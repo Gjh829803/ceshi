@@ -2084,7 +2084,7 @@ function validateSceneBriefImplementationMapDraftV1(value) {
   ));
   return diagnostics;
 }
-const EXECUTION_RESOURCE_KINDS_V1 = [
+const SUBJECT_RESOURCE_KINDS_V1 = Object.freeze([
   "subject-definition",
   "subject-asset",
   "rig-profile",
@@ -2106,10 +2106,81 @@ const EXECUTION_RESOURCE_KINDS_V1 = [
   "relationship-profile",
   "harness-profile",
   "pose-set-profile",
-  "render-binding-profile",
+  "render-binding-profile"
+]);
+const GROUND_HUMANOID_ACTION_IDS_V1 = Object.freeze([
+  "idle",
+  "idle.gaming",
+  "walk",
+  "walk.step",
+  "run",
+  "jump",
+  "fall",
+  "land.hard",
+  "land.hard.alt",
+  "fly",
+  "float",
+  "swim.surface",
+  "swim.tread",
+  "swim.exit",
+  "sit",
+  "sit.idle",
+  "sit.ground.idle",
+  "sit.toStand",
+  "stand",
+  "lay.idle",
+  "roll.toRun",
+  "fight.enter",
+  "emote.salute",
+  "emote.angry",
+  "dance.rumba"
+]);
+const BIPED_BONE_IDS_V1 = Object.freeze([
+  "hips",
+  "spine",
+  "chest",
+  "neck",
+  "head",
+  "upper-arm.left",
+  "lower-arm.left",
+  "hand.left",
+  "upper-arm.right",
+  "lower-arm.right",
+  "hand.right",
+  "upper-leg.left",
+  "lower-leg.left",
+  "foot.left",
+  "upper-leg.right",
+  "lower-leg.right",
+  "foot.right"
+]);
+const SUBJECT_BODY_TOPOLOGIES_V2 = Object.freeze([
+  "biped",
+  "quadruped",
+  "four-wheel",
+  "surface-craft",
+  "watercraft",
+  "glider",
+  "composite",
+  "custom"
+]);
+function includesSerializedTerm(values, value) {
+  return typeof value === "string" && values.includes(value);
+}
+function isGroundHumanoidActionIdV1(value) {
+  return includesSerializedTerm(GROUND_HUMANOID_ACTION_IDS_V1, value);
+}
+function isBipedBoneIdV1(value) {
+  return includesSerializedTerm(BIPED_BONE_IDS_V1, value);
+}
+function isSubjectBodyTopologyV2(value) {
+  return includesSerializedTerm(SUBJECT_BODY_TOPOLOGIES_V2, value);
+}
+const EXECUTION_RESOURCE_KINDS_V1 = Object.freeze([
+  ...SUBJECT_RESOURCE_KINDS_V1,
   "traversal-surface-profile",
   "gameplay-bootstrap"
-];
+]);
 const EXECUTION_RESOURCE_LOCK_ENTRY_FIELDS_V1 = [
   "resourceRef",
   "resourceKind",
@@ -2275,6 +2346,18 @@ function requireTuple(input, length) {
 function requireStringArray(input) {
   dataArray(input).forEach(requireString);
 }
+function requireBipedBoneId(input) {
+  if (!isBipedBoneIdV1(input)) return invalidExecutionPlanV5();
+  return input;
+}
+function requireGroundHumanoidActionId(input) {
+  if (!isGroundHumanoidActionIdV1(input)) return invalidExecutionPlanV5();
+  return input;
+}
+function requireSubjectBodyTopology(input) {
+  if (!isSubjectBodyTopologyV2(input)) return invalidExecutionPlanV5();
+  return input;
+}
 function validateTransform(input) {
   const value = exactDataRecord(input, [
     "positionMetersXYZ",
@@ -2423,8 +2506,13 @@ function validateRigProfile$1(input) {
   requireString(value.rigProfileRef);
   requireLiteral(value.bodyTopology, ["biped"]);
   requireString(value.skeletonRootBoneName);
-  requireStringArray(value.requiredBoneIds);
-  Object.values(dataRecord(value.sourceNodeNameByBoneId)).forEach(requireString);
+  dataArray(value.requiredBoneIds).forEach(requireBipedBoneId);
+  Object.entries(dataRecord(value.sourceNodeNameByBoneId)).forEach(
+    ([boneId, sourceNodeName]) => {
+      requireBipedBoneId(boneId);
+      requireString(sourceNodeName);
+    }
+  );
 }
 function validateAnimationSet$1(input) {
   const value = exactDataRecord(input, [
@@ -2438,8 +2526,8 @@ function validateAnimationSet$1(input) {
   requireString(value.animationSetRef);
   requireString(value.subjectAssetRef);
   requireString(value.rigProfileRef);
-  requireString(value.defaultActionId);
-  requireStringArray(value.requiredActionIds);
+  requireGroundHumanoidActionId(value.defaultActionId);
+  dataArray(value.requiredActionIds).forEach(requireGroundHumanoidActionId);
   dataArray(value.animationBindings).forEach((binding) => {
     const row = exactDataRecord(binding, [
       "actionId",
@@ -2449,7 +2537,7 @@ function validateAnimationSet$1(input) {
       "blendDurationSeconds",
       "rootMotionMode"
     ]);
-    requireString(row.actionId);
+    requireGroundHumanoidActionId(row.actionId);
     requireString(row.sourceClipName);
     requireLiteral(row.loopMode, ["repeat", "once"]);
     requireFinite(row.playbackSpeedRatio);
@@ -2464,7 +2552,7 @@ function validateColliderProfile$1(input) {
     "collider"
   ]);
   requireString(value.colliderProfileRef);
-  requireStringArray(value.supportedBodyTopologies);
+  dataArray(value.supportedBodyTopologies).forEach(requireSubjectBodyTopology);
   const collider = exactDataRecord(value.collider, [
     "kind",
     "radiusMeters",
@@ -2571,7 +2659,6 @@ function validateCapabilityAssembly(input) {
       "implementationId",
       "commandKind",
       "supportedMediums",
-      "runtimeParameterNames",
       "fallbackMotionProfileRef",
       "deterministic"
     ]);
@@ -2591,7 +2678,6 @@ function validateCapabilityAssembly(input) {
       "none"
     ]);
     requireStringArray(row.supportedMediums);
-    requireStringArray(row.runtimeParameterNames);
     requireString(row.fallbackMotionProfileRef);
     requireLiteral(row.deterministic, [true]);
   });
@@ -2771,7 +2857,7 @@ function validateSubject(input) {
   requireString(value.entityId);
   requireString(value.subjectDefinitionRef);
   requireHash(value.subjectDefinitionHash);
-  requireString(value.bodyTopology);
+  requireSubjectBodyTopology(value.bodyTopology);
   requireString(value.semanticClassId);
   requireString(value.spawnAnchorEntityId);
   requireTuple(value.spawnSubjectOriginPositionMetersXYZ, 3);
@@ -2846,7 +2932,7 @@ function validateSubject(input) {
       requireTuple(transform.positionMetersXYZ, 3);
       requireTuple(transform.rotationEulerRadiansXYZ, 3);
     } else {
-      requireString(socketValue.boneId);
+      requireBipedBoneId(socketValue.boneId);
       const transform = exactDataRecord(socketValue.offsetTransform, [
         "positionMetersXYZ",
         "rotationEulerRadiansXYZ"
@@ -4702,25 +4788,6 @@ const GOLDEN_HUMANOID_SUBJECT_ASSET = {
     semanticTags: ["biped", "golden", "humanoid", "rigged", "whitebox"]
   }
 };
-const GOLDEN_BIPED_BONE_IDS = [
-  "hips",
-  "spine",
-  "chest",
-  "neck",
-  "head",
-  "upper-arm.left",
-  "lower-arm.left",
-  "hand.left",
-  "upper-arm.right",
-  "lower-arm.right",
-  "hand.right",
-  "upper-leg.left",
-  "lower-leg.left",
-  "foot.left",
-  "upper-leg.right",
-  "lower-leg.right",
-  "foot.right"
-];
 const GOLDEN_BIPED_RIG_PROFILE = {
   kind: "rig-profile",
   id: "biped.golden",
@@ -4729,7 +4796,7 @@ const GOLDEN_BIPED_RIG_PROFILE = {
   bodyTopology: "biped",
   compatibleSubjectAssetRefs: [GOLDEN_HUMANOID_SUBJECT_ASSET.resourceRef],
   skeletonRootBoneName: "root",
-  requiredBoneIds: GOLDEN_BIPED_BONE_IDS,
+  requiredBoneIds: BIPED_BONE_IDS_V1,
   sourceNodeNameByBoneId: {
     hips: "hips",
     spine: "spine",
@@ -4883,7 +4950,7 @@ const G_BOT_MIXAMO_RIG_PROFILE = {
   bodyTopology: "biped",
   compatibleSubjectAssetRefs: [G_BOT_SUBJECT_ASSET.resourceRef],
   skeletonRootBoneName: "mixamorig:Hips",
-  requiredBoneIds: GOLDEN_BIPED_BONE_IDS,
+  requiredBoneIds: BIPED_BONE_IDS_V1,
   sourceNodeNameByBoneId: {
     hips: "mixamorig:Hips",
     spine: "mixamorig:Spine",
@@ -5737,7 +5804,311 @@ const mediumProfiles = [
     }
   }
 ];
-const motionKernels = /* @__PURE__ */ JSON.parse('[{"kind":"motion-kernel","id":"K01.free-ground","version":1,"resourceRef":"worldkit://motion-kernel/free-ground@1","authoringAvailability":"recommended","implementationId":"free-ground","commandKind":"planar-vector","supportedMediums":["ground","air","water"],"supportedBodyKinds":["character"],"requiredCapabilityRefs":["worldkit://capability/locomotion.ground@1"],"parameterSchemaRef":"worldkit://motion-parameter-schema/free-ground@1","runtimeParameterNames":["walkSpeedMetersPerSecond","runSpeedMetersPerSecond","jumpSpeedMetersPerSecond","accelerationMetersPerSecondSquared","decelerationMetersPerSecondSquared","turnRateRadiansPerSecond","airControlRatio","coyoteTimeSeconds","jumpBufferSeconds","variableJumpHoldSeconds","jumpHoldGravityScale","jumpReleaseGravityScale","maximumSlopeDegrees","stepHeightMeters"],"fallbackMotionProfileRef":"worldkit://motion-profile/safe-ground@1","deterministic":true,"runtimeStatus":"implemented","aiMetadata":{"displayName":"K01 Free Ground","description":"Camera-relative grounded movement, facing, support and jumping.","semanticTags":["free-ground","ground","jump","planar"]}},{"kind":"motion-kernel","id":"K02.forward-steer","version":1,"resourceRef":"worldkit://motion-kernel/forward-steer@1","authoringAvailability":"advanced","implementationId":"forward-steer","commandKind":"throttle-steer","supportedMediums":["ground"],"supportedBodyKinds":["character"],"requiredCapabilityRefs":["worldkit://capability/locomotion.forward-steer@1"],"parameterSchemaRef":"worldkit://motion-parameter-schema/forward-steer@1","runtimeParameterNames":["forwardSpeedMetersPerSecond","reverseSpeedMetersPerSecond","accelerationMetersPerSecondSquared","decelerationMetersPerSecondSquared","turnRateRadiansPerSecond","jumpSpeedMetersPerSecond","boostMultiplier","lowSpeedTurnRateRadiansPerSecond","highSpeedTurnRateRadiansPerSecond","steeringResponsePerSecond","steeringReturnPerSecond","fullSteeringAuthoritySpeedMetersPerSecond","minimumSteeringAuthorityRatio","turnRateSpeedCurveExponent","bodyLeanMaximumRadians"],"fallbackMotionProfileRef":"worldkit://motion-profile/safe-ground@1","deterministic":true,"runtimeStatus":"implemented","aiMetadata":{"displayName":"K02 Forward Steer","description":"Subject-local forward motion with gradual steering and no strafing.","semanticTags":["forward","ground","steer"]}},{"kind":"motion-kernel","id":"K03.wheeled-arcade","version":1,"resourceRef":"worldkit://motion-kernel/wheeled-arcade@1","authoringAvailability":"advanced","implementationId":"wheeled-arcade","commandKind":"throttle-steer","supportedMediums":["ground"],"supportedBodyKinds":["character"],"requiredCapabilityRefs":["worldkit://capability/locomotion.wheeled@1"],"parameterSchemaRef":"worldkit://motion-parameter-schema/wheeled-arcade@1","runtimeParameterNames":["forwardSpeedMetersPerSecond","reverseSpeedMetersPerSecond","accelerationMetersPerSecondSquared","brakeMetersPerSecondSquared","dragPerSecond","lowSpeedTurnRateRadiansPerSecond","highSpeedTurnRateRadiansPerSecond","steeringResponsePerSecond","steeringReturnPerSecond","fullSteeringAuthoritySpeedMetersPerSecond","turnRateSpeedCurveExponent","boostMultiplier","steeringDeadzoneRatio","steeringInputExponent","lateralGripPerSecond","handbrakeLateralGripPerSecond","handbrakeTurnMultiplier","brakeToReverseDelaySeconds"],"fallbackMotionProfileRef":"worldkit://motion-profile/forward-steer.medium@1","deterministic":true,"runtimeStatus":"implemented","aiMetadata":{"displayName":"K03 Wheeled Arcade","description":"Deterministic arcade throttle, braking, reverse and speed-coupled steering.","semanticTags":["arcade","ground","steer","wheeled"]}},{"kind":"motion-kernel","id":"K04.surface-slide","version":1,"resourceRef":"worldkit://motion-kernel/surface-slide@1","authoringAvailability":"experimental","implementationId":"surface-slide","commandKind":"throttle-steer","supportedMediums":["ground"],"supportedBodyKinds":["character"],"requiredCapabilityRefs":["worldkit://capability/locomotion.surface-slide@1"],"parameterSchemaRef":"worldkit://motion-parameter-schema/surface-slide@1","runtimeParameterNames":["maximumSpeedMetersPerSecond","driveAccelerationMetersPerSecondSquared","surfaceFrictionPerSecond","turnRateRadiansPerSecond","boostMultiplier","driveResponsePerSecond","slopeGravityRatio","lateralFrictionPerSecond","maximumDriftAngleRadians","steeringResponsePerSecond","steeringReturnPerSecond"],"fallbackMotionProfileRef":"worldkit://motion-profile/forward-steer.medium@1","deterministic":true,"runtimeStatus":"implemented","aiMetadata":{"displayName":"K04 Surface Slide","description":"Slope, friction and inertia driven movement constrained to a support surface.","semanticTags":["ground","inertia","slide","surface"]}},{"kind":"motion-kernel","id":"K05.hover","version":1,"resourceRef":"worldkit://motion-kernel/hover@1","authoringAvailability":"internal","implementationId":"hover","commandKind":"throttle-steer","supportedMediums":["air","ground","water"],"supportedBodyKinds":["character","rigid-body"],"requiredCapabilityRefs":[],"parameterSchemaRef":"worldkit://motion-parameter-schema/hover@1","runtimeParameterNames":[],"fallbackMotionProfileRef":"worldkit://motion-profile/safe-ground@1","deterministic":true,"runtimeStatus":"reserved","aiMetadata":{"displayName":"K05 Hover","description":"Reserved height-holding locomotion contract.","semanticTags":["height-hold","hover","reserved"]}},{"kind":"motion-kernel","id":"K06.water-surface","version":1,"resourceRef":"worldkit://motion-kernel/water-surface@1","authoringAvailability":"experimental","implementationId":"water-surface","commandKind":"throttle-steer","supportedMediums":["water"],"supportedBodyKinds":["character"],"requiredCapabilityRefs":["worldkit://capability/locomotion.water-surface@1"],"parameterSchemaRef":"worldkit://motion-parameter-schema/water-surface@1","runtimeParameterNames":["forwardSpeedMetersPerSecond","reverseSpeedMetersPerSecond","accelerationMetersPerSecondSquared","dragPerSecond","turnRateRadiansPerSecond","surfaceHoldStrengthPerSecond","boostMultiplier","turnAccelerationRadiansPerSecondSquared","turnDampingPerSecond","minimumSteeringAuthorityRatio","reverseTurnMultiplier","surfaceVerticalSpeedLimitMetersPerSecond","waterGravityScale"],"fallbackMotionProfileRef":"worldkit://motion-profile/water-surface.safe@1","deterministic":true,"runtimeStatus":"implemented","aiMetadata":{"displayName":"K06 Water Surface","description":"Water-level hold, propulsion, drag and low-speed steering.","semanticTags":["drag","surface","water"]}},{"kind":"motion-kernel","id":"K07.underwater","version":1,"resourceRef":"worldkit://motion-kernel/underwater@1","authoringAvailability":"internal","implementationId":"underwater","commandKind":"flight-attitude","supportedMediums":["water"],"supportedBodyKinds":["character","rigid-body"],"requiredCapabilityRefs":[],"parameterSchemaRef":"worldkit://motion-parameter-schema/underwater@1","runtimeParameterNames":[],"fallbackMotionProfileRef":"worldkit://motion-profile/water-surface.safe@1","deterministic":true,"runtimeStatus":"reserved","aiMetadata":{"displayName":"K07 Underwater","description":"Reserved three-dimensional underwater locomotion contract.","semanticTags":["reserved","underwater","water"]}},{"kind":"motion-kernel","id":"K08.unpowered-glide","version":1,"resourceRef":"worldkit://motion-kernel/unpowered-glide@1","authoringAvailability":"experimental","implementationId":"unpowered-glide","commandKind":"flight-attitude","supportedMediums":["air"],"supportedBodyKinds":["character"],"requiredCapabilityRefs":["worldkit://capability/locomotion.unpowered-glide@1"],"parameterSchemaRef":"worldkit://motion-parameter-schema/unpowered-glide@1","runtimeParameterNames":["minimumForwardSpeedMetersPerSecond","maximumForwardSpeedMetersPerSecond","glideAccelerationMetersPerSecondSquared","gravityScale","liftRatio","pitchRateRadiansPerSecond","yawRateRadiansPerSecond","rollRateRadiansPerSecond","stallSpeedMetersPerSecond","maximumPitchRadians","maximumRollRadians","pitchCenteringPerSecond","rollCenteringPerSecond","yawRollCouplingRatio","pitchToForwardSpeedRatio","pitchToVerticalSpeedMetersPerSecondPerRadian","maximumSinkSpeedMetersPerSecond","maximumClimbSpeedMetersPerSecond","verticalResponseMetersPerSecondSquared","stallSinkSpeedMetersPerSecond"],"fallbackMotionProfileRef":"worldkit://motion-profile/airborne.fall@1","deterministic":true,"runtimeStatus":"implemented","aiMetadata":{"displayName":"K08 Unpowered Glide","description":"Gravity-powered forward glide with pitch, yaw, bank and stall behavior.","semanticTags":["air","glide","unpowered"]}},{"kind":"motion-kernel","id":"K09.powered-flight","version":1,"resourceRef":"worldkit://motion-kernel/powered-flight@1","authoringAvailability":"internal","implementationId":"powered-flight","commandKind":"flight-attitude","supportedMediums":["air"],"supportedBodyKinds":["character","rigid-body"],"requiredCapabilityRefs":[],"parameterSchemaRef":"worldkit://motion-parameter-schema/powered-flight@1","runtimeParameterNames":[],"fallbackMotionProfileRef":"worldkit://motion-profile/airborne.fall@1","deterministic":true,"runtimeStatus":"reserved","aiMetadata":{"displayName":"K09 Powered Flight","description":"Reserved thrust, lift, climb and hover-capable flight contract.","semanticTags":["air","powered","reserved"]}},{"kind":"motion-kernel","id":"K10.zero-gravity-six-dof","version":1,"resourceRef":"worldkit://motion-kernel/zero-gravity-six-dof@1","authoringAvailability":"internal","implementationId":"zero-gravity-six-dof","commandKind":"flight-attitude","supportedMediums":["air"],"supportedBodyKinds":["character","rigid-body"],"requiredCapabilityRefs":[],"parameterSchemaRef":"worldkit://motion-parameter-schema/zero-gravity-six-dof@1","runtimeParameterNames":[],"fallbackMotionProfileRef":"worldkit://motion-profile/airborne.fall@1","deterministic":true,"runtimeStatus":"reserved","aiMetadata":{"displayName":"K10 Zero Gravity Six DOF","description":"Reserved translation and rotation contract without a fixed up direction.","semanticTags":["reserved","six-dof","zero-gravity"]}}]');
+const motionKernels = [
+  {
+    kind: "motion-kernel",
+    id: "K01.free-ground",
+    version: 1,
+    resourceRef: "worldkit://motion-kernel/free-ground@1",
+    authoringAvailability: "recommended",
+    implementationId: "free-ground",
+    commandKind: "planar-vector",
+    supportedMediums: [
+      "ground",
+      "air",
+      "water"
+    ],
+    supportedBodyKinds: [
+      "character"
+    ],
+    requiredCapabilityRefs: [
+      "worldkit://capability/locomotion.ground@1"
+    ],
+    fallbackMotionProfileRef: "worldkit://motion-profile/safe-ground@1",
+    deterministic: true,
+    runtimeStatus: "implemented",
+    aiMetadata: {
+      displayName: "K01 Free Ground",
+      description: "Camera-relative grounded movement, facing, support and jumping.",
+      semanticTags: [
+        "free-ground",
+        "ground",
+        "jump",
+        "planar"
+      ]
+    }
+  },
+  {
+    kind: "motion-kernel",
+    id: "K02.forward-steer",
+    version: 1,
+    resourceRef: "worldkit://motion-kernel/forward-steer@1",
+    authoringAvailability: "advanced",
+    implementationId: "forward-steer",
+    commandKind: "throttle-steer",
+    supportedMediums: [
+      "ground"
+    ],
+    supportedBodyKinds: [
+      "character"
+    ],
+    requiredCapabilityRefs: [
+      "worldkit://capability/locomotion.forward-steer@1"
+    ],
+    fallbackMotionProfileRef: "worldkit://motion-profile/safe-ground@1",
+    deterministic: true,
+    runtimeStatus: "implemented",
+    aiMetadata: {
+      displayName: "K02 Forward Steer",
+      description: "Subject-local forward motion with gradual steering and no strafing.",
+      semanticTags: [
+        "forward",
+        "ground",
+        "steer"
+      ]
+    }
+  },
+  {
+    kind: "motion-kernel",
+    id: "K03.wheeled-arcade",
+    version: 1,
+    resourceRef: "worldkit://motion-kernel/wheeled-arcade@1",
+    authoringAvailability: "advanced",
+    implementationId: "wheeled-arcade",
+    commandKind: "throttle-steer",
+    supportedMediums: [
+      "ground"
+    ],
+    supportedBodyKinds: [
+      "character"
+    ],
+    requiredCapabilityRefs: [
+      "worldkit://capability/locomotion.wheeled@1"
+    ],
+    fallbackMotionProfileRef: "worldkit://motion-profile/forward-steer.medium@1",
+    deterministic: true,
+    runtimeStatus: "implemented",
+    aiMetadata: {
+      displayName: "K03 Wheeled Arcade",
+      description: "Deterministic arcade throttle, braking, reverse and speed-coupled steering.",
+      semanticTags: [
+        "arcade",
+        "ground",
+        "steer",
+        "wheeled"
+      ]
+    }
+  },
+  {
+    kind: "motion-kernel",
+    id: "K04.surface-slide",
+    version: 1,
+    resourceRef: "worldkit://motion-kernel/surface-slide@1",
+    authoringAvailability: "experimental",
+    implementationId: "surface-slide",
+    commandKind: "throttle-steer",
+    supportedMediums: [
+      "ground"
+    ],
+    supportedBodyKinds: [
+      "character"
+    ],
+    requiredCapabilityRefs: [
+      "worldkit://capability/locomotion.surface-slide@1"
+    ],
+    fallbackMotionProfileRef: "worldkit://motion-profile/forward-steer.medium@1",
+    deterministic: true,
+    runtimeStatus: "implemented",
+    aiMetadata: {
+      displayName: "K04 Surface Slide",
+      description: "Slope, friction and inertia driven movement constrained to a support surface.",
+      semanticTags: [
+        "ground",
+        "inertia",
+        "slide",
+        "surface"
+      ]
+    }
+  },
+  {
+    kind: "motion-kernel",
+    id: "K05.hover",
+    version: 1,
+    resourceRef: "worldkit://motion-kernel/hover@1",
+    authoringAvailability: "internal",
+    implementationId: "hover",
+    commandKind: "throttle-steer",
+    supportedMediums: [
+      "air",
+      "ground",
+      "water"
+    ],
+    supportedBodyKinds: [
+      "character",
+      "rigid-body"
+    ],
+    requiredCapabilityRefs: [],
+    fallbackMotionProfileRef: "worldkit://motion-profile/safe-ground@1",
+    deterministic: true,
+    runtimeStatus: "reserved",
+    aiMetadata: {
+      displayName: "K05 Hover",
+      description: "Reserved height-holding locomotion contract.",
+      semanticTags: [
+        "height-hold",
+        "hover",
+        "reserved"
+      ]
+    }
+  },
+  {
+    kind: "motion-kernel",
+    id: "K06.water-surface",
+    version: 1,
+    resourceRef: "worldkit://motion-kernel/water-surface@1",
+    authoringAvailability: "experimental",
+    implementationId: "water-surface",
+    commandKind: "throttle-steer",
+    supportedMediums: [
+      "water"
+    ],
+    supportedBodyKinds: [
+      "character"
+    ],
+    requiredCapabilityRefs: [
+      "worldkit://capability/locomotion.water-surface@1"
+    ],
+    fallbackMotionProfileRef: "worldkit://motion-profile/water-surface.safe@1",
+    deterministic: true,
+    runtimeStatus: "implemented",
+    aiMetadata: {
+      displayName: "K06 Water Surface",
+      description: "Water-level hold, propulsion, drag and low-speed steering.",
+      semanticTags: [
+        "drag",
+        "surface",
+        "water"
+      ]
+    }
+  },
+  {
+    kind: "motion-kernel",
+    id: "K07.underwater",
+    version: 1,
+    resourceRef: "worldkit://motion-kernel/underwater@1",
+    authoringAvailability: "internal",
+    implementationId: "underwater",
+    commandKind: "flight-attitude",
+    supportedMediums: [
+      "water"
+    ],
+    supportedBodyKinds: [
+      "character",
+      "rigid-body"
+    ],
+    requiredCapabilityRefs: [],
+    fallbackMotionProfileRef: "worldkit://motion-profile/water-surface.safe@1",
+    deterministic: true,
+    runtimeStatus: "reserved",
+    aiMetadata: {
+      displayName: "K07 Underwater",
+      description: "Reserved three-dimensional underwater locomotion contract.",
+      semanticTags: [
+        "reserved",
+        "underwater",
+        "water"
+      ]
+    }
+  },
+  {
+    kind: "motion-kernel",
+    id: "K08.unpowered-glide",
+    version: 1,
+    resourceRef: "worldkit://motion-kernel/unpowered-glide@1",
+    authoringAvailability: "experimental",
+    implementationId: "unpowered-glide",
+    commandKind: "flight-attitude",
+    supportedMediums: [
+      "air"
+    ],
+    supportedBodyKinds: [
+      "character"
+    ],
+    requiredCapabilityRefs: [
+      "worldkit://capability/locomotion.unpowered-glide@1"
+    ],
+    fallbackMotionProfileRef: "worldkit://motion-profile/airborne.fall@1",
+    deterministic: true,
+    runtimeStatus: "implemented",
+    aiMetadata: {
+      displayName: "K08 Unpowered Glide",
+      description: "Gravity-powered forward glide with pitch, yaw, bank and stall behavior.",
+      semanticTags: [
+        "air",
+        "glide",
+        "unpowered"
+      ]
+    }
+  },
+  {
+    kind: "motion-kernel",
+    id: "K09.powered-flight",
+    version: 1,
+    resourceRef: "worldkit://motion-kernel/powered-flight@1",
+    authoringAvailability: "internal",
+    implementationId: "powered-flight",
+    commandKind: "flight-attitude",
+    supportedMediums: [
+      "air"
+    ],
+    supportedBodyKinds: [
+      "character",
+      "rigid-body"
+    ],
+    requiredCapabilityRefs: [],
+    fallbackMotionProfileRef: "worldkit://motion-profile/airborne.fall@1",
+    deterministic: true,
+    runtimeStatus: "reserved",
+    aiMetadata: {
+      displayName: "K09 Powered Flight",
+      description: "Reserved thrust, lift, climb and hover-capable flight contract.",
+      semanticTags: [
+        "air",
+        "powered",
+        "reserved"
+      ]
+    }
+  },
+  {
+    kind: "motion-kernel",
+    id: "K10.zero-gravity-six-dof",
+    version: 1,
+    resourceRef: "worldkit://motion-kernel/zero-gravity-six-dof@1",
+    authoringAvailability: "internal",
+    implementationId: "zero-gravity-six-dof",
+    commandKind: "flight-attitude",
+    supportedMediums: [
+      "air"
+    ],
+    supportedBodyKinds: [
+      "character",
+      "rigid-body"
+    ],
+    requiredCapabilityRefs: [],
+    fallbackMotionProfileRef: "worldkit://motion-profile/airborne.fall@1",
+    deterministic: true,
+    runtimeStatus: "reserved",
+    aiMetadata: {
+      displayName: "K10 Zero Gravity Six DOF",
+      description: "Reserved translation and rotation contract without a fixed up direction.",
+      semanticTags: [
+        "reserved",
+        "six-dof",
+        "zero-gravity"
+      ]
+    }
+  }
+];
 const motionProfiles = [
   {
     kind: "motion-profile",
@@ -6185,6 +6556,324 @@ function selectableControlFeelProfileRefsV1(profiles2) {
     ...uniqueAllowed.filter((resourceRef) => resourceRef !== profiles2.controlFeelProfileRef)
   ];
 }
+const RELATIONSHIP_PROFILE_REF_BY_CAPABILITY_REF_V1 = Object.freeze({
+  "worldkit://capability/relationship.mount@1": "worldkit://relationship-profile/mount.reserved@1",
+  "worldkit://capability/relationship.seat@1": "worldkit://relationship-profile/seat.driver@1",
+  "worldkit://capability/relationship.tether@1": "worldkit://relationship-profile/tether.standard@1"
+});
+function edge(sourceResourceRef, sourcePath, targetResourceRef, expectedResourceKinds, type2) {
+  return Object.freeze({
+    sourceResourceRef,
+    sourcePath,
+    targetResourceRef,
+    expectedResourceKinds: Object.freeze([...expectedResourceKinds]),
+    type: type2
+  });
+}
+function edgesForRefs(sourceResourceRef, sourcePath, targetResourceRefs, expectedResourceKinds, type2) {
+  return targetResourceRefs.map((targetResourceRef, index) => edge(
+    sourceResourceRef,
+    `${sourcePath}/${index}`,
+    targetResourceRef,
+    expectedResourceKinds,
+    type2
+  ));
+}
+function listSubjectRegistryReferenceEdgesV1(resource) {
+  const sourceResourceRef = resource.resourceRef;
+  const edges = [];
+  switch (resource.kind) {
+    case "rig-profile":
+      edges.push(...edgesForRefs(
+        sourceResourceRef,
+        "/compatibleSubjectAssetRefs",
+        resource.compatibleSubjectAssetRefs,
+        ["subject-asset"],
+        "metadata"
+      ));
+      break;
+    case "animation-set":
+      edges.push(
+        edge(
+          sourceResourceRef,
+          "/subjectAssetRef",
+          resource.subjectAssetRef,
+          ["subject-asset"],
+          "dependency"
+        ),
+        edge(
+          sourceResourceRef,
+          "/rigProfileRef",
+          resource.rigProfileRef,
+          ["rig-profile"],
+          "dependency"
+        )
+      );
+      break;
+    case "capability":
+      edges.push(
+        ...edgesForRefs(
+          sourceResourceRef,
+          "/requiredCapabilityRefs",
+          resource.requiredCapabilityRefs,
+          ["capability"],
+          "dependency"
+        ),
+        ...edgesForRefs(
+          sourceResourceRef,
+          "/conflictingCapabilityRefs",
+          resource.conflictingCapabilityRefs,
+          ["capability"],
+          "metadata"
+        )
+      );
+      break;
+    case "locomotion-profile":
+      edges.push(...edgesForRefs(
+        sourceResourceRef,
+        "/requiredCapabilityRefs",
+        resource.requiredCapabilityRefs,
+        ["capability"],
+        "dependency"
+      ));
+      break;
+    case "motion-kernel":
+      edges.push(
+        ...edgesForRefs(
+          sourceResourceRef,
+          "/requiredCapabilityRefs",
+          resource.requiredCapabilityRefs,
+          ["capability"],
+          "dependency"
+        ),
+        edge(
+          sourceResourceRef,
+          "/fallbackMotionProfileRef",
+          resource.fallbackMotionProfileRef,
+          ["motion-profile"],
+          "back-reference"
+        )
+      );
+      break;
+    case "motion-profile":
+      edges.push(edge(
+        sourceResourceRef,
+        "/motionKernelRef",
+        resource.motionKernelRef,
+        ["motion-kernel"],
+        "dependency"
+      ));
+      break;
+    case "camera-rig-profile":
+      edges.push(edge(
+        sourceResourceRef,
+        "/algorithmRef",
+        resource.algorithmRef,
+        ["camera-rig-algorithm"],
+        "dependency"
+      ));
+      break;
+    case "camera-context-profile":
+      edges.push(edge(
+        sourceResourceRef,
+        "/defaultCameraRigProfileRef",
+        resource.defaultCameraRigProfileRef,
+        ["camera-rig-profile"],
+        "dependency"
+      ));
+      if (resource.firstPersonCameraRigProfileRef !== void 0) {
+        edges.push(edge(
+          sourceResourceRef,
+          "/firstPersonCameraRigProfileRef",
+          resource.firstPersonCameraRigProfileRef,
+          ["camera-rig-profile"],
+          "dependency"
+        ));
+      }
+      resource.rules.forEach((rule, ruleIndex) => {
+        edges.push(...edgesForRefs(
+          sourceResourceRef,
+          `/rules/${ruleIndex}/when/motionKernelRefs`,
+          rule.when.motionKernelRefs ?? [],
+          ["motion-kernel"],
+          "metadata"
+        ));
+        if (rule.cameraRigProfileRef !== void 0) {
+          edges.push(edge(
+            sourceResourceRef,
+            `/rules/${ruleIndex}/cameraRigProfileRef`,
+            rule.cameraRigProfileRef,
+            ["camera-rig-profile"],
+            "dependency"
+          ));
+        }
+        edges.push(...edgesForRefs(
+          sourceResourceRef,
+          `/rules/${ruleIndex}/cameraModifierRefs`,
+          rule.cameraModifierRefs ?? [],
+          ["camera-modifier-profile"],
+          "dependency"
+        ));
+      });
+      break;
+    case "subject-definition":
+      resource.visualParts.forEach((visualPart, partIndex) => {
+        if (visualPart.kind !== "asset") return;
+        edges.push(edge(
+          sourceResourceRef,
+          `/visualParts/${partIndex}/subjectAssetRef`,
+          visualPart.subjectAssetRef,
+          ["subject-asset"],
+          "dependency"
+        ));
+      });
+      if (resource.visualBinding.mode === "rigged") {
+        edges.push(
+          edge(
+            sourceResourceRef,
+            "/visualBinding/rigProfileRef",
+            resource.visualBinding.rigProfileRef,
+            ["rig-profile"],
+            "dependency"
+          ),
+          edge(
+            sourceResourceRef,
+            "/visualBinding/animationSetRef",
+            resource.visualBinding.animationSetRef,
+            ["animation-set"],
+            "dependency"
+          )
+        );
+      }
+      edges.push(edge(
+        sourceResourceRef,
+        resource.colliderPolicy.kind === "profile" ? "/colliderPolicy/colliderProfileRef" : "/colliderPolicy/colliderDerivationProfileRef",
+        resource.colliderPolicy.kind === "profile" ? resource.colliderPolicy.colliderProfileRef : resource.colliderPolicy.colliderDerivationProfileRef,
+        [resource.colliderPolicy.kind === "profile" ? "collider-profile" : "collider-derivation-profile"],
+        "dependency"
+      ));
+      edges.push(
+        ...edgesForRefs(
+          sourceResourceRef,
+          "/capabilityRefs",
+          resource.capabilityRefs,
+          ["capability"],
+          "dependency"
+        ),
+        edge(
+          sourceResourceRef,
+          "/profiles/physicsBodyProfileRef",
+          resource.profiles.physicsBodyProfileRef,
+          ["physics-body-profile"],
+          "dependency"
+        ),
+        edge(
+          sourceResourceRef,
+          "/profiles/locomotionProfileRef",
+          resource.profiles.locomotionProfileRef,
+          ["locomotion-profile"],
+          "dependency"
+        ),
+        edge(
+          sourceResourceRef,
+          "/profiles/controlFeelProfileRef",
+          resource.profiles.controlFeelProfileRef,
+          ["control-feel-profile"],
+          "dependency"
+        ),
+        ...edgesForRefs(
+          sourceResourceRef,
+          "/profiles/allowedControlFeelProfileRefs",
+          resource.profiles.allowedControlFeelProfileRefs,
+          ["control-feel-profile"],
+          "dependency"
+        ),
+        edge(
+          sourceResourceRef,
+          "/profiles/motion/defaultMotionProfileRef",
+          resource.profiles.motion.defaultMotionProfileRef,
+          ["motion-profile"],
+          "dependency"
+        ),
+        ...edgesForRefs(
+          sourceResourceRef,
+          "/profiles/motion/optionalMotionProfileRefs",
+          resource.profiles.motion.optionalMotionProfileRefs,
+          ["motion-profile"],
+          "dependency"
+        ),
+        edge(
+          sourceResourceRef,
+          "/profiles/motion/fallbackMotionProfileRef",
+          resource.profiles.motion.fallbackMotionProfileRef,
+          ["motion-profile"],
+          "dependency"
+        ),
+        edge(
+          sourceResourceRef,
+          "/profiles/controlProfileRef",
+          resource.profiles.controlProfileRef,
+          ["control-profile"],
+          "dependency"
+        ),
+        edge(
+          sourceResourceRef,
+          "/profiles/cameraContextProfileRef",
+          resource.profiles.cameraContextProfileRef,
+          ["camera-context-profile"],
+          "dependency"
+        ),
+        edge(
+          sourceResourceRef,
+          "/profiles/mediumProfileRef",
+          resource.profiles.mediumProfileRef,
+          ["medium-profile"],
+          "dependency"
+        ),
+        edge(
+          sourceResourceRef,
+          "/profiles/harnessProfileRef",
+          resource.profiles.harnessProfileRef,
+          ["harness-profile"],
+          "dependency"
+        ),
+        ...edgesForRefs(
+          sourceResourceRef,
+          "/relationshipCapabilityRefs",
+          resource.relationshipCapabilityRefs,
+          ["capability"],
+          "dependency"
+        ),
+        edge(
+          sourceResourceRef,
+          "/actionOrPoseSetRef",
+          resource.actionOrPoseSetRef,
+          ["animation-set", "pose-set-profile"],
+          "dependency"
+        ),
+        edge(
+          sourceResourceRef,
+          "/renderBindingProfileRef",
+          resource.renderBindingProfileRef,
+          ["render-binding-profile"],
+          "dependency"
+        )
+      );
+      resource.relationshipCapabilityRefs.forEach((capabilityRef, index) => {
+        const relationshipProfileRef = RELATIONSHIP_PROFILE_REF_BY_CAPABILITY_REF_V1[capabilityRef];
+        if (relationshipProfileRef === void 0) return;
+        edges.push(edge(
+          sourceResourceRef,
+          `/relationshipCapabilityRefs/${index}`,
+          relationshipProfileRef,
+          ["relationship-profile"],
+          "dependency"
+        ));
+      });
+      break;
+  }
+  return Object.freeze(edges);
+}
 const LOCOMOTION_ALLOWED_KEYS = /* @__PURE__ */ new Set([
   "kind",
   "id",
@@ -6213,6 +6902,23 @@ const MOTION_ALLOWED_KEYS = /* @__PURE__ */ new Set([
   "aiMetadata",
   "motionKernelRef",
   "motionTags"
+]);
+const MOTION_KERNEL_ALLOWED_KEYS = /* @__PURE__ */ new Set([
+  "kind",
+  "id",
+  "version",
+  "resourceRef",
+  "authoringAvailability",
+  "aiMetadata",
+  "implementationId",
+  "commandKind",
+  "supportedMediums",
+  "supportedBodyKinds",
+  "requiredCapabilityRefs",
+  "fallbackMotionProfileRef",
+  "deterministic",
+  "runtimeStatus",
+  "contentHash"
 ]);
 const MOTION_NUMERIC_FIELD_PATTERN = /Speed|Acceleration|Deceleration|TurnRate|Gravity|Slope|StepHeight|Seconds|Meters|Radians|Ratio/;
 const MEDIUM_FORBIDDEN_KEYS = /* @__PURE__ */ new Set([
@@ -6416,6 +7122,16 @@ function validateMotionProfile(source) {
     }
   }
 }
+function validateMotionKernel(source) {
+  const unknownField2 = Object.keys(source).find(
+    (fieldName) => !MOTION_KERNEL_ALLOWED_KEYS.has(fieldName)
+  );
+  if (unknownField2 !== void 0) {
+    throw new Error(
+      `SUBJECT_REGISTRY_UNKNOWN_FIELD: '${unknownField2}' in '${source.resourceRef}'.`
+    );
+  }
+}
 function isFiniteInRange(value, minimum, maximum) {
   return Number.isFinite(value) && value >= minimum && value <= maximum;
 }
@@ -6597,17 +7313,19 @@ function validateCameraModifierProfile(source) {
   }
 }
 function validateReferences(resourcesByRef) {
-  const requireRef2 = (ownerRef, resourceRef, expectedKind) => {
-    const resolved = resourcesByRef.get(resourceRef);
-    if (resolved?.kind !== expectedKind) {
-      throw new Error(
-        `SUBJECT_REGISTRY_MISSING_REFERENCE: '${ownerRef}' requires ${expectedKind} '${resourceRef}'.`
-      );
+  for (const resource of resourcesByRef.values()) {
+    for (const referenceEdge of listSubjectRegistryReferenceEdgesV1(resource)) {
+      const resolved = resourcesByRef.get(referenceEdge.targetResourceRef);
+      if (resolved === void 0 || !referenceEdge.expectedResourceKinds.includes(resolved.kind)) {
+        const expectedKinds = referenceEdge.expectedResourceKinds.join(" or ");
+        throw new Error(
+          `SUBJECT_REGISTRY_MISSING_REFERENCE: '${resource.resourceRef}' requires ${expectedKinds} '${referenceEdge.targetResourceRef}' at '${referenceEdge.sourcePath}'.`
+        );
+      }
     }
-  };
+  }
   for (const resource of resourcesByRef.values()) {
     if (resource.kind === "motion-profile") {
-      requireRef2(resource.resourceRef, resource.motionKernelRef, "motion-kernel");
       const kernel = resourcesByRef.get(resource.motionKernelRef);
       if (kernel?.kind === "motion-kernel" && kernel.runtimeStatus === "reserved") {
         throw new Error(
@@ -6616,7 +7334,6 @@ function validateReferences(resourcesByRef) {
       }
     }
     if (resource.kind === "camera-rig-profile") {
-      requireRef2(resource.resourceRef, resource.algorithmRef, "camera-rig-algorithm");
       const algorithm = resourcesByRef.get(resource.algorithmRef);
       if (algorithm?.kind === "camera-rig-algorithm" && algorithm.runtimeStatus === "reserved") {
         throw new Error(
@@ -6625,26 +7342,6 @@ function validateReferences(resourcesByRef) {
       }
     }
     if (resource.kind === "camera-context-profile") {
-      requireRef2(
-        resource.resourceRef,
-        resource.defaultCameraRigProfileRef,
-        "camera-rig-profile"
-      );
-      if (resource.firstPersonCameraRigProfileRef !== void 0) {
-        requireRef2(
-          resource.resourceRef,
-          resource.firstPersonCameraRigProfileRef,
-          "camera-rig-profile"
-        );
-      }
-      for (const rule of resource.rules) {
-        if (rule.cameraRigProfileRef !== void 0) {
-          requireRef2(resource.resourceRef, rule.cameraRigProfileRef, "camera-rig-profile");
-        }
-        for (const modifierRef of rule.cameraModifierRefs ?? []) {
-          requireRef2(resource.resourceRef, modifierRef, "camera-modifier-profile");
-        }
-      }
       const reachableBaseProfileRefs = /* @__PURE__ */ new Set([
         resource.defaultCameraRigProfileRef,
         ...resource.firstPersonCameraRigProfileRef === void 0 ? [] : [resource.firstPersonCameraRigProfileRef],
@@ -6687,19 +7384,6 @@ function validateReferences(resourcesByRef) {
     }
     if (resource.kind === "subject-definition" && "schemaVersion" in resource) {
       const subject = resource;
-      requireRef2(
-        subject.resourceRef,
-        subject.profiles.physicsBodyProfileRef,
-        "physics-body-profile"
-      );
-      const allMotionProfileRefs = [
-        subject.profiles.motion.defaultMotionProfileRef,
-        ...subject.profiles.motion.optionalMotionProfileRefs,
-        subject.profiles.motion.fallbackMotionProfileRef
-      ];
-      for (const ref2 of allMotionProfileRefs) {
-        requireRef2(subject.resourceRef, ref2, "motion-profile");
-      }
       const defaultMotion = resourcesByRef.get(
         subject.profiles.motion.defaultMotionProfileRef
       );
@@ -6713,39 +7397,6 @@ function validateReferences(resourcesByRef) {
         if (defaultMotion.motionTags.includes("safe") && defaultMotion.motionTags.includes("stopped")) {
           throw new Error(`MOTION_DEFAULT_SAFE_STOP_FORBIDDEN: '${subject.resourceRef}'.`);
         }
-      }
-      requireRef2(subject.resourceRef, subject.profiles.controlProfileRef, "control-profile");
-      requireRef2(
-        subject.resourceRef,
-        subject.profiles.cameraContextProfileRef,
-        "camera-context-profile"
-      );
-      requireRef2(subject.resourceRef, subject.profiles.mediumProfileRef, "medium-profile");
-      requireRef2(subject.resourceRef, subject.profiles.harnessProfileRef, "harness-profile");
-      requireRef2(
-        subject.resourceRef,
-        subject.profiles.controlFeelProfileRef,
-        "control-feel-profile"
-      );
-      for (const allowedControlFeelProfileRef of selectableControlFeelProfileRefsV1(
-        subject.profiles
-      )) {
-        requireRef2(
-          subject.resourceRef,
-          allowedControlFeelProfileRef,
-          "control-feel-profile"
-        );
-      }
-      requireRef2(
-        subject.resourceRef,
-        subject.renderBindingProfileRef,
-        "render-binding-profile"
-      );
-      const actionOrPose = resourcesByRef.get(subject.actionOrPoseSetRef);
-      if (actionOrPose?.kind !== "animation-set" && actionOrPose?.kind !== "pose-set-profile") {
-        throw new Error(
-          `SUBJECT_REGISTRY_MISSING_REFERENCE: '${subject.resourceRef}' requires action or pose set '${subject.actionOrPoseSetRef}'.`
-        );
       }
       const motion = resourcesByRef.get(subject.profiles.motion.defaultMotionProfileRef);
       const control = resourcesByRef.get(subject.profiles.controlProfileRef);
@@ -6784,14 +7435,7 @@ function createSubjectResourceRegistry(resources) {
       }
       validateSubjectDefinitionV3(source);
     }
-    if (source.kind === "motion-kernel") {
-      const duplicateParameterName = duplicateValue(source.runtimeParameterNames);
-      if (duplicateParameterName !== void 0) {
-        throw new Error(
-          `SUBJECT_REGISTRY_DUPLICATE_RUNTIME_PARAMETER: '${duplicateParameterName}' in '${source.resourceRef}'.`
-        );
-      }
-    }
+    if (source.kind === "motion-kernel") validateMotionKernel(source);
     validateCanonicalizedSemanticTags(source);
     resourcesByRef.set(source.resourceRef, lockResource(source));
   }
@@ -6801,125 +7445,104 @@ function createSubjectResourceRegistry(resources) {
       (left, right) => left.resourceRef.localeCompare(right.resourceRef)
     )
   );
-  const stableSubjectDefinitions = deepFreeze$3(
-    stableResources.filter(
-      (resource) => resource.kind === "subject-definition"
-    )
-  );
-  const stableCliSubjectDefinitions = stableSubjectDefinitions;
-  const stableCapabilitySubjectDefinitions = stableSubjectDefinitions;
-  const stableCapabilityResources = deepFreeze$3(
-    stableResources.filter(
-      (resource) => resource.kind !== "subject-definition" && "authoringAvailability" in resource
-    )
-  );
-  const stableBaseResources = deepFreeze$3(
-    stableResources.filter(
-      (resource) => {
-        return resource.kind === "subject-asset" || resource.kind === "rig-profile" || resource.kind === "animation-set" || resource.kind === "collider-profile" || resource.kind === "capability" || resource.kind === "physics-body-profile" || resource.kind === "locomotion-profile" || resource.kind === "collider-derivation-profile";
-      }
-    )
-  );
+  const resolveResource = (resourceRef) => resourcesByRef.get(resourceRef);
+  function listDiscoverableResources(filter) {
+    if (filter?.kind === void 0) return stableResources;
+    return deepFreeze$3(stableResources.filter(
+      (resource) => resource.kind === filter.kind
+    ));
+  }
   return Object.freeze({
+    resolveResource,
+    listDiscoverableResources,
+    listReferenceEdges: listSubjectRegistryReferenceEdgesV1,
     resolveSubjectAsset(resourceRef) {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "subject-asset" ? resource : void 0;
     },
     resolveRigProfile(resourceRef) {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "rig-profile" ? resource : void 0;
     },
     resolveAnimationSet(resourceRef) {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "animation-set" ? resource : void 0;
     },
     resolveColliderProfile(resourceRef) {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "collider-profile" ? resource : void 0;
     },
     resolveSubjectDefinition(resourceRef) {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "subject-definition" ? resource : void 0;
     },
     resolveCapability(resourceRef) {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "capability" ? resource : void 0;
     },
     resolvePhysicsBodyProfile(resourceRef) {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "physics-body-profile" ? resource : void 0;
     },
     resolveLocomotionProfile(resourceRef) {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "locomotion-profile" ? resource : void 0;
     },
     resolveColliderDerivationProfile(resourceRef) {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "collider-derivation-profile" ? resource : void 0;
     },
     resolveMotionKernel(resourceRef) {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "motion-kernel" ? resource : void 0;
     },
     resolveMotionProfile(resourceRef) {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "motion-profile" ? resource : void 0;
     },
     resolveControlFeelProfile(resourceRef) {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "control-feel-profile" ? resource : void 0;
     },
     resolveControlProfile(resourceRef) {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "control-profile" ? resource : void 0;
     },
     resolveCameraRigAlgorithm(resourceRef) {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "camera-rig-algorithm" ? resource : void 0;
     },
     resolveCameraRigProfile(resourceRef) {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "camera-rig-profile" ? resource : void 0;
     },
     resolveCameraModifierProfile(resourceRef) {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "camera-modifier-profile" ? resource : void 0;
     },
     resolveCameraContextProfile(resourceRef) {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "camera-context-profile" ? resource : void 0;
     },
     resolveMediumProfile(resourceRef) {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "medium-profile" ? resource : void 0;
     },
     resolveRelationshipProfile(resourceRef) {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "relationship-profile" ? resource : void 0;
     },
     resolveHarnessProfile(resourceRef) {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "harness-profile" ? resource : void 0;
     },
     resolvePoseSetProfile(resourceRef) {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "pose-set-profile" ? resource : void 0;
     },
     resolveRenderBindingProfile(resourceRef) {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "render-binding-profile" ? resource : void 0;
-    },
-    listSubjectDefinitions() {
-      return stableCliSubjectDefinitions;
-    },
-    listCapabilitySubjectDefinitions() {
-      return stableCapabilitySubjectDefinitions;
-    },
-    listResources() {
-      return stableBaseResources;
-    },
-    listCapabilityResources() {
-      return stableCapabilityResources;
     }
   });
 }
@@ -8411,7 +9034,7 @@ function normalizeSockets(definition, instancePath, diagnostics) {
   }).sort((left, right) => left.id.localeCompare(right.id));
 }
 function resourcesOfKind(registry, kind) {
-  return registry.listResources().filter((resource) => resource.kind === kind).map((resource) => resource.resourceRef).sort((left, right) => left.localeCompare(right));
+  return registry.listDiscoverableResources({ kind }).map((resource) => resource.resourceRef).sort((left, right) => left.localeCompare(right));
 }
 function resolveVisualResources(definition, request) {
   const { diagnostics, instancePath, resourceLockBuilder, subjectResourceRegistry } = request;
@@ -8466,7 +9089,7 @@ function resolveVisualResources(definition, request) {
   const { rigProfileRef, animationSetRef } = definition.visualBinding;
   const rigProfile = subjectResourceRegistry.resolveRigProfile(rigProfileRef);
   if (rigProfile === void 0) {
-    const compatibleRigProfileRefs = subjectResourceRegistry.listResources().filter((resource) => resource.kind === "rig-profile" && resource.compatibleSubjectAssetRefs.includes(assetPart.subjectAssetRef)).map((resource) => resource.resourceRef).sort((left, right) => left.localeCompare(right));
+    const compatibleRigProfileRefs = subjectResourceRegistry.listDiscoverableResources({ kind: "rig-profile" }).filter((resource) => resource.compatibleSubjectAssetRefs.includes(assetPart.subjectAssetRef)).map((resource) => resource.resourceRef).sort((left, right) => left.localeCompare(right));
     addError$1(
       diagnostics,
       "SUBJECT_RIG_PROFILE_NOT_FOUND",
@@ -8483,7 +9106,7 @@ function resolveVisualResources(definition, request) {
   }
   const animationSet = subjectResourceRegistry.resolveAnimationSet(animationSetRef);
   if (animationSet === void 0) {
-    const compatibleAnimationSetRefs = subjectResourceRegistry.listResources().filter((resource) => resource.kind === "animation-set" && resource.subjectAssetRef === assetPart.subjectAssetRef && resource.rigProfileRef === rigProfileRef).map((resource) => resource.resourceRef).sort((left, right) => left.localeCompare(right));
+    const compatibleAnimationSetRefs = subjectResourceRegistry.listDiscoverableResources({ kind: "animation-set" }).filter((resource) => resource.subjectAssetRef === assetPart.subjectAssetRef && resource.rigProfileRef === rigProfileRef).map((resource) => resource.resourceRef).sort((left, right) => left.localeCompare(right));
     addError$1(
       diagnostics,
       "SUBJECT_ANIMATION_SET_NOT_FOUND",
@@ -8634,7 +9257,7 @@ function resolveColliderPolicy(definition, request) {
     const { colliderProfileRef } = definition.colliderPolicy;
     const colliderProfile = subjectResourceRegistry.resolveColliderProfile(colliderProfileRef);
     if (colliderProfile === void 0) {
-      const compatibleColliderProfileRefs = subjectResourceRegistry.listResources().filter((resource) => resource.kind === "collider-profile" && resource.supportedBodyTopologies.includes(definition.bodyTopology)).map((resource) => resource.resourceRef).sort((left, right) => left.localeCompare(right));
+      const compatibleColliderProfileRefs = subjectResourceRegistry.listDiscoverableResources({ kind: "collider-profile" }).filter((resource) => resource.supportedBodyTopologies.includes(definition.bodyTopology)).map((resource) => resource.resourceRef).sort((left, right) => left.localeCompare(right));
       addError$1(
         diagnostics,
         "SUBJECT_COLLIDER_PROFILE_NOT_FOUND",
@@ -16382,7 +17005,7 @@ const additionalProperties = false;
 const required = ["id", "version", "kind", "authoringAvailability", "category", "bodyTopology", "semanticClassId", "coordinateConvention", "visualParts", "visualBinding", "sockets", "colliderPolicy", "capabilityRefs", "profiles", "relationshipCapabilityRefs", "actionOrPoseSetRef", "renderBindingProfileRef", "aiMetadata"];
 const properties = { "id": { "$ref": "#/$defs/id" }, "version": { "const": 1 }, "kind": { "const": "subject-definition" }, "authoringAvailability": { "enum": ["recommended", "advanced", "experimental"] }, "category": { "enum": ["human", "animal", "custom"] }, "bodyTopology": { "enum": ["biped", "quadruped", "custom"] }, "semanticClassId": { "$ref": "#/$defs/nonEmptyString" }, "coordinateConvention": { "type": "object", "additionalProperties": false, "required": ["forwardAxis", "upAxis", "metersPerUnit", "pivot"], "properties": { "forwardAxis": { "const": "-Z" }, "upAxis": { "const": "+Y" }, "metersPerUnit": { "const": 1 }, "pivot": { "const": "support-center" } } }, "visualParts": { "type": "array", "minItems": 1, "maxItems": 128, "items": { "$ref": "#/$defs/visualPart" } }, "visualBinding": { "$ref": "#/$defs/visualBinding" }, "sockets": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/socket" } }, "colliderPolicy": { "$ref": "#/$defs/colliderPolicy" }, "capabilityRefs": { "type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true, "items": { "type": "string", "format": "capability-ref" } }, "profiles": { "type": "object", "additionalProperties": false, "required": ["physicsBodyProfileRef", "locomotionProfileRef", "controlFeelProfileRef", "allowedControlFeelProfileRefs", "motion", "controlProfileRef", "cameraContextProfileRef", "mediumProfileRef", "harnessProfileRef"], "properties": { "physicsBodyProfileRef": { "type": "string", "format": "physics-body-profile-ref" }, "locomotionProfileRef": { "type": "string", "format": "locomotion-profile-ref" }, "controlFeelProfileRef": { "type": "string", "pattern": "^worldkit://control-feel-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "allowedControlFeelProfileRefs": { "type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true, "items": { "type": "string", "pattern": "^worldkit://control-feel-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" } }, "motion": { "type": "object", "additionalProperties": false, "required": ["defaultMotionProfileRef", "optionalMotionProfileRefs", "fallbackMotionProfileRef"], "properties": { "defaultMotionProfileRef": { "type": "string", "pattern": "^worldkit://motion-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "optionalMotionProfileRefs": { "type": "array", "maxItems": 16, "uniqueItems": true, "items": { "type": "string", "pattern": "^worldkit://motion-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" } }, "fallbackMotionProfileRef": { "type": "string", "pattern": "^worldkit://motion-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" } } }, "controlProfileRef": { "type": "string", "pattern": "^worldkit://control-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "cameraContextProfileRef": { "type": "string", "pattern": "^worldkit://camera-context/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "mediumProfileRef": { "type": "string", "pattern": "^worldkit://medium-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "harnessProfileRef": { "type": "string", "pattern": "^worldkit://harness-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" } } }, "relationshipCapabilityRefs": { "type": "array", "maxItems": 16, "uniqueItems": true, "items": { "type": "string", "format": "capability-ref" } }, "actionOrPoseSetRef": { "type": "string", "pattern": "^worldkit://(?:animation-set|pose-set)/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "renderBindingProfileRef": { "type": "string", "pattern": "^worldkit://render-binding/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "aiMetadata": { "type": "object", "additionalProperties": false, "required": ["displayName", "description", "semanticTags"], "properties": { "displayName": { "type": "string", "minLength": 1, "maxLength": 120 }, "description": { "type": "string", "minLength": 1, "maxLength": 1e3 }, "semanticTags": { "$ref": "#/$defs/semanticTags" } } } };
 const allOf = [{ "if": { "properties": { "visualBinding": { "type": "object", "required": ["mode"], "properties": { "mode": { "const": "rigged" } } } } }, "then": { "properties": { "visualParts": { "type": "array", "contains": { "type": "object", "required": ["kind"], "properties": { "kind": { "const": "asset" } } }, "minContains": 1 } } } }];
-const $defs = { "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$" }, "nonEmptyString": { "type": "string", "minLength": 1, "maxLength": 128 }, "positiveNumber": { "type": "number", "exclusiveMinimum": 0 }, "vec3": { "type": "array", "prefixItems": [{ "type": "number" }, { "type": "number" }, { "type": "number" }], "items": false, "minItems": 3, "maxItems": 3 }, "positiveVec3": { "type": "array", "prefixItems": [{ "$ref": "#/$defs/positiveNumber" }, { "$ref": "#/$defs/positiveNumber" }, { "$ref": "#/$defs/positiveNumber" }], "items": false, "minItems": 3, "maxItems": 3 }, "semanticTags": { "type": "array", "maxItems": 32, "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$" } }, "localTransform": { "type": "object", "additionalProperties": false, "required": ["positionMetersXYZ"], "properties": { "positionMetersXYZ": { "$ref": "#/$defs/vec3" }, "rotationEulerRadiansXYZ": { "$ref": "#/$defs/vec3" } } }, "assetLocalTransform": { "type": "object", "additionalProperties": false, "required": ["positionMetersXYZ", "scaleXYZ"], "properties": { "positionMetersXYZ": { "$ref": "#/$defs/vec3" }, "rotationEulerRadiansXYZ": { "$ref": "#/$defs/vec3" }, "scaleXYZ": { "$ref": "#/$defs/positiveVec3" } } }, "shape": { "oneOf": [{ "type": "object", "additionalProperties": false, "required": ["kind", "sizeMetersXYZ"], "properties": { "kind": { "const": "box" }, "sizeMetersXYZ": { "$ref": "#/$defs/positiveVec3" } } }, { "type": "object", "additionalProperties": false, "required": ["kind", "radiusMeters"], "properties": { "kind": { "const": "sphere" }, "radiusMeters": { "$ref": "#/$defs/positiveNumber" } } }, { "type": "object", "additionalProperties": false, "required": ["kind", "radiusMeters", "heightMeters"], "properties": { "kind": { "const": "cylinder" }, "radiusMeters": { "$ref": "#/$defs/positiveNumber" }, "heightMeters": { "$ref": "#/$defs/positiveNumber" } } }, { "type": "object", "additionalProperties": false, "required": ["kind", "radiusMeters", "heightMeters"], "properties": { "kind": { "const": "capsule" }, "radiusMeters": { "$ref": "#/$defs/positiveNumber" }, "heightMeters": { "$ref": "#/$defs/positiveNumber" } } }] }, "visualPart": { "oneOf": [{ "type": "object", "additionalProperties": false, "required": ["id", "kind", "shape", "localTransform", "colliderContribution", "semanticTags"], "properties": { "id": { "$ref": "#/$defs/id" }, "kind": { "const": "primitive" }, "shape": { "$ref": "#/$defs/shape" }, "localTransform": { "$ref": "#/$defs/localTransform" }, "colliderContribution": { "enum": ["include", "exclude"] }, "semanticTags": { "$ref": "#/$defs/semanticTags" } } }, { "type": "object", "additionalProperties": false, "required": ["id", "kind", "subjectAssetRef", "localTransform", "appearance", "semanticTags"], "properties": { "id": { "$ref": "#/$defs/id" }, "kind": { "const": "asset" }, "subjectAssetRef": { "type": "string", "pattern": "^worldkit://subject-asset/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "localTransform": { "$ref": "#/$defs/assetLocalTransform" }, "appearance": { "type": "object", "additionalProperties": false, "required": ["mode"], "properties": { "mode": { "const": "whitebox-neutral" } } }, "semanticTags": { "$ref": "#/$defs/semanticTags" } } }] }, "visualBinding": { "oneOf": [{ "type": "object", "additionalProperties": false, "required": ["mode"], "properties": { "mode": { "const": "static" } } }, { "type": "object", "additionalProperties": false, "required": ["mode", "rigProfileRef", "animationSetRef"], "properties": { "mode": { "const": "rigged" }, "rigProfileRef": { "type": "string", "pattern": "^worldkit://rig-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "animationSetRef": { "type": "string", "pattern": "^worldkit://animation-set/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" } } }] }, "colliderPolicy": { "oneOf": [{ "type": "object", "additionalProperties": false, "required": ["kind", "colliderDerivationProfileRef"], "properties": { "kind": { "const": "derive" }, "colliderDerivationProfileRef": { "type": "string", "format": "collider-derivation-profile-ref" } } }, { "type": "object", "additionalProperties": false, "required": ["kind", "colliderProfileRef"], "properties": { "kind": { "const": "profile" }, "colliderProfileRef": { "type": "string", "pattern": "^worldkit://collider-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" } } }] }, "socket": { "oneOf": [{ "type": "object", "additionalProperties": false, "required": ["id", "kind", "localTransform", "semanticTags"], "properties": { "id": { "$ref": "#/$defs/id" }, "kind": { "const": "local" }, "localTransform": { "$ref": "#/$defs/localTransform" }, "semanticTags": { "$ref": "#/$defs/semanticTags" } } }, { "type": "object", "additionalProperties": false, "required": ["id", "kind", "boneId", "offsetTransform", "semanticTags"], "properties": { "id": { "$ref": "#/$defs/id" }, "kind": { "const": "bone" }, "boneId": { "enum": ["root", "hips", "spine", "chest", "neck", "head", "upper-arm.left", "lower-arm.left", "hand.left", "upper-arm.right", "lower-arm.right", "hand.right", "upper-leg.left", "lower-leg.left", "foot.left", "upper-leg.right", "lower-leg.right", "foot.right"] }, "offsetTransform": { "$ref": "#/$defs/localTransform" }, "semanticTags": { "$ref": "#/$defs/semanticTags" } } }] } };
+const $defs = { "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$" }, "nonEmptyString": { "type": "string", "minLength": 1, "maxLength": 128 }, "positiveNumber": { "type": "number", "exclusiveMinimum": 0 }, "vec3": { "type": "array", "prefixItems": [{ "type": "number" }, { "type": "number" }, { "type": "number" }], "items": false, "minItems": 3, "maxItems": 3 }, "positiveVec3": { "type": "array", "prefixItems": [{ "$ref": "#/$defs/positiveNumber" }, { "$ref": "#/$defs/positiveNumber" }, { "$ref": "#/$defs/positiveNumber" }], "items": false, "minItems": 3, "maxItems": 3 }, "semanticTags": { "type": "array", "maxItems": 32, "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$" } }, "localTransform": { "type": "object", "additionalProperties": false, "required": ["positionMetersXYZ"], "properties": { "positionMetersXYZ": { "$ref": "#/$defs/vec3" }, "rotationEulerRadiansXYZ": { "$ref": "#/$defs/vec3" } } }, "assetLocalTransform": { "type": "object", "additionalProperties": false, "required": ["positionMetersXYZ", "scaleXYZ"], "properties": { "positionMetersXYZ": { "$ref": "#/$defs/vec3" }, "rotationEulerRadiansXYZ": { "$ref": "#/$defs/vec3" }, "scaleXYZ": { "$ref": "#/$defs/positiveVec3" } } }, "shape": { "oneOf": [{ "type": "object", "additionalProperties": false, "required": ["kind", "sizeMetersXYZ"], "properties": { "kind": { "const": "box" }, "sizeMetersXYZ": { "$ref": "#/$defs/positiveVec3" } } }, { "type": "object", "additionalProperties": false, "required": ["kind", "radiusMeters"], "properties": { "kind": { "const": "sphere" }, "radiusMeters": { "$ref": "#/$defs/positiveNumber" } } }, { "type": "object", "additionalProperties": false, "required": ["kind", "radiusMeters", "heightMeters"], "properties": { "kind": { "const": "cylinder" }, "radiusMeters": { "$ref": "#/$defs/positiveNumber" }, "heightMeters": { "$ref": "#/$defs/positiveNumber" } } }, { "type": "object", "additionalProperties": false, "required": ["kind", "radiusMeters", "heightMeters"], "properties": { "kind": { "const": "capsule" }, "radiusMeters": { "$ref": "#/$defs/positiveNumber" }, "heightMeters": { "$ref": "#/$defs/positiveNumber" } } }] }, "visualPart": { "oneOf": [{ "type": "object", "additionalProperties": false, "required": ["id", "kind", "shape", "localTransform", "colliderContribution", "semanticTags"], "properties": { "id": { "$ref": "#/$defs/id" }, "kind": { "const": "primitive" }, "shape": { "$ref": "#/$defs/shape" }, "localTransform": { "$ref": "#/$defs/localTransform" }, "colliderContribution": { "enum": ["include", "exclude"] }, "semanticTags": { "$ref": "#/$defs/semanticTags" } } }, { "type": "object", "additionalProperties": false, "required": ["id", "kind", "subjectAssetRef", "localTransform", "appearance", "semanticTags"], "properties": { "id": { "$ref": "#/$defs/id" }, "kind": { "const": "asset" }, "subjectAssetRef": { "type": "string", "pattern": "^worldkit://subject-asset/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "localTransform": { "$ref": "#/$defs/assetLocalTransform" }, "appearance": { "type": "object", "additionalProperties": false, "required": ["mode"], "properties": { "mode": { "const": "whitebox-neutral" } } }, "semanticTags": { "$ref": "#/$defs/semanticTags" } } }] }, "visualBinding": { "oneOf": [{ "type": "object", "additionalProperties": false, "required": ["mode"], "properties": { "mode": { "const": "static" } } }, { "type": "object", "additionalProperties": false, "required": ["mode", "rigProfileRef", "animationSetRef"], "properties": { "mode": { "const": "rigged" }, "rigProfileRef": { "type": "string", "pattern": "^worldkit://rig-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "animationSetRef": { "type": "string", "pattern": "^worldkit://animation-set/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" } } }] }, "colliderPolicy": { "oneOf": [{ "type": "object", "additionalProperties": false, "required": ["kind", "colliderDerivationProfileRef"], "properties": { "kind": { "const": "derive" }, "colliderDerivationProfileRef": { "type": "string", "format": "collider-derivation-profile-ref" } } }, { "type": "object", "additionalProperties": false, "required": ["kind", "colliderProfileRef"], "properties": { "kind": { "const": "profile" }, "colliderProfileRef": { "type": "string", "pattern": "^worldkit://collider-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" } } }] }, "socket": { "oneOf": [{ "type": "object", "additionalProperties": false, "required": ["id", "kind", "localTransform", "semanticTags"], "properties": { "id": { "$ref": "#/$defs/id" }, "kind": { "const": "local" }, "localTransform": { "$ref": "#/$defs/localTransform" }, "semanticTags": { "$ref": "#/$defs/semanticTags" } } }, { "type": "object", "additionalProperties": false, "required": ["id", "kind", "boneId", "offsetTransform", "semanticTags"], "properties": { "id": { "$ref": "#/$defs/id" }, "kind": { "const": "bone" }, "boneId": { "enum": ["hips", "spine", "chest", "neck", "head", "upper-arm.left", "lower-arm.left", "hand.left", "upper-arm.right", "lower-arm.right", "hand.right", "upper-leg.left", "lower-leg.left", "foot.left", "upper-leg.right", "lower-leg.right", "foot.right"] }, "offsetTransform": { "$ref": "#/$defs/localTransform" }, "semanticTags": { "$ref": "#/$defs/semanticTags" } } }] } };
 const subjectDefinitionV1Schema = {
   $schema,
   $id,
@@ -16989,7 +17612,7 @@ function normalizeValidatedAuthoringBase(spec, options) {
             `Registry Subject Definition '${node.subjectDefinitionRef}' does not exist.`,
             {
               subjectDefinitionRef: node.subjectDefinitionRef,
-              availableSubjectDefinitionRefs: subjectResourceRegistry.listSubjectDefinitions().map((candidate) => candidate.resourceRef)
+              availableSubjectDefinitionRefs: subjectResourceRegistry.listDiscoverableResources({ kind: "subject-definition" }).map((candidate) => candidate.resourceRef)
             }
           );
         } else if (!definitionsToNormalizeByRef.has(node.subjectDefinitionRef)) {
@@ -19027,25 +19650,6 @@ function rejectPublishedWaterMediumProfile(mediumProfile) {
     assertPublishedMovementMediumSupported();
   }
 }
-const EXECUTION_BIPED_BONE_IDS = [
-  "chest",
-  "foot.left",
-  "foot.right",
-  "hand.left",
-  "hand.right",
-  "head",
-  "hips",
-  "lower-arm.left",
-  "lower-arm.right",
-  "lower-leg.left",
-  "lower-leg.right",
-  "neck",
-  "spine",
-  "upper-arm.left",
-  "upper-arm.right",
-  "upper-leg.left",
-  "upper-leg.right"
-];
 class CompilerInputAccessorErrorV1 extends Error {
 }
 function assertCompilerInputAccessorFreeV1(value, visited = /* @__PURE__ */ new WeakSet()) {
@@ -19372,7 +19976,7 @@ function compileSubjectAssetV1(resource) {
   };
 }
 function compileRigProfileV1(resource) {
-  for (const boneId of EXECUTION_BIPED_BONE_IDS) {
+  for (const boneId of BIPED_BONE_IDS_V1) {
     const hasMapping = Object.prototype.hasOwnProperty.call(
       resource.sourceNodeNameByBoneId,
       boneId
@@ -19541,7 +20145,6 @@ function compileCapabilityAssemblyV1(assembly) {
       implementationId,
       commandKind: motionKernel.commandKind,
       supportedMediums: [...motionKernel.supportedMediums],
-      runtimeParameterNames: [...motionKernel.runtimeParameterNames],
       fallbackMotionProfileRef: motionKernel.fallbackMotionProfileRef,
       deterministic: true
     };
