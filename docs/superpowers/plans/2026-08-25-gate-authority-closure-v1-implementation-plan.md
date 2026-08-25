@@ -102,4 +102,4 @@
 - [x] Run focused suites after the final edit.
 - [x] Run `pnpm test:census`, `pnpm check:agent-self-check`, `pnpm test:independent`, `pnpm typecheck`, `pnpm test`, and `pnpm build` once on the final tree, followed by `git diff --check` and a clean-tree mutation audit.
 - [x] Use the project-local read-only Cursor completion review; independently reproduce and disposition every candidate finding.
-- [ ] Commit and push `cursor/workspace-structure-audit-ad0d` only after all required evidence is current.
+- [x] Commit and push `cursor/workspace-structure-audit-ad0d` only after all required evidence is current.
