@@ -110,6 +110,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "packages/subject-registry/src/subject-registry.test.ts", lane: "contract" },
   { path: "packages/subject-registry/src/xier120-subjects.test.ts", lane: "contract" },
   { path: "packages/terrain-surface/src/simple-polygon-xz.test.ts", lane: "contract" },
+  { path: "packages/terrain-surface/src/spawn-safety.test.ts", lane: "contract" },
   { path: "packages/terrain-surface/src/static-collider-triangle-mesh.test.ts", lane: "contract" },
   { path: "packages/terrain-surface/src/terrain-surface.test.ts", lane: "contract" },
   { path: "packages/terrain-surface/src/traversal-surface-query.test.ts", lane: "contract" },

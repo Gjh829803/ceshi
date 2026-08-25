@@ -15,11 +15,11 @@ import type {
 } from "@whitebox-world/authoring";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import {
+  sampleTriangleHeightfieldSurface,
   validateSpawnSafety,
   type SpawnFootprintBoundary,
   type SpawnStaticBlockingObject,
-} from "@whitebox-world/testkit";
-import { sampleTriangleHeightfieldSurface } from "@whitebox-world/terrain-surface";
+} from "@whitebox-world/terrain-surface";
 import {
   canonicalExecutionResourceLockEntriesV1,
   hashExecutionPlanV5,

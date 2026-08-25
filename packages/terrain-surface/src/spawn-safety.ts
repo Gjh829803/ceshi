@@ -1,11 +1,75 @@
-import type {
-  Aabb,
-  Diagnostic,
-  SpawnFootprintBoundary,
-  SpawnSafetyInput,
-  Vec3Tuple,
-} from "./types.js";
 import { DEFAULT_HUMANOID_TRAVERSAL } from "@whitebox-world/contracts";
+import type {
+  Diagnostic,
+  EntityId,
+  FeatureId,
+  Vec3Tuple,
+} from "@whitebox-world/contracts";
+
+export interface Aabb {
+  min: Vec3Tuple;
+  max: Vec3Tuple;
+}
+
+export interface SpawnCollider {
+  bounds: Aabb;
+  entityId?: EntityId;
+  featureId?: FeatureId;
+  isTrigger?: boolean;
+}
+
+export type SpawnFootprintBoundary =
+  | {
+      kind: "circle";
+      centerMetersXZ: readonly [x: number, z: number];
+      radiusMeters: number;
+    }
+  | {
+      kind: "ellipse";
+      centerMetersXZ: readonly [x: number, z: number];
+      radiusMetersXZ: readonly [x: number, z: number];
+    }
+  | {
+      kind: "polygon";
+      pointsMetersXZ: readonly (readonly [x: number, z: number])[];
+    };
+
+export interface SpawnWaterSurface {
+  entityId: EntityId;
+  featureId?: FeatureId;
+  boundary: SpawnFootprintBoundary;
+  waterLevelMeters: number;
+  depthMeters: number;
+  traversalMode: "blocked" | "walkable" | "swimmable";
+}
+
+export interface SpawnStaticBlockingObject {
+  entityId: EntityId;
+  featureId?: FeatureId;
+  footprint: SpawnFootprintBoundary;
+  heightRangeMeters?: readonly [minimum: number, maximum: number];
+}
+
+export interface SpawnSafetyInput {
+  entityId: EntityId;
+  /** Player feet position in world space. */
+  position: Vec3Tuple;
+  capsule?: {
+    radius: number;
+    height: number;
+  };
+  worldBounds?: Aabb;
+  colliders?: readonly SpawnCollider[];
+  waterSurfaces?: readonly SpawnWaterSurface[];
+  staticBlockingObjects?: readonly SpawnStaticBlockingObject[];
+  ground?: {
+    heightAt(x: number, z: number): number | undefined;
+    slopeDegreesAt?(x: number, z: number): number | undefined;
+    maxWalkableSlopeDegrees?: number;
+    tolerance?: number;
+    maxDrop?: number;
+  };
+}
 
 const DEFAULT_RADIUS = 0.35;
 const DEFAULT_HEIGHT = 1.8;

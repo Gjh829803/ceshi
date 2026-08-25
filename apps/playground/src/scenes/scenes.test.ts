@@ -1,8 +1,8 @@
 import {
   validateFeatureOwnership,
   validateFiniteTransforms,
-  validateSpawnSafety,
 } from "@whitebox-world/testkit";
+import { validateSpawnSafety } from "@whitebox-world/terrain-surface";
 import {
   compileOutdoorScene,
   deriveWorldPlanArtifacts,

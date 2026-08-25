@@ -20,12 +20,13 @@
     "@whitebox-world/runtime-contracts": "workspace:*",
     "@whitebox-world/runtime-host": "workspace:*",
     "@whitebox-world/subject-registry": "workspace:*",
-    "@whitebox-world/testkit": "workspace:*",
     "@whitebox-world/world": "workspace:*",
     "@whitebox-world/world-package": "workspace:*",
     "lodash-es": "^4.18.1"
   },
   "devDependencies": {
+    "@whitebox-world/terrain-surface": "workspace:*",
+    "@whitebox-world/testkit": "workspace:*",
     "@whitebox-world/traversal": "workspace:*",
     "typescript": "^5.9.2",
     "vite": "^7.1.2"

@@ -433,6 +433,7 @@ Protocol V5。详细事务、状态保留和权限边界见总体设计 §16.4�
 ### 7.2 场景与制品工作流
 
 `@whitebox-world/world` 保留 Plan-first 场景 DSL、规划工件和引擎无关几何数据；
+`@whitebox-world/terrain-surface` 拥有 Spawn Safety 等生产空间不变量，
 `@whitebox-world/testkit` 只服务门禁。`apps/playground` 同时承载 Canonical Browser Gate、
 Babylon-backed catalog gameplay 和 artifact-only 捕获，但三者共享同一 Authoring/Compiler
 与 Babylon/Havok Runtime 边界，不存在可混用的第二套运行时协议。

@@ -143,9 +143,6 @@ importers:
       '@whitebox-world/subject-registry':
         specifier: workspace:*
         version: link:../../packages/subject-registry
-      '@whitebox-world/testkit':
-        specifier: workspace:*
-        version: link:../../packages/testkit
       '@whitebox-world/world':
         specifier: workspace:*
         version: link:../../packages/world
@@ -156,6 +153,12 @@ importers:
         specifier: ^4.18.1
         version: 4.18.1
     devDependencies:
+      '@whitebox-world/terrain-surface':
+        specifier: workspace:*
+        version: link:../../packages/terrain-surface
+      '@whitebox-world/testkit':
+        specifier: workspace:*
+        version: link:../../packages/testkit
       '@whitebox-world/traversal':
         specifier: workspace:*
         version: link:../../packages/traversal
@@ -220,9 +223,6 @@ importers:
       '@whitebox-world/terrain-surface':
         specifier: workspace:*
         version: link:../terrain-surface
-      '@whitebox-world/testkit':
-        specifier: workspace:*
-        version: link:../testkit
       '@whitebox-world/traversal':
         specifier: workspace:*
         version: link:../traversal
@@ -399,6 +399,9 @@ importers:
 
   packages/terrain-surface:
     dependencies:
+      '@whitebox-world/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       lodash-es:
         specifier: ^4.18.1
         version: 4.18.1
@@ -490,9 +493,6 @@ importers:
       '@whitebox-world/terrain-surface':
         specifier: workspace:*
         version: link:../terrain-surface
-      '@whitebox-world/testkit':
-        specifier: workspace:*
-        version: link:../testkit
 
   packages/world-package:
     dependencies:

@@ -9,7 +9,6 @@
   "dependencies": {
     "@whitebox-world/authoring": "workspace:*",
     "@whitebox-world/contracts": "workspace:*",
-    "@whitebox-world/testkit": "workspace:*",
     "@whitebox-world/terrain-surface": "workspace:*"
   }
 }

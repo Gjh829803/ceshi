@@ -507,14 +507,14 @@ Validation 词汇。它不构建 Traversal Graph，不跑 Character Controller�
 | `packages/subject-composition/` | Primitive Bounds、Collider 推导、角色胶囊和资源成本 | 内部可复用 LEGO 几何合同 | 依赖 Babylon Mesh 或场景层级 |
 | `packages/subject-actions/` | Character State、Ground Humanoid Action 与动作解析 | 引擎无关动作语义 | 直接播放 AnimationGroup 或控制输入设备 |
 | `packages/camera/` | Provider-neutral 命名 Camera Rig/Modifier/Context Profile、View Preference、纯 Selection/Explain | Camera 领域合同；Runtime/Browser 接线尚未完成 | 创建渲染相机、执行碰撞查询、拥有 Gameplay State，或把纯选择误写成已交付 Runtime selector |
-| `packages/terrain-surface/` | Heightfield、Triangle Mesh、Collider Support 与 Surface Query | Traversal/Runtime 内部几何合同 | 把单一 Heightfield 冒充全部空间拓扑 |
+| `packages/terrain-surface/` | Heightfield、Triangle Mesh、Collider Support、Surface Query 与 Spawn Safety | Traversal/Runtime 内部几何合同与生产空间不变量 | 把单一 Heightfield 冒充全部空间拓扑 |
 | `packages/traversal/` | Traversal Surface、Lock、Capability Envelope、Graph/Path/Probe Receipt 与 Route Overlay | Provider-neutral Route 合同 | 暴露 Recast 数据或替代 Runtime 支撑事实 |
 | `packages/traversal-recast/` | Recast/Detour Graph Build、Query 与 Route Evidence Provider Adapter | 不直接面向 AI | 让 Provider 名称或 Handle 进入 Canonical 协议 |
 | `packages/gameplay/` | Gameplay State、Feature、Semantic Action 与 Command Dispatcher | 引擎无关 Gameplay 组合层 | 依赖 Babylon、Browser DOM 或设备输入 |
 | `packages/runtime-host/` | WorldSession、Command Journal、事务、容量和生命周期所有权 | Runtime Host API | 实现 Babylon 场景细节或重复推导 Gameplay State |
 | `packages/runtime-babylon/` | Babylon/Havok Runtime、Camera Director、Subject Controller、Capture 与资产生命周期 | Engine Adapter，不直接面向 AI | 定义 Canonical Schema 或泄漏引擎 Handle |
 | `packages/control-capture/` | Simulation Take、Capture Schedule、Profile、严格校验与 Hash | Take/Capture 自动化合同 | 把 Authoring Preview 当作 Gameplay Ground Truth |
-| `packages/testkit/` | Feature Ownership、Transform、Spawn Safety 与诊断测试辅助 | 仅测试/门禁 | 被生产 Runtime 依赖为业务实现 |
+| `packages/testkit/` | Feature Ownership、Transform 与诊断测试辅助 | 仅测试/门禁 | 被生产代码依赖为业务实现 |
 
 旧的 `@whitebox-world/physics` 和 `@whitebox-world/subjects` 已删除，也没有被一对一合并成
 新的大包。Subject 的公共资源、组合和动作语义分别由 `subject-registry`、

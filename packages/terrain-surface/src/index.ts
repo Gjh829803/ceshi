@@ -11,6 +11,15 @@ export {
   type LockedSupportColliderV1,
 } from "./collider-support.js";
 export {
+  validateSpawnSafety,
+  type Aabb,
+  type SpawnCollider,
+  type SpawnFootprintBoundary,
+  type SpawnSafetyInput,
+  type SpawnStaticBlockingObject,
+  type SpawnWaterSurface,
+} from "./spawn-safety.js";
+export {
   emitStaticColliderTriangleMeshV1,
   emitTransformedStaticColliderTriangleMeshV1,
   queryStaticColliderTriangleMeshSupportHeightMetersV1,

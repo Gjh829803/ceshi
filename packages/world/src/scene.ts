@@ -11,7 +11,7 @@ import {
   type SpawnFootprintBoundary,
   type SpawnStaticBlockingObject,
   type SpawnWaterSurface,
-} from "@whitebox-world/testkit";
+} from "@whitebox-world/terrain-surface";
 
 import {
   FeatureRegistry,
