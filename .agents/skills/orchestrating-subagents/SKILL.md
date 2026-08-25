@@ -25,6 +25,23 @@ Use subagents only when:
 
 Otherwise, continue directly.
 
+## Direct-Execution Gate
+
+Before every implementation dispatch, check the ready DAG rather than the total task count.
+
+The main agent must execute directly when all of these conditions describe the next work:
+
+- only one mutation workstream is ready, or ready tasks share files/interfaces and must run sequentially;
+- the worker would edit the same worktree and use the same test processes, ports, caches, or native resources;
+- the main agent has no separate, useful work it can complete while the worker runs; and
+- delegation would provide only context isolation or another reporting layer, not concrete wall-clock savings.
+
+Do not turn a sequential implementation plan into a one-worker-at-a-time subagent loop. In that shape, dispatch, handoff, review-package, waiting, and recovery are additional critical-path work. The main agent implements and verifies the tasks directly, then may request an independent read-only review at a meaningful checkpoint.
+
+Long or exclusive verification strengthens the direct-execution decision. A worker that launches Browser, server, Havok/Recast, build, or full-suite processes prevents the main agent from safely running competing verification. The process owner must finish or terminate those exact processes before another lane starts; interruption is not proof that child processes stopped.
+
+Context isolation and review independence can improve quality, but neither alone satisfies this skill's parallelism gate.
+
 ## Design-stage Handoff
 
 For qualifying tasks, design first produces this dependency-aware graph:
@@ -49,6 +66,8 @@ Keep cross-cutting interfaces main-agent-owned until stable. Do not distort arch
 6. Integrate and run end-to-end verification.
 
 Never hard-code a worker count. Idle capacity warrants reassessment, not invented work.
+
+If `safe ready workstreams < 2`, set `worker_limit = 0` and continue in the main agent. A future DAG transition may make delegation useful; reassess then instead of committing to subagents for the whole plan.
 
 ## Model and Thinking Inheritance
 
@@ -82,5 +101,8 @@ Avoid prompts such as "investigate this" or "fix the project."
 ## Common Mistakes
 
 - Treating task phases as workstreams or fixed worker counts as portable.
+- Dispatching one implementer per sequential task while the main agent waits.
+- Counting context isolation or an extra task report as wall-clock savings.
+- Interrupting a worker and starting new verification without checking its child processes.
 - Confusing isolated context with isolated state.
 - Treating successful reports as integrated proof.
