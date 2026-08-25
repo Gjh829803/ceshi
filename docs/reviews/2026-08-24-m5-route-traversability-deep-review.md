@@ -5,7 +5,7 @@
 ## 0. 2026-08-25 最新 main 复验（当前权威）
 
 - 最新 `origin/main`：`a8b9fd363a7116a8eb731e2c56f0f210c0ee00c8`（`docs: record final pr14 integration baseline`）。
-- 报告分支：`codex/m5-traversability-deep-review`，已 fetch 并把两份报告提交 rebase 到上述 main；本轮改文档前 HEAD 为 `a0367161213874f00e622542b8635eb3f747ae0f`。
+- 报告分支：`codex/m5-traversability-deep-review`，已 fetch 并把两份报告提交 rebase 到上述 main；本轮改文档前 HEAD 为 `893ae2394fcb664da62eab9d129859f55bf60baf`。
 - 原始审查锚点：`4ae1912b3e7ce0b635a4a2fc6cf0b3ae178a75e5`；从该锚点到最新 main 共 141 个提交。
 - 审查模式：Mode B 最新变更复验，并按 full-dimension protocol 补齐 D1–D6；Runtime 部分完整应用 runtime-deep-review checklist。
 - `126a8f4..a8b9fd3` 新增 4 个提交、改动 97 个文件，主体是 Hosted Scene Brief / Recording / Visual workflow；所有既有 M5 owner、fixture、Route runner 与 lockfile blob 均未变化。
@@ -14,7 +14,7 @@
 
 ### 0.1 最新结论
 
-**仍为 NO-GO。最新 main 没有关闭 5 个原 P0 或 8 个原 P1，并由 Hosted workflow 新增 2 个 P1；当前合计 5 个 P0、10 个 P1。**
+**仍为 NO-GO。最新 main 没有关闭 5 个原 P0 或 8 个原 P1，并由 Hosted workflow 新增 2 个 P1；本轮独立 Cursor main 审计再确认 2 个此前未记录的 P1；当前合计 5 个 P0、12 个 P1。**
 
 旧报告对 Medium `contentHash` 的判断不准确，继续撤回。此前标记为已关闭的 `route-validation-runner.test.ts` timeout 在最新全量门禁中重新出现：隔离运行通过，但与整仓资源型测试并行时超过 180 秒。这不改变下面 5 个 P0 的阻断地位。
 
@@ -49,6 +49,9 @@
 | P1 SubjectController 部分构造泄漏 | **仍存在，且仍是 pre-existing debt** | 最新失败注入 3/3 均 `created=2,released=0`；allocation 后仍有 throwing work：`motion-kernel-runtime.ts:442-463`，host 到成功后才登记 disposer：`babylon-world-runtime.ts:601-620`。 |
 | P1 Hosted Studio 导入未绑定 Route report | **新增，存在** | 生产 runner 在 `scripts/run-spatial-world-agent.sh:211-226` 对 `requiresTrustedRouteValidation` 执行 Route gate；但 `apps/studio/server.mjs:672-701,953-1030` 的 deliverable/admission 不要求或校验该 report，随后在 `:1061-1098` 直接标 `ready/passed`。 |
 | P1 Visual Capture 配置失败泄漏 Runtime | **新增，存在** | `main.ts:1998-2016` 在 Adapter 创建成功后先 configure、后登记 owner；未知 entity 在 `babylon-world-adapter.ts:668-683` 抛错，Browser catch `worldkit-browser-api.ts:1209-1247` 只能释放已登记 owner。最小所有权复现为 `disposed=0,status=error`。 |
+| P1 V2 pre-Graph Surface failure 状态误标 | **新增确认，存在** | 冻结规格要求 profile/correlation failure 为 `incomplete / unavailable`；`connectivity-result.ts:892-923` 却只接受其 `unreachable / unavailable`，`evaluate-route.ts:844-852,977-985` 也按 unreachable 生产。当前 focused tests 把错误状态固化为绿测。 |
+| P1 overlap correlation failure 的 Y 坐标硬编码 0 | **新增确认，存在** | `evaluate-route.ts:977-985` 把 overlap witness 的 XZ 与常量 Y=0 拼成 XYZ。真实 elevated fixture 的两个候选 Surface 顶面均为 0.25m，最小复现仍输出 `[6,0,3.666…]`。 |
+| P2 ambiguous Surface Diagnostic 只保留首个 identity | **新增确认，存在** | failure receipt 保留 2 个 overlap identity，但 `validation/src/route.ts:237-244` 只复制 `[0]` 到 Diagnostic；最小复现中第二个冲突 Surface 在用户/AI-facing Diagnostic 中消失。 |
 | P2 route-validation-runner timeout | **重新打开** | `pnpm test` 中真实 case 191.074s，超过 180s；隔离运行仍 12/12 通过，真实 case 96.565s、suite 103.22s。问题是资源型门禁并发编排/预算不稳定，不应只继续上调 timeout。 |
 | P2 Browser complete connectivity / unavailable Path | **仍存在** | 最新最小 DTO 仍被接受；`browser-route-evidence.ts:443-452` 只有 `hasPath ⇒ connectivity complete`，没有反向闭包。 |
 | P2 slope domain 不一致 | **仍存在** | Lock 接受 `(0,90]`，Build Input 接受 `[0,90]`，Recast 要求 `[0,90)`：`lock.ts:152-167`、`build-input.ts:473-479`、`recast-config.ts:123-129`。 |
@@ -56,7 +59,7 @@
 | P2 完成声明 / 文档不一致 | **仍存在，且扩大** | `docs/05-mvp-roadmap.md:17,106-125` 本轮改称 M5 closed；`docs/18-refactor-progress-and-backlog.md:19-22,840-843,855-861` 与 PR14 integration review `:28` 也称 closed。相反，`docs/00-project-overview.md:55-57,103,153-169`、`docs/17-canonical-json-quickstart.md:25-27` 仍称完整 M5/R1b 开放；`docs/18:326` 还保留 Browser/CI Evidence 开放项。 |
 | P2 dead code / clean-break 噪声 | **部分修复** | `route-evaluator.ts` 的冗余分支已清理；但 `route-runtime-probe.ts:212-214` 仍有 `RoutePathReceiptV2 \| RoutePathReceiptV2`，`route-evidence-publication.ts:69-78,346-355` 仍重复导出同名 interfaces。 |
 
-本轮确认 2 个新增 P1，没有新增 P0。结论变化为：原 5 个 P0、8 个 P1 保持；runner timeout P2 重新打开；Medium 子结论继续撤回；dead-code 子结论仍为部分修复。
+最新 main 的 Hosted workflow 变更新增 2 个 P1；本轮 Cursor clean-main 补充审计又确认 2 个此前遗漏的现存 P1 与 1 个 P2，没有新增 P0。结论变化为：原 5 个 P0、8 个 P1 保持，当前合计 5 个 P0、12 个 P1；runner timeout P2 重新打开；Medium 子结论继续撤回；dead-code 子结论仍为部分修复。
 
 ### 0.3 最新门禁矩阵
 
@@ -75,6 +78,8 @@
 | `pnpm verify:unreleased-clean-break` | exit 0，694 files、0 forbidden、519 current-authority matches |
 | 改动后的 `worldkit-route-run.integration.test.ts` | exit 0，1/1，120.430s |
 | `pnpm test:studio` / `pnpm test:lwdp-client` | exit 0，36/36 与 13/13 |
+| Surface failure focused contract tests | exit 0，3 files、26 tests；但现有断言把 profile missing 固化为 `unreachable`，且没有 elevated Y / 全 identities 断言，因此属于 false-green evidence |
+| Surface failure 最小动态 probe | profile missing=`unreachable / unavailable`；overlap failure=`[6,0,3.666…]` 且保留 2 identities；转成 Diagnostic 后只剩首个 identity |
 | `pnpm build` | exit 0，Vite 2189 modules，1m15s；仅大 chunk warning |
 
 门禁运行生成的动态 session/hash 差异已在取证后恢复；最终分支只保留本文档改动。
@@ -92,7 +97,7 @@
 - `packages/traversal-recast/src/evaluate-route.ts`
 - `packages/traversal-recast/src/build-graph.ts`
 
-`motion-kernel-runtime.ts` 的 P0 step-up block 与 P1 partial-construction 顺序未变；`route-evaluator.ts` 的 Required Route set binding 与 MIME 闭包也未补齐。四个新提交改变的是 Hosted/Studio/Playground integration，并由此新增上述两个 P1。
+`motion-kernel-runtime.ts` 的 P0 step-up block 与 P1 partial-construction 顺序未变；`route-evaluator.ts` 的 Required Route set binding 与 MIME 闭包也未补齐。四个新提交改变的是 Hosted/Studio/Playground integration，并由此新增上述两个 Hosted P1。Surface failure 状态与坐标两条 P1 是本轮对当前 main 补审时发现的既有遗漏，不能归因于这四个提交。
 
 本轮使用 static-read、自动化 contract、真实 Babylon/Havok runtime probe、Browser/Studio 定向测试和完整仓库门禁。Canonical / Placement / Rigged / G Bot gates 生成了 rendered artifacts，但本文不把它们当作 Route 通过性证明；没有声明 manual-interaction evidence。动态 artifact 差异在取证后已恢复。
 
@@ -103,12 +108,20 @@
 - 主审接受的措辞修正：Graph Builder Profile 已重绑定，P0-04 缺的是 Lock-derived Capability Envelope 重算；短 Path 总长处于容差内的 0 Tick complete 是合法例外；现有 Studio import 绿测只是无 Required Route 的浅工件，不是本 finding 的 RED；Controller leak、MIME、Medium 的现行行号已在本文校正。
 - 证据边界：Cursor 使用 Ask/read-only static review，对已安装 Babylon 源码作了核对；Ask 模式拒绝其 Git/GitHub diff listing。主审已独立 fetch、逐 blob 比较、执行动态反例和当前树门禁，因此该限制不构成 finding 处置阻塞。
 
+2026-08-25 又在 detached clean `origin/main@a8b9fd3` 上执行补充审计，主模型为 `cursor-grok-4.6-xhigh`。首轮单体 deep audit 在 Cursor 内部尝试调用 `claude-fable-5-thinking-high` 子审模型时遇到额度失败，随后长时间无最终输出；该会话已按恢复流程终止，其未完成结论没有用于处置。之后改为三个明确禁止继续分派的窄范围只读会话：
+
+- Contract / Graph：`27d5eaaf-ac76-4c64-b2de-a303d2b20aee`；提出 6 个候选，主审合并并接受 2 个 P1、1 个 P2，另 3 个为既有 finding 重复。
+- Runtime：`f5afdbf7-98a2-47af-ae27-c42080178560`；候选均为现有 P0 的重复机制。其 snap-down 候选经 Babylon 9.21.2 源码与冻结 P1.5 规格核对，不构成独立新 finding。
+- Integration / Evidence：`f567dc84-313b-41b0-9fd3-22c4a4d5dde4`；root timeout 与 docs 候选均已在报告中；`worldkit run` 返回 0 是只读 Host transport 生命周期语义，真正阻断退出码属于 `worldkit verify route` / production admission，因此不接受为绕过门禁。
+
+主审随后直接核对冻结 status table、当前 canonicalizer/producer/Diagnostic，并执行最小动态 probe 与 3 files / 26 tests 的 focused suite。最终只新增下面两条 P1 与一条 P2；不是把 Cursor 候选未经复现直接写入报告。
+
 ### 0.6 当前处置建议
 
 重新打开 M5，并撤回 `Complete / Final GO / no open P0/P1`。修复顺序仍应是：
 
 1. 先为 5 个 P0 提交 fix-before-fix failing reproducer；
-2. 修复 P0 后逐条关闭 10 个 P1 合同/生命周期缺口，包括两个 Hosted 新回归；
+2. 修复 P0 后逐条关闭 12 个 P1 合同/生命周期缺口，包括两个 Hosted 新回归与两条本轮补审确认的 Surface failure 缺口；
 3. 把本报告的反例纳入正式 verifier，而不是只保留外部审查脚本；
 4. 把 root test 重构为“并行 contract lane + 串行 resource-heavy lane”，保留 `pnpm test` 的全覆盖语义；按变更影响只执行失效证据，合入前再执行相关完整闭包；
 5. 重跑 focused regressions、R0/R1/R1b、完整 test/typecheck/build、Report/Browser/Studio 同字节闭包，以及分层长绕路和窄踏面的真实 Runtime evidence。
@@ -126,7 +139,7 @@ Medium finding 已撤回；runner timeout 则必须通过门禁编排修复并�
 5. 最终树上每个相关完整 lane 恰好运行一次；`typecheck`、`build`、R0/R1/R1b、Browser Route integration、Studio、LWDP 与 clean-break 仍是 root Vitest 之外的显式闭包，不能因 lane 拆分省略。
 6. 五个 P0 的反例必须进入正式 verifier，并保留“整条 Path 总长在 tolerance 内才允许 0 Tick”的合法短路径测试。外部 `/tmp` 审查脚本只作取证，不作为长期覆盖。
 
-修复工作按三个 batch 推进：A 先落地门禁 census 并锁住 5 个 P0 RED/GREEN；B 在 P0 authority 稳定后处理 10 个 P1；C 处理 P2、文档与 clean-break，并执行最终完整闭包。具体文件所有权、依赖边和集成点需在实施前的修复设计中冻结。
+修复工作按三个 batch 推进：A 先落地门禁 census 并锁住 5 个 P0 RED/GREEN；B 在 P0 authority 稳定后处理 12 个 P1；C 处理 P2、文档与 clean-break，并执行最终完整闭包。具体文件所有权、依赖边和集成点需在实施前的修复设计中冻结。
 
 ## 1. 原始审查元数据（2026-08-24 历史锚点）
 
@@ -348,6 +361,30 @@ Medium finding 已撤回；runner timeout 则必须通过门禁编排修复并�
 - 建议：把 `createdAdapter` 与 `trackAdapter(adapter)` 移到 configure 之前，并为 create→track→configure:throw→dispose 的严格事件顺序增加回归；错误仍应为 `WORLDKIT_CAPTURE_TARGET_NOT_FOUND`。
 - 复核：Runtime 子审查发现并执行最小 owner probe；主 Agent对拍初始化、配置、Browser catch 与 disposer 控制流，确认是 `73f1830` 新回归。
 
+### [P1] [D3/D6] Surface Profile / Correlation 基础设施失败被误标为 Route unreachable
+
+- 证据（spec-to-code + automated contract）：冻结 R1b status table 在 `docs/superpowers/specs/2026-08-23-route-r1b-static-platform-design.md:519-539` 明确要求 `surface-profile-missing`、`surface-correlation-missing` 与 `surface-correlation-ambiguous` 使用 `incomplete / unavailable`；实施计划 `docs/superpowers/plans/2026-08-23-route-r1b-static-platform-implementation-plan.md:404-416` 也冻结相同状态。当前 `packages/traversal/src/connectivity-result.ts:892-923` 却把三者放进 `unavailableUnreachable`，producer 在 `packages/traversal-recast/src/evaluate-route.ts:844-852,977-985` 同样产生 `unreachable`。最小动态 probe 得到 profile missing=`unreachable / unavailable`。focused suite 虽 3 files / 26 tests 全绿，但 `evaluate-route.v2.test.ts:123-150` 与 `route-v2-contracts.test.ts:532-575` 正在固化错误状态。
+- 期望：Provider/Surface Profile join 缺失或无法唯一相关属于证据基础设施不完整，不是已经证明世界在该能力下不可通过；Canonical Failure、Report 聚合、Browser/Studio 摘要必须统一保留 `incomplete / unavailable`。
+- 影响：Report 会把缺 Profile、漏绑定或相关歧义统计成真实 Route failed/unreachable，错误地把基础设施责任归给世界几何/玩法，并误导后续 Agent 去“修地图”。两者目前都会阻断发布，但状态、指标和修复责任已经漂移。
+- 建议：把三种 reason 原子移入 `unavailableIncomplete`，producer 改发 `incomplete`；同步更新 canonical contracts、Report/Browser assertions 与 golden hashes。修复前先为三个 reason 分别增加 RED，并断言 status、graphStatus 与下游 aggregation。
+- 复核：Cursor Contract/Graph 窄审发现；主 Agent独立对拍冻结规格、实施计划、canonicalizer、producer 与现有测试，并用当前源码 probe 复现。
+
+### [P1] [D2/D3] Coplanar Surface overlap failure 把世界坐标 Y 硬编码为 0
+
+- 证据（static-read + dynamic probe）：`packages/traversal-recast/src/evaluate-route.ts:977-985` 用 overlap witness 的 XZ 构造 `failurePositionMetersXYZ`，中间分量固定写 `0`。当前 elevated overlap fixture 的 step/platform 顶面都在 Y=0.25m（`packages/traversal-recast/src/test-fixture.test-support.ts:267-288`），最小 probe 仍输出 `[6,0,3.666…]`，同时正确保留两个候选 Surface identity。
+- 期望：字段名和冻结 reason contract 都要求世界空间 XYZ；歧义位置应落在实际重叠 Surface 上，并在输入排序变化时保持确定性。
+- 影响：高架桥面、分层平台或任何非零海拔世界的 failure marker 会落到错误高度；Browser overlay、日志和 AI 修复提示可能指向下层或地面，破坏分层 Route 的可诊断性。
+- 建议：从 canonical blocker 对应的确定性 triangle plane 在 witness XZ 求 Y，并按 Envelope 位置精度量化；若两个面高度不相同，则不得伪装为 coplanar overlap。增加非零、非对称高度 fixture，并断言反转输入顺序后的完整 XYZ 稳定。
+- 复核：Cursor Contract/Graph 窄审发现；主 Agent以当前真实 fixture 独立复现并核对 Surface 顶面高度。
+
+### [P2] [D2/D6] ambiguous Surface Diagnostic 丢失第二个及后续候选 identity
+
+- 证据（automated contract）：冻结 R1b 规格 `docs/superpowers/specs/2026-08-23-route-r1b-static-platform-design.md:535-555` 要求 ambiguous failure 至少保留两个 identity 和全部内部重叠候选。Canonical failure receipt 在最小 probe 中确实保留 step/platform 两个 identity；但 `packages/validation/src/route.ts:237-244` 只把 `relatedTraversalSurfaceIdentities[0]` 复制到用户/AI-facing Diagnostic，输出中第二个冲突 Surface 消失。
+- 期望：面向修复者的 Diagnostic 应表达“哪些 Surface 彼此歧义”，不能把多方冲突降成一个看似独立的 Surface。当前完整 evidence artifact 仍可追溯全部 identities，因此本条定为 P2 而非 P1。
+- 影响：默认 Report/Studio 诊断只展示首个候选，AI 或人工必须额外解引用底层 failure artifact 才能还原冲突集合；如果只消费 Diagnostic，会对错误对象执行单边修复。
+- 建议：在不引入同义公共字段的前提下，原子设计 plural、closed 的相关 Surface identity 结构，或在已经冻结的结构化 `details` 合同中完整保留排序数组；Schema、generated types、Browser/Studio 与测试必须一起迁移。至少增加 2 个及 3 个 candidate 的顺序稳定断言。
+- 复核：Cursor Contract/Graph 窄审发现；主 Agent独立执行 failure→Diagnostic probe，确认完整 receipt 有 2 个 identity 而 Diagnostic 只有首个。
+
 ### [P2] [REOPENED 2026-08-25] [D6] 正式 verifier 与同一真实 fixture 的测试预算
 
 - 最新处置：**重新打开。** `scripts/lib/route-validation-runner.test.ts:363` 的专用 timeout 虽已由 120s 调整到 180s，但 `a8b9fd3` 全量 `pnpm test` 中真实 V4/V5 case 为 191.074s，成为 193/194 files、2235/2236 tests 中唯一失败；隔离运行则为 12/12、真实 case 96.565s、suite 103.22s。
@@ -380,10 +417,10 @@ Medium finding 已撤回；runner timeout 则必须通过门禁编排修复并�
 | 维度 | 状态 | 证据摘要 |
 | --- | --- | --- |
 | D1 定位与需求边界 | 已查 | M5=Route/主体真实通过性；区分 R0、R1、R1b 与 H1/H2/H3、dynamic platform、NPC/goTo 等开放项 |
-| D2 Schema 与 AI-friendly | 已查 | V2 naming/identity 主体一致；发现 MIME clean-break 与冗余声明 |
-| D3 承诺与事实 | 已查 | 对拍 Route/R1b/Validation 规格、backlog、旧 review；发现 complete claim、Path topology、scope/seam/layer 差异 |
+| D2 Schema 与 AI-friendly | 已查 | V2 naming/identity 主体一致；发现 MIME clean-break、冗余声明、overlap XYZ 错位与 Diagnostic identity 截断 |
+| D3 承诺与事实 | 已查 | 对拍 Route/R1b/Validation 规格、backlog、旧 review；发现 complete claim、Path topology、scope/seam/layer 与 Surface failure status 差异 |
 | D4 单一权威状态 | 已查 | 检查 Lock→Envelope、Graph、retained support、station、arrival、Medium；确认 5 个 P0 |
 | D5 工程质量 | 已查 | 检查 installed Babylon semantics、partial construction、dispose、test timeout、dead code；step-up/native leaks 仍在，新增 Adapter startup leak，runner timeout 重新打开 |
-| D6 门禁与证据分层 | 已查 | 跑 R0/R1/R1b、full tests、build/typecheck、artifact forgery probes；明确 automated 与 rendered/manual 边界 |
+| D6 门禁与证据分层 | 已查 | 跑 R0/R1/R1b、full tests、build/typecheck、artifact forgery 与 Surface failure probes；确认现有 profile-missing 测试为 false green，并明确 automated 与 rendered/manual 边界 |
 
-最终处置建议（2026-08-25 最新 main 复验）：重新打开 M5。先修复并以 failing reproducer 锁住全部 P0，再处理 10 个 P1 合同/生命周期缺口；同步把门禁拆成可按影响面选择、最终仍完整闭合的 lane。之后必须重跑 focused regressions、R0/R1/R1b、完整 pnpm test/typecheck/build、同字节 Report/Browser/Studio publication，以及真实窄踏面/分层长绕路交互证据。不能仅凭当前 11+11 fixture matrix 恢复 Final GO。
+最终处置建议（2026-08-25 最新 main 复验）：重新打开 M5。先修复并以 failing reproducer 锁住全部 P0，再处理 12 个 P1 合同/生命周期缺口；同步把门禁拆成可按影响面选择、最终仍完整闭合的 lane。之后必须重跑 focused regressions、R0/R1/R1b、完整 pnpm test/typecheck/build、同字节 Report/Browser/Studio publication，以及真实窄踏面/分层长绕路交互证据。不能仅凭当前 11+11 fixture matrix 恢复 Final GO。
