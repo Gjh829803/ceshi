@@ -7,6 +7,7 @@ import type {
   CompatibleProfileSummaryV1,
   ControlTuningV1,
   MotionKernelSummaryV1,
+  RuntimeCaptureTargetV1,
   SemanticInputActionV1,
   SubjectDefinitionSummaryV1,
   WorldRuntimeSnapshotV4,
@@ -1910,7 +1911,7 @@ if (runtimeRoute.mode === "unknown") {
   let preparationError: unknown;
   let prepared: Readonly<{
     loaded: Awaited<ReturnType<typeof import("./authoring-loader.js")["loadAuthoringScene"]>>;
-    visualCaptureTargets: Awaited<ReturnType<typeof import("./authoring-loader.js")["loadRuntimeVisualCaptureTargets"]>>;
+    visualCaptureTargets: readonly RuntimeCaptureTargetV1[];
     BabylonWorldAdapter: typeof import("./babylon-world-adapter.js")["BabylonWorldAdapter"];
   }> | undefined;
   try {
@@ -1918,32 +1919,28 @@ if (runtimeRoute.mode === "unknown") {
     const { BabylonWorldAdapter } = await import("./babylon-world-adapter.js");
     const subjectDefinitionRef = urlParameters.get("subjectDefinitionRef");
     let loaded: Awaited<ReturnType<typeof import("./authoring-loader.js")["loadAuthoringScene"]>>;
-    let visualCaptureTargets: Awaited<ReturnType<typeof import("./authoring-loader.js")["loadRuntimeVisualCaptureTargets"]>> = [];
+    let visualCaptureTargets: readonly RuntimeCaptureTargetV1[] = [];
     if (runtimeRoute.mode === "authoring") {
-      const { loadAuthoringScene, loadRuntimeVisualCaptureTargets } = await import("./authoring-loader.js");
+      const { loadAuthoringScene, loadStudioAuthoringPreviewV1 } = await import("./authoring-loader.js");
       startupStage = "authoring-load";
       const worldId = urlParameters.get("world");
-      [loaded, visualCaptureTargets] = await Promise.all([
-        loadAuthoringScene(
-          isNil(worldId)
-            ? undefined
-            : () => fetch(
-                `/api/worlds/${encodeURIComponent(worldId)}/authoring-spec`,
-                { cache: "no-store" },
-              ),
-          {
-            ...(isNil(subjectDefinitionRef) ? {} : { subjectDefinitionRef }),
-          },
-        ),
-        isNil(worldId)
-          ? Promise.resolve([])
-          : loadRuntimeVisualCaptureTargets(
-              () => fetch(
-                `/api/worlds/${encodeURIComponent(worldId)}/visual-capture-targets`,
-                { cache: "no-store" },
-              ),
-            ),
-      ]);
+      const authoringOptions = {
+        ...(isNil(subjectDefinitionRef) ? {} : { subjectDefinitionRef }),
+      };
+      if (isNil(worldId)) {
+        loaded = await loadAuthoringScene(undefined, authoringOptions);
+      } else {
+        const preview = await loadStudioAuthoringPreviewV1(
+          worldId,
+          () => fetch(
+            `/api/worlds/${encodeURIComponent(worldId)}/preview-bootstrap`,
+            { cache: "no-store" },
+          ),
+          authoringOptions,
+        );
+        loaded = preview.loaded;
+        visualCaptureTargets = preview.visualCaptureTargets;
+      }
     } else {
       const { loadOutdoorGameplaySceneV1 } = await import(
         "./outdoor-scene-gameplay-loader.js"

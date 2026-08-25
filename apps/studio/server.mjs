@@ -19,6 +19,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { createRecordingWorkbenchService } from "./recording-workbench.mjs";
+import {
+  StudioPreviewBootstrapError,
+  assembleStudioPreviewBootstrapV1,
+} from "./preview-bootstrap.mjs";
 import { FORMAL_CODEX_EXECUTION_PROFILE } from "../../scripts/lib/lwdp-codex-profile.mjs";
 import {
   cancelGenerationJob,
@@ -2737,37 +2741,54 @@ export function createStudio(options = {}) {
       return true;
     }
 
-    const authoringSourceMatch = /^\/api\/worlds\/([a-z0-9-]+)\/authoring-spec$/.exec(url.pathname);
-    if (request.method === "GET" && authoringSourceMatch) {
-      const record = await readRecord(authoringSourceMatch[1]);
-      const authoringPath = record === null
-        ? null
-        : path.join(repoRoot, "artifacts/scenes", record.sceneId, "authoring.json");
-      if (record === null || authoringPath === null || !await fileExists(authoringPath)) {
-        sendError(response, 404, "这个世界尚未生成 Canonical AuthoringSpec。");
+    const previewBootstrapMatch = /^\/api\/worlds\/([a-z0-9-]+)\/preview-bootstrap$/.exec(url.pathname);
+    if (request.method === "GET" && previewBootstrapMatch) {
+      const worldId = previewBootstrapMatch[1];
+      const recordBefore = await readRecord(worldId);
+      if (recordBefore === null) {
+        sendJson(response, 404, {
+          code: "STUDIO_PREVIEW_NOT_FOUND",
+          error: "没有找到这个世界。",
+        });
         return true;
       }
-      serveFile(response, authoringPath, "private, no-store");
-      return true;
-    }
-
-    const visualCaptureTargetsMatch = /^\/api\/worlds\/([a-z0-9-]+)\/visual-capture-targets$/.exec(url.pathname);
-    if (request.method === "GET" && visualCaptureTargetsMatch) {
-      const record = await readRecord(visualCaptureTargetsMatch[1]);
-      const implementationMapPath = record === null
-        ? null
-        : path.join(repoRoot, "artifacts/scenes", record.sceneId, "scene-implementation-map.json");
-      if (record === null || implementationMapPath === null ||
-          !await fileExists(implementationMapPath)) {
-        sendError(response, 404, "这个世界尚未生成可信视觉目标映射。");
+      const artifactRoot = path.join(repoRoot, "artifacts/scenes", recordBefore.sceneId);
+      const readSourceIfPresent = async (relativePath) => {
+        try {
+          return await readFile(path.join(artifactRoot, relativePath), "utf8");
+        } catch {
+          return null;
+        }
+      };
+      const [authoringSource, implementationMapSource, evaluationRunSource] =
+        await Promise.all([
+          readSourceIfPresent("authoring.json"),
+          readSourceIfPresent("scene-implementation-map.json"),
+          readSourceIfPresent("evaluation-run.json"),
+        ]);
+      const recordAfter = await readRecord(worldId);
+      if (authoringSource === null || implementationMapSource === null) {
+        sendJson(response, 404, {
+          code: "STUDIO_PREVIEW_NOT_FOUND",
+          error: "这个世界尚未生成完整 Preview authority。",
+        });
         return true;
       }
-      const implementationMap = JSON.parse(await readFile(implementationMapPath, "utf8"));
-      if (!Array.isArray(implementationMap.visualCaptureGroups)) {
-        sendError(response, 409, "这个世界的可信视觉目标映射无效。");
-        return true;
+      try {
+        const bootstrap = assembleStudioPreviewBootstrapV1({
+          worldId,
+          recordBefore,
+          recordAfter,
+          authoringSource,
+          implementationMapSource,
+          evaluationRunSource,
+        });
+        sendJson(response, 200, bootstrap);
+      } catch (error) {
+        if (!(error instanceof StudioPreviewBootstrapError)) throw error;
+        const statusCode = error.code === "STUDIO_PREVIEW_NOT_FOUND" ? 404 : 409;
+        sendJson(response, statusCode, { code: error.code, error: error.message });
       }
-      sendJson(response, 200, { targets: implementationMap.visualCaptureGroups });
       return true;
     }
 

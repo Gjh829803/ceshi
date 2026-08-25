@@ -1588,19 +1588,124 @@ test("serves Scene Brief deliverables and runtime tri-views", async () => {
     const styledTriView = await fetch(`${origin}/api/worlds/${created.id}/styled-triviews/player-subject`);
     assert.equal(styledTriView.status, 200);
     assert.equal(styledTriView.headers.get("content-type"), "image/png");
-    const authoringSource = await fetch(`${origin}/api/worlds/${created.id}/authoring-spec`);
-    assert.equal(authoringSource.status, 200);
-    assert.equal(await authoringSource.text(), "{}");
-    const visualTargets = await fetch(`${origin}/api/worlds/${created.id}/visual-capture-targets`);
-    assert.equal(visualTargets.status, 200);
-    assert.deepEqual((await visualTargets.json()).targets, [{
-      id: "player-subject",
-      visualTargetId: "player-subject",
-      runtimeEntityIds: ["player", "player-accessory"],
-      role: "primary-subject",
-      semanticClassId: "subject.player",
-      identityColor: "#E85D5D",
-    }]);
+  } finally {
+    await studio.shutdown();
+  }
+});
+
+test("serves one atomic Preview bootstrap and removes split Preview authority routes", async () => {
+  const dataRoot = await temporaryRoot(".test-data-");
+  const fakeRepoRoot = await temporaryRoot(".test-repo-");
+  const studio = createStudio({ repoRoot: fakeRepoRoot, dataRoot, autoRunJobs: false });
+  const origin = await listen(studio);
+  try {
+    const created = (await (await fetch(`${origin}/api/worlds`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "Atomic Preview", prompt: "Create one closed Preview world." }),
+    })).json()).world;
+    const startedAt = "2026-08-25T09:00:00.000Z";
+    const authoringSpec = {
+      kind: "worldkit-authoring-spec",
+      schemaVersion: 4,
+      id: created.sceneId,
+      seed: 25,
+    };
+    const authoringSpecHash = `sha256:${createHash("sha256")
+      .update(canonicalJson(authoringSpec))
+      .digest("hex")}`;
+    const implementationMap = {
+      kind: "worldkit-scene-brief-implementation-map",
+      schemaVersion: 1,
+      sceneId: created.sceneId,
+      sceneBriefHash: `sha256:${"b".repeat(64)}`,
+      authoringSpecId: created.sceneId,
+      authoringSpecHash,
+      mappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"] }],
+      visualCaptureGroups: [{
+        id: "player-subject",
+        visualTargetId: "player-subject",
+        runtimeEntityIds: ["player"],
+        role: "primary-subject",
+        semanticClassId: "subject.player",
+        identityColor: "#E85D5D",
+      }],
+    };
+    const artifactRoot = path.join(fakeRepoRoot, "artifacts/scenes", created.sceneId);
+    const recordPath = path.join(dataRoot, "worlds", created.id, "record.json");
+    const record = JSON.parse(await readFile(recordPath, "utf8"));
+    await mkdir(artifactRoot, { recursive: true });
+    await Promise.all([
+      writeFile(path.join(artifactRoot, "authoring.json"), JSON.stringify(authoringSpec)),
+      writeFile(
+        path.join(artifactRoot, "scene-implementation-map.json"),
+        JSON.stringify(implementationMap),
+      ),
+      writeFile(path.join(artifactRoot, "evaluation-run.json"), JSON.stringify({
+        kind: "worldkit-evaluation-run",
+        schemaVersion: 1,
+        caseId: created.id,
+        sceneId: created.sceneId,
+        workflowPolicyVersion,
+        attempt: 1,
+        startedAt,
+      })),
+      writeFile(recordPath, JSON.stringify({
+        ...record,
+        status: "ready",
+        stage: "ready",
+        outcome: "passed",
+        captureStatus: "passed",
+        attempt: 1,
+        startedAt,
+        workflowPolicyVersion,
+      })),
+    ]);
+
+    const bootstrapResponse = await fetch(
+      `${origin}/api/worlds/${created.id}/preview-bootstrap`,
+    );
+    assert.equal(
+      bootstrapResponse.status,
+      200,
+      JSON.stringify(await bootstrapResponse.clone().json()),
+    );
+    assert.equal(bootstrapResponse.headers.get("cache-control"), "no-store");
+    assert.deepEqual(await bootstrapResponse.json(), {
+      kind: "worldkit-studio-preview-bootstrap",
+      schemaVersion: 1,
+      worldId: created.id,
+      sceneId: created.sceneId,
+      attempt: 1,
+      attemptStartedAt: startedAt,
+      authoringSpecHash,
+      authoringSpec,
+      implementationMap,
+    });
+
+    await writeFile(path.join(artifactRoot, "evaluation-run.json"), JSON.stringify({
+      kind: "worldkit-evaluation-run",
+      schemaVersion: 1,
+      caseId: created.id,
+      sceneId: created.sceneId,
+      workflowPolicyVersion,
+      attempt: 2,
+      startedAt,
+    }));
+    const staleResponse = await fetch(`${origin}/api/worlds/${created.id}/preview-bootstrap`);
+    assert.equal(staleResponse.status, 409);
+    assert.equal((await staleResponse.json()).code, "STUDIO_PREVIEW_ATTEMPT_DRIFT");
+
+    await rm(path.join(artifactRoot, "scene-implementation-map.json"));
+    const missingResponse = await fetch(`${origin}/api/worlds/${created.id}/preview-bootstrap`);
+    assert.equal(missingResponse.status, 404);
+    assert.equal((await missingResponse.json()).code, "STUDIO_PREVIEW_NOT_FOUND");
+
+    assert.equal((await fetch(`${origin}/api/worlds/${created.id}/authoring-spec`)).status, 404);
+    assert.equal(
+      (await fetch(`${origin}/api/worlds/${created.id}/visual-capture-targets`)).status,
+      404,
+    );
   } finally {
     await studio.shutdown();
   }

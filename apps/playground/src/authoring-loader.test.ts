@@ -9,6 +9,7 @@ import {
 } from "../../../packages/authoring/src/test-fixture";
 import {
   normalizeAuthoringSpecV4,
+  sha256CanonicalJson,
   type AuthoringSpecV4,
   type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
@@ -36,7 +37,7 @@ import {
   featureInspections,
   mapPlaygroundInputActions,
 } from "./babylon-world-adapter";
-import { loadAuthoringScene, loadRuntimeVisualCaptureTargets } from "./authoring-loader";
+import { loadAuthoringScene, loadStudioAuthoringPreviewV1 } from "./authoring-loader";
 
 function deepFreeze<T>(value: T): Readonly<T> {
   if (value !== null && typeof value === "object") {
@@ -244,9 +245,19 @@ function jsonResponse(value: unknown, status = 200): Response {
 }
 
 describe("loadAuthoringScene", () => {
-  it("loads the trusted visual identity palette for interactive authoring playback", async () => {
-    const targets = await loadRuntimeVisualCaptureTargets(async () => new Response(JSON.stringify({
-      targets: [{
+  it("loads one Studio authoring Preview bootstrap with its closed implementation map", async () => {
+    const authoringSpec = createValidAuthoringSpecV4();
+    const worldId = "studio-preview-world";
+    const authoringSpecHash = sha256CanonicalJson(authoringSpec);
+    const implementationMap = {
+      kind: "worldkit-scene-brief-implementation-map" as const,
+      schemaVersion: 1 as const,
+      sceneId: authoringSpec.id,
+      sceneBriefHash: `sha256:${"b".repeat(64)}` as const,
+      authoringSpecId: authoringSpec.id,
+      authoringSpecHash: authoringSpecHash as `sha256:${string}`,
+      mappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"] }],
+      visualCaptureGroups: [{
         id: "player-subject",
         visualTargetId: "player-subject",
         runtimeEntityIds: ["player"],
@@ -254,8 +265,24 @@ describe("loadAuthoringScene", () => {
         semanticClassId: "subject.player",
         identityColor: "#E85D5D",
       }],
-    }), { status: 200 }));
-    expect(targets).toEqual([{
+    };
+    const fetchBootstrap = vi.fn(async () => jsonResponse({
+      kind: "worldkit-studio-preview-bootstrap",
+      schemaVersion: 1,
+      worldId,
+      sceneId: authoringSpec.id,
+      attempt: 2,
+      attemptStartedAt: "2026-08-25T09:00:00.000Z",
+      authoringSpecHash,
+      authoringSpec,
+      implementationMap,
+    }));
+
+    const preview = await loadStudioAuthoringPreviewV1(worldId, fetchBootstrap);
+    expect(fetchBootstrap).toHaveBeenCalledTimes(1);
+    expect(preview.loaded.ok).toBe(true);
+    expect(preview.attempt).toBe(2);
+    expect(preview.visualCaptureTargets).toEqual([{
       id: "player-subject",
       visualTargetId: "player-subject",
       runtimeEntityIds: ["player"],
@@ -263,9 +290,64 @@ describe("loadAuthoringScene", () => {
       semanticClassId: "subject.player",
       identityColor: "#E85D5D",
     }]);
-    await expect(loadRuntimeVisualCaptureTargets(async () => new Response(JSON.stringify({
-      targets: [],
-    }), { status: 200 }))).rejects.toThrow(/Visual capture groups must contain 1-5 targets/);
+    implementationMap.visualCaptureGroups[0]!.runtimeEntityIds.push("mutated");
+    expect(preview.visualCaptureTargets[0]!.runtimeEntityIds).toEqual(["player"]);
+  });
+
+  it("rejects malformed or cross-authority Studio Preview bootstraps", async () => {
+    const authoringSpec = createValidAuthoringSpecV4();
+    const worldId = "studio-preview-world";
+    const authoringSpecHash = sha256CanonicalJson(authoringSpec);
+    const validPayload = {
+      kind: "worldkit-studio-preview-bootstrap",
+      schemaVersion: 1,
+      worldId,
+      sceneId: authoringSpec.id,
+      attempt: 1,
+      attemptStartedAt: "2026-08-25T09:00:00.000Z",
+      authoringSpecHash,
+      authoringSpec,
+      implementationMap: {
+        kind: "worldkit-scene-brief-implementation-map",
+        schemaVersion: 1,
+        sceneId: authoringSpec.id,
+        sceneBriefHash: `sha256:${"b".repeat(64)}`,
+        authoringSpecId: authoringSpec.id,
+        authoringSpecHash,
+        mappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"] }],
+        visualCaptureGroups: [{
+          id: "player-subject",
+          visualTargetId: "player-subject",
+          runtimeEntityIds: ["player"],
+          role: "primary-subject",
+          semanticClassId: "subject.player",
+          identityColor: "#E85D5D",
+        }],
+      },
+    };
+    const invalidPayloads = [
+      { ...validPayload, kind: "wrong-kind" },
+      { ...validPayload, attempt: 0 },
+      { ...validPayload, worldId: "another-world" },
+      { ...validPayload, authoringSpecHash: `sha256:${"0".repeat(64)}` },
+      {
+        ...validPayload,
+        implementationMap: {
+          ...validPayload.implementationMap,
+          visualCaptureGroups: [],
+        },
+      },
+    ];
+    for (const payload of invalidPayloads) {
+      await expect(loadStudioAuthoringPreviewV1(
+        worldId,
+        async () => jsonResponse(payload),
+      )).rejects.toThrow(/Studio Preview bootstrap/);
+    }
+    await expect(loadStudioAuthoringPreviewV1(
+      worldId,
+      async () => jsonResponse({ error: "not ready" }, 409),
+    )).rejects.toThrow(/HTTP 409/);
   });
 
   it("keeps the rigged canonical world ref-only with two stable non-overlapping instances", async () => {

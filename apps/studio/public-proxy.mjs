@@ -74,7 +74,7 @@ const publicApiRoutes = [
   },
   {
     methods: ["GET"],
-    pattern: /^\/api\/worlds\/[a-z0-9-]+\/(?:authoring-spec|visual-capture-targets|reference)$/,
+    pattern: /^\/api\/worlds\/[a-z0-9-]+\/(?:preview-bootstrap|reference)$/,
   },
   { methods: ["GET"], pattern: /^\/api\/worlds\/[a-z0-9-]+\/deliverables\/[a-z0-9-]+$/ },
   { methods: ["POST"], pattern: /^\/api\/worlds\/[a-z0-9-]+\/retry$/ },

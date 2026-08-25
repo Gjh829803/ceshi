@@ -113,6 +113,8 @@ test("does not expose Vite internals or unlisted paths through the public bounda
       ["GET", "/play/@fs/etc/passwd"],
       ["POST", "/app.js"],
       ["GET", "/api/not-a-studio-route"],
+      ["GET", "/api/worlds/demo-world/authoring-spec"],
+      ["GET", "/api/worlds/demo-world/visual-capture-targets"],
       ["POST", "/api/health"],
     ];
     for (const [method, pathname] of forbiddenRequests) {
@@ -152,6 +154,7 @@ test("forwards only the public Studio pages, assets, and declared API methods", 
     ["GET", "/scene-assets/demo-world/world-plan.png"],
     ["GET", "/worldkit-assets/character.glb"],
     ["POST", "/api/worlds"],
+    ["GET", "/api/worlds/demo-world/preview-bootstrap"],
     ["GET", "/api/worlds/demo-world/deliverables/opening-frame"],
     ["POST", "/api/recording-worlds/demo-world/recordings/recording-abc/generate"],
     ["HEAD", "/api/recording-worlds/demo-world/recordings/recording-abc/source"],

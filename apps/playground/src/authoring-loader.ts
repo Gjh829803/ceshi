@@ -3,6 +3,7 @@ import {
   parseCanonicalJson,
   parseAuthoringSpecV4,
   sha256CanonicalJson,
+  stringifyCanonicalJson,
   type AuthoringDiagnostic,
   type AuthoringSpecV4,
   type NormalizedWorldIRV4,
@@ -22,10 +23,11 @@ import type {
   CompileDiagnostic,
   ExecutionPlanV5,
   RuntimeCaptureTargetV1,
+  SceneBriefImplementationMapV1,
 } from "@whitebox-world/runtime-contracts";
 import {
   canonicalWorldkitBrowserRouteEvidencePublicationV2,
-  validateRuntimeCaptureTargetsV1,
+  validateSceneBriefImplementationMapV1,
   type WorldkitBrowserRouteEvidencePublicationV2,
 } from "@whitebox-world/runtime-contracts";
 import type { RuntimeWorldConfigurationV1 } from "@whitebox-world/runtime-host";
@@ -91,41 +93,122 @@ export interface AuthoringSceneLoadResult {
 
 export type AuthoringSourceFetcher = () => Promise<Response>;
 
-export type VisualCaptureTargetsFetcher = () => Promise<Response>;
-
 export interface AuthoringSceneLoadOptionsV1 {
   subjectDefinitionRef?: string;
   fetchRouteEvidence?: AuthoringSourceFetcher;
   fetchSubjectAsset?: typeof fetch;
 }
 
-export async function loadRuntimeVisualCaptureTargets(
-  fetchSource: VisualCaptureTargetsFetcher,
-): Promise<readonly RuntimeCaptureTargetV1[]> {
+export interface StudioPreviewBootstrapV1 {
+  readonly kind: "worldkit-studio-preview-bootstrap";
+  readonly schemaVersion: 1;
+  readonly worldId: string;
+  readonly sceneId: string;
+  readonly attempt: number;
+  readonly attemptStartedAt: string;
+  readonly authoringSpecHash: `sha256:${string}`;
+  readonly authoringSpec: AuthoringSpecV4;
+  readonly implementationMap: SceneBriefImplementationMapV1;
+}
+
+export async function loadStudioAuthoringPreviewV1(
+  worldId: string,
+  fetchSource: AuthoringSourceFetcher,
+  options: AuthoringSceneLoadOptionsV1 = {},
+): Promise<Readonly<{
+  loaded: AuthoringSceneLoadResult;
+  visualCaptureTargets: readonly RuntimeCaptureTargetV1[];
+  attempt: number;
+  attemptStartedAt: string;
+}>> {
   let response: Response;
   try {
     response = await fetchSource();
   } catch (error) {
-    throw new Error("Unable to fetch the trusted visual capture targets.", {
+    throw new Error("Unable to fetch the Studio Preview bootstrap.", {
       cause: error,
     });
   }
   if (!response.ok) {
-    throw new Error(`Visual capture target source returned HTTP ${response.status}.`);
+    throw new Error(`Studio Preview bootstrap returned HTTP ${response.status}.`);
   }
-  const payload = await response.json() as { targets?: unknown };
-  if (!Array.isArray(payload.targets)) {
-    throw new Error("Visual capture target source omitted targets.");
+  let value: unknown;
+  try {
+    value = await response.json();
+  } catch (error) {
+    throw new Error("Studio Preview bootstrap is not valid JSON.", { cause: error });
   }
-  const targets = payload.targets as RuntimeCaptureTargetV1[];
-  const errors = validateRuntimeCaptureTargetsV1(targets);
-  if (errors.length > 0) {
-    throw new Error(`Visual capture targets are invalid: ${errors.join(" ")}`);
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Studio Preview bootstrap must be a JSON object.");
   }
-  return targets.map((target) => ({
-    ...target,
-    runtimeEntityIds: [...target.runtimeEntityIds],
-  }));
+  const payload = value as Partial<StudioPreviewBootstrapV1>;
+  const attempt = payload.attempt;
+  const attemptStartedAt = payload.attemptStartedAt;
+  if (
+    payload.kind !== "worldkit-studio-preview-bootstrap" ||
+    payload.schemaVersion !== 1 ||
+    payload.worldId !== worldId ||
+    typeof payload.sceneId !== "string" || !payload.sceneId ||
+    !Number.isInteger(attempt) || (attempt ?? 0) < 1 ||
+    typeof attemptStartedAt !== "string" ||
+      !Number.isFinite(Date.parse(attemptStartedAt)) ||
+    typeof payload.authoringSpecHash !== "string" ||
+    payload.authoringSpec === null || typeof payload.authoringSpec !== "object" ||
+      Array.isArray(payload.authoringSpec) ||
+    payload.implementationMap === null ||
+      typeof payload.implementationMap !== "object" ||
+      Array.isArray(payload.implementationMap) ||
+    !Array.isArray(payload.implementationMap.mappings) ||
+    !Array.isArray(payload.implementationMap.visualCaptureGroups)
+  ) {
+    throw new Error("Studio Preview bootstrap wrapper is invalid.");
+  }
+  const implementationMap = payload.implementationMap as SceneBriefImplementationMapV1;
+  let implementationMapErrors: readonly string[];
+  try {
+    implementationMapErrors = validateSceneBriefImplementationMapV1(implementationMap);
+  } catch (error) {
+    throw new Error("Studio Preview bootstrap implementation map is malformed.", {
+      cause: error,
+    });
+  }
+  const canonicalAuthoringSpecHash = sha256CanonicalJson(payload.authoringSpec);
+  if (
+    implementationMapErrors.length > 0 ||
+    payload.authoringSpec.kind !== "worldkit-authoring-spec" ||
+    payload.authoringSpec.schemaVersion !== 4 ||
+    payload.authoringSpec.id !== payload.sceneId ||
+    implementationMap.sceneId !== payload.sceneId ||
+    implementationMap.authoringSpecId !== payload.authoringSpec.id ||
+    payload.authoringSpecHash !== canonicalAuthoringSpecHash ||
+    implementationMap.authoringSpecHash !== canonicalAuthoringSpecHash
+  ) {
+    throw new Error(
+      `Studio Preview bootstrap authority is invalid${
+        implementationMapErrors.length === 0
+          ? "."
+          : `: ${implementationMapErrors.join(" ")}`
+      }`,
+    );
+  }
+  const loaded = await loadAuthoringScene(
+    async () => new Response(stringifyCanonicalJson(payload.authoringSpec), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }),
+    options,
+  );
+  return Object.freeze({
+    loaded,
+    visualCaptureTargets: Object.freeze(
+      implementationMap.visualCaptureGroups.map((target) => Object.freeze({
+        ...target,
+        runtimeEntityIds: Object.freeze([...target.runtimeEntityIds]),
+      })),
+    ),
+    attempt: attempt as number,
+    attemptStartedAt,
+  });
 }
 const CAPABILITY_PLAYGROUND_MINIMUM_RESOURCE_BUDGET = Object.freeze({
   maxVertices: 200_000,

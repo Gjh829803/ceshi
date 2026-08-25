@@ -86,7 +86,14 @@ function requireReadyRecord(worldId, record) {
   if (record.captureStatus !== "passed") {
     fail("STUDIO_PREVIEW_NOT_READY", "Studio world has not published trusted capture.");
   }
-  if (typeof record.workflowPolicyVersion !== "string" || !record.workflowPolicyVersion.trim()) {
+  if (
+    !(
+      (typeof record.workflowPolicyVersion === "string" &&
+        record.workflowPolicyVersion.trim()) ||
+      (Number.isInteger(record.workflowPolicyVersion) &&
+        record.workflowPolicyVersion > 0)
+    )
+  ) {
     fail("STUDIO_PREVIEW_AUTHORITY_MISMATCH", "Studio workflow policy identity is invalid.");
   }
   const startedAt = attemptStartedAt(record);
