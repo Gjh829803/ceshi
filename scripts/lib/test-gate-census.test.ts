@@ -165,7 +165,7 @@ describe("evaluateTestGateCensusV1", () => {
 describe("test gate configuration", () => {
   it("keeps the source-backed wrapper and discovered lanes exactly aligned with the manifest", async () => {
     expect(packageJson.scripts.test).toBe(
-      "pnpm test:census && pnpm test:contract && pnpm test:resource-heavy",
+      "pnpm verify:workspace-boundaries && pnpm test:census && pnpm test:contract && pnpm test:resource-heavy",
     );
     expect(resourceHeavyVitestConfig.test?.pool).toBe("threads");
 

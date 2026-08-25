@@ -233,6 +233,9 @@ importers:
       '@whitebox-world/gameplay-contracts':
         specifier: workspace:*
         version: link:../gameplay-contracts
+      '@whitebox-world/subject-registry':
+        specifier: workspace:*
+        version: link:../subject-registry
 
   packages/contracts: {}
 

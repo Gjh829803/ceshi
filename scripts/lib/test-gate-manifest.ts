@@ -215,6 +215,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "scripts/verify-unreleased-clean-break.test.ts", lane: "contract" },
   { path: "scripts/verify-xier120-subjects.test.ts", lane: "contract" },
   { path: "scripts/visual-reconstruction.test.ts", lane: "contract" },
+  { path: "scripts/workspace-boundary.test.ts", lane: "contract" },
   { path: "scripts/worldkit-route-run.integration.test.ts", lane: "resource-heavy", reasonCodes: ["native-havok-or-recast"] },
   { path: "scripts/worldkit.test.ts", lane: "contract" },
 ]);

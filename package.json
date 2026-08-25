@@ -49,7 +49,7 @@
     "import:local-humanoid": "bash scripts/link-local-humanoid.sh",
     "link:local-humanoid": "bash scripts/link-local-humanoid.sh",
     "typecheck": "tsc --noEmit",
-    "test": "pnpm test:census && pnpm test:contract && pnpm test:resource-heavy",
+    "test": "pnpm verify:workspace-boundaries && pnpm test:census && pnpm test:contract && pnpm test:resource-heavy",
     "test:census": "tsx scripts/verify-test-gate-census.ts",
     "test:contract": "vitest run --config vitest.contract.config.ts",
     "test:contract:coverage": "vitest run --coverage --config vitest.contract.config.ts --coverage.reporter=text --coverage.reporter=json-summary",
@@ -74,6 +74,7 @@
     "verify:route-r1b-static-platform": "tsx scripts/verify-route-r1b-static-platform.ts",
     "verify:outdoor-gameplay": "tsx scripts/verify-outdoor-gameplay-worlds.ts",
     "verify:unreleased-clean-break": "tsx scripts/verify-unreleased-clean-break.ts",
+    "verify:workspace-boundaries": "tsx scripts/verify-workspace-boundaries.ts",
     "benchmark:route-r1b-surface-preflight": "tsx scripts/benchmark-route-r1b-surface-preflight.ts"
   },
   "dependencies": {

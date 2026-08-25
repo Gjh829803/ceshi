@@ -1,0 +1,390 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    {
+      "importer": "apps/playground/src/authoring-loader.test.ts",
+      "specifier": "../../../packages/authoring/src/test-fixture",
+      "owner": "@whitebox-world/authoring",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "apps/playground/src/babylon-world-adapter.test.ts",
+      "specifier": "../../../packages/authoring/src/test-fixture",
+      "owner": "@whitebox-world/authoring",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "apps/playground/src/gameplay-babylon-runtime-coordinator.test.ts",
+      "specifier": "../../../packages/authoring/src/test-fixture",
+      "owner": "@whitebox-world/authoring",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "apps/playground/src/gameplay-babylon-runtime-coordinator.test.ts",
+      "specifier": "../../../packages/runtime-host/src/test/fake-gameplay-world-adapter",
+      "owner": "@whitebox-world/runtime-host",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "packages/authoring/src/subject-definition-normalizer.test.ts",
+      "specifier": "../../subject-registry/src/built-in-capability-resources",
+      "owner": "@whitebox-world/subject-registry",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "packages/authoring/src/subject-definition-normalizer.test.ts",
+      "specifier": "../../subject-registry/src/built-in-resource-manifests",
+      "owner": "@whitebox-world/subject-registry",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "packages/authoring/src/subject-definition-normalizer.test.ts",
+      "specifier": "../../subject-registry/src/built-in-subject-definitions",
+      "owner": "@whitebox-world/subject-registry",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "packages/authoring/src/subject-definition-normalizer.test.ts",
+      "specifier": "../../subject-registry/src/types-v3",
+      "owner": "@whitebox-world/subject-registry",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "packages/compiler/src/capability-compile.test.ts",
+      "specifier": "../../authoring/src/test-fixture",
+      "owner": "@whitebox-world/authoring",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "packages/compiler/src/compile-traversal-lock.test.ts",
+      "specifier": "../../authoring/src/test-fixture",
+      "owner": "@whitebox-world/authoring",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "packages/compiler/src/compile-v5.test.ts",
+      "specifier": "../../authoring/src/test-fixture",
+      "owner": "@whitebox-world/authoring",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "packages/compiler/src/compile.test.ts",
+      "specifier": "../../authoring/src/test-fixture",
+      "owner": "@whitebox-world/authoring",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "packages/compiler/src/compile.test.ts",
+      "specifier": "../../subject-registry/src/built-in-capability-resources",
+      "owner": "@whitebox-world/subject-registry",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "packages/compiler/src/compile.test.ts",
+      "specifier": "../../subject-registry/src/built-in-resource-manifests",
+      "owner": "@whitebox-world/subject-registry",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "packages/compiler/src/compile.test.ts",
+      "specifier": "../../subject-registry/src/built-in-subject-definitions",
+      "owner": "@whitebox-world/subject-registry",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "packages/compiler/src/compile.test.ts",
+      "specifier": "../../subject-registry/src/types-v3",
+      "owner": "@whitebox-world/subject-registry",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "packages/runtime-babylon/src/camera-preview-channel.test.ts",
+      "specifier": "../../authoring/src/test-fixture",
+      "owner": "@whitebox-world/authoring",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "packages/runtime-babylon/src/camera-preview-channel.test.ts",
+      "specifier": "../../subject-registry/src/index",
+      "owner": "@whitebox-world/subject-registry",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "packages/runtime-babylon/src/capability-runtime.test.ts",
+      "specifier": "../../authoring/src/test-fixture",
+      "owner": "@whitebox-world/authoring",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "packages/runtime-babylon/src/capability-runtime.test.ts",
+      "specifier": "../../subject-registry/src/index",
+      "owner": "@whitebox-world/subject-registry",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "packages/runtime-babylon/src/p15-conformance.test.ts",
+      "specifier": "../../authoring/src/test-fixture",
+      "owner": "@whitebox-world/authoring",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "packages/runtime-babylon/src/p15-runtime-debt-repro.test.ts",
+      "specifier": "../../authoring/src/test-fixture",
+      "owner": "@whitebox-world/authoring",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "packages/runtime-babylon/src/runtime.test.ts",
+      "specifier": "../../authoring/src/test-fixture",
+      "owner": "@whitebox-world/authoring",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "packages/runtime-babylon/src/traversal-runtime-port.test.ts",
+      "specifier": "../../authoring/src/test-fixture",
+      "owner": "@whitebox-world/authoring",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "packages/runtime-babylon/src/traversal-runtime-support-conformance.test.ts",
+      "specifier": "../../authoring/src/test-fixture",
+      "owner": "@whitebox-world/authoring",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "packages/validation/src/route-evidence-publication.test.ts",
+      "specifier": "../../../apps/playground/src/worldkit-browser-api.js",
+      "owner": "@whitebox-world/playground",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "packages/validation/src/world-package-validation-subject.test.ts",
+      "specifier": "../../authoring/src/test-fixture.js",
+      "owner": "@whitebox-world/authoring",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "packages/world-package/src/build-receipt.test.ts",
+      "specifier": "../../authoring/src/test-fixture.js",
+      "owner": "@whitebox-world/authoring",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "scripts/benchmark-route-r1b-surface-preflight.ts",
+      "specifier": "../packages/terrain-surface/src/index.js",
+      "owner": "@whitebox-world/terrain-surface",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "scripts/export-scene-plan.ts",
+      "specifier": "../apps/playground/src/scenes/index.js",
+      "owner": "@whitebox-world/playground",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "scripts/export-scene-plan.ts",
+      "specifier": "../packages/world/src/index.js",
+      "owner": "@whitebox-world/world",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "scripts/lib/layout-artifacts.test.ts",
+      "specifier": "../../packages/authoring/src/test-fixture",
+      "owner": "@whitebox-world/authoring",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "scripts/lib/plan-lock.ts",
+      "specifier": "../../packages/world/src/index.js",
+      "owner": "@whitebox-world/world",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "scripts/lib/product-asset-intake.test.ts",
+      "specifier": "../../apps/playground/src/worldkit-asset-resolver",
+      "owner": "@whitebox-world/playground",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "scripts/lib/route-r1b-fixture-proofs.ts",
+      "specifier": "../../packages/traversal-recast/src/build-graph.js",
+      "owner": "@whitebox-world/traversal-recast",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "scripts/lib/route-runtime-probe.integration.test.ts",
+      "specifier": "../../packages/authoring/src/test-fixture.js",
+      "owner": "@whitebox-world/authoring",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "scripts/lib/route-runtime-probe.integration.test.ts",
+      "specifier": "../../packages/runtime-babylon/src/runtime-test-possession.js",
+      "owner": "@whitebox-world/runtime-babylon",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "scripts/lib/route-validation-orchestrator.test.ts",
+      "specifier": "../../packages/authoring/src/test-fixture.js",
+      "owner": "@whitebox-world/authoring",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "scripts/lib/route-validation-runner.ts",
+      "specifier": "../../packages/traversal-recast/src/evaluate-route.js",
+      "owner": "@whitebox-world/traversal-recast",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "scripts/lib/subject-preset-promotion.ts",
+      "specifier": "../../packages/subject-registry/src/built-in-capability-resources",
+      "owner": "@whitebox-world/subject-registry",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "scripts/lib/subject-preset-promotion.ts",
+      "specifier": "../../packages/subject-registry/src/built-in-resource-manifests",
+      "owner": "@whitebox-world/subject-registry",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "scripts/lib/subject-preset-promotion.ts",
+      "specifier": "../../packages/subject-registry/src/built-in-subject-definitions",
+      "owner": "@whitebox-world/subject-registry",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "scripts/lib/subject-source-migration-audit.test.ts",
+      "specifier": "../../apps/playground/src/worldkit-asset-resolver",
+      "owner": "@whitebox-world/playground",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "scripts/lib/subject-source-migration-audit.ts",
+      "specifier": "../../apps/playground/src/worldkit-asset-resolver",
+      "owner": "@whitebox-world/playground",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "scripts/lib/subject-source-migration-audit.ts",
+      "specifier": "../../packages/subject-registry/src/built-in-resource-manifests",
+      "owner": "@whitebox-world/subject-registry",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "scripts/lib/traversal-area-runtime-collision.integration.test.ts",
+      "specifier": "../../packages/authoring/src/test-fixture.js",
+      "owner": "@whitebox-world/authoring",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "scripts/lib/traversal-area-runtime-collision.integration.test.ts",
+      "specifier": "../../packages/runtime-babylon/src/runtime-test-possession.js",
+      "owner": "@whitebox-world/runtime-babylon",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "scripts/lib/world-package-resource-resolver.ts",
+      "specifier": "../../apps/playground/src/worldkit-asset-resolver.js",
+      "owner": "@whitebox-world/playground",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "scripts/lib/worldkit-server.test.ts",
+      "specifier": "../../packages/authoring/src/test-fixture",
+      "owner": "@whitebox-world/authoring",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "scripts/verify-g-bot-subject-world.ts",
+      "specifier": "../apps/playground/src/worldkit-asset-resolver",
+      "owner": "@whitebox-world/playground",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "scripts/verify-placement-layout.test.ts",
+      "specifier": "../packages/layout-solver/src/index.js",
+      "owner": "@whitebox-world/layout-solver",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "scripts/verify-placement-layout.ts",
+      "specifier": "../packages/layout-solver/src/index.js",
+      "owner": "@whitebox-world/layout-solver",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "scripts/verify-xier120-subjects.ts",
+      "specifier": "../apps/playground/src/worldkit-asset-resolver",
+      "owner": "@whitebox-world/playground",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "scripts/worldkit.test.ts",
+      "specifier": "../apps/playground/src/authoring-loader",
+      "owner": "@whitebox-world/playground",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    },
+    {
+      "importer": "scripts/worldkit.test.ts",
+      "specifier": "../packages/authoring/src/test-fixture",
+      "owner": "@whitebox-world/authoring",
+      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
+      "removalGate": "Replace with an explicitly exported public or testing subpath."
+    }
+  ]
+}
