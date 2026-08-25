@@ -18,8 +18,9 @@
 
 > Route R1 Heightfield 与 R1b Static Platform 的原始纵向切片已完成；2026-08-24
 > 深审重新打开 M5，并发现 Route set、Surface/Portal、Runtime ownership、V2 evidence
-> 与 Hosted admission 等存量问题。remediation 已进入收口，但在最新 `main` 集成门禁
-> 和独立复核完成前，M5 保持 reopened。H1/H2/H3、动态平台、NPC/public `goTo` 与车辆
+> 与 Hosted admission 等存量问题。remediation 已完成，最新 `main` 集成门禁与
+> GLM 5.3/zcode、Cursor 独立终审均为 FINAL GO；M5 已在 R1 Heightfield / R1b Static
+> Platform 当前生产边界内关闭。H1/H2/H3、动态平台、NPC/public `goTo` 与车辆
 > 仍由后续里程碑拥有。
 
 > Gameplay Framework G19-2 至 G19-6 已合入 `main@5ffd031`；关闭 Command/Receipt/Event/World
@@ -854,14 +855,15 @@ S1b Golden、
 2. **M2（已完成）：冻结 Take/Capture V1 首条实施范围**；
 3. **M3（已完成）：实现五 Pass Capture 窄纵向切片并复用 Placement World Identity/Hash**；
 4. **M4（已完成）：实现 P0.3 统一 Validation Profile/Report 的 Capture/Integrity 窄切片，把现有 Bundle Gate 纳入同一报告协议**；
-5. **M5（reopened，remediation 收口中）：Route Graph 与主体可通行性 R0/R1/R1b**：R0 字段冻结已由
+5. **M5（已关闭，回归中）：Route Graph 与主体可通行性 R0/R1/R1b**：R0 字段冻结已由
    `pnpm verify:route-r0-contract` 证明；R1 Heightfield 已由
    `pnpm verify:route-r1-heightfield` 与
    [Runtime Review](reviews/2026-08-22-route-r1-heightfield-runtime-review.md) 关闭。
    R1b Task 9/10 已完成静态平台 / Surface→Collider Subshape 实现、11 个 Fixture、V2/V5
    clean break、完整矩阵和主 Agent 深审；首轮 Cursor 建议触发的 Runtime ambiguous
-   诊断分层修复已由三模式回归与条件复核关闭；2026-08-24 深审发现的存量问题正在
-   remediation，需以最新 `main` 集成门禁和独立复核重新关闭。H1/H2/H3、动态平台、
+   诊断分层修复已由三模式回归与条件复核关闭；2026-08-24 深审发现的存量问题已经
+   remediation，并由最新 `main` 集成门禁以及 GLM 5.3/zcode、Cursor FINAL GO 重新关闭。
+   H1/H2/H3、动态平台、
    NPC/public `goTo`、车辆等能力继续由后续里程碑拥有；
 6. **M6：在 Placement + Take + Validation 闭环上接入实验 Video Model Adapter**；
 7. **M7（Ground/Air 首切片已完成）：继续扩展 P1.5 Control Feel/Physics Medium/State

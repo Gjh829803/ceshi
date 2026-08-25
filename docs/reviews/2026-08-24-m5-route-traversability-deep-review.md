@@ -7,8 +7,9 @@
 - 当前基线：`origin/main@1fabf53c54270e35cd61c58087a6e5c36224516a`（`feat(assets): activate modular subject runtime bundles`）。
 - 修复分支：`codex/m5-traversability-remediation`；通过 merge commit `d929bea` 合入上述 main，没有文本冲突。
 - 审查模式：实现前 Mode C 全仓审查；修复阶段按 finding 的失效证据执行 focused gate；最终按新门禁策略执行完整 contract lane、串行 resource-heavy lane、R0/R1/R1b verifier、typecheck、canonical verifier 与 production build。
-- 当前 host 结论：**GO candidate。原报告 4 个有效 P0、12 个 P1 与其 P2 均已修复或按一手引擎证据撤回；完整相关门禁无剩余失败。**
+- 当前 host 结论：**FINAL GO。原报告 4 个有效 P0、12 个 P1 与其 P2 均已修复或按一手引擎证据撤回；完整相关门禁无剩余失败。**
 - 最新 main 的 modular 3D asset 拆分没有推翻 M5 finding 机制或结论；它改变了依赖、Subject 资产包和生成 self-check，因此已在 `1011de2` 中补入门禁 census、模块化 GLB pose evidence 兼容和生成产物同步。
+- 独立终审：GLM 5.3/zcode 与 Cursor 均给出 **FINAL GO**，且没有 P0/P1 实现 finding。zcode 的唯一 P3（旧 V1 私有 helper 与同型重复 union）已删除；Cursor 的唯一 P2（活动文档同时写 closed/reopened）已统一为本节的最终关闭口径。
 
 ### 0A.1 Finding 最终处置
 
@@ -51,6 +52,8 @@
 | `pnpm build` | exit 0；Vite 2190 modules，53.39s；仅保留既有大 chunk warning |
 | 真实 Recast + Babylon/Havok trusted runner | 12/12；successive-turn 路线 68.159s 完成，不再 stalled |
 | `worldkit run` Route Host/Browser transport | 1/1；51.675s；same-world evidence 发布与 owned state 清理通过 |
+| GLM 5.3 / zcode 静态终审 | FINAL GO；0 个 P0/P1/P2；1 个 P3 clean-break 残留已清理 |
+| Cursor `cursor-grok-4.6-xhigh` 静态终审 | FINAL GO；0 个 P0/P1；1 个 P2 活动文档漂移已统一 |
 
 证据边界：以上包含 automated contract、真实 Babylon/Havok Runtime、Browser/Studio transport 与 rendered canonical capture；没有新增 manual-interaction evidence。Canonical verifier 产生的 tracked screenshot/snapshot 差异已在核验后恢复，分支不提交动态取证噪声。
 

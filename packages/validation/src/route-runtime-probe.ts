@@ -16,7 +16,6 @@ import {
   type RouteRuntimeProbeTickV2,
   type TraversalRuntimePortV1,
   type TraversalRuntimeTickEvidenceV1,
-  type TraversalSurfaceIdentityV1,
 } from "@whitebox-world/traversal";
 import { isEqual, isNil } from "lodash-es";
 
@@ -89,14 +88,6 @@ const PROJECTION_TIE_EPSILON_METERS = 1e-9;
 
 function fail(code: RouteRuntimeProbeErrorCodeV2): never {
   throw new RouteRuntimeProbeErrorV2(code);
-}
-
-function canonicalPath(value: RoutePathReceiptV2): RoutePathReceiptV2 {
-  try {
-    return canonicalRoutePathReceiptV2(value);
-  } catch {
-    return fail("ROUTE_RUNTIME_PROBE_INPUT_INVALID");
-  }
 }
 
 function canonicalDriver(
@@ -421,20 +412,9 @@ function quantizedDirection(
   return [x === 0 ? 0 : x, z === 0 ? 0 : z];
 }
 
-function surfaceMismatch(
-  evidence: TraversalRuntimeTickEvidenceV1,
-  expected: TraversalSurfaceIdentityV1,
-): boolean {
-  if (evidence.characterSupport.supportState === "unsupported") return false;
-  return !isEqual(evidence.characterSupport.surfaceResolution, {
-    mode: "resolved",
-    ...expected,
-  });
-}
-
 function runtimeEvidence(
   value: TraversalRuntimeTickEvidenceV1,
-  request: RouteRuntimeProbeRequestV2 | RouteRuntimeProbeRequestV2,
+  request: RouteRuntimeProbeRequestV2,
   expectedTick: number,
   fixedTimeStepSeconds?: number,
 ): TraversalRuntimeTickEvidenceV1 {
@@ -462,67 +442,6 @@ function runtimeEvidence(
     fail("ROUTE_RUNTIME_PROBE_RUNTIME_INVALID");
   }
   return evidence;
-}
-
-function emptyMetrics(
-  initial: TraversalRuntimeTickEvidenceV1,
-  surface: TraversalSurfaceIdentityV1,
-): RouteRuntimeProbeMetricsV2 {
-  return {
-    processedTickCount: 0,
-    maximumStalledDurationTicks: 0,
-    maximumRouteDeviationMetersXZ: 0,
-    maximumConsecutiveUnexpectedUnsupportedTicks: 0,
-    slidingDurationTicks: 0,
-    unexpectedSupportLossCount: 0,
-    wrongSupportSurfaceCount: surfaceMismatch(initial, surface) ? 1 : 0,
-    invalidPhysicsValueCount: 0,
-  };
-}
-
-function failedReceipt(
-  request: RouteRuntimeProbeRequestV2,
-  initialRuntimeEvidence: TraversalRuntimeTickEvidenceV1,
-  ticks: readonly RouteRuntimeProbeTickV2[],
-  metrics: RouteRuntimeProbeMetricsV2,
-  failure: RouteRuntimeProbeFailureV2,
-): RouteRuntimeProbeReceiptV2 {
-  try {
-    return canonicalRouteRuntimeProbeReceiptV2({
-      kind: "route-runtime-probe-receipt",
-      schemaVersion: 1,
-      status: "failed",
-      request,
-      initialRuntimeEvidence,
-      ticks,
-      metrics,
-      failure,
-    });
-  } catch {
-    return fail("ROUTE_RUNTIME_PROBE_RUNTIME_INVALID");
-  }
-}
-
-function completeReceipt(
-  request: RouteRuntimeProbeRequestV2,
-  initialRuntimeEvidence: TraversalRuntimeTickEvidenceV1,
-  ticks: readonly RouteRuntimeProbeTickV2[],
-  metrics: RouteRuntimeProbeMetricsV2,
-): RouteRuntimeProbeReceiptV2 {
-  try {
-    return canonicalRouteRuntimeProbeReceiptV2({
-      kind: "route-runtime-probe-receipt",
-      schemaVersion: 1,
-      status: "complete",
-      request,
-      initialRuntimeEvidence,
-      ticks,
-      metrics,
-      completionDurationTicks: ticks.length,
-    });
-  } catch {
-    return fail("ROUTE_RUNTIME_PROBE_RUNTIME_INVALID");
-  }
 }
 
 function mismatchMode(

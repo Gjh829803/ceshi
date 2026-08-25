@@ -24,8 +24,8 @@ AuthoringSpec V4
 
 > Route R1 Heightfield 已完成并通过 `pnpm verify:route-r1-heightfield`。公开 Golden
 > 示例为 `examples/traversal/r1-heightfield/`。R1b 静态平台切片已通过
-> `pnpm verify:route-r1b-static-platform`；M5 深审 remediation 尚待最新 `main`
-> 集成门禁与独立复核，当前不宣称里程碑关闭。
+> `pnpm verify:route-r1b-static-platform`；M5 深审 remediation 已通过最新 `main`
+> 集成门禁与 GLM 5.3/zcode、Cursor 独立终审，当前生产边界内里程碑已关闭。
 
 ## 1. 最短运行路径
 
