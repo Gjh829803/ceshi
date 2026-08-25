@@ -16,7 +16,9 @@ import {
 } from "@whitebox-world/gameplay-contracts";
 import {
   builtInSubjectResourceRegistry,
+  createSubjectResourceRegistry,
   type RegistrySubjectDefinitionV3,
+  type SubjectRegistryResourceInputV3,
   type SubjectResourceRegistryV3,
 } from "@whitebox-world/subject-registry";
 import type {
@@ -303,26 +305,15 @@ function createRelationshipDeferredPreview(
     ...previewInput,
     contentHash: sha256CanonicalJson(previewInput),
   }) as RegistrySubjectDefinitionV3;
-  const registry: SubjectResourceRegistryV3 = Object.freeze({
-    ...builtInSubjectResourceRegistry,
-    resolveSubjectDefinition(resourceRef: string) {
-      return resourceRef === definition.resourceRef
-        ? definition
-        : builtInSubjectResourceRegistry.resolveSubjectDefinition(resourceRef);
-    },
-    listSubjectDefinitions() {
-      return [
-        ...builtInSubjectResourceRegistry.listSubjectDefinitions(),
-        definition,
-      ].sort((left, right) => left.resourceRef.localeCompare(right.resourceRef));
-    },
-    listCapabilitySubjectDefinitions() {
-      return [
-        ...builtInSubjectResourceRegistry.listCapabilitySubjectDefinitions(),
-        definition,
-      ].sort((left, right) => left.resourceRef.localeCompare(right.resourceRef));
-    },
+  const registryInputs = [
+    ...builtInSubjectResourceRegistry.listDiscoverableResources(),
+    definition,
+  ].map((resource) => {
+    const { contentHash: _contentHash, ...input } = structuredClone(resource);
+    return input as SubjectRegistryResourceInputV3;
   });
+  const registry: SubjectResourceRegistryV3 =
+    createSubjectResourceRegistry(registryInputs);
   return Object.freeze({ definition, registry, deferredCapabilityRefs });
 }
 

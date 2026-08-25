@@ -473,7 +473,7 @@ export async function verifyXier120SubjectActualUse(input: {
       "XIER120_COLLIDER_PROFILE_NOT_IN_CLOSURE",
     );
     const capabilityCatalogDiscoverable = builtInSubjectResourceRegistry
-      .listCapabilitySubjectDefinitions()
+      .listDiscoverableResources({ kind: "subject-definition" })
       .some((candidate) => candidate.resourceRef === input.subjectDefinitionRef);
     requireInvariant(
       capabilityCatalogDiscoverable,

@@ -309,7 +309,6 @@ function createExecutionPlan(worldPackageRef: string): ExecutionPlanV5 {
           implementationId: "free-ground",
           commandKind: "planar-vector",
           supportedMediums: ["ground", "air"],
-          runtimeParameterNames: [],
           fallbackMotionProfileRef: "worldkit://motion-profile/safe-ground@1",
           deterministic: true,
         }],

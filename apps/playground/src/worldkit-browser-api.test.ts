@@ -1513,8 +1513,7 @@ describe("installDeferredWorldkitBrowserApi", () => {
       "worldkit://control-feel-profile/subject.animal.quadruped.forward-steer.default@1",
     );
     const catalogFeelCount = builtInSubjectResourceRegistry
-      .listCapabilityResources()
-      .filter((resource) => resource.kind === "control-feel-profile")
+      .listDiscoverableResources({ kind: "control-feel-profile" })
       .length;
     expect(catalogFeelCount).toBeGreaterThan(feelRefs.length);
   });

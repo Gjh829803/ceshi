@@ -970,10 +970,11 @@ export function installDeferredWorldkitBrowserApi(options: {
     listSubjectDefinitions: (options = {}) =>
       builtInSubjectDefaultRegistry.listPublicDefaults()
         .flatMap((entry) => {
-          const definition = builtInSubjectResourceRegistry.resolveSubjectDefinition(
+          const definition = builtInSubjectResourceRegistry.resolveResource(
             entry.subjectDefinitionRef,
           );
-          return definition !== undefined && "schemaVersion" in definition
+          return definition?.kind === "subject-definition" &&
+            "schemaVersion" in definition
             ? [definition]
             : [];
         })
@@ -998,8 +999,9 @@ export function installDeferredWorldkitBrowserApi(options: {
           };
         }),
     listMotionKernels: (options = {}) =>
-      builtInSubjectResourceRegistry.listCapabilityResources()
-        .filter((resource) => resource.kind === "motion-kernel")
+      builtInSubjectResourceRegistry.listDiscoverableResources({
+        kind: "motion-kernel",
+      })
         .filter(
           (resource) =>
             (options.includeExperimental === true ||

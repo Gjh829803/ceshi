@@ -29,7 +29,6 @@ function capabilityAssemblyFixture(): ExecutionSubjectCapabilityAssemblyV1 {
       implementationId: "free-ground",
       commandKind: "planar-vector",
       supportedMediums: ["ground", "air"],
-      runtimeParameterNames: [],
       fallbackMotionProfileRef: motionProfile.resourceRef,
       deterministic: true,
     }],
@@ -214,6 +213,36 @@ describe("ExecutionPlanV5 canonical boundary", () => {
       "EXECUTION_PLAN_V5_INVALID",
     );
     expect(() => parseExecutionPlanV5(nestedUnknown)).toThrowError(
+      "EXECUTION_PLAN_V5_INVALID",
+    );
+  });
+
+  it("rejects retired Motion Kernel Catalog fields from capability assemblies", () => {
+    const withRuntimeParameterNames = structuredClone(planFixture()) as unknown as {
+      subjects: Array<{
+        capabilityAssembly: {
+          motionKernels: Array<Record<string, unknown>>;
+        };
+      }>;
+    };
+    withRuntimeParameterNames.subjects[0]!.capabilityAssembly
+      .motionKernels[0]!.runtimeParameterNames = [];
+
+    const withParameterSchemaRef = structuredClone(planFixture()) as unknown as {
+      subjects: Array<{
+        capabilityAssembly: {
+          motionKernels: Array<Record<string, unknown>>;
+        };
+      }>;
+    };
+    withParameterSchemaRef.subjects[0]!.capabilityAssembly
+      .motionKernels[0]!.parameterSchemaRef =
+        "worldkit://motion-parameter-schema/free-ground@1";
+
+    expect(() => parseExecutionPlanV5(withRuntimeParameterNames)).toThrowError(
+      "EXECUTION_PLAN_V5_INVALID",
+    );
+    expect(() => parseExecutionPlanV5(withParameterSchemaRef)).toThrowError(
       "EXECUTION_PLAN_V5_INVALID",
     );
   });

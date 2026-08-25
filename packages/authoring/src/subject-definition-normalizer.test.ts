@@ -32,6 +32,10 @@ import {
 const SUBJECT_ASSET_REF = "worldkit://subject-asset/humanoid.golden@2";
 const RIG_PROFILE_REF = "worldkit://rig-profile/biped.golden@2";
 const ANIMATION_SET_REF = "worldkit://animation-set/humanoid.ground.golden@2";
+const G_BOT_SUBJECT_ASSET_REF =
+  "worldkit://subject-asset/actor.humanoid.g-bot@2";
+const G_BOT_RIG_PROFILE_REF =
+  "worldkit://rig-profile/biped.mixamo-g-bot@2";
 const COLLIDER_PROFILE_REF =
   "worldkit://collider-profile/humanoid.medium-capsule@1";
 const BIPED_BONE_IDS = [
@@ -104,7 +108,7 @@ function registryWithPermutedNewResourceCollections(
         case "rig-profile": {
           const compatibleSubjectAssetRefs = [
             SUBJECT_ASSET_REF,
-            "worldkit://subject-asset/humanoid.other@1",
+            G_BOT_SUBJECT_ASSET_REF,
           ];
           const boneEntries = Object.entries(input.sourceNodeNameByBoneId);
           return {
@@ -391,13 +395,13 @@ describe("Package Subject Definition normalization", () => {
 
     expect(result.ok).toBe(true);
     expect(packageDefinitionHash(result)).toBe(
-      "sha256:7fa027c89ef71aed6e6390293ed27a2b4757e13f0cfd0fd3c36a9a51095160f1",
+      "sha256:6cc15f8e2ea0d1fdbd808154c92e5cf9d2e7405d5b2954a9fa816c1398890892",
     );
     expect(result.value?.resources.resourceLockHash).toBe(
-      "sha256:4b6e32291625deebdf389da8595c887b31a2f0b4a4aa15e27d2230c8e3d4cd47",
+      "sha256:e83261223ab2b5d1f0adbc9e53cf50e281a0d1c2a97a75f6bc82c11c161a1f42",
     );
     expect(result.normalizedWorldIrHash).toBe(
-      "sha256:861e6fb644cb0ebc4fe984cd5ee7abc864b266cfaa4804a4f3f8fbab46ba83db",
+      "sha256:cdc8e7d1af8889a5b91755945abe51a1985a77374b38a5b2a1037473dd168086",
     );
   });
 
@@ -593,7 +597,9 @@ describe("Package Subject Definition normalization", () => {
           return resource;
       }
     });
-    const registryBefore = structuredClone(subjectResourceRegistry.listResources());
+    const registryBefore = structuredClone(
+      subjectResourceRegistry.listDiscoverableResources(),
+    );
     const world = createValidRiggedPackageSubjectWorld();
     const definition = world.resources.subjectDefinitions[0]!;
     definition.sockets = [
@@ -615,7 +621,7 @@ describe("Package Subject Definition normalization", () => {
     expect(result.diagnostics).toEqual([]);
     expect(result.ok).toBe(true);
     expect(world).toEqual(worldBefore);
-    expect(subjectResourceRegistry.listResources()).toEqual(registryBefore);
+    expect(subjectResourceRegistry.listDiscoverableResources()).toEqual(registryBefore);
     const asset = result.value!.resources.subjectAssets[0]!;
     const rig = result.value!.resources.rigProfiles[0]!;
     const animationSet = result.value!.resources.animationSets[0]!;
@@ -738,8 +744,7 @@ describe("Package Subject Definition normalization", () => {
       COLLIDER_PROFILE_REF,
     ]) {
       const lockedManifest = subjectResourceRegistry
-        .listResources()
-        .find((resource) => resource.resourceRef === resourceRef)!;
+        .resolveResource(resourceRef)!;
       expect(
         result.value!.resources.resourceLock.find(
           (entry) => entry.resourceRef === resourceRef,
@@ -755,8 +760,8 @@ describe("Package Subject Definition normalization", () => {
       "/resources/subjectDefinitions/0/visualParts/0/subjectAssetRef",
       "worldkit://subject-asset/missing@1",
       "availableSubjectAssetRefs",
-      builtInSubjectResourceRegistry.listResources()
-        .filter((resource) => resource.kind === "subject-asset")
+      builtInSubjectResourceRegistry
+        .listDiscoverableResources({ kind: "subject-asset" })
         .map((resource) => resource.resourceRef)
         .sort((left, right) => left.localeCompare(right)),
     ],
@@ -782,9 +787,9 @@ describe("Package Subject Definition normalization", () => {
       "/resources/subjectDefinitions/0/colliderPolicy/colliderProfileRef",
       "worldkit://collider-profile/missing@1",
       "compatibleColliderProfileRefs",
-      builtInSubjectResourceRegistry.listResources()
+      builtInSubjectResourceRegistry
+        .listDiscoverableResources({ kind: "collider-profile" })
         .filter((resource) =>
-          resource.kind === "collider-profile" &&
           resource.supportedBodyTopologies.includes("biped"),
         )
         .map((resource) => resource.resourceRef)
@@ -851,14 +856,14 @@ describe("Package Subject Definition normalization", () => {
         resource.kind === "animation-set"
           ? {
               ...resource,
-              subjectAssetRef: "worldkit://subject-asset/other@1",
+              subjectAssetRef: G_BOT_SUBJECT_ASSET_REF,
             }
           : resource,
       instancePath: "/resources/subjectDefinitions/0/visualBinding/animationSetRef",
       details: {
         animationSetRef: ANIMATION_SET_REF,
         subjectAssetRef: SUBJECT_ASSET_REF,
-        compatibleSubjectAssetRefs: ["worldkit://subject-asset/other@1"],
+        compatibleSubjectAssetRefs: [G_BOT_SUBJECT_ASSET_REF],
       },
     },
     {
@@ -867,14 +872,14 @@ describe("Package Subject Definition normalization", () => {
         resource.kind === "animation-set"
           ? {
               ...resource,
-              rigProfileRef: "worldkit://rig-profile/other@1",
+              rigProfileRef: G_BOT_RIG_PROFILE_REF,
             }
           : resource,
       instancePath: "/resources/subjectDefinitions/0/visualBinding/animationSetRef",
       details: {
         animationSetRef: ANIMATION_SET_REF,
         rigProfileRef: RIG_PROFILE_REF,
-        compatibleRigProfileRefs: ["worldkit://rig-profile/other@1"],
+        compatibleRigProfileRefs: [G_BOT_RIG_PROFILE_REF],
       },
     },
     {

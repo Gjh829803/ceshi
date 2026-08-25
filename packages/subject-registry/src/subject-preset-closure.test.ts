@@ -6,6 +6,10 @@ import {
   builtInSubjectResourceRegistry,
   resolveSubjectPresetClosureV1,
 } from "./index";
+import type {
+  SubjectRegistryResourceV3,
+  SubjectResourceRegistryV3,
+} from "./types-v3";
 
 const VEHICLE_DEFINITION_REF =
   "worldkit://subject-definition/vehicle.four-wheel.arcade@1";
@@ -13,6 +17,42 @@ const G_BOT_DEFINITION_REF =
   "worldkit://subject-definition/humanoid.g-bot@2";
 
 describe("subject preset resource closure", () => {
+  it("consumes the generic Registry facade instead of typed resolver authorities", () => {
+    const resources = builtInSubjectResourceRegistry.listDiscoverableResources();
+    const resourcesByRef = new Map(
+      resources.map((resource) => [resource.resourceRef, resource] as const),
+    );
+    const genericOnlyRegistry = new Proxy({
+      resolveResource(resourceRef: string): SubjectRegistryResourceV3 | undefined {
+        return resourcesByRef.get(resourceRef);
+      },
+      listDiscoverableResources(): readonly SubjectRegistryResourceV3[] {
+        return resources;
+      },
+    }, {
+      get(target, property, receiver) {
+        if (
+          typeof property === "string" &&
+          property.startsWith("resolve") &&
+          property !== "resolveResource"
+        ) {
+          return () => {
+            throw new Error(`TYPED_REGISTRY_RESOLVER_USED: '${property}'.`);
+          };
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    }) as unknown as SubjectResourceRegistryV3;
+
+    expect(resolveSubjectPresetClosureV1(
+      genericOnlyRegistry,
+      VEHICLE_DEFINITION_REF,
+    )).toEqual(resolveSubjectPresetClosureV1(
+      builtInSubjectResourceRegistry,
+      VEHICLE_DEFINITION_REF,
+    ));
+  });
+
   it("returns the complete sorted exact dependency closure", () => {
     const closure = resolveSubjectPresetClosureV1(
       builtInSubjectResourceRegistry,
@@ -119,11 +159,11 @@ describe("subject preset resource closure", () => {
   it("rejects missing reachable resources with a stable diagnostic", () => {
     const registry = {
       ...builtInSubjectResourceRegistry,
-      resolveMediumProfile(resourceRef: string) {
+      resolveResource(resourceRef: string) {
         if (resourceRef === "worldkit://medium-profile/ground-air.standard@1") {
           return undefined;
         }
-        return builtInSubjectResourceRegistry.resolveMediumProfile(resourceRef);
+        return builtInSubjectResourceRegistry.resolveResource(resourceRef);
       },
     };
 
@@ -134,8 +174,9 @@ describe("subject preset resource closure", () => {
   it("rejects a resource whose locked version disagrees with its exact ref", () => {
     const registry = {
       ...builtInSubjectResourceRegistry,
-      resolveMotionProfile(resourceRef: string) {
-        const resolved = builtInSubjectResourceRegistry.resolveMotionProfile(resourceRef);
+      resolveResource(resourceRef: string) {
+        const resolved = builtInSubjectResourceRegistry.resolveResource(resourceRef);
+        if (resolved?.kind !== "motion-profile") return resolved;
         return resolved === undefined ? undefined : { ...resolved, version: 99 };
       },
     };
@@ -147,8 +188,9 @@ describe("subject preset resource closure", () => {
   it("rejects a resource whose canonical content hash is forged", () => {
     const registry = {
       ...builtInSubjectResourceRegistry,
-      resolveMotionProfile(resourceRef: string) {
-        const resolved = builtInSubjectResourceRegistry.resolveMotionProfile(resourceRef);
+      resolveResource(resourceRef: string) {
+        const resolved = builtInSubjectResourceRegistry.resolveResource(resourceRef);
+        if (resolved?.kind !== "motion-profile") return resolved;
         return resolved === undefined
           ? undefined
           : { ...resolved, contentHash: `sha256:${"0".repeat(64)}` };
@@ -174,9 +216,9 @@ describe("subject preset resource closure", () => {
     };
     const registry = {
       ...builtInSubjectResourceRegistry,
-      resolveCapability(resourceRef: string) {
+      resolveResource(resourceRef: string) {
         if (resourceRef === capabilityRef) return cyclicCapability;
-        return builtInSubjectResourceRegistry.resolveCapability(resourceRef);
+        return builtInSubjectResourceRegistry.resolveResource(resourceRef);
       },
     };
 

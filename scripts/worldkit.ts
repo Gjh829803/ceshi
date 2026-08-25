@@ -83,7 +83,7 @@ Usage:
   worldkit build <file> --output <file> [--json]
   worldkit run <file> [--port <port>] [--refresh-dependencies] [--json]
   worldkit capture <file> --output <png> [--snapshot <json>] [--triview-output <directory> --implementation-map <json>] [--port <port>] [--json]
-  worldkit registry list --kind subject-definition [--json]
+  worldkit registry list --kind <resource-kind> [--json]
   worldkit registry describe --resource-ref <ref> [--json]
   worldkit subject-definition validate <file> [--json]
   worldkit subject explain <world-file> --entity-id <id> [--json]
@@ -130,7 +130,7 @@ export type WorldkitArgs =
     }
   | {
       command: "registry-list";
-      resourceKind: "subject-definition";
+      resourceKind: SubjectRegistryResourceV3["kind"];
       json: boolean;
     }
   | { command: "registry-describe"; resourceRef: string; json: boolean }
@@ -486,13 +486,22 @@ export function parseWorldkitArgs(arguments_: readonly string[]): WorldkitArgs {
     const operation = takeRequiredPositional(tokens, "registry operation");
     if (operation === "list") {
       const resourceKind = takeOption(tokens, "--kind");
-      if (resourceKind !== "subject-definition") {
+      if (
+        resourceKind === undefined ||
+        !builtInSubjectResourceRegistry.listDiscoverableResources().some(
+          (resource) => resource.kind === resourceKind,
+        )
+      ) {
         throw new WorldkitUsageError(
-          "registry list requires --kind subject-definition.",
+          "registry list requires --kind <discoverable-resource-kind>.",
         );
       }
       rejectRemaining(tokens, "registry list");
-      return { command: "registry-list", resourceKind, json };
+      return {
+        command: "registry-list",
+        resourceKind: resourceKind as SubjectRegistryResourceV3["kind"],
+        json,
+      };
     }
     if (operation === "describe") {
       const resourceRef = takeOption(tokens, "--resource-ref");
@@ -634,10 +643,10 @@ export function parseWorldkitArgs(arguments_: readonly string[]): WorldkitArgs {
 }
 
 export function listRegistryResources(
-  resourceKind: "subject-definition",
+  resourceKind: SubjectRegistryResourceV3["kind"],
 ) {
   const resources = builtInSubjectResourceRegistry
-    .listSubjectDefinitions()
+    .listDiscoverableResources({ kind: resourceKind })
     .map((resource) => structuredClone(resource));
   return {
     ok: true as const,
@@ -654,6 +663,10 @@ function missingRegistryResourceDiagnostic(resourceRef: string): CliDiagnostic {
   const isSubjectDefinition = resourceRef.startsWith(
     "worldkit://subject-definition/",
   );
+  const requestedKind = /^worldkit:\/\/([^/]+)\//.exec(resourceRef)?.[1];
+  const discoverableKind = builtInSubjectResourceRegistry
+    .listDiscoverableResources()
+    .find((resource) => resource.kind === requestedKind)?.kind;
   return {
     severity: "error",
     code: isSubjectDefinition
@@ -664,21 +677,19 @@ function missingRegistryResourceDiagnostic(resourceRef: string): CliDiagnostic {
     details: {
       resourceRef,
       availableResourceRefs: builtInSubjectResourceRegistry
-        [isSubjectDefinition ? "listSubjectDefinitions" : "listResources"]()
+        .listDiscoverableResources(
+          discoverableKind === undefined ? {} : { kind: discoverableKind },
+        )
         .map((resource) => resource.resourceRef),
-      discoveryCommand: isSubjectDefinition
-        ? "worldkit registry list --kind subject-definition --json"
-        : "worldkit registry describe --resource-ref <ref> --json",
+      discoveryCommand: discoverableKind === undefined
+        ? "worldkit registry describe --resource-ref <ref> --json"
+        : `worldkit registry list --kind ${discoverableKind} --json`,
     },
   };
 }
 
 export function describeRegistryResource(resourceRef: string) {
-  const resource = resourceRef.startsWith("worldkit://subject-definition/")
-    ? builtInSubjectResourceRegistry.resolveSubjectDefinition(resourceRef)
-    : builtInSubjectResourceRegistry
-        .listResources()
-        .find((candidate) => candidate.resourceRef === resourceRef);
+  const resource = builtInSubjectResourceRegistry.resolveResource(resourceRef);
   if (resource === undefined) {
     return {
       ok: false as const,

@@ -55,8 +55,7 @@ describe("selectable Control Feel authority", () => {
       throw new Error("Expected G Bot Subject Definition.");
     }
     const catalogFeelRefs = builtInSubjectResourceRegistry
-      .listCapabilityResources()
-      .filter((resource) => resource.kind === "control-feel-profile")
+      .listDiscoverableResources({ kind: "control-feel-profile" })
       .map((resource) => resource.resourceRef)
       .sort();
     const selectable = selectableControlFeelProfileRefsV1(definition.profiles);

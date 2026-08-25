@@ -136,10 +136,17 @@ function registryWithPermutedNewResourceCollections(
 
   return createSubjectResourceRegistry(
     builtInSubjectResourceRegistry
-      .listResources()
+      .listDiscoverableResources()
       .filter(
         (resource) =>
-          resource.resourceRef !== RIGGED_SUBJECT_DEFINITION_REF,
+          resource.kind === "subject-asset" ||
+          resource.kind === "rig-profile" ||
+          resource.kind === "animation-set" ||
+          resource.kind === "collider-profile" ||
+          resource.kind === "capability" ||
+          resource.kind === "physics-body-profile" ||
+          resource.kind === "locomotion-profile" ||
+          resource.kind === "collider-derivation-profile",
       )
       .map((resource) => {
       const { contentHash: _contentHash, ...input } = structuredClone(resource);
@@ -159,7 +166,7 @@ function registryWithPermutedNewResourceCollections(
         case "rig-profile": {
           const compatibleSubjectAssetRefs = [
             SUBJECT_ASSET_REF,
-            "worldkit://subject-asset/humanoid.other@1",
+            G_BOT_SUBJECT_ASSET_REF,
           ];
           const boneEntries = Object.entries(input.sourceNodeNameByBoneId);
           return {
@@ -226,7 +233,7 @@ describe("subject resource registry", () => {
   it("exposes canonical subject-definition resource refs", () => {
     expect(
       builtInSubjectResourceRegistry
-        .listSubjectDefinitions()
+        .listDiscoverableResources({ kind: "subject-definition" })
         .map((definition) => definition.resourceRef),
     ).toEqual([
       "worldkit://subject-definition/animal.quadruped.forward-steer@1",
@@ -246,7 +253,9 @@ describe("subject resource registry", () => {
   });
 
   it("shares the exact closed Subject unions across built-in definitions", () => {
-    const definitions = builtInSubjectResourceRegistry.listSubjectDefinitions();
+    const definitions = builtInSubjectResourceRegistry.listDiscoverableResources({
+      kind: "subject-definition",
+    });
     const staticHumanoid = definitions.find(
       (definition) =>
         definition.resourceRef ===
@@ -317,7 +326,7 @@ describe("subject resource registry", () => {
   });
 
   it("locks every immutable manifest with a canonical content hash", () => {
-    for (const resource of builtInSubjectResourceRegistry.listResources()) {
+    for (const resource of builtInSubjectResourceRegistry.listDiscoverableResources()) {
       const { contentHash, ...hashInput } = resource;
       expect(contentHash).toMatch(/^sha256:[a-f0-9]{64}$/);
       expect(contentHash).toBe(sha256CanonicalJson(hashInput));
@@ -344,7 +353,7 @@ describe("subject resource registry", () => {
 
   it("lists every resource in stable resourceRef order", () => {
     const refs = builtInSubjectResourceRegistry
-      .listResources()
+      .listDiscoverableResources()
       .map((resource) => resource.resourceRef);
     expect(refs).toEqual([...refs].sort((left, right) => left.localeCompare(right)));
   });
@@ -358,9 +367,9 @@ describe("subject resource registry", () => {
       "animation-set",
       "collider-profile",
     ]);
-    const forwardRows = forward.listResources().filter((resource) =>
+    const forwardRows = forward.listDiscoverableResources().filter((resource) =>
       newResourceKinds.has(resource.kind));
-    const reversedRows = reversed.listResources().filter((resource) =>
+    const reversedRows = reversed.listDiscoverableResources().filter((resource) =>
       newResourceKinds.has(resource.kind));
 
     expect(reversedRows).toEqual(forwardRows);
@@ -687,29 +696,17 @@ describe("subject resource registry", () => {
   });
 
   it("discovers one canonical V3 G Bot definition with the complete socket contract", () => {
-    const cliDefinitions = builtInSubjectResourceRegistry
-      .listSubjectDefinitions()
-      .filter((definition) => definition.resourceRef.includes("humanoid.g-bot"));
-    const browserDefinitions = builtInSubjectResourceRegistry
-      .listCapabilitySubjectDefinitions()
+    const discoveredDefinitions = builtInSubjectResourceRegistry
+      .listDiscoverableResources({ kind: "subject-definition" })
       .filter((definition) => definition.resourceRef.includes("humanoid.g-bot"));
     const resolvedDefinition = builtInSubjectResourceRegistry.resolveSubjectDefinition(
       G_BOT_SUBJECT_DEFINITION_REF,
     );
 
-    expect(cliDefinitions.map((definition) => definition.resourceRef)).toEqual([
+    expect(discoveredDefinitions.map((definition) => definition.resourceRef)).toEqual([
       G_BOT_SUBJECT_DEFINITION_REF,
     ]);
-    expect(browserDefinitions.map((definition) => definition.resourceRef)).toEqual([
-      G_BOT_SUBJECT_DEFINITION_REF,
-    ]);
-    expect(
-      builtInSubjectResourceRegistry
-        .listResources()
-        .filter((resource) => resource.resourceRef === G_BOT_SUBJECT_DEFINITION_REF),
-    ).toEqual([]);
-    expect(cliDefinitions[0]?.contentHash).toBe(resolvedDefinition?.contentHash);
-    expect(browserDefinitions[0]?.contentHash).toBe(resolvedDefinition?.contentHash);
+    expect(discoveredDefinitions[0]?.contentHash).toBe(resolvedDefinition?.contentHash);
     expect(resolvedDefinition).toMatchObject({
       schemaVersion: 3,
       resourceRef: G_BOT_SUBJECT_DEFINITION_REF,
@@ -825,7 +822,8 @@ describe("subject resource registry", () => {
   });
 
   it("rejects a duplicate resourceRef even when resource kinds differ", () => {
-    const definition = builtInSubjectResourceRegistry.listSubjectDefinitions()[0];
+    const definition = builtInSubjectResourceRegistry
+      .listDiscoverableResources({ kind: "subject-definition" })[0];
     const capability = builtInSubjectResourceRegistry.resolveCapability(
       "worldkit://capability/locomotion.ground@1",
     );
@@ -903,9 +901,8 @@ describe("subject resource registry", () => {
   ] as const)(
     "rejects duplicate %s semantic tags before canonical ordering",
     (resourceKind) => {
-      const resource = builtInSubjectResourceRegistry.listResources().find(
-        (candidate) => candidate.kind === resourceKind,
-      )!;
+      const resource = builtInSubjectResourceRegistry
+        .listDiscoverableResources({ kind: resourceKind })[0]!;
 
       expect(() => createSubjectResourceRegistry([
         {
@@ -964,9 +961,8 @@ describe("subject resource registry", () => {
   });
 
   it("rejects non-finite or out-of-range Control Profile tuning", () => {
-    const control = builtInSubjectResourceRegistry.listCapabilityResources().find(
-      (resource) => resource.kind === "control-profile",
-    );
+    const control = builtInSubjectResourceRegistry
+      .listDiscoverableResources({ kind: "control-profile" })[0];
     expect(control).toBeDefined();
 
     expect(() => createSubjectResourceRegistry([{
@@ -981,8 +977,7 @@ describe("subject resource registry", () => {
 
   it("rejects Control Profile policies that its command runtime cannot execute", () => {
     const planar = builtInSubjectResourceRegistry
-      .listCapabilityResources()
-      .filter((resource) => resource.kind === "control-profile")
+      .listDiscoverableResources({ kind: "control-profile" })
       .find((resource) => resource.resourceRef ===
         "worldkit://control-profile/planar.camera-relative@1")!;
 
@@ -997,9 +992,8 @@ describe("subject resource registry", () => {
   });
 
   it("rejects non-finite or internally inconsistent Camera Profile parameters", () => {
-    const camera = builtInSubjectResourceRegistry.listCapabilityResources().find(
-      (resource) => resource.kind === "camera-rig-profile",
-    );
+    const camera = builtInSubjectResourceRegistry
+      .listDiscoverableResources({ kind: "camera-rig-profile" })[0];
     expect(camera).toBeDefined();
 
     expect(() => createSubjectResourceRegistry([{
@@ -1024,9 +1018,8 @@ describe("subject resource registry", () => {
   });
 
   it("rejects Camera Profiles with missing or unknown parameter fields", () => {
-    const camera = builtInSubjectResourceRegistry.listCapabilityResources().find(
-      (resource) => resource.kind === "camera-rig-profile",
-    )!;
+    const camera = builtInSubjectResourceRegistry
+      .listDiscoverableResources({ kind: "camera-rig-profile" })[0]!;
     const { yawDampingPerSecond: _missing, ...missingParameters } = camera.parameters;
 
     expect(() => createSubjectResourceRegistry([{
@@ -1043,9 +1036,8 @@ describe("subject resource registry", () => {
   });
 
   it("rejects unknown Camera Modifier parameters", () => {
-    const modifier = builtInSubjectResourceRegistry.listCapabilityResources().find(
-      (resource) => resource.kind === "camera-modifier-profile",
-    )!;
+    const modifier = builtInSubjectResourceRegistry
+      .listDiscoverableResources({ kind: "camera-modifier-profile" })[0]!;
 
     expect(() => createSubjectResourceRegistry([{
       ...modifier,
@@ -1074,9 +1066,8 @@ describe("subject resource registry", () => {
   });
 
   it("rejects finite Camera Modifiers that violate camera parameter invariants", () => {
-    const modifier = builtInSubjectResourceRegistry.listCapabilityResources().find(
-      (resource) => resource.kind === "camera-modifier-profile",
-    );
+    const modifier = builtInSubjectResourceRegistry
+      .listDiscoverableResources({ kind: "camera-modifier-profile" })[0];
     expect(modifier).toBeDefined();
 
     expect(() => createSubjectResourceRegistry([{

@@ -109,12 +109,9 @@ describe("source-only FBX vehicle inventory", () => {
   });
 
   it("keeps source-only FBX files out of runnable subject discovery", () => {
-    const runnableRegistryPayload = JSON.stringify([
-      ...builtInSubjectResourceRegistry.listSubjectDefinitions(),
-      ...builtInSubjectResourceRegistry.listCapabilitySubjectDefinitions(),
-      ...builtInSubjectResourceRegistry.listResources(),
-      ...builtInSubjectResourceRegistry.listCapabilityResources(),
-    ]);
+    const runnableRegistryPayload = JSON.stringify(
+      builtInSubjectResourceRegistry.listDiscoverableResources(),
+    );
 
     expect(runnableRegistryPayload).not.toContain("source-fbx/vehicles");
     expect(runnableRegistryPayload).not.toContain("source-fbx/contributors");

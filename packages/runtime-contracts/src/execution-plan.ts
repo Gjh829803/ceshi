@@ -269,7 +269,6 @@ export interface ExecutionMotionKernelDefinitionV1 {
     | "unpowered-glide";
   commandKind: ExecutionMotionCommandKindV1;
   supportedMediums: readonly ExecutionMovementMediumV1[];
-  runtimeParameterNames: readonly string[];
   fallbackMotionProfileRef: string;
   deterministic: true;
 }
@@ -1223,7 +1222,6 @@ function validateCapabilityAssembly(input: unknown): void {
       "implementationId",
       "commandKind",
       "supportedMediums",
-      "runtimeParameterNames",
       "fallbackMotionProfileRef",
       "deterministic",
     ]);
@@ -1243,7 +1241,6 @@ function validateCapabilityAssembly(input: unknown): void {
       "none",
     ]);
     requireStringArray(row.supportedMediums);
-    requireStringArray(row.runtimeParameterNames);
     requireString(row.fallbackMotionProfileRef);
     requireLiteral(row.deterministic, [true]);
   });

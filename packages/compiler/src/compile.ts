@@ -750,7 +750,6 @@ function compileCapabilityAssemblyV1(
       implementationId,
       commandKind: motionKernel.commandKind,
       supportedMediums: [...motionKernel.supportedMediums],
-      runtimeParameterNames: [...motionKernel.runtimeParameterNames],
       fallbackMotionProfileRef: motionKernel.fallbackMotionProfileRef,
       deterministic: true,
     };

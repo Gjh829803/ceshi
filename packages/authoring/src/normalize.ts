@@ -385,7 +385,7 @@ function normalizeValidatedAuthoringBase(
             {
               subjectDefinitionRef: node.subjectDefinitionRef,
               availableSubjectDefinitionRefs: subjectResourceRegistry
-                .listSubjectDefinitions()
+                .listDiscoverableResources({ kind: "subject-definition" })
                 .map((candidate) => candidate.resourceRef),
             },
           );

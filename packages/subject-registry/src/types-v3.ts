@@ -60,8 +60,6 @@ export interface MotionKernelDefinitionInputV1
   supportedMediums: readonly MovementMediumV1[];
   supportedBodyKinds: readonly PhysicsBodyKindV1[];
   requiredCapabilityRefs: readonly string[];
-  parameterSchemaRef: string;
-  runtimeParameterNames: readonly string[];
   fallbackMotionProfileRef: string;
   deterministic: true;
   runtimeStatus: "implemented" | "reserved";
@@ -353,7 +351,37 @@ export type SubjectRegistryResourceV3 =
   | SubjectCapabilityResourceV1
   | RegistrySubjectDefinitionV3;
 
+export interface SubjectRegistryDiscoveryFilterV1<
+  ResourceKind extends SubjectRegistryResourceV3["kind"] =
+    SubjectRegistryResourceV3["kind"],
+> {
+  kind?: ResourceKind;
+}
+
+export type SubjectRegistryReferenceEdgeTypeV1 =
+  | "dependency"
+  | "metadata"
+  | "back-reference";
+
+export interface SubjectRegistryReferenceEdgeV1 {
+  sourceResourceRef: string;
+  sourcePath: string;
+  targetResourceRef: string;
+  expectedResourceKinds: readonly SubjectRegistryResourceV3["kind"][];
+  type: SubjectRegistryReferenceEdgeTypeV1;
+}
+
 export interface SubjectResourceRegistryV3 {
+  resolveResource(resourceRef: string): SubjectRegistryResourceV3 | undefined;
+  listDiscoverableResources(): readonly SubjectRegistryResourceV3[];
+  listDiscoverableResources<
+    ResourceKind extends SubjectRegistryResourceV3["kind"],
+  >(
+    filter: SubjectRegistryDiscoveryFilterV1<ResourceKind>,
+  ): readonly Extract<SubjectRegistryResourceV3, { kind: ResourceKind }>[];
+  listReferenceEdges(
+    resource: SubjectRegistryResourceV3,
+  ): readonly SubjectRegistryReferenceEdgeV1[];
   resolveSubjectAsset(resourceRef: string): SubjectAssetManifestV1 | undefined;
   resolveRigProfile(resourceRef: string): RigProfileManifestV1 | undefined;
   resolveAnimationSet(resourceRef: string): AnimationSetManifestV1 | undefined;
@@ -384,8 +412,4 @@ export interface SubjectResourceRegistryV3 {
   resolveHarnessProfile(resourceRef: string): HarnessProfileV1 | undefined;
   resolvePoseSetProfile(resourceRef: string): PoseSetProfileV1 | undefined;
   resolveRenderBindingProfile(resourceRef: string): RenderBindingProfileV1 | undefined;
-  listSubjectDefinitions(): readonly RegistrySubjectDefinitionV3[];
-  listCapabilitySubjectDefinitions(): readonly RegistrySubjectDefinitionV3[];
-  listResources(): readonly SubjectRegistryResourceV1[];
-  listCapabilityResources(): readonly SubjectCapabilityResourceV1[];
 }

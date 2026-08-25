@@ -21,7 +21,6 @@ import type {
   RigProfileManifestV1,
   SubjectAssetManifestV1,
   SubjectAssetManifestInputV1,
-  SubjectRegistryResourceV1,
 } from "./types-v2";
 import type {
   CameraContextProfileV1,
@@ -47,10 +46,11 @@ import type {
   RenderBindingProfileV1,
   SubjectRegistryResourceInputV3,
   SubjectRegistryResourceV3,
-  SubjectCapabilityResourceV1,
+  SubjectRegistryDiscoveryFilterV1,
   SubjectResourceRegistryV3,
 } from "./types-v3";
 import { selectableControlFeelProfileRefsV1 } from "./selectable-control-feel";
+import { listSubjectRegistryReferenceEdgesV1 } from "./subject-registry-reference-edges";
 
 export const FIRST_SLICE_ALLOWED_OVERRIDE_PATHS = [
   "profiles.controlFeelProfileRef",
@@ -100,6 +100,24 @@ const MOTION_ALLOWED_KEYS = new Set([
   "aiMetadata",
   "motionKernelRef",
   "motionTags",
+]);
+
+const MOTION_KERNEL_ALLOWED_KEYS = new Set([
+  "kind",
+  "id",
+  "version",
+  "resourceRef",
+  "authoringAvailability",
+  "aiMetadata",
+  "implementationId",
+  "commandKind",
+  "supportedMediums",
+  "supportedBodyKinds",
+  "requiredCapabilityRefs",
+  "fallbackMotionProfileRef",
+  "deterministic",
+  "runtimeStatus",
+  "contentHash",
 ]);
 
 const MOTION_NUMERIC_FIELD_PATTERN =
@@ -350,6 +368,19 @@ function validateMotionProfile(source: MotionProfileInputV1): void {
         `MOTION_PROFILE_NUMERIC_BAG_FORBIDDEN: '${source.resourceRef}'.`,
       );
     }
+  }
+}
+
+function validateMotionKernel(
+  source: SubjectRegistryResourceInputV3 & { kind: "motion-kernel" },
+): void {
+  const unknownField = Object.keys(source).find(
+    (fieldName) => !MOTION_KERNEL_ALLOWED_KEYS.has(fieldName),
+  );
+  if (unknownField !== undefined) {
+    throw new Error(
+      `SUBJECT_REGISTRY_UNKNOWN_FIELD: '${unknownField}' in '${source.resourceRef}'.`,
+    );
   }
 }
 
@@ -604,18 +635,23 @@ function validateCameraModifierProfile(source: CameraModifierProfileInputV1): vo
 }
 
 function validateReferences(resourcesByRef: ReadonlyMap<string, SubjectRegistryResourceV3>): void {
-  const requireRef = (ownerRef: string, resourceRef: string, expectedKind: string): void => {
-    const resolved = resourcesByRef.get(resourceRef);
-    if (resolved?.kind !== expectedKind) {
-      throw new Error(
-        `SUBJECT_REGISTRY_MISSING_REFERENCE: '${ownerRef}' requires ${expectedKind} '${resourceRef}'.`,
-      );
+  for (const resource of resourcesByRef.values()) {
+    for (const referenceEdge of listSubjectRegistryReferenceEdgesV1(resource)) {
+      const resolved = resourcesByRef.get(referenceEdge.targetResourceRef);
+      if (
+        resolved === undefined ||
+        !referenceEdge.expectedResourceKinds.includes(resolved.kind)
+      ) {
+        const expectedKinds = referenceEdge.expectedResourceKinds.join(" or ");
+        throw new Error(
+          `SUBJECT_REGISTRY_MISSING_REFERENCE: '${resource.resourceRef}' requires ${expectedKinds} '${referenceEdge.targetResourceRef}' at '${referenceEdge.sourcePath}'.`,
+        );
+      }
     }
-  };
+  }
 
   for (const resource of resourcesByRef.values()) {
     if (resource.kind === "motion-profile") {
-      requireRef(resource.resourceRef, resource.motionKernelRef, "motion-kernel");
       const kernel = resourcesByRef.get(resource.motionKernelRef);
       if (kernel?.kind === "motion-kernel" && kernel.runtimeStatus === "reserved") {
         throw new Error(
@@ -624,7 +660,6 @@ function validateReferences(resourcesByRef: ReadonlyMap<string, SubjectRegistryR
       }
     }
     if (resource.kind === "camera-rig-profile") {
-      requireRef(resource.resourceRef, resource.algorithmRef, "camera-rig-algorithm");
       const algorithm = resourcesByRef.get(resource.algorithmRef);
       if (algorithm?.kind === "camera-rig-algorithm" && algorithm.runtimeStatus === "reserved") {
         throw new Error(
@@ -633,27 +668,6 @@ function validateReferences(resourcesByRef: ReadonlyMap<string, SubjectRegistryR
       }
     }
     if (resource.kind === "camera-context-profile") {
-      requireRef(
-        resource.resourceRef,
-        resource.defaultCameraRigProfileRef,
-        "camera-rig-profile",
-      );
-      if (resource.firstPersonCameraRigProfileRef !== undefined) {
-        requireRef(
-          resource.resourceRef,
-          resource.firstPersonCameraRigProfileRef,
-          "camera-rig-profile",
-        );
-      }
-      for (const rule of resource.rules) {
-        if (rule.cameraRigProfileRef !== undefined) {
-          requireRef(resource.resourceRef, rule.cameraRigProfileRef, "camera-rig-profile");
-        }
-        for (const modifierRef of rule.cameraModifierRefs ?? []) {
-          requireRef(resource.resourceRef, modifierRef, "camera-modifier-profile");
-        }
-      }
-
       const reachableBaseProfileRefs = new Set([
         resource.defaultCameraRigProfileRef,
         ...(resource.firstPersonCameraRigProfileRef === undefined
@@ -698,19 +712,6 @@ function validateReferences(resourcesByRef: ReadonlyMap<string, SubjectRegistryR
     }
     if (resource.kind === "subject-definition" && "schemaVersion" in resource) {
       const subject = resource as RegistrySubjectDefinitionV3;
-      requireRef(
-        subject.resourceRef,
-        subject.profiles.physicsBodyProfileRef,
-        "physics-body-profile",
-      );
-      const allMotionProfileRefs = [
-        subject.profiles.motion.defaultMotionProfileRef,
-        ...subject.profiles.motion.optionalMotionProfileRefs,
-        subject.profiles.motion.fallbackMotionProfileRef,
-      ];
-      for (const ref of allMotionProfileRefs) {
-        requireRef(subject.resourceRef, ref, "motion-profile");
-      }
       const defaultMotion = resourcesByRef.get(
         subject.profiles.motion.defaultMotionProfileRef,
       );
@@ -730,39 +731,6 @@ function validateReferences(resourcesByRef: ReadonlyMap<string, SubjectRegistryR
         ) {
           throw new Error(`MOTION_DEFAULT_SAFE_STOP_FORBIDDEN: '${subject.resourceRef}'.`);
         }
-      }
-      requireRef(subject.resourceRef, subject.profiles.controlProfileRef, "control-profile");
-      requireRef(
-        subject.resourceRef,
-        subject.profiles.cameraContextProfileRef,
-        "camera-context-profile",
-      );
-      requireRef(subject.resourceRef, subject.profiles.mediumProfileRef, "medium-profile");
-      requireRef(subject.resourceRef, subject.profiles.harnessProfileRef, "harness-profile");
-      requireRef(
-        subject.resourceRef,
-        subject.profiles.controlFeelProfileRef,
-        "control-feel-profile",
-      );
-      for (const allowedControlFeelProfileRef of selectableControlFeelProfileRefsV1(
-        subject.profiles,
-      )) {
-        requireRef(
-          subject.resourceRef,
-          allowedControlFeelProfileRef,
-          "control-feel-profile",
-        );
-      }
-      requireRef(
-        subject.resourceRef,
-        subject.renderBindingProfileRef,
-        "render-binding-profile",
-      );
-      const actionOrPose = resourcesByRef.get(subject.actionOrPoseSetRef);
-      if (actionOrPose?.kind !== "animation-set" && actionOrPose?.kind !== "pose-set-profile") {
-        throw new Error(
-          `SUBJECT_REGISTRY_MISSING_REFERENCE: '${subject.resourceRef}' requires action or pose set '${subject.actionOrPoseSetRef}'.`,
-        );
       }
       const motion = resourcesByRef.get(subject.profiles.motion.defaultMotionProfileRef);
       const control = resourcesByRef.get(subject.profiles.controlProfileRef);
@@ -811,14 +779,7 @@ export function createSubjectResourceRegistry(
       }
       validateSubjectDefinitionV3(source);
     }
-    if (source.kind === "motion-kernel") {
-      const duplicateParameterName = duplicateValue(source.runtimeParameterNames);
-      if (duplicateParameterName !== undefined) {
-        throw new Error(
-          `SUBJECT_REGISTRY_DUPLICATE_RUNTIME_PARAMETER: '${duplicateParameterName}' in '${source.resourceRef}'.`,
-        );
-      }
-    }
+    if (source.kind === "motion-kernel") validateMotionKernel(source);
     validateCanonicalizedSemanticTags(source);
     resourcesByRef.set(source.resourceRef, lockResource(source));
   }
@@ -829,144 +790,124 @@ export function createSubjectResourceRegistry(
       left.resourceRef.localeCompare(right.resourceRef),
     ),
   );
-  const stableSubjectDefinitions = deepFreeze(
-    stableResources.filter(
-      (resource): resource is RegistrySubjectDefinitionV3 =>
-        resource.kind === "subject-definition",
-    ),
-  );
-  const stableCliSubjectDefinitions = stableSubjectDefinitions;
-  const stableCapabilitySubjectDefinitions = stableSubjectDefinitions;
-  const stableCapabilityResources = deepFreeze(
-    stableResources.filter(
-      (resource): resource is SubjectCapabilityResourceV1 =>
-        resource.kind !== "subject-definition" &&
-        "authoringAvailability" in resource,
-    ),
-  );
-  const stableBaseResources = deepFreeze(
-    stableResources.filter(
-      (resource): resource is SubjectRegistryResourceV1 => {
-        return resource.kind === "subject-asset" ||
-          resource.kind === "rig-profile" ||
-          resource.kind === "animation-set" ||
-          resource.kind === "collider-profile" ||
-          resource.kind === "capability" ||
-          resource.kind === "physics-body-profile" ||
-          resource.kind === "locomotion-profile" ||
-          resource.kind === "collider-derivation-profile";
-      },
-    ),
-  );
+  const resolveResource = (
+    resourceRef: string,
+  ): SubjectRegistryResourceV3 | undefined => resourcesByRef.get(resourceRef);
+
+  function listDiscoverableResources(): readonly SubjectRegistryResourceV3[];
+  function listDiscoverableResources<
+    ResourceKind extends SubjectRegistryResourceV3["kind"],
+  >(
+    filter: SubjectRegistryDiscoveryFilterV1<ResourceKind>,
+  ): readonly Extract<SubjectRegistryResourceV3, { kind: ResourceKind }>[];
+  function listDiscoverableResources(
+    filter?: SubjectRegistryDiscoveryFilterV1,
+  ): readonly SubjectRegistryResourceV3[] {
+    if (filter?.kind === undefined) return stableResources;
+    return deepFreeze(stableResources.filter(
+      (resource) => resource.kind === filter.kind,
+    ));
+  }
 
   return Object.freeze({
+    resolveResource,
+    listDiscoverableResources,
+    listReferenceEdges: listSubjectRegistryReferenceEdgesV1,
     resolveSubjectAsset(resourceRef: string): SubjectAssetManifestV1 | undefined {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "subject-asset" ? resource : undefined;
     },
     resolveRigProfile(resourceRef: string): RigProfileManifestV1 | undefined {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "rig-profile" ? resource : undefined;
     },
     resolveAnimationSet(resourceRef: string): AnimationSetManifestV1 | undefined {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "animation-set" ? resource : undefined;
     },
     resolveColliderProfile(resourceRef: string): ColliderProfileManifestV1 | undefined {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "collider-profile" ? resource : undefined;
     },
     resolveSubjectDefinition(
       resourceRef: string,
     ): RegistrySubjectDefinitionV3 | undefined {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "subject-definition" ? resource : undefined;
     },
     resolveCapability(resourceRef: string): CapabilityManifestV1 | undefined {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "capability" ? resource : undefined;
     },
     resolvePhysicsBodyProfile(
       resourceRef: string,
     ): PhysicsBodyProfileManifestV1 | undefined {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "physics-body-profile" ? resource : undefined;
     },
     resolveLocomotionProfile(resourceRef: string): LocomotionProfileManifestV1 | undefined {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "locomotion-profile" ? resource : undefined;
     },
     resolveColliderDerivationProfile(
       resourceRef: string,
     ): ColliderDerivationProfileManifestV1 | undefined {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "collider-derivation-profile" ? resource : undefined;
     },
     resolveMotionKernel(resourceRef: string): MotionKernelDefinitionV1 | undefined {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "motion-kernel" ? resource : undefined;
     },
     resolveMotionProfile(resourceRef: string): MotionProfileV1 | undefined {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "motion-profile" ? resource : undefined;
     },
     resolveControlFeelProfile(resourceRef: string): ControlFeelProfileV1 | undefined {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "control-feel-profile" ? resource : undefined;
     },
     resolveControlProfile(resourceRef: string): ControlProfileV1 | undefined {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "control-profile" ? resource : undefined;
     },
     resolveCameraRigAlgorithm(
       resourceRef: string,
     ): CameraRigAlgorithmDefinitionV1 | undefined {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "camera-rig-algorithm" ? resource : undefined;
     },
     resolveCameraRigProfile(resourceRef: string): CameraRigProfileV1 | undefined {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "camera-rig-profile" ? resource : undefined;
     },
     resolveCameraModifierProfile(resourceRef: string): CameraModifierProfileV1 | undefined {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "camera-modifier-profile" ? resource : undefined;
     },
     resolveCameraContextProfile(resourceRef: string): CameraContextProfileV1 | undefined {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "camera-context-profile" ? resource : undefined;
     },
     resolveMediumProfile(resourceRef: string): MediumProfileV1 | undefined {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "medium-profile" ? resource : undefined;
     },
     resolveRelationshipProfile(resourceRef: string): RelationshipProfileV1 | undefined {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "relationship-profile" ? resource : undefined;
     },
     resolveHarnessProfile(resourceRef: string): HarnessProfileV1 | undefined {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "harness-profile" ? resource : undefined;
     },
     resolvePoseSetProfile(resourceRef: string): PoseSetProfileV1 | undefined {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "pose-set-profile" ? resource : undefined;
     },
     resolveRenderBindingProfile(resourceRef: string): RenderBindingProfileV1 | undefined {
-      const resource = resourcesByRef.get(resourceRef);
+      const resource = resolveResource(resourceRef);
       return resource?.kind === "render-binding-profile" ? resource : undefined;
-    },
-    listSubjectDefinitions(): readonly RegistrySubjectDefinitionV3[] {
-      return stableCliSubjectDefinitions;
-    },
-    listCapabilitySubjectDefinitions(): readonly RegistrySubjectDefinitionV3[] {
-      return stableCapabilitySubjectDefinitions;
-    },
-    listResources(): readonly SubjectRegistryResourceV1[] {
-      return stableBaseResources;
-    },
-    listCapabilityResources(): readonly SubjectCapabilityResourceV1[] {
-      return stableCapabilityResources;
     },
   });
 }

@@ -536,8 +536,7 @@ function resourcesOfKind(
   registry: SubjectResourceRegistryV3,
   kind: "subject-asset" | "rig-profile" | "animation-set" | "collider-profile",
 ): readonly string[] {
-  return registry.listResources()
-    .filter((resource) => resource.kind === kind)
+  return registry.listDiscoverableResources({ kind })
     .map((resource) => resource.resourceRef)
     .sort((left, right) => left.localeCompare(right));
 }
@@ -591,8 +590,9 @@ function resolveVisualResources(
   const { rigProfileRef, animationSetRef } = definition.visualBinding;
   const rigProfile = subjectResourceRegistry.resolveRigProfile(rigProfileRef);
   if (rigProfile === undefined) {
-    const compatibleRigProfileRefs = subjectResourceRegistry.listResources()
-      .filter((resource) => resource.kind === "rig-profile" &&
+    const compatibleRigProfileRefs = subjectResourceRegistry
+      .listDiscoverableResources({ kind: "rig-profile" })
+      .filter((resource) =>
         resource.compatibleSubjectAssetRefs.includes(assetPart.subjectAssetRef))
       .map((resource) => resource.resourceRef).sort((left, right) => left.localeCompare(right));
     addError(diagnostics, "SUBJECT_RIG_PROFILE_NOT_FOUND",
@@ -606,8 +606,9 @@ function resolveVisualResources(
 
   const animationSet = subjectResourceRegistry.resolveAnimationSet(animationSetRef);
   if (animationSet === undefined) {
-    const compatibleAnimationSetRefs = subjectResourceRegistry.listResources()
-      .filter((resource) => resource.kind === "animation-set" &&
+    const compatibleAnimationSetRefs = subjectResourceRegistry
+      .listDiscoverableResources({ kind: "animation-set" })
+      .filter((resource) =>
         resource.subjectAssetRef === assetPart.subjectAssetRef &&
         resource.rigProfileRef === rigProfileRef)
       .map((resource) => resource.resourceRef).sort((left, right) => left.localeCompare(right));
@@ -743,8 +744,9 @@ function resolveColliderPolicy(
     const { colliderProfileRef } = definition.colliderPolicy;
     const colliderProfile = subjectResourceRegistry.resolveColliderProfile(colliderProfileRef);
     if (colliderProfile === undefined) {
-      const compatibleColliderProfileRefs = subjectResourceRegistry.listResources()
-        .filter((resource) => resource.kind === "collider-profile" &&
+      const compatibleColliderProfileRefs = subjectResourceRegistry
+        .listDiscoverableResources({ kind: "collider-profile" })
+        .filter((resource) =>
           resource.supportedBodyTopologies.includes(definition.bodyTopology))
         .map((resource) => resource.resourceRef).sort((left, right) => left.localeCompare(right));
       addError(diagnostics, "SUBJECT_COLLIDER_PROFILE_NOT_FOUND",

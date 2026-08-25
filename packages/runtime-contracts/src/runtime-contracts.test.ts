@@ -55,7 +55,6 @@ function capabilityAssemblyFixture(): ExecutionSubjectCapabilityAssemblyV1 {
       implementationId: "free-ground",
       commandKind: "planar-vector",
       supportedMediums: ["ground", "air"],
-      runtimeParameterNames: [],
       fallbackMotionProfileRef: motionProfile.resourceRef,
       deterministic: true,
     }],

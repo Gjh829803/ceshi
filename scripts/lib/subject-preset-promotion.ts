@@ -39,13 +39,6 @@ import { isEmpty, isEqual, isNil } from "lodash-es";
 
 import { parseTrustedSourceCommit } from "./worldkit-source-commit";
 
-import {
-  BUILT_IN_CAPABILITY_MANIFESTS,
-  BUILT_IN_CAPABILITY_RESOURCES,
-} from "../../packages/subject-registry/src/built-in-capability-resources";
-import { BUILT_IN_SUBJECT_RESOURCE_MANIFESTS } from "../../packages/subject-registry/src/built-in-resource-manifests";
-import { BUILT_IN_SUBJECT_DEFINITIONS } from "../../packages/subject-registry/src/built-in-subject-definitions";
-
 const execFile = promisify(execFileCallback);
 
 const HASH_PATTERN = /^sha256:[a-f0-9]{64}$/;
@@ -542,34 +535,9 @@ function cameraRole(profileId: string): string {
 function currentRegistryInputs(
   registry: SubjectResourceRegistryV3,
 ): SubjectRegistryResourceInputV3[] {
-  const resources = [
-    ...BUILT_IN_SUBJECT_DEFINITIONS,
-    ...BUILT_IN_SUBJECT_RESOURCE_MANIFESTS,
-    ...BUILT_IN_CAPABILITY_MANIFESTS,
-    ...BUILT_IN_CAPABILITY_RESOURCES,
-    ...registry.listCapabilitySubjectDefinitions(),
-  ];
-  const byRef = new Map<string, SubjectRegistryResourceInputV3>();
-  for (const resource of resources) {
-    byRef.set(
-      resource.resourceRef,
-      ("contentHash" in resource
-        ? stripContentHash(resource as SubjectRegistryResourceV3)
-        : structuredClone(resource)) as SubjectRegistryResourceInputV3,
-    );
-  }
-  return [...byRef.values()];
-}
-
-function resolveResource(
-  registry: SubjectResourceRegistryV3,
-  resourceRefValue: string,
-): SubjectRegistryResourceV3 | undefined {
-  return [
-    ...registry.listResources(),
-    ...registry.listCapabilityResources(),
-    ...registry.listCapabilitySubjectDefinitions(),
-  ].find((resource) => resource.resourceRef === resourceRefValue);
+  return registry.listDiscoverableResources().map((resource) =>
+    stripContentHash(resource) as SubjectRegistryResourceInputV3
+  );
 }
 
 function cloneControlFeelProfile(
@@ -864,7 +832,7 @@ async function materializePromotion(
     ...generatedInputs,
   ]);
   const generatedResources = generatedInputs.map((input) => {
-    const resource = resolveResource(generatedRegistry, input.resourceRef);
+    const resource = generatedRegistry.resolveResource(input.resourceRef);
     if (resource === undefined) {
       return fail(
         "SUBJECT_PRESET_PROMOTION_REGISTRY_INVALID",
@@ -1554,7 +1522,7 @@ export async function promoteSubjectPresetTransactionally(
 
   const registry = options.registry ?? builtInSubjectResourceRegistry;
   for (const generated of plan.generatedResources) {
-    if (resolveResource(registry, generated.resourceRef) !== undefined) {
+    if (registry.resolveResource(generated.resourceRef) !== undefined) {
       fail(
         "SUBJECT_PRESET_PROMOTION_VERSION_COLLISION",
         `Generated resource version '${generated.resourceRef}' already exists.`,

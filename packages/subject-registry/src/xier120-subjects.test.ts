@@ -400,7 +400,7 @@ describe("xier120 static Subject Registry closures", () => {
     }
 
     const registeredXier120DefinitionRefs = builtInSubjectResourceRegistry
-      .listCapabilitySubjectDefinitions()
+      .listDiscoverableResources({ kind: "subject-definition" })
       .filter((definition) =>
         definition.resourceRef.startsWith(
           "worldkit://subject-definition/xier120.",

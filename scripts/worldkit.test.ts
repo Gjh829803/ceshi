@@ -373,6 +373,19 @@ describe("worldkit CLI", () => {
       json: true,
     });
     expect(
+      parseWorldkitArgs([
+        "registry",
+        "list",
+        "--kind",
+        "control-feel-profile",
+        "--json",
+      ]),
+    ).toEqual({
+      command: "registry-list",
+      resourceKind: "control-feel-profile",
+      json: true,
+    });
+    expect(
       parseWorldkitArgs(["layout", "validate", "world.json", "--json"]),
     ).toEqual({
       command: "layout-validate",
@@ -938,6 +951,11 @@ describe("worldkit CLI", () => {
       },
       coordinateConvention: { pivot: "support-center" },
     });
+    const controlFeelProfiles = listRegistryResources("control-feel-profile");
+    expect(controlFeelProfiles.resources.length).toBeGreaterThan(0);
+    expect(controlFeelProfiles.resources.every(
+      (resource) => resource.kind === "control-feel-profile",
+    )).toBe(true);
     expect(
       describeRegistryResource(
         "worldkit://subject-definition/humanoid.g-bot@2",
@@ -991,6 +1009,22 @@ describe("worldkit CLI", () => {
         resource: { kind, resourceRef },
       });
     }
+  });
+
+  it("describes a Control Feel through generic Registry discovery", () => {
+    expect(
+      describeRegistryResource(
+        "worldkit://control-feel-profile/humanoid.medium-ground@1",
+      ),
+    ).toMatchObject({
+      ok: true,
+      kind: "worldkit-registry-description",
+      resource: {
+        kind: "control-feel-profile",
+        resourceRef:
+          "worldkit://control-feel-profile/humanoid.medium-ground@1",
+      },
+    });
   });
 
   it("returns discovery guidance for a missing exact Registry Ref", () => {

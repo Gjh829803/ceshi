@@ -3,9 +3,15 @@ import { describe, expect, it } from "vitest";
 import {
   builtInSubjectDefaultRegistry,
   builtInSubjectResourceRegistry,
+  createSubjectResourceRegistry,
+  resolveSubjectPresetClosureV1,
   XIER120_SUBJECT_DEFINITIONS,
 } from "./index";
-import type { RegistrySubjectDefinitionV3 } from "./types-v3";
+import type {
+  RegistrySubjectDefinitionV3,
+  SubjectRegistryReferenceEdgeV1,
+  SubjectRegistryResourceV3,
+} from "./types-v3";
 
 const SUBJECT_DEFINITION_REFS = [
   "worldkit://subject-definition/animal.quadruped.forward-steer@1",
@@ -60,9 +66,44 @@ const G_BOT_CLIPS = [
   "dance.rumba",
 ] as const;
 
+function publicReferenceValues(
+  value: unknown,
+  sourcePath = "",
+): readonly { sourcePath: string; targetResourceRef: string }[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((child, index) =>
+      publicReferenceValues(child, `${sourcePath}/${index}`)
+    );
+  }
+  if (value === null || typeof value !== "object") return [];
+  return Object.entries(value).flatMap(([key, child]) => {
+    if (key === "resourceRef" || key === "contentHash") return [];
+    const childPath = `${sourcePath}/${key}`;
+    if (
+      key.endsWith("Ref") &&
+      typeof child === "string" &&
+      child.startsWith("worldkit://")
+    ) {
+      return [{ sourcePath: childPath, targetResourceRef: child }];
+    }
+    if (key.endsWith("Refs") && Array.isArray(child)) {
+      return child.flatMap((targetResourceRef, index) =>
+        typeof targetResourceRef === "string" &&
+          targetResourceRef.startsWith("worldkit://")
+          ? [{
+              sourcePath: `${childPath}/${index}`,
+              targetResourceRef,
+            }]
+          : []
+      );
+    }
+    return publicReferenceValues(child, childPath);
+  });
+}
+
 function capabilityDefinitions(): readonly RegistrySubjectDefinitionV3[] {
   return builtInSubjectResourceRegistry
-    .listCapabilitySubjectDefinitions()
+    .listDiscoverableResources({ kind: "subject-definition" })
     .filter(
       (definition): definition is RegistrySubjectDefinitionV3 =>
         "schemaVersion" in definition && definition.schemaVersion === 3,
@@ -70,6 +111,99 @@ function capabilityDefinitions(): readonly RegistrySubjectDefinitionV3[] {
 }
 
 describe("capability-driven subject registry", () => {
+  it("exposes one frozen, sorted, identity-resolving discovery view", () => {
+    const registry = builtInSubjectResourceRegistry;
+
+    expect(typeof registry.resolveResource).toBe("function");
+    expect(typeof registry.listDiscoverableResources).toBe("function");
+    expect("listSubjectDefinitions" in registry).toBe(false);
+    expect("listCapabilitySubjectDefinitions" in registry).toBe(false);
+    expect("listResources" in registry).toBe(false);
+    expect("listCapabilityResources" in registry).toBe(false);
+
+    const resources = registry.listDiscoverableResources();
+    const resourceRefs = resources.map((resource) => resource.resourceRef);
+    expect(resourceRefs).toEqual([...resourceRefs].sort((left, right) =>
+      left.localeCompare(right)
+    ));
+    expect(new Set(resourceRefs).size).toBe(resourceRefs.length);
+    expect(Object.isFrozen(resources)).toBe(true);
+    expect(resources.every(Object.isFrozen)).toBe(true);
+    for (const resource of resources) {
+      expect(registry.resolveResource(resource.resourceRef)).toBe(resource);
+    }
+
+    const controlFeelProfiles = registry.listDiscoverableResources({
+      kind: "control-feel-profile",
+    });
+    expect(controlFeelProfiles.length).toBeGreaterThan(0);
+    expect(controlFeelProfiles.every(
+      (resource) => resource.kind === "control-feel-profile",
+    )).toBe(true);
+    expect(Object.isFrozen(controlFeelProfiles)).toBe(true);
+  });
+
+  it("enumerates every public Registry Ref and drives the exact dependency closure", () => {
+    const listReferenceEdges = (
+      resource: SubjectRegistryResourceV3,
+    ): readonly SubjectRegistryReferenceEdgeV1[] =>
+      builtInSubjectResourceRegistry.listReferenceEdges(resource);
+    const resources = builtInSubjectResourceRegistry.listDiscoverableResources();
+    for (const resource of resources) {
+      const edges = listReferenceEdges(resource);
+      for (const reference of publicReferenceValues(resource)) {
+        expect(edges).toContainEqual(expect.objectContaining(reference));
+      }
+      for (const edge of edges) {
+        expect(edge.sourceResourceRef).toBe(resource.resourceRef);
+        const target = builtInSubjectResourceRegistry.resolveResource(
+          edge.targetResourceRef,
+        );
+        expect(target).toBeDefined();
+        expect(edge.expectedResourceKinds).toContain(target?.kind);
+      }
+    }
+
+    const freeGroundKernel = builtInSubjectResourceRegistry.resolveMotionKernel(
+      "worldkit://motion-kernel/free-ground@1",
+    )!;
+    expect(listReferenceEdges(freeGroundKernel)).toContainEqual(
+      expect.objectContaining({
+        sourcePath: "/fallbackMotionProfileRef",
+        type: "back-reference",
+      }),
+    );
+    const goldenRig = builtInSubjectResourceRegistry.resolveRigProfile(
+      "worldkit://rig-profile/biped.golden@2",
+    )!;
+    expect(listReferenceEdges(goldenRig)).toContainEqual(
+      expect.objectContaining({
+        sourcePath: "/compatibleSubjectAssetRefs/0",
+        type: "metadata",
+      }),
+    );
+
+    const dependencyRefs = new Set<string>();
+    const visit = (resourceRef: string): void => {
+      if (dependencyRefs.has(resourceRef)) return;
+      dependencyRefs.add(resourceRef);
+      const resource = builtInSubjectResourceRegistry.resolveResource(resourceRef);
+      expect(resource).toBeDefined();
+      for (const edge of listReferenceEdges(resource!)) {
+        if (edge.type === "dependency") visit(edge.targetResourceRef);
+      }
+    };
+    const subjectDefinitionRef =
+      "worldkit://subject-definition/vehicle.four-wheel.arcade@1";
+    visit(subjectDefinitionRef);
+    expect(resolveSubjectPresetClosureV1(
+      builtInSubjectResourceRegistry,
+      subjectDefinitionRef,
+    ).entries.map((entry) => entry.resourceRef)).toEqual(
+      [...dependencyRefs].sort((left, right) => left.localeCompare(right)),
+    );
+  });
+
   it("keeps immutable current Subject versions and exact public defaults", () => {
     expect(capabilityDefinitions().map((definition) => definition.resourceRef)).toEqual(
       SUBJECT_DEFINITION_REFS,
@@ -78,23 +212,22 @@ describe("capability-driven subject registry", () => {
       builtInSubjectDefaultRegistry.listPublicDefaults()
         .map((entry) => entry.subjectDefinitionRef),
     ).toEqual(PUBLIC_DEFAULT_REFS);
-    expect(builtInSubjectResourceRegistry.listSubjectDefinitions()).toHaveLength(
+    expect(builtInSubjectResourceRegistry.listDiscoverableResources({
+      kind: "subject-definition",
+    })).toHaveLength(
       10 + XIER120_SUBJECT_DEFINITIONS.length,
     );
   });
 
   it("discovers the primitive humanoid as one capability-driven V3 Definition", () => {
     const resourceRef = "worldkit://subject-definition/humanoid.third-person@1";
-    const cliRows = builtInSubjectResourceRegistry.listSubjectDefinitions()
-      .filter((definition) => definition.resourceRef === resourceRef);
-    const capabilityRows = builtInSubjectResourceRegistry.listCapabilitySubjectDefinitions()
+    const discoveryRows = builtInSubjectResourceRegistry
+      .listDiscoverableResources({ kind: "subject-definition" })
       .filter((definition) => definition.resourceRef === resourceRef);
     const resolved = builtInSubjectResourceRegistry.resolveSubjectDefinition(resourceRef);
 
-    expect(cliRows).toHaveLength(1);
-    expect(capabilityRows).toHaveLength(1);
-    expect(cliRows[0]?.contentHash).toBe(resolved?.contentHash);
-    expect(capabilityRows[0]?.contentHash).toBe(resolved?.contentHash);
+    expect(discoveryRows).toHaveLength(1);
+    expect(discoveryRows[0]?.contentHash).toBe(resolved?.contentHash);
     expect(resolved).toMatchObject({
       schemaVersion: 3,
       actionOrPoseSetRef: "worldkit://pose-set/static.whitebox@1",
@@ -109,16 +242,11 @@ describe("capability-driven subject registry", () => {
       },
       visualBinding: { mode: "static" },
     });
-    expect(
-      builtInSubjectResourceRegistry.listResources()
-        .filter((resource) => resource.resourceRef === resourceRef),
-    ).toEqual([]);
   });
 
   it("freezes ten kernel IDs and exposes only K01, K02, K03, K04, K06 and K08 as runtime implementations", () => {
     const kernels = builtInSubjectResourceRegistry
-      .listCapabilityResources()
-      .filter((resource) => resource.kind === "motion-kernel");
+      .listDiscoverableResources({ kind: "motion-kernel" });
 
     expect(kernels).toHaveLength(10);
     expect(
@@ -207,8 +335,7 @@ describe("capability-driven subject registry", () => {
 
   it("keeps movement control deadzone on the control profile root", () => {
     const controls = builtInSubjectResourceRegistry
-      .listCapabilityResources()
-      .filter((resource) => resource.kind === "control-profile");
+      .listDiscoverableResources({ kind: "control-profile" });
 
     expect(controls).toHaveLength(2);
     for (const control of controls) {
@@ -262,7 +389,7 @@ describe("capability-driven subject registry", () => {
     );
   });
 
-  it("keeps motion profiles bag-free while kernels retain runtime parameter names", () => {
+  it("keeps motion profiles and kernels free of retired parameter schemas", () => {
     const vehicle = builtInSubjectResourceRegistry.resolveMotionProfile(
       "worldkit://motion-profile/wheeled-arcade.medium@1",
     );
@@ -275,7 +402,8 @@ describe("capability-driven subject registry", () => {
       motionTags: ["arcade", "ground", "surface-fast", "wheeled"],
     });
     expect(vehicle).not.toHaveProperty("parameters");
-    expect(vehicleKernel?.runtimeParameterNames.length).toBeGreaterThan(0);
+    expect(vehicleKernel).not.toHaveProperty("parameterSchemaRef");
+    expect(vehicleKernel).not.toHaveProperty("runtimeParameterNames");
 
     const feel = builtInSubjectResourceRegistry.resolveControlFeelProfile(
       "worldkit://control-feel-profile/humanoid.medium-ground@1",
@@ -309,13 +437,19 @@ describe("capability-driven subject registry", () => {
         "worldkit://camera-profile/chase.surface-fast@1",
       )?.reverseHeadingPolicy,
     ).toBe("preserve-target-forward");
-    expect(
-      builtInSubjectResourceRegistry.resolveMotionKernel(
-        "worldkit://motion-kernel/unpowered-glide@1",
-      )?.runtimeParameterNames,
-    ).toEqual(expect.arrayContaining([
-      "pitchRateRadiansPerSecond",
-      "rollRateRadiansPerSecond",
-    ]));
+  });
+
+  it("rejects retired Motion Kernel fields at Catalog admission", () => {
+    const kernel = builtInSubjectResourceRegistry.resolveMotionKernel(
+      "worldkit://motion-kernel/free-ground@1",
+    );
+    expect(kernel).toBeDefined();
+    const { contentHash: _contentHash, ...input } = structuredClone(kernel!);
+
+    expect(() => createSubjectResourceRegistry([{
+      ...input,
+      parameterSchemaRef: "worldkit://motion-parameter-schema/free-ground@1",
+      runtimeParameterNames: ["walkSpeedMetersPerSecond"],
+    } as never])).toThrowError(/SUBJECT_REGISTRY_UNKNOWN_FIELD/);
   });
 });
