@@ -12,6 +12,7 @@ import {
   type Property,
   type Skin,
   type Texture,
+  type TypedArray,
 } from "@gltf-transform/core";
 import { cloneDocument, prune } from "@gltf-transform/functions";
 
@@ -963,6 +964,69 @@ function stripNonStandardContent(document: Document): void {
   document.getRoot().listExtensionsUsed().forEach((extension) => extension.dispose());
 }
 
+function repackAccessorsIntoCompactBuffer(document: Document): void {
+  const root = document.getRoot();
+  const accessors = root.listAccessors();
+  const previousBuffers = root.listBuffers();
+  if (accessors.length === 0) {
+    previousBuffers.forEach((buffer) => buffer.dispose());
+    return;
+  }
+  const compactBuffer = document.createBuffer("modular-subject-compact");
+  accessors.forEach((accessor) => {
+    const array = accessor.getArray();
+    if (array !== null) accessor.setArray(array.slice() as TypedArray);
+    accessor.setBuffer(compactBuffer);
+  });
+  previousBuffers.forEach((buffer) => buffer.dispose());
+}
+
+function disposeAccessorsExcept(document: Document, kept: ReadonlySet<Accessor>): void {
+  document.getRoot().listAccessors().forEach((accessor) => {
+    if (!kept.has(accessor)) accessor.dispose();
+  });
+}
+
+function modelAccessors(document: Document): ReadonlySet<Accessor> {
+  const kept = new Set<Accessor>();
+  for (const mesh of document.getRoot().listMeshes()) {
+    for (const primitive of mesh.listPrimitives()) {
+      const indices = primitive.getIndices();
+      if (indices !== null) kept.add(indices);
+      primitive.listSemantics().forEach((semantic) => {
+        const accessor = primitive.getAttribute(semantic);
+        if (accessor !== null) kept.add(accessor);
+      });
+      for (const target of primitive.listTargets()) {
+        target.listSemantics().forEach((semantic) => {
+          const accessor = target.getAttribute(semantic);
+          if (accessor !== null) kept.add(accessor);
+        });
+      }
+    }
+  }
+  document.getRoot().listSkins().forEach((skin) => {
+    const inverseBindMatrices = skin.getInverseBindMatrices();
+    if (inverseBindMatrices !== null) kept.add(inverseBindMatrices);
+  });
+  return kept;
+}
+
+function clipAccessors(document: Document, animation: Animation): ReadonlySet<Accessor> {
+  const kept = new Set<Accessor>();
+  animation.listSamplers().forEach((sampler) => {
+    const input = sampler.getInput();
+    const output = sampler.getOutput();
+    if (input !== null) kept.add(input);
+    if (output !== null) kept.add(output);
+  });
+  document.getRoot().listSkins().forEach((skin) => {
+    const inverseBindMatrices = skin.getInverseBindMatrices();
+    if (inverseBindMatrices !== null) kept.add(inverseBindMatrices);
+  });
+  return kept;
+}
+
 async function recoverModelDocument(source: Document): Promise<Uint8Array> {
   const model = cloneDocument(source);
   stripNonStandardContent(model);
@@ -978,15 +1042,19 @@ async function recoverModelDocument(source: Document): Promise<Uint8Array> {
     material.setEmissiveTexture(null);
   });
   root.listTextures().forEach((texture) => texture.dispose());
+  disposeAccessorsExcept(model, modelAccessors(model));
   await model.transform(prune({
     propertyTypes: [
       PropertyType.ANIMATION,
+      PropertyType.ANIMATION_CHANNEL,
+      PropertyType.ANIMATION_SAMPLER,
       PropertyType.CAMERA,
       PropertyType.TEXTURE,
       PropertyType.ACCESSOR,
       PropertyType.BUFFER,
     ],
   }));
+  repackAccessorsIntoCompactBuffer(model);
   return IO.writeBinary(model);
 }
 
@@ -1015,6 +1083,7 @@ async function recoverClipDocument(
   root.listMaterials().forEach((material) => material.dispose());
   root.listTextures().forEach((texture) => texture.dispose());
   root.listCameras().forEach((camera) => camera.dispose());
+  disposeAccessorsExcept(clip, clipAccessors(clip, selected));
   await clip.transform(prune({
     propertyTypes: [
       PropertyType.MESH,
@@ -1024,10 +1093,13 @@ async function recoverClipDocument(
       PropertyType.TEXTURE,
       PropertyType.CAMERA,
       PropertyType.ANIMATION,
+      PropertyType.ANIMATION_CHANNEL,
+      PropertyType.ANIMATION_SAMPLER,
       PropertyType.ACCESSOR,
       PropertyType.BUFFER,
     ],
   }));
+  repackAccessorsIntoCompactBuffer(clip);
   return IO.writeBinary(clip);
 }
 

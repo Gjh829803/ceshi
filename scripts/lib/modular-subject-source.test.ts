@@ -107,7 +107,8 @@ function definitionFor(
 
 describe("modular Subject source recovery", () => {
   it("accepts the tracked G Bot Skin whose unique joint root is implicit", async () => {
-    const inventory = await inspectModularSubjectGlb(await readFile(G_BOT_GLB_PATH));
+    const sourceGlbBytes = await readFile(G_BOT_GLB_PATH);
+    const inventory = await inspectModularSubjectGlb(sourceGlbBytes);
 
     expect(inventory).toMatchObject({
       meshCount: 2,
@@ -115,6 +116,40 @@ describe("modular Subject source recovery", () => {
       jointCount: 65,
       animationClipCount: 25,
     });
+
+    const firstAction = {
+      actionId: "idle",
+      sourceClipName: "idle",
+      loopMode: "repeat" as const,
+      playbackSpeedRatio: 1,
+      blendDurationSeconds: 0.2,
+      rootMotionMode: "in-place" as const,
+    };
+    const document = await TEST_IO.readBinary(sourceGlbBytes);
+    document.getRoot().listAnimations().forEach((animation) => {
+      if (animation.getName() !== firstAction.sourceClipName) animation.dispose();
+    });
+    const singleActionSource = await TEST_IO.writeBinary(document);
+    const recovered = await recoverModularSubjectSourcePackage({
+      definition: {
+        ...goldenPackageDefinition,
+        id: "g-bot-buffer-compaction",
+        sourceGlbRelativePath: "apps/playground/public/subject-assets/humanoid/g-bot/v1/g-bot.glb",
+        expectedSourceContentHash: sourceHash(singleActionSource),
+        rigProfileRef: "worldkit://rig-profile/biped.mixamo-g-bot@1",
+        provenanceMode: "derived-recovery",
+        spatialReview: {
+          spatialReviewStatus: "needs-visual-review",
+          evidence: {
+            kind: "product-sidecar-declaration",
+            evidenceRef: "assets/subjects/humanoid/g-bot/asset.manifest.json",
+          },
+        },
+        actions: [firstAction],
+      },
+      sourceGlbBytes: singleActionSource,
+    });
+    expect(recovered.animationClips[0]!.glbBytes.byteLength).toBeLessThan(500_000);
   });
 
   it("recovers one animation-free Model and one render-free Clip per configured Golden action", async () => {
