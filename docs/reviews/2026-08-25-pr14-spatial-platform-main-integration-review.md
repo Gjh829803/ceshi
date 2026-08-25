@@ -6,7 +6,8 @@
 - Source branch reviewed through: `origin/codex/spatial-plan-platform-main@917b9b60890fa971fd38ef5dab33b8db417aa592`
 - Original implementation slice selectively integrated through: `15b3fd952247b56403b355ba81450777274794ed`
 - Initial target baseline: `origin/main@01ee4b9dd403dcc3f05b59ec29d7dbd8e5b17f10`
-- Final integration baseline: `origin/main@ff3c23c29cb9b148025eaf8c6a17faa8f26a0d21`
+- Runtime integration baseline: `origin/main@ff3c23c29cb9b148025eaf8c6a17faa8f26a0d21`
+- Final push baseline: `origin/main@126a8f4081e19ea6f9bc1109f36bafbae3d70da2`
 - Integration method: current-main reimplementation and squash, not a history merge
 - Review protocols: `full-dimension-review-protocol.md` and `runtime-deep-review-checklist.md`
 
@@ -130,3 +131,5 @@ Before final integration, the two reviewed commits were rebased onto
 `ff3c23c`. The host retained that baseline's Babylon shared-material mask
 isolation, temporary-texture disposal, camera-selection hardening and strict
 `isNil` cleanup, then rechecked the hosted capture adapter against those owners.
+The later `126a8f4` baseline update changes only the project-local Cursor review
+skill and its tests; it has no product-runtime or hosted-workflow overlap.
