@@ -12,7 +12,10 @@ import type {
   CameraViewPreferenceAdmissionResultV1,
   CameraViewPreferenceV1,
 } from "./camera-domain.js";
-import { CAMERA_RIG_PARAMETER_NAMES_V1 } from "./camera-domain.js";
+import {
+  CAMERA_RIG_PARAMETER_NAMES_V1,
+  cameraRigParametersViolateInvariantsV1,
+} from "./camera-domain.js";
 
 function compareCodeUnits(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
@@ -169,26 +172,33 @@ export function admitCameraContextProfileV1(
       );
     const hasOnlyFiniteValues = Object.values(profile.parameters)
       .every((value) => typeof value === "number" && Number.isFinite(value));
-    if (hasExactParameterNames && hasOnlyFiniteValues) continue;
+    if (
+      hasExactParameterNames &&
+      hasOnlyFiniteValues &&
+      !cameraRigParametersViolateInvariantsV1(profile.parameters)
+    ) continue;
     diagnostics.push(diagnostic(
       cameraContextProfile,
       "CAMERA_PROFILE_INVALID",
-      `Camera Rig Profile '${profile.cameraRigProfileRef}' must provide exactly the closed finite Camera parameter vocabulary.`,
+      `Camera Rig Profile '${profile.cameraRigProfileRef}' must provide exactly the closed finite Camera parameter vocabulary and satisfy its parameter invariants.`,
       { resourceRef: profile.cameraRigProfileRef },
     ));
   }
   const allowedParameterNames = new Set<string>(CAMERA_RIG_PARAMETER_NAMES_V1);
   for (const profile of cameraContextProfile.cameraModifierProfiles) {
     const overrides = Object.entries(profile.parameterOverrides);
-    if (overrides.every(([name, value]) =>
-      allowedParameterNames.has(name) &&
-      typeof value === "number" &&
-      Number.isFinite(value)
-    )) continue;
+    if (
+      overrides.every(([name, value]) =>
+        allowedParameterNames.has(name) &&
+        typeof value === "number" &&
+        Number.isFinite(value)
+      ) &&
+      !cameraRigParametersViolateInvariantsV1(profile.parameterOverrides)
+    ) continue;
     diagnostics.push(diagnostic(
       cameraContextProfile,
       "CAMERA_PROFILE_INVALID",
-      `Camera Modifier Profile '${profile.cameraModifierProfileRef}' contains an unknown or non-finite Camera parameter override.`,
+      `Camera Modifier Profile '${profile.cameraModifierProfileRef}' contains an unknown, non-finite, or invariant-violating Camera parameter override.`,
       { resourceRef: profile.cameraModifierProfileRef },
     ));
   }

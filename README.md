@@ -383,7 +383,6 @@ Pose 配置及 Registry 锁定，才能成为可运行的主体资产。
 ```bash
 pnpm typecheck
 pnpm test
-pnpm test:scenes
 pnpm build
 pnpm verify:canonical
 pnpm verify:rigged-subject
@@ -393,6 +392,14 @@ pnpm verify:control-capture
 pnpm verify:validation-capture
 pnpm verify:route-r0-contract
 ```
+
+这是一张完整能力覆盖表，不要求每次小改都机械重跑全部命令。先跑受影响的定向回归，
+在最终待合入树上把相关完整门禁各跑一次；只要后续改动没有触及某条门禁的输入或承诺，
+它的通过证据可以复用。根 `pnpm test` 已包含 `pnpm test:scenes` 的两个 Vitest 文件，
+不要连续重复执行；`pnpm test:studio` 使用独立 Node Test Runner，需要 Studio 证据时单独跑。
+生产构建、Browser/Capability verifier、截图检查和人工交互属于不同证据层，不能由单元
+测试替代。详细失效规则见
+[`runtime-deep-review-checklist.md`](docs/reviews/runtime-deep-review-checklist.md#6-required-completion-gates)。
 
 `verify:canonical` 会在真实 Chromium 中验证 Canonical Build Artifact、
 Babylon/Havok、墙体碰撞、水域切换、两个 Package Subject 独立控制、截图、

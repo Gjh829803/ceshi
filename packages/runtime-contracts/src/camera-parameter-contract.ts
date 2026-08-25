@@ -1,5 +1,6 @@
 import {
   CAMERA_RIG_PARAMETER_NAMES_V1,
+  cameraRigParametersViolateInvariantsV1,
   type CameraRigParameterNameV1,
   type CameraRigParametersV1,
 } from "@whitebox-world/camera";
@@ -114,46 +115,7 @@ export function cameraTuningBoundsV1(
 export function cameraParametersViolateInvariantsV1(
   parameters: Readonly<Partial<CameraRigParametersV1>>,
 ): boolean {
-  const negativeAllowed = new Set<keyof CameraRigParametersV1>([
-    "shoulderOffsetMeters",
-    "pitchRadians",
-    "minimumPitchRadians",
-    "maximumPitchRadians",
-  ]);
-  return Object.entries(parameters).some(([name, value]) =>
-    !Number.isFinite(value) ||
-    (!negativeAllowed.has(name as keyof CameraRigParametersV1) && value < 0)
-  ) ||
-    (parameters.minimumDistanceMeters !== undefined &&
-      parameters.maximumDistanceMeters !== undefined &&
-      parameters.minimumDistanceMeters > parameters.maximumDistanceMeters) ||
-    (parameters.distanceMeters !== undefined &&
-      parameters.minimumDistanceMeters !== undefined &&
-      parameters.distanceMeters < parameters.minimumDistanceMeters) ||
-    (parameters.distanceMeters !== undefined &&
-      parameters.maximumDistanceMeters !== undefined &&
-      parameters.distanceMeters > parameters.maximumDistanceMeters) ||
-    (parameters.minimumPitchRadians !== undefined &&
-      parameters.maximumPitchRadians !== undefined &&
-      parameters.minimumPitchRadians > parameters.maximumPitchRadians) ||
-    (parameters.pitchRadians !== undefined &&
-      parameters.minimumPitchRadians !== undefined &&
-      parameters.pitchRadians < parameters.minimumPitchRadians) ||
-    (parameters.pitchRadians !== undefined &&
-      parameters.maximumPitchRadians !== undefined &&
-      parameters.pitchRadians > parameters.maximumPitchRadians) ||
-    (parameters.horizontalDeadZoneRatio !== undefined &&
-      parameters.horizontalDeadZoneRatio > 1) ||
-    (parameters.verticalDeadZoneRatio !== undefined &&
-      parameters.verticalDeadZoneRatio > 1) ||
-    (parameters.baseFovDegrees !== undefined && parameters.baseFovDegrees <= 0) ||
-    (parameters.baseFovDegrees !== undefined &&
-      parameters.maximumSpeedFovDegrees !== undefined &&
-      parameters.baseFovDegrees + parameters.maximumSpeedFovDegrees >= 180) ||
-    (parameters.lookSensitivityXRatio !== undefined &&
-      parameters.lookSensitivityXRatio <= 0) ||
-    (parameters.lookSensitivityYRatio !== undefined &&
-      parameters.lookSensitivityYRatio <= 0);
+  return cameraRigParametersViolateInvariantsV1(parameters);
 }
 
 export function validateCameraTuningV1(

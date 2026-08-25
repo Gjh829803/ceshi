@@ -54,6 +54,8 @@ Apply `docs/reviews/runtime-deep-review-checklist.md` whenever changing or revie
 - Review integrations as a semantic three-way merge. Compare the base, incoming branch, and target behavior for each authority; resolving textual conflicts is not sufficient evidence that behavior was preserved.
 - Separate automated contract evidence, rendered visual evidence, and manual interaction evidence. State exactly which was run, and do not claim production support for an experimental capability from a smoke test alone.
 - Every confirmed runtime bug fix needs a failing reproducer before the fix, a focused regression after it, and the repository's full relevant verification gates before completion.
+- Treat verification evidence as scoped to the exact tree state and affected domain. After each edit, rerun the focused regression first; before integration, run each relevant full gate once. Do not rerun a command already covered by a broader passing command on the same tree: root `pnpm test` includes `pnpm test:scenes`, while `pnpm test:studio`, production builds, Browser verifiers, rendered inspection, and manual interaction remain separate evidence layers.
+- A later change invalidates only evidence whose inputs or claimed behavior it can affect. Runtime/source changes invalidate the focused tests plus the relevant typecheck, test, build, or capability verifier; build/dependency changes invalidate affected builds; documentation-only truth updates require diff/link checks, not runtime replay. When an independent review finds a narrow defect after full gates passed, rerun the new reproducer and only the gates touched by that fix unless the fix changes a cross-cutting contract or shared runtime authority.
 
 ## Agent roles and frozen boundary
 

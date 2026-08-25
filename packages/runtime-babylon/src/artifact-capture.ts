@@ -5,6 +5,7 @@ import { Color3, Color4 } from "@babylonjs/core/Maths/math.color.js";
 import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import { Viewport } from "@babylonjs/core/Maths/math.viewport.js";
 import type { Material } from "@babylonjs/core/Materials/material.js";
+import type { BaseTexture } from "@babylonjs/core/Materials/Textures/baseTexture.js";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
 
@@ -299,6 +300,9 @@ export function captureBabylonArtifactViewV1(options: Readonly<{
   const previousWidth = engine.getRenderWidth(true);
   const previousHeight = engine.getRenderHeight(true);
   const materialColors = new Map<Material, MaterialColorSnapshotV1>();
+  const originalMaterialByMesh = new Map<AbstractMesh, Material>();
+  const temporaryMaterials = new Set<Material>();
+  const temporaryTextures = new Set<BaseTexture>();
   let temporaryCamera: FreeCamera | undefined;
   try {
     if (request.kind === "entity-triview") {
@@ -364,8 +368,26 @@ export function captureBabylonArtifactViewV1(options: Readonly<{
       for (const mesh of scene.meshes) {
         if (!mesh.isVisible || mesh.material === null) continue;
         const entityId = String(mesh.metadata?.worldkitEntityId ?? "");
+        const originalMaterial = mesh.material;
+        const texturesBeforeClone = new Set(scene.textures);
+        let semanticMaterial: Material | null;
+        try {
+          semanticMaterial = originalMaterial.clone(
+            `${originalMaterial.name}.worldkit-mask.${entityId}`,
+          );
+        } finally {
+          for (const texture of scene.textures) {
+            if (!texturesBeforeClone.has(texture)) temporaryTextures.add(texture);
+          }
+        }
+        if (semanticMaterial === null) {
+          throw new Error(`BABYLON_ARTIFACT_MATERIAL_NOT_CLONEABLE: ${mesh.name}`);
+        }
+        originalMaterialByMesh.set(mesh, originalMaterial);
+        temporaryMaterials.add(semanticMaterial);
+        mesh.material = semanticMaterial;
         tintMaterial(
-          mesh.material,
+          semanticMaterial,
           Color3.FromHexString(request.colorByEntityId[entityId] ?? "#FFFFFF"),
           materialColors,
         );
@@ -393,7 +415,10 @@ export function captureBabylonArtifactViewV1(options: Readonly<{
     };
   } finally {
     temporaryCamera?.dispose();
+    for (const [mesh, material] of originalMaterialByMesh) mesh.material = material;
     restoreMaterialColors(materialColors);
+    for (const material of temporaryMaterials) material.dispose();
+    for (const texture of temporaryTextures) texture.dispose();
     scene.activeCamera = previousCamera;
     scene.clearColor = previousClearColor;
     engine.setSize(previousWidth, previousHeight, true);

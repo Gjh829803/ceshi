@@ -722,7 +722,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
         const height = artifact.grid.heights[index];
         const slopeDegrees = artifact.grid.slopesDegrees[index];
         const offset = index * 4;
-        if (height == null || slopeDegrees == null) {
+        if (isNil(height) || isNil(slopeDegrees)) {
           image.data.set([20, 24, 28, 255], offset);
           continue;
         }

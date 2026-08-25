@@ -66,7 +66,9 @@ Evidence reports must name the exact commands, test counts, artifacts inspected,
 
 ## 6. Required completion gates
 
-Run the focused reproducer first, then the relevant full gates. For changes touching the canonical Babylon runtime, the default set is:
+Run the focused reproducer first, then run each relevant full gate once on the final tree. Reuse a passing result while its inputs are unchanged; do not use a narrower alias to repeat coverage already provided by a broader command. In particular, root `pnpm test` already discovers the two files behind `pnpm test:scenes`. `pnpm test:studio` is separate because Studio uses Node's test runner, and Browser verifiers, rendered inspection, manual interaction, and production builds prove different evidence layers.
+
+For changes touching the canonical Babylon runtime, select from this default closure according to the affected contracts:
 
 ```bash
 pnpm typecheck
@@ -78,4 +80,11 @@ pnpm verify:rigged-subject
 pnpm verify:g-bot-subject
 ```
 
-Also run any capability-specific verifier added by the branch. Inspect generated screenshots when visual behavior is part of the claim. A known warning must be classified and tracked; it must not be silently described as success or automatically treated as a blocker.
+The list is a coverage map, not an instruction to rerun every command after every edit. Evidence becomes stale only when a subsequent change can affect that command's inputs or claim:
+
+- runtime or shared-contract changes: focused regression, `typecheck`, root `test`, `build`, and the directly affected Browser/capability verifier;
+- verifier, fixture, or capture changes: that verifier and its focused tests; add `build` only when shipped code or bundling changed;
+- Studio-only changes: Studio tests/build path, without repeating unrelated Vitest or Babylon gates;
+- documentation-only corrections: `git diff --check` plus link/claim inspection, without runtime replay.
+
+After an independent review finds a narrow defect, run its failing reproducer before the fix and its focused regression after the fix. Reopen the entire closure only when the fix changes a cross-cutting public contract, shared runtime authority, dependencies, or build graph. Otherwise rerun only the invalidated evidence. Also run any capability-specific verifier added by the branch. Inspect generated screenshots when visual behavior is part of the claim. A known warning must be classified and tracked; it must not be silently described as success or automatically treated as a blocker.
