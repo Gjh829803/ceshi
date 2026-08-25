@@ -26,6 +26,8 @@ interface RuntimeProbeApi {
     fixedTimeStepSeconds: number,
   ) => Readonly<{
     readonly arcLengthMeters: number;
+    readonly totalArcLengthMeters: number;
+    readonly remainingArcLengthMeters: number;
     readonly expectedTraversalSurfaceIds: readonly string[];
     readonly retainedSegmentIndexes: readonly number[];
   }>;
@@ -774,6 +776,97 @@ describe.skipIf(!hasRuntimeProbeApi)("RouteRuntimeProbeReceiptV2", () => {
     })).toThrow("ROUTE_RUNTIME_PROBE_CONTEXT_INVALID");
   });
 
+  it("contextually derives each support station from retained foot instead of subject origin", () => {
+    const path = pathReceiptV2(
+      [[0, 0, 0], [1, 0, 0], [2, 0, 0], [3, 0, 0]],
+      ["surface-main", "surface-main", "surface-b", "surface-b"],
+    );
+    const asymmetricEvidence = runtimeEvidence(1, {
+      subjectPositionMetersXYZ: [2.5, 0, 0],
+      characterSupport: {
+        ...runtimeEvidence(1).characterSupport,
+        sampledFootPositionMetersXYZ: [0.5, 0, 0],
+      },
+    });
+    const raw = oneTickFailure({
+      kind: "runtime-stalled",
+      failureProbeTick: 1,
+      failurePositionMetersXYZ: asymmetricEvidence.subjectPositionMetersXYZ,
+      stalledDurationTicks: 1,
+    }, {
+      runtimeEvidence: asymmetricEvidence,
+      expectedTraversalSurfaceIds: ["surface-main"],
+      stalledDurationTicks: 1,
+    });
+    const receipt: RouteRuntimeProbeReceiptV2 = {
+      ...raw,
+      request: request({
+        routePathReceiptHash: hashRoutePathReceiptV2(path),
+        walkSpeedMetersPerSecond: 180,
+      }),
+    };
+
+    expect(canonicalRouteRuntimeProbeReceiptV2(receipt)).toEqual(receipt);
+    expect(assertRouteRuntimeProbeReceiptContextV2({
+      receipt,
+      routePathReceipt: path,
+      resolvedDriverProfile: RESOLVED_DRIVER_PROFILE,
+      validationProfileIdentity: VALIDATION_PROFILE_IDENTITY,
+    })).toEqual(receipt);
+  });
+
+  it("rejects forged complete receipts with a Tick 0 support mismatch", () => {
+    for (const initialSurfaceResolution of [
+      { mode: "ambiguous" as const },
+      { mode: "unmatched" as const },
+    ]) {
+      const complete = completeReceipt();
+      const forged: RouteRuntimeProbeReceiptV2 = {
+        ...complete,
+        initialRuntimeEvidence: runtimeEvidence(0, {
+          characterSupport: {
+            ...runtimeEvidence(0).characterSupport,
+            surfaceResolution: initialSurfaceResolution,
+          },
+        }),
+      };
+
+      expect(() => canonicalRouteRuntimeProbeReceiptV2(forged)).toThrow(
+        "ROUTE_RUNTIME_PROBE_RECEIPT_INVALID",
+      );
+      expect(() => assertRouteRuntimeProbeReceiptContextV2({
+        receipt: forged,
+        routePathReceipt: pathReceipt(),
+        resolvedDriverProfile: RESOLVED_DRIVER_PROFILE,
+        validationProfileIdentity: VALIDATION_PROFILE_IDENTITY,
+      })).toThrow("ROUTE_RUNTIME_PROBE_CONTEXT_INVALID");
+    }
+
+    const complete = completeReceipt();
+    const wrongResolved: RouteRuntimeProbeReceiptV2 = {
+      ...complete,
+      initialRuntimeEvidence: runtimeEvidence(0, {
+        characterSupport: {
+          ...runtimeEvidence(0).characterSupport,
+          surfaceResolution: {
+            mode: "resolved",
+            ...SURFACE,
+            traversalSurfaceId: "surface-forged",
+          },
+        },
+      }),
+    };
+    expect(canonicalRouteRuntimeProbeReceiptV2(wrongResolved)).toEqual(
+      wrongResolved,
+    );
+    expect(() => assertRouteRuntimeProbeReceiptContextV2({
+      receipt: wrongResolved,
+      routePathReceipt: pathReceipt(),
+      resolvedDriverProfile: RESOLVED_DRIVER_PROFILE,
+      validationProfileIdentity: VALIDATION_PROFILE_IDENTITY,
+    })).toThrow("ROUTE_RUNTIME_PROBE_CONTEXT_INVALID");
+  });
+
   it("rejects non-consecutive evidence/Probe ticks and every identity mismatch", () => {
     const base = completeReceipt();
     const invalidReceipts: readonly unknown[] = [
@@ -915,6 +1008,18 @@ function pathReceiptV2(
   points: ReadonlyArray<readonly [number, number, number]> = [[0, 0, 0], [1, 0, 0]],
   surfaceIds: readonly string[] = points.map(() => SURFACE.traversalSurfaceId),
 ): traversal.RoutePathReceiptV2 {
+  const routePathDistanceMeters = points.slice(1).reduce((total, point, index) => {
+    const previous = points[index]!;
+    return total + Math.hypot(
+      point[0] - previous[0],
+      point[1] - previous[1],
+      point[2] - previous[2],
+    );
+  }, 0);
+  const routePathDistanceMetersXZ = points.slice(1).reduce((total, point, index) => {
+    const previous = points[index]!;
+    return total + Math.hypot(point[0] - previous[0], point[2] - previous[2]);
+  }, 0);
   const identities = surfaceIds.map((traversalSurfaceId, index) => ({
     ...SURFACE,
     traversalSurfaceId,
@@ -942,9 +1047,9 @@ function pathReceiptV2(
     orderedTraversalEdgeIds: points.slice(1).map((_, index) => `edge-${index}`),
     orderedPathPositionsMetersXYZ: points,
     orderedTraversalSurfaceIdentities: identities,
-    routePathDistanceMeters: 1,
-    routePathDistanceMetersXZ: 1,
-    routePathCost: 0.5,
+    routePathDistanceMeters,
+    routePathDistanceMetersXZ,
+    routePathCost: routePathDistanceMeters,
     maximumObservedSlopeDegrees: 0,
     maximumObservedStepHeightMeters: 0,
     minimumObservedClearanceWidthMeters: 0.9,
@@ -1053,6 +1158,54 @@ describe.skipIf(!hasRuntimeProbeApiV2)("RouteRuntimeProbeTickV2", () => {
 });
 
 describe.skipIf(!hasRuntimeProbeApiV2)("advanceRouteRuntimeProbeSupportStationV2", () => {
+  it("defines a total station for one node and preserves 3D layered topology", () => {
+    const oneNode = advanceRouteRuntimeProbeSupportStationV2(
+      pathReceiptV2([[0, 0, 0]], ["surface-a"]),
+      [0, 0, 0],
+      0,
+      1,
+      GRAPH_BUILDER_PROFILE.profile.positionQuantizationMeters,
+      1 / 60,
+    );
+    expect(oneNode).toEqual({
+      arcLengthMeters: 0,
+      totalArcLengthMeters: 0,
+      remainingArcLengthMeters: 0,
+      expectedTraversalSurfaceIds: ["surface-a"],
+      retainedSegmentIndexes: [],
+    });
+
+    const vertical = advanceRouteRuntimeProbeSupportStationV2(
+      pathReceiptV2([[0, 0, 0], [0, 2, 0]], ["surface-a", "surface-b"]),
+      [0, 1.5, 0],
+      0,
+      10,
+      GRAPH_BUILDER_PROFILE.profile.positionQuantizationMeters,
+      1,
+    );
+    expect(vertical).toMatchObject({
+      arcLengthMeters: 1.5,
+      totalArcLengthMeters: 2,
+      remainingArcLengthMeters: 0.5,
+      expectedTraversalSurfaceIds: ["surface-a", "surface-b"],
+      retainedSegmentIndexes: [0],
+    });
+
+    const layeredCrossing = advanceRouteRuntimeProbeSupportStationV2(
+      pathReceiptV2(
+        [[0, 0, 0], [2, 0, 2], [0, 5, 2], [2, 5, 0]],
+        ["surface-lower", "surface-lower", "surface-connector", "surface-upper"],
+      ),
+      [1, 0, 1],
+      0,
+      20,
+      GRAPH_BUILDER_PROFILE.profile.positionQuantizationMeters,
+      1,
+    );
+    expect(layeredCrossing.retainedSegmentIndexes).toEqual([0]);
+    expect(layeredCrossing.expectedTraversalSurfaceIds).toEqual(["surface-lower"]);
+  });
+
   it("bounds the station window by walk speed times that tick's dt plus quantization", () => {
     const path = pathReceiptV2(
       [[0, 0, 0], [0.025, 0, 0], [1, 0, 0]],

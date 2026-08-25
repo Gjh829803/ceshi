@@ -153,6 +153,8 @@ const RECAST_CANONICAL_PROJECTION_MAPPING_V1 = Object.freeze({
   nodeSlope: "maximum-detail-triangle-slope-degrees-rounded-up",
   heightDelta: "signed-destination-centroid-y-minus-source-centroid-y",
   stepHeight: "maximum-absolute-portal-endpoint-height-discontinuity",
+  crossSurfaceSeam:
+    "edge-local-portal-endpoints-and-midpoint-nearest-source-boundary-gap-and-height",
   clearanceWidth:
     "two-times-walkableRadiusCells-times-voxelCellSizeMeters-rounded-down",
   clearanceHeight:
@@ -171,7 +173,7 @@ export const RECAST_GRAPH_PROVIDER_ADAPTER_MANIFEST_V1 = Object.freeze({
   graphProviderAdapterRef:
     "worldkit://graph-provider-adapter/recast-navigation.tiled@1",
   graphProviderAdapterResolvedVersion:
-    "0.43.1+lifecycle.1+source-areas.3+mapping.5",
+    "0.43.1+lifecycle.1+source-areas.3+mapping.6",
   providerPackageName: "recast-navigation",
   providerPackageVersion: "0.43.1",
   providerPackages: RECAST_PROVIDER_PACKAGES_V1,

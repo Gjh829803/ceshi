@@ -135,12 +135,12 @@ function gameplayBootstrap(
 async function riggedInput(): Promise<CreateWorldPackageBuildReceiptInputV1> {
   const v3 = createValidRiggedPackageSubjectWorld();
   const bytes = new Uint8Array(await readFile(new URL(
-    "../../../apps/playground/public/worldkit-assets/golden-humanoid.glb",
+    "../../../apps/playground/public/subject-assets/humanoid/golden/v2/golden-humanoid.glb",
     import.meta.url,
   )));
   return compileInput(asV4(v3), {
     resourceArtifacts: [{
-      resourceRef: "worldkit://subject-asset/humanoid.golden@1",
+      resourceRef: "worldkit://subject-asset/humanoid.golden@2",
       packagePath: "resources/subject-assets/humanoid.golden.glb",
       mediaType: "model/gltf-binary",
       bytes,
@@ -158,12 +158,12 @@ async function uninstantiatedRiggedResourceInput(): Promise<CreateWorldPackageBu
     },
   });
   const bytes = new Uint8Array(await readFile(new URL(
-    "../../../apps/playground/public/worldkit-assets/golden-humanoid.glb",
+    "../../../apps/playground/public/subject-assets/humanoid/golden/v2/golden-humanoid.glb",
     import.meta.url,
   )));
   return compileInput(v4, {
     resourceArtifacts: [{
-      resourceRef: "worldkit://subject-asset/humanoid.golden@1",
+      resourceRef: "worldkit://subject-asset/humanoid.golden@2",
       packagePath: "resources/subject-assets/humanoid.golden.glb",
       mediaType: "model/gltf-binary",
       bytes,
@@ -461,7 +461,7 @@ describe("WorldPackageBuildReceiptV1", () => {
 
     expect(receipt.manifest.resources.map((row) => row.resourceRef)).toEqual([
       input.gameplayBootstrap.resourceRef,
-      "worldkit://subject-asset/humanoid.golden@1",
+      "worldkit://subject-asset/humanoid.golden@2",
     ]);
   });
 

@@ -11,8 +11,8 @@ const SUBJECT_DEFINITION_REFS = [
   "worldkit://subject-definition/animal.quadruped.forward-steer@1",
   "worldkit://subject-definition/animal.quadruped.forward-steer@2",
   "worldkit://subject-definition/glider.paraglider.unpowered@1",
-  "worldkit://subject-definition/humanoid.g-bot@1",
-  "worldkit://subject-definition/humanoid.rigged-golden@1",
+  "worldkit://subject-definition/humanoid.g-bot@2",
+  "worldkit://subject-definition/humanoid.rigged-golden@2",
   "worldkit://subject-definition/humanoid.third-person@1",
   "worldkit://subject-definition/quadruped.ground-proxy@1",
   "worldkit://subject-definition/surface-craft.ice-skimmer@1",
@@ -26,7 +26,7 @@ const SUBJECT_DEFINITION_REFS = [
 const PUBLIC_DEFAULT_REFS = [
   "worldkit://subject-definition/animal.quadruped.forward-steer@2",
   "worldkit://subject-definition/glider.paraglider.unpowered@1",
-  "worldkit://subject-definition/humanoid.g-bot@1",
+  "worldkit://subject-definition/humanoid.g-bot@2",
   "worldkit://subject-definition/surface-craft.ice-skimmer@1",
   "worldkit://subject-definition/vehicle.four-wheel.arcade@1",
   "worldkit://subject-definition/watercraft.kayak.surface@1",
@@ -230,17 +230,17 @@ describe("capability-driven subject registry", () => {
 
   it("locks the current 25-clip G Bot artifact and keeps runtime state binding explicitly unready", () => {
     const asset = builtInSubjectResourceRegistry.resolveSubjectAsset(
-      "worldkit://subject-asset/actor.humanoid.g-bot@1",
+      "worldkit://subject-asset/actor.humanoid.g-bot@2",
     );
     const actionSet = builtInSubjectResourceRegistry.resolveAnimationSet(
-      "worldkit://animation-set/humanoid.ground.g-bot@1",
+      "worldkit://animation-set/humanoid.ground.g-bot@2",
     );
 
     expect(asset).toMatchObject({
       artifact: {
-        byteLength: 5_302_160,
+        byteLength: 6_743_072,
         contentHash:
-          "sha256:41833210e735788da0777fc37badcec03f90ccf17ab5a7d89103f0727abeeb1b",
+          "sha256:4bcf3fabdba1e083ef54bf172fd962ca740e0f2fabdb9cddaae45d5ea208718f",
       },
       inventory: {
         meshCount: 2,

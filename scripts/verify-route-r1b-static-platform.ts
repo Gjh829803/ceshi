@@ -30,7 +30,7 @@ import {
 type GateOutcome =
   | Readonly<{ status: "passed" }>
   | Readonly<{ status: "failed"; diagnosticCode: string }>
-  | Readonly<{ status: "incomplete" }>;
+  | Readonly<{ status: "incomplete"; diagnosticCode?: string }>;
 
 export interface RouteR1bFixtureOracle {
   readonly fixtureId: string;
@@ -183,7 +183,7 @@ export const R1B_STATIC_PLATFORM_FIXTURE_ORACLE: readonly RouteR1bFixtureOracle[
     Object.freeze({
       fixtureId: "fail-missing-surface-profile",
       graph: Object.freeze({
-        status: "failed" as const,
+        status: "incomplete" as const,
         diagnosticCode: "ROUTE_SURFACE_PROFILE_MISSING",
       }),
       runtime: Object.freeze({ status: "incomplete" as const }),
@@ -191,7 +191,7 @@ export const R1B_STATIC_PLATFORM_FIXTURE_ORACLE: readonly RouteR1bFixtureOracle[
     Object.freeze({
       fixtureId: "fail-wrong-collider-binding",
       graph: Object.freeze({
-        status: "failed" as const,
+        status: "incomplete" as const,
         diagnosticCode: "ROUTE_SURFACE_CORRELATION_MISSING",
       }),
       runtime: Object.freeze({ status: "incomplete" as const }),
@@ -215,7 +215,7 @@ export const R1B_STATIC_PLATFORM_FIXTURE_ORACLE: readonly RouteR1bFixtureOracle[
     Object.freeze({
       fixtureId: "fail-overlapping-surfaces",
       graph: Object.freeze({
-        status: "failed" as const,
+        status: "incomplete" as const,
         diagnosticCode: "ROUTE_SURFACE_CORRELATION_AMBIGUOUS",
       }),
       runtime: Object.freeze({ status: "incomplete" as const }),
@@ -369,7 +369,7 @@ function assertGateOutcome(
     expected.status,
     `${fixtureId} ${lane} produced '${actualStatus}' instead of '${expected.status}'.`,
   );
-  if (expected.status === "failed") {
+  if ("diagnosticCode" in expected && !isNil(expected.diagnosticCode)) {
     assert.equal(
       actualCodes.has(expected.diagnosticCode),
       true,

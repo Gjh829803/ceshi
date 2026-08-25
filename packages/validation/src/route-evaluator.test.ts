@@ -70,6 +70,12 @@ const SURFACE = {
   resolvedVersion: "1",
   resourceHash: HASH_B,
 } as const;
+const SECONDARY_SURFACE = {
+  ...SURFACE,
+  traversalSurfaceId: "surface-secondary",
+  surfaceEntityId: "platform-secondary",
+  colliderSubshapeId: deriveColliderSubshapeIdV1("platform-secondary", "primary"),
+} as const;
 
 const WALL_ENTITY_ID = "wall-narrow";
 const WALL_LOGICAL_SUBSHAPE_ID = "primary";
@@ -116,6 +122,7 @@ function rebuildBuildInputReceipt(
   overrides: Readonly<{
     terrainSource?: RouteBuildInputReceiptV2["input"]["terrainSource"];
     staticColliders?: readonly StaticColliderSourceV1[];
+    traversalSurfaces?: RouteBuildInputReceiptV2["input"]["traversalSurfaces"];
   }>,
 ): RouteBuildInputReceiptV2 {
   const draft = {
@@ -130,11 +137,14 @@ function rebuildBuildInputReceipt(
   });
   const surfaceArtifactHash = hashRouteSurfaceArtifactV2(draft.traversalSurfaces);
   return createRouteBuildInputReceiptV2({
-    ...draft,
-    terrainArtifactHash,
-    colliderArtifactHash,
-    geometryArtifactHash,
-    surfaceArtifactHash,
+    input: {
+      ...draft,
+      terrainArtifactHash,
+      colliderArtifactHash,
+      geometryArtifactHash,
+      surfaceArtifactHash,
+    },
+    traversalLockReceipt: receipt.traversalLockReceipt,
   });
 }
 
@@ -267,11 +277,14 @@ function buildInputReceipt(
   });
   const surfaceArtifactHash = hashRouteSurfaceArtifactV2(draft.traversalSurfaces);
   return createRouteBuildInputReceiptV2({
-    ...draft,
-    terrainArtifactHash,
-    colliderArtifactHash,
-    geometryArtifactHash,
-    surfaceArtifactHash,
+    input: {
+      ...draft,
+      terrainArtifactHash,
+      colliderArtifactHash,
+      geometryArtifactHash,
+      surfaceArtifactHash,
+    },
+    traversalLockReceipt: lockReceipt,
   });
 }
 
@@ -605,13 +618,40 @@ function rowInput(options: Readonly<{
 }
 
 function input(options: Parameters<typeof rowInput>[0] = {}): CreateRouteValidationReportInputV2 {
+  const row = rowInput(options);
   return {
     reportId: "main-route-validation",
     subject: SUBJECT,
     dependencyReportRefs: [],
     validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
-    rows: [rowInput(options)],
+    requiredRoutes: [requiredRouteForRow(row)],
+    rows: [row],
   };
+}
+
+function requiredRouteForRow(row: RouteValidationRowInputV2) {
+  const buildInput = row.routeBuildInputReceipt.input;
+  return {
+    constraintId: buildInput.connectivityRequirement.constraintId,
+    routeId: buildInput.connectivityRequirement.routeId,
+    traversingEntityId: buildInput.connectivityRequirement.traversingEntityId,
+    startAnchorEntityId: buildInput.startAnchor.entityId,
+    destinationAnchorEntityId: buildInput.destinationAnchor.entityId,
+  } satisfies CreateRouteValidationReportInputV2["requiredRoutes"][number];
+}
+
+function requiredRoutesForRows(rows: readonly RouteValidationRowInputV2[]) {
+  return rows.map(requiredRouteForRow).sort((left, right) =>
+    left.constraintId < right.constraintId
+      ? -1
+      : left.constraintId > right.constraintId
+      ? 1
+      : left.routeId < right.routeId
+      ? -1
+      : left.routeId > right.routeId
+      ? 1
+      : 0
+  );
 }
 
 function onlyRow(
@@ -664,6 +704,15 @@ function failedConnectivityInput(
         terrainEntityId: SURFACE.surfaceEntityId,
       },
       staticColliders: [],
+    });
+  }
+  if (
+    !isNil(pendingReason) &&
+    pendingReason.kind === "surface-correlation-ambiguous"
+  ) {
+    routeBuildInputReceipt = rebuildBuildInputReceipt(routeBuildInputReceipt, {
+      traversalSurfaces: [SURFACE, SECONDARY_SURFACE],
+      staticColliders: [staticBoxCollider("platform-secondary", "primary")],
     });
   }
   if (
@@ -741,7 +790,9 @@ function failedConnectivityInput(
     startAnchorPositionMetersXYZ: [0, 0, 0],
     destinationAnchorPositionMetersXYZ: [1, 0, 0],
     relatedTraversalSurfaceIdentities: (
-      reason.kind === "slope-threshold-exceeded" ||
+      reason.kind === "surface-correlation-ambiguous"
+        ? [SURFACE, SECONDARY_SURFACE]
+        : reason.kind === "slope-threshold-exceeded" ||
       reason.kind === "step-height-threshold-exceeded" ||
       reason.kind === "clearance-width-insufficient" ||
       reason.kind === "overhead-clearance-insufficient" ||
@@ -792,6 +843,7 @@ function failedConnectivityInput(
     subject: SUBJECT,
     dependencyReportRefs: [],
     validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+    requiredRoutes: [requiredRouteForRow(row)],
     rows: [row],
   };
 }
@@ -1007,9 +1059,38 @@ function expectedFailurePosition(
 }
 
 describe("createRouteValidationReportV2", () => {
+  it("rejects missing, extra, duplicate, and mismatched-plan Required Route sets", () => {
+    const first = rowInput({ constraintId: "a-route", routeId: "route-a" });
+    const second = rowInput({ constraintId: "b-route", routeId: "route-b" });
+    const requiredRoutes = requiredRoutesForRows([first, second]);
+
+    expect(() => createRouteValidationReportV2({
+      ...input(),
+      requiredRoutes,
+      rows: [first],
+    })).toThrow("ROUTE_VALIDATION_REQUIRED_ROUTE_SET_MISMATCH");
+    expect(() => createRouteValidationReportV2({
+      ...input(),
+      requiredRoutes: [requiredRoutes[0]!],
+      rows: [first, second],
+    })).toThrow("ROUTE_VALIDATION_REQUIRED_ROUTE_SET_MISMATCH");
+    expect(() => createRouteValidationReportV2({
+      ...input(),
+      requiredRoutes: [requiredRoutes[0]!, requiredRoutes[0]!],
+      rows: [first, first],
+    })).toThrow("must be unique and sorted by constraintId then routeId");
+    expect(() => createRouteValidationReportV2({
+      ...input(),
+      subject: { ...SUBJECT, executionPlanHash: HASH_A },
+      requiredRoutes: [requiredRoutes[0]!],
+      rows: [first],
+    })).toThrow();
+  });
+
   it("publishes a real failed world Report when no required Route rows exist", () => {
     const report = createRouteValidationReportV2({
       ...input(),
+      requiredRoutes: [],
       rows: [],
     });
 
@@ -1030,12 +1111,14 @@ describe("createRouteValidationReportV2", () => {
   });
 
   it("sorts Route rows and keeps artifacts unique when constraints share one routeId", () => {
+    const rows = [
+      rowInput({ constraintId: "z-route-check", routeId: "shared-route" }),
+      rowInput({ constraintId: "a-route-check", routeId: "shared-route" }),
+    ];
     const report = createRouteValidationReportV2({
       ...input(),
-      rows: [
-        rowInput({ constraintId: "z-route-check", routeId: "shared-route" }),
-        rowInput({ constraintId: "a-route-check", routeId: "shared-route" }),
-      ],
+      requiredRoutes: requiredRoutesForRows(rows),
+      rows,
     });
 
     expect(report.status).toBe("passed");
@@ -1057,12 +1140,14 @@ describe("createRouteValidationReportV2", () => {
   });
 
   it("uses locale-independent canonical ordering for Route rows", () => {
+    const rows = [
+      rowInput({ constraintId: "ä-route", routeId: "shared-route" }),
+      rowInput({ constraintId: "z-route", routeId: "shared-route" }),
+    ];
     const report = createRouteValidationReportV2({
       ...input(),
-      rows: [
-        rowInput({ constraintId: "ä-route", routeId: "shared-route" }),
-        rowInput({ constraintId: "z-route", routeId: "shared-route" }),
-      ],
+      requiredRoutes: requiredRoutesForRows(rows),
+      rows,
     });
 
     expect(report.routeValidationSetReceipt.rows.map(({ constraintId }) =>
@@ -1153,17 +1238,19 @@ describe("createRouteValidationReportV2", () => {
   });
 
   it("evaluates heterogeneous capability bounds per row without publishing a false world bound", () => {
+    const rows = [
+      rowInput({ constraintId: "human-route", maxSlopeDegrees: 42 }),
+      rowInput({
+        constraintId: "npc-route",
+        traversingEntityId: "npc",
+        routeId: "npc-main-route",
+        maxSlopeDegrees: 30,
+      }),
+    ];
     const report = createRouteValidationReportV2({
       ...input(),
-      rows: [
-        rowInput({ constraintId: "human-route", maxSlopeDegrees: 42 }),
-        rowInput({
-          constraintId: "npc-route",
-          traversingEntityId: "npc",
-          routeId: "npc-main-route",
-          maxSlopeDegrees: 30,
-        }),
-      ],
+      requiredRoutes: requiredRoutesForRows(rows),
+      rows,
     });
     const slope = report.gateResultsById["route-connectivity"]!
       .metricResultsById["maximum-observed-slope-degrees"]!;
@@ -1187,10 +1274,12 @@ describe("createRouteValidationReportV2", () => {
 
     const failed = createRouteValidationReportV2({
       ...input(),
+      requiredRoutes: requiredRoutesForRows([incomplete, unreachable]),
       rows: [incomplete, unreachable],
     });
     const incompleteReport = createRouteValidationReportV2({
       ...input(),
+      requiredRoutes: requiredRoutesForRows([passed, incomplete]),
       rows: [passed, incomplete],
     });
     const runtimeBaseline = rowInput({
@@ -1207,6 +1296,17 @@ describe("createRouteValidationReportV2", () => {
     );
     const runtimeFailed = createRouteValidationReportV2({
       ...input(),
+      requiredRoutes: requiredRoutesForRows([
+        incomplete,
+        {
+          ...runtimeBaseline,
+          routeRuntimeProbeReceipt: failedProbe,
+          evidenceBytes: {
+            ...runtimeBaseline.evidenceBytes,
+            routeRuntimeProbeReceipt: canonicalJsonBytes(failedProbe),
+          },
+        },
+      ]),
       rows: [
         incomplete,
         {
@@ -1236,9 +1336,15 @@ describe("createRouteValidationReportV2", () => {
       rowInput({ constraintId: "z-route", routeId: "route-z" }),
       rowInput({ constraintId: "a-route", routeId: "route-a" }),
     ];
-    const first = createRouteValidationReportV2({ ...input(), rows });
+    const requiredRoutes = requiredRoutesForRows(rows);
+    const first = createRouteValidationReportV2({
+      ...input(),
+      requiredRoutes,
+      rows,
+    });
     const second = createRouteValidationReportV2({
       ...input(),
+      requiredRoutes,
       rows: [...rows].reverse(),
     });
     const connectivity = first.gateResultsById["route-connectivity"]!
@@ -1263,15 +1369,18 @@ describe("createRouteValidationReportV2", () => {
     const duplicate = rowInput({ constraintId: "duplicate", routeId: "shared" });
     expect(() => createRouteValidationReportV2({
       ...input(),
+      requiredRoutes: requiredRoutesForRows([duplicate, duplicate]),
       rows: [duplicate, duplicate],
     })).toThrow("must be unique and sorted by constraintId then routeId");
 
+    const rows = [
+      rowInput({ constraintId: "a-row", routeId: "route-a" }),
+      rowInput({ constraintId: "b-row", routeId: "route-b" }),
+    ];
     const report = createRouteValidationReportV2({
       ...input(),
-      rows: [
-        rowInput({ constraintId: "a-row", routeId: "route-a" }),
-        rowInput({ constraintId: "b-row", routeId: "route-b" }),
-      ],
+      requiredRoutes: requiredRoutesForRows(rows),
+      rows,
     });
     const graph = report.evidenceArtifactsById["route:a-row:traversal-graph"]!;
     const forged = {
@@ -1299,6 +1408,48 @@ describe("createRouteValidationReportV2", () => {
     expect(report.status).toBe("passed");
     expect(report.gateResultsById["route-connectivity"]?.status).toBe("passed");
     expect(report.gateResultsById["route-runtime-conformance"]?.status).toBe("passed");
+    expect(report.evidenceArtifactsById["route:player-to-goal:traversal-graph"])
+      .toMatchObject({
+        mediaType: "application/vnd.worldkit.traversal-graph.v2+json",
+      });
+    expect(report.evidenceArtifactsById["route:player-to-goal:route-path-receipt"])
+      .toMatchObject({
+        mediaType: "application/vnd.worldkit.route-path-receipt.v2+json",
+      });
+    expect(report.evidenceArtifactsById["route:player-to-goal:route-runtime-probe-receipt"])
+      .toMatchObject({
+        mediaType:
+          "application/vnd.worldkit.route-runtime-probe-receipt.v2+json",
+      });
+    expect(validateValidationReportV2(report)).toMatchObject({ ok: true });
+  });
+
+  it("publishes every ambiguous Surface identity in the route Diagnostic", () => {
+    const report = createRouteValidationReportV2(
+      failedConnectivityInput("incomplete", {
+        reason: {
+          kind: "surface-correlation-ambiguous",
+          code: "ROUTE_SURFACE_CORRELATION_AMBIGUOUS",
+          failurePositionMetersXYZ: [0.5, 0.25, 0],
+        },
+      }),
+    );
+    const diagnostic = report.diagnostics.find(
+      ({ code }) => code === "ROUTE_SURFACE_CORRELATION_AMBIGUOUS",
+    );
+
+    expect(diagnostic).toMatchObject({
+      relatedTraversalSurfaceIdentities: [
+        { traversalSurfaceId: "surface-main" },
+        { traversalSurfaceId: "surface-secondary" },
+      ],
+    });
+    expect(report.evidenceArtifactsById[
+      "route:player-to-goal:route-connectivity-failure"
+    ]).toMatchObject({
+      mediaType:
+        "application/vnd.worldkit.route-connectivity-failure.v2+json",
+    });
     expect(validateValidationReportV2(report)).toMatchObject({ ok: true });
   });
 
@@ -1767,11 +1918,14 @@ function v2BuildInputReceipt(
   });
   const surfaceArtifactHash = hashRouteSurfaceArtifactV2(draft.traversalSurfaces);
   return createRouteBuildInputReceiptV2({
-    ...draft,
-    terrainArtifactHash,
-    colliderArtifactHash,
-    geometryArtifactHash,
-    surfaceArtifactHash,
+    input: {
+      ...draft,
+      terrainArtifactHash,
+      colliderArtifactHash,
+      geometryArtifactHash,
+      surfaceArtifactHash,
+    },
+    traversalLockReceipt: lockReceipt,
   });
 }
 
@@ -1993,11 +2147,13 @@ function v2RowInput(): RouteValidationRowInputV2 {
 
 describe("createRouteValidationReportV2 Path/Probe V2 rows", () => {
   it("accepts a complete V2 Build Input, Path, and Probe row", () => {
+    const row = v2RowInput();
     const report = createRouteValidationReportV2({
       reportId: "v2-route-validation",
       subject: SUBJECT,
       validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
-      rows: [v2RowInput()],
+      requiredRoutes: [requiredRouteForRow(row)],
+      rows: [row],
     });
     expect(report.status).toBe("passed");
     expect(validateValidationReportV2(report).ok).toBe(true);

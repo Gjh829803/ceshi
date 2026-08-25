@@ -1,11 +1,21 @@
 import { describe, expect, it } from "vitest";
 
-import { canonicalRouteValidationSetReceiptV1 } from "./route-validation-set.js";
+import {
+  canonicalRouteValidationSetReceiptV1,
+  hashRouteValidationRequiredRouteSetV1,
+} from "./route-validation-set.js";
 
 const HASH_A = `sha256:${"a".repeat(64)}` as const;
 const ZERO_HASH = `sha256:${"0".repeat(64)}` as const;
 
 function receipt(): unknown {
+  const requiredRoutes = [{
+    constraintId: "route-check",
+    routeId: "main-route",
+    traversingEntityId: "player",
+    startAnchorEntityId: "spawn",
+    destinationAnchorEntityId: "goal",
+  }] as const;
   return {
     kind: "route-validation-set-receipt",
     schemaVersion: 1,
@@ -14,6 +24,12 @@ function receipt(): unknown {
     executionPlanHash: HASH_A,
     resourceLockHash: HASH_A,
     layoutSolveReportHash: HASH_A,
+    requiredRouteCount: 1,
+    requiredRouteSetHash: hashRouteValidationRequiredRouteSetV1(
+      HASH_A,
+      requiredRoutes,
+    ),
+    requiredRoutes,
     rows: [{
       constraintId: "route-check",
       routeId: "main-route",
@@ -38,6 +54,24 @@ describe("RouteValidationSetReceiptV1", () => {
     expect(Object.isFrozen(canonical.rows)).toBe(true);
     expect(Object.isFrozen(canonical.rows[0])).toBe(true);
     expect(Object.isFrozen(canonical.rows[0]?.evidenceArtifactRefs)).toBe(true);
+    expect(canonical.requiredRouteCount).toBe(1);
+    expect(Object.isFrozen(canonical.requiredRoutes)).toBe(true);
+  });
+
+  it("rejects drift in Required Route count, hash, or exact row coverage", () => {
+    const baseline = receipt() as Record<string, unknown>;
+    expect(() => canonicalRouteValidationSetReceiptV1({
+      ...baseline,
+      requiredRouteCount: 2,
+    })).toThrow("requiredRouteCount");
+    expect(() => canonicalRouteValidationSetReceiptV1({
+      ...baseline,
+      requiredRouteSetHash: ZERO_HASH,
+    })).toThrow("requiredRouteSetHash");
+    expect(() => canonicalRouteValidationSetReceiptV1({
+      ...baseline,
+      rows: [],
+    })).toThrow("must cover every required Route exactly once");
   });
 
   it("rejects all-zero identities at every receipt and row hash boundary", () => {

@@ -309,7 +309,7 @@ export function createValidRiggedPackageDefinition(): PackageSubjectDefinitionV1
       {
         id: "body.asset",
         kind: "asset",
-        subjectAssetRef: "worldkit://subject-asset/humanoid.golden@1",
+        subjectAssetRef: "worldkit://subject-asset/humanoid.golden@2",
         localTransform: {
           positionMetersXYZ: [0, 0, 0],
           rotationEulerRadiansXYZ: [0, 0, 0],
@@ -321,8 +321,8 @@ export function createValidRiggedPackageDefinition(): PackageSubjectDefinitionV1
     ],
     visualBinding: {
       mode: "rigged",
-      rigProfileRef: "worldkit://rig-profile/biped.golden@1",
-      animationSetRef: "worldkit://animation-set/humanoid.ground.golden@1",
+      rigProfileRef: "worldkit://rig-profile/biped.golden@2",
+      animationSetRef: "worldkit://animation-set/humanoid.ground.golden@2",
     },
     sockets: [
       {
@@ -367,7 +367,7 @@ export function createValidRiggedPackageDefinition(): PackageSubjectDefinitionV1
     },
     relationshipCapabilityRefs: [],
     actionOrPoseSetRef:
-      "worldkit://animation-set/humanoid.ground.golden@1",
+      "worldkit://animation-set/humanoid.ground.golden@2",
     renderBindingProfileRef: "worldkit://render-binding/subject.standard@1",
     aiMetadata: {
       displayName: "Package rigged Golden humanoid",

@@ -44,7 +44,18 @@ async function listen(studio) {
   return `http://127.0.0.1:${address.port}`;
 }
 
-async function writeTrustedWhiteboxArtifacts(fakeRepoRoot, sceneId) {
+function canonicalJson(value) {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  return `{${Object.keys(value).sort().map((key) =>
+    `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+}
+
+async function writeTrustedWhiteboxArtifacts(
+  fakeRepoRoot,
+  sceneId,
+  { requiresRouteValidation = false, routeReportMode = "exact" } = {},
+) {
   const artifactRoot = path.join(fakeRepoRoot, "artifacts/scenes", sceneId);
   const triViewRoot = path.join(artifactRoot, "triviews", "player-subject");
   await mkdir(triViewRoot, { recursive: true });
@@ -63,9 +74,15 @@ async function writeTrustedWhiteboxArtifacts(fakeRepoRoot, sceneId) {
     mappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"] }],
   })}\n`;
   const hash = (source) => `sha256:${createHash("sha256").update(source).digest("hex")}`;
-  const executionPlanHash = `sha256:${"a".repeat(64)}`;
+  const resourceLockHash = `sha256:${"e".repeat(64)}`;
+  const layoutSolveReportHash = `sha256:${"f".repeat(64)}`;
   const sceneBriefHash = `sha256:${"b".repeat(64)}`;
-  const authoringSpecHash = `sha256:${"c".repeat(64)}`;
+  const authoringSpecHash = hash(authoring);
+  const normalizedWorldIr = {
+    kind: "normalized-world-ir",
+    schemaVersion: 4,
+  };
+  const normalizedWorldIrHash = hash(canonicalJson(normalizedWorldIr));
   const visualTarget = {
     id: "player-subject",
     visualTargetId: "player-subject",
@@ -84,6 +101,30 @@ async function writeTrustedWhiteboxArtifacts(fakeRepoRoot, sceneId) {
     mappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"] }],
     visualCaptureGroups: [visualTarget],
   };
+  const requiredRoutes = requiresRouteValidation
+    ? [{
+        constraintId: "player-to-goal",
+        routeId: "main-route",
+        traversingEntityId: "player",
+        startAnchorEntityId: "spawn",
+        destinationAnchorEntityId: "goal",
+      }]
+    : [];
+  const executionPlan = {
+    kind: "worldkit-execution-plan",
+    schemaVersion: 5,
+    authoringSpecHash,
+    normalizedWorldIrHash,
+    resourceLockHash,
+    layout: { layoutSolveReportHash },
+    traversal: {
+      connectivityRequirements: requiredRoutes.map((route) => ({
+        ...route,
+        kind: "connected-by-route",
+      })),
+    },
+  };
+  const executionPlanHash = hash(canonicalJson(executionPlan));
   const captureTargets = {
     kind: "worldkit-runtime-triview-manifest",
     schemaVersion: 1,
@@ -119,6 +160,7 @@ async function writeTrustedWhiteboxArtifacts(fakeRepoRoot, sceneId) {
       validatorVersion: "worldkit-builder-self-check-v4",
       sceneId,
       status: "passed",
+      requiresTrustedRouteValidation: requiresRouteValidation,
       inputs: {
         sceneBriefHash: hash(brief),
         authoringSpecHash: hash(authoring),
@@ -129,8 +171,10 @@ async function writeTrustedWhiteboxArtifacts(fakeRepoRoot, sceneId) {
     writeFile(path.join(artifactRoot, "world.build.json"), JSON.stringify({
       kind: "worldkit-build-artifact",
       schemaVersion: 4,
+      normalizedWorldIrHash,
       executionPlanHash,
-      executionPlan: { kind: "worldkit-execution-plan", schemaVersion: 5 },
+      normalizedWorldIr,
+      executionPlan,
     })),
     writeFile(path.join(artifactRoot, "opening-frame.png"), png),
     writeFile(path.join(artifactRoot, "runtime-snapshot.json"), JSON.stringify({
@@ -140,6 +184,68 @@ async function writeTrustedWhiteboxArtifacts(fakeRepoRoot, sceneId) {
     writeFile(path.join(artifactRoot, "triviews/capture-targets.json"), JSON.stringify(captureTargets)),
     writeFile(path.join(triViewRoot, "whitebox-triview.png"), png),
   ]);
+  if (requiresRouteValidation && routeReportMode !== "missing") {
+    const reportFileName = "route-validation.20260825-120000-123.json";
+    const requiredRouteSetHash = `sha256:${createHash("sha256").update(
+      canonicalJson({
+        kind: "route-validation-required-route-set",
+        schemaVersion: 1,
+        executionPlanHash,
+        requiredRoutes,
+      }),
+    ).digest("hex")}`;
+    const report = {
+      kind: "worldkit-validation-report",
+      schemaVersion: 2,
+      id: `${sceneId}.route-validation`,
+      status: routeReportMode === "failed" ? "failed" : "passed",
+      subject: {
+        kind: "world-package",
+        authoringSpecHash,
+        normalizedWorldIrHash,
+        executionPlanHash: routeReportMode === "mismatched" ? resourceLockHash : executionPlanHash,
+        resourceLockHash,
+        layoutSolveReportHash,
+      },
+      routeValidationSetReceipt: {
+        kind: "route-validation-set-receipt",
+        schemaVersion: 1,
+        authoringSpecHash,
+        normalizedWorldIrHash,
+        executionPlanHash,
+        resourceLockHash,
+        layoutSolveReportHash,
+        requiredRouteCount: requiredRoutes.length,
+        requiredRouteSetHash,
+        requiredRoutes,
+        rows: requiredRoutes.map((route) => ({
+          ...route,
+          resolvedTraversalLockHash: `sha256:${"9".repeat(64)}`,
+          connectivityStatus: "complete",
+          runtimeStatus: "complete",
+          evidenceArtifactRefs: [],
+        })),
+      },
+      gateResultsById: {
+        "route-connectivity": { status: "passed" },
+        "route-runtime-conformance": { status: "passed" },
+      },
+      evidenceArtifactsById: {},
+      diagnostics: [],
+    };
+    const reportBytes = Buffer.from(`${canonicalJson(report)}\n`);
+    await Promise.all([
+      writeFile(path.join(artifactRoot, reportFileName), reportBytes),
+      writeFile(path.join(artifactRoot, "route-validation-manifest.json"), JSON.stringify({
+        kind: "worldkit-route-validation-manifest",
+        schemaVersion: 1,
+        sceneId,
+        reportFileName,
+        reportContentHash:
+          `sha256:${createHash("sha256").update(reportBytes).digest("hex")}`,
+      })),
+    ]);
+  }
   return { artifactRoot, captureTargets, png };
 }
 
@@ -147,8 +253,16 @@ test.afterEach(async () => {
   await Promise.all(temporaryRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
-test("uses one current Studio workflow contract", () => {
-  assert.equal(workflowPolicyVersion, 1);
+test("uses one current switchable Codex backend workflow contract", () => {
+  assert.equal(workflowPolicyVersion, 3);
+});
+
+test("passes the frozen backend to world jobs and records local Codex markers without provider details", async () => {
+  const source = await readFile(path.join(repoRoot, "apps/studio/server.mjs"), "utf8");
+  assert.match(source, /WORLDKIT_CODEX_BACKEND: codexBackend/);
+  assert.match(source, /WORLDKIT_LOCAL_CODEX_JOB \(\[a-z-\]\+\) \(\[a-zA-Z0-9\._:-\]\+\)/);
+  assert.match(source, /kind: "local-job", taskId: localCodexJob\[2\]/);
+  assert.doesNotMatch(source, /kind: "local-job"[^\n]+(?:credential|token|CODEX_HOME)/i);
 });
 
 test("keeps concurrent atomic writes isolated and serializes same-record mutations", async () => {
@@ -201,22 +315,27 @@ test("keeps concurrent atomic writes isolated and serializes same-record mutatio
   assert.match(result.stdout, /WORLDKIT_PROMPT_SMOKE_OK planner coding-agent canonical-build runtime-capture visual-prompt-synthesis visual-imagegen/);
 });
 
-test("routes Codex through LWDP and post-whitebox visuals through direct project-local Gemini", async () => {
-  const scripts = await Promise.all([
+test("routes Planner and Builder through the selected Codex backend while keeping post-whitebox visuals on Gemini", async () => {
+  const [scripts, codexRouter] = await Promise.all([Promise.all([
     "run-spatial-world-agent.sh",
     "run-styled-opening-frame-agent.sh",
     "run-styled-triviews-agent.sh",
     "run-visual-reconstruction-agent.sh",
-  ].map((name) => readFile(path.join(repoRoot, "scripts", name), "utf8")));
+  ].map((name) => readFile(path.join(repoRoot, "scripts", name), "utf8"))),
+  readFile(path.join(repoRoot, "scripts/run-codex-task.mjs"), "utf8")]);
   for (const source of scripts) {
     assert.doesNotMatch(source, /command -v codex|CODEX_HOME=|codex exec/);
   }
-  assert.match(scripts[0], /run-lwdp-codex-task\.mjs[^\n]*--execution-profile formal/);
+  assert.match(scripts[0], /codex_backend="\$\{WORLDKIT_CODEX_BACKEND:-cloud\}"/);
+  assert.match(scripts[0], /run-codex-task\.mjs --backend "\$codex_backend"[^\n]*--execution-profile formal/);
+  assert.match(codexRouter, /backend === "cloud"/);
+  assert.match(codexRouter, /run-lwdp-codex-task\.mjs/);
+  assert.match(codexRouter, /run-local-codex-task\.mjs/);
   assert.match(scripts[1], /run-gemini-visual-pipeline\.py/);
   assert.match(scripts[2], /run-gemini-visual-pipeline\.py/);
   assert.doesNotMatch(scripts[1], /run-lwdp-(?:codex-task|t2i-job)\.mjs/);
   assert.doesNotMatch(scripts[2], /run-lwdp-(?:codex-task|t2i-job)\.mjs/);
-  assert.match(scripts[3], /run-lwdp-(?:codex-task|t2i-job)\.mjs/);
+  assert.match(scripts[3], /run-codex-task\.mjs --backend "\$codex_backend"/);
   assert.equal((scripts[3].match(/--execution-profile formal/g) ?? []).length, 2);
 });
 
@@ -250,8 +369,9 @@ test("keeps lightweight Planner prose and Builder implementation authority separ
   assert.match(launcher, /worldkit verify route/);
   assert.match(launcher, /Implement the complete world rather than only the opening view/);
   assert.match(launcher, /Define 1-5 visual targets as whole targets/);
-  assert.match(launcher, /never substitute a visual prop for an unsupported movement assembly/);
-  assert.match(launcher, /outside the current hosted production lane must fail as explicit capability gaps/);
+  assert.match(launcher, /absence of a same-named preset is never a reason to omit the world/);
+  assert.match(launcher, /documented current ground closure as an explicitly disclosed playable approximation/);
+  assert.match(launcher, /never add or modify SDK motion bases/);
   assert.match(launcher, /maxVertices, maxTriangles, and maxColliders are all blocking compiler budgets/);
   assert.doesNotMatch(launcher, /humanoid\.board\.surface-slide|humanoid\.wingsuit\.unpowered-glide/);
   assert.doesNotMatch(launcher, /triangle-count overruns do not block/);
@@ -267,7 +387,7 @@ test("keeps lightweight Planner prose and Builder implementation authority separ
   assert.match(launcher, /\.codex\/skills\/worldkit-canonical-builder\/SKILL\.md/);
   assert.doesNotMatch(launcher, /Read packages\/authoring\/src\/authoring-spec-v3\.schema\.json/);
   assert.match(builderSkill, /sole authoring guide/);
-  assert.match(resourceCatalog, /humanoid\.g-bot@1/);
+  assert.match(resourceCatalog, /humanoid\.g-bot@2/);
   assert.match(resourceCatalog, /red static capsule proxy|red column/);
   assert.match(builderSkill, /complete described world/);
   assert.match(builderSkill, /strict centered rear view/);
@@ -374,8 +494,8 @@ test("proxies Playground subject assets through the Studio origin", async () => 
   const origin = await listen(studio);
   try {
     for (const assetPath of [
-      "/subject-assets/humanoid/g-bot/v1/g-bot.glb?worldkit-content-hash=test",
-      "/worldkit-assets/golden-humanoid.glb",
+      "/subject-assets/humanoid/g-bot/v2/g-bot.glb?worldkit-content-hash=test",
+      "/subject-assets/humanoid/golden/v2/golden-humanoid.glb",
     ]) {
       const response = await fetch(`${origin}${assetPath}`);
       assert.equal(response.status, 200);
@@ -383,8 +503,8 @@ test("proxies Playground subject assets through the Studio origin", async () => 
       assert.equal(await response.text(), "glb-through-playground");
     }
     assert.deepEqual(requestedUrls, [
-      "/subject-assets/humanoid/g-bot/v1/g-bot.glb?worldkit-content-hash=test",
-      "/worldkit-assets/golden-humanoid.glb",
+      "/subject-assets/humanoid/g-bot/v2/g-bot.glb?worldkit-content-hash=test",
+      "/subject-assets/humanoid/golden/v2/golden-humanoid.glb",
     ]);
   } finally {
     await studio.shutdown();
@@ -415,7 +535,12 @@ test("publishes bounded concurrent cloud-case capacity without starting queued w
     assert.equal(health.activeJob, null);
     assert.deepEqual(health.activeJobs, []);
     assert.equal(health.maxConcurrentJobs, 6);
+    assert.deepEqual(health.maxConcurrentJobsByBackend, { cloud: 6, local: 1 });
     assert.equal(health.lwdpConfigured, true);
+    assert.equal(health.codexBackend, "cloud");
+    assert.equal(health.codexAvailable, true);
+    assert.equal(health.codexBackends.cloud.available, true);
+    assert.equal(typeof health.codexBackends.local.available, "boolean");
     assert.equal(typeof health.geminiConfigured, "boolean");
     assert.equal(health.geminiPromptModel, "gemini-3-flash-preview");
     assert.equal(health.geminiImageModel, "gemini-3.1-flash-image");
@@ -425,6 +550,392 @@ test("publishes bounded concurrent cloud-case capacity without starting queued w
       reasoningEffort: "xhigh",
     });
     assert.equal(health.queued, 0);
+  } finally {
+    await studio.shutdown();
+  }
+});
+
+test("defaults to cloud and atomically persists an available one-click Codex backend switch", async () => {
+  const dataRoot = await temporaryRoot(".codex-backend-persistence-");
+  const codexSpawnSync = (_command, args) => ({
+    status: args[0] === "--version" || (args[0] === "login" && args[1] === "status") ? 0 : 1,
+  });
+  let studio = createStudio({
+    repoRoot,
+    dataRoot,
+    autoRunJobs: false,
+    importExistingArtifacts: false,
+    importBuiltinTestSets: false,
+    importBuiltinResults: false,
+    lwdpConfigured: true,
+    codexSpawnSync,
+  });
+  let origin = await listen(studio);
+  try {
+    const initialHealth = await fetch(`${origin}/api/health`).then((response) => response.json());
+    assert.equal(initialHealth.codexBackend, "cloud");
+    assert.deepEqual(initialHealth.codexBackends, {
+      cloud: { available: true },
+      local: { available: true },
+    });
+
+    const switched = await fetch(`${origin}/api/settings/codex-backend`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ backend: "local" }),
+    });
+    assert.equal(switched.status, 200);
+    assert.equal((await switched.json()).codexBackend, "local");
+    const persisted = JSON.parse(await readFile(path.join(dataRoot, "runtime-settings.json"), "utf8"));
+    assert.deepEqual(
+      { kind: persisted.kind, schemaVersion: persisted.schemaVersion, codexBackend: persisted.codexBackend },
+      { kind: "worldkit-studio-runtime-settings", schemaVersion: 1, codexBackend: "local" },
+    );
+    assert.deepEqual(
+      (await readdir(dataRoot)).filter((name) => name.endsWith(".tmp")),
+      [],
+    );
+  } finally {
+    await studio.shutdown();
+  }
+
+  studio = createStudio({
+    repoRoot,
+    dataRoot,
+    autoRunJobs: false,
+    importExistingArtifacts: false,
+    importBuiltinTestSets: false,
+    importBuiltinResults: false,
+    initialCodexBackend: "cloud",
+    lwdpConfigured: true,
+    codexSpawnSync,
+  });
+  origin = await listen(studio);
+  try {
+    const health = await fetch(`${origin}/api/health`).then((response) => response.json());
+    assert.equal(health.codexBackend, "local");
+    assert.equal(health.codexAvailable, true);
+  } finally {
+    await studio.shutdown();
+  }
+});
+
+test("rejects an unavailable backend without changing the selected or persisted backend", async () => {
+  const dataRoot = await temporaryRoot(".codex-backend-unavailable-");
+  const studio = createStudio({
+    repoRoot,
+    dataRoot,
+    autoRunJobs: false,
+    importExistingArtifacts: false,
+    importBuiltinTestSets: false,
+    importBuiltinResults: false,
+    lwdpConfigured: true,
+    codexSpawnSync: (_command, args) => ({ status: args[0] === "--version" ? 0 : 1 }),
+  });
+  const origin = await listen(studio);
+  try {
+    const response = await fetch(`${origin}/api/settings/codex-backend`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ backend: "local" }),
+    });
+    assert.equal(response.status, 409);
+    const payload = await response.json();
+    assert.equal(payload.codexBackend, "cloud");
+    assert.equal(payload.codexBackends.local.available, false);
+    const health = await fetch(`${origin}/api/health`).then((result) => result.json());
+    assert.equal(health.codexBackend, "cloud");
+    assert.equal(health.codexAvailable, true);
+    const persisted = JSON.parse(await readFile(path.join(dataRoot, "runtime-settings.json"), "utf8"));
+    assert.equal(persisted.codexBackend, "cloud");
+  } finally {
+    await studio.shutdown();
+  }
+});
+
+test("defaults legacy records without a frozen backend to cloud", async () => {
+  const dataRoot = await temporaryRoot(".codex-backend-legacy-");
+  const legacyId = "legacy-queued-world";
+  const legacyRoot = path.join(dataRoot, "worlds", legacyId);
+  await mkdir(legacyRoot, { recursive: true });
+  await writeFile(path.join(legacyRoot, "record.json"), JSON.stringify({
+    id: legacyId,
+    sceneId: legacyId,
+    title: "Legacy queued world",
+    prompt: "Build the legacy queued world.",
+    referenceImage: null,
+    status: "queued",
+    stage: "queued",
+    attempt: 0,
+    origin: "creator-studio",
+    createdAt: "2026-08-20T00:00:00.000Z",
+    updatedAt: "2026-08-20T00:00:00.000Z",
+    workflowPolicyVersion: 23,
+  }));
+  const studio = createStudio({
+    repoRoot,
+    dataRoot,
+    autoRunJobs: false,
+    importExistingArtifacts: false,
+    importBuiltinTestSets: false,
+    importBuiltinResults: false,
+    initialCodexBackend: "local",
+    lwdpConfigured: true,
+    codexSpawnSync: () => ({ status: 0 }),
+  });
+  const origin = await listen(studio);
+  try {
+    const world = await fetch(`${origin}/api/worlds/${legacyId}`).then((response) => response.json());
+    assert.equal(world.world.codexBackend, "cloud");
+    const health = await fetch(`${origin}/api/health`).then((response) => response.json());
+    assert.equal(health.codexBackend, "local");
+  } finally {
+    await studio.shutdown();
+  }
+});
+
+test("freezes each backend and gives cloud and local independent execution slots", async () => {
+  const dataRoot = await temporaryRoot(".codex-backend-binding-");
+  const pendingById = new Map();
+  const started = [];
+  const studio = createStudio({
+    repoRoot,
+    dataRoot,
+    autoRunJobs: true,
+    importExistingArtifacts: false,
+    importBuiltinTestSets: false,
+    importBuiltinResults: false,
+    maxConcurrentJobs: 1,
+    lwdpConfigured: true,
+    codexSpawnSync: () => ({ status: 0 }),
+    jobRunner: (id) => new Promise((resolve) => {
+      started.push(id);
+      pendingById.set(id, resolve);
+    }),
+  });
+  const origin = await listen(studio);
+  try {
+    const firstResponse = await fetch(`${origin}/api/worlds`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "Cloud-bound", prompt: "Create the first backend-bound world." }),
+    });
+    const first = (await firstResponse.json()).world;
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(started, [first.id]);
+    assert.equal(first.codexBackend, "cloud");
+
+    const switchResponse = await fetch(`${origin}/api/settings/codex-backend`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ backend: "local" }),
+    });
+    assert.equal(switchResponse.status, 200);
+    const firstAfterSwitch = await fetch(`${origin}/api/worlds/${first.id}`).then((response) => response.json());
+    assert.equal(firstAfterSwitch.world.codexBackend, "cloud");
+
+    const secondResponse = await fetch(`${origin}/api/worlds`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "Local-bound", prompt: "Create the second backend-bound world." }),
+    });
+    const second = (await secondResponse.json()).world;
+    assert.equal(second.codexBackend, "local");
+    assert.equal((await fetch(`${origin}/api/worlds/${first.id}`).then((response) => response.json())).world.codexBackend, "cloud");
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(started, [first.id, second.id]);
+    assert.equal(studio.activeJobs.length, 2);
+
+    const thirdResponse = await fetch(`${origin}/api/worlds`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "Local queued", prompt: "Create the queued local world." }),
+    });
+    const third = (await thirdResponse.json()).world;
+    assert.equal(third.codexBackend, "local");
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(started, [first.id, second.id]);
+    const health = await fetch(`${origin}/api/health`).then((response) => response.json());
+    assert.deepEqual(health.maxConcurrentJobsByBackend, { cloud: 1, local: 1 });
+    assert.deepEqual(health.queuedByBackend, { cloud: 0, local: 1 });
+
+    pendingById.get(first.id)();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(started, [first.id, second.id]);
+    pendingById.get(second.id)();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(started, [first.id, second.id, third.id]);
+    pendingById.get(third.id)();
+    await new Promise((resolve) => setImmediate(resolve));
+  } finally {
+    for (const resolve of pendingById.values()) resolve();
+    await studio.shutdown();
+  }
+});
+
+test("stops both queued and running worlds without counting user cancellation as failure", async () => {
+  const dataRoot = await temporaryRoot(".world-stop-");
+  const pendingById = new Map();
+  const studio = createStudio({
+    repoRoot,
+    dataRoot,
+    autoRunJobs: true,
+    importExistingArtifacts: false,
+    importBuiltinTestSets: false,
+    importBuiltinResults: false,
+    maxConcurrentJobs: 1,
+    jobRunner: (id) => new Promise((resolve) => pendingById.set(id, resolve)),
+  });
+  const origin = await listen(studio);
+  try {
+    const create = async (title) => (await (await fetch(`${origin}/api/worlds`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title, prompt: `Build ${title}` }),
+    })).json()).world;
+    const running = await create("Running stop case");
+    const queued = await create("Queued stop case");
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(studio.activeJobs.length, 1);
+
+    const queuedStop = await fetch(`${origin}/api/worlds/${queued.id}/stop`, { method: "POST" });
+    assert.equal(queuedStop.status, 200);
+    assert.equal((await queuedStop.json()).world.status, "interrupted");
+    assert.equal((await fetch(`${origin}/api/health`).then((response) => response.json())).queued, 0);
+
+    const runningStop = await fetch(`${origin}/api/worlds/${running.id}/stop`, { method: "POST" });
+    assert.equal(runningStop.status, 200);
+    const stopped = (await runningStop.json()).world;
+    assert.equal(stopped.status, "interrupted");
+    assert.equal(stopped.outcome, "cancelled");
+    assert.match(stopped.error, /用户已停止/);
+    pendingById.get(running.id)?.();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(studio.activeJobs.length, 0);
+
+    const reliability = deriveReliabilityMetrics([
+      { status: "interrupted", outcome: "cancelled", error: "用户已停止任务" },
+    ]);
+    assert.equal(reliability.terminalCount, 0);
+    assert.equal(reliability.failureCount, 0);
+  } finally {
+    for (const resolve of pendingById.values()) resolve();
+    await studio.shutdown();
+  }
+});
+
+test("stops an active world before child registration without spawning the pipeline", async () => {
+  const dataRoot = await temporaryRoot(".world-stop-before-spawn-");
+  let markSpawnBoundaryReached;
+  let releaseSpawnBoundary;
+  const spawnBoundaryReached = new Promise((resolve) => { markSpawnBoundaryReached = resolve; });
+  const spawnBoundaryRelease = new Promise((resolve) => { releaseSpawnBoundary = resolve; });
+  let spawnCalls = 0;
+  const studio = createStudio({
+    repoRoot,
+    dataRoot,
+    autoRunJobs: true,
+    importExistingArtifacts: false,
+    importBuiltinTestSets: false,
+    importBuiltinResults: false,
+    lwdpConfigured: true,
+    beforeWorldSpawn: async () => {
+      markSpawnBoundaryReached();
+      await spawnBoundaryRelease;
+    },
+    worldSpawnImplementation: () => {
+      spawnCalls += 1;
+      throw new Error("world pipeline must not spawn after cancellation");
+    },
+  });
+  const origin = await listen(studio);
+  let created;
+  try {
+    created = (await (await fetch(`${origin}/api/worlds`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "Stop before spawn", prompt: "Build a cancellable world." }),
+    })).json()).world;
+    await spawnBoundaryReached;
+    assert.deepEqual(studio.activeJobs, [created.id]);
+    assert.equal(spawnCalls, 0);
+
+    const response = await fetch(`${origin}/api/worlds/${created.id}/stop`, { method: "POST" });
+    const responseBody = await response.text();
+    assert.equal(response.status, 200, responseBody);
+    const stopped = JSON.parse(responseBody).world;
+    assert.equal(stopped.status, "interrupted");
+    assert.equal(stopped.outcome, "cancelled");
+
+    releaseSpawnBoundary();
+    for (let attempt = 0; attempt < 20 && studio.activeJobs.length > 0; attempt += 1) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    assert.equal(spawnCalls, 0);
+    assert.deepEqual(studio.activeJobs, []);
+    const persisted = await fetch(`${origin}/api/worlds/${created.id}`).then((result) => result.json());
+    assert.equal(persisted.world.status, "interrupted");
+    assert.equal(persisted.world.outcome, "cancelled");
+  } finally {
+    releaseSpawnBoundary?.();
+    await studio.shutdown();
+    if (created?.sceneId) {
+      await rm(path.join(repoRoot, "artifacts/scenes", created.sceneId), {
+        recursive: true,
+        force: true,
+      });
+    }
+  }
+});
+
+test("snapshots one selected Codex backend across every world in a test-set batch", async () => {
+  const dataRoot = await temporaryRoot(".codex-backend-batch-");
+  const studio = createStudio({
+    repoRoot,
+    dataRoot,
+    autoRunJobs: false,
+    importExistingArtifacts: false,
+    importBuiltinTestSets: false,
+    importBuiltinResults: false,
+    lwdpConfigured: true,
+    codexSpawnSync: () => ({ status: 0 }),
+  });
+  const origin = await listen(studio);
+  try {
+    assert.equal((await fetch(`${origin}/api/settings/codex-backend`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ backend: "local" }),
+    })).status, 200);
+    const testSet = (await (await fetch(`${origin}/api/test-sets`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "Backend batch", prompt: "Build each complete reference world." }),
+    })).json()).testSet;
+    for (const suffix of [1, 2]) {
+      const bytes = Buffer.from(`89504e470d0a1a0a0000000${suffix}`, "hex");
+      const upload = await fetch(`${origin}/api/test-sets/${testSet.id}/images`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          image: {
+            name: `case-${suffix}.png`,
+            dataUrl: `data:image/png;base64,${bytes.toString("base64")}`,
+          },
+        }),
+      });
+      assert.equal(upload.status, 201);
+    }
+    const run = await fetch(`${origin}/api/test-sets/${testSet.id}/run`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    assert.equal(run.status, 202);
+    const worlds = (await run.json()).worlds;
+    assert.equal(worlds.length, 2);
+    assert.ok(worlds.every(({ codexBackend }) => codexBackend === "local"));
+    assert.equal(new Set(worlds.map(({ batchId }) => batchId)).size, 1);
   } finally {
     await studio.shutdown();
   }
@@ -511,7 +1022,44 @@ test("derives the single current Scene Brief workflow", () => {
   assert.equal(stages.find(({ id }) => id === "coding-agent")?.status, "complete");
   assert.equal(stages.find(({ id }) => id === "canonical-build")?.status, "active");
   assert.equal(stages.find(({ id }) => id === "runtime-capture")?.status, "pending");
+  assert.equal(stages.find(({ id }) => id === "entry-alignment-validation")?.status, "pending");
   assert.equal(stages.some(({ id }) => ["spatial-planner", "image-planner", "styled-triviews"].includes(id)), false);
+});
+
+test("separates whitebox capture from Snapshot V4 entry-alignment validation", () => {
+  const availableIds = [
+    "scene-brief", "planner-self-check", "visual-identity-palette", "world-plan", "entry-whitebox-target",
+    "authoring-spec", "implementation-map-draft", "builder-self-check", "implementation-map", "execution-plan",
+    "opening-frame", "runtime-snapshot", "capture-targets",
+  ];
+  const failedStages = deriveWorkflowTrajectory({
+    record: {
+      stage: "failed",
+      failedStage: "entry-alignment-validation",
+      status: "failed",
+      captureStatus: "passed",
+      workflowPolicyVersion,
+      styledOpeningFrameRequired: true,
+      styledTriviewsRequired: true,
+    },
+    availableIds,
+  });
+  assert.equal(failedStages.find(({ id }) => id === "runtime-capture")?.status, "complete");
+  assert.equal(failedStages.find(({ id }) => id === "entry-alignment-validation")?.status, "failed");
+
+  const passedStages = deriveWorkflowTrajectory({
+    record: {
+      stage: "visual-prompt-synthesis",
+      status: "running",
+      captureStatus: "passed",
+      workflowPolicyVersion,
+      styledOpeningFrameRequired: true,
+      styledTriviewsRequired: true,
+    },
+    availableIds: [...availableIds, "entry-third-person-validation"],
+  });
+  assert.equal(passedStages.find(({ id }) => id === "entry-alignment-validation")?.status, "complete");
+  assert.equal(passedStages.find(({ id }) => id === "visual-prompt-synthesis")?.status, "active");
 });
 
 test("records tokens per new agent stage and elapsed time", () => {
@@ -855,6 +1403,32 @@ test("imports a complete current whitebox chain with passed trusted receipts", a
     assert.equal(payload.worlds[0].outcome, "passed");
   } finally {
     await studio.shutdown();
+  }
+});
+
+test("requires an exact same-world passed Route report when Builder declares Required Routes", async () => {
+  for (const [routeReportMode, shouldImport] of [
+    ["missing", false],
+    ["mismatched", false],
+    ["failed", false],
+    ["exact", true],
+  ]) {
+    const dataRoot = await temporaryRoot(`.test-data-route-${routeReportMode}-`);
+    const fakeRepoRoot = await temporaryRoot(`.test-repo-route-${routeReportMode}-`);
+    const sceneId = `route-${routeReportMode}-world`;
+    await writeTrustedWhiteboxArtifacts(fakeRepoRoot, sceneId, {
+      requiresRouteValidation: true,
+      routeReportMode,
+    });
+
+    const studio = createStudio({ repoRoot: fakeRepoRoot, dataRoot, autoRunJobs: false });
+    const origin = await listen(studio);
+    try {
+      const payload = await (await fetch(`${origin}/api/worlds`)).json();
+      assert.equal(payload.worlds.some((world) => world.sceneId === sceneId), shouldImport);
+    } finally {
+      await studio.shutdown();
+    }
   }
 });
 

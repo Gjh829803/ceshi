@@ -14,7 +14,7 @@
 Agent 执行步骤见
 [`docs/superpowers/skills/product-asset-intake.md`](../skills/product-asset-intake.md)。
 G Bot 的 Intake Fixture 为
-`examples/product-asset-intakes/humanoid.g-bot@1.json`。
+`examples/product-asset-intakes/humanoid.g-bot@2.json`。
 
 ## 2. 目标与非目标
 

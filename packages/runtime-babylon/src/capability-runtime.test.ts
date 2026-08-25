@@ -27,7 +27,7 @@ const havokWasmBinary = havokWasmBytes.buffer.slice(
 const gBotAssetBytes = new Uint8Array(
   await readFile(
     new URL(
-      "../../../apps/playground/public/subject-assets/humanoid/g-bot/v1/g-bot.glb",
+      "../../../apps/playground/public/subject-assets/humanoid/g-bot/v2/g-bot.glb",
       import.meta.url,
     ),
   ),
@@ -109,7 +109,7 @@ function createGbotCapabilityExecutionPlan(): ExecutionPlanV5 {
     throw new Error("Capability fixture Subject is missing.");
   }
   subject.subjectDefinitionRef =
-    "worldkit://subject-definition/humanoid.g-bot@1";
+    "worldkit://subject-definition/humanoid.g-bot@2";
   return compileRuntimeTestPlanV5(spec, {
     subjectResourceRegistry: builtInSubjectResourceRegistry,
   });
@@ -151,7 +151,7 @@ describe("capability package runtime smoke tests", () => {
 
   it("loads the locked 25-clip G Bot package into a live Runtime", async () => {
     const subjectDefinitionRef =
-      "worldkit://subject-definition/humanoid.g-bot@1";
+      "worldkit://subject-definition/humanoid.g-bot@2";
     const executionPlan = createGbotCapabilityExecutionPlan();
     const gBotAssetPart = executionPlan.subjects[0]?.visualParts.find(
       (part) => part.id === "body.asset",

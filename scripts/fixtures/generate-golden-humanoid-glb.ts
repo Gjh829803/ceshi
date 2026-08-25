@@ -535,7 +535,10 @@ export function buildGoldenHumanoidGlb(): {
 
 function writeFixture(): void {
   const outputPath = fileURLToPath(
-    new URL("../../apps/playground/public/worldkit-assets/golden-humanoid.glb", import.meta.url),
+    new URL(
+      "../../assets/subjects/packages/seedleap/golden-humanoid/v1/extensions/source-archive/original.glb",
+      import.meta.url,
+    ),
   );
   const fixture = buildGoldenHumanoidGlb();
   mkdirSync(dirname(outputPath), { recursive: true });

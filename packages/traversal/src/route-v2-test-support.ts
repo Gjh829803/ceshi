@@ -92,11 +92,15 @@ export function traversalLock() {
 
 export function capabilityEnvelope(): TraversalCapabilityEnvelopeV1 {
   return traversal.createTraversalCapabilityEnvelopeV1({
-    traversalLockReceipt: traversal.resolveTraversalLockV1(traversalLock()),
+    traversalLockReceipt: traversalLockReceipt(),
     graphBuilderProfile: traversal.resolveTraversalGraphBuilderProfileV2(
       traversal.BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
     ),
   }).envelope;
+}
+
+export function traversalLockReceipt() {
+  return traversal.resolveTraversalLockV1(traversalLock());
 }
 
 export function heightfieldSurface(): TraversalSurfaceIdentityV1 {
@@ -245,5 +249,8 @@ export function completeV2BuildInput(
 export function v2BuildInputReceipt(
   draft: RouteBuildInputV2Draft = validV2BuildInputDraft() as RouteBuildInputV2Draft,
 ) {
-  return traversal.createRouteBuildInputReceiptV2(completeV2BuildInput(draft));
+  return traversal.createRouteBuildInputReceiptV2({
+    input: completeV2BuildInput(draft),
+    traversalLockReceipt: traversalLockReceipt(),
+  });
 }

@@ -449,7 +449,9 @@ function canonicalProjectionV2(
     summary.routeOverlayStatus,
     isNil(overlay) ? "unavailable" : "available",
   );
-  if (hasPath && summary.connectivityStatus !== "complete") publicationInvalid();
+  if ((summary.connectivityStatus === "complete") !== hasPath) {
+    publicationInvalid();
+  }
 
   return {
     selector,

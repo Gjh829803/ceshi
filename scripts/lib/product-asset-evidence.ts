@@ -170,8 +170,10 @@ function parseGlbDocument(bytes: Uint8Array): GltfDocumentV2 {
   }
 }
 
-function exactOrderedStrings(actual: readonly string[], expected: readonly string[]): boolean {
-  return actual.length === expected.length && actual.every((value, index) => value === expected[index]);
+function exactStringSet(actual: readonly string[], expected: readonly string[]): boolean {
+  if (actual.length !== expected.length) return false;
+  const orderedExpected = [...expected].sort();
+  return [...actual].sort().every((value, index) => value === orderedExpected[index]);
 }
 
 function accessorCount(document: GltfDocumentV2, index: number | undefined): number {
@@ -312,7 +314,7 @@ export function inspectProductAssetEvidence(options: {
     return fail("PRODUCT_ASSET_GLB_ANIMATION_INVENTORY_INVALID");
   }
   const manifestSourceClipNames = actionManifest.actions.map((action) => action.clip);
-  if (!exactOrderedStrings(sourceClipNames as string[], manifestSourceClipNames)) {
+  if (!exactStringSet(sourceClipNames as string[], manifestSourceClipNames)) {
     return fail("PRODUCT_ASSET_ACTION_MANIFEST_CLIP_MISMATCH");
   }
   if (isEmpty(options.requiredRuntimeActionIds)) {

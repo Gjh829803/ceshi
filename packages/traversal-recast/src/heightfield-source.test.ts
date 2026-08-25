@@ -14,7 +14,10 @@ import {
   evaluateRequiredRouteV2,
 } from "./index.js";
 import * as heightfieldSourceModule from "./heightfield-source.js";
-import { createRecastTestEnvelopeV1 } from "./test-fixture.test-support.js";
+import {
+  createRecastTestEnvelopeV1,
+  createRecastTestLockReceiptV1,
+} from "./test-fixture.test-support.js";
 import {
   createMultiSurfaceRouteBuildInputReceiptV2,
 } from "./test-fixture.test-support.js";
@@ -154,11 +157,15 @@ function basePlan(): HeightfieldSourcePlanFixture {
 }
 
 function build(plan: HeightfieldSourcePlanFixture = basePlan()) {
+  const traversalLockReceipt = createRecastTestLockReceiptV1({
+    resourceLockHash: plan.resourceLockHash as `sha256:${string}`,
+  });
   return createRouteBuildInputFromPlanV2({
     executionPlan: plan as unknown as ExecutionPlanV5,
     capabilityEnvelope: createRecastTestEnvelopeV1({
       resourceLockHash: plan.resourceLockHash as `sha256:${string}`,
     }),
+    traversalLockReceipt,
     constraintId: "hero-to-goal",
   });
 }
@@ -660,10 +667,14 @@ describe("Heightfield Route R1 locked source assembly", () => {
 
   it("excludes remote blockers and rejects forged non-positive collider scales", () => {
     const remote = basePlan();
+    const remoteColliderSubshapeId = deriveColliderSubshapeIdV1(
+      "remote-wall",
+      "primary",
+    );
     remote.staticColliders = [{
       entityId: "remote-wall",
       logicalSubshapeId: "primary",
-      colliderSubshapeId: deriveColliderSubshapeIdV1("remote-wall", "primary"),
+      colliderSubshapeId: remoteColliderSubshapeId,
       colliderHash: HASH_A,
       transform: {
         positionMetersXYZ: [0, 1, 100],
@@ -672,9 +683,33 @@ describe("Heightfield Route R1 locked source assembly", () => {
       },
       shape: { kind: "box", sizeMetersXYZ: [1, 2, 2] },
     }];
-    expect(build(remote).input.staticColliders).toEqual([]);
-    expect(build(remote).input.colliderArtifactHash).toBe(
-      build(basePlan()).input.colliderArtifactHash,
+    remote.traversal.surfaces.push({
+      kind: "static-collider",
+      traversalSurfaceId: "surface-remote-wall",
+      surfaceEntityId: "remote-wall",
+      colliderSubshapeId: remoteColliderSubshapeId,
+      resourceRef: "package://traversal-surface/remote-wall.primary@1",
+      resolvedVersion: "1",
+      resourceHash: HASH_A,
+      logicalSurfaceId: "primary",
+      logicalSubshapeId: "primary",
+      colliderHash: HASH_A,
+      traversalSurfaceProfileRef:
+        "worldkit://traversal-surface-profile/ground.static@1",
+      traversalSurfaceProfileResolvedVersion: "1",
+      traversalSurfaceProfileHash: HASH_A,
+    });
+    const scoped = build(remote).input;
+    const baseline = build(basePlan()).input;
+    expect(scoped.staticColliders).toEqual([]);
+    expect(scoped.traversalSurfaces).toEqual(baseline.traversalSurfaces);
+    expect(scoped.colliderArtifactHash).toBe(baseline.colliderArtifactHash);
+    expect(scoped.surfaceArtifactHash).toBe(baseline.surfaceArtifactHash);
+
+    const orphanSurface = basePlan();
+    orphanSurface.traversal.surfaces.push(remote.traversal.surfaces[1]!);
+    expect(() => build(orphanSurface)).toThrow(
+      "does not join a declared static collider",
     );
 
     remote.staticColliders[0]!.transform.scaleXYZ = [1, 0, 1];
@@ -810,12 +845,17 @@ describe("Heightfield Route R1 locked source assembly", () => {
     hashes.add(build(water).routeBuildInputHash);
 
     const envelopePlan = basePlan();
+    const traversalLockReceipt = createRecastTestLockReceiptV1({
+      maxSlopeDegrees: 35,
+      resourceLockHash: envelopePlan.resourceLockHash as `sha256:${string}`,
+    });
     const envelopeHash = createRouteBuildInputFromPlanV2({
       executionPlan: envelopePlan as unknown as ExecutionPlanV5,
       capabilityEnvelope: createRecastTestEnvelopeV1({
         maxSlopeDegrees: 35,
         resourceLockHash: envelopePlan.resourceLockHash as `sha256:${string}`,
       }),
+      traversalLockReceipt,
       constraintId: "hero-to-goal",
     }).routeBuildInputHash;
     hashes.add(envelopeHash);
@@ -829,10 +869,14 @@ describe("Heightfield Route R1 locked source assembly", () => {
     const capabilityEnvelope = createRecastTestEnvelopeV1({
       resourceLockHash: baseline.resourceLockHash as `sha256:${string}`,
     });
+    const traversalLockReceipt = createRecastTestLockReceiptV1({
+      resourceLockHash: baseline.resourceLockHash as `sha256:${string}`,
+    });
     const buildTampered = (plan: HeightfieldSourcePlanFixture) =>
       createRouteBuildInputFromPlanV2({
         executionPlan: plan as unknown as ExecutionPlanV5,
         capabilityEnvelope,
+        traversalLockReceipt,
         constraintId: "hero-to-goal",
       });
 

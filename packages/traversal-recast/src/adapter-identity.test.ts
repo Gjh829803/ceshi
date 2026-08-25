@@ -48,7 +48,7 @@ describe("Recast Graph Provider Adapter identity", () => {
       graphProviderAdapterRef:
         "worldkit://graph-provider-adapter/recast-navigation.tiled@1",
       graphProviderAdapterResolvedVersion:
-        "0.43.1+lifecycle.1+source-areas.3+mapping.5",
+        "0.43.1+lifecycle.1+source-areas.3+mapping.6",
       providerPackageName: "recast-navigation",
       providerPackageVersion: "0.43.1",
       generatorMode: "tiled",
@@ -105,6 +105,8 @@ describe("Recast Graph Provider Adapter identity", () => {
           "signed-destination-centroid-y-minus-source-centroid-y",
         stepHeight:
           "maximum-absolute-portal-endpoint-height-discontinuity",
+        crossSurfaceSeam:
+          "edge-local-portal-endpoints-and-midpoint-nearest-source-boundary-gap-and-height",
         clearanceWidth:
           "two-times-walkableRadiusCells-times-voxelCellSizeMeters-rounded-down",
         clearanceHeight:
@@ -131,7 +133,7 @@ describe("Recast Graph Provider Adapter identity", () => {
       sha256CanonicalJson(RECAST_GRAPH_PROVIDER_ADAPTER_MANIFEST_V1),
     );
     expect(RECAST_GRAPH_PROVIDER_ADAPTER_HASH_V1).toBe(
-      "sha256:188ff09ee328ad7e17fd21f5c1ccd759c05e0cf4c8d280bc66c814d8a99937e2",
+      "sha256:574831081cdc032faa2534efd4de6345b2d6f50fcd7c5f30caa4ea75fbcb042b",
     );
     expect(Object.isFrozen(RECAST_GRAPH_PROVIDER_ADAPTER_MANIFEST_V1)).toBe(true);
     expect(Object.isFrozen(RECAST_GRAPH_PROVIDER_ADAPTER_MANIFEST_V1.constants))

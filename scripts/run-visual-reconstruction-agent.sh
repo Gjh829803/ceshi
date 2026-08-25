@@ -59,9 +59,13 @@ cleanup() {
 }
 trap cleanup EXIT
 mkdir -p "$task_tmp/runtime"
-cloud_run_nonce="$(date -u +%Y%m%d-%H%M%S)-$$"
+codex_backend="${WORLDKIT_CODEX_BACKEND:-cloud}"
+[[ "$codex_backend" == "cloud" || "$codex_backend" == "local" ]] || {
+  echo "WORLDKIT_CODEX_BACKEND must be cloud or local." >&2; exit 2;
+}
+codex_run_nonce="$(date -u +%Y%m%d-%H%M%S)-$$"
 cloud_s3_root="${WORLDKIT_LWDP_S3_ROOT:-s3://leap-world-us-east-2/world-model/platform/agent-whitebox-world-sdk}"
-cloud_run_prefix="${cloud_s3_root%/}/$scene_id/$cloud_run_nonce/video-prompt"
+codex_output_prefix="${cloud_s3_root%/}/$scene_id/$codex_run_nonce/video-prompt"
 
 echo "WORLDKIT_VIDEO_STAGE reference-ingest"
 "$node_bin" scripts/prepare-visual-reconstruction.mjs \
@@ -105,14 +109,14 @@ Do not write the final prompt or change the fixed reference-authority template."
 prompt_log="$task_tmp/prompt-fields.log"
 prompt_fields_file="$task_tmp/video-prompt-fields.prompt.txt"
 printf '%s\n' "$prompt_fields_prompt" > "$prompt_fields_file"
-"$node_bin" scripts/run-lwdp-codex-task.mjs \
+"$node_bin" scripts/run-codex-task.mjs --backend "$codex_backend" \
   --repo-root "$project_root" \
   --execution-profile formal \
-  --task-id "video-prompt-$cloud_run_nonce" \
+  --task-id "video-prompt-$codex_run_nonce" \
   --stage prompt-synthesis \
   --job-name "WorldKit Video Prompt · $scene_id" \
-  --request-id "$scene_id-video-prompt-$cloud_run_nonce" \
-  --output-s3-prefix "$cloud_run_prefix/analysis" \
+  --request-id "$scene_id-video-prompt-$codex_run_nonce" \
+  --output-s3-prefix "$codex_output_prefix/analysis" \
   --instruction-file "$prompt_fields_file" \
   --context "artifacts/scenes/$scene_id/scene-brief.md" \
   --context "artifacts/scenes/$scene_id/visual-reference-manifest.draft.json" \
@@ -141,14 +145,14 @@ $(<"$prompt_gate_log")"
   repair_log="$task_tmp/prompt-repair-$prompt_repair_attempt.log"
   repair_prompt_file="$task_tmp/video-prompt-repair-$prompt_repair_attempt.prompt.txt"
   printf '%s\n' "$repair_prompt" > "$repair_prompt_file"
-  "$node_bin" scripts/run-lwdp-codex-task.mjs \
+  "$node_bin" scripts/run-codex-task.mjs --backend "$codex_backend" \
     --repo-root "$project_root" \
     --execution-profile formal \
-    --task-id "video-prompt-repair-$prompt_repair_attempt-$cloud_run_nonce" \
+    --task-id "video-prompt-repair-$prompt_repair_attempt-$codex_run_nonce" \
     --stage prompt-synthesis \
     --job-name "WorldKit Video Prompt Repair $prompt_repair_attempt · $scene_id" \
-    --request-id "$scene_id-video-prompt-repair-$prompt_repair_attempt-$cloud_run_nonce" \
-    --output-s3-prefix "$cloud_run_prefix/repair-$prompt_repair_attempt" \
+    --request-id "$scene_id-video-prompt-repair-$prompt_repair_attempt-$codex_run_nonce" \
+    --output-s3-prefix "$codex_output_prefix/repair-$prompt_repair_attempt" \
     --instruction-file "$repair_prompt_file" \
     --context "artifacts/scenes/$scene_id/scene-brief.md" \
     --context "artifacts/scenes/$scene_id/visual-reference-manifest.draft.json" \

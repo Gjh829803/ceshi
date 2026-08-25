@@ -49,7 +49,7 @@ describe("selectable Control Feel authority", () => {
 
   it("does not treat the whole Control Feel catalog as G Bot's selectable set", () => {
     const definition = builtInSubjectResourceRegistry.resolveSubjectDefinition(
-      "worldkit://subject-definition/humanoid.g-bot@1",
+      "worldkit://subject-definition/humanoid.g-bot@2",
     );
     if (definition === undefined || !("schemaVersion" in definition)) {
       throw new Error("Expected G Bot Subject Definition.");
@@ -83,7 +83,7 @@ describe("selectable Control Feel authority", () => {
   it("locks every allowed G Bot Control Feel into the ResourceLock closure", () => {
     const closure = resolveSubjectPresetClosureV1(
       builtInSubjectResourceRegistry,
-      "worldkit://subject-definition/humanoid.g-bot@1",
+      "worldkit://subject-definition/humanoid.g-bot@2",
     );
     const lockedFeelRefs = closure.entries
       .filter((entry) => entry.resourceKind === "control-feel-profile")

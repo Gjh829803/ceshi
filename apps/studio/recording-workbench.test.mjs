@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { EventEmitter } from "node:events";
 import { createServer } from "node:http";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { PassThrough } from "node:stream";
 import test from "node:test";
 
 import {
@@ -28,10 +30,13 @@ async function makeFixture() {
   const dataRoot = path.join(root, "data");
   const sceneId = "recording-test-world";
   const artifactRoot = path.join(repoRoot, "artifacts", "scenes", sceneId);
+  const planRoot = path.join(repoRoot, "apps", "playground", "public", "scene-plans", sceneId);
   await mkdir(path.join(artifactRoot, "triviews", "hero"), { recursive: true });
   await mkdir(path.join(artifactRoot, "triviews", "tower"), { recursive: true });
+  await mkdir(planRoot, { recursive: true });
   await writeFile(path.join(artifactRoot, "authoring.json"), "{}\n");
   await writeFile(path.join(artifactRoot, "styled-opening-frame.png"), "opening");
+  await writeFile(path.join(planRoot, "world-plan.png"), "world-plan");
   await writeFile(path.join(artifactRoot, "triviews", "hero", "whitebox-triview.png"), "hero-whitebox");
   await writeFile(path.join(artifactRoot, "triviews", "hero", "styled-triview.png"), "hero");
   await writeFile(path.join(artifactRoot, "triviews", "tower", "whitebox-triview.png"), "tower-whitebox");
@@ -80,6 +85,93 @@ async function listen(service) {
   };
 }
 
+async function uploadRecording(origin, sceneId) {
+  const mp4 = Buffer.concat([
+    Buffer.from("0000001866747970", "hex"),
+    Buffer.from("recording-body"),
+  ]);
+  const response = await fetch(`${origin}/api/recording-worlds/${sceneId}/recordings`, {
+    method: "POST",
+    headers: {
+      "content-type": "video/mp4",
+      "x-worldkit-recording-duration-ms": "9000",
+    },
+    body: mp4,
+  });
+  if (response.status !== 201) assert.fail(await response.text());
+  return (await response.json()).recording;
+}
+
+async function fakeRecordingTranscode({ sourcePath, destinationPath, durationSeconds }) {
+  await copyFile(sourcePath, destinationPath);
+  return {
+    width: 1280,
+    height: 720,
+    fps: 24,
+    frameCount: durationSeconds * 24,
+    durationSeconds,
+  };
+}
+
+async function waitForRecording(origin, sceneId, predicate) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const payload = await fetch(
+      `${origin}/api/recording-worlds/${sceneId}/recordings`,
+    ).then((response) => response.json());
+    const recording = payload.recordings[0];
+    if (recording && predicate(recording)) return recording;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error("Timed out waiting for recording state.");
+}
+
+function createGenerationSpawn({ holdCodex = Promise.resolve() } = {}) {
+  const calls = [];
+  const spawnImplementation = (command, args) => {
+    const child = new EventEmitter();
+    child.stdout = new PassThrough();
+    child.stderr = new PassThrough();
+    child.killed = false;
+    child.kill = () => {
+      child.killed = true;
+      return true;
+    };
+    calls.push({ command, args: [...args] });
+    setImmediate(() => {
+      void (async () => {
+        const script = path.basename(args[0] ?? "");
+        if (script === "run-codex-task.mjs") {
+          await holdCodex;
+          const taskId = args[args.indexOf("--task-id") + 1];
+          const backend = args[args.indexOf("--backend") + 1];
+          const output = args[args.indexOf("--output") + 1].split("::");
+          await writeFile(output[1], "final prompt\n");
+          child.stdout.write(backend === "cloud"
+            ? `WORLDKIT_LWDP_JOB recording-prompt ${taskId} gen_cloud123 profile=formal model=gpt-5.6-sol reasoning=xhigh\n`
+            : `WORLDKIT_CODEX_BACKEND local\nWORLDKIT_LOCAL_CODEX_JOB recording-prompt ${taskId} pid=123 profile=formal model=gpt-5.6-sol reasoning=xhigh\nWORLDKIT_LOCAL_CODEX_TASK_READY ${taskId}\n`);
+        } else if (script === "run-seedance25-reference-video.py") {
+          const requestPath = args[args.indexOf("--request") + 1];
+          const resultPath = args[args.indexOf("--result") + 1];
+          const request = JSON.parse(await readFile(requestPath, "utf8"));
+          await writeFile(request.outputPath, "generated-video");
+          await writeFile(resultPath, JSON.stringify({
+            status: "succeeded",
+            taskId: "ark_test",
+            resolvedModel: "doubao-seedance-2-5-260628",
+          }));
+        } else {
+          throw new Error(`Unexpected child script: ${script}`);
+        }
+        child.stdout.end();
+        child.stderr.end();
+        child.emit("close", 0, null);
+      })().catch((error) => child.emit("error", error));
+    });
+    return child;
+  };
+  return { calls, spawnImplementation };
+}
+
 test("locks video, subject, opening-frame, and supplementary tri-view roles in the prompt", () => {
   const instruction = buildRecordingPromptInstruction({
     sceneId: "demo-world",
@@ -94,6 +186,9 @@ test("locks video, subject, opening-frame, and supplementary tri-view roles in t
   assert.match(instruction, /@图片3：palace/);
   assert.match(instruction, /不得增加@视频1不存在的主要动作/);
   assert.match(RECORDING_PROMPT_TEMPLATE, /@视频1是本视频唯一且严格的运动/);
+  assert.match(RECORDING_PROMPT_TEMPLATE, /环境音和动作音效/);
+  assert.match(RECORDING_PROMPT_TEMPLATE, /不得加入背景音乐、配乐、歌曲、歌声、对白、旁白、解说或任何人类语音/);
+  assert.match(instruction, /严禁音乐、配乐、歌曲、对白、旁白、解说、人声或语音/);
 });
 
 test("derives independent prompt and Seedance workflow states", () => {
@@ -103,11 +198,194 @@ test("derives independent prompt and Seedance workflow states", () => {
   assert.equal(deriveRecordingWorkflowStatus({ prompt: { status: "succeeded" }, video: { status: "succeeded" } }), "ready");
 });
 
-test("pads odd browser canvas dimensions before H.264 normalization", async (context) => {
-  const args = recordingNormalizationFfmpegArgs("capture.webm", "capture.mp4");
+test("requests Seedance audio at a fixed 16:9 delivery ratio", async () => {
+  const config = JSON.parse(await readFile(
+    new URL("../../config/seedance25-reference-video.json", import.meta.url),
+    "utf8",
+  ));
+  assert.deepEqual(config.videoEditingDefaults, {
+    ratio: "16:9",
+    duration: -1,
+    generateAudio: true,
+    watermark: false,
+  });
+});
+
+test("routes legacy recording prompt metadata through the default cloud Codex backend", async () => {
+  const fixture = await makeFixture();
+  const fake = createGenerationSpawn();
+  const service = createRecordingWorkbenchService({
+    repoRoot: fixture.repoRoot,
+    dataRoot: fixture.dataRoot,
+    spawnImplementation: fake.spawnImplementation,
+    transcodeRecording: fakeRecordingTranscode,
+  });
+  await service.initialize();
+  const http = await listen(service);
+  try {
+    const created = await uploadRecording(http.origin, fixture.sceneId);
+    assert.equal(created.prompt.backend, undefined);
+
+    const response = await fetch(
+      `${http.origin}/api/recording-worlds/${fixture.sceneId}/recordings/${created.id}/generate`,
+      { method: "POST" },
+    );
+    assert.equal(response.status, 202, await response.text());
+    const ready = await waitForRecording(
+      http.origin,
+      fixture.sceneId,
+      (recording) => recording.workflowStatus === "ready",
+    );
+    const codexCall = fake.calls.find(({ args }) =>
+      path.basename(args[0] ?? "") === "run-codex-task.mjs");
+    assert.ok(codexCall);
+    assert.equal(codexCall.args[codexCall.args.indexOf("--backend") + 1], "cloud");
+    assert.equal(ready.prompt.backend, "cloud");
+    assert.equal(ready.prompt.taskId, `prompt-${created.id}`);
+    assert.equal(ready.prompt.jobId, "gen_cloud123");
+    assert.equal(ready.video.provider, "Volcengine Ark");
+    assert.equal(ready.video.taskId, "ark_test");
+    const seedanceRequest = JSON.parse(await readFile(path.join(
+      fixture.dataRoot, "recordings", fixture.sceneId, created.id, "seedance-request.json",
+    ), "utf8"));
+    assert.deepEqual({
+      width: seedanceRequest.width,
+      height: seedanceRequest.height,
+      frameRate: seedanceRequest.frameRate,
+      durationSeconds: seedanceRequest.durationSeconds,
+      frameCount: seedanceRequest.frameCount,
+      requireAudio: seedanceRequest.requireAudio,
+    }, {
+      width: 1280,
+      height: 720,
+      frameRate: 24,
+      durationSeconds: 9,
+      frameCount: 216,
+      requireAudio: true,
+    });
+  } finally {
+    await service.shutdown();
+    await http.close();
+  }
+});
+
+test("freezes a local Codex backend at enqueue and stores only its local task marker", async () => {
+  const fixture = await makeFixture();
+  let releaseCodex;
+  const codexBarrier = new Promise((resolve) => { releaseCodex = resolve; });
+  const fake = createGenerationSpawn({ holdCodex: codexBarrier });
+  let selectedBackend = "local";
+  let providerCalls = 0;
+  const service = createRecordingWorkbenchService({
+    repoRoot: fixture.repoRoot,
+    dataRoot: fixture.dataRoot,
+    spawnImplementation: fake.spawnImplementation,
+    transcodeRecording: fakeRecordingTranscode,
+    codexBackendProvider: () => {
+      providerCalls += 1;
+      return selectedBackend;
+    },
+  });
+  await service.initialize();
+  const http = await listen(service);
+  try {
+    const created = await uploadRecording(http.origin, fixture.sceneId);
+    const firstResponse = await fetch(
+      `${http.origin}/api/recording-worlds/${fixture.sceneId}/recordings/${created.id}/generate`,
+      { method: "POST" },
+    );
+    if (firstResponse.status !== 202) assert.fail(await firstResponse.text());
+    assert.equal((await firstResponse.json()).recording.prompt.backend, "local");
+
+    selectedBackend = "cloud";
+    const duplicateResponse = await fetch(
+      `${http.origin}/api/recording-worlds/${fixture.sceneId}/recordings/${created.id}/generate`,
+      { method: "POST" },
+    );
+    if (duplicateResponse.status !== 202) assert.fail(await duplicateResponse.text());
+    assert.equal((await duplicateResponse.json()).recording.prompt.backend, "local");
+    assert.equal(providerCalls, 1);
+
+    releaseCodex();
+    const ready = await waitForRecording(
+      http.origin,
+      fixture.sceneId,
+      (recording) => recording.workflowStatus === "ready",
+    );
+    const codexCalls = fake.calls.filter(({ args }) =>
+      path.basename(args[0] ?? "") === "run-codex-task.mjs");
+    assert.equal(codexCalls.length, 1);
+    assert.equal(codexCalls[0].args[codexCalls[0].args.indexOf("--backend") + 1], "local");
+    assert.equal(ready.prompt.backend, "local");
+    assert.equal(ready.prompt.taskId, `prompt-${created.id}`);
+    assert.equal(ready.prompt.jobId, null);
+    assert.equal(ready.video.provider, "Volcengine Ark");
+    assert.equal(ready.video.taskId, "ark_test");
+  } finally {
+    releaseCodex();
+    await service.shutdown();
+    await http.close();
+  }
+});
+
+test("rewrites an existing Seedance prompt when the selected Codex backend changes", async () => {
+  const fixture = await makeFixture();
+  const fake = createGenerationSpawn();
+  let selectedBackend = "cloud";
+  const service = createRecordingWorkbenchService({
+    repoRoot: fixture.repoRoot,
+    dataRoot: fixture.dataRoot,
+    spawnImplementation: fake.spawnImplementation,
+    transcodeRecording: fakeRecordingTranscode,
+    codexBackendProvider: () => selectedBackend,
+  });
+  await service.initialize();
+  const http = await listen(service);
+  try {
+    const created = await uploadRecording(http.origin, fixture.sceneId);
+    const firstResponse = await fetch(
+      `${http.origin}/api/recording-worlds/${fixture.sceneId}/recordings/${created.id}/generate`,
+      { method: "POST" },
+    );
+    assert.equal(firstResponse.status, 202, await firstResponse.text());
+    const cloudReady = await waitForRecording(
+      http.origin,
+      fixture.sceneId,
+      (recording) => recording.workflowStatus === "ready",
+    );
+    assert.equal(cloudReady.prompt.backend, "cloud");
+
+    selectedBackend = "local";
+    const secondResponse = await fetch(
+      `${http.origin}/api/recording-worlds/${fixture.sceneId}/recordings/${created.id}/generate`,
+      { method: "POST" },
+    );
+    assert.equal(secondResponse.status, 202, await secondResponse.text());
+    const localReady = await waitForRecording(
+      http.origin,
+      fixture.sceneId,
+      (recording) => recording.workflowStatus === "ready" && recording.prompt.backend === "local",
+    );
+    const codexCalls = fake.calls.filter(({ args }) =>
+      path.basename(args[0] ?? "") === "run-codex-task.mjs");
+    assert.equal(codexCalls.length, 2);
+    assert.equal(codexCalls[0].args[codexCalls[0].args.indexOf("--backend") + 1], "cloud");
+    assert.equal(codexCalls[1].args[codexCalls[1].args.indexOf("--backend") + 1], "local");
+    assert.equal(localReady.prompt.jobId, null);
+  } finally {
+    await service.shutdown();
+    await http.close();
+  }
+});
+
+test("normalizes whitebox capture to integer seconds at 1280x720 and exactly 24 fps", async (context) => {
+  const args = recordingNormalizationFfmpegArgs("capture.webm", "capture.mp4", 3);
   assert.deepEqual(args.slice(args.indexOf("-vf"), args.indexOf("-vf") + 2), [
     "-vf",
-    "pad=ceil(iw/2)*2:ceil(ih/2)*2:0:0,setsar=1",
+    "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=24",
+  ]);
+  assert.deepEqual(args.slice(args.indexOf("-t"), args.indexOf("-t") + 4), [
+    "-t", "3", "-frames:v", "72",
   ]);
 
   if (spawnSync("ffmpeg", ["-version"], { stdio: "ignore" }).status !== 0) {
@@ -120,7 +398,7 @@ test("pads odd browser canvas dimensions before H.264 normalization", async (con
   const generated = spawnSync("ffmpeg", [
     "-y", "-v", "error",
     "-f", "lavfi",
-    "-i", "color=c=blue:s=106x59:d=1,format=yuv444p",
+    "-i", "color=c=blue:s=106x59:d=1.9,format=yuv444p",
     "-c:v", "libvpx-vp9",
     "-pix_fmt", "yuv444p",
     oddWebmPath,
@@ -141,7 +419,7 @@ test("pads odd browser canvas dimensions before H.264 normalization", async (con
         method: "POST",
         headers: {
           "content-type": "video/webm",
-          "x-worldkit-recording-duration-ms": "1000",
+          "x-worldkit-recording-duration-ms": "1900",
         },
         body: await readFile(oddWebmPath),
       },
@@ -151,7 +429,13 @@ test("pads odd browser canvas dimensions before H.264 normalization", async (con
       `${http.origin}/api/recording-worlds/${fixture.sceneId}/recordings`,
     ).then((response) => response.json());
     assert.equal(recordings.recordings.length, 1);
-    assert.equal(recordings.recordings[0].source.extension, "mp4");
+    const source = recordings.recordings[0].source;
+    assert.equal(source.extension, "mp4");
+    assert.equal(source.durationMs, 1000);
+    assert.deepEqual(
+      { width: source.width, height: source.height, fps: source.fps, frameCount: source.frameCount },
+      { width: 1280, height: 720, fps: 24, frameCount: 24 },
+    );
   } finally {
     await service.shutdown();
     await http.close();
@@ -179,6 +463,7 @@ test("persists browser recordings, lists them, generates independently, and serv
   const service = createRecordingWorkbenchService({
     repoRoot: fixture.repoRoot,
     dataRoot: fixture.dataRoot,
+    transcodeRecording: fakeRecordingTranscode,
     composeTriviewComparison: async ({ whiteboxPath, styledPath, destinationPath }) => {
       await writeFile(
         destinationPath,
@@ -248,6 +533,7 @@ test("persists browser recordings, lists them, generates independently, and serv
     assert.equal(zipEntries.status, 0, zipEntries.stderr);
     const prefix = `${fixture.sceneId}-${ready.id}/`;
     for (const name of [
+      "world-plan.png",
       "triview-01-whitebox.png",
       "triview-01-styled.png",
       "triview-01-comparison.png",
@@ -265,6 +551,10 @@ test("persists browser recordings, lists them, generates independently, and serv
     assert.equal(manifest.status, 0, manifest.stderr);
     assert.deepEqual(JSON.parse(manifest.stdout).portableBundle, {
       schemaVersion: 1,
+      worldPlan: {
+        file: "world-plan.png",
+        role: "planner-navigation-layout",
+      },
       triviewComparisonLayout: "whitebox-left-styled-right",
       triviewPanelSizePixels: [1280, 720],
       triviewComparisonSizePixels: [2560, 720],

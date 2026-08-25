@@ -415,7 +415,7 @@ describe("subject preset candidate V1", () => {
   });
 
   it("rejects a G Bot candidate that selects a quadruped-specific Control Feel", () => {
-    const gBotRef = "worldkit://subject-definition/humanoid.g-bot@1";
+    const gBotRef = "worldkit://subject-definition/humanoid.g-bot@2";
     const quadrupedFeelRef =
       "worldkit://control-feel-profile/subject.animal.quadruped.forward-steer.default@1";
     const gBotClosure = resolveSubjectPresetClosureV1(

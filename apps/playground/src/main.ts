@@ -51,6 +51,7 @@ import { createGameplayPageLifecycle } from "./gameplay-page-lifecycle.js";
 import { createAndStartArtifactRenderer } from "./artifact-renderer-lifecycle.js";
 import { installPageExitDisposal } from "./page-exit-lifecycle.js";
 import { installWorldkitAuthoringCaptureApi } from "./worldkit-authoring-capture-api.js";
+import { initializePlaygroundAdapterV1 } from "./playground-adapter-startup.js";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (app === null) throw new Error("Missing #app container");
@@ -2007,18 +2008,17 @@ if (runtimeRoute.mode === "unknown") {
             },
           },
         );
-        startupStage = "visual-targets-configure";
-        if (visualCaptureTargets.length > 0) {
-          adapter.configureVisualCaptureTargets(visualCaptureTargets);
-        }
-        createdAdapter = adapter;
         createdHostOverlay = loaded.hostOverlay;
-        trackAdapter(adapter);
-        startupStage = "adapter-mount";
-        adapter.mount(viewport);
-        startupStage = "first-render";
-        adapter.render();
-        return adapter;
+        createdAdapter = initializePlaygroundAdapterV1<BabylonWorldAdapter>({
+          adapter,
+          visualCaptureTargets,
+          viewport,
+          trackAdapter,
+          setStartupStage(stage) {
+            startupStage = stage;
+          },
+        });
+        return createdAdapter;
       } catch (error) {
         captureAuthoringStartupFailure(startupStage, error);
         throw error;

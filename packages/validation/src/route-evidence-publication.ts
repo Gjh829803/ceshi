@@ -343,17 +343,6 @@ function hashValidationReportV2(report: ValidationReportV2): Sha256HashV1 {
 
 
 
-export interface RouteEvidencePublicationRowInputV2 {
-  readonly validationRow: RouteValidationRowInputV2;
-  readonly routeOverlay?: RouteOverlayV2;
-}
-
-export interface CreateWorldkitBrowserRouteEvidencePublicationInputV2 {
-  readonly subject: WorldPackageValidationSubjectV1;
-  readonly validationReport: ValidationReportV2;
-  readonly rows: readonly RouteEvidencePublicationRowInputV2[];
-}
-
 function expectedOverlayV2(
   row: RouteValidationRowInputV2,
   overlay: RouteOverlayV2,
@@ -531,6 +520,8 @@ export function createWorldkitBrowserRouteEvidencePublicationV2(
       subject: snapshot.subject,
       dependencyReportRefs: snapshot.validationReport.dependencyReportRefs,
       validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+      requiredRoutes:
+        snapshot.validationReport.routeValidationSetReceipt.requiredRoutes,
       rows: snapshot.rows.map(({ validationRow }) => validationRow),
     });
     requireEqual(snapshot.validationReport, rebuiltReport);

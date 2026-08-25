@@ -76,6 +76,8 @@ export interface CanonicalTraversalSurfaceOverlapBlockerV1 {
   readonly firstTraversalSurfaceId: string;
   readonly secondTraversalSurfaceId: string;
   readonly witnessPointMetersXZ: readonly [number, number];
+  readonly firstHeightMeters: number;
+  readonly secondHeightMeters: number;
   readonly minimumHeightDifferenceMeters: number;
 }
 
@@ -830,6 +832,8 @@ function classifyIndexedTrianglePair(
   | Readonly<{
       kind: "blocker";
       witnessPointMetersXZ: readonly [number, number];
+      firstHeightMeters: number;
+      secondHeightMeters: number;
       minimumHeightDifferenceMeters: number;
     }>
   | Readonly<{ kind: "clear" }> {
@@ -861,9 +865,22 @@ function classifyIndexedTrianglePair(
   if (isNil(witnessPointMetersXZ)) {
     return { kind: "clear" };
   }
+  const firstWitness = samplePointOnWorldTriangleV1(
+    first.geometry,
+    witnessPointMetersXZ,
+  );
+  const secondWitness = samplePointOnWorldTriangleV1(
+    second.geometry,
+    witnessPointMetersXZ,
+  );
+  if (isNil(firstWitness) || isNil(secondWitness)) {
+    return { kind: "clear" };
+  }
   return {
     kind: "blocker",
     witnessPointMetersXZ,
+    firstHeightMeters: firstWitness.heightMeters,
+    secondHeightMeters: secondWitness.heightMeters,
     minimumHeightDifferenceMeters,
   };
 }
@@ -938,6 +955,8 @@ export function preflightCanonicalTraversalSurfaceOverlapsV1(
                   firstTraversalSurfaceId: firstSource.traversalSurfaceId,
                   secondTraversalSurfaceId: secondSource.traversalSurfaceId,
                   witnessPointMetersXZ: relation.witnessPointMetersXZ,
+                  firstHeightMeters: relation.firstHeightMeters,
+                  secondHeightMeters: relation.secondHeightMeters,
                   minimumHeightDifferenceMeters:
                     relation.minimumHeightDifferenceMeters,
                 },

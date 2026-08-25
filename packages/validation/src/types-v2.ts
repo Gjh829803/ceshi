@@ -18,6 +18,7 @@ import type {
   RouteRuntimeGateThresholdsV1,
   RouteValidationDiagnosticCodeV2,
 } from "./route";
+import type { TraversalSurfaceIdentityV1 } from "@whitebox-world/traversal";
 
 interface MetricDefinitionBaseV2 {
   readonly id: string;
@@ -169,6 +170,14 @@ export interface RouteValidationSetRowV1 {
   readonly evidenceArtifactRefs: readonly string[];
 }
 
+export interface RouteValidationRequiredRouteV1 {
+  readonly constraintId: string;
+  readonly routeId: string;
+  readonly traversingEntityId: string;
+  readonly startAnchorEntityId: string;
+  readonly destinationAnchorEntityId: string;
+}
+
 export interface RouteValidationSetReceiptV1 {
   readonly kind: "route-validation-set-receipt";
   readonly schemaVersion: 1;
@@ -177,6 +186,9 @@ export interface RouteValidationSetReceiptV1 {
   readonly executionPlanHash: Sha256HashV1;
   readonly resourceLockHash: Sha256HashV1;
   readonly layoutSolveReportHash: Sha256HashV1;
+  readonly requiredRouteCount: number;
+  readonly requiredRouteSetHash: Sha256HashV1;
+  readonly requiredRoutes: readonly RouteValidationRequiredRouteV1[];
   readonly rows: readonly RouteValidationSetRowV1[];
 }
 
@@ -319,6 +331,7 @@ export interface RouteRowValidationDiagnosticV2 extends ValidationDiagnosticBase
   readonly destinationAnchorEntityId: string;
   readonly traversalSurfaceId?: string;
   readonly colliderSubshapeId?: string;
+  readonly relatedTraversalSurfaceIdentities?: readonly TraversalSurfaceIdentityV1[];
   readonly positionMetersXYZ?: readonly [number, number, number];
 }
 

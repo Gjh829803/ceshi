@@ -16,10 +16,12 @@
 
 > Placement Solver S1 首个海湾纵向切片已完成并进入回归；通用 Terrain Mask、更多 Constraint 与 P0.1 整体仍未完成。
 
-> Route R1 Heightfield 与 R1b Static Platform 已完成，M5 已关闭。候选 `506e088`
-> 相对 base `9c5a615` 的修后完整矩阵通过（148 files / 1577 tests、R1b 11/11）；
-> 主 Agent 全维度/Runtime 深审与 Cursor 首轮、条件复核均为 Final GO / No findings，
-> 无 open confirmed P0/P1。H1/H2/H3、动态平台、NPC/public `goTo` 与车辆仍开放。
+> Route R1 Heightfield 与 R1b Static Platform 的原始纵向切片已完成；2026-08-24
+> 深审重新打开 M5，并发现 Route set、Surface/Portal、Runtime ownership、V2 evidence
+> 与 Hosted admission 等存量问题。remediation 已完成，最新 `main` 集成门禁与
+> GLM 5.3/zcode、Cursor 独立终审均为 FINAL GO；M5 已在 R1 Heightfield / R1b Static
+> Platform 当前生产边界内关闭。H1/H2/H3、动态平台、NPC/public `goTo` 与车辆
+> 仍由后续里程碑拥有。
 
 > Gameplay Framework G19-2 至 G19-6 已合入 `main@5ffd031`；关闭 Command/Receipt/Event/World
 > State、Gameplay State/Feature、事务式 WorldSession/RuntimeHost、Babylon transactional port、
@@ -272,14 +274,15 @@ P1.5、P1.6、P2.5 与 P2.6 是把既有总体设计和产品对接契约显式�
   台阶、坡道和普通静态平台；阈值从同一 `resolvedTraversalLockHash` 推导，当前锁定
   `0.3m` 人形 Profile 的 Golden 要求 `0.25m` 通过、`0.35m` 失败。11 个 Fixture、
   V2/V5 clean break、R0/R1/R1b 聚焦门禁与 43 files / 525 tests 已通过。
-- [x] R1b Task 10 已完成并关闭 R1b/M5：首轮 Cursor chat
+- [ ] R1b Task 10 的历史完成结论已由 2026-08-24 深审重新打开：首轮 Cursor chat
   `1e938715-a5b2-4a25-ad83-45eec0c37c15` 对 `28752e0` 为 Final GO / No findings，
   同时给出 Runtime ambiguous 诊断分层建议；主审确认该分层问题并修复为 `506e088`，
   三模式回归证明 Runtime `unmatched / ambiguous / wrong resolved Surface` 均输出
   `ROUTE_RUNTIME_SUPPORT_SURFACE_MISMATCH`。修后 `typecheck`、148 files / 1577 tests、
   `build`、R0、R1、R1b 11/11、Canonical、Placement、Rigged、G Bot 与 `diff-check`
   全部通过；条件复核 chat `d61f751c-a398-4063-bcbf-2ddc55ea20a9` 对 `506e088`
-  再次为 Final GO / No findings，最终无 open confirmed P0/P1。
+  再次为 Final GO / No findings；这些是历史证据，不能覆盖当前 remediation 的最新
+  `main` 集成门禁与双重独立复核。
 - [x] Required 路线接入统一 Validation Report；Graph 通过但真实 Controller 卡住仍为
   Blocking Failure，并输出台阶、坡度、宽高净空、缝隙、Surface 身份和卡住坐标。
 - [ ] 增加 S1 之外的 Constraint、增量求解等价证明和通用 ValidationReport。
@@ -373,7 +376,7 @@ WorldPackage、Resume 与完整 Replay Gate 为完成标准。
 - [x] Golden 切片中缺少 Rig、Clip、Collider 或 Socket 时返回稳定 Diagnostic，不静默猜测。
 - [x] 把 G Bot 的 Manifest/Registry/Gate 固化为
   [`Product Asset Intake Template`](superpowers/specs/2026-08-21-product-asset-intake-template-design.md)
-  与 Fixture `examples/product-asset-intakes/humanoid.g-bot@1.json`；未接入第二个产品 GLB。
+  与 Fixture `examples/product-asset-intakes/humanoid.g-bot@2.json`；未接入第二个产品 GLB。
 
 #### P1.3 Semantic Action 与 Animation Binding
 
@@ -848,17 +851,19 @@ S1b Golden、
 1. **M1（已完成）：把 G Bot 的交付 Manifest/Registry 映射/Gate 固化为后续产品资产接入模板**
    （专项 [`product-asset-intake-template`](superpowers/specs/2026-08-21-product-asset-intake-template-design.md)，
    执行 [`product-asset-intake`](superpowers/skills/product-asset-intake.md)；G Bot Fixture
-   `examples/product-asset-intakes/humanoid.g-bot@1.json`）；
+   `examples/product-asset-intakes/humanoid.g-bot@2.json`）；
 2. **M2（已完成）：冻结 Take/Capture V1 首条实施范围**；
 3. **M3（已完成）：实现五 Pass Capture 窄纵向切片并复用 Placement World Identity/Hash**；
 4. **M4（已完成）：实现 P0.3 统一 Validation Profile/Report 的 Capture/Integrity 窄切片，把现有 Bundle Gate 纳入同一报告协议**；
-5. **M5（已完成）：Route Graph 与主体可通行性 R0/R1/R1b**：R0 字段冻结已由
+5. **M5（已关闭，回归中）：Route Graph 与主体可通行性 R0/R1/R1b**：R0 字段冻结已由
    `pnpm verify:route-r0-contract` 证明；R1 Heightfield 已由
    `pnpm verify:route-r1-heightfield` 与
    [Runtime Review](reviews/2026-08-22-route-r1-heightfield-runtime-review.md) 关闭。
    R1b Task 9/10 已完成静态平台 / Surface→Collider Subshape 实现、11 个 Fixture、V2/V5
    clean break、完整矩阵和主 Agent 深审；首轮 Cursor 建议触发的 Runtime ambiguous
-   诊断分层修复已由三模式回归与条件复核关闭。M5 已完成，但 H1/H2/H3、动态平台、
+   诊断分层修复已由三模式回归与条件复核关闭；2026-08-24 深审发现的存量问题已经
+   remediation，并由最新 `main` 集成门禁以及 GLM 5.3/zcode、Cursor FINAL GO 重新关闭。
+   H1/H2/H3、动态平台、
    NPC/public `goTo`、车辆等能力继续由后续里程碑拥有；
 6. **M6：在 Placement + Take + Validation 闭环上接入实验 Video Model Adapter**；
 7. **M7（Ground/Air 首切片已完成）：继续扩展 P1.5 Control Feel/Physics Medium/State

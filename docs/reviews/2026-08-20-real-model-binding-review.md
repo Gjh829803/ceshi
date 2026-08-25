@@ -21,7 +21,7 @@
 
 Canonical 里**没有**文件路径。Authoring / IR / ExecutionPlan 只带：
 
-`worldkit://subject-asset/actor.humanoid.g-bot@1`
+`worldkit://subject-asset/actor.humanoid.g-bot@2`
 
 Playground Host 用 `PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1` 映射到同源 URL，请求带 `worldkit-content-hash` 查询参数且 `cache: "no-store"`，避免旧 GLB 通过 HTTP 缓存混进 hash 校验。这是对的：URI 停在 Host，契约停在 ref + hash。
 
@@ -61,7 +61,7 @@ GLB 字节（Host）
 
 | Ref | 出处 | 实际用在 |
 |---|---|---|
-| `worldkit://subject-definition/humanoid.g-bot@1` | `built-in-subject-definitions.ts`（无 capabilityAssembly，socket 几乎只有 `hand.right`） | `examples/authoring/g-bot-subject-world.json`、`verify-g-bot-subject-world.ts`、多数 registry/compiler 测试 |
+| `worldkit://subject-definition/humanoid.g-bot@2` | `built-in-subject-definitions.ts`（无 capabilityAssembly，socket 几乎只有 `hand.right`） | `examples/authoring/g-bot-subject-world.json`、`verify-g-bot-subject-world.ts`、多数 registry/compiler 测试 |
 | `worldkit://subject-definition/humanoid.g-bot.ground@1` | `assets/registry/subject-definitions/catalog.json`（V3 + K01 + 相机 sockets） | playground 能力包切换、`capability-runtime.test.ts` |
 
 共用同一 GLB / Rig / AnimationSet / Capsule，但组装不同：一个走 legacy locomotion 字段 + 旧相机；一个走 capability 的 motion/camera context，带 `FirstPersonView`、`ThirdPersonTarget` 等 socket。
@@ -180,7 +180,7 @@ pnpm verify:rigged-subject
 
 | 原发现 | 处置 | 结论 |
 |---|---|---|
-| 两套 G Bot Subject Definition | **已修复**（`74a90e3`） | 对外只保留 `worldkit://subject-definition/humanoid.g-bot@1`；`.ground@1` 已删除且无 alias。CLI 与 Browser 返回同一 Ref 和 canonical hash，G Bot verifier 使用同一产品定义。 |
+| 两套 G Bot Subject Definition | **已修复**（`74a90e3`） | 对外只保留 `worldkit://subject-definition/humanoid.g-bot@2`；`.ground@1` 已删除且无 alias。CLI 与 Browser 返回同一 Ref 和 canonical hash，G Bot verifier 使用同一产品定义。 |
 | 25 个 clip 进入 SDK 动作枚举，但运行时只有四态选择 | **延期** | 当前资产加载与资源锁仍可验证完整 clip inventory，但“可加载”不等于“语义动作已实现”。`fall`、`land.hard`、蹲伏/攀爬等应在独立 Semantic Action / State Binding 切片中设计，不能在本轮靠扩充 if/else 假装完成。 |
 | Sidecar、Registry、Catalog 三份信息可能漂移 | **延期，边界已明确** | Canonical Runtime 只信 Registry + Resource Lock；Host URI/Sidecar 仍属于 provenance/交付层。后续应增加从 Sidecar 到 Registry 投影的专门 conformance 脚本，而不是让运行时读取多份真值。 |
 | 空中下降仍绑定 jump，而不是 fall | **延期** | 物理运动没有因此失真，但动画语义仍未完成。需和动作状态机、打断/落地规则一起做，不能只按 `medium=air` 临时替换 clip。 |

@@ -64,9 +64,13 @@ cleanup() {
 }
 trap cleanup EXIT
 mkdir -p "$task_tmp/input" "$task_tmp/runtime"
-cloud_run_nonce="$(date -u +%Y%m%d-%H%M%S)-$$"
+codex_backend="${WORLDKIT_CODEX_BACKEND:-cloud}"
+[[ "$codex_backend" == "cloud" || "$codex_backend" == "local" ]] || {
+  echo "WORLDKIT_CODEX_BACKEND must be cloud or local." >&2; exit 2;
+}
+codex_run_nonce="$(date -u +%Y%m%d-%H%M%S)-$$"
 cloud_s3_root="${WORLDKIT_LWDP_S3_ROOT:-s3://leap-world-us-east-2/world-model/platform/agent-whitebox-world-sdk}"
-cloud_run_prefix="${cloud_s3_root%/}/$scene_id/$cloud_run_nonce"
+codex_output_prefix="${cloud_s3_root%/}/$scene_id/$codex_run_nonce"
 reference_asset_args=()
 reference_index=0
 for source_path in "${image_sources[@]}"; do
@@ -92,15 +96,15 @@ for source_path in "${image_sources[@]}"; do
   reference_index=$((reference_index + 1))
 done
 
-run_cloud_codex() {
-  "$node_bin" scripts/run-lwdp-codex-task.mjs --repo-root "$project_root" "$@" --execution-profile formal
+run_codex() {
+  "$node_bin" scripts/run-codex-task.mjs --backend "$codex_backend" --repo-root "$project_root" "$@" --execution-profile formal
 }
 
 planner_prompt="$user_prompt
 
 You are the unified WorldKit Planner for world '$scene_id'. In this one Codex task, create exactly three declared outputs: artifacts/scenes/$scene_id/scene-brief.md, apps/playground/public/scene-plans/$scene_id/world-plan.png, and apps/playground/public/scene-plans/$scene_id/entry-whitebox-target.png. Write the Brief first, then use Codex's built-in image generation tool to generate both PNGs from that same Brief and the attached user reference images. Do not delegate to another Image Planner or external API. Do not create JSON, coordinates, dimensions, geometry, route graphs, or AuthoringSpec.
 
-Use .codex/skills/worldkit-spatial-planner/SKILL.md as the hosted preview-planning guide and read its template reference. Name exactly one standard or custom movement mode; treat the opening frame only as an entry slice and describe entry, middle, remote, and off-camera exploration areas appropriate to the request without empty map padding. Keep user facts, visible reference evidence, inferred continuation and render-only ideas in their separate Scene Brief sections. Define 1-5 visual targets as whole targets beginning with the complete controlled subject; never pad or split targets. The top-down image must show the complete reference-consistent world geography, the initial-subject marker, and the traversable domain/path, not merely the entry-frame crop. The entry target is non-authoritative composition intent, not runtime whitebox evidence. The complete red primary Subject, its main body/pilot, and visual mass center are exactly on the 50% image-width vertical centerline. Near-center, any slight left/right bias, diagonal rear, three-quarter rear, shoulder, or side composition is invalid. Use bright neutral inspection lighting and neutralize everything except the skill's fixed target-order identity colors.
+Use .codex/skills/worldkit-spatial-planner/SKILL.md as the hosted preview-planning guide and read its template reference. Keep user facts, visible reference evidence, inferred continuation, and render-only ideas in the four separate provenance sections required by current main. Name exactly one standard or custom movement mode, but describe the complete controlled shape and movement behavior only in plain language: Planner does not select Subject Definitions, Subject Assets, Runtime Bundles, rigs, clips, colliders, or motion resources. Treat the opening frame only as an entry slice and describe entry, middle, remote, and off-camera exploration areas appropriate to the request without empty map padding; do not use a fixed play-time or perimeter target. Define 1-5 visual targets as whole targets beginning with the complete controlled subject; never pad or split targets. The top-down image must show the complete reference-consistent world geography, the initial-subject marker, and the traversable domain/path, not merely the entry-frame crop. The entry target is non-authoritative composition intent, not runtime whitebox evidence. The complete red primary Subject, its main body/pilot, and visual mass center are exactly on the 50% image-width vertical centerline. Near-center, any slight left/right bias, diagonal rear, three-quarter rear, shoulder, or side composition is invalid. Use the same bright neutral clear daytime inspection lighting for every case and neutralize everything except the skill's fixed target-order identity colors.
 
 Before finishing, run this bundled self-check from the extracted workspace:
 node .codex/skills/worldkit-spatial-planner/scripts/self-check.mjs --scene-id '$scene_id' --brief artifacts/scenes/$scene_id/scene-brief.md --world-plan apps/playground/public/scene-plans/$scene_id/world-plan.png --entry apps/playground/public/scene-plans/$scene_id/entry-whitebox-target.png --report artifacts/scenes/$scene_id/planner-self-check.json
@@ -108,9 +112,9 @@ If it exits nonzero, read its JSON diagnostics, repair the three Planner outputs
 
 builder_prompt="You are the Canonical World Builder for '$scene_id'. Read artifacts/scenes/$scene_id/scene-brief.md, artifacts/scenes/$scene_id/visual-identity-palette.json, and the two planner images. Convert their natural-language intent into Canonical AuthoringSpec V4 at artifacts/scenes/$scene_id/authoring.json. Also create artifacts/scenes/$scene_id/implementation-map.draft.json.
 
-Use .codex/skills/worldkit-canonical-builder/SKILL.md and every reference it marks required as the authoring guide for this hosted path. The Planner does not provide coordinates or geometry: you own practical bounds, scale, terrain, support surfaces, routes when explicitly restricted, placements, collision, camera numbers, and exact resource selection. Implement the complete world rather than only the opening view. Every generated whitebox AuthoringSpec must set world.environment.preset to clear-day. Size meaningful entry, middle, remote, and off-camera areas from the request, evidence, resource budget and terrain-cell guidance; do not use a fixed play-time estimate. The real Babylon opening must be a strict centered rear view: spawn yaw 0 toward canonical -Z, controlled Subject targeted by the camera, zero lateral/yaw offset, camera directly behind the Subject, and primary visual mass on the image vertical centerline. For every ground-supported movement mode, put the capsule feet on an actual support surface. Never rely on runtime falling/recovery. Respect the brief's exact movement mode only when a compatible implemented Registry closure exists; otherwise fail with a capability gap. Keep open land fully traversable outside collision blockers and do not invent routes.
+Use .codex/skills/worldkit-canonical-builder/SKILL.md and every reference it marks required as the authoring guide for this hosted path. The Planner does not provide coordinates or geometry: you own practical bounds, scale, terrain, support surfaces, routes when explicitly restricted, placements, collision, camera numbers, and exact resource selection. Implement the complete world rather than only the opening view. Every generated whitebox AuthoringSpec must set world.environment.preset to clear-day. Size meaningful entry, middle, remote, and off-camera areas from the request, evidence, resource budget and terrain-cell guidance; do not use a fixed play-time estimate. The real Babylon opening must be a strict centered rear view: spawn yaw 0 toward canonical -Z, controlled Subject targeted by the camera, zero lateral/yaw offset, camera directly behind the Subject, and primary visual mass on the image vertical centerline. For every ground-supported movement mode, put the capsule feet on an actual support surface. Never rely on runtime falling/recovery. Preserve the brief's requested movement semantics in Subject metadata; execute it exactly when a compatible implemented Registry closure exists, otherwise use the Skill's disclosed playable approximation without deleting the world or controlled silhouette. Keep open land fully traversable outside collision blockers and do not invent routes.
 
-Capability and resource-budget requirements are hard. Select only an implemented Registry closure whose movement, control, physics, and camera contracts are mutually compatible. Never invent relationship.mount, relationship.seat, or relationship.tether capabilities, and never substitute a visual prop for an unsupported movement assembly. Board riding, gliding, vehicles, watercraft, caves, flight, underwater traversal, and other capabilities outside the current hosted production lane must fail as explicit capability gaps. Motion Kernel and Control Profile command kinds must match. maxVertices, maxTriangles, and maxColliders are all blocking compiler budgets; choose declared values within the current schema limits and keep compiled use within every declaration. Do not remove meaningful world geometry merely to hide a budget overrun—simplify deterministically or report the gap. Keep routes, traversalAreas, and connectivity empty for open worlds. Use required connected-by-route only for an explicitly constrained ground connection supported by Route R1 Heightfield surfaces or an unambiguous R1b chain of collision-enabled static box steps/decks/platforms/ramps whose Prototypes declare exact collider-subshape traversalSurfaceBindings to worldkit://traversal-surface-profile/ground.static@1. Dynamic or overlapping surfaces and bridge-underpass dual layers do not receive current production connectivity claims.
+Capability and resource-budget requirements are hard. Shape and movement are independent decisions: use the modular humanoid G Bot @2 for an ordinary person, or create one package-local controlled Subject from exact registered Subject Assets and/or primitive visualParts when the planned complete silhouette is custom. A named Registry Subject is a shortcut, not a whitelist, and absence of a same-named preset is never a reason to omit the world. Select an exact registered movement closure only when the current Registry and bundled validator accept its complete closure without reserved relationships. Otherwise preserve the complete requested silhouette and world topology, use the documented current ground closure as an explicitly disclosed playable approximation, and record requested versus implemented behavior in Subject metadata. Never put lower-level bundle, rig, clip, collider, capability, motion, control, camera, or asset-pipeline refs in AuthoringSpec, and never add or modify SDK motion bases, Registry catalogs, Runtime, Compiler, or protocols. Never invent relationship.mount, relationship.seat, or relationship.tether capabilities. Motion Kernel and Control Profile command kinds must match. Configure the camera from the complete assembled Subject bounds and requested movement rather than copying a preset number. maxVertices, maxTriangles, and maxColliders are all blocking compiler budgets; choose declared values within the current schema limits and keep compiled use within every declaration. Do not remove meaningful world geometry merely to hide a budget overrun—simplify deterministically or report the gap. Keep routes, traversalAreas, and connectivity empty for open worlds. Use required connected-by-route only for an explicitly constrained ground connection supported by Route R1 Heightfield surfaces or an unambiguous R1b chain of collision-enabled static box steps/decks/platforms/ramps whose Prototypes declare exact collider-subshape traversalSurfaceBindings to worldkit://traversal-surface-profile/ground.static@1. Dynamic or overlapping surfaces and bridge-underpass dual layers do not receive current production connectivity claims.
 
 The map draft shape is {kind:'worldkit-scene-brief-implementation-map',schemaVersion:1,sceneId:'$scene_id',authoringSpecId,mappings:[{visualTargetId,runtimeEntityIds}]}. Map exactly every visual-target-N row from visual-identity-palette.json and nothing else. The primary target maps the controlled Subject. One repeated target maps all intentionally identical complete instances in one row. Do not map parts, helpers, or generic decoration. Do not invent hashes; the trusted host adds them. Do not edit the brief, palette, or images.
 
@@ -123,13 +127,13 @@ if [[ "$mode" == "full" || "$mode" == "plan" ]]; then
   planner_log="$task_tmp/planner.log"
   planner_prompt_file="$task_tmp/planner.prompt.txt"
   printf '%s\n' "$planner_prompt" > "$planner_prompt_file"
-  planner_task_id="planner-$cloud_run_nonce"
-  run_cloud_codex \
+  planner_task_id="planner-$codex_run_nonce"
+  run_codex \
     --task-id "$planner_task_id" \
     --stage planner \
     --job-name "WorldKit Planner · $scene_id" \
-    --request-id "$scene_id-planner-$cloud_run_nonce" \
-    --output-s3-prefix "$cloud_run_prefix/planner" \
+    --request-id "$scene_id-planner-$codex_run_nonce" \
+    --output-s3-prefix "$codex_output_prefix/planner" \
     --instruction-file "$planner_prompt_file" \
     --context ".codex/skills/worldkit-spatial-planner" \
     "${reference_asset_args[@]}" \
@@ -174,13 +178,13 @@ echo "WORLDKIT_STAGE coding-agent"
 builder_log="$task_tmp/coding-agent.log"
 builder_prompt_file="$task_tmp/canonical-builder.prompt.txt"
 printf '%s\n' "$builder_prompt" > "$builder_prompt_file"
-builder_task_id="builder-$cloud_run_nonce"
-run_cloud_codex \
+builder_task_id="builder-$codex_run_nonce"
+run_codex \
   --task-id "$builder_task_id" \
   --stage coding-agent \
   --job-name "WorldKit Builder · $scene_id" \
-  --request-id "$scene_id-builder-$cloud_run_nonce" \
-  --output-s3-prefix "$cloud_run_prefix/canonical-builder" \
+  --request-id "$scene_id-builder-$codex_run_nonce" \
+  --output-s3-prefix "$codex_output_prefix/canonical-builder" \
   --instruction-file "$builder_prompt_file" \
   --context ".codex/skills/worldkit-canonical-builder" \
   --context "artifacts/scenes/$scene_id/scene-brief.md" \
@@ -220,9 +224,27 @@ run_builder_gates() {
   route_validation_required="$("$node_bin" -e 'const fs=require("node:fs");const report=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(report.requiresTrustedRouteValidation===true?"1":"0")' "$builder_host_receipt")" &&
   if [[ "$route_validation_required" == "1" ]]; then
     echo "WORLDKIT_STAGE route-validation"
+    route_validation_report="$artifact_root/route-validation.$codex_run_nonce.json"
     "$pnpm_bin" worldkit verify route "$artifact_root/authoring.json" \
       --profile worldkit://validation-profile/outdoor-world-package-dev@1 \
-      --output "$artifact_root/route-validation.$cloud_run_nonce.json" --json
+      --output "$route_validation_report" --json &&
+    "$node_bin" -e '
+      const fs = require("node:fs");
+      const path = require("node:path");
+      const crypto = require("node:crypto");
+      const [reportPath, manifestPath, sceneId] = process.argv.slice(1);
+      const bytes = fs.readFileSync(reportPath);
+      const manifest = {
+        kind: "worldkit-route-validation-manifest",
+        schemaVersion: 1,
+        sceneId,
+        reportFileName: path.basename(reportPath),
+        reportContentHash: `sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`,
+      };
+      const temporaryPath = `${manifestPath}.tmp-${process.pid}`;
+      fs.writeFileSync(temporaryPath, `${JSON.stringify(manifest)}\n`, { flag: "wx" });
+      fs.renameSync(temporaryPath, manifestPath);
+    ' "$route_validation_report" "$artifact_root/route-validation-manifest.json" "$scene_id"
   fi &&
   echo "WORLDKIT_STAGE runtime-capture" &&
   "$pnpm_bin" worldkit capture "$artifact_root/authoring.json" \
@@ -232,7 +254,8 @@ run_builder_gates() {
     --implementation-map "$artifact_root/scene-implementation-map.json" --json &&
   python3 "$project_root/scripts/validate-entry-third-person.py" \
     --image "$artifact_root/opening-frame.png" \
-    --snapshot "$artifact_root/runtime-snapshot.json"
+    --snapshot "$artifact_root/runtime-snapshot.json" \
+    --output "$artifact_root/entry-third-person-validation.json"
 }
 run_builder_gates
 

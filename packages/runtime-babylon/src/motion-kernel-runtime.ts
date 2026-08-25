@@ -448,18 +448,30 @@ export class MotionKernelRuntimeV1 {
       },
       scene,
     );
-    this.physicsController.maxSlopeCosine = Math.cos(
-      (subject.collider.maxSlopeDegrees * Math.PI) / 180,
-    );
-    this.physicsController.maxStepHeight = subject.collider.maxStepHeightMeters;
-    this.physicsController.characterMass = subject.collider.massKilograms;
-    this.syncVisual(spawnSubjectOrigin);
-    this.physicsController.setVelocity(Vector3.Zero());
-    this.bootstrapContactManifold();
-    this.publishResolvedState(
-      this.physicsController.checkSupport(FIXED_TIME_STEP_SECONDS, this.gravityDirection),
-      { moveRequested: false, runRequested: false },
-    );
+    try {
+      this.physicsController.maxSlopeCosine = Math.cos(
+        (subject.collider.maxSlopeDegrees * Math.PI) / 180,
+      );
+      this.physicsController.maxStepHeight = subject.collider.maxStepHeightMeters;
+      this.physicsController.characterMass = subject.collider.massKilograms;
+      this.syncVisual(spawnSubjectOrigin);
+      this.physicsController.setVelocity(Vector3.Zero());
+      this.bootstrapContactManifold();
+      this.publishResolvedState(
+        this.physicsController.checkSupport(
+          FIXED_TIME_STEP_SECONDS,
+          this.gravityDirection,
+        ),
+        { moveRequested: false, runRequested: false },
+      );
+    } catch (error) {
+      try {
+        this.physicsController.dispose();
+      } catch {
+        // Construction must preserve its primary failure after best-effort rollback.
+      }
+      throw error;
+    }
   }
 
   requestMotionProfile(resourceRef: string): boolean {

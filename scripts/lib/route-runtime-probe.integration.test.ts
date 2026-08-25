@@ -211,6 +211,7 @@ async function prepareRealRouteFixture(
   const buildInputReceipt = createRouteBuildInputFromPlanV2({
     executionPlan: compiled.executionPlan,
     capabilityEnvelope: capabilityEnvelope.envelope,
+    traversalLockReceipt,
     constraintId: "hero-to-goal",
   });
   const routeResult = await evaluateRequiredRouteV2({

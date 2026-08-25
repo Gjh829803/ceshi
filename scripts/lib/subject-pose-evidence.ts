@@ -52,6 +52,7 @@ export function readGlbAnimationClipTiming(
     new TextDecoder().decode(bytes.subarray(20, jsonEnd)),
   ) as {
     accessors?: readonly {
+      count?: number;
       min?: readonly number[];
       max?: readonly number[];
     }[];
@@ -66,31 +67,43 @@ export function readGlbAnimationClipTiming(
     throw new Error(`GLB animation clip '${clipName}' must resolve exactly once.`);
   }
   const animation = matches[0]!;
-  const framesPerSecond = animation.extras?.framesPerSecond;
-  assertPositiveFinite(framesPerSecond ?? Number.NaN, "GLB animation framesPerSecond");
   const inputAccessorIndexes = new Set(
     animation.samplers?.map((sampler) => sampler.input) ?? [],
   );
   if (
-    inputAccessorIndexes.size !== 1 ||
-    [...inputAccessorIndexes][0] === undefined ||
-    !Number.isSafeInteger([...inputAccessorIndexes][0])
+    inputAccessorIndexes.size === 0 ||
+    [...inputAccessorIndexes].some((index) => !Number.isSafeInteger(index))
   ) {
-    throw new Error(`GLB animation clip '${clipName}' must use one timing accessor.`);
+    throw new Error(`GLB animation clip '${clipName}' must use valid timing accessors.`);
   }
-  const accessor = document.accessors[[...inputAccessorIndexes][0]!];
+  const accessors = [...inputAccessorIndexes].map((index) =>
+    document.accessors![index!]
+  );
+  const accessor = accessors[0];
+  const keyframeCount = accessor?.count;
   const minimumSeconds = accessor?.min?.[0];
   const maximumSeconds = accessor?.max?.[0];
   if (
     !Number.isFinite(minimumSeconds) ||
     !Number.isFinite(maximumSeconds) ||
-    maximumSeconds! <= minimumSeconds!
+    maximumSeconds! <= minimumSeconds! ||
+    accessors.some((candidate) =>
+      candidate?.count !== keyframeCount ||
+      candidate?.min?.[0] !== minimumSeconds ||
+      candidate?.max?.[0] !== maximumSeconds
+    )
   ) {
-    throw new Error(`GLB animation clip '${clipName}' has invalid timing bounds.`);
+    throw new Error(`GLB animation clip '${clipName}' has inconsistent timing bounds.`);
   }
+  const durationSeconds = maximumSeconds! - minimumSeconds!;
+  const framesPerSecond = animation.extras?.framesPerSecond ??
+    (Number.isSafeInteger(keyframeCount) && keyframeCount! > 1
+      ? (keyframeCount! - 1) / durationSeconds
+      : Number.NaN);
+  assertPositiveFinite(framesPerSecond, "GLB animation framesPerSecond");
   return {
-    durationSeconds: maximumSeconds! - minimumSeconds!,
-    framesPerSecond: framesPerSecond!,
+    durationSeconds,
+    framesPerSecond,
   };
 }
 

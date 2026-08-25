@@ -32,7 +32,11 @@ import {
   hashValidationProfileV2,
 } from "./profile-v2.js";
 import { createRouteConnectivityValidationDiagnosticV2 } from "./route.js";
-import { canonicalRouteValidationSetReceiptV1 } from "./route-validation-set.js";
+import {
+  canonicalRouteValidationRequiredRoutesV1,
+  canonicalRouteValidationSetReceiptV1,
+  hashRouteValidationRequiredRouteSetV1,
+} from "./route-validation-set.js";
 import type {
   EvidenceArtifactV2,
   GateDefinitionV2,
@@ -44,6 +48,7 @@ import type {
   ValidationReportV2,
   WorldPackageValidationSubjectV1,
   RouteValidationSetReceiptV1,
+  RouteValidationRequiredRouteV1,
 } from "./types-v2.js";
 import { validateValidationProfileV2, validateValidationReportV2 } from "./validate-v2.js";
 import { assertAccessorFreeDataGraph } from "./accessor-free-data.js";
@@ -71,6 +76,7 @@ export interface CreateRouteValidationReportInputV2 {
   readonly subject: WorldPackageValidationSubjectV1;
   readonly dependencyReportRefs?: readonly string[];
   readonly validationProfile: ValidationProfileV2;
+  readonly requiredRoutes: readonly RouteValidationRequiredRouteV1[];
   readonly rows: readonly RouteValidationRowInputV2[];
 }
 
@@ -1164,7 +1170,7 @@ function createFailedConnectivityReport(
     failure.routeId,
     failure.constraintId,
     "route-connectivity-failure.json",
-    "application/vnd.worldkit.route-connectivity-failure.v1+json",
+    "application/vnd.worldkit.route-connectivity-failure.v2+json",
     input.evidenceBytes.routeConnectivityFailure,
   );
   const evidenceArtifactsById: Record<string, EvidenceArtifactV2> = {
@@ -1200,7 +1206,7 @@ function createFailedConnectivityReport(
       failure.routeId,
       failure.constraintId,
       "traversal-graph.json",
-      "application/vnd.worldkit.traversal-graph.v1+json",
+      "application/vnd.worldkit.traversal-graph.v2+json",
       input.evidenceBytes.traversalGraph,
     );
     graphArtifactRef = graphBase.artifactRef;
@@ -1305,7 +1311,7 @@ function evaluateRouteValidationRowAsReportV2(
     routePathReceipt.routeId,
     routePathReceipt.constraintId,
     "traversal-graph.json",
-    "application/vnd.worldkit.traversal-graph.v1+json",
+    "application/vnd.worldkit.traversal-graph.v2+json",
     input.evidenceBytes.traversalGraph,
   );
   const pathBase = evidenceBase(
@@ -1314,7 +1320,7 @@ function evaluateRouteValidationRowAsReportV2(
     routePathReceipt.routeId,
     routePathReceipt.constraintId,
     "route-path-receipt.json",
-    "application/vnd.worldkit.route-path-receipt.v1+json",
+    "application/vnd.worldkit.route-path-receipt.v2+json",
     input.evidenceBytes.routePathReceipt,
   );
   const evidenceArtifactsById: Record<string, EvidenceArtifactV2> = {
@@ -1464,7 +1470,7 @@ function evaluateRouteValidationRowAsReportV2(
       routePathReceipt.routeId,
       routePathReceipt.constraintId,
       "route-runtime-probe-receipt.json",
-      "application/vnd.worldkit.route-runtime-probe-receipt.v1+json",
+      "application/vnd.worldkit.route-runtime-probe-receipt.v2+json",
       input.evidenceBytes.routeRuntimeProbeReceipt,
     );
     evidenceArtifactsById[probeBase.id] = {
@@ -1832,6 +1838,9 @@ export function createRouteValidationReportV2(
     fail("ROUTE_VALIDATION_INPUT_ACCESSOR_FORBIDDEN");
   }
   const profile = canonicalProfileIdentity(input.validationProfile);
+  const requiredRoutes = canonicalRouteValidationRequiredRoutesV1(
+    input.requiredRoutes,
+  );
   const evaluationsWithRows = input.rows.map((row) => ({
     row,
     evaluation: evaluateRouteValidationRowV2({
@@ -1849,6 +1858,29 @@ export function createRouteValidationReportV2(
       rightRequirement.constraintId,
     ) || compareCanonicalString(leftRequirement.routeId, rightRequirement.routeId);
   });
+  const actualRoutes = evaluationsWithRows.map(({ row }) => {
+    const requirement = row.routeBuildInputReceipt.input.connectivityRequirement;
+    return {
+      constraintId: requirement.constraintId,
+      routeId: requirement.routeId,
+      traversingEntityId: requirement.traversingEntityId,
+      startAnchorEntityId: row.routeBuildInputReceipt.input.startAnchor.entityId,
+      destinationAnchorEntityId:
+        row.routeBuildInputReceipt.input.destinationAnchor.entityId,
+    } satisfies RouteValidationRequiredRouteV1;
+  });
+  if (
+    !bytesEqual(
+      canonicalJsonBytes(actualRoutes),
+      canonicalJsonBytes(requiredRoutes),
+    )
+  ) {
+    fail("ROUTE_VALIDATION_REQUIRED_ROUTE_SET_MISMATCH");
+  }
+  const requiredRouteSetHash = hashRouteValidationRequiredRouteSetV1(
+    input.subject.executionPlanHash,
+    requiredRoutes,
+  );
   const receipt = canonicalRouteValidationSetReceiptV1({
     kind: "route-validation-set-receipt",
     schemaVersion: 1,
@@ -1857,6 +1889,9 @@ export function createRouteValidationReportV2(
     executionPlanHash: input.subject.executionPlanHash,
     resourceLockHash: input.subject.resourceLockHash,
     layoutSolveReportHash: input.subject.layoutSolveReportHash,
+    requiredRouteCount: requiredRoutes.length,
+    requiredRouteSetHash,
+    requiredRoutes,
     rows: evaluationsWithRows.map(({ row, evaluation }) =>
       rowReceipt(row, evaluation)
     ),

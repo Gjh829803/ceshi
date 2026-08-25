@@ -916,8 +916,8 @@ describe("worldkit CLI", () => {
       "worldkit://subject-definition/animal.quadruped.forward-steer@1",
       "worldkit://subject-definition/animal.quadruped.forward-steer@2",
       "worldkit://subject-definition/glider.paraglider.unpowered@1",
-      "worldkit://subject-definition/humanoid.g-bot@1",
-      "worldkit://subject-definition/humanoid.rigged-golden@1",
+      "worldkit://subject-definition/humanoid.g-bot@2",
+      "worldkit://subject-definition/humanoid.rigged-golden@2",
       "worldkit://subject-definition/humanoid.third-person@1",
       "worldkit://subject-definition/quadruped.ground-proxy@1",
       "worldkit://subject-definition/surface-craft.ice-skimmer@1",
@@ -940,19 +940,19 @@ describe("worldkit CLI", () => {
     });
     expect(
       describeRegistryResource(
-        "worldkit://subject-definition/humanoid.g-bot@1",
+        "worldkit://subject-definition/humanoid.g-bot@2",
       ),
     ).toMatchObject({
       ok: true,
       kind: "worldkit-registry-description",
       schemaVersion: 1,
       resource: {
-        resourceRef: "worldkit://subject-definition/humanoid.g-bot@1",
+        resourceRef: "worldkit://subject-definition/humanoid.g-bot@2",
         schemaVersion: 3,
         contentHash: first.resources.find(
           (resource) =>
             resource.resourceRef ===
-            "worldkit://subject-definition/humanoid.g-bot@1",
+            "worldkit://subject-definition/humanoid.g-bot@2",
         )?.contentHash,
       },
     });
@@ -975,14 +975,14 @@ describe("worldkit CLI", () => {
 
   it("describes every Registry resource kind selected by the rigged Subject", () => {
     const resourceRefByKind = {
-      "subject-asset": "worldkit://subject-asset/humanoid.golden@1",
-      "rig-profile": "worldkit://rig-profile/biped.golden@1",
-      "animation-set": "worldkit://animation-set/humanoid.ground.golden@1",
+      "subject-asset": "worldkit://subject-asset/humanoid.golden@2",
+      "rig-profile": "worldkit://rig-profile/biped.golden@2",
+      "animation-set": "worldkit://animation-set/humanoid.ground.golden@2",
       "collider-profile": "worldkit://collider-profile/humanoid.medium-capsule@1",
       "physics-body-profile": "worldkit://physics-body-profile/character.medium@1",
       "locomotion-profile": "worldkit://locomotion-profile/ground.standard@1",
       capability: "worldkit://capability/locomotion.ground@1",
-      "subject-definition": "worldkit://subject-definition/humanoid.rigged-golden@1",
+      "subject-definition": "worldkit://subject-definition/humanoid.rigged-golden@2",
     } as const;
 
     for (const [kind, resourceRef] of Object.entries(resourceRefByKind)) {
@@ -1147,19 +1147,19 @@ describe("worldkit CLI", () => {
       subject: {
         entityId: "rigged-primary",
         subjectDefinitionRef:
-          "worldkit://subject-definition/humanoid.rigged-golden@1",
+          "worldkit://subject-definition/humanoid.rigged-golden@2",
         visualParts: [
           {
             id: "body.asset",
             kind: "asset",
-            subjectAssetRef: "worldkit://subject-asset/humanoid.golden@1",
+            subjectAssetRef: "worldkit://subject-asset/humanoid.golden@2",
           },
         ],
         visualBinding: {
           mode: "rigged",
-          rigProfileRef: "worldkit://rig-profile/biped.golden@1",
+          rigProfileRef: "worldkit://rig-profile/biped.golden@2",
           animationSetRef:
-            "worldkit://animation-set/humanoid.ground.golden@1",
+            "worldkit://animation-set/humanoid.ground.golden@2",
         },
         collider: {
           colliderProfileRef:
@@ -1209,11 +1209,11 @@ describe("worldkit CLI", () => {
       subject: {
         entityId: "g-bot-primary",
         subjectDefinitionRef:
-          "worldkit://subject-definition/humanoid.g-bot@1",
+          "worldkit://subject-definition/humanoid.g-bot@2",
         visualBinding: {
-          rigProfileRef: "worldkit://rig-profile/biped.mixamo-g-bot@1",
+          rigProfileRef: "worldkit://rig-profile/biped.mixamo-g-bot@2",
           animationSetRef:
-            "worldkit://animation-set/humanoid.ground.g-bot@1",
+            "worldkit://animation-set/humanoid.ground.g-bot@2",
         },
       },
     });
@@ -1229,10 +1229,10 @@ describe("worldkit CLI", () => {
 
     expect(artifact.executionPlan.subjectAssets).toEqual([
       {
-        subjectAssetRef: "worldkit://subject-asset/actor.humanoid.g-bot@1",
+        subjectAssetRef: "worldkit://subject-asset/actor.humanoid.g-bot@2",
         artifactContentHash:
-          "sha256:41833210e735788da0777fc37badcec03f90ccf17ab5a7d89103f0727abeeb1b",
-        byteLength: 5_302_160,
+          "sha256:4bcf3fabdba1e083ef54bf172fd962ca740e0f2fabdb9cddaae45d5ea208718f",
+        byteLength: 6_743_072,
         format: "glb",
         inventory: expect.any(Object),
         mediaType: "model/gltf-binary",

@@ -137,8 +137,6 @@ try {
       reasoning_effort: executionProfile.reasoningEffort,
       sandbox: "workspace-write",
       timeout_seconds: Number(args.timeoutSeconds || 1_800),
-      account_concurrency: Number(process.env.WORLDKIT_LWDP_ACCOUNT_CONCURRENCY || 20),
-      pod_concurrency: Number(process.env.WORLDKIT_LWDP_POD_CONCURRENCY || 32),
     },
     tasks: [{
       id: taskId,
@@ -151,35 +149,32 @@ try {
       })),
     }],
     dry_run: Boolean(args.dryRun),
-    options: {
-      distributed: true,
-      account_concurrency: Number(process.env.WORLDKIT_LWDP_ACCOUNT_CONCURRENCY || 20),
-      pod_concurrency: Number(process.env.WORLDKIT_LWDP_POD_CONCURRENCY || 32),
-      max_pods: Number(process.env.WORLDKIT_LWDP_MAX_PODS || 50),
-    },
   };
 
-  const defaultSubmitAttempts = executionProfile.name === "formal" ? 1 : 4;
+  const defaultSubmitAttempts = 1;
   const submitAttempts = Number(args.submitAttempts || defaultSubmitAttempts);
   if (!Number.isSafeInteger(submitAttempts) || submitAttempts < 1 || submitAttempts > 4) {
     throw new Error("--submit-attempts must be an integer in [1, 4].");
   }
-  if (executionProfile.name === "formal" && submitAttempts !== 1) {
-    throw new Error("Formal WorldKit stages submit each LWDP creation request exactly once.");
+  if (submitAttempts !== 1) {
+    throw new Error("WorldKit submits every LWDP Codex creation request exactly once, then recovers by request_id.");
   }
 
   if (smokeMode) {
     process.stdout.write(
-      `WORLDKIT_LWDP_CODEX_SMOKE ${taskId} profile=${executionProfile.name} model=${executionProfile.model} reasoning=${executionProfile.reasoningEffort} submitAttempts=${submitAttempts} assets=${taskAssets.length} outputs=${outputSpecs.length}\n`,
+      `WORLDKIT_LWDP_CODEX_SMOKE ${taskId} dispatch=single-task-fast-path tasks=1 profile=${executionProfile.name} model=${executionProfile.model} reasoning=${executionProfile.reasoningEffort} submitAttempts=${submitAttempts} assets=${taskAssets.length} outputs=${outputSpecs.length}\n`,
     );
     process.exit(0);
   }
 
   const config = await loadLwdpGenerationConfig();
-  const submitted = await submitCodexGenerationJob(payload, { config, maxAttempts: submitAttempts });
+  const submitted = await submitCodexGenerationJob(payload, { config });
   const jobId = submittedJobId(submitted);
+  if (submitted.recovered_by_request_id === true) {
+    process.stdout.write(`WORLDKIT_LWDP_RECOVERED_BY_REQUEST_ID ${taskId} ${jobId}\n`);
+  }
   process.stdout.write(
-    `WORLDKIT_LWDP_JOB ${args.stage || taskId} ${taskId} ${jobId} profile=${executionProfile.name} model=${executionProfile.model} reasoning=${executionProfile.reasoningEffort}\n`,
+    `WORLDKIT_LWDP_JOB ${args.stage || taskId} ${taskId} ${jobId} dispatch=single-task-fast-path profile=${executionProfile.name} model=${executionProfile.model} reasoning=${executionProfile.reasoningEffort}\n`,
   );
   if (args.dryRun) {
     process.stdout.write(`WORLDKIT_LWDP_DRY_RUN ${taskId} ${jobId}\n`);

@@ -72,6 +72,29 @@ const SURFACE = {
   resourceHash: HASH_B,
 } as const;
 
+function requiredRoutesForRows(rows: readonly RouteValidationRowInputV2[]) {
+  return rows.map((row) => {
+    const input = row.routeBuildInputReceipt.input;
+    return {
+      constraintId: input.connectivityRequirement.constraintId,
+      routeId: input.connectivityRequirement.routeId,
+      traversingEntityId: input.connectivityRequirement.traversingEntityId,
+      startAnchorEntityId: input.startAnchor.entityId,
+      destinationAnchorEntityId: input.destinationAnchor.entityId,
+    };
+  }).sort((left, right) =>
+    left.constraintId < right.constraintId
+      ? -1
+      : left.constraintId > right.constraintId
+      ? 1
+      : left.routeId < right.routeId
+      ? -1
+      : left.routeId > right.routeId
+      ? 1
+      : 0
+  );
+}
+
 function deepFreeze<T>(value: T): T {
   if (value === null || value === undefined || typeof value !== "object") {
     return value;
@@ -203,11 +226,14 @@ function buildInputReceipt(
   });
   const surfaceArtifactHash = hashRouteSurfaceArtifactV2(draft.traversalSurfaces);
   return createRouteBuildInputReceiptV2({
-    ...draft,
-    terrainArtifactHash,
-    colliderArtifactHash,
-    geometryArtifactHash,
-    surfaceArtifactHash,
+    input: {
+      ...draft,
+      terrainArtifactHash,
+      colliderArtifactHash,
+      geometryArtifactHash,
+      surfaceArtifactHash,
+    },
+    traversalLockReceipt: lockReceipt,
   });
 }
 
@@ -562,6 +588,7 @@ function publicationInput(
       subject: SUBJECT,
       dependencyReportRefs: ["report://layout@1"],
       validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+      requiredRoutes: requiredRoutesForRows(validationRows),
       rows: validationRows,
     }),
     rows,
@@ -961,11 +988,14 @@ function v2BuildInputReceipt(
   });
   const surfaceArtifactHash = hashRouteSurfaceArtifactV2(draft.traversalSurfaces);
   return createRouteBuildInputReceiptV2({
-    ...draft,
-    terrainArtifactHash,
-    colliderArtifactHash,
-    geometryArtifactHash,
-    surfaceArtifactHash,
+    input: {
+      ...draft,
+      terrainArtifactHash,
+      colliderArtifactHash,
+      geometryArtifactHash,
+      surfaceArtifactHash,
+    },
+    traversalLockReceipt: lockReceipt,
   });
 }
 
@@ -1246,6 +1276,7 @@ function v2PublicationInput(
       subject: SUBJECT,
       dependencyReportRefs: ["report://layout@1"],
       validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+      requiredRoutes: requiredRoutesForRows([row.validationRow]),
       rows: [row.validationRow],
     }),
     rows: [row],

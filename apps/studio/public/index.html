@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="使用 LWDP 云端 Codex 与 WorldKit SDK 并发创建可游玩的白膜世界。" />
+    <meta name="description" content="使用云端或本地 Codex 与 WorldKit SDK 创建可游玩的白膜世界。" />
     <title>WorldKit Creator Studio</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
@@ -19,8 +19,12 @@
           <a href="#test-sets">测试集</a>
           <a href="#history">任务历史</a>
         </nav>
+        <div class="codex-backend-switch" role="group" aria-label="Codex 执行端" aria-describedby="codex-backend-note">
+          <button type="button" data-codex-backend="cloud" aria-pressed="false">云端 Codex</button>
+          <button type="button" data-codex-backend="local" aria-pressed="false">本地 Codex</button>
+        </div>
         <div class="runtime-state" id="runtime-state">
-          <i></i><span>正在连接本地运行时</span>
+          <i></i><span>正在读取 Codex 执行端</span>
         </div>
       </div>
     </header>
@@ -63,10 +67,13 @@
           </div>
           <div class="create-submit">
             <button class="submit-button" id="submit-button" type="submit">
-              <span><small>RUN LWDP CLOUD CODEX</small>生成白膜世界</span>
+              <span><small id="submit-backend-eyebrow">SELECT CODEX BACKEND</small>生成白膜世界</span>
               <b>→</b>
             </button>
-            <p class="form-message" id="form-message" role="status"></p>
+            <div class="create-feedback">
+              <p class="form-message" id="form-message" role="status"></p>
+              <p class="codex-backend-note" id="codex-backend-note">正在读取执行端配置。切换只影响之后新建的任务。</p>
+            </div>
           </div>
         </form>
         <div class="implementation-notes">
@@ -127,7 +134,7 @@
       <section class="history-panel history-wide" id="history">
           <div class="history-heading">
             <div>
-              <p class="kicker">WORLD HISTORY / LWDP CLOUD</p>
+              <p class="kicker" id="history-kicker">WORLD HISTORY / CODEX BACKENDS</p>
               <h2>世界任务</h2>
             </div>
             <div class="history-stats" id="history-stats"></div>
@@ -190,13 +197,14 @@
           <span class="status-pill"></span>
         </button>
         <div class="card-body">
-          <div class="card-meta"><span class="scene-id"></span><time></time></div>
+          <div class="card-meta"><span class="scene-id"></span><span class="backend-badge" hidden></span><time></time></div>
           <h3></h3>
           <p class="prompt-excerpt"></p>
           <div class="progress-track"><i></i></div>
           <p class="stage-copy"></p>
           <div class="card-actions">
             <button class="details-button" type="button">查看详情</button>
+            <button class="stop-button" type="button" hidden>停止</button>
             <a class="play-button" target="_blank" rel="noreferrer">进入世界 ↗</a>
           </div>
         </div>

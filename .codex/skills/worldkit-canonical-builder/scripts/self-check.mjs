@@ -4247,13 +4247,13 @@ function solveLayoutV1(input, profile) {
 const GOLDEN_HUMANOID_SUBJECT_ASSET = {
   kind: "subject-asset",
   id: "humanoid.golden",
-  version: 1,
-  resourceRef: "worldkit://subject-asset/humanoid.golden@1",
+  version: 2,
+  resourceRef: "worldkit://subject-asset/humanoid.golden@2",
   format: "glb",
   artifact: {
     mediaType: "model/gltf-binary",
-    byteLength: 43656,
-    contentHash: "sha256:1095fd65c754d53e6db3757ab5e1c9e5e9dcea2581f85d40f37ea4890ee8c2c2"
+    byteLength: 48060,
+    contentHash: "sha256:6cf29a2c9c024bdc108a8a436255abbb5f370d658d78cca0afb30f4872cd25a8"
   },
   coordinateConvention: {
     forwardAxis: "-Z",
@@ -4306,8 +4306,8 @@ const GOLDEN_BIPED_BONE_IDS = [
 const GOLDEN_BIPED_RIG_PROFILE = {
   kind: "rig-profile",
   id: "biped.golden",
-  version: 1,
-  resourceRef: "worldkit://rig-profile/biped.golden@1",
+  version: 2,
+  resourceRef: "worldkit://rig-profile/biped.golden@2",
   bodyTopology: "biped",
   compatibleSubjectAssetRefs: [GOLDEN_HUMANOID_SUBJECT_ASSET.resourceRef],
   skeletonRootBoneName: "root",
@@ -4340,8 +4340,8 @@ const GOLDEN_BIPED_RIG_PROFILE = {
 const GOLDEN_GROUND_ANIMATION_SET = {
   kind: "animation-set",
   id: "humanoid.ground.golden",
-  version: 1,
-  resourceRef: "worldkit://animation-set/humanoid.ground.golden@1",
+  version: 2,
+  resourceRef: "worldkit://animation-set/humanoid.ground.golden@2",
   subjectAssetRef: GOLDEN_HUMANOID_SUBJECT_ASSET.resourceRef,
   rigProfileRef: GOLDEN_BIPED_RIG_PROFILE.resourceRef,
   defaultActionId: "idle",
@@ -4389,13 +4389,13 @@ const GOLDEN_GROUND_ANIMATION_SET = {
 const G_BOT_SUBJECT_ASSET = {
   kind: "subject-asset",
   id: "actor.humanoid.g-bot",
-  version: 1,
-  resourceRef: "worldkit://subject-asset/actor.humanoid.g-bot@1",
+  version: 2,
+  resourceRef: "worldkit://subject-asset/actor.humanoid.g-bot@2",
   format: "glb",
   artifact: {
     mediaType: "model/gltf-binary",
-    byteLength: 5302160,
-    contentHash: "sha256:41833210e735788da0777fc37badcec03f90ccf17ab5a7d89103f0727abeeb1b"
+    byteLength: 6743072,
+    contentHash: "sha256:4bcf3fabdba1e083ef54bf172fd962ca740e0f2fabdb9cddaae45d5ea208718f"
   },
   coordinateConvention: {
     forwardAxis: "-Z",
@@ -4460,8 +4460,8 @@ const G_BOT_SUBJECT_ASSET = {
 const G_BOT_MIXAMO_RIG_PROFILE = {
   kind: "rig-profile",
   id: "biped.mixamo-g-bot",
-  version: 1,
-  resourceRef: "worldkit://rig-profile/biped.mixamo-g-bot@1",
+  version: 2,
+  resourceRef: "worldkit://rig-profile/biped.mixamo-g-bot@2",
   bodyTopology: "biped",
   compatibleSubjectAssetRefs: [G_BOT_SUBJECT_ASSET.resourceRef],
   skeletonRootBoneName: "mixamorig:Hips",
@@ -4521,8 +4521,8 @@ const G_BOT_ACTION_BINDINGS = [
 const G_BOT_GROUND_ANIMATION_SET = {
   kind: "animation-set",
   id: "humanoid.ground.g-bot",
-  version: 1,
-  resourceRef: "worldkit://animation-set/humanoid.ground.g-bot@1",
+  version: 2,
+  resourceRef: "worldkit://animation-set/humanoid.ground.g-bot@2",
   subjectAssetRef: G_BOT_SUBJECT_ASSET.resourceRef,
   rigProfileRef: G_BOT_MIXAMO_RIG_PROFILE.resourceRef,
   defaultActionId: "idle",
@@ -4932,8 +4932,8 @@ const RIGGED_GOLDEN_HUMANOID_DEFINITION = {
   kind: "subject-definition",
   schemaVersion: 3,
   id: "humanoid.rigged-golden",
-  version: 1,
-  resourceRef: "worldkit://subject-definition/humanoid.rigged-golden@1",
+  version: 2,
+  resourceRef: "worldkit://subject-definition/humanoid.rigged-golden@2",
   authoringAvailability: "recommended",
   category: "human",
   bodyTopology: "biped",
@@ -4943,7 +4943,7 @@ const RIGGED_GOLDEN_HUMANOID_DEFINITION = {
     {
       id: "body.asset",
       kind: "asset",
-      subjectAssetRef: "worldkit://subject-asset/humanoid.golden@1",
+      subjectAssetRef: "worldkit://subject-asset/humanoid.golden@2",
       localTransform: {
         positionMetersXYZ: [0, 0, 0],
         rotationEulerRadiansXYZ: [0, 0, 0],
@@ -4955,8 +4955,8 @@ const RIGGED_GOLDEN_HUMANOID_DEFINITION = {
   ],
   visualBinding: {
     mode: "rigged",
-    rigProfileRef: "worldkit://rig-profile/biped.golden@1",
-    animationSetRef: "worldkit://animation-set/humanoid.ground.golden@1"
+    rigProfileRef: "worldkit://rig-profile/biped.golden@2",
+    animationSetRef: "worldkit://animation-set/humanoid.ground.golden@2"
   },
   sockets: [
     {
@@ -4991,7 +4991,7 @@ const RIGGED_GOLDEN_HUMANOID_DEFINITION = {
     harnessProfileRef: "worldkit://harness-profile/subject.standard@1"
   },
   relationshipCapabilityRefs: [],
-  actionOrPoseSetRef: "worldkit://animation-set/humanoid.ground.golden@1",
+  actionOrPoseSetRef: "worldkit://animation-set/humanoid.ground.golden@2",
   renderBindingProfileRef: "worldkit://render-binding/subject.standard@1",
   aiMetadata: {
     displayName: "Rigged Golden humanoid",
@@ -5003,8 +5003,8 @@ const G_BOT_HUMANOID_DEFINITION = {
   kind: "subject-definition",
   schemaVersion: 3,
   id: "humanoid.g-bot",
-  version: 1,
-  resourceRef: "worldkit://subject-definition/humanoid.g-bot@1",
+  version: 2,
+  resourceRef: "worldkit://subject-definition/humanoid.g-bot@2",
   authoringAvailability: "recommended",
   category: "human",
   bodyTopology: "biped",
@@ -5014,7 +5014,7 @@ const G_BOT_HUMANOID_DEFINITION = {
     {
       id: "body.asset",
       kind: "asset",
-      subjectAssetRef: "worldkit://subject-asset/actor.humanoid.g-bot@1",
+      subjectAssetRef: "worldkit://subject-asset/actor.humanoid.g-bot@2",
       localTransform: {
         positionMetersXYZ: [0, 0, 0],
         rotationEulerRadiansXYZ: [0, Math.PI, 0],
@@ -5026,8 +5026,8 @@ const G_BOT_HUMANOID_DEFINITION = {
   ],
   visualBinding: {
     mode: "rigged",
-    rigProfileRef: "worldkit://rig-profile/biped.mixamo-g-bot@1",
-    animationSetRef: "worldkit://animation-set/humanoid.ground.g-bot@1"
+    rigProfileRef: "worldkit://rig-profile/biped.mixamo-g-bot@2",
+    animationSetRef: "worldkit://animation-set/humanoid.ground.g-bot@2"
   },
   sockets: [
     {
@@ -5108,7 +5108,7 @@ const G_BOT_HUMANOID_DEFINITION = {
     harnessProfileRef: "worldkit://harness-profile/subject.standard@1"
   },
   relationshipCapabilityRefs: [],
-  actionOrPoseSetRef: "worldkit://animation-set/humanoid.ground.g-bot@1",
+  actionOrPoseSetRef: "worldkit://animation-set/humanoid.ground.g-bot@2",
   renderBindingProfileRef: "worldkit://render-binding/subject.standard@1",
   aiMetadata: {
     displayName: "G Bot humanoid",
@@ -7093,7 +7093,7 @@ Object.freeze(
   )
 );
 const schemaVersion = 1;
-const defaults$1 = [{ "subjectDefinitionId": "animal.quadruped.forward-steer", "subjectDefinitionRef": "worldkit://subject-definition/animal.quadruped.forward-steer@2", "subjectDefinitionContentHash": "sha256:33201a745e15c386c45147dbdb30bf8aeae9af9bf4f52ad56502279572bf7759" }, { "subjectDefinitionId": "glider.paraglider.unpowered", "subjectDefinitionRef": "worldkit://subject-definition/glider.paraglider.unpowered@1", "subjectDefinitionContentHash": "sha256:8d0d7e0dd662703e613f7c143c350d7ab7cd8424e92e37aa8bb914006a5cf06f" }, { "subjectDefinitionId": "humanoid.g-bot", "subjectDefinitionRef": "worldkit://subject-definition/humanoid.g-bot@1", "subjectDefinitionContentHash": "sha256:b6b9cc919ee4ddf5f1d0c63d093a7c26e04271e4b49cc5c6a3869e9e82f2879c" }, { "subjectDefinitionId": "surface-craft.ice-skimmer", "subjectDefinitionRef": "worldkit://subject-definition/surface-craft.ice-skimmer@1", "subjectDefinitionContentHash": "sha256:4dfaed753c6417e89ad386473f0c833cc3f75ed6cfdb154aa90e6436fdd2b92b" }, { "subjectDefinitionId": "vehicle.four-wheel.arcade", "subjectDefinitionRef": "worldkit://subject-definition/vehicle.four-wheel.arcade@1", "subjectDefinitionContentHash": "sha256:d9860837867a5125a7b5cdb5570ee9babdd8a93c40dac8b31b349863a2ed1f81" }, { "subjectDefinitionId": "watercraft.kayak.surface", "subjectDefinitionRef": "worldkit://subject-definition/watercraft.kayak.surface@1", "subjectDefinitionContentHash": "sha256:2a02e0520efa69b4d6a4c74481866329418f3dc5c14bb967ba502ee51f6e0d8a" }];
+const defaults$1 = [{ "subjectDefinitionId": "animal.quadruped.forward-steer", "subjectDefinitionRef": "worldkit://subject-definition/animal.quadruped.forward-steer@2", "subjectDefinitionContentHash": "sha256:33201a745e15c386c45147dbdb30bf8aeae9af9bf4f52ad56502279572bf7759" }, { "subjectDefinitionId": "glider.paraglider.unpowered", "subjectDefinitionRef": "worldkit://subject-definition/glider.paraglider.unpowered@1", "subjectDefinitionContentHash": "sha256:8d0d7e0dd662703e613f7c143c350d7ab7cd8424e92e37aa8bb914006a5cf06f" }, { "subjectDefinitionId": "humanoid.g-bot", "subjectDefinitionRef": "worldkit://subject-definition/humanoid.g-bot@2", "subjectDefinitionContentHash": "sha256:7e56addb34e91835a229c309fd5c132ab94e895ebc529f827b47d46729d4f9c4" }, { "subjectDefinitionId": "surface-craft.ice-skimmer", "subjectDefinitionRef": "worldkit://subject-definition/surface-craft.ice-skimmer@1", "subjectDefinitionContentHash": "sha256:4dfaed753c6417e89ad386473f0c833cc3f75ed6cfdb154aa90e6436fdd2b92b" }, { "subjectDefinitionId": "vehicle.four-wheel.arcade", "subjectDefinitionRef": "worldkit://subject-definition/vehicle.four-wheel.arcade@1", "subjectDefinitionContentHash": "sha256:d9860837867a5125a7b5cdb5570ee9babdd8a93c40dac8b31b349863a2ed1f81" }, { "subjectDefinitionId": "watercraft.kayak.surface", "subjectDefinitionRef": "worldkit://subject-definition/watercraft.kayak.surface@1", "subjectDefinitionContentHash": "sha256:2a02e0520efa69b4d6a4c74481866329418f3dc5c14bb967ba502ee51f6e0d8a" }];
 const defaultCatalog = {
   schemaVersion,
   defaults: defaults$1

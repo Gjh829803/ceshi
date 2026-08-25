@@ -443,7 +443,7 @@ describe("runtime contracts V3", () => {
 
   it("defines minimal engine-neutral execution resource descriptors", () => {
     const subjectAsset = {
-      subjectAssetRef: "worldkit://subject-asset/humanoid.golden@1",
+      subjectAssetRef: "worldkit://subject-asset/humanoid.golden@2",
       artifactContentHash: `sha256:${"1".repeat(64)}`,
       byteLength: 43_656,
       mediaType: "model/gltf-binary",
@@ -458,7 +458,7 @@ describe("runtime contracts V3", () => {
       },
     } satisfies ExecutionSubjectAssetV1;
     const rigProfile = {
-      rigProfileRef: "worldkit://rig-profile/biped.golden@1",
+      rigProfileRef: "worldkit://rig-profile/biped.golden@2",
       bodyTopology: "biped",
       skeletonRootBoneName: "root",
       requiredBoneIds: ["hips", "hand.right"],
@@ -483,7 +483,7 @@ describe("runtime contracts V3", () => {
       },
     } satisfies ExecutionRigProfileV1;
     const animationSet = {
-      animationSetRef: "worldkit://animation-set/humanoid.ground.golden@1",
+      animationSetRef: "worldkit://animation-set/humanoid.ground.golden@2",
       subjectAssetRef: subjectAsset.subjectAssetRef,
       rigProfileRef: rigProfile.rigProfileRef,
       defaultActionId: "idle",
@@ -845,6 +845,29 @@ describe("runtime contracts V5 Route Evidence", () => {
           staticColliderIdentities: [],
         },
         routeOverlayHash: ROUTE_PUBLICATION_HASH,
+      }],
+    })).toThrow("WORLDKIT_BROWSER_ROUTE_EVIDENCE_PUBLICATION_INVALID");
+  });
+
+  it("rejects complete connectivity when the canonical Path is unavailable", () => {
+    const valid = emptyRouteEvidencePublicationFixtureV2();
+    expect(() => canonicalWorldkitBrowserRouteEvidencePublicationV2({
+      ...valid,
+      routes: [{
+        selector: { constraintId: "player-to-goal", routeId: "main-route" },
+        summary: {
+          kind: "route-evidence-summary",
+          schemaVersion: 1,
+          constraintId: "player-to-goal",
+          routeId: "main-route",
+          traversingEntityId: "player",
+          startAnchorEntityId: "spawn",
+          destinationAnchorEntityId: "goal",
+          connectivityStatus: "complete",
+          routePathStatus: "unavailable",
+          routeRuntimeProbeStatus: "unavailable",
+          routeOverlayStatus: "unavailable",
+        },
       }],
     })).toThrow("WORLDKIT_BROWSER_ROUTE_EVIDENCE_PUBLICATION_INVALID");
   });

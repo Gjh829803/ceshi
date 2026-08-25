@@ -49,7 +49,7 @@ const INPUT_PATH = path.join(
 );
 const ASSET_PATH = path.join(
   REPOSITORY_ROOT,
-  "apps/playground/public/worldkit-assets/golden-humanoid.glb",
+  "apps/playground/public/subject-assets/humanoid/golden/v2/golden-humanoid.glb",
 );
 const TARGET_ARTIFACT_DIRECTORY = path.join(
   REPOSITORY_ROOT,
@@ -58,8 +58,8 @@ const TARGET_ARTIFACT_DIRECTORY = path.join(
 const PRIMARY_ENTITY_ID = "rigged-primary";
 const SECONDARY_ENTITY_ID = "rigged-secondary";
 const CONTROLLER_ID = "controller-primary";
-const SUBJECT_ASSET_REF = "worldkit://subject-asset/humanoid.golden@1";
-const ASSET_ROUTE_PATH = "/worldkit-assets/golden-humanoid.glb";
+const SUBJECT_ASSET_REF = "worldkit://subject-asset/humanoid.golden@2";
+const ASSET_ROUTE_PATH = "/subject-assets/humanoid/golden/v2/golden-humanoid.glb";
 const MINIMUM_SUBJECT_POSE_DIFFERENCE_RATIO = 0.15;
 const ARTIFACT_FILES = [
   "explain.json",

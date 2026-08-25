@@ -821,10 +821,10 @@ function deriveMetricsV2(
   let slidingDurationTicks = 0;
   let unexpectedSupportLossCount = 0;
   let previousUnsupported = initial.characterSupport.supportState === "unsupported";
-  let wrongSupportSurfaceCount = ticks.length === 0 &&
-    isSurfaceMismatchV2(initial, initialExpectedTraversalSurfaceIds)
-      ? 1
-      : 0;
+  let wrongSupportSurfaceCount = isSurfaceMismatchV2(
+    initial,
+    initialExpectedTraversalSurfaceIds,
+  ) ? 1 : 0;
 
   for (const row of ticks) {
     maximumStalledDurationTicks = Math.max(
@@ -928,19 +928,30 @@ function polylineArcLengths(
 
 export function advanceRouteRuntimeProbeSupportStationV2(
   path: RoutePathReceiptV2,
-  subjectPositionMetersXYZ: Vec3,
+  sampledFootPositionMetersXYZ: Vec3,
   previousArcLengthMeters: number,
   walkSpeedMetersPerSecond: number,
   positionQuantizationMeters: number,
   fixedTimeStepSeconds: number,
 ): Readonly<{
   readonly arcLengthMeters: number;
+  readonly totalArcLengthMeters: number;
+  readonly remainingArcLengthMeters: number;
   readonly expectedTraversalSurfaceIds: readonly string[];
   readonly retainedSegmentIndexes: readonly number[];
 }> {
   const points = path.orderedPathPositionsMetersXYZ;
   const identities = path.orderedTraversalSurfaceIdentities;
   const polyline = polylineArcLengths(points);
+  if (points.length === 1) {
+    return {
+      arcLengthMeters: 0,
+      totalArcLengthMeters: 0,
+      remainingArcLengthMeters: 0,
+      expectedTraversalSurfaceIds: [identities[0]!.traversalSurfaceId],
+      retainedSegmentIndexes: [],
+    };
+  }
   const maxForwardMeters =
     walkSpeedMetersPerSecond * fixedTimeStepSeconds + positionQuantizationMeters;
   const windowStart = Math.max(0, previousArcLengthMeters - positionQuantizationMeters);
@@ -975,7 +986,7 @@ export function advanceRouteRuntimeProbeSupportStationV2(
       start[2] + (end[2] - start[2]) * endParameter,
     ];
     const projection = distancePointToSegment3d(
-      subjectPositionMetersXYZ,
+      sampledFootPositionMetersXYZ,
       clippedStartPoint,
       clippedEndPoint,
     );
@@ -1021,7 +1032,7 @@ export function advanceRouteRuntimeProbeSupportStationV2(
   const primaryStart = points[primaryIndex]!;
   const primaryEnd = points[primaryIndex + 1]!;
   const primaryProjection = distancePointToSegment3d(
-    subjectPositionMetersXYZ,
+    sampledFootPositionMetersXYZ,
     primaryStart,
     primaryEnd,
   );
@@ -1035,6 +1046,8 @@ export function advanceRouteRuntimeProbeSupportStationV2(
   );
   return {
     arcLengthMeters: nextArc,
+    totalArcLengthMeters: polyline.total,
+    remainingArcLengthMeters: Math.max(0, polyline.total - nextArc),
     expectedTraversalSurfaceIds: [...expectedIds].sort((left, right) =>
       left < right ? -1 : left > right ? 1 : 0,
     ),
@@ -1527,6 +1540,14 @@ export function canonicalRouteRuntimeProbeReceiptV2(
   const firstMismatchIndex = ticks.findIndex((row) =>
     isSurfaceMismatchV2(row.runtimeEvidence, row.expectedTraversalSurfaceIds)
   );
+  const initialSurfaceResolution =
+    initialRuntimeEvidence.characterSupport.surfaceResolution;
+  const hasInitialUnresolvedSurface =
+    initialRuntimeEvidence.characterSupport.supportState !== "unsupported" &&
+    initialSurfaceResolution.mode !== "resolved";
+  if (ticks.length > 0 && hasInitialUnresolvedSurface) {
+    fail(prefix, "ticks", "must be empty after initial support-surface mismatch");
+  }
   if (firstMismatchIndex >= 0 && firstMismatchIndex !== ticks.length - 1) {
     fail(prefix, "ticks", "must stop at the first support-surface mismatch");
   }
@@ -1549,7 +1570,9 @@ export function canonicalRouteRuntimeProbeReceiptV2(
     : deriveMetricsV2(
         initialRuntimeEvidence,
         ticks,
-        ticks[0]!.expectedTraversalSurfaceIds,
+        initialSurfaceResolution.mode === "resolved"
+          ? [initialSurfaceResolution.traversalSurfaceId]
+          : [],
       );
   requireEqual(
     metrics,
@@ -1564,6 +1587,7 @@ export function canonicalRouteRuntimeProbeReceiptV2(
     const finalTick = ticks.at(-1);
     if (
       initialRuntimeEvidence.characterSupport.supportState === "unsupported" ||
+      hasInitialUnresolvedSurface ||
       firstMismatchIndex >= 0 ||
       finalTick?.runtimeEvidence.characterSupport.supportState === "unsupported"
     ) {
@@ -1698,29 +1722,30 @@ export function assertRouteRuntimeProbeReceiptContextV2(
   let stationArc = 0;
   const initialStation = advanceRouteRuntimeProbeSupportStationV2(
     path,
-    receipt.initialRuntimeEvidence.subjectPositionMetersXYZ,
+    receipt.initialRuntimeEvidence.characterSupport.sampledFootPositionMetersXYZ,
     0,
     receipt.request.walkSpeedMetersPerSecond,
     receipt.request.positionQuantizationMeters,
     receipt.initialRuntimeEvidence.fixedTimeStepSeconds,
   );
   stationArc = initialStation.arcLengthMeters;
-  if (
-    receipt.ticks.length === 0 &&
-    isSurfaceMismatchV2(
-      receipt.initialRuntimeEvidence,
-      initialStation.expectedTraversalSurfaceIds,
-    ) &&
-    (receipt.status !== "failed" ||
+  if (isSurfaceMismatchV2(
+    receipt.initialRuntimeEvidence,
+    initialStation.expectedTraversalSurfaceIds,
+  )) {
+    if (
+      receipt.ticks.length !== 0 ||
+      receipt.status !== "failed" ||
       receipt.failure.kind !== "support-surface-mismatch" ||
-      receipt.failure.failureProbeTick !== 0)
-  ) {
-    fail(prefix, "failure", "must report initial support-surface mismatch");
+      receipt.failure.failureProbeTick !== 0
+    ) {
+      fail(prefix, "failure", "must report initial support-surface mismatch");
+    }
   }
   for (const [index, row] of receipt.ticks.entries()) {
     const station = advanceRouteRuntimeProbeSupportStationV2(
       path,
-      row.runtimeEvidence.subjectPositionMetersXYZ,
+      row.runtimeEvidence.characterSupport.sampledFootPositionMetersXYZ,
       stationArc,
       receipt.request.walkSpeedMetersPerSecond,
       receipt.request.positionQuantizationMeters,

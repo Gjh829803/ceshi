@@ -108,7 +108,7 @@ describe("subject public-default registry", () => {
   it("rejects unsorted or duplicate subject ids", () => {
     const vehicle = validVehicleDefault();
     const humanoid = builtInSubjectResourceRegistry.resolveSubjectDefinition(
-      "worldkit://subject-definition/humanoid.g-bot@1",
+      "worldkit://subject-definition/humanoid.g-bot@2",
     );
     if (humanoid === undefined) throw new Error("Fixture definition is missing.");
     const humanoidEntry = {

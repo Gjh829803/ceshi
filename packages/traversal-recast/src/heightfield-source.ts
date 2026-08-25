@@ -18,6 +18,7 @@ import {
 import {
   assertRouteBuildInputV2,
   assertTraversalGraphBuildBudgetV1,
+  assertTraversalSurfaceIdentityV1,
   createRouteBuildInputReceiptV2,
   hashRouteColliderArtifactV2,
   hashRouteGeometryArtifactV2,
@@ -30,6 +31,7 @@ import {
   type RouteBuildInputReceiptV2,
   type RouteBuildInputV2,
   type RouteTerrainSourceV2,
+  type ResolvedTraversalLockReceiptV1,
   type StaticColliderSourceV1,
   type TraversalCapabilityEnvelopeV1,
   type TraversalSurfaceIdentityV1,
@@ -79,6 +81,7 @@ export class RouteBuildInputFromPlanInvalidErrorV2 extends Error {
 export interface CreateRouteBuildInputFromPlanInputV2 {
   readonly executionPlan: ExecutionPlanV5;
   readonly capabilityEnvelope: TraversalCapabilityEnvelopeV1;
+  readonly traversalLockReceipt: ResolvedTraversalLockReceiptV1;
   readonly constraintId: string;
 }
 
@@ -835,7 +838,12 @@ function requirePlanAndEnvelope(input: CreateRouteBuildInputFromPlanInputV2): vo
     failStructural("input-invalid", "factory input must be an object.");
   }
   const unknownField = Object.keys(input).find((field) =>
-    !["executionPlan", "capabilityEnvelope", "constraintId"].includes(field),
+    ![
+      "executionPlan",
+      "capabilityEnvelope",
+      "traversalLockReceipt",
+      "constraintId",
+    ].includes(field),
   );
   if (!isNil(unknownField)) {
     failStructural("input-invalid", `unknown factory field '${unknownField}'.`);
@@ -989,18 +997,27 @@ export function createRouteBuildInputFromPlanV2(
   if (!Array.isArray(plan.traversal.surfaces)) {
     failStructural("contract-invalid", "Traversal Surface rows must be an array.");
   }
-  const traversalSurfaces: TraversalSurfaceIdentityV1[] = plan.traversal.surfaces.map((candidate, index) => {
+  const declaredTraversalSurfaces: TraversalSurfaceIdentityV1[] = plan.traversal.surfaces.map((candidate) => {
     if (isNil(candidate) || typeof candidate !== "object") {
       failStructural("contract-invalid", "Traversal Surface rows must be objects.");
     }
-    return {
-      traversalSurfaceId: candidate.traversalSurfaceId,
-      surfaceEntityId: candidate.surfaceEntityId,
-      colliderSubshapeId: candidate.colliderSubshapeId,
-      resourceRef: candidate.resourceRef,
-      resolvedVersion: candidate.resolvedVersion,
-      resourceHash: candidate.resourceHash,
-    };
+    try {
+      return assertTraversalSurfaceIdentityV1({
+        traversalSurfaceId: candidate.traversalSurfaceId,
+        surfaceEntityId: candidate.surfaceEntityId,
+        colliderSubshapeId: candidate.colliderSubshapeId,
+        resourceRef: candidate.resourceRef,
+        resolvedVersion: candidate.resolvedVersion,
+        resourceHash: candidate.resourceHash,
+      });
+    } catch (cause) {
+      failStructural(
+        "contract-invalid",
+        cause instanceof Error
+          ? cause.message
+          : "Traversal Surface identity is malformed.",
+      );
+    }
   }).sort((left, right) =>
     left.traversalSurfaceId < right.traversalSurfaceId
       ? -1
@@ -1008,10 +1025,18 @@ export function createRouteBuildInputFromPlanV2(
         ? 1
         : 0,
   );
-  if (traversalSurfaces.length === 0) {
+  if (declaredTraversalSurfaces.length === 0) {
     failStructural("surface-missing", "Traversal Surface is missing.");
   }
-  const heightfieldSurfaces = traversalSurfaces.filter(
+  for (let index = 1; index < declaredTraversalSurfaces.length; index += 1) {
+    if (
+      declaredTraversalSurfaces[index - 1]!.traversalSurfaceId ===
+      declaredTraversalSurfaces[index]!.traversalSurfaceId
+    ) {
+      failStructural("surface-ambiguous", "Traversal Surface identities must be unique.");
+    }
+  }
+  const heightfieldSurfaces = declaredTraversalSurfaces.filter(
     (surface) => surface.surfaceEntityId === plan.terrain.entityId,
   );
   if (heightfieldSurfaces.length === 0) {
@@ -1118,6 +1143,32 @@ export function createRouteBuildInputFromPlanV2(
         ? 1
         : 0,
   );
+  const declaredColliderKeys = new Set(
+    plan.staticColliders.map(
+      (collider) => `${collider.entityId}\0${collider.colliderSubshapeId}`,
+    ),
+  );
+  for (const surface of declaredTraversalSurfaces) {
+    if (
+      surface.surfaceEntityId !== plan.terrain.entityId &&
+      !declaredColliderKeys.has(`${surface.surfaceEntityId}\0${surface.colliderSubshapeId}`)
+    ) {
+      failStructural(
+        "contract-invalid",
+        `Traversal Surface '${surface.traversalSurfaceId}' does not join a declared static collider.`,
+      );
+    }
+  }
+  const scopedColliderKeys = new Set(
+    staticColliders.map(
+      (collider) => `${collider.entityId}\0${collider.colliderSubshapeId}`,
+    ),
+  );
+  const traversalSurfaces = declaredTraversalSurfaces.filter(
+    (surface) =>
+      surface.surfaceEntityId === plan.terrain.entityId ||
+      scopedColliderKeys.has(`${surface.surfaceEntityId}\0${surface.colliderSubshapeId}`),
+  );
   const terrainArtifactHash = hashRouteTerrainArtifactV2(terrainSource);
   const colliderArtifactHash = hashRouteColliderArtifactV2(staticColliders);
   const geometryArtifactHash = hashRouteGeometryArtifactV2({
@@ -1168,7 +1219,10 @@ export function createRouteBuildInputFromPlanV2(
   };
 
   try {
-    return createRouteBuildInputReceiptV2(buildInput);
+    return createRouteBuildInputReceiptV2({
+      input: buildInput,
+      traversalLockReceipt: input.traversalLockReceipt,
+    });
   } catch (cause) {
     failStructural(
       "contract-invalid",

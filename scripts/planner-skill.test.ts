@@ -26,10 +26,12 @@ describe("Unified WorldKit Planner skill", () => {
   });
 
   it("routes Planner creation and in-job self-repair through the dedicated skill", async () => {
-    const [launcher, skill, cloudRunner] = await Promise.all([
+    const [launcher, skill, router, cloudRunner, localRunner] = await Promise.all([
       readFile(path.resolve("scripts/run-spatial-world-agent.sh"), "utf8"),
       readFile(path.resolve(".codex/skills/worldkit-spatial-planner/SKILL.md"), "utf8"),
+      readFile(path.resolve("scripts/run-codex-task.mjs"), "utf8"),
       readFile(path.resolve("scripts/run-lwdp-codex-task.mjs"), "utf8"),
+      readFile(path.resolve("scripts/run-local-codex-task.mjs"), "utf8"),
     ]);
     const plannerPrompt = launcher.split("planner_prompt=")[1]?.split("builder_prompt=")[0] ?? "";
     expect(plannerPrompt).toContain(".codex/skills/worldkit-spatial-planner/SKILL.md");
@@ -41,6 +43,9 @@ describe("Unified WorldKit Planner skill", () => {
     expect(plannerPrompt).toContain("built-in image generation tool");
     expect(plannerPrompt).toContain("1-5 visual targets");
     expect(plannerPrompt).toContain("standard or custom movement mode");
+    expect(plannerPrompt).toContain("four separate provenance sections required by current main");
+    expect(plannerPrompt).toContain("Planner does not select Subject Definitions");
+    expect(plannerPrompt).toContain("do not use a fixed play-time or perimeter target");
     expect(skill).toContain("Create exactly three files");
     expect(skill).toContain("built-in image generation tool");
     expect(skill).toContain("The image contains only three information layers");
@@ -57,7 +62,7 @@ describe("Unified WorldKit Planner skill", () => {
     expect(skill).toContain("three-quarter rear view");
     expect(skill).toContain("same neutral clear daytime inspection lighting");
     expect(skill).toContain("Never copy the reference image's time of day");
-    expect(plannerPrompt).toContain("bright neutral inspection lighting");
+    expect(plannerPrompt).toContain("same bright neutral clear daytime inspection lighting");
     expect(launcher).toContain("scripts/write-visual-identity-palette.ts");
     expect(launcher).toContain("worldkit-spatial-planner/scripts/self-check.mjs");
     expect(launcher).toContain("planner-self-check.json");
@@ -70,6 +75,11 @@ describe("Unified WorldKit Planner skill", () => {
     expect(launcher).toMatch(/--output "apps\/playground\/public\/scene-plans\/\$scene_id\/entry-whitebox-target\.png/);
     expect(launcher).not.toContain("planner_repair_prompt");
     expect(launcher).not.toContain("WORLDKIT_PLANNER_REPAIR");
+    expect(launcher).toContain("scripts/run-codex-task.mjs");
+    expect(router).toContain('new Set(["cloud", "local"])');
     expect(cloudRunner).toContain("Host-provided built-in tools explicitly required by the caller instruction");
+    expect(localRunner).toContain("Local isolated workspace protocol");
+    expect(localRunner).toContain('"--sandbox", "workspace-write"');
+    expect(localRunner).toContain('"--ignore-user-config"');
   });
 });

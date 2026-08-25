@@ -237,6 +237,7 @@ function quantizeRoundHalfAwayFromZero(value: number, quantum: number): number {
 export const ROUTE_CONNECTIVITY_FAILURE_CODES_V2 = [
   "ROUTE_START_SURFACE_NOT_FOUND",
   "ROUTE_DESTINATION_SURFACE_NOT_FOUND",
+  "ROUTE_CORRIDOR_LAYER_AMBIGUOUS",
   "ROUTE_REQUIRED_PATH_UNREACHABLE",
   "ROUTE_STEP_HEIGHT_EXCEEDED",
   "ROUTE_SLOPE_EXCEEDED",
@@ -284,6 +285,13 @@ const REASON_FIELDS_V2: Readonly<
   "no-queryable-ground-surface": ["kind", "code"],
   "start-surface-not-found": ["kind", "code", "anchorEntityId", "positionMetersXYZ"],
   "destination-surface-not-found": [
+    "kind",
+    "code",
+    "anchorEntityId",
+    "positionMetersXYZ",
+  ],
+  "start-surface-ambiguous": ["kind", "code", "anchorEntityId", "positionMetersXYZ"],
+  "destination-surface-ambiguous": [
     "kind",
     "code",
     "anchorEntityId",
@@ -408,6 +416,18 @@ export type RouteConnectivityFailureReasonV2 =
       positionMetersXYZ: Vec3;
     }>
   | Readonly<{
+      kind: "start-surface-ambiguous";
+      code: "ROUTE_CORRIDOR_LAYER_AMBIGUOUS";
+      anchorEntityId: string;
+      positionMetersXYZ: Vec3;
+    }>
+  | Readonly<{
+      kind: "destination-surface-ambiguous";
+      code: "ROUTE_CORRIDOR_LAYER_AMBIGUOUS";
+      anchorEntityId: string;
+      positionMetersXYZ: Vec3;
+    }>
+  | Readonly<{
       kind: "required-path-unreachable";
       code: "ROUTE_REQUIRED_PATH_UNREACHABLE";
       relevantBlockingColliderEntityIds: readonly string[];
@@ -514,7 +534,13 @@ type RouteConnectivityCompleteUnreachableReasonV2 =
 
 type RouteConnectivityCompleteIncompleteReasonV2 = Extract<
   RouteConnectivityFailureReasonV2,
-  { kind: "search-budget-exceeded" | "straight-path-capacity-exceeded" }
+  {
+    kind:
+      | "start-surface-ambiguous"
+      | "destination-surface-ambiguous"
+      | "search-budget-exceeded"
+      | "straight-path-capacity-exceeded";
+  }
 >;
 
 export type RouteConnectivityFailureV2 =
@@ -684,6 +710,16 @@ function canonicalRelatedIdentities(
       "must contain at least two identities",
     );
   }
+  if (
+    (reasonKind === "start-surface-ambiguous" ||
+      reasonKind === "destination-surface-ambiguous") &&
+    identities.length < 2
+  ) {
+    failFailure(
+      "relatedTraversalSurfaceIdentities",
+      "must contain at least two identities for an ambiguous endpoint",
+    );
+  }
   if (THRESHOLD_KINDS_V2.has(reasonKind) && isEmpty(identities)) {
     failFailure(
       "relatedTraversalSurfaceIdentities",
@@ -710,6 +746,8 @@ function canonicalReasonV2(value: unknown): RouteConnectivityFailureReasonV2 {
     "no-queryable-ground-surface": "ROUTE_REQUIRED_PATH_UNREACHABLE",
     "start-surface-not-found": "ROUTE_START_SURFACE_NOT_FOUND",
     "destination-surface-not-found": "ROUTE_DESTINATION_SURFACE_NOT_FOUND",
+    "start-surface-ambiguous": "ROUTE_CORRIDOR_LAYER_AMBIGUOUS",
+    "destination-surface-ambiguous": "ROUTE_CORRIDOR_LAYER_AMBIGUOUS",
     "required-path-unreachable": "ROUTE_REQUIRED_PATH_UNREACHABLE",
     "node-budget-exceeded": "ROUTE_GRAPH_BUDGET_EXCEEDED",
     "edge-budget-exceeded": "ROUTE_GRAPH_BUDGET_EXCEEDED",
@@ -745,7 +783,12 @@ function canonicalReasonV2(value: unknown): RouteConnectivityFailureReasonV2 {
   ) {
     requireCapacity(record);
   }
-  if (kind === "start-surface-not-found" || kind === "destination-surface-not-found") {
+  if (
+    kind === "start-surface-not-found" ||
+    kind === "destination-surface-not-found" ||
+    kind === "start-surface-ambiguous" ||
+    kind === "destination-surface-ambiguous"
+  ) {
     requireVec3(record.positionMetersXYZ, "reason/positionMetersXYZ", failFailure);
   }
   if (kind === "required-path-unreachable") {
@@ -892,14 +935,14 @@ export function canonicalRouteConnectivityFailureV2(
   const unavailableUnreachable = new Set<ReasonKindV2>([
     "empty-heightfield-source",
     "no-queryable-ground-surface",
-    "surface-profile-missing",
-    "surface-correlation-missing",
-    "surface-correlation-ambiguous",
     ...THRESHOLD_KINDS_V2,
   ]);
   const unavailableIncomplete = new Set<ReasonKindV2>([
     "node-budget-exceeded",
     "edge-budget-exceeded",
+    "surface-profile-missing",
+    "surface-correlation-missing",
+    "surface-correlation-ambiguous",
     "traversal-surface-count-budget-exceeded",
     "traversal-surface-triangle-pair-test-budget-exceeded",
   ]);
@@ -910,6 +953,8 @@ export function canonicalRouteConnectivityFailureV2(
     ...THRESHOLD_KINDS_V2,
   ]);
   const completeIncomplete = new Set<ReasonKindV2>([
+    "start-surface-ambiguous",
+    "destination-surface-ambiguous",
     "search-budget-exceeded",
     "straight-path-capacity-exceeded",
   ]);
@@ -1250,7 +1295,10 @@ function assertContextualFailureV2(
       `connectivityFailure/destinationAnchorPositionMetersXYZ/${index}`,
     ),
   );
-  if (failure.reason.kind === "start-surface-not-found") {
+  if (
+    failure.reason.kind === "start-surface-not-found" ||
+    failure.reason.kind === "start-surface-ambiguous"
+  ) {
     requireEqualV2(
       failure.reason.anchorEntityId,
       input.startAnchor.entityId,
@@ -1263,7 +1311,10 @@ function assertContextualFailureV2(
         `connectivityFailure/reason/positionMetersXYZ/${index}`,
       ),
     );
-  } else if (failure.reason.kind === "destination-surface-not-found") {
+  } else if (
+    failure.reason.kind === "destination-surface-not-found" ||
+    failure.reason.kind === "destination-surface-ambiguous"
+  ) {
     requireEqualV2(
       failure.reason.anchorEntityId,
       input.destinationAnchor.entityId,

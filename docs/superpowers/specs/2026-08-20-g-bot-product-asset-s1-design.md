@@ -75,11 +75,11 @@ The product handoff manifests remain source/provenance inputs. They are not trea
 The SDK adds five explicit Registry entries:
 
 ```text
-worldkit://subject-asset/actor.humanoid.g-bot@1
-worldkit://rig-profile/biped.mixamo-g-bot@1
-worldkit://animation-set/humanoid.ground.g-bot@1
+worldkit://subject-asset/actor.humanoid.g-bot@2
+worldkit://rig-profile/biped.mixamo-g-bot@2
+worldkit://animation-set/humanoid.ground.g-bot@2
 worldkit://collider-profile/humanoid.g-bot-capsule@1
-worldkit://subject-definition/humanoid.g-bot@1
+worldkit://subject-definition/humanoid.g-bot@2
 ```
 
 The Rig Profile maps canonical anatomical IDs to Mixamo source Bone names. The Animation Set exposes only the four supported ground actions. The Collider Profile uses the accepted 0.35m radius, 1.8m height, and `[0, 0.9, 0]` center. The Subject Definition composes the Asset, Rig, Animation Set, Collider, existing ground locomotion Capability, physics-body Profile, and locomotion Profile.
@@ -90,7 +90,7 @@ The World Authoring example contains only:
 {
   "id": "g-bot-player",
   "kind": "subject",
-  "subjectDefinitionRef": "worldkit://subject-definition/humanoid.g-bot@1",
+  "subjectDefinitionRef": "worldkit://subject-definition/humanoid.g-bot@2",
   "spawnAnchorEntityId": "spawn-g-bot-player"
 }
 ```

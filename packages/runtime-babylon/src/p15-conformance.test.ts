@@ -672,7 +672,7 @@ describe("P1.5 conformance: closed Ground/Air Feel slice", () => {
     if (subject === undefined || subject.kind !== "subject") {
       throw new Error("Expected the valid fixture to contain a Subject node.");
     }
-    subject.subjectDefinitionRef = "worldkit://subject-definition/humanoid.g-bot@1";
+    subject.subjectDefinitionRef = "worldkit://subject-definition/humanoid.g-bot@2";
     const normalized = normalizeAuthoringSpecV4(spec);
     if (!normalized.ok || normalized.value === undefined) {
       throw new Error(

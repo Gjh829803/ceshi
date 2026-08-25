@@ -150,7 +150,7 @@ git commit -m "feat: register G Bot product subject"
 - Modify: `package.json`
 
 **Interfaces:**
-- Produces: a Canonical Authoring V3 example that references only `worldkit://subject-definition/humanoid.g-bot@1`.
+- Produces: a Canonical Authoring V3 example that references only `worldkit://subject-definition/humanoid.g-bot@2`.
 - Produces: build, capture, snapshot, and explain artifacts through existing CLI operations.
 
 - [x] **Step 1: Write RED CLI integration coverage**
