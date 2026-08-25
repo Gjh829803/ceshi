@@ -5,6 +5,7 @@ import {
   readFile,
   readdir,
   rm,
+  symlink,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -92,6 +93,46 @@ async function recursiveByteSnapshot(directory: string): Promise<ReadonlyMap<str
   return snapshot;
 }
 
+async function recursiveEntryInventory(directory: string): Promise<string[]> {
+  const result: string[] = [];
+  const visit = async (current: string, prefix: string): Promise<void> => {
+    for (const entry of await readdir(current, { withFileTypes: true })) {
+      const relativePath = prefix.length === 0 ? entry.name : `${prefix}/${entry.name}`;
+      result.push(`${entry.isDirectory() ? "directory" : entry.isFile() ? "file" : "other"}:${relativePath}`);
+      if (entry.isDirectory()) await visit(path.join(current, entry.name), relativePath);
+    }
+  };
+  await visit(directory, "");
+  return result.sort();
+}
+
+function transactionDefinitions() {
+  return ["alpha-subject", "bravo-subject"].map((id) => ({
+    ...GOLDEN_MODULAR_SUBJECT_SOURCE_PACKAGE,
+    id,
+    displayName: id,
+  }));
+}
+
+async function prepareTransactionTargets(
+  outputRoot: string,
+  definitions: ReturnType<typeof transactionDefinitions>,
+): Promise<void> {
+  for (const [index, definition] of definitions.entries()) {
+    const target = path.join(
+      outputRoot,
+      definition.creatorId,
+      definition.id,
+      `v${definition.version}`,
+    );
+    await mkdir(path.join(target, "old/nested"), { recursive: true });
+    await Promise.all([
+      writeFile(path.join(target, "old/value.bin"), Uint8Array.from([index, 1, 2, 3])),
+      writeFile(path.join(target, "old/nested/value.txt"), `old-${definition.id}\n`),
+    ]);
+  }
+}
+
 function goldenOptions(outputRoot: string, mode: "write" | "check") {
   return {
     mode,
@@ -145,6 +186,49 @@ describe("modular Subject source package catalog", () => {
 });
 
 describe("writeModularSubjectSourcePackages", () => {
+  it.each(["creator", "package", "version"] as const)(
+    "rejects a symlinked %s parent without changing the external directory",
+    async (symlinkLevel) => {
+      const { root, outputRoot } = await temporaryOutput();
+      const externalDirectory = path.join(root, `external-${symlinkLevel}`);
+      await mkdir(path.join(externalDirectory, "nested"), { recursive: true });
+      await Promise.all([
+        writeFile(path.join(externalDirectory, "sentinel.bin"), Uint8Array.from([9, 8, 7])),
+        writeFile(path.join(externalDirectory, "nested/value.txt"), "external-owned\n"),
+      ]);
+      await mkdir(outputRoot, { recursive: true });
+      const symlinkPath = symlinkLevel === "creator"
+        ? path.join(outputRoot, "seedleap")
+        : symlinkLevel === "package"
+          ? path.join(outputRoot, "seedleap/golden-humanoid")
+          : path.join(outputRoot, "seedleap/golden-humanoid/v1");
+      if (symlinkLevel !== "creator") {
+        await mkdir(path.join(outputRoot, "seedleap"), { recursive: true });
+      }
+      if (symlinkLevel === "version") {
+        await mkdir(path.join(outputRoot, "seedleap/golden-humanoid"), { recursive: true });
+      }
+      await symlink(externalDirectory, symlinkPath, "dir");
+      const before = await recursiveByteSnapshot(externalDirectory);
+
+      const error = await writeModularSubjectSourcePackages(
+        goldenOptions(outputRoot, "write"),
+      ).then(() => undefined, (caught: unknown) => caught);
+
+      expect(await recursiveByteSnapshot(externalDirectory)).toEqual(before);
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toBe(
+        `MODULAR_SUBJECT_SOURCE_OUTPUT_SYMLINK_FORBIDDEN: ${
+          symlinkLevel === "creator"
+            ? "seedleap"
+            : symlinkLevel === "package"
+              ? "seedleap/golden-humanoid"
+              : "seedleap/golden-humanoid/v1"
+        }`,
+      );
+    },
+  );
+
   it("publishes G Bot actions whose dotted IDs share directory-name prefixes", async () => {
     const { outputRoot } = await temporaryOutput();
     const target = path.join(outputRoot, "seedleap/g-bot/v1");
@@ -239,6 +323,42 @@ describe("writeModularSubjectSourcePackages", () => {
       .resolves.toBeUndefined();
   });
 
+  it("reports every extra entry across the complete managed output root", async () => {
+    const { outputRoot } = await temporaryOutput();
+    await writeModularSubjectSourcePackages(goldenOptions(outputRoot, "write"));
+    const extras = [
+      "migration-inventory.json",
+      "seedleap/golden-humanoid/v2/package.manifest.json",
+      "seedleap/golden-humanoid/v1.backup-stale/package.manifest.json",
+      "unexpected-creator/rogue/v1/value.bin",
+    ] as const;
+    for (const [index, relativePath] of extras.entries()) {
+      const absolutePath = path.join(outputRoot, relativePath);
+      await mkdir(path.dirname(absolutePath), { recursive: true });
+      await writeFile(absolutePath, Uint8Array.from([index]));
+    }
+
+    const error = await writeModularSubjectSourcePackages(
+      goldenOptions(outputRoot, "check"),
+    ).then(() => undefined, (caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(Error);
+    const expectedMismatches = [
+      "migration-inventory.json (unexpected)",
+      "seedleap/golden-humanoid/v1.backup-stale (unexpected directory)",
+      "seedleap/golden-humanoid/v1.backup-stale/package.manifest.json (unexpected)",
+      "seedleap/golden-humanoid/v2 (unexpected directory)",
+      "seedleap/golden-humanoid/v2/package.manifest.json (unexpected)",
+      "unexpected-creator (unexpected directory)",
+      "unexpected-creator/rogue (unexpected directory)",
+      "unexpected-creator/rogue/v1 (unexpected directory)",
+      "unexpected-creator/rogue/v1/value.bin (unexpected)",
+    ].sort();
+    expect((error as Error).message).toBe(
+      `MODULAR_SUBJECT_SOURCE_OUTPUT_MISMATCH: ${expectedMismatches.join(", ")}`,
+    );
+  });
+
   it("reports a tampered Clip byte without rewriting the committed output", async () => {
     const { outputRoot, target } = await temporaryOutput();
     await writeModularSubjectSourcePackages(goldenOptions(outputRoot, "write"));
@@ -249,7 +369,7 @@ describe("writeModularSubjectSourcePackages", () => {
 
     await expect(writeModularSubjectSourcePackages(goldenOptions(outputRoot, "check")))
       .rejects.toThrowError(
-        "MODULAR_SUBJECT_SOURCE_OUTPUT_MISMATCH: golden-humanoid animations/jump/clip.glb",
+        "MODULAR_SUBJECT_SOURCE_OUTPUT_MISMATCH: seedleap/golden-humanoid/v1/animations/jump/clip.glb",
       );
     expect(await readFile(clipPath)).toEqual(tampered);
   });
@@ -276,6 +396,64 @@ describe("writeModularSubjectSourcePackages", () => {
     })).rejects.toThrowError("injected staging failure");
 
     expect(await recursiveByteSnapshot(target)).toEqual(before);
+  });
+
+  it("restores both package targets when the second publish fails after the first publishes", async () => {
+    const { outputRoot } = await temporaryOutput();
+    const definitions = transactionDefinitions();
+    await prepareTransactionTargets(outputRoot, definitions);
+    const beforeBytes = await recursiveByteSnapshot(outputRoot);
+    const beforeInventory = await recursiveEntryInventory(outputRoot);
+
+    await expect(writeModularSubjectSourcePackages({
+      mode: "write",
+      repositoryRoot: REPOSITORY_ROOT,
+      outputRoot,
+      packageDefinitions: definitions,
+      injectFailure(point) {
+        if (
+          point.phase === "before-publish-rename" &&
+          point.packageId === "bravo-subject"
+        ) {
+          throw new Error("injected second publish failure");
+        }
+      },
+    })).rejects.toThrowError("injected second publish failure");
+
+    expect(await recursiveByteSnapshot(outputRoot)).toEqual(beforeBytes);
+    expect(await recursiveEntryInventory(outputRoot)).toEqual(beforeInventory);
+    expect((await recursiveEntryInventory(outputRoot)).filter((entry) =>
+      entry.includes(".staging-") || entry.includes(".backup-")
+    )).toEqual([]);
+  });
+
+  it("restores earlier backups when backing up the later package fails", async () => {
+    const { outputRoot } = await temporaryOutput();
+    const definitions = transactionDefinitions();
+    await prepareTransactionTargets(outputRoot, definitions);
+    const beforeBytes = await recursiveByteSnapshot(outputRoot);
+    const beforeInventory = await recursiveEntryInventory(outputRoot);
+
+    await expect(writeModularSubjectSourcePackages({
+      mode: "write",
+      repositoryRoot: REPOSITORY_ROOT,
+      outputRoot,
+      packageDefinitions: definitions,
+      injectFailure(point) {
+        if (
+          point.phase === "before-backup-rename" &&
+          point.packageId === "bravo-subject"
+        ) {
+          throw new Error("injected later backup failure");
+        }
+      },
+    })).rejects.toThrowError("injected later backup failure");
+
+    expect(await recursiveByteSnapshot(outputRoot)).toEqual(beforeBytes);
+    expect(await recursiveEntryInventory(outputRoot)).toEqual(beforeInventory);
+    expect((await recursiveEntryInventory(outputRoot)).filter((entry) =>
+      entry.includes(".staging-") || entry.includes(".backup-")
+    )).toEqual([]);
   });
 });
 

@@ -5,6 +5,7 @@ import {
   mkdtemp,
   readFile,
   readdir,
+  realpath,
   rename,
   rm,
   writeFile,
@@ -58,6 +59,7 @@ interface ResolvedPackageOperationOptionsV1 {
 }
 
 interface StagedPackageV1 {
+  readonly ownedOutputRoot: string;
   readonly definition: ModularSubjectPackageDefinitionV1;
   readonly targetDirectory: string;
   readonly stagingDirectory: string;
@@ -65,6 +67,11 @@ interface StagedPackageV1 {
   hadTarget: boolean;
   backupCreated: boolean;
   published: boolean;
+}
+
+interface RecursiveOutputEntryV1 {
+  readonly relativePath: string;
+  readonly kind: "directory" | "file" | "other";
 }
 
 function compareCodeUnits(left: string, right: string): number {
@@ -102,6 +109,157 @@ function resolveOwnedRelativePath(root: string, relativePath: string): string {
     throw new Error(`MODULAR_SUBJECT_SOURCE_OUTPUT_PATH_INVALID: ${relativePath}`);
   }
   return resolved;
+}
+
+function ownedRelativeLabel(ownedRoot: string, targetPath: string): string {
+  const relativePath = path.relative(ownedRoot, targetPath).split(path.sep).join("/");
+  return relativePath.length === 0 ? "." : relativePath;
+}
+
+async function lstatOrMissing(targetPath: string): Promise<Awaited<ReturnType<typeof lstat>> | null> {
+  try {
+    return await lstat(targetPath);
+  } catch (error) {
+    if (errorCode(error) === "ENOENT") return null;
+    throw error;
+  }
+}
+
+async function assertCanonicalOwnedDirectory(
+  ownedRoot: string,
+  directory: string,
+  allowMissing = false,
+): Promise<boolean> {
+  const resolvedRoot = path.resolve(ownedRoot);
+  const resolvedDirectory = path.resolve(directory);
+  if (
+    resolvedDirectory !== resolvedRoot &&
+    !resolvedDirectory.startsWith(`${resolvedRoot}${path.sep}`)
+  ) {
+    throw new Error(
+      `MODULAR_SUBJECT_SOURCE_OUTPUT_OWNERSHIP_INVALID: ${resolvedDirectory}`,
+    );
+  }
+  const label = ownedRelativeLabel(resolvedRoot, resolvedDirectory);
+  const stat = await lstatOrMissing(resolvedDirectory);
+  if (stat === null) {
+    if (allowMissing) return false;
+    throw new Error(`MODULAR_SUBJECT_SOURCE_OUTPUT_DIRECTORY_MISSING: ${label}`);
+  }
+  if (stat.isSymbolicLink()) {
+    throw new Error(`MODULAR_SUBJECT_SOURCE_OUTPUT_SYMLINK_FORBIDDEN: ${label}`);
+  }
+  if (!stat.isDirectory()) {
+    throw new Error(`MODULAR_SUBJECT_SOURCE_OUTPUT_TARGET_NOT_DIRECTORY: ${label}`);
+  }
+  if (await realpath(resolvedDirectory) !== resolvedDirectory) {
+    throw new Error(`MODULAR_SUBJECT_SOURCE_OUTPUT_CANONICAL_PATH_MISMATCH: ${label}`);
+  }
+  return true;
+}
+
+async function establishOwnedOutputRoot(outputRoot: string): Promise<string> {
+  const resolvedOutputRoot = path.resolve(outputRoot);
+  const existing = await lstatOrMissing(resolvedOutputRoot);
+  if (existing?.isSymbolicLink() === true) {
+    throw new Error("MODULAR_SUBJECT_SOURCE_OUTPUT_SYMLINK_FORBIDDEN: .");
+  }
+  if (existing === null) await mkdir(resolvedOutputRoot, { recursive: true });
+  const established = await lstatOrMissing(resolvedOutputRoot);
+  if (established?.isSymbolicLink() === true) {
+    throw new Error("MODULAR_SUBJECT_SOURCE_OUTPUT_SYMLINK_FORBIDDEN: .");
+  }
+  if (established === null || !established.isDirectory()) {
+    throw new Error("MODULAR_SUBJECT_SOURCE_OUTPUT_TARGET_NOT_DIRECTORY: .");
+  }
+  const canonicalRoot = await realpath(resolvedOutputRoot);
+  await assertCanonicalOwnedDirectory(canonicalRoot, canonicalRoot);
+  return canonicalRoot;
+}
+
+async function resolveExistingOwnedOutputRoot(outputRoot: string): Promise<string | null> {
+  const resolvedOutputRoot = path.resolve(outputRoot);
+  const existing = await lstatOrMissing(resolvedOutputRoot);
+  if (existing === null) return null;
+  if (existing.isSymbolicLink()) {
+    throw new Error("MODULAR_SUBJECT_SOURCE_OUTPUT_SYMLINK_FORBIDDEN: .");
+  }
+  if (!existing.isDirectory()) {
+    throw new Error("MODULAR_SUBJECT_SOURCE_OUTPUT_TARGET_NOT_DIRECTORY: .");
+  }
+  const canonicalRoot = await realpath(resolvedOutputRoot);
+  await assertCanonicalOwnedDirectory(canonicalRoot, canonicalRoot);
+  return canonicalRoot;
+}
+
+async function ensureOwnedPackageParent(
+  ownedRoot: string,
+  definition: ModularSubjectPackageDefinitionV1,
+): Promise<string> {
+  await assertCanonicalOwnedDirectory(ownedRoot, ownedRoot);
+  let current = ownedRoot;
+  for (const segment of [definition.creatorId, definition.id]) {
+    const candidate = path.join(current, segment);
+    if (!await assertCanonicalOwnedDirectory(ownedRoot, candidate, true)) {
+      await assertCanonicalOwnedDirectory(ownedRoot, current);
+      try {
+        await mkdir(candidate, { recursive: false });
+      } catch (error) {
+        if (errorCode(error) !== "EEXIST") throw error;
+      }
+    }
+    await assertCanonicalOwnedDirectory(ownedRoot, candidate);
+    current = candidate;
+  }
+  return current;
+}
+
+async function assertCanonicalPackageParent(entry: StagedPackageV1): Promise<void> {
+  await assertCanonicalOwnedDirectory(entry.ownedOutputRoot, entry.ownedOutputRoot);
+  await assertCanonicalOwnedDirectory(
+    entry.ownedOutputRoot,
+    path.join(entry.ownedOutputRoot, entry.definition.creatorId),
+  );
+  await assertCanonicalOwnedDirectory(
+    entry.ownedOutputRoot,
+    path.dirname(entry.targetDirectory),
+  );
+}
+
+async function assertOwnedSiblingMissing(
+  entry: StagedPackageV1,
+  siblingPath: string,
+): Promise<void> {
+  await assertCanonicalPackageParent(entry);
+  const existing = await lstatOrMissing(siblingPath);
+  if (existing !== null) {
+    throw new Error(
+      `MODULAR_SUBJECT_SOURCE_OUTPUT_SIBLING_COLLISION: ${
+        ownedRelativeLabel(entry.ownedOutputRoot, siblingPath)
+      }`,
+    );
+  }
+}
+
+async function assertOwnedEntryDirectory(
+  entry: StagedPackageV1,
+  directory: string,
+  allowMissing = false,
+): Promise<boolean> {
+  await assertCanonicalPackageParent(entry);
+  return assertCanonicalOwnedDirectory(
+    entry.ownedOutputRoot,
+    directory,
+    allowMissing,
+  );
+}
+
+async function removeOwnedEntryDirectoryIfPresent(
+  entry: StagedPackageV1,
+  directory: string,
+): Promise<void> {
+  if (!await assertOwnedEntryDirectory(entry, directory, true)) return;
+  await rm(directory, { recursive: true, force: true });
 }
 
 function sortedDefinitions(
@@ -196,6 +354,28 @@ async function recursiveInventory(directory: string): Promise<string[]> {
   return result.sort(compareCodeUnits);
 }
 
+async function recursiveOutputEntries(directory: string): Promise<RecursiveOutputEntryV1[]> {
+  const result: RecursiveOutputEntryV1[] = [];
+  const visit = async (current: string, prefix: string): Promise<void> => {
+    const entries = (await readdir(current, { withFileTypes: true }))
+      .sort((left, right) => compareCodeUnits(left.name, right.name));
+    for (const entry of entries) {
+      const relativePath = prefix.length === 0 ? entry.name : `${prefix}/${entry.name}`;
+      const kind = entry.isDirectory()
+        ? "directory"
+        : entry.isFile()
+          ? "file"
+          : "other";
+      result.push({ relativePath, kind });
+      if (kind === "directory") {
+        await visit(path.join(current, entry.name), relativePath);
+      }
+    }
+  };
+  await visit(directory, "");
+  return result.sort((left, right) => compareCodeUnits(left.relativePath, right.relativePath));
+}
+
 async function readExactStagedFiles(
   stagingDirectory: string,
   expectedFiles: readonly RecoveredSubjectSourcePackageFileV1[],
@@ -262,7 +442,7 @@ function stagedPackageValue(
 
 async function stagePackage(
   repositoryRoot: string,
-  outputRoot: string,
+  ownedOutputRoot: string,
   definition: ModularSubjectPackageDefinitionV1,
   injectFailure: WriteModularSubjectSourcePackagesOptionsV1["injectFailure"],
 ): Promise<StagedPackageV1> {
@@ -272,18 +452,25 @@ async function stagePackage(
     sourceGlbBytes: await readFile(sourcePath),
   });
   const files = collectRecoveredSubjectSourcePackageFiles(recovered);
-  const targetDirectory = path.join(
-    outputRoot,
-    definition.creatorId,
-    definition.id,
-    `v${definition.version}`,
-  );
-  const parentDirectory = path.dirname(targetDirectory);
-  await mkdir(parentDirectory, { recursive: true });
+  const parentDirectory = await ensureOwnedPackageParent(ownedOutputRoot, definition);
+  const targetDirectory = path.join(parentDirectory, `v${definition.version}`);
+  await assertCanonicalOwnedDirectory(ownedOutputRoot, targetDirectory, true);
+  await assertCanonicalOwnedDirectory(ownedOutputRoot, parentDirectory);
   const stagingDirectory = await mkdtemp(
     path.join(parentDirectory, `.${path.basename(targetDirectory)}.staging-`),
   );
+  const stagedEntry: StagedPackageV1 = {
+    ownedOutputRoot,
+    definition,
+    targetDirectory,
+    stagingDirectory,
+    backupDirectory: `${targetDirectory}.backup-${randomUUID()}`,
+    hadTarget: false,
+    backupCreated: false,
+    published: false,
+  };
   try {
+    await assertOwnedEntryDirectory(stagedEntry, stagingDirectory);
     for (const file of files) {
       const stagedPath = resolveOwnedRelativePath(stagingDirectory, file.relativePath);
       await mkdir(path.dirname(stagedPath), { recursive: true });
@@ -297,18 +484,17 @@ async function stagePackage(
     const stagedBytes = await readExactStagedFiles(stagingDirectory, files);
     await validateRecoveredSubjectSourcePackage(stagedPackageValue(recovered, stagedBytes));
   } catch (error) {
-    await rm(stagingDirectory, { recursive: true, force: true });
+    try {
+      await removeOwnedEntryDirectoryIfPresent(stagedEntry, stagingDirectory);
+    } catch (cleanupError) {
+      throw new AggregateError(
+        [error, cleanupError],
+        "MODULAR_SUBJECT_SOURCE_STAGING_CLEANUP_FAILED",
+      );
+    }
     throw error;
   }
-  return {
-    definition,
-    targetDirectory,
-    stagingDirectory,
-    backupDirectory: `${targetDirectory}.backup-${randomUUID()}`,
-    hadTarget: false,
-    backupCreated: false,
-    published: false,
-  };
+  return stagedEntry;
 }
 
 async function rollbackPackages(entries: readonly StagedPackageV1[]): Promise<void> {
@@ -316,9 +502,11 @@ async function rollbackPackages(entries: readonly StagedPackageV1[]): Promise<vo
   for (const entry of [...entries].reverse()) {
     try {
       if (entry.published) {
-        await rm(entry.targetDirectory, { recursive: true, force: true });
+        await removeOwnedEntryDirectoryIfPresent(entry, entry.targetDirectory);
       }
       if (entry.backupCreated) {
+        await assertOwnedSiblingMissing(entry, entry.targetDirectory);
+        await assertOwnedEntryDirectory(entry, entry.backupDirectory);
         await rename(entry.backupDirectory, entry.targetDirectory);
       }
     } catch (error) {
@@ -327,7 +515,7 @@ async function rollbackPackages(entries: readonly StagedPackageV1[]): Promise<vo
   }
   for (const entry of entries) {
     try {
-      await rm(entry.stagingDirectory, { recursive: true, force: true });
+      await removeOwnedEntryDirectoryIfPresent(entry, entry.stagingDirectory);
     } catch (error) {
       rollbackErrors.push(error);
     }
@@ -343,41 +531,45 @@ async function rollbackPackages(entries: readonly StagedPackageV1[]): Promise<vo
 async function writePackages(
   options: ResolvedPackageOperationOptionsV1,
 ): Promise<void> {
+  const definitions = sortedDefinitions(options.packageDefinitions);
+  const ownedOutputRoot = await establishOwnedOutputRoot(options.outputRoot);
   const staged: StagedPackageV1[] = [];
   try {
-    for (const definition of sortedDefinitions(options.packageDefinitions)) {
+    for (const definition of definitions) {
       staged.push(await stagePackage(
         options.repositoryRoot,
-        options.outputRoot,
+        ownedOutputRoot,
         definition,
         options.injectFailure,
       ));
     }
   } catch (error) {
-    await Promise.all(staged.map((entry) =>
-      rm(entry.stagingDirectory, { recursive: true, force: true })
-    ));
+    try {
+      await Promise.all(staged.map((entry) =>
+        removeOwnedEntryDirectoryIfPresent(entry, entry.stagingDirectory)
+      ));
+    } catch (cleanupError) {
+      throw new AggregateError(
+        [error, cleanupError],
+        "MODULAR_SUBJECT_SOURCE_STAGING_CLEANUP_FAILED",
+      );
+    }
     throw error;
   }
 
   try {
     for (const entry of staged) {
-      try {
-        const target = await lstat(entry.targetDirectory);
-        if (!target.isDirectory()) {
-          throw new Error(
-            `MODULAR_SUBJECT_SOURCE_OUTPUT_TARGET_NOT_DIRECTORY: ${entry.definition.id}`,
-          );
-        }
-        entry.hadTarget = true;
-      } catch (error) {
-        if (errorCode(error) !== "ENOENT") throw error;
-      }
-      if (!entry.hadTarget) continue;
       await options.injectFailure?.({
         phase: "before-backup-rename",
         packageId: entry.definition.id,
       });
+      entry.hadTarget = await assertOwnedEntryDirectory(
+        entry,
+        entry.targetDirectory,
+        true,
+      );
+      await assertOwnedSiblingMissing(entry, entry.backupDirectory);
+      if (!entry.hadTarget) continue;
       await rename(entry.targetDirectory, entry.backupDirectory);
       entry.backupCreated = true;
     }
@@ -386,6 +578,11 @@ async function writePackages(
         phase: "before-publish-rename",
         packageId: entry.definition.id,
       });
+      await assertOwnedSiblingMissing(entry, entry.targetDirectory);
+      if (entry.backupCreated) {
+        await assertOwnedEntryDirectory(entry, entry.backupDirectory);
+      }
+      await assertOwnedEntryDirectory(entry, entry.stagingDirectory);
       await rename(entry.stagingDirectory, entry.targetDirectory);
       entry.published = true;
     }
@@ -404,7 +601,7 @@ async function writePackages(
   await Promise.all(staged.map(async (entry) => {
     if (!entry.backupCreated) return;
     try {
-      await rm(entry.backupDirectory, { recursive: true, force: true });
+      await removeOwnedEntryDirectoryIfPresent(entry, entry.backupDirectory);
     } catch {
       // Publication is committed. A stale backup is never authoritative and must
       // not replace the complete new target during post-commit garbage collection.
@@ -412,47 +609,52 @@ async function writePackages(
   }));
 }
 
-async function directoryExists(directory: string): Promise<boolean> {
-  try {
-    return (await lstat(directory)).isDirectory();
-  } catch (error) {
-    if (errorCode(error) === "ENOENT") return false;
-    throw error;
-  }
-}
-
-async function comparePackageDirectories(
-  packageId: string,
-  expectedDirectory: string,
-  actualDirectory: string,
+async function compareManagedOutputRoots(
+  expectedRoot: string,
+  actualRoot: string | null,
 ): Promise<string[]> {
   const mismatches: string[] = [];
-  const expectedInventory = await recursiveInventory(expectedDirectory);
-  if (!await directoryExists(actualDirectory)) {
-    return expectedInventory.map((relativePath) => `${packageId} ${relativePath} (missing)`);
-  }
-  const actualInventory = await recursiveInventory(actualDirectory);
-  const expectedPaths = new Set(expectedInventory);
-  const actualPaths = new Set(actualInventory);
-  for (const relativePath of expectedInventory) {
-    if (!actualPaths.has(relativePath)) {
-      mismatches.push(`${packageId} ${relativePath} (missing)`);
+  const expectedEntries = await recursiveOutputEntries(expectedRoot);
+  const actualEntries = actualRoot === null ? [] : await recursiveOutputEntries(actualRoot);
+  const expectedByPath = new Map(expectedEntries.map((entry) => [entry.relativePath, entry]));
+  const actualByPath = new Map(actualEntries.map((entry) => [entry.relativePath, entry]));
+  for (const expected of expectedEntries) {
+    const actual = actualByPath.get(expected.relativePath);
+    if (actual === undefined) {
+      mismatches.push(
+        `${expected.relativePath} (missing${
+          expected.kind === "directory" ? " directory" : ""
+        })`,
+      );
       continue;
     }
-    const [expectedBytes, actualBytes] = await Promise.all([
-      readFile(resolveOwnedRelativePath(expectedDirectory, relativePath)),
-      readFile(resolveOwnedRelativePath(actualDirectory, relativePath)),
-    ]);
-    if (!equalBytes(expectedBytes, actualBytes)) {
-      mismatches.push(`${packageId} ${relativePath}`);
+    if (actual.kind !== expected.kind) {
+      mismatches.push(
+        `${expected.relativePath} (expected ${expected.kind}, received ${actual.kind})`,
+      );
+      continue;
+    }
+    if (expected.kind === "file" && actualRoot !== null) {
+      const [expectedBytes, actualBytes] = await Promise.all([
+        readFile(resolveOwnedRelativePath(expectedRoot, expected.relativePath)),
+        readFile(resolveOwnedRelativePath(actualRoot, actual.relativePath)),
+      ]);
+      if (!equalBytes(expectedBytes, actualBytes)) {
+        mismatches.push(expected.relativePath);
+      }
     }
   }
-  for (const relativePath of actualInventory) {
-    if (!expectedPaths.has(relativePath)) {
-      mismatches.push(`${packageId} ${relativePath} (unexpected)`);
+  for (const actual of actualEntries) {
+    if (!expectedByPath.has(actual.relativePath)) {
+      mismatches.push(
+        `${actual.relativePath} (unexpected${
+          actual.kind === "directory" ? " directory" :
+            actual.kind === "other" ? " other entry" : ""
+        })`,
+      );
     }
   }
-  return mismatches;
+  return mismatches.sort(compareCodeUnits);
 }
 
 async function checkPackages(
@@ -468,22 +670,15 @@ async function checkPackages(
       outputRoot: expectedOutputRoot,
       injectFailure: undefined,
     });
-    const mismatches: string[] = [];
-    for (const definition of sortedDefinitions(options.packageDefinitions)) {
-      const relativeTarget = path.join(
-        definition.creatorId,
-        definition.id,
-        `v${definition.version}`,
-      );
-      mismatches.push(...await comparePackageDirectories(
-        definition.id,
-        path.join(expectedOutputRoot, relativeTarget),
-        path.join(options.outputRoot, relativeTarget),
-      ));
+    const expectedRoot = await resolveExistingOwnedOutputRoot(expectedOutputRoot);
+    if (expectedRoot === null) {
+      throw new Error("MODULAR_SUBJECT_SOURCE_CHECK_GENERATION_MISSING");
     }
+    const actualRoot = await resolveExistingOwnedOutputRoot(options.outputRoot);
+    const mismatches = await compareManagedOutputRoots(expectedRoot, actualRoot);
     if (mismatches.length > 0) {
       throw new Error(
-        `MODULAR_SUBJECT_SOURCE_OUTPUT_MISMATCH: ${mismatches.sort(compareCodeUnits).join(", ")}`,
+        `MODULAR_SUBJECT_SOURCE_OUTPUT_MISMATCH: ${mismatches.join(", ")}`,
       );
     }
   } finally {
