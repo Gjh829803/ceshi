@@ -48,18 +48,33 @@ It does not modify M5 Traversal, Recast, Runtime, Validation, Browser, Studio, o
 
 `pnpm test` remains the only complete root Vitest wrapper. It runs:
 
-1. `test:contract`: all root-discovered test files except the explicit resource-heavy manifest, with bounded parallel workers;
-2. `test:resource-heavy`: exactly the explicit manifest, serially with one worker.
+1. `test:census`: use Vitest's public Node API to discover the root, contract, and resource-heavy config sets and compare all three with one complete explicit manifest;
+2. `test:contract`: exactly the manifest rows classified `contract`, with bounded parallel workers;
+3. `test:resource-heavy`: exactly the manifest rows classified `resource-heavy`, serially with one worker and file parallelism disabled.
 
-The initial resource-heavy manifest contains:
+The initial resource-heavy classification contains:
 
+- `apps/playground/src/outdoor-scene-gameplay-loader.test.ts`;
+- `packages/runtime-babylon/src/camera-preview-channel.test.ts`;
+- `packages/runtime-babylon/src/capability-runtime.test.ts`;
+- `packages/runtime-babylon/src/p15-conformance.test.ts`;
+- `packages/runtime-babylon/src/p15-runtime-debt-repro.test.ts`;
+- `packages/runtime-babylon/src/runtime.test.ts`;
+- `packages/runtime-babylon/src/traversal-runtime-port.test.ts`;
+- `packages/runtime-babylon/src/traversal-runtime-support-conformance.test.ts`;
+- `packages/traversal-recast/src/evaluate-route.test.ts`;
+- `packages/traversal-recast/src/provider-acceptance.test.ts`;
+- `packages/traversal-recast/src/query-provider.test.ts`;
+- `scripts/lib/route-runtime-probe.integration.test.ts`;
+- `scripts/lib/route-validation-orchestrator.test.ts`;
 - `scripts/lib/route-validation-runner.test.ts`;
+- `scripts/lib/traversal-area-runtime-collision.integration.test.ts`;
+- `scripts/lib/worldkit-server.test.ts`;
 - `scripts/worldkit-route-run.integration.test.ts`;
-- `scripts/verification-browser-launch.test.ts`.
 
-`scripts/lib/test-gate-manifest.ts` recursively discovers the same `packages/**/*.test.ts`, `apps/**/*.test.ts`, and `scripts/**/*.test.ts` universe as the root config. Its canonical output is sorted repository-relative POSIX paths. It rejects missing manifest entries, duplicate entries, paths outside the root test universe, overlap between lanes, or a union different from the root universe. The contract lane is the exact set difference between the root universe and the resource manifest; the resource lane is the exact manifest.
+`scripts/lib/test-gate-manifest.ts` explicitly maps every root test path to `contract` or `resource-heavy`. Resource-heavy rows additionally carry one or more closed reason codes for Browser/Vite/server child processes, native Havok/Recast/WASM state, measured duration, measured memory, or measured contention. `scripts/lib/test-gate-census.ts` uses Vitest 3.2.7 `createVitest()` and `globTestSpecifications()` rather than copying Vitest's glob rules. Its canonical output is sorted repository-relative POSIX paths.
 
-New tests therefore cannot disappear from `pnpm test`. A test is promoted to the resource lane only with measured evidence that it launches a browser/server/native-heavy fixture or otherwise causes material contention. When the modular Subject asset branch is integrated, its GLB test is first admitted by census into the contract lane; timing evidence, not its domain label, decides whether it moves to the resource manifest.
+The census rejects unclassified root tests, stale or duplicate manifest rows, non-canonical/out-of-root paths, missing resource-heavy reasons, config drift, lane overlap, or a lane union different from the root universe. A new test therefore makes `test:census` RED until the gate owner classifies it; there is no default lane. `scripts/verification-browser-launch.test.ts` stays in `contract` because it only reads source text. When the modular Subject asset branch is integrated, its GLB test must first produce an `UNCLASSIFIED` RED and then be explicitly added to `contract`; timing evidence, not its domain label, decides whether it moves to the resource-heavy lane.
 
 No test timeout is increased as part of the lane change. The existing 180-second real Route case must pass in both isolated resource-lane and complete-wrapper executions.
 
@@ -69,19 +84,19 @@ Every row is an independently reviewable deliverable. The main agent owns cross-
 
 | ID | Goal and deliverable | `depends_on` | `blocks` | Exclusive ownership | Contract and exact integration point | Required evidence | Mode |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| GATE-1 | Complete two-lane Vitest wrapper and fail-closed census | — | INT-1 | `package.json`, `vitest*.config.ts`, `scripts/lib/test-gate-manifest*` | Sorted root test universe → disjoint contract/resource file lists consumed by Vitest configs | injected missing/duplicate/out-of-root REDs; both lanes; wrapper; census after asset merge | main-agent-only |
-| LOCK-1 | Reject any Build Input Envelope not re-derived byte-for-byte from the admitted Lock | — | GRAPH-1, INT-1 | `packages/traversal/src/build-input*`, existing Envelope/Lock tests | Build Input admission consumes canonical Lock receipt and compares the unique Envelope factory projection before hashing | capsule/slope/step tamper matrix RED/GREEN | sequential |
-| PATH-1 | Establish one total Path station helper, including one-node/zero-edge paths and legal 3D self-crossing | — | PROBE-1, PROBE-2, PROBE-3 | `packages/traversal/src/path-receipt*`, station helper and tests | Canonical Path + 3D position → deterministic station, segment window, expected Surface set, remaining arc length | one-node, vertical segment, repeated/non-adjacent XZ and layered crossing RED/GREEN | sequential |
+| GATE-1 | Complete two-lane Vitest wrapper and fail-closed census | — | INT-1 | `package.json`, `vitest*.config.ts`, `scripts/lib/test-gate-*`, `scripts/verify-test-gate-census.ts` | Complete explicit path→lane manifest; Vitest public discovery must equal root manifest and each lane config projection | unclassified/stale/duplicate/out-of-root/config-drift/missing-reason REDs; both lanes; twice-run wrapper; census after asset merge | main-agent-only |
+| LOCK-1 | Reject any Build Input Envelope not re-derived byte-for-byte from the admitted Lock | — | GRAPH-1, INT-1 | `packages/traversal/src/build-input*`, `heightfield-source*`, orchestrator and existing Envelope/Lock tests | `RouteBuildInputReceiptV2` carries `traversalLockReceipt`; its clean-break factory accepts `{ input, traversalLockReceipt }`, re-runs the unique Envelope factory from that Lock plus the registered Graph Builder Profile, and compares canonical Envelope bytes before hashing | capsule/slope/step tamper matrix RED/GREEN; standalone receipt assert remains self-sufficient | sequential |
+| PATH-1 | Establish one total Path station helper, including one-node/zero-edge paths and legal 3D self-crossing | — | PROBE-1, PROBE-2, PROBE-3 | station section of `packages/traversal/src/runtime-probe-contract*` | Canonical Path + retained sampled-foot XYZ → deterministic station, segment window, expected Surface set, total and remaining arc length | one-node, vertical segment, repeated/non-adjacent XZ and layered crossing RED/GREEN | sequential |
 | PROBE-1 | Forbid long-arc Route completion at Tick 0 | PATH-1 | INT-1 | `packages/validation/src/route-runtime-probe*` arrival logic/tests | zero-tick completion only when total canonical Path arc length is within arrival tolerance | 16.795m loop RED, legal short-path GREEN, real fixture | sequential |
 | PROBE-2 | Use retained-foot position and retained support as the only Route station/support authority | PATH-1 | PROBE-3, INT-1 | Runtime Probe port/runner boundary plus focused tests | MotionKernel retained foot/support sample → PATH-1 station; subject origin is not re-inferred | six-tick split RED, ledge departure/reset/rebind and R1b GREEN | sequential |
 | PROBE-3 | Count and reject Tick-0 unresolved/ambiguous/wrong Surface even when later ticks exist | PATH-1, PROBE-2 | INT-1 | `packages/traversal/src/runtime-probe-contract*` | initial expected Surface from PATH-1 is always included in mismatch metrics and complete admission | forged 385-tick receipt RED/GREEN | sequential |
-| MOTION-1 | Keep step-up displacement within the same fixed-tick budget | — | INT-1 | `packages/runtime-babylon/src/motion-kernel-runtime*` step integration | Babylon sweep/integration never receives more remaining time than the fixed-step budget; returned time and committed pose agree | narrow-step 0.34m RED; 30/60/120-like cadence and R1b success GREEN | sequential |
-| LIFE-1 | Roll back native SubjectController allocation on partial construction failure | — | INT-1 | MotionKernel controller factory and lifecycle tests | allocate → configure/check → register; any throw disposes both Babylon collectors exactly once and rethrows primary error | created/released handle equality over repeated failures | parallel-safe |
+| MOTION-1 | Keep step-up displacement within the same fixed-tick budget | — | LIFE-1, INT-1 | `packages/runtime-babylon/src/motion-kernel-runtime*`, `scripts/lib/route-runtime-probe.integration.test.ts` | Babylon sweep/integration never receives more remaining time than the fixed-step budget; returned time and committed pose agree | narrow-step 0.34m RED; 30/60/120-like cadence and R1b success GREEN | sequential; owns real Havok process |
+| LIFE-1 | Roll back native SubjectController allocation on partial construction failure | MOTION-1 | INT-1 | MotionKernel controller construction and `runtime.test.ts` lifecycle cases | allocate → configure/check → register; any throw disposes both Babylon collectors exactly once and rethrows primary error | created/released handle equality over three failures | sequential because it shares `motion-kernel-runtime.ts` |
 | LIFE-2 | Register Visual Capture Runtime ownership before target configuration can throw | — | INT-1 | Playground startup ordering and lifecycle tests | create → track owner → configure; failure → exactly-once dispose; never mount/render/ready | invalid entity RED and event-order GREEN | parallel-safe |
 | GRAPH-1 | Give Surface and Collider inventories one deterministic Route scope | LOCK-1 | GRAPH-2, GRAPH-3, INT-1 | `packages/traversal-recast/src/heightfield-source*` | one route-scoped projection supplies both Surface and Collider inventories | remote platform pollution RED; multiple-route GREEN | sequential |
-| GRAPH-2 | Fail closed on layered endpoint ambiguity before provider nearest-polygon selection | GRAPH-1 | INT-1 | endpoint admission in `evaluate-route*` and provider/query seam | canonical endpoint Surface query → zero/one/many candidate result; provider receives exactly one resolved Surface | reversed tile order and stacked endpoint RED/GREEN | sequential |
+| GRAPH-2 | Fail closed on layered endpoint ambiguity before provider nearest-polygon selection | GRAPH-1 | INT-1 | endpoint admission in `evaluate-route*` and provider/query seam | canonical endpoint Surface query → zero/one/many candidate result; many publishes `start-surface-ambiguous` or `destination-surface-ambiguous` as `incomplete / complete` with at least two sorted identities; provider receives exactly one resolved Surface | reversed tile order and stacked endpoint RED/GREEN | sequential |
 | GRAPH-3 | Publish only edge-local seam gap/step proof | GRAPH-1 | INT-1 | `packages/traversal-recast/src/build-graph*`, adapter identity tests | cache key includes canonical edge-local boundary/portal; gap and step sample that boundary | remote exact seam/current gap and centroid-height counterexamples | sequential |
-| GRAPH-4 | Correct unavailable Surface failure status and world-space XYZ | GRAPH-1 | REPORT-1, INT-1 | `connectivity-result*`, `evaluate-route.v2*` | profile/correlation failures are `incomplete / unavailable`; overlap Y derives deterministically from canonical Surface geometry | three-reason status table RED; elevated/asymmetric overlap XYZ RED | sequential |
+| GRAPH-4 | Correct unavailable Surface failure status and world-space XYZ | GRAPH-1 | REPORT-1, INT-1 | `traversal-surface-query*`, `connectivity-result*`, `evaluate-route.v2*` | profile/correlation failures are `incomplete / unavailable`; internal overlap blocker retains both triangle-plane witness heights and failure Y uses the canonical first identity's actual height, then quantizes | three-reason status table RED; elevated/asymmetric overlap XYZ and reversed-input stability RED | sequential |
 | REPORT-1 | Bind Report rows to the complete ExecutionPlan-derived Required Route set | LOCK-1, GRAPH-4 | REPORT-2, STUDIO-1, INT-1 | `packages/validation/src/route-evaluator*` and expected-set receipt tests | expected constraint IDs/count/hash are canonical inputs; missing/extra/duplicate rows fail closed | subset/extra/duplicate/mismatched-plan RED/GREEN | main-agent-only |
 | REPORT-2 | Close V2 MIME, Browser state, and plural Surface Diagnostic contracts | REPORT-1 | STUDIO-1, INT-1 | validation publication, runtime contracts, generated/public types | kind + schemaVersion + MIME table is exact; complete Connectivity iff Path exists; ambiguous Diagnostic preserves sorted identities | MIME table, state matrix, 2/3 identity RED/GREEN | sequential |
 | STUDIO-1 | Require same-world passing Route Report for import/recovery when Required Routes exist | REPORT-1, REPORT-2 | INT-1 | `apps/studio/server.mjs` and tests | trusted Builder/Execution evidence decides requirement; report hashes bind Authoring/IR/Plan/Lock and exact expected Route set | missing/mismatched/failed/exact report admission matrix | sequential |
@@ -90,7 +105,7 @@ Every row is an independently reviewable deliverable. The main agent owns cross-
 
 ## 7. Sequencing and parallelism
 
-1. Land `GATE-1` first so every later iteration uses the new policy.
+1. Land `GATE-1` first so every later iteration uses the new policy. `pnpm test` runs census, contract, and resource-heavy as three sequential processes; it does not raise timeouts.
 2. In parallel, stabilize `LOCK-1`, `PATH-1`, `MOTION-1`, `LIFE-1`, and `LIFE-2`; they own disjoint files and contracts.
 3. Run `PROBE-1 → PROBE-2 → PROBE-3` sequentially because all three depend on the same Path/support authority.
 4. Run `GRAPH-1 → (GRAPH-2, GRAPH-3, GRAPH-4)` after the Route scope contract is stable. The three child tasks may execute in parallel only if their tests and implementation files do not overlap; `evaluate-route.ts` makes GRAPH-2 and GRAPH-4 sequential in practice.
