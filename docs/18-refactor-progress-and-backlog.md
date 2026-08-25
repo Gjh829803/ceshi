@@ -274,15 +274,16 @@ P1.5、P1.6、P2.5 与 P2.6 是把既有总体设计和产品对接契约显式�
   台阶、坡道和普通静态平台；阈值从同一 `resolvedTraversalLockHash` 推导，当前锁定
   `0.3m` 人形 Profile 的 Golden 要求 `0.25m` 通过、`0.35m` 失败。11 个 Fixture、
   V2/V5 clean break、R0/R1/R1b 聚焦门禁与 43 files / 525 tests 已通过。
-- [ ] R1b Task 10 的历史完成结论已由 2026-08-24 深审重新打开：首轮 Cursor chat
+- [x] R1b Task 10 曾由 2026-08-24 深审重新打开，并已在当前 R1/R1b 生产边界内关闭：首轮 Cursor chat
   `1e938715-a5b2-4a25-ad83-45eec0c37c15` 对 `28752e0` 为 Final GO / No findings，
   同时给出 Runtime ambiguous 诊断分层建议；主审确认该分层问题并修复为 `506e088`，
   三模式回归证明 Runtime `unmatched / ambiguous / wrong resolved Surface` 均输出
   `ROUTE_RUNTIME_SUPPORT_SURFACE_MISMATCH`。修后 `typecheck`、148 files / 1577 tests、
   `build`、R0、R1、R1b 11/11、Canonical、Placement、Rigged、G Bot 与 `diff-check`
   全部通过；条件复核 chat `d61f751c-a398-4063-bcbf-2ddc55ea20a9` 对 `506e088`
-  再次为 Final GO / No findings；这些是历史证据，不能覆盖当前 remediation 的最新
-  `main` 集成门禁与双重独立复核。
+  再次为 Final GO / No findings。随后 Route set、Surface/Portal、Runtime ownership、V2 evidence
+  与 Hosted admission remediation 及最新 `main` 集成门禁、双重独立复核均已完成；H1/H2/H3、
+  动态平台、NPC/public `goTo` 与车辆仍是后续范围，不属于该项未完成。
 - [x] Required 路线接入统一 Validation Report；Graph 通过但真实 Controller 卡住仍为
   Blocking Failure，并输出台阶、坡度、宽高净空、缝隙、Surface 身份和卡住坐标。
 - [ ] 增加 S1 之外的 Constraint、增量求解等价证明和通用 ValidationReport。

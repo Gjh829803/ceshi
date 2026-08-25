@@ -102,7 +102,7 @@ Director LLM → Render Directive SDK ────────────┘
 
 当前的“自由创造”严格指室外高度场白膜世界，不等于任意 3D 游戏类型。
 Primitive 四足代理已经可以自定义和控制，但动物资产、骨骼、动画与行为尚未
-实现；通用 Terrain Mask 与完整 M5、更多 Constraint、洞穴、倒悬结构、完整
+实现；通用 Terrain Mask、R1/R1b 之外的 H1/H2/H3 Route 范围、更多 Constraint、洞穴、倒悬结构、完整
 室内、车辆、骑乘、NPC、寻路、Gameplay、联网、Render Bridge、实时世界模型和
 Runtime Director 也都尚未实现。
 

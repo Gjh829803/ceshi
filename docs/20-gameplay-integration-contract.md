@@ -183,8 +183,16 @@ Snapshot V4 不在根级重复发布控制目标。实时 UI 从
 `expectedPossession` 是 compare-and-swap 前置条件，不是第二份控制权状态。收到
 `CONTROL_POSSESSION_STALE` 时先刷新 Snapshot，再决定是否发出新 Command；不要盲重试旧请求。
 
-Reset 会创建新的 `worldSessionId`，清空当前 possession。旧 Session 的 Command 和 World State
-Ref 必须 fail closed，调用方需要使用新 Session 重新显式绑定。
+Host Reset 与 Browser Reset 是两层合同，不能混写成同一个状态所有者：
+
+- [`RuntimeHost.reset()`](../packages/runtime-host/src/runtime-host.ts) 使用冻结的初始
+  `RuntimeWorldConfigurationV1` 执行事务式 World replacement，发布新的 `worldSessionId`，并使旧
+  Session 的 Command、World State Ref 和 possession fail closed；Host 是 Session 生命周期权威。
+- [`WorldkitBrowserApiV5.reset()`](../apps/playground/src/worldkit-browser-api.ts) 只负责 Browser 边界的
+  并发保护、错误封装和调用 Adapter；Adapter 会清空按键、相机输入与 Capture reservation，再通过
+  Runtime coordinator 请求 Host Reset，并返回新 Snapshot。Browser 不自行创建第二份 Session 真相。
+
+Reset 后调用方必须读取新 Snapshot，并按新 `worldSessionId` 重新显式绑定；不得重放旧 Session 请求。
 
 ## 5. Receipt、Event 与 World State
 
