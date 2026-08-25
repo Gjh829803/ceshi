@@ -282,7 +282,13 @@ function parseNumericValues(value: unknown, path: string): Record<string, number
         `${path}.${name} must be a finite number.`,
       );
     }
-    return [name, Object.is(parameterValue, -0) ? 0 : parameterValue];
+    if (Object.is(parameterValue, -0)) {
+      fail(
+        "SUBJECT_PRESET_CANDIDATE_NEGATIVE_ZERO_PARAMETER",
+        `${path}.${name} must not be negative zero.`,
+      );
+    }
+    return [name, parameterValue];
   }));
 }
 

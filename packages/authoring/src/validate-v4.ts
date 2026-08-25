@@ -1,6 +1,10 @@
 import Ajv2020, { type ErrorObject } from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
 import {
+  assertCanonicalJsonValue,
+  CanonicalJsonAdmissionError,
+} from "@whitebox-world/protocol";
+import {
   validateSimplePolygonXZV1,
   validateTraversalAreaComplexityV1,
 } from "@whitebox-world/terrain-surface";
@@ -364,6 +368,22 @@ function traversalAreaDiagnostics(spec: AuthoringSpecV4): AuthoringDiagnostic[] 
 export function validateAuthoringSpecV4(
   value: unknown,
 ): AuthoringResult<AuthoringSpecV4> {
+  try {
+    assertCanonicalJsonValue(value);
+  } catch (error) {
+    if (error instanceof CanonicalJsonAdmissionError) {
+      return {
+        ok: false,
+        diagnostics: [{
+          severity: "error",
+          code: "AUTHORING_JSON_NEGATIVE_ZERO",
+          instancePath: error.instancePath,
+          message: "Negative zero is not allowed in Canonical JSON.",
+        }],
+      };
+    }
+    throw error;
+  }
   if (!validateCanonicalAuthoringSpecV4(value)) {
     const errors = validateCanonicalAuthoringSpecV4.errors;
     return {

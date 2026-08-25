@@ -30,7 +30,10 @@ export function stringifyStudioCanonicalJson(value) {
   }
   if (typeof value === "number") {
     if (!Number.isFinite(value)) throw new TypeError("Canonical JSON requires finite numbers.");
-    return JSON.stringify(Object.is(value, -0) ? 0 : value);
+    if (Object.is(value, -0)) {
+      throw new TypeError("Negative zero is unsupported canonical JSON.");
+    }
+    return JSON.stringify(value);
   }
   if (Array.isArray(value)) {
     return `[${value.map((item) => stringifyStudioCanonicalJson(item)).join(",")}]`;
@@ -235,7 +238,16 @@ export function assembleStudioPreviewBootstrapV1({
     implementationMapSource,
     "scene-implementation-map.json",
   );
-  const authoringSpecHash = hashCanonical(authoringSpec);
+  let authoringSpecHash;
+  try {
+    authoringSpecHash = hashCanonical(authoringSpec);
+  } catch (error) {
+    fail(
+      "STUDIO_PREVIEW_AUTHORITY_MISMATCH",
+      "AuthoringSpec is not valid Canonical JSON.",
+      { cause: error },
+    );
+  }
   if (
     authoringSpec.kind !== "worldkit-authoring-spec" ||
     authoringSpec.schemaVersion !== 4 ||

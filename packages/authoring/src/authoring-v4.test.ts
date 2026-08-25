@@ -67,6 +67,19 @@ function validV4(): AuthoringSpecV4 {
   };
 }
 
+it("rejects negative zero through direct Authoring V4 object validation", () => {
+  const source = validV4();
+  const result = validateAuthoringSpecV4({ ...source, seed: -0 });
+
+  expect(result).toMatchObject({
+    ok: false,
+    diagnostics: [{
+      code: "AUTHORING_JSON_NEGATIVE_ZERO",
+      instancePath: "/seed",
+    }],
+  });
+});
+
 function withConnectivity(
   spec: AuthoringSpecV4,
   constraint: unknown,

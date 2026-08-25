@@ -401,6 +401,18 @@ describe("subject preset candidate V1", () => {
     );
   });
 
+  it("rejects negative-zero numeric overrides instead of repairing signed input", () => {
+    const candidate = clone(validCandidate());
+    const override = candidate.semanticContent.overrides.controlFeelByProfileRef[
+      CONTROL_FEEL_REF
+    ]! as { values: Record<string, number> };
+    override.values.turnRateRadiansPerSecond = -0;
+
+    expect(() => parseSubjectPresetCandidateV1(candidate)).toThrow(
+      "SUBJECT_PRESET_CANDIDATE_NEGATIVE_ZERO_PARAMETER",
+    );
+  });
+
   it("accepts a non-default allowed Control Feel when the hash matches exactly", () => {
     const heavyRef = "worldkit://control-feel-profile/humanoid.heavy-ground@1";
     const input = validInput();

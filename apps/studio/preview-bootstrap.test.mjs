@@ -140,6 +140,16 @@ test("fails closed for cross-scene and wrong-hash artifacts", () => {
   });
 });
 
+test("fails closed when Preview artifacts contain forbidden negative zero", () => {
+  assert.throws(
+    () => stringifyStudioCanonicalJson({ value: -0 }),
+    /Negative zero/,
+  );
+  expectCode("STUDIO_PREVIEW_AUTHORITY_MISMATCH", (input) => {
+    input.authoringSource = input.authoringSource.replace('"seed":17', '"seed":-0');
+  });
+});
+
 test("fails closed when implementation mappings and capture groups do not close", () => {
   expectCode("STUDIO_PREVIEW_AUTHORITY_MISMATCH", (input) => {
     const implementationMap = JSON.parse(input.implementationMapSource);

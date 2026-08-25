@@ -1,6 +1,20 @@
 import { sha256 } from "@noble/hashes/sha256";
 import { bytesToHex } from "@noble/hashes/utils";
 
+export class CanonicalJsonAdmissionError extends TypeError {
+  readonly code: "CANONICAL_JSON_NEGATIVE_ZERO";
+  readonly instancePath: string;
+
+  constructor(instancePath: string) {
+    super(
+      `Negative zero at ${canonicalJsonPath(instancePath)} is unsupported canonical JSON.`,
+    );
+    this.name = "CanonicalJsonAdmissionError";
+    this.code = "CANONICAL_JSON_NEGATIVE_ZERO";
+    this.instancePath = instancePath;
+  }
+}
+
 function canonicalJsonPath(path: string): string {
   return path || "/";
 }
@@ -30,7 +44,10 @@ function canonicalize(value: unknown, path: string): unknown {
     if (!Number.isFinite(value)) {
       throw new TypeError(`Non-finite number at ${canonicalJsonPath(path)}.`);
     }
-    return Object.is(value, -0) ? 0 : value;
+    if (Object.is(value, -0)) {
+      throw new CanonicalJsonAdmissionError(path);
+    }
+    return value;
   }
   if (Array.isArray(value)) {
     if (Object.getPrototypeOf(value) !== Array.prototype) {
@@ -62,6 +79,10 @@ function canonicalize(value: unknown, path: string): unknown {
     return Object.fromEntries(entries);
   }
   throw new TypeError(`Unsupported canonical JSON value at ${canonicalJsonPath(path)}.`);
+}
+
+export function assertCanonicalJsonValue(value: unknown): void {
+  canonicalize(value, "");
 }
 
 export function stringifyCanonicalJson(value: unknown): string {

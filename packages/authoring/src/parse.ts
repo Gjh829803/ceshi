@@ -5,6 +5,10 @@ import {
   type Node,
   type ParseError,
 } from "jsonc-parser";
+import {
+  assertCanonicalJsonValue,
+  CanonicalJsonAdmissionError,
+} from "@whitebox-world/protocol";
 
 import type {
   AuthoringDiagnostic,
@@ -95,5 +99,22 @@ export function parseCanonicalJson(sourceText: string): AuthoringResult<unknown>
   if (duplicateDiagnostics.length > 0) {
     return { ok: false, diagnostics: duplicateDiagnostics };
   }
-  return { ok: true, value: JSON.parse(sourceText) as unknown, diagnostics: [] };
+  const value = JSON.parse(sourceText) as unknown;
+  try {
+    assertCanonicalJsonValue(value);
+  } catch (error) {
+    if (error instanceof CanonicalJsonAdmissionError) {
+      return {
+        ok: false,
+        diagnostics: [{
+          severity: "error",
+          code: "AUTHORING_JSON_NEGATIVE_ZERO",
+          instancePath: error.instancePath,
+          message: "Negative zero is not allowed in Canonical JSON.",
+        }],
+      };
+    }
+    throw error;
+  }
+  return { ok: true, value, diagnostics: [] };
 }

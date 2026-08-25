@@ -36,6 +36,24 @@ describe("current AuthoringSpec", () => {
     );
   });
 
+  it.each(["-0", "-0.0", "-0e2"])(
+    "rejects forbidden negative-zero token %s before schema validation",
+    (negativeZero) => {
+      const result = parseCanonicalJson(
+        `{"nested":{"value":${negativeZero}}}`,
+      );
+
+      expect(result).toMatchObject({
+        ok: false,
+        diagnostics: [{
+          severity: "error",
+          code: "AUTHORING_JSON_NEGATIVE_ZERO",
+          instancePath: "/nested/value",
+        }],
+      });
+    },
+  );
+
   it("materializes validated JSON as nested plain objects", () => {
     const result = parseCanonicalJson('{"nested":{"value":1}}');
 

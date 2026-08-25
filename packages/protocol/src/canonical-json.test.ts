@@ -62,8 +62,17 @@ describe("canonical JSON protocol", () => {
   it("continues to accept arrays and plain objects with canonical omissions", () => {
     expect(stringifyCanonicalJson({
       omitted: undefined,
-      values: [-0, { z: 2, a: 1 }],
+      values: [0, { z: 2, a: 1 }],
     })).toBe('{"values":[0,{"a":1,"z":2}]}');
+  });
+
+  it("rejects negative zero instead of collapsing a forbidden input into zero", () => {
+    expect(() => stringifyCanonicalJson({ value: -0 })).toThrow(
+      "Negative zero at /value is unsupported canonical JSON.",
+    );
+    expect(() => sha256CanonicalJson([-0])).toThrow(
+      "Negative zero at /0 is unsupported canonical JSON.",
+    );
   });
 
   it("preserves a legal own __proto__ key without a stringify collision", () => {
