@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { BIPED_BONE_IDS_V1 } from "@whitebox-world/subject-contracts";
+
 import {
   builtInSubjectResourceRegistry,
   createSubjectResourceRegistry,
@@ -38,25 +40,7 @@ const G_BOT_RIG_PROFILE_REF =
   "worldkit://rig-profile/biped.mixamo-g-bot@2";
 const COLLIDER_PROFILE_REF =
   "worldkit://collider-profile/humanoid.medium-capsule@1";
-const BIPED_BONE_IDS = [
-  "chest",
-  "foot.left",
-  "foot.right",
-  "hand.left",
-  "hand.right",
-  "head",
-  "hips",
-  "lower-arm.left",
-  "lower-arm.right",
-  "lower-leg.left",
-  "lower-leg.right",
-  "neck",
-  "spine",
-  "upper-arm.left",
-  "upper-arm.right",
-  "upper-leg.left",
-  "upper-leg.right",
-] as const;
+const BIPED_BONE_IDS = [...BIPED_BONE_IDS_V1].sort();
 
 const ALL_BUILT_IN_REGISTRY_INPUTS = [
   ...BUILT_IN_SUBJECT_DEFINITIONS,

@@ -1,29 +1,14 @@
-export type GroundHumanoidActionIdV1 =
-  | "idle"
-  | "idle.gaming"
-  | "walk"
-  | "walk.step"
-  | "run"
-  | "jump"
-  | "fall"
-  | "land.hard"
-  | "land.hard.alt"
-  | "fly"
-  | "float"
-  | "swim.surface"
-  | "swim.tread"
-  | "swim.exit"
-  | "sit"
-  | "sit.idle"
-  | "sit.ground.idle"
-  | "sit.toStand"
-  | "stand"
-  | "lay.idle"
-  | "roll.toRun"
-  | "fight.enter"
-  | "emote.salute"
-  | "emote.angry"
-  | "dance.rumba";
+import type { GroundHumanoidActionIdV1 } from "@whitebox-world/subject-contracts";
+
+export const AUTOMATIC_GROUND_HUMANOID_ACTION_IDS_V1 = Object.freeze([
+  "idle",
+  "walk",
+  "run",
+  "jump",
+] as const satisfies readonly GroundHumanoidActionIdV1[]);
+
+export type AutomaticGroundHumanoidActionIdV1 =
+  typeof AUTOMATIC_GROUND_HUMANOID_ACTION_IDS_V1[number];
 
 export interface GroundHumanoidActionInputV1 {
   movementMedium: "ground" | "air";

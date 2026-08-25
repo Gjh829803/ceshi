@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
+import {
+  BIPED_BONE_IDS_V1,
+  GROUND_HUMANOID_ACTION_IDS_V1,
+} from "@whitebox-world/subject-contracts";
 
 import {
   builtInSubjectResourceRegistry,
@@ -28,53 +32,8 @@ const G_BOT_COLLIDER_PROFILE_REF =
   "worldkit://collider-profile/humanoid.g-bot-capsule@1";
 const G_BOT_SUBJECT_DEFINITION_REF =
   "worldkit://subject-definition/humanoid.g-bot@2";
-const G_BOT_ACTION_IDS = [
-  "dance.rumba",
-  "emote.angry",
-  "emote.salute",
-  "fall",
-  "fight.enter",
-  "float",
-  "fly",
-  "idle",
-  "idle.gaming",
-  "jump",
-  "land.hard",
-  "land.hard.alt",
-  "lay.idle",
-  "roll.toRun",
-  "run",
-  "sit",
-  "sit.ground.idle",
-  "sit.idle",
-  "sit.toStand",
-  "stand",
-  "swim.exit",
-  "swim.surface",
-  "swim.tread",
-  "walk",
-  "walk.step",
-] as const;
-
-const BIPED_BONE_IDS = [
-  "chest",
-  "foot.left",
-  "foot.right",
-  "hand.left",
-  "hand.right",
-  "head",
-  "hips",
-  "lower-arm.left",
-  "lower-arm.right",
-  "lower-leg.left",
-  "lower-leg.right",
-  "neck",
-  "spine",
-  "upper-arm.left",
-  "upper-arm.right",
-  "upper-leg.left",
-  "upper-leg.right",
-] as const;
+const G_BOT_ACTION_IDS = [...GROUND_HUMANOID_ACTION_IDS_V1].sort();
+const BIPED_BONE_IDS = [...BIPED_BONE_IDS_V1].sort();
 
 function goldenAnimationSetInput(): AnimationSetManifestInputV1 {
   return {

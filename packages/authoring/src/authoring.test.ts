@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import { BIPED_BONE_IDS_V1 } from "@whitebox-world/subject-contracts";
+
+import subjectDefinitionV1Schema from "./subject-definition-v1.schema.json";
 import {
   parseAuthoringSpecV4,
   parseCanonicalJson,
@@ -206,6 +209,37 @@ describe("current AuthoringSpec", () => {
       ok: true,
       value: createValidRiggedPackageDefinition(),
       diagnostics: [],
+    });
+  });
+
+  it("keeps the Biped bone Schema in exact parity and rejects stale root", () => {
+    const socketBranches = (
+      subjectDefinitionV1Schema.$defs.socket as {
+        oneOf: Array<{
+          properties: {
+            kind: { const: string };
+            boneId?: { enum: string[] };
+          };
+        }>;
+      }
+    ).oneOf;
+    const boneIdEnum = socketBranches.find(
+      (branch) => branch.properties.kind.const === "bone",
+    )?.properties.boneId?.enum;
+
+    expect(boneIdEnum).toEqual(BIPED_BONE_IDS_V1);
+
+    const definition = structuredClone(
+      createValidRiggedPackageDefinition(),
+    ) as unknown as {
+      sockets: Array<{ boneId: string }>;
+    };
+    definition.sockets[0]!.boneId = "root";
+    expect(validatePackageSubjectDefinition(definition)).toMatchObject({
+      ok: false,
+      diagnostics: expect.arrayContaining([
+        expect.objectContaining({ instancePath: "/sockets/0/boneId" }),
+      ]),
     });
   });
 

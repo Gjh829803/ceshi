@@ -55,24 +55,6 @@ export interface MovementIntent {
   jump: boolean;
 }
 
-export type HumanoidActionId = "idle" | "walk" | "run" | "jump";
-
-export interface ActionManifestEntry {
-  id: HumanoidActionId | string;
-  clip: string;
-  loop: boolean;
-  blendIn: number;
-  speed: number;
-  rootMotion: "inPlace" | "world" | "none";
-  motionKind?: "idle" | "pose" | "subtle" | "facial" | "dynamic";
-}
-
-export interface ActionManifest {
-  version: 1;
-  rigId: string;
-  actions: ActionManifestEntry[];
-}
-
 export interface Diagnostic {
   severity: "info" | "warning" | "error";
   code: string;

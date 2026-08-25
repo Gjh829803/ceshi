@@ -1,4 +1,9 @@
 import type { CompositionPrimitiveV1, Vec3 } from "@whitebox-world/subject-composition";
+import type {
+  BipedBoneIdV1,
+  GroundHumanoidActionIdV1,
+  SubjectBodyTopologyV2,
+} from "@whitebox-world/subject-contracts";
 
 export interface SubjectResourceAiMetadataV1 {
   displayName: string;
@@ -53,25 +58,6 @@ export interface SubjectAssetManifestInputV1 extends SubjectRegistryResourceBase
   };
 }
 
-export type BipedBoneIdV1 =
-  | "hips"
-  | "spine"
-  | "chest"
-  | "neck"
-  | "head"
-  | "upper-arm.left"
-  | "lower-arm.left"
-  | "hand.left"
-  | "upper-arm.right"
-  | "lower-arm.right"
-  | "hand.right"
-  | "upper-leg.left"
-  | "lower-leg.left"
-  | "foot.left"
-  | "upper-leg.right"
-  | "lower-leg.right"
-  | "foot.right";
-
 export interface RigProfileManifestInputV1 extends SubjectRegistryResourceBaseInputV1 {
   kind: "rig-profile";
   bodyTopology: "biped";
@@ -80,43 +66,6 @@ export interface RigProfileManifestInputV1 extends SubjectRegistryResourceBaseIn
   requiredBoneIds: readonly BipedBoneIdV1[];
   sourceNodeNameByBoneId: Readonly<Record<BipedBoneIdV1, string>>;
 }
-
-export type GroundHumanoidActionIdV1 =
-  | "idle"
-  | "idle.gaming"
-  | "walk"
-  | "walk.step"
-  | "run"
-  | "jump"
-  | "fall"
-  | "land.hard"
-  | "land.hard.alt"
-  | "fly"
-  | "float"
-  | "swim.surface"
-  | "swim.tread"
-  | "swim.exit"
-  | "sit"
-  | "sit.idle"
-  | "sit.ground.idle"
-  | "sit.toStand"
-  | "stand"
-  | "lay.idle"
-  | "roll.toRun"
-  | "fight.enter"
-  | "emote.salute"
-  | "emote.angry"
-  | "dance.rumba";
-
-export type SubjectBodyTopologyV2 =
-  | "biped"
-  | "quadruped"
-  | "four-wheel"
-  | "surface-craft"
-  | "watercraft"
-  | "glider"
-  | "composite"
-  | "custom";
 
 export interface AnimationBindingV1 {
   actionId: GroundHumanoidActionIdV1;

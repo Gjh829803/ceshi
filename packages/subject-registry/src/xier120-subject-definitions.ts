@@ -1,4 +1,5 @@
-import type { SubjectBodyTopologyV2 } from "./types-v2";
+import type { SubjectBodyTopologyV2 } from "@whitebox-world/subject-contracts";
+
 import type { RegistrySubjectDefinitionInputV3 } from "./types-v3";
 
 interface Xier120SubjectClassificationV1 {

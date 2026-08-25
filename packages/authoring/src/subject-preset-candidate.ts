@@ -1,8 +1,13 @@
 import {
   resolveControlFeelParametersV1,
   validateCameraTuningV1,
-  type NumericProfileOverrideV1,
 } from "@whitebox-world/runtime-contracts";
+import {
+  isSubjectResourceKindV1,
+  type NumericProfileOverrideV1,
+  type SubjectPresetClosureV1,
+  type SubjectPresetResourceLockEntryV1,
+} from "@whitebox-world/subject-contracts";
 import {
   builtInSubjectResourceRegistry,
   resolveSubjectPresetClosureV1,
@@ -12,8 +17,6 @@ import {
   type ControlProfileV1,
   type MotionProfileV1,
   type RegistrySubjectDefinitionV3,
-  type SubjectPresetClosureV1,
-  type SubjectPresetResourceLockEntryV1,
   type SubjectResourceRegistryV3,
 } from "@whitebox-world/subject-registry";
 import { isNil } from "lodash-es";
@@ -250,12 +253,18 @@ function parseLockEntry(value: unknown, index: number): SubjectPresetResourceLoc
   );
   const resourceRef = stringValue(source.resourceRef, `registryLock[${index}].resourceRef`);
   const resourceKind = stringValue(source.resourceKind, `registryLock[${index}].resourceKind`);
+  if (!isSubjectResourceKindV1(resourceKind)) {
+    fail(
+      "SUBJECT_PRESET_CANDIDATE_UNKNOWN_RESOURCE_KIND",
+      `registryLock[${index}].resourceKind is not a canonical Subject resource kind.`,
+    );
+  }
   if (!Number.isSafeInteger(source.version) || (source.version as number) < 1) {
     fail("SUBJECT_PRESET_CANDIDATE_INVALID_LOCK", `registryLock[${index}].version is invalid.`);
   }
   return {
     resourceRef,
-    resourceKind: resourceKind as SubjectPresetResourceLockEntryV1["resourceKind"],
+    resourceKind,
     version: source.version as number,
     contentHash: exactHash(source.contentHash, `registryLock[${index}].contentHash`),
   };

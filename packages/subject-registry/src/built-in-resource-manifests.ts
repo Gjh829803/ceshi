@@ -1,10 +1,13 @@
+import {
+  BIPED_BONE_IDS_V1,
+  type GroundHumanoidActionIdV1,
+} from "@whitebox-world/subject-contracts";
+
 import type {
   AnimationSetManifestInputV1,
-  BipedBoneIdV1,
   CapabilityManifestInputV1,
   ColliderProfileManifestInputV1,
   ColliderDerivationProfileManifestInputV1,
-  GroundHumanoidActionIdV1,
   LocomotionProfileManifestInputV1,
   PhysicsBodyProfileManifestInputV1,
   RigProfileManifestInputV1,
@@ -53,26 +56,6 @@ const GOLDEN_HUMANOID_SUBJECT_ASSET: SubjectAssetManifestInputV1 = {
   },
 };
 
-const GOLDEN_BIPED_BONE_IDS = [
-  "hips",
-  "spine",
-  "chest",
-  "neck",
-  "head",
-  "upper-arm.left",
-  "lower-arm.left",
-  "hand.left",
-  "upper-arm.right",
-  "lower-arm.right",
-  "hand.right",
-  "upper-leg.left",
-  "lower-leg.left",
-  "foot.left",
-  "upper-leg.right",
-  "lower-leg.right",
-  "foot.right",
-] as const satisfies readonly BipedBoneIdV1[];
-
 const GOLDEN_BIPED_RIG_PROFILE: RigProfileManifestInputV1 = {
   kind: "rig-profile",
   id: "biped.golden",
@@ -81,7 +64,7 @@ const GOLDEN_BIPED_RIG_PROFILE: RigProfileManifestInputV1 = {
   bodyTopology: "biped",
   compatibleSubjectAssetRefs: [GOLDEN_HUMANOID_SUBJECT_ASSET.resourceRef],
   skeletonRootBoneName: "root",
-  requiredBoneIds: GOLDEN_BIPED_BONE_IDS,
+  requiredBoneIds: BIPED_BONE_IDS_V1,
   sourceNodeNameByBoneId: {
     hips: "hips",
     spine: "spine",
@@ -240,7 +223,7 @@ const G_BOT_MIXAMO_RIG_PROFILE: RigProfileManifestInputV1 = {
   bodyTopology: "biped",
   compatibleSubjectAssetRefs: [G_BOT_SUBJECT_ASSET.resourceRef],
   skeletonRootBoneName: "mixamorig:Hips",
-  requiredBoneIds: GOLDEN_BIPED_BONE_IDS,
+  requiredBoneIds: BIPED_BONE_IDS_V1,
   sourceNodeNameByBoneId: {
     hips: "mixamorig:Hips",
     spine: "mixamorig:Spine",

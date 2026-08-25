@@ -8,6 +8,7 @@ export {
   type SubjectResolvedStateV1,
 } from "./character-state-resolver.js";
 export type {
-  GroundHumanoidActionIdV1,
+  AutomaticGroundHumanoidActionIdV1,
   GroundHumanoidActionInputV1,
 } from "./types.js";
+export { AUTOMATIC_GROUND_HUMANOID_ACTION_IDS_V1 } from "./types.js";

@@ -227,6 +227,20 @@ describe("subject preset candidate V1", () => {
     );
   });
 
+  it("rejects an unknown lock resourceKind before Registry drift comparison", () => {
+    const candidate = clone(validCandidate());
+    const firstLockEntry = candidate.semanticContent.base.registryLock[0] as unknown as {
+      resourceKind: string;
+    };
+    firstLockEntry.resourceKind = "provider-private-handle";
+    candidate.semanticContent.base.subjectDefinitionContentHash =
+      "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+    expect(() => parseSubjectPresetCandidateV1(rehash(candidate))).toThrow(
+      "SUBJECT_PRESET_CANDIDATE_UNKNOWN_RESOURCE_KIND",
+    );
+  });
+
   it("requires an exact derive/preserve publication decision for every reachable camera", () => {
     const missingPublication = clone(validCandidate());
     delete missingPublication.semanticContent.overrides

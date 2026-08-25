@@ -282,6 +282,49 @@ describe("ExecutionPlanV5 canonical boundary", () => {
     );
   });
 
+  it("rejects unknown serialized Subject Action, Bone, and Topology terms", () => {
+    const unknownAction = structuredClone(planFixture()) as unknown as {
+      animationSets: Array<Record<string, unknown>>;
+    };
+    unknownAction.animationSets = [{
+      animationSetRef: "worldkit://animation-set/test@1",
+      subjectAssetRef: "worldkit://subject-asset/test@1",
+      rigProfileRef: "worldkit://rig-profile/test@1",
+      defaultActionId: "teleport",
+      requiredActionIds: ["teleport"],
+      animationBindings: [{
+        actionId: "teleport",
+        sourceClipName: "teleport",
+        loopMode: "once",
+        playbackSpeedRatio: 1,
+        blendDurationSeconds: 0.1,
+        rootMotionMode: "in-place",
+      }],
+    }];
+
+    const unknownBone = structuredClone(planFixture()) as unknown as {
+      rigProfiles: Array<Record<string, unknown>>;
+    };
+    unknownBone.rigProfiles = [{
+      rigProfileRef: "worldkit://rig-profile/test@1",
+      bodyTopology: "biped",
+      skeletonRootBoneName: "Armature",
+      requiredBoneIds: ["root"],
+      sourceNodeNameByBoneId: { root: "Armature" },
+    }];
+
+    const unknownTopology = structuredClone(planFixture()) as unknown as {
+      subjects: Array<Record<string, unknown>>;
+    };
+    unknownTopology.subjects[0]!.bodyTopology = "hoverboard";
+
+    for (const candidate of [unknownAction, unknownBone, unknownTopology]) {
+      expect(() => parseExecutionPlanV5(candidate)).toThrowError(
+        "EXECUTION_PLAN_V5_INVALID",
+      );
+    }
+  });
+
   it("rejects accessors before reading them", () => {
     const input = planFixture() as unknown as Record<string, unknown>;
     let getterCalls = 0;

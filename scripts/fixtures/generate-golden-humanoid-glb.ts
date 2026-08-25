@@ -3,6 +3,11 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import {
+  BIPED_BONE_IDS_V1,
+  type BipedBoneIdV1,
+} from "@whitebox-world/subject-contracts";
+
 export interface GoldenHumanoidInventoryV1 {
   byteLength: number;
   contentHash: string;
@@ -14,33 +19,17 @@ export interface GoldenHumanoidInventoryV1 {
   animationClipNames: readonly ["idle", "jump", "run", "walk"];
 }
 
-const BIPED_BONE_IDS = [
+const SKELETON_BONE_IDS = Object.freeze([
   "root",
-  "hips",
-  "spine",
-  "chest",
-  "neck",
-  "head",
-  "upper-arm.left",
-  "lower-arm.left",
-  "hand.left",
-  "upper-arm.right",
-  "lower-arm.right",
-  "hand.right",
-  "upper-leg.left",
-  "lower-leg.left",
-  "foot.left",
-  "upper-leg.right",
-  "lower-leg.right",
-  "foot.right",
-] as const;
+  ...BIPED_BONE_IDS_V1,
+] as const);
 
-type BipedBoneIdV1 = (typeof BIPED_BONE_IDS)[number];
+type SkeletonBoneIdV1 = (typeof SKELETON_BONE_IDS)[number];
 type Vector3 = readonly [number, number, number];
 
 interface BoneDefinition {
-  id: BipedBoneIdV1;
-  parentId?: BipedBoneIdV1;
+  id: SkeletonBoneIdV1;
+  parentId?: SkeletonBoneIdV1;
   translation: Vector3;
 }
 
@@ -172,10 +161,10 @@ class BinaryBufferBuilder {
   }
 }
 
-function boneIndex(boneId: BipedBoneIdV1): number {
-  const index = BIPED_BONE_IDS.indexOf(boneId);
+function boneIndex(boneId: SkeletonBoneIdV1): number {
+  const index = SKELETON_BONE_IDS.indexOf(boneId);
   if (index < 0) {
-    throw new Error(`Unknown biped bone: ${boneId}`);
+    throw new Error(`Unknown skeleton bone: ${boneId}`);
   }
   return index;
 }
@@ -514,7 +503,7 @@ export function buildGoldenHumanoidGlb(): {
     scenes: [{ name: "GoldenHumanoidScene", nodes: [0, meshNodeIndex] }],
     skins: [{
       inverseBindMatrices: inverseBindAccessor,
-      joints: BIPED_BONE_IDS.map((_, index) => index),
+      joints: SKELETON_BONE_IDS.map((_, index) => index),
       name: "GoldenHumanoidSkeleton",
       skeleton: 0,
     }],

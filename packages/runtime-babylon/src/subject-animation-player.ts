@@ -1,7 +1,7 @@
 import type { AnimationGroup } from "@babylonjs/core/Animations/animationGroup.js";
 
 import type { ExecutionAnimationSetV1 } from "@whitebox-world/runtime-contracts";
-import type { GroundHumanoidActionIdV1 } from "@whitebox-world/subject-actions";
+import type { GroundHumanoidActionIdV1 } from "@whitebox-world/subject-contracts";
 
 import { FIXED_TIME_STEP_SECONDS } from "./physics";
 import { SubjectAssetRuntimeErrorV1 } from "./subject-asset-cache";

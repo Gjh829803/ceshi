@@ -25,6 +25,7 @@ import {
   CONTROL_TRANSITION_CAPABILITY_REF,
   createCoreControlFeatureFactoryV1,
 } from "@whitebox-world/gameplay";
+import { GROUND_HUMANOID_ACTION_IDS_V1 } from "@whitebox-world/subject-contracts";
 import { XIER120_SUBJECT_DEFINITIONS } from "@whitebox-world/subject-registry";
 
 import { loadWorldkitRoutePipeline } from "./lib/worldkit-pipeline";
@@ -118,13 +119,7 @@ const RIGGED_SUBJECT_WORLD_PATH = path.resolve(
 const G_BOT_SUBJECT_WORLD_PATH = path.resolve(
   fileURLToPath(new URL("../examples/authoring/g-bot-subject-world.json", import.meta.url)),
 );
-const G_BOT_ACTION_IDS = [
-  "dance.rumba", "emote.angry", "emote.salute", "fall", "fight.enter",
-  "float", "fly", "idle", "idle.gaming", "jump", "land.hard",
-  "land.hard.alt", "lay.idle", "roll.toRun", "run", "sit",
-  "sit.ground.idle", "sit.idle", "sit.toStand", "stand", "swim.exit",
-  "swim.surface", "swim.tread", "walk", "walk.step",
-] as const;
+const G_BOT_ACTION_IDS = [...GROUND_HUMANOID_ACTION_IDS_V1].sort();
 
 afterEach(async () => {
   await Promise.all(

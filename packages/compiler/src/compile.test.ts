@@ -12,6 +12,7 @@ import {
   createGameplayBootstrapResourceLockEntryV1,
   createGameplayBootstrapV1,
 } from "@whitebox-world/gameplay-contracts";
+import { BIPED_BONE_IDS_V1 } from "@whitebox-world/subject-contracts";
 import {
   builtInSubjectResourceRegistry,
   createSubjectResourceRegistry,
@@ -41,25 +42,7 @@ const RIG_PROFILE_REF = "worldkit://rig-profile/biped.golden@2";
 const ANIMATION_SET_REF = "worldkit://animation-set/humanoid.ground.golden@2";
 const COLLIDER_PROFILE_REF =
   "worldkit://collider-profile/humanoid.medium-capsule@1";
-const BIPED_BONE_IDS = [
-  "chest",
-  "foot.left",
-  "foot.right",
-  "hand.left",
-  "hand.right",
-  "head",
-  "hips",
-  "lower-arm.left",
-  "lower-arm.right",
-  "lower-leg.left",
-  "lower-leg.right",
-  "neck",
-  "spine",
-  "upper-arm.left",
-  "upper-arm.right",
-  "upper-leg.left",
-  "upper-leg.right",
-] as const;
+const BIPED_BONE_IDS = [...BIPED_BONE_IDS_V1].sort();
 const INJECTED_SOURCE_URI = "https://registry.invalid/private/golden-humanoid.glb";
 const INJECTED_LICENSE_URI = "https://registry.invalid/private/license";
 const INJECTED_AI_TAG = "registry-private-discovery-tag";

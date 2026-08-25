@@ -1,7 +1,8 @@
+import type { SubjectBodyTopologyV2 } from "@whitebox-world/subject-contracts";
+
 import type {
   ColliderProfileManifestInputV1,
   SubjectAssetManifestInputV1,
-  SubjectBodyTopologyV2,
 } from "./types-v2";
 
 interface Xier120StaticResourceRowV1 {

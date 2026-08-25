@@ -1,5 +1,5 @@
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
-import type { NumericProfileOverrideV1 } from "@whitebox-world/runtime-contracts";
+import type { NumericProfileOverrideV1 } from "@whitebox-world/subject-contracts";
 
 export const SUBJECT_PRESET_LOCAL_STORAGE_KEY = "worldkit.subject-preset-local.v1";
 

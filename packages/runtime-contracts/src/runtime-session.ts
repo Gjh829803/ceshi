@@ -12,6 +12,7 @@ import type {
   SpatialEntityStateV1,
   WorldStateSnapshotV1,
 } from "@whitebox-world/gameplay-contracts";
+import type { SubjectPresetBaselineV1 } from "@whitebox-world/subject-contracts";
 import type {
   RouteEvidenceSelectorV1,
   RouteOverlayQueryResultV2,
@@ -21,7 +22,6 @@ import type {
 } from "./browser-route-evidence";
 import type { CameraTuningV1 } from "./camera-parameter-contract";
 import type { Vec3 } from "./execution-plan";
-import type { SubjectPresetBaselineV1 } from "./subject-preset";
 
 export type SemanticInputActionV1 =
   | "move-forward"

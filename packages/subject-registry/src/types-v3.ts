@@ -2,6 +2,7 @@ import type {
   CameraRigParameterNameV1,
   CameraRigParametersV1,
 } from "@whitebox-world/runtime-contracts";
+import type { SubjectBodyTopologyV2 } from "@whitebox-world/subject-contracts";
 
 import type {
   AnimationSetManifestV1,
@@ -12,7 +13,6 @@ import type {
   PhysicsBodyProfileManifestV1,
   RigProfileManifestV1,
   SubjectAssetManifestV1,
-  SubjectBodyTopologyV2,
   SubjectColliderPolicyV2,
   SubjectRegistryResourceInputV1,
   SubjectRegistryResourceV1,

@@ -275,27 +275,6 @@
       "removalGate": "Replace with an explicitly exported public or testing subpath."
     },
     {
-      "importer": "scripts/lib/subject-preset-promotion.ts",
-      "specifier": "../../packages/subject-registry/src/built-in-capability-resources",
-      "owner": "@whitebox-world/subject-registry",
-      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
-      "removalGate": "Replace with an explicitly exported public or testing subpath."
-    },
-    {
-      "importer": "scripts/lib/subject-preset-promotion.ts",
-      "specifier": "../../packages/subject-registry/src/built-in-resource-manifests",
-      "owner": "@whitebox-world/subject-registry",
-      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
-      "removalGate": "Replace with an explicitly exported public or testing subpath."
-    },
-    {
-      "importer": "scripts/lib/subject-preset-promotion.ts",
-      "specifier": "../../packages/subject-registry/src/built-in-subject-definitions",
-      "owner": "@whitebox-world/subject-registry",
-      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
-      "removalGate": "Replace with an explicitly exported public or testing subpath."
-    },
-    {
       "importer": "scripts/lib/subject-source-migration-audit.test.ts",
       "specifier": "../../apps/playground/src/worldkit-asset-resolver",
       "owner": "@whitebox-world/playground",

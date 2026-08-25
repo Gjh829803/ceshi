@@ -10,6 +10,7 @@
     "@whitebox-world/authoring": "workspace:*",
     "@whitebox-world/protocol": "workspace:*",
     "@whitebox-world/runtime-contracts": "workspace:*",
+    "@whitebox-world/subject-contracts": "workspace:*",
     "@whitebox-world/terrain-surface": "workspace:*",
     "@whitebox-world/traversal": "workspace:*",
     "lodash-es": "^4.18.1"

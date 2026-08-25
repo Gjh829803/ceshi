@@ -15,7 +15,7 @@ import type {
   ExecutionSubjectV3,
   SubjectVisualPrimitivePartV3,
 } from "@whitebox-world/runtime-contracts";
-import type { GroundHumanoidActionIdV1 } from "@whitebox-world/subject-actions";
+import type { GroundHumanoidActionIdV1 } from "@whitebox-world/subject-contracts";
 
 import { SubjectAnimationPlayer } from "./subject-animation-player";
 import {

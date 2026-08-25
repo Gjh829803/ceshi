@@ -1,4 +1,9 @@
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
+import type {
+  SubjectPresetClosureV1,
+  SubjectPresetResourceLockEntryV1,
+  SubjectResourceKindV1,
+} from "@whitebox-world/subject-contracts";
 
 import { listSubjectRegistryReferenceEdgesV1 } from "./subject-registry-reference-edges";
 import type {
@@ -6,23 +11,6 @@ import type {
   SubjectRegistryResourceV3,
   SubjectResourceRegistryV3,
 } from "./types-v3";
-
-export interface SubjectPresetResourceLockEntryV1 {
-  resourceRef: string;
-  resourceKind: SubjectRegistryResourceV3["kind"];
-  version: number;
-  contentHash: string;
-}
-
-export interface SubjectPresetClosureV1 {
-  subjectDefinitionId: string;
-  subjectDefinitionRef: string;
-  subjectDefinitionContentHash: string;
-  entries: readonly SubjectPresetResourceLockEntryV1[];
-  contentHash: string;
-}
-
-type ResourceKindV1 = SubjectRegistryResourceV3["kind"];
 
 function deepFreeze<T>(value: T): T {
   if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
@@ -32,7 +20,7 @@ function deepFreeze<T>(value: T): T {
 
 function assertExactLockedResource(
   resource: SubjectRegistryResourceV3,
-  expectedResourceKinds: readonly ResourceKindV1[],
+  expectedResourceKinds: readonly SubjectResourceKindV1[],
   requestedRef: string,
 ): void {
   if (
@@ -79,7 +67,7 @@ export function resolveSubjectPresetClosureV1(
 
   const visit = (
     resourceRef: string,
-    expectedResourceKinds: readonly ResourceKindV1[],
+    expectedResourceKinds: readonly SubjectResourceKindV1[],
   ): SubjectRegistryResourceV3 => {
     if (activeRefs.has(resourceRef)) {
       throw new Error(`SUBJECT_PRESET_CLOSURE_CYCLE: '${resourceRef}'.`);

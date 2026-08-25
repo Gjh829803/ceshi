@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { NumericProfileOverrideV1 } from "@whitebox-world/runtime-contracts";
+import type { NumericProfileOverrideV1 } from "@whitebox-world/subject-contracts";
 
 import {
   SUBJECT_PRESET_LOCAL_STORAGE_KEY,

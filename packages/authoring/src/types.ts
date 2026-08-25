@@ -1,6 +1,10 @@
 import type {
   BipedBoneIdV1,
   GroundHumanoidActionIdV1,
+  SubjectBodyTopologyV2,
+  SubjectResourceKindV1,
+} from "@whitebox-world/subject-contracts";
+import type {
   CameraContextProfileV1,
   CameraModifierProfileV1,
   CameraRigAlgorithmDefinitionV1,
@@ -12,7 +16,6 @@ import type {
   MotionProfileV1,
   RelationshipProfileV1,
   RenderBindingProfileV1,
-  SubjectBodyTopologyV2,
   SubjectResourceRegistryV3,
 } from "@whitebox-world/subject-registry";
 
@@ -433,10 +436,8 @@ export interface NormalizedRigProfileV1 {
   sourceNodeNameByBoneId: Readonly<Record<BipedBoneIdV1, string>>;
 }
 
-export type NormalizedGroundHumanoidActionIdV1 = GroundHumanoidActionIdV1;
-
 export interface NormalizedAnimationBindingV1 {
-  actionId: NormalizedGroundHumanoidActionIdV1;
+  actionId: GroundHumanoidActionIdV1;
   sourceClipName: string;
   loopMode: "repeat" | "once";
   playbackSpeedRatio: number;
@@ -448,8 +449,8 @@ export interface NormalizedAnimationSetV1 {
   animationSetRef: string;
   subjectAssetRef: string;
   rigProfileRef: string;
-  defaultActionId: NormalizedGroundHumanoidActionIdV1;
-  requiredActionIds: readonly NormalizedGroundHumanoidActionIdV1[];
+  defaultActionId: GroundHumanoidActionIdV1;
+  requiredActionIds: readonly GroundHumanoidActionIdV1[];
   animationBindings: readonly NormalizedAnimationBindingV1[];
 }
 
@@ -541,28 +542,7 @@ export interface NormalizedSubjectDefinitionV2 {
 }
 
 export type ResolvedResourceKindV1 =
-  | "subject-definition"
-  | "subject-asset"
-  | "rig-profile"
-  | "animation-set"
-  | "collider-profile"
-  | "capability"
-  | "physics-body-profile"
-  | "locomotion-profile"
-  | "control-feel-profile"
-  | "collider-derivation-profile"
-  | "motion-kernel"
-  | "motion-profile"
-  | "control-profile"
-  | "camera-rig-algorithm"
-  | "camera-rig-profile"
-  | "camera-modifier-profile"
-  | "camera-context-profile"
-  | "medium-profile"
-  | "relationship-profile"
-  | "harness-profile"
-  | "pose-set-profile"
-  | "render-binding-profile"
+  | SubjectResourceKindV1
   | "traversal-surface-profile";
 
 export interface ResolvedResourceLockEntryV1 {

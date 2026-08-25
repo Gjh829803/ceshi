@@ -88,6 +88,7 @@
     "@whitebox-world/protocol": "workspace:*",
     "@whitebox-world/runtime-babylon": "workspace:*",
     "@whitebox-world/runtime-contracts": "workspace:*",
+    "@whitebox-world/subject-contracts": "workspace:*",
     "@whitebox-world/subject-registry": "workspace:*",
     "@whitebox-world/traversal": "workspace:*",
     "@whitebox-world/traversal-recast": "workspace:*",

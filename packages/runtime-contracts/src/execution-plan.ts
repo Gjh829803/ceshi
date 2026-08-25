@@ -1,11 +1,21 @@
 import {
+  SUBJECT_RESOURCE_KINDS_V1,
+  isBipedBoneIdV1,
+  isGroundHumanoidActionIdV1,
+  isSubjectBodyTopologyV2,
+  type BipedBoneIdV1,
+  type GroundHumanoidActionIdV1,
+  type SubjectBodyTopologyV2,
+} from "@whitebox-world/subject-contracts";
+import { sha256CanonicalJson } from "@whitebox-world/protocol";
+import type { TraversalSurfaceIdentityV1 } from "@whitebox-world/traversal";
+import { isNil } from "lodash-es";
+
+import {
   CAMERA_RIG_PARAMETER_NAMES_V1,
   type CameraRigParameterNameV1,
   type CameraRigParametersV1,
 } from "./camera-parameter-contract";
-import type { TraversalSurfaceIdentityV1 } from "@whitebox-world/traversal";
-import { sha256CanonicalJson } from "@whitebox-world/protocol";
-import { isNil } from "lodash-es";
 
 export type Vec2 = readonly [x: number, z: number];
 export type Vec3 = readonly [x: number, y: number, z: number];
@@ -91,62 +101,16 @@ export interface ExecutionSubjectAssetV1 {
   inventory: SubjectAssetInventoryV1;
 }
 
-export type ExecutionBipedBoneIdV1 =
-  | "hips"
-  | "spine"
-  | "chest"
-  | "neck"
-  | "head"
-  | "upper-arm.left"
-  | "lower-arm.left"
-  | "hand.left"
-  | "upper-arm.right"
-  | "lower-arm.right"
-  | "hand.right"
-  | "upper-leg.left"
-  | "lower-leg.left"
-  | "foot.left"
-  | "upper-leg.right"
-  | "lower-leg.right"
-  | "foot.right";
-
-export type ExecutionGroundHumanoidActionIdV1 =
-  | "idle"
-  | "idle.gaming"
-  | "walk"
-  | "walk.step"
-  | "run"
-  | "jump"
-  | "fall"
-  | "land.hard"
-  | "land.hard.alt"
-  | "fly"
-  | "float"
-  | "swim.surface"
-  | "swim.tread"
-  | "swim.exit"
-  | "sit"
-  | "sit.idle"
-  | "sit.ground.idle"
-  | "sit.toStand"
-  | "stand"
-  | "lay.idle"
-  | "roll.toRun"
-  | "fight.enter"
-  | "emote.salute"
-  | "emote.angry"
-  | "dance.rumba";
-
 export interface ExecutionRigProfileV1 {
   rigProfileRef: string;
   bodyTopology: "biped";
   skeletonRootBoneName: string;
-  requiredBoneIds: readonly ExecutionBipedBoneIdV1[];
-  sourceNodeNameByBoneId: Readonly<Record<ExecutionBipedBoneIdV1, string>>;
+  requiredBoneIds: readonly BipedBoneIdV1[];
+  sourceNodeNameByBoneId: Readonly<Record<BipedBoneIdV1, string>>;
 }
 
 export interface ExecutionAnimationBindingV1 {
-  actionId: ExecutionGroundHumanoidActionIdV1;
+  actionId: GroundHumanoidActionIdV1;
   sourceClipName: string;
   loopMode: "repeat" | "once";
   playbackSpeedRatio: number;
@@ -158,8 +122,8 @@ export interface ExecutionAnimationSetV1 {
   animationSetRef: string;
   subjectAssetRef: string;
   rigProfileRef: string;
-  defaultActionId: ExecutionGroundHumanoidActionIdV1;
-  requiredActionIds: readonly ExecutionGroundHumanoidActionIdV1[];
+  defaultActionId: GroundHumanoidActionIdV1;
+  requiredActionIds: readonly GroundHumanoidActionIdV1[];
   animationBindings: readonly ExecutionAnimationBindingV1[];
 }
 
@@ -172,16 +136,7 @@ export interface ExecutionSubjectCapsuleV1 {
 
 export interface ExecutionColliderProfileV1 {
   colliderProfileRef: string;
-  supportedBodyTopologies: readonly (
-    | "biped"
-    | "quadruped"
-    | "four-wheel"
-    | "surface-craft"
-    | "watercraft"
-    | "glider"
-    | "composite"
-    | "custom"
-  )[];
+  supportedBodyTopologies: readonly SubjectBodyTopologyV2[];
   collider: ExecutionSubjectCapsuleV1;
 }
 
@@ -226,7 +181,7 @@ export interface SubjectLocalSocketV3 {
 export interface SubjectBoneSocketV3 {
   id: string;
   kind: "bone";
-  boneId: ExecutionBipedBoneIdV1;
+  boneId: BipedBoneIdV1;
   offsetTransform: {
     positionMetersXYZ: Vec3;
     rotationEulerRadiansXYZ: Vec3;
@@ -373,7 +328,7 @@ export interface ExecutionSubjectV3 {
   entityId: string;
   subjectDefinitionRef: string;
   subjectDefinitionHash: string;
-  bodyTopology: string;
+  bodyTopology: SubjectBodyTopologyV2;
   semanticClassId: string;
   spawnAnchorEntityId: string;
   spawnSubjectOriginPositionMetersXYZ: Vec3;
@@ -551,32 +506,11 @@ export interface ExecutionConnectivityRequirementV1 {
   readonly routeId: string;
 }
 
-export const EXECUTION_RESOURCE_KINDS_V1 = [
-  "subject-definition",
-  "subject-asset",
-  "rig-profile",
-  "animation-set",
-  "collider-profile",
-  "capability",
-  "physics-body-profile",
-  "locomotion-profile",
-  "control-feel-profile",
-  "collider-derivation-profile",
-  "motion-kernel",
-  "motion-profile",
-  "control-profile",
-  "camera-rig-algorithm",
-  "camera-rig-profile",
-  "camera-modifier-profile",
-  "camera-context-profile",
-  "medium-profile",
-  "relationship-profile",
-  "harness-profile",
-  "pose-set-profile",
-  "render-binding-profile",
+export const EXECUTION_RESOURCE_KINDS_V1 = Object.freeze([
+  ...SUBJECT_RESOURCE_KINDS_V1,
   "traversal-surface-profile",
   "gameplay-bootstrap",
-] as const;
+] as const);
 
 export type ExecutionResourceKindV1 =
   typeof EXECUTION_RESOURCE_KINDS_V1[number];
@@ -898,6 +832,23 @@ function requireStringArray(input: unknown): void {
   dataArray(input).forEach(requireString);
 }
 
+function requireBipedBoneId(input: unknown): BipedBoneIdV1 {
+  if (!isBipedBoneIdV1(input)) return invalidExecutionPlanV5();
+  return input;
+}
+
+function requireGroundHumanoidActionId(
+  input: unknown,
+): GroundHumanoidActionIdV1 {
+  if (!isGroundHumanoidActionIdV1(input)) return invalidExecutionPlanV5();
+  return input;
+}
+
+function requireSubjectBodyTopology(input: unknown): SubjectBodyTopologyV2 {
+  if (!isSubjectBodyTopologyV2(input)) return invalidExecutionPlanV5();
+  return input;
+}
+
 function validateTransform(input: unknown): void {
   const value = exactDataRecord(input, [
     "positionMetersXYZ",
@@ -1064,8 +1015,13 @@ function validateRigProfile(input: unknown): void {
   requireString(value.rigProfileRef);
   requireLiteral(value.bodyTopology, ["biped"]);
   requireString(value.skeletonRootBoneName);
-  requireStringArray(value.requiredBoneIds);
-  Object.values(dataRecord(value.sourceNodeNameByBoneId)).forEach(requireString);
+  dataArray(value.requiredBoneIds).forEach(requireBipedBoneId);
+  Object.entries(dataRecord(value.sourceNodeNameByBoneId)).forEach(
+    ([boneId, sourceNodeName]) => {
+      requireBipedBoneId(boneId);
+      requireString(sourceNodeName);
+    },
+  );
 }
 
 function validateAnimationSet(input: unknown): void {
@@ -1080,8 +1036,8 @@ function validateAnimationSet(input: unknown): void {
   requireString(value.animationSetRef);
   requireString(value.subjectAssetRef);
   requireString(value.rigProfileRef);
-  requireString(value.defaultActionId);
-  requireStringArray(value.requiredActionIds);
+  requireGroundHumanoidActionId(value.defaultActionId);
+  dataArray(value.requiredActionIds).forEach(requireGroundHumanoidActionId);
   dataArray(value.animationBindings).forEach((binding) => {
     const row = exactDataRecord(binding, [
       "actionId",
@@ -1091,7 +1047,7 @@ function validateAnimationSet(input: unknown): void {
       "blendDurationSeconds",
       "rootMotionMode",
     ]);
-    requireString(row.actionId);
+    requireGroundHumanoidActionId(row.actionId);
     requireString(row.sourceClipName);
     requireLiteral(row.loopMode, ["repeat", "once"]);
     requireFinite(row.playbackSpeedRatio);
@@ -1107,7 +1063,7 @@ function validateColliderProfile(input: unknown): void {
     "collider",
   ]);
   requireString(value.colliderProfileRef);
-  requireStringArray(value.supportedBodyTopologies);
+  dataArray(value.supportedBodyTopologies).forEach(requireSubjectBodyTopology);
   const collider = exactDataRecord(value.collider, [
     "kind",
     "radiusMeters",
@@ -1422,7 +1378,7 @@ function validateSubject(input: unknown): void {
   requireString(value.entityId);
   requireString(value.subjectDefinitionRef);
   requireHash(value.subjectDefinitionHash);
-  requireString(value.bodyTopology);
+  requireSubjectBodyTopology(value.bodyTopology);
   requireString(value.semanticClassId);
   requireString(value.spawnAnchorEntityId);
   requireTuple(value.spawnSubjectOriginPositionMetersXYZ, 3);
@@ -1499,7 +1455,7 @@ function validateSubject(input: unknown): void {
       requireTuple(transform.positionMetersXYZ, 3);
       requireTuple(transform.rotationEulerRadiansXYZ, 3);
     } else {
-      requireString(socketValue.boneId);
+      requireBipedBoneId(socketValue.boneId);
       const transform = exactDataRecord(socketValue.offsetTransform, [
         "positionMetersXYZ",
         "rotationEulerRadiansXYZ",

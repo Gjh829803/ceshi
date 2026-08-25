@@ -1,5 +1,9 @@
 import { createHash } from "node:crypto";
 
+import {
+  isGroundHumanoidActionIdV1,
+  type GroundHumanoidActionIdV1,
+} from "@whitebox-world/subject-contracts";
 import { isEmpty, isNil, isPlainObject } from "lodash-es";
 
 export interface ProductAssetSourceClipTimingV1 {
@@ -10,7 +14,7 @@ export interface ProductAssetSourceClipTimingV1 {
 }
 
 export interface ProductAssetSupportedActionBindingV1 {
-  readonly actionId: string;
+  readonly actionId: GroundHumanoidActionIdV1;
   readonly sourceClip: string;
 }
 
@@ -51,13 +55,13 @@ interface AssetManifestV1 {
   readonly rig: {
     readonly rootBone: string;
     readonly jointCount: number;
-    readonly requiredActions: readonly string[];
+    readonly requiredActions: readonly GroundHumanoidActionIdV1[];
   };
 }
 
 interface ActionManifestV1 {
   readonly actions: readonly {
-    readonly id: string;
+    readonly id: GroundHumanoidActionIdV1;
     readonly clip: string;
   }[];
 }
@@ -123,7 +127,7 @@ function parseAssetManifest(value: unknown): AssetManifestV1 {
     typeof rig.rootBone !== "string" ||
     typeof rig.jointCount !== "number" ||
     !Array.isArray(rig.requiredActions) ||
-    !rig.requiredActions.every((actionId) => typeof actionId === "string")
+    !rig.requiredActions.every(isGroundHumanoidActionIdV1)
   ) {
     return fail("PRODUCT_ASSET_MANIFEST_INVALID");
   }
@@ -137,7 +141,7 @@ function parseActionManifest(value: unknown): ActionManifestV1 {
     !(value as { actions: unknown[] }).actions.every(
       (action) =>
         isPlainObject(action) &&
-        typeof (action as { id?: unknown }).id === "string" &&
+        isGroundHumanoidActionIdV1((action as { id?: unknown }).id) &&
         typeof (action as { clip?: unknown }).clip === "string",
     )
   ) {
@@ -225,7 +229,7 @@ export function inspectProductAssetEvidence(options: {
   readonly glbBytes: Uint8Array;
   readonly assetManifest: unknown;
   readonly actionManifest: unknown;
-  readonly requiredRuntimeActionIds: readonly string[];
+  readonly requiredRuntimeActionIds: readonly GroundHumanoidActionIdV1[];
   readonly expectedSubjectAssetRef: string;
 }): ProductAssetEvidenceV1 {
   const assetManifest = parseAssetManifest(options.assetManifest);

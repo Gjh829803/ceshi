@@ -14,6 +14,7 @@ import type {
   Vec2,
 } from "@whitebox-world/authoring";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
+import { BIPED_BONE_IDS_V1 } from "@whitebox-world/subject-contracts";
 import {
   sampleTriangleHeightfieldSurface,
   validateSpawnSafety,
@@ -26,7 +27,6 @@ import {
   parseExecutionPlanV5,
   type CompileDiagnostic,
   type ExecutionAnimationSetV1,
-  type ExecutionBipedBoneIdV1,
   type ExecutionColliderProfileV1,
   type ExecutionObjectPrimitiveV3,
   type ExecutionObjectV3,
@@ -82,26 +82,6 @@ function rejectPublishedWaterMediumProfile(mediumProfile: object): void {
     assertPublishedMovementMediumSupported("water");
   }
 }
-
-const EXECUTION_BIPED_BONE_IDS = [
-  "chest",
-  "foot.left",
-  "foot.right",
-  "hand.left",
-  "hand.right",
-  "head",
-  "hips",
-  "lower-arm.left",
-  "lower-arm.right",
-  "lower-leg.left",
-  "lower-leg.right",
-  "neck",
-  "spine",
-  "upper-arm.left",
-  "upper-arm.right",
-  "upper-leg.left",
-  "upper-leg.right",
-] as const satisfies readonly ExecutionBipedBoneIdV1[];
 
 type NormalizedWorldCompileView = Pick<
   NormalizedWorldIRV4,
@@ -557,7 +537,7 @@ function compileSubjectAssetV1(
 function compileRigProfileV1(
   resource: NormalizedRigProfileV1,
 ): ExecutionRigProfileV1 {
-  for (const boneId of EXECUTION_BIPED_BONE_IDS) {
+  for (const boneId of BIPED_BONE_IDS_V1) {
     const hasMapping = Object.prototype.hasOwnProperty.call(
       resource.sourceNodeNameByBoneId,
       boneId,

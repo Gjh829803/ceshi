@@ -1,11 +1,11 @@
 import type {
-  GroundHumanoidActionIdV1,
+  AutomaticGroundHumanoidActionIdV1,
   GroundHumanoidActionInputV1,
 } from "./types.js";
 
 export function resolveGroundHumanoidAction(
   input: GroundHumanoidActionInputV1,
-): GroundHumanoidActionIdV1 {
+): AutomaticGroundHumanoidActionIdV1 {
   if (
     !Number.isFinite(input.horizontalSpeedMetersPerSecond) ||
     input.horizontalSpeedMetersPerSecond < 0

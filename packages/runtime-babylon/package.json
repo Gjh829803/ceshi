@@ -16,6 +16,7 @@
     "@whitebox-world/runtime-contracts": "workspace:*",
     "@whitebox-world/runtime-host": "workspace:*",
     "@whitebox-world/subject-actions": "workspace:*",
+    "@whitebox-world/subject-contracts": "workspace:*",
     "@whitebox-world/terrain-surface": "workspace:*",
     "@whitebox-world/traversal": "workspace:*",
     "earcut": "3.0.2",

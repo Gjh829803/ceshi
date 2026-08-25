@@ -2,9 +2,9 @@ import type {
   ApplyCameraPreviewRequestV1,
   ApplySubjectPresetTuningRequestV1,
   CameraPreviewStateV1,
-  NumericProfileOverrideV1,
   SubjectPresetTuningReceiptV1,
 } from "@whitebox-world/runtime-contracts";
+import type { NumericProfileOverrideV1 } from "@whitebox-world/subject-contracts";
 import { isNil } from "lodash-es";
 
 import {

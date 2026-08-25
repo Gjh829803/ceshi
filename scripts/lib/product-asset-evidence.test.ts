@@ -113,4 +113,27 @@ describe("product asset evidence", () => {
       expectedSubjectAssetRef: fixture.subjectAssetRef,
     })).toThrowError("PRODUCT_ASSET_REQUIRED_ACTION_DUPLICATE");
   });
+
+  it("rejects an Action Manifest term outside the canonical Subject vocabulary", async () => {
+    const fixture = parseProductAssetIntakeFixtureV1(
+      JSON.parse(await readFile(G_BOT_FIXTURE_PATH, "utf8")) as unknown,
+    );
+    const [glbBytes, assetManifestText, actionManifestText] = await Promise.all([
+      readFile(path.join(REPOSITORY_ROOT, fixture.glbRepositoryPath)),
+      readFile(path.join(REPOSITORY_ROOT, fixture.productAssetManifestPath), "utf8"),
+      readFile(path.join(REPOSITORY_ROOT, fixture.productActionManifestPath), "utf8"),
+    ]);
+    const actionManifest = JSON.parse(actionManifestText) as {
+      actions: Array<{ id: string }>;
+    };
+    actionManifest.actions.at(-1)!.id = "provider-private-action";
+
+    expect(() => inspectProductAssetEvidence({
+      glbBytes,
+      assetManifest: JSON.parse(assetManifestText) as unknown,
+      actionManifest,
+      requiredRuntimeActionIds: fixture.requiredRuntimeActionIds,
+      expectedSubjectAssetRef: fixture.subjectAssetRef,
+    })).toThrowError("PRODUCT_ASSET_ACTION_MANIFEST_INVALID");
+  });
 });

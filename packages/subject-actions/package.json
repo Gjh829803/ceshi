@@ -5,5 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@whitebox-world/subject-contracts": "workspace:*"
   }
 }

@@ -101,6 +101,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "packages/subject-actions/src/character-state-resolver.test.ts", lane: "contract" },
   { path: "packages/subject-actions/src/subject-actions.test.ts", lane: "contract" },
   { path: "packages/subject-composition/src/subject-composition.test.ts", lane: "contract" },
+  { path: "packages/subject-contracts/src/subject-contracts.test.ts", lane: "contract" },
   { path: "packages/subject-registry/src/capability-registry.test.ts", lane: "contract" },
   { path: "packages/subject-registry/src/p15-admission-repro.test.ts", lane: "contract" },
   { path: "packages/subject-registry/src/selectable-control-feel.test.ts", lane: "contract" },

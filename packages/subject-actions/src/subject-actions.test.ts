@@ -1,7 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { resolveGroundHumanoidAction } from "./index.js";
+import {
+  AUTOMATIC_GROUND_HUMANOID_ACTION_IDS_V1,
+  resolveGroundHumanoidAction,
+} from "./index.js";
 
 describe("resolveGroundHumanoidAction", () => {
+  it("publishes only the four automatic ground action outputs", () => {
+    expect(AUTOMATIC_GROUND_HUMANOID_ACTION_IDS_V1).toEqual([
+      "idle",
+      "walk",
+      "run",
+      "jump",
+    ]);
+    expect(Object.isFrozen(AUTOMATIC_GROUND_HUMANOID_ACTION_IDS_V1)).toBe(true);
+  });
+
   it.each([
     [{ movementMedium: "ground", horizontalSpeedMetersPerSecond: 0, runRequested: false }, "idle"],
     [{ movementMedium: "ground", horizontalSpeedMetersPerSecond: 0, runRequested: true }, "idle"],
@@ -14,7 +27,9 @@ describe("resolveGroundHumanoidAction", () => {
     [{ movementMedium: "air", horizontalSpeedMetersPerSecond: 2.4, runRequested: false }, "jump"],
     [{ movementMedium: "air", horizontalSpeedMetersPerSecond: 2.4, runRequested: true }, "jump"],
   ] as const)("maps %j to %s", (input, expected) => {
-    expect(resolveGroundHumanoidAction(input)).toBe(expected);
+    const resolved: (typeof AUTOMATIC_GROUND_HUMANOID_ACTION_IDS_V1)[number] =
+      resolveGroundHumanoidAction(input);
+    expect(resolved).toBe(expected);
   });
 
   it.each([
