@@ -514,7 +514,7 @@ describe("Route V2 Graph, Path, Overlay, and Connectivity", () => {
     expect(() => assertRouteConnectivityResultForBuildInputV2({
       kind: "route-connectivity-result",
       schemaVersion: 2,
-      status: "unreachable",
+      status: "incomplete",
       graphStatus: "unavailable",
       connectivityFailure: {
         ...common,
@@ -531,7 +531,7 @@ describe("Route V2 Graph, Path, Overlay, and Connectivity", () => {
 
     const profileMissing = canonicalRouteConnectivityFailureV2({
       ...common,
-      status: "unreachable",
+      status: "incomplete",
       graphStatus: "unavailable",
       reason: {
         kind: "surface-profile-missing",
@@ -550,7 +550,7 @@ describe("Route V2 Graph, Path, Overlay, and Connectivity", () => {
     expect(canonicalRouteConnectivityFailureV2({
       ...common,
       relatedTraversalSurfaceIdentities: [heightfieldSurface()],
-      status: "unreachable",
+      status: "incomplete",
       graphStatus: "unavailable",
       reason: {
         kind: "surface-correlation-missing",
@@ -565,7 +565,7 @@ describe("Route V2 Graph, Path, Overlay, and Connectivity", () => {
     expect(canonicalRouteConnectivityFailureV2({
       ...common,
       relatedTraversalSurfaceIdentities: sortedIdentities,
-      status: "unreachable",
+      status: "incomplete",
       graphStatus: "unavailable",
       reason: {
         kind: "surface-correlation-ambiguous",
@@ -580,7 +580,7 @@ describe("Route V2 Graph, Path, Overlay, and Connectivity", () => {
         heightfieldSurface(),
         { ...heightfieldSurface(), resolvedVersion: "2" },
       ],
-      status: "unreachable",
+      status: "incomplete",
       graphStatus: "unavailable",
       reason: {
         kind: "surface-correlation-ambiguous",

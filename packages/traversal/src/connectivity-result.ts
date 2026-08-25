@@ -935,14 +935,14 @@ export function canonicalRouteConnectivityFailureV2(
   const unavailableUnreachable = new Set<ReasonKindV2>([
     "empty-heightfield-source",
     "no-queryable-ground-surface",
-    "surface-profile-missing",
-    "surface-correlation-missing",
-    "surface-correlation-ambiguous",
     ...THRESHOLD_KINDS_V2,
   ]);
   const unavailableIncomplete = new Set<ReasonKindV2>([
     "node-budget-exceeded",
     "edge-budget-exceeded",
+    "surface-profile-missing",
+    "surface-correlation-missing",
+    "surface-correlation-ambiguous",
     "traversal-surface-count-budget-exceeded",
     "traversal-surface-triangle-pair-test-budget-exceeded",
   ]);

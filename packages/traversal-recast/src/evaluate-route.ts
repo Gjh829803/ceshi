@@ -990,7 +990,7 @@ function profileMissingIfUnboundSupportV2(
       (unboundHits.mode === "resolved" ? [unboundHits.hit, ...unboundHits.hits] : unboundHits.hits)
         .map((hit) => hit.traversalSurfaceId),
     );
-    return failureResultV2(receipt, "unreachable", undefined, {
+    return failureResultV2(receipt, "incomplete", undefined, {
       kind: "surface-profile-missing",
       code: "ROUTE_SURFACE_PROFILE_MISSING",
       relevantColliderSubshapeIds: [...hitIds].sort(),
@@ -1009,14 +1009,14 @@ function unavailableProjectionResultV2(
   rejectionProofInput: EvaluateRouteRejectionProofInputV1 | undefined,
 ): RouteConnectivityResultV2 {
   if ("reason" in projection && projection.reason === "surface-correlation-missing") {
-    return failureResultV2(receipt, "unreachable", undefined, {
+    return failureResultV2(receipt, "incomplete", undefined, {
       kind: "surface-correlation-missing",
       code: "ROUTE_SURFACE_CORRELATION_MISSING",
       failurePositionMetersXYZ: projection.failurePositionMetersXYZ,
     }, projection.relatedTraversalSurfaceIdentities);
   }
   if ("reason" in projection && projection.reason === "surface-correlation-ambiguous") {
-    return failureResultV2(receipt, "unreachable", undefined, {
+    return failureResultV2(receipt, "incomplete", undefined, {
       kind: "surface-correlation-ambiguous",
       code: "ROUTE_SURFACE_CORRELATION_AMBIGUOUS",
       failurePositionMetersXYZ: projection.failurePositionMetersXYZ,
@@ -1123,14 +1123,14 @@ export async function evaluateRequiredRouteV2(
         surface.traversalSurfaceId === preflight.blocker.secondTraversalSurfaceId
       ),
     );
-    return failureResultV2(receipt, "unreachable", undefined, {
+    return failureResultV2(receipt, "incomplete", undefined, {
       kind: "surface-correlation-ambiguous",
       code: "ROUTE_SURFACE_CORRELATION_AMBIGUOUS",
-      failurePositionMetersXYZ: [
+      failurePositionMetersXYZ: quantizeVec3([
         preflight.blocker.witnessPointMetersXZ[0],
-        0,
+        preflight.blocker.firstHeightMeters,
         preflight.blocker.witnessPointMetersXZ[1],
-      ],
+      ], envelope.positionQuantizationMeters),
     }, identities);
   }
   const profileMissing = profileMissingIfUnboundSupportV2(receipt);

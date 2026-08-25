@@ -146,7 +146,7 @@ describe("evaluateRequiredRouteV2", () => {
       destinationOnPlatform: true,
     });
     const result = await evaluateRequiredRouteV2({ buildInputReceipt: receipt });
-    expect(result.status).toBe("unreachable");
+    expect(result.status).toBe("incomplete");
     if (result.status === "complete") return;
     expect(result.graphStatus).toBe("unavailable");
     expect(result.connectivityFailure.reason.kind).toBe("surface-profile-missing");
@@ -161,10 +161,13 @@ describe("evaluateRequiredRouteV2", () => {
       overlapCoplanarMeters: 1,
     });
     const result = await evaluateRequiredRouteV2({ buildInputReceipt: receipt });
-    expect(result.status).toBe("unreachable");
+    expect(result.status).toBe("incomplete");
     if (result.status === "complete") return;
     expect(result.graphStatus).toBe("unavailable");
     expect(result.connectivityFailure.reason.kind).toBe("surface-correlation-ambiguous");
+    if (result.connectivityFailure.reason.kind === "surface-correlation-ambiguous") {
+      expect(result.connectivityFailure.reason.failurePositionMetersXYZ[1]).toBe(0.25);
+    }
     expect(
       result.connectivityFailure.relatedTraversalSurfaceIdentities.length,
     ).toBeGreaterThanOrEqual(2);
