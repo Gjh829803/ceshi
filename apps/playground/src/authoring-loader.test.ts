@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -36,7 +37,7 @@ import {
   featureInspections,
   mapPlaygroundInputActions,
 } from "./babylon-world-adapter";
-import { loadAuthoringScene } from "./authoring-loader";
+import { loadAuthoringScene, loadRuntimeVisualCaptureTargets } from "./authoring-loader";
 
 function deepFreeze<T>(value: T): Readonly<T> {
   if (value !== null && typeof value === "object") {
@@ -244,6 +245,40 @@ function jsonResponse(value: unknown, status = 200): Response {
 }
 
 describe("loadAuthoringScene", () => {
+  it("loads the trusted visual identity palette for interactive authoring playback", async () => {
+    const targets = await loadRuntimeVisualCaptureTargets(async () => new Response(JSON.stringify({
+      targets: [{
+        id: "player-subject",
+        visualTargetId: "player-subject",
+        runtimeEntityIds: ["player"],
+        role: "primary-subject",
+        semanticClassId: "subject.player",
+        identityColor: "#E85D5D",
+      }],
+    }), { status: 200 }));
+    expect(targets).toEqual([{
+      id: "player-subject",
+      visualTargetId: "player-subject",
+      runtimeEntityIds: ["player"],
+      role: "primary-subject",
+      semanticClassId: "subject.player",
+      identityColor: "#E85D5D",
+    }]);
+    await expect(loadRuntimeVisualCaptureTargets(async () => new Response(JSON.stringify({
+      targets: [],
+    }), { status: 200 }))).rejects.toThrow(/Visual capture groups must contain 1-5 targets/);
+  });
+
+  it("configures trusted target colors before mounting an interactive world", async () => {
+    const mainSource = await readFile(path.resolve("apps/playground/src/main.ts"), "utf8");
+    const endpointIndex = mainSource.indexOf("/visual-capture-targets");
+    const configureIndex = mainSource.indexOf("adapter.configureVisualCaptureTargets(visualCaptureTargets)");
+    const mountIndex = mainSource.indexOf("adapter.mount(viewport)", configureIndex);
+    expect(endpointIndex).toBeGreaterThan(-1);
+    expect(configureIndex).toBeGreaterThan(endpointIndex);
+    expect(mountIndex).toBeGreaterThan(configureIndex);
+  });
+
   it("keeps the rigged canonical world ref-only with two stable non-overlapping instances", async () => {
     const inputPath = fileURLToPath(
       new URL("../../../examples/authoring/rigged-subject-world.json", import.meta.url),

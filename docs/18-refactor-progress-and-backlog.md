@@ -40,19 +40,21 @@
 [`2026-08-25-babylon-only-threejs-retirement.md`](superpowers/plans/2026-08-25-babylon-only-threejs-retirement.md)。
 它保留 Plan-first、Opening Composition、Studio preview、planning capture 和 SDK-derived
 tri-view 产品合同，同时把 gameplay、catalog 和 artifact-only 路由收口到同一个
-Babylon/Havok Runtime。下表描述当前候选工作树状态；“候选已实现”不等于已完成 TR7
-全量集成、独立审查或发布。
+Babylon/Havok Runtime。TR0–TR7 已随 `main@01ee4b9` 完成首次合入；合入后 Cursor 深审为
+Final GO / 无 blocker，并识别一项 composition-mask 共享材质缺陷及若干测试、合同和文档
+收口项。复核修补、相关门禁、第二轮 Cursor 深审及定向 follow-up 均已 Final GO；Camera Runtime 自动选择仍以 P2.4 为准，不在本 Epic
+中冒充已交付能力。
 
 | ID | 当前状态 | 当前交付物 | depends_on / blocks | 完成证据 |
 |---|---|---|---|---|
 | TR0 | 已完成 | 冻结 Babylon-only 边界、迁移范围、资产不变式和依赖图 | 无 / TR1–TR7 | 本 Epic 与实施计划可从权威 Backlog 发现 |
-| TR1 | 候选已实现，待 TR7 | Outdoor importer 与 World geometry 只使用 Babylon/引擎无关数据 | TR0 / TR2、TR5 | 非对称 TRS、terrain geometry data、六场景回归进入集成矩阵 |
-| TR2 | 候选已实现，待最终渲染验收 | Babylon artifact renderer 承接 opening frame、mask/report、planning views 和 prototype tri-view | TR0、TR1 / TR3、TR5、TR6 | 生命周期测试和 6/6 artifact route 已通过；最终像素证据由 TR7 收口 |
-| TR3 | 候选已实现，待 TR7 | 旧 Runtime cluster 退出；`@whitebox-world/camera` clean-break 为 provider-neutral Domain | TR2 / TR5、TR6 | 包边界和纯 Selection 测试已加入；不宣称 Browser/Runtime selector 已接线 |
-| TR4 | 候选已实现，聚焦门禁已过 | Static Subject intake 改为 GLB-first；保留 19/19 Registry/hash/load/dispose 验证 | TR0 / TR6 | `verify:xier120-subjects` 与 malformed/hash mismatch 负向门禁 |
-| TR5 | 进行中 | Scene/artifact verification 迁移到 Babylon/Havok | TR1、TR2、TR3 / TR7 | `test:scenes`、6/6 gameplay/artifact 已通过；新增 14 项 geometry conformance 覆盖 Primitive、水体边界、凹多边形双绕序、退化拒绝和 dispose；Studio/full gates 尚待收口 |
-| TR6 | 候选已实现，待 TR7 | Active docs、Agent 规则、架构站和 Camera 包说明统一为 Babylon-only | TR2、TR3、TR4 / TR7 | Active provider scan 零命中；18 个 Markdown 入口相对链接和 architecture build 已通过 |
-| TR7 | 待执行，main-agent-only | 全量门禁、视觉证据、深审、独立复核、提交并推送 `main` | TR3–TR6 / 无 | 完整测试/build/Browser/scene/artifact/census 与远端 SHA |
+| TR1 | 已完成 | Outdoor importer 与 World geometry 只使用 Babylon/引擎无关数据 | TR0 / TR2、TR5 | 非对称与嵌套非均匀 TRS、负行列式、不可表示 shear、terrain geometry data、六场景回归进入集成矩阵 |
+| TR2 | 已完成 | Babylon artifact renderer 承接 opening frame、mask/report、planning views 和 prototype tri-view | TR0、TR1 / TR3、TR5、TR6 | 生命周期测试和 6/6 artifact route 已通过；composition mask 按 mesh 隔离临时材质，共享 beauty material 与临时贴图释放均有回归 |
+| TR3 | 已完成 | 旧 Runtime cluster 退出；`@whitebox-world/camera` clean-break 为 provider-neutral Domain | TR2 / TR5、TR6 | 包边界和纯 Selection 测试已加入；Profile admission 复用 Camera Domain 参数不变量；不宣称 Browser/Runtime selector 已接线 |
+| TR4 | 已完成 | Static Subject intake 改为 GLB-first；保留 19/19 Registry/hash/load/dispose 验证 | TR0 / TR6 | `verify:xier120-subjects` 与 malformed/hash mismatch 负向门禁 |
+| TR5 | 已完成 | Scene/artifact verification 迁移到 Babylon/Havok | TR1、TR2、TR3 / TR7 | 181 files / 2,201 tests、6/6 gameplay/artifact、Studio 5/5、生产与架构 build 已通过；14 项 geometry conformance 覆盖 Primitive、水体边界、凹多边形双绕序、退化拒绝和 dispose |
+| TR6 | 已完成 | Active docs、Agent 规则、架构站和 Camera 包说明统一为 Babylon-only | TR2、TR3、TR4 / TR7 | Active provider scan 零命中；18 个 Markdown 入口相对链接和 architecture build 已通过 |
+| TR7 | 已完成，main-agent-only | 全量门禁、视觉证据、深审、独立复核、提交并推送 `main` | TR3–TR6 / 无 | 首次合入及复核修补门禁通过；两轮 Cursor 深审及最新纹理生命周期定向 follow-up 均为 Final GO；本提交为最终 `main` 收口 |
 
 `@whitebox-world/camera` 当前已实现命名 Rig/Modifier/Context Profile、View Preference、
 Context admission、纯 Selection/Explain 和诊断；committed Gameplay Context Projection、
@@ -582,6 +584,9 @@ Incremental Hot Apply，以及哪些 Runtime 状态被保留、重置或替换�
   `CameraContextSampleV1` Projection；不得保留旧命令 alias 或从 Render Pose 反推 Context。
 - [ ] GCC-2/GCC-3：把已实现的 Profile admission/Selection/Explain 接入 Registry Lock、
   唯一 `cameraViewPreference` Command/View State 和原子拒绝语义。
+- [ ] GCC-4 接线前必须解析选中 Rig 与全部匹配 Modifier 的最终参数，并对合并结果再次执行
+  Camera Domain 不变量校验；当前 admission 只保证单个完整 Rig 与单个 partial Modifier 各自
+  合法，不宣称跨 Rule/Profile 组合已经闭环。
 - [ ] GCC-4/GCC-5：CameraDirector 消费纯 Selection Decision；Mount/Equipment/Flight 事务
   只提交 Camera 输入并与 Gameplay 一起原子回滚。
 - [ ] GCC-6/GCC-7：交付两个 Kit、Registry Lock、Browser/CLI/Take 与两个 Golden Fixture，
@@ -696,17 +701,19 @@ Replay、Streaming/Dispose 和自动 Diagnostic；普通 Agent 只引用稳定 P
 
 - [x] TR0 已冻结依赖图与产品保留合同；执行权威为
   [Babylon-only Runtime 收口实施计划](superpowers/plans/2026-08-25-babylon-only-threejs-retirement.md)。
-- [x] TR1/TR3/TR4 候选实现已移除旧 geometry/Runtime/bake 路径，并建立 provider-neutral
-  Camera Domain 与 GLB-first intake；最终状态仍由 TR7 集成门禁决定。
-- [x] TR2 候选实现已让 Babylon 承接 `?scene=` artifact-only 的 Opening Composition、
-  planning capture 和 SDK-derived tri-view；实际 6/6 像素证据尚待 TR5/TR7。
-- [ ] TR5 已通过 `test:scenes`、6/6 gameplay/artifact 和 14 项 Babylon geometry
-  conformance；继续完成 Studio preview/capture 与最终非对称 terrain parity，确保没有第二套
-  Gameplay 或 capture truth。
-- [x] TR6 候选已让 README、AGENTS、快速接入、架构站和发布流程只指向 Babylon-backed
-  当前入口；历史 review/spec 只保留决策证据，不作为可用说明。最终发布仍受 TR7 阻断。
-- [ ] TR7 运行完整 Gates、provider census、Runtime 深审、独立复核和 rendered/manual evidence，
-  之后才能提交、推送并宣布默认实现收口完成。
+- [x] TR1/TR3/TR4 已随 `main@01ee4b9` 移除旧 geometry/Runtime/bake 路径，并建立
+  provider-neutral Camera Domain 与 GLB-first intake；复核分支补齐非均匀 TRS、反射与 shear
+  对抗测试，以及 Camera 参数不变量的单一所有权。
+- [x] TR2 已让 Babylon 承接 `?scene=` artifact-only 的 Opening Composition、planning
+  capture 和 SDK-derived tri-view；首次合入与复核修补均取得 6/6 artifact 像素证据，且共享
+  beauty material 的语义色隔离与临时贴图释放已有回归。
+- [x] TR5 已通过 `test:scenes`、6/6 gameplay/artifact、Studio 5/5、非对称 terrain parity
+  和 14 项 Babylon geometry conformance；Gameplay 与 capture 没有第二套 truth。
+- [x] TR6 已让 README、AGENTS、快速接入、架构站和发布流程只指向 Babylon-backed 当前
+  入口；历史 review/spec 只保留决策证据，不作为可用说明。
+- [x] TR7 的首次全量 Gates、provider census、Runtime 深审、rendered/manual evidence、两轮
+  Cursor 深审与最新纹理生命周期定向 follow-up 均已完成并取得 Final GO；复核修补随本提交
+  合入并推送 `main`，关闭 Babylon-only Runtime 收口 Epic。
 
 #### P3.3 后续独立能力
 

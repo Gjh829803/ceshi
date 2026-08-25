@@ -21,9 +21,11 @@ import {
 import type {
   CompileDiagnostic,
   ExecutionPlanV5,
+  RuntimeCaptureTargetV1,
 } from "@whitebox-world/runtime-contracts";
 import {
   canonicalWorldkitBrowserRouteEvidencePublicationV2,
+  validateRuntimeCaptureTargetsV1,
   type WorldkitBrowserRouteEvidencePublicationV2,
 } from "@whitebox-world/runtime-contracts";
 import type { RuntimeWorldConfigurationV1 } from "@whitebox-world/runtime-host";
@@ -89,12 +91,42 @@ export interface AuthoringSceneLoadResult {
 
 export type AuthoringSourceFetcher = () => Promise<Response>;
 
+export type VisualCaptureTargetsFetcher = () => Promise<Response>;
+
 export interface AuthoringSceneLoadOptionsV1 {
   subjectDefinitionRef?: string;
   fetchRouteEvidence?: AuthoringSourceFetcher;
   fetchSubjectAsset?: typeof fetch;
 }
 
+export async function loadRuntimeVisualCaptureTargets(
+  fetchSource: VisualCaptureTargetsFetcher,
+): Promise<readonly RuntimeCaptureTargetV1[]> {
+  let response: Response;
+  try {
+    response = await fetchSource();
+  } catch (error) {
+    throw new Error("Unable to fetch the trusted visual capture targets.", {
+      cause: error,
+    });
+  }
+  if (!response.ok) {
+    throw new Error(`Visual capture target source returned HTTP ${response.status}.`);
+  }
+  const payload = await response.json() as { targets?: unknown };
+  if (!Array.isArray(payload.targets)) {
+    throw new Error("Visual capture target source omitted targets.");
+  }
+  const targets = payload.targets as RuntimeCaptureTargetV1[];
+  const errors = validateRuntimeCaptureTargetsV1(targets);
+  if (errors.length > 0) {
+    throw new Error(`Visual capture targets are invalid: ${errors.join(" ")}`);
+  }
+  return targets.map((target) => ({
+    ...target,
+    runtimeEntityIds: [...target.runtimeEntityIds],
+  }));
+}
 const CAPABILITY_PLAYGROUND_MINIMUM_RESOURCE_BUDGET = Object.freeze({
   maxVertices: 200_000,
   maxTriangles: 300_000,

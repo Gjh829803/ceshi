@@ -13,7 +13,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
+import type { Browser, BrowserContext, Page } from "playwright";
 
 import {
   parseAuthoringSpecV4,
@@ -36,6 +36,7 @@ import {
 } from "../packages/layout-solver/src/index.js";
 import { promoteArtifactDirectory } from "./lib/artifact-directory-promotion";
 import { layoutSolveFile } from "./lib/layout-artifacts";
+import { launchChromiumWithSystemFallback } from "./lib/playwright-browser-launch";
 import { loadWorldkitRoutePipeline } from "./lib/worldkit-pipeline";
 import { startWorldkitServer } from "./lib/worldkit-server";
 import { captureVisibleWorldWithRetries } from "./worldkit";
@@ -346,7 +347,7 @@ async function captureBrowserEvidence(): Promise<BrowserEvidenceV1> {
   let primaryError: unknown;
   try {
     server = await startWorldkitServer({ inputPath: INPUT_PATH });
-    browser = await chromium.launch({ headless: true });
+    browser = await launchChromiumWithSystemFallback();
     context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
     page = await context.newPage();
     await page.goto(server.url, { waitUntil: "domcontentloaded", timeout: 30_000 });

@@ -11,17 +11,23 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import queue
 import re
 import shlex
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 from typing import Iterator
 
 
 DEFAULT_MODEL = "cursor-grok-4.6-xhigh"
+DEFAULT_OUTPUT_CHECK_SECONDS = 15.0
+DEFAULT_SESSION_INSPECT_SECONDS = 60.0
 STATE_SCHEMA_VERSION = 1
+WORKTREE_DRIFT_EXIT_CODE = 3
 CHAT_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
 WORKSPACE_TRUST_GUIDANCE = (
     "If you want Cursor to collaborate, add trust for this workspace first "
@@ -50,6 +56,55 @@ def run_git(workspace: Path, *arguments: str) -> str:
         detail = result.stderr.strip() or result.stdout.strip() or "unknown git error"
         raise ReviewError(f"workspace is not an accessible Git worktree: {detail}")
     return result.stdout.strip()
+
+
+def run_git_bytes(workspace: Path, *arguments: str) -> bytes:
+    result = subprocess.run(
+        ["git", "-C", str(workspace), *arguments],
+        check=False,
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        detail = result.stderr.decode(errors="replace").strip() or "unknown git error"
+        raise ReviewError(f"cannot fingerprint review tree: {detail}")
+    return result.stdout
+
+
+def fingerprint_review_tree(workspace: Path) -> str:
+    """Hash HEAD plus tracked and untracked review inputs without mutating Git."""
+    digest = hashlib.sha256()
+    head = subprocess.run(
+        ["git", "-C", str(workspace), "rev-parse", "--verify", "HEAD"],
+        check=False,
+        capture_output=True,
+    )
+    if head.returncode == 0:
+        digest.update(head.stdout)
+    else:
+        digest.update(b"unborn\0")
+        digest.update(run_git_bytes(workspace, "symbolic-ref", "HEAD"))
+    digest.update(run_git_bytes(workspace, "diff", "--binary", "--no-ext-diff"))
+    digest.update(run_git_bytes(workspace, "diff", "--cached", "--binary", "--no-ext-diff"))
+    untracked = run_git_bytes(
+        workspace,
+        "ls-files",
+        "--others",
+        "--exclude-standard",
+        "-z",
+    )
+    for raw_path in sorted(path for path in untracked.split(b"\0") if path):
+        digest.update(b"untracked\0" + raw_path + b"\0")
+        file_path = workspace / os.fsdecode(raw_path)
+        if file_path.is_symlink():
+            digest.update(b"symlink\0" + os.fsencode(os.readlink(file_path)))
+            continue
+        if not file_path.is_file():
+            digest.update(b"non-file\0")
+            continue
+        with file_path.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(chunk)
+    return digest.hexdigest()
 
 
 def resolve_state_file(workspace: Path, override: str | None) -> Path:
@@ -119,6 +174,21 @@ def save_state(path: Path, state: dict[str, object]) -> None:
         with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
             json.dump(state, stream, indent=2, sort_keys=True)
             stream.write("\n")
+        os.chmod(temporary_path, 0o600)
+        temporary_path.replace(path)
+    finally:
+        temporary_path.unlink(missing_ok=True)
+
+
+def write_report(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    temporary_path = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            stream.write(content)
+            if content and not content.endswith("\n"):
+                stream.write("\n")
         os.chmod(temporary_path, 0o600)
         temporary_path.replace(path)
     finally:
@@ -220,6 +290,159 @@ def build_review_command(
     ]
 
 
+def inspect_authentication(agent_binary: str) -> str:
+    try:
+        result = subprocess.run(
+            [agent_binary, "status", "--format", "json"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except subprocess.TimeoutExpired:
+        return "Cursor authentication inspection timed out"
+    detail = result.stdout.strip() or result.stderr.strip() or "no status output"
+    return f"exit={result.returncode} {detail}"
+
+
+def inspect_live_chat_progress(
+    *,
+    agent_binary: str,
+    model: str,
+    workspace: Path,
+    chat_id: str,
+) -> str:
+    prompt = (
+        "This is a read-only liveness inspection while the preceding review is still running. "
+        "Report actual current progress in exactly three concise bullets: work completed, what is "
+        "currently executing or waiting, and work remaining. Do not restart the review, modify "
+        "files, or invent progress."
+    )
+    try:
+        result = subprocess.run(
+            build_review_command(
+                agent_binary=agent_binary,
+                model=model,
+                workspace=workspace,
+                chat_id=chat_id,
+                prompt=prompt,
+            ),
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except subprocess.TimeoutExpired:
+        return "live chat progress query timed out"
+    detail = result.stdout.strip() or result.stderr.strip() or "no progress output"
+    return f"exit={result.returncode}\n{detail}"
+
+
+def run_review_with_idle_inspection(
+    *,
+    command: list[str],
+    agent_binary: str,
+    model: str,
+    workspace: Path,
+    chat_id: str,
+    output_check_seconds: float,
+    session_inspect_seconds: float,
+) -> tuple[int, str]:
+    process = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+    )
+    assert process.stdout is not None
+    output_queue: queue.Queue[str | None] = queue.Queue()
+
+    def read_output() -> None:
+        try:
+            for line in process.stdout:
+                output_queue.put(line)
+        finally:
+            output_queue.put(None)
+
+    reader = threading.Thread(target=read_output, daemon=True)
+    reader.start()
+    output: list[str] = []
+    last_output_at = time.monotonic()
+    next_output_check_at = last_output_at + output_check_seconds
+    next_session_inspect_at = last_output_at + session_inspect_seconds
+
+    while True:
+        now = time.monotonic()
+        deadlines = [
+            deadline
+            for interval, deadline in (
+                (output_check_seconds, next_output_check_at),
+                (session_inspect_seconds, next_session_inspect_at),
+            )
+            if interval > 0
+        ]
+        queue_timeout = 0.25
+        if deadlines:
+            queue_timeout = min(queue_timeout, max(0.001, min(deadlines) - now))
+        try:
+            item = output_queue.get(timeout=queue_timeout)
+        except queue.Empty:
+            now = time.monotonic()
+            if process.poll() is not None:
+                continue
+            if output_check_seconds > 0 and now >= next_output_check_at:
+                idle_seconds = now - last_output_at
+                print(
+                    f"[cursor-review] process pid={process.pid} is still running; "
+                    f"no output for {idle_seconds:.0f}s; chatId={chat_id}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                next_output_check_at = now + output_check_seconds
+            if session_inspect_seconds > 0 and now >= next_session_inspect_at:
+                process_status = subprocess.run(
+                    ["ps", "-o", "pid=,stat=,etime=,command=", "-p", str(process.pid)],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                ).stdout.strip()
+                print(
+                    f"[cursor-review] requesting live progress from chatId={chat_id}; "
+                    f"process={process_status or 'not found'}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                progress = inspect_live_chat_progress(
+                    agent_binary=agent_binary,
+                    model=model,
+                    workspace=workspace,
+                    chat_id=chat_id,
+                )
+                authentication = (
+                    inspect_authentication(agent_binary)
+                    if not progress.startswith("exit=0")
+                    else "not needed"
+                )
+                diagnostic = (
+                    f"[cursor-review] live chat progress: {progress}\n"
+                    f"[cursor-review] authentication fallback: {authentication}\n"
+                )
+                print(diagnostic, end="", file=sys.stderr, flush=True)
+                next_session_inspect_at = now + session_inspect_seconds
+            continue
+        if item is None:
+            break
+        print(item, end="", flush=True)
+        output.append(item)
+        last_output_at = time.monotonic()
+        next_output_check_at = last_output_at + output_check_seconds
+        next_session_inspect_at = last_output_at + session_inspect_seconds
+
+    reader.join()
+    return process.wait(), "".join(output)
+
+
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run a Cursor design/code/final review with explicit session isolation."
@@ -233,7 +456,28 @@ def parse_arguments() -> argparse.Namespace:
     run_parser.add_argument("--review-id")
     run_parser.add_argument("--prompt-file", required=True)
     run_parser.add_argument("--model", default=DEFAULT_MODEL)
+    run_parser.add_argument("--output-file")
+    run_parser.add_argument(
+        "--output-check-seconds",
+        type=float,
+        default=DEFAULT_OUTPUT_CHECK_SECONDS,
+        help="report process liveness after this many silent seconds; 0 disables",
+    )
+    run_parser.add_argument(
+        "--session-inspect-seconds",
+        type=float,
+        default=DEFAULT_SESSION_INSPECT_SECONDS,
+        help="periodically inspect the process and Cursor CLI authentication after this many silent seconds; 0 disables",
+    )
     run_parser.add_argument("--dry-run", action="store_true")
+    inspect_parser = subparsers.add_parser(
+        "inspect", help="inspect a stored review session without resuming or mutating it"
+    )
+    inspect_parser.add_argument("--workspace", default=os.getcwd())
+    inspect_parser.add_argument("--state-file")
+    inspect_parser.add_argument("--stage", required=True)
+    inspect_parser.add_argument("--role", required=True, choices=("design", "code", "final"))
+    inspect_parser.add_argument("--review-id")
     return parser.parse_args()
 
 
@@ -247,6 +491,29 @@ def main() -> int:
         raise ReviewError(f"workspace does not exist: {workspace}")
     run_git(workspace, "rev-parse", "--show-toplevel")
 
+    state_file = resolve_state_file(workspace, arguments.state_file)
+    key = session_key(arguments.stage, arguments.role, arguments.review_id)
+    agent_binary = resolve_agent_binary()
+
+    if arguments.command == "inspect":
+        state = load_state(state_file)
+        sessions = state["sessions"]
+        assert isinstance(sessions, dict)
+        session = sessions.get(key)
+        if not isinstance(session, dict):
+            raise ReviewError(f"no stored Cursor review session for {key!r}")
+        result = {
+            "authentication": inspect_authentication(agent_binary),
+            "currentBranch": resolve_branch_identity(workspace),
+            "currentTreeFingerprint": fingerprint_review_tree(workspace),
+            "session": session,
+        }
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+
+    if arguments.output_check_seconds < 0 or arguments.session_inspect_seconds < 0:
+        raise ReviewError("output/session inspection intervals must be zero or positive")
+
     prompt_path = Path(arguments.prompt_file).expanduser().resolve()
     try:
         prompt = prompt_path.read_text(encoding="utf-8").strip()
@@ -254,10 +521,6 @@ def main() -> int:
         raise ReviewError(f"cannot read review prompt {prompt_path}: {error}") from error
     if not prompt:
         raise ReviewError(f"review prompt is empty: {prompt_path}")
-
-    state_file = resolve_state_file(workspace, arguments.state_file)
-    key = session_key(arguments.stage, arguments.role, arguments.review_id)
-    agent_binary = resolve_agent_binary()
 
     if arguments.dry_run:
         print(shlex.join([agent_binary, "--workspace", str(workspace), "create-chat"]))
@@ -293,14 +556,46 @@ def main() -> int:
         chat_id=chat_id,
         prompt=prompt,
     )
+    before_fingerprint = fingerprint_review_tree(workspace)
     with exclusive_lock(review_lock):
-        result = subprocess.run(command, check=False)
-    if result.returncode != 0:
+        return_code, review_output = run_review_with_idle_inspection(
+            command=command,
+            agent_binary=agent_binary,
+            model=arguments.model,
+            workspace=workspace,
+            chat_id=chat_id,
+            output_check_seconds=arguments.output_check_seconds,
+            session_inspect_seconds=arguments.session_inspect_seconds,
+        )
+    after_fingerprint = fingerprint_review_tree(workspace)
+    tree_drifted = before_fingerprint != after_fingerprint
+    if arguments.output_file is not None:
+        report_path = Path(arguments.output_file).expanduser().resolve()
+        metadata = (
+            "# Cursor review session\n\n"
+            f"- workspace: `{workspace}`\n"
+            f"- branch: `{resolve_branch_identity(workspace)}`\n"
+            f"- chatId: `{chat_id}`\n"
+            f"- treeFingerprintBefore: `{before_fingerprint}`\n"
+            f"- treeFingerprintAfter: `{after_fingerprint}`\n"
+            f"- cursorExitCode: `{return_code}`\n"
+            f"- treeDrifted: `{str(tree_drifted).lower()}`\n\n"
+            "## Cursor output\n\n"
+        )
+        write_report(report_path, metadata + review_output)
+    if tree_drifted:
+        print(
+            "error: review tree changed while Cursor was running; discard the verdict and rerun "
+            f"(before={before_fingerprint}, after={after_fingerprint})",
+            file=sys.stderr,
+        )
+        return WORKTREE_DRIFT_EXIT_CODE
+    if return_code != 0:
         print(
             "If the failure above is Workspace Trust Required, " + WORKSPACE_TRUST_GUIDANCE,
             file=sys.stderr,
         )
-    return result.returncode
+    return return_code
 
 
 if __name__ == "__main__":

@@ -7,6 +7,16 @@ import {
   projectOutdoorLandmarkTransformV1,
 } from "./outdoor-scene-gameplay-loader.js";
 
+function expectImportErrorCode(action: () => unknown, code: string): void {
+  try {
+    action();
+  } catch (error) {
+    expect(error).toMatchObject({ code });
+    return;
+  }
+  throw new Error(`Expected Outdoor Scene import error '${code}'.`);
+}
+
 describe("loadOutdoorGameplaySceneV1", () => {
   it("composes nested legacy XYZ transforms into the Babylon execution convention", () => {
     const result = projectOutdoorLandmarkTransformV1([
@@ -31,6 +41,48 @@ describe("loadOutdoorGameplaySceneV1", () => {
     expect(result.scaleXYZ[0]).toBeCloseTo(2, 6);
     expect(result.scaleXYZ[1]).toBeCloseTo(2, 6);
     expect(result.scaleXYZ[2]).toBeCloseTo(2, 6);
+  });
+
+  it("composes aligned nested non-uniform scale without losing an axis", () => {
+    const result = projectOutdoorLandmarkTransformV1([
+      {
+        position: [10, 2, -4],
+        rotation: [0, 0, 0],
+        scale: [2, 3, 4],
+      },
+      {
+        position: [1, 2, 3],
+        rotation: [0, 0, 0],
+        scale: [0.5, 2, 0.25],
+      },
+    ]);
+
+    expect(result.positionMetersXYZ).toEqual([12, 8, 8]);
+    expect(result.rotationEulerRadiansXYZ).toEqual([0, 0, 0]);
+    expect(result.scaleXYZ).toEqual([1, 6, 1]);
+  });
+
+  it("rejects a negative-determinant landmark transform", () => {
+    expectImportErrorCode(() => projectOutdoorLandmarkTransformV1([{
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [-1, 1, 1],
+    }]), "OUTDOOR_SCENE_IMPORT_TRANSFORM_INVALID");
+  });
+
+  it("rejects nested non-uniform transforms that flatten into shear", () => {
+    expectImportErrorCode(() => projectOutdoorLandmarkTransformV1([
+      {
+        position: [0, 0, 0],
+        rotation: [0, 0, 0],
+        scale: [2, 1, 1],
+      },
+      {
+        position: [0, 0, 0],
+        rotation: [0, 0, Math.PI / 4],
+        scale: [1, 1, 1],
+      },
+    ]), "OUTDOOR_SCENE_IMPORT_TRANSFORM_UNREPRESENTABLE");
   });
 
   it.each(Object.entries(sceneCatalog))(

@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import {
-  access,
   mkdtemp,
   readFile,
   rm,
@@ -10,12 +9,7 @@ import {
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
-import {
-  chromium,
-  type Browser,
-  type BrowserContext,
-  type Page,
-} from "playwright";
+import type { Browser, BrowserContext, Page } from "playwright";
 
 import {
   stringifyCanonicalJson,
@@ -33,6 +27,7 @@ import {
   type SubjectExplanationSuccessV1,
 } from "./lib/subject-explain";
 import { promoteArtifactDirectory } from "./lib/artifact-directory-promotion";
+import { launchChromiumWithSystemFallback } from "./lib/playwright-browser-launch";
 import {
   analyzeSubjectPoseCrop,
   compareSubjectPoseSilhouettes,
@@ -483,7 +478,7 @@ async function verifyBrowser(
   try {
     server = await startWorldkitServer({ inputPath: INPUT_PATH });
     try {
-      browser = await chromium.launch({ headless: true });
+      browser = await launchChromiumWithSystemFallback();
     } catch {
       throw new PlaywrightBrowserUnavailableError();
     }
@@ -537,6 +532,19 @@ async function verifyBrowser(
       sha256(await readFile(paths.world)),
       "CLI world.png must render the same paused reset Tick as snapshot.json.",
     );
+    const poseTarget = await page.evaluate((runtimeEntityId) => {
+      const api = window.__WORLDKIT_AUTHORING_CAPTURE__;
+      if (api === undefined) throw new Error("WORLDKIT_AUTHORING_CAPTURE_PROTOCOL_MISSING");
+      return api.configureVisualCaptureTargets([{
+        id: "pose-primary-subject",
+        visualTargetId: "pose-primary-subject",
+        runtimeEntityIds: [runtimeEntityId],
+        role: "primary-subject",
+        semanticClassId: "subject.humanoid.rigged",
+        identityColor: "#E85D5D",
+      }])[0];
+    }, PRIMARY_ENTITY_ID);
+    assert.equal(poseTarget?.runtimeEntityIds[0], PRIMARY_ENTITY_ID);
 
     const captures = {
       idle: await captureAction(page, paths, "idle", [], 12),
@@ -863,11 +871,6 @@ async function writeVerification(
 }
 
 async function run(): Promise<void> {
-  try {
-    await access(chromium.executablePath());
-  } catch {
-    throw new PlaywrightBrowserUnavailableError();
-  }
   const temporaryDirectory = await mkdtemp(
     path.join(path.dirname(TARGET_ARTIFACT_DIRECTORY), ".rigged-subject-world.tmp-"),
   );

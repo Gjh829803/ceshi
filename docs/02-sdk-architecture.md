@@ -454,16 +454,16 @@ Babylon-backed catalog gameplay 和 artifact-only 捕获，但三者共享同一
 
 ## 9. 当前完成边界
 
-截至 2026-08-23，以下窄纵向切片已经运行并进入回归：
+截至 2026-08-25，以下窄纵向切片已经运行并进入回归：
 
 - Canonical AuthoringSpec V4 → NormalizedWorldIR V4 → ExecutionPlan V5；
 - Placement Solver S1 的八种 Constraint 和海湾 Golden 场景；
 - Babylon/Havok Heightfield、障碍、水域、第三人称和多主体控制；
 - Golden Humanoid GLB、17 根解剖语义骨骼、独立 Skeleton Root、Bone Socket 与 `idle/walk/run/jump`；
 - CLI/Browser V5 的校验、编译、运行、Gameplay 控制、Runtime Snapshot V4、单截图和 Take/Capture 操作；
-- Route Task 8 的 WorldPackage Build Receipt、Validation Subject、Recast Graph/Path、
+- Route R1/R1b 的 WorldPackage Build Receipt、Validation Subject、Recast Graph/Path、
   真实 Babylon/Havok `NullEngine` Probe、Canonical Evidence/Report、`verify route`、
-  R1 Heightfield Golden Gate 与四个只读 Browser getter；
+  Heightfield 与 Static Platform 双 Blocking Gate，以及 Browser Protocol V5 只读投影；
 - Simulation Take V1、五 Pass Babylon Capture、Render Ready Receipt 与原子 Bundle；
 - Validation Capture/Integrity V1：版本化 Profile、严格 Report、Blocking/Incomplete
   Policy、Bundle Adapter、`verify capture|explain` 与五类 Conformance Fixture；
@@ -476,8 +476,8 @@ Babylon-backed catalog gameplay 和 artifact-only 捕获，但三者共享同一
 - 任意产品资产自动 Retarget、Compound Collider、LOD 和更多拓扑；
 - 完整 P1.4 WorldPackage 发布格式（Task 8 的最小 Manifest/Root/Build Receipt 已实现）、WorldChangeSet、持久 Runtime Session；
 - 完整 Replay/Resume、Event/Action/Relationship Receipt、Motion Vector 和视频 Adapter；
-- Placement/Physics/Composition/Replay/Performance 等统一 Validation 扩展，以及 Route R1b 与
-  生产 Video Model Adapter；
+- Placement/Physics/Composition/Replay/Performance 等统一 Validation 扩展，以及生产
+  Video Model Adapter；
 - 室内、洞穴、Overhang、联网和完整 Gameplay。
 
 最新完成度、优先级和验收证据以

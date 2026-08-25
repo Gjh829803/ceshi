@@ -42,6 +42,7 @@ import {
   listRegistryResources,
   main,
   parseWorldkitArgs,
+  validateSceneBriefFile,
   validateFile,
   validateSubjectDefinitionFile,
   WorldkitUsageError,
@@ -189,6 +190,28 @@ describe("worldkit CLI", () => {
     expect(loaded.executionPlanHash).toBe(route.executionPlanHash);
   });
 
+  it("validates and builds V4 worlds through the shared CLI surface", async () => {
+    const directory = await createTemporaryDirectory();
+    const inputPath = await writeRouteWorld(directory);
+    const outputPath = path.join(directory, "route-world.build.json");
+
+    const validation = await validateFile(inputPath);
+    const build = await buildFile(inputPath, outputPath);
+    const artifact = JSON.parse(await readFile(outputPath, "utf8"));
+
+    expect(validation).toMatchObject({
+      ok: true,
+      normalizedWorldIrHash: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+      executionPlanHash: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+    });
+    expect(build).toMatchObject({ ok: true, outputPath });
+    expect(artifact).toMatchObject({
+      kind: "worldkit-build-artifact",
+      normalizedWorldIr: { schemaVersion: 4 },
+      executionPlan: { schemaVersion: 5 },
+    });
+  });
+
   it("parses an explicit dependency refresh for local Runtime startup", () => {
     expect(
       parseWorldkitArgs([
@@ -233,6 +256,13 @@ describe("worldkit CLI", () => {
   });
 
   it("parses discovery and explain commands without positional guessing", () => {
+    expect(
+      parseWorldkitArgs(["brief", "validate", "scene-brief.md", "--json"]),
+    ).toEqual({
+      command: "brief-validate",
+      inputPath: "scene-brief.md",
+      json: true,
+    });
     expect(
       parseWorldkitArgs(["take", "validate", "opening.take.json", "--json"]),
     ).toEqual({
@@ -421,6 +451,86 @@ describe("worldkit CLI", () => {
     });
   });
 
+  it("parses canonical runtime capture artifact outputs", () => {
+    expect(parseWorldkitArgs([
+      "capture",
+      "world.json",
+      "--output",
+      "opening-frame.png",
+      "--snapshot",
+      "snapshot.json",
+      "--triview-output",
+      "triviews",
+      "--implementation-map",
+      "scene-implementation-map.json",
+      "--json",
+    ])).toEqual({
+      command: "capture",
+      inputPath: "world.json",
+      outputPath: "opening-frame.png",
+      snapshotPath: "snapshot.json",
+      triviewOutputPath: "triviews",
+      implementationMapPath: "scene-implementation-map.json",
+      json: true,
+    });
+  });
+
+  it("validates a lightweight Scene Brief through the CLI boundary", async () => {
+    const directory = await createTemporaryDirectory();
+    const inputPath = path.join(directory, "scene-brief.md");
+    await writeFile(inputPath, `# WorldKit Scene Brief
+
+## 场景
+开阔海湾中的完整滑行世界。
+
+## 主体
+人与滑板组成一个完整受控主体。
+
+## 用户事实
+用户要求根据参考意图创建可操作白模世界。
+
+## 可见参考证据
+可见海湾、前景平台和远景城市天际线。
+
+## 推断的世界延伸
+镜头外区域延伸为连贯海岸地形，此项为工程推断。
+
+## 仅视觉层设想
+水面反光、材质和天空风格只属于渲染层。
+
+## 运动模式
+陆地滑行：主体依靠滑板连续滑行并保留惯性。
+
+## 空间
+前景平台连接中景海湾，远景保留完整城市天际线。
+
+## 通行
+除实体碰撞外全图开放，不设计首选路线。
+
+## 首帧
+标准第三人称背后构图，主体面向开放海湾。
+
+## 视觉目标
+- 主体｜滑板旅人：完整的人与滑板复合主体
+`, "utf8");
+    const result = await validateSceneBriefFile(inputPath);
+    expect(result).toMatchObject({
+      ok: true,
+      movementMode: "ground-slide",
+      movementModeLabel: "陆地滑行",
+      visualTargetCount: 1,
+    });
+    expect(result.sceneBriefHash).toMatch(/^sha256:[a-f0-9]{64}$/);
+
+    const customSource = (await readFile(inputPath, "utf8")).replace("陆地滑行", "磁力墙面行走");
+    await writeFile(inputPath, customSource, "utf8");
+    await expect(validateSceneBriefFile(inputPath)).resolves.toMatchObject({
+      ok: true,
+      movementMode: "custom",
+      movementModeLabel: "磁力墙面行走",
+    });
+  });
+
   it("rejects unknown, incomplete, or ambiguous command options", () => {
     expect(() => parseWorldkitArgs(["build", "world.json"])).toThrow(
       WorldkitUsageError,
@@ -510,6 +620,9 @@ describe("worldkit CLI", () => {
     expect(() =>
       parseWorldkitArgs(["layout", "solve", "world.json"]),
     ).toThrow("layout solve requires --output <directory>");
+    expect(() => parseWorldkitArgs([
+      "capture", "world.json", "--output", "frame.png", "--triview-output", "triviews",
+    ])).toThrow("--triview-output and --implementation-map together");
     expect(() =>
       parseWorldkitArgs(["take", "run", "opening.take.json", "--world", "world.json"]),
     ).toThrow("take run requires --output <directory>");

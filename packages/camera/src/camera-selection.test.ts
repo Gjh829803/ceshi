@@ -162,6 +162,63 @@ const AIM_RULE: CameraContextRuleV2 = {
 };
 
 describe("Camera Context admission", () => {
+  it("rejects a finite Camera parameter bag whose bounds contradict its selected values", () => {
+    // This catches admission that validates only field names and finiteness but
+    // allows a Rig that no runtime algorithm can resolve consistently.
+    const base = profile([FLIGHT_RULE]);
+    const invalid: CameraContextProfileV1 = {
+      ...base,
+      cameraRigProfiles: base.cameraRigProfiles.map((candidate) =>
+        candidate.cameraRigProfileRef === DEFAULT_RIG_REF
+          ? {
+              ...candidate,
+              parameters: {
+                ...candidate.parameters,
+                distanceMeters: 6,
+                minimumDistanceMeters: 8,
+                maximumDistanceMeters: 4,
+              },
+            }
+          : candidate
+      ),
+    };
+
+    const result = admitCameraContextProfileV1(invalid);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: "CAMERA_PROFILE_INVALID",
+      resourceRef: DEFAULT_RIG_REF,
+    }));
+  });
+
+  it("rejects a finite Camera Modifier override that violates parameter invariants", () => {
+    // This catches a finite Modifier that passes vocabulary checks but is
+    // already invalid before any selected-Rig combination is resolved.
+    const base = profile([AIM_RULE]);
+    const invalid: CameraContextProfileV1 = {
+      ...base,
+      cameraModifierProfiles: base.cameraModifierProfiles.map((candidate) =>
+        candidate.cameraModifierProfileRef === "worldkit://camera-modifier/aim@1"
+          ? {
+              ...candidate,
+              parameterOverrides: { distanceMeters: -1 },
+            }
+          : candidate
+      ),
+    };
+
+    const result = admitCameraContextProfileV1(invalid);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: "CAMERA_PROFILE_INVALID",
+      resourceRef: "worldkit://camera-modifier/aim@1",
+    }));
+  });
+
   it("rejects duplicate Profile refs and incomplete, unknown, or non-finite parameter bags", () => {
     const base = profile([FLIGHT_RULE]);
     const { distanceMeters: _removed, ...missingDistance } = parameters();

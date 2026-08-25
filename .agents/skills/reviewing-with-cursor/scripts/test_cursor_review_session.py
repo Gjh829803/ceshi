@@ -38,6 +38,7 @@ class CursorReviewSessionTest(unittest.TestCase):
                 import os
                 from pathlib import Path
                 import sys
+                import time
 
                 log_path = Path(os.environ["FAKE_AGENT_LOG"])
                 with log_path.open("a", encoding="utf-8") as stream:
@@ -49,10 +50,16 @@ class CursorReviewSessionTest(unittest.TestCase):
                     count += 1
                     counter_path.write_text(str(count))
                     print(f"chat-{count:03d}")
+                elif "status" in sys.argv:
+                    print(json.dumps({"authenticated": True}))
                 else:
                     if os.environ.get("FAKE_AGENT_REVIEW_EXIT"):
                         print("Workspace Trust Required", file=sys.stderr)
                         raise SystemExit(int(os.environ["FAKE_AGENT_REVIEW_EXIT"]))
+                    if os.environ.get("FAKE_AGENT_DELAY"):
+                        time.sleep(float(os.environ["FAKE_AGENT_DELAY"]))
+                    if os.environ.get("FAKE_AGENT_MUTATE_PATH"):
+                        Path(os.environ["FAKE_AGENT_MUTATE_PATH"]).write_text("changed")
                     print("REVIEW_OK")
                 """
             ),
@@ -95,6 +102,32 @@ class CursorReviewSessionTest(unittest.TestCase):
         if not self.log_file.exists():
             return []
         return [json.loads(line) for line in self.log_file.read_text().splitlines()]
+
+    def run_inspect(self, *arguments: str) -> subprocess.CompletedProcess[str]:
+        environment = os.environ.copy()
+        environment.update(
+            {
+                "CURSOR_AGENT_BIN": str(self.fake_agent),
+                "FAKE_AGENT_LOG": str(self.log_file),
+                "FAKE_AGENT_COUNTER": str(self.counter_file),
+            }
+        )
+        return subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPT_PATH),
+                "inspect",
+                "--workspace",
+                str(self.workspace),
+                "--state-file",
+                str(self.state_file),
+                *arguments,
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=environment,
+        )
 
     def test_design_review_reuses_one_explicit_session(self) -> None:
         first = self.run_script("--stage", "m5-r1", "--role", "design")
@@ -199,6 +232,84 @@ class CursorReviewSessionTest(unittest.TestCase):
         self.assertIn("Workspace Trust Required", result.stderr)
         self.assertIn("want Cursor to collaborate", result.stderr)
         self.assertIn("--trust", result.stderr)
+
+    def test_writes_atomic_report_with_tree_fingerprints(self) -> None:
+        report_file = self.root / "review.md"
+
+        result = self.run_script(
+            "--stage",
+            "m5-r1",
+            "--role",
+            "final",
+            "--review-id",
+            "task-2",
+            "--output-file",
+            str(report_file),
+        )
+
+        self.assertEqual(result.returncode, 0)
+        report = report_file.read_text(encoding="utf-8")
+        self.assertIn("# Cursor review session", report)
+        self.assertIn("treeFingerprintBefore", report)
+        self.assertIn("treeDrifted: `false`", report)
+        self.assertIn("REVIEW_OK", report)
+
+    def test_rejects_verdict_when_review_tree_changes(self) -> None:
+        changed_file = self.workspace / "changed.txt"
+        os.environ["FAKE_AGENT_MUTATE_PATH"] = str(changed_file)
+        try:
+            result = self.run_script(
+                "--stage",
+                "m5-r1",
+                "--role",
+                "final",
+                "--review-id",
+                "task-2",
+                check=False,
+            )
+        finally:
+            os.environ.pop("FAKE_AGENT_MUTATE_PATH", None)
+
+        self.assertEqual(result.returncode, 3)
+        self.assertIn("review tree changed", result.stderr)
+
+    def test_silent_review_checks_process_then_live_chat_progress(self) -> None:
+        os.environ["FAKE_AGENT_DELAY"] = "0.12"
+        try:
+            result = self.run_script(
+                "--stage",
+                "m5-r1",
+                "--role",
+                "final",
+                "--review-id",
+                "task-2",
+                "--output-check-seconds",
+                "0.02",
+                "--session-inspect-seconds",
+                "0.04",
+            )
+        finally:
+            os.environ.pop("FAKE_AGENT_DELAY", None)
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("is still running", result.stderr)
+        self.assertIn("requesting live progress", result.stderr)
+        self.assertIn("live chat progress", result.stderr)
+        review_calls = [call for call in self.read_log() if "--resume" in call]
+        self.assertEqual(len(review_calls), 2)
+
+    def test_inspect_reports_stored_session_auth_and_tree_without_resuming(self) -> None:
+        self.run_script("--stage", "m5-r1", "--role", "code", "--review-id", "task-2")
+
+        result = self.run_inspect(
+            "--stage", "m5-r1", "--role", "code", "--review-id", "task-2"
+        )
+
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["session"]["chatId"], "chat-001")
+        self.assertIn("authenticated", payload["authentication"])
+        review_calls = [call for call in self.read_log() if "--resume" in call]
+        self.assertEqual(len(review_calls), 1)
 
 
 if __name__ == "__main__":

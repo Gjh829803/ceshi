@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { execFile as execFileCallback } from "node:child_process";
-import { mkdir, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -8,13 +8,22 @@ import { promisify } from "node:util";
 import {
   normalizeSubjectDefinitionV2,
   parseCanonicalJson,
+  parseSceneBriefV1,
   ResourceLockBuilderV1,
+  sha256CanonicalJson,
   stringifyCanonicalJson,
   validatePackageSubjectDefinition,
   type AuthoringDiagnostic,
 } from "@whitebox-world/authoring";
 import { canonicalJsonBytes } from "@whitebox-world/protocol";
-import type { WorldRuntimeSnapshotV4 } from "@whitebox-world/runtime-contracts";
+import {
+  validateSceneBriefImplementationMapV1,
+  type SceneBriefImplementationMapV1,
+  type RuntimeCaptureTargetV1,
+  type RuntimeTriviewManifestV1,
+  type WhiteboxTriviewCaptureV1,
+  type WorldRuntimeSnapshotV4,
+} from "@whitebox-world/runtime-contracts";
 import {
   builtInSubjectResourceRegistry,
   type SubjectRegistryResourceV3,
@@ -73,11 +82,12 @@ Usage:
   worldkit validate <file> [--json]
   worldkit build <file> --output <file> [--json]
   worldkit run <file> [--port <port>] [--refresh-dependencies] [--json]
-  worldkit capture <file> --output <png> [--snapshot <json>] [--port <port>] [--json]
+  worldkit capture <file> --output <png> [--snapshot <json>] [--triview-output <directory> --implementation-map <json>] [--port <port>] [--json]
   worldkit registry list --kind subject-definition [--json]
   worldkit registry describe --resource-ref <ref> [--json]
   worldkit subject-definition validate <file> [--json]
   worldkit subject explain <world-file> --entity-id <id> [--json]
+  worldkit brief validate <scene-brief.md> [--json]
   worldkit layout validate <world-file> [--json]
   worldkit layout solve <world-file> --output <directory> [--json]
   worldkit layout explain <layout-report.json> --entity-id <id> [--json]
@@ -113,6 +123,8 @@ export type WorldkitArgs =
       inputPath: string;
       outputPath: string;
       snapshotPath?: string;
+      triviewOutputPath?: string;
+      implementationMapPath?: string;
       port?: number;
       json: boolean;
     }
@@ -133,6 +145,7 @@ export type WorldkitArgs =
       entityId: string;
       json: boolean;
     }
+  | { command: "brief-validate"; inputPath: string; json: boolean }
   | { command: "layout-validate"; inputPath: string; json: boolean }
   | { command: "take-validate"; inputPath: string; json: boolean }
   | { command: "take-inspect"; inputPath: string; json: boolean }
@@ -204,11 +217,16 @@ export interface WorldkitCommandResult {
   diagnostics: readonly WorldkitDiagnostic[];
   normalizedWorldIrHash?: string;
   executionPlanHash?: string;
+  sceneBriefHash?: string;
+  movementMode?: string;
+  movementModeLabel?: string;
+  visualTargetCount?: number;
   validationReportHash?: string;
   validationStatus?: string;
   outputPath?: string;
   evidenceDirectory?: string;
   snapshotPath?: string;
+  triviewOutputPath?: string;
   url?: string;
 }
 
@@ -518,6 +536,16 @@ export function parseWorldkitArgs(arguments_: readonly string[]): WorldkitArgs {
     return { command: "subject-explain", inputPath, entityId, json };
   }
 
+  if (command === "brief") {
+    const operation = takeRequiredPositional(tokens, "brief operation");
+    if (operation !== "validate") {
+      throw new WorldkitUsageError(`Unknown brief operation '${operation}'.`);
+    }
+    const inputPath = takeRequiredPositional(tokens, "Scene Brief input file");
+    rejectRemaining(tokens, "brief validate");
+    return { command: "brief-validate", inputPath, json };
+  }
+
   if (command === "layout") {
     const operation = takeRequiredPositional(tokens, "layout operation");
     const inputPath = takeRequiredPositional(tokens, "Layout input file");
@@ -579,9 +607,16 @@ export function parseWorldkitArgs(arguments_: readonly string[]): WorldkitArgs {
   if (command === "capture") {
     const outputPath = takeOption(tokens, "--output");
     const snapshotPath = takeOption(tokens, "--snapshot");
+    const triviewOutputPath = takeOption(tokens, "--triview-output");
+    const implementationMapPath = takeOption(tokens, "--implementation-map");
     const portValue = takeOption(tokens, "--port");
     if (outputPath === undefined) {
       throw new WorldkitUsageError("capture requires --output <png>.");
+    }
+    if ((triviewOutputPath === undefined) !== (implementationMapPath === undefined)) {
+      throw new WorldkitUsageError(
+        "capture requires --triview-output and --implementation-map together.",
+      );
     }
     rejectRemaining(tokens, "capture");
     return {
@@ -589,6 +624,8 @@ export function parseWorldkitArgs(arguments_: readonly string[]): WorldkitArgs {
       inputPath,
       outputPath,
       ...(snapshotPath === undefined ? {} : { snapshotPath }),
+      ...(triviewOutputPath === undefined ? {} : { triviewOutputPath }),
+      ...(implementationMapPath === undefined ? {} : { implementationMapPath }),
       ...(portValue === undefined ? {} : { port: parsePort(portValue) }),
       json,
     };
@@ -729,6 +766,38 @@ export async function validateFile(
   };
 }
 
+export async function validateSceneBriefFile(
+  inputPath: string,
+): Promise<WorldkitCommandResult> {
+  const input = await readWorldkitInput(inputPath);
+  if (!input.ok) return input;
+  const validated = parseSceneBriefV1(input.sourceText);
+  if (!validated.ok) {
+    return {
+      ok: false,
+      exitCode: 2,
+      diagnostics: validated.diagnostics.map((diagnostic) => {
+        const separator = diagnostic.indexOf(":");
+        return {
+          severity: "error" as const,
+          code: separator < 0 ? "SCENE_BRIEF_INVALID" : diagnostic.slice(0, separator),
+          instancePath: "",
+          message: separator < 0 ? diagnostic : diagnostic.slice(separator + 1).trim(),
+        };
+      }),
+    };
+  }
+  return {
+    ok: true,
+    exitCode: 0,
+    diagnostics: [],
+    sceneBriefHash: validated.sceneBriefHash,
+    movementMode: validated.value.movement.mode,
+    movementModeLabel: validated.value.movement.label,
+    visualTargetCount: validated.value.visualTargets.length,
+  };
+}
+
 async function writeAtomic(
   outputPath: string,
   bytes: string | Uint8Array,
@@ -811,7 +880,12 @@ export async function captureVisibleWorldWithRetries<
 export async function captureFile(
   inputPath: string,
   outputPath: string,
-  options: { snapshotPath?: string; port?: number } = {},
+  options: {
+    snapshotPath?: string;
+    triviewOutputPath?: string;
+    implementationMapPath?: string;
+    port?: number;
+  } = {},
 ): Promise<WorldkitCommandResult> {
   const validation = await validateFile(inputPath);
   if (!validation.ok) return validation;
@@ -820,14 +894,58 @@ export async function captureFile(
     options.snapshotPath === undefined
       ? undefined
       : path.resolve(options.snapshotPath);
+  const absoluteTriviewOutputPath = options.triviewOutputPath === undefined
+    ? undefined
+    : path.resolve(options.triviewOutputPath);
+  const absoluteImplementationMapPath = options.implementationMapPath === undefined
+    ? undefined
+    : path.resolve(options.implementationMapPath);
+  if ((absoluteTriviewOutputPath === undefined) !== (absoluteImplementationMapPath === undefined)) {
+    return cliFailure(
+      "CLI_CAPTURE_GROUPS_REQUIRED",
+      "Tri-view capture requires the trusted visual implementation map.",
+    );
+  }
   if (
     absoluteOutputPath === path.resolve(inputPath) ||
-    absoluteSnapshotPath === path.resolve(inputPath)
+    absoluteSnapshotPath === path.resolve(inputPath) ||
+    absoluteTriviewOutputPath === path.resolve(inputPath)
   ) {
     return cliFailure(
       "CLI_OUTPUT_OVERWRITES_INPUT",
       "Capture outputs must not overwrite the AuthoringSpec input.",
     );
+  }
+
+  let configuredCaptureTargets: readonly RuntimeCaptureTargetV1[] = [];
+  if (absoluteImplementationMapPath !== undefined) {
+    try {
+      const [mapSource, worldSource] = await Promise.all([
+        readFile(absoluteImplementationMapPath, "utf8"),
+        readFile(path.resolve(inputPath), "utf8"),
+      ]);
+      const [mapResult, worldResult] = [
+        parseCanonicalJson(mapSource),
+        parseCanonicalJson(worldSource),
+      ];
+      if (!mapResult.ok || mapResult.value === undefined ||
+          !worldResult.ok || worldResult.value === undefined) {
+        throw new Error("Implementation map or AuthoringSpec is not canonical JSON.");
+      }
+      const implementationMap = mapResult.value as unknown as SceneBriefImplementationMapV1;
+      const mapErrors = validateSceneBriefImplementationMapV1(implementationMap);
+      if (mapErrors.length > 0) throw new Error(mapErrors.join(" "));
+      if (implementationMap.authoringSpecHash !== sha256CanonicalJson(worldResult.value)) {
+        throw new Error("Implementation map does not bind this AuthoringSpec.");
+      }
+      configuredCaptureTargets = implementationMap.visualCaptureGroups;
+    } catch (error) {
+      return cliFailure(
+        "CLI_CAPTURE_GROUPS_INVALID",
+        "Unable to load trusted visual capture groups.",
+        { cause: error instanceof Error ? error.message : String(error) },
+      );
+    }
   }
 
   let server: WorldkitServerHandle | undefined;
@@ -854,12 +972,21 @@ export async function captureFile(
     const { chromium } = await import("playwright");
     try {
       browser = await chromium.launch({ headless: true });
-    } catch (error) {
-      return cliFailure(
-        "CLI_PLAYWRIGHT_BROWSER_UNAVAILABLE",
-        "Playwright Chromium is unavailable. Run 'pnpm exec playwright install chromium'.",
-        { cause: error instanceof Error ? error.message : String(error) },
-      );
+    } catch (bundledError) {
+      try {
+        browser = await chromium.launch({ headless: true, channel: "chrome" });
+      } catch (systemChromeError) {
+        return cliFailure(
+          "CLI_PLAYWRIGHT_BROWSER_UNAVAILABLE",
+          "Neither Playwright Chromium nor a system Chrome channel is available.",
+          {
+            bundledCause: bundledError instanceof Error ? bundledError.message : String(bundledError),
+            systemChromeCause: systemChromeError instanceof Error
+              ? systemChromeError.message
+              : String(systemChromeError),
+          },
+        );
+      }
     }
     const page = await browser.newPage({
       viewport: { width: 1280, height: 720 },
@@ -882,18 +1009,36 @@ export async function captureFile(
       await api.ready();
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     });
+    if (configuredCaptureTargets.length > 0) {
+      await page.waitForFunction(
+        () => window.__WORLDKIT_AUTHORING_CAPTURE__ !== undefined,
+        undefined,
+        { timeout: 30_000 },
+      );
+    }
     const capture = await captureVisibleWorldWithRetries(() => page.evaluate(
-      async (): Promise<{
+      async (captureTargets): Promise<{
         snapshot: WorldRuntimeSnapshotV4;
         screenshotDataUrl: string;
         sampledRgbColorCount: number;
+        triviews: readonly {
+          target: RuntimeCaptureTargetV1;
+          capture: WhiteboxTriviewCaptureV1;
+          sampledRgbColorCount: number;
+        }[];
       }> => {
         const api = window.__WORLDKIT__;
         if (api === undefined) {
           throw new Error("WORLDKIT_BROWSER_PROTOCOL_MISSING");
         }
+        const authoringCaptureApi = window.__WORLDKIT_AUTHORING_CAPTURE__;
         api.setPaused(true);
         const snapshot = await api.reset();
+        const configuredTargets = captureTargets.length === 0
+          ? []
+          : authoringCaptureApi?.configureVisualCaptureTargets(captureTargets) ?? (() => {
+              throw new Error("WORLDKIT_CAPTURE_TARGET_CONFIGURATION_UNAVAILABLE");
+            })();
         await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
         await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
         const beforeCapture = api.getSnapshot();
@@ -911,30 +1056,26 @@ export async function captureFile(
         const inspectionCanvas = document.createElement("canvas");
         inspectionCanvas.width = screenshotImage.naturalWidth;
         inspectionCanvas.height = screenshotImage.naturalHeight;
-        const inspectionContext = inspectionCanvas.getContext("2d", {
-          willReadFrequently: true,
-        });
-        if (inspectionContext === null) {
-          throw new Error("WORLDKIT_CAPTURE_INSPECTION_UNAVAILABLE");
-        }
+        const inspectionContext = inspectionCanvas.getContext("2d", { willReadFrequently: true });
+        if (inspectionContext === null) throw new Error("WORLDKIT_CAPTURE_INSPECTION_UNAVAILABLE");
         inspectionContext.drawImage(screenshotImage, 0, 0);
-        const pixels = inspectionContext.getImageData(
+        const screenshotPixels = inspectionContext.getImageData(
           0,
           0,
           inspectionCanvas.width,
           inspectionCanvas.height,
         ).data;
         const sampledRgbColors = new Set<number>();
-        const stridePixels = 16;
-        for (let pixel = 0; pixel < pixels.length / 4; pixel += stridePixels) {
+        for (let pixel = 0; pixel < screenshotPixels.length / 4; pixel += 16) {
           const offset = pixel * 4;
           sampledRgbColors.add(
-            (pixels[offset]! << 16) |
-              (pixels[offset + 1]! << 8) |
-              pixels[offset + 2]!,
+            (screenshotPixels[offset]! << 16) |
+              (screenshotPixels[offset + 1]! << 8) |
+              screenshotPixels[offset + 2]!,
           );
           if (sampledRgbColors.size >= 4) break;
         }
+        const sampledRgbColorCount = sampledRgbColors.size;
         const afterCapture = api.getSnapshot();
         if (
           afterCapture.world.simulationTick !==
@@ -942,12 +1083,50 @@ export async function captureFile(
         ) {
           throw new Error("WORLDKIT_CAPTURE_TICK_ADVANCED");
         }
+        const triviews: {
+          target: RuntimeCaptureTargetV1;
+          capture: WhiteboxTriviewCaptureV1;
+          sampledRgbColorCount: number;
+        }[] = [];
+        if (authoringCaptureApi !== undefined) {
+          for (const target of configuredTargets) {
+            const triviewCapture = authoringCaptureApi.captureWhiteboxTriview(target.id);
+            const triviewImage = new Image();
+            triviewImage.src = triviewCapture.imageDataUrl;
+            await triviewImage.decode();
+            inspectionCanvas.width = triviewImage.naturalWidth;
+            inspectionCanvas.height = triviewImage.naturalHeight;
+            inspectionContext.drawImage(triviewImage, 0, 0);
+            const triviewPixels = inspectionContext.getImageData(
+              0,
+              0,
+              inspectionCanvas.width,
+              inspectionCanvas.height,
+            ).data;
+            const triviewRgbColors = new Set<number>();
+            for (let pixel = 0; pixel < triviewPixels.length / 4; pixel += 16) {
+              const offset = pixel * 4;
+              triviewRgbColors.add(
+                (triviewPixels[offset]! << 16) |
+                  (triviewPixels[offset + 1]! << 8) |
+                  triviewPixels[offset + 2]!,
+              );
+              if (triviewRgbColors.size >= 4) break;
+            }
+            triviews.push({
+              target,
+              capture: triviewCapture,
+              sampledRgbColorCount: triviewRgbColors.size,
+            });
+          }
+        }
         return {
           snapshot,
           screenshotDataUrl,
-          sampledRgbColorCount: sampledRgbColors.size,
+          sampledRgbColorCount,
+          triviews,
         };
-      },
+      }, configuredCaptureTargets,
     ));
     const pngDataUrlPrefix = "data:image/png;base64,";
     if (!capture.screenshotDataUrl.startsWith(pngDataUrlPrefix)) {
@@ -965,6 +1144,57 @@ export async function captureFile(
         `${stringifyCanonicalJson(capture.snapshot)}\n`,
       );
     }
+    if (absoluteTriviewOutputPath !== undefined) {
+      const targets = [] as {
+        id: string;
+        visualTargetId: string;
+        runtimeEntityIds: readonly string[];
+        role: RuntimeCaptureTargetV1["role"];
+        semanticClassId: string;
+        identityColor: `#${string}`;
+        views: readonly ["front", "right", "back"];
+        imagePath: string;
+      }[];
+      for (const triview of capture.triviews) {
+        if (!/^[a-z0-9][a-z0-9-]{2,79}$/.test(triview.target.id)) {
+          throw new Error(`WORLDKIT_CAPTURE_TARGET_ID_INVALID: ${triview.target.id}`);
+        }
+        if (!triview.capture.imageDataUrl.startsWith(pngDataUrlPrefix)) {
+          throw new Error(`WORLDKIT_CAPTURE_TRIVIEW_DATA_URL_INVALID: ${triview.target.id}`);
+        }
+        if (triview.sampledRgbColorCount < 2) {
+          throw new Error(`WORLDKIT_CAPTURE_TRIVIEW_EMPTY: ${triview.target.id}`);
+        }
+        const relativeImagePath = `${triview.target.id}/whitebox-triview.png`;
+        const imagePath = path.join(absoluteTriviewOutputPath, relativeImagePath);
+        await mkdir(path.dirname(imagePath), { recursive: true });
+        await writeFile(
+          imagePath,
+          Buffer.from(
+            triview.capture.imageDataUrl.slice(pngDataUrlPrefix.length),
+            "base64",
+          ),
+        );
+        targets.push({
+          ...triview.target,
+          views: ["front", "right", "back"],
+          imagePath: relativeImagePath,
+        });
+      }
+      if (validation.executionPlanHash === undefined) {
+        throw new Error("WORLDKIT_CAPTURE_EXECUTION_PLAN_HASH_MISSING");
+      }
+      const manifest: RuntimeTriviewManifestV1 = {
+        kind: "worldkit-runtime-triview-manifest",
+        schemaVersion: 1,
+        executionPlanHash: validation.executionPlanHash as `sha256:${string}`,
+        targets,
+      };
+      await writeAtomic(
+        path.join(absoluteTriviewOutputPath, "capture-targets.json"),
+        `${stringifyCanonicalJson(manifest)}\n`,
+      );
+    }
     return {
       ok: true,
       exitCode: 0,
@@ -979,6 +1209,9 @@ export async function captureFile(
       ...(absoluteSnapshotPath === undefined
         ? {}
         : { snapshotPath: absoluteSnapshotPath }),
+      ...(absoluteTriviewOutputPath === undefined
+        ? {}
+        : { triviewOutputPath: absoluteTriviewOutputPath }),
       url: server.url,
     };
   } catch (error) {
@@ -1101,6 +1334,7 @@ type PrintableResult = {
   outputPath?: string;
   evidenceDirectory?: string;
   snapshotPath?: string;
+  triviewOutputPath?: string;
   kind?: string;
   schemaVersion?: number;
   candidateId?: string;
@@ -1128,6 +1362,7 @@ function printResult(result: PrintableResult, json: boolean): void {
       result.evidenceDirectory,
       result.validationReportHash,
       result.snapshotPath,
+      result.triviewOutputPath,
       result.normalizedWorldIrHash,
       result.executionPlanHash,
     ]
@@ -1350,7 +1585,9 @@ export async function main(
   }
 
   const result =
-    parsed.command === "validate"
+    parsed.command === "brief-validate"
+      ? await validateSceneBriefFile(parsed.inputPath)
+      : parsed.command === "validate"
       ? await validateFile(parsed.inputPath)
       : parsed.command === "layout-validate"
         ? await layoutValidateFile(parsed.inputPath)
@@ -1370,6 +1607,12 @@ export async function main(
               ...(parsed.snapshotPath === undefined
                 ? {}
                 : { snapshotPath: parsed.snapshotPath }),
+              ...(parsed.triviewOutputPath === undefined
+                ? {}
+                : { triviewOutputPath: parsed.triviewOutputPath }),
+              ...(parsed.implementationMapPath === undefined
+                ? {}
+                : { implementationMapPath: parsed.implementationMapPath }),
               ...(parsed.port === undefined ? {} : { port: parsed.port }),
             })
           : parsed.command === "registry-list"

@@ -29,7 +29,9 @@ Gameplay 真相。
 3. [Canonical JSON V4 快速接入](docs/17-canonical-json-quickstart.md)：当前世界输入、CLI 与 Browser Protocol；
 4. [主体手感配表与版本工作区](docs/19-subject-preset-workspace.md)：本地版本、公共默认、发布与回滚；
 5. [Gameplay 正式对接合同](docs/20-gameplay-integration-contract.md)：当前 Domain Schema、Browser V5 / Snapshot V4 与 clean-break 边界；
-6. [重构总进度与 Backlog](docs/18-refactor-progress-and-backlog.md)：完成度、优先级、依赖和验收标准。
+6. [Hosted Scene Brief 与评测工作流](docs/22-hosted-scene-brief-and-evaluation.md)：可选托管编排、权威边界、自检与 Studio；
+7. [录制与视频工作台](docs/23-recording-and-video-workbench.md)：独立手动录制、Provider Adapter 与下载包；
+8. [重构总进度与 Backlog](docs/18-refactor-progress-and-backlog.md)：完成度、优先级、依赖和验收标准。
 
 ## 核心链路
 
@@ -383,7 +385,6 @@ Pose 配置及 Registry 锁定，才能成为可运行的主体资产。
 ```bash
 pnpm typecheck
 pnpm test
-pnpm test:scenes
 pnpm build
 pnpm verify:canonical
 pnpm verify:rigged-subject
@@ -393,6 +394,14 @@ pnpm verify:control-capture
 pnpm verify:validation-capture
 pnpm verify:route-r0-contract
 ```
+
+这是一张完整能力覆盖表，不要求每次小改都机械重跑全部命令。先跑受影响的定向回归，
+在最终待合入树上把相关完整门禁各跑一次；只要后续改动没有触及某条门禁的输入或承诺，
+它的通过证据可以复用。根 `pnpm test` 已包含 `pnpm test:scenes` 的两个 Vitest 文件，
+不要连续重复执行；`pnpm test:studio` 使用独立 Node Test Runner，需要 Studio 证据时单独跑。
+生产构建、Browser/Capability verifier、截图检查和人工交互属于不同证据层，不能由单元
+测试替代。详细失效规则见
+[`runtime-deep-review-checklist.md`](docs/reviews/runtime-deep-review-checklist.md#6-required-completion-gates)。
 
 `verify:canonical` 会在真实 Chromium 中验证 Canonical Build Artifact、
 Babylon/Havok、墙体碰撞、水域切换、两个 Package Subject 独立控制、截图、
@@ -494,12 +503,15 @@ Browser、示例和门禁。若本轮确实无法删除某个旧路径，技术�
 - [项目总览：范围、状态与阅读顺序](docs/00-project-overview.md)
 - [Canonical JSON V4：AI/CLI 接入与运行指南](docs/17-canonical-json-quickstart.md)
 - [主体手感配表与版本工作区](docs/19-subject-preset-workspace.md)
+- [Hosted Scene Brief 与评测工作流](docs/22-hosted-scene-brief-and-evaluation.md)
+- [录制与视频工作台](docs/23-recording-and-video-workbench.md)
 - [SDK 重构总进度与 Backlog](docs/18-refactor-progress-and-backlog.md)
 - [当前实验与验证记录](docs/10-current-experiments.md)
 - [第一期 Alpha 实现与运行指南](docs/07-alpha-implementation.md)
 
 ### 架构评审
 
+- [PR #14 Hosted Scene Brief / Evaluation 选择性融合审查](docs/reviews/2026-08-25-pr14-spatial-platform-main-integration-review.md)
 - [AI-first 白模游戏 SDK 设计评审简版](docs/reviews/2026-08-18-ai-first-sdk-design-review-brief.md)
 - [AI-first LEGO 游戏 SDK 总体设计](docs/superpowers/specs/2026-08-17-ai-first-lego-game-sdk-design.md)
 - [Canonical Runtime State 与 Semantic Projection 设计](docs/superpowers/specs/2026-08-22-canonical-runtime-state-and-semantic-projection-design.md)

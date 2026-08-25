@@ -4,6 +4,7 @@ import type {
   VisualPrototypeSpec,
 } from "@whitebox-world/world";
 import type {
+  WorldkitAuthoringCaptureApiV1,
   WorldkitBrowserApiV5,
 } from "@whitebox-world/runtime-contracts";
 export type { WorldkitBrowserApiV5 } from "@whitebox-world/runtime-contracts";
@@ -194,6 +195,7 @@ declare global {
   interface Window {
     __WHITEBOX_PLAYGROUND__: PlaygroundBrowserAutomationApi;
     __WORLDKIT__?: WorldkitBrowserApiV5;
+    __WORLDKIT_AUTHORING_CAPTURE__?: WorldkitAuthoringCaptureApiV1;
   }
 }
 

@@ -6,10 +6,11 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 import { isNil } from "lodash-es";
-import { chromium, type Browser } from "playwright";
+import type { Browser } from "playwright";
 import { describe, expect, it } from "vitest";
 
 import { loadWorldkitRoutePipeline } from "./lib/worldkit-pipeline";
+import { launchChromiumWithSystemFallback } from "./lib/playwright-browser-launch";
 
 const REPOSITORY_ROOT = path.resolve(
   fileURLToPath(new URL("../", import.meta.url)),
@@ -222,14 +223,14 @@ describe("worldkit run trusted Route Host transport", () => {
       expect(ready.port).toBe(port);
       expect(await ownedRouteEvidenceDirectories(childProcessId)).toHaveLength(1);
 
-      browser = await chromium.launch({ headless: true });
+      browser = await launchChromiumWithSystemFallback();
       const page = await browser.newPage();
       await page.goto(ready.url, {
         waitUntil: "domcontentloaded",
         timeout: WORLDKIT_ROUTE_BROWSER_READY_TIMEOUT_MILLISECONDS,
       });
       await page.waitForFunction(
-        () => window.__WORLDKIT__ !== undefined,
+        () => document.documentElement.dataset.worldkitStatus === "ready",
         undefined,
         { timeout: WORLDKIT_ROUTE_BROWSER_READY_TIMEOUT_MILLISECONDS },
       );

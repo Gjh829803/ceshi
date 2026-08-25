@@ -8,12 +8,7 @@ import {
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
-import {
-  chromium,
-  type Browser,
-  type BrowserContext,
-  type Page,
-} from "playwright";
+import type { Browser, BrowserContext, Page } from "playwright";
 
 import {
   stringifyCanonicalJson,
@@ -30,6 +25,7 @@ import {
   type SubjectExplanationSuccessV1,
 } from "./lib/subject-explain";
 import { promoteArtifactDirectory } from "./lib/artifact-directory-promotion";
+import { launchChromiumWithSystemFallback } from "./lib/playwright-browser-launch";
 import { startWorldkitServer } from "./lib/worldkit-server";
 import { main as worldkitMain } from "./worldkit";
 
@@ -463,7 +459,7 @@ async function verifyBrowserProtocolAndPhysics(): Promise<{
   try {
     server = await startWorldkitServer({ inputPath: INPUT_PATH });
     try {
-      browser = await chromium.launch({ headless: true });
+      browser = await launchChromiumWithSystemFallback();
     } catch {
       throw Object.assign(new Error("Playwright Chromium is unavailable."), {
         code: "CLI_PLAYWRIGHT_BROWSER_UNAVAILABLE",

@@ -37,6 +37,7 @@ import {
   runCompiledSimulationTakeV1,
   type SimulationTakeBrowserDriverV1,
 } from "./simulation-take-runner";
+import { launchChromiumWithSystemFallback } from "./playwright-browser-launch";
 import {
   cliFailure,
   loadWorldkitRoutePipeline,
@@ -343,8 +344,7 @@ export async function runSimulationTakeFileV1(
       inputPath: pipeline.absoluteInputPath,
       ...(options.port === undefined ? {} : { port: options.port }),
     });
-    const { chromium } = await import("playwright");
-    browser = await chromium.launch({ headless: true });
+    browser = await launchChromiumWithSystemFallback();
     const page = await browser.newPage({
       viewport: { width: Math.max(640, options.widthPixels), height: Math.max(360, options.heightPixels) },
       deviceScaleFactor: 1,
