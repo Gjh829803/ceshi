@@ -1,6 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+const discoveryStubs = vi.hoisted(() => ({ createVitest: vi.fn() }));
+
+vi.mock("vitest/node", () => ({ createVitest: discoveryStubs.createVitest }));
 
 import {
+  discoverVitestTestFilesV1,
   evaluateTestGateCensusV1,
   type TestGateManifestEntryV1,
 } from "./test-gate-census";
@@ -9,6 +14,47 @@ const MANIFEST: readonly TestGateManifestEntryV1[] = [
   { path: "packages/a.test.ts", lane: "contract" },
   { path: "scripts/heavy.test.ts", lane: "resource-heavy", reasonCodes: ["measured-duration"] },
 ];
+
+afterEach(() => {
+  discoveryStubs.createVitest.mockReset();
+});
+
+describe("discoverVitestTestFilesV1", () => {
+  it("canonicalizes discovered module ids and closes Vitest after success", async () => {
+    const globTestSpecifications = vi.fn().mockResolvedValue([
+      { moduleId: "/repo/scripts/z.test.ts" },
+      { moduleId: "/repo/packages/a.test.ts" },
+    ]);
+    const close = vi.fn().mockResolvedValue(undefined);
+    discoveryStubs.createVitest.mockResolvedValue({ globTestSpecifications, close });
+
+    await expect(discoverVitestTestFilesV1({
+      repositoryRoot: "/repo",
+      configPath: "vitest.config.ts",
+    })).resolves.toEqual(["packages/a.test.ts", "scripts/z.test.ts"]);
+    expect(discoveryStubs.createVitest).toHaveBeenCalledWith("test", {
+      root: "/repo",
+      config: "vitest.config.ts",
+      run: true,
+      watch: false,
+    });
+    expect(close).toHaveBeenCalledOnce();
+  });
+
+  it("closes Vitest when test specification discovery rejects", async () => {
+    const close = vi.fn().mockResolvedValue(undefined);
+    discoveryStubs.createVitest.mockResolvedValue({
+      globTestSpecifications: vi.fn().mockRejectedValue(new Error("glob fault")),
+      close,
+    });
+
+    await expect(discoverVitestTestFilesV1({
+      repositoryRoot: "/repo",
+      configPath: "vitest.config.ts",
+    })).rejects.toThrow("glob fault");
+    expect(close).toHaveBeenCalledOnce();
+  });
+});
 
 describe("evaluateTestGateCensusV1", () => {
   it.each([
