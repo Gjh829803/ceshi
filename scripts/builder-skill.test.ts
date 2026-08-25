@@ -100,7 +100,7 @@ describe("Canonical Builder skill", () => {
   });
 
   it("consumes the lightweight movement brief and maps only complete visual targets", async () => {
-    const [skill, template, terrainAndStructures] = await Promise.all([
+    const [skill, template, terrainAndStructures, controlledSubjects, modularSubjects, launcher] = await Promise.all([
       readFile(path.resolve(".codex/skills/worldkit-canonical-builder/SKILL.md"), "utf8"),
       readFile(path.resolve(
         ".codex/skills/worldkit-canonical-builder/references/canonical-template.md",
@@ -108,9 +108,20 @@ describe("Canonical Builder skill", () => {
       readFile(path.resolve(
         ".codex/skills/worldkit-canonical-builder/references/terrain-and-structures.md",
       ), "utf8"),
+      readFile(path.resolve(
+        ".codex/skills/worldkit-canonical-builder/references/controlled-subjects.md",
+      ), "utf8"),
+      readFile(path.resolve(
+        ".codex/skills/worldkit-canonical-builder/references/modular-subjects.md",
+      ), "utf8"),
+      readFile(path.resolve("scripts/run-spatial-world-agent.sh"), "utf8"),
     ]);
     expect(skill).toContain("brief's explicit movement mode");
-    expect(skill).toContain("capability-gap diagnostic");
+    expect(skill).toContain("A named Registry Subject is a shortcut, not a whitelist");
+    expect(skill).toContain("Absence of a named preset is never a reason");
+    expect(skill).toContain("package-local Subject Definition");
+    expect(skill).toContain("explicitly disclosed playable approximation");
+    expect(skill).toContain("must not add or modify SDK motion bases");
     expect(skill).toContain("Never emit `worldkit://capability/relationship.mount@1`");
     expect(skill).toContain("`maxVertices`, `maxTriangles`, and `maxColliders` are required hard budgets");
     expect(skill).toContain("current compiler rejects every overrun");
@@ -146,6 +157,19 @@ describe("Canonical Builder skill", () => {
     expect(template).toContain('"kind": "worldkit-scene-brief-implementation-map"');
     expect(template).toContain('"visualTargetId": "visual-target-1"');
     expect(template).not.toContain('"planId"');
+    expect(template).toContain("humanoid.g-bot@2");
+    expect(controlledSubjects).toContain("one complete package-local Subject silhouette");
+    expect(controlledSubjects).toContain("documented ground closure");
+    expect(controlledSubjects).not.toContain("humanoid.board.surface-slide@1");
+    expect(controlledSubjects).not.toContain("humanoid.wingsuit.unpowered-glide@1");
+    expect(modularSubjects).toContain("humanoid.g-bot@2");
+    expect(modularSubjects).toContain("humanoid.golden@2");
+    expect(modularSubjects).toContain("xier120");
+    expect(modularSubjects).toContain("Never put any of these lower-level refs in AuthoringSpec");
+    expect(launcher).toContain("absence of a same-named preset is never a reason");
+    expect(launcher).toContain("never add or modify SDK motion bases");
+    expect(launcher).not.toContain("humanoid.board.surface-slide@1");
+    expect(launcher).not.toContain("humanoid.wingsuit.unpowered-glide@1");
     expect(terrainAndStructures).toContain(
       "`maxVertices`, `maxTriangles`, and `maxColliders` are required hard budgets",
     );
@@ -154,9 +178,6 @@ describe("Canonical Builder skill", () => {
     );
     expect(terrainAndStructures).not.toContain(
       "`maxTriangles` is a required resource-budget field but no longer blocks validation or compilation",
-    );
-    expect(terrainAndStructures).toContain(
-      "Flight, underwater, vehicles, caves, interiors, and other unsupported production movement or topology requests are capability gaps",
     );
     expect(terrainAndStructures).not.toContain(
       "Flight also needs at least 120 m of usable vertical range",

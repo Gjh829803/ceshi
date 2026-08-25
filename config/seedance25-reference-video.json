@@ -28,9 +28,9 @@
     "presignSeconds": 86400
   },
   "videoEditingDefaults": {
-    "ratio": "adaptive",
+    "ratio": "16:9",
     "duration": -1,
-    "generateAudio": false,
+    "generateAudio": true,
     "watermark": false
   },
   "contentOrder": [
@@ -42,7 +42,7 @@
   ],
   "notes": [
     "The API key is intentionally excluded from this file and all generated artifacts.",
-    "Adaptive ratio and duration -1 preserve the complete reference video's aspect ratio and duration.",
+    "The request locks 16:9 and uses the integer-second reference duration; local post-processing enforces 1280x720, 24 fps, exact frame parity, and an audio stream.",
     "The recorded whitebox video is submitted directly as reference_video; it is not reduced to text-only motion guidance."
   ]
 }

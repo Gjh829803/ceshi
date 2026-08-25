@@ -190,7 +190,14 @@ Use this template as the structural starting point. Infer IDs, bounds, terrain, 
 
 Fixed transforms may omit `rotationEulerRadiansXYZ` or `scaleXYZ` when their defaults are intended. Do not place `placement` on a Subject; its spawn comes from `spawnAnchorEntityId`.
 
-For the required opening composition, keep the spawn Anchor's `rotationEulerRadiansXYZ` exactly `[0, 0, 0]`: canonical Subject forward is `-Z`, and the main entry destination must therefore lie generally along `-Z`. Keep `cameraRig.target.targetEntityId` equal to `startup.controlledEntityId`, use the standard third-person rig with no manual switch, and do not create lateral or shoulder composition. The trusted runtime gate proves that the captured camera is directly behind the Subject and the primary visual mask is centered; a diagonal spawn facing is not an acceptable way to point at an off-axis landmark—rotate/lay out the world relationship instead.
+`resources.subjectDefinitions` is the scene-local composition surface, not an
+exceptional fallback. When no Registry Subject has the complete planned shape,
+add one package-local definition assembled from registered asset and primitive
+visual parts, then reference it from the Subject node. Use the compilable
+composition example in `controlled-subjects.md`; shape parts never need
+separate startup, control, camera, or implementation-map entities.
+
+For the required opening composition, keep the spawn Anchor's `rotationEulerRadiansXYZ` exactly `[0, 0, 0]`: canonical Subject forward is `-Z`, and the main entry destination must therefore lie generally along `-Z`. Keep `cameraRig.target.targetEntityId` equal to `startup.controlledEntityId`, use the standard third-person rig with no manual switch, and configure pitch, distance, target height, and FOV from the assembled Subject bounds and movement speed. Do not create lateral or shoulder composition. The trusted runtime gate proves that the captured camera is directly behind the Subject and the primary visual mask is centered; a diagonal spawn facing is not an acceptable way to point at an off-axis landmark—rotate/lay out the world relationship instead.
 
 The default shown above is an open world: empty routes and connectivity are correct. When the Brief explicitly requires a constrained ground connection and the complete route lies on `terrain-main`, add a destination Anchor, a `spatial.routes` row, and one required connectivity row:
 

@@ -19,7 +19,7 @@
     "studio": "pnpm --filter @whitebox-world/studio dev",
     "studio:public": "pnpm --filter @whitebox-world/studio public-proxy",
     "test:studio": "pnpm --filter @whitebox-world/studio test",
-    "test:lwdp-client": "node --test scripts/lwdp-codex-profile.test.mjs scripts/lwdp-generation-client.test.mjs scripts/write-lwdp-t2i-manifest.test.mjs",
+    "test:lwdp-client": "node --test scripts/lwdp-codex-profile.test.mjs scripts/lwdp-generation-client.test.mjs scripts/local-codex-task.test.mjs scripts/write-lwdp-t2i-manifest.test.mjs",
     "dev:architecture": "pnpm --filter @whitebox-world/architecture dev",
     "build": "pnpm --filter @whitebox-world/playground build",
     "build:agent-self-check": "node scripts/build-agent-self-check.mjs",

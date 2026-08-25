@@ -52,6 +52,7 @@ export function readGlbAnimationClipTiming(
     new TextDecoder().decode(bytes.subarray(20, jsonEnd)),
   ) as {
     accessors?: readonly {
+      count?: number;
       min?: readonly number[];
       max?: readonly number[];
     }[];
@@ -66,31 +67,59 @@ export function readGlbAnimationClipTiming(
     throw new Error(`GLB animation clip '${clipName}' must resolve exactly once.`);
   }
   const animation = matches[0]!;
-  const framesPerSecond = animation.extras?.framesPerSecond;
-  assertPositiveFinite(framesPerSecond ?? Number.NaN, "GLB animation framesPerSecond");
-  const inputAccessorIndexes = new Set(
+  const inputAccessorIndexes = [...new Set(
     animation.samplers?.map((sampler) => sampler.input) ?? [],
-  );
+  )];
   if (
-    inputAccessorIndexes.size !== 1 ||
-    [...inputAccessorIndexes][0] === undefined ||
-    !Number.isSafeInteger([...inputAccessorIndexes][0])
+    inputAccessorIndexes.length === 0 ||
+    inputAccessorIndexes.some(
+      (accessorIndex) =>
+        accessorIndex === undefined || !Number.isSafeInteger(accessorIndex),
+    )
   ) {
-    throw new Error(`GLB animation clip '${clipName}' must use one timing accessor.`);
+    throw new Error(`GLB animation clip '${clipName}' must use valid timing accessors.`);
   }
-  const accessor = document.accessors[[...inputAccessorIndexes][0]!];
-  const minimumSeconds = accessor?.min?.[0];
-  const maximumSeconds = accessor?.max?.[0];
+  const timingAccessors = inputAccessorIndexes.map(
+    (accessorIndex) => document.accessors![accessorIndex!],
+  );
+  const firstAccessor = timingAccessors[0];
+  const minimumSeconds = firstAccessor?.min?.[0];
+  const maximumSeconds = firstAccessor?.max?.[0];
   if (
     !Number.isFinite(minimumSeconds) ||
     !Number.isFinite(maximumSeconds) ||
-    maximumSeconds! <= minimumSeconds!
+    maximumSeconds! <= minimumSeconds! ||
+    timingAccessors.some(
+      (accessor) =>
+        accessor?.min?.[0] !== minimumSeconds ||
+        accessor?.max?.[0] !== maximumSeconds,
+    )
   ) {
-    throw new Error(`GLB animation clip '${clipName}' has invalid timing bounds.`);
+    throw new Error(`GLB animation clip '${clipName}' has inconsistent timing bounds.`);
   }
+  const durationSeconds = maximumSeconds! - minimumSeconds!;
+  const explicitFramesPerSecond = animation.extras?.framesPerSecond;
+  const derivedSampleRates = timingAccessors.map((accessor) =>
+    Number.isSafeInteger(accessor?.count) && accessor!.count! >= 2
+      ? (accessor!.count! - 1) / durationSeconds
+      : Number.NaN
+  );
+  const derivedFramesPerSecond = derivedSampleRates[0] ?? Number.NaN;
+  if (
+    explicitFramesPerSecond === undefined &&
+    derivedSampleRates.some(
+      (sampleRate) =>
+        !Number.isFinite(sampleRate) ||
+        Math.abs(sampleRate - derivedFramesPerSecond) > 1e-9,
+    )
+  ) {
+    throw new Error(`GLB animation clip '${clipName}' has inconsistent sample rates.`);
+  }
+  const framesPerSecond = explicitFramesPerSecond ?? derivedFramesPerSecond;
+  assertPositiveFinite(framesPerSecond, "GLB animation framesPerSecond");
   return {
-    durationSeconds: maximumSeconds! - minimumSeconds!,
-    framesPerSecond: framesPerSecond!,
+    durationSeconds,
+    framesPerSecond,
   };
 }
 

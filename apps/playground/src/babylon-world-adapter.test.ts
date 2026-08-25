@@ -99,6 +99,7 @@ interface RuntimeProbe {
   getControlCaptureCapabilities: ReturnType<typeof vi.fn>;
   waitForRenderReady: ReturnType<typeof vi.fn>;
   captureControlFrame: ReturnType<typeof vi.fn>;
+  captureArtifactView: ReturnType<typeof vi.fn>;
   snapshot(): BabylonRuntimeProjectionV1;
 }
 
@@ -119,6 +120,13 @@ interface AdapterProbe {
   waitForSimulationTick(expectedSimulationTick: number): Promise<WorldRuntimeSnapshotV4>;
   waitForRenderReady(expectedSimulationTick: number): Promise<unknown>;
   captureControlFrame(request: ControlCaptureRequestV1): Promise<RuntimeControlCaptureFrameV1>;
+  configureVisualCaptureTargets(
+    targets: readonly import("@whitebox-world/runtime-contracts").RuntimeCaptureTargetV1[],
+  ): readonly import("@whitebox-world/runtime-contracts").RuntimeCaptureTargetV1[];
+  listCaptureTargets(): readonly import("@whitebox-world/runtime-contracts").RuntimeCaptureTargetV1[];
+  captureRuntimeWhiteboxTriview(
+    targetId: string,
+  ): import("@whitebox-world/runtime-contracts").WhiteboxTriviewCaptureV1;
 }
 
 function publicRuntimeSnapshot(
@@ -312,10 +320,15 @@ function createAdapterProbe(): {
     captureControlFrame: vi.fn(async () =>
       undefined as unknown as RuntimeControlCaptureFrameV1
     ),
+    captureArtifactView: vi.fn(() => ({
+      kind: "worldkit-runtime-artifact-capture",
+      schemaVersion: 1,
+      dataUrl: "data:image/png;base64,test",
+    })),
     snapshot: () => runtimeSnapshot(tick, cameraView),
   };
   const executionPlan = LOCKED_EXECUTION_PLAN_V5;
-  const canvas = {} as HTMLCanvasElement;
+  const canvas = { width: 640, height: 360 } as HTMLCanvasElement;
   const acquireRuntimeActivity = vi.fn(
     (request: { id: string; activityKind: string }) => ({
       kind: "worldkit-runtime-activity-receipt",
@@ -374,6 +387,7 @@ function createAdapterProbe(): {
     animationFrameId: null,
     frame: 0,
     captureActivitySequence: 0,
+    visualCaptureTargets: [],
     previousAnimationTimestampMilliseconds: 0,
     fixedStepAccumulatorSeconds: 0,
     displayFramesPerSecond: 0,
@@ -397,6 +411,38 @@ afterEach(() => {
 });
 
 describe("BabylonWorldAdapter frame loop", () => {
+  it("keeps grouped whitebox capture on the Adapter artifact surface", () => {
+    const { adapter, runtime } = createAdapterProbe();
+    const target = {
+      id: "player-target",
+      visualTargetId: "visual-target-1",
+      runtimeEntityIds: ["player"],
+      role: "primary-subject",
+      semanticClassId: "subject.player",
+      identityColor: "#E85D5D",
+    } as const;
+
+    expect(adapter.listCaptureTargets()).toEqual([]);
+    expect(adapter.configureVisualCaptureTargets([target])).toEqual([target]);
+    expect(adapter.listCaptureTargets()).toEqual([target]);
+    expect(() => adapter.captureRuntimeWhiteboxTriview("missing-target")).toThrow(
+      "WORLDKIT_CAPTURE_TARGET_NOT_FOUND",
+    );
+    expect(adapter.captureRuntimeWhiteboxTriview(target.id)).toMatchObject({
+      targetId: target.id,
+      runtimeEntityIds: ["player"],
+      views: ["front", "right", "back"],
+      imageDataUrl: "data:image/png;base64,test",
+    });
+    expect(runtime.captureArtifactView).toHaveBeenCalledWith({
+      kind: "entity-triview",
+      widthPixels: 640,
+      heightPixels: 360,
+      entityIds: ["player"],
+      identityColor: "#E85D5D",
+    });
+  });
+
   it("fails closed instead of selecting the initial Subject when possession is unbound", () => {
     const possessedProjection = runtimeSnapshot();
     const unboundProjection: BabylonRuntimeProjectionV1 = {

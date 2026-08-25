@@ -18,6 +18,9 @@ import path from "node:path";
 const ID_PATTERN = /^[a-z0-9][a-z0-9-]{2,79}$/;
 const RECORDING_ID_PATTERN = /^recording-[0-9]{8}t[0-9]{6}-[a-f0-9]{6}$/;
 const MAX_RECORDING_BYTES = 256 * 1024 * 1024;
+const RECORDING_WIDTH = 1280;
+const RECORDING_HEIGHT = 720;
+const RECORDING_FPS = 24;
 const ACTIVE_PROMPT_STATUSES = new Set(["queued", "running"]);
 const ACTIVE_VIDEO_STATUSES = new Set(["queued", "preparing", "submitted", "running"]);
 
@@ -55,6 +58,12 @@ export const RECORDING_PROMPT_TEMPLATE = `参考素材职责：
 [35mm/50mm]镜头，[手持跟拍/轨道推进/弧形环绕]，
 自然运动模糊，稳定空间连续性。
 不得自行增加切镜、反打、旋转或额外推拉。
+
+声音：
+生成与画面事件严格同步的环境音和动作音效，包括脚步、载具、衣物、风声、
+地面接触、碰撞及场景中真实可见声源产生的声音。
+不得加入背景音乐、配乐、歌曲、歌声、对白、旁白、解说或任何人类语音。
+不得用音乐替代环境音效，不得增加画面中没有声源依据的夸张声音。
 
 限制：
 主体身份全程一致；无角色交换；无额外人物；无肢体融合；
@@ -105,19 +114,27 @@ export function deriveRecordingWorkflowStatus(record) {
   return "recorded";
 }
 
-export function recordingNormalizationFfmpegArgs(sourcePath, destinationPath) {
+export function recordingNormalizationFfmpegArgs(sourcePath, destinationPath, durationSeconds) {
+  if (!Number.isSafeInteger(durationSeconds) || durationSeconds < 1 || durationSeconds > 120) {
+    throw new Error("白膜录屏必须裁剪为 1–120 秒的整数时长。");
+  }
+  const frameCount = durationSeconds * RECORDING_FPS;
   return [
     "-y",
     "-v", "error",
     "-fflags", "+genpts",
     "-i", sourcePath,
     "-an",
-    "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2:0:0,setsar=1",
+    "-vf", `scale=${RECORDING_WIDTH}:${RECORDING_HEIGHT}:force_original_aspect_ratio=decrease,` +
+      `pad=${RECORDING_WIDTH}:${RECORDING_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=black,` +
+      `setsar=1,fps=${RECORDING_FPS}`,
+    "-t", String(durationSeconds),
+    "-frames:v", String(frameCount),
     "-c:v", "libx264",
     "-preset", "fast",
     "-crf", "18",
     "-pix_fmt", "yuv420p",
-    "-r", "30",
+    "-r", String(RECORDING_FPS),
     "-movflags", "+faststart",
     destinationPath,
   ];
@@ -166,6 +183,8 @@ export function buildRecordingPromptInstruction({ sceneId, triViews }) {
 ${supplements || "- 没有额外标识物三视图。"}
 
 先逐段理解@视频1的相机路径、速度变化、动作时序、关键姿态和遮挡关系；再观察图片中的最终外观。补全模板内的地点、时间、天气、材质、灯光、色温、镜头焦段与运镜方式。不得改变模板的参考职责，不得增加@视频1不存在的主要动作，不得把白膜外观带入最终画面。
+
+声音必须只包含与画面同步的真实环境音和动作音效；严禁音乐、配乐、歌曲、对白、旁白、解说、人声或语音。
 
 输出必须保留以下模板结构和全部限制，并把方括号占位内容替换成明确、可执行的描述：
 
@@ -304,6 +323,7 @@ export function createRecordingWorkbenchService(options = {}) {
   ) || 2));
   const autoRunJobs = options.autoRunJobs ?? true;
   const spawnImplementation = options.spawnImplementation ?? spawn;
+  const codexBackendProvider = options.codexBackendProvider ?? (() => "cloud");
   const generationRunner = options.generationRunner;
   const transcodeRecording = options.transcodeRecording;
   const composeTriviewComparison = options.composeTriviewComparison;
@@ -311,6 +331,14 @@ export function createRecordingWorkbenchService(options = {}) {
   const activeJobs = new Map();
   const activeChildren = new Map();
   let shuttingDown = false;
+
+  function resolveCodexBackend() {
+    const backend = codexBackendProvider();
+    if (backend !== "cloud" && backend !== "local") {
+      throw new Error(`Unsupported Codex backend: ${String(backend)}`);
+    }
+    return backend;
+  }
 
   const sceneRoot = (sceneId) => path.join(recordingsRoot, sceneId);
   const recordingRoot = (sceneId, recordingId) => path.join(sceneRoot(sceneId), recordingId);
@@ -329,25 +357,20 @@ export function createRecordingWorkbenchService(options = {}) {
     }
   }
 
-  async function normalizeRecordingVideo(sceneId, recordingId, sourcePath, extension) {
-    if (extension === "mp4") {
-      return {
-        fileName: path.basename(sourcePath),
-        extension: "mp4",
-        mimeType: "video/mp4",
-        normalizedFrom: null,
-      };
-    }
+  async function normalizeRecordingVideo(sceneId, recordingId, sourcePath, extension, durationSeconds) {
     const destinationPath = path.join(recordingRoot(sceneId, recordingId), "whitebox-recording.mp4");
+    let injectedMedia = null;
     if (typeof transcodeRecording === "function") {
-      await transcodeRecording({ sourcePath, destinationPath, sceneId, recordingId });
+      injectedMedia = await transcodeRecording({
+        sourcePath, destinationPath, sceneId, recordingId, durationSeconds,
+      });
     } else {
       const result = await runTrackedChild(
         "recording-normalize",
         sceneId,
         recordingId,
         "ffmpeg",
-        recordingNormalizationFfmpegArgs(sourcePath, destinationPath),
+        recordingNormalizationFfmpegArgs(sourcePath, destinationPath, durationSeconds),
         { cwd: repoRoot, env: process.env },
       );
       if (result.code !== 0) {
@@ -357,11 +380,49 @@ export function createRecordingWorkbenchService(options = {}) {
     if (!await fileExists(destinationPath) || (await stat(destinationPath)).size === 0) {
       throw new Error("录屏 MP4 规范化没有生成有效文件。");
     }
+    let media = injectedMedia;
+    if (media === null || typeof media !== "object") {
+      const probe = await runTrackedChild(
+        "recording-probe",
+        sceneId,
+        recordingId,
+        "ffprobe",
+        [
+          "-v", "error", "-count_frames", "-select_streams", "v:0",
+          "-show_entries", "stream=width,height,avg_frame_rate,nb_read_frames,nb_frames",
+          "-show_entries", "format=duration", "-of", "json", destinationPath,
+        ],
+        { cwd: repoRoot, env: process.env },
+      );
+      if (probe.code !== 0) throw new Error(tail(probe.stderr || "无法检查规范化白膜视频。"));
+      const body = JSON.parse(probe.stdout);
+      const stream = body.streams?.[0] ?? {};
+      const [numerator, denominator = "1"] = String(stream.avg_frame_rate ?? "0/1").split("/");
+      media = {
+        width: Number(stream.width),
+        height: Number(stream.height),
+        fps: Number(numerator) / Number(denominator),
+        frameCount: Number(stream.nb_read_frames ?? stream.nb_frames),
+        durationSeconds: Number(body.format?.duration),
+      };
+    }
+    const expectedFrames = durationSeconds * RECORDING_FPS;
+    if (
+      media.width !== RECORDING_WIDTH || media.height !== RECORDING_HEIGHT ||
+      media.fps !== RECORDING_FPS || media.frameCount !== expectedFrames
+    ) {
+      throw new Error(
+        `白膜录屏规格不合格：${media.width}x${media.height} ${media.fps}fps ` +
+        `${media.frameCount}帧；要求 ${RECORDING_WIDTH}x${RECORDING_HEIGHT} ` +
+        `${RECORDING_FPS}fps ${expectedFrames}帧。`,
+      );
+    }
     return {
       fileName: path.basename(destinationPath),
       extension: "mp4",
       mimeType: "video/mp4",
       normalizedFrom: path.basename(sourcePath),
+      media,
     };
   }
 
@@ -386,6 +447,9 @@ export function createRecordingWorkbenchService(options = {}) {
 
   async function resolveSceneAssets(sceneId) {
     const artifactRoot = path.join(repoRoot, "artifacts", "scenes", sceneId);
+    const worldPlanPath = path.join(
+      repoRoot, "apps", "playground", "public", "scene-plans", sceneId, "world-plan.png",
+    );
     const openingFramePath = path.join(artifactRoot, "styled-opening-frame.png");
     const manifest = await readJson(path.join(artifactRoot, "styled-triviews-manifest.json"));
     const declaredTargets = Array.isArray(manifest?.targets) ? manifest.targets : [];
@@ -430,9 +494,10 @@ export function createRecordingWorkbenchService(options = {}) {
       return rank(left.role) - rank(right.role) || left.id.localeCompare(right.id);
     });
     const openingFrameReady = await fileExists(openingFramePath);
+    const worldPlanReady = await fileExists(worldPlanPath);
     const ready = openingFrameReady && triViews.some(({ role, whiteboxPath }) =>
       role === "primary-subject" && whiteboxPath !== null);
-    const bundleReady = ready && declaredTargets.length > 0 &&
+    const bundleReady = ready && worldPlanReady && declaredTargets.length > 0 &&
       unresolvedTargetIds.length === 0 &&
       triViews.length === declaredTargets.length &&
       triViews.every(({ whiteboxPath }) => whiteboxPath !== null);
@@ -440,6 +505,8 @@ export function createRecordingWorkbenchService(options = {}) {
       ready,
       bundleReady,
       openingFramePath,
+      worldPlanPath,
+      worldPlanReady,
       triViews,
       unresolvedTargetIds,
     };
@@ -502,7 +569,7 @@ export function createRecordingWorkbenchService(options = {}) {
     return Promise.all(records.map(enrichRecord));
   }
 
-  async function runDefaultGeneration(sceneId, recordingId) {
+  async function runDefaultGeneration(sceneId, recordingId, frozenCodexBackend = null) {
     let record = await readRecord(sceneId, recordingId);
     if (!record) throw new Error("录屏记录不存在。");
     const root = recordingRoot(sceneId, recordingId);
@@ -518,6 +585,7 @@ export function createRecordingWorkbenchService(options = {}) {
     const finalPromptPath = path.join(root, "final-prompt.txt");
 
     if (record.prompt?.status !== "succeeded" || !await fileExists(finalPromptPath)) {
+      const codexBackend = frozenCodexBackend ?? record.prompt?.backend ?? resolveCodexBackend();
       const instructionPath = path.join(root, "prompt-instruction.txt");
       await writeFile(
         instructionPath,
@@ -525,7 +593,15 @@ export function createRecordingWorkbenchService(options = {}) {
         "utf8",
       );
       record = await updateRecord(sceneId, recordingId, {
-        prompt: { status: "running", startedAt: now(), finishedAt: null, error: null },
+        prompt: {
+          status: "running",
+          backend: codexBackend,
+          jobId: null,
+          taskId: null,
+          startedAt: now(),
+          finishedAt: null,
+          error: null,
+        },
         video: { status: "waiting-for-prompt", error: null },
         error: null,
       });
@@ -537,7 +613,8 @@ export function createRecordingWorkbenchService(options = {}) {
       const taskId = `prompt-${recordingId}`;
       const sourcePath = path.join(root, record.source.fileName);
       const args = [
-        path.join(repoRoot, "scripts", "run-lwdp-codex-task.mjs"),
+        path.join(repoRoot, "scripts", "run-codex-task.mjs"),
+        "--backend", codexBackend,
         "--repo-root", repoRoot,
         "--task-id", taskId,
         "--stage", "recording-prompt",
@@ -565,9 +642,21 @@ export function createRecordingWorkbenchService(options = {}) {
         });
         return;
       }
-      const jobId = /WORLDKIT_LWDP_JOB\s+\S+\s+\S+\s+(gen_[a-z0-9]+)/.exec(result.stdout)?.[1] ?? null;
+      const cloudMarker = /WORLDKIT_LWDP_JOB\s+\S+\s+(\S+)\s+(gen_[a-z0-9]+)/.exec(result.stdout);
+      const localMarker = /WORLDKIT_LOCAL_CODEX_JOB\s+\S+\s+(\S+)\s+pid=/.exec(result.stdout);
+      const completedTaskId = codexBackend === "cloud"
+        ? cloudMarker?.[1] ?? null
+        : localMarker?.[1] ?? null;
+      const jobId = codexBackend === "cloud" ? cloudMarker?.[2] ?? null : null;
       record = await updateRecord(sceneId, recordingId, {
-        prompt: { status: "succeeded", jobId, finishedAt: now(), error: null },
+        prompt: {
+          status: "succeeded",
+          backend: codexBackend,
+          taskId: completedTaskId,
+          jobId,
+          finishedAt: now(),
+          error: null,
+        },
       });
     }
 
@@ -581,6 +670,13 @@ export function createRecordingWorkbenchService(options = {}) {
       recordingId,
       promptPath: finalPromptPath,
       referenceVideoPath: path.join(root, record.source.fileName),
+      durationSeconds: record.source.durationSeconds ?? Math.floor(record.source.durationMs / 1_000),
+      frameRate: record.source.fps ?? RECORDING_FPS,
+      frameCount: record.source.frameCount ??
+        Math.floor(record.source.durationMs / 1_000) * RECORDING_FPS,
+      width: record.source.width ?? RECORDING_WIDTH,
+      height: record.source.height ?? RECORDING_HEIGHT,
+      requireAudio: true,
       referenceImagePaths: referenceImages,
       outputPath: generatedPath,
     });
@@ -633,11 +729,12 @@ export function createRecordingWorkbenchService(options = {}) {
     });
   }
 
-  async function runGeneration(sceneId, recordingId) {
+  async function runGeneration(sceneId, recordingId, frozenCodexBackend = null) {
     if (typeof generationRunner === "function") {
       await generationRunner({
         sceneId,
         recordingId,
+        codexBackend: frozenCodexBackend,
         root: recordingRoot(sceneId, recordingId),
         readRecord: () => readRecord(sceneId, recordingId),
         updateRecord: (patch) => updateRecord(sceneId, recordingId, patch),
@@ -645,7 +742,7 @@ export function createRecordingWorkbenchService(options = {}) {
       });
       return;
     }
-    await runDefaultGeneration(sceneId, recordingId);
+    await runDefaultGeneration(sceneId, recordingId, frozenCodexBackend);
   }
 
   function pumpQueue() {
@@ -656,7 +753,7 @@ export function createRecordingWorkbenchService(options = {}) {
       const key = `${item.sceneId}:${item.recordingId}`;
       if (activeJobs.has(key)) continue;
       const task = Promise.resolve()
-        .then(() => runGeneration(item.sceneId, item.recordingId))
+        .then(() => runGeneration(item.sceneId, item.recordingId, item.codexBackend))
         .catch(async (error) => {
           await updateRecord(item.sceneId, item.recordingId, {
             video: { status: "failed", finishedAt: now(), error: error instanceof Error ? error.message : String(error) },
@@ -671,10 +768,10 @@ export function createRecordingWorkbenchService(options = {}) {
     }
   }
 
-  function enqueue(sceneId, recordingId) {
+  function enqueue(sceneId, recordingId, codexBackend = null) {
     const key = `${sceneId}:${recordingId}`;
     if (!activeJobs.has(key) && !queue.some((item) => `${item.sceneId}:${item.recordingId}` === key)) {
-      queue.push({ sceneId, recordingId });
+      queue.push({ sceneId, recordingId, codexBackend });
     }
     pumpQueue();
   }
@@ -686,6 +783,9 @@ export function createRecordingWorkbenchService(options = {}) {
     const folder = path.join(temporaryRoot, folderName);
     try {
       await mkdir(folder, { recursive: true });
+      if (!assets.worldPlanReady) {
+        throw new RecordingBundleNotReadyError("下载包缺少 Planner 生成的 world-plan.png。");
+      }
       if (!assets.bundleReady) {
         const unresolved = assets.unresolvedTargetIds.length > 0
           ? `：${assets.unresolvedTargetIds.join(", ")}`
@@ -716,6 +816,7 @@ export function createRecordingWorkbenchService(options = {}) {
         };
       });
       const copies = [
+        [assets.worldPlanPath, "world-plan.png"],
         [path.join(recordingRoot(sceneId, recordingId), record.source.fileName), `whitebox-recording.${record.source.extension}`],
         ...(record.source.originalFileName ? [[
           path.join(recordingRoot(sceneId, recordingId), record.source.originalFileName),
@@ -772,6 +873,10 @@ export function createRecordingWorkbenchService(options = {}) {
         video: { ...record.video, error: record.video?.error ? "See local status; excluded from portable bundle." : null },
         portableBundle: {
           schemaVersion: 1,
+          worldPlan: {
+            file: "world-plan.png",
+            role: "planner-navigation-layout",
+          },
           triviewComparisonLayout: "whitebox-left-styled-right",
           triviewPanelSizePixels: [1280, 720],
           triviewComparisonSizePixels: [2560, 720],
@@ -872,15 +977,16 @@ export function createRecordingWorkbenchService(options = {}) {
         return true;
       }
       const durationMs = Number(request.headers["x-worldkit-recording-duration-ms"]);
-      if (!Number.isFinite(durationMs) || durationMs < 500 || durationMs > 120_000) {
-        sendError(response, 400, "录屏时长必须在 0.5–120 秒之间。");
+      if (!Number.isFinite(durationMs) || durationMs < 1_000 || durationMs > 120_999) {
+        sendError(response, 400, "录屏时长必须至少 1 秒且不超过 120 秒。");
         return true;
       }
+      const durationSeconds = Math.floor(durationMs / 1_000);
       const recordingId = createRecordingId();
       const root = recordingRoot(sceneId, recordingId);
       await mkdir(sceneRoot(sceneId), { recursive: true });
       await mkdir(root, { recursive: false });
-      const fileName = `whitebox-recording.${extension}`;
+      const fileName = `whitebox-recording.original.${extension}`;
       try {
         const uploaded = await writeRecordingBody(request, path.join(root, fileName));
         if (!validVideoSignature(uploaded.signature, extension)) {
@@ -891,6 +997,7 @@ export function createRecordingWorkbenchService(options = {}) {
           recordingId,
           path.join(root, fileName),
           extension,
+          durationSeconds,
         );
         const normalizedMetadata = await stat(path.join(root, normalized.fileName));
         const timestamp = now();
@@ -903,13 +1010,24 @@ export function createRecordingWorkbenchService(options = {}) {
           createdAt: timestamp,
           updatedAt: timestamp,
           source: {
-            ...normalized,
+            fileName: normalized.fileName,
+            extension: normalized.extension,
+            mimeType: normalized.mimeType,
+            normalizedFrom: normalized.normalizedFrom,
             sizeBytes: normalizedMetadata.size,
-            durationMs: Math.round(durationMs),
-            contentSha256: uploaded.contentSha256,
+            durationMs: durationSeconds * 1_000,
+            durationSeconds,
+            width: normalized.media.width,
+            height: normalized.media.height,
+            fps: normalized.media.fps,
+            frameCount: normalized.media.frameCount,
+            contentSha256: createHash("sha256")
+              .update(await readFile(path.join(root, normalized.fileName)))
+              .digest("hex"),
             originalFileName: normalized.normalizedFrom,
-            originalExtension: normalized.normalizedFrom ? extension : null,
-            originalSizeBytes: normalized.normalizedFrom ? uploaded.sizeBytes : null,
+            originalExtension: extension,
+            originalSizeBytes: uploaded.sizeBytes,
+            originalContentSha256: uploaded.contentSha256,
           },
           prompt: {
             status: "not-started",
@@ -950,7 +1068,9 @@ export function createRecordingWorkbenchService(options = {}) {
         return true;
       }
       const key = `${sceneId}:${recordingId}`;
-      if (!activeJobs.has(key)) {
+      const alreadyScheduled = activeJobs.has(key) ||
+        queue.some((item) => `${item.sceneId}:${item.recordingId}` === key);
+      if (!alreadyScheduled) {
         const assets = await resolveSceneAssets(sceneId);
         if (!assets.ready) {
           sendError(response, 409, "最终样式化首帧或主角渲染后三视图尚未生成。");
@@ -959,14 +1079,26 @@ export function createRecordingWorkbenchService(options = {}) {
         const promptReady = record.prompt?.status === "succeeded" && await fileExists(
           path.join(recordingRoot(sceneId, recordingId), "final-prompt.txt"),
         );
+        const selectedCodexBackend = resolveCodexBackend();
+        const existingPromptBackend = record.prompt?.backend === "local" ? "local" : "cloud";
+        const promptMatchesSelection = promptReady && existingPromptBackend === selectedCodexBackend;
+        const codexBackend = promptMatchesSelection ? null : selectedCodexBackend;
         await updateRecord(sceneId, recordingId, {
-          prompt: promptReady
+          prompt: promptMatchesSelection
             ? { status: "succeeded", error: null }
-            : { status: "queued", startedAt: null, finishedAt: null, error: null },
+            : {
+                status: "queued",
+                backend: codexBackend,
+                jobId: null,
+                taskId: null,
+                startedAt: null,
+                finishedAt: null,
+                error: null,
+              },
           video: { status: "queued", providerStatus: null, startedAt: null, finishedAt: null, error: null },
           error: null,
         });
-        enqueue(sceneId, recordingId);
+        enqueue(sceneId, recordingId, codexBackend);
       }
       sendJson(response, 202, { recording: await enrichRecord(await readRecord(sceneId, recordingId)) });
       return true;

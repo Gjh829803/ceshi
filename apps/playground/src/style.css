@@ -200,6 +200,8 @@ h1 span {
   position: relative;
   overflow: hidden;
   min-height: 0;
+  aspect-ratio: 16 / 9;
+  align-self: center;
   border: 1px solid #2a302d;
   border-radius: 12px 0 0 12px;
   background: #aeb6b3;

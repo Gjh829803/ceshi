@@ -164,6 +164,24 @@ WorldPackage 发布格式、恢复续拍和视频模型 Adapter 仍在后续 Bac
 白模 Runtime 是唯一世界真相。凡是影响位置、数量、碰撞、遮挡、导航、动作、
 关键轮廓或玩法结果的变化，都必须先进入 Canonical 世界并通过 Runtime Gate。
 
+### Hosted 创作与评测链路
+
+当前 Studio 将上游创作流程保持为清晰的阶段边界：Unified Planner 在一个 Codex
+任务中生成 `scene-brief.md`、简化世界规划图和入口白膜目标；Canonical Builder
+在另一个 Codex 任务中生成 AuthoringSpec V4 与实现映射。Codex 默认通过 LWDP 云端
+运行，也可在 Studio 顶栏一键切换为已安装并登录的本地 Codex；后端在创建任务时冻结，
+不会迁移已排队或运行中的任务。两种后端都使用同一 formal 模型、Skill、自检和输出合同。
+本地后端在 `.codex-tmp/local-codex` 创建一次性隔离工作区，只复制任务所需上下文，
+通过本机已有 Codex 登录完成认证但不会复制或提交凭证，并在 Host 验证非空产物后原子回传。
+可信 Host 负责校验、
+编译 ExecutionPlan V5、捕获真实白膜首帧和按完整视觉目标分组的三视图。随后 Gemini
+只合成共享视觉规范与结构锁定 Prompt，Direct ImageGen 并发生成样式化首帧和各组
+样式化三视图。规划图或生成图都不能替代 Runtime 世界真相。
+
+Studio 与公网评测页展示同一批场景状态、诊断和产物；可玩入口必须进入 Gameplay
+Browser，而详情与产物浏览保持独立。人工试玩录制及后续视频生成是工作流完成后的
+显式用户操作，不会被自动插入 Planner、Builder、白膜捕获或样式化图片阶段。
+
 ## 核心设计原则
 
 - **AI-friendly Schema**：一个概念只有一个公共名称；使用稳定 ID、精确 Ref、

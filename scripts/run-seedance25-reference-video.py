@@ -213,6 +213,7 @@ def probe_video(path: Path) -> dict[str, Any]:
             "ffprobe",
             "-v",
             "error",
+            "-count_frames",
             "-show_streams",
             "-show_format",
             "-of",
@@ -235,6 +236,8 @@ def probe_video(path: Path) -> dict[str, Any]:
     rate = str(video.get("avg_frame_rate") or "0/1").split("/", 1)
     denominator = float(rate[1] or 1) if len(rate) == 2 else 1.0
     fps = float(rate[0]) / denominator if denominator else 0.0
+    raw_frame_count = video.get("nb_read_frames") or video.get("nb_frames") or 0
+    frame_count = int(raw_frame_count) if str(raw_frame_count).isdigit() else 0
     return {
         "width": int(video["width"]),
         "height": int(video["height"]),
@@ -242,6 +245,7 @@ def probe_video(path: Path) -> dict[str, Any]:
         "sizeBytes": path.stat().st_size,
         "videoCodec": video.get("codec_name"),
         "fps": fps,
+        "frameCount": frame_count,
         "hasAudio": any(stream.get("codec_type") == "audio" for stream in streams),
     }
 
@@ -257,6 +261,65 @@ def download_video(url: str, output: Path) -> None:
                     stream.write(chunk)
     probe_video(temporary)
     os.replace(temporary, output)
+
+
+def conform_video(source: Path, output: Path, reference_media: dict[str, Any]) -> dict[str, Any]:
+    width = int(reference_media["width"])
+    height = int(reference_media["height"])
+    fps = int(reference_media["fps"])
+    frame_count = int(reference_media["frameCount"])
+    if width != 1280 or height != 720 or fps != 24 or frame_count < 24:
+        raise SeedanceRunError(
+            f"invalid whitebox media contract: {width}x{height} {fps}fps {frame_count} frames"
+        )
+    source_media = probe_video(source)
+    if not source_media["hasAudio"]:
+        raise SeedanceRunError("Seedance output has no audio stream")
+    duration_seconds = frame_count / fps
+    temporary = output.with_name(f".{output.name}.{os.getpid()}.conform.mp4")
+    video_filter = (
+        f"[0:v:0]scale={width}:{height}:force_original_aspect_ratio=decrease,"
+        f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,"
+        f"fps={fps},tpad=stop_mode=clone:stop_duration={duration_seconds},"
+        f"trim=duration={duration_seconds},setpts=PTS-STARTPTS[v]"
+    )
+    audio_filter = (
+        f"[0:a:0]apad=pad_dur={duration_seconds},"
+        f"atrim=duration={duration_seconds},asetpts=PTS-STARTPTS[a]"
+    )
+    try:
+        subprocess.run(
+            [
+                "ffmpeg", "-y", "-v", "error", "-i", str(source),
+                "-filter_complex", f"{video_filter};{audio_filter}",
+                "-map", "[v]", "-map", "[a]",
+                "-frames:v", str(frame_count), "-r", str(fps),
+                "-c:v", "libx264", "-preset", "fast", "-crf", "18",
+                "-pix_fmt", "yuv420p",
+                "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
+                "-t", str(duration_seconds), "-movflags", "+faststart",
+                str(temporary),
+            ],
+            check=True,
+            timeout=900,
+        )
+        media = probe_video(temporary)
+        if (
+            media["width"] != width
+            or media["height"] != height
+            or media["fps"] != fps
+            or media["frameCount"] != frame_count
+            or not media["hasAudio"]
+        ):
+            raise SeedanceRunError(
+                "Seedance conformance failed: "
+                f"{media['width']}x{media['height']} {media['fps']}fps "
+                f"{media['frameCount']} frames audio={media['hasAudio']}"
+            )
+        os.replace(temporary, output)
+        return {"source": source_media, "output": media}
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def main() -> int:
@@ -303,6 +366,36 @@ def main() -> int:
     write_json_atomic(result_path, record)
 
     try:
+        duration_seconds = int(request.get("durationSeconds") or 0)
+        requested_fps = int(request.get("frameRate") or 0)
+        requested_frames = int(request.get("frameCount") or 0)
+        requested_width = int(request.get("width") or 0)
+        requested_height = int(request.get("height") or 0)
+        if (
+            duration_seconds < 1
+            or requested_fps != 24
+            or requested_frames != duration_seconds * requested_fps
+            or requested_width != 1280
+            or requested_height != 720
+            or request.get("requireAudio") is not True
+        ):
+            raise SeedanceRunError(
+                "request must require 1280x720, 24 fps, integer seconds, exact frame count, and audio"
+            )
+        reference_media = probe_video(reference_video)
+        if (
+            reference_media["width"] != requested_width
+            or reference_media["height"] != requested_height
+            or reference_media["fps"] != requested_fps
+            or reference_media["frameCount"] != requested_frames
+        ):
+            raise SeedanceRunError(
+                "whitebox reference does not match its media contract: "
+                f"{reference_media['width']}x{reference_media['height']} "
+                f"{reference_media['fps']}fps {reference_media['frameCount']} frames"
+            )
+        record["referenceMedia"] = reference_media
+        write_json_atomic(result_path, record)
         api_key = load_api_key(config)
         image_urls = [
             upload_reference(
@@ -339,9 +432,9 @@ def main() -> int:
         payload = {
             "model": config["modelEndpoint"],
             "content": content,
-            "generate_audio": bool(defaults.get("generateAudio", False)),
-            "ratio": str(defaults.get("ratio") or "adaptive"),
-            "duration": int(defaults.get("duration", -1)),
+            "generate_audio": True,
+            "ratio": "16:9",
+            "duration": duration_seconds,
             "watermark": bool(defaults.get("watermark", False)),
         }
         endpoint = str(config["apiBaseUrl"]).rstrip("/")
@@ -393,7 +486,14 @@ def main() -> int:
                 generated_url = content_body.get("video_url") or body.get("video_url")
                 if not generated_url:
                     raise SeedanceRunError("successful Ark task response has no video URL")
-                download_video(str(generated_url), output_path)
+                raw_output_path = output_path.with_name(
+                    f".{output_path.name}.{os.getpid()}.seedance-raw.mp4"
+                )
+                try:
+                    download_video(str(generated_url), raw_output_path)
+                    conformance = conform_video(raw_output_path, output_path, reference_media)
+                finally:
+                    raw_output_path.unlink(missing_ok=True)
                 media = probe_video(output_path)
                 record.update(
                     {
@@ -403,6 +503,12 @@ def main() -> int:
                             "fileName": output_path.name,
                             "sha256": sha256(output_path),
                             "media": media,
+                            "conformance": {
+                                "referenceFrameCount": requested_frames,
+                                "outputFrameCount": media["frameCount"],
+                                "frameCountExact": media["frameCount"] == requested_frames,
+                                "rawSeedanceMedia": conformance["source"],
+                            },
                         },
                         "error": None,
                     }

@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.14.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.3.0
+          cache: pnpm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install media and Python test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python -m pip install --disable-pip-version-check pillow requests
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify generated Builder self-check
+        run: |
+          pnpm build:agent-self-check
+          git diff --exit-code -- .codex/skills/worldkit-canonical-builder/scripts/self-check.mjs
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test Studio and cloud/local execution clients
+        run: |
+          pnpm test:studio
+          pnpm test:lwdp-client
+          node --test scripts/seedance25-media-conformance.test.mjs
+
+      - name: Run full Vitest suite
+        run: pnpm test
+
+      - name: Build Playground
+        run: pnpm build

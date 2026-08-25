@@ -15,6 +15,8 @@ Use this skill for the optional hosted preview-planning stage. It does not repla
 
 Use the reference images as primary visual evidence and the user request as primary intent. Write concise natural language using [references/scene-brief-template.md](references/scene-brief-template.md). Do not create a Spatial Plan, JSON spec, dimensions, coordinates, route nodes, support-surface tables, camera numbers, Registry refs, primitive decomposition, colliders, or implementation mappings.
 
+Keep the four provenance sections required by current main strictly separate: `用户事实` contains only explicit user requirements, `可见参考证据` only directly visible image evidence, `推断的世界延伸` only conservative playable continuation beyond that evidence, and `仅视觉层设想` only styling/material/lighting ideas for later rendering. Never present an inferred continuation as observed geography. Planner does not select Subject Definitions, registered Subject Assets, Runtime Bundles, rigs, clips, colliders, or motion resources; it describes the complete controlled shape and movement behavior in plain language for Builder.
+
 ## Required decisions
 
 ### Movement mode
@@ -29,7 +31,7 @@ Name exactly one movement mode and explain it in one sentence. These common mode
 - `水下游动` — free motion through an underwater volume;
 - `空中飞行` — free motion through an air volume.
 
-When none fits, write a concise custom movement label followed by its real support, inertia, steering, and free-space behavior in plain language. Preserve a user-specified custom mode instead of coercing it to the nearest reference mode. The Builder decides whether an exact runtime capability exists and must not silently claim unsupported behavior.
+When none fits, write a concise custom movement label followed by its real support, inertia, steering, and free-space behavior in plain language. Preserve a user-specified custom mode instead of coercing it to the nearest reference mode. The Builder owns implementation: it may assemble a package-local controlled Subject and bind the closest honest current motion closure independently of shape. A missing named Subject preset is not a reason to revise or reject the plan; the Agent does not add SDK motion bases.
 
 Movement-changing equipment belongs to the complete subject description. Clothing, weapons, armor, and backpacks that do not change locomotion remain appearance details and do not create another subject.
 
