@@ -10,13 +10,16 @@ import {
   assertTraversalGraphBuildBudgetV1,
   assertTraversalSurfaceCountBudgetV1,
 } from "./build-budget.js";
+import { createTraversalCapabilityEnvelopeV1 } from "./capability-envelope.js";
 import { deriveColliderSubshapeIdV1 } from "./collider-subshape-id.js";
 import { assertTraversalSurfaceIdentityV1 } from "./graph-contract.js";
+import { resolveTraversalLockV1 } from "./lock.js";
 import {
   resolveTraversalGraphBuilderProfile,
   resolveTraversalGraphBuilderProfileV2,
 } from "./profile-registry.js";
 import type {
+  ResolvedTraversalLockReceiptV1,
   TraversalCapabilityEnvelopeV1,
   TraversalSurfaceIdentityV1,
 } from "./types.js";
@@ -138,13 +141,25 @@ export type RouteBuildBudgetEvidenceV2 =
 
 export interface RouteBuildInputReceiptV2 {
   readonly input: RouteBuildInputV2;
+  readonly traversalLockReceipt: ResolvedTraversalLockReceiptV1;
   readonly routeBuildInputHash: Sha256Hash;
   readonly budgetEvidence: RouteBuildBudgetEvidenceV2;
 }
 
+export interface CreateRouteBuildInputReceiptV2Input {
+  readonly input: RouteBuildInputV2;
+  readonly traversalLockReceipt: ResolvedTraversalLockReceiptV1;
+}
+
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
 
-const RECEIPT_FIELDS = ["input", "routeBuildInputHash", "budgetEvidence"] as const;
+const CREATE_RECEIPT_FIELDS = ["input", "traversalLockReceipt"] as const;
+const RECEIPT_FIELDS = [
+  "input",
+  "traversalLockReceipt",
+  "routeBuildInputHash",
+  "budgetEvidence",
+] as const;
 const EMPTY_BUDGET_FIELDS = ["kind"] as const;
 const BOUNDED_BUDGET_FIELDS = [
   "kind",
@@ -1271,15 +1286,51 @@ export function hashRouteBuildInputV2(value: unknown): Sha256Hash {
 }
 
 export function createRouteBuildInputReceiptV2(
-  value: unknown,
+  value: CreateRouteBuildInputReceiptV2Input,
 ): RouteBuildInputReceiptV2 {
   return withRouteBuildInputV2ErrorPrefix(() => {
-    const input = assertRouteBuildInputV2(value);
-    assertEnvelopeMatchesResolvedProfileV2(input.capabilityEnvelope);
+    const record = requireExactFields(value, CREATE_RECEIPT_FIELDS, "");
+    const input = assertRouteBuildInputV2(record.input);
+    const suppliedLockReceipt = record.traversalLockReceipt as ResolvedTraversalLockReceiptV1;
+    let traversalLockReceipt: ResolvedTraversalLockReceiptV1;
+    try {
+      traversalLockReceipt = resolveTraversalLockV1(suppliedLockReceipt.lock);
+    } catch (cause) {
+      fail(
+        "traversalLockReceipt",
+        cause instanceof Error ? cause.message : "must be a canonical resolved Lock receipt",
+      );
+    }
+    if (
+      !isDeeplyFrozen(suppliedLockReceipt) ||
+      sha256CanonicalJson(suppliedLockReceipt) !== sha256CanonicalJson(traversalLockReceipt)
+    ) {
+      fail(
+        "traversalLockReceipt",
+        "must equal the canonical deeply frozen resolved Lock receipt",
+      );
+    }
+    const graphBuilderProfile = resolveTraversalGraphBuilderProfileV2(
+      input.capabilityEnvelope.graphBuilderProfileRef,
+    );
+    const expectedEnvelope = createTraversalCapabilityEnvelopeV1({
+      traversalLockReceipt,
+      graphBuilderProfile,
+    }).envelope;
+    if (
+      sha256CanonicalJson(input.capabilityEnvelope) !==
+      sha256CanonicalJson(expectedEnvelope)
+    ) {
+      fail(
+        "input/capabilityEnvelope",
+        "must equal the Envelope derived from traversalLockReceipt and its resolved Graph Builder Profile",
+      );
+    }
     const routeBuildInputHash = hashRouteBuildInputV2(input);
     const budgetEvidence = computeRouteBuildBudgetEvidenceV2(input);
     return deepFreeze({
       input,
+      traversalLockReceipt,
       routeBuildInputHash,
       budgetEvidence,
     });
@@ -1292,7 +1343,10 @@ export function assertRouteBuildInputReceiptV2(
   return withRouteBuildInputV2ErrorPrefix(() => {
     const record = requireExactFields(value, RECEIPT_FIELDS, "");
     if (!isDeeplyFrozen(value)) fail("", "receipt must be deeply frozen");
-    const expected = createRouteBuildInputReceiptV2(record.input);
+    const expected = createRouteBuildInputReceiptV2({
+      input: record.input as RouteBuildInputV2,
+      traversalLockReceipt: record.traversalLockReceipt as ResolvedTraversalLockReceiptV1,
+    });
     if (sha256CanonicalJson(value) !== sha256CanonicalJson(expected)) {
       fail("", "must equal the factory-produced canonical receipt bytes");
     }

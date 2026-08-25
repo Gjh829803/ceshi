@@ -20,6 +20,7 @@ import {
 import {
   createMultiSurfaceRouteBuildInputReceiptV2,
   createRecastTestEnvelopeV1,
+  createRecastTestLockReceiptV1,
 } from "./test-fixture.test-support.js";
 
 const HASH_A =
@@ -108,7 +109,10 @@ function boundedReceipt(
     }),
     surfaceArtifactHash: hashRouteSurfaceArtifactV2(draft.traversalSurfaces),
   } as unknown as RouteBuildInputV2);
-  return createRouteBuildInputReceiptV2(input);
+  return createRouteBuildInputReceiptV2({
+    input,
+    traversalLockReceipt: createRecastTestLockReceiptV1({ resourceLockHash }),
+  });
 }
 
 function flatReceipt(): RouteBuildInputReceiptV2 {
@@ -170,7 +174,10 @@ function emptyReceipt(): RouteBuildInputReceiptV2 {
       colliderArtifactHash,
     }),
   });
-  return createRouteBuildInputReceiptV2(input);
+  return createRouteBuildInputReceiptV2({
+    input,
+    traversalLockReceipt: createRecastTestLockReceiptV1({ resourceLockHash: HASH_C }),
+  });
 }
 
 describe("evaluateRequiredRouteV2", () => {

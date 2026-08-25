@@ -66,11 +66,19 @@ function traversalLock() {
 
 function capabilityEnvelope() {
   return traversal.createTraversalCapabilityEnvelopeV1({
-    traversalLockReceipt: traversal.resolveTraversalLockV1(traversalLock()),
+    traversalLockReceipt: traversalLockReceipt(),
     graphBuilderProfile: traversal.resolveTraversalGraphBuilderProfileV2(
       traversal.BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
     ),
   }).envelope;
+}
+
+function traversalLockReceipt() {
+  return traversal.resolveTraversalLockV1(traversalLock());
+}
+
+function createReceipt(input: ReturnType<typeof validBuildInput>) {
+  return createRouteBuildInputReceiptV2({ input, traversalLockReceipt: traversalLockReceipt() });
 }
 
 function validBuildInput() {
@@ -327,7 +335,7 @@ describe("Heightfield route build input contract", () => {
 
   it("admits one exact deeply frozen Receipt and recomputes bounded budget evidence", () => {
     const input = deepFreeze(validBuildInput());
-    const receipt = createRouteBuildInputReceiptV2(input);
+    const receipt = createReceipt(input);
 
     expect(assertRouteBuildInputReceiptV2(receipt)).toEqual(receipt);
     expect(Object.isFrozen(receipt.input.terrainSource)).toBe(true);
@@ -342,7 +350,7 @@ describe("Heightfield route build input contract", () => {
 
   it("rejects mutable, stale-hash, forged-policy, and stale-budget Receipts", () => {
     const input = deepFreeze(validBuildInput());
-    const receipt = createRouteBuildInputReceiptV2(input);
+    const receipt = createReceipt(input);
 
     expect(() => assertRouteBuildInputReceiptV2({ ...receipt }))
       .toThrow("ROUTE_BUILD_INPUT_INVALID");
@@ -368,6 +376,38 @@ describe("Heightfield route build input contract", () => {
     }))).toThrow("ROUTE_BUILD_INPUT_INVALID");
   });
 
+  it("rejects every Lock-derived Capability Envelope drift", () => {
+    const input = deepFreeze(validBuildInput());
+    const receipt = createReceipt(input);
+    const mutations = [
+      { capsuleRadiusMeters: input.capabilityEnvelope.capsuleRadiusMeters + 0.01 },
+      { capsuleHeightMeters: input.capabilityEnvelope.capsuleHeightMeters + 0.01 },
+      { colliderCenterOffsetMetersXYZ: [0, 1.01, 0] as const },
+      { maxSlopeDegrees: input.capabilityEnvelope.maxSlopeDegrees - 1 },
+      { maxStepHeightMeters: input.capabilityEnvelope.maxStepHeightMeters + 0.01 },
+    ];
+
+    for (const mutation of mutations) {
+      const forgedInput = deepFreeze({
+        ...input,
+        capabilityEnvelope: {
+          ...input.capabilityEnvelope,
+          ...mutation,
+        },
+      });
+      expect(() => createRouteBuildInputReceiptV2({
+        input: forgedInput,
+        traversalLockReceipt: traversalLockReceipt(),
+      }))
+        .toThrow("ROUTE_BUILD_INPUT_INVALID");
+      expect(() => assertRouteBuildInputReceiptV2(deepFreeze({
+        ...receipt,
+        input: forgedInput,
+        routeBuildInputHash: hashRouteBuildInputV2(forgedInput),
+      }))).toThrow("ROUTE_BUILD_INPUT_INVALID");
+    }
+  });
+
   it("requires the exact empty-source budget evidence variant", () => {
     const bounded = validBuildInput();
     const input = deepFreeze(rehashed(bounded, {
@@ -378,7 +418,7 @@ describe("Heightfield route build input contract", () => {
           : "terrain-main",
       },
     }));
-    const receipt = createRouteBuildInputReceiptV2(input);
+    const receipt = createReceipt(input);
 
     expect(assertRouteBuildInputReceiptV2(receipt)).toEqual(receipt);
     expect(() => assertRouteBuildInputReceiptV2(deepFreeze({

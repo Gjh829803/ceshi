@@ -30,6 +30,7 @@ import {
   type RouteBuildInputReceiptV2,
   type RouteBuildInputV2,
   type RouteTerrainSourceV2,
+  type ResolvedTraversalLockReceiptV1,
   type StaticColliderSourceV1,
   type TraversalCapabilityEnvelopeV1,
   type TraversalSurfaceIdentityV1,
@@ -79,6 +80,7 @@ export class RouteBuildInputFromPlanInvalidErrorV2 extends Error {
 export interface CreateRouteBuildInputFromPlanInputV2 {
   readonly executionPlan: ExecutionPlanV5;
   readonly capabilityEnvelope: TraversalCapabilityEnvelopeV1;
+  readonly traversalLockReceipt: ResolvedTraversalLockReceiptV1;
   readonly constraintId: string;
 }
 
@@ -835,7 +837,12 @@ function requirePlanAndEnvelope(input: CreateRouteBuildInputFromPlanInputV2): vo
     failStructural("input-invalid", "factory input must be an object.");
   }
   const unknownField = Object.keys(input).find((field) =>
-    !["executionPlan", "capabilityEnvelope", "constraintId"].includes(field),
+    ![
+      "executionPlan",
+      "capabilityEnvelope",
+      "traversalLockReceipt",
+      "constraintId",
+    ].includes(field),
   );
   if (!isNil(unknownField)) {
     failStructural("input-invalid", `unknown factory field '${unknownField}'.`);
@@ -1168,7 +1175,10 @@ export function createRouteBuildInputFromPlanV2(
   };
 
   try {
-    return createRouteBuildInputReceiptV2(buildInput);
+    return createRouteBuildInputReceiptV2({
+      input: buildInput,
+      traversalLockReceipt: input.traversalLockReceipt,
+    });
   } catch (cause) {
     failStructural(
       "contract-invalid",

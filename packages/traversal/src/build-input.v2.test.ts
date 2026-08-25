@@ -10,15 +10,24 @@ import {
   hashRouteGeometryArtifactV2,
   hashRouteSurfaceArtifactV2,
   hashRouteTerrainArtifactV2,
+  type RouteBuildInputV2,
 } from "./index.js";
 import {
   capabilityEnvelope,
   deepFreeze,
   HASH_A,
   terrainSoup,
+  traversalLockReceipt,
   validV2BuildInputDraft,
   type RouteBuildInputV2Draft,
 } from "./route-v2-test-support.js";
+
+function createReceipt(input: unknown) {
+  return createRouteBuildInputReceiptV2({
+    input: input as RouteBuildInputV2,
+    traversalLockReceipt: traversalLockReceipt(),
+  });
+}
 
 function completeV2Input(
   draft: RouteBuildInputV2Draft = validV2BuildInputDraft() as RouteBuildInputV2Draft,
@@ -76,7 +85,7 @@ describe("RouteBuildInputV2", () => {
       terrainArtifactHash: admitted.terrainArtifactHash,
       colliderArtifactHash: admitted.colliderArtifactHash,
     }));
-    const receipt = createRouteBuildInputReceiptV2(input);
+    const receipt = createReceipt(input);
     expect(receipt.routeBuildInputHash).toBe(sha256CanonicalJson(receipt.input));
     expect(receipt.routeBuildInputHash).toBe(hashRouteBuildInputV2(input));
     expect(Object.isFrozen(receipt)).toBe(true);
@@ -190,7 +199,7 @@ describe("RouteBuildInputV2", () => {
       );
       expect(() => assertRouteBuildInputV2(forgedInput)).toThrow("ROUTE_BUILD_INPUT_INVALID");
       expect(() => hashRouteBuildInputV2(forgedInput)).toThrow("ROUTE_BUILD_INPUT_INVALID");
-      expect(() => createRouteBuildInputReceiptV2(forgedInput)).toThrow(
+      expect(() => createReceipt(forgedInput)).toThrow(
         "ROUTE_BUILD_INPUT_INVALID",
       );
       expect(() => assertRouteBuildInputReceiptV2(attackerReceipt)).toThrow(
@@ -211,13 +220,13 @@ describe("RouteBuildInputV2", () => {
       });
       expect(() => assertRouteBuildInputV2(forged)).toThrow("ROUTE_BUILD_INPUT_INVALID");
       expect(() => hashRouteBuildInputV2(forged)).toThrow("ROUTE_BUILD_INPUT_INVALID");
-      expect(() => createRouteBuildInputReceiptV2(forged)).toThrow("ROUTE_BUILD_INPUT_INVALID");
+      expect(() => createReceipt(forged)).toThrow("ROUTE_BUILD_INPUT_INVALID");
     }
   });
 
   it("uses route-geometry-tile-estimate union bounds for empty terrain plus static colliders", () => {
     const draft = validV2BuildInputDraft();
-    const receipt = createRouteBuildInputReceiptV2(completeV2Input({
+    const receipt = createReceipt(completeV2Input({
       ...draft,
       terrainSource: {
         kind: "empty",
@@ -236,7 +245,7 @@ describe("RouteBuildInputV2", () => {
 
   it("uses not-required-empty-geometry only when terrain and static colliders are both empty", () => {
     const draft = validV2BuildInputDraft();
-    const receipt = createRouteBuildInputReceiptV2(completeV2Input({
+    const receipt = createReceipt(completeV2Input({
       ...draft,
       terrainSource: {
         kind: "empty",
@@ -272,8 +281,8 @@ describe("RouteBuildInputV2", () => {
       terrainArtifactHash: mutated.terrainArtifactHash,
       colliderArtifactHash: mutated.colliderArtifactHash,
     })).toBe(input.geometryArtifactHash);
-    const originalReceipt = createRouteBuildInputReceiptV2(input);
-    const mutatedReceipt = createRouteBuildInputReceiptV2(mutated);
+    const originalReceipt = createReceipt(input);
+    const mutatedReceipt = createReceipt(mutated);
     expect(mutatedReceipt.routeBuildInputHash).not.toBe(originalReceipt.routeBuildInputHash);
     expect(mutatedReceipt.routeBuildInputHash).toBe(sha256CanonicalJson(mutatedReceipt.input));
   });

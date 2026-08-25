@@ -14,6 +14,7 @@ import {
   resolveTraversalLockV1,
   type CanonicalTriangleSoupV1,
   type ResolvedTraversalLockV1,
+  type ResolvedTraversalLockReceiptV1,
   type RouteBuildInputReceiptV2,
   type RouteBuildInputV2,
   type StaticColliderSourceV1,
@@ -33,11 +34,11 @@ const HASH_D =
 const HASH_E =
   "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as const;
 
-export function createRecastTestEnvelopeV1(
+export function createRecastTestLockReceiptV1(
   overrides: Partial<ResolvedTraversalLockV1> = {},
-): TraversalCapabilityEnvelopeV1 {
+): ResolvedTraversalLockReceiptV1 {
   const runtimeIdentity = BABYLON_TRAVERSAL_RUNTIME_IMPLEMENTATION_IDENTITY_V1;
-  const lock = resolveTraversalLockV1({
+  return resolveTraversalLockV1({
     kind: "resolved-traversal-lock",
     schemaVersion: 1,
     subjectEntityId: "player",
@@ -70,6 +71,12 @@ export function createRecastTestEnvelopeV1(
     maxStepHeightMeters: 0.3,
     ...overrides,
   });
+}
+
+export function createRecastTestEnvelopeV1(
+  overrides: Partial<ResolvedTraversalLockV1> = {},
+): TraversalCapabilityEnvelopeV1 {
+  const lock = createRecastTestLockReceiptV1(overrides);
   return createTraversalCapabilityEnvelopeV1({
     traversalLockReceipt: lock,
     graphBuilderProfile: resolveTraversalGraphBuilderProfileV2(
@@ -456,7 +463,12 @@ export function createMultiSurfaceRouteBuildInputReceiptV2(
     }),
     surfaceArtifactHash: hashRouteSurfaceArtifactV2(draft.traversalSurfaces),
   };
-  return createRouteBuildInputReceiptV2(input);
+  return createRouteBuildInputReceiptV2({
+    input,
+    traversalLockReceipt: createRecastTestLockReceiptV1({
+      resourceLockHash: capabilityEnvelope.resourceLockHash,
+    }),
+  });
 }
 
 export function createOverlappingSurfaceRouteBuildInputReceiptV2(): RouteBuildInputReceiptV2 {

@@ -130,11 +130,14 @@ function rebuildBuildInputReceipt(
   });
   const surfaceArtifactHash = hashRouteSurfaceArtifactV2(draft.traversalSurfaces);
   return createRouteBuildInputReceiptV2({
-    ...draft,
-    terrainArtifactHash,
-    colliderArtifactHash,
-    geometryArtifactHash,
-    surfaceArtifactHash,
+    input: {
+      ...draft,
+      terrainArtifactHash,
+      colliderArtifactHash,
+      geometryArtifactHash,
+      surfaceArtifactHash,
+    },
+    traversalLockReceipt: receipt.traversalLockReceipt,
   });
 }
 
@@ -267,11 +270,14 @@ function buildInputReceipt(
   });
   const surfaceArtifactHash = hashRouteSurfaceArtifactV2(draft.traversalSurfaces);
   return createRouteBuildInputReceiptV2({
-    ...draft,
-    terrainArtifactHash,
-    colliderArtifactHash,
-    geometryArtifactHash,
-    surfaceArtifactHash,
+    input: {
+      ...draft,
+      terrainArtifactHash,
+      colliderArtifactHash,
+      geometryArtifactHash,
+      surfaceArtifactHash,
+    },
+    traversalLockReceipt: lockReceipt,
   });
 }
 
@@ -1767,11 +1773,14 @@ function v2BuildInputReceipt(
   });
   const surfaceArtifactHash = hashRouteSurfaceArtifactV2(draft.traversalSurfaces);
   return createRouteBuildInputReceiptV2({
-    ...draft,
-    terrainArtifactHash,
-    colliderArtifactHash,
-    geometryArtifactHash,
-    surfaceArtifactHash,
+    input: {
+      ...draft,
+      terrainArtifactHash,
+      colliderArtifactHash,
+      geometryArtifactHash,
+      surfaceArtifactHash,
+    },
+    traversalLockReceipt: lockReceipt,
   });
 }
 

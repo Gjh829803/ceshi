@@ -21,7 +21,10 @@ import {
 } from "./build-rejection-graph.js";
 import { routeConnectivityReasonForRejectionProofV2 } from "./evaluate-route.js";
 import { evaluateRouteRejectionProofV1 } from "./route-rejection-proof.js";
-import { createRecastTestEnvelopeV1 } from "./test-fixture.test-support.js";
+import {
+  createRecastTestEnvelopeV1,
+  createRecastTestLockReceiptV1,
+} from "./test-fixture.test-support.js";
 
 const HASH_A =
   "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as const;
@@ -236,7 +239,10 @@ function receipt(input: Readonly<{
     }),
     surfaceArtifactHash: hashRouteSurfaceArtifactV2(buildInput.traversalSurfaces),
   } as unknown as RouteBuildInputV2;
-  return createRouteBuildInputReceiptV2(completeInput);
+  return createRouteBuildInputReceiptV2({
+    input: completeInput,
+    traversalLockReceipt: createRecastTestLockReceiptV1({ resourceLockHash }),
+  });
 }
 
 function buildAndEvaluate(

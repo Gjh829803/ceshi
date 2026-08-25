@@ -14,7 +14,10 @@ import {
   evaluateRequiredRouteV2,
 } from "./index.js";
 import * as heightfieldSourceModule from "./heightfield-source.js";
-import { createRecastTestEnvelopeV1 } from "./test-fixture.test-support.js";
+import {
+  createRecastTestEnvelopeV1,
+  createRecastTestLockReceiptV1,
+} from "./test-fixture.test-support.js";
 import {
   createMultiSurfaceRouteBuildInputReceiptV2,
 } from "./test-fixture.test-support.js";
@@ -154,11 +157,15 @@ function basePlan(): HeightfieldSourcePlanFixture {
 }
 
 function build(plan: HeightfieldSourcePlanFixture = basePlan()) {
+  const traversalLockReceipt = createRecastTestLockReceiptV1({
+    resourceLockHash: plan.resourceLockHash as `sha256:${string}`,
+  });
   return createRouteBuildInputFromPlanV2({
     executionPlan: plan as unknown as ExecutionPlanV5,
     capabilityEnvelope: createRecastTestEnvelopeV1({
       resourceLockHash: plan.resourceLockHash as `sha256:${string}`,
     }),
+    traversalLockReceipt,
     constraintId: "hero-to-goal",
   });
 }
@@ -810,12 +817,17 @@ describe("Heightfield Route R1 locked source assembly", () => {
     hashes.add(build(water).routeBuildInputHash);
 
     const envelopePlan = basePlan();
+    const traversalLockReceipt = createRecastTestLockReceiptV1({
+      maxSlopeDegrees: 35,
+      resourceLockHash: envelopePlan.resourceLockHash as `sha256:${string}`,
+    });
     const envelopeHash = createRouteBuildInputFromPlanV2({
       executionPlan: envelopePlan as unknown as ExecutionPlanV5,
       capabilityEnvelope: createRecastTestEnvelopeV1({
         maxSlopeDegrees: 35,
         resourceLockHash: envelopePlan.resourceLockHash as `sha256:${string}`,
       }),
+      traversalLockReceipt,
       constraintId: "hero-to-goal",
     }).routeBuildInputHash;
     hashes.add(envelopeHash);
@@ -829,10 +841,14 @@ describe("Heightfield Route R1 locked source assembly", () => {
     const capabilityEnvelope = createRecastTestEnvelopeV1({
       resourceLockHash: baseline.resourceLockHash as `sha256:${string}`,
     });
+    const traversalLockReceipt = createRecastTestLockReceiptV1({
+      resourceLockHash: baseline.resourceLockHash as `sha256:${string}`,
+    });
     const buildTampered = (plan: HeightfieldSourcePlanFixture) =>
       createRouteBuildInputFromPlanV2({
         executionPlan: plan as unknown as ExecutionPlanV5,
         capabilityEnvelope,
+        traversalLockReceipt,
         constraintId: "hero-to-goal",
       });
 
