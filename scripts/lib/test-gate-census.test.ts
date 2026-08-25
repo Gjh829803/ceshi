@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import packageJson from "../../package.json";
+import resourceHeavyVitestConfig from "../../vitest.resource-heavy.config";
+
+import { TEST_GATE_MANIFEST_V1 } from "./test-gate-manifest";
+
 const discoveryStubs = vi.hoisted(() => ({ createVitest: vi.fn() }));
 
 vi.mock("vitest/node", () => ({ createVitest: discoveryStubs.createVitest }));
@@ -154,5 +159,40 @@ describe("evaluateTestGateCensusV1", () => {
     });
     expect(Object.isFrozen(report)).toBe(true);
     expect(Object.isFrozen(report.rootTestFiles)).toBe(true);
+  });
+});
+
+describe("test gate configuration", () => {
+  it("keeps the source-backed wrapper and discovered lanes exactly aligned with the manifest", async () => {
+    expect(packageJson.scripts.test).toBe(
+      "pnpm test:census && pnpm test:contract && pnpm test:resource-heavy",
+    );
+    expect(resourceHeavyVitestConfig.test?.pool).toBe("threads");
+
+    vi.doUnmock("vitest/node");
+    vi.resetModules();
+    const { discoverVitestTestFilesV1: discoverRealVitestTestFilesV1, evaluateTestGateCensusV1: evaluateRealTestGateCensusV1 } =
+      await import("./test-gate-census");
+    const repositoryRoot = new URL("../..", import.meta.url).pathname;
+    const [rootTestFiles, contractConfigTestFiles, resourceHeavyConfigTestFiles] = await Promise.all([
+      discoverRealVitestTestFilesV1({ repositoryRoot, configPath: "vitest.config.ts" }),
+      discoverRealVitestTestFilesV1({ repositoryRoot, configPath: "vitest.contract.config.ts" }),
+      discoverRealVitestTestFilesV1({ repositoryRoot, configPath: "vitest.resource-heavy.config.ts" }),
+    ]);
+
+    expect(evaluateRealTestGateCensusV1({
+      rootTestFiles,
+      contractConfigTestFiles,
+      resourceHeavyConfigTestFiles,
+      manifest: TEST_GATE_MANIFEST_V1,
+    })).toEqual({
+      rootTestFiles,
+      contractTestFiles: TEST_GATE_MANIFEST_V1
+        .filter((entry) => entry.lane === "contract")
+        .map((entry) => entry.path),
+      resourceHeavyTestFiles: TEST_GATE_MANIFEST_V1
+        .filter((entry) => entry.lane === "resource-heavy")
+        .map((entry) => entry.path),
+    });
   });
 });
