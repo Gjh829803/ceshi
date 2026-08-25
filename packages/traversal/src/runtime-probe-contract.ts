@@ -821,10 +821,10 @@ function deriveMetricsV2(
   let slidingDurationTicks = 0;
   let unexpectedSupportLossCount = 0;
   let previousUnsupported = initial.characterSupport.supportState === "unsupported";
-  let wrongSupportSurfaceCount = ticks.length === 0 &&
-    isSurfaceMismatchV2(initial, initialExpectedTraversalSurfaceIds)
-      ? 1
-      : 0;
+  let wrongSupportSurfaceCount = isSurfaceMismatchV2(
+    initial,
+    initialExpectedTraversalSurfaceIds,
+  ) ? 1 : 0;
 
   for (const row of ticks) {
     maximumStalledDurationTicks = Math.max(
@@ -1540,6 +1540,13 @@ export function canonicalRouteRuntimeProbeReceiptV2(
   const firstMismatchIndex = ticks.findIndex((row) =>
     isSurfaceMismatchV2(row.runtimeEvidence, row.expectedTraversalSurfaceIds)
   );
+  const hasInitialSurfaceMismatch = ticks.length > 0 && isSurfaceMismatchV2(
+    initialRuntimeEvidence,
+    ticks[0]!.expectedTraversalSurfaceIds,
+  );
+  if (hasInitialSurfaceMismatch) {
+    fail(prefix, "ticks", "must be empty after initial support-surface mismatch");
+  }
   if (firstMismatchIndex >= 0 && firstMismatchIndex !== ticks.length - 1) {
     fail(prefix, "ticks", "must stop at the first support-surface mismatch");
   }
@@ -1718,17 +1725,18 @@ export function assertRouteRuntimeProbeReceiptContextV2(
     receipt.initialRuntimeEvidence.fixedTimeStepSeconds,
   );
   stationArc = initialStation.arcLengthMeters;
-  if (
-    receipt.ticks.length === 0 &&
-    isSurfaceMismatchV2(
-      receipt.initialRuntimeEvidence,
-      initialStation.expectedTraversalSurfaceIds,
-    ) &&
-    (receipt.status !== "failed" ||
+  if (isSurfaceMismatchV2(
+    receipt.initialRuntimeEvidence,
+    initialStation.expectedTraversalSurfaceIds,
+  )) {
+    if (
+      receipt.ticks.length !== 0 ||
+      receipt.status !== "failed" ||
       receipt.failure.kind !== "support-surface-mismatch" ||
-      receipt.failure.failureProbeTick !== 0)
-  ) {
-    fail(prefix, "failure", "must report initial support-surface mismatch");
+      receipt.failure.failureProbeTick !== 0
+    ) {
+      fail(prefix, "failure", "must report initial support-surface mismatch");
+    }
   }
   for (const [index, row] of receipt.ticks.entries()) {
     const station = advanceRouteRuntimeProbeSupportStationV2(

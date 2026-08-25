@@ -815,6 +815,39 @@ describe.skipIf(!hasRuntimeProbeApi)("RouteRuntimeProbeReceiptV2", () => {
     })).toEqual(receipt);
   });
 
+  it("rejects forged complete receipts with a Tick 0 support mismatch", () => {
+    for (const initialSurfaceResolution of [
+      { mode: "ambiguous" as const },
+      { mode: "unmatched" as const },
+      {
+        mode: "resolved" as const,
+        ...SURFACE,
+        traversalSurfaceId: "surface-forged",
+      },
+    ]) {
+      const complete = completeReceipt();
+      const forged: RouteRuntimeProbeReceiptV2 = {
+        ...complete,
+        initialRuntimeEvidence: runtimeEvidence(0, {
+          characterSupport: {
+            ...runtimeEvidence(0).characterSupport,
+            surfaceResolution: initialSurfaceResolution,
+          },
+        }),
+      };
+
+      expect(() => canonicalRouteRuntimeProbeReceiptV2(forged)).toThrow(
+        "ROUTE_RUNTIME_PROBE_RECEIPT_INVALID",
+      );
+      expect(() => assertRouteRuntimeProbeReceiptContextV2({
+        receipt: forged,
+        routePathReceipt: pathReceipt(),
+        resolvedDriverProfile: RESOLVED_DRIVER_PROFILE,
+        validationProfileIdentity: VALIDATION_PROFILE_IDENTITY,
+      })).toThrow("ROUTE_RUNTIME_PROBE_CONTEXT_INVALID");
+    }
+  });
+
   it("rejects non-consecutive evidence/Probe ticks and every identity mismatch", () => {
     const base = completeReceipt();
     const invalidReceipts: readonly unknown[] = [
