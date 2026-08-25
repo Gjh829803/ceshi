@@ -538,6 +538,7 @@ Browser、示例和门禁。若本轮确实无法删除某个旧路径，技术�
 - [AI 自定义场景几何扩展候选方案（未来探索）](docs/superpowers/specs/2026-08-20-ai-authored-geometry-extension-design.md)
 - [Package 局部 Subject Definition（S1a）设计](docs/superpowers/specs/2026-08-19-package-subject-definition-design.md)
 - [主体资产与 3C 配置接入契约](docs/16-subject-assets-3c-integration.md)
+- [模块化 Subject 资产导入与 xier120 修改清单](docs/20-modular-subject-source-assets.md)
 - [世界模型团队接入说明](docs/11-world-model-team-handoff.md)
 - [运行时世界导演与受控世界操作协议](docs/09-runtime-world-director.md)
 

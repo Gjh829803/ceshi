@@ -2,7 +2,8 @@
 
 这是一条给“收到一目录 Static GLB，想把它们作为可用 Subjects”的重复使用流程。
 入口路由在 [`product-asset-intake.md`](./product-asset-intake.md)；Rigged G Bot 仍走原来的
-Rigged 路径，不能用本流程削减其骨架或动作合同。仓库只接收已转换的 GLB；FBX、Blender
+Rigged 路径，不能用本流程削减其骨架或动作合同。统一的模块化权威源和当前资产修改项见
+[`20-modular-subject-source-assets.md`](../../20-modular-subject-source-assets.md)。仓库只接收已转换的 GLB；FBX、Blender
 工程等源格式必须在 SDK 仓库外完成转换，转换工具和参数作为 provenance 记录，而不是仓库
 脚本、Runtime 或 Registry 的能力。
 
@@ -13,6 +14,11 @@ bytes 的 `sha256:` 与 `byteLength`、`-Z` forward、`+Y` up、1 meter/unit，�
 `support-center`（X/Z 居中，最低可见点在 Y=0）。它还必须有明确的 Collider Profile、
 Asset Manifest 和 schema-v3 Subject Definition。Definition 的静态资产不带 Rig、Socket、
 动画或动画能力；当前只能复用已有的 ground Character capability。
+
+Ready Static GLB 是受限兼容路径，不是长期 Rigged 产品源模板。来源内容仍应按不可变
+Source Package 记录；材质/纹理可独立保存，非标准内容进入
+`extensions/source-archive/` 且禁止 Runtime 消费。以后增加 Rig/动作时必须发布新的
+Rigged 版本，不能覆盖这个 Static GLB 或借用空 Rig/Clip。
 
 这不是“看到车模型就有 vehicle 驾驶”或“看到飞行器就能 flight / mount”的快捷路径。
 也不提供 NPC 行为。外观类别可以是 animal、vehicle 或 composite，但实际运行能力必须
@@ -27,7 +33,7 @@ Definition Ref。
 | 已有 GLB 满足本节全部静态合同 | Ready Static GLB admission | 冻结该 GLB bytes，记录清单、Hash、尺寸和人工朝向检查；当前仓库没有可直接接收任意目录的通用 admission CLI |
 | GLB 的单位、轴、Pivot、朝向、内容清单或自包含性不符合 | 不能直接注册 | 在仓库外修正并重新导出，再把新 GLB 当成新的不可变输入完整 admission；不要靠 Subject 的 local transform 掩盖错误 |
 | 只有 FBX 或其他源格式 | 不能直接注册 | 在仓库外转换为满足合同的 GLB，记录原始来源 Hash、转换工具版本和显式单位/轴/Pivot 参数，再从 Ready Static GLB admission 开始 |
-| 需要骨架、Clip 或四个语义动作 | 改走 Rigged GLB | 回到入口的 G Bot 路由；不要把 Rigged 资产伪装成 Static |
+| 需要骨架、Clip 或语义动作 | 改走模块化 Rigged Source | 回到入口的 G Bot 路由；Model/单 Skeleton/Bind Pose、材质纹理和单动作分别交付，不把 Rigged 资产伪装成 Static |
 
 xier120 的 19 个已提交 GLB 是受 Registry Hash、长度和 Babylon 加载门禁保护的现有
 artifact，不是可重新烘焙的模板。不要改写其 bytes 或把新来源加入 xier120 专用 Registry

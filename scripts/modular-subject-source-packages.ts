@@ -21,10 +21,15 @@ import {
   type ModularSubjectPackageDefinitionV1,
   type RecoveredSubjectSourcePackageV1,
 } from "./lib/modular-subject-source";
+import {
+  auditSubjectSourceMigration,
+  serializeSubjectSourceMigrationInventory,
+} from "./lib/subject-source-migration-audit";
 
 const DEFAULT_REPOSITORY_ROOT = path.resolve(
   fileURLToPath(new URL("../", import.meta.url)),
 );
+const MIGRATION_INVENTORY_FILE = "migration-inventory.json";
 
 export interface RecoveredSubjectSourcePackageFileV1 {
   readonly relativePath: string;
@@ -609,6 +614,59 @@ async function writePackages(
   }));
 }
 
+async function migrationInventoryBytes(repositoryRoot: string): Promise<Uint8Array> {
+  return serializeSubjectSourceMigrationInventory(
+    await auditSubjectSourceMigration({ repositoryRoot }),
+  );
+}
+
+async function writeMigrationInventory(
+  repositoryRoot: string,
+  outputRoot: string,
+): Promise<void> {
+  const ownedOutputRoot = await establishOwnedOutputRoot(outputRoot);
+  await assertCanonicalOwnedDirectory(ownedOutputRoot, ownedOutputRoot);
+  const targetPath = resolveOwnedRelativePath(ownedOutputRoot, MIGRATION_INVENTORY_FILE);
+  const stagingPath = resolveOwnedRelativePath(
+    ownedOutputRoot,
+    `.${MIGRATION_INVENTORY_FILE}.staging-${randomUUID()}`,
+  );
+  const backupPath = resolveOwnedRelativePath(
+    ownedOutputRoot,
+    `.${MIGRATION_INVENTORY_FILE}.backup-${randomUUID()}`,
+  );
+  const bytes = await migrationInventoryBytes(repositoryRoot);
+  await writeFile(stagingPath, bytes, { flag: "wx" });
+  const stagedBytes = await readFile(stagingPath);
+  if (!equalBytes(stagedBytes, bytes)) {
+    await rm(stagingPath, { force: true });
+    throw new Error("MODULAR_SUBJECT_SOURCE_STAGED_BYTES_MISMATCH: migration-inventory.json");
+  }
+  const existing = await lstatOrMissing(targetPath);
+  if (existing?.isSymbolicLink() === true || (existing !== null && !existing.isFile())) {
+    await rm(stagingPath, { force: true });
+    throw new Error("MODULAR_SUBJECT_SOURCE_OUTPUT_ENTRY_UNSUPPORTED: migration-inventory.json");
+  }
+  let backupCreated = false;
+  try {
+    await assertCanonicalOwnedDirectory(ownedOutputRoot, ownedOutputRoot);
+    if (existing !== null) {
+      await rename(targetPath, backupPath);
+      backupCreated = true;
+    }
+    await assertCanonicalOwnedDirectory(ownedOutputRoot, ownedOutputRoot);
+    await rename(stagingPath, targetPath);
+  } catch (error) {
+    await rm(stagingPath, { force: true });
+    if (backupCreated) {
+      await rm(targetPath, { force: true });
+      await rename(backupPath, targetPath);
+    }
+    throw error;
+  }
+  if (backupCreated) await rm(backupPath, { force: true });
+}
+
 async function compareManagedOutputRoots(
   expectedRoot: string,
   actualRoot: string | null,
@@ -670,6 +728,7 @@ async function checkPackages(
       outputRoot: expectedOutputRoot,
       injectFailure: undefined,
     });
+    await writeMigrationInventory(options.repositoryRoot, expectedOutputRoot);
     const expectedRoot = await resolveExistingOwnedOutputRoot(expectedOutputRoot);
     if (expectedRoot === null) {
       throw new Error("MODULAR_SUBJECT_SOURCE_CHECK_GENERATION_MISSING");
@@ -702,6 +761,7 @@ export async function writeModularSubjectSourcePackages(
       packageDefinitions,
       injectFailure: options.injectFailure,
     });
+    await writeMigrationInventory(repositoryRoot, outputRoot);
     return;
   }
   await checkPackages({

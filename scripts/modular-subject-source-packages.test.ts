@@ -319,6 +319,11 @@ describe("writeModularSubjectSourcePackages", () => {
     const { outputRoot } = await temporaryOutput();
     await writeModularSubjectSourcePackages(goldenOptions(outputRoot, "write"));
 
+    const migrationInventory = JSON.parse(
+      await readFile(path.join(outputRoot, "migration-inventory.json"), "utf8"),
+    ) as { readonly rows: readonly unknown[] };
+    expect(migrationInventory.rows).toHaveLength(21);
+
     await expect(writeModularSubjectSourcePackages(goldenOptions(outputRoot, "check")))
       .resolves.toBeUndefined();
   });
@@ -327,7 +332,7 @@ describe("writeModularSubjectSourcePackages", () => {
     const { outputRoot } = await temporaryOutput();
     await writeModularSubjectSourcePackages(goldenOptions(outputRoot, "write"));
     const extras = [
-      "migration-inventory.json",
+      "root-extra.json",
       "seedleap/golden-humanoid/v2/package.manifest.json",
       "seedleap/golden-humanoid/v1.backup-stale/package.manifest.json",
       "unexpected-creator/rogue/v1/value.bin",
@@ -344,7 +349,7 @@ describe("writeModularSubjectSourcePackages", () => {
 
     expect(error).toBeInstanceOf(Error);
     const expectedMismatches = [
-      "migration-inventory.json (unexpected)",
+      "root-extra.json (unexpected)",
       "seedleap/golden-humanoid/v1.backup-stale (unexpected directory)",
       "seedleap/golden-humanoid/v1.backup-stale/package.manifest.json (unexpected)",
       "seedleap/golden-humanoid/v2 (unexpected directory)",
@@ -357,6 +362,20 @@ describe("writeModularSubjectSourcePackages", () => {
     expect((error as Error).message).toBe(
       `MODULAR_SUBJECT_SOURCE_OUTPUT_MISMATCH: ${expectedMismatches.join(", ")}`,
     );
+  });
+
+  it("reports a tampered migration inventory without rewriting it", async () => {
+    const { outputRoot } = await temporaryOutput();
+    await writeModularSubjectSourcePackages(goldenOptions(outputRoot, "write"));
+    const inventoryPath = path.join(outputRoot, "migration-inventory.json");
+    const tampered = Buffer.from("{\"tampered\":true}\n", "utf8");
+    await writeFile(inventoryPath, tampered);
+
+    await expect(writeModularSubjectSourcePackages(goldenOptions(outputRoot, "check")))
+      .rejects.toThrowError(
+        "MODULAR_SUBJECT_SOURCE_OUTPUT_MISMATCH: migration-inventory.json",
+      );
+    expect(await readFile(inventoryPath)).toEqual(tampered);
   });
 
   it("reports a tampered Clip byte without rewriting the committed output", async () => {
