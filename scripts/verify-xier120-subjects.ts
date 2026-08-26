@@ -30,6 +30,7 @@ import {
 } from "@whitebox-world/subject-registry";
 
 import { XIER120_SUBJECT_ASSET_URI_BY_REF_V1 } from "../apps/playground/src/worldkit-asset-resolver";
+import { validateGlbAdmissionV1 } from "./lib/glb-admission.js";
 
 const EXPECTED_SUBJECT_COUNT = 19;
 const DEFAULT_FIXTURE_RELATIVE_PATH =
@@ -660,6 +661,16 @@ export async function verifyXier120Subjects(input: {
       sha256Bytes(assetBytes) === assetManifest.artifact.contentHash,
       `XIER120_COMMITTED_GLB_HASH_MISMATCH:${assetPart.subjectAssetRef}`,
     );
+    await validateGlbAdmissionV1(assetBytes, {
+      profileId: "subject-static-ready.v1",
+      expectedInventory: {
+        meshCount: assetManifest.inventory.meshCount,
+        skinCount: assetManifest.inventory.skeletonCount,
+        animationClipCount: assetManifest.inventory.animationClipNames.length,
+        totalVertexCount: assetManifest.inventory.vertexCount,
+        totalTriangleCount: assetManifest.inventory.triangleCount,
+      },
+    });
     committedGlbHashMatchCount += 1;
     results.push(
       await verifyXier120SubjectActualUse({

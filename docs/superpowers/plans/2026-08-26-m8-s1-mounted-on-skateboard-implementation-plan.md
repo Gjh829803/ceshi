@@ -237,7 +237,8 @@ outside this slice.
   ```
 
   Evidence: 190 contract files / 2,050 tests, 21 resource-heavy files / 401 tests, Studio 73/73,
-  independent Node 23/23 + Python 17/17 + Site 1/1, typecheck/build and all listed verifiers pass.
+  independent Node 23/23 + Site 1/1, typecheck/build and all listed verifiers pass. The removed
+  project Cursor Python suites are no longer part of the current independent gate.
   The Site lane required `npm ci` inside `sites/world-sdk-blueprint` from its committed lockfile.
 
 - [ ] Run the new mounted-skateboard Browser/Capture verifier. Record command, test count, artifact paths and warnings.
@@ -245,7 +246,7 @@ outside this slice.
 - [x] Apply `docs/reviews/full-dimension-review-protocol.md` change dimensions and
   `docs/reviews/runtime-deep-review-checklist.md` authority, adversarial, lifecycle and evidence checks
   to this integration checkpoint. Repeat the final completion review after the open Tasks 6/8 work.
-- [ ] Obtain a completed read-only project-local Cursor completion verdict and reproduce every candidate
-  finding before disposition. Manual zcode/Cursor checkpoint reports were produced and fully dispositioned;
-  their confirmed defects were fixed, but both reports predate the fixes and are not a final-tree GO.
+- [ ] Complete the final-tree host review and reproduce every candidate finding before disposition. Earlier
+  optional external checkpoint reports were fully dispositioned, but they predate the fixes and are not
+  final-tree evidence.
 - [ ] Update the backlog only after all gates pass. Do not mark seat/tether, wheel physics, tricks, full mounted Camera, dynamic Route or hosted Builder support complete.

@@ -112,8 +112,8 @@ Task 5–10, Runtime Probe, or either production Blocking Gate.
 
 - Review ID: `task4-candidate-616a75c-wt1`.
 - Chat ID: `20dfb053-e5cb-41c3-9d65-ddbdc66f38dc`.
-- Model/mode: Cursor Grok 4.6 Extra High, read-only `ask`, invoked through the repository-selected
-  `reviewing-with-cursor` skill.
+- Model/mode: Cursor Grok 4.6 Extra High, read-only `ask`, invoked through the repository helper
+  that was available at the time and has since been removed.
 - Initial result: exit `0`, `CODE NO-GO`, one confirmed P1 width-quantization finding.
 - Same-session follow-up: exit `0`, `CODE GO`; the P1 and host compound-collider fix were closed.
   One non-blocking P2 filled-solid attribution gap was reported and then accepted/fixed by the host.

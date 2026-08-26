@@ -173,5 +173,5 @@
   pnpm verify:video-model-adapter
   ```
 
-- [ ] Apply the full-dimension design/change review and runtime lifecycle/evidence checklist. Use a fresh read-only Cursor completion review when authenticated and independently reproduce every finding.
+- [ ] Apply the full-dimension design/change review and runtime lifecycle/evidence checklist, and independently reproduce every finding.
 - [ ] Mark M6 complete only when the formal Capture-backed slice passes. Do not infer completion from the pre-existing direct Recording Workbench path.

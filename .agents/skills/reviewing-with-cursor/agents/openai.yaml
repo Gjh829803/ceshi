@@ -1,4 +1,0 @@
-interface:
-  display_name: "Reviewing with Cursor"
-  short_description: "Use Cursor as an independent design and code reviewer"
-  default_prompt: "Use $reviewing-with-cursor to obtain an independent Cursor review of the current design or code change."

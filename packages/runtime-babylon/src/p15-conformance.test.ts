@@ -486,6 +486,87 @@ describe("P1.5 conformance: closed Ground/Air Feel slice", () => {
     }
   }, 60_000);
 
+  it("4a. snaps a grounded 0.25 m descent without pulling a rising Jump down", async () => {
+    const runtime = await createConformanceRuntime(
+      playerOnlyPlan({
+        spawnMetersXYZ: [1.5, 0.3, 0],
+        objects: [
+          staticBox({
+            entityId: "low-step",
+            sizeMetersXYZ: [4, 0.25, 4],
+            positionMetersXYZ: [0, 0.125, 0],
+          }),
+        ],
+      }),
+    );
+    try {
+      const settled = await tickUntil(
+        runtime,
+        [],
+        60,
+        (state) =>
+          state.movementMedium === "ground" &&
+          Math.abs(state.velocityMetersPerSecondXYZ[1]) < 0.01,
+      );
+      expect(settled).toBeDefined();
+      expect(settled!.state.positionMetersXYZ[1]).toBeGreaterThan(0.2);
+
+      const descentMediums: string[] = [];
+      let descended: SubjectRuntimeState | undefined;
+      for (let tick = 0; tick < 120; tick += 1) {
+        const snapshot = await runtime.runFixedInput({
+          actions: ["move-right"],
+          ticks: 1,
+        });
+        const state = snapshot.subjectStatesByEntityId.player!;
+        descentMediums.push(state.movementMedium);
+        if (state.positionMetersXYZ[0] > 2.25 && state.positionMetersXYZ[1] < 0.1) {
+          descended = state;
+          break;
+        }
+      }
+      expect(descended).toBeDefined();
+      expect(descentMediums).not.toContain("air");
+
+      runtime.reset();
+      await bindRuntimeTestPossession(runtime, "player");
+      await tickUntil(
+        runtime,
+        [],
+        60,
+        (state) =>
+          state.movementMedium === "ground" &&
+          Math.abs(state.velocityMetersPerSecondXYZ[1]) < 0.01,
+      );
+      const takeoffY = runtime.snapshot()
+        .subjectStatesByEntityId.player!.positionMetersXYZ[1];
+      let rising = await runtime.runFixedInput({
+        actions: ["move-right", "run", "jump"],
+        ticks: 1,
+      });
+      for (let tick = 0; tick < 20; tick += 1) {
+        const state = rising.subjectStatesByEntityId.player!;
+        if (
+          state.positionMetersXYZ[0] > 1.9 &&
+          state.velocityMetersPerSecondXYZ[1] > 0
+        ) {
+          break;
+        }
+        rising = await runtime.runFixedInput({
+          actions: ["move-right", "run", "jump"],
+          ticks: 1,
+        });
+      }
+      const risingState = rising.subjectStatesByEntityId.player!;
+      expect(risingState.positionMetersXYZ[0]).toBeGreaterThan(1.9);
+      expect(risingState.positionMetersXYZ[1]).toBeGreaterThan(takeoffY + 0.1);
+      expect(risingState.velocityMetersPerSecondXYZ[1]).toBeGreaterThan(0);
+      expect(risingState.movementMedium).toBe("air");
+    } finally {
+      await runtime.dispose();
+    }
+  }, 60_000);
+
   it("5a. forbids the jump from sliding and does not re-arm coyote from sliding", async () => {
     // A 51.6-degree box face is steeper than the Body's 42-degree slope lock,
     // so Havok classifies contact as SLIDING. Downhill faces +X.

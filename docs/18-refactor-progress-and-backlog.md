@@ -96,8 +96,11 @@ Registry Lock、Browser preference 命令，以及 Babylon CameraDirector 消费
 - [`2026-08-24-workspace-structure-authority-review.md`](reviews/2026-08-24-workspace-structure-authority-review.md)：Workspace authority 根因闭包、门禁 invalidation 策略，以及 `WS-07B → WS-05B/C → WS-08` 结构治理任务的唯一详细裁决；
 - [`2026-08-24-context-driven-gameplay-camera-composition-design.md`](superpowers/specs/2026-08-24-context-driven-gameplay-camera-composition-design.md)：Kit、Relationship、Action、Equipment、Flight 与 Camera Context/Director 的设计输入；Camera Domain 已实现的部分和剩余集成以本页 P2.4 为准；
 - [`2026-08-25-context-driven-camera-package-boundary-review.md`](reviews/2026-08-25-context-driven-camera-package-boundary-review.md)：Camera 分包决策的历史审查证据，不是 active 实现状态或可用入口；
+- [`2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md`](superpowers/specs/2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md)：P1.6 AI Schema Projection、受控覆盖、WorldChangeSet、幂等 Journal、Full Reload Runtime 发布与后续 Incremental Hot Apply 的专项实施权威；
+- [`2026-08-26-p16-ai-schema-world-change-set-design-review.md`](reviews/2026-08-26-p16-ai-schema-world-change-set-design-review.md)：P1.6 专项规格的全维度设计审查、Runtime authority map 与当前源码复验证据；
 - [`2026-08-19-world-validation-report-and-quality-gates-design.md`](superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md)：量化 Gate、Metric、Evidence 和生产阻断协议；
 - [`2026-08-20-ai-authored-geometry-extension-design.md`](superpowers/specs/2026-08-20-ai-authored-geometry-extension-design.md)：未来可能需要的 AI 自定义几何能力及候选技术，仅供调研评审，不属于当前 Roadmap；
+- [`21-open-source-design-reference-ledger.md`](21-open-source-design-reference-ledger.md)：开源实现/测试的持续借鉴台账；记录锁定来源、本地落点、拒绝原因和候选验证，但不单独改变能力完成度；
 - `docs/superpowers/plans/`：已经进入实施阶段的单个纵向切片计划与证据。
 
 如果本文与已接受的 ADR、Canonical Schema 或真实代码不一致，以已接受 ADR、
@@ -506,6 +509,36 @@ placement-layout / rigged-subject / g-bot-subject）；专项规格见
 目标：让上游 Agent 获得“小而稳定、能力感知”的 Schema，并能用领域操作增量修复
 世界；不能要求 Agent 每次重写大型 Authoring JSON，也不能让 Provider Adapter 形成
 第二套公共方言。
+
+专项详细设计已经冻结为
+[`P1.6 AI Schema、WorldChangeSet 与 Runtime Structural Publication 设计`](superpowers/specs/2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md)，
+审查证据见
+[`P1.6 AI Schema / WorldChangeSet 设计审查`](reviews/2026-08-26-p16-ai-schema-world-change-set-design-review.md)。
+Publication hardening 已全部折回上述核心规格；
+[`历史 amendment`](superpowers/specs/2026-08-26-p16-world-change-publication-hardening-amendment.md)
+和
+[`follow-up review`](reviews/2026-08-26-p16-world-change-post-freeze-hardening-follow-up.md)
+只保留发现轨迹，不拥有规范优先级。
+这只完成 P16-D0，不表示 P1.6 已实现或可用于生产；后续开发按下表依赖顺序领取，完整
+文件所有权、输入输出、集成点和验收证据以专项规格 §21 为准。
+
+| Task | 状态 | 可独立验收交付物 | `depends_on` / `blocks` |
+| --- | --- | --- | --- |
+| P16-D0 | [x] 设计冻结 | 唯一专项规格、公共 DTO/Hash/权限/切片边界、全维度审查 | 当前 main、总体设计、P1.6 Backlog / 全部 P16 |
+| P16-H0 | [ ] 等待开发 | Authoring document hash clean break 与独立 `layoutInputHash` | P16-D0 / P16-A0、P16-C1、P16-S1、P16-P1 |
+| P16-A0 | [ ] 等待开发 | provider-neutral `@whitebox-world/authoring-edit` 包、required publication Candidate、mode-specific Receipt 及 strict parser/hash 边界 | P16-D0、P16-H0 / P16-S1、P16-O1、P16-C1 |
+| P16-S1 | [ ] 等待开发 | AI Schema Projector、Profile Registry kind、预算降级、Projection Receipt | P16-A0、P16-H0、P1.4 Registry Lock shape / P16-B1、P16-F1 |
+| P16-O1 | [ ] 等待开发 | 通用 `allowedOverridePaths` 与 Resource Ref Override validator | P16-A0、P16-S1 contract / P16-C1、P16-F1 |
+| P16-C1 | [ ] 等待开发 | WorldChangeSet、Precondition、Operation、Candidate Diff 纯实现 | P16-A0、P16-H0 / P16-P1、P16-R1 |
+| P16-P1 | [ ] 等待 P1.4/开发 | 完整 Normalize/Solve/Compile/Package/Gates Candidate pipeline 与 lease pin/expiry/GC | P16-C1、P1.4 完整 Package/Lock / P16-R1、P16-H1、P16-CLI1 |
+| P16-R1 | [ ] 等待开发 | durable idempotency journal、admission epoch/pin owner、revision head、Receipt/Cleanup Report Query/Explain/Diff | P16-C1、P16-P1 / P16-H1、P16-B1、P16-CLI1 |
+| P16-H1 | [ ] 等待开发 | RuntimeHost publication V2：Commit-time authorization/CAS、exclusive fence、commit point、cleanup disposition | P16-P1、P16-R1 / P16-B1、P16-F1 |
+| P16-CLI1 | [ ] 等待开发 | Schema/Registry/Change CLI 与 Dry Run→new Apply ID 的 offline/live adapters | P16-S1、P16-C1、P16-P1、P16-R1 / P16-F1 |
+| P16-B1 | [ ] 等待开发 | Trusted Studio Authoring/Edit API、authorization epoch，Browser V5 仍为 exact 39 keys | P16-S1、P16-O1、P16-R1、P16-H1 / P16-F1 |
+| P16-F1 | [ ] 等待开发 | Add Subject/House 与 Terrain replacement Golden、pin/GC race、Commit 前/后撤权证据 | P16-O1、P16-P1、P16-R1、P16-H1、P16-CLI1、P16-B1 / P16-G1 |
+| P16-I1 | [ ] 后续切片 | Handler Registry、fixed-tick Hot Apply、Differential Runtime Conformance | P16-F1、独立批准的 Incremental plan / P16-G2 |
+| P16-G1 | [ ] 等待集成 | Full Reload 首切片 Final GO 与能力声明更新 | P16-F1 / 无 |
+| P16-G2 | [ ] 后续集成 | Incremental 第二切片 Final GO | P16-I1 / 无 |
 
 - [ ] 为 Canonical Schema + Registry Lock + 允许 Capability 集冻结版本化 AI Schema
   Profile/Projector；记录 Profile Hash、Registry Lock Hash、Capability Set Hash、规模
@@ -933,8 +966,11 @@ S1b Golden、
    verifier及其失效门禁重跑和最终 review，并保持 `supportedBy` 只来自既有 Physics support
    authority。`CAM-MOUNT-1` 由 P2.4 相机专项修复；不向 `SubjectRuntimeStateV3` 追加字段，
    也不先铺开 seat/tether、轮子动力学、特技、车辆或 Hosted Builder admission；
-9. **M9：在实现游泳、攀爬或增量 Agent 修复前，分别冻结 P2.5 Surface/Traversal 与
-   P1.6 AI Schema/WorldChangeSet 的专项设计，禁止临时增加公共字段或场景脚本旁路**。
+9. **M9（P1.6 专项设计已冻结，生产实现未开始）**：P1.6 以
+   [`WorldChangeSet 专项设计`](superpowers/specs/2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md)
+   完成 P16-D0；post-freeze publication hardening 已折回该唯一权威，历史 amendment 不再覆盖
+   核心类型。P2.5 Surface/Traversal 仍按其独立状态追踪。在实现游泳、攀爬或增量
+   Agent 修复前，禁止临时增加公共字段或场景脚本旁路**。
 10. **M10：P1.1 与 P2.5 边界稳定后评审 P2.6 H1 Bridge Fixture；先验证同 XZ 双层支撑、
    Static Collider 和唯一 Ground Support，不直接并行启动完整洞穴/室内**。
 11. **M11：在公共 SDK 正式发布前完成协议类型命名与版本后缀治理**：审计

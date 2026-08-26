@@ -255,6 +255,8 @@ function physicsCharacterControllerCastCollector(
 }
 
 class GroundAwarePhysicsCharacterController extends PhysicsCharacterController {
+  private stepUpEnabledForCurrentIntegrate = false;
+
   probeGroundPlacementAt(
     desiredControllerCenter: Vector3,
     gravityDirection: Vector3,
@@ -301,6 +303,9 @@ class GroundAwarePhysicsCharacterController extends PhysicsCharacterController {
     simplexOutput: StepUpSimplexOutput,
     constraints: StepUpConstraints,
   ): number {
+    if (!this.stepUpEnabledForCurrentIntegrate) {
+      return -1;
+    }
     const verticalSpeed = Vector3.Dot(inputVelocity, this.up);
     const horizontalVelocity = inputVelocity.subtract(this.up.scale(verticalSpeed));
     const horizontalSpeed = horizontalVelocity.length();
@@ -336,7 +341,13 @@ class GroundAwarePhysicsCharacterController extends PhysicsCharacterController {
     surfaceInfo: CharacterSurfaceInfo,
     gravity: Vector3,
   ): void {
-    super.integrate(deltaTime, surfaceInfo, gravity);
+    this.stepUpEnabledForCurrentIntegrate =
+      surfaceInfo.supportedState !== CharacterSupportedState.UNSUPPORTED;
+    try {
+      super.integrate(deltaTime, surfaceInfo, gravity);
+    } finally {
+      this.stepUpEnabledForCurrentIntegrate = false;
+    }
     this.snapDownToWalkableSupport(surfaceInfo);
   }
 

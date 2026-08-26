@@ -17,8 +17,6 @@ For complex SDK or runtime work, define responsibility boundaries during technic
 
 Keep architecture, cross-cutting interfaces, dependency decisions, and final integration owned by the main agent until their contracts are stable. Parallelize only ready workstreams that are materially independent and whose time savings exceed coordination costs. Do not distort the architecture, invent work, or split tightly coupled edits merely to occupy more agents. Successful worker reports are not integration proof: review the actual changes, reconcile assumptions, and run end-to-end gates after integration.
 
-After the host's own review, use the project-local [reviewing-with-cursor skill](.agents/skills/reviewing-with-cursor/SKILL.md) when an authenticated Cursor Agent CLI is available and an independent design, code, or completion review is valuable. Cursor remains read-only; every finding must be independently reproduced and dispositioned before any fix.
-
 ## Schema naming and AI friendliness
 
 Apply these rules whenever adding or changing public Authoring Schema, Registry manifests, Commands, Events, Snapshots, CLI/Browser protocols, examples, or generated types. The authoritative detailed rules live in `docs/superpowers/specs/2026-08-17-ai-first-lego-game-sdk-design.md`.

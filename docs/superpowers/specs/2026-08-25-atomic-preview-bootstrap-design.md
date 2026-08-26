@@ -144,7 +144,7 @@ Required integration evidence on the final unchanged tree:
 - root `pnpm test` once;
 - `pnpm build` once;
 - `git diff --check` and tracked/untracked mutation audit;
-- fresh project-local read-only Cursor completion review with every finding independently dispositioned.
+- fresh host full-dimension completion review with every finding independently dispositioned.
 
 Browser/render/manual claims remain separate. This slice changes startup input consistency, not visual output or interaction behavior, so no new production capability may be claimed from these tests.
 

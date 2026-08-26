@@ -438,7 +438,7 @@ pnpm verify:route-r0-contract
 这是一张完整能力覆盖表，不要求每次小改都机械重跑全部命令。先跑受影响的定向回归，
 在最终待合入树上把相关完整门禁各跑一次；只要后续改动没有触及某条门禁的输入或承诺，
 它的通过证据可以复用。Studio 与 independent tests 需要按改动范围单独跑；tracked CI 当前显式组合
-临时目录 generated bundle check、typecheck、Studio、independent Node/Python/Site、root test、
+临时目录 generated bundle check、typecheck、Studio、independent Node/Site、root test、
 Playground build 与最终 clean-tree assertion，但没有被 workflow 调用的证据层不能因“CI 存在”而
 视为已覆盖。
 生产构建、Browser/Capability verifier、截图检查和人工交互属于不同证据层，不能由单元
@@ -592,6 +592,7 @@ Browser、示例和门禁。若本轮确实无法删除某个旧路径，技术�
 
 ### 外部依据与可行性
 
+- [开源设计借鉴与验证台账](docs/21-open-source-design-reference-ledger.md)：持续记录采用的具体实现/测试、锁定来源、本地边界、验证证据和未采用原因。
 - [业界对照与可落地性核查报告](docs/superpowers/specs/2026-08-18-industry-alignment-and-feasibility-review.md)
 - [Agentic 白模世界到可控视频：开源方案调研与架构启示](docs/superpowers/specs/2026-08-19-agentic-whitebox-to-video-open-source-research.md)
 - [阶段 0 技术探针计划与外部资料核查](docs/superpowers/specs/2026-08-18-phase0-probe-plan-and-external-research.md)

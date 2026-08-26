@@ -933,7 +933,7 @@ describe("installDeferredWorldkitBrowserApi", () => {
       afterEventSequence: 0,
       maximumEventCount: 2,
     })).toThrowError(expect.objectContaining({
-      code: "WORLDKIT_GAMEPLAY_EVENTS_PROTOCOL_INVALID",
+      code: "WORLDKIT_WORLD_SESSION_EVENTS_PROTOCOL_INVALID",
     }));
     adapter.worldSessionEventsAfterRuntime = () => [
       malformedEvent(1, "world-session-other"),
@@ -942,7 +942,7 @@ describe("installDeferredWorldkitBrowserApi", () => {
       afterEventSequence: 0,
       maximumEventCount: 2,
     })).toThrowError(expect.objectContaining({
-      code: "WORLDKIT_GAMEPLAY_EVENTS_PROTOCOL_INVALID",
+      code: "WORLDKIT_WORLD_SESSION_EVENTS_PROTOCOL_INVALID",
     }));
   });
 

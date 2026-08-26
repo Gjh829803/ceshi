@@ -34,6 +34,11 @@ interface EventJournalReservationRequestV1 {
   readonly eventCount: number;
 }
 
+interface ExternalCommandRetentionUsageV1 {
+  readonly idempotencyRecordCount: number;
+  readonly receiptCount: number;
+}
+
 interface CommandJournalCommitBundleV1 {
   readonly command: GameplayCommandV1;
   readonly commandHash: Sha256HashV1;
@@ -255,6 +260,29 @@ function parseWorldSessionEvent(input: unknown): WorldSessionEventV1 {
     return parseCameraViewEventV1(input);
   }
   return parseGameplayEventV1(input);
+}
+
+function parseExternalCommandRetentionUsage(
+  input: unknown,
+): ExternalCommandRetentionUsageV1 {
+  if (input === undefined) {
+    return Object.freeze({ idempotencyRecordCount: 0, receiptCount: 0 });
+  }
+  const record = snapshotPlainRecord(input);
+  const keys = ["idempotencyRecordCount", "receiptCount"] as const;
+  if (
+    isNil(record) ||
+    !hasExactKeys(record, keys) ||
+    !keys.every((key) => isSafeNonNegativeInteger(record[key]))
+  ) {
+    throw new RangeError(
+      "CommandJournal external retention usage must be exact non-negative integers.",
+    );
+  }
+  return Object.freeze({
+    idempotencyRecordCount: record.idempotencyRecordCount as number,
+    receiptCount: record.receiptCount as number,
+  });
 }
 
 function parseEventBundle(input: unknown): readonly WorldSessionEventV1[] {
@@ -488,8 +516,12 @@ export class CommandJournal {
     return Object.freeze({ status: "reserved", reservation });
   }
 
-  reserveCapacity(input: unknown): CommandJournalReservationResultV1 {
+  reserveCapacity(
+    input: unknown,
+    externalUsageInput?: unknown,
+  ): CommandJournalReservationResultV1 {
     const request = parseReservationRequest(input);
+    const externalUsage = parseExternalCommandRetentionUsage(externalUsageInput);
     if (!isNil(this.commandAdmissionClosedSimulationTick)) {
       return Object.freeze({
         status: "command-admission-closed",
@@ -499,10 +531,12 @@ export class CommandJournal {
     }
 
     if (
-      this.retainedCommandsById.size + this.reserved.idempotencyRecordCount +
+      this.retainedCommandsById.size + externalUsage.idempotencyRecordCount +
+          this.reserved.idempotencyRecordCount +
           request.idempotencyRecordCount >
         this.capacity.maximumIdempotencyRecordCount ||
-      this.retainedReceiptCount + this.reserved.receiptCount + request.receiptCount >
+      this.retainedReceiptCount + externalUsage.receiptCount +
+          this.reserved.receiptCount + request.receiptCount >
         this.capacity.maximumRetainedReceiptCount
     ) {
       this.commandAdmissionClosedSimulationTick = request.simulationTick;

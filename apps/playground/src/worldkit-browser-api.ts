@@ -285,7 +285,7 @@ function validateWorldSessionEventLookaheadPage(
   try {
     if (!Array.isArray(input) || input.length > query.maximumEventCount + 1) {
       throw boundaryError(
-        "WORLDKIT_GAMEPLAY_EVENTS_PROTOCOL_INVALID",
+        "WORLDKIT_WORLD_SESSION_EVENTS_PROTOCOL_INVALID",
         "Gameplay Event publication violated the Browser protocol.",
       );
     }
@@ -297,7 +297,7 @@ function validateWorldSessionEventLookaheadPage(
         event.runtimeSessionId !== runtimeSessionId ||
         event.worldSessionId !== worldSessionId
       ) throw boundaryError(
-        "WORLDKIT_GAMEPLAY_EVENTS_PROTOCOL_INVALID",
+        "WORLDKIT_WORLD_SESSION_EVENTS_PROTOCOL_INVALID",
         "Gameplay Event publication violated the Browser protocol.",
       );
       previousSequence = event.sequence;
@@ -305,7 +305,7 @@ function validateWorldSessionEventLookaheadPage(
   } catch (error) {
     if (error instanceof WorldkitBrowserBoundaryErrorV1) throw error;
     throw boundaryError(
-      "WORLDKIT_GAMEPLAY_EVENTS_PROTOCOL_INVALID",
+      "WORLDKIT_WORLD_SESSION_EVENTS_PROTOCOL_INVALID",
       "Gameplay Event publication violated the Browser protocol.",
     );
   }
@@ -839,8 +839,8 @@ export function installDeferredWorldkitBrowserApi(options: {
         () => adapter.runtimeSnapshot(),
       );
       const pageWithLookahead = callAdapter(
-        "WORLDKIT_GAMEPLAY_EVENTS_QUERY_FAILED",
-        "Gameplay Event query failed.",
+        "WORLDKIT_WORLD_SESSION_EVENTS_QUERY_FAILED",
+        "WorldSession Event query failed.",
         () => adapter.worldSessionEventsAfterRuntime(
           query.afterEventSequence,
           query.maximumEventCount + 1,
@@ -854,8 +854,8 @@ export function installDeferredWorldkitBrowserApi(options: {
       );
       const hasMore = pageWithLookahead.length > query.maximumEventCount;
       const events = callAdapter(
-        "WORLDKIT_GAMEPLAY_EVENTS_PROTOCOL_INVALID",
-        "Gameplay Event publication violated the Browser protocol.",
+        "WORLDKIT_WORLD_SESSION_EVENTS_PROTOCOL_INVALID",
+        "WorldSession Event publication violated the Browser protocol.",
         () => immutableBrowserCopy(
           pageWithLookahead.slice(0, query.maximumEventCount),
         ),

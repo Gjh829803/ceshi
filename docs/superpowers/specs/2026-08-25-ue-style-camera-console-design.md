@@ -213,8 +213,9 @@ CAM-06 不改变 `mountedOn`、Possession 或角色移动权威。Gameplay 仍�
 
 ## 14. View Preference 运行时接线（2026-08-26）
 
-CAM-07 删除 `requestCameraProfile/resetCameraProfile` 旧表面，不保留 alias。Browser V5 与
-Babylon Runtime 统一使用 `setCameraViewPreference/resetCameraViewPreference`；Director 只保存
+CAM-07 删除 `requestCameraProfile/resetCameraProfile` 旧表面，不保留 alias。Babylon Runtime
+内部仍以 `setCameraViewPreference/resetCameraViewPreference` 应用已准入命令；Browser V5 只公开
+异步 `executeCameraViewCommand`，不暴露同步写入口。Director 只保存
 一个强类型 Preference，并在命令提交前复用 Camera Domain Admission。显式 Profile 不属于当前
 Context、或第一人称不可用时，命令原子拒绝且保留上一稳定 View；后续 Context 变化导致的不兼容
 仍由每 Tick Selection 进入显式 fallback，并在再次兼容时恢复原 Preference。Preference Reset

@@ -78,6 +78,99 @@ describe("BabylonHavokPhysicsWorldQueryV1", () => {
     }
   });
 
+  it.each([
+    {
+      name: "thin diagonal blocker",
+      blockers: [{
+        entityId: "diagonal-blocker",
+        position: [0.32, 0.32, 5] as const,
+        size: [0.12, 0.12, 0.12] as const,
+      }],
+      expectedEntityIds: ["diagonal-blocker"],
+      expectedMaximumTravelMeters: 5,
+    },
+    {
+      name: "L-shaped wall corner",
+      blockers: [
+        {
+          entityId: "corner-vertical",
+          position: [0.34, 0.18, 5] as const,
+          size: [0.08, 0.4, 0.12] as const,
+        },
+        {
+          entityId: "corner-horizontal",
+          position: [0.18, 0.34, 5] as const,
+          size: [0.4, 0.08, 0.12] as const,
+        },
+      ],
+      expectedEntityIds: ["corner-vertical", "corner-horizontal"],
+      expectedMaximumTravelMeters: 5,
+    },
+    {
+      name: "doorway narrower than the Probe diameter",
+      blockers: [
+        {
+          entityId: "door-jamb-left",
+          position: [-0.55, 0, 5] as const,
+          size: [0.3, 2, 0.12] as const,
+        },
+        {
+          entityId: "door-jamb-right",
+          position: [0.55, 0, 5] as const,
+          size: [0.3, 2, 0.12] as const,
+        },
+      ],
+      expectedEntityIds: ["door-jamb-left", "door-jamb-right"],
+      expectedMaximumTravelMeters: 5,
+    },
+    {
+      name: "Probe origin overlap",
+      blockers: [{
+        entityId: "origin-blocker",
+        position: [0, 0, 0] as const,
+        size: [1, 1, 1] as const,
+      }],
+      expectedEntityIds: ["origin-blocker"],
+      expectedMaximumTravelMeters: 0.000001,
+    },
+  ])("detects $name with a true sphere Sweep", async ({
+    blockers,
+    expectedEntityIds,
+    expectedMaximumTravelMeters,
+  }) => {
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    const plugin = await enableHavokPhysics(scene, [0, -9.81, 0], havokWasmBinary);
+    const aggregates = blockers.map(({ entityId, position, size }) => {
+      const mesh = MeshBuilder.CreateBox(entityId, {
+        width: size[0],
+        height: size[1],
+        depth: size[2],
+      }, scene);
+      mesh.position.set(position[0], position[1], position[2]);
+      mesh.metadata = { worldkitEntityId: entityId };
+      return new PhysicsAggregate(mesh, PhysicsShapeType.BOX, { mass: 0 }, scene);
+    });
+    const query = new BabylonHavokPhysicsWorldQueryV1(scene, plugin);
+
+    try {
+      const sweep = query.sweepSphere({
+        startPositionMetersXYZ: [0, 0, 0],
+        endPositionMetersXYZ: [0, 0, 10],
+        probeRadiusMeters: 0.5,
+      });
+
+      expect(sweep).toBeDefined();
+      expect(expectedEntityIds).toContain(sweep?.hitEntityId);
+      expect(sweep?.travelDistanceMeters).toBeLessThanOrEqual(expectedMaximumTravelMeters);
+    } finally {
+      query.dispose();
+      for (const aggregate of aggregates) aggregate.dispose();
+      scene.dispose();
+      engine.dispose();
+    }
+  });
+
   it("rejects duplicate Entity bindings and disposes every cached Probe shape", async () => {
     const engine = new NullEngine();
     const scene = new Scene(engine);

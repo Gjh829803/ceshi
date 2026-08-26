@@ -40,6 +40,7 @@ function freezeDefinition(
       });
   return Object.freeze({
     ...definition,
+    sourceExtensionAllowlist: Object.freeze([...definition.sourceExtensionAllowlist]),
     spatialConvention: Object.freeze({ ...definition.spatialConvention }),
     spatialReview,
     actions: Object.freeze([...definition.actions]),
@@ -57,6 +58,7 @@ export const G_BOT_MODULAR_SUBJECT_SOURCE_PACKAGE = freezeDefinition({
     "sha256:41833210e735788da0777fc37badcec03f90ccf17ab5a7d89103f0727abeeb1b",
   rigProfileRef: "worldkit://rig-profile/biped.mixamo-g-bot@2",
   provenanceMode: "derived-recovery",
+  sourceExtensionAllowlist: ["KHR_materials_specular"],
   spatialConvention: {
     units: "meters",
     upAxis: "+Y",
@@ -110,6 +112,7 @@ export const GOLDEN_MODULAR_SUBJECT_SOURCE_PACKAGE = freezeDefinition({
     "sha256:1095fd65c754d53e6db3757ab5e1c9e5e9dcea2581f85d40f37ea4890ee8c2c2",
   rigProfileRef: "worldkit://rig-profile/biped.golden@2",
   provenanceMode: "generated-fixture",
+  sourceExtensionAllowlist: [],
   spatialConvention: {
     units: "meters",
     upAxis: "+Y",

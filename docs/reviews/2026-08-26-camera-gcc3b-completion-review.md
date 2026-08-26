@@ -3,7 +3,7 @@
 - Date: 2026-08-26
 - Review mode: B, change review
 - Branch: `codex/camera-development`
-- Base: `7e3ff84508d926f23c2c88994af079aa5e941993`
+- PR base after integration: `origin/main@62acfc8b54c232574a6024f0ef89ca2ca26f4b38`
 - Runtime dependencies: Babylon.js `9.21.2`, Havok `1.3.14`
 - Scope: Camera View Command/Receipt, unified WorldSession Event journal, automatic Camera Selection events,
   Browser Protocol V5 clean break and Playground consumer cutover
@@ -29,6 +29,8 @@ change by explicit product decision.
 - Event capacity is reserved before runtime execution and committed before publication. Rejected commands
   do not advance View revision or Event sequence.
 - Gameplay and Camera events share the same retained journal and monotonically increasing sequence.
+- Gameplay and Camera commands also share the same idempotency-record and retained-Receipt budgets; either
+  command family closes admission before the other can exceed the configured Session capacity.
 - Automatic Context, Modifier, target rebound, fallback and target-unbound changes are observed at the
   coordinator integration point. Multi-Tick input is evaluated one Tick at a time, matching the existing
   WorldSession held-input semantics while preventing intermediate Camera changes from being skipped.
@@ -47,14 +49,40 @@ change by explicit product decision.
 - Browser exact-key surface, async command routing and consumer rollback;
 - fixed-step determinism, held-versus-pressed input, reset/rebind, multi-instance isolation, collision and
   resource cleanup remain covered by the repository aggregate and G Bot acceptance gates.
+- true Havok sphere Sweep covers a thin diagonal blocker, an L-shaped corner and a doorway narrower than
+  Probe diameter; a zero-distance `shapeProximity` closes initial Probe overlap before ShapeCast.
+
+## Ten-round self-PR review
+
+1. Scope/clean-break: removed stale Follow Arm references from current architecture documentation and
+   confirmed the canceled other-character ignore policy is absent.
+2. State authority: confirmed CameraDirector remains Selection/orbit owner, Gameplay remains possession and
+   relationship owner, and RuntimeHost consumes only provider-neutral projections.
+3. Protocol/idempotency: rechecked exact parsers, canonical hashes, deterministic IDs, replay and conflict
+   behavior; no second command dialect remains in Browser V5.
+4. Capacity/atomicity: found and fixed Camera receipts not reducing Gameplay command-retention capacity;
+   added Camera-first and Gameplay-first exhaustion regression coverage.
+5. Fixed-step timing: verified multi-Tick coordinator execution advances one host Tick per observation while
+   preserving held-versus-pressed semantics and deterministic cadence coverage.
+6. Spring Arm collision: reconciled main's nine-ray adversarial work into true Havok ShapeCast and fixed the
+   RED initial-overlap case with `shapeProximity(maxDistance=0)`.
+7. Browser/consumer: renamed remaining Gameplay-only event diagnostic codes to WorldSession terminology and
+   reran exact-key, hostile-query and asynchronous compensation tests.
+8. Lifecycle/isolation: verified component rollback, throwing cleanup, cached Probe shape disposal and
+   multi-runtime isolation; no additional owner was introduced.
+9. Runtime evidence: reran the affected 16-file/230-test matrix, production build, G Bot and Canonical Browser
+   gates on the integrated tree.
+10. Documentation/release: reconciled the living open-source ledger and implementation plan with the final
+    ShapeCast architecture, checked the PR diff and reran final repository gates.
 
 ## Verification evidence
 
 - `pnpm typecheck`: passed.
-- `pnpm test`: passed, 194 contract files / 2,081 tests; 2 skipped.
-- Resource-heavy lane: passed, 21 files / 405 tests; 4 skipped and one integration file intentionally
+- `pnpm test`: passed, 196 contract files / 2,093 tests; 2 skipped.
+- Resource-heavy lane: passed, 22 files / 422 tests; 4 skipped and one integration file intentionally
   skipped by its configured gate.
-- `pnpm build`: passed, 2,202 modules transformed. Vite reported only the existing large-chunk warning.
+- Affected self-review matrix: passed, 16 files / 230 tests.
+- `pnpm build`: passed, 2,213 modules transformed. Vite reported only the existing large-chunk warning.
 - `pnpm verify:g-bot-subject`: passed in check mode with real Browser/Babylon/Havok evidence, including
   idle/walk/run/jump pose separation, two-subject isolation and wall-stop collision. Rendering used
   SwiftShader, so performance is not hardware-representative.

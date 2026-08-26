@@ -1,0 +1,35 @@
+# Open-source Core Adversarial Follow-ups Plan
+
+**Goal:** Close the next evidence-backed gaps identified in the open-source reference ledger without importing a second Runtime, geometry dialect, or state owner.
+
+**Architecture:** Every task begins as a pressure test against the installed Babylon/Havok version or the existing WorldKit geometry primitive. Production code changes only after a correct RED. `checkSupport()`, `GameplayRelationshipStateV1`, CameraDirector, Canonical XZ units, and current protocol names remain authoritative.
+
+**Tech stack:** TypeScript 5.9, Vitest 3.2, Babylon.js 9.21.2, Havok 1.3.14.
+
+## Dependency-aware work graph
+
+| ID | Goal and independently verifiable deliverable | depends_on | blocks | Exclusive ownership | Input → output and integration point | Required evidence | Mode |
+|---|---|---|---|---|---|---|---|
+| `TRAV-SNAP-01` | Prove down-slope snap, ledge departure, and rising Jump have distinct behavior | none | `TRAV-VELOCITY-01` | traversal tests in `runtime.test.ts`; `motion-kernel-runtime.ts` only after RED | existing `CharacterSurfaceInfo` + fixed Tick → existing position/velocity/medium Snapshot | real Havok three-branch fixture; one support query per Subject/Tick remains green | sequential, main-agent-only |
+| `CAM-COLL-02` | Pressure-test wall corner, narrow doorway, and camera origin already inside a blocker | `TRAV-SNAP-01` only for shared Runtime test ordering | `CAM-SWEEP-01` | Follow Arm focused source/test | existing solve request → unchanged solve result/telemetry | three real Babylon fixtures; RED/GREEN or documented existing correctness | sequential, main-agent-only |
+| `MNT-PAIR-01` | Prove two Rider/Mount pairs cannot cross-contaminate slot, suspension, possession, rollback, or reset | `CAM-COLL-02` only for shared Runtime fixture ownership | `MNT-LIFE-01` | mounted Runtime test section; Gameplay/Runtime source only after RED | two typed `mountedOn` relationships → isolated projections and visual/controller poses | interleaved prepare/abort/commit/Tick/Reset using real Runtime | sequential, main-agent-only |
+| `GEO-RP-01` | Decide whether current orientation arithmetic fails at project-scale near-collinear inputs | none | possible `GEO-RP-02` | `terrain-surface` and `layout-solver` geometry tests only | canonical meter XZ points → existing classification/error codes | translated/scaled/reversed pressure family and mutation-sensitive expectation | parallel-safe in architecture, sequential in this worktree |
+| `ASSET-GLB-01-DESIGN` | Freeze the Khronos Validator admission contract before adding a tool or dependency | `GEO-RP-01` | later `ASSET-GLB-01` implementation | design document only | current GLB inventory/admission → explicit validator boundary and error ownership | installed pipeline/source inspection; malformed fixture matrix; dependency and lifecycle decision | main-agent-only |
+| `GLB-A1/A2` | Implement the pinned Node-only Validator Adapter and authority-split malformed fixtures | `ASSET-GLB-01-DESIGN` | `GLB-A3/A4` | root dependency; `scripts/lib/glb-admission*` | immutable GLB bytes + closed profile → deterministic receipt or owned diagnostic | glTF-Transform-pass/Khronos-fail, Khronos-pass/WorldKit-fail, URI/extension/inventory fixtures | main-agent-only |
+| `GLB-A3/A4` | Wire source/generated/static corpus gates and prove deterministic lifecycle | `GLB-A1/A2` | new asset intake | modular Subject scripts; xier120 verifier | Source/Model/Clip/Bundle/Static bytes → admission before promotion plus existing Runtime gate | Golden/G Bot source and bundles, xier120 19/19, deterministic outputs, bounded serialized memory observation | main-agent-only |
+| `OS-LEDGER-03` | Record exact adopted, rejected, or deferred outcome and fresh gates | completed implementation tasks | none | `docs/21-open-source-design-reference-ledger.md` | candidate rows → truthful status and local evidence links | diff inspection plus affected repository gates | sequential, main-agent-only |
+
+## Execution order
+
+- [x] `TRAV-SNAP-01`: add the real-Havok three-branch test, capture RED if present, apply only a provider-local fix using the existing support input, and rerun adjacent ledge/jump/support-owner tests. Existing Runtime behavior was correct; only the missing 0.25m descent/rising-Jump regression was added.
+- [x] `CAM-COLL-02`: add wall-corner, narrow-doorway, and origin-inside fixtures; introduce shape cast only if nine rays have a demonstrated uncloseable gap and the architecture review accepts its lifecycle/budget. All three real Babylon fixtures pass with the current nine rays; a center-ray mutation makes the corner and doorway fixtures RED, so no shape cast or production change is justified.
+- [x] `MNT-PAIR-01`: add two-pair interleaving and rollback/reset isolation; do not infer relationships from Babylon parenting. Real Runtime prepare/abort/commit/Tick/Reset keeps both Rider poses and suspension IDs tied to their own Mount; existing production code is correct.
+- [x] `GEO-RP-01`: run near-collinear XZ pressure families; add `robust-predicates` only in a later task if ordinary arithmetic produces a contract-relevant wrong result. A translated one-meter square was misclassified at an admitted finite coordinate, and a 1e-6-meter-quantized near-collinear turn at roughly 100 meters collapsed to zero. Added a translation-stable area fan plus the sign-adapted robust XZ predicate and focused regressions.
+- [x] `ASSET-GLB-01-DESIGN`: specify validator ownership and malformed fixture admission before implementation. Frozen in `docs/superpowers/specs/2026-08-26-glb-admission-profile-design.md`; implementation remains the separately gated `ASSET-GLB-01` task.
+- [x] `GLB-A1/A2`: pin official `gltf-validator@2.0.0-dev.3.10`; add deterministic Node-only receipt/error Adapter and malformed plus authority-split fixtures.
+- [x] `GLB-A3/A4`: validate Source Archive, generated Model/Clip/Runtime Bundle, and all 19 xier120 Static artifacts before promotion/use; retain existing glTF-Transform inventory and Babylon actual-use/disposal gates. The G Bot-focused test process observed about 220 MB maximum resident size, so admission stays serialized.
+- [x] `OS-LEDGER-03`: update the ledger and run focused tests, `pnpm typecheck`, `pnpm test`, `pnpm build`, and `git diff --check` on the final affected tree. The complete Contract lane passed 192 files/2,073 tests. The Resource-heavy lane passed 21 files/415 tests and exposed only a stale generated Builder self-check; after regenerating the tracked standalone bundle, its focused two-test gate and freshness checker passed. The subsequent optional-extension hardening touched only the serialized GLB adapter and its focused 25-test/source/corpus gates passed, so unrelated green lanes were not replayed.
+
+## Explicit deferrals
+
+Clipper/polyclip and Manifold remain demand-gated. They begin only after an approved Terrain Mask/Opening or Geometry Recipe contract supplies real fixtures and budget constraints. Dynamic platforms and vehicles remain outside the current trusted traversal boundary.

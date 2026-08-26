@@ -1,4 +1,5 @@
 import { Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
+import { ProximityCastResult } from "@babylonjs/core/Physics/proximityCastResult.js";
 import { ShapeCastResult } from "@babylonjs/core/Physics/shapeCastResult.js";
 import type { PhysicsBody } from "@babylonjs/core/Physics/v2/physicsBody.js";
 import { PhysicsShapeSphere } from "@babylonjs/core/Physics/v2/physicsShape.js";
@@ -75,11 +76,36 @@ export class BabylonHavokPhysicsWorldQueryV1 implements PhysicsWorldQueryPortV1 
       return this.raycast(start, end, distanceMeters, ignoreBody);
     }
 
+    const probeShape = this.sphereShape(request.probeRadiusMeters);
+    const overlapInputResult = new ProximityCastResult();
+    const overlapHitResult = new ProximityCastResult();
+    this.havokPlugin.shapeProximity(
+      {
+        shape: probeShape,
+        position: start,
+        rotation: Quaternion.Identity(),
+        maxDistance: 0,
+        shouldHitTriggers: false,
+        ...(ignoreBody === undefined ? {} : { ignoreBody }),
+      },
+      overlapInputResult,
+      overlapHitResult,
+    );
+    if (overlapHitResult.hasHit) {
+      const hitEntityId = entityIdFromBody(overlapHitResult.body);
+      return Object.freeze({
+        travelDistanceMeters: 0,
+        travelFraction: 0,
+        hitPositionMetersXYZ: frozenPosition(overlapHitResult.hitPoint),
+        ...(hitEntityId === undefined ? {} : { hitEntityId }),
+      });
+    }
+
     const inputShapeResult = new ShapeCastResult();
     const hitShapeResult = new ShapeCastResult();
     this.havokPlugin.shapeCast(
       {
-        shape: this.sphereShape(request.probeRadiusMeters),
+        shape: probeShape,
         rotation: Quaternion.Identity(),
         startPosition: start,
         endPosition: end,

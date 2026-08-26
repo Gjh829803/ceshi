@@ -557,6 +557,58 @@ describe("WorldSession Camera View command transaction", () => {
     expect(session.eventsAfter(0, 10)).toEqual([]);
   });
 
+  it("shares command and Receipt retention capacity with Gameplay commands", async () => {
+    const firstSetup = createHarnessAndOptions();
+    const cameraFirst = await WorldSession.create({
+      ...firstSetup.options,
+      gameplayCapacityBudget: {
+        ...firstSetup.options.gameplayCapacityBudget,
+        maximumIdempotencyRecordCount: 1,
+        maximumRetainedReceiptCount: 1,
+      },
+    });
+    await cameraFirst.executeCameraViewCommand(cameraCommand(), async () => ({
+      previous: selection("before"),
+      next: selection("after"),
+    }));
+
+    const gameplayAfterCamera = await cameraFirst.executeGameplayCommand({
+      ...bindCommand("command.after-camera-capacity"),
+      controllerEntityId: "controller.unknown",
+    });
+    expect(gameplayAfterCamera).toMatchObject({
+      status: "rejected",
+      diagnostic: { code: "GAMEPLAY_CAPACITY_EXCEEDED" },
+    });
+
+    const secondSetup = createHarnessAndOptions();
+    const gameplayFirst = await WorldSession.create({
+      ...secondSetup.options,
+      gameplayCapacityBudget: {
+        ...secondSetup.options.gameplayCapacityBudget,
+        maximumIdempotencyRecordCount: 1,
+        maximumRetainedReceiptCount: 1,
+      },
+    });
+    await gameplayFirst.executeGameplayCommand({
+      ...bindCommand("command.fill-shared-capacity"),
+      controllerEntityId: "controller.unknown",
+    });
+    let cameraExecutionCount = 0;
+    const cameraAfterGameplay = await gameplayFirst.executeCameraViewCommand(
+      cameraCommand("camera-command.after-gameplay-capacity"),
+      async () => {
+        cameraExecutionCount += 1;
+        return { previous: selection("before"), next: selection("after") };
+      },
+    );
+    expect(cameraAfterGameplay).toMatchObject({
+      status: "rejected",
+      diagnostic: { code: "VIEW_EVENT_CAPACITY_EXCEEDED" },
+    });
+    expect(cameraExecutionCount).toBe(0);
+  });
+
   it("shares the next Event sequence with following Gameplay commits", async () => {
     const { harness, options } = createHarnessAndOptions();
     const session = await WorldSession.create(options);

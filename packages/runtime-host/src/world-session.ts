@@ -1062,6 +1062,9 @@ export class WorldSession {
       idempotencyRecordCount: 1,
       receiptCount: 1,
       eventCount: reservedEventCount,
+    }, {
+      idempotencyRecordCount: this.retainedCameraViewCommandsById.size,
+      receiptCount: this.retainedCameraViewCommandsById.size,
     });
     if (journalReservation.status !== "reserved") {
       if (journalReservation.status === "command-admission-closed") {
@@ -1397,10 +1400,16 @@ export class WorldSession {
         },
       }));
     }
+    const journalSnapshot = this.commandJournal.snapshot();
     if (
-      this.commandJournal.snapshot().retainedIdempotencyRecordCount +
+      journalSnapshot.retainedIdempotencyRecordCount +
+          journalSnapshot.reservedIdempotencyRecordCount +
           this.retainedCameraViewCommandsById.size >=
-        this.options.gameplayCapacityBudget.maximumIdempotencyRecordCount
+        this.options.gameplayCapacityBudget.maximumIdempotencyRecordCount ||
+      journalSnapshot.retainedReceiptCount +
+          journalSnapshot.reservedReceiptCount +
+          this.retainedCameraViewCommandsById.size >=
+        this.options.gameplayCapacityBudget.maximumRetainedReceiptCount
     ) {
       return this.cameraViewReceipt(command, {
         status: "rejected",
@@ -2010,6 +2019,9 @@ export class WorldSession {
       idempotencyRecordCount: 1,
       receiptCount: 1,
       eventCount: 0,
+    }, {
+      idempotencyRecordCount: this.retainedCameraViewCommandsById.size,
+      receiptCount: this.retainedCameraViewCommandsById.size,
     });
     const rejectedReceipt = receipt(command, simulationTick, {
       status: "rejected",

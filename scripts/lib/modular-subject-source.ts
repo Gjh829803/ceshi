@@ -16,6 +16,13 @@ import {
 } from "@gltf-transform/core";
 import { cloneDocument, prune } from "@gltf-transform/functions";
 
+import {
+  GlbAdmissionErrorV1,
+  validateGlbAdmissionV1,
+  type GlbAdmissionReceiptV1,
+  type ValidateGlbAdmissionOptionsV1,
+} from "./glb-admission.js";
+
 const IO = new NodeIO().setLogger(new Logger(Logger.Verbosity.SILENT));
 const TEXT_ENCODER = new TextEncoder();
 const SHA256_PREFIX = "sha256:";
@@ -82,6 +89,7 @@ export interface ModularSubjectPackageDefinitionV1 {
   readonly expectedSourceContentHash: `sha256:${string}`;
   readonly rigProfileRef: string;
   readonly provenanceMode: "derived-recovery" | "generated-fixture";
+  readonly sourceExtensionAllowlist: readonly string[];
   readonly spatialConvention: ModularSubjectSpatialConventionV1;
   readonly spatialReview: ModularSubjectSpatialReviewV1;
   readonly actions: readonly ModularSubjectActionDefinitionV1[];
@@ -605,7 +613,14 @@ function validateNodeTransforms(document: Document): void {
   }
 }
 
-async function inspectDocument(bytes: Uint8Array): Promise<InspectedDocumentV1> {
+async function inspectDocument(
+  bytes: Uint8Array,
+  admissionOptions?: ValidateGlbAdmissionOptionsV1,
+): Promise<InspectedDocumentV1> {
+  let admissionReceipt: GlbAdmissionReceiptV1 | undefined;
+  if (admissionOptions !== undefined) {
+    admissionReceipt = await validateGlbAdmissionV1(bytes, admissionOptions);
+  }
   const raw = parseRawGlbJson(bytes);
   validateRawNodeTransforms(raw);
   const uris = externalUris(raw);
@@ -651,9 +666,7 @@ async function inspectDocument(bytes: Uint8Array): Promise<InspectedDocumentV1> 
     durationSeconds: animationDuration(animation),
   }));
 
-  return {
-    document,
-    inventory: {
+  const inventory: ModularSubjectGlbInventoryV1 = {
       meshCount: root.listMeshes().length,
       skinCount: skins.length,
       skeletonCount: skins.length,
@@ -669,17 +682,45 @@ async function inspectDocument(bytes: Uint8Array): Promise<InspectedDocumentV1> 
       lightCount: raw.extensions?.KHR_lights_punctual?.lights?.length ?? 0,
       externalUris: uris,
       rigSignatureHash: skin === undefined ? null : rigSignatureHash(skin),
-    },
   };
+  if (
+    admissionReceipt !== undefined &&
+    (
+      admissionReceipt.inventory.meshCount !== inventory.meshCount ||
+      admissionReceipt.inventory.skinCount !== inventory.skinCount ||
+      admissionReceipt.inventory.animationClipCount !== inventory.animationClipCount ||
+      admissionReceipt.inventory.materialCount !== inventory.materialCount ||
+      admissionReceipt.inventory.textureCount !== inventory.textureCount ||
+      admissionReceipt.inventory.cameraCount !== inventory.cameraCount ||
+      admissionReceipt.inventory.lightCount !== inventory.lightCount
+    )
+  ) {
+    throw new GlbAdmissionErrorV1("GLB_ADMISSION_INVENTORY_MISMATCH", {
+      validatorInventory: admissionReceipt.inventory,
+      worldKitInventory: inventory,
+    });
+  }
+  return { document, inventory };
 }
 
 export async function inspectModularSubjectGlb(
   bytes: Uint8Array,
+  admissionOptions?: ValidateGlbAdmissionOptionsV1,
 ): Promise<ModularSubjectGlbInventoryV1> {
-  return (await inspectDocument(bytes)).inventory;
+  return (await inspectDocument(bytes, admissionOptions)).inventory;
 }
 
 function validateDefinition(definition: ModularSubjectPackageDefinitionV1): void {
+  if (
+    !Array.isArray(definition.sourceExtensionAllowlist) ||
+    definition.sourceExtensionAllowlist.some((extension) =>
+      typeof extension !== "string" || extension.length === 0
+    ) ||
+    new Set(definition.sourceExtensionAllowlist).size !==
+      definition.sourceExtensionAllowlist.length
+  ) {
+    return fail("MODULAR_SUBJECT_SOURCE_EXTENSION_ALLOWLIST_INVALID");
+  }
   const spatialConvention = definition.spatialConvention;
   if (
     spatialConvention?.units !== "meters" ||
@@ -1130,6 +1171,10 @@ export async function recoverModularSubjectSourcePackage(
   const source = await inspectDocument(input.sourceGlbBytes);
   validateActionCoverage(input.definition, source.inventory);
   validateRiggedModelInventory(source.inventory, true);
+  await validateGlbAdmissionV1(input.sourceGlbBytes, {
+    profileId: "subject-source-archive.v1",
+    allowedExtensions: input.definition.sourceExtensionAllowlist,
+  });
   const rawSource = parseRawGlbJson(input.sourceGlbBytes);
   const residueInventory = extensionResidueInventory(rawSource);
 
@@ -1178,7 +1223,9 @@ export async function recoverModularSubjectSourcePackage(
   };
 
   const modelGlbBytes = await recoverModelDocument(source.document);
-  const modelInventory = await inspectModularSubjectGlb(modelGlbBytes);
+  const modelInventory = await inspectModularSubjectGlb(modelGlbBytes, {
+    profileId: "subject-rigged-model.v1",
+  });
   const modelResourceRef = `worldkit://subject-model-asset/${input.definition.creatorId}.${input.definition.id}@${input.definition.version}`;
   const modelManifest: SubjectModelAssetManifestV1 = {
     kind: "subject-model-asset",
@@ -1213,7 +1260,9 @@ export async function recoverModularSubjectSourcePackage(
       action.sourceClipName,
       action.actionId,
     );
-    const inventory = await inspectModularSubjectGlb(glbBytes);
+    const inventory = await inspectModularSubjectGlb(glbBytes, {
+      profileId: "subject-animation-clip.v1",
+    });
     const rigSignature = inventory.rigSignatureHash;
     if (rigSignature === null) {
       return fail("MODULAR_SUBJECT_SOURCE_CLIP_RIG_MISSING", action.actionId);
@@ -1548,7 +1597,10 @@ export async function validateRecoveredSubjectSourcePackage(
   ) {
     return fail("MODULAR_SUBJECT_SOURCE_ARCHIVE_CONTRACT_INVALID");
   }
-  const sourceInspection = await inspectDocument(sourceArchive.glbBytes);
+  const sourceInspection = await inspectDocument(sourceArchive.glbBytes, {
+    profileId: "subject-source-archive.v1",
+    allowedExtensions: sourceArchive.manifest.residueInventory.extensionsUsed,
+  });
   validateRiggedModelInventory(sourceInspection.inventory, true);
 
   validateTextureArtifactSet(recovered);
@@ -1564,6 +1616,7 @@ export async function validateRecoveredSubjectSourcePackage(
       expectedSourceContentHash: sourceContentHash,
       rigProfileRef: packageManifest.rigProfileRef,
       provenanceMode: expectedProvenance.mode,
+      sourceExtensionAllowlist: sourceArchive.manifest.residueInventory.extensionsUsed,
       spatialConvention: model.manifest.spatialConvention,
       spatialReview: model.manifest.spatialReview,
       actions: [],
@@ -1580,6 +1633,7 @@ export async function validateRecoveredSubjectSourcePackage(
       expectedSourceContentHash: sourceContentHash,
       rigProfileRef: packageManifest.rigProfileRef,
       provenanceMode: expectedProvenance.mode,
+      sourceExtensionAllowlist: sourceArchive.manifest.residueInventory.extensionsUsed,
       spatialConvention: model.manifest.spatialConvention,
       spatialReview: model.manifest.spatialReview,
       actions: [],
@@ -1605,7 +1659,9 @@ export async function validateRecoveredSubjectSourcePackage(
     return fail("MODULAR_SUBJECT_SOURCE_TEXTURE_ARTIFACT_SOURCE_MISMATCH");
   }
 
-  const modelInventory = await inspectModularSubjectGlb(model.glbBytes);
+  const modelInventory = await inspectModularSubjectGlb(model.glbBytes, {
+    profileId: "subject-rigged-model.v1",
+  });
   const modelResidue = extensionResidueInventory(parseRawGlbJson(model.glbBytes));
   if (
     modelInventory.animationClipCount !== 0 ||
@@ -1674,7 +1730,9 @@ export async function validateRecoveredSubjectSourcePackage(
     ) {
       return fail("MODULAR_SUBJECT_SOURCE_PACKAGE_REF_MISMATCH", "rig-profile");
     }
-    const inventory = await inspectModularSubjectGlb(clip.glbBytes);
+    const inventory = await inspectModularSubjectGlb(clip.glbBytes, {
+      profileId: "subject-animation-clip.v1",
+    });
     validateRiggedModelInventory(inventory, false);
     const clipResidue = extensionResidueInventory(parseRawGlbJson(clip.glbBytes));
     if (
