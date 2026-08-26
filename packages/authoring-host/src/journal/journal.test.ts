@@ -671,6 +671,22 @@ describe("P16-R1 durable WorldChange journal", () => {
     expect(completed.receipt.mode).toBe("dry-run");
   });
 
+  it("does not rewrite a committed Receipt when recovery sees an expired Session", async () => {
+    const { journal, leaseStore, changeSet } = seededJournal();
+    const request = requestFor("apply-authoring", changeSet);
+    const committed = accepted(await submit(journal, leaseStore, request));
+    expect(committed.receipt.status).toBe("committed");
+    const recovered = accepted(await recover(journal, leaseStore, request, {
+      session: session({ expiresAtUnixMilliseconds: NOW }),
+    }));
+    expect(hashWorldChangeReceiptV1(recovered.receipt)).toBe(
+      hashWorldChangeReceiptV1(committed.receipt),
+    );
+    expect(getAuthoringRevisionHeadV1(journal, "basic-world")?.revisionRef).toBe(
+      "revision://basic-world/2",
+    );
+  });
+
   it("lets an expired Session read a terminal Receipt but not Apply", async () => {
     const { journal, leaseStore, changeSet } = seededJournal();
     const validated = accepted(await submit(

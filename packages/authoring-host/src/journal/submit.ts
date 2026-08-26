@@ -42,6 +42,7 @@ import {
   lockChangeSetHashV1,
   lockedChangeSetHashV1,
   nextAuthoringRevisionRefV1,
+  isTerminalStateV1,
   nonTerminalRequestCountV1,
   putCleanupReportV1,
   putDurableRequestRecordV1,
@@ -351,6 +352,9 @@ async function advance(
   input: SubmitWorldChangeRequestInputV1,
   record: DurableRequestRecordV1,
 ): Promise<SubmitWorldChangeRequestResultV1> {
+  if (isTerminalStateV1(record.state) && !isNil(record.receipt)) {
+    return { status: "accepted", receipt: record.receipt };
+  }
   let current = record;
   const authz = authorize(input, current);
   if (!isNil(authz)) {
