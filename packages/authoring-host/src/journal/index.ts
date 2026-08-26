@@ -23,6 +23,7 @@ export {
   getDurableRequestRecordV1,
   recoveryFencingTokenV1,
   seedAuthoringRevisionHeadV1,
+  validateWorldChangeJournalTransactionsV1,
 } from "./store.js";
 export {
   resumeWorldChangeRequestV1,

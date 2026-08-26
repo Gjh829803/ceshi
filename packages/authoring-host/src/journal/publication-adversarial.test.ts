@@ -38,6 +38,7 @@ import type {
   AuthoringEditSessionV1,
   PublishRuntimeReplacementV1,
   SubmitWorldChangeRequestResultV1,
+  WorldChangeJournalTransactionV1,
   WorldChangeJournalV1,
 } from "./types.js";
 
@@ -108,10 +109,13 @@ function loadChangeSet(name: "p16-add-house" | "p16-terrain-replace", specHash: 
   });
 }
 
-function seeded(extras: { readonly policy?: AuthoringEditPolicyProjectionV1 } = {}) {
+function seeded(extras: {
+  readonly policy?: AuthoringEditPolicyProjectionV1;
+  readonly journal?: WorldChangeJournalV1;
+} = {}) {
   const spec = createValidAuthoringSpec();
   const authoringSpecHash = hashAuthoringDocumentV4(spec) as Sha256HashV1;
-  const journal = createWorldChangeJournalV1();
+  const journal = extras.journal ?? createWorldChangeJournalV1();
   seedAuthoringRevisionHeadV1(journal, {
     worldId: spec.id,
     revisionRef: `revision://${spec.id}/1`,
@@ -333,6 +337,136 @@ describe("P16-F1 Full Reload adversarial publication", () => {
       nowUnixMilliseconds: NOW,
     });
     expect(afterSwap.status).toBe("found");
+  });
+
+  it("returns the stored committed Receipt when the publisher disconnects after durable commit", async () => {
+    const transactions: WorldChangeJournalTransactionV1[] = [];
+    const journal = createWorldChangeJournalV1({
+      wal: {
+        brand: "WorldChangeJournalWalV1",
+        readTransactions: () => transactions,
+        appendTransaction: (transaction) => {
+          transactions.push(transaction);
+        },
+      },
+    });
+    const { leaseStore, addHouse, session: active } = seeded({ journal });
+    const dryRun = accepted(await submit(
+      journal,
+      leaseStore,
+      requestFor("dry-run", addHouse, { id: "request.dry-run.post-commit-drop" }),
+      { session: active },
+    ));
+    if (dryRun.receipt.status !== "succeeded" || dryRun.receipt.mode !== "dry-run") {
+      throw new Error("expected dry-run");
+    }
+    const applyRequest = requestFor("apply-publish", addHouse, {
+      id: "request.apply.publish-post-commit-drop",
+      preparedCandidateRef: dryRun.receipt.preparedCandidateRef,
+    });
+    const previous = {
+      runtimeSessionId: "runtime-session-9",
+      worldSessionId: "world-session-31",
+      worldPackageRootHash: `sha256:${"d".repeat(64)}` as Sha256HashV1,
+      simulationTick: 12,
+    };
+    const current = {
+      ...previous,
+      worldSessionId: "world-session-32",
+      simulationTick: 0,
+    };
+
+    const committed = accepted(await submit(
+      journal,
+      leaseStore,
+      applyRequest,
+      {
+        session: active,
+        publishRuntimeReplacement: async ({ persistDurableCommit }) => {
+          persistDurableCommit({ previous, current });
+          throw new Error("transport disconnected after durable commit");
+        },
+      },
+    ));
+
+    expect(committed.receipt.status).toBe("committed");
+    expect(() => getAuthoringRevisionHeadV1(journal, "basic-world")).toThrow(
+      /WORLD_CHANGE_PUBLICATION_FENCE_ACTIVE/,
+    );
+    const queried = queryWorldChangeReceiptV1({
+      journal,
+      session: active,
+      query: parseWorldChangeReceiptQueryV1({
+        kind: "worldkit-world-change-receipt-query",
+        schemaVersion: 1,
+        id: "q.receipt.post-commit-drop",
+        authoringEditSessionId: SESSION_ID,
+        requestId: applyRequest.id,
+      }),
+      nowUnixMilliseconds: NOW,
+    });
+    expect(queried).toEqual({ status: "pending", state: "preparing-runtime" });
+    const cleanup = queryWorldChangeCleanupReportV1({
+      journal,
+      session: active,
+      query: parseWorldChangeCleanupReportQueryV1({
+        kind: "worldkit-world-change-cleanup-report-query",
+        schemaVersion: 1,
+        id: "q.cleanup.post-commit-drop",
+        authoringEditSessionId: SESSION_ID,
+        cleanupOperationId:
+          committed.receipt.status === "committed" &&
+            committed.receipt.requestedOutcome === "publish-runtime"
+            ? committed.receipt.runtimeCleanup.cleanupOperationId
+            : "cleanup.invalid",
+      }),
+      nowUnixMilliseconds: NOW,
+    });
+    expect(cleanup).toMatchObject({
+      status: "found",
+      report: {
+        status: "scheduled",
+        attemptCount: 0,
+        previousWorldSessionId: "world-session-31",
+      },
+    });
+    expect(transactions.at(-1)?.operations.map((operation) => operation.type)).toEqual([
+      "revision-head-put",
+      "request-record-put",
+      "cleanup-report-put",
+    ]);
+    const reopened = createWorldChangeJournalV1({
+      wal: {
+        brand: "WorldChangeJournalWalV1",
+        readTransactions: () => transactions,
+        appendTransaction: (transaction) => {
+          transactions.push(transaction);
+        },
+      },
+    });
+    expect(() => getAuthoringRevisionHeadV1(reopened, "basic-world")).toThrow(
+      /WORLD_CHANGE_PUBLICATION_RECOVERY_REQUIRED/,
+    );
+    expect(queryWorldChangeReceiptV1({
+      journal: reopened,
+      session: active,
+      query: parseWorldChangeReceiptQueryV1({
+        kind: "worldkit-world-change-receipt-query",
+        schemaVersion: 1,
+        id: "q.receipt.post-commit-restart",
+        authoringEditSessionId: SESSION_ID,
+        requestId: applyRequest.id,
+      }),
+      nowUnixMilliseconds: NOW,
+    })).toEqual({ status: "pending", state: "preparing-runtime" });
+    const lease = lookupPreparedCandidateV1(
+      leaseStore,
+      dryRun.receipt.preparedCandidateRef,
+      NOW,
+    );
+    expect(lease.status).toBe("found");
+    if (lease.status !== "found") throw new Error("expected retained candidate lease");
+    expect(lease.lease.pin?.requestId).toBe(applyRequest.id);
   });
 
   it("keeps a committed publish-runtime Receipt after the Session expires", async () => {

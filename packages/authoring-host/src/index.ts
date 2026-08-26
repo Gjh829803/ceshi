@@ -20,6 +20,7 @@ export {
   recoverWorldChangeRequestV1,
   seedAuthoringRevisionHeadV1,
   submitWorldChangeRequestV1,
+  validateWorldChangeJournalTransactionsV1,
 } from "./journal/index.js";
 export type {
   AuthoringEditSessionV1,

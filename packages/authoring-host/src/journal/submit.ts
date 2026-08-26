@@ -52,6 +52,7 @@ import {
 import type {
   DurableRequestRecordV1,
   PublishRuntimeReplacementFailureKindV1,
+  PublishRuntimeReplacementV1,
   SubmitWorldChangeRequestInputV1,
   SubmitWorldChangeRequestResultV1,
 } from "./types.js";
@@ -263,77 +264,99 @@ async function finishRuntimePublication(
   const cleanupOperationId = journalArtifactIdV1("cleanup", current.request.id);
   let commitDenial: WorldChangeDiagnosticV1 | undefined;
   let committedReceipt = current.receipt;
-  const published = await input.publishRuntimeReplacement({
-    worldConfiguration: {
-      executionPlan: found.lease.executionPlan,
-      executionPlanHash: found.lease.buildIdentity.executionPlanHash,
-      worldPackageRef: found.lease.worldPackageRef,
-      worldPackageBuildReceipt: found.lease.worldPackageBuildReceipt,
-      gameplayBootstrap: found.lease.gameplayBootstrap,
-    },
-    publication: {
-      requestId: current.request.id,
-      requestHash: current.requestHash,
-      fencingToken: recoveryFencingTokenV1(input.journal) ?? current.fencingToken,
-      runtimeExpectation,
-    },
-    persistDurableCommit: (identities) => {
-      const releasePublicationFence = acquireWorldPublicationFenceV1(
-        input.journal,
-        current.request.worldId,
-        recoveryFencingTokenV1(input.journal) ?? current.fencingToken,
-      );
-      try {
-        const authz = authorize(input, current);
-        if (!isNil(authz)) {
-          commitDenial = authz;
-          throw new Error("WORLD_CHANGE_COMMIT_DENIED");
-        }
-        const reserved = reserveRevisionRef(input, current);
-        current = reserved.record;
-        const receipt = assemblePublishRuntimeCommittedReceiptV1({
-          request: current.request,
-          requestHash: current.requestHash,
-          authoringEditPolicyHash: current.authoringEditPolicyHash,
-          changeSetHash: current.changeSetHash,
-          buildIdentity: current.buildIdentity!,
-          affectedIds: current.applied!.affectedIds,
-          operationResults: current.applied!.operationResults,
-          validationReports: current.validationReports!,
-          committedRevisionRef: reserved.revisionRef,
-          previousRuntimeIdentity: identities.previous,
-          currentRuntimeIdentity: identities.current,
-          cleanupOperationId,
-        });
-        const { pin: _pin, pendingRevisionRef: _pendingRevisionRef, ...rest } = current;
-        commitAuthoringRevisionV1(
+  let releasePublicationFence: (() => void) | undefined;
+  let publicationError: unknown;
+  let published: Awaited<ReturnType<PublishRuntimeReplacementV1>> | undefined;
+  try {
+    published = await input.publishRuntimeReplacement({
+      worldConfiguration: {
+        executionPlan: found.lease.executionPlan,
+        executionPlanHash: found.lease.buildIdentity.executionPlanHash,
+        worldPackageRef: found.lease.worldPackageRef,
+        worldPackageBuildReceipt: found.lease.worldPackageBuildReceipt,
+        gameplayBootstrap: found.lease.gameplayBootstrap,
+      },
+      publication: {
+        requestId: current.request.id,
+        requestHash: current.requestHash,
+        fencingToken: recoveryFencingTokenV1(input.journal) ?? current.fencingToken,
+        runtimeExpectation,
+      },
+      persistDurableCommit: (identities) => {
+        releasePublicationFence = acquireWorldPublicationFenceV1(
           input.journal,
-          {
-            worldId: current.request.worldId,
-            revisionRef: reserved.revisionRef,
-            authoringSpec: current.applied!.candidateAuthoringSpec,
-            authoringSpecHash: current.applied!.resultAuthoringSpecHash,
-          },
-          {
-            ...rest,
-            state: "committed",
-            receipt,
-            commitRecord: {
+          current.request.worldId,
+          recoveryFencingTokenV1(input.journal) ?? current.fencingToken,
+        );
+        try {
+          const authz = authorize(input, current);
+          if (!isNil(authz)) {
+            commitDenial = authz;
+            throw new Error("WORLD_CHANGE_COMMIT_DENIED");
+          }
+          const reserved = reserveRevisionRef(input, current);
+          current = reserved.record;
+          const receipt = assemblePublishRuntimeCommittedReceiptV1({
+            request: current.request,
+            requestHash: current.requestHash,
+            authoringEditPolicyHash: current.authoringEditPolicyHash,
+            changeSetHash: current.changeSetHash,
+            buildIdentity: current.buildIdentity!,
+            affectedIds: current.applied!.affectedIds,
+            operationResults: current.applied!.operationResults,
+            validationReports: current.validationReports!,
+            committedRevisionRef: reserved.revisionRef,
+            previousRuntimeIdentity: identities.previous,
+            currentRuntimeIdentity: identities.current,
+            cleanupOperationId,
+          });
+          const scheduledCleanup = parseWorldChangeCleanupReportV1({
+            kind: "worldkit-world-change-cleanup-report",
+            schemaVersion: 1,
+            id: journalArtifactIdV1("cr", current.request.id),
+            requestId: current.request.id,
+            cleanupOperationId,
+            previousWorldSessionId: identities.previous.worldSessionId,
+            status: "scheduled",
+            attemptCount: 0,
+            diagnostics: [],
+          });
+          const { pin: _pin, pendingRevisionRef: _pendingRevisionRef, ...rest } = current;
+          commitAuthoringRevisionV1(
+            input.journal,
+            {
+              worldId: current.request.worldId,
               revisionRef: reserved.revisionRef,
+              authoringSpec: current.applied!.candidateAuthoringSpec,
               authoringSpecHash: current.applied!.resultAuthoringSpecHash,
             },
-          },
-        );
-        committedReceipt = receipt;
-      } catch (error) {
-        releasePublicationFence();
-        throw error;
-      }
-      return releasePublicationFence;
-    },
-  });
+            {
+              ...rest,
+              state: "committed",
+              receipt,
+              commitRecord: {
+                revisionRef: reserved.revisionRef,
+                authoringSpecHash: current.applied!.resultAuthoringSpecHash,
+              },
+            },
+            scheduledCleanup,
+          );
+          committedReceipt = receipt;
+        } catch (error) {
+          releasePublicationFence();
+          throw error;
+        }
+        return releasePublicationFence;
+      },
+    });
+  } catch (error) {
+    publicationError = error;
+  }
+  if (published?.status === "published") {
+    releasePublicationFence?.();
+  }
   if (!isNil(committedReceipt)) {
-    if (published.status === "published") {
+    if (published?.status === "published") {
       putCleanupReportV1(
         input.journal,
         current.request.authoringEditSessionId,
@@ -350,7 +373,11 @@ async function finishRuntimePublication(
         }),
       );
     }
-    if (!isNil(current.preparedCandidateRef) && !isNil(current.pin)) {
+    if (
+      published?.status === "published" &&
+      !isNil(current.preparedCandidateRef) &&
+      !isNil(current.pin)
+    ) {
       releasePreparedCandidatePinV1({
         store: input.leaseStore,
         preparedCandidateRef: current.preparedCandidateRef,
@@ -363,6 +390,8 @@ async function finishRuntimePublication(
   if (!isNil(commitDenial)) {
     return rejectRecord(input, current, "authorization", [commitDenial]);
   }
+  if (!isNil(publicationError)) throw publicationError;
+  if (isNil(published)) throw new Error("WORLD_CHANGE_RUNTIME_PUBLICATION_FAILED");
   if (published.status === "rejected") {
     const mapped = publicationFailure(published.failureKind, published.message);
     return rejectRecord(input, current, mapped.failurePhase, [mapped.diagnostic]);

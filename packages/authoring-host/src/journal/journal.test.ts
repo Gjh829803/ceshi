@@ -38,7 +38,7 @@ import {
   seedAuthoringRevisionHeadV1,
   submitWorldChangeRequestV1,
 } from "../index.js";
-import { createFileBackedWorldChangeJournalV1 } from "../node.js";
+import { createFileBackedWorldChangeJournalV1 } from "../../../../scripts/lib/file-world-change-journal.js";
 import type {
   AuthoringEditSessionV1,
   DurableCrashAfterStateV1,

@@ -27,6 +27,7 @@ class WorldChangeJournal implements WorldChangeJournalV1 {
   public readonly revisions = new Map<string, AuthoringRevisionHeadV1>();
   public readonly cleanupReports = new Map<string, WorldChangeCleanupReportV1>();
   public readonly publicationFenceTokensByWorldId = new Map<string, string>();
+  public readonly publicationRecoveryRequestIdsByWorldId = new Map<string, string>();
   public revisionSequence = 0;
   public transactionSequence = 0;
   public lastTransactionHash: Sha256HashV1 = GENESIS_TRANSACTION_HASH;
@@ -39,6 +40,23 @@ class WorldChangeJournal implements WorldChangeJournalV1 {
       applyOperations(this, transaction.operations, true);
       this.transactionSequence = transaction.sequence;
       this.lastTransactionHash = transaction.transactionHash;
+    }
+    for (const record of this.records.values()) {
+      if (
+        record.state !== "committed" ||
+        record.receipt?.status !== "committed" ||
+        record.receipt.requestedOutcome !== "publish-runtime"
+      ) continue;
+      const cleanupReport = this.cleanupReports.get(cleanupJournalKeyV1(
+        record.request.authoringEditSessionId,
+        record.receipt.runtimeCleanup.cleanupOperationId,
+      ));
+      if (cleanupReport?.status === "scheduled") {
+        this.publicationRecoveryRequestIdsByWorldId.set(
+          record.request.worldId,
+          record.request.id,
+        );
+      }
     }
   }
 }
@@ -298,6 +316,11 @@ export function getAuthoringRevisionHeadV1(
   journal: WorldChangeJournalV1,
   worldId: string,
 ): AuthoringRevisionHeadV1 | undefined {
+  if (asJournal(journal).publicationRecoveryRequestIdsByWorldId.has(worldId)) {
+    throw new Error(
+      "WORLD_CHANGE_PUBLICATION_RECOVERY_REQUIRED: Runtime publication must recover before the Authoring revision is exposed.",
+    );
+  }
   if (isWorldPublicationFencedV1(journal, worldId)) {
     throw new Error(
       "WORLD_CHANGE_PUBLICATION_FENCE_ACTIVE: Authoring revision is hidden until Runtime handle swap.",
@@ -313,7 +336,10 @@ export function acquireWorldPublicationFenceV1(
   fencingToken: string,
 ): () => void {
   const internals = asJournal(journal);
-  if (internals.publicationFenceTokensByWorldId.has(worldId)) {
+  if (
+    internals.publicationFenceTokensByWorldId.has(worldId) ||
+    internals.publicationRecoveryRequestIdsByWorldId.has(worldId)
+  ) {
     throw new Error(
       "WORLD_CHANGE_PUBLICATION_CONFLICT: World publication fence is already held.",
     );
@@ -333,7 +359,9 @@ export function isWorldPublicationFencedV1(
   journal: WorldChangeJournalV1,
   worldId: string,
 ): boolean {
-  return asJournal(journal).publicationFenceTokensByWorldId.has(worldId);
+  const internals = asJournal(journal);
+  return internals.publicationFenceTokensByWorldId.has(worldId) ||
+    internals.publicationRecoveryRequestIdsByWorldId.has(worldId);
 }
 
 export function nextAuthoringRevisionRefV1(
@@ -424,9 +452,10 @@ export function commitAuthoringRevisionV1(
   journal: WorldChangeJournalV1,
   head: AuthoringRevisionHeadV1,
   record: DurableRequestRecordV1,
+  cleanupReport?: WorldChangeCleanupReportV1,
 ): DurableRequestRecordV1 {
   const committed = structuredClone(record);
-  commitTransaction(journal, [
+  const operations: WorldChangeJournalTransactionOperationV1[] = [
     { type: "revision-head-put", key: head.worldId, head },
     {
       type: "request-record-put",
@@ -436,7 +465,18 @@ export function commitAuthoringRevisionV1(
       ),
       record: committed,
     },
-  ]);
+  ];
+  if (!isNil(cleanupReport)) {
+    operations.push({
+      type: "cleanup-report-put",
+      key: cleanupJournalKeyV1(
+        committed.request.authoringEditSessionId,
+        cleanupReport.cleanupOperationId,
+      ),
+      report: structuredClone(cleanupReport),
+    });
+  }
+  commitTransaction(journal, operations);
   return committed;
 }
 

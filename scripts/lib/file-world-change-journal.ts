@@ -10,18 +10,15 @@ import {
 } from "node:fs";
 import path from "node:path";
 
-import { stringifyCanonicalJson } from "@whitebox-world/protocol";
-import { isEmpty, isNil } from "lodash-es";
-
 import {
   createWorldChangeJournalV1,
   validateWorldChangeJournalTransactionsV1,
-} from "./journal/store.js";
-import type {
-  WorldChangeJournalTransactionV1,
-  WorldChangeJournalV1,
-  WorldChangeJournalWalV1,
-} from "./journal/types.js";
+  type WorldChangeJournalTransactionV1,
+  type WorldChangeJournalV1,
+  type WorldChangeJournalWalV1,
+} from "@whitebox-world/authoring-host";
+import { stringifyCanonicalJson } from "@whitebox-world/protocol";
+import { isEmpty, isNil } from "lodash-es";
 
 class FileWorldChangeJournalWalV1 implements WorldChangeJournalWalV1 {
   public readonly brand = "WorldChangeJournalWalV1" as const;
