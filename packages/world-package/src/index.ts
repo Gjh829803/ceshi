@@ -23,6 +23,10 @@ export {
   migrateWorldPackageBuildReceiptV1ToV2,
   worldPackageSignatureEnvelopeBytesV1,
 } from "./v2-contract.js";
+export {
+  assembleWorldPackageDirectoryV2,
+  verifyWorldPackageDirectoryV2,
+} from "./v2-directory.js";
 export type {
   CreateWorldPackageBuildReceiptInputV1,
   ResolvedWorldPackageResourceArtifactV1,
@@ -47,3 +51,9 @@ export type {
   WorldPackageSignatureEnvelopeV1,
   WorldPackageV1ToV2MigrationContextV1,
 } from "./v2-types.js";
+export type {
+  AssembleWorldPackageDirectoryV2Input,
+  VerifiedWorldPackageDirectoryV2,
+  WorldPackageDirectoryFileV2,
+  WorldPackageDirectoryV2,
+} from "./v2-directory.js";
