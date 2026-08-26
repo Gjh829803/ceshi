@@ -177,6 +177,7 @@ UE 模板中第三人称常使用 Control Rotation 决定移动方向；本项�
 | CAM-06 | 修复 mounted ViewTarget 的 Camera Context 投影，并覆盖 Mount/Dismount 与多 Rider 歧义 | depends_on CAM-05 | `runtime-contracts` ViewTarget Sample、Babylon Camera Context 解析与 mounted 集成测试 | 输入：Possession Target + committed `mountedOn`；输出：Rider Camera Context + 不变的物理 ViewTarget | sequential |
 | CAM-07 | 用强类型 View Preference clean break 替换旧 Profile 请求表面，并接通 Browser V5、Runtime 与 Director Admission | depends_on CAM-06 | `runtime-contracts` Browser V5、Playground Adapter/UI、Babylon Camera Component/Director 与回归 | 输入：`auto` / `first-person` / `camera-rig-profile`；输出：命令期原子拒绝、Context fallback/recovery、公开 Selection Decision | sequential |
 | CAM-08 | 在 View 状态提交前校验 Rig、全部命中 Modifier 与 Preview 的最终参数组合 | depends_on CAM-07 | Babylon Camera Component/Director 与 Preview 集成回归 | 输入：Selection Decision + Rig + ordered Modifiers + Preview；输出：合法 resolved parameters 或无 Camera 状态突变的稳定拒绝 | sequential |
+| CAM-09 | 冻结 Camera View Command/Event 关闭协议，再接入 WorldSession 唯一排序、Receipt 与 staged View commit | depends_on CAM-08 | `runtime-contracts` Camera View 协议、`runtime-host` Session/Journal、Babylon View transaction 与回归 | 输入：Session-bound Preference Command + committed Selection；输出：Receipt、View revision 和统一 sequence 的 Selection/Unbound Event | main-agent-only |
 
 所有任务在当前已隔离的 `feat/gameplay-camera-optimization` worktree 内执行；不并行编辑 `CameraDirector` 或 `main.ts`，以避免接口和行为竞争。
 
@@ -228,3 +229,14 @@ CAM-08 在 `CameraDirector` 写入 Active Profile、Modifier、Transition、Foll
 Preview Admission 还会在写入预览状态前逐一验证当前 Context 中全部可达 Modifier，避免一个
 只对基础 Rig 合法的调参在 Modifier 激活后制造非法 View。该项只关闭 GCC-4 的最终参数门槛；
 统一 WorldSession Camera Selection Event 与完整 Golden Fixture 仍未完成。
+
+## 16. Camera View Command/Event 关闭协议（2026-08-26）
+
+CAM-09A 已在 `runtime-contracts` 冻结 `view.camera-preference.set/reset`、
+`camera.selection.changed` 与 `camera.target.unbound` 的 provider-neutral 关闭协议，并提供严格
+Parser、Canonical JSON/Bytes、Command Hash 与 Event ID 派生。Camera Modifier 与 Context Rule
+列表保留 Selection Decision 的确定顺序，同时拒绝重复项、未知字段、访问器和旧命令 alias。
+
+该步骤只完成公共值对象与协议准入，不代表 RuntimeHost 已经发布 Camera Event。CAM-09B 仍需
+定义 View Command Receipt，把 View transaction 接入 WorldSession 的唯一 mutation queue 与统一
+Event Sequence，并保证失败时不推进 View revision、不发布 Event、也不修改 CameraDirector。

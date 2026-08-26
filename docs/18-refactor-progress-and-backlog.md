@@ -601,6 +601,11 @@ Incremental Hot Apply，以及哪些 Runtime 状态被保留、重置或替换�
   的最终参数并再次执行 Camera Domain 不变量校验；非法组合稳定拒绝且不修改上一 Camera 状态，
   Preview 也会针对当前 Context 全部可达 Modifier 做写入前组合准入。该子门槛完成不代表
   GCC-4 的 Selection Event、Golden Fixture 或最终生产验收已经闭环。
+- [x] GCC-3A：`runtime-contracts` 已冻结唯一 `view.camera-preference.set/reset` Command 与
+  `camera.selection.changed` / `camera.target.unbound` Event 关闭协议，包含 Canonical
+  Command Hash/Bytes、Event ID、严格字段准入和顺序列表校验。RuntimeHost Receipt、统一
+  Event Sequence 预留、staged View commit 与 Browser/CLI consumer cutover 仍属于 GCC-3B，
+  因此当前不能宣称 Camera Selection Event 已经在运行时发布。
 - [ ] GCC-4/GCC-5：CameraDirector 消费纯 Selection Decision；Mount/Equipment/Flight 事务
   只提交 Camera 输入并与 Gameplay 一起原子回滚。
 - [ ] GCC-6/GCC-7：交付两个 Kit、Registry Lock、Browser/CLI/Take 与两个 Golden Fixture，
