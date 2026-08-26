@@ -2,6 +2,9 @@ import Ajv2020, { type ErrorObject } from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
 
 import subjectDefinitionV1Schema from "./subject-definition-v1.schema.json";
+import { isEmpty } from "lodash-es";
+
+import { FIRST_BATCH_ALLOWED_OVERRIDE_PATHS_V1 } from "./types";
 import type {
   AuthoringDiagnostic,
   AuthoringResult,
@@ -95,14 +98,55 @@ function diagnosticFor(error: ErrorObject): AuthoringDiagnostic {
   };
 }
 
+function allowedOverridePathsDiagnostics(
+  paths: readonly string[],
+  instancePath: string,
+): AuthoringDiagnostic[] {
+  const diagnostics: AuthoringDiagnostic[] = [];
+  let previous: string | undefined;
+  paths.forEach((path, index) => {
+    if (
+      previous !== undefined &&
+      previous.localeCompare(path) >= 0
+    ) {
+      diagnostics.push({
+        severity: "error",
+        code: "AUTHORING_SCHEMA_INVALID",
+        instancePath: `${instancePath}/${index}`,
+        message: "allowedOverridePaths must be lexicographically sorted.",
+      });
+    }
+    previous = path;
+    if (
+      !FIRST_BATCH_ALLOWED_OVERRIDE_PATHS_V1.some((allowedPath) => allowedPath === path)
+    ) {
+      diagnostics.push({
+        severity: "error",
+        code: "AUTHORING_SCHEMA_INVALID",
+        instancePath: `${instancePath}/${index}`,
+        message:
+          `allowedOverridePaths entry '${path}' is outside the first-batch ceiling.`,
+      });
+    }
+  });
+  return diagnostics;
+}
+
 export function validatePackageSubjectDefinition(
   value: unknown,
 ): AuthoringResult<PackageSubjectDefinitionV1> {
-  if (validateSubjectDefinitionV1(value)) {
-    return { ok: true, value: value as PackageSubjectDefinitionV1, diagnostics: [] };
+  if (!validateSubjectDefinitionV1(value)) {
+    return {
+      ok: false,
+      diagnostics: (validateSubjectDefinitionV1.errors ?? []).map(diagnosticFor),
+    };
   }
-  return {
-    ok: false,
-    diagnostics: (validateSubjectDefinitionV1.errors ?? []).map(diagnosticFor),
-  };
+  const definition = value as PackageSubjectDefinitionV1;
+  const diagnostics = allowedOverridePathsDiagnostics(
+    definition.allowedOverridePaths,
+    "/allowedOverridePaths",
+  );
+  return isEmpty(diagnostics)
+    ? { ok: true, value: definition, diagnostics: [] }
+    : { ok: false, diagnostics };
 }

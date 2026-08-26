@@ -60,6 +60,8 @@ export const FIRST_SLICE_ALLOWED_OVERRIDE_PATHS = [
   "profiles.motion.defaultMotionProfileRef",
 ] as const;
 
+const OVERRIDE_PATH_PATTERN = /^[a-z][A-Za-z0-9]*(?:\.[a-z][A-Za-z0-9]*)*$/;
+
 export function assertAllowedOverridePath(path: string): void {
   if (
     !FIRST_SLICE_ALLOWED_OVERRIDE_PATHS.some(
@@ -67,6 +69,31 @@ export function assertAllowedOverridePath(path: string): void {
     )
   ) {
     throw new Error(`SUBJECT_OVERRIDE_FORBIDDEN: '${path}'.`);
+  }
+}
+
+function validateAllowedOverridePaths(
+  resourceRef: string,
+  paths: unknown,
+): asserts paths is readonly string[] {
+  if (!Array.isArray(paths)) {
+    throw new Error(`SUBJECT_OVERRIDE_PATHS_INVALID: '${resourceRef}'.`);
+  }
+  const seen = new Set<string>();
+  let previous: string | undefined;
+  for (const path of paths) {
+    if (typeof path !== "string" || !OVERRIDE_PATH_PATTERN.test(path)) {
+      throw new Error(`SUBJECT_OVERRIDE_PATHS_INVALID: '${resourceRef}'.`);
+    }
+    if (seen.has(path)) {
+      throw new Error(`SUBJECT_OVERRIDE_PATHS_INVALID: '${resourceRef}'.`);
+    }
+    seen.add(path);
+    if (!isNil(previous) && previous.localeCompare(path) >= 0) {
+      throw new Error(`SUBJECT_OVERRIDE_PATHS_INVALID: '${resourceRef}'.`);
+    }
+    previous = path;
+    assertAllowedOverridePath(path);
   }
 }
 
@@ -322,6 +349,15 @@ function canonicalizeNewResourceCollections(
           semanticTags: sortedStrings(input.aiMetadata.semanticTags),
         },
       };
+    case "subject-definition":
+      return {
+        ...input,
+        allowedOverridePaths: sortedStrings(input.allowedOverridePaths),
+        aiMetadata: {
+          ...input.aiMetadata,
+          semanticTags: sortedStrings(input.aiMetadata.semanticTags),
+        },
+      };
     default:
       return {
         ...input,
@@ -567,6 +603,7 @@ function validatePhysicsBodyProfile(source: PhysicsBodyProfileManifestInputV1): 
 }
 
 function validateSubjectDefinitionV3(source: RegistrySubjectDefinitionInputV3): void {
+  validateAllowedOverridePaths(source.resourceRef, source.allowedOverridePaths);
   const controlFeelProfileRef = source.profiles.controlFeelProfileRef;
   if (isNil(controlFeelProfileRef) || controlFeelProfileRef === "") {
     throw new Error(

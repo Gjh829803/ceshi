@@ -1,5 +1,6 @@
 import type {
   AuthoringSpecV4,
+  DefinitionResourceRefOverrideV1,
   PackageSubjectDefinitionV1,
   PlacementConstraintSpecV1,
   PrimitivePrototypeSpecV4,
@@ -11,6 +12,9 @@ import type {
   TraversalAreaSpecV1,
   WorldNodeSpecV4,
 } from "@whitebox-world/authoring";
+
+export { FIRST_BATCH_ALLOWED_OVERRIDE_PATHS_V1 } from "@whitebox-world/authoring";
+export type { DefinitionResourceRefOverrideV1 };
 
 import type { Sha256HashV1 } from "./parse-kernel.js";
 
@@ -199,12 +203,6 @@ export const RUNTIME_STATE_EFFECT_REASON_CODES_V1 = [
 export type RuntimeStateEffectReasonCodeV1 =
   (typeof RUNTIME_STATE_EFFECT_REASON_CODES_V1)[number];
 
-export const FIRST_BATCH_ALLOWED_OVERRIDE_PATHS_V1 = [
-  "profiles.controlFeelProfileRef",
-  "profiles.controlProfileRef",
-  "profiles.motion.defaultMotionProfileRef",
-] as const;
-
 export interface AiSchemaProjectionProfileV1 {
   readonly kind: "ai-schema-projection-profile";
   readonly schemaVersion: 1;
@@ -316,13 +314,6 @@ export interface RegistrySearchReceiptV1 {
   readonly results: readonly RegistrySearchResultV1[];
   readonly nextAfterResourceRef?: string;
   readonly registrySearchResultHash: Sha256HashV1;
-}
-
-export interface DefinitionResourceRefOverrideV1 {
-  readonly id: string;
-  readonly kind: "resource-ref";
-  readonly path: string;
-  readonly resourceRef: string;
 }
 
 export interface WorldChangeProvenanceV1 {

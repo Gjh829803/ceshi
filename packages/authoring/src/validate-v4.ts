@@ -223,6 +223,35 @@ function duplicateIdDiagnostics(spec: AuthoringSpecV4): AuthoringDiagnostic[] {
       seen.add(row.id);
     });
   }
+  spec.nodes.forEach((node, nodeIndex) => {
+    const overrides = node.kind === "subject" ? node.overrides : undefined;
+    if (isNil(overrides) || isEmpty(overrides)) return;
+    const seenIds = new Set<string>();
+    const seenPaths = new Set<string>();
+    overrides.forEach((override, overrideIndex) => {
+      const instancePath = `/nodes/${nodeIndex}/overrides/${overrideIndex}`;
+      if (seenIds.has(override.id)) {
+        diagnostics.push({
+          severity: "error",
+          code: "AUTHORING_DUPLICATE_ID",
+          instancePath: `${instancePath}/id`,
+          message: `Duplicate id '${override.id}' is not allowed in this collection.`,
+          details: { id: override.id },
+        });
+      }
+      seenIds.add(override.id);
+      if (seenPaths.has(override.path)) {
+        diagnostics.push({
+          severity: "error",
+          code: "AUTHORING_DUPLICATE_BINDING",
+          instancePath: `${instancePath}/path`,
+          message: `Duplicate override path '${override.path}' is not allowed on one Subject.`,
+          details: { id: override.path },
+        });
+      }
+      seenPaths.add(override.path);
+    });
+  });
   spec.resources.prototypes.forEach((prototype, prototypeIndex) => {
     const seen = new Set<string>();
     prototype.traversalSurfaceBindings?.forEach((binding, bindingIndex) => {

@@ -46,3 +46,14 @@ export type {
   SearchRegistryInputV1,
   SearchRegistryResultV1,
 } from "./schema-projection/index.js";
+export {
+  effectiveAllowedOverridePathsV1,
+  FIRST_BATCH_OVERRIDE_RESOURCE_KIND_BY_PATH_V1,
+  validateDefinitionResourceRefOverrideV1,
+} from "./override-policy/index.js";
+export type {
+  DefinitionOverrideLockEntryV1,
+  DefinitionOverrideOwnerV1,
+  ValidateDefinitionResourceRefOverrideInputV1,
+  ValidateDefinitionResourceRefOverrideResultV1,
+} from "./override-policy/index.js";

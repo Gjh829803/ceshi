@@ -320,6 +320,7 @@ export interface RegistrySubjectDefinitionInputV3 {
   relationshipCapabilityRefs: readonly string[];
   actionOrPoseSetRef: string;
   renderBindingProfileRef: string;
+  allowedOverridePaths: readonly string[];
   aiMetadata: SubjectResourceAiMetadataV1;
 }
 

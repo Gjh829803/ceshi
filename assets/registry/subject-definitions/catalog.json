@@ -198,6 +198,11 @@
     ],
     "actionOrPoseSetRef": "worldkit://pose-set/static.whitebox@1",
     "renderBindingProfileRef": "worldkit://render-binding/subject.standard@1",
+    "allowedOverridePaths": [
+      "profiles.controlFeelProfileRef",
+      "profiles.controlProfileRef",
+      "profiles.motion.defaultMotionProfileRef"
+    ],
     "aiMetadata": {
       "displayName": "Quadruped Forward Steer",
       "description": "Whitebox quadruped using the reusable K02 forward-steer kernel.",
@@ -407,6 +412,11 @@
     ],
     "actionOrPoseSetRef": "worldkit://pose-set/static.whitebox@1",
     "renderBindingProfileRef": "worldkit://render-binding/subject.standard@1",
+    "allowedOverridePaths": [
+      "profiles.controlFeelProfileRef",
+      "profiles.controlProfileRef",
+      "profiles.motion.defaultMotionProfileRef"
+    ],
     "aiMetadata": {
       "displayName": "Quadruped Forward Steer Official v2",
       "description": "Reviewed quadruped public default with versioned P1.5 Control Feel and Camera Profiles.",
@@ -608,6 +618,11 @@
     ],
     "actionOrPoseSetRef": "worldkit://pose-set/static.whitebox@1",
     "renderBindingProfileRef": "worldkit://render-binding/subject.standard@1",
+    "allowedOverridePaths": [
+      "profiles.controlFeelProfileRef",
+      "profiles.controlProfileRef",
+      "profiles.motion.defaultMotionProfileRef"
+    ],
     "aiMetadata": {
       "displayName": "Unpowered Paraglider",
       "description": "Whitebox pilot and canopy package using K08 unpowered glide and R03 tether facts.",
@@ -792,6 +807,11 @@
     ],
     "actionOrPoseSetRef": "worldkit://pose-set/static.whitebox@1",
     "renderBindingProfileRef": "worldkit://render-binding/subject.standard@1",
+    "allowedOverridePaths": [
+      "profiles.controlFeelProfileRef",
+      "profiles.controlProfileRef",
+      "profiles.motion.defaultMotionProfileRef"
+    ],
     "aiMetadata": {
       "displayName": "Ice Skimmer",
       "description": "Whitebox surface craft using K04 slope, friction and inertia motion.",
@@ -976,6 +996,11 @@
     ],
     "actionOrPoseSetRef": "worldkit://pose-set/static.whitebox@1",
     "renderBindingProfileRef": "worldkit://render-binding/subject.standard@1",
+    "allowedOverridePaths": [
+      "profiles.controlFeelProfileRef",
+      "profiles.controlProfileRef",
+      "profiles.motion.defaultMotionProfileRef"
+    ],
     "aiMetadata": {
       "displayName": "Four-wheel Arcade",
       "description": "Whitebox four-wheel package using simplified deterministic K03 motion.",
@@ -1153,6 +1178,11 @@
     ],
     "actionOrPoseSetRef": "worldkit://pose-set/static.whitebox@1",
     "renderBindingProfileRef": "worldkit://render-binding/subject.standard@1",
+    "allowedOverridePaths": [
+      "profiles.controlFeelProfileRef",
+      "profiles.controlProfileRef",
+      "profiles.motion.defaultMotionProfileRef"
+    ],
     "aiMetadata": {
       "displayName": "Kayak Surface Package",
       "description": "Whitebox kayak and paddler package using K06 water-surface motion.",
