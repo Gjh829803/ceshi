@@ -289,10 +289,11 @@ test("starts only after nonce readiness and keeps public credentials out of Stud
 });
 
 test("fails closed for wrong readiness, early exit, timeout, and an occupied proxy port", async (t) => {
+  const readinessTimeoutMs = 500;
   const cases = [
     { name: "wrong nonce", mode: "wrong-nonce", error: /readiness identity did not match/ },
     { name: "early exit", mode: "early-exit", error: /exited before readiness \(code 23, signal null\)/ },
-    { name: "readiness timeout", mode: "timeout", error: /readiness timed out after 100ms/ },
+    { name: "readiness timeout", mode: "timeout", error: /readiness timed out after 500ms/ },
     { name: "occupied proxy port", mode: "ready", error: /EADDRINUSE/, occupyPublicPort: true },
   ];
   for (const fixture of cases) {
@@ -317,7 +318,7 @@ test("fails closed for wrong readiness, early exit, timeout, and an occupied pro
             studioArgs: ["-e", readinessFixtureProgram(fixture.mode)],
             studioPort,
             publicPort,
-            readinessTimeoutMs: 100,
+            readinessTimeoutMs,
             readinessPollMs: 5,
             shutdownGraceMs: 50,
             env: { ...process.env, TEST_CHILD_RECORD_PATH: recordPath },

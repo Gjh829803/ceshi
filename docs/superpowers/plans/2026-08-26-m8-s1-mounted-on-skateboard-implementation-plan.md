@@ -13,8 +13,9 @@
 **Progress (2026-08-26):** The core paths in Tasks 1–7 are implemented on `main`; Task 8's canonical
 Track writer/validator and primary tamper checks are implemented. Remaining before final M8-S1
 completion is the listed Runtime adversarial hardening, retained-support `supportedBy` evidence,
-formal four-phase mounted Capture verifier, and Task 9's full same-tree gates/independent completion
-review. `CAM-MOUNT-1` is recorded in the central Backlog and remains owned by P2.4 Camera work,
+formal four-phase mounted Capture verifier, and Task 9's final independent completion review. The
+current integration checkpoint's full same-tree base gates pass; subsequent hardening/Capture edits
+must rerun the evidence they invalidate. `CAM-MOUNT-1` is recorded in the central Backlog and remains owned by P2.4 Camera work,
 outside this slice.
 
 ## Global constraints
@@ -215,7 +216,7 @@ outside this slice.
 - Modify: `README.md` only if the public capability index needs an M8 entry
 
 - [x] Run focused tests after the final implementation edit.
-- [ ] Run once on the same tree:
+- [x] Run once on the same current checkpoint tree:
 
   ```bash
   pnpm typecheck
@@ -231,8 +232,17 @@ outside this slice.
   pnpm verify:outdoor-gameplay
   ```
 
+  Evidence: 190 contract files / 2,050 tests, 21 resource-heavy files / 401 tests, Studio 73/73,
+  independent Node 23/23 + Python 17/17 + Site 1/1, typecheck/build and all listed verifiers pass.
+  The Site lane required `npm ci` inside `sites/world-sdk-blueprint` from its committed lockfile.
+
 - [ ] Run the new mounted-skateboard Browser/Capture verifier. Record command, test count, artifact paths and warnings.
 - [ ] Inspect the real rendered surface for Rider/board separation, slot alignment, Mount movement, Dismount placement and Reset. Record manual input separately from automated evidence.
-- [ ] Apply `docs/reviews/full-dimension-review-protocol.md` design/change dimensions and `docs/reviews/runtime-deep-review-checklist.md` authority, adversarial, lifecycle and evidence checks.
-- [ ] Run a read-only project-local Cursor completion review when authenticated; reproduce every candidate finding before disposition.
+- [x] Apply `docs/reviews/full-dimension-review-protocol.md` change dimensions and
+  `docs/reviews/runtime-deep-review-checklist.md` authority, adversarial, lifecycle and evidence checks
+  to this integration checkpoint. Repeat the final completion review after the open Tasks 6/8 work.
+- [ ] Obtain a completed read-only project-local Cursor completion verdict and reproduce every
+  candidate finding before disposition. Two authenticated 2026-08-26 attempts did not yield a report:
+  Ask mode rejected read-only Git commands, then the no-inspection retry remained silent for more than
+  ten minutes. This is an attempted tool review, not a Cursor GO.
 - [ ] Update the backlog only after all gates pass. Do not mark seat/tether, wheel physics, tricks, full mounted Camera, dynamic Route or hosted Builder support complete.

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { normalizeAuthoringSpecV4 } from "@whitebox-world/authoring";
-import { createValidAuthoringSpecV4 } from "../../../../packages/authoring/src/test-fixture";
+import { createValidAuthoringSpecV4 } from "@whitebox-world/authoring/testing";
 import {
   CORE_CONTROL_FEATURE_REF,
   CORE_SEMANTIC_ACTION_FEATURE_REF,

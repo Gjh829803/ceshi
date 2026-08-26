@@ -132,7 +132,10 @@ Capability 和 Profile 定义主体，再通过多个 `subject` 节点生成独�
 
 新增的 M8-S1 窄切片已经交付严格 `mountedOn` Authoring/Compiler 合同、Mount/Dismount
 原子事务、`MountStand` 投影、控制切换、Rider locomotion 暂停、安全下车、Reset 与
-Action/Event/Receipt Track 交叉校验。它是人—滑板 stand-ground 行为切片，不等于完整坐骑。
+Action/Event/Receipt Track 交叉校验；当前树的 typecheck、完整测试、build、Studio、独立测试
+与 Canonical/Placement/Rigged/G Bot/Outdoor verifier 已通过。它仍需 Runtime 对抗 hardening、
+retained-support `supportedBy`、正式四阶段 Capture verifier 和最终审查，因此是人—滑板
+stand-ground 行为切片，不等于完整坐骑或已关闭的 M8-S1。
 
 未完成：更多产品 GLB 资产、Compound Collider、完整 Semantic Action Presentation、
 seat/tether、装备、拖拽、车辆动力学与飞行。它们分别属于 S1b 后续、S2/S3 及之后阶段。

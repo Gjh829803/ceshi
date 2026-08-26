@@ -4,7 +4,8 @@
 > Gameplay/RuntimeHost atomic transaction, Babylon stand projection/safe Dismount, Playground fixture
 > and Control Capture Track writer/validator are implemented. Final completion remains open for the
 > adversarial Runtime cases, retained-support `supportedBy` evidence, formal four-stage mounted Capture
-> verifier, full same-tree gates and completion review. Camera issue `CAM-MOUNT-1` is explicitly owned
+> verifier and completion review. The current checkpoint's full same-tree base gates pass; later
+> hardening/Capture edits must rerun their invalidated evidence. Camera issue `CAM-MOUNT-1` is explicitly owned
 > by P2.4 and is not repaired inside this design slice.
 
 **Status:** implementation authority

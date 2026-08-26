@@ -81,6 +81,7 @@ When a bound visual assembly is needed but ordinary ground locomotion is explici
     "animationSetRef": "worldkit://animation-set/humanoid.ground.g-bot@2"
   },
   "sockets": [],
+  "mountSlots": [],
   "colliderPolicy": {
     "kind": "profile",
     "colliderProfileRef": "worldkit://collider-profile/humanoid.g-bot-capsule@1"

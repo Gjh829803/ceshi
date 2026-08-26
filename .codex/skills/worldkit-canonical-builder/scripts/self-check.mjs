@@ -2242,6 +2242,7 @@ const EXECUTION_PLAN_V5_FIELDS = [
   "colliderProfiles",
   "initialControlledEntityId",
   "subjects",
+  "initialRelationships",
   "camera",
   "resourceUsage",
   "layout",
@@ -2799,30 +2800,49 @@ function validateCapabilityAssembly(input) {
   requireFinite(air.gravityRatio);
   requireFinite(air.linearDragPerSecond);
   dataArray(value.relationshipProfiles).forEach((profile) => {
-    const row = exactDataRecord(profile, [
+    const source = dataRecord(profile);
+    const relationshipType = requireLiteral(source.relationshipType, [
+      "mountedOn",
+      "seat",
+      "tether"
+    ]);
+    if (relationshipType === "mountedOn") {
+      const row2 = exactDataRecord(profile, [
+        "resourceRef",
+        "relationshipType",
+        "requiredRiderSocketIds",
+        "requiredMountSocketIds",
+        "controlTransferMode",
+        "cameraTargetRole"
+      ], ["maximumMountDistanceMeters"]);
+      requireString(row2.resourceRef);
+      requireStringArray(row2.requiredRiderSocketIds);
+      requireStringArray(row2.requiredMountSocketIds);
+      requireLiteral(row2.controlTransferMode, ["keep-rider", "to-mount", "none"]);
+      requireLiteral(row2.cameraTargetRole, ["controlled-entity", "rider", "mount"]);
+      if (Object.hasOwn(row2, "maximumMountDistanceMeters")) {
+        requireFinite(row2.maximumMountDistanceMeters);
+      }
+      return;
+    }
+    const row = relationshipType === "seat" ? exactDataRecord(profile, [
       "resourceRef",
       "relationshipType",
-      "requiredSourceSocketIds",
-      "requiredTargetSocketIds",
-      "controlTransferPolicy",
-      "cameraTargetPolicy"
-    ], ["maximumDistanceMeters"]);
+      "requiredOccupantSocketIds",
+      "requiredSeatSocketIds"
+    ]) : exactDataRecord(profile, [
+      "resourceRef",
+      "relationshipType",
+      "requiredTetheredSocketIds",
+      "requiredTetherAnchorSocketIds"
+    ]);
     requireString(row.resourceRef);
-    requireLiteral(row.relationshipType, ["seat", "tether"]);
-    requireStringArray(row.requiredSourceSocketIds);
-    requireStringArray(row.requiredTargetSocketIds);
-    requireLiteral(row.controlTransferPolicy, [
-      "keep-source",
-      "transfer-to-target",
-      "none"
-    ]);
-    requireLiteral(row.cameraTargetPolicy, [
-      "controlled-entity",
-      "source-entity",
-      "target-entity"
-    ]);
-    if (Object.hasOwn(row, "maximumDistanceMeters")) {
-      requireFinite(row.maximumDistanceMeters);
+    if (relationshipType === "seat") {
+      requireStringArray(row.requiredOccupantSocketIds);
+      requireStringArray(row.requiredSeatSocketIds);
+    } else {
+      requireStringArray(row.requiredTetheredSocketIds);
+      requireStringArray(row.requiredTetherAnchorSocketIds);
     }
   });
   requireString(value.harnessProfileRef);
@@ -2844,6 +2864,7 @@ function validateSubject(input) {
     "visualParts",
     "visualBinding",
     "sockets",
+    "mountSlots",
     "collider",
     "locomotion",
     "locomotionCapabilityRef",
@@ -2918,11 +2939,14 @@ function validateSubject(input) {
     requireString(rigged.rigProfileRef);
     requireString(rigged.animationSetRef);
   }
+  const socketIds = /* @__PURE__ */ new Set();
   dataArray(value.sockets).forEach((socket) => {
     const row = dataRecord(socket);
     const kind = requireLiteral(row.kind, ["local", "bone"]);
     const socketValue = kind === "local" ? exactDataRecord(row, ["id", "kind", "localTransform", "semanticTags"]) : exactDataRecord(row, ["id", "kind", "boneId", "offsetTransform", "semanticTags"]);
-    requireString(socketValue.id);
+    const socketId = requireString(socketValue.id);
+    if (socketIds.has(socketId)) return invalidExecutionPlanV5();
+    socketIds.add(socketId);
     requireStringArray(socketValue.semanticTags);
     if (kind === "local") {
       const transform = exactDataRecord(socketValue.localTransform, [
@@ -2940,6 +2964,32 @@ function validateSubject(input) {
       requireTuple(transform.positionMetersXYZ, 3);
       requireTuple(transform.rotationEulerRadiansXYZ, 3);
     }
+  });
+  const mountSlotIds = /* @__PURE__ */ new Set();
+  dataArray(value.mountSlots).forEach((slot) => {
+    const row = exactDataRecord(slot, [
+      "id",
+      "kind",
+      "mode",
+      "mountSocketId",
+      "riderSubjectOriginOffsetMetersXYZ",
+      "dismountCandidateOffsetsMetersXYZ"
+    ]);
+    const mountSlotId = requireString(row.id);
+    if (mountSlotIds.has(mountSlotId)) return invalidExecutionPlanV5();
+    mountSlotIds.add(mountSlotId);
+    requireLiteral(row.kind, ["mount-slot"]);
+    requireLiteral(row.mode, ["stand"]);
+    const mountSocketId = requireString(row.mountSocketId);
+    if (!socketIds.has(mountSocketId)) return invalidExecutionPlanV5();
+    requireTuple(row.riderSubjectOriginOffsetMetersXYZ, 3);
+    const dismountCandidateOffsets = dataArray(
+      row.dismountCandidateOffsetsMetersXYZ
+    );
+    if (dismountCandidateOffsets.length < 1 || dismountCandidateOffsets.length > 8) {
+      return invalidExecutionPlanV5();
+    }
+    dismountCandidateOffsets.forEach((offset) => requireTuple(offset, 3));
   });
   const collider = exactDataRecord(value.collider, [
     "kind",
@@ -3264,6 +3314,67 @@ function validateStaticCollider(input) {
   validatePrimitive(value.shape, ["box", "sphere", "cylinder"]);
   requireHash(value.colliderHash);
 }
+function validateInitialRelationships(input, subjectsByEntityId, initialControlledEntityId) {
+  const relationshipIds = /* @__PURE__ */ new Set();
+  const occupiedRiderEntityIds = /* @__PURE__ */ new Set();
+  const occupiedMountSlotKeys = /* @__PURE__ */ new Set();
+  let previousRelationshipId;
+  dataArray(input).forEach((relationship) => {
+    const row = exactDataRecord(relationship, [
+      "id",
+      "type",
+      "schemaVersion",
+      "riderEntityId",
+      "mountEntityId",
+      "mountSlotId",
+      "establishedSimulationTick"
+    ]);
+    const id2 = requireString(row.id);
+    if (relationshipIds.has(id2) || previousRelationshipId !== void 0 && id2.localeCompare(previousRelationshipId) <= 0) return invalidExecutionPlanV5();
+    relationshipIds.add(id2);
+    previousRelationshipId = id2;
+    requireLiteral(row.type, ["mountedOn"]);
+    requireLiteral(row.schemaVersion, [1]);
+    const riderEntityId = requireString(row.riderEntityId);
+    const mountEntityId = requireString(row.mountEntityId);
+    const mountSlotId = requireString(row.mountSlotId);
+    if (riderEntityId === mountEntityId) return invalidExecutionPlanV5();
+    if (requireSafeNonNegativeInteger(row.establishedSimulationTick) !== 0) {
+      return invalidExecutionPlanV5();
+    }
+    const rider = subjectsByEntityId.get(riderEntityId);
+    const mount = subjectsByEntityId.get(mountEntityId);
+    if (rider === void 0 || mount === void 0) return invalidExecutionPlanV5();
+    if (occupiedRiderEntityIds.has(riderEntityId)) return invalidExecutionPlanV5();
+    occupiedRiderEntityIds.add(riderEntityId);
+    const mountSlotKey = `${mountEntityId}\0${mountSlotId}`;
+    if (occupiedMountSlotKeys.has(mountSlotKey)) return invalidExecutionPlanV5();
+    occupiedMountSlotKeys.add(mountSlotKey);
+    if (initialControlledEntityId !== mountEntityId) return invalidExecutionPlanV5();
+    const mountSlot = dataArray(mount.mountSlots).map(dataRecord).find((slot) => slot.id === mountSlotId);
+    if (mountSlot === void 0) return invalidExecutionPlanV5();
+    const mountSocketId = requireString(mountSlot.mountSocketId);
+    const relationshipProfile = dataArray(
+      dataRecord(mount.capabilityAssembly).relationshipProfiles
+    ).map(dataRecord).find(
+      (profile) => profile.resourceRef === "worldkit://relationship-profile/mounted-on.stand-ground@1" && profile.relationshipType === "mountedOn"
+    );
+    if (relationshipProfile === void 0) return invalidExecutionPlanV5();
+    const requiredRiderSocketIds = dataArray(
+      relationshipProfile.requiredRiderSocketIds
+    ).map(requireString);
+    const requiredMountSocketIds = dataArray(
+      relationshipProfile.requiredMountSocketIds
+    ).map(requireString);
+    const riderSocketIds = new Set(
+      dataArray(rider.sockets).map((socket) => requireString(dataRecord(socket).id))
+    );
+    const mountSocketIds = new Set(
+      dataArray(mount.sockets).map((socket) => requireString(dataRecord(socket).id))
+    );
+    if (requiredRiderSocketIds.some((socketId) => !riderSocketIds.has(socketId)) || requiredMountSocketIds.some((socketId) => !mountSocketIds.has(socketId)) || !requiredMountSocketIds.includes(mountSocketId)) return invalidExecutionPlanV5();
+  });
+}
 function deepFreezeExecutionPlan(value) {
   if (typeof value !== "object" || isNil(value) || Object.isFrozen(value)) {
     return value;
@@ -3303,15 +3414,22 @@ function parseExecutionPlanV5(input) {
       plan.initialControlledEntityId
     );
     const subjectEntityIds = /* @__PURE__ */ new Set();
+    const subjectsByEntityId = /* @__PURE__ */ new Map();
     dataArray(plan.subjects).forEach((subject) => {
       validateSubject(subject);
       const entityId = requireString(dataRecord(subject).entityId);
       if (subjectEntityIds.has(entityId)) return invalidExecutionPlanV5();
       subjectEntityIds.add(entityId);
+      subjectsByEntityId.set(entityId, dataRecord(subject));
     });
     if (!subjectEntityIds.has(initialControlledEntityId)) {
       return invalidExecutionPlanV5();
     }
+    validateInitialRelationships(
+      plan.initialRelationships,
+      subjectsByEntityId,
+      initialControlledEntityId
+    );
     validateCamera(plan.camera);
     if (!subjectEntityIds.has(
       requireString(dataRecord(plan.camera).targetEntityId)
@@ -5516,6 +5634,15 @@ const G_BOT_HUMANOID_DEFINITION = {
   },
   sockets: [
     {
+      id: "FootAlignment",
+      kind: "local",
+      localTransform: {
+        positionMetersXYZ: [0, 0, 0],
+        rotationEulerRadiansXYZ: [0, 0, 0]
+      },
+      semanticTags: ["foot-alignment", "relationship", "rider"]
+    },
+    {
       id: "FirstPersonView",
       kind: "bone",
       boneId: "head",
@@ -6328,15 +6455,12 @@ const relationshipProfiles = [
     authoringAvailability: "experimental",
     relationshipType: "seat",
     runtimeStatus: "reserved",
-    requiredSourceSocketIds: [
+    requiredOccupantSocketIds: [
       "SeatAlignment"
     ],
-    requiredTargetSocketIds: [
+    requiredSeatSocketIds: [
       "DriverSeat"
     ],
-    controlTransferPolicy: "transfer-to-target",
-    cameraTargetPolicy: "controlled-entity",
-    maximumDistanceMeters: 3,
     aiMetadata: {
       displayName: "R01 Driver Seat",
       description: "Frozen seat alignment and control-transfer vocabulary; runtime behavior is reserved in this phase.",
@@ -6354,15 +6478,12 @@ const relationshipProfiles = [
     authoringAvailability: "experimental",
     relationshipType: "tether",
     runtimeStatus: "reserved",
-    requiredSourceSocketIds: [
+    requiredTetheredSocketIds: [
       "TetherSource"
     ],
-    requiredTargetSocketIds: [
+    requiredTetherAnchorSocketIds: [
       "TetherTarget"
     ],
-    controlTransferPolicy: "keep-source",
-    cameraTargetPolicy: "source-entity",
-    maximumDistanceMeters: 4,
     aiMetadata: {
       displayName: "R03 Standard Tether",
       description: "Frozen bounded tether vocabulary for composite subjects; runtime behavior is reserved in this phase.",
@@ -6374,26 +6495,28 @@ const relationshipProfiles = [
   },
   {
     kind: "relationship-profile",
-    id: "R02.mount.reserved",
+    id: "R02.mounted-on.stand-ground",
     version: 1,
-    resourceRef: "worldkit://relationship-profile/mount.reserved@1",
+    resourceRef: "worldkit://relationship-profile/mounted-on.stand-ground@1",
     authoringAvailability: "internal",
-    relationshipType: "mount",
-    runtimeStatus: "reserved",
-    requiredSourceSocketIds: [
-      "SeatAlignment"
+    relationshipType: "mountedOn",
+    runtimeStatus: "implemented",
+    requiredRiderSocketIds: [
+      "FootAlignment"
     ],
-    requiredTargetSocketIds: [
-      "MountSeat"
+    requiredMountSocketIds: [
+      "MountStand"
     ],
-    controlTransferPolicy: "transfer-to-target",
-    cameraTargetPolicy: "controlled-entity",
+    controlTransferMode: "to-mount",
+    cameraTargetRole: "controlled-entity",
+    maximumMountDistanceMeters: 2,
     aiMetadata: {
-      displayName: "R02 Mount Reserved",
-      description: "Frozen mount relationship vocabulary; runtime is not implemented in this phase.",
+      displayName: "R02 Mounted On Stand Ground",
+      description: "Implemented mountedOn stand-slot relationship for the Ground skateboard slice.",
       semanticTags: [
-        "mount",
-        "reserved"
+        "mountedOn",
+        "skateboard",
+        "stand"
       ]
     }
   }
@@ -6499,16 +6622,16 @@ const CAPABILITY_MANIFESTS = [
   },
   {
     kind: "capability",
-    id: "relationship.mount",
+    id: "relationship.mounted-on",
     version: 1,
-    resourceRef: "worldkit://capability/relationship.mount@1",
+    resourceRef: "worldkit://capability/relationship.mounted-on@1",
     requiredCapabilityRefs: [],
-    providedFeatures: ["mount"],
+    providedFeatures: ["mountedOn"],
     conflictingCapabilityRefs: [],
     aiMetadata: {
-      displayName: "Mount Relationship Vocabulary",
-      description: "Frozen mount capability name; runtime behavior remains reserved.",
-      semanticTags: ["mount", "relationship", "reserved"]
+      displayName: "Mounted On Relationship",
+      description: "Role-qualified mountedOn relationship with implemented Ground stand-slot behavior.",
+      semanticTags: ["mountedOn", "relationship", "implemented"]
     }
   }
 ];
@@ -6528,7 +6651,7 @@ const BUILT_IN_CAPABILITY_RESOURCES = [
   ...poseAndRenderCatalog.renderBindings
 ];
 const BUILT_IN_CAPABILITY_MANIFESTS = CAPABILITY_MANIFESTS;
-const subjectDefinitionsV3 = /* @__PURE__ */ JSON.parse('[{"kind":"subject-definition","schemaVersion":3,"id":"animal.quadruped.forward-steer","version":1,"resourceRef":"worldkit://subject-definition/animal.quadruped.forward-steer@1","authoringAvailability":"advanced","category":"animal","bodyTopology":"quadruped","semanticClassId":"subject.animal.quadruped","coordinateConvention":{"forwardAxis":"-Z","upAxis":"+Y","metersPerUnit":1,"pivot":"support-center"},"visualParts":[{"id":"body","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[0.8,0.7,1.5]},"localTransform":{"positionMetersXYZ":[0,0.8,0],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["body"]},{"id":"head","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[0.55,0.55,0.6]},"localTransform":{"positionMetersXYZ":[0,0.95,-0.95],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["head"]},{"id":"legs","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[0.65,0.65,1.1]},"localTransform":{"positionMetersXYZ":[0,0.33,0],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["legs"]}],"visualBinding":{"mode":"static"},"sockets":[{"id":"CameraTarget3D","kind":"local","localTransform":{"positionMetersXYZ":[0,1,0],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","target"]},{"id":"LookAhead","kind":"local","localTransform":{"positionMetersXYZ":[0,0.9,-1.2],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","look-ahead"]},{"id":"MountSeat","kind":"local","localTransform":{"positionMetersXYZ":[0,1.25,0],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["mount","relationship"]}],"colliderPolicy":{"kind":"derive","colliderDerivationProfileRef":"worldkit://collider-derivation-profile/vertical-capability-capsule@1"},"capabilityRefs":["worldkit://capability/locomotion.forward-steer@1"],"profiles":{"physicsBodyProfileRef":"worldkit://physics-body-profile/character.capability-medium@1","locomotionProfileRef":"worldkit://locomotion-profile/ground.standard@1","motion":{"defaultMotionProfileRef":"worldkit://motion-profile/free-ground.humanoid-medium@1","optionalMotionProfileRefs":["worldkit://motion-profile/safe-ground@1"],"fallbackMotionProfileRef":"worldkit://motion-profile/safe-ground@1"},"controlProfileRef":"worldkit://control-profile/planar.camera-relative@1","cameraContextProfileRef":"worldkit://camera-context/capability-driven.default@1","mediumProfileRef":"worldkit://medium-profile/ground-air.standard@1","harnessProfileRef":"worldkit://harness-profile/subject.standard@1","controlFeelProfileRef":"worldkit://control-feel-profile/humanoid.medium-ground@1","allowedControlFeelProfileRefs":["worldkit://control-feel-profile/humanoid.medium-ground@1","worldkit://control-feel-profile/humanoid.heavy-ground@1"]},"relationshipCapabilityRefs":["worldkit://capability/relationship.mount@1"],"actionOrPoseSetRef":"worldkit://pose-set/static.whitebox@1","renderBindingProfileRef":"worldkit://render-binding/subject.standard@1","aiMetadata":{"displayName":"Quadruped Forward Steer","description":"Whitebox quadruped using the reusable K02 forward-steer kernel.","semanticTags":["animal","forward-steer","quadruped","whitebox"]}},{"kind":"subject-definition","schemaVersion":3,"id":"animal.quadruped.forward-steer","version":2,"resourceRef":"worldkit://subject-definition/animal.quadruped.forward-steer@2","authoringAvailability":"advanced","category":"animal","bodyTopology":"quadruped","semanticClassId":"subject.animal.quadruped","coordinateConvention":{"forwardAxis":"-Z","upAxis":"+Y","metersPerUnit":1,"pivot":"support-center"},"visualParts":[{"id":"body","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[0.8,0.7,1.5]},"localTransform":{"positionMetersXYZ":[0,0.8,0],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["body"]},{"id":"head","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[0.55,0.55,0.6]},"localTransform":{"positionMetersXYZ":[0,0.95,-0.95],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["head"]},{"id":"legs","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[0.65,0.65,1.1]},"localTransform":{"positionMetersXYZ":[0,0.33,0],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["legs"]}],"visualBinding":{"mode":"static"},"sockets":[{"id":"CameraTarget3D","kind":"local","localTransform":{"positionMetersXYZ":[0,1,0],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","target"]},{"id":"LookAhead","kind":"local","localTransform":{"positionMetersXYZ":[0,0.9,-1.2],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","look-ahead"]},{"id":"MountSeat","kind":"local","localTransform":{"positionMetersXYZ":[0,1.25,0],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["mount","relationship"]}],"colliderPolicy":{"kind":"derive","colliderDerivationProfileRef":"worldkit://collider-derivation-profile/vertical-capability-capsule@1"},"capabilityRefs":["worldkit://capability/locomotion.forward-steer@1"],"profiles":{"physicsBodyProfileRef":"worldkit://physics-body-profile/character.capability-medium@1","locomotionProfileRef":"worldkit://locomotion-profile/ground.standard@1","motion":{"defaultMotionProfileRef":"worldkit://motion-profile/free-ground.humanoid-medium@1","optionalMotionProfileRefs":["worldkit://motion-profile/safe-ground@1"],"fallbackMotionProfileRef":"worldkit://motion-profile/safe-ground@1"},"controlProfileRef":"worldkit://control-profile/planar.camera-relative@1","cameraContextProfileRef":"worldkit://camera-context/capability-driven.quadruped-official@1","mediumProfileRef":"worldkit://medium-profile/ground-air.standard@1","harnessProfileRef":"worldkit://harness-profile/subject.standard@1","controlFeelProfileRef":"worldkit://control-feel-profile/subject.animal.quadruped.forward-steer.default@1","allowedControlFeelProfileRefs":["worldkit://control-feel-profile/subject.animal.quadruped.forward-steer.default@1"]},"relationshipCapabilityRefs":["worldkit://capability/relationship.mount@1"],"actionOrPoseSetRef":"worldkit://pose-set/static.whitebox@1","renderBindingProfileRef":"worldkit://render-binding/subject.standard@1","aiMetadata":{"displayName":"Quadruped Forward Steer Official v2","description":"Reviewed quadruped public default with versioned P1.5 Control Feel and Camera Profiles.","semanticTags":["animal","forward-steer","official","quadruped","whitebox"]}},{"kind":"subject-definition","schemaVersion":3,"id":"glider.paraglider.unpowered","version":1,"resourceRef":"worldkit://subject-definition/glider.paraglider.unpowered@1","authoringAvailability":"experimental","category":"composite","bodyTopology":"glider","semanticClassId":"subject.glider.paraglider","coordinateConvention":{"forwardAxis":"-Z","upAxis":"+Y","metersPerUnit":1,"pivot":"support-center"},"visualParts":[{"id":"pilot","kind":"primitive","shape":{"kind":"capsule","radiusMeters":0.28,"heightMeters":1.45},"localTransform":{"positionMetersXYZ":[0,0.725,0],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["pilot"]},{"id":"canopy","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[5.5,0.18,1.7]},"localTransform":{"positionMetersXYZ":[0,4.2,0.3],"rotationEulerRadiansXYZ":[0.08,0,0]},"colliderContribution":"exclude","semanticTags":["canopy","wing"]}],"visualBinding":{"mode":"static"},"sockets":[{"id":"TetherSource","kind":"local","localTransform":{"positionMetersXYZ":[0,1.55,0],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["pilot","tether"]},{"id":"TetherTarget","kind":"local","localTransform":{"positionMetersXYZ":[0,3.9,0.2],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["canopy","tether"]},{"id":"CameraTarget3D","kind":"local","localTransform":{"positionMetersXYZ":[0,1.4,0],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","target"]},{"id":"LookAhead","kind":"local","localTransform":{"positionMetersXYZ":[0,1.5,-3],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","look-ahead"]}],"colliderPolicy":{"kind":"derive","colliderDerivationProfileRef":"worldkit://collider-derivation-profile/vertical-capability-capsule@1"},"capabilityRefs":["worldkit://capability/locomotion.unpowered-glide@1","worldkit://capability/relationship.tether@1"],"profiles":{"physicsBodyProfileRef":"worldkit://physics-body-profile/character.capability-medium@1","locomotionProfileRef":"worldkit://locomotion-profile/ground.standard@1","motion":{"defaultMotionProfileRef":"worldkit://motion-profile/free-ground.humanoid-medium@1","optionalMotionProfileRefs":["worldkit://motion-profile/safe-ground@1"],"fallbackMotionProfileRef":"worldkit://motion-profile/safe-ground@1"},"controlProfileRef":"worldkit://control-profile/planar.camera-relative@1","cameraContextProfileRef":"worldkit://camera-context/capability-driven.default@1","mediumProfileRef":"worldkit://medium-profile/ground-air.standard@1","harnessProfileRef":"worldkit://harness-profile/subject.standard@1","controlFeelProfileRef":"worldkit://control-feel-profile/humanoid.medium-ground@1","allowedControlFeelProfileRefs":["worldkit://control-feel-profile/humanoid.medium-ground@1"]},"relationshipCapabilityRefs":["worldkit://capability/relationship.tether@1"],"actionOrPoseSetRef":"worldkit://pose-set/static.whitebox@1","renderBindingProfileRef":"worldkit://render-binding/subject.standard@1","aiMetadata":{"displayName":"Unpowered Paraglider","description":"Whitebox pilot and canopy package using K08 unpowered glide and R03 tether facts.","semanticTags":["air","glide","paraglider","whitebox"]}},{"kind":"subject-definition","schemaVersion":3,"id":"surface-craft.ice-skimmer","version":1,"resourceRef":"worldkit://subject-definition/surface-craft.ice-skimmer@1","authoringAvailability":"experimental","category":"vehicle","bodyTopology":"surface-craft","semanticClassId":"subject.surface-craft.skimmer","coordinateConvention":{"forwardAxis":"-Z","upAxis":"+Y","metersPerUnit":1,"pivot":"support-center"},"visualParts":[{"id":"deck","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[1.4,0.25,2.8]},"localTransform":{"positionMetersXYZ":[0,0.125,0],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["deck","skimmer"]},{"id":"seat","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[0.7,0.7,0.8]},"localTransform":{"positionMetersXYZ":[0,0.7,0.3],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["seat"]}],"visualBinding":{"mode":"static"},"sockets":[{"id":"DriverSeat","kind":"local","localTransform":{"positionMetersXYZ":[0,0.95,0.25],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["driver","seat"]},{"id":"CameraTarget3D","kind":"local","localTransform":{"positionMetersXYZ":[0,0.9,0],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","target"]},{"id":"LookAhead","kind":"local","localTransform":{"positionMetersXYZ":[0,0.5,-2.5],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","look-ahead"]}],"colliderPolicy":{"kind":"derive","colliderDerivationProfileRef":"worldkit://collider-derivation-profile/vertical-capability-capsule@1"},"capabilityRefs":["worldkit://capability/locomotion.forward-steer@1","worldkit://capability/locomotion.surface-slide@1","worldkit://capability/relationship.seat@1"],"profiles":{"physicsBodyProfileRef":"worldkit://physics-body-profile/character.capability-medium@1","locomotionProfileRef":"worldkit://locomotion-profile/ground.standard@1","motion":{"defaultMotionProfileRef":"worldkit://motion-profile/free-ground.humanoid-medium@1","optionalMotionProfileRefs":["worldkit://motion-profile/safe-ground@1"],"fallbackMotionProfileRef":"worldkit://motion-profile/safe-ground@1"},"controlProfileRef":"worldkit://control-profile/planar.camera-relative@1","cameraContextProfileRef":"worldkit://camera-context/capability-driven.default@1","mediumProfileRef":"worldkit://medium-profile/ground-air.standard@1","harnessProfileRef":"worldkit://harness-profile/subject.standard@1","controlFeelProfileRef":"worldkit://control-feel-profile/humanoid.medium-ground@1","allowedControlFeelProfileRefs":["worldkit://control-feel-profile/humanoid.medium-ground@1"]},"relationshipCapabilityRefs":["worldkit://capability/relationship.seat@1"],"actionOrPoseSetRef":"worldkit://pose-set/static.whitebox@1","renderBindingProfileRef":"worldkit://render-binding/subject.standard@1","aiMetadata":{"displayName":"Ice Skimmer","description":"Whitebox surface craft using K04 slope, friction and inertia motion.","semanticTags":["ice","skimmer","surface-slide","whitebox"]}},{"kind":"subject-definition","schemaVersion":3,"id":"vehicle.four-wheel.arcade","version":1,"resourceRef":"worldkit://subject-definition/vehicle.four-wheel.arcade@1","authoringAvailability":"experimental","category":"vehicle","bodyTopology":"four-wheel","semanticClassId":"subject.vehicle.four-wheel","coordinateConvention":{"forwardAxis":"-Z","upAxis":"+Y","metersPerUnit":1,"pivot":"support-center"},"visualParts":[{"id":"body","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[1.8,0.8,3.6]},"localTransform":{"positionMetersXYZ":[0,0.4,0],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["body","vehicle"]},{"id":"cabin","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[1.45,0.75,1.7]},"localTransform":{"positionMetersXYZ":[0,1.3,0.15],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["cabin"]}],"visualBinding":{"mode":"static"},"sockets":[{"id":"DriverSeat","kind":"local","localTransform":{"positionMetersXYZ":[-0.35,1.25,0.25],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["driver","seat"]},{"id":"CameraTarget3D","kind":"local","localTransform":{"positionMetersXYZ":[0,1.1,0],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","target"]},{"id":"LookAhead","kind":"local","localTransform":{"positionMetersXYZ":[0,0.8,-3],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","look-ahead"]}],"colliderPolicy":{"kind":"derive","colliderDerivationProfileRef":"worldkit://collider-derivation-profile/vertical-capability-capsule@1"},"capabilityRefs":["worldkit://capability/locomotion.forward-steer@1","worldkit://capability/locomotion.wheeled@1","worldkit://capability/relationship.seat@1"],"profiles":{"physicsBodyProfileRef":"worldkit://physics-body-profile/character.capability-medium@1","locomotionProfileRef":"worldkit://locomotion-profile/ground.standard@1","motion":{"defaultMotionProfileRef":"worldkit://motion-profile/free-ground.humanoid-medium@1","optionalMotionProfileRefs":["worldkit://motion-profile/safe-ground@1"],"fallbackMotionProfileRef":"worldkit://motion-profile/safe-ground@1"},"controlProfileRef":"worldkit://control-profile/planar.camera-relative@1","cameraContextProfileRef":"worldkit://camera-context/capability-driven.default@1","mediumProfileRef":"worldkit://medium-profile/ground-air.standard@1","harnessProfileRef":"worldkit://harness-profile/subject.standard@1","controlFeelProfileRef":"worldkit://control-feel-profile/humanoid.medium-ground@1","allowedControlFeelProfileRefs":["worldkit://control-feel-profile/humanoid.medium-ground@1"]},"relationshipCapabilityRefs":["worldkit://capability/relationship.seat@1"],"actionOrPoseSetRef":"worldkit://pose-set/static.whitebox@1","renderBindingProfileRef":"worldkit://render-binding/subject.standard@1","aiMetadata":{"displayName":"Four-wheel Arcade","description":"Whitebox four-wheel package using simplified deterministic K03 motion.","semanticTags":["arcade","four-wheel","vehicle","whitebox"]}},{"kind":"subject-definition","schemaVersion":3,"id":"watercraft.kayak.surface","version":1,"resourceRef":"worldkit://subject-definition/watercraft.kayak.surface@1","authoringAvailability":"experimental","category":"composite","bodyTopology":"watercraft","semanticClassId":"subject.watercraft.kayak","coordinateConvention":{"forwardAxis":"-Z","upAxis":"+Y","metersPerUnit":1,"pivot":"support-center"},"visualParts":[{"id":"hull","kind":"primitive","shape":{"kind":"capsule","radiusMeters":0.42,"heightMeters":3.2},"localTransform":{"positionMetersXYZ":[0,0.42,0],"rotationEulerRadiansXYZ":[1.5707963267948966,0,0]},"colliderContribution":"include","semanticTags":["hull","kayak"]},{"id":"paddler","kind":"primitive","shape":{"kind":"capsule","radiusMeters":0.25,"heightMeters":1.15},"localTransform":{"positionMetersXYZ":[0,0.85,0],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"exclude","semanticTags":["paddler"]}],"visualBinding":{"mode":"static"},"sockets":[{"id":"DriverSeat","kind":"local","localTransform":{"positionMetersXYZ":[0,0.55,0],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["driver","seat"]},{"id":"CameraTarget3D","kind":"local","localTransform":{"positionMetersXYZ":[0,1,0],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","target"]},{"id":"LookAhead","kind":"local","localTransform":{"positionMetersXYZ":[0,0.4,-2.3],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","look-ahead"]}],"colliderPolicy":{"kind":"derive","colliderDerivationProfileRef":"worldkit://collider-derivation-profile/vertical-capability-capsule@1"},"capabilityRefs":["worldkit://capability/locomotion.water-surface@1","worldkit://capability/relationship.seat@1"],"profiles":{"physicsBodyProfileRef":"worldkit://physics-body-profile/character.capability-medium@1","locomotionProfileRef":"worldkit://locomotion-profile/ground.standard@1","motion":{"defaultMotionProfileRef":"worldkit://motion-profile/free-ground.humanoid-medium@1","optionalMotionProfileRefs":["worldkit://motion-profile/safe-ground@1"],"fallbackMotionProfileRef":"worldkit://motion-profile/safe-ground@1"},"controlProfileRef":"worldkit://control-profile/planar.camera-relative@1","cameraContextProfileRef":"worldkit://camera-context/capability-driven.default@1","mediumProfileRef":"worldkit://medium-profile/ground-air.standard@1","harnessProfileRef":"worldkit://harness-profile/subject.standard@1","controlFeelProfileRef":"worldkit://control-feel-profile/humanoid.medium-ground@1","allowedControlFeelProfileRefs":["worldkit://control-feel-profile/humanoid.medium-ground@1"]},"relationshipCapabilityRefs":["worldkit://capability/relationship.seat@1"],"actionOrPoseSetRef":"worldkit://pose-set/static.whitebox@1","renderBindingProfileRef":"worldkit://render-binding/subject.standard@1","aiMetadata":{"displayName":"Kayak Surface Package","description":"Whitebox kayak and paddler package using K06 water-surface motion.","semanticTags":["kayak","water-surface","watercraft","whitebox"]}}]');
+const subjectDefinitionsV3 = /* @__PURE__ */ JSON.parse('[{"kind":"subject-definition","schemaVersion":3,"id":"animal.quadruped.forward-steer","version":1,"resourceRef":"worldkit://subject-definition/animal.quadruped.forward-steer@1","authoringAvailability":"advanced","category":"animal","bodyTopology":"quadruped","semanticClassId":"subject.animal.quadruped","coordinateConvention":{"forwardAxis":"-Z","upAxis":"+Y","metersPerUnit":1,"pivot":"support-center"},"visualParts":[{"id":"body","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[0.8,0.7,1.5]},"localTransform":{"positionMetersXYZ":[0,0.8,0],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["body"]},{"id":"head","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[0.55,0.55,0.6]},"localTransform":{"positionMetersXYZ":[0,0.95,-0.95],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["head"]},{"id":"legs","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[0.65,0.65,1.1]},"localTransform":{"positionMetersXYZ":[0,0.33,0],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["legs"]}],"visualBinding":{"mode":"static"},"sockets":[{"id":"CameraTarget3D","kind":"local","localTransform":{"positionMetersXYZ":[0,1,0],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","target"]},{"id":"LookAhead","kind":"local","localTransform":{"positionMetersXYZ":[0,0.9,-1.2],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","look-ahead"]},{"id":"MountSeat","kind":"local","localTransform":{"positionMetersXYZ":[0,1.25,0],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["mount","relationship"]}],"colliderPolicy":{"kind":"derive","colliderDerivationProfileRef":"worldkit://collider-derivation-profile/vertical-capability-capsule@1"},"capabilityRefs":["worldkit://capability/locomotion.forward-steer@1"],"profiles":{"physicsBodyProfileRef":"worldkit://physics-body-profile/character.capability-medium@1","locomotionProfileRef":"worldkit://locomotion-profile/ground.standard@1","motion":{"defaultMotionProfileRef":"worldkit://motion-profile/free-ground.humanoid-medium@1","optionalMotionProfileRefs":["worldkit://motion-profile/safe-ground@1"],"fallbackMotionProfileRef":"worldkit://motion-profile/safe-ground@1"},"controlProfileRef":"worldkit://control-profile/planar.camera-relative@1","cameraContextProfileRef":"worldkit://camera-context/capability-driven.default@1","mediumProfileRef":"worldkit://medium-profile/ground-air.standard@1","harnessProfileRef":"worldkit://harness-profile/subject.standard@1","controlFeelProfileRef":"worldkit://control-feel-profile/humanoid.medium-ground@1","allowedControlFeelProfileRefs":["worldkit://control-feel-profile/humanoid.medium-ground@1","worldkit://control-feel-profile/humanoid.heavy-ground@1"]},"relationshipCapabilityRefs":["worldkit://capability/relationship.mounted-on@1"],"actionOrPoseSetRef":"worldkit://pose-set/static.whitebox@1","renderBindingProfileRef":"worldkit://render-binding/subject.standard@1","aiMetadata":{"displayName":"Quadruped Forward Steer","description":"Whitebox quadruped using the reusable K02 forward-steer kernel.","semanticTags":["animal","forward-steer","quadruped","whitebox"]}},{"kind":"subject-definition","schemaVersion":3,"id":"animal.quadruped.forward-steer","version":2,"resourceRef":"worldkit://subject-definition/animal.quadruped.forward-steer@2","authoringAvailability":"advanced","category":"animal","bodyTopology":"quadruped","semanticClassId":"subject.animal.quadruped","coordinateConvention":{"forwardAxis":"-Z","upAxis":"+Y","metersPerUnit":1,"pivot":"support-center"},"visualParts":[{"id":"body","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[0.8,0.7,1.5]},"localTransform":{"positionMetersXYZ":[0,0.8,0],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["body"]},{"id":"head","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[0.55,0.55,0.6]},"localTransform":{"positionMetersXYZ":[0,0.95,-0.95],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["head"]},{"id":"legs","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[0.65,0.65,1.1]},"localTransform":{"positionMetersXYZ":[0,0.33,0],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["legs"]}],"visualBinding":{"mode":"static"},"sockets":[{"id":"CameraTarget3D","kind":"local","localTransform":{"positionMetersXYZ":[0,1,0],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","target"]},{"id":"LookAhead","kind":"local","localTransform":{"positionMetersXYZ":[0,0.9,-1.2],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","look-ahead"]},{"id":"MountSeat","kind":"local","localTransform":{"positionMetersXYZ":[0,1.25,0],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["mount","relationship"]}],"colliderPolicy":{"kind":"derive","colliderDerivationProfileRef":"worldkit://collider-derivation-profile/vertical-capability-capsule@1"},"capabilityRefs":["worldkit://capability/locomotion.forward-steer@1"],"profiles":{"physicsBodyProfileRef":"worldkit://physics-body-profile/character.capability-medium@1","locomotionProfileRef":"worldkit://locomotion-profile/ground.standard@1","motion":{"defaultMotionProfileRef":"worldkit://motion-profile/free-ground.humanoid-medium@1","optionalMotionProfileRefs":["worldkit://motion-profile/safe-ground@1"],"fallbackMotionProfileRef":"worldkit://motion-profile/safe-ground@1"},"controlProfileRef":"worldkit://control-profile/planar.camera-relative@1","cameraContextProfileRef":"worldkit://camera-context/capability-driven.quadruped-official@1","mediumProfileRef":"worldkit://medium-profile/ground-air.standard@1","harnessProfileRef":"worldkit://harness-profile/subject.standard@1","controlFeelProfileRef":"worldkit://control-feel-profile/subject.animal.quadruped.forward-steer.default@1","allowedControlFeelProfileRefs":["worldkit://control-feel-profile/subject.animal.quadruped.forward-steer.default@1"]},"relationshipCapabilityRefs":["worldkit://capability/relationship.mounted-on@1"],"actionOrPoseSetRef":"worldkit://pose-set/static.whitebox@1","renderBindingProfileRef":"worldkit://render-binding/subject.standard@1","aiMetadata":{"displayName":"Quadruped Forward Steer Official v2","description":"Reviewed quadruped public default with versioned P1.5 Control Feel and Camera Profiles.","semanticTags":["animal","forward-steer","official","quadruped","whitebox"]}},{"kind":"subject-definition","schemaVersion":3,"id":"glider.paraglider.unpowered","version":1,"resourceRef":"worldkit://subject-definition/glider.paraglider.unpowered@1","authoringAvailability":"experimental","category":"composite","bodyTopology":"glider","semanticClassId":"subject.glider.paraglider","coordinateConvention":{"forwardAxis":"-Z","upAxis":"+Y","metersPerUnit":1,"pivot":"support-center"},"visualParts":[{"id":"pilot","kind":"primitive","shape":{"kind":"capsule","radiusMeters":0.28,"heightMeters":1.45},"localTransform":{"positionMetersXYZ":[0,0.725,0],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["pilot"]},{"id":"canopy","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[5.5,0.18,1.7]},"localTransform":{"positionMetersXYZ":[0,4.2,0.3],"rotationEulerRadiansXYZ":[0.08,0,0]},"colliderContribution":"exclude","semanticTags":["canopy","wing"]}],"visualBinding":{"mode":"static"},"sockets":[{"id":"TetherSource","kind":"local","localTransform":{"positionMetersXYZ":[0,1.55,0],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["pilot","tether"]},{"id":"TetherTarget","kind":"local","localTransform":{"positionMetersXYZ":[0,3.9,0.2],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["canopy","tether"]},{"id":"CameraTarget3D","kind":"local","localTransform":{"positionMetersXYZ":[0,1.4,0],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","target"]},{"id":"LookAhead","kind":"local","localTransform":{"positionMetersXYZ":[0,1.5,-3],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","look-ahead"]}],"colliderPolicy":{"kind":"derive","colliderDerivationProfileRef":"worldkit://collider-derivation-profile/vertical-capability-capsule@1"},"capabilityRefs":["worldkit://capability/locomotion.unpowered-glide@1","worldkit://capability/relationship.tether@1"],"profiles":{"physicsBodyProfileRef":"worldkit://physics-body-profile/character.capability-medium@1","locomotionProfileRef":"worldkit://locomotion-profile/ground.standard@1","motion":{"defaultMotionProfileRef":"worldkit://motion-profile/free-ground.humanoid-medium@1","optionalMotionProfileRefs":["worldkit://motion-profile/safe-ground@1"],"fallbackMotionProfileRef":"worldkit://motion-profile/safe-ground@1"},"controlProfileRef":"worldkit://control-profile/planar.camera-relative@1","cameraContextProfileRef":"worldkit://camera-context/capability-driven.default@1","mediumProfileRef":"worldkit://medium-profile/ground-air.standard@1","harnessProfileRef":"worldkit://harness-profile/subject.standard@1","controlFeelProfileRef":"worldkit://control-feel-profile/humanoid.medium-ground@1","allowedControlFeelProfileRefs":["worldkit://control-feel-profile/humanoid.medium-ground@1"]},"relationshipCapabilityRefs":["worldkit://capability/relationship.tether@1"],"actionOrPoseSetRef":"worldkit://pose-set/static.whitebox@1","renderBindingProfileRef":"worldkit://render-binding/subject.standard@1","aiMetadata":{"displayName":"Unpowered Paraglider","description":"Whitebox pilot and canopy package using K08 unpowered glide and R03 tether facts.","semanticTags":["air","glide","paraglider","whitebox"]}},{"kind":"subject-definition","schemaVersion":3,"id":"surface-craft.ice-skimmer","version":1,"resourceRef":"worldkit://subject-definition/surface-craft.ice-skimmer@1","authoringAvailability":"experimental","category":"vehicle","bodyTopology":"surface-craft","semanticClassId":"subject.surface-craft.skimmer","coordinateConvention":{"forwardAxis":"-Z","upAxis":"+Y","metersPerUnit":1,"pivot":"support-center"},"visualParts":[{"id":"deck","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[1.4,0.25,2.8]},"localTransform":{"positionMetersXYZ":[0,0.125,0],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["deck","skimmer"]},{"id":"seat","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[0.7,0.7,0.8]},"localTransform":{"positionMetersXYZ":[0,0.7,0.3],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["seat"]}],"visualBinding":{"mode":"static"},"sockets":[{"id":"DriverSeat","kind":"local","localTransform":{"positionMetersXYZ":[0,0.95,0.25],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["driver","seat"]},{"id":"CameraTarget3D","kind":"local","localTransform":{"positionMetersXYZ":[0,0.9,0],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","target"]},{"id":"LookAhead","kind":"local","localTransform":{"positionMetersXYZ":[0,0.5,-2.5],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","look-ahead"]}],"colliderPolicy":{"kind":"derive","colliderDerivationProfileRef":"worldkit://collider-derivation-profile/vertical-capability-capsule@1"},"capabilityRefs":["worldkit://capability/locomotion.forward-steer@1","worldkit://capability/locomotion.surface-slide@1","worldkit://capability/relationship.seat@1"],"profiles":{"physicsBodyProfileRef":"worldkit://physics-body-profile/character.capability-medium@1","locomotionProfileRef":"worldkit://locomotion-profile/ground.standard@1","motion":{"defaultMotionProfileRef":"worldkit://motion-profile/free-ground.humanoid-medium@1","optionalMotionProfileRefs":["worldkit://motion-profile/safe-ground@1"],"fallbackMotionProfileRef":"worldkit://motion-profile/safe-ground@1"},"controlProfileRef":"worldkit://control-profile/planar.camera-relative@1","cameraContextProfileRef":"worldkit://camera-context/capability-driven.default@1","mediumProfileRef":"worldkit://medium-profile/ground-air.standard@1","harnessProfileRef":"worldkit://harness-profile/subject.standard@1","controlFeelProfileRef":"worldkit://control-feel-profile/humanoid.medium-ground@1","allowedControlFeelProfileRefs":["worldkit://control-feel-profile/humanoid.medium-ground@1"]},"relationshipCapabilityRefs":["worldkit://capability/relationship.seat@1"],"actionOrPoseSetRef":"worldkit://pose-set/static.whitebox@1","renderBindingProfileRef":"worldkit://render-binding/subject.standard@1","aiMetadata":{"displayName":"Ice Skimmer","description":"Whitebox surface craft using K04 slope, friction and inertia motion.","semanticTags":["ice","skimmer","surface-slide","whitebox"]}},{"kind":"subject-definition","schemaVersion":3,"id":"vehicle.four-wheel.arcade","version":1,"resourceRef":"worldkit://subject-definition/vehicle.four-wheel.arcade@1","authoringAvailability":"experimental","category":"vehicle","bodyTopology":"four-wheel","semanticClassId":"subject.vehicle.four-wheel","coordinateConvention":{"forwardAxis":"-Z","upAxis":"+Y","metersPerUnit":1,"pivot":"support-center"},"visualParts":[{"id":"body","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[1.8,0.8,3.6]},"localTransform":{"positionMetersXYZ":[0,0.4,0],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["body","vehicle"]},{"id":"cabin","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[1.45,0.75,1.7]},"localTransform":{"positionMetersXYZ":[0,1.3,0.15],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["cabin"]}],"visualBinding":{"mode":"static"},"sockets":[{"id":"DriverSeat","kind":"local","localTransform":{"positionMetersXYZ":[-0.35,1.25,0.25],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["driver","seat"]},{"id":"CameraTarget3D","kind":"local","localTransform":{"positionMetersXYZ":[0,1.1,0],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","target"]},{"id":"LookAhead","kind":"local","localTransform":{"positionMetersXYZ":[0,0.8,-3],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","look-ahead"]}],"colliderPolicy":{"kind":"derive","colliderDerivationProfileRef":"worldkit://collider-derivation-profile/vertical-capability-capsule@1"},"capabilityRefs":["worldkit://capability/locomotion.forward-steer@1","worldkit://capability/locomotion.wheeled@1","worldkit://capability/relationship.seat@1"],"profiles":{"physicsBodyProfileRef":"worldkit://physics-body-profile/character.capability-medium@1","locomotionProfileRef":"worldkit://locomotion-profile/ground.standard@1","motion":{"defaultMotionProfileRef":"worldkit://motion-profile/free-ground.humanoid-medium@1","optionalMotionProfileRefs":["worldkit://motion-profile/safe-ground@1"],"fallbackMotionProfileRef":"worldkit://motion-profile/safe-ground@1"},"controlProfileRef":"worldkit://control-profile/planar.camera-relative@1","cameraContextProfileRef":"worldkit://camera-context/capability-driven.default@1","mediumProfileRef":"worldkit://medium-profile/ground-air.standard@1","harnessProfileRef":"worldkit://harness-profile/subject.standard@1","controlFeelProfileRef":"worldkit://control-feel-profile/humanoid.medium-ground@1","allowedControlFeelProfileRefs":["worldkit://control-feel-profile/humanoid.medium-ground@1"]},"relationshipCapabilityRefs":["worldkit://capability/relationship.seat@1"],"actionOrPoseSetRef":"worldkit://pose-set/static.whitebox@1","renderBindingProfileRef":"worldkit://render-binding/subject.standard@1","aiMetadata":{"displayName":"Four-wheel Arcade","description":"Whitebox four-wheel package using simplified deterministic K03 motion.","semanticTags":["arcade","four-wheel","vehicle","whitebox"]}},{"kind":"subject-definition","schemaVersion":3,"id":"watercraft.kayak.surface","version":1,"resourceRef":"worldkit://subject-definition/watercraft.kayak.surface@1","authoringAvailability":"experimental","category":"composite","bodyTopology":"watercraft","semanticClassId":"subject.watercraft.kayak","coordinateConvention":{"forwardAxis":"-Z","upAxis":"+Y","metersPerUnit":1,"pivot":"support-center"},"visualParts":[{"id":"hull","kind":"primitive","shape":{"kind":"capsule","radiusMeters":0.42,"heightMeters":3.2},"localTransform":{"positionMetersXYZ":[0,0.42,0],"rotationEulerRadiansXYZ":[1.5707963267948966,0,0]},"colliderContribution":"include","semanticTags":["hull","kayak"]},{"id":"paddler","kind":"primitive","shape":{"kind":"capsule","radiusMeters":0.25,"heightMeters":1.15},"localTransform":{"positionMetersXYZ":[0,0.85,0],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"exclude","semanticTags":["paddler"]}],"visualBinding":{"mode":"static"},"sockets":[{"id":"DriverSeat","kind":"local","localTransform":{"positionMetersXYZ":[0,0.55,0],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["driver","seat"]},{"id":"CameraTarget3D","kind":"local","localTransform":{"positionMetersXYZ":[0,1,0],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","target"]},{"id":"LookAhead","kind":"local","localTransform":{"positionMetersXYZ":[0,0.4,-2.3],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","look-ahead"]}],"colliderPolicy":{"kind":"derive","colliderDerivationProfileRef":"worldkit://collider-derivation-profile/vertical-capability-capsule@1"},"capabilityRefs":["worldkit://capability/locomotion.water-surface@1","worldkit://capability/relationship.seat@1"],"profiles":{"physicsBodyProfileRef":"worldkit://physics-body-profile/character.capability-medium@1","locomotionProfileRef":"worldkit://locomotion-profile/ground.standard@1","motion":{"defaultMotionProfileRef":"worldkit://motion-profile/free-ground.humanoid-medium@1","optionalMotionProfileRefs":["worldkit://motion-profile/safe-ground@1"],"fallbackMotionProfileRef":"worldkit://motion-profile/safe-ground@1"},"controlProfileRef":"worldkit://control-profile/planar.camera-relative@1","cameraContextProfileRef":"worldkit://camera-context/capability-driven.default@1","mediumProfileRef":"worldkit://medium-profile/ground-air.standard@1","harnessProfileRef":"worldkit://harness-profile/subject.standard@1","controlFeelProfileRef":"worldkit://control-feel-profile/humanoid.medium-ground@1","allowedControlFeelProfileRefs":["worldkit://control-feel-profile/humanoid.medium-ground@1"]},"relationshipCapabilityRefs":["worldkit://capability/relationship.seat@1"],"actionOrPoseSetRef":"worldkit://pose-set/static.whitebox@1","renderBindingProfileRef":"worldkit://render-binding/subject.standard@1","aiMetadata":{"displayName":"Kayak Surface Package","description":"Whitebox kayak and paddler package using K06 water-surface motion.","semanticTags":["kayak","water-surface","watercraft","whitebox"]}}]');
 function selectableControlFeelProfileRefsV1(profiles2) {
   if (isNil(profiles2.controlFeelProfileRef) || profiles2.controlFeelProfileRef === "") {
     throw new Error(
@@ -6557,7 +6680,7 @@ function selectableControlFeelProfileRefsV1(profiles2) {
   ];
 }
 const RELATIONSHIP_PROFILE_REF_BY_CAPABILITY_REF_V1 = Object.freeze({
-  "worldkit://capability/relationship.mount@1": "worldkit://relationship-profile/mount.reserved@1",
+  "worldkit://capability/relationship.mounted-on@1": "worldkit://relationship-profile/mounted-on.stand-ground@1",
   "worldkit://capability/relationship.seat@1": "worldkit://relationship-profile/seat.driver@1",
   "worldkit://capability/relationship.tether@1": "worldkit://relationship-profile/tether.standard@1"
 });
@@ -8134,7 +8257,7 @@ Object.freeze(
   )
 );
 const schemaVersion = 1;
-const defaults$1 = [{ "subjectDefinitionId": "animal.quadruped.forward-steer", "subjectDefinitionRef": "worldkit://subject-definition/animal.quadruped.forward-steer@2", "subjectDefinitionContentHash": "sha256:33201a745e15c386c45147dbdb30bf8aeae9af9bf4f52ad56502279572bf7759" }, { "subjectDefinitionId": "glider.paraglider.unpowered", "subjectDefinitionRef": "worldkit://subject-definition/glider.paraglider.unpowered@1", "subjectDefinitionContentHash": "sha256:8d0d7e0dd662703e613f7c143c350d7ab7cd8424e92e37aa8bb914006a5cf06f" }, { "subjectDefinitionId": "humanoid.g-bot", "subjectDefinitionRef": "worldkit://subject-definition/humanoid.g-bot@2", "subjectDefinitionContentHash": "sha256:7e56addb34e91835a229c309fd5c132ab94e895ebc529f827b47d46729d4f9c4" }, { "subjectDefinitionId": "surface-craft.ice-skimmer", "subjectDefinitionRef": "worldkit://subject-definition/surface-craft.ice-skimmer@1", "subjectDefinitionContentHash": "sha256:4dfaed753c6417e89ad386473f0c833cc3f75ed6cfdb154aa90e6436fdd2b92b" }, { "subjectDefinitionId": "vehicle.four-wheel.arcade", "subjectDefinitionRef": "worldkit://subject-definition/vehicle.four-wheel.arcade@1", "subjectDefinitionContentHash": "sha256:d9860837867a5125a7b5cdb5570ee9babdd8a93c40dac8b31b349863a2ed1f81" }, { "subjectDefinitionId": "watercraft.kayak.surface", "subjectDefinitionRef": "worldkit://subject-definition/watercraft.kayak.surface@1", "subjectDefinitionContentHash": "sha256:2a02e0520efa69b4d6a4c74481866329418f3dc5c14bb967ba502ee51f6e0d8a" }];
+const defaults$1 = [{ "subjectDefinitionId": "animal.quadruped.forward-steer", "subjectDefinitionRef": "worldkit://subject-definition/animal.quadruped.forward-steer@2", "subjectDefinitionContentHash": "sha256:4f53ebb7edf027ae8a6dffcc152041cc5343fac9c2244a4d73f4235293e3f69b" }, { "subjectDefinitionId": "glider.paraglider.unpowered", "subjectDefinitionRef": "worldkit://subject-definition/glider.paraglider.unpowered@1", "subjectDefinitionContentHash": "sha256:8d0d7e0dd662703e613f7c143c350d7ab7cd8424e92e37aa8bb914006a5cf06f" }, { "subjectDefinitionId": "humanoid.g-bot", "subjectDefinitionRef": "worldkit://subject-definition/humanoid.g-bot@2", "subjectDefinitionContentHash": "sha256:1f5c9007ce5f7a6e707d4809e51401bf9c0a9532ecc57e88930b9015e2dac92b" }, { "subjectDefinitionId": "surface-craft.ice-skimmer", "subjectDefinitionRef": "worldkit://subject-definition/surface-craft.ice-skimmer@1", "subjectDefinitionContentHash": "sha256:4dfaed753c6417e89ad386473f0c833cc3f75ed6cfdb154aa90e6436fdd2b92b" }, { "subjectDefinitionId": "vehicle.four-wheel.arcade", "subjectDefinitionRef": "worldkit://subject-definition/vehicle.four-wheel.arcade@1", "subjectDefinitionContentHash": "sha256:d9860837867a5125a7b5cdb5570ee9babdd8a93c40dac8b31b349863a2ed1f81" }, { "subjectDefinitionId": "watercraft.kayak.surface", "subjectDefinitionRef": "worldkit://subject-definition/watercraft.kayak.surface@1", "subjectDefinitionContentHash": "sha256:2a02e0520efa69b4d6a4c74481866329418f3dc5c14bb967ba502ee51f6e0d8a" }];
 const defaultCatalog = {
   schemaVersion,
   defaults: defaults$1
@@ -8744,7 +8867,7 @@ function normalizeCapabilityAssemblyV1(definition, request) {
     request.diagnostics
   );
   const unavailableRelationshipCapabilityRef = subject.relationshipCapabilityRefs.find(
-    (resourceRef) => resourceRef === "worldkit://capability/relationship.mount@1" || resourceRef === "worldkit://capability/relationship.seat@1" || resourceRef === "worldkit://capability/relationship.tether@1"
+    (resourceRef) => resourceRef === "worldkit://capability/relationship.seat@1" || resourceRef === "worldkit://capability/relationship.tether@1"
   );
   if (unavailableRelationshipCapabilityRef !== void 0) {
     addError$1(
@@ -8841,8 +8964,8 @@ function normalizeCapabilityAssemblyV1(definition, request) {
     return resource === void 0 ? [] : [resource];
   });
   const relationshipProfileRefs = subject.relationshipCapabilityRefs.flatMap((resourceRef) => {
-    if (resourceRef === "worldkit://capability/relationship.mount@1") {
-      return ["worldkit://relationship-profile/mount.reserved@1"];
+    if (resourceRef === "worldkit://capability/relationship.mounted-on@1") {
+      return ["worldkit://relationship-profile/mounted-on.stand-ground@1"];
     }
     if (resourceRef === "worldkit://capability/relationship.seat@1") {
       return ["worldkit://relationship-profile/seat.driver@1"];
@@ -9032,6 +9155,37 @@ function normalizeSockets(definition, instancePath, diagnostics) {
     },
     semanticTags: sortedStrings(socket.semanticTags)
   }).sort((left, right) => left.id.localeCompare(right.id));
+}
+function normalizeMountSlots(definition, sockets, instancePath, diagnostics) {
+  const mountSlots = "mountSlots" in definition ? definition.mountSlots : [];
+  reportDuplicateIds(
+    mountSlots,
+    "SUBJECT_MOUNT_SLOT_DUPLICATE",
+    `${instancePath}/mountSlots`,
+    diagnostics
+  );
+  const socketIds = new Set(sockets.map(({ id: id2 }) => id2));
+  mountSlots.forEach((slot, index) => {
+    if (!socketIds.has(slot.mountSocketId)) {
+      addError$1(
+        diagnostics,
+        "SUBJECT_MOUNT_SLOT_SOCKET_NOT_FOUND",
+        `${instancePath}/mountSlots/${index}/mountSocketId`,
+        `Mount slot '${slot.id}' references missing Socket '${slot.mountSocketId}'.`,
+        { mountSlotId: slot.id, mountSocketId: slot.mountSocketId }
+      );
+    }
+  });
+  return mountSlots.map((slot) => ({
+    id: slot.id,
+    kind: "mount-slot",
+    mode: "stand",
+    mountSocketId: slot.mountSocketId,
+    riderSubjectOriginOffsetMetersXYZ: cloneVec3(
+      slot.riderSubjectOriginOffsetMetersXYZ
+    ),
+    dismountCandidateOffsetsMetersXYZ: slot.dismountCandidateOffsetsMetersXYZ.map(cloneVec3)
+  })).sort((left, right) => left.id.localeCompare(right.id));
 }
 function resourcesOfKind(registry, kind) {
   return registry.listDiscoverableResources({ kind }).map((resource) => resource.resourceRef).sort((left, right) => left.localeCompare(right));
@@ -9389,6 +9543,12 @@ function normalizeSubjectDefinitionV2(request) {
   }
   const visualParts = normalizeVisualParts(definition, instancePath, diagnostics);
   const sockets = normalizeSockets(definition, instancePath, diagnostics);
+  const mountSlots = normalizeMountSlots(
+    definition,
+    sockets,
+    instancePath,
+    diagnostics
+  );
   const capabilityRefs = sortedStrings(definition.capabilityRefs);
   const selectedCapabilityRefs = new Set(capabilityRefs);
   const capabilities = capabilityRefs.flatMap((resourceRef) => {
@@ -9582,6 +9742,7 @@ function normalizeSubjectDefinitionV2(request) {
       animationSetRef: definition.visualBinding.animationSetRef
     },
     sockets,
+    mountSlots,
     colliderPolicy: structuredClone(definition.colliderPolicy),
     capabilityRefs,
     locomotionCapabilityRef: locomotionCapability.resourceRef,
@@ -16988,7 +17149,7 @@ const type$1 = "object";
 const additionalProperties$1 = false;
 const required$1 = ["kind", "schemaVersion", "id", "seed", "layout", "spatial", "world", "resources", "nodes", "relationships", "rules", "startup", "constraints"];
 const properties$1 = { "kind": { "const": "worldkit-authoring-spec" }, "schemaVersion": { "const": 4 }, "id": { "$ref": "#/$defs/id" }, "seed": { "type": "integer", "minimum": 0, "maximum": 4294967295 }, "provenance": { "$ref": "#/$defs/provenance" }, "layout": { "type": "object", "additionalProperties": false, "required": ["solverProfileRef"], "properties": { "solverProfileRef": { "type": "string", "format": "layout-solver-profile-ref" } } }, "spatial": { "type": "object", "additionalProperties": false, "required": ["regions", "routes", "traversalAreas", "screenRegions"], "properties": { "regions": { "type": "array", "maxItems": 256, "items": { "$ref": "#/$defs/spatialRegion" } }, "routes": { "type": "array", "maxItems": 256, "items": { "$ref": "#/$defs/route" } }, "traversalAreas": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/traversalArea" } }, "screenRegions": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/screenRegion" } } } }, "world": { "$ref": "#/$defs/world" }, "resources": { "type": "object", "additionalProperties": false, "required": ["prototypes", "subjectDefinitions"], "properties": { "prototypes": { "type": "array", "maxItems": 4096, "items": { "$ref": "#/$defs/prototype" } }, "subjectDefinitions": { "type": "array", "maxItems": 256, "items": { "$ref": "worldkit://schema/subject-definition@1" } } } }, "nodes": { "type": "array", "minItems": 4, "maxItems": 1e4, "items": { "oneOf": [{ "$ref": "#/$defs/terrainNode" }, { "$ref": "#/$defs/waterNode" }, { "$ref": "#/$defs/objectNode" }, { "$ref": "#/$defs/subjectNode" }, { "$ref": "#/$defs/cameraNode" }, { "$ref": "#/$defs/anchorNode" }] } }, "relationships": { "type": "array", "maxItems": 1e4, "items": { "$ref": "#/$defs/relationship" } }, "rules": { "type": "array", "maxItems": 1e4, "items": { "$ref": "#/$defs/rule" } }, "startup": { "$ref": "#/$defs/startup" }, "constraints": { "type": "object", "additionalProperties": false, "required": ["placements", "connectivity"], "properties": { "placements": { "type": "array", "maxItems": 128, "items": { "$ref": "#/$defs/placementConstraint" } }, "connectivity": { "type": "array", "maxItems": 128, "items": { "$ref": "#/$defs/connectivityConstraint" } } } } };
-const $defs$1 = /* @__PURE__ */ JSON.parse('{"uv":{"type":"array","prefixItems":[{"type":"number","minimum":0,"maximum":1},{"type":"number","minimum":0,"maximum":1}],"items":false,"minItems":2,"maxItems":2},"spatialRegion":{"type":"object","additionalProperties":false,"required":["id","kind","pointsMetersXZ","semanticClassId"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"polygon-xz"},"pointsMetersXZ":{"type":"array","minItems":3,"maxItems":4096,"items":{"$ref":"#/$defs/vec2"}},"minimumHeightMeters":{"type":"number"},"maximumHeightMeters":{"type":"number"},"semanticClassId":{"type":"string","minLength":1,"maxLength":128}}},"route":{"type":"object","additionalProperties":false,"required":["id","kind","pointsMetersXZ","widthMeters","locomotionProfileRef"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"polyline-xz"},"pointsMetersXZ":{"type":"array","minItems":2,"maxItems":4096,"items":{"$ref":"#/$defs/vec2"}},"widthMeters":{"type":"number","exclusiveMinimum":0},"locomotionProfileRef":{"type":"string","format":"locomotion-profile-ref"}}},"traversalArea":{"type":"object","additionalProperties":false,"required":["id","kind","pointsMetersXZ","surfaceEntityId","mode"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"polygon-xz"},"pointsMetersXZ":{"type":"array","minItems":3,"maxItems":128,"items":{"$ref":"#/$defs/vec2"}},"surfaceEntityId":{"$ref":"#/$defs/id"},"mode":{"const":"blocked"}}},"screenRegion":{"type":"object","additionalProperties":false,"required":["id","kind","minimumUv","maximumUv"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"rectangle-uv"},"minimumUv":{"$ref":"#/$defs/uv"},"maximumUv":{"$ref":"#/$defs/uv"}}},"placement":{"oneOf":[{"type":"object","additionalProperties":false,"required":["kind","transform"],"properties":{"kind":{"const":"fixed"},"transform":{"$ref":"#/$defs/transform"}}},{"type":"object","additionalProperties":false,"required":["kind","placementConstraintIds"],"properties":{"kind":{"const":"solved"},"initialTransform":{"$ref":"#/$defs/transform"},"placementConstraintIds":{"type":"array","minItems":1,"maxItems":128,"uniqueItems":true,"items":{"$ref":"#/$defs/id"}}}}]},"objectNode":{"type":"object","additionalProperties":false,"required":["id","kind","prototypeRef","placement"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"object"},"prototypeRef":{"type":"string","format":"package-prototype-ref"},"placement":{"$ref":"#/$defs/placement"}}},"anchorNode":{"type":"object","additionalProperties":false,"required":["id","kind","placement","semantic"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"anchor"},"placement":{"$ref":"#/$defs/placement"},"semantic":{"$ref":"#/$defs/semantic"}}},"cameraNode":{"type":"object","additionalProperties":false,"required":["id","kind","components"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"camera"},"components":{"type":"object","additionalProperties":false,"required":["cameraRig"],"properties":{"cameraRig":{"type":"object","additionalProperties":false,"required":["defaultRigRef","allowedRigRefs","target","thirdPerson","manualSwitchAllowed"],"properties":{"defaultRigRef":{"$ref":"#/$defs/resourceRef"},"allowedRigRefs":{"type":"array","minItems":1,"maxItems":16,"uniqueItems":true,"items":{"$ref":"#/$defs/resourceRef"}},"target":{"type":"object","additionalProperties":false,"required":["targetEntityId"],"properties":{"targetEntityId":{"$ref":"#/$defs/id"},"targetHeightMeters":{"type":"number"}}},"thirdPerson":{"type":"object","additionalProperties":false,"required":["pitchRadians","distanceMeters","targetHeightMeters","fovDegrees","aspectRatio"],"properties":{"pitchRadians":{"type":"number","minimum":-0.95,"maximum":0.65},"distanceMeters":{"type":"number","minimum":1.8,"maximum":8},"targetHeightMeters":{"type":"number","minimum":0.5,"maximum":4.5},"fovDegrees":{"type":"number","minimum":35,"maximum":90},"aspectRatio":{"type":"number","minimum":0.25,"maximum":4}}},"manualSwitchAllowed":{"type":"boolean"}}}}}}},"insideRegionConstraint":{"type":"object","additionalProperties":false,"required":["id","kind","requirement","entityId","regionId","boundaryClearanceMeters"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"inside-region"},"requirement":{"enum":["required","preferred"]},"preferenceWeightRatio":{"type":"number","exclusiveMinimum":0,"maximum":1},"entityId":{"$ref":"#/$defs/id"},"regionId":{"$ref":"#/$defs/id"},"boundaryClearanceMeters":{"type":"number","minimum":0}},"allOf":[{"$ref":"#/$defs/requirementWeight"}]},"outsideRegionConstraint":{"type":"object","additionalProperties":false,"required":["id","kind","requirement","entityId","regionId","boundaryClearanceMeters"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"outside-region"},"requirement":{"enum":["required","preferred"]},"preferenceWeightRatio":{"type":"number","exclusiveMinimum":0,"maximum":1},"entityId":{"$ref":"#/$defs/id"},"regionId":{"$ref":"#/$defs/id"},"boundaryClearanceMeters":{"type":"number","minimum":0}},"allOf":[{"$ref":"#/$defs/requirementWeight"}]},"distanceRangeConstraint":{"type":"object","additionalProperties":false,"required":["id","kind","requirement","entityId","referenceEntityId","minimumDistanceMeters","maximumDistanceMeters"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"distance-range"},"requirement":{"enum":["required","preferred"]},"preferenceWeightRatio":{"type":"number","exclusiveMinimum":0,"maximum":1},"entityId":{"$ref":"#/$defs/id"},"referenceEntityId":{"$ref":"#/$defs/id"},"minimumDistanceMeters":{"type":"number","minimum":0},"maximumDistanceMeters":{"type":"number","minimum":0}},"allOf":[{"$ref":"#/$defs/requirementWeight"}]},"facesEntityConstraint":{"type":"object","additionalProperties":false,"required":["id","kind","requirement","facingEntityId","targetEntityId","maximumAngularDeviationDegrees"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"faces-entity"},"requirement":{"enum":["required","preferred"]},"preferenceWeightRatio":{"type":"number","exclusiveMinimum":0,"maximum":1},"facingEntityId":{"$ref":"#/$defs/id"},"targetEntityId":{"$ref":"#/$defs/id"},"maximumAngularDeviationDegrees":{"type":"number","minimum":0,"maximum":180}},"allOf":[{"$ref":"#/$defs/requirementWeight"}]},"supportedByConstraint":{"type":"object","additionalProperties":false,"required":["id","kind","requirement","supportedEntityId","supportingEntityId","maximumSupportGapMeters","minimumSupportRatio"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"supported-by"},"requirement":{"enum":["required","preferred"]},"preferenceWeightRatio":{"type":"number","exclusiveMinimum":0,"maximum":1},"supportedEntityId":{"$ref":"#/$defs/id"},"supportingEntityId":{"$ref":"#/$defs/id"},"maximumSupportGapMeters":{"type":"number","minimum":0},"minimumSupportRatio":{"type":"number","minimum":0,"maximum":1}},"allOf":[{"$ref":"#/$defs/requirementWeight"}]},"minimumClearanceConstraint":{"type":"object","additionalProperties":false,"required":["id","kind","requirement","entityId","clearanceMeters"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"minimum-clearance"},"requirement":{"enum":["required","preferred"]},"preferenceWeightRatio":{"type":"number","exclusiveMinimum":0,"maximum":1},"entityId":{"$ref":"#/$defs/id"},"clearanceMeters":{"type":"number","minimum":0},"otherEntityIds":{"type":"array","minItems":1,"maxItems":256,"uniqueItems":true,"items":{"$ref":"#/$defs/id"}},"semanticClassIds":{"type":"array","minItems":1,"maxItems":256,"uniqueItems":true,"items":{"type":"string","minLength":1,"maxLength":128}}},"oneOf":[{"type":"object","properties":{"otherEntityIds":true},"required":["otherEntityIds"],"not":{"type":"object","properties":{"semanticClassIds":true},"required":["semanticClassIds"]}},{"type":"object","properties":{"semanticClassIds":true},"required":["semanticClassIds"],"not":{"type":"object","properties":{"otherEntityIds":true},"required":["otherEntityIds"]}}],"allOf":[{"$ref":"#/$defs/requirementWeight"}]},"withinSlopeLimitConstraint":{"type":"object","additionalProperties":false,"required":["id","kind","requirement","terrainEntityId","maximumSlopeDegrees"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"within-slope-limit"},"requirement":{"enum":["required","preferred"]},"preferenceWeightRatio":{"type":"number","exclusiveMinimum":0,"maximum":1},"entityId":{"$ref":"#/$defs/id"},"routeId":{"$ref":"#/$defs/id"},"terrainEntityId":{"$ref":"#/$defs/id"},"maximumSlopeDegrees":{"type":"number","minimum":0,"maximum":90}},"oneOf":[{"type":"object","properties":{"entityId":true},"required":["entityId"],"not":{"type":"object","properties":{"routeId":true},"required":["routeId"]}},{"type":"object","properties":{"routeId":true},"required":["routeId"],"not":{"type":"object","properties":{"entityId":true},"required":["entityId"]}}],"allOf":[{"$ref":"#/$defs/requirementWeight"}]},"visibleInCameraRegionConstraint":{"type":"object","additionalProperties":false,"required":["id","kind","requirement","visibleEntityId","cameraEntityId","screenRegionId","minimumVisibleRatio","minimumProjectedAreaRatio"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"visible-in-camera-region"},"requirement":{"enum":["required","preferred"]},"preferenceWeightRatio":{"type":"number","exclusiveMinimum":0,"maximum":1},"visibleEntityId":{"$ref":"#/$defs/id"},"cameraEntityId":{"$ref":"#/$defs/id"},"screenRegionId":{"$ref":"#/$defs/id"},"minimumVisibleRatio":{"type":"number","minimum":0,"maximum":1},"minimumProjectedAreaRatio":{"type":"number","minimum":0,"maximum":1}},"allOf":[{"$ref":"#/$defs/requirementWeight"}]},"requirementWeight":{"type":"object","properties":{"requirement":{"enum":["required","preferred"]},"preferenceWeightRatio":{"type":"number","exclusiveMinimum":0,"maximum":1}},"if":{"type":"object","properties":{"requirement":{"const":"preferred"}},"required":["requirement"]},"then":{"type":"object","properties":{"preferenceWeightRatio":true},"required":["preferenceWeightRatio"]},"else":{"type":"object","not":{"type":"object","properties":{"preferenceWeightRatio":true},"required":["preferenceWeightRatio"]}}},"connectedByRouteConstraint":{"type":"object","additionalProperties":false,"required":["id","kind","requirement","traversingEntityId","startAnchorEntityId","destinationAnchorEntityId","routeId"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"connected-by-route"},"requirement":{"const":"required"},"traversingEntityId":{"$ref":"#/$defs/id"},"startAnchorEntityId":{"$ref":"#/$defs/id"},"destinationAnchorEntityId":{"$ref":"#/$defs/id"},"routeId":{"$ref":"#/$defs/id"}}},"connectivityConstraint":{"oneOf":[{"$ref":"#/$defs/connectedByRouteConstraint"}]},"placementConstraint":{"oneOf":[{"$ref":"#/$defs/insideRegionConstraint"},{"$ref":"#/$defs/outsideRegionConstraint"},{"$ref":"#/$defs/distanceRangeConstraint"},{"$ref":"#/$defs/facesEntityConstraint"},{"$ref":"#/$defs/supportedByConstraint"},{"$ref":"#/$defs/minimumClearanceConstraint"},{"$ref":"#/$defs/withinSlopeLimitConstraint"},{"$ref":"#/$defs/visibleInCameraRegionConstraint"}]},"id":{"type":"string","pattern":"^[a-z0-9][a-z0-9.-]{0,63}$"},"resourceRef":{"type":"string","format":"worldkit-resource-ref"},"positiveNumber":{"type":"number","exclusiveMinimum":0},"vec2":{"type":"array","prefixItems":[{"type":"number"},{"type":"number"}],"items":false,"minItems":2,"maxItems":2},"positiveVec2":{"type":"array","prefixItems":[{"$ref":"#/$defs/positiveNumber"},{"$ref":"#/$defs/positiveNumber"}],"items":false,"minItems":2,"maxItems":2},"vec3":{"type":"array","prefixItems":[{"type":"number"},{"type":"number"},{"type":"number"}],"items":false,"minItems":3,"maxItems":3},"positiveVec3":{"type":"array","prefixItems":[{"$ref":"#/$defs/positiveNumber"},{"$ref":"#/$defs/positiveNumber"},{"$ref":"#/$defs/positiveNumber"}],"items":false,"minItems":3,"maxItems":3},"semantic":{"type":"object","additionalProperties":false,"required":["classId"],"properties":{"classId":{"type":"string","minLength":1,"maxLength":128}}},"transform":{"type":"object","additionalProperties":false,"required":["positionMetersXYZ"],"properties":{"positionMetersXYZ":{"$ref":"#/$defs/vec3"},"rotationEulerRadiansXYZ":{"$ref":"#/$defs/vec3"},"scaleXYZ":{"$ref":"#/$defs/positiveVec3"}}},"provenance":{"type":"object","additionalProperties":false,"properties":{"userPrompt":{"type":"string","maxLength":20000},"referenceImages":{"type":"array","maxItems":64,"items":{"type":"object","additionalProperties":false,"required":["assetRef","evidenceClass"],"properties":{"assetRef":{"$ref":"#/$defs/resourceRef"},"evidenceClass":{"enum":["user-explicit","reference-visible","planner-inferred"]}}}}}},"world":{"type":"object","additionalProperties":false,"required":["coordinateSystem","bounds","gravityMetersPerSecondSquaredXYZ","environment","resourceBudget"],"properties":{"coordinateSystem":{"const":"right-handed-y-up-minus-z-forward"},"bounds":{"type":"object","additionalProperties":false,"required":["centerMetersXZ","sizeMetersXZ","heightRangeMeters"],"properties":{"centerMetersXZ":{"$ref":"#/$defs/vec2"},"sizeMetersXZ":{"$ref":"#/$defs/positiveVec2"},"heightRangeMeters":{"type":"array","prefixItems":[{"type":"number"},{"type":"number"}],"items":false,"minItems":2,"maxItems":2}}},"gravityMetersPerSecondSquaredXYZ":{"$ref":"#/$defs/vec3"},"environment":{"type":"object","additionalProperties":false,"required":["preset"],"properties":{"preset":{"enum":["clear-day","golden-hour","overcast","night"]}}},"resourceBudget":{"type":"object","additionalProperties":false,"required":["maxVertices","maxTriangles","maxColliders"],"properties":{"maxVertices":{"type":"integer","minimum":1},"maxTriangles":{"type":"integer","minimum":1},"maxColliders":{"type":"integer","minimum":1}}}}},"traversalSurfaceBinding":{"type":"object","additionalProperties":false,"required":["id","kind","logicalSubshapeId","traversalSurfaceProfileRef"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"collider-subshape"},"logicalSubshapeId":{"$ref":"#/$defs/id"},"traversalSurfaceProfileRef":{"type":"string","format":"traversal-surface-profile-ref"}}},"prototype":{"oneOf":[{"type":"object","additionalProperties":false,"required":["id","version","kind","primitive","sizeMetersXYZ","collisionEnabled"],"properties":{"id":{"$ref":"#/$defs/id"},"version":{"const":1},"kind":{"const":"primitive"},"primitive":{"const":"box"},"sizeMetersXYZ":{"$ref":"#/$defs/positiveVec3"},"collisionEnabled":{"type":"boolean"},"traversalSurfaceBindings":{"type":"array","items":{"$ref":"#/$defs/traversalSurfaceBinding"}},"semantic":{"$ref":"#/$defs/semantic"}}},{"type":"object","additionalProperties":false,"required":["id","version","kind","primitive","radiusMeters","collisionEnabled"],"properties":{"id":{"$ref":"#/$defs/id"},"version":{"const":1},"kind":{"const":"primitive"},"primitive":{"const":"sphere"},"radiusMeters":{"$ref":"#/$defs/positiveNumber"},"collisionEnabled":{"type":"boolean"},"traversalSurfaceBindings":{"type":"array","items":{"$ref":"#/$defs/traversalSurfaceBinding"}},"semantic":{"$ref":"#/$defs/semantic"}}},{"type":"object","additionalProperties":false,"required":["id","version","kind","primitive","radiusMeters","heightMeters","collisionEnabled"],"properties":{"id":{"$ref":"#/$defs/id"},"version":{"const":1},"kind":{"const":"primitive"},"primitive":{"const":"cylinder"},"radiusMeters":{"$ref":"#/$defs/positiveNumber"},"heightMeters":{"$ref":"#/$defs/positiveNumber"},"collisionEnabled":{"type":"boolean"},"traversalSurfaceBindings":{"type":"array","items":{"$ref":"#/$defs/traversalSurfaceBinding"}},"semantic":{"$ref":"#/$defs/semantic"}}},{"type":"object","additionalProperties":false,"required":["id","version","kind","primitive","radiusMeters","heightMeters","collisionEnabled"],"properties":{"id":{"$ref":"#/$defs/id"},"version":{"const":1},"kind":{"const":"primitive"},"primitive":{"const":"cone"},"radiusMeters":{"$ref":"#/$defs/positiveNumber"},"heightMeters":{"$ref":"#/$defs/positiveNumber"},"collisionEnabled":{"type":"boolean"},"traversalSurfaceBindings":{"type":"array","items":{"$ref":"#/$defs/traversalSurfaceBinding"}},"semantic":{"$ref":"#/$defs/semantic"}}}]},"proceduralSource":{"type":"object","additionalProperties":false,"required":["kind","relief"],"properties":{"kind":{"const":"procedural"},"relief":{"enum":["flat","plain","hills","mountains"]},"baseHeightMeters":{"type":"number"},"amplitudeMeters":{"type":"number","minimum":0},"frequencyPerMeter":{"$ref":"#/$defs/positiveNumber"},"octaves":{"type":"integer","minimum":1,"maximum":8},"lacunarityRatio":{"$ref":"#/$defs/positiveNumber"},"persistenceRatio":{"type":"number","exclusiveMinimum":0,"maximum":1}}},"terrainNode":{"type":"object","additionalProperties":false,"required":["id","kind","components"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"terrain"},"components":{"type":"object","additionalProperties":false,"required":["terrain"],"properties":{"terrain":{"type":"object","additionalProperties":false,"required":["source","grid"],"properties":{"source":{"$ref":"#/$defs/proceduralSource"},"grid":{"type":"object","additionalProperties":false,"required":["centerMetersXZ","sizeMetersXZ","resolutionCellsXZ"],"properties":{"centerMetersXZ":{"$ref":"#/$defs/vec2"},"sizeMetersXZ":{"$ref":"#/$defs/positiveVec2"},"resolutionCellsXZ":{"type":"array","prefixItems":[{"type":"integer","minimum":2,"maximum":1025},{"type":"integer","minimum":2,"maximum":1025}],"items":false,"minItems":2,"maxItems":2},"heightSamplesMeters":{"type":"array","minItems":4,"maxItems":1048576,"items":{"type":"number"}}}},"semantic":{"$ref":"#/$defs/semantic"}}}}}}},"waterBoundary":{"oneOf":[{"type":"object","additionalProperties":false,"required":["kind","centerMetersXZ","radiusMeters"],"properties":{"kind":{"const":"circle"},"centerMetersXZ":{"$ref":"#/$defs/vec2"},"radiusMeters":{"$ref":"#/$defs/positiveNumber"}}},{"type":"object","additionalProperties":false,"required":["kind","centerMetersXZ","radiusMetersXZ"],"properties":{"kind":{"const":"ellipse"},"centerMetersXZ":{"$ref":"#/$defs/vec2"},"radiusMetersXZ":{"$ref":"#/$defs/positiveVec2"}}},{"type":"object","additionalProperties":false,"required":["kind","pointsMetersXZ"],"properties":{"kind":{"const":"polygon"},"pointsMetersXZ":{"type":"array","minItems":3,"maxItems":4096,"items":{"$ref":"#/$defs/vec2"}}}}]},"waterNode":{"type":"object","additionalProperties":false,"required":["id","kind","components"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"water"},"components":{"type":"object","additionalProperties":false,"required":["water"],"properties":{"water":{"type":"object","additionalProperties":false,"required":["terrainEntityId","boundary","depthMeters"],"properties":{"terrainEntityId":{"$ref":"#/$defs/id"},"boundary":{"$ref":"#/$defs/waterBoundary"},"depthMeters":{"$ref":"#/$defs/positiveNumber"},"shoreWidthMeters":{"type":"number","minimum":0},"waterLevelMeters":{"type":"number"},"traversalMode":{"enum":["blocked","swimmable","walkable"]},"semantic":{"$ref":"#/$defs/semantic"}}}}}}},"subjectNode":{"type":"object","additionalProperties":false,"required":["id","kind","subjectDefinitionRef"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"subject"},"subjectDefinitionRef":{"type":"string","format":"subject-definition-ref"},"spawnAnchorEntityId":{"$ref":"#/$defs/id"}}},"relationship":{"type":"object","additionalProperties":false,"required":["id","type","schemaVersion"],"properties":{"id":{"$ref":"#/$defs/id"},"type":{"type":"string","minLength":1},"schemaVersion":{"const":1}}},"rule":{"type":"object","additionalProperties":false,"required":["id","kind"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"type":"string","minLength":1}}},"startup":{"type":"object","additionalProperties":false,"required":["spawnAnchorEntityId","controlledEntityId","cameraEntityId"],"properties":{"spawnAnchorEntityId":{"$ref":"#/$defs/id"},"controlledEntityId":{"$ref":"#/$defs/id"},"cameraEntityId":{"$ref":"#/$defs/id"}}}}');
+const $defs$1 = /* @__PURE__ */ JSON.parse('{"uv":{"type":"array","prefixItems":[{"type":"number","minimum":0,"maximum":1},{"type":"number","minimum":0,"maximum":1}],"items":false,"minItems":2,"maxItems":2},"spatialRegion":{"type":"object","additionalProperties":false,"required":["id","kind","pointsMetersXZ","semanticClassId"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"polygon-xz"},"pointsMetersXZ":{"type":"array","minItems":3,"maxItems":4096,"items":{"$ref":"#/$defs/vec2"}},"minimumHeightMeters":{"type":"number"},"maximumHeightMeters":{"type":"number"},"semanticClassId":{"type":"string","minLength":1,"maxLength":128}}},"route":{"type":"object","additionalProperties":false,"required":["id","kind","pointsMetersXZ","widthMeters","locomotionProfileRef"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"polyline-xz"},"pointsMetersXZ":{"type":"array","minItems":2,"maxItems":4096,"items":{"$ref":"#/$defs/vec2"}},"widthMeters":{"type":"number","exclusiveMinimum":0},"locomotionProfileRef":{"type":"string","format":"locomotion-profile-ref"}}},"traversalArea":{"type":"object","additionalProperties":false,"required":["id","kind","pointsMetersXZ","surfaceEntityId","mode"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"polygon-xz"},"pointsMetersXZ":{"type":"array","minItems":3,"maxItems":128,"items":{"$ref":"#/$defs/vec2"}},"surfaceEntityId":{"$ref":"#/$defs/id"},"mode":{"const":"blocked"}}},"screenRegion":{"type":"object","additionalProperties":false,"required":["id","kind","minimumUv","maximumUv"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"rectangle-uv"},"minimumUv":{"$ref":"#/$defs/uv"},"maximumUv":{"$ref":"#/$defs/uv"}}},"placement":{"oneOf":[{"type":"object","additionalProperties":false,"required":["kind","transform"],"properties":{"kind":{"const":"fixed"},"transform":{"$ref":"#/$defs/transform"}}},{"type":"object","additionalProperties":false,"required":["kind","placementConstraintIds"],"properties":{"kind":{"const":"solved"},"initialTransform":{"$ref":"#/$defs/transform"},"placementConstraintIds":{"type":"array","minItems":1,"maxItems":128,"uniqueItems":true,"items":{"$ref":"#/$defs/id"}}}}]},"objectNode":{"type":"object","additionalProperties":false,"required":["id","kind","prototypeRef","placement"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"object"},"prototypeRef":{"type":"string","format":"package-prototype-ref"},"placement":{"$ref":"#/$defs/placement"}}},"anchorNode":{"type":"object","additionalProperties":false,"required":["id","kind","placement","semantic"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"anchor"},"placement":{"$ref":"#/$defs/placement"},"semantic":{"$ref":"#/$defs/semantic"}}},"cameraNode":{"type":"object","additionalProperties":false,"required":["id","kind","components"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"camera"},"components":{"type":"object","additionalProperties":false,"required":["cameraRig"],"properties":{"cameraRig":{"type":"object","additionalProperties":false,"required":["defaultRigRef","allowedRigRefs","target","thirdPerson","manualSwitchAllowed"],"properties":{"defaultRigRef":{"$ref":"#/$defs/resourceRef"},"allowedRigRefs":{"type":"array","minItems":1,"maxItems":16,"uniqueItems":true,"items":{"$ref":"#/$defs/resourceRef"}},"target":{"type":"object","additionalProperties":false,"required":["targetEntityId"],"properties":{"targetEntityId":{"$ref":"#/$defs/id"},"targetHeightMeters":{"type":"number"}}},"thirdPerson":{"type":"object","additionalProperties":false,"required":["pitchRadians","distanceMeters","targetHeightMeters","fovDegrees","aspectRatio"],"properties":{"pitchRadians":{"type":"number","minimum":-0.95,"maximum":0.65},"distanceMeters":{"type":"number","minimum":1.8,"maximum":8},"targetHeightMeters":{"type":"number","minimum":0.5,"maximum":4.5},"fovDegrees":{"type":"number","minimum":35,"maximum":90},"aspectRatio":{"type":"number","minimum":0.25,"maximum":4}}},"manualSwitchAllowed":{"type":"boolean"}}}}}}},"insideRegionConstraint":{"type":"object","additionalProperties":false,"required":["id","kind","requirement","entityId","regionId","boundaryClearanceMeters"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"inside-region"},"requirement":{"enum":["required","preferred"]},"preferenceWeightRatio":{"type":"number","exclusiveMinimum":0,"maximum":1},"entityId":{"$ref":"#/$defs/id"},"regionId":{"$ref":"#/$defs/id"},"boundaryClearanceMeters":{"type":"number","minimum":0}},"allOf":[{"$ref":"#/$defs/requirementWeight"}]},"outsideRegionConstraint":{"type":"object","additionalProperties":false,"required":["id","kind","requirement","entityId","regionId","boundaryClearanceMeters"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"outside-region"},"requirement":{"enum":["required","preferred"]},"preferenceWeightRatio":{"type":"number","exclusiveMinimum":0,"maximum":1},"entityId":{"$ref":"#/$defs/id"},"regionId":{"$ref":"#/$defs/id"},"boundaryClearanceMeters":{"type":"number","minimum":0}},"allOf":[{"$ref":"#/$defs/requirementWeight"}]},"distanceRangeConstraint":{"type":"object","additionalProperties":false,"required":["id","kind","requirement","entityId","referenceEntityId","minimumDistanceMeters","maximumDistanceMeters"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"distance-range"},"requirement":{"enum":["required","preferred"]},"preferenceWeightRatio":{"type":"number","exclusiveMinimum":0,"maximum":1},"entityId":{"$ref":"#/$defs/id"},"referenceEntityId":{"$ref":"#/$defs/id"},"minimumDistanceMeters":{"type":"number","minimum":0},"maximumDistanceMeters":{"type":"number","minimum":0}},"allOf":[{"$ref":"#/$defs/requirementWeight"}]},"facesEntityConstraint":{"type":"object","additionalProperties":false,"required":["id","kind","requirement","facingEntityId","targetEntityId","maximumAngularDeviationDegrees"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"faces-entity"},"requirement":{"enum":["required","preferred"]},"preferenceWeightRatio":{"type":"number","exclusiveMinimum":0,"maximum":1},"facingEntityId":{"$ref":"#/$defs/id"},"targetEntityId":{"$ref":"#/$defs/id"},"maximumAngularDeviationDegrees":{"type":"number","minimum":0,"maximum":180}},"allOf":[{"$ref":"#/$defs/requirementWeight"}]},"supportedByConstraint":{"type":"object","additionalProperties":false,"required":["id","kind","requirement","supportedEntityId","supportingEntityId","maximumSupportGapMeters","minimumSupportRatio"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"supported-by"},"requirement":{"enum":["required","preferred"]},"preferenceWeightRatio":{"type":"number","exclusiveMinimum":0,"maximum":1},"supportedEntityId":{"$ref":"#/$defs/id"},"supportingEntityId":{"$ref":"#/$defs/id"},"maximumSupportGapMeters":{"type":"number","minimum":0},"minimumSupportRatio":{"type":"number","minimum":0,"maximum":1}},"allOf":[{"$ref":"#/$defs/requirementWeight"}]},"minimumClearanceConstraint":{"type":"object","additionalProperties":false,"required":["id","kind","requirement","entityId","clearanceMeters"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"minimum-clearance"},"requirement":{"enum":["required","preferred"]},"preferenceWeightRatio":{"type":"number","exclusiveMinimum":0,"maximum":1},"entityId":{"$ref":"#/$defs/id"},"clearanceMeters":{"type":"number","minimum":0},"otherEntityIds":{"type":"array","minItems":1,"maxItems":256,"uniqueItems":true,"items":{"$ref":"#/$defs/id"}},"semanticClassIds":{"type":"array","minItems":1,"maxItems":256,"uniqueItems":true,"items":{"type":"string","minLength":1,"maxLength":128}}},"oneOf":[{"type":"object","properties":{"otherEntityIds":true},"required":["otherEntityIds"],"not":{"type":"object","properties":{"semanticClassIds":true},"required":["semanticClassIds"]}},{"type":"object","properties":{"semanticClassIds":true},"required":["semanticClassIds"],"not":{"type":"object","properties":{"otherEntityIds":true},"required":["otherEntityIds"]}}],"allOf":[{"$ref":"#/$defs/requirementWeight"}]},"withinSlopeLimitConstraint":{"type":"object","additionalProperties":false,"required":["id","kind","requirement","terrainEntityId","maximumSlopeDegrees"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"within-slope-limit"},"requirement":{"enum":["required","preferred"]},"preferenceWeightRatio":{"type":"number","exclusiveMinimum":0,"maximum":1},"entityId":{"$ref":"#/$defs/id"},"routeId":{"$ref":"#/$defs/id"},"terrainEntityId":{"$ref":"#/$defs/id"},"maximumSlopeDegrees":{"type":"number","minimum":0,"maximum":90}},"oneOf":[{"type":"object","properties":{"entityId":true},"required":["entityId"],"not":{"type":"object","properties":{"routeId":true},"required":["routeId"]}},{"type":"object","properties":{"routeId":true},"required":["routeId"],"not":{"type":"object","properties":{"entityId":true},"required":["entityId"]}}],"allOf":[{"$ref":"#/$defs/requirementWeight"}]},"visibleInCameraRegionConstraint":{"type":"object","additionalProperties":false,"required":["id","kind","requirement","visibleEntityId","cameraEntityId","screenRegionId","minimumVisibleRatio","minimumProjectedAreaRatio"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"visible-in-camera-region"},"requirement":{"enum":["required","preferred"]},"preferenceWeightRatio":{"type":"number","exclusiveMinimum":0,"maximum":1},"visibleEntityId":{"$ref":"#/$defs/id"},"cameraEntityId":{"$ref":"#/$defs/id"},"screenRegionId":{"$ref":"#/$defs/id"},"minimumVisibleRatio":{"type":"number","minimum":0,"maximum":1},"minimumProjectedAreaRatio":{"type":"number","minimum":0,"maximum":1}},"allOf":[{"$ref":"#/$defs/requirementWeight"}]},"requirementWeight":{"type":"object","properties":{"requirement":{"enum":["required","preferred"]},"preferenceWeightRatio":{"type":"number","exclusiveMinimum":0,"maximum":1}},"if":{"type":"object","properties":{"requirement":{"const":"preferred"}},"required":["requirement"]},"then":{"type":"object","properties":{"preferenceWeightRatio":true},"required":["preferenceWeightRatio"]},"else":{"type":"object","not":{"type":"object","properties":{"preferenceWeightRatio":true},"required":["preferenceWeightRatio"]}}},"connectedByRouteConstraint":{"type":"object","additionalProperties":false,"required":["id","kind","requirement","traversingEntityId","startAnchorEntityId","destinationAnchorEntityId","routeId"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"connected-by-route"},"requirement":{"const":"required"},"traversingEntityId":{"$ref":"#/$defs/id"},"startAnchorEntityId":{"$ref":"#/$defs/id"},"destinationAnchorEntityId":{"$ref":"#/$defs/id"},"routeId":{"$ref":"#/$defs/id"}}},"connectivityConstraint":{"oneOf":[{"$ref":"#/$defs/connectedByRouteConstraint"}]},"placementConstraint":{"oneOf":[{"$ref":"#/$defs/insideRegionConstraint"},{"$ref":"#/$defs/outsideRegionConstraint"},{"$ref":"#/$defs/distanceRangeConstraint"},{"$ref":"#/$defs/facesEntityConstraint"},{"$ref":"#/$defs/supportedByConstraint"},{"$ref":"#/$defs/minimumClearanceConstraint"},{"$ref":"#/$defs/withinSlopeLimitConstraint"},{"$ref":"#/$defs/visibleInCameraRegionConstraint"}]},"id":{"type":"string","pattern":"^[a-z0-9][a-z0-9.-]{0,63}$"},"resourceRef":{"type":"string","format":"worldkit-resource-ref"},"positiveNumber":{"type":"number","exclusiveMinimum":0},"vec2":{"type":"array","prefixItems":[{"type":"number"},{"type":"number"}],"items":false,"minItems":2,"maxItems":2},"positiveVec2":{"type":"array","prefixItems":[{"$ref":"#/$defs/positiveNumber"},{"$ref":"#/$defs/positiveNumber"}],"items":false,"minItems":2,"maxItems":2},"vec3":{"type":"array","prefixItems":[{"type":"number"},{"type":"number"},{"type":"number"}],"items":false,"minItems":3,"maxItems":3},"positiveVec3":{"type":"array","prefixItems":[{"$ref":"#/$defs/positiveNumber"},{"$ref":"#/$defs/positiveNumber"},{"$ref":"#/$defs/positiveNumber"}],"items":false,"minItems":3,"maxItems":3},"semantic":{"type":"object","additionalProperties":false,"required":["classId"],"properties":{"classId":{"type":"string","minLength":1,"maxLength":128}}},"transform":{"type":"object","additionalProperties":false,"required":["positionMetersXYZ"],"properties":{"positionMetersXYZ":{"$ref":"#/$defs/vec3"},"rotationEulerRadiansXYZ":{"$ref":"#/$defs/vec3"},"scaleXYZ":{"$ref":"#/$defs/positiveVec3"}}},"provenance":{"type":"object","additionalProperties":false,"properties":{"userPrompt":{"type":"string","maxLength":20000},"referenceImages":{"type":"array","maxItems":64,"items":{"type":"object","additionalProperties":false,"required":["assetRef","evidenceClass"],"properties":{"assetRef":{"$ref":"#/$defs/resourceRef"},"evidenceClass":{"enum":["user-explicit","reference-visible","planner-inferred"]}}}}}},"world":{"type":"object","additionalProperties":false,"required":["coordinateSystem","bounds","gravityMetersPerSecondSquaredXYZ","environment","resourceBudget"],"properties":{"coordinateSystem":{"const":"right-handed-y-up-minus-z-forward"},"bounds":{"type":"object","additionalProperties":false,"required":["centerMetersXZ","sizeMetersXZ","heightRangeMeters"],"properties":{"centerMetersXZ":{"$ref":"#/$defs/vec2"},"sizeMetersXZ":{"$ref":"#/$defs/positiveVec2"},"heightRangeMeters":{"type":"array","prefixItems":[{"type":"number"},{"type":"number"}],"items":false,"minItems":2,"maxItems":2}}},"gravityMetersPerSecondSquaredXYZ":{"$ref":"#/$defs/vec3"},"environment":{"type":"object","additionalProperties":false,"required":["preset"],"properties":{"preset":{"enum":["clear-day","golden-hour","overcast","night"]}}},"resourceBudget":{"type":"object","additionalProperties":false,"required":["maxVertices","maxTriangles","maxColliders"],"properties":{"maxVertices":{"type":"integer","minimum":1},"maxTriangles":{"type":"integer","minimum":1},"maxColliders":{"type":"integer","minimum":1}}}}},"traversalSurfaceBinding":{"type":"object","additionalProperties":false,"required":["id","kind","logicalSubshapeId","traversalSurfaceProfileRef"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"collider-subshape"},"logicalSubshapeId":{"$ref":"#/$defs/id"},"traversalSurfaceProfileRef":{"type":"string","format":"traversal-surface-profile-ref"}}},"prototype":{"oneOf":[{"type":"object","additionalProperties":false,"required":["id","version","kind","primitive","sizeMetersXYZ","collisionEnabled"],"properties":{"id":{"$ref":"#/$defs/id"},"version":{"const":1},"kind":{"const":"primitive"},"primitive":{"const":"box"},"sizeMetersXYZ":{"$ref":"#/$defs/positiveVec3"},"collisionEnabled":{"type":"boolean"},"traversalSurfaceBindings":{"type":"array","items":{"$ref":"#/$defs/traversalSurfaceBinding"}},"semantic":{"$ref":"#/$defs/semantic"}}},{"type":"object","additionalProperties":false,"required":["id","version","kind","primitive","radiusMeters","collisionEnabled"],"properties":{"id":{"$ref":"#/$defs/id"},"version":{"const":1},"kind":{"const":"primitive"},"primitive":{"const":"sphere"},"radiusMeters":{"$ref":"#/$defs/positiveNumber"},"collisionEnabled":{"type":"boolean"},"traversalSurfaceBindings":{"type":"array","items":{"$ref":"#/$defs/traversalSurfaceBinding"}},"semantic":{"$ref":"#/$defs/semantic"}}},{"type":"object","additionalProperties":false,"required":["id","version","kind","primitive","radiusMeters","heightMeters","collisionEnabled"],"properties":{"id":{"$ref":"#/$defs/id"},"version":{"const":1},"kind":{"const":"primitive"},"primitive":{"const":"cylinder"},"radiusMeters":{"$ref":"#/$defs/positiveNumber"},"heightMeters":{"$ref":"#/$defs/positiveNumber"},"collisionEnabled":{"type":"boolean"},"traversalSurfaceBindings":{"type":"array","items":{"$ref":"#/$defs/traversalSurfaceBinding"}},"semantic":{"$ref":"#/$defs/semantic"}}},{"type":"object","additionalProperties":false,"required":["id","version","kind","primitive","radiusMeters","heightMeters","collisionEnabled"],"properties":{"id":{"$ref":"#/$defs/id"},"version":{"const":1},"kind":{"const":"primitive"},"primitive":{"const":"cone"},"radiusMeters":{"$ref":"#/$defs/positiveNumber"},"heightMeters":{"$ref":"#/$defs/positiveNumber"},"collisionEnabled":{"type":"boolean"},"traversalSurfaceBindings":{"type":"array","items":{"$ref":"#/$defs/traversalSurfaceBinding"}},"semantic":{"$ref":"#/$defs/semantic"}}}]},"proceduralSource":{"type":"object","additionalProperties":false,"required":["kind","relief"],"properties":{"kind":{"const":"procedural"},"relief":{"enum":["flat","plain","hills","mountains"]},"baseHeightMeters":{"type":"number"},"amplitudeMeters":{"type":"number","minimum":0},"frequencyPerMeter":{"$ref":"#/$defs/positiveNumber"},"octaves":{"type":"integer","minimum":1,"maximum":8},"lacunarityRatio":{"$ref":"#/$defs/positiveNumber"},"persistenceRatio":{"type":"number","exclusiveMinimum":0,"maximum":1}}},"terrainNode":{"type":"object","additionalProperties":false,"required":["id","kind","components"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"terrain"},"components":{"type":"object","additionalProperties":false,"required":["terrain"],"properties":{"terrain":{"type":"object","additionalProperties":false,"required":["source","grid"],"properties":{"source":{"$ref":"#/$defs/proceduralSource"},"grid":{"type":"object","additionalProperties":false,"required":["centerMetersXZ","sizeMetersXZ","resolutionCellsXZ"],"properties":{"centerMetersXZ":{"$ref":"#/$defs/vec2"},"sizeMetersXZ":{"$ref":"#/$defs/positiveVec2"},"resolutionCellsXZ":{"type":"array","prefixItems":[{"type":"integer","minimum":2,"maximum":1025},{"type":"integer","minimum":2,"maximum":1025}],"items":false,"minItems":2,"maxItems":2},"heightSamplesMeters":{"type":"array","minItems":4,"maxItems":1048576,"items":{"type":"number"}}}},"semantic":{"$ref":"#/$defs/semantic"}}}}}}},"waterBoundary":{"oneOf":[{"type":"object","additionalProperties":false,"required":["kind","centerMetersXZ","radiusMeters"],"properties":{"kind":{"const":"circle"},"centerMetersXZ":{"$ref":"#/$defs/vec2"},"radiusMeters":{"$ref":"#/$defs/positiveNumber"}}},{"type":"object","additionalProperties":false,"required":["kind","centerMetersXZ","radiusMetersXZ"],"properties":{"kind":{"const":"ellipse"},"centerMetersXZ":{"$ref":"#/$defs/vec2"},"radiusMetersXZ":{"$ref":"#/$defs/positiveVec2"}}},{"type":"object","additionalProperties":false,"required":["kind","pointsMetersXZ"],"properties":{"kind":{"const":"polygon"},"pointsMetersXZ":{"type":"array","minItems":3,"maxItems":4096,"items":{"$ref":"#/$defs/vec2"}}}}]},"waterNode":{"type":"object","additionalProperties":false,"required":["id","kind","components"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"water"},"components":{"type":"object","additionalProperties":false,"required":["water"],"properties":{"water":{"type":"object","additionalProperties":false,"required":["terrainEntityId","boundary","depthMeters"],"properties":{"terrainEntityId":{"$ref":"#/$defs/id"},"boundary":{"$ref":"#/$defs/waterBoundary"},"depthMeters":{"$ref":"#/$defs/positiveNumber"},"shoreWidthMeters":{"type":"number","minimum":0},"waterLevelMeters":{"type":"number"},"traversalMode":{"enum":["blocked","swimmable","walkable"]},"semantic":{"$ref":"#/$defs/semantic"}}}}}}},"subjectNode":{"type":"object","additionalProperties":false,"required":["id","kind","subjectDefinitionRef"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"subject"},"subjectDefinitionRef":{"type":"string","format":"subject-definition-ref"},"spawnAnchorEntityId":{"$ref":"#/$defs/id"}}},"relationship":{"type":"object","additionalProperties":false,"required":["id","type","schemaVersion","riderEntityId","mountEntityId","mountSlotId"],"properties":{"id":{"$ref":"#/$defs/id"},"type":{"const":"mountedOn"},"schemaVersion":{"const":1},"riderEntityId":{"$ref":"#/$defs/id"},"mountEntityId":{"$ref":"#/$defs/id"},"mountSlotId":{"$ref":"#/$defs/id"}}},"rule":{"type":"object","additionalProperties":false,"required":["id","kind"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"type":"string","minLength":1}}},"startup":{"type":"object","additionalProperties":false,"required":["spawnAnchorEntityId","controlledEntityId","cameraEntityId"],"properties":{"spawnAnchorEntityId":{"$ref":"#/$defs/id"},"controlledEntityId":{"$ref":"#/$defs/id"},"cameraEntityId":{"$ref":"#/$defs/id"}}}}');
 const authoringSpecV4Schema = {
   $schema: $schema$1,
   $id: $id$1,
@@ -17002,10 +17163,10 @@ const $schema = "https://json-schema.org/draft/2020-12/schema";
 const $id = "worldkit://schema/subject-definition@1";
 const type = "object";
 const additionalProperties = false;
-const required = ["id", "version", "kind", "authoringAvailability", "category", "bodyTopology", "semanticClassId", "coordinateConvention", "visualParts", "visualBinding", "sockets", "colliderPolicy", "capabilityRefs", "profiles", "relationshipCapabilityRefs", "actionOrPoseSetRef", "renderBindingProfileRef", "aiMetadata"];
-const properties = { "id": { "$ref": "#/$defs/id" }, "version": { "const": 1 }, "kind": { "const": "subject-definition" }, "authoringAvailability": { "enum": ["recommended", "advanced", "experimental"] }, "category": { "enum": ["human", "animal", "custom"] }, "bodyTopology": { "enum": ["biped", "quadruped", "custom"] }, "semanticClassId": { "$ref": "#/$defs/nonEmptyString" }, "coordinateConvention": { "type": "object", "additionalProperties": false, "required": ["forwardAxis", "upAxis", "metersPerUnit", "pivot"], "properties": { "forwardAxis": { "const": "-Z" }, "upAxis": { "const": "+Y" }, "metersPerUnit": { "const": 1 }, "pivot": { "const": "support-center" } } }, "visualParts": { "type": "array", "minItems": 1, "maxItems": 128, "items": { "$ref": "#/$defs/visualPart" } }, "visualBinding": { "$ref": "#/$defs/visualBinding" }, "sockets": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/socket" } }, "colliderPolicy": { "$ref": "#/$defs/colliderPolicy" }, "capabilityRefs": { "type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true, "items": { "type": "string", "format": "capability-ref" } }, "profiles": { "type": "object", "additionalProperties": false, "required": ["physicsBodyProfileRef", "locomotionProfileRef", "controlFeelProfileRef", "allowedControlFeelProfileRefs", "motion", "controlProfileRef", "cameraContextProfileRef", "mediumProfileRef", "harnessProfileRef"], "properties": { "physicsBodyProfileRef": { "type": "string", "format": "physics-body-profile-ref" }, "locomotionProfileRef": { "type": "string", "format": "locomotion-profile-ref" }, "controlFeelProfileRef": { "type": "string", "pattern": "^worldkit://control-feel-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "allowedControlFeelProfileRefs": { "type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true, "items": { "type": "string", "pattern": "^worldkit://control-feel-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" } }, "motion": { "type": "object", "additionalProperties": false, "required": ["defaultMotionProfileRef", "optionalMotionProfileRefs", "fallbackMotionProfileRef"], "properties": { "defaultMotionProfileRef": { "type": "string", "pattern": "^worldkit://motion-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "optionalMotionProfileRefs": { "type": "array", "maxItems": 16, "uniqueItems": true, "items": { "type": "string", "pattern": "^worldkit://motion-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" } }, "fallbackMotionProfileRef": { "type": "string", "pattern": "^worldkit://motion-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" } } }, "controlProfileRef": { "type": "string", "pattern": "^worldkit://control-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "cameraContextProfileRef": { "type": "string", "pattern": "^worldkit://camera-context/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "mediumProfileRef": { "type": "string", "pattern": "^worldkit://medium-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "harnessProfileRef": { "type": "string", "pattern": "^worldkit://harness-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" } } }, "relationshipCapabilityRefs": { "type": "array", "maxItems": 16, "uniqueItems": true, "items": { "type": "string", "format": "capability-ref" } }, "actionOrPoseSetRef": { "type": "string", "pattern": "^worldkit://(?:animation-set|pose-set)/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "renderBindingProfileRef": { "type": "string", "pattern": "^worldkit://render-binding/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "aiMetadata": { "type": "object", "additionalProperties": false, "required": ["displayName", "description", "semanticTags"], "properties": { "displayName": { "type": "string", "minLength": 1, "maxLength": 120 }, "description": { "type": "string", "minLength": 1, "maxLength": 1e3 }, "semanticTags": { "$ref": "#/$defs/semanticTags" } } } };
+const required = ["id", "version", "kind", "authoringAvailability", "category", "bodyTopology", "semanticClassId", "coordinateConvention", "visualParts", "visualBinding", "sockets", "mountSlots", "colliderPolicy", "capabilityRefs", "profiles", "relationshipCapabilityRefs", "actionOrPoseSetRef", "renderBindingProfileRef", "aiMetadata"];
+const properties = { "id": { "$ref": "#/$defs/id" }, "version": { "const": 1 }, "kind": { "const": "subject-definition" }, "authoringAvailability": { "enum": ["recommended", "advanced", "experimental"] }, "category": { "enum": ["human", "animal", "custom"] }, "bodyTopology": { "enum": ["biped", "quadruped", "custom"] }, "semanticClassId": { "$ref": "#/$defs/nonEmptyString" }, "coordinateConvention": { "type": "object", "additionalProperties": false, "required": ["forwardAxis", "upAxis", "metersPerUnit", "pivot"], "properties": { "forwardAxis": { "const": "-Z" }, "upAxis": { "const": "+Y" }, "metersPerUnit": { "const": 1 }, "pivot": { "const": "support-center" } } }, "visualParts": { "type": "array", "minItems": 1, "maxItems": 128, "items": { "$ref": "#/$defs/visualPart" } }, "visualBinding": { "$ref": "#/$defs/visualBinding" }, "sockets": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/socket" } }, "mountSlots": { "type": "array", "maxItems": 16, "items": { "$ref": "#/$defs/mountSlot" } }, "colliderPolicy": { "$ref": "#/$defs/colliderPolicy" }, "capabilityRefs": { "type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true, "items": { "type": "string", "format": "capability-ref" } }, "profiles": { "type": "object", "additionalProperties": false, "required": ["physicsBodyProfileRef", "locomotionProfileRef", "controlFeelProfileRef", "allowedControlFeelProfileRefs", "motion", "controlProfileRef", "cameraContextProfileRef", "mediumProfileRef", "harnessProfileRef"], "properties": { "physicsBodyProfileRef": { "type": "string", "format": "physics-body-profile-ref" }, "locomotionProfileRef": { "type": "string", "format": "locomotion-profile-ref" }, "controlFeelProfileRef": { "type": "string", "pattern": "^worldkit://control-feel-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "allowedControlFeelProfileRefs": { "type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true, "items": { "type": "string", "pattern": "^worldkit://control-feel-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" } }, "motion": { "type": "object", "additionalProperties": false, "required": ["defaultMotionProfileRef", "optionalMotionProfileRefs", "fallbackMotionProfileRef"], "properties": { "defaultMotionProfileRef": { "type": "string", "pattern": "^worldkit://motion-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "optionalMotionProfileRefs": { "type": "array", "maxItems": 16, "uniqueItems": true, "items": { "type": "string", "pattern": "^worldkit://motion-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" } }, "fallbackMotionProfileRef": { "type": "string", "pattern": "^worldkit://motion-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" } } }, "controlProfileRef": { "type": "string", "pattern": "^worldkit://control-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "cameraContextProfileRef": { "type": "string", "pattern": "^worldkit://camera-context/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "mediumProfileRef": { "type": "string", "pattern": "^worldkit://medium-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "harnessProfileRef": { "type": "string", "pattern": "^worldkit://harness-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" } } }, "relationshipCapabilityRefs": { "type": "array", "maxItems": 16, "uniqueItems": true, "items": { "type": "string", "format": "capability-ref" } }, "actionOrPoseSetRef": { "type": "string", "pattern": "^worldkit://(?:animation-set|pose-set)/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "renderBindingProfileRef": { "type": "string", "pattern": "^worldkit://render-binding/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "aiMetadata": { "type": "object", "additionalProperties": false, "required": ["displayName", "description", "semanticTags"], "properties": { "displayName": { "type": "string", "minLength": 1, "maxLength": 120 }, "description": { "type": "string", "minLength": 1, "maxLength": 1e3 }, "semanticTags": { "$ref": "#/$defs/semanticTags" } } } };
 const allOf = [{ "if": { "properties": { "visualBinding": { "type": "object", "required": ["mode"], "properties": { "mode": { "const": "rigged" } } } } }, "then": { "properties": { "visualParts": { "type": "array", "contains": { "type": "object", "required": ["kind"], "properties": { "kind": { "const": "asset" } } }, "minContains": 1 } } } }];
-const $defs = { "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$" }, "nonEmptyString": { "type": "string", "minLength": 1, "maxLength": 128 }, "positiveNumber": { "type": "number", "exclusiveMinimum": 0 }, "vec3": { "type": "array", "prefixItems": [{ "type": "number" }, { "type": "number" }, { "type": "number" }], "items": false, "minItems": 3, "maxItems": 3 }, "positiveVec3": { "type": "array", "prefixItems": [{ "$ref": "#/$defs/positiveNumber" }, { "$ref": "#/$defs/positiveNumber" }, { "$ref": "#/$defs/positiveNumber" }], "items": false, "minItems": 3, "maxItems": 3 }, "semanticTags": { "type": "array", "maxItems": 32, "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$" } }, "localTransform": { "type": "object", "additionalProperties": false, "required": ["positionMetersXYZ"], "properties": { "positionMetersXYZ": { "$ref": "#/$defs/vec3" }, "rotationEulerRadiansXYZ": { "$ref": "#/$defs/vec3" } } }, "assetLocalTransform": { "type": "object", "additionalProperties": false, "required": ["positionMetersXYZ", "scaleXYZ"], "properties": { "positionMetersXYZ": { "$ref": "#/$defs/vec3" }, "rotationEulerRadiansXYZ": { "$ref": "#/$defs/vec3" }, "scaleXYZ": { "$ref": "#/$defs/positiveVec3" } } }, "shape": { "oneOf": [{ "type": "object", "additionalProperties": false, "required": ["kind", "sizeMetersXYZ"], "properties": { "kind": { "const": "box" }, "sizeMetersXYZ": { "$ref": "#/$defs/positiveVec3" } } }, { "type": "object", "additionalProperties": false, "required": ["kind", "radiusMeters"], "properties": { "kind": { "const": "sphere" }, "radiusMeters": { "$ref": "#/$defs/positiveNumber" } } }, { "type": "object", "additionalProperties": false, "required": ["kind", "radiusMeters", "heightMeters"], "properties": { "kind": { "const": "cylinder" }, "radiusMeters": { "$ref": "#/$defs/positiveNumber" }, "heightMeters": { "$ref": "#/$defs/positiveNumber" } } }, { "type": "object", "additionalProperties": false, "required": ["kind", "radiusMeters", "heightMeters"], "properties": { "kind": { "const": "capsule" }, "radiusMeters": { "$ref": "#/$defs/positiveNumber" }, "heightMeters": { "$ref": "#/$defs/positiveNumber" } } }] }, "visualPart": { "oneOf": [{ "type": "object", "additionalProperties": false, "required": ["id", "kind", "shape", "localTransform", "colliderContribution", "semanticTags"], "properties": { "id": { "$ref": "#/$defs/id" }, "kind": { "const": "primitive" }, "shape": { "$ref": "#/$defs/shape" }, "localTransform": { "$ref": "#/$defs/localTransform" }, "colliderContribution": { "enum": ["include", "exclude"] }, "semanticTags": { "$ref": "#/$defs/semanticTags" } } }, { "type": "object", "additionalProperties": false, "required": ["id", "kind", "subjectAssetRef", "localTransform", "appearance", "semanticTags"], "properties": { "id": { "$ref": "#/$defs/id" }, "kind": { "const": "asset" }, "subjectAssetRef": { "type": "string", "pattern": "^worldkit://subject-asset/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "localTransform": { "$ref": "#/$defs/assetLocalTransform" }, "appearance": { "type": "object", "additionalProperties": false, "required": ["mode"], "properties": { "mode": { "const": "whitebox-neutral" } } }, "semanticTags": { "$ref": "#/$defs/semanticTags" } } }] }, "visualBinding": { "oneOf": [{ "type": "object", "additionalProperties": false, "required": ["mode"], "properties": { "mode": { "const": "static" } } }, { "type": "object", "additionalProperties": false, "required": ["mode", "rigProfileRef", "animationSetRef"], "properties": { "mode": { "const": "rigged" }, "rigProfileRef": { "type": "string", "pattern": "^worldkit://rig-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "animationSetRef": { "type": "string", "pattern": "^worldkit://animation-set/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" } } }] }, "colliderPolicy": { "oneOf": [{ "type": "object", "additionalProperties": false, "required": ["kind", "colliderDerivationProfileRef"], "properties": { "kind": { "const": "derive" }, "colliderDerivationProfileRef": { "type": "string", "format": "collider-derivation-profile-ref" } } }, { "type": "object", "additionalProperties": false, "required": ["kind", "colliderProfileRef"], "properties": { "kind": { "const": "profile" }, "colliderProfileRef": { "type": "string", "pattern": "^worldkit://collider-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" } } }] }, "socket": { "oneOf": [{ "type": "object", "additionalProperties": false, "required": ["id", "kind", "localTransform", "semanticTags"], "properties": { "id": { "$ref": "#/$defs/id" }, "kind": { "const": "local" }, "localTransform": { "$ref": "#/$defs/localTransform" }, "semanticTags": { "$ref": "#/$defs/semanticTags" } } }, { "type": "object", "additionalProperties": false, "required": ["id", "kind", "boneId", "offsetTransform", "semanticTags"], "properties": { "id": { "$ref": "#/$defs/id" }, "kind": { "const": "bone" }, "boneId": { "enum": ["hips", "spine", "chest", "neck", "head", "upper-arm.left", "lower-arm.left", "hand.left", "upper-arm.right", "lower-arm.right", "hand.right", "upper-leg.left", "lower-leg.left", "foot.left", "upper-leg.right", "lower-leg.right", "foot.right"] }, "offsetTransform": { "$ref": "#/$defs/localTransform" }, "semanticTags": { "$ref": "#/$defs/semanticTags" } } }] } };
+const $defs = { "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$" }, "socketId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9.-]{0,63}$" }, "nonEmptyString": { "type": "string", "minLength": 1, "maxLength": 128 }, "positiveNumber": { "type": "number", "exclusiveMinimum": 0 }, "vec3": { "type": "array", "prefixItems": [{ "type": "number" }, { "type": "number" }, { "type": "number" }], "items": false, "minItems": 3, "maxItems": 3 }, "positiveVec3": { "type": "array", "prefixItems": [{ "$ref": "#/$defs/positiveNumber" }, { "$ref": "#/$defs/positiveNumber" }, { "$ref": "#/$defs/positiveNumber" }], "items": false, "minItems": 3, "maxItems": 3 }, "semanticTags": { "type": "array", "maxItems": 32, "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$" } }, "localTransform": { "type": "object", "additionalProperties": false, "required": ["positionMetersXYZ"], "properties": { "positionMetersXYZ": { "$ref": "#/$defs/vec3" }, "rotationEulerRadiansXYZ": { "$ref": "#/$defs/vec3" } } }, "assetLocalTransform": { "type": "object", "additionalProperties": false, "required": ["positionMetersXYZ", "scaleXYZ"], "properties": { "positionMetersXYZ": { "$ref": "#/$defs/vec3" }, "rotationEulerRadiansXYZ": { "$ref": "#/$defs/vec3" }, "scaleXYZ": { "$ref": "#/$defs/positiveVec3" } } }, "shape": { "oneOf": [{ "type": "object", "additionalProperties": false, "required": ["kind", "sizeMetersXYZ"], "properties": { "kind": { "const": "box" }, "sizeMetersXYZ": { "$ref": "#/$defs/positiveVec3" } } }, { "type": "object", "additionalProperties": false, "required": ["kind", "radiusMeters"], "properties": { "kind": { "const": "sphere" }, "radiusMeters": { "$ref": "#/$defs/positiveNumber" } } }, { "type": "object", "additionalProperties": false, "required": ["kind", "radiusMeters", "heightMeters"], "properties": { "kind": { "const": "cylinder" }, "radiusMeters": { "$ref": "#/$defs/positiveNumber" }, "heightMeters": { "$ref": "#/$defs/positiveNumber" } } }, { "type": "object", "additionalProperties": false, "required": ["kind", "radiusMeters", "heightMeters"], "properties": { "kind": { "const": "capsule" }, "radiusMeters": { "$ref": "#/$defs/positiveNumber" }, "heightMeters": { "$ref": "#/$defs/positiveNumber" } } }] }, "visualPart": { "oneOf": [{ "type": "object", "additionalProperties": false, "required": ["id", "kind", "shape", "localTransform", "colliderContribution", "semanticTags"], "properties": { "id": { "$ref": "#/$defs/id" }, "kind": { "const": "primitive" }, "shape": { "$ref": "#/$defs/shape" }, "localTransform": { "$ref": "#/$defs/localTransform" }, "colliderContribution": { "enum": ["include", "exclude"] }, "semanticTags": { "$ref": "#/$defs/semanticTags" } } }, { "type": "object", "additionalProperties": false, "required": ["id", "kind", "subjectAssetRef", "localTransform", "appearance", "semanticTags"], "properties": { "id": { "$ref": "#/$defs/id" }, "kind": { "const": "asset" }, "subjectAssetRef": { "type": "string", "pattern": "^worldkit://subject-asset/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "localTransform": { "$ref": "#/$defs/assetLocalTransform" }, "appearance": { "type": "object", "additionalProperties": false, "required": ["mode"], "properties": { "mode": { "const": "whitebox-neutral" } } }, "semanticTags": { "$ref": "#/$defs/semanticTags" } } }] }, "visualBinding": { "oneOf": [{ "type": "object", "additionalProperties": false, "required": ["mode"], "properties": { "mode": { "const": "static" } } }, { "type": "object", "additionalProperties": false, "required": ["mode", "rigProfileRef", "animationSetRef"], "properties": { "mode": { "const": "rigged" }, "rigProfileRef": { "type": "string", "pattern": "^worldkit://rig-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "animationSetRef": { "type": "string", "pattern": "^worldkit://animation-set/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" } } }] }, "colliderPolicy": { "oneOf": [{ "type": "object", "additionalProperties": false, "required": ["kind", "colliderDerivationProfileRef"], "properties": { "kind": { "const": "derive" }, "colliderDerivationProfileRef": { "type": "string", "format": "collider-derivation-profile-ref" } } }, { "type": "object", "additionalProperties": false, "required": ["kind", "colliderProfileRef"], "properties": { "kind": { "const": "profile" }, "colliderProfileRef": { "type": "string", "pattern": "^worldkit://collider-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" } } }] }, "socket": { "oneOf": [{ "type": "object", "additionalProperties": false, "required": ["id", "kind", "localTransform", "semanticTags"], "properties": { "id": { "$ref": "#/$defs/socketId" }, "kind": { "const": "local" }, "localTransform": { "$ref": "#/$defs/localTransform" }, "semanticTags": { "$ref": "#/$defs/semanticTags" } } }, { "type": "object", "additionalProperties": false, "required": ["id", "kind", "boneId", "offsetTransform", "semanticTags"], "properties": { "id": { "$ref": "#/$defs/socketId" }, "kind": { "const": "bone" }, "boneId": { "enum": ["hips", "spine", "chest", "neck", "head", "upper-arm.left", "lower-arm.left", "hand.left", "upper-arm.right", "lower-arm.right", "hand.right", "upper-leg.left", "lower-leg.left", "foot.left", "upper-leg.right", "lower-leg.right", "foot.right"] }, "offsetTransform": { "$ref": "#/$defs/localTransform" }, "semanticTags": { "$ref": "#/$defs/semanticTags" } } }] }, "mountSlot": { "type": "object", "additionalProperties": false, "required": ["id", "kind", "mode", "mountSocketId", "riderSubjectOriginOffsetMetersXYZ", "dismountCandidateOffsetsMetersXYZ"], "properties": { "id": { "$ref": "#/$defs/id" }, "kind": { "const": "mount-slot" }, "mode": { "const": "stand" }, "mountSocketId": { "$ref": "#/$defs/socketId" }, "riderSubjectOriginOffsetMetersXYZ": { "$ref": "#/$defs/vec3" }, "dismountCandidateOffsetsMetersXYZ": { "type": "array", "minItems": 1, "maxItems": 8, "uniqueItems": true, "items": { "$ref": "#/$defs/vec3" } } } } };
 const subjectDefinitionV1Schema = {
   $schema,
   $id,
@@ -17416,6 +17577,147 @@ function requireNodeKind(nodes, id2, kind, instancePath, diagnostics) {
     );
   }
 }
+const IMPLEMENTED_MOUNTED_ON_PROFILE_REF = "worldkit://relationship-profile/mounted-on.stand-ground@1";
+function normalizeMountedOnRelationships(relationships, nodes, subjectDefinitions, controlledEntityId, diagnostics) {
+  const definitionsByRef = new Map(
+    subjectDefinitions.map((definition) => [definition.subjectDefinitionRef, definition])
+  );
+  const occupiedRiderIds = /* @__PURE__ */ new Set();
+  const occupiedMountSlotKeys = /* @__PURE__ */ new Set();
+  relationships.forEach((relationship, index) => {
+    const relationshipPath = `/relationships/${index}`;
+    const rider = nodes.get(relationship.riderEntityId);
+    const mount = nodes.get(relationship.mountEntityId);
+    requireNodeKind(
+      nodes,
+      relationship.riderEntityId,
+      "subject",
+      `${relationshipPath}/riderEntityId`,
+      diagnostics
+    );
+    requireNodeKind(
+      nodes,
+      relationship.mountEntityId,
+      "subject",
+      `${relationshipPath}/mountEntityId`,
+      diagnostics
+    );
+    if (relationship.riderEntityId === relationship.mountEntityId) {
+      addError(
+        diagnostics,
+        "AUTHORING_RELATIONSHIP_ENDPOINTS_INVALID",
+        relationshipPath,
+        "A mountedOn Rider and Mount must be different Subject Entities.",
+        { entityId: relationship.riderEntityId }
+      );
+    }
+    const riderDefinition = rider?.kind === "subject" ? definitionsByRef.get(rider.subjectDefinitionRef) : void 0;
+    const mountDefinition = mount?.kind === "subject" ? definitionsByRef.get(mount.subjectDefinitionRef) : void 0;
+    const mountSlot = mountDefinition?.mountSlots.find(
+      ({ id: id2 }) => id2 === relationship.mountSlotId
+    );
+    if (mountDefinition !== void 0 && mountSlot === void 0) {
+      addError(
+        diagnostics,
+        "AUTHORING_MOUNT_SLOT_NOT_FOUND",
+        `${relationshipPath}/mountSlotId`,
+        `Mount Subject '${relationship.mountEntityId}' does not declare Mount slot '${relationship.mountSlotId}'.`,
+        {
+          mountEntityId: relationship.mountEntityId,
+          mountSlotId: relationship.mountSlotId
+        }
+      );
+    }
+    const relationshipProfile = mountDefinition?.capabilityAssembly.relationshipProfiles.find(
+      (profile) => profile.resourceRef === IMPLEMENTED_MOUNTED_ON_PROFILE_REF && profile.relationshipType === "mountedOn" && profile.runtimeStatus === "implemented"
+    );
+    if (mountDefinition !== void 0 && relationshipProfile === void 0) {
+      addError(
+        diagnostics,
+        "AUTHORING_RELATIONSHIP_PROFILE_UNAVAILABLE",
+        relationshipPath,
+        `Mount Subject '${relationship.mountEntityId}' does not resolve the exact implemented mountedOn Relationship Profile.`,
+        {
+          mountEntityId: relationship.mountEntityId,
+          requiredRelationshipProfileRef: IMPLEMENTED_MOUNTED_ON_PROFILE_REF
+        }
+      );
+    }
+    if (relationshipProfile !== void 0) {
+      const riderSocketIds = new Set(riderDefinition?.sockets.map(({ id: id2 }) => id2) ?? []);
+      const mountSocketIds = new Set(mountDefinition?.sockets.map(({ id: id2 }) => id2) ?? []);
+      const missingRiderSocketId = relationshipProfile.requiredRiderSocketIds.find(
+        (socketId) => !riderSocketIds.has(socketId)
+      );
+      const missingMountSocketId = relationshipProfile.requiredMountSocketIds.find(
+        (socketId) => !mountSocketIds.has(socketId)
+      );
+      if (missingRiderSocketId !== void 0 || missingMountSocketId !== void 0) {
+        addError(
+          diagnostics,
+          "AUTHORING_RELATIONSHIP_PROFILE_UNSATISFIED",
+          relationshipPath,
+          "The Rider or Mount is missing a Socket required by the mountedOn Relationship Profile.",
+          {
+            ...missingRiderSocketId === void 0 ? {} : { missingRiderSocketId },
+            ...missingMountSocketId === void 0 ? {} : { missingMountSocketId }
+          }
+        );
+      }
+      if (mountSlot !== void 0 && !relationshipProfile.requiredMountSocketIds.includes(mountSlot.mountSocketId)) {
+        addError(
+          diagnostics,
+          "AUTHORING_RELATIONSHIP_PROFILE_UNSATISFIED",
+          `${relationshipPath}/mountSlotId`,
+          `Mount slot '${mountSlot.id}' targets Socket '${mountSlot.mountSocketId}', which is not allowed by the mountedOn Relationship Profile.`,
+          {
+            mountSlotId: mountSlot.id,
+            mountSocketId: mountSlot.mountSocketId,
+            relationshipProfileRef: relationshipProfile.resourceRef
+          }
+        );
+      }
+    }
+    if (occupiedRiderIds.has(relationship.riderEntityId)) {
+      addError(
+        diagnostics,
+        "AUTHORING_MOUNTED_ON_RIDER_OCCUPIED",
+        `${relationshipPath}/riderEntityId`,
+        `Rider '${relationship.riderEntityId}' is already a Rider in another mountedOn Relationship.`,
+        { riderEntityId: relationship.riderEntityId }
+      );
+    }
+    occupiedRiderIds.add(relationship.riderEntityId);
+    const mountSlotKey = `${relationship.mountEntityId}\0${relationship.mountSlotId}`;
+    if (occupiedMountSlotKeys.has(mountSlotKey)) {
+      addError(
+        diagnostics,
+        "AUTHORING_MOUNT_SLOT_OCCUPIED",
+        relationshipPath,
+        `Mount slot '${relationship.mountSlotId}' on '${relationship.mountEntityId}' is already occupied.`,
+        {
+          mountEntityId: relationship.mountEntityId,
+          mountSlotId: relationship.mountSlotId
+        }
+      );
+    }
+    occupiedMountSlotKeys.add(mountSlotKey);
+    if (controlledEntityId !== relationship.mountEntityId) {
+      addError(
+        diagnostics,
+        "AUTHORING_MOUNTED_ON_POSSESSION_MISMATCH",
+        "/startup/controlledEntityId",
+        "An initial mountedOn Relationship requires matching initial possession of its Mount.",
+        {
+          controlledEntityId,
+          riderEntityId: relationship.riderEntityId,
+          requiredControlledEntityId: relationship.mountEntityId
+        }
+      );
+    }
+  });
+  return [...relationships].sort((left, right) => left.id.localeCompare(right.id)).map((relationship) => structuredClone(relationship));
+}
 function normalizeTransformV2(transform) {
   return {
     positionMetersXYZ: [...transform.positionMetersXYZ],
@@ -17533,15 +17835,6 @@ function normalizeValidatedAuthoringBase(spec, options) {
     diagnostics
   );
   const nodes = buildUniqueIndex(spec.nodes, "/nodes", diagnostics);
-  spec.relationships.forEach((relationship, index) => {
-    addError(
-      diagnostics,
-      "AUTHORING_FEATURE_NOT_SUPPORTED",
-      `/relationships/${index}`,
-      `Relationship '${relationship.type}' is not supported by AuthoringSpec V${spec.schemaVersion}.`,
-      { feature: "relationships", type: relationship.type }
-    );
-  });
   spec.rules.forEach((rule, index) => {
     addError(
       diagnostics,
@@ -17753,6 +18046,13 @@ function normalizeValidatedAuthoringBase(spec, options) {
     resourceLock,
     resourceLockHash
   } = resourceLockBuilder.finish();
+  const relationships = normalizeMountedOnRelationships(
+    spec.relationships,
+    nodes,
+    subjectDefinitions,
+    spec.startup.controlledEntityId,
+    diagnostics
+  );
   if (diagnostics.some((diagnostic2) => diagnostic2.severity === "error")) {
     return { ok: false, diagnostics };
   }
@@ -17777,6 +18077,7 @@ function normalizeValidatedAuthoringBase(spec, options) {
       options.finalTransformsByEntityId ?? {},
       [spec.world.bounds.centerMetersXZ[0], 0, spec.world.bounds.centerMetersXZ[1]]
     )),
+    relationships,
     startup: structuredClone(spec.startup)
   };
   return {
@@ -20150,19 +20451,19 @@ function compileCapabilityAssemblyV1(assembly) {
     };
   };
   const relationshipProfiles2 = assembly.relationshipProfiles.map((profile) => {
-    if (profile.runtimeStatus !== "implemented" || profile.relationshipType === "mount") {
+    if (profile.runtimeStatus !== "implemented" || profile.relationshipType !== "mountedOn") {
       throw new Error(
         `NormalizedWorldIR invariant violated: reserved Relationship Profile '${profile.resourceRef}' cannot enter an Execution Plan.`
       );
     }
     return {
       resourceRef: profile.resourceRef,
-      relationshipType: profile.relationshipType,
-      requiredSourceSocketIds: [...profile.requiredSourceSocketIds],
-      requiredTargetSocketIds: [...profile.requiredTargetSocketIds],
-      controlTransferPolicy: profile.controlTransferPolicy,
-      cameraTargetPolicy: profile.cameraTargetPolicy,
-      ...profile.maximumDistanceMeters === void 0 ? {} : { maximumDistanceMeters: profile.maximumDistanceMeters }
+      relationshipType: "mountedOn",
+      requiredRiderSocketIds: [...profile.requiredRiderSocketIds],
+      requiredMountSocketIds: [...profile.requiredMountSocketIds],
+      controlTransferMode: profile.controlTransferMode,
+      cameraTargetRole: profile.cameraTargetRole,
+      ...profile.maximumMountDistanceMeters === void 0 ? {} : { maximumMountDistanceMeters: profile.maximumMountDistanceMeters }
     };
   });
   rejectPublishedWaterMediumProfile(assembly.mediumProfile);
@@ -20424,6 +20725,16 @@ function compileSubjectsV3(world) {
         animationSetRef: definition.visualBinding.animationSetRef
       },
       sockets: definition.sockets.map(compileSubjectSocketV3),
+      mountSlots: definition.mountSlots.map((slot) => ({
+        id: slot.id,
+        kind: slot.kind,
+        mode: slot.mode,
+        mountSocketId: slot.mountSocketId,
+        riderSubjectOriginOffsetMetersXYZ: [
+          ...slot.riderSubjectOriginOffsetMetersXYZ
+        ],
+        dismountCandidateOffsetsMetersXYZ: slot.dismountCandidateOffsetsMetersXYZ.map((offset) => [...offset])
+      })),
       collider: {
         kind: definition.collider.kind,
         radiusMeters: definition.collider.radiusMeters,
@@ -21154,6 +21465,10 @@ function compileWorldV5(input) {
       ...componentsWithoutControlledEntity,
       schemaVersion: 5,
       initialControlledEntityId,
+      initialRelationships: snapshot.normalizedWorldIr.relationships.map((relationship) => ({
+        ...structuredClone(relationship),
+        establishedSimulationTick: 0
+      })).sort((left, right) => left.id.localeCompare(right.id)),
       authoringSpecHash: snapshot.normalizedWorldIr.authoringSpecHash,
       normalizedWorldIrHash: snapshot.normalizedWorldIrHash,
       resourceLockHash,
@@ -21227,7 +21542,7 @@ function deepFreeze$1(value) {
 const GAMEPLAY_CAPACITY_BUDGET_KEYS = [
   "maximumParticipantCount",
   "maximumControllerEntityCount",
-  "maximumPossessedByRelationshipCount",
+  "maximumRelationshipStateCount",
   "maximumActiveActionStateCount",
   "maximumGameplayFeatureCount",
   "maximumSemanticActionDefinitionCount",
@@ -21252,7 +21567,7 @@ function parseGameplayCapacityBudgetV1(input) {
 parseGameplayCapacityBudgetV1({
   maximumParticipantCount: 1,
   maximumControllerEntityCount: 1,
-  maximumPossessedByRelationshipCount: 1,
+  maximumRelationshipStateCount: 1,
   maximumActiveActionStateCount: 256,
   maximumGameplayFeatureCount: 16,
   maximumSemanticActionDefinitionCount: 256,
@@ -21458,6 +21773,7 @@ function parseGameplayActionDefinitionBody(input, mode) {
     "resourceRef",
     "executionMode",
     "completion",
+    "effect",
     "isMovementInputBlocked",
     "allowedActorEntityDefinitionRefs",
     "requiredActorCapabilityRefs",
@@ -21466,12 +21782,32 @@ function parseGameplayActionDefinitionBody(input, mode) {
   const completionRecord = snapshotDataRecord(record2.completion);
   if (isNil(completionRecord)) invalid(schemaName);
   let completion;
-  if (completionRecord.mode === "explicit-cancel" && hasExactKeys(completionRecord, ["mode"])) {
+  if (completionRecord.mode === "immediate" && hasExactKeys(completionRecord, ["mode"])) {
+    completion = { mode: "immediate" };
+  } else if (completionRecord.mode === "explicit-cancel" && hasExactKeys(completionRecord, ["mode"])) {
     completion = { mode: "explicit-cancel" };
   } else if (completionRecord.mode === "fixed-duration" && hasExactKeys(completionRecord, ["mode", "durationTicks"]) && isSafePositiveInteger(completionRecord.durationTicks)) {
     completion = {
       mode: "fixed-duration",
       durationTicks: completionRecord.durationTicks
+    };
+  } else {
+    return invalid(schemaName);
+  }
+  const effectRecord = snapshotDataRecord(record2.effect);
+  if (isNil(effectRecord)) invalid(schemaName);
+  let effect;
+  if (effectRecord.mode === "state-only" && hasExactKeys(effectRecord, ["mode"])) {
+    effect = { mode: "state-only" };
+  } else if (effectRecord.mode === "trusted" && hasExactKeys(effectRecord, [
+    "mode",
+    "gameplayActionEffectRef",
+    "gameplayActionEffectHash"
+  ]) && isNonEmptyString(effectRecord.gameplayActionEffectRef) && isSha256(effectRecord.gameplayActionEffectHash)) {
+    effect = {
+      mode: "trusted",
+      gameplayActionEffectRef: effectRecord.gameplayActionEffectRef,
+      gameplayActionEffectHash: effectRecord.gameplayActionEffectHash
     };
   } else {
     return invalid(schemaName);
@@ -21501,6 +21837,7 @@ function parseGameplayActionDefinitionBody(input, mode) {
     resourceRef: record2.resourceRef,
     executionMode: "exclusive-per-subject",
     completion,
+    effect,
     isMovementInputBlocked: record2.isMovementInputBlocked,
     allowedActorEntityDefinitionRefs: canonicalStringSet(
       record2.allowedActorEntityDefinitionRefs,
@@ -21527,6 +21864,7 @@ function parseGameplayActionDefinitionV1(input) {
     "contentHash",
     "executionMode",
     "completion",
+    "effect",
     "isMovementInputBlocked",
     "allowedActorEntityDefinitionRefs",
     "requiredActorCapabilityRefs",
@@ -21723,6 +22061,63 @@ createGameplayFeatureManifestV1({
   requiredCapabilityRefs: [ACTION_PROJECTION_CAPABILITY_REF],
   commandTypes: ["action.activate", "action.cancel"],
   resourceBudget: { stateSliceCount: 1, commandHandlerCount: 2 }
+});
+const MOUNTED_RELATIONSHIP_FEATURE_REF = "worldkit://gameplay-feature/mounted-relationship@1";
+const MOUNTED_RELATIONSHIP_EFFECT_REF = "worldkit://gameplay-action-effect/mounted-relationship@1";
+const MOUNT_ACTION_REQUEST_SCHEMA_REF = "worldkit://schema/mount-action-request@1";
+const DISMOUNT_ACTION_REQUEST_SCHEMA_REF = "worldkit://schema/dismount-action-request@1";
+const MOUNT_ACTION_REQUEST_SCHEMA_BODY = {
+  kind: "action-request-schema",
+  schemaVersion: 1,
+  requestKind: "mount-action-request",
+  fields: [
+    "id",
+    "kind",
+    "mountEntityId",
+    "mountSlotId",
+    "riderEntityId",
+    "schemaVersion"
+  ]
+};
+const DISMOUNT_ACTION_REQUEST_SCHEMA_BODY = {
+  kind: "action-request-schema",
+  schemaVersion: 1,
+  requestKind: "dismount-action-request",
+  fields: [
+    "id",
+    "kind",
+    "mountedOnRelationshipId",
+    "riderEntityId",
+    "schemaVersion"
+  ]
+};
+sha256CanonicalJson(
+  MOUNT_ACTION_REQUEST_SCHEMA_BODY
+);
+sha256CanonicalJson(
+  DISMOUNT_ACTION_REQUEST_SCHEMA_BODY
+);
+sha256CanonicalJson({
+  kind: "gameplay-action-effect",
+  schemaVersion: 1,
+  resourceRef: MOUNTED_RELATIONSHIP_EFFECT_REF,
+  supportedRequestSchemaRefs: [
+    DISMOUNT_ACTION_REQUEST_SCHEMA_REF,
+    MOUNT_ACTION_REQUEST_SCHEMA_REF
+  ]
+});
+createGameplayFeatureManifestV1({
+  kind: "gameplay-feature",
+  id: "mounted-relationship",
+  version: 1,
+  resourceRef: MOUNTED_RELATIONSHIP_FEATURE_REF,
+  dependencyFeatureRefs: [
+    CORE_CONTROL_FEATURE_REF,
+    CORE_SEMANTIC_ACTION_FEATURE_REF
+  ],
+  requiredCapabilityRefs: [],
+  commandTypes: [],
+  resourceBudget: { stateSliceCount: 1, commandHandlerCount: 0 }
 });
 const BUILDER_SELF_CHECK_VERSION = "worldkit-builder-self-check-v5";
 const SPAWN_GROUND_TOLERANCE_METERS = 0.15;

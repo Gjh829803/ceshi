@@ -31,8 +31,12 @@ function snapshotV4(): any {
       gameplayInspection: {
         relationshipStatesById: {
           possession: {
+            id: "possession",
+            type: "possessedBy",
+            schemaVersion: 1,
             controllerEntityId: "controller-primary",
             controlledEntityId: "player",
+            establishedSimulationTick: 0,
           },
         },
       },

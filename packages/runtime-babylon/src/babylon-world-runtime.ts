@@ -100,6 +100,14 @@ function canonicalizeSignedZero(value: number): number {
   return Object.is(value, -0) ? 0 : value;
 }
 
+function canonicalizeVec3(value: readonly [number, number, number]): Vec3 {
+  return Object.freeze([
+    canonicalizeSignedZero(value[0]),
+    canonicalizeSignedZero(value[1]),
+    canonicalizeSignedZero(value[2]),
+  ]) as Vec3;
+}
+
 export type BabylonWorldRuntimeInitializationStageV1 =
   | "engine"
   | "scene"
@@ -1555,11 +1563,11 @@ export class BabylonWorldRuntime {
         ...(controlledEntityId === undefined
           ? {}
           : { targetEntityId: controlledEntityId }),
-        positionMetersXYZ: [
+        positionMetersXYZ: canonicalizeVec3([
           this.camera.position.x,
           this.camera.position.y,
           this.camera.position.z,
-        ],
+        ]),
         activeCameraProfileRef: cameraDirectorSnapshot.activeCameraProfileRef,
         activeCameraRigRef: cameraDirectorSnapshot.activeCameraRigRef,
         activeCameraModifierRefs: cameraDirectorSnapshot.activeCameraModifierRefs,
@@ -1576,9 +1584,9 @@ export class BabylonWorldRuntime {
         ...(cameraDirectorSnapshot.targetSocketPositionMetersXYZ === undefined
           ? {}
           : {
-              targetSocketPositionMetersXYZ: Object.freeze([
-                ...cameraDirectorSnapshot.targetSocketPositionMetersXYZ,
-              ]) as Vec3,
+              targetSocketPositionMetersXYZ: canonicalizeVec3(
+                cameraDirectorSnapshot.targetSocketPositionMetersXYZ,
+              ),
             }),
         ...(cameraDirectorSnapshot.isTargetSocketFallback === undefined
           ? {}
@@ -1586,23 +1594,23 @@ export class BabylonWorldRuntime {
         ...(cameraDirectorSnapshot.desiredTargetPositionMetersXYZ === undefined
           ? {}
           : {
-              desiredTargetPositionMetersXYZ: Object.freeze([
-                ...cameraDirectorSnapshot.desiredTargetPositionMetersXYZ,
-              ]) as Vec3,
+              desiredTargetPositionMetersXYZ: canonicalizeVec3(
+                cameraDirectorSnapshot.desiredTargetPositionMetersXYZ,
+              ),
             }),
         ...(cameraDirectorSnapshot.desiredPositionMetersXYZ === undefined
           ? {}
           : {
-              desiredPositionMetersXYZ: Object.freeze([
-                ...cameraDirectorSnapshot.desiredPositionMetersXYZ,
-              ]) as Vec3,
+              desiredPositionMetersXYZ: canonicalizeVec3(
+                cameraDirectorSnapshot.desiredPositionMetersXYZ,
+              ),
             }),
         ...(cameraDirectorSnapshot.actualPositionMetersXYZ === undefined
           ? {}
           : {
-              actualPositionMetersXYZ: Object.freeze([
-                ...cameraDirectorSnapshot.actualPositionMetersXYZ,
-              ]) as Vec3,
+              actualPositionMetersXYZ: canonicalizeVec3(
+                cameraDirectorSnapshot.actualPositionMetersXYZ,
+              ),
             }),
         ...(cameraDirectorSnapshot.finalFovDegrees === undefined
           ? {}
@@ -1625,23 +1633,23 @@ export class BabylonWorldRuntime {
         ...(cameraDirectorSnapshot.collisionHitPositionXYZ === undefined
           ? {}
           : {
-              collisionHitPositionXYZ: Object.freeze([
-                ...cameraDirectorSnapshot.collisionHitPositionXYZ,
-              ]) as Vec3,
+              collisionHitPositionXYZ: canonicalizeVec3(
+                cameraDirectorSnapshot.collisionHitPositionXYZ,
+              ),
             }),
         ...(cameraDirectorSnapshot.positionLagXYZ === undefined
           ? {}
           : {
-              positionLagXYZ: Object.freeze([
-                ...cameraDirectorSnapshot.positionLagXYZ,
-              ]) as Vec3,
+              positionLagXYZ: canonicalizeVec3(
+                cameraDirectorSnapshot.positionLagXYZ,
+              ),
             }),
         ...(cameraDirectorSnapshot.rotationLagRadiansXYZ === undefined
           ? {}
           : {
-              rotationLagRadiansXYZ: Object.freeze([
-                ...cameraDirectorSnapshot.rotationLagRadiansXYZ,
-              ]) as Vec3,
+              rotationLagRadiansXYZ: canonicalizeVec3(
+                cameraDirectorSnapshot.rotationLagRadiansXYZ,
+              ),
             }),
         ...(cameraDirectorSnapshot.recenterRemainingSeconds === undefined
           ? {}
@@ -1675,23 +1683,23 @@ export class BabylonWorldRuntime {
         ...(cameraDirectorSnapshot.controlForwardXYZ === undefined
           ? {}
           : {
-              controlForwardXYZ: Object.freeze([
-                ...cameraDirectorSnapshot.controlForwardXYZ,
-              ]) as Vec3,
+              controlForwardXYZ: canonicalizeVec3(
+                cameraDirectorSnapshot.controlForwardXYZ,
+              ),
             }),
         ...(cameraDirectorSnapshot.subjectForwardXYZ === undefined
           ? {}
           : {
-              subjectForwardXYZ: Object.freeze([
-                ...cameraDirectorSnapshot.subjectForwardXYZ,
-              ]) as Vec3,
+              subjectForwardXYZ: canonicalizeVec3(
+                cameraDirectorSnapshot.subjectForwardXYZ,
+              ),
             }),
         ...(cameraDirectorSnapshot.subjectVelocityMetersPerSecondXYZ === undefined
           ? {}
           : {
-              subjectVelocityMetersPerSecondXYZ: Object.freeze([
-                ...cameraDirectorSnapshot.subjectVelocityMetersPerSecondXYZ,
-              ]) as Vec3,
+              subjectVelocityMetersPerSecondXYZ: canonicalizeVec3(
+                cameraDirectorSnapshot.subjectVelocityMetersPerSecondXYZ,
+              ),
             }),
       },
       resources: {

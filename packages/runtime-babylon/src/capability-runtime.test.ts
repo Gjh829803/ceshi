@@ -229,6 +229,7 @@ describe("capability package runtime smoke tests", () => {
       .toEqual([
         "CameraTarget3D",
         "FirstPersonView",
+        "FootAlignment",
         "LookAhead",
         "SeatAlignment",
         "ThirdPersonTarget",

@@ -95,12 +95,14 @@ def measure_runtime_rear_alignment(snapshot_path: Path) -> dict[str, float | boo
         if isinstance(world.get("gameplayInspection"), dict)
         else {}
     )
-    relationships = inspection.get("possessedByRelationshipsById")
-    possession_rows = list(relationships.values()) if isinstance(relationships, dict) else []
+    relationships = inspection.get("relationshipStatesById")
+    relationship_rows = list(relationships.values()) if isinstance(relationships, dict) else []
     controlled_rows = [
         row
-        for row in possession_rows
-        if isinstance(row, dict) and row.get("controllerEntityId") == "controller-primary"
+        for row in relationship_rows
+        if isinstance(row, dict)
+        and row.get("type") == "possessedBy"
+        and row.get("controllerEntityId") == "controller-primary"
     ]
     if len(controlled_rows) != 1:
         raise ValueError("Runtime Snapshot must contain exactly one primary possession binding.")
