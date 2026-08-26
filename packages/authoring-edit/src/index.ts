@@ -57,3 +57,13 @@ export type {
   ValidateDefinitionResourceRefOverrideInputV1,
   ValidateDefinitionResourceRefOverrideResultV1,
 } from "./override-policy/index.js";
+export {
+  applyWorldChangeSetV1,
+  assembleWorldChangeDiffV1,
+  isAppliedWorldChangeSetResultV1,
+} from "./world-change/index.js";
+export type {
+  ApplyWorldChangeSetInputV1,
+  ApplyWorldChangeSetResultV1,
+  WorldChangeAdmissionUsageV1,
+} from "./world-change/index.js";
