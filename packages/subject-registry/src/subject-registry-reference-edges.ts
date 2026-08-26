@@ -362,6 +362,7 @@ export function listSubjectRegistryReferenceEdgesV1(
     case "harness-profile":
     case "pose-set-profile":
     case "render-binding-profile":
+    case "ai-schema-projection-profile":
       break;
   }
   return Object.freeze(edges);

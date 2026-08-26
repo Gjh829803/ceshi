@@ -395,6 +395,36 @@ describe("subject resource registry", () => {
         supportOriginToleranceMeters: 0.01,
       },
     });
+    const projectionProfile = builtInSubjectResourceRegistry.resolveAiSchemaProjectionProfile(
+      "worldkit://ai-schema-projection-profile/constrained-json@1",
+    );
+    expect(projectionProfile).toMatchObject({
+      kind: "ai-schema-projection-profile",
+      schemaVersion: 1,
+      id: "constrained-json",
+      version: 1,
+      optionalFieldMode: "native-optional",
+      maximumPropertyCount: 512,
+      maximumNestingDepth: 8,
+      maximumEnumValueCount: 32,
+      maximumSchemaBytes: 65_536,
+      maximumRegistrySearchResultCount: 32,
+    });
+    expect(projectionProfile?.authoringAvailability).toBe("recommended");
+    expect(projectionProfile).not.toHaveProperty("provider");
+    const { contentHash, ...hashInput } = projectionProfile!;
+    expect(contentHash).toBe(sha256CanonicalJson(hashInput));
+    expect(
+      builtInSubjectResourceRegistry.listDiscoverableResources({
+        kind: "ai-schema-projection-profile",
+      }),
+    ).toEqual([projectionProfile]);
+    expect(() => createSubjectResourceRegistry([
+      {
+        ...hashInput,
+        provider: "openai",
+      } as never,
+    ])).toThrowError(/SUBJECT_REGISTRY_UNKNOWN_FIELD/);
   });
 
   it("resolves the exact Golden asset binding graph", () => {

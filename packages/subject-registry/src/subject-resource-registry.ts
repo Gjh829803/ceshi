@@ -44,6 +44,8 @@ import type {
   RegistrySubjectDefinitionV3,
   RelationshipProfileV1,
   RenderBindingProfileV1,
+  AiSchemaProjectionProfileInputV1,
+  AiSchemaProjectionProfileV1,
   SubjectRegistryResourceInputV3,
   SubjectRegistryResourceV3,
   SubjectRegistryDiscoveryFilterV1,
@@ -100,6 +102,23 @@ const MOTION_ALLOWED_KEYS = new Set([
   "aiMetadata",
   "motionKernelRef",
   "motionTags",
+]);
+
+const AI_SCHEMA_PROJECTION_PROFILE_ALLOWED_KEYS = new Set([
+  "kind",
+  "schemaVersion",
+  "id",
+  "version",
+  "resourceRef",
+  "authoringAvailability",
+  "aiMetadata",
+  "maximumPropertyCount",
+  "maximumNestingDepth",
+  "maximumEnumValueCount",
+  "maximumSchemaBytes",
+  "maximumRegistrySearchResultCount",
+  "optionalFieldMode",
+  "contentHash",
 ]);
 
 const MOTION_KERNEL_ALLOWED_KEYS = new Set([
@@ -480,6 +499,57 @@ function validateMediumProfile(source: MediumProfileInputV1): void {
   }
 }
 
+function validateAiSchemaProjectionProfile(
+  source: AiSchemaProjectionProfileInputV1,
+): void {
+  const unknownField = Object.keys(source).find(
+    (fieldName) => !AI_SCHEMA_PROJECTION_PROFILE_ALLOWED_KEYS.has(fieldName),
+  );
+  if (unknownField !== undefined) {
+    throw new Error(
+      `SUBJECT_REGISTRY_UNKNOWN_FIELD: '${unknownField}' in '${source.resourceRef}'.`,
+    );
+  }
+  if (source.schemaVersion !== 1) {
+    throw new Error(
+      `AI_SCHEMA_PROJECTION_PROFILE_INVALID: '${source.resourceRef}'.`,
+    );
+  }
+  if (
+    source.authoringAvailability !== "recommended" &&
+    source.authoringAvailability !== "advanced" &&
+    source.authoringAvailability !== "experimental"
+  ) {
+    throw new Error(
+      `AI_SCHEMA_PROJECTION_PROFILE_INVALID: '${source.resourceRef}'.`,
+    );
+  }
+  const budgetFields = [
+    source.maximumPropertyCount,
+    source.maximumNestingDepth,
+    source.maximumEnumValueCount,
+    source.maximumSchemaBytes,
+    source.maximumRegistrySearchResultCount,
+  ];
+  if (
+    budgetFields.some((value) =>
+      !Number.isSafeInteger(value) || value <= 0 || Object.is(value, -0)
+    )
+  ) {
+    throw new Error(
+      `AI_SCHEMA_PROJECTION_PROFILE_INVALID: '${source.resourceRef}'.`,
+    );
+  }
+  if (
+    source.optionalFieldMode !== "native-optional" &&
+    source.optionalFieldMode !== "required-nullable-with-round-trip-map"
+  ) {
+    throw new Error(
+      `AI_SCHEMA_PROJECTION_PROFILE_INVALID: '${source.resourceRef}'.`,
+    );
+  }
+}
+
 function validatePhysicsBodyProfile(source: PhysicsBodyProfileManifestInputV1): void {
   const { maxSlopeDegrees, maxStepHeightMeters } = source.physicsBody;
   if (
@@ -772,12 +842,16 @@ export function createSubjectResourceRegistry(
     if (source.kind === "camera-rig-profile") validateCameraProfile(source);
     if (source.kind === "camera-modifier-profile") validateCameraModifierProfile(source);
     if (source.kind === "subject-definition") {
+      const resourceRef = source.resourceRef;
       if (!("schemaVersion" in source) || source.schemaVersion !== 3) {
         throw new Error(
-          `SUBJECT_REGISTRY_SUBJECT_DEFINITION_VERSION_NOT_SUPPORTED: '${source.resourceRef}'.`,
+          `SUBJECT_REGISTRY_SUBJECT_DEFINITION_VERSION_NOT_SUPPORTED: '${resourceRef}'.`,
         );
       }
       validateSubjectDefinitionV3(source);
+    }
+    if (source.kind === "ai-schema-projection-profile") {
+      validateAiSchemaProjectionProfile(source);
     }
     if (source.kind === "motion-kernel") validateMotionKernel(source);
     validateCanonicalizedSemanticTags(source);
@@ -908,6 +982,12 @@ export function createSubjectResourceRegistry(
     resolveRenderBindingProfile(resourceRef: string): RenderBindingProfileV1 | undefined {
       const resource = resolveResource(resourceRef);
       return resource?.kind === "render-binding-profile" ? resource : undefined;
+    },
+    resolveAiSchemaProjectionProfile(
+      resourceRef: string,
+    ): AiSchemaProjectionProfileV1 | undefined {
+      const resource = resolveResource(resourceRef);
+      return resource?.kind === "ai-schema-projection-profile" ? resource : undefined;
     },
   });
 }

@@ -30,3 +30,19 @@ export {
   hashWorldChangeRequestV1,
   hashWorldChangeSetV1,
 } from "./authoring-edit.js";
+export {
+  applyCanonicalPathMappingsV1,
+  canonicalizeRegistryLockEntriesV1,
+  hashCapabilitySetV1,
+  hashCanonicalAuthoringSchemaV1,
+  hashRegistryLockEntriesV1,
+  parseAiSchemaProjectionProfileSourceV1,
+  projectAiSchemaV1,
+  searchRegistryV1,
+} from "./schema-projection/index.js";
+export type {
+  ProjectAiSchemaInputV1,
+  ProjectAiSchemaResultV1,
+  SearchRegistryInputV1,
+  SearchRegistryResultV1,
+} from "./schema-projection/index.js";

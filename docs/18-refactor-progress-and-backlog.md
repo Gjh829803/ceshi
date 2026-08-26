@@ -527,7 +527,7 @@ P16-D0 已冻结，P16-H0、P16-A0 已落地；这不表示 P1.6 已实现或可
 | P16-D0 | [x] 设计冻结 | 唯一专项规格、公共 DTO/Hash/权限/切片边界、全维度审查 | 当前 main、总体设计、P1.6 Backlog / 全部 P16 |
 | P16-H0 | [x] 已完成 | Authoring document hash clean break 与独立 `layoutInputHash` | P16-D0 / P16-A0、P16-C1、P16-S1、P16-P1 |
 | P16-A0 | [x] 已完成 | provider-neutral `@whitebox-world/authoring-edit` 包、required publication Candidate、mode-specific Receipt 及 strict parser/hash 边界 | P16-D0、P16-H0 / P16-S1、P16-O1、P16-C1 |
-| P16-S1 | [ ] 等待开发 | AI Schema Projector、Profile Registry kind、预算降级、Projection Receipt | P16-A0、P16-H0、P1.4 Registry Lock shape / P16-B1、P16-F1 |
+| P16-S1 | [x] 已完成 | AI Schema Projector、Profile Registry kind、预算降级、Projection Receipt | P16-A0、P16-H0、P1.4 Registry Lock shape / P16-B1、P16-F1 |
 | P16-O1 | [ ] 等待开发 | 通用 `allowedOverridePaths` 与 Resource Ref Override validator | P16-A0、P16-S1 contract / P16-C1、P16-F1 |
 | P16-C1 | [ ] 等待开发 | WorldChangeSet、Precondition、Operation、Candidate Diff 纯实现 | P16-A0、P16-H0 / P16-P1、P16-R1 |
 | P16-P1 | [ ] 等待 P1.4/开发 | 完整 Normalize/Solve/Compile/Package/Gates Candidate pipeline 与 lease pin/expiry/GC | P16-C1、P1.4 完整 Package/Lock / P16-R1、P16-H1、P16-CLI1 |
@@ -556,10 +556,19 @@ parser + Canonical SHA-256；`publish-runtime` 必须同时带 `preparedCandidat
 验证：`pnpm typecheck`、focused fragment/parser/package-boundary 测试、`pnpm test:census`、
 `pnpm verify:workspace-boundaries` 均通过。这不是 P1.6 生产可用声明。
 
-- [ ] 为 Canonical Schema + Registry Lock + 允许 Capability 集冻结版本化 AI Schema
+P16-S1 证据：Registry 新增 `ai-schema-projection-profile` 与
+`worldkit://ai-schema-projection-profile/constrained-json@1`；`@whitebox-world/authoring-edit`
+提供纯函数 Projector / Registry Search。`projectionProfileHash` 绑定公开 Profile body（不含
+catalog `aiMetadata`）；`registryLockHash` / `capabilitySetHash` 对集合排序不敏感。超出 enum/bytes
+预算时降级为 Canonical `format`/`pattern`，不改字段名。optional/null 双态无法无损表达时返回
+`AI_SCHEMA_PROFILE_UNREPRESENTABLE`。authoring-edit 仍不依赖 `subject-registry`。验证：
+`pnpm typecheck`、focused projector/search/registry/contracts/package-boundary 测试、
+`pnpm test:census`、`pnpm verify:workspace-boundaries` 均通过。这不是 P1.6 生产可用声明。
+
+- [x] 为 Canonical Schema + Registry Lock + 允许 Capability 集冻结版本化 AI Schema
   Profile/Projector；记录 Profile Hash、Registry Lock Hash、Capability Set Hash、规模
   预算和降级原因。
-- [ ] Registry 枚举超过 Provider 结构化输出预算时，只能按 Profile 降级为带
+- [x] Registry 枚举超过 Provider 结构化输出预算时，只能按 Profile 降级为带
   `format`/`pattern` 的 Canonical Ref；字段名称、语义和验证规则不得改变。
 - [ ] 实现跨 Definition 通用的 `allowedOverridePaths` 校验、Explain 和拒绝诊断；
   Override 不能修改版本/Hash、权限、Provider 类型或未开放 Collider/Socket 内部结构。
@@ -971,12 +980,13 @@ S1b Golden、
    verifier及其失效门禁重跑和最终 review，并保持 `supportedBy` 只来自既有 Physics support
    authority。`CAM-MOUNT-1` 由 P2.4 相机专项修复；不向 `SubjectRuntimeStateV3` 追加字段，
    也不先铺开 seat/tether、轮子动力学、特技、车辆或 Hosted Builder admission；
-9. **M9（P1.6 专项设计已冻结，H0/A0 已落地，生产切片未完成）**：P1.6 以
+9. **M9（P1.6 专项设计已冻结，H0/A0/S1 已落地，生产切片未完成）**：P1.6 以
    [`WorldChangeSet 专项设计`](superpowers/specs/2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md)
    完成 P16-D0；post-freeze publication hardening 已折回该唯一权威，历史 amendment 不再覆盖
    核心类型。P16-H0 已把公开 `authoringSpecHash` 收敛为文档内容哈希，并拆出
    `layoutInputHash`；P16-A0 已建立 provider-neutral `@whitebox-world/authoring-edit` strict
-   DTO/parser/hash 边界。WorldChangeSet 纯实现、Runtime Full Reload 与 Incremental 仍未交付，不得按生产
+   DTO/parser/hash 边界；P16-S1 已交付 constrained-json Profile、Projector 与 Registry Search。
+   WorldChangeSet 纯实现、Runtime Full Reload 与 Incremental 仍未交付，不得按生产
    可用宣称。P2.5 Surface/Traversal 仍按其独立状态追踪。在实现游泳、攀爬或增量
    Agent 修复前，禁止临时增加公共字段或场景脚本旁路**。
 10. **M10：P1.1 与 P2.5 边界稳定后评审 P2.6 H1 Bridge Fixture；先验证同 XZ 双层支撑、

@@ -38,6 +38,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "apps/playground/vite-host.test.ts", lane: "contract" },
   { path: "packages/authoring-edit/src/authoring-edit.test.ts", lane: "contract" },
   { path: "packages/authoring-edit/src/package-boundary.test.ts", lane: "contract" },
+  { path: "packages/authoring-edit/src/schema-projection/schema-projection.test.ts", lane: "contract" },
   { path: "packages/authoring/src/authoring-document-hash-v4.test.ts", lane: "contract" },
   { path: "packages/authoring/src/authoring-v4.test.ts", lane: "contract" },
   { path: "packages/authoring/src/authoring.test.ts", lane: "contract" },
