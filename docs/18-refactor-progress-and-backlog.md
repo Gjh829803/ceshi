@@ -520,10 +520,12 @@ Publication hardening 已全部折回上述核心规格；
 和
 [`follow-up review`](reviews/2026-08-26-p16-world-change-post-freeze-hardening-follow-up.md)
 只保留发现轨迹，不拥有规范优先级。
-P16-D0 已冻结，H0–B1 已落地为 Full Reload 首切片；F1 对抗/集成证据已写入仓库。
+P16-D0 已冻结，H0–G1 已落地为 Full Reload 首切片。
 这不表示 P1.6 可用于生产，也不表示 Incremental 或完整 P1.4 已交付。完整文件所有权、
 输入输出、集成点和验收证据以专项规格 §21 为准。深度审查见
-[`P1.6 Full Reload 变更审查`](reviews/2026-08-26-p16-full-reload-b-review.md)。
+[`P1.6 Full Reload 变更审查`](reviews/2026-08-26-p16-full-reload-b-review.md)；
+G1 完成记录见
+[`P1.6 Full Reload G1 Completion`](reviews/2026-08-26-p16-full-reload-g1-completion.md)。
 
 | Task | 状态 | 可独立验收交付物 | `depends_on` / `blocks` |
 | --- | --- | --- | --- |
@@ -540,7 +542,7 @@ P16-D0 已冻结，H0–B1 已落地为 Full Reload 首切片；F1 对抗/集成
 | P16-B1 | [x] 已完成 first-slice | Trusted Authoring/Edit API 装在 `__WORLDKIT_AUTHORING_EDIT__`，V5 仍 exact 39 keys | P16-S1、P16-O1、P16-R1、P16-H1 / P16-F1 |
 | P16-F1 | [x] 已完成 first-slice evidence | Add House / Terrain golden、pin/GC、Commit 前/后撤权、quarantine、Host↔RuntimeHost 集成 | P16-O1、P16-P1、P16-R1、P16-H1、P16-CLI1、P16-B1 / P16-G1 |
 | P16-I1 | [ ] 后续切片 | Handler Registry、fixed-tick Hot Apply、Differential Runtime Conformance | P16-F1、独立批准的 Incremental plan / P16-G2 |
-| P16-G1 | [ ] 等待全量门禁 | Full Reload 首切片 Final GO；规格文档状态行仍保持 implementation not started | P16-F1 / 无 |
+| P16-G1 | [x] 已完成 first-slice Final GO | Full Reload 首切片合同门禁；规格文档状态行仍保持 implementation not started；不是生产可用 | P16-F1 / 无 |
 | P16-G2 | [ ] 后续集成 | Incremental 第二切片 Final GO | P16-I1 / 无 |
 
 P16-H0 证据：公开 `authoringSpecHash` / `baseAuthoringSpecHash` 使用 `hashAuthoringDocumentV4`
@@ -616,6 +618,12 @@ Commit 后过期、quarantine、pin vs 并发 Apply、未 pin GC、prepare 失�
 Host↔RuntimeHost 集成覆盖 stale expectation 后成功 Full Reload（新 WorldSession、tick 0）。
 Chromium 安装测试证明 Edit 面隔离；页面上真实加房屋并 Full Reload 的 rendered 证据尚未作为
 独立 Browser verifier 关闭。这不是完整 P1.4，也不是 Incremental。
+
+P16-G1 证据：候选 `63d530b` 上 `pnpm typecheck`、`pnpm test`（233 files / 2646 tests，
+含 census 与 workspace boundary 52）、`pnpm build` 通过。G1 过程中关闭了 F1 deep import、
+Builder `allowedOverridePaths` 模板、Take 身份哈希和 self-check bundle 过期。完成记录：
+[`2026-08-26-p16-full-reload-g1-completion.md`](reviews/2026-08-26-p16-full-reload-g1-completion.md)。
+这不是生产可用声明。规格头保持 *implementation not started*。
 
 - [x] 为 Canonical Schema + Registry Lock + 允许 Capability 集冻结版本化 AI Schema
   Profile/Projector；记录 Profile Hash、Registry Lock Hash、Capability Set Hash、规模
@@ -1032,9 +1040,11 @@ S1b Golden、
 9. **M9（P1.6 Full Reload 首切片已落地，未生产可用）**：P1.6 以
    [`WorldChangeSet 专项设计`](superpowers/specs/2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md)
    为唯一实施权威；规格文档状态行仍写 *implementation not started*，那是文档元数据，
-   不以它代替 Backlog。H0–F1 已交付 AI Schema、WorldChangeSet、进程内 journal、
-   RuntimeHost publication V2、CLI 文件模式和 Authoring 页 Edit API。Incremental Hot Apply、
-   完整 P1.4 Package、磁盘 WAL 和双 Provider Conformance 未交付，不得按生产可用宣称。
+   不以它代替 Backlog。H0–G1 已交付 AI Schema、WorldChangeSet、进程内 journal、
+   RuntimeHost publication V2、CLI 文件模式、Authoring 页 Edit API，以及
+   [`G1 first-slice Final GO`](reviews/2026-08-26-p16-full-reload-g1-completion.md)。
+   Incremental Hot Apply、完整 P1.4 Package、磁盘 WAL 和双 Provider Conformance
+   未交付，不得按生产可用宣称。
    P2.5 Surface/Traversal 仍按其独立状态追踪。在实现游泳、攀爬或增量 Agent 修复前，
    禁止临时增加公共字段或场景脚本旁路**。
 10. **M10：P1.1 与 P2.5 边界稳定后评审 P2.6 H1 Bridge Fixture；先验证同 XZ 双层支撑、
