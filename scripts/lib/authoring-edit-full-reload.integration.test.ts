@@ -15,7 +15,7 @@ import { describe, expect, it } from "vitest";
 import {
   createHost,
   createPortHarness,
-} from "../../packages/runtime-host/src/test/runtime-host-lifecycle-harness";
+} from "@whitebox-world/runtime-host/testing";
 import { createAuthoringEditHostBridgeV1 } from "./authoring-edit-host-bridge";
 
 const EXAMPLES_ROOT = join(
