@@ -27,7 +27,7 @@
 - World disposal is exactly once. A replacement or resumed Runtime cannot report ready until the old ownership ledger is empty and the new Runtime has passed its World Ready Gate.
 - stdout for one-shot commands is one stable JSON document; stdout for interactive run is canonical NDJSON only. Human diagnostics and progress use stderr.
 - Every new one-shot JSON result carries the §16 envelope `protocolVersion`, `sdkVersion`, `specVersion`, and `command`; Runtime Session records carry both their DTO `schemaVersion` and stream `protocolVersion`.
-- The first interactive event is `ready` and includes a stable logical `worldkit://runtime-session/<runtimeSessionId>` URL. It does not claim that a headless stdio session owns an HTTP listener.
+- The first interactive event is `ready` and includes a stable logical `worldkit://runtime-session/<runtimeSessionId>` URL in the canonical `runtimeSessionUri` field. It does not claim that a headless stdio session owns an HTTP listener.
 - Plain `pnpm dev + ?authoring=1` is never introduced. The existing trusted `worldkit run <world.json>` authoring Browser route remains separate from Package headless sessions.
 
 ## Work graph and exclusive ownership
@@ -50,7 +50,9 @@
 
 - Create: `packages/runtime-contracts/src/runtime-session-protocol.ts`
 - Create: `packages/runtime-contracts/src/runtime-session-protocol.test.ts`
+- Modify: `packages/runtime-contracts/src/runtime-session.ts`
 - Modify: `packages/runtime-contracts/src/index.ts`
+- Modify: `packages/runtime-host/src/world-session.ts`
 
 **Input/output contract:**
 
@@ -58,10 +60,11 @@
 - V1 request types: `gameplay-command.execute`, `fixed-input.run`, `snapshot.get`, `events.get`, and `session.close`.
 - Mutation payloads are the existing exact `GameplayCommandV1` and singular `FixedInputV1`; no translated parameter bag.
 - Receipt common fields bind `id`, `requestId`, `requestHash`, `runtimeSessionId`, `worldSessionId`, `requestType`, and `status`; succeeded payloads reuse exact existing Gameplay receipt, public `WorldRuntimeSnapshotV4`, event page, or close result. Rejections contain one stable diagnostic.
-- Event common fields: `kind: "worldkit-runtime-session-event"`, `schemaVersion: 1`, monotonic `sequence`, `runtimeSessionId`; types are `ready`, `completed`, and `failed`.
-- `ready` binds `protocolVersion`, logical `url`, `worldSessionId`, `worldPackageRef`, `worldPackageRootHash`, `fixedInputControllerEntityId`, and the exact supported request-type list.
+- Event common fields: `kind: "worldkit-runtime-session-event"`, `schemaVersion: 1`, derived `id`, `protocolVersion`, monotonic `sequence`, and `runtimeSessionId`; types are `ready`, `completed`, and `failed`.
+- `ready` binds logical `runtimeSessionUri`, `worldSessionId`, `worldPackageRef`, `worldPackageRootHash`, `fixedInputControllerEntityId`, and the exact supported request-type list.
+- Add closed `parseFixedInputV1` and `parseWorldRuntimeSnapshotV4` exports beside their existing public DTOs. `runtime-host` removes its private FixedInput dialect and consumes the public parser.
 
-- [ ] Write RED happy-path/exact-key/adversarial tests, including aliases, accessor/symbol keys, negative zero, wrong nested Gameplay DTOs, unsorted event pages, and Request Hash domain separation.
+- [ ] Write RED happy-path/exact-key/adversarial tests, including aliases, accessor/symbol keys, negative zero, wrong nested Gameplay/FixedInput/Snapshot DTOs, unsorted event pages, derived Receipt/Event IDs, and Request Hash domain separation.
 - [ ] Run `pnpm exec vitest run packages/runtime-contracts/src/runtime-session-protocol.test.ts` and capture the missing-export failure.
 - [ ] Implement the closed unions plus `parseRuntimeSessionRequestV1`, `canonicalRuntimeSessionReceiptV1`, `canonicalRuntimeSessionEventV1`, and `hashRuntimeSessionRequestV1`.
 - [ ] Run `pnpm exec vitest run packages/runtime-contracts/src/runtime-session-protocol.test.ts packages/runtime-contracts/src/runtime-contracts.test.ts packages/runtime-host/src/runtime-host.test.ts packages/runtime-host/src/world-session.test.ts`.
