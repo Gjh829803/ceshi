@@ -12,13 +12,22 @@ import {
   GameplayCommandDispatcher,
   type GameplayCommandHandlerV1,
 } from "./gameplay-command-dispatcher";
+import {
+  createGameplayActionEffectRegistryV1,
+  type GameplayActionEffectRegistrarV1,
+  type GameplayActionEffectRegistryV1,
+} from "./gameplay-action-effect-registry";
 
 export interface GameplayFeatureFactoryContextV1 {
   readonly worldSessionId: string;
+  readonly actionEffectRegistry?: GameplayActionEffectRegistryV1;
+  readonly actionEffectRegistrar?: GameplayActionEffectRegistrarV1;
 }
 
 export interface GameplayFeatureActivationContextV1 {
   readonly worldSessionId: string;
+  readonly actionEffectRegistry?: GameplayActionEffectRegistryV1;
+  readonly actionEffectRegistrar?: GameplayActionEffectRegistrarV1;
 }
 
 export interface GameplayFeatureV1 {
@@ -309,10 +318,16 @@ export class GameplayFeatureManager {
   ): Promise<ActiveGameplayFeaturesHandleV1> {
     if (this.activated) throw new Error("Gameplay FeatureManager can activate only once.");
     this.activated = true;
+    const actionEffects = createGameplayActionEffectRegistryV1();
+    const featureContext = Object.freeze({
+      ...context,
+      actionEffectRegistry: actionEffects.registry,
+      actionEffectRegistrar: actionEffects.registrar,
+    });
     const records: LifecycleRecord[] = [];
     try {
       for (const factory of this.orderedFactories) {
-        const feature = factory.create({ worldSessionId: context.worldSessionId });
+        const feature = factory.create(featureContext);
         const record: LifecycleRecord = {
           feature,
           commandHandlers: Object.freeze([]),
@@ -354,17 +369,18 @@ export class GameplayFeatureManager {
         record.commandHandlers = Object.freeze(commandHandlers);
       }
       for (const record of records) {
-        record.stateSlice = record.feature.createStateSlice(context);
+        record.stateSlice = record.feature.createStateSlice(featureContext);
       }
       for (const record of records) {
-        await record.feature.prepare(context, record.stateSlice);
+        await record.feature.prepare(featureContext, record.stateSlice);
       }
       for (const record of records) {
         record.activationStarted = true;
-        await record.feature.activate(context, record.stateSlice);
+        await record.feature.activate(featureContext, record.stateSlice);
       }
+      actionEffects.registrar.seal();
     } catch (primary) {
-      const cleanupErrors = await cleanupReverse(context, records);
+      const cleanupErrors = await cleanupReverse(featureContext, records);
       throwWithCleanup(
         primary,
         cleanupErrors,
@@ -382,7 +398,7 @@ export class GameplayFeatureManager {
       dispatcher,
       dispose: () => {
         disposePromise ??= (async () => {
-          const errors = await cleanupReverse(context, records);
+          const errors = await cleanupReverse(featureContext, records);
           if (errors.length > 0) {
             throw new AggregateError(
               errors,

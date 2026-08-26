@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   createGameplayActionDefinitionV1,
@@ -7,7 +7,9 @@ import {
 
 import {
   createGameplayActionCatalogV1,
+  createCoreSemanticActionFeatureFactoryV1,
 } from "./core-semantic-action-feature";
+import { createGameplayActionEffectRegistryV1 } from "./gameplay-action-effect-registry";
 
 const HASH = `sha256:${"a".repeat(64)}` as const;
 
@@ -83,5 +85,48 @@ describe("GameplayActionCatalogV1", () => {
     expect(createGameplayActionCatalogV1([umlaut, z], 2).definitions.map(
       ({ resourceRef }) => resourceRef,
     )).toEqual(["action:z", "action:ä"]);
+  });
+});
+
+describe("core-semantic-action Feature", () => {
+  it("keeps sole action.activate ownership and passes the shared effect registry to GameplayState", () => {
+    const effects = createGameplayActionEffectRegistryV1();
+    const factory = createCoreSemanticActionFeatureFactoryV1();
+    const feature = factory.create({
+      worldSessionId: "world-a",
+      actionEffectRegistry: effects.registry,
+      actionEffectRegistrar: effects.registrar,
+    });
+    const planAction = vi.fn(() => ({
+      status: "rejected" as const,
+      diagnostic: { code: "ACTION_REQUEST_INVALID" as const, message: "test" },
+    }));
+    const handler = feature.commandHandlers.find(({ type }) =>
+      type === "action.activate") as Extract<
+        (typeof feature.commandHandlers)[number],
+        { type: "action.activate" }
+      >;
+    const command = {
+      schemaVersion: 1 as const,
+      id: "activate-a",
+      type: "action.activate" as const,
+      runtimeSessionId: "runtime-a",
+      worldSessionId: "world-a",
+      controllerEntityId: "controller-a",
+      expectedPossession: { mode: "possessed" as const, controlledEntityId: "rider" },
+      actionExecutionId: "execution-a",
+      semanticActionRef: "action:a",
+      actorEntityId: "rider",
+    };
+    handler.plan({
+      command,
+      simulationTick: 1,
+      state: { planControl: vi.fn(), planAction },
+    });
+    expect(planAction).toHaveBeenCalledWith(command, 1, effects.registry);
+    expect(factory.manifest.commandTypes).toEqual([
+      "action.activate",
+      "action.cancel",
+    ]);
   });
 });

@@ -32,6 +32,11 @@ import type {
   GameplayActionRequestResolverV1,
   InternalGameplayActionExecutionV1,
 } from "./core-semantic-action-feature";
+import {
+  resolveGameplayActionRequestV1,
+  type GameplayActionEffectRegistryV1,
+  type GameplayTrustedActionEffectPlanV1,
+} from "./gameplay-action-effect-registry";
 
 export interface GameplayStateOptionsV1 {
   readonly runtimeSessionId: string;
@@ -94,6 +99,7 @@ export interface GameplayCommandTransitionPlanV1
     | "action.activate"
     | "action.cancel";
   readonly commandId: string;
+  readonly trustedActionEffectPlan?: GameplayTrustedActionEffectPlanV1;
 }
 
 export interface GameplayActionCompletionTransitionPlanV1
@@ -156,6 +162,7 @@ export interface GameplayPlanningStateV1 {
   planAction(
     command: ActionActivateGameplayCommandV1 | ActionCancelGameplayCommandV1,
     simulationTick: number,
+    actionEffectRegistry?: GameplayActionEffectRegistryV1,
   ): GameplayStatePlanResultV1;
 }
 
@@ -526,6 +533,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
   planAction(
     command: ActionActivateGameplayCommandV1 | ActionCancelGameplayCommandV1,
     simulationTick: number,
+    actionEffectRegistry?: GameplayActionEffectRegistryV1,
   ): GameplayStatePlanResultV1 {
     assertTick(simulationTick, "simulationTick");
     if (isNil(ownValue(this.controllerStatesById, command.controllerEntityId))) {
@@ -541,14 +549,13 @@ export class GameplayState implements GameplayPlanningStateV1 {
         `Controller '${command.controllerEntityId}' possession changed.`,
       );
     }
-    if (command.actorEntityId !== command.expectedPossession.controlledEntityId) {
-      return reject(
-        "ACTION_NOT_AVAILABLE_FOR_ACTOR",
-        "Action actor must be the expected possession target.",
-      );
-    }
-
     if (command.type === "action.cancel") {
+      if (command.actorEntityId !== command.expectedPossession.controlledEntityId) {
+        return reject(
+          "ACTION_NOT_AVAILABLE_FOR_ACTOR",
+          "Action actor must be the expected possession target.",
+        );
+      }
       const execution = ownValue(
         this.activeActionExecutionsById,
         command.actionExecutionId,
@@ -617,16 +624,93 @@ export class GameplayState implements GameplayPlanningStateV1 {
         `Semantic Action '${command.semanticActionRef}' is unavailable for '${command.actorEntityId}'.`,
       );
     }
-    const requestDiagnostic = this.validateActionRequest(command, definition.request);
+    const requestDiagnostic = definition.effect.mode === "state-only"
+      ? this.validateActionRequest(command, definition.request)
+      : undefined;
     if (!isNil(requestDiagnostic)) {
       return { status: "rejected", diagnostic: requestDiagnostic };
     }
+    let trustedActionEffectPlan: GameplayTrustedActionEffectPlanV1 | undefined;
+    if (definition.effect.mode === "state-only") {
+      if (command.actorEntityId !== command.expectedPossession.controlledEntityId) {
+        return reject(
+          "ACTION_NOT_AVAILABLE_FOR_ACTOR",
+          "State-only Action actor must be the expected possession target.",
+        );
+      }
+    } else {
+      const planner = actionEffectRegistry?.resolve(
+        definition.effect.gameplayActionEffectRef,
+        definition.effect.gameplayActionEffectHash,
+      );
+      if (isNil(planner)) {
+        return reject(
+          "ACTION_CATALOG_INVALID",
+          "The trusted Action effect planner is missing or has the wrong locked hash.",
+        );
+      }
+      if (
+        definition.request.mode !== "required" ||
+        isNil(command.actionRequestRef) ||
+        isNil(command.actionRequestHash) ||
+        isNil(this.actionRequestResolver)
+      ) {
+        return reject(
+          "ACTION_REQUEST_INVALID",
+          "The trusted Action effect requires a locked Action Request.",
+        );
+      }
+      const actionRequest = resolveGameplayActionRequestV1(
+        this.actionRequestResolver,
+        command.actionRequestRef,
+        command.actionRequestHash,
+        definition.request.actionRequestSchemaRef,
+        definition.request.actionRequestSchemaHash,
+      );
+      if (isNil(actionRequest)) {
+        return reject(
+          "ACTION_REQUEST_INVALID",
+          "Action Request bytes are non-canonical or do not match their locked Schema and hash.",
+        );
+      }
+      try {
+        const plannedEffect = planner.plan({
+          command,
+          definition,
+          actionRequest,
+          planningView: {
+            simulationTick,
+            relationshipStatesById: this.relationshipStatesById,
+          },
+        });
+        if (
+          plannedEffect.actorEntityId !== command.actorEntityId ||
+          plannedEffect.requiredControlledEntityId !==
+            command.expectedPossession.controlledEntityId
+        ) {
+          return reject(
+            "ACTION_NOT_AVAILABLE_FOR_ACTOR",
+            "Trusted Action actor or control authority does not match the command.",
+          );
+        }
+        trustedActionEffectPlan = plannedEffect;
+      } catch {
+        return reject(
+          "ACTION_REQUEST_INVALID",
+          "The trusted Action effect could not plan this request.",
+        );
+      }
+    }
+    const activeActionStateCountDelta = definition.completion.mode === "immediate"
+      ? 0
+      : 1;
     if (
-      Object.keys(this.activeActionExecutionsById).length + 1 >
+      Object.keys(this.activeActionExecutionsById).length +
+        activeActionStateCountDelta >
         this.capacityBudget.maximumActiveActionStateCount ||
       this.usedActionExecutionIdSet.size + 1 >
         this.capacityBudget.maximumUsedActionExecutionIdCount ||
-      this.terminalEventReservationCount + 1 >
+      this.terminalEventReservationCount + activeActionStateCountDelta >
         this.capacityBudget.maximumRetainedEventCount
     ) {
       return reject(
@@ -669,16 +753,22 @@ export class GameplayState implements GameplayPlanningStateV1 {
         ? {}
         : { scheduledEndSimulationTick }),
     });
-    return this.plannedCommand(command, simulationTick, [], [{
-      operation: "add",
-      after: execution,
-    }], [command.actionExecutionId], {
+    const actionChanges: GameplayActionChangeV1[] = definition.completion.mode === "immediate"
+      ? [
+          { operation: "add", after: execution },
+          { operation: "remove", before: execution },
+        ]
+      : [{ operation: "add", after: execution }];
+    return this.plannedCommand(command, simulationTick, [], actionChanges,
+      [command.actionExecutionId], {
       relationshipStateCountDelta: 0,
-      activeActionStateCountDelta: 1,
+      activeActionStateCountDelta:
+        definition.completion.mode === "immediate" ? 0 : 1,
       usedActionExecutionIdCountDelta: 1,
-      immediateEventCount: 1,
-      terminalEventReservationCountDelta: 1,
-    });
+      immediateEventCount: definition.completion.mode === "immediate" ? 2 : 1,
+      terminalEventReservationCountDelta:
+        definition.completion.mode === "immediate" ? 0 : 1,
+    }, trustedActionEffectPlan);
   }
 
   planDueActionCompletions(
@@ -1050,6 +1140,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
     actionChanges: readonly GameplayActionChangeV1[],
     newlyCommittedActionExecutionIds: readonly string[],
     capacityDelta: GameplayTransitionCapacityDeltaV1,
+    trustedActionEffectPlan?: GameplayTrustedActionEffectPlanV1,
   ): Extract<GameplayStatePlanResultV1, { status: "planned" }> {
     const result: Extract<GameplayStatePlanResultV1, { status: "planned" }> =
       deepFreeze({
@@ -1064,6 +1155,9 @@ export class GameplayState implements GameplayPlanningStateV1 {
           actionChanges,
           newlyCommittedActionExecutionIds,
           capacityDelta,
+          ...(isNil(trustedActionEffectPlan)
+            ? {}
+            : { trustedActionEffectPlan }),
         },
       });
     this.transitionProvenance.set(result.transitionPlan, deepFreeze({

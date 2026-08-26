@@ -10,6 +10,9 @@ import {
   GameplayFeatureManager,
   type GameplayFeatureFactoryV1,
 } from "./gameplay-feature-manager";
+import { createCoreControlFeatureFactoryV1 } from "./core-control-feature";
+import { createCoreSemanticActionFeatureFactoryV1 } from "./core-semantic-action-feature";
+import { createMountedRelationshipFeatureFactoryV1 } from "./mounted-relationship-feature";
 
 const HASH = `sha256:${"a".repeat(64)}` as const;
 
@@ -67,6 +70,20 @@ function manager(factories: readonly GameplayFeatureFactoryV1[], caps: readonly 
 }
 
 describe("GameplayFeatureManager", () => {
+  it("keeps action.activate owned only by Core Semantic Action", () => {
+    const factories = [
+      createCoreControlFeatureFactoryV1(),
+      createCoreSemanticActionFeatureFactoryV1(),
+      createMountedRelationshipFeatureFactoryV1(),
+    ];
+    expect(
+      factories.filter(({ manifest }) =>
+        manifest.commandTypes.includes("action.activate"))
+        .map(({ manifest }) => manifest.resourceRef),
+    ).toEqual(["worldkit://gameplay-feature/core-semantic-action@1"]);
+    expect(factories[2]?.manifest.commandTypes).toEqual([]);
+  });
+
   it("validates locks, counts, dependencies, capabilities, cycles, and duplicate handlers before factories", () => {
     const create = vi.fn(() => { throw new Error("must not create"); });
     const aManifest = createGameplayFeatureManifestV1(manifestBody("feature:a", {

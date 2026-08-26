@@ -13,6 +13,7 @@ import {
   type GameplayCommandV1,
   type GameplayParticipantStateV1,
 } from "@whitebox-world/gameplay-contracts";
+import { canonicalJsonBytes, sha256CanonicalJson } from "@whitebox-world/protocol";
 
 import {
   createGameplayActionCatalogV1,
@@ -29,6 +30,14 @@ import {
   type GameplayTransitionCapacityDeltaV1,
   type GameplayTransitionPlanV1,
 } from "./gameplay-state";
+import { createGameplayActionEffectRegistryV1 } from "./gameplay-action-effect-registry";
+import {
+  MOUNTED_RELATIONSHIP_EFFECT_HASH,
+  MOUNTED_RELATIONSHIP_EFFECT_REF,
+  MOUNT_ACTION_REQUEST_SCHEMA_HASH,
+  MOUNT_ACTION_REQUEST_SCHEMA_REF,
+  createMountedRelationshipFeatureFactoryV1,
+} from "./mounted-relationship-feature";
 
 const HASH_A = `sha256:${"a".repeat(64)}` as const;
 const HASH_B = `sha256:${"b".repeat(64)}` as const;
@@ -271,6 +280,91 @@ function stageAndCommit(
 }
 
 describe("GameplayState possession", () => {
+  it("carries the exact trusted mounted effect Plan into the issued Action transition", () => {
+    const request = {
+      kind: "mount-action-request",
+      schemaVersion: 1,
+      id: "mount-subject-a",
+      riderEntityId: "subject-a",
+      mountEntityId: "subject-b",
+      mountSlotId: "stand",
+    } as const;
+    const requestHash = sha256CanonicalJson(request) as `sha256:${string}`;
+    const mountAction = definition({
+      id: "mount",
+      resourceRef: "worldkit://semantic-action/mount@1",
+      completion: { mode: "immediate" },
+      effect: {
+        mode: "trusted",
+        gameplayActionEffectRef: MOUNTED_RELATIONSHIP_EFFECT_REF,
+        gameplayActionEffectHash: MOUNTED_RELATIONSHIP_EFFECT_HASH,
+      },
+      requiredActorCapabilityRefs: [],
+      request: {
+        mode: "required",
+        actionRequestSchemaRef: MOUNT_ACTION_REQUEST_SCHEMA_REF,
+        actionRequestSchemaHash: MOUNT_ACTION_REQUEST_SCHEMA_HASH,
+      },
+    });
+    const state = new GameplayState(options({
+      actionCatalog: createGameplayActionCatalogV1([mountAction], 1),
+      actionRequestResolver: (ref, hash) =>
+        ref === "worldkit://action-request/mount-subject-a@1" && hash === requestHash
+          ? {
+              actionRequestSchemaRef: MOUNT_ACTION_REQUEST_SCHEMA_REF,
+              actionRequestSchemaHash: MOUNT_ACTION_REQUEST_SCHEMA_HASH,
+              actionRequestBytes: canonicalJsonBytes(request),
+            }
+          : undefined,
+    }));
+    bind(state);
+    const effects = createGameplayActionEffectRegistryV1();
+    const context = {
+      worldSessionId: "world-a",
+      actionEffectRegistry: effects.registry,
+      actionEffectRegistrar: effects.registrar,
+    };
+    createMountedRelationshipFeatureFactoryV1()
+      .create(context)
+      .activate(context, {});
+    effects.registrar.seal();
+    const activate = command({
+      id: "mount-command",
+      type: "action.activate",
+      controllerEntityId: "controller-a",
+      actionExecutionId: "mount-execution",
+      semanticActionRef: mountAction.resourceRef,
+      actorEntityId: "subject-a",
+      expectedPossession: { mode: "possessed", controlledEntityId: "subject-a" },
+      actionRequestRef: "worldkit://action-request/mount-subject-a@1",
+      actionRequestHash: requestHash,
+    });
+
+    expect(state.planAction(activate, 2)).toMatchObject({
+      status: "rejected",
+      diagnostic: { code: "ACTION_CATALOG_INVALID" },
+    });
+    const result = state.planAction(activate, 2, effects.registry);
+    expect(result).toMatchObject({
+      status: "planned",
+      transitionPlan: {
+        trustedActionEffectPlan: {
+          operation: "mount",
+          actorEntityId: "subject-a",
+          requiredControlledEntityId: "subject-a",
+        },
+        actionChanges: [
+          { operation: "add" },
+          { operation: "remove" },
+        ],
+        capacityDelta: {
+          activeActionStateCountDelta: 0,
+          terminalEventReservationCountDelta: 0,
+        },
+      },
+    });
+  });
+
   it("rejects a non-canonical serialized Entity Descriptor", () => {
     expect(() => new GameplayState(options({
       entityDescriptors: [{
@@ -1693,6 +1787,7 @@ describe("GameplayState actions", () => {
           ? {
               actionRequestSchemaRef: "worldkit://schema/equip-request@1",
               actionRequestSchemaHash: HASH_A,
+              actionRequestBytes: canonicalJsonBytes({}),
             }
           : undefined,
     }));

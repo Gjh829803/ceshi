@@ -8,7 +8,11 @@ import {
 import { isNil } from "lodash-es";
 
 import type { GameplayCommandHandlerV1 } from "./gameplay-command-dispatcher";
-import type { GameplayFeatureFactoryV1 } from "./gameplay-feature-manager";
+import type {
+  GameplayFeatureFactoryContextV1,
+  GameplayFeatureFactoryV1,
+} from "./gameplay-feature-manager";
+import type { GameplayActionEffectRegistryV1 } from "./gameplay-action-effect-registry";
 import { CORE_CONTROL_FEATURE_REF } from "./core-control-feature";
 
 export interface GameplayActionCatalogV1 {
@@ -19,6 +23,7 @@ export interface GameplayActionCatalogV1 {
 export interface GameplayActionRequestResolutionV1 {
   readonly actionRequestSchemaRef: string;
   readonly actionRequestSchemaHash: Sha256HashV1;
+  readonly actionRequestBytes: Uint8Array;
 }
 
 export type GameplayActionRequestResolverV1 = (
@@ -125,12 +130,14 @@ const semanticActionManifest = createGameplayFeatureManifestV1({
   resourceBudget: { stateSliceCount: 1, commandHandlerCount: 2 },
 });
 
-function actionHandlers(): readonly GameplayCommandHandlerV1[] {
+function actionHandlers(
+  actionEffectRegistry: GameplayActionEffectRegistryV1 | undefined,
+): readonly GameplayCommandHandlerV1[] {
   return [
     {
       type: "action.activate",
       plan: ({ command, state, simulationTick }) =>
-        state.planAction(command, simulationTick),
+        state.planAction(command, simulationTick, actionEffectRegistry),
     },
     {
       type: "action.cancel",
@@ -143,9 +150,9 @@ function actionHandlers(): readonly GameplayCommandHandlerV1[] {
 export function createCoreSemanticActionFeatureFactoryV1(): GameplayFeatureFactoryV1 {
   return Object.freeze({
     manifest: semanticActionManifest,
-    create: () => ({
+    create: (context: GameplayFeatureFactoryContextV1) => ({
       resourceRef: CORE_SEMANTIC_ACTION_FEATURE_REF,
-      commandHandlers: actionHandlers(),
+      commandHandlers: actionHandlers(context.actionEffectRegistry),
       createStateSlice: () => Object.freeze({
         kind: "core-semantic-action-state",
         schemaVersion: 1,
