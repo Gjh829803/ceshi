@@ -14,6 +14,7 @@ const CONSTRAINT_PRIORITY: Readonly<Record<TerrainConstraintV0["kind"], number>>
 };
 const UNLOCKED_PRIORITY = 255;
 const GEOMETRY_EPSILON_METERS = 1e-9;
+const HEIGHT_RANGE_EPSILON_METERS = 1e-5;
 
 export interface TerrainConstraintDeltaV0 {
   readonly constraintId: string;
@@ -23,6 +24,7 @@ export interface TerrainConstraintDeltaV0 {
 
 export interface ApplyTerrainConstraintsResultV0 {
   readonly heightSamplesMeters: Float32Array;
+  readonly protectedSampleMask: Uint8Array;
   readonly deltas: readonly TerrainConstraintDeltaV0[];
   readonly diagnostics: readonly TerrainIntentDiagnosticV0[];
 }
@@ -141,6 +143,7 @@ function validateConstraint(constraint: TerrainConstraintV0): void {
 function validateInput(input: {
   readonly centerMetersXZ: Vec2;
   readonly sizeMetersXZ: Vec2;
+  readonly heightRangeMeters: readonly [minimum: number, maximum: number];
   readonly resolutionVerticesXZ: readonly [number, number];
   readonly heightSamplesMeters: Float32Array;
   readonly constraints: readonly TerrainConstraintV0[];
@@ -148,6 +151,11 @@ function validateInput(input: {
   requireVec2(input.centerMetersXZ, "centerMetersXZ");
   requirePositive(input.sizeMetersXZ[0], "sizeMetersXZ[0]");
   requirePositive(input.sizeMetersXZ[1], "sizeMetersXZ[1]");
+  requireFinite(input.heightRangeMeters[0], "heightRangeMeters[0]");
+  requireFinite(input.heightRangeMeters[1], "heightRangeMeters[1]");
+  if (!(input.heightRangeMeters[0] < input.heightRangeMeters[1])) {
+    throw new Error("heightRangeMeters minimum must be less than maximum.");
+  }
   const [columns, rows] = input.resolutionVerticesXZ;
   if (!Number.isSafeInteger(columns) || !Number.isSafeInteger(rows) || columns < 2 || rows < 2) {
     throw new Error("resolutionVerticesXZ must contain safe integers of at least 2.");
@@ -363,6 +371,146 @@ function gridPoint(grid: GridGeometryV0, column: number, row: number): Vec2 {
   ];
 }
 
+interface RectangleXZV0 {
+  readonly minimumXMeters: number;
+  readonly minimumZMeters: number;
+  readonly maximumXMeters: number;
+  readonly maximumZMeters: number;
+}
+
+function pointInsideRectangle(point: Vec2, rectangle: RectangleXZV0): boolean {
+  return point[0] >= rectangle.minimumXMeters - GEOMETRY_EPSILON_METERS &&
+    point[0] <= rectangle.maximumXMeters + GEOMETRY_EPSILON_METERS &&
+    point[1] >= rectangle.minimumZMeters - GEOMETRY_EPSILON_METERS &&
+    point[1] <= rectangle.maximumZMeters + GEOMETRY_EPSILON_METERS;
+}
+
+function orientation(left: Vec2, middle: Vec2, right: Vec2): number {
+  return (middle[1] - left[1]) * (right[0] - middle[0]) -
+    (middle[0] - left[0]) * (right[1] - middle[1]);
+}
+
+function segmentsIntersect(leftStart: Vec2, leftEnd: Vec2, rightStart: Vec2, rightEnd: Vec2): boolean {
+  const leftStartOrientation = orientation(leftStart, leftEnd, rightStart);
+  const leftEndOrientation = orientation(leftStart, leftEnd, rightEnd);
+  const rightStartOrientation = orientation(rightStart, rightEnd, leftStart);
+  const rightEndOrientation = orientation(rightStart, rightEnd, leftEnd);
+  if (
+    Math.abs(leftStartOrientation) <= GEOMETRY_EPSILON_METERS &&
+    pointOnSegment(rightStart, leftStart, leftEnd)
+  ) return true;
+  if (
+    Math.abs(leftEndOrientation) <= GEOMETRY_EPSILON_METERS &&
+    pointOnSegment(rightEnd, leftStart, leftEnd)
+  ) return true;
+  if (
+    Math.abs(rightStartOrientation) <= GEOMETRY_EPSILON_METERS &&
+    pointOnSegment(leftStart, rightStart, rightEnd)
+  ) return true;
+  if (
+    Math.abs(rightEndOrientation) <= GEOMETRY_EPSILON_METERS &&
+    pointOnSegment(leftEnd, rightStart, rightEnd)
+  ) return true;
+  return (leftStartOrientation > 0) !== (leftEndOrientation > 0) &&
+    (rightStartOrientation > 0) !== (rightEndOrientation > 0);
+}
+
+function rectangleCorners(rectangle: RectangleXZV0): readonly Vec2[] {
+  return [
+    [rectangle.minimumXMeters, rectangle.minimumZMeters],
+    [rectangle.maximumXMeters, rectangle.minimumZMeters],
+    [rectangle.maximumXMeters, rectangle.maximumZMeters],
+    [rectangle.minimumXMeters, rectangle.maximumZMeters],
+  ];
+}
+
+function polygonIntersectsRectangle(points: readonly Vec2[], rectangle: RectangleXZV0): boolean {
+  if (points.some((point) => pointInsideRectangle(point, rectangle))) return true;
+  const corners = rectangleCorners(rectangle);
+  if (corners.some((corner) => pointInPolygon(corner, points))) return true;
+  for (let pointIndex = 0; pointIndex < points.length; pointIndex += 1) {
+    const start = points[pointIndex]!;
+    const end = points[(pointIndex + 1) % points.length]!;
+    for (let cornerIndex = 0; cornerIndex < corners.length; cornerIndex += 1) {
+      if (segmentsIntersect(
+        start,
+        end,
+        corners[cornerIndex]!,
+        corners[(cornerIndex + 1) % corners.length]!,
+      )) return true;
+    }
+  }
+  return false;
+}
+
+function waterBoundaryIntersectsRectangle(
+  constraint: Extract<TerrainConstraintV0, { kind: "water-basin" }>,
+  rectangle: RectangleXZV0,
+): boolean {
+  const boundary = constraint.boundary;
+  if (boundary.kind === "polygon") {
+    return polygonIntersectsRectangle(boundary.pointsMetersXZ, rectangle);
+  }
+  if (boundary.kind === "circle") {
+    const nearestX = Math.max(
+      rectangle.minimumXMeters,
+      Math.min(rectangle.maximumXMeters, boundary.centerMetersXZ[0]),
+    );
+    const nearestZ = Math.max(
+      rectangle.minimumZMeters,
+      Math.min(rectangle.maximumZMeters, boundary.centerMetersXZ[1]),
+    );
+    return Math.hypot(
+      nearestX - boundary.centerMetersXZ[0],
+      nearestZ - boundary.centerMetersXZ[1],
+    ) <= boundary.radiusMeters + GEOMETRY_EPSILON_METERS;
+  }
+  return rectangle.maximumXMeters >=
+      boundary.centerMetersXZ[0] - boundary.radiusMetersXZ[0] - GEOMETRY_EPSILON_METERS &&
+    rectangle.minimumXMeters <=
+      boundary.centerMetersXZ[0] + boundary.radiusMetersXZ[0] + GEOMETRY_EPSILON_METERS &&
+    rectangle.maximumZMeters >=
+      boundary.centerMetersXZ[1] - boundary.radiusMetersXZ[1] - GEOMETRY_EPSILON_METERS &&
+    rectangle.minimumZMeters <=
+      boundary.centerMetersXZ[1] + boundary.radiusMetersXZ[1] + GEOMETRY_EPSILON_METERS;
+}
+
+function conservativeIntersectingCellVertexIndices(
+  grid: GridGeometryV0,
+  intersects: (rectangle: RectangleXZV0) => boolean,
+): ReadonlySet<number> {
+  const indices = new Set<number>();
+  for (let row = 0; row < grid.rows - 1; row += 1) {
+    for (let column = 0; column < grid.columns - 1; column += 1) {
+      const minimum = gridPoint(grid, column, row);
+      const maximum = gridPoint(grid, column + 1, row + 1);
+      if (!intersects({
+        minimumXMeters: minimum[0],
+        minimumZMeters: minimum[1],
+        maximumXMeters: maximum[0],
+        maximumZMeters: maximum[1],
+      })) continue;
+      indices.add(row * grid.columns + column);
+      indices.add(row * grid.columns + column + 1);
+      indices.add((row + 1) * grid.columns + column);
+      indices.add((row + 1) * grid.columns + column + 1);
+    }
+  }
+  return indices;
+}
+
+function pushProtectedRegionOutsideTerrainDiagnostic(
+  diagnostics: TerrainIntentDiagnosticV0[],
+  constraint: Extract<TerrainConstraintV0, { kind: "water-basin" | "flatten-region" }>,
+): void {
+  diagnostics.push({
+    severity: "blocking",
+    code: "TERRAIN_INTENT_PROTECTED_REGION_OUTSIDE_TERRAIN",
+    instancePath: `/constraints/${constraint.id}`,
+    message: `Protected terrain constraint '${constraint.id}' does not intersect the Terrain grid.`,
+  });
+}
+
 function recordDelta(
   constraintId: string,
   before: Float32Array,
@@ -515,6 +663,7 @@ function validateRouteSlope(
 export function applyTerrainConstraintsV0(input: {
   readonly centerMetersXZ: Vec2;
   readonly sizeMetersXZ: Vec2;
+  readonly heightRangeMeters: readonly [minimum: number, maximum: number];
   readonly resolutionVerticesXZ: readonly [number, number];
   readonly heightSamplesMeters: Float32Array;
   readonly constraints: readonly TerrainConstraintV0[];
@@ -525,25 +674,43 @@ export function applyTerrainConstraintsV0(input: {
   lockPriorities.fill(UNLOCKED_PRIORITY);
   const diagnostics: TerrainIntentDiagnosticV0[] = [];
   const deltas: TerrainConstraintDeltaV0[] = [];
+  const sortedConstraints = sortConstraints(input.constraints);
 
-  for (const constraint of sortConstraints(input.constraints)) {
+  for (const constraint of sortedConstraints) {
     const before = new Float32Array(values);
     const priority = CONSTRAINT_PRIORITY[constraint.kind];
 
     if (constraint.kind === "water-basin") {
       const bedHeightMeters = constraint.waterLevelMeters - constraint.depthMeters;
+      let coveredSampleCount = 0;
       for (let row = 0; row < grid.rows; row += 1) {
         for (let column = 0; column < grid.columns; column += 1) {
           const index = row * grid.columns + column;
           const distance = waterInteriorDistanceMeters(gridPoint(grid, column, row), constraint);
           if (distance === undefined) continue;
+          coveredSampleCount += 1;
           const weight = falloffWeight(distance, constraint.shoreWidthMeters);
           const target = values[index]! + (bedHeightMeters - values[index]!) * weight;
           values[index] = Math.min(values[index]!, target);
           lockPriorities[index] = Math.min(lockPriorities[index]!, priority);
         }
       }
+      if (coveredSampleCount === 0) {
+        const fallbackIndices = conservativeIntersectingCellVertexIndices(
+          grid,
+          (rectangle) => waterBoundaryIntersectsRectangle(constraint, rectangle),
+        );
+        if (fallbackIndices.size === 0) {
+          pushProtectedRegionOutsideTerrainDiagnostic(diagnostics, constraint);
+        } else {
+          for (const index of fallbackIndices) {
+            values[index] = Math.min(values[index]!, bedHeightMeters);
+            lockPriorities[index] = Math.min(lockPriorities[index]!, priority);
+          }
+        }
+      }
     } else if (constraint.kind === "flatten-region") {
+      let coveredSampleCount = 0;
       for (let row = 0; row < grid.rows; row += 1) {
         for (let column = 0; column < grid.columns; column += 1) {
           const index = row * grid.columns + column;
@@ -553,10 +720,26 @@ export function applyTerrainConstraintsV0(input: {
             constraint.pointsMetersXZ,
           );
           if (distance === undefined) continue;
+          coveredSampleCount += 1;
           const weight = falloffWeight(distance, constraint.falloffWidthMeters);
           values[index] = values[index]! +
             (constraint.targetHeightMeters - values[index]!) * weight;
           lockPriorities[index] = Math.min(lockPriorities[index]!, priority);
+        }
+      }
+      if (coveredSampleCount === 0) {
+        const fallbackIndices = conservativeIntersectingCellVertexIndices(
+          grid,
+          (rectangle) => polygonIntersectsRectangle(constraint.pointsMetersXZ, rectangle),
+        );
+        if (fallbackIndices.size === 0) {
+          pushProtectedRegionOutsideTerrainDiagnostic(diagnostics, constraint);
+        } else {
+          for (const index of fallbackIndices) {
+            if (lockPriorities[index]! < priority) continue;
+            values[index] = constraint.targetHeightMeters;
+            lockPriorities[index] = Math.min(lockPriorities[index]!, priority);
+          }
         }
       }
     } else if (constraint.kind === "flatten-footprint") {
@@ -641,15 +824,50 @@ export function applyTerrainConstraintsV0(input: {
             },
           });
         }
-        validateRouteSlope(input, values, grid, constraint, diagnostics);
       }
     }
 
     deltas.push(recordDelta(constraint.id, before, values));
   }
 
+  for (const constraint of sortedConstraints) {
+    if (constraint.kind === "route-slope") {
+      validateRouteSlope(input, values, grid, constraint, diagnostics);
+    }
+  }
+
   if (values.some((height) => !Number.isFinite(height))) {
     throw new Error("Terrain constraints produced non-finite height samples.");
   }
-  return { heightSamplesMeters: values, deltas, diagnostics };
+  let actualMinimumHeightMeters = Number.POSITIVE_INFINITY;
+  let actualMaximumHeightMeters = Number.NEGATIVE_INFINITY;
+  for (const height of values) {
+    actualMinimumHeightMeters = Math.min(actualMinimumHeightMeters, height);
+    actualMaximumHeightMeters = Math.max(actualMaximumHeightMeters, height);
+  }
+  if (
+    actualMinimumHeightMeters < input.heightRangeMeters[0] - HEIGHT_RANGE_EPSILON_METERS ||
+    actualMaximumHeightMeters > input.heightRangeMeters[1] + HEIGHT_RANGE_EPSILON_METERS
+  ) {
+    diagnostics.push({
+      severity: "blocking",
+      code: "TERRAIN_INTENT_HEIGHT_RANGE_EXCEEDED",
+      instancePath: "/heightSamplesMeters",
+      message: "Terrain constraints produced height samples outside world.bounds.heightRangeMeters.",
+      details: {
+        heightRangeMeters: input.heightRangeMeters,
+        actualMinimumHeightMeters,
+        actualMaximumHeightMeters,
+      },
+    });
+  }
+  return {
+    heightSamplesMeters: values,
+    protectedSampleMask: Uint8Array.from(
+      lockPriorities,
+      (priority) => priority === UNLOCKED_PRIORITY ? 0 : 1,
+    ),
+    deltas,
+    diagnostics,
+  };
 }

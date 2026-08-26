@@ -25,7 +25,12 @@ import {
 } from "@whitebox-world/runtime-contracts";
 import { isNil } from "lodash-es";
 
-export const BUILDER_SELF_CHECK_VERSION = "worldkit-builder-self-check-v5";
+import {
+  collectBuilderLargeWorldEvidenceV1,
+  type BuilderLargeWorldEvidenceV1,
+} from "./lib/builder-large-world-evidence";
+
+export const BUILDER_SELF_CHECK_VERSION = "worldkit-builder-self-check-v6";
 
 const SPAWN_GROUND_TOLERANCE_METERS = 0.15;
 
@@ -251,6 +256,7 @@ export async function runBuilderSelfCheck(options: {
   }
   const parsed = parseAuthoringSpecV4(worldSource);
   let compiledExecutionPlan: ExecutionPlanV5 | undefined;
+  let largeWorldEvidence: BuilderLargeWorldEvidenceV1 | undefined;
   if (!parsed.ok || parsed.value === undefined) {
     diagnostics.push(...parsed.diagnostics.map((diagnostic) => ({
       code: diagnostic.code,
@@ -269,6 +275,8 @@ export async function runBuilderSelfCheck(options: {
         details: diagnostic.details,
       })));
     } else {
+      largeWorldEvidence = collectBuilderLargeWorldEvidenceV1(parsed.value);
+      diagnostics.push(...largeWorldEvidence.diagnostics);
       const compiled = compileWorldV5({
         normalizedWorldIr: normalized.value,
         normalizedWorldIrHash: normalized.normalizedWorldIrHash,
@@ -315,6 +323,12 @@ export async function runBuilderSelfCheck(options: {
     requiresTrustedRouteValidation: parsed.ok &&
       parsed.value !== undefined &&
       parsed.value.constraints.connectivity.length > 0,
+    ...(largeWorldEvidence === undefined
+      ? {}
+      : {
+          terrainScaleEvidence: largeWorldEvidence.terrainScaleEvidence,
+          routeBuildWindowEvidence: largeWorldEvidence.routeBuildWindowEvidence,
+        }),
     inputs: {
       sceneBriefHash: contentHash(briefSource),
       authoringSpecHash: contentHash(worldSource),

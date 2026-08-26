@@ -112,7 +112,8 @@ pnpm terrain:intent:compile -- \
 
 Accepted V4 evidence:
 
-- report status: `passed`, with no Diagnostics;
+- report status: `passed`, with no Diagnostics；这里的 `passed` 只覆盖 PNG transport、确定性
+  scalar projection 和 Authoring required constraints，不表示自动通过宏观拓扑/视觉语义验收；
 - scalar prefilter: `separable-box`, with automatic radii `[4px, 6px]` for this asymmetric target;
 - `12,513` finite height samples in `[-45m, 90m]`;
 - Spawn: `169` edited samples, maximum delta `27.0m`;

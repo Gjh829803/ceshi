@@ -1,5 +1,10 @@
 # Signed Height Intent Compiler V0 change review
 
+> **后续状态：** commit `a81134d` 的对抗审查推翻了本报告最初的“无 P0”结论。三个已确认
+> hard-constraint 缺口及其修复证据见
+> `docs/reviews/2026-08-26-signed-height-intent-compiler-v0-remediation-review.md`。本报告保留为
+> `d1d7f8b` 提交时的历史审查，不能单独作为当前树的通过证据。
+
 ## 审查元数据
 
 - 模式：B（变更审查）。

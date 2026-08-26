@@ -156,10 +156,15 @@ async function writeTrustedWhiteboxArtifacts(
     writeFile(path.join(artifactRoot, "builder-self-check.json"), JSON.stringify({
       kind: "worldkit-builder-self-check",
       schemaVersion: 1,
-      validatorVersion: "worldkit-builder-self-check-v5",
+      validatorVersion: "worldkit-builder-self-check-v6",
       sceneId,
       status: "passed",
       requiresTrustedRouteValidation: requiresRouteValidation,
+      terrainScaleEvidence: {
+        terrainEntityId: "terrain-main",
+        operationalProfile: "ordinary-single-heightfield-v1",
+      },
+      routeBuildWindowEvidence: [],
       inputs: {
         sceneBriefHash: hash(brief),
         authoringSpecHash: hash(authoring),

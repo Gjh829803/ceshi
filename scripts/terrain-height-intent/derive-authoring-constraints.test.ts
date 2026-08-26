@@ -1,7 +1,7 @@
 import type { AuthoringSpecV4 } from "@whitebox-world/authoring";
 import { describe, expect, it } from "vitest";
 
-import { createValidAuthoringSpec } from "../../packages/authoring/src/test-fixture";
+import { createValidAuthoringSpec } from "@whitebox-world/authoring/testing";
 import { deriveTerrainConstraintsFromAuthoringV4 } from "./derive-authoring-constraints";
 
 function focusedAuthoringSpec(): AuthoringSpecV4 {

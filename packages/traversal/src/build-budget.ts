@@ -26,6 +26,22 @@ export interface HeightfieldTileEstimateV1 {
   readonly estimatedTiles: number;
 }
 
+export interface RouteBuildWindowTileEstimateInputV1 {
+  readonly pointsMetersXZ: readonly (readonly [number, number])[];
+  readonly widthMeters: number;
+  readonly terrainCellSizeMetersXZ: readonly [number, number];
+  readonly tileSizeCells: number;
+  readonly voxelCellSizeMeters: number;
+  readonly maximumTiles: number;
+}
+
+export interface RouteBuildWindowTileEstimateV1
+  extends HeightfieldTileEstimateV1 {
+  readonly minimumMetersXZ: readonly [number, number];
+  readonly maximumMetersXZ: readonly [number, number];
+  readonly maximumTiles: number;
+}
+
 export interface TraversalSurfaceCountBudgetInputV1 {
   readonly traversalSurfaceCount: number;
   readonly capabilityEnvelope: TraversalCapabilityEnvelopeV1;
@@ -278,4 +294,120 @@ export function assertTraversalGraphBuildBudgetV1(
     });
   }
   return estimate;
+}
+
+function requireRoutePointsMicrometers(
+  pointsMetersXZ: unknown,
+): readonly (readonly [number, number])[] {
+  if (!Array.isArray(pointsMetersXZ) || pointsMetersXZ.length < 2) {
+    failBudget("'pointsMetersXZ' must contain at least two finite 2-tuples.");
+  }
+  const pointsMicrometers = pointsMetersXZ.map((point, index) => {
+    if (!Array.isArray(point) || point.length !== 2) {
+      failBudget(`'pointsMetersXZ[${index}]' must be a finite 2-tuple.`);
+    }
+    return [
+      quantizeTraversalMetersToMicrometersV1(point[0]),
+      quantizeTraversalMetersToMicrometersV1(point[1]),
+    ] as const;
+  });
+  const hasNonZeroSegment = pointsMicrometers.slice(1).some((point, index) => {
+    const previous = pointsMicrometers[index]!;
+    return point[0] !== previous[0] || point[1] !== previous[1];
+  });
+  if (!hasNonZeroSegment) {
+    failBudget("'pointsMetersXZ' must contain a non-zero segment after micrometer normalization.");
+  }
+  return pointsMicrometers;
+}
+
+function safeMicrometerSum(left: number, right: number, field: string): number {
+  const result = left + right;
+  if (!Number.isSafeInteger(result)) {
+    failBudget(`'${field}' exceeds deterministic micrometer range.`);
+  }
+  return result;
+}
+
+function metersFromMicrometers(value: number): number {
+  const meters = value / MICROMETERS_PER_METER;
+  return Object.is(meters, -0) ? 0 : meters;
+}
+
+export function estimateRouteBuildWindowTileCountV1(
+  input: RouteBuildWindowTileEstimateInputV1,
+): RouteBuildWindowTileEstimateV1 {
+  if (input === null || typeof input !== "object" || Array.isArray(input)) {
+    failBudget("route build-window input must be an object.");
+  }
+  const pointsMicrometers = requireRoutePointsMicrometers(input.pointsMetersXZ);
+  const widthMicrometers = requirePositiveMeters(input.widthMeters, "widthMeters");
+  if (
+    !Array.isArray(input.terrainCellSizeMetersXZ) ||
+    input.terrainCellSizeMetersXZ.length !== 2
+  ) {
+    failBudget("'terrainCellSizeMetersXZ' must be a positive finite 2-tuple.");
+  }
+  const terrainCellXMicrometers = requirePositiveMeters(
+    input.terrainCellSizeMetersXZ[0],
+    "terrainCellSizeMetersXZ[0]",
+  );
+  const terrainCellZMicrometers = requirePositiveMeters(
+    input.terrainCellSizeMetersXZ[1],
+    "terrainCellSizeMetersXZ[1]",
+  );
+  const halfWidthMicrometers = Math.ceil(widthMicrometers / 2);
+  const guardXMicrometers = safeMicrometerSum(
+    halfWidthMicrometers,
+    terrainCellXMicrometers,
+    "route build-window X guard",
+  );
+  const guardZMicrometers = safeMicrometerSum(
+    halfWidthMicrometers,
+    terrainCellZMicrometers,
+    "route build-window Z guard",
+  );
+  const xMicrometers = pointsMicrometers.map((point) => point[0]);
+  const zMicrometers = pointsMicrometers.map((point) => point[1]);
+  const minimumXMicrometers = safeMicrometerSum(
+    Math.min(...xMicrometers),
+    -guardXMicrometers,
+    "minimumMetersXZ[0]",
+  );
+  const minimumZMicrometers = safeMicrometerSum(
+    Math.min(...zMicrometers),
+    -guardZMicrometers,
+    "minimumMetersXZ[1]",
+  );
+  const maximumXMicrometers = safeMicrometerSum(
+    Math.max(...xMicrometers),
+    guardXMicrometers,
+    "maximumMetersXZ[0]",
+  );
+  const maximumZMicrometers = safeMicrometerSum(
+    Math.max(...zMicrometers),
+    guardZMicrometers,
+    "maximumMetersXZ[1]",
+  );
+  const minimumMetersXZ = [
+    metersFromMicrometers(minimumXMicrometers),
+    metersFromMicrometers(minimumZMicrometers),
+  ] as const;
+  const maximumMetersXZ = [
+    metersFromMicrometers(maximumXMicrometers),
+    metersFromMicrometers(maximumZMicrometers),
+  ] as const;
+  const estimate = assertTraversalGraphBuildBudgetV1({
+    minimumMetersXZ,
+    maximumMetersXZ,
+    tileSizeCells: input.tileSizeCells,
+    voxelCellSizeMeters: input.voxelCellSizeMeters,
+    maximumTiles: input.maximumTiles,
+  });
+  return {
+    minimumMetersXZ,
+    maximumMetersXZ,
+    ...estimate,
+    maximumTiles: input.maximumTiles,
+  };
 }

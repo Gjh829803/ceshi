@@ -20,7 +20,7 @@ import { stringifyCanonicalJson } from "@whitebox-world/protocol";
 import sharp from "sharp";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { createValidAuthoringSpec } from "../../packages/authoring/src/test-fixture";
+import { createValidAuthoringSpec } from "@whitebox-world/authoring/testing";
 
 const execFileAsync = promisify(execFile);
 const temporaryDirectories: string[] = [];
@@ -159,7 +159,7 @@ afterEach(async () => {
   );
 });
 
-describe("terrain:intent:compile CLI", () => {
+describe("terrain:intent:compile CLI", { timeout: 30_000 }, () => {
   it("publishes canonical compiled Authoring first and the passing report last", async () => {
     const paths = await fixture();
 

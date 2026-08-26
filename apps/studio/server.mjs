@@ -1227,8 +1227,11 @@ export function createStudio(options = {}) {
       authoring?.kind !== "worldkit-authoring-spec" || authoring.schemaVersion !== 4 ||
       typeof authoring.id !== "string" || !idPattern.test(authoring.id) ||
       builderCheck?.kind !== "worldkit-builder-self-check" || builderCheck.schemaVersion !== 1 ||
-      builderCheck.validatorVersion !== "worldkit-builder-self-check-v5" ||
+      builderCheck.validatorVersion !== "worldkit-builder-self-check-v6" ||
       builderCheck.sceneId !== sceneId || builderCheck.status !== "passed" ||
+      builderCheck.terrainScaleEvidence === null ||
+      typeof builderCheck.terrainScaleEvidence !== "object" ||
+      !Array.isArray(builderCheck.routeBuildWindowEvidence) ||
       builderCheck.inputs?.sceneBriefHash !== briefHash ||
       builderCheck.inputs?.authoringSpecHash !== authoringHash ||
       builderCheck.inputs?.implementationMapDraftHash !== mapDraftHash ||

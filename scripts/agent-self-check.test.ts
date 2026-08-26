@@ -147,8 +147,13 @@ describe("single-job Planner and Builder self-check bundles", () => {
       expect(agent.status, agent.stderr || agent.stdout).toBe(0);
       expect(await readFile(agentReport, "utf8")).toBe(await readFile(hostReport, "utf8"));
       expect(JSON.parse(await readFile(agentReport, "utf8"))).toMatchObject({
-        validatorVersion: "worldkit-builder-self-check-v5",
+        validatorVersion: "worldkit-builder-self-check-v6",
         requiresTrustedRouteValidation: false,
+        terrainScaleEvidence: {
+          terrainEntityId: "terrain-main",
+          operationalProfile: "ordinary-single-heightfield-v1",
+        },
+        routeBuildWindowEvidence: [],
       });
 
       await writeFile(mapPath, JSON.stringify({

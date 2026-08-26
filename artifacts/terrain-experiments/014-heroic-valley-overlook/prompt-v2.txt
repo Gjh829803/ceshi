@@ -1,0 +1,14 @@
+Use case: precise-object-edit
+Asset type: corrected untrusted continuous terrain height-intent raster for deterministic SDK compilation
+Input image: Image 1 is the edit target and already contains the intended primary-coordinate top-down macro topology.
+
+Primary request: Preserve the exact square top-down coordinate frame, the branching depressed central river-valley topology, the left/right broad terrain shoulders, and the continuous signed blue-gray/neutral-gray/orange-gray ramp. Change only two defects:
+
+1. Replace the narrow near-maximum warm mound at bottom center with one broad, stable, gently crowned entry-overlook support plateau. It must occupy roughly the middle 22 percent of image width along the bottom 18 percent of image height and stay around signed height +0.45..+0.60, not +1. Blend it continuously into the adjacent shoulders and the descending central valley; do not cut a crater, ring, trench, or wall around it.
+2. Remove rock-like microtexture, directional lighting, highlights, shadows, ambient occlusion, erosion grain, and embossed surface appearance across the whole image. Replace them with smooth low-frequency scalar gradients only while keeping macro landform boundaries and sign unchanged.
+
+Encoding invariant: deep depression -1 = RGB(32,64,208) -> ordinary ground 0 = RGB(128,128,128) -> high base terrain +1 = RGB(224,96,32). Use only continuous interpolated colors on this ramp. The output is scientific scalar-field transport, not a terrain render.
+
+Keep unchanged: strict orthographic true top-down view; square bounds; bottom entry and top world-forward orientation; depressed branching river beds; broad valley and shoulder placement; no structures or subjects.
+
+Avoid: perspective, isometric view, lighting, shadows, surface normals, texture, noise, strata, contours, bands, labels, routes, icons, people, vegetation, buildings, castle, ruins, sharp hero peak, sky, border, transparency, UI, logo, and watermark.

@@ -3,7 +3,7 @@ import { sha256CanonicalJson, stringifyCanonicalJson } from "@whitebox-world/pro
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 
-import { createValidAuthoringSpec } from "../../packages/authoring/src/test-fixture";
+import { createValidAuthoringSpec } from "@whitebox-world/authoring/testing";
 import { compileTerrainHeightIntentV0 } from "./compile-height-intent";
 
 function focusedCompileSpec(): AuthoringSpecV4 {
@@ -184,6 +184,33 @@ describe("compileTerrainHeightIntentV0", () => {
     expect(stringifyCanonicalJson(authoringSpec)).toBe(inputBefore);
   });
 
+  it("records compact base quantization only above the large-grid threshold", async () => {
+    const authoringSpec = focusedCompileSpec();
+    const terrain = authoringSpec.nodes.find((node) => node.kind === "terrain");
+    if (terrain?.kind !== "terrain") throw new Error("TEST_TERRAIN_MISSING");
+    terrain.components.terrain.grid.resolutionCellsXZ = [401, 301];
+    terrain.components.terrain.grid.sizeMetersXZ = [1000, 750];
+    authoringSpec.world.bounds.sizeMetersXZ = [1000, 750];
+    authoringSpec.world.resourceBudget.maxVertices = 130_000;
+    authoringSpec.world.resourceBudget.maxTriangles = 250_000;
+
+    const result = await compileTerrainHeightIntentV0({
+      sourcePngBytes: await neutralIntentPng(),
+      authoringSpec,
+    });
+
+    expect(result.report.status).toBe("passed");
+    expect(result.report.baseSampleQuantization).toEqual({
+      quantumMeters: 0.1,
+      quantizedSampleCount: expect.any(Number),
+      protectedSampleCount: expect.any(Number),
+    });
+    expect(
+      result.report.baseSampleQuantization!.quantizedSampleCount +
+      result.report.baseSampleQuantization!.protectedSampleCount,
+    ).toBe(401 * 301);
+  });
+
   it("omits compiled output when Authoring evidence produces a blocking diagnostic", async () => {
     const authoringSpec = focusedCompileSpec();
     const terrain = authoringSpec.nodes.find((node) => node.kind === "terrain");
@@ -202,6 +229,29 @@ describe("compileTerrainHeightIntentV0", () => {
       expect.objectContaining({
         severity: "blocking",
         code: "TERRAIN_INTENT_BASE_HEIGHT_REQUIRED",
+      }),
+    ]));
+  });
+
+  it("omits compiled output when a constraint escapes world.bounds.heightRangeMeters", async () => {
+    const authoringSpec = focusedCompileSpec();
+    const water = authoringSpec.nodes.find((node) => node.kind === "water");
+    if (water?.kind !== "water") throw new Error("TEST_WATER_MISSING");
+    water.components.water.waterLevelMeters = -3;
+    water.components.water.depthMeters = 100;
+
+    const result = await compileTerrainHeightIntentV0({
+      sourcePngBytes: await neutralIntentPng(),
+      authoringSpec,
+    });
+
+    expect(result.report.status).toBe("failed");
+    expect(result.report.outputAuthoringSpecHash).toBeUndefined();
+    expect(result.compiledAuthoringSpec).toBeUndefined();
+    expect(result.report.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        severity: "blocking",
+        code: "TERRAIN_INTENT_HEIGHT_RANGE_EXCEEDED",
       }),
     ]));
   });

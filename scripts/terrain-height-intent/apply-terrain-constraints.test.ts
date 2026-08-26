@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { sampleTriangleHeightfieldSurface } from "@whitebox-world/terrain-surface";
 
 import { applyTerrainConstraintsV0 } from "./apply-terrain-constraints";
 import type { TerrainConstraintV0 } from "./terrain-constraint-types";
@@ -59,6 +60,7 @@ describe("applyTerrainConstraintsV0", () => {
     const forward = applyTerrainConstraintsV0({
       centerMetersXZ: [0, 0],
       sizeMetersXZ: [6, 4],
+      heightRangeMeters: [-20, 20],
       resolutionVerticesXZ: [columns, rows],
       heightSamplesMeters,
       constraints,
@@ -66,6 +68,7 @@ describe("applyTerrainConstraintsV0", () => {
     const reversed = applyTerrainConstraintsV0({
       centerMetersXZ: [0, 0],
       sizeMetersXZ: [6, 4],
+      heightRangeMeters: [-20, 20],
       resolutionVerticesXZ: [columns, rows],
       heightSamplesMeters,
       constraints: [...constraints].reverse(),
@@ -83,6 +86,7 @@ describe("applyTerrainConstraintsV0", () => {
       "route-main",
     ]);
     expect(forward.deltas.every((delta) => delta.changedSampleCount > 0)).toBe(true);
+    expect(forward.protectedSampleMask.some((value) => value === 1)).toBe(true);
     expect(forward).toEqual(reversed);
     expect(Array.from(heightSamplesMeters)).toEqual(before);
   });
@@ -131,6 +135,7 @@ describe("applyTerrainConstraintsV0", () => {
     const result = applyTerrainConstraintsV0({
       centerMetersXZ: [0, 0],
       sizeMetersXZ: [4, 4],
+      heightRangeMeters: [-20, 20],
       resolutionVerticesXZ: [5, 5],
       heightSamplesMeters: new Float32Array(25).fill(10),
       constraints: [constraint],
@@ -149,6 +154,7 @@ describe("applyTerrainConstraintsV0", () => {
     const result = applyTerrainConstraintsV0({
       centerMetersXZ: [0, 0],
       sizeMetersXZ: [2, 2],
+      heightRangeMeters: [-20, 20],
       resolutionVerticesXZ: [3, 3],
       heightSamplesMeters: values,
       constraints: [{
@@ -180,6 +186,7 @@ describe("applyTerrainConstraintsV0", () => {
     const result = applyTerrainConstraintsV0({
       centerMetersXZ: [0, 0],
       sizeMetersXZ: [4, 4],
+      heightRangeMeters: [-20, 20],
       resolutionVerticesXZ: [5, 5],
       heightSamplesMeters,
       constraints: [{
@@ -203,6 +210,7 @@ describe("applyTerrainConstraintsV0", () => {
     const result = applyTerrainConstraintsV0({
       centerMetersXZ: [0, 0],
       sizeMetersXZ: [6, 6],
+      heightRangeMeters: [-20, 20],
       resolutionVerticesXZ: [7, 7],
       heightSamplesMeters,
       constraints: [{
@@ -227,6 +235,7 @@ describe("applyTerrainConstraintsV0", () => {
     const input = {
       centerMetersXZ: [0, 0] as const,
       sizeMetersXZ: [6, 6] as const,
+      heightRangeMeters: [-20, 20] as const,
       resolutionVerticesXZ: [7, 7] as const,
       heightSamplesMeters,
       constraints: [{
@@ -255,6 +264,7 @@ describe("applyTerrainConstraintsV0", () => {
     const result = applyTerrainConstraintsV0({
       centerMetersXZ: [0, 0],
       sizeMetersXZ: [6, 6],
+      heightRangeMeters: [-20, 20],
       resolutionVerticesXZ: [7, 7],
       heightSamplesMeters,
       constraints: [{
@@ -276,6 +286,7 @@ describe("applyTerrainConstraintsV0", () => {
     const result = applyTerrainConstraintsV0({
       centerMetersXZ: [0, 0],
       sizeMetersXZ: [4, 2],
+      heightRangeMeters: [-20, 20],
       resolutionVerticesXZ: [5, 3],
       heightSamplesMeters: new Float32Array(15),
       constraints: [
@@ -305,10 +316,127 @@ describe("applyTerrainConstraintsV0", () => {
     ]));
   });
 
+  it("revalidates every Route against the final raster after equal-priority overlaps", () => {
+    const result = applyTerrainConstraintsV0({
+      centerMetersXZ: [0, 0],
+      sizeMetersXZ: [4, 4],
+      heightRangeMeters: [-20, 20],
+      resolutionVerticesXZ: [5, 5],
+      heightSamplesMeters: new Float32Array(
+        [-10, -5, 0, 5, 10].flatMap((height) => Array(5).fill(height)),
+      ),
+      constraints: [
+        {
+          id: "a-horizontal-flat",
+          kind: "route-slope",
+          pointsMetersXZ: [[-2, 0], [2, 0]],
+          widthMeters: 1,
+          maximumSlopeDegrees: 0,
+        },
+        {
+          id: "b-vertical-flat",
+          kind: "route-slope",
+          pointsMetersXZ: [[0, -2], [0, 2]],
+          widthMeters: 1,
+          maximumSlopeDegrees: 0,
+        },
+      ],
+    });
+
+    expect(result.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        severity: "blocking",
+        code: "TERRAIN_INTENT_ROUTE_SLOPE_UNSATISFIED",
+        instancePath: "/constraints/a-horizontal-flat",
+      }),
+    ]));
+  });
+
+  it("conservatively rasterizes a required Spawn region smaller than one grid cell", () => {
+    const result = applyTerrainConstraintsV0({
+      centerMetersXZ: [0, 0],
+      sizeMetersXZ: [2, 2],
+      heightRangeMeters: [-10, 10],
+      resolutionVerticesXZ: [3, 3],
+      heightSamplesMeters: new Float32Array(9),
+      constraints: [{
+        id: "tiny-spawn",
+        kind: "flatten-region",
+        pointsMetersXZ: [[0.15, 0.15], [0.25, 0.15], [0.25, 0.25], [0.15, 0.25]],
+        targetHeightMeters: 5,
+        falloffWidthMeters: 0,
+        role: "spawn",
+      }],
+    });
+    const spawnSurface = sampleTriangleHeightfieldSurface({
+      centerMetersXZ: [0, 0],
+      sizeMetersXZ: [2, 2],
+      resolutionVerticesXZ: [3, 3],
+      heightSamplesMeters: result.heightSamplesMeters,
+    }, [0.2, 0.2]);
+
+    expect(result.deltas[0]?.changedSampleCount).toBeGreaterThan(0);
+    expect(spawnSurface?.heightMeters).toBeCloseTo(5, 6);
+  });
+
+  it("conservatively rasterizes a Water body smaller than one grid cell", () => {
+    const result = applyTerrainConstraintsV0({
+      centerMetersXZ: [0, 0],
+      sizeMetersXZ: [2, 2],
+      heightRangeMeters: [-10, 10],
+      resolutionVerticesXZ: [3, 3],
+      heightSamplesMeters: new Float32Array(9),
+      constraints: [{
+        id: "tiny-water",
+        kind: "water-basin",
+        boundary: { kind: "circle", centerMetersXZ: [0.2, 0.2], radiusMeters: 0.05 },
+        waterLevelMeters: 0,
+        depthMeters: 2,
+        shoreWidthMeters: 0,
+      }],
+    });
+    const waterSurface = sampleTriangleHeightfieldSurface({
+      centerMetersXZ: [0, 0],
+      sizeMetersXZ: [2, 2],
+      resolutionVerticesXZ: [3, 3],
+      heightSamplesMeters: result.heightSamplesMeters,
+    }, [0.2, 0.2]);
+
+    expect(result.deltas[0]?.changedSampleCount).toBeGreaterThan(0);
+    expect(waterSurface?.heightMeters).toBeCloseTo(-2, 6);
+  });
+
+  it("fails closed when a constraint writes outside the world height range", () => {
+    const result = applyTerrainConstraintsV0({
+      centerMetersXZ: [0, 0],
+      sizeMetersXZ: [2, 2],
+      heightRangeMeters: [-10, 10],
+      resolutionVerticesXZ: [3, 3],
+      heightSamplesMeters: new Float32Array(9),
+      constraints: [{
+        id: "out-of-range-water",
+        kind: "water-basin",
+        boundary: { kind: "circle", centerMetersXZ: [0, 0], radiusMeters: 0.5 },
+        waterLevelMeters: -9,
+        depthMeters: 100,
+        shoreWidthMeters: 0,
+      }],
+    });
+
+    expect(result.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        severity: "blocking",
+        code: "TERRAIN_INTENT_HEIGHT_RANGE_EXCEEDED",
+        instancePath: "/heightSamplesMeters",
+      }),
+    ]));
+  });
+
   it("rejects invalid grids and non-finite constraint edits", () => {
     expect(() => applyTerrainConstraintsV0({
       centerMetersXZ: [0, 0],
       sizeMetersXZ: [2, 2],
+      heightRangeMeters: [-20, 20],
       resolutionVerticesXZ: [2, 2],
       heightSamplesMeters: new Float32Array([0, 1, 2]),
       constraints: [],
@@ -316,6 +444,7 @@ describe("applyTerrainConstraintsV0", () => {
     expect(() => applyTerrainConstraintsV0({
       centerMetersXZ: [0, 0],
       sizeMetersXZ: [2, 2],
+      heightRangeMeters: [-20, 20],
       resolutionVerticesXZ: [2, 2],
       heightSamplesMeters: new Float32Array([0, 1, 2, 3]),
       constraints: [{

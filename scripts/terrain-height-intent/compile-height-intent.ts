@@ -10,6 +10,8 @@ import { deriveTerrainConstraintsFromAuthoringV4 } from "./derive-authoring-cons
 import { mapSignedHeightRatiosToMetersV0 } from "./map-height-meters";
 import { prefilterScalarRasterForDownsampleV0 } from "./prefilter-scalar-raster";
 import { projectSignedHeightIntentRgbV0 } from "./project-signed-rgb";
+import { quantizeUnprotectedTerrainHeightSamplesMetersV0 } from
+  "./quantize-height-samples";
 import { resampleScalarRasterBilinearV0 } from "./resample-scalar-raster";
 import {
   summarizeTerrainIntentProjectionV0,
@@ -18,6 +20,9 @@ import {
 import type { TerrainIntentDiagnosticV0 } from "./terrain-constraint-types";
 
 type Sha256HashV0 = `sha256:${string}`;
+
+const LARGE_GRID_SAMPLE_THRESHOLD_V0 = 120_000;
+const LARGE_GRID_BASE_SAMPLE_QUANTUM_METERS_V0 = 0.1;
 
 export interface TerrainHeightIntentCompileReportV0 {
   readonly schemaVersion: 1;
@@ -31,6 +36,11 @@ export interface TerrainHeightIntentCompileReportV0 {
   readonly prefilter?: Readonly<{
     kind: "separable-box";
     radiusPixelsXY: readonly [number, number];
+  }>;
+  readonly baseSampleQuantization?: Readonly<{
+    quantumMeters: number;
+    quantizedSampleCount: number;
+    protectedSampleCount: number;
   }>;
   readonly constraintDeltas: readonly TerrainConstraintDeltaV0[];
   readonly diagnostics: readonly TerrainIntentDiagnosticV0[];
@@ -162,6 +172,7 @@ export async function compileTerrainHeightIntentV0(input: {
   const constrained = applyTerrainConstraintsV0({
     centerMetersXZ: terrain.components.terrain.grid.centerMetersXZ,
     sizeMetersXZ: terrain.components.terrain.grid.sizeMetersXZ,
+    heightRangeMeters: input.authoringSpec.world.bounds.heightRangeMeters,
     resolutionVerticesXZ: terrain.components.terrain.grid.resolutionCellsXZ,
     heightSamplesMeters: metricGrid,
     constraints: derived.constraints,
@@ -191,7 +202,16 @@ export async function compileTerrainHeightIntentV0(input: {
   if (compiledTerrain?.kind !== "terrain") {
     throw new Error("TERRAIN_INTENT_INTERNAL_TERRAIN_CLONE_MISSING");
   }
+  const baseSampleQuantization = constrained.heightSamplesMeters.length >
+      LARGE_GRID_SAMPLE_THRESHOLD_V0
+    ? quantizeUnprotectedTerrainHeightSamplesMetersV0({
+        heightSamplesMeters: constrained.heightSamplesMeters,
+        protectedSampleMask: constrained.protectedSampleMask,
+        quantumMeters: LARGE_GRID_BASE_SAMPLE_QUANTUM_METERS_V0,
+      })
+    : undefined;
   compiledTerrain.components.terrain.grid.heightSamplesMeters =
+    baseSampleQuantization?.heightSamplesMeters ??
     Array.from(constrained.heightSamplesMeters);
   const outputAuthoringSpecHash = sha256CanonicalJson(compiledAuthoringSpec) as Sha256HashV0;
 
@@ -209,6 +229,15 @@ export async function compileTerrainHeightIntentV0(input: {
         kind: "separable-box",
         radiusPixelsXY: prefiltered.radiusPixelsXY,
       },
+      ...(baseSampleQuantization === undefined
+        ? {}
+        : {
+            baseSampleQuantization: {
+              quantumMeters: LARGE_GRID_BASE_SAMPLE_QUANTUM_METERS_V0,
+              quantizedSampleCount: baseSampleQuantization.quantizedSampleCount,
+              protectedSampleCount: baseSampleQuantization.protectedSampleCount,
+            },
+          }),
       constraintDeltas: constrained.deltas,
       diagnostics,
     },
