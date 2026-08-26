@@ -9,6 +9,27 @@ export {
   releasePreparedCandidatePinV1,
   sweepExpiredPreparedCandidatesV1,
 } from "./lease-store.js";
+export {
+  createWorldChangeJournalV1,
+  getAuthoringRevisionHeadV1,
+  queryWorldChangeCleanupReportV1,
+  queryWorldChangeDiffV1,
+  queryWorldChangeExplainV1,
+  queryWorldChangeReceiptV1,
+  recoverWorldChangeRequestV1,
+  seedAuthoringRevisionHeadV1,
+  submitWorldChangeRequestV1,
+} from "./journal/index.js";
+export type {
+  AuthoringEditSessionV1,
+  AuthoringRevisionHeadV1,
+  QueryWorldChangeCleanupReportResultV1,
+  QueryWorldChangeDiffResultV1,
+  QueryWorldChangeExplainResultV1,
+  QueryWorldChangeReceiptResultV1,
+  SubmitWorldChangeRequestResultV1,
+  WorldChangeJournalV1,
+} from "./journal/index.js";
 export type {
   EvaluateRequiredGatesV1,
   LookupPreparedCandidateResultV1,

@@ -1,0 +1,544 @@
+import {
+  applyWorldChangeSetV1,
+  assembleWorldChangeDiffV1,
+  hashAuthoringEditPolicyProjectionV1,
+  hashWorldChangeRequestV1,
+  hashWorldChangeSetV1,
+  isAppliedWorldChangeSetResultV1,
+  type Sha256HashV1,
+  type WorldChangeAffectedIdsV1,
+  type WorldChangeDiagnosticV1,
+  type WorldChangeFailurePhaseV1,
+} from "@whitebox-world/authoring-edit";
+import { isNil } from "lodash-es";
+
+import { admissionBudgetDiagnostic, worldChangeDiagnostic } from "../diagnostics.js";
+import { prepareTrustedCandidateV1 } from "../build.js";
+import {
+  lookupPreparedCandidateV1,
+  pinPreparedCandidateV1,
+  preparedCandidateLeaseUsageV1,
+  releasePreparedCandidatePinV1,
+} from "../lease-store.js";
+import {
+  requiredWorldChangeScopesV1,
+  sessionAuthorizationDiagnosticV1,
+} from "./authorize.js";
+import { WorldChangeJournalCrashErrorV1 } from "./crash.js";
+import { journalArtifactIdV1 } from "./ids.js";
+import {
+  assembleAuthoringOnlyCommittedReceiptV1,
+  assembleDryRunReceiptV1,
+  assembleRejectedReceiptV1,
+  assembleValidatedReceiptV1,
+} from "./receipts.js";
+import {
+  commitAuthoringRevisionV1,
+  getAuthoringRevisionHeadV1,
+  getDurableRequestRecordV1,
+  hasNonTerminalApplyOnWorldV1,
+  lockChangeSetHashV1,
+  lockedChangeSetHashV1,
+  nextAuthoringRevisionRefV1,
+  nonTerminalRequestCountV1,
+  putDurableRequestRecordV1,
+} from "./store.js";
+import type {
+  DurableRequestRecordV1,
+  SubmitWorldChangeRequestInputV1,
+  SubmitWorldChangeRequestResultV1,
+} from "./types.js";
+
+function persist(
+  input: SubmitWorldChangeRequestInputV1,
+  record: DurableRequestRecordV1,
+): DurableRequestRecordV1 {
+  const stored = putDurableRequestRecordV1(input.journal, record);
+  if (input.crashAfterState === stored.state) {
+    throw new WorldChangeJournalCrashErrorV1(stored.state);
+  }
+  return stored;
+}
+
+function withoutPin(record: DurableRequestRecordV1): DurableRequestRecordV1 {
+  if (isNil(record.pin)) return record;
+  const { pin: _pin, ...rest } = record;
+  return rest;
+}
+
+function rejectRecord(
+  input: SubmitWorldChangeRequestInputV1,
+  record: DurableRequestRecordV1,
+  failurePhase: WorldChangeFailurePhaseV1,
+  diagnostics: readonly WorldChangeDiagnosticV1[],
+  extras: {
+    readonly currentAuthoringSpecHash?: Sha256HashV1;
+    readonly conflictingIds?: WorldChangeAffectedIdsV1;
+  } = {},
+): SubmitWorldChangeRequestResultV1 {
+  if (!isNil(record.pin) && !isNil(record.preparedCandidateRef)) {
+    releasePreparedCandidatePinV1({
+      store: input.leaseStore,
+      preparedCandidateRef: record.preparedCandidateRef,
+      requestId: record.request.id,
+      nowUnixMilliseconds: input.nowUnixMilliseconds,
+    });
+  }
+  const receipt = assembleRejectedReceiptV1({
+    request: record.request,
+    requestHash: record.requestHash,
+    authoringEditPolicyHash: record.authoringEditPolicyHash,
+    changeSetHash: record.changeSetHash,
+    failurePhase,
+    diagnostics,
+    ...(isNil(extras.currentAuthoringSpecHash)
+      ? {}
+      : { currentAuthoringSpecHash: extras.currentAuthoringSpecHash }),
+    ...(isNil(extras.conflictingIds) ? {} : { conflictingIds: extras.conflictingIds }),
+  });
+  persist(input, {
+    ...withoutPin(record),
+    state: "rejected",
+    receipt,
+  });
+  return { status: "accepted", receipt };
+}
+
+function authorize(
+  input: SubmitWorldChangeRequestInputV1,
+  record: DurableRequestRecordV1,
+): WorldChangeDiagnosticV1 | undefined {
+  return sessionAuthorizationDiagnosticV1({
+    session: input.session,
+    expectedSessionId: record.request.authoringEditSessionId,
+    requiredScopes: requiredWorldChangeScopesV1(record.request),
+    nowUnixMilliseconds: input.nowUnixMilliseconds,
+    worldId: record.request.worldId,
+    expectedAuthorizationEpoch: record.authorizationEpoch,
+    expectedPolicyHash: record.authoringEditPolicyHash,
+  });
+}
+
+function advance(
+  input: SubmitWorldChangeRequestInputV1,
+  record: DurableRequestRecordV1,
+): SubmitWorldChangeRequestResultV1 {
+  let current = record;
+  const authz = authorize(input, current);
+  if (!isNil(authz)) {
+    return rejectRecord(input, current, "authorization", [authz]);
+  }
+
+  if (current.state === "received") {
+    const budget = input.session.policy.workloadBudget;
+    const concurrent = nonTerminalRequestCountV1(input.journal);
+    if (concurrent > budget.maximumConcurrentNonTerminalRequestCount) {
+      return rejectRecord(input, current, "admission", [
+        admissionBudgetDiagnostic(
+          "concurrent-non-terminal-request-count",
+          "/",
+          budget.maximumConcurrentNonTerminalRequestCount,
+          concurrent,
+        ),
+      ]);
+    }
+    if (
+      current.request.mode === "apply" &&
+      hasNonTerminalApplyOnWorldV1(input.journal, current.request.worldId, current.request.id)
+    ) {
+      return rejectRecord(input, current, "publication-conflict", [
+        worldChangeDiagnostic(
+          "WORLD_CHANGE_PUBLICATION_CONFLICT",
+          "/worldId",
+          "Another non-terminal Apply already owns this World.",
+        ),
+      ]);
+    }
+    current = persist(input, { ...current, state: "validating" });
+  }
+
+  if (current.state === "validating") {
+    const head = getAuthoringRevisionHeadV1(input.journal, current.request.worldId);
+    if (isNil(head) || head.authoringSpec.id !== current.request.worldId) {
+      return rejectRecord(input, current, "base-check", [
+        worldChangeDiagnostic(
+          "WORLD_CHANGE_BASE_AUTHORING_SPEC_MISMATCH",
+          "/worldId",
+          "Request World does not match the Authoring revision head.",
+        ),
+      ]);
+    }
+    const leaseUsage = preparedCandidateLeaseUsageV1(input.leaseStore);
+    const applied = applyWorldChangeSetV1({
+      baseAuthoringSpec: head.authoringSpec,
+      changeSet: current.request.changeSet,
+      workloadBudget: input.session.policy.workloadBudget,
+      admissionUsage: {
+        concurrentNonTerminalRequestCount: nonTerminalRequestCountV1(input.journal),
+        preparedCandidateCount: leaseUsage.count,
+        preparedCandidateBytes: leaseUsage.bytes,
+        preparedCandidateRetentionMilliseconds:
+          input.session.policy.workloadBudget.maximumPreparedCandidateRetentionMilliseconds,
+      },
+    });
+    if (!isAppliedWorldChangeSetResultV1(applied)) {
+      return rejectRecord(input, current, applied.failurePhase, applied.diagnostics, {
+        ...(isNil(applied.currentAuthoringSpecHash)
+          ? {}
+          : { currentAuthoringSpecHash: applied.currentAuthoringSpecHash }),
+        ...(isNil(applied.conflictingIds) ? {} : { conflictingIds: applied.conflictingIds }),
+      });
+    }
+    const diff = assembleWorldChangeDiffV1({
+      id: journalArtifactIdV1("diff", current.request.id),
+      requestId: current.request.id,
+      applied,
+    });
+    current = persist(input, {
+      ...current,
+      applied,
+      diff,
+      state: current.request.mode === "validate" ? "validated" : "building-candidate",
+      ...(current.request.mode === "validate"
+        ? {
+            receipt: assembleValidatedReceiptV1({
+              request: current.request,
+              requestHash: current.requestHash,
+              authoringEditPolicyHash: current.authoringEditPolicyHash,
+              changeSetHash: current.changeSetHash,
+            }),
+          }
+        : {}),
+    });
+    if (current.state === "validated" && !isNil(current.receipt)) {
+      return { status: "accepted", receipt: current.receipt };
+    }
+  }
+
+  if (current.state === "building-candidate") {
+    if (isNil(current.applied)) {
+      return rejectRecord(input, current, "candidate-apply", [
+        worldChangeDiagnostic(
+          "WORLD_CHANGE_CANDIDATE_INVALID",
+          "/",
+          "Durable request is missing the isolated candidate application.",
+        ),
+      ]);
+    }
+    if (current.request.mode === "apply" && !isNil(current.request.preparedCandidateRef)) {
+      const pin = pinPreparedCandidateV1({
+        store: input.leaseStore,
+        preparedCandidateRef: current.request.preparedCandidateRef,
+        authoringEditSessionId: current.request.authoringEditSessionId,
+        requestId: current.request.id,
+        requestHash: current.requestHash,
+        authoringEditPolicyHash: current.authoringEditPolicyHash,
+        nowUnixMilliseconds: input.nowUnixMilliseconds,
+      });
+      if (pin.status !== "pinned") {
+        return rejectRecord(input, current, pin.failurePhase, pin.diagnostics);
+      }
+      const found = lookupPreparedCandidateV1(
+        input.leaseStore,
+        current.request.preparedCandidateRef,
+        input.nowUnixMilliseconds,
+      );
+      if (
+        found.status !== "found" ||
+        found.lease.worldId !== current.request.worldId ||
+        found.lease.buildIdentity.resultAuthoringSpecHash !==
+          current.applied.resultAuthoringSpecHash
+      ) {
+        return rejectRecord(
+          input,
+          {
+            ...current,
+            pin: pin.pin,
+            preparedCandidateRef: current.request.preparedCandidateRef,
+          },
+          "admission",
+          [
+            worldChangeDiagnostic(
+              "WORLD_CHANGE_PREPARED_CANDIDATE_STALE",
+              "/preparedCandidateRef",
+              "Prepared Candidate no longer matches the applied ChangeSet.",
+            ),
+          ],
+        );
+      }
+      current = persist(input, {
+        ...current,
+        pin: pin.pin,
+        preparedCandidateRef: current.request.preparedCandidateRef,
+        buildIdentity: found.lease.buildIdentity,
+        expiresAtUnixMilliseconds: found.lease.expiresAtUnixMilliseconds,
+        state: "candidate-ready",
+      });
+    } else {
+      const prepared = prepareTrustedCandidateV1({
+        candidateAuthoringSpec: current.applied.candidateAuthoringSpec,
+        policy: input.session.policy,
+        store: input.leaseStore,
+        nowUnixMilliseconds: input.nowUnixMilliseconds,
+        ...(isNil(input.evaluateRequiredGates)
+          ? {}
+          : { evaluateRequiredGates: input.evaluateRequiredGates }),
+      });
+      if (prepared.status !== "prepared") {
+        return rejectRecord(input, current, prepared.failurePhase, prepared.diagnostics);
+      }
+      current = persist(input, {
+        ...current,
+        preparedCandidateRef: prepared.preparedCandidateRef,
+        buildIdentity: prepared.buildIdentity,
+        expiresAtUnixMilliseconds: prepared.preparedCandidateExpiresAtUnixMilliseconds,
+        state: "candidate-ready",
+      });
+    }
+  }
+
+  if (current.state === "candidate-ready") {
+    if (current.request.mode === "dry-run") {
+      if (
+        isNil(current.applied) ||
+        isNil(current.buildIdentity) ||
+        isNil(current.preparedCandidateRef) ||
+        isNil(current.expiresAtUnixMilliseconds)
+      ) {
+        return rejectRecord(input, current, "package", [
+          worldChangeDiagnostic(
+            "WORLD_CHANGE_CANDIDATE_INVALID",
+            "/",
+            "Dry Run is missing Prepared Candidate bindings.",
+          ),
+        ]);
+      }
+      const receipt = assembleDryRunReceiptV1({
+        request: current.request,
+        requestHash: current.requestHash,
+        authoringEditPolicyHash: current.authoringEditPolicyHash,
+        changeSetHash: current.changeSetHash,
+        buildIdentity: current.buildIdentity,
+        affectedIds: current.applied.affectedIds,
+        operationResults: current.applied.operationResults,
+        preparedCandidateRef: current.preparedCandidateRef,
+        preparedCandidateExpiresAtUnixMilliseconds: current.expiresAtUnixMilliseconds,
+      });
+      persist(input, { ...current, state: "dry-run-succeeded", receipt });
+      return { status: "accepted", receipt };
+    }
+    if (
+      current.request.mode === "apply" &&
+      current.request.requestedOutcome === "publish-runtime"
+    ) {
+      current = persist(input, { ...current, state: "preparing-runtime" });
+    } else {
+      const revisionRef = current.pendingRevisionRef ??
+        nextAuthoringRevisionRefV1(input.journal, current.request.worldId);
+      current = persist(input, {
+        ...current,
+        state: "committing",
+        pendingRevisionRef: revisionRef,
+      });
+    }
+  }
+
+  if (current.state === "preparing-runtime") {
+    return rejectRecord(input, current, "runtime-prepare", [
+      worldChangeDiagnostic(
+        "WORLD_CHANGE_RUNTIME_PUBLICATION_REQUIRED",
+        "/requestedOutcome",
+        "Runtime publication is owned by RuntimeHost publication V2 and is not wired in this journal slice.",
+      ),
+    ]);
+  }
+
+  if (current.state === "committing") {
+    const commitAuthz = authorize(input, current);
+    if (!isNil(commitAuthz)) {
+      return rejectRecord(input, current, "authorization", [commitAuthz]);
+    }
+    if (input.session.hasActiveRuntimeBinding) {
+      return rejectRecord(input, current, "runtime-preflight", [
+        worldChangeDiagnostic(
+          "WORLD_CHANGE_RUNTIME_PUBLICATION_REQUIRED",
+          "/requestedOutcome",
+          "An active Runtime binding cannot commit authoring-only.",
+        ),
+      ]);
+    }
+    if (
+      isNil(current.applied) ||
+      isNil(current.buildIdentity) ||
+      isNil(current.pendingRevisionRef)
+    ) {
+      return rejectRecord(input, current, "publication-commit", [
+        worldChangeDiagnostic(
+          "WORLD_CHANGE_CANDIDATE_INVALID",
+          "/",
+          "Apply is missing the immutable Candidate to commit.",
+        ),
+      ]);
+    }
+    const revisionRef = current.pendingRevisionRef;
+    const receipt = assembleAuthoringOnlyCommittedReceiptV1({
+      request: current.request,
+      requestHash: current.requestHash,
+      authoringEditPolicyHash: current.authoringEditPolicyHash,
+      changeSetHash: current.changeSetHash,
+      buildIdentity: current.buildIdentity,
+      affectedIds: current.applied.affectedIds,
+      operationResults: current.applied.operationResults,
+      committedRevisionRef: revisionRef,
+    });
+    const { pin: _pin, pendingRevisionRef: _pendingRevisionRef, ...rest } = current;
+    const committed: DurableRequestRecordV1 = {
+      ...rest,
+      state: "committed",
+      receipt,
+      commitRecord: {
+        revisionRef,
+        authoringSpecHash: current.applied.resultAuthoringSpecHash,
+      },
+    };
+    commitAuthoringRevisionV1(
+      input.journal,
+      {
+        worldId: current.request.worldId,
+        revisionRef,
+        authoringSpec: current.applied.candidateAuthoringSpec,
+        authoringSpecHash: current.applied.resultAuthoringSpecHash,
+      },
+      committed,
+    );
+    if (!isNil(current.preparedCandidateRef) && !isNil(current.pin)) {
+      releasePreparedCandidatePinV1({
+        store: input.leaseStore,
+        preparedCandidateRef: current.preparedCandidateRef,
+        requestId: current.request.id,
+        nowUnixMilliseconds: input.nowUnixMilliseconds,
+      });
+    }
+    return { status: "accepted", receipt };
+  }
+
+  if (!isNil(current.receipt)) {
+    return { status: "accepted", receipt: current.receipt };
+  }
+  return rejectRecord(input, current, "idempotency", [
+    worldChangeDiagnostic(
+      "WORLD_CHANGE_REQUEST_ID_CONFLICT",
+      "/requestId",
+      "Durable request reached an unknown non-terminal state.",
+    ),
+  ]);
+}
+
+export function submitWorldChangeRequestV1(
+  input: SubmitWorldChangeRequestInputV1,
+): SubmitWorldChangeRequestResultV1 {
+  try {
+    const requestHash = hashWorldChangeRequestV1(input.request);
+    const changeSetHash = hashWorldChangeSetV1(input.request.changeSet);
+    const authoringEditPolicyHash = hashAuthoringEditPolicyProjectionV1(input.session.policy);
+    const existing = getDurableRequestRecordV1(
+      input.journal,
+      input.request.authoringEditSessionId,
+      input.request.id,
+    );
+    if (!isNil(existing)) {
+      if (
+        existing.requestHash !== requestHash ||
+        existing.authoringEditPolicyHash !== authoringEditPolicyHash
+      ) {
+        return {
+          status: "accepted",
+          receipt: assembleRejectedReceiptV1({
+            request: input.request,
+            requestHash,
+            authoringEditPolicyHash,
+            changeSetHash,
+            failurePhase: "idempotency",
+            diagnostics: [
+              worldChangeDiagnostic(
+                "WORLD_CHANGE_REQUEST_ID_CONFLICT",
+                "/requestId",
+                "Request ID already durable with a different Request or Policy Hash.",
+              ),
+            ],
+          }),
+        };
+      }
+      if (!isNil(existing.receipt)) {
+        return { status: "accepted", receipt: existing.receipt };
+      }
+      return advance(input, existing);
+    }
+
+    const lockedHash = lockedChangeSetHashV1(
+      input.journal,
+      input.request.worldId,
+      input.request.changeSet.id,
+    );
+    const record: DurableRequestRecordV1 = {
+      request: input.request,
+      requestHash,
+      authoringEditPolicyHash,
+      authorizationEpoch: input.session.authorizationEpoch,
+      changeSetHash,
+      state: "received",
+      fencingToken: "journal",
+    };
+    if (!isNil(lockedHash) && lockedHash !== changeSetHash) {
+      const receipt = assembleRejectedReceiptV1({
+        request: input.request,
+        requestHash,
+        authoringEditPolicyHash,
+        changeSetHash,
+        failurePhase: "idempotency",
+        diagnostics: [
+          worldChangeDiagnostic(
+            "WORLD_CHANGE_SET_ID_CONFLICT",
+            "/changeSet/id",
+            "ChangeSet ID already durable with a different ChangeSet Hash.",
+          ),
+        ],
+      });
+      persist(input, { ...record, state: "rejected", receipt });
+      return { status: "accepted", receipt };
+    }
+    lockChangeSetHashV1(
+      input.journal,
+      input.request.worldId,
+      input.request.changeSet.id,
+      changeSetHash,
+    );
+    return advance(input, persist(input, record));
+  } catch (error) {
+    if (error instanceof WorldChangeJournalCrashErrorV1) {
+      return { status: "crashed", state: error.state };
+    }
+    throw error;
+  }
+}
+
+export function resumeWorldChangeRequestV1(
+  input: SubmitWorldChangeRequestInputV1,
+): SubmitWorldChangeRequestResultV1 {
+  const existing = getDurableRequestRecordV1(
+    input.journal,
+    input.request.authoringEditSessionId,
+    input.request.id,
+  );
+  if (isNil(existing)) {
+    return submitWorldChangeRequestV1(input);
+  }
+  try {
+    return advance(input, existing);
+  } catch (error) {
+    if (error instanceof WorldChangeJournalCrashErrorV1) {
+      return { status: "crashed", state: error.state };
+    }
+    throw error;
+  }
+}

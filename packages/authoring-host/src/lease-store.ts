@@ -41,6 +41,19 @@ export function nextPreparedCandidateNonceV1(
   return internals.nonce;
 }
 
+export function listPreparedCandidateLeasesV1(
+  store: PreparedCandidateLeaseStoreV1,
+): readonly PreparedCandidateLeaseV1[] {
+  return [...asStore(store).leases.values()];
+}
+
+export function deletePreparedCandidateLeaseV1(
+  store: PreparedCandidateLeaseStoreV1,
+  preparedCandidateRef: string,
+): void {
+  asStore(store).leases.delete(preparedCandidateRef);
+}
+
 export function preparedCandidateLeaseUsageV1(
   store: PreparedCandidateLeaseStoreV1,
 ): PreparedCandidateLeaseUsageV1 {

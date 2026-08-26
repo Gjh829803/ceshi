@@ -531,7 +531,7 @@ P16-D0 已冻结，P16-H0、P16-A0 已落地；这不表示 P1.6 已实现或可
 | P16-O1 | [x] 已完成 | 通用 `allowedOverridePaths` 与 Resource Ref Override validator | P16-A0、P16-S1 contract / P16-C1、P16-F1 |
 | P16-C1 | [x] 已完成 | WorldChangeSet、Precondition、Operation、Candidate Diff 纯实现 | P16-A0、P16-H0 / P16-P1、P16-R1 |
 | P16-P1 | [x] 已完成 first-slice host | 完整 Normalize/Solve/Compile/最小 Package Receipt/Gates Candidate pipeline 与 in-memory lease pin/expiry/GC | P16-C1、P1.4 最小 Manifest/Build Receipt / P16-R1、P16-H1、P16-CLI1 |
-| P16-R1 | [ ] 等待开发 | durable idempotency journal、admission epoch/pin owner、revision head、Receipt/Cleanup Report Query/Explain/Diff | P16-C1、P16-P1 / P16-H1、P16-B1、P16-CLI1 |
+| P16-R1 | [x] 已完成 first-slice host | in-memory durable idempotency journal、admission epoch/pin owner、revision head、Receipt/Cleanup Report Query/Explain/Diff | P16-C1、P16-P1 / P16-H1、P16-B1、P16-CLI1 |
 | P16-H1 | [ ] 等待开发 | RuntimeHost publication V2：Commit-time authorization/CAS、exclusive fence、commit point、cleanup disposition | P16-P1、P16-R1 / P16-B1、P16-F1 |
 | P16-CLI1 | [ ] 等待开发 | Schema/Registry/Change CLI 与 Dry Run→new Apply ID 的 offline/live adapters | P16-S1、P16-C1、P16-P1、P16-R1 / P16-F1 |
 | P16-B1 | [ ] 等待开发 | Trusted Studio Authoring/Edit API、authorization epoch，Browser V5 仍为 exact 39 keys | P16-S1、P16-O1、P16-R1、P16-H1 / P16-F1 |
@@ -580,6 +580,18 @@ lease pin/expiry/GC 与 Policy Hash binding。复用 P1.4 **最小** Manifest/Bu
 现有 runner 执行，缺 runner 或失败都 fail-closed 且不写 lease。验证：focused authoring-host
 测试、`pnpm typecheck`、`pnpm test:census`、`pnpm verify:workspace-boundaries`。这不是 P1.6
 生产可用声明，也不表示 P1.4 整体完成。
+
+P16-R1 证据：`@whitebox-world/authoring-host` 增加 in-memory journal 与 revision head。
+`(sessionId, requestId)` 锁定 Request/Policy Hash，`(worldId, changeSetId)` 锁定 ChangeSet Hash；
+相同三元组重试返回 byte-identical Receipt。validate 只跑 C1；dry-run 跑 C1+P1 写 lease 不 pin；
+authoring-only Apply 在同一 transaction 写 commit record + new revision head + immutable Receipt。
+`publish-runtime` 在 `preparing-runtime` fail-closed 为 `WORLD_CHANGE_RUNTIME_PUBLICATION_REQUIRED`，
+不伪造 committed Runtime Receipt。Crash recovery 按原 Request ID resume，committing 复用已分配
+revision ref；未被 commit 引用的 lease 用 fencing token sweep。Receipt/Explain/Diff/Cleanup Query
+需要 `authoring.receipt.read`；authoring-only 没有 Cleanup Report，缺报告返回 `missing`。
+这是进程内 journal，不是磁盘 WAL，也不表示 H1 Runtime 发布完成。验证：focused journal 测试、
+`pnpm typecheck`、`pnpm test:census`、`pnpm verify:workspace-boundaries`。这不是 P1.6
+生产可用声明。
 
 - [x] 为 Canonical Schema + Registry Lock + 允许 Capability 集冻结版本化 AI Schema
   Profile/Projector；记录 Profile Hash、Registry Lock Hash、Capability Set Hash、规模

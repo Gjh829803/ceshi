@@ -1,0 +1,216 @@
+import type { AuthoringSpecV4 } from "@whitebox-world/authoring";
+import type { ApplyWorldChangeSetResultV1 } from "@whitebox-world/authoring-edit";
+import type {
+  AuthoringEditPolicyProjectionV1,
+  AuthoringEditScopeV1,
+  PreparedCandidatePinV1,
+  Sha256HashV1,
+  WorldChangeCleanupReportQueryV1,
+  WorldChangeCleanupReportV1,
+  WorldChangeDiagnosticV1,
+  WorldChangeDiffRequestV1,
+  WorldChangeDiffV1,
+  WorldChangeExplainRequestV1,
+  WorldChangeExplainV1,
+  WorldChangeBuildIdentityV1,
+  WorldChangeReceiptQueryV1,
+  WorldChangeReceiptV1,
+  WorldChangeRequestV1,
+} from "@whitebox-world/authoring-edit";
+
+import type {
+  EvaluateRequiredGatesV1,
+  PreparedCandidateLeaseStoreV1,
+} from "../types.js";
+
+export const DURABLE_REQUEST_STATES_V1 = [
+  "received",
+  "validating",
+  "building-candidate",
+  "candidate-ready",
+  "committing",
+  "preparing-runtime",
+  "validated",
+  "dry-run-succeeded",
+  "committed",
+  "rejected",
+] as const;
+
+export type DurableRequestStateV1 = (typeof DURABLE_REQUEST_STATES_V1)[number];
+
+export const TERMINAL_REQUEST_STATES_V1 = [
+  "validated",
+  "dry-run-succeeded",
+  "committed",
+  "rejected",
+] as const;
+
+export type TerminalRequestStateV1 = (typeof TERMINAL_REQUEST_STATES_V1)[number];
+
+export interface AuthoringEditSessionV1 {
+  readonly authoringEditSessionId: string;
+  readonly authorizationEpoch: number;
+  readonly isActive: boolean;
+  readonly expiresAtUnixMilliseconds: number;
+  readonly scopes: readonly AuthoringEditScopeV1[];
+  readonly policy: AuthoringEditPolicyProjectionV1;
+  readonly hasActiveRuntimeBinding: boolean;
+}
+
+export interface AuthoringRevisionHeadV1 {
+  readonly worldId: string;
+  readonly revisionRef: string;
+  readonly authoringSpec: AuthoringSpecV4;
+  readonly authoringSpecHash: Sha256HashV1;
+}
+
+export type AppliedWorldChangeV1 = Extract<
+  ApplyWorldChangeSetResultV1,
+  { status: "applied" }
+>;
+
+export interface DurableRequestRecordV1 {
+  readonly request: WorldChangeRequestV1;
+  readonly requestHash: Sha256HashV1;
+  readonly authoringEditPolicyHash: Sha256HashV1;
+  readonly authorizationEpoch: number;
+  readonly changeSetHash: Sha256HashV1;
+  readonly state: DurableRequestStateV1;
+  readonly fencingToken: string;
+  readonly pin?: PreparedCandidatePinV1;
+  readonly preparedCandidateRef?: string;
+  readonly applied?: AppliedWorldChangeV1;
+  readonly buildIdentity?: WorldChangeBuildIdentityV1;
+  readonly expiresAtUnixMilliseconds?: number;
+  readonly receipt?: WorldChangeReceiptV1;
+  readonly pendingRevisionRef?: string;
+  readonly commitRecord?: Readonly<{
+    readonly revisionRef: string;
+    readonly authoringSpecHash: Sha256HashV1;
+  }>;
+  readonly diff?: WorldChangeDiffV1;
+}
+
+export interface WorldChangeJournalV1 {
+  readonly brand: "WorldChangeJournalV1";
+}
+
+export type DurableCrashAfterStateV1 =
+  | "received"
+  | "validating"
+  | "building-candidate"
+  | "candidate-ready"
+  | "committing"
+  | "preparing-runtime";
+
+export interface SubmitWorldChangeRequestInputV1 {
+  readonly journal: WorldChangeJournalV1;
+  readonly leaseStore: PreparedCandidateLeaseStoreV1;
+  readonly request: WorldChangeRequestV1;
+  readonly session: AuthoringEditSessionV1;
+  readonly nowUnixMilliseconds: number;
+  readonly evaluateRequiredGates?: EvaluateRequiredGatesV1;
+  readonly crashAfterState?: DurableCrashAfterStateV1;
+}
+
+export type SubmitWorldChangeRequestResultV1 =
+  | {
+      readonly status: "accepted";
+      readonly receipt: WorldChangeReceiptV1;
+    }
+  | {
+      readonly status: "crashed";
+      readonly state: DurableRequestStateV1;
+    };
+
+export interface QueryWorldChangeReceiptInputV1 {
+  readonly journal: WorldChangeJournalV1;
+  readonly session: AuthoringEditSessionV1;
+  readonly query: WorldChangeReceiptQueryV1;
+  readonly nowUnixMilliseconds: number;
+}
+
+export type QueryWorldChangeReceiptResultV1 =
+  | {
+      readonly status: "found";
+      readonly receipt: WorldChangeReceiptV1;
+    }
+  | {
+      readonly status: "pending";
+      readonly state: DurableRequestStateV1;
+    }
+  | {
+      readonly status: "missing";
+    }
+  | {
+      readonly status: "rejected";
+      readonly diagnostics: readonly WorldChangeDiagnosticV1[];
+    };
+
+export interface QueryWorldChangeExplainInputV1 {
+  readonly journal: WorldChangeJournalV1;
+  readonly session: AuthoringEditSessionV1;
+  readonly request: WorldChangeExplainRequestV1;
+  readonly nowUnixMilliseconds: number;
+}
+
+export type QueryWorldChangeExplainResultV1 =
+  | {
+      readonly status: "found";
+      readonly explain: WorldChangeExplainV1;
+    }
+  | {
+      readonly status: "pending";
+      readonly state: DurableRequestStateV1;
+    }
+  | {
+      readonly status: "missing";
+    }
+  | {
+      readonly status: "rejected";
+      readonly diagnostics: readonly WorldChangeDiagnosticV1[];
+    };
+
+export interface QueryWorldChangeDiffInputV1 {
+  readonly journal: WorldChangeJournalV1;
+  readonly session: AuthoringEditSessionV1;
+  readonly request: WorldChangeDiffRequestV1;
+  readonly nowUnixMilliseconds: number;
+}
+
+export type QueryWorldChangeDiffResultV1 =
+  | {
+      readonly status: "found";
+      readonly diff: WorldChangeDiffV1;
+    }
+  | {
+      readonly status: "pending";
+      readonly state: DurableRequestStateV1;
+    }
+  | {
+      readonly status: "missing";
+    }
+  | {
+      readonly status: "rejected";
+      readonly diagnostics: readonly WorldChangeDiagnosticV1[];
+    };
+
+export interface QueryWorldChangeCleanupReportInputV1 {
+  readonly journal: WorldChangeJournalV1;
+  readonly session: AuthoringEditSessionV1;
+  readonly query: WorldChangeCleanupReportQueryV1;
+  readonly nowUnixMilliseconds: number;
+}
+
+export type QueryWorldChangeCleanupReportResultV1 =
+  | {
+      readonly status: "found";
+      readonly report: WorldChangeCleanupReportV1;
+    }
+  | {
+      readonly status: "missing";
+    }
+  | {
+      readonly status: "rejected";
+      readonly diagnostics: readonly WorldChangeDiagnosticV1[];
+    };
