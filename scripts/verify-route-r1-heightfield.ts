@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -172,6 +173,32 @@ const FORBIDDEN_PROVIDER_HANDLE_KEYS = new Set([
 ]);
 
 const execFileAsync = promisify(execFile);
+
+function pnpmVitestCommand(): Readonly<{
+  readonly executable: string;
+  readonly prefixArguments: readonly string[];
+}> {
+  if (process.platform !== "win32") {
+    return { executable: "pnpm", prefixArguments: [] };
+  }
+  const commandPath = execFileSync("where", ["corepack"], { encoding: "utf8" })
+    .split(/\r?\n/)
+    .find((line) => line.endsWith(".cmd"));
+  if (commandPath === undefined) throw new Error("Corepack is unavailable.");
+  const launcher = readFileSync(commandPath, "utf8");
+  const relativeCliPath = launcher.match(/"%~dp0([^\"]*corepack\.js)"/i)?.[1];
+  if (relativeCliPath === undefined) throw new Error("Corepack launcher is invalid.");
+  return {
+    executable: process.execPath,
+    prefixArguments: [
+      path.resolve(
+        path.dirname(commandPath),
+        relativeCliPath.replace(/^[\\/]+/, ""),
+      ),
+      "pnpm",
+    ],
+  };
+}
 
 const ADVERSARIAL_ROUTE_CHECKS_V1 = Object.freeze([
   Object.freeze({
@@ -561,19 +588,21 @@ export async function runExactAdversarialVitestCheckV1(options: Readonly<{
       "has an invalid exact-test contract.",
     );
   }
-  const exactNamePattern = `^(?:${expectedTestFullNames
+  const exactNamePattern = `(?:${expectedTestFullNames
     .map((name) => escapeRegExp(name))
-    .join("|")})$`;
+    .join("|")})`;
+  const pnpm = pnpmVitestCommand();
+  const arguments_ = [
+    "vitest",
+    "run",
+    options.testFile,
+    "-t",
+    exactNamePattern,
+    "--reporter=json",
+  ];
   const { stdout } = await execFileAsync(
-    "pnpm",
-    [
-      "vitest",
-      "run",
-      options.testFile,
-      "-t",
-      exactNamePattern,
-      "--reporter=json",
-    ],
+    pnpm.executable,
+    [...pnpm.prefixArguments, ...arguments_],
     {
       cwd: options.repositoryRoot,
       env: { ...process.env, FORCE_COLOR: "0" },

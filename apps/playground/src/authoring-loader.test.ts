@@ -490,6 +490,7 @@ describe("loadAuthoringScene", () => {
         viewYawOffsetRadians: 0,
         viewPitchOffsetRadians: 0,
         viewDistanceOffsetMeters: 0,
+        fixedStepDeltaSeconds: 1 / 60,
       },
       physics: { backend: "havok", ready: true, fixedTimeStepSeconds: 1 / 60 },
       resources: { meshes: 1, bodies: 1, terrainSamples: 9 },

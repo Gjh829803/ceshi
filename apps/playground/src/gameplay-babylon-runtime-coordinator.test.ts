@@ -136,6 +136,45 @@ function fakeRuntimeFactory(
           viewYawOffsetRadians: 0,
           viewPitchOffsetRadians: 0,
           viewDistanceOffsetMeters: 0,
+          selectionDecision: {
+            schemaVersion: 1,
+            simulationTick: 0,
+            targetEntityId: configuration.executionPlan.initialControlledEntityId,
+            activeCameraRigProfileRef: "worldkit://camera-rig/third-person@1",
+            activeCameraModifierRefs: [],
+            matchedCameraContextRuleIds: [],
+            cameraViewPreference: { mode: "auto" },
+            fallbackActive: false,
+            diagnostics: [],
+            explain: {
+              cameraViewPreference: { mode: "auto" },
+              cameraContextRules: [],
+              selectedCameraRigProfileRef: "worldkit://camera-rig/third-person@1",
+              appliedCameraModifierRefs: [],
+              fallbackActive: false,
+            },
+          },
+          selectedTargetSocketId: "ThirdPersonView",
+          targetSocketPositionMetersXYZ: [0, 1, 0],
+          isTargetSocketFallback: false,
+          desiredTargetPositionMetersXYZ: [0, 1, 0],
+          desiredPositionMetersXYZ: [1, 2, 3],
+          actualPositionMetersXYZ: [1, 2, 3],
+          finalFovDegrees: 60,
+          requestedArmLengthMeters: 6,
+          safeArmLengthMeters: 3,
+          effectiveArmLengthMeters: 3,
+          isCollisionRetracted: true,
+          positionLagXYZ: [0, 0, 0],
+          rotationLagRadiansXYZ: [0.1, 0.2, 0],
+          recenterRemainingSeconds: 0.8,
+          fixedStepDeltaSeconds: 1 / 60,
+          resolvedParameters: {} as never,
+          previewParameterOverrides: { distanceMeters: 4 },
+          profileTransitionProgressRatio: 1,
+          controlForwardXYZ: [0, 0, -1],
+          subjectForwardXYZ: [0, 0, -1],
+          subjectVelocityMetersPerSecondXYZ: [0, 0, 0],
         },
         physics: {
           backend: "havok",
@@ -239,7 +278,14 @@ describe("Gameplay Babylon Runtime coordinator", () => {
           possessedByRelationshipsById: expect.any(Object),
         },
       },
-      view: { camera: { mode: "tracking" } },
+      view: {
+        camera: {
+          mode: "tracking",
+          rotationLagRadiansXYZ: [0.1, 0.2, 0],
+          recenterRemainingSeconds: 0.8,
+          fixedStepDeltaSeconds: 1 / 60,
+        },
+      },
       runtime: { phase: "ready", fixedTimeStepSeconds: 1 / 60 },
       resources: { meshCount: 3, physicsBodyCount: 2, terrainSampleCount: 4 },
     });
@@ -251,7 +297,7 @@ describe("Gameplay Babylon Runtime coordinator", () => {
     await coordinator.dispose();
   });
 
-  it("publishes an unbound camera after canonical control release despite the provider target", async () => {
+  it("hides provider target, socket, and Follow Arm telemetry after canonical control release", async () => {
     const { configuration, coordinator } = await createHarness();
     const current = coordinator.snapshot();
     await expect(coordinator.executeGameplayCommand({
@@ -269,6 +315,27 @@ describe("Gameplay Babylon Runtime coordinator", () => {
     })).resolves.toMatchObject({ status: "committed" });
 
     expect(coordinator.snapshot().view.camera).toEqual({ mode: "unbound" });
+
+    const released = coordinator.snapshot();
+    await expect(coordinator.executeGameplayCommand({
+      schemaVersion: 1,
+      id: "command.rebind.after-unbound-camera",
+      type: "control.bind",
+      runtimeSessionId: released.runtimeSessionId,
+      worldSessionId: released.worldSessionId,
+      controllerEntityId: PLAYGROUND_CONTROLLER_ENTITY_ID_V1,
+      controlledEntityId: configuration.executionPlan.initialControlledEntityId,
+      expectedPossession: { mode: "unbound" },
+    })).resolves.toMatchObject({ status: "committed" });
+    expect(coordinator.snapshot().view.camera).toMatchObject({
+      mode: "tracking",
+      targetEntityId: configuration.executionPlan.initialControlledEntityId,
+      selectedTargetSocketId: "ThirdPersonView",
+      requestedArmLengthMeters: 6,
+      safeArmLengthMeters: 3,
+      effectiveArmLengthMeters: 3,
+      previewParameterOverrides: { distanceMeters: 4 },
+    });
 
     await coordinator.dispose();
   });

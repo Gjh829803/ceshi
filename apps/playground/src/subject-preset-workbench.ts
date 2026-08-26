@@ -154,11 +154,12 @@ export function createSubjectPresetWorkbenchDraftV1(
 export function subjectPresetTuningRequestFromDraftV1(
   draft: SubjectPresetWorkingDraftV1,
   subjectEntityId: string,
+  runtimeExpectedSubjectDefinitionHash: string,
 ): ApplySubjectPresetTuningRequestV1 {
   return {
     subjectEntityId,
     expectedSubjectDefinitionRef: draft.baseSubjectDefinitionRef,
-    expectedSubjectDefinitionContentHash: draft.baseSubjectDefinitionContentHash,
+    expectedSubjectDefinitionContentHash: runtimeExpectedSubjectDefinitionHash,
     selectedMotionProfileRef: draft.selectedMotionProfileRef,
     selectedControlFeelProfileRef: draft.selectedControlFeelProfileRef,
     selectedControlProfileRef: draft.selectedControlProfileRef,
@@ -255,6 +256,7 @@ function parseGameplayProfileSelectionMemento(
 export function applySubjectPresetWorkingDraftTransactionV1(input: Readonly<{
   draft: SubjectPresetWorkingDraftV1;
   subjectEntityId: string;
+  runtimeExpectedSubjectDefinitionHash: string;
   previousCameraPreferenceRef: string | null;
   previousGameplayProfileSelection:
     | SubjectPresetGameplayProfileSelectionMementoV1
@@ -290,8 +292,7 @@ export function applySubjectPresetWorkingDraftTransactionV1(input: Readonly<{
     const receipt = input.runtime.applySubjectPresetTuning({
       subjectEntityId: input.subjectEntityId,
       expectedSubjectDefinitionRef: input.draft.baseSubjectDefinitionRef,
-      expectedSubjectDefinitionContentHash:
-        input.draft.baseSubjectDefinitionContentHash,
+      expectedSubjectDefinitionContentHash: input.runtimeExpectedSubjectDefinitionHash,
       selectedMotionProfileRef: previousGameplayProfileSelection.motionProfileRef,
       selectedControlFeelProfileRef:
         previousGameplayProfileSelection.controlFeelProfileRef,
@@ -338,7 +339,11 @@ export function applySubjectPresetWorkingDraftTransactionV1(input: Readonly<{
 
   try {
     const receipt = input.runtime.applySubjectPresetTuning(
-      subjectPresetTuningRequestFromDraftV1(input.draft, input.subjectEntityId),
+      subjectPresetTuningRequestFromDraftV1(
+        input.draft,
+        input.subjectEntityId,
+        input.runtimeExpectedSubjectDefinitionHash,
+      ),
     );
     if (receipt.status === "committed") {
       return { status: "committed", receipt };

@@ -1,3 +1,5 @@
+import { fileURLToPath } from "node:url";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import packageJson from "../../package.json";
@@ -173,7 +175,7 @@ describe("test gate configuration", () => {
     vi.resetModules();
     const { discoverVitestTestFilesV1: discoverRealVitestTestFilesV1, evaluateTestGateCensusV1: evaluateRealTestGateCensusV1 } =
       await import("./test-gate-census");
-    const repositoryRoot = new URL("../..", import.meta.url).pathname;
+    const repositoryRoot = fileURLToPath(new URL("../..", import.meta.url));
     const [rootTestFiles, contractConfigTestFiles, resourceHeavyConfigTestFiles] = await Promise.all([
       discoverRealVitestTestFilesV1({ repositoryRoot, configPath: "vitest.config.ts" }),
       discoverRealVitestTestFilesV1({ repositoryRoot, configPath: "vitest.contract.config.ts" }),

@@ -105,6 +105,10 @@ interface RuntimeProbe {
 
 interface AdapterProbe {
   animate(timestampMilliseconds: number): Promise<void>;
+  clearPhysicalInputState(reason: "blur" | "simulation-reset"): void;
+  runFixedInput(
+    steps: Parameters<BabylonWorldAdapter["runFixedInput"]>[0],
+  ): ReturnType<BabylonWorldAdapter["runFixedInput"]>;
   keyboardInput: PhysicalKeyboardActionTracker;
   cameraInput: Set<string>;
   previousAnimationTimestampMilliseconds: number | null;
@@ -114,6 +118,15 @@ interface AdapterProbe {
   setPaused(paused: boolean): void;
   isPaused(): boolean;
   runtimeDiagnostics(): ReturnType<BabylonWorldAdapter["runtimeDiagnostics"]>;
+  getArrowInputDiagnosticSnapshot(): Readonly<{
+    maximumYawRadiansPerFixedTick: number;
+    maximumPitchRadiansPerFixedTick: number;
+    keyboardAccelerationSeconds: number;
+    keyboardDecelerationSeconds: number;
+    yawRadiansPerFixedTick: number;
+    pitchRadiansPerFixedTick: number;
+    lastClearReason: "startup" | "blur" | "simulation-reset" | "possession-unbound" | "possession-rebind";
+  }>;
   resetRuntime(): Promise<WorldRuntimeSnapshotV4>;
   runWorldkitFixedInput(steps: readonly FixedInputV1[]): Promise<WorldRuntimeSnapshotV4>;
   render(): void;
@@ -201,6 +214,8 @@ function publicRuntimeSnapshot(
           providerProjection.camera.viewPitchOffsetRadians ?? 0,
         viewDistanceOffsetMeters:
           providerProjection.camera.viewDistanceOffsetMeters ?? 0,
+        fixedStepDeltaSeconds:
+          providerProjection.camera.fixedStepDeltaSeconds ?? 1 / 60,
       },
     },
     runtime: {
@@ -379,6 +394,10 @@ function createAdapterProbe(): {
     coordinator,
     keyboardInput: new PhysicalKeyboardActionTracker(),
     cameraInput: new Set<string>(),
+    keyboardCameraYawRadiansPerTick: 0,
+    keyboardCameraPitchRadiansPerTick: 0,
+    lastArrowInputClearReason: "startup",
+    lastPossessedControlledEntityId: "player",
     inspections: [],
     listeners: new Set(),
     disposed: false,
@@ -507,6 +526,65 @@ describe("BabylonWorldAdapter frame loop", () => {
     expect(adapter.isPaused()).toBe(false);
   });
 
+  it("does not apply residual keyboard camera inertia while possession is unbound", async () => {
+    const { adapter, runtime } = createAdapterProbe();
+    await adapter.runFixedInput([{
+      actions: ["cameraLeft"],
+      ticks: 12,
+    }]);
+    const adjustCameraView = vi.spyOn(runtime, "adjustCameraView");
+    const possessedProjection = runtime.snapshot();
+    vi.spyOn(runtime, "snapshot").mockReturnValue({
+      ...possessedProjection,
+      possessionTarget: { mode: "unbound" },
+    });
+
+    await adapter.animate(0);
+    await adapter.animate(17);
+
+    expect(adjustCameraView).not.toHaveBeenCalled();
+    expect(adapter.getArrowInputDiagnosticSnapshot()).toMatchObject({
+      yawRadiansPerFixedTick: 0,
+      pitchRadiansPerFixedTick: 0,
+      lastClearReason: "possession-unbound",
+    });
+  });
+
+  it("clears held physical input and Arrow inertia before a direct possession rebind", async () => {
+    const { adapter, runtime } = createAdapterProbe();
+    await adapter.runFixedInput([{
+      actions: ["cameraLeft", "cameraDown"],
+      ticks: 12,
+    }]);
+    adapter.keyboardInput.press("KeyW");
+    adapter.cameraInput.add("cameraLeft");
+    const adjustCameraView = vi.spyOn(runtime, "adjustCameraView");
+    adjustCameraView.mockClear();
+    const possessedProjection = runtime.snapshot();
+    const subject = possessedProjection.subjectStatesByEntityId.player!;
+    vi.spyOn(runtime, "snapshot").mockReturnValue({
+      ...possessedProjection,
+      possessionTarget: { mode: "possessed", controlledEntityId: "player-b" },
+      subjectStatesByEntityId: {
+        ...possessedProjection.subjectStatesByEntityId,
+        "player-b": { ...subject, entityId: "player-b" },
+      },
+    });
+
+    await adapter.animate(0);
+    await adapter.animate(17);
+
+    expect(runtime.runFixedInput).toHaveBeenLastCalledWith({ actions: [], ticks: 1 });
+    expect(adjustCameraView).not.toHaveBeenCalled();
+    expect(adapter.keyboardInput.actions()).toEqual([]);
+    expect(adapter.cameraInput).toEqual(new Set());
+    expect(adapter.getArrowInputDiagnosticSnapshot()).toMatchObject({
+      yawRadiansPerFixedTick: 0,
+      pitchRadiansPerFixedTick: 0,
+      lastClearReason: "possession-rebind",
+    });
+  });
+
   it("uses a locked ExecutionPlan V5 at the adapter boundary", () => {
     expect(LOCKED_EXECUTION_PLAN_V5).toMatchObject({
       kind: "worldkit-execution-plan",
@@ -577,8 +655,136 @@ describe("BabylonWorldAdapter frame loop", () => {
     expect(rightProbe.adapter.snapshot().camera.yaw).toBeLessThan(0);
   });
 
-  it("clears held movement and camera input across a protocol reset", async () => {
+  it.each([
+    {
+      action: "cameraLeft" as const,
+      component: "yaw" as const,
+      direction: 1,
+      maximumRadiansPerTick: 0.025,
+    },
+    {
+      action: "cameraRight" as const,
+      component: "yaw" as const,
+      direction: -1,
+      maximumRadiansPerTick: 0.025,
+    },
+    {
+      action: "cameraUp" as const,
+      component: "pitch" as const,
+      direction: -1,
+      maximumRadiansPerTick: 0.015,
+    },
+    {
+      action: "cameraDown" as const,
+      component: "pitch" as const,
+      direction: 1,
+      maximumRadiansPerTick: 0.015,
+    },
+  ])(
+    "ramps $action to its existing maximum speed over 0.20 seconds",
+    async ({ action, component, direction, maximumRadiansPerTick }) => {
+      const { adapter } = createAdapterProbe();
+      const initialValue = adapter.snapshot().camera[component];
+
+      const firstTick = await adapter.runFixedInput([{
+        actions: [action],
+        ticks: 1,
+      }]);
+      expect(firstTick.camera[component] - initialValue).toBeCloseTo(
+        direction * maximumRadiansPerTick / 12,
+        10,
+      );
+
+      const accelerationComplete = await adapter.runFixedInput([{
+        actions: [action],
+        ticks: 11,
+      }]);
+      expect(accelerationComplete.camera[component] - initialValue).toBeCloseTo(
+        direction * maximumRadiansPerTick * 6.5,
+        10,
+      );
+
+      const atMaximumSpeed = await adapter.runFixedInput([{
+        actions: [action],
+        ticks: 1,
+      }]);
+      expect(
+        direction * (
+          atMaximumSpeed.camera[component] -
+          accelerationComplete.camera[component]
+        ),
+      ).toBeCloseTo(maximumRadiansPerTick, 10);
+      expect(adapter.getArrowInputDiagnosticSnapshot()).toMatchObject(
+        component === "yaw"
+          ? { yawRadiansPerFixedTick: direction * maximumRadiansPerTick }
+          : { pitchRadiansPerFixedTick: direction * maximumRadiansPerTick },
+      );
+    },
+  );
+
+  it("glides for 0.15 seconds after keyboard camera input is released", async () => {
+    const { adapter } = createAdapterProbe();
+    const atRelease = await adapter.runFixedInput([{
+      actions: ["cameraLeft"],
+      ticks: 12,
+    }]);
+
+    const firstReleaseTick = await adapter.runFixedInput([{
+      actions: [],
+      ticks: 1,
+    }]);
+    expect(firstReleaseTick.camera.yaw - atRelease.camera.yaw).toBeCloseTo(
+      0.025 * 8 / 9,
+      10,
+    );
+
+    const stopped = await adapter.runFixedInput([{
+      actions: [],
+      ticks: 8,
+    }]);
+    expect(stopped.camera.yaw).toBeCloseTo(0.2625, 10);
+    expect(adapter.getArrowInputDiagnosticSnapshot().yawRadiansPerFixedTick).toBe(0);
+
+    const afterStopping = await adapter.runFixedInput([{
+      actions: [],
+      ticks: 5,
+    }]);
+    expect(afterStopping.camera.yaw).toBeCloseTo(stopped.camera.yaw, 10);
+  });
+
+  it("keeps a multi-tick camera step inside one fixed-input mutation batch", async () => {
     const { adapter, runtime } = createAdapterProbe();
+
+    await adapter.runFixedInput([{
+      actions: ["cameraLeft"],
+      ticks: 5,
+    }]);
+
+    expect(runtime.runFixedInput).toHaveBeenCalledOnce();
+    expect(runtime.runFixedInput).toHaveBeenCalledWith({ actions: [], ticks: 5 });
+  });
+
+  it("integrates the same 0.20-second ramp at 30, 60, and 120 Hz display cadence", async () => {
+    const yawAfterOneSecondAt = async (displayFramesPerSecond: number) => {
+      const { adapter } = createAdapterProbe();
+      adapter.cameraInput.add("cameraLeft");
+      for (let frame = 1; frame <= displayFramesPerSecond; frame += 1) {
+        await adapter.animate(frame * 1_000 / displayFramesPerSecond);
+      }
+      return adapter.snapshot().camera.yaw;
+    };
+
+    await expect(yawAfterOneSecondAt(30)).resolves.toBeCloseTo(1.3625, 10);
+    await expect(yawAfterOneSecondAt(60)).resolves.toBeCloseTo(1.3625, 10);
+    await expect(yawAfterOneSecondAt(120)).resolves.toBeCloseTo(1.3625, 10);
+  });
+
+  it("clears held movement and keyboard camera inertia across a protocol reset", async () => {
+    const { adapter, runtime } = createAdapterProbe();
+    await adapter.runFixedInput([{
+      actions: ["cameraLeft"],
+      ticks: 12,
+    }]);
     adapter.keyboardInput.press("KeyW");
     adapter.cameraInput.add("cameraLeft");
 
@@ -588,6 +794,54 @@ describe("BabylonWorldAdapter frame loop", () => {
 
     expect(runtime.runFixedInput).toHaveBeenLastCalledWith({ actions: [], ticks: 1 });
     expect(adapter.snapshot().camera.yaw).toBe(0);
+    expect(adapter.getArrowInputDiagnosticSnapshot()).toMatchObject({
+      yawRadiansPerFixedTick: 0,
+      pitchRadiansPerFixedTick: 0,
+      lastClearReason: "simulation-reset",
+    });
+  });
+
+  it("clears residual keyboard camera inertia when the window loses focus", async () => {
+    const { adapter } = createAdapterProbe();
+    const beforeBlur = await adapter.runFixedInput([{
+      actions: ["cameraLeft"],
+      ticks: 12,
+    }]);
+
+    adapter.clearPhysicalInputState("blur");
+    await adapter.animate(0);
+    await adapter.animate(17);
+
+    expect(adapter.snapshot().camera.yaw).toBeCloseTo(beforeBlur.camera.yaw, 10);
+    expect(adapter.getArrowInputDiagnosticSnapshot()).toMatchObject({
+      yawRadiansPerFixedTick: 0,
+      pitchRadiansPerFixedTick: 0,
+      lastClearReason: "blur",
+    });
+  });
+
+  it("publishes frozen Arrow input limits and instantaneous fixed-tick velocities", async () => {
+    const { adapter } = createAdapterProbe();
+
+    const startup = adapter.getArrowInputDiagnosticSnapshot();
+    expect(Object.isFrozen(startup)).toBe(true);
+    expect(startup).toEqual({
+      maximumYawRadiansPerFixedTick: 0.025,
+      maximumPitchRadiansPerFixedTick: 0.015,
+      keyboardAccelerationSeconds: 0.20,
+      keyboardDecelerationSeconds: 0.15,
+      yawRadiansPerFixedTick: 0,
+      pitchRadiansPerFixedTick: 0,
+      lastClearReason: "startup",
+    });
+
+    await adapter.runFixedInput([{ actions: ["cameraLeft", "cameraDown"], ticks: 1 }]);
+
+    const active = adapter.getArrowInputDiagnosticSnapshot();
+    expect(Object.isFrozen(active)).toBe(true);
+    expect(active.yawRadiansPerFixedTick).toBeCloseTo(0.025 / 12, 12);
+    expect(active.pitchRadiansPerFixedTick).toBeCloseTo(0.015 / 12, 12);
+    expect(active.lastClearReason).toBe("startup");
   });
 
   it.each([

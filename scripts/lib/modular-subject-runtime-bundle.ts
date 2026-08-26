@@ -133,11 +133,17 @@ function canonicalJsonBytes(value: unknown): Uint8Array {
   return TEXT_ENCODER.encode(`${JSON.stringify(canonicalValue(value))}\n`);
 }
 
+function newlineNormalizedJsonBytes(bytes: Uint8Array): Uint8Array {
+  return TEXT_ENCODER.encode(
+    new TextDecoder().decode(bytes).replace(/\r\n?/g, "\n"),
+  );
+}
+
 async function readJson<T>(filePath: string): Promise<{ value: T; bytes: Uint8Array }> {
-  const bytes = await readFile(filePath);
+  const bytes = newlineNormalizedJsonBytes(await readFile(filePath));
   let value: T;
   try {
-    value = JSON.parse(bytes.toString("utf8")) as T;
+    value = JSON.parse(new TextDecoder().decode(bytes)) as T;
   } catch {
     return fail("MODULAR_SUBJECT_RUNTIME_MANIFEST_INVALID", filePath);
   }

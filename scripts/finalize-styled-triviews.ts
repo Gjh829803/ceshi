@@ -16,6 +16,10 @@ function option(arguments_: readonly string[], name: string): string {
   return value;
 }
 
+function canonicalRelativePath(root: string, target: string): string {
+  return path.relative(root, target).split(path.sep).join("/");
+}
+
 async function hash(filePath: string): Promise<`sha256:${string}`> {
   return `sha256:${createHash("sha256").update(await readFile(filePath)).digest("hex")}`;
 }
@@ -66,11 +70,11 @@ export async function finalizeStyledTriviews(options: {
       role: target.role,
       semanticClassId: target.semanticClassId,
       whiteboxTriview: {
-        path: path.relative(sceneRoot, whiteboxPath),
+        path: canonicalRelativePath(sceneRoot, whiteboxPath),
         contentHash: await hash(whiteboxPath),
       },
       styledTriview: {
-        path: path.relative(sceneRoot, styledPath),
+        path: canonicalRelativePath(sceneRoot, styledPath),
         contentHash: await hash(styledPath),
       },
     });

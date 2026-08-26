@@ -28,11 +28,11 @@ describe("createSimulationTakeWorldPackageIdentityV1", () => {
       worldPackageRef:
         "worldkit://world-package/placement-coastal-world.20310417@1",
       worldPackageRootHash:
-        "sha256:5041eae30ce4ea8237ade557fefd320ac240e763ed31fa9df35a77db4070d30b",
+        "sha256:ac5aa63e359f6148d25b253fc5a16b4532ae3eeb585e7d56d98984aeabfe7365",
       normalizedWorldIrHash:
-        "sha256:ecf318f3820d0c403b99fca772c8b276b8e493e3ae32330561b8c360680c79d7",
+        "sha256:d60cfe42c0887c62c19a653ded273f60bb6528b898ec945ce09a872832932ffe",
       executionPlanHash:
-        "sha256:c8f77e1dc61036782f1e1b69cde6004feef1428ac6d5f56ecbe6c4c06ddffb7f",
+        "sha256:0dff5ee54663f78407f90198f82d3557e6133ee03ec78e60fe3416f37458e424",
     });
   });
 });

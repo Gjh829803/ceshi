@@ -84,6 +84,31 @@ describe("modular Subject Runtime Bundle assembly", () => {
     expect(bundle.manifest.source.sourceArchiveIncluded).toBe(false);
   });
 
+  it("keeps Runtime Bundle bytes stable when source manifest line endings differ", async () => {
+    const root = await temporaryDirectory();
+    const packageDirectory = path.join(root, "golden-humanoid");
+    await cp(GOLDEN_PACKAGE_DIRECTORY, packageDirectory, { recursive: true });
+    for (const relativePath of [
+      "package.manifest.json",
+      "materials/default/material-set.manifest.json",
+    ]) {
+      const sourcePath = path.join(packageDirectory, relativePath);
+      const sourceText = await readFile(sourcePath, "utf8");
+      const newline = sourceText.includes("\r\n") ? "\n" : "\r\n";
+      await writeFile(sourcePath, sourceText.replace(/\r?\n/g, newline));
+    }
+
+    const baseline = await assembleModularSubjectRuntimeBundle({
+      packageDirectory: GOLDEN_PACKAGE_DIRECTORY,
+    });
+    const alternateLineEndings = await assembleModularSubjectRuntimeBundle({
+      packageDirectory,
+    });
+
+    expect(alternateLineEndings.glbBytes).toEqual(baseline.glbBytes);
+    expect(alternateLineEndings.manifestBytes).toEqual(baseline.manifestBytes);
+  });
+
   it("rejects a Clip whose bytes no longer match its manifest lock", async () => {
     const root = await temporaryDirectory();
     const packageDirectory = path.join(root, "golden-humanoid");

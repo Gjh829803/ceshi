@@ -1076,6 +1076,132 @@ export class BabylonWorldRuntime {
         viewYawOffsetRadians: cameraDirectorSnapshot.viewYawOffsetRadians,
         viewPitchOffsetRadians: cameraDirectorSnapshot.viewPitchOffsetRadians,
         viewDistanceOffsetMeters: cameraDirectorSnapshot.viewDistanceOffsetMeters,
+        ...(cameraDirectorSnapshot.selectionDecision === undefined
+          ? {}
+          : { selectionDecision: cameraDirectorSnapshot.selectionDecision }),
+        ...(cameraDirectorSnapshot.selectedTargetSocketId === undefined
+          ? {}
+          : { selectedTargetSocketId: cameraDirectorSnapshot.selectedTargetSocketId }),
+        ...(cameraDirectorSnapshot.targetSocketPositionMetersXYZ === undefined
+          ? {}
+          : {
+              targetSocketPositionMetersXYZ: Object.freeze([
+                ...cameraDirectorSnapshot.targetSocketPositionMetersXYZ,
+              ]) as Vec3,
+            }),
+        ...(cameraDirectorSnapshot.isTargetSocketFallback === undefined
+          ? {}
+          : { isTargetSocketFallback: cameraDirectorSnapshot.isTargetSocketFallback }),
+        ...(cameraDirectorSnapshot.desiredTargetPositionMetersXYZ === undefined
+          ? {}
+          : {
+              desiredTargetPositionMetersXYZ: Object.freeze([
+                ...cameraDirectorSnapshot.desiredTargetPositionMetersXYZ,
+              ]) as Vec3,
+            }),
+        ...(cameraDirectorSnapshot.desiredPositionMetersXYZ === undefined
+          ? {}
+          : {
+              desiredPositionMetersXYZ: Object.freeze([
+                ...cameraDirectorSnapshot.desiredPositionMetersXYZ,
+              ]) as Vec3,
+            }),
+        ...(cameraDirectorSnapshot.actualPositionMetersXYZ === undefined
+          ? {}
+          : {
+              actualPositionMetersXYZ: Object.freeze([
+                ...cameraDirectorSnapshot.actualPositionMetersXYZ,
+              ]) as Vec3,
+            }),
+        ...(cameraDirectorSnapshot.finalFovDegrees === undefined
+          ? {}
+          : { finalFovDegrees: cameraDirectorSnapshot.finalFovDegrees }),
+        ...(cameraDirectorSnapshot.requestedArmLengthMeters === undefined
+          ? {}
+          : { requestedArmLengthMeters: cameraDirectorSnapshot.requestedArmLengthMeters }),
+        ...(cameraDirectorSnapshot.safeArmLengthMeters === undefined
+          ? {}
+          : { safeArmLengthMeters: cameraDirectorSnapshot.safeArmLengthMeters }),
+        ...(cameraDirectorSnapshot.effectiveArmLengthMeters === undefined
+          ? {}
+          : { effectiveArmLengthMeters: cameraDirectorSnapshot.effectiveArmLengthMeters }),
+        ...(cameraDirectorSnapshot.isCollisionRetracted === undefined
+          ? {}
+          : { isCollisionRetracted: cameraDirectorSnapshot.isCollisionRetracted }),
+        ...(cameraDirectorSnapshot.collisionHitEntityId === undefined
+          ? {}
+          : { collisionHitEntityId: cameraDirectorSnapshot.collisionHitEntityId }),
+        ...(cameraDirectorSnapshot.collisionHitPositionXYZ === undefined
+          ? {}
+          : {
+              collisionHitPositionXYZ: Object.freeze([
+                ...cameraDirectorSnapshot.collisionHitPositionXYZ,
+              ]) as Vec3,
+            }),
+        ...(cameraDirectorSnapshot.positionLagXYZ === undefined
+          ? {}
+          : {
+              positionLagXYZ: Object.freeze([
+                ...cameraDirectorSnapshot.positionLagXYZ,
+              ]) as Vec3,
+            }),
+        ...(cameraDirectorSnapshot.rotationLagRadiansXYZ === undefined
+          ? {}
+          : {
+              rotationLagRadiansXYZ: Object.freeze([
+                ...cameraDirectorSnapshot.rotationLagRadiansXYZ,
+              ]) as Vec3,
+            }),
+        ...(cameraDirectorSnapshot.recenterRemainingSeconds === undefined
+          ? {}
+          : {
+              recenterRemainingSeconds:
+                cameraDirectorSnapshot.recenterRemainingSeconds,
+            }),
+        ...(cameraDirectorSnapshot.fixedStepDeltaSeconds === undefined
+          ? {}
+          : { fixedStepDeltaSeconds: cameraDirectorSnapshot.fixedStepDeltaSeconds }),
+        ...(cameraDirectorSnapshot.resolvedParameters === undefined
+          ? {}
+          : {
+              resolvedParameters: Object.freeze({
+                ...cameraDirectorSnapshot.resolvedParameters,
+              }),
+            }),
+        ...(cameraDirectorSnapshot.previewParameterOverrides === undefined
+          ? {}
+          : {
+              previewParameterOverrides: Object.freeze({
+                ...cameraDirectorSnapshot.previewParameterOverrides,
+              }),
+            }),
+        ...(cameraDirectorSnapshot.profileTransitionProgressRatio === undefined
+          ? {}
+          : {
+              profileTransitionProgressRatio:
+                cameraDirectorSnapshot.profileTransitionProgressRatio,
+            }),
+        ...(cameraDirectorSnapshot.controlForwardXYZ === undefined
+          ? {}
+          : {
+              controlForwardXYZ: Object.freeze([
+                ...cameraDirectorSnapshot.controlForwardXYZ,
+              ]) as Vec3,
+            }),
+        ...(cameraDirectorSnapshot.subjectForwardXYZ === undefined
+          ? {}
+          : {
+              subjectForwardXYZ: Object.freeze([
+                ...cameraDirectorSnapshot.subjectForwardXYZ,
+              ]) as Vec3,
+            }),
+        ...(cameraDirectorSnapshot.subjectVelocityMetersPerSecondXYZ === undefined
+          ? {}
+          : {
+              subjectVelocityMetersPerSecondXYZ: Object.freeze([
+                ...cameraDirectorSnapshot.subjectVelocityMetersPerSecondXYZ,
+              ]) as Vec3,
+            }),
       },
       resources: {
         meshes: this.scene.meshes.length,
@@ -1359,6 +1485,7 @@ export class BabylonWorldRuntime {
       subject.capabilityAssembly.cameraContext,
       sample,
       deltaSeconds,
+      this.tick,
     );
   }
 

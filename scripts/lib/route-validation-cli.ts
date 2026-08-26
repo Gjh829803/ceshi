@@ -118,6 +118,27 @@ async function pathExists(targetPath: string): Promise<boolean> {
   }
 }
 
+async function assertOutputParentInspectable(targetPath: string): Promise<void> {
+  let currentPath = path.dirname(targetPath);
+  for (;;) {
+    try {
+      const stat = await lstat(currentPath);
+      if (!stat.isDirectory()) {
+        throw new Error("Route validation output parent is not a directory.");
+      }
+      return;
+    } catch (error) {
+      if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+        const parent = path.dirname(currentPath);
+        if (parent === currentPath) throw error;
+        currentPath = parent;
+        continue;
+      }
+      throw error;
+    }
+  }
+}
+
 function escapeJsonPointerSegment(value: string): string {
   return value.replaceAll("~", "~0").replaceAll("/", "~1");
 }
@@ -208,6 +229,7 @@ export async function verifyRouteFileV1(
   }
 
   try {
+    await assertOutputParentInspectable(absoluteOutputPath);
     if (
       await pathExists(absoluteOutputPath) ||
       await pathExists(evidenceDirectory)

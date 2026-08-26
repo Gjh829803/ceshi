@@ -318,7 +318,9 @@ describe("resolveWorldPackageResourceArtifactsV1", () => {
     );
   });
 
-  it("rejects a Subject Asset symlink that escapes the public root", async () => {
+  it.skipIf(process.platform === "win32")(
+    "rejects a Subject Asset symlink that escapes the public root",
+    async () => {
     const publicRoot = await temporaryPublicRoot();
     const outsideRoot = await temporaryPublicRoot();
     const bytes = new Uint8Array([1, 2, 3]);
@@ -339,7 +341,8 @@ describe("resolveWorldPackageResourceArtifactsV1", () => {
       ),
       "asset-path-escape",
     );
-  });
+    },
+  );
 
   it("normalizes an unreadable or missing Subject Asset into an infrastructure error", async () => {
     const publicRoot = await temporaryPublicRoot();

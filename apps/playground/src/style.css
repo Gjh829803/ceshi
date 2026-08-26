@@ -1146,6 +1146,42 @@ kbd,
 .camera-card-grid p { margin: 5px 0 0; color: #7893a3; font-size: 10px; line-height: 1.45; }
 .camera-card-grid button:disabled { color: #74d5ff; border-color: transparent; background: transparent; cursor: default; }
 .camera-tuning-grid { padding-top: 4px; }
+.camera-inspector-section {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 13px;
+  border: 1px solid rgba(116, 213, 255, 0.14);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.018);
+}
+.camera-inspector-section > h4,
+.camera-diagnostics-heading h4,
+.camera-expert-groups h5 { margin: 0; color: #b9e7fa; font-size: 11px; letter-spacing: .04em; }
+.camera-expert-groups { display: grid; gap: 13px; }
+.camera-expert-groups section { display: grid; gap: 7px; }
+.camera-diagnostics-heading { display: flex; justify-content: space-between; gap: 16px; align-items: start; }
+.camera-diagnostics-heading > div { display: grid; gap: 5px; }
+.camera-diagnostics-heading p,
+.camera-publish-boundary p { margin: 0; color: #7893a3; font-size: 10px; line-height: 1.5; }
+.camera-diagnostics-heading button {
+  flex: 0 0 auto;
+  border: 1px solid rgba(116, 213, 255, .28);
+  border-radius: 7px;
+  padding: 7px 9px;
+  color: #dff6ff;
+  background: rgba(38, 112, 145, .16);
+  cursor: pointer;
+  font-size: 10px;
+}
+#tuning-camera-diagnostics { display: grid; grid-template-columns: minmax(120px, .7fr) 1.3fr; gap: 0; margin: 0; }
+#tuning-camera-diagnostics dt,
+#tuning-camera-diagnostics dd { margin: 0; padding: 7px 8px; border-top: 1px solid rgba(143, 199, 224, .09); font-size: 10px; }
+#tuning-camera-diagnostics dt { color: #7893a3; }
+#tuning-camera-diagnostics dd { overflow: hidden; color: #dff6ff; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; text-overflow: ellipsis; white-space: nowrap; }
+#tuning-camera-overlay { padding: 10px; border-radius: 8px; color: #aee4fa; background: #07131a; font: 10px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
+#tuning-camera-overlay[hidden] { display: none; }
+.camera-publish-boundary { border-color: rgba(215, 171, 104, .24); }
 
 .local-version-editor {
   display: grid;

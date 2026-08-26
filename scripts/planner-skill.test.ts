@@ -5,7 +5,7 @@ import { parseSceneBriefV1 } from "@whitebox-world/authoring";
 import { describe, expect, it } from "vitest";
 
 function templateFrom(markdown: string): string {
-  const brief = markdown.match(/```md\n([\s\S]*?)\n```/)?.[1];
+  const brief = markdown.match(/```md\r?\n([\s\S]*?)\r?\n```/)?.[1];
   if (brief === undefined) throw new Error("Scene Brief template is missing.");
   return brief;
 }

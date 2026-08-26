@@ -669,6 +669,10 @@ describe("subject resource registry", () => {
     expect(resolvedDefinition).toMatchObject({
       schemaVersion: 3,
       resourceRef: G_BOT_SUBJECT_DEFINITION_REF,
+      profiles: {
+        controlProfileRef:
+          "worldkit://control-profile/planar.camera-relative@1",
+      },
     });
 
     const socketIds = resolvedDefinition?.sockets.map((socket) => socket.id).sort();
@@ -943,7 +947,7 @@ describe("subject resource registry", () => {
     expect(() => createSubjectResourceRegistry([{
       ...planar,
       inputSpace: "subject-local",
-    }])).toThrowError(/SUBJECT_REGISTRY_INVALID_CONTROL_PROFILE_COMBINATION/);
+    }])).toThrow("SUBJECT_REGISTRY_INVALID_CONTROL_PROFILE_COMBINATION");
     expect(() => createSubjectResourceRegistry([{
       ...planar,
       facingPolicy: "fixed",

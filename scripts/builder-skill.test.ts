@@ -16,7 +16,7 @@ function controlledSubjectTemplate(
   heading = "## Valid bound ground proxy",
 ): AuthoringSpecV4["resources"]["subjectDefinitions"][number] {
   const section = markdown.split(heading)[1];
-  const json = section?.match(/```json\n([\s\S]*?)\n```/)?.[1];
+  const json = section?.match(/```json\r?\n([\s\S]*?)\r?\n```/)?.[1];
   if (json === undefined) throw new Error(`Controlled Subject template is missing: ${heading}.`);
   return JSON.parse(json);
 }

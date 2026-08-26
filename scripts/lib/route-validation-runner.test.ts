@@ -1,6 +1,7 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
@@ -97,7 +98,7 @@ describe("Route validation trusted runner", () => {
       import.meta.url,
     );
 
-    const result = await runTrustedRouteValidationV1(fixturePath.pathname, {
+    const result = await runTrustedRouteValidationV1(fileURLToPath(fixturePath), {
       fixtureFaultInjection: {
         kind: "inject-surface-correlation-miss",
       },
@@ -397,7 +398,7 @@ describe("Route validation trusted runner", () => {
       import.meta.url,
     );
 
-    const result = await runTrustedRouteValidationV1(fixturePath.pathname, {
+    const result = await runTrustedRouteValidationV1(fileURLToPath(fixturePath), {
       fixtureFaultInjection: {
         kind: "withdraw-static-support-after-reset",
         supportEntityId: "terrain-main",

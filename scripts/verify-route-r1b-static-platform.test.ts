@@ -255,8 +255,9 @@ describe("verify:route-r1b-static-platform", () => {
 
     const census = censusLegacyRouteConsumers({ repositoryRoot });
     expect(census.matchCount).toBe(19);
-    expect(census.matchedPaths).toEqual([injectedRelativePath]);
-    expect(isEqual(census.matchedPaths, [injectedRelativePath])).toBe(true);
+    const expectedPath = injectedRelativePath.replaceAll(path.sep, "/");
+    expect(census.matchedPaths).toEqual([expectedPath]);
+    expect(isEqual(census.matchedPaths, [expectedPath])).toBe(true);
   });
 
   it("parses route R0 contract Graph evidence as V2 with valid child and root hashes", async () => {

@@ -104,6 +104,7 @@ function profile(
 function sample(
   overrides: Partial<CameraContextSampleV1> = {},
 ): CameraContextSampleV1 {
+  const { relationshipRole = "rider", ...remainingOverrides } = overrides;
   return {
     simulationTick: 42,
     controlledEntityId: "rider",
@@ -122,12 +123,13 @@ function sample(
         mountSlotId: "stand-slot",
       },
     ],
+    relationshipRole,
     velocityMetersPerSecondXYZ: [6, 0, 8],
     socketPositionsMetersXYZById: {
       "camera.flight": [0, 2, -1],
     },
     cameraContextTags: ["aim"],
-    ...overrides,
+    ...remainingOverrides,
   };
 }
 
@@ -404,6 +406,42 @@ describe("Camera View Preference admission", () => {
 });
 
 describe("deterministic Camera selection", () => {
+  it("matches relationship roles only for the matching Camera Context sample", () => {
+    const mountedRule: CameraContextRuleV2 = {
+      id: "mounted-framing",
+      priority: 100,
+      when: { relationshipRoles: ["rider"] },
+      cameraModifierRefs: ["worldkit://camera-modifier/mounted@1"],
+    };
+    const noRelationshipMatch = selectCameraViewV1({
+      cameraContextProfile: profile([mountedRule]),
+      cameraContextSample: sample({ relationshipRole: "none" }),
+      cameraViewPreference: { mode: "camera-rig-profile", cameraRigProfileRef: DEFAULT_RIG_REF },
+    });
+    const riderMatch = selectCameraViewV1({
+      cameraContextProfile: profile([mountedRule]),
+      cameraContextSample: sample({ relationshipRole: "rider" }),
+      cameraViewPreference: { mode: "camera-rig-profile", cameraRigProfileRef: DEFAULT_RIG_REF },
+    });
+
+    expect(noRelationshipMatch).toMatchObject({
+      ok: true,
+      decision: {
+        activeCameraRigProfileRef: DEFAULT_RIG_REF,
+        activeCameraModifierRefs: [],
+      },
+    });
+    expect(riderMatch).toMatchObject({
+      ok: true,
+      decision: {
+        // An explicit base Profile remains the selection authority; matching
+        // relationship rules only contribute their declared Modifiers.
+        activeCameraRigProfileRef: DEFAULT_RIG_REF,
+        activeCameraModifierRefs: ["worldkit://camera-modifier/mounted@1"],
+      },
+    });
+  });
+
   it("selects the highest-priority Rig and applies unique Modifiers low-to-high", () => {
     const result = selectCameraViewV1({
       cameraContextProfile: profile([AIM_RULE, FLIGHT_RULE]),

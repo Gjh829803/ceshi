@@ -15,6 +15,7 @@ import {
   type SubjectResourceRegistryV3,
 } from "@whitebox-world/subject-registry";
 import {
+  CAMERA_TUNING_SAFETY_LIMITS_V1,
   CONTROL_FEEL_PARAMETER_BOUNDS_V1,
   CONTROL_FEEL_PARAMETER_NAMES_V1,
   WORLDKIT_GAMEPLAY_EVENT_PAGE_MAXIMUM_COUNT,
@@ -692,6 +693,7 @@ export function listSubjectPresetAuthoringProfilesV1(
             headingSource: resource.headingSource,
             recenterMode: resource.recenterMode,
             parameters: resource.parameters,
+            safetyLimits: CAMERA_TUNING_SAFETY_LIMITS_V1,
             ...(resource.authoringRanges === undefined
               ? {}
               : { authoringRanges: resource.authoringRanges }),

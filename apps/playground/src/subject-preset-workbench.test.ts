@@ -20,14 +20,18 @@ type TransactionRuntimeDouble = {
     tuningByProfileRef: Readonly<Record<string, Readonly<Record<string, number>>>>;
   }): unknown;
   applySubjectPresetTuning(request: {
+    expectedSubjectDefinitionContentHash: string;
     selectedMotionProfileRef: string;
     selectedControlFeelProfileRef: string;
   }): { status: "committed" | "rejected"; diagnostic?: { message: string } };
 };
 
+const runtimeSubjectDefinitionHash = `sha256:${"9".repeat(64)}`;
+
 const applyTransaction = (input: {
   draft: ReturnType<typeof createSubjectPresetWorkbenchDraftV1>;
   subjectEntityId: string;
+  runtimeExpectedSubjectDefinitionHash?: string;
   previousCameraPreferenceRef: string | null;
   previousGameplayProfileSelection?: {
     motionProfileRef: string;
@@ -36,6 +40,8 @@ const applyTransaction = (input: {
   runtime: TransactionRuntimeDouble;
 }) => applySubjectPresetWorkingDraftTransactionV1({
   ...input,
+  runtimeExpectedSubjectDefinitionHash:
+    input.runtimeExpectedSubjectDefinitionHash ?? runtimeSubjectDefinitionHash,
   previousGameplayProfileSelection:
     input.previousGameplayProfileSelection === undefined
       ? {
@@ -209,10 +215,14 @@ describe("subject preset workbench projection", () => {
       },
     });
 
-    expect(subjectPresetTuningRequestFromDraftV1(draft, "player")).toEqual({
+    expect(subjectPresetTuningRequestFromDraftV1(
+      draft,
+      "player",
+      runtimeSubjectDefinitionHash,
+    )).toEqual({
       subjectEntityId: "player",
       expectedSubjectDefinitionRef: baseline.subjectDefinitionRef,
-      expectedSubjectDefinitionContentHash: baseline.subjectDefinitionContentHash,
+      expectedSubjectDefinitionContentHash: runtimeSubjectDefinitionHash,
       selectedMotionProfileRef: "worldkit://motion-profile/safe-ground@1",
       selectedControlFeelProfileRef:
         "worldkit://control-feel-profile/humanoid.heavy-ground@1",
@@ -284,6 +294,8 @@ describe("subject preset workbench Runtime transaction", () => {
     let gameplayApplyCount = 0;
     let cameraPreviewApplyCount = 0;
     let cameraPreviewReadCount = 0;
+    let resetCameraProfileCallCount = 0;
+    const gameplayExpectedSubjectDefinitionHashes: string[] = [];
     const gameplayRequests: Array<{
       selectedMotionProfileRef: string;
       selectedControlFeelProfileRef: string;
@@ -299,6 +311,7 @@ describe("subject preset workbench Runtime transaction", () => {
         state.cameraPreferenceRef = profileRef;
       },
       resetCameraProfile: () => {
+        resetCameraProfileCallCount += 1;
         state.cameraPreferenceRef = null;
       },
       applyCameraPreview: (request) => {
@@ -313,6 +326,9 @@ describe("subject preset workbench Runtime transaction", () => {
       },
       applySubjectPresetTuning: (request) => {
         gameplayApplyCount += 1;
+        gameplayExpectedSubjectDefinitionHashes.push(
+          request.expectedSubjectDefinitionContentHash,
+        );
         gameplayRequests.push({
           selectedMotionProfileRef: request.selectedMotionProfileRef,
           selectedControlFeelProfileRef: request.selectedControlFeelProfileRef,
@@ -332,7 +348,9 @@ describe("subject preset workbench Runtime transaction", () => {
       runtime,
       state,
       gameplayRequests,
+      gameplayExpectedSubjectDefinitionHashes,
       cameraPreviewReadCount: () => cameraPreviewReadCount,
+      resetCameraProfileCallCount: () => resetCameraProfileCallCount,
     };
   };
 
@@ -342,6 +360,7 @@ describe("subject preset workbench Runtime transaction", () => {
     const result = applySubjectPresetWorkingDraftTransactionV1({
       draft: createDraft(),
       subjectEntityId: "player",
+      runtimeExpectedSubjectDefinitionHash: runtimeSubjectDefinitionHash,
       previousCameraPreferenceRef: null,
       previousGameplayProfileSelection: undefined,
       runtime: runtime as unknown as SubjectPresetWorkingDraftTransactionRuntimeV1,
@@ -362,6 +381,7 @@ describe("subject preset workbench Runtime transaction", () => {
     const result = applySubjectPresetWorkingDraftTransactionV1({
       draft: createDraft(),
       subjectEntityId: "player",
+      runtimeExpectedSubjectDefinitionHash: runtimeSubjectDefinitionHash,
       previousCameraPreferenceRef: null,
       previousGameplayProfileSelection: {
         activeMotionProfileRef: baseline.defaultMotionProfile.resourceRef,
@@ -386,6 +406,7 @@ describe("subject preset workbench Runtime transaction", () => {
     const result = applySubjectPresetWorkingDraftTransactionV1({
       draft: createDraft(),
       subjectEntityId: "player",
+      runtimeExpectedSubjectDefinitionHash: runtimeSubjectDefinitionHash,
       previousCameraPreferenceRef: null,
       previousGameplayProfileSelection: {
         motionProfileRef: baseline.controlFeelProfile.resourceRef,
@@ -436,7 +457,9 @@ describe("subject preset workbench Runtime transaction", () => {
   });
 
   it("rolls Camera Profile and preview tuning back when Gameplay rejects", () => {
-    const { runtime, state } = createRuntime({ gameplayOutcome: "rejected" });
+    const { runtime, state, resetCameraProfileCallCount } = createRuntime({
+      gameplayOutcome: "rejected",
+    });
 
     const result = applyTransaction({
       draft: createDraft(),
@@ -454,6 +477,7 @@ describe("subject preset workbench Runtime transaction", () => {
       motionProfileRef: baseline.defaultMotionProfile.resourceRef,
       controlFeelProfileRef: baseline.controlFeelProfile.resourceRef,
     });
+    expect(resetCameraProfileCallCount()).toBe(1);
   });
 
   it("rolls a Camera Profile mutation back when Camera preview fails", () => {
@@ -498,5 +522,26 @@ describe("subject preset workbench Runtime transaction", () => {
       motionProfileRef: baseline.defaultMotionProfile.resourceRef,
       controlFeelProfileRef: baseline.controlFeelProfile.resourceRef,
     });
+  });
+
+  it("keeps Registry draft locks distinct from the Runtime subject hash for apply and rollback", () => {
+    const { runtime, gameplayExpectedSubjectDefinitionHashes } = createRuntime({
+      gameplayOutcome: "throw-after-mutation",
+    });
+
+    const result = applyTransaction({
+      draft: createDraft(),
+      subjectEntityId: "player",
+      runtimeExpectedSubjectDefinitionHash: runtimeSubjectDefinitionHash,
+      previousCameraPreferenceRef: null,
+      runtime,
+    });
+
+    expect(result.status).toBe("failed");
+    expect(baseline.subjectDefinitionContentHash).not.toBe(runtimeSubjectDefinitionHash);
+    expect(gameplayExpectedSubjectDefinitionHashes).toEqual([
+      runtimeSubjectDefinitionHash,
+      runtimeSubjectDefinitionHash,
+    ]);
   });
 });

@@ -253,7 +253,22 @@ function cameraProjection(
     isNil(camera.safeFallbackActive) ||
     isNil(camera.viewYawOffsetRadians) ||
     isNil(camera.viewPitchOffsetRadians) ||
-    isNil(camera.viewDistanceOffsetMeters)
+    isNil(camera.viewDistanceOffsetMeters) ||
+    isNil(camera.selectionDecision) ||
+    isNil(camera.isTargetSocketFallback) ||
+    isNil(camera.desiredTargetPositionMetersXYZ) ||
+    isNil(camera.desiredPositionMetersXYZ) ||
+    isNil(camera.actualPositionMetersXYZ) ||
+    isNil(camera.finalFovDegrees) ||
+    isNil(camera.positionLagXYZ) ||
+    isNil(camera.rotationLagRadiansXYZ) ||
+    isNil(camera.fixedStepDeltaSeconds) ||
+    isNil(camera.resolvedParameters) ||
+    isNil(camera.previewParameterOverrides) ||
+    isNil(camera.profileTransitionProgressRatio) ||
+    isNil(camera.controlForwardXYZ) ||
+    isNil(camera.subjectForwardXYZ) ||
+    isNil(camera.subjectVelocityMetersPerSecondXYZ)
   ) {
     throw new Error(
       "WORLDKIT_RUNTIME_CAMERA_STATE_INVALID: Bound camera state is incomplete.",
@@ -274,6 +289,101 @@ function cameraProjection(
     viewYawOffsetRadians: camera.viewYawOffsetRadians,
     viewPitchOffsetRadians: camera.viewPitchOffsetRadians,
     viewDistanceOffsetMeters: camera.viewDistanceOffsetMeters,
+    selectionDecision: Object.freeze({
+      ...camera.selectionDecision,
+      activeCameraModifierRefs: Object.freeze([
+        ...camera.selectionDecision.activeCameraModifierRefs,
+      ]),
+      matchedCameraContextRuleIds: Object.freeze([
+        ...camera.selectionDecision.matchedCameraContextRuleIds,
+      ]),
+      cameraViewPreference: Object.freeze({
+        ...camera.selectionDecision.cameraViewPreference,
+      }),
+      diagnostics: Object.freeze(camera.selectionDecision.diagnostics.map(
+        (diagnostic) => Object.freeze({ ...diagnostic }),
+      )),
+      explain: Object.freeze({
+        ...camera.selectionDecision.explain,
+        cameraViewPreference: Object.freeze({
+          ...camera.selectionDecision.explain.cameraViewPreference,
+        }),
+        cameraContextRules: Object.freeze(
+          camera.selectionDecision.explain.cameraContextRules.map((rule) =>
+            Object.freeze({
+              ...rule,
+              unmatchedReasons: Object.freeze([...rule.unmatchedReasons]),
+            })
+          ),
+        ),
+        appliedCameraModifierRefs: Object.freeze([
+          ...camera.selectionDecision.explain.appliedCameraModifierRefs,
+        ]),
+      }),
+    }),
+    ...(camera.selectedTargetSocketId === undefined
+      ? {}
+      : { selectedTargetSocketId: camera.selectedTargetSocketId }),
+    ...(camera.targetSocketPositionMetersXYZ === undefined
+      ? {}
+      : {
+          targetSocketPositionMetersXYZ: Object.freeze([
+            ...camera.targetSocketPositionMetersXYZ,
+          ]) as readonly [number, number, number],
+        }),
+    isTargetSocketFallback: camera.isTargetSocketFallback,
+    desiredTargetPositionMetersXYZ: Object.freeze([
+      ...camera.desiredTargetPositionMetersXYZ,
+    ]) as readonly [number, number, number],
+    desiredPositionMetersXYZ: Object.freeze([
+      ...camera.desiredPositionMetersXYZ,
+    ]) as readonly [number, number, number],
+    actualPositionMetersXYZ: Object.freeze([
+      ...camera.actualPositionMetersXYZ,
+    ]) as readonly [number, number, number],
+    finalFovDegrees: camera.finalFovDegrees,
+    ...(camera.requestedArmLengthMeters === undefined
+      ? {}
+      : { requestedArmLengthMeters: camera.requestedArmLengthMeters }),
+    ...(camera.safeArmLengthMeters === undefined
+      ? {}
+      : { safeArmLengthMeters: camera.safeArmLengthMeters }),
+    ...(camera.effectiveArmLengthMeters === undefined
+      ? {}
+      : { effectiveArmLengthMeters: camera.effectiveArmLengthMeters }),
+    ...(camera.isCollisionRetracted === undefined
+      ? {}
+      : { isCollisionRetracted: camera.isCollisionRetracted }),
+    ...(camera.collisionHitEntityId === undefined
+      ? {}
+      : { collisionHitEntityId: camera.collisionHitEntityId }),
+    ...(camera.collisionHitPositionXYZ === undefined
+      ? {}
+      : {
+          collisionHitPositionXYZ: Object.freeze([
+            ...camera.collisionHitPositionXYZ,
+          ]) as readonly [number, number, number],
+        }),
+    positionLagXYZ: Object.freeze([...camera.positionLagXYZ]) as
+      readonly [number, number, number],
+    rotationLagRadiansXYZ: Object.freeze([...camera.rotationLagRadiansXYZ]) as
+      readonly [number, number, number],
+    ...(camera.recenterRemainingSeconds === undefined
+      ? {}
+      : { recenterRemainingSeconds: camera.recenterRemainingSeconds }),
+    fixedStepDeltaSeconds: camera.fixedStepDeltaSeconds,
+    resolvedParameters: Object.freeze({ ...camera.resolvedParameters }),
+    previewParameterOverrides: Object.freeze({
+      ...camera.previewParameterOverrides,
+    }),
+    profileTransitionProgressRatio: camera.profileTransitionProgressRatio,
+    controlForwardXYZ: Object.freeze([...camera.controlForwardXYZ]) as
+      readonly [number, number, number],
+    subjectForwardXYZ: Object.freeze([...camera.subjectForwardXYZ]) as
+      readonly [number, number, number],
+    subjectVelocityMetersPerSecondXYZ: Object.freeze([
+      ...camera.subjectVelocityMetersPerSecondXYZ,
+    ]) as readonly [number, number, number],
   });
 }
 

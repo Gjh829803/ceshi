@@ -141,7 +141,7 @@
       "algorithmRef": "worldkit://camera-rig/orbit-follow@1",
       "headingSource": "view",
       "reverseHeadingPolicy": "preserve-target-forward",
-      "recenterMode": "forward-motion",
+      "recenterMode": "off",
       "preferredSocketIds": ["ThirdPersonTarget", "CameraTarget3D"],
       "parameters": {
         "distanceMeters": 5,

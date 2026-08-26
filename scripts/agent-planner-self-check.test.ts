@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import {
   copyFile,
   mkdir,
@@ -8,6 +8,7 @@ import {
   rm,
   writeFile,
 } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -123,6 +124,26 @@ const SCENARIOS: readonly PlannerScenario[] = [
 ];
 
 function run(command: string, arguments_: readonly string[]) {
+  if (process.platform === "win32" && command === "pnpm") {
+    const commandPath = execFileSync("where", ["corepack"], { encoding: "utf8" })
+      .split(/\r?\n/)
+      .find((line) => line.endsWith(".cmd"));
+    if (commandPath === undefined) throw new Error("Corepack is unavailable.");
+    const launcher = readFileSync(commandPath, "utf8");
+    const relativeCliPath = launcher.match(/"%~dp0([^\"]*corepack\.js)"/i)?.[1];
+    if (relativeCliPath === undefined) throw new Error("Corepack launcher is invalid.");
+    return spawnSync(process.execPath, [
+      path.resolve(
+        path.dirname(commandPath),
+        relativeCliPath.replace(/^[\\/]+/, ""),
+      ),
+      "pnpm",
+      ...arguments_,
+    ], {
+      cwd: path.resolve("."),
+      encoding: "utf8",
+    });
+  }
   return spawnSync(command, arguments_, {
     cwd: path.resolve("."),
     encoding: "utf8",

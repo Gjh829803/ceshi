@@ -1,7 +1,15 @@
 import type { FreeCamera } from "@babylonjs/core/Cameras/freeCamera.js";
-import { Ray } from "@babylonjs/core/Culling/ray.js";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
+import {
+  selectCameraViewV1,
+  type CameraContextProfileV1,
+  type CameraContextSampleV1,
+  type CameraDiagnosticV1,
+  type CameraRigParametersV1,
+  type CameraSelectionDecisionV1,
+  type CameraViewPreferenceV1,
+} from "@whitebox-world/camera";
 
 import type {
   CameraPreviewStateV1,
@@ -12,6 +20,7 @@ import type {
   ExecutionPlanV5,
   ExecutionSubjectCapabilityAssemblyV1,
   SemanticInputActionV1,
+  Vec3,
   ViewControlFrameV1,
   ViewTargetSampleV1,
 } from "@whitebox-world/runtime-contracts";
@@ -21,6 +30,9 @@ import {
 } from "@whitebox-world/runtime-contracts";
 import { isNil } from "lodash-es";
 
+import { CameraViewSolverV1 } from "./camera-view-solver";
+import { FollowArmSolverV1 } from "./follow-arm-solver";
+
 export interface CameraDirectorSnapshotV1 {
   activeCameraProfileRef: string;
   activeCameraRigRef: string;
@@ -29,6 +41,30 @@ export interface CameraDirectorSnapshotV1 {
   viewYawOffsetRadians: number;
   viewPitchOffsetRadians: number;
   viewDistanceOffsetMeters: number;
+  selectionDecision?: CameraSelectionDecisionV1;
+  selectedTargetSocketId?: string;
+  targetSocketPositionMetersXYZ?: Vec3;
+  isTargetSocketFallback?: boolean;
+  desiredTargetPositionMetersXYZ?: Vec3;
+  desiredPositionMetersXYZ?: Vec3;
+  actualPositionMetersXYZ?: Vec3;
+  finalFovDegrees?: number;
+  requestedArmLengthMeters?: number;
+  safeArmLengthMeters?: number;
+  effectiveArmLengthMeters?: number;
+  isCollisionRetracted?: boolean;
+  collisionHitEntityId?: string;
+  collisionHitPositionXYZ?: Vec3;
+  positionLagXYZ?: Vec3;
+  rotationLagRadiansXYZ?: Vec3;
+  recenterRemainingSeconds?: number;
+  fixedStepDeltaSeconds?: number;
+  resolvedParameters?: Readonly<CameraRigParametersV1>;
+  previewParameterOverrides?: Readonly<Partial<CameraRigParametersV1>>;
+  profileTransitionProgressRatio?: number;
+  controlForwardXYZ?: Vec3;
+  subjectForwardXYZ?: Vec3;
+  subjectVelocityMetersPerSecondXYZ?: Vec3;
 }
 
 type CameraContextV1 = ExecutionSubjectCapabilityAssemblyV1["cameraContext"];
@@ -37,6 +73,168 @@ type CameraParametersV1 = ExecutionCameraRigProfileV1["parameters"];
 interface SelectedCameraStateV1 {
   profile: ExecutionCameraRigProfileV1;
   modifiers: readonly ExecutionCameraModifierProfileV1[];
+  decision: CameraSelectionDecisionV1;
+}
+
+function freezeVec3(value: Vector3 | readonly number[]): Vec3 {
+  if (value instanceof Vector3) {
+    return Object.freeze([value.x, value.y, value.z]) as Vec3;
+  }
+  return Object.freeze([value[0], value[1], value[2]]) as Vec3;
+}
+
+function copySelectionDecision(
+  decision: CameraSelectionDecisionV1,
+): CameraSelectionDecisionV1 {
+  const preference = decision.cameraViewPreference.mode === "camera-rig-profile"
+    ? Object.freeze({ ...decision.cameraViewPreference })
+    : Object.freeze({ ...decision.cameraViewPreference });
+  return Object.freeze({
+    ...decision,
+    activeCameraModifierRefs: Object.freeze([...decision.activeCameraModifierRefs]),
+    matchedCameraContextRuleIds: Object.freeze([...decision.matchedCameraContextRuleIds]),
+    cameraViewPreference: preference,
+    diagnostics: Object.freeze(decision.diagnostics.map((diagnostic) => Object.freeze({ ...diagnostic }))),
+    explain: Object.freeze({
+      ...decision.explain,
+      cameraViewPreference: preference,
+      cameraContextRules: Object.freeze(decision.explain.cameraContextRules.map((rule) => Object.freeze({
+        ...rule,
+        unmatchedReasons: Object.freeze([...rule.unmatchedReasons]),
+      }))),
+      appliedCameraModifierRefs: Object.freeze([...decision.explain.appliedCameraModifierRefs]),
+    }),
+  });
+}
+
+function selectionDecisionWithSocketDiagnostic(
+  decision: CameraSelectionDecisionV1,
+  cameraContextProfileRef: string,
+  cameraRigProfileRef: string,
+  isTargetSocketFallback: boolean,
+): CameraSelectionDecisionV1 {
+  if (!isTargetSocketFallback) return decision;
+  const diagnostic: CameraDiagnosticV1 = {
+    severity: "error",
+    code: "CAMERA_REQUIRED_SOCKET_MISSING",
+    message: "The selected first-person Camera Rig could not resolve a preferred target Socket; the target-height fallback is active.",
+    cameraContextProfileRef,
+    resourceRef: cameraRigProfileRef,
+  };
+  return {
+    ...decision,
+    diagnostics: [...decision.diagnostics, diagnostic],
+  };
+}
+
+function cameraContextProfileFromExecution(
+  context: CameraContextV1,
+): CameraContextProfileV1 {
+  return {
+    cameraContextProfileRef: context.resourceRef,
+    defaultCameraRigProfileRef: context.defaultCameraRigProfileRef,
+    ...(context.firstPersonCameraRigProfileRef === undefined
+      ? {}
+      : { firstPersonCameraRigProfileRef: context.firstPersonCameraRigProfileRef }),
+    rules: context.rules.flatMap((rule) => {
+      const movementMediums = rule.when.movementMediums?.filter(
+        (movementMedium): movementMedium is "ground" | "air" =>
+          movementMedium === "ground" || movementMedium === "air",
+      );
+      // P1.5 has no water runtime sample. A water-only execution rule must be
+      // unavailable rather than becoming an unconditional Camera Domain rule.
+      if (
+        rule.when.movementMediums !== undefined &&
+        movementMediums?.length === 0
+      ) return [];
+      return {
+        id: rule.id,
+        priority: rule.priority,
+        when: {
+        ...(rule.when.relationshipRoles === undefined
+          ? {}
+          : { relationshipRoles: rule.when.relationshipRoles }),
+        ...(rule.when.motionKernelRefs === undefined
+          ? {}
+          : { motionKernelRefs: rule.when.motionKernelRefs }),
+        ...(movementMediums === undefined
+          ? {}
+          : { movementMediums }),
+        ...(rule.when.minimumSpeedMetersPerSecond === undefined
+          ? {}
+          : { minimumSpeedMetersPerSecond: rule.when.minimumSpeedMetersPerSecond }),
+        ...(rule.when.maximumSpeedMetersPerSecond === undefined
+          ? {}
+          : { maximumSpeedMetersPerSecond: rule.when.maximumSpeedMetersPerSecond }),
+        ...(rule.when.requiredSocketIds === undefined
+          ? {}
+          : { requiredSocketIds: rule.when.requiredSocketIds }),
+        ...((rule.when.requiredMotionTags === undefined &&
+          rule.when.requiredCameraContextTags === undefined)
+          ? {}
+          : {
+              requiredCameraContextTags: [
+                ...(rule.when.requiredMotionTags ?? []),
+                ...(rule.when.requiredCameraContextTags ?? []),
+              ],
+            }),
+        },
+        ...(rule.cameraRigProfileRef === undefined
+          ? {}
+          : { cameraRigProfileRef: rule.cameraRigProfileRef }),
+        ...(rule.cameraModifierRefs === undefined
+          ? {}
+          : { cameraModifierRefs: rule.cameraModifierRefs }),
+      };
+    }),
+    cameraRigProfiles: context.cameraRigProfiles.map((profile) => ({
+      cameraRigProfileRef: profile.resourceRef,
+      algorithmRef: profile.algorithmRef,
+      baseMode: profile.baseMode,
+      headingSource: profile.headingSource,
+      reverseHeadingPolicy: profile.reverseHeadingPolicy,
+      recenterMode: profile.recenterMode,
+      preferredSocketIds: profile.preferredSocketIds,
+      parameters: profile.parameters,
+    })),
+    cameraModifierProfiles: context.cameraModifierProfiles.map((modifier) => ({
+      cameraModifierProfileRef: modifier.resourceRef,
+      parameterOverrides: modifier.parameterOverrides,
+      ...(modifier.headingSourceOverride === undefined
+        ? {}
+        : { headingSourceOverride: modifier.headingSourceOverride }),
+      ...(modifier.reverseHeadingPolicyOverride === undefined
+        ? {}
+        : { reverseHeadingPolicyOverride: modifier.reverseHeadingPolicyOverride }),
+      ...(modifier.recenterModeOverride === undefined
+        ? {}
+        : { recenterModeOverride: modifier.recenterModeOverride }),
+    })),
+  };
+}
+
+function cameraContextSampleFromViewTarget(
+  sample: ViewTargetSampleV1,
+  simulationTick: number,
+): CameraContextSampleV1 {
+  return {
+    simulationTick,
+    controlledEntityId: sample.entityId,
+    targetEntityId: sample.entityId,
+    movementMedium: sample.movementMedium,
+    activeMotionProfileRef: sample.activeMotionKernelRef,
+    activeMotionKernelRef: sample.activeMotionKernelRef,
+    motionTags: sample.motionTags,
+    activeActionRefs: [],
+    relationshipContexts: [],
+    relationshipRole: sample.relationshipRole,
+    velocityMetersPerSecondXYZ: sample.velocityMetersPerSecondXYZ,
+    socketPositionsMetersXYZById: sample.socketPositionsMetersXYZById,
+    cameraContextTags: [
+      ...sample.cameraContextTags,
+      ...sample.motionTags,
+    ],
+  };
 }
 
 function exponentialAlpha(ratePerSecond: number, deltaSeconds: number): number {
@@ -45,11 +243,6 @@ function exponentialAlpha(ratePerSecond: number, deltaSeconds: number): number {
 
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.max(minimum, Math.min(maximum, value));
-}
-
-function moveTowards(current: number, target: number, maximumDelta: number): number {
-  if (Math.abs(target - current) <= maximumDelta) return target;
-  return current + Math.sign(target - current) * maximumDelta;
 }
 
 function wrapRadians(value: number): number {
@@ -86,56 +279,14 @@ function smoothstep01(value: number): number {
   return clamped * clamped * (3 - 2 * clamped);
 }
 
-function ruleMatches(
-  rule: CameraContextV1["rules"][number],
-  sample: ViewTargetSampleV1,
-): boolean {
-  const when = rule.when;
-  const speedMetersPerSecond = Math.hypot(
-    sample.velocityMetersPerSecondXYZ[0],
-    sample.velocityMetersPerSecondXYZ[1],
-    sample.velocityMetersPerSecondXYZ[2],
-  );
-  const socketIds = new Set(Object.keys(sample.socketPositionsMetersXYZById));
-  if (
-    when.relationshipRoles !== undefined &&
-    !when.relationshipRoles.includes(sample.relationshipRole)
-  ) return false;
-  if (
-    when.motionKernelRefs !== undefined &&
-    !when.motionKernelRefs.includes(sample.activeMotionKernelRef)
-  ) return false;
-  if (
-    when.requiredMotionTags !== undefined &&
-    !when.requiredMotionTags.every((tag) => sample.motionTags.includes(tag))
-  ) return false;
-  if (
-    when.movementMediums !== undefined &&
-    !when.movementMediums.includes(sample.movementMedium)
-  ) return false;
-  if (
-    when.minimumSpeedMetersPerSecond !== undefined &&
-    speedMetersPerSecond < when.minimumSpeedMetersPerSecond
-  ) return false;
-  if (
-    when.maximumSpeedMetersPerSecond !== undefined &&
-    speedMetersPerSecond > when.maximumSpeedMetersPerSecond
-  ) return false;
-  if (
-    when.requiredSocketIds !== undefined &&
-    !when.requiredSocketIds.every((id) => socketIds.has(id))
-  ) return false;
-  if (
-    when.requiredCameraContextTags !== undefined &&
-    !when.requiredCameraContextTags.every((tag) => sample.cameraContextTags.includes(tag))
-  ) return false;
-  return true;
-}
-
 export class CameraDirectorV1 {
   private initialized = false;
   private explicitProfileRef: string | undefined;
   private activeProfileRef: string;
+  private activeHeadingSource: ExecutionCameraRigProfileV1["headingSource"] | undefined;
+  private activeReverseHeadingPolicy:
+    | ExecutionCameraRigProfileV1["reverseHeadingPolicy"]
+    | undefined;
   private activeRigRef = "worldkit://camera-rig/orbit-follow@1";
   private activeModifierRefs: readonly string[] = [];
   private fallbackActive = false;
@@ -170,11 +321,22 @@ export class CameraDirectorV1 {
   private lookBackBlendRatio = 0;
   private previousVelocity = Vector3.Zero();
   private lastBaseTarget: Vector3 | undefined;
-  private collisionDistanceMeters: number | undefined;
+  private readonly cameraViewSolver = new CameraViewSolverV1();
+  private readonly followArmSolver = new FollowArmSolverV1();
   private smoothedFovRadians = Math.PI / 3;
   private activeParameters: CameraParametersV1 | undefined;
   private activeLockedParameters: CameraParametersV1 | undefined;
   private controlForward = new Vector3(0, 0, -1);
+  private latestTelemetry: Omit<
+    CameraDirectorSnapshotV1,
+    | "activeCameraProfileRef"
+    | "activeCameraRigRef"
+    | "activeCameraModifierRefs"
+    | "fallbackActive"
+    | "viewYawOffsetRadians"
+    | "viewPitchOffsetRadians"
+    | "viewDistanceOffsetMeters"
+  > = {};
 
   constructor(
     private readonly executionPlan: ExecutionPlanV5,
@@ -299,8 +461,9 @@ export class CameraDirectorV1 {
     cameraContext: CameraContextV1,
     sample: ViewTargetSampleV1,
     deltaSeconds: number,
+    simulationTick: number,
   ): void {
-    const selected = this.selectProfile(cameraContext, sample);
+    const selected = this.selectProfile(cameraContext, sample, simulationTick);
     if (selected === undefined) {
       throw new Error(
         "WORLDKIT_RUNTIME_CAMERA_PROFILE_NOT_FOUND: Camera context has no resolvable default profile.",
@@ -330,19 +493,33 @@ export class CameraDirectorV1 {
 
     const previousProfileRef = this.activeProfileRef;
     const nextModifierRefs = selected.modifiers.map((modifier) => modifier.resourceRef);
-    const profileChanged = this.initialized && (
+    const selectionChanged = this.initialized && (
       previousProfileRef !== profile.resourceRef ||
       nextModifierRefs.join("|") !== this.activeModifierRefs.join("|")
     );
-    if (profileChanged) {
+    const followArmBasisChanged = this.initialized && (
+      previousProfileRef !== profile.resourceRef ||
+      this.activeRigRef !== profile.algorithmRef
+    );
+    const headingBasisChanged = this.initialized && (
+      previousProfileRef !== profile.resourceRef ||
+      this.activeHeadingSource !== profile.headingSource ||
+      this.activeReverseHeadingPolicy !== profile.reverseHeadingPolicy
+    );
+    if (followArmBasisChanged) this.followArmSolver.reset();
+    if (selectionChanged) {
       this.transitionElapsedSeconds = 0;
       this.transitionStartPosition.copyFrom(this.camera.position);
       this.transitionStartTarget.copyFrom(this.smoothedTarget);
       this.transitionStartFovRadians = this.camera.fov;
+    }
+    if (headingBasisChanged) {
       this.baseHeadingIdentity = undefined;
       this.controlBaseHeadingIdentity = undefined;
     }
     this.activeProfileRef = profile.resourceRef;
+    this.activeHeadingSource = profile.headingSource;
+    this.activeReverseHeadingPolicy = profile.reverseHeadingPolicy;
     this.activeRigRef = profile.algorithmRef;
     this.activeModifierRefs = nextModifierRefs;
     const tuning = this.tuningByProfileRef.get(profile.resourceRef) ?? {};
@@ -354,12 +531,15 @@ export class CameraDirectorV1 {
     this.activeParameters = parameters;
     const lockedParameters = profile.parameters;
     this.activeLockedParameters = lockedParameters;
-    if (profileChanged) this.transitionDurationSeconds = parameters.transitionSeconds;
+    if (selectionChanged) this.transitionDurationSeconds = parameters.transitionSeconds;
 
     const targetPosition = new Vector3(...sample.targetPositionMetersXYZ);
-    const socketPosition = profile.preferredSocketIds
-      .map((id) => sample.socketPositionsMetersXYZById[id])
-      .find((position) => position !== undefined);
+    const selectedTargetSocketId = profile.preferredSocketIds.find(
+      (id) => sample.socketPositionsMetersXYZById[id] !== undefined,
+    );
+    const socketPosition = selectedTargetSocketId === undefined
+      ? undefined
+      : sample.socketPositionsMetersXYZById[selectedTargetSocketId];
     const baseTarget = socketPosition === undefined
       ? targetPosition.add(new Vector3(0, parameters.targetHeightMeters, 0))
       : new Vector3(...socketPosition);
@@ -372,7 +552,7 @@ export class CameraDirectorV1 {
         parameters.teleportSnapDistanceMeters * parameters.teleportSnapDistanceMeters
     ) {
       this.initialized = false;
-      this.collisionDistanceMeters = undefined;
+      this.followArmSolver.reset();
       this.transitionDurationSeconds = 0;
     }
     this.lastBaseTarget = baseTarget.clone();
@@ -473,69 +653,66 @@ export class CameraDirectorV1 {
       .add(
         acceleration.scale(parameters.accelerationLookAheadSecondsSquared),
       );
-    const target = this.targetWithDeadZone(rawTarget, parameters);
+    let target = this.targetWithDeadZone(rawTarget, parameters);
     const firstPerson = profile.algorithmRef.endsWith("/socket-first-person@1");
-    let desiredPosition: Vector3;
-    if (firstPerson) {
-      desiredPosition = baseTarget.clone();
-      const pitch = clamp(
-        parameters.pitchRadians + this.viewPitchOffsetRadians,
-        parameters.minimumPitchRadians,
-        parameters.maximumPitchRadians,
-      );
-      const lookDirection = new Vector3(
-        forward.x * Math.cos(pitch),
-        Math.sin(pitch),
-        forward.z * Math.cos(pitch),
-      );
-      target.copyFrom(desiredPosition.add(lookDirection));
-    } else {
-      const pitch = clamp(
-        parameters.pitchRadians + this.viewPitchOffsetRadians,
-        parameters.minimumPitchRadians,
-        parameters.maximumPitchRadians,
-      );
-      const distance = clamp(
-        parameters.distanceMeters + this.viewDistanceOffsetMeters,
-        parameters.minimumDistanceMeters,
-        parameters.maximumDistanceMeters,
-      );
-      const horizontalDistance = Math.cos(pitch) * distance;
-      const right = Vector3.Cross(Vector3.Up(), forward).normalize();
-      desiredPosition = target
-        .subtract(forward.scale(horizontalDistance))
-        .add(right.scale(parameters.shoulderOffsetMeters * this.shoulderSide));
-      desiredPosition.y += Math.sin(pitch) * distance;
-      if (profile.algorithmRef.endsWith("/flight-horizon@1")) {
-        target.y = baseTarget.y + velocity.y * Math.min(0.5, parameters.lookAheadSeconds);
-      }
-      desiredPosition = this.collisionShortenedPosition(
-        sample.entityId,
-        target,
+    const view = this.cameraViewSolver.solve({
+      algorithmRef: profile.algorithmRef,
+      baseTarget,
+      desiredTarget: target,
+      forward,
+      velocity,
+      parameters,
+      viewPitchOffsetRadians: this.viewPitchOffsetRadians,
+      viewDistanceOffsetMeters: this.viewDistanceOffsetMeters,
+      shoulderSide: this.shoulderSide,
+    });
+    target = view.desiredTarget;
+    let desiredPosition = view.desiredPosition;
+    let requestedArmLengthMeters = view.requestedArmLengthMeters;
+    let safeArmLengthMeters: number | undefined;
+    let effectiveArmLengthMeters: number | undefined;
+    let isCollisionRetracted: boolean | undefined;
+    let collisionHitEntityId: string | undefined;
+    let collisionHitPositionXYZ: Vec3 | undefined;
+    if (!firstPerson) {
+      const collision = this.followArmSolver.solve({
+        subjectEntityId: sample.entityId,
+        desiredTarget: target,
         desiredPosition,
         parameters,
         deltaSeconds,
-      );
+        sceneQuery: this.scene,
+      });
+      desiredPosition = collision.position;
+      safeArmLengthMeters = collision.safeArmLengthMeters;
+      effectiveArmLengthMeters = collision.effectiveArmLengthMeters;
+      isCollisionRetracted = collision.isCollisionRetracted;
+      collisionHitEntityId = collision.collisionHitEntityId;
+      collisionHitPositionXYZ = collision.collisionHitPositionXYZ;
     }
 
-    let nextPosition = new Vector3(
-      this.camera.position.x +
-        (desiredPosition.x - this.camera.position.x) * horizontalPositionAlpha,
-      this.camera.position.y +
-        (desiredPosition.y - this.camera.position.y) * verticalPositionAlpha,
-      this.camera.position.z +
-        (desiredPosition.z - this.camera.position.z) * horizontalPositionAlpha,
-    );
-    const positionLag = nextPosition.subtract(desiredPosition);
-    if (
-      positionLag.lengthSquared() >
-        parameters.maximumPositionLagMeters * parameters.maximumPositionLagMeters
-    ) {
-      nextPosition = parameters.maximumPositionLagMeters <= 0
-        ? desiredPosition.clone()
-        : desiredPosition.add(
-            positionLag.normalize().scale(parameters.maximumPositionLagMeters),
-          );
+    let nextPosition = isCollisionRetracted === true
+      ? desiredPosition.clone()
+      : new Vector3(
+          this.camera.position.x +
+            (desiredPosition.x - this.camera.position.x) * horizontalPositionAlpha,
+          this.camera.position.y +
+            (desiredPosition.y - this.camera.position.y) * verticalPositionAlpha,
+          this.camera.position.z +
+            (desiredPosition.z - this.camera.position.z) * horizontalPositionAlpha,
+        );
+    if (isCollisionRetracted !== true) {
+      const positionLag = nextPosition.subtract(desiredPosition);
+      if (
+        positionLag.lengthSquared() >
+          parameters.maximumPositionLagMeters * parameters.maximumPositionLagMeters
+      ) {
+        nextPosition = parameters.maximumPositionLagMeters <= 0
+          ? desiredPosition.clone()
+          : desiredPosition.add(
+              positionLag.normalize().scale(parameters.maximumPositionLagMeters),
+            );
+      }
     }
     const nextTarget = new Vector3(
       this.smoothedTarget.x + (target.x - this.smoothedTarget.x) * yawAlpha,
@@ -552,6 +729,7 @@ export class CameraDirectorV1 {
       : 1;
     this.smoothedFovRadians += (targetFov - this.smoothedFovRadians) * fovAlpha;
     const nextFov = this.smoothedFovRadians;
+    let profileTransitionProgressRatio = 1;
     if (
       this.transitionDurationSeconds > 0 &&
       this.transitionElapsedSeconds < this.transitionDurationSeconds
@@ -559,11 +737,16 @@ export class CameraDirectorV1 {
       const transitionAlpha = smoothstep01(
         this.transitionElapsedSeconds / this.transitionDurationSeconds,
       );
-      this.camera.position.copyFrom(Vector3.Lerp(
-        this.transitionStartPosition,
-        nextPosition,
-        transitionAlpha,
-      ));
+      profileTransitionProgressRatio = transitionAlpha;
+      this.camera.position.copyFrom(
+        isCollisionRetracted === true
+          ? desiredPosition
+          : Vector3.Lerp(
+              this.transitionStartPosition,
+              nextPosition,
+              transitionAlpha,
+            ),
+      );
       this.smoothedTarget.copyFrom(Vector3.Lerp(
         this.transitionStartTarget,
         nextTarget,
@@ -580,11 +763,67 @@ export class CameraDirectorV1 {
     this.camera.setTarget(this.smoothedTarget);
     this.initialized = true;
     this.controlInitialized = true;
+    const isTargetSocketFallback =
+      profile.preferredSocketIds.length > 0 && selectedTargetSocketId === undefined;
+    this.latestTelemetry = {
+      selectionDecision: copySelectionDecision(selectionDecisionWithSocketDiagnostic(
+        selected.decision,
+        cameraContext.resourceRef,
+        profile.resourceRef,
+        firstPerson && isTargetSocketFallback,
+      )),
+      ...(selectedTargetSocketId === undefined
+        ? {}
+        : { selectedTargetSocketId }),
+      ...(socketPosition === undefined
+        ? {}
+        : { targetSocketPositionMetersXYZ: freezeVec3(socketPosition) }),
+      isTargetSocketFallback,
+      desiredTargetPositionMetersXYZ: freezeVec3(target),
+      desiredPositionMetersXYZ: freezeVec3(desiredPosition),
+      actualPositionMetersXYZ: freezeVec3(this.camera.position),
+      finalFovDegrees: (this.camera.fov * 180) / Math.PI,
+      ...(requestedArmLengthMeters === undefined
+        ? {}
+        : { requestedArmLengthMeters }),
+      ...(safeArmLengthMeters === undefined ? {} : { safeArmLengthMeters }),
+      ...(effectiveArmLengthMeters === undefined
+        ? {}
+        : { effectiveArmLengthMeters }),
+      ...(isCollisionRetracted === undefined ? {} : { isCollisionRetracted }),
+      ...(collisionHitEntityId === undefined ? {} : { collisionHitEntityId }),
+      ...(collisionHitPositionXYZ === undefined ? {} : { collisionHitPositionXYZ }),
+      positionLagXYZ: freezeVec3(this.camera.position.subtract(desiredPosition)),
+      rotationLagRadiansXYZ: freezeVec3([
+        this.targetPitchOffsetRadians - this.viewPitchOffsetRadians,
+        wrapRadians(this.targetYawOffsetRadians - this.viewYawOffsetRadians),
+        0,
+      ]),
+      ...(profile.recenterMode === "off"
+        ? {}
+        : {
+            recenterRemainingSeconds: Math.max(
+              0,
+              parameters.recenterDelaySeconds - this.secondsSinceManualViewInput,
+            ),
+          }),
+      fixedStepDeltaSeconds: deltaSeconds,
+      resolvedParameters: Object.freeze({ ...parameters }),
+      previewParameterOverrides: Object.freeze({ ...tuning }),
+      profileTransitionProgressRatio,
+      controlForwardXYZ: freezeVec3(this.controlForward),
+      subjectForwardXYZ: freezeVec3(sample.forwardXYZ),
+      subjectVelocityMetersPerSecondXYZ: freezeVec3(
+        sample.velocityMetersPerSecondXYZ,
+      ),
+    };
   }
 
   reset(): void {
     this.initialized = false;
     this.explicitProfileRef = undefined;
+    this.activeHeadingSource = undefined;
+    this.activeReverseHeadingPolicy = undefined;
     this.tuningByProfileRef.clear();
     this.fallbackActive = false;
     this.smoothedTarget.setAll(0);
@@ -615,11 +854,12 @@ export class CameraDirectorV1 {
     this.lookBackBlendRatio = 0;
     this.previousVelocity.setAll(0);
     this.lastBaseTarget = undefined;
-    this.collisionDistanceMeters = undefined;
+    this.followArmSolver.reset();
     this.smoothedFovRadians = Math.PI / 3;
     this.activeParameters = undefined;
     this.activeLockedParameters = undefined;
     this.controlForward.set(0, 0, -1);
+    this.latestTelemetry = {};
   }
 
   snapshot(): CameraDirectorSnapshotV1 {
@@ -631,6 +871,7 @@ export class CameraDirectorV1 {
       viewYawOffsetRadians: this.viewYawOffsetRadians,
       viewPitchOffsetRadians: this.viewPitchOffsetRadians,
       viewDistanceOffsetMeters: this.viewDistanceOffsetMeters,
+      ...this.latestTelemetry,
     };
   }
 
@@ -855,83 +1096,43 @@ export class CameraDirectorV1 {
   private selectProfile(
     context: CameraContextV1,
     sample: ViewTargetSampleV1,
+    simulationTick: number,
   ): SelectedCameraStateV1 | undefined {
+    const selection = selectCameraViewV1({
+      cameraContextProfile: cameraContextProfileFromExecution(context),
+      cameraContextSample: cameraContextSampleFromViewTarget(
+        sample,
+        simulationTick,
+      ),
+      cameraViewPreference: this.explicitProfileRef === undefined
+        ? { mode: "auto" }
+        : {
+            mode: "camera-rig-profile",
+            cameraRigProfileRef: this.explicitProfileRef,
+          } satisfies CameraViewPreferenceV1,
+    });
+    if (!selection.ok) {
+      throw new Error(
+        `WORLDKIT_RUNTIME_CAMERA_SELECTION_FAILED: ${selection.diagnostics
+          .map((diagnostic) => diagnostic.code)
+          .join(",")}`,
+      );
+    }
     const byRef = new Map(
       context.cameraRigProfiles.map((profile) => [profile.resourceRef, profile]),
     );
     const modifiersByRef = new Map(
       context.cameraModifierProfiles.map((modifier) => [modifier.resourceRef, modifier]),
     );
-    const matchingRules = [...context.rules]
-      .sort((left, right) => right.priority - left.priority || left.id.localeCompare(right.id))
-      .filter((rule) => ruleMatches(rule, sample));
-    let selectedRef: string;
-    if (this.explicitProfileRef !== undefined && byRef.has(this.explicitProfileRef)) {
-      selectedRef = this.explicitProfileRef;
-    } else {
-      selectedRef = matchingRules.find(
-        (rule) => rule.cameraRigProfileRef !== undefined,
-      )?.cameraRigProfileRef ??
-        context.defaultCameraRigProfileRef;
-    }
-    const profile = byRef.get(selectedRef) ?? byRef.get(context.defaultCameraRigProfileRef);
-    this.fallbackActive = profile === undefined || profile.resourceRef !== selectedRef;
+    const profile = byRef.get(selection.decision.activeCameraRigProfileRef);
+    this.fallbackActive = selection.decision.fallbackActive;
     if (profile === undefined) return undefined;
-    const modifierRefs = matchingRules.flatMap((rule) => rule.cameraModifierRefs ?? []);
-    const modifiers = [...new Set(modifierRefs)]
-      .reverse()
+    const modifiers = selection.decision.activeCameraModifierRefs
       .flatMap((resourceRef) => {
         const modifier = modifiersByRef.get(resourceRef);
         return modifier === undefined ? [] : [modifier];
       });
-    return { profile, modifiers };
-  }
-
-  private collisionShortenedPosition(
-    subjectEntityId: string,
-    target: Vector3,
-    desiredPosition: Vector3,
-    parameters: CameraParametersV1,
-    deltaSeconds: number,
-  ): Vector3 {
-    const displacement = desiredPosition.subtract(target);
-    const distance = displacement.length();
-    if (distance <= 0.000001) return desiredPosition;
-    const direction = displacement.scale(1 / distance);
-    const right = Vector3.Cross(Vector3.Up(), direction).normalize();
-    const probeUp = Vector3.Cross(direction, right).normalize();
-    const radius = parameters.collisionRadiusMeters;
-    const offsets = [
-      Vector3.Zero(),
-      right.scale(radius),
-      right.scale(-radius),
-      probeUp.scale(radius),
-      probeUp.scale(-radius),
-    ];
-    let safeDistance = distance;
-    for (const offset of offsets) {
-      const ray = new Ray(target.add(offset), direction, distance);
-      const hit = this.scene.pickWithRay(ray, (mesh) =>
-        mesh.isPickable && mesh.metadata?.worldkitEntityId !== subjectEntityId
-      );
-      if (hit?.hit !== true || hit.distance <= 0) continue;
-      safeDistance = Math.min(
-        safeDistance,
-        Math.max(parameters.minimumDistanceMeters, hit.distance - radius),
-      );
-    }
-    this.collisionDistanceMeters ??= distance;
-    const rate = safeDistance < this.collisionDistanceMeters
-      ? parameters.collisionRetractionMetersPerSecond
-      : parameters.collisionRecoveryMetersPerSecond;
-    this.collisionDistanceMeters = moveTowards(
-      this.collisionDistanceMeters,
-      safeDistance,
-      rate * Math.max(0, deltaSeconds),
-    );
-    return target.add(
-      direction.scale(Math.min(distance, this.collisionDistanceMeters)),
-    );
+    return { profile, modifiers, decision: selection.decision };
   }
 
 }

@@ -97,10 +97,60 @@ const CAMERA_KEY_ACTION_MAP: Readonly<Partial<Record<string, CameraInputAction>>
   ArrowDown: "cameraDown",
 };
 
+function isCameraInputAction(action: InputAction): action is CameraInputAction {
+  return action === "cameraLeft" ||
+    action === "cameraRight" ||
+    action === "cameraUp" ||
+    action === "cameraDown";
+}
+
 const CAMERA_YAW_RADIANS_PER_TICK = 0.025;
 const CAMERA_PITCH_RADIANS_PER_TICK = 0.015;
+const CAMERA_KEYBOARD_ACCELERATION_SECONDS = 0.20;
+const CAMERA_KEYBOARD_RELEASE_DECELERATION_SECONDS = 0.15;
 const MAXIMUM_FIXED_TICKS_PER_DISPLAY_FRAME = 5;
 const CONTEXTUAL_KEY_CODES = new Set(["ShiftLeft", "ShiftRight", "Space"]);
+
+export type ArrowInputClearReasonV1 =
+  | "startup"
+  | "blur"
+  | "simulation-reset"
+  | "possession-unbound"
+  | "possession-rebind";
+
+export interface ArrowInputDiagnosticSnapshotV1 {
+  readonly maximumYawRadiansPerFixedTick: number;
+  readonly maximumPitchRadiansPerFixedTick: number;
+  readonly keyboardAccelerationSeconds: number;
+  readonly keyboardDecelerationSeconds: number;
+  readonly yawRadiansPerFixedTick: number;
+  readonly pitchRadiansPerFixedTick: number;
+  readonly lastClearReason: ArrowInputClearReasonV1;
+}
+
+function moveTowards(
+  current: number,
+  target: number,
+  maximumDelta: number,
+): number {
+  if (Math.abs(target - current) <= maximumDelta) return target;
+  return current + Math.sign(target - current) * maximumDelta;
+}
+
+function advanceKeyboardCameraRadiansPerTick(
+  currentRadiansPerTick: number,
+  inputDirection: number,
+  maximumRadiansPerTick: number,
+): number {
+  const transitionSeconds = inputDirection === 0
+    ? CAMERA_KEYBOARD_RELEASE_DECELERATION_SECONDS
+    : CAMERA_KEYBOARD_ACCELERATION_SECONDS;
+  return moveTowards(
+    currentRadiansPerTick,
+    inputDirection * maximumRadiansPerTick,
+    maximumRadiansPerTick * FIXED_TIME_STEP_SECONDS / transitionSeconds,
+  );
+}
 
 const SEMANTIC_INPUT_ACTION_ORDER: readonly SemanticInputActionV1[] = [
   "move-forward",
@@ -282,6 +332,10 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   private readonly listeners = new Set<(snapshot: WorldSnapshot) => void>();
   private readonly keyboardInput = new PhysicalKeyboardActionTracker();
   private readonly cameraInput = new Set<CameraInputAction>();
+  private keyboardCameraYawRadiansPerTick = 0;
+  private keyboardCameraPitchRadiansPerTick = 0;
+  private lastArrowInputClearReason: ArrowInputClearReasonV1 = "startup";
+  private lastPossessedControlledEntityId: string | undefined;
   private readonly inspections: readonly FeatureInspection[];
   private readonly resizeObserver: ResizeObserver;
   private animationFrameId: number | null = null;
@@ -317,6 +371,10 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     window.addEventListener("keydown", this.handleKeyDown);
     window.addEventListener("keyup", this.handleKeyUp);
     window.addEventListener("blur", this.handleBlur);
+    const initialPossession = this.activeRuntime().snapshot().possessionTarget;
+    this.lastPossessedControlledEntityId = initialPossession.mode === "possessed"
+      ? initialPossession.controlledEntityId
+      : undefined;
     this.attachCanvas(this.canvas);
   }
 
@@ -380,6 +438,18 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     return this.paused;
   }
 
+  getArrowInputDiagnosticSnapshot(): ArrowInputDiagnosticSnapshotV1 {
+    return Object.freeze({
+      maximumYawRadiansPerFixedTick: CAMERA_YAW_RADIANS_PER_TICK,
+      maximumPitchRadiansPerFixedTick: CAMERA_PITCH_RADIANS_PER_TICK,
+      keyboardAccelerationSeconds: CAMERA_KEYBOARD_ACCELERATION_SECONDS,
+      keyboardDecelerationSeconds: CAMERA_KEYBOARD_RELEASE_DECELERATION_SECONDS,
+      yawRadiansPerFixedTick: this.keyboardCameraYawRadiansPerTick,
+      pitchRadiansPerFixedTick: this.keyboardCameraPitchRadiansPerTick,
+      lastClearReason: this.lastArrowInputClearReason,
+    });
+  }
+
   reset(): void {
     void this.resetRuntime().catch(() => {
       this.paused = true;
@@ -406,11 +476,11 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     this.paused = true;
     for (const step of steps) {
       const ticks = Math.max(0, Math.floor(step.ticks));
-      this.applyCameraActions(step.actions, ticks);
-      await this.coordinator.runFixedInput({
-        actions: mapPlaygroundInputActions(step.actions),
+      await this.runFixedInputWithCameraActions(
+        step.actions.filter(isCameraInputAction),
+        mapPlaygroundInputActions(step.actions),
         ticks,
-      });
+      );
     }
     this.paused = wasPaused;
     this.resetAnimationClock();
@@ -639,8 +709,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
 
   async resetRuntime(): Promise<WorldRuntimeSnapshotV4> {
     this.captureReservationReceiptId = undefined;
-    this.keyboardInput.clear();
-    this.cameraInput.clear();
+    this.clearPhysicalInputState("simulation-reset");
     this.activeCameraPointerId = null;
     this.frameLoopDiagnostic = undefined;
     this.resetAnimationClock();
@@ -1168,8 +1237,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   };
 
   private readonly handleBlur = (): void => {
-    this.keyboardInput.clear();
-    this.cameraInput.clear();
+    this.clearPhysicalInputState("blur");
     this.activeCameraPointerId = null;
   };
 
@@ -1226,18 +1294,32 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
         const controlledEntityId = runtimeProjection.possessionTarget.mode === "possessed"
           ? runtimeProjection.possessionTarget.controlledEntityId
           : undefined;
-        if (!isNil(controlledEntityId)) {
-          this.applyCameraActions([...this.cameraInput], ticks);
+        if (isNil(controlledEntityId)) {
+          this.clearPhysicalInputState("possession-unbound");
+          this.lastPossessedControlledEntityId = undefined;
+        } else {
+          if (
+            this.lastPossessedControlledEntityId !== undefined &&
+            this.lastPossessedControlledEntityId !== controlledEntityId
+          ) {
+            this.clearPhysicalInputState("possession-rebind");
+          }
+          this.lastPossessedControlledEntityId = controlledEntityId;
         }
-        await this.coordinator.runFixedInput({
-          actions: isNil(controlledEntityId)
-            ? []
-            : this.keyboardInput.actions(
-              runtimeProjection.subjectStatesByEntityId[controlledEntityId]
-                ?.activeMotionKernelRef,
-            ),
+        const cameraActions = isNil(controlledEntityId)
+          ? []
+          : [...this.cameraInput];
+        const gameplayActions = isNil(controlledEntityId)
+          ? []
+          : this.keyboardInput.actions(
+            runtimeProjection.subjectStatesByEntityId[controlledEntityId]
+              ?.activeMotionKernelRef,
+          );
+        await this.runFixedInputWithCameraActions(
+          cameraActions,
+          gameplayActions,
           ticks,
-        });
+        );
       } catch (error) {
         if (this.disposed) return;
         this.paused = true;
@@ -1300,22 +1382,67 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     this.displayFramesPerSecond = 0;
   }
 
+  private clearPhysicalInputState(
+    reason: Exclude<ArrowInputClearReasonV1, "startup">,
+  ): void {
+    this.keyboardInput.clear();
+    this.cameraInput.clear();
+    this.clearKeyboardCameraVelocity(reason);
+  }
+
+  private clearKeyboardCameraVelocity(
+    reason?: Exclude<ArrowInputClearReasonV1, "startup">,
+  ): void {
+    this.keyboardCameraYawRadiansPerTick = 0;
+    this.keyboardCameraPitchRadiansPerTick = 0;
+    if (reason !== undefined) this.lastArrowInputClearReason = reason;
+  }
+
   private applyCameraActions(
     actions: readonly InputAction[],
     ticks: number,
   ): void {
     if (ticks <= 0) return;
     const actionSet = new Set(actions);
-    const yawDeltaRadians =
-      (Number(actionSet.has("cameraLeft")) - Number(actionSet.has("cameraRight"))) *
-      CAMERA_YAW_RADIANS_PER_TICK *
-      ticks;
-    const pitchDeltaRadians =
-      (Number(actionSet.has("cameraDown")) - Number(actionSet.has("cameraUp"))) *
-      CAMERA_PITCH_RADIANS_PER_TICK *
-      ticks;
-    if (yawDeltaRadians === 0 && pitchDeltaRadians === 0) return;
-    this.activeRuntime().adjustCameraView({ yawDeltaRadians, pitchDeltaRadians });
+    const yawInput =
+      Number(actionSet.has("cameraLeft")) - Number(actionSet.has("cameraRight"));
+    const pitchInput =
+      Number(actionSet.has("cameraDown")) - Number(actionSet.has("cameraUp"));
+    for (let tick = 0; tick < ticks; tick += 1) {
+      this.keyboardCameraYawRadiansPerTick = advanceKeyboardCameraRadiansPerTick(
+        this.keyboardCameraYawRadiansPerTick,
+        yawInput,
+        CAMERA_YAW_RADIANS_PER_TICK,
+      );
+      this.keyboardCameraPitchRadiansPerTick = advanceKeyboardCameraRadiansPerTick(
+        this.keyboardCameraPitchRadiansPerTick,
+        pitchInput,
+        CAMERA_PITCH_RADIANS_PER_TICK,
+      );
+      if (
+        this.keyboardCameraYawRadiansPerTick === 0 &&
+        this.keyboardCameraPitchRadiansPerTick === 0
+      ) continue;
+      this.activeRuntime().adjustCameraView({
+        yawDeltaRadians: this.keyboardCameraYawRadiansPerTick,
+        pitchDeltaRadians: this.keyboardCameraPitchRadiansPerTick,
+      });
+    }
+  }
+
+  private async runFixedInputWithCameraActions(
+    cameraActions: readonly CameraInputAction[],
+    gameplayActions: readonly SemanticInputActionV1[],
+    ticks: number,
+  ): Promise<void> {
+    const hasCameraAction = cameraActions.length > 0;
+    const hasCameraVelocity =
+      this.keyboardCameraYawRadiansPerTick !== 0 ||
+      this.keyboardCameraPitchRadiansPerTick !== 0;
+    if (hasCameraAction || hasCameraVelocity) {
+      this.applyCameraActions(cameraActions, ticks);
+    }
+    await this.coordinator.runFixedInput({ actions: gameplayActions, ticks });
   }
 
   private emit(): void {

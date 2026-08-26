@@ -1,4 +1,5 @@
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -6,6 +7,26 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 function run(command: string, arguments_: readonly string[]) {
+  if (process.platform === "win32" && command === "pnpm") {
+    const commandPath = execFileSync("where", ["corepack"], { encoding: "utf8" })
+      .split(/\r?\n/)
+      .find((line) => line.endsWith(".cmd"));
+    if (commandPath === undefined) throw new Error("Corepack is unavailable.");
+    const launcher = readFileSync(commandPath, "utf8");
+    const relativeCliPath = launcher.match(/"%~dp0([^\"]*corepack\.js)"/i)?.[1];
+    if (relativeCliPath === undefined) throw new Error("Corepack launcher is invalid.");
+    return spawnSync(process.execPath, [
+      path.resolve(
+        path.dirname(commandPath),
+        relativeCliPath.replace(/^[\\/]+/, ""),
+      ),
+      "pnpm",
+      ...arguments_,
+    ], {
+      cwd: path.resolve("."),
+      encoding: "utf8",
+    });
+  }
   return spawnSync(command, arguments_, { cwd: path.resolve("."), encoding: "utf8" });
 }
 
@@ -56,7 +77,7 @@ describe("single-job Planner and Builder self-check bundles", () => {
         ".codex/skills/worldkit-spatial-planner/references/scene-brief-template.md",
         "utf8",
       );
-      const brief = template.match(/```md\n([\s\S]*?)\n```/)?.[1];
+      const brief = template.match(/```md\r?\n([\s\S]*?)\r?\n```/)?.[1];
       if (brief === undefined) throw new Error("Scene Brief fixture is missing.");
       const briefPath = path.join(root, "scene-brief.md");
       const worldPath = path.join(root, "authoring.json");
@@ -90,7 +111,7 @@ describe("single-job Planner and Builder self-check bundles", () => {
           ],
         })),
       ]);
-      const imageFixture = run("python3", ["-c", [
+      const imageFixture = run(process.platform === "win32" ? "python" : "python3", ["-c", [
         "from PIL import Image, ImageDraw",
         "import sys",
         "world=Image.new('RGB',(100,100),'white'); world.save(sys.argv[1])",

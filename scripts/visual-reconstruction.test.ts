@@ -8,8 +8,6 @@ import { afterEach, expect, it } from "vitest";
 import { finalizeStyledOpeningFrame } from "./finalize-styled-opening-frame";
 import { finalizeStyledTriviews } from "./finalize-styled-triviews";
 import { finalizeVideoGenerationPrompt } from "./finalize-video-generation-prompt";
-import { prepareVisualReconstruction } from "./prepare-visual-reconstruction.mjs";
-
 const roots: string[] = [];
 
 function ffmpeg(args: string[]): void {
@@ -85,16 +83,20 @@ it("binds a manual whitebox recording, reconstructs the styled frame, and render
       imageUri: "traveler/whitebox-triview.png",
     }],
   }));
-  const prepared = await prepareVisualReconstruction({
-    scene_id: "paper-moon-palace",
-    scene_root: sceneRoot,
-    video: videoPath,
-    user_frame: userFramePath,
-    opening_frame: openingFramePath,
-    triview_manifest: triviewManifestPath,
-  });
-  expect(prepared.draft.motionReference.token).toBe("@视频1");
-  expect(prepared.draft.supplementalTriviews[0]?.token).toBe("@图片3");
+  const preparation = spawnSync(process.execPath, [
+    "scripts/prepare-visual-reconstruction.mjs",
+    "--scene-id", "paper-moon-palace",
+    "--scene-root", sceneRoot,
+    "--video", videoPath,
+    "--user-frame", userFramePath,
+    "--opening-frame", openingFramePath,
+    "--triview-manifest", triviewManifestPath,
+  ], { encoding: "utf8" });
+  expect(preparation.status, preparation.stderr).toBe(0);
+  const draftPath = path.join(sceneRoot, "visual-reference-manifest.draft.json");
+  const draft = JSON.parse(await readFile(draftPath, "utf8"));
+  expect(draft.motionReference.token).toBe("@视频1");
+  expect(draft.supplementalTriviews[0]?.token).toBe("@图片3");
 
   await copyFile(userFramePath, path.join(sceneRoot, "styled-opening-frame.png"));
   await finalizeStyledOpeningFrame({
@@ -142,7 +144,7 @@ it("binds a manual whitebox recording, reconstructs the styled frame, and render
   }));
   const result = await finalizeVideoGenerationPrompt({
     sceneRoot,
-    draftPath: prepared.outputPath,
+    draftPath,
     fieldsPath,
   });
   expect(result.promptArtifact.prompt).toContain("@视频1是本视频唯一且严格的运动、镜头和空间调度参考");

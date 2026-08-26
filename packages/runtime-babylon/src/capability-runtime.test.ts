@@ -36,6 +36,14 @@ const cameraDirectorSource = await readFile(
   new URL("./camera-director.ts", import.meta.url),
   "utf8",
 );
+const cameraViewSolverSource = await readFile(
+  new URL("./camera-view-solver.ts", import.meta.url),
+  "utf8",
+).catch(() => "");
+const followArmSolverSource = await readFile(
+  new URL("./follow-arm-solver.ts", import.meta.url),
+  "utf8",
+).catch(() => "");
 
 
 const CAMERA_PROFILES = [
@@ -147,6 +155,63 @@ describe("capability package runtime smoke tests", () => {
     expect(cameraDirectorSource).not.toMatch(
       /controlProfile|SubjectController|ExecutionSubjectV3|humanoid|vehicle|category\s*===/,
     );
+  });
+
+  it("keeps view and Follow Arm solving outside the Camera Director", () => {
+    expect(cameraDirectorSource).not.toMatch(
+      /pickWithRay|collisionDistanceMeters|collisionShortenedPosition/,
+    );
+    expect(cameraViewSolverSource).toContain("export class CameraViewSolverV1");
+    expect(cameraViewSolverSource).not.toMatch(/FreeCamera|ViewControlFrame|Gameplay/);
+    expect(followArmSolverSource).toContain("export class FollowArmSolverV1");
+    expect(followArmSolverSource).toContain("pickWithRay");
+    expect(followArmSolverSource).not.toMatch(/FreeCamera|ViewControlFrame|Gameplay/);
+  });
+
+  it("keeps the manual orbit heading through sprint framing activation and release", async () => {
+    const runtime = await createBoundGbotRuntime(createGbotCapabilityExecutionPlan());
+    const horizontalCameraOffset = (snapshot: ReturnType<typeof runtime.snapshot>) => {
+      const subject = snapshot.subjectStatesByEntityId.player!;
+      const offsetX = snapshot.camera.positionMetersXYZ[0] - subject.positionMetersXYZ[0];
+      const offsetZ = snapshot.camera.positionMetersXYZ[2] - subject.positionMetersXYZ[2];
+      const length = Math.hypot(offsetX, offsetZ);
+      return [offsetX / length, offsetZ / length] as const;
+    };
+    try {
+      runtime.requestCameraProfile("worldkit://camera-profile/orbit.medium@1");
+      runtime.adjustCameraView({ yawDeltaRadians: 1.2 });
+      await runtime.runFixedInput({ actions: [], ticks: 120 });
+      await runtime.runFixedInput({ actions: ["move-forward"], ticks: 120 });
+      const beforeSprint = await runtime.runFixedInput({ actions: [], ticks: 120 });
+      const beforeOffset = horizontalCameraOffset(beforeSprint);
+
+      const sprinting = await runtime.runFixedInput({
+        actions: ["move-forward", "run"],
+        ticks: 120,
+      });
+      const sprintOffset = horizontalCameraOffset(sprinting);
+      const afterRelease = await runtime.runFixedInput({ actions: [], ticks: 120 });
+      const releasedOffset = horizontalCameraOffset(afterRelease);
+
+      expect(sprinting.camera.activeCameraModifierRefs).toContain(
+        "worldkit://camera-modifier/sprint-emphasis@1",
+      );
+      expect(sprinting.camera.activeCameraProfileRef).toBe(
+        "worldkit://camera-profile/orbit.medium@1",
+      );
+      expect(sprinting.camera.viewYawOffsetRadians).toBeCloseTo(1.2, 6);
+      expect(
+        beforeOffset[0] * sprintOffset[0] + beforeOffset[1] * sprintOffset[1],
+      ).toBeGreaterThan(0.999);
+      expect(afterRelease.camera.activeCameraModifierRefs).not.toContain(
+        "worldkit://camera-modifier/sprint-emphasis@1",
+      );
+      expect(
+        beforeOffset[0] * releasedOffset[0] + beforeOffset[1] * releasedOffset[1],
+      ).toBeGreaterThan(0.999);
+    } finally {
+      await runtime.dispose();
+    }
   });
 
   it("loads the locked 25-clip G Bot package into a live Runtime", async () => {

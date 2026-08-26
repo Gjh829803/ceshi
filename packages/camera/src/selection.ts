@@ -394,6 +394,10 @@ function ruleExplain(
     )
   ) unmatchedReasons.push("relationship-condition-not-met");
   if (
+    rule.when.relationshipRoles !== undefined &&
+    !rule.when.relationshipRoles.includes(sample.relationshipRole)
+  ) unmatchedReasons.push("relationship-role-not-matched");
+  if (
     rule.when.motionProfileRefs !== undefined &&
     !rule.when.motionProfileRefs.includes(sample.activeMotionProfileRef)
   ) unmatchedReasons.push("motion-profile-not-matched");

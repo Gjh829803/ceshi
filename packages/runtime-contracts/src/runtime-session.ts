@@ -14,6 +14,10 @@ import type {
 } from "@whitebox-world/gameplay-contracts";
 import type { SubjectPresetBaselineV1 } from "@whitebox-world/subject-contracts";
 import type {
+  CameraRigParametersV1,
+  CameraSelectionDecisionV1,
+} from "@whitebox-world/camera";
+import type {
   RouteEvidenceSelectorV1,
   RouteOverlayQueryResultV2,
   RoutePathReceiptQueryResultV2,
@@ -118,6 +122,30 @@ export type WorldRuntimeCameraStateV4 =
       viewYawOffsetRadians: number;
       viewPitchOffsetRadians: number;
       viewDistanceOffsetMeters: number;
+      selectionDecision?: CameraSelectionDecisionV1;
+      selectedTargetSocketId?: string;
+      targetSocketPositionMetersXYZ?: Vec3;
+      isTargetSocketFallback?: boolean;
+      desiredTargetPositionMetersXYZ?: Vec3;
+      desiredPositionMetersXYZ?: Vec3;
+      actualPositionMetersXYZ?: Vec3;
+      finalFovDegrees?: number;
+      requestedArmLengthMeters?: number;
+      safeArmLengthMeters?: number;
+      effectiveArmLengthMeters?: number;
+      isCollisionRetracted?: boolean;
+      collisionHitEntityId?: string;
+      collisionHitPositionXYZ?: Vec3;
+      positionLagXYZ?: Vec3;
+      rotationLagRadiansXYZ?: Vec3;
+      recenterRemainingSeconds?: number;
+      fixedStepDeltaSeconds: number;
+      resolvedParameters?: Readonly<CameraRigParametersV1>;
+      previewParameterOverrides?: Readonly<Partial<CameraRigParametersV1>>;
+      profileTransitionProgressRatio?: number;
+      controlForwardXYZ?: Vec3;
+      subjectForwardXYZ?: Vec3;
+      subjectVelocityMetersPerSecondXYZ?: Vec3;
     }>;
 
 export interface WorldRuntimeSubjectStateV4 {

@@ -2039,6 +2039,42 @@ describe("BabylonWorldRuntime", () => {
     const runtime = await createRuntime(executionPlan, {
       subjectAssetResolver: createMemoryResolver(gBotSubjectAssetBytes),
     });
+    await runtime.ready;
+    const adjustedCamera = runtime.adjustCameraView({ yawDeltaRadians: Math.PI / 2 });
+    const cameraForwardXYZ = adjustedCamera.camera.controlForwardXYZ!;
+    const cameraRelativeStep = await runtime.runFixedInput({
+      actions: ["move-forward", "run"],
+      ticks: 1,
+    });
+    const cameraRelativeVelocity = cameraRelativeStep
+      .subjectStatesByEntityId.player!.velocityMetersPerSecondXYZ;
+    const horizontalSpeed = Math.hypot(cameraRelativeVelocity[0], cameraRelativeVelocity[2]);
+    expect(horizontalSpeed).toBeGreaterThan(0.000001);
+    expect(
+      (cameraRelativeVelocity[0] / horizontalSpeed) * cameraForwardXYZ[0] +
+        (cameraRelativeVelocity[2] / horizontalSpeed) * cameraForwardXYZ[2],
+    ).toBeGreaterThan(0.999999);
+    runtime.reset();
+    await bindRuntimeTestPossession(runtime, "player");
+    const strafeCamera = runtime.adjustCameraView({ yawDeltaRadians: Math.PI / 2 });
+    const strafeCameraForwardXYZ = strafeCamera.camera.controlForwardXYZ!;
+    const strafeCameraRightXZ: readonly [number, number] = [
+      -strafeCameraForwardXYZ[2],
+      strafeCameraForwardXYZ[0],
+    ];
+    const strafeStep = await runtime.runFixedInput({
+      actions: ["move-right"],
+      ticks: 1,
+    });
+    const strafeVelocity = strafeStep.subjectStatesByEntityId.player!
+      .velocityMetersPerSecondXYZ;
+    const strafeSpeed = Math.hypot(strafeVelocity[0], strafeVelocity[2]);
+    expect(
+      (strafeVelocity[0] / strafeSpeed) * strafeCameraRightXZ[0] +
+        (strafeVelocity[2] / strafeSpeed) * strafeCameraRightXZ[1],
+    ).toBeGreaterThan(0.999999);
+    runtime.reset();
+    await bindRuntimeTestPossession(runtime, "player");
     const probe = createSubjectVisualProbe(runtime);
     const visual = probe.visual("player");
     const secondaryVisual = probe.visual("g-bot-secondary");
@@ -3425,6 +3461,36 @@ describe("BabylonWorldRuntime", () => {
     }
 
     await runtime.dispose();
+  });
+
+  it("moves along the yaw-only camera frame while Subject facing catches up", async () => {
+    const { runtime } = await createRuntimeWithPackageSubject();
+    try {
+      await bindRuntimeTestPossession(runtime, "player");
+      runtime.adjustCameraView({ yawDeltaRadians: 1.2 });
+      await runtime.runFixedInput({ actions: [], ticks: 120 });
+
+      for (let tick = 0; tick < 30; tick += 1) {
+        const cameraForwardXYZ = runtime.snapshot().camera.controlForwardXYZ!;
+        const snapshot = await runtime.runFixedInput({
+          actions: ["move-forward"],
+          ticks: 1,
+        });
+        const subject = snapshot.subjectStatesByEntityId.player!;
+        const [velocityX, , velocityZ] = subject.velocityMetersPerSecondXYZ;
+        const horizontalSpeed = Math.hypot(velocityX, velocityZ);
+        if (horizontalSpeed <= 0.000001) continue;
+        const velocityDirectionX = velocityX / horizontalSpeed;
+        const velocityDirectionZ = velocityZ / horizontalSpeed;
+
+        expect(
+          velocityDirectionX * cameraForwardXYZ[0] +
+            velocityDirectionZ * cameraForwardXYZ[2],
+        ).toBeGreaterThan(0.999999);
+      }
+    } finally {
+      await runtime.dispose();
+    }
   });
 
   it("keeps the locked capability motion active after reset", async () => {

@@ -6,6 +6,13 @@ export type CameraViewPreferenceV1 =
       readonly cameraRigProfileRef: string;
     };
 
+export type CameraRelationshipRoleV1 =
+  | "none"
+  | "rider"
+  | "driver"
+  | "passenger"
+  | "tethered";
+
 export type CameraRelationshipContextV1 =
   | {
       readonly id: string;
@@ -38,6 +45,7 @@ export interface CameraContextSampleV1 {
   readonly motionTags: readonly string[];
   readonly activeActionRefs: readonly string[];
   readonly relationshipContexts: readonly CameraRelationshipContextV1[];
+  readonly relationshipRole: CameraRelationshipRoleV1;
   readonly velocityMetersPerSecondXYZ: readonly [number, number, number];
   readonly socketPositionsMetersXYZById: Readonly<
     Record<string, readonly [number, number, number]>
@@ -141,6 +149,7 @@ export interface CameraContextRuleV2 {
   readonly id: string;
   readonly priority: number;
   readonly when: {
+    readonly relationshipRoles?: readonly CameraRelationshipRoleV1[];
     readonly allRelationshipConditions?: readonly CameraRelationshipConditionV1[];
     readonly motionProfileRefs?: readonly string[];
     readonly motionKernelRefs?: readonly string[];

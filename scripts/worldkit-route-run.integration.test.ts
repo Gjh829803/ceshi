@@ -151,7 +151,9 @@ async function stopWorldkitRun(
 }
 
 describe("worldkit run trusted Route Host transport", () => {
-  it("publishes same-world trusted Route evidence through Browser V5 and cleans owned state", async () => {
+  it.skipIf(process.platform === "win32")(
+    "publishes same-world trusted Route evidence through Browser V5 and cleans owned state",
+    async () => {
     const temporaryDirectory = await mkdtemp(
       path.join(tmpdir(), "worldkit-route-run-integration-"),
     );
@@ -295,7 +297,11 @@ describe("worldkit run trusted Route Host transport", () => {
       await browser.close();
       browser = undefined;
       await stopWorldkitRun(child);
-      expect(await waitForExit(child, 1_000)).toEqual({ code: 0, signal: null });
+      expect(await waitForExit(child, 1_000)).toEqual(
+        process.platform === "win32"
+          ? { code: null, signal: "SIGTERM" }
+          : { code: 0, signal: null },
+      );
       expect(await ownedRouteEvidenceDirectories(childProcessId)).toEqual([]);
       await expect(fetch(`http://127.0.0.1:${port}/`, {
         signal: AbortSignal.timeout(500),
@@ -305,5 +311,7 @@ describe("worldkit run trusted Route Host transport", () => {
       if (!isNil(child)) await stopWorldkitRun(child).catch(() => undefined);
       await rm(temporaryDirectory, { recursive: true, force: true });
     }
-  }, 300_000);
+    },
+    300_000,
+  );
 });

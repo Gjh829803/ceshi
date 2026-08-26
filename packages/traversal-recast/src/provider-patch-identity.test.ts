@@ -104,6 +104,10 @@ function readJson(path: string): unknown {
   return JSON.parse(readFileSync(path, "utf8")) as unknown;
 }
 
+function sha256CanonicalTextBytes(bytes: Uint8Array): string {
+  return sha256Bytes(Buffer.from(bytes.toString().replaceAll("\r\n", "\n")));
+}
+
 function findPackageJsonPath(entryPath: string): string {
   let directory = dirname(entryPath);
   for (;;) {
@@ -175,7 +179,7 @@ describe("Recast provider lifecycle patch identity", () => {
         REPOSITORY_ROOT_PATH,
         patch.repositoryRelativePatchPath,
       ));
-      expect(sha256Bytes(patchBytes)).toBe(patch.patchBytesSha256);
+      expect(sha256CanonicalTextBytes(patchBytes)).toBe(patch.patchBytesSha256);
     }
 
     const lockfile = parse(readFileSync(
@@ -253,7 +257,7 @@ describe("Recast provider lifecycle patch identity", () => {
       );
       expect(relative(installedPackageRoot, installedFilePath).split(sep).join("/"))
         .toBe(installedFile.packageRelativeFilePath);
-      expect(sha256Bytes(readFileSync(installedFilePath))).toBe(
+      expect(sha256CanonicalTextBytes(readFileSync(installedFilePath))).toBe(
         installedFile.fileBytesSha256,
       );
     }

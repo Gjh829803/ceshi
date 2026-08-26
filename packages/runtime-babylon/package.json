@@ -10,6 +10,7 @@
     "@babylonjs/core": "9.21.2",
     "@babylonjs/havok": "1.3.14",
     "@babylonjs/loaders": "9.21.2",
+    "@whitebox-world/camera": "workspace:*",
     "@whitebox-world/control-capture": "workspace:*",
     "@whitebox-world/gameplay-contracts": "workspace:*",
     "@whitebox-world/protocol": "workspace:*",

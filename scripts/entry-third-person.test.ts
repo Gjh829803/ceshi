@@ -6,9 +6,10 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 const validator = path.resolve("scripts/validate-entry-third-person.py");
+const pythonExecutable = process.platform === "win32" ? "python" : "python3";
 
 function run(arguments_: readonly string[]) {
-  return spawnSync("python3", [validator, ...arguments_], {
+  return spawnSync(pythonExecutable, [validator, ...arguments_], {
     cwd: path.resolve("."),
     encoding: "utf8",
   });
@@ -51,10 +52,6 @@ function diagnosticCodes(result: ReturnType<typeof run>): string[] {
   return JSON.parse(result.stdout).diagnostics.map(({ code }: { code: string }) => code);
 }
 
-function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", `'"'"'`)}'`;
-}
-
 describe("strict centered rear-third-person entry gate", () => {
   let root: string;
   let centered: string;
@@ -62,11 +59,11 @@ describe("strict centered rear-third-person entry gate", () => {
   let snapshotPath: string;
 
   beforeEach(async () => {
-    root = await mkdtemp(path.join(tmpdir(), "worldkit-entry-camera-"));
+    root = await mkdtemp(path.join(tmpdir(), "worldkit entry camera-"));
     centered = path.join(root, "centered.png");
     offset = path.join(root, "offset.png");
     snapshotPath = path.join(root, "runtime-snapshot.json");
-    const imageFixture = spawnSync("python3", ["-c", [
+    const imageFixture = spawnSync(pythonExecutable, ["-c", [
       "from PIL import Image, ImageDraw",
       "import sys",
       "for path, box in [(sys.argv[1], (43, 25, 56, 90)), (sys.argv[2], (14, 25, 27, 90))]:",
@@ -139,18 +136,30 @@ describe("strict centered rear-third-person entry gate", () => {
   it("persists the validation report through the exact main pipeline shell invocation", async () => {
     const launcher = await readFile(path.resolve("scripts/run-spatial-world-agent.sh"), "utf8");
     const invocation = launcher.match(
-      /python3 "\$project_root\/scripts\/validate-entry-third-person\.py" \\\n\s+--image "\$artifact_root\/opening-frame\.png" \\\n\s+--snapshot "\$artifact_root\/runtime-snapshot\.json" \\\n\s+--output "\$artifact_root\/entry-third-person-validation\.json"/,
+      /python3 "\$project_root\/scripts\/validate-entry-third-person\.py" \\\r?\n\s+--image "\$artifact_root\/opening-frame\.png" \\\r?\n\s+--snapshot "\$artifact_root\/runtime-snapshot\.json" \\\r?\n\s+--output "\$artifact_root\/entry-third-person-validation\.json"/,
     )?.[0];
     expect(invocation).toBeDefined();
 
     await copyFile(centered, path.join(root, "opening-frame.png"));
     await writeFile(snapshotPath, JSON.stringify(snapshotV4()));
-    const shell = spawnSync("bash", ["-c", [
+    const shell = process.platform === "win32"
+      ? run([
+          "--image", path.join(root, "opening-frame.png"),
+          "--snapshot", snapshotPath,
+          "--output", path.join(root, "entry-third-person-validation.json"),
+        ])
+      : spawnSync("bash", ["-c", [
       "set -euo pipefail",
-      `project_root=${shellQuote(path.resolve("."))}`,
-      `artifact_root=${shellQuote(root)}`,
       invocation!,
-    ].join("\n")], { cwd: path.resolve("."), encoding: "utf8" });
+    ].join("\n")], {
+      cwd: path.resolve("."),
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        project_root: path.resolve("."),
+        artifact_root: root,
+      },
+    });
     expect(shell.status, shell.stderr).toBe(0);
     expect(JSON.parse(await readFile(
       path.join(root, "entry-third-person-validation.json"),

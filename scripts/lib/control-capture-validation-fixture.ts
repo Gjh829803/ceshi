@@ -83,6 +83,7 @@ function runtimeSnapshot(simulationTick: number): WorldRuntimeSnapshotV4 {
         viewYawOffsetRadians: 0,
         viewPitchOffsetRadians: 0,
         viewDistanceOffsetMeters: 0,
+        fixedStepDeltaSeconds: 1 / 60,
       },
     },
     runtime: {

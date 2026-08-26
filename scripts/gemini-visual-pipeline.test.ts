@@ -8,9 +8,13 @@ describe("Gemini prompt synthesis and direct parallel ImageGen", () => {
   it("ships a self-contained project-local visual pipeline", async () => {
     const scriptPath = path.resolve("scripts/run-gemini-visual-pipeline.py");
     const source = await readFile(scriptPath, "utf8");
-    const result = spawnSync("python3", [scriptPath, "--smoke"], {
+    const result = spawnSync(
+      process.platform === "win32" ? "python" : "python3",
+      [scriptPath, "--smoke"],
+      {
       encoding: "utf8",
-    });
+      },
+    );
 
     expect(result.status, result.stderr).toBe(0);
     expect(JSON.parse(result.stdout)).toMatchObject({

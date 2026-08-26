@@ -3,6 +3,10 @@ import type {
   PublishedMovementMediumV1,
   Vec3,
 } from "@whitebox-world/runtime-contracts";
+import type {
+  CameraRigParametersV1,
+  CameraSelectionDecisionV1,
+} from "@whitebox-world/camera";
 
 /**
  * Babylon-provider projection consumed by the host coordinator. It is not a
@@ -47,6 +51,30 @@ export interface BabylonRuntimeCameraProjectionV1 {
   readonly viewYawOffsetRadians: number;
   readonly viewPitchOffsetRadians: number;
   readonly viewDistanceOffsetMeters: number;
+  readonly selectionDecision?: CameraSelectionDecisionV1;
+  readonly selectedTargetSocketId?: string;
+  readonly targetSocketPositionMetersXYZ?: Vec3;
+  readonly isTargetSocketFallback?: boolean;
+  readonly desiredTargetPositionMetersXYZ?: Vec3;
+  readonly desiredPositionMetersXYZ?: Vec3;
+  readonly actualPositionMetersXYZ?: Vec3;
+  readonly finalFovDegrees?: number;
+  readonly requestedArmLengthMeters?: number;
+  readonly safeArmLengthMeters?: number;
+  readonly effectiveArmLengthMeters?: number;
+  readonly isCollisionRetracted?: boolean;
+  readonly collisionHitEntityId?: string;
+  readonly collisionHitPositionXYZ?: Vec3;
+  readonly positionLagXYZ?: Vec3;
+  readonly rotationLagRadiansXYZ?: Vec3;
+  readonly recenterRemainingSeconds?: number;
+  readonly fixedStepDeltaSeconds?: number;
+  readonly resolvedParameters?: Readonly<CameraRigParametersV1>;
+  readonly previewParameterOverrides?: Readonly<Partial<CameraRigParametersV1>>;
+  readonly profileTransitionProgressRatio?: number;
+  readonly controlForwardXYZ?: Vec3;
+  readonly subjectForwardXYZ?: Vec3;
+  readonly subjectVelocityMetersPerSecondXYZ?: Vec3;
 }
 
 export type BabylonRuntimePossessionProjectionV1 =

@@ -50,6 +50,10 @@ function publicationInput(directory: string) {
   } as const;
 }
 
+function canonicalDirectoryEntries(entries: readonly string[]): string[] {
+  return entries.map((entry) => entry.replaceAll(path.sep, "/")).sort();
+}
+
 describe("publishEvidenceAndReportNoReplaceV1", () => {
   it("publishes exact evidence bytes before the Report commit marker", async () => {
     const directory = await temporaryDirectory();
@@ -79,7 +83,9 @@ describe("publishEvidenceAndReportNoReplaceV1", () => {
       "rows/route-path-receipt.json",
     ))).toEqual(Buffer.from([1, 2, 3]));
     expect(observedPhases).toContain("before-report-publish");
-    expect((await readdir(`${input.reportPath}.evidence`, { recursive: true })).sort())
+    expect(canonicalDirectoryEntries(
+      await readdir(`${input.reportPath}.evidence`, { recursive: true }),
+    ))
       .toEqual([
         "route-validation-set-receipt.json",
         "rows",
@@ -111,7 +117,9 @@ describe("publishEvidenceAndReportNoReplaceV1", () => {
     await expect(lstat(input.reportPath)).rejects.toMatchObject({ code: "ENOENT" });
   });
 
-  it("refuses a pre-existing symlink without touching its target", async () => {
+  it.skipIf(process.platform === "win32")(
+    "refuses a pre-existing symlink without touching its target",
+    async () => {
     const directory = await temporaryDirectory();
     const outside = await temporaryDirectory();
     const input = publicationInput(directory);
@@ -122,7 +130,8 @@ describe("publishEvidenceAndReportNoReplaceV1", () => {
       "WORLDKIT_EVIDENCE_PUBLICATION_TARGET_EXISTS",
     );
     await expect(readFile(path.join(outside, "sentinel"), "utf8")).resolves.toBe("keep");
-  });
+    },
+  );
 
   it("allows exactly one concurrent publisher", async () => {
     const directory = await temporaryDirectory();
@@ -238,7 +247,9 @@ describe("publishEvidenceAndReportNoReplaceV1", () => {
       evidenceDirectory: path.resolve(`${input.reportPath}.evidence`),
     });
     expect(await readFile(input.reportPath)).toEqual(Buffer.from(input.reportBytes));
-    expect((await readdir(`${input.reportPath}.evidence`, { recursive: true })).sort())
+    expect(canonicalDirectoryEntries(
+      await readdir(`${input.reportPath}.evidence`, { recursive: true }),
+    ))
       .toEqual([
         "route-validation-set-receipt.json",
         "rows",

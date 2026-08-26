@@ -186,7 +186,7 @@ describe("modular Subject source package catalog", () => {
 });
 
 describe("writeModularSubjectSourcePackages", () => {
-  it.each(["creator", "package", "version"] as const)(
+  it.skipIf(process.platform === "win32").each(["creator", "package", "version"] as const)(
     "rejects a symlinked %s parent without changing the external directory",
     async (symlinkLevel) => {
       const { root, outputRoot } = await temporaryOutput();

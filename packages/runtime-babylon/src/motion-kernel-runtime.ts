@@ -874,12 +874,6 @@ export class MotionKernelRuntimeV1 {
         ? feel.accelerationMetersPerSecondSquared
         : feel.decelerationMetersPerSecondSquared;
       const airControl = movementMedium === "air" ? feel.airControlRatio : 1;
-      this.planarVelocity = moveVectorTowards(
-        currentPlanarVelocity,
-        targetPlanarVelocity,
-        response * airControl * FIXED_TIME_STEP_SECONDS,
-      );
-      desired.copyFrom(this.planarVelocity);
       if (targetPlanarVelocity.lengthSquared() > 0.000001 || planar?.aimRequested === true) {
         const facingDirection = planar?.aimRequested === true
           ? planar.facingDirectionMetersXZ
@@ -894,6 +888,12 @@ export class MotionKernelRuntimeV1 {
           feel.turnRateRadiansPerSecond * airControl * FIXED_TIME_STEP_SECONDS,
         );
       }
+      this.planarVelocity = moveVectorTowards(
+        currentPlanarVelocity,
+        targetPlanarVelocity,
+        response * airControl * FIXED_TIME_STEP_SECONDS,
+      );
+      desired.copyFrom(this.planarVelocity);
       if (planar?.jumpRequested === true && jumpPressedThisTick) {
         this.jumpBufferRemainingSeconds = feel.jumpBufferSeconds;
       } else {

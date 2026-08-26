@@ -1,4 +1,5 @@
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
@@ -85,7 +86,7 @@ describe("evaluateIndependentTestGateV1", () => {
 
 describe("independent test repository census", () => {
   it("discovers every current Node, Python, and Site suite in the manifest", async () => {
-    const repositoryRoot = path.resolve(new URL("../..", import.meta.url).pathname);
+    const repositoryRoot = fileURLToPath(new URL("../..", import.meta.url));
     const discoveredByLane = await discoverIndependentTestFilesV1(repositoryRoot);
 
     expect(
