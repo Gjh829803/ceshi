@@ -4,7 +4,7 @@
 
 **Goal:** Finish the remaining P1.4 Package CLI and persistent Runtime Session rows with one canonical CLI dialect, a provider-neutral request/receipt protocol, durable Request ID replay, fresh-process recovery, and exact Runtime ownership cleanup.
 
-**Architecture:** `worldkit build` becomes the canonical complete WorldPackage V2 directory publisher required by the overall design; the previous single `worldkit-build-artifact` writer remains only an internal trusted-host helper for workflows that still need that intermediate artifact. `worldkit inspect` independently verifies a Package without constructing Runtime state, `worldkit load` verifies and reaches a headless World Ready Gate before immediately disposing, and `worldkit run <package-directory> --interactive --protocol ndjson --headless` owns a long-lived `RuntimeHost`. A closed provider-neutral protocol lives in `@whitebox-world/runtime-host`; Node filesystem durability, Havok loading, process signals, and NDJSON framing stay under `scripts/lib`. Recovery replays the exact admitted Package and committed mutations into a fresh Runtime, verifies byte-identical receipts/publications, and never trusts a cloud/browser process handle as durable state.
+**Architecture:** `worldkit build` becomes the canonical complete WorldPackage V2 directory publisher required by the overall design; the previous single `worldkit-build-artifact` writer remains only an internal trusted-host helper for workflows that still need that intermediate artifact. `worldkit inspect` independently verifies a Package without constructing Runtime state, `worldkit load` verifies and reaches a headless World Ready Gate before immediately disposing, and `worldkit run <package-directory> --interactive --protocol ndjson --headless` owns a long-lived `RuntimeHost`. A closed provider-neutral protocol lives with the existing public Runtime/Browser DTOs in `@whitebox-world/runtime-contracts`; `@whitebox-world/runtime-host` implements execution without owning the transport schema. Node filesystem durability, Havok loading, process signals, and NDJSON framing stay under `scripts/lib`. Recovery replays the exact admitted Package and committed mutations into a fresh Runtime, verifies byte-identical receipts/snapshots, and never trusts a cloud/browser process handle as durable state.
 
 **Tech Stack:** TypeScript, Vitest, pnpm workspace, Canonical JSON JCS V1, SHA-256, hash-chained fsynced NDJSON WAL, Babylon.js `NullEngine`, Havok WASM, Node ESM filesystem/process adapters.
 
@@ -34,7 +34,7 @@
 
 | ID | Deliverable | `depends_on` | `blocks` | Exclusive ownership | Mode |
 | --- | --- | --- | --- | --- | --- |
-| P14-RS-01 | Closed Runtime Session V1 transport | P14-PKG-07 | P14-RS-04, P14-RS-05, P14-RS-06 | `packages/runtime-host/src/runtime-session-protocol*` | main-agent-only |
+| P14-RS-01 | Closed Runtime Session V1 transport | P14-PKG-07 | P14-RS-04, P14-RS-05, P14-RS-06 | `packages/runtime-contracts/src/runtime-session-protocol*` | main-agent-only |
 | P14-RS-02 | Durable Runtime Session WAL | P14-RS-01 | P14-RS-05, P14-RS-06 | `scripts/lib/runtime-session-wal*` | sequential |
 | P14-RS-03 | Canonical Package build/inspect/load core | P14-PKG-07 | P14-RS-04, P14-RS-06 | `scripts/lib/world-package-cli*` | sequential |
 | P14-RS-04 | Headless Babylon/Havok Runtime composition and ownership ledger | P14-RS-01, P14-RS-03 | P14-RS-05 | `scripts/lib/headless-runtime-session*` | main-agent-only |
@@ -44,27 +44,27 @@
 
 ## Task 1: Freeze Runtime Session V1 transport (`P14-RS-01`)
 
-**Deliverable:** Provider-neutral closed Request, Receipt, Event, parser, canonicalizer, and hash exports that reuse current Gameplay and WorldSession DTOs without exposing Babylon, filesystem, process, or Browser concepts.
+**Deliverable:** Provider-neutral closed Request, Receipt, Event, parser, canonicalizer, and hash exports that reuse current public Gameplay and Runtime DTOs without exposing `runtime-host` internals, Babylon, filesystem, process, or Browser concepts.
 
 **Files:**
 
-- Create: `packages/runtime-host/src/runtime-session-protocol.ts`
-- Create: `packages/runtime-host/src/runtime-session-protocol.test.ts`
-- Modify: `packages/runtime-host/src/index.ts`
+- Create: `packages/runtime-contracts/src/runtime-session-protocol.ts`
+- Create: `packages/runtime-contracts/src/runtime-session-protocol.test.ts`
+- Modify: `packages/runtime-contracts/src/index.ts`
 
 **Input/output contract:**
 
 - Request common fields: `kind: "worldkit-runtime-session-request"`, `schemaVersion: 1`, `id`, `runtimeSessionId`, and closed `type`.
 - V1 request types: `gameplay-command.execute`, `fixed-input.run`, `snapshot.get`, `events.get`, and `session.close`.
 - Mutation payloads are the existing exact `GameplayCommandV1` and singular `FixedInputV1`; no translated parameter bag.
-- Receipt common fields bind `id`, `requestId`, `requestHash`, `runtimeSessionId`, `worldSessionId`, `requestType`, and `status`; succeeded payloads reuse exact existing Gameplay receipt, WorldSession publication, event page, or close result. Rejections contain one stable diagnostic.
+- Receipt common fields bind `id`, `requestId`, `requestHash`, `runtimeSessionId`, `worldSessionId`, `requestType`, and `status`; succeeded payloads reuse exact existing Gameplay receipt, public `WorldRuntimeSnapshotV4`, event page, or close result. Rejections contain one stable diagnostic.
 - Event common fields: `kind: "worldkit-runtime-session-event"`, `schemaVersion: 1`, monotonic `sequence`, `runtimeSessionId`; types are `ready`, `completed`, and `failed`.
 - `ready` binds `protocolVersion`, logical `url`, `worldSessionId`, `worldPackageRef`, `worldPackageRootHash`, `fixedInputControllerEntityId`, and the exact supported request-type list.
 
 - [ ] Write RED happy-path/exact-key/adversarial tests, including aliases, accessor/symbol keys, negative zero, wrong nested Gameplay DTOs, unsorted event pages, and Request Hash domain separation.
-- [ ] Run `pnpm exec vitest run packages/runtime-host/src/runtime-session-protocol.test.ts` and capture the missing-export failure.
+- [ ] Run `pnpm exec vitest run packages/runtime-contracts/src/runtime-session-protocol.test.ts` and capture the missing-export failure.
 - [ ] Implement the closed unions plus `parseRuntimeSessionRequestV1`, `canonicalRuntimeSessionReceiptV1`, `canonicalRuntimeSessionEventV1`, and `hashRuntimeSessionRequestV1`.
-- [ ] Run `pnpm exec vitest run packages/runtime-host/src/runtime-session-protocol.test.ts packages/runtime-host/src/runtime-host.test.ts packages/runtime-host/src/world-session.test.ts`.
+- [ ] Run `pnpm exec vitest run packages/runtime-contracts/src/runtime-session-protocol.test.ts packages/runtime-contracts/src/runtime-contracts.test.ts packages/runtime-host/src/runtime-host.test.ts packages/runtime-host/src/world-session.test.ts`.
 - [ ] Run `pnpm typecheck`.
 - [ ] Commit: `feat(runtime-host): freeze runtime session protocol`.
 
