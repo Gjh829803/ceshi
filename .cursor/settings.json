@@ -1,7 +1,0 @@
-{
-  "plugins": {
-    "openai-codex/codex": {
-      "enabled": true
-    }
-  }
-}
