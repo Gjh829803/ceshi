@@ -531,13 +531,6 @@ export class GameplayBabylonRuntimeCoordinatorV1 {
         if (isNil(handle)) {
           throw new Error("WORLDKIT_RUNTIME_CANDIDATE_HANDLE_NOT_FOUND");
         }
-        if (
-          activePossessionEntityId(publication.gameplayInspection) !==
-            options.initialWorldConfiguration.executionPlan
-              .initialControlledEntityId
-        ) {
-          throw new Error("WORLDKIT_RUNTIME_CANDIDATE_CONTROL_NOT_BOUND");
-        }
         await handle.runtime.renderFrameWhenReady();
       },
     });
@@ -605,23 +598,7 @@ export class GameplayBabylonRuntimeCoordinatorV1 {
       handles,
     );
     try {
-      const receipt = await host.executeGameplayCommand({
-        schemaVersion: 1,
-        id: `command.playground.initial-bind.${host.currentWorldSessionId}`,
-        type: "control.bind",
-        runtimeSessionId: options.runtimeSessionId,
-        worldSessionId: host.currentWorldSessionId,
-        controllerEntityId: PLAYGROUND_CONTROLLER_ENTITY_ID_V1,
-        controlledEntityId:
-          options.initialWorldConfiguration.executionPlan
-            .initialControlledEntityId,
-        expectedPossession: { mode: "unbound" },
-      });
-      if (receipt.status !== "committed") {
-        throw new Error(
-          `${receipt.diagnostic.code}: Initial control binding was rejected.`,
-        );
-      }
+      await coordinator.bindInitialControl(host.currentWorldSessionId);
       await coordinator.activeRuntime().renderFrameWhenReady();
       return coordinator;
     } catch (error) {
@@ -705,10 +682,36 @@ export class GameplayBabylonRuntimeCoordinatorV1 {
     });
   }
 
-  publishWorldReplacementV1(
+  async publishWorldReplacementV1(
     input: unknown,
   ): Promise<PublishWorldReplacementResultV1> {
-    return this.host.publishWorldReplacementV1(input);
+    const result = await this.host.publishWorldReplacementV1(input);
+    if (result.status === "published") {
+      try {
+        await this.bindInitialControl(result.current.worldSessionId);
+      } catch {
+        // Publication already committed. Control bind must not unwind it.
+      }
+    }
+    return result;
+  }
+
+  private async bindInitialControl(worldSessionId: string): Promise<void> {
+    const receipt = await this.host.executeGameplayCommand({
+      schemaVersion: 1,
+      id: `command.playground.initial-bind.${worldSessionId}`,
+      type: "control.bind",
+      runtimeSessionId: this.host.runtimeSessionId,
+      worldSessionId,
+      controllerEntityId: PLAYGROUND_CONTROLLER_ENTITY_ID_V1,
+      controlledEntityId: this.initialControlledEntityId,
+      expectedPossession: { mode: "unbound" },
+    });
+    if (receipt.status !== "committed") {
+      throw new Error(
+        `${receipt.diagnostic.code}: Initial control binding was rejected.`,
+      );
+    }
   }
 
   async runFixedInput(input: FixedInputV1): Promise<WorldRuntimeSnapshotV4> {
