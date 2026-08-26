@@ -3350,6 +3350,7 @@ describe("BabylonWorldRuntime", () => {
 
       expect(() => parseGameplayWorldStateProjectionV1(moved, {
         controllerEntityIds: ["controller-primary"],
+        relationshipStatesById: {},
       })).not.toThrow();
 
       expect(moved.simulationTick).toBe(before.simulationTick + 1);

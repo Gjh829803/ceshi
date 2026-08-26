@@ -1,5 +1,6 @@
 import {
   deriveGameplaySemanticFactIdV1,
+  type GameplayRelationshipStateV1,
   type GameplaySemanticFactV1,
   type SpatialEntityStateV1,
 } from "@whitebox-world/gameplay-contracts";
@@ -70,11 +71,49 @@ function worldProjectionInput() {
   };
 }
 
-function projectionValidationOptions() {
-  return { controllerEntityIds: ["controller.primary"] } as const;
+function projectionValidationOptions(
+  relationshipStatesById: Readonly<
+    Record<string, GameplayRelationshipStateV1>
+  > = {},
+) {
+  return {
+    controllerEntityIds: ["controller.primary"],
+    relationshipStatesById,
+  } as const;
 }
 
 describe("GameplayWorldPortV1 projection boundary", () => {
+  it("validates a suspended Rider capability against the staged mountedOn Relationship", () => {
+    const relationship = {
+      id: "mounted-on:primary",
+      type: "mountedOn" as const,
+      schemaVersion: 1 as const,
+      riderEntityId: "entity.hero",
+      mountEntityId: "entity.wall",
+      mountSlotId: "stand",
+      establishedSimulationTick: 7,
+    };
+    const input = {
+      ...worldProjectionInput(),
+      capabilityStatesById: {
+        "capability-state:entity.hero:locomotion": {
+          id: "capability-state:entity.hero:locomotion",
+          kind: "locomotion-capability-state" as const,
+          ownerEntityId: "entity.hero",
+          locomotionCapabilityRef: "worldkit://locomotion-profile/humanoid@1",
+          locomotionCapabilityHash: HASH,
+          mode: "suspended" as const,
+          suspendedByRelationshipId: relationship.id,
+        },
+      },
+    };
+
+    expect(parseGameplayWorldStateProjectionV1(
+      input,
+      projectionValidationOptions({ [relationship.id]: relationship }),
+    ).capabilityStatesById).toEqual(input.capabilityStatesById);
+  });
+
   it("snapshots and deeply freezes an exact canonical world projection", () => {
     const input = worldProjectionInput();
 

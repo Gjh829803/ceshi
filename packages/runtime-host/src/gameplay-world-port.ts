@@ -1,6 +1,7 @@
 import {
   buildWorldStateSnapshotV1,
   type GameplayCapabilityStateV1,
+  type GameplayRelationshipStateV1,
   type GameplaySemanticFactV1,
   type SpatialEntityStateV1,
 } from "@whitebox-world/gameplay-contracts";
@@ -70,6 +71,9 @@ export interface GameplayWorldPortV1 {
 
 export interface GameplayWorldProjectionValidationOptionsV1 {
   readonly controllerEntityIds: readonly string[];
+  readonly relationshipStatesById: Readonly<
+    Record<string, GameplayRelationshipStateV1>
+  >;
 }
 
 function invalid(schemaName: string): never {
@@ -156,7 +160,10 @@ function parseControllerEntityIds(
   if (isNil(options)) {
     return invalid("GameplayWorldProjectionValidationOptionsV1");
   }
-  if (!hasExactKeys(options, ["controllerEntityIds"])) {
+  if (!hasExactKeys(options, [
+    "controllerEntityIds",
+    "relationshipStatesById",
+  ])) {
     return invalid("GameplayWorldProjectionValidationOptionsV1");
   }
   const values = snapshotDataArray(options.controllerEntityIds);
@@ -190,6 +197,7 @@ export function parseGameplayWorldStateProjectionV1(
       return invalid(schemaName);
     }
     const controllerEntityIds = parseControllerEntityIds(optionsInput);
+    const options = snapshotDataRecord(optionsInput) ?? invalid(schemaName);
     const canonical = buildWorldStateSnapshotV1({
       kind: "worldkit-world-state-snapshot",
       schemaVersion: 1,
@@ -201,7 +209,7 @@ export function parseGameplayWorldStateProjectionV1(
       executionPlanHash: VALIDATION_HASH,
       entityStatesById: record.spatialEntityStatesById,
       capabilityStatesById: record.capabilityStatesById,
-      relationshipStatesById: {},
+      relationshipStatesById: options.relationshipStatesById,
       semanticFactsById: record.semanticFactsById,
       activeActionStatesById: {},
       lastEventSequence: 0,

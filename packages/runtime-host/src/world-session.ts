@@ -8,6 +8,7 @@ import {
   parseGameplayCommandReceiptV1,
   parseGameplayCommandV1,
   parseGameplayEventV1,
+  parseGameplayRelationshipStateV1,
   type ControllerEntityStateV1,
   type GameplayBootstrapV1,
   type GameplayCapacityBudgetV1,
@@ -18,6 +19,7 @@ import {
   type GameplayEventV1,
   type GameplayInspectionSnapshotV1,
   type GameplayParticipantStateV1,
+  type GameplayRelationshipStateV1,
   type GameplaySemanticFactV1,
   type Sha256HashV1,
   type WorldStateSnapshotV1,
@@ -61,6 +63,7 @@ export interface WorldSessionCreateOptionsV1 {
   readonly worldPackageRootHash: Sha256HashV1;
   readonly executionPlanHash: Sha256HashV1;
   readonly gameplayBootstrap: GameplayBootstrapV1;
+  readonly initialRelationships: readonly GameplayRelationshipStateV1[];
   readonly participantStates: readonly GameplayParticipantStateV1[];
   readonly controllerStates: readonly ControllerEntityStateV1[];
   readonly fixedInputControllerEntityId: string;
@@ -332,6 +335,7 @@ function parseCreateOptions(input: unknown): ParsedWorldSessionCreateOptionsV1 {
     "worldPackageRootHash",
     "executionPlanHash",
     "gameplayBootstrap",
+    "initialRelationships",
     "participantStates",
     "controllerStates",
     "fixedInputControllerEntityId",
@@ -372,6 +376,16 @@ function parseCreateOptions(input: unknown): ParsedWorldSessionCreateOptionsV1 {
   const factoryInputs = snapshotDataArray(record.gameplayFeatureFactories);
   if (isNil(factoryInputs)) return invalid("WorldSessionCreateOptionsV1");
   const gameplayBootstrap = parseGameplayBootstrapV1(record.gameplayBootstrap);
+  const initialRelationshipInputs = snapshotDataArray(record.initialRelationships);
+  if (isNil(initialRelationshipInputs)) return invalid("WorldSessionCreateOptionsV1");
+  const initialRelationships = Object.freeze(initialRelationshipInputs.map(
+    (relationshipInput) => {
+      const relationship = parseGameplayRelationshipStateV1(relationshipInput);
+      return isNil(relationship)
+        ? invalid("WorldSessionCreateOptionsV1")
+        : relationship;
+    },
+  ));
   const gameplayCapacityBudget = parseGameplayCapacityBudgetV1(
     record.gameplayCapacityBudget,
   );
@@ -382,6 +396,7 @@ function parseCreateOptions(input: unknown): ParsedWorldSessionCreateOptionsV1 {
     worldPackageRootHash: record.worldPackageRootHash,
     executionPlanHash: record.executionPlanHash,
     gameplayBootstrap,
+    initialRelationships,
     participantStates,
     controllerStates,
     fixedInputControllerEntityId: record.fixedInputControllerEntityId,
@@ -523,7 +538,12 @@ function transitionEvents(
           ? transition.commandId
           : invalid("GameplayTransitionPlanV1"),
       }));
-    } else if (transition.type === "action.complete") {
+    } else if (
+      transition.type === "action.complete" ||
+      transition.actionChanges.some((candidate) =>
+        candidate.operation === "add" && candidate.after.state.id === action.id
+      )
+    ) {
       events.push(parseGameplayEventV1({
         ...base(),
         type: "action.completed",
@@ -543,6 +563,61 @@ function transitionEvents(
     }
   }
   return Object.freeze(events);
+}
+
+function changedProjectionIds(
+  before: Readonly<Record<string, unknown>>,
+  after: Readonly<Record<string, unknown>>,
+): readonly string[] {
+  return Object.freeze(
+    [...new Set([...Object.keys(before), ...Object.keys(after)])]
+      .filter((id) => !isEqual(before[id], after[id]))
+      .sort(compareCodeUnits),
+  );
+}
+
+function mountedRelationshipsById(
+  relationshipsById: Readonly<
+    Record<string, GameplayRelationshipStateV1>
+  >,
+): Readonly<Record<string, GameplayRelationshipStateV1>> {
+  return Object.fromEntries(Object.values(relationshipsById)
+    .filter((relationship) => relationship.type === "mountedOn")
+    .map((relationship) => [relationship.id, relationship]));
+}
+
+function validateGameplayProjectionWriteSet(
+  before: GameplayWorldStateProjectionV1,
+  after: GameplayWorldStateProjectionV1,
+  transition: GameplayTransitionPlanV1,
+): void {
+  const writeSet = "trustedActionEffectPlan" in transition &&
+      !isNil(transition.trustedActionEffectPlan)
+    ? transition.trustedActionEffectPlan.runtimeProjectionWriteSet
+    : {
+        spatialEntityIds: [],
+        capabilityStateIds: [],
+        semanticFactIds: [],
+      };
+  const changed = {
+    spatialEntityIds: changedProjectionIds(
+      before.spatialEntityStatesById,
+      after.spatialEntityStatesById,
+    ),
+    capabilityStateIds: changedProjectionIds(
+      before.capabilityStatesById,
+      after.capabilityStatesById,
+    ),
+    semanticFactIds: changedProjectionIds(
+      before.semanticFactsById,
+      after.semanticFactsById,
+    ),
+  };
+  if (!isEqual(changed, writeSet)) {
+    throw new Error(
+      "GAMEPLAY_WORLD_PROJECTION_WRITE_SET_MISMATCH: Adapter projection changes must exactly match the trusted effect write set.",
+    );
+  }
 }
 
 function compareCodeUnits(left: string, right: string): number {
@@ -700,6 +775,7 @@ export class WorldSession {
         participantStates: options.participantStates,
         controllerStates: options.controllerStates,
         entityDescriptors: options.gameplayBootstrap.entityDescriptors,
+        initialRelationshipStates: options.initialRelationships,
         actionCatalog,
         ...(isNil(options.gameplayActionRequestResolver)
           ? {}
@@ -718,7 +794,15 @@ export class WorldSession {
       });
       const initialProjection = parseGameplayWorldStateProjectionV1(
         await options.worldPort.initialize(),
-        { controllerEntityIds: options.controllerEntityIds },
+        {
+          controllerEntityIds: options.controllerEntityIds,
+          relationshipStatesById: mountedRelationshipsById(Object.fromEntries(
+            options.initialRelationships.map((relationship) => [
+              relationship.id,
+              relationship,
+            ]),
+          )),
+        },
       );
       const worldState = gameplayState.projectWorldState({
         simulationTick: initialProjection.simulationTick,
@@ -979,9 +1063,18 @@ export class WorldSession {
 
     let transaction;
     try {
+      const stagedRelationships = { ...this.currentPublication.gameplayInspection
+        .relationshipStatesById };
+      for (const change of planned.transitionPlan.relationshipChanges) {
+        if (change.operation === "remove") delete stagedRelationships[change.before.id];
+        else stagedRelationships[change.after.id] = change.after;
+      }
       transaction = parseGameplayWorldTransactionV1(
         rawTransaction,
-        { controllerEntityIds: this.options.controllerEntityIds },
+        {
+          controllerEntityIds: this.options.controllerEntityIds,
+          relationshipStatesById: mountedRelationshipsById(stagedRelationships),
+        },
       );
     } catch {
       artifactReservation.reservation.release();
@@ -1017,24 +1110,17 @@ export class WorldSession {
 
     try {
       if (
-        transaction.projectedWorldStateAfter.simulationTick !== simulationTick ||
-        !isEqual(
-          transaction.projectedWorldStateAfter.spatialEntityStatesById,
-          this.publishedWorldProjection.spatialEntityStatesById,
-        ) ||
-        !isEqual(
-          transaction.projectedWorldStateAfter.capabilityStatesById,
-          this.publishedWorldProjection.capabilityStatesById,
-        ) ||
-        !isEqual(
-          transaction.projectedWorldStateAfter.semanticFactsById,
-          this.publishedWorldProjection.semanticFactsById,
-        )
+        transaction.projectedWorldStateAfter.simulationTick !== simulationTick
       ) {
         throw new Error(
-          "GAMEPLAY_WORLD_PROJECTION_CHANGED: Command transactions cannot mutate Adapter-owned World projection.",
+          "GAMEPLAY_WORLD_PROJECTION_TICK_CHANGED: Command transactions cannot advance the fixed simulation Tick.",
         );
       }
+      validateGameplayProjectionWriteSet(
+        this.publishedWorldProjection,
+        transaction.projectedWorldStateAfter,
+        planned.transitionPlan,
+      );
       const events = transitionEvents(
         this.runtimeSessionId,
         this.worldSessionId,
@@ -1315,7 +1401,12 @@ export class WorldSession {
     try {
       projectionAfter = parseGameplayWorldStateProjectionV1(
         await this.options.worldPort.runFixedInputTick(input),
-        { controllerEntityIds: this.options.controllerEntityIds },
+        {
+          controllerEntityIds: this.options.controllerEntityIds,
+          relationshipStatesById: mountedRelationshipsById(
+            this.currentPublication.gameplayInspection.relationshipStatesById,
+          ),
+        },
       );
       if (projectionAfter.simulationTick !== nextTick) {
         throw new Error("FIXED_INPUT_TICK_MISMATCH");

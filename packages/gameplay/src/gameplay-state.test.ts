@@ -95,6 +95,7 @@ function options(
         capabilityRefs: ["worldkit://capability/arms@1"],
       },
     ],
+    initialRelationshipStates: [],
     actionCatalog: createGameplayActionCatalogV1([definition()], 8),
     capacityBudget: {
       ...DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
@@ -305,6 +306,57 @@ function stageAndCommit(
 }
 
 describe("GameplayState possession", () => {
+  it("publishes validated initial mountedOn Relationships without a synthetic command", () => {
+    const initialRelationship = {
+      id: "mounted-on:initial",
+      type: "mountedOn" as const,
+      schemaVersion: 1 as const,
+      riderEntityId: "subject-a",
+      mountEntityId: "subject-b",
+      mountSlotId: "stand",
+      establishedSimulationTick: 0,
+    };
+    const state = new GameplayState(options({
+      entityDescriptors: [
+        {
+          id: "subject-a",
+          entityDefinitionRef: "worldkit://entity/humanoid@1",
+          capabilityRefs: ["worldkit://capability/arms@1"],
+        },
+        {
+          id: "subject-b",
+          entityDefinitionRef: "worldkit://entity/board@1",
+          capabilityRefs: [
+            "worldkit://capability/relationship.mounted-on@1",
+          ],
+        },
+      ],
+      initialRelationshipStates: [initialRelationship],
+    }));
+
+    expect(state.projectGameplayInspection(inspectionContext(
+      "inspection-initial-mounted",
+      0,
+    )).relationshipStatesById).toEqual({
+      [initialRelationship.id]: initialRelationship,
+    });
+    expect(() => new GameplayState(options({
+      entityDescriptors: [
+        {
+          id: "subject-a",
+          entityDefinitionRef: "worldkit://entity/humanoid@1",
+          capabilityRefs: [],
+        },
+        {
+          id: "subject-b",
+          entityDefinitionRef: "worldkit://entity/board@1",
+          capabilityRefs: [],
+        },
+      ],
+      initialRelationshipStates: [initialRelationship],
+    }))).toThrow(/initial Relationship|capability/);
+  });
+
   it("carries the exact trusted mounted effect Plan into the issued Action transition", () => {
     const request = {
       kind: "mount-action-request",

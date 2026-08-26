@@ -2,6 +2,7 @@ import {
   buildWorldStateSnapshotV1,
   deriveGameplayCommandHashV1,
   parseGameplayEntityDescriptorV1,
+  parseGameplayRelationshipStateV1,
   parseGameplayInspectionSnapshotV1,
   type ActionActivateGameplayCommandV1,
   type ActionCancelGameplayCommandV1,
@@ -46,6 +47,7 @@ export interface GameplayStateOptionsV1 {
   readonly participantStates: readonly GameplayParticipantStateV1[];
   readonly controllerStates: readonly ControllerEntityStateV1[];
   readonly entityDescriptors: readonly GameplayEntityDescriptorV1[];
+  readonly initialRelationshipStates: readonly GameplayRelationshipStateV1[];
   readonly actionCatalog: GameplayActionCatalogV1;
   readonly actionRequestResolver?: GameplayActionRequestResolverV1;
   readonly capacityBudget: GameplayCapacityBudgetV1;
@@ -381,6 +383,66 @@ export class GameplayState implements GameplayPlanningStateV1 {
     this.actionCatalog = options.actionCatalog;
     this.actionRequestResolver = options.actionRequestResolver;
     this.capacityBudget = options.capacityBudget;
+    const initialRelationshipIds = new Set<string>();
+    const initialRelationships = options.initialRelationshipStates.map(
+      (relationshipInput) => {
+        const relationship = parseGameplayRelationshipStateV1(relationshipInput);
+        if (isNil(relationship)) {
+          throw new Error("INPUT_INVALID: An initial Relationship is invalid.");
+        }
+        if (relationship.establishedSimulationTick !== 0) {
+          throw new Error(
+            "INPUT_INVALID: An initial Relationship must be established at Tick zero.",
+          );
+        }
+        if (initialRelationshipIds.has(relationship.id)) {
+          throw new Error(
+            `INPUT_INVALID: Duplicate initial Relationship '${relationship.id}'.`,
+          );
+        }
+        initialRelationshipIds.add(relationship.id);
+        if (relationship.type === "possessedBy") {
+          if (
+            !controllers.has(relationship.controllerEntityId) ||
+            !descriptors.has(relationship.controlledEntityId)
+          ) {
+            throw new Error(
+              "INPUT_INVALID: An initial possession Relationship has an unknown endpoint.",
+            );
+          }
+        } else {
+          const rider = descriptors.get(relationship.riderEntityId);
+          const mount = descriptors.get(relationship.mountEntityId);
+          if (
+            isNil(rider) ||
+            isNil(mount) ||
+            !mount.capabilityRefs.includes(
+              "worldkit://capability/relationship.mounted-on@1",
+            )
+          ) {
+            throw new Error(
+              "INPUT_INVALID: An initial mountedOn Relationship lacks valid endpoints or Mount capability.",
+            );
+          }
+        }
+        return relationship;
+      },
+    );
+    if (
+      initialRelationships.length >
+      options.capacityBudget.maximumRelationshipStateCount
+    ) {
+      throw new Error(
+        "GAMEPLAY_CAPACITY_EXCEEDED: Initial Relationship capacity exceeded.",
+      );
+    }
+    this.relationshipStatesById = deepFreeze(sortedRecord(initialRelationships));
+    this.assertCardinalityAndCapacity(
+      this.relationshipStatesById,
+      this.activeActionExecutionsById,
+      this.usedActionExecutionIdSet,
+      this.terminalEventReservationCount,
+    );
     this.planningState = Object.freeze({
       planControl: this.planControl.bind(this),
       planAction: this.planAction.bind(this),
@@ -1416,6 +1478,13 @@ export class GameplayState implements GameplayPlanningStateV1 {
         mountedRiders.add(relationship.riderEntityId);
         occupiedMountSlots.add(slotKey);
       }
+    }
+    if ([...mountedRiders].some((riderEntityId) =>
+      controlledEntities.has(riderEntityId)
+    )) {
+      throw new Error(
+        "GAMEPLAY_STATE_STALE: A mounted Rider cannot be directly possessed.",
+      );
     }
     const actors = new Set<string>();
     for (const execution of Object.values(actions)) {

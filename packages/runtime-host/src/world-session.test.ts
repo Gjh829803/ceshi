@@ -126,6 +126,7 @@ function createHarnessAndOptions() {
       worldPackageRootHash: HASH,
       executionPlanHash: HASH,
       gameplayBootstrap,
+      initialRelationships: [],
       participantStates: [participantState],
       controllerStates: [controllerState],
       fixedInputControllerEntityId: controllerState.id,

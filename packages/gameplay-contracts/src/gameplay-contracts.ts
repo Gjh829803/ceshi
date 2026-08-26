@@ -1329,7 +1329,7 @@ function parseMountedOnRelationshipStateV1(
   };
 }
 
-function parseGameplayRelationshipStateV1(
+export function parseGameplayRelationshipStateV1(
   input: unknown,
 ): GameplayRelationshipStateV1 | undefined {
   const record = snapshotDataRecord(input);
