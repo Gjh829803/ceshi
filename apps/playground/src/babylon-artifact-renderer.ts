@@ -49,6 +49,12 @@ export class BabylonArtifactRenderer implements PlaygroundArtifactRenderer {
       loaded.runtimeWorldConfiguration,
       {
         playgroundMetadata: loaded.playgroundMetadata,
+        ...(loaded.gameplayActionRequestResolver === undefined
+          ? {}
+          : {
+              gameplayActionRequestResolver:
+                loaded.gameplayActionRequestResolver,
+            }),
         subjectAssetResolver: createFetchSubjectAssetResolver(
           PLAYGROUND_CAPABILITY_SUBJECT_ASSET_URI_BY_REF_V1,
         ),

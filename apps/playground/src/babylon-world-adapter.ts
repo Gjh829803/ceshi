@@ -33,6 +33,7 @@ import {
   type BabylonWorldRuntimeOptions,
 } from "@whitebox-world/runtime-babylon";
 import type { RuntimeWorldConfigurationV1 } from "@whitebox-world/runtime-host";
+import type { GameplayActionRequestResolverV1 } from "@whitebox-world/gameplay";
 import { isNil } from "lodash-es";
 
 import type {
@@ -57,6 +58,7 @@ export interface BabylonWorldAdapterCreateOptionsV1 extends Pick<
   | "onInitializationStage"
 > {
   readonly playgroundMetadata?: PlaygroundWorldMetadataV1;
+  readonly gameplayActionRequestResolver?: GameplayActionRequestResolverV1;
 }
 
 const INPUT_ACTION_MAP: Readonly<Partial<Record<InputAction, SemanticInputActionV1>>> = {
@@ -389,6 +391,12 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     const coordinator = await createGameplayBabylonRuntimeCoordinatorV1({
       runtimeSessionId: crypto.randomUUID(),
       initialWorldConfiguration: runtimeWorldConfiguration,
+      ...(options.gameplayActionRequestResolver === undefined
+        ? {}
+        : {
+            gameplayActionRequestResolver:
+              options.gameplayActionRequestResolver,
+          }),
       ...(options.subjectAssetResolver === undefined
         ? {}
         : { subjectAssetResolver: options.subjectAssetResolver }),

@@ -10,6 +10,7 @@ import type {
   ExecutionPlanV5,
 } from "@whitebox-world/runtime-contracts";
 import type { RuntimeWorldConfigurationV1 } from "@whitebox-world/runtime-host";
+import type { GameplayActionRequestResolverV1 } from "@whitebox-world/gameplay";
 import { Matrix, Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import {
   SceneCompilationError,
@@ -52,6 +53,7 @@ export interface OutdoorSceneGameplayLoadOptionsV1 {
   readonly sceneCatalogId: string;
   readonly aspectRatio?: number;
   readonly subjectDefinitionRef?: string;
+  readonly fetchSubjectAsset?: typeof fetch;
 }
 
 export interface OutdoorSceneGameplayLoadResultV1 {
@@ -64,6 +66,8 @@ export interface OutdoorSceneGameplayLoadResultV1 {
   readonly playgroundMetadata?: PlaygroundWorldMetadataV1;
   /** Internal Host bootstrap. This is intentionally not a Browser DTO. */
   readonly runtimeWorldConfiguration?: RuntimeWorldConfigurationV1;
+  /** Trusted Host-only resolver; never exposed through Browser Protocol V5. */
+  readonly gameplayActionRequestResolver?: GameplayActionRequestResolverV1;
 }
 
 class OutdoorSceneImportError extends Error {
@@ -919,9 +923,14 @@ export async function loadOutdoorGameplaySceneV1(
         status: 200,
         headers: { "content-type": "application/json" },
       }),
-      isNil(options.subjectDefinitionRef)
-        ? {}
-        : { subjectDefinitionRef: options.subjectDefinitionRef },
+      {
+        ...(isNil(options.subjectDefinitionRef)
+          ? {}
+          : { subjectDefinitionRef: options.subjectDefinitionRef }),
+        ...(isNil(options.fetchSubjectAsset)
+          ? {}
+          : { fetchSubjectAsset: options.fetchSubjectAsset }),
+      },
     );
     if (
       !loaded.ok ||
@@ -951,6 +960,12 @@ export async function loadOutdoorGameplaySceneV1(
       ...(isNil(loaded.hostOverlay) ? {} : { hostOverlay: loaded.hostOverlay }),
       playgroundMetadata: playgroundMetadata(scene, options.sceneCatalogId),
       runtimeWorldConfiguration: loaded.runtimeWorldConfiguration,
+      ...(isNil(loaded.gameplayActionRequestResolver)
+        ? {}
+        : {
+            gameplayActionRequestResolver:
+              loaded.gameplayActionRequestResolver,
+          }),
     };
   } catch (cause) {
     if (cause instanceof OutdoorSceneImportError) {

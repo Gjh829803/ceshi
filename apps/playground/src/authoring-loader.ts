@@ -9,7 +9,10 @@ import {
   type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
 import { compileWorldV5 } from "@whitebox-world/compiler";
-import { createCoreGameplayBootstrapV1 } from "@whitebox-world/gameplay";
+import {
+  createCoreGameplayBootstrapV1,
+  type GameplayActionRequestResolverV1,
+} from "@whitebox-world/gameplay";
 import {
   createGameplayBootstrapResourceLockEntryV1,
   type GameplayBootstrapV1,
@@ -41,6 +44,11 @@ import {
   PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1,
   resolveWorldPackageSubjectAssetArtifactsV1,
 } from "./worldkit-asset-resolver.js";
+import {
+  MOUNTED_SKATEBOARD_S1_SCENE_ID,
+  augmentMountedSkateboardS1AuthoringSpecV1,
+  createMountedSkateboardS1GameplayResourcesV1,
+} from "./scenes/mounted-skateboard-s1.js";
 
 type CapabilityDemoResourceBudgetV1 = Readonly<
   AuthoringSpecV4["world"]["resourceBudget"]
@@ -91,6 +99,8 @@ export interface AuthoringSceneLoadResult {
   routeEvidencePublication?: WorldkitBrowserRouteEvidencePublicationV2;
   /** Internal Host bootstrap. This is intentionally not a public Browser DTO. */
   runtimeWorldConfiguration?: RuntimeWorldConfigurationV1;
+  /** Trusted Host-only resolver; never exposed through Browser Protocol V5. */
+  gameplayActionRequestResolver?: GameplayActionRequestResolverV1;
 }
 
 export type AuthoringSourceFetcher = () => Promise<Response>;
@@ -714,10 +724,14 @@ export async function loadAuthoringScene(
   }
   const parsed = parseAuthoringSpecV4(sourceText);
   if (!parsed.ok || parsed.value === undefined) return { ok: false, diagnostics: parsed.diagnostics };
-  const overlayResult = options.subjectDefinitionRef === undefined
-    ? { source: parsed.value }
+  const fixtureSource = parsed.value.id === MOUNTED_SKATEBOARD_S1_SCENE_ID
+    ? augmentMountedSkateboardS1AuthoringSpecV1(parsed.value)
+    : parsed.value;
+  const overlayResult = options.subjectDefinitionRef === undefined ||
+      fixtureSource.id === MOUNTED_SKATEBOARD_S1_SCENE_ID
+    ? { source: fixtureSource }
     : applyCapabilityDemoContext(
-        parsed.value,
+        fixtureSource,
         options.subjectDefinitionRef,
       );
   const { source, hostOverlay, subjectResourceRegistry } = overlayResult;
@@ -732,7 +746,12 @@ export async function loadAuthoringScene(
       ...(hostOverlay === undefined ? {} : { hostOverlay }),
     };
   }
-  const gameplayBootstrap = createRuntimeGameplayBootstrap(normalized.value);
+  const mountedSkateboardResources = normalized.value.id ===
+      MOUNTED_SKATEBOARD_S1_SCENE_ID
+    ? createMountedSkateboardS1GameplayResourcesV1(normalized.value)
+    : undefined;
+  const gameplayBootstrap = mountedSkateboardResources?.gameplayBootstrap ??
+    createRuntimeGameplayBootstrap(normalized.value);
   const compiled = compileWorldV5({
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
@@ -832,7 +851,7 @@ export async function loadAuthoringScene(
       worldPackageBuildReceipt,
       gameplayBootstrap,
     });
-  } catch {
+  } catch (error) {
     return {
       ok: false,
       diagnostics: [{
@@ -841,6 +860,9 @@ export async function loadAuthoringScene(
         instancePath: "/resources",
         message:
           "Unable to construct the locked Runtime World Configuration from the Authoring world.",
+        details: {
+          cause: error instanceof Error ? error.message : String(error),
+        },
       }],
       ...(hostOverlay === undefined ? {} : { hostOverlay }),
     };
@@ -857,5 +879,11 @@ export async function loadAuthoringScene(
       ? {}
       : { routeEvidencePublication: routeEvidence.publication }),
     runtimeWorldConfiguration,
+    ...(mountedSkateboardResources === undefined
+      ? {}
+      : {
+          gameplayActionRequestResolver:
+            mountedSkateboardResources.gameplayActionRequestResolver,
+        }),
   };
 }

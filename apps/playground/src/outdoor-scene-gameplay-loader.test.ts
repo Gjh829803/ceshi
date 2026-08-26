@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { compileOutdoorScene } from "@whitebox-world/world";
 
 import { sceneCatalog } from "./scenes/index.js";
@@ -6,6 +8,28 @@ import {
   loadOutdoorGameplaySceneV1,
   projectOutdoorLandmarkTransformV1,
 } from "./outdoor-scene-gameplay-loader.js";
+
+const gBotAssetBytes = new Uint8Array(await readFile(fileURLToPath(new URL(
+  "../public/subject-assets/humanoid/g-bot/v2/g-bot.glb",
+  import.meta.url,
+))));
+const fetchGbotAsset = (async (input: URL | RequestInfo) => ({
+  ok: true,
+  redirected: false,
+  url: String(input),
+  arrayBuffer: async () => gBotAssetBytes.buffer.slice(
+    gBotAssetBytes.byteOffset,
+    gBotAssetBytes.byteOffset + gBotAssetBytes.byteLength,
+  ),
+})) as typeof fetch;
+
+beforeEach(() => {
+  vi.stubGlobal("location", { origin: "https://playground.test" });
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 function expectImportErrorCode(action: () => unknown, code: string): void {
   try {
@@ -91,6 +115,9 @@ describe("loadOutdoorGameplaySceneV1", () => {
       const result = await loadOutdoorGameplaySceneV1(sceneDefinition, {
         sceneCatalogId,
         aspectRatio: 16 / 9,
+        ...(sceneCatalogId === "mounted-skateboard-s1"
+          ? { fetchSubjectAsset: fetchGbotAsset }
+          : {}),
       });
 
       expect(result.ok, `${sceneCatalogId}: ${JSON.stringify(result.diagnostics)}`).toBe(true);
@@ -108,6 +135,28 @@ describe("loadOutdoorGameplaySceneV1", () => {
     },
     90_000,
   );
+
+  it("loads the mounted skateboard scene with its Action and Request authority", async () => {
+    const result = await loadOutdoorGameplaySceneV1(
+      sceneCatalog["mounted-skateboard-s1"]!,
+      {
+        sceneCatalogId: "mounted-skateboard-s1",
+        aspectRatio: 16 / 9,
+        fetchSubjectAsset: fetchGbotAsset,
+      },
+    );
+
+    expect(result.ok, JSON.stringify(result.diagnostics)).toBe(true);
+    expect(
+      result.executionPlan?.subjects.find(({ entityId }) =>
+        entityId === "skateboard")?.mountSlots,
+    ).toHaveLength(1);
+    expect(
+      result.runtimeWorldConfiguration?.gameplayBootstrap
+        .semanticActionDefinitions,
+    ).toHaveLength(2);
+    expect(result.gameplayActionRequestResolver).toBeTypeOf("function");
+  });
 
   it("produces byte-stable identities for the same scene", async () => {
     const scene = sceneCatalog["world-08170639-54db"]!;

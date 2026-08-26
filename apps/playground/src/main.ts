@@ -2277,6 +2277,12 @@ if (runtimeRoute.mode === "unknown") {
           loaded.runtimeWorldConfiguration,
           {
             subjectAssetResolver,
+            ...(isNil(loaded.gameplayActionRequestResolver)
+              ? {}
+              : {
+                  gameplayActionRequestResolver:
+                    loaded.gameplayActionRequestResolver,
+                }),
             ...(isNil(createdPlaygroundMetadata)
               ? {}
               : { playgroundMetadata: createdPlaygroundMetadata }),

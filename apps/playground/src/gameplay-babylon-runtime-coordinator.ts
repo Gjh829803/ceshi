@@ -1,5 +1,8 @@
 import {
   createCoreControlFeatureFactoryV1,
+  createCoreSemanticActionFeatureFactoryV1,
+  createMountedRelationshipFeatureFactoryV1,
+  type GameplayActionRequestResolverV1,
   type GameplayModeV1,
 } from "@whitebox-world/gameplay";
 import {
@@ -119,6 +122,7 @@ export interface CreateGameplayBabylonRuntimeCoordinatorOptionsV1 {
   readonly document?: Pick<Document, "createElement">;
   readonly runtimeBundleFactory?: GameplayBabylonRuntimeBundleFactoryV1;
   readonly worldSessionIdFactory?: () => string;
+  readonly gameplayActionRequestResolver?: GameplayActionRequestResolverV1;
 }
 
 interface RuntimeHandleV1 {
@@ -539,6 +543,26 @@ export class GameplayBabylonRuntimeCoordinatorV1 {
       let index = 0;
       return () => `${options.runtimeSessionId}.world.${index += 1}`;
     })();
+    const builtInFeatureFactories = [
+      createCoreControlFeatureFactoryV1(),
+      createCoreSemanticActionFeatureFactoryV1(),
+      createMountedRelationshipFeatureFactoryV1(),
+    ];
+    const lockedFeatureRefs = new Set(
+      options.initialWorldConfiguration.gameplayBootstrap.featureResourceLocks
+        .map(({ resourceRef }) => resourceRef),
+    );
+    const gameplayFeatureFactories = builtInFeatureFactories.filter(
+      ({ manifest }) => lockedFeatureRefs.has(manifest.resourceRef),
+    );
+    const gameplayCapacityBudget = Object.freeze({
+      ...DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
+      maximumRelationshipStateCount: Math.max(
+        DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1.maximumRelationshipStateCount,
+        options.initialWorldConfiguration.gameplayBootstrap.entityDescriptors
+          .length + 1,
+      ),
+    });
     const host = await RuntimeHost.create({
       runtimeSessionId: options.runtimeSessionId,
       initialWorld: options.initialWorldConfiguration,
@@ -557,8 +581,14 @@ export class GameplayBabylonRuntimeCoordinatorV1 {
       }],
       fixedInputControllerEntityId: PLAYGROUND_CONTROLLER_ENTITY_ID_V1,
       gameplayModeFactory,
-      gameplayFeatureFactories: [createCoreControlFeatureFactoryV1()],
-      gameplayCapacityBudget: DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
+      gameplayFeatureFactories,
+      ...(isNil(options.gameplayActionRequestResolver)
+        ? {}
+        : {
+            gameplayActionRequestResolver:
+              options.gameplayActionRequestResolver,
+          }),
+      gameplayCapacityBudget,
       runtimeHostCapacityBudget: {
         maximumWorldSessionCount: MAXIMUM_WORLD_SESSION_COUNT_V1,
         maximumRuntimeActivityRecordCount:

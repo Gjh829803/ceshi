@@ -341,6 +341,15 @@ export const G_BOT_HUMANOID_DEFINITION: RegistrySubjectDefinitionInputV3 = {
   },
   sockets: [
     {
+      id: "FootAlignment",
+      kind: "local",
+      localTransform: {
+        positionMetersXYZ: [0, 0, 0],
+        rotationEulerRadiansXYZ: [0, 0, 0],
+      },
+      semanticTags: ["foot-alignment", "relationship", "rider"],
+    },
+    {
       id: "FirstPersonView",
       kind: "bone",
       boneId: "head",

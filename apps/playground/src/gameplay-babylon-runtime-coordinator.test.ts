@@ -1,21 +1,46 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
+import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
 
 import { createValidAuthoringSpec } from "../../../packages/authoring/src/test-fixture";
 import type {
   GameplayWorldPortV1,
   GameplayWorldStateProjectionV1,
+  RuntimeWorldConfigurationV1,
 } from "@whitebox-world/runtime-host";
-import type { BabylonRuntimeProjectionV1 } from "@whitebox-world/runtime-babylon";
+import { sha256CanonicalJson } from "@whitebox-world/protocol";
+import {
+  BabylonWorldRuntime,
+  createBabylonGameplayWorldPortV1,
+  type BabylonRuntimeProjectionV1,
+} from "@whitebox-world/runtime-babylon";
 import { createFakeGameplayWorldPortHarnessV1 } from
   "../../../packages/runtime-host/src/test/fake-gameplay-world-adapter";
 import { isNil } from "lodash-es";
 
 import { loadAuthoringScene } from "./authoring-loader";
+import { loadOutdoorGameplaySceneV1 } from "./outdoor-scene-gameplay-loader";
+import {
+  MOUNTED_SKATEBOARD_S1_MOUNT_ACTION_REF,
+  MOUNTED_SKATEBOARD_S1_MOUNT_COMMAND_ID,
+  MOUNTED_SKATEBOARD_S1_MOUNT_REQUEST_REF,
+  MOUNTED_SKATEBOARD_S1_DISMOUNT_ACTION_REF,
+  MOUNTED_SKATEBOARD_S1_DISMOUNT_COMMAND_ID,
+  MOUNTED_SKATEBOARD_S1_DISMOUNT_REQUEST_REF,
+  MOUNTED_SKATEBOARD_S1_RELATIONSHIP_ID,
+  mountedSkateboardS1Scene,
+} from "./scenes/mounted-skateboard-s1";
 import {
   PLAYGROUND_CONTROLLER_ENTITY_ID_V1,
   createGameplayBabylonRuntimeCoordinatorV1,
   type GameplayBabylonRuntimeBundleV1,
 } from "./gameplay-babylon-runtime-coordinator";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 async function worldConfiguration() {
   const base = createValidAuthoringSpec();
@@ -44,7 +69,7 @@ async function worldConfiguration() {
 }
 
 function worldProjection(
-  configuration: Awaited<ReturnType<typeof worldConfiguration>>,
+  configuration: RuntimeWorldConfigurationV1,
 ): GameplayWorldStateProjectionV1 {
   return Object.freeze({
     simulationTick: 0,
@@ -80,7 +105,7 @@ interface FakeRuntimeV1 {
 }
 
 function fakeRuntimeFactory(
-  configuration: Awaited<ReturnType<typeof worldConfiguration>>,
+  configuration: RuntimeWorldConfigurationV1,
   options: Readonly<{ rejectCandidateRender?: boolean }> = {},
 ) {
   const runtimes: FakeRuntimeV1[] = [];
@@ -250,6 +275,242 @@ async function createHarness(
 }
 
 describe("Gameplay Babylon Runtime coordinator", () => {
+  it("runs Mount, board movement, Dismount, and Rider movement through real Havok", async () => {
+    vi.stubGlobal("location", { origin: "https://playground.test" });
+    const gBotBytes = new Uint8Array(await readFile(fileURLToPath(new URL(
+      "../public/subject-assets/humanoid/g-bot/v2/g-bot.glb",
+      import.meta.url,
+    ))));
+    const havokWasmBytes = await readFile(
+      createRequire(import.meta.url).resolve(
+        "@babylonjs/havok/lib/esm/HavokPhysics.wasm",
+      ),
+    );
+    const loaded = await loadOutdoorGameplaySceneV1(
+      mountedSkateboardS1Scene,
+      {
+        sceneCatalogId: "mounted-skateboard-s1",
+        fetchSubjectAsset: (async (input: URL | RequestInfo) => ({
+          ok: true,
+          redirected: false,
+          url: String(input),
+          arrayBuffer: async () => gBotBytes.buffer.slice(
+            gBotBytes.byteOffset,
+            gBotBytes.byteOffset + gBotBytes.byteLength,
+          ),
+        })) as typeof fetch,
+      },
+    );
+    if (
+      !loaded.ok ||
+      loaded.runtimeWorldConfiguration === undefined ||
+      loaded.gameplayActionRequestResolver === undefined
+    ) throw new Error(JSON.stringify(loaded.diagnostics));
+    const runtimeBundleFactory = async (
+      input: Parameters<NonNullable<Parameters<
+        typeof createGameplayBabylonRuntimeCoordinatorV1
+      >[0]["runtimeBundleFactory"]>>[0],
+    ): Promise<GameplayBabylonRuntimeBundleV1> => {
+      const runtime = await BabylonWorldRuntime.create({
+        executionPlan: input.descriptor.executionPlan,
+        runtimeSessionId: input.descriptor.runtimeSessionId,
+        autoStartRenderLoop: false,
+        engineFactory: () => new NullEngine({
+          renderWidth: 640,
+          renderHeight: 360,
+          textureSize: 512,
+          deterministicLockstep: true,
+          lockstepMaxSteps: 4,
+        }),
+        havokWasmBinary: havokWasmBytes.buffer.slice(
+          havokWasmBytes.byteOffset,
+          havokWasmBytes.byteOffset + havokWasmBytes.byteLength,
+        ) as ArrayBuffer,
+        subjectAssetResolver: {
+          resolveSubjectAsset: async () => ({
+            bytes: new Uint8Array(gBotBytes),
+            sourceLabel: "memory://g-bot.glb",
+          }),
+        },
+      });
+      return Object.freeze({
+        runtime,
+        gameplayWorldPort: createBabylonGameplayWorldPortV1(
+          runtime,
+          PLAYGROUND_CONTROLLER_ENTITY_ID_V1,
+        ),
+      });
+    };
+    const coordinator = await createGameplayBabylonRuntimeCoordinatorV1({
+      runtimeSessionId: "runtime.mounted-havok",
+      initialWorldConfiguration: loaded.runtimeWorldConfiguration,
+      gameplayActionRequestResolver: loaded.gameplayActionRequestResolver,
+      document: fakeDocument(),
+      runtimeBundleFactory,
+      worldSessionIdFactory: () => "world-session.mounted-havok",
+    });
+    const initial = coordinator.snapshot();
+    const mountRequest = {
+      id: "mount-skateboard-s1",
+      kind: "mount-action-request",
+      mountEntityId: "skateboard",
+      mountSlotId: "stand",
+      riderEntityId: "player",
+      schemaVersion: 1,
+    } as const;
+    const mounted = await coordinator.executeGameplayCommand({
+      schemaVersion: 1,
+      id: MOUNTED_SKATEBOARD_S1_MOUNT_COMMAND_ID,
+      type: "action.activate",
+      runtimeSessionId: initial.runtimeSessionId,
+      worldSessionId: initial.worldSessionId,
+      controllerEntityId: PLAYGROUND_CONTROLLER_ENTITY_ID_V1,
+      expectedPossession: { mode: "possessed", controlledEntityId: "player" },
+      actionExecutionId: "action-execution.mounted-havok.mount",
+      semanticActionRef: MOUNTED_SKATEBOARD_S1_MOUNT_ACTION_REF,
+      actorEntityId: "player",
+      actionRequestRef: MOUNTED_SKATEBOARD_S1_MOUNT_REQUEST_REF,
+      actionRequestHash:
+        sha256CanonicalJson(mountRequest) as `sha256:${string}`,
+    });
+    expect(mounted).toMatchObject({ status: "committed" });
+    expect(
+      coordinator.getGameplayInspectionSnapshot()
+        .relationshipStatesById[MOUNTED_SKATEBOARD_S1_RELATIONSHIP_ID],
+    ).toMatchObject({
+      type: "mountedOn",
+      riderEntityId: "player",
+      mountEntityId: "skateboard",
+    });
+
+    const beforeBoardMove = coordinator.snapshot().world
+      .subjectStatesByEntityId.skateboard!.entityState.positionMetersXYZ;
+    const afterBoardMove = await coordinator.runFixedInput({
+      actions: ["move-forward"],
+      ticks: 30,
+    });
+    const boardAfter = afterBoardMove.world.subjectStatesByEntityId.skateboard!
+      .entityState.positionMetersXYZ;
+    const riderAfter = afterBoardMove.world.subjectStatesByEntityId.player!;
+    expect(boardAfter[2]).toBeLessThan(beforeBoardMove[2]);
+    expect(riderAfter.entityState.positionMetersXYZ[2]).toBeCloseTo(boardAfter[2], 4);
+    expect(Object.values(riderAfter.capabilityStatesById)).toContainEqual(
+      expect.objectContaining({
+        mode: "suspended",
+        suspendedByRelationshipId: MOUNTED_SKATEBOARD_S1_RELATIONSHIP_ID,
+      }),
+    );
+
+    const dismountRequest = {
+      id: "dismount-skateboard-s1",
+      kind: "dismount-action-request",
+      mountedOnRelationshipId: MOUNTED_SKATEBOARD_S1_RELATIONSHIP_ID,
+      riderEntityId: "player",
+      schemaVersion: 1,
+    } as const;
+    const dismounted = await coordinator.executeGameplayCommand({
+      schemaVersion: 1,
+      id: MOUNTED_SKATEBOARD_S1_DISMOUNT_COMMAND_ID,
+      type: "action.activate",
+      runtimeSessionId: initial.runtimeSessionId,
+      worldSessionId: initial.worldSessionId,
+      controllerEntityId: PLAYGROUND_CONTROLLER_ENTITY_ID_V1,
+      expectedPossession: {
+        mode: "possessed",
+        controlledEntityId: "skateboard",
+      },
+      actionExecutionId: "action-execution.mounted-havok.dismount",
+      semanticActionRef: MOUNTED_SKATEBOARD_S1_DISMOUNT_ACTION_REF,
+      actorEntityId: "player",
+      actionRequestRef: MOUNTED_SKATEBOARD_S1_DISMOUNT_REQUEST_REF,
+      actionRequestHash:
+        sha256CanonicalJson(dismountRequest) as `sha256:${string}`,
+    });
+    expect(dismounted).toMatchObject({ status: "committed" });
+    expect(
+      coordinator.getGameplayInspectionSnapshot()
+        .relationshipStatesById[MOUNTED_SKATEBOARD_S1_RELATIONSHIP_ID],
+    ).toBeUndefined();
+    const riderBeforeIndependentMove = coordinator.snapshot().world
+      .subjectStatesByEntityId.player!.entityState.positionMetersXYZ;
+    const independentlyMoved = await coordinator.runFixedInput({
+      actions: ["move-forward"],
+      ticks: 30,
+    });
+    expect(
+      independentlyMoved.world.subjectStatesByEntityId.player!
+        .entityState.positionMetersXYZ[2],
+    ).toBeLessThan(riderBeforeIndependentMove[2]);
+
+    await coordinator.dispose();
+  }, 30_000);
+
+  it("activates the locked mounted feature closure and resolves trusted fixture Requests", async () => {
+    vi.stubGlobal("location", { origin: "https://playground.test" });
+    const bytes = new Uint8Array(await readFile(fileURLToPath(new URL(
+      "../public/subject-assets/humanoid/g-bot/v2/g-bot.glb",
+      import.meta.url,
+    ))));
+    const loaded = await loadOutdoorGameplaySceneV1(
+      mountedSkateboardS1Scene,
+      {
+        sceneCatalogId: "mounted-skateboard-s1",
+        fetchSubjectAsset: (async (input: URL | RequestInfo) => ({
+          ok: true,
+          redirected: false,
+          url: String(input),
+          arrayBuffer: async () => bytes.buffer.slice(
+            bytes.byteOffset,
+            bytes.byteOffset + bytes.byteLength,
+          ),
+        })) as typeof fetch,
+      },
+    );
+    if (
+      !loaded.ok ||
+      loaded.runtimeWorldConfiguration === undefined ||
+      loaded.gameplayActionRequestResolver === undefined
+    ) throw new Error(JSON.stringify(loaded.diagnostics));
+    const runtimeFactory = fakeRuntimeFactory(loaded.runtimeWorldConfiguration);
+    const coordinator = await createGameplayBabylonRuntimeCoordinatorV1({
+      runtimeSessionId: "runtime.mounted-test",
+      initialWorldConfiguration: loaded.runtimeWorldConfiguration,
+      gameplayActionRequestResolver: loaded.gameplayActionRequestResolver,
+      document: fakeDocument(),
+      runtimeBundleFactory: runtimeFactory.factory,
+      worldSessionIdFactory: () => "world-session.mounted-test",
+    });
+    const request = {
+      id: "mount-skateboard-s1",
+      kind: "mount-action-request",
+      mountEntityId: "skateboard",
+      mountSlotId: "stand",
+      riderEntityId: "player",
+      schemaVersion: 1,
+    } as const;
+    const snapshot = coordinator.snapshot();
+
+    await expect(coordinator.executeGameplayCommand({
+      schemaVersion: 1,
+      id: MOUNTED_SKATEBOARD_S1_MOUNT_COMMAND_ID,
+      type: "action.activate",
+      runtimeSessionId: snapshot.runtimeSessionId,
+      worldSessionId: snapshot.worldSessionId,
+      controllerEntityId: PLAYGROUND_CONTROLLER_ENTITY_ID_V1,
+      expectedPossession: { mode: "possessed", controlledEntityId: "player" },
+      actionExecutionId: "action-execution.mounted-skateboard-s1.mount",
+      semanticActionRef: MOUNTED_SKATEBOARD_S1_MOUNT_ACTION_REF,
+      actorEntityId: "player",
+      actionRequestRef: MOUNTED_SKATEBOARD_S1_MOUNT_REQUEST_REF,
+      actionRequestHash: sha256CanonicalJson(request) as `sha256:${string}`,
+    })).resolves.toMatchObject({
+      status: "rejected",
+      diagnostic: { code: "ACTION_NOT_AVAILABLE_FOR_ACTOR" },
+    });
+
+    await coordinator.dispose();
+  }, 30_000);
+
   it("commits the canonical initial possession and renders before create resolves", async () => {
     const { configuration, coordinator, runtimes } = await createHarness();
     const publication = coordinator.hostPublication();

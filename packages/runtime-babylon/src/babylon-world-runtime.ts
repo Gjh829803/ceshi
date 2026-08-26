@@ -978,6 +978,12 @@ export class BabylonWorldRuntime {
       return this.prepareDismountRelationshipTransition(input);
     }
     const rider = this.subjectControllersByEntityId.get(relationship.riderEntityId);
+    const riderSubject = this.executionPlan.subjects.find(
+      (subject) => subject.entityId === relationship.riderEntityId,
+    );
+    const riderVisual = this.subjectVisualsByEntityId.get(
+      relationship.riderEntityId,
+    );
     const mount = this.executionPlan.subjects.find(
       (subject) => subject.entityId === relationship.mountEntityId,
     );
@@ -989,9 +995,19 @@ export class BabylonWorldRuntime {
     );
     if (
       isNil(rider) ||
+      isNil(riderSubject) ||
+      isNil(riderVisual) ||
       isNil(mount) ||
       isNil(profile) ||
       profile.relationshipType !== "mountedOn" ||
+      profile.requiredRiderSocketIds.some(
+        (socketId) => !riderVisual.socketNodesById.has(socketId),
+      ) ||
+      profile.requiredMountSocketIds.some(
+        (socketId) => !this.subjectVisualsByEntityId.get(
+          relationship.mountEntityId,
+        )?.socketNodesById.has(socketId),
+      ) ||
       !isNil(this.gameplayPublishedState
         .mountedRelationshipsByRiderEntityId[relationship.riderEntityId])
     ) {
@@ -1010,9 +1026,6 @@ export class BabylonWorldRuntime {
     const riderState = baseProjection.spatialEntityStatesById[
       relationship.riderEntityId
     ];
-    const riderSubject = this.executionPlan.subjects.find(
-      (subject) => subject.entityId === relationship.riderEntityId,
-    );
     if (isNil(riderState) || isNil(riderSubject)) {
       throw new Error("WORLDKIT_MOUNTED_RIDER_UNAVAILABLE");
     }

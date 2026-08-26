@@ -679,12 +679,13 @@ describe("subject resource registry", () => {
     expect(socketIds).toEqual([
       "CameraTarget3D",
       "FirstPersonView",
+      "FootAlignment",
       "LookAhead",
       "SeatAlignment",
       "ThirdPersonTarget",
       "hand.right",
     ]);
-    expect(new Set(socketIds).size).toBe(6);
+    expect(new Set(socketIds).size).toBe(7);
   });
 
   it("locks the exact canonical hashes for every G Bot binding resource", () => {
@@ -729,7 +730,7 @@ describe("subject resource registry", () => {
       {
         resourceRef: G_BOT_SUBJECT_DEFINITION_REF,
         contentHash:
-          "sha256:7e56addb34e91835a229c309fd5c132ab94e895ebc529f827b47d46729d4f9c4",
+          "sha256:1f5c9007ce5f7a6e707d4809e51401bf9c0a9532ecc57e88930b9015e2dac92b",
       },
     ]);
   });
