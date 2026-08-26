@@ -971,6 +971,14 @@ function createPublicationSurfaceProbe(options: {
   const runtime = {
     snapshot: () => runtimeSnapshot(tick, cameraView),
     resize: vi.fn(),
+    renderFrameWhenReady: vi.fn(async () => ({
+      kind: "worldkit-render-ready-receipt",
+      schemaVersion: 1,
+      id: "render-ready:replacement:0",
+      runtimeSessionId: "runtime-session-test",
+      simulationTick: 0,
+      renderFrameIndex: 0,
+    })),
     runFixedInput: vi.fn(),
     renderFrame: vi.fn(),
     reset: vi.fn(),
@@ -1019,6 +1027,7 @@ function createPublicationSurfaceProbe(options: {
     previousCanvas,
     nextCanvas,
     coordinator,
+    runtime,
     publishedPlan: options.publishedPlan ?? withHouseNorth(LOCKED_EXECUTION_PLAN_V5),
   };
 }
@@ -1046,7 +1055,7 @@ const PUBLISHED_REPLACEMENT = {
 
 describe("BabylonWorldAdapter Full Reload visible surface", () => {
   it("adopts the replacement canvas and inspections after a published world replacement", async () => {
-    const { adapter, previousCanvas, nextCanvas, publishedPlan } =
+    const { adapter, previousCanvas, nextCanvas, publishedPlan, runtime } =
       createPublicationSurfaceProbe({ result: PUBLISHED_REPLACEMENT });
 
     expect(adapter.inspectFeatures().some((feature) => feature.id === "house-north"))
@@ -1061,6 +1070,7 @@ describe("BabylonWorldAdapter Full Reload visible surface", () => {
     expect(result.status).toBe("published");
     expect(previousCanvas.replaceWith).toHaveBeenCalledWith(nextCanvas);
     expect(nextCanvas.focus).toHaveBeenCalledOnce();
+    expect(runtime.renderFrameWhenReady).toHaveBeenCalledOnce();
     expect(adapter.inspectFeatures().some((feature) => feature.id === "house-north"))
       .toBe(true);
   });
@@ -1086,7 +1096,7 @@ describe("BabylonWorldAdapter Full Reload visible surface", () => {
   });
 
   it("still swaps the visible canvas when the published plan cannot be parsed", async () => {
-    const { adapter, previousCanvas, nextCanvas } = createPublicationSurfaceProbe({
+    const { adapter, previousCanvas, nextCanvas, runtime } = createPublicationSurfaceProbe({
       result: PUBLISHED_REPLACEMENT,
     });
 
@@ -1097,6 +1107,7 @@ describe("BabylonWorldAdapter Full Reload visible surface", () => {
 
     expect(result.status).toBe("published");
     expect(previousCanvas.replaceWith).toHaveBeenCalledWith(nextCanvas);
+    expect(runtime.renderFrameWhenReady).toHaveBeenCalledOnce();
     expect(adapter.inspectFeatures().some((feature) => feature.id === "house-north"))
       .toBe(false);
   });

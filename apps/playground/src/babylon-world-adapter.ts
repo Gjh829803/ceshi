@@ -719,7 +719,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     const result = await this.coordinator.publishWorldReplacementV1(input);
     if (result.status === "published") {
       try {
-        this.adoptActiveWorldSurface({
+        await this.adoptActiveWorldSurface({
           previousCanvas,
           ...publishedExecutionPlanFields(input),
         });
@@ -769,7 +769,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     this.resetAnimationClock();
     const previousCanvas = this.canvas;
     const snapshot = await this.coordinator.resetWithInitialControlBinding();
-    this.adoptActiveWorldSurface({ previousCanvas });
+    await this.adoptActiveWorldSurface({ previousCanvas });
     this.emit();
     return snapshot;
   }
@@ -1259,10 +1259,10 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     canvas.removeEventListener("wheel", this.handleCameraWheel);
   }
 
-  private adoptActiveWorldSurface(input: {
+  private async adoptActiveWorldSurface(input: {
     readonly previousCanvas: HTMLCanvasElement;
     readonly executionPlan?: ExecutionPlanV5;
-  }): void {
+  }): Promise<void> {
     if (!isNil(input.executionPlan)) {
       this.executionPlan = input.executionPlan;
       this.inspections = structuredClone(featureInspections(input.executionPlan));
@@ -1276,6 +1276,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
       input.previousCanvas.replaceWith(nextCanvas);
       this.activeRuntime().resize();
       nextCanvas.focus();
+      await this.activeRuntime().renderFrameWhenReady();
     }
   }
 
