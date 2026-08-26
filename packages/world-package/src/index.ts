@@ -13,6 +13,16 @@ export {
   assertWorldPackageGameplayBootstrapMembershipV1,
   createWorldPackageBuildReceiptV1,
 } from "./build-receipt.js";
+export {
+  assertWorldPackageBuildReceiptV2,
+  assertWorldPackageMigrationReportV1,
+  canonicalWorldPackageManifestV2,
+  canonicalWorldPackageSignatureEnvelopeV1,
+  hashWorldPackageManifestV2,
+  hashWorldPackageRootV2,
+  migrateWorldPackageBuildReceiptV1ToV2,
+  worldPackageSignatureEnvelopeBytesV1,
+} from "./v2-contract.js";
 export type {
   CreateWorldPackageBuildReceiptInputV1,
   ResolvedWorldPackageResourceArtifactV1,
@@ -24,3 +34,16 @@ export type {
   WorldPackageResourceArtifactV1,
   WorldPackageSha256HashV1,
 } from "./types.js";
+export type {
+  MigrateWorldPackageBuildReceiptV1ToV2Input,
+  MigrateWorldPackageBuildReceiptV1ToV2Result,
+  WorldPackageBuildReceiptV2,
+  WorldPackageDistributionPolicyV2,
+  WorldPackageHostCompatibilityV2,
+  WorldPackageLegalDocumentV2,
+  WorldPackageManifestV2,
+  WorldPackageMigrationReportV1,
+  WorldPackageResourceArtifactV2,
+  WorldPackageSignatureEnvelopeV1,
+  WorldPackageV1ToV2MigrationContextV1,
+} from "./v2-types.js";
