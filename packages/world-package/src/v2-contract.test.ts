@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   assertWorldPackageBuildReceiptV2,
+  assertWorldPackageHostCompatibilityV2,
   assertWorldPackageMigrationReportV1,
   canonicalWorldPackageManifestV1,
   canonicalWorldPackageManifestV2,
@@ -17,6 +18,7 @@ import {
   hashWorldPackageRootV2,
   migrateWorldPackageBuildReceiptV1ToV2,
   worldPackageSignatureEnvelopeBytesV1,
+  type WorldPackageHostPolicyV1,
 } from "./index.js";
 
 const HASH_A = `sha256:${"a".repeat(64)}` as const;
@@ -640,6 +642,120 @@ describe("WorldPackageSignatureEnvelopeV1", () => {
       expect(() => canonicalWorldPackageSignatureEnvelopeV1(candidate)).toThrow(
         "WORLD_PACKAGE_SIGNATURE_ENVELOPE_INVALID",
       );
+    }
+    expect(getterInvocations).toBe(0);
+  });
+});
+
+describe("WorldPackageHostPolicyV1", () => {
+  function validPolicy(): WorldPackageHostPolicyV1 {
+    return {
+      acceptedRuntimeTargets: ["babylon-web"],
+      acceptedPackageFormatVersions: [2],
+      acceptedManifestSchemaVersions: [2],
+      runtimeContractVersion: 1,
+      supportedFeatureIds: ["runtime.full-reload-v1"],
+      trustedCompatibilityProfiles: [{
+        profileRef: "worldkit://host-compatibility/babylon-web@1",
+        profileHash: HASH_D,
+      }],
+      allowedDistributionPolicies: ["redistributable"],
+      signaturePolicy: { mode: "not-required" },
+    };
+  }
+
+  it("admits the exact Runtime, feature, compatibility profile, and distribution matrix", () => {
+    expect(() => assertWorldPackageHostCompatibilityV2(
+      validManifestV2(),
+      validPolicy(),
+    )).not.toThrow();
+  });
+
+  it("rejects incompatible versions, features, profiles, contracts, and distribution", () => {
+    const wrongRuntime = { ...validManifestV2(), runtimeTarget: "three-web" };
+    const wrongPackageVersion = { ...validManifestV2(), packageFormatVersion: 1 };
+    const wrongManifestVersion = { ...validManifestV2(), schemaVersion: 1 };
+    const wrongContract = validManifestV2();
+    wrongContract.hostCompatibility = {
+      ...(wrongContract.hostCompatibility as Record<string, unknown>),
+      runtimeContractVersion: 2,
+    };
+    const unknownFeature = validManifestV2();
+    unknownFeature.hostCompatibility = {
+      ...(unknownFeature.hostCompatibility as Record<string, unknown>),
+      requiredFeatureIds: ["runtime.incremental-v1"],
+    };
+    const wrongProfileRef = validManifestV2();
+    wrongProfileRef.hostCompatibility = {
+      ...(wrongProfileRef.hostCompatibility as Record<string, unknown>),
+      profileRef: "worldkit://host-compatibility/unknown@1",
+    };
+    const wrongProfileHash = validManifestV2();
+    wrongProfileHash.hostCompatibility = {
+      ...(wrongProfileHash.hostCompatibility as Record<string, unknown>),
+      profileHash: HASH_A,
+    };
+    const disallowedDistribution = validManifestV2();
+    disallowedDistribution.legal = {
+      ...(disallowedDistribution.legal as Record<string, unknown>),
+      distributionPolicy: "internal-only",
+    };
+
+    for (const manifest of [
+      wrongRuntime,
+      wrongPackageVersion,
+      wrongManifestVersion,
+      wrongContract,
+      unknownFeature,
+      wrongProfileRef,
+      wrongProfileHash,
+      disallowedDistribution,
+    ]) {
+      expect(() => assertWorldPackageHostCompatibilityV2(
+        manifest as never,
+        validPolicy(),
+      )).toThrow("WORLD_PACKAGE_HOST_INCOMPATIBLE");
+    }
+  });
+
+  it("rejects malformed, accessor-bearing, and internally ambiguous Host policy", () => {
+    let getterInvocations = 0;
+    const accessor = validPolicy() as unknown as Record<string, unknown>;
+    Object.defineProperty(accessor, "runtimeContractVersion", {
+      enumerable: true,
+      get() {
+        getterInvocations += 1;
+        return 1;
+      },
+    });
+    const duplicateFeatures = {
+      ...validPolicy(),
+      supportedFeatureIds: ["runtime.full-reload-v1", "runtime.full-reload-v1"],
+    };
+    const wrongRequiredSignature = {
+      ...validPolicy(),
+      signaturePolicy: { mode: "required", trustDomain: "" },
+    };
+    const broadenedPackageVersions = {
+      ...validPolicy(),
+      acceptedPackageFormatVersions: [2, 3],
+    };
+    const broadenedManifestVersions = {
+      ...validPolicy(),
+      acceptedManifestSchemaVersions: [2, 3],
+    };
+
+    for (const policy of [
+      accessor,
+      duplicateFeatures,
+      wrongRequiredSignature,
+      broadenedPackageVersions,
+      broadenedManifestVersions,
+    ]) {
+      expect(() => assertWorldPackageHostCompatibilityV2(
+        validManifestV2(),
+        policy as never,
+      )).toThrow("WORLD_PACKAGE_HOST_INCOMPATIBLE");
     }
     expect(getterInvocations).toBe(0);
   });

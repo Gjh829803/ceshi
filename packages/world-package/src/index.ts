@@ -15,6 +15,7 @@ export {
 } from "./build-receipt.js";
 export {
   assertWorldPackageBuildReceiptV2,
+  assertWorldPackageHostCompatibilityV2,
   assertWorldPackageMigrationReportV1,
   canonicalWorldPackageManifestV2,
   canonicalWorldPackageSignatureEnvelopeV1,
@@ -45,11 +46,14 @@ export type {
   WorldPackageBuildReceiptV2,
   WorldPackageDistributionPolicyV2,
   WorldPackageHostCompatibilityV2,
+  WorldPackageHostPolicyV1,
+  WorldPackageHostSignaturePolicyV1,
   WorldPackageLegalDocumentV2,
   WorldPackageManifestV2,
   WorldPackageMigrationReportV1,
   WorldPackageResourceArtifactV2,
   WorldPackageSignatureEnvelopeV1,
+  WorldPackageTrustedCompatibilityProfileV1,
   WorldPackageV1ToV2MigrationContextV1,
 } from "./v2-types.js";
 export type {

@@ -18,6 +18,8 @@ import type {
   MigrateWorldPackageBuildReceiptV1ToV2Input,
   MigrateWorldPackageBuildReceiptV1ToV2Result,
   WorldPackageBuildReceiptV2,
+  WorldPackageDistributionPolicyV2,
+  WorldPackageHostPolicyV1,
   WorldPackageManifestV2,
   WorldPackageMigrationReportV1,
   WorldPackageResourceArtifactV2,
@@ -127,6 +129,20 @@ const SIGNATURE_ENVELOPE_FIELDS_V1 = [
   "keyId",
   "trustDomain",
   "signedAt",
+] as const;
+const HOST_POLICY_FIELDS_V1 = [
+  "acceptedRuntimeTargets",
+  "acceptedPackageFormatVersions",
+  "acceptedManifestSchemaVersions",
+  "runtimeContractVersion",
+  "supportedFeatureIds",
+  "trustedCompatibilityProfiles",
+  "allowedDistributionPolicies",
+  "signaturePolicy",
+] as const;
+const TRUSTED_COMPATIBILITY_PROFILE_FIELDS_V1 = [
+  "profileRef",
+  "profileHash",
 ] as const;
 const MIGRATION_INPUT_FIELDS = ["sourceReceipt", "context"] as const;
 const MIGRATION_CONTEXT_FIELDS = [
@@ -819,6 +835,252 @@ export function worldPackageSignatureEnvelopeBytesV1(
   value: unknown,
 ): Uint8Array {
   return canonicalJsonBytes(canonicalWorldPackageSignatureEnvelopeV1(value));
+}
+
+function hostCompatibilityFail(message: string): never {
+  throw new Error(`WORLD_PACKAGE_HOST_INCOMPATIBLE: ${message}`);
+}
+
+function requireHostPolicyArray(
+  value: unknown,
+  path: string,
+  allowEmpty = false,
+): readonly unknown[] {
+  if (!isPlainDenseArray(value) || (!allowEmpty && isEmpty(value))) {
+    hostCompatibilityFail(
+      `${path} must be a ${allowEmpty ? "plain dense" : "non-empty plain dense"} array`,
+    );
+  }
+  return value;
+}
+
+function requireHostPolicyString(value: unknown, path: string): string {
+  if (typeof value !== "string" || isEmpty(value) || value.trim() !== value) {
+    hostCompatibilityFail(`${path} must be a non-empty canonical string`);
+  }
+  return value;
+}
+
+function requireCanonicalHostPolicyStrings(
+  value: unknown,
+  path: string,
+  allowEmpty = false,
+): readonly string[] {
+  const rows = requireHostPolicyArray(value, path, allowEmpty).map((item, index) =>
+    requireHostPolicyString(item, `${path}/${index}`)
+  );
+  const canonical = [...rows].sort(compareStrings);
+  if (new Set(rows).size !== rows.length || !isEqual(rows, canonical)) {
+    hostCompatibilityFail(`${path} must contain unique strings in canonical order`);
+  }
+  return rows;
+}
+
+function requireCanonicalHostPolicyVersions(
+  value: unknown,
+  path: string,
+): readonly number[] {
+  const rows = requireHostPolicyArray(value, path).map((item, index) => {
+    if (typeof item !== "number" || !Number.isSafeInteger(item) || item <= 0) {
+      hostCompatibilityFail(`${path}/${index} must be a positive safe integer`);
+    }
+    return item;
+  });
+  const canonical = [...rows].sort((left, right) => left - right);
+  if (new Set(rows).size !== rows.length || !isEqual(rows, canonical)) {
+    hostCompatibilityFail(`${path} must contain unique versions in ascending order`);
+  }
+  return rows;
+}
+
+function requireHostPolicyRecord(
+  value: unknown,
+  fields: readonly string[],
+  path: string,
+): UnknownRecord {
+  if (isNil(value) || !isPlainObject(value)) {
+    hostCompatibilityFail(`${path} must be a plain object`);
+  }
+  const record = value as UnknownRecord;
+  const allowed = new Set(fields);
+  const unknown = Object.keys(record).find((field) => !allowed.has(field));
+  if (!isNil(unknown)) {
+    hostCompatibilityFail(`${path} contains unknown field '${unknown}'`);
+  }
+  for (const field of fields) {
+    if (!Object.hasOwn(record, field) || isNil(record[field])) {
+      hostCompatibilityFail(`${path} is missing field '${field}'`);
+    }
+  }
+  return record;
+}
+
+function canonicalWorldPackageHostPolicyV1(
+  value: unknown,
+): WorldPackageHostPolicyV1 {
+  try {
+    assertWorldPackageAccessorFreeDataGraphV1(
+      value,
+      "WORLD_PACKAGE_HOST_POLICY_ACCESSOR_FORBIDDEN",
+    );
+  } catch {
+    hostCompatibilityFail(
+      "Host policy accessors, symbol keys, and invalid byte views are forbidden",
+    );
+  }
+  const record = requireHostPolicyRecord(value, HOST_POLICY_FIELDS_V1, "Host policy");
+  const acceptedRuntimeTargets = requireCanonicalHostPolicyStrings(
+    record.acceptedRuntimeTargets,
+    "acceptedRuntimeTargets",
+  );
+  if (!isEqual(acceptedRuntimeTargets, ["babylon-web"])) {
+    hostCompatibilityFail("acceptedRuntimeTargets must be ['babylon-web']");
+  }
+  const acceptedPackageFormatVersions = requireCanonicalHostPolicyVersions(
+    record.acceptedPackageFormatVersions,
+    "acceptedPackageFormatVersions",
+  );
+  const acceptedManifestSchemaVersions = requireCanonicalHostPolicyVersions(
+    record.acceptedManifestSchemaVersions,
+    "acceptedManifestSchemaVersions",
+  );
+  if (
+    !isEqual(acceptedPackageFormatVersions, [2]) ||
+    !isEqual(acceptedManifestSchemaVersions, [2])
+  ) {
+    hostCompatibilityFail(
+      "accepted package and Manifest versions must both be [2]",
+    );
+  }
+  if (record.runtimeContractVersion !== 1) {
+    hostCompatibilityFail("runtimeContractVersion must be 1");
+  }
+  const supportedFeatureIds = requireCanonicalHostPolicyStrings(
+    record.supportedFeatureIds,
+    "supportedFeatureIds",
+    true,
+  );
+  const profileValues = requireHostPolicyArray(
+    record.trustedCompatibilityProfiles,
+    "trustedCompatibilityProfiles",
+  );
+  const trustedCompatibilityProfiles = profileValues.map((value, index) => {
+    const path = `trustedCompatibilityProfiles/${index}`;
+    const row = requireHostPolicyRecord(
+      value,
+      TRUSTED_COMPATIBILITY_PROFILE_FIELDS_V1,
+      path,
+    );
+    let profileRef;
+    let profileHash;
+    try {
+      profileRef = requireResourceRef(row.profileRef, `${path}/profileRef`);
+      profileHash = requireHash(row.profileHash, `${path}/profileHash`);
+    } catch {
+      return hostCompatibilityFail(`${path} is invalid`);
+    }
+    return { profileRef, profileHash };
+  });
+  const canonicalProfiles = [...trustedCompatibilityProfiles].sort((left, right) =>
+    compareStrings(left.profileRef, right.profileRef)
+  );
+  if (
+    !isEqual(trustedCompatibilityProfiles, canonicalProfiles) ||
+    new Set(trustedCompatibilityProfiles.map((row) => row.profileRef)).size !==
+      trustedCompatibilityProfiles.length
+  ) {
+    hostCompatibilityFail(
+      "trustedCompatibilityProfiles must have unique Refs in canonical order",
+    );
+  }
+  const distributionRows = requireCanonicalHostPolicyStrings(
+    record.allowedDistributionPolicies,
+    "allowedDistributionPolicies",
+  );
+  if (distributionRows.some((row) =>
+    row !== "internal-only" && row !== "redistributable"
+  )) {
+    hostCompatibilityFail("allowedDistributionPolicies contains an unknown policy");
+  }
+  const signatureRecord = (() => {
+    if (isNil(record.signaturePolicy) || !isPlainObject(record.signaturePolicy)) {
+      return hostCompatibilityFail("signaturePolicy must be a plain object");
+    }
+    const mode = (record.signaturePolicy as UnknownRecord).mode;
+    if (mode === "not-required") {
+      return requireHostPolicyRecord(record.signaturePolicy, ["mode"], "signaturePolicy");
+    }
+    if (mode === "required") {
+      return requireHostPolicyRecord(
+        record.signaturePolicy,
+        ["mode", "trustDomain"],
+        "signaturePolicy",
+      );
+    }
+    return hostCompatibilityFail("signaturePolicy/mode is invalid");
+  })();
+  const signaturePolicy = signatureRecord.mode === "not-required"
+    ? { mode: "not-required" as const }
+    : {
+        mode: "required" as const,
+        trustDomain: requireHostPolicyString(
+          signatureRecord.trustDomain,
+          "signaturePolicy/trustDomain",
+        ),
+      };
+  return deepFreeze({
+    acceptedRuntimeTargets: ["babylon-web"] as const,
+    acceptedPackageFormatVersions: [2] as const,
+    acceptedManifestSchemaVersions: [2] as const,
+    runtimeContractVersion: 1 as const,
+    supportedFeatureIds,
+    trustedCompatibilityProfiles,
+    allowedDistributionPolicies:
+      distributionRows as readonly WorldPackageDistributionPolicyV2[],
+    signaturePolicy,
+  });
+}
+
+export function assertWorldPackageHostCompatibilityV2(
+  value: unknown,
+  hostPolicyValue: unknown,
+): void {
+  let manifest;
+  let hostPolicy;
+  try {
+    manifest = canonicalWorldPackageManifestV2(value);
+    hostPolicy = canonicalWorldPackageHostPolicyV1(hostPolicyValue);
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message.startsWith("WORLD_PACKAGE_HOST_INCOMPATIBLE")
+    ) {
+      throw error;
+    }
+    hostCompatibilityFail("Manifest or Host policy is invalid");
+  }
+  const trustedProfile = hostPolicy.trustedCompatibilityProfiles.find((profile) =>
+    profile.profileRef === manifest.hostCompatibility.profileRef
+  );
+  if (
+    !hostPolicy.acceptedRuntimeTargets.includes(manifest.runtimeTarget) ||
+    !hostPolicy.acceptedPackageFormatVersions.includes(
+      manifest.packageFormatVersion,
+    ) ||
+    !hostPolicy.acceptedManifestSchemaVersions.includes(manifest.schemaVersion) ||
+    hostPolicy.runtimeContractVersion !==
+      manifest.hostCompatibility.runtimeContractVersion ||
+    manifest.hostCompatibility.requiredFeatureIds.some((featureId) =>
+      !hostPolicy.supportedFeatureIds.includes(featureId)
+    ) ||
+    isNil(trustedProfile) ||
+    trustedProfile.profileHash !== manifest.hostCompatibility.profileHash ||
+    !hostPolicy.allowedDistributionPolicies.includes(
+      manifest.legal.distributionPolicy,
+    )
+  ) {
+    hostCompatibilityFail("package requirements are not admitted by Host policy");
+  }
 }
 
 function migrationFail(path: string, message: string): never {

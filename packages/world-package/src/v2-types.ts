@@ -38,6 +38,33 @@ export interface WorldPackageHostCompatibilityV2 {
   readonly requiredFeatureIds: readonly string[];
 }
 
+export interface WorldPackageTrustedCompatibilityProfileV1 {
+  readonly profileRef: string;
+  readonly profileHash: WorldPackageSha256HashV1;
+}
+
+export type WorldPackageHostSignaturePolicyV1 =
+  | Readonly<{
+      readonly mode: "not-required";
+    }>
+  | Readonly<{
+      readonly mode: "required";
+      readonly trustDomain: string;
+    }>;
+
+export interface WorldPackageHostPolicyV1 {
+  readonly acceptedRuntimeTargets: readonly ["babylon-web"];
+  readonly acceptedPackageFormatVersions: readonly [2];
+  readonly acceptedManifestSchemaVersions: readonly [2];
+  readonly runtimeContractVersion: 1;
+  readonly supportedFeatureIds: readonly string[];
+  readonly trustedCompatibilityProfiles:
+    readonly WorldPackageTrustedCompatibilityProfileV1[];
+  readonly allowedDistributionPolicies:
+    readonly WorldPackageDistributionPolicyV2[];
+  readonly signaturePolicy: WorldPackageHostSignaturePolicyV1;
+}
+
 export interface WorldPackageManifestV2 {
   readonly kind: "worldkit-world-package-manifest";
   readonly schemaVersion: 2;
