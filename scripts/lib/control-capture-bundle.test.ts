@@ -17,12 +17,22 @@ import {
   stringifyCanonicalJson,
 } from "@whitebox-world/protocol";
 import type { WorldRuntimeSnapshotV4 } from "@whitebox-world/runtime-contracts";
+import {
+  buildWorldStateSnapshotV1,
+  deriveGameplayCommandReceiptIdV1,
+  deriveGameplayEventIdV1,
+  deriveWorldStateSnapshotRefV1,
+  type GameplayCommandReceiptV1,
+  type GameplayCommandV1,
+  type GameplayEventV1,
+} from "@whitebox-world/gameplay-contracts";
 
 import {
   collectControlCaptureBundleByteEvidenceV1,
   createControlCaptureBundleWriterV1,
   inspectControlCaptureBundleV1,
   type ControlCaptureFrameInputV1,
+  type ControlCaptureGameplayTransitionInputV1,
   validateControlCaptureBundleV1,
 } from "./control-capture-bundle";
 
@@ -193,6 +203,7 @@ async function rewriteIntegrity(outputDirectory: string): Promise<void> {
 function frameInput(
   captureFrameIndex: number,
   simulationTick: number,
+  snapshot: WorldRuntimeSnapshotV4 = runtimeSnapshot(simulationTick),
 ): ControlCaptureFrameInputV1 {
   return {
     kind: "worldkit-control-capture-frame" as const,
@@ -216,7 +227,7 @@ function frameInput(
       viewMatrixColumnMajor: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1] as const,
       projectionMatrixColumnMajor: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1] as const,
     },
-    snapshot: runtimeSnapshot(simulationTick),
+    snapshot,
     passesById: Object.fromEntries(CONTROL_CAPTURE_PASS_IDS_V1.map((passId) => [
       passId,
       {
@@ -224,6 +235,162 @@ function frameInput(
         bytes: passBytes(passId, captureFrameIndex),
       },
     ])),
+  };
+}
+
+function mountedGameplayEvidence(): Readonly<{
+  transition: ControlCaptureGameplayTransitionInputV1;
+  snapshot: WorldRuntimeSnapshotV4;
+}> {
+  const relationship = {
+    id: "mounted-on-test",
+    type: "mountedOn" as const,
+    schemaVersion: 1 as const,
+    riderEntityId: "player",
+    mountEntityId: "skateboard",
+    mountSlotId: "stand",
+    establishedSimulationTick: 5,
+  };
+  const spatial = (id: string, classId: string) => ({
+    id,
+    kind: "spatial-entity-state" as const,
+    entityDefinitionRef: `worldkit://subject-definition/${id}@1`,
+    entityDefinitionHash: WORLD_HASH,
+    semanticClassId: classId,
+    lifecycleMode: "active" as const,
+    positionMetersXYZ: [0, 0, 0] as const,
+    rotationQuaternionXYZW: [0, 0, 0, 1] as const,
+    scaleRatioXYZ: [1, 1, 1] as const,
+    linearVelocityMetersPerSecondXYZ: [0, 0, 0] as const,
+  });
+  const worldStateAfter = buildWorldStateSnapshotV1({
+    kind: "worldkit-world-state-snapshot",
+    schemaVersion: 1,
+    runtimeSessionId: "session-test",
+    worldSessionId: "world-session-test",
+    simulationTick: 5,
+    worldPackageRef: `package://bundle-test@${WORLD_HASH}`,
+    worldPackageRootHash: WORLD_HASH,
+    executionPlanHash: `sha256:${"c".repeat(64)}`,
+    entityStatesById: {
+      player: spatial("player", "character.humanoid"),
+      skateboard: spatial("skateboard", "vehicle.skateboard"),
+    },
+    capabilityStatesById: {
+      "capability-state:player:locomotion": {
+        id: "capability-state:player:locomotion",
+        kind: "locomotion-capability-state",
+        ownerEntityId: "player",
+        locomotionCapabilityRef: "worldkit://capability/locomotion.ground@1",
+        locomotionCapabilityHash: WORLD_HASH,
+        mode: "suspended",
+        suspendedByRelationshipId: relationship.id,
+      },
+    },
+    relationshipStatesById: { [relationship.id]: relationship },
+    semanticFactsById: {},
+    activeActionStatesById: {},
+    lastEventSequence: 3,
+  });
+  const command = {
+    schemaVersion: 1,
+    id: "command.mount.capture",
+    type: "action.activate",
+    runtimeSessionId: "session-test",
+    worldSessionId: "world-session-test",
+    controllerEntityId: "controller-primary",
+    expectedPossession: { mode: "possessed", controlledEntityId: "player" },
+    actionExecutionId: "execution.mount.capture",
+    semanticActionRef: "worldkit://semantic-action/mount@1",
+    actorEntityId: "player",
+  } as const satisfies GameplayCommandV1;
+  const events: GameplayEventV1[] = [
+    {
+      kind: "worldkit-gameplay-event",
+      schemaVersion: 1,
+      id: deriveGameplayEventIdV1("world-session-test", 1),
+      type: "relationship.committed",
+      runtimeSessionId: "session-test",
+      worldSessionId: "world-session-test",
+      simulationTick: 5,
+      sequence: 1,
+      commandId: command.id,
+      relationship,
+    },
+    {
+      kind: "worldkit-gameplay-event" as const,
+      schemaVersion: 1 as const,
+      id: deriveGameplayEventIdV1("world-session-test", 2),
+      type: "action.started" as const,
+      runtimeSessionId: "session-test",
+      worldSessionId: "world-session-test",
+      simulationTick: 5,
+      sequence: 2,
+      semanticActionRef: command.semanticActionRef,
+      actionExecutionId: command.actionExecutionId,
+      actorEntityId: command.actorEntityId,
+      commandId: command.id,
+    },
+    {
+      kind: "worldkit-gameplay-event" as const,
+      schemaVersion: 1 as const,
+      id: deriveGameplayEventIdV1("world-session-test", 3),
+      type: "action.completed" as const,
+      runtimeSessionId: "session-test",
+      worldSessionId: "world-session-test",
+      simulationTick: 5,
+      sequence: 3,
+      semanticActionRef: command.semanticActionRef,
+      actionExecutionId: command.actionExecutionId,
+      actorEntityId: command.actorEntityId,
+    },
+  ];
+  const receiptBody = {
+    kind: "worldkit-gameplay-command-receipt" as const,
+    schemaVersion: 1 as const,
+    runtimeSessionId: "session-test",
+    worldSessionId: "world-session-test",
+    commandId: command.id,
+    commandHash: sha256CanonicalJson(command) as Sha256HashV1,
+    commandType: command.type,
+    simulationTick: 5,
+    status: "committed" as const,
+    eventIds: events.map(({ id }) => id),
+    worldStateAfterRef: deriveWorldStateSnapshotRefV1({
+      runtimeSessionId: worldStateAfter.runtimeSessionId,
+      worldSessionId: worldStateAfter.worldSessionId,
+      worldStateHash: worldStateAfter.worldStateHash,
+    }),
+    worldStateAfterHash: worldStateAfter.worldStateHash,
+  };
+  const receipt: GameplayCommandReceiptV1 = {
+    id: deriveGameplayCommandReceiptIdV1(receiptBody),
+    ...receiptBody,
+  };
+  const gameplayInspectionAfter = {
+    ...runtimeSnapshot(5).world.gameplayInspection,
+    relationshipStatesById: { [relationship.id]: relationship },
+    lastEventSequence: 3,
+  };
+  const snapshot: WorldRuntimeSnapshotV4 = {
+    ...runtimeSnapshot(5),
+    world: {
+      ...runtimeSnapshot(5).world,
+      worldStateRef: receipt.worldStateAfterRef,
+      worldStateHash: receipt.worldStateAfterHash,
+      gameplayInspection: gameplayInspectionAfter,
+    },
+  };
+  return {
+    transition: {
+      captureFrameIndexAfter: 1,
+      command,
+      receipt,
+      events,
+      worldStateAfter,
+      gameplayInspectionAfter,
+    },
+    snapshot,
   };
 }
 
@@ -246,6 +413,181 @@ async function createWriter(outputDirectory: string) {
 }
 
 describe("Control Capture Bundle V1", () => {
+  it("binds mounted Action, Event, Relationship, Receipt, and Snapshot tracks", async () => {
+    const parent = await createTemporaryDirectory();
+    const outputDirectory = path.join(parent, "capture-bundle");
+    const writer = await createWriter(outputDirectory);
+    const evidence = mountedGameplayEvidence();
+
+    await writer.appendFrame(frameInput(0, 0));
+    writer.appendGameplayTransition(evidence.transition);
+    await writer.appendFrame(frameInput(1, 5, evidence.snapshot));
+    await writer.finalize();
+
+    const readRows = async (fileName: string) =>
+      (await readFile(path.join(outputDirectory, "tracks", fileName), "utf8"))
+        .trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
+    expect(await readRows("actions.ndjson")).toHaveLength(1);
+    expect(await readRows("events.ndjson")).toHaveLength(3);
+    expect(await readRows("relationships.ndjson")).toEqual([
+      expect.objectContaining({
+        captureFrameIndexAfter: 1,
+        operation: "add",
+        relationship: expect.objectContaining({ type: "mountedOn" }),
+      }),
+    ]);
+    await expect(validateControlCaptureBundleV1(outputDirectory)).resolves
+      .toMatchObject({ ok: true });
+  });
+
+  it("rejects a missing Relationship row even after a self-consistent re-hash", async () => {
+    const parent = await createTemporaryDirectory();
+    const outputDirectory = path.join(parent, "capture-bundle");
+    const writer = await createWriter(outputDirectory);
+    const evidence = mountedGameplayEvidence();
+    await writer.appendFrame(frameInput(0, 0));
+    writer.appendGameplayTransition(evidence.transition);
+    await writer.appendFrame(frameInput(1, 5, evidence.snapshot));
+    await writer.finalize();
+
+    await writeFile(
+      path.join(outputDirectory, "tracks/relationships.ndjson"),
+      "",
+      "utf8",
+    );
+    await rewriteIntegrity(outputDirectory);
+    const validation = await validateControlCaptureBundleV1(outputDirectory);
+    expect(validation.ok).toBe(false);
+    expect(validation.diagnostics).toContainEqual(expect.objectContaining({
+      code: "CAPTURE_GAMEPLAY_REFERENCE_MISMATCH",
+      path: "tracks/relationships.ndjson",
+    }));
+  });
+
+  it("rejects transition evidence whose Event Tick disagrees with its Receipt", async () => {
+    const parent = await createTemporaryDirectory();
+    const writer = await createWriter(path.join(parent, "capture-bundle"));
+    const evidence = mountedGameplayEvidence();
+    const events = evidence.transition.events.map((event) => ({
+      ...event,
+      simulationTick: event.simulationTick + 1,
+    })) as readonly GameplayEventV1[];
+
+    expect(() => writer.appendGameplayTransition({
+      ...evidence.transition,
+      events,
+    })).toThrow("CAPTURE_GAMEPLAY_REFERENCE_MISMATCH");
+    await writer.abort();
+  });
+
+  it("rejects a re-hashed Relationship Event that disagrees with its post-transition Snapshot", async () => {
+    const parent = await createTemporaryDirectory();
+    const outputDirectory = path.join(parent, "capture-bundle");
+    const writer = await createWriter(outputDirectory);
+    const evidence = mountedGameplayEvidence();
+    await writer.appendFrame(frameInput(0, 0));
+    writer.appendGameplayTransition(evidence.transition);
+    await writer.appendFrame(frameInput(1, 5, evidence.snapshot));
+    await writer.finalize();
+
+    const eventPath = path.join(outputDirectory, "tracks/events.ndjson");
+    const relationshipPath = path.join(
+      outputDirectory,
+      "tracks/relationships.ndjson",
+    );
+    const eventRows = (await readFile(eventPath, "utf8")).trim().split("\n")
+      .map((line) => JSON.parse(line));
+    const relationshipRows = (await readFile(relationshipPath, "utf8"))
+      .trim().split("\n").map((line) => JSON.parse(line));
+    eventRows[0].event.relationship.mountSlotId = "tampered-slot";
+    relationshipRows[0].relationship.mountSlotId = "tampered-slot";
+    await writeFile(
+      eventPath,
+      `${eventRows.map(stringifyCanonicalJson).join("\n")}\n`,
+      "utf8",
+    );
+    await writeFile(
+      relationshipPath,
+      `${relationshipRows.map(stringifyCanonicalJson).join("\n")}\n`,
+      "utf8",
+    );
+    await rewriteIntegrity(outputDirectory);
+
+    const validation = await validateControlCaptureBundleV1(outputDirectory);
+    expect(validation.ok).toBe(false);
+    expect(validation.diagnostics).toContainEqual(expect.objectContaining({
+      code: "CAPTURE_GAMEPLAY_REFERENCE_MISMATCH",
+      path: "tracks/relationships.ndjson/0",
+    }));
+  });
+
+  it("rejects a self-consistent Receipt chain bound to the wrong post-transition World State", async () => {
+    const parent = await createTemporaryDirectory();
+    const outputDirectory = path.join(parent, "capture-bundle");
+    const writer = await createWriter(outputDirectory);
+    const evidence = mountedGameplayEvidence();
+    await writer.appendFrame(frameInput(0, 0));
+    writer.appendGameplayTransition(evidence.transition);
+    await writer.appendFrame(frameInput(1, 5, evidence.snapshot));
+    await writer.finalize();
+
+    const actionPath = path.join(outputDirectory, "tracks/actions.ndjson");
+    const eventPath = path.join(outputDirectory, "tracks/events.ndjson");
+    const relationshipPath = path.join(
+      outputDirectory,
+      "tracks/relationships.ndjson",
+    );
+    const actionRows = (await readFile(actionPath, "utf8")).trim().split("\n")
+      .map((line) => JSON.parse(line));
+    const eventRows = (await readFile(eventPath, "utf8")).trim().split("\n")
+      .map((line) => JSON.parse(line));
+    const relationshipRows = (await readFile(relationshipPath, "utf8"))
+      .trim().split("\n").map((line) => JSON.parse(line));
+    const { id: _receiptId, ...receiptBody } = actionRows[0].receipt;
+    const wrongWorldStateHash = `sha256:${"e".repeat(64)}`;
+    const receipt = {
+      ...receiptBody,
+      worldStateAfterHash: wrongWorldStateHash,
+      worldStateAfterRef: deriveWorldStateSnapshotRefV1({
+        runtimeSessionId: receiptBody.runtimeSessionId,
+        worldSessionId: receiptBody.worldSessionId,
+        worldStateHash: wrongWorldStateHash,
+      }),
+    };
+    actionRows[0].receipt = {
+      id: deriveGameplayCommandReceiptIdV1(receipt),
+      ...receipt,
+    };
+    actionRows[0].worldStateAfterRef = receipt.worldStateAfterRef;
+    actionRows[0].worldStateAfterHash = receipt.worldStateAfterHash;
+    for (const row of [...eventRows, ...relationshipRows]) {
+      row.receiptId = actionRows[0].receipt.id;
+    }
+    await writeFile(
+      actionPath,
+      `${actionRows.map(stringifyCanonicalJson).join("\n")}\n`,
+      "utf8",
+    );
+    await writeFile(
+      eventPath,
+      `${eventRows.map(stringifyCanonicalJson).join("\n")}\n`,
+      "utf8",
+    );
+    await writeFile(
+      relationshipPath,
+      `${relationshipRows.map(stringifyCanonicalJson).join("\n")}\n`,
+      "utf8",
+    );
+    await rewriteIntegrity(outputDirectory);
+
+    const validation = await validateControlCaptureBundleV1(outputDirectory);
+    expect(validation.ok).toBe(false);
+    expect(validation.diagnostics).toContainEqual(expect.objectContaining({
+      code: "CAPTURE_GAMEPLAY_REFERENCE_MISMATCH",
+      path: "tracks/actions.ndjson/0",
+    }));
+  });
+
   it("atomically writes and validates a deterministic five-pass bundle", async () => {
     const parent = await createTemporaryDirectory();
     const outputDirectory = path.join(parent, "capture-bundle");

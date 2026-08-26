@@ -25,6 +25,20 @@ import {
   stringifyCanonicalJson,
 } from "@whitebox-world/protocol";
 import type { WorldRuntimeSnapshotV4 } from "@whitebox-world/runtime-contracts";
+import {
+  deriveGameplayCommandHashV1,
+  deriveWorldStateSnapshotRefV1,
+  parseGameplayCommandReceiptV1,
+  parseGameplayCommandV1,
+  parseGameplayEventV1,
+  parseGameplayInspectionSnapshotV1,
+  parseWorldStateSnapshotV1,
+  type GameplayCommandReceiptV1,
+  type GameplayCommandV1,
+  type GameplayEventV1,
+  type GameplayInspectionSnapshotV1,
+  type WorldStateSnapshotV1,
+} from "@whitebox-world/gameplay-contracts";
 import { isEqual, isPlainObject } from "lodash-es";
 
 const PASS_FILE_NAMES: Readonly<Record<ControlCapturePassIdV1, string>> = {
@@ -138,8 +152,20 @@ export interface ControlCaptureBundleByteEvidenceV1 {
 
 export interface ControlCaptureBundleWriterV1 {
   appendFrame(frame: ControlCaptureFrameInputV1): Promise<void>;
+  appendGameplayTransition(
+    transition: ControlCaptureGameplayTransitionInputV1,
+  ): void;
   finalize(): Promise<FinalizedControlCaptureBundleV1>;
   abort(): Promise<void>;
+}
+
+export interface ControlCaptureGameplayTransitionInputV1 {
+  readonly captureFrameIndexAfter: number;
+  readonly command: GameplayCommandV1;
+  readonly receipt: GameplayCommandReceiptV1;
+  readonly events: readonly GameplayEventV1[];
+  readonly worldStateAfter: WorldStateSnapshotV1;
+  readonly gameplayInspectionAfter: GameplayInspectionSnapshotV1;
 }
 
 export interface ControlCaptureBundleDiagnosticV1 {
@@ -152,6 +178,8 @@ export interface ControlCaptureBundleDiagnosticV1 {
     | "CAPTURE_FRAME_DIMENSIONS_INVALID"
     | "CAPTURE_FRAME_HASH_MISMATCH"
     | "CAPTURE_FRAME_TICK_INVALID"
+    | "CAPTURE_GAMEPLAY_REFERENCE_MISMATCH"
+    | "CAPTURE_GAMEPLAY_TRACK_INVALID"
     | "CAPTURE_MANIFEST_HASH_MISMATCH"
     | "CAPTURE_REQUIRED_PASS_MISSING"
     | "CAPTURE_ROOT_HASH_MISMATCH"
@@ -339,6 +367,9 @@ export async function createControlCaptureBundleWriterV1(
   const frameManifests: FrameManifestV1[] = [];
   const snapshotRows: unknown[] = [];
   const cameraRows: unknown[] = [];
+  const actionRows: unknown[] = [];
+  const eventRows: unknown[] = [];
+  const relationshipRows: unknown[] = [];
   let closed = false;
   let previousSimulationTick: number | undefined;
 
@@ -354,6 +385,94 @@ export async function createControlCaptureBundleWriterV1(
   };
 
   return {
+    appendGameplayTransition(input): void {
+      if (closed) throw new Error("CAPTURE_WRITER_CLOSED");
+      if (
+        !Number.isSafeInteger(input.captureFrameIndexAfter) ||
+        input.captureFrameIndexAfter < 0 ||
+        input.captureFrameIndexAfter >=
+          options.compiledTake.captureSchedulePlan.entries.length
+      ) {
+        throw new Error("CAPTURE_GAMEPLAY_TRACK_INVALID: Frame binding is invalid.");
+      }
+      let command: GameplayCommandV1;
+      let receipt: GameplayCommandReceiptV1;
+      let events: readonly GameplayEventV1[];
+      let worldStateAfter: WorldStateSnapshotV1;
+      let gameplayInspectionAfter: GameplayInspectionSnapshotV1;
+      try {
+        command = parseGameplayCommandV1(input.command);
+        receipt = parseGameplayCommandReceiptV1(input.receipt);
+        events = input.events.map(parseGameplayEventV1);
+        worldStateAfter = parseWorldStateSnapshotV1(input.worldStateAfter);
+        gameplayInspectionAfter = parseGameplayInspectionSnapshotV1(
+          input.gameplayInspectionAfter,
+        );
+      } catch {
+        throw new Error("CAPTURE_GAMEPLAY_TRACK_INVALID: Evidence is non-canonical.");
+      }
+      if (
+        receipt.status !== "committed" ||
+        receipt.commandId !== command.id ||
+        receipt.commandHash !== deriveGameplayCommandHashV1(command) ||
+        receipt.commandType !== command.type ||
+        receipt.runtimeSessionId !== options.runtimeSessionId ||
+        receipt.worldSessionId !== options.worldSessionId ||
+        command.runtimeSessionId !== options.runtimeSessionId ||
+        command.worldSessionId !== options.worldSessionId ||
+        worldStateAfter.runtimeSessionId !== options.runtimeSessionId ||
+        worldStateAfter.worldSessionId !== options.worldSessionId ||
+        gameplayInspectionAfter.runtimeSessionId !== options.runtimeSessionId ||
+        gameplayInspectionAfter.worldSessionId !== options.worldSessionId ||
+        receipt.worldStateAfterRef !== deriveWorldStateSnapshotRefV1({
+          runtimeSessionId: worldStateAfter.runtimeSessionId,
+          worldSessionId: worldStateAfter.worldSessionId,
+          worldStateHash: worldStateAfter.worldStateHash,
+        }) ||
+        receipt.worldStateAfterHash !== worldStateAfter.worldStateHash ||
+        !isEqual(receipt.eventIds, events.map(({ id }) => id)) ||
+        events.some((event) =>
+          event.runtimeSessionId !== options.runtimeSessionId ||
+          event.worldSessionId !== options.worldSessionId ||
+          event.simulationTick !== receipt.simulationTick ||
+          ("commandId" in event && event.commandId !== command.id)
+        )
+      ) {
+        throw new Error(
+          "CAPTURE_GAMEPLAY_REFERENCE_MISMATCH: Evidence identities disagree.",
+        );
+      }
+      const baseRow = {
+        captureFrameIndexAfter: input.captureFrameIndexAfter,
+        simulationTick: receipt.simulationTick,
+        receipt,
+        worldStateAfterRef: receipt.worldStateAfterRef,
+        worldStateAfterHash: receipt.worldStateAfterHash,
+      };
+      if (command.type === "action.activate" || command.type === "action.cancel") {
+        actionRows.push({ ...baseRow, command });
+      }
+      for (const event of events) {
+        eventRows.push({
+          captureFrameIndexAfter: input.captureFrameIndexAfter,
+          receiptId: receipt.id,
+          event,
+        });
+        if (
+          event.type === "relationship.committed" ||
+          event.type === "relationship.removed"
+        ) {
+          relationshipRows.push({
+            captureFrameIndexAfter: input.captureFrameIndexAfter,
+            receiptId: receipt.id,
+            eventId: event.id,
+            operation: event.type === "relationship.committed" ? "add" : "remove",
+            relationship: event.relationship,
+          });
+        }
+      }
+    },
+
     async appendFrame(frame): Promise<void> {
       if (closed) throw new Error("CAPTURE_WRITER_CLOSED");
       try {
@@ -449,9 +568,9 @@ export async function createControlCaptureBundleWriterV1(
         await writeCanonicalJson(path.join(stagingDirectory, "tables/semantic-classes.json"), options.semanticClasses);
         await writeCanonicalJson(path.join(stagingDirectory, "tables/instances.json"), options.instances);
         await writeNdjson(path.join(stagingDirectory, "tracks/inputs.ndjson"), []);
-        await writeNdjson(path.join(stagingDirectory, "tracks/actions.ndjson"), []);
-        await writeNdjson(path.join(stagingDirectory, "tracks/events.ndjson"), []);
-        await writeNdjson(path.join(stagingDirectory, "tracks/relationships.ndjson"), []);
+        await writeNdjson(path.join(stagingDirectory, "tracks/actions.ndjson"), actionRows);
+        await writeNdjson(path.join(stagingDirectory, "tracks/events.ndjson"), eventRows);
+        await writeNdjson(path.join(stagingDirectory, "tracks/relationships.ndjson"), relationshipRows);
         await writeNdjson(path.join(stagingDirectory, "tracks/snapshots.ndjson"), snapshotRows);
         await writeNdjson(path.join(stagingDirectory, "tracks/cameras.ndjson"), cameraRows);
         await writeCanonicalJson(path.join(stagingDirectory, "diagnostics.json"), []);
@@ -545,6 +664,33 @@ async function readJsonArray(
   }
 }
 
+async function readNdjsonRows(
+  directory: string,
+  filePath: string,
+  diagnostics: ControlCaptureBundleDiagnosticV1[],
+): Promise<readonly unknown[]> {
+  try {
+    const text = await readFile(path.join(directory, filePath), "utf8");
+    if (text === "") return [];
+    if (!text.endsWith("\n")) throw new TypeError("missing newline");
+    return text.slice(0, -1).split("\n").map((line) => {
+      const value: unknown = JSON.parse(line);
+      if (!isPlainObject(value) || stringifyCanonicalJson(value) !== line) {
+        throw new TypeError("non-canonical row");
+      }
+      return value;
+    });
+  } catch {
+    addValidationDiagnostic(
+      diagnostics,
+      "CAPTURE_GAMEPLAY_TRACK_INVALID",
+      filePath,
+      "Gameplay track must contain canonical NDJSON objects.",
+    );
+    return [];
+  }
+}
+
 function validateIdTable(
   rows: readonly unknown[] | undefined,
   filePath: string,
@@ -628,6 +774,26 @@ export async function validateControlCaptureBundleV1(
   const instances = await readJsonArray(
     resolvedDirectory,
     "tables/instances.json",
+    diagnostics,
+  );
+  const actionTrackRows = await readNdjsonRows(
+    resolvedDirectory,
+    "tracks/actions.ndjson",
+    diagnostics,
+  );
+  const eventTrackRows = await readNdjsonRows(
+    resolvedDirectory,
+    "tracks/events.ndjson",
+    diagnostics,
+  );
+  const relationshipTrackRows = await readNdjsonRows(
+    resolvedDirectory,
+    "tracks/relationships.ndjson",
+    diagnostics,
+  );
+  const snapshotTrackRows = await readNdjsonRows(
+    resolvedDirectory,
+    "tracks/snapshots.ndjson",
     diagnostics,
   );
   if (integrity === undefined || manifest === undefined || take === undefined) {
@@ -906,6 +1072,174 @@ export async function validateControlCaptureBundleV1(
   }
   if (manifest.frameCount !== frames.length) {
     addValidationDiagnostic(diagnostics, "CAPTURE_FRAME_INDEX_INVALID", "bundle.json/frameCount", "Frame count does not match frame manifests.");
+  }
+  const snapshotByFrameIndex = new Map<number, WorldRuntimeSnapshotV4>();
+  let trackWorldSessionId: string | undefined;
+  for (const [index, row] of snapshotTrackRows.entries()) {
+    if (!isPlainObject(row)) continue;
+    const record = row as Record<string, unknown>;
+    const captureFrameIndex = record.captureFrameIndex;
+    const snapshot = record.snapshot as WorldRuntimeSnapshotV4 | undefined;
+    if (
+      snapshot === undefined ||
+      !Number.isSafeInteger(captureFrameIndex) ||
+      captureFrameIndex !== index ||
+      snapshot?.runtimeSessionId !== manifest.runtimeSessionId ||
+      typeof snapshot.worldSessionId !== "string" ||
+      (trackWorldSessionId !== undefined &&
+        snapshot.worldSessionId !== trackWorldSessionId)
+    ) {
+      addValidationDiagnostic(
+        diagnostics,
+        "CAPTURE_GAMEPLAY_TRACK_INVALID",
+        `tracks/snapshots.ndjson/${index}`,
+        "Snapshot track row has invalid frame or Session ownership.",
+      );
+      continue;
+    }
+    trackWorldSessionId ??= snapshot.worldSessionId;
+    snapshotByFrameIndex.set(captureFrameIndex as number, snapshot);
+  }
+  const eventsById = new Map<string, GameplayEventV1>();
+  const eventIdsByReceiptId = new Map<string, string[]>();
+  for (const [index, row] of eventTrackRows.entries()) {
+    if (!isPlainObject(row)) continue;
+    const record = row as Record<string, unknown>;
+    let event: GameplayEventV1;
+    try {
+      event = parseGameplayEventV1(record.event);
+    } catch {
+      addValidationDiagnostic(
+        diagnostics,
+        "CAPTURE_GAMEPLAY_TRACK_INVALID",
+        `tracks/events.ndjson/${index}`,
+        "Event row contains an invalid Gameplay Event.",
+      );
+      continue;
+    }
+    if (
+      typeof record.receiptId !== "string" ||
+      event.runtimeSessionId !== manifest.runtimeSessionId ||
+      eventsById.has(event.id)
+    ) {
+      addValidationDiagnostic(
+        diagnostics,
+        "CAPTURE_GAMEPLAY_REFERENCE_MISMATCH",
+        `tracks/events.ndjson/${index}`,
+        "Event identity, Session ownership, or uniqueness is invalid.",
+      );
+      continue;
+    }
+    eventsById.set(event.id, event);
+    const ids = eventIdsByReceiptId.get(record.receiptId) ?? [];
+    ids.push(event.id);
+    eventIdsByReceiptId.set(record.receiptId, ids);
+  }
+  for (const [index, row] of actionTrackRows.entries()) {
+    if (!isPlainObject(row)) continue;
+    const record = row as Record<string, unknown>;
+    let command: GameplayCommandV1;
+    let receipt: GameplayCommandReceiptV1;
+    try {
+      command = parseGameplayCommandV1(record.command);
+      receipt = parseGameplayCommandReceiptV1(record.receipt);
+    } catch {
+      addValidationDiagnostic(
+        diagnostics,
+        "CAPTURE_GAMEPLAY_TRACK_INVALID",
+        `tracks/actions.ndjson/${index}`,
+        "Action row contains an invalid Command or Receipt.",
+      );
+      continue;
+    }
+    const frameIndex = record.captureFrameIndexAfter;
+    const snapshot = Number.isSafeInteger(frameIndex)
+      ? snapshotByFrameIndex.get(frameIndex as number)
+      : undefined;
+    if (
+      receipt.status !== "committed" ||
+      command.id !== receipt.commandId ||
+      receipt.commandHash !== deriveGameplayCommandHashV1(command) ||
+      receipt.commandType !== command.type ||
+      command.runtimeSessionId !== manifest.runtimeSessionId ||
+      command.worldSessionId !== snapshot?.worldSessionId ||
+      receipt.runtimeSessionId !== manifest.runtimeSessionId ||
+      receipt.worldSessionId !== snapshot?.worldSessionId ||
+      receipt.worldStateAfterRef !== snapshot?.world.worldStateRef ||
+      receipt.worldStateAfterHash !== snapshot.world.worldStateHash ||
+      !isEqual(receipt.eventIds, eventIdsByReceiptId.get(receipt.id) ?? []) ||
+      snapshot.world.simulationTick < receipt.simulationTick ||
+      receipt.eventIds.some((eventId) => {
+        const event = eventsById.get(eventId);
+        return event === undefined ||
+          event.runtimeSessionId !== receipt.runtimeSessionId ||
+          event.worldSessionId !== receipt.worldSessionId ||
+          event.simulationTick !== receipt.simulationTick ||
+          ("commandId" in event && event.commandId !== command.id);
+      })
+    ) {
+      addValidationDiagnostic(
+        diagnostics,
+        "CAPTURE_GAMEPLAY_REFERENCE_MISMATCH",
+        `tracks/actions.ndjson/${index}`,
+        "Action, Receipt, Event, Snapshot, or World State identities disagree.",
+      );
+    }
+  }
+  const expectedRelationshipRows = eventTrackRows.flatMap((row) => {
+    if (!isPlainObject(row)) return [];
+    const record = row as Record<string, unknown>;
+    let event: GameplayEventV1;
+    try {
+      event = parseGameplayEventV1(record.event);
+    } catch {
+      return [];
+    }
+    if (
+      event.type !== "relationship.committed" &&
+      event.type !== "relationship.removed"
+    ) return [];
+    return [{
+      captureFrameIndexAfter: record.captureFrameIndexAfter,
+      receiptId: record.receiptId,
+      eventId: event.id,
+      operation: event.type === "relationship.committed" ? "add" : "remove",
+      relationship: event.relationship,
+    }];
+  });
+  if (!isEqual(relationshipTrackRows, expectedRelationshipRows)) {
+    addValidationDiagnostic(
+      diagnostics,
+      "CAPTURE_GAMEPLAY_REFERENCE_MISMATCH",
+      "tracks/relationships.ndjson",
+      "Relationship rows must exactly project Relationship Events.",
+    );
+  }
+  for (const [index, row] of relationshipTrackRows.entries()) {
+    if (!isPlainObject(row)) {
+      continue;
+    }
+    const record = row as Record<string, unknown>;
+    if (!Number.isSafeInteger(record.captureFrameIndexAfter)) continue;
+    const snapshot = snapshotByFrameIndex.get(
+      record.captureFrameIndexAfter as number,
+    );
+    const relationship = record.relationship as { id?: unknown } | undefined;
+    const state = typeof relationship?.id === "string"
+      ? snapshot?.world.gameplayInspection.relationshipStatesById[relationship.id]
+      : undefined;
+    if (
+      snapshot === undefined ||
+      (record.operation === "add" && !isEqual(state, relationship)) ||
+      (record.operation === "remove" && state !== undefined)
+    ) {
+      addValidationDiagnostic(
+        diagnostics,
+        "CAPTURE_GAMEPLAY_REFERENCE_MISMATCH",
+        `tracks/relationships.ndjson/${index}`,
+        "Relationship row does not match its bound post-transition Snapshot.",
+      );
+    }
   }
   if (diagnostics.length > 0 || typeof integrity.bundleRootHash !== "string") {
     return { ok: false, diagnostics };
