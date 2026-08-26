@@ -247,9 +247,9 @@ describe("P16-H1 RuntimeHost publication V2", () => {
       worldSessionId: "world-session.next",
       worldPackageRef: REPLACEMENT_WORLD_PACKAGE_REF,
     });
-    await expect(host.replaceWorld({
+    expect(() => host.replaceWorld({
       worldConfiguration: mutableWorldConfiguration(INITIAL_WORLD_PACKAGE_REF),
       publication: publicationEnvelope(host),
-    })).rejects.toThrow(/RuntimeWorldReplacementRequestV1/);
+    })).toThrow(/RuntimeWorldReplacementRequestV1/);
   });
 });
