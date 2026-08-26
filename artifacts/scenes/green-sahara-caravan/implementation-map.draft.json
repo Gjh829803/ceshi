@@ -1,0 +1,40 @@
+{
+  "kind": "worldkit-scene-brief-implementation-map-draft",
+  "schemaVersion": 1,
+  "sceneId": "green-sahara-caravan",
+  "authoringSpecId": "green-sahara-caravan-authoring",
+  "visualTargetMappings": [
+    {
+      "visualTargetId": "visual-target-1",
+      "runtimeEntityIds": [
+        "camel-rider"
+      ]
+    },
+    {
+      "visualTargetId": "visual-target-2",
+      "runtimeEntityIds": [
+        "city-front-wall-west",
+        "city-front-wall-east",
+        "city-wall-west",
+        "city-wall-east",
+        "city-wall-back",
+        "city-gate-tower-west",
+        "city-gate-tower-east",
+        "city-main-gate",
+        "city-corner-tower-front-west",
+        "city-corner-tower-front-east",
+        "city-corner-tower-back-west",
+        "city-corner-tower-back-east",
+        "city-inner-keep",
+        "city-buildings-front-west",
+        "city-buildings-front-east",
+        "city-buildings-middle-west",
+        "city-buildings-middle-east",
+        "city-buildings-back-west",
+        "city-buildings-back-east",
+        "city-inner-tower-west",
+        "city-inner-tower-east"
+      ]
+    }
+  ]
+}

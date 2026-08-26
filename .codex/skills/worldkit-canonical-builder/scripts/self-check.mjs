@@ -1056,6 +1056,7 @@ function baseUniq(array, iteratee, comparator) {
 function uniq(array) {
   return array && array.length ? baseUniq(array) : [];
 }
+const BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF = "worldkit://traversal-graph-builder-profile/outdoor-humanoid.heightfield-r1@1";
 const BUILT_IN_GROUND_STATIC_TRAVERSAL_SURFACE_PROFILE_REF = "worldkit://traversal-surface-profile/ground.static@1";
 const TRAVERSAL_DRIVER_PROFILE_REQUIRED_KEYS = [
   "kind",
@@ -1103,7 +1104,7 @@ const TRAVERSAL_GRAPH_BUILDER_PROFILE_V2_REQUIRED_KEYS = [
   "minimumEquivalentPlaneNormalDotRatio",
   "maximumTraversalSurfaceTrianglePairTestCount"
 ];
-new Set(
+const TRAVERSAL_GRAPH_BUILDER_PROFILE_V2_ALLOWED_KEYS = new Set(
   TRAVERSAL_GRAPH_BUILDER_PROFILE_V2_REQUIRED_KEYS
 );
 const TRAVERSAL_SURFACE_PROFILE_REQUIRED_KEYS = [
@@ -1115,6 +1116,29 @@ const TRAVERSAL_SURFACE_PROFILE_REQUIRED_KEYS = [
 const TRAVERSAL_SURFACE_PROFILE_ALLOWED_KEYS = new Set(
   TRAVERSAL_SURFACE_PROFILE_REQUIRED_KEYS
 );
+const BUILT_IN_HEIGHTFIELD_R1_GRAPH_BUILDER_PROFILE = {
+  kind: "traversal-graph-builder-profile",
+  schemaVersion: 2,
+  clearanceMarginMeters: 0.05,
+  voxelCellSizeMeters: 0.15,
+  voxelCellHeightMeters: 0.1,
+  tileSizeCells: 64,
+  maximumEdgeLengthMeters: 2.4,
+  maximumSimplificationErrorMeters: 0.15,
+  positionQuantizationMeters: 1e-3,
+  slopeCostWeight: 1,
+  stepCostWeight: 1,
+  maximumNodes: 1e5,
+  maximumEdges: 2e5,
+  maximumTiles: 1024,
+  maximumSearchSteps: 1e5,
+  maximumTraversalSurfaceCount: 61,
+  minimumEquivalentPlaneNormalDotRatio: 0.99999,
+  maximumTraversalSurfaceTrianglePairTestCount: 4e6
+};
+({
+  ...BUILT_IN_HEIGHTFIELD_R1_GRAPH_BUILDER_PROFILE
+});
 const BUILT_IN_GROUND_STATIC_TRAVERSAL_SURFACE_PROFILE = {
   kind: "traversal-surface-profile",
   schemaVersion: 1,
@@ -1154,6 +1178,43 @@ function rejectForbiddenAndMissingKeys(source, allowedKeys, requiredKeys, forbid
     throw new Error(`${missingCode}: '${missingKey}'.`);
   }
 }
+function requireFiniteNumber(value, code2, field) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new Error(`${code2}: '${field}' must be a finite number.`);
+  }
+  return value;
+}
+function requirePositiveNumber(value, code2, field, maximum) {
+  const numberValue = requireFiniteNumber(value, code2, field);
+  if (!(numberValue > 0) || numberValue > maximum) {
+    throw new Error(`${code2}: '${field}' must be > 0 and <= ${maximum}.`);
+  }
+  return numberValue;
+}
+function requireNonNegativeNumber(value, code2, field, maximum) {
+  const numberValue = requireFiniteNumber(value, code2, field);
+  if (numberValue < 0 || numberValue > maximum) {
+    throw new Error(`${code2}: '${field}' must be >= 0 and <= ${maximum}.`);
+  }
+  return numberValue;
+}
+function requireNumberInRange(value, code2, field, minimum, maximum) {
+  const numberValue = requireFiniteNumber(value, code2, field);
+  if (numberValue < minimum || numberValue > maximum) {
+    throw new Error(
+      `${code2}: '${field}' must be >= ${minimum} and <= ${maximum}.`
+    );
+  }
+  return numberValue;
+}
+function requireSafeIntegerInRange(value, code2, field, minimum, maximum) {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < minimum || value > maximum) {
+    throw new Error(
+      `${code2}: '${field}' must be a safe integer from ${minimum} through ${maximum}.`
+    );
+  }
+  return value;
+}
 function validateTraversalSurfaceProfileV1(value) {
   const source = requirePlainProfile(value, "TRAVERSAL_SURFACE_PROFILE_NOT_PLAIN");
   rejectForbiddenAndMissingKeys(
@@ -1184,6 +1245,152 @@ function validateTraversalSurfaceProfileV1(value) {
     );
   }
 }
+function validateTraversalGraphBuilderProfileV2(value) {
+  const source = requirePlainProfile(
+    value,
+    "TRAVERSAL_GRAPH_BUILDER_PROFILE_NOT_PLAIN"
+  );
+  rejectForbiddenAndMissingKeys(
+    source,
+    TRAVERSAL_GRAPH_BUILDER_PROFILE_V2_ALLOWED_KEYS,
+    TRAVERSAL_GRAPH_BUILDER_PROFILE_V2_REQUIRED_KEYS,
+    "TRAVERSAL_GRAPH_BUILDER_FIELD_FORBIDDEN",
+    "TRAVERSAL_GRAPH_BUILDER_FIELD_MISSING"
+  );
+  if (source.kind !== "traversal-graph-builder-profile") {
+    throw new Error(
+      "TRAVERSAL_GRAPH_BUILDER_KIND_MISMATCH: kind must be traversal-graph-builder-profile."
+    );
+  }
+  if (source.schemaVersion !== 2) {
+    throw new Error(
+      "TRAVERSAL_GRAPH_BUILDER_SCHEMA_VERSION_MISMATCH: schemaVersion must be 2."
+    );
+  }
+  requireNonNegativeNumber(
+    source.clearanceMarginMeters,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "clearanceMarginMeters",
+    2
+  );
+  const voxelCellSizeMeters = requireNumberInRange(
+    source.voxelCellSizeMeters,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "voxelCellSizeMeters",
+    1e-3,
+    4
+  );
+  requireNumberInRange(
+    source.voxelCellHeightMeters,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "voxelCellHeightMeters",
+    1e-3,
+    2
+  );
+  requireSafeIntegerInRange(
+    source.tileSizeCells,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "tileSizeCells",
+    16,
+    1024
+  );
+  const maximumEdgeLengthMeters = requirePositiveNumber(
+    source.maximumEdgeLengthMeters,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "maximumEdgeLengthMeters",
+    256
+  );
+  if (maximumEdgeLengthMeters < voxelCellSizeMeters) {
+    throw new Error(
+      "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID: 'maximumEdgeLengthMeters' must be at least one voxelCellSizeMeters."
+    );
+  }
+  requirePositiveNumber(
+    source.maximumSimplificationErrorMeters,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "maximumSimplificationErrorMeters",
+    16
+  );
+  requirePositiveNumber(
+    source.positionQuantizationMeters,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "positionQuantizationMeters",
+    1
+  );
+  requireNonNegativeNumber(
+    source.slopeCostWeight,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "slopeCostWeight",
+    100
+  );
+  requireNonNegativeNumber(
+    source.stepCostWeight,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "stepCostWeight",
+    100
+  );
+  requireSafeIntegerInRange(
+    source.maximumNodes,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "maximumNodes",
+    1,
+    1e6
+  );
+  requireSafeIntegerInRange(
+    source.maximumEdges,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "maximumEdges",
+    1,
+    2e6
+  );
+  requireSafeIntegerInRange(
+    source.maximumTiles,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "maximumTiles",
+    1,
+    4096
+  );
+  requireSafeIntegerInRange(
+    source.maximumSearchSteps,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "maximumSearchSteps",
+    1,
+    1e6
+  );
+  requireSafeIntegerInRange(
+    source.maximumTraversalSurfaceCount,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "maximumTraversalSurfaceCount",
+    1,
+    1e6
+  );
+  requirePositiveNumber(
+    source.minimumEquivalentPlaneNormalDotRatio,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "minimumEquivalentPlaneNormalDotRatio",
+    1
+  );
+  requireSafeIntegerInRange(
+    source.maximumTraversalSurfaceTrianglePairTestCount,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "maximumTraversalSurfaceTrianglePairTestCount",
+    1,
+    Number.MAX_SAFE_INTEGER - 1
+  );
+}
+function resolveTraversalGraphBuilderProfileV2(resourceRef) {
+  let profile;
+  {
+    profile = structuredClone(BUILT_IN_HEIGHTFIELD_R1_GRAPH_BUILDER_PROFILE);
+  }
+  validateTraversalGraphBuilderProfileV2(profile);
+  return deepFreeze$5({
+    resourceRef,
+    resolvedVersion: "1",
+    contentHash: contentHashOf(profile),
+    profile: deepFreeze$5(profile)
+  });
+}
 function resolveTraversalSurfaceProfileV1(resourceRef) {
   if (resourceRef !== BUILT_IN_GROUND_STATIC_TRAVERSAL_SURFACE_PROFILE_REF) {
     throw new Error(`TRAVERSAL_SURFACE_PROFILE_NOT_FOUND: '${resourceRef}'.`);
@@ -1196,6 +1403,233 @@ function resolveTraversalSurfaceProfileV1(resourceRef) {
     contentHash: contentHashOf(profile),
     profile: deepFreeze$5(profile)
   });
+}
+const MICROMETERS_PER_METER = 1e6;
+class TraversalGraphBuildBudgetExceededErrorV1 extends Error {
+  code = "ROUTE_GRAPH_BUDGET_EXCEEDED";
+  tilesX;
+  tilesZ;
+  estimatedTiles;
+  maximumTiles;
+  minimumMetersXZ;
+  maximumMetersXZ;
+  constructor(input) {
+    super(
+      `ROUTE_GRAPH_BUDGET_EXCEEDED: estimated ${input.estimate.estimatedTiles} tiles exceeds maximumTiles ${input.maximumTiles}.`
+    );
+    this.name = "TraversalGraphBuildBudgetExceededErrorV1";
+    this.tilesX = input.estimate.tilesX;
+    this.tilesZ = input.estimate.tilesZ;
+    this.estimatedTiles = input.estimate.estimatedTiles;
+    this.maximumTiles = input.maximumTiles;
+    this.minimumMetersXZ = Object.freeze([...input.minimumMetersXZ]);
+    this.maximumMetersXZ = Object.freeze([...input.maximumMetersXZ]);
+  }
+}
+function failBudget(message) {
+  throw new Error(`TRAVERSAL_GRAPH_BUILD_BUDGET_INVALID: ${message}`);
+}
+function quantizeTraversalMetersToMicrometersV1(valueMeters) {
+  if (!Number.isFinite(valueMeters)) {
+    failBudget("meter value must be finite.");
+  }
+  const micrometers = Math.round(valueMeters * MICROMETERS_PER_METER);
+  if (!Number.isSafeInteger(micrometers)) {
+    failBudget("meter value exceeds deterministic micrometer range.");
+  }
+  return micrometers;
+}
+function requirePositiveMeters(value, field) {
+  if (!Number.isFinite(value) || !(value > 0)) {
+    failBudget(`'${field}' must be finite and > 0.`);
+  }
+  const micrometers = quantizeTraversalMetersToMicrometersV1(value);
+  if (!(micrometers > 0)) {
+    failBudget(`'${field}' must be at least one micrometer.`);
+  }
+  return micrometers;
+}
+function requireBoundsTuple(value, field) {
+  if (!Array.isArray(value) || value.length !== 2) {
+    failBudget(`'${field}' must be a finite 2-tuple.`);
+  }
+  quantizeTraversalMetersToMicrometersV1(value[0]);
+  quantizeTraversalMetersToMicrometersV1(value[1]);
+  return value;
+}
+function estimateHeightfieldTileCountV1(input) {
+  const widthMicrometers = requirePositiveMeters(input.widthMeters, "widthMeters");
+  const depthMicrometers = requirePositiveMeters(input.depthMeters, "depthMeters");
+  const voxelCellSizeMicrometers = requirePositiveMeters(
+    input.voxelCellSizeMeters,
+    "voxelCellSizeMeters"
+  );
+  if (!Number.isSafeInteger(input.tileSizeCells) || !(input.tileSizeCells > 0)) {
+    failBudget("'tileSizeCells' must be a positive safe integer.");
+  }
+  const tileSizeMicrometers = input.tileSizeCells * voxelCellSizeMicrometers;
+  if (!Number.isSafeInteger(tileSizeMicrometers)) {
+    failBudget("tile span exceeds deterministic micrometer range.");
+  }
+  const tilesX = Math.ceil(widthMicrometers / tileSizeMicrometers);
+  const tilesZ = Math.ceil(depthMicrometers / tileSizeMicrometers);
+  const estimatedTiles = tilesX * tilesZ;
+  if (!Number.isSafeInteger(estimatedTiles)) {
+    failBudget("estimated tile count exceeds safe integer range.");
+  }
+  return { tilesX, tilesZ, estimatedTiles };
+}
+function assertTraversalGraphBuildBudgetV1(input) {
+  if (!Number.isSafeInteger(input.maximumTiles) || !(input.maximumTiles > 0)) {
+    failBudget("'maximumTiles' must be a positive safe integer.");
+  }
+  const minimumMetersXZ = requireBoundsTuple(
+    input.minimumMetersXZ,
+    "minimumMetersXZ"
+  );
+  const maximumMetersXZ = requireBoundsTuple(
+    input.maximumMetersXZ,
+    "maximumMetersXZ"
+  );
+  const minimumXMicrometers = quantizeTraversalMetersToMicrometersV1(
+    minimumMetersXZ[0]
+  );
+  const minimumZMicrometers = quantizeTraversalMetersToMicrometersV1(
+    minimumMetersXZ[1]
+  );
+  const maximumXMicrometers = quantizeTraversalMetersToMicrometersV1(
+    maximumMetersXZ[0]
+  );
+  const maximumZMicrometers = quantizeTraversalMetersToMicrometersV1(
+    maximumMetersXZ[1]
+  );
+  const widthMicrometers = maximumXMicrometers - minimumXMicrometers;
+  const depthMicrometers = maximumZMicrometers - minimumZMicrometers;
+  if (!(widthMicrometers > 0) || !(depthMicrometers > 0)) {
+    failBudget(
+      "minimumMetersXZ and maximumMetersXZ must define positive X and Z extents after micrometer normalization."
+    );
+  }
+  const estimate2 = estimateHeightfieldTileCountV1({
+    widthMeters: widthMicrometers / MICROMETERS_PER_METER,
+    depthMeters: depthMicrometers / MICROMETERS_PER_METER,
+    tileSizeCells: input.tileSizeCells,
+    voxelCellSizeMeters: input.voxelCellSizeMeters
+  });
+  if (estimate2.estimatedTiles > input.maximumTiles) {
+    throw new TraversalGraphBuildBudgetExceededErrorV1({
+      estimate: estimate2,
+      maximumTiles: input.maximumTiles,
+      minimumMetersXZ,
+      maximumMetersXZ
+    });
+  }
+  return estimate2;
+}
+function requireRoutePointsMicrometers(pointsMetersXZ) {
+  if (!Array.isArray(pointsMetersXZ) || pointsMetersXZ.length < 2) {
+    failBudget("'pointsMetersXZ' must contain at least two finite 2-tuples.");
+  }
+  const pointsMicrometers = pointsMetersXZ.map((point, index) => {
+    if (!Array.isArray(point) || point.length !== 2) {
+      failBudget(`'pointsMetersXZ[${index}]' must be a finite 2-tuple.`);
+    }
+    return [
+      quantizeTraversalMetersToMicrometersV1(point[0]),
+      quantizeTraversalMetersToMicrometersV1(point[1])
+    ];
+  });
+  const hasNonZeroSegment = pointsMicrometers.slice(1).some((point, index) => {
+    const previous = pointsMicrometers[index];
+    return point[0] !== previous[0] || point[1] !== previous[1];
+  });
+  if (!hasNonZeroSegment) {
+    failBudget("'pointsMetersXZ' must contain a non-zero segment after micrometer normalization.");
+  }
+  return pointsMicrometers;
+}
+function safeMicrometerSum(left, right, field) {
+  const result2 = left + right;
+  if (!Number.isSafeInteger(result2)) {
+    failBudget(`'${field}' exceeds deterministic micrometer range.`);
+  }
+  return result2;
+}
+function metersFromMicrometers(value) {
+  const meters = value / MICROMETERS_PER_METER;
+  return Object.is(meters, -0) ? 0 : meters;
+}
+function estimateRouteBuildWindowTileCountV1(input) {
+  if (input === null || typeof input !== "object" || Array.isArray(input)) {
+    failBudget("route build-window input must be an object.");
+  }
+  const pointsMicrometers = requireRoutePointsMicrometers(input.pointsMetersXZ);
+  const widthMicrometers = requirePositiveMeters(input.widthMeters, "widthMeters");
+  if (!Array.isArray(input.terrainCellSizeMetersXZ) || input.terrainCellSizeMetersXZ.length !== 2) {
+    failBudget("'terrainCellSizeMetersXZ' must be a positive finite 2-tuple.");
+  }
+  const terrainCellXMicrometers = requirePositiveMeters(
+    input.terrainCellSizeMetersXZ[0],
+    "terrainCellSizeMetersXZ[0]"
+  );
+  const terrainCellZMicrometers = requirePositiveMeters(
+    input.terrainCellSizeMetersXZ[1],
+    "terrainCellSizeMetersXZ[1]"
+  );
+  const halfWidthMicrometers = Math.ceil(widthMicrometers / 2);
+  const guardXMicrometers = safeMicrometerSum(
+    halfWidthMicrometers,
+    terrainCellXMicrometers,
+    "route build-window X guard"
+  );
+  const guardZMicrometers = safeMicrometerSum(
+    halfWidthMicrometers,
+    terrainCellZMicrometers,
+    "route build-window Z guard"
+  );
+  const xMicrometers = pointsMicrometers.map((point) => point[0]);
+  const zMicrometers = pointsMicrometers.map((point) => point[1]);
+  const minimumXMicrometers = safeMicrometerSum(
+    Math.min(...xMicrometers),
+    -guardXMicrometers,
+    "minimumMetersXZ[0]"
+  );
+  const minimumZMicrometers = safeMicrometerSum(
+    Math.min(...zMicrometers),
+    -guardZMicrometers,
+    "minimumMetersXZ[1]"
+  );
+  const maximumXMicrometers = safeMicrometerSum(
+    Math.max(...xMicrometers),
+    guardXMicrometers,
+    "maximumMetersXZ[0]"
+  );
+  const maximumZMicrometers = safeMicrometerSum(
+    Math.max(...zMicrometers),
+    guardZMicrometers,
+    "maximumMetersXZ[1]"
+  );
+  const minimumMetersXZ = [
+    metersFromMicrometers(minimumXMicrometers),
+    metersFromMicrometers(minimumZMicrometers)
+  ];
+  const maximumMetersXZ = [
+    metersFromMicrometers(maximumXMicrometers),
+    metersFromMicrometers(maximumZMicrometers)
+  ];
+  const estimate2 = assertTraversalGraphBuildBudgetV1({
+    minimumMetersXZ,
+    maximumMetersXZ,
+    tileSizeCells: input.tileSizeCells,
+    voxelCellSizeMeters: input.voxelCellSizeMeters,
+    maximumTiles: input.maximumTiles
+  });
+  return {
+    minimumMetersXZ,
+    maximumMetersXZ,
+    ...estimate2,
+    maximumTiles: input.maximumTiles
+  };
 }
 const TRAVERSAL_SURFACE_QUERY_AREA_EPSILON_SQUARE_METERS_V1 = 1e-10;
 class TriangleWorldGeometryNonFiniteErrorV1 extends Error {
@@ -22537,7 +22971,138 @@ createGameplayFeatureManifestV1({
   commandTypes: [],
   resourceBudget: { stateSliceCount: 1, commandHandlerCount: 0 }
 });
-const BUILDER_SELF_CHECK_VERSION = "worldkit-builder-self-check-v5";
+const ORDINARY_WORLD_TARGET_MAXIMUM_VERTICES_V1 = 12e4;
+const LARGE_WORLD_MAXIMUM_RESOLUTION_VERTICES_PER_AXIS_V1 = 1024;
+const RECOMMENDED_MINIMUM_CELL_SIZE_METERS_V1 = 1.25;
+const RECOMMENDED_MAXIMUM_CELL_SIZE_METERS_V1 = 2.5;
+function compareCanonicalString(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+function terrainScaleEvidence(authoringSpec) {
+  const terrains = authoringSpec.nodes.filter((node) => node.kind === "terrain");
+  if (terrains.length !== 1) {
+    throw new Error("BUILDER_LARGE_WORLD_TERRAIN_CARDINALITY_INVALID");
+  }
+  const terrain = terrains[0];
+  const sizeMetersXZ = terrain.components.terrain.grid.sizeMetersXZ;
+  const resolutionVerticesXZ = terrain.components.terrain.grid.resolutionCellsXZ;
+  const cellSizeMetersXZ = [
+    sizeMetersXZ[0] / (resolutionVerticesXZ[0] - 1),
+    sizeMetersXZ[1] / (resolutionVerticesXZ[1] - 1)
+  ];
+  const terrainVertexCount = resolutionVerticesXZ[0] * resolutionVerticesXZ[1];
+  const terrainTriangleCount = (resolutionVerticesXZ[0] - 1) * (resolutionVerticesXZ[1] - 1) * 2;
+  const recommendedCellSizeRangeSatisfied = cellSizeMetersXZ.every(
+    (cellSizeMeters) => cellSizeMeters >= RECOMMENDED_MINIMUM_CELL_SIZE_METERS_V1 && cellSizeMeters <= RECOMMENDED_MAXIMUM_CELL_SIZE_METERS_V1
+  );
+  const isInsideLargeProfile = resolutionVerticesXZ.every(
+    (resolutionVertices) => resolutionVertices <= LARGE_WORLD_MAXIMUM_RESOLUTION_VERTICES_PER_AXIS_V1
+  ) && cellSizeMetersXZ.every(
+    (cellSizeMeters) => cellSizeMeters <= RECOMMENDED_MAXIMUM_CELL_SIZE_METERS_V1
+  );
+  return {
+    terrainEntityId: terrain.id,
+    sizeMetersXZ: [...sizeMetersXZ],
+    resolutionVerticesXZ: [...resolutionVerticesXZ],
+    cellSizeMetersXZ,
+    terrainVertexCount,
+    terrainTriangleCount,
+    operationalProfile: terrainVertexCount <= ORDINARY_WORLD_TARGET_MAXIMUM_VERTICES_V1 ? "ordinary-single-heightfield-v1" : isInsideLargeProfile ? "large-single-heightfield-v1" : "outside-large-single-heightfield-v1",
+    recommendedCellSizeRangeSatisfied
+  };
+}
+function collectBuilderLargeWorldEvidenceV1(authoringSpec) {
+  const scaleEvidence = terrainScaleEvidence(authoringSpec);
+  const profile = resolveTraversalGraphBuilderProfileV2(
+    BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF
+  ).profile;
+  const routesById = new Map(
+    authoringSpec.spatial.routes.map((route) => [route.id, route])
+  );
+  const routeBuildWindowEvidence = [];
+  const diagnostics = [];
+  const connectivity = [...authoringSpec.constraints.connectivity].sort(
+    (left, right) => compareCanonicalString(left.id, right.id) || compareCanonicalString(left.routeId, right.routeId)
+  );
+  for (const constraint of connectivity) {
+    const route = routesById.get(constraint.routeId);
+    const instancePath = `/constraints/connectivity/${constraint.id}`;
+    if (route === void 0) {
+      diagnostics.push({
+        code: "ROUTE_BUILD_WINDOW_ESTIMATE_INVALID",
+        message: `Required route '${constraint.routeId}' is unavailable for build-window estimation.`,
+        instancePath,
+        details: {
+          constraintId: constraint.id,
+          routeId: constraint.routeId
+        }
+      });
+      continue;
+    }
+    try {
+      const estimate2 = estimateRouteBuildWindowTileCountV1({
+        pointsMetersXZ: route.pointsMetersXZ,
+        widthMeters: route.widthMeters,
+        terrainCellSizeMetersXZ: scaleEvidence.cellSizeMetersXZ,
+        tileSizeCells: profile.tileSizeCells,
+        voxelCellSizeMeters: profile.voxelCellSizeMeters,
+        maximumTiles: profile.maximumTiles
+      });
+      routeBuildWindowEvidence.push({
+        constraintId: constraint.id,
+        routeId: route.id,
+        ...estimate2,
+        status: "admitted"
+      });
+    } catch (error) {
+      if (error instanceof TraversalGraphBuildBudgetExceededErrorV1) {
+        routeBuildWindowEvidence.push({
+          constraintId: constraint.id,
+          routeId: route.id,
+          minimumMetersXZ: error.minimumMetersXZ,
+          maximumMetersXZ: error.maximumMetersXZ,
+          tilesX: error.tilesX,
+          tilesZ: error.tilesZ,
+          estimatedTiles: error.estimatedTiles,
+          maximumTiles: error.maximumTiles,
+          status: "budget-exceeded"
+        });
+        diagnostics.push({
+          code: "ROUTE_BUILD_WINDOW_BUDGET_EXCEEDED",
+          message: `Required route '${route.id}' exceeds the trusted single-build Tile budget; split it into ordered segments that share explicit seam Anchors.`,
+          instancePath,
+          details: {
+            constraintId: constraint.id,
+            routeId: route.id,
+            tilesX: error.tilesX,
+            tilesZ: error.tilesZ,
+            estimatedTiles: error.estimatedTiles,
+            maximumTiles: error.maximumTiles,
+            minimumMetersXZ: error.minimumMetersXZ,
+            maximumMetersXZ: error.maximumMetersXZ,
+            repair: "split-with-shared-seam-anchors"
+          }
+        });
+      } else {
+        diagnostics.push({
+          code: "ROUTE_BUILD_WINDOW_ESTIMATE_INVALID",
+          message: error instanceof Error ? error.message : String(error),
+          instancePath,
+          details: {
+            constraintId: constraint.id,
+            routeId: route.id
+          }
+        });
+      }
+    }
+  }
+  return {
+    terrainScaleEvidence: scaleEvidence,
+    routeBuildWindowEvidence,
+    diagnostics
+  };
+}
+const BUILDER_SELF_CHECK_VERSION = "worldkit-builder-self-check-v6";
 const SPAWN_GROUND_TOLERANCE_METERS = 0.15;
 function option(arguments_, name) {
   const index = arguments_.indexOf(name);
@@ -22714,6 +23279,7 @@ async function runBuilderSelfCheck(options) {
   }
   const parsed = parseAuthoringSpecV4(worldSource);
   let compiledExecutionPlan;
+  let largeWorldEvidence;
   if (!parsed.ok || parsed.value === void 0) {
     diagnostics.push(...parsed.diagnostics.map((diagnostic2) => ({
       code: diagnostic2.code,
@@ -22732,6 +23298,8 @@ async function runBuilderSelfCheck(options) {
         details: diagnostic2.details
       })));
     } else {
+      largeWorldEvidence = collectBuilderLargeWorldEvidenceV1(parsed.value);
+      diagnostics.push(...largeWorldEvidence.diagnostics);
       const compiled = compileWorldV5({
         normalizedWorldIr: normalized.value,
         normalizedWorldIrHash: normalized.normalizedWorldIrHash,
@@ -22775,6 +23343,10 @@ async function runBuilderSelfCheck(options) {
     sceneId: options.sceneId,
     status: diagnostics.length === 0 ? "passed" : "failed",
     requiresTrustedRouteValidation: parsed.ok && parsed.value !== void 0 && parsed.value.constraints.connectivity.length > 0,
+    ...largeWorldEvidence === void 0 ? {} : {
+      terrainScaleEvidence: largeWorldEvidence.terrainScaleEvidence,
+      routeBuildWindowEvidence: largeWorldEvidence.routeBuildWindowEvidence
+    },
     inputs: {
       sceneBriefHash: contentHash(briefSource),
       authoringSpecHash: contentHash(worldSource),

@@ -1,0 +1,50 @@
+Use case: scientific-educational
+Asset type: untrusted continuous terrain height-intent raster for deterministic SDK compilation
+Input image: Image 1 is a spatial-composition reference only. Infer coherent base terrain from it; do not copy perspective, lighting, materials, subjects, structures, or sky.
+
+Reference roles and shared semantic anchors:
+Image 1 is the primary-coordinate reference. It owns output orientation, left/right placement, and initial topology. There are no secondary references. Semantic anchors are left-tower-support, central-gap, right-mesa-pedestal, foreground-basin, and far-canyon-wall.
+
+Reference evidence:
+Image 1 shows a broad low foreground basin, an isolated narrow rock tower on the left, a broad mesa on the right, connected canyon walls across the far background, and a central gap between the left and right masses.
+
+Inferred continuation:
+The central low ground continues through the far gap into a coherent off-camera canyon. Side terrain continues as broad canyon shoulders.
+
+Base terrain owned by the heightfield:
+Low foreground basin, wide central valley, broad right-side mesa base, and connected far canyon mass. The basin and valley are below ordinary surrounding ground. The mesa base and canyon mass are above it.
+
+Depressions owned by the heightfield:
+Wide central valley only. There is no water and no closed pit.
+
+Static Landmark and Structure exclusions:
+The isolated left rock tower and the distinctive upper silhouette of the right mesa are separate static Landmarks. Keep low stable support ground under the tower and a broad blended heightfield pedestal under the mesa Landmark. Do not encode buildings.
+
+Case-specific continuous height anchors:
+Bottom-center spawn support -0.85..-0.55; broad foreground basin -0.75..-0.35; central valley -0.90..-0.60; left tower support footprint -0.25..0.00, matching nearby low ground rather than forming a mound; broad right mesa pedestal +0.35..+0.70; connected far canyon mass +0.55..+0.85. These are smooth regional targets, not visible bands.
+
+Entry and connectivity:
+A broad stable spawn support area at bottom center connects through a wide low valley to the far central gap. This is open natural ground, not a painted road.
+
+Orientation:
+Bottom edge is the entry. Top is world-forward into the distant canyon. Preserve reference left and right.
+
+Primary request: Generate one square, strict orthographic, true top-down continuous signed-color terrain height-intent image. It represents only the single-valued, continuous base ground surface. It is scientific scalar-field data, not a terrain render or decorative map. The color is a temporary transport encoding for height sign and magnitude; it is not terrain appearance and will be removed by the deterministic compiler.
+
+Encoding contract:
+- Encode signed height on one continuous two-segment color ramp: deep depression -1 = RGB(32,64,208) to ordinary ground 0 = RGB(128,128,128) to high base terrain +1 = RGB(224,96,32).
+- Cool blue-gray values below 0 are basins, valleys, pits, channels, and submerged beds.
+- Neutral gray RGB(128,128,128) is the ordinary undeformed ground datum.
+- Warm orange-gray values above 0 are broad hills, mountain masses, mesas, and ridges.
+- Use only smooth interpolated colors on that ramp. Never use hue for material, biome, water, lighting, or semantic classes. Do not create discrete blue, gray, or orange zones or contour bands.
+- Retain headroom at both ends. Do not auto-normalize the scene to fill -1..+1.
+- Use smooth, continuous, low-frequency gradients. Preserve broad flat support areas and connected ground.
+- Honor the sign and approximate range of the case-specific anchors, then interpolate smoothly between them.
+
+Water rule: encode terrain beds below water when present, but do not depict a water surface, shoreline color, reflection, or water material. There is no water in this case.
+
+Static-geometry rule: omit every declared static Landmark or Structure silhouette. At each declared footprint, render only continuous support ground or a broad blended terrain pedestal. Do not create a proxy spike, mound, ring, shadow, or marker for the omitted object.
+
+Constraints: the complete world bounds fill the square canvas; preserve visible adjacency, containment, separation, openings, and large-scale landform proportions; keep the spawn support stable; keep the ground connection continuous; all output geometry must be representable by one height value per XZ point.
+
+Avoid: perspective, isometric view, camera shading, cast shadows, ambient occlusion, surface normals, rock strata, erosion texture, cracks, material grain, noise, contour lines, discrete color bands, rainbow colors, labels, legend, grid, compass, route line, spawn icon, people, animals, vegetation, buildings, static Landmarks, sky, border, transparency, UI, logo, and watermark.

@@ -6,6 +6,7 @@ import {
   BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
   createTraversalCapabilityEnvelopeV1,
   estimateHeightfieldTileCountV1,
+  estimateRouteBuildWindowTileCountV1,
   quantizeTraversalMetersToMicrometersV1,
   resolveTraversalGraphBuilderProfileV2,
   resolveTraversalLockV1,
@@ -191,6 +192,116 @@ describe("Heightfield traversal tile budget", () => {
       expect(() => estimateHeightfieldTileCountV1(input)).toThrow(
         "TRAVERSAL_GRAPH_BUILD_BUDGET_INVALID",
       );
+    }
+  });
+});
+
+describe("Heightfield route build-window budget", () => {
+  const profile = {
+    tileSizeCells: 64,
+    voxelCellSizeMeters: 0.15,
+    maximumTiles: 1024,
+  } as const;
+
+  it("admits a narrow 2km straight route without treating world size as a square", () => {
+    expect(estimateRouteBuildWindowTileCountV1({
+      pointsMetersXZ: [[-1000, 0], [1000, 0]],
+      widthMeters: 4,
+      terrainCellSizeMetersXZ: [2.5, 2.5],
+      ...profile,
+    })).toEqual({
+      minimumMetersXZ: [-1004.5, -4.5],
+      maximumMetersXZ: [1004.5, 4.5],
+      tilesX: 210,
+      tilesZ: 1,
+      estimatedTiles: 210,
+      maximumTiles: 1024,
+    });
+  });
+
+  it("rejects one diagonal 2km AABB while admitting explicit bounded segments", () => {
+    expect(() => estimateRouteBuildWindowTileCountV1({
+      pointsMetersXZ: [[-1000, -1000], [1000, 1000]],
+      widthMeters: 4,
+      terrainCellSizeMetersXZ: [2.5, 2.5],
+      ...profile,
+    })).toThrow(expect.objectContaining({
+      code: "ROUTE_GRAPH_BUDGET_EXCEEDED",
+      tilesX: 210,
+      tilesZ: 210,
+      estimatedTiles: 44_100,
+      maximumTiles: 1024,
+    }));
+
+    const seamPoints = Array.from({ length: 11 }, (_, index) =>
+      [-1000 + index * 200, -1000 + index * 200] as const,
+    );
+    const segmentEstimates = seamPoints.slice(1).map((destination, index) =>
+      estimateRouteBuildWindowTileCountV1({
+        pointsMetersXZ: [seamPoints[index]!, destination],
+        widthMeters: 4,
+        terrainCellSizeMetersXZ: [2.5, 2.5],
+        ...profile,
+      }),
+    );
+    expect(segmentEstimates).toHaveLength(10);
+    expect(segmentEstimates.every(({ estimatedTiles }) => estimatedTiles === 484)).toBe(true);
+  });
+
+  it("uses asymmetric terrain-cell guards and does not mutate caller points", () => {
+    const pointsMetersXZ = [[0, -0], [10, 0]] as const;
+    const before = structuredClone(pointsMetersXZ);
+    const estimate = estimateRouteBuildWindowTileCountV1({
+      pointsMetersXZ,
+      widthMeters: 2,
+      terrainCellSizeMetersXZ: [1, 4],
+      ...profile,
+    });
+
+    expect(estimate).toEqual({
+      minimumMetersXZ: [-2, -5],
+      maximumMetersXZ: [12, 5],
+      tilesX: 2,
+      tilesZ: 2,
+      estimatedTiles: 4,
+      maximumTiles: 1024,
+    });
+    expect(pointsMetersXZ).toEqual(before);
+    expect(Object.is(estimate.minimumMetersXZ[1], -0)).toBe(false);
+  });
+
+  it("fails closed for malformed, degenerate, and non-finite route windows", () => {
+    for (const input of [
+      {
+        pointsMetersXZ: [[0, 0]],
+        widthMeters: 2,
+        terrainCellSizeMetersXZ: [1, 1],
+      },
+      {
+        pointsMetersXZ: [[0, 0], [0, 0]],
+        widthMeters: 2,
+        terrainCellSizeMetersXZ: [1, 1],
+      },
+      {
+        pointsMetersXZ: [[0, 0], [Number.NaN, 1]],
+        widthMeters: 2,
+        terrainCellSizeMetersXZ: [1, 1],
+      },
+      {
+        pointsMetersXZ: [[0, 0], [1, 1]],
+        widthMeters: 0,
+        terrainCellSizeMetersXZ: [1, 1],
+      },
+      {
+        pointsMetersXZ: [[0, 0], [1, 1]],
+        widthMeters: 2,
+        terrainCellSizeMetersXZ: [1, Number.POSITIVE_INFINITY],
+      },
+    ] as const) {
+      expect(() => estimateRouteBuildWindowTileCountV1({
+        ...input,
+        ...profile,
+      })).toThrow("TRAVERSAL_GRAPH_BUILD_BUDGET_INVALID");
     }
   });
 });

@@ -57,8 +57,12 @@ async function writeTrustedWhiteboxArtifacts(
   { requiresRouteValidation = false, routeReportMode = "exact" } = {},
 ) {
   const artifactRoot = path.join(fakeRepoRoot, "artifacts/scenes", sceneId);
+  const planRoot = path.join(fakeRepoRoot, "apps/playground/public/scene-plans", sceneId);
   const triViewRoot = path.join(artifactRoot, "triviews", "player-subject");
-  await mkdir(triViewRoot, { recursive: true });
+  await Promise.all([
+    mkdir(triViewRoot, { recursive: true }),
+    mkdir(planRoot, { recursive: true }),
+  ]);
   const png = Buffer.from("89504e470d0a1a0a00000000", "hex");
   const brief = "# WorldKit Scene Brief\n\n## 场景\n可信导入场景\n";
   const authoring = `${JSON.stringify({
@@ -74,6 +78,7 @@ async function writeTrustedWhiteboxArtifacts(
     visualTargetMappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"] }],
   })}\n`;
   const hash = (source) => `sha256:${createHash("sha256").update(source).digest("hex")}`;
+  const terrainPrompt = "# Terrain Height Intent\n\nEncoding profile: signed-diverging-blue-gray-orange@1.\n";
   const resourceLockHash = `sha256:${"e".repeat(64)}`;
   const layoutSolveReportHash = `sha256:${"f".repeat(64)}`;
   const sceneBriefHash = `sha256:${"b".repeat(64)}`;
@@ -134,16 +139,71 @@ async function writeTrustedWhiteboxArtifacts(
       imageUri: "player-subject/whitebox-triview.png",
     }],
   };
+  const plannerReceipt = `${JSON.stringify({
+    kind: "worldkit-planner-self-check",
+    schemaVersion: 1,
+    validatorVersion: "worldkit-planner-self-check-v3",
+    sceneId,
+    status: "passed",
+    inputs: {
+      sceneBriefHash: hash(brief),
+      terrainHeightIntentPromptHash: hash(terrainPrompt),
+      terrainHeightIntentPngHash: hash(png),
+    },
+  })}\n`;
+  const builderReceipt = `${JSON.stringify({
+    kind: "worldkit-builder-self-check",
+    schemaVersion: 1,
+    validatorVersion: "worldkit-builder-self-check-v6",
+    sceneId,
+    status: "passed",
+    requiresTrustedRouteValidation: requiresRouteValidation,
+    terrainScaleEvidence: {
+      terrainEntityId: "terrain-main",
+      operationalProfile: "ordinary-single-heightfield-v1",
+    },
+    routeBuildWindowEvidence: [],
+    inputs: {
+      sceneBriefHash: hash(brief),
+      authoringSpecHash: hash(authoring),
+      implementationMapDraftHash: hash(mapDraft),
+    },
+  })}\n`;
+  const terrainReport = `${JSON.stringify({
+    kind: "worldkit-terrain-height-intent-compile-report",
+    schemaVersion: 1,
+    status: "passed",
+    sourcePngHash: hash(png),
+  })}\n`;
+  const finalReceipt = builderReceipt;
+  const terrainManifest = `${JSON.stringify({
+    kind: "worldkit-terrain-compilation-manifest",
+    schemaVersion: 1,
+    sceneId,
+    runId: "fixture-run",
+    compiler: {
+      compilerVersion: "terrain-height-intent-compiler@1",
+      normalizationProfileId: "signed-diverging-blue-gray-orange-median-datum@1",
+    },
+    inputs: {
+      plannerReceiptHash: hash(plannerReceipt),
+      terrainHeightIntentPromptHash: hash(terrainPrompt),
+      terrainHeightIntentPngHash: hash(png),
+      builderReceiptHash: hash(builderReceipt),
+      builderAuthoringSpecHash: hash(authoring),
+      implementationMapDraftHash: hash(mapDraft),
+    },
+    outputs: {
+      authoringSpecHash: hash(authoring),
+      terrainCompileReportHash: hash(terrainReport),
+      finalAuthoringSelfCheckHash: hash(finalReceipt),
+    },
+  })}\n`;
   await Promise.all([
     writeFile(path.join(artifactRoot, "scene-brief.md"), brief),
-    writeFile(path.join(artifactRoot, "planner-self-check.json"), JSON.stringify({
-      kind: "worldkit-planner-self-check",
-      schemaVersion: 1,
-      validatorVersion: "worldkit-planner-self-check-v2",
-      sceneId,
-      status: "passed",
-      inputs: { sceneBriefHash: hash(brief) },
-    })),
+    writeFile(path.join(artifactRoot, "terrain-height-intent-prompt.md"), terrainPrompt),
+    writeFile(path.join(planRoot, "terrain-height-intent.png"), png),
+    writeFile(path.join(artifactRoot, "planner-self-check.json"), plannerReceipt),
     writeFile(path.join(artifactRoot, "visual-identity-palette.json"), JSON.stringify({
       kind: "worldkit-visual-identity-palette",
       schemaVersion: 1,
@@ -151,21 +211,13 @@ async function writeTrustedWhiteboxArtifacts(
       sceneBriefHash,
       targets: [{ id: "player-subject" }],
     })),
-    writeFile(path.join(artifactRoot, "authoring.json"), authoring),
+    writeFile(path.join(artifactRoot, "authoring.builder.json"), authoring),
     writeFile(path.join(artifactRoot, "implementation-map.draft.json"), mapDraft),
-    writeFile(path.join(artifactRoot, "builder-self-check.json"), JSON.stringify({
-      kind: "worldkit-builder-self-check",
-      schemaVersion: 1,
-      validatorVersion: "worldkit-builder-self-check-v5",
-      sceneId,
-      status: "passed",
-      requiresTrustedRouteValidation: requiresRouteValidation,
-      inputs: {
-        sceneBriefHash: hash(brief),
-        authoringSpecHash: hash(authoring),
-        implementationMapDraftHash: hash(mapDraft),
-      },
-    })),
+    writeFile(path.join(artifactRoot, "builder-self-check.json"), builderReceipt),
+    writeFile(path.join(artifactRoot, "authoring.json"), authoring),
+    writeFile(path.join(artifactRoot, "terrain-height-intent-report.json"), terrainReport),
+    writeFile(path.join(artifactRoot, "terrain-compilation-manifest.json"), terrainManifest),
+    writeFile(path.join(artifactRoot, "final-authoring-self-check.json"), finalReceipt),
     writeFile(path.join(artifactRoot, "scene-implementation-map.json"), JSON.stringify(implementationMap)),
     writeFile(path.join(artifactRoot, "world.build.json"), JSON.stringify({
       kind: "worldkit-build-artifact",
@@ -253,7 +305,7 @@ test.afterEach(async () => {
 });
 
 test("uses one current switchable Codex backend workflow contract", () => {
-  assert.equal(workflowPolicyVersion, 3);
+  assert.equal(workflowPolicyVersion, 4);
 });
 
 test("passes the frozen backend to world jobs and records local Codex markers without provider details", async () => {
@@ -311,7 +363,7 @@ test("keeps concurrent atomic writes isolated and serializes same-record mutatio
     { cwd: repoRoot, env: { ...process.env, WORLDKIT_PROMPT_SMOKE: "1" }, encoding: "utf8" },
   );
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.match(result.stdout, /WORLDKIT_PROMPT_SMOKE_OK planner coding-agent canonical-build runtime-capture visual-prompt-synthesis visual-imagegen/);
+  assert.match(result.stdout, /WORLDKIT_PROMPT_SMOKE_OK planner coding-agent terrain-compilation canonical-build runtime-capture visual-prompt-synthesis visual-imagegen/);
 });
 
 test("routes Planner and Builder through the selected Codex backend while keeping post-whitebox visuals on Gemini", async () => {
@@ -375,6 +427,9 @@ test("keeps lightweight Planner prose and Builder implementation authority separ
   assert.doesNotMatch(launcher, /humanoid\.board\.surface-slide|humanoid\.wingsuit\.unpowered-glide/);
   assert.doesNotMatch(launcher, /triangle-count overruns do not block/);
   assert.match(launcher, /implementation-map\.draft\.json/);
+  assert.match(launcher, /authoring\.builder\.json/);
+  assert.match(launcher, /terrain-height-intent\.png/);
+  assert.match(launcher, /finalize-scene-terrain\.ts/);
   assert.match(launcher, /finalize-spatial-build\.ts/);
   assert.match(launcher, /--triview-output/);
   assert.doesNotMatch(launcher, /WORLDKIT_PLANNER_REPAIR_LIMIT/);
@@ -462,6 +517,7 @@ test("normalizes input and validates image payloads", () => {
 test("allows only declared planning assets", () => {
   assert.equal(isAllowedSceneAsset("world-plan.png"), true);
   assert.equal(isAllowedSceneAsset("entry-whitebox-target.png"), true);
+  assert.equal(isAllowedSceneAsset("terrain-height-intent.png"), true);
   assert.equal(isAllowedSceneAsset("reference-0.webp"), true);
   assert.equal(isAllowedSceneAsset("prototypes/tower/whitebox-triview.png"), true);
   assert.equal(isAllowedSceneAsset("../../package.json"), false);
@@ -1042,18 +1098,19 @@ test("adapts the main Registry subject catalog for the Studio UI", async () => {
 test("derives the single current Scene Brief workflow", () => {
   const stages = deriveWorkflowTrajectory({
     record: {
-      stage: "canonical-build", status: "running", captureStatus: "pending",
+      stage: "terrain-compilation", status: "running", captureStatus: "pending",
       styledOpeningFrameRequired: true, styledTriviewsRequired: true,
     },
     availableIds: [
       "scene-brief", "planner-self-check", "visual-identity-palette", "world-plan",
-      "entry-whitebox-target", "authoring-spec", "implementation-map-draft",
-      "builder-self-check",
+      "entry-whitebox-target", "terrain-height-intent-prompt", "terrain-height-intent",
+      "builder-authoring-spec", "implementation-map-draft", "builder-self-check",
     ],
   });
   assert.equal(stages.find(({ id }) => id === "planner")?.status, "complete");
   assert.equal(stages.find(({ id }) => id === "coding-agent")?.status, "complete");
-  assert.equal(stages.find(({ id }) => id === "canonical-build")?.status, "active");
+  assert.equal(stages.find(({ id }) => id === "terrain-compilation")?.status, "active");
+  assert.equal(stages.find(({ id }) => id === "canonical-build")?.status, "pending");
   assert.equal(stages.find(({ id }) => id === "runtime-capture")?.status, "pending");
   assert.equal(stages.find(({ id }) => id === "entry-alignment-validation")?.status, "pending");
   assert.equal(stages.some(({ id }) => ["spatial-planner", "image-planner", "styled-triviews"].includes(id)), false);

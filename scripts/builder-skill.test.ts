@@ -126,6 +126,13 @@ describe("Canonical Builder skill", () => {
     expect(skill).toContain("Never emit `worldkit://capability/relationship.mounted-on@1`");
     expect(skill).toContain("`maxVertices`, `maxTriangles`, and `maxColliders` are required hard budgets");
     expect(skill).toContain("current compiler rejects every overrun");
+    expect(skill).toContain("`1–2km`");
+    expect(skill).toContain("`1024` vertices per axis");
+    expect(skill).toContain("ROUTE_BUILD_WINDOW_BUDGET_EXCEEDED");
+    expect(skill).toContain("exact same explicit seam Anchor");
+    expect(skill).not.toContain(
+      "Keep `world.resourceBudget.maxVertices` at or below `120000`",
+    );
     expect(skill).not.toContain("actual compiled use at or below `150000` triangles");
     expect(skill).toContain("Do not infer quality from perimeter length or a fixed play-time estimate");
     expect(skill).toContain("standalone validator bundled with this Skill");
@@ -148,6 +155,10 @@ describe("Canonical Builder skill", () => {
     expect(skill).toContain("SPAWN_BELOW_GROUND");
     expect(skill).toContain("SPAWN_ABOVE_GROUND");
     expect(skill).toContain("requiredSubjectOriginYMeters");
+    expect(skill).toContain("terrain-height-intent.png");
+    expect(skill).toContain("terrain-height-intent-prompt.md");
+    expect(skill).toContain("must not decode, resample, normalize, or edit its pixels");
+    expect(skill).toContain("authoring.builder.json");
     expect(template).toContain('"schemaVersion": 4');
     expect(template).toContain('"preset": "clear-day"');
     expect(template).toContain('"kind": "supported-by"');
@@ -173,6 +184,11 @@ describe("Canonical Builder skill", () => {
     expect(modularSubjects).toContain("Never put any of these lower-level refs in AuthoringSpec");
     expect(launcher).toContain("absence of a same-named preset is never a reason");
     expect(launcher).toContain("never add or modify SDK motion bases");
+    expect(launcher).toContain("maximumTiles is a per-route build-window budget");
+    expect(launcher).toContain("ROUTE_BUILD_WINDOW_BUDGET_EXCEEDED");
+    expect(launcher).toContain("terrain-height-intent.png");
+    expect(launcher).toContain("authoring.builder.json");
+    expect(launcher).toContain("scripts/finalize-scene-terrain.ts");
     expect(launcher).not.toContain("humanoid.board.surface-slide@1");
     expect(launcher).not.toContain("humanoid.wingsuit.unpowered-glide@1");
     expect(terrainAndStructures).toContain(
@@ -180,6 +196,11 @@ describe("Canonical Builder skill", () => {
     );
     expect(terrainAndStructures).toContain(
       "the current compiler rejects every overrun",
+    );
+    expect(terrainAndStructures).toContain("`801 x 801` over `2000m x 2000m`");
+    expect(terrainAndStructures).toContain("previous destination and next start");
+    expect(terrainAndStructures).not.toContain(
+      "Keep `maxVertices` at or below `120000`",
     );
     expect(terrainAndStructures).not.toContain(
       "`maxTriangles` is a required resource-budget field but no longer blocks validation or compilation",

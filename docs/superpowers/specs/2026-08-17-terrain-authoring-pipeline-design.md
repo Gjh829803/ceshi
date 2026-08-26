@@ -32,6 +32,14 @@
 
 该选择接受产品侧的实际观察：强图像生成模型通常比大模型直接书写大量等高线坐标更擅长保持海湾、山脊、岛屿和前中后景的整体空间构图。但生成图片仍是不可信 Authoring Input，不是最终数值地形。颜色、高度、拓扑和 Gameplay 约束必须由 SDK 确定性编译和验证。
 
+2026-08-26 的 GPT Image 2 Canyon 探针新增一条 Development 候选：使用连续
+`低地蓝灰 → 基准灰 → 高地橙灰` 的有符号传输色带，再由 Host 投影回单一标量。它没有
+明显离散分层，比纯灰度更容易检查高低正负，但重复生成仍会违反局部高度锚点。因此该
+编码只进入 T2 Bake-off，不取代结构化 Spawn、Route、Water、Support 和 Slope 硬约束，
+也不因单个成功样例改变本文尚未完成 Benchmark 的默认选择。Development Host 在色带投影
+成单一 signed scalar 后、降采样前执行确定性低通并记录像素半径；不得先模糊 RGB 传输色，
+也不得让平滑覆盖最后施加的 Protected Constraints。
+
 同时保留以下正式 Terrain Source 扩展点：
 
 - 已编译数值高度场。
@@ -268,6 +276,22 @@ Static Structure/Geometry Resource 只承载桥、洞穴外壳、崖壁等局部
 3. 每张候选图仍必须经过 Palette Quantization、Topology Validation、Constraint Solver 和 Browser/Physics Gates。
 4. 原始模型、Prompt、Seed/生成参数和资产 Hash 只记录在 Provenance；更换模型不改变 Source Schema。
 
+#### 5.10.1 少量多参考图的注册规则
+
+多张同一世界的参考图可以补充遮挡区域，但不能假设它们共享屏幕坐标：
+
+- 每次任务只允许一个 `primary-coordinate` 参考图；它拥有输出方向、入口、左右关系和
+  初始平面拓扑。
+- 其他图片只能是 `secondary-evidence`。它们通过稳定语义锚点和 `behind`、`between`、
+  `inside`、`connected-to` 等拓扑关系注册，不能按像素位置、表观大小或平面平均融合。
+- 视角、透视和视差造成的地标位移不改变 Primary 已冻结的位置。无法通过语义锚点解释
+  的冲突必须记录为歧义，不生成折中坐标。
+- 同一次生成调用只输出一张 Primary 坐标系中的 Canonical 候选图；不为每张参考图独立
+  生成地形图再对齐，因为那会额外引入生成漂移。
+- OpenCV Homography 仅适合已证明接近同一平面的视图；COLMAP 一类 SfM/MVS 只在未来
+  具有真实重叠摄影、足够纹理和 Host 可信重建的 Capture Profile 中评估，不作为 Prompt
+  V0 的默认依赖。
+
 ### 5.11 深度模型与专用地形生成研究
 
 单目深度可作为可见区域的空间证据，但不能成为完整世界的高度真相。[Marigold](https://arxiv.org/abs/2312.02145) 明确将单图深度描述为几何上不适定的问题；[Depth Anything V2](https://arxiv.org/abs/2406.09414) 展示了强单目深度能力和 Metric Depth 变体，但仍无法从单张图恢复遮挡后方、画面外区域与唯一世界拓扑。因此它只输出 `reference-depth-evidence`，由 Planner 结合正交规划和世界约束使用。
@@ -358,9 +382,12 @@ WorldClaw 支持了本项目“全局到区域、结构先于生成”的总体�
 WorldClaw 为“图像模型生成语义区域图，再由工程 Compiler 生成高度场”的路线提供了外部案例，但没有证明语义图能够单独恢复精确高度，也没有公开足够实现用于直接复现。因此：
 
 - 第一版推荐路线仍是 Elevation Band Image + Critical Structured Controls。
-- T2 Bake-off 增加第四条候选：**语义区域布局图 + 每区域结构化地貌参数**。第一轮使用既有 `CompositeTerrainSourceSpec` 表达，避免过早冻结新 Source Schema。
-- 第四条路线必须与离散色带、连续灰度、概念图转 Canonical Map 使用同一 Dataset、Constraint 和 Runtime Gate。
-- 只有当第四条路线显著改善宏观拓扑、区域一致性或 Agent 收敛，并能给出稳定 Canonicalization 规则时，才提出新的公共 Source ID；否则它保持为 Composite Source 的上游生成 Profile。
+- WorldClaw 调研当时为 T2 Bake-off 增加了语义区域布局图 + 每区域结构化地貌参数；
+  2026-08-26 探针又增加连续有符号传输色带。两者都必须与离散色带、连续灰度和概念图
+  转 Canonical Map 使用同一 Dataset、Constraint 和 Runtime Gate。
+- 只有当语义区域路线显著改善宏观拓扑、区域一致性或 Agent 收敛，并能给出稳定
+  Canonicalization 规则时，才提出新的公共 Source ID；否则它保持为 Composite Source
+  的上游生成 Profile。有符号传输色带同理先转成既有 `height-raster@1`。
 
 ### 5.13 非 Heightfield 特殊地形的业界共同模式
 
@@ -1200,7 +1227,7 @@ Benchmark 规则：
 
 1. Development Split 用于调整 Prompt、Palette、Compiler 和修复策略；Holdout Split 在阈值冻结后运行，其期望标注不暴露给调参/Planner 流程。
 2. 对随机生成器执行 Manifest 声明的重复次数，报告单次成功率、全 Case 通过率、分位数和跨运行漂移，禁止挑选最佳一次作为正式结果。
-3. 比较离散色带、连续灰度、概念图转 Canonical Map，以及语义区域布局图 + 结构化区域参数时使用同一 Case、结构约束和 Runtime Gate；Provider 名称只进入 Benchmark/Provenance，不进入 Public Terrain Schema。
+3. 比较离散色带、连续灰度、连续有符号传输色带、概念图转 Canonical Map，以及语义区域布局图 + 结构化区域参数时使用同一 Case、结构约束和 Runtime Gate；Provider 名称只进入 Benchmark/Provenance，不进入 Public Terrain Schema。
 4. 阻断指标至少包括 Source 可解析、关键拓扑、必需 Region/Anchor、Spawn、Route、Water/Platform、Tile Seam 和 Physics。任何阻断 Gate 失败都不能由加权总分抵消。
 5. 诊断指标至少包括 unknown pixel ratio、非法 Band 邻接、Constraint Repair Delta、地形修改面积/高度、Agent 收敛轮数、生成漂移、编译耗时和资源峰值。模型价格不是本项目的选择指标。
 6. Metric 定义、聚合方式、缺失值策略和阈值都写入 Manifest；阈值变化必须增加 Manifest 版本，不能在看到 Holdout 结果后原地修改。
@@ -1212,35 +1239,33 @@ T0/T2 的 20～30 张真实参考图是第一版 Benchmark Dataset，不是永�
 
 ## 16. 包边界与依赖方向
 
-建议新包：
+首个纵向切片只建议新增一个引擎无关包：
 
 ```text
 packages/
-  terrain-contracts/       # Source Schema、NormalizedTerrainIR、Diagnostic codes
-  terrain-source-registry/ # Source Compiler manifests 与 resolver
-  terrain-image-bands/     # Elevation Band Image compiler plugin
-  terrain-vector/          # Vector control compiler plugin
-  terrain-procedural/      # Noise/detail plugin
-  terrain-refiner-native/  # 内置确定性平滑/侵蚀 Refiner
-  terrain-refiner-host/    # 受信外部 Recipe/HDA/Graph 进程适配
-  terrain-compiler/        # Reconstruction、constraints、tiling、package
-  terrain-runtime-babylon/ # Mesh、LOD、material binding
-  terrain-physics-havok/   # Collider 与 query adapter
-  terrain-testkit/         # Golden fixtures、assertions、debug exports
+  terrain-compiler/  # 图片 Canonicalization、重建、硬约束、Diagnostic 和纯数据产物
 ```
 
-以上目录发布为与上位规格同一 scope 的 `@worldkit/terrain-*` 包，位于同一 Monorepo；`terrain-contracts` 复用 `@worldkit/contracts` 的 Diagnostic、Canonical Bytes 与 Registry Lock 协议，不依赖任何 Runtime 包。
+该包使用当前 Monorepo scope `@whitebox-world/terrain-compiler`，复用现有
+`@whitebox-world/contracts`、`@whitebox-world/compiler`、`@whitebox-world/world-package`、
+`@whitebox-world/terrain-surface` 和 `@whitebox-world/testkit` 的稳定边界。Prompt、图片模型
+调用和 Provider 配置仍留在 Planner/Host，不进入该包。首个探针甚至可以先由 Host 脚本
+输出受信 `height-raster@1` Fixture；只有 Canonicalization 与 Constraint 行为通过
+Development Gate 后才创建 Package，避免先冻结错误 API。
+
+当且仅当某一部分出现独立版本、独立依赖、独立发布或明确的多实现 Registry 需求时，
+再把 Contracts、Source Plugins、Refiner 或 Runtime Adapter 从该包拆出。本文早期列出的
+一次性十包拆分不作为第一版实施要求。
 
 依赖方向：
 
 ```text
-@worldkit/contracts
-  ← terrain-contracts
+@whitebox-world/contracts
+  ← @whitebox-world/terrain-compiler
 
-terrain-contracts
-  ← source plugins
-  ← terrain-compiler
-  ← runtime adapters
+@whitebox-world/terrain-compiler
+  → content-addressed height-raster@1 / NormalizedTerrainIR inputs
+  → existing compiler and world-package integration
 
 terrain-compiler 不依赖 Babylon/Havok
 source plugins 不依赖 Runtime
@@ -1254,6 +1279,20 @@ runtime adapters 不读取 Authoring 图片
 
 T 阶段与上位规格阶段 0–F 的依赖关系：T0 与阶段 A 并行执行；T1、T2 依赖阶段 B 交付的 contracts、Canonical Bytes 与 Registry Lock 协议；T4 与阶段 C 是同一次 Babylon/Havok Vertical Slice 里程碑，由地形部分与主体部分共同组成，不重复建设两条切片；T5 依赖阶段 E 的 CLI 与 Browser Protocol。
 
+### 17.1 当前 Prompt-to-Compiler 纵向切片工作图
+
+Main Agent 在 TG-4 完成前持续拥有 Architecture、Public Interface、Source ID、依赖选择和
+最终集成；Worker 的局部成功不能替代主树端到端 Gate。
+
+| ID | Goal / independently verifiable deliverable | `depends_on` | `blocks` | Exclusive ownership and exact I/O integration | Required verification evidence | Mode |
+| --- | --- | --- | --- | --- | --- | --- |
+| TG-0 | 冻结 Prompt V0、单图/多图注册规则和带 Hash 的 Development Fixtures | none | TG-1, TG-3 | owns Planner experimental reference and `artifacts/terrain-experiments/**`; reference images + planning evidence → prompt, PNG candidates, measurements | Prompt pressure tests, source/prompt/output hashes, per-anchor sign metrics, link/diff checks | `main-agent-only` |
+| TG-1 | 实现无 Provider 依赖的连续色带投影 Probe，输出 signed `Float32Array` 和结构化 residual/sign Diagnostic | TG-0 | TG-2 | owns future `packages/terrain-compiler` Canonicalization internals only; PNG bytes + locked encoding profile → scalar field + report | V4 positive fixture, V5 negative fixture, malformed color/budget/asymmetric raster tests, deterministic bytes | `sequential` |
+| TG-2 | 从现有规划数据派生 Protected Masks，并强制 Spawn、Route、Water、Support 和 Slope 约束 | TG-1 | TG-4 | owns terrain constraint implementation, not the upstream planning schema; scalar field + existing plan/implementation-map constraints → constrained metric raster + delta | failing-before/focused regression, sign reversal, route cut, support mound, water overlap, tile-boundary adversarial cases | `sequential` |
+| TG-3 | 冻结少量多图 Development/Holdout Case，测量语义注册与跨运行漂移 | TG-0 | TG-4 | owns benchmark manifest/fixtures only; same-world references + semantic anchor annotations → registration outcomes and drift report | duplicate-landmark, parallax shift, occluded basin, irreconcilable conflict, repeated-run statistics | `parallel-safe` |
+| TG-4 | 将通过 Gate 的输出接到现有 `height-raster@1` / Canonical Compiler 链路，冻结接口或明确退回 Host Script | TG-2, TG-3 | TG-5 | owns cross-package interface and integration changes; compiler output → content-addressed existing terrain source | canonical hash, schema validation, dependency-boundary tests, exact source-to-NormalizedTerrainIR evidence | `main-agent-only` |
+| TG-5 | 用同一权威 Height Resource 完成 Babylon/Havok、Height/Slope、Route 和 Opening Composition Gate | TG-4 | none | owns final integration evidence, not new image semantics; canonical terrain source → rendered/physics verification artifacts | focused terrain tests, typecheck, relevant build, route verifier, rendered capture, collision/manual evidence as applicable | `main-agent-only` |
+
 ### T0：冻结回归基准
 
 - 保存当前海湾 Height/Slope、路线、Spawn、构图和物理结果。
@@ -1263,8 +1302,10 @@ T 阶段与上位规格阶段 0–F 的依赖关系：T0 与阶段 A 并行执�
 
 ### T1：协议与 Reference Compiler
 
-- 新建 terrain-contracts、Source Union 和 NormalizedTerrainIR。
-- 实现 `height-raster@1` Reference Source。
+- 先复用现有 Contracts、Canonical Compiler、World Package 和 `height-raster@1` 链路；
+  仅当 TG-1/TG-2 证明存在无法由内部 Profile 表达的稳定公共缺口时才新增 Terrain Contract。
+- 在纯 Host Probe 中冻结 PNG → signed scalar → content-addressed `height-raster@1` 的字节和
+  Diagnostic 行为，再决定是否创建 `@whitebox-world/terrain-compiler`。
 - 实现稳定 Raster Package、Hash 和 Diagnostic。
 - 不接入 Babylon，先在纯 Compiler 测试中通过。
 
@@ -1274,7 +1315,7 @@ T 阶段与上位规格阶段 0–F 的依赖关系：T0 与阶段 A 并行执�
 - 实现 Band Topology 和 `monotonic-bands@1`。
 - 实现 unknown、repair 和 adjacency Diagnostics。
 - 使用生成式规划图和人工 Golden 图双轨测试。
-- 在冻结默认 Image Profile 前，对 20～30 张真实参考图执行四路线 Bake-off：离散色带控制图、连续灰度高度候选图、概念图再经 Vision/Segmentation 转 Canonical Map、语义区域布局图 + 每区域结构化地貌参数。第四条路线第一轮必须通过既有 `CompositeTerrainSourceSpec` 表达，不提前增加公共 Source ID。
+- 在冻结默认 Image Profile 前，对 20～30 张真实参考图执行五路线 Bake-off：离散色带控制图、连续灰度高度候选图、连续有符号传输色带、概念图再经 Vision/Segmentation 转 Canonical Map、语义区域布局图 + 每区域结构化地貌参数。最后一条路线第一轮必须通过既有 `CompositeTerrainSourceSpec` 表达，不提前增加公共 Source ID；连续有符号色带先由 Host 投影为现有 `height-raster@1`，不提前冻结新的公共 Source ID。
 - Bake-off 严格通过冻结的 TerrainBenchmarkManifest 运行，记录宏观拓扑正确率、Opening Shot Region/Anchor、unknown pixel ratio、非法 Band 邻接、Constraint Repair Delta、路线/出生点通过率、重复生成一致性和 Agent 收敛轮数；模型成本不是选择指标。
 - Profile 和阈值在 Development Split 冻结后只运行一次正式 Holdout；失败后不得原地修改同版本阈值或删除失败 Case。
 
@@ -1384,7 +1425,9 @@ T7 不阻塞 T0～T6 的 Heightfield Pipeline，必须在 P1.1 Terrain/Mask、�
 - 路线约束对宏观地形改造量的可接受阈值。
 - 1.25、2.0、2.5 米/格的碰撞、画面和资源差异。
 - 生成图整体重做与局部 Patch 哪种更容易让 Agent 稳定收敛。
-- 四条图像路线在 20～30 张真实参考图上的 Gate 通过率和 Agent 收敛轮数：离散色带、连续灰度、概念图转 Canonical Map、语义区域布局图 + 结构化区域参数。
+- 五条图像路线在 20～30 张真实参考图上的 Gate 通过率和 Agent 收敛轮数：离散色带、连续灰度、连续有符号传输色带、概念图转 Canonical Map、语义区域布局图 + 结构化区域参数。
+- 单图与少量多图在同一 Dataset 上的增益、共享语义锚点配准失败率，以及多图是否因
+  视差和生成漂移反而降低 Gate 通过率。
 - GPT Image 2 等具体 Provider 在推荐 Profile 下的重复生成漂移；结果只用于选择上游 Profile，不写入 Public Schema。
 - Native、Gaea Recipe、Houdini HDA、World Machine Graph 中哪一种 Refiner 在自然度、确定性、Protected Mask 和自动化 Report 上真正增加价值。
 

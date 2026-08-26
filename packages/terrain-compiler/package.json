@@ -1,0 +1,15 @@
+{
+  "name": "@whitebox-world/terrain-compiler",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@whitebox-world/authoring": "workspace:*",
+    "@whitebox-world/protocol": "workspace:*",
+    "@whitebox-world/terrain-surface": "workspace:*",
+    "sharp": "0.35.4"
+  }
+}

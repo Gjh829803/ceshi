@@ -2,11 +2,13 @@ import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
+import { createValidAuthoringSpec } from "@whitebox-world/authoring/testing";
 import type { ExecutionTerrainV3 } from "@whitebox-world/runtime-contracts";
 import * as terrainSurface from "@whitebox-world/terrain-surface";
 import { describe, expect, it } from "vitest";
 
 import { createTerrainMesh } from "./terrain.js";
+import { compileRuntimeTestPlanV5 } from "./runtime-test-plan.js";
 
 type HeightfieldEmitter = (
   input: terrainSurface.TriangleHeightfieldSurfaceInput,
@@ -112,6 +114,52 @@ describe("Babylon terrain topology", () => {
         /^TRIANGLE_HEIGHTFIELD_INPUT_INVALID:/,
       );
       expect(scene.meshes).toEqual([]);
+    } finally {
+      material.dispose();
+      scene.dispose();
+      engine.dispose();
+    }
+  });
+
+  it("builds a 1km 401x401 Heightfield with 32-bit topology", () => {
+    const columns = 401;
+    const rows = 401;
+    const authoring = createValidAuthoringSpec();
+    authoring.world.bounds.sizeMetersXZ = [1000, 1000];
+    authoring.world.resourceBudget.maxVertices = 200_000;
+    authoring.world.resourceBudget.maxTriangles = 400_000;
+    const terrainNode = authoring.nodes.find((node) => node.kind === "terrain");
+    if (terrainNode?.kind !== "terrain") throw new Error("TEST_TERRAIN_MISSING");
+    terrainNode.components.terrain.grid.sizeMetersXZ = [1000, 1000];
+    terrainNode.components.terrain.grid.resolutionCellsXZ = [columns, rows];
+    if (terrainNode.components.terrain.source.kind !== "procedural") {
+      throw new Error("TEST_PROCEDURAL_TERRAIN_MISSING");
+    }
+    terrainNode.components.terrain.source.relief = "flat";
+    terrainNode.components.terrain.source.baseHeightMeters = 0;
+    terrainNode.components.terrain.source.amplitudeMeters = 0;
+    const terrain = compileRuntimeTestPlanV5(authoring).terrain;
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    const material = new StandardMaterial("terrain-material-large-1km", scene);
+
+    try {
+      const mesh = createTerrainMesh(terrain, material, scene);
+      const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
+      const indices = mesh.getIndices();
+      if (positions === null || indices === null) {
+        throw new Error("TEST_LARGE_TERRAIN_TOPOLOGY_MISSING");
+      }
+      let maximumIndex = 0;
+      for (const index of indices) maximumIndex = Math.max(maximumIndex, index);
+
+      expect(terrain.sizeMetersXZ[0] / (columns - 1)).toBe(2.5);
+      expect(mesh.getTotalVertices()).toBe(160_801);
+      expect(positions).toHaveLength(160_801 * 3);
+      expect(indices).toHaveLength(320_000 * 3);
+      expect(maximumIndex).toBe(160_800);
+      expect(maximumIndex).toBeGreaterThan(65_535);
+      expect(scene.meshes).toEqual([mesh]);
     } finally {
       material.dispose();
       scene.dispose();

@@ -1,0 +1,54 @@
+Use case: scientific-educational
+Asset type: untrusted continuous terrain height-intent raster for deterministic WorldKit SDK compilation
+
+Reference roles:
+- Image 1 is the primary visual reference. Use it only for large-scale natural landform evidence and the oasis-city relationship.
+- Image 2 is the strict top-down world-plan reference. It owns output orientation, world bounds, city placement, entry placement, and left/right topology.
+
+World orientation and composition:
+- Output is one square, strict orthographic, true top-down raster covering the complete 640m x 720m world.
+- Image top maps toward the distant northern horizon / world -Z. Image bottom is the southern caravan entry / world +Z.
+- The oasis fortress occupies the upper-middle northern area. The camel-rider spawn is near bottom-center. Preserve the wide open approach corridor between them.
+
+Base terrain owned by the heightfield:
+- A broad, gently undulating desert plain is the datum surface.
+- A shallow, wide approach basin starts around the southern spawn and rises gradually toward the oasis.
+- Low broad dune shoulders frame the approach on the left and right without closing it.
+- Broad distant plateau and mesa bases may rise along the outer north-west and north-east margins.
+- Transitions must be continuous and low-frequency, with large walkable regions.
+
+Depressions owned by the heightfield:
+- The southern entry basin and a subtle dry drainage swale through the central approach are below ordinary ground.
+- There is no open water in this case and no closed pit.
+
+Static geometry exclusions:
+- The oasis fortress walls, gate, towers, inner buildings, rocks, palms, camel and rider are separate static or Subject geometry.
+- Do not encode their silhouettes, roofs, walls, towers, bodies, shadows, markers, proxy spikes, rings, or mounds into the heightfield.
+- Under the fortress footprint, create one broad, stable, nearly level support terrace blended smoothly into nearby ground.
+- Keep the gate threshold and the entire central approach continuously walkable.
+
+Continuous signed height anchors:
+- Southern spawn support near bottom-center: -0.12 to 0.00, broad and nearly level.
+- Southern entry basin: -0.25 to -0.08.
+- Central approach swale: -0.18 to -0.04, wide and continuous.
+- Ordinary desert datum: near 0.00.
+- Fortress support terrace in upper-middle: 0.02 to 0.10, broad and level, not a mound.
+- Outer dune shoulders: +0.08 to +0.25.
+- Distant outer plateau/mesa bases near top-left and top-right edges: +0.25 to +0.55.
+- Retain headroom; do not stretch the field to fill the whole -1..+1 range.
+
+Encoding contract:
+- Encode signed height on exactly one continuous two-segment color ramp: deep depression -1 = RGB(32,64,208), ordinary ground 0 = RGB(128,128,128), high base terrain +1 = RGB(224,96,32).
+- Cool blue-gray values below 0 represent basins and channels.
+- Neutral gray RGB(128,128,128) is the ordinary ground datum.
+- Warm orange-gray values above 0 represent broad hills, dunes, plateau bases and ridges.
+- Use only smooth interpolated colors on this ramp. The color is transport data, not terrain appearance.
+- Never use hue for material, biome, water, vegetation, lighting, or semantic classes.
+- Avoid discrete zones, terraces, contour bands, sharp steps, high-frequency noise, or visible segmentation.
+
+Navigation constraints:
+- Keep a broad stable spawn patch at bottom-center.
+- Keep a continuous, comfortably walkable central corridor from spawn to the fortress gate.
+- Keep primary approach slopes gentle and avoid cross-slope ridges that block the route.
+
+Avoid: perspective, isometric view, camera shading, cast shadows, ambient occlusion, surface normals, sand texture, dune ripples, erosion texture, cracks, material grain, contour lines, discrete color bands, rainbow colors, labels, legend, grid, compass, route line, spawn icon, people, animals, vegetation, buildings, fortress silhouettes, rocks, water surface, sky, border, transparency, UI, logo, and watermark.
