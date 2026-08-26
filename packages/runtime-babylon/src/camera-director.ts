@@ -4,6 +4,7 @@ import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
 import {
   admitCameraViewPreferenceV1,
+  cameraRigParametersViolateInvariantsV1,
   selectCameraViewV1,
   type CameraContextProfileV1,
   type CameraContextSampleV1,
@@ -434,11 +435,19 @@ export class CameraDirectorV1 {
 
   applyPreview(
     tuningByProfileRef: Readonly<Record<string, CameraTuningV1>>,
-    profiles: readonly ExecutionCameraRigProfileV1[],
+    cameraContext: CameraContextV1,
   ): boolean {
     if (Array.isArray(tuningByProfileRef)) return false;
     const profilesByRef = new Map(
-      profiles.map((profile) => [profile.resourceRef, profile] as const),
+      cameraContext.cameraRigProfiles.map(
+        (profile) => [profile.resourceRef, profile] as const,
+      ),
+    );
+    const reachableModifierRefs = new Set(
+      cameraContext.rules.flatMap((rule) => rule.cameraModifierRefs ?? []),
+    );
+    const reachableModifiers = cameraContext.cameraModifierProfiles.filter(
+      (modifier) => reachableModifierRefs.has(modifier.resourceRef),
     );
     const nextTunings = new Map<string, CameraTuningV1>();
     for (const [profileRef, tuning] of Object.entries(tuningByProfileRef)) {
@@ -455,6 +464,22 @@ export class CameraDirectorV1 {
         tuning,
       );
       if (!result.ok) return false;
+      const validForEveryReachableModifier =
+        reachableModifiers.every((modifier) => {
+          const modifiedParameters = applyCameraRigParameterOverridesV1(
+            profile.algorithmRef,
+            profile.parameters,
+            modifier.parameterOverrides,
+          );
+          return validateCameraTuningV1(
+            {
+              algorithmRef: profile.algorithmRef,
+              parameters: modifiedParameters,
+            },
+            result.tuning,
+          ).ok;
+        });
+      if (!validForEveryReachableModifier) return false;
       nextTunings.set(profileRef, result.tuning);
     }
 
@@ -512,6 +537,23 @@ export class CameraDirectorV1 {
       }),
       baseProfile,
     );
+    const lockedParameters = profile.parameters;
+    const tuning = this.tuningByProfileRef.get(profile.resourceRef) ?? {};
+    const parameters = applyCameraRigParameterOverridesV1(
+      profile.algorithmRef,
+      lockedParameters,
+      tuning,
+    );
+    if (
+      cameraRigParametersViolateInvariantsV1(lockedParameters) ||
+      cameraRigParametersViolateInvariantsV1(parameters)
+    ) {
+      throw new Error(
+        "WORLDKIT_RUNTIME_CAMERA_RESOLVED_PARAMETERS_INVALID: " +
+          `Camera Rig '${profile.resourceRef}' and its active Modifiers or Preview ` +
+          "violate the closed Camera parameter invariants.",
+      );
+    }
 
     const previousProfileRef = this.activeProfileRef;
     const nextModifierRefs = selected.modifiers.map((modifier) => modifier.resourceRef);
@@ -544,14 +586,8 @@ export class CameraDirectorV1 {
     this.activeReverseHeadingPolicy = profile.reverseHeadingPolicy;
     this.activeRigRef = profile.algorithmRef;
     this.activeModifierRefs = nextModifierRefs;
-    const tuning = this.tuningByProfileRef.get(profile.resourceRef) ?? {};
-    const parameters = applyCameraRigParameterOverridesV1(
-      profile.algorithmRef,
-      profile.parameters,
-      tuning,
-    );
+    this.fallbackActive = selected.decision.fallbackActive;
     this.activeParameters = parameters;
-    const lockedParameters = profile.parameters;
     this.activeLockedParameters = lockedParameters;
     if (selectionChanged) this.transitionDurationSeconds = parameters.transitionSeconds;
 
@@ -1141,7 +1177,6 @@ export class CameraDirectorV1 {
       context.cameraModifierProfiles.map((modifier) => [modifier.resourceRef, modifier]),
     );
     const profile = byRef.get(selection.decision.activeCameraRigProfileRef);
-    this.fallbackActive = selection.decision.fallbackActive;
     if (profile === undefined) return undefined;
     const modifiers = selection.decision.activeCameraModifierRefs
       .flatMap((resourceRef) => {

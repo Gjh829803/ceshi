@@ -2144,11 +2144,9 @@ export class BabylonWorldRuntime {
         `WORLDKIT_RUNTIME_CONTROL_TARGET_NOT_FOUND: ${String(controlledEntityId)}`,
       );
     }
-    const cameraProfiles =
-      subject.capabilityAssembly.cameraContext.cameraRigProfiles;
     if (!this.cameraComponent.applyPreview(
       tuningByProfileRef,
-      cameraProfiles,
+      subject.capabilityAssembly.cameraContext,
     )) {
       throw new Error("SUBJECT_PRESET_INVALID_CAMERA_TUNING");
     }

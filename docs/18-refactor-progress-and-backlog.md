@@ -597,9 +597,10 @@ Incremental Hot Apply，以及哪些 Runtime 状态被保留、重置或替换�
   `CameraContextSampleV1` Projection；不得保留旧命令 alias 或从 Render Pose 反推 Context。
 - [ ] GCC-2/GCC-3：把已实现的 Profile admission/Selection/Explain 接入 Registry Lock、
   唯一 `cameraViewPreference` Command/View State 和原子拒绝语义。
-- [ ] GCC-4 接线前必须解析选中 Rig 与全部匹配 Modifier 的最终参数，并对合并结果再次执行
-  Camera Domain 不变量校验；当前 admission 只保证单个完整 Rig 与单个 partial Modifier 各自
-  合法，不宣称跨 Rule/Profile 组合已经闭环。
+- [x] GCC-4A：CameraDirector 已在提交 View 状态前解析选中 Rig、全部匹配 Modifier 与 Preview
+  的最终参数并再次执行 Camera Domain 不变量校验；非法组合稳定拒绝且不修改上一 Camera 状态，
+  Preview 也会针对当前 Context 全部可达 Modifier 做写入前组合准入。该子门槛完成不代表
+  GCC-4 的 Selection Event、Golden Fixture 或最终生产验收已经闭环。
 - [ ] GCC-4/GCC-5：CameraDirector 消费纯 Selection Decision；Mount/Equipment/Flight 事务
   只提交 Camera 输入并与 Gameplay 一起原子回滚。
 - [ ] GCC-6/GCC-7：交付两个 Kit、Registry Lock、Browser/CLI/Take 与两个 Golden Fixture，

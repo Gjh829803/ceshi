@@ -61,7 +61,9 @@ function createFlatTerrainCapabilitySpec() {
 async function createCameraPreviewChannelRuntime(options?: {
   readonly blockCameraArm?: boolean;
   readonly cameraBlockerZMeters?: number;
+  readonly invalidCombinedCameraModifiers?: boolean;
   readonly omitFirstPersonSocket?: boolean;
+  readonly previewCompositionModifier?: "reachable" | "unreferenced";
   readonly waterOnlyCameraRule?: boolean;
 }) {
   const subjectDefinitionRef = "worldkit://subject-definition/humanoid.g-bot@2";
@@ -120,6 +122,76 @@ async function createCameraPreviewChannelRuntime(options?: {
         cameraModifierRefs: ["worldkit://camera-modifier/mounted-framing@1"],
       },
     ];
+  }
+  if (options?.invalidCombinedCameraModifiers === true) {
+    const cameraContext = executionPlan.subjects
+      .find((candidate) => candidate.entityId === executionPlan.initialControlledEntityId)
+      ?.capabilityAssembly.cameraContext;
+    const modifierTemplate = cameraContext?.cameraModifierProfiles[0];
+    if (cameraContext === undefined || modifierTemplate === undefined) {
+      throw new Error("Camera preview fixture Camera Modifier is missing.");
+    }
+    const distanceModifierRef =
+      "worldkit://camera-modifier/test-invalid-distance@1";
+    const maximumModifierRef =
+      "worldkit://camera-modifier/test-invalid-maximum@1";
+    cameraContext.cameraModifierProfiles = [
+      ...cameraContext.cameraModifierProfiles,
+      {
+        ...modifierTemplate,
+        resourceRef: distanceModifierRef,
+        parameterOverrides: { distanceMeters: 12 },
+      },
+      {
+        ...modifierTemplate,
+        resourceRef: maximumModifierRef,
+        parameterOverrides: { maximumDistanceMeters: 10 },
+      },
+    ];
+    cameraContext.rules = [
+      ...cameraContext.rules,
+      {
+        id: "test-invalid-distance",
+        priority: 2_001,
+        when: { requiredCameraContextTags: ["aim"] },
+        cameraModifierRefs: [distanceModifierRef],
+      },
+      {
+        id: "test-invalid-maximum",
+        priority: 2_000,
+        when: { requiredCameraContextTags: ["sprint"] },
+        cameraModifierRefs: [maximumModifierRef],
+      },
+    ];
+  }
+  if (options?.previewCompositionModifier !== undefined) {
+    const cameraContext = executionPlan.subjects
+      .find((candidate) => candidate.entityId === executionPlan.initialControlledEntityId)
+      ?.capabilityAssembly.cameraContext;
+    const modifierTemplate = cameraContext?.cameraModifierProfiles[0];
+    if (cameraContext === undefined || modifierTemplate === undefined) {
+      throw new Error("Camera preview fixture Camera Modifier is missing.");
+    }
+    const modifierRef = "worldkit://camera-modifier/test-preview-maximum@1";
+    cameraContext.cameraModifierProfiles = [
+      ...cameraContext.cameraModifierProfiles,
+      {
+        ...modifierTemplate,
+        resourceRef: modifierRef,
+        parameterOverrides: { maximumDistanceMeters: 10 },
+      },
+    ];
+    if (options.previewCompositionModifier === "reachable") {
+      cameraContext.rules = [
+        ...cameraContext.rules,
+        {
+          id: "test-preview-maximum",
+          priority: 2_000,
+          when: {},
+          cameraModifierRefs: [modifierRef],
+        },
+      ];
+    }
   }
   const runtime = await BabylonWorldRuntime.create({
     executionPlan,
@@ -239,6 +311,69 @@ function expectTargetAndFovRemainTransitioning(
 }
 
 describe("camera preview channel stays out of Gameplay truth", () => {
+  it("rejects an invalid final Rig and Modifier composition before mutating Camera state", async () => {
+    const runtime = await createCameraPreviewChannelRuntime({
+      invalidCombinedCameraModifiers: true,
+    });
+    try {
+      await runtime.runFixedInput({ actions: [], ticks: 4 });
+      setCameraProfile(runtime, ORBIT_REF);
+      const before = runtime.snapshot().camera;
+
+      await expect(runtime.runFixedInput({
+        actions: ["aim", "run"],
+        ticks: 1,
+      })).rejects.toThrow(/WORLDKIT_RUNTIME_CAMERA_RESOLVED_PARAMETERS_INVALID/);
+
+      expect(runtime.snapshot().camera).toEqual(before);
+    } finally {
+      await runtime.dispose();
+    }
+  }, 15_000);
+
+  it("rejects Preview tuning that is valid on the base Rig but invalid with a reachable Modifier", async () => {
+    const runtime = await createCameraPreviewChannelRuntime({
+      previewCompositionModifier: "reachable",
+    });
+    try {
+      await runtime.runFixedInput({ actions: [], ticks: 4 });
+      setCameraProfile(runtime, ORBIT_REF);
+      const beforeCamera = runtime.snapshot().camera;
+      const beforePreview = runtime.getCameraPreviewState();
+
+      expect(() => runtime.applyCameraPreview({
+        tuningByProfileRef: {
+          [ORBIT_REF]: { distanceMeters: 12 },
+        },
+      })).toThrow(/SUBJECT_PRESET_INVALID_CAMERA_TUNING/);
+
+      expect(runtime.snapshot().camera).toEqual(beforeCamera);
+      expect(runtime.getCameraPreviewState()).toEqual(beforePreview);
+    } finally {
+      await runtime.dispose();
+    }
+  }, 15_000);
+
+  it("does not reject Preview tuning because of an unreferenced Modifier resource", async () => {
+    const runtime = await createCameraPreviewChannelRuntime({
+      previewCompositionModifier: "unreferenced",
+    });
+    try {
+      await runtime.runFixedInput({ actions: [], ticks: 4 });
+      setCameraProfile(runtime, ORBIT_REF);
+
+      expect(() => runtime.applyCameraPreview({
+        tuningByProfileRef: {
+          [ORBIT_REF]: { distanceMeters: 12 },
+        },
+      })).not.toThrow();
+      expect(runtime.getCameraPreviewState().tuningByProfileRef[ORBIT_REF])
+        .toEqual({ distanceMeters: 12 });
+    } finally {
+      await runtime.dispose();
+    }
+  }, 15_000);
+
   it("publishes first-person socket, FOV, and resolved telemetry without arm state", async () => {
     const runtime = await createCameraPreviewChannelRuntime();
     try {

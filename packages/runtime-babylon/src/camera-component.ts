@@ -5,7 +5,6 @@ import type {
   CameraPreviewStateV1,
   CameraTuningV1,
   CameraViewInputV1,
-  ExecutionCameraRigProfileV1,
   ExecutionPlanV5,
   SemanticInputActionV1,
   ViewControlFrameV1,
@@ -68,9 +67,9 @@ export class CameraComponentV1 extends SceneComponentV1 {
 
   applyPreview(
     tuningByProfileRef: Readonly<Record<string, CameraTuningV1>>,
-    profiles: readonly ExecutionCameraRigProfileV1[],
+    cameraContext: CameraContextV1,
   ): boolean {
-    return this.director.applyPreview(tuningByProfileRef, profiles);
+    return this.director.applyPreview(tuningByProfileRef, cameraContext);
   }
 
   controlFrame(committedTick: number): ViewControlFrameV1 {

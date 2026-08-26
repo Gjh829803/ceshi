@@ -176,6 +176,7 @@ UE 模板中第三人称常使用 Control Rotation 决定移动方向；本项�
 | CAM-05 | 关闭 Entity/Component 生命周期、部分构造回滚与 Physics Query 释放缺口 | depends_on CAM-04 | `packages/runtime-framework/**`、Babylon Runtime 构造/Query 与回归 | 输入：组件注册和 Runtime 构造；输出：fail-closed 激活、逆序全清理、exactly-once 资源释放 | main-agent-only |
 | CAM-06 | 修复 mounted ViewTarget 的 Camera Context 投影，并覆盖 Mount/Dismount 与多 Rider 歧义 | depends_on CAM-05 | `runtime-contracts` ViewTarget Sample、Babylon Camera Context 解析与 mounted 集成测试 | 输入：Possession Target + committed `mountedOn`；输出：Rider Camera Context + 不变的物理 ViewTarget | sequential |
 | CAM-07 | 用强类型 View Preference clean break 替换旧 Profile 请求表面，并接通 Browser V5、Runtime 与 Director Admission | depends_on CAM-06 | `runtime-contracts` Browser V5、Playground Adapter/UI、Babylon Camera Component/Director 与回归 | 输入：`auto` / `first-person` / `camera-rig-profile`；输出：命令期原子拒绝、Context fallback/recovery、公开 Selection Decision | sequential |
+| CAM-08 | 在 View 状态提交前校验 Rig、全部命中 Modifier 与 Preview 的最终参数组合 | depends_on CAM-07 | Babylon Camera Component/Director 与 Preview 集成回归 | 输入：Selection Decision + Rig + ordered Modifiers + Preview；输出：合法 resolved parameters 或无 Camera 状态突变的稳定拒绝 | sequential |
 
 所有任务在当前已隔离的 `feat/gameplay-camera-optimization` worktree 内执行；不并行编辑 `CameraDirector` 或 `main.ts`，以避免接口和行为竞争。
 
@@ -217,3 +218,13 @@ Babylon Runtime 统一使用 `setCameraViewPreference/resetCameraViewPreference`
 Context、或第一人称不可用时，命令原子拒绝且保留上一稳定 View；后续 Context 变化导致的不兼容
 仍由每 Tick Selection 进入显式 fallback，并在再次兼容时恢复原 Preference。Preference Reset
 恢复 `auto`，同时清除手动 Orbit、Transition、Modifier、Input Latch 与 Preview 状态。
+
+## 15. 最终参数组合校验（2026-08-26）
+
+CAM-08 在 `CameraDirector` 写入 Active Profile、Modifier、Transition、Follow Arm 或 Telemetry
+之前，对选中 Rig 与全部有序 Modifier 合并后的锁定参数，以及继续叠加 Preview 后的最终参数，
+再次执行 Camera Domain 不变量校验。非法组合以
+`WORLDKIT_RUNTIME_CAMERA_RESOLVED_PARAMETERS_INVALID` 稳定拒绝，并保留上一 Camera 状态。
+Preview Admission 还会在写入预览状态前逐一验证当前 Context 中全部可达 Modifier，避免一个
+只对基础 Rig 合法的调参在 Modifier 激活后制造非法 View。该项只关闭 GCC-4 的最终参数门槛；
+统一 WorldSession Camera Selection Event 与完整 Golden Fixture 仍未完成。
