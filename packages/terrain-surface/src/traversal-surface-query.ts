@@ -1,7 +1,6 @@
 import { isEmpty, isNil } from "lodash-es";
 
 import {
-  aabbOverlapsInclusiveXZV1,
   classifyProjectedTriangleOverlapV1,
   classifyTriangleXZLocationV1,
   describeWorldTriangleV1,
@@ -11,6 +10,16 @@ import {
   TriangleWorldGeometryNonFiniteErrorV1,
   type WorldTriangleGeometryV1,
 } from "./triangle-world-geometry.js";
+import {
+  createTriangleXzBroadphaseIndexV1,
+  type TriangleXzBroadphaseIndexV1,
+} from "./triangle-xz-broadphase.js";
+
+export {
+  createTriangleXzBroadphaseIndexV1,
+  type TriangleXzBroadphaseEntryV1,
+  type TriangleXzBroadphaseIndexV1,
+} from "./triangle-xz-broadphase.js";
 
 export {
   TRAVERSAL_SURFACE_QUERY_AREA_EPSILON_SQUARE_METERS_V1,
@@ -552,178 +561,6 @@ function compareSurfaceIds(left: string, right: string): number {
     return 0;
   }
   return left < right ? -1 : 1;
-}
-
-export interface TriangleXzBroadphaseEntryV1 {
-  readonly ordinal: number;
-  readonly minimumMetersXZ: readonly [number, number];
-  readonly maximumMetersXZ: readonly [number, number];
-}
-
-export interface TriangleXzBroadphaseIndexV1 {
-  overlappingOrdinals(
-    minimumMetersXZ: readonly [number, number],
-    maximumMetersXZ: readonly [number, number],
-  ): Iterable<number>;
-}
-
-interface TriangleXzBroadphaseNodeV1 {
-  readonly minimumMetersXZ: readonly [number, number];
-  readonly maximumMetersXZ: readonly [number, number];
-  readonly minimumOrdinal: number;
-  readonly entry?: TriangleXzBroadphaseEntryV1;
-  readonly left?: TriangleXzBroadphaseNodeV1;
-  readonly right?: TriangleXzBroadphaseNodeV1;
-}
-
-function entryCenter(
-  entry: TriangleXzBroadphaseEntryV1,
-  axis: 0 | 1,
-): number {
-  return entry.minimumMetersXZ[axis] +
-    (entry.maximumMetersXZ[axis] - entry.minimumMetersXZ[axis]) / 2;
-}
-
-function buildTriangleXzBroadphaseNode(
-  entries: readonly TriangleXzBroadphaseEntryV1[],
-): TriangleXzBroadphaseNodeV1 | undefined {
-  if (entries.length === 0) return undefined;
-  let minimumX = Number.POSITIVE_INFINITY;
-  let minimumZ = Number.POSITIVE_INFINITY;
-  let maximumX = Number.NEGATIVE_INFINITY;
-  let maximumZ = Number.NEGATIVE_INFINITY;
-  let minimumCenterX = Number.POSITIVE_INFINITY;
-  let minimumCenterZ = Number.POSITIVE_INFINITY;
-  let maximumCenterX = Number.NEGATIVE_INFINITY;
-  let maximumCenterZ = Number.NEGATIVE_INFINITY;
-  let minimumOrdinal = Number.POSITIVE_INFINITY;
-  for (const entry of entries) {
-    minimumX = Math.min(minimumX, entry.minimumMetersXZ[0]);
-    minimumZ = Math.min(minimumZ, entry.minimumMetersXZ[1]);
-    maximumX = Math.max(maximumX, entry.maximumMetersXZ[0]);
-    maximumZ = Math.max(maximumZ, entry.maximumMetersXZ[1]);
-    const centerX = entryCenter(entry, 0);
-    const centerZ = entryCenter(entry, 1);
-    minimumCenterX = Math.min(minimumCenterX, centerX);
-    minimumCenterZ = Math.min(minimumCenterZ, centerZ);
-    maximumCenterX = Math.max(maximumCenterX, centerX);
-    maximumCenterZ = Math.max(maximumCenterZ, centerZ);
-    minimumOrdinal = Math.min(minimumOrdinal, entry.ordinal);
-  }
-  const minimumMetersXZ = [minimumX, minimumZ] as const;
-  const maximumMetersXZ = [maximumX, maximumZ] as const;
-  if (entries.length === 1) {
-    return {
-      minimumMetersXZ,
-      maximumMetersXZ,
-      minimumOrdinal,
-      entry: entries[0]!,
-    };
-  }
-  const centerExtentX = maximumCenterX - minimumCenterX;
-  const centerExtentZ = maximumCenterZ - minimumCenterZ;
-  const splitAxis: 0 | 1 = centerExtentX >= centerExtentZ ? 0 : 1;
-  const otherAxis: 0 | 1 = splitAxis === 0 ? 1 : 0;
-  const ordered = [...entries].sort((left, right) =>
-    entryCenter(left, splitAxis) - entryCenter(right, splitAxis) ||
-    entryCenter(left, otherAxis) - entryCenter(right, otherAxis) ||
-    left.ordinal - right.ordinal
-  );
-  const split = Math.floor(ordered.length / 2);
-  return {
-    minimumMetersXZ,
-    maximumMetersXZ,
-    minimumOrdinal,
-    left: buildTriangleXzBroadphaseNode(ordered.slice(0, split))!,
-    right: buildTriangleXzBroadphaseNode(ordered.slice(split))!,
-  };
-}
-
-function pushBroadphaseNode(
-  heap: TriangleXzBroadphaseNodeV1[],
-  node: TriangleXzBroadphaseNodeV1,
-): void {
-  heap.push(node);
-  let index = heap.length - 1;
-  while (index > 0) {
-    const parent = Math.floor((index - 1) / 2);
-    if (heap[parent]!.minimumOrdinal <= node.minimumOrdinal) break;
-    heap[index] = heap[parent]!;
-    index = parent;
-  }
-  heap[index] = node;
-}
-
-function popBroadphaseNode(
-  heap: TriangleXzBroadphaseNodeV1[],
-): TriangleXzBroadphaseNodeV1 | undefined {
-  const first = heap[0];
-  const last = heap.pop();
-  if (heap.length === 0 || isNil(last)) return first;
-  let index = 0;
-  while (true) {
-    const left = index * 2 + 1;
-    if (left >= heap.length) break;
-    const right = left + 1;
-    const child = right < heap.length &&
-        heap[right]!.minimumOrdinal < heap[left]!.minimumOrdinal
-      ? right
-      : left;
-    if (heap[child]!.minimumOrdinal >= last.minimumOrdinal) break;
-    heap[index] = heap[child]!;
-    index = child;
-  }
-  heap[index] = last;
-  return first;
-}
-
-/** Package-private: deliberately not re-exported from the package root. */
-export function createTriangleXzBroadphaseIndexV1(
-  entries: readonly TriangleXzBroadphaseEntryV1[],
-): TriangleXzBroadphaseIndexV1 {
-  const root = buildTriangleXzBroadphaseNode(entries);
-  const entriesByOrdinal = [...entries].sort(
-    (left, right) => left.ordinal - right.ordinal,
-  );
-  return {
-    *overlappingOrdinals(minimumMetersXZ, maximumMetersXZ): Generator<number> {
-      if (isNil(root)) return;
-      const overlaps = (node: TriangleXzBroadphaseNodeV1) =>
-        aabbOverlapsInclusiveXZV1(
-          minimumMetersXZ,
-          maximumMetersXZ,
-          node.minimumMetersXZ,
-          node.maximumMetersXZ,
-        );
-      if (!overlaps(root)) return;
-      const containsRoot =
-        minimumMetersXZ[0] <= root.minimumMetersXZ[0] &&
-        minimumMetersXZ[1] <= root.minimumMetersXZ[1] &&
-        maximumMetersXZ[0] >= root.maximumMetersXZ[0] &&
-        maximumMetersXZ[1] >= root.maximumMetersXZ[1];
-      if (containsRoot) {
-        for (const entry of entriesByOrdinal) {
-          yield entry.ordinal;
-        }
-        return;
-      }
-      const heap: TriangleXzBroadphaseNodeV1[] = [];
-      pushBroadphaseNode(heap, root);
-      while (heap.length > 0) {
-        const node = popBroadphaseNode(heap)!;
-        if (!isNil(node.entry)) {
-          yield node.entry.ordinal;
-          continue;
-        }
-        if (!isNil(node.left) && overlaps(node.left)) {
-          pushBroadphaseNode(heap, node.left);
-        }
-        if (!isNil(node.right) && overlaps(node.right)) {
-          pushBroadphaseNode(heap, node.right);
-        }
-      }
-    },
-  };
 }
 
 export function queryCanonicalTraversalSurfaceHitsV1(

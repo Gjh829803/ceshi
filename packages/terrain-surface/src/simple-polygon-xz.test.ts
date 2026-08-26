@@ -29,6 +29,15 @@ describe("validateSimplePolygonXZV1", () => {
     ])).toEqual({ ok: true });
   });
 
+  it("rejects a GeoJSON-style closed ring at the canonical open-ring boundary", () => {
+    expect(validateSimplePolygonXZV1([
+      [0, 0], [2, 0], [2, 2], [0, 2], [0, 0],
+    ])).toEqual({
+      ok: false,
+      issueCode: "zero-length-edge",
+    });
+  });
+
   it("freezes collection and triangle-point operation limits", () => {
     expect(TRAVERSAL_AREA_COMPLEXITY_LIMITS_V1).toEqual({
       maximumAreaCount: 64,

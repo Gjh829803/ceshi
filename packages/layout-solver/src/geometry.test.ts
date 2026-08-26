@@ -33,6 +33,37 @@ describe("engine-neutral layout geometry", () => {
     );
   });
 
+  // Adapted to WorldKit's open-ring meter-based XZ contract from Turf's
+  // boolean-point-in-polygon concavity and boundary regression matrix:
+  // https://github.com/Turfjs/turf/blob/98b9a4ed270148fda73dda48b7fd1f7c8b6f88e0/packages/turf-boolean-point-in-polygon/test.ts
+  it("keeps concave exclusions separate from inclusive edge and vertex hits", () => {
+    const concave = [
+      [0, 0],
+      [5, 5],
+      [0, 10],
+      [10, 10],
+      [10, 0],
+    ] as const;
+
+    expect(pointInPolygonXZ([7.5, 7.5], concave)).toBe(true);
+    expect(pointInPolygonXZ([2.5, 5], concave)).toBe(false);
+    expect(pointInPolygonXZ([0, 0], concave)).toBe(true);
+    expect(pointInPolygonXZ([2.5, 2.5], concave)).toBe(true);
+    expect(pointInPolygonXZ([5, 10], concave)).toBe(true);
+  });
+
+  // Regression shape derived from Turf's historical turf-inside issue #15.
+  it("classifies an interior point beside a long irregular edge", () => {
+    const irregular = [
+      [5.080336744095521, 67.89398938540765],
+      [0.35070899909145403, 69.32470003971179],
+      [-24.453622256504122, 41.146696777884564],
+      [-21.6445524714804, 40.43225902006474],
+    ] as const;
+
+    expect(pointInPolygonXZ([-9.9964077, 53.8040989], irregular)).toBe(true);
+  });
+
   it("measures AABB separation and overlap without treating overlap as clearance", () => {
     const left = {
       minimumMetersXYZ: [0, 0, 0],

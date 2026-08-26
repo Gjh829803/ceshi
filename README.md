@@ -592,6 +592,7 @@ Browser、示例和门禁。若本轮确实无法删除某个旧路径，技术�
 
 ### 外部依据与可行性
 
+- [开源设计借鉴与验证台账](docs/21-open-source-design-reference-ledger.md)：持续记录采用的具体实现/测试、锁定来源、本地边界、验证证据和未采用原因。
 - [业界对照与可落地性核查报告](docs/superpowers/specs/2026-08-18-industry-alignment-and-feasibility-review.md)
 - [Agentic 白模世界到可控视频：开源方案调研与架构启示](docs/superpowers/specs/2026-08-19-agentic-whitebox-to-video-open-source-research.md)
 - [阶段 0 技术探针计划与外部资料核查](docs/superpowers/specs/2026-08-18-phase0-probe-plan-and-external-research.md)

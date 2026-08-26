@@ -98,6 +98,7 @@ Registry Lock、Browser preference 命令，以及 Babylon CameraDirector 消费
 - [`2026-08-25-context-driven-camera-package-boundary-review.md`](reviews/2026-08-25-context-driven-camera-package-boundary-review.md)：Camera 分包决策的历史审查证据，不是 active 实现状态或可用入口；
 - [`2026-08-19-world-validation-report-and-quality-gates-design.md`](superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md)：量化 Gate、Metric、Evidence 和生产阻断协议；
 - [`2026-08-20-ai-authored-geometry-extension-design.md`](superpowers/specs/2026-08-20-ai-authored-geometry-extension-design.md)：未来可能需要的 AI 自定义几何能力及候选技术，仅供调研评审，不属于当前 Roadmap；
+- [`21-open-source-design-reference-ledger.md`](21-open-source-design-reference-ledger.md)：开源实现/测试的持续借鉴台账；记录锁定来源、本地落点、拒绝原因和候选验证，但不单独改变能力完成度；
 - `docs/superpowers/plans/`：已经进入实施阶段的单个纵向切片计划与证据。
 
 如果本文与已接受的 ADR、Canonical Schema 或真实代码不一致，以已接受 ADR、

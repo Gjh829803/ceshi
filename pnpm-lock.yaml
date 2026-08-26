@@ -435,6 +435,9 @@ importers:
       '@whitebox-world/contracts':
         specifier: workspace:*
         version: link:../contracts
+      flatbush:
+        specifier: 4.6.2
+        version: 4.6.2
       lodash-es:
         specifier: ^4.18.1
         version: 4.18.1
@@ -1273,6 +1276,12 @@ packages:
     peerDependenciesMeta:
       picomatch:
         optional: true
+
+  flatbush@4.6.2:
+    resolution: {integrity: sha512-nNT7MFJ58Q4IAm3aYsEg+zgZGpdRcmR1i4U+aa8c+r91jmYZg7FTQwNnIMC0FyBqVZTbClKdAnrJkKkfp1BOvw==}
+
+  flatqueue@3.1.0:
+    resolution: {integrity: sha512-Ia4qIYrrsEqIRx3c3XhkT+QDLQuUV5ovsr6ah1rIgKT5wclhoGK3lAMS1bWRAWxlx7wtlTBpV7QXB5d9fOSRxA==}
 
   foreground-child@3.3.1:
     resolution: {integrity: sha512-gIXjKqtFuWEgzFRJA9WCQeSJLZDjgJUOMCMzxtvFq/37KojM1BFGufqsCy0r4qSQmYLsZYMeyRqzIWOMup03sw==}
@@ -2233,6 +2242,12 @@ snapshots:
   fdir@6.5.0(picomatch@4.0.5):
     optionalDependencies:
       picomatch: 4.0.5
+
+  flatbush@4.6.2:
+    dependencies:
+      flatqueue: 3.1.0
+
+  flatqueue@3.1.0: {}
 
   foreground-child@3.3.1:
     dependencies:

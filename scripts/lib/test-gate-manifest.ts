@@ -121,6 +121,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "packages/terrain-surface/src/terrain-surface.test.ts", lane: "contract" },
   { path: "packages/terrain-surface/src/traversal-surface-query.test.ts", lane: "contract" },
   { path: "packages/terrain-surface/src/triangle-heightfield.test.ts", lane: "contract" },
+  { path: "packages/terrain-surface/src/triangle-xz-broadphase.test.ts", lane: "contract" },
   { path: "packages/testkit/src/testkit.test.ts", lane: "contract" },
   { path: "packages/traversal-recast/src/adapter-identity.test.ts", lane: "contract" },
   { path: "packages/traversal-recast/src/build-graph.test.ts", lane: "contract" },
