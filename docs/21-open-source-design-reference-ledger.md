@@ -37,10 +37,10 @@ Authoring Schema。
 | [glTF-Transform `4.4.2`](https://github.com/donmccurdy/glTF-Transform/tree/0677324a34cea46c3ef01866ef004b69d0347453) | Apache-2.0 | 现有实现一致 | NodeIO、prune、unpartition、确定性 GLB 处理 | 根依赖与 `scripts/lib/modular-subject-runtime-bundle.ts` 已使用；后续补 Khronos Validator admission profile |
 | [Recast Navigation](https://github.com/recastnavigation/recastnavigation/tree/9f4ce64458dfae86e1239c525ddc219c4e9e06f1) / `recast-navigation@0.43.1` | Zlib | 现有实现一致 | NavMesh 构建/查询、Tile/Polygon/Portal/Detail Mesh 语义 | `packages/traversal-recast` Provider；WorldKit `hard-ribbon`、Surface 身份、预算与 Evidence 仍是上层权威 |
 | [Babylon.js `9.21.2`](https://github.com/BabylonJS/Babylon.js/tree/72a4c7a28caa4f18ae1f93513d1743e3f9060159) + Havok `1.3.14` | Apache-2.0 / vendor package | 现有实现一致 | 3D 数学、渲染、物理 Character、资源生命周期 | `packages/runtime-babylon`；`checkSupport()` 是唯一 Ground support Owner，不复制 Provider 状态 |
-| [Godot `b56a918`](https://github.com/godotengine/godot/tree/b56a91878e7c94977e4af978968e41d0670c0a8b) | MIT | 候选验证 | Character slope/snap/platform 条件、SpringArm shape cast、reparent/global transform 生命周期 | 不引入依赖；先转化为 Traversal、Mounted、Camera adversarial fixtures |
-| [Rapier.js `9f638c5`](https://github.com/dimforge/rapier.js/tree/9f638c5384c282a8abd22515973ac7c82ccfbc43) | Apache-2.0 | 候选验证 | autostep 前置接地、snap-to-ground、slope、moving platform、shape cast | 不替换 Havok；只用于压力测试条件和 API 边界对照 |
-| [Bevy `0de2663`](https://github.com/bevyengine/bevy/tree/0de26631b0603acdc945aeae5e05b07ce58bc4dc) | MIT OR Apache-2.0 | 现有实现一致；候选验证 | Relationship 单一 source-of-truth、派生 reverse index、层级生命周期 | `GameplayRelationshipStateV1` 仍是 Canonical 真相；Renderer parent 不能替代 `mountedOn` |
-| [camera-controls `c516011`](https://github.com/yomotsu/camera-controls/tree/c51601107e266097edf6a9caa57bfa9eaa77427c) | MIT | 候选验证 | 近裁剪面四角碰撞射线、平滑过渡、边界与 collision mesh 集合 | 不引入 Three.js；先用于审视 Babylon Follow Arm 的碰撞覆盖和恢复测试 |
+| [Godot `b56a918`](https://github.com/godotengine/godot/tree/b56a91878e7c94977e4af978968e41d0670c0a8b) | MIT | 已吸收测试 | Character step/snap 条件、SpringArm 多方向覆盖、reparent/global transform 生命周期 | 转化为真实 Babylon/Havok Traversal、Mounted、Camera adversarial fixtures；未引入 Godot 依赖 |
+| [Rapier.js `9f638c5`](https://github.com/dimforge/rapier.js/tree/9f638c5384c282a8abd22515973ac7c82ccfbc43) | Apache-2.0 | 已吸收测试；已吸收代码 | autostep 前置接地压力条件 | 不替换 Havok；`checkSupport()` 的既有结果现在显式约束 provider-local step-up；snap/slope/moving platform 仍为候选或延后 |
+| [Bevy `0de2663`](https://github.com/bevyengine/bevy/tree/0de26631b0603acdc945aeae5e05b07ce58bc4dc) | MIT OR Apache-2.0 | 现有实现一致；已吸收测试 | Relationship 单一 source-of-truth、派生投影、层级生命周期 | 旋转非对称 Mount 回归证明 `GameplayRelationshipStateV1` 仍是 Canonical 真相；Renderer parent 未替代 `mountedOn` |
+| [camera-controls `c516011`](https://github.com/yomotsu/camera-controls/tree/c51601107e266097edf6a9caa57bfa9eaa77427c) | MIT | 已吸收测试；已吸收代码 | 近裁剪面角向碰撞覆盖思路 | 不引入 Three.js；Babylon Follow Arm 从五条中心/轴向 ray 补成九条含对角 ray，原有过滤、telemetry 与恢复语义不变 |
 
 ## 3. 本轮已经吸收的实现与测试
 
@@ -86,6 +86,25 @@ Turf 的 `booleanPointInPolygon` 把 GeoJSON Polygon/MultiPolygon、hole、bbox 
 - bbox 快速拒绝只有在 bbox 被预计算并复用时才避免 O(n) 扫描，当前最多 128 点的单次简单环
   不值得增加第二份派生状态。
 
+### 3.3 核心 Runtime：把外部条件改写成真实引擎回归
+
+本轮没有移植 Godot、Rapier、Bevy 或 Three.js 对象模型，而是把三个能击穿本地合同的条件放进
+现有 Babylon/Havok Runtime：
+
+- `CAM-COLL-01` 在真实 Babylon `Scene` 中放置位于 collision-radius 圆截面内、但会漏过中心与
+  四条轴向 ray 的薄对角 blocker。五 ray 实现先 RED；Follow Arm 增加四条半径归一化的对角 ray
+  后 GREEN。公共请求/结果、受控主体过滤、最近命中、立即收缩、限速恢复和 telemetry 均未变化。
+- `MNT-XFORM-01` 使用旋转 `Math.PI / 2` 的 Mount、非对称 Socket 与 Rider offset，核对 prepare、
+  commit、render root、下一固定 Tick 和 Reset。现有 `mountedPose()` 已正确把 local offset 变换到
+  world，故只吸收测试，没有为“看起来统一”而改动正确生产代码；临时未旋转期望可稳定击穿测试。
+- `TRAV-STEP-01` 用真实 Havok 对照地面低台阶和悬空低台阶。原实现会把初始
+  `movementMedium: "air"` 的 Character 从 `2m` 抬到约 `2.2498m`；修复只把同一 Tick 已有的
+  `CharacterSurfaceInfo` 传入 step-up 准入，`UNSUPPORTED` 时拒绝 `_tryStepUp()`。没有新增 support
+  query、terrain height、raycast 或 AABB grounding，`checkSupport()` 仍是唯一 Ground Owner。
+
+这些是自动化 Runtime 合同证据，不等价于 rendered screenshot 或人工手感验收，也不扩大动态
+平台、车辆、双层 Surface 或 Camera shape cast 的当前生产边界。
+
 ## 4. 核心能力的跨项目对照
 
 ### 4.1 通过性、Character 与 Route
@@ -95,7 +114,7 @@ Recast/Detour 已经是 Route Provider，不需要再引入 Turf A* 或第二套
 
 | 来源细节 | 对 WorldKit 的判断 | 后续验证 ID |
 |---|---|---|
-| Rapier autostep 只有在越障前已接触地面时生效 | 与“空中不能被台阶吸上去”的 Runtime 语义一致 | `TRAV-STEP-01`：接地/空中对同一台阶的非对称回归 |
+| Rapier autostep 只有在越障前已接触地面时生效 | 已复现空中被悬空低台阶抬升，并用既有 support 结果约束 step-up | `TRAV-STEP-01` 已完成；见 `runtime.test.ts` 与 `motion-kernel-runtime.ts` |
 | Rapier/Godot snap-to-ground 只在先前接地且运动含向下分量时触发 | 可防止 jump 上升阶段被错误吸回 | `TRAV-SNAP-01`：下坡、离台、上升 Jump 三分支 |
 | Godot 区分 requested velocity 与碰撞后的 real velocity | Camera/Animation 应消费提交后的实际状态，不从输入重算 | `TRAV-VELOCITY-01`：斜坡与贴墙后的速度/朝向一致性 |
 | Godot/Rapier 均暴露贴墙近共线和 moving-platform 历史缺陷 | 适合做高风险边界夹具，但动态平台不属于当前 R1b | `TRAV-WALL-01` 当前候选；`TRAV-PLATFORM-01` 延后到动态 Surface |
@@ -117,28 +136,28 @@ prepare/project/commit 比直接改场景树更稳，但还应补齐：
 
 | 验证 ID | 交付物 | depends_on | Owner / 执行模式 | 所需证据 |
 |---|---|---|---|---|
-| `MNT-XFORM-01` | 旋转且非对称 Mount slot；同一 commit Tick 的 Rider 世界位置/朝向正确 | 当前 M8-S1 | `runtime-babylon`，main-agent-only | Runtime projection、render node、Capture 三者一致；Reset 无残留 |
+| `MNT-XFORM-01` | 已完成：旋转且非对称 Mount slot；prepare/commit/next Tick 的 Rider 世界位置/朝向正确 | 当前 M8-S1 | `runtime-babylon`，main-agent-only | World projection、render root 与 controller 一致；Reset 无残留；现有生产实现无需修改 |
 | `MNT-PAIR-01` | 两组 Rider/Mount 并存且互不串 slot、suspension、possession | 当前 M8-S1 | Gameplay + Runtime，sequential | 两对交错动作和回滚/失败隔离 |
 | `MNT-LIFE-01` | partial construction、throwing cleanup、Reset/foreign WorldSession 无泄漏 | `MNT-PAIR-01` | RuntimeHost + Runtime，sequential | 资源计数、Journal、World State、Capture 一致 |
 | `MNT-DYNAMIC-01` | moving platform/vehicle 的继承速度与离开行为 | 动态 Surface 与车辆设计 | 未排期 | 当前明确不实现，不得用于 S1 完成声明 |
 
 ### 4.3 第三人称视角与碰撞
 
-WorldKit 当前 `FollowArmSolverV1` 采用中心、左右、上下五条 Babylon picking ray 近似一个
-collision radius，并已覆盖受控主体排除、立即缩臂、限速恢复、异常 delta 与 telemetry。
+WorldKit 当前 `FollowArmSolverV1` 采用中心、左右、上下和四个对角方向共九条 Babylon picking ray
+近似一个 collision radius，并已覆盖受控主体排除、立即缩臂、限速恢复、异常 delta 与 telemetry。
 Godot SpringArm 使用 camera near-plane shape 或用户指定 shape sweep；camera-controls 使用近裁剪面
-四角射线。两者共同说明“单中心 ray 不足”，也暴露当前五射线对薄斜障碍和 near-plane corner 的
-覆盖仍需真实验证。
+四角射线。两者共同说明“单中心 ray 不足”；此前五射线方案对薄对角障碍的缺口已经复现并关闭，
+near-plane corner、墙角和起点穿入仍需分别验证。
 
 | 验证 ID | 交付物 | depends_on | Owner / 执行模式 | 所需证据 |
 |---|---|---|---|---|
-| `CAM-COLL-01` | 薄斜柱、墙角、窄门、镜头起点已穿入四类真实 Babylon Fixture | 无 | Camera design + Runtime，先 design、后 sequential | 当前五射线是否漏检的失败复现；截图与 arm telemetry |
+| `CAM-COLL-01` | 已完成首个最小闭环：真实 Babylon 薄对角 blocker 击穿五 ray，并由九 ray 覆盖 | 无 | Follow Arm Provider Adapter，main-agent-only | RED/GREEN、blocker entity telemetry；未宣称墙角/窄门/起点穿入已全部完成 |
 | `CAM-SWEEP-01` | 若 `CAM-COLL-01` 证实缺陷，比较 Babylon/Havok shape cast、near-plane corners 与现状 | `CAM-COLL-01` | Architecture main-agent-only | Provider 版本源码、性能预算、过滤层、确定性与 dispose 证据 |
 | `CAM-MOUNT-01` | Mount 转移 possession 后 Rider 不被裁切，Context/Modifier 选择可解释 | M8-S1 状态与 P2.4 Camera Context | CameraDirector，sequential | 修复现有 `CAM-MOUNT-1`，不得写场景特判 |
 
-没有 `CAM-COLL-01` 的失败复现前，不因外部实现“看起来更先进”而改 Camera Runtime。若需要
-shape cast，它只应替换 Follow Arm 的碰撞查询 Provider，不得接管 Orbit、Target、Profile、
-Context 或固定 Tick View publication。
+`CAM-COLL-01` 已证明角向覆盖缺口，但九 ray 的最小修复已关闭该复现，所以当前没有足够证据引入
+shape cast。未来若墙角、窄门或镜头起点穿入继续复现，shape cast 也只应替换 Follow Arm 的碰撞
+查询 Provider，不得接管 Orbit、Target、Profile、Context 或固定 Tick View publication。
 
 ## 5. 几何与资产候选的推进顺序
 
@@ -164,6 +183,6 @@ Context 或固定 Tick View publication。
 - 每次真正采用后，把状态从 `候选验证` 更新为 `已吸收代码/测试`，补本地文件和新鲜 Gate；
 - 每次拒绝也记录原因，避免后续 Agent 重复调研或误把旧候选当批准方案。
 
-下一次更新优先处理 `GEO-RP-01`、`CAM-COLL-01` 与 M8-S1 已列出的 mounted adversarial
-closure；它们分别覆盖几何健壮性、镜头遮挡和核心 Relationship 生命周期，且不会重复
-当前 Recast/Havok/CameraDirector 的状态权威。
+下一次更新优先处理 `GEO-RP-01`、`TRAV-SNAP-01`、`CAM-COLL-01` 剩余的墙角/窄门/起点穿入，
+以及 `MNT-PAIR-01`。它们分别覆盖几何健壮性、离地/下坡/Jump、镜头遮挡余量和多组 Relationship
+隔离，且不会重复当前 Recast/Havok/CameraDirector 的状态权威。

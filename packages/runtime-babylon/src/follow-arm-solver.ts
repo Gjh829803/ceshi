@@ -56,12 +56,19 @@ export class FollowArmSolverV1 {
     const right = Vector3.Cross(Vector3.Up(), direction).normalize();
     const probeUp = Vector3.Cross(direction, right).normalize();
     const radius = input.parameters.collisionRadiusMeters;
+    const diagonalScale = radius / Math.SQRT2;
+    const diagonalRight = right.scale(diagonalScale);
+    const diagonalUp = probeUp.scale(diagonalScale);
     const offsets = [
       Vector3.Zero(),
       right.scale(radius),
       right.scale(-radius),
       probeUp.scale(radius),
       probeUp.scale(-radius),
+      diagonalRight.add(diagonalUp),
+      diagonalRight.subtract(diagonalUp),
+      diagonalRight.scale(-1).add(diagonalUp),
+      diagonalRight.scale(-1).subtract(diagonalUp),
     ];
     let safeArmLengthMeters = distance;
     let collisionHitEntityId: string | undefined;

@@ -831,6 +831,53 @@ function createV5StaticColliderSupportExecutionPlan(): ExecutionPlanV5 {
   };
 }
 
+function createLowStepTraversalExecutionPlan(options: {
+  gravityYMetersPerSecondSquared?: number;
+  spawnSubjectOriginYMeters: number;
+  stepEnabled: boolean;
+  stepBottomMeters?: number;
+}): ExecutionPlanV5 {
+  const base = createFlatPackageExecutionPlan();
+  const player = base.subjects.find((subject) => subject.entityId === "player")!;
+  const stepTransform = {
+    positionMetersXYZ: [1.7, (options.stepBottomMeters ?? 0) + 0.1, 0] as const,
+    rotationEulerRadiansXYZ: [0, 0, 0] as const,
+    scaleXYZ: [1, 1, 1] as const,
+  };
+  return {
+    ...base,
+    gravityMetersPerSecondSquaredXYZ: [
+      0,
+      options.gravityYMetersPerSecondSquared ??
+        base.gravityMetersPerSecondSquaredXYZ[1],
+      0,
+    ],
+    terrain: {
+      ...base.terrain,
+      heightSamplesMeters: base.terrain.heightSamplesMeters.map(() => 0),
+      minimumHeightMeters: 0,
+      maximumHeightMeters: 0,
+    },
+    waters: [],
+    objects: [],
+    staticColliders: options.stepEnabled
+      ? [{
+          entityId: "low-step",
+          logicalSubshapeId: "primary",
+          colliderSubshapeId: "collider:low-step:primary",
+          colliderHash: `sha256:${"b".repeat(64)}`,
+          transform: stepTransform,
+          shape: { kind: "box", sizeMetersXYZ: [2, 0.2, 4] },
+        }]
+      : [],
+    subjects: [{
+      ...player,
+      spawnSubjectOriginPositionMetersXYZ: [0, options.spawnSubjectOriginYMeters, 0],
+    }],
+    layout: { ...base.layout, layoutAssertions: [] },
+  };
+}
+
 function createV5StaticColliderGeometryConformancePlan(): ExecutionPlanV5 {
   const plan = createV5StaticColliderSupportExecutionPlan();
   return {
@@ -2898,6 +2945,75 @@ describe("BabylonWorldRuntime", () => {
     }
   });
 
+  it("climbs a low step only while grounded and never steps an unsupported Character upward", async () => {
+    const groundedRuntime = await createRuntime(
+      createLowStepTraversalExecutionPlan({
+        spawnSubjectOriginYMeters: 0,
+        stepEnabled: true,
+      }),
+    );
+    const airborneStepRuntime = await createRuntime(
+      createLowStepTraversalExecutionPlan({
+        spawnSubjectOriginYMeters: 2,
+        stepEnabled: true,
+        stepBottomMeters: 2,
+        gravityYMetersPerSecondSquared: -0.1,
+      }),
+    );
+    const airborneControlRuntime = await createRuntime(
+      createLowStepTraversalExecutionPlan({
+        spawnSubjectOriginYMeters: 2,
+        stepEnabled: false,
+        stepBottomMeters: 2,
+        gravityYMetersPerSecondSquared: -0.1,
+      }),
+    );
+    try {
+      await groundedRuntime.runFixedInput({ actions: [], ticks: 5 });
+      const climbed = await groundedRuntime.runFixedInput({
+        actions: ["move-right"],
+        ticks: 45,
+      });
+      const climbedState = climbed.subjectStatesByEntityId.player!;
+      expect(climbedState.positionMetersXYZ[0]).toBeGreaterThan(0.75);
+      expect(climbedState.positionMetersXYZ[1]).toBeGreaterThan(0.15);
+      expect(climbedState.movementMedium).toBe("ground");
+
+      expect(
+        airborneStepRuntime.snapshot().subjectStatesByEntityId.player!.movementMedium,
+      ).toBe("air");
+      expect(
+        airborneControlRuntime.snapshot().subjectStatesByEntityId.player!.movementMedium,
+      ).toBe("air");
+      const airborneStep = await airborneStepRuntime.runFixedInput({
+        actions: ["move-right", "run"],
+        ticks: 45,
+      });
+      const airborneControl = await airborneControlRuntime.runFixedInput({
+        actions: ["move-right", "run"],
+        ticks: 45,
+      });
+      const airborneStepY =
+        airborneStep.subjectStatesByEntityId.player!.positionMetersXYZ[1];
+      expect(
+        airborneStep.subjectStatesByEntityId.player!.positionMetersXYZ[0],
+      ).toBeLessThan(
+        airborneControl.subjectStatesByEntityId.player!.positionMetersXYZ[0] -
+          0.05,
+      );
+      expect(airborneStepY).toBeLessThanOrEqual(2);
+      expect(
+        airborneStep.subjectStatesByEntityId.player!.velocityMetersPerSecondXYZ[1],
+      ).toBeLessThanOrEqual(0);
+    } finally {
+      await Promise.all([
+        groundedRuntime.dispose(),
+        airborneStepRuntime.dispose(),
+        airborneControlRuntime.dispose(),
+      ]);
+    }
+  });
+
   it("falls to lower terrain after walking off a raised collider", async () => {
     const base = createFlatPackageExecutionPlan();
     const player = base.subjects.find((subject) => subject.entityId === "player")!;
@@ -3351,6 +3467,133 @@ describe("BabylonWorldRuntime", () => {
       expect(riderMoved.spatialEntityStatesById[
         "pack-animal-a"
       ]!.positionMetersXYZ).not.toEqual(riderBeforeIndependentMove);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("keeps a rotated asymmetric Mount slot consistent through prepare, commit, tick, and reset", async () => {
+    const spec = createValidMountedOnAuthoringSpec();
+    const terrainNode = spec.nodes.find((node) => node.kind === "terrain");
+    const riderAnchor = spec.nodes.find((node) =>
+      node.kind === "anchor" && node.id === "spawn-pack-animal-a"
+    );
+    const mountAnchor = spec.nodes.find((node) =>
+      node.kind === "anchor" && node.id === "spawn-pack-animal-b"
+    );
+    const definition = spec.resources.subjectDefinitions[0];
+    const mountSocket = definition?.sockets.find(({ id }) => id === "MountStand");
+    const mountSlot = definition?.mountSlots.find(({ id }) => id === "stand");
+    if (
+      terrainNode?.kind !== "terrain" ||
+      riderAnchor?.kind !== "anchor" ||
+      riderAnchor.placement.kind !== "fixed" ||
+      mountAnchor?.kind !== "anchor" ||
+      mountAnchor.placement.kind !== "fixed" ||
+      isNil(definition) ||
+      isNil(mountSocket) ||
+      mountSocket.kind !== "local" ||
+      isNil(mountSlot)
+    ) {
+      throw new Error("Rotated mounted fixture is incomplete.");
+    }
+    terrainNode.components.terrain.source = { kind: "procedural", relief: "flat" };
+    riderAnchor.placement.transform.positionMetersXYZ = [3.5, 0, 5];
+    mountAnchor.placement.transform.positionMetersXYZ = [5, 0, 5];
+    mountAnchor.placement.transform.rotationEulerRadiansXYZ = [0, Math.PI / 2, 0];
+    mountSocket.localTransform.positionMetersXYZ = [0.6, 0.25, -0.2];
+    const mutableMountSlots = definition.mountSlots as unknown as Array<
+      (typeof definition.mountSlots)[number]
+    >;
+    const mountSlotIndex = mutableMountSlots.indexOf(mountSlot);
+    mutableMountSlots[mountSlotIndex] = {
+      ...mountSlot,
+      riderSubjectOriginOffsetMetersXYZ: [0.15, 0.2, 0.35],
+    };
+
+    const compiled = compileExecutionPlan(spec);
+    const executionPlan: ExecutionPlanV5 = {
+      ...compiled,
+      initialControlledEntityId: "pack-animal-a",
+      initialRelationships: [],
+      camera: { ...compiled.camera, targetEntityId: "pack-animal-a" },
+    };
+    const runtime = await createRuntime(executionPlan, {}, false);
+    try {
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      const debug = createRuntimeDebugProbe(runtime);
+      const bind = await internal.preparePossessionTarget({
+        mode: "possessed",
+        controlledEntityId: "pack-animal-a",
+      });
+      bind.commitPrepared();
+      const relationship = {
+        id: "mounted-on:rotated-runtime-test",
+        type: "mountedOn" as const,
+        schemaVersion: 1 as const,
+        riderEntityId: "pack-animal-a",
+        mountEntityId: "pack-animal-b",
+        mountSlotId: "stand",
+        establishedSimulationTick: 0,
+      };
+      const expectedRiderPosition = [5.15, 0.45, 4.25] as const;
+      const expectedRiderRotation = [
+        0,
+        Math.sin(Math.PI / 4),
+        0,
+        Math.cos(Math.PI / 4),
+      ] as const;
+
+      const prepared = await internal.prepareMountedRelationshipTransition({
+        operation: "mount",
+        relationship,
+        possessionTarget: {
+          mode: "possessed",
+          controlledEntityId: "pack-animal-b",
+        },
+      });
+      const preparedRider = prepared.projectedWorldStateAfter
+        .spatialEntityStatesById["pack-animal-a"]!;
+      expect(preparedRider.positionMetersXYZ).toEqual(
+        expectedRiderPosition.map((value) => expect.closeTo(value, 6)),
+      );
+      expect(preparedRider.rotationQuaternionXYZW).toEqual(
+        expectedRiderRotation.map((value) => expect.closeTo(value, 6)),
+      );
+
+      prepared.commitPrepared();
+      expect(debug.subjectVisualOrigin("pack-animal-a")).toEqual(
+        expectedRiderPosition.map((value) => expect.closeTo(value, 6)),
+      );
+      expect(debug.visualRootYawRadians("pack-animal-a")).toBeCloseTo(
+        Math.PI / 2,
+        6,
+      );
+      expect(internal.readWorldProjection().spatialEntityStatesById[
+        "pack-animal-a"
+      ]!.positionMetersXYZ).toEqual(
+        expectedRiderPosition.map((value) => expect.closeTo(value, 6)),
+      );
+
+      const afterTick = await internal.runFixedInputTick({ actions: [], ticks: 1 });
+      expect(afterTick.spatialEntityStatesById[
+        "pack-animal-a"
+      ]!.positionMetersXYZ).toEqual(
+        expectedRiderPosition.map((value) => expect.closeTo(value, 6)),
+      );
+      expect(debug.subjectVisualOrigin("pack-animal-a")).toEqual(
+        expectedRiderPosition.map((value) => expect.closeTo(value, 6)),
+      );
+
+      runtime.reset();
+      expect(internal.readWorldProjection().capabilityStatesById[
+        "capability-state:pack-animal-a:locomotion"
+      ]).not.toMatchObject({ mode: "suspended" });
+      expect(debug.subjectVisualOrigin("pack-animal-a")).toEqual(
+        riderAnchor.placement.transform.positionMetersXYZ.map(
+          (value) => expect.closeTo(value, 6),
+        ),
+      );
     } finally {
       await runtime.dispose();
     }

@@ -1,4 +1,7 @@
+import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
+import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
+import { Scene } from "@babylonjs/core/scene.js";
 import type { CameraRigParametersV1 } from "@whitebox-world/camera";
 import { describe, expect, it } from "vitest";
 
@@ -156,7 +159,42 @@ describe("FollowArmSolverV1", () => {
     expect(result.effectiveArmLengthMeters).toBe(10);
     expect(result.isCollisionRetracted).toBe(false);
     expect(result.collisionHitEntityId).toBeUndefined();
-    expect(pickQueryCount).toBe(5);
-    expect(subjectPredicateResults).toEqual([false, false, false, false, false]);
+    expect(pickQueryCount).toBe(9);
+    expect(subjectPredicateResults).toEqual([
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+    ]);
+  });
+
+  it("detects a thin diagonal blocker inside the collision cross-section", () => {
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    try {
+      const blocker = MeshBuilder.CreateBox("diagonal-blocker", {
+        width: 0.12,
+        height: 0.12,
+        depth: 0.12,
+      }, scene);
+      blocker.position.set(0.32, 0.32, 5);
+      blocker.isPickable = true;
+      blocker.metadata = { worldkitEntityId: "diagonal-blocker" };
+      blocker.computeWorldMatrix(true);
+
+      const result = solve(new FollowArmSolverV1(), scene);
+
+      expect(result.safeArmLengthMeters).toBeLessThan(10);
+      expect(result.isCollisionRetracted).toBe(true);
+      expect(result.collisionHitEntityId).toBe("diagonal-blocker");
+    } finally {
+      scene.dispose();
+      engine.dispose();
+    }
   });
 });
