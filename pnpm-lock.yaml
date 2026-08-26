@@ -231,6 +231,33 @@ importers:
         specifier: ^4.18.1
         version: 4.18.1
 
+  packages/authoring-host:
+    dependencies:
+      '@whitebox-world/authoring':
+        specifier: workspace:*
+        version: link:../authoring
+      '@whitebox-world/authoring-edit':
+        specifier: workspace:*
+        version: link:../authoring-edit
+      '@whitebox-world/compiler':
+        specifier: workspace:*
+        version: link:../compiler
+      '@whitebox-world/gameplay':
+        specifier: workspace:*
+        version: link:../gameplay
+      '@whitebox-world/gameplay-contracts':
+        specifier: workspace:*
+        version: link:../gameplay-contracts
+      '@whitebox-world/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      '@whitebox-world/world-package':
+        specifier: workspace:*
+        version: link:../world-package
+      lodash-es:
+        specifier: ^4.18.1
+        version: 4.18.1
+
   packages/camera: {}
 
   packages/compiler:

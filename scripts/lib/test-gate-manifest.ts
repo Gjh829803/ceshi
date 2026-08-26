@@ -41,6 +41,8 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "packages/authoring-edit/src/package-boundary.test.ts", lane: "contract" },
   { path: "packages/authoring-edit/src/schema-projection/schema-projection.test.ts", lane: "contract" },
   { path: "packages/authoring-edit/src/world-change/world-change.test.ts", lane: "contract" },
+  { path: "packages/authoring-host/src/package-boundary.test.ts", lane: "contract" },
+  { path: "packages/authoring-host/src/prepared-candidate.test.ts", lane: "contract" },
   { path: "packages/authoring/src/authoring-document-hash-v4.test.ts", lane: "contract" },
   { path: "packages/authoring/src/authoring-v4.test.ts", lane: "contract" },
   { path: "packages/authoring/src/authoring.test.ts", lane: "contract" },

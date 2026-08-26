@@ -528,9 +528,9 @@ P16-D0 已冻结，P16-H0、P16-A0 已落地；这不表示 P1.6 已实现或可
 | P16-H0 | [x] 已完成 | Authoring document hash clean break 与独立 `layoutInputHash` | P16-D0 / P16-A0、P16-C1、P16-S1、P16-P1 |
 | P16-A0 | [x] 已完成 | provider-neutral `@whitebox-world/authoring-edit` 包、required publication Candidate、mode-specific Receipt 及 strict parser/hash 边界 | P16-D0、P16-H0 / P16-S1、P16-O1、P16-C1 |
 | P16-S1 | [x] 已完成 | AI Schema Projector、Profile Registry kind、预算降级、Projection Receipt | P16-A0、P16-H0、P1.4 Registry Lock shape / P16-B1、P16-F1 |
-| P16-O1 | [ ] 等待开发 | 通用 `allowedOverridePaths` 与 Resource Ref Override validator | P16-A0、P16-S1 contract / P16-C1、P16-F1 |
-| P16-C1 | [ ] 等待开发 | WorldChangeSet、Precondition、Operation、Candidate Diff 纯实现 | P16-A0、P16-H0 / P16-P1、P16-R1 |
-| P16-P1 | [ ] 等待 P1.4/开发 | 完整 Normalize/Solve/Compile/Package/Gates Candidate pipeline 与 lease pin/expiry/GC | P16-C1、P1.4 完整 Package/Lock / P16-R1、P16-H1、P16-CLI1 |
+| P16-O1 | [x] 已完成 | 通用 `allowedOverridePaths` 与 Resource Ref Override validator | P16-A0、P16-S1 contract / P16-C1、P16-F1 |
+| P16-C1 | [x] 已完成 | WorldChangeSet、Precondition、Operation、Candidate Diff 纯实现 | P16-A0、P16-H0 / P16-P1、P16-R1 |
+| P16-P1 | [x] 已完成 first-slice host | 完整 Normalize/Solve/Compile/最小 Package Receipt/Gates Candidate pipeline 与 in-memory lease pin/expiry/GC | P16-C1、P1.4 最小 Manifest/Build Receipt / P16-R1、P16-H1、P16-CLI1 |
 | P16-R1 | [ ] 等待开发 | durable idempotency journal、admission epoch/pin owner、revision head、Receipt/Cleanup Report Query/Explain/Diff | P16-C1、P16-P1 / P16-H1、P16-B1、P16-CLI1 |
 | P16-H1 | [ ] 等待开发 | RuntimeHost publication V2：Commit-time authorization/CAS、exclusive fence、commit point、cleanup disposition | P16-P1、P16-R1 / P16-B1、P16-F1 |
 | P16-CLI1 | [ ] 等待开发 | Schema/Registry/Change CLI 与 Dry Run→new Apply ID 的 offline/live adapters | P16-S1、P16-C1、P16-P1、P16-R1 / P16-F1 |
@@ -564,6 +564,22 @@ catalog `aiMetadata`）；`registryLockHash` / `capabilitySetHash` 对集合排�
 `AI_SCHEMA_PROFILE_UNREPRESENTABLE`。authoring-edit 仍不依赖 `subject-registry`。验证：
 `pnpm typecheck`、focused projector/search/registry/contracts/package-boundary 测试、
 `pnpm test:census`、`pnpm verify:workspace-boundaries` 均通过。这不是 P1.6 生产可用声明。
+
+P16-O1 证据：Definition / AI Profile / Host Policy 的 `allowedOverridePaths` 取交集后校验
+Resource Ref Override；第一批路径仍是天花板。验证：focused override-policy 测试、
+`pnpm typecheck`、`pnpm test:census`。这不是 P1.6 生产可用声明。
+
+P16-C1 证据：`applyWorldChangeSetV1` 在隔离 Candidate 上执行领域 Operation，产出 Diff /
+affectedIds，不进入 Normalize/Compile/Package。验证：focused world-change 测试、
+`pnpm typecheck`、`pnpm test:census`。这不是 P1.6 生产可用声明。
+
+P16-P1 证据：新增 `@whitebox-world/authoring-host`，调用现有 Normalize / `createCoreGameplayBootstrapV1`
+/ Compile / `createWorldPackageBuildReceiptV1` 做 Trusted Candidate Build，并提供 in-memory
+lease pin/expiry/GC 与 Policy Hash binding。复用 P1.4 **最小** Manifest/Build Receipt，不发明
+完整 Package 目录、签名、License 或 Host Compatibility。声明的 Required Gate 必须经 Host 注入的
+现有 runner 执行，缺 runner 或失败都 fail-closed 且不写 lease。验证：focused authoring-host
+测试、`pnpm typecheck`、`pnpm test:census`、`pnpm verify:workspace-boundaries`。这不是 P1.6
+生产可用声明，也不表示 P1.4 整体完成。
 
 - [x] 为 Canonical Schema + Registry Lock + 允许 Capability 集冻结版本化 AI Schema
   Profile/Projector；记录 Profile Hash、Registry Lock Hash、Capability Set Hash、规模
