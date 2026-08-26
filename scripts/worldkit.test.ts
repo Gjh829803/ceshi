@@ -39,7 +39,9 @@ import { explainSubjectFile } from "./lib/subject-explain";
 import {
   buildFile,
   captureVisibleWorldWithRetries,
+  createRenderEnvironmentDiagnosticsV1,
   describeRegistryResource,
+  inspectRenderEnvironmentV1,
   listRegistryResources,
   main,
   parseWorldkitArgs,
@@ -248,6 +250,62 @@ describe("worldkit CLI", () => {
       }, 3),
     ).rejects.toThrow("WORLDKIT_CAPTURE_VISIBLE_WORLD_MISSING");
     expect(attempts).toBe(3);
+  });
+
+  it.each([
+    [
+      "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)))",
+      "software",
+    ],
+    ["llvmpipe (LLVM 18.1.8, 256 bits)", "software"],
+    ["ANGLE Metal Renderer: Apple M3", "hardware"],
+  ] as const)(
+    "classifies the reported WebGL renderer %s as %s",
+    (webglRenderer, expectedMode) => {
+      expect(
+        inspectRenderEnvironmentV1({
+          webglApi: "webgl2",
+          webglVendor: "Google Inc.",
+          webglRenderer,
+          isUnmaskedRenderer: true,
+        }),
+      ).toMatchObject({
+        kind: "worldkit-render-environment-receipt",
+        schemaVersion: 1,
+        mode: expectedMode,
+        webglRenderer,
+      });
+    },
+  );
+
+  it("does not claim hardware acceleration from a masked WebGL identity", () => {
+    expect(
+      inspectRenderEnvironmentV1({
+        webglApi: "webgl2",
+        webglVendor: "WebKit",
+        webglRenderer: "WebKit WebGL",
+        isUnmaskedRenderer: false,
+      }).mode,
+    ).toBe("unknown");
+  });
+
+  it("reports software rendering as a non-blocking capture warning", () => {
+    expect(
+      createRenderEnvironmentDiagnosticsV1({
+        kind: "worldkit-render-environment-receipt",
+        schemaVersion: 1,
+        webglApi: "webgl2",
+        webglVendor: "Google Inc.",
+        webglRenderer: "ANGLE (SwiftShader Device)",
+        isUnmaskedRenderer: true,
+        mode: "software",
+      }),
+    ).toEqual([
+      expect.objectContaining({
+        severity: "warning",
+        code: "CLI_CAPTURE_SOFTWARE_RENDERER",
+      }),
+    ]);
   });
 
   it("parses discovery and explain commands without positional guessing", () => {

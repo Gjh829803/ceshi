@@ -32,6 +32,12 @@ import { isNil } from "lodash-es";
 
 import { explainSubjectFile } from "./lib/subject-explain";
 import {
+  createRenderEnvironmentDiagnosticsV1,
+  inspectRenderEnvironmentV1,
+  type BrowserRenderEnvironmentV1,
+  type RenderEnvironmentReceiptV1,
+} from "./lib/render-environment";
+import {
   layoutExplainFile,
   layoutSolveFile,
   layoutValidateFile,
@@ -106,6 +112,10 @@ Usage:
 `;
 
 export type { CliDiagnostic } from "./lib/worldkit-pipeline";
+export {
+  createRenderEnvironmentDiagnosticsV1,
+  inspectRenderEnvironmentV1,
+} from "./lib/render-environment";
 
 export type WorldkitArgs =
   | { command: "help"; json: false }
@@ -228,6 +238,7 @@ export interface WorldkitCommandResult {
   snapshotPath?: string;
   triviewOutputPath?: string;
   url?: string;
+  renderEnvironment?: RenderEnvironmentReceiptV1;
 }
 
 export class WorldkitUsageError extends Error {
@@ -1023,6 +1034,42 @@ export async function captureFile(
       await api.ready();
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     });
+    const reportedRenderEnvironment = await page.evaluate(
+      (): BrowserRenderEnvironmentV1 => {
+        const canvas = document.createElement("canvas");
+        const webgl2Context = canvas.getContext("webgl2");
+        const context = webgl2Context ?? canvas.getContext("webgl");
+        if (context === null) {
+          return {
+            webglApi: "unavailable",
+            webglVendor: "",
+            webglRenderer: "",
+            isUnmaskedRenderer: false,
+          };
+        }
+
+        const debugRendererInfo = context.getExtension(
+          "WEBGL_debug_renderer_info",
+        );
+        const isUnmaskedRenderer = debugRendererInfo !== null;
+        const vendorParameter = debugRendererInfo?.UNMASKED_VENDOR_WEBGL ??
+          context.VENDOR;
+        const rendererParameter = debugRendererInfo?.UNMASKED_RENDERER_WEBGL ??
+          context.RENDERER;
+        return {
+          webglApi: webgl2Context === null ? "webgl" : "webgl2",
+          webglVendor: String(context.getParameter(vendorParameter) ?? ""),
+          webglRenderer: String(context.getParameter(rendererParameter) ?? ""),
+          isUnmaskedRenderer,
+        };
+      },
+    );
+    const renderEnvironment = inspectRenderEnvironmentV1(
+      reportedRenderEnvironment,
+    );
+    const captureDiagnostics = createRenderEnvironmentDiagnosticsV1(
+      renderEnvironment,
+    );
     if (configuredCaptureGroups.length > 0) {
       await page.waitForFunction(
         () => window.__WORLDKIT_AUTHORING_CAPTURE__ !== undefined,
@@ -1211,7 +1258,7 @@ export async function captureFile(
     return {
       ok: true,
       exitCode: 0,
-      diagnostics: [],
+      diagnostics: captureDiagnostics,
       ...(validation.normalizedWorldIrHash === undefined
         ? {}
         : { normalizedWorldIrHash: validation.normalizedWorldIrHash }),
@@ -1226,6 +1273,7 @@ export async function captureFile(
         ? {}
         : { triviewOutputPath: absoluteTriviewOutputPath }),
       url: server.url,
+      renderEnvironment,
     };
   } catch (error) {
     return cliFailure(
@@ -1366,6 +1414,11 @@ function printResult(result: PrintableResult, json: boolean): void {
     return;
   }
   if (result.ok) {
+    for (const diagnostic of result.diagnostics) {
+      process.stderr.write(
+        `[${diagnostic.severity}] ${diagnostic.code} ${diagnostic.instancePath || "/"}: ${diagnostic.message}\n`,
+      );
+    }
     if (result.humanReadableText !== undefined) {
       process.stdout.write(`${result.humanReadableText}\n`);
       return;
