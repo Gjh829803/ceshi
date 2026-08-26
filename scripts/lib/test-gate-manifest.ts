@@ -23,6 +23,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "apps/playground/src/canvas-recorder.test.ts", lane: "contract" },
   { path: "apps/playground/src/gameplay-babylon-runtime-coordinator.test.ts", lane: "contract" },
   { path: "apps/playground/src/gameplay-page-lifecycle.test.ts", lane: "contract" },
+  { path: "apps/playground/src/mounted-skateboard-controls.test.ts", lane: "contract" },
   { path: "apps/playground/src/outdoor-scene-gameplay-loader.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"] },
   { path: "apps/playground/src/page-exit-lifecycle.test.ts", lane: "contract" },
   { path: "apps/playground/src/playground-feature-inspection.test.ts", lane: "contract" },

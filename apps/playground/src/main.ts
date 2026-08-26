@@ -54,6 +54,8 @@ import { createAndStartArtifactRenderer } from "./artifact-renderer-lifecycle.js
 import { installPageExitDisposal } from "./page-exit-lifecycle.js";
 import { installWorldkitAuthoringCaptureApi } from "./worldkit-authoring-capture-api.js";
 import { initializePlaygroundAdapterV1 } from "./playground-adapter-startup.js";
+import { installMountedSkateboardControlsV1 } from "./mounted-skateboard-controls.js";
+import { MOUNTED_SKATEBOARD_S1_SCENE_ID } from "./scenes/mounted-skateboard-s1.js";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (app === null) throw new Error("Missing #app container");
@@ -112,6 +114,7 @@ app.innerHTML = `
               ? '<div><span>右侧 Camera Preference</span><span>切换镜头</span></div>'
               : '<div><kbd>↑</kbd><kbd>↓</kbd><span>上下移动视角</span></div><div><span class="mouse-icon">↖</span><span>拖拽镜头</span></div><div><span class="wheel-icon">↕</span><span>滚轮缩放</span></div>'}
           </div>
+          <div class="mounted-controls" id="mounted-controls" hidden></div>
           <button class="pause-button" id="pause-button" type="button" aria-label="暂停模拟">Ⅱ</button>
           <div class="recording-indicator" id="recording-indicator" aria-live="polite" hidden>
             <i aria-hidden="true"></i><span>REC</span><time id="recording-time">00:00</time>
@@ -2312,6 +2315,9 @@ if (runtimeRoute.mode === "unknown") {
     | ReturnType<typeof installWorldkitAuthoringCaptureApi>
     | undefined;
   let disposeAuthoringWorkbenchAdapterBinding: (() => void) | undefined;
+  let mountedSkateboardControls:
+    | ReturnType<typeof installMountedSkateboardControlsV1>
+    | undefined;
   const pageLifecycle = createGameplayPageLifecycle({
     initialization: browserInstallation.initialization,
     getAdapter: () => createdAdapter,
@@ -2332,6 +2338,15 @@ if (runtimeRoute.mode === "unknown") {
         disposeAuthoringWorkbenchAdapterBinding?.();
         disposeAuthoringWorkbenchAdapterBinding = workbench.bindAdapterDiagnostics(createdAdapter);
       }
+      if (
+        runtimeRoute.mode === "catalog-gameplay" &&
+        runtimeRoute.sceneCatalogId === MOUNTED_SKATEBOARD_S1_SCENE_ID
+      ) {
+        mountedSkateboardControls = installMountedSkateboardControlsV1(
+          requiredElement<HTMLDivElement>("#mounted-controls"),
+          browserInstallation.api,
+        );
+      }
       startPlayground(adapter, () => pageLifecycle.dispose(), {
         resetSimulation: async () => {
           await browserInstallation.api.reset();
@@ -2343,6 +2358,8 @@ if (runtimeRoute.mode === "unknown") {
       delete (window as { __WHITEBOX_PLAYGROUND__?: unknown }).__WHITEBOX_PLAYGROUND__;
     },
     disposeRuntimeHost: async () => {
+      mountedSkateboardControls?.dispose();
+      mountedSkateboardControls = undefined;
       disposeAuthoringWorkbenchAdapterBinding?.();
       disposeAuthoringWorkbenchAdapterBinding = undefined;
       authoringCaptureInstallation?.dispose();

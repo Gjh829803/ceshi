@@ -28,6 +28,9 @@
   disposed on every path; it does not resample heightfield or triangle heights.
 - Playground scene `mounted-skateboard-s1` uses separate G Bot Rider and package-local primitive board;
   Browser Protocol V5 remains the exact existing 39-key surface.
+- The scene now exposes visible Mount/Dismount acceptance controls through a product-layer UI Adapter.
+  It submits the existing Browser V5 `action.activate` contract and renders only committed
+  Snapshot/Inspection/Camera telemetry; it does not own Relationship, Possession or Camera state.
 - Control Capture Bundle V1 now writes Action/Event/Relationship rows and cross-validates Command,
   Receipt, Event, World State, Snapshot, Frame and Relationship projections. Tamper tests cover missing
   rows, wrong Relationship payload, wrong Receipt World State and wrong transition Tick. The mounted
@@ -72,6 +75,9 @@ Implementation commits already on local `main` after rebasing onto `origin/main@
 - Real Chromium Browser V5 run passes Mount → 30 fixed movement Ticks → Dismount → 30 Rider movement
   Ticks → Reset. The run confirmed control transfer, `mountedOn`, Rider `suspended`, Mount-only movement,
   independent Rider movement after Dismount, new WorldSession on Reset and no old Relationship leakage.
+- A fresh in-app Chromium rendered run used the visible controls and confirmed Mount publishes
+  `Possession=skateboard`, `Camera Target=skateboard`, `mounted-framing active` and a 7m arm; Dismount
+  restores `player`, `player`, no modifier and the 5m base arm. Reset re-enables a fresh one-cycle run.
 - Local rendered evidence is produced under `output/playwright/` and intentionally ignored by Git.
 
 ## 2026-08-26 manual review disposition
@@ -111,14 +117,15 @@ fixes changed the reviewed tree, neither original verdict is a final completion 
    no final-tree Cursor GO is claimed.
 5. Only after items 1–4 pass, create the final completion record and mark M8-S1 complete.
 
-## Known issue outside this slice
+## Resolved Camera follow-up outside this slice
 
-`CAM-MOUNT-1`: after Mount changes possession to the skateboard, rendered camera follow can retract too
-close and crop the Rider. Relationship, possession, movement, Dismount and Reset state are correct.
-This remains a P2.4 Camera Context/CameraDirector issue; M8-S1 must not add scene-specific camera logic
-or change camera ownership to hide it.
+`CAM-MOUNT-1` is resolved on `codex/camera-development`: Camera projection now separates the Rider
+control context from the physical skateboard ViewTarget, applies the 7m mounted modifier for one
+unambiguous Rider and fails closed for multiple Riders. The visible fixture controls remain only an
+acceptance adapter and do not add scene-specific CameraDirector behavior.
 
 ## Explicit non-claims
 
-This work does not claim seat/tether, wheel physics, skateboard tricks, vehicle dynamics, full mounted
-Camera behavior, dynamic Route publication, NPC behavior or Hosted Builder mount admission.
+This work does not claim seat/tether, wheel physics, skateboard tricks, vehicle dynamics, generalized
+mounted Camera behavior beyond this stand-ground S1, the formal four-stage Capture Bundle verifier,
+dynamic Route publication, NPC behavior or Hosted Builder mount admission.

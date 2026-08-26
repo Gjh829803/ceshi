@@ -617,8 +617,10 @@ Babylon ViewTarget Sample 把 `relationshipRole` 固定发布为 `none` 并丢�
 CAM-06 现在分离 Camera Domain 的 Rider 控制上下文与实际 Mount ViewTarget：唯一 Rider
 命中 7m mounted modifier，多 Rider 歧义 fail closed，Dismount 后下一 Camera 固定更新撤销 modifier。
 真实 Havok 集成回归确认 Mount/移动/Dismount 全链路、请求臂长 7m 且有效臂长大于 6m；
-Legacy Playground 页面正常运行，但没有可见 Mount/Dismount 控件，因此本轮没有把只读浏览器页面
-启动检查冒充挂载后的 rendered visual 验收，原复现截图仍保留为历史证据。
+Legacy Playground 的 `mounted-skateboard-s1` 已增加场景专用 Mount/Dismount 验收控件；控件只提交
+Browser V5 `action.activate` 并从 Snapshot/Inspection/Camera Telemetry 显示结果，不成为第二状态权威。
+真实浏览器验收确认 Mount 后 `skateboard / skateboard / mounted-framing / 7m`，Dismount 后恢复
+`player / player / none / 5m`，Reset 后可重复单周期验收；正式四阶段 Capture Bundle verifier 仍归 M8-S1。
 
 #### P2.5 Surface Semantics 与 Traversal Capability
 
