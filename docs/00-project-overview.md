@@ -73,7 +73,12 @@ Director LLM → Render Directive SDK ────────────┘
 - `worldkit` 支持校验、构建、运行、截图、Registry Discovery、独立 Definition
   校验、Subject Explain、Take validate/inspect/run、Capture validate/inspect，以及
   `verify capture|route|explain`；真实 Chromium 门禁覆盖碰撞、入水、两个自定义实例和五
-  Pass 控制捕获。
+  Pass 控制捕获。P1.6 另增 `schema project`、`registry search` 与 `change *`：文件模式
+  只改 Authoring JSON，不把 Full Reload 伪装成已随 `pnpm worldkit change apply` 发布。
+- Browser Protocol V5 仍是 exact 39-key Runtime 面。结构修改走独立的
+  `window.__WORLDKIT_AUTHORING_EDIT__`，只出现在注入了 AuthoringSpec 的 Canonical
+  Authoring 页；catalog `?scene=` 没有这个对象。这不是生产可用的世界编辑器，也不表示
+  Incremental Hot Apply 或完整 P1.4 WorldPackage 已交付。
 - Route Task 8 可信 Node 链路把 Authoring V4 → NormalizedWorldIR V4 →
   ExecutionPlan V5 世界依次物化为最小正式
   WorldPackage Build Receipt、Validation Subject、Recast Graph/Path、真实

@@ -301,7 +301,32 @@ pnpm dev:g-bot
 ```
 
 不要用普通 `pnpm dev` 配合 `?authoring=1`。普通 Vite Playground 没有配置
-`WORLDKIT_AUTHORING_SPEC_PATH`，该组合会被明确拒绝。如果切换分支或依赖后浏览器
+`WORLDKIT_AUTHORING_SPEC_PATH`，该组合会被明确拒绝。Canonical Authoring 页由
+`worldkit run <world.json>` 或 `pnpm dev:g-bot` 注入 AuthoringSpec。
+
+结构修改不走 Browser Protocol V5。V5 仍是 exact 39-key Runtime 面，只处理
+Gameplay/Camera/Capture/Route。受信 Authoring 页另外安装
+`window.__WORLDKIT_AUTHORING_EDIT__`（10 个可枚举成员：`version` + 9 个方法）。
+Catalog `?scene=` 和普通 playable **不会**安装这个对象。不要把
+`validateWorldChange` / `applyWorldChange` 写进 `window.__WORLDKIT__`。
+
+```bash
+pnpm worldkit schema project <world.json> \
+  --profile worldkit://ai-schema-projection-profile/constrained-json@1 \
+  --output /tmp/ai-schema.json --json
+pnpm worldkit registry search --lock <registry-lock.json> --kind subject-definition --json
+pnpm worldkit change validate <change-set.json> --json
+pnpm worldkit change dry-run <world.json> --change-set <change-set.json> \
+  --output /tmp/candidate --json
+pnpm worldkit change apply <world.json> --change-set <change-set.json> \
+  --output /tmp/new-world.json --receipt /tmp/receipt.json --write --json
+```
+
+文件模式 `change apply` 只提交 Authoring head（`authoring-only`，`publicationMode: "none"`），
+不会 Full Reload 正在运行的页面。`publish-runtime` 只通过受信 Host / Authoring 页
+Edit API。P1.6 首切片不是生产可用，也不表示完整 P1.4 WorldPackage 已交付。
+
+如果切换分支或依赖后浏览器
 出现 `504 Outdated Optimize Dep`，停止旧服务后只执行一次：
 
 ```bash
@@ -499,6 +524,8 @@ Validation 词汇。它不构建 Traversal Graph，不跑 Character Controller�
 | `packages/gameplay-contracts/` | Gameplay Command、Receipt、Event、State 与 Bootstrap 的关闭合同 | Gameplay 当前公共合同 | 实现 Gameplay 规则或依赖引擎 |
 | `packages/world/` | `world.*` Authoring DSL、Feature、Terrain、Landmark、规划工件与场景规格 | AI/场景作者入口 | 直接创建 Provider 对象或修改 Runtime 内部 |
 | `packages/authoring/` | Authoring V4 Schema、Parser、Normalizer、Resource Lock、Preset Candidate 与 Normalized IR V4 | AI Schema 与 Authoring Pipeline | 执行 Babylon/Havok 或反向读取 Runtime State |
+| `packages/authoring-edit/` | AI Schema Projection、Registry Search、Override Policy、WorldChangeSet/Request/Receipt 纯合同 | Authoring/Edit DTO 与 parser | 持有 journal、文件系统、Browser 或 Runtime handle |
+| `packages/authoring-host/` | Trusted Candidate Build、in-memory journal、Authoring/Edit Host API | 受信 Host 编排 | 依赖 `runtime-host` 或直接改 Babylon Scene |
 | `packages/layout-solver/` | 候选生成、Constraint Evaluator、确定性搜索和 Layout Report | 引擎无关 Solver 合同 | 直接修改场景或依赖渲染结果 |
 | `packages/compiler/` | NormalizedWorldIR V4 到锁定 ExecutionPlan V5 的确定性编译 | Compiler API | 读取 Prompt、执行 Gameplay 或创建引擎对象 |
 | `packages/world-package/` | WorldPackage Manifest、Package Root、Build Closure 与 Receipt | 正式内容包合同 | 保存运行时 Handle 或未锁定草稿 |

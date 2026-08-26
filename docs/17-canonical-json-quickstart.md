@@ -421,6 +421,31 @@ Discovery、Subject Harness 和 Camera Authoring 方法以
 `WorldkitBrowserApiV5` 类型定义为准。`window.__WORLDKIT__` 只暴露 V5，不保留旧版本
 对象或方法别名。
 
+### 7.1 Authoring/Edit 是另一条控制面
+
+增删房屋、主体、地形或资源 **不要** 调用 `executeGameplayCommand`，也不要给
+`window.__WORLDKIT__` 增加方法。结构写入走独立的受信 Authoring/Edit API：
+
+```text
+window.__WORLDKIT__                  # Browser Protocol V5，exact 39 keys，Runtime
+window.__WORLDKIT_AUTHORING_EDIT__   # 仅 Canonical Authoring 页；10 个可枚举成员
+```
+
+安装条件：`worldkit run <world.json>`（或等价的注入 AuthoringSpec）打开
+`?authoring=1`，并且 adapter 暴露 `publishWorldReplacementV1`。`pnpm dev` +
+`?authoring=1` 会被拒绝。`?scene=` catalog 页只有 V5，没有 Edit API。
+
+CLI 对应命令是 `worldkit schema project`、`worldkit registry search` 和
+`worldkit change *`。文件模式 `change apply` 只写新的 Authoring JSON
+（`authoring-only`）。要把 Candidate 发布到正在运行的 Runtime，使用 Authoring 页
+的 `applyWorldChange` 且 `requestedOutcome: "publish-runtime"`，并带上
+`preparedCandidateRef` 与 Runtime expectation。不要发明第二套 LiveChange 方言，
+也不要把 token 放进 CLI 参数或 Receipt。
+
+P1.6 首切片只证明 Full Reload；Incremental Hot Apply、完整 P1.4 Package 和生产
+可用性都还没交付。权威合同见
+[P1.6 专项规格](superpowers/specs/2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md)。
+
 固定输入使用 `move-forward / move-backward / move-left / move-right / jump / run`
 和明确 tick 数。控制权通过 `executeGameplayCommand` 提交关闭的 `control.bind` /
 `control.release` 命令，并用 `expectedPossession` 做原子比较；Runtime 不从启动候选或
