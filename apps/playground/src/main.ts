@@ -54,6 +54,7 @@ import { createAndStartArtifactRenderer } from "./artifact-renderer-lifecycle.js
 import { installPageExitDisposal } from "./page-exit-lifecycle.js";
 import { installWorldkitAuthoringCaptureApi } from "./worldkit-authoring-capture-api.js";
 import { initializePlaygroundAdapterV1 } from "./playground-adapter-startup.js";
+import { createIndexedDbWorldPackageStoreV1 } from "./indexeddb-world-package-store.js";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (app === null) throw new Error("Missing #app container");
@@ -2182,6 +2183,7 @@ if (runtimeRoute.mode === "unknown") {
     diagnostics: [runtimeRoute.diagnostic],
   }, null, 2))}</pre>`;
 } else if (runtimeRoute.mode !== "artifact-only") {
+  const worldPackageStore = createIndexedDbWorldPackageStoreV1();
   let createdAdapter: BabylonWorldAdapter | null = null;
   let createdHostOverlay: CapabilityDemoHostOverlayV1 | undefined;
   let createdPlaygroundMetadata:
@@ -2205,6 +2207,7 @@ if (runtimeRoute.mode === "unknown") {
       startupStage = "authoring-load";
       const worldId = urlParameters.get("world");
       const authoringOptions = {
+        worldPackageStore,
         ...(isNil(subjectDefinitionRef) ? {} : { subjectDefinitionRef }),
       };
       if (isNil(worldId)) {
@@ -2233,6 +2236,7 @@ if (runtimeRoute.mode === "unknown") {
           aspectRatio: viewport.clientWidth > 0 && viewport.clientHeight > 0
             ? viewport.clientWidth / viewport.clientHeight
             : 16 / 9,
+          worldPackageStore,
           ...(isNil(subjectDefinitionRef) ? {} : { subjectDefinitionRef }),
         },
       );
@@ -2327,6 +2331,8 @@ if (runtimeRoute.mode === "unknown") {
         if (
           prepared?.loaded.ok === true &&
           !isNil(prepared.loaded.authoringSpec) &&
+          !isNil(prepared.loaded.worldPackageBuildContext) &&
+          !isNil(prepared.loaded.worldPackageResourceArtifacts) &&
           "publishWorldReplacementV1" in adapter
         ) {
           const [{ installWorldkitAuthoringEditApi }, { createPlaygroundAuthoringEditHostV1 }] =
@@ -2338,6 +2344,11 @@ if (runtimeRoute.mode === "unknown") {
             window,
             createPlaygroundAuthoringEditHostV1({
               authoringSpec: prepared.loaded.authoringSpec,
+              worldPackageStore,
+              worldPackageBuildContext:
+                prepared.loaded.worldPackageBuildContext,
+              resourceArtifacts:
+                prepared.loaded.worldPackageResourceArtifacts,
               publishWorldReplacement: (input) => adapter.publishWorldReplacementV1(input),
             }),
           );

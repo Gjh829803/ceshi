@@ -1,5 +1,15 @@
-import { canonicalJsonBytes, sha256CanonicalJson } from "@whitebox-world/protocol";
+import {
+  canonicalJsonBytes,
+  sha256Bytes,
+  sha256CanonicalJson,
+} from "@whitebox-world/protocol";
 import { canonicalExecutionResourceLockEntriesV1 } from "@whitebox-world/runtime-contracts";
+import { hashExecutionPlanV5, parseExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
+import {
+  createGameplayBootstrapResourceLockEntryV1,
+  gameplayBootstrapCanonicalBytesV1,
+  parseGameplayBootstrapV1,
+} from "@whitebox-world/gameplay-contracts";
 import { isEmpty, isEqual, isNil, isPlainObject } from "lodash-es";
 
 import {
@@ -10,6 +20,10 @@ import {
   hashWorldPackageManifestV1,
 } from "./manifest.js";
 import { assertWorldPackageBuildReceiptV1 } from "./build-receipt.js";
+import {
+  GAMEPLAY_BOOTSTRAP_MEDIA_TYPE_V1,
+  GAMEPLAY_BOOTSTRAP_PACKAGE_PATH_V1,
+} from "./build-receipt.js";
 import type {
   WorldPackageFileIntegrityEntryV1,
   WorldPackageSha256HashV1,
@@ -20,6 +34,7 @@ import type {
   WorldPackageBuildReceiptV2,
   WorldPackageDistributionPolicyV2,
   WorldPackageHostPolicyV1,
+  WorldPackageGameplayBootstrapMembershipInputV2,
   WorldPackageManifestV2,
   WorldPackageMigrationReportV1,
   WorldPackageResourceArtifactV2,
@@ -1081,6 +1096,94 @@ export function assertWorldPackageHostCompatibilityV2(
   ) {
     hostCompatibilityFail("package requirements are not admitted by Host policy");
   }
+}
+
+export function assertWorldPackageGameplayBootstrapMembershipV2(
+  input: WorldPackageGameplayBootstrapMembershipInputV2,
+) {
+  const membershipFail = (message: string): never => {
+    throw new Error(
+      `WORLD_PACKAGE_GAMEPLAY_BOOTSTRAP_MEMBERSHIP_V2_INVALID: ${message}`,
+    );
+  };
+  try {
+    assertWorldPackageAccessorFreeDataGraphV1(
+      input,
+      "WORLD_PACKAGE_GAMEPLAY_BOOTSTRAP_MEMBERSHIP_V2_ACCESSOR_FORBIDDEN",
+    );
+  } catch {
+    membershipFail("input accessors and symbol keys are forbidden");
+  }
+  let record;
+  try {
+    record = requireExactRecord(
+      input,
+      ["executionPlan", "gameplayBootstrap", "worldPackageBuildReceipt"],
+      "",
+    );
+  } catch {
+    return membershipFail("input must contain exactly Receipt, Plan, and Bootstrap");
+  }
+  let receipt;
+  let executionPlan;
+  let gameplayBootstrap;
+  try {
+    receipt = assertWorldPackageBuildReceiptV2(record.worldPackageBuildReceipt);
+    executionPlan = parseExecutionPlanV5(record.executionPlan);
+    gameplayBootstrap = parseGameplayBootstrapV1(record.gameplayBootstrap);
+  } catch {
+    return membershipFail("Receipt, Plan, or Gameplay Bootstrap is invalid");
+  }
+  let planResourceLock;
+  try {
+    planResourceLock = canonicalExecutionResourceLockEntriesV1(
+      executionPlan.resourceLockEntries,
+    );
+  } catch {
+    return membershipFail("Execution Resource Lock is invalid");
+  }
+  const expectedBootstrapLock = createGameplayBootstrapResourceLockEntryV1(
+    gameplayBootstrap,
+  );
+  const bootstrapLocks = planResourceLock.filter((entry) =>
+    entry.resourceKind === "gameplay-bootstrap"
+  );
+  if (
+    hashExecutionPlanV5(executionPlan) !== receipt.manifest.executionPlanHash ||
+    !isEqual(executionPlan.resourceLockEntries, planResourceLock) ||
+    !isEqual(receipt.manifest.lockedResources, planResourceLock) ||
+    receipt.manifest.registryLockHash !== sha256CanonicalJson(planResourceLock) ||
+    bootstrapLocks.length !== 1 ||
+    !isEqual(bootstrapLocks[0], expectedBootstrapLock)
+  ) {
+    membershipFail("Plan and Registry Lock do not bind the supplied Bootstrap");
+  }
+  const bootstrapBytes = gameplayBootstrapCanonicalBytesV1(gameplayBootstrap);
+  const bootstrapHash = sha256Bytes(
+    bootstrapBytes,
+  ) as WorldPackageSha256HashV1;
+  const manifestRows = receipt.manifest.resources.filter((resource) =>
+    resource.resourceRef === gameplayBootstrap.resourceRef ||
+    resource.packagePath === GAMEPLAY_BOOTSTRAP_PACKAGE_PATH_V1
+  );
+  const integrityRows = receipt.fileIntegrityEntries.filter((entry) =>
+    entry.path === GAMEPLAY_BOOTSTRAP_PACKAGE_PATH_V1
+  );
+  if (
+    manifestRows.length !== 1 ||
+    manifestRows[0]?.resourceRef !== gameplayBootstrap.resourceRef ||
+    manifestRows[0]?.packagePath !== GAMEPLAY_BOOTSTRAP_PACKAGE_PATH_V1 ||
+    manifestRows[0]?.mediaType !== GAMEPLAY_BOOTSTRAP_MEDIA_TYPE_V1 ||
+    manifestRows[0]?.sizeBytes !== bootstrapBytes.byteLength ||
+    manifestRows[0]?.contentHash !== bootstrapHash ||
+    integrityRows.length !== 1 ||
+    integrityRows[0]?.mediaType !== GAMEPLAY_BOOTSTRAP_MEDIA_TYPE_V1 ||
+    integrityRows[0]?.sizeBytes !== bootstrapBytes.byteLength ||
+    integrityRows[0]?.sha256 !== bootstrapHash
+  ) {
+    membershipFail("Gameplay Bootstrap canonical bytes are not Package-bound");
+  }
+  return gameplayBootstrap;
 }
 
 function migrationFail(path: string, message: string): never {

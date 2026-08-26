@@ -1,9 +1,19 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
   hashAuthoringDocumentV4,
+  normalizeAuthoringSpecV4,
   parseAuthoringSpecV4,
   parseCanonicalJson,
   type AuthoringSpecV4,
@@ -72,10 +82,20 @@ import {
 } from "@whitebox-world/authoring-host";
 import { stringifyCanonicalJson } from "@whitebox-world/protocol";
 import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
+import type {
+  ResolvedWorldPackageResourceArtifactV2,
+  WorldPackageBuildContextV2,
+  WorldPackageStoreV1,
+} from "@whitebox-world/world-package";
 import { isEmpty, isNil, isPlainObject, sortBy } from "lodash-es";
 
 import { promoteArtifactDirectory } from "./artifact-directory-promotion";
 import type { CliDiagnostic } from "./worldkit-pipeline";
+import { createFileWorldPackageStoreV1 } from "./file-world-package";
+import {
+  createTrustedWorldPackageBuildContextV2,
+  resolveTrustedWorldPackageResourceArtifactsV2,
+} from "./trusted-world-package-v2";
 
 export const FILE_MODE_VALIDATE_WORLD_ID = "offline";
 export const CONSTRAINED_JSON_PROFILE_REF =
@@ -601,14 +621,43 @@ async function submitFileModeRequest(input: {
           requestedOutcome: "authoring-only",
         },
   );
-  const submitted = await submitWorldChangeRequestV1({
-    journal,
-    leaseStore,
-    request,
-    session,
-    nowUnixMilliseconds: input.nowUnixMilliseconds,
+  const normalized = normalizeAuthoringSpecV4(input.spec);
+  if (!normalized.ok || isNil(normalized.value)) {
+    return failure(
+      "CLI_AUTHORING_EDIT_WORLD_PACKAGE_INPUT_INVALID",
+      "Unable to normalize the AuthoringSpec for WorldPackage V2 publication.",
+      { exitCode: 2 },
+    );
+  }
+  const resourceArtifacts = await resolveTrustedWorldPackageResourceArtifactsV2(
+    normalized.value,
+  );
+  const worldPackageBuildContext = createTrustedWorldPackageBuildContextV2({
+    title: `${input.spec.id} Authoring/Edit package`,
+    resourceArtifacts,
   });
-  return { ok: true, journal, result: receiptFromSubmit(submitted) };
+  const temporaryStoreRoot = await realpath(await mkdtemp(
+    path.join(tmpdir(), "worldkit-authoring-edit-package-store-"),
+  ));
+  try {
+    const submitted = await submitWorldChangeRequestV1({
+      journal,
+      leaseStore,
+      worldPackageStore: createFileWorldPackageStoreV1({
+        storeRootPath: temporaryStoreRoot,
+        maximumTotalBytes: 512 * 1024 * 1024,
+        maximumFileCount: 4_096,
+      }),
+      worldPackageBuildContext,
+      resourceArtifacts,
+      request,
+      session,
+      nowUnixMilliseconds: input.nowUnixMilliseconds,
+    });
+    return { ok: true, journal, result: receiptFromSubmit(submitted) };
+  } finally {
+    await rm(temporaryStoreRoot, { recursive: true, force: true });
+  }
 }
 
 export function resolveAuthoringEditLivePortV1(options?: {
@@ -627,6 +676,9 @@ export function resolveAuthoringEditLivePortV1(options?: {
 export function createInProcessAuthoringEditLivePortV1(input: {
   readonly journal: WorldChangeJournalV1;
   readonly leaseStore: PreparedCandidateLeaseStoreV1;
+  readonly worldPackageStore: WorldPackageStoreV1;
+  readonly worldPackageBuildContext: WorldPackageBuildContextV2;
+  readonly resourceArtifacts: readonly ResolvedWorldPackageResourceArtifactV2[];
   readonly session: AuthoringEditSessionV1;
   readonly nowUnixMilliseconds: number;
 }): AuthoringEditLivePortV1 {
@@ -635,6 +687,9 @@ export function createInProcessAuthoringEditLivePortV1(input: {
       return submitWorldChangeRequestV1({
         journal: input.journal,
         leaseStore: input.leaseStore,
+        worldPackageStore: input.worldPackageStore,
+        worldPackageBuildContext: input.worldPackageBuildContext,
+        resourceArtifacts: input.resourceArtifacts,
         request,
         session: input.session,
         nowUnixMilliseconds: input.nowUnixMilliseconds,

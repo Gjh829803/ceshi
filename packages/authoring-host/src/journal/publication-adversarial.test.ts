@@ -20,6 +20,10 @@ import {
   type WorldChangeSetV1,
 } from "@whitebox-world/authoring-edit";
 import { isNil } from "lodash-es";
+import {
+  createInMemoryWorldPackageStoreV1,
+  createWorldPackageBuildContextFixtureV2,
+} from "@whitebox-world/world-package/testing";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -51,6 +55,8 @@ const EXAMPLES_ROOT = join(
   "../../../../examples/authoring",
 );
 const GATE_REF = "worldkit://validation-profile/outdoor-world-package-dev@1";
+const WORLD_PACKAGE_STORE = createInMemoryWorldPackageStoreV1();
+const WORLD_PACKAGE_BUILD_CONTEXT = createWorldPackageBuildContextFixtureV2();
 
 function generousBudget(overrides: {
   readonly maximumPreparedCandidateRetentionMilliseconds?: number;
@@ -210,6 +216,9 @@ function submit(
   return submitWorldChangeRequestV1({
     journal,
     leaseStore,
+    worldPackageStore: WORLD_PACKAGE_STORE,
+    worldPackageBuildContext: WORLD_PACKAGE_BUILD_CONTEXT,
+    resourceArtifacts: [],
     request,
     session: extras.session ?? session(),
     nowUnixMilliseconds: extras.nowUnixMilliseconds ?? NOW,
@@ -513,6 +522,9 @@ describe("P16-F1 Full Reload adversarial publication", () => {
     const recovered = accepted(await recoverWorldChangeRequestV1({
       journal,
       leaseStore,
+      worldPackageStore: WORLD_PACKAGE_STORE,
+      worldPackageBuildContext: WORLD_PACKAGE_BUILD_CONTEXT,
+      resourceArtifacts: [],
       request: requestFor("apply-publish", addHouse, {
         preparedCandidateRef: dryRun.receipt.preparedCandidateRef,
       }),
@@ -651,6 +663,9 @@ describe("P16-F1 Full Reload adversarial publication", () => {
     const resumed = accepted(await recoverWorldChangeRequestV1({
       journal,
       leaseStore,
+      worldPackageStore: WORLD_PACKAGE_STORE,
+      worldPackageBuildContext: WORLD_PACKAGE_BUILD_CONTEXT,
+      resourceArtifacts: [],
       request: requestFor("apply-publish", addHouse, {
         id: "request.apply.publish-pin-owner",
         preparedCandidateRef: dryRun.receipt.preparedCandidateRef,

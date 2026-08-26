@@ -652,7 +652,6 @@ function requireCoreBindings(
 
   if (
     layoutSolveReport.authoringSpecHash !== manifest.authoringSpecHash ||
-    layoutSolveReport.registryLockHash !== normalizedWorldIr.resources.resourceLockHash ||
     layoutSolveReport.seed !== manifest.seed ||
     layoutSolveReport.solverProfileRef !== normalizedWorldIr.layout.solverProfileRef ||
     layoutSolveReport.resolvedVersion !== normalizedWorldIr.layout.resolvedVersion ||

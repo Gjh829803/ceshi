@@ -10,6 +10,7 @@ import {
 } from "@whitebox-world/gameplay-contracts";
 import {
   createWorldPackageV2,
+  worldPackageRefFromRootHashV1,
   type WorldPackageDirectoryV2,
 } from "@whitebox-world/world-package";
 import { generateKeyPairSync } from "node:crypto";
@@ -35,6 +36,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import basicWorldDocument from "../../examples/authoring/basic-world.json";
 import {
   createFileWorldPackageTestAdapterV2,
+  createFileWorldPackageStoreV1,
   readWorldPackageDirectoryV2,
   writeWorldPackageDirectoryV2,
 } from "./file-world-package.js";
@@ -364,5 +366,118 @@ describe("file WorldPackage V2 adapter", () => {
       receipt: { worldPackageRootHash: fixture.receipt.worldPackageRootHash },
     });
     await assertNoPublicationDebris();
+  });
+});
+
+describe("file WorldPackageStoreV1", () => {
+  it("replays an idempotently stored package through a fresh adapter", async () => {
+    const storeRootPath = path.join(testRoot, "store");
+    await mkdir(storeRootPath, { mode: 0o700 });
+    const store = createFileWorldPackageStoreV1({
+      storeRootPath,
+      ...READ_LIMITS,
+    });
+    const concurrentStore = createFileWorldPackageStoreV1({
+      storeRootPath,
+      ...READ_LIMITS,
+    });
+    const [first, concurrent] = await Promise.all([
+      store.put(fixture),
+      concurrentStore.put(fixture),
+    ]);
+    expect(first).toEqual(concurrent);
+    expect(Object.keys(first).sort()).toEqual(["receipt", "worldPackageRef"]);
+    expect(JSON.stringify(first)).not.toContain(storeRootPath);
+
+    const freshStore = createFileWorldPackageStoreV1({
+      storeRootPath,
+      ...READ_LIMITS,
+    });
+    await expect(freshStore.get(first.worldPackageRef)).resolves.toMatchObject({
+      receipt: { worldPackageRootHash: fixture.receipt.worldPackageRootHash },
+      executionPlan: { id: fixture.receipt.manifest.worldId },
+    });
+    await expect(freshStore.get(worldPackageRefFromRootHashV1(
+      `sha256:${"a".repeat(64)}`,
+    ))).resolves.toBeUndefined();
+  });
+
+  it("rejects same-Root directory conflicts", async () => {
+    const storeRootPath = path.join(testRoot, "store");
+    await mkdir(storeRootPath, { mode: 0o700 });
+    const store = createFileWorldPackageStoreV1({
+      storeRootPath,
+      ...READ_LIMITS,
+    });
+    await store.put(fixture);
+    const { privateKey } = generateKeyPairSync("ed25519");
+    const conflicting = signWorldPackageDirectoryV2({
+      directory: fixture,
+      keyId: "conflicting-signature",
+      trustDomain: "worldkit.test",
+      signedAt: "2026-08-27T00:00:01.000Z",
+      privateKey,
+    });
+    expect(conflicting.receipt.worldPackageRootHash).toBe(
+      fixture.receipt.worldPackageRootHash,
+    );
+    await expect(store.put(conflicting)).rejects.toThrow(
+      "WORLD_PACKAGE_STORE_CONFLICT",
+    );
+  });
+
+  it("rejects a stored directory whose path Ref and verified Root disagree", async () => {
+    const storeRootPath = path.join(testRoot, "store");
+    await mkdir(storeRootPath, { mode: 0o700 });
+    const store = createFileWorldPackageStoreV1({
+      storeRootPath,
+      ...READ_LIMITS,
+    });
+    const stored = await store.put(fixture);
+    const wrongRef = worldPackageRefFromRootHashV1(
+      `sha256:${"c".repeat(64)}`,
+    );
+    const correctHex = stored.worldPackageRef.split("/").at(-1)!;
+    const wrongHex = wrongRef.split("/").at(-1)!;
+    await rename(
+      path.join(storeRootPath, "sha256", correctHex),
+      path.join(storeRootPath, "sha256", wrongHex),
+    );
+
+    const freshStore = createFileWorldPackageStoreV1({
+      storeRootPath,
+      ...READ_LIMITS,
+    });
+    await expect(freshStore.get(wrongRef)).rejects.toThrow(
+      "WORLD_PACKAGE_STORE_REF_MISMATCH",
+    );
+  });
+
+  it("rejects corrupted bytes instead of trusting the content-addressed directory name", async () => {
+    const storeRootPath = path.join(testRoot, "store");
+    await mkdir(storeRootPath, { mode: 0o700 });
+    const store = createFileWorldPackageStoreV1({
+      storeRootPath,
+      ...READ_LIMITS,
+    });
+    const stored = await store.put(fixture);
+    const rootHex = stored.worldPackageRef.split("/").at(-1)!;
+    const manifestPath = path.join(
+      storeRootPath,
+      "sha256",
+      rootHex,
+      "manifest.json",
+    );
+    const bytes = await readFile(manifestPath);
+    bytes[0] = bytes[0]! ^ 0xff;
+    await writeFile(manifestPath, bytes, { mode: 0o600 });
+
+    const freshStore = createFileWorldPackageStoreV1({
+      storeRootPath,
+      ...READ_LIMITS,
+    });
+    await expect(freshStore.get(stored.worldPackageRef)).rejects.toThrow(
+      "WORLD_PACKAGE_STORE_CORRUPT",
+    );
   });
 });

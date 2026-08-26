@@ -28,7 +28,13 @@ import {
 } from "@whitebox-world/authoring-host";
 import type { PublishWorldReplacementResultV1 } from "@whitebox-world/runtime-host";
 import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
-import { isNil } from "lodash-es";
+import {
+  BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V2,
+  type ResolvedWorldPackageResourceArtifactV2,
+  type WorldPackageBuildContextV2,
+  type WorldPackageStoreV1,
+} from "@whitebox-world/world-package";
+import { isEqual, isNil } from "lodash-es";
 
 export const PLAYGROUND_AUTHORING_EDIT_PROFILE_REF =
   "worldkit://ai-schema-projection-profile/constrained-json@1";
@@ -173,12 +179,23 @@ export function createPlaygroundAuthoringEditSessionV1(input: {
 
 export function createPlaygroundAuthoringEditHostV1(input: {
   readonly authoringSpec: AuthoringSpecV4;
+  readonly worldPackageStore: WorldPackageStoreV1;
+  readonly worldPackageBuildContext: WorldPackageBuildContextV2;
+  readonly resourceArtifacts: readonly ResolvedWorldPackageResourceArtifactV2[];
   readonly nowUnixMilliseconds?: () => number;
   readonly publishWorldReplacement?: (
     value: unknown,
   ) => Promise<PublishWorldReplacementResultV1>;
   readonly session?: AuthoringEditSessionV1;
 }): AuthoringEditHostV1 & WorldkitAuthoringEditApiV1 {
+  if (
+    !isEqual(
+      input.worldPackageBuildContext.hostCompatibility,
+      BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V2,
+    )
+  ) {
+    throw new Error("WORLD_PACKAGE_HOST_INCOMPATIBLE: Playground profile mismatch");
+  }
   const lockEntries = playgroundRegistryLockEntriesV1();
   const nowUnixMilliseconds = input.nowUnixMilliseconds ?? (() => Date.now());
   const journal = createWorldChangeJournalV1();
@@ -197,6 +214,9 @@ export function createPlaygroundAuthoringEditHostV1(input: {
   return createAuthoringEditHostV1({
     journal,
     leaseStore: createPreparedCandidateLeaseStoreV1(),
+    worldPackageStore: input.worldPackageStore,
+    worldPackageBuildContext: input.worldPackageBuildContext,
+    resourceArtifacts: input.resourceArtifacts,
     session: input.session ?? createPlaygroundAuthoringEditSessionV1({
       worldId: input.authoringSpec.id,
       nowUnixMilliseconds: nowUnixMilliseconds(),

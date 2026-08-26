@@ -1,8 +1,12 @@
 import type { NormalizedSubjectAssetV1 } from "@whitebox-world/authoring";
 import { sha256Bytes } from "@whitebox-world/protocol";
 import type { SubjectAssetResolverV1 } from "@whitebox-world/runtime-babylon";
-import type { ResolvedWorldPackageResourceArtifactV1 } from "@whitebox-world/world-package";
-import { isNil } from "lodash-es";
+import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
+import type {
+  ResolvedWorldPackageResourceArtifactV1,
+  ResolvedWorldPackageResourceArtifactV2,
+} from "@whitebox-world/world-package";
+import { isEqual, isNil } from "lodash-es";
 
 export const XIER120_SUBJECT_ASSET_URI_BY_REF_V1: Readonly<Record<string, string>> =
   Object.freeze({
@@ -268,4 +272,73 @@ export async function resolveWorldPackageSubjectAssetArtifactsV1(
     }));
   }
   return Object.freeze(artifacts);
+}
+
+const LICENSE_DOCUMENT_ID_BY_SPDX_EXPRESSION = Object.freeze({
+  "LicenseRef-Project-Owned": "project-owned",
+  "LicenseRef-Loopit-Company-Private": "loopit-private",
+} as const);
+
+export async function resolveWorldPackageSubjectAssetArtifactsV2(
+  subjectAssets: readonly NormalizedSubjectAssetV1[],
+  assetUriByRef: Readonly<Record<string, string>> =
+    PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1,
+  packagePathByRef: Readonly<Record<string, string>> =
+    PLAYGROUND_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1,
+  fetchImplementation: typeof fetch = fetch,
+): Promise<readonly ResolvedWorldPackageResourceArtifactV2[]> {
+  const artifacts = await resolveWorldPackageSubjectAssetArtifactsV1(
+    subjectAssets,
+    assetUriByRef,
+    packagePathByRef,
+    fetchImplementation,
+  );
+  const assetByRef = new Map(subjectAssets.map((asset) => [
+    asset.subjectAssetRef,
+    asset,
+  ]));
+  return Object.freeze(artifacts.map((artifact) => {
+    const asset = assetByRef.get(artifact.resourceRef);
+    const manifest = builtInSubjectResourceRegistry.resolveSubjectAsset(
+      artifact.resourceRef,
+    );
+    if (
+      isNil(asset) ||
+      isNil(manifest) ||
+      manifest.contentHash !== asset.subjectAssetManifestHash ||
+      manifest.artifact.contentHash !== asset.artifactContentHash ||
+      manifest.artifact.byteLength !== asset.byteLength ||
+      manifest.artifact.mediaType !== asset.mediaType ||
+      manifest.inventory.meshCount !== asset.inventory.meshCount ||
+      manifest.inventory.vertexCount !== asset.inventory.vertexCount ||
+      manifest.inventory.triangleCount !== asset.inventory.triangleCount ||
+      manifest.inventory.skeletonCount !== asset.inventory.skeletonCount ||
+      manifest.inventory.boneCount !== asset.inventory.boneCount ||
+      !isEqual(
+        manifest.inventory.animationClipNames,
+        asset.inventory.animationClipNames,
+      )
+    ) {
+      throw hostResolveFailure();
+    }
+    const licenseDocumentId = LICENSE_DOCUMENT_ID_BY_SPDX_EXPRESSION[
+      manifest.provenance.licenseSpdxId as keyof
+        typeof LICENSE_DOCUMENT_ID_BY_SPDX_EXPRESSION
+    ];
+    if (isNil(licenseDocumentId)) throw hostResolveFailure();
+    return Object.freeze({
+      ...artifact,
+      subjectAssetManifestHash:
+        asset.subjectAssetManifestHash as `sha256:${string}`,
+      licenseDocumentId,
+      licenseSpdxExpression: manifest.provenance.licenseSpdxId,
+      redistributionPolicy: manifest.provenance.redistributionPolicy,
+      ...(isNil(manifest.provenance.sourceUri)
+        ? {}
+        : { sourceUri: manifest.provenance.sourceUri }),
+      ...(isNil(manifest.provenance.author)
+        ? {}
+        : { author: manifest.provenance.author }),
+    });
+  }));
 }

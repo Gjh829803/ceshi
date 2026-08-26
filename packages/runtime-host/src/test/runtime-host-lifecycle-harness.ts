@@ -21,11 +21,15 @@ import type { ExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
 import {
   canonicalWorldPackageFileIntegrityEntriesV1,
   canonicalWorldPackageManifestV1,
+  BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V2,
   GAMEPLAY_BOOTSTRAP_MEDIA_TYPE_V1,
   GAMEPLAY_BOOTSTRAP_PACKAGE_PATH_V1,
   hashWorldPackageManifestV1,
   hashWorldPackageRootV1,
+  migrateWorldPackageBuildReceiptV1ToV2,
+  worldPackageRefFromRootHashV1,
   type WorldPackageBuildReceiptV1,
+  type WorldPackageBuildReceiptV2,
   type WorldPackageFileIntegrityEntryV1,
   type WorldPackageSha256HashV1,
 } from "@whitebox-world/world-package";
@@ -48,8 +52,6 @@ export const HASH_B = `sha256:${"b".repeat(64)}` as const;
 export const HASH_C = `sha256:${"c".repeat(64)}` as const;
 export const HASH_D = `sha256:${"d".repeat(64)}` as const;
 export const RUNTIME_SESSION_ID = "runtime.lifecycle";
-export const INITIAL_WORLD_PACKAGE_REF = "worldkit://world-package/initial@1";
-export const REPLACEMENT_WORLD_PACKAGE_REF = "worldkit://world-package/replacement@1";
 
 /*
  * RuntimeHost is intentionally exercised through the frozen Task 4 public
@@ -198,8 +200,10 @@ export function createAdapterFactoryHarness(
   });
 }
 
-function createExecutionPlan(worldPackageRef: string): ExecutionPlanV5 {
-  const worldId = worldPackageRef === INITIAL_WORLD_PACKAGE_REF
+function createExecutionPlan(
+  worldKind: "initial" | "replacement",
+): ExecutionPlanV5 {
+  const worldId = worldKind === "initial"
     ? "world.lifecycle.initial"
     : "world.lifecycle.replacement";
   const controlFeel = {
@@ -400,7 +404,7 @@ function jsonIntegrityEntry(
 export function createBuildReceipt(
   executionPlan: ExecutionPlanV5,
   executionPlanHash: WorldPackageSha256HashV1,
-): WorldPackageBuildReceiptV1 {
+): WorldPackageBuildReceiptV2 {
   const manifest = canonicalWorldPackageManifestV1({
     kind: "worldkit-world-package-manifest",
     schemaVersion: 1,
@@ -465,7 +469,7 @@ export function createBuildReceipt(
       ) as WorldPackageSha256HashV1,
     },
   ]);
-  return Object.freeze({
+  const sourceReceipt: WorldPackageBuildReceiptV1 = Object.freeze({
     kind: "worldkit-world-package-build-receipt",
     schemaVersion: 1,
     manifest,
@@ -473,20 +477,101 @@ export function createBuildReceipt(
     fileIntegrityEntries,
     worldPackageRootHash: hashWorldPackageRootV1(fileIntegrityEntries),
   });
+  const noticeBytes = new TextEncoder().encode(
+    "RuntimeHost V2 fixture\nSee LICENSES/project-owned.txt.\n",
+  );
+  const licenseBytes = new TextEncoder().encode(
+    "Project-owned RuntimeHost V2 test fixture. Redistribution allowed.\n",
+  );
+  return migrateWorldPackageBuildReceiptV1ToV2({
+    sourceReceipt,
+    context: {
+      title: `${executionPlan.id} RuntimeHost fixture`,
+      sdkVersion: "0.0.0",
+      canonicalAuthoringSchemaHash: HASH_A,
+      aiSchemaProjectionProfile: {
+        resourceRef:
+          "worldkit://ai-schema-projection-profile/constrained-json@1",
+        contentHash: HASH_B,
+      },
+      worldBounds: {
+        centerMetersXZ: [0, 0],
+        sizeMetersXZ: [16, 16],
+        heightRangeMeters: [0, 8],
+      },
+      resourceBudget: {
+        maximumVertices: 1_000,
+        maximumTriangles: 1_000,
+        maximumColliders: 16,
+      },
+      lockedResources: executionPlan.resourceLockEntries,
+      legal: {
+        distributionPolicy: "redistributable",
+        noticePath: "NOTICE",
+        licenseDocuments: [{
+          id: "project-owned",
+          spdxLicenseExpression: "LicenseRef-Project-Owned",
+          path: "LICENSES/project-owned.txt",
+          mediaType: "text/plain; charset=utf-8",
+          sizeBytes: licenseBytes.byteLength,
+          contentHash: sha256Bytes(licenseBytes) as WorldPackageSha256HashV1,
+        }],
+      },
+      hostCompatibility: BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V2,
+      resources: sourceReceipt.manifest.resources.map((resource) => ({
+        ...resource,
+        licenseDocumentId: "project-owned",
+        redistributionPolicy: "allowed",
+      })),
+      v2OnlyFileIntegrityEntries: [
+        {
+          path: "LICENSES/project-owned.txt",
+          mediaType: "text/plain; charset=utf-8",
+          sizeBytes: licenseBytes.byteLength,
+          sha256: sha256Bytes(licenseBytes) as WorldPackageSha256HashV1,
+        },
+        {
+          path: "NOTICE",
+          mediaType: "text/plain; charset=utf-8",
+          sizeBytes: noticeBytes.byteLength,
+          sha256: sha256Bytes(noticeBytes) as WorldPackageSha256HashV1,
+        },
+      ],
+    },
+  }).receipt;
 }
 
-export function mutableWorldConfiguration(worldPackageRef: string) {
-  const executionPlan = createExecutionPlan(worldPackageRef);
+function mutableWorldConfigurationForKind(
+  worldKind: "initial" | "replacement",
+) {
+  const executionPlan = createExecutionPlan(worldKind);
   const executionPlanHash = sha256CanonicalJson(
     executionPlan,
   ) as WorldPackageSha256HashV1;
+  const worldPackageBuildReceipt = createBuildReceipt(
+    executionPlan,
+    executionPlanHash,
+  );
   return {
     executionPlan,
     executionPlanHash,
-    worldPackageRef,
-    worldPackageBuildReceipt: createBuildReceipt(executionPlan, executionPlanHash),
+    worldPackageRef: worldPackageRefFromRootHashV1(
+      worldPackageBuildReceipt.worldPackageRootHash,
+    ),
+    worldPackageBuildReceipt,
     gameplayBootstrap,
   };
+}
+
+export const INITIAL_WORLD_PACKAGE_REF =
+  mutableWorldConfigurationForKind("initial").worldPackageRef;
+export const REPLACEMENT_WORLD_PACKAGE_REF =
+  mutableWorldConfigurationForKind("replacement").worldPackageRef;
+
+export function mutableWorldConfiguration(worldPackageRef: string) {
+  return mutableWorldConfigurationForKind(
+    worldPackageRef === INITIAL_WORLD_PACKAGE_REF ? "initial" : "replacement",
+  );
 }
 
 export function replacementRequest(worldPackageRef: string) {

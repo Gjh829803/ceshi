@@ -31,7 +31,13 @@ import type {
   RuntimeHost,
 } from "@whitebox-world/runtime-host";
 import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
-import { isNil } from "lodash-es";
+import {
+  BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V2,
+  type ResolvedWorldPackageResourceArtifactV2,
+  type WorldPackageBuildContextV2,
+  type WorldPackageStoreV1,
+} from "@whitebox-world/world-package";
+import { isEqual, isNil } from "lodash-es";
 
 import {
   CONSTRAINED_JSON_PROFILE_REF,
@@ -133,11 +139,22 @@ export interface AuthoringEditHostBridgeV1 {
 
 export function createAuthoringEditHostBridgeV1(input: {
   readonly authoringSpec: AuthoringSpecV4;
+  readonly worldPackageStore: WorldPackageStoreV1;
+  readonly worldPackageBuildContext: WorldPackageBuildContextV2;
+  readonly resourceArtifacts: readonly ResolvedWorldPackageResourceArtifactV2[];
   readonly nowUnixMilliseconds?: () => number;
   readonly runtimeHost?: Pick<RuntimeHost, "publishWorldReplacementV1">;
   readonly session?: AuthoringEditSessionV1;
   readonly journal?: WorldChangeJournalV1;
 }): AuthoringEditHostBridgeV1 {
+  if (
+    !isEqual(
+      input.worldPackageBuildContext.hostCompatibility,
+      BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V2,
+    )
+  ) {
+    throw new Error("WORLD_PACKAGE_HOST_INCOMPATIBLE: RuntimeHost profile mismatch");
+  }
   const lockEntries = builtInRegistryLockEntriesV1();
   const nowUnixMilliseconds = input.nowUnixMilliseconds ?? (() => Date.now());
   const journal = input.journal ?? createWorldChangeJournalV1();
@@ -164,6 +181,9 @@ export function createAuthoringEditHostBridgeV1(input: {
   const host = createAuthoringEditHostV1({
     journal,
     leaseStore: createPreparedCandidateLeaseStoreV1(),
+    worldPackageStore: input.worldPackageStore,
+    worldPackageBuildContext: input.worldPackageBuildContext,
+    resourceArtifacts: input.resourceArtifacts,
     session: input.session ?? createAuthoringEditHostSessionV1({
       worldId: input.authoringSpec.id,
       nowUnixMilliseconds: nowUnixMilliseconds(),

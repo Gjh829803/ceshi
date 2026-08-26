@@ -26,9 +26,11 @@ import {
 } from "@whitebox-world/runtime-contracts";
 import {
   assertWorldPackageAccessorFreeDataGraphV1,
-  assertWorldPackageBuildReceiptV1,
-  assertWorldPackageGameplayBootstrapMembershipV1,
-  type WorldPackageBuildReceiptV1,
+  assertWorldPackageBuildReceiptV2,
+  assertWorldPackageGameplayBootstrapMembershipV2,
+  worldPackageRootHashFromRefV1,
+  type WorldPackageBuildReceiptV2,
+  type WorldPackageRefV1,
 } from "@whitebox-world/world-package";
 import { isNil } from "lodash-es";
 
@@ -412,8 +414,8 @@ export class RuntimeActivityCoordinator {
 export interface RuntimeWorldConfigurationV1 {
   readonly executionPlan: ExecutionPlanV5;
   readonly executionPlanHash: Sha256HashV1;
-  readonly worldPackageRef: string;
-  readonly worldPackageBuildReceipt: WorldPackageBuildReceiptV1;
+  readonly worldPackageRef: WorldPackageRefV1;
+  readonly worldPackageBuildReceipt: WorldPackageBuildReceiptV2;
   readonly gameplayBootstrap: GameplayBootstrapV1;
 }
 
@@ -864,18 +866,24 @@ function parseRuntimeWorldConfiguration(
     );
   }
   let executionPlan: ExecutionPlanV5;
-  let worldPackageBuildReceipt: WorldPackageBuildReceiptV1;
+  const receiptRecord = snapshotDataRecord(record.worldPackageBuildReceipt);
+  if (!isNil(receiptRecord) && receiptRecord.schemaVersion === 1) {
+    throw new RangeError(
+      "WORLD_PACKAGE_VERSION_UNSUPPORTED: RuntimeWorldConfigurationV1 requires WorldPackage V2",
+    );
+  }
+  let worldPackageBuildReceipt: WorldPackageBuildReceiptV2;
   let gameplayBootstrap: GameplayBootstrapV1;
   try {
     executionPlan = parseExecutionPlanV5(record.executionPlan);
     if (hashExecutionPlanV5(executionPlan) !== record.executionPlanHash) {
       throw new RangeError("ExecutionPlanV5 hash mismatch.");
     }
-    worldPackageBuildReceipt = assertWorldPackageBuildReceiptV1(
+    worldPackageBuildReceipt = assertWorldPackageBuildReceiptV2(
       record.worldPackageBuildReceipt,
     );
     gameplayBootstrap = parseGameplayBootstrapV1(record.gameplayBootstrap);
-    assertWorldPackageGameplayBootstrapMembershipV1({
+    assertWorldPackageGameplayBootstrapMembershipV2({
       executionPlan,
       gameplayBootstrap,
       worldPackageBuildReceipt,
@@ -887,7 +895,9 @@ function parseRuntimeWorldConfiguration(
   }
   if (
     worldPackageBuildReceipt.manifest.executionPlanHash !==
-      record.executionPlanHash
+      record.executionPlanHash ||
+    worldPackageRootHashFromRefV1(record.worldPackageRef) !==
+      worldPackageBuildReceipt.worldPackageRootHash
   ) {
     throw new RangeError(
       "Value must match the closed RuntimeWorldConfigurationV1 schema.",
@@ -896,7 +906,7 @@ function parseRuntimeWorldConfiguration(
   return Object.freeze({
     executionPlan,
     executionPlanHash: record.executionPlanHash,
-    worldPackageRef: record.worldPackageRef,
+    worldPackageRef: record.worldPackageRef as WorldPackageRefV1,
     worldPackageBuildReceipt,
     gameplayBootstrap,
   });

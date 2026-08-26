@@ -23,6 +23,10 @@ import {
   type WorldPreconditionV1,
 } from "@whitebox-world/authoring-edit";
 import { isNil } from "lodash-es";
+import {
+  createInMemoryWorldPackageStoreV1,
+  createWorldPackageBuildContextFixtureV2,
+} from "@whitebox-world/world-package/testing";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -62,6 +66,8 @@ const VALIDATION_REPORT = {
   validationReportHash: `sha256:${"9".repeat(64)}` as Sha256HashV1,
   status: "passed",
 } as const;
+const WORLD_PACKAGE_STORE = createInMemoryWorldPackageStoreV1();
+const WORLD_PACKAGE_BUILD_CONTEXT = createWorldPackageBuildContextFixtureV2();
 
 const HOUSE_PROTOTYPE = {
   id: "house-blockout",
@@ -274,6 +280,9 @@ function submit(
   return submitWorldChangeRequestV1({
     journal,
     leaseStore,
+    worldPackageStore: WORLD_PACKAGE_STORE,
+    worldPackageBuildContext: WORLD_PACKAGE_BUILD_CONTEXT,
+    resourceArtifacts: [],
     request,
     session: extras.session ?? session(),
     nowUnixMilliseconds: extras.nowUnixMilliseconds ?? NOW,
@@ -299,6 +308,9 @@ function recover(
   return recoverWorldChangeRequestV1({
     journal,
     leaseStore,
+    worldPackageStore: WORLD_PACKAGE_STORE,
+    worldPackageBuildContext: WORLD_PACKAGE_BUILD_CONTEXT,
+    resourceArtifacts: [],
     request,
     session: extras.session ?? session(),
     nowUnixMilliseconds: NOW,

@@ -8,11 +8,12 @@ import type {
   WorldChangeFailurePhaseV1,
   WorldChangeValidationReportBindingV1,
 } from "@whitebox-world/authoring-edit";
-import type { GameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
-import type { ExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
 import type {
-  ResolvedWorldPackageResourceArtifactV1,
-  WorldPackageBuildReceiptV1,
+  ResolvedWorldPackageResourceArtifactV2,
+  WorldPackageBuildContextV2,
+  WorldPackageBuildReceiptV2,
+  WorldPackageRefV1,
+  WorldPackageStoreV1,
 } from "@whitebox-world/world-package";
 
 export interface PreparedCandidateLeaseStoreV1 {
@@ -27,7 +28,7 @@ export interface PreparedCandidateLeaseUsageV1 {
 export interface RequiredGateEvaluationInputV1 {
   readonly requiredGateProfileRefs: readonly string[];
   readonly authoringSpec: AuthoringSpecV4;
-  readonly worldPackageBuildReceipt: WorldPackageBuildReceiptV1;
+  readonly worldPackageBuildReceipt: WorldPackageBuildReceiptV2;
 }
 
 export type RequiredGateEvaluationResultV1 =
@@ -51,8 +52,10 @@ export interface PrepareTrustedCandidateInputV1 {
   readonly baseAuthoringSpecHash: Sha256HashV1;
   readonly policy: AuthoringEditPolicyProjectionV1;
   readonly store: PreparedCandidateLeaseStoreV1;
+  readonly worldPackageStore: WorldPackageStoreV1;
+  readonly worldPackageBuildContext: WorldPackageBuildContextV2;
   readonly nowUnixMilliseconds: number;
-  readonly resourceArtifacts?: readonly ResolvedWorldPackageResourceArtifactV1[];
+  readonly resourceArtifacts: readonly ResolvedWorldPackageResourceArtifactV2[];
   readonly evaluateRequiredGates?: EvaluateRequiredGatesV1;
 }
 
@@ -82,11 +85,8 @@ export interface PreparedCandidateLeaseV1 {
   readonly authoringEditPolicyHash: Sha256HashV1;
   readonly requiredGateProfileRefs: readonly string[];
   readonly buildIdentity: WorldChangeBuildIdentityV1;
-  readonly candidateAuthoringSpec: AuthoringSpecV4;
-  readonly executionPlan: ExecutionPlanV5;
-  readonly gameplayBootstrap: GameplayBootstrapV1;
-  readonly worldPackageRef: string;
-  readonly worldPackageBuildReceipt: WorldPackageBuildReceiptV1;
+  readonly worldPackageRef: WorldPackageRefV1;
+  readonly worldPackageBuildReceipt: WorldPackageBuildReceiptV2;
   readonly validationReports: readonly WorldChangeValidationReportBindingV1[];
   readonly validationReportsHash: Sha256HashV1;
   readonly sizeBytes: number;

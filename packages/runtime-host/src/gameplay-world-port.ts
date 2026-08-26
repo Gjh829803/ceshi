@@ -208,7 +208,8 @@ export function parseGameplayWorldStateProjectionV1(
       runtimeSessionId: "runtime-host-projection-validation",
       worldSessionId: "world-projection-validation",
       simulationTick: record.simulationTick,
-      worldPackageRef: "worldkit://world-package/projection-validation",
+      worldPackageRef:
+        `package://world-package/sha256/${VALIDATION_HASH.slice(7)}`,
       worldPackageRootHash: VALIDATION_HASH,
       executionPlanHash: VALIDATION_HASH,
       entityStatesById: record.spatialEntityStatesById,

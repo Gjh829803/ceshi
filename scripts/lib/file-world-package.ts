@@ -1,10 +1,18 @@
 import {
   assembleWorldPackageDirectoryV2,
+  assertWorldPackageStoreRefMatchesDirectoryV1,
   assertWorldPackageBuildReceiptV2,
+  canonicalWorldPackageDirectoryForStoreV1,
+  equalWorldPackageDirectoryBytesV1,
   verifyWorldPackageDirectoryV2,
+  worldPackageRefFromRootHashV1,
+  worldPackageRootHashFromRefV1,
   type WorldPackageBuildReceiptV2,
   type WorldPackageDirectoryFileV2,
   type WorldPackageDirectoryV2,
+  type WorldPackageRefV1,
+  type WorldPackageStorePutResultV1,
+  type WorldPackageStoreV1,
 } from "@whitebox-world/world-package";
 import {
   chmod,
@@ -28,6 +36,8 @@ const JSON_MEDIA_TYPE = "application/json";
 const INTEGRITY_PATH = "integrity.json";
 const RECEIPT_PATH = "world-package-build-receipt.json";
 const TRANSPORT_METADATA_PATHS = new Set([INTEGRITY_PATH, RECEIPT_PATH]);
+const STORE_PUBLICATION_WAIT_TIMEOUT_MILLISECONDS = 30_000;
+const STORE_PUBLICATION_WAIT_INTERVAL_MILLISECONDS = 20;
 
 export interface WriteWorldPackageDirectoryV2Input {
   readonly outputDirectoryPath: string;
@@ -36,6 +46,12 @@ export interface WriteWorldPackageDirectoryV2Input {
 
 export interface ReadWorldPackageDirectoryV2Input {
   readonly packageDirectoryPath: string;
+  readonly maximumTotalBytes: number;
+  readonly maximumFileCount: number;
+}
+
+export interface CreateFileWorldPackageStoreV1Input {
+  readonly storeRootPath: string;
   readonly maximumTotalBytes: number;
   readonly maximumFileCount: number;
 }
@@ -93,6 +109,22 @@ const EMPTY_HOOKS: FileWorldPackageTestHooksV2 = Object.freeze({});
 
 function fileIoFail(message: string): never {
   throw new Error(`WORLD_PACKAGE_FILE_IO_V2_INVALID: ${message}`);
+}
+
+class FileWorldPackagePublicationConflictError extends Error {
+  constructor() {
+    super(
+      "WORLD_PACKAGE_FILE_IO_V2_INVALID: atomic package publication conflict",
+    );
+  }
+}
+
+function publicationConflict(): never {
+  throw new FileWorldPackagePublicationConflictError();
+}
+
+function waitMilliseconds(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 function requireCanonicalAbsolutePath(value: unknown, role: string): string {
@@ -311,7 +343,7 @@ async function writeWorldPackageDirectoryV2Internal(
     fileIoFail("output parent must be one canonical non-symlink directory");
   }
   if (!isNil(await lstatOrMissing(outputDirectoryPath))) {
-    fileIoFail("output destination already exists");
+    publicationConflict();
   }
 
   const baseName = path.basename(outputDirectoryPath);
@@ -327,7 +359,18 @@ async function writeWorldPackageDirectoryV2Internal(
         constants.O_WRONLY |
         constants.O_NOFOLLOW,
       FILE_MODE,
-    );
+    )
+      .catch((error: unknown) => {
+        if (
+          !isNil(error) &&
+          typeof error === "object" &&
+          "code" in error &&
+          error.code === "EEXIST"
+        ) {
+          publicationConflict();
+        }
+        throw error;
+      });
     ownsLock = true;
     try {
       await lockHandle.writeFile(`${process.pid}\n`, "utf8");
@@ -343,7 +386,7 @@ async function writeWorldPackageDirectoryV2Internal(
       "output parent",
     );
     if (!isNil(await lstatOrMissing(outputDirectoryPath))) {
-      fileIoFail("output destination appeared while acquiring publication ownership");
+      publicationConflict();
     }
 
     stagingDirectoryPath = await mkdtemp(
@@ -406,7 +449,7 @@ async function writeWorldPackageDirectoryV2Internal(
       "output parent",
     );
     if (!isNil(await lstatOrMissing(outputDirectoryPath))) {
-      fileIoFail("output destination appeared before atomic rename");
+      publicationConflict();
     }
     await hooks.beforeRename?.(stagingDirectoryPath, outputDirectoryPath);
     await rename(stagingDirectoryPath, outputDirectoryPath);
@@ -625,7 +668,9 @@ async function readWorldPackageDirectoryV2Internal(
     if (TRANSPORT_METADATA_PATHS.has(row.path)) continue;
     rootFiles.push({
       path: row.path,
-      mediaType: mediaTypeByPath.get(row.path) ?? "application/octet-stream",
+      mediaType: isNil(mediaTypeByPath.get(row.path))
+        ? "application/octet-stream"
+        : mediaTypeByPath.get(row.path)!,
       bytes: row.bytes,
     });
   }
@@ -682,4 +727,171 @@ export function createFileWorldPackageTestAdapterV2(
   hooks: FileWorldPackageTestHooksV2,
 ): FileWorldPackageAdapterV2 {
   return createAdapter(hooks);
+}
+
+function storeCorrupt(message: string): never {
+  throw new Error(`WORLD_PACKAGE_STORE_CORRUPT: ${message}`);
+}
+
+async function requireStoreDirectory(
+  absolutePath: string,
+  role: string,
+): Promise<BigIntFileSnapshot> {
+  const snapshot = await lstatOrMissing(absolutePath);
+  if (isNil(snapshot) || snapshot.isSymbolicLink()) {
+    storeCorrupt(`${role} is missing or symbolic`);
+  }
+  try {
+    assertOwnerDirectoryMode(snapshot, role);
+  } catch {
+    storeCorrupt(`${role} must be an owner-only directory`);
+  }
+  if (await realpath(absolutePath) !== absolutePath) {
+    storeCorrupt(`${role} must not resolve through symbolic links`);
+  }
+  return snapshot;
+}
+
+class FileWorldPackageStoreV1 implements WorldPackageStoreV1 {
+  public readonly brand = "WorldPackageStoreV1" as const;
+  readonly #storeRootPath: string;
+  readonly #sha256RootPath: string;
+  readonly #maximumTotalBytes: number;
+  readonly #maximumFileCount: number;
+
+  constructor(input: CreateFileWorldPackageStoreV1Input) {
+    this.#storeRootPath = requireCanonicalAbsolutePath(
+      input.storeRootPath,
+      "storeRootPath",
+    );
+    this.#sha256RootPath = path.join(this.#storeRootPath, "sha256");
+    this.#maximumTotalBytes = requirePositiveSafeInteger(
+      input.maximumTotalBytes,
+      "maximumTotalBytes",
+    );
+    this.#maximumFileCount = requirePositiveSafeInteger(
+      input.maximumFileCount,
+      "maximumFileCount",
+    );
+  }
+
+  async #ensureSha256RootForPut(): Promise<void> {
+    await requireStoreDirectory(this.#storeRootPath, "store root");
+    const existing = await lstatOrMissing(this.#sha256RootPath);
+    if (isNil(existing)) {
+      try {
+        await mkdir(this.#sha256RootPath, { mode: DIRECTORY_MODE });
+        await chmod(this.#sha256RootPath, DIRECTORY_MODE);
+        await syncDirectory(this.#storeRootPath, "publication", EMPTY_HOOKS);
+      } catch (error) {
+        const raced = await lstatOrMissing(this.#sha256RootPath);
+        if (isNil(raced)) throw error;
+      }
+    }
+    await requireStoreDirectory(this.#sha256RootPath, "sha256 store root");
+  }
+
+  async #storedDirectory(
+    worldPackageRef: WorldPackageRefV1,
+  ): Promise<WorldPackageDirectoryV2 | undefined> {
+    await requireStoreDirectory(this.#storeRootPath, "store root");
+    const sha256Root = await lstatOrMissing(this.#sha256RootPath);
+    if (isNil(sha256Root)) return undefined;
+    await requireStoreDirectory(this.#sha256RootPath, "sha256 store root");
+    const rootHash = worldPackageRootHashFromRefV1(worldPackageRef);
+    const directoryPath = path.join(this.#sha256RootPath, rootHash.slice(7));
+    if (isNil(await lstatOrMissing(directoryPath))) return undefined;
+    let directory;
+    try {
+      directory = await readWorldPackageDirectoryV2({
+        packageDirectoryPath: directoryPath,
+        maximumTotalBytes: this.#maximumTotalBytes,
+        maximumFileCount: this.#maximumFileCount,
+      });
+    } catch {
+      return storeCorrupt("stored directory failed symlink-safe V2 replay");
+    }
+    assertWorldPackageStoreRefMatchesDirectoryV1(worldPackageRef, directory);
+    return directory;
+  }
+
+  async #putOnce(
+    directoryValue: WorldPackageDirectoryV2,
+  ): Promise<WorldPackageStorePutResultV1> {
+    const directory = canonicalWorldPackageDirectoryForStoreV1(directoryValue);
+    const worldPackageRef = worldPackageRefFromRootHashV1(
+      directory.receipt.worldPackageRootHash,
+    );
+    await this.#ensureSha256RootForPut();
+    const rootHash = worldPackageRootHashFromRefV1(worldPackageRef);
+    const directoryPath = path.join(this.#sha256RootPath, rootHash.slice(7));
+    const lockPath = path.join(
+      this.#sha256RootPath,
+      `.${rootHash.slice(7)}.publish.lock`,
+    );
+    const deadline = Date.now() + STORE_PUBLICATION_WAIT_TIMEOUT_MILLISECONDS;
+    while (true) {
+      const existing = await this.#storedDirectory(worldPackageRef);
+      if (!isNil(existing)) {
+        if (!equalWorldPackageDirectoryBytesV1(existing, directory)) {
+          throw new Error(
+            "WORLD_PACKAGE_STORE_CONFLICT: one Package Root maps to different directory bytes",
+          );
+        }
+        return Object.freeze({ worldPackageRef, receipt: directory.receipt });
+      }
+      try {
+        await writeWorldPackageDirectoryV2({
+          outputDirectoryPath: directoryPath,
+          directory,
+        });
+      } catch (error) {
+        if (!(error instanceof FileWorldPackagePublicationConflictError)) {
+          throw error;
+        }
+        while (true) {
+          const raced = await this.#storedDirectory(worldPackageRef);
+          if (!isNil(raced)) {
+            if (!equalWorldPackageDirectoryBytesV1(raced, directory)) {
+              throw new Error(
+                "WORLD_PACKAGE_STORE_CONFLICT: one Package Root maps to different directory bytes",
+              );
+            }
+            return Object.freeze({ worldPackageRef, receipt: directory.receipt });
+          }
+          if (isNil(await lstatOrMissing(lockPath))) break;
+          if (Date.now() >= deadline) {
+            throw new Error(
+              "WORLD_PACKAGE_STORE_BUSY: concurrent publication did not finish within the bounded wait",
+            );
+          }
+          await waitMilliseconds(STORE_PUBLICATION_WAIT_INTERVAL_MILLISECONDS);
+        }
+        continue;
+      }
+      const replayed = await this.#storedDirectory(worldPackageRef);
+      if (isNil(replayed) || !equalWorldPackageDirectoryBytesV1(replayed, directory)) {
+        storeCorrupt("freshly published directory did not replay exact bytes");
+      }
+      return Object.freeze({ worldPackageRef, receipt: directory.receipt });
+    }
+  }
+
+  async put(
+    directory: WorldPackageDirectoryV2,
+  ): Promise<WorldPackageStorePutResultV1> {
+    return this.#putOnce(directory);
+  }
+
+  async get(worldPackageRef: WorldPackageRefV1) {
+    worldPackageRootHashFromRefV1(worldPackageRef);
+    const directory = await this.#storedDirectory(worldPackageRef);
+    return isNil(directory) ? undefined : verifyWorldPackageDirectoryV2(directory);
+  }
+}
+
+export function createFileWorldPackageStoreV1(
+  input: CreateFileWorldPackageStoreV1Input,
+): WorldPackageStoreV1 {
+  return new FileWorldPackageStoreV1(input);
 }

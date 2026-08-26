@@ -1,4 +1,6 @@
 import type { ExecutionResourceLockEntryV1 } from "@whitebox-world/runtime-contracts";
+import type { ExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
+import type { GameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
 
 import type {
   WorldPackageBuildReceiptV1,
@@ -124,6 +126,12 @@ export interface WorldPackageBuildReceiptV2 {
   readonly manifestHash: WorldPackageSha256HashV1;
   readonly fileIntegrityEntries: readonly WorldPackageFileIntegrityEntryV1[];
   readonly worldPackageRootHash: WorldPackageSha256HashV1;
+}
+
+export interface WorldPackageGameplayBootstrapMembershipInputV2 {
+  readonly executionPlan: ExecutionPlanV5;
+  readonly gameplayBootstrap: GameplayBootstrapV1;
+  readonly worldPackageBuildReceipt: WorldPackageBuildReceiptV2;
 }
 
 export interface WorldPackageSignatureEnvelopeV1 {

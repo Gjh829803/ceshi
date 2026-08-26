@@ -1,4 +1,8 @@
 import { createValidAuthoringSpec } from "@whitebox-world/authoring/testing";
+import {
+  createInMemoryWorldPackageStoreV1,
+  createWorldPackageBuildContextFixtureV2,
+} from "@whitebox-world/world-package/testing";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -8,10 +12,30 @@ import {
 } from "./worldkit-authoring-edit-host";
 
 describe("Playground Authoring/Edit Host", () => {
+  it("rejects a WorldPackage context for a different Host profile", () => {
+    const spec = createValidAuthoringSpec();
+    const context = createWorldPackageBuildContextFixtureV2();
+    expect(() => createPlaygroundAuthoringEditHostV1({
+      authoringSpec: spec,
+      worldPackageStore: createInMemoryWorldPackageStoreV1(),
+      worldPackageBuildContext: {
+        ...context,
+        hostCompatibility: {
+          ...context.hostCompatibility,
+          profileHash: `sha256:${"f".repeat(64)}`,
+        },
+      },
+      resourceArtifacts: [],
+    })).toThrow("WORLD_PACKAGE_HOST_INCOMPATIBLE");
+  });
+
   it("seeds a trusted Edit Session from the loaded AuthoringSpec", async () => {
     const spec = createValidAuthoringSpec();
     const host = createPlaygroundAuthoringEditHostV1({
       authoringSpec: spec,
+      worldPackageStore: createInMemoryWorldPackageStoreV1(),
+      worldPackageBuildContext: createWorldPackageBuildContextFixtureV2(),
+      resourceArtifacts: [],
       nowUnixMilliseconds: () => 1_700_000_000_000,
     });
     expect(host.version).toBe(1);

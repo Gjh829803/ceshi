@@ -137,6 +137,20 @@ export interface CreateWorldPackageV2Input {
   readonly includeAuthoringSpec: boolean;
 }
 
+export type WorldPackageBuildContextV2 = Pick<
+  CreateWorldPackageV2Input,
+  | "title"
+  | "sdkVersion"
+  | "distributionPolicy"
+  | "canonicalAuthoringSchemaHash"
+  | "aiSchemaProjectionProfile"
+  | "hostCompatibility"
+  | "generatedResourceProvenance"
+  | "licenseDocuments"
+  | "noticeText"
+  | "includeAuthoringSpec"
+>;
+
 interface CanonicalLegalDocument {
   readonly id: string;
   readonly spdxLicenseExpression: string;
@@ -650,6 +664,11 @@ export function createWorldPackageV2(
     ) {
       throw error;
     }
-    buildFail("", "trusted build closure validation failed");
+    buildFail(
+      "",
+      `trusted build closure validation failed: ${
+        error instanceof Error ? error.message : "unknown owner failure"
+      }`,
+    );
   }
 }

@@ -5,6 +5,10 @@ import {
   getAuthoringRevisionHeadV1,
   seedAuthoringRevisionHeadV1,
 } from "@whitebox-world/authoring-host";
+import {
+  createInMemoryWorldPackageStoreV1,
+  createWorldPackageBuildContextFixtureV2,
+} from "@whitebox-world/world-package/testing";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -14,8 +18,33 @@ import {
 } from "./authoring-edit-host-bridge";
 
 const HASH = `sha256:${"d".repeat(64)}` as const;
+const PACKAGE_REF = `package://world-package/sha256/${"d".repeat(64)}` as const;
+
+function worldPackageInputs() {
+  return {
+    worldPackageStore: createInMemoryWorldPackageStoreV1(),
+    worldPackageBuildContext: createWorldPackageBuildContextFixtureV2(),
+    resourceArtifacts: [],
+  } as const;
+}
 
 describe("P16-B1 Authoring/Edit Host bridge", () => {
+  it("rejects a WorldPackage context for a different RuntimeHost profile", () => {
+    const spec = createValidAuthoringSpec();
+    const inputs = worldPackageInputs();
+    expect(() => createAuthoringEditHostBridgeV1({
+      authoringSpec: spec,
+      ...inputs,
+      worldPackageBuildContext: {
+        ...inputs.worldPackageBuildContext,
+        hostCompatibility: {
+          ...inputs.worldPackageBuildContext.hostCompatibility,
+          profileHash: `sha256:${"f".repeat(64)}`,
+        },
+      },
+    })).toThrow("WORLD_PACKAGE_HOST_INCOMPATIBLE");
+  });
+
   it("maps RuntimeHost publication V2 onto the journal publication port", async () => {
     const persistDurableCommit = vi.fn();
     const publishWorldReplacementV1 = vi.fn(async (input: unknown) => {
@@ -65,7 +94,7 @@ describe("P16-B1 Authoring/Edit Host bridge", () => {
       worldConfiguration: {
         executionPlan: {} as never,
         executionPlanHash: HASH,
-        worldPackageRef: "worldkit://world-package/basic-world@1",
+        worldPackageRef: PACKAGE_REF,
         worldPackageBuildReceipt: {} as never,
         gameplayBootstrap: {} as never,
       },
@@ -132,7 +161,7 @@ describe("P16-B1 Authoring/Edit Host bridge", () => {
       worldConfiguration: {
         executionPlan: {} as never,
         executionPlanHash: HASH,
-        worldPackageRef: "worldkit://world-package/basic-world@1",
+        worldPackageRef: PACKAGE_REF,
         worldPackageBuildReceipt: {} as never,
         gameplayBootstrap: {} as never,
       },
@@ -159,6 +188,7 @@ describe("P16-B1 Authoring/Edit Host bridge", () => {
     const spec = createValidAuthoringSpec();
     const bridge = createAuthoringEditHostBridgeV1({
       authoringSpec: spec,
+      ...worldPackageInputs(),
       nowUnixMilliseconds: () => 1_700_000_000_000,
     });
     expect(bridge.kind).toBe(AUTHORING_EDIT_HOST_BRIDGE_KIND);
@@ -187,6 +217,7 @@ describe("P16-B1 Authoring/Edit Host bridge", () => {
 
     const bridge = createAuthoringEditHostBridgeV1({
       authoringSpec: spec,
+      ...worldPackageInputs(),
       journal,
       nowUnixMilliseconds: () => 1_700_000_000_000,
     });

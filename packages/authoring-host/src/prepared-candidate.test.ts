@@ -18,10 +18,16 @@ import { compileWorldV5 } from "@whitebox-world/compiler";
 import { createCoreGameplayBootstrapV1 } from "@whitebox-world/gameplay";
 import {
   createGameplayBootstrapResourceLockEntryV1,
-  gameplayBootstrapCanonicalBytesV1,
 } from "@whitebox-world/gameplay-contracts";
 import { canonicalJsonBytes } from "@whitebox-world/protocol";
-import { createWorldPackageBuildReceiptV1 } from "@whitebox-world/world-package";
+import {
+  createWorldPackageV2,
+  worldPackageRefFromRootHashV1,
+} from "@whitebox-world/world-package";
+import {
+  createInMemoryWorldPackageStoreV1,
+  createWorldPackageBuildContextFixtureV2,
+} from "@whitebox-world/world-package/testing";
 import { isNil } from "lodash-es";
 import { describe, expect, it } from "vitest";
 
@@ -139,8 +145,9 @@ function expectedHashes(spec: AuthoringSpecV4) {
   if (!compiled.ok || isNil(compiled.executionPlan) || isNil(compiled.executionPlanHash)) {
     throw new Error(`expected fixture compile: ${JSON.stringify(compiled.diagnostics)}`);
   }
-  const receipt = createWorldPackageBuildReceiptV1({
+  const directory = createWorldPackageV2({
     packageId: `${spec.id}.package`,
+    ...createWorldPackageBuildContextFixtureV2(),
     authoringSpec: spec,
     normalizedWorldIr,
     layoutSolveResult: {
@@ -152,24 +159,21 @@ function expectedHashes(spec: AuthoringSpecV4) {
     gameplayBootstrap,
     resourceArtifacts: [],
   });
+  const receipt = directory.receipt;
   return {
     resultAuthoringSpecHash: hashAuthoringDocumentV4(spec) as Sha256HashV1,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash as Sha256HashV1,
     executionPlanHash: compiled.executionPlanHash as Sha256HashV1,
     worldPackageRootHash: receipt.worldPackageRootHash,
-    worldPackageRef: `worldkit://world-package/${spec.id}.package@1`,
-    executionPlan: compiled.executionPlan,
-    gameplayBootstrap,
+    registryLockHash: receipt.manifest.registryLockHash,
+    worldPackageRef: worldPackageRefFromRootHashV1(receipt.worldPackageRootHash),
     sizeBytes:
-      canonicalJsonBytes(spec).byteLength +
-      canonicalJsonBytes(compiled.executionPlan).byteLength +
-      gameplayBootstrapCanonicalBytesV1(gameplayBootstrap).byteLength +
       canonicalJsonBytes(receipt).byteLength +
       canonicalJsonBytes([]).byteLength,
   };
 }
 
-function prepare(
+async function prepare(
   spec: AuthoringSpecV4,
   extras: {
     readonly policy?: AuthoringEditPolicyProjectionV1;
@@ -182,14 +186,18 @@ function prepare(
 ) {
   const store = extras.store ?? createPreparedCandidateLeaseStoreV1();
   const selectedPolicy = extras.policy ?? policy();
+  const worldPackageStore = createInMemoryWorldPackageStoreV1();
   return {
     store,
     policy: selectedPolicy,
-    result: prepareTrustedCandidateV1({
+    result: await prepareTrustedCandidateV1({
       candidateAuthoringSpec: spec,
       ...CANDIDATE_BINDING,
       policy: selectedPolicy,
       store,
+      worldPackageStore,
+      worldPackageBuildContext: createWorldPackageBuildContextFixtureV2(),
+      resourceArtifacts: [],
       nowUnixMilliseconds: extras.nowUnixMilliseconds ?? NOW,
       ...(isNil(extras.evaluateRequiredGates)
         ? {}
@@ -199,16 +207,16 @@ function prepare(
 }
 
 function prepared(
-  result: ReturnType<typeof prepareTrustedCandidateV1>,
-): Extract<ReturnType<typeof prepareTrustedCandidateV1>, { status: "prepared" }> {
+  result: Awaited<ReturnType<typeof prepareTrustedCandidateV1>>,
+): Extract<Awaited<ReturnType<typeof prepareTrustedCandidateV1>>, { status: "prepared" }> {
   expect(result.status).toBe("prepared");
   if (result.status !== "prepared") throw new Error("expected prepared candidate");
   return result;
 }
 
 function rejected(
-  result: ReturnType<typeof prepareTrustedCandidateV1>,
-): Extract<ReturnType<typeof prepareTrustedCandidateV1>, { status: "rejected" }> {
+  result: Awaited<ReturnType<typeof prepareTrustedCandidateV1>>,
+): Extract<Awaited<ReturnType<typeof prepareTrustedCandidateV1>>, { status: "rejected" }> {
   expect(result.status).toBe("rejected");
   if (result.status !== "rejected") throw new Error("expected rejected candidate");
   return result;
@@ -219,16 +227,16 @@ function codes(diagnostics: readonly WorldChangeDiagnosticV1[]): readonly string
 }
 
 describe("P16-P1 trusted candidate build", () => {
-  it("builds full hashes and stores an immutable lease bound to the host policy", () => {
+  it("builds full hashes and stores an immutable lease bound to the host policy", async () => {
     const spec = createValidAuthoringSpec();
     const selectedPolicy = policy();
-    const { store, result } = prepare(spec, { policy: selectedPolicy });
+    const { store, result } = await prepare(spec, { policy: selectedPolicy });
     const ready = prepared(result);
     const independent = expectedHashes(spec);
 
     expect(ready.buildIdentity).toEqual({
       resultAuthoringSpecHash: independent.resultAuthoringSpecHash,
-      registryLockHash: selectedPolicy.registryLockHash,
+      registryLockHash: independent.registryLockHash,
       normalizedWorldIrHash: independent.normalizedWorldIrHash,
       executionPlanHash: independent.executionPlanHash,
       worldPackageRootHash: independent.worldPackageRootHash,
@@ -250,9 +258,9 @@ describe("P16-P1 trusted candidate build", () => {
     expect(found.status).toBe("found");
     if (found.status !== "found") throw new Error("expected found lease");
     expect(found.lease.buildIdentity).toEqual(ready.buildIdentity);
-    expect(found.lease.candidateAuthoringSpec).toEqual(spec);
-    expect(found.lease.executionPlan).toEqual(independent.executionPlan);
-    expect(found.lease.gameplayBootstrap).toEqual(independent.gameplayBootstrap);
+    expect(Object.hasOwn(found.lease, "candidateAuthoringSpec")).toBe(false);
+    expect(Object.hasOwn(found.lease, "executionPlan")).toBe(false);
+    expect(Object.hasOwn(found.lease, "gameplayBootstrap")).toBe(false);
     expect(found.lease.worldPackageRef).toBe(independent.worldPackageRef);
     expect(found.lease.worldPackageBuildReceipt.worldPackageRootHash).toBe(
       independent.worldPackageRootHash,
@@ -260,9 +268,9 @@ describe("P16-P1 trusted candidate build", () => {
     expect(found.lease.authoringEditPolicyHash).toBe(ready.authoringEditPolicyHash);
   });
 
-  it("fails closed without storing a lease when a required gate has no trusted runner", () => {
+  it("fails closed without storing a lease when a required gate has no trusted runner", async () => {
     const spec = createValidAuthoringSpec();
-    const { store, result } = prepare(spec, {
+    const { store, result } = await prepare(spec, {
       policy: policy({ requiredGateProfileRefs: [REQUIRED_GATE_REF] }),
     });
     const failed = rejected(result);
@@ -271,9 +279,9 @@ describe("P16-P1 trusted candidate build", () => {
     expect(preparedCandidateLeaseUsageV1(store)).toEqual({ count: 0, bytes: 0 });
   });
 
-  it("fails closed without storing a lease when a required gate runner reports failure", () => {
+  it("fails closed without storing a lease when a required gate runner reports failure", async () => {
     const spec = createValidAuthoringSpec();
-    const { store, result } = prepare(spec, {
+    const { store, result } = await prepare(spec, {
       policy: policy({ requiredGateProfileRefs: [REQUIRED_GATE_REF] }),
       evaluateRequiredGates: () => ({
         status: "failed",
@@ -293,9 +301,9 @@ describe("P16-P1 trusted candidate build", () => {
     expect(preparedCandidateLeaseUsageV1(store)).toEqual({ count: 0, bytes: 0 });
   });
 
-  it("persists a lease only after an injected required gate runner passes", () => {
+  it("persists a lease only after an injected required gate runner passes", async () => {
     const spec = createValidAuthoringSpec();
-    const { store, result } = prepare(spec, {
+    const { store, result } = await prepare(spec, {
       policy: policy({ requiredGateProfileRefs: [REQUIRED_GATE_REF] }),
       evaluateRequiredGates: () => ({
         status: "passed",
@@ -314,9 +322,9 @@ describe("P16-P1 trusted candidate build", () => {
     ]);
   });
 
-  it("fails closed when a required gate runner returns duplicate report refs", () => {
+  it("fails closed when a required gate runner returns duplicate report refs", async () => {
     const spec = createValidAuthoringSpec();
-    const { store, result } = prepare(spec, {
+    const { store, result } = await prepare(spec, {
       policy: policy({ requiredGateProfileRefs: [REQUIRED_GATE_REF] }),
       evaluateRequiredGates: () => ({
         status: "passed",
@@ -335,27 +343,27 @@ describe("P16-P1 trusted candidate build", () => {
     expect(preparedCandidateLeaseUsageV1(store)).toEqual({ count: 0, bytes: 0 });
   });
 
-  it("rejects an invalid candidate and stores no lease", () => {
+  it("rejects an invalid candidate and stores no lease", async () => {
     const valid = createValidAuthoringSpec();
     const spec = {
       ...valid,
       nodes: [...valid.nodes, valid.nodes[0]!],
     };
-    const { store, result } = prepare(spec);
+    const { store, result } = await prepare(spec);
     const failed = rejected(result);
     expect(failed.failurePhase).toBe("canonical-validation");
     expect(codes(failed.diagnostics)).toEqual(["WORLD_CHANGE_CANDIDATE_INVALID"]);
     expect(preparedCandidateLeaseUsageV1(store)).toEqual({ count: 0, bytes: 0 });
   });
 
-  it("rejects a second lease when the prepared-candidate count budget is exceeded", () => {
+  it("rejects a second lease when the prepared-candidate count budget is exceeded", async () => {
     const spec = createValidAuthoringSpec();
     const selectedPolicy = policy({
       workloadBudget: generousBudget({ maximumPreparedCandidateCount: 1 }),
     });
-    const first = prepare(spec, { policy: selectedPolicy });
+    const first = await prepare(spec, { policy: selectedPolicy });
     prepared(first.result);
-    const second = prepare(spec, { store: first.store, policy: selectedPolicy });
+    const second = await prepare(spec, { store: first.store, policy: selectedPolicy });
     const failed = rejected(second.result);
     expect(failed.failurePhase).toBe("admission");
     expect(failed.diagnostics).toEqual([
@@ -372,10 +380,10 @@ describe("P16-P1 trusted candidate build", () => {
     expect(preparedCandidateLeaseUsageV1(first.store).count).toBe(1);
   });
 
-  it("rejects persist when candidate bytes would exceed the host budget", () => {
+  it("rejects persist when candidate bytes would exceed the host budget", async () => {
     const spec = createValidAuthoringSpec();
     const sizeBytes = expectedHashes(spec).sizeBytes;
-    const { store, result } = prepare(spec, {
+    const { store, result } = await prepare(spec, {
       policy: policy({
         workloadBudget: generousBudget({ maximumPreparedCandidateBytes: sizeBytes - 1 }),
       }),
@@ -396,10 +404,10 @@ describe("P16-P1 trusted candidate build", () => {
     expect(preparedCandidateLeaseUsageV1(store)).toEqual({ count: 0, bytes: 0 });
   });
 
-  it("pins with compare-and-set and reuses the same request identity", () => {
+  it("pins with compare-and-set and reuses the same request identity", async () => {
     const spec = createValidAuthoringSpec();
     const selectedPolicy = policy();
-    const { store, result } = prepare(spec, { policy: selectedPolicy });
+    const { store, result } = await prepare(spec, { policy: selectedPolicy });
     const ready = prepared(result);
     const policyHash = hashAuthoringEditPolicyProjectionV1(selectedPolicy);
     const first = pinPreparedCandidateV1({
@@ -449,10 +457,10 @@ describe("P16-P1 trusted candidate build", () => {
     expect(codes(conflicted.diagnostics)).toEqual(["WORLD_CHANGE_REQUEST_ID_CONFLICT"]);
   });
 
-  it("does not let a different request steal an active pin", () => {
+  it("does not let a different request steal an active pin", async () => {
     const spec = createValidAuthoringSpec();
     const selectedPolicy = policy();
-    const { store, result } = prepare(spec, { policy: selectedPolicy });
+    const { store, result } = await prepare(spec, { policy: selectedPolicy });
     const ready = prepared(result);
     const policyHash = hashAuthoringEditPolicyProjectionV1(selectedPolicy);
     const first = pinPreparedCandidateV1({
@@ -479,9 +487,9 @@ describe("P16-P1 trusted candidate build", () => {
     expect(codes(stolen.diagnostics)).toEqual(["WORLD_CHANGE_PREPARED_CANDIDATE_STALE"]);
   });
 
-  it("rejects a pin when the policy hash no longer matches the lease", () => {
+  it("rejects a pin when the policy hash no longer matches the lease", async () => {
     const spec = createValidAuthoringSpec();
-    const { store, result } = prepare(spec);
+    const { store, result } = await prepare(spec);
     const ready = prepared(result);
     const stale = pinPreparedCandidateV1({
       store,
@@ -497,14 +505,14 @@ describe("P16-P1 trusted candidate build", () => {
     expect(codes(stale.diagnostics)).toEqual(["WORLD_CHANGE_PREPARED_CANDIDATE_STALE"]);
   });
 
-  it("expires unpinned leases and refuses a late pin after GC", () => {
+  it("expires unpinned leases and refuses a late pin after GC", async () => {
     const spec = createValidAuthoringSpec();
     const selectedPolicy = policy({
       workloadBudget: generousBudget({
         maximumPreparedCandidateRetentionMilliseconds: 100,
       }),
     });
-    const { store, result } = prepare(spec, { policy: selectedPolicy });
+    const { store, result } = await prepare(spec, { policy: selectedPolicy });
     const ready = prepared(result);
     sweepExpiredPreparedCandidatesV1(store, NOW + 100);
     expect(preparedCandidateLeaseUsageV1(store)).toEqual({ count: 0, bytes: 0 });
@@ -522,14 +530,14 @@ describe("P16-P1 trusted candidate build", () => {
     expect(codes(latePin.diagnostics)).toEqual(["WORLD_CHANGE_PREPARED_CANDIDATE_EXPIRED"]);
   });
 
-  it("keeps a pinned lease past expiry until the owning request releases it", () => {
+  it("keeps a pinned lease past expiry until the owning request releases it", async () => {
     const spec = createValidAuthoringSpec();
     const selectedPolicy = policy({
       workloadBudget: generousBudget({
         maximumPreparedCandidateRetentionMilliseconds: 100,
       }),
     });
-    const { store, result } = prepare(spec, { policy: selectedPolicy });
+    const { store, result } = await prepare(spec, { policy: selectedPolicy });
     const ready = prepared(result);
     const policyHash = hashAuthoringEditPolicyProjectionV1(selectedPolicy);
     const pinned = pinPreparedCandidateV1({

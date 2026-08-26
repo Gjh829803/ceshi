@@ -23,7 +23,13 @@ import type {
 } from "@whitebox-world/authoring-edit";
 import type { GameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
 import type { ExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
-import type { WorldPackageBuildReceiptV1 } from "@whitebox-world/world-package";
+import type {
+  ResolvedWorldPackageResourceArtifactV2,
+  WorldPackageBuildContextV2,
+  WorldPackageBuildReceiptV2,
+  WorldPackageRefV1,
+  WorldPackageStoreV1,
+} from "@whitebox-world/world-package";
 
 import type {
   EvaluateRequiredGatesV1,
@@ -172,8 +178,8 @@ export type PublishRuntimeReplacementFailureKindV1 =
 export interface TrustedRuntimeWorldConfigurationV1 {
   readonly executionPlan: ExecutionPlanV5;
   readonly executionPlanHash: Sha256HashV1;
-  readonly worldPackageRef: string;
-  readonly worldPackageBuildReceipt: WorldPackageBuildReceiptV1;
+  readonly worldPackageRef: WorldPackageRefV1;
+  readonly worldPackageBuildReceipt: WorldPackageBuildReceiptV2;
   readonly gameplayBootstrap: GameplayBootstrapV1;
 }
 
@@ -208,6 +214,9 @@ export type PublishRuntimeReplacementV1 = (input: {
 export interface SubmitWorldChangeRequestInputV1 {
   readonly journal: WorldChangeJournalV1;
   readonly leaseStore: PreparedCandidateLeaseStoreV1;
+  readonly worldPackageStore: WorldPackageStoreV1;
+  readonly worldPackageBuildContext: WorldPackageBuildContextV2;
+  readonly resourceArtifacts: readonly ResolvedWorldPackageResourceArtifactV2[];
   readonly request: WorldChangeRequestV1;
   readonly session: AuthoringEditSessionV1;
   readonly nowUnixMilliseconds: number;

@@ -11,7 +11,7 @@ import {
   type WorldChangeDiagnosticV1,
   type WorldChangeFailurePhaseV1,
 } from "@whitebox-world/authoring-edit";
-import { isNil } from "lodash-es";
+import { isEqual, isNil } from "lodash-es";
 
 import { admissionBudgetDiagnostic, worldChangeDiagnostic } from "../diagnostics.js";
 import { prepareTrustedCandidateV1 } from "../build.js";
@@ -260,6 +260,37 @@ async function finishRuntimePublication(
       ),
     ]);
   }
+  let verifiedWorldPackage;
+  try {
+    verifiedWorldPackage = await input.worldPackageStore.get(
+      found.lease.worldPackageRef,
+    );
+  } catch (error) {
+    return rejectRecord(input, record, "runtime-prepare", [
+      worldChangeDiagnostic(
+        "WORLD_CHANGE_RUNTIME_PREPARE_FAILED",
+        "/preparedCandidateRef",
+        error instanceof Error
+          ? `Stored WorldPackage verification failed: ${error.message}`
+          : "Stored WorldPackage verification failed.",
+      ),
+    ]);
+  }
+  if (
+    isNil(verifiedWorldPackage) ||
+    !isEqual(
+      verifiedWorldPackage.receipt,
+      found.lease.worldPackageBuildReceipt,
+    )
+  ) {
+    return rejectRecord(input, record, "runtime-prepare", [
+      worldChangeDiagnostic(
+        "WORLD_CHANGE_RUNTIME_PREPARE_FAILED",
+        "/preparedCandidateRef",
+        "Stored WorldPackage is missing or no longer matches the Candidate Receipt.",
+      ),
+    ]);
+  }
   let current = record;
   const cleanupOperationId = journalArtifactIdV1("cleanup", current.request.id);
   let commitDenial: WorldChangeDiagnosticV1 | undefined;
@@ -270,11 +301,12 @@ async function finishRuntimePublication(
   try {
     published = await input.publishRuntimeReplacement({
       worldConfiguration: {
-        executionPlan: found.lease.executionPlan,
-        executionPlanHash: found.lease.buildIdentity.executionPlanHash,
+        executionPlan: verifiedWorldPackage.executionPlan,
+        executionPlanHash:
+          verifiedWorldPackage.receipt.manifest.executionPlanHash,
         worldPackageRef: found.lease.worldPackageRef,
-        worldPackageBuildReceipt: found.lease.worldPackageBuildReceipt,
-        gameplayBootstrap: found.lease.gameplayBootstrap,
+        worldPackageBuildReceipt: verifiedWorldPackage.receipt,
+        gameplayBootstrap: verifiedWorldPackage.gameplayBootstrap,
       },
       publication: {
         requestId: current.request.id,
@@ -569,13 +601,16 @@ async function advance(
         state: "candidate-ready",
       });
     } else {
-      const prepared = prepareTrustedCandidateV1({
+      const prepared = await prepareTrustedCandidateV1({
         candidateAuthoringSpec: current.applied.candidateAuthoringSpec,
         authoringEditSessionId: current.request.authoringEditSessionId,
         changeSetHash: current.changeSetHash,
         baseAuthoringSpecHash: current.request.changeSet.baseAuthoringSpecHash,
         policy: input.session.policy,
         store: input.leaseStore,
+        worldPackageStore: input.worldPackageStore,
+        worldPackageBuildContext: input.worldPackageBuildContext,
+        resourceArtifacts: input.resourceArtifacts,
         nowUnixMilliseconds: input.nowUnixMilliseconds,
         ...(isNil(input.evaluateRequiredGates)
           ? {}

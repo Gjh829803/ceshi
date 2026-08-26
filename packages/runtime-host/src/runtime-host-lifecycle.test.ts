@@ -28,6 +28,46 @@ import {
 
 
 describe("RuntimeHost lifecycle isolation and admission", () => {
+  it("rejects WorldPackage V1 explicitly before adapter creation", async () => {
+    const port = createPortHarness();
+    const adapter = createAdapterFactoryHarness([port]);
+    const baseline = mutableWorldConfiguration(INITIAL_WORLD_PACKAGE_REF);
+    const initialWorld = {
+      ...baseline,
+      worldPackageBuildReceipt: {
+        ...baseline.worldPackageBuildReceipt,
+        schemaVersion: 1,
+      },
+    };
+
+    await expect(runtimeHostConstructor().create(hostOptions(
+      adapter.factory,
+      ["world-session.v1-forbidden"],
+      { initialWorld },
+    ))).rejects.toThrow("WORLD_PACKAGE_VERSION_UNSUPPORTED");
+    expect(adapter.factory.create).not.toHaveBeenCalled();
+    expect(port.calls).toEqual([]);
+  });
+
+  it("rejects a content Ref that does not match the verified V2 Package Root", async () => {
+    const port = createPortHarness();
+    const adapter = createAdapterFactoryHarness([port]);
+    const baseline = mutableWorldConfiguration(INITIAL_WORLD_PACKAGE_REF);
+    const initialWorld = {
+      ...baseline,
+      worldPackageRef:
+        `package://world-package/sha256/${"f".repeat(64)}`,
+    };
+
+    await expect(runtimeHostConstructor().create(hostOptions(
+      adapter.factory,
+      ["world-session.ref-mismatch"],
+      { initialWorld },
+    ))).rejects.toThrow(/RuntimeWorldConfigurationV1/);
+    expect(adapter.factory.create).not.toHaveBeenCalled();
+    expect(port.calls).toEqual([]);
+  });
+
   it("publishes immutable provider-neutral Runtime Activity counters without lease authority", async () => {
     const current = createPortHarness();
     const { host } = await createHost([current]);

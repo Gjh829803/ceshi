@@ -24,6 +24,10 @@ import {
   type WorldPreconditionV1,
 } from "@whitebox-world/authoring-edit";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
+import {
+  createInMemoryWorldPackageStoreV1,
+  createWorldPackageBuildContextFixtureV2,
+} from "@whitebox-world/world-package/testing";
 import { isNil } from "lodash-es";
 import { describe, expect, it } from "vitest";
 
@@ -224,6 +228,9 @@ function createHost(extras: {
   const host = createAuthoringEditHostV1({
     journal,
     leaseStore: createPreparedCandidateLeaseStoreV1(),
+    worldPackageStore: createInMemoryWorldPackageStoreV1(),
+    worldPackageBuildContext: createWorldPackageBuildContextFixtureV2(),
+    resourceArtifacts: [],
     session: sessionFor(entries, extras),
     nowUnixMilliseconds: () => now.value,
     projectionProfile: profileSource(),

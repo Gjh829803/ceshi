@@ -6,6 +6,10 @@ import {
 import { describe, expect, it } from "vitest";
 
 import {
+  BABYLON_WEB_HOST_COMPATIBILITY_PROFILE_HASH_V1,
+  BABYLON_WEB_HOST_COMPATIBILITY_PROFILE_V1,
+  BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V2,
+  BABYLON_WEB_WORLD_PACKAGE_HOST_POLICY_V1,
   assertWorldPackageBuildReceiptV2,
   assertWorldPackageHostCompatibilityV2,
   assertWorldPackageMigrationReportV1,
@@ -668,6 +672,19 @@ describe("WorldPackageHostPolicyV1", () => {
     expect(() => assertWorldPackageHostCompatibilityV2(
       validManifestV2(),
       validPolicy(),
+    )).not.toThrow();
+  });
+
+  it("binds the built-in Babylon Web profile bytes to the admitted Host policy", () => {
+    expect(BABYLON_WEB_HOST_COMPATIBILITY_PROFILE_HASH_V1).toBe(
+      sha256CanonicalJson(BABYLON_WEB_HOST_COMPATIBILITY_PROFILE_V1),
+    );
+    const manifest = validManifestV2();
+    manifest.hostCompatibility =
+      BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V2;
+    expect(() => assertWorldPackageHostCompatibilityV2(
+      manifest,
+      BABYLON_WEB_WORLD_PACKAGE_HOST_POLICY_V1,
     )).not.toThrow();
   });
 

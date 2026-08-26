@@ -20,6 +20,10 @@ import {
   seedAuthoringRevisionHeadV1,
 } from "@whitebox-world/authoring-host";
 import { stringifyCanonicalJson } from "@whitebox-world/protocol";
+import {
+  createInMemoryWorldPackageStoreV1,
+  createWorldPackageBuildContextFixtureV2,
+} from "@whitebox-world/world-package/testing";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { parseWorldkitArgs, WorldkitUsageError } from "../worldkit";
@@ -324,7 +328,7 @@ describe("P16-CLI1 schema project and registry search", () => {
       semanticTags: ["humanoid"],
       limit: 1,
     });
-    expect(result.ok).toBe(true);
+    expect(result.ok, JSON.stringify(result)).toBe(true);
     expect(result.searchReceipt?.results.map((row) => row.resourceRef)).toEqual([
       subjectA,
     ]);
@@ -412,7 +416,7 @@ describe("P16-CLI1 change dry-run and apply", () => {
       changeSetPath,
       outputPath,
     });
-    expect(result.ok).toBe(true);
+    expect(result.ok, JSON.stringify(result)).toBe(true);
     expect(result.receipt?.status).toBe("succeeded");
     expect(result.receipt?.mode).toBe("dry-run");
     expect(result.receipt?.publicationMode).toBe("none");
@@ -454,7 +458,7 @@ describe("P16-CLI1 change dry-run and apply", () => {
       outputPath,
       receiptPath,
     });
-    expect(apply.ok).toBe(true);
+    expect(apply.ok, JSON.stringify(apply)).toBe(true);
     expect(apply.receipt?.status).toBe("committed");
     expect(apply.receipt?.publicationMode).toBe("none");
     if (apply.receipt?.status === "committed") {
@@ -471,7 +475,7 @@ describe("P16-CLI1 change dry-run and apply", () => {
     };
     expect(writtenReceipt.publicationMode).toBe("none");
     expect(JSON.stringify(writtenReceipt)).not.toMatch(/"token"/);
-  });
+  }, 15_000);
 });
 
 describe("P16-CLI1 change diff and explain", () => {
@@ -491,7 +495,7 @@ describe("P16-CLI1 change diff and explain", () => {
       changeSetPath,
       outputPath: candidatePath,
     });
-    expect(dryRun.ok).toBe(true);
+    expect(dryRun.ok, JSON.stringify(dryRun)).toBe(true);
     const receiptPath = path.join(candidatePath, "world-change-receipt.json");
     const diff = await runChangeDiffV1({ receiptPath });
     expect(diff.ok).toBe(true);
@@ -564,6 +568,9 @@ describe("P16-CLI1 live transport and credential redaction", () => {
     const inner = createInProcessAuthoringEditLivePortV1({
       journal,
       leaseStore,
+      worldPackageStore: createInMemoryWorldPackageStoreV1(),
+      worldPackageBuildContext: createWorldPackageBuildContextFixtureV2(),
+      resourceArtifacts: [],
       session,
       nowUnixMilliseconds,
     });

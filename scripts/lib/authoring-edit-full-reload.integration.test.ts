@@ -10,6 +10,10 @@ import {
   type Sha256HashV1,
 } from "@whitebox-world/authoring-edit";
 import { getAuthoringRevisionHeadV1 } from "@whitebox-world/authoring-host";
+import {
+  createInMemoryWorldPackageStoreV1,
+  createWorldPackageBuildContextFixtureV2,
+} from "@whitebox-world/world-package/testing";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -45,6 +49,9 @@ describe("P16-F1 Full Reload Host and RuntimeHost integration", () => {
     const previousHash = runtimeHost.snapshot().worldState.worldPackageRootHash;
     const bridge = createAuthoringEditHostBridgeV1({
       authoringSpec: spec,
+      worldPackageStore: createInMemoryWorldPackageStoreV1(),
+      worldPackageBuildContext: createWorldPackageBuildContextFixtureV2(),
+      resourceArtifacts: [],
       runtimeHost,
       nowUnixMilliseconds: () => 1_700_000_000_000,
     });

@@ -30,6 +30,11 @@ import {
   type WorldkitAuthoringEditApiV1,
 } from "@whitebox-world/authoring-edit";
 import { isNil } from "lodash-es";
+import type {
+  ResolvedWorldPackageResourceArtifactV2,
+  WorldPackageBuildContextV2,
+  WorldPackageStoreV1,
+} from "@whitebox-world/world-package";
 
 import { worldChangeDiagnostic } from "./diagnostics.js";
 import {
@@ -78,6 +83,9 @@ export interface AuthoringEditHostV1 extends WorldkitAuthoringEditApiV1 {
 export interface CreateAuthoringEditHostInputV1 {
   readonly journal: WorldChangeJournalV1;
   readonly leaseStore: PreparedCandidateLeaseStoreV1;
+  readonly worldPackageStore: WorldPackageStoreV1;
+  readonly worldPackageBuildContext: WorldPackageBuildContextV2;
+  readonly resourceArtifacts: readonly ResolvedWorldPackageResourceArtifactV2[];
   readonly session: AuthoringEditSessionV1;
   readonly nowUnixMilliseconds: () => number;
   readonly projectionProfile: unknown;
@@ -134,6 +142,9 @@ export function createAuthoringEditHostV1(
     submitWorldChangeRequestV1({
       journal: input.journal,
       leaseStore: input.leaseStore,
+      worldPackageStore: input.worldPackageStore,
+      worldPackageBuildContext: input.worldPackageBuildContext,
+      resourceArtifacts: input.resourceArtifacts,
       request,
       session,
       nowUnixMilliseconds: input.nowUnixMilliseconds(),

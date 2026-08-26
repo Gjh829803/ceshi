@@ -10,6 +10,7 @@ import type {
   ExecutionPlanV5,
 } from "@whitebox-world/runtime-contracts";
 import type { RuntimeWorldConfigurationV1 } from "@whitebox-world/runtime-host";
+import type { WorldPackageStoreV1 } from "@whitebox-world/world-package";
 import type { GameplayActionRequestResolverV1 } from "@whitebox-world/gameplay";
 import { Matrix, Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import {
@@ -54,6 +55,7 @@ export interface OutdoorSceneGameplayLoadOptionsV1 {
   readonly aspectRatio?: number;
   readonly subjectDefinitionRef?: string;
   readonly fetchSubjectAsset?: typeof fetch;
+  readonly worldPackageStore?: WorldPackageStoreV1;
 }
 
 export interface OutdoorSceneGameplayLoadResultV1 {
@@ -930,6 +932,9 @@ export async function loadOutdoorGameplaySceneV1(
         ...(isNil(options.fetchSubjectAsset)
           ? {}
           : { fetchSubjectAsset: options.fetchSubjectAsset }),
+        ...(isNil(options.worldPackageStore)
+          ? {}
+          : { worldPackageStore: options.worldPackageStore }),
       },
     );
     if (

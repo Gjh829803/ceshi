@@ -26,9 +26,9 @@ describe("createSimulationTakeWorldPackageIdentityV1", () => {
 
     expect(identity).toEqual({
       worldPackageRef:
-        "worldkit://world-package/placement-coastal-world.20310417@1",
+        "package://world-package/sha256/3ac39c7f3848c2a61ce5fb738f726ad8f57d80bac9626286b24835e1072a249d",
       worldPackageRootHash:
-        "sha256:9137aa480f712728a68e70caa200f3f44849cfd45e927ba88615a6e51a8a9b06",
+        "sha256:3ac39c7f3848c2a61ce5fb738f726ad8f57d80bac9626286b24835e1072a249d",
       normalizedWorldIrHash:
         "sha256:670cfe30b2a88254050b4d0448e80c3361ed143fd88956621c62f0eab8dd0211",
       executionPlanHash:
