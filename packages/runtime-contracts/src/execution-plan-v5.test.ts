@@ -110,6 +110,7 @@ function planFixture(): ExecutionPlanV5 {
       visualParts: [],
       visualBinding: { mode: "static" },
       sockets: [],
+      mountSlots: [],
       collider: {
         kind: "capsule",
         radiusMeters: 0.3,
@@ -144,6 +145,7 @@ function planFixture(): ExecutionPlanV5 {
       availableControlFeels: [],
       capabilityAssembly: capabilityAssemblyFixture(),
     }],
+    initialRelationships: [],
     camera: {
       cameraEntityId: "camera-main",
       rigRef: "worldkit://camera/third-person.standard@1",
@@ -193,6 +195,105 @@ describe("ExecutionPlanV5 canonical boundary", () => {
 
     (input.terrain.heightSamplesMeters as number[])[0] = 9;
     expect(parsed.terrain.heightSamplesMeters[0]).toBe(0);
+  });
+
+  it("parses only closed initial mountedOn state with Subject and slot closure", () => {
+    const base = planFixture();
+    const subjects: ExecutionPlanV5["subjects"] = [
+      {
+        ...base.subjects[0]!,
+        sockets: [{
+          id: "FootAlignment",
+          kind: "local",
+          localTransform: {
+            positionMetersXYZ: [0, 0, 0],
+            rotationEulerRadiansXYZ: [0, 0, 0],
+          },
+          semanticTags: ["rider"],
+        }],
+      },
+      {
+        ...structuredClone(base.subjects[0]!),
+        entityId: "board",
+        spawnAnchorEntityId: "spawn-board",
+        sockets: [{
+          id: "MountStand",
+          kind: "local",
+          localTransform: {
+            positionMetersXYZ: [0, 0.2, 0],
+            rotationEulerRadiansXYZ: [0, 0, 0],
+          },
+          semanticTags: ["mount"],
+        }],
+        mountSlots: [{
+          id: "stand",
+          kind: "mount-slot",
+          mode: "stand",
+          mountSocketId: "MountStand",
+          riderSubjectOriginOffsetMetersXYZ: [0, 0.2, 0],
+          dismountCandidateOffsetsMetersXYZ: [[0.8, 0, 0], [-0.8, 0, 0]],
+        }],
+        capabilityAssembly: {
+          ...capabilityAssemblyFixture(),
+          relationshipProfiles: [{
+            resourceRef:
+              "worldkit://relationship-profile/mounted-on.stand-ground@1",
+            relationshipType: "mountedOn",
+            requiredRiderSocketIds: ["FootAlignment"],
+            requiredMountSocketIds: ["MountStand"],
+            controlTransferMode: "to-mount",
+            cameraTargetRole: "controlled-entity",
+            maximumMountDistanceMeters: 2,
+          }],
+        },
+      },
+    ];
+    const input: ExecutionPlanV5 = {
+      ...base,
+      subjects,
+      initialControlledEntityId: "board",
+      camera: { ...base.camera, targetEntityId: "board" },
+      initialRelationships: [{
+        id: "player-mounted-on-board",
+        type: "mountedOn",
+        schemaVersion: 1,
+        riderEntityId: "player",
+        mountEntityId: "board",
+        mountSlotId: "stand",
+        establishedSimulationTick: 0,
+      }],
+    };
+
+    expect(parseExecutionPlanV5(input).initialRelationships).toEqual(
+      input.initialRelationships,
+    );
+
+    const danglingSlot = {
+      ...structuredClone(input),
+      initialRelationships: [{
+        ...input.initialRelationships[0]!,
+        mountSlotId: "missing",
+      }],
+    };
+    expect(() => parseExecutionPlanV5(danglingSlot)).toThrowError(
+      "EXECUTION_PLAN_V5_INVALID",
+    );
+
+    const oldGenericShape = structuredClone(input) as unknown as {
+      initialRelationships: Array<Record<string, unknown>>;
+    };
+    oldGenericShape.initialRelationships = [{
+      id: "legacy",
+      type: "mount",
+      schemaVersion: 1,
+      sourceEntityId: "player",
+      targetEntityId: "board",
+      params: { mountSlotId: "stand" },
+      establishedSimulationTick: 0,
+    }];
+    expect(() => parseExecutionPlanV5(oldGenericShape)).toThrowError(
+      "EXECUTION_PLAN_V5_INVALID",
+    );
   });
 
   it("rejects the removed controlledEntityId alias and unknown nested fields", () => {

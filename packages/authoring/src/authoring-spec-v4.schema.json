@@ -1857,18 +1857,29 @@
       "required": [
         "id",
         "type",
-        "schemaVersion"
+        "schemaVersion",
+        "riderEntityId",
+        "mountEntityId",
+        "mountSlotId"
       ],
       "properties": {
         "id": {
           "$ref": "#/$defs/id"
         },
         "type": {
-          "type": "string",
-          "minLength": 1
+          "const": "mountedOn"
         },
         "schemaVersion": {
           "const": 1
+        },
+        "riderEntityId": {
+          "$ref": "#/$defs/id"
+        },
+        "mountEntityId": {
+          "$ref": "#/$defs/id"
+        },
+        "mountSlotId": {
+          "$ref": "#/$defs/id"
         }
       }
     },

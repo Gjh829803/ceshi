@@ -253,6 +253,7 @@
             ]
           }
         ],
+        "mountSlots": [],
         "colliderPolicy": {
           "kind": "derive",
           "colliderDerivationProfileRef": "worldkit://collider-derivation-profile/vertical-character-capsule@1"

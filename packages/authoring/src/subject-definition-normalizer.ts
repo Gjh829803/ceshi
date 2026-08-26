@@ -24,6 +24,7 @@ import type {
   NormalizedSubjectSocketV2,
   NormalizedSubjectVisualPartV2,
   PackageSubjectDefinitionV1,
+  SubjectMountSlotDefinitionV1,
   SubjectPrimitiveShapeSpecV1,
   Vec3,
 } from "./types";
@@ -207,7 +208,6 @@ function normalizeCapabilityAssemblyV1(
 
   const unavailableRelationshipCapabilityRef = subject.relationshipCapabilityRefs.find(
     (resourceRef) =>
-      resourceRef === "worldkit://capability/relationship.mounted-on@1" ||
       resourceRef === "worldkit://capability/relationship.seat@1" ||
       resourceRef === "worldkit://capability/relationship.tether@1",
   );
@@ -436,7 +436,10 @@ function cloneVec3(value: Vec3): Vec3 {
 
 function reportDuplicateIds(
   values: readonly { id: string }[],
-  code: "SUBJECT_VISUAL_PART_DUPLICATE" | "SUBJECT_SOCKET_DUPLICATE",
+  code:
+    | "SUBJECT_VISUAL_PART_DUPLICATE"
+    | "SUBJECT_SOCKET_DUPLICATE"
+    | "SUBJECT_MOUNT_SLOT_DUPLICATE",
   instancePath: string,
   diagnostics: AuthoringDiagnostic[],
 ): void {
@@ -530,6 +533,44 @@ function normalizeSockets(
           semanticTags: sortedStrings(socket.semanticTags),
         })
     .sort((left, right) => left.id.localeCompare(right.id));
+}
+
+function normalizeMountSlots(
+  definition: SubjectDefinitionSourceV2,
+  sockets: readonly NormalizedSubjectSocketV2[],
+  instancePath: string,
+  diagnostics: AuthoringDiagnostic[],
+): readonly SubjectMountSlotDefinitionV1[] {
+  const mountSlots = "mountSlots" in definition ? definition.mountSlots : [];
+  reportDuplicateIds(
+    mountSlots,
+    "SUBJECT_MOUNT_SLOT_DUPLICATE",
+    `${instancePath}/mountSlots`,
+    diagnostics,
+  );
+  const socketIds = new Set(sockets.map(({ id }) => id));
+  mountSlots.forEach((slot, index) => {
+    if (!socketIds.has(slot.mountSocketId)) {
+      addError(
+        diagnostics,
+        "SUBJECT_MOUNT_SLOT_SOCKET_NOT_FOUND",
+        `${instancePath}/mountSlots/${index}/mountSocketId`,
+        `Mount slot '${slot.id}' references missing Socket '${slot.mountSocketId}'.`,
+        { mountSlotId: slot.id, mountSocketId: slot.mountSocketId },
+      );
+    }
+  });
+  return mountSlots.map((slot) => ({
+    id: slot.id,
+    kind: "mount-slot" as const,
+    mode: "stand" as const,
+    mountSocketId: slot.mountSocketId,
+    riderSubjectOriginOffsetMetersXYZ: cloneVec3(
+      slot.riderSubjectOriginOffsetMetersXYZ,
+    ),
+    dismountCandidateOffsetsMetersXYZ:
+      slot.dismountCandidateOffsetsMetersXYZ.map(cloneVec3),
+  })).sort((left, right) => left.id.localeCompare(right.id));
 }
 
 function resourcesOfKind(
@@ -858,6 +899,12 @@ export function normalizeSubjectDefinitionV2(
   }
   const visualParts = normalizeVisualParts(definition, instancePath, diagnostics);
   const sockets = normalizeSockets(definition, instancePath, diagnostics);
+  const mountSlots = normalizeMountSlots(
+    definition,
+    sockets,
+    instancePath,
+    diagnostics,
+  );
   const capabilityRefs = sortedStrings(definition.capabilityRefs);
   const selectedCapabilityRefs = new Set(capabilityRefs);
   const capabilities = capabilityRefs.flatMap((resourceRef) => {
@@ -1028,6 +1075,7 @@ export function normalizeSubjectDefinitionV2(
           animationSetRef: definition.visualBinding.animationSetRef,
         },
     sockets,
+    mountSlots,
     colliderPolicy: structuredClone(definition.colliderPolicy),
     capabilityRefs,
     locomotionCapabilityRef: locomotionCapability.resourceRef,

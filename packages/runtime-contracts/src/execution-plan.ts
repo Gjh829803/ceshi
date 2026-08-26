@@ -8,6 +8,7 @@ import {
   type SubjectBodyTopologyV2,
 } from "@whitebox-world/subject-contracts";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
+import type { MountedOnRelationshipStateV1 } from "@whitebox-world/gameplay-contracts";
 import type { TraversalSurfaceIdentityV1 } from "@whitebox-world/traversal";
 import { isNil } from "lodash-es";
 
@@ -351,6 +352,7 @@ export interface ExecutionSubjectV3 {
   visualParts: readonly SubjectVisualPartV3[];
   visualBinding: ExecutionSubjectVisualBindingV1;
   sockets: readonly SubjectSocketV3[];
+  mountSlots: readonly ExecutionSubjectMountSlotV1[];
   collider: {
     kind: "capsule";
     radiusMeters: number;
@@ -392,6 +394,15 @@ export interface ExecutionSubjectV3 {
    */
   availableControlFeels: readonly ExecutionSubjectV3["controlFeel"][];
   capabilityAssembly: ExecutionSubjectCapabilityAssemblyV1;
+}
+
+export interface ExecutionSubjectMountSlotV1 {
+  readonly id: string;
+  readonly kind: "mount-slot";
+  readonly mode: "stand";
+  readonly mountSocketId: string;
+  readonly riderSubjectOriginOffsetMetersXYZ: Vec3;
+  readonly dismountCandidateOffsetsMetersXYZ: readonly Vec3[];
 }
 
 interface ExecutionCameraCore {
@@ -646,6 +657,7 @@ export interface ExecutionPlanV5 {
   readonly colliderProfiles: readonly ExecutionColliderProfileV1[];
   readonly initialControlledEntityId: string;
   readonly subjects: readonly ExecutionSubjectV3[];
+  readonly initialRelationships: readonly MountedOnRelationshipStateV1[];
   readonly camera: ExecutionCameraV5;
   readonly resourceUsage: Readonly<{
     vertices: number;
@@ -692,6 +704,7 @@ const EXECUTION_PLAN_V5_FIELDS = [
   "colliderProfiles",
   "initialControlledEntityId",
   "subjects",
+  "initialRelationships",
   "camera",
   "resourceUsage",
   "layout",
@@ -1400,6 +1413,7 @@ function validateSubject(input: unknown): void {
     "visualParts",
     "visualBinding",
     "sockets",
+    "mountSlots",
     "collider",
     "locomotion",
     "locomotionCapabilityRef",
@@ -1474,13 +1488,16 @@ function validateSubject(input: unknown): void {
     requireString(rigged.rigProfileRef);
     requireString(rigged.animationSetRef);
   }
+  const socketIds = new Set<string>();
   dataArray(value.sockets).forEach((socket) => {
     const row = dataRecord(socket);
     const kind = requireLiteral(row.kind, ["local", "bone"]);
     const socketValue = kind === "local"
       ? exactDataRecord(row, ["id", "kind", "localTransform", "semanticTags"])
       : exactDataRecord(row, ["id", "kind", "boneId", "offsetTransform", "semanticTags"]);
-    requireString(socketValue.id);
+    const socketId = requireString(socketValue.id);
+    if (socketIds.has(socketId)) return invalidExecutionPlanV5();
+    socketIds.add(socketId);
     requireStringArray(socketValue.semanticTags);
     if (kind === "local") {
       const transform = exactDataRecord(socketValue.localTransform, [
@@ -1498,6 +1515,32 @@ function validateSubject(input: unknown): void {
       requireTuple(transform.positionMetersXYZ, 3);
       requireTuple(transform.rotationEulerRadiansXYZ, 3);
     }
+  });
+  const mountSlotIds = new Set<string>();
+  dataArray(value.mountSlots).forEach((slot) => {
+    const row = exactDataRecord(slot, [
+      "id",
+      "kind",
+      "mode",
+      "mountSocketId",
+      "riderSubjectOriginOffsetMetersXYZ",
+      "dismountCandidateOffsetsMetersXYZ",
+    ]);
+    const mountSlotId = requireString(row.id);
+    if (mountSlotIds.has(mountSlotId)) return invalidExecutionPlanV5();
+    mountSlotIds.add(mountSlotId);
+    requireLiteral(row.kind, ["mount-slot"]);
+    requireLiteral(row.mode, ["stand"]);
+    const mountSocketId = requireString(row.mountSocketId);
+    if (!socketIds.has(mountSocketId)) return invalidExecutionPlanV5();
+    requireTuple(row.riderSubjectOriginOffsetMetersXYZ, 3);
+    const dismountCandidateOffsets = dataArray(
+      row.dismountCandidateOffsetsMetersXYZ,
+    );
+    if (dismountCandidateOffsets.length < 1 || dismountCandidateOffsets.length > 8) {
+      return invalidExecutionPlanV5();
+    }
+    dismountCandidateOffsets.forEach((offset) => requireTuple(offset, 3));
   });
   const collider = exactDataRecord(value.collider, [
     "kind",
@@ -1837,6 +1880,89 @@ function validateStaticCollider(input: unknown): void {
   requireHash(value.colliderHash);
 }
 
+function validateInitialRelationships(
+  input: unknown,
+  subjectsByEntityId: ReadonlyMap<string, Record<string, unknown>>,
+  initialControlledEntityId: string,
+): void {
+  const relationshipIds = new Set<string>();
+  const occupiedRiderEntityIds = new Set<string>();
+  const occupiedMountSlotKeys = new Set<string>();
+  let previousRelationshipId: string | undefined;
+
+  dataArray(input).forEach((relationship) => {
+    const row = exactDataRecord(relationship, [
+      "id",
+      "type",
+      "schemaVersion",
+      "riderEntityId",
+      "mountEntityId",
+      "mountSlotId",
+      "establishedSimulationTick",
+    ]);
+    const id = requireString(row.id);
+    if (
+      relationshipIds.has(id) ||
+      (previousRelationshipId !== undefined && id.localeCompare(previousRelationshipId) <= 0)
+    ) return invalidExecutionPlanV5();
+    relationshipIds.add(id);
+    previousRelationshipId = id;
+    requireLiteral(row.type, ["mountedOn"]);
+    requireLiteral(row.schemaVersion, [1]);
+    const riderEntityId = requireString(row.riderEntityId);
+    const mountEntityId = requireString(row.mountEntityId);
+    const mountSlotId = requireString(row.mountSlotId);
+    if (riderEntityId === mountEntityId) return invalidExecutionPlanV5();
+    if (requireSafeNonNegativeInteger(row.establishedSimulationTick) !== 0) {
+      return invalidExecutionPlanV5();
+    }
+
+    const rider = subjectsByEntityId.get(riderEntityId);
+    const mount = subjectsByEntityId.get(mountEntityId);
+    if (rider === undefined || mount === undefined) return invalidExecutionPlanV5();
+    if (occupiedRiderEntityIds.has(riderEntityId)) return invalidExecutionPlanV5();
+    occupiedRiderEntityIds.add(riderEntityId);
+    const mountSlotKey = `${mountEntityId}\u0000${mountSlotId}`;
+    if (occupiedMountSlotKeys.has(mountSlotKey)) return invalidExecutionPlanV5();
+    occupiedMountSlotKeys.add(mountSlotKey);
+    if (initialControlledEntityId !== mountEntityId) return invalidExecutionPlanV5();
+
+    const mountSlot = dataArray(mount.mountSlots)
+      .map(dataRecord)
+      .find((slot) => slot.id === mountSlotId);
+    if (mountSlot === undefined) return invalidExecutionPlanV5();
+    const mountSocketId = requireString(mountSlot.mountSocketId);
+
+    const relationshipProfile = dataArray(
+      dataRecord(mount.capabilityAssembly).relationshipProfiles,
+    )
+      .map(dataRecord)
+      .find((profile) =>
+        profile.resourceRef ===
+          "worldkit://relationship-profile/mounted-on.stand-ground@1" &&
+        profile.relationshipType === "mountedOn"
+      );
+    if (relationshipProfile === undefined) return invalidExecutionPlanV5();
+    const requiredRiderSocketIds = dataArray(
+      relationshipProfile.requiredRiderSocketIds,
+    ).map(requireString);
+    const requiredMountSocketIds = dataArray(
+      relationshipProfile.requiredMountSocketIds,
+    ).map(requireString);
+    const riderSocketIds = new Set(
+      dataArray(rider.sockets).map((socket) => requireString(dataRecord(socket).id)),
+    );
+    const mountSocketIds = new Set(
+      dataArray(mount.sockets).map((socket) => requireString(dataRecord(socket).id)),
+    );
+    if (
+      requiredRiderSocketIds.some((socketId) => !riderSocketIds.has(socketId)) ||
+      requiredMountSocketIds.some((socketId) => !mountSocketIds.has(socketId)) ||
+      !requiredMountSocketIds.includes(mountSocketId)
+    ) return invalidExecutionPlanV5();
+  });
+}
+
 function deepFreezeExecutionPlan<Value>(value: Value): Value {
   if (typeof value !== "object" || isNil(value) || Object.isFrozen(value)) {
     return value;
@@ -1877,15 +2003,22 @@ export function parseExecutionPlanV5(input: unknown): ExecutionPlanV5 {
       plan.initialControlledEntityId,
     );
     const subjectEntityIds = new Set<string>();
+    const subjectsByEntityId = new Map<string, Record<string, unknown>>();
     dataArray(plan.subjects).forEach((subject) => {
       validateSubject(subject);
       const entityId = requireString(dataRecord(subject).entityId);
       if (subjectEntityIds.has(entityId)) return invalidExecutionPlanV5();
       subjectEntityIds.add(entityId);
+      subjectsByEntityId.set(entityId, dataRecord(subject));
     });
     if (!subjectEntityIds.has(initialControlledEntityId)) {
       return invalidExecutionPlanV5();
     }
+    validateInitialRelationships(
+      plan.initialRelationships,
+      subjectsByEntityId,
+      initialControlledEntityId,
+    );
     validateCamera(plan.camera);
     if (
       !subjectEntityIds.has(

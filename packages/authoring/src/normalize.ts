@@ -12,9 +12,11 @@ import type {
   NormalizeAuthoringOptions,
   NormalizeAuthoringBaseResult,
   NormalizedProceduralTerrainSourceV2,
+  NormalizedSubjectDefinitionV2,
   NormalizedTransformV2,
   NormalizedWorldBase,
   NormalizedWorldNodeV2,
+  MountedOnRelationshipSpecV1,
   PackageSubjectDefinitionV1,
   ProceduralTerrainSourceSpecV2,
 } from "./types";
@@ -133,6 +135,182 @@ function requireNodeKind(
       { id, actualKind: node.kind, expectedKind: kind },
     );
   }
+}
+
+const IMPLEMENTED_MOUNTED_ON_PROFILE_REF =
+  "worldkit://relationship-profile/mounted-on.stand-ground@1";
+
+type MountedOnRelationshipProfile = Extract<
+  NormalizedSubjectDefinitionV2["capabilityAssembly"]["relationshipProfiles"][number],
+  { relationshipType: "mountedOn" }
+>;
+
+function normalizeMountedOnRelationships(
+  relationships: readonly MountedOnRelationshipSpecV1[],
+  nodes: ReadonlyMap<string, AuthoringWorldNode>,
+  subjectDefinitions: readonly NormalizedSubjectDefinitionV2[],
+  controlledEntityId: string,
+  diagnostics: AuthoringDiagnostic[],
+): readonly MountedOnRelationshipSpecV1[] {
+  const definitionsByRef = new Map(
+    subjectDefinitions.map((definition) => [definition.subjectDefinitionRef, definition]),
+  );
+  const occupiedRiderIds = new Set<string>();
+  const occupiedMountSlotKeys = new Set<string>();
+
+  relationships.forEach((relationship, index) => {
+    const relationshipPath = `/relationships/${index}`;
+    const rider = nodes.get(relationship.riderEntityId);
+    const mount = nodes.get(relationship.mountEntityId);
+    requireNodeKind(
+      nodes,
+      relationship.riderEntityId,
+      "subject",
+      `${relationshipPath}/riderEntityId`,
+      diagnostics,
+    );
+    requireNodeKind(
+      nodes,
+      relationship.mountEntityId,
+      "subject",
+      `${relationshipPath}/mountEntityId`,
+      diagnostics,
+    );
+
+    if (relationship.riderEntityId === relationship.mountEntityId) {
+      addError(
+        diagnostics,
+        "AUTHORING_RELATIONSHIP_ENDPOINTS_INVALID",
+        relationshipPath,
+        "A mountedOn Rider and Mount must be different Subject Entities.",
+        { entityId: relationship.riderEntityId },
+      );
+    }
+
+    const riderDefinition = rider?.kind === "subject"
+      ? definitionsByRef.get(rider.subjectDefinitionRef)
+      : undefined;
+    const mountDefinition = mount?.kind === "subject"
+      ? definitionsByRef.get(mount.subjectDefinitionRef)
+      : undefined;
+    const mountSlot = mountDefinition?.mountSlots.find(
+      ({ id }) => id === relationship.mountSlotId,
+    );
+    if (mountDefinition !== undefined && mountSlot === undefined) {
+      addError(
+        diagnostics,
+        "AUTHORING_MOUNT_SLOT_NOT_FOUND",
+        `${relationshipPath}/mountSlotId`,
+        `Mount Subject '${relationship.mountEntityId}' does not declare Mount slot '${relationship.mountSlotId}'.`,
+        {
+          mountEntityId: relationship.mountEntityId,
+          mountSlotId: relationship.mountSlotId,
+        },
+      );
+    }
+
+    const relationshipProfile = mountDefinition?.capabilityAssembly.relationshipProfiles
+      .find((profile): profile is MountedOnRelationshipProfile =>
+        profile.resourceRef === IMPLEMENTED_MOUNTED_ON_PROFILE_REF &&
+        profile.relationshipType === "mountedOn" &&
+        profile.runtimeStatus === "implemented"
+      );
+    if (mountDefinition !== undefined && relationshipProfile === undefined) {
+      addError(
+        diagnostics,
+        "AUTHORING_RELATIONSHIP_PROFILE_UNAVAILABLE",
+        relationshipPath,
+        `Mount Subject '${relationship.mountEntityId}' does not resolve the exact implemented mountedOn Relationship Profile.`,
+        {
+          mountEntityId: relationship.mountEntityId,
+          requiredRelationshipProfileRef: IMPLEMENTED_MOUNTED_ON_PROFILE_REF,
+        },
+      );
+    }
+
+    if (relationshipProfile !== undefined) {
+      const riderSocketIds = new Set(riderDefinition?.sockets.map(({ id }) => id) ?? []);
+      const mountSocketIds = new Set(mountDefinition?.sockets.map(({ id }) => id) ?? []);
+      const missingRiderSocketId = relationshipProfile.requiredRiderSocketIds.find(
+        (socketId) => !riderSocketIds.has(socketId),
+      );
+      const missingMountSocketId = relationshipProfile.requiredMountSocketIds.find(
+        (socketId) => !mountSocketIds.has(socketId),
+      );
+      if (missingRiderSocketId !== undefined || missingMountSocketId !== undefined) {
+        addError(
+          diagnostics,
+          "AUTHORING_RELATIONSHIP_PROFILE_UNSATISFIED",
+          relationshipPath,
+          "The Rider or Mount is missing a Socket required by the mountedOn Relationship Profile.",
+          {
+            ...(missingRiderSocketId === undefined ? {} : { missingRiderSocketId }),
+            ...(missingMountSocketId === undefined ? {} : { missingMountSocketId }),
+          },
+        );
+      }
+      if (
+        mountSlot !== undefined &&
+        !relationshipProfile.requiredMountSocketIds.includes(mountSlot.mountSocketId)
+      ) {
+        addError(
+          diagnostics,
+          "AUTHORING_RELATIONSHIP_PROFILE_UNSATISFIED",
+          `${relationshipPath}/mountSlotId`,
+          `Mount slot '${mountSlot.id}' targets Socket '${mountSlot.mountSocketId}', which is not allowed by the mountedOn Relationship Profile.`,
+          {
+            mountSlotId: mountSlot.id,
+            mountSocketId: mountSlot.mountSocketId,
+            relationshipProfileRef: relationshipProfile.resourceRef,
+          },
+        );
+      }
+    }
+
+    if (occupiedRiderIds.has(relationship.riderEntityId)) {
+      addError(
+        diagnostics,
+        "AUTHORING_MOUNTED_ON_RIDER_OCCUPIED",
+        `${relationshipPath}/riderEntityId`,
+        `Rider '${relationship.riderEntityId}' is already a Rider in another mountedOn Relationship.`,
+        { riderEntityId: relationship.riderEntityId },
+      );
+    }
+    occupiedRiderIds.add(relationship.riderEntityId);
+
+    const mountSlotKey = `${relationship.mountEntityId}\u0000${relationship.mountSlotId}`;
+    if (occupiedMountSlotKeys.has(mountSlotKey)) {
+      addError(
+        diagnostics,
+        "AUTHORING_MOUNT_SLOT_OCCUPIED",
+        relationshipPath,
+        `Mount slot '${relationship.mountSlotId}' on '${relationship.mountEntityId}' is already occupied.`,
+        {
+          mountEntityId: relationship.mountEntityId,
+          mountSlotId: relationship.mountSlotId,
+        },
+      );
+    }
+    occupiedMountSlotKeys.add(mountSlotKey);
+
+    if (controlledEntityId !== relationship.mountEntityId) {
+      addError(
+        diagnostics,
+        "AUTHORING_MOUNTED_ON_POSSESSION_MISMATCH",
+        "/startup/controlledEntityId",
+        "An initial mountedOn Relationship requires matching initial possession of its Mount.",
+        {
+          controlledEntityId,
+          riderEntityId: relationship.riderEntityId,
+          requiredControlledEntityId: relationship.mountEntityId,
+        },
+      );
+    }
+  });
+
+  return [...relationships]
+    .sort((left, right) => left.id.localeCompare(right.id))
+    .map((relationship) => structuredClone(relationship));
 }
 
 function normalizeTransformV2(transform: {
@@ -299,15 +477,6 @@ function normalizeValidatedAuthoringBase(
   );
   const nodes = buildUniqueIndex(spec.nodes, "/nodes", diagnostics);
 
-  spec.relationships.forEach((relationship, index) => {
-    addError(
-      diagnostics,
-      "AUTHORING_FEATURE_NOT_SUPPORTED",
-      `/relationships/${index}`,
-      `Relationship '${relationship.type}' is not supported by AuthoringSpec V${spec.schemaVersion}.`,
-      { feature: "relationships", type: relationship.type },
-    );
-  });
   spec.rules.forEach((rule, index) => {
     addError(
       diagnostics,
@@ -554,6 +723,13 @@ function normalizeValidatedAuthoringBase(
     resourceLock,
     resourceLockHash,
   } = resourceLockBuilder.finish();
+  const relationships = normalizeMountedOnRelationships(
+    spec.relationships,
+    nodes,
+    subjectDefinitions,
+    spec.startup.controlledEntityId,
+    diagnostics,
+  );
 
   if (diagnostics.some((diagnostic) => diagnostic.severity === "error")) {
     return { ok: false, diagnostics };
@@ -586,6 +762,7 @@ function normalizeValidatedAuthoringBase(
         options.finalTransformsByEntityId ?? {},
         [spec.world.bounds.centerMetersXZ[0], 0, spec.world.bounds.centerMetersXZ[1]],
       )),
+    relationships,
     startup: structuredClone(spec.startup),
   };
 

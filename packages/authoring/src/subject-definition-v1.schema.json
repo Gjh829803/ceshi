@@ -15,6 +15,7 @@
     "visualParts",
     "visualBinding",
     "sockets",
+    "mountSlots",
     "colliderPolicy",
     "capabilityRefs",
     "profiles",
@@ -55,6 +56,11 @@
       "type": "array",
       "maxItems": 64,
       "items": { "$ref": "#/$defs/socket" }
+    },
+    "mountSlots": {
+      "type": "array",
+      "maxItems": 16,
+      "items": { "$ref": "#/$defs/mountSlot" }
     },
     "colliderPolicy": { "$ref": "#/$defs/colliderPolicy" },
     "capabilityRefs": {
@@ -202,6 +208,10 @@
     "id": {
       "type": "string",
       "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$"
+    },
+    "socketId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9.-]{0,63}$"
     },
     "nonEmptyString": {
       "type": "string",
@@ -417,7 +427,7 @@
           "additionalProperties": false,
           "required": ["id", "kind", "localTransform", "semanticTags"],
           "properties": {
-            "id": { "$ref": "#/$defs/id" },
+            "id": { "$ref": "#/$defs/socketId" },
             "kind": { "const": "local" },
             "localTransform": { "$ref": "#/$defs/localTransform" },
             "semanticTags": { "$ref": "#/$defs/semanticTags" }
@@ -428,7 +438,7 @@
           "additionalProperties": false,
           "required": ["id", "kind", "boneId", "offsetTransform", "semanticTags"],
           "properties": {
-            "id": { "$ref": "#/$defs/id" },
+            "id": { "$ref": "#/$defs/socketId" },
             "kind": { "const": "bone" },
             "boneId": {
               "enum": [
@@ -456,6 +466,32 @@
           }
         }
       ]
+    },
+    "mountSlot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "mode",
+        "mountSocketId",
+        "riderSubjectOriginOffsetMetersXYZ",
+        "dismountCandidateOffsetsMetersXYZ"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": { "const": "mount-slot" },
+        "mode": { "const": "stand" },
+        "mountSocketId": { "$ref": "#/$defs/socketId" },
+        "riderSubjectOriginOffsetMetersXYZ": { "$ref": "#/$defs/vec3" },
+        "dismountCandidateOffsetsMetersXYZ": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/vec3" }
+        }
+      }
     }
   }
 }

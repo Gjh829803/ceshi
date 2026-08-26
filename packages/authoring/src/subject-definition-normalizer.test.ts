@@ -168,6 +168,105 @@ function packageDefinitionHash(result: NormalizeAuthoringResultV4): string {
   )!.subjectDefinitionHash;
 }
 
+describe("Package Subject Mount slots", () => {
+  it("normalizes an exact stand slot and rejects a missing Mount Socket", () => {
+    const world = createValidPackageSubjectWorld();
+    const definition = world.resources.subjectDefinitions[0]!;
+    definition.sockets = [
+      ...definition.sockets,
+      {
+        id: "MountStand",
+        kind: "local",
+        localTransform: { positionMetersXYZ: [0, 0.25, 0] },
+        semanticTags: ["mounted-on", "stand"],
+      },
+    ];
+    definition.mountSlots = [{
+      id: "stand",
+      kind: "mount-slot",
+      mode: "stand",
+      mountSocketId: "MountStand",
+      riderSubjectOriginOffsetMetersXYZ: [0, 0.2, 0],
+      dismountCandidateOffsetsMetersXYZ: [[0.8, 0, 0]],
+    }];
+
+    const normalized = normalizeAuthoringSpecV4(world);
+    expect(normalized.diagnostics).toEqual([]);
+    expect(normalized.value?.resources.subjectDefinitions[0]?.mountSlots)
+      .toEqual(definition.mountSlots);
+
+    const missingSocket = createValidPackageSubjectWorld();
+    missingSocket.resources.subjectDefinitions[0]!.mountSlots =
+      definition.mountSlots;
+    expect(normalizeAuthoringSpecV4(missingSocket).diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "SUBJECT_MOUNT_SLOT_SOCKET_NOT_FOUND",
+        instancePath:
+          "/resources/subjectDefinitions/0/mountSlots/0/mountSocketId",
+      }),
+    );
+  });
+
+  it("sorts Mount slot IDs deterministically and rejects duplicate IDs", () => {
+    const world = createValidPackageSubjectWorld();
+    const definition = world.resources.subjectDefinitions[0]!;
+    definition.sockets = [
+      ...definition.sockets,
+      {
+        id: "MountFront",
+        kind: "local",
+        localTransform: { positionMetersXYZ: [0, 0.25, -0.2] },
+        semanticTags: ["mounted-on", "stand"],
+      },
+      {
+        id: "MountRear",
+        kind: "local",
+        localTransform: { positionMetersXYZ: [0, 0.25, 0.2] },
+        semanticTags: ["mounted-on", "stand"],
+      },
+    ];
+    definition.mountSlots = [
+      {
+        id: "rear",
+        kind: "mount-slot",
+        mode: "stand",
+        mountSocketId: "MountRear",
+        riderSubjectOriginOffsetMetersXYZ: [0, 0.2, 0],
+        dismountCandidateOffsetsMetersXYZ: [[-0.8, 0, 0]],
+      },
+      {
+        id: "front",
+        kind: "mount-slot",
+        mode: "stand",
+        mountSocketId: "MountFront",
+        riderSubjectOriginOffsetMetersXYZ: [0, 0.2, 0],
+        dismountCandidateOffsetsMetersXYZ: [[0.8, 0, 0]],
+      },
+    ];
+
+    const normalized = normalizeAuthoringSpecV4(world);
+    expect(normalized.diagnostics).toEqual([]);
+    expect(
+      normalized.value?.resources.subjectDefinitions[0]?.mountSlots.map(
+        ({ id }) => id,
+      ),
+    ).toEqual(["front", "rear"]);
+
+    const duplicate = createValidPackageSubjectWorld();
+    duplicate.resources.subjectDefinitions[0]!.sockets = definition.sockets;
+    duplicate.resources.subjectDefinitions[0]!.mountSlots = [
+      definition.mountSlots[0]!,
+      { ...definition.mountSlots[1]!, id: definition.mountSlots[0]!.id },
+    ];
+    expect(normalizeAuthoringSpecV4(duplicate).diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "SUBJECT_MOUNT_SLOT_DUPLICATE",
+        instancePath: "/resources/subjectDefinitions/0/mountSlots/1/id",
+      }),
+    );
+  });
+});
+
 describe("ResourceLockBuilderV1 canonical ordering", () => {
   it("uses locale-independent byte order for punctuation-bearing refs", () => {
     const refs = [
@@ -379,13 +478,13 @@ describe("Package Subject Definition normalization", () => {
 
     expect(result.ok).toBe(true);
     expect(packageDefinitionHash(result)).toBe(
-      "sha256:e1e29b39385ba153ab742e056d9e8568707b2d5d36c9c701c79013827385f186",
+      "sha256:70fc3a666b248ea4b4009273613a18b3bdf272e88b99a92191fbd9ed25ac40e1",
     );
     expect(result.value?.resources.resourceLockHash).toBe(
-      "sha256:26be19749a1ac370d26ce1ba10d84a9499da9cda129b92042a0162746eaf5144",
+      "sha256:0c9d52d03e5ab1b3d5ee9cf7d0ac037cdb4cf383388dab53869cd5c62a5fe6db",
     );
     expect(result.normalizedWorldIrHash).toBe(
-      "sha256:017f6e5fa164cb7bbb76c9637390cf2d5dbb3a0787ed263dc6391d8def714f6d",
+      "sha256:47f751b5bec1090848967ed898edb11587f3b96c082b0f5877046f8acc87b9d9",
     );
   });
 

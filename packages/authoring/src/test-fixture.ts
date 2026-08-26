@@ -186,6 +186,7 @@ function createPackageSubjectDefinition(
         semanticTags: ["tow-point"],
       },
     ],
+    mountSlots: [],
     colliderPolicy: {
       kind: "derive",
       colliderDerivationProfileRef:
@@ -336,6 +337,7 @@ export function createValidRiggedPackageDefinition(): PackageSubjectDefinitionV1
         semanticTags: ["equipment-grip", "hand"],
       },
     ],
+    mountSlots: [],
     colliderPolicy: {
       kind: "profile",
       colliderProfileRef:
@@ -382,6 +384,64 @@ export function createValidPackageSubjectWorldV4(options: {
   bodyWidthMeters?: number;
 } = {}): AuthoringSpecV4 {
   return createValidPackageSubjectWorld(options);
+}
+
+export function createValidMountedOnAuthoringSpec(): AuthoringSpecV4 {
+  const world = createValidPackageSubjectWorld();
+  const definition = world.resources.subjectDefinitions[0]!;
+  definition.sockets = [
+    ...definition.sockets,
+    {
+      id: "FootAlignment",
+      kind: "local",
+      localTransform: { positionMetersXYZ: [0, 0, 0] },
+      semanticTags: ["rider", "foot-alignment"],
+    },
+    {
+      id: "MountStand",
+      kind: "local",
+      localTransform: { positionMetersXYZ: [0, 0.25, 0] },
+      semanticTags: ["mount", "stand"],
+    },
+  ];
+  definition.mountSlots = [{
+    id: "stand",
+    kind: "mount-slot",
+    mode: "stand",
+    mountSocketId: "MountStand",
+    riderSubjectOriginOffsetMetersXYZ: [0, 0.2, 0],
+    dismountCandidateOffsetsMetersXYZ: [[0.8, 0, 0], [-0.8, 0, 0]],
+  }];
+  definition.relationshipCapabilityRefs = [
+    "worldkit://capability/relationship.mounted-on@1",
+  ];
+  world.relationships = [{
+    id: "rider-mounted-on-board",
+    type: "mountedOn",
+    schemaVersion: 1,
+    riderEntityId: "pack-animal-a",
+    mountEntityId: "pack-animal-b",
+    mountSlotId: "stand",
+  }];
+  world.startup = {
+    ...world.startup,
+    spawnAnchorEntityId: "spawn-pack-animal-b",
+    controlledEntityId: "pack-animal-b",
+  };
+  world.nodes = world.nodes.map((node) =>
+    node.kind === "camera" && node.id === world.startup.cameraEntityId
+      ? {
+          ...node,
+          components: {
+            cameraRig: {
+              ...node.components.cameraRig,
+              target: { targetEntityId: "pack-animal-b" },
+            },
+          },
+        }
+      : node,
+  );
+  return world;
 }
 
 export function createValidRiggedPackageSubjectWorld(): AuthoringSpecV4 {

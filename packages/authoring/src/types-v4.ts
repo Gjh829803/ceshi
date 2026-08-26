@@ -257,6 +257,7 @@ export interface NormalizedWorldIRV4 {
   readonly authoringSpecHash: `sha256:${string}`;
   readonly resources: NormalizedWorldResourcesV4;
   readonly nodes: readonly NormalizedWorldNodeV4[];
+  readonly relationships: NormalizedWorldBase["relationships"];
   readonly startup: AuthoringDocumentBase["startup"];
   readonly layout: Readonly<{
     solverProfileRef: string;

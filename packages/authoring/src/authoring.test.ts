@@ -11,6 +11,7 @@ import {
 } from "./index";
 import {
   createValidAuthoringSpec,
+  createValidMountedOnAuthoringSpec,
   createValidPackageSubjectWorld,
   createValidRiggedPackageDefinition,
 } from "./test-fixture";
@@ -167,6 +168,62 @@ describe("current AuthoringSpec", () => {
       value: definition,
       diagnostics: [],
     });
+  });
+
+  it("accepts an exact stand Mount slot owned by a Package Subject Definition", () => {
+    const definition = createValidPackageSubjectWorld().resources
+      .subjectDefinitions[0]!;
+    const input = {
+      ...definition,
+      sockets: [
+        ...definition.sockets,
+        {
+          id: "MountStand",
+          kind: "local",
+          localTransform: { positionMetersXYZ: [0, 0.25, 0] },
+          semanticTags: ["mounted-on", "stand"],
+        },
+      ],
+      mountSlots: [{
+        id: "stand",
+        kind: "mount-slot",
+        mode: "stand",
+        mountSocketId: "MountStand",
+        riderSubjectOriginOffsetMetersXYZ: [0, 0.2, 0],
+        dismountCandidateOffsetsMetersXYZ: [
+          [0.8, 0, 0],
+          [-0.8, 0, 0],
+        ],
+      }],
+    };
+
+    expect(validatePackageSubjectDefinition(input)).toEqual({
+      ok: true,
+      value: input,
+      diagnostics: [],
+    });
+  });
+
+  it("accepts only the closed mountedOn Relationship shape", () => {
+    const validMountedOn = createValidMountedOnAuthoringSpec();
+    expect(validateAuthoringSpecV4(validMountedOn).ok).toBe(true);
+
+    const relationship = validMountedOn.relationships[0]!;
+    expect(validateAuthoringSpecV4({
+      ...validMountedOn,
+      relationships: [{ ...relationship, unexpected: true }],
+    }).ok).toBe(false);
+    expect(validateAuthoringSpecV4({
+      ...validMountedOn,
+      relationships: [{
+        id: relationship.id,
+        type: "mount",
+        schemaVersion: 1,
+        sourceEntityId: relationship.riderEntityId,
+        targetEntityId: relationship.mountEntityId,
+        params: { mountSlotId: relationship.mountSlotId },
+      }],
+    }).ok).toBe(false);
   });
 
   it("rejects attempts to author computed Definition fields", () => {

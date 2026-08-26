@@ -27,6 +27,7 @@ import { BUILT_IN_SUBJECT_RESOURCE_MANIFESTS } from "../../subject-registry/src/
 import type { RegistrySubjectDefinitionInputV3 } from "../../subject-registry/src/types-v3";
 import {
   createValidAuthoringSpecV4 as createValidAuthoringSpec,
+  createValidMountedOnAuthoringSpec,
   createValidPackageSubjectWorldV4,
   createValidRiggedPackageDefinition,
   createValidRiggedPackageSubjectWorldV4,
@@ -287,6 +288,31 @@ const PRODUCT_FIXED_SPAWN_CASES = [
 ] as const;
 
 describe("compileWorld", () => {
+  it("compiles Mount slots and initial mountedOn state without re-inferring endpoints", () => {
+    const normalized = normalizeAuthoringSpecV4(createValidMountedOnAuthoringSpec());
+    if (
+      !normalized.ok ||
+      normalized.value === undefined ||
+      normalized.normalizedWorldIrHash === undefined
+    ) {
+      throw new Error(`Mounted fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`);
+    }
+    const compiled = compileWorld({
+      normalizedWorldIr: normalized.value,
+      normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+    });
+
+    expect(compiled.diagnostics).toEqual([]);
+    expect(compiled.executionPlan?.initialRelationships).toEqual([{
+      ...normalized.value.relationships[0],
+      establishedSimulationTick: 0,
+    }]);
+    expect(
+      compiled.executionPlan?.subjects.find(({ entityId }) =>
+        entityId === "pack-animal-b")?.mountSlots,
+    ).toEqual(normalized.value.resources.subjectDefinitions[0]?.mountSlots);
+  });
+
   it("projects feel and body traversal, not locomotion speeds", () => {
     const plan = compileAuthoringSpec({
       subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@2",
@@ -643,7 +669,7 @@ describe("compileWorld", () => {
         normalizedWorldIrHash: rigged.normalizedWorldIrHash!,
       }).executionPlanHash,
     ).toBe(
-      "sha256:59d3ae70ed79949fb9c64bba4cc4c5eaf17f0e46834e76b9f4c51d06a0ae3dcf",
+      "sha256:0151b90a353b73608fd2387b5a35367294691fd82bc748e932c09dbe9767bcb3",
     );
   });
 
@@ -1187,7 +1213,7 @@ describe("compileWorld", () => {
     expect(serialized).not.toContain('"constraints"');
     expect(serialized).not.toMatch(/candidateRegionIds|sourceUri|licenseUri|providerHandle/);
     expect(result.executionPlanHash).toBe(
-      "sha256:4befcb6e5859d684fef1663b78fda1c4a5be598d1b43b2f3b0d9d2f1665327ba",
+      "sha256:c48259eebf0970807047af754c6e8ce132cdb61cfed1e05297ad06b7fc0ac557",
     );
   });
 

@@ -243,6 +243,7 @@ export interface PackageSubjectDefinitionV1 {
   visualParts: readonly SubjectVisualPartSpecV2[];
   visualBinding: SubjectVisualBindingV1;
   sockets: readonly SubjectSocketSpecV2[];
+  mountSlots: readonly SubjectMountSlotDefinitionV1[];
   colliderPolicy: SubjectColliderPolicyV2;
   capabilityRefs: readonly string[];
   profiles: {
@@ -270,11 +271,25 @@ export interface PackageSubjectDefinitionV1 {
   };
 }
 
-export interface RelationshipSpecV1 {
-  id: string;
-  type: string;
-  schemaVersion: 1;
+export interface SubjectMountSlotDefinitionV1 {
+  readonly id: string;
+  readonly kind: "mount-slot";
+  readonly mode: "stand";
+  readonly mountSocketId: string;
+  readonly riderSubjectOriginOffsetMetersXYZ: Vec3;
+  readonly dismountCandidateOffsetsMetersXYZ: readonly Vec3[];
 }
+
+export interface MountedOnRelationshipSpecV1 {
+  readonly id: string;
+  readonly type: "mountedOn";
+  readonly schemaVersion: 1;
+  readonly riderEntityId: string;
+  readonly mountEntityId: string;
+  readonly mountSlotId: string;
+}
+
+export type RelationshipSpecV1 = MountedOnRelationshipSpecV1;
 
 export interface RuleSpecV1 {
   id: string;
@@ -474,6 +489,7 @@ export interface NormalizedSubjectDefinitionV2 {
   visualParts: readonly NormalizedSubjectVisualPartV2[];
   visualBinding: SubjectVisualBindingV1;
   sockets: readonly NormalizedSubjectSocketV2[];
+  mountSlots: readonly SubjectMountSlotDefinitionV1[];
   colliderPolicy: SubjectColliderPolicyV2;
   capabilityRefs: readonly string[];
   locomotionCapabilityRef: string;
@@ -598,5 +614,6 @@ export interface NormalizedWorldBase {
   world: AuthoringDocumentBase["world"];
   resources: NormalizedWorldResourcesV2;
   nodes: readonly NormalizedWorldNodeV2[];
+  relationships: readonly MountedOnRelationshipSpecV1[];
   startup: AuthoringDocumentBase["startup"];
 }

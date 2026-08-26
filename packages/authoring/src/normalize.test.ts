@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { normalizeAuthoringSpecV4 } from "./index";
 import {
   createValidAuthoringSpec,
+  createValidMountedOnAuthoringSpec,
   createValidPackageSubjectWorld,
 } from "./test-fixture";
 
@@ -105,22 +106,85 @@ describe("normalizeAuthoringSpecV4", () => {
     );
   });
 
-  it("rejects unsupported Relationships and Rules instead of dropping them", () => {
-    const spec = createValidAuthoringSpec();
-    spec.relationships = [{ id: "unsupported", type: "mountedOn", schemaVersion: 1 }];
+  it("normalizes the closed mountedOn relationship and still rejects Rules", () => {
+    const spec = createValidMountedOnAuthoringSpec();
     spec.rules = [{ id: "unsupported-rule", kind: "combat" }];
 
-    expect(normalizeAuthoringSpecV4(spec).diagnostics).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          code: "AUTHORING_FEATURE_NOT_SUPPORTED",
-          instancePath: "/relationships/0",
-        }),
-        expect.objectContaining({
-          code: "AUTHORING_FEATURE_NOT_SUPPORTED",
-          instancePath: "/rules/0",
-        }),
-      ]),
+    const rejectedRule = normalizeAuthoringSpecV4(spec);
+    expect(rejectedRule.diagnostics).toContainEqual(expect.objectContaining({
+      code: "AUTHORING_FEATURE_NOT_SUPPORTED",
+      instancePath: "/rules/0",
+    }));
+
+    spec.rules = [];
+    const normalized = normalizeAuthoringSpecV4(spec);
+    expect(normalized.diagnostics).toEqual([]);
+    expect(normalized.value?.relationships).toEqual(spec.relationships);
+  });
+
+  it.each([
+    ["missing Rider", "riderEntityId", "missing-rider", "AUTHORING_REFERENCE_NOT_FOUND"],
+    ["missing Mount", "mountEntityId", "missing-mount", "AUTHORING_REFERENCE_NOT_FOUND"],
+    ["same endpoint", "mountEntityId", "pack-animal-a", "AUTHORING_RELATIONSHIP_ENDPOINTS_INVALID"],
+    ["missing Mount slot", "mountSlotId", "missing-slot", "AUTHORING_MOUNT_SLOT_NOT_FOUND"],
+  ] as const)("rejects mountedOn with %s", (_label, field, value, code) => {
+    const spec = createValidMountedOnAuthoringSpec();
+    spec.relationships = [{ ...spec.relationships[0]!, [field]: value }];
+    expect(normalizeAuthoringSpecV4(spec).diagnostics).toContainEqual(
+      expect.objectContaining({ code }),
+    );
+  });
+
+  it("rejects duplicate Rider/slot occupancy and contradictory possession", () => {
+    const duplicated = createValidMountedOnAuthoringSpec();
+    duplicated.relationships = [
+      ...duplicated.relationships,
+      { ...duplicated.relationships[0]!, id: "second-mounted-on" },
+    ];
+    const duplicateDiagnostics = normalizeAuthoringSpecV4(duplicated).diagnostics;
+    expect(duplicateDiagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "AUTHORING_MOUNTED_ON_RIDER_OCCUPIED" }),
+      expect.objectContaining({ code: "AUTHORING_MOUNT_SLOT_OCCUPIED" }),
+    ]));
+
+    const contradictory = createValidMountedOnAuthoringSpec();
+    contradictory.startup = {
+      ...contradictory.startup,
+      spawnAnchorEntityId: "spawn-pack-animal-a",
+      controlledEntityId: "pack-animal-a",
+    };
+    contradictory.nodes = contradictory.nodes.map((node) =>
+      node.kind === "camera" && node.id === contradictory.startup.cameraEntityId
+        ? {
+            ...node,
+            components: {
+              cameraRig: {
+                ...node.components.cameraRig,
+                target: { targetEntityId: "pack-animal-a" },
+              },
+            },
+          }
+        : node,
+    );
+    expect(normalizeAuthoringSpecV4(contradictory).diagnostics).toContainEqual(
+      expect.objectContaining({ code: "AUTHORING_MOUNTED_ON_POSSESSION_MISMATCH" }),
+    );
+  });
+
+  it("rejects missing profile Sockets and reserved Relationship capabilities", () => {
+    const missingRiderSocket = createValidMountedOnAuthoringSpec();
+    const definition = missingRiderSocket.resources.subjectDefinitions[0]!;
+    definition.sockets = definition.sockets.filter(({ id }) => id !== "FootAlignment");
+    expect(normalizeAuthoringSpecV4(missingRiderSocket).diagnostics).toContainEqual(
+      expect.objectContaining({ code: "AUTHORING_RELATIONSHIP_PROFILE_UNSATISFIED" }),
+    );
+
+    const reserved = createValidMountedOnAuthoringSpec();
+    reserved.resources.subjectDefinitions[0]!.relationshipCapabilityRefs = [
+      "worldkit://capability/relationship.seat@1",
+    ];
+    expect(normalizeAuthoringSpecV4(reserved).diagnostics).toContainEqual(
+      expect.objectContaining({ code: "SUBJECT_CAPABILITY_UNSATISFIED" }),
     );
   });
 

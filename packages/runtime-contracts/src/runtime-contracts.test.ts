@@ -367,6 +367,7 @@ describe("runtime contracts V3", () => {
       visualParts: [],
       visualBinding: { mode: "static" },
       sockets: [],
+      mountSlots: [],
       collider: {
         kind: "capsule",
         radiusMeters: 0.7,

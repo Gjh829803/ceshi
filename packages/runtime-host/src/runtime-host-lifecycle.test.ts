@@ -245,6 +245,7 @@ function createExecutionPlan(worldPackageRef: string): ExecutionPlanV5 {
     animationSets: [],
     colliderProfiles: [],
     initialControlledEntityId: heroState.id,
+    initialRelationships: [],
     subjects: [{
       entityId: heroState.id,
       subjectDefinitionRef: heroState.entityDefinitionRef,
@@ -266,7 +267,8 @@ function createExecutionPlan(worldPackageRef: string): ExecutionPlanV5 {
         semanticTags: ["body"],
       }],
       visualBinding: { mode: "static" },
-      sockets: [],
+    sockets: [],
+    mountSlots: [],
       collider: {
         kind: "capsule",
         radiusMeters: 0.35,

@@ -1066,6 +1066,17 @@ function compileSubjectsV3(
               animationSetRef: definition.visualBinding.animationSetRef,
             },
         sockets: definition.sockets.map(compileSubjectSocketV3),
+        mountSlots: definition.mountSlots.map((slot) => ({
+          id: slot.id,
+          kind: slot.kind,
+          mode: slot.mode,
+          mountSocketId: slot.mountSocketId,
+          riderSubjectOriginOffsetMetersXYZ: [
+            ...slot.riderSubjectOriginOffsetMetersXYZ,
+          ],
+          dismountCandidateOffsetsMetersXYZ:
+            slot.dismountCandidateOffsetsMetersXYZ.map((offset) => [...offset]),
+        })),
         collider: {
           kind: definition.collider.kind,
           radiusMeters: definition.collider.radiusMeters,
@@ -2006,6 +2017,12 @@ export function compileWorldV5(input: CompileWorldInputV5): CompileWorldResultV5
       ...componentsWithoutControlledEntity,
       schemaVersion: 5,
       initialControlledEntityId,
+      initialRelationships: snapshot.normalizedWorldIr.relationships
+        .map((relationship) => ({
+          ...structuredClone(relationship),
+          establishedSimulationTick: 0,
+        }))
+        .sort((left, right) => left.id.localeCompare(right.id)),
       authoringSpecHash: snapshot.normalizedWorldIr.authoringSpecHash,
       normalizedWorldIrHash: snapshot.normalizedWorldIrHash,
       resourceLockHash,
