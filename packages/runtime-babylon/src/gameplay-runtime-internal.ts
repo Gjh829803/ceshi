@@ -1,9 +1,16 @@
 import type { ExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
+import type { MountedOnRelationshipStateV1 } from "@whitebox-world/gameplay-contracts";
 import type {
   FixedInputOneTickV1,
   GameplayWorldStateProjectionV1,
   GameplayViewStateProjectionV1,
 } from "@whitebox-world/runtime-host";
+
+export interface BabylonGameplayMountedTransitionV1 {
+  readonly operation: "mount" | "dismount";
+  readonly relationship: MountedOnRelationshipStateV1;
+  readonly possessionTarget: BabylonGameplayPossessionTargetV1;
+}
 
 export const BABYLON_GAMEPLAY_RUNTIME_INTERNAL = Symbol(
   "whitebox-world.babylon-gameplay-runtime-internal.v1",
@@ -41,6 +48,9 @@ export interface BabylonGameplayRuntimeInternalV1 {
   isEntityControllable(entityId: string): boolean;
   preparePossessionTarget(
     target: BabylonGameplayPossessionTargetV1,
+  ): Promise<PreparedBabylonGameplayPossessionV1>;
+  prepareMountedRelationshipTransition(
+    transition: BabylonGameplayMountedTransitionV1,
   ): Promise<PreparedBabylonGameplayPossessionV1>;
   runFixedInputTick(
     input: FixedInputOneTickV1,

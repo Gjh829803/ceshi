@@ -17,6 +17,7 @@ import { Scene } from "@babylonjs/core/scene.pure.js";
 import { CONTROL_CAPTURE_PASS_IDS_V1 } from "@whitebox-world/control-capture";
 import type {
   GameplayCapabilityStateV1,
+  MountedOnRelationshipStateV1,
   SpatialEntityStateV1,
 } from "@whitebox-world/gameplay-contracts";
 import type {
@@ -75,6 +76,7 @@ import {
 import {
   BABYLON_GAMEPLAY_RUNTIME_INTERNAL,
   type BabylonGameplayPossessionTargetV1,
+  type BabylonGameplayMountedTransitionV1,
   type BabylonGameplayRuntimeInternalV1,
   type PreparedBabylonGameplayPossessionV1,
 } from "./gameplay-runtime-internal";
@@ -124,9 +126,18 @@ type OwnedDisposer = () => void | Promise<void>;
 
 interface BabylonGameplayPublishedStateV1 {
   readonly possessionTarget: BabylonGameplayPossessionTargetV1;
+  readonly mountedRelationshipsByRiderEntityId: Readonly<
+    Record<string, BabylonMountedRelationshipProjectionV1>
+  >;
   readonly viewProjection: ReturnType<
     BabylonGameplayRuntimeInternalV1["readViewProjection"]
   >;
+}
+
+interface BabylonMountedRelationshipProjectionV1 {
+  readonly relationship: MountedOnRelationshipStateV1;
+  readonly riderCollisionFilterMembershipMask: number;
+  readonly riderCollisionFilterCollideMask: number;
 }
 
 const WATER_SURFACE_CLASSIFICATION_EPSILON_METERS = 0.1;
@@ -470,6 +481,7 @@ export class BabylonWorldRuntime {
   ) {
     this.gameplayPublishedState = Object.freeze({
       possessionTarget: Object.freeze({ mode: "unbound" }),
+      mountedRelationshipsByRiderEntityId: Object.freeze({}),
       viewProjection: Object.freeze({ viewStateRevision: 0 }),
     });
     this.subjectControllersByEntityId = subjectControllersByEntityId;
@@ -489,6 +501,7 @@ export class BabylonWorldRuntime {
     this.renderLoop = () => this.renderFrame();
     this.autoStartRenderLoop = autoStartRenderLoop;
     this.#creationExecutionPlanHash = creationExecutionPlanHash;
+    this.initializeInitialMountedRelationships();
     this.updateCamera();
     if (autoStartRenderLoop) this.engine.runRenderLoop(this.renderLoop);
   }
@@ -721,6 +734,8 @@ export class BabylonWorldRuntime {
         this.subjectControllersByEntityId.has(entityId),
       preparePossessionTarget: (target) =>
         this.prepareGameplayPossessionTarget(target),
+      prepareMountedRelationshipTransition: (transition) =>
+        this.prepareMountedRelationshipTransition(transition),
       runFixedInputTick: (input) => this.runGameplayFixedInputTick(input),
       dispose: () => this.dispose(),
     };
@@ -764,20 +779,33 @@ export class BabylonWorldRuntime {
       });
       const motion = controller.motionSnapshot();
       const capabilityStateId = `capability-state:${subject.entityId}:locomotion`;
-      capabilityStatesById[capabilityStateId] = Object.freeze({
-        id: capabilityStateId,
-        kind: "locomotion-capability-state",
-        ownerEntityId: subject.entityId,
-        locomotionCapabilityRef: subject.locomotionCapabilityRef,
-        locomotionCapabilityHash:
-          subject.locomotionCapabilityHash as `sha256:${string}`,
-        mode: motion.locomotionMode,
-        movementMedium: controller.movementMedium,
-        facingYawRadians: canonicalizeSignedZero(controller.facingYawRadians),
-        speedMetersPerSecond: canonicalizeSignedZero(
-          motion.speedMetersPerSecond,
-        ),
-      });
+      const mounted = this.gameplayPublishedState
+        .mountedRelationshipsByRiderEntityId[subject.entityId];
+      capabilityStatesById[capabilityStateId] = !isNil(mounted)
+        ? Object.freeze({
+            id: capabilityStateId,
+            kind: "locomotion-capability-state",
+            ownerEntityId: subject.entityId,
+            locomotionCapabilityRef: subject.locomotionCapabilityRef,
+            locomotionCapabilityHash:
+              subject.locomotionCapabilityHash as `sha256:${string}`,
+            mode: "suspended",
+            suspendedByRelationshipId: mounted.relationship.id,
+          })
+        : Object.freeze({
+            id: capabilityStateId,
+            kind: "locomotion-capability-state",
+            ownerEntityId: subject.entityId,
+            locomotionCapabilityRef: subject.locomotionCapabilityRef,
+            locomotionCapabilityHash:
+              subject.locomotionCapabilityHash as `sha256:${string}`,
+            mode: motion.locomotionMode,
+            movementMedium: controller.movementMedium,
+            facingYawRadians: canonicalizeSignedZero(controller.facingYawRadians),
+            speedMetersPerSecond: canonicalizeSignedZero(
+              motion.speedMetersPerSecond,
+            ),
+          });
     }
     return Object.freeze({
       simulationTick: this.tick,
@@ -820,6 +848,8 @@ export class BabylonWorldRuntime {
     });
     const stagedState: BabylonGameplayPublishedStateV1 = Object.freeze({
       possessionTarget: target,
+      mountedRelationshipsByRiderEntityId:
+        this.gameplayPublishedState.mountedRelationshipsByRiderEntityId,
       viewProjection: projectedViewStateAfter,
     });
     const previousControlledEntityId = this.controlledEntityId();
@@ -867,6 +897,430 @@ export class BabylonWorldRuntime {
     });
   }
 
+  private mountedPose(
+    relationship: MountedOnRelationshipStateV1,
+  ): Readonly<{ subjectOrigin: Vector3; facingYawRadians: number }> {
+    const mountSubject = this.executionPlan.subjects.find(
+      (subject) => subject.entityId === relationship.mountEntityId,
+    );
+    const slot = mountSubject?.mountSlots.find(
+      (candidate) => candidate.id === relationship.mountSlotId,
+    );
+    const mountController = this.subjectControllersByEntityId.get(
+      relationship.mountEntityId,
+    );
+    const mountVisual = this.subjectVisualsByEntityId.get(
+      relationship.mountEntityId,
+    );
+    const socket = isNil(slot)
+      ? undefined
+      : mountVisual?.socketNodesById.get(slot.mountSocketId);
+    if (
+      isNil(mountSubject) ||
+      isNil(slot) ||
+      isNil(mountController) ||
+      isNil(socket)
+    ) {
+      throw new Error("WORLDKIT_MOUNTED_SLOT_UNAVAILABLE");
+    }
+    socket.computeWorldMatrix(true);
+    const subjectOrigin = Vector3.TransformCoordinates(
+      new Vector3(...slot.riderSubjectOriginOffsetMetersXYZ),
+      socket.getWorldMatrix(),
+    );
+    if (![subjectOrigin.x, subjectOrigin.y, subjectOrigin.z].every(Number.isFinite)) {
+      throw new Error("WORLDKIT_MOUNTED_POSE_NON_FINITE");
+    }
+    return Object.freeze({
+      subjectOrigin,
+      facingYawRadians: mountController.facingYawRadians,
+    });
+  }
+
+  private initializeInitialMountedRelationships(): void {
+    if (this.executionPlan.initialRelationships.length === 0) return;
+    const mountedRelationshipsByRiderEntityId: Record<
+      string,
+      BabylonMountedRelationshipProjectionV1
+    > = {};
+    for (const relationship of this.executionPlan.initialRelationships) {
+      const rider = this.controllerFor(relationship.riderEntityId);
+      const pose = this.mountedPose(relationship);
+      const staged = Object.freeze({
+        relationship,
+        riderCollisionFilterMembershipMask:
+          rider.physicsController.shape.filterMembershipMask,
+        riderCollisionFilterCollideMask:
+          rider.physicsController.shape.filterCollideMask,
+      });
+      rider.physicsController.shape.filterMembershipMask = 0;
+      rider.physicsController.shape.filterCollideMask = 0;
+      rider.projectSuspendedAt(
+        [pose.subjectOrigin.x, pose.subjectOrigin.y, pose.subjectOrigin.z],
+        pose.facingYawRadians,
+      );
+      mountedRelationshipsByRiderEntityId[relationship.riderEntityId] = staged;
+    }
+    this.gameplayPublishedState = Object.freeze({
+      ...this.gameplayPublishedState,
+      mountedRelationshipsByRiderEntityId: Object.freeze(
+        mountedRelationshipsByRiderEntityId,
+      ),
+    });
+  }
+
+  private async prepareMountedRelationshipTransition(
+    input: BabylonGameplayMountedTransitionV1,
+  ): Promise<PreparedBabylonGameplayPossessionV1> {
+    this.assertUsable();
+    const { relationship } = input;
+    if (input.operation === "dismount") {
+      return this.prepareDismountRelationshipTransition(input);
+    }
+    const rider = this.subjectControllersByEntityId.get(relationship.riderEntityId);
+    const mount = this.executionPlan.subjects.find(
+      (subject) => subject.entityId === relationship.mountEntityId,
+    );
+    const profile = mount?.capabilityAssembly.relationshipProfiles.find(
+      (candidate) =>
+        candidate.relationshipType === "mountedOn" &&
+        candidate.resourceRef ===
+          "worldkit://relationship-profile/mounted-on.stand-ground@1",
+    );
+    if (
+      isNil(rider) ||
+      isNil(mount) ||
+      isNil(profile) ||
+      profile.relationshipType !== "mountedOn" ||
+      !isNil(this.gameplayPublishedState
+        .mountedRelationshipsByRiderEntityId[relationship.riderEntityId])
+    ) {
+      throw new Error("WORLDKIT_MOUNTED_RELATIONSHIP_UNAVAILABLE");
+    }
+    const pose = this.mountedPose(relationship);
+    const distanceMeters = Vector3.Distance(rider.subjectOrigin, pose.subjectOrigin);
+    if (
+      !Number.isFinite(distanceMeters) ||
+      (!isNil(profile.maximumMountDistanceMeters) &&
+        distanceMeters > profile.maximumMountDistanceMeters)
+    ) {
+      throw new Error("WORLDKIT_MOUNTED_DISTANCE_EXCEEDED");
+    }
+    const baseProjection = this.gameplayWorldProjection();
+    const riderState = baseProjection.spatialEntityStatesById[
+      relationship.riderEntityId
+    ];
+    const riderSubject = this.executionPlan.subjects.find(
+      (subject) => subject.entityId === relationship.riderEntityId,
+    );
+    if (isNil(riderState) || isNil(riderSubject)) {
+      throw new Error("WORLDKIT_MOUNTED_RIDER_UNAVAILABLE");
+    }
+    const halfYawRadians = pose.facingYawRadians / 2;
+    const capabilityStateId =
+      `capability-state:${relationship.riderEntityId}:locomotion`;
+    const suspendedCapability: GameplayCapabilityStateV1 = Object.freeze({
+      id: capabilityStateId,
+      kind: "locomotion-capability-state",
+      ownerEntityId: relationship.riderEntityId,
+      locomotionCapabilityRef: riderSubject.locomotionCapabilityRef,
+      locomotionCapabilityHash:
+        riderSubject.locomotionCapabilityHash as `sha256:${string}`,
+      mode: "suspended",
+      suspendedByRelationshipId: relationship.id,
+    });
+    const projectedWorldStateAfter = Object.freeze({
+      ...baseProjection,
+      spatialEntityStatesById: Object.freeze({
+        ...baseProjection.spatialEntityStatesById,
+        [relationship.riderEntityId]: Object.freeze({
+          ...riderState,
+          positionMetersXYZ: Object.freeze([
+            canonicalizeSignedZero(pose.subjectOrigin.x),
+            canonicalizeSignedZero(pose.subjectOrigin.y),
+            canonicalizeSignedZero(pose.subjectOrigin.z),
+          ]) as readonly [number, number, number],
+          rotationQuaternionXYZW: Object.freeze([
+            0,
+            canonicalizeSignedZero(Math.sin(halfYawRadians)),
+            0,
+            canonicalizeSignedZero(Math.cos(halfYawRadians)),
+          ]) as readonly [number, number, number, number],
+          linearVelocityMetersPerSecondXYZ: Object.freeze([0, 0, 0]) as
+            readonly [number, number, number],
+        }),
+      }),
+      capabilityStatesById: Object.freeze({
+        ...baseProjection.capabilityStatesById,
+        [capabilityStateId]: suspendedCapability,
+      }),
+    });
+    const projectedViewStateAfter = Object.freeze({
+      viewStateRevision:
+        this.gameplayPublishedState.viewProjection.viewStateRevision + 1,
+    });
+    const stagedRelationship: BabylonMountedRelationshipProjectionV1 =
+      Object.freeze({
+        relationship,
+        riderCollisionFilterMembershipMask:
+          rider.physicsController.shape.filterMembershipMask,
+        riderCollisionFilterCollideMask:
+          rider.physicsController.shape.filterCollideMask,
+      });
+    const stagedState: BabylonGameplayPublishedStateV1 = Object.freeze({
+      possessionTarget: input.possessionTarget,
+      mountedRelationshipsByRiderEntityId: Object.freeze({
+        ...this.gameplayPublishedState.mountedRelationshipsByRiderEntityId,
+        [relationship.riderEntityId]: stagedRelationship,
+      }),
+      viewProjection: projectedViewStateAfter,
+    });
+    if (this.traversalConfigurationEpoch === Number.MAX_SAFE_INTEGER) {
+      throw new Error(
+        "WORLDKIT_TRAVERSAL_CONFIGURATION_EPOCH_EXHAUSTED",
+      );
+    }
+    const traversalConfigurationEpochAfter =
+      this.traversalConfigurationEpoch + 1;
+    let lifecycle: "prepared" | "committed" | "aborted" = "prepared";
+    let abortPromise: Promise<void> | undefined;
+    return Object.freeze({
+      projectedWorldStateAfter,
+      projectedViewStateAfter,
+      commitPrepared: (): void => {
+        if (lifecycle !== "prepared") return;
+        lifecycle = "committed";
+        rider.physicsController.shape.filterMembershipMask = 0;
+        rider.physicsController.shape.filterCollideMask = 0;
+        rider.projectSuspendedAt(
+          [pose.subjectOrigin.x, pose.subjectOrigin.y, pose.subjectOrigin.z],
+          pose.facingYawRadians,
+        );
+        this.gameplayPublishedState = stagedState;
+        this.traversalConfigurationEpoch = traversalConfigurationEpochAfter;
+        this.activeInputActions = EMPTY_INPUT_ACTIONS;
+        this.activeInputAxes = EMPTY_INPUT_AXES;
+        this.latestRenderReadyReceipt = undefined;
+      },
+      abort: (): Promise<void> => {
+        if (!isNil(abortPromise)) return abortPromise;
+        if (lifecycle === "committed") {
+          abortPromise = Promise.reject(
+            new Error("Babylon mounted transaction is already committed."),
+          );
+          return abortPromise;
+        }
+        lifecycle = "aborted";
+        abortPromise = Promise.resolve();
+        return abortPromise;
+      },
+    });
+  }
+
+  private safeDismountSubjectOrigin(
+    relationship: MountedOnRelationshipStateV1,
+  ): Readonly<{ subjectOrigin: Vector3; facingYawRadians: number }> {
+    const riderSubject = this.executionPlan.subjects.find(
+      (subject) => subject.entityId === relationship.riderEntityId,
+    );
+    const mountSubject = this.executionPlan.subjects.find(
+      (subject) => subject.entityId === relationship.mountEntityId,
+    );
+    const slot = mountSubject?.mountSlots.find(
+      (candidate) => candidate.id === relationship.mountSlotId,
+    );
+    const mountController = this.subjectControllersByEntityId.get(
+      relationship.mountEntityId,
+    );
+    if (
+      isNil(riderSubject) ||
+      isNil(mountSubject) ||
+      isNil(slot) ||
+      isNil(mountController)
+    ) throw new Error("WORLDKIT_DISMOUNT_SLOT_UNAVAILABLE");
+    const mountOrigin = mountController.subjectOrigin;
+    const yaw = mountController.facingYawRadians;
+    const cosine = Math.cos(yaw);
+    const sine = Math.sin(yaw);
+    for (const offset of slot.dismountCandidateOffsetsMetersXYZ) {
+      const x = mountOrigin.x + offset[0] * cosine + offset[2] * sine;
+      const z = mountOrigin.z - offset[0] * sine + offset[2] * cosine;
+      const supportHeights = [
+        sampleExecutionTerrainHeight(this.executionPlan.terrain, x, z),
+        ...this.executionPlan.staticColliders.flatMap((collider) => {
+          const height = queryStaticColliderTriangleMeshSupportHeightMetersV1(
+            emitTransformedStaticColliderTriangleMeshV1(
+              collider.shape,
+              collider.transform,
+            ),
+            [x, z],
+          );
+          return isNil(height) ? [] : [height];
+        }),
+      ].filter(Number.isFinite);
+      if (supportHeights.length === 0) continue;
+      const subjectOrigin = new Vector3(
+        x,
+        Math.max(...supportHeights) + offset[1],
+        z,
+      );
+      const candidateCenter = subjectOrigin.add(
+        new Vector3(...riderSubject.collider.centerOffsetFromSubjectOriginMetersXYZ),
+      );
+      const candidateRadius = riderSubject.collider.radiusMeters;
+      const isBlockedBySubject = this.executionPlan.subjects.some((subject) => {
+        if (subject.entityId === relationship.riderEntityId) return false;
+        const controller = this.subjectControllersByEntityId.get(subject.entityId);
+        if (isNil(controller)) return true;
+        const otherCenter = controller.subjectOrigin.add(
+          new Vector3(...subject.collider.centerOffsetFromSubjectOriginMetersXYZ),
+        );
+        const horizontalDistance = Math.hypot(
+          candidateCenter.x - otherCenter.x,
+          candidateCenter.z - otherCenter.z,
+        );
+        const verticalDistance = Math.abs(candidateCenter.y - otherCenter.y);
+        return horizontalDistance < candidateRadius + subject.collider.radiusMeters &&
+          verticalDistance <
+            (riderSubject.collider.heightMeters + subject.collider.heightMeters) / 2;
+      });
+      if (!isBlockedBySubject) {
+        return Object.freeze({ subjectOrigin, facingYawRadians: yaw });
+      }
+    }
+    throw new Error("WORLDKIT_DISMOUNT_SAFE_PLACEMENT_UNAVAILABLE");
+  }
+
+  private async prepareDismountRelationshipTransition(
+    input: BabylonGameplayMountedTransitionV1,
+  ): Promise<PreparedBabylonGameplayPossessionV1> {
+    const { relationship } = input;
+    const mounted = this.gameplayPublishedState
+      .mountedRelationshipsByRiderEntityId[relationship.riderEntityId];
+    const rider = this.subjectControllersByEntityId.get(relationship.riderEntityId);
+    const riderSubject = this.executionPlan.subjects.find(
+      (subject) => subject.entityId === relationship.riderEntityId,
+    );
+    if (
+      isNil(mounted) ||
+      mounted.relationship.id !== relationship.id ||
+      isNil(rider) ||
+      isNil(riderSubject)
+    ) throw new Error("WORLDKIT_DISMOUNT_RELATIONSHIP_STALE");
+    const placement = this.safeDismountSubjectOrigin(relationship);
+    const baseProjection = this.gameplayWorldProjection();
+    const riderState = baseProjection.spatialEntityStatesById[
+      relationship.riderEntityId
+    ];
+    if (isNil(riderState)) throw new Error("WORLDKIT_DISMOUNT_RIDER_UNAVAILABLE");
+    const halfYawRadians = placement.facingYawRadians / 2;
+    const capabilityStateId =
+      `capability-state:${relationship.riderEntityId}:locomotion`;
+    const projectedWorldStateAfter: ReturnType<
+      BabylonGameplayRuntimeInternalV1["readWorldProjection"]
+    > =
+      Object.freeze({
+        ...baseProjection,
+        spatialEntityStatesById: Object.freeze({
+          ...baseProjection.spatialEntityStatesById,
+          [relationship.riderEntityId]: Object.freeze({
+            ...riderState,
+            positionMetersXYZ: Object.freeze([
+              canonicalizeSignedZero(placement.subjectOrigin.x),
+              canonicalizeSignedZero(placement.subjectOrigin.y),
+              canonicalizeSignedZero(placement.subjectOrigin.z),
+            ]) as readonly [number, number, number],
+            rotationQuaternionXYZW: Object.freeze([
+              0,
+              canonicalizeSignedZero(Math.sin(halfYawRadians)),
+              0,
+              canonicalizeSignedZero(Math.cos(halfYawRadians)),
+            ]) as readonly [number, number, number, number],
+            linearVelocityMetersPerSecondXYZ: Object.freeze([0, 0, 0]) as
+              readonly [number, number, number],
+          }),
+        }),
+        capabilityStatesById: Object.freeze({
+          ...baseProjection.capabilityStatesById,
+          [capabilityStateId]: Object.freeze({
+            id: capabilityStateId,
+            kind: "locomotion-capability-state" as const,
+            ownerEntityId: relationship.riderEntityId,
+            locomotionCapabilityRef: riderSubject.locomotionCapabilityRef,
+            locomotionCapabilityHash:
+              riderSubject.locomotionCapabilityHash as `sha256:${string}`,
+            mode: "idle" as const,
+            movementMedium: "ground" as const,
+            facingYawRadians: canonicalizeSignedZero(
+              placement.facingYawRadians,
+            ),
+            speedMetersPerSecond: 0,
+          }),
+        }),
+      });
+    const mountedRelationshipsByRiderEntityId = {
+      ...this.gameplayPublishedState.mountedRelationshipsByRiderEntityId,
+    };
+    delete mountedRelationshipsByRiderEntityId[relationship.riderEntityId];
+    const projectedViewStateAfter = Object.freeze({
+      viewStateRevision:
+        this.gameplayPublishedState.viewProjection.viewStateRevision + 1,
+    });
+    const stagedState: BabylonGameplayPublishedStateV1 = Object.freeze({
+      possessionTarget: input.possessionTarget,
+      mountedRelationshipsByRiderEntityId: Object.freeze(
+        mountedRelationshipsByRiderEntityId,
+      ),
+      viewProjection: projectedViewStateAfter,
+    });
+    if (this.traversalConfigurationEpoch === Number.MAX_SAFE_INTEGER) {
+      throw new Error(
+        "WORLDKIT_TRAVERSAL_CONFIGURATION_EPOCH_EXHAUSTED",
+      );
+    }
+    const traversalConfigurationEpochAfter =
+      this.traversalConfigurationEpoch + 1;
+    let lifecycle: "prepared" | "committed" | "aborted" = "prepared";
+    let abortPromise: Promise<void> | undefined;
+    return Object.freeze({
+      projectedWorldStateAfter,
+      projectedViewStateAfter,
+      commitPrepared: (): void => {
+        if (lifecycle !== "prepared") return;
+        lifecycle = "committed";
+        rider.physicsController.shape.filterMembershipMask =
+          mounted.riderCollisionFilterMembershipMask;
+        rider.physicsController.shape.filterCollideMask =
+          mounted.riderCollisionFilterCollideMask;
+        rider.resetAt(
+          [
+            placement.subjectOrigin.x,
+            placement.subjectOrigin.y,
+            placement.subjectOrigin.z,
+          ],
+          placement.facingYawRadians,
+        );
+        this.gameplayPublishedState = stagedState;
+        this.traversalConfigurationEpoch = traversalConfigurationEpochAfter;
+        this.activeInputActions = EMPTY_INPUT_ACTIONS;
+        this.activeInputAxes = EMPTY_INPUT_AXES;
+        this.latestRenderReadyReceipt = undefined;
+      },
+      abort: (): Promise<void> => {
+        if (!isNil(abortPromise)) return abortPromise;
+        if (lifecycle === "committed") {
+          abortPromise = Promise.reject(
+            new Error("Babylon dismount transaction is already committed."),
+          );
+          return abortPromise;
+        }
+        lifecycle = "aborted";
+        abortPromise = Promise.resolve();
+        return abortPromise;
+      },
+    });
+  }
+
   private async runGameplayFixedInputTick(
     input: Parameters<BabylonGameplayRuntimeInternalV1["runFixedInputTick"]>[0],
   ): Promise<ReturnType<BabylonGameplayRuntimeInternalV1["readWorldProjection"]>> {
@@ -888,6 +1342,11 @@ export class BabylonWorldRuntime {
     const viewControlFrame = this.cameraDirector.controlFrame(this.tick);
     for (const subject of this.executionPlan.subjects) {
       const controller = this.controllerFor(subject.entityId);
+      if (!isNil(this.gameplayPublishedState
+        .mountedRelationshipsByRiderEntityId[subject.entityId])) {
+        controller.stop();
+        continue;
+      }
       const isTarget = subject.entityId === targetEntityId;
       if (isTarget || controller.movementMedium !== "ground") {
         controller.step(
@@ -919,6 +1378,10 @@ export class BabylonWorldRuntime {
     for (const subject of this.executionPlan.subjects) {
       const controller = this.controllerFor(subject.entityId);
       const visual = this.visualFor(subject.entityId);
+      if (!isNil(this.gameplayPublishedState
+        .mountedRelationshipsByRiderEntityId[subject.entityId])) {
+        continue;
+      }
       controller.synchronizeVisual();
       if (subject.entityId !== targetEntityId) {
         visual.stepAnimation(this.tick, "idle");
@@ -926,6 +1389,21 @@ export class BabylonWorldRuntime {
       }
       const motion = controller.sampleMotion(runRequested);
       visual.stepAnimation(this.tick, resolveGroundHumanoidAction(motion));
+    }
+    for (const mounted of Object.values(
+      this.gameplayPublishedState.mountedRelationshipsByRiderEntityId,
+    ).sort((left, right) =>
+      left.relationship.riderEntityId.localeCompare(
+        right.relationship.riderEntityId,
+      ))) {
+      const pose = this.mountedPose(mounted.relationship);
+      const rider = this.controllerFor(mounted.relationship.riderEntityId);
+      rider.projectSuspendedAt(
+        [pose.subjectOrigin.x, pose.subjectOrigin.y, pose.subjectOrigin.z],
+        pose.facingYawRadians,
+      );
+      this.visualFor(mounted.relationship.riderEntityId)
+        .stepAnimation(this.tick, "idle");
     }
     if (!isNil(targetEntityId)) this.updateCameraForEntity(targetEntityId);
   }
@@ -1214,12 +1692,23 @@ export class BabylonWorldRuntime {
   reset(): BabylonRuntimeProjectionV1 {
     this.assertUsable();
     this.traversalConfigurationEpoch += 1;
+    for (const mounted of Object.values(
+      this.gameplayPublishedState.mountedRelationshipsByRiderEntityId,
+    )) {
+      const rider = this.controllerFor(mounted.relationship.riderEntityId);
+      rider.physicsController.shape.filterMembershipMask =
+        mounted.riderCollisionFilterMembershipMask;
+      rider.physicsController.shape.filterCollideMask =
+        mounted.riderCollisionFilterCollideMask;
+    }
     for (const controller of this.subjectControllersByEntityId.values()) controller.reset();
     for (const visual of this.subjectVisuals) visual.resetAnimation();
     this.gameplayPublishedState = Object.freeze({
       possessionTarget: Object.freeze({ mode: "unbound" }),
+      mountedRelationshipsByRiderEntityId: Object.freeze({}),
       viewProjection: Object.freeze({ viewStateRevision: 0 }),
     });
+    this.initializeInitialMountedRelationships();
     this.appliedCameraViewStateRevision = 0;
     this.tick = 0;
     this.activeInputActions = [];

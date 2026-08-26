@@ -690,6 +690,14 @@ export class MotionKernelRuntimeV1 {
     );
   }
 
+  projectSuspendedAt(subjectOrigin: Vector3, facingYawRadians: number): void {
+    this.stop();
+    this.physicsController.setPosition(subjectOrigin.add(this.colliderCenterOffset));
+    this.yawRadians = facingYawRadians;
+    this.retainedSupportSample = undefined;
+    this.syncVisual(subjectOrigin);
+  }
+
   reset(): void {
     this.resetAt(
       new Vector3(...this.subject.spawnSubjectOriginPositionMetersXYZ),

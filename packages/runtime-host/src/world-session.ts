@@ -613,9 +613,19 @@ function validateGameplayProjectionWriteSet(
       after.semanticFactsById,
     ),
   };
-  if (!isEqual(changed, writeSet)) {
+  if (
+    changed.spatialEntityIds.some((id) =>
+      !writeSet.spatialEntityIds.includes(id)
+    ) ||
+    changed.capabilityStateIds.some((id) =>
+      !writeSet.capabilityStateIds.includes(id)
+    ) ||
+    changed.semanticFactIds.some((id) =>
+      !writeSet.semanticFactIds.includes(id)
+    )
+  ) {
     throw new Error(
-      "GAMEPLAY_WORLD_PROJECTION_WRITE_SET_MISMATCH: Adapter projection changes must exactly match the trusted effect write set.",
+      "GAMEPLAY_WORLD_PROJECTION_WRITE_SET_MISMATCH: Adapter projection changes must stay inside the trusted effect write set.",
     );
   }
 }
@@ -1010,7 +1020,10 @@ export class WorldSession {
         ),
       );
     }
-    const availabilityDiagnostic = this.availabilityDiagnostic(command);
+    const availabilityDiagnostic = this.availabilityDiagnostic(
+      command,
+      planned.transitionPlan,
+    );
     if (!isNil(availabilityDiagnostic)) {
       const rejectedReceipt = receipt(command, simulationTick, {
         status: "rejected",
@@ -1601,6 +1614,7 @@ export class WorldSession {
 
   private availabilityDiagnostic(
     command: GameplayCommandV1,
+    transition: GameplayTransitionPlanV1,
   ): GameplayDiagnosticV1 | undefined {
     if (command.type === "control.bind") {
       if (!this.options.worldPort.hasEntity(command.controlledEntityId)) {
@@ -1621,6 +1635,7 @@ export class WorldSession {
       !this.options.worldPort.isActionAvailable(
         command.actorEntityId,
         command.semanticActionRef,
+        transition,
       )
     ) {
       return diagnostic(

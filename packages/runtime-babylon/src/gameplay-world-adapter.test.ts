@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   BABYLON_GAMEPLAY_RUNTIME_INTERNAL,
   type BabylonGameplayPossessionTargetV1,
+  type BabylonGameplayMountedTransitionV1,
   type BabylonGameplayRuntimeInternalV1,
 } from "./gameplay-runtime-internal";
 import { createBabylonGameplayWorldPortV1 } from "./gameplay-world-adapter";
@@ -91,6 +92,7 @@ interface RuntimeHarness {
     [BABYLON_GAMEPLAY_RUNTIME_INTERNAL](): BabylonGameplayRuntimeInternalV1;
   }>;
   readonly prepareTargets: BabylonGameplayPossessionTargetV1[];
+  readonly mountedPrepareInputs: BabylonGameplayMountedTransitionV1[];
   readonly commitCount: () => number;
   readonly abortCount: () => number;
   readonly target: () => BabylonGameplayPossessionTargetV1;
@@ -108,6 +110,7 @@ function runtimeHarness(
   let commits = 0;
   let aborts = 0;
   const prepareTargets: BabylonGameplayPossessionTargetV1[] = [];
+  const mountedPrepareInputs: BabylonGameplayMountedTransitionV1[] = [];
   const internal: BabylonGameplayRuntimeInternalV1 = {
     readExecutionPlan: () => undefined as never,
     readPossessionTarget: () => target,
@@ -148,6 +151,10 @@ function runtimeHarness(
         },
       });
     },
+    prepareMountedRelationshipTransition: async (input) => {
+      mountedPrepareInputs.push(input);
+      return internal.preparePossessionTarget(input.possessionTarget);
+    },
     runFixedInputTick: async (input) => {
       if (input.ticks !== 1) throw new RangeError("single tick required");
       projection = worldProjection(projection.simulationTick + 1);
@@ -160,6 +167,7 @@ function runtimeHarness(
       [BABYLON_GAMEPLAY_RUNTIME_INTERNAL]: () => internal,
     }),
     prepareTargets,
+    mountedPrepareInputs,
     commitCount: () => commits,
     abortCount: () => aborts,
     target: () => target,
@@ -187,6 +195,90 @@ function runtimeHarness(
 }
 
 describe("Babylon Gameplay World Port V1", () => {
+  it("routes a trusted mountedOn Action to one staged mounted Runtime transaction", async () => {
+    const harness = runtimeHarness(Object.freeze({
+      mode: "possessed",
+      controlledEntityId: "subject-a",
+    }));
+    const port = createBabylonGameplayWorldPortV1(
+      harness.runtime,
+      FIXED_INPUT_CONTROLLER_ENTITY_ID,
+    );
+    const possessionBefore = relationship("subject-a", 0);
+    const mountedOn = Object.freeze({
+      id: "mounted-on:subject-a:subject-b",
+      type: "mountedOn" as const,
+      schemaVersion: 1 as const,
+      riderEntityId: "subject-a",
+      mountEntityId: "subject-b",
+      mountSlotId: "stand",
+      establishedSimulationTick: 1,
+    });
+    const possessionAfter = relationship("subject-b", 1);
+    const mountedTransition = Object.freeze({
+      kind: "gameplay-transition-plan" as const,
+      schemaVersion: 1 as const,
+      type: "action.activate" as const,
+      commandId: "command:mount",
+      expectedStateRevision: 1,
+      relationshipChanges: Object.freeze([
+        { operation: "remove" as const, before: possessionBefore },
+        { operation: "add" as const, after: mountedOn },
+        { operation: "add" as const, after: possessionAfter },
+      ]),
+      actionChanges: Object.freeze([]),
+      newlyCommittedActionExecutionIds: Object.freeze(["execution:mount"]),
+      capacityDelta: Object.freeze({
+        relationshipStateCountDelta: 1,
+        activeActionStateCountDelta: 0,
+        usedActionExecutionIdCountDelta: 1,
+        immediateEventCount: 5,
+        terminalEventReservationCountDelta: 0,
+      }),
+      trustedActionEffectPlan: Object.freeze({
+        kind: "mounted-relationship-effect-plan" as const,
+        schemaVersion: 1 as const,
+        operation: "mount" as const,
+        actorEntityId: "subject-a",
+        requiredControlledEntityId: "subject-a",
+        relationshipChanges: Object.freeze([
+          { operation: "remove" as const, before: possessionBefore },
+          { operation: "add" as const, after: mountedOn },
+          { operation: "add" as const, after: possessionAfter },
+        ]),
+        runtimeProjectionWriteSet: Object.freeze({
+          spatialEntityIds: Object.freeze(["subject-a"]),
+          capabilityStateIds: Object.freeze([
+            "capability-state:subject-a:locomotion",
+          ]),
+          semanticFactIds: Object.freeze([]),
+        }),
+      }),
+    }) as GameplayWorldTransitionV1;
+
+    expect(port.isActionAvailable(
+      "subject-a",
+      "worldkit://semantic-action/mount@1",
+      mountedTransition,
+    )).toBe(true);
+    const prepared = await port.prepareGameplayTransition(mountedTransition);
+
+    expect(harness.mountedPrepareInputs).toEqual([{
+      operation: "mount",
+      relationship: mountedOn,
+      possessionTarget: { mode: "possessed", controlledEntityId: "subject-b" },
+    }]);
+    expect(harness.target()).toEqual({
+      mode: "possessed",
+      controlledEntityId: "subject-a",
+    });
+    prepared.commitPrepared();
+    expect(harness.target()).toEqual({
+      mode: "possessed",
+      controlledEntityId: "subject-b",
+    });
+  });
+
   it("stages bind, rebind and release without publishing before commit", async () => {
     const harness = runtimeHarness();
     const port = createBabylonGameplayWorldPortV1(
@@ -308,6 +400,10 @@ describe("Babylon Gameplay World Port V1", () => {
     expect(port.isActionAvailable(
       "subject-a",
       "worldkit://semantic-action/emote.salute@1",
+      Object.freeze({
+        ...transition("control.bind", []),
+        type: "action.activate",
+      }) as GameplayWorldTransitionV1,
     )).toBe(false);
     expect(hasEntitySpy).not.toHaveBeenCalled();
   });

@@ -89,10 +89,12 @@ describe("FakeGameplayWorldPort harness", () => {
     expect(harness.port.isActionAvailable(
       "entity.hero",
       "worldkit://semantic-action/jump@1",
+      transition(),
     )).toBe(true);
     expect(harness.port.isActionAvailable(
       "entity.wall",
       "worldkit://semantic-action/jump@1",
+      transition(),
     )).toBe(false);
     expect(harness.calls.map((call) => call.operation)).toEqual([
       "initialize",

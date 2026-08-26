@@ -36,6 +36,7 @@ import { createCoreGameplayBootstrapV1 } from "@whitebox-world/gameplay";
 import { createGameplayBootstrapResourceLockEntryV1 } from "@whitebox-world/gameplay-contracts";
 import {
   createValidAuthoringSpecV4,
+  createValidMountedOnAuthoringSpec,
   createValidPackageSubjectWorldV4,
   createValidRiggedPackageSubjectWorldV4,
 } from "../../authoring/src/test-fixture";
@@ -3190,6 +3191,288 @@ describe("BabylonWorldRuntime", () => {
       });
     } finally {
       await runtime.dispose();
+    }
+  });
+
+  it("stages and commits a mounted Rider at the asymmetric Mount slot while suspending Rider locomotion", async () => {
+    const spec = createValidMountedOnAuthoringSpec();
+    const riderAnchor = spec.nodes.find((node) =>
+      node.kind === "anchor" && node.id === "spawn-pack-animal-a"
+    );
+    if (riderAnchor?.kind !== "anchor" || riderAnchor.placement.kind !== "fixed") {
+      throw new Error("Mounted fixture Rider Anchor missing.");
+    }
+    riderAnchor.placement.transform.positionMetersXYZ = [3.5, 0, 5];
+    const mountedDefinition = spec.resources.subjectDefinitions[0];
+    if (isNil(mountedDefinition) || isNil(mountedDefinition.mountSlots[0])) {
+      throw new Error("Mounted fixture slot missing.");
+    }
+    const mutableMountSlots = mountedDefinition.mountSlots as unknown as Array<
+      (typeof mountedDefinition.mountSlots)[number]
+    >;
+    mutableMountSlots[0] = {
+      ...mountedDefinition.mountSlots[0],
+      dismountCandidateOffsetsMetersXYZ: [[1.5, 0, 0], [-1.5, 0, 0]],
+    };
+    const compiled = compileExecutionPlan(spec);
+    const blockerSource = compiled.subjects.find(({ entityId }) =>
+      entityId === "pack-animal-a"
+    );
+    if (isNil(blockerSource)) throw new Error("Mounted blocker source missing.");
+    const executionPlan: ExecutionPlanV5 = {
+      ...compiled,
+      initialControlledEntityId: "pack-animal-a",
+      initialRelationships: [],
+      subjects: [
+        ...compiled.subjects,
+        {
+          ...blockerSource,
+          entityId: "dismount-candidate-one-blocker",
+          spawnAnchorEntityId: "spawn-dismount-candidate-one-blocker",
+          spawnSubjectOriginPositionMetersXYZ: [5.5, 0, 5],
+        },
+      ],
+      camera: { ...compiled.camera, targetEntityId: "pack-animal-a" },
+    };
+    const runtime = await createRuntime(executionPlan, {}, false);
+    try {
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      const bind = await internal.preparePossessionTarget({
+        mode: "possessed",
+        controlledEntityId: "pack-animal-a",
+      });
+      bind.commitPrepared();
+      const relationship = {
+        id: "mounted-on:runtime-test",
+        type: "mountedOn" as const,
+        schemaVersion: 1 as const,
+        riderEntityId: "pack-animal-a",
+        mountEntityId: "pack-animal-b",
+        mountSlotId: "stand",
+        establishedSimulationTick: 0,
+      };
+      const before = internal.readWorldProjection();
+
+      const prepared = await internal.prepareMountedRelationshipTransition({
+        operation: "mount",
+        relationship,
+        possessionTarget: {
+          mode: "possessed",
+          controlledEntityId: "pack-animal-b",
+        },
+      });
+
+      expect(internal.readWorldProjection()).toEqual(before);
+      expect(prepared.projectedWorldStateAfter).toMatchObject({
+        spatialEntityStatesById: {
+          "pack-animal-a": {
+            positionMetersXYZ: [4, 0.45, 5],
+          },
+        },
+        capabilityStatesById: {
+          "capability-state:pack-animal-a:locomotion": {
+            mode: "suspended",
+            suspendedByRelationshipId: relationship.id,
+          },
+        },
+      });
+      prepared.commitPrepared();
+      expect(internal.readPossessionTarget()).toEqual({
+        mode: "possessed",
+        controlledEntityId: "pack-animal-b",
+      });
+      expect(internal.readWorldProjection()).toEqual(
+        prepared.projectedWorldStateAfter,
+      );
+      const moved = await internal.runFixedInputTick({
+        actions: ["move-right"],
+        ticks: 1,
+      });
+      const movedRider = moved.spatialEntityStatesById["pack-animal-a"]!;
+      const movedMount = moved.spatialEntityStatesById["pack-animal-b"]!;
+      expect(movedRider.positionMetersXYZ[0]).toBeCloseTo(
+        movedMount.positionMetersXYZ[0],
+        6,
+      );
+      expect(movedRider.positionMetersXYZ[1] - movedMount.positionMetersXYZ[1])
+        .toBeCloseTo(0.45, 6);
+      expect(moved.capabilityStatesById[
+        "capability-state:pack-animal-a:locomotion"
+      ]).toMatchObject({
+        mode: "suspended",
+        suspendedByRelationshipId: relationship.id,
+      });
+      const mountedBeforeDismount = internal.readWorldProjection();
+      const dismount = await internal.prepareMountedRelationshipTransition({
+        operation: "dismount",
+        relationship,
+        possessionTarget: {
+          mode: "possessed",
+          controlledEntityId: "pack-animal-a",
+        },
+      });
+      expect(internal.readWorldProjection()).toEqual(mountedBeforeDismount);
+      expect(dismount.projectedWorldStateAfter.capabilityStatesById[
+        "capability-state:pack-animal-a:locomotion"
+      ]).toMatchObject({
+        mode: "idle",
+        movementMedium: "ground",
+      });
+      expect(dismount.projectedWorldStateAfter.spatialEntityStatesById[
+        "pack-animal-a"
+      ]!.positionMetersXYZ[0]).toBeLessThan(
+        mountedBeforeDismount.spatialEntityStatesById[
+          "pack-animal-b"
+        ]!.positionMetersXYZ[0],
+      );
+      dismount.commitPrepared();
+      expect(internal.readPossessionTarget()).toEqual({
+        mode: "possessed",
+        controlledEntityId: "pack-animal-a",
+      });
+      expect(internal.readWorldProjection()).toEqual(
+        dismount.projectedWorldStateAfter,
+      );
+      const riderBeforeIndependentMove = internal.readWorldProjection()
+        .spatialEntityStatesById["pack-animal-a"]!.positionMetersXYZ;
+      const riderMoved = await internal.runFixedInputTick({
+        actions: ["move-left"],
+        ticks: 1,
+      });
+      expect(riderMoved.spatialEntityStatesById[
+        "pack-animal-a"
+      ]!.positionMetersXYZ).not.toEqual(riderBeforeIndependentMove);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("projects compiled initial mountedOn state and reset restores that authored initial state", async () => {
+    const executionPlan = compileExecutionPlan(
+      createValidMountedOnAuthoringSpec(),
+    );
+    const runtime = await createRuntime(executionPlan, {}, false);
+    try {
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      const initialProjection = internal.readWorldProjection();
+      expect(initialProjection.capabilityStatesById[
+        "capability-state:pack-animal-a:locomotion"
+      ]).toMatchObject({
+        mode: "suspended",
+        suspendedByRelationshipId: "rider-mounted-on-board",
+      });
+      const reset = runtime.reset();
+      expect(internal.readWorldProjection().capabilityStatesById[
+        "capability-state:pack-animal-a:locomotion"
+      ]).toMatchObject({
+        mode: "suspended",
+        suspendedByRelationshipId: "rider-mounted-on-board",
+      });
+      expect(reset.subjectStatesByEntityId["pack-animal-a"]!.positionMetersXYZ)
+        .toEqual(initialProjection.spatialEntityStatesById[
+          "pack-animal-a"
+        ]!.positionMetersXYZ);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("rejects excessive Mount distance and all-blocked Dismount candidates without mutation", async () => {
+    const relationship = {
+      id: "mounted-on:adversarial",
+      type: "mountedOn" as const,
+      schemaVersion: 1 as const,
+      riderEntityId: "pack-animal-a",
+      mountEntityId: "pack-animal-b",
+      mountSlotId: "stand",
+      establishedSimulationTick: 0,
+    };
+    const dynamicPlan = (spec: AuthoringSpecV4): ExecutionPlanV5 => {
+      const compiled = compileExecutionPlan(spec);
+      return {
+        ...compiled,
+        initialControlledEntityId: "pack-animal-a",
+        initialRelationships: [],
+        camera: { ...compiled.camera, targetEntityId: "pack-animal-a" },
+      };
+    };
+
+    const farRuntime = await createRuntime(dynamicPlan(
+      createValidMountedOnAuthoringSpec(),
+    ), {}, false);
+    try {
+      const internal = farRuntime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      const bind = await internal.preparePossessionTarget({
+        mode: "possessed",
+        controlledEntityId: "pack-animal-a",
+      });
+      bind.commitPrepared();
+      const before = internal.readWorldProjection();
+      await expect(internal.prepareMountedRelationshipTransition({
+        operation: "mount",
+        relationship,
+        possessionTarget: {
+          mode: "possessed",
+          controlledEntityId: "pack-animal-b",
+        },
+      })).rejects.toThrow("WORLDKIT_MOUNTED_DISTANCE_EXCEEDED");
+      expect(internal.readWorldProjection()).toEqual(before);
+    } finally {
+      await farRuntime.dispose();
+    }
+
+    const blockedSpec = createValidMountedOnAuthoringSpec();
+    const riderAnchor = blockedSpec.nodes.find((node) =>
+      node.kind === "anchor" && node.id === "spawn-pack-animal-a"
+    );
+    const definition = blockedSpec.resources.subjectDefinitions[0];
+    if (
+      riderAnchor?.kind !== "anchor" ||
+      riderAnchor.placement.kind !== "fixed" ||
+      isNil(definition) ||
+      isNil(definition.mountSlots[0])
+    ) throw new Error("Blocked Dismount fixture is incomplete.");
+    riderAnchor.placement.transform.positionMetersXYZ = [3.5, 0, 5];
+    const mutableSlots = definition.mountSlots as unknown as Array<
+      (typeof definition.mountSlots)[number]
+    >;
+    mutableSlots[0] = {
+      ...mutableSlots[0]!,
+      dismountCandidateOffsetsMetersXYZ: [[0.1, 0, 0], [-0.1, 0, 0]],
+    };
+    const blockedRuntime = await createRuntime(dynamicPlan(blockedSpec), {}, false);
+    try {
+      const internal = blockedRuntime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      const bind = await internal.preparePossessionTarget({
+        mode: "possessed",
+        controlledEntityId: "pack-animal-a",
+      });
+      bind.commitPrepared();
+      const mount = await internal.prepareMountedRelationshipTransition({
+        operation: "mount",
+        relationship,
+        possessionTarget: {
+          mode: "possessed",
+          controlledEntityId: "pack-animal-b",
+        },
+      });
+      mount.commitPrepared();
+      const mountedBefore = internal.readWorldProjection();
+      await expect(internal.prepareMountedRelationshipTransition({
+        operation: "dismount",
+        relationship,
+        possessionTarget: {
+          mode: "possessed",
+          controlledEntityId: "pack-animal-a",
+        },
+      })).rejects.toThrow("WORLDKIT_DISMOUNT_SAFE_PLACEMENT_UNAVAILABLE");
+      expect(internal.readWorldProjection()).toEqual(mountedBefore);
+      expect(internal.readPossessionTarget()).toEqual({
+        mode: "possessed",
+        controlledEntityId: "pack-animal-b",
+      });
+    } finally {
+      await blockedRuntime.dispose();
     }
   });
 

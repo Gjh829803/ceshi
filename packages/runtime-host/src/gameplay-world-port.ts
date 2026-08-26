@@ -55,7 +55,11 @@ export interface GameplayWorldPortV1 {
   initialize(): Promise<GameplayWorldStateProjectionV1>;
   hasEntity(entityId: string): boolean;
   isEntityControllable(controlledEntityId: string): boolean;
-  isActionAvailable(actorEntityId: string, semanticActionRef: string): boolean;
+  isActionAvailable(
+    actorEntityId: string,
+    semanticActionRef: string,
+    transition: GameplayWorldTransitionV1,
+  ): boolean;
   prepareGameplayTransition(
     transition: GameplayWorldTransitionV1,
   ): Promise<GameplayWorldTransactionV1>;

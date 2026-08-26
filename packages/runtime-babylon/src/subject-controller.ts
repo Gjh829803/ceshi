@@ -158,6 +158,16 @@ export class SubjectController {
     );
   }
 
+  projectSuspendedAt(
+    subjectOriginMetersXYZ: Vec3,
+    facingYawRadians: number,
+  ): void {
+    this.motionKernel.projectSuspendedAt(
+      new Vector3(...subjectOriginMetersXYZ),
+      facingYawRadians,
+    );
+  }
+
   stop(): void {
     this.motionKernel.stop();
   }

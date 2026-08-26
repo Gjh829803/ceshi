@@ -10,6 +10,7 @@ import { isNil } from "lodash-es";
 
 import {
   BABYLON_GAMEPLAY_RUNTIME_INTERNAL,
+  type BabylonGameplayMountedTransitionV1,
   type BabylonGameplayPossessionTargetV1,
   type BabylonGameplayRuntimeInternalV1,
 } from "./gameplay-runtime-internal";
@@ -132,6 +133,52 @@ function nextPossessionTarget(
   return next;
 }
 
+function mountedTransition(
+  internal: BabylonGameplayRuntimeInternalV1,
+  fixedInputControllerEntityId: string,
+  transition: GameplayWorldTransitionV1,
+): BabylonGameplayMountedTransitionV1 | undefined {
+  if (
+    transition.type !== "action.activate" ||
+    !("trustedActionEffectPlan" in transition) ||
+    isNil(transition.trustedActionEffectPlan)
+  ) return undefined;
+  const effect = transition.trustedActionEffectPlan;
+  if (effect.kind !== "mounted-relationship-effect-plan") {
+    return fail("GAMEPLAY_MOUNTED_TRANSITION_INVALID");
+  }
+  const relationship = effect.relationshipChanges
+    .map((change) => change.operation === "add" ? change.after : change.before)
+    .find((candidate) => candidate.type === "mountedOn");
+  const possession = effect.relationshipChanges
+    .filter((change) => change.operation === "add")
+    .map((change) => change.after)
+    .find((candidate) =>
+      candidate.type === "possessedBy" &&
+      candidate.controllerEntityId === fixedInputControllerEntityId
+    );
+  const current = internal.readPossessionTarget();
+  if (
+    isNil(relationship) ||
+    relationship.type !== "mountedOn" ||
+    isNil(possession) ||
+    possession.type !== "possessedBy" ||
+    current.mode !== "possessed" ||
+    current.controlledEntityId !== effect.requiredControlledEntityId ||
+    !internal.hasEntity(relationship.riderEntityId) ||
+    !internal.hasEntity(relationship.mountEntityId) ||
+    !internal.isEntityControllable(possession.controlledEntityId)
+  ) return fail("GAMEPLAY_MOUNTED_TRANSITION_STALE");
+  return Object.freeze({
+    operation: effect.operation,
+    relationship,
+    possessionTarget: Object.freeze({
+      mode: "possessed" as const,
+      controlledEntityId: possession.controlledEntityId,
+    }),
+  });
+}
+
 function noOpTransaction(
   internal: BabylonGameplayRuntimeInternalV1,
 ): GameplayWorldTransactionV1 {
@@ -220,18 +267,40 @@ class BabylonGameplayWorldPortV1 implements GameplayWorldPortV1 {
   }
 
   isActionAvailable(
-    _actorEntityId: string,
+    actorEntityId: string,
     _semanticActionRef: string,
+    transition: GameplayWorldTransitionV1,
   ): boolean {
-    // G19-5 deliberately has no Semantic Action -> presentation mapping. A
-    // future locked mapping must be admitted before this boundary can return
-    // true; deriving an animation from a Ref or clip name is forbidden.
-    return false;
+    // State-only presentation remains fail-closed. A trusted mounted effect is
+    // already locked by Ref+Hash and is revalidated in prepare, so it does not
+    // require an unrelated animation mapping.
+    return transition.type === "action.activate" &&
+      "trustedActionEffectPlan" in transition &&
+      transition.trustedActionEffectPlan?.kind ===
+        "mounted-relationship-effect-plan" &&
+      this.internal.hasEntity(actorEntityId);
   }
 
   async prepareGameplayTransition(
     transition: GameplayWorldTransitionV1,
   ): Promise<GameplayWorldTransactionV1> {
+    const mounted = mountedTransition(
+      this.internal,
+      this.fixedInputControllerEntityId,
+      transition,
+    );
+    if (!isNil(mounted)) {
+      try {
+        return providerNeutralTransaction(
+          await this.internal.prepareMountedRelationshipTransition(mounted),
+        );
+      } catch {
+        throw portError(
+          "ADAPTER_PREPARE_FAILED",
+          "Gameplay World Port could not prepare the mounted transition.",
+        );
+      }
+    }
     const target = nextPossessionTarget(
       this.internal,
       this.fixedInputControllerEntityId,

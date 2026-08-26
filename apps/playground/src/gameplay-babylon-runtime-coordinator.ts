@@ -196,8 +196,12 @@ function wrapOwnedPort(
     hasEntity: (entityId: string) => port.hasEntity(entityId),
     isEntityControllable: (entityId: string) =>
       port.isEntityControllable(entityId),
-    isActionAvailable: (actorEntityId: string, semanticActionRef: string) =>
-      port.isActionAvailable(actorEntityId, semanticActionRef),
+    isActionAvailable: (
+      actorEntityId: string,
+      semanticActionRef: string,
+      transition: Parameters<GameplayWorldPortV1["isActionAvailable"]>[2],
+    ) =>
+      port.isActionAvailable(actorEntityId, semanticActionRef, transition),
     prepareGameplayTransition: (
       transition: Parameters<GameplayWorldPortV1["prepareGameplayTransition"]>[0],
     ) =>

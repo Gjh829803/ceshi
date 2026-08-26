@@ -190,8 +190,16 @@ function fakeRuntimeFactory(
       hasEntity: (entityId: string) => harness.port.hasEntity(entityId),
       isEntityControllable: (entityId: string) =>
         harness.port.isEntityControllable(entityId),
-      isActionAvailable: (actorEntityId: string, semanticActionRef: string) =>
-        harness.port.isActionAvailable(actorEntityId, semanticActionRef),
+      isActionAvailable: (
+        actorEntityId: string,
+        semanticActionRef: string,
+        transition: Parameters<GameplayWorldPortV1["isActionAvailable"]>[2],
+      ) =>
+        harness.port.isActionAvailable(
+          actorEntityId,
+          semanticActionRef,
+          transition,
+        ),
       prepareGameplayTransition: (
         transition: Parameters<GameplayWorldPortV1["prepareGameplayTransition"]>[0],
       ) =>
