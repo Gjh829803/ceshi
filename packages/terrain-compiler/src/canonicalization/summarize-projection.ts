@@ -1,6 +1,6 @@
-import type { SignedHeightIntentProjectionV0 } from "./project-signed-rgb";
+import type { SignedHeightIntentProjection } from "./project-signed-rgb";
 
-export interface TerrainIntentProjectionSummaryV0 {
+export interface TerrainIntentProjectionSummary {
   readonly minimumHeightRatio: number;
   readonly medianHeightRatio: number;
   readonly maximumHeightRatio: number;
@@ -44,9 +44,9 @@ function nearestRankPercentile(sortedSamples: readonly number[], ratio: number):
   return sortedSamples[index]!;
 }
 
-export function summarizeTerrainIntentProjectionV0(
-  projection: SignedHeightIntentProjectionV0,
-): TerrainIntentProjectionSummaryV0 {
+export function summarizeTerrainIntentProjection(
+  projection: SignedHeightIntentProjection,
+): TerrainIntentProjectionSummary {
   requirePositiveDimension(projection.widthPixels, "widthPixels");
   requirePositiveDimension(projection.heightPixels, "heightPixels");
   const sampleCount = projection.widthPixels * projection.heightPixels;

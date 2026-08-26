@@ -2,81 +2,101 @@ import type { AuthoringSpecV4 } from "@whitebox-world/authoring";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 
 import {
-  applyTerrainConstraintsV0,
-  type TerrainConstraintDeltaV0,
+  applyTerrainConstraints,
+  type TerrainConstraintDelta,
 } from "./constraints/apply-terrain-constraints";
-import { decodeTerrainIntentPngV0 } from "./canonicalization/decode-png";
+import { decodeTerrainIntentPng } from "./canonicalization/decode-png";
 import { deriveTerrainConstraintsFromAuthoringV4 } from
   "./constraints/derive-authoring-constraints";
-import { mapSignedHeightRatiosToMetersV0 } from "./raster/map-height-meters";
-import { prefilterScalarRasterForDownsampleV0 } from
+import { mapSignedHeightRatiosToMeters } from "./raster/map-height-meters";
+import {
+  normalizeSignedHeightRaster,
+  type NormalizedSignedHeightRaster,
+} from "./raster/normalize-signed-height-raster";
+import { prefilterScalarRasterForDownsample } from
   "./raster/prefilter-scalar-raster";
-import { projectSignedHeightIntentRgbV0 } from
+import { projectSignedHeightIntentRgb } from
   "./canonicalization/project-signed-rgb";
-import { quantizeUnprotectedTerrainHeightSamplesMetersV0 } from
+import { quantizeUnprotectedTerrainHeightSamplesMeters } from
   "./raster/quantize-height-samples";
-import { resampleScalarRasterBilinearV0 } from
+import { resampleScalarRasterBilinear } from
   "./raster/resample-scalar-raster";
 import {
-  summarizeTerrainIntentProjectionV0,
-  type TerrainIntentProjectionSummaryV0,
+  summarizeTerrainIntentProjection,
+  type TerrainIntentProjectionSummary,
 } from "./canonicalization/summarize-projection";
-import type { TerrainIntentDiagnosticV0 } from
+import type { TerrainIntentDiagnostic } from
   "./constraints/terrain-constraint-types";
 
-type Sha256HashV0 = `sha256:${string}`;
+type Sha256Hash = `sha256:${string}`;
 
-const LARGE_GRID_SAMPLE_THRESHOLD_V0 = 120_000;
-const LARGE_GRID_BASE_SAMPLE_QUANTUM_METERS_V0 = 0.1;
+const LARGE_GRID_SAMPLE_THRESHOLD = 120_000;
+const LARGE_GRID_BASE_SAMPLE_QUANTUM_METERS = 0.1;
 
-export interface TerrainHeightIntentCompileReportV0 {
+export const TERRAIN_HEIGHT_INTENT_NORMALIZATION_PROFILE =
+  "signed-diverging-blue-gray-orange-median-datum@1" as const;
+export const TERRAIN_HEIGHT_INTENT_COMPILER_VERSION =
+  "terrain-height-intent-compiler@1" as const;
+
+export interface TerrainHeightIntentCompileReport {
+  readonly kind: "worldkit-terrain-height-intent-compile-report";
   readonly schemaVersion: 1;
   readonly status: "passed" | "failed";
   readonly terrainEntityId: string;
-  readonly sourcePngHash: Sha256HashV0;
-  readonly canonicalRgbHash: Sha256HashV0;
-  readonly inputAuthoringSpecHash: Sha256HashV0;
-  readonly outputAuthoringSpecHash?: Sha256HashV0;
-  readonly projection: TerrainIntentProjectionSummaryV0;
+  readonly sourcePngHash: Sha256Hash;
+  readonly canonicalRgbHash: Sha256Hash;
+  readonly inputAuthoringSpecHash: Sha256Hash;
+  readonly outputAuthoringSpecHash?: Sha256Hash;
+  readonly projection: TerrainIntentProjectionSummary;
   readonly prefilter?: Readonly<{
     kind: "separable-box";
     radiusPixelsXY: readonly [number, number];
+  }>;
+  readonly normalization?: Readonly<{
+    profileId: typeof TERRAIN_HEIGHT_INTENT_NORMALIZATION_PROFILE;
+    medianHeightRatioBefore: number;
+    heightRatioOffsetApplied: number;
+    inputRange: readonly [minimum: number, maximum: number];
+    outputRange: readonly [minimum: number, maximum: number];
+    clampedSampleCount: number;
   }>;
   readonly baseSampleQuantization?: Readonly<{
     quantumMeters: number;
     quantizedSampleCount: number;
     protectedSampleCount: number;
   }>;
-  readonly constraintDeltas: readonly TerrainConstraintDeltaV0[];
-  readonly diagnostics: readonly TerrainIntentDiagnosticV0[];
+  readonly constraintDeltas: readonly TerrainConstraintDelta[];
+  readonly diagnostics: readonly TerrainIntentDiagnostic[];
 }
 
-export interface CompileTerrainHeightIntentResultV0 {
-  readonly report: TerrainHeightIntentCompileReportV0;
+export interface CompileTerrainHeightIntentResult {
+  readonly report: TerrainHeightIntentCompileReport;
   readonly compiledAuthoringSpec?: AuthoringSpecV4;
 }
 
-export interface CompileTerrainHeightIntentInputV0 {
+export interface CompileTerrainHeightIntentInput {
   readonly sourcePngBytes: Uint8Array;
   readonly authoringSpec: AuthoringSpecV4;
 }
 
-function hasBlockingDiagnostic(diagnostics: readonly TerrainIntentDiagnosticV0[]): boolean {
+function hasBlockingDiagnostic(diagnostics: readonly TerrainIntentDiagnostic[]): boolean {
   return diagnostics.some((diagnostic) => diagnostic.severity === "blocking");
 }
 
 function failedResult(input: {
   readonly terrainEntityId: string;
-  readonly sourcePngHash: Sha256HashV0;
-  readonly canonicalRgbHash: Sha256HashV0;
-  readonly inputAuthoringSpecHash: Sha256HashV0;
-  readonly projection: TerrainIntentProjectionSummaryV0;
-  readonly prefilter?: TerrainHeightIntentCompileReportV0["prefilter"];
-  readonly constraintDeltas?: readonly TerrainConstraintDeltaV0[];
-  readonly diagnostics: readonly TerrainIntentDiagnosticV0[];
-}): CompileTerrainHeightIntentResultV0 {
+  readonly sourcePngHash: Sha256Hash;
+  readonly canonicalRgbHash: Sha256Hash;
+  readonly inputAuthoringSpecHash: Sha256Hash;
+  readonly projection: TerrainIntentProjectionSummary;
+  readonly prefilter?: TerrainHeightIntentCompileReport["prefilter"];
+  readonly normalization?: NormalizedSignedHeightRaster;
+  readonly constraintDeltas?: readonly TerrainConstraintDelta[];
+  readonly diagnostics: readonly TerrainIntentDiagnostic[];
+}): CompileTerrainHeightIntentResult {
   return {
     report: {
+      kind: "worldkit-terrain-height-intent-compile-report",
       schemaVersion: 1,
       status: "failed",
       terrainEntityId: input.terrainEntityId,
@@ -85,23 +105,37 @@ function failedResult(input: {
       inputAuthoringSpecHash: input.inputAuthoringSpecHash,
       projection: input.projection,
       ...(input.prefilter === undefined ? {} : { prefilter: input.prefilter }),
+      ...(input.normalization === undefined
+        ? {}
+        : {
+            normalization: {
+              profileId: TERRAIN_HEIGHT_INTENT_NORMALIZATION_PROFILE,
+              medianHeightRatioBefore:
+                input.normalization.medianHeightRatioBefore,
+              heightRatioOffsetApplied:
+                input.normalization.heightRatioOffsetApplied,
+              inputRange: input.normalization.inputRange,
+              outputRange: input.normalization.outputRange,
+              clampedSampleCount: input.normalization.clampedSampleCount,
+            },
+          }),
       constraintDeltas: input.constraintDeltas ?? [],
       diagnostics: input.diagnostics,
     },
   };
 }
 
-export async function compileTerrainHeightIntentV0(
-  input: CompileTerrainHeightIntentInputV0,
-): Promise<CompileTerrainHeightIntentResultV0> {
-  const canonicalRgb = await decodeTerrainIntentPngV0(input.sourcePngBytes);
-  const projection = projectSignedHeightIntentRgbV0({
+export async function compileTerrainHeightIntent(
+  input: CompileTerrainHeightIntentInput,
+): Promise<CompileTerrainHeightIntentResult> {
+  const canonicalRgb = await decodeTerrainIntentPng(input.sourcePngBytes);
+  const projection = projectSignedHeightIntentRgb({
     widthPixels: canonicalRgb.widthPixels,
     heightPixels: canonicalRgb.heightPixels,
     rgbBytes: canonicalRgb.rgbBytes,
   });
-  const projectionSummary = summarizeTerrainIntentProjectionV0(projection);
-  const inputAuthoringSpecHash = sha256CanonicalJson(input.authoringSpec) as Sha256HashV0;
+  const projectionSummary = summarizeTerrainIntentProjection(projection);
+  const inputAuthoringSpecHash = sha256CanonicalJson(input.authoringSpec) as Sha256Hash;
   const derived = deriveTerrainConstraintsFromAuthoringV4(input.authoringSpec);
 
   if (hasBlockingDiagnostic(derived.diagnostics)) {
@@ -160,7 +194,7 @@ export async function compileTerrainHeightIntentV0(
     });
   }
 
-  const prefiltered = prefilterScalarRasterForDownsampleV0(
+  const prefiltered = prefilterScalarRasterForDownsample(
     {
       columns: projection.widthPixels,
       rows: projection.heightPixels,
@@ -168,17 +202,18 @@ export async function compileTerrainHeightIntentV0(
     },
     terrain.components.terrain.grid.resolutionCellsXZ,
   );
-  const ratioGrid = resampleScalarRasterBilinearV0(
-    prefiltered,
+  const normalization = normalizeSignedHeightRaster(prefiltered.values);
+  const ratioGrid = resampleScalarRasterBilinear(
+    { ...prefiltered, values: normalization.values },
     terrain.components.terrain.grid.resolutionCellsXZ,
   );
-  const metricGrid = mapSignedHeightRatiosToMetersV0({
+  const metricGrid = mapSignedHeightRatiosToMeters({
     heightRatios: ratioGrid.values,
     minimumHeightMeters,
     datumHeightMeters,
     maximumHeightMeters,
   });
-  const constrained = applyTerrainConstraintsV0({
+  const constrained = applyTerrainConstraints({
     centerMetersXZ: terrain.components.terrain.grid.centerMetersXZ,
     sizeMetersXZ: terrain.components.terrain.grid.sizeMetersXZ,
     heightRangeMeters: input.authoringSpec.world.bounds.heightRangeMeters,
@@ -199,6 +234,7 @@ export async function compileTerrainHeightIntentV0(
         kind: "separable-box",
         radiusPixelsXY: prefiltered.radiusPixelsXY,
       },
+      normalization,
       constraintDeltas: constrained.deltas,
       diagnostics,
     });
@@ -212,20 +248,21 @@ export async function compileTerrainHeightIntentV0(
     throw new Error("TERRAIN_INTENT_INTERNAL_TERRAIN_CLONE_MISSING");
   }
   const baseSampleQuantization = constrained.heightSamplesMeters.length >
-      LARGE_GRID_SAMPLE_THRESHOLD_V0
-    ? quantizeUnprotectedTerrainHeightSamplesMetersV0({
+      LARGE_GRID_SAMPLE_THRESHOLD
+    ? quantizeUnprotectedTerrainHeightSamplesMeters({
         heightSamplesMeters: constrained.heightSamplesMeters,
         protectedSampleMask: constrained.protectedSampleMask,
-        quantumMeters: LARGE_GRID_BASE_SAMPLE_QUANTUM_METERS_V0,
+        quantumMeters: LARGE_GRID_BASE_SAMPLE_QUANTUM_METERS,
       })
     : undefined;
   compiledTerrain.components.terrain.grid.heightSamplesMeters =
     baseSampleQuantization?.heightSamplesMeters ??
     Array.from(constrained.heightSamplesMeters);
-  const outputAuthoringSpecHash = sha256CanonicalJson(compiledAuthoringSpec) as Sha256HashV0;
+  const outputAuthoringSpecHash = sha256CanonicalJson(compiledAuthoringSpec) as Sha256Hash;
 
   return {
     report: {
+      kind: "worldkit-terrain-height-intent-compile-report",
       schemaVersion: 1,
       status: "passed",
       terrainEntityId: terrain.id,
@@ -238,11 +275,19 @@ export async function compileTerrainHeightIntentV0(
         kind: "separable-box",
         radiusPixelsXY: prefiltered.radiusPixelsXY,
       },
+      normalization: {
+        profileId: TERRAIN_HEIGHT_INTENT_NORMALIZATION_PROFILE,
+        medianHeightRatioBefore: normalization.medianHeightRatioBefore,
+        heightRatioOffsetApplied: normalization.heightRatioOffsetApplied,
+        inputRange: normalization.inputRange,
+        outputRange: normalization.outputRange,
+        clampedSampleCount: normalization.clampedSampleCount,
+      },
       ...(baseSampleQuantization === undefined
         ? {}
         : {
             baseSampleQuantization: {
-              quantumMeters: LARGE_GRID_BASE_SAMPLE_QUANTUM_METERS_V0,
+              quantumMeters: LARGE_GRID_BASE_SAMPLE_QUANTUM_METERS,
               quantizedSampleCount: baseSampleQuantization.quantizedSampleCount,
               protectedSampleCount: baseSampleQuantization.protectedSampleCount,
             },

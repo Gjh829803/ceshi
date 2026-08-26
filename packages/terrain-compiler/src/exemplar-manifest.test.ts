@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-interface GoldenExemplarManifestV1 {
+interface GoldenExemplarManifest {
   readonly schemaVersion: 1;
   readonly kind: "worldkit-terrain-height-intent-golden-exemplars";
   readonly exemplars: readonly {
@@ -12,7 +12,7 @@ interface GoldenExemplarManifestV1 {
     readonly terrainFamily: "canyon" | "rolling-desert";
     readonly imagePath: string;
     readonly sha256: `sha256:${string}`;
-    readonly encodingProfile: "signed-diverging-blue-gray-orange@0";
+    readonly encodingProfile: "signed-diverging-blue-gray-orange@1";
     readonly promptRole: "encoding-style-only";
     readonly status: "accepted";
     readonly sourceExperiment: string;
@@ -27,15 +27,15 @@ describe("terrain Height Intent golden exemplars", () => {
     );
     const manifest = JSON.parse(
       await readFile(manifestPath, "utf8"),
-    ) as GoldenExemplarManifestV1;
+    ) as GoldenExemplarManifest;
 
     expect(manifest.schemaVersion).toBe(1);
     expect(manifest.kind).toBe(
       "worldkit-terrain-height-intent-golden-exemplars",
     );
     expect(manifest.exemplars.map(({ id }) => id)).toEqual([
-      "grand-canyon-signed-v4",
-      "green-sahara-rolling-v1",
+      "grand-canyon-signed",
+      "green-sahara-rolling",
     ]);
 
     for (const exemplar of manifest.exemplars) {

@@ -1,4 +1,4 @@
-export interface PrefilteredScalarRasterV0 {
+export interface PrefilteredScalarRaster {
   readonly columns: number;
   readonly rows: number;
   readonly values: Float32Array;
@@ -66,14 +66,14 @@ function blurColumns(
   return output;
 }
 
-export function prefilterScalarRasterForDownsampleV0(
+export function prefilterScalarRasterForDownsample(
   input: {
     readonly columns: number;
     readonly rows: number;
     readonly values: Float32Array;
   },
   targetResolutionVerticesXY: readonly [number, number],
-): PrefilteredScalarRasterV0 {
+): PrefilteredScalarRaster {
   requireRasterDimension(input.columns, "columns");
   requireRasterDimension(input.rows, "rows");
   requireRasterDimension(targetResolutionVerticesXY[0], "targetResolutionVerticesXY[0]");

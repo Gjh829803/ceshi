@@ -7,12 +7,12 @@ import type {
 } from "@whitebox-world/authoring";
 
 import type {
-  DerivedTerrainConstraintsV0,
-  TerrainConstraintV0,
-  TerrainIntentDiagnosticV0,
+  DerivedTerrainConstraints,
+  TerrainConstraint,
+  TerrainIntentDiagnostic,
 } from "./terrain-constraint-types";
 
-const CONSTRAINT_PRIORITY: Readonly<Record<TerrainConstraintV0["kind"], number>> = {
+const CONSTRAINT_PRIORITY: Readonly<Record<TerrainConstraint["kind"], number>> = {
   "water-basin": 0,
   "flatten-region": 1,
   "flatten-footprint": 2,
@@ -20,7 +20,7 @@ const CONSTRAINT_PRIORITY: Readonly<Record<TerrainConstraintV0["kind"], number>>
 };
 
 function blocking(
-  diagnostics: TerrainIntentDiagnosticV0[],
+  diagnostics: TerrainIntentDiagnostic[],
   code: string,
   instancePath: string,
   message: string,
@@ -67,7 +67,7 @@ function primitiveFootprintMetersXZ(
   }
 }
 
-function sortConstraints(constraints: TerrainConstraintV0[]): TerrainConstraintV0[] {
+function sortConstraints(constraints: TerrainConstraint[]): TerrainConstraint[] {
   return constraints.sort((left, right) => {
     const priorityDelta = CONSTRAINT_PRIORITY[left.kind] - CONSTRAINT_PRIORITY[right.kind];
     return priorityDelta === 0 ? left.id.localeCompare(right.id) : priorityDelta;
@@ -76,9 +76,9 @@ function sortConstraints(constraints: TerrainConstraintV0[]): TerrainConstraintV
 
 export function deriveTerrainConstraintsFromAuthoringV4(
   spec: AuthoringSpecV4,
-): DerivedTerrainConstraintsV0 {
-  const diagnostics: TerrainIntentDiagnosticV0[] = [];
-  const constraints: TerrainConstraintV0[] = [];
+): DerivedTerrainConstraints {
+  const diagnostics: TerrainIntentDiagnostic[] = [];
+  const constraints: TerrainConstraint[] = [];
   const terrainEntries = spec.nodes
     .map((node, index) => ({ node, index }))
     .filter(

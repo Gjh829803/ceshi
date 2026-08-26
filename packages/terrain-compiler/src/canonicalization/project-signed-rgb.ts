@@ -1,18 +1,18 @@
-export const SIGNED_HEIGHT_INTENT_PROFILE_V0 = Object.freeze({
-  id: "signed-diverging-blue-gray-orange@0",
+export const SIGNED_HEIGHT_INTENT_PROFILE = Object.freeze({
+  id: "signed-diverging-blue-gray-orange@1",
   depressionRgb: Object.freeze([32, 64, 208] as const),
   datumRgb: Object.freeze([128, 128, 128] as const),
   elevationRgb: Object.freeze([224, 96, 32] as const),
 });
 
-export interface SignedHeightIntentRgbInputV0 {
+export interface SignedHeightIntentRgbInput {
   readonly widthPixels: number;
   readonly heightPixels: number;
   readonly rgbBytes: Uint8Array;
 }
 
-export interface SignedHeightIntentProjectionV0 {
-  readonly profileId: typeof SIGNED_HEIGHT_INTENT_PROFILE_V0.id;
+export interface SignedHeightIntentProjection {
+  readonly profileId: typeof SIGNED_HEIGHT_INTENT_PROFILE.id;
   readonly widthPixels: number;
   readonly heightPixels: number;
   readonly heightRatios: Float32Array;
@@ -63,9 +63,9 @@ function requirePositivePixelDimension(value: number, fieldName: string): void {
   }
 }
 
-export function projectSignedHeightIntentRgbV0(
-  input: SignedHeightIntentRgbInputV0,
-): SignedHeightIntentProjectionV0 {
+export function projectSignedHeightIntentRgb(
+  input: SignedHeightIntentRgbInput,
+): SignedHeightIntentProjection {
   requirePositivePixelDimension(input.widthPixels, "widthPixels");
   requirePositivePixelDimension(input.heightPixels, "heightPixels");
 
@@ -82,7 +82,7 @@ export function projectSignedHeightIntentRgbV0(
 
   const heightRatios = new Float32Array(pixelCount);
   const rampResidualRgbUnits = new Float32Array(pixelCount);
-  const { depressionRgb, datumRgb, elevationRgb } = SIGNED_HEIGHT_INTENT_PROFILE_V0;
+  const { depressionRgb, datumRgb, elevationRgb } = SIGNED_HEIGHT_INTENT_PROFILE;
 
   for (let pixelIndex = 0; pixelIndex < pixelCount; pixelIndex += 1) {
     const byteIndex = pixelIndex * 3;
@@ -115,7 +115,7 @@ export function projectSignedHeightIntentRgbV0(
   }
 
   return {
-    profileId: SIGNED_HEIGHT_INTENT_PROFILE_V0.id,
+    profileId: SIGNED_HEIGHT_INTENT_PROFILE.id,
     widthPixels: input.widthPixels,
     heightPixels: input.heightPixels,
     heightRatios,

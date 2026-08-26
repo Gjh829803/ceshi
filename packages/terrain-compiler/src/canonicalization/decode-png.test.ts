@@ -1,7 +1,7 @@
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 
-import { decodeTerrainIntentPngV0 } from "./decode-png";
+import { decodeTerrainIntentPng } from "./decode-png";
 
 const RAMP_RGB_2X2 = new Uint8Array([
   32, 64, 208,
@@ -10,13 +10,13 @@ const RAMP_RGB_2X2 = new Uint8Array([
   224, 96, 32,
 ]);
 
-describe("decodeTerrainIntentPngV0", () => {
+describe("decodeTerrainIntentPng", () => {
   it("returns an exact opaque sRGB buffer for a square PNG", async () => {
     const sourcePngBytes = await sharp(RAMP_RGB_2X2, {
       raw: { width: 2, height: 2, channels: 3 },
     }).png().toBuffer();
 
-    const decoded = await decodeTerrainIntentPngV0(sourcePngBytes);
+    const decoded = await decodeTerrainIntentPng(sourcePngBytes);
 
     expect(decoded).toMatchObject({
       widthPixels: 2,
@@ -35,8 +35,8 @@ describe("decodeTerrainIntentPngV0", () => {
       raw: { width: 2, height: 2, channels: 4 },
     }).png().toBuffer();
 
-    await expect(decodeTerrainIntentPngV0(nonSquare)).rejects.toThrow("square");
-    await expect(decodeTerrainIntentPngV0(withAlpha)).rejects.toThrow("alpha");
+    await expect(decodeTerrainIntentPng(nonSquare)).rejects.toThrow("square");
+    await expect(decodeTerrainIntentPng(withAlpha)).rejects.toThrow("alpha");
   });
 
   it("rejects animated or multipage inputs", async () => {
@@ -47,7 +47,7 @@ describe("decodeTerrainIntentPngV0", () => {
       raw: { width: 2, height: 4, channels: 3, pageHeight: 2 },
     }).gif({ loop: 0, delay: [10, 10] }).toBuffer();
 
-    await expect(decodeTerrainIntentPngV0(animatedGif)).rejects.toThrow("one PNG page");
+    await expect(decodeTerrainIntentPng(animatedGif)).rejects.toThrow("one PNG page");
   });
 
   it("rejects image dimensions above the pixel budget before decoding", async () => {
@@ -60,6 +60,6 @@ describe("decodeTerrainIntentPngV0", () => {
       },
     }).png({ compressionLevel: 9 }).toBuffer();
 
-    await expect(decodeTerrainIntentPngV0(oversizedPng)).rejects.toThrow(/pixel limit|Input image exceeds/i);
+    await expect(decodeTerrainIntentPng(oversizedPng)).rejects.toThrow(/pixel limit|Input image exceeds/i);
   });
 });

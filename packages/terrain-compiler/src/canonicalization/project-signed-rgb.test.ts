@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  SIGNED_HEIGHT_INTENT_PROFILE_V0,
-  projectSignedHeightIntentRgbV0,
+  SIGNED_HEIGHT_INTENT_PROFILE,
+  projectSignedHeightIntentRgb,
 } from "./project-signed-rgb";
 
-describe("projectSignedHeightIntentRgbV0", () => {
+describe("projectSignedHeightIntentRgb", () => {
   it("projects the frozen ramp endpoints and segment midpoints to signed ratios", () => {
-    const result = projectSignedHeightIntentRgbV0({
+    const result = projectSignedHeightIntentRgb({
       widthPixels: 5,
       heightPixels: 1,
       rgbBytes: new Uint8Array([
@@ -19,13 +19,13 @@ describe("projectSignedHeightIntentRgbV0", () => {
       ]),
     });
 
-    expect(result.profileId).toBe(SIGNED_HEIGHT_INTENT_PROFILE_V0.id);
+    expect(result.profileId).toBe(SIGNED_HEIGHT_INTENT_PROFILE.id);
     expect(Array.from(result.heightRatios)).toEqual([-1, -0.5, 0, 0.5, 1]);
     expect(Array.from(result.rampResidualRgbUnits)).toEqual([0, 0, 0, 0, 0]);
   });
 
   it("projects off-ramp pixels deterministically and reports their color residual", () => {
-    const result = projectSignedHeightIntentRgbV0({
+    const result = projectSignedHeightIntentRgb({
       widthPixels: 2,
       heightPixels: 1,
       rgbBytes: new Uint8Array([
@@ -42,7 +42,7 @@ describe("projectSignedHeightIntentRgbV0", () => {
     expect(result.rampResidualRgbUnits[0]).toBeGreaterThan(0);
     expect(result.rampResidualRgbUnits[1]).toBeGreaterThan(0);
 
-    const replay = projectSignedHeightIntentRgbV0({
+    const replay = projectSignedHeightIntentRgb({
       widthPixels: 2,
       heightPixels: 1,
       rgbBytes: new Uint8Array([
@@ -59,7 +59,7 @@ describe("projectSignedHeightIntentRgbV0", () => {
 
   it("rejects malformed raster dimensions and RGB byte counts", () => {
     expect(() =>
-      projectSignedHeightIntentRgbV0({
+      projectSignedHeightIntentRgb({
         widthPixels: 0,
         heightPixels: 1,
         rgbBytes: new Uint8Array(),
@@ -67,7 +67,7 @@ describe("projectSignedHeightIntentRgbV0", () => {
     ).toThrow("widthPixels");
 
     expect(() =>
-      projectSignedHeightIntentRgbV0({
+      projectSignedHeightIntentRgb({
         widthPixels: 1,
         heightPixels: 1,
         rgbBytes: new Uint8Array([32, 64]),

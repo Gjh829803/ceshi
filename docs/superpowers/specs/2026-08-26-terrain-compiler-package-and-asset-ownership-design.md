@@ -8,9 +8,9 @@
 
 ## 1. Context
 
-The signed Height Intent V0 vertical slice currently lives under
+The signed Height Intent vertical slice initially lived under
 `scripts/terrain-height-intent/`. That was an intentional incubation boundary: the
-V0 implementation plan required the Host probe to remain a script until its
+implementation plan required the Host probe to remain a script until its
 Canonicalization and Constraint behavior passed the Development Gate without
 introducing Provider or Runtime dependencies.
 
@@ -44,7 +44,7 @@ This keeps an organizational migration from hiding pipeline or algorithm changes
    compilation.
 2. Keep the public package surface intentionally small while allowing internal
    algorithms to evolve.
-3. Preserve the existing root CLI command and V0 behavior during promotion.
+3. Preserve the existing root CLI command and behavior during promotion.
 4. Give human developers and AI agents one canonical discovery map for code, prompts,
    fixtures, reference exemplars, experiments, and formal scene artifacts.
 5. Prevent experimental images from silently becoming universal prompt references or
@@ -62,9 +62,9 @@ This keeps an organizational migration from hiding pipeline or algorithm changes
 
 - Milestone 1 does not change Height Intent encoding, normalization, clipping,
   smoothing, quantization, constraint priority, or Authoring output semantics.
-- Milestone 2 adds a versioned normalization profile and hosted integration only after
-  Milestone 1 equivalence passes; the direct V0 compiler behavior remains available for
-  deterministic regression and existing experiment reproduction.
+- Milestone 2 replaces the private incubation API with one current normalization and
+  compilation contract after Milestone 1 equivalence passes. No compatibility alias or
+  selectable legacy behavior remains.
 - It does not add Image2, Gemini, LWDP, S3, Babylon, Havok, Browser, or Runtime
   dependencies to the compiler.
 - It does not create new public Authoring Schema or Source IDs.
@@ -189,21 +189,20 @@ Runtime never reads the planning image. The compiler never invokes the image pro
 
 ## 6. Public API Boundary
 
-The initial supported API is the existing semantic operation, renamed only at the file
-level if needed for clarity but not behaviorally changed:
+The supported API is one current semantic operation:
 
 ```ts
-compileTerrainHeightIntentV0(
-  input: CompileTerrainHeightIntentInputV0,
-): Promise<CompileTerrainHeightIntentResultV0>
+compileTerrainHeightIntent(
+  input: CompileTerrainHeightIntentInput,
+): Promise<CompileTerrainHeightIntentResult>
 ```
 
 The package root exports:
 
-- `compileTerrainHeightIntentV0`;
-- `CompileTerrainHeightIntentInputV0`;
-- `CompileTerrainHeightIntentResultV0`;
-- `TerrainHeightIntentCompileReportV0`;
+- `compileTerrainHeightIntent`;
+- `CompileTerrainHeightIntentInput`;
+- `CompileTerrainHeightIntentResult`;
+- `TerrainHeightIntentCompileReport`;
 - the closed diagnostic types required to consume the report.
 
 The package root does not export:
@@ -215,11 +214,11 @@ The package root does not export:
 - test factories;
 - provider-specific profiles.
 
-This prevents an incidental V0 implementation pipeline from becoming a permanent
+This prevents an incidental implementation pipeline from becoming a permanent
 multi-entry public API. A future caller needing a lower-level operation must first
 establish a stable independent contract and a second real consumer.
 
-### 6.1 Versioned hosted normalization
+### 6.1 Closed hosted normalization
 
 Milestone 2 adds a closed Host profile rather than exposing arbitrary image-processing
 knobs:
@@ -251,9 +250,10 @@ The report adds the profile ID, filtered median, applied offset, pre/post-normal
 range, clamped sample count, and all existing projection and constraint evidence. The
 profile and measurements participate in the output hash and compilation manifest.
 
-The V0 API retains byte-equivalent behavior. Hosted integration calls a V1 operation
-whose input requires the closed profile ID; it does not add optional booleans or loose
-numeric parameter bags.
+The package exposes no caller-selectable normalization mode. The single current
+operation always applies this closed profile; new behavior requires an intentional
+contract change rather than an optional boolean, loose numeric parameter bag, or
+legacy fallback.
 
 ## 7. Asset Taxonomy and Ownership
 
@@ -361,7 +361,7 @@ Canonical Builder Codex task
   -> Builder self-check receipt
 
 Trusted Host terrain compilation
-  -> @whitebox-world/terrain-compiler V1
+  -> @whitebox-world/terrain-compiler
   -> final authoring.json
   -> terrain-height-intent-report.json
   -> terrain-compilation-manifest.json
@@ -446,7 +446,7 @@ not duplicate domain algorithms or execute the developer CLI as a subprocess. It
 
 1. validates Planner and Builder receipt freshness;
 2. reads the immutable Height Intent PNG and `authoring.builder.json`;
-3. invokes the V1 closed normalization/compilation profile;
+3. invokes the closed normalization/compilation profile;
 4. writes the final `authoring.json`, compiler report, and compilation manifest into
    sibling temporary files;
 5. runs source-equivalent Builder/Authoring validation against the final AuthoringSpec;
@@ -517,7 +517,7 @@ Discovery uses a short chain of canonical indexes rather than duplicated prose:
    machine-readable manifest.
 4. Each experiment keeps a local README with inputs, outputs, measured conclusion, and
    whether any candidate was promoted to the exemplar library.
-5. Current authoritative specs link to the package. Historical V0 documents retain
+5. Current authoritative specs link to the package. Historical incubation documents retain
    their original paths and add a dated promotion note.
 
 The canonical wording should include stable search terms used by both developers and
@@ -551,8 +551,7 @@ change.
     during package migration.
 11. Land and verify the package-only milestone before modifying Planner/Builder/Studio
     workflow behavior.
-12. Add the V1 profile with failing normalization and profile-selection tests before
-    wiring the hosted caller.
+12. Add the closed profile with failing normalization tests before wiring the hosted caller.
 13. Advance Planner receipts and artifact status definitions together; do not allow the
     CLI pipeline and Studio to disagree about which terrain artifacts are required.
 14. Preserve Builder output as `authoring.builder.json` and reserve `authoring.json` for
@@ -564,9 +563,8 @@ change.
 
 - Existing CLI exit behavior, argument validation, atomic output publication, report
   format, and diagnostic codes remain compatible.
-- Programmatic package API is introduced as V0 and remains private-workspace scope. Its
-  `V0` suffix communicates that a later stable contract may replace it without exposing
-  permanent aliases.
+- The private-workspace package exposes one current programmatic API and no aliases for
+  unreleased development iterations.
 - Package promotion must be byte-stable for the same input PNG, AuthoringSpec, and CLI
   flags. Any byte difference is a migration failure unless separately designed and
   approved.
@@ -574,8 +572,8 @@ change.
   compatibility boundary is the root command and package API, not the old source path.
 - Errors remain structured compiler/CLI diagnostics; the package must not convert
   validation failures into partial successful terrain output.
-- V1 hosted compilation is fail-closed. It never silently selects V0, skips datum
-  normalization, or falls back to Builder-procedural terrain.
+- Hosted compilation is fail-closed. It never skips datum normalization or falls back
+  to Builder-procedural terrain.
 - The final AuthoringSpec, terrain report, compilation manifest, and final self-check are
   one publication unit. A partial unit is not a successful scene attempt.
 
@@ -637,7 +635,7 @@ integration remain Main Agent responsibilities until the package contract is sta
 | TC-2 | Preserve root CLI compatibility and test census | TC-1 | TC-4 | owns root `terrain:intent:compile` target and terrain entries in `scripts/lib/test-gate-manifest.ts`; package CLI adapter -> unchanged command behavior | adversarial CLI tests, atomic publication checks, `test:census`, unchanged help/flags/exit behavior | `sequential` |
 | TC-3 | Establish canonical AI discovery and asset admission | TC-0 | TC-4 | owns package README, root AGENTS discovery section, `assets/terrain-height-intent/**`, and current-doc promotion notes; experiments + acceptance decisions -> hash-locked exemplar index | JSON/schema or structural validation, SHA-256/path verification, link audit, secret/private-path scan | `parallel-safe` |
 | TC-4 | Prove package migration equivalence and create the first commit boundary | TC-1, TC-2, TC-3 | TC-5, TC-6 | owns migration evidence and package-only commit; same Green Sahara inputs -> byte-identical compiled AuthoringSpec/report and valid downstream output | focused 52-test terrain lane, workspace boundaries, test census, relevant typecheck, deterministic replay, Authoring validation, no Provider/Runtime dependency | `main-agent-only` |
-| TC-5 | Add the closed V1 median-datum profile without changing V0 | TC-4 | TC-7 | owns package V1 API/report/profile tests only; raw signed raster + Builder Authoring -> normalized constrained final Authoring and report | failing-before global-offset case, asymmetric sign case, mostly-high/mostly-low cases, clamp and determinism coverage, V0 byte regression | `sequential` |
+| TC-5 | Replace the incubation API with the closed median-datum compiler contract | TC-4 | TC-7 | owns package API/report/profile tests only; raw signed raster + Builder Authoring -> normalized constrained final Authoring and report | failing-before global-offset case, asymmetric sign case, mostly-high/mostly-low cases, clamp and determinism coverage, exact root-export test | `sequential` |
 | TC-6 | Extend unified Planner outputs and self-check for scene prompt plus Height Intent PNG | TC-4 | TC-7 | owns Planner Skill/prompt/checker, root hosted-workflow rules, launcher Planner output declarations, accepted exemplar context, and receipt version; Brief + World Plan + references -> hash-bound prompt/image | positive fixture, malformed/constant/off-profile/stale image negatives, bundled/source checker parity, cloud/local closed-output tests | `sequential` |
 | TC-7 | Preserve Builder input, run trusted Host terrain finalization, then continue existing build gates | TC-5, TC-6 | TC-8, TC-9 | owns `authoring.builder.json` boundary, Host orchestration script, compilation manifest, launcher stage order, and final Authoring self-check; frozen Planner + Builder outputs -> atomic final Authoring unit | pipeline failure injection, receipt/hash mismatch, atomic promotion/rollback, build-only stale-plan rejection, Canonical/Route/capture ordering tests | `main-agent-only` |
 | TC-8 | Expose the new stages and artifacts consistently in Studio | TC-7 | TC-9 | owns Studio phase/artifact/status mappings and tests; launcher artifacts -> distinct visible Planner terrain, Builder source, compiler report, final Authoring states | server/API tests, preview bootstrap tests, missing/failed/complete artifact matrices | `sequential` |
@@ -666,7 +664,7 @@ The package and hosted integration are complete only when all of the following a
   raw PNG inside the existing Planner task and bind both in its replayed receipt.
 - Builder receives but cannot modify the frozen Height Intent asset, and its exact
   Authoring output remains preserved as `authoring.builder.json`.
-- Trusted Host V1 compilation records median-datum measurements and publishes an atomic
+- Trusted Host compilation records median-datum measurements and publishes an atomic
   final Authoring/report/manifest/self-check unit before Canonical build.
 - Build-only rejects missing or stale new Planner terrain artifacts without procedural
   fallback.
@@ -674,8 +672,8 @@ The package and hosted integration are complete only when all of the following a
   final Authoring state separately.
 - A real integrated scene runs through Canonical build, required Route validation,
   runtime capture, and entry validation using the final compiled height samples.
-- Package-only promotion and pipeline integration are separate reviewed commits on the
-  branch; neither is merged into `main` by this work.
+- Package-only promotion and pipeline integration remain separate reviewed commits;
+  integration into `main` happens only after all final gates pass.
 
 ## 15. Deferred Follow-ups
 

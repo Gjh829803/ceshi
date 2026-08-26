@@ -1,9 +1,10 @@
-# Terrain Height Intent Prompt V0
+# Terrain Height Intent Prompt
 
-Use this reference only when the Host or user explicitly requests an experimental
-`height-intent.png`. It is not a normal Unified Planner output. The generated PNG is an
+Use this reference for the normal hosted Unified Planner
+`terrain-height-intent-prompt.md` and `terrain-height-intent.png` outputs. The generated PNG is an
 untrusted terrain proposal that a deterministic Host compiler must inspect, normalize, constrain,
-and convert to metric height samples before any Builder or Runtime consumes it.
+and convert to metric height samples before Runtime consumes it. The Builder may inspect the frozen
+image to choose coherent world scale and geometry but must never edit or decode it into samples.
 
 The image supplies a macro-shape prior, not hard numeric truth. Spawn support, required routes,
 Landmark support footprints, water coverage, water-surface height, and slope limits remain owned by

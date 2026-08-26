@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "kind": "worldkit-terrain-height-intent-normalization-receipt",
+  "id": "green-sahara-caravan-height-intent-v2-normalization",
+  "sourcePngHash": "sha256:a50f635b08e82951916d1c081bd645d69720bfe4df277d4cb9a2e544de51be16",
+  "outputPngHash": "sha256:110d48c1cf247d68fa0564a16f4c654d28e15c1d40d355915e65bcfdefc33d2f",
+  "projectionProfileId": "signed-diverging-blue-gray-orange@0",
+  "operationOrder": [
+    "project-rgb-to-signed-height-ratio",
+    "scalar-space-separable-box-prefilter",
+    "subtract-filtered-median-height-ratio",
+    "clip-height-ratio",
+    "encode-signed-height-ratio-to-ramp-png"
+  ],
+  "scalarPrefilterRadiusPixelsXY": [4, 4],
+  "medianHeightRatioBefore": 0.19229207932949066,
+  "heightRatioOffsetApplied": -0.19229207932949066,
+  "clipHeightRatioRange": [-0.45, 0.55]
+}

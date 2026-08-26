@@ -1,10 +1,10 @@
 import { stringifyCanonicalJson } from "@whitebox-world/protocol";
 import { describe, expect, it } from "vitest";
 
-import { quantizeUnprotectedTerrainHeightSamplesMetersV0 } from
+import { quantizeUnprotectedTerrainHeightSamplesMeters } from
   "./quantize-height-samples";
 
-describe("quantizeUnprotectedTerrainHeightSamplesMetersV0", () => {
+describe("quantizeUnprotectedTerrainHeightSamplesMeters", () => {
   it("quantizes only unprotected samples without mutating caller buffers", () => {
     const heightSamplesMeters = new Float32Array([
       -0,
@@ -16,7 +16,7 @@ describe("quantizeUnprotectedTerrainHeightSamplesMetersV0", () => {
     const beforeHeights = new Float32Array(heightSamplesMeters);
     const beforeMask = new Uint8Array(protectedSampleMask);
 
-    const result = quantizeUnprotectedTerrainHeightSamplesMetersV0({
+    const result = quantizeUnprotectedTerrainHeightSamplesMeters({
       heightSamplesMeters,
       protectedSampleMask,
       quantumMeters: 0.1,
@@ -39,7 +39,7 @@ describe("quantizeUnprotectedTerrainHeightSamplesMetersV0", () => {
       heightSamplesMeters[index] = -45 + (index % 1351) / 10;
     }
 
-    const result = quantizeUnprotectedTerrainHeightSamplesMetersV0({
+    const result = quantizeUnprotectedTerrainHeightSamplesMeters({
       heightSamplesMeters,
       protectedSampleMask: new Uint8Array(sampleCount),
       quantumMeters: 0.1,
@@ -76,7 +76,7 @@ describe("quantizeUnprotectedTerrainHeightSamplesMetersV0", () => {
         quantumMeters: 0.3,
       },
     ]) {
-      expect(() => quantizeUnprotectedTerrainHeightSamplesMetersV0(input)).toThrow(
+      expect(() => quantizeUnprotectedTerrainHeightSamplesMeters(input)).toThrow(
         "TERRAIN_HEIGHT_SAMPLE_QUANTIZATION_INVALID",
       );
     }

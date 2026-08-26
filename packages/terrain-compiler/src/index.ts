@@ -1,12 +1,10 @@
 export {
-  compileTerrainHeightIntentV0,
-  type CompileTerrainHeightIntentInputV0,
-  type CompileTerrainHeightIntentResultV0,
-  type TerrainHeightIntentCompileReportV0,
+  compileTerrainHeightIntent,
+  TERRAIN_HEIGHT_INTENT_COMPILER_VERSION,
+  TERRAIN_HEIGHT_INTENT_NORMALIZATION_PROFILE,
+  type CompileTerrainHeightIntentInput,
+  type CompileTerrainHeightIntentResult,
+  type TerrainHeightIntentCompileReport,
 } from "./compile-terrain-height-intent";
-export type {
-  TerrainIntentDiagnosticV0,
-} from "./constraints/terrain-constraint-types";
-export type {
-  TerrainConstraintDeltaV0,
-} from "./constraints/apply-terrain-constraints";
+export type { TerrainIntentDiagnostic } from "./constraints/terrain-constraint-types";
+export type { TerrainConstraintDelta } from "./constraints/apply-terrain-constraints";

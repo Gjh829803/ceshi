@@ -1,6 +1,6 @@
 import type { Vec2, WaterBoundarySpecV2 } from "@whitebox-world/authoring";
 
-export interface TerrainIntentDiagnosticV0 {
+export interface TerrainIntentDiagnostic {
   readonly severity: "info" | "warning" | "blocking";
   readonly code: string;
   readonly instancePath: string;
@@ -8,7 +8,7 @@ export interface TerrainIntentDiagnosticV0 {
   readonly details?: Readonly<Record<string, unknown>>;
 }
 
-export type TerrainConstraintV0 =
+export type TerrainConstraint =
   | Readonly<{
       id: string;
       kind: "water-basin";
@@ -41,8 +41,8 @@ export type TerrainConstraintV0 =
       maximumSlopeDegrees: number;
     }>;
 
-export interface DerivedTerrainConstraintsV0 {
+export interface DerivedTerrainConstraints {
   readonly terrainEntityId: string;
-  readonly constraints: readonly TerrainConstraintV0[];
-  readonly diagnostics: readonly TerrainIntentDiagnosticV0[];
+  readonly constraints: readonly TerrainConstraint[];
+  readonly diagnostics: readonly TerrainIntentDiagnostic[];
 }

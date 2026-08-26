@@ -12427,8 +12427,18 @@ ajv.addSchema(subjectDefinitionV1Schema);
   }
   return registeredValidator;
 })();
-const PLANNER_SELF_CHECK_VERSION = "worldkit-planner-self-check-v2";
+const PLANNER_SELF_CHECK_VERSION = "worldkit-planner-self-check-v3";
 const MAXIMUM_CENTER_ERROR_RATIO = 0.015;
+const MAXIMUM_TERRAIN_IMAGE_DIMENSION_PIXELS = 4096;
+const MAXIMUM_MEAN_RAMP_RESIDUAL_RGB_UNITS = 60;
+const MAXIMUM_P95_RAMP_RESIDUAL_RGB_UNITS = 90;
+const MINIMUM_NON_FLAT_HEIGHT_RATIO_RANGE = 0.05;
+const TERRAIN_HEIGHT_INTENT_PROFILE_ID = "signed-diverging-blue-gray-orange@1";
+const TERRAIN_RAMP = {
+  depression: [32, 64, 208],
+  datum: [128, 128, 128],
+  elevation: [224, 96, 32]
+};
 function option(arguments_, name) {
   const index = arguments_.indexOf(name);
   const value = index < 0 ? void 0 : arguments_[index + 1];
@@ -12559,6 +12569,86 @@ function centerMeasurement(bytes) {
     maximumCenterErrorRatio: MAXIMUM_CENTER_ERROR_RATIO
   };
 }
+function segmentProjection(rgb, start, end, startHeightRatio) {
+  const delta = [end[0] - start[0], end[1] - start[1], end[2] - start[2]];
+  const lengthSquared = delta.reduce((sum, value) => sum + value * value, 0);
+  const unclamped = ((rgb[0] - start[0]) * delta[0] + (rgb[1] - start[1]) * delta[1] + (rgb[2] - start[2]) * delta[2]) / lengthSquared;
+  const ratio = Math.max(0, Math.min(1, unclamped));
+  return {
+    heightRatio: startHeightRatio + ratio,
+    residual: Math.hypot(
+      rgb[0] - (start[0] + ratio * delta[0]),
+      rgb[1] - (start[1] + ratio * delta[1]),
+      rgb[2] - (start[2] + ratio * delta[2])
+    )
+  };
+}
+function nearestRank(sorted, ratio) {
+  return sorted[Math.max(0, Math.ceil(ratio * sorted.length) - 1)];
+}
+function terrainIntentMeasurement(bytes) {
+  const image = decodePng(bytes);
+  if (image.width !== image.height) {
+    throw new Error("Height Intent PNG must be square.");
+  }
+  if (image.width > MAXIMUM_TERRAIN_IMAGE_DIMENSION_PIXELS) {
+    throw new Error(
+      `Height Intent PNG dimensions must not exceed ${MAXIMUM_TERRAIN_IMAGE_DIMENSION_PIXELS}px.`
+    );
+  }
+  const ratios = [];
+  const residuals = [];
+  for (let index = 0; index < image.width * image.height; index += 1) {
+    const offset = index * image.channels;
+    if (image.channels === 4 && image.pixels[offset + 3] !== 255) {
+      throw new Error("Height Intent PNG must be fully opaque.");
+    }
+    const rgb = [
+      image.pixels[offset],
+      image.pixels[offset + 1],
+      image.pixels[offset + 2]
+    ];
+    const low = segmentProjection(
+      rgb,
+      TERRAIN_RAMP.depression,
+      TERRAIN_RAMP.datum,
+      -1
+    );
+    const high = segmentProjection(
+      rgb,
+      TERRAIN_RAMP.datum,
+      TERRAIN_RAMP.elevation,
+      0
+    );
+    const projected = high.residual < low.residual ? high : low;
+    ratios.push(projected.heightRatio);
+    residuals.push(projected.residual);
+  }
+  ratios.sort((left, right) => left - right);
+  residuals.sort((left, right) => left - right);
+  return {
+    widthPixels: image.width,
+    heightPixels: image.height,
+    profileId: TERRAIN_HEIGHT_INTENT_PROFILE_ID,
+    minimumHeightRatio: ratios[0],
+    medianHeightRatio: nearestRank(ratios, 0.5),
+    maximumHeightRatio: ratios[ratios.length - 1],
+    meanRampResidualRgbUnits: residuals.reduce((sum, value) => sum + value, 0) / residuals.length,
+    p95RampResidualRgbUnits: nearestRank(residuals, 0.95)
+  };
+}
+function terrainPromptDiagnostics(source) {
+  const requirements = [
+    ["TERRAIN_PROMPT_REFERENCE_ROLES", /reference roles/i],
+    ["TERRAIN_PROMPT_BASE_TERRAIN", /base terrain/i],
+    ["TERRAIN_PROMPT_DEPRESSIONS", /depressions/i],
+    ["TERRAIN_PROMPT_STATIC_EXCLUSIONS", /static landmark and structure exclusions/i],
+    ["TERRAIN_PROMPT_ENTRY_CONNECTIVITY", /entry and connectivity/i],
+    ["TERRAIN_PROMPT_ORIENTATION", /orientation/i],
+    ["TERRAIN_PROMPT_ENCODING_PROFILE", /signed-diverging-blue-gray-orange@1/i]
+  ];
+  return requirements.flatMap(([code2, pattern2]) => pattern2.test(source) ? [] : [{ code: code2, message: `Height Intent prompt is missing ${pattern2.source}.` }]);
+}
 function sceneBriefDiagnostics(source) {
   const result = parseSceneBriefV1(source);
   if (result.ok) return [];
@@ -12568,13 +12658,26 @@ function sceneBriefDiagnostics(source) {
   }));
 }
 async function runPlannerSelfCheck(options) {
-  const [briefBytes, worldPlanBytes, entryBytes] = await Promise.all([
+  const [
+    briefBytes,
+    worldPlanBytes,
+    entryBytes,
+    terrainPromptBytes,
+    terrainIntentBytes
+  ] = await Promise.all([
     readFile(options.briefPath),
     readFile(options.worldPlanPath),
-    readFile(options.entryPath)
+    readFile(options.entryPath),
+    readFile(options.terrainPromptPath),
+    readFile(options.terrainIntentPath)
   ]);
-  const diagnostics = sceneBriefDiagnostics(briefBytes.toString("utf8"));
+  const briefSource = briefBytes.toString("utf8");
+  const diagnostics = [
+    ...sceneBriefDiagnostics(briefSource),
+    ...terrainPromptDiagnostics(terrainPromptBytes.toString("utf8"))
+  ];
   let imageMeasurements = null;
+  let terrainIntentMeasurements = null;
   try {
     decodePng(worldPlanBytes);
     imageMeasurements = centerMeasurement(entryBytes);
@@ -12590,6 +12693,27 @@ async function runPlannerSelfCheck(options) {
       message: error instanceof Error ? error.message : String(error)
     });
   }
+  try {
+    terrainIntentMeasurements = terrainIntentMeasurement(terrainIntentBytes);
+    const ratioRange = terrainIntentMeasurements.maximumHeightRatio - terrainIntentMeasurements.minimumHeightRatio;
+    if (ratioRange < MINIMUM_NON_FLAT_HEIGHT_RATIO_RANGE && !/(?:flat terrain|flat ground|平地)/i.test(briefSource)) {
+      diagnostics.push({
+        code: "TERRAIN_INTENT_NEAR_CONSTANT",
+        message: `Height Intent signed ratio range ${ratioRange.toFixed(4)} is below ${MINIMUM_NON_FLAT_HEIGHT_RATIO_RANGE.toFixed(4)}.`
+      });
+    }
+    if (terrainIntentMeasurements.meanRampResidualRgbUnits > MAXIMUM_MEAN_RAMP_RESIDUAL_RGB_UNITS || terrainIntentMeasurements.p95RampResidualRgbUnits > MAXIMUM_P95_RAMP_RESIDUAL_RGB_UNITS) {
+      diagnostics.push({
+        code: "TERRAIN_INTENT_COLOR_RESIDUAL_EXCEEDED",
+        message: "Height Intent colors exceed the signed transport ramp residual limits."
+      });
+    }
+  } catch (error) {
+    diagnostics.push({
+      code: "TERRAIN_INTENT_IMAGE_INVALID",
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
   const report = {
     kind: "worldkit-planner-self-check",
     schemaVersion: 1,
@@ -12599,9 +12723,12 @@ async function runPlannerSelfCheck(options) {
     inputs: {
       sceneBriefHash: contentHash(briefBytes),
       worldPlanHash: contentHash(worldPlanBytes),
-      entryWhiteboxTargetHash: contentHash(entryBytes)
+      entryWhiteboxTargetHash: contentHash(entryBytes),
+      terrainHeightIntentPromptHash: contentHash(terrainPromptBytes),
+      terrainHeightIntentPngHash: contentHash(terrainIntentBytes)
     },
     imageMeasurements,
+    terrainIntentMeasurements,
     diagnostics
   };
   await writeFile(options.reportPath, `${JSON.stringify(report)}
@@ -12614,6 +12741,8 @@ async function main(arguments_ = process.argv.slice(2)) {
     briefPath: path.resolve(option(arguments_, "--brief")),
     worldPlanPath: path.resolve(option(arguments_, "--world-plan")),
     entryPath: path.resolve(option(arguments_, "--entry")),
+    terrainPromptPath: path.resolve(option(arguments_, "--terrain-prompt")),
+    terrainIntentPath: path.resolve(option(arguments_, "--terrain-intent")),
     reportPath: path.resolve(option(arguments_, "--report"))
   });
   process.stdout.write(`${JSON.stringify(result)}

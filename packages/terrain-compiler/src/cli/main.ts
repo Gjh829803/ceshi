@@ -13,11 +13,11 @@ import path from "node:path";
 import { parseAuthoringSpecV4 } from "@whitebox-world/authoring";
 import { stringifyCanonicalJson } from "@whitebox-world/protocol";
 
-import { compileTerrainHeightIntentV0 } from "../compile-terrain-height-intent";
-import type { TerrainIntentDiagnosticV0 } from
+import { compileTerrainHeightIntent } from "../compile-terrain-height-intent";
+import type { TerrainIntentDiagnostic } from
   "../constraints/terrain-constraint-types";
 
-interface TerrainIntentCliOptionsV0 {
+interface TerrainIntentCliOptions {
   readonly imagePath: string;
   readonly authoringPath: string;
   readonly outputAuthoringPath: string;
@@ -25,7 +25,7 @@ interface TerrainIntentCliOptionsV0 {
   readonly force: boolean;
 }
 
-interface PublicationEntryV0 {
+interface PublicationEntry {
   readonly targetPath: string;
   readonly temporaryPath: string;
   readonly backupPath: string;
@@ -35,49 +35,49 @@ interface PublicationEntryV0 {
   published: boolean;
 }
 
-class TerrainIntentCliErrorV0 extends Error {
-  readonly diagnostics?: readonly TerrainIntentDiagnosticV0[];
+class TerrainIntentCliError extends Error {
+  readonly diagnostics?: readonly TerrainIntentDiagnostic[];
 
-  constructor(message: string, diagnostics?: readonly TerrainIntentDiagnosticV0[]) {
+  constructor(message: string, diagnostics?: readonly TerrainIntentDiagnostic[]) {
     super(message);
-    this.name = "TerrainIntentCliErrorV0";
+    this.name = "TerrainIntentCliError";
     if (diagnostics !== undefined) this.diagnostics = diagnostics;
   }
 }
 
 function requireAbsolutePath(value: string, flag: string): string {
   if (!path.isAbsolute(value)) {
-    throw new TerrainIntentCliErrorV0(`${flag} must be an absolute path.`);
+    throw new TerrainIntentCliError(`${flag} must be an absolute path.`);
   }
   return path.resolve(value);
 }
 
-function parseArguments(arguments_: readonly string[]): TerrainIntentCliOptionsV0 {
+function parseArguments(arguments_: readonly string[]): TerrainIntentCliOptions {
   const normalizedArguments = arguments_[0] === "--" ? arguments_.slice(1) : arguments_;
   const values = new Map<string, string>();
   let force = false;
   for (let index = 0; index < normalizedArguments.length; index += 1) {
     const argument = normalizedArguments[index]!;
     if (argument === "--force") {
-      if (force) throw new TerrainIntentCliErrorV0("--force may appear only once.");
+      if (force) throw new TerrainIntentCliError("--force may appear only once.");
       force = true;
       continue;
     }
     if (!["--image", "--authoring", "--output-authoring", "--report"].includes(argument)) {
-      throw new TerrainIntentCliErrorV0(`Unknown argument '${argument}'.`);
+      throw new TerrainIntentCliError(`Unknown argument '${argument}'.`);
     }
     if (values.has(argument)) {
-      throw new TerrainIntentCliErrorV0(`${argument} may appear only once.`);
+      throw new TerrainIntentCliError(`${argument} may appear only once.`);
     }
     const value = normalizedArguments[index + 1];
     if (value === undefined || value.startsWith("--")) {
-      throw new TerrainIntentCliErrorV0(`${argument} requires a path.`);
+      throw new TerrainIntentCliError(`${argument} requires a path.`);
     }
     values.set(argument, value);
     index += 1;
   }
   for (const flag of ["--image", "--authoring", "--output-authoring", "--report"]) {
-    if (!values.has(flag)) throw new TerrainIntentCliErrorV0(`${flag} is required.`);
+    if (!values.has(flag)) throw new TerrainIntentCliError(`${flag} is required.`);
   }
   const options = {
     imagePath: requireAbsolutePath(values.get("--image")!, "--image"),
@@ -96,7 +96,7 @@ function parseArguments(arguments_: readonly string[]): TerrainIntentCliOptionsV
     options.reportPath,
   ]);
   if (distinctPaths.size !== 4) {
-    throw new TerrainIntentCliErrorV0("Input and output paths must identify four distinct files.");
+    throw new TerrainIntentCliError("Input and output paths must identify four distinct files.");
   }
   return options;
 }
@@ -104,7 +104,7 @@ function parseArguments(arguments_: readonly string[]): TerrainIntentCliOptionsV
 async function requireRegularUnlinkedInput(filePath: string, flag: string): Promise<void> {
   const info = await lstat(filePath);
   if (info.isSymbolicLink() || !info.isFile()) {
-    throw new TerrainIntentCliErrorV0(`${flag} must identify a regular non-symbolic-link file.`);
+    throw new TerrainIntentCliError(`${flag} must identify a regular non-symbolic-link file.`);
   }
 }
 
@@ -112,7 +112,7 @@ async function outputExistsAsRegularFile(filePath: string): Promise<boolean> {
   try {
     const info = await lstat(filePath);
     if (info.isSymbolicLink() || !info.isFile()) {
-      throw new TerrainIntentCliErrorV0(
+      throw new TerrainIntentCliError(
         `Output target '${filePath}' must be absent or a regular non-symbolic-link file.`,
       );
     }
@@ -133,14 +133,14 @@ async function writeSyncedExclusive(filePath: string, contents: string): Promise
   }
 }
 
-async function cleanupTransaction(entries: readonly PublicationEntryV0[]): Promise<void> {
+async function cleanupTransaction(entries: readonly PublicationEntry[]): Promise<void> {
   for (const entry of entries) {
     await rm(entry.temporaryPath, { force: true });
     await rm(entry.backupPath, { force: true });
   }
 }
 
-async function rollbackTransaction(entries: readonly PublicationEntryV0[]): Promise<void> {
+async function rollbackTransaction(entries: readonly PublicationEntry[]): Promise<void> {
   const failures: unknown[] = [];
   for (const entry of [...entries].reverse()) {
     try {
@@ -176,13 +176,13 @@ async function publishCompiledAuthoringAndReport(input: {
     outputExistsAsRegularFile(input.reportPath),
   ]);
   if (!input.force && existing.some(Boolean)) {
-    throw new TerrainIntentCliErrorV0(
+    throw new TerrainIntentCliError(
       "Output already exists; pass --force to replace both transactionally.",
     );
   }
 
   const transactionId = randomUUID();
-  const entries: PublicationEntryV0[] = [
+  const entries: PublicationEntry[] = [
     {
       targetPath: input.outputAuthoringPath,
       temporaryPath: path.join(
@@ -245,7 +245,7 @@ async function publishCompiledAuthoringAndReport(input: {
   await cleanupTransaction(entries);
 }
 
-export async function runTerrainHeightIntentCliV0(
+export async function runTerrainHeightIntentCli(
   arguments_: readonly string[],
 ): Promise<void> {
   const options = parseArguments(arguments_);
@@ -258,7 +258,7 @@ export async function runTerrainHeightIntentCliV0(
     outputExistsAsRegularFile(options.reportPath),
   ]);
   if (!options.force && existingOutputs.some(Boolean)) {
-    throw new TerrainIntentCliErrorV0(
+    throw new TerrainIntentCliError(
       "Output already exists; pass --force to replace both transactionally.",
     );
   }
@@ -269,7 +269,7 @@ export async function runTerrainHeightIntentCliV0(
   ]);
   const parsed = parseAuthoringSpecV4(authoringSourceText);
   if (!parsed.ok || parsed.value === undefined) {
-    throw new TerrainIntentCliErrorV0(
+    throw new TerrainIntentCliError(
       "AuthoringSpec V4 input is invalid.",
       parsed.diagnostics.map((diagnostic) => ({
         severity: "blocking" as const,
@@ -280,12 +280,12 @@ export async function runTerrainHeightIntentCliV0(
       })),
     );
   }
-  const result = await compileTerrainHeightIntentV0({
+  const result = await compileTerrainHeightIntent({
     sourcePngBytes,
     authoringSpec: parsed.value,
   });
   if (result.report.status !== "passed" || result.compiledAuthoringSpec === undefined) {
-    throw new TerrainIntentCliErrorV0(
+    throw new TerrainIntentCliError(
       "Terrain height intent compilation produced blocking diagnostics.",
       result.report.diagnostics,
     );
@@ -301,7 +301,7 @@ export async function runTerrainHeightIntentCliV0(
 }
 
 function publicError(error: unknown): Readonly<Record<string, unknown>> {
-  if (error instanceof TerrainIntentCliErrorV0) {
+  if (error instanceof TerrainIntentCliError) {
     return {
       status: "failed",
       message: error.message,
@@ -316,7 +316,7 @@ function publicError(error: unknown): Readonly<Record<string, unknown>> {
 
 const entryPath = process.argv[1] === undefined ? "" : path.resolve(process.argv[1]);
 if (entryPath === fileURLToPath(import.meta.url)) {
-  runTerrainHeightIntentCliV0(process.argv.slice(2)).catch((error) => {
+  runTerrainHeightIntentCli(process.argv.slice(2)).catch((error) => {
     process.stderr.write(`${JSON.stringify(publicError(error))}\n`);
     process.exitCode = 1;
   });

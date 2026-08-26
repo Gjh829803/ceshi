@@ -52,6 +52,9 @@ importers:
       '@whitebox-world/subject-registry':
         specifier: workspace:*
         version: link:packages/subject-registry
+      '@whitebox-world/terrain-compiler':
+        specifier: workspace:*
+        version: link:packages/terrain-compiler
       '@whitebox-world/terrain-surface':
         specifier: workspace:*
         version: link:packages/terrain-surface

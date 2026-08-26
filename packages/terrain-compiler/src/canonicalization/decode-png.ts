@@ -1,9 +1,9 @@
 import { sha256Bytes } from "@whitebox-world/protocol";
 import sharp from "sharp";
 
-const MAXIMUM_TERRAIN_INTENT_PIXELS_V0 = 16_777_216;
+const MAXIMUM_TERRAIN_INTENT_PIXELS = 16_777_216;
 
-export interface CanonicalTerrainIntentRgbV0 {
+export interface CanonicalTerrainIntentRgb {
   readonly widthPixels: number;
   readonly heightPixels: number;
   readonly rgbBytes: Uint8Array;
@@ -11,13 +11,13 @@ export interface CanonicalTerrainIntentRgbV0 {
   readonly canonicalRgbHash: `sha256:${string}`;
 }
 
-export async function decodeTerrainIntentPngV0(
+export async function decodeTerrainIntentPng(
   sourcePngBytes: Uint8Array,
-): Promise<CanonicalTerrainIntentRgbV0> {
+): Promise<CanonicalTerrainIntentRgb> {
   const decodeOptions = {
     animated: true,
     failOn: "error" as const,
-    limitInputPixels: MAXIMUM_TERRAIN_INTENT_PIXELS_V0,
+    limitInputPixels: MAXIMUM_TERRAIN_INTENT_PIXELS,
   };
   const metadata = await sharp(sourcePngBytes, decodeOptions).metadata();
 

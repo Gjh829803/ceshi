@@ -1,4 +1,4 @@
-export interface ScalarRasterV0 {
+export interface ScalarRaster {
   readonly columns: number;
   readonly rows: number;
   readonly values: Float32Array;
@@ -10,7 +10,7 @@ function requireRasterDimension(value: number, fieldName: string): void {
   }
 }
 
-function requireFiniteRaster(input: ScalarRasterV0): void {
+function requireFiniteRaster(input: ScalarRaster): void {
   requireRasterDimension(input.columns, "columns");
   requireRasterDimension(input.rows, "rows");
   const expectedSampleCount = input.columns * input.rows;
@@ -27,10 +27,10 @@ function requireFiniteRaster(input: ScalarRasterV0): void {
   }
 }
 
-export function resampleScalarRasterBilinearV0(
-  input: ScalarRasterV0,
+export function resampleScalarRasterBilinear(
+  input: ScalarRaster,
   outputResolutionVerticesXZ: readonly [columns: number, rows: number],
-): ScalarRasterV0 {
+): ScalarRaster {
   requireFiniteRaster(input);
   const [outputColumns, outputRows] = outputResolutionVerticesXZ;
   requireRasterDimension(outputColumns, "output columns");

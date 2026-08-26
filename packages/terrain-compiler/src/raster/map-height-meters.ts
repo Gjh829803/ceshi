@@ -1,12 +1,12 @@
-export interface SignedHeightMeterMappingInputV0 {
+export interface SignedHeightMeterMappingInput {
   readonly heightRatios: Float32Array;
   readonly minimumHeightMeters: number;
   readonly datumHeightMeters: number;
   readonly maximumHeightMeters: number;
 }
 
-export function mapSignedHeightRatiosToMetersV0(
-  input: SignedHeightMeterMappingInputV0,
+export function mapSignedHeightRatiosToMeters(
+  input: SignedHeightMeterMappingInput,
 ): Float32Array {
   const bounds = [
     input.minimumHeightMeters,

@@ -155,6 +155,10 @@ describe("Canonical Builder skill", () => {
     expect(skill).toContain("SPAWN_BELOW_GROUND");
     expect(skill).toContain("SPAWN_ABOVE_GROUND");
     expect(skill).toContain("requiredSubjectOriginYMeters");
+    expect(skill).toContain("terrain-height-intent.png");
+    expect(skill).toContain("terrain-height-intent-prompt.md");
+    expect(skill).toContain("must not decode, resample, normalize, or edit its pixels");
+    expect(skill).toContain("authoring.builder.json");
     expect(template).toContain('"schemaVersion": 4');
     expect(template).toContain('"preset": "clear-day"');
     expect(template).toContain('"kind": "supported-by"');
@@ -180,6 +184,9 @@ describe("Canonical Builder skill", () => {
     expect(launcher).toContain("never add or modify SDK motion bases");
     expect(launcher).toContain("maximumTiles is a per-route build-window budget");
     expect(launcher).toContain("ROUTE_BUILD_WINDOW_BUDGET_EXCEEDED");
+    expect(launcher).toContain("terrain-height-intent.png");
+    expect(launcher).toContain("authoring.builder.json");
+    expect(launcher).toContain("scripts/finalize-scene-terrain.ts");
     expect(launcher).not.toContain("humanoid.board.surface-slide@1");
     expect(launcher).not.toContain("humanoid.wingsuit.unpowered-glide@1");
     expect(terrainAndStructures).toContain(

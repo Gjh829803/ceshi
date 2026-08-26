@@ -10,10 +10,10 @@ license, deterministic behavior, platform support, and workspace ownership befor
 | height/control/color separation and tiled regions | [Terrain3D](https://github.com/TokisanGames/Terrain3D), MIT | architecture reference; do not import its Godot Runtime into WorldKit |
 | named height and mask layers | [Houdini HeightFields](https://www.sidefx.com/docs/houdini/model/heightfields) | industry data-boundary reference, not an SDK dependency |
 | region-aware deterministic heightfield composition | [fal-worldclaw](https://github.com/blendi-remade/fal-worldclaw) | algorithm study only while its repository has no declared license |
-| erosion and hydrology | [Landlab](https://landlab.readthedocs.io/en/latest/) and [WhiteboxTools](https://github.com/jblindsay/whitebox-tools) | optional offline refiners after macro topology and gameplay constraints; not V0 dependencies |
+| erosion and hydrology | [Landlab](https://landlab.readthedocs.io/en/latest/) and [WhiteboxTools](https://github.com/jblindsay/whitebox-tools) | optional offline refiners after macro topology and gameplay constraints; not current dependencies |
 | natural terrain refinement | [symbios-ground](https://github.com/TheJanusStream/symbios-ground) | inspect algorithms and conformance; do not add a Rust/WASM boundary for the first slice |
 | planar or near-planar image registration | [OpenCV homography](https://docs.opencv.org/4.10.0/d9/dab/tutorial_homography.html) | useful only when views observe a shared near-planar surface with reliable feature matches; not valid for parallax-heavy canyon views |
-| calibrated overlapping multi-view reconstruction | [COLMAP](https://colmap.github.io/), new BSD | credible SfM/MVS reference for real photographic capture sets; too heavy and assumption-sensitive for the prompt-first V0 path |
+| calibrated overlapping multi-view reconstruction | [COLMAP](https://colmap.github.io/), new BSD | credible SfM/MVS reference for real photographic capture sets; too heavy and assumption-sensitive for the prompt-first path |
 | learned uncalibrated multi-view reconstruction | [DUSt3R](https://github.com/naver/dust3r) | research reference only; official implementation and checkpoints require noncommercial/share-alike licensing review, so do not make it a production dependency |
 
 ## Academic terminology and closest prior art
@@ -59,16 +59,14 @@ proposal; project its color transport back to a scalar; low-pass before resampli
 Water, Spawn, Landmark-support, and Route constraints override the stochastic proposal. Do not call
 the generated PNG a DEM measurement or ground truth because it is neither georeferenced nor sensed.
 
-## Candidate datum-recentering policy
+## Datum-recentering policy
 
-V0 maps the signed raster through explicit minimum / datum / maximum heights and does not currently
-shift a whole field merely because most generated pixels are positive. If holdout cases show a
-repeatable global high/low bias, evaluate a Host-only **datum recentering** step between metric
-mapping and required-constraint application:
+The compiler applies Host-only **datum recentering** before metric mapping and required-constraint
+application so a globally high or low generated raster cannot displace the whole playable world:
 
-- estimate a robust median from the unconstrained base field;
-- translate the entire field so that median approaches explicit `baseHeightMeters`;
-- cap the permitted translation and fail closed if it would leave `heightRangeMeters`; and
+- estimate a robust median from the unconstrained signed field;
+- translate the entire signed field so that its median maps to explicit `baseHeightMeters`; and
+- clamp only values that escape the signed profile range and report the clamp count;
 - apply Water, Spawn, Landmark support, and Route constraints only after that translation.
 
 Do not use per-image min-max normalization. It destroys absolute relief semantics and expands a
@@ -88,7 +86,7 @@ not contrast stretching, clipping, or another Runtime terrain authority.
 
 ## Multiple-reference decision
 
-- V0 uses one `primary-coordinate` reference plus zero or more `secondary-evidence` references.
+- The Planner uses one `primary-coordinate` reference plus zero or more `secondary-evidence` references.
   Stable semantic anchors and topological relations register secondary evidence; raw screen-space
   coordinates never do.
 - Generate one canonical height-intent raster in the primary frame. Independently generated

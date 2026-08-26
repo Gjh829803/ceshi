@@ -12,6 +12,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
+  promoteNamedArtifactsTransactionally,
   promoteArtifactsTransactionally,
   type ArtifactPromotionFaultPoint,
   type ArtifactPromotionRole,
@@ -98,5 +99,65 @@ describe("transactional artifact promotion", () => {
       expect(await readFile(targetPath(role), "utf8")).toBe(`new-${role}`);
     }
     await expectNoResidue();
+  });
+
+  it("publishes an arbitrary coherent set with its declared commit artifact last", async () => {
+    const namedRoot = path.join(root, "named");
+    await mkdir(namedRoot, { recursive: true });
+    const namedRoles = ["authoring", "report", "receipt", "manifest"] as const;
+    for (const role of namedRoles) {
+      await writeFile(path.join(namedRoot, `${role}.json`), `old-${role}`);
+    }
+    const published: string[] = [];
+
+    await promoteNamedArtifactsTransactionally({
+      writes: namedRoles.map((role) => ({
+        role,
+        targetPath: path.join(namedRoot, `${role}.json`),
+        contents: `new-${role}`,
+      })),
+      commitRole: "manifest",
+      injectFailure(point) {
+        if (point.phase === "before-publish-rename") published.push(point.role);
+      },
+    });
+
+    expect(published).toEqual(["authoring", "report", "receipt", "manifest"]);
+    for (const role of namedRoles) {
+      expect(await readFile(path.join(namedRoot, `${role}.json`), "utf8"))
+        .toBe(`new-${role}`);
+    }
+    expect((await readdir(namedRoot)).filter((name) => name.includes(".worldkit-")))
+      .toEqual([]);
+  });
+
+  it("restores an arbitrary coherent set when publication fails", async () => {
+    const namedRoot = path.join(root, "named-rollback");
+    await mkdir(namedRoot, { recursive: true });
+    const namedRoles = ["authoring", "report", "receipt", "manifest"] as const;
+    for (const role of namedRoles) {
+      await writeFile(path.join(namedRoot, `${role}.json`), `old-${role}`);
+    }
+
+    await expect(promoteNamedArtifactsTransactionally({
+      writes: namedRoles.map((role) => ({
+        role,
+        targetPath: path.join(namedRoot, `${role}.json`),
+        contents: `new-${role}`,
+      })),
+      commitRole: "manifest",
+      injectFailure(point) {
+        if (point.phase === "before-publish-rename" && point.role === "receipt") {
+          throw new Error("named publication failed");
+        }
+      },
+    })).rejects.toThrow("named publication failed");
+
+    for (const role of namedRoles) {
+      expect(await readFile(path.join(namedRoot, `${role}.json`), "utf8"))
+        .toBe(`old-${role}`);
+    }
+    expect((await readdir(namedRoot)).filter((name) => name.includes(".worldkit-")))
+      .toEqual([]);
   });
 });

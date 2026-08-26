@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { resampleScalarRasterBilinearV0 } from "./resample-scalar-raster";
+import { resampleScalarRasterBilinear } from "./resample-scalar-raster";
 
-describe("resampleScalarRasterBilinearV0", () => {
+describe("resampleScalarRasterBilinear", () => {
   it("resamples an asymmetric X-fastest field with endpoint-aligned bilinear interpolation", () => {
     const input = {
       columns: 3,
@@ -14,7 +14,7 @@ describe("resampleScalarRasterBilinearV0", () => {
     };
     const before = Array.from(input.values);
 
-    const result = resampleScalarRasterBilinearV0(input, [5, 3]);
+    const result = resampleScalarRasterBilinear(input, [5, 3]);
 
     expect(result.columns).toBe(5);
     expect(result.rows).toBe(3);
@@ -33,8 +33,8 @@ describe("resampleScalarRasterBilinearV0", () => {
       values: new Float32Array([0, 2, 4, 6]),
     };
 
-    const first = resampleScalarRasterBilinearV0(input, [3, 3]);
-    const second = resampleScalarRasterBilinearV0(input, [3, 3]);
+    const first = resampleScalarRasterBilinear(input, [3, 3]);
+    const second = resampleScalarRasterBilinear(input, [3, 3]);
 
     expect(Array.from(first.values)).toEqual([0, 1, 2, 2, 3, 4, 4, 5, 6]);
     expect(first).toEqual(second);
@@ -42,22 +42,22 @@ describe("resampleScalarRasterBilinearV0", () => {
   });
 
   it("rejects degenerate dimensions, mismatched sample counts, and non-finite values", () => {
-    expect(() => resampleScalarRasterBilinearV0({
+    expect(() => resampleScalarRasterBilinear({
       columns: 1,
       rows: 2,
       values: new Float32Array([0, 1]),
     }, [2, 2])).toThrow("at least 2");
-    expect(() => resampleScalarRasterBilinearV0({
+    expect(() => resampleScalarRasterBilinear({
       columns: 2,
       rows: 2,
       values: new Float32Array([0, 1, 2]),
     }, [2, 2])).toThrow("sample count");
-    expect(() => resampleScalarRasterBilinearV0({
+    expect(() => resampleScalarRasterBilinear({
       columns: 2,
       rows: 2,
       values: new Float32Array([0, 1, 2, Number.NaN]),
     }, [2, 2])).toThrow("finite");
-    expect(() => resampleScalarRasterBilinearV0({
+    expect(() => resampleScalarRasterBilinear({
       columns: 2,
       rows: 2,
       values: new Float32Array([0, 1, 2, 3]),

@@ -4,7 +4,7 @@
 
 **Goal:** Promote signed Height Intent compilation into `@whitebox-world/terrain-compiler`, establish durable terrain asset discovery, and make image-driven terrain a receipt-bound default stage of the hosted `agent:world` workflow.
 
-**Architecture:** Land two independently verified commits. The first is a behavior-preserving package and asset-ownership migration. The second adds a closed V1 median-datum profile, extends the existing unified Planner task with a scene prompt and Height Intent PNG, preserves Builder output separately, and lets a trusted Host finalizer atomically publish the final AuthoringSpec before existing build/capture gates.
+**Architecture:** Land two independently verified commits. The first is a behavior-preserving package and asset-ownership migration. The second adds a closed median-datum profile, extends the existing unified Planner task with a scene prompt and Height Intent PNG, preserves Builder output separately, and lets a trusted Host finalizer atomically publish the final AuthoringSpec before existing build/capture gates.
 
 **Tech Stack:** TypeScript 5.9, pnpm workspaces, Vitest, Node.js ESM, shell workflow orchestration, bundled Vite self-checks, sharp PNG decode, Canonical AuthoringSpec V4.
 
@@ -12,12 +12,12 @@
 
 ## Global Constraints
 
-- Work only in `.worktrees/terrain-generation` on `codex/terrain-generation`; do not merge into `main`.
+- Work only in `.worktrees/terrain-generation` on `codex/terrain-generation`; merge into `main` only after the final gates pass and the user explicitly approves integration.
 - Keep package promotion and hosted integration as two separate commits.
 - Runtime never reads planning PNG bytes; only final metric Authoring samples enter build/capture.
 - Planner owns image semantics, Builder owns exact world scale/structure, the package owns deterministic conversion, and trusted Host owns validation and publication.
 - Do not add Provider, Gemini, LWDP, S3, Babylon, Havok, Browser, Runtime, or credential dependencies to `@whitebox-world/terrain-compiler`.
-- Keep `pnpm terrain:intent:compile` and its V0 flags/exit behavior stable.
+- Keep `pnpm terrain:intent:compile` and its flags/exit behavior stable.
 - Do not silently fall back to procedural terrain in the hosted path.
 - Preserve all existing Green Sahara and terrain-experiment artifacts.
 - Apply TDD for every behavior change: write the real behavior test, run it red for the intended reason, implement minimally, then rerun green.
@@ -35,7 +35,7 @@
 - Modify: `scripts/lib/test-gate-manifest.ts`
 
 **Interfaces:**
-- Produces: package root export `compileTerrainHeightIntentV0(input: CompileTerrainHeightIntentInputV0): Promise<CompileTerrainHeightIntentResultV0>` and its input/result/report/diagnostic types.
+- Produces: package root export `compileTerrainHeightIntent(input: CompileTerrainHeightIntentInput): Promise<CompileTerrainHeightIntentResult>` and its input/result/report/diagnostic types.
 - Keeps private: decode, projection, filters, resampling, constraint mutation, CLI parsing, and filesystem publication.
 
 - [ ] **Step 1: Write the failing package-boundary test**
@@ -45,7 +45,7 @@ import * as terrainCompiler from "@whitebox-world/terrain-compiler";
 
 it("exports only the supported Height Intent compiler boundary", () => {
   expect(Object.keys(terrainCompiler).sort()).toEqual([
-    "compileTerrainHeightIntentV0",
+    "compileTerrainHeightIntent",
   ]);
 });
 ```
@@ -64,7 +64,7 @@ Use one export map:
 "exports": { ".": "./src/index.ts" }
 ```
 
-Declare direct dependencies on `@whitebox-world/authoring`, `@whitebox-world/protocol`, `@whitebox-world/terrain-surface`, and `sharp`. Extract the current inline compile input object as `CompileTerrainHeightIntentInputV0`. Update ESM-relative imports and the root CLI target, and move every test-gate path without changing census count.
+Declare direct dependencies on `@whitebox-world/authoring`, `@whitebox-world/protocol`, `@whitebox-world/terrain-surface`, and `sharp`. Extract the current inline compile input object as `CompileTerrainHeightIntentInput`. Update ESM-relative imports and the root CLI target, and move every test-gate path without changing census count.
 
 - [ ] **Step 4: Run package and CLI tests GREEN**
 
@@ -132,9 +132,9 @@ Expected: all tests pass and every accepted asset hash matches.
 **Interfaces:**
 - Produces: first reviewed commit with no hosted workflow behavior change.
 
-- [ ] **Step 1: Reproduce Green Sahara V0 into a temporary directory**
+- [ ] **Step 1: Reproduce the Green Sahara migration baseline into a temporary directory**
 
-Run the stable root CLI against the committed normalized V1 raster and `authoring-v1.json`; compare generated Authoring/report bytes with the frozen files using `/usr/bin/cmp`.
+Run the stable root CLI against the committed selected raster and Builder Authoring; compare generated Authoring/report bytes with the frozen migration baseline using `/usr/bin/cmp`.
 
 - [ ] **Step 2: Run milestone gates**
 
@@ -160,7 +160,7 @@ git add AGENTS.md package.json pnpm-lock.yaml packages/terrain-compiler assets/t
 git commit -m "refactor: promote terrain compiler package"
 ```
 
-### Task 4: Add the closed V1 median-datum profile
+### Task 4: Add the closed median-datum profile
 
 **Files:**
 - Create: `packages/terrain-compiler/src/raster/normalize-signed-height-raster.ts`
@@ -169,7 +169,7 @@ git commit -m "refactor: promote terrain compiler package"
 - Modify: corresponding compiler tests and `src/index.ts`
 
 **Interfaces:**
-- Produces: `compileTerrainHeightIntentV1({ sourcePngBytes, authoringSpec, normalizationProfileId })`.
+- Produces: `compileTerrainHeightIntent({ sourcePngBytes, authoringSpec, normalizationProfileId })`.
 - Requires: `normalizationProfileId: "signed-diverging-blue-gray-orange-median-datum@1"`.
 - Report adds profile ID, filtered median, applied offset, input/output range, and clamped count.
 
@@ -181,12 +181,12 @@ Cover `[0.4, 0.5, 0.6] -> [-0.1, 0, 0.1]`, asymmetric even-count median, negativ
 
 Run: `pnpm exec vitest run packages/terrain-compiler/src/raster/normalize-signed-height-raster.test.ts`
 
-Expected: FAIL because the V1 normalizer is missing.
+Expected: FAIL because the median-datum normalizer is missing.
 
 - [ ] **Step 3: Implement deterministic median-datum normalization**
 
 ```ts
-export const TERRAIN_HEIGHT_INTENT_NORMALIZATION_PROFILE_V1 =
+export const TERRAIN_HEIGHT_INTENT_NORMALIZATION_PROFILE =
   "signed-diverging-blue-gray-orange-median-datum@1" as const;
 
 export function normalizeSignedHeightRasterV1(
@@ -198,11 +198,11 @@ Sort a copy for median calculation, subtract the median from every sample, clamp
 
 - [ ] **Step 4: Run normalization tests GREEN**
 
-Run the focused normalizer tests, then existing V0 compiler tests to prove V0 is unchanged.
+Run the focused normalizer tests, then current compiler tests to prove the package boundary remains intact.
 
-- [ ] **Step 5: Write V1 compiler RED tests, implement V1 orchestration, and rerun GREEN**
+- [ ] **Step 5: Write current compiler RED tests, implement the closed orchestration, and rerun GREEN**
 
-Assert a globally high but varied raster compiles around `baseHeightMeters`, V1 reports exact normalization measurements, V0 hashes remain unchanged, and unsupported profile IDs fail closed.
+Assert a globally high but varied raster compiles around `baseHeightMeters`, the report records exact normalization measurements, migration baseline hashes remain unchanged, and the public input exposes no caller-selectable profile.
 
 ### Task 5: Extend Planner outputs and self-check
 
@@ -263,7 +263,7 @@ Declare the scene prompt and PNG as outputs of the existing Planner task, includ
 
 - [ ] **Step 1: Write failing real-filesystem finalizer tests**
 
-Cover successful publication, Planner hash mismatch, Builder hash mismatch, V1 blocking diagnostics, final self-check failure, pre-existing output refusal/explicit retry behavior, and injected publication failure leaving no partial final set.
+Cover successful publication, Planner hash mismatch, Builder hash mismatch, blocking terrain diagnostics, final self-check failure, pre-existing output refusal/explicit retry behavior, and injected publication failure leaving no partial final set.
 
 - [ ] **Step 2: Run tests and verify RED**
 
@@ -273,7 +273,7 @@ Expected: FAIL because the finalizer is missing.
 
 - [ ] **Step 3: Implement the thin Host finalizer**
 
-Import only package API plus existing Authoring/protocol validators. Hash and validate all inputs, call V1, construct a canonical manifest, stage sibling files, validate staged final Authoring with the source Builder checker, then promote the complete set transactionally.
+Import only package API plus existing Authoring/protocol validators. Hash and validate all inputs, call the current compiler, construct a canonical manifest, stage sibling files, validate staged final Authoring with the source Builder checker, then promote the complete set transactionally.
 
 - [ ] **Step 4: Run finalizer tests GREEN**
 
@@ -318,11 +318,11 @@ Run: `pnpm test:studio`
 - Preserve: `artifacts/terrain-experiments/016-green-sahara-caravan/**`
 
 **Interfaces:**
-- Produces: one inspectable real hosted-equivalent artifact chain and rendered opening evidence using final V1 terrain.
+- Produces: one inspectable real hosted-equivalent artifact chain and rendered opening evidence using final terrain.
 
 - [ ] **Step 1: Bring the frozen Green Sahara planner artifacts to the new receipt contract**
 
-Use the selected raw V1 Height Intent and its exact prompt as the Planner terrain outputs, preserving hashes and provenance. Preserve the old experiment copies.
+Use the selected raw Height Intent and its exact prompt as the Planner terrain outputs, preserving hashes and provenance. Preserve the old experiment copies.
 
 - [ ] **Step 2: Preserve Builder Authoring and run trusted Host finalization**
 

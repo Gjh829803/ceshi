@@ -40,13 +40,15 @@ describe("Unified WorldKit Planner skill", () => {
     expect(plannerPrompt).toContain("scene-brief.md");
     expect(plannerPrompt).toContain("world-plan.png");
     expect(plannerPrompt).toContain("entry-whitebox-target.png");
+    expect(plannerPrompt).toContain("terrain-height-intent-prompt.md");
+    expect(plannerPrompt).toContain("terrain-height-intent.png");
     expect(plannerPrompt).toContain("built-in image generation tool");
     expect(plannerPrompt).toContain("1-5 visual targets");
     expect(plannerPrompt).toContain("standard or custom movement mode");
     expect(plannerPrompt).toContain("four separate provenance sections required by current main");
     expect(plannerPrompt).toContain("Planner does not select Subject Definitions");
     expect(plannerPrompt).toContain("do not use a fixed play-time or perimeter target");
-    expect(skill).toContain("Create exactly three files");
+    expect(skill).toContain("Create exactly five semantic output files");
     expect(skill).toContain("built-in image generation tool");
     expect(skill).toContain("The image contains only three information layers");
     expect(skill).toContain("initial-subject marker");
@@ -61,6 +63,9 @@ describe("Unified WorldKit Planner skill", () => {
     expect(skill).toContain("never diagonally behind it");
     expect(skill).toContain("three-quarter rear view");
     expect(skill).toContain("same neutral clear daytime inspection lighting");
+    expect(skill).toContain("signed-diverging-blue-gray-orange@1");
+    expect(skill).toContain("encoding-style-only");
+    expect(skill).toContain("world-plan.png owns orientation and complete-world extent");
     expect(skill).toContain("Never copy the reference image's time of day");
     expect(plannerPrompt).toContain("same bright neutral clear daytime inspection lighting");
     expect(launcher).toContain("scripts/write-visual-identity-palette.ts");
@@ -73,6 +78,8 @@ describe("Unified WorldKit Planner skill", () => {
     expect(launcher).toMatch(/--output "artifacts\/scenes\/\$scene_id\/scene-brief\.md/);
     expect(launcher).toMatch(/--output "apps\/playground\/public\/scene-plans\/\$scene_id\/world-plan\.png/);
     expect(launcher).toMatch(/--output "apps\/playground\/public\/scene-plans\/\$scene_id\/entry-whitebox-target\.png/);
+    expect(launcher).toMatch(/--output "artifacts\/scenes\/\$scene_id\/terrain-height-intent-prompt\.md/);
+    expect(launcher).toMatch(/--output "apps\/playground\/public\/scene-plans\/\$scene_id\/terrain-height-intent\.png/);
     expect(launcher).not.toContain("planner_repair_prompt");
     expect(launcher).not.toContain("WORLDKIT_PLANNER_REPAIR");
     expect(launcher).toContain("scripts/run-codex-task.mjs");

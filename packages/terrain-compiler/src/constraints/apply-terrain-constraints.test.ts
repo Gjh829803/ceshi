@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { sampleTriangleHeightfieldSurface } from "@whitebox-world/terrain-surface";
 
-import { applyTerrainConstraintsV0 } from "./apply-terrain-constraints";
-import type { TerrainConstraintV0 } from "./terrain-constraint-types";
+import { applyTerrainConstraints } from "./apply-terrain-constraints";
+import type { TerrainConstraint } from "./terrain-constraint-types";
 
 function sampleAt(
   values: Float32Array,
@@ -13,7 +13,7 @@ function sampleAt(
   return values[row * columns + column]!;
 }
 
-describe("applyTerrainConstraintsV0", () => {
+describe("applyTerrainConstraints", () => {
   it("applies stable Water > Spawn > Landmark > Route priority on an asymmetric grid", () => {
     const columns = 7;
     const rows = 5;
@@ -23,7 +23,7 @@ describe("applyTerrainConstraintsV0", () => {
       ).flat(),
     );
     const before = Array.from(heightSamplesMeters);
-    const constraints: TerrainConstraintV0[] = [
+    const constraints: TerrainConstraint[] = [
       {
         id: "route-main",
         kind: "route-slope",
@@ -57,7 +57,7 @@ describe("applyTerrainConstraintsV0", () => {
       },
     ];
 
-    const forward = applyTerrainConstraintsV0({
+    const forward = applyTerrainConstraints({
       centerMetersXZ: [0, 0],
       sizeMetersXZ: [6, 4],
       heightRangeMeters: [-20, 20],
@@ -65,7 +65,7 @@ describe("applyTerrainConstraintsV0", () => {
       heightSamplesMeters,
       constraints,
     });
-    const reversed = applyTerrainConstraintsV0({
+    const reversed = applyTerrainConstraints({
       centerMetersXZ: [0, 0],
       sizeMetersXZ: [6, 4],
       heightRangeMeters: [-20, 20],
@@ -132,7 +132,7 @@ describe("applyTerrainConstraintsV0", () => {
       sample: [0, 1] as const,
     },
   ])("rasterizes $name Water boundaries", ({ constraint, sample }) => {
-    const result = applyTerrainConstraintsV0({
+    const result = applyTerrainConstraints({
       centerMetersXZ: [0, 0],
       sizeMetersXZ: [4, 4],
       heightRangeMeters: [-20, 20],
@@ -151,7 +151,7 @@ describe("applyTerrainConstraintsV0", () => {
       3, 4, 5,
       6, 7, 8,
     ]);
-    const result = applyTerrainConstraintsV0({
+    const result = applyTerrainConstraints({
       centerMetersXZ: [0, 0],
       sizeMetersXZ: [2, 2],
       heightRangeMeters: [-20, 20],
@@ -183,7 +183,7 @@ describe("applyTerrainConstraintsV0", () => {
       8, 8, 8, 8, 8,
     ]);
 
-    const result = applyTerrainConstraintsV0({
+    const result = applyTerrainConstraints({
       centerMetersXZ: [0, 0],
       sizeMetersXZ: [4, 4],
       heightRangeMeters: [-20, 20],
@@ -207,7 +207,7 @@ describe("applyTerrainConstraintsV0", () => {
       [0, 0, 0, 0, 2, 2, 2].flatMap((height) => Array(7).fill(height)),
     );
 
-    const result = applyTerrainConstraintsV0({
+    const result = applyTerrainConstraints({
       centerMetersXZ: [0, 0],
       sizeMetersXZ: [6, 6],
       heightRangeMeters: [-20, 20],
@@ -247,8 +247,8 @@ describe("applyTerrainConstraintsV0", () => {
       }],
     };
 
-    const first = applyTerrainConstraintsV0(input);
-    const second = applyTerrainConstraintsV0(input);
+    const first = applyTerrainConstraints(input);
+    const second = applyTerrainConstraints(input);
 
     expect(first).toEqual(second);
     expect(first.deltas[0]?.changedSampleCount).toBeGreaterThan(0);
@@ -261,7 +261,7 @@ describe("applyTerrainConstraintsV0", () => {
         Array.from({ length: 7 }, (_, column) => (column - 3) * 2),
       ).flat(),
     );
-    const result = applyTerrainConstraintsV0({
+    const result = applyTerrainConstraints({
       centerMetersXZ: [0, 0],
       sizeMetersXZ: [6, 6],
       heightRangeMeters: [-20, 20],
@@ -283,7 +283,7 @@ describe("applyTerrainConstraintsV0", () => {
   });
 
   it("reports a blocking diagnostic when higher-priority Water makes Route slope impossible", () => {
-    const result = applyTerrainConstraintsV0({
+    const result = applyTerrainConstraints({
       centerMetersXZ: [0, 0],
       sizeMetersXZ: [4, 2],
       heightRangeMeters: [-20, 20],
@@ -317,7 +317,7 @@ describe("applyTerrainConstraintsV0", () => {
   });
 
   it("revalidates every Route against the final raster after equal-priority overlaps", () => {
-    const result = applyTerrainConstraintsV0({
+    const result = applyTerrainConstraints({
       centerMetersXZ: [0, 0],
       sizeMetersXZ: [4, 4],
       heightRangeMeters: [-20, 20],
@@ -353,7 +353,7 @@ describe("applyTerrainConstraintsV0", () => {
   });
 
   it("conservatively rasterizes a required Spawn region smaller than one grid cell", () => {
-    const result = applyTerrainConstraintsV0({
+    const result = applyTerrainConstraints({
       centerMetersXZ: [0, 0],
       sizeMetersXZ: [2, 2],
       heightRangeMeters: [-10, 10],
@@ -379,8 +379,34 @@ describe("applyTerrainConstraintsV0", () => {
     expect(spawnSurface?.heightMeters).toBeCloseTo(5, 6);
   });
 
+  it("protects intersecting cell corners when a tiny Spawn region contains one grid vertex", () => {
+    const result = applyTerrainConstraints({
+      centerMetersXZ: [0, 0],
+      sizeMetersXZ: [4, 4],
+      heightRangeMeters: [-10, 10],
+      resolutionVerticesXZ: [5, 5],
+      heightSamplesMeters: Float32Array.from(
+        { length: 25 },
+        (_, index) => index - 10,
+      ),
+      constraints: [{
+        id: "grid-aligned-tiny-spawn",
+        kind: "flatten-region",
+        pointsMetersXZ: [[-0.25, -0.25], [0.25, -0.25], [0.25, 0.25], [-0.25, 0.25]],
+        targetHeightMeters: 0,
+        falloffWidthMeters: 0,
+        role: "spawn",
+      }],
+    });
+
+    expect(result.deltas[0]?.changedSampleCount).toBeGreaterThanOrEqual(9);
+    for (const index of [6, 7, 8, 11, 12, 13, 16, 17, 18]) {
+      expect(result.heightSamplesMeters[index]).toBe(0);
+    }
+  });
+
   it("conservatively rasterizes a Water body smaller than one grid cell", () => {
-    const result = applyTerrainConstraintsV0({
+    const result = applyTerrainConstraints({
       centerMetersXZ: [0, 0],
       sizeMetersXZ: [2, 2],
       heightRangeMeters: [-10, 10],
@@ -407,7 +433,7 @@ describe("applyTerrainConstraintsV0", () => {
   });
 
   it("fails closed when a constraint writes outside the world height range", () => {
-    const result = applyTerrainConstraintsV0({
+    const result = applyTerrainConstraints({
       centerMetersXZ: [0, 0],
       sizeMetersXZ: [2, 2],
       heightRangeMeters: [-10, 10],
@@ -433,7 +459,7 @@ describe("applyTerrainConstraintsV0", () => {
   });
 
   it("rejects invalid grids and non-finite constraint edits", () => {
-    expect(() => applyTerrainConstraintsV0({
+    expect(() => applyTerrainConstraints({
       centerMetersXZ: [0, 0],
       sizeMetersXZ: [2, 2],
       heightRangeMeters: [-20, 20],
@@ -441,7 +467,7 @@ describe("applyTerrainConstraintsV0", () => {
       heightSamplesMeters: new Float32Array([0, 1, 2]),
       constraints: [],
     })).toThrow("sample count");
-    expect(() => applyTerrainConstraintsV0({
+    expect(() => applyTerrainConstraints({
       centerMetersXZ: [0, 0],
       sizeMetersXZ: [2, 2],
       heightRangeMeters: [-20, 20],

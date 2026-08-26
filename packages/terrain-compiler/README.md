@@ -10,9 +10,9 @@ Import only from the package root:
 
 ```ts
 import {
-  compileTerrainHeightIntentV0,
-  type CompileTerrainHeightIntentInputV0,
-  type CompileTerrainHeightIntentResultV0,
+  compileTerrainHeightIntent,
+  type CompileTerrainHeightIntentInput,
+  type CompileTerrainHeightIntentResult,
 } from "@whitebox-world/terrain-compiler";
 ```
 

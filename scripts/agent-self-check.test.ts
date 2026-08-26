@@ -84,6 +84,8 @@ describe("single-job Planner and Builder self-check bundles", () => {
       const mapPath = path.join(root, "implementation-map.draft.json");
       const worldPlanPath = path.join(root, "world-plan.png");
       const entryPath = path.join(root, "entry-whitebox-target.png");
+      const terrainPromptPath = path.join(root, "terrain-height-intent-prompt.md");
+      const terrainIntentPath = path.join(root, "terrain-height-intent.png");
       const world = JSON.parse(
         await readFile("examples/authoring/basic-world.json", "utf8"),
       );
@@ -99,6 +101,16 @@ describe("single-job Planner and Builder self-check bundles", () => {
       terrain.components.terrain.source.amplitudeMeters = 0;
       await Promise.all([
         writeFile(briefPath, brief),
+        writeFile(terrainPromptPath, `# Terrain Height Intent
+
+Reference roles: Image 1 is the primary-coordinate reference.
+Base terrain: broad continuous valley and hills.
+Depressions: one shallow basin.
+Static Landmark and Structure exclusions: omit the tower and buildings.
+Entry and connectivity: preserve stable connected ground at the entry.
+Orientation: bottom is entry and top is world-forward.
+Encoding profile: signed-diverging-blue-gray-orange@1 using RGB(32,64,208), RGB(128,128,128), and RGB(224,96,32).
+`),
         writeFile(worldPath, JSON.stringify(world)),
         writeFile(mapPath, JSON.stringify({
           kind: "worldkit-scene-brief-implementation-map-draft",
@@ -118,7 +130,10 @@ describe("single-job Planner and Builder self-check bundles", () => {
         "entry=Image.new('RGB',(100,100),'white')",
         "ImageDraw.Draw(entry).rectangle((43,25,56,90),fill='#E85D5D')",
         "entry.save(sys.argv[2])",
-      ].join("\n"), worldPlanPath, entryPath]);
+        "terrain=Image.new('RGB',(100,100),(80,96,168))",
+        "ImageDraw.Draw(terrain).rectangle((50,0,99,99),fill=(176,112,80))",
+        "terrain.save(sys.argv[3])",
+      ].join("\n"), worldPlanPath, entryPath, terrainIntentPath]);
       expect(imageFixture.status, imageFixture.stderr).toBe(0);
 
       const plannerReport = path.join(root, "planner-self-check.json");
@@ -128,6 +143,8 @@ describe("single-job Planner and Builder self-check bundles", () => {
         "--brief", briefPath,
         "--world-plan", worldPlanPath,
         "--entry", entryPath,
+        "--terrain-prompt", terrainPromptPath,
+        "--terrain-intent", terrainIntentPath,
         "--report", plannerReport,
       ]);
       expect(planner.status, planner.stderr || planner.stdout).toBe(0);

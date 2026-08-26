@@ -2,11 +2,11 @@ import type { Vec2 } from "@whitebox-world/authoring";
 import { sampleTriangleHeightfieldSurface } from "@whitebox-world/terrain-surface";
 
 import type {
-  TerrainConstraintV0,
-  TerrainIntentDiagnosticV0,
+  TerrainConstraint,
+  TerrainIntentDiagnostic,
 } from "./terrain-constraint-types";
 
-const CONSTRAINT_PRIORITY: Readonly<Record<TerrainConstraintV0["kind"], number>> = {
+const CONSTRAINT_PRIORITY: Readonly<Record<TerrainConstraint["kind"], number>> = {
   "water-basin": 0,
   "flatten-region": 1,
   "flatten-footprint": 2,
@@ -16,20 +16,20 @@ const UNLOCKED_PRIORITY = 255;
 const GEOMETRY_EPSILON_METERS = 1e-9;
 const HEIGHT_RANGE_EPSILON_METERS = 1e-5;
 
-export interface TerrainConstraintDeltaV0 {
+export interface TerrainConstraintDelta {
   readonly constraintId: string;
   readonly changedSampleCount: number;
   readonly maximumAbsoluteDeltaMeters: number;
 }
 
-export interface ApplyTerrainConstraintsResultV0 {
+export interface ApplyTerrainConstraintsResult {
   readonly heightSamplesMeters: Float32Array;
   readonly protectedSampleMask: Uint8Array;
-  readonly deltas: readonly TerrainConstraintDeltaV0[];
-  readonly diagnostics: readonly TerrainIntentDiagnosticV0[];
+  readonly deltas: readonly TerrainConstraintDelta[];
+  readonly diagnostics: readonly TerrainIntentDiagnostic[];
 }
 
-interface GridGeometryV0 {
+interface GridGeometry {
   readonly columns: number;
   readonly rows: number;
   readonly minimumXMeters: number;
@@ -38,7 +38,7 @@ interface GridGeometryV0 {
   readonly stepZMeters: number;
 }
 
-interface RouteHeightEnvelopeV0 {
+interface RouteHeightEnvelope {
   readonly nearestDistanceMeters: number;
   readonly nearestProjectedHeightMeters: number;
   readonly minimumHeightMeters: number;
@@ -94,7 +94,7 @@ function requirePolygon(points: readonly Vec2[], fieldName: string): void {
   points.forEach((point, index) => requireVec2(point, `${fieldName}[${index}]`));
 }
 
-function validateConstraint(constraint: TerrainConstraintV0): void {
+function validateConstraint(constraint: TerrainConstraint): void {
   if (constraint.id.length === 0) {
     throw new Error("Terrain constraint id must be non-empty.");
   }
@@ -146,8 +146,8 @@ function validateInput(input: {
   readonly heightRangeMeters: readonly [minimum: number, maximum: number];
   readonly resolutionVerticesXZ: readonly [number, number];
   readonly heightSamplesMeters: Float32Array;
-  readonly constraints: readonly TerrainConstraintV0[];
-}): GridGeometryV0 {
+  readonly constraints: readonly TerrainConstraint[];
+}): GridGeometry {
   requireVec2(input.centerMetersXZ, "centerMetersXZ");
   requirePositive(input.sizeMetersXZ[0], "sizeMetersXZ[0]");
   requirePositive(input.sizeMetersXZ[1], "sizeMetersXZ[1]");
@@ -213,7 +213,7 @@ function routeHeightEnvelope(
   points: readonly Vec2[],
   routeHeights: readonly number[],
   maximumSlopeDegrees: number,
-): RouteHeightEnvelopeV0 {
+): RouteHeightEnvelope {
   const maximumRisePerMeter = Math.tan((maximumSlopeDegrees * Math.PI) / 180);
   let nearestDistanceMeters = Number.POSITIVE_INFINITY;
   let nearestProjectedHeightMeters = Number.NaN;
@@ -312,7 +312,7 @@ function polygonInteriorDistanceMeters(point: Vec2, points: readonly Vec2[]): nu
 
 function waterInteriorDistanceMeters(
   point: Vec2,
-  constraint: Extract<TerrainConstraintV0, { kind: "water-basin" }>,
+  constraint: Extract<TerrainConstraint, { kind: "water-basin" }>,
 ): number | undefined {
   const boundary = constraint.boundary;
   switch (boundary.kind) {
@@ -364,21 +364,21 @@ function falloffWeight(interiorDistanceMeters: number, falloffWidthMeters: numbe
     : Math.max(0, Math.min(1, interiorDistanceMeters / falloffWidthMeters));
 }
 
-function gridPoint(grid: GridGeometryV0, column: number, row: number): Vec2 {
+function gridPoint(grid: GridGeometry, column: number, row: number): Vec2 {
   return [
     grid.minimumXMeters + column * grid.stepXMeters,
     grid.minimumZMeters + row * grid.stepZMeters,
   ];
 }
 
-interface RectangleXZV0 {
+interface RectangleXZ {
   readonly minimumXMeters: number;
   readonly minimumZMeters: number;
   readonly maximumXMeters: number;
   readonly maximumZMeters: number;
 }
 
-function pointInsideRectangle(point: Vec2, rectangle: RectangleXZV0): boolean {
+function pointInsideRectangle(point: Vec2, rectangle: RectangleXZ): boolean {
   return point[0] >= rectangle.minimumXMeters - GEOMETRY_EPSILON_METERS &&
     point[0] <= rectangle.maximumXMeters + GEOMETRY_EPSILON_METERS &&
     point[1] >= rectangle.minimumZMeters - GEOMETRY_EPSILON_METERS &&
@@ -415,7 +415,7 @@ function segmentsIntersect(leftStart: Vec2, leftEnd: Vec2, rightStart: Vec2, rig
     (rightStartOrientation > 0) !== (rightEndOrientation > 0);
 }
 
-function rectangleCorners(rectangle: RectangleXZV0): readonly Vec2[] {
+function rectangleCorners(rectangle: RectangleXZ): readonly Vec2[] {
   return [
     [rectangle.minimumXMeters, rectangle.minimumZMeters],
     [rectangle.maximumXMeters, rectangle.minimumZMeters],
@@ -424,7 +424,7 @@ function rectangleCorners(rectangle: RectangleXZV0): readonly Vec2[] {
   ];
 }
 
-function polygonIntersectsRectangle(points: readonly Vec2[], rectangle: RectangleXZV0): boolean {
+function polygonIntersectsRectangle(points: readonly Vec2[], rectangle: RectangleXZ): boolean {
   if (points.some((point) => pointInsideRectangle(point, rectangle))) return true;
   const corners = rectangleCorners(rectangle);
   if (corners.some((corner) => pointInPolygon(corner, points))) return true;
@@ -444,8 +444,8 @@ function polygonIntersectsRectangle(points: readonly Vec2[], rectangle: Rectangl
 }
 
 function waterBoundaryIntersectsRectangle(
-  constraint: Extract<TerrainConstraintV0, { kind: "water-basin" }>,
-  rectangle: RectangleXZV0,
+  constraint: Extract<TerrainConstraint, { kind: "water-basin" }>,
+  rectangle: RectangleXZ,
 ): boolean {
   const boundary = constraint.boundary;
   if (boundary.kind === "polygon") {
@@ -476,8 +476,8 @@ function waterBoundaryIntersectsRectangle(
 }
 
 function conservativeIntersectingCellVertexIndices(
-  grid: GridGeometryV0,
-  intersects: (rectangle: RectangleXZV0) => boolean,
+  grid: GridGeometry,
+  intersects: (rectangle: RectangleXZ) => boolean,
 ): ReadonlySet<number> {
   const indices = new Set<number>();
   for (let row = 0; row < grid.rows - 1; row += 1) {
@@ -500,8 +500,8 @@ function conservativeIntersectingCellVertexIndices(
 }
 
 function pushProtectedRegionOutsideTerrainDiagnostic(
-  diagnostics: TerrainIntentDiagnosticV0[],
-  constraint: Extract<TerrainConstraintV0, { kind: "water-basin" | "flatten-region" }>,
+  diagnostics: TerrainIntentDiagnostic[],
+  constraint: Extract<TerrainConstraint, { kind: "water-basin" | "flatten-region" }>,
 ): void {
   diagnostics.push({
     severity: "blocking",
@@ -515,7 +515,7 @@ function recordDelta(
   constraintId: string,
   before: Float32Array,
   after: Float32Array,
-): TerrainConstraintDeltaV0 {
+): TerrainConstraintDelta {
   let changedSampleCount = 0;
   let maximumAbsoluteDeltaMeters = 0;
   for (let index = 0; index < after.length; index += 1) {
@@ -530,7 +530,7 @@ function recordDelta(
   return { constraintId, changedSampleCount, maximumAbsoluteDeltaMeters };
 }
 
-function sortConstraints(constraints: readonly TerrainConstraintV0[]): TerrainConstraintV0[] {
+function sortConstraints(constraints: readonly TerrainConstraint[]): TerrainConstraint[] {
   return [...constraints].sort((left, right) => {
     const priorityDelta = CONSTRAINT_PRIORITY[left.kind] - CONSTRAINT_PRIORITY[right.kind];
     return priorityDelta === 0 ? left.id.localeCompare(right.id) : priorityDelta;
@@ -544,8 +544,8 @@ function sampleRouteVertexHeights(
     readonly resolutionVerticesXZ: readonly [number, number];
   },
   values: Float32Array,
-  constraint: Extract<TerrainConstraintV0, { kind: "route-slope" }>,
-  diagnostics: TerrainIntentDiagnosticV0[],
+  constraint: Extract<TerrainConstraint, { kind: "route-slope" }>,
+  diagnostics: TerrainIntentDiagnostic[],
 ): number[] | undefined {
   const heights = constraint.pointsMetersXZ.map((point) =>
     sampleTriangleHeightfieldSurface(
@@ -604,9 +604,9 @@ function validateRouteSlope(
     readonly resolutionVerticesXZ: readonly [number, number];
   },
   values: Float32Array,
-  grid: GridGeometryV0,
-  constraint: Extract<TerrainConstraintV0, { kind: "route-slope" }>,
-  diagnostics: TerrainIntentDiagnosticV0[],
+  grid: GridGeometry,
+  constraint: Extract<TerrainConstraint, { kind: "route-slope" }>,
+  diagnostics: TerrainIntentDiagnostic[],
 ): void {
   const spacingMeters = Math.min(grid.stepXMeters, grid.stepZMeters) / 4;
   let measuredMaximumSlopeDegrees = 0;
@@ -660,20 +660,20 @@ function validateRouteSlope(
   }
 }
 
-export function applyTerrainConstraintsV0(input: {
+export function applyTerrainConstraints(input: {
   readonly centerMetersXZ: Vec2;
   readonly sizeMetersXZ: Vec2;
   readonly heightRangeMeters: readonly [minimum: number, maximum: number];
   readonly resolutionVerticesXZ: readonly [number, number];
   readonly heightSamplesMeters: Float32Array;
-  readonly constraints: readonly TerrainConstraintV0[];
-}): ApplyTerrainConstraintsResultV0 {
+  readonly constraints: readonly TerrainConstraint[];
+}): ApplyTerrainConstraintsResult {
   const grid = validateInput(input);
   const values = new Float32Array(input.heightSamplesMeters);
   const lockPriorities = new Uint8Array(values.length);
   lockPriorities.fill(UNLOCKED_PRIORITY);
-  const diagnostics: TerrainIntentDiagnosticV0[] = [];
-  const deltas: TerrainConstraintDeltaV0[] = [];
+  const diagnostics: TerrainIntentDiagnostic[] = [];
+  const deltas: TerrainConstraintDelta[] = [];
   const sortedConstraints = sortConstraints(input.constraints);
 
   for (const constraint of sortedConstraints) {
@@ -727,12 +727,21 @@ export function applyTerrainConstraintsV0(input: {
           lockPriorities[index] = Math.min(lockPriorities[index]!, priority);
         }
       }
-      if (coveredSampleCount === 0) {
+      const minimumXMeters = Math.min(...constraint.pointsMetersXZ.map(([x]) => x));
+      const maximumXMeters = Math.max(...constraint.pointsMetersXZ.map(([x]) => x));
+      const minimumZMeters = Math.min(...constraint.pointsMetersXZ.map(([, z]) => z));
+      const maximumZMeters = Math.max(...constraint.pointsMetersXZ.map(([, z]) => z));
+      const requiresConservativeSpawnCoverage = constraint.role === "spawn" &&
+        (
+          maximumXMeters - minimumXMeters < grid.stepXMeters ||
+          maximumZMeters - minimumZMeters < grid.stepZMeters
+        );
+      if (coveredSampleCount === 0 || requiresConservativeSpawnCoverage) {
         const fallbackIndices = conservativeIntersectingCellVertexIndices(
           grid,
           (rectangle) => polygonIntersectsRectangle(constraint.pointsMetersXZ, rectangle),
         );
-        if (fallbackIndices.size === 0) {
+        if (fallbackIndices.size === 0 && coveredSampleCount === 0) {
           pushProtectedRegionOutsideTerrainDiagnostic(diagnostics, constraint);
         } else {
           for (const index of fallbackIndices) {

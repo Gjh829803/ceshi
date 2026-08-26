@@ -11,14 +11,14 @@ Every generated whitebox world uses `world.environment.preset: "clear-day"`. Thi
 
 ## Authority boundary
 
-Inputs are the validated natural-language `scene-brief.md`, `visual-identity-palette.json`, `world-plan.png`, and `entry-whitebox-target.png`. These are hosted-workflow intent inputs, not Canonical world authority and not a replacement for the repository's formal WorldSpec/plan-lock workflow. The Builder owns all numeric spatialization and emits the first Canonical authority for this hosted path: AuthoringSpec V4. The trusted Host remains authoritative for normalization, compilation, route evidence and runtime capture.
+Inputs are the validated natural-language `scene-brief.md`, `visual-identity-palette.json`, `world-plan.png`, `entry-whitebox-target.png`, `terrain-height-intent-prompt.md`, and `terrain-height-intent.png`. These are hosted-workflow intent inputs, not Canonical world authority and not a replacement for the repository's formal WorldSpec/plan-lock workflow. The Builder owns all numeric spatialization and emits the pre-terrain Canonical authority for this hosted path: AuthoringSpec V4. It uses Height Intent only to choose coherent world bounds, grid resolution, height range, datum, placements, and authored constraints; it must not decode, resample, normalize, or edit its pixels. The trusted Host alone compiles the frozen Height Intent into the final AuthoringSpec, then owns normalization, route evidence and runtime capture.
 
 Create the declared scene outputs:
 
-- `artifacts/scenes/<scene-id>/authoring.json`
+- `artifacts/scenes/<scene-id>/authoring.builder.json`
 - `artifacts/scenes/<scene-id>/implementation-map.draft.json`
 
-Do not edit the Scene Brief, palette, or planner images. Do not add Babylon, Havok, Three.js, mesh, GLB URL, bone, clip, collider-handle, compiler, or runtime implementation fields to Canonical JSON.
+Do not edit the Scene Brief, palette, terrain prompt, or planner images. Do not add Babylon, Havok, Three.js, mesh, GLB URL, bone, clip, collider-handle, compiler, or runtime implementation fields to Canonical JSON.
 
 ## Required references
 
@@ -43,7 +43,7 @@ Read these files completely before writing either output:
 2. Build the complete described world, not only the entry-camera view. Infer practical bounds, levels, support surfaces, and clearances from the brief, reference images, motion mode, and planner images.
    - The entry Camera covers only an entry slice. Size the usable world from the request, visible evidence, inferred continuation, current terrain-cell guidance and resource budget. Do not infer quality from perimeter length or a fixed play-time estimate.
    - For an explicitly requested `1–2km` world, use the current large single-Heightfield profile: at most `1024` vertices per axis, normally `1.25–2.5m` per cell, and a resource budget derived from the actual Terrain vertex/triangle counts plus other geometry. This is not Runtime streaming or multi-Terrain support.
-   - Do not create an empty oversized rectangle. Carry the Brief's terrain variation, spatial subareas, destinations, and explorable structures across the usable footprint while preserving open-domain rules.
+   - Do not create an empty oversized rectangle. Carry the Brief's terrain variation, Height Intent topology, spatial subareas, destinations, and explorable structures across the usable footprint while preserving open-domain rules. Keep large peaks, arches, buildings, and other discrete landmarks as separately authored static geometry; Height Intent owns only continuous base ground.
 3. Establish navigation before landmark detail. Open land remains fully traversable outside collision blockers. Only a visibly or verbally restricted connection receives explicit route supports. For flight, underwater, vehicle and other requests outside the current production phase, still build the complete requested world and Subject silhouette, use the disclosed playable approximation described above, and leave unsupported Route claims empty.
 4. Create landmarks after world coverage and traversal are complete. Preserve each named whole target's semantic identity and use the smallest number of major masses that still reads as the intended complete object.
 5. Bind exactly one startup-controlled Subject to exactly one spawn Anchor and one third-person Camera. The Camera target and `startup.controlledEntityId` must identify that Subject, including when it is a bound composite.
@@ -61,7 +61,7 @@ Read these files completely before writing either output:
 
 ## Composable capability and remaining budget gates
 
-- Every emitted capability closure must resolve and execute in the current runtime, but the complete Subject does not need a Registry preset. Compose a package-local Subject from visual parts and the closest honest current motion closure, then repair it through the bundled validator. Absence of a named preset is never a reason to omit `authoring.json` or stop the task. The Agent must not add or modify SDK motion bases, Registry catalogs, Runtime, Compiler, or protocols.
+- Every emitted capability closure must resolve and execute in the current runtime, but the complete Subject does not need a Registry preset. Compose a package-local Subject from visual parts and the closest honest current motion closure, then repair it through the bundled validator. Absence of a named preset is never a reason to omit `authoring.builder.json` or stop the task. The Agent must not add or modify SDK motion bases, Registry catalogs, Runtime, Compiler, or protocols.
 - Never emit `worldkit://capability/relationship.mount@1`, `relationship.seat@1`, or `relationship.tether@1`.
 - Never emit `worldkit://capability/relationship.mounted-on@1` until Hosted Builder mount admission is explicitly opened. Bind the rider/body/equipment pieces into one Subject with shared visual parts and one current motion closure instead of using a relationship.
 - The default Motion Kernel and Control Profile must use the same command kind. Never reconstruct an unlisted motion closure from individual refs merely because their names resemble the requested behavior.
@@ -98,14 +98,14 @@ Run the standalone validator bundled with this Skill:
 node .codex/skills/worldkit-canonical-builder/scripts/self-check.mjs \
   --scene-id <scene-id> \
   --brief artifacts/scenes/<scene-id>/scene-brief.md \
-  --world artifacts/scenes/<scene-id>/authoring.json \
+  --world artifacts/scenes/<scene-id>/authoring.builder.json \
   --map-draft artifacts/scenes/<scene-id>/implementation-map.draft.json \
   --report artifacts/scenes/<scene-id>/builder-self-check.json
 ```
 
 This portable single-file checker is generated from the current repository source and contains Authoring V4 validation, normalization, layout solving, IR V4 / ExecutionPlan V5 compilation, data-only Gameplay Bootstrap construction, the current modular Subject Registry closure, terrain-scale evidence, per-route build-window evidence, and implementation-map checks. `scripts/agent-self-check.test.ts` verifies parity with the source implementation. It needs no repository checkout or `node_modules` in the cloud workspace.
 
-If it fails, read its JSON diagnostics, correct only `authoring.json` and `implementation-map.draft.json` inside this same task, and run it again. Use at most three self-repair cycles. A repair must remove the exact rejected ref, fix the named placement, reduce the measured vertex/triangle/collider cause, or split an over-budget Route with explicit shared seam Anchors; never return the same invalid content or raise an enforced ceiling. Never finish with a failed or stale receipt: the receipt hashes the Brief, AuthoringSpec and map draft, so rerun after every edit.
+If it fails, read its JSON diagnostics, correct only `authoring.builder.json` and `implementation-map.draft.json` inside this same task, and run it again. Use at most three self-repair cycles. A repair must remove the exact rejected ref, fix the named placement, reduce the measured vertex/triangle/collider cause, or split an over-budget Route with explicit shared seam Anchors; never return the same invalid content or raise an enforced ceiling. Never finish with a failed or stale receipt: the receipt hashes the Brief, AuthoringSpec and map draft, so rerun after every edit.
 
 For every ground-supported movement mode, the compiled Subject's capsule feet must begin on an actual support surface. Terrain starts are sampled against the compiled Heightfield within the checker's tolerance; constructed starts require a satisfied `supported-by` layout assertion. The checker reports `SPAWN_BELOW_GROUND` or `SPAWN_ABOVE_GROUND` with `requiredSubjectOriginYMeters` for bad Terrain starts; repair the Anchor and rerun instead of relying on runtime falling or collision recovery.
 

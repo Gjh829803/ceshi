@@ -1,10 +1,10 @@
-export interface QuantizeTerrainHeightSamplesInputV0 {
+export interface QuantizeTerrainHeightSamplesInput {
   readonly heightSamplesMeters: Float32Array;
   readonly protectedSampleMask: Uint8Array;
   readonly quantumMeters: number;
 }
 
-export interface QuantizedTerrainHeightSamplesV0 {
+export interface QuantizedTerrainHeightSamples {
   readonly heightSamplesMeters: readonly number[];
   readonly quantizedSampleCount: number;
   readonly protectedSampleCount: number;
@@ -14,9 +14,9 @@ function fail(message: string): never {
   throw new Error(`TERRAIN_HEIGHT_SAMPLE_QUANTIZATION_INVALID: ${message}`);
 }
 
-export function quantizeUnprotectedTerrainHeightSamplesMetersV0(
-  input: QuantizeTerrainHeightSamplesInputV0,
-): QuantizedTerrainHeightSamplesV0 {
+export function quantizeUnprotectedTerrainHeightSamplesMeters(
+  input: QuantizeTerrainHeightSamplesInput,
+): QuantizedTerrainHeightSamples {
   if (!(input.heightSamplesMeters instanceof Float32Array)) {
     fail("heightSamplesMeters must be a Float32Array.");
   }
