@@ -219,6 +219,18 @@ importers:
         specifier: ^4.18.1
         version: 4.18.1
 
+  packages/authoring-edit:
+    dependencies:
+      '@whitebox-world/authoring':
+        specifier: workspace:*
+        version: link:../authoring
+      '@whitebox-world/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      lodash-es:
+        specifier: ^4.18.1
+        version: 4.18.1
+
   packages/camera: {}
 
   packages/compiler:
