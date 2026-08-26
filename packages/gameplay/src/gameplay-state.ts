@@ -18,7 +18,9 @@ import {
   type GameplayEntityDescriptorV1,
   type GameplayInspectionSnapshotV1,
   type GameplayParticipantStateV1,
+  type GameplayRelationshipStateV1,
   type GameplaySemanticFactV1,
+  type MountedOnRelationshipStateV1,
   type PossessedByRelationshipStateV1,
   type Sha256HashV1,
   type SpatialEntityStateV1,
@@ -61,11 +63,11 @@ export type GameplayRelationshipChangeV1 =
   | Readonly<{
       operation: "add";
       before?: never;
-      after: PossessedByRelationshipStateV1;
+      after: GameplayRelationshipStateV1;
     }>
   | Readonly<{
       operation: "remove";
-      before: PossessedByRelationshipStateV1;
+      before: GameplayRelationshipStateV1;
       after?: never;
     }>;
 
@@ -177,7 +179,7 @@ export interface GameplayCommandPlanAuthorityV1 {
 interface PreparedGameplayTransitionV1 {
   readonly expectedStateRevision: number;
   readonly relationshipStatesById: Readonly<
-    Record<string, PossessedByRelationshipStateV1>
+    Record<string, GameplayRelationshipStateV1>
   >;
   readonly activeActionExecutionsById: Readonly<
     Record<string, InternalGameplayActionExecutionV1>
@@ -301,7 +303,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
   private readonly actionRequestResolver: GameplayActionRequestResolverV1 | undefined;
   private readonly capacityBudget: GameplayCapacityBudgetV1;
   private relationshipStatesById: Readonly<
-    Record<string, PossessedByRelationshipStateV1>
+    Record<string, GameplayRelationshipStateV1>
   > = Object.freeze({});
   private activeActionExecutionsById: Readonly<
     Record<string, InternalGameplayActionExecutionV1>
@@ -404,7 +406,9 @@ export class GameplayState implements GameplayPlanningStateV1 {
     controllerEntityId: string,
   ): PossessedByRelationshipStateV1 | undefined {
     return Object.values(this.relationshipStatesById).find(
-      (relationship) => relationship.controllerEntityId === controllerEntityId,
+      (relationship): relationship is PossessedByRelationshipStateV1 =>
+        relationship.type === "possessedBy" &&
+        relationship.controllerEntityId === controllerEntityId,
     );
   }
 
@@ -412,7 +416,9 @@ export class GameplayState implements GameplayPlanningStateV1 {
     controlledEntityId: string,
   ): PossessedByRelationshipStateV1 | undefined {
     return Object.values(this.relationshipStatesById).find(
-      (relationship) => relationship.controlledEntityId === controlledEntityId,
+      (relationship): relationship is PossessedByRelationshipStateV1 =>
+        relationship.type === "possessedBy" &&
+        relationship.controlledEntityId === controlledEntityId,
     );
   }
 
@@ -631,6 +637,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
       return { status: "rejected", diagnostic: requestDiagnostic };
     }
     let trustedActionEffectPlan: GameplayTrustedActionEffectPlanV1 | undefined;
+    let relationshipChanges: readonly GameplayRelationshipChangeV1[] = [];
     if (definition.effect.mode === "state-only") {
       if (command.actorEntityId !== command.expectedPossession.controlledEntityId) {
         return reject(
@@ -700,11 +707,30 @@ export class GameplayState implements GameplayPlanningStateV1 {
           "The trusted Action effect could not plan this request.",
         );
       }
+      try {
+        relationshipChanges = this.validateTrustedRelationshipChanges(
+          trustedActionEffectPlan,
+          command,
+          simulationTick,
+        );
+      } catch {
+        return reject(
+          "GAMEPLAY_RULE_REJECTED",
+          "The trusted mounted Relationship transition is no longer valid.",
+        );
+      }
     }
     const activeActionStateCountDelta = definition.completion.mode === "immediate"
       ? 0
       : 1;
+    const relationshipStateCountDelta = relationshipChanges.reduce(
+      (delta, change) => delta + (change.operation === "add" ? 1 : -1),
+      0,
+    );
     if (
+      Object.keys(this.relationshipStatesById).length +
+        relationshipStateCountDelta >
+        this.capacityBudget.maximumRelationshipStateCount ||
       Object.keys(this.activeActionExecutionsById).length +
         activeActionStateCountDelta >
         this.capacityBudget.maximumActiveActionStateCount ||
@@ -759,13 +785,14 @@ export class GameplayState implements GameplayPlanningStateV1 {
           { operation: "remove", before: execution },
         ]
       : [{ operation: "add", after: execution }];
-    return this.plannedCommand(command, simulationTick, [], actionChanges,
+    return this.plannedCommand(command, simulationTick, relationshipChanges, actionChanges,
       [command.actionExecutionId], {
-      relationshipStateCountDelta: 0,
+      relationshipStateCountDelta,
       activeActionStateCountDelta:
         definition.completion.mode === "immediate" ? 0 : 1,
       usedActionExecutionIdCountDelta: 1,
-      immediateEventCount: definition.completion.mode === "immediate" ? 2 : 1,
+      immediateEventCount: relationshipChanges.length +
+        (definition.completion.mode === "immediate" ? 2 : 1),
       terminalEventReservationCountDelta:
         definition.completion.mode === "immediate" ? 0 : 1,
     }, trustedActionEffectPlan);
@@ -887,7 +914,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
   private buildProjectedGameplayInspection(
     context: GameplayInspectionProjectionContextV1,
     relationshipStatesById: Readonly<
-      Record<string, PossessedByRelationshipStateV1>
+      Record<string, GameplayRelationshipStateV1>
     >,
     activeActionExecutionsById: Readonly<
       Record<string, InternalGameplayActionExecutionV1>
@@ -966,7 +993,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
       throw new Error("GAMEPLAY_CAPACITY_EXCEEDED: State revision is exhausted.");
     }
     const relationships = Object.assign(
-      Object.create(null) as Record<string, PossessedByRelationshipStateV1>,
+      Object.create(null) as Record<string, GameplayRelationshipStateV1>,
       this.relationshipStatesById,
     );
     const actions = Object.assign(
@@ -1088,7 +1115,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
   private buildProjectedWorldState(
     context: GameplayWorldStateProjectionContextV1,
     relationshipStatesById: Readonly<
-      Record<string, PossessedByRelationshipStateV1>
+      Record<string, GameplayRelationshipStateV1>
     >,
     activeActionExecutionsById: Readonly<
       Record<string, InternalGameplayActionExecutionV1>
@@ -1254,21 +1281,141 @@ export class GameplayState implements GameplayPlanningStateV1 {
     return undefined;
   }
 
+  private validateTrustedRelationshipChanges(
+    plan: GameplayTrustedActionEffectPlanV1,
+    command: ActionActivateGameplayCommandV1,
+    simulationTick: number,
+  ): readonly GameplayRelationshipChangeV1[] {
+    const changes = plan.relationshipChanges as readonly GameplayRelationshipChangeV1[];
+    if (changes.length !== 3) {
+      throw new Error("Trusted mounted Relationship Plan must contain three changes.");
+    }
+    const ordered = [...changes].sort((left, right) => {
+      const operationOrder = (left.operation === "remove" ? 0 : 1) -
+        (right.operation === "remove" ? 0 : 1);
+      if (operationOrder !== 0) return operationOrder;
+      const leftId = left.operation === "remove" ? left.before.id : left.after.id;
+      const rightId = right.operation === "remove" ? right.before.id : right.after.id;
+      return compareCodeUnits(leftId, rightId);
+    });
+    if (!sameCanonical(changes, ordered)) {
+      throw new Error("Trusted mounted Relationship changes are not canonically ordered.");
+    }
+    for (const change of changes) {
+      if (change.operation === "remove") {
+        const current = ownValue(this.relationshipStatesById, change.before.id);
+        if (isNil(current) || !sameCanonical(current, change.before)) {
+          throw new Error("Trusted Relationship before-image is stale.");
+        }
+      } else {
+        if (
+          !isNil(ownValue(this.relationshipStatesById, change.after.id)) ||
+          change.after.establishedSimulationTick !== simulationTick
+        ) throw new Error("Trusted Relationship after-image is invalid.");
+      }
+    }
+
+    const removals = changes.flatMap((change) =>
+      change.operation === "remove" ? [change.before] : []);
+    const additions = changes.flatMap((change) =>
+      change.operation === "add" ? [change.after] : []);
+    const mounted = (plan.operation === "mount" ? additions : removals).find(
+      (relationship): relationship is MountedOnRelationshipStateV1 =>
+        relationship.type === "mountedOn",
+    );
+    const removedPossession = removals.find(
+      (relationship): relationship is PossessedByRelationshipStateV1 =>
+        relationship.type === "possessedBy",
+    );
+    const addedPossession = additions.find(
+      (relationship): relationship is PossessedByRelationshipStateV1 =>
+        relationship.type === "possessedBy",
+    );
+    if (
+      isNil(mounted) ||
+      isNil(removedPossession) ||
+      isNil(addedPossession) ||
+      mounted.riderEntityId !== plan.actorEntityId ||
+      mounted.riderEntityId === mounted.mountEntityId ||
+      removedPossession.controllerEntityId !== command.controllerEntityId ||
+      addedPossession.controllerEntityId !== command.controllerEntityId
+    ) throw new Error("Trusted mounted Relationship roles are invalid.");
+
+    const rider = ownValue(this.entityDescriptorsById, mounted.riderEntityId);
+    const mount = ownValue(this.entityDescriptorsById, mounted.mountEntityId);
+    if (
+      isNil(rider) ||
+      isNil(mount) ||
+      !mount.capabilityRefs.includes(
+        "worldkit://capability/relationship.mounted-on@1",
+      )
+    ) throw new Error("Mounted Relationship capability is unavailable.");
+    if (Object.values(this.activeActionExecutionsById).some((execution) =>
+      execution.state.actorEntityId === mounted.riderEntityId ||
+      execution.state.actorEntityId === mounted.mountEntityId
+    )) throw new Error("Rider or Mount already has an exclusive Action.");
+
+    if (plan.operation === "mount") {
+      if (
+        removals.length !== 1 ||
+        additions.length !== 2 ||
+        removedPossession.controlledEntityId !== mounted.riderEntityId ||
+        addedPossession.controlledEntityId !== mounted.mountEntityId ||
+        Object.values(this.relationshipStatesById).some((relationship) =>
+          relationship.type === "mountedOn" &&
+          (relationship.riderEntityId === mounted.riderEntityId ||
+            (relationship.mountEntityId === mounted.mountEntityId &&
+              relationship.mountSlotId === mounted.mountSlotId))
+        )
+      ) throw new Error("Mount Relationship cardinality is invalid.");
+    } else if (
+      removals.length !== 2 ||
+      additions.length !== 1 ||
+      removedPossession.controlledEntityId !== mounted.mountEntityId ||
+      addedPossession.controlledEntityId !== mounted.riderEntityId
+    ) {
+      throw new Error("Dismount Relationship cardinality is invalid.");
+    }
+
+    const expectedCapabilityStateId =
+      `capability-state:${mounted.riderEntityId}:locomotion`;
+    if (
+      !sameCanonical(plan.runtimeProjectionWriteSet, {
+        spatialEntityIds: [mounted.riderEntityId],
+        capabilityStateIds: [expectedCapabilityStateId],
+        semanticFactIds: [],
+      })
+    ) throw new Error("Mounted Runtime projection write set is invalid.");
+    return changes;
+  }
+
   private assertCardinalityAndCapacity(
-    relationships: Readonly<Record<string, PossessedByRelationshipStateV1>>,
+    relationships: Readonly<Record<string, GameplayRelationshipStateV1>>,
     actions: Readonly<Record<string, InternalGameplayActionExecutionV1>>,
     usedActionExecutionIds: ReadonlySet<string>,
     terminalEventReservationCount: number,
   ): void {
     const controllers = new Set<string>();
     const controlledEntities = new Set<string>();
+    const mountedRiders = new Set<string>();
+    const occupiedMountSlots = new Set<string>();
     for (const relationship of Object.values(relationships)) {
-      if (
-        controllers.has(relationship.controllerEntityId) ||
-        controlledEntities.has(relationship.controlledEntityId)
-      ) throw new Error("GAMEPLAY_STATE_STALE: Possession cardinality changed.");
-      controllers.add(relationship.controllerEntityId);
-      controlledEntities.add(relationship.controlledEntityId);
+      if (relationship.type === "possessedBy") {
+        if (
+          controllers.has(relationship.controllerEntityId) ||
+          controlledEntities.has(relationship.controlledEntityId)
+        ) throw new Error("GAMEPLAY_STATE_STALE: Possession cardinality changed.");
+        controllers.add(relationship.controllerEntityId);
+        controlledEntities.add(relationship.controlledEntityId);
+      } else {
+        const slotKey = `${relationship.mountEntityId}\u0000${relationship.mountSlotId}`;
+        if (
+          mountedRiders.has(relationship.riderEntityId) ||
+          occupiedMountSlots.has(slotKey)
+        ) throw new Error("GAMEPLAY_STATE_STALE: mountedOn cardinality changed.");
+        mountedRiders.add(relationship.riderEntityId);
+        occupiedMountSlots.add(slotKey);
+      }
     }
     const actors = new Set<string>();
     for (const execution of Object.values(actions)) {

@@ -32,6 +32,8 @@ import {
 } from "./gameplay-state";
 import { createGameplayActionEffectRegistryV1 } from "./gameplay-action-effect-registry";
 import {
+  DISMOUNT_ACTION_REQUEST_SCHEMA_HASH,
+  DISMOUNT_ACTION_REQUEST_SCHEMA_REF,
   MOUNTED_RELATIONSHIP_EFFECT_HASH,
   MOUNTED_RELATIONSHIP_EFFECT_REF,
   MOUNT_ACTION_REQUEST_SCHEMA_HASH,
@@ -115,7 +117,7 @@ function controller(id: string): ControllerEntityStateV1 {
   };
 }
 
-function projectionContext(simulationTick = 2) {
+function projectionContext(simulationTick = 2, includeSubjectC = false) {
   return {
     simulationTick,
     worldPackageRef: "worldkit://world/a@1",
@@ -144,6 +146,21 @@ function projectionContext(simulationTick = 2) {
         rotationQuaternionXYZW: [0, 0, 0, 1] as const,
         scaleRatioXYZ: [1, 1, 1] as const,
       },
+      ...(includeSubjectC
+        ? {
+            "subject-c": {
+              id: "subject-c",
+              kind: "spatial-entity-state" as const,
+              entityDefinitionRef: "worldkit://entity/humanoid@1",
+              entityDefinitionHash: HASH_B,
+              semanticClassId: "humanoid",
+              lifecycleMode: "active" as const,
+              positionMetersXYZ: [2, 0, 0] as const,
+              rotationQuaternionXYZW: [0, 0, 0, 1] as const,
+              scaleRatioXYZ: [1, 1, 1] as const,
+            },
+          }
+        : {}),
     },
     capabilityStatesById: {},
     semanticFactsById: {},
@@ -191,6 +208,7 @@ function bind(
   controlledEntityId = "subject-a",
   id = `bind-${controllerEntityId}-${controlledEntityId}`,
   tick = 1,
+  includeSubjectC = false,
 ): void {
   const bindCommand = command({
     id,
@@ -201,7 +219,10 @@ function bind(
   });
   const result = dispatchCanonicalCommand(state, bindCommand, tick);
   if (result.status !== "planned") throw new Error(result.diagnostic.code);
-  state.projectWorldStateAfter(result.transitionPlan, projectionContext(tick));
+  state.projectWorldStateAfter(
+    result.transitionPlan,
+    projectionContext(tick, includeSubjectC),
+  );
   state.commit(result.transitionPlan);
 }
 
@@ -274,8 +295,12 @@ function stageAndCommit(
   state: GameplayState,
   transitionPlan: GameplayTransitionPlanV1,
   simulationTick: number,
+  includeSubjectC = false,
 ): void {
-  state.projectWorldStateAfter(transitionPlan, projectionContext(simulationTick));
+  state.projectWorldStateAfter(
+    transitionPlan,
+    projectionContext(simulationTick, includeSubjectC),
+  );
   state.commit(transitionPlan);
 }
 
@@ -306,8 +331,72 @@ describe("GameplayState possession", () => {
         actionRequestSchemaHash: MOUNT_ACTION_REQUEST_SCHEMA_HASH,
       },
     });
+    const dismountAction = definition({
+      id: "dismount",
+      resourceRef: "worldkit://semantic-action/dismount@1",
+      completion: { mode: "immediate" },
+      effect: {
+        mode: "trusted",
+        gameplayActionEffectRef: MOUNTED_RELATIONSHIP_EFFECT_REF,
+        gameplayActionEffectHash: MOUNTED_RELATIONSHIP_EFFECT_HASH,
+      },
+      requiredActorCapabilityRefs: [],
+      request: {
+        mode: "required",
+        actionRequestSchemaRef: DISMOUNT_ACTION_REQUEST_SCHEMA_REF,
+        actionRequestSchemaHash: DISMOUNT_ACTION_REQUEST_SCHEMA_HASH,
+      },
+    });
+    let dismountRequest:
+      | Readonly<{
+          kind: "dismount-action-request";
+          schemaVersion: 1;
+          id: string;
+          riderEntityId: string;
+          mountedOnRelationshipId: string;
+        }>
+      | undefined;
+    let dismountRequestHash: `sha256:${string}` | undefined;
+    let secondMountRequest:
+      | Readonly<{
+          kind: "mount-action-request";
+          schemaVersion: 1;
+          id: string;
+          riderEntityId: string;
+          mountEntityId: string;
+          mountSlotId: string;
+        }>
+      | undefined;
+    let secondMountRequestHash: `sha256:${string}` | undefined;
     const state = new GameplayState(options({
-      actionCatalog: createGameplayActionCatalogV1([mountAction], 1),
+      actionCatalog: createGameplayActionCatalogV1(
+        [mountAction, dismountAction],
+        2,
+      ),
+      entityDescriptors: [
+        {
+          id: "subject-a",
+          entityDefinitionRef: "worldkit://entity/humanoid@1",
+          capabilityRefs: ["worldkit://capability/arms@1"],
+        },
+        {
+          id: "subject-b",
+          entityDefinitionRef: "worldkit://entity/board@1",
+          capabilityRefs: [
+            "worldkit://capability/relationship.mounted-on@1",
+          ],
+        },
+        {
+          id: "subject-c",
+          entityDefinitionRef: "worldkit://entity/humanoid@1",
+          capabilityRefs: ["worldkit://capability/arms@1"],
+        },
+      ],
+      capacityBudget: {
+        ...DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
+        maximumControllerEntityCount: 2,
+        maximumRelationshipStateCount: 4,
+      },
       actionRequestResolver: (ref, hash) =>
         ref === "worldkit://action-request/mount-subject-a@1" && hash === requestHash
           ? {
@@ -315,6 +404,22 @@ describe("GameplayState possession", () => {
               actionRequestSchemaHash: MOUNT_ACTION_REQUEST_SCHEMA_HASH,
               actionRequestBytes: canonicalJsonBytes(request),
             }
+          : ref === "worldkit://action-request/mount-subject-c@1" &&
+              hash === secondMountRequestHash &&
+              secondMountRequest !== undefined
+            ? {
+                actionRequestSchemaRef: MOUNT_ACTION_REQUEST_SCHEMA_REF,
+                actionRequestSchemaHash: MOUNT_ACTION_REQUEST_SCHEMA_HASH,
+                actionRequestBytes: canonicalJsonBytes(secondMountRequest),
+              }
+          : ref === "worldkit://action-request/dismount-subject-a@1" &&
+              hash === dismountRequestHash &&
+              dismountRequest !== undefined
+            ? {
+                actionRequestSchemaRef: DISMOUNT_ACTION_REQUEST_SCHEMA_REF,
+                actionRequestSchemaHash: DISMOUNT_ACTION_REQUEST_SCHEMA_HASH,
+                actionRequestBytes: canonicalJsonBytes(dismountRequest),
+              }
           : undefined,
     }));
     bind(state);
@@ -357,12 +462,124 @@ describe("GameplayState possession", () => {
           { operation: "add" },
           { operation: "remove" },
         ],
+        relationshipChanges: [
+          { operation: "remove", before: { type: "possessedBy" } },
+          { operation: "add", after: { type: "mountedOn" } },
+          { operation: "add", after: { type: "possessedBy" } },
+        ],
         capacityDelta: {
+          relationshipStateCountDelta: 1,
           activeActionStateCountDelta: 0,
           terminalEventReservationCountDelta: 0,
+          immediateEventCount: 5,
         },
       },
     });
+    if (result.status !== "planned") throw new Error("Mount was rejected.");
+    state.commandPlanAuthorityPort().authorizeCommandPlan({
+      transitionPlan: result.transitionPlan,
+      command: activate,
+      simulationTick: 2,
+    });
+    stageAndCommit(state, result.transitionPlan, 2);
+    expect(
+      Object.values(state.projectGameplayInspection(inspectionContext(
+        "inspection-mounted",
+        2,
+      )).relationshipStatesById).map(({ type }) => type).sort(),
+    ).toEqual(["mountedOn", "possessedBy"]);
+
+    const mountedRelationship = Object.values(
+      state.projectGameplayInspection(inspectionContext("inspection-mounted-2", 2))
+        .relationshipStatesById,
+    ).find((relationship) => relationship.type === "mountedOn");
+    if (mountedRelationship?.type !== "mountedOn") {
+      throw new Error("Mounted Relationship was not committed.");
+    }
+    bind(
+      state,
+      "controller-b",
+      "subject-c",
+      "bind-controller-b-subject-c",
+      3,
+      true,
+    );
+    secondMountRequest = {
+      kind: "mount-action-request",
+      schemaVersion: 1,
+      id: "mount-subject-c",
+      riderEntityId: "subject-c",
+      mountEntityId: "subject-b",
+      mountSlotId: "stand",
+    };
+    secondMountRequestHash = sha256CanonicalJson(
+      secondMountRequest,
+    ) as `sha256:${string}`;
+    expect(state.planAction(command({
+      id: "mount-command-subject-c",
+      type: "action.activate",
+      controllerEntityId: "controller-b",
+      actionExecutionId: "mount-execution-subject-c",
+      semanticActionRef: mountAction.resourceRef,
+      actorEntityId: "subject-c",
+      expectedPossession: { mode: "possessed", controlledEntityId: "subject-c" },
+      actionRequestRef: "worldkit://action-request/mount-subject-c@1",
+      actionRequestHash: secondMountRequestHash,
+    }), 4, effects.registry)).toMatchObject({
+      status: "rejected",
+      diagnostic: { code: "GAMEPLAY_RULE_REJECTED" },
+    });
+    dismountRequest = {
+      kind: "dismount-action-request",
+      schemaVersion: 1,
+      id: "dismount-subject-a",
+      riderEntityId: "subject-a",
+      mountedOnRelationshipId: mountedRelationship.id,
+    };
+    dismountRequestHash = sha256CanonicalJson(
+      dismountRequest,
+    ) as `sha256:${string}`;
+    const dismount = command({
+      id: "dismount-command",
+      type: "action.activate",
+      controllerEntityId: "controller-a",
+      actionExecutionId: "dismount-execution",
+      semanticActionRef: dismountAction.resourceRef,
+      actorEntityId: "subject-a",
+      expectedPossession: { mode: "possessed", controlledEntityId: "subject-b" },
+      actionRequestRef: "worldkit://action-request/dismount-subject-a@1",
+      actionRequestHash: dismountRequestHash,
+    });
+    const dismountResult = state.planAction(dismount, 5, effects.registry);
+    expect(dismountResult).toMatchObject({
+      status: "planned",
+      transitionPlan: {
+        relationshipChanges: [
+          { operation: "remove", before: { type: "mountedOn" } },
+          { operation: "remove", before: { type: "possessedBy" } },
+          { operation: "add", after: { type: "possessedBy" } },
+        ],
+        capacityDelta: {
+          relationshipStateCountDelta: -1,
+          immediateEventCount: 5,
+        },
+      },
+    });
+    if (dismountResult.status !== "planned") throw new Error("Dismount rejected.");
+    state.commandPlanAuthorityPort().authorizeCommandPlan({
+      transitionPlan: dismountResult.transitionPlan,
+      command: dismount,
+      simulationTick: 5,
+    });
+    stageAndCommit(state, dismountResult.transitionPlan, 5, true);
+    expect(Object.values(state.projectGameplayInspection(inspectionContext(
+      "inspection-dismounted",
+      5,
+    )).relationshipStatesById).map((relationship) =>
+      relationship.type === "possessedBy"
+        ? relationship.controlledEntityId
+        : relationship.type
+    ).sort()).toEqual(["subject-a", "subject-c"]);
   });
 
   it("rejects a non-canonical serialized Entity Descriptor", () => {
