@@ -36,6 +36,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "apps/playground/src/worldkit-authoring-capture-api.test.ts", lane: "contract" },
   { path: "apps/playground/src/worldkit-browser-api.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"] },
   { path: "apps/playground/vite-host.test.ts", lane: "contract" },
+  { path: "packages/authoring/src/authoring-document-hash-v4.test.ts", lane: "contract" },
   { path: "packages/authoring/src/authoring-v4.test.ts", lane: "contract" },
   { path: "packages/authoring/src/authoring.test.ts", lane: "contract" },
   { path: "packages/authoring/src/layout-input.test.ts", lane: "contract" },

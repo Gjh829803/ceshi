@@ -3,7 +3,7 @@
   "schemaVersion": 1,
   "id": "coastal-walk-opening",
   "worldPackageRef": "worldkit://world-package/placement-coastal-world.20310417@1",
-  "worldPackageRootHash": "sha256:5806c6e5cc705cbf9b7a0b4e4d4b4bfe2c1561290ad41319fc67deef3c41add5",
+  "worldPackageRootHash": "sha256:64b12a209f945b062b3af1b7febaae23f42407a10119e2ea8d327e0a937ede97",
   "seed": 731991,
   "simulationTickRate": {
     "numeratorTicks": 60,

@@ -3790,19 +3790,8 @@ function projectNormalizedWorldResourcesToLayoutIdentityV4(resources) {
     resourceLockHash: sha256CanonicalJson(resourceLock)
   };
 }
-function canonicalAuthoringIdentityV4(spec, normalizedBase) {
-  const baseIdentity = canonicalIdentityBaseV4(spec, normalizedBase);
-  return {
-    ...baseIdentity,
-    spatial: {
-      ...baseIdentity.spatial,
-      traversalAreas: [...spec.spatial.traversalAreas].sort((left, right) => left.id.localeCompare(right.id)).map((row) => structuredClone(row))
-    },
-    constraints: {
-      placements: baseIdentity.constraints.placements,
-      connectivity: [...spec.constraints.connectivity].sort((left, right) => left.id.localeCompare(right.id)).map((row) => structuredClone(row))
-    }
-  };
+function hashAuthoringDocumentV4(spec) {
+  return sha256CanonicalJson(spec);
 }
 function canonicalAuthoringLayoutIdentityV4(spec, normalizedBase) {
   return canonicalIdentityBaseV4(spec, {
@@ -3811,6 +3800,11 @@ function canonicalAuthoringLayoutIdentityV4(spec, normalizedBase) {
       normalizedBase.resources
     )
   });
+}
+function hashAuthoringLayoutInputV4(spec, normalizedBase) {
+  return sha256CanonicalJson(
+    canonicalAuthoringLayoutIdentityV4(spec, normalizedBase)
+  );
 }
 const BUILT_IN_LAYOUT_SOLVER_PROFILE_REF = "worldkit://layout-solver-profile/outdoor.s1@1";
 const BUILT_IN_OUTDOOR_PROFILE = {
@@ -4747,6 +4741,7 @@ function validateInput(input, profile) {
   if (input.kind !== "worldkit-resolved-layout-input" || input.schemaVersion !== 1 || !Number.isInteger(input.seed) || input.seed < 0) add("");
   const hashPattern = /^sha256:[a-f0-9]{64}$/;
   if (!hashPattern.test(input.authoringSpecHash)) add("/authoringSpecHash");
+  if (!hashPattern.test(input.layoutInputHash)) add("/layoutInputHash");
   if (!hashPattern.test(input.registryLockHash)) add("/registryLockHash");
   if (input.solverProfile.contentHash !== sha256CanonicalJson(profile) || !hashPattern.test(input.solverProfile.contentHash)) add("/solverProfile/contentHash");
   if (!/^worldkit:\/\/layout-solver-profile\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(
@@ -4935,6 +4930,7 @@ function reportBase(input, status) {
     schemaVersion: 1,
     id: `${input.id}-layout`,
     authoringSpecHash: input.authoringSpecHash,
+    layoutInputHash: input.layoutInputHash,
     registryLockHash: input.registryLockHash,
     solverProfileRef: input.solverProfile.solverProfileRef,
     resolvedVersion: input.solverProfile.resolvedVersion,
@@ -18566,12 +18562,11 @@ function resolveAuthoringLayoutV4(value, options = {}) {
     spec,
     normalizedBase.value,
     resolvedSolverProfile,
-    sha256CanonicalJson(
-      canonicalAuthoringLayoutIdentityV4(spec, normalizedBase.value)
-    )
+    hashAuthoringDocumentV4(spec),
+    hashAuthoringLayoutInputV4(spec, normalizedBase.value)
   );
 }
-function resolveValidatedAuthoringLayout(spec, normalized, resolvedSolverProfile, authoringSpecHash) {
+function resolveValidatedAuthoringLayout(spec, normalized, resolvedSolverProfile, authoringSpecHash, layoutInputHash) {
   const prototypeByRef = new Map(normalized.resources.prototypes.map((prototype) => [
     `package://prototype/${prototype.id}@${prototype.version}`,
     prototype
@@ -18628,6 +18623,7 @@ function resolveValidatedAuthoringLayout(spec, normalized, resolvedSolverProfile
     schemaVersion: 1,
     id: spec.id,
     authoringSpecHash,
+    layoutInputHash,
     registryLockHash: normalized.resources.resourceLockHash,
     solverProfile: {
       solverProfileRef: resolvedSolverProfile.resourceRef,
@@ -18865,9 +18861,7 @@ function normalizeAuthoringSpecV4(value, options = {}) {
     ...canonicalBase,
     kind: "worldkit-normalized-world",
     schemaVersion: 4,
-    authoringSpecHash: sha256CanonicalJson(
-      canonicalAuthoringIdentityV4(spec, canonicalBase)
-    ),
+    authoringSpecHash: hashAuthoringDocumentV4(spec),
     nodes: normalizedNodesV4(
       spec,
       normalizedBase.nodes,

@@ -519,13 +519,13 @@ Publication hardening 已全部折回上述核心规格；
 和
 [`follow-up review`](reviews/2026-08-26-p16-world-change-post-freeze-hardening-follow-up.md)
 只保留发现轨迹，不拥有规范优先级。
-这只完成 P16-D0，不表示 P1.6 已实现或可用于生产；后续开发按下表依赖顺序领取，完整
-文件所有权、输入输出、集成点和验收证据以专项规格 §21 为准。
+P16-D0 已冻结，P16-H0 已落地；这不表示 P1.6 已实现或可用于生产。后续开发按下表依赖
+顺序领取，完整文件所有权、输入输出、集成点和验收证据以专项规格 §21 为准。
 
 | Task | 状态 | 可独立验收交付物 | `depends_on` / `blocks` |
 | --- | --- | --- | --- |
 | P16-D0 | [x] 设计冻结 | 唯一专项规格、公共 DTO/Hash/权限/切片边界、全维度审查 | 当前 main、总体设计、P1.6 Backlog / 全部 P16 |
-| P16-H0 | [ ] 等待开发 | Authoring document hash clean break 与独立 `layoutInputHash` | P16-D0 / P16-A0、P16-C1、P16-S1、P16-P1 |
+| P16-H0 | [x] 已完成 | Authoring document hash clean break 与独立 `layoutInputHash` | P16-D0 / P16-A0、P16-C1、P16-S1、P16-P1 |
 | P16-A0 | [ ] 等待开发 | provider-neutral `@whitebox-world/authoring-edit` 包、required publication Candidate、mode-specific Receipt 及 strict parser/hash 边界 | P16-D0、P16-H0 / P16-S1、P16-O1、P16-C1 |
 | P16-S1 | [ ] 等待开发 | AI Schema Projector、Profile Registry kind、预算降级、Projection Receipt | P16-A0、P16-H0、P1.4 Registry Lock shape / P16-B1、P16-F1 |
 | P16-O1 | [ ] 等待开发 | 通用 `allowedOverridePaths` 与 Resource Ref Override validator | P16-A0、P16-S1 contract / P16-C1、P16-F1 |
@@ -539,6 +539,13 @@ Publication hardening 已全部折回上述核心规格；
 | P16-I1 | [ ] 后续切片 | Handler Registry、fixed-tick Hot Apply、Differential Runtime Conformance | P16-F1、独立批准的 Incremental plan / P16-G2 |
 | P16-G1 | [ ] 等待集成 | Full Reload 首切片 Final GO 与能力声明更新 | P16-F1 / 无 |
 | P16-G2 | [ ] 后续集成 | Incremental 第二切片 Final GO | P16-I1 / 无 |
+
+P16-H0 证据：公开 `authoringSpecHash` / `baseAuthoringSpecHash` 使用 `hashAuthoringDocumentV4`
+（validated Authoring V4 Canonical JSON，不含 Normalize/Solver/Compiler）；Layout 专用身份
+使用独立 `layoutInputHash`。已删除公开 `canonicalAuthoringIdentityV4`。验证：`pnpm typecheck`、
+focused hash/normalize/compile/layout-solver 测试、`pnpm test:census`、`pnpm verify:placement-layout`、
+`pnpm verify:canonical`、`pnpm verify:rigged-subject`、`pnpm verify:g-bot-subject` 均通过；
+WorldPackage / Plan / Report / Take / example artifacts 已同步。这不是 P1.6 生产可用声明。
 
 - [ ] 为 Canonical Schema + Registry Lock + 允许 Capability 集冻结版本化 AI Schema
   Profile/Projector；记录 Profile Hash、Registry Lock Hash、Capability Set Hash、规模
@@ -955,10 +962,12 @@ S1b Golden、
    verifier及其失效门禁重跑和最终 review，并保持 `supportedBy` 只来自既有 Physics support
    authority。`CAM-MOUNT-1` 由 P2.4 相机专项修复；不向 `SubjectRuntimeStateV3` 追加字段，
    也不先铺开 seat/tether、轮子动力学、特技、车辆或 Hosted Builder admission；
-9. **M9（P1.6 专项设计已冻结，生产实现未开始）**：P1.6 以
+9. **M9（P1.6 专项设计已冻结，H0 已落地，生产切片未完成）**：P1.6 以
    [`WorldChangeSet 专项设计`](superpowers/specs/2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md)
    完成 P16-D0；post-freeze publication hardening 已折回该唯一权威，历史 amendment 不再覆盖
-   核心类型。P2.5 Surface/Traversal 仍按其独立状态追踪。在实现游泳、攀爬或增量
+   核心类型。P16-H0 已把公开 `authoringSpecHash` 收敛为文档内容哈希，并拆出
+   `layoutInputHash`；WorldChangeSet、Runtime Full Reload 与 Incremental 仍未交付，不得按生产
+   可用宣称。P2.5 Surface/Traversal 仍按其独立状态追踪。在实现游泳、攀爬或增量
    Agent 修复前，禁止临时增加公共字段或场景脚本旁路**。
 10. **M10：P1.1 与 P2.5 边界稳定后评审 P2.6 H1 Bridge Fixture；先验证同 XZ 双层支撑、
    Static Collider 和唯一 Ground Support，不直接并行启动完整洞穴/室内**。

@@ -16,6 +16,7 @@ function reportFixture(
     schemaVersion: 1,
     id: "coast-layout",
     authoringSpecHash: `sha256:${"1".repeat(64)}`,
+    layoutInputHash: `sha256:${"4".repeat(64)}`,
     registryLockHash: `sha256:${"2".repeat(64)}`,
     solverProfileRef: "worldkit://layout-solver-profile/outdoor.s1@1",
     resolvedVersion: "1",

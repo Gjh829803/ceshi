@@ -669,7 +669,7 @@ describe("compileWorld", () => {
         normalizedWorldIrHash: rigged.normalizedWorldIrHash!,
       }).executionPlanHash,
     ).toBe(
-      "sha256:59a58544af1744a638ce3babc712c7f240c5d05d07b5a378c3394dee681cb9c4",
+      "sha256:55a013a5030f27f9640b135163ddc83e3c7c658f0f4d3624407c5e7d23575eb2",
     );
   });
 
@@ -1213,7 +1213,7 @@ describe("compileWorld", () => {
     expect(serialized).not.toContain('"constraints"');
     expect(serialized).not.toMatch(/candidateRegionIds|sourceUri|licenseUri|providerHandle/);
     expect(result.executionPlanHash).toBe(
-      "sha256:035275ad9d53da845fcdc75d5ac5582a4c46947603aeb97f068d07215da9d7fa",
+      "sha256:5d89c751e1e94918e1a6476d4cd49be98e66c15919a52b33e95cf10de5b0b63f",
     );
   });
 

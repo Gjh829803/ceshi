@@ -111,6 +111,27 @@ describe("promoteArtifactDirectory", () => {
     expect(await valueAt(temporary)).toBe("new");
   });
 
+  it("publishes by copy when sibling directory rename fails with EXDEV", async () => {
+    const { root, target, temporary } = await fixture();
+
+    await expect(promoteArtifactDirectory({
+      temporaryDirectory: temporary,
+      targetDirectory: target,
+      expectedFilenames: ["value.txt"],
+      fileSystem: {
+        rename: async () => {
+          throw Object.assign(new Error("cross-device link not permitted"), {
+            code: "EXDEV",
+          });
+        },
+        rm,
+        cp,
+      },
+    })).resolves.toEqual({ backupGarbageCollection: "complete" });
+    expect(await valueAt(target)).toBe("new");
+    expect((await readdir(root)).sort()).toEqual(["evidence"]);
+  });
+
   it("rolls the complete backup back when publication rename fails", async () => {
     const { target, temporary } = await fixture();
 

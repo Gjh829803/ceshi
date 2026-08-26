@@ -1,5 +1,6 @@
 import {
-  canonicalAuthoringIdentityV4,
+  hashAuthoringDocumentV4,
+  hashAuthoringLayoutInputV4,
   normalizeAuthoringSpecV4,
   projectNormalizedWorldResourcesToLayoutIdentityV4,
   validateAuthoringSpecV4,
@@ -164,12 +165,7 @@ export function createWorldPackageValidationSubjectV1(
     "layoutSolveResult",
   );
 
-  const authoringSpecHash = asHash(sha256CanonicalJson(
-    canonicalAuthoringIdentityV4(
-      validated.value,
-      snapshot.normalizedWorldIr,
-    ),
-  ));
+  const authoringSpecHash = hashAuthoringDocumentV4(validated.value);
   const normalizedWorldIrHash = asHash(
     sha256CanonicalJson(snapshot.normalizedWorldIr),
   );
@@ -298,6 +294,21 @@ export function createWorldPackageValidationSubjectV1(
     snapshot.executionPlan.layout.layoutSolveReportHash,
     layoutSolveReportHash,
     "executionPlan/layout/layoutSolveReportHash",
+  );
+  requireEqual(
+    snapshot.layoutSolveResult.report.authoringSpecHash,
+    authoringSpecHash,
+    "layoutSolveResult/report/authoringSpecHash",
+  );
+  requireEqual(
+    snapshot.layoutSolveResult.report.layoutInputHash,
+    hashAuthoringLayoutInputV4(validated.value, {
+      ...snapshot.normalizedWorldIr,
+      resources: projectNormalizedWorldResourcesToLayoutIdentityV4(
+        snapshot.normalizedWorldIr.resources,
+      ),
+    }),
+    "layoutSolveResult/report/layoutInputHash",
   );
   requireEqual(
     snapshot.layoutSolveResult.report.registryLockHash,
