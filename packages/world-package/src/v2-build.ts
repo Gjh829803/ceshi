@@ -19,6 +19,7 @@ import {
 import {
   assertSafeWorldPackagePathV1,
   assertWorldPackageAccessorFreeDataGraphV1,
+  copyAdmittedWorldPackageBytesV1,
 } from "./manifest.js";
 import {
   migrateWorldPackageBuildReceiptV1ToV2,
@@ -279,7 +280,7 @@ function canonicalResources(
         "WORLD_PACKAGE_V2_BUILD_INVALID",
       ),
       mediaType: requireString(row.mediaType, `${path}/mediaType`),
-      bytes: new Uint8Array(row.bytes),
+      bytes: copyAdmittedWorldPackageBytesV1(row.bytes),
       subjectAssetManifestHash: requireHash(
         row.subjectAssetManifestHash,
         `${path}/subjectAssetManifestHash`,
@@ -368,7 +369,9 @@ function canonicalLegalDocuments(
       buildFail(`${path}/path`, "must be inside LICENSES/");
     }
     const text = requireText(row.text, `${path}/text`);
-    const bytes = new TextEncoder().encode(text);
+    const bytes = copyAdmittedWorldPackageBytesV1(
+      new TextEncoder().encode(text),
+    );
     return {
       id: requireString(row.id, `${path}/id`),
       spdxLicenseExpression: requireString(
@@ -471,7 +474,11 @@ function assertSubjectAssetManifestClosure(
 }
 
 function jsonFile(path: string, value: unknown): WorldPackageDirectoryFileV2 {
-  return { path, mediaType: "application/json", bytes: canonicalJsonBytes(value) };
+  return {
+    path,
+    mediaType: "application/json",
+    bytes: copyAdmittedWorldPackageBytesV1(canonicalJsonBytes(value)),
+  };
 }
 
 function createWorldPackageV2Internal(
@@ -493,7 +500,9 @@ function createWorldPackageV2Internal(
   }
   const distributionPolicy = record.distributionPolicy;
   const noticeText = requireText(record.noticeText, "noticeText");
-  const noticeBytes = new TextEncoder().encode(noticeText);
+  const noticeBytes = copyAdmittedWorldPackageBytesV1(
+    new TextEncoder().encode(noticeText),
+  );
   const resources = canonicalResources(record.resourceArtifacts);
   const generatedProvenance = canonicalGeneratedProvenance(
     record.generatedResourceProvenance,
@@ -632,7 +641,9 @@ function createWorldPackageV2Internal(
     {
       path: "gameplay/bootstrap.json",
       mediaType: "application/vnd.worldkit.gameplay-bootstrap+json",
-      bytes: gameplayBootstrapCanonicalBytesV1(record.gameplayBootstrap),
+      bytes: copyAdmittedWorldPackageBytesV1(
+        gameplayBootstrapCanonicalBytesV1(record.gameplayBootstrap),
+      ),
     },
     ...resources.map((resource) => ({
       path: resource.packagePath,

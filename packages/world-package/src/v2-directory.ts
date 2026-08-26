@@ -37,6 +37,7 @@ import { isEmpty, isEqual, isNil, isPlainObject } from "lodash-es";
 
 import {
   assertWorldPackageAccessorFreeDataGraphV1,
+  copyAdmittedWorldPackageBytesV1,
   deepFreeze,
 } from "./manifest.js";
 import { assertWorldPackageBuildReceiptV2 } from "./v2-contract.js";
@@ -243,7 +244,7 @@ function cloneBytes(value: unknown, path: string): Uint8Array {
   ) {
     directoryFail(path, "must be a plain Uint8Array");
   }
-  return new Uint8Array(value);
+  return copyAdmittedWorldPackageBytesV1(value);
 }
 
 function canonicalFiles(

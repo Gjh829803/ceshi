@@ -51,6 +51,7 @@ const CORE_PACKAGE_PATHS = new Set([
   "layout-solve-report.json",
   "targets/babylon-web/execution-plan.json",
 ]);
+const ADMITTED_WORLD_PACKAGE_BYTE_VIEWS = new WeakSet<Uint8Array>();
 
 function compareCanonicalStrings(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
@@ -72,8 +73,12 @@ export function assertWorldPackageAccessorFreeDataGraphV1(
     throw new Error(errorCode.replace("ACCESSOR_FORBIDDEN", "SYMBOL_KEY_FORBIDDEN"));
   }
   if (value instanceof Uint8Array) {
-    for (const key of Object.getOwnPropertyNames(value)) {
-      if (/^(0|[1-9]\d*)$/.test(key)) continue;
+    if (ADMITTED_WORLD_PACKAGE_BYTE_VIEWS.has(value)) return;
+    const ownPropertyNames = Object.getOwnPropertyNames(value);
+    // TypedArray own keys list every in-bounds integer index before ordinary
+    // string keys, so only the suffix can contain attached mutable state.
+    for (let index = value.length; index < ownPropertyNames.length; index += 1) {
+      const key = ownPropertyNames[index]!;
       const descriptor = Object.getOwnPropertyDescriptor(value, key);
       if (!isNil(descriptor?.get) || !isNil(descriptor?.set)) {
         throw new Error(errorCode);
@@ -125,6 +130,15 @@ export function assertWorldPackageAccessorFreeDataGraphV1(
       assertWorldPackageAccessorFreeDataGraphV1(descriptor.value, errorCode, visited);
     }
   }
+}
+
+export function copyAdmittedWorldPackageBytesV1(
+  value: Uint8Array,
+): Uint8Array {
+  const copy = new Uint8Array(value);
+  Object.preventExtensions(copy);
+  ADMITTED_WORLD_PACKAGE_BYTE_VIEWS.add(copy);
+  return copy;
 }
 
 function requireExactRecord(
