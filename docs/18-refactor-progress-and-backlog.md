@@ -821,7 +821,7 @@ Placement S1、Simulation Take / Control Capture V1 与 Validation Capture/Integ
 | WS-07B | **待开始；结构治理后续 1** | 按 public contract family 扩展唯一 source/generated parity；每次只迁一个领域 | `ARC-INT` 已完成 / 阻塞相关 Schema release | 正负 parity、unknown-key、round-trip、tracked bytes；禁止用私有 deep import 换取小 bundle |
 | WS-05B/C | **待开始；结构治理后续 2** | 按 owner 批次消减当前 52 条 exact workspace boundary debt；补必要 `/testing` exports、direct deps 与 per-package tsconfig | `ARC-INT` 已完成 / 阻塞 `WS-08` 的相关 package extraction | debt count 单调下降、zero stale/new、zero cycles、无 wildcard |
 | WS-08 | **待开始；结构治理后续 3** | 稳定 Host primitives 后拆分 Host/Studio/CLI composition package，不改变 Runtime/Camera/Capture authority | public contracts 稳定且相关 `WS-05B/C` debt 已清 / 无 | CLI snapshots、readiness/shutdown lifecycle、build graph、Studio E2E |
-| M8-S1 | 核心实现与当前树基础门禁已完成；最终 Capture/Completion 收口中 | `mountedOn` 合同、编译、Action effect、Gameplay/Host 原子事务、Babylon Rider 投影、安全下车、Playground 与 Track validator；[专项设计](superpowers/specs/2026-08-26-m8-s1-mounted-on-skateboard-design.md) / [实施计划](superpowers/plans/2026-08-26-m8-s1-mounted-on-skateboard-implementation-plan.md) / [进展记录](reviews/2026-08-26-m8-s1-mounted-on-skateboard-progress.md) | G19 已完成 | 当前树 190/2,050 + 21/401、Studio 73/73、独立三 lane、build 与六项 verifier 全绿；剩余 Runtime 对抗 hardening、`supportedBy`、正式四阶段 Capture verifier 及最终 review；`CAM-MOUNT-1` 归 P2.4 |
+| M8-S1 | 核心实现与 review hardening 已完成；最终 Capture/Completion 收口中 | `mountedOn` 合同、编译、Action effect、Gameplay/Host 原子事务、Babylon Rider 投影、Physics-authority 安全下车、Playground 与 Track validator；[专项设计](superpowers/specs/2026-08-26-m8-s1-mounted-on-skateboard-design.md) / [实施计划](superpowers/plans/2026-08-26-m8-s1-mounted-on-skateboard-implementation-plan.md) / [进展记录](reviews/2026-08-26-m8-s1-mounted-on-skateboard-progress.md) | G19 已完成 | 本轮独立 review 已逐项复现处置，补齐 Physics/边界、控制权不变量、五 Event Capture 与 Builder 禁止项；新树 9/496 affected、190/2,057 contract、typecheck/build、clean-break 与 6+6 Outdoor verifier 通过，resource-heavy 仅有既有固定 5s 负载抖动且失败文件分别复跑通过；剩余 Runtime 对抗 hardening、`supportedBy`、正式四阶段 Capture verifier 及最终新树 review；`CAM-MOUNT-1` 归 P2.4 |
 
 结构治理固定按 `WS-07B → WS-05B/C → WS-08` 推荐；`M8-S1` 仍是产品能力主线，两条 lane 不得
 因表格相邻而被解释为可以共享 owner 或跳过各自依赖。上述 WS 项的范围、延期理由、ownership、
@@ -914,7 +914,9 @@ S1b Golden、
    [M8-S1 专项设计](superpowers/specs/2026-08-26-m8-s1-mounted-on-skateboard-design.md)与
    [实施计划](superpowers/plans/2026-08-26-m8-s1-mounted-on-skateboard-implementation-plan.md)
    实现 `mountedOn` 权威关系、Mount/Dismount Action、Receipt/Event、Babylon 投影、
-   Safe Dismount、Browser Fixture 与 Capture Track validator。当前树的 typecheck、root test
+   Safe Dismount、Browser Fixture 与 Capture Track validator；独立 review 后又补齐了只依赖静态
+   环境接触与 `checkSupport()` 的隔离下车探针、admitted bounds、骑乘控制权不变量、五 Event
+   Capture 夹具和 Hosted Builder 当前 capability 名禁止项。review 前基线的 typecheck、root test
    （190/2,050 + 21/401）、build、Studio 73/73、独立三 lane 与六项能力 verifier 已通过；
    下一步只做 Runtime 对抗 hardening、`supportedBy` retained-support 证据、正式四阶段 Capture
    verifier及其失效门禁重跑和最终 review，并保持 `supportedBy` 只来自既有 Physics support

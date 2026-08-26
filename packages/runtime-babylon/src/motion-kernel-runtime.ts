@@ -230,6 +230,18 @@ type PhysicsCharacterControllerCastCollectorHost = {
   readonly _castCollector: unknown;
 };
 
+type PhysicsCharacterControllerManifoldHost = {
+  readonly _manifold: Array<Readonly<{
+    bodyB: {
+      body: { getMotionType(index: number): number };
+      index: number;
+    };
+    distance: number;
+    normal: Vector3;
+  }>>;
+};
+
+const STATIC_PHYSICS_MOTION_TYPE = 0;
 const DYNAMIC_PHYSICS_MOTION_TYPE = 2;
 const SNAP_DOWN_UPWARD_SPEED_LIMIT_METERS_PER_SECOND = 0.5;
 const SNAP_DOWN_MINIMUM_DROP_METERS = 1e-4;
@@ -243,6 +255,46 @@ function physicsCharacterControllerCastCollector(
 }
 
 class GroundAwarePhysicsCharacterController extends PhysicsCharacterController {
+  probeGroundPlacementAt(
+    desiredControllerCenter: Vector3,
+    gravityDirection: Vector3,
+  ): Readonly<{ controllerCenter: Vector3; support: CharacterSurfaceInfo }> | undefined {
+    const manifold = (this as unknown as PhysicsCharacterControllerManifoldHost)
+      ._manifold;
+    const maximumVerticalAdjustmentMeters = Math.max(
+      this.maxStepHeight,
+      this.keepDistance + this.keepContactTolerance,
+    );
+    const stepMeters = Math.max(this.keepContactTolerance / 2, 0.01);
+    const verticalOffsetsMeters = [0];
+    for (
+      let distanceMeters = stepMeters;
+      distanceMeters <= maximumVerticalAdjustmentMeters + 1e-9;
+      distanceMeters += stepMeters
+    ) {
+      verticalOffsetsMeters.push(-distanceMeters, distanceMeters);
+    }
+    for (const verticalOffsetMeters of verticalOffsetsMeters) {
+      const controllerCenter = desiredControllerCenter.add(
+        this.up.scale(verticalOffsetMeters),
+      );
+      this.setPosition(controllerCenter);
+      this._refreshManifoldAtPosition(controllerCenter);
+      const staticContacts = manifold.filter(({ bodyB }) =>
+        bodyB.body.getMotionType(bodyB.index) === STATIC_PHYSICS_MOTION_TYPE
+      );
+      manifold.splice(0, manifold.length, ...staticContacts);
+      const support = this.checkSupport(FIXED_TIME_STEP_SECONDS, gravityDirection);
+      if (support.supportedState === CharacterSupportedState.UNSUPPORTED) continue;
+      if (manifold.some((contact) =>
+        contact.distance < -this.keepDistance &&
+        Vector3.Dot(contact.normal, this.up) < this.maxSlopeCosine
+      )) continue;
+      return Object.freeze({ controllerCenter, support });
+    }
+    return undefined;
+  }
+
   protected override _tryStepUp(
     remainingTime: number,
     inputVelocity: Vector3,
@@ -407,7 +459,7 @@ export class MotionKernelRuntimeV1 {
     private readonly subject: ExecutionSubjectV3,
     gravityMetersPerSecondSquaredXYZ: Vec3,
     private readonly visualRoot: TransformNode,
-    scene: Scene,
+    private readonly scene: Scene,
     private readonly waterSurfaceHeightAtSubjectOrigin: (
       subjectOrigin: Vector3,
     ) => number | undefined,
@@ -520,6 +572,39 @@ export class MotionKernelRuntimeV1 {
 
   clearRetainedCharacterSupportSample(): void {
     this.retainedSupportSample = undefined;
+  }
+
+  probeGroundPlacementAt(
+    desiredSubjectOrigin: Vector3,
+    filterMembershipMask: number,
+    filterCollideMask: number,
+  ): Vector3 | undefined {
+    const probe = new GroundAwarePhysicsCharacterController(
+      desiredSubjectOrigin.add(this.colliderCenterOffset),
+      {
+        capsuleHeight: this.subject.collider.heightMeters,
+        capsuleRadius: this.subject.collider.radiusMeters,
+      },
+      this.scene,
+    );
+    try {
+      probe.keepDistance = this.physicsController.keepDistance;
+      probe.keepContactTolerance = this.physicsController.keepContactTolerance;
+      probe.maxSlopeCosine = this.physicsController.maxSlopeCosine;
+      probe.maxStepHeight = this.physicsController.maxStepHeight;
+      probe.characterMass = this.physicsController.characterMass;
+      probe.shape.filterMembershipMask = filterMembershipMask;
+      probe.shape.filterCollideMask = filterCollideMask;
+      const result = probe.probeGroundPlacementAt(
+        desiredSubjectOrigin.add(this.colliderCenterOffset),
+        this.gravityDirection,
+      );
+      return isNil(result)
+        ? undefined
+        : result.controllerCenter.subtract(this.colliderCenterOffset);
+    } finally {
+      probe.dispose();
+    }
   }
 
   liveLockState(): MotionKernelLiveLockStateV1 {

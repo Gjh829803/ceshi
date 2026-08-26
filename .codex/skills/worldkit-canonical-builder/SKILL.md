@@ -61,7 +61,8 @@ Read these files completely before writing either output:
 ## Composable capability and remaining budget gates
 
 - Every emitted capability closure must resolve and execute in the current runtime, but the complete Subject does not need a Registry preset. Compose a package-local Subject from visual parts and the closest honest current motion closure, then repair it through the bundled validator. Absence of a named preset is never a reason to omit `authoring.json` or stop the task. The Agent must not add or modify SDK motion bases, Registry catalogs, Runtime, Compiler, or protocols.
-- Never emit `worldkit://capability/relationship.mount@1`, `relationship.seat@1`, or `relationship.tether@1`. Bind the rider/body/equipment pieces into one Subject with shared visual parts and one current motion closure instead of using a relationship.
+- Never emit `worldkit://capability/relationship.mount@1`, `relationship.seat@1`, or `relationship.tether@1`.
+- Never emit `worldkit://capability/relationship.mounted-on@1` until Hosted Builder mount admission is explicitly opened. Bind the rider/body/equipment pieces into one Subject with shared visual parts and one current motion closure instead of using a relationship.
 - The default Motion Kernel and Control Profile must use the same command kind. Never reconstruct an unlisted motion closure from individual refs merely because their names resemble the requested behavior.
 - `maxVertices`, `maxTriangles`, and `maxColliders` are required hard budgets. The current compiler rejects every overrun; never describe triangle count as advisory.
 - Keep `world.resourceBudget.maxVertices` at or below `120000`, target actual compiled use below `100000` vertices, and retain practical triangle and collider ceilings.

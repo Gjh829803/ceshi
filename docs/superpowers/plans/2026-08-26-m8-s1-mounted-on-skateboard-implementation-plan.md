@@ -157,11 +157,15 @@ outside this slice.
 **Produces:** Rider follows the skateboard slot; board alone owns movement/support; rollback and disposal are exact.
 
 - [ ] Current RED/GREEN coverage includes asymmetric slot projection, Rider suspension/collider policy,
-  Mount movement, safe/blocked Dismount and Reset. Explicit ledge departure/landing, two mounted pairs
-  and partial native-allocation cleanup cases remain completion-hardening work.
+  Mount movement, Physics-unsupported and admitted-bounds rejection, safe/blocked Dismount, isolated
+  probe cleanup and Reset. Explicit ledge departure/landing, two mounted pairs and broader partial
+  Runtime-construction cleanup cases remain completion-hardening work.
 - [x] Project Rider Subject Origin from committed Mount pose + slot + authored Rider offset. Preserve Snapshot/Visual Root at Subject Origin and project Rider locomotion as the closed `suspended` branch with no fake medium/speed.
 - [x] Suspend Rider controller/input/body support while mounted. Do not add a second grounding query.
-- [x] Implement deterministic Dismount candidate evaluation through the existing physics/placement authority. Add a RED case where candidate 1 is blocked and candidate 2 is selected, and one where all candidates fail without mutation.
+- [x] Implement deterministic Dismount candidate evaluation through an isolated Rider Physics placement
+  probe using static environment contacts plus Babylon `checkSupport()`, admitted terrain bounds and
+  deterministic Subject blocking. Add RED cases for unsupported Physics, out-of-bounds candidate 1,
+  blocked candidate 1 selection and all-candidates-fail without mutation.
 - [ ] The board keeps the existing single `checkSupport()` locomotion authority and no rider-board fact is
   fabricated. Publishing and asserting board `supportedBy` from retained support evidence remains open.
 - [x] Run:
@@ -200,8 +204,8 @@ outside this slice.
 **Produces:** populated Action/Event/Relationship/Snapshot tracks bound to frame and Receipt identities.
 
 - [ ] RED fixtures now cover missing Relationship row, wrong Event payload, Receipt → WorldState
-  mismatch and wrong transition Tick. Formal foreign-WorldSession and post-reset leakage fixtures remain
-  with the mounted Capture verifier.
+  mismatch and wrong transition Tick. The unit fixture now reproduces the five-Event Host Mount sequence;
+  formal foreign-WorldSession and post-reset leakage fixtures remain with the mounted Capture verifier.
 - [ ] Feed committed RuntimeHost journal records to the existing reserved NDJSON tracks in canonical sequence order.
 - [x] Extend validation to cross-check every reference described in spec section 10; keep bundle schemaVersion 1 because paths and frame refs already reserve these tracks.
 - [ ] Capture frames before Mount, after Mount movement, after Dismount movement and after Reset.
@@ -241,8 +245,7 @@ outside this slice.
 - [x] Apply `docs/reviews/full-dimension-review-protocol.md` change dimensions and
   `docs/reviews/runtime-deep-review-checklist.md` authority, adversarial, lifecycle and evidence checks
   to this integration checkpoint. Repeat the final completion review after the open Tasks 6/8 work.
-- [ ] Obtain a completed read-only project-local Cursor completion verdict and reproduce every
-  candidate finding before disposition. Two authenticated 2026-08-26 attempts did not yield a report:
-  Ask mode rejected read-only Git commands, then the no-inspection retry remained silent for more than
-  ten minutes. This is an attempted tool review, not a Cursor GO.
+- [ ] Obtain a completed read-only project-local Cursor completion verdict and reproduce every candidate
+  finding before disposition. Manual zcode/Cursor checkpoint reports were produced and fully dispositioned;
+  their confirmed defects were fixed, but both reports predate the fixes and are not a final-tree GO.
 - [ ] Update the backlog only after all gates pass. Do not mark seat/tether, wheel physics, tricks, full mounted Camera, dynamic Route or hosted Builder support complete.

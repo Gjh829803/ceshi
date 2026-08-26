@@ -536,6 +536,15 @@ export class GameplayState implements GameplayPlanningStateV1 {
           `Controller '${command.controllerEntityId}' is unbound.`,
         );
       }
+      if (Object.values(this.relationshipStatesById).some((relationship) =>
+        relationship.type === "mountedOn" &&
+        relationship.mountEntityId === current.controlledEntityId
+      )) {
+        return reject(
+          "GAMEPLAY_RULE_REJECTED",
+          `Controlled Mount '${current.controlledEntityId}' must Dismount its Rider before release.`,
+        );
+      }
       return this.plannedCommand(command, simulationTick, [{
         operation: "remove",
         before: current,
@@ -552,6 +561,15 @@ export class GameplayState implements GameplayPlanningStateV1 {
       return reject(
         "CONTROLLED_ENTITY_NOT_FOUND",
         `Controlled Entity '${command.controlledEntityId}' does not exist.`,
+      );
+    }
+    if (Object.values(this.relationshipStatesById).some((relationship) =>
+      relationship.type === "mountedOn" &&
+      relationship.riderEntityId === command.controlledEntityId
+    )) {
+      return reject(
+        "GAMEPLAY_RULE_REJECTED",
+        `Mounted Rider '${command.controlledEntityId}' cannot be directly possessed.`,
       );
     }
     if (current?.controlledEntityId === command.controlledEntityId) {

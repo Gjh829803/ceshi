@@ -11,7 +11,10 @@ import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js"
 import { Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
-import { PhysicsCharacterController } from "@babylonjs/core/Physics/v2/characterController.js";
+import {
+  CharacterSupportedState,
+  PhysicsCharacterController,
+} from "@babylonjs/core/Physics/v2/characterController.js";
 import type { PhysicsEngine } from "@babylonjs/core/Physics/v2/physicsEngine.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
 import { sha256Bytes, sha256CanonicalJson } from "@whitebox-world/protocol";
@@ -3196,12 +3199,18 @@ describe("BabylonWorldRuntime", () => {
 
   it("stages and commits a mounted Rider at the asymmetric Mount slot while suspending Rider locomotion", async () => {
     const spec = createValidMountedOnAuthoringSpec();
+    const terrainNode = spec.nodes.find((node) => node.kind === "terrain");
     const riderAnchor = spec.nodes.find((node) =>
       node.kind === "anchor" && node.id === "spawn-pack-animal-a"
     );
-    if (riderAnchor?.kind !== "anchor" || riderAnchor.placement.kind !== "fixed") {
+    if (
+      terrainNode?.kind !== "terrain" ||
+      riderAnchor?.kind !== "anchor" ||
+      riderAnchor.placement.kind !== "fixed"
+    ) {
       throw new Error("Mounted fixture Rider Anchor missing.");
     }
+    terrainNode.components.terrain.source = { kind: "procedural", relief: "flat" };
     riderAnchor.placement.transform.positionMetersXYZ = [3.5, 0, 5];
     const mountedDefinition = spec.resources.subjectDefinitions[0];
     if (isNil(mountedDefinition) || isNil(mountedDefinition.mountSlots[0])) {
@@ -3372,6 +3381,167 @@ describe("BabylonWorldRuntime", () => {
         .toEqual(initialProjection.spatialEntityStatesById[
           "pack-animal-a"
         ]!.positionMetersXYZ);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("uses an isolated Physics support probe and rejects unsupported Dismount without mutation", async () => {
+    const spec = createValidMountedOnAuthoringSpec();
+    const riderAnchor = spec.nodes.find((node) =>
+      node.kind === "anchor" && node.id === "spawn-pack-animal-a"
+    );
+    if (riderAnchor?.kind !== "anchor" || riderAnchor.placement.kind !== "fixed") {
+      throw new Error("Mounted fixture Rider Anchor missing.");
+    }
+    riderAnchor.placement.transform.positionMetersXYZ = [3.5, 0, 5];
+    const compiled = compileExecutionPlan(spec);
+    const executionPlan: ExecutionPlanV5 = {
+      ...compiled,
+      initialControlledEntityId: "pack-animal-a",
+      initialRelationships: [],
+      camera: { ...compiled.camera, targetEntityId: "pack-animal-a" },
+    };
+    const runtime = await createRuntime(executionPlan, {}, false);
+    try {
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      const bind = await internal.preparePossessionTarget({
+        mode: "possessed",
+        controlledEntityId: "pack-animal-a",
+      });
+      bind.commitPrepared();
+      const relationship = {
+        id: "mounted-on:physics-probe",
+        type: "mountedOn" as const,
+        schemaVersion: 1 as const,
+        riderEntityId: "pack-animal-a",
+        mountEntityId: "pack-animal-b",
+        mountSlotId: "stand",
+        establishedSimulationTick: 0,
+      };
+      const mount = await internal.prepareMountedRelationshipTransition({
+        operation: "mount",
+        relationship,
+        possessionTarget: {
+          mode: "possessed",
+          controlledEntityId: "pack-animal-b",
+        },
+      });
+      mount.commitPrepared();
+      const mountedBefore = internal.readWorldProjection();
+      const disposeProbe = vi.spyOn(
+        PhysicsCharacterController.prototype,
+        "dispose",
+      );
+      const supportProbe = vi.spyOn(
+        PhysicsCharacterController.prototype,
+        "checkSupport",
+      ).mockReturnValue({
+        supportedState: CharacterSupportedState.UNSUPPORTED,
+        averageSurfaceNormal: Vector3.Zero(),
+        averageSurfaceVelocity: Vector3.Zero(),
+        averageAngularSurfaceVelocity: Vector3.Zero(),
+        isSurfaceDynamic: false,
+      });
+
+      await expect(internal.prepareMountedRelationshipTransition({
+        operation: "dismount",
+        relationship,
+        possessionTarget: {
+          mode: "possessed",
+          controlledEntityId: "pack-animal-a",
+        },
+      })).rejects.toThrow("WORLDKIT_DISMOUNT_SAFE_PLACEMENT_UNAVAILABLE");
+
+      expect(supportProbe).toHaveBeenCalled();
+      expect(disposeProbe).toHaveBeenCalledTimes(2);
+      expect(internal.readWorldProjection()).toEqual(mountedBefore);
+      expect(internal.readPossessionTarget()).toEqual({
+        mode: "possessed",
+        controlledEntityId: "pack-animal-b",
+      });
+      supportProbe.mockRestore();
+      disposeProbe.mockRestore();
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("skips Dismount candidates outside the admitted terrain bounds", async () => {
+    const spec = createValidMountedOnAuthoringSpec();
+    const terrainNode = spec.nodes.find((node) => node.kind === "terrain");
+    const riderAnchor = spec.nodes.find((node) =>
+      node.kind === "anchor" && node.id === "spawn-pack-animal-a"
+    );
+    const mountAnchor = spec.nodes.find((node) =>
+      node.kind === "anchor" && node.id === "spawn-pack-animal-b"
+    );
+    const definition = spec.resources.subjectDefinitions[0];
+    if (
+      riderAnchor?.kind !== "anchor" ||
+      riderAnchor.placement.kind !== "fixed" ||
+      mountAnchor?.kind !== "anchor" ||
+      mountAnchor.placement.kind !== "fixed" ||
+      terrainNode?.kind !== "terrain" ||
+      isNil(definition) ||
+      isNil(definition.mountSlots[0])
+    ) throw new Error("Terrain-edge Dismount fixture is incomplete.");
+    terrainNode.components.terrain.source = { kind: "procedural", relief: "flat" };
+    riderAnchor.placement.transform.positionMetersXYZ = [78.5, 0, 5];
+    mountAnchor.placement.transform.positionMetersXYZ = [79, 0, 5];
+    const mutableSlots = definition.mountSlots as unknown as Array<
+      (typeof definition.mountSlots)[number]
+    >;
+    mutableSlots[0] = {
+      ...mutableSlots[0]!,
+      dismountCandidateOffsetsMetersXYZ: [[2, 0, 0], [-2, 0, 0]],
+    };
+    const compiled = compileExecutionPlan(spec);
+    const executionPlan: ExecutionPlanV5 = {
+      ...compiled,
+      initialControlledEntityId: "pack-animal-a",
+      initialRelationships: [],
+      camera: { ...compiled.camera, targetEntityId: "pack-animal-a" },
+    };
+    const runtime = await createRuntime(executionPlan, {}, false);
+    try {
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      const bind = await internal.preparePossessionTarget({
+        mode: "possessed",
+        controlledEntityId: "pack-animal-a",
+      });
+      bind.commitPrepared();
+      const relationship = {
+        id: "mounted-on:terrain-edge",
+        type: "mountedOn" as const,
+        schemaVersion: 1 as const,
+        riderEntityId: "pack-animal-a",
+        mountEntityId: "pack-animal-b",
+        mountSlotId: "stand",
+        establishedSimulationTick: 0,
+      };
+      const mount = await internal.prepareMountedRelationshipTransition({
+        operation: "mount",
+        relationship,
+        possessionTarget: {
+          mode: "possessed",
+          controlledEntityId: "pack-animal-b",
+        },
+      });
+      mount.commitPrepared();
+
+      const dismount = await internal.prepareMountedRelationshipTransition({
+        operation: "dismount",
+        relationship,
+        possessionTarget: {
+          mode: "possessed",
+          controlledEntityId: "pack-animal-a",
+        },
+      });
+
+      expect(dismount.projectedWorldStateAfter.spatialEntityStatesById[
+        "pack-animal-a"
+      ]!.positionMetersXYZ[0]).toBeLessThanOrEqual(80);
     } finally {
       await runtime.dispose();
     }

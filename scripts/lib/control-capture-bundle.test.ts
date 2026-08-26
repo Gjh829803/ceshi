@@ -251,6 +251,22 @@ function mountedGameplayEvidence(): Readonly<{
     mountSlotId: "stand",
     establishedSimulationTick: 5,
   };
+  const riderPossession = {
+    id: "possession-rider-test",
+    type: "possessedBy" as const,
+    schemaVersion: 1 as const,
+    controlledEntityId: "player",
+    controllerEntityId: "controller-primary",
+    establishedSimulationTick: 1,
+  };
+  const mountPossession = {
+    id: "possession-mount-test",
+    type: "possessedBy" as const,
+    schemaVersion: 1 as const,
+    controlledEntityId: "skateboard",
+    controllerEntityId: "controller-primary",
+    establishedSimulationTick: 5,
+  };
   const spatial = (id: string, classId: string) => ({
     id,
     kind: "spatial-entity-state" as const,
@@ -275,6 +291,15 @@ function mountedGameplayEvidence(): Readonly<{
     entityStatesById: {
       player: spatial("player", "character.humanoid"),
       skateboard: spatial("skateboard", "vehicle.skateboard"),
+      "controller-primary": {
+        id: "controller-primary",
+        kind: "controller-entity-state",
+        controllerDefinitionRef: "worldkit://controller/local-player@1",
+        controllerDefinitionHash: WORLD_HASH,
+        participantId: "participant-primary",
+        lifecycleMode: "active",
+        inputMode: "human",
+      },
     },
     capabilityStatesById: {
       "capability-state:player:locomotion": {
@@ -287,10 +312,13 @@ function mountedGameplayEvidence(): Readonly<{
         suspendedByRelationshipId: relationship.id,
       },
     },
-    relationshipStatesById: { [relationship.id]: relationship },
+    relationshipStatesById: {
+      [relationship.id]: relationship,
+      [mountPossession.id]: mountPossession,
+    },
     semanticFactsById: {},
     activeActionStatesById: {},
-    lastEventSequence: 3,
+    lastEventSequence: 5,
   });
   const command = {
     schemaVersion: 1,
@@ -309,23 +337,47 @@ function mountedGameplayEvidence(): Readonly<{
       kind: "worldkit-gameplay-event",
       schemaVersion: 1,
       id: deriveGameplayEventIdV1("world-session-test", 1),
-      type: "relationship.committed",
+      type: "relationship.removed",
       runtimeSessionId: "session-test",
       worldSessionId: "world-session-test",
       simulationTick: 5,
       sequence: 1,
       commandId: command.id,
-      relationship,
+      relationship: riderPossession,
     },
     {
-      kind: "worldkit-gameplay-event" as const,
-      schemaVersion: 1 as const,
+      kind: "worldkit-gameplay-event",
+      schemaVersion: 1,
       id: deriveGameplayEventIdV1("world-session-test", 2),
-      type: "action.started" as const,
+      type: "relationship.committed",
       runtimeSessionId: "session-test",
       worldSessionId: "world-session-test",
       simulationTick: 5,
       sequence: 2,
+      commandId: command.id,
+      relationship,
+    },
+    {
+      kind: "worldkit-gameplay-event",
+      schemaVersion: 1,
+      id: deriveGameplayEventIdV1("world-session-test", 3),
+      type: "relationship.committed",
+      runtimeSessionId: "session-test",
+      worldSessionId: "world-session-test",
+      simulationTick: 5,
+      sequence: 3,
+      commandId: command.id,
+      relationship: mountPossession,
+    },
+    {
+      kind: "worldkit-gameplay-event" as const,
+      schemaVersion: 1 as const,
+      id: deriveGameplayEventIdV1("world-session-test", 4),
+      type: "action.started" as const,
+      runtimeSessionId: "session-test",
+      worldSessionId: "world-session-test",
+      simulationTick: 5,
+      sequence: 4,
       semanticActionRef: command.semanticActionRef,
       actionExecutionId: command.actionExecutionId,
       actorEntityId: command.actorEntityId,
@@ -334,12 +386,12 @@ function mountedGameplayEvidence(): Readonly<{
     {
       kind: "worldkit-gameplay-event" as const,
       schemaVersion: 1 as const,
-      id: deriveGameplayEventIdV1("world-session-test", 3),
+      id: deriveGameplayEventIdV1("world-session-test", 5),
       type: "action.completed" as const,
       runtimeSessionId: "session-test",
       worldSessionId: "world-session-test",
       simulationTick: 5,
-      sequence: 3,
+      sequence: 5,
       semanticActionRef: command.semanticActionRef,
       actionExecutionId: command.actionExecutionId,
       actorEntityId: command.actorEntityId,
@@ -369,8 +421,11 @@ function mountedGameplayEvidence(): Readonly<{
   };
   const gameplayInspectionAfter = {
     ...runtimeSnapshot(5).world.gameplayInspection,
-    relationshipStatesById: { [relationship.id]: relationship },
-    lastEventSequence: 3,
+    relationshipStatesById: {
+      [relationship.id]: relationship,
+      [mountPossession.id]: mountPossession,
+    },
+    lastEventSequence: 5,
   };
   const snapshot: WorldRuntimeSnapshotV4 = {
     ...runtimeSnapshot(5),
@@ -428,14 +483,15 @@ describe("Control Capture Bundle V1", () => {
       (await readFile(path.join(outputDirectory, "tracks", fileName), "utf8"))
         .trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
     expect(await readRows("actions.ndjson")).toHaveLength(1);
-    expect(await readRows("events.ndjson")).toHaveLength(3);
-    expect(await readRows("relationships.ndjson")).toEqual([
+    expect(await readRows("events.ndjson")).toHaveLength(5);
+    expect(await readRows("relationships.ndjson")).toHaveLength(3);
+    expect(await readRows("relationships.ndjson")).toContainEqual(
       expect.objectContaining({
         captureFrameIndexAfter: 1,
         operation: "add",
         relationship: expect.objectContaining({ type: "mountedOn" }),
       }),
-    ]);
+    );
     await expect(validateControlCaptureBundleV1(outputDirectory)).resolves
       .toMatchObject({ ok: true });
   });
@@ -499,8 +555,18 @@ describe("Control Capture Bundle V1", () => {
       .map((line) => JSON.parse(line));
     const relationshipRows = (await readFile(relationshipPath, "utf8"))
       .trim().split("\n").map((line) => JSON.parse(line));
-    eventRows[0].event.relationship.mountSlotId = "tampered-slot";
-    relationshipRows[0].relationship.mountSlotId = "tampered-slot";
+    const eventRowIndex = eventRows.findIndex((row) =>
+      row.event.type === "relationship.committed" &&
+      row.event.relationship.type === "mountedOn"
+    );
+    const relationshipRowIndex = relationshipRows.findIndex((row) =>
+      row.operation === "add" && row.relationship.type === "mountedOn"
+    );
+    expect(eventRowIndex).toBeGreaterThanOrEqual(0);
+    expect(relationshipRowIndex).toBeGreaterThanOrEqual(0);
+    eventRows[eventRowIndex].event.relationship.mountSlotId = "tampered-slot";
+    relationshipRows[relationshipRowIndex].relationship.mountSlotId =
+      "tampered-slot";
     await writeFile(
       eventPath,
       `${eventRows.map(stringifyCanonicalJson).join("\n")}\n`,
@@ -517,7 +583,7 @@ describe("Control Capture Bundle V1", () => {
     expect(validation.ok).toBe(false);
     expect(validation.diagnostics).toContainEqual(expect.objectContaining({
       code: "CAPTURE_GAMEPLAY_REFERENCE_MISMATCH",
-      path: "tracks/relationships.ndjson/0",
+      path: `tracks/relationships.ndjson/${relationshipRowIndex}`,
     }));
   });
 

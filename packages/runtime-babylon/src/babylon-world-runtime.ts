@@ -1153,38 +1153,50 @@ export class BabylonWorldRuntime {
     const mountController = this.subjectControllersByEntityId.get(
       relationship.mountEntityId,
     );
+    const riderController = this.subjectControllersByEntityId.get(
+      relationship.riderEntityId,
+    );
+    const mounted = this.gameplayPublishedState
+      .mountedRelationshipsByRiderEntityId[relationship.riderEntityId];
     if (
       isNil(riderSubject) ||
       isNil(mountSubject) ||
       isNil(slot) ||
-      isNil(mountController)
+      isNil(mountController) ||
+      isNil(riderController) ||
+      isNil(mounted) ||
+      mounted.relationship.id !== relationship.id
     ) throw new Error("WORLDKIT_DISMOUNT_SLOT_UNAVAILABLE");
     const mountOrigin = mountController.subjectOrigin;
+    const terrainMinimumX = this.executionPlan.terrain.centerMetersXZ[0] -
+      this.executionPlan.terrain.sizeMetersXZ[0] / 2;
+    const terrainMaximumX = this.executionPlan.terrain.centerMetersXZ[0] +
+      this.executionPlan.terrain.sizeMetersXZ[0] / 2;
+    const terrainMinimumZ = this.executionPlan.terrain.centerMetersXZ[1] -
+      this.executionPlan.terrain.sizeMetersXZ[1] / 2;
+    const terrainMaximumZ = this.executionPlan.terrain.centerMetersXZ[1] +
+      this.executionPlan.terrain.sizeMetersXZ[1] / 2;
     const yaw = mountController.facingYawRadians;
     const cosine = Math.cos(yaw);
     const sine = Math.sin(yaw);
     for (const offset of slot.dismountCandidateOffsetsMetersXYZ) {
       const x = mountOrigin.x + offset[0] * cosine + offset[2] * sine;
       const z = mountOrigin.z - offset[0] * sine + offset[2] * cosine;
-      const supportHeights = [
-        sampleExecutionTerrainHeight(this.executionPlan.terrain, x, z),
-        ...this.executionPlan.staticColliders.flatMap((collider) => {
-          const height = queryStaticColliderTriangleMeshSupportHeightMetersV1(
-            emitTransformedStaticColliderTriangleMeshV1(
-              collider.shape,
-              collider.transform,
-            ),
-            [x, z],
-          );
-          return isNil(height) ? [] : [height];
-        }),
-      ].filter(Number.isFinite);
-      if (supportHeights.length === 0) continue;
-      const subjectOrigin = new Vector3(
-        x,
-        Math.max(...supportHeights) + offset[1],
-        z,
+      const y = mountOrigin.y + offset[1];
+      if (
+        ![x, y, z].every(Number.isFinite) ||
+        x < terrainMinimumX ||
+        x > terrainMaximumX ||
+        z < terrainMinimumZ ||
+        z > terrainMaximumZ
+      ) continue;
+      const placement = riderController.probeGroundPlacementAt(
+        [x, y, z],
+        mounted.riderCollisionFilterMembershipMask,
+        mounted.riderCollisionFilterCollideMask,
       );
+      if (isNil(placement)) continue;
+      const subjectOrigin = new Vector3(...placement);
       const candidateCenter = subjectOrigin.add(
         new Vector3(...riderSubject.collider.centerOffsetFromSubjectOriginMetersXYZ),
       );

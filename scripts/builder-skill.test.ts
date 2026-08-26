@@ -123,6 +123,7 @@ describe("Canonical Builder skill", () => {
     expect(skill).toContain("explicitly disclosed playable approximation");
     expect(skill).toContain("must not add or modify SDK motion bases");
     expect(skill).toContain("Never emit `worldkit://capability/relationship.mount@1`");
+    expect(skill).toContain("Never emit `worldkit://capability/relationship.mounted-on@1`");
     expect(skill).toContain("`maxVertices`, `maxTriangles`, and `maxColliders` are required hard budgets");
     expect(skill).toContain("current compiler rejects every overrun");
     expect(skill).not.toContain("actual compiled use at or below `150000` triangles");

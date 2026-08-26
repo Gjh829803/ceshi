@@ -119,6 +119,21 @@ export class SubjectController {
     this.motionKernel.clearRetainedCharacterSupportSample();
   }
 
+  probeGroundPlacementAt(
+    desiredSubjectOriginMetersXYZ: Vec3,
+    filterMembershipMask: number,
+    filterCollideMask: number,
+  ): Vec3 | undefined {
+    const placement = this.motionKernel.probeGroundPlacementAt(
+      new Vector3(...desiredSubjectOriginMetersXYZ),
+      filterMembershipMask,
+      filterCollideMask,
+    );
+    return placement === undefined
+      ? undefined
+      : [placement.x, placement.y, placement.z];
+  }
+
   liveLockState(): MotionKernelLiveLockStateV1 {
     return this.motionKernel.liveLockState();
   }

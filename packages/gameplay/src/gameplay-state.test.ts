@@ -548,6 +548,31 @@ describe("GameplayState possession", () => {
     if (mountedRelationship?.type !== "mountedOn") {
       throw new Error("Mounted Relationship was not committed.");
     }
+    expect(state.planControl(command({
+      id: "bind-mounted-rider-directly",
+      type: "control.bind",
+      controllerEntityId: "controller-a",
+      controlledEntityId: "subject-a",
+      expectedPossession: {
+        mode: "possessed",
+        controlledEntityId: "subject-b",
+      },
+    }), 3)).toMatchObject({
+      status: "rejected",
+      diagnostic: { code: "GAMEPLAY_RULE_REJECTED" },
+    });
+    expect(state.planControl(command({
+      id: "release-mounted-pair",
+      type: "control.release",
+      controllerEntityId: "controller-a",
+      expectedPossession: {
+        mode: "possessed",
+        controlledEntityId: "subject-b",
+      },
+    }), 3)).toMatchObject({
+      status: "rejected",
+      diagnostic: { code: "GAMEPLAY_RULE_REJECTED" },
+    });
     bind(
       state,
       "controller-b",

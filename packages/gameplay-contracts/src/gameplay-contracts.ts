@@ -1770,6 +1770,9 @@ function parseWorldStateSnapshotBuildInputV1(
     controlledEntityIds.add(relationship.controlledEntityId);
     controllerEntityIds.add(relationship.controllerEntityId);
   }
+  if ([...mountedRiderEntityIds].some((riderEntityId) =>
+    controlledEntityIds.has(riderEntityId)
+  )) invalid(schemaName);
 
   for (const capability of Object.values(capabilityStatesById)) {
     if (
@@ -2121,6 +2124,9 @@ export function parseGameplayInspectionSnapshotV1(
     controlledEntityIds.add(relationship.controlledEntityId);
     controllerEntityIds.add(relationship.controllerEntityId);
   }
+  if ([...mountedRiderEntityIds].some((riderEntityId) =>
+    controlledEntityIds.has(riderEntityId)
+  )) invalid(schemaName);
 
   const base = {
     kind: "worldkit-gameplay-inspection-snapshot" as const,

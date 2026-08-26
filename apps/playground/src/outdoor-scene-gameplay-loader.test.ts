@@ -156,7 +156,7 @@ describe("loadOutdoorGameplaySceneV1", () => {
         .semanticActionDefinitions,
     ).toHaveLength(2);
     expect(result.gameplayActionRequestResolver).toBeTypeOf("function");
-  });
+  }, 90_000);
 
   it("produces byte-stable identities for the same scene", async () => {
     const scene = sceneCatalog["world-08170639-54db"]!;

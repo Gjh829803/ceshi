@@ -928,7 +928,10 @@ describe("WorldStateSnapshotV1", () => {
       },
       relationshipStatesById: {
         "mounted-on-primary": mountedOnRelationshipState,
-        "possession-primary": possessionRelationshipState,
+        "possession-primary": {
+          ...possessionRelationshipState,
+          controlledEntityId: "skateboard-primary",
+        },
       },
     });
 
@@ -1330,7 +1333,10 @@ describe("WorldStateSnapshotV1", () => {
         [suspendedLocomotion.id]: suspendedLocomotion,
       },
       relationshipStatesById: {
-        ...worldStateSnapshot.relationshipStatesById,
+        "possession-primary": {
+          ...possessionRelationshipState,
+          controlledEntityId: "skateboard-primary",
+        },
         "mounted-on-primary": mountedOnRelationshipState,
       },
     };
@@ -1344,6 +1350,32 @@ describe("WorldStateSnapshotV1", () => {
           ...suspendedLocomotion,
           movementMedium: "ground",
         },
+      },
+    })).toThrow("closed WorldStateSnapshotV1 schema");
+  });
+
+  it("rejects direct possession of a mounted rider", () => {
+    const suspendedLocomotion = {
+      id: "locomotion-g-bot-primary",
+      kind: "locomotion-capability-state",
+      ownerEntityId: "g-bot-primary",
+      locomotionCapabilityRef: "worldkit://locomotion-profile/g-bot@1",
+      locomotionCapabilityHash: HASH_C,
+      mode: "suspended",
+      suspendedByRelationshipId: "mounted-on-primary",
+    } as const;
+    expect(() => rebuildWorldStateSnapshotV1({
+      ...worldStateSnapshot,
+      entityStatesById: {
+        ...worldStateSnapshot.entityStatesById,
+        "skateboard-primary": skateboardSpatialEntityState,
+      },
+      capabilityStatesById: {
+        [suspendedLocomotion.id]: suspendedLocomotion,
+      },
+      relationshipStatesById: {
+        "possession-primary": possessionRelationshipState,
+        "mounted-on-primary": mountedOnRelationshipState,
       },
     })).toThrow("closed WorldStateSnapshotV1 schema");
   });
@@ -1686,7 +1718,10 @@ const inspectionSnapshot = {
     },
   },
   relationshipStatesById: {
-    "possession-primary": possessionRelationshipState,
+    "possession-primary": {
+      ...possessionRelationshipState,
+      controlledEntityId: "skateboard-primary",
+    },
     "mounted-on-primary": mountedOnRelationshipState,
   },
   activeActionStatesById: {
@@ -1764,6 +1799,13 @@ describe("GameplayInspectionSnapshotV1", () => {
           ...possessionRelationshipState,
           controllerEntityId: "controller-missing",
         },
+      },
+    }],
+    ["direct possession of a mounted Rider", {
+      ...inspectionSnapshot,
+      relationshipStatesById: {
+        ...inspectionSnapshot.relationshipStatesById,
+        "possession-primary": possessionRelationshipState,
       },
     }],
   ])("rejects %s", (_label, input) => {
