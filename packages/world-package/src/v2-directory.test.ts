@@ -1,5 +1,6 @@
 import {
   normalizeAuthoringSpecV4,
+  validateAuthoringSpecV4,
   type AuthoringSpecV4,
 } from "@whitebox-world/authoring";
 import { compileWorldV5 } from "@whitebox-world/compiler";
@@ -29,10 +30,8 @@ import {
   type WorldPackageDirectoryFileV2,
   type WorldPackageDirectoryV2,
 } from "./index.js";
-import {
-  createValidAuthoringSpec,
-  createValidRiggedPackageSubjectWorld,
-} from "../../authoring/src/test-fixture.js";
+import basicWorldDocument from "../../../examples/authoring/basic-world.json";
+import riggedWorldDocument from "../../../examples/authoring/rigged-subject-world.json";
 
 const HASH_A = `sha256:${"a".repeat(64)}` as const;
 const HASH_B = `sha256:${"b".repeat(64)}` as const;
@@ -48,22 +47,15 @@ function hashBytes(bytes: Uint8Array): `sha256:${string}` {
 }
 
 function v4Fixture(): AuthoringSpecV4 {
-  const source = createValidAuthoringSpec();
-  return asV4(source);
+  return authoringFixture(basicWorldDocument);
 }
 
-function asV4(
-  source: ReturnType<typeof createValidAuthoringSpec>,
-): AuthoringSpecV4 {
-  return {
-    ...source,
-    schemaVersion: 4,
-    spatial: { ...source.spatial, traversalAreas: [] },
-    constraints: {
-      placements: source.constraints.placements,
-      connectivity: [],
-    },
-  };
+function authoringFixture(value: unknown): AuthoringSpecV4 {
+  const validated = validateAuthoringSpecV4(value);
+  if (!validated.ok || isNil(validated.value)) {
+    throw new Error("fixture AuthoringSpecV4 is invalid");
+  }
+  return validated.value;
 }
 
 function trustedBuildInput(
@@ -311,7 +303,7 @@ describe("WorldPackageDirectoryV2", () => {
       import.meta.url,
     )));
     const build = trustedBuildInput(
-      asV4(createValidRiggedPackageSubjectWorld()),
+      authoringFixture(riggedWorldDocument),
       [{
         resourceRef: "worldkit://subject-asset/humanoid.golden@2",
         packagePath: "resources/subject-assets/humanoid.golden.glb",

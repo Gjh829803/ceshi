@@ -637,6 +637,9 @@ importers:
       '@whitebox-world/runtime-contracts':
         specifier: workspace:*
         version: link:../runtime-contracts
+      '@whitebox-world/subject-registry':
+        specifier: workspace:*
+        version: link:../subject-registry
       jsonc-parser:
         specifier: ^3.3.1
         version: 3.3.1

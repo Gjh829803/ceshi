@@ -27,6 +27,7 @@ export {
   assembleWorldPackageDirectoryV2,
   verifyWorldPackageDirectoryV2,
 } from "./v2-directory.js";
+export { createWorldPackageV2 } from "./v2-build.js";
 export type {
   CreateWorldPackageBuildReceiptInputV1,
   ResolvedWorldPackageResourceArtifactV1,
@@ -57,3 +58,9 @@ export type {
   WorldPackageDirectoryFileV2,
   WorldPackageDirectoryV2,
 } from "./v2-directory.js";
+export type {
+  CreateWorldPackageV2Input,
+  ResolvedWorldPackageResourceArtifactV2,
+  WorldPackageGeneratedResourceProvenanceV2,
+  WorldPackageLicenseDocumentInputV2,
+} from "./v2-build.js";
