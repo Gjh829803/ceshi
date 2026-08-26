@@ -257,7 +257,11 @@ describe("WorldKit authoring edit add-house Full Reload", () => {
         sessionId: PLAYGROUND_AUTHORING_EDIT_SESSION_ID,
       });
 
-      expect(applied.status).toBe("committed");
+      if (applied.status !== "committed") {
+        throw new Error(
+          `expected committed publish-runtime, got ${JSON.stringify(applied)}`,
+        );
+      }
       expect(applied.requestedOutcome).toBe("publish-runtime");
       expect(applied.publicationMode).toBe("full-reload");
       expect(applied.affectedIds?.nodeEntityIds).toContain("house-north");

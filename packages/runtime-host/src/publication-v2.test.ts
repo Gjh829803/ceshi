@@ -7,9 +7,11 @@ import {
   RUNTIME_SESSION_ID,
   createHost,
   createPortHarness,
+  heroState,
   mutableWorldConfiguration,
   replacementRequest,
 } from "./test/runtime-host-lifecycle-harness";
+import type { WorldSessionPublicationV1 } from "./world-session";
 
 const REQUEST_HASH = `sha256:${"2".repeat(64)}` as const;
 
@@ -234,6 +236,29 @@ describe("P16-H1 RuntimeHost publication V2", () => {
     initialize.release();
     const published = await first;
     expect(published.status).toBe("published");
+  });
+
+  it("binds the plan initial controlled entity before the publication ready gate", async () => {
+    const oldPort = createPortHarness();
+    const candidatePort = createPortHarness();
+    const { host, adapter } = await createHost([oldPort, candidatePort]);
+    let controlledAtReady: string | undefined;
+    adapter.factory.awaitCandidatePublicationReady.mockImplementation(
+      async (input: { publication: WorldSessionPublicationV1 }) => {
+        const possessed = Object.values(
+          input.publication.gameplayInspection.relationshipStatesById,
+        ).find((relationship) => relationship.type === "possessedBy");
+        controlledAtReady = possessed?.type === "possessedBy"
+          ? possessed.controlledEntityId
+          : undefined;
+      },
+    );
+    const result = await host.publishWorldReplacementV1({
+      worldConfiguration: mutableWorldConfiguration(REPLACEMENT_WORLD_PACKAGE_REF),
+      publication: publicationEnvelope(host),
+    });
+    expect(result.status).toBe("published");
+    expect(controlledAtReady).toBe(heroState.id);
   });
 
   it("keeps ordinary replaceWorld on the exact worldConfiguration envelope", async () => {

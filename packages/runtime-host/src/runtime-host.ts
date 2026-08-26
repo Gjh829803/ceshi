@@ -1543,7 +1543,11 @@ export class RuntimeHost {
     try {
       const outcome = await this.performReplacement(
         parsed.worldConfiguration,
-        undefined,
+        {
+          controllerEntityId: this.options.fixedInputControllerEntityId,
+          controlledEntityId:
+            parsed.worldConfiguration.executionPlan.initialControlledEntityId,
+        },
         {
           expectation: parsed.publication.runtimeExpectation,
           ...(isNil(parsed.persistDurableCommit)
