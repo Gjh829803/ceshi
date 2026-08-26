@@ -418,8 +418,14 @@ WorldPackage、Resume 与完整 Replay Gate 为完成标准。
   Root。该窄合同已解除 Task 8 Validation-subject seam 的阻塞；包归属相对原计划从
   `@whitebox-world/protocol` 修正为独立装配边界，避免基础协议反向依赖 Authoring、Compiler、
   Layout 与 Runtime Contracts。该项完成不表示 P1.4 整体完成。
-- [ ] 冻结可独立校验、加载和运行的 WorldPackage 目录与 Manifest。
-- [ ] 实现 Package Root Hash、完整性、签名输入、License/NOTICE 和 Host Compatibility Gate。
+- [x] 冻结并实现可独立校验、加载和运行的 WorldPackage V2 目录与 Manifest；完整目录绑定
+  Authoring/IR/Registry Lock/Layout/ExecutionPlan/Gameplay Bootstrap 与资源字节，可信 Host
+  通过内容寻址 `WorldPackageStoreV1` 读回验证后的 Runtime 配置。V1 仅保留为具名迁移、
+  测试和历史合同，不再被 active trusted consumer 接受。
+- [x] 实现 V2 Package Root Hash、逐文件完整性、Ed25519 签名输入与可信策略、
+  License/NOTICE legal closure 和 Host Compatibility Gate；文件 Adapter 支持绝对目录、
+  symlink-safe 读取与跨进程原子发布。完成证据见
+  [`P1.4 Complete WorldPackage V2 completion record`](reviews/2026-08-27-p14-complete-world-package-v2-completion.md)。
 - [ ] CLI 支持 package、inspect、load 和 run-session。
 - [ ] Runtime Session 支持 NDJSON 或等价的有生命周期协议、Request ID、Receipt 和恢复语义。
 - [ ] 加载新 Package 前完成旧世界 Dispose、Ownership Ledger 清空和 World Ready Gate。
