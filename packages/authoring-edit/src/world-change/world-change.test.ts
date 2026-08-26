@@ -636,6 +636,7 @@ describe("P16-C1 WorldChangeSet apply", () => {
       }],
     });
     expect(result).not.toHaveProperty("rebaseRequired");
+    if (result.status !== "rejected") throw new Error("expected rejected");
     expect(result.conflictingIds?.nodeEntityIds).toEqual(["house-north"]);
     expect(base.nodes.find((item) => item.id === "house-north")).toBeUndefined();
   });

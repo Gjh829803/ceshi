@@ -192,7 +192,7 @@
 | D1 | 不适用（Mode B）；未把 Incremental/室内/载具写成已支持 |
 | D2 | 已查；Receipt 命名与关闭 union 成立；host-local query 码已记录 |
 | D3 | 已查；Backlog/README/Quickstart 已与 first-slice 事实对齐 |
-| D4 | 已查；recover 终态覆盖已修；fence/snapshot 弱保证已记录 |
+| D4 | 已查；recover 终态覆盖已修；revision 只在 Commit point 分配；fence/snapshot 弱保证已记录 |
 | D5 | 已查；F1 断言已改到与规格一致 |
 | D6 | 见下节命令；rendered/manual 未跑 |
 
@@ -200,10 +200,10 @@
 
 审查当轮先跑 focused 回归，不把未跑的全量门禁写成已通过。
 
-| 命令 | 预期 | 证明范围 |
+| 命令 | 结果 | 证明范围 |
 | --- | --- | --- |
-| `pnpm exec vitest run packages/authoring-host/src/journal/journal.test.ts packages/authoring-host/src/journal/publication-adversarial.test.ts scripts/lib/authoring-edit-full-reload.integration.test.ts` | 见本轮实际输出 | recover 终态、F1 对抗、Host↔RuntimeHost |
-| `pnpm typecheck` | 见本轮实际输出 | TS 合同 |
+| `pnpm exec vitest run packages/authoring-edit/src/authoring-edit.test.ts packages/authoring-edit/src/world-change/world-change.test.ts packages/authoring-host/src/journal/journal.test.ts packages/authoring-host/src/journal/publication-adversarial.test.ts scripts/lib/authoring-edit-full-reload.integration.test.ts` | 5 files / 51 tests passed | Receipt 拒 `rebaseRequired`、base-mismatch、recover 终态、revision 不空耗、F1 对抗、Host↔RuntimeHost |
+| `pnpm typecheck` | passed | TS 合同 |
 | `pnpm test` / `pnpm build` | G1 再跑 | 全量 Vitest + bundle；本记录不提前宣称 |
 | `pnpm test:studio` / Browser verifier / 人工操作 | 未跑 | 输入未改 Studio；无新 rendered claim |
 

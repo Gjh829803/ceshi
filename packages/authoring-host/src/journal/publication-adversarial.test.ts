@@ -123,7 +123,7 @@ function seeded(extras: { readonly policy?: AuthoringEditPolicyProjectionV1 } = 
     journal,
     leaseStore: createPreparedCandidateLeaseStoreV1(),
     authoringSpecHash,
-    session: session({ policy: extras.policy }),
+    session: isNil(extras.policy) ? session() : session({ policy: extras.policy }),
     addHouse: loadChangeSet("p16-add-house", authoringSpecHash),
     terrainReplace: loadChangeSet("p16-terrain-replace", authoringSpecHash),
   };
@@ -347,8 +347,12 @@ describe("P16-F1 Full Reload adversarial publication", () => {
       },
     ));
     expect(committed.receipt.status).toBe("committed");
-    if (committed.receipt.status !== "committed" || committed.receipt.mode !== "apply") {
-      throw new Error("expected committed");
+    if (
+      committed.receipt.status !== "committed" ||
+      committed.receipt.mode !== "apply" ||
+      committed.receipt.requestedOutcome !== "publish-runtime"
+    ) {
+      throw new Error("expected committed publish-runtime");
     }
     const cleanup = queryWorldChangeCleanupReportV1({
       journal,

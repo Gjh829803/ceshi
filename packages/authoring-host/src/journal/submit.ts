@@ -599,7 +599,9 @@ async function advance(
         ),
       ]);
     }
-    if (isNil(current.applied) || isNil(current.buildIdentity)) {
+    const applied = current.applied;
+    const buildIdentity = current.buildIdentity;
+    if (isNil(applied) || isNil(buildIdentity)) {
       return rejectRecord(input, current, "publication-commit", [
         worldChangeDiagnostic(
           "WORLD_CHANGE_CANDIDATE_INVALID",
@@ -616,9 +618,9 @@ async function advance(
       requestHash: current.requestHash,
       authoringEditPolicyHash: current.authoringEditPolicyHash,
       changeSetHash: current.changeSetHash,
-      buildIdentity: current.buildIdentity,
-      affectedIds: current.applied.affectedIds,
-      operationResults: current.applied.operationResults,
+      buildIdentity,
+      affectedIds: applied.affectedIds,
+      operationResults: applied.operationResults,
       committedRevisionRef: revisionRef,
     });
     const { pin: _pin, pendingRevisionRef: _pendingRevisionRef, ...rest } = current;
@@ -628,7 +630,7 @@ async function advance(
       receipt,
       commitRecord: {
         revisionRef,
-        authoringSpecHash: current.applied.resultAuthoringSpecHash,
+        authoringSpecHash: applied.resultAuthoringSpecHash,
       },
     };
     commitAuthoringRevisionV1(
@@ -636,8 +638,8 @@ async function advance(
       {
         worldId: current.request.worldId,
         revisionRef,
-        authoringSpec: current.applied.candidateAuthoringSpec,
-        authoringSpecHash: current.applied.resultAuthoringSpecHash,
+        authoringSpec: applied.candidateAuthoringSpec,
+        authoringSpecHash: applied.resultAuthoringSpecHash,
       },
       committed,
     );
