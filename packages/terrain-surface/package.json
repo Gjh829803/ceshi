@@ -9,6 +9,7 @@
   "dependencies": {
     "@whitebox-world/contracts": "workspace:*",
     "flatbush": "4.6.2",
-    "lodash-es": "^4.18.1"
+    "lodash-es": "^4.18.1",
+    "robust-predicates": "3.0.3"
   }
 }

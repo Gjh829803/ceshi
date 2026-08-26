@@ -31,10 +31,10 @@ Authoring Schema。
 |---|---|---|---|---|
 | [Flatbush `4.6.2`](https://github.com/mourner/flatbush/tree/bb12071743bfeaf1b11d232b0a07b7857cabfdf8) | ISC | 已吸收代码 | 静态 packed R-tree、紧凑 typed-array 存储、inclusive AABB search | `packages/terrain-surface/src/triangle-xz-broadphase.ts`；Provider 返回顺序不可信，本地按 triangle ordinal 排序 |
 | [Turf `98b9a4e`](https://github.com/Turfjs/turf/tree/98b9a4ed270148fda73dda48b7fd1f7c8b6f88e0) | MIT | 已吸收测试；不引入生产依赖 | 凹多边形、顶点/边界、历史长边 point-in-polygon 回归；GeoJSON 闭环差异 | `packages/layout-solver/src/geometry.test.ts`、`packages/terrain-surface/src/simple-polygon-xz.test.ts`；仍是米制 XZ 简单开环 |
-| [robust-predicates `db6dca0`](https://github.com/mourner/robust-predicates/tree/db6dca0dd05fbccf04c66e479361e84a5416f1ca) | Unlicense | 候选验证 | adaptive exact `orient2d` 等谓词与近共线压力族 | 先在 `terrain-surface` 做复现；必须显式适配 XZ 轴序/符号，不能直接替换所有 epsilon 语义 |
+| [robust-predicates `3.0.3` / `db6dca0`](https://github.com/mourner/robust-predicates/tree/db6dca0dd05fbccf04c66e479361e84a5416f1ca) | Unlicense | 已吸收代码；已吸收测试 | adaptive exact `orient2d` 与近共线压力族 | `packages/terrain-surface/src/orientation-xz.ts` 是唯一薄 Adapter；显式反转上游 screen-Y 符号以维持 X-right/Z-up，未替换距离 epsilon 语义 |
 | [Manifold `87f5fec`](https://github.com/elalish/manifold/tree/87f5fec565e8c277917238b5e2d1c0b76f8ab942) | Apache-2.0 | 延后 | 保证 manifold 输出的 build-time Boolean、extrude、revolve、simplify | 仅可作为未来 Geometry Recipe Provider；WASM 对象显式释放，禁止 Runtime CSG |
 | [Clipper2](https://github.com/AngusJohnson/Clipper2) / [polyclip-ts `bef480b`](https://github.com/luizbarboza/polyclip-ts/tree/bef480bf8b035777d64a4ea857df109b5931aa61) | BSL-1.0 / MIT | 候选验证 | polygon boolean、offset、整数缩放或高精度 overlay | 等 Terrain Mask / Opening 出现真实合同后 bake-off；Earcut 继续只负责 triangulation |
-| [glTF-Transform `4.4.2`](https://github.com/donmccurdy/glTF-Transform/tree/0677324a34cea46c3ef01866ef004b69d0347453) | Apache-2.0 | 现有实现一致 | NodeIO、prune、unpartition、确定性 GLB 处理 | 根依赖与 `scripts/lib/modular-subject-runtime-bundle.ts` 已使用；后续补 Khronos Validator admission profile |
+| [glTF-Transform `4.4.2`](https://github.com/donmccurdy/glTF-Transform/tree/0677324a34cea46c3ef01866ef004b69d0347453) + [Khronos glTF Validator `2.0.0-dev.3.10`](https://github.com/KhronosGroup/glTF-Validator) | Apache-2.0 | 已吸收代码；已吸收测试 | NodeIO、prune、unpartition、确定性 GLB 处理；官方 glTF 2.0 结构/Accessor 校验边界 | `scripts/lib/glb-admission.ts` 是 Node-only Gate；原始/生成资产 promotion 前接线，xier120 19/19 语料通过；Babylon Runtime admission 不变 |
 | [Recast Navigation](https://github.com/recastnavigation/recastnavigation/tree/9f4ce64458dfae86e1239c525ddc219c4e9e06f1) / `recast-navigation@0.43.1` | Zlib | 现有实现一致 | NavMesh 构建/查询、Tile/Polygon/Portal/Detail Mesh 语义 | `packages/traversal-recast` Provider；WorldKit `hard-ribbon`、Surface 身份、预算与 Evidence 仍是上层权威 |
 | [Babylon.js `9.21.2`](https://github.com/BabylonJS/Babylon.js/tree/72a4c7a28caa4f18ae1f93513d1743e3f9060159) + Havok `1.3.14` | Apache-2.0 / vendor package | 现有实现一致 | 3D 数学、渲染、物理 Character、资源生命周期 | `packages/runtime-babylon`；`checkSupport()` 是唯一 Ground support Owner，不复制 Provider 状态 |
 | [Godot `b56a918`](https://github.com/godotengine/godot/tree/b56a91878e7c94977e4af978968e41d0670c0a8b) | MIT | 已吸收测试 | Character step/snap 条件、SpringArm 多方向覆盖、reparent/global transform 生命周期 | 转化为真实 Babylon/Havok Traversal、Mounted、Camera adversarial fixtures；未引入 Godot 依赖 |
@@ -105,6 +105,40 @@ Turf 的 `booleanPointInPolygon` 把 GeoJSON Polygon/MultiPolygon、hole、bbox 
 这些是自动化 Runtime 合同证据，不等价于 rendered screenshot 或人工手感验收，也不扩大动态
 平台、车辆、双层 Surface 或 Camera shape cast 的当前生产边界。
 
+### 3.4 robust-predicates：只接管拓扑方向，不接管米制容差
+
+本地压力族确认了两个不同层次的问题：直接用绝对坐标做 shoelace 求和，会把平移到
+`100,000,000m` 的普通 1m 正方形误判为零面积；普通 orientation 乘减也会把约 `100m`、
+仍按 `1e-6m` 量化的非共线三点算成 0。前者通过相对首点的 triangle fan 消除大数抵消，
+后者由 `terrain-surface` 唯一的 `orientXZV1()` Adapter 调用 adaptive-exact `orient2d`。
+
+上游使用 screen-style downward-positive Y，Adapter 显式取反以保持 WorldKit 既有
+X-right/Z-up cross-product 符号。`pointOnSegment` 的米制 epsilon、边界 inclusive 语义、
+多边形错误码和 Canonical Schema 均未交给第三方。正向/逆序、精确共线、近共线、
+大坐标平移与既有凹多边形矩阵均有回归。
+
+### 3.5 GLB：先冻结官方 Validator 的可信接入边界
+
+现有 glTF-Transform 管线与 Babylon Runtime admission 各自正确，但都不是官方 glTF 2.0
+conformance Validator。先在
+[`2026-08-26-glb-admission-profile-design.md`](superpowers/specs/2026-08-26-glb-admission-profile-design.md)
+冻结边界，再把 Khronos Validator 接入 Node 可信资产 intake/build，原始输入与生成输出均校验；
+WorldKit 继续拥有自包含、extension allowlist、产品 inventory、预算、Hash/长度和 Registry Lock，
+Babylon 继续拥有实际加载 inventory、cache/instance/dispose。malformed matrix 必须同时证明
+“glTF-Transform 可读但 Khronos 拒绝”和“Khronos 合法但 WorldKit Profile 拒绝”，避免新增一个
+没有独立价值的形式化 Gate。当前测试已用非单位 Quaternion 证明前者，用合法 Rigged Model
+套入 Static Profile 证明后者；同时覆盖 GLB envelope、Buffer/Image URI、data URI、extension allowlist
+和伪造 inventory。
+allowlist 只表达 WorldKit 愿意接纳的 Khronos 扩展，并不能把未知扩展变成受支持扩展；测试额外证明
+一个被调用方显式 allow、但官方 Validator 不认识的可选扩展仍会 fail closed。
+
+`scripts/lib/modular-subject-source.ts` 现在对 Source Archive、生成 Model 与独立 Clip 执行 admission，
+`scripts/lib/modular-subject-runtime-bundle.ts` 对锁定输入和最终 Runtime Bundle 再执行 admission；
+`verify:xier120-subjects` 把 19 个 Static GLB 的官方结构校验、精确 inventory 与原有 Babylon 双实例/
+释放证据串起来。Golden/G Bot 模块化 check 保持字节确定，两个公开 Runtime Bundle 均无 Error。
+G Bot 6.7 MB 夹具所在独立 Vitest 进程一次方向性观测的 maximum resident set size 约 220 MB，
+因此首版串行化 Validator Promise，不开放无界 batch 并发。
+
 ## 4. 核心能力的跨项目对照
 
 ### 4.1 通过性、Character 与 Route
@@ -115,7 +149,7 @@ Recast/Detour 已经是 Route Provider，不需要再引入 Turf A* 或第二套
 | 来源细节 | 对 WorldKit 的判断 | 后续验证 ID |
 |---|---|---|
 | Rapier autostep 只有在越障前已接触地面时生效 | 已复现空中被悬空低台阶抬升，并用既有 support 结果约束 step-up | `TRAV-STEP-01` 已完成；见 `runtime.test.ts` 与 `motion-kernel-runtime.ts` |
-| Rapier/Godot snap-to-ground 只在先前接地且运动含向下分量时触发 | 可防止 jump 上升阶段被错误吸回 | `TRAV-SNAP-01`：下坡、离台、上升 Jump 三分支 |
+| Rapier/Godot snap-to-ground 只在先前接地且运动含向下分量时触发 | 现有实现一致；新增真实 Havok 回归证明 0.25m 下台阶保持 Ground、0.4m 离台进入 Air、上升 Jump 不被吸回 | `TRAV-SNAP-01` 已完成；生产代码无需修改 |
 | Godot 区分 requested velocity 与碰撞后的 real velocity | Camera/Animation 应消费提交后的实际状态，不从输入重算 | `TRAV-VELOCITY-01`：斜坡与贴墙后的速度/朝向一致性 |
 | Godot/Rapier 均暴露贴墙近共线和 moving-platform 历史缺陷 | 适合做高风险边界夹具，但动态平台不属于当前 R1b | `TRAV-WALL-01` 当前候选；`TRAV-PLATFORM-01` 延后到动态 Surface |
 | Recast off-mesh connection 受 Tile 邻接/端点解析约束 | 不能把任意远端 Portal 伪装成已支持连接 | 维持 H1/H2/H3 与 Portal admission 的现有 fail-closed 边界 |
@@ -137,7 +171,7 @@ prepare/project/commit 比直接改场景树更稳，但还应补齐：
 | 验证 ID | 交付物 | depends_on | Owner / 执行模式 | 所需证据 |
 |---|---|---|---|---|
 | `MNT-XFORM-01` | 已完成：旋转且非对称 Mount slot；prepare/commit/next Tick 的 Rider 世界位置/朝向正确 | 当前 M8-S1 | `runtime-babylon`，main-agent-only | World projection、render root 与 controller 一致；Reset 无残留；现有生产实现无需修改 |
-| `MNT-PAIR-01` | 两组 Rider/Mount 并存且互不串 slot、suspension、possession | 当前 M8-S1 | Gameplay + Runtime，sequential | 两对交错动作和回滚/失败隔离 |
+| `MNT-PAIR-01` | 已完成：两组 Rider/Mount 并存且互不串 slot、suspension、possession | 当前 M8-S1 | Gameplay + Runtime，sequential | prepare/abort/commit/Tick/Reset 的真实 Runtime 回归通过；现有生产实现无需修改 |
 | `MNT-LIFE-01` | partial construction、throwing cleanup、Reset/foreign WorldSession 无泄漏 | `MNT-PAIR-01` | RuntimeHost + Runtime，sequential | 资源计数、Journal、World State、Capture 一致 |
 | `MNT-DYNAMIC-01` | moving platform/vehicle 的继承速度与离开行为 | 动态 Surface 与车辆设计 | 未排期 | 当前明确不实现，不得用于 S1 完成声明 |
 
@@ -151,26 +185,28 @@ near-plane corner、墙角和起点穿入仍需分别验证。
 
 | 验证 ID | 交付物 | depends_on | Owner / 执行模式 | 所需证据 |
 |---|---|---|---|---|
-| `CAM-COLL-01` | 已完成首个最小闭环：真实 Babylon 薄对角 blocker 击穿五 ray，并由九 ray 覆盖 | 无 | Follow Arm Provider Adapter，main-agent-only | RED/GREEN、blocker entity telemetry；未宣称墙角/窄门/起点穿入已全部完成 |
+| `CAM-COLL-01` | 已完成：真实 Babylon 薄对角 blocker 击穿五 ray，并由九 ray 覆盖 | 无 | Follow Arm Provider Adapter，main-agent-only | RED/GREEN、blocker entity telemetry |
+| `CAM-COLL-02` | 已完成：L 型墙角、窄门、Follow Arm target 起点穿入三个真实 Babylon Fixture | `CAM-COLL-01` | Follow Arm Provider Adapter，main-agent-only | 九 ray 全部通过；临时退化为中心 ray 时墙角/窄门稳定 RED；无需 shape cast 或生产改动 |
 | `CAM-SWEEP-01` | 若 `CAM-COLL-01` 证实缺陷，比较 Babylon/Havok shape cast、near-plane corners 与现状 | `CAM-COLL-01` | Architecture main-agent-only | Provider 版本源码、性能预算、过滤层、确定性与 dispose 证据 |
 | `CAM-MOUNT-01` | Mount 转移 possession 后 Rider 不被裁切，Context/Modifier 选择可解释 | M8-S1 状态与 P2.4 Camera Context | CameraDirector，sequential | 修复现有 `CAM-MOUNT-1`，不得写场景特判 |
 
-`CAM-COLL-01` 已证明角向覆盖缺口，但九 ray 的最小修复已关闭该复现，所以当前没有足够证据引入
-shape cast。未来若墙角、窄门或镜头起点穿入继续复现，shape cast 也只应替换 Follow Arm 的碰撞
-查询 Provider，不得接管 Orbit、Target、Profile、Context 或固定 Tick View publication。
+`CAM-COLL-01/02` 已证明并关闭当前已知 ray 覆盖缺口，所以当前没有足够证据引入 shape cast。
+未来若连续 sweep、非点状 near-plane 或高速穿越出现新复现，shape cast 也只应替换 Follow Arm 的
+碰撞查询 Provider，不得接管 Orbit、Target、Profile、Context 或固定 Tick View publication。
 
 ## 5. 几何与资产候选的推进顺序
 
 | ID | 目标与独立交付物 | depends_on / blocks | 独占 Owner | 集成点 | 证据 | 模式 |
 |---|---|---|---|---|---|---|
-| `GEO-RP-01` | 用项目尺度近共线输入证明普通 orientation 是否会错号/归零；只产测试与裁决 | 无 / `GEO-RP-02` | `terrain-surface` 几何测试 | simple polygon / triangle predicates | 失败样本、符号适配、现有错误码不变 | sequential |
-| `GEO-RP-02` | 仅在复现成立时引入 `robust-predicates` package-private Adapter | `GEO-RP-01` / 后续消费者 | `terrain-surface` | 一个 canonical predicate primitive | RED/GREEN、随机/逆序/缩放、typecheck、相关 Gates | main-agent-only |
+| `GEO-RP-01` | 已完成：普通 1m polygon 大坐标平移误判与近共线 orientation 归零均已复现 | 无 / `GEO-RP-02` | `terrain-surface` + `layout-solver` 几何测试 | simple polygon / layout predicates | RED 样本、平移/逆序、现有错误码不变 | sequential |
+| `GEO-RP-02` | 已完成：引入 `robust-predicates` 薄 Adapter，保留 canonical XZ 符号与本地 epsilon | `GEO-RP-01` / 后续消费者 | `terrain-surface` | `orientXZV1` canonical predicate primitive | RED/GREEN、正反序/共线/近共线、相关 focused Gates | main-agent-only |
 | `GEO-BOOL-01` | Clipper2/polyclip 在真实 Terrain Mask/Opening fixtures 上 bake-off | 对应 Schema/Compiler 设计 / Provider 选择 | Geometry build-time Provider | Compiler admission 前 | holes、self-touch、thin sliver、determinism、license、budget | sequential |
 | `GEO-CSG-01` | Manifold build-time Recipe 技术探针 | Geometry Recipe 设计批准 / Recipe Provider | 独立 build-time Adapter | Registry Lock 前 | exact WASM bytes、显式 delete、manifold/triangle budgets、GLB validation | sequential |
-| `ASSET-GLB-01` | 形成 GLB Admission Profile：glTF-Transform + Khronos Validator + inventory | 当前资产管线 | Asset intake | Registry Lock 前 | malformed、extension allowlist、deterministic bytes、dispose | main-agent-only |
+| `ASSET-GLB-01-DESIGN` | 已完成：冻结 GLB Admission Profile 与 implementation graph | 当前资产管线 / `ASSET-GLB-01` | Asset intake design | Registry Lock 前 | malformed、extension allowlist、deterministic receipt、依赖/生命周期裁决 | main-agent-only |
+| `ASSET-GLB-01` | 已完成：Node-only Khronos Validator Adapter、fixture matrix、管线接线与 corpus receipt | `ASSET-GLB-01-DESIGN` | Asset intake | 原始/生成 GLB promotion 前 | authority-split fixtures、G Bot/Golden、xier120 19/19、串行 memory observation、focused/typecheck | main-agent-only |
 
-优先级是 `GEO-RP-01` → `ASSET-GLB-01` → 有真实产品需求后再做 `GEO-BOOL-01` /
-`GEO-CSG-01`。这避免为了“可能有用”提前把重型几何内核带进 Runtime。
+后续只有在真实产品需求出现后再做 `GEO-BOOL-01` / `GEO-CSG-01`。这避免为了“可能有用”
+提前把重型几何内核带进 Runtime。
 
 ## 6. 给 AI 开发流程的约束
 
@@ -183,6 +219,19 @@ shape cast。未来若墙角、窄门或镜头起点穿入继续复现，shape c
 - 每次真正采用后，把状态从 `候选验证` 更新为 `已吸收代码/测试`，补本地文件和新鲜 Gate；
 - 每次拒绝也记录原因，避免后续 Agent 重复调研或误把旧候选当批准方案。
 
-下一次更新优先处理 `GEO-RP-01`、`TRAV-SNAP-01`、`CAM-COLL-01` 剩余的墙角/窄门/起点穿入，
-以及 `MNT-PAIR-01`。它们分别覆盖几何健壮性、离地/下坡/Jump、镜头遮挡余量和多组 Relationship
-隔离，且不会重复当前 Recast/Havok/CameraDirector 的状态权威。
+下一次更新优先补 `MNT-LIFE-01` 的 partial construction 与 throwing cleanup。Geometry Boolean/CSG、
+动态平台、车辆和 Camera shape cast 继续保持真实需求或新复现
+门控，不会重复当前 Recast/Havok/CameraDirector 的状态权威。
+
+## 7. 本轮新鲜验证收据
+
+- 根 `pnpm test` 的 Contract lane：192 个文件、2,073 个测试全部通过；Resource-heavy lane 的
+  22 个文件中 21 个、416 个测试中 415 个通过，唯一失败准确暴露了 robust orientation 变更后
+  过期的 Builder standalone self-check bundle。
+- 用正式 `pnpm generate:agent-self-check` 重新生成后，`scripts/agent-self-check.test.ts` 2/2 与
+  `pnpm check:agent-self-check` 通过。该修复只改变生成 bundle，故没有重跑不受影响的 Runtime lane。
+- GLB adapter、模块化 Source/Runtime Bundle 共 3 个文件 25/25 测试通过；Golden/G Bot 的
+  modularize/runtime-bundle freshness check 通过；xier120 19/19 均通过官方 admission、Babylon
+  双实例隔离与完整 lease/cache disposal。
+- `pnpm typecheck`、`pnpm build` 与 `git diff --check` 通过。构建保留既有大 chunk warning，
+  本轮没有扩大浏览器 Runtime 依赖面。

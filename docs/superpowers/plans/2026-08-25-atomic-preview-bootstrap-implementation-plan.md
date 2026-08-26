@@ -192,9 +192,9 @@ Run, in order:
 
 Do not rerun narrower commands already covered on the unchanged tree unless a later fix invalidates their inputs.
 
-**Step 4: Run independent completion review**
+**Step 4: Run the host completion review**
 
-Use the project-local `reviewing-with-cursor` skill in read-only mode. Reproduce every actionable finding locally, fix only confirmed defects with a failing regression first, and rerun only the invalidated focused/full gates described by the review protocol.
+Apply the full-dimension review protocol. Reproduce every actionable finding locally, fix only confirmed defects with a failing regression first, and rerun only the invalidated focused/full gates described by the review protocol.
 
 **Step 5: Commit and push**
 

@@ -78,7 +78,7 @@ pnpm test
 pnpm build
 ```
 
-Studio and the independent Node/Python/Site gate are added only when their inputs are affected:
+Studio and the independent Node/Site gate are added only when their inputs are affected:
 
 ```bash
 pnpm test:studio

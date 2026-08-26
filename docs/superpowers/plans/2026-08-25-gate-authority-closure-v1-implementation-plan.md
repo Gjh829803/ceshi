@@ -2,11 +2,11 @@
 
 > **Execution:** Implement task-by-task in the main process. All tasks overlap gate or publication authority and are `main-agent-only`.
 
-**Goal:** Make default gates read-only, make artifact updates explicit, close independent Node/Python/Site coverage without duplicate execution, and update the workspace audit with current-tree evidence.
+**Goal:** Make default gates read-only, make artifact updates explicit, close independent Node/Site coverage without duplicate execution, and update the workspace audit with current-tree evidence.
 
 **Architecture:** A tracked generated bundle gets one explicit generator and one temporary byte checker. Browser verifiers share a mode-aware staging finalizer whose default checks inventory and whose explicit update mode performs existing atomic promotion. An independent-test manifest discovers non-Vitest suites and drives one sequential runner. The broken Legacy Site becomes a direct current-state React publication.
 
-**Tech stack:** Node.js 24, TypeScript 5.9, Vitest 3.2, Node test runner, Python unittest, Vinext/Vite, pnpm 10.14.
+**Tech stack:** Node.js 24, TypeScript 5.9, Vitest 3.2, Node test runner, Vinext/Vite, pnpm 10.14.
 
 **Spec:** `docs/superpowers/specs/2026-08-25-gate-authority-closure-v1-design.md`
 
@@ -73,16 +73,16 @@
 - Modify: `sites/world-sdk-blueprint/README.md`
 - Modify: `package.json`
 
-**Contract:** one fail-closed manifest equals discovered root Node, Cursor Python, and Site suites; one runner executes a selected lane or all lanes sequentially. The Site directly renders current architecture and contains no `/legacy/` dependency.
+**Contract:** one fail-closed manifest equals discovered root Node and Site suites; one runner executes a selected lane or all lanes sequentially. The Site directly renders current architecture and contains no `/legacy/` dependency.
 
 - [x] Add census RED cases for unclassified, stale, duplicate, outside-root, and invalid lane entries.
-- [x] Add a real repository discovery RED requiring all six Node tests, two Python tests, and one Site suite.
+- [x] Add a real repository discovery RED requiring all six Node tests and one Site suite.
 - [x] Run focused Vitest and observe the missing module/API failure.
 - [x] Implement manifest evaluation, discovery, and sequential runner without shell interpolation.
 - [x] Run the existing image-delivery test and observe the removed producer import failure; delete only that obsolete test/import and retain both importer behavior tests.
 - [x] Change the Site render test first to require current architecture content and reject Legacy paths; run it and observe RED.
 - [x] Implement the direct current-state page/CSS/README and run Site GREEN.
-- [x] Run Node, Python, Site, and all-lanes commands; verify the census is fail-closed.
+- [x] Run Node, Site, and all-lanes commands; verify the census is fail-closed.
 
 ## Task 4 — GAC-04: CI, docs, audit disposition, and integration
 
@@ -101,5 +101,5 @@
 - [x] Correct the Vite-config audit claim and record GAC-01/GAC-02/GAC-03 disposition plus scoped evidence.
 - [x] Run focused suites after the final edit.
 - [x] Run `pnpm test:census`, `pnpm check:agent-self-check`, `pnpm test:independent`, `pnpm typecheck`, `pnpm test`, and `pnpm build` once on the final tree, followed by `git diff --check` and a clean-tree mutation audit.
-- [x] Use the project-local read-only Cursor completion review; independently reproduce and disposition every candidate finding.
+- [x] Complete the host full-dimension review and independently reproduce and disposition every candidate finding.
 - [x] Commit and push `cursor/workspace-structure-audit-ad0d` only after all required evidence is current.

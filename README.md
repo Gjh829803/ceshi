@@ -438,7 +438,7 @@ pnpm verify:route-r0-contract
 这是一张完整能力覆盖表，不要求每次小改都机械重跑全部命令。先跑受影响的定向回归，
 在最终待合入树上把相关完整门禁各跑一次；只要后续改动没有触及某条门禁的输入或承诺，
 它的通过证据可以复用。Studio 与 independent tests 需要按改动范围单独跑；tracked CI 当前显式组合
-临时目录 generated bundle check、typecheck、Studio、independent Node/Python/Site、root test、
+临时目录 generated bundle check、typecheck、Studio、independent Node/Site、root test、
 Playground build 与最终 clean-tree assertion，但没有被 workflow 调用的证据层不能因“CI 存在”而
 视为已覆盖。
 生产构建、Browser/Capability verifier、截图检查和人工交互属于不同证据层，不能由单元

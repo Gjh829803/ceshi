@@ -42,7 +42,7 @@ Task numbers describe the architecture from public contracts toward final gates;
 4. **Wave 4 — parallel after Tasks 1–5 are integrated:** Task 6 (Graph), Task 7 (Babylon Runtime correlation), and Task 8 (Probe/Browser publication). These packages are independently owned, but each starts from the same integrated base.
 5. **Wave 5:** Task 9 fixtures and blocking gate, followed by Task 10 full verification and handoff.
 
-Each parallel worker uses a dedicated Git worktree and branch. Integration is commit-based onto `codex/m5-route-r1b-static-platform`; never share one writable worktree between implementers. Cursor remains a read-only reviewer and does not own integration decisions.
+Each parallel worker uses a dedicated Git worktree and branch. Integration is commit-based onto `codex/m5-route-r1b-static-platform`; never share one writable worktree between implementers. The main agent owns review and all integration decisions.
 
 The V2/V5 public clean break is atomic at Task 9. Earlier tasks may add the new V2/V5 definitions beside unchanged V1/V4 declarations solely as an unmerged feature-branch staging mechanism so every intermediate commit typechecks; they must not add alias fields, converters, or adapters between dialects. Task 9 migrates the final trusted-host/CLI consumers and deletes every V1/V4 declaration/export in the same commit. No dual public contract may reach the completion gate or `main`.
 
@@ -1204,9 +1204,9 @@ Apply `docs/reviews/full-dimension-review-protocol.md` and `docs/reviews/runtime
 Disposition: reviewed the installed Babylon `checkSupport()` normal normalization, snap-down
 authority/ownership, V2/V5 clean-break diff and provider boundary. No host P0/P1 remains open.
 
-- [x] **Step 3: Request one final independent Cursor core review**
+- [x] **Step 3: Complete the final core review**
 
-Use `/Users/xiateng/.agents/skills/reviewing-with-cursor/SKILL.md` with a fresh code review ID bound to the actual `git merge-base origin/main HEAD` at review time and the final head SHA. Record every finding as confirmed, rejected, or deferred; fix only confirmed in-scope defects with a failing reproducer.
+Apply the full-dimension and Runtime review protocols against the actual `git merge-base origin/main HEAD` at review time and the final head SHA. Record every finding as confirmed, rejected, or deferred; fix only confirmed in-scope defects with a failing reproducer.
 
 Result: chat `1e938715-a5b2-4a25-ad83-45eec0c37c15` reviewed `28752e0` against base
 `9c5a6158c347e08ea0af01135cb827166ffbede0` and returned Final GO / No findings. Its
@@ -1215,9 +1215,9 @@ by the host and fixed in `506e088`.
 
 - [x] **Step 4: Conditionally re-review confirmed fixes**
 
-Do not request a mechanical second review when the core review reports no confirmed blocker.
+Do not repeat the full review mechanically when the core review reports no confirmed blocker.
 Only if Step 3 evidence leads the host to confirm a real defect and code changes are required,
-re-run the affected and complete gates, then use a new review ID to verify the resulting fix.
+re-run the affected and complete gates, then re-review the resulting fix against the invalidated dimensions.
 Completion requires no open confirmed P0/P1; every reported blocker must otherwise have a
 host-evidenced rejection or an explicit out-of-scope disposition that does not violate the
 frozen completion contract.

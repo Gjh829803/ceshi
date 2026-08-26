@@ -102,7 +102,7 @@ Every row is an independently reviewable deliverable. The main agent owns cross-
 | REPORT-2 | Close V2 MIME, Browser state, and plural Surface Diagnostic contracts | REPORT-1 | STUDIO-1, INT-1 | validation publication, runtime contracts, generated/public types | kind + schemaVersion + MIME table is exact; complete Connectivity iff Path exists; ambiguous Diagnostic preserves sorted identities | MIME table, state matrix, 2/3 identity RED/GREEN | sequential |
 | STUDIO-1 | Require same-world passing Route Report for import/recovery when Required Routes exist | REPORT-1, REPORT-2 | INT-1 | `apps/studio/server.mjs` and tests | trusted Builder/Execution evidence decides requirement; report hashes bind Authoring/IR/Plan/Lock and exact expected Route set | missing/mismatched/failed/exact report admission matrix | sequential |
 | CLEAN-1 | Align slope domain, remove duplicate V2 declarations, and reopen active docs | LOCK-1, REPORT-2 | INT-1 | slope validators, duplicate declarations, active status docs | one public slope interval; no aliases/duplicate interface; docs match evidence | boundary matrix, clean-break census, docs grep | parallel-safe after contracts freeze |
-| INT-1 | Integrate all tasks and close evidence | all prior rows | — | main agent; whole tree and release artifacts | one final tree, one current main, one canonical report/publication chain | focused suites; R0/R1/R1b; two test lanes; typecheck/build; Browser/Studio; real counterexamples; Cursor read-only review | main-agent-only |
+| INT-1 | Integrate all tasks and close evidence | all prior rows | — | main agent; whole tree and release artifacts | one final tree, one current main, one canonical report/publication chain | focused suites; R0/R1/R1b; two test lanes; typecheck/build; Browser/Studio; real counterexamples; host full-dimension review | main-agent-only |
 
 ## 7. Sequencing and parallelism
 
@@ -139,7 +139,7 @@ Final verification on one tree includes:
 - the five original P0 adversarial reproducers;
 - elevated/layered/remote-platform Graph reproducers;
 - Report/Browser/Studio same-byte and same-hash closure;
-- independent read-only Cursor completion review followed by host reproduction of any new candidate.
+- host full-dimension completion review with local reproduction of every new candidate.
 
 Rendered output and manual interaction evidence remain separate from automated contract evidence. M5 cannot return to Final GO until the automated gates and the relevant real Runtime evidence are both current on the same integrated tree.
 

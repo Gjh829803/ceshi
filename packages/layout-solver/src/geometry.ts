@@ -5,7 +5,10 @@ import type {
   LayoutVec2V1,
   LayoutVec3V1,
 } from "./types.js";
-import { sampleTriangleHeightfieldSurface } from "@whitebox-world/terrain-surface";
+import {
+  orientXZV1,
+  sampleTriangleHeightfieldSurface,
+} from "@whitebox-world/terrain-surface";
 
 const EPSILON = 1e-9;
 
@@ -32,11 +35,12 @@ export function validatePolygonXZ(
 ): "LAYOUT_POLYGON_DEGENERATE" | undefined {
   if (points.length < 3) return "LAYOUT_POLYGON_DEGENERATE";
   points.forEach(assertFiniteVector);
+  const origin = points[0]!;
   let doubledArea = 0;
-  for (let index = 0; index < points.length; index += 1) {
+  for (let index = 1; index < points.length - 1; index += 1) {
     const current = points[index]!;
-    const next = points[(index + 1) % points.length]!;
-    doubledArea += current[0] * next[1] - next[0] * current[1];
+    const next = points[index + 1]!;
+    doubledArea += orientXZV1(origin, current, next);
   }
   return Math.abs(doubledArea) <= EPSILON ? "LAYOUT_POLYGON_DEGENERATE" : undefined;
 }
@@ -46,9 +50,7 @@ function pointOnSegment(
   start: LayoutVec2V1,
   end: LayoutVec2V1,
 ): boolean {
-  const cross =
-    (point[1] - start[1]) * (end[0] - start[0]) -
-    (point[0] - start[0]) * (end[1] - start[1]);
+  const cross = orientXZV1(start, end, point);
   if (Math.abs(cross) > EPSILON) return false;
   const dot =
     (point[0] - start[0]) * (end[0] - start[0]) +

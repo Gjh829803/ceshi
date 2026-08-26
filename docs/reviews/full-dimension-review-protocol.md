@@ -113,7 +113,7 @@
 | Lane | 当前入口 | 证明范围 / 不覆盖范围 |
 |---|---|---|
 | Type / source contract | `pnpm typecheck` | TypeScript 输入；不证明 Runtime、Node `.mjs` 或视觉行为 |
-| Root Vitest aggregate | `pnpm test` | census 后运行 contract + resource-heavy，两 lane 精确覆盖 `.test.ts` 并已包含 scenes；不包含独立 Node/Python/Site tests |
+| Root Vitest aggregate | `pnpm test` | census 后运行 contract + resource-heavy，两 lane 精确覆盖 `.test.ts` 并已包含 scenes；不包含独立 Node/Site tests |
 | Contract coverage diagnostic | `pnpm test:contract:coverage` | 按需重跑 contract 并生成 coverage；证明覆盖率 claim，不作为默认 completion gate 或新增行为证据 |
 | Studio | `pnpm test:studio` | Studio Node tests；不被 root Vitest 包含 |
 | Independent | `pnpm test:independent` | fail-closed census 后顺序运行 root Node、Cursor Python、Site；不被 root Vitest 包含 |

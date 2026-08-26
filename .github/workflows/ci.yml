@@ -64,7 +64,7 @@ jobs:
       - name: Test Studio
         run: pnpm test:studio
 
-      - name: Test independent Node, Python, and Site lanes
+      - name: Test independent Node and Site lanes
         run: pnpm test:independent
 
       - name: Run full Vitest suite

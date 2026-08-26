@@ -269,15 +269,15 @@ class SHA256 extends HashMD {
     this.H = SHA256_IV[7] | 0;
   }
   get() {
-    const { A, B, C, D, E, F, G, H } = this;
-    return [A, B, C, D, E, F, G, H];
+    const { A, B: B2, C, D: D2, E, F, G, H } = this;
+    return [A, B2, C, D2, E, F, G, H];
   }
   // prettier-ignore
-  set(A, B, C, D, E, F, G, H) {
+  set(A, B2, C, D2, E, F, G, H) {
     this.A = A | 0;
-    this.B = B | 0;
+    this.B = B2 | 0;
     this.C = C | 0;
-    this.D = D | 0;
+    this.D = D2 | 0;
     this.E = E | 0;
     this.F = F | 0;
     this.G = G | 0;
@@ -293,30 +293,30 @@ class SHA256 extends HashMD {
       const s1 = rotr(W2, 17) ^ rotr(W2, 19) ^ W2 >>> 10;
       SHA256_W[i] = s1 + SHA256_W[i - 7] + s0 + SHA256_W[i - 16] | 0;
     }
-    let { A, B, C, D, E, F, G, H } = this;
+    let { A, B: B2, C, D: D2, E, F, G, H } = this;
     for (let i = 0; i < 64; i++) {
       const sigma1 = rotr(E, 6) ^ rotr(E, 11) ^ rotr(E, 25);
       const T1 = H + sigma1 + Chi(E, F, G) + SHA256_K[i] + SHA256_W[i] | 0;
       const sigma0 = rotr(A, 2) ^ rotr(A, 13) ^ rotr(A, 22);
-      const T2 = sigma0 + Maj(A, B, C) | 0;
+      const T2 = sigma0 + Maj(A, B2, C) | 0;
       H = G;
       G = F;
       F = E;
-      E = D + T1 | 0;
-      D = C;
-      C = B;
-      B = A;
+      E = D2 + T1 | 0;
+      D2 = C;
+      C = B2;
+      B2 = A;
       A = T1 + T2 | 0;
     }
     A = A + this.A | 0;
-    B = B + this.B | 0;
+    B2 = B2 + this.B | 0;
     C = C + this.C | 0;
-    D = D + this.D | 0;
+    D2 = D2 + this.D | 0;
     E = E + this.E | 0;
     F = F + this.F | 0;
     G = G + this.G | 0;
     H = H + this.H | 0;
-    this.set(A, B, C, D, E, F, G, H);
+    this.set(A, B2, C, D2, E, F, G, H);
   }
   roundClean() {
     clean(SHA256_W);
@@ -1510,21 +1510,21 @@ function assertTraversalGraphBuildBudgetV1(input) {
       "minimumMetersXZ and maximumMetersXZ must define positive X and Z extents after micrometer normalization."
     );
   }
-  const estimate = estimateHeightfieldTileCountV1({
+  const estimate2 = estimateHeightfieldTileCountV1({
     widthMeters: widthMicrometers / MICROMETERS_PER_METER,
     depthMeters: depthMicrometers / MICROMETERS_PER_METER,
     tileSizeCells: input.tileSizeCells,
     voxelCellSizeMeters: input.voxelCellSizeMeters
   });
-  if (estimate.estimatedTiles > input.maximumTiles) {
+  if (estimate2.estimatedTiles > input.maximumTiles) {
     throw new TraversalGraphBuildBudgetExceededErrorV1({
-      estimate,
+      estimate: estimate2,
       maximumTiles: input.maximumTiles,
       minimumMetersXZ,
       maximumMetersXZ
     });
   }
-  return estimate;
+  return estimate2;
 }
 function requireRoutePointsMicrometers(pointsMetersXZ) {
   if (!Array.isArray(pointsMetersXZ) || pointsMetersXZ.length < 2) {
@@ -1617,7 +1617,7 @@ function estimateRouteBuildWindowTileCountV1(input) {
     metersFromMicrometers(maximumXMicrometers),
     metersFromMicrometers(maximumZMicrometers)
   ];
-  const estimate = assertTraversalGraphBuildBudgetV1({
+  const estimate2 = assertTraversalGraphBuildBudgetV1({
     minimumMetersXZ,
     maximumMetersXZ,
     tileSizeCells: input.tileSizeCells,
@@ -1627,7 +1627,7 @@ function estimateRouteBuildWindowTileCountV1(input) {
   return {
     minimumMetersXZ,
     maximumMetersXZ,
-    ...estimate,
+    ...estimate2,
     maximumTiles: input.maximumTiles
   };
 }
@@ -2129,6 +2129,254 @@ function validateSpawnSafety(input) {
   }
   return diagnostics;
 }
+const epsilon = 11102230246251565e-32;
+const splitter = 134217729;
+const resulterrbound = (3 + 8 * epsilon) * epsilon;
+function sum(elen, e, flen, f, h) {
+  let Q, Qnew, hh, bvirt;
+  let enow = e[0];
+  let fnow = f[0];
+  let eindex = 0;
+  let findex = 0;
+  if (fnow > enow === fnow > -enow) {
+    Q = enow;
+    enow = e[++eindex];
+  } else {
+    Q = fnow;
+    fnow = f[++findex];
+  }
+  let hindex = 0;
+  if (eindex < elen && findex < flen) {
+    if (fnow > enow === fnow > -enow) {
+      Qnew = enow + Q;
+      hh = Q - (Qnew - enow);
+      enow = e[++eindex];
+    } else {
+      Qnew = fnow + Q;
+      hh = Q - (Qnew - fnow);
+      fnow = f[++findex];
+    }
+    Q = Qnew;
+    if (hh !== 0) {
+      h[hindex++] = hh;
+    }
+    while (eindex < elen && findex < flen) {
+      if (fnow > enow === fnow > -enow) {
+        Qnew = Q + enow;
+        bvirt = Qnew - Q;
+        hh = Q - (Qnew - bvirt) + (enow - bvirt);
+        enow = e[++eindex];
+      } else {
+        Qnew = Q + fnow;
+        bvirt = Qnew - Q;
+        hh = Q - (Qnew - bvirt) + (fnow - bvirt);
+        fnow = f[++findex];
+      }
+      Q = Qnew;
+      if (hh !== 0) {
+        h[hindex++] = hh;
+      }
+    }
+  }
+  while (eindex < elen) {
+    Qnew = Q + enow;
+    bvirt = Qnew - Q;
+    hh = Q - (Qnew - bvirt) + (enow - bvirt);
+    enow = e[++eindex];
+    Q = Qnew;
+    if (hh !== 0) {
+      h[hindex++] = hh;
+    }
+  }
+  while (findex < flen) {
+    Qnew = Q + fnow;
+    bvirt = Qnew - Q;
+    hh = Q - (Qnew - bvirt) + (fnow - bvirt);
+    fnow = f[++findex];
+    Q = Qnew;
+    if (hh !== 0) {
+      h[hindex++] = hh;
+    }
+  }
+  if (Q !== 0 || hindex === 0) {
+    h[hindex++] = Q;
+  }
+  return hindex;
+}
+function estimate(elen, e) {
+  let Q = e[0];
+  for (let i = 1; i < elen; i++) Q += e[i];
+  return Q;
+}
+function vec(n) {
+  return new Float64Array(n);
+}
+const ccwerrboundA = (3 + 16 * epsilon) * epsilon;
+const ccwerrboundB = (2 + 12 * epsilon) * epsilon;
+const ccwerrboundC = (9 + 64 * epsilon) * epsilon * epsilon;
+const B = vec(4);
+const C1 = vec(8);
+const C2 = vec(12);
+const D = vec(16);
+const u = vec(4);
+function orient2dadapt(ax, ay, bx, by, cx, cy, detsum) {
+  let acxtail, acytail, bcxtail, bcytail;
+  let bvirt, c, ahi, alo, bhi, blo, _i, _j, _0, s1, s0, t1, t0, u3;
+  const acx = ax - cx;
+  const bcx = bx - cx;
+  const acy = ay - cy;
+  const bcy = by - cy;
+  s1 = acx * bcy;
+  c = splitter * acx;
+  ahi = c - (c - acx);
+  alo = acx - ahi;
+  c = splitter * bcy;
+  bhi = c - (c - bcy);
+  blo = bcy - bhi;
+  s0 = alo * blo - (s1 - ahi * bhi - alo * bhi - ahi * blo);
+  t1 = acy * bcx;
+  c = splitter * acy;
+  ahi = c - (c - acy);
+  alo = acy - ahi;
+  c = splitter * bcx;
+  bhi = c - (c - bcx);
+  blo = bcx - bhi;
+  t0 = alo * blo - (t1 - ahi * bhi - alo * bhi - ahi * blo);
+  _i = s0 - t0;
+  bvirt = s0 - _i;
+  B[0] = s0 - (_i + bvirt) + (bvirt - t0);
+  _j = s1 + _i;
+  bvirt = _j - s1;
+  _0 = s1 - (_j - bvirt) + (_i - bvirt);
+  _i = _0 - t1;
+  bvirt = _0 - _i;
+  B[1] = _0 - (_i + bvirt) + (bvirt - t1);
+  u3 = _j + _i;
+  bvirt = u3 - _j;
+  B[2] = _j - (u3 - bvirt) + (_i - bvirt);
+  B[3] = u3;
+  let det = estimate(4, B);
+  let errbound = ccwerrboundB * detsum;
+  if (det >= errbound || -det >= errbound) {
+    return det;
+  }
+  bvirt = ax - acx;
+  acxtail = ax - (acx + bvirt) + (bvirt - cx);
+  bvirt = bx - bcx;
+  bcxtail = bx - (bcx + bvirt) + (bvirt - cx);
+  bvirt = ay - acy;
+  acytail = ay - (acy + bvirt) + (bvirt - cy);
+  bvirt = by - bcy;
+  bcytail = by - (bcy + bvirt) + (bvirt - cy);
+  if (acxtail === 0 && acytail === 0 && bcxtail === 0 && bcytail === 0) {
+    return det;
+  }
+  errbound = ccwerrboundC * detsum + resulterrbound * Math.abs(det);
+  det += acx * bcytail + bcy * acxtail - (acy * bcxtail + bcx * acytail);
+  if (det >= errbound || -det >= errbound) return det;
+  s1 = acxtail * bcy;
+  c = splitter * acxtail;
+  ahi = c - (c - acxtail);
+  alo = acxtail - ahi;
+  c = splitter * bcy;
+  bhi = c - (c - bcy);
+  blo = bcy - bhi;
+  s0 = alo * blo - (s1 - ahi * bhi - alo * bhi - ahi * blo);
+  t1 = acytail * bcx;
+  c = splitter * acytail;
+  ahi = c - (c - acytail);
+  alo = acytail - ahi;
+  c = splitter * bcx;
+  bhi = c - (c - bcx);
+  blo = bcx - bhi;
+  t0 = alo * blo - (t1 - ahi * bhi - alo * bhi - ahi * blo);
+  _i = s0 - t0;
+  bvirt = s0 - _i;
+  u[0] = s0 - (_i + bvirt) + (bvirt - t0);
+  _j = s1 + _i;
+  bvirt = _j - s1;
+  _0 = s1 - (_j - bvirt) + (_i - bvirt);
+  _i = _0 - t1;
+  bvirt = _0 - _i;
+  u[1] = _0 - (_i + bvirt) + (bvirt - t1);
+  u3 = _j + _i;
+  bvirt = u3 - _j;
+  u[2] = _j - (u3 - bvirt) + (_i - bvirt);
+  u[3] = u3;
+  const C1len = sum(4, B, 4, u, C1);
+  s1 = acx * bcytail;
+  c = splitter * acx;
+  ahi = c - (c - acx);
+  alo = acx - ahi;
+  c = splitter * bcytail;
+  bhi = c - (c - bcytail);
+  blo = bcytail - bhi;
+  s0 = alo * blo - (s1 - ahi * bhi - alo * bhi - ahi * blo);
+  t1 = acy * bcxtail;
+  c = splitter * acy;
+  ahi = c - (c - acy);
+  alo = acy - ahi;
+  c = splitter * bcxtail;
+  bhi = c - (c - bcxtail);
+  blo = bcxtail - bhi;
+  t0 = alo * blo - (t1 - ahi * bhi - alo * bhi - ahi * blo);
+  _i = s0 - t0;
+  bvirt = s0 - _i;
+  u[0] = s0 - (_i + bvirt) + (bvirt - t0);
+  _j = s1 + _i;
+  bvirt = _j - s1;
+  _0 = s1 - (_j - bvirt) + (_i - bvirt);
+  _i = _0 - t1;
+  bvirt = _0 - _i;
+  u[1] = _0 - (_i + bvirt) + (bvirt - t1);
+  u3 = _j + _i;
+  bvirt = u3 - _j;
+  u[2] = _j - (u3 - bvirt) + (_i - bvirt);
+  u[3] = u3;
+  const C2len = sum(C1len, C1, 4, u, C2);
+  s1 = acxtail * bcytail;
+  c = splitter * acxtail;
+  ahi = c - (c - acxtail);
+  alo = acxtail - ahi;
+  c = splitter * bcytail;
+  bhi = c - (c - bcytail);
+  blo = bcytail - bhi;
+  s0 = alo * blo - (s1 - ahi * bhi - alo * bhi - ahi * blo);
+  t1 = acytail * bcxtail;
+  c = splitter * acytail;
+  ahi = c - (c - acytail);
+  alo = acytail - ahi;
+  c = splitter * bcxtail;
+  bhi = c - (c - bcxtail);
+  blo = bcxtail - bhi;
+  t0 = alo * blo - (t1 - ahi * bhi - alo * bhi - ahi * blo);
+  _i = s0 - t0;
+  bvirt = s0 - _i;
+  u[0] = s0 - (_i + bvirt) + (bvirt - t0);
+  _j = s1 + _i;
+  bvirt = _j - s1;
+  _0 = s1 - (_j - bvirt) + (_i - bvirt);
+  _i = _0 - t1;
+  bvirt = _0 - _i;
+  u[1] = _0 - (_i + bvirt) + (bvirt - t1);
+  u3 = _j + _i;
+  bvirt = u3 - _j;
+  u[2] = _j - (u3 - bvirt) + (_i - bvirt);
+  u[3] = u3;
+  const Dlen = sum(C2len, C2, 4, u, D);
+  return D[Dlen - 1];
+}
+function orient2d(ax, ay, bx, by, cx, cy) {
+  const detleft = (ay - cy) * (bx - cx);
+  const detright = (ax - cx) * (by - cy);
+  const det = detleft - detright;
+  const detsum = Math.abs(detleft + detright);
+  if (Math.abs(det) >= ccwerrboundA * detsum) return det;
+  return -orient2dadapt(ax, ay, bx, by, cx, cy, detsum);
+}
+function orientXZV1(a, b, c) {
+  return -orient2d(a[0], a[1], b[0], b[1], c[0], c[1]);
+}
 const TRAVERSAL_AREA_COMPLEXITY_LIMITS_V1 = Object.freeze({
   maximumAreaCount: 64,
   maximumPointsPerArea: 128,
@@ -2199,7 +2447,7 @@ function samePoint(left, right) {
   return left[0] === right[0] && left[1] === right[1];
 }
 function cross$1(a, b, c) {
-  return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+  return orientXZV1(a, b, c);
 }
 function isBetweenInclusive(value, first, second) {
   return value >= Math.min(first, second) && value <= Math.max(first, second);
@@ -2266,11 +2514,12 @@ function validateSimplePolygonXZV1(value) {
       }
     }
   }
+  const origin = points[0];
   let twiceArea = 0;
-  for (let index = 0; index < points.length; index += 1) {
+  for (let index = 1; index < points.length - 1; index += 1) {
     const point = points[index];
-    const next2 = points[(index + 1) % points.length];
-    twiceArea += point[0] * next2[1] - next2[0] * point[1];
+    const next2 = points[index + 1];
+    twiceArea += orientXZV1(origin, point, next2);
   }
   if (!Number.isFinite(twiceArea)) {
     return { ok: false, issueCode: "coordinate-invalid" };
@@ -2356,10 +2605,10 @@ function sampleTriangleHeightfieldSurface(input, pointMetersXZ) {
   }
   const minimumX = input.centerMetersXZ[0] - input.sizeMetersXZ[0] / 2;
   const minimumZ = input.centerMetersXZ[1] - input.sizeMetersXZ[1] / 2;
-  const u = (pointMetersXZ[0] - minimumX) / input.sizeMetersXZ[0];
+  const u2 = (pointMetersXZ[0] - minimumX) / input.sizeMetersXZ[0];
   const v = (pointMetersXZ[1] - minimumZ) / input.sizeMetersXZ[1];
-  if (u < 0 || u > 1 || v < 0 || v > 1) return void 0;
-  const columnPosition = u * (columns - 1);
+  if (u2 < 0 || u2 > 1 || v < 0 || v > 1) return void 0;
+  const columnPosition = u2 * (columns - 1);
   const rowPosition = v * (rows - 1);
   const column = Math.min(columns - 2, Math.floor(columnPosition));
   const row = Math.min(rows - 2, Math.floor(rowPosition));
@@ -4064,16 +4313,17 @@ function quantizeFinite(value, step) {
 function validatePolygonXZ(points) {
   if (points.length < 3) return "LAYOUT_POLYGON_DEGENERATE";
   points.forEach(assertFiniteVector);
+  const origin = points[0];
   let doubledArea = 0;
-  for (let index = 0; index < points.length; index += 1) {
+  for (let index = 1; index < points.length - 1; index += 1) {
     const current = points[index];
-    const next2 = points[(index + 1) % points.length];
-    doubledArea += current[0] * next2[1] - next2[0] * current[1];
+    const next2 = points[index + 1];
+    doubledArea += orientXZV1(origin, current, next2);
   }
   return Math.abs(doubledArea) <= EPSILON ? "LAYOUT_POLYGON_DEGENERATE" : void 0;
 }
 function pointOnSegment(point, start, end) {
-  const cross2 = (point[1] - start[1]) * (end[0] - start[0]) - (point[0] - start[0]) * (end[1] - start[1]);
+  const cross2 = orientXZV1(start, end, point);
   if (Math.abs(cross2) > EPSILON) return false;
   const dot2 = (point[0] - start[0]) * (end[0] - start[0]) + (point[1] - start[1]) * (end[1] - start[1]);
   const squaredLength = (end[0] - start[0]) ** 2 + (end[1] - start[1]) ** 2;
@@ -4271,7 +4521,7 @@ function boundsFor(transform, halfExtentsMetersXYZ, profile) {
   ];
   const rotatedHalfExtents = rotation.map(
     (row) => row.reduce(
-      (sum, coefficient, axis) => sum + Math.abs(coefficient) * scaledHalfExtents[axis],
+      (sum2, coefficient, axis) => sum2 + Math.abs(coefficient) * scaledHalfExtents[axis],
       0
     )
   );
@@ -4513,7 +4763,7 @@ function pointInsideFootprint(point, bounds) {
   return point[0] >= bounds.minimumMetersXYZ[0] && point[0] <= bounds.maximumMetersXYZ[0] && point[1] >= bounds.minimumMetersXYZ[2] && point[1] <= bounds.maximumMetersXYZ[2];
 }
 function orientation(a, b, c) {
-  return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+  return orientXZV1(a, b, c);
 }
 function segmentsIntersect(a, b, c, d) {
   const first = orientation(a, b, c);
@@ -5043,18 +5293,18 @@ function search(input, profile, constraints, domains, stopAtFirst) {
       (evaluation) => evaluation.requirement === "required" && !evaluation.satisfied
     )) return;
     const preferenceWeight = constraints.reduce(
-      (sum, constraint) => sum + (constraint.requirement === "preferred" ? constraint.preferenceWeightRatio : 0),
+      (sum2, constraint) => sum2 + (constraint.requirement === "preferred" ? constraint.preferenceWeightRatio : 0),
       0
     );
     const preferenceCost = quantizeFinite(
-      evaluations.reduce((sum, evaluation) => {
+      evaluations.reduce((sum2, evaluation) => {
         const constraint = constraints.find((row) => row.id === evaluation.constraintId);
-        return sum + (constraint.requirement === "preferred" ? constraint.preferenceWeightRatio * evaluation.preferenceCostRatio : 0);
+        return sum2 + (constraint.requirement === "preferred" ? constraint.preferenceWeightRatio * evaluation.preferenceCostRatio : 0);
       }, 0) / (preferenceWeight === 0 ? 1 : preferenceWeight),
       profile.quantization.scoreStep
     );
     const localCost = quantizeFinite(
-      Object.values(assignment).reduce((sum, candidate) => sum + candidate.localCostRatio, 0),
+      Object.values(assignment).reduce((sum2, candidate) => sum2 + candidate.localCostRatio, 0),
       profile.quantization.scoreStep
     );
     const signature = JSON.stringify(
@@ -5151,13 +5401,13 @@ function solvedPlacements(input, assignment, evaluations, profile) {
         const constraint = input.constraints.find((row) => row.id === evaluation.constraintId);
         return constraintTouchesEntity(constraint, entityId, input);
       });
-      const weight = related.reduce((sum, evaluation) => {
+      const weight = related.reduce((sum2, evaluation) => {
         const constraint = input.constraints.find((row) => row.id === evaluation.constraintId);
-        return sum + (constraint.requirement === "preferred" ? constraint.preferenceWeightRatio : 0);
+        return sum2 + (constraint.requirement === "preferred" ? constraint.preferenceWeightRatio : 0);
       }, 0);
-      const cost = related.reduce((sum, evaluation) => {
+      const cost = related.reduce((sum2, evaluation) => {
         const constraint = input.constraints.find((row) => row.id === evaluation.constraintId);
-        return sum + (constraint.requirement === "preferred" ? constraint.preferenceWeightRatio * evaluation.preferenceCostRatio : 0);
+        return sum2 + (constraint.requirement === "preferred" ? constraint.preferenceWeightRatio * evaluation.preferenceCostRatio : 0);
       }, 0) / (weight === 0 ? 1 : weight);
       return [entityId, {
         entityId,
@@ -11980,13 +12230,13 @@ function requireCode() {
   code.callValidateCode = callValidateCode;
   const newRegExp = (0, codegen_1._)`new RegExp`;
   function usePattern({ gen, it: { opts } }, pattern2) {
-    const u = opts.unicodeRegExp ? "u" : "";
+    const u2 = opts.unicodeRegExp ? "u" : "";
     const { regExp } = opts.code;
-    const rx = regExp(pattern2, u);
+    const rx = regExp(pattern2, u2);
     return gen.scopeValue("pattern", {
       key: rx.toString(),
       ref: rx,
-      code: (0, codegen_1._)`${regExp.code === "new RegExp" ? newRegExp : (0, util_2.useFunc)(gen, regExp)}(${pattern2}, ${u})`
+      code: (0, codegen_1._)`${regExp.code === "new RegExp" ? newRegExp : (0, util_2.useFunc)(gen, regExp)}(${pattern2}, ${u2})`
     });
   }
   code.usePattern = usePattern;
@@ -15052,12 +15302,12 @@ function requirePattern() {
     error,
     code(cxt) {
       const { gen, data, $data, schema, schemaCode, it } = cxt;
-      const u = it.opts.unicodeRegExp ? "u" : "";
+      const u2 = it.opts.unicodeRegExp ? "u" : "";
       if ($data) {
         const { regExp } = it.opts.code;
         const regExpCode = regExp.code === "new RegExp" ? (0, codegen_1._)`new RegExp` : (0, util_1.useFunc)(gen, regExp);
         const valid = gen.let("valid");
-        gen.try(() => gen.assign(valid, (0, codegen_1._)`${regExpCode}(${schemaCode}, ${u}).test(${data})`), () => gen.assign(valid, false));
+        gen.try(() => gen.assign(valid, (0, codegen_1._)`${regExpCode}(${schemaCode}, ${u2}).test(${data})`), () => gen.assign(valid, false));
         cxt.fail$data((0, codegen_1._)`!${valid}`);
       } else {
         const regExp = (0, code_1.usePattern)(cxt, schema);
@@ -20494,7 +20744,7 @@ function compileTerrainV3(world) {
 function boundaryCenterV3(boundary) {
   if (boundary.kind !== "polygon") return boundary.centerMetersXZ;
   const total = boundary.pointsMetersXZ.reduce(
-    (sum, point) => [sum[0] + point[0], sum[1] + point[1]],
+    (sum2, point) => [sum2[0] + point[0], sum2[1] + point[1]],
     [0, 0]
   );
   return [
@@ -21301,11 +21551,11 @@ function compileWorldCore(input) {
     const waterCosts = waters.map((water) => waterResourceCostV3(water.boundary));
     const usage = {
       vertices: terrainVertices + subjectResourceCost.vertices + [...objectCosts, ...waterCosts].reduce(
-        (sum, cost) => sum + cost.vertices,
+        (sum2, cost) => sum2 + cost.vertices,
         0
       ),
       triangles: terrainTriangles + subjectResourceCost.triangles + [...objectCosts, ...waterCosts].reduce(
-        (sum, cost) => sum + cost.triangles,
+        (sum2, cost) => sum2 + cost.triangles,
         0
       ),
       colliders: 1 + subjectResourceCost.colliders + objects.filter((object) => object.collisionEnabled).length
@@ -22622,7 +22872,7 @@ function collectBuilderLargeWorldEvidenceV1(authoringSpec) {
       continue;
     }
     try {
-      const estimate = estimateRouteBuildWindowTileCountV1({
+      const estimate2 = estimateRouteBuildWindowTileCountV1({
         pointsMetersXZ: route.pointsMetersXZ,
         widthMeters: route.widthMeters,
         terrainCellSizeMetersXZ: scaleEvidence.cellSizeMetersXZ,
@@ -22633,7 +22883,7 @@ function collectBuilderLargeWorldEvidenceV1(authoringSpec) {
       routeBuildWindowEvidence.push({
         constraintId: constraint.id,
         routeId: route.id,
-        ...estimate,
+        ...estimate2,
         status: "admitted"
       });
     } catch (error) {

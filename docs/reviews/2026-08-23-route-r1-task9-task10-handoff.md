@@ -93,15 +93,15 @@ The authoritative heavy gate remains `pnpm verify:route-r1-heightfield` and must
 still run explicitly during Task 10. Do not replace this with larger unrelated
 test timeouts unless a fresh clean run still proves they are necessary.
 
-## 6. Cursor review status
+## 6. Historical external review status
 
-The final Cursor CR started through the repository's `reviewing-with-cursor`
-workflow but did not return a verdict before shutdown. It was interrupted and
+The final Cursor CR started through the repository helper that existed at the
+time but did not return a verdict before shutdown. It was interrupted and
 must be recorded as `INTERRUPTED/TIMEOUT`, never as `GO`.
 
-Run one fresh final Cursor review only after the current HEAD passes the full
-Task 10 gate. Avoid fragmenting the remaining work into repeated small reviews.
-Codex/host must independently reproduce and disposition any Cursor finding.
+That helper is no longer part of the repository workflow. After the current HEAD
+passes the full Task 10 gate, run the full-dimension and Runtime host review and
+independently reproduce and disposition every finding.
 
 ## 7. Exact next actions
 
@@ -126,25 +126,22 @@ Execute these steps in order:
 3. If `pnpm test` still times out, first reproduce the named test independently
    and inspect process/resource contention. Do not weaken the R1 standalone gate
    or silently increase global timeouts.
-4. Run a fresh final Cursor completion review against the new HEAD using
-   `/Users/xiateng/.agents/skills/reviewing-with-cursor/SKILL.md`. Treat it as an
-   independent reviewer, then reproduce and disposition every real finding.
-5. Create
+4. Create
    `docs/reviews/2026-08-22-route-r1-heightfield-runtime-review.md` using
    `docs/reviews/full-dimension-review-protocol.md` and
    `docs/reviews/runtime-deep-review-checklist.md`. Record exact commit hashes,
    commands, pass counts, rendered/manual evidence actually obtained, review
    findings, and dispositions.
-6. Only after all blocking gates and final review pass, reconcile the public
+5. Only after all blocking gates and final review pass, reconcile the public
    progress/docs: README, `docs/00-*`, `docs/02-*`, `docs/05-*`, `docs/17-*`,
    `docs/18-refactor-progress-and-backlog.md`, the Route design spec, this R1
    implementation plan, and the SDD progress ledger. Mark Task 9/Task 10/R1
    complete only then.
-7. Keep M5 open and R1b pending. After R1 is integrated and verified, write a
+6. Keep M5 open and R1b pending. After R1 is integrated and verified, write a
    separate R1b implementation plan for explicit static Traversal Surfaces,
    terrain/step/platform seams, multi-surface identity, and Collider/Surface
    evidence. Do not add R1b implementation to this branch.
-8. Commit the Task 10 documentation as a separate semantic slice, push the
+7. Commit the Task 10 documentation as a separate semantic slice, push the
    branch, and only then prepare final integration/merge review.
 
 ## 8. Non-goals for the next AI
@@ -156,4 +153,3 @@ Execute these steps in order:
 - Do not reintroduce Motion parameter bags, ray/AABB grounding, or competing
   ground-support ownership.
 - Do not treat prior or interrupted reviewer output as final acceptance.
-

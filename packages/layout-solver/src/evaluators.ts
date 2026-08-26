@@ -1,4 +1,7 @@
-import { queryLockedColliderSupportHeightMeters } from "@whitebox-world/terrain-surface";
+import {
+  orientXZV1,
+  queryLockedColliderSupportHeightMeters,
+} from "@whitebox-world/terrain-surface";
 
 import {
   aabbOverlapDepthMetersXYZ,
@@ -129,7 +132,7 @@ function pointInsideFootprint(point: LayoutVec2V1, bounds: LayoutAabbV1): boolea
 }
 
 function orientation(a: LayoutVec2V1, b: LayoutVec2V1, c: LayoutVec2V1): number {
-  return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+  return orientXZV1(a, b, c);
 }
 
 function segmentsIntersect(a: LayoutVec2V1, b: LayoutVec2V1, c: LayoutVec2V1, d: LayoutVec2V1): boolean {

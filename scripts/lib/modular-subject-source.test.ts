@@ -44,6 +44,7 @@ const goldenPackageDefinition: ModularSubjectPackageDefinitionV1 = {
     "sha256:1095fd65c754d53e6db3757ab5e1c9e5e9dcea2581f85d40f37ea4890ee8c2c2",
   rigProfileRef: "worldkit://rig-profile/humanoid.golden-biped@1",
   provenanceMode: "generated-fixture",
+  sourceExtensionAllowlist: [],
   spatialConvention: {
     units: "meters",
     upAxis: "+Y",
@@ -400,6 +401,18 @@ describe("modular Subject source recovery", () => {
 
   it("recovers duplicate embedded image bytes as one independently addressable texture artifact", async () => {
     const document = await TEST_IO.readBinary(await readFile(GOLDEN_GLB_PATH));
+    for (const mesh of document.getRoot().listMeshes()) {
+      for (const primitive of mesh.listPrimitives()) {
+        const positions = primitive.getAttribute("POSITION")!;
+        primitive.setAttribute(
+          "TEXCOORD_0",
+          document.createAccessor("test-uv")
+            .setType("VEC2")
+            .setArray(new Float32Array(positions.getCount() * 2))
+            .setBuffer(positions.getBuffer()),
+        );
+      }
+    }
     const material = document.getRoot().listMaterials()[0]!;
     const baseColorTexture = document.createTexture("duplicate-base-color")
       .setMimeType("image/png")

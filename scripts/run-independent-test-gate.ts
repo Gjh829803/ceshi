@@ -20,7 +20,7 @@ const report = evaluateIndependentTestGateV1({
 
 process.stdout.write(
   `Independent test census passed: ${report.nodeTestFiles.length} Node, ` +
-    `${report.pythonTestFiles.length} Python, ${report.siteTestFiles.length} Site.\n`,
+    `${report.siteTestFiles.length} Site.\n`,
 );
 
 for (const testCommand of createIndependentTestCommandsV1(report, selection)) {
