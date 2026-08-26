@@ -18,6 +18,7 @@ import type {
   RuntimeControlCaptureFrameV1,
   WorldRuntimeSnapshotV4,
 } from "@whitebox-world/runtime-contracts";
+import type { PublishWorldReplacementResultV1 } from "@whitebox-world/runtime-host";
 import { isNil } from "lodash-es";
 
 import {
@@ -918,5 +919,185 @@ describe("BabylonWorldAdapter frame loop", () => {
     );
     adapter.render();
     expect(runtime.renderFrame).toHaveBeenCalledOnce();
+  });
+});
+
+function houseNorthExecutionObject(): ExecutionPlanV5["objects"][number] {
+  return {
+    entityId: "house-north",
+    prototypeId: "house-blockout",
+    primitive: { kind: "box", sizeMetersXYZ: [8, 5, 10] },
+    transform: {
+      positionMetersXYZ: [18, 2.5, -24],
+      rotationEulerRadiansXYZ: [0, 0, 0],
+      scaleXYZ: [1, 1, 1],
+    },
+    collisionEnabled: true,
+    semanticClassId: "structure.house",
+  };
+}
+
+function withHouseNorth(plan: ExecutionPlanV5): ExecutionPlanV5 {
+  return {
+    ...plan,
+    objects: [...plan.objects, houseNorthExecutionObject()],
+  };
+}
+
+function createFakeCanvas(id: string) {
+  return {
+    id,
+    width: 640,
+    height: 360,
+    className: "",
+    tabIndex: 0,
+    style: {} as CSSStyleDeclaration,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    replaceWith: vi.fn(),
+    focus: vi.fn(),
+  };
+}
+
+function createPublicationSurfaceProbe(options: {
+  readonly result: PublishWorldReplacementResultV1;
+  readonly publishedPlan?: ExecutionPlanV5;
+}) {
+  let tick = 0;
+  const cameraView = { yawRadians: 0, pitchRadians: 0, distanceMeters: 0 };
+  const previousCanvas = createFakeCanvas("previous-world-canvas");
+  const nextCanvas = createFakeCanvas("next-world-canvas");
+  let activeCanvas = previousCanvas;
+  const runtime = {
+    snapshot: () => runtimeSnapshot(tick, cameraView),
+    resize: vi.fn(),
+    runFixedInput: vi.fn(),
+    renderFrame: vi.fn(),
+    reset: vi.fn(),
+    adjustCameraView: vi.fn(),
+  };
+  const coordinator = {
+    activeRuntime: () => runtime,
+    activeCanvas: () => activeCanvas,
+    snapshot: () => publicRuntimeSnapshot(runtime.snapshot()),
+    publishWorldReplacementV1: vi.fn(async () => {
+      if (options.result.status === "published") {
+        activeCanvas = nextCanvas;
+      }
+      return options.result;
+    }),
+  };
+  const adapter = Object.assign(Object.create(BabylonWorldAdapter.prototype), {
+    executionPlan: LOCKED_EXECUTION_PLAN_V5,
+    coordinator,
+    keyboardInput: new PhysicalKeyboardActionTracker(),
+    cameraInput: new Set<string>(),
+    keyboardCameraYawRadiansPerTick: 0,
+    keyboardCameraPitchRadiansPerTick: 0,
+    lastArrowInputClearReason: "startup",
+    lastPossessedControlledEntityId: "player",
+    inspections: structuredClone(featureInspections(LOCKED_EXECUTION_PLAN_V5)),
+    listeners: new Set(),
+    disposed: false,
+    paused: false,
+    animationPending: false,
+    animationFrameId: null,
+    frame: 0,
+    captureActivitySequence: 0,
+    visualCaptureGroups: [],
+    previousAnimationTimestampMilliseconds: 0,
+    fixedStepAccumulatorSeconds: 0,
+    displayFramesPerSecond: 0,
+    mountedContainer: { id: "viewport" },
+    handleCameraPointerDown: vi.fn(),
+    handleCameraPointerMove: vi.fn(),
+    handleCameraPointerUp: vi.fn(),
+    handleCameraWheel: vi.fn(),
+  }) as unknown as BabylonWorldAdapter;
+  return {
+    adapter,
+    previousCanvas,
+    nextCanvas,
+    coordinator,
+    publishedPlan: options.publishedPlan ?? withHouseNorth(LOCKED_EXECUTION_PLAN_V5),
+  };
+}
+
+const PUBLISHED_REPLACEMENT = {
+  status: "published",
+  publication: {},
+  previous: {
+    runtimeSessionId: "runtime-session-test",
+    worldSessionId: "world-session-31",
+    worldPackageRootHash: `sha256:${"d".repeat(64)}`,
+    simulationTick: 4,
+  },
+  current: {
+    runtimeSessionId: "runtime-session-test",
+    worldSessionId: "world-session-32",
+    worldPackageRootHash: `sha256:${"e".repeat(64)}`,
+    simulationTick: 0,
+  },
+  cleanup: {
+    status: "released",
+    diagnostics: [],
+  },
+} as unknown as PublishWorldReplacementResultV1;
+
+describe("BabylonWorldAdapter Full Reload visible surface", () => {
+  it("adopts the replacement canvas and inspections after a published world replacement", async () => {
+    const { adapter, previousCanvas, nextCanvas, publishedPlan } =
+      createPublicationSurfaceProbe({ result: PUBLISHED_REPLACEMENT });
+
+    expect(adapter.inspectFeatures().some((feature) => feature.id === "house-north"))
+      .toBe(false);
+
+    const result = await adapter.publishWorldReplacementV1({
+      worldConfiguration: { executionPlan: publishedPlan },
+      publication: {},
+      persistDurableCommit: () => undefined,
+    });
+
+    expect(result.status).toBe("published");
+    expect(previousCanvas.replaceWith).toHaveBeenCalledWith(nextCanvas);
+    expect(nextCanvas.focus).toHaveBeenCalledOnce();
+    expect(adapter.inspectFeatures().some((feature) => feature.id === "house-north"))
+      .toBe(true);
+  });
+
+  it("keeps the visible canvas and inspections when publication is rejected", async () => {
+    const { adapter, previousCanvas, publishedPlan } = createPublicationSurfaceProbe({
+      result: {
+        status: "rejected",
+        failureKind: "expectation-stale",
+        message: "WORLD_CHANGE_RUNTIME_EXPECTATION_STALE",
+      },
+    });
+
+    const result = await adapter.publishWorldReplacementV1({
+      worldConfiguration: { executionPlan: publishedPlan },
+      publication: {},
+    });
+
+    expect(result.status).toBe("rejected");
+    expect(previousCanvas.replaceWith).not.toHaveBeenCalled();
+    expect(adapter.inspectFeatures().some((feature) => feature.id === "house-north"))
+      .toBe(false);
+  });
+
+  it("still swaps the visible canvas when the published plan cannot be parsed", async () => {
+    const { adapter, previousCanvas, nextCanvas } = createPublicationSurfaceProbe({
+      result: PUBLISHED_REPLACEMENT,
+    });
+
+    const result = await adapter.publishWorldReplacementV1({
+      worldConfiguration: { executionPlan: { kind: "not-an-execution-plan" } },
+      publication: {},
+    });
+
+    expect(result.status).toBe("published");
+    expect(previousCanvas.replaceWith).toHaveBeenCalledWith(nextCanvas);
+    expect(adapter.inspectFeatures().some((feature) => feature.id === "house-north"))
+      .toBe(false);
   });
 });
