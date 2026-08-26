@@ -64,6 +64,19 @@ describe("engine-neutral layout geometry", () => {
     expect(pointInPolygonXZ([-9.9964077, 53.8040989], irregular)).toBe(true);
   });
 
+  it("keeps one-meter polygon validity and containment invariant under large XZ translation", () => {
+    const translatedSquare = [
+      [100_000_000, 100_000_000],
+      [100_000_001, 100_000_000],
+      [100_000_001, 100_000_001],
+      [100_000_000, 100_000_001],
+    ] as const;
+
+    expect(validatePolygonXZ(translatedSquare)).toBeUndefined();
+    expect(pointInPolygonXZ([100_000_000.5, 100_000_000.5], translatedSquare)).toBe(true);
+    expect(pointInPolygonXZ([100_000_002, 100_000_000.5], translatedSquare)).toBe(false);
+  });
+
   it("measures AABB separation and overlap without treating overlap as clearance", () => {
     const left = {
       minimumMetersXYZ: [0, 0, 0],

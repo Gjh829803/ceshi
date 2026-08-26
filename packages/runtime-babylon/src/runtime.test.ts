@@ -3599,6 +3599,197 @@ describe("BabylonWorldRuntime", () => {
     }
   });
 
+  it("isolates two Rider and Mount pairs through prepare, abort, commit, tick, and reset", async () => {
+    const compiled = compileExecutionPlan(createValidMountedOnAuthoringSpec());
+    const riderA = compiled.subjects.find(({ entityId }) =>
+      entityId === "pack-animal-a"
+    );
+    const mountA = compiled.subjects.find(({ entityId }) =>
+      entityId === "pack-animal-b"
+    );
+    if (isNil(riderA) || isNil(mountA)) {
+      throw new Error("Two-pair mounted fixture Subjects are missing.");
+    }
+    const executionPlan: ExecutionPlanV5 = {
+      ...compiled,
+      initialControlledEntityId: "rider-a",
+      initialRelationships: [],
+      subjects: [
+        {
+          ...riderA,
+          entityId: "rider-a",
+          spawnAnchorEntityId: "spawn-rider-a",
+          spawnSubjectOriginPositionMetersXYZ: [0, 0, 5],
+        },
+        {
+          ...mountA,
+          entityId: "mount-a",
+          spawnAnchorEntityId: "spawn-mount-a",
+          spawnSubjectOriginPositionMetersXYZ: [0.5, 0, 5],
+        },
+        {
+          ...riderA,
+          entityId: "rider-b",
+          spawnAnchorEntityId: "spawn-rider-b",
+          spawnSubjectOriginPositionMetersXYZ: [10, 0, 5],
+        },
+        {
+          ...mountA,
+          entityId: "mount-b",
+          spawnAnchorEntityId: "spawn-mount-b",
+          spawnSubjectOriginPositionMetersXYZ: [10.5, 0, 5],
+        },
+      ],
+      layout: { ...compiled.layout, layoutAssertions: [] },
+      camera: { ...compiled.camera, targetEntityId: "rider-a" },
+    };
+    const runtime = await createRuntime(executionPlan, {}, false);
+    try {
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      const debug = createRuntimeDebugProbe(runtime);
+      const bind = await internal.preparePossessionTarget({
+        mode: "possessed",
+        controlledEntityId: "rider-a",
+      });
+      bind.commitPrepared();
+      const relationshipA = {
+        id: "mounted-on:pair-a",
+        type: "mountedOn" as const,
+        schemaVersion: 1 as const,
+        riderEntityId: "rider-a",
+        mountEntityId: "mount-a",
+        mountSlotId: "stand",
+        establishedSimulationTick: 0,
+      };
+      const relationshipB = {
+        id: "mounted-on:pair-b",
+        type: "mountedOn" as const,
+        schemaVersion: 1 as const,
+        riderEntityId: "rider-b",
+        mountEntityId: "mount-b",
+        mountSlotId: "stand",
+        establishedSimulationTick: 0,
+      };
+
+      const first = await internal.prepareMountedRelationshipTransition({
+        operation: "mount",
+        relationship: relationshipA,
+        possessionTarget: {
+          mode: "possessed",
+          controlledEntityId: "mount-a",
+        },
+      });
+      first.commitPrepared();
+      const afterFirst = internal.readWorldProjection();
+      expect(afterFirst.capabilityStatesById[
+        "capability-state:rider-a:locomotion"
+      ]).toMatchObject({
+        mode: "suspended",
+        suspendedByRelationshipId: relationshipA.id,
+      });
+      expect(afterFirst.capabilityStatesById[
+        "capability-state:rider-b:locomotion"
+      ]).not.toMatchObject({ mode: "suspended" });
+
+      const abortedSecond = await internal.prepareMountedRelationshipTransition({
+        operation: "mount",
+        relationship: relationshipB,
+        possessionTarget: {
+          mode: "possessed",
+          controlledEntityId: "mount-b",
+        },
+      });
+      expect(internal.readWorldProjection()).toEqual(afterFirst);
+      await abortedSecond.abort();
+      expect(internal.readWorldProjection()).toEqual(afterFirst);
+      expect(internal.readPossessionTarget()).toEqual({
+        mode: "possessed",
+        controlledEntityId: "mount-a",
+      });
+
+      const second = await internal.prepareMountedRelationshipTransition({
+        operation: "mount",
+        relationship: relationshipB,
+        possessionTarget: {
+          mode: "possessed",
+          controlledEntityId: "mount-b",
+        },
+      });
+      second.commitPrepared();
+      const bothMounted = internal.readWorldProjection();
+      expect(bothMounted.capabilityStatesById[
+        "capability-state:rider-a:locomotion"
+      ]).toMatchObject({
+        mode: "suspended",
+        suspendedByRelationshipId: relationshipA.id,
+      });
+      expect(bothMounted.capabilityStatesById[
+        "capability-state:rider-b:locomotion"
+      ]).toMatchObject({
+        mode: "suspended",
+        suspendedByRelationshipId: relationshipB.id,
+      });
+      expect(debug.subjectVisualOrigin("rider-a")).toEqual([
+        expect.closeTo(0.5, 6),
+        expect.closeTo(0.45, 6),
+        expect.closeTo(5, 6),
+      ]);
+      expect(debug.subjectVisualOrigin("rider-b")).toEqual([
+        expect.closeTo(10.5, 6),
+        expect.closeTo(0.45, 6),
+        expect.closeTo(5, 6),
+      ]);
+
+      const afterTick = await internal.runFixedInputTick({
+        actions: ["move-right"],
+        ticks: 1,
+      });
+      const riderAAfterTick = afterTick.spatialEntityStatesById["rider-a"]!;
+      const mountAAfterTick = afterTick.spatialEntityStatesById["mount-a"]!;
+      const riderBAfterTick = afterTick.spatialEntityStatesById["rider-b"]!;
+      const mountBAfterTick = afterTick.spatialEntityStatesById["mount-b"]!;
+      expect(riderAAfterTick.positionMetersXYZ[0]).toBeCloseTo(
+        mountAAfterTick.positionMetersXYZ[0],
+        6,
+      );
+      expect(
+        riderAAfterTick.positionMetersXYZ[1] -
+          mountAAfterTick.positionMetersXYZ[1],
+      ).toBeCloseTo(0.45, 6);
+      expect(riderBAfterTick.positionMetersXYZ[0]).toBeCloseTo(
+        mountBAfterTick.positionMetersXYZ[0],
+        6,
+      );
+      expect(
+        riderBAfterTick.positionMetersXYZ[1] -
+          mountBAfterTick.positionMetersXYZ[1],
+      ).toBeCloseTo(0.45, 6);
+      expect(
+        riderBAfterTick.positionMetersXYZ[0] -
+          riderAAfterTick.positionMetersXYZ[0],
+      ).toBeGreaterThan(9);
+      expect(afterTick.capabilityStatesById[
+        "capability-state:rider-a:locomotion"
+      ]).toMatchObject({ suspendedByRelationshipId: relationshipA.id });
+      expect(afterTick.capabilityStatesById[
+        "capability-state:rider-b:locomotion"
+      ]).toMatchObject({ suspendedByRelationshipId: relationshipB.id });
+
+      runtime.reset();
+      const reset = internal.readWorldProjection();
+      expect(reset.capabilityStatesById[
+        "capability-state:rider-a:locomotion"
+      ]).not.toMatchObject({ mode: "suspended" });
+      expect(reset.capabilityStatesById[
+        "capability-state:rider-b:locomotion"
+      ]).not.toMatchObject({ mode: "suspended" });
+      expect(debug.subjectVisualOrigin("rider-a")).toEqual([0, 0, 5]);
+      expect(debug.subjectVisualOrigin("rider-b")).toEqual([10, 0, 5]);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
   it("projects compiled initial mountedOn state and reset restores that authored initial state", async () => {
     const executionPlan = compileExecutionPlan(
       createValidMountedOnAuthoringSpec(),

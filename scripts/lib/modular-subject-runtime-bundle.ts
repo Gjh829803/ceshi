@@ -13,6 +13,7 @@ import {
 } from "@gltf-transform/core";
 import { prune, unpartition } from "@gltf-transform/functions";
 
+import { validateGlbAdmissionV1 } from "./glb-admission.js";
 import {
   inspectModularSubjectGlb,
   type ModularSubjectGlbInventoryV1,
@@ -305,6 +306,9 @@ export async function assembleModularSubjectRuntimeBundle(
     return fail("MODULAR_SUBJECT_RUNTIME_MODEL_MANIFEST_INVALID");
   }
   const modelBytes = await readLockedGlb(options.packageDirectory, modelManifest.artifact);
+  await validateGlbAdmissionV1(modelBytes, {
+    profileId: "subject-rigged-model.v1",
+  });
   const document = await IO.readBinary(modelBytes);
   if (document.getRoot().listAnimations().length !== 0) {
     return fail("MODULAR_SUBJECT_RUNTIME_MODEL_ANIMATIONS_FORBIDDEN");
@@ -341,6 +345,9 @@ export async function assembleModularSubjectRuntimeBundle(
       return fail("MODULAR_SUBJECT_RUNTIME_CLIP_MANIFEST_INVALID", configuredClip.actionId);
     }
     const clipBytes = await readLockedGlb(options.packageDirectory, clipManifest.artifact);
+    await validateGlbAdmissionV1(clipBytes, {
+      profileId: "subject-animation-clip.v1",
+    });
     const clipDocument = await IO.readBinary(clipBytes);
     const animations = clipDocument.getRoot().listAnimations();
     if (animations.length !== 1 || animations[0]!.getName() !== configuredClip.actionId) {
@@ -356,7 +363,9 @@ export async function assembleModularSubjectRuntimeBundle(
 
   await document.transform(prune({ keepAttributes: true }), unpartition());
   const glbBytes = await IO.writeBinary(document);
-  const inventory = await inspectModularSubjectGlb(glbBytes);
+  const inventory = await inspectModularSubjectGlb(glbBytes, {
+    profileId: "subject-runtime-bundle.v1",
+  });
   const expectedActions = packageManifest.animationClips.map((clip) => clip.actionId);
   if (
     inventory.meshCount < 1 ||
@@ -420,7 +429,9 @@ export async function validateModularSubjectRuntimeBundle(
   ) {
     return fail("MODULAR_SUBJECT_RUNTIME_BUNDLE_INVALID");
   }
-  const inventory = await inspectModularSubjectGlb(bundle.glbBytes);
+  const inventory = await inspectModularSubjectGlb(bundle.glbBytes, {
+    profileId: "subject-runtime-bundle.v1",
+  });
   if (
     JSON.stringify(inventory) !== JSON.stringify(bundle.manifest.inventory) ||
     inventory.rigSignatureHash !== bundle.manifest.rigSignatureHash ||

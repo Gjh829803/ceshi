@@ -29,6 +29,23 @@ describe("validateSimplePolygonXZV1", () => {
     ])).toEqual({ ok: true });
   });
 
+  it.each([
+    ["forward", [
+      [100_000_000, 100_000_000],
+      [100_000_001, 100_000_000],
+      [100_000_001, 100_000_001],
+      [100_000_000, 100_000_001],
+    ]],
+    ["reversed", [
+      [100_000_000, 100_000_001],
+      [100_000_001, 100_000_001],
+      [100_000_001, 100_000_000],
+      [100_000_000, 100_000_000],
+    ]],
+  ] as const)("keeps a translated one-meter polygon valid in %s order", (_order, pointsMetersXZ) => {
+    expect(validateSimplePolygonXZV1(pointsMetersXZ)).toEqual({ ok: true });
+  });
+
   it("rejects a GeoJSON-style closed ring at the canonical open-ring boundary", () => {
     expect(validateSimplePolygonXZV1([
       [0, 0], [2, 0], [2, 2], [0, 2], [0, 0],

@@ -38,6 +38,10 @@ export {
   type TraversalAreaComplexityValidationResultV1,
 } from "./simple-polygon-xz.js";
 export {
+  orientXZV1,
+  type OrientationPointXZV1,
+} from "./orientation-xz.js";
+export {
   TRAVERSAL_SURFACE_QUERY_AREA_EPSILON_SQUARE_METERS_V1,
   TRAVERSAL_SURFACE_QUERY_HEIGHT_EPSILON_METERS_V1,
   TRAVERSAL_SURFACE_QUERY_XZ_EPSILON_METERS_V1,

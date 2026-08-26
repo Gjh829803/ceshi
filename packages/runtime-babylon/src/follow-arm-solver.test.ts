@@ -197,4 +197,95 @@ describe("FollowArmSolverV1", () => {
       engine.dispose();
     }
   });
+
+  it("detects an L-shaped wall corner reached only by an angular probe", () => {
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    try {
+      const vertical = MeshBuilder.CreateBox("corner-vertical", {
+        width: 0.08,
+        height: 0.4,
+        depth: 0.12,
+      }, scene);
+      vertical.position.set(0.34, 0.18, 5);
+      vertical.isPickable = true;
+      vertical.metadata = { worldkitEntityId: "wall-corner" };
+      vertical.computeWorldMatrix(true);
+
+      const horizontal = MeshBuilder.CreateBox("corner-horizontal", {
+        width: 0.4,
+        height: 0.08,
+        depth: 0.12,
+      }, scene);
+      horizontal.position.set(0.18, 0.34, 5);
+      horizontal.isPickable = true;
+      horizontal.metadata = { worldkitEntityId: "wall-corner" };
+      horizontal.computeWorldMatrix(true);
+
+      const result = solve(new FollowArmSolverV1(), scene);
+
+      expect(result.safeArmLengthMeters).toBeLessThan(10);
+      expect(result.isCollisionRetracted).toBe(true);
+      expect(result.collisionHitEntityId).toBe("wall-corner");
+    } finally {
+      scene.dispose();
+      engine.dispose();
+    }
+  });
+
+  it("retracts before a doorway narrower than the camera collision diameter", () => {
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    try {
+      for (const [entityId, x] of [
+        ["door-jamb-left", -0.55],
+        ["door-jamb-right", 0.55],
+      ] as const) {
+        const jamb = MeshBuilder.CreateBox(entityId, {
+          width: 0.3,
+          height: 2,
+          depth: 0.12,
+        }, scene);
+        jamb.position.set(x, 0, 5);
+        jamb.isPickable = true;
+        jamb.metadata = { worldkitEntityId: entityId };
+        jamb.computeWorldMatrix(true);
+      }
+
+      const result = solve(new FollowArmSolverV1(), scene);
+
+      expect(result.safeArmLengthMeters).toBeLessThan(10);
+      expect(result.isCollisionRetracted).toBe(true);
+      expect(["door-jamb-left", "door-jamb-right"]).toContain(
+        result.collisionHitEntityId,
+      );
+    } finally {
+      scene.dispose();
+      engine.dispose();
+    }
+  });
+
+  it("retracts to zero when the Follow Arm target starts inside a blocker", () => {
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    try {
+      const blocker = MeshBuilder.CreateBox("origin-blocker", {
+        size: 1,
+      }, scene);
+      blocker.position.set(0, 0, 0);
+      blocker.isPickable = true;
+      blocker.metadata = { worldkitEntityId: "origin-blocker" };
+      blocker.computeWorldMatrix(true);
+
+      const result = solve(new FollowArmSolverV1(), scene);
+
+      expect(result.safeArmLengthMeters).toBe(0);
+      expect(result.effectiveArmLengthMeters).toBe(0);
+      expect(result.isCollisionRetracted).toBe(true);
+      expect(result.collisionHitEntityId).toBe("origin-blocker");
+    } finally {
+      scene.dispose();
+      engine.dispose();
+    }
+  });
 });

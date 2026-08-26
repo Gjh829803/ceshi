@@ -1,5 +1,7 @@
 import { isNil } from "lodash-es";
 
+import { orientXZV1 } from "./orientation-xz.js";
+
 export type SimplePolygonXZValidationIssueCodeV1 =
   | "point-count-invalid"
   | "coordinate-invalid"
@@ -120,8 +122,7 @@ function samePoint(left: Vec2, right: Vec2): boolean {
 }
 
 function cross(a: Vec2, b: Vec2, c: Vec2): number {
-  return (b[0] - a[0]) * (c[1] - a[1]) -
-    (b[1] - a[1]) * (c[0] - a[0]);
+  return orientXZV1(a, b, c);
 }
 
 function isBetweenInclusive(value: number, first: number, second: number): boolean {
@@ -215,11 +216,12 @@ export function validateSimplePolygonXZV1(
     }
   }
 
+  const origin = points[0]!;
   let twiceArea = 0;
-  for (let index = 0; index < points.length; index += 1) {
+  for (let index = 1; index < points.length - 1; index += 1) {
     const point = points[index]!;
-    const next = points[(index + 1) % points.length]!;
-    twiceArea += point[0] * next[1] - next[0] * point[1];
+    const next = points[index + 1]!;
+    twiceArea += orientXZV1(origin, point, next);
   }
   if (!Number.isFinite(twiceArea)) {
     return { ok: false, issueCode: "coordinate-invalid" };
