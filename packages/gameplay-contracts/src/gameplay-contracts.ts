@@ -654,9 +654,7 @@ interface GameplayEventBaseV1 {
 
 interface GameplayRelationshipEventBaseV1 extends GameplayEventBaseV1 {
   readonly commandId: string;
-  readonly relationshipId: string;
-  readonly controlledEntityId: string;
-  readonly controllerEntityId: string;
+  readonly relationship: GameplayRelationshipStateV1;
 }
 
 export interface GameplayRelationshipCommittedEventV1
@@ -965,7 +963,19 @@ export interface PossessedByRelationshipStateV1 {
   readonly establishedSimulationTick: number;
 }
 
-export type GameplayRelationshipStateV1 = PossessedByRelationshipStateV1;
+export interface MountedOnRelationshipStateV1 {
+  readonly id: string;
+  readonly type: "mountedOn";
+  readonly schemaVersion: 1;
+  readonly riderEntityId: string;
+  readonly mountEntityId: string;
+  readonly mountSlotId: string;
+  readonly establishedSimulationTick: number;
+}
+
+export type GameplayRelationshipStateV1 =
+  | PossessedByRelationshipStateV1
+  | MountedOnRelationshipStateV1;
 
 export type GameplaySemanticFactIdV1 = `semantic-fact:${string}`;
 
@@ -1253,6 +1263,52 @@ function parsePossessedByRelationshipStateV1(
     controllerEntityId: record.controllerEntityId,
     establishedSimulationTick: record.establishedSimulationTick,
   };
+}
+
+function parseMountedOnRelationshipStateV1(
+  input: unknown,
+): MountedOnRelationshipStateV1 | undefined {
+  const record = snapshotDataRecord(input);
+  if (isNil(record) || !hasExactKeys(record, [
+    "id",
+    "type",
+    "schemaVersion",
+    "riderEntityId",
+    "mountEntityId",
+    "mountSlotId",
+    "establishedSimulationTick",
+  ]) ||
+    !isNonEmptyString(record.id) ||
+    record.type !== "mountedOn" ||
+    record.schemaVersion !== 1 ||
+    !isNonEmptyString(record.riderEntityId) ||
+    !isNonEmptyString(record.mountEntityId) ||
+    record.riderEntityId === record.mountEntityId ||
+    !isNonEmptyString(record.mountSlotId) ||
+    !isSafeNonNegativeInteger(record.establishedSimulationTick)
+  ) return undefined;
+  return {
+    id: record.id,
+    type: "mountedOn",
+    schemaVersion: 1,
+    riderEntityId: record.riderEntityId,
+    mountEntityId: record.mountEntityId,
+    mountSlotId: record.mountSlotId,
+    establishedSimulationTick: record.establishedSimulationTick,
+  };
+}
+
+function parseGameplayRelationshipStateV1(
+  input: unknown,
+): GameplayRelationshipStateV1 | undefined {
+  const record = snapshotDataRecord(input);
+  if (record?.type === "possessedBy") {
+    return parsePossessedByRelationshipStateV1(record);
+  }
+  if (record?.type === "mountedOn") {
+    return parseMountedOnRelationshipStateV1(record);
+  }
+  return undefined;
 }
 
 function semanticFactIdentityDomainV1(input: unknown): unknown {
@@ -1630,7 +1686,7 @@ function parseWorldStateSnapshotBuildInputV1(
   ) ?? invalid(schemaName);
   const relationshipStatesById = parseIdMap(
     record.relationshipStatesById,
-    parsePossessedByRelationshipStateV1,
+    parseGameplayRelationshipStateV1,
   ) ?? invalid(schemaName);
   const semanticFactsById = parseIdMap(
     record.semanticFactsById,
@@ -1643,7 +1699,26 @@ function parseWorldStateSnapshotBuildInputV1(
 
   const controlledEntityIds = new Set<string>();
   const controllerEntityIds = new Set<string>();
+  const mountedRiderEntityIds = new Set<string>();
+  const occupiedMountSlotIds = new Set<string>();
   for (const relationship of Object.values(relationshipStatesById)) {
+    if (relationship.establishedSimulationTick > simulationTick) {
+      invalid(schemaName);
+    }
+    if (relationship.type === "mountedOn") {
+      const slotIdentity = `${relationship.mountEntityId}\u0000${relationship.mountSlotId}`;
+      if (
+        mountedRiderEntityIds.has(relationship.riderEntityId) ||
+        occupiedMountSlotIds.has(slotIdentity) ||
+        getOwnMapValue(entityStatesById, relationship.riderEntityId)?.kind !==
+          "spatial-entity-state" ||
+        getOwnMapValue(entityStatesById, relationship.mountEntityId)?.kind !==
+          "spatial-entity-state"
+      ) invalid(schemaName);
+      mountedRiderEntityIds.add(relationship.riderEntityId);
+      occupiedMountSlotIds.add(slotIdentity);
+      continue;
+    }
     if (
       controlledEntityIds.has(relationship.controlledEntityId) ||
       controllerEntityIds.has(relationship.controllerEntityId) ||
@@ -1872,8 +1947,8 @@ interface GameplayInspectionSnapshotBaseV1 {
   readonly simulationTick: number;
   readonly participantStatesById: Readonly<Record<string, GameplayParticipantStateV1>>;
   readonly controllerStatesById: Readonly<Record<string, GameplayControllerStateV1>>;
-  readonly possessedByRelationshipsById: Readonly<
-    Record<string, PossessedByRelationshipStateV1>
+  readonly relationshipStatesById: Readonly<
+    Record<string, GameplayRelationshipStateV1>
   >;
   readonly activeActionStatesById: Readonly<Record<string, GameplayActionStateV1>>;
   readonly activatedGameplayFeatureRefs: readonly string[];
@@ -1932,7 +2007,7 @@ export function parseGameplayInspectionSnapshotV1(
     "simulationTick",
     "participantStatesById",
     "controllerStatesById",
-    "possessedByRelationshipsById",
+    "relationshipStatesById",
     "activeActionStatesById",
     "activatedGameplayFeatureRefs",
     "lastEventSequence",
@@ -1961,9 +2036,9 @@ export function parseGameplayInspectionSnapshotV1(
     record.controllerStatesById,
     parseGameplayControllerStateV1,
   ) ?? invalid(schemaName);
-  const possessedByRelationshipsById = parseIdMap(
-    record.possessedByRelationshipsById,
-    parsePossessedByRelationshipStateV1,
+  const relationshipStatesById = parseIdMap(
+    record.relationshipStatesById,
+    parseGameplayRelationshipStateV1,
   ) ?? invalid(schemaName);
   const activeActionStatesById = parseIdMap(
     record.activeActionStatesById,
@@ -1981,7 +2056,19 @@ export function parseGameplayInspectionSnapshotV1(
 
   const controlledEntityIds = new Set<string>();
   const controllerEntityIds = new Set<string>();
-  for (const relationship of Object.values(possessedByRelationshipsById)) {
+  const mountedRiderEntityIds = new Set<string>();
+  const occupiedMountSlotIds = new Set<string>();
+  for (const relationship of Object.values(relationshipStatesById)) {
+    if (relationship.type === "mountedOn") {
+      const slotIdentity = `${relationship.mountEntityId}\u0000${relationship.mountSlotId}`;
+      if (
+        mountedRiderEntityIds.has(relationship.riderEntityId) ||
+        occupiedMountSlotIds.has(slotIdentity)
+      ) invalid(schemaName);
+      mountedRiderEntityIds.add(relationship.riderEntityId);
+      occupiedMountSlotIds.add(slotIdentity);
+      continue;
+    }
     if (
       controlledEntityIds.has(relationship.controlledEntityId) ||
       controllerEntityIds.has(relationship.controllerEntityId) ||
@@ -2005,7 +2092,7 @@ export function parseGameplayInspectionSnapshotV1(
     simulationTick: record.simulationTick as number,
     participantStatesById,
     controllerStatesById,
-    possessedByRelationshipsById,
+    relationshipStatesById,
     activeActionStatesById,
     activatedGameplayFeatureRefs,
     lastEventSequence: record.lastEventSequence as number,
@@ -2027,7 +2114,7 @@ export function canonicalizeGameplayInspectionSnapshotV1(input: unknown): string
 export interface GameplayCapacityBudgetV1 {
   readonly maximumParticipantCount: number;
   readonly maximumControllerEntityCount: number;
-  readonly maximumPossessedByRelationshipCount: number;
+  readonly maximumRelationshipStateCount: number;
   readonly maximumActiveActionStateCount: number;
   readonly maximumGameplayFeatureCount: number;
   readonly maximumSemanticActionDefinitionCount: number;
@@ -2043,7 +2130,7 @@ export interface GameplayCapacityBudgetV1 {
 const GAMEPLAY_CAPACITY_BUDGET_KEYS = [
   "maximumParticipantCount",
   "maximumControllerEntityCount",
-  "maximumPossessedByRelationshipCount",
+  "maximumRelationshipStateCount",
   "maximumActiveActionStateCount",
   "maximumGameplayFeatureCount",
   "maximumSemanticActionDefinitionCount",
@@ -2075,7 +2162,7 @@ export const DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1: GameplayCapacityBudgetV1 =
   parseGameplayCapacityBudgetV1({
     maximumParticipantCount: 1,
     maximumControllerEntityCount: 1,
-    maximumPossessedByRelationshipCount: 1,
+    maximumRelationshipStateCount: 1,
     maximumActiveActionStateCount: 256,
     maximumGameplayFeatureCount: 16,
     maximumSemanticActionDefinitionCount: 256,

@@ -786,6 +786,16 @@ const possessionRelationshipState = {
   establishedSimulationTick: 1,
 } as const;
 
+const mountedOnRelationshipState = {
+  id: "mounted-on-primary",
+  type: "mountedOn",
+  schemaVersion: 1,
+  riderEntityId: "g-bot-primary",
+  mountEntityId: "skateboard-primary",
+  mountSlotId: "stand",
+  establishedSimulationTick: 12,
+} as const;
+
 const actionState = {
   id: "action-execution-primary",
   kind: "action-state",
@@ -880,6 +890,30 @@ describe("WorldStateSnapshotV1", () => {
     expect(Object.isFrozen(parsed)).toBe(true);
     expect(Object.isFrozen(parsed.entityStatesById["g-bot-primary"])).toBe(true);
     expect(Object.isFrozen(parsed.relationshipStatesById)).toBe(true);
+  });
+
+  it("parses mountedOn as a role-qualified Relationship without inferring support", () => {
+    const parsed = rebuildWorldStateSnapshotV1({
+      ...worldStateSnapshot,
+      relationshipStatesById: {
+        "mounted-on-primary": mountedOnRelationshipState,
+        "possession-primary": possessionRelationshipState,
+      },
+    });
+
+    expect(parsed.relationshipStatesById["mounted-on-primary"]).toEqual(
+      mountedOnRelationshipState,
+    );
+    expect(parsed.semanticFactsById).toEqual(worldStateSnapshot.semanticFactsById);
+    expect(() => rebuildWorldStateSnapshotV1({
+      ...worldStateSnapshot,
+      relationshipStatesById: {
+        "mounted-on-primary": {
+          ...mountedOnRelationshipState,
+          sourceEntityId: "g-bot-primary",
+        },
+      },
+    })).toThrow("closed WorldStateSnapshotV1 schema");
   });
 
   it("accepts requestless and request-backed Action states as an exact paired union", () => {
@@ -1565,8 +1599,9 @@ const inspectionSnapshot = {
       participantId: "participant-primary",
     },
   },
-  possessedByRelationshipsById: {
+  relationshipStatesById: {
     "possession-primary": possessionRelationshipState,
+    "mounted-on-primary": mountedOnRelationshipState,
   },
   activeActionStatesById: {
     "action-execution-primary": actionState,
@@ -1638,7 +1673,7 @@ describe("GameplayInspectionSnapshotV1", () => {
     }],
     ["dangling possession Controller", {
       ...inspectionSnapshot,
-      possessedByRelationshipsById: {
+      relationshipStatesById: {
         "possession-primary": {
           ...possessionRelationshipState,
           controllerEntityId: "controller-missing",
@@ -1661,7 +1696,7 @@ describe("GameplayCapacityBudgetV1", () => {
     expect(DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1).toEqual({
       maximumParticipantCount: 1,
       maximumControllerEntityCount: 1,
-      maximumPossessedByRelationshipCount: 1,
+      maximumRelationshipStateCount: 1,
       maximumActiveActionStateCount: 256,
       maximumGameplayFeatureCount: 16,
       maximumSemanticActionDefinitionCount: 256,

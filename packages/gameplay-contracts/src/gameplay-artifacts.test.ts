@@ -58,6 +58,7 @@ function actionBody(
     resourceRef: "worldkit://semantic-action/wave@1",
     executionMode: "exclusive-per-subject",
     completion: { mode: "fixed-duration", durationTicks: 12 },
+    effect: { mode: "state-only" },
     isMovementInputBlocked: false,
     allowedActorEntityDefinitionRefs: ["entity:z", "entity:a"],
     requiredActorCapabilityRefs: ["capability:z", "capability:a"],
@@ -250,6 +251,39 @@ describe("GameplayActionDefinitionV1", () => {
       ...definition,
       contentHash: HASH_A,
     })).toThrow(/GameplayActionDefinitionV1/);
+  });
+
+  it("supports immediate trusted effects only with a paired Ref and Hash", () => {
+    const definition = createGameplayActionDefinitionV1(actionBody({
+      completion: { mode: "immediate" },
+      effect: {
+        mode: "trusted",
+        gameplayActionEffectRef:
+          "worldkit://gameplay-action-effect/mounted-relationship@1",
+        gameplayActionEffectHash: HASH_A,
+      },
+      request: {
+        mode: "required",
+        actionRequestSchemaRef: "worldkit://schema/mount-action-request@1",
+        actionRequestSchemaHash: HASH_A,
+      },
+    }));
+
+    expect(definition.completion).toEqual({ mode: "immediate" });
+    expect(definition.effect).toEqual({
+      mode: "trusted",
+      gameplayActionEffectRef:
+        "worldkit://gameplay-action-effect/mounted-relationship@1",
+      gameplayActionEffectHash: HASH_A,
+    });
+    expect(() => createGameplayActionDefinitionV1(actionBody({
+      effect: {
+        mode: "trusted",
+        gameplayActionEffectRef:
+          "worldkit://gameplay-action-effect/mounted-relationship@1",
+        gameplayActionEffectHash: "sha256:bad" as typeof HASH_A,
+      },
+    }))).toThrow(/GameplayActionDefinitionBodyV1/);
   });
 });
 

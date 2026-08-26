@@ -343,7 +343,11 @@ WorldPackage、Resume 与完整 Replay Gate 为完成标准。
 
 #### P0.4 白模到生成式视频的第一条纵向切片
 
-- [ ] 冻结一个不进入 Canonical Schema 的 Video Model Adapter 接口。
+- [x] 冻结一个不进入 Canonical Schema 的 Video Model Adapter 接口：
+  [专项设计](superpowers/specs/2026-08-26-m6-video-model-adapter-design.md)与
+  [实施计划](superpowers/plans/2026-08-26-m6-video-model-adapter-implementation-plan.md)已定义
+  gate-passed Control Capture 输入、provider-neutral Request/Run、exactly-once submission、
+  输出 conformance 与结构一致性报告；接口冻结不等于 Provider 纵向切片已实现。
 - [ ] 选择一个首批模型/工作流作为实验 Adapter，并单独记录许可证与运行环境。
 - [ ] 固定一个包含地形、水体、主体移动、障碍和相机运动的 WorldPackage/Take。
 - [ ] 导出 Neutral Color、Linear Depth、Semantic、Instance、World Normal 和 Camera 控制序列。
@@ -804,7 +808,7 @@ Placement S1、Simulation Take / Control Capture V1 与 Validation Capture/Integ
 | WS-07B | **待开始；结构治理后续 1** | 按 public contract family 扩展唯一 source/generated parity；每次只迁一个领域 | `ARC-INT` 已完成 / 阻塞相关 Schema release | 正负 parity、unknown-key、round-trip、tracked bytes；禁止用私有 deep import 换取小 bundle |
 | WS-05B/C | **待开始；结构治理后续 2** | 按 owner 批次消减当前 52 条 exact workspace boundary debt；补必要 `/testing` exports、direct deps 与 per-package tsconfig | `ARC-INT` 已完成 / 阻塞 `WS-08` 的相关 package extraction | debt count 单调下降、zero stale/new、zero cycles、无 wildcard |
 | WS-08 | **待开始；结构治理后续 3** | 稳定 Host primitives 后拆分 Host/Studio/CLI composition package，不改变 Runtime/Camera/Capture authority | public contracts 稳定且相关 `WS-05B/C` debt 已清 / 无 | CLI snapshots、readiness/shutdown lifecycle、build graph、Studio E2E |
-| M8-S1 | 下一主线 | 首个 `mountedOn` 人—滑板关系切片 | G19 已完成 | Relationship/Action/Event/Receipt/Capture 端到端一致 |
+| M8-S1 | 下一主线；设计已冻结 | 首个 `mountedOn` 人—滑板关系切片；[专项设计](superpowers/specs/2026-08-26-m8-s1-mounted-on-skateboard-design.md)与[实施计划](superpowers/plans/2026-08-26-m8-s1-mounted-on-skateboard-implementation-plan.md)已完成 | G19 已完成 | Relationship/Action/Event/Receipt/Capture 端到端一致 |
 
 结构治理固定按 `WS-07B → WS-05B/C → WS-08` 推荐；`M8-S1` 仍是产品能力主线，两条 lane 不得
 因表格相邻而被解释为可以共享 owner 或跳过各自依赖。上述 WS 项的范围、延期理由、ownership、
@@ -876,7 +880,11 @@ S1b Golden、
    remediation，并由最新 `main` 集成门禁以及 GLM 5.3/zcode、Cursor FINAL GO 重新关闭。
    H1/H2/H3、动态平台、
    NPC/public `goTo`、车辆等能力继续由后续里程碑拥有；
-6. **M6：在 Placement + Take + Validation 闭环上接入实验 Video Model Adapter**；
+6. **M6：在 Placement + Take + Validation 闭环上接入实验 Video Model Adapter**：
+   [专项设计](superpowers/specs/2026-08-26-m6-video-model-adapter-design.md)与
+   [实施计划](superpowers/plans/2026-08-26-m6-video-model-adapter-implementation-plan.md)已冻结
+   provider-neutral 边界、passed Capture/Validation admission、Seedance 首适配器、
+   exactly-once submission、输出 conformance 与一致性报告；当前是设计完成，未标记实现完成；
 7. **M7（Ground/Air 首切片已完成）：继续扩展 P1.5 Control Feel/Physics Medium/State
    Resolver**：首条 Ground/Air 切片的
    [实施计划](superpowers/plans/2026-08-21-p15-control-feel-state-resolver.md) 已实施、
@@ -889,7 +897,8 @@ S1b Golden、
 8. **M8：完成 Canonical World State + Typed Relationship 人—滑板窄可视切片**：G19-2/G19-4
    已交付 Canonical Gameplay 合同、provider-neutral RuntimeHost staging 和 WorldPackage membership；
    G19-6 至 G19-8 已完成并通过 Final GO，下一步按
-   [专项设计](superpowers/specs/2026-08-22-canonical-runtime-state-and-semantic-projection-design.md)
+   [M8-S1 专项设计](superpowers/specs/2026-08-26-m8-s1-mounted-on-skateboard-design.md)与
+   [实施计划](superpowers/plans/2026-08-26-m8-s1-mounted-on-skateboard-implementation-plan.md)
    沿用已冻结的 World/View/Runtime Status/Transition 四类投影，再实现 `mountedOn` 权威关系、
    `supportedBy` 派生事实、Mount/Dismount Action、Receipt/Event 与 Capture 对齐；在这条
    纵向切片稳定前，不继续向 `SubjectRuntimeStateV3` 追加字段，也不先铺开更多人物动作；

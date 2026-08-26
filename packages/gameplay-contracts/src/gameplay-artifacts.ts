@@ -49,8 +49,16 @@ export interface GameplayActionDefinitionV1 {
   readonly contentHash: Sha256HashV1;
   readonly executionMode: "exclusive-per-subject";
   readonly completion:
+    | Readonly<{ mode: "immediate" }>
     | Readonly<{ mode: "explicit-cancel" }>
     | Readonly<{ mode: "fixed-duration"; durationTicks: number }>;
+  readonly effect:
+    | Readonly<{ mode: "state-only" }>
+    | Readonly<{
+        mode: "trusted";
+        gameplayActionEffectRef: string;
+        gameplayActionEffectHash: Sha256HashV1;
+      }>;
   readonly isMovementInputBlocked: boolean;
   readonly allowedActorEntityDefinitionRefs: readonly string[];
   readonly requiredActorCapabilityRefs: readonly string[];
@@ -416,6 +424,7 @@ function parseGameplayActionDefinitionBody(
     "resourceRef",
     "executionMode",
     "completion",
+    "effect",
     "isMovementInputBlocked",
     "allowedActorEntityDefinitionRefs",
     "requiredActorCapabilityRefs",
@@ -433,6 +442,11 @@ function parseGameplayActionDefinitionBody(
   if (isNil(completionRecord)) invalid(schemaName);
   let completion: GameplayActionDefinitionV1["completion"];
   if (
+    completionRecord.mode === "immediate" &&
+    hasExactKeys(completionRecord, ["mode"])
+  ) {
+    completion = { mode: "immediate" };
+  } else if (
     completionRecord.mode === "explicit-cancel" &&
     hasExactKeys(completionRecord, ["mode"])
   ) {
@@ -445,6 +459,33 @@ function parseGameplayActionDefinitionBody(
     completion = {
       mode: "fixed-duration",
       durationTicks: completionRecord.durationTicks,
+    };
+  } else {
+    return invalid(schemaName);
+  }
+
+  const effectRecord = snapshotDataRecord(record.effect);
+  if (isNil(effectRecord)) invalid(schemaName);
+  let effect: GameplayActionDefinitionV1["effect"];
+  if (
+    effectRecord.mode === "state-only" &&
+    hasExactKeys(effectRecord, ["mode"])
+  ) {
+    effect = { mode: "state-only" };
+  } else if (
+    effectRecord.mode === "trusted" &&
+    hasExactKeys(effectRecord, [
+      "mode",
+      "gameplayActionEffectRef",
+      "gameplayActionEffectHash",
+    ]) &&
+    isNonEmptyString(effectRecord.gameplayActionEffectRef) &&
+    isSha256(effectRecord.gameplayActionEffectHash)
+  ) {
+    effect = {
+      mode: "trusted",
+      gameplayActionEffectRef: effectRecord.gameplayActionEffectRef,
+      gameplayActionEffectHash: effectRecord.gameplayActionEffectHash,
     };
   } else {
     return invalid(schemaName);
@@ -481,6 +522,7 @@ function parseGameplayActionDefinitionBody(
     resourceRef: record.resourceRef,
     executionMode: "exclusive-per-subject",
     completion,
+    effect,
     isMovementInputBlocked: record.isMovementInputBlocked,
     allowedActorEntityDefinitionRefs: canonicalStringSet(
       record.allowedActorEntityDefinitionRefs,
