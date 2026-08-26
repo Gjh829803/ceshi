@@ -616,12 +616,15 @@ P16-B1 证据：Playground 仅在 `runtimeRoute.mode === "authoring"` 且 loader
 P16-F1 证据：`examples/authoring/p16-add-house` 与 `p16-terrain-replace`；journal 对抗覆盖
 Commit 后过期、quarantine、pin vs 并发 Apply、未 pin GC、prepare 失败、terrain Dry Run。
 Host↔RuntimeHost 集成覆盖 stale expectation 后成功 Full Reload（新 WorldSession、tick 0）。
-Chromium 安装测试证明 Edit 面隔离；页面上真实加房屋并 Full Reload 的 rendered 证据尚未作为
-独立 Browser verifier 关闭。这不是完整 P1.4，也不是 Incremental。
+Chromium 安装测试证明 Edit 面隔离。页面级
+`worldkit-authoring-edit-add-house.browser.test.ts` 已在 `?authoring=1` 上
+`publish-runtime` add-house：合法 PNG before ≠ after，`inspectFeatures()` 含
+`house-north`。这不是完整 P1.4，也不是 Incremental，也不是人工操作验收。
 
-P16-G1 证据：候选 `63d530b` 上 `pnpm typecheck`、`pnpm test`（233 files / 2646 tests，
+P16-G1 证据：候选 `8ca8503` 上 `pnpm typecheck`、`pnpm test`（234 files / 2651 tests，
 含 census 与 workspace boundary 52）、`pnpm build` 通过。G1 过程中关闭了 F1 deep import、
-Builder `allowedOverridePaths` 模板、Take 身份哈希和 self-check bundle 过期。完成记录：
+Builder `allowedOverridePaths` 模板、Take 身份哈希、self-check bundle 过期，以及页面级
+add-house rendered verifier。完成记录：
 [`2026-08-26-p16-full-reload-g1-completion.md`](reviews/2026-08-26-p16-full-reload-g1-completion.md)。
 这不是生产可用声明。规格头保持 *implementation not started*。
 
@@ -661,7 +664,8 @@ Builder `allowedOverridePaths` 模板、Take 身份哈希和 self-check bundle �
 - [ ] Conformance 覆盖 Schema 规模预算、Provider 降级、非法 Override、过期 Base Hash、
   重复 Request、Replacement Runtime 准备失败时旧世界仍可运行、Full Reload 状态重置、
   Incremental 未影响实体状态保留、部分失败回滚、增量/全量结果等价和 Migration Golden
-  Fixture。双 Provider round-trip 与页面级加房屋 rendered verifier 仍未关闭。
+  Fixture。双 Provider round-trip 仍未关闭。页面级加房屋 Chromium verifier 已关
+  first-slice rendered，不是生产编辑器。
 
 完成标准：至少两个结构化输出 Provider 使用同一 Canonical 字段生成有效世界；一次 AI
 修复通过 WorldChangeSet 原子应用并可重放，Adapter、CLI 和 Browser 不产生同义字段或

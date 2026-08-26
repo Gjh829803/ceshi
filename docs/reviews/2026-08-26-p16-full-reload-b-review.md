@@ -160,16 +160,19 @@
   磁盘 WAL 切片。
 - 复核：不假装已有完整 cleanup worker。
 
-### [P2] [D6] 页面级加房屋 Full Reload 的 rendered 证据未关闭
+### [P2] [D6] 页面级加房屋 Full Reload 的 rendered 证据已关 first-slice
 
-- 证据：Chromium 测试覆盖 Edit 安装/缺席与 V5 39 keys。Host↔RuntimeHost 集成用
-  fake Gameplay port 证明新 WorldSession / tick 0。没有独立 Browser verifier
-  在 `?authoring=1` 上 apply add-house 并截图。
+- 证据：`worldkit-authoring-edit-add-house.browser.test.ts` 用
+  `startWorldkitServer(basic-world.json)` 打开 `?authoring=1`，按 Agent 合同
+  用 stale Dry Run 读 `currentAuthoringSpecHash`，再新 ChangeSet Dry Run /
+  `publish-runtime`。Receipt 为 committed + `full-reload`；V5 与页面 canvas
+  PNG before ≠ after；`inspectFeatures()` 含 `house-north`。V5 仍 exact 39 keys。
+- 实现配套：Playground adopt 可见 canvas / inspections；`resize()` 后补一帧；
+  publication ready gate 不要求 possession，swap 后 Playground bind。
 - 期望：F1 五层证据分层，不互相冒充。
-- 影响：不能用 unit 宣称「页面上已经看见新房子」。
-- 建议：G1 全量门禁后，若要声称 rendered，再补 authoring-only/publish-runtime
-  的 Chromium 用例。
-- 复核：文档已分层。
+- 影响：可以声称 Chromium verifier 看见了新房子；不能声称生产编辑器或人工
+  playtest。
+- 复核：`8ca8503` 上门禁 234 / 2651。不是 Incremental，也不是完整 P1.4。
 
 ## 4. 已查无问题
 
