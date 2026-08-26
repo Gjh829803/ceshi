@@ -1285,15 +1285,24 @@ Crash recovery 使用是否存在 durable commit record，而不是只看进程�
 
 ### 13.3 Base mismatch 与 Rebase
 
-`baseAuthoringSpecHash` 不匹配返回：
+`baseAuthoringSpecHash` 不是当前 revision head 时，返回 Rejected Receipt，并且只使用
+§10.3 已经关闭的字段：
 
-- `currentAuthoringSpecHash`；
-- ChangeSet Target 与 Base→Current Diff 的 `conflictingIds`；
-- 非冲突 `affectedIds`；
-- `rebaseRequired: true`。
+- `failurePhase: "base-check"`；
+- Diagnostic `code` 必须是 `WORLD_CHANGE_BASE_AUTHORING_SPEC_MISMATCH`；
+- Diagnostic `details` 必须是关闭的 `hash-mismatch`：`expectedHash` 是 ChangeSet 声明的
+  Base，`actualHash` 是当前 revision head；
+- Receipt 携带 `currentAuthoringSpecHash`；
+- `conflictingIds` 给出调用方需要重规划的 Target ID。首切片用 ChangeSet Operation
+  Target 作为保守上界；完整 Base→Current 文档 diff 只有在 Host 同时持有 Base 文档字节
+  时才能计算，不得伪造一份看起来更精确的 diff。
 
-V1 不自动把 ChangeSet 改投当前 Head，也不做 last-write-wins。Agent 读取 Current AuthoringSpec、
-重新规划 Preconditions 并创建新的 ChangeSet ID。
+V1 Receipt 关闭 union **没有** `rebaseRequired` 字段。需要 rebase 的唯一公开信号就是上述
+Diagnostic code；不要再增加与它 1:1 的同义布尔，也不要把该词写进 Diagnostic `details`。
+
+V1 不自动把 ChangeSet 改投当前 Head，也不做 last-write-wins。Agent 读取 Current
+AuthoringSpec（以 `currentAuthoringSpecHash` 为准），重新规划 Preconditions，并创建
+**新的** ChangeSet ID 与 Request ID。
 
 ## 14. Full Reload Runtime Structural Publication
 
@@ -2026,7 +2035,7 @@ live Request，客户端必须保留 Request ID 并使用 `change receipt`/Recei
 | `WORLD_CHANGE_SET_ID_CONFLICT` | 同一 ChangeSet ID 携带不同 Hash |
 | `WORLD_CHANGE_REQUEST_ID_CONFLICT` | 同一 Request ID 携带不同 Request/Policy Hash |
 | `WORLD_CHANGE_ADMISSION_BUDGET_EXCEEDED` | ChangeSet、并发 Request 或 Candidate 留存超过 Host workload budget |
-| `WORLD_CHANGE_BASE_AUTHORING_SPEC_MISMATCH` | Base Hash 不是当前 revision head |
+| `WORLD_CHANGE_BASE_AUTHORING_SPEC_MISMATCH` | Base Hash 不是当前 revision head。Agent 读取 `currentAuthoringSpecHash` 与 Current AuthoringSpec，新建 ChangeSet ID / Request ID；不要寻找 `rebaseRequired` 字段 |
 | `WORLD_CHANGE_PRECONDITION_FAILED` | 任一 Precondition 失败 |
 | `WORLD_CHANGE_TARGET_CONFLICT` | 同一 ChangeSet 多次非交换写同一 Target |
 | `WORLD_CHANGE_REFERENCE_DANGLING` | Candidate 最终存在悬空引用 |

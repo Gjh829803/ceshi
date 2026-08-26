@@ -326,6 +326,10 @@ pnpm worldkit change apply <world.json> --change-set <change-set.json> \
 不会 Full Reload 正在运行的页面。`publish-runtime` 只通过受信 Host / Authoring 页
 Edit API。P1.6 首切片不是生产可用，也不表示完整 P1.4 WorldPackage 已交付。
 
+看到 `WORLD_CHANGE_BASE_AUTHORING_SPEC_MISMATCH` 时：读取 Receipt 的
+`currentAuthoringSpecHash`，对当前 Authoring 重新规划，并换新的 ChangeSet ID。
+不要寻找 `rebaseRequired`，也不要复用旧 ChangeSet ID 去“套”新 Head。
+
 如果切换分支或依赖后浏览器
 出现 `504 Outdated Optimize Dep`，停止旧服务后只执行一次：
 

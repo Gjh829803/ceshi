@@ -446,6 +446,19 @@ P1.6 首切片只证明 Full Reload；Incremental Hot Apply、完整 P1.4 Packag
 可用性都还没交付。权威合同见
 [P1.6 专项规格](superpowers/specs/2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md)。
 
+Agent 读 Receipt 时按关闭字段分支，不要发明同义字段：
+
+- `WORLD_CHANGE_BASE_AUTHORING_SPEC_MISMATCH`：读 `currentAuthoringSpecHash`，拉取
+  Current AuthoringSpec，重新规划 Preconditions，创建**新的** ChangeSet ID 和
+  Request ID。Receipt **没有** `rebaseRequired`。`conflictingIds` 是 ChangeSet
+  打算改写的 Target，不是完整 Base→Current 文档 diff。
+- `getWorldChangeReceipt` 在 missing / pending 时抛 Host 本地错误
+  （`WORLD_CHANGE_RECEIPT_MISSING` / `PENDING`），这些码不在封闭 Diagnostic 表里。
+  终态才返回 Receipt。
+- `WORLD_CHANGE_CANDIDATE_INVALID` 且 `failurePhase: "publication-commit"` 表示
+  publication commit 失败，不是 Candidate 编译失败。先看 `failurePhase`，不要只看
+  code。
+
 固定输入使用 `move-forward / move-backward / move-left / move-right / jump / run`
 和明确 tick 数。控制权通过 `executeGameplayCommand` 提交关闭的 `control.bind` /
 `control.release` 命令，并用 `expectedPossession` 做原子比较；Runtime 不从启动候选或

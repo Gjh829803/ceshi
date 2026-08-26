@@ -627,7 +627,8 @@ Chromium 安装测试证明 Edit 面隔离；页面上真实加房屋并 Full Re
   Override 仍不能修改版本/Hash、权限、Provider 类型或未开放 Collider/Socket 内部结构。
 - [x] 冻结 `WorldChangeSet`/`WorldChangeReceipt`：稳定 ID、`baseAuthoringSpecHash`、
   Precondition、Dry Run、原子提交、幂等重试。增量/全量编译等价性留给 Incremental 切片。
-  不使用数组位置驱动的通用 Patch 作为生产协议。
+  不使用数组位置驱动的通用 Patch 作为生产协议。`WORLD_CHANGE_BASE_AUTHORING_SPEC_MISMATCH`
+  是 rebase 信号；Receipt 关闭 union 没有 `rebaseRequired`。
 - [x] 明确两条写入平面：已有实体状态走固定 Tick Gameplay Command；结构修改只走
   `WorldChangeSet`。Browser V5 与 Authoring/Edit 分成两个 window 对象。
 - [x] 第一条生产切片采用 Full Reload：隔离 Candidate 完成 Apply、完整

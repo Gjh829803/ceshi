@@ -10,7 +10,8 @@
   [`2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md`](../superpowers/specs/2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md)。
   规格文档状态行仍为 *Detailed design；implementation not started*；那是文档元数据，
   不以它代替 Backlog 的 first-slice 完成口径，也不把它改成 Implemented。
-- 审查基线：修复前 HEAD `2f2bacc`；本记录覆盖随后的 recover 终态保护与 F1 断言修正。
+- 审查基线：修复前 HEAD `2f2bacc`；本记录覆盖随后的 recover 终态保护、F1 断言修正，
+  以及 `rebaseRequired` 不进 A0 的裁定。
 - Diff 基线：`origin/main` merge-base `021feb5`。
 - 当前安装依赖：Babylon.js `9.21.2`、Havok `1.3.14`（`package.json`）。
 - 引擎语义：本次不以 Babylon/Havok 坐标、Controller 或 dispose 源码行为作为
@@ -91,17 +92,18 @@
   交集）。本切片不半接一个没有 Lock 的 path-only 检查，避免假安全感。
 - 复核：已确认 Host 无调用。文档/Backlog 已标明。
 
-### [P2] [D3] `rebaseRequired` 与 base-mismatch `conflictingIds` 未按 §13.3 全文落地
+### [P2] [D3] `rebaseRequired` 不进 A0 — 已按设计原则裁定
 
-- 证据：§13.3 要求 `rebaseRequired: true`、Base→Current diff 的 `conflictingIds`、
-  非冲突 `affectedIds`。§10.3 Receipt 关闭 union **没有** `rebaseRequired`。
-  实现返回 `WORLD_CHANGE_BASE_AUTHORING_SPEC_MISMATCH` + `currentAuthoringSpecHash`，
-  `conflictingIds` 放入全部 operation target。
-- 期望：不自动 rebase；Agent 读当前 Authoring 后换新 ChangeSet ID。
-- 影响：Agent 不能靠 `rebaseRequired` 字段分支；应按 diagnostic code 重规划。
-- 建议：保持 Receipt 关闭 union。入门文档写：看到
-  `WORLD_CHANGE_BASE_AUTHORING_SPEC_MISMATCH` 就读当前 hash，新建 ChangeSet。
-- 复核：不新增未 parse 字段。
+- 证据：旧 §13.3 散文写了 `rebaseRequired: true`，但 §10.3 Receipt 关闭 union
+  **没有**该字段。实现返回 `WORLD_CHANGE_BASE_AUTHORING_SPEC_MISMATCH` +
+  `currentAuthoringSpecHash`，`conflictingIds` 放入 ChangeSet Operation Target。
+- 裁定：不把 `rebaseRequired` 加进 A0 DTO / parser / Receipt。它与上述 Diagnostic
+  code 1:1 同义，违反「一个概念一个词」和「用关闭判别器，不用重叠可选布尔」。
+  完整 Base→Current 文档 diff 需要 Base 文档字节；首切片没有这份字节时不得伪造
+  更精确的 diff。
+- Agent 合同：看到该 code 就读 `currentAuthoringSpecHash`，新建 ChangeSet ID /
+  Request ID。Parser 拒绝 Receipt 上的 `rebaseRequired`。
+- 文档：§13.3 已改成与 §10.3 同一套字段；README / Quickstart 写明处理步骤。
 
 ### [P2] [D2] Host query missing/pending 抛 host-local 错误码
 

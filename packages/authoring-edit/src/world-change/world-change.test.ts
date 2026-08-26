@@ -635,6 +635,8 @@ describe("P16-C1 WorldChangeSet apply", () => {
         details: { kind: "hash-mismatch" },
       }],
     });
+    expect(result).not.toHaveProperty("rebaseRequired");
+    expect(result.conflictingIds?.nodeEntityIds).toEqual(["house-north"]);
     expect(base.nodes.find((item) => item.id === "house-north")).toBeUndefined();
   });
 

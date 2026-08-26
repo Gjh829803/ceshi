@@ -460,6 +460,50 @@ describe("P16-A0 Receipt and Diagnostic parser", () => {
     )).toThrow(/WorldChangeReceiptV1/);
   });
 
+  it("accepts base-mismatch fields and rejects rebaseRequired on Receipt", () => {
+    const baseMismatch = {
+      ...receiptBase,
+      status: "rejected",
+      mode: "validate",
+      publicationMode: "none",
+      failurePhase: "base-check",
+      currentAuthoringSpecHash: HASH_E,
+      conflictingIds: {
+        resourceIds: [],
+        nodeEntityIds: ["house-north"],
+        relationshipIds: [],
+        spatialFeatureIds: [],
+        constraintIds: [],
+        overrideIds: [],
+      },
+      diagnostics: [
+        {
+          severity: "error",
+          code: "WORLD_CHANGE_BASE_AUTHORING_SPEC_MISMATCH",
+          instancePath: "/baseAuthoringSpecHash",
+          message: "ChangeSet baseAuthoringSpecHash does not match the provided AuthoringSpec.",
+          details: {
+            kind: "hash-mismatch",
+            expectedHash: HASH_A,
+            actualHash: HASH_E,
+          },
+        },
+      ],
+    };
+    const parsed = parseWorldChangeReceiptV1(baseMismatch);
+    expect(parsed.status).toBe("rejected");
+    if (parsed.status === "rejected") {
+      expect(parsed.failurePhase).toBe("base-check");
+      expect(parsed.currentAuthoringSpecHash).toBe(HASH_E);
+      expect(parsed.conflictingIds?.nodeEntityIds).toEqual(["house-north"]);
+      expect(parsed).not.toHaveProperty("rebaseRequired");
+    }
+    expect(() => parseWorldChangeReceiptV1({
+      ...baseMismatch,
+      rebaseRequired: true,
+    })).toThrow(/WorldChangeReceiptV1/);
+  });
+
   it("rejects unknown Diagnostic codes, aliases, and open details", () => {
     expect(() => parseWorldChangeDiagnosticV1({
       severity: "error",
