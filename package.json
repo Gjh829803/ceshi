@@ -21,7 +21,6 @@
     "test:studio": "pnpm --filter @whitebox-world/studio test",
     "test:independent": "tsx scripts/run-independent-test-gate.ts",
     "test:independent:node": "tsx scripts/run-independent-test-gate.ts --lane node",
-    "test:independent:python": "tsx scripts/run-independent-test-gate.ts --lane python",
     "test:independent:site": "tsx scripts/run-independent-test-gate.ts --lane site",
     "dev:architecture": "pnpm --filter @whitebox-world/architecture dev",
     "build": "pnpm --filter @whitebox-world/playground build",

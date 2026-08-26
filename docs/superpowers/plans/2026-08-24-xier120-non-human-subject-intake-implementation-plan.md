@@ -342,9 +342,9 @@
 
   Apply the full-dimension and runtime checklists. Reproduce and fix confirmed findings with RED tests, then rerun affected and full gates.
 
-- [ ] **Step 4: Run independent Cursor final review when available**
+- [ ] **Step 4: Run the host final review**
 
-  Use a fresh final review ID, keep Cursor read-only, classify each P0-P3 finding, and independently reproduce any confirmed issue before editing.
+  Apply the full-dimension review protocol, classify each P0-P3 finding, and reproduce any confirmed issue before editing.
 
 - [ ] **Step 5: Merge into `main`, push, and verify branch state**
 

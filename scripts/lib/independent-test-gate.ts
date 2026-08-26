@@ -1,7 +1,7 @@
 import { readdir } from "node:fs/promises";
 import path from "node:path";
 
-export type IndependentTestLaneV1 = "node" | "python" | "site";
+export type IndependentTestLaneV1 = "node" | "site";
 
 export interface IndependentTestManifestEntryV1 {
   readonly path: string;
@@ -10,13 +10,11 @@ export interface IndependentTestManifestEntryV1 {
 
 export interface IndependentTestDiscoveryV1 {
   readonly node: readonly string[];
-  readonly python: readonly string[];
   readonly site: readonly string[];
 }
 
 export interface IndependentTestGateReportV1 {
   readonly nodeTestFiles: readonly string[];
-  readonly pythonTestFiles: readonly string[];
   readonly siteTestFiles: readonly string[];
 }
 
@@ -30,14 +28,6 @@ export interface IndependentTestCommandV1 {
 
 export const INDEPENDENT_TEST_MANIFEST_V1: readonly IndependentTestManifestEntryV1[] =
   Object.freeze([
-    {
-      path: ".agents/skills/reviewing-with-cursor/scripts/test_cursor_review_session.py",
-      lane: "python",
-    },
-    {
-      path: ".agents/skills/reviewing-with-cursor/test_skill_contract.py",
-      lane: "python",
-    },
     { path: "scripts/image-delivery.test.mjs", lane: "node" },
     { path: "scripts/local-codex-task.test.mjs", lane: "node" },
     { path: "scripts/lwdp-codex-profile.test.mjs", lane: "node" },
@@ -90,7 +80,6 @@ export function evaluateIndependentTestGateV1(input: {
   readonly manifest: readonly IndependentTestManifestEntryV1[];
 }): IndependentTestGateReportV1 {
   assertStrictlySorted("node discovery", input.discoveredByLane.node);
-  assertStrictlySorted("python discovery", input.discoveredByLane.python);
   assertStrictlySorted("site discovery", input.discoveredByLane.site);
   assertStrictlySorted(
     "independent manifest",
@@ -101,7 +90,7 @@ export function evaluateIndependentTestGateV1(input: {
     input.manifest.map((entry) => [entry.path, entry] as const),
   );
   const discoveredLaneByPath = new Map<string, IndependentTestLaneV1>();
-  for (const lane of ["node", "python", "site"] as const) {
+  for (const lane of ["node", "site"] as const) {
     for (const testPath of input.discoveredByLane[lane]) {
       const previousLane = discoveredLaneByPath.get(testPath);
       if (previousLane !== undefined) fail("DUPLICATE", testPath);
@@ -119,7 +108,6 @@ export function evaluateIndependentTestGateV1(input: {
 
   return Object.freeze({
     nodeTestFiles: frozenPaths(input.discoveredByLane.node),
-    pythonTestFiles: frozenPaths(input.discoveredByLane.python),
     siteTestFiles: frozenPaths(input.discoveredByLane.site),
   });
 }
@@ -140,21 +128,11 @@ async function discoverMatchingFiles(input: {
 export async function discoverIndependentTestFilesV1(
   repositoryRoot: string,
 ): Promise<IndependentTestDiscoveryV1> {
-  const [node, cursorRootPython, cursorScriptPython, site] = await Promise.all([
+  const [node, site] = await Promise.all([
     discoverMatchingFiles({
       repositoryRoot,
       directory: "scripts",
       matches: (filename) => filename.endsWith(".test.mjs"),
-    }),
-    discoverMatchingFiles({
-      repositoryRoot,
-      directory: ".agents/skills/reviewing-with-cursor",
-      matches: (filename) => filename.startsWith("test_") && filename.endsWith(".py"),
-    }),
-    discoverMatchingFiles({
-      repositoryRoot,
-      directory: ".agents/skills/reviewing-with-cursor/scripts",
-      matches: (filename) => filename.startsWith("test_") && filename.endsWith(".py"),
     }),
     discoverMatchingFiles({
       repositoryRoot,
@@ -164,7 +142,6 @@ export async function discoverIndependentTestFilesV1(
   ]);
   return Object.freeze({
     node: frozenPaths(node),
-    python: frozenPaths([...cursorRootPython, ...cursorScriptPython].sort()),
     site: frozenPaths(site),
   });
 }
@@ -176,14 +153,12 @@ export function parseIndependentTestSelectionV1(
   if (
     arguments_.length === 2 &&
     arguments_[0] === "--lane" &&
-    (arguments_[1] === "node" ||
-      arguments_[1] === "python" ||
-      arguments_[1] === "site")
+    (arguments_[1] === "node" || arguments_[1] === "site")
   ) {
     return arguments_[1];
   }
   throw new Error(
-    "INDEPENDENT_TEST_ARGUMENT_INVALID: expected no arguments or '--lane node|python|site'.",
+    "INDEPENDENT_TEST_ARGUMENT_INVALID: expected no arguments or '--lane node|site'.",
   );
 }
 
@@ -197,11 +172,6 @@ export function createIndependentTestCommandsV1(
       command: process.execPath,
       arguments: ["--test", ...report.nodeTestFiles],
     },
-    ...report.pythonTestFiles.map((testPath) => ({
-      lane: "python" as const,
-      command: "python3",
-      arguments: [testPath],
-    })),
     {
       lane: "site",
       command: "npm",

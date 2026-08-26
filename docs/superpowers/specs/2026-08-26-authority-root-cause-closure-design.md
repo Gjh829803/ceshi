@@ -142,7 +142,7 @@ The HSE-02 wrapper may use one small app-local owned-process helper because supe
 | `WS-04` | Move spawn safety out of testkit | `ARC-00` | `WS-05A`, `ARC-INT` | Terrain Surface algorithm owner | exact diagnostic parity, zero production testkit imports | `parallel-safe` |
 | `WS-07A` | Source-generated Planner checker with positive/negative parity | `ARC-00`, `HSE-01` | `ARC-INT` | Planner source/generator/bundle; main agent integrates package scripts | source/bundle byte reports, stale bundle negative | `sequential` |
 | `WS-05A` | Read-only workspace boundary floor and exact debt ledger | `WS-04` | `ARC-INT` | Verifier and debt manifest only | six negative graph cases, stale debt, current tree check | `sequential` |
-| `ARC-INT` | Final semantic integration, docs, gates, independent review and main push | all current tasks | — | Main agent owns merge/release evidence | relevant lanes once, mutation audit, Cursor read-only review | `main-agent-only` |
+| `ARC-INT` | Final semantic integration, docs, gates, host review and main push | all current tasks | — | Main agent owns merge/release evidence | relevant lanes once, mutation audit, full-dimension host review | `main-agent-only` |
 
 Architecture, cross-cutting names, generated artifacts, final integration, and main push remain main-agent-owned. No worker completion substitutes for integrated-tree evidence.
 
@@ -152,7 +152,7 @@ Every production fix begins with an observed failing reproducer. After each chan
 
 - generated/check-only gates;
 - `pnpm test:studio`;
-- `pnpm test:independent` when Node/Python/Site manifests change;
+- `pnpm test:independent` when Node/Site manifests change;
 - `pnpm typecheck`;
 - root `pnpm test` once;
 - `pnpm build` once;

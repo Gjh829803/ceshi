@@ -9,7 +9,7 @@
 - 独立审查范围：`git diff --stat origin/main...HEAD`（219 files）。`5de4ee7` 仅补强 Task 10 的 adversarial 门禁；独立复跑完整门禁后，`4495d8c` 额外收紧 Vitest 默认 worker 预算，不改 Graph/Runtime 权威路径或任何产品 timeout。
 - 安装版本（lockfile / `package.json`，非训练记忆）：Babylon.js **9.21.2**，`@babylonjs/havok` **1.3.14**，`recast-navigation` **0.43.1**（含仓库 pinned patch）。
 - 证据层级：`static-read` + `automated-contract`。R1 生产门禁跑的是 Babylon `NullEngine` + Havok，**没有** rendered-visual 截图，也**没有** manual-interaction 手感验收。不得把本审查说成控制手感或像素构图已生产验收。
-- 阶段 Cursor CR（Codex 交接里的 `reviewing-with-cursor`）保持 `INTERRUPTED/TIMEOUT`，不当作 `GO`。本文件是 Task 10 要求的全维度 + Runtime 终审记录。
+- 当时的阶段 Cursor CR 保持 `INTERRUPTED/TIMEOUT`，不当作 `GO`；对应仓库 helper 后来已移除。本文件是 Task 10 要求的全维度 + Runtime 终审记录。
 
 ### 权威状态表
 

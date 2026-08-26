@@ -425,7 +425,7 @@ pnpm vitest run packages/authoring/src/authoring-v4.test.ts packages/authoring/s
 pnpm typecheck
 ```
 
-Expected: PASS. Then run self-review plus skill-managed Cursor code and fresh final reviews. Task 3 is not complete from focused tests alone.
+Expected: PASS. Then run the host full-dimension code and final reviews. Task 3 is not complete from focused tests alone.
 
 ---
 
@@ -547,7 +547,7 @@ pnpm typecheck
 pnpm verify:route-r0-contract
 ```
 
-Expected: PASS, including the unchanged legacy provider golden, new source-area golden, repeated construction/disposal, abort, and throwing cleanup. Then run host self-review plus one skill-managed Cursor Grok 4.6 Extra High code/final review for the complete Task 4 range; do not micro-review each helper.
+Expected: PASS, including the unchanged legacy provider golden, new source-area golden, repeated construction/disposal, abort, and throwing cleanup. Then run one host full-dimension code/final review for the complete Task 4 range; do not micro-review each helper.
 
 Completed evidence: focused 19 files / 176 tests, full 120 files / 1043 tests, Typecheck,
 `verify:route-r0-contract`, frozen-lockfile install, Build, and diff check all pass. Cursor review

@@ -23,7 +23,6 @@ describe("evaluateIndependentTestGateV1", () => {
       name: "rejects an unclassified discovered test",
       discoveredByLane: {
         node: ["scripts/a.test.mjs", "scripts/b.test.mjs"],
-        python: [],
         site: ["sites/site/tests/new.test.mjs"],
       },
       manifest: MANIFEST,
@@ -31,13 +30,13 @@ describe("evaluateIndependentTestGateV1", () => {
     },
     {
       name: "rejects a stale manifest entry",
-      discoveredByLane: { node: ["scripts/a.test.mjs"], python: [], site: [] },
+      discoveredByLane: { node: ["scripts/a.test.mjs"], site: [] },
       manifest: MANIFEST,
       error: /STALE: scripts\/b\.test\.mjs/,
     },
     {
       name: "rejects duplicate manifest entries",
-      discoveredByLane: { node: ["scripts/a.test.mjs"], python: [], site: [] },
+      discoveredByLane: { node: ["scripts/a.test.mjs"], site: [] },
       manifest: [
         { path: "scripts/a.test.mjs", lane: "node" },
         { path: "scripts/a.test.mjs", lane: "node" },
@@ -46,14 +45,14 @@ describe("evaluateIndependentTestGateV1", () => {
     },
     {
       name: "rejects paths outside the repository",
-      discoveredByLane: { node: ["../outside.test.mjs"], python: [], site: [] },
+      discoveredByLane: { node: ["../outside.test.mjs"], site: [] },
       manifest: [{ path: "../outside.test.mjs", lane: "node" }],
       error: /OUTSIDE_ROOT: \.\.\/outside\.test\.mjs/,
     },
     {
       name: "rejects lane drift",
-      discoveredByLane: { node: [], python: ["scripts/a.test.mjs"], site: [] },
-      manifest: [{ path: "scripts/a.test.mjs", lane: "node" }],
+      discoveredByLane: { node: ["scripts/a.test.mjs"], site: [] },
+      manifest: [{ path: "scripts/a.test.mjs", lane: "site" }],
       error: /LANE_DRIFT: scripts\/a\.test\.mjs/,
     },
   ] as const)("$name", ({ discoveredByLane, manifest, error }) => {
@@ -67,25 +66,22 @@ describe("evaluateIndependentTestGateV1", () => {
       evaluateIndependentTestGateV1({
         discoveredByLane: {
           node: ["scripts/a.test.mjs"],
-          python: ["tools/test_tool.py"],
           site: ["sites/site/tests/rendered.test.mjs"],
         },
         manifest: [
           { path: "scripts/a.test.mjs", lane: "node" },
           { path: "sites/site/tests/rendered.test.mjs", lane: "site" },
-          { path: "tools/test_tool.py", lane: "python" },
         ],
       }),
     ).toEqual({
       nodeTestFiles: ["scripts/a.test.mjs"],
-      pythonTestFiles: ["tools/test_tool.py"],
       siteTestFiles: ["sites/site/tests/rendered.test.mjs"],
     });
   });
 });
 
 describe("independent test repository census", () => {
-  it("discovers every current Node, Python, and Site suite in the manifest", async () => {
+  it("discovers every current Node and Site suite in the manifest", async () => {
     const repositoryRoot = fileURLToPath(new URL("../..", import.meta.url));
     const discoveredByLane = await discoverIndependentTestFilesV1(repositoryRoot);
 
@@ -103,10 +99,6 @@ describe("independent test repository census", () => {
         "scripts/seedance25-media-conformance.test.mjs",
         "scripts/write-lwdp-t2i-manifest.test.mjs",
       ],
-      pythonTestFiles: [
-        ".agents/skills/reviewing-with-cursor/scripts/test_cursor_review_session.py",
-        ".agents/skills/reviewing-with-cursor/test_skill_contract.py",
-      ],
       siteTestFiles: [
         "sites/world-sdk-blueprint/tests/rendered-html.test.mjs",
       ],
@@ -115,22 +107,21 @@ describe("independent test repository census", () => {
 });
 
 describe("independent test runner contract", () => {
-  it("selects all lanes by default and rejects unknown selections", () => {
+  it("selects current lanes and rejects the removed Python lane", () => {
     expect(parseIndependentTestSelectionV1([])).toBe("all");
-    expect(parseIndependentTestSelectionV1(["--lane", "python"])).toBe(
-      "python",
+    expect(() => parseIndependentTestSelectionV1(["--lane", "python"])).toThrow(
+      /INDEPENDENT_TEST_ARGUMENT_INVALID/,
     );
     expect(() => parseIndependentTestSelectionV1(["--lane", "browser"])).toThrow(
       /INDEPENDENT_TEST_ARGUMENT_INVALID/,
     );
   });
 
-  it("runs Node, Python, and Site suites once in dependency order", () => {
+  it("runs Node and Site suites once in dependency order", () => {
     expect(
       createIndependentTestCommandsV1(
         {
           nodeTestFiles: ["scripts/a.test.mjs"],
-          pythonTestFiles: ["tools/test_tool.py"],
           siteTestFiles: ["sites/world-sdk-blueprint/tests/rendered-html.test.mjs"],
         },
         "all",
@@ -142,11 +133,6 @@ describe("independent test runner contract", () => {
         arguments: ["--test", "scripts/a.test.mjs"],
       },
       {
-        lane: "python",
-        command: "python3",
-        arguments: ["tools/test_tool.py"],
-      },
-      {
         lane: "site",
         command: "npm",
         arguments: ["test", "--prefix", "sites/world-sdk-blueprint"],
@@ -154,34 +140,4 @@ describe("independent test runner contract", () => {
     ]);
   });
 
-  it("executes dotted repository Python paths directly instead of importing them as modules", () => {
-    expect(
-      createIndependentTestCommandsV1(
-        {
-          nodeTestFiles: [],
-          pythonTestFiles: [
-            ".agents/skills/reviewing-with-cursor/scripts/test_session.py",
-            ".agents/skills/reviewing-with-cursor/test_contract.py",
-          ],
-          siteTestFiles: [],
-        },
-        "python",
-      ),
-    ).toEqual([
-      {
-        lane: "python",
-        command: "python3",
-        arguments: [
-          ".agents/skills/reviewing-with-cursor/scripts/test_session.py",
-        ],
-      },
-      {
-        lane: "python",
-        command: "python3",
-        arguments: [
-          ".agents/skills/reviewing-with-cursor/test_contract.py",
-        ],
-      },
-    ]);
-  });
 });

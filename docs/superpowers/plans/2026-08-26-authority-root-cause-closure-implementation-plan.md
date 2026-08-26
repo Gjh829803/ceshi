@@ -6,7 +6,7 @@
 
 **Architecture:** Freeze the current-only Hosted visual contract first, then adapt the atomic Preview. Independently close Canonical admission, Registry discovery, Subject vocabulary ownership, Studio process topology, production/test dependency inversion, and Planner generated parity. Finish with a read-only workspace boundary floor and one deduplicated release gate sequence.
 
-**Tech stack:** TypeScript/Vitest/pnpm workspace; Node ESM/`node:test` Studio; generated standalone ESM checkers; Git worktree and read-only Cursor review.
+**Tech stack:** TypeScript/Vitest/pnpm workspace; Node ESM/`node:test` Studio; generated standalone ESM checkers; Git worktree and full-dimension host review.
 
 ---
 
@@ -283,5 +283,5 @@ Test missing direct dependency, private sibling source, production-to-devDepende
 3. Run focused tests invalidated by the final merge/fixes.
 4. On the final unchanged tree run generated checks, boundaries, Studio, independent lane if changed, typecheck, root test once, build once, and only the required Browser/capture verifier.
 5. Record pre/post tracked and untracked fingerprints, `git diff --check`, and branch/upstream state.
-6. Use project-local read-only Cursor completion review; independently reproduce every finding and fix only confirmed defects with a RED first.
+6. Run the full-dimension host completion review; independently reproduce every finding and fix only confirmed defects with a RED first.
 7. Read the finishing-development-branch skill, commit all final truth updates, merge the verified branch into local `main`, push `origin/main`, and verify remote SHA. Do not force-push.

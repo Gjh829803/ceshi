@@ -11,6 +11,7 @@
 - 初次设计冻结分支：`codex/p16-world-change-design`，基于 `origin/main` 创建的隔离 worktree。
 - 初次审查基线 HEAD：`1a3d9ea5e5262732ef42032c75aa6ed7f4c0fb99`。
 - 初次冻结提交：`main@0cc386cf5e0cdcfb7b4496dece4b6640804ee848`。
+- 单一权威 consolidation 基线：`main@0c3cf181f5b109cd2c1c3249d283252bd00b33a9`。
 - 当前安装依赖：Babylon.js `9.21.2`、Havok `1.3.14`、Playwright `1.62.1`。
 - 引擎语义：本文不新增 Babylon/Havok 坐标、碰撞、Controller 或渲染算法断言；本次没有用
   引擎行为作为 finding 依据，因此不需要对安装源码做新的行为探针。
@@ -43,9 +44,9 @@ worktree 创建时按隔离基线要求运行了 root `pnpm test`；其唯一超
 | Authoring document bytes/hash | `@whitebox-world/authoring` + `@whitebox-world/protocol` | ChangeSet CAS、WorldPackage、Reports | 单一；Registry/IR/Package hashes 分名 |
 | ChangeSet/Request identity | `@whitebox-world/authoring-edit` pure contracts | trusted Host journal/CLI/Studio | ChangeSet ID 与 Request ID 分离 |
 | Edit scope/revision head/journal | trusted Host adapter | Candidate pipeline、Receipt query | DTO 不能自授 Scope；Policy 使用 secret-free Hash 进入审计与 Candidate binding |
-| Candidate compile/package/gates | 现有 Authoring/Layout/Compiler/WorldPackage/Validation owners | Host publication | 没有 ChangeSet 私有 compiler；Prepared Candidate 是有期限、无权限含义的 Host lease |
+| Candidate compile/package/gates | 现有 Authoring/Layout/Compiler/WorldPackage/Validation owners | Host publication | 没有 ChangeSet 私有 compiler；Prepared Candidate 是有期限、无权限含义的 Host lease，Apply admission 原子 pin |
 | active Runtime/WorldSession | `RuntimeHost` | Browser V5、Gameplay、Capture | Authoring/Edit 不直接持有 handle |
-| durable publication commit | trusted Host exclusive publication fence | RuntimeHost handle swap、Receipt | Commit transaction 前失败保留旧世界；transaction 后按新 head 恢复 |
+| durable publication commit | trusted Host exclusive publication fence | RuntimeHost handle swap、Receipt | Candidate pin 不替代 fence；Commit 前复验 authorization/CAS，transaction 后按新 head 恢复 |
 | Runtime resource lifetime | RuntimeHost/adapter ownership root | Babylon/Havok/assets | immutable Receipt 只引用 cleanup operation；独立 Cleanup Report + queue 更新状态，可进入 quarantine |
 | simulation time/state | 新 WorldSession fixed Tick | Gameplay/View/Snapshot | Full Reload Tick 0，不隐式迁移旧状态；Incremental 使用默认 disposition + scoped exceptions |
 
@@ -108,33 +109,72 @@ worktree 创建时按隔离基线要求运行了 root `pnpm test`；其唯一超
 7. **Cleanup 只有无限 retry，没有不可自动恢复状态。** Cleanup Report 新增 `quarantined` 和
    attempt count；达到策略上限或发现 ownership corruption 时进入可审计隔离状态，但不改变
    committed Receipt。
+8. **Runtime publication 可以绕过已批准 Candidate。** `publish-runtime` 现强制携带仍有效的
+   `preparedCandidateRef`；只有 `authoring-only` 可以省略 ref 后完整重建。
+9. **Candidate expiry/GC 与 Apply 存在并发空窗。** Apply admission 现于读取 Candidate bytes 前
+   对 durable Request ID 原子 pin Candidate；同 Request 恢复复用 pin，不同 Request 不能共享。
+10. **授权撤销存在 Commit-time TOCTOU。** Host 在 admission 和 durable commit 前两次验证
+    Session、World、Scope、authorization epoch 与 Policy Hash；Commit 前漂移保留旧世界，Commit
+    后撤权不反转已提交事实。
+11. **Rejected Apply Receipt 丢失请求意图。** Rejected Receipt 现为 mode-specific closed union；
+    Apply 分支保留 `requestedOutcome`，所有拒绝分支明确 `publicationMode: "none"`。
 
 上述修正保持 P1.6 scope 不变：没有新增生产实现、Runtime Spawn、Terrain Hot Patch 或普通
 Browser API；只让已经承诺的 V1/未来 Incremental 合同可无歧义实现和运维。
+
+### 3.2 单一权威与使用入口收口
+
+后续复核发现，初次 publication hardening 以规范性 amendment 覆盖核心规格，但 Backlog 仍只把
+核心规格标记为唯一实施权威。这会让实现者从任务入口读到 optional publication Candidate、旧
+Rejected Receipt 和不完整授权流程。现已把 amendment 全部折回核心规格，将 amendment/follow-up
+降为 historical review evidence，并在核心规格 §16.5 增加 Add Subject、Add House、Terrain、
+Dry Run→Apply、失败/幂等重试的端到端示例。Backlog 继续只把核心规格作为实施输入，同时显式
+链接历史发现，避免审查轨迹丢失。
 
 ## 4. 维度覆盖
 
 | 维度 | 状态 | 结论/证据 |
 | --- | --- | --- |
 | D1 定位与需求边界 | 已查 | 状态明确为设计未实现；Runtime Spawn/Incremental 首切片非目标闭合；P1.4 是 Runtime publication 硬依赖 |
-| D2 Schema 与 AI-friendly | 已查 | 当前对象用 `id`、Operation 用 `type`、Request mode 判别、role-qualified IDs/Refs/Hashes、关闭 Diagnostic/Details、无权限 Candidate ref 已核对 |
+| D2 Schema 与 AI-friendly | 已查 | 当前对象用 `id`、Operation 用 `type`、Request mode 判别、role-qualified IDs/Refs/Hashes、关闭 Diagnostic/Details、required publication Candidate 与五组端到端示例已核对 |
 | D3 承诺与事实对拍 | 已查 | Authoring hash、override 常量、RuntimeHost replacement/dispose、Browser 39 keys 均从当前源码复验；规格不宣称实现完成 |
-| D4 单一权威状态 | 已查（Runtime checklist） | Authoring/Edit/Compiler/Runtime/Browser/cleanup owner map 单一；exclusive fence 遮蔽 durable commit→handle swap 临界段；transport disconnect 不创造第二取消真相 |
+| D4 单一权威状态 | 已查（Runtime checklist） | Authoring/Edit/Compiler/Runtime/Browser/cleanup owner map 单一；Candidate pin、authorization revalidation、exclusive fence 各有唯一边界；transport disconnect 不创造第二取消真相 |
 | D5 工程质量与可维护性 | 不适用代码审查；设计层已查 | 新包依赖 DAG、文件独占、workload budget、mode-specific journal state 与 parallel/sequential/main-agent-only 工作图已冻结 |
 | D6 门禁与证据分层 | 已查 | Schema/override/ChangeSet/Candidate lease/Runtime/Cleanup adversarial matrix及五层证据分开；没有用文档或 smoke 宣称生产能力 |
 
-## 5. 独立复核状态
+## 5. 复核状态
 
-初次冻结时按项目本地 `reviewing-with-cursor` 流程启动了一个 design 会话和一个 fresh final
+初次冻结时曾按当时的项目外部复核流程启动一个 design 会话和一个 fresh final
 review ID。两个会话均已认证、保持 Ask/read-only、读取了限定文档与关键源码边界，且工作树
 指纹未漂移；但两次都在完成 Read 批次后长期停住，未输出 finding 或 GO/NO-GO。主 Agent 已
 终止无输出进程，丢弃这两次不完整结果；本文不把 Cursor 存活摘要、候选缺陷字样或认证状态
 当成独立审查证据。P16-D0 的结论由本页可复现的当前源码对拍和全维度主审支撑。
 
-本次 post-freeze hardening 是文档级合同修订，没有执行新的外部独立模型审查，也不据此宣称
-实现或 Runtime Gate 已通过。
+本次单一权威 consolidation 又启动了一个新的 Cursor design review，chat ID 为
+`c73ec210-1dfc-4c26-8942-16b933960091`。会话已认证、保持 Ask/read-only、工作树指纹未漂移，
+但主请求超过 180 秒无任何审查输出，live progress 查询也超时；主 Agent 随后终止进程，未生成
+report、finding 或 GO/NO-GO。该不完整结果已丢弃，不能作为独立通过证据。本轮结论仍由可复现的
+主审、JSON/Authoring Candidate 定向校验、链接/字段一致性检查支撑；文档修订不据此宣称实现或
+Runtime Gate 已通过。
 
-## 6. 结论
+项目现已移除该外部复核 helper 与默认调用规则；后续 P1.6 设计和实现以 Host 全维度复核及
+可复现门禁为准，不再把 Cursor 结论列为完成条件。
 
-结论：hardening 后的规格可以继续作为 P1.6 后续实施计划的设计基线。P1.6 当前仍为未实现；
-只有工作图中的 Slice A/B 各自通过对应 Gate 后，才能更新能力声明。
+## 6. 当前树验证
+
+| 检查 | 结果 |
+| --- | --- |
+| P1.6 文档合同检查 | PASS；5 个权威/历史/Backlog 文件，5 个 JSON block，15 个 P16 任务 ID 顺序一致 |
+| Authoring V4 Candidate 定向校验 | PASS；Add Subject、Add House、Replace Terrain 三个示例应用到当前 `basic-world.json` 后均通过真实 `parseAuthoringSpecV4` |
+| Cursor workflow focused regression | PASS；`scripts/lib/independent-test-gate.test.ts` 9/9，已拒绝被移除的 Python lane |
+| `pnpm test:independent` | PASS；按 CI Python 前置运行，Node 23/23、Site 1/1 |
+| `pnpm typecheck` | PASS |
+| `git diff --check` 与 stale-reference scan | PASS；项目 Cursor skill、独立测试 Python lane script 与对应 Report 字段均无活跃引用 |
+
+本轮没有修改 Runtime、Compiler、Physics、Camera 或 Browser 行为，因此不重跑与这些输入无关的
+root Runtime、rendered visual 或 manual interaction 门禁；Independent Site build 已由上述 gate 覆盖。
+
+## 7. 结论
+
+结论：hardening 已收口进唯一核心规格，可以作为 P1.6 后续实施计划的设计基线。P1.6 当前仍为
+未实现；只有工作图中的 Slice A/B 各自通过对应 Gate 后，才能更新能力声明。

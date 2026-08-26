@@ -18,7 +18,7 @@ This slice implements `WS-06A`, `WS-06B`, and the Site portion of `WS-00`. It do
 - `apps/playground/vite-host.test.ts` imports `apps/playground/vite.config.test.mjs`, and the importing test is in the contract manifest. The audit claim that CI does not consume this Vite config is stale and must be withdrawn.
 - `scripts/agent-self-check.test.ts` currently rebuilds the tracked Builder bundle before comparing source and bundle behavior. That makes the default root test a self-healing producer.
 - Four Browser verifiers validate real Runtime behavior and then unconditionally promote staging output into tracked golden directories.
-- Six root Node `.test.mjs` files exist, but `scripts/image-delivery.test.mjs` is not in a gate and imports a removed visual-plan producer. Two project-local Cursor Python suites and the Site build/test are also outside CI.
+- Six root Node `.test.mjs` files exist, but `scripts/image-delivery.test.mjs` is not in a gate and imports a removed visual-plan producer. The Site build/test is also outside CI.
 - The Site points at a deleted `/legacy/index.html`. Restoring that Legacy bundle is forbidden.
 
 ## 3. Authority model
@@ -61,7 +61,6 @@ Each verifier gains exactly one explicit update command with the `:update` suffi
 One explicit manifest owns all non-Vitest tests in this slice:
 
 - every root `scripts/*.test.mjs` Node test;
-- both project-local `reviewing-with-cursor` Python unittest files;
 - the active `sites/world-sdk-blueprint` build/render suite.
 
 The independent runner first performs census discovery and fails on missing, stale, duplicate, or out-of-root rows. It then runs the requested lane or all lanes sequentially. CI calls the all-lanes command once. Studio remains separate because it is a package-owned Node suite; root Vitest remains separate; neither is re-run by the independent runner.
@@ -87,7 +86,7 @@ CI runs each evidence layer once:
 2. `check:agent-self-check`;
 3. `typecheck`;
 4. `test:studio`;
-5. `test:independent` (Node, Python, Site exactly once);
+5. `test:independent` (Node and Site exactly once);
 6. root `test` (census, contract, resource-heavy exactly once);
 7. Playground `build`;
 8. final `git diff --exit-code`.
@@ -100,7 +99,7 @@ The final clean-tree assertion detects any accidental tracked write by any prece
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | GAC-01 | Builder generate/check separation | — | GAC-04 | `scripts/build-agent-self-check.mjs`, new checker, `scripts/agent-self-check.test.ts`, Builder package scripts, its manifest row | source TS + tracked bundle → temporary byte comparison; tracked output only through `generate:agent-self-check` | stale-bundle RED, temporary-output GREEN, behavior parity, clean tree | main-agent-only |
 | GAC-02 | Browser verifier check/update split | — | GAC-04 | artifact publication helper/tests, four verifier entrypoints, four package-script pairs | verified staging directory + explicit mode → inventory-only check or atomic promotion | check leaves target unchanged; update replaces target; bad args reject; four real check runs leave tree clean | main-agent-only |
-| GAC-03 | Independent Node/Python/Site gate and current Site | — | GAC-04 | independent manifest/runner/tests, root scripts, CI lane, `sites/world-sdk-blueprint/**` | discovered suites must equal manifest; runner executes each lane once | orphan/stale/duplicate REDs; image delivery GREEN; Python GREEN; Site build/render GREEN | main-agent-only |
+| GAC-03 | Independent Node/Site gate and current Site | — | GAC-04 | independent manifest/runner/tests, root scripts, CI lane, `sites/world-sdk-blueprint/**` | discovered suites must equal manifest; runner executes each lane once | orphan/stale/duplicate REDs; image delivery GREEN; Site build/render GREEN | main-agent-only |
 | GAC-04 | Integration, documentation, and audit disposition | GAC-01, GAC-02, GAC-03 | — | `.github/workflows/ci.yml`, README/current gate docs, audit report | one current tree and one coverage matrix | focused suites, census, typecheck, root test, build, clean-tree, independent review | main-agent-only |
 
 All tasks are `main-agent-only` because they overlap root scripts, CI, the audit authority, or shared publication helpers. Parallel mutation would create more coordination cost than elapsed-time savings.
@@ -117,7 +116,7 @@ All tasks are `main-agent-only` because they overlap root scripts, CI, the audit
 
 - Default root and Browser verification commands leave tracked files unchanged.
 - A stale Builder bundle fails `check:agent-self-check` without first repairing itself.
-- Every current independent Node/Python/Site suite is discovered and executed exactly once in CI.
+- Every current independent Node/Site suite is discovered and executed exactly once in CI.
 - The Site renders current architecture content and contains no Legacy dependency.
 - The audit withdraws the stale Vite-config subclaim and records exact dispositions for this slice without closing unrelated findings.
 - Fresh focused and relevant full gates pass on one clean tree.

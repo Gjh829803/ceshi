@@ -5,11 +5,17 @@
 - 状态：**Detailed design；implementation not started**。
 - 日期：2026-08-26。
 - 适用里程碑：P1.6 AI Schema Profile、受控覆盖与 WorldChangeSet。
-- 当前实现基线：`main@1a3d9ea`；Authoring V4 → Normalized IR V4 → ExecutionPlan V5、
+- 设计起始实现基线：`main@1a3d9ea`；Authoring V4 → Normalized IR V4 → ExecutionPlan V5、
   最小 WorldPackage Manifest/Build Receipt、Gameplay RuntimeHost/WorldSession、Browser Protocol V5
   和 `mountedOn.stand-ground@1` 已在主干。
 - 初次设计冻结：`main@0cc386c`；本轮 post-freeze hardening 只收紧公共合同，不改变
   implementation not started 的能力状态。
+- 单一权威 consolidation 基线：`main@0c3cf18`。
+- Publication hardening 已全部折回本文；
+  [`Publication Hardening Amendment`](./2026-08-26-p16-world-change-publication-hardening-amendment.md)
+  和
+  [`Post-freeze Hardening Follow-up`](../../reviews/2026-08-26-p16-world-change-post-freeze-hardening-follow-up.md)
+  只保留历史审查轨迹，不再覆盖本文。
 - 上位权威：
   - [AI-first LEGO 游戏 SDK 总体设计](./2026-08-17-ai-first-lego-game-sdk-design.md) §7.5、§16.4–16.5；
   - [Control Feel、Physics Medium 与 State Resolver](./2026-08-21-control-feel-physics-medium-state-resolver-design.md)；
@@ -17,7 +23,7 @@
   - [World Validation Report 与质量门禁](./2026-08-19-world-validation-report-and-quality-gates-design.md)；
   - [SDK 重构进度与 Backlog](../../18-refactor-progress-and-backlog.md) P1.4、P1.6、M9。
 
-本文是 P1.6 的专项实施权威。它把总体设计中的架构级语义收敛为当前 Authoring V4、
+本文是 P1.6 唯一的专项实施权威。它把总体设计中的架构级语义收敛为当前 Authoring V4、
 WorldPackage 和 RuntimeHost 可以实施的公共合同。本文不表示 P1.6 已实现，也不把未通过
 Conformance 的能力标记为生产可用。
 
@@ -40,9 +46,10 @@ Host-selected Authoring/Edit Session
         → full validate / normalize / solve / compile / package / gates
         → Dry Run Receipt
         └── explicit Apply
+              → atomic Candidate pin + authorization admission
               → prepared Replacement Runtime
               → World Ready
-              → durable publication barrier + RuntimeHost CAS
+              → Commit-time authorization/CAS + durable publication barrier
               → atomic Full Reload publication
               → committed WorldChangeReceipt
 ```
@@ -75,6 +82,9 @@ Host-selected Authoring/Edit Session
 10. **Prepared Candidate 是有期限、无权限含义的 Host lease。** 它绑定 World、ChangeSet/Base、
     secret-free Edit Policy、Registry/Compiler/Gate identities；持有 opaque ref 不授予 Apply
     Scope。Authoring/Edit 工作量和 Candidate 留存都受 Host-selected budget 约束。
+11. **Runtime publication 只发布被 Dry Run 批准的精确 Candidate。** Apply admission 原子 pin
+    Candidate，Commit barrier 内再次复验授权 epoch、Scope、Policy 和 Runtime CAS；Commit 前
+    撤权保留旧世界，Commit 后撤权不能改写已经提交的事实。
 
 ## 3. 当前基线与明确缺口
 
@@ -596,7 +606,7 @@ type WorldChangeApplyRequestV1 =
   | (WorldChangeRequestBaseV1 & Readonly<{
       mode: "apply";
       requestedOutcome: "publish-runtime";
-      preparedCandidateRef?: string;
+      preparedCandidateRef: string;
       runtimeExpectation: RuntimePublicationExpectationV1;
     }>);
 ```
@@ -605,7 +615,9 @@ type WorldChangeApplyRequestV1 =
   Normalize/Compile；
 - `dry-run` 运行完整 Candidate Build/Gates，但不更新 revision head、不创建 Runtime；
 - `apply` 必须显式提交；文件 CLI 还必须带 `--write`，且从不原地覆盖输入；
-- `publish-runtime` 必须提供 `runtimeExpectation`，并要求额外 Scope；
+- `authoring-only` 可以携带有效 Candidate ref，也可以省略 ref 后重新运行完整 Candidate Build；
+- `publish-runtime` 必须同时提供 `preparedCandidateRef`、`runtimeExpectation`、
+  `authoring.change.apply` 与 `authoring.runtime.publish` Scope；
 - `authoring-only` 只允许文件模式或没有 active Runtime binding 的 Hosted workspace。绑定正在
   运行 WorldSession 的 Edit Session 必须先保持 Dry Run Candidate，批准后使用新的 Apply
   Request ID 请求 `publish-runtime`；Host 不允许 Authoring revision head 与 active Runtime head
@@ -616,6 +628,8 @@ type WorldChangeApplyRequestV1 =
 - Host 必须在 Apply admission 和 Commit 前复验全部 Candidate binding。不存在或过期返回
   `WORLD_CHANGE_PREPARED_CANDIDATE_EXPIRED`；绑定 Hash/Policy 漂移返回
   `WORLD_CHANGE_PREPARED_CANDIDATE_STALE`，不能静默重建或复用过期产物；
+- `publish-runtime` Candidate 过期后，调用方必须创建新的 Dry Run Request，并以新的 Apply
+  Request ID 引用新 Candidate；Host 不得在原 Apply 内隐式重建、延长或复活原 ref；
 - 不提供 `cancel` mode。调用方断开、AbortSignal 或等待超时不改变 durable Request；只能按
   原 Request ID 查询 terminal Receipt。
 
@@ -648,6 +662,7 @@ type WorldChangeDiagnosticCodeV1 =
   | "WORLD_CHANGE_PREPARED_CANDIDATE_EXPIRED"
   | "WORLD_CHANGE_PREPARED_CANDIDATE_STALE"
   | "WORLD_CHANGE_PUBLICATION_SCOPE_REQUIRED"
+  | "WORLD_CHANGE_AUTHORIZATION_STALE"
   | "WORLD_CHANGE_RUNTIME_PUBLICATION_REQUIRED"
   | "WORLD_CHANGE_RUNTIME_EXPECTATION_STALE"
   | "WORLD_CHANGE_PUBLICATION_MODE_UNSUPPORTED"
@@ -685,6 +700,14 @@ type WorldChangeDiagnosticDetailsV1 =
       budgetId: AuthoringEditBudgetIdV1;
       limit: number;
       actual: number;
+    }>
+  | Readonly<{
+      kind: "authorization-stale";
+      reason:
+        | "session-expired"
+        | "session-revoked"
+        | "scope-removed"
+        | "policy-hash-changed";
     }>;
 
 interface WorldChangeReceiptBaseV1 {
@@ -872,13 +895,24 @@ type WorldChangeFailurePhaseV1 =
   | "publication-conflict"
   | "publication-commit";
 
-interface WorldChangeRejectedReceiptV1 extends WorldChangeReceiptBaseV1 {
+interface WorldChangeRejectedReceiptBaseV1
+  extends WorldChangeReceiptBaseV1 {
   readonly status: "rejected";
-  readonly mode: "validate" | "dry-run" | "apply";
+  readonly publicationMode: "none";
   readonly failurePhase: WorldChangeFailurePhaseV1;
   readonly currentAuthoringSpecHash?: `sha256:${string}`;
   readonly conflictingIds?: WorldChangeAffectedIdsV1;
 }
+
+type WorldChangeRejectedReceiptV1 =
+  | (WorldChangeRejectedReceiptBaseV1 & Readonly<{
+      mode: "validate" | "dry-run";
+      requestedOutcome?: never;
+    }>)
+  | (WorldChangeRejectedReceiptBaseV1 & Readonly<{
+      mode: "apply";
+      requestedOutcome: "authoring-only" | "publish-runtime";
+    }>);
 ```
 
 成功 Dry Run/Commit 通过上述 `WorldChangeCandidateReceiptBaseV1` 绑定：
@@ -899,6 +933,10 @@ interface WorldChangeRejectedReceiptV1 extends WorldChangeReceiptBaseV1 {
 Diagnostic 的 `code` 和 `details.kind` 都是关闭 Union。不得把 Provider error、任意
 `Record<string, unknown>` 或自由诊断字段塞入 `details`；无法映射到公开 Diagnostic 的内部错误
 必须清洗为最接近的稳定 code，并只在受保护的 Host telemetry 中保留原始信息。
+
+Rejected Receipt 的 `publicationMode` 恒为 `none`。Apply Rejection 必须原样保留 Request 的
+`requestedOutcome`；Validate/Dry Run Receipt 禁止携带该字段。Parser 必须拒绝缺失、额外或与
+`mode` 不一致的字段，审计和 Explain 不需要重新读取原始 Request 才能恢复失败意图。
 
 Rejected Receipt 使用关闭的 `failurePhase`：
 
@@ -1133,11 +1171,40 @@ Gate 选择和未来优化，不允许跳过当前完整 Build。
 - Dry Run Candidate 是 Host-owned lease，metadata 绑定 World/Session Policy、ChangeSet/Base、
   Registry/Compiler/Gate identities、字节大小和明确到期时间；
 - Dry Run Receipt 永久可查并记录 `preparedCandidateExpiresAtUnixMilliseconds`，但 Candidate bytes
-  到期后可以 GC。到期后 Apply 可以不带 ref 重新完整 Build，不能让 Host 以同一 ref 静默重建；
+  到期后可以 GC。`authoring-only` Apply 可以省略 ref 重新完整 Build；`publish-runtime` 必须重新
+  Dry Run 并使用新 Request ID，不能让 Host 以同一 ref 静默重建；
 - Candidate ref 不可枚举、不可作为 bearer capability；Apply 仍重新执行 Scope、World、Base、
   Policy 和 Runtime expectation admission；
 - Candidate Build 失败只写 Rejected Receipt/diagnostics，不写 result revision head；
 - Candidate count/bytes/retention 与同 World 的并发 Build 受 §16.1 Host workload budget 限制。
+
+Apply admission 通过 Schema、Request idempotency、Session/Scope、World/Base 与 Candidate binding
+检查后，必须在读取 Candidate bytes 或创建 Replacement Runtime 前原子 pin Candidate：
+
+```ts
+interface PreparedCandidatePinV1 {
+  readonly preparedCandidateRef: string;
+  readonly authoringEditSessionId: string;
+  readonly requestId: string;
+  readonly requestHash: `sha256:${string}`;
+  readonly authoringEditPolicyHash: `sha256:${string}`;
+  readonly pinnedAtUnixMilliseconds: number;
+}
+```
+
+`PreparedCandidatePinV1` 是 Host persistence 内部记录，不进入公共 Request，也不成为调用方可
+伪造的权限对象：
+
+- Pin 是 compare-and-set：只有 Candidate 存在、未过期、未被另一非终态 Request pin、全部
+  binding 仍匹配时成功；
+- Pin 成功后 Candidate 不受普通 expiry/GC 影响，直到绑定 Request 写入 terminal Receipt，或
+  crash recovery 明确判定该 Request 可以清理；
+- 同一 Request ID 的幂等恢复复用同一个 pin；不同 Request 不能抢占或共享 pin；
+- Host 不得修改 Dry Run Receipt 的到期时间，也不得为同一 ref 生成新的 Candidate bytes；
+- Commit 前 Rejected、Runtime Prepare 失败或 recovery abandon 必须释放 pin，并按 Ownership
+  cleanup 规则清理 Candidate/Runtime lease；
+- Durable commit 后，Candidate 由 committed revision/Package ownership 接管；释放 pin 不能删除
+  已提交制品。
 
 ### 12.3 Differential Test
 
@@ -1160,7 +1227,8 @@ Canonical bytes 必须逐字节相同。不能使用“功能看起来一致”�
 
 - `(worldId, changeSetId)` 索引 immutable `changeSetHash`；同 ID 不同 Hash 永久冲突；
 - `(authoringEditSessionId, requestId)` 索引 immutable `requestHash`、`authoringEditPolicyHash` 和
-  mode-specific durable state；
+  mode-specific durable state；Apply journal 还持久化 admission `authorizationEpoch` 和 Candidate
+  pin owner；
 - 相同 Request ID + Request Hash + Policy Hash 重试返回同一 Receipt，不重复 Build、创建
   Runtime、切换 WorldSession 或分配 Asset Lease；
 - 相同 Request ID 携带不同 Request Hash 或在不同 Policy Hash 下重放，返回
@@ -1212,6 +1280,8 @@ Crash recovery 使用是否存在 durable commit record，而不是只看进程�
   Package 重建 Runtime 并完成 publication recovery；调用方查询原 Request ID 得到同一 Receipt；
 - 未被 commit record 引用的 Candidate revision、Runtime lease 或 temp artifact 由带 fencing token
   的 recovery sweep 清理，不能靠调用方重试触发回收。
+- recovery 恢复同一 Apply 时必须复用 durable Candidate pin 和原 Request identity；不能创建第二个
+  pin、延长 Candidate lease 或把旧 Request 迁移到新的 authorization epoch。
 
 ### 13.3 Base mismatch 与 Rebase
 
@@ -1250,7 +1320,8 @@ Full Reload V1 只接受 `next-world-replacement-barrier`。`fixed-tick` 为未�
 ### 14.2 固定流程
 
 ```text
-Candidate Authoring/Package + Required Gates succeeded
+Candidate Dry Run succeeded
+  → Apply admission + atomic Candidate pin
   → verify Apply request still owns authoring revision head
   → verify Runtime expectation and zero active Runtime Activity
   → preflight temporary dual residency budget
@@ -1259,12 +1330,17 @@ Candidate Authoring/Package + Required Gates succeeded
   → await Candidate World Ready
   → acquire exclusive per-World publication fence
   → recheck revision head + RuntimeSession + WorldSession + Package + activity epoch
+  → recheck active Edit Session + World binding + required Scopes
+  → recheck authorization epoch + authoringEditPolicyHash
   → persist commit record + new revision head + immutable Receipt in one transaction
   → synchronously swap RuntimeHost current WorldSession/configuration handle
   → release fence and publish new Snapshot + the stored committed Receipt
   → dispose old Runtime from its ownership root
   → retry cleanup failures without changing committed result
 ```
+
+Candidate pin 与 publication fence 是两个不同的原子边界：前者保护被批准 Candidate 的生命周期，
+后者保护 revision/Runtime 的唯一 Commit point，不能互相替代。
 
 RuntimeHost 只接收已经验证的 `RuntimeWorldConfiguration` 和 publication CAS envelope；它不读取
 WorldChangeSet，也不运行 Schema/Compiler/Gate。
@@ -1398,12 +1474,33 @@ interface AuthoringEditWorkloadBudgetV1 {
   `authoringEditPolicyHash`；
 - Session 过期后已有 committed Receipt 仍可按审计策略读取，但不能继续 Apply。
 
-### 16.2 普通 Runtime load
+### 16.2 Authorization epoch 与 Commit 前复验
+
+Trusted Host 为每个 Authoring/Edit Session 维护单调的内部 `authorizationEpoch`。Session 显式
+撤销、到期，或 World allowlist、Scope、Registry Lock、Capability Set、Projection Profile、
+Gate Profile、资源预算、workload budget、任何进入 `authoringEditPolicyHash` 的 secret-free policy
+发生替换时，都必须推进 epoch。该值不进入 ChangeSet/Candidate bytes，也不对调用方公开。
+
+Apply 在两个位置验证授权：
+
+1. **Admission check**：Request 进入 durable journal 后、Candidate pin 前，验证 Session active、
+   未过期、允许 `worldId`、具备所需 Scope，并持久化当前 authorization epoch 与 policy hash；
+2. **Commit check**：在 exclusive per-World publication fence 内、durable commit transaction 前，
+   重新验证 Session active、World binding、所需 Scope、authorization epoch 和 policy hash均未漂移，
+   同时复验 revision/runtime/activity CAS。
+
+Commit check 失败返回 Rejected Receipt，`failurePhase: "authorization"`，Diagnostic 使用
+`WORLD_CHANGE_AUTHORIZATION_STALE`；Host 销毁未发布 Replacement Runtime、释放 Candidate pin，
+旧 revision head、Runtime 和 WorldSession 继续运行，不写 commit record。Durable commit 成功后，
+后续撤权不能把 Committed Receipt 改写为 Rejected，也不能回滚已经发布的 Runtime；它只影响后续
+Request。
+
+### 16.3 普通 Runtime load
 
 Runtime `load/run` 只接受 Host 已批准、完整性验证的 immutable WorldPackage。它不能从
 WorldChangeSet 现场编译 Package，也不能因为 caller 能加载 Package 就授予结构写权限。
 
-### 16.3 Browser 控制面
+### 16.4 Browser 控制面
 
 现有 `window.__WORLDKIT__` 继续是 exact Browser Protocol V5 Runtime API。P1.6 不增加第 40 个
 key，也不复用 `executeGameplayCommand`。
@@ -1525,6 +1622,357 @@ Cleanup Report 规则：
   使用独立管理协议，不复用 WorldChangeRequest；
 - `attemptCount` 单调递增，重复查询不能触发新的 cleanup attempt。
 
+### 16.5 使用方端到端示例
+
+使用方通过受信 `WorldkitAuthoringEditApiV1` 修改 Authoring 世界；普通 playable 的
+`window.__WORLDKIT__` 不接收以下 Request。示例中的 64 位十六进制 Hash 只用于展示协议形状；
+真实调用必须使用 Host 返回的当前 Authoring/Runtime identity，禁止硬编码示例 Hash。
+
+#### 16.5.1 增加一个已有 Registry Subject
+
+下面的 ChangeSet 在同一原子修改中增加出生 Anchor 和 Subject。最终 Candidate Validation 负责
+验证新 Subject 对同一 ChangeSet 中新 Anchor 的引用：
+
+```json
+{
+  "kind": "worldkit-world-change-set",
+  "schemaVersion": 1,
+  "id": "change.add-companion.001",
+  "baseAuthoringSpecHash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "preconditions": [
+    {
+      "id": "precondition.companion-anchor-absent",
+      "type": "target-absent",
+      "target": {
+        "kind": "node",
+        "nodeEntityId": "companion-spawn"
+      }
+    },
+    {
+      "id": "precondition.companion-absent",
+      "type": "target-absent",
+      "target": {
+        "kind": "node",
+        "nodeEntityId": "companion"
+      }
+    }
+  ],
+  "operations": [
+    {
+      "id": "operation.add-companion-anchor",
+      "type": "node-upsert",
+      "node": {
+        "id": "companion-spawn",
+        "kind": "anchor",
+        "semantic": {
+          "classId": "spawn.companion"
+        },
+        "placement": {
+          "kind": "fixed",
+          "transform": {
+            "positionMetersXYZ": [4, 0, 2]
+          }
+        }
+      }
+    },
+    {
+      "id": "operation.add-companion",
+      "type": "node-upsert",
+      "node": {
+        "id": "companion",
+        "kind": "subject",
+        "subjectDefinitionRef": "worldkit://subject-definition/humanoid.g-bot@2",
+        "spawnAnchorEntityId": "companion-spawn"
+      }
+    }
+  ],
+  "provenance": {
+    "sourceType": "agent",
+    "sourceId": "builder-session-42"
+  }
+}
+```
+
+这只增加 Canonical World Structure。发布后若要让已有 Controller 骑乘某个支持骑乘的实体，
+再通过 Runtime Gameplay/Relationship Transaction 提交 `mountedOn`；不能把骑乘状态写进本次
+结构修改。
+
+#### 16.5.2 增加 package-local House Prototype 与实例
+
+```json
+{
+  "kind": "worldkit-world-change-set",
+  "schemaVersion": 1,
+  "id": "change.add-house.001",
+  "baseAuthoringSpecHash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "preconditions": [
+    {
+      "id": "precondition.house-prototype-absent",
+      "type": "target-absent",
+      "target": {
+        "kind": "resource",
+        "resourceKind": "prototype",
+        "resourceId": "house-blockout"
+      }
+    },
+    {
+      "id": "precondition.house-node-absent",
+      "type": "target-absent",
+      "target": {
+        "kind": "node",
+        "nodeEntityId": "house-north"
+      }
+    }
+  ],
+  "operations": [
+    {
+      "id": "operation.add-house-prototype",
+      "type": "resource-upsert",
+      "resourceKind": "prototype",
+      "prototype": {
+        "id": "house-blockout",
+        "version": 1,
+        "kind": "primitive",
+        "primitive": "box",
+        "sizeMetersXYZ": [8, 5, 10],
+        "collisionEnabled": true,
+        "semantic": {
+          "classId": "structure.house"
+        }
+      }
+    },
+    {
+      "id": "operation.add-house-node",
+      "type": "node-upsert",
+      "node": {
+        "id": "house-north",
+        "kind": "object",
+        "prototypeRef": "package://prototype/house-blockout@1",
+        "placement": {
+          "kind": "fixed",
+          "transform": {
+            "positionMetersXYZ": [18, 2.5, -24]
+          }
+        }
+      }
+    }
+  ],
+  "provenance": {
+    "sourceType": "user",
+    "sourceId": "studio-user-7"
+  }
+}
+```
+
+#### 16.5.3 把现有 Terrain Source 替换为山地
+
+```json
+{
+  "kind": "worldkit-world-change-set",
+  "schemaVersion": 1,
+  "id": "change.replace-terrain-mountains.001",
+  "baseAuthoringSpecHash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "preconditions": [
+    {
+      "id": "precondition.terrain-main-exists",
+      "type": "target-exists",
+      "target": {
+        "kind": "node",
+        "nodeEntityId": "terrain-main"
+      }
+    }
+  ],
+  "operations": [
+    {
+      "id": "operation.replace-terrain-source",
+      "type": "terrain-source-replace",
+      "terrainEntityId": "terrain-main",
+      "terrainSource": {
+        "kind": "procedural",
+        "relief": "mountains",
+        "baseHeightMeters": 0,
+        "amplitudeMeters": 18,
+        "frequencyPerMeter": 0.018,
+        "octaves": 5,
+        "lacunarityRatio": 2,
+        "persistenceRatio": 0.5
+      }
+    }
+  ],
+  "provenance": {
+    "sourceType": "agent",
+    "sourceId": "terrain-revision-agent-3"
+  }
+}
+```
+
+Terrain Operation 稳定分类为 Full Reload，Host 必须重新运行完整 Normalize/Solve/Compile、
+Physics/Traversal/Validation Gates，不能直接改 Babylon/Havok 对象。
+
+#### 16.5.4 Dry Run Receipt 到 Runtime publication Apply
+
+以 `change.add-house.001` 为例，完整成功 Dry Run Receipt 的形状如下：
+
+```json
+{
+  "kind": "worldkit-world-change-receipt",
+  "schemaVersion": 1,
+  "id": "receipt.dry-run.add-house.001",
+  "requestId": "request.dry-run.add-house.001",
+  "requestHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+  "authoringEditSessionId": "edit-session-17",
+  "authoringEditPolicyHash": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+  "worldId": "basic-world",
+  "changeSetId": "change.add-house.001",
+  "changeSetHash": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+  "baseAuthoringSpecHash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "diagnostics": [],
+  "buildIdentity": {
+    "resultAuthoringSpecHash": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+    "registryLockHash": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+    "normalizedWorldIrHash": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+    "executionPlanHash": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+    "worldPackageRootHash": "sha256:9999999999999999999999999999999999999999999999999999999999999999"
+  },
+  "affectedIds": {
+    "resourceIds": ["house-blockout"],
+    "nodeEntityIds": ["house-north"],
+    "relationshipIds": [],
+    "spatialFeatureIds": [],
+    "constraintIds": [],
+    "overrideIds": []
+  },
+  "operationResults": [
+    {
+      "operationId": "operation.add-house-prototype",
+      "operationType": "resource-upsert",
+      "target": {
+        "kind": "resource",
+        "resourceKind": "prototype",
+        "resourceId": "house-blockout"
+      },
+      "status": "applied",
+      "currentTargetHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "operationId": "operation.add-house-node",
+      "operationType": "node-upsert",
+      "target": {
+        "kind": "node",
+        "nodeEntityId": "house-north"
+      },
+      "status": "applied",
+      "currentTargetHash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }
+  ],
+  "validationReports": [
+    {
+      "validationReportRef": "worldkit://validation-report/add-house-required-gates@1",
+      "validationReportHash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "status": "passed"
+    }
+  ],
+  "appliedMigrations": [],
+  "appliedSafetyFixes": [],
+  "status": "succeeded",
+  "mode": "dry-run",
+  "publicationMode": "none",
+  "preparedCandidateRef": "candidate://basic-world/add-house/7f23a9",
+  "preparedCandidateExpiresAtUnixMilliseconds": 1787713200000
+}
+```
+
+调用方批准该 Candidate 后，必须使用新的 Apply Request ID，并复用 byte-identical ChangeSet：
+
+```ts
+const dryRunRequest: WorldChangeDryRunRequestV1 = {
+  kind: "worldkit-world-change-request",
+  schemaVersion: 1,
+  id: "request.dry-run.add-house.001",
+  authoringEditSessionId: "edit-session-17",
+  worldId: "basic-world",
+  mode: "dry-run",
+  changeSet: addHouseChangeSet,
+};
+
+const dryRunReceipt = await authoringEditApi.dryRunWorldChange(dryRunRequest);
+if (dryRunReceipt.status !== "succeeded" || dryRunReceipt.mode !== "dry-run") {
+  throw new Error("Dry Run did not produce a publishable Candidate");
+}
+
+const applyRequest: WorldChangeApplyRequestV1 = {
+  kind: "worldkit-world-change-request",
+  schemaVersion: 1,
+  id: "request.apply.add-house.001",
+  authoringEditSessionId: "edit-session-17",
+  worldId: "basic-world",
+  mode: "apply",
+  requestedOutcome: "publish-runtime",
+  changeSet: addHouseChangeSet,
+  preparedCandidateRef: dryRunReceipt.preparedCandidateRef,
+  runtimeExpectation: {
+    runtimeSessionId: "runtime-session-9",
+    expectedWorldSessionId: "world-session-31",
+    expectedWorldPackageRootHash:
+      "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    targetPhaseBarrier: {
+      mode: "next-world-replacement-barrier",
+    },
+  },
+};
+
+const applyReceipt = await authoringEditApi.applyWorldChange(applyRequest);
+```
+
+`addHouseChangeSet` 是 §16.5.2 的完整 JSON 对象，不是只携带 ChangeSet ID 的服务器端隐式引用。
+Host 对 Request、ChangeSet、Candidate、Runtime expectation 和授权分别做 Hash/CAS 检查。
+
+#### 16.5.5 冲突、失败与幂等重试
+
+被拒绝的 Runtime Apply 自身保留请求意图和未发布事实：
+
+```json
+{
+  "kind": "worldkit-world-change-receipt",
+  "schemaVersion": 1,
+  "id": "receipt.apply.add-house.expired",
+  "requestId": "request.apply.add-house.001",
+  "requestHash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "authoringEditSessionId": "edit-session-17",
+  "authoringEditPolicyHash": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+  "worldId": "basic-world",
+  "changeSetId": "change.add-house.001",
+  "changeSetHash": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+  "baseAuthoringSpecHash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "diagnostics": [
+    {
+      "severity": "error",
+      "code": "WORLD_CHANGE_PREPARED_CANDIDATE_EXPIRED",
+      "instancePath": "/preparedCandidateRef",
+      "message": "Prepared Candidate does not exist or its lease expired."
+    }
+  ],
+  "status": "rejected",
+  "mode": "apply",
+  "requestedOutcome": "publish-runtime",
+  "publicationMode": "none",
+  "failurePhase": "admission"
+}
+```
+
+重试规则：
+
+| 场景 | 调用方动作 | Host 结果 |
+| --- | --- | --- |
+| transport timeout / 连接断开 | 使用原 `requestId` 查询 Receipt | 继续同一 durable Request；不隐式取消 |
+| 相同 Request ID、Request Hash、Policy Hash 重试 | 原样重发或查询 | 返回 byte-identical Receipt；不重复 Build/发布 |
+| 相同 Request ID 携带不同内容或 Policy Hash | 不得覆盖原请求 | `WORLD_CHANGE_REQUEST_ID_CONFLICT` |
+| `baseAuthoringSpecHash` 过期 | 读取 Current Authoring、重新规划 | 创建新的 ChangeSet ID 和 Request ID |
+| Candidate expired | 重新 Dry Run | 创建新的 Dry Run ID、Candidate ref 和 Apply ID |
+| Candidate/Policy/Registry/Gate binding 漂移 | 重新取得当前 Session/Policy 下的 Candidate | `WORLD_CHANGE_PREPARED_CANDIDATE_STALE` |
+| Commit 前 Session 撤销/到期/Scope 移除 | 不重试旧 Candidate | `WORLD_CHANGE_AUTHORIZATION_STALE`，旧世界继续 |
+| Commit 后连接断开或撤权 | 查询原 Request ID | 返回原 byte-identical Committed Receipt；不回滚新世界 |
+
 ## 17. CLI 合同
 
 在现有 `worldkit` CLI 增加：
@@ -1587,6 +2035,7 @@ live Request，客户端必须保留 Request ID 并使用 `change receipt`/Recei
 | `WORLD_CHANGE_PREPARED_CANDIDATE_EXPIRED` | Prepared Candidate 不存在或 lease 已到期 |
 | `WORLD_CHANGE_PREPARED_CANDIDATE_STALE` | Candidate 的 Base/Policy/Registry/Compiler/Validation binding 漂移 |
 | `WORLD_CHANGE_PUBLICATION_SCOPE_REQUIRED` | 缺少 Runtime publish Scope |
+| `WORLD_CHANGE_AUTHORIZATION_STALE` | Apply admission 后、Commit 前 Session/World/Scope/authorization epoch/Policy 漂移 |
 | `WORLD_CHANGE_RUNTIME_PUBLICATION_REQUIRED` | active Runtime 绑定下试图只提交 Authoring head |
 | `WORLD_CHANGE_RUNTIME_EXPECTATION_STALE` | Runtime/WorldSession/Package CAS 过期 |
 | `WORLD_CHANGE_PUBLICATION_MODE_UNSUPPORTED` | 首切片请求 fixed-tick/Incremental |
@@ -1640,6 +2089,10 @@ Explain 必须能回答：
   workload budget 的边界与超限 fail-closed；
 - Prepared Candidate ref 不授予权限，expiry 与 stale 分离，Policy/Registry/Compiler/Gate 漂移均
   稳定拒绝；
+- `publish-runtime` 缺失 Candidate ref 稳定拒绝；`authoring-only` 省略 ref 才允许完整重建；
+- Candidate expiry/GC 与 Apply pin 竞争只有一个确定赢家；同 Request 恢复复用 pin，不同 Request
+  不能抢占，Rejected/recovery cleanup 释放 pin 且不删除 committed artifact；
+- Apply Rejected Receipt round-trip 保留 `requestedOutcome` 和 `publicationMode: "none"`；
 - Diagnostic code/details parser 关闭 unknown code、unknown details kind 和任意自由字段；
 - 任一 Operation/Gate 失败不产生 result revision 或部分世界；
 - Candidate bytes、Diff、affected IDs、operation results 和 Receipt hashes 可重放。
@@ -1649,6 +2102,8 @@ Explain 必须能回答：
 - Replacement Prepare/Gate/World Ready 失败时旧 Runtime 仍可移动并返回旧 Snapshot；
 - 双驻留预算拒绝、active Runtime Activity 拒绝、Commit 前 Runtime/Package/Revision CAS 过期；
 - exclusive publication fence 阻止 revision/Receipt/Snapshot/第二 publisher 旁路观察临界段；
+- Session expiry、explicit revoke、Scope removal、authorization epoch 与 Policy Hash 在 admission
+  后、Commit 前漂移时稳定拒绝；durable commit 后撤权不能改写 Receipt 或回滚新 Runtime；
 - crash 覆盖 commit transaction 前、transaction 后但 handle swap 前、swap 后 cleanup 前；
 - Commit 创建新 WorldSession、Tick 0、旧 Command/WorldState refs fail closed；
 - 默认状态 reset，显式 Bootstrap 只使用新 Package；
@@ -1703,16 +2158,16 @@ Architecture、公共字段、Hash 语义、权限、跨包接口和最终集成
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | P16-D0 | 冻结本文、术语、包 DAG、公共 DTO、首条 Slice 和 Gate | 当前 main、总体设计、P1.6 Backlog | 全部 P16 任务 | 主 Agent；本 spec、Backlog、后续 plan | 当前源码/规格 → 唯一设计权威 | 全维度设计审查、无 placeholder/alias | main-agent-only |
 | P16-H0 | Clean-break 统一 Authoring document hash，并拆出明确 `layoutInputHash` | P16-D0 | P16-A0、P16-C1、P16-S1、P16-P1 | `protocol` hash primitive、`authoring` hash API、WorldPackage/Plan/Report 公共字段；跨包集成由主 Agent | valid Authoring V4 bytes → 唯一 document hash | golden bytes、reorder semantics、全引用 census | main-agent-only |
-| P16-A0 | 建立 provider-neutral `@whitebox-world/authoring-edit` 包和 strict DTO/parser/hash 边界 | P16-D0、P16-H0 | P16-S1、P16-O1、P16-C1 | 新 package manifest/exports/types/parsers；不接 I/O/Runtime | closed DTO → parsed/frozen/hash values | unknown-key、negative-zero、alias、closed Diagnostic/details、RuntimeStateEffect scope、dependency graph | sequential |
+| P16-A0 | 建立 provider-neutral `@whitebox-world/authoring-edit` 包和 strict DTO/parser/hash 边界 | P16-D0、P16-H0 | P16-S1、P16-O1、P16-C1 | 新 package manifest/exports/types/parsers；不接 I/O/Runtime | closed DTO → parsed/frozen/hash values | unknown-key、negative-zero、alias、required publication Candidate、mode-specific Rejected Receipt、closed Diagnostic/details、RuntimeStateEffect scope、dependency graph | sequential |
 | P16-S1 | AI Schema Profile/Projector、预算降级、Projection Receipt | P16-A0、P16-H0、P1.4 Registry Lock shape | P16-B1、P16-F1 | `authoring-edit/src/schema-projection/*`、`authoring` schema export、Registry `ai-schema-projection-profile` kind/parser/catalog 与 read port；不改 change protocol | schema + lock + capabilities + budget → projection | optional/null round trip、budget/provider fixtures、Registry Lock kind closure | parallel-safe |
 | P16-O1 | 通用 Definition `allowedOverridePaths` 与 Resource Ref Override validator | P16-A0、P16-S1 contract | P16-C1、P16-F1 | `subject-registry` definition field、`authoring-edit/src/override-policy/*`、Authoring instance override shape | definition/profile/host intersections → accepted override or diagnostic | two-definition reuse、forbidden paths/refs | sequential |
 | P16-C1 | WorldChangeSet/Precondition/Operation/Candidate Diff 纯实现 | P16-A0、P16-H0 | P16-P1、P16-R1 | `authoring-edit/src/world-change/*`；不改 projector/override policy | base spec + ChangeSet → isolated candidate/diff or rejection | operation matrix、conflict/base/precondition、workload admission tests | parallel-safe |
-| P16-P1 | Trusted Candidate Build pipeline：完整 Normalize/Solve/Compile/Package/Gates | P16-C1、P1.4 complete package/lock | P16-R1、P16-H1、P16-CLI1 | trusted host orchestration in scripts/lib or dedicated host adapter；调用现有 owners | candidate + profiles/artifacts → immutable prepared candidate lease | gate failures/no partial output/full build hashes、expiry/GC/Policy binding | sequential |
-| P16-R1 | Durable idempotency journal、revision head、Receipt/Cleanup Report Query/Explain/Diff | P16-C1、P16-P1 | P16-H1、P16-B1、P16-CLI1 | Host persistence adapter；`authoring-edit` 只保留 port/DTO | request identity + pipeline outcome → durable terminal Receipt | mode-specific terminals、transport timeout/retry/conflict、transaction boundary、crash-state/recovery sweep | sequential |
-| P16-H1 | RuntimeHost publication V2：CAS、exclusive fence、commit point、cleanup disposition | P16-P1、P16-R1、当前 RuntimeHost replacement | P16-B1、P16-F1 | `runtime-host` request/commit lifecycle；Babylon adapter 只做 candidate ready/ownership | verified configuration + runtime expectation → new session or stable rejection | runtime deep checklist、commit/swap crash windows、state effect defaults/exceptions、cleanup quarantine、partial construction、immutable Receipt | sequential |
-| P16-CLI1 | Schema/Registry/Change CLI 和 offline/live adapters | P16-S1、P16-C1、P16-P1、P16-R1 | P16-F1 | `scripts/worldkit.ts` + focused lib；不复制 domain parsing | CLI args/files/session context → Canonical requests/artifacts | parser/exact output/no-in-place/credential redaction/transport-disconnect semantics | parallel-safe |
-| P16-B1 | Trusted Studio Authoring/Edit API；保持 Browser V5 exact 39 keys | P16-S1、P16-O1、P16-R1、P16-H1 | P16-F1 | Studio shell/Host bridge + Browser DTO adapter；playable window 不安装 | scoped API calls → Canonical receipts | scope/workload matrix、iframe/global absence、V5 exact-key tests | parallel-safe |
-| P16-F1 | Full Reload 两个 Golden fixtures 与五层证据 | P16-O1、P16-P1、P16-R1、P16-H1、P16-CLI1、P16-B1 | P16-G1 | fixtures/verifiers/evidence；主 Agent集成 | add Subject/House + Terrain replacement → atomic world publication | full gates、real Chromium/Babylon、old-world survival、candidate expiry、cleanup quarantine | sequential |
+| P16-P1 | Trusted Candidate Build pipeline：完整 Normalize/Solve/Compile/Package/Gates | P16-C1、P1.4 complete package/lock | P16-R1、P16-H1、P16-CLI1 | trusted host orchestration in scripts/lib or dedicated host adapter；调用现有 owners | candidate + profiles/artifacts → immutable prepared candidate lease | gate failures/no partial output/full build hashes、lease pin/expiry/GC/Policy binding | sequential |
+| P16-R1 | Durable idempotency journal、revision head、Receipt/Cleanup Report Query/Explain/Diff | P16-C1、P16-P1 | P16-H1、P16-B1、P16-CLI1 | Host persistence adapter；`authoring-edit` 只保留 port/DTO | request identity + pipeline outcome → durable terminal Receipt | mode-specific terminals、admission epoch/pin owner、transport timeout/retry/conflict、transaction boundary、crash-state/recovery sweep | sequential |
+| P16-H1 | RuntimeHost publication V2：CAS、exclusive fence、commit point、cleanup disposition | P16-P1、P16-R1、当前 RuntimeHost replacement | P16-B1、P16-F1 | `runtime-host` request/commit lifecycle；Babylon adapter 只做 candidate ready/ownership | verified configuration + runtime expectation → new session or stable rejection | runtime deep checklist、commit-time authorization/CAS、commit/swap crash windows、state effect defaults/exceptions、cleanup quarantine、partial construction、immutable Receipt | sequential |
+| P16-CLI1 | Schema/Registry/Change CLI 和 offline/live adapters | P16-S1、P16-C1、P16-P1、P16-R1 | P16-F1 | `scripts/worldkit.ts` + focused lib；不复制 domain parsing | CLI args/files/session context → Canonical requests/artifacts | parser/exact output/no-in-place/credential redaction/Dry Run→new Apply ID/transport-disconnect semantics | parallel-safe |
+| P16-B1 | Trusted Studio Authoring/Edit API；保持 Browser V5 exact 39 keys | P16-S1、P16-O1、P16-R1、P16-H1 | P16-F1 | Studio shell/Host bridge + Browser DTO adapter；playable window 不安装 | scoped API calls → Canonical receipts | scope/workload/authorization epoch matrix、iframe/global absence、V5 exact-key tests | parallel-safe |
+| P16-F1 | Full Reload 两个 Golden fixtures 与五层证据 | P16-O1、P16-P1、P16-R1、P16-H1、P16-CLI1、P16-B1 | P16-G1 | fixtures/verifiers/evidence；主 Agent集成 | add Subject/House + Terrain replacement → atomic world publication | full gates、real Chromium/Babylon、old-world survival、pin/GC race、commit 前撤权、post-commit revoke、cleanup quarantine | sequential |
 | P16-I1 | 第二切片 Handler Registry、fixed-tick Hot Apply 与 Differential Runtime Conformance | P16-F1、独立批准的 Incremental implementation plan | P16-G2 | 新 handler registry + affected runtime owners；不得改 V1 Receipt 方言 | eligible operation + prepared candidate → atomic hot apply or full-reload-required | full byte equivalence、scoped state effects、rollback/unaffected state/replay | sequential |
 | P16-G1 | Full Reload 首切片 Final GO、文档状态和 production claims | P16-F1 | 无 | 主 Agent；Backlog/README/review/evidence | integrated exact HEAD → GO/NO-GO | relevant full gates + independent completion review | main-agent-only |
 | P16-G2 | Incremental 第二切片 Final GO | P16-I1 | 无 | 主 Agent；Backlog/README/review/evidence | exact Incremental HEAD → GO/NO-GO | Differential + runtime full gates + independent review | main-agent-only |
@@ -1744,6 +2199,7 @@ WorldPackage/Registry Lock 是 P16-P1、P16-H1 的硬依赖，但不阻塞先实
 - 页面运行中通过受信 Edit Session 增加一个 Subject/House；
 - Candidate 失败时旧世界继续可运行；
 - Candidate Ready 后以新 WorldSession/Tick 0 原子发布；
+- Runtime publication 只接受仍有效且已原子 pin 的 Dry Run Candidate；
 - Receipt 无歧义记录 hashes、publication mode 和所有 Runtime state default disposition；
 - transport disconnect 后可用原 Request ID 对账，Committed Receipt 不被 cleanup 结果改写；
 - Terrain 修改完整重跑 Physics/Traversal/Validation 并通过 Full Reload 发布；
@@ -1774,7 +2230,9 @@ WorldPackage/Registry Lock 是 P16-P1、P16-H1 的硬依赖，但不阻塞先实
 9. 当前未发布 Hash/Override/Runtime replacement 字段在实施时一次 clean break，不保留 Alias。
 10. Validate、Dry Run、Apply 使用各自不可升级的 durable terminal state；连接断开不是业务取消，
     Prepared Candidate ref 不是权限凭证。
-11. Full Reload 使用 world-wide state defaults；Incremental 使用 default + scoped exceptions，
+11. `publish-runtime` 必须引用已批准的精确 Dry Run Candidate；Candidate pin 与 publication fence
+    是两个不同的原子边界，Commit 前授权必须仍然有效，Commit 后撤权不能反转已提交事实。
+12. Full Reload 使用 world-wide state defaults；Incremental 使用 default + scoped exceptions，
     不允许为了未来热更新再发明第二套 Receipt。
-12. 只有 Slice B 的真实 Browser/Runtime evidence 和 Final GO 完成后，项目才可宣称“运行中
+13. 只有 Slice B 的真实 Browser/Runtime evidence 和 Final GO 完成后，项目才可宣称“运行中
     增加人物或房屋”生产可用；只有 Slice C 完成后才可宣称受限 Incremental Hot Apply。

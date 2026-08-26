@@ -997,7 +997,7 @@ prepare/abort/commit-contract 失败；新增稳定 code 必须与 parser、fixt
 
 | ID | 目标与可验收交付 | depends_on | blocks | 独占所有权 | 集成点 | 验证 | 模式 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| G19-0 | 冻结本文与实施计划 | 无 | 全部 | 本文、计划、SDD ledger | R1b `1bf9f5d` | 文档自审、Cursor design CR | main-agent-only |
+| G19-0 | 冻结本文与实施计划 | 无 | 全部 | 本文、计划、SDD ledger | R1b `1bf9f5d` | 文档自审、全维度设计复核 | main-agent-only |
 | G19-1 | 将 Aurora Camera cleanup 语义移植到 R1b | G19-0、R1b completion HEAD | G19-5 | fetch 后由 main-agent 锁定的 Camera/R1b exact ledger | Babylon/Playground Camera boundary | focused camera tests、R1b gates | main-agent-only |
 | G19-2 | 干净 Gameplay contracts/core | G19-0 | G19-2A | 新 `gameplay-contracts`、`gameplay` packages | typed interfaces | parser/state/feature/action tests | parallel-safe |
 | G19-2A | Snapshot/Receipt identity 与 Semantic Fact capacity 收口 | G19-2 | G19-2B | `gameplay-contracts` exact V1 | RuntimeHost identity/admission | collision、mismatch、Fact N/N+1 | sequential |

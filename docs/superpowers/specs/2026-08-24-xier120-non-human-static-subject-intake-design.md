@@ -281,7 +281,7 @@ Subject 实施计划：
 | XNHS-04 | 建立确定性静态烘焙工具、配置、生成 GLB 和 Inventory | 01 | 05 | converter、bake config、generated xier120 assets；转换进程独占输出目录 | Source entry + config -> GLB + manifest inventory | 双次字节一致；19/19 Babylon NullEngine admission | `sequential` |
 | XNHS-05 | 注册 19 套 Asset/Collider/Definition 并接入 Resolver/Gallery | 02,03,04 | 06,08 | xier120 manifests/definitions、resolver mapping、专用 fixture | qualified refs -> same-origin URL -> buildable world | Registry closure、Compiler、resolver、19-item fixture tests | `sequential` |
 | XNHS-06 | 端到端 Gate 与浏览器视觉/交互 QA | 05 | 07 | verifier、捕获物、验证用 dev server/port | fixture -> report/capture/manual checklist | 19/19 automated；代表性动物/车辆/组合 rendered + manual evidence | `main-agent-only` |
-| XNHS-07 | 全维度主审与可用时的 Cursor 只读复审 | 06 | completion | review 文档；不共享实现文件写权 | integrated diff + gate logs -> finding dispositions | 每条 finding 独立复现/关闭；全量相关门禁复跑 | `main-agent-only` |
+| XNHS-07 | 全维度主审与最终复核 | 06 | completion | review 文档；不共享实现文件写权 | integrated diff + gate logs -> finding dispositions | 每条 finding 独立复现/关闭；全量相关门禁复跑 | `main-agent-only` |
 | XNHS-08 | 四足动画 Readiness Probe；不阻塞静态交付 | 05 | future rig plan only | readiness report/change request；禁止修改公共 Rig 合同 | candidate GLB/source stacks -> pass/fail evidence | 六项 Gate 明细；失败不生成伪 Rigged Definition | `parallel-safe` |
 
 XNHS-03 和 XNHS-04 虽修改不同文件，但二者共同冻结 Asset Inventory/生命周期语义；首轮由主 Agent
