@@ -504,9 +504,30 @@ const relationshipCommittedEvent = {
   simulationTick: 12,
   sequence: 1,
   commandId: "command-bind-primary",
-  relationshipId: "possession-primary",
-  controlledEntityId: "g-bot-primary",
-  controllerEntityId: "controller-primary",
+  relationship: {
+    id: "possession-primary",
+    type: "possessedBy",
+    schemaVersion: 1,
+    controlledEntityId: "g-bot-primary",
+    controllerEntityId: "controller-primary",
+    establishedSimulationTick: 12,
+  },
+} as const satisfies GameplayEventV1;
+
+const mountedRelationshipCommittedEvent = {
+  ...relationshipCommittedEvent,
+  id: "gameplay-event:world-primary:10",
+  sequence: 10,
+  commandId: "command-mount-primary",
+  relationship: {
+    id: "mounted-on-primary",
+    type: "mountedOn",
+    schemaVersion: 1,
+    riderEntityId: "g-bot-primary",
+    mountEntityId: "skateboard-primary",
+    mountSlotId: "stand",
+    establishedSimulationTick: 12,
+  },
 } as const satisfies GameplayEventV1;
 
 const naturallyCompletedEvent = {
@@ -568,9 +589,15 @@ describe("GameplayEventV1", () => {
     );
   });
 
-  it("parses relationship endpoints with role-qualified names", () => {
+  it("parses a possession Relationship as one typed event payload", () => {
     expect(parseGameplayEventV1(relationshipCommittedEvent)).toEqual(
       relationshipCommittedEvent,
+    );
+  });
+
+  it("parses mountedOn endpoints with role-qualified names", () => {
+    expect(parseGameplayEventV1(mountedRelationshipCommittedEvent)).toEqual(
+      mountedRelationshipCommittedEvent,
     );
   });
 
@@ -590,13 +617,7 @@ describe("GameplayEventV1", () => {
       sequence: 3,
     }],
     ["action started", {
-      ...withoutKey(
-        withoutKey(
-          withoutKey(relationshipCommittedEvent, "relationshipId"),
-          "controlledEntityId",
-        ),
-        "controllerEntityId",
-      ),
+      ...withoutKey(relationshipCommittedEvent, "relationship"),
       id: "gameplay-event:world-primary:4",
       type: "action.started",
       sequence: 4,
@@ -673,6 +694,7 @@ describe("GameplayEventV1", () => {
   it.each([
     ["unknown type", { ...relationshipCommittedEvent, type: "control.bound" }],
     ["unknown key", { ...relationshipCommittedEvent, target: "g-bot-primary" }],
+    ["missing relationship", withoutKey(relationshipCommittedEvent, "relationship")],
     ["missing sequence", withoutKey(relationshipCommittedEvent, "sequence")],
     ["fractional sequence", { ...relationshipCommittedEvent, sequence: 1.5 }],
     ["non-finite tick", { ...relationshipCommittedEvent, simulationTick: NaN }],
@@ -753,6 +775,11 @@ function staticSpatialEntityState(
 const terrainSpatialEntityState = staticSpatialEntityState(
   "terrain-primary",
   "terrain.surface",
+);
+
+const skateboardSpatialEntityState = staticSpatialEntityState(
+  "skateboard-primary",
+  "vehicle.skateboard",
 );
 
 const controllerEntityState = {
@@ -895,6 +922,10 @@ describe("WorldStateSnapshotV1", () => {
   it("parses mountedOn as a role-qualified Relationship without inferring support", () => {
     const parsed = rebuildWorldStateSnapshotV1({
       ...worldStateSnapshot,
+      entityStatesById: {
+        ...worldStateSnapshot.entityStatesById,
+        "skateboard-primary": skateboardSpatialEntityState,
+      },
       relationshipStatesById: {
         "mounted-on-primary": mountedOnRelationshipState,
         "possession-primary": possessionRelationshipState,
@@ -1276,6 +1307,61 @@ describe("WorldStateSnapshotV1", () => {
     expect(() => rebuildWorldStateSnapshotV1({
       ...worldStateSnapshot,
       capabilityStatesById: { [capability.id]: capability },
+    })).toThrow("closed WorldStateSnapshotV1 schema");
+  });
+
+  it("accepts an exact suspended locomotion branch owned by mountedOn", () => {
+    const suspendedLocomotion = {
+      id: "locomotion-g-bot-primary",
+      kind: "locomotion-capability-state",
+      ownerEntityId: "g-bot-primary",
+      locomotionCapabilityRef: "worldkit://locomotion-profile/g-bot@1",
+      locomotionCapabilityHash: HASH_C,
+      mode: "suspended",
+      suspendedByRelationshipId: "mounted-on-primary",
+    } as const;
+    const input = {
+      ...worldStateSnapshot,
+      entityStatesById: {
+        ...worldStateSnapshot.entityStatesById,
+        "skateboard-primary": skateboardSpatialEntityState,
+      },
+      capabilityStatesById: {
+        [suspendedLocomotion.id]: suspendedLocomotion,
+      },
+      relationshipStatesById: {
+        ...worldStateSnapshot.relationshipStatesById,
+        "mounted-on-primary": mountedOnRelationshipState,
+      },
+    };
+
+    expect(rebuildWorldStateSnapshotV1(input).capabilityStatesById)
+      .toEqual({ [suspendedLocomotion.id]: suspendedLocomotion });
+    expect(() => rebuildWorldStateSnapshotV1({
+      ...input,
+      capabilityStatesById: {
+        [suspendedLocomotion.id]: {
+          ...suspendedLocomotion,
+          movementMedium: "ground",
+        },
+      },
+    })).toThrow("closed WorldStateSnapshotV1 schema");
+  });
+
+  it("rejects suspended locomotion without its matching mountedOn Relationship", () => {
+    expect(() => rebuildWorldStateSnapshotV1({
+      ...worldStateSnapshot,
+      capabilityStatesById: {
+        "locomotion-g-bot-primary": {
+          id: "locomotion-g-bot-primary",
+          kind: "locomotion-capability-state",
+          ownerEntityId: "g-bot-primary",
+          locomotionCapabilityRef: "worldkit://locomotion-profile/g-bot@1",
+          locomotionCapabilityHash: HASH_C,
+          mode: "suspended",
+          suspendedByRelationshipId: "possession-primary",
+        },
+      },
     })).toThrow("closed WorldStateSnapshotV1 schema");
   });
 

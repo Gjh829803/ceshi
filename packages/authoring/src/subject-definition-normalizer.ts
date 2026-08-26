@@ -207,7 +207,7 @@ function normalizeCapabilityAssemblyV1(
 
   const unavailableRelationshipCapabilityRef = subject.relationshipCapabilityRefs.find(
     (resourceRef) =>
-      resourceRef === "worldkit://capability/relationship.mount@1" ||
+      resourceRef === "worldkit://capability/relationship.mounted-on@1" ||
       resourceRef === "worldkit://capability/relationship.seat@1" ||
       resourceRef === "worldkit://capability/relationship.tether@1",
   );
@@ -319,8 +319,8 @@ function normalizeCapabilityAssemblyV1(
     });
 
   const relationshipProfileRefs = subject.relationshipCapabilityRefs.flatMap((resourceRef) => {
-    if (resourceRef === "worldkit://capability/relationship.mount@1") {
-      return ["worldkit://relationship-profile/mount.reserved@1"];
+    if (resourceRef === "worldkit://capability/relationship.mounted-on@1") {
+      return ["worldkit://relationship-profile/mounted-on.stand-ground@1"];
     }
     if (resourceRef === "worldkit://capability/relationship.seat@1") {
       return ["worldkit://relationship-profile/seat.driver@1"];

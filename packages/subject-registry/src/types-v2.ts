@@ -166,7 +166,7 @@ export interface CapabilityManifestInputV1 extends SubjectRegistryResourceBaseIn
     | "controllable"
     | "seat"
     | "tether"
-    | "mount"
+    | "mountedOn"
     | "motion-switch"
   )[];
   conflictingCapabilityRefs: readonly string[];

@@ -570,6 +570,7 @@ export function parseGameplayActionDefinitionV1(
     "contentHash",
     "executionMode",
     "completion",
+    "effect",
     "isMovementInputBlocked",
     "allowedActorEntityDefinitionRefs",
     "requiredActorCapabilityRefs",

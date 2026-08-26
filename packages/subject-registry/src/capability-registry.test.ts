@@ -345,14 +345,49 @@ describe("capability-driven subject registry", () => {
     }
   });
 
-  it("publishes relationship profiles as reserved until their runtime behavior exists", () => {
-    expect([
-      "worldkit://relationship-profile/mount.reserved@1",
+  it("publishes one implemented mountedOn profile with role-qualified sockets", () => {
+    const mountedOn = builtInSubjectResourceRegistry.resolveRelationshipProfile(
+      "worldkit://relationship-profile/mounted-on.stand-ground@1",
+    );
+
+    expect(mountedOn).toMatchObject({
+      relationshipType: "mountedOn",
+      runtimeStatus: "implemented",
+      requiredRiderSocketIds: ["FootAlignment"],
+      requiredMountSocketIds: ["MountStand"],
+      controlTransferMode: "to-mount",
+      cameraTargetRole: "controlled-entity",
+      maximumMountDistanceMeters: 2,
+    });
+    expect(mountedOn).not.toHaveProperty("requiredSourceSocketIds");
+    expect(mountedOn).not.toHaveProperty("requiredTargetSocketIds");
+    expect(
+      builtInSubjectResourceRegistry.resolveRelationshipProfile(
+        "worldkit://relationship-profile/mount.reserved@1",
+      ),
+    ).toBeUndefined();
+  });
+
+  it("keeps seat and tether reserved with their own role-qualified sockets", () => {
+    const seat = builtInSubjectResourceRegistry.resolveRelationshipProfile(
       "worldkit://relationship-profile/seat.driver@1",
+    );
+    const tether = builtInSubjectResourceRegistry.resolveRelationshipProfile(
       "worldkit://relationship-profile/tether.standard@1",
-    ].map((resourceRef) =>
-      builtInSubjectResourceRegistry.resolveRelationshipProfile(resourceRef)?.runtimeStatus
-    )).toEqual(["reserved", "reserved", "reserved"]);
+    );
+
+    expect(seat).toMatchObject({
+      relationshipType: "seat",
+      runtimeStatus: "reserved",
+      requiredOccupantSocketIds: ["SeatAlignment"],
+      requiredSeatSocketIds: ["DriverSeat"],
+    });
+    expect(tether).toMatchObject({
+      relationshipType: "tether",
+      runtimeStatus: "reserved",
+      requiredTetheredSocketIds: ["TetherSource"],
+      requiredTetherAnchorSocketIds: ["TetherTarget"],
+    });
   });
 
   it("locks the current 25-clip G Bot artifact and keeps runtime state binding explicitly unready", () => {

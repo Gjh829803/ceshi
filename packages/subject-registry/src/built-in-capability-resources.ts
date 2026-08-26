@@ -112,16 +112,16 @@ const CAPABILITY_MANIFESTS = [
   },
   {
     kind: "capability",
-    id: "relationship.mount",
+    id: "relationship.mounted-on",
     version: 1,
-    resourceRef: "worldkit://capability/relationship.mount@1",
+    resourceRef: "worldkit://capability/relationship.mounted-on@1",
     requiredCapabilityRefs: [],
-    providedFeatures: ["mount"],
+    providedFeatures: ["mountedOn"],
     conflictingCapabilityRefs: [],
     aiMetadata: {
-      displayName: "Mount Relationship Vocabulary",
-      description: "Frozen mount capability name; runtime behavior remains reserved.",
-      semanticTags: ["mount", "relationship", "reserved"],
+      displayName: "Mounted On Relationship",
+      description: "Role-qualified mountedOn relationship with implemented Ground stand-slot behavior.",
+      semanticTags: ["mountedOn", "relationship", "implemented"],
     },
   },
 ] as const satisfies readonly CapabilityManifestInputV1[];

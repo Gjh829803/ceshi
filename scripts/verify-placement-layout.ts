@@ -416,9 +416,10 @@ async function captureBrowserEvidence(): Promise<BrowserEvidenceV1> {
     assert.ok(
       Object.values(
         captured.snapshot.world.gameplayInspection
-          .possessedByRelationshipsById,
+          .relationshipStatesById,
       ).some(
         (relationship) =>
+          relationship.type === "possessedBy" &&
           relationship.controllerEntityId === "controller-primary" &&
           relationship.controlledEntityId === "player",
       ),

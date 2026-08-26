@@ -247,6 +247,44 @@ describe("ExecutionPlanV5 canonical boundary", () => {
     );
   });
 
+  it("parses mountedOn Relationship Profiles and rejects the old generic mount shape", () => {
+    const input = structuredClone(planFixture()) as unknown as {
+      subjects: Array<{
+        capabilityAssembly: {
+          relationshipProfiles: Array<Record<string, unknown>>;
+        };
+      }>;
+    };
+    input.subjects[0]!.capabilityAssembly.relationshipProfiles = [{
+      resourceRef:
+        "worldkit://relationship-profile/mounted-on.stand-ground@1",
+      relationshipType: "mountedOn",
+      requiredRiderSocketIds: ["FootAlignment"],
+      requiredMountSocketIds: ["MountStand"],
+      controlTransferMode: "to-mount",
+      cameraTargetRole: "controlled-entity",
+      maximumMountDistanceMeters: 2,
+    }];
+
+    expect(parseExecutionPlanV5(input).subjects[0]!.capabilityAssembly
+      .relationshipProfiles).toEqual(
+      input.subjects[0]!.capabilityAssembly.relationshipProfiles,
+    );
+
+    const oldShape = structuredClone(input);
+    oldShape.subjects[0]!.capabilityAssembly.relationshipProfiles = [{
+      resourceRef: "worldkit://relationship-profile/mount.reserved@1",
+      relationshipType: "mount",
+      requiredSourceSocketIds: ["SeatAlignment"],
+      requiredTargetSocketIds: ["MountSeat"],
+      controlTransferPolicy: "transfer-to-target",
+      cameraTargetPolicy: "controlled-entity",
+    }];
+    expect(() => parseExecutionPlanV5(oldShape)).toThrowError(
+      "EXECUTION_PLAN_V5_INVALID",
+    );
+  });
+
   it("rejects a V5 Subject without its locked capability assembly", () => {
     const input = structuredClone(planFixture()) as unknown as {
       subjects: Array<Record<string, unknown>>;

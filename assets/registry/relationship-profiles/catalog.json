@@ -7,11 +7,8 @@
     "authoringAvailability": "experimental",
     "relationshipType": "seat",
     "runtimeStatus": "reserved",
-    "requiredSourceSocketIds": ["SeatAlignment"],
-    "requiredTargetSocketIds": ["DriverSeat"],
-    "controlTransferPolicy": "transfer-to-target",
-    "cameraTargetPolicy": "controlled-entity",
-    "maximumDistanceMeters": 3,
+    "requiredOccupantSocketIds": ["SeatAlignment"],
+    "requiredSeatSocketIds": ["DriverSeat"],
     "aiMetadata": {
       "displayName": "R01 Driver Seat",
       "description": "Frozen seat alignment and control-transfer vocabulary; runtime behavior is reserved in this phase.",
@@ -26,11 +23,8 @@
     "authoringAvailability": "experimental",
     "relationshipType": "tether",
     "runtimeStatus": "reserved",
-    "requiredSourceSocketIds": ["TetherSource"],
-    "requiredTargetSocketIds": ["TetherTarget"],
-    "controlTransferPolicy": "keep-source",
-    "cameraTargetPolicy": "source-entity",
-    "maximumDistanceMeters": 4,
+    "requiredTetheredSocketIds": ["TetherSource"],
+    "requiredTetherAnchorSocketIds": ["TetherTarget"],
     "aiMetadata": {
       "displayName": "R03 Standard Tether",
       "description": "Frozen bounded tether vocabulary for composite subjects; runtime behavior is reserved in this phase.",
@@ -39,20 +33,21 @@
   },
   {
     "kind": "relationship-profile",
-    "id": "R02.mount.reserved",
+    "id": "R02.mounted-on.stand-ground",
     "version": 1,
-    "resourceRef": "worldkit://relationship-profile/mount.reserved@1",
+    "resourceRef": "worldkit://relationship-profile/mounted-on.stand-ground@1",
     "authoringAvailability": "internal",
-    "relationshipType": "mount",
-    "runtimeStatus": "reserved",
-    "requiredSourceSocketIds": ["SeatAlignment"],
-    "requiredTargetSocketIds": ["MountSeat"],
-    "controlTransferPolicy": "transfer-to-target",
-    "cameraTargetPolicy": "controlled-entity",
+    "relationshipType": "mountedOn",
+    "runtimeStatus": "implemented",
+    "requiredRiderSocketIds": ["FootAlignment"],
+    "requiredMountSocketIds": ["MountStand"],
+    "controlTransferMode": "to-mount",
+    "cameraTargetRole": "controlled-entity",
+    "maximumMountDistanceMeters": 2,
     "aiMetadata": {
-      "displayName": "R02 Mount Reserved",
-      "description": "Frozen mount relationship vocabulary; runtime is not implemented in this phase.",
-      "semanticTags": ["mount", "reserved"]
+      "displayName": "R02 Mounted On Stand Ground",
+      "description": "Implemented mountedOn stand-slot relationship for the Ground skateboard slice.",
+      "semanticTags": ["mountedOn", "skateboard", "stand"]
     }
   }
 ]

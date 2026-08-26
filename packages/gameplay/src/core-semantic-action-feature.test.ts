@@ -19,6 +19,7 @@ function body(overrides: Partial<Omit<GameplayActionDefinitionV1, "contentHash">
     resourceRef: "worldkit://semantic-action/jump@1",
     executionMode: "exclusive-per-subject" as const,
     completion: { mode: "fixed-duration" as const, durationTicks: 12 },
+    effect: { mode: "state-only" as const },
     isMovementInputBlocked: false,
     allowedActorEntityDefinitionRefs: ["worldkit://entity/humanoid@1"],
     requiredActorCapabilityRefs: ["worldkit://capability/jump@1"],

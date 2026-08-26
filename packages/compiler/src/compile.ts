@@ -735,21 +735,24 @@ function compileCapabilityAssemblyV1(
     };
   };
   const relationshipProfiles = assembly.relationshipProfiles.map((profile) => {
-    if (profile.runtimeStatus !== "implemented" || profile.relationshipType === "mount") {
+    if (
+      profile.runtimeStatus !== "implemented" ||
+      profile.relationshipType !== "mountedOn"
+    ) {
       throw new Error(
         `NormalizedWorldIR invariant violated: reserved Relationship Profile '${profile.resourceRef}' cannot enter an Execution Plan.`,
       );
     }
     return {
       resourceRef: profile.resourceRef,
-      relationshipType: profile.relationshipType,
-      requiredSourceSocketIds: [...profile.requiredSourceSocketIds],
-      requiredTargetSocketIds: [...profile.requiredTargetSocketIds],
-      controlTransferPolicy: profile.controlTransferPolicy,
-      cameraTargetPolicy: profile.cameraTargetPolicy,
-      ...(profile.maximumDistanceMeters === undefined
+      relationshipType: "mountedOn" as const,
+      requiredRiderSocketIds: [...profile.requiredRiderSocketIds],
+      requiredMountSocketIds: [...profile.requiredMountSocketIds],
+      controlTransferMode: profile.controlTransferMode,
+      cameraTargetRole: profile.cameraTargetRole,
+      ...(profile.maximumMountDistanceMeters === undefined
         ? {}
-        : { maximumDistanceMeters: profile.maximumDistanceMeters }),
+        : { maximumMountDistanceMeters: profile.maximumMountDistanceMeters }),
     };
   });
   rejectPublishedWaterMediumProfile(assembly.mediumProfile);

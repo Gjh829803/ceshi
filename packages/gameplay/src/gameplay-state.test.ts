@@ -47,6 +47,7 @@ function definition(
     resourceRef: "worldkit://semantic-action/wave@1",
     executionMode: "exclusive-per-subject" as const,
     completion: { mode: "explicit-cancel" as const },
+    effect: { mode: "state-only" as const },
     isMovementInputBlocked: false,
     allowedActorEntityDefinitionRefs: ["worldkit://entity/humanoid@1"],
     requiredActorCapabilityRefs: ["worldkit://capability/arms@1"],
@@ -87,7 +88,7 @@ function options(
     capacityBudget: {
       ...DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
       maximumControllerEntityCount: 2,
-      maximumPossessedByRelationshipCount: 2,
+      maximumRelationshipStateCount: 2,
     },
     ...overrides,
   };
@@ -771,7 +772,7 @@ describe("GameplayState possession", () => {
     const budget: GameplayCapacityBudgetV1 = {
       ...DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
       maximumControllerEntityCount: 2,
-      maximumPossessedByRelationshipCount: 1,
+      maximumRelationshipStateCount: 1,
     };
     const state = new GameplayState(options({ capacityBudget: budget }));
     bind(state, "controller-a", "subject-a");
@@ -899,7 +900,7 @@ describe("GameplayState possession", () => {
       id: "controller-a",
       participantId: "participant-a",
     });
-    expect(inspection.possessedByRelationshipsById).toHaveProperty(
+    expect(inspection.relationshipStatesById).toHaveProperty(
       derivePossessedByRelationshipIdV1("bind-controller-a-subject-a"),
     );
   });
@@ -925,8 +926,8 @@ describe("GameplayState possession", () => {
       inspectionContext("inspection-staged-bind", 2),
     );
 
-    expect(current.possessedByRelationshipsById).toEqual({});
-    expect(staged.possessedByRelationshipsById).toHaveProperty(
+    expect(current.relationshipStatesById).toEqual({});
+    expect(staged.relationshipStatesById).toHaveProperty(
       derivePossessedByRelationshipIdV1("bind-staged-inspection"),
     );
     expect(state.revision).toBe(0);
@@ -936,8 +937,8 @@ describe("GameplayState possession", () => {
     const committed = state.projectGameplayInspection(
       inspectionContext("inspection-committed-bind", 2),
     );
-    expect(committed.possessedByRelationshipsById).toEqual(
-      staged.possessedByRelationshipsById,
+    expect(committed.relationshipStatesById).toEqual(
+      staged.relationshipStatesById,
     );
     expect(state.revision).toBe(1);
   });
@@ -966,9 +967,9 @@ describe("GameplayState possession", () => {
       rebind.transitionPlan,
       inspectionContext("inspection-staged-rebind", 2),
     );
-    expect(Object.values(currentBeforeRebind.possessedByRelationshipsById))
+    expect(Object.values(currentBeforeRebind.relationshipStatesById))
       .toEqual([expect.objectContaining({ controlledEntityId: "subject-a" })]);
-    expect(Object.values(stagedRebind.possessedByRelationshipsById))
+    expect(Object.values(stagedRebind.relationshipStatesById))
       .toEqual([expect.objectContaining({ controlledEntityId: "subject-b" })]);
     expect(state.revision).toBe(1);
 
@@ -976,8 +977,8 @@ describe("GameplayState possession", () => {
     const committedRebind = state.projectGameplayInspection(
       inspectionContext("inspection-committed-rebind", 2),
     );
-    expect(committedRebind.possessedByRelationshipsById).toEqual(
-      stagedRebind.possessedByRelationshipsById,
+    expect(committedRebind.relationshipStatesById).toEqual(
+      stagedRebind.relationshipStatesById,
     );
     const activateCommand = command({
       id: "activate-staged-inspection",
@@ -1255,7 +1256,7 @@ describe("GameplayState actions", () => {
       capacityBudget: {
         ...DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
         maximumControllerEntityCount: 2,
-        maximumPossessedByRelationshipCount: 2,
+        maximumRelationshipStateCount: 2,
         maximumActiveActionStateCount: 2,
         maximumRetainedEventCount: 1,
       },
@@ -1297,7 +1298,7 @@ describe("GameplayState actions", () => {
       capacityBudget: {
         ...DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
         maximumControllerEntityCount: 2,
-        maximumPossessedByRelationshipCount: 2,
+        maximumRelationshipStateCount: 2,
         maximumRetainedEventCount: 1,
       },
     }));
@@ -1352,7 +1353,7 @@ describe("GameplayState actions", () => {
       capacityBudget: {
         ...DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
         maximumControllerEntityCount: 2,
-        maximumPossessedByRelationshipCount: 2,
+        maximumRelationshipStateCount: 2,
         maximumRetainedEventCount: 2,
       },
     }));
@@ -1398,7 +1399,7 @@ describe("GameplayState actions", () => {
       capacityBudget: {
         ...DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
         maximumControllerEntityCount: 2,
-        maximumPossessedByRelationshipCount: 2,
+        maximumRelationshipStateCount: 2,
         maximumRetainedEventCount: 1,
       },
     }));
@@ -1589,7 +1590,7 @@ describe("GameplayState actions", () => {
     const budget = {
       ...DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
       maximumControllerEntityCount: 2,
-      maximumPossessedByRelationshipCount: 2,
+      maximumRelationshipStateCount: 2,
       maximumActiveActionStateCount: 1,
       maximumUsedActionExecutionIdCount: 1,
     };
@@ -1642,7 +1643,7 @@ describe("GameplayState actions", () => {
       capacityBudget: {
         ...DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
         maximumControllerEntityCount: 2,
-        maximumPossessedByRelationshipCount: 2,
+        maximumRelationshipStateCount: 2,
         maximumActiveActionStateCount: 1,
       },
       actionCatalog: createGameplayActionCatalogV1([fixed], 1),

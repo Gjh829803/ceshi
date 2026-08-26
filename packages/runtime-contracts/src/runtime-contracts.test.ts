@@ -126,7 +126,7 @@ function createGameplayInspectionFixtureV1(): GameplayInspectionSnapshotV1 {
         participantId: "participant-primary",
       },
     },
-    possessedByRelationshipsById: {},
+    relationshipStatesById: {},
     activeActionStatesById: {},
     activatedGameplayFeatureRefs: [],
     lastEventSequence: 0,

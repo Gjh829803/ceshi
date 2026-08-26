@@ -506,9 +506,7 @@ function transitionEvents(
       commandId: "commandId" in transition
         ? transition.commandId
         : invalid("GameplayTransitionPlanV1"),
-      relationshipId: relationship.id,
-      controlledEntityId: relationship.controlledEntityId,
-      controllerEntityId: relationship.controllerEntityId,
+      relationship,
     }));
   }
   for (const change of transition.actionChanges) {

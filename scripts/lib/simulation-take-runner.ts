@@ -136,9 +136,12 @@ function expectedPossessionForController(
   controllerEntityId: string,
 ): ExpectedPossessionV1 {
   const possession = Object.values(
-    snapshot.world.gameplayInspection.possessedByRelationshipsById,
-  ).find((relationship) => relationship.controllerEntityId === controllerEntityId);
-  return isNil(possession)
+    snapshot.world.gameplayInspection.relationshipStatesById,
+  ).find((relationship) =>
+    relationship.type === "possessedBy" &&
+    relationship.controllerEntityId === controllerEntityId
+  );
+  return isNil(possession) || possession.type !== "possessedBy"
     ? { mode: "unbound" }
     : {
         mode: "possessed",

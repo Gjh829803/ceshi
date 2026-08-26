@@ -135,7 +135,7 @@ function snapshot(
             participantId: "participant-primary",
           },
         },
-        possessedByRelationshipsById: possessedEntityId === undefined
+        relationshipStatesById: possessedEntityId === undefined
           ? {}
           : {
               "possessed-by-primary": {

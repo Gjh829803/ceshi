@@ -282,9 +282,10 @@ describe("startWorldkitServer", () => {
         const api = window.__WORLDKIT__!;
         const ready = await api.ready();
         const possession = Object.values(
-          ready.world.gameplayInspection.possessedByRelationshipsById,
+          ready.world.gameplayInspection.relationshipStatesById,
         ).find(
           (relationship) =>
+            relationship.type === "possessedBy" &&
             relationship.controllerEntityId === "controller-primary",
         );
         const selector = {
@@ -293,7 +294,9 @@ describe("startWorldkitServer", () => {
         };
         return {
           version: api.version,
-          executionWorldId: possession?.controlledEntityId,
+          executionWorldId: possession?.type === "possessedBy"
+            ? possession.controlledEntityId
+            : undefined,
           rootControlledEntityIdPresent: "controlledEntityId" in ready,
           routeResult: api.getRouteSummary(selector),
         };

@@ -911,7 +911,7 @@ describe("RuntimeHost two-phase replacement", () => {
           simulationTick: 0,
         });
         expect(Object.values(
-          publication.gameplayInspection.possessedByRelationshipsById,
+          publication.gameplayInspection.relationshipStatesById,
         )).toEqual([
           expect.objectContaining({
             controllerEntityId: controllerState.id,
@@ -941,11 +941,11 @@ describe("RuntimeHost two-phase replacement", () => {
         simulationTick: 0,
       },
       gameplayInspection: {
-        possessedByRelationshipsById: expect.objectContaining({}),
+        relationshipStatesById: expect.objectContaining({}),
       },
     });
     expect(Object.values(
-      host.snapshot().gameplayInspection.possessedByRelationshipsById,
+      host.snapshot().gameplayInspection.relationshipStatesById,
     )).toEqual([
       expect.objectContaining({
         controllerEntityId: controllerState.id,
@@ -1275,14 +1275,14 @@ describe("RuntimeHost two-phase replacement", () => {
       worldSessionId: "world-session.reset",
       worldPackageRef: INITIAL_WORLD_PACKAGE_REF,
     });
-    expect(reset.gameplayInspection.possessedByRelationshipsById).toEqual({});
+    expect(reset.gameplayInspection.relationshipStatesById).toEqual({});
     expect(reset.worldState.simulationTick).toBe(0);
     const resetGateInput = created.adapter.factory
       .awaitCandidatePublicationReady.mock.calls.at(-1)?.[0] as
         | { publication: WorldSessionPublicationV1 }
         | undefined;
     expect(resetGateInput?.publication.gameplayInspection
-      .possessedByRelationshipsById).toEqual({});
+      .relationshipStatesById).toEqual({});
   });
 });
 

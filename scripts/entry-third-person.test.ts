@@ -29,7 +29,7 @@ function snapshotV4(): any {
     },
     world: {
       gameplayInspection: {
-        possessedByRelationshipsById: {
+        relationshipStatesById: {
           possession: {
             controllerEntityId: "controller-primary",
             controlledEntityId: "player",
@@ -184,7 +184,7 @@ describe("strict centered rear-third-person entry gate", () => {
       {
         snapshot: (() => {
           const value = snapshotV4();
-          value.world.gameplayInspection.possessedByRelationshipsById = {};
+          value.world.gameplayInspection.relationshipStatesById = {};
           return value;
         })(),
         message: "primary possession binding",

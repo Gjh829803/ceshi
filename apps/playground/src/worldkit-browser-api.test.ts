@@ -406,7 +406,7 @@ function gameplayInspectionFixture(): GameplayInspectionSnapshotV1 {
     simulationTick: 0,
     participantStatesById: {},
     controllerStatesById: {},
-    possessedByRelationshipsById: {},
+    relationshipStatesById: {},
     activeActionStatesById: {},
     activatedGameplayFeatureRefs: [],
     lastEventSequence: 0,

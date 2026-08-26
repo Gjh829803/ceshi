@@ -8,8 +8,8 @@ type ResourceKindV1 = SubjectRegistryResourceV3["kind"];
 
 const RELATIONSHIP_PROFILE_REF_BY_CAPABILITY_REF_V1: Readonly<Record<string, string>> =
   Object.freeze({
-    "worldkit://capability/relationship.mount@1":
-      "worldkit://relationship-profile/mount.reserved@1",
+    "worldkit://capability/relationship.mounted-on@1":
+      "worldkit://relationship-profile/mounted-on.stand-ground@1",
     "worldkit://capability/relationship.seat@1":
       "worldkit://relationship-profile/seat.driver@1",
     "worldkit://capability/relationship.tether@1":

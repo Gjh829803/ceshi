@@ -224,17 +224,21 @@ function activePossessionEntityId(
   inspection: GameplayInspectionSnapshotV1,
 ): string | undefined {
   const relationships = Object.values(
-    inspection.possessedByRelationshipsById,
+    inspection.relationshipStatesById,
   ).filter(
-    ({ controllerEntityId }) =>
-      controllerEntityId === PLAYGROUND_CONTROLLER_ENTITY_ID_V1,
+    (relationship) =>
+      relationship.type === "possessedBy" &&
+      relationship.controllerEntityId === PLAYGROUND_CONTROLLER_ENTITY_ID_V1,
   );
   if (relationships.length > 1) {
     throw new Error(
       "WORLDKIT_RUNTIME_POSSESSION_INVALID: Multiple canonical control owners were published.",
     );
   }
-  return relationships[0]?.controlledEntityId;
+  const relationship = relationships[0];
+  return relationship?.type === "possessedBy"
+    ? relationship.controlledEntityId
+    : undefined;
 }
 
 function cameraProjection(

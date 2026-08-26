@@ -54,7 +54,7 @@ function runtimeSnapshot(simulationTick: number): WorldRuntimeSnapshotV4 {
             participantId: "participant-primary",
           },
         },
-        possessedByRelationshipsById: {
+        relationshipStatesById: {
           "possessed-by-primary": {
             id: "possessed-by-primary",
             type: "possessedBy",

@@ -1713,13 +1713,31 @@ export class BabylonWorldRuntime {
     const availableSocketIds = new Set(subject.sockets.map((socket) => socket.id));
     const relationshipSocketCoverage = assembly.relationshipProfiles.every(
       (profile) => {
-        const sourceAvailable = profile.requiredSourceSocketIds.every((socketId) =>
-          availableSocketIds.has(socketId),
+        if (profile.relationshipType === "mountedOn") {
+          const riderAvailable = profile.requiredRiderSocketIds.every(
+            (socketId) => availableSocketIds.has(socketId),
+          );
+          const mountAvailable = profile.requiredMountSocketIds.every(
+            (socketId) => availableSocketIds.has(socketId),
+          );
+          return riderAvailable || mountAvailable;
+        }
+        if (profile.relationshipType === "seat") {
+          const occupantAvailable = profile.requiredOccupantSocketIds.every(
+            (socketId) => availableSocketIds.has(socketId),
+          );
+          const seatAvailable = profile.requiredSeatSocketIds.every(
+            (socketId) => availableSocketIds.has(socketId),
+          );
+          return occupantAvailable || seatAvailable;
+        }
+        const tetheredAvailable = profile.requiredTetheredSocketIds.every(
+          (socketId) => availableSocketIds.has(socketId),
         );
-        const targetAvailable = profile.requiredTargetSocketIds.every((socketId) =>
-          availableSocketIds.has(socketId),
+        const anchorAvailable = profile.requiredTetherAnchorSocketIds.every(
+          (socketId) => availableSocketIds.has(socketId),
         );
-        return sourceAvailable || targetAvailable;
+        return tetheredAvailable || anchorAvailable;
       },
     );
     const checks: SubjectHarnessReportV1["checks"] = [

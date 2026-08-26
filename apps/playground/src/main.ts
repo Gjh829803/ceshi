@@ -464,12 +464,19 @@ function controlledEntityIdFromSnapshotV4(
   snapshot: WorldRuntimeSnapshotV4,
 ): string {
   const relationships = Object.values(
-    snapshot.world.gameplayInspection.possessedByRelationshipsById,
-  ).filter(({ controllerEntityId }) => controllerEntityId === "controller-primary");
+    snapshot.world.gameplayInspection.relationshipStatesById,
+  ).filter((relationship) =>
+    relationship.type === "possessedBy" &&
+    relationship.controllerEntityId === "controller-primary"
+  );
   if (relationships.length !== 1) {
     throw new Error("WORLDKIT_PLAYGROUND_CONTROL_BINDING_UNAVAILABLE");
   }
-  return relationships[0]!.controlledEntityId;
+  const relationship = relationships[0];
+  if (relationship?.type !== "possessedBy") {
+    throw new Error("WORLDKIT_PLAYGROUND_CONTROL_BINDING_UNAVAILABLE");
+  }
+  return relationship.controlledEntityId;
 }
 
 function locomotionStateFromSubjectV4(

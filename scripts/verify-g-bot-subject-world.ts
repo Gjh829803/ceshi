@@ -249,6 +249,9 @@ function requireLocomotionCapability(snapshot: WorldRuntimeSnapshotV4, entityId:
     requireSubjectProjection(snapshot, entityId).capabilityStatesById,
   ).find((candidate) => candidate.kind === "locomotion-capability-state");
   assert.ok(capability !== undefined, `Missing locomotion capability state for '${entityId}'.`);
+  if (capability.mode === "suspended") {
+    throw new Error(`Unexpected suspended locomotion capability for '${entityId}'.`);
+  }
   return capability;
 }
 
@@ -259,8 +262,9 @@ function locomotionActionId(snapshot: WorldRuntimeSnapshotV4, entityId: string):
 
 function assertPossessedBy(snapshot: WorldRuntimeSnapshotV4, controlledEntityId: string): void {
   assert.ok(
-    Object.values(snapshot.world.gameplayInspection.possessedByRelationshipsById).some(
+    Object.values(snapshot.world.gameplayInspection.relationshipStatesById).some(
       (relationship) =>
+        relationship.type === "possessedBy" &&
         relationship.controllerEntityId === CONTROLLER_ID &&
         relationship.controlledEntityId === controlledEntityId,
     ),

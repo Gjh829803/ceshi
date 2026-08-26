@@ -99,6 +99,7 @@ function actionDefinition(
     resourceRef: ACTION_REF,
     executionMode: "exclusive-per-subject",
     completion: { mode: "fixed-duration", durationTicks },
+    effect: { mode: "state-only" },
     isMovementInputBlocked: true,
     allowedActorEntityDefinitionRefs: [HERO_DEFINITION_REF],
     requiredActorCapabilityRefs: [],
@@ -198,7 +199,7 @@ function createHarnessAndOptions(input: Readonly<{
       gameplayCapacityBudget: {
         ...DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
         maximumControllerEntityCount: controllerIds.length,
-        maximumPossessedByRelationshipCount: controllerIds.length,
+        maximumRelationshipStateCount: controllerIds.length,
       },
       worldPort: harness.port,
     },

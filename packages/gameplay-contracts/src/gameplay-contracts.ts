@@ -774,22 +774,20 @@ function parseRelationshipEvent(
     "simulationTick",
     "sequence",
     "commandId",
-    "relationshipId",
-    "controlledEntityId",
-    "controllerEntityId",
+    "relationship",
   ]) ||
-    !isNonEmptyString(record.commandId) ||
-    !isNonEmptyString(record.relationshipId) ||
-    !isNonEmptyString(record.controlledEntityId) ||
-    !isNonEmptyString(record.controllerEntityId)
+    !isNonEmptyString(record.commandId)
   ) return invalid(schemaName);
+  const relationship = parseGameplayRelationshipStateV1(record.relationship) ??
+    invalid(schemaName);
+  if (relationship.establishedSimulationTick > base.simulationTick) {
+    return invalid(schemaName);
+  }
   return {
     ...base,
     type,
     commandId: record.commandId,
-    relationshipId: record.relationshipId,
-    controlledEntityId: record.controlledEntityId,
-    controllerEntityId: record.controllerEntityId,
+    relationship,
   };
 }
 
@@ -940,17 +938,31 @@ export type GameplayEntityStateV1 =
   | SpatialEntityStateV1
   | ControllerEntityStateV1;
 
-export interface LocomotionCapabilityStateV1 {
+interface LocomotionCapabilityStateBaseV1 {
   readonly id: string;
   readonly kind: "locomotion-capability-state";
   readonly ownerEntityId: string;
   readonly locomotionCapabilityRef: string;
   readonly locomotionCapabilityHash: Sha256HashV1;
-  readonly mode: "idle" | "walk" | "run" | "airborne";
-  readonly movementMedium: "ground" | "air";
-  readonly facingYawRadians: number;
-  readonly speedMetersPerSecond: number;
 }
+
+export type LocomotionCapabilityStateV1 = LocomotionCapabilityStateBaseV1 &
+  (
+    | Readonly<{
+        mode: "idle" | "walk" | "run" | "airborne";
+        movementMedium: "ground" | "air";
+        facingYawRadians: number;
+        speedMetersPerSecond: number;
+        suspendedByRelationshipId?: never;
+      }>
+    | Readonly<{
+        mode: "suspended";
+        suspendedByRelationshipId: string;
+        movementMedium?: never;
+        facingYawRadians?: never;
+        speedMetersPerSecond?: never;
+      }>
+  );
 
 export type GameplayCapabilityStateV1 = LocomotionCapabilityStateV1;
 
@@ -1200,22 +1212,45 @@ function parseLocomotionCapabilityStateV1(
   input: unknown,
 ): LocomotionCapabilityStateV1 | undefined {
   const record = snapshotDataRecord(input);
-  if (isNil(record) || !hasExactKeys(record, [
+  const baseKeys = [
     "id",
     "kind",
     "ownerEntityId",
     "locomotionCapabilityRef",
     "locomotionCapabilityHash",
     "mode",
-    "movementMedium",
-    "facingYawRadians",
-    "speedMetersPerSecond",
-  ]) ||
+  ] as const;
+  if (isNil(record) ||
     record.kind !== "locomotion-capability-state" ||
     !isNonEmptyString(record.id) ||
     !isNonEmptyString(record.ownerEntityId) ||
     !isNonEmptyString(record.locomotionCapabilityRef) ||
-    !isSha256(record.locomotionCapabilityHash) ||
+    !isSha256(record.locomotionCapabilityHash)
+  ) return undefined;
+  const base = {
+    id: record.id,
+    kind: "locomotion-capability-state" as const,
+    ownerEntityId: record.ownerEntityId,
+    locomotionCapabilityRef: record.locomotionCapabilityRef,
+    locomotionCapabilityHash: record.locomotionCapabilityHash,
+  };
+  if (record.mode === "suspended") {
+    if (
+      !hasExactKeys(record, [...baseKeys, "suspendedByRelationshipId"]) ||
+      !isNonEmptyString(record.suspendedByRelationshipId)
+    ) return undefined;
+    return {
+      ...base,
+      mode: "suspended",
+      suspendedByRelationshipId: record.suspendedByRelationshipId,
+    };
+  }
+  if (!hasExactKeys(record, [
+    ...baseKeys,
+    "movementMedium",
+    "facingYawRadians",
+    "speedMetersPerSecond",
+  ]) ||
     !["idle", "walk", "run", "airborne"].includes(record.mode as string) ||
     !["ground", "air"].includes(record.movementMedium as string) ||
     !isFiniteNumber(record.facingYawRadians) ||
@@ -1224,13 +1259,9 @@ function parseLocomotionCapabilityStateV1(
     ((record.mode === "airborne") !== (record.movementMedium === "air"))
   ) return undefined;
   return {
-    id: record.id,
-    kind: "locomotion-capability-state",
-    ownerEntityId: record.ownerEntityId,
-    locomotionCapabilityRef: record.locomotionCapabilityRef,
-    locomotionCapabilityHash: record.locomotionCapabilityHash,
-    mode: record.mode as LocomotionCapabilityStateV1["mode"],
-    movementMedium: record.movementMedium as LocomotionCapabilityStateV1["movementMedium"],
+    ...base,
+    mode: record.mode as "idle" | "walk" | "run" | "airborne",
+    movementMedium: record.movementMedium as "ground" | "air",
     facingYawRadians: record.facingYawRadians,
     speedMetersPerSecond: record.speedMetersPerSecond,
   };
@@ -1745,6 +1776,16 @@ function parseWorldStateSnapshotBuildInputV1(
       getOwnMapValue(entityStatesById, capability.ownerEntityId)?.kind !==
         "spatial-entity-state"
     ) invalid(schemaName);
+    if (capability.mode === "suspended") {
+      const relationship = getOwnMapValue(
+        relationshipStatesById,
+        capability.suspendedByRelationshipId,
+      );
+      if (
+        relationship?.type !== "mountedOn" ||
+        relationship.riderEntityId !== capability.ownerEntityId
+      ) invalid(schemaName);
+    }
   }
 
   const isSpatialEntityEndpoint = (entityId: string): boolean => {

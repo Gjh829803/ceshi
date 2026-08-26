@@ -235,7 +235,7 @@ describe("WorldSession command transaction", () => {
       publicationEpoch: 0,
       viewState: { viewStateRevision: 0 },
     });
-    expect(session.snapshot().gameplayInspection.possessedByRelationshipsById)
+    expect(session.snapshot().gameplayInspection.relationshipStatesById)
       .toEqual({});
 
     barrier.release();
@@ -252,7 +252,7 @@ describe("WorldSession command transaction", () => {
       viewStateRevision: 1,
     });
     expect(Object.values(
-      publication.gameplayInspection.possessedByRelationshipsById,
+      publication.gameplayInspection.relationshipStatesById,
     )).toEqual([
       expect.objectContaining({
         controlledEntityId: heroState.id,
@@ -407,7 +407,7 @@ describe("WorldSession command transaction", () => {
       publicationEpoch: 1,
       gameplayInspection: {
         phase: "failed",
-        possessedByRelationshipsById: {},
+        relationshipStatesById: {},
       },
       viewState: { viewStateRevision: 0 },
     });

@@ -203,17 +203,33 @@ export interface MediumProfileInputV1 extends CapabilityResourceBaseInputV1 {
   };
 }
 
-export interface RelationshipProfileInputV1
+interface RelationshipProfileBaseInputV1
   extends CapabilityResourceBaseInputV1 {
   kind: "relationship-profile";
-  relationshipType: "seat" | "tether" | "mount";
   runtimeStatus: "implemented" | "reserved";
-  requiredSourceSocketIds: readonly string[];
-  requiredTargetSocketIds: readonly string[];
-  controlTransferPolicy: "keep-source" | "transfer-to-target" | "none";
-  cameraTargetPolicy: "controlled-entity" | "source-entity" | "target-entity";
-  maximumDistanceMeters?: number;
 }
+
+export type RelationshipProfileInputV1 =
+  | (RelationshipProfileBaseInputV1 & Readonly<{
+      relationshipType: "mountedOn";
+      requiredRiderSocketIds: readonly string[];
+      requiredMountSocketIds: readonly string[];
+      controlTransferMode: "keep-rider" | "to-mount" | "none";
+      cameraTargetRole: "controlled-entity" | "rider" | "mount";
+      maximumMountDistanceMeters?: number;
+    }>)
+  | (RelationshipProfileBaseInputV1 & Readonly<{
+      relationshipType: "seat";
+      runtimeStatus: "reserved";
+      requiredOccupantSocketIds: readonly string[];
+      requiredSeatSocketIds: readonly string[];
+    }>)
+  | (RelationshipProfileBaseInputV1 & Readonly<{
+      relationshipType: "tether";
+      runtimeStatus: "reserved";
+      requiredTetheredSocketIds: readonly string[];
+      requiredTetherAnchorSocketIds: readonly string[];
+    }>);
 
 export interface HarnessProfileInputV1 extends CapabilityResourceBaseInputV1 {
   kind: "harness-profile";

@@ -309,15 +309,29 @@ export interface ExecutionSubjectCapabilityAssemblyV1 {
     resourceRef: string;
     air: { gravityRatio: number; linearDragPerSecond: number };
   };
-  relationshipProfiles: readonly {
-    resourceRef: string;
-    relationshipType: "seat" | "tether";
-    requiredSourceSocketIds: readonly string[];
-    requiredTargetSocketIds: readonly string[];
-    controlTransferPolicy: "keep-source" | "transfer-to-target" | "none";
-    cameraTargetPolicy: "controlled-entity" | "source-entity" | "target-entity";
-    maximumDistanceMeters?: number;
-  }[];
+  relationshipProfiles: readonly (
+    | Readonly<{
+        resourceRef: string;
+        relationshipType: "mountedOn";
+        requiredRiderSocketIds: readonly string[];
+        requiredMountSocketIds: readonly string[];
+        controlTransferMode: "keep-rider" | "to-mount" | "none";
+        cameraTargetRole: "controlled-entity" | "rider" | "mount";
+        maximumMountDistanceMeters?: number;
+      }>
+    | Readonly<{
+        resourceRef: string;
+        relationshipType: "seat";
+        requiredOccupantSocketIds: readonly string[];
+        requiredSeatSocketIds: readonly string[];
+      }>
+    | Readonly<{
+        resourceRef: string;
+        relationshipType: "tether";
+        requiredTetheredSocketIds: readonly string[];
+        requiredTetherAnchorSocketIds: readonly string[];
+      }>
+  )[];
   harnessProfileRef: string;
   requiredHarnessCheckIds: readonly string[];
   actionOrPoseSetRef: string;
@@ -1319,30 +1333,51 @@ function validateCapabilityAssembly(input: unknown): void {
   requireFinite(air.gravityRatio);
   requireFinite(air.linearDragPerSecond);
   dataArray(value.relationshipProfiles).forEach((profile) => {
-    const row = exactDataRecord(profile, [
-      "resourceRef",
-      "relationshipType",
-      "requiredSourceSocketIds",
-      "requiredTargetSocketIds",
-      "controlTransferPolicy",
-      "cameraTargetPolicy",
-    ], ["maximumDistanceMeters"]);
+    const source = dataRecord(profile);
+    const relationshipType = requireLiteral(source.relationshipType, [
+      "mountedOn",
+      "seat",
+      "tether",
+    ]);
+    if (relationshipType === "mountedOn") {
+      const row = exactDataRecord(profile, [
+        "resourceRef",
+        "relationshipType",
+        "requiredRiderSocketIds",
+        "requiredMountSocketIds",
+        "controlTransferMode",
+        "cameraTargetRole",
+      ], ["maximumMountDistanceMeters"]);
+      requireString(row.resourceRef);
+      requireStringArray(row.requiredRiderSocketIds);
+      requireStringArray(row.requiredMountSocketIds);
+      requireLiteral(row.controlTransferMode, ["keep-rider", "to-mount", "none"]);
+      requireLiteral(row.cameraTargetRole, ["controlled-entity", "rider", "mount"]);
+      if (Object.hasOwn(row, "maximumMountDistanceMeters")) {
+        requireFinite(row.maximumMountDistanceMeters);
+      }
+      return;
+    }
+    const row = relationshipType === "seat"
+      ? exactDataRecord(profile, [
+          "resourceRef",
+          "relationshipType",
+          "requiredOccupantSocketIds",
+          "requiredSeatSocketIds",
+        ])
+      : exactDataRecord(profile, [
+          "resourceRef",
+          "relationshipType",
+          "requiredTetheredSocketIds",
+          "requiredTetherAnchorSocketIds",
+        ]);
     requireString(row.resourceRef);
-    requireLiteral(row.relationshipType, ["seat", "tether"]);
-    requireStringArray(row.requiredSourceSocketIds);
-    requireStringArray(row.requiredTargetSocketIds);
-    requireLiteral(row.controlTransferPolicy, [
-      "keep-source",
-      "transfer-to-target",
-      "none",
-    ]);
-    requireLiteral(row.cameraTargetPolicy, [
-      "controlled-entity",
-      "source-entity",
-      "target-entity",
-    ]);
-    if (Object.hasOwn(row, "maximumDistanceMeters")) {
-      requireFinite(row.maximumDistanceMeters);
+    if (relationshipType === "seat") {
+      requireStringArray(row.requiredOccupantSocketIds);
+      requireStringArray(row.requiredSeatSocketIds);
+    } else {
+      requireStringArray(row.requiredTetheredSocketIds);
+      requireStringArray(row.requiredTetherAnchorSocketIds);
     }
   });
   requireString(value.harnessProfileRef);

@@ -161,16 +161,20 @@ function requireControlledEntityId(
   snapshot: WorldRuntimeSnapshotV4,
 ): string {
   const possessions = Object.values(
-    snapshot.world.gameplayInspection.possessedByRelationshipsById,
+    snapshot.world.gameplayInspection.relationshipStatesById,
   ).filter(
-    (relationship) => relationship.controllerEntityId === CONTROLLER_ENTITY_ID,
+    (relationship) =>
+      relationship.type === "possessedBy" &&
+      relationship.controllerEntityId === CONTROLLER_ENTITY_ID,
   );
   assert.equal(
     possessions.length,
     1,
     `Expected exactly one authoritative possession for '${CONTROLLER_ENTITY_ID}'.`,
   );
-  return possessions[0]!.controlledEntityId;
+  const possession = possessions[0];
+  assert.equal(possession?.type, "possessedBy");
+  return possession.controlledEntityId;
 }
 
 function deterministicResetProjection(
@@ -189,8 +193,8 @@ function deterministicResetProjection(
         ]),
     ),
     possession: Object.values(
-      snapshot.world.gameplayInspection.possessedByRelationshipsById,
-    ).map((relationship) => ({
+      snapshot.world.gameplayInspection.relationshipStatesById,
+    ).filter((relationship) => relationship.type === "possessedBy").map((relationship) => ({
       controllerEntityId: relationship.controllerEntityId,
       controlledEntityId: relationship.controlledEntityId,
     })),

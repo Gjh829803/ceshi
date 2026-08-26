@@ -247,7 +247,7 @@ describe("Gameplay Babylon Runtime coordinator", () => {
     const publication = coordinator.hostPublication();
 
     expect(Object.values(
-      publication.gameplayInspection.possessedByRelationshipsById,
+      publication.gameplayInspection.relationshipStatesById,
     )).toEqual([
       expect.objectContaining({
           controlledEntityId:
@@ -275,7 +275,7 @@ describe("Gameplay Babylon Runtime coordinator", () => {
       world: {
         simulationTick: 0,
         gameplayInspection: {
-          possessedByRelationshipsById: expect.any(Object),
+          relationshipStatesById: expect.any(Object),
         },
       },
       view: {
@@ -368,7 +368,7 @@ describe("Gameplay Babylon Runtime coordinator", () => {
     expect(reset.worldSessionId).not.toBe(previousWorldSessionId);
     expect(reset.world.simulationTick).toBe(0);
     expect(Object.values(
-      reset.world.gameplayInspection.possessedByRelationshipsById,
+      reset.world.gameplayInspection.relationshipStatesById,
     )).toEqual([
       expect.objectContaining({
         controlledEntityId:

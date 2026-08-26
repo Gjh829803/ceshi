@@ -194,7 +194,7 @@
       ]
     },
     "relationshipCapabilityRefs": [
-      "worldkit://capability/relationship.mount@1"
+      "worldkit://capability/relationship.mounted-on@1"
     ],
     "actionOrPoseSetRef": "worldkit://pose-set/static.whitebox@1",
     "renderBindingProfileRef": "worldkit://render-binding/subject.standard@1",
@@ -403,7 +403,7 @@
       ]
     },
     "relationshipCapabilityRefs": [
-      "worldkit://capability/relationship.mount@1"
+      "worldkit://capability/relationship.mounted-on@1"
     ],
     "actionOrPoseSetRef": "worldkit://pose-set/static.whitebox@1",
     "renderBindingProfileRef": "worldkit://render-binding/subject.standard@1",

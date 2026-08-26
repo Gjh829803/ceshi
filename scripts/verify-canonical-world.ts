@@ -346,9 +346,10 @@ async function verifyArtifacts(paths: CanonicalArtifactPaths): Promise<{
   );
   assert.ok(
     Object.values(
-      snapshot.world.gameplayInspection.possessedByRelationshipsById,
+      snapshot.world.gameplayInspection.relationshipStatesById,
     ).some(
       (relationship) =>
+        relationship.type === "possessedBy" &&
         relationship.controllerEntityId === "controller-primary" &&
         relationship.controlledEntityId === PLAYER_ENTITY_ID,
     ),
@@ -431,9 +432,10 @@ function assertPossessedBy(
 ): void {
   assert.ok(
     Object.values(
-      snapshot.world.gameplayInspection.possessedByRelationshipsById,
+      snapshot.world.gameplayInspection.relationshipStatesById,
     ).some(
       (relationship) =>
+        relationship.type === "possessedBy" &&
         relationship.controllerEntityId === controllerEntityId &&
         relationship.controlledEntityId === controlledEntityId,
     ),

@@ -4,7 +4,7 @@
     {
       "subjectDefinitionId": "animal.quadruped.forward-steer",
       "subjectDefinitionRef": "worldkit://subject-definition/animal.quadruped.forward-steer@2",
-      "subjectDefinitionContentHash": "sha256:33201a745e15c386c45147dbdb30bf8aeae9af9bf4f52ad56502279572bf7759"
+      "subjectDefinitionContentHash": "sha256:4f53ebb7edf027ae8a6dffcc152041cc5343fac9c2244a4d73f4235293e3f69b"
     },
     {
       "subjectDefinitionId": "glider.paraglider.unpowered",

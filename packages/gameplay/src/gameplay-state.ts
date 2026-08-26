@@ -508,7 +508,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
         ];
     const finalCount = Object.keys(this.relationshipStatesById).length +
       (isNil(current) ? 1 : 0);
-    if (finalCount > this.capacityBudget.maximumPossessedByRelationshipCount) {
+    if (finalCount > this.capacityBudget.maximumRelationshipStateCount) {
       return reject(
         "GAMEPLAY_CAPACITY_EXCEEDED",
         "Possession Relationship capacity is exhausted.",
@@ -827,7 +827,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
           { id: controller.id, participantId: controller.participantId },
         ]),
       ),
-      possessedByRelationshipsById: relationshipStatesById,
+      relationshipStatesById: relationshipStatesById,
       activeActionStatesById: Object.fromEntries(
         Object.values(activeActionExecutionsById).map((execution) => [
           execution.state.id,
@@ -1190,7 +1190,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
     }
     if (
       Object.keys(relationships).length >
-        this.capacityBudget.maximumPossessedByRelationshipCount ||
+        this.capacityBudget.maximumRelationshipStateCount ||
       Object.keys(actions).length > this.capacityBudget.maximumActiveActionStateCount ||
       usedActionExecutionIds.size >
         this.capacityBudget.maximumUsedActionExecutionIdCount ||

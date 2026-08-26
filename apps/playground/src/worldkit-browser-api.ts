@@ -555,8 +555,8 @@ export function validateSubjectPackageAgainstRegistry(
   }
 
   const relationshipProfileRefByCapabilityRef: Readonly<Record<string, string>> = {
-    "worldkit://capability/relationship.mount@1":
-      "worldkit://relationship-profile/mount.reserved@1",
+    "worldkit://capability/relationship.mounted-on@1":
+      "worldkit://relationship-profile/mounted-on.stand-ground@1",
     "worldkit://capability/relationship.seat@1":
       "worldkit://relationship-profile/seat.driver@1",
     "worldkit://capability/relationship.tether@1":

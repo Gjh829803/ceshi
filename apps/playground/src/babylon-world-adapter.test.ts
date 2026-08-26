@@ -183,7 +183,7 @@ function publicRuntimeSnapshot(
         simulationTick: providerProjection.tick,
         participantStatesById: {},
         controllerStatesById: {},
-        possessedByRelationshipsById: {
+        relationshipStatesById: {
           "possession.primary": {
             id: "possession.primary",
             type: "possessedBy",
