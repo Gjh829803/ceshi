@@ -10,8 +10,8 @@
   [`2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md`](../superpowers/specs/2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md)。
   规格文档状态行仍为 *Detailed design；implementation not started*；那是文档元数据，
   不以它代替 Backlog 的 first-slice 完成口径，也不把它改成 Implemented。
-- 审查基线：修复前 HEAD `2f2bacc`；本记录覆盖随后的 recover 终态保护、F1 断言修正，
-  以及 `rebaseRequired` 不进 A0 的裁定。
+- 审查基线：修复前 HEAD `2f2bacc`；本记录覆盖随后的 recover 终态保护、F1 断言修正、
+  `rebaseRequired` 不进 A0 的裁定，以及 revision 序号只在 Commit point 分配。
 - Diff 基线：`origin/main` merge-base `021feb5`。
 - 当前安装依赖：Babylon.js `9.21.2`、Havok `1.3.14`（`package.json`）。
 - 引擎语义：本次不以 Babylon/Havok 坐标、Controller 或 dispose 源码行为作为
@@ -124,6 +124,18 @@
 - 期望：Agent 以 `failurePhase` 区分 publication-commit 与 candidate 编译失败。
 - 建议：不发明新公共 diagnostic。入门写：看 `failurePhase`，不要只看 code。
 - 复核：确认为 first-slice 映射，不是静默成功。
+
+### [P1] [D4] Prepare 失败会空耗 revision 序号 — 已修复
+
+- 证据（`automated-contract`，修复前）：`nextAuthoringRevisionRefV1` 在进入
+  `preparing-runtime` / `committing` 时调用。stale expectation 的 Apply 预支
+  `/2` 后被拒，随后成功 Commit 变成 `/3`。F1 集成测试因此失败。
+- 期望：Authoring revision ref 只在唯一 Commit point 分配。失败的 Prepare /
+  preflight 不得占用下一个 head。
+- 修复：状态转入 `preparing-runtime`/`committing` 不再 `next()`；
+  `persistDurableCommit` 与 authoring-only commit 在授权通过后才 reserve。
+  Rejected record 丢掉 `pendingRevisionRef`。
+- 回归：journal「expectation-stale 后再发布仍是 `/2`」；集成测试仍断言 `/2`。
 
 ### [P2] [D4] publication fence 弱于 §14.2 全文
 

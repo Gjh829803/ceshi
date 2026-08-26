@@ -66,10 +66,26 @@ function persist(
   return stored;
 }
 
-function withoutPin(record: DurableRequestRecordV1): DurableRequestRecordV1 {
-  if (isNil(record.pin)) return record;
-  const { pin: _pin, ...rest } = record;
+function withoutReservations(record: DurableRequestRecordV1): DurableRequestRecordV1 {
+  const { pin: _pin, pendingRevisionRef: _pendingRevisionRef, ...rest } = record;
   return rest;
+}
+
+function reserveRevisionRef(
+  input: SubmitWorldChangeRequestInputV1,
+  record: DurableRequestRecordV1,
+): {
+  readonly record: DurableRequestRecordV1;
+  readonly revisionRef: string;
+} {
+  if (!isNil(record.pendingRevisionRef)) {
+    return { record, revisionRef: record.pendingRevisionRef };
+  }
+  const revisionRef = nextAuthoringRevisionRefV1(input.journal, record.request.worldId);
+  return {
+    record: persist(input, { ...record, pendingRevisionRef: revisionRef }),
+    revisionRef,
+  };
 }
 
 function rejectRecord(
@@ -103,7 +119,7 @@ function rejectRecord(
     ...(isNil(extras.conflictingIds) ? {} : { conflictingIds: extras.conflictingIds }),
   });
   persist(input, {
-    ...withoutPin(record),
+    ...withoutReservations(record),
     state: "rejected",
     receipt,
   });
@@ -241,11 +257,7 @@ async function finishRuntimePublication(
       ),
     ]);
   }
-  const revisionRef = record.pendingRevisionRef ??
-    nextAuthoringRevisionRefV1(input.journal, record.request.worldId);
-  const current = isNil(record.pendingRevisionRef)
-    ? persist(input, { ...record, pendingRevisionRef: revisionRef })
-    : record;
+  let current = record;
   const cleanupOperationId = journalArtifactIdV1("cleanup", current.request.id);
   let commitDenial: WorldChangeDiagnosticV1 | undefined;
   let committedReceipt = current.receipt;
@@ -269,6 +281,8 @@ async function finishRuntimePublication(
         commitDenial = authz;
         throw new Error("WORLD_CHANGE_COMMIT_DENIED");
       }
+      const reserved = reserveRevisionRef(input, current);
+      current = reserved.record;
       const receipt = assemblePublishRuntimeCommittedReceiptV1({
         request: current.request,
         requestHash: current.requestHash,
@@ -277,7 +291,7 @@ async function finishRuntimePublication(
         buildIdentity: current.buildIdentity!,
         affectedIds: current.applied!.affectedIds,
         operationResults: current.applied!.operationResults,
-        committedRevisionRef: revisionRef,
+        committedRevisionRef: reserved.revisionRef,
         previousRuntimeIdentity: identities.previous,
         currentRuntimeIdentity: identities.current,
         cleanupOperationId,
@@ -287,7 +301,7 @@ async function finishRuntimePublication(
         input.journal,
         {
           worldId: current.request.worldId,
-          revisionRef,
+          revisionRef: reserved.revisionRef,
           authoringSpec: current.applied!.candidateAuthoringSpec,
           authoringSpecHash: current.applied!.resultAuthoringSpecHash,
         },
@@ -296,7 +310,7 @@ async function finishRuntimePublication(
           state: "committed",
           receipt,
           commitRecord: {
-            revisionRef,
+            revisionRef: reserved.revisionRef,
             authoringSpecHash: current.applied!.resultAuthoringSpecHash,
           },
         },
@@ -555,20 +569,14 @@ async function advance(
       current.request.mode === "apply" &&
       current.request.requestedOutcome === "publish-runtime"
     ) {
-      const revisionRef = current.pendingRevisionRef ??
-        nextAuthoringRevisionRefV1(input.journal, current.request.worldId);
       current = persist(input, {
         ...current,
         state: "preparing-runtime",
-        pendingRevisionRef: revisionRef,
       });
     } else {
-      const revisionRef = current.pendingRevisionRef ??
-        nextAuthoringRevisionRefV1(input.journal, current.request.worldId);
       current = persist(input, {
         ...current,
         state: "committing",
-        pendingRevisionRef: revisionRef,
       });
     }
   }
@@ -591,11 +599,7 @@ async function advance(
         ),
       ]);
     }
-    if (
-      isNil(current.applied) ||
-      isNil(current.buildIdentity) ||
-      isNil(current.pendingRevisionRef)
-    ) {
+    if (isNil(current.applied) || isNil(current.buildIdentity)) {
       return rejectRecord(input, current, "publication-commit", [
         worldChangeDiagnostic(
           "WORLD_CHANGE_CANDIDATE_INVALID",
@@ -604,7 +608,9 @@ async function advance(
         ),
       ]);
     }
-    const revisionRef = current.pendingRevisionRef;
+    const reserved = reserveRevisionRef(input, current);
+    current = reserved.record;
+    const revisionRef = reserved.revisionRef;
     const receipt = assembleAuthoringOnlyCommittedReceiptV1({
       request: current.request,
       requestHash: current.requestHash,

@@ -882,6 +882,50 @@ describe("P16-R1 durable WorldChange journal", () => {
       }),
       nowUnixMilliseconds: NOW,
     })).toEqual({ status: "missing" });
+    const found = lookupPreparedCandidateV1(
+      leaseStore,
+      dryRun.receipt.preparedCandidateRef,
+      NOW,
+    );
+    if (found.status !== "found") throw new Error("expected prepared lease");
+    const previous = {
+      runtimeSessionId: "runtime-session-9",
+      worldSessionId: "world-session-31",
+      worldPackageRootHash: `sha256:${"d".repeat(64)}` as Sha256HashV1,
+      simulationTick: 12,
+    };
+    const current = {
+      runtimeSessionId: "runtime-session-9",
+      worldSessionId: "world-session-33",
+      worldPackageRootHash: found.lease.buildIdentity.worldPackageRootHash,
+      simulationTick: 0,
+    };
+    const committed = accepted(await submit(
+      journal,
+      leaseStore,
+      requestFor("apply-publish", changeSet, {
+        id: "request.apply.publish-house.after-stale",
+        preparedCandidateRef: dryRun.receipt.preparedCandidateRef,
+      }),
+      {
+        publishRuntimeReplacement: async ({ persistDurableCommit }) => {
+          persistDurableCommit({ previous, current });
+          return {
+            status: "published",
+            previous,
+            current,
+            cleanupStatus: "released",
+            cleanupDiagnostics: [],
+          };
+        },
+      },
+    ));
+    expect(committed.receipt.status).toBe("committed");
+    if (committed.receipt.status !== "committed") throw new Error("expected committed");
+    expect(committed.receipt.committedRevisionRef).toBe("revision://basic-world/2");
+    expect(getAuthoringRevisionHeadV1(journal, "basic-world")?.revisionRef).toBe(
+      "revision://basic-world/2",
+    );
   });
 
   it("rejects Receipt query without authoring.receipt.read", async () => {
