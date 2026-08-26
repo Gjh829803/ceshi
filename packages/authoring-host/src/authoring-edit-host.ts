@@ -22,6 +22,8 @@ import {
   type WorldChangeExplainRequestV1,
   type WorldChangeExplainV1,
   type WorldChangeOperationTypeV1,
+  type DefinitionOverrideLockEntryV1,
+  type DefinitionOverrideOwnerV1,
   type WorldChangeReceiptQueryV1,
   type WorldChangeReceiptV1,
   type WorldChangeValidateRequestV1,
@@ -82,6 +84,9 @@ export interface CreateAuthoringEditHostInputV1 {
   readonly canonicalAuthoringSchema: unknown;
   readonly registryLockEntries: readonly unknown[];
   readonly allowedCapabilityRefs: readonly string[];
+  readonly definitionOverrideOwners: readonly DefinitionOverrideOwnerV1[];
+  readonly definitionOverrideLockEntries: readonly DefinitionOverrideLockEntryV1[];
+  readonly projectionAllowedOverridePaths: readonly string[];
   readonly allowedWorldChangeOperationTypes: readonly WorldChangeOperationTypeV1[];
   readonly includeExperimental?: boolean;
   readonly publishRuntimeReplacement?: PublishRuntimeReplacementV1;
@@ -132,6 +137,13 @@ export function createAuthoringEditHostV1(
       request,
       session,
       nowUnixMilliseconds: input.nowUnixMilliseconds(),
+      overrideValidation: {
+        definitionOwners: input.definitionOverrideOwners,
+        projectionAllowedOverridePaths: input.projectionAllowedOverridePaths,
+        hostPolicyAllowedOverridePaths: session.policy.allowedOverridePaths,
+        registryLockEntries: input.definitionOverrideLockEntries,
+        allowedCapabilityRefs: input.allowedCapabilityRefs,
+      },
       ...(isNil(input.evaluateRequiredGates)
         ? {}
         : { evaluateRequiredGates: input.evaluateRequiredGates }),

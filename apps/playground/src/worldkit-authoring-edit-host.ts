@@ -2,6 +2,7 @@ import { hashAuthoringDocumentV4, type AuthoringSpecV4 } from "@whitebox-world/a
 import canonicalAuthoringSchema from "@whitebox-world/authoring/schema";
 import {
   AUTHORING_EDIT_SCOPES_V1,
+  FIRST_BATCH_ALLOWED_OVERRIDE_PATHS_V1,
   REGISTRY_RESOURCE_KINDS_V1,
   WORLD_CHANGE_OPERATION_TYPES_V1,
   hashCapabilitySetV1,
@@ -208,6 +209,9 @@ export function createPlaygroundAuthoringEditHostV1(input: {
     allowedCapabilityRefs: lockEntries
       .filter((entry) => entry.resourceKind === "capability")
       .map((entry) => entry.resourceRef),
+    definitionOverrideOwners: [],
+    definitionOverrideLockEntries: [],
+    projectionAllowedOverridePaths: [...FIRST_BATCH_ALLOWED_OVERRIDE_PATHS_V1],
     allowedWorldChangeOperationTypes: [...WORLD_CHANGE_OPERATION_TYPES_V1],
     ...(isNil(input.publishWorldReplacement)
       ? {}

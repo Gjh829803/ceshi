@@ -35,6 +35,7 @@ import {
   assembleValidatedReceiptV1,
 } from "./receipts.js";
 import {
+  acquireWorldPublicationFenceV1,
   commitAuthoringRevisionV1,
   getAuthoringRevisionHeadV1,
   getDurableRequestRecordV1,
@@ -226,6 +227,7 @@ async function finishRuntimePublication(
     record.request.requestedOutcome !== "publish-runtime" ||
     isNil(record.applied) ||
     isNil(record.buildIdentity) ||
+    isNil(record.validationReports) ||
     isNil(record.preparedCandidateRef) ||
     isNil(record.pin)
   ) {
@@ -276,46 +278,58 @@ async function finishRuntimePublication(
       runtimeExpectation,
     },
     persistDurableCommit: (identities) => {
-      const authz = authorize(input, current);
-      if (!isNil(authz)) {
-        commitDenial = authz;
-        throw new Error("WORLD_CHANGE_COMMIT_DENIED");
-      }
-      const reserved = reserveRevisionRef(input, current);
-      current = reserved.record;
-      const receipt = assemblePublishRuntimeCommittedReceiptV1({
-        request: current.request,
-        requestHash: current.requestHash,
-        authoringEditPolicyHash: current.authoringEditPolicyHash,
-        changeSetHash: current.changeSetHash,
-        buildIdentity: current.buildIdentity!,
-        affectedIds: current.applied!.affectedIds,
-        operationResults: current.applied!.operationResults,
-        committedRevisionRef: reserved.revisionRef,
-        previousRuntimeIdentity: identities.previous,
-        currentRuntimeIdentity: identities.current,
-        cleanupOperationId,
-      });
-      const { pin: _pin, pendingRevisionRef: _pendingRevisionRef, ...rest } = current;
-      commitAuthoringRevisionV1(
+      const releasePublicationFence = acquireWorldPublicationFenceV1(
         input.journal,
-        {
-          worldId: current.request.worldId,
-          revisionRef: reserved.revisionRef,
-          authoringSpec: current.applied!.candidateAuthoringSpec,
-          authoringSpecHash: current.applied!.resultAuthoringSpecHash,
-        },
-        {
-          ...rest,
-          state: "committed",
-          receipt,
-          commitRecord: {
+        current.request.worldId,
+        recoveryFencingTokenV1(input.journal) ?? current.fencingToken,
+      );
+      try {
+        const authz = authorize(input, current);
+        if (!isNil(authz)) {
+          commitDenial = authz;
+          throw new Error("WORLD_CHANGE_COMMIT_DENIED");
+        }
+        const reserved = reserveRevisionRef(input, current);
+        current = reserved.record;
+        const receipt = assemblePublishRuntimeCommittedReceiptV1({
+          request: current.request,
+          requestHash: current.requestHash,
+          authoringEditPolicyHash: current.authoringEditPolicyHash,
+          changeSetHash: current.changeSetHash,
+          buildIdentity: current.buildIdentity!,
+          affectedIds: current.applied!.affectedIds,
+          operationResults: current.applied!.operationResults,
+          validationReports: current.validationReports!,
+          committedRevisionRef: reserved.revisionRef,
+          previousRuntimeIdentity: identities.previous,
+          currentRuntimeIdentity: identities.current,
+          cleanupOperationId,
+        });
+        const { pin: _pin, pendingRevisionRef: _pendingRevisionRef, ...rest } = current;
+        commitAuthoringRevisionV1(
+          input.journal,
+          {
+            worldId: current.request.worldId,
             revisionRef: reserved.revisionRef,
+            authoringSpec: current.applied!.candidateAuthoringSpec,
             authoringSpecHash: current.applied!.resultAuthoringSpecHash,
           },
-        },
-      );
-      committedReceipt = receipt;
+          {
+            ...rest,
+            state: "committed",
+            receipt,
+            commitRecord: {
+              revisionRef: reserved.revisionRef,
+              authoringSpecHash: current.applied!.resultAuthoringSpecHash,
+            },
+          },
+        );
+        committedReceipt = receipt;
+      } catch (error) {
+        releasePublicationFence();
+        throw error;
+      }
+      return releasePublicationFence;
     },
   });
   if (!isNil(committedReceipt)) {
@@ -424,6 +438,9 @@ async function advance(
         preparedCandidateCount: leaseUsage.count,
         preparedCandidateBytes: leaseUsage.bytes,
       },
+      ...(isNil(input.overrideValidation)
+        ? {}
+        : { overrideValidation: input.overrideValidation }),
     });
     if (!isAppliedWorldChangeSetResultV1(applied)) {
       return rejectRecord(input, current, applied.failurePhase, applied.diagnostics, {
@@ -474,6 +491,8 @@ async function advance(
         store: input.leaseStore,
         preparedCandidateRef: current.request.preparedCandidateRef,
         authoringEditSessionId: current.request.authoringEditSessionId,
+        changeSetHash: current.changeSetHash,
+        baseAuthoringSpecHash: current.request.changeSet.baseAuthoringSpecHash,
         requestId: current.request.id,
         requestHash: current.requestHash,
         authoringEditPolicyHash: current.authoringEditPolicyHash,
@@ -515,12 +534,17 @@ async function advance(
         pin: pin.pin,
         preparedCandidateRef: current.request.preparedCandidateRef,
         buildIdentity: found.lease.buildIdentity,
+        validationReports: found.lease.validationReports,
+        validationReportsHash: found.lease.validationReportsHash,
         expiresAtUnixMilliseconds: found.lease.expiresAtUnixMilliseconds,
         state: "candidate-ready",
       });
     } else {
       const prepared = prepareTrustedCandidateV1({
         candidateAuthoringSpec: current.applied.candidateAuthoringSpec,
+        authoringEditSessionId: current.request.authoringEditSessionId,
+        changeSetHash: current.changeSetHash,
+        baseAuthoringSpecHash: current.request.changeSet.baseAuthoringSpecHash,
         policy: input.session.policy,
         store: input.leaseStore,
         nowUnixMilliseconds: input.nowUnixMilliseconds,
@@ -540,6 +564,7 @@ async function advance(
           buildIdentity: prepared.buildIdentity,
           affectedIds: current.applied.affectedIds,
           operationResults: current.applied.operationResults,
+          validationReports: prepared.validationReports,
           preparedCandidateRef: prepared.preparedCandidateRef,
           preparedCandidateExpiresAtUnixMilliseconds:
             prepared.preparedCandidateExpiresAtUnixMilliseconds,
@@ -548,6 +573,8 @@ async function advance(
           ...current,
           preparedCandidateRef: prepared.preparedCandidateRef,
           buildIdentity: prepared.buildIdentity,
+          validationReports: prepared.validationReports,
+          validationReportsHash: prepared.validationReportsHash,
           expiresAtUnixMilliseconds: prepared.preparedCandidateExpiresAtUnixMilliseconds,
           state: "dry-run-succeeded",
           receipt,
@@ -558,6 +585,8 @@ async function advance(
         ...current,
         preparedCandidateRef: prepared.preparedCandidateRef,
         buildIdentity: prepared.buildIdentity,
+        validationReports: prepared.validationReports,
+        validationReportsHash: prepared.validationReportsHash,
         expiresAtUnixMilliseconds: prepared.preparedCandidateExpiresAtUnixMilliseconds,
         state: "candidate-ready",
       });
@@ -601,7 +630,8 @@ async function advance(
     }
     const applied = current.applied;
     const buildIdentity = current.buildIdentity;
-    if (isNil(applied) || isNil(buildIdentity)) {
+    const validationReports = current.validationReports;
+    if (isNil(applied) || isNil(buildIdentity) || isNil(validationReports)) {
       return rejectRecord(input, current, "publication-commit", [
         worldChangeDiagnostic(
           "WORLD_CHANGE_CANDIDATE_INVALID",
@@ -621,6 +651,7 @@ async function advance(
       buildIdentity,
       affectedIds: applied.affectedIds,
       operationResults: applied.operationResults,
+      validationReports,
       committedRevisionRef: revisionRef,
     });
     const { pin: _pin, pendingRevisionRef: _pendingRevisionRef, ...rest } = current;

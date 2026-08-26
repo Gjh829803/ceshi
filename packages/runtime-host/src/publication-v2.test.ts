@@ -57,6 +57,11 @@ describe("P16-H1 RuntimeHost publication V2", () => {
       worldConfiguration: mutableWorldConfiguration(REPLACEMENT_WORLD_PACKAGE_REF),
       publication: publicationEnvelope(host),
       persistDurableCommit: () => {
+        expect(() => host.snapshot()).toThrow(/WORLD_SESSION_NOT_READY/);
+        expect(() => host.getWorldStateSnapshot("world-state:stale")).toThrow(
+          /WORLD_SESSION_NOT_READY/,
+        );
+        expect(() => host.eventsAfter(0, 1)).toThrow(/WORLD_SESSION_NOT_READY/);
         persistWorldSessionId = host.currentWorldSessionId;
         persistOrder = "persist";
       },

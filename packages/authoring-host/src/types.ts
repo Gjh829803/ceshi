@@ -46,6 +46,9 @@ export type EvaluateRequiredGatesV1 = (
 
 export interface PrepareTrustedCandidateInputV1 {
   readonly candidateAuthoringSpec: AuthoringSpecV4;
+  readonly authoringEditSessionId: string;
+  readonly changeSetHash: Sha256HashV1;
+  readonly baseAuthoringSpecHash: Sha256HashV1;
   readonly policy: AuthoringEditPolicyProjectionV1;
   readonly store: PreparedCandidateLeaseStoreV1;
   readonly nowUnixMilliseconds: number;
@@ -60,6 +63,8 @@ export type PrepareTrustedCandidateResultV1 =
       readonly preparedCandidateExpiresAtUnixMilliseconds: number;
       readonly authoringEditPolicyHash: Sha256HashV1;
       readonly buildIdentity: WorldChangeBuildIdentityV1;
+      readonly validationReports: readonly WorldChangeValidationReportBindingV1[];
+      readonly validationReportsHash: Sha256HashV1;
       readonly sizeBytes: number;
     }
   | {
@@ -71,6 +76,9 @@ export type PrepareTrustedCandidateResultV1 =
 export interface PreparedCandidateLeaseV1 {
   readonly preparedCandidateRef: string;
   readonly worldId: string;
+  readonly authoringEditSessionId: string;
+  readonly changeSetHash: Sha256HashV1;
+  readonly baseAuthoringSpecHash: Sha256HashV1;
   readonly authoringEditPolicyHash: Sha256HashV1;
   readonly requiredGateProfileRefs: readonly string[];
   readonly buildIdentity: WorldChangeBuildIdentityV1;
@@ -79,6 +87,8 @@ export interface PreparedCandidateLeaseV1 {
   readonly gameplayBootstrap: GameplayBootstrapV1;
   readonly worldPackageRef: string;
   readonly worldPackageBuildReceipt: WorldPackageBuildReceiptV1;
+  readonly validationReports: readonly WorldChangeValidationReportBindingV1[];
+  readonly validationReportsHash: Sha256HashV1;
   readonly sizeBytes: number;
   readonly createdAtUnixMilliseconds: number;
   readonly expiresAtUnixMilliseconds: number;
@@ -89,6 +99,8 @@ export interface PinPreparedCandidateInputV1 {
   readonly store: PreparedCandidateLeaseStoreV1;
   readonly preparedCandidateRef: string;
   readonly authoringEditSessionId: string;
+  readonly changeSetHash: Sha256HashV1;
+  readonly baseAuthoringSpecHash: Sha256HashV1;
   readonly requestId: string;
   readonly requestHash: Sha256HashV1;
   readonly authoringEditPolicyHash: Sha256HashV1;

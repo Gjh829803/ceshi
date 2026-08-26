@@ -11,6 +11,7 @@ import {
   type WorldChangeOperationResultV1,
   type WorldChangeReceiptV1,
   type WorldChangeRequestV1,
+  type WorldChangeValidationReportBindingV1,
 } from "@whitebox-world/authoring-edit";
 import { isNil } from "lodash-es";
 
@@ -90,6 +91,7 @@ export function assembleCandidateReceiptFieldsV1(input: {
   readonly buildIdentity: WorldChangeBuildIdentityV1;
   readonly affectedIds: WorldChangeAffectedIdsV1;
   readonly operationResults: readonly WorldChangeOperationResultV1[];
+  readonly validationReports: readonly WorldChangeValidationReportBindingV1[];
 }) {
   return {
     kind: "worldkit-world-change-receipt" as const,
@@ -107,7 +109,7 @@ export function assembleCandidateReceiptFieldsV1(input: {
     buildIdentity: input.buildIdentity,
     affectedIds: input.affectedIds,
     operationResults: input.operationResults,
-    validationReports: [],
+    validationReports: input.validationReports,
     appliedMigrations: [],
     appliedSafetyFixes: [],
   };
@@ -121,6 +123,7 @@ export function assembleDryRunReceiptV1(input: {
   readonly buildIdentity: WorldChangeBuildIdentityV1;
   readonly affectedIds: WorldChangeAffectedIdsV1;
   readonly operationResults: readonly WorldChangeOperationResultV1[];
+  readonly validationReports: readonly WorldChangeValidationReportBindingV1[];
   readonly preparedCandidateRef: string;
   readonly preparedCandidateExpiresAtUnixMilliseconds: number;
 }): WorldChangeReceiptV1 {
@@ -143,6 +146,7 @@ export function assembleAuthoringOnlyCommittedReceiptV1(input: {
   readonly buildIdentity: WorldChangeBuildIdentityV1;
   readonly affectedIds: WorldChangeAffectedIdsV1;
   readonly operationResults: readonly WorldChangeOperationResultV1[];
+  readonly validationReports: readonly WorldChangeValidationReportBindingV1[];
   readonly committedRevisionRef: string;
 }): WorldChangeReceiptV1 {
   return parseWorldChangeReceiptV1({
@@ -198,6 +202,7 @@ export function assemblePublishRuntimeCommittedReceiptV1(input: {
   readonly buildIdentity: WorldChangeBuildIdentityV1;
   readonly affectedIds: WorldChangeAffectedIdsV1;
   readonly operationResults: readonly WorldChangeOperationResultV1[];
+  readonly validationReports: readonly WorldChangeValidationReportBindingV1[];
   readonly committedRevisionRef: string;
   readonly previousRuntimeIdentity: RuntimePublicationIdentityV1;
   readonly currentRuntimeIdentity: RuntimePublicationIdentityV1;

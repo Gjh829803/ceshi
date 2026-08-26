@@ -15,6 +15,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyWorldChangeSetV1,
   assembleWorldChangeDiffV1,
+  FIRST_BATCH_ALLOWED_OVERRIDE_PATHS_V1,
   isAppliedWorldChangeSetResultV1,
   parseAuthoringEditWorkloadBudgetV1,
   parseWorldChangeSetV1,
@@ -24,6 +25,7 @@ import {
   type WorldChangeSetV1,
   type WorldChangeTargetV1,
   type WorldPreconditionV1,
+  type WorldChangeOverrideValidationContextV1,
 } from "../index.js";
 import { hashTargetValue, lookupTargetValue } from "./targets.js";
 
@@ -136,6 +138,39 @@ const FEEL_OVERRIDE = {
   resourceRef: "worldkit://control-feel-profile/humanoid.heavy-ground@1",
 } as const;
 
+const OVERRIDE_VALIDATION: WorldChangeOverrideValidationContextV1 = {
+  definitionOwners: [
+    {
+      definitionKind: "subject-definition",
+      definitionRef: "worldkit://subject-definition/humanoid.third-person@1",
+      allowedOverridePaths: [...FIRST_BATCH_ALLOWED_OVERRIDE_PATHS_V1],
+      bodyTopology: "biped",
+      mediumProfileRef: "worldkit://medium-profile/ground-air.standard@1",
+    },
+  ],
+  projectionAllowedOverridePaths: [...FIRST_BATCH_ALLOWED_OVERRIDE_PATHS_V1],
+  hostPolicyAllowedOverridePaths: [...FIRST_BATCH_ALLOWED_OVERRIDE_PATHS_V1],
+  registryLockEntries: [
+    {
+      resourceRef: FEEL_OVERRIDE.resourceRef,
+      resourceKind: "control-feel-profile",
+      contentHash: sha256CanonicalJson({ resourceRef: FEEL_OVERRIDE.resourceRef }) as Sha256HashV1,
+      requiredCapabilityRefs: [],
+      runtimeStatus: "implemented",
+    },
+    {
+      resourceRef: "worldkit://control-profile/planar.camera-relative@1",
+      resourceKind: "control-profile",
+      contentHash: sha256CanonicalJson({
+        resourceRef: "worldkit://control-profile/planar.camera-relative@1",
+      }) as Sha256HashV1,
+      requiredCapabilityRefs: [],
+      runtimeStatus: "implemented",
+    },
+  ],
+  allowedCapabilityRefs: [],
+};
+
 const MOUNTED_RELATIONSHIP = {
   id: "rider-mounted-on-board",
   type: "mountedOn",
@@ -189,6 +224,7 @@ function apply(
       extras.changeSetId ?? "change.test.001",
     ),
     workloadBudget: extras.budget ?? GENEROUS_BUDGET,
+    overrideValidation: OVERRIDE_VALIDATION,
     ...(isNil(extras.admissionUsage) ? {} : { admissionUsage: extras.admissionUsage }),
   });
 }

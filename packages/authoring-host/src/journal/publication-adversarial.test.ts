@@ -232,7 +232,8 @@ function successfulPublishPort(cleanupStatus: "released" | "quarantined"): Publi
     simulationTick: 0,
   };
   return async ({ persistDurableCommit }) => {
-    persistDurableCommit({ previous, current });
+    const releaseFence = persistDurableCommit({ previous, current });
+    releaseFence();
     return {
       status: "published",
       previous,
@@ -253,6 +254,87 @@ function successfulPublishPort(cleanupStatus: "released" | "quarantined"): Publi
 }
 
 describe("P16-F1 Full Reload adversarial publication", () => {
+  it("hides the durable commit until the Runtime handle swap releases the fence", async () => {
+    const { journal, leaseStore, addHouse, session: active } = seeded();
+    const dryRun = accepted(await submit(
+      journal,
+      leaseStore,
+      requestFor("dry-run", addHouse, { id: "request.dry-run.fence" }),
+      { session: active },
+    ));
+    if (dryRun.receipt.status !== "succeeded" || dryRun.receipt.mode !== "dry-run") {
+      throw new Error("expected dry-run");
+    }
+    const applyRequest = requestFor("apply-publish", addHouse, {
+      id: "request.apply.publish-fence",
+      preparedCandidateRef: dryRun.receipt.preparedCandidateRef,
+    });
+    const previous = {
+      runtimeSessionId: "runtime-session-9",
+      worldSessionId: "world-session-31",
+      worldPackageRootHash: `sha256:${"d".repeat(64)}` as Sha256HashV1,
+      simulationTick: 12,
+    };
+    const current = {
+      ...previous,
+      worldSessionId: "world-session-32",
+      simulationTick: 0,
+    };
+    const committed = accepted(await submit(
+      journal,
+      leaseStore,
+      applyRequest,
+      {
+        session: active,
+        publishRuntimeReplacement: async ({ persistDurableCommit }) => {
+          const releaseFence = persistDurableCommit({ previous, current }) as unknown;
+          const duringCommit = queryWorldChangeReceiptV1({
+            journal,
+            session: active,
+            query: parseWorldChangeReceiptQueryV1({
+              kind: "worldkit-world-change-receipt-query",
+              schemaVersion: 1,
+              id: "q.receipt.fence.during-commit",
+              authoringEditSessionId: SESSION_ID,
+              requestId: applyRequest.id,
+            }),
+            nowUnixMilliseconds: NOW,
+          });
+          expect(duringCommit).toEqual({
+            status: "pending",
+            state: "preparing-runtime",
+          });
+          expect(() => getAuthoringRevisionHeadV1(journal, "basic-world")).toThrow(
+            /WORLD_CHANGE_PUBLICATION_FENCE_ACTIVE/,
+          );
+          expect(typeof releaseFence).toBe("function");
+          if (typeof releaseFence === "function") releaseFence();
+          return {
+            status: "published",
+            previous,
+            current,
+            cleanupStatus: "released",
+            cleanupDiagnostics: [],
+          };
+        },
+      },
+    ));
+    expect(committed.receipt.status).toBe("committed");
+    const afterSwap = queryWorldChangeReceiptV1({
+      journal,
+      session: active,
+      query: parseWorldChangeReceiptQueryV1({
+        kind: "worldkit-world-change-receipt-query",
+        schemaVersion: 1,
+        id: "q.receipt.fence.after-swap",
+        authoringEditSessionId: SESSION_ID,
+        requestId: applyRequest.id,
+      }),
+      nowUnixMilliseconds: NOW,
+    });
+    expect(afterSwap.status).toBe("found");
+  });
+
   it("keeps a committed publish-runtime Receipt after the Session expires", async () => {
     const { journal, leaseStore, addHouse, session: active } = seeded();
     const dryRun = accepted(await submit(

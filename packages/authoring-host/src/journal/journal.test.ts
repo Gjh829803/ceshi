@@ -1,4 +1,7 @@
 import { hashAuthoringDocumentV4 } from "@whitebox-world/authoring";
+import { appendFileSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { createValidAuthoringSpec } from "@whitebox-world/authoring/testing";
 import {
   AUTHORING_EDIT_SCOPES_V1,
@@ -35,6 +38,7 @@ import {
   seedAuthoringRevisionHeadV1,
   submitWorldChangeRequestV1,
 } from "../index.js";
+import { createFileBackedWorldChangeJournalV1 } from "../node.js";
 import type {
   AuthoringEditSessionV1,
   DurableCrashAfterStateV1,
@@ -52,6 +56,12 @@ const DRY_RUN_REQUEST_ID = "request.dry-run.add-house.001";
 const APPLY_REQUEST_ID = "request.apply.add-house.001";
 const APPLY_REQUEST_ID_B = "request.apply.add-house.002";
 const PUBLISH_REQUEST_ID = "request.apply.publish-house.001";
+const REQUIRED_GATE_REF = "worldkit://validation-profile/outdoor-world-package-dev@1";
+const VALIDATION_REPORT = {
+  validationReportRef: "artifact://validation/report.001",
+  validationReportHash: `sha256:${"9".repeat(64)}` as Sha256HashV1,
+  status: "passed",
+} as const;
 
 const HOUSE_PROTOTYPE = {
   id: "house-blockout",
@@ -116,7 +126,9 @@ function generousBudget() {
   };
 }
 
-function policy(): AuthoringEditPolicyProjectionV1 {
+function policy(
+  overrides: { readonly requiredGateProfileRefs?: readonly string[] } = {},
+): AuthoringEditPolicyProjectionV1 {
   return parseAuthoringEditPolicyProjectionV1({
     allowedWorldIds: ["basic-world"],
     registryLockHash: HASH_LOCK,
@@ -124,27 +136,29 @@ function policy(): AuthoringEditPolicyProjectionV1 {
     projectionProfileRef: "worldkit://ai-schema-projection-profile/constrained-json@1",
     allowedWorldChangeOperationTypes: [...WORLD_CHANGE_OPERATION_TYPES_V1],
     allowedOverridePaths: [],
-    requiredGateProfileRefs: [],
+    requiredGateProfileRefs: overrides.requiredGateProfileRefs ?? [],
     workloadBudget: generousBudget(),
   });
 }
 
 function session(
   overrides: {
+    readonly authoringEditSessionId?: string;
     readonly authorizationEpoch?: number;
     readonly isActive?: boolean;
     readonly expiresAtUnixMilliseconds?: number;
     readonly scopes?: readonly AuthoringEditScopeV1[];
     readonly hasActiveRuntimeBinding?: boolean;
+    readonly policy?: AuthoringEditPolicyProjectionV1;
   } = {},
 ): AuthoringEditSessionV1 {
   return {
-    authoringEditSessionId: SESSION_ID,
+    authoringEditSessionId: overrides.authoringEditSessionId ?? SESSION_ID,
     authorizationEpoch: overrides.authorizationEpoch ?? 1,
     isActive: overrides.isActive ?? true,
     expiresAtUnixMilliseconds: overrides.expiresAtUnixMilliseconds ?? NOW + 3_600_000,
     scopes: overrides.scopes ?? [...AUTHORING_EDIT_SCOPES_V1],
-    policy: policy(),
+    policy: overrides.policy ?? policy(),
     hasActiveRuntimeBinding: overrides.hasActiveRuntimeBinding ?? false,
   };
 }
@@ -166,8 +180,10 @@ function addHouseChangeSet(
   });
 }
 
-function seededJournal(spec = createValidAuthoringSpec()) {
-  const journal = createWorldChangeJournalV1();
+function seededJournal(
+  spec = createValidAuthoringSpec(),
+  journal = createWorldChangeJournalV1(),
+) {
   const authoringSpecHash = hashAuthoringDocumentV4(spec) as Sha256HashV1;
   seedAuthoringRevisionHeadV1(journal, {
     worldId: spec.id,
@@ -188,6 +204,7 @@ function requestFor(
   mode: "validate" | "dry-run" | "apply-authoring" | "apply-publish",
   changeSet: WorldChangeSetV1,
   extras: {
+    readonly authoringEditSessionId?: string;
     readonly id?: string;
     readonly preparedCandidateRef?: string;
   } = {},
@@ -197,7 +214,7 @@ function requestFor(
       kind: "worldkit-world-change-request",
       schemaVersion: 1,
       id: extras.id ?? (mode === "validate" ? VALIDATE_REQUEST_ID : DRY_RUN_REQUEST_ID),
-      authoringEditSessionId: SESSION_ID,
+      authoringEditSessionId: extras.authoringEditSessionId ?? SESSION_ID,
       worldId: "basic-world",
       changeSet,
       mode,
@@ -211,7 +228,7 @@ function requestFor(
       kind: "worldkit-world-change-request",
       schemaVersion: 1,
       id: extras.id ?? PUBLISH_REQUEST_ID,
-      authoringEditSessionId: SESSION_ID,
+      authoringEditSessionId: extras.authoringEditSessionId ?? SESSION_ID,
       worldId: "basic-world",
       changeSet,
       mode: "apply",
@@ -229,7 +246,7 @@ function requestFor(
     kind: "worldkit-world-change-request",
     schemaVersion: 1,
     id: extras.id ?? APPLY_REQUEST_ID,
-    authoringEditSessionId: SESSION_ID,
+    authoringEditSessionId: extras.authoringEditSessionId ?? SESSION_ID,
     worldId: "basic-world",
     changeSet,
     mode: "apply",
@@ -249,6 +266,9 @@ function submit(
     readonly crashAfterState?: DurableCrashAfterStateV1;
     readonly nowUnixMilliseconds?: number;
     readonly publishRuntimeReplacement?: PublishRuntimeReplacementV1;
+    readonly evaluateRequiredGates?: Parameters<
+      typeof submitWorldChangeRequestV1
+    >[0]["evaluateRequiredGates"];
   } = {},
 ) {
   return submitWorldChangeRequestV1({
@@ -261,6 +281,9 @@ function submit(
     ...(isNil(extras.publishRuntimeReplacement)
       ? {}
       : { publishRuntimeReplacement: extras.publishRuntimeReplacement }),
+    ...(isNil(extras.evaluateRequiredGates)
+      ? {}
+      : { evaluateRequiredGates: extras.evaluateRequiredGates }),
   });
 }
 
@@ -312,6 +335,86 @@ function receiptQuery(requestId: string) {
 }
 
 describe("P16-R1 durable WorldChange journal", () => {
+  it("recovers a committed Receipt and revision head from the file WAL", async () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "world-change-journal-"));
+    const walFilePath = path.join(directory, "journal.wal.ndjson");
+    try {
+      const journal = createFileBackedWorldChangeJournalV1({ walFilePath });
+      const seeded = seededJournal(createValidAuthoringSpec(), journal);
+      const request = requestFor("apply-authoring", seeded.changeSet);
+      const committed = accepted(await submit(
+        journal,
+        seeded.leaseStore,
+        request,
+      ));
+      expect(committed.receipt.status).toBe("committed");
+
+      const reopened = createFileBackedWorldChangeJournalV1({ walFilePath });
+      const retried = accepted(await submit(
+        reopened,
+        createPreparedCandidateLeaseStoreV1(),
+        request,
+      ));
+      expect(hashWorldChangeReceiptV1(retried.receipt)).toBe(
+        hashWorldChangeReceiptV1(committed.receipt),
+      );
+      expect(getAuthoringRevisionHeadV1(reopened, "basic-world")?.revisionRef).toBe(
+        "revision://basic-world/2",
+      );
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("recovers the original non-terminal Apply after a process restart", async () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "world-change-journal-"));
+    const walFilePath = path.join(directory, "journal.wal.ndjson");
+    try {
+      const journal = createFileBackedWorldChangeJournalV1({ walFilePath });
+      const seeded = seededJournal(createValidAuthoringSpec(), journal);
+      const request = requestFor("apply-authoring", seeded.changeSet);
+      expect(crashed(await submit(journal, seeded.leaseStore, request, {
+        crashAfterState: "committing",
+      })).state).toBe("committing");
+
+      const reopened = createFileBackedWorldChangeJournalV1({ walFilePath });
+      const recovered = accepted(await recover(
+        reopened,
+        createPreparedCandidateLeaseStoreV1(),
+        request,
+      ));
+      expect(recovered.receipt.status).toBe("committed");
+      expect(getAuthoringRevisionHeadV1(reopened, "basic-world")?.revisionRef).toBe(
+        "revision://basic-world/2",
+      );
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("ignores only an unterminated WAL tail and fail-closes on a corrupt complete row", () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "world-change-journal-"));
+    const walFilePath = path.join(directory, "journal.wal.ndjson");
+    try {
+      const journal = createFileBackedWorldChangeJournalV1({ walFilePath });
+      seededJournal(createValidAuthoringSpec(), journal);
+      appendFileSync(walFilePath, '{"partial":', "utf8");
+      expect(
+        getAuthoringRevisionHeadV1(
+          createFileBackedWorldChangeJournalV1({ walFilePath }),
+          "basic-world",
+        )?.revisionRef,
+      ).toBe("revision://basic-world/1");
+
+      appendFileSync(walFilePath, '}\n', "utf8");
+      expect(() => createFileBackedWorldChangeJournalV1({ walFilePath })).toThrow(
+        /WORLD_CHANGE_JOURNAL_WAL_CORRUPT/,
+      );
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("validates, queries, and returns a byte-identical retry without moving the revision head", async () => {
     const { journal, leaseStore, changeSet, authoringSpecHash } = seededJournal();
     const request = requestFor("validate", changeSet);
@@ -419,6 +522,111 @@ describe("P16-R1 durable WorldChange journal", () => {
     const head = getAuthoringRevisionHeadV1(journal, "basic-world");
     expect(head?.revisionRef).toBe("revision://basic-world/1");
     expect(head?.authoringSpecHash).toBe(authoringSpecHash);
+  });
+
+  it("binds trusted gate reports into both Dry Run and reused Apply receipts", async () => {
+    const { journal, leaseStore, changeSet } = seededJournal();
+    const gatedSession = session({
+      policy: policy({ requiredGateProfileRefs: [REQUIRED_GATE_REF] }),
+    });
+    const dryRun = accepted(await submit(
+      journal,
+      leaseStore,
+      requestFor("dry-run", changeSet),
+      {
+        session: gatedSession,
+        evaluateRequiredGates: () => ({
+          status: "passed",
+          validationReports: [VALIDATION_REPORT],
+        }),
+      },
+    ));
+    if (dryRun.receipt.status !== "succeeded" || dryRun.receipt.mode !== "dry-run") {
+      throw new Error("expected dry-run receipt");
+    }
+    expect(dryRun.receipt.validationReports).toEqual([VALIDATION_REPORT]);
+
+    const apply = accepted(await submit(
+      journal,
+      leaseStore,
+      requestFor("apply-authoring", changeSet, {
+        preparedCandidateRef: dryRun.receipt.preparedCandidateRef,
+      }),
+      { session: gatedSession },
+    ));
+    expect(apply.receipt.status).toBe("committed");
+    if (apply.receipt.status !== "committed") throw new Error("expected committed");
+    expect(apply.receipt.validationReports).toEqual([VALIDATION_REPORT]);
+  });
+
+  it("rejects a Prepared Candidate produced by a different ChangeSet with the same result", async () => {
+    const { journal, leaseStore, changeSet, authoringSpecHash } = seededJournal();
+    const dryRun = accepted(await submit(
+      journal,
+      leaseStore,
+      requestFor("dry-run", changeSet),
+    ));
+    if (dryRun.receipt.status !== "succeeded" || dryRun.receipt.mode !== "dry-run") {
+      throw new Error("expected dry-run receipt");
+    }
+    const sameResultChangeSet = addHouseChangeSet(authoringSpecHash, {
+      id: "change.add-house.same-result.002",
+    });
+
+    const applied = accepted(await submit(
+      journal,
+      leaseStore,
+      requestFor("apply-authoring", sameResultChangeSet, {
+        id: "request.apply.same-result.002",
+        preparedCandidateRef: dryRun.receipt.preparedCandidateRef,
+      }),
+    ));
+
+    expect(applied.receipt.status).toBe("rejected");
+    if (applied.receipt.status !== "rejected") throw new Error("expected rejected");
+    expect(applied.receipt.failurePhase).toBe("admission");
+    expect(applied.receipt.diagnostics[0]?.code).toBe(
+      "WORLD_CHANGE_PREPARED_CANDIDATE_STALE",
+    );
+    expect(getAuthoringRevisionHeadV1(journal, "basic-world")?.authoringSpecHash).toBe(
+      authoringSpecHash,
+    );
+  });
+
+  it("rejects a Prepared Candidate produced by a different Edit Session", async () => {
+    const { journal, leaseStore, changeSet, authoringSpecHash } = seededJournal();
+    const dryRun = accepted(await submit(
+      journal,
+      leaseStore,
+      requestFor("dry-run", changeSet),
+    ));
+    if (dryRun.receipt.status !== "succeeded" || dryRun.receipt.mode !== "dry-run") {
+      throw new Error("expected dry-run receipt");
+    }
+    const otherSessionId = "edit-session-18";
+
+    const applied = accepted(await submit(
+      journal,
+      leaseStore,
+      requestFor("apply-authoring", changeSet, {
+        authoringEditSessionId: otherSessionId,
+        id: "request.apply.other-session.001",
+        preparedCandidateRef: dryRun.receipt.preparedCandidateRef,
+      }),
+      {
+        session: session({ authoringEditSessionId: otherSessionId }),
+      },
+    ));
+
+    expect(applied.receipt.status).toBe("rejected");
+    if (applied.receipt.status !== "rejected") throw new Error("expected rejected");
+    expect(applied.receipt.failurePhase).toBe("admission");
+    expect(applied.receipt.diagnostics[0]?.code).toBe(
+      "WORLD_CHANGE_PREPARED_CANDIDATE_STALE",
+    );
+    expect(getAuthoringRevisionHeadV1(journal, "basic-world")?.authoringSpecHash).toBe(
+      authoringSpecHash,
+    );
   });
 
   it("commits authoring-only and advances the revision head once", async () => {
@@ -772,8 +980,9 @@ describe("P16-R1 durable WorldChange journal", () => {
       persistDurableCommit,
     }) => {
       portCalls += 1;
-      persistDurableCommit({ previous, current });
+      const releaseFence = persistDurableCommit({ previous, current });
       persistCalls += 1;
+      releaseFence();
       return {
         status: "published",
         previous,
@@ -909,7 +1118,8 @@ describe("P16-R1 durable WorldChange journal", () => {
       }),
       {
         publishRuntimeReplacement: async ({ persistDurableCommit }) => {
-          persistDurableCommit({ previous, current });
+          const releaseFence = persistDurableCommit({ previous, current });
+          releaseFence();
           return {
             status: "published",
             previous,

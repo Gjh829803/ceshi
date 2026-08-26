@@ -24,6 +24,7 @@ export {
 export type {
   AuthoringEditSessionV1,
   AuthoringRevisionHeadV1,
+  CreateWorldChangeJournalInputV1,
   QueryWorldChangeCleanupReportResultV1,
   QueryWorldChangeDiffResultV1,
   QueryWorldChangeExplainResultV1,
@@ -32,6 +33,9 @@ export type {
   PublishRuntimeReplacementV1,
   SubmitWorldChangeRequestResultV1,
   WorldChangeJournalV1,
+  WorldChangeJournalTransactionOperationV1,
+  WorldChangeJournalTransactionV1,
+  WorldChangeJournalWalV1,
 } from "./journal/index.js";
 export {
   AuthoringEditHostErrorV1,

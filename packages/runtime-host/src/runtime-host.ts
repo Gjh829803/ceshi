@@ -501,7 +501,7 @@ export interface RuntimeWorldPublicationIdentitiesV1 {
 export type PersistDurableWorldCommitV1 = (identities: {
   readonly previous: RuntimeWorldPublicationIdentitiesV1;
   readonly current: RuntimeWorldPublicationIdentitiesV1;
-}) => void;
+}) => () => void;
 
 export type RuntimeWorldPublicationFailureKindV1 =
   | "expectation-stale"
@@ -1330,6 +1330,7 @@ export class RuntimeHost {
   }
 
   snapshot(): WorldSessionPublicationV1 {
+    this.assertObservationAllowed();
     return this.currentWorldSession.snapshot();
   }
 
@@ -1354,6 +1355,7 @@ export class RuntimeHost {
   }
 
   getWorldStateSnapshot(worldStateRef: string): WorldStateSnapshotV1 | undefined {
+    this.assertObservationAllowed();
     return this.currentWorldSession.getWorldStateSnapshot(worldStateRef);
   }
 
@@ -1361,6 +1363,7 @@ export class RuntimeHost {
     afterEventSequence: number,
     maximumEventCount: number,
   ): readonly GameplayEventV1[] {
+    this.assertObservationAllowed();
     return this.currentWorldSession.eventsAfter(
       afterEventSequence,
       maximumEventCount,
@@ -1368,6 +1371,7 @@ export class RuntimeHost {
   }
 
   runtimeActivitySnapshot(): RuntimeActivityCoordinatorSnapshotV1 {
+    this.assertObservationAllowed();
     return this.activityCoordinator.snapshot();
   }
 
@@ -1747,10 +1751,14 @@ export class RuntimeHost {
           token.candidateConfiguration,
         );
         this.replacementCommitPending = true;
+        let releaseDurableCommitFence: (() => void) | undefined;
         try {
           if (!isNil(publication?.persistDurableCommit)) {
             try {
-              publication.persistDurableCommit({ previous, current });
+              releaseDurableCommitFence = publication.persistDurableCommit({
+                previous,
+                current,
+              });
             } catch (error) {
               throw new PublicationCommitErrorV1(error);
             }
@@ -1760,6 +1768,7 @@ export class RuntimeHost {
           this.worldSessionGeneration += 1;
         } finally {
           this.replacementCommitPending = false;
+          releaseDurableCommitFence?.();
         }
         return { previous, current };
       });
@@ -1826,6 +1835,15 @@ export class RuntimeHost {
       "WORLD_SESSION_NOT_READY",
       "Runtime Host is not accepting mutations.",
     );
+  }
+
+  private assertObservationAllowed(): void {
+    if (this.replacementCommitPending) {
+      throw hostFailure(
+        "WORLD_SESSION_NOT_READY",
+        "Runtime publication fence is committing a World replacement.",
+      );
+    }
   }
 
   private synchronizePhaseFromCurrent(): void {

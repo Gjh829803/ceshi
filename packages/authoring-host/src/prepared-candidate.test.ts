@@ -40,10 +40,27 @@ const HASH_REQUEST = `sha256:${"2".repeat(64)}` as Sha256HashV1;
 const HASH_LOCK = `sha256:${"a".repeat(64)}` as Sha256HashV1;
 const HASH_CAPS = `sha256:${"b".repeat(64)}` as Sha256HashV1;
 const HASH_OTHER_POLICY = `sha256:${"c".repeat(64)}` as Sha256HashV1;
+const HASH_CHANGE_SET = `sha256:${"e".repeat(64)}` as Sha256HashV1;
+const HASH_BASE = `sha256:${"f".repeat(64)}` as Sha256HashV1;
 const SESSION_ID = "edit-session-17";
 const REQUEST_ID = "request.apply.add-house.001";
 const OTHER_REQUEST_ID = "request.apply.add-house.002";
 const REQUIRED_GATE_REF = "worldkit://validation-profile/outdoor-world-package-dev@1";
+const VALIDATION_REPORT = {
+  validationReportRef: "artifact://validation/report.001",
+  validationReportHash: `sha256:${"9".repeat(64)}` as Sha256HashV1,
+  status: "passed",
+} as const;
+const VALIDATION_REPORT_B = {
+  validationReportRef: "artifact://validation/report.002",
+  validationReportHash: `sha256:${"8".repeat(64)}` as Sha256HashV1,
+  status: "passed",
+} as const;
+const CANDIDATE_BINDING = {
+  authoringEditSessionId: SESSION_ID,
+  changeSetHash: HASH_CHANGE_SET,
+  baseAuthoringSpecHash: HASH_BASE,
+} as const;
 
 function generousBudget(overrides: {
   readonly maximumPreparedCandidateCount?: number;
@@ -147,7 +164,8 @@ function expectedHashes(spec: AuthoringSpecV4) {
       canonicalJsonBytes(spec).byteLength +
       canonicalJsonBytes(compiled.executionPlan).byteLength +
       gameplayBootstrapCanonicalBytesV1(gameplayBootstrap).byteLength +
-      canonicalJsonBytes(receipt).byteLength,
+      canonicalJsonBytes(receipt).byteLength +
+      canonicalJsonBytes([]).byteLength,
   };
 }
 
@@ -169,6 +187,7 @@ function prepare(
     policy: selectedPolicy,
     result: prepareTrustedCandidateV1({
       candidateAuthoringSpec: spec,
+      ...CANDIDATE_BINDING,
       policy: selectedPolicy,
       store,
       nowUnixMilliseconds: extras.nowUnixMilliseconds ?? NOW,
@@ -278,11 +297,42 @@ describe("P16-P1 trusted candidate build", () => {
     const spec = createValidAuthoringSpec();
     const { store, result } = prepare(spec, {
       policy: policy({ requiredGateProfileRefs: [REQUIRED_GATE_REF] }),
-      evaluateRequiredGates: () => ({ status: "passed", validationReports: [] }),
+      evaluateRequiredGates: () => ({
+        status: "passed",
+        validationReports: [VALIDATION_REPORT_B, VALIDATION_REPORT],
+      }),
     });
     const ready = prepared(result);
     expect(preparedCandidateLeaseUsageV1(store).count).toBe(1);
     expect(ready.buildIdentity.worldPackageRootHash).toMatch(/^sha256:[a-f0-9]{64}$/);
+    const found = lookupPreparedCandidateV1(store, ready.preparedCandidateRef, NOW);
+    expect(found.status).toBe("found");
+    if (found.status !== "found") throw new Error("expected found lease");
+    expect(found.lease.validationReports).toEqual([
+      VALIDATION_REPORT,
+      VALIDATION_REPORT_B,
+    ]);
+  });
+
+  it("fails closed when a required gate runner returns duplicate report refs", () => {
+    const spec = createValidAuthoringSpec();
+    const { store, result } = prepare(spec, {
+      policy: policy({ requiredGateProfileRefs: [REQUIRED_GATE_REF] }),
+      evaluateRequiredGates: () => ({
+        status: "passed",
+        validationReports: [
+          VALIDATION_REPORT,
+          {
+            ...VALIDATION_REPORT,
+            validationReportHash: `sha256:${"7".repeat(64)}` as Sha256HashV1,
+          },
+        ],
+      }),
+    });
+    const failed = rejected(result);
+    expect(failed.failurePhase).toBe("required-gates");
+    expect(codes(failed.diagnostics)).toEqual(["WORLD_CHANGE_REQUIRED_GATE_FAILED"]);
+    expect(preparedCandidateLeaseUsageV1(store)).toEqual({ count: 0, bytes: 0 });
   });
 
   it("rejects an invalid candidate and stores no lease", () => {
@@ -355,7 +405,7 @@ describe("P16-P1 trusted candidate build", () => {
     const first = pinPreparedCandidateV1({
       store,
       preparedCandidateRef: ready.preparedCandidateRef,
-      authoringEditSessionId: SESSION_ID,
+      ...CANDIDATE_BINDING,
       requestId: REQUEST_ID,
       requestHash: HASH_REQUEST,
       authoringEditPolicyHash: policyHash,
@@ -376,7 +426,7 @@ describe("P16-P1 trusted candidate build", () => {
     const reused = pinPreparedCandidateV1({
       store,
       preparedCandidateRef: ready.preparedCandidateRef,
-      authoringEditSessionId: SESSION_ID,
+      ...CANDIDATE_BINDING,
       requestId: REQUEST_ID,
       requestHash: HASH_REQUEST,
       authoringEditPolicyHash: policyHash,
@@ -388,7 +438,7 @@ describe("P16-P1 trusted candidate build", () => {
     const conflicted = pinPreparedCandidateV1({
       store,
       preparedCandidateRef: ready.preparedCandidateRef,
-      authoringEditSessionId: SESSION_ID,
+      ...CANDIDATE_BINDING,
       requestId: REQUEST_ID,
       requestHash: `sha256:${"d".repeat(64)}` as Sha256HashV1,
       authoringEditPolicyHash: policyHash,
@@ -408,7 +458,7 @@ describe("P16-P1 trusted candidate build", () => {
     const first = pinPreparedCandidateV1({
       store,
       preparedCandidateRef: ready.preparedCandidateRef,
-      authoringEditSessionId: SESSION_ID,
+      ...CANDIDATE_BINDING,
       requestId: REQUEST_ID,
       requestHash: HASH_REQUEST,
       authoringEditPolicyHash: policyHash,
@@ -418,7 +468,7 @@ describe("P16-P1 trusted candidate build", () => {
     const stolen = pinPreparedCandidateV1({
       store,
       preparedCandidateRef: ready.preparedCandidateRef,
-      authoringEditSessionId: SESSION_ID,
+      ...CANDIDATE_BINDING,
       requestId: OTHER_REQUEST_ID,
       requestHash: HASH_REQUEST,
       authoringEditPolicyHash: policyHash,
@@ -436,7 +486,7 @@ describe("P16-P1 trusted candidate build", () => {
     const stale = pinPreparedCandidateV1({
       store,
       preparedCandidateRef: ready.preparedCandidateRef,
-      authoringEditSessionId: SESSION_ID,
+      ...CANDIDATE_BINDING,
       requestId: REQUEST_ID,
       requestHash: HASH_REQUEST,
       authoringEditPolicyHash: HASH_OTHER_POLICY,
@@ -461,7 +511,7 @@ describe("P16-P1 trusted candidate build", () => {
     const latePin = pinPreparedCandidateV1({
       store,
       preparedCandidateRef: ready.preparedCandidateRef,
-      authoringEditSessionId: SESSION_ID,
+      ...CANDIDATE_BINDING,
       requestId: REQUEST_ID,
       requestHash: HASH_REQUEST,
       authoringEditPolicyHash: hashAuthoringEditPolicyProjectionV1(selectedPolicy),
@@ -485,7 +535,7 @@ describe("P16-P1 trusted candidate build", () => {
     const pinned = pinPreparedCandidateV1({
       store,
       preparedCandidateRef: ready.preparedCandidateRef,
-      authoringEditSessionId: SESSION_ID,
+      ...CANDIDATE_BINDING,
       requestId: REQUEST_ID,
       requestHash: HASH_REQUEST,
       authoringEditPolicyHash: policyHash,

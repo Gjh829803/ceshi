@@ -2,6 +2,7 @@ import { hashAuthoringDocumentV4, type AuthoringSpecV4 } from "@whitebox-world/a
 import canonicalAuthoringSchema from "@whitebox-world/authoring/schema";
 import {
   AUTHORING_EDIT_SCOPES_V1,
+  FIRST_BATCH_ALLOWED_OVERRIDE_PATHS_V1,
   WORLD_CHANGE_OPERATION_TYPES_V1,
   hashCapabilitySetV1,
   hashRegistryLockEntriesV1,
@@ -17,6 +18,7 @@ import {
   createAuthoringEditHostV1,
   createPreparedCandidateLeaseStoreV1,
   createWorldChangeJournalV1,
+  getAuthoringRevisionHeadV1,
   seedAuthoringRevisionHeadV1,
   type AuthoringEditHostV1,
   type AuthoringEditSessionV1,
@@ -134,17 +136,25 @@ export function createAuthoringEditHostBridgeV1(input: {
   readonly nowUnixMilliseconds?: () => number;
   readonly runtimeHost?: Pick<RuntimeHost, "publishWorldReplacementV1">;
   readonly session?: AuthoringEditSessionV1;
+  readonly journal?: WorldChangeJournalV1;
 }): AuthoringEditHostBridgeV1 {
   const lockEntries = builtInRegistryLockEntriesV1();
   const nowUnixMilliseconds = input.nowUnixMilliseconds ?? (() => Date.now());
-  const journal = createWorldChangeJournalV1();
+  const journal = input.journal ?? createWorldChangeJournalV1();
   const authoringSpecHash = hashAuthoringDocumentV4(input.authoringSpec) as Sha256HashV1;
-  seedAuthoringRevisionHeadV1(journal, {
-    worldId: input.authoringSpec.id,
-    revisionRef: `revision://${input.authoringSpec.id}/1`,
-    authoringSpec: input.authoringSpec,
-    authoringSpecHash,
-  });
+  const existingHead = getAuthoringRevisionHeadV1(journal, input.authoringSpec.id);
+  if (isNil(existingHead)) {
+    seedAuthoringRevisionHeadV1(journal, {
+      worldId: input.authoringSpec.id,
+      revisionRef: `revision://${input.authoringSpec.id}/1`,
+      authoringSpec: input.authoringSpec,
+      authoringSpecHash,
+    });
+  } else if (existingHead.authoringSpecHash !== authoringSpecHash) {
+    throw new Error(
+      "WORLD_CHANGE_JOURNAL_HEAD_MISMATCH: Injected journal head does not match the Host AuthoringSpec.",
+    );
+  }
   const resolved = builtInSubjectResourceRegistry.resolveAiSchemaProjectionProfile(
     CONSTRAINED_JSON_PROFILE_REF,
   );
@@ -166,6 +176,9 @@ export function createAuthoringEditHostBridgeV1(input: {
     allowedCapabilityRefs: lockEntries
       .filter((entry) => entry.resourceKind === "capability")
       .map((entry) => entry.resourceRef),
+    definitionOverrideOwners: [],
+    definitionOverrideLockEntries: [],
+    projectionAllowedOverridePaths: [...FIRST_BATCH_ALLOWED_OVERRIDE_PATHS_V1],
     allowedWorldChangeOperationTypes: [...WORLD_CHANGE_OPERATION_TYPES_V1],
     ...(isNil(input.runtimeHost)
       ? {}

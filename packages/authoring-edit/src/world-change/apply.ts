@@ -18,6 +18,11 @@ import { canonicalJsonBytes } from "@whitebox-world/protocol";
 import { isEmpty, isNil, sortBy } from "lodash-es";
 
 import { parseWorldChangeAffectedIdsV1, parseWorldChangeDiagnosticV1, parseWorldChangeDiffV1 } from "../authoring-edit.js";
+import {
+  validateDefinitionResourceRefOverrideV1,
+  type DefinitionOverrideLockEntryV1,
+  type DefinitionOverrideOwnerV1,
+} from "../override-policy/index.js";
 import { deepFreeze, type Sha256HashV1 } from "../parse-kernel.js";
 import type {
   AuthoringEditBudgetIdV1,
@@ -53,6 +58,15 @@ export interface ApplyWorldChangeSetInputV1 {
   readonly changeSet: WorldChangeSetV1;
   readonly workloadBudget: AuthoringEditWorkloadBudgetV1;
   readonly admissionUsage?: WorldChangeAdmissionUsageV1;
+  readonly overrideValidation?: WorldChangeOverrideValidationContextV1;
+}
+
+export interface WorldChangeOverrideValidationContextV1 {
+  readonly definitionOwners: readonly DefinitionOverrideOwnerV1[];
+  readonly projectionAllowedOverridePaths: readonly string[];
+  readonly hostPolicyAllowedOverridePaths: readonly string[];
+  readonly registryLockEntries: readonly DefinitionOverrideLockEntryV1[];
+  readonly allowedCapabilityRefs: readonly string[];
 }
 
 export type ApplyWorldChangeSetResultV1 =
@@ -177,16 +191,27 @@ export function applyWorldChangeSetV1(
   const applyDiagnostics: WorldChangeDiagnosticV1[] = [];
   changeSet.operations.forEach((operation, index) => {
     if (!isEmpty(applyDiagnostics)) return;
-    const next = applyOperation(candidate, operation);
+    const next = applyOperation(candidate, operation, input.overrideValidation);
     if (!isAppliedDraft(next)) {
-      applyDiagnostics.push(
-        diagnostic(
-          "WORLD_CHANGE_CANDIDATE_INVALID",
-          `/operations/${index}`,
-          next.message,
-          { kind: "related-ids", ids: [operation.id] },
-        ),
-      );
+      if ("diagnostics" in next) {
+        applyDiagnostics.push(
+          ...next.diagnostics.map((item) =>
+            parseWorldChangeDiagnosticV1({
+              ...item,
+              instancePath: `/operations/${index}${item.instancePath}`,
+            }),
+          ),
+        );
+      } else {
+        applyDiagnostics.push(
+          diagnostic(
+            "WORLD_CHANGE_CANDIDATE_INVALID",
+            `/operations/${index}`,
+            next.message,
+            { kind: "related-ids", ids: [operation.id] },
+          ),
+        );
+      }
       return;
     }
     candidate = next.spec;
@@ -397,7 +422,8 @@ function collectConflicts(
 
 type ApplyDraftResult =
   | { readonly spec: AuthoringSpecV4 }
-  | { readonly message: string };
+  | { readonly message: string }
+  | { readonly diagnostics: readonly WorldChangeDiagnosticV1[] };
 
 function isAppliedDraft(
   value: ApplyDraftResult,
@@ -408,6 +434,7 @@ function isAppliedDraft(
 function applyOperation(
   spec: AuthoringSpecV4,
   operation: WorldChangeOperationV1,
+  overrideValidation: WorldChangeOverrideValidationContextV1 | undefined,
 ): ApplyDraftResult {
   switch (operation.type) {
     case "resource-upsert":
@@ -464,7 +491,12 @@ function applyOperation(
     case "startup-set":
       return { spec: { ...spec, startup: operation.startup } };
     case "definition-override-set":
-      return setOverride(spec, operation.nodeEntityId, operation.override);
+      return setOverride(
+        spec,
+        operation.nodeEntityId,
+        operation.override,
+        overrideValidation,
+      );
     case "definition-override-remove":
       return removeOverride(spec, operation.nodeEntityId, operation.overrideId);
   }
@@ -641,6 +673,7 @@ function setOverride(
   spec: AuthoringSpecV4,
   nodeEntityId: string,
   override: DefinitionResourceRefOverrideV1,
+  validationContext: WorldChangeOverrideValidationContextV1 | undefined,
 ): ApplyDraftResult {
   const node = spec.nodes.find((item) => item.id === nodeEntityId);
   if (isNil(node)) {
@@ -649,10 +682,33 @@ function setOverride(
   if (node.kind !== "subject") {
     return { message: `Node '${nodeEntityId}' is not a Subject node.` };
   }
+  if (isNil(validationContext)) {
+    return {
+      diagnostics: [
+        diagnostic(
+          "DEFINITION_OVERRIDE_PATH_FORBIDDEN",
+          "/override/path",
+          "definition-override-set requires trusted Definition, Projection, Host policy, Registry Lock, and Capability context.",
+        ),
+      ],
+    };
+  }
+  const definition = definitionOverrideOwner(spec, node.subjectDefinitionRef, validationContext);
+  const validated = validateDefinitionResourceRefOverrideV1({
+    definition,
+    projectionAllowedOverridePaths: validationContext.projectionAllowedOverridePaths,
+    hostPolicyAllowedOverridePaths: validationContext.hostPolicyAllowedOverridePaths,
+    override,
+    registryLockEntries: validationContext.registryLockEntries,
+    allowedCapabilityRefs: validationContext.allowedCapabilityRefs,
+  });
+  if (validated.status !== "accepted") {
+    return { diagnostics: validated.diagnostics };
+  }
   const current = node.overrides ?? [];
   const nextNode: WorldNodeSpecV4 = {
     ...node,
-    overrides: upsertById([...current], override),
+    overrides: upsertById([...current], validated.override),
   };
   return {
     spec: {
@@ -660,6 +716,40 @@ function setOverride(
       nodes: spec.nodes.map((item) => (item.id === nodeEntityId ? nextNode : item)),
     },
   };
+}
+
+function definitionOverrideOwner(
+  spec: AuthoringSpecV4,
+  definitionRef: string,
+  validationContext: WorldChangeOverrideValidationContextV1,
+): DefinitionOverrideOwnerV1 | undefined {
+  if (definitionRef.startsWith("package://subject-definition/")) {
+    const definition = spec.resources.subjectDefinitions.find(
+      (candidate) =>
+        `package://subject-definition/${candidate.id}@${candidate.version}` === definitionRef,
+    );
+    if (isNil(definition)) return undefined;
+    return {
+      definitionKind: definition.kind,
+      definitionRef,
+      allowedOverridePaths: definition.allowedOverridePaths,
+      compatibleResourceRefsByPath: {
+        "profiles.controlFeelProfileRef": definition.profiles.allowedControlFeelProfileRefs,
+        "profiles.motion.defaultMotionProfileRef": sortBy(
+          Array.from(new Set([
+            definition.profiles.motion.defaultMotionProfileRef,
+            ...definition.profiles.motion.optionalMotionProfileRefs,
+            definition.profiles.motion.fallbackMotionProfileRef,
+          ])),
+        ),
+      },
+      bodyTopology: definition.bodyTopology,
+      mediumProfileRef: definition.profiles.mediumProfileRef,
+    };
+  }
+  return validationContext.definitionOwners.find(
+    (candidate) => candidate.definitionRef === definitionRef,
+  );
 }
 
 function removeOverride(

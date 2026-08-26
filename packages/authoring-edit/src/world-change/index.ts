@@ -7,6 +7,7 @@ export type {
   ApplyWorldChangeSetInputV1,
   ApplyWorldChangeSetResultV1,
   WorldChangeAdmissionUsageV1,
+  WorldChangeOverrideValidationContextV1,
 } from "./apply.js";
 export {
   constraintIdOf,

@@ -31,6 +31,7 @@ export {
 export type {
   AuthoringEditSessionV1,
   AuthoringRevisionHeadV1,
+  CreateWorldChangeJournalInputV1,
   DurableCrashAfterStateV1,
   DurableRequestRecordV1,
   DurableRequestStateV1,
@@ -50,6 +51,9 @@ export type {
   TerminalRequestStateV1,
   TrustedRuntimeWorldConfigurationV1,
   WorldChangeJournalV1,
+  WorldChangeJournalTransactionOperationV1,
+  WorldChangeJournalTransactionV1,
+  WorldChangeJournalWalV1,
 } from "./types.js";
 export {
   DURABLE_REQUEST_STATES_V1,

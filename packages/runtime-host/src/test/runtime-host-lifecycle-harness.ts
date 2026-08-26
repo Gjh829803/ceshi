@@ -62,6 +62,8 @@ export interface RuntimeHostUnderTestV1 {
   readonly phase: runtimeHostModule.RuntimeHostPhaseV1;
   readonly currentWorldSessionId: string;
   snapshot(): WorldSessionPublicationV1;
+  getWorldStateSnapshot(worldStateRef: string): unknown;
+  eventsAfter(afterEventSequence: number, maximumEventCount: number): readonly unknown[];
   runFixedInput(input: unknown): Promise<WorldSessionPublicationV1>;
   replaceWorld(world: unknown): Promise<WorldSessionPublicationV1>;
   publishWorldReplacementV1(input: unknown): Promise<PublishWorldReplacementResultV1>;

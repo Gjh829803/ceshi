@@ -25,6 +25,7 @@ export {
   parseWorldChangeRequestV1,
   parseWorldChangeSetV1,
   parseWorldChangeTargetV1,
+  parseWorldChangeValidationReportBindingV1,
   hashAuthoringEditPolicyProjectionV1,
   hashWorldChangeReceiptV1,
   hashWorldChangeRequestV1,
@@ -69,4 +70,5 @@ export type {
   ApplyWorldChangeSetInputV1,
   ApplyWorldChangeSetResultV1,
   WorldChangeAdmissionUsageV1,
+  WorldChangeOverrideValidationContextV1,
 } from "./world-change/index.js";

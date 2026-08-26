@@ -12,6 +12,7 @@ import {
   getCleanupReportV1,
   getDurableRequestRecordV1,
   isTerminalStateV1,
+  isWorldPublicationFencedV1,
 } from "./store.js";
 import type {
   DurableRequestRecordV1,
@@ -159,6 +160,9 @@ export function queryWorldChangeReceiptV1(
     worldId: record.request.worldId,
   });
   if (!isNil(worldAuthz)) return worldAuthz;
+  if (isWorldPublicationFencedV1(input.journal, record.request.worldId)) {
+    return { status: "pending", state: "preparing-runtime" };
+  }
   if (!isNil(record.receipt) && isTerminalStateV1(record.state)) {
     return { status: "found", receipt: record.receipt };
   }
@@ -187,6 +191,9 @@ export function queryWorldChangeExplainV1(
     worldId: record.request.worldId,
   });
   if (!isNil(worldAuthz)) return worldAuthz;
+  if (isWorldPublicationFencedV1(input.journal, record.request.worldId)) {
+    return { status: "pending", state: "preparing-runtime" };
+  }
   if (!isTerminalStateV1(record.state)) {
     return { status: "pending", state: record.state };
   }
@@ -215,6 +222,9 @@ export function queryWorldChangeDiffV1(
     worldId: record.request.worldId,
   });
   if (!isNil(worldAuthz)) return worldAuthz;
+  if (isWorldPublicationFencedV1(input.journal, record.request.worldId)) {
+    return { status: "pending", state: "preparing-runtime" };
+  }
   if (!isTerminalStateV1(record.state)) {
     return { status: "pending", state: record.state };
   }

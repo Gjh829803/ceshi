@@ -18,6 +18,8 @@ import type {
   WorldChangeReceiptQueryV1,
   WorldChangeReceiptV1,
   WorldChangeRequestV1,
+  WorldChangeOverrideValidationContextV1,
+  WorldChangeValidationReportBindingV1,
 } from "@whitebox-world/authoring-edit";
 import type { GameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
 import type { ExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
@@ -86,6 +88,8 @@ export interface DurableRequestRecordV1 {
   readonly preparedCandidateRef?: string;
   readonly applied?: AppliedWorldChangeV1;
   readonly buildIdentity?: WorldChangeBuildIdentityV1;
+  readonly validationReports?: readonly WorldChangeValidationReportBindingV1[];
+  readonly validationReportsHash?: Sha256HashV1;
   readonly expiresAtUnixMilliseconds?: number;
   readonly receipt?: WorldChangeReceiptV1;
   readonly pendingRevisionRef?: string;
@@ -98,6 +102,55 @@ export interface DurableRequestRecordV1 {
 
 export interface WorldChangeJournalV1 {
   readonly brand: "WorldChangeJournalV1";
+}
+
+export type WorldChangeJournalTransactionOperationV1 =
+  | {
+      readonly type: "request-record-put";
+      readonly key: string;
+      readonly record: DurableRequestRecordV1;
+    }
+  | {
+      readonly type: "change-set-hash-lock";
+      readonly key: string;
+      readonly changeSetHash: Sha256HashV1;
+    }
+  | {
+      readonly type: "revision-head-put";
+      readonly key: string;
+      readonly head: AuthoringRevisionHeadV1;
+    }
+  | {
+      readonly type: "revision-sequence-set";
+      readonly revisionSequence: number;
+    }
+  | {
+      readonly type: "cleanup-report-put";
+      readonly key: string;
+      readonly report: WorldChangeCleanupReportV1;
+    }
+  | {
+      readonly type: "recovery-fencing-token-set";
+      readonly fencingToken: string;
+    };
+
+export interface WorldChangeJournalTransactionV1 {
+  readonly kind: "worldkit-world-change-journal-transaction";
+  readonly schemaVersion: 1;
+  readonly sequence: number;
+  readonly previousTransactionHash: Sha256HashV1;
+  readonly operations: readonly WorldChangeJournalTransactionOperationV1[];
+  readonly transactionHash: Sha256HashV1;
+}
+
+export interface WorldChangeJournalWalV1 {
+  readonly brand: "WorldChangeJournalWalV1";
+  readTransactions(): readonly WorldChangeJournalTransactionV1[];
+  appendTransaction(transaction: WorldChangeJournalTransactionV1): void;
+}
+
+export interface CreateWorldChangeJournalInputV1 {
+  readonly wal?: WorldChangeJournalWalV1;
 }
 
 export type DurableCrashAfterStateV1 =
@@ -149,7 +202,7 @@ export type PublishRuntimeReplacementV1 = (input: {
   readonly persistDurableCommit: (identities: {
     readonly previous: RuntimePublicationIdentityV1;
     readonly current: RuntimePublicationIdentityV1;
-  }) => void;
+  }) => () => void;
 }) => Promise<PublishRuntimeReplacementResultV1>;
 
 export interface SubmitWorldChangeRequestInputV1 {
@@ -158,6 +211,7 @@ export interface SubmitWorldChangeRequestInputV1 {
   readonly request: WorldChangeRequestV1;
   readonly session: AuthoringEditSessionV1;
   readonly nowUnixMilliseconds: number;
+  readonly overrideValidation?: WorldChangeOverrideValidationContextV1;
   readonly evaluateRequiredGates?: EvaluateRequiredGatesV1;
   readonly publishRuntimeReplacement?: PublishRuntimeReplacementV1;
   readonly crashAfterState?: DurableCrashAfterStateV1;

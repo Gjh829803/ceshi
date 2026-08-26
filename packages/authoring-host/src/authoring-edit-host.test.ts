@@ -3,6 +3,7 @@ import canonicalAuthoringSchema from "@whitebox-world/authoring/schema";
 import { createValidAuthoringSpec } from "@whitebox-world/authoring/testing";
 import {
   AUTHORING_EDIT_SCOPES_V1,
+  FIRST_BATCH_ALLOWED_OVERRIDE_PATHS_V1,
   hashCapabilitySetV1,
   hashRegistryLockEntriesV1,
   hashWorldChangeReceiptV1,
@@ -229,6 +230,17 @@ function createHost(extras: {
     canonicalAuthoringSchema,
     registryLockEntries: entries,
     allowedCapabilityRefs: [CAPABILITY_REF],
+    definitionOverrideOwners: [
+      {
+        definitionKind: "subject-definition",
+        definitionRef: "worldkit://subject-definition/humanoid.third-person@1",
+        allowedOverridePaths: [...FIRST_BATCH_ALLOWED_OVERRIDE_PATHS_V1],
+        bodyTopology: "biped",
+        mediumProfileRef: "worldkit://medium-profile/ground-air.standard@1",
+      },
+    ],
+    definitionOverrideLockEntries: [],
+    projectionAllowedOverridePaths: [...FIRST_BATCH_ALLOWED_OVERRIDE_PATHS_V1],
     allowedWorldChangeOperationTypes: [...WORLD_CHANGE_OPERATION_TYPES_V1],
     ...(isNil(extras.publishRuntimeReplacement)
       ? {}
@@ -424,6 +436,47 @@ describe("P16-B1 Authoring/Edit Host", () => {
     if (receipt.status !== "rejected") throw new Error("expected rejected");
     expect(receipt.failurePhase).toBe("admission");
     expect(receipt.diagnostics[0]?.code).toBe("WORLD_CHANGE_ADMISSION_BUDGET_EXCEEDED");
+  });
+
+  it("rejects definition-override-set outside the Host policy before Candidate build", async () => {
+    const { host, authoringSpecHash } = createHost();
+    const changeSet = parseWorldChangeSetV1({
+      kind: "worldkit-world-change-set",
+      schemaVersion: 1,
+      id: "change.override.forbidden.001",
+      baseAuthoringSpecHash: authoringSpecHash,
+      preconditions: [],
+      operations: [
+        {
+          id: "operation.override.feel.001",
+          type: "definition-override-set",
+          nodeEntityId: "player",
+          override: {
+            id: "override.feel.001",
+            kind: "resource-ref",
+            path: "profiles.controlFeelProfileRef",
+            resourceRef:
+              "worldkit://control-feel-profile/humanoid.heavy-ground@1",
+          },
+        },
+      ],
+    });
+
+    const receipt = await host.validateWorldChange(parseWorldChangeRequestV1({
+      kind: "worldkit-world-change-request",
+      schemaVersion: 1,
+      id: "request.validate.override.forbidden.001",
+      authoringEditSessionId: SESSION_ID,
+      worldId: "basic-world",
+      changeSet,
+      mode: "validate",
+    }) as never);
+
+    expect(receipt.status).toBe("rejected");
+    if (receipt.status !== "rejected") throw new Error("expected rejected");
+    expect(receipt.failurePhase).toBe("candidate-apply");
+    expect(receipt.diagnostics[0]?.code).toBe("DEFINITION_OVERRIDE_PATH_FORBIDDEN");
+    expect(receipt.diagnostics[0]?.instancePath).toBe("/operations/0/override/path");
   });
 
   it("keeps the old revision when authorization is revoked before publication commit", async () => {
@@ -628,4 +681,3 @@ describe("P16-B1 Authoring/Edit Host", () => {
     );
   });
 });
-

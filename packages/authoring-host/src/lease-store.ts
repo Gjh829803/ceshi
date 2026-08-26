@@ -1,4 +1,5 @@
 import { parsePreparedCandidatePinV1 } from "@whitebox-world/authoring-edit";
+import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { isNil } from "lodash-es";
 
 import { worldChangeDiagnostic } from "./diagnostics.js";
@@ -127,6 +128,36 @@ export function pinPreparedCandidateV1(
           "WORLD_CHANGE_PREPARED_CANDIDATE_STALE",
           "/authoringEditPolicyHash",
           "Prepared Candidate policy binding no longer matches the host policy.",
+        ),
+      ],
+    };
+  }
+  if (sha256CanonicalJson(lease.validationReports) !== lease.validationReportsHash) {
+    return {
+      status: "rejected",
+      failurePhase: "admission",
+      diagnostics: [
+        worldChangeDiagnostic(
+          "WORLD_CHANGE_PREPARED_CANDIDATE_STALE",
+          "/preparedCandidateRef",
+          "Prepared Candidate Validation Report binding no longer matches its immutable identity.",
+        ),
+      ],
+    };
+  }
+  if (
+    lease.authoringEditSessionId !== input.authoringEditSessionId ||
+    lease.changeSetHash !== input.changeSetHash ||
+    lease.baseAuthoringSpecHash !== input.baseAuthoringSpecHash
+  ) {
+    return {
+      status: "rejected",
+      failurePhase: "admission",
+      diagnostics: [
+        worldChangeDiagnostic(
+          "WORLD_CHANGE_PREPARED_CANDIDATE_STALE",
+          "/preparedCandidateRef",
+          "Prepared Candidate session, ChangeSet, or Base binding no longer matches the Apply request.",
         ),
       ],
     };

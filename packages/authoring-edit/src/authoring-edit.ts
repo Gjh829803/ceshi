@@ -988,7 +988,7 @@ function parseOperationResult(input: unknown): WorldChangeOperationResultV1 {
   });
 }
 
-function parseValidationReport(
+export function parseWorldChangeValidationReportBindingV1(
   input: unknown,
 ): WorldChangeValidationReportBindingV1 {
   const record = snapshotDataRecord(input) ?? invalid(SCHEMA_RECEIPT);
@@ -1190,7 +1190,7 @@ function parseCandidateFields(record: Readonly<Record<string, unknown>>) {
     buildIdentity: parseBuildIdentity(record.buildIdentity),
     affectedIds: parseWorldChangeAffectedIdsV1(record.affectedIds),
     operationResults,
-    validationReports: reportRows.map(parseValidationReport),
+    validationReports: reportRows.map(parseWorldChangeValidationReportBindingV1),
     appliedMigrations: migrationRows.map(parseTransformation),
     appliedSafetyFixes: safetyRows.map(parseTransformation),
   };

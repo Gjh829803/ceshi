@@ -1,4 +1,10 @@
+import { hashAuthoringDocumentV4 } from "@whitebox-world/authoring";
 import { createValidAuthoringSpec } from "@whitebox-world/authoring/testing";
+import {
+  createWorldChangeJournalV1,
+  getAuthoringRevisionHeadV1,
+  seedAuthoringRevisionHeadV1,
+} from "@whitebox-world/authoring-host";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -16,7 +22,7 @@ describe("P16-B1 Authoring/Edit Host bridge", () => {
       const record = input as {
         readonly persistDurableCommit: typeof persistDurableCommit;
       };
-      record.persistDurableCommit({
+      const releaseFence = record.persistDurableCommit({
         previous: {
           runtimeSessionId: "runtime-session-9",
           worldSessionId: "world-session-31",
@@ -30,6 +36,7 @@ describe("P16-B1 Authoring/Edit Host bridge", () => {
           simulationTick: 0,
         },
       });
+      if (typeof releaseFence === "function") releaseFence();
       return {
         status: "published" as const,
         publication: {
@@ -140,7 +147,7 @@ describe("P16-B1 Authoring/Edit Host bridge", () => {
           targetPhaseBarrier: { mode: "next-world-replacement-barrier" },
         },
       },
-      persistDurableCommit: () => undefined,
+      persistDurableCommit: () => () => undefined,
     });
     expect(published.status).toBe("published");
     if (published.status !== "published") throw new Error("expected published");
@@ -166,5 +173,27 @@ describe("P16-B1 Authoring/Edit Host bridge", () => {
       authoringSchemaVersion: 4,
     });
     expect(projection.kind).toBe("worldkit-ai-schema-projection");
+  });
+
+  it("uses an injected durable journal without reseeding its current revision", () => {
+    const spec = createValidAuthoringSpec();
+    const journal = createWorldChangeJournalV1();
+    seedAuthoringRevisionHeadV1(journal, {
+      worldId: spec.id,
+      revisionRef: `revision://${spec.id}/7`,
+      authoringSpec: spec,
+      authoringSpecHash: hashAuthoringDocumentV4(spec),
+    });
+
+    const bridge = createAuthoringEditHostBridgeV1({
+      authoringSpec: spec,
+      journal,
+      nowUnixMilliseconds: () => 1_700_000_000_000,
+    });
+
+    expect(bridge.journal).toBe(journal);
+    expect(getAuthoringRevisionHeadV1(journal, spec.id)?.revisionRef).toBe(
+      `revision://${spec.id}/7`,
+    );
   });
 });
