@@ -174,6 +174,7 @@ UE 模板中第三人称常使用 Control Rotation 决定移动方向；本项�
 | CAM-03 | 控制台按基础/专家/诊断/发布分层，并消费 Telemetry | depends_on CAM-01、CAM-02; blocks CAM-04 | `apps/playground/src/main.ts`、Browser/Preview 适配与 UI 测试 | 输入：Telemetry、Profile Ranges；输出：Validated Preview Override 与只读诊断 | sequential |
 | CAM-04 | Overlay、对抗性回归与端到端验证 | depends_on CAM-02、CAM-03 | 测试、Harness、Overlay 文件 | 输入：Telemetry；输出：稳定开发态诊断与验证证据 | sequential |
 | CAM-05 | 关闭 Entity/Component 生命周期、部分构造回滚与 Physics Query 释放缺口 | depends_on CAM-04 | `packages/runtime-framework/**`、Babylon Runtime 构造/Query 与回归 | 输入：组件注册和 Runtime 构造；输出：fail-closed 激活、逆序全清理、exactly-once 资源释放 | main-agent-only |
+| CAM-06 | 修复 mounted ViewTarget 的 Camera Context 投影，并覆盖 Mount/Dismount 与多 Rider 歧义 | depends_on CAM-05 | `runtime-contracts` ViewTarget Sample、Babylon Camera Context 解析与 mounted 集成测试 | 输入：Possession Target + committed `mountedOn`；输出：Rider Camera Context + 不变的物理 ViewTarget | sequential |
 
 所有任务在当前已隔离的 `feat/gameplay-camera-optimization` worktree 内执行；不并行编辑 `CameraDirector` 或 `main.ts`，以避免接口和行为竞争。
 
@@ -198,3 +199,11 @@ CAM-05 不增加兼容层，也不把 UE 的类名作为第二套公共术语。
 - 已进入 disposing/disposed 的 Scene Component 不得重新挂接，也不得成为新的父节点。跨 Entity 的 Camera → Spring Arm 挂接仍允许，因为它表示 ViewTarget 关系，不把 Possession 或 Gameplay State 复制进组件树。
 - 每个 Babylon Character Entity 与 Camera Entity 在注册后立即加入 Runtime 部分构造回滚栈；即使后续 Subject、Physics Body、Camera 或 Registry 激活失败，也必须释放已创建的 Character Controller。
 - Physics World Query 的 Entity→Body 绑定拒绝空 ID 和重复 ID；所有按 Probe 半径缓存的 Havok Shape 必须逐个尝试释放，单个 provider disposer 失败不得跳过其余 Shape。
+
+## 13. Mounted ViewTarget 上下文（2026-08-26）
+
+CAM-06 不改变 `mountedOn`、Possession 或角色移动权威。Gameplay 仍决定受控 Mount，Camera 只消费已提交的关系投影：`ViewTargetSampleV1.entityId` 保留实际取景目标，`controlledEntityId` 表示 Camera Domain 的 Rider 控制上下文，`relationshipContexts` 携带与目标相关的 canonical 关系。
+
+- 唯一 `mountedOn` 关系允许 Camera 以 `relationshipRole: "rider"` 命中 `mounted-framing`，同时继续跟随由 Relationship Profile `cameraTargetRole` 确定的 Mount ViewTarget。
+- 同一 Mount 出现多个 Rider 且无法确定本地 Rider 时，解析器保留全部关系上下文，但以 `relationshipRole: "none"` fail closed，不按排序结果猜测控制者。
+- Dismount 删除 committed `mountedOn` 后，下一次 Camera 固定更新撤销 mounted modifier；事务提交阶段继续不执行可能失败的 Camera/Animation 工作。

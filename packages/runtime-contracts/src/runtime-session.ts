@@ -14,6 +14,8 @@ import type {
 } from "@whitebox-world/gameplay-contracts";
 import type { SubjectPresetBaselineV1 } from "@whitebox-world/subject-contracts";
 import type {
+  CameraRelationshipContextV1,
+  CameraRelationshipRoleV1,
   CameraRigParametersV1,
   CameraSelectionDecisionV1,
 } from "@whitebox-world/camera";
@@ -77,6 +79,7 @@ export interface ViewControlFrameV1 {
 }
 
 export interface ViewTargetSampleV1 {
+  controlledEntityId: string;
   entityId: string;
   targetPositionMetersXYZ: Vec3;
   forwardXYZ: Vec3;
@@ -87,7 +90,8 @@ export interface ViewTargetSampleV1 {
   activeMotionKernelRef: string;
   motionTags: readonly string[];
   movementMedium: PublishedMovementMediumV1;
-  relationshipRole: "none" | "rider" | "driver" | "passenger" | "tethered";
+  relationshipContexts: readonly CameraRelationshipContextV1[];
+  relationshipRole: CameraRelationshipRoleV1;
   cameraContextTags: readonly string[];
 }
 

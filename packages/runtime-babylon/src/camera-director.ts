@@ -221,14 +221,14 @@ function cameraContextSampleFromViewTarget(
 ): CameraContextSampleV1 {
   return {
     simulationTick,
-    controlledEntityId: sample.entityId,
+    controlledEntityId: sample.controlledEntityId,
     targetEntityId: sample.entityId,
     movementMedium: sample.movementMedium,
     activeMotionProfileRef: sample.activeMotionKernelRef,
     activeMotionKernelRef: sample.activeMotionKernelRef,
     motionTags: sample.motionTags,
     activeActionRefs: [],
-    relationshipContexts: [],
+    relationshipContexts: sample.relationshipContexts,
     relationshipRole: sample.relationshipRole,
     velocityMetersPerSecondXYZ: sample.velocityMetersPerSecondXYZ,
     socketPositionsMetersXYZById: sample.socketPositionsMetersXYZById,

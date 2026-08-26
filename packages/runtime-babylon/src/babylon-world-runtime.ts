@@ -60,6 +60,7 @@ import "./babylon-shader-bootstrap";
 import { BabylonCharacterEntityV1 } from "./babylon-character-entity";
 import { BabylonHavokPhysicsWorldQueryV1 } from "./babylon-physics-world-query";
 import { CameraComponentV1 } from "./camera-component";
+import { resolveCameraViewTargetContextV1 } from "./camera-view-target-context";
 import { createWhiteboxMaterials } from "./materials";
 import { enableHavokPhysics, FIXED_TIME_STEP_SECONDS } from "./physics";
 import { CharacterMovementComponentV1 } from "./character-movement-component";
@@ -2011,7 +2012,14 @@ export class BabylonWorldRuntime {
       const position = socketNode.getAbsolutePosition();
       socketPositionsMetersXYZById[socketId] = [position.x, position.y, position.z];
     }
+    const cameraViewTargetContext = resolveCameraViewTargetContextV1(
+      subject.entityId,
+      Object.values(
+        this.gameplayPublishedState.mountedRelationshipsByRiderEntityId,
+      ).map((projection) => projection.relationship),
+    );
     const sample: ViewTargetSampleV1 = {
+      controlledEntityId: cameraViewTargetContext.controlledEntityId,
       entityId: subject.entityId,
       targetPositionMetersXYZ: [origin.x, origin.y, origin.z],
       forwardXYZ: motion.forwardXYZ,
@@ -2022,7 +2030,8 @@ export class BabylonWorldRuntime {
       activeMotionKernelRef: motion.activeMotionKernelRef,
       motionTags: motion.motionTags,
       movementMedium: this.detectMovementMedium(controller),
-      relationshipRole: "none",
+      relationshipContexts: cameraViewTargetContext.relationshipContexts,
+      relationshipRole: cameraViewTargetContext.relationshipRole,
       cameraContextTags: [
         ...(hasForwardControlIntentV1(
           subject.capabilityAssembly.controlProfile,

@@ -611,14 +611,14 @@ Incremental Hot Apply，以及哪些 Runtime 状态被保留、重置或替换�
 - [ ] Browser/CLI 支持观察、控制、截图权限分离。
 - [ ] 为上游 Agent 提供 Registry Search、Dry Run、Explain、Diff 和结构化修复工具，不提供底层引擎对象。
 
-已知问题 `CAM-MOUNT-1`（2026-08-26，开放）：在 Playground
-`?scene=mounted-skateboard-s1` 中提交 Mount Action、把 Possession 从 Rider 切到 skateboard
-并运行固定输入后，Babylon CameraDirector 的跟随距离会异常缩短，渲染画面贴近并裁切 Rider。
-同一轮 Browser V5 证据确认 `mountedOn`、Possession、Rider `suspended`、Mount 移动、Dismount
-和 Reset 状态均正确，因此该问题当前限定为控制目标切换后的 Camera Context/碰撞取景专项，
-不回滚 M8-S1 Relationship 数据链路，也不在 M8-S1 内临时修改相机所有权。后续由 P2.4
-GCC-4/GCC-5 复现、定根因并增加 rendered visual 回归；本地 Playwright 复现截图名为
-`output/playwright/mounted-skateboard-s1-after-mount-move.png`。
+已知问题 `CAM-MOUNT-1`（2026-08-26，已修复）：根因是 Possession 切到 skateboard 后，
+Babylon ViewTarget Sample 把 `relationshipRole` 固定发布为 `none` 并丢弃 committed
+`mountedOn` 上下文，导致 `mounted-framing` 从未命中，镜头继续使用 5m 基础臂长。
+CAM-06 现在分离 Camera Domain 的 Rider 控制上下文与实际 Mount ViewTarget：唯一 Rider
+命中 7m mounted modifier，多 Rider 歧义 fail closed，Dismount 后下一 Camera 固定更新撤销 modifier。
+真实 Havok 集成回归确认 Mount/移动/Dismount 全链路、请求臂长 7m 且有效臂长大于 6m；
+Legacy Playground 页面正常运行，但没有可见 Mount/Dismount 控件，因此本轮没有把只读浏览器页面
+启动检查冒充挂载后的 rendered visual 验收，原复现截图仍保留为历史证据。
 
 #### P2.5 Surface Semantics 与 Traversal Capability
 

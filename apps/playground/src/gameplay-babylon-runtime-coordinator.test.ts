@@ -400,6 +400,18 @@ describe("Gameplay Babylon Runtime coordinator", () => {
         suspendedByRelationshipId: MOUNTED_SKATEBOARD_S1_RELATIONSHIP_ID,
       }),
     );
+    expect(afterBoardMove.view.camera).toMatchObject({
+      mode: "tracking",
+      targetEntityId: "skateboard",
+      activeCameraModifierRefs: [
+        "worldkit://camera-modifier/mounted-framing@1",
+      ],
+      requestedArmLengthMeters: 7,
+    });
+    expect(afterBoardMove.view.camera.mode).toBe("tracking");
+    if (afterBoardMove.view.camera.mode === "tracking") {
+      expect(afterBoardMove.view.camera.effectiveArmLengthMeters).toBeGreaterThan(6);
+    }
 
     const dismountRequest = {
       id: "dismount-skateboard-s1",
@@ -441,6 +453,11 @@ describe("Gameplay Babylon Runtime coordinator", () => {
       independentlyMoved.world.subjectStatesByEntityId.player!
         .entityState.positionMetersXYZ[2],
     ).toBeLessThan(riderBeforeIndependentMove[2]);
+    expect(independentlyMoved.view.camera).toMatchObject({
+      mode: "tracking",
+      targetEntityId: "player",
+      activeCameraModifierRefs: [],
+    });
 
     await coordinator.dispose();
   }, 30_000);
