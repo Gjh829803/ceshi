@@ -26,6 +26,8 @@
 - `SIGINT`, `SIGTERM`, explicit close, crash, and partial WAL tail have distinct tests. Only an unterminated final WAL row may be truncated; a corrupt complete row is fatal.
 - World disposal is exactly once. A replacement or resumed Runtime cannot report ready until the old ownership ledger is empty and the new Runtime has passed its World Ready Gate.
 - stdout for one-shot commands is one stable JSON document; stdout for interactive run is canonical NDJSON only. Human diagnostics and progress use stderr.
+- Every new one-shot JSON result carries the §16 envelope `protocolVersion`, `sdkVersion`, `specVersion`, and `command`; Runtime Session records carry both their DTO `schemaVersion` and stream `protocolVersion`.
+- The first interactive event is `ready` and includes a stable logical `worldkit://runtime-session/<runtimeSessionId>` URL. It does not claim that a headless stdio session owns an HTTP listener.
 - Plain `pnpm dev + ?authoring=1` is never introduced. The existing trusted `worldkit run <world.json>` authoring Browser route remains separate from Package headless sessions.
 
 ## Work graph and exclusive ownership
@@ -57,7 +59,7 @@
 - Mutation payloads are the existing exact `GameplayCommandV1` and singular `FixedInputV1`; no translated parameter bag.
 - Receipt common fields bind `id`, `requestId`, `requestHash`, `runtimeSessionId`, `worldSessionId`, `requestType`, and `status`; succeeded payloads reuse exact existing Gameplay receipt, WorldSession publication, event page, or close result. Rejections contain one stable diagnostic.
 - Event common fields: `kind: "worldkit-runtime-session-event"`, `schemaVersion: 1`, monotonic `sequence`, `runtimeSessionId`; types are `ready`, `completed`, and `failed`.
-- `ready` binds `worldSessionId`, `worldPackageRef`, `worldPackageRootHash`, `fixedInputControllerEntityId`, and the exact supported request-type list.
+- `ready` binds `protocolVersion`, logical `url`, `worldSessionId`, `worldPackageRef`, `worldPackageRootHash`, `fixedInputControllerEntityId`, and the exact supported request-type list.
 
 - [ ] Write RED happy-path/exact-key/adversarial tests, including aliases, accessor/symbol keys, negative zero, wrong nested Gameplay DTOs, unsorted event pages, and Request Hash domain separation.
 - [ ] Run `pnpm exec vitest run packages/runtime-host/src/runtime-session-protocol.test.ts` and capture the missing-export failure.
@@ -107,6 +109,7 @@
 - Build refuses an existing destination and returns a stable summary binding Package Ref/Root and Manifest/ExecutionPlan/Registry Lock hashes.
 - Inspect uses `readWorldPackageDirectoryV2` plus Host compatibility/signature policy admission and returns stable package facts without constructing any adapter.
 - Load uses the same verification result to produce `RuntimeWorldConfigurationV1`; no asset or Registry lookup occurs after package verification.
+- All three public results use the §16 one-shot envelope and stable exit-code mapping; no stack or absolute local path enters the protocol result.
 
 - [ ] Write RED tests for basic and G Bot builds, deterministic roots, existing destination, flipped Manifest/GLB bytes, missing file, symlink, unsupported Host profile, and an adapter sentinel proving inspect/verification happens before Runtime construction.
 - [ ] Run `pnpm exec vitest run scripts/lib/world-package-cli.test.ts` and capture RED.
