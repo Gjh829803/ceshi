@@ -72,7 +72,7 @@ export function putPreparedCandidateLeaseV1(
   store: PreparedCandidateLeaseStoreV1,
   lease: PreparedCandidateLeaseV1,
 ): void {
-  asStore(store).leases.set(lease.preparedCandidateRef, lease);
+  asStore(store).leases.set(lease.preparedCandidateRef, structuredClone(lease));
 }
 
 export function lookupPreparedCandidateV1(
@@ -85,7 +85,7 @@ export function lookupPreparedCandidateV1(
   if (isExpired(lease, nowUnixMilliseconds) && isNil(lease.pin)) {
     return { status: "missing" };
   }
-  return { status: "found", lease };
+  return { status: "found", lease: structuredClone(lease) };
 }
 
 export function sweepExpiredPreparedCandidatesV1(

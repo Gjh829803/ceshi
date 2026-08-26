@@ -2,6 +2,7 @@ import {
   hashAuthoringDocumentV4,
   normalizeAuthoringSpecV4,
   validateAuthoringSpecV4,
+  type AuthoringSpecV4,
   type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
 import {
@@ -13,8 +14,13 @@ import {
 } from "@whitebox-world/authoring-edit";
 import { compileWorldV5 } from "@whitebox-world/compiler";
 import { createCoreGameplayBootstrapV1 } from "@whitebox-world/gameplay";
-import { createGameplayBootstrapResourceLockEntryV1 } from "@whitebox-world/gameplay-contracts";
+import {
+  createGameplayBootstrapResourceLockEntryV1,
+  gameplayBootstrapCanonicalBytesV1,
+  type GameplayBootstrapV1,
+} from "@whitebox-world/gameplay-contracts";
 import { canonicalJsonBytes, sha256CanonicalJson } from "@whitebox-world/protocol";
+import type { ExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
 import {
   createWorldPackageBuildReceiptV1,
   type WorldPackageBuildReceiptV1,
@@ -70,6 +76,24 @@ function createRuntimeGameplayBootstrap(normalizedWorldIr: NormalizedWorldIRV4) 
     worldSeed: normalizedWorldIr.seed,
     entityDescriptors,
   });
+}
+
+function worldPackageRefForCandidateV1(worldId: string): string {
+  return `worldkit://world-package/${worldId}.package@1`;
+}
+
+function preparedCandidateClosureBytesV1(input: {
+  readonly authoringSpec: AuthoringSpecV4;
+  readonly executionPlan: ExecutionPlanV5;
+  readonly gameplayBootstrap: GameplayBootstrapV1;
+  readonly worldPackageBuildReceipt: WorldPackageBuildReceiptV1;
+}): number {
+  return (
+    canonicalJsonBytes(input.authoringSpec).byteLength +
+    canonicalJsonBytes(input.executionPlan).byteLength +
+    gameplayBootstrapCanonicalBytesV1(input.gameplayBootstrap).byteLength +
+    canonicalJsonBytes(input.worldPackageBuildReceipt).byteLength
+  );
 }
 
 function mapOwnerDiagnostics(
@@ -192,7 +216,13 @@ export function prepareTrustedCandidateV1(
     }
   }
 
-  const sizeBytes = canonicalJsonBytes(validated.value).byteLength;
+  const worldPackageRef = worldPackageRefForCandidateV1(validated.value.id);
+  const sizeBytes = preparedCandidateClosureBytesV1({
+    authoringSpec: validated.value,
+    executionPlan: compiled.executionPlan,
+    gameplayBootstrap,
+    worldPackageBuildReceipt,
+  });
   if (usage.bytes + sizeBytes > budget.maximumPreparedCandidateBytes) {
     return rejectedPrepare("admission", [
       admissionBudgetDiagnostic(
@@ -231,6 +261,9 @@ export function prepareTrustedCandidateV1(
     requiredGateProfileRefs: policy.requiredGateProfileRefs,
     buildIdentity,
     candidateAuthoringSpec: structuredClone(validated.value),
+    executionPlan: structuredClone(compiled.executionPlan),
+    gameplayBootstrap: structuredClone(gameplayBootstrap),
+    worldPackageRef,
     worldPackageBuildReceipt,
     sizeBytes,
     createdAtUnixMilliseconds,

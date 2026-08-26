@@ -251,6 +251,9 @@ importers:
       '@whitebox-world/protocol':
         specifier: workspace:*
         version: link:../protocol
+      '@whitebox-world/runtime-contracts':
+        specifier: workspace:*
+        version: link:../runtime-contracts
       '@whitebox-world/world-package':
         specifier: workspace:*
         version: link:../world-package

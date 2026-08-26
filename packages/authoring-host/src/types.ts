@@ -8,6 +8,8 @@ import type {
   WorldChangeFailurePhaseV1,
   WorldChangeValidationReportBindingV1,
 } from "@whitebox-world/authoring-edit";
+import type { GameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
+import type { ExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
 import type {
   ResolvedWorldPackageResourceArtifactV1,
   WorldPackageBuildReceiptV1,
@@ -73,6 +75,9 @@ export interface PreparedCandidateLeaseV1 {
   readonly requiredGateProfileRefs: readonly string[];
   readonly buildIdentity: WorldChangeBuildIdentityV1;
   readonly candidateAuthoringSpec: AuthoringSpecV4;
+  readonly executionPlan: ExecutionPlanV5;
+  readonly gameplayBootstrap: GameplayBootstrapV1;
+  readonly worldPackageRef: string;
   readonly worldPackageBuildReceipt: WorldPackageBuildReceiptV1;
   readonly sizeBytes: number;
   readonly createdAtUnixMilliseconds: number;

@@ -634,6 +634,85 @@ describe("P16-R1 durable WorldChange journal", () => {
     expect(cleanup).toEqual({ status: "missing" });
   });
 
+  it("dry-runs from building-candidate to succeeded without persisting candidate-ready", () => {
+    const { journal, leaseStore, changeSet } = seededJournal();
+    const request = requestFor("dry-run", changeSet);
+    expect(crashed(submit(journal, leaseStore, request, {
+      crashAfterState: "building-candidate",
+    })).state).toBe("building-candidate");
+    const pending = queryWorldChangeReceiptV1({
+      journal,
+      session: session(),
+      query: receiptQuery(DRY_RUN_REQUEST_ID),
+      nowUnixMilliseconds: NOW,
+    });
+    expect(pending).toEqual({ status: "pending", state: "building-candidate" });
+    const resumed = accepted(recover(journal, leaseStore, request));
+    expect(resumed.receipt.status).toBe("succeeded");
+    expect(resumed.receipt.mode).toBe("dry-run");
+
+    const isolated = seededJournal();
+    const completed = accepted(submit(
+      isolated.journal,
+      isolated.leaseStore,
+      requestFor("dry-run", isolated.changeSet),
+      { crashAfterState: "candidate-ready" },
+    ));
+    expect(completed.receipt.status).toBe("succeeded");
+    expect(completed.receipt.mode).toBe("dry-run");
+  });
+
+  it("lets an expired Session read a terminal Receipt but not Apply", () => {
+    const { journal, leaseStore, changeSet } = seededJournal();
+    const validated = accepted(submit(
+      journal,
+      leaseStore,
+      requestFor("validate", changeSet),
+    ));
+    const expired = session({ expiresAtUnixMilliseconds: NOW });
+    const queried = queryWorldChangeReceiptV1({
+      journal,
+      session: expired,
+      query: receiptQuery(VALIDATE_REQUEST_ID),
+      nowUnixMilliseconds: NOW,
+    });
+    expect(queried.status).toBe("found");
+    if (queried.status !== "found") throw new Error("expected found receipt");
+    expect(hashWorldChangeReceiptV1(queried.receipt)).toBe(
+      hashWorldChangeReceiptV1(validated.receipt),
+    );
+    const revoked = queryWorldChangeReceiptV1({
+      journal,
+      session: session({ isActive: false }),
+      query: receiptQuery(VALIDATE_REQUEST_ID),
+      nowUnixMilliseconds: NOW,
+    });
+    expect(revoked.status).toBe("rejected");
+    if (revoked.status !== "rejected") throw new Error("expected revoked query");
+    expect(revoked.diagnostics[0]?.code).toBe("WORLD_CHANGE_AUTHORIZATION_STALE");
+    const apply = accepted(submit(
+      journal,
+      leaseStore,
+      requestFor("apply-authoring", changeSet),
+      { session: expired },
+    ));
+    expect(apply.receipt.status).toBe("rejected");
+    if (apply.receipt.status !== "rejected") throw new Error("expected rejected apply");
+    expect(apply.receipt.failurePhase).toBe("authorization");
+    expect(apply.receipt.diagnostics[0]?.code).toBe("WORLD_CHANGE_AUTHORIZATION_STALE");
+  });
+
+  it("returns a cloned Authoring revision head", () => {
+    const { journal, spec } = seededJournal();
+    const head = getAuthoringRevisionHeadV1(journal, spec.id);
+    expect(head).toBeDefined();
+    if (isNil(head)) throw new Error("expected seeded revision head");
+    expect(head).not.toBe(getAuthoringRevisionHeadV1(journal, spec.id));
+    const writableSpec = head.authoringSpec as { id: string };
+    writableSpec.id = "mutated-world";
+    expect(getAuthoringRevisionHeadV1(journal, spec.id)?.authoringSpec.id).toBe(spec.id);
+  });
+
   it("rejects Receipt query without authoring.receipt.read", () => {
     const { journal, leaseStore, changeSet } = seededJournal();
     accepted(submit(journal, leaseStore, requestFor("validate", changeSet)));

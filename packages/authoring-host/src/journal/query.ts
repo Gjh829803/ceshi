@@ -35,6 +35,7 @@ function queryAuthorization(input: {
     expectedSessionId: input.expectedSessionId,
     requiredScopes: ["authoring.receipt.read"],
     nowUnixMilliseconds: input.nowUnixMilliseconds,
+    allowExpiredSession: true,
     ...(isNil(input.worldId) ? {} : { worldId: input.worldId }),
   });
   if (isNil(diagnostic)) return undefined;

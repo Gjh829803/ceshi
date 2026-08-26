@@ -177,8 +177,6 @@ function advance(
         concurrentNonTerminalRequestCount: nonTerminalRequestCountV1(input.journal),
         preparedCandidateCount: leaseUsage.count,
         preparedCandidateBytes: leaseUsage.bytes,
-        preparedCandidateRetentionMilliseconds:
-          input.session.policy.workloadBudget.maximumPreparedCandidateRetentionMilliseconds,
       },
     });
     if (!isAppliedWorldChangeSetResultV1(applied)) {
@@ -287,6 +285,29 @@ function advance(
       if (prepared.status !== "prepared") {
         return rejectRecord(input, current, prepared.failurePhase, prepared.diagnostics);
       }
+      if (current.request.mode === "dry-run") {
+        const receipt = assembleDryRunReceiptV1({
+          request: current.request,
+          requestHash: current.requestHash,
+          authoringEditPolicyHash: current.authoringEditPolicyHash,
+          changeSetHash: current.changeSetHash,
+          buildIdentity: prepared.buildIdentity,
+          affectedIds: current.applied.affectedIds,
+          operationResults: current.applied.operationResults,
+          preparedCandidateRef: prepared.preparedCandidateRef,
+          preparedCandidateExpiresAtUnixMilliseconds:
+            prepared.preparedCandidateExpiresAtUnixMilliseconds,
+        });
+        persist(input, {
+          ...current,
+          preparedCandidateRef: prepared.preparedCandidateRef,
+          buildIdentity: prepared.buildIdentity,
+          expiresAtUnixMilliseconds: prepared.preparedCandidateExpiresAtUnixMilliseconds,
+          state: "dry-run-succeeded",
+          receipt,
+        });
+        return { status: "accepted", receipt };
+      }
       current = persist(input, {
         ...current,
         preparedCandidateRef: prepared.preparedCandidateRef,
@@ -298,35 +319,6 @@ function advance(
   }
 
   if (current.state === "candidate-ready") {
-    if (current.request.mode === "dry-run") {
-      if (
-        isNil(current.applied) ||
-        isNil(current.buildIdentity) ||
-        isNil(current.preparedCandidateRef) ||
-        isNil(current.expiresAtUnixMilliseconds)
-      ) {
-        return rejectRecord(input, current, "package", [
-          worldChangeDiagnostic(
-            "WORLD_CHANGE_CANDIDATE_INVALID",
-            "/",
-            "Dry Run is missing Prepared Candidate bindings.",
-          ),
-        ]);
-      }
-      const receipt = assembleDryRunReceiptV1({
-        request: current.request,
-        requestHash: current.requestHash,
-        authoringEditPolicyHash: current.authoringEditPolicyHash,
-        changeSetHash: current.changeSetHash,
-        buildIdentity: current.buildIdentity,
-        affectedIds: current.applied.affectedIds,
-        operationResults: current.applied.operationResults,
-        preparedCandidateRef: current.preparedCandidateRef,
-        preparedCandidateExpiresAtUnixMilliseconds: current.expiresAtUnixMilliseconds,
-      });
-      persist(input, { ...current, state: "dry-run-succeeded", receipt });
-      return { status: "accepted", receipt };
-    }
     if (
       current.request.mode === "apply" &&
       current.request.requestedOutcome === "publish-runtime"

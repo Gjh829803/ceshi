@@ -36,6 +36,7 @@ export function sessionAuthorizationDiagnosticV1(input: {
   readonly worldId?: string;
   readonly expectedAuthorizationEpoch?: number;
   readonly expectedPolicyHash?: Sha256HashV1;
+  readonly allowExpiredSession?: boolean;
 }): WorldChangeDiagnosticV1 | undefined {
   const session = input.session;
   if (session.authoringEditSessionId !== input.expectedSessionId) {
@@ -54,7 +55,10 @@ export function sessionAuthorizationDiagnosticV1(input: {
       { kind: "authorization-stale", reason: "session-revoked" },
     );
   }
-  if (input.nowUnixMilliseconds >= session.expiresAtUnixMilliseconds) {
+  if (
+    input.allowExpiredSession !== true &&
+    input.nowUnixMilliseconds >= session.expiresAtUnixMilliseconds
+  ) {
     return worldChangeDiagnostic(
       "WORLD_CHANGE_AUTHORIZATION_STALE",
       "/authoringEditSessionId",

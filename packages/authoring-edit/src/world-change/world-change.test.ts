@@ -175,7 +175,7 @@ function apply(
       readonly concurrentNonTerminalRequestCount: number;
       readonly preparedCandidateCount: number;
       readonly preparedCandidateBytes: number;
-      readonly preparedCandidateRetentionMilliseconds: number;
+      readonly preparedCandidateRetentionMilliseconds?: number;
     };
     readonly changeSetId?: string;
   } = {},

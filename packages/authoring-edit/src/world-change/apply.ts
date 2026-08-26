@@ -45,7 +45,7 @@ export interface WorldChangeAdmissionUsageV1 {
   readonly concurrentNonTerminalRequestCount: number;
   readonly preparedCandidateCount: number;
   readonly preparedCandidateBytes: number;
-  readonly preparedCandidateRetentionMilliseconds: number;
+  readonly preparedCandidateRetentionMilliseconds?: number;
 }
 
 export interface ApplyWorldChangeSetInputV1 {
@@ -309,13 +309,15 @@ function admitWorkload(
     budget.maximumPreparedCandidateBytes,
     usage.preparedCandidateBytes,
   );
-  pushBudget(
-    diagnostics,
-    "prepared-candidate-retention-milliseconds",
-    "/",
-    budget.maximumPreparedCandidateRetentionMilliseconds,
-    usage.preparedCandidateRetentionMilliseconds,
-  );
+  if (!isNil(usage.preparedCandidateRetentionMilliseconds)) {
+    pushBudget(
+      diagnostics,
+      "prepared-candidate-retention-milliseconds",
+      "/",
+      budget.maximumPreparedCandidateRetentionMilliseconds,
+      usage.preparedCandidateRetentionMilliseconds,
+    );
+  }
   return diagnostics;
 }
 

@@ -59,7 +59,8 @@ export function getAuthoringRevisionHeadV1(
   journal: WorldChangeJournalV1,
   worldId: string,
 ): AuthoringRevisionHeadV1 | undefined {
-  return asJournal(journal).revisions.get(worldId);
+  const head = asJournal(journal).revisions.get(worldId);
+  return isNil(head) ? undefined : structuredClone(head);
 }
 
 export function nextAuthoringRevisionRefV1(

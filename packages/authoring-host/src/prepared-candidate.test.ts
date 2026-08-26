@@ -16,7 +16,10 @@ import {
 } from "@whitebox-world/authoring-edit";
 import { compileWorldV5 } from "@whitebox-world/compiler";
 import { createCoreGameplayBootstrapV1 } from "@whitebox-world/gameplay";
-import { createGameplayBootstrapResourceLockEntryV1 } from "@whitebox-world/gameplay-contracts";
+import {
+  createGameplayBootstrapResourceLockEntryV1,
+  gameplayBootstrapCanonicalBytesV1,
+} from "@whitebox-world/gameplay-contracts";
 import { canonicalJsonBytes } from "@whitebox-world/protocol";
 import { createWorldPackageBuildReceiptV1 } from "@whitebox-world/world-package";
 import { isNil } from "lodash-es";
@@ -137,6 +140,14 @@ function expectedHashes(spec: AuthoringSpecV4) {
     normalizedWorldIrHash: normalized.normalizedWorldIrHash as Sha256HashV1,
     executionPlanHash: compiled.executionPlanHash as Sha256HashV1,
     worldPackageRootHash: receipt.worldPackageRootHash,
+    worldPackageRef: `worldkit://world-package/${spec.id}.package@1`,
+    executionPlan: compiled.executionPlan,
+    gameplayBootstrap,
+    sizeBytes:
+      canonicalJsonBytes(spec).byteLength +
+      canonicalJsonBytes(compiled.executionPlan).byteLength +
+      gameplayBootstrapCanonicalBytesV1(gameplayBootstrap).byteLength +
+      canonicalJsonBytes(receipt).byteLength,
   };
 }
 
@@ -214,13 +225,16 @@ describe("P16-P1 trusted candidate build", () => {
       count: 1,
       bytes: ready.sizeBytes,
     });
-    expect(ready.sizeBytes).toBe(canonicalJsonBytes(spec).byteLength);
+    expect(ready.sizeBytes).toBe(independent.sizeBytes);
 
     const found = lookupPreparedCandidateV1(store, ready.preparedCandidateRef, NOW);
     expect(found.status).toBe("found");
     if (found.status !== "found") throw new Error("expected found lease");
     expect(found.lease.buildIdentity).toEqual(ready.buildIdentity);
     expect(found.lease.candidateAuthoringSpec).toEqual(spec);
+    expect(found.lease.executionPlan).toEqual(independent.executionPlan);
+    expect(found.lease.gameplayBootstrap).toEqual(independent.gameplayBootstrap);
+    expect(found.lease.worldPackageRef).toBe(independent.worldPackageRef);
     expect(found.lease.worldPackageBuildReceipt.worldPackageRootHash).toBe(
       independent.worldPackageRootHash,
     );
@@ -310,7 +324,7 @@ describe("P16-P1 trusted candidate build", () => {
 
   it("rejects persist when candidate bytes would exceed the host budget", () => {
     const spec = createValidAuthoringSpec();
-    const sizeBytes = canonicalJsonBytes(spec).byteLength;
+    const sizeBytes = expectedHashes(spec).sizeBytes;
     const { store, result } = prepare(spec, {
       policy: policy({
         workloadBudget: generousBudget({ maximumPreparedCandidateBytes: sizeBytes - 1 }),
