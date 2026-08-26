@@ -1196,7 +1196,7 @@ function installTuningWorkbench(
       { key: "rotationDampingPerSecond", label: "整体旋转阻尼", help: "未单独覆盖偏航或俯仰阻尼时，同时控制两个轴；轴向 Preview 值优先", step: 0.1, fallback: Number(base.rotationDampingPerSecond ?? 14) },
       { key: "lookSensitivityXRatio", label: "水平拖动灵敏度", help: "鼠标左右拖动的响应倍率", step: 0.05, fallback: Number(base.lookSensitivityXRatio ?? 1) },
       { key: "lookSensitivityYRatio", label: "垂直拖动灵敏度", help: "鼠标上下拖动的响应倍率", step: 0.05, fallback: Number(base.lookSensitivityYRatio ?? 1) },
-      { key: "collisionRadiusMeters", label: "碰撞保护距离", help: "镜头接近墙面时保留的安全距离", step: 0.01, fallback: Number(base.collisionRadiusMeters ?? 0.25) },
+      { key: "collisionRadiusMeters", label: "Probe Size（球形 Sweep 半径）", help: "0 使用射线；正值使用 Havok 球形 Sweep。默认 0.12 米（12 cm），数值越大越早收臂。", step: 0.01, fallback: Number(base.collisionRadiusMeters ?? 0.12) },
       { key: "collisionRetractionMetersPerSecond", label: "遇墙缩近速度", help: "遮挡出现时镜头向主体收回的速度", step: 0.25, fallback: Number(base.collisionRetractionMetersPerSecond ?? 30) },
       { key: "collisionRecoveryMetersPerSecond", label: "离墙恢复速度", help: "遮挡消失后镜头慢慢回到原距离的速度", step: 0.25, fallback: Number(base.collisionRecoveryMetersPerSecond ?? 5) },
       { key: "lookAheadSeconds", label: "启动时镜头向前带", help: "主体移动时焦点沿前进方向预看；设为 0 完全关闭", step: 0.01, fallback: Number(base.lookAheadSeconds ?? 0.2) },

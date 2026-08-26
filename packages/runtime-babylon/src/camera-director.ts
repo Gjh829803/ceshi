@@ -1,4 +1,5 @@
 import type { FreeCamera } from "@babylonjs/core/Cameras/freeCamera.js";
+import "@babylonjs/core/Culling/ray.js";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
 import {
@@ -31,7 +32,8 @@ import {
 import { isNil } from "lodash-es";
 
 import { CameraViewSolverV1 } from "./camera-view-solver";
-import { FollowArmSolverV1 } from "./follow-arm-solver";
+import { SpringArmComponentV1 } from "./spring-arm-component";
+import type { PhysicsWorldQueryPortV1 } from "@whitebox-world/runtime-framework";
 
 export interface CameraDirectorSnapshotV1 {
   activeCameraProfileRef: string;
@@ -322,7 +324,6 @@ export class CameraDirectorV1 {
   private previousVelocity = Vector3.Zero();
   private lastBaseTarget: Vector3 | undefined;
   private readonly cameraViewSolver = new CameraViewSolverV1();
-  private readonly followArmSolver = new FollowArmSolverV1();
   private smoothedFovRadians = Math.PI / 3;
   private activeParameters: CameraParametersV1 | undefined;
   private activeLockedParameters: CameraParametersV1 | undefined;
@@ -342,6 +343,7 @@ export class CameraDirectorV1 {
     private readonly executionPlan: ExecutionPlanV5,
     private readonly camera: FreeCamera,
     private readonly scene: Scene,
+    private readonly physicsWorldQuery: PhysicsWorldQueryPortV1,
   ) {
     this.activeProfileRef = executionPlan.camera.rigRef;
   }
@@ -462,6 +464,7 @@ export class CameraDirectorV1 {
     sample: ViewTargetSampleV1,
     deltaSeconds: number,
     simulationTick: number,
+    springArm: SpringArmComponentV1,
   ): void {
     const selected = this.selectProfile(cameraContext, sample, simulationTick);
     if (selected === undefined) {
@@ -506,7 +509,7 @@ export class CameraDirectorV1 {
       this.activeHeadingSource !== profile.headingSource ||
       this.activeReverseHeadingPolicy !== profile.reverseHeadingPolicy
     );
-    if (followArmBasisChanged) this.followArmSolver.reset();
+    if (followArmBasisChanged) springArm.reset();
     if (selectionChanged) {
       this.transitionElapsedSeconds = 0;
       this.transitionStartPosition.copyFrom(this.camera.position);
@@ -552,7 +555,7 @@ export class CameraDirectorV1 {
         parameters.teleportSnapDistanceMeters * parameters.teleportSnapDistanceMeters
     ) {
       this.initialized = false;
-      this.followArmSolver.reset();
+      springArm.reset();
       this.transitionDurationSeconds = 0;
     }
     this.lastBaseTarget = baseTarget.clone();
@@ -675,13 +678,13 @@ export class CameraDirectorV1 {
     let collisionHitEntityId: string | undefined;
     let collisionHitPositionXYZ: Vec3 | undefined;
     if (!firstPerson) {
-      const collision = this.followArmSolver.solve({
+      const collision = springArm.solve({
         subjectEntityId: sample.entityId,
         desiredTarget: target,
         desiredPosition,
         parameters,
         deltaSeconds,
-        sceneQuery: this.scene,
+        physicsWorldQuery: this.physicsWorldQuery,
       });
       desiredPosition = collision.position;
       safeArmLengthMeters = collision.safeArmLengthMeters;
@@ -854,7 +857,6 @@ export class CameraDirectorV1 {
     this.lookBackBlendRatio = 0;
     this.previousVelocity.setAll(0);
     this.lastBaseTarget = undefined;
-    this.followArmSolver.reset();
     this.smoothedFovRadians = Math.PI / 3;
     this.activeParameters = undefined;
     this.activeLockedParameters = undefined;

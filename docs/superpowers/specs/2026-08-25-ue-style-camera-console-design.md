@@ -2,16 +2,16 @@
 
 **状态：** 已实施
 **日期：** 2026-08-25
-**适用分支：** `feat/gameplay-camera-optimization`
+**适用分支：** `codex/camera-development`
 
 ## 1. 目标与范围
 
-将 G Bot 的摄像机 Authoring 控制台重构为可观察、可调试的 UE 风格 Inspector，并使 Runtime 内部职责清晰地分为 Camera View 与第三人称 Follow Arm 两部分。
+将 G Bot 的摄像机 Authoring 控制台重构为可观察、可调试的 UE 风格 Inspector，并使 Runtime 按 Entity / Component 分层：角色移动、第三人称 Spring Arm 与 Camera 各自拥有独立生命周期和状态。
 
 用户可在控制台选择两种镜头类型：
 
-- **第一人称**：固定映射至 `first-person.standard`；Camera View 直接取 `FirstPersonView` Socket，不创建或执行 Follow Arm。
-- **第三人称：自由环绕**：固定映射至 `orbit.medium`；Camera View 使用第三人称目标 Socket，Follow Arm 负责期望臂长、Lag、碰撞缩臂与恢复。
+- **第一人称**：固定映射至 `first-person.standard`；Camera Component 直接取 `FirstPersonView` Socket，不激活 Spring Arm。
+- **第三人称：自由环绕**：固定映射至 `orbit.medium`；Camera Component 使用第三人称目标 Socket，Spring Arm Component 负责期望臂长、Lag、碰撞缩臂与恢复。
 
 冲刺、瞄准等当前已支持的 Gameplay Context 可以叠加已声明的 Camera Modifier，但不得在用户手动选择上述类型后替换基础 Profile 或改变 `kind`。它们只能修改最终参数、FOV 或过渡。Registry 中的水面规则保留为 P2.5 游泳/攀爬切片的声明能力；当前 P1.5 Runtime 只发布 `ground | air`，控制台必须显示水面规则不可用，不能通过 Adapter 或别名伪造 `water` 状态。
 
@@ -28,23 +28,26 @@
 
 ## 3. 运行时架构与权威
 
-`CameraDirector` 继续是唯一的相机状态、最终 POV 和运行时选择权威。它不再以一个大方法隐式承担所有职责，而是在其内部组合两个无 Babylon Handle 的 Solver：
+`RuntimeEntityV1` 和 `SceneComponentV1` 提供通用生命周期/挂接边界。`CharacterMovementComponentV1` 包装既有 Motion Kernel；`SpringArmComponentV1` 独占第三人称臂长与碰撞状态；`CameraComponentV1` 负责绑定 Spring Arm 与 Babylon `FreeCamera`。`CameraDirector` 仍是唯一的相机选择、最终 POV 和 View Control Frame 权威，但不再拥有碰撞缩臂状态。
 
 ```text
-CameraDirector
-├── CameraViewSolver
-│   ├── 选择后的 Profile / Modifier / Preview Override
-│   ├── 目标 Socket、输入 yaw/pitch/zoom、Pitch/FOV、切换 Blend
-│   └── Final ViewControlFrame 和 Final Camera Pose
-└── FollowArmSolver                    # third-person only
+BabylonCharacterEntityV1 (RuntimeEntityV1)
+├── VisualRoot (SceneComponentV1)
+├── CharacterMovementComponentV1      # Motion Kernel / support / locomotion
+└── SpringArmComponentV1              # third-person only
     ├── Arm origin、Target/Socket Offset、Desired Arm Length
     ├── Position/Rotation Lag、Substep、Maximum Lag
-    └── Collision Probe、Safe Arm Length、Retraction/Recovery
+    └── PhysicsWorldQueryPortV1：ProbeSize=0 Raycast；>0 Havok Sphere ShapeCast
+
+Camera RuntimeEntityV1
+└── CameraComponentV1
+    ├── CameraDirector：选择、Socket、输入 yaw/pitch/zoom、Pitch/FOV、Blend
+    └── FreeCamera adapter：只消费最终安全 pose
 ```
 
-`CameraViewSolver` 与 `FollowArmSolver` 是 `CameraDirector` 的运行时内部对象，不是新的 Gameplay State、Babylon Component 或公开 Authoring Schema。`FreeCamera` 仍仅是 Babylon 适配对象。`MotionKernel` 保持角色速度与面朝方向权威；它只消费 View Control Frame 中已定义的输入，不读取或写入摄像机内部状态。
+`SpringArmComponentV1` 与 `CameraComponentV1` 都不是 Gameplay State 或公开 Authoring Schema。`FreeCamera` 仍仅是 Babylon 适配对象。`MotionKernel` 保持角色速度与面朝方向权威；它只消费 View Control Frame 中已定义的输入，不读取或写入摄像机内部状态。
 
-第一人称的 Follow Arm 状态明确为 `disabled`；第三人称明确为 `collision-follow`。不得通过一个可空的共享参数包让第一人称偷偷获得碰撞缩臂路径。
+第一人称的 Spring Arm 状态明确为 `disabled`；第三人称明确为 `collision-follow`。不得通过一个可空的共享参数包让第一人称偷偷获得碰撞缩臂路径。
 
 ## 4. 类型选择、规则选择和配置来源
 
@@ -52,8 +55,8 @@ CameraDirector
 
 | 控制台选择 | 锁定 Base Profile | Runtime 结构 |
 | --- | --- | --- |
-| 第一人称 | `first-person.standard` | `CameraViewSolver`，Follow Arm disabled |
-| 第三人称：自由环绕 | `orbit.medium` | `CameraViewSolver` + collision-follow `FollowArmSolver` |
+| 第一人称 | `first-person.standard` | `CameraComponentV1`，Spring Arm disabled |
+| 第三人称：自由环绕 | `orbit.medium` | `CameraComponentV1` + collision-follow `SpringArmComponentV1` |
 
 运行时只允许一个 Camera Selection Decision。`packages/camera` 中的 Profile Admission/Selection 决定必须成为 `CameraDirector` 的输入；Director 不得保留第二套独立的 Context Rule 匹配实现。
 
@@ -170,6 +173,7 @@ UE 模板中第三人称常使用 Control Rotation 决定移动方向；本项�
 | CAM-02 | 从 Director 内部抽取 View/Follow Arm Solver，保留 Final POV 行为 | depends_on CAM-01; blocks CAM-03、CAM-04 | `packages/runtime-babylon/src/camera-director.ts`、新增内部 solver 文件、运行时测试 | 输入：Selected Decision、View Target；输出：Pose/Arm State/Telemetry | sequential |
 | CAM-03 | 控制台按基础/专家/诊断/发布分层，并消费 Telemetry | depends_on CAM-01、CAM-02; blocks CAM-04 | `apps/playground/src/main.ts`、Browser/Preview 适配与 UI 测试 | 输入：Telemetry、Profile Ranges；输出：Validated Preview Override 与只读诊断 | sequential |
 | CAM-04 | Overlay、对抗性回归与端到端验证 | depends_on CAM-02、CAM-03 | 测试、Harness、Overlay 文件 | 输入：Telemetry；输出：稳定开发态诊断与验证证据 | sequential |
+| CAM-05 | 关闭 Entity/Component 生命周期、部分构造回滚与 Physics Query 释放缺口 | depends_on CAM-04 | `packages/runtime-framework/**`、Babylon Runtime 构造/Query 与回归 | 输入：组件注册和 Runtime 构造；输出：fail-closed 激活、逆序全清理、exactly-once 资源释放 | main-agent-only |
 
 所有任务在当前已隔离的 `feat/gameplay-camera-optimization` worktree 内执行；不并行编辑 `CameraDirector` 或 `main.ts`，以避免接口和行为竞争。
 
@@ -184,3 +188,13 @@ CAM-01 至 CAM-04 已按顺序实施。CAM-04 在公开 `WorldRuntimeCameraState
 - `node_modules\\.bin\\tsc.cmd --noEmit`：退出 0；
 - `corepack pnpm@10.14.0 build`：Playground Vite production build 通过；
 - `node_modules\\.bin\\tsx.cmd scripts/verify-g-bot-subject-world.ts`：退出 0，idle/walk/run/jump、主体隔离和墙体停步验证通过。
+
+## 12. 生命周期继续硬化（2026-08-26）
+
+CAM-05 不增加兼容层，也不把 UE 的类名作为第二套公共术语。项目继续以 `RuntimeEntityV1`、`EntityComponentV1`、`SceneComponentV1` 为唯一 canonical 名称；它们在职责上分别对应 UE 的 Actor、ActorComponent 与 SceneComponent。
+
+- Component 生命周期为 `constructed → activating → active → disposing → disposed`。激活失败是终止性失败：先清理部分构造资源，再由 Entity 逆注册顺序回滚全部兄弟组件；不得留下“状态显示 active、资源却未完成”的半激活对象。
+- Entity 或 Registry 销毁时，一个 disposer 抛错不能阻断其他 owner；完成全部清理后统一抛出稳定的聚合错误。已激活 Entity/Registry 支持动态组件/实体注册，并立即进入 active 状态；动态激活失败只移除失败对象，不污染既有 active owner。
+- 已进入 disposing/disposed 的 Scene Component 不得重新挂接，也不得成为新的父节点。跨 Entity 的 Camera → Spring Arm 挂接仍允许，因为它表示 ViewTarget 关系，不把 Possession 或 Gameplay State 复制进组件树。
+- 每个 Babylon Character Entity 与 Camera Entity 在注册后立即加入 Runtime 部分构造回滚栈；即使后续 Subject、Physics Body、Camera 或 Registry 激活失败，也必须释放已创建的 Character Controller。
+- Physics World Query 的 Entity→Body 绑定拒绝空 ID 和重复 ID；所有按 Probe 半径缓存的 Havok Shape 必须逐个尝试释放，单个 provider disposer 失败不得跳过其余 Shape。

@@ -40,8 +40,8 @@ const cameraViewSolverSource = await readFile(
   new URL("./camera-view-solver.ts", import.meta.url),
   "utf8",
 ).catch(() => "");
-const followArmSolverSource = await readFile(
-  new URL("./follow-arm-solver.ts", import.meta.url),
+const springArmComponentSource = await readFile(
+  new URL("./spring-arm-component.ts", import.meta.url),
   "utf8",
 ).catch(() => "");
 
@@ -153,19 +153,19 @@ async function createBoundGbotRuntime(
 describe("capability package runtime smoke tests", () => {
   it("keeps Camera Director independent from controls and real-world subject categories", () => {
     expect(cameraDirectorSource).not.toMatch(
-      /controlProfile|SubjectController|ExecutionSubjectV3|humanoid|vehicle|category\s*===/,
+      /controlProfile|CharacterMovementComponentV1|ExecutionSubjectV3|humanoid|vehicle|category\s*===/,
     );
   });
 
-  it("keeps view and Follow Arm solving outside the Camera Director", () => {
+  it("keeps view and Spring Arm solving outside the Camera Director", () => {
     expect(cameraDirectorSource).not.toMatch(
       /pickWithRay|collisionDistanceMeters|collisionShortenedPosition/,
     );
     expect(cameraViewSolverSource).toContain("export class CameraViewSolverV1");
     expect(cameraViewSolverSource).not.toMatch(/FreeCamera|ViewControlFrame|Gameplay/);
-    expect(followArmSolverSource).toContain("export class FollowArmSolverV1");
-    expect(followArmSolverSource).toContain("pickWithRay");
-    expect(followArmSolverSource).not.toMatch(/FreeCamera|ViewControlFrame|Gameplay/);
+    expect(springArmComponentSource).toContain("export class SpringArmComponentV1");
+    expect(springArmComponentSource).toContain("sweepSphere");
+    expect(springArmComponentSource).not.toMatch(/FreeCamera|ViewControlFrame|Gameplay/);
   });
 
   it("keeps the manual orbit heading through sprint framing activation and release", async () => {

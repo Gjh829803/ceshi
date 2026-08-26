@@ -34,9 +34,29 @@ function compareCodeUnits(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
-function equalBytes(left: Uint8Array, right: Uint8Array): boolean {
-  return left.byteLength === right.byteLength &&
-    left.every((value, index) => value === right[index]);
+export function canonicalizeModularSubjectRuntimeBundleOutputBytes(
+  relativePath: string,
+  bytes: Uint8Array,
+): Uint8Array {
+  if (!relativePath.endsWith(".json")) return bytes;
+  return Buffer.from(Buffer.from(bytes).toString("utf8").replaceAll("\r\n", "\n"));
+}
+
+function equalBytes(
+  relativePath: string,
+  left: Uint8Array,
+  right: Uint8Array,
+): boolean {
+  const canonicalLeft = canonicalizeModularSubjectRuntimeBundleOutputBytes(
+    relativePath,
+    left,
+  );
+  const canonicalRight = canonicalizeModularSubjectRuntimeBundleOutputBytes(
+    relativePath,
+    right,
+  );
+  return canonicalLeft.byteLength === canonicalRight.byteLength &&
+    canonicalLeft.every((value, index) => value === canonicalRight[index]);
 }
 
 function repositoryPath(repositoryRoot: string, relativePath: string): string {
@@ -90,7 +110,9 @@ async function checkOutputs(
   for (const output of outputs) {
     try {
       const actual = await readFile(repositoryPath(repositoryRoot, output.relativePath));
-      if (!equalBytes(actual, output.bytes)) mismatches.push(output.relativePath);
+      if (!equalBytes(output.relativePath, actual, output.bytes)) {
+        mismatches.push(output.relativePath);
+      }
     } catch {
       mismatches.push(output.relativePath);
     }

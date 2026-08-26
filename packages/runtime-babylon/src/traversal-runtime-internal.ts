@@ -5,7 +5,7 @@ import type {
   Vec3,
 } from "@whitebox-world/runtime-contracts";
 
-import type { SubjectController } from "./subject-controller";
+import type { CharacterMovementComponentV1 } from "./character-movement-component";
 
 export const BABYLON_TRAVERSAL_RUNTIME_INTERNAL = Symbol(
   "whitebox-world.babylon-traversal-runtime-internal.v1",
@@ -23,7 +23,7 @@ export interface BabylonTraversalRuntimeInternalV1 {
   readConfigurationEpoch(): number;
   readTick(): number;
   isDisposed(): boolean;
-  readSubjectController(entityId: string): SubjectController | undefined;
+  readCharacterMovement(entityId: string): CharacterMovementComponentV1 | undefined;
   readStaticCollisionMeshes(): readonly StaticCollisionMeshEntryV1[];
   resetToTraversalAnchor(input: Readonly<{
     traversingEntityId: string;

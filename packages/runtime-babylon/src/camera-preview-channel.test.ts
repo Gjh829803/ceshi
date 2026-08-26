@@ -153,10 +153,12 @@ function countScenePickQueries(runtime: BabylonWorldRuntime) {
 
 function smoothedCameraTarget(runtime: BabylonWorldRuntime): readonly [number, number, number] {
   const target = (runtime as unknown as {
-    readonly cameraDirector: {
-      readonly smoothedTarget: { readonly x: number; readonly y: number; readonly z: number };
+    readonly cameraComponent: {
+      readonly director: {
+        readonly smoothedTarget: { readonly x: number; readonly y: number; readonly z: number };
+      };
     };
-  }).cameraDirector.smoothedTarget;
+  }).cameraComponent.director.smoothedTarget;
   return [target.x, target.y, target.z];
 }
 
@@ -181,11 +183,13 @@ function renderedTransitionProgressRatio(
   fixedStepDeltaSeconds: number,
 ): number {
   const director = (runtime as unknown as {
-    readonly cameraDirector: {
-      readonly transitionElapsedSeconds: number;
-      readonly transitionDurationSeconds: number;
+    readonly cameraComponent: {
+      readonly director: {
+        readonly transitionElapsedSeconds: number;
+        readonly transitionDurationSeconds: number;
+      };
     };
-  }).cameraDirector;
+  }).cameraComponent.director;
   return smoothstep01(
     (director.transitionElapsedSeconds - fixedStepDeltaSeconds) /
       director.transitionDurationSeconds,
@@ -348,7 +352,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     }
   }, 15_000);
 
-  it("uses collision queries and arm telemetry only for third-person camera poses", async () => {
+  it("uses physics collision and arm telemetry only for third-person camera poses", async () => {
     const runtime = await createCameraPreviewChannelRuntime({
       blockCameraArm: true,
     });
@@ -368,7 +372,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       runtime.requestCameraProfile(ORBIT_REF);
       const thirdPerson = await runtime.runFixedInput({ actions: [], ticks: 1 });
 
-      expect(sceneQueries.count()).toBeGreaterThan(0);
+      expect(sceneQueries.count()).toBe(0);
       expect(thirdPerson.camera.requestedArmLengthMeters).toBeDefined();
       expect(thirdPerson.camera.safeArmLengthMeters).toBeDefined();
       expect(thirdPerson.camera.effectiveArmLengthMeters).toBeDefined();

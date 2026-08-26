@@ -425,13 +425,13 @@ function wrapTraversalPort(
 
 function runtimeLedger(harness: Awaited<ReturnType<typeof createRuntimeHarness>>) {
   const internals = harness.runtime as unknown as {
-    subjectControllersByEntityId: ReadonlyMap<string, unknown>;
+    characterEntitiesByEntityId: ReadonlyMap<string, unknown>;
   };
   const scene = harness.engine.scenes[0];
   if (isNil(scene)) throw new Error("Runtime Scene was not created.");
   return {
     resources: structuredClone(harness.runtime.snapshot().resources),
-    controllerCount: internals.subjectControllersByEntityId.size,
+    controllerCount: internals.characterEntitiesByEntityId.size,
     listenerCounts: {
       beforeRender: scene.onBeforeRenderObservable.observers.length,
       afterRender: scene.onAfterRenderObservable.observers.length,
@@ -497,13 +497,15 @@ describe("Route R1 fixed-tick probe with real Recast and Babylon/Havok", () => {
     const harness = await createRuntimeHarness(fixture, "route-probe-continuous");
     try {
       const internals = harness.runtime as unknown as {
-        subjectControllersByEntityId: ReadonlyMap<string, {
-          physicsController: { checkSupport: (...args: unknown[]) => unknown };
+        characterEntitiesByEntityId: ReadonlyMap<string, {
+          movement: {
+            physicsController: { checkSupport: (...args: unknown[]) => unknown };
+          };
         }>;
       };
-      const controller = internals.subjectControllersByEntityId.get("player");
-      if (isNil(controller)) throw new Error("Player controller was not created.");
-      const checkSupport = vi.spyOn(controller.physicsController, "checkSupport");
+      const character = internals.characterEntitiesByEntityId.get("player");
+      if (isNil(character)) throw new Error("Player character was not created.");
+      const checkSupport = vi.spyOn(character.movement.physicsController, "checkSupport");
       const receipt = await runProbe(fixture, harness.port);
 
       expect(receipt.status).toBe("complete");
@@ -590,13 +592,15 @@ describe("Route R1 fixed-tick probe with real Recast and Babylon/Havok", () => {
         throw new Error("Runtime did not create the terrain PhysicsAggregate.");
       }
       const bodyCountBeforeWithdrawal = harness.runtime.snapshot().resources.bodies;
-      const controller = (harness.runtime as unknown as {
-        subjectControllersByEntityId: ReadonlyMap<string, {
-          physicsController: { checkSupport: (...args: unknown[]) => unknown };
+      const character = (harness.runtime as unknown as {
+        characterEntitiesByEntityId: ReadonlyMap<string, {
+          movement: {
+            physicsController: { checkSupport: (...args: unknown[]) => unknown };
+          };
         }>;
-      }).subjectControllersByEntityId.get("player");
-      if (isNil(controller)) throw new Error("Player controller was not created.");
-      const checkSupport = vi.spyOn(controller.physicsController, "checkSupport");
+      }).characterEntitiesByEntityId.get("player");
+      if (isNil(character)) throw new Error("Player character was not created.");
+      const checkSupport = vi.spyOn(character.movement.physicsController, "checkSupport");
       const port = wrapTraversalPort(harness.port, {
         afterReset: (evidence) => {
           expect(evidence.characterSupport.supportState).toBe("supported");

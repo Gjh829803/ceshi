@@ -3,7 +3,10 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { buildModularSubjectRuntimeBundleOutputs } from "./modular-subject-runtime-bundles";
+import {
+  buildModularSubjectRuntimeBundleOutputs,
+  canonicalizeModularSubjectRuntimeBundleOutputBytes,
+} from "./modular-subject-runtime-bundles";
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -22,7 +25,28 @@ describe("modular Subject Runtime Bundle publication", () => {
     for (const output of outputs) {
       expect(output.bytes.byteLength).toBeGreaterThan(0);
       const actual = await readFile(path.join(REPOSITORY_ROOT, output.relativePath));
-      expect(Buffer.compare(actual, Buffer.from(output.bytes))).toBe(0);
+      expect(Buffer.compare(
+        canonicalizeModularSubjectRuntimeBundleOutputBytes(
+          output.relativePath,
+          actual,
+        ),
+        Buffer.from(output.bytes),
+      )).toBe(0);
     }
+  });
+
+  it("canonicalizes only text Manifest line endings", () => {
+    expect([
+      ...canonicalizeModularSubjectRuntimeBundleOutputBytes(
+        "assets/subjects/runtime-bundles/seedleap/g-bot/v1/runtime-bundle.manifest.json",
+        Buffer.from("{\r\n  \"kind\": \"bundle\"\r\n}\r\n"),
+      ),
+    ]).toEqual([...Buffer.from("{\n  \"kind\": \"bundle\"\n}\n")]);
+    expect([
+      ...canonicalizeModularSubjectRuntimeBundleOutputBytes(
+        "apps/playground/public/subject-assets/humanoid/g-bot/v2/g-bot.glb",
+        Uint8Array.from([13, 10]),
+      ),
+    ]).toEqual([13, 10]);
   });
 });

@@ -478,13 +478,13 @@ describe("Package Subject Definition normalization", () => {
 
     expect(result.ok).toBe(true);
     expect(packageDefinitionHash(result)).toBe(
-      "sha256:9c441f90c004b56755c0d5a88ad21d70e0df6e635e198441612c016cd777e3a6",
+      "sha256:bbfe1cfbcc097ab2dc4e32af38c2b8fdf6abd7a70ba41a36d55175199e113e45",
     );
     expect(result.value?.resources.resourceLockHash).toBe(
-      "sha256:76a46a6021ba1af424fec8f9d2ad58e74e6abfd74f6fccb65ca9ab43a5c8f600",
+      "sha256:ec36491175794fd9782955a6fe8428d0d48f199e676791998100980ea5eb7afc",
     );
     expect(result.normalizedWorldIrHash).toBe(
-      "sha256:54007ef65ba8324c1abdad76a1568c2181841515d0527e95f30d9e021f61be32",
+      "sha256:a60e7b989020b1f93915f9fa034e433ff4cd590348a64d4814304416fba4b95e",
     );
   });
 
