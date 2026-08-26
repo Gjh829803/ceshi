@@ -8,14 +8,14 @@
 - 对象：
   `docs/superpowers/specs/2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md`。
 - 对象状态：Detailed design；implementation not started。
-- 分支：`codex/p16-world-change-design`，基于 `origin/main` 创建的隔离 worktree。
-- 当前基线 HEAD：`1a3d9ea5e5262732ef42032c75aa6ed7f4c0fb99`。
-- 规格基线：`origin/main@1a3d9ea`。
+- 初次设计冻结分支：`codex/p16-world-change-design`，基于 `origin/main` 创建的隔离 worktree。
+- 初次审查基线 HEAD：`1a3d9ea5e5262732ef42032c75aa6ed7f4c0fb99`。
+- 初次冻结提交：`main@0cc386cf5e0cdcfb7b4496dece4b6640804ee848`。
 - 当前安装依赖：Babylon.js `9.21.2`、Havok `1.3.14`、Playwright `1.62.1`。
 - 引擎语义：本文不新增 Babylon/Havok 坐标、碰撞、Controller 或渲染算法断言；本次没有用
   引擎行为作为 finding 依据，因此不需要对安装源码做新的行为探针。
 
-执行的检查：
+初次设计冻结执行的检查：
 
 | 命令 | Exit code | 证据范围 |
 | --- | ---: | --- |
@@ -31,9 +31,9 @@
 | `pnpm test`（worktree 基线） | 1 | contract 191 files / 2,065 tests 全过；resource-heavy 20 files / 404 tests 通过，`agent-self-check` 1 项在全套资源竞争下超过 30 秒 |
 | `pnpm exec vitest run --config vitest.resource-heavy.config.ts scripts/agent-self-check.test.ts` | 0 | 超时文件定向复跑 2/2 通过；首项 20.6 秒，证实不是本次文档回归 |
 
-未因本次文档变更运行 `pnpm typecheck`、`pnpm build`、Browser verifier 或视觉/人工交互。
+未因初次文档变更运行 `pnpm typecheck`、`pnpm build`、Browser verifier 或视觉/人工交互。
 worktree 创建时按隔离基线要求运行了 root `pnpm test`；其唯一超时已按同一配置定向复跑通过。
-当前变更只新增/修改设计、审查和 Backlog 文档，没有改 TypeScript、Runtime、依赖、构建输入
+当前规格和本次 hardening 只修改设计/审查文本，没有改 TypeScript、Runtime、依赖、构建输入
 或产品能力；这些基线测试不构成未来 P1.6 实现已通过的证据。
 
 ### Runtime authority map
@@ -42,74 +42,99 @@ worktree 创建时按隔离基线要求运行了 root `pnpm test`；其唯一超
 | --- | --- | --- | --- |
 | Authoring document bytes/hash | `@whitebox-world/authoring` + `@whitebox-world/protocol` | ChangeSet CAS、WorldPackage、Reports | 单一；Registry/IR/Package hashes 分名 |
 | ChangeSet/Request identity | `@whitebox-world/authoring-edit` pure contracts | trusted Host journal/CLI/Studio | ChangeSet ID 与 Request ID 分离 |
-| Edit scope/revision head/journal | trusted Host adapter | Candidate pipeline、Receipt query | DTO 不能自授 Scope |
-| Candidate compile/package/gates | 现有 Authoring/Layout/Compiler/WorldPackage/Validation owners | Host publication | 没有 ChangeSet 私有 compiler |
+| Edit scope/revision head/journal | trusted Host adapter | Candidate pipeline、Receipt query | DTO 不能自授 Scope；Policy 使用 secret-free Hash 进入审计与 Candidate binding |
+| Candidate compile/package/gates | 现有 Authoring/Layout/Compiler/WorldPackage/Validation owners | Host publication | 没有 ChangeSet 私有 compiler；Prepared Candidate 是有期限、无权限含义的 Host lease |
 | active Runtime/WorldSession | `RuntimeHost` | Browser V5、Gameplay、Capture | Authoring/Edit 不直接持有 handle |
 | durable publication commit | trusted Host exclusive publication fence | RuntimeHost handle swap、Receipt | Commit transaction 前失败保留旧世界；transaction 后按新 head 恢复 |
-| Runtime resource lifetime | RuntimeHost/adapter ownership root | Babylon/Havok/assets | immutable Receipt 只引用 cleanup operation；独立 Cleanup Report + queue 更新状态 |
-| simulation time/state | 新 WorldSession fixed Tick | Gameplay/View/Snapshot | Full Reload Tick 0，不隐式迁移旧状态 |
+| Runtime resource lifetime | RuntimeHost/adapter ownership root | Babylon/Havok/assets | immutable Receipt 只引用 cleanup operation；独立 Cleanup Report + queue 更新状态，可进入 quarantine |
+| simulation time/state | 新 WorldSession fixed Tick | Gameplay/View/Snapshot | Full Reload Tick 0，不隐式迁移旧状态；Incremental 使用默认 disposition + scoped exceptions |
 
 ## 2. 旧结论复验
 
 1. `docs/reviews/2026-08-20-sdk-protocol-gates-terrain-audit.md` 的“WorldChangeSet / ChangeReceipt /
    Full Reload 尚无类型和命令”结论仍成立。已复验：当前 `packages/`、`apps/`、`scripts/` 的生产
    TypeScript 没有 `WorldChangeSet` 或 `ChangeReceipt` 匹配；新规格也明确标注 implementation not
-   started（5:20:docs/superpowers/specs/2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md）。
+   started。
 2. Browser V5 是 exact 39-key Runtime surface 的结论仍成立。已复验：
-   `653:699:apps/playground/src/worldkit-browser-api.test.ts` 枚举精确 keys；新规格选择独立受信
-   Authoring/Edit 控制面，不增加第 40 个 key
-   （65:66、1245:1251:docs/superpowers/specs/2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md）。
-3. RuntimeHost 已有 replacement prepare/ready/swap 底座的结论仍成立。已复验：
-   `1277:1339:packages/runtime-host/src/runtime-host.ts` 完成双驻留 preflight、Candidate 创建和 Ready；
-   `1341:1362` 做 CAS-like handle swap。它尚未绑定 P1.6 Request/Revision/Package envelope。
-4. “旧 Session dispose 失败可在新 Session 已交换后把调用报成失败”是当前源码事实：
-   `1355:1357:packages/runtime-host/src/runtime-host.ts` 已交换 current session，随后
-   `1374:1380` 在 dispose 抛错时抛出 `WORLD_SESSION_FAILED`。新规格将其冻结为 Commit 后 Cleanup
-   Report，不允许反转或修改 committed Receipt
-   （100:103、1140:1153:docs/superpowers/specs/2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md）。
+   `apps/playground/src/worldkit-browser-api.test.ts` 枚举精确 keys；新规格选择独立受信
+   Authoring/Edit 控制面，不增加第 40 个 key。
+3. RuntimeHost 已有 replacement prepare/ready/swap 底座的结论仍成立。已复验：当前
+   `runtime-host.ts` 已有双驻留 preflight、Candidate 创建、Ready 和 CAS-like handle swap；
+   它尚未绑定 P1.6 Request/Revision/Package envelope。
+4. “旧 Session dispose 失败可在新 Session 已交换后把调用报成失败”是当前源码事实。新规格
+   将其冻结为 Commit 后 Cleanup Report，不允许反转或修改 committed Receipt。
 
 ## 3. Findings
 
 没有未解决的 P0、P1 或 P2 finding。
 
-主审期间已在作者阶段收敛以下问题，因此不作为开放 finding：
+初次主审期间已在作者阶段收敛以下问题，因此不作为开放 finding：
 
 - Registry/Spatial Resource Kind 从开放 `string` 改为关闭 Union；
 - `WorldChangeApplyRequestV1` 改为 `requestedOutcome` 判别 Union，禁止
   `publish-runtime` 缺失 Runtime expectation；
 - 补齐 Receipt success/rejected closed union、Build identity、affected IDs、Runtime state
   disposition、Explain/Diff/Query DTO；
-- 修正 durable request state 图的 rejected 分支；
 - 增加 node/terrain、node/override 的 overlap conflict；
 - 把可并行任务的 `authoring-edit` 文件所有权拆到互斥子目录；
-- 禁止 active Runtime 下 `authoring-only` 提交导致 Authoring head 与 Runtime head 静默分叉。
+- 禁止 active Runtime 下 `authoring-only` 提交导致 Authoring head 与 Runtime head 静默分叉；
 - 把 `ai-schema-projection-profile` 明确加入关闭 Registry kind，并定义 Profile/Search content
   Hash 的精确对象与 P16-S1 所有权；
 - 在 durable commit transaction 与内存 handle swap 之间增加 per-World exclusive publication
   fence、fencing token 和 crash recovery 规则，禁止旁路观察半提交状态；
 - 将 Commit 后 cleanup 从 immutable Receipt 中拆出为稳定 `cleanupOperationId` 引用的独立
-  Cleanup Report，后续 retry/released 状态不再改变幂等 Receipt。
+  Cleanup Report，后续状态不再改变幂等 Receipt。
+
+### 3.1 设计冻结后的 hardening disposition
+
+对冻结规格再次做协议一致性和未来 Incremental 可表达性检查后，确认并修正以下设计缺口：
+
+1. **Request 状态机终态不完整。** 原图只把 `rejected/committed` 作为终态，无法表达
+   `validate → validated` 与 `dry-run → dry-run-succeeded`。现已冻结 mode-specific terminal
+   states，并明确 Validate/Dry Run Request 不能沿用同一 Request ID 升级为 Apply。
+2. **传输断开与业务取消语义未冻结。** V1 现在明确没有公共 Cancel Request；调用方断开、
+   AbortSignal 或超时只停止等待，不取消 durable work，后续必须按原 Request ID 查询 Receipt。
+3. **Prepared Candidate 缺少可操作的租约边界。** Dry Run Receipt 现在携带到期时间；opaque
+   ref 绑定 World、ChangeSet/Base、secret-free Edit Policy、Registry/Compiler/Gate identities，
+   持有 ref 不授予 Apply 权限，过期与 Hash/Policy 漂移使用不同 Diagnostic。
+4. **Runtime state disposition 对 Incremental 过于粗粒度。** 单个 kind 的单一 disposition 无法
+   同时表达“默认 preserved、少数 Entity replaced/reset”。现改为每个 kind 的 default disposition
+   加非重叠 scoped exceptions；Full Reload exceptions 必须为空。
+5. **Diagnostic 仍有开放 `code: string` / `Record<string, unknown>` 袋。** 现冻结关闭的 Code 和
+   code-specific details union，避免实现阶段在 `details` 内长出第二套私有协议。
+6. **Authoring/Edit 工作量和 Candidate 留存没有独立预算。** Session Policy 现绑定 ChangeSet
+   bytes、Precondition/Operation 数、并发非终态请求、Prepared Candidate 数/字节和最长留存预算；
+   超限在分配 Candidate/Runtime 前 fail closed。
+7. **Cleanup 只有无限 retry，没有不可自动恢复状态。** Cleanup Report 新增 `quarantined` 和
+   attempt count；达到策略上限或发现 ownership corruption 时进入可审计隔离状态，但不改变
+   committed Receipt。
+
+上述修正保持 P1.6 scope 不变：没有新增生产实现、Runtime Spawn、Terrain Hot Patch 或普通
+Browser API；只让已经承诺的 V1/未来 Incremental 合同可无歧义实现和运维。
 
 ## 4. 维度覆盖
 
 | 维度 | 状态 | 结论/证据 |
 | --- | --- | --- |
-| D1 定位与需求边界 | 已查 | 状态明确为设计未实现；outdoor/Runtime/Incremental 非目标闭合；P1.4 是 Runtime publication 硬依赖（5:20、106:132、1530:1531:docs/superpowers/specs/2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md） |
-| D2 Schema 与 AI-friendly | 已查 | 当前对象用 `id`、Change Operation 用 `type`、Request mode 判别、role-qualified IDs/Refs/Hashes、单位字段和关闭 Union 已核对（247:517、521:987:docs/superpowers/specs/2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md） |
+| D1 定位与需求边界 | 已查 | 状态明确为设计未实现；Runtime Spawn/Incremental 首切片非目标闭合；P1.4 是 Runtime publication 硬依赖 |
+| D2 Schema 与 AI-friendly | 已查 | 当前对象用 `id`、Operation 用 `type`、Request mode 判别、role-qualified IDs/Refs/Hashes、关闭 Diagnostic/Details、无权限 Candidate ref 已核对 |
 | D3 承诺与事实对拍 | 已查 | Authoring hash、override 常量、RuntimeHost replacement/dispose、Browser 39 keys 均从当前源码复验；规格不宣称实现完成 |
-| D4 单一权威状态 | 已查（Runtime checklist） | Authoring/Edit/Compiler/Runtime/Browser/cleanup owner map 单一；exclusive fence 遮蔽 durable commit→handle swap 临界段；没有从 DOM/Babylon/Gameplay Command 反推结构真相（162:194、1090:1153、1216:1355:docs/superpowers/specs/2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md） |
-| D5 工程质量与可维护性 | 不适用代码审查；设计层已查 | 新包依赖 DAG、文件独占和 parallel/sequential/main-agent-only 工作图已冻结（162:194、1502:1531:docs/superpowers/specs/2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md） |
-| D6 门禁与证据分层 | 已查 | Schema/override/ChangeSet/Runtime adversarial matrix及五层证据分开；没有用文档或 smoke 宣称生产能力（1435:1486:docs/superpowers/specs/2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md） |
+| D4 单一权威状态 | 已查（Runtime checklist） | Authoring/Edit/Compiler/Runtime/Browser/cleanup owner map 单一；exclusive fence 遮蔽 durable commit→handle swap 临界段；transport disconnect 不创造第二取消真相 |
+| D5 工程质量与可维护性 | 不适用代码审查；设计层已查 | 新包依赖 DAG、文件独占、workload budget、mode-specific journal state 与 parallel/sequential/main-agent-only 工作图已冻结 |
+| D6 门禁与证据分层 | 已查 | Schema/override/ChangeSet/Candidate lease/Runtime/Cleanup adversarial matrix及五层证据分开；没有用文档或 smoke 宣称生产能力 |
 
 ## 5. 独立复核状态
 
-按项目本地 `reviewing-with-cursor` 流程启动了一个 design 会话和一个 fresh final review ID。
-两个会话均已认证、保持 Ask/read-only、读取了限定文档与关键源码边界，且工作树指纹未漂移；
-但两次都在完成 Read 批次后长期停住，未输出 finding 或 GO/NO-GO。主 Agent 已终止无输出进程，
-丢弃这两次不完整结果；本文不把 Cursor 存活摘要、候选缺陷字样或认证状态当成独立审查证据。
-P16-D0 的结论仅由本页可复现的当前源码对拍和全维度主审支撑。
+初次冻结时按项目本地 `reviewing-with-cursor` 流程启动了一个 design 会话和一个 fresh final
+review ID。两个会话均已认证、保持 Ask/read-only、读取了限定文档与关键源码边界，且工作树
+指纹未漂移；但两次都在完成 Read 批次后长期停住，未输出 finding 或 GO/NO-GO。主 Agent 已
+终止无输出进程，丢弃这两次不完整结果；本文不把 Cursor 存活摘要、候选缺陷字样或认证状态
+当成独立审查证据。P16-D0 的结论由本页可复现的当前源码对拍和全维度主审支撑。
+
+本次 post-freeze hardening 是文档级合同修订，没有执行新的外部独立模型审查，也不据此宣称
+实现或 Runtime Gate 已通过。
 
 ## 6. 结论
 
-结论：该规格可以作为 P1.6 后续实施计划的设计基线。P1.6 当前仍为未实现；只有工作图中的
-Slice A/B 各自通过对应 Gate 后，才能更新能力声明。
+结论：hardening 后的规格可以继续作为 P1.6 后续实施计划的设计基线。P1.6 当前仍为未实现；
+只有工作图中的 Slice A/B 各自通过对应 Gate 后，才能更新能力声明。
