@@ -28,8 +28,25 @@ import {
   builtInSubjectResourceRegistry,
   type SubjectRegistryResourceV3,
 } from "@whitebox-world/subject-registry";
+import {
+  REGISTRY_RESOURCE_KINDS_V1,
+  type RegistryResourceKindV1,
+} from "@whitebox-world/authoring-edit";
 import { isNil } from "lodash-es";
 
+import {
+  runChangeApplyV1,
+  runChangeCleanupV1,
+  runChangeDiffV1,
+  runChangeDryRunV1,
+  runChangeExplainV1,
+  runChangeReceiptV1,
+  runChangeValidateV1,
+  runRegistrySearchV1,
+  runSchemaProjectV1,
+  redactAuthoringEditJsonV1,
+  type AuthoringEditCliResultV1,
+} from "./lib/authoring-edit-cli";
 import { explainSubjectFile } from "./lib/subject-explain";
 import {
   createRenderEnvironmentDiagnosticsV1,
@@ -91,6 +108,19 @@ Usage:
   worldkit capture <file> --output <png> [--snapshot <json>] [--triview-output <directory> --implementation-map <json>] [--port <port>] [--json]
   worldkit registry list --kind <resource-kind> [--json]
   worldkit registry describe --resource-ref <ref> [--json]
+  worldkit registry search --lock <registry-lock.json> --kind <resource-kind>
+    [--tag <semantic-tag>] [--after-resource-ref <ref>] [--limit <count>] [--json]
+  worldkit schema project <world.json> --profile <resource-ref> --output <projection.json> [--json]
+  worldkit change validate <change-set.json> [--json]
+  worldkit change dry-run <world.json> --change-set <change-set.json>
+    --output <candidate-directory> [--json]
+  worldkit change diff <world-change-receipt.json> [--json]
+  worldkit change explain <world-change-receipt.json>
+    [--operation-id <id>] [--diagnostic-code <code>] [--json]
+  worldkit change apply <world.json> --change-set <change-set.json>
+    --output <new-world.json> --receipt <world-change-receipt.json> --write [--json]
+  worldkit change receipt --request-id <id> [--connection-profile <file>] [--json]
+  worldkit change cleanup --cleanup-operation-id <id> [--connection-profile <file>] [--json]
   worldkit subject-definition validate <file> [--json]
   worldkit subject explain <world-file> --entity-id <id> [--json]
   worldkit brief validate <scene-brief.md> [--json]
@@ -219,7 +249,60 @@ export type WorldkitArgs =
       (
         | { entityId: string; constraintId?: never }
         | { constraintId: string; entityId?: never }
-      ));
+      ))
+  | {
+      command: "schema-project";
+      inputPath: string;
+      profileRef: string;
+      outputPath: string;
+      json: boolean;
+    }
+  | {
+      command: "registry-search";
+      lockPath: string;
+      resourceKind: RegistryResourceKindV1;
+      semanticTags: readonly string[];
+      afterResourceRef?: string;
+      limit?: number;
+      json: boolean;
+    }
+  | { command: "change-validate"; inputPath: string; json: boolean }
+  | {
+      command: "change-dry-run";
+      inputPath: string;
+      changeSetPath: string;
+      outputPath: string;
+      json: boolean;
+    }
+  | { command: "change-diff"; inputPath: string; json: boolean }
+  | {
+      command: "change-explain";
+      inputPath: string;
+      operationId?: string;
+      diagnosticCode?: string;
+      json: boolean;
+    }
+  | {
+      command: "change-apply";
+      inputPath: string;
+      changeSetPath: string;
+      outputPath: string;
+      receiptPath: string;
+      write: true;
+      json: boolean;
+    }
+  | {
+      command: "change-receipt";
+      requestId: string;
+      connectionProfilePath?: string;
+      json: boolean;
+    }
+  | {
+      command: "change-cleanup";
+      cleanupOperationId: string;
+      connectionProfilePath?: string;
+      json: boolean;
+    };
 
 export interface WorldkitCommandResult {
   ok: boolean;
@@ -278,6 +361,25 @@ function takeOption(tokens: string[], option: string): string | undefined {
   }
   tokens.splice(index, 2);
   return value;
+}
+
+function takeAllOptions(tokens: string[], option: string): string[] {
+  const values: string[] = [];
+  let index = tokens.indexOf(option);
+  while (index !== -1) {
+    const value = tokens[index + 1];
+    if (value === undefined || value.startsWith("--")) {
+      throw new WorldkitUsageError(`${option} requires a value.`);
+    }
+    values.push(value);
+    tokens.splice(index, 2);
+    index = tokens.indexOf(option);
+  }
+  return values;
+}
+
+function isRegistryResourceKind(value: string): value is RegistryResourceKindV1 {
+  return (REGISTRY_RESOURCE_KINDS_V1 as readonly string[]).includes(value);
 }
 
 function takeRequiredPositional(tokens: string[], label: string): string {
@@ -524,6 +626,35 @@ export function parseWorldkitArgs(arguments_: readonly string[]): WorldkitArgs {
       rejectRemaining(tokens, "registry describe");
       return { command: "registry-describe", resourceRef, json };
     }
+    if (operation === "search") {
+      const lockPath = takeOption(tokens, "--lock");
+      const resourceKind = takeOption(tokens, "--kind");
+      const semanticTags = takeAllOptions(tokens, "--tag");
+      const afterResourceRef = takeOption(tokens, "--after-resource-ref");
+      const limitValue = takeOption(tokens, "--limit");
+      if (lockPath === undefined) {
+        throw new WorldkitUsageError(
+          "registry search requires --lock <registry-lock.json>.",
+        );
+      }
+      if (resourceKind === undefined || !isRegistryResourceKind(resourceKind)) {
+        throw new WorldkitUsageError(
+          "registry search requires --kind <resource-kind>.",
+        );
+      }
+      rejectRemaining(tokens, "registry search");
+      return {
+        command: "registry-search",
+        lockPath,
+        resourceKind,
+        semanticTags,
+        ...(afterResourceRef === undefined ? {} : { afterResourceRef }),
+        ...(limitValue === undefined
+          ? {}
+          : { limit: parsePositiveIntegerOption(limitValue, "--limit") }),
+        json,
+      };
+    }
     throw new WorldkitUsageError(`Unknown registry operation '${operation}'.`);
   }
 
@@ -597,6 +728,153 @@ export function parseWorldkitArgs(arguments_: readonly string[]): WorldkitArgs {
         : { command: "layout-explain", inputPath, entityId, json };
     }
     throw new WorldkitUsageError(`Unknown layout operation '${operation}'.`);
+  }
+
+  if (command === "schema") {
+    const operation = takeRequiredPositional(tokens, "schema operation");
+    if (operation !== "project") {
+      throw new WorldkitUsageError(`Unknown schema operation '${operation}'.`);
+    }
+    const inputPath = takeRequiredPositional(tokens, "world.json");
+    const profileRef = takeOption(tokens, "--profile");
+    const outputPath = takeOption(tokens, "--output");
+    if (profileRef === undefined) {
+      throw new WorldkitUsageError(
+        "schema project requires --profile <resource-ref>.",
+      );
+    }
+    if (outputPath === undefined) {
+      throw new WorldkitUsageError(
+        "schema project requires --output <projection.json>.",
+      );
+    }
+    rejectRemaining(tokens, "schema project");
+    return { command: "schema-project", inputPath, profileRef, outputPath, json };
+  }
+
+  if (command === "change") {
+    const operation = takeRequiredPositional(tokens, "change operation");
+    if (operation === "validate") {
+      const inputPath = takeRequiredPositional(tokens, "change-set.json");
+      rejectRemaining(tokens, "change validate");
+      return { command: "change-validate", inputPath, json };
+    }
+    if (operation === "dry-run") {
+      const inputPath = takeRequiredPositional(tokens, "world.json");
+      const changeSetPath = takeOption(tokens, "--change-set");
+      const outputPath = takeOption(tokens, "--output");
+      if (changeSetPath === undefined) {
+        throw new WorldkitUsageError(
+          "change dry-run requires --change-set <change-set.json>.",
+        );
+      }
+      if (outputPath === undefined) {
+        throw new WorldkitUsageError(
+          "change dry-run requires --output <candidate-directory>.",
+        );
+      }
+      rejectRemaining(tokens, "change dry-run");
+      return {
+        command: "change-dry-run",
+        inputPath,
+        changeSetPath,
+        outputPath,
+        json,
+      };
+    }
+    if (operation === "diff") {
+      const inputPath = takeRequiredPositional(tokens, "world-change-receipt.json");
+      rejectRemaining(tokens, "change diff");
+      return { command: "change-diff", inputPath, json };
+    }
+    if (operation === "explain") {
+      const inputPath = takeRequiredPositional(tokens, "world-change-receipt.json");
+      const operationId = takeOption(tokens, "--operation-id");
+      const diagnosticCode = takeOption(tokens, "--diagnostic-code");
+      if (operationId !== undefined && diagnosticCode !== undefined) {
+        throw new WorldkitUsageError(
+          "change explain accepts only one of --operation-id or --diagnostic-code.",
+        );
+      }
+      rejectRemaining(tokens, "change explain");
+      return {
+        command: "change-explain",
+        inputPath,
+        ...(operationId === undefined ? {} : { operationId }),
+        ...(diagnosticCode === undefined ? {} : { diagnosticCode }),
+        json,
+      };
+    }
+    if (operation === "apply") {
+      const inputPath = takeRequiredPositional(tokens, "world.json");
+      const changeSetPath = takeOption(tokens, "--change-set");
+      const outputPath = takeOption(tokens, "--output");
+      const receiptPath = takeOption(tokens, "--receipt");
+      const write = takeFlag(tokens, "--write");
+      if (changeSetPath === undefined) {
+        throw new WorldkitUsageError(
+          "change apply requires --change-set <change-set.json>.",
+        );
+      }
+      if (outputPath === undefined) {
+        throw new WorldkitUsageError(
+          "change apply requires --output <new-world.json>.",
+        );
+      }
+      if (receiptPath === undefined) {
+        throw new WorldkitUsageError(
+          "change apply requires --receipt <world-change-receipt.json>.",
+        );
+      }
+      if (!write) {
+        throw new WorldkitUsageError(
+          "change apply requires explicit --write.",
+        );
+      }
+      rejectRemaining(tokens, "change apply");
+      return {
+        command: "change-apply",
+        inputPath,
+        changeSetPath,
+        outputPath,
+        receiptPath,
+        write: true,
+        json,
+      };
+    }
+    if (operation === "receipt") {
+      const requestId = takeOption(tokens, "--request-id");
+      const connectionProfilePath = takeOption(tokens, "--connection-profile");
+      if (requestId === undefined) {
+        throw new WorldkitUsageError(
+          "change receipt requires --request-id <id>.",
+        );
+      }
+      rejectRemaining(tokens, "change receipt");
+      return {
+        command: "change-receipt",
+        requestId,
+        ...(connectionProfilePath === undefined ? {} : { connectionProfilePath }),
+        json,
+      };
+    }
+    if (operation === "cleanup") {
+      const cleanupOperationId = takeOption(tokens, "--cleanup-operation-id");
+      const connectionProfilePath = takeOption(tokens, "--connection-profile");
+      if (cleanupOperationId === undefined) {
+        throw new WorldkitUsageError(
+          "change cleanup requires --cleanup-operation-id <id>.",
+        );
+      }
+      rejectRemaining(tokens, "change cleanup");
+      return {
+        command: "change-cleanup",
+        cleanupOperationId,
+        ...(connectionProfilePath === undefined ? {} : { connectionProfilePath }),
+        json,
+      };
+    }
+    throw new WorldkitUsageError(`Unknown change operation '${operation}'.`);
   }
 
   const inputPath = takeRequiredPositional(tokens, `${command ?? "command"} input file`);
@@ -1393,6 +1671,7 @@ type PrintableResult = {
   validationReportHash?: string;
   validationStatus?: string;
   outputPath?: string;
+  receiptPath?: string;
   evidenceDirectory?: string;
   snapshotPath?: string;
   triviewOutputPath?: string;
@@ -1405,12 +1684,21 @@ type PrintableResult = {
   planHash?: string;
   writtenLogicalPaths?: readonly string[];
   humanReadableText?: string;
+  requestId?: string;
+  receipt?: AuthoringEditCliResultV1["receipt"];
+  projection?: AuthoringEditCliResultV1["projection"];
+  searchReceipt?: AuthoringEditCliResultV1["searchReceipt"];
+  explain?: AuthoringEditCliResultV1["explain"];
+  diff?: AuthoringEditCliResultV1["diff"];
+  cleanupReport?: AuthoringEditCliResultV1["cleanupReport"];
 };
 
 function printResult(result: PrintableResult, json: boolean): void {
   if (json) {
     const { humanReadableText: _humanReadableText, ...machineResult } = result;
-    process.stdout.write(`${stringifyCanonicalJson(machineResult)}\n`);
+    process.stdout.write(
+      `${stringifyCanonicalJson(redactAuthoringEditJsonV1(machineResult))}\n`,
+    );
     return;
   }
   if (result.ok) {
@@ -1425,6 +1713,8 @@ function printResult(result: PrintableResult, json: boolean): void {
     }
     const details = [
       result.outputPath,
+      result.receiptPath,
+      result.requestId,
       result.evidenceDirectory,
       result.validationReportHash,
       result.snapshotPath,
@@ -1646,6 +1936,88 @@ export async function main(
       parsed.inputPath,
       parsed.gateId,
     );
+    printResult(result, parsed.json);
+    return result.exitCode;
+  }
+  if (parsed.command === "schema-project") {
+    const result = await runSchemaProjectV1({
+      worldJsonPath: parsed.inputPath,
+      profileRef: parsed.profileRef,
+      outputPath: parsed.outputPath,
+    });
+    printResult(result, parsed.json);
+    return result.exitCode;
+  }
+  if (parsed.command === "registry-search") {
+    const result = await runRegistrySearchV1({
+      lockPath: parsed.lockPath,
+      resourceKind: parsed.resourceKind,
+      semanticTags: parsed.semanticTags,
+      ...(parsed.afterResourceRef === undefined
+        ? {}
+        : { afterResourceRef: parsed.afterResourceRef }),
+      ...(parsed.limit === undefined ? {} : { limit: parsed.limit }),
+    });
+    printResult(result, parsed.json);
+    return result.exitCode;
+  }
+  if (parsed.command === "change-validate") {
+    const result = await runChangeValidateV1({ changeSetPath: parsed.inputPath });
+    printResult(result, parsed.json);
+    return result.exitCode;
+  }
+  if (parsed.command === "change-dry-run") {
+    const result = await runChangeDryRunV1({
+      worldJsonPath: parsed.inputPath,
+      changeSetPath: parsed.changeSetPath,
+      outputPath: parsed.outputPath,
+    });
+    printResult(result, parsed.json);
+    return result.exitCode;
+  }
+  if (parsed.command === "change-diff") {
+    const result = await runChangeDiffV1({ receiptPath: parsed.inputPath });
+    printResult(result, parsed.json);
+    return result.exitCode;
+  }
+  if (parsed.command === "change-explain") {
+    const result = await runChangeExplainV1({
+      receiptPath: parsed.inputPath,
+      ...(parsed.operationId === undefined ? {} : { operationId: parsed.operationId }),
+      ...(parsed.diagnosticCode === undefined
+        ? {}
+        : { diagnosticCode: parsed.diagnosticCode }),
+    });
+    printResult(result, parsed.json);
+    return result.exitCode;
+  }
+  if (parsed.command === "change-apply") {
+    const result = await runChangeApplyV1({
+      worldJsonPath: parsed.inputPath,
+      changeSetPath: parsed.changeSetPath,
+      outputPath: parsed.outputPath,
+      receiptPath: parsed.receiptPath,
+    });
+    printResult(result, parsed.json);
+    return result.exitCode;
+  }
+  if (parsed.command === "change-receipt") {
+    const result = await runChangeReceiptV1({
+      requestId: parsed.requestId,
+      ...(parsed.connectionProfilePath === undefined
+        ? {}
+        : { connectionProfilePath: parsed.connectionProfilePath }),
+    });
+    printResult(result, parsed.json);
+    return result.exitCode;
+  }
+  if (parsed.command === "change-cleanup") {
+    const result = await runChangeCleanupV1({
+      cleanupOperationId: parsed.cleanupOperationId,
+      ...(parsed.connectionProfilePath === undefined
+        ? {}
+        : { connectionProfilePath: parsed.connectionProfilePath }),
+    });
     printResult(result, parsed.json);
     return result.exitCode;
   }

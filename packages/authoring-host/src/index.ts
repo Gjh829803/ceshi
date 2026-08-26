@@ -12,6 +12,7 @@ export {
 export {
   createWorldChangeJournalV1,
   getAuthoringRevisionHeadV1,
+  journalArtifactIdV1,
   queryWorldChangeCleanupReportV1,
   queryWorldChangeDiffV1,
   queryWorldChangeExplainV1,

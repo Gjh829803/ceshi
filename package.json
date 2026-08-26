@@ -80,6 +80,8 @@
     "@babylonjs/core": "9.21.2",
     "@babylonjs/havok": "1.3.14",
     "@whitebox-world/authoring": "workspace:*",
+    "@whitebox-world/authoring-edit": "workspace:*",
+    "@whitebox-world/authoring-host": "workspace:*",
     "@whitebox-world/compiler": "workspace:*",
     "@whitebox-world/control-capture": "workspace:*",
     "@whitebox-world/gameplay": "workspace:*",

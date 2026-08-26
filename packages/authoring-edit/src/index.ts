@@ -61,6 +61,9 @@ export {
   applyWorldChangeSetV1,
   assembleWorldChangeDiffV1,
   isAppliedWorldChangeSetResultV1,
+  operationPrimaryTarget,
+  operationsConflict,
+  targetOverlapKey,
 } from "./world-change/index.js";
 export type {
   ApplyWorldChangeSetInputV1,

@@ -193,6 +193,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "scripts/fixtures/generate-golden-humanoid-glb.test.ts", lane: "contract" },
   { path: "scripts/gemini-visual-pipeline.test.ts", lane: "contract" },
   { path: "scripts/lib/agent-self-check-bundle.test.ts", lane: "contract" },
+  { path: "scripts/lib/authoring-edit-cli.test.ts", lane: "contract" },
   { path: "scripts/lib/artifact-directory-promotion.test.ts", lane: "contract" },
   { path: "scripts/lib/composition-gate.test.ts", lane: "contract" },
   { path: "scripts/lib/control-capture-bundle.test.ts", lane: "contract" },

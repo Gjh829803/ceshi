@@ -25,6 +25,12 @@ importers:
       '@whitebox-world/authoring':
         specifier: workspace:*
         version: link:packages/authoring
+      '@whitebox-world/authoring-edit':
+        specifier: workspace:*
+        version: link:packages/authoring-edit
+      '@whitebox-world/authoring-host':
+        specifier: workspace:*
+        version: link:packages/authoring-host
       '@whitebox-world/compiler':
         specifier: workspace:*
         version: link:packages/compiler
