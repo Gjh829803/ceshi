@@ -2043,16 +2043,17 @@ describe("Authoring camera console", () => {
       const subjectLockDomains = await page.evaluate(() => {
         const api = window.__WORLDKIT__!;
         const relationships = Object.values(
-          api.getSnapshot().world.gameplayInspection.possessedByRelationshipsById,
-        ).filter((candidate) => candidate.controllerEntityId === "controller-primary");
-        if (relationships.length !== 1) {
+          api.getSnapshot().world.gameplayInspection.relationshipStatesById,
+        ).filter((candidate) =>
+          candidate.type === "possessedBy" &&
+          candidate.controllerEntityId === "controller-primary"
+        );
+        if (relationships.length !== 1 || relationships[0]?.type !== "possessedBy") {
           throw new Error("Expected one controller-primary possession relationship.");
         }
         const relationship = relationships[0]!;
-        const controlledEntityId = relationship?.controlledEntityId;
-        const subject = controlledEntityId === undefined
-          ? undefined
-          : api.getSubjectSnapshot?.(controlledEntityId);
+        const controlledEntityId = relationship.controlledEntityId;
+        const subject = api.getSubjectSnapshot?.(controlledEntityId);
         const runtimeRef = subject?.entityState.entityDefinitionRef;
         const baseline = runtimeRef === undefined
           ? undefined
