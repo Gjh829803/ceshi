@@ -1,5 +1,9 @@
 # Signed Height Intent Compiler V0 Implementation Plan
 
+> Promotion note (2026-08-26): this completed incubation plan intentionally used
+> `scripts/terrain-height-intent/`; the passing implementation was subsequently promoted
+> to `packages/terrain-compiler/` without changing V0 behavior.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build a Host-only deterministic compiler that turns one generated signed-color terrain PNG plus an existing AuthoringSpec V4 into validated metric `heightSamplesMeters` and an auditable report.

@@ -436,6 +436,21 @@ importers:
         specifier: ^4.18.1
         version: 4.18.1
 
+  packages/terrain-compiler:
+    dependencies:
+      '@whitebox-world/authoring':
+        specifier: workspace:*
+        version: link:../authoring
+      '@whitebox-world/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      '@whitebox-world/terrain-surface':
+        specifier: workspace:*
+        version: link:../terrain-surface
+      sharp:
+        specifier: 0.35.4
+        version: 0.35.4(@types/node@24.13.3)
+
   packages/terrain-surface:
     dependencies:
       '@whitebox-world/contracts':

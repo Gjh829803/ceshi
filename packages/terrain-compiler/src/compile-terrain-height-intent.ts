@@ -4,20 +4,25 @@ import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import {
   applyTerrainConstraintsV0,
   type TerrainConstraintDeltaV0,
-} from "./apply-terrain-constraints";
-import { decodeTerrainIntentPngV0 } from "./decode-png";
-import { deriveTerrainConstraintsFromAuthoringV4 } from "./derive-authoring-constraints";
-import { mapSignedHeightRatiosToMetersV0 } from "./map-height-meters";
-import { prefilterScalarRasterForDownsampleV0 } from "./prefilter-scalar-raster";
-import { projectSignedHeightIntentRgbV0 } from "./project-signed-rgb";
+} from "./constraints/apply-terrain-constraints";
+import { decodeTerrainIntentPngV0 } from "./canonicalization/decode-png";
+import { deriveTerrainConstraintsFromAuthoringV4 } from
+  "./constraints/derive-authoring-constraints";
+import { mapSignedHeightRatiosToMetersV0 } from "./raster/map-height-meters";
+import { prefilterScalarRasterForDownsampleV0 } from
+  "./raster/prefilter-scalar-raster";
+import { projectSignedHeightIntentRgbV0 } from
+  "./canonicalization/project-signed-rgb";
 import { quantizeUnprotectedTerrainHeightSamplesMetersV0 } from
-  "./quantize-height-samples";
-import { resampleScalarRasterBilinearV0 } from "./resample-scalar-raster";
+  "./raster/quantize-height-samples";
+import { resampleScalarRasterBilinearV0 } from
+  "./raster/resample-scalar-raster";
 import {
   summarizeTerrainIntentProjectionV0,
   type TerrainIntentProjectionSummaryV0,
-} from "./summarize-projection";
-import type { TerrainIntentDiagnosticV0 } from "./terrain-constraint-types";
+} from "./canonicalization/summarize-projection";
+import type { TerrainIntentDiagnosticV0 } from
+  "./constraints/terrain-constraint-types";
 
 type Sha256HashV0 = `sha256:${string}`;
 
@@ -51,6 +56,11 @@ export interface CompileTerrainHeightIntentResultV0 {
   readonly compiledAuthoringSpec?: AuthoringSpecV4;
 }
 
+export interface CompileTerrainHeightIntentInputV0 {
+  readonly sourcePngBytes: Uint8Array;
+  readonly authoringSpec: AuthoringSpecV4;
+}
+
 function hasBlockingDiagnostic(diagnostics: readonly TerrainIntentDiagnosticV0[]): boolean {
   return diagnostics.some((diagnostic) => diagnostic.severity === "blocking");
 }
@@ -81,10 +91,9 @@ function failedResult(input: {
   };
 }
 
-export async function compileTerrainHeightIntentV0(input: {
-  readonly sourcePngBytes: Uint8Array;
-  readonly authoringSpec: AuthoringSpecV4;
-}): Promise<CompileTerrainHeightIntentResultV0> {
+export async function compileTerrainHeightIntentV0(
+  input: CompileTerrainHeightIntentInputV0,
+): Promise<CompileTerrainHeightIntentResultV0> {
   const canonicalRgb = await decodeTerrainIntentPngV0(input.sourcePngBytes);
   const projection = projectSignedHeightIntentRgbV0({
     widthPixels: canonicalRgb.widthPixels,

@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "kind": "worldkit-terrain-height-intent-golden-exemplars",
+  "exemplars": [
+    {
+      "id": "grand-canyon-signed-v4",
+      "terrainFamily": "canyon",
+      "imagePath": "assets/terrain-height-intent/exemplars/canyon/grand-canyon-signed-v4.png",
+      "sha256": "sha256:2dd65d5e77809b31a6ede814d84c9e04a2940ce0e64e20ead0bfde917e65f4cc",
+      "encodingProfile": "signed-diverging-blue-gray-orange@0",
+      "promptRole": "encoding-style-only",
+      "status": "accepted",
+      "sourceExperiment": "artifacts/terrain-experiments/013-grand-canyon-courier",
+      "limitations": [
+        "Use only for canyon-family encoding style.",
+        "Do not copy its spatial layout, relief amplitude, landmark silhouettes, or basin placement."
+      ]
+    },
+    {
+      "id": "green-sahara-rolling-v1",
+      "terrainFamily": "rolling-desert",
+      "imagePath": "assets/terrain-height-intent/exemplars/rolling-desert/green-sahara-rolling-v1.png",
+      "sha256": "sha256:92e2eb9be5dde786c6ef5570dd6bff0e824150075172042ec950fc6a331c2f06",
+      "encodingProfile": "signed-diverging-blue-gray-orange@0",
+      "promptRole": "encoding-style-only",
+      "status": "accepted",
+      "sourceExperiment": "artifacts/terrain-experiments/016-green-sahara-caravan",
+      "limitations": [
+        "Use only for gently rolling desert or savanna encoding style.",
+        "Do not copy oasis, settlement, route, or dune placement into another world."
+      ]
+    }
+  ]
+}

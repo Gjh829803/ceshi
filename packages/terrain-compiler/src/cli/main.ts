@@ -13,8 +13,9 @@ import path from "node:path";
 import { parseAuthoringSpecV4 } from "@whitebox-world/authoring";
 import { stringifyCanonicalJson } from "@whitebox-world/protocol";
 
-import { compileTerrainHeightIntentV0 } from "./compile-height-intent";
-import type { TerrainIntentDiagnosticV0 } from "./terrain-constraint-types";
+import { compileTerrainHeightIntentV0 } from "../compile-terrain-height-intent";
+import type { TerrainIntentDiagnosticV0 } from
+  "../constraints/terrain-constraint-types";
 
 interface TerrainIntentCliOptionsV0 {
   readonly imagePath: string;

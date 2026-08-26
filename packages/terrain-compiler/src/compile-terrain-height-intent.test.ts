@@ -4,7 +4,7 @@ import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 
 import { createValidAuthoringSpec } from "@whitebox-world/authoring/testing";
-import { compileTerrainHeightIntentV0 } from "./compile-height-intent";
+import { compileTerrainHeightIntentV0 } from "./compile-terrain-height-intent";
 
 function focusedCompileSpec(): AuthoringSpecV4 {
   const source = createValidAuthoringSpec();

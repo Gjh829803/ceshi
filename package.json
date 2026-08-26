@@ -18,7 +18,7 @@
     "generate:example-takes": "tsx scripts/generate-example-takes.ts",
     "studio": "pnpm --filter @whitebox-world/studio dev",
     "studio:public": "pnpm --filter @whitebox-world/studio public",
-    "terrain:intent:compile": "tsx scripts/terrain-height-intent/cli.ts",
+    "terrain:intent:compile": "tsx packages/terrain-compiler/src/cli/main.ts",
     "test:studio": "pnpm --filter @whitebox-world/studio test",
     "test:independent": "tsx scripts/run-independent-test-gate.ts",
     "test:independent:node": "tsx scripts/run-independent-test-gate.ts --lane node",
