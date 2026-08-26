@@ -3,6 +3,7 @@ import type {
   OutdoorWorldSpec,
   VisualPrototypeSpec,
 } from "@whitebox-world/world";
+import type { WorldkitAuthoringEditApiV1 } from "@whitebox-world/authoring-edit";
 import type {
   WorldkitAuthoringCaptureApiV1,
   WorldkitBrowserApiV5,
@@ -196,6 +197,7 @@ declare global {
     __WHITEBOX_PLAYGROUND__: PlaygroundBrowserAutomationApi;
     __WORLDKIT__?: WorldkitBrowserApiV5;
     __WORLDKIT_AUTHORING_CAPTURE__?: WorldkitAuthoringCaptureApiV1;
+    __WORLDKIT_AUTHORING_EDIT__?: WorldkitAuthoringEditApiV1;
   }
 }
 

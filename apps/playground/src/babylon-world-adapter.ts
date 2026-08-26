@@ -32,7 +32,11 @@ import {
   type BabylonRuntimeProjectionV1,
   type BabylonWorldRuntimeOptions,
 } from "@whitebox-world/runtime-babylon";
-import type { RuntimeWorldConfigurationV1 } from "@whitebox-world/runtime-host";
+import type {
+  PublishWorldReplacementResultV1,
+  RuntimeWorldConfigurationV1,
+  RuntimeWorldPublicationIdentitiesV1,
+} from "@whitebox-world/runtime-host";
 import type { GameplayActionRequestResolverV1 } from "@whitebox-world/gameplay";
 import { isNil } from "lodash-es";
 
@@ -684,6 +688,16 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     command: GameplayCommandV1,
   ): Promise<GameplayCommandReceiptV1> {
     return this.coordinator.executeGameplayCommand(command);
+  }
+
+  currentRuntimePublicationIdentity(): RuntimeWorldPublicationIdentitiesV1 {
+    return this.coordinator.currentRuntimePublicationIdentity();
+  }
+
+  publishWorldReplacementV1(
+    input: unknown,
+  ): Promise<PublishWorldReplacementResultV1> {
+    return this.coordinator.publishWorldReplacementV1(input);
   }
 
   gameplayEventsAfterRuntime(

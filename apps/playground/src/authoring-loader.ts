@@ -1,4 +1,5 @@
 import {
+  hashAuthoringDocumentV4,
   normalizeAuthoringSpecV4,
   parseCanonicalJson,
   parseAuthoringSpecV4,
@@ -101,6 +102,9 @@ export interface AuthoringSceneLoadResult {
   runtimeWorldConfiguration?: RuntimeWorldConfigurationV1;
   /** Trusted Host-only resolver; never exposed through Browser Protocol V5. */
   gameplayActionRequestResolver?: GameplayActionRequestResolverV1;
+  /** Trusted Host-only Authoring document; never exposed through Browser Protocol V5. */
+  authoringSpec?: AuthoringSpecV4;
+  authoringSpecHash?: `sha256:${string}`;
 }
 
 export type AuthoringSourceFetcher = () => Promise<Response>;
@@ -873,6 +877,8 @@ export async function loadAuthoringScene(
     executionPlan: compiled.executionPlan,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
     executionPlanHash: compiled.executionPlanHash,
+    authoringSpec: source,
+    authoringSpecHash: hashAuthoringDocumentV4(source),
     diagnostics: [],
     ...(hostOverlay === undefined ? {} : { hostOverlay }),
     ...(routeEvidence.publication === undefined

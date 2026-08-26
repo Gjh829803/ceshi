@@ -33,6 +33,14 @@ export type {
   SubmitWorldChangeRequestResultV1,
   WorldChangeJournalV1,
 } from "./journal/index.js";
+export {
+  AuthoringEditHostErrorV1,
+  createAuthoringEditHostV1,
+} from "./authoring-edit-host.js";
+export type {
+  AuthoringEditHostV1,
+  CreateAuthoringEditHostInputV1,
+} from "./authoring-edit-host.js";
 export type {
   EvaluateRequiredGatesV1,
   LookupPreparedCandidateResultV1,

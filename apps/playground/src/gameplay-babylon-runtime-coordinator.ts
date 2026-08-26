@@ -29,11 +29,13 @@ import {
   RuntimeHost,
   type GameplayWorldAdapterFactoryV1,
   type GameplayWorldPortV1,
+  type PublishWorldReplacementResultV1,
   type RuntimeActivityLeaseV1,
   type RuntimeActivityRecordV1,
   type RuntimeCandidatePublicationGateInputV1,
   type RuntimeWorldAdapterDescriptorV1,
   type RuntimeWorldConfigurationV1,
+  type RuntimeWorldPublicationIdentitiesV1,
   type WorldSessionPublicationV1,
 } from "@whitebox-world/runtime-host";
 import type {
@@ -691,6 +693,22 @@ export class GameplayBabylonRuntimeCoordinatorV1 {
     command: GameplayCommandV1,
   ): Promise<GameplayCommandReceiptV1> {
     return this.host.executeGameplayCommand(command);
+  }
+
+  currentRuntimePublicationIdentity(): RuntimeWorldPublicationIdentitiesV1 {
+    const publication = this.host.snapshot();
+    return Object.freeze({
+      runtimeSessionId: this.host.runtimeSessionId,
+      worldSessionId: this.host.currentWorldSessionId,
+      worldPackageRootHash: publication.worldState.worldPackageRootHash,
+      simulationTick: publication.worldState.simulationTick,
+    });
+  }
+
+  publishWorldReplacementV1(
+    input: unknown,
+  ): Promise<PublishWorldReplacementResultV1> {
+    return this.host.publishWorldReplacementV1(input);
   }
 
   async runFixedInput(input: FixedInputV1): Promise<WorldRuntimeSnapshotV4> {

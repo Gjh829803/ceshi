@@ -2311,16 +2311,37 @@ if (runtimeRoute.mode === "unknown") {
   let authoringCaptureInstallation:
     | ReturnType<typeof installWorldkitAuthoringCaptureApi>
     | undefined;
+  let authoringEditInstallation:
+    | { dispose(): void }
+    | undefined;
   let disposeAuthoringWorkbenchAdapterBinding: (() => void) | undefined;
   const pageLifecycle = createGameplayPageLifecycle({
     initialization: browserInstallation.initialization,
     getAdapter: () => createdAdapter,
-    setup(adapter) {
+    async setup(adapter) {
       if (runtimeRoute.mode === "authoring") {
         authoringCaptureInstallation = installWorldkitAuthoringCaptureApi(
           window,
           adapter,
         );
+        if (
+          prepared?.loaded.ok === true &&
+          !isNil(prepared.loaded.authoringSpec) &&
+          "publishWorldReplacementV1" in adapter
+        ) {
+          const [{ installWorldkitAuthoringEditApi }, { createPlaygroundAuthoringEditHostV1 }] =
+            await Promise.all([
+              import("./worldkit-authoring-edit-api.js"),
+              import("./worldkit-authoring-edit-host.js"),
+            ]);
+          authoringEditInstallation = installWorldkitAuthoringEditApi(
+            window,
+            createPlaygroundAuthoringEditHostV1({
+              authoringSpec: prepared.loaded.authoringSpec,
+              publishWorldReplacement: (input) => adapter.publishWorldReplacementV1(input),
+            }),
+          );
+        }
       }
       const workbench = runtimeRoute.mode === "authoring"
         ? installCapabilityAuthoringPanel(
@@ -2346,6 +2367,7 @@ if (runtimeRoute.mode === "unknown") {
       disposeAuthoringWorkbenchAdapterBinding?.();
       disposeAuthoringWorkbenchAdapterBinding = undefined;
       authoringCaptureInstallation?.dispose();
+      authoringEditInstallation?.dispose();
       await browserInstallation.dispose();
     },
   });
