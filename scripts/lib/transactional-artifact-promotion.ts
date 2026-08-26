@@ -26,7 +26,27 @@ export interface ArtifactPromotionOptions {
   injectFailure?: (point: ArtifactPromotionFaultPoint) => void | Promise<void>;
 }
 
-interface TransactionEntry extends ArtifactPromotionWrite {
+export interface NamedArtifactPromotionWrite {
+  role: string;
+  targetPath: string;
+  contents: string | Uint8Array;
+}
+
+export interface NamedArtifactPromotionFaultPoint {
+  phase: "before-temp-write" | "before-backup-rename" | "before-publish-rename";
+  role: string;
+  targetPath: string;
+}
+
+export interface NamedArtifactPromotionOptions {
+  writes: readonly NamedArtifactPromotionWrite[];
+  commitRole: string;
+  injectFailure?: (
+    point: NamedArtifactPromotionFaultPoint,
+  ) => void | Promise<void>;
+}
+
+interface TransactionEntry extends NamedArtifactPromotionWrite {
   tempPath: string;
   backupPath: string;
   existed: boolean;
@@ -91,13 +111,46 @@ export async function promoteArtifactsTransactionally(
   ) {
     throw new Error("Artifact promotion requires exactly one frame, report, and manifest write.");
   }
-  if (new Set(options.writes.map((write) => path.resolve(write.targetPath))).size !== 3) {
+  await promoteNamedArtifactsTransactionally({
+    writes: options.writes,
+    commitRole: "manifest",
+    ...(options.injectFailure === undefined
+      ? {}
+      : {
+          injectFailure: (point: NamedArtifactPromotionFaultPoint) =>
+            options.injectFailure!({
+              ...point,
+              role: point.role as ArtifactPromotionRole,
+            }),
+        }),
+  });
+}
+
+export async function promoteNamedArtifactsTransactionally(
+  options: NamedArtifactPromotionOptions,
+): Promise<void> {
+  if (options.writes.length === 0) {
+    throw new Error("Artifact promotion requires at least one write.");
+  }
+  const roles = options.writes.map((write) => write.role);
+  if (new Set(roles).size !== roles.length) {
+    throw new Error("Artifact promotion roles must be unique.");
+  }
+  if (!roles.includes(options.commitRole)) {
+    throw new Error(`Artifact promotion commit role '${options.commitRole}' is missing.`);
+  }
+  if (
+    new Set(options.writes.map((write) => path.resolve(write.targetPath))).size !==
+    options.writes.length
+  ) {
     throw new Error("Artifact promotion targets must be distinct files.");
   }
 
   const transactionId = randomUUID();
-  const orderedWrites = ["frame", "report", "manifest"].map((role) =>
-    options.writes.find((write) => write.role === role)!) as ArtifactPromotionWrite[];
+  const orderedWrites = [
+    ...options.writes.filter((write) => write.role !== options.commitRole),
+    options.writes.find((write) => write.role === options.commitRole)!,
+  ];
   const entries: TransactionEntry[] = [];
   for (const write of orderedWrites) {
     const targetPath = path.resolve(write.targetPath);
@@ -147,7 +200,7 @@ export async function promoteArtifactsTransactionally(
       });
       await rename(entry.tempPath, entry.targetPath);
       entry.published = true;
-      if (entry.role === "manifest") committed = true;
+      if (entry.role === options.commitRole) committed = true;
     }
   } catch (error) {
     if (!committed) {

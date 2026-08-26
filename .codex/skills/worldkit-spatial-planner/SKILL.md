@@ -1,19 +1,34 @@
 ---
 name: worldkit-spatial-planner
-description: In one WorldKit Planner job, turn a user request and reference images into a short Scene Brief plus a minimal top-down world plan and a palette-marked entry whitebox target using Codex's built-in image generation tool. Use only for planning; do not author Canonical JSON, implementation resources, or runtime details.
+description: Use when a hosted WorldKit outdoor scene needs a Scene Brief, top-down world plan, entry composition target, and signed Height Intent raster from a user request and reference images. Use only for planning; do not author Canonical JSON, implementation resources, or runtime details.
 ---
 
 # WorldKit Unified Planner
 
-Create exactly three files:
+Create exactly five semantic output files:
 
 - `artifacts/scenes/<scene-id>/scene-brief.md`
+- `artifacts/scenes/<scene-id>/terrain-height-intent-prompt.md`
 - `apps/playground/public/scene-plans/<scene-id>/world-plan.png`
 - `apps/playground/public/scene-plans/<scene-id>/entry-whitebox-target.png`
+- `apps/playground/public/scene-plans/<scene-id>/terrain-height-intent.png`
 
 Use this skill for the optional hosted preview-planning stage. It does not replace the formal World Planner's WorldSpec, World Plan, Opening Shot or trusted plan-lock boundary. Write the Scene Brief first, then call Codex's built-in image generation tool inside the same task to create both PNG files from the same decisions and reference evidence. Do not delegate the PNGs to another Image Planner or create a separate T2I job.
 
 Use the reference images as primary visual evidence and the user request as primary intent. Write concise natural language using [references/scene-brief-template.md](references/scene-brief-template.md). Do not create a Spatial Plan, JSON spec, dimensions, coordinates, route nodes, support-surface tables, camera numbers, Registry refs, primitive decomposition, colliders, or implementation mappings.
+
+For Height Intent, read
+[references/terrain-height-intent-prompt.md](references/terrain-height-intent-prompt.md), write the
+fully expanded scene prompt to the declared Markdown path, then generate exactly one raster from
+that prompt in this same task. `world-plan.png owns orientation and complete-world extent`; the
+Height Intent image encodes only continuous base-ground relief in that same frame. It is an
+untrusted proposal and must never be presented as compiled terrain or Runtime evidence.
+
+If `assets/terrain-height-intent/golden-exemplars.json` is available, select an accepted exemplar
+only when its `terrainFamily` matches the planned world. It is `encoding-style-only`: never copy
+its topology, relief amplitude, structures, landmarks, routes, water placement, or composition.
+When no compatible accepted family exists, generate without a golden exemplar rather than using
+the nearest-looking one.
 
 Keep the four provenance sections required by current main strictly separate: `用户事实` contains only explicit user requirements, `可见参考证据` only directly visible image evidence, `推断的世界延伸` only conservative playable continuation beyond that evidence, and `仅视觉层设想` only styling/material/lighting ideas for later rendering. Never present an inferred continuation as observed geography. Planner does not select Subject Definitions, registered Subject Assets, Runtime Bundles, rigs, clips, colliders, or motion resources; it describes the complete controlled shape and movement behavior in plain language for Builder.
 
@@ -103,6 +118,28 @@ For open ground, shade the entire collision-free walkable area instead of invent
 
 Remove every other overlay or annotation: no identity colors, target highlighting, labels, title, legend, scale, elevation values, dimensions, coordinates, grid, camera cone, route nodes, arrows, callouts, UI, logo, or watermark.
 
+## Terrain Height Intent
+
+After the Brief and World Plan exist, expand every required input in the maintained Height Intent
+prompt reference. Preserve the World Plan's orientation, extent, adjacency, containment, open
+connections, and major continuous terrain masses. A user image remains visible evidence; the
+World Plan is the canonical top-down coordinate frame for this output.
+
+Save the exact rendered prompt before image generation. Generate one square, strict orthographic,
+fully opaque PNG using `signed-diverging-blue-gray-orange@1`:
+
+- depressions interpolate from `RGB(32,64,208)` to datum `RGB(128,128,128)`;
+- elevations interpolate from datum to `RGB(224,96,32)`;
+- use continuous low-frequency gradients without discrete bands, lighting, materials, labels, or
+  objects;
+- omit every separately modeled Landmark or Structure while preserving blended support ground;
+- encode water beds as depressed terrain but never encode the water surface or material;
+- preserve stable entry support and connected ground without drawing routes or markers.
+
+The deterministic Host owns median-datum normalization, metric mapping, Water, Spawn, Landmark
+support, Route, slope, and quantization constraints. Do not preprocess or numerically repair the
+PNG inside the Planner task.
+
 ## Entry composition intent target
 
 Generate one geometry-readable entry composition intent target using the reference images and the completed Brief. Despite the historical file name `entry-whitebox-target.png`, this image is not runtime evidence and must never be presented as the actual whitebox. Preserve complete-subject silhouette, landmark scale, navigation openness or real constrained connection, depth order, occlusion, and the strict centered third-person rear composition. The actual whitebox is captured only from the verified Babylon Runtime.
@@ -113,7 +150,7 @@ All terrain, support surfaces, structures, and unselected components are neutral
 
 ## Completion
 
-Before finishing, confirm all three declared files exist and run the bundled portable checker:
+Before finishing, confirm all five semantic output files exist and run the bundled portable checker:
 
 ```bash
 node .codex/skills/worldkit-spatial-planner/scripts/self-check.mjs \
@@ -121,9 +158,11 @@ node .codex/skills/worldkit-spatial-planner/scripts/self-check.mjs \
   --brief artifacts/scenes/<scene-id>/scene-brief.md \
   --world-plan apps/playground/public/scene-plans/<scene-id>/world-plan.png \
   --entry apps/playground/public/scene-plans/<scene-id>/entry-whitebox-target.png \
+  --terrain-prompt artifacts/scenes/<scene-id>/terrain-height-intent-prompt.md \
+  --terrain-intent apps/playground/public/scene-plans/<scene-id>/terrain-height-intent.png \
   --report artifacts/scenes/<scene-id>/planner-self-check.json
 ```
 
-If it fails, read the JSON diagnostics, repair the Brief and regenerate both PNGs inside this same task, then rerun the checker. Use at most three self-repair cycles and never finish with a failed or stale receipt. The receipt hashes all three outputs, so any edit after a passing check requires another check. Inspect the entry target as well: the primary Subject must be exactly centered and seen straight from behind; “approximately centered” is a failure.
+If it fails, read the JSON diagnostics, repair the Brief or scene prompt, and regenerate the affected PNGs inside this same task, then rerun the checker. Use at most three self-repair cycles and never finish with a failed or stale receipt. The receipt hashes all five semantic outputs, so any edit after a passing check requires another check. Inspect the entry target as well: the primary Subject must be exactly centered and seen straight from behind; “approximately centered” is a failure.
 
 The trusted Host replays this same checker and the canonical Brief parser once after delivery. It never starts a separate Planner Repair Agent. The Builder owns all subsequent technical spatialization.

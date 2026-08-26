@@ -21,12 +21,15 @@ export {
   assertTraversalSurfaceCountBudgetV1,
   quantizeTraversalMetersToMicrometersV1,
   estimateHeightfieldTileCountV1,
+  estimateRouteBuildWindowTileCountV1,
   assertTraversalGraphBuildBudgetV1,
 } from "./build-budget.js";
 export type {
   HeightfieldTileEstimateInputV1,
   HeightfieldTileBudgetInputV1,
   HeightfieldTileEstimateV1,
+  RouteBuildWindowTileEstimateInputV1,
+  RouteBuildWindowTileEstimateV1,
   TraversalSurfaceCountBudgetInputV1,
 } from "./build-budget.js";
 export {

@@ -18,6 +18,7 @@
     "generate:example-takes": "tsx scripts/generate-example-takes.ts",
     "studio": "pnpm --filter @whitebox-world/studio dev",
     "studio:public": "pnpm --filter @whitebox-world/studio public",
+    "terrain:intent:compile": "tsx packages/terrain-compiler/src/cli/main.ts",
     "test:studio": "pnpm --filter @whitebox-world/studio test",
     "test:independent": "tsx scripts/run-independent-test-gate.ts",
     "test:independent:node": "tsx scripts/run-independent-test-gate.ts --lane node",
@@ -89,12 +90,15 @@
     "@whitebox-world/runtime-contracts": "workspace:*",
     "@whitebox-world/subject-contracts": "workspace:*",
     "@whitebox-world/subject-registry": "workspace:*",
+    "@whitebox-world/terrain-compiler": "workspace:*",
+    "@whitebox-world/terrain-surface": "workspace:*",
     "@whitebox-world/traversal": "workspace:*",
     "@whitebox-world/traversal-recast": "workspace:*",
     "@whitebox-world/validation": "workspace:*",
     "@whitebox-world/world": "workspace:*",
     "@whitebox-world/world-package": "workspace:*",
-    "lodash-es": "^4.18.1"
+    "lodash-es": "^4.18.1",
+    "sharp": "0.35.4"
   },
   "devDependencies": {
     "@gltf-transform/core": "4.4.2",

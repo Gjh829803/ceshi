@@ -37,12 +37,13 @@ const idPattern = /^[a-z0-9][a-z0-9-]{2,79}$/;
 // The Studio workflow is unreleased and intentionally has one current contract.
 // Bump this only when the persisted Studio record shape changes; do not keep
 // parallel historical workflow implementations in the runtime.
-export const workflowPolicyVersion = 3;
+export const workflowPolicyVersion = 4;
 const codexBackendValues = new Set(["cloud", "local"]);
 const allowedRootSceneAssets = new Set([
   "world-plan.png",
   "opening-shot.png",
   "entry-whitebox-target.png",
+  "terrain-height-intent.png",
   "entry-styled-target.png",
   "whitebox-opening-frame.png",
   "opening-frame-rendered.png",
@@ -75,15 +76,22 @@ const workflowStageDefinitions = [
     id: "planner",
     title: "托管式意图规划",
     owner: "WorldKit Planner",
-    description: "生成非权威 Scene Brief、世界规划图和进入构图目标，并在同一任务内完成输入自检。正式世界权威仍由 WorldSpec/plan-lock 与 Authoring V4 建立。",
-    required: ["scene-brief", "visual-identity-palette", "world-plan", "entry-whitebox-target", "planner-self-check"],
+    description: "生成非权威 Scene Brief、世界规划图、进入构图目标与连续地表 Height Intent，并在同一任务内完成输入自检。正式世界权威仍由 WorldSpec/plan-lock 与 Authoring V4 建立。",
+    required: ["scene-brief", "visual-identity-palette", "world-plan", "entry-whitebox-target", "terrain-height-intent-prompt", "terrain-height-intent", "planner-self-check"],
   },
   {
     id: "coding-agent",
     title: "白膜实现",
     owner: "Coding Agent",
-    description: "把已校验意图空间化为 Canonical AuthoringSpec V4，并通过与当前源码同源的便携校验器。",
-    required: ["authoring-spec", "implementation-map-draft", "builder-self-check"],
+    description: "把已校验意图空间化为预地形 AuthoringSpec V4，并通过与当前源码同源的便携校验器。",
+    required: ["builder-authoring-spec", "implementation-map-draft", "builder-self-check"],
+  },
+  {
+    id: "terrain-compilation",
+    title: "地形编译",
+    owner: "Trusted Host",
+    description: "可信宿主校验 Planner/Builder 收据，将冻结的 Height Intent 归一化、约束化并原子发布最终 AuthoringSpec。",
+    required: ["authoring-spec", "terrain-height-intent-report", "terrain-compilation-manifest", "final-authoring-self-check"],
   },
   {
     id: "canonical-build",
@@ -777,7 +785,13 @@ export function createStudio(options = {}) {
       "visual-identity-palette": [path.join(artifactRoot, "visual-identity-palette.json")],
       "world-plan": [path.join(planRoot, "world-plan.png")],
       "entry-whitebox-target": [path.join(planRoot, "entry-whitebox-target.png")],
+      "terrain-height-intent-prompt": [path.join(artifactRoot, "terrain-height-intent-prompt.md")],
+      "terrain-height-intent": [path.join(planRoot, "terrain-height-intent.png")],
+      "builder-authoring-spec": [path.join(artifactRoot, "authoring.builder.json")],
       "authoring-spec": [path.join(artifactRoot, "authoring.json")],
+      "terrain-height-intent-report": [path.join(artifactRoot, "terrain-height-intent-report.json")],
+      "terrain-compilation-manifest": [path.join(artifactRoot, "terrain-compilation-manifest.json")],
+      "final-authoring-self-check": [path.join(artifactRoot, "final-authoring-self-check.json")],
       "implementation-map-draft": [path.join(artifactRoot, "implementation-map.draft.json")],
       "builder-self-check": [path.join(artifactRoot, "builder-self-check.json")],
       "implementation-map": [path.join(artifactRoot, "scene-implementation-map.json")],
@@ -1175,9 +1189,20 @@ export function createStudio(options = {}) {
       brief: path.join(artifactRoot, "scene-brief.md"),
       plannerCheck: path.join(artifactRoot, "planner-self-check.json"),
       palette: path.join(artifactRoot, "visual-identity-palette.json"),
-      authoring: path.join(artifactRoot, "authoring.json"),
-      mapDraft: path.join(artifactRoot, "implementation-map.draft.json"),
+      terrainPrompt: path.join(artifactRoot, "terrain-height-intent-prompt.md"),
+      terrainIntent: path.join(
+        repoRoot,
+        "apps/playground/public/scene-plans",
+        sceneId,
+        "terrain-height-intent.png",
+      ),
+      builderAuthoring: path.join(artifactRoot, "authoring.builder.json"),
       builderCheck: path.join(artifactRoot, "builder-self-check.json"),
+      authoring: path.join(artifactRoot, "authoring.json"),
+      terrainReport: path.join(artifactRoot, "terrain-height-intent-report.json"),
+      terrainManifest: path.join(artifactRoot, "terrain-compilation-manifest.json"),
+      finalCheck: path.join(artifactRoot, "final-authoring-self-check.json"),
+      mapDraft: path.join(artifactRoot, "implementation-map.draft.json"),
       implementationMap: path.join(artifactRoot, "scene-implementation-map.json"),
       build: path.join(artifactRoot, "world.build.json"),
       openingFrame: path.join(artifactRoot, "opening-frame.png"),
@@ -1186,52 +1211,103 @@ export function createStudio(options = {}) {
     };
     if (!(await Promise.all(Object.values(paths).map((filePath) =>
       nonemptyArtifact(filePath, freshnessFloor)))).every(Boolean)) return false;
-    if (!await pngArtifact(paths.openingFrame, freshnessFloor)) return false;
+    if (!await pngArtifact(paths.openingFrame, freshnessFloor) ||
+      !await pngArtifact(paths.terrainIntent, freshnessFloor)) return false;
 
     const [
       brief,
       plannerCheck,
       palette,
+      builderAuthoring,
       authoring,
       builderCheck,
+      terrainReport,
+      terrainManifest,
+      finalCheck,
       implementationMap,
       build,
       snapshot,
       captureTargets,
       briefHash,
+      terrainPromptHash,
+      terrainIntentHash,
+      plannerReceiptHash,
+      builderAuthoringHash,
+      builderReceiptHash,
       authoringHash,
       mapDraftHash,
+      terrainReportHash,
+      finalCheckHash,
     ] = await Promise.all([
       readFile(paths.brief, "utf8").catch(() => null),
       readJsonIfPresent(paths.plannerCheck),
       readJsonIfPresent(paths.palette),
+      readJsonIfPresent(paths.builderAuthoring),
       readJsonIfPresent(paths.authoring),
       readJsonIfPresent(paths.builderCheck),
+      readJsonIfPresent(paths.terrainReport),
+      readJsonIfPresent(paths.terrainManifest),
+      readJsonIfPresent(paths.finalCheck),
       readJsonIfPresent(paths.implementationMap),
       readJsonIfPresent(paths.build),
       readJsonIfPresent(paths.snapshot),
       readJsonIfPresent(paths.captureTargets),
       sourceHash(paths.brief),
+      sourceHash(paths.terrainPrompt),
+      sourceHash(paths.terrainIntent),
+      sourceHash(paths.plannerCheck),
+      sourceHash(paths.builderAuthoring),
+      sourceHash(paths.builderCheck),
       sourceHash(paths.authoring),
       sourceHash(paths.mapDraft),
+      sourceHash(paths.terrainReport),
+      sourceHash(paths.finalCheck),
     ]);
     if (
       typeof brief !== "string" || !brief.startsWith("# WorldKit Scene Brief") ||
       plannerCheck?.kind !== "worldkit-planner-self-check" || plannerCheck.schemaVersion !== 1 ||
-      plannerCheck.validatorVersion !== "worldkit-planner-self-check-v2" ||
+      plannerCheck.validatorVersion !== "worldkit-planner-self-check-v3" ||
       plannerCheck.sceneId !== sceneId || plannerCheck.status !== "passed" ||
       plannerCheck.inputs?.sceneBriefHash !== briefHash ||
+      plannerCheck.inputs?.terrainHeightIntentPromptHash !== terrainPromptHash ||
+      plannerCheck.inputs?.terrainHeightIntentPngHash !== terrainIntentHash ||
       palette?.kind !== "worldkit-visual-identity-palette" || palette.schemaVersion !== 1 ||
       palette.sceneId !== sceneId || !/^sha256:[a-f0-9]{64}$/.test(palette.sceneBriefHash ?? "") ||
       !Array.isArray(palette.targets) || palette.targets.length === 0 || palette.targets.length > 5 ||
+      builderAuthoring?.kind !== "worldkit-authoring-spec" || builderAuthoring.schemaVersion !== 4 ||
       authoring?.kind !== "worldkit-authoring-spec" || authoring.schemaVersion !== 4 ||
       typeof authoring.id !== "string" || !idPattern.test(authoring.id) ||
       builderCheck?.kind !== "worldkit-builder-self-check" || builderCheck.schemaVersion !== 1 ||
-      builderCheck.validatorVersion !== "worldkit-builder-self-check-v5" ||
+      builderCheck.validatorVersion !== "worldkit-builder-self-check-v6" ||
       builderCheck.sceneId !== sceneId || builderCheck.status !== "passed" ||
+      builderCheck.terrainScaleEvidence === null ||
+      typeof builderCheck.terrainScaleEvidence !== "object" ||
+      !Array.isArray(builderCheck.routeBuildWindowEvidence) ||
       builderCheck.inputs?.sceneBriefHash !== briefHash ||
-      builderCheck.inputs?.authoringSpecHash !== authoringHash ||
+      builderCheck.inputs?.authoringSpecHash !== builderAuthoringHash ||
       builderCheck.inputs?.implementationMapDraftHash !== mapDraftHash ||
+      terrainReport?.kind !== "worldkit-terrain-height-intent-compile-report" ||
+      terrainReport.schemaVersion !== 1 || terrainReport.status !== "passed" ||
+      terrainReport.sourcePngHash !== terrainIntentHash ||
+      terrainManifest?.kind !== "worldkit-terrain-compilation-manifest" ||
+      terrainManifest.schemaVersion !== 1 || terrainManifest.sceneId !== sceneId ||
+      terrainManifest.compiler?.compilerVersion !== "terrain-height-intent-compiler@1" ||
+      terrainManifest.compiler?.normalizationProfileId !== "signed-diverging-blue-gray-orange-median-datum@1" ||
+      terrainManifest.inputs?.plannerReceiptHash !== plannerReceiptHash ||
+      terrainManifest.inputs?.terrainHeightIntentPromptHash !== terrainPromptHash ||
+      terrainManifest.inputs?.terrainHeightIntentPngHash !== terrainIntentHash ||
+      terrainManifest.inputs?.builderReceiptHash !== builderReceiptHash ||
+      terrainManifest.inputs?.builderAuthoringSpecHash !== builderAuthoringHash ||
+      terrainManifest.inputs?.implementationMapDraftHash !== mapDraftHash ||
+      terrainManifest.outputs?.authoringSpecHash !== authoringHash ||
+      terrainManifest.outputs?.terrainCompileReportHash !== terrainReportHash ||
+      terrainManifest.outputs?.finalAuthoringSelfCheckHash !== finalCheckHash ||
+      finalCheck?.kind !== "worldkit-builder-self-check" || finalCheck.schemaVersion !== 1 ||
+      finalCheck.validatorVersion !== "worldkit-builder-self-check-v6" ||
+      finalCheck.sceneId !== sceneId || finalCheck.status !== "passed" ||
+      finalCheck.inputs?.sceneBriefHash !== briefHash ||
+      finalCheck.inputs?.authoringSpecHash !== authoringHash ||
+      finalCheck.inputs?.implementationMapDraftHash !== mapDraftHash ||
       implementationMap?.kind !== "worldkit-scene-brief-implementation-map" ||
       implementationMap.schemaVersion !== 1 || implementationMap.sceneId !== sceneId ||
       implementationMap.sceneBriefHash !== palette.sceneBriefHash ||
@@ -1251,7 +1327,7 @@ export function createStudio(options = {}) {
     if (!await hasTrustedRouteValidationArtifacts(
       artifactRoot,
       sceneId,
-      builderCheck,
+      finalCheck,
       build,
       authoringHash,
       freshnessFloor,
@@ -1454,14 +1530,44 @@ export function createStudio(options = {}) {
         owner: "WorldKit Planner", format: "PNG",
       },
       {
-        id: "authoring-spec", phase: "coding-agent", title: "Canonical AuthoringSpec V4",
-        description: "Builder 面向当前 main 输出的权威场景 JSON。",
+        id: "terrain-height-intent-prompt", phase: "planner", title: "Height Intent 提示词",
+        description: "冻结地形语义、坐标朝向、signed 色标与静态建筑排除规则。",
+        owner: "WorldKit Planner", format: "Markdown",
+      },
+      {
+        id: "terrain-height-intent", phase: "planner", title: "Height Intent 位图",
+        description: "只表达连续基础地貌高低，不承载建筑、独立山峰或渲染纹理。",
+        owner: "WorldKit Planner", format: "PNG",
+      },
+      {
+        id: "builder-authoring-spec", phase: "coding-agent", title: "Builder AuthoringSpec V4",
+        description: "Builder 输出的预地形场景 JSON；定义尺寸、datum、约束与静态几何。",
         owner: "Coding Agent", format: "JSON",
       },
       {
         id: "implementation-map-draft", phase: "coding-agent", title: "视觉目标实现映射草稿",
         description: "简报视觉目标到实际 runtime entity 的一对多归因。",
         owner: "Coding Agent", format: "JSON",
+      },
+      {
+        id: "authoring-spec", phase: "terrain-compilation", title: "最终 Canonical AuthoringSpec V4",
+        description: "可信宿主将 Height Intent 编译并复验后原子发布的运行权威。",
+        owner: "Trusted Host", format: "JSON",
+      },
+      {
+        id: "terrain-height-intent-report", phase: "terrain-compilation", title: "Height Intent 编译报告",
+        description: "记录投影、median datum 归一化、约束调整与编译诊断。",
+        owner: "Trusted Host", format: "JSON",
+      },
+      {
+        id: "terrain-compilation-manifest", phase: "terrain-compilation", title: "地形编译绑定清单",
+        description: "绑定 Planner/Builder 收据、原始位图、编译器版本与最终产物哈希。",
+        owner: "Trusted Host", format: "JSON",
+      },
+      {
+        id: "final-authoring-self-check", phase: "terrain-compilation", title: "最终 Authoring 自检收据",
+        description: "对注入地形后的最终 AuthoringSpec 重跑源码同源校验所得收据。",
+        owner: "Trusted Host", format: "JSON",
       },
       {
         id: "builder-self-check", phase: "coding-agent", title: "Builder 自检收据",
@@ -1604,6 +1710,7 @@ export function createStudio(options = {}) {
     for (const item of [
       ["world-plan", "极简导航俯视图", "只显示参考图一致的世界布局、初始人物位置和可通行区域/路径。", "world-plan.png", `/scene-assets/${record.sceneId}/world-plan.png`],
       ["entry-whitebox-target", "标准进入白膜目标", "Planner 规定的可玩进入构图。", "entry-whitebox-target.png", `/scene-assets/${record.sceneId}/entry-whitebox-target.png`],
+      ["terrain-height-intent", "连续地表 Height Intent", "signed 色标表达基础地貌的下陷、datum 与凸起；静态建筑另行建模。", "terrain-height-intent.png", `/scene-assets/${record.sceneId}/terrain-height-intent.png`],
       ["opening-frame", "实际运行进入首帧", "Canonical JSON 经 Babylon 真实渲染后的结果。", "opening-frame.png", `/api/worlds/${record.id}/deliverables/opening-frame`],
       ["styled-opening-frame", "最终样式化首帧", "白膜投影锁空间，用户首帧锁身份、材质、风格和灯光。", "styled-opening-frame.png", `/api/worlds/${record.id}/deliverables/styled-opening-frame`],
     ]) {
@@ -1944,8 +2051,14 @@ export function createStudio(options = {}) {
       "scene-brief.md",
       "planner-self-check.json",
       "visual-identity-palette.json",
+      "terrain-height-intent-prompt.md",
+      "authoring.builder.json",
+      "implementation-map.draft.json",
       "authoring.json",
       "builder-self-check.json",
+      "terrain-height-intent-report.json",
+      "terrain-compilation-manifest.json",
+      "final-authoring-self-check.json",
       "scene-implementation-map.json",
       "world.build.json",
       "opening-frame.png",
@@ -1976,6 +2089,15 @@ export function createStudio(options = {}) {
         return [relativePath, false];
       }
     })));
+    artifactGates["terrain-height-intent.png"] = await nonemptyArtifact(
+      path.join(
+        repoRoot,
+        "apps/playground/public/scene-plans",
+        record.sceneId,
+        "terrain-height-intent.png",
+      ),
+      freshnessFloor,
+    );
     const artifactsComplete = Object.values(artifactGates).every(Boolean);
     const finishedAt = new Date().toISOString();
     if (exit.code === 0 && artifactsComplete) {

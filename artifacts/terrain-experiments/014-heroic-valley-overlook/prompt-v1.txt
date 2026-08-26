@@ -1,0 +1,50 @@
+Use case: scientific-educational
+Asset type: untrusted continuous terrain height-intent raster for deterministic SDK compilation
+Input images: Image 1 is the primary-coordinate spatial-composition reference only. Infer coherent base terrain from it; do not copy perspective, lighting, materials, characters, structures, or sky.
+
+Reference roles and shared semantic anchors:
+Image 1 is the primary-coordinate reference. It owns output orientation, left/right placement, and initial topology. There are no secondary references. Semantic anchors are entry-overlook, central-river-valley, left-valley-shoulder, right-castle-pedestal, and far-mountain-pedestal.
+
+Reference evidence, separated by image ID:
+Image 1 shows a high foreground overlook descending into a broad rolling valley; branching low river and lake corridors wind through the center; raised shoulders and broken plateaus frame both sides; a castle occupies a raised right-middle pedestal; a distinctive mountain peak rises in the far left-middle background; narrow ruins and arches sit on several ledges.
+
+Inferred continuation:
+The valley, river beds, and rolling terrain continue coherently beyond the visible frame. The side shoulders remain broad connected ground rather than isolated stacks. The far edge closes with a gently raised mountain pedestal and broad passes.
+
+Base terrain owned by the heightfield:
+The elevated entry overlook and its broad descending ridge, rolling valley floor, continuous side shoulders, river and lake beds, broad support pedestal under the castle, and broad support pedestal under the far mountain. Preserve a wide connected land corridor from the overlook into the valley.
+
+Depressions owned by the heightfield:
+The branching central river and lake beds, plus their broad shallow valley. Encode the submerged beds below surrounding ground, but do not depict water surfaces or waterfalls.
+
+Static Landmark and Structure exclusions:
+Exclude the controlled hero, castle silhouette, distinctive sharp mountain summit, all arches and ruins, towers, trees, bridges, and waterfall sheets. Keep only broad blended support ground beneath the castle and mountain Landmark footprints. Do not create proxy spikes, rings, markers, or shadows for excluded objects.
+
+Case-specific continuous height anchors:
+Bottom-center entry overlook +0.35..+0.60; broad foreground ridge +0.25..+0.55; central rolling valley -0.30..+0.05; branching river and lake beds -0.75..-0.40; left valley shoulder +0.15..+0.45; right castle pedestal +0.30..+0.55; far mountain pedestal +0.45..+0.70 without the sharp summit. These are smooth regional targets, not visible bands.
+
+Entry and connectivity:
+A broad stable spawn support area at bottom center connects by naturally descending open ground into the central valley and around both sides of the river beds. This is open natural ground, not a painted route.
+
+Orientation:
+Bottom edge is the entry overlook. Top is world-forward into the distant valley and mountain passes. Preserve reference left and right.
+
+Primary request: Generate one square, strict orthographic, true top-down continuous signed-color terrain height-intent image. It represents only the single-valued, continuous base ground surface. It is scientific scalar-field data, not a terrain render or decorative map. The color is a temporary transport encoding for height sign and magnitude; it is not terrain appearance and will be removed by the deterministic compiler.
+
+Encoding contract:
+- Encode signed height on one continuous two-segment color ramp: deep depression -1 = RGB(32,64,208) -> ordinary ground 0 = RGB(128,128,128) -> high base terrain +1 = RGB(224,96,32).
+- Cool blue-gray values below 0 are basins, valleys, pits, channels, and submerged beds.
+- Neutral gray RGB(128,128,128) is ordinary undeformed ground datum.
+- Warm orange-gray values above 0 are broad hills, mountain pedestals, mesas, and ridges.
+- Use only smooth interpolated colors on that ramp. Never use hue for material, biome, water, lighting, or semantic classes. Do not create discrete blue, gray, or orange zones or contour bands.
+- Retain headroom at both ends. Do not auto-normalize the scene to fill -1..+1.
+- Use smooth, continuous, low-frequency gradients. Preserve broad flat support areas and connected ground.
+- Honor the sign and approximate range of the case-specific anchors, then interpolate smoothly between them.
+
+Water rule: encode terrain beds below water, but do not depict a water surface, shoreline color, reflection, waterfall, or water material. A separate semantic mask and control JSON own water coverage and water-surface height.
+
+Static-geometry rule: omit every declared static Landmark or Structure silhouette. At each declared footprint, render only continuous support ground or a broad blended terrain pedestal. Do not create a proxy spike, mound, ring, shadow, or marker for the omitted object.
+
+Constraints: the complete world bounds fill the square canvas; preserve visible adjacency, containment, separation, openings, and large-scale landform proportions; keep the spawn support stable; keep connected open ground through the valley; all output geometry must be representable by one height value per XZ point.
+
+Avoid: perspective, isometric view, camera shading, cast shadows, ambient occlusion, surface normals, rock strata, erosion texture, cracks, material grain, noise, contour lines, discrete color bands, rainbow colors, labels, legend, grid, compass, route line, spawn icon, people, animals, vegetation, buildings, ruins, castle, sharp hero peak, sky, border, transparency, UI, logo, and watermark.
