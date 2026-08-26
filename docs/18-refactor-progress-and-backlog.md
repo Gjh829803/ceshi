@@ -92,6 +92,7 @@ Registry Lock、Browser preference 命令，以及 Babylon CameraDirector 消费
 - [`2026-08-24-unreleased-compatibility-clean-break-design.md`](superpowers/specs/2026-08-24-unreleased-compatibility-clean-break-design.md)：G19-8 未发布协议 clean break 的权威边界、UCCB 依赖图与零消费者门禁；
 - [`2026-08-25-historical-naming-and-compatibility-path-cleanup-plan.md`](superpowers/plans/2026-08-25-historical-naming-and-compatibility-path-cleanup-plan.md)：UCCB-65 历史命名、公共导出、隐式兼容行为、生成资产与延期清理账本的专项执行计划；
 - [`2026-08-25-gameplay-g19-8-completion.md`](reviews/2026-08-25-gameplay-g19-8-completion.md)：G19-8 current-only clean break、全量门禁与 Final GO disposition；
+- [`2026-08-26-m8-s1-mounted-on-skateboard-progress.md`](reviews/2026-08-26-m8-s1-mounted-on-skateboard-progress.md)：M8-S1 已实现核心链路、当前证据、明确剩余门禁与 `CAM-MOUNT-1` 的快速接续入口；
 - [`2026-08-24-workspace-structure-authority-review.md`](reviews/2026-08-24-workspace-structure-authority-review.md)：Workspace authority 根因闭包、门禁 invalidation 策略，以及 `WS-07B → WS-05B/C → WS-08` 结构治理任务的唯一详细裁决；
 - [`2026-08-24-context-driven-gameplay-camera-composition-design.md`](superpowers/specs/2026-08-24-context-driven-gameplay-camera-composition-design.md)：Kit、Relationship、Action、Equipment、Flight 与 Camera Context/Director 的设计输入；Camera Domain 已实现的部分和剩余集成以本页 P2.4 为准；
 - [`2026-08-25-context-driven-camera-package-boundary-review.md`](reviews/2026-08-25-context-driven-camera-package-boundary-review.md)：Camera 分包决策的历史审查证据，不是 active 实现状态或可用入口；
@@ -307,7 +308,8 @@ P0.1 整体仍以上述三项开放能力及生产范围扩展为完成标准。
 - [x] 实现 Neutral Color、Linear Depth Meters、Semantic Class ID、Stable Instance ID、World Normal。
 - [ ] 评估并决定 Motion Vector、Albedo、Roughness、Metallic 和 Lighting Profile 的阶段。
 - [x] 每帧记录 Camera Intrinsics/Extrinsics、Snapshot 和三种明确计数器。
-- [ ] 接入 Event/Action/Relationship Receipt；V1 对应 Track 文件为空，不宣称已有事件证据。
+- [x] 接入 Event/Action/Relationship Receipt Track；保持 Bundle V1，并交叉校验
+  Command → Receipt → Event → World State → Snapshot/Frame 以及 Relationship Event 投影。
 - [x] Bundle 固定过渡期 WorldPackage、IR、ExecutionPlan、Session 和 Take Hash，并交叉验证引用。
 - [ ] 完整 WorldPackage/Registry Lock 发布格式与 Bundle 签名。
 - [x] CLI/Browser 支持确定性运行 Take、等待 Render Ready、批量捕获和原子失败清理。
@@ -555,15 +557,17 @@ Incremental Hot Apply，以及哪些 Runtime 状态被保留、重置或替换�
 
 #### P2.1 Subject S2：类型化 Relationship Framework
 
-- [ ] 按 [Canonical Runtime State 与 Semantic Projection 设计](superpowers/specs/2026-08-22-canonical-runtime-state-and-semantic-projection-design.md) 冻结 World State、View State、Runtime Status 与 Transition Log 四个公共投影；不扩充现有 `SubjectRuntimeStateV3` 大对象。
-- [ ] 增加由 ExecutionPlan Resource Lock 约束的 `capabilityStatesById`，用闭合 Capability State Schema 扩展门、载具、飞行等状态，禁止自由 `state: Record<string, unknown>` 袋。
-- [ ] Relationship Manifest Registry 和角色化端点。
-- [ ] 初始 Relationship 编译与动态事务边界。
-- [ ] Socket/Slot 兼容、基数、冲突、删除策略和权限校验。
-- [ ] 固定 Tick 原子提交，失败时逻辑、渲染、物理、控制和相机全部回滚。
+- [x] 按 [Canonical Runtime State 与 Semantic Projection 设计](superpowers/specs/2026-08-22-canonical-runtime-state-and-semantic-projection-design.md) 冻结 World State、View State、Runtime Status 与 Transition Log 四个公共投影；不扩充现有 `SubjectRuntimeStateV3` 大对象。
+- [x] 增加由 ExecutionPlan Resource Lock 约束的 `capabilityStatesById`，使用关闭 Capability State Schema，禁止自由 `state: Record<string, unknown>` 袋。
+- [x] 首个 Relationship Manifest Registry 与角色化 `riderEntityId` / `mountEntityId` / `mountSlotId` 端点；seat/tether 仍保留。
+- [x] `mountedOn` 初始 Relationship 编译与动态 Mount/Dismount 事务边界。
+- [x] 首个 stand slot 的 Socket closure、Rider/Slot 基数、冲突、删除和权限校验。
+- [x] 固定 Tick 原子提交；失败时 Gameplay、World State、Event/Receipt 与 Babylon 投影回滚。完整 Camera Context 原子切换仍归 P2.4。
 - [ ] 单一 Semantic Fact Projector 输出 `supportedBy/touching/insideVolume`，不导出 Babylon/Havok Handle 或另建 Ground Support 推断路径。
-- [ ] Request ID 幂等、Receipt、关闭 Event Union、Snapshot/Transition Hash 和 Capture 关联。
-- [ ] 第一个人—滑板 Fixture 完成绑定、移动、解绑、Reset 和 State/Event/Capture 对齐 E2E。
+- [x] Request ID 幂等、Receipt、关闭 Event Union、Snapshot/Transition Hash，以及
+  Control Capture Track 写入/篡改校验。
+- [ ] 第一个人—滑板 Fixture 已完成绑定、移动、解绑、Reset 和 Browser 状态证据；仍需把
+  四阶段真实 RuntimeHost journal 接入正式多帧 Capture verifier 后关闭完整 E2E。
 
 #### P2.2 Subject S3：骑乘、拖拽与控制上下文
 
@@ -606,6 +610,15 @@ Incremental Hot Apply，以及哪些 Runtime 状态被保留、重置或替换�
 - [ ] 第一人称、第三人称和声明式 Camera Rig 切换。
 - [ ] Browser/CLI 支持观察、控制、截图权限分离。
 - [ ] 为上游 Agent 提供 Registry Search、Dry Run、Explain、Diff 和结构化修复工具，不提供底层引擎对象。
+
+已知问题 `CAM-MOUNT-1`（2026-08-26，开放）：在 Playground
+`?scene=mounted-skateboard-s1` 中提交 Mount Action、把 Possession 从 Rider 切到 skateboard
+并运行固定输入后，Babylon CameraDirector 的跟随距离会异常缩短，渲染画面贴近并裁切 Rider。
+同一轮 Browser V5 证据确认 `mountedOn`、Possession、Rider `suspended`、Mount 移动、Dismount
+和 Reset 状态均正确，因此该问题当前限定为控制目标切换后的 Camera Context/碰撞取景专项，
+不回滚 M8-S1 Relationship 数据链路，也不在 M8-S1 内临时修改相机所有权。后续由 P2.4
+GCC-4/GCC-5 复现、定根因并增加 rendered visual 回归；本地 Playwright 复现截图名为
+`output/playwright/mounted-skateboard-s1-after-mount-move.png`。
 
 #### P2.5 Surface Semantics 与 Traversal Capability
 
@@ -808,7 +821,7 @@ Placement S1、Simulation Take / Control Capture V1 与 Validation Capture/Integ
 | WS-07B | **待开始；结构治理后续 1** | 按 public contract family 扩展唯一 source/generated parity；每次只迁一个领域 | `ARC-INT` 已完成 / 阻塞相关 Schema release | 正负 parity、unknown-key、round-trip、tracked bytes；禁止用私有 deep import 换取小 bundle |
 | WS-05B/C | **待开始；结构治理后续 2** | 按 owner 批次消减当前 52 条 exact workspace boundary debt；补必要 `/testing` exports、direct deps 与 per-package tsconfig | `ARC-INT` 已完成 / 阻塞 `WS-08` 的相关 package extraction | debt count 单调下降、zero stale/new、zero cycles、无 wildcard |
 | WS-08 | **待开始；结构治理后续 3** | 稳定 Host primitives 后拆分 Host/Studio/CLI composition package，不改变 Runtime/Camera/Capture authority | public contracts 稳定且相关 `WS-05B/C` debt 已清 / 无 | CLI snapshots、readiness/shutdown lifecycle、build graph、Studio E2E |
-| M8-S1 | 下一主线；设计已冻结 | 首个 `mountedOn` 人—滑板关系切片；[专项设计](superpowers/specs/2026-08-26-m8-s1-mounted-on-skateboard-design.md)与[实施计划](superpowers/plans/2026-08-26-m8-s1-mounted-on-skateboard-implementation-plan.md)已完成 | G19 已完成 | Relationship/Action/Event/Receipt/Capture 端到端一致 |
+| M8-S1 | 核心实现已完成；最终 Capture/Completion Gate 收口中 | `mountedOn` 合同、编译、Action effect、Gameplay/Host 原子事务、Babylon Rider 投影、安全下车、Playground 与 Track validator；[专项设计](superpowers/specs/2026-08-26-m8-s1-mounted-on-skateboard-design.md) / [实施计划](superpowers/plans/2026-08-26-m8-s1-mounted-on-skateboard-implementation-plan.md) / [进展记录](reviews/2026-08-26-m8-s1-mounted-on-skateboard-progress.md) | G19 已完成 | 剩余正式四阶段 Capture verifier、完整 completion gates/review；相机已知问题 `CAM-MOUNT-1` 归 P2.4 |
 
 结构治理固定按 `WS-07B → WS-05B/C → WS-08` 推荐；`M8-S1` 仍是产品能力主线，两条 lane 不得
 因表格相邻而被解释为可以共享 owner 或跳过各自依赖。上述 WS 项的范围、延期理由、ownership、
@@ -894,14 +907,17 @@ S1b Golden、
    但 Browser Command/View State 与 Babylon CameraDirector 接线仍未完成；作者面板
    Feel 范围与 session 数字袋类型已在 Preset 语义合同修复中收口，
    M7 不标记完成；
-8. **M8：完成 Canonical World State + Typed Relationship 人—滑板窄可视切片**：G19-2/G19-4
-   已交付 Canonical Gameplay 合同、provider-neutral RuntimeHost staging 和 WorldPackage membership；
-   G19-6 至 G19-8 已完成并通过 Final GO，下一步按
+8. **M8（核心实现已完成，最终证据收口中）：Canonical World State + Typed Relationship
+   人—滑板窄可视切片**：G19-2/G19-4 已交付 Canonical Gameplay 合同、provider-neutral
+   RuntimeHost staging 和 WorldPackage membership；G19-6 至 G19-8 已完成并通过 Final GO。
+   当前已按
    [M8-S1 专项设计](superpowers/specs/2026-08-26-m8-s1-mounted-on-skateboard-design.md)与
    [实施计划](superpowers/plans/2026-08-26-m8-s1-mounted-on-skateboard-implementation-plan.md)
-   沿用已冻结的 World/View/Runtime Status/Transition 四类投影，再实现 `mountedOn` 权威关系、
-   `supportedBy` 派生事实、Mount/Dismount Action、Receipt/Event 与 Capture 对齐；在这条
-   纵向切片稳定前，不继续向 `SubjectRuntimeStateV3` 追加字段，也不先铺开更多人物动作；
+   实现 `mountedOn` 权威关系、Mount/Dismount Action、Receipt/Event、Babylon 投影、
+   Safe Dismount、Browser Fixture 与 Capture Track validator。下一步只做正式四阶段 Capture
+   verifier、完整 completion gates/review，并保持 `supportedBy` 只来自既有 Physics support
+   authority。`CAM-MOUNT-1` 由 P2.4 相机专项修复；不向 `SubjectRuntimeStateV3` 追加字段，
+   也不先铺开 seat/tether、轮子动力学、特技、车辆或 Hosted Builder admission；
 9. **M9：在实现游泳、攀爬或增量 Agent 修复前，分别冻结 P2.5 Surface/Traversal 与
    P1.6 AI Schema/WorldChangeSet 的专项设计，禁止临时增加公共字段或场景脚本旁路**。
 10. **M10：P1.1 与 P2.5 边界稳定后评审 P2.6 H1 Bridge Fixture；先验证同 XZ 双层支撑、

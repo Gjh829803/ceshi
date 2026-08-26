@@ -10,6 +10,13 @@
 
 **Spec:** `docs/superpowers/specs/2026-08-26-m8-s1-mounted-on-skateboard-design.md`
 
+**Progress (2026-08-26):** The core paths in Tasks 1–7 are implemented on `main`; Task 8's canonical
+Track writer/validator and primary tamper checks are implemented. Remaining before final M8-S1
+completion is the listed Runtime adversarial hardening, retained-support `supportedBy` evidence,
+formal four-phase mounted Capture verifier, and Task 9's full same-tree gates/independent completion
+review. `CAM-MOUNT-1` is recorded in the central Backlog and remains owned by P2.4 Camera work,
+outside this slice.
+
 ## Global constraints
 
 - Do not add a new Mount command or a second `action.activate` handler.
@@ -33,18 +40,18 @@
 
 **Produces:** the exact contracts in spec sections 4–6.
 
-- [ ] Add RED tests for parsing/freezing/hashing `MountedOnRelationshipStateV1`, typed Relationship Events, generic inspection/capacity names, explicit Action `effect`, immediate completion, `mountedOn` profile terms, and rejection of the old `mount`, generic profile socket roles, possession-only inspection and capacity names.
-- [ ] Run:
+- [x] Add RED tests for parsing/freezing/hashing `MountedOnRelationshipStateV1`, typed Relationship Events, generic inspection/capacity names, explicit Action `effect`, immediate completion, `mountedOn` profile terms, and rejection of the old `mount`, generic profile socket roles, possession-only inspection and capacity names.
+- [x] Run:
 
   ```bash
   pnpm exec vitest run packages/gameplay-contracts/src packages/subject-registry/src --no-file-parallelism --maxWorkers=1 --minWorkers=1
   ```
 
   Confirm failures are missing contracts, not fixture mistakes.
-- [ ] Add the union member and strict parsers. Replace Relationship Event endpoint fields with `relationship`. Replace possession-only inspection/capacity fields without aliases.
-- [ ] Add explicit Action effect unions and migrate every current Action definition to `state-only`.
-- [ ] Replace the registry `mount` vocabulary with `mountedOn`; add only `mounted-on.stand-ground@1` as implemented and retain seat/tether as reserved.
-- [ ] Regenerate only through owning generators, rerun the focused command, `pnpm verify:unreleased-clean-break`, and `git diff --check`.
+- [x] Add the union member and strict parsers. Replace Relationship Event endpoint fields with `relationship`. Replace possession-only inspection/capacity fields without aliases.
+- [x] Add explicit Action effect unions and migrate every current Action definition to `state-only`.
+- [x] Replace the registry `mount` vocabulary with `mountedOn`; add only `mounted-on.stand-ground@1` as implemented and retain seat/tether as reserved.
+- [x] Regenerate only through owning generators, rerun the focused command, `pnpm verify:unreleased-clean-break`, and `git diff --check`.
 
 ## Task 2: Authoring, slot and initial Relationship compilation
 
@@ -60,12 +67,12 @@
 
 **Produces:** Authoring V4 `mountedOn` and package-local Mount slots compiled into ExecutionPlan V5 initial Relationship state.
 
-- [ ] Add RED tests for one valid initial relationship plus missing Rider, missing Mount, same endpoint, missing/duplicate slot, missing Socket, reserved profile, duplicate Rider occupancy, duplicate slot occupancy, contradictory possession, extra key and old `mount` input.
-- [ ] Add `SubjectMountSlotDefinitionV1[]` to Subject Definition with strict ID ordering and socket closure. Migrate current definitions to explicit empty arrays.
-- [ ] Replace the all-Relationship rejection with a closed `mountedOn` validator. Do not accept generic `sourceEntityId`, `targetEntityId` or `params`.
-- [ ] Normalize endpoints and slot/profile closure; lock every consumed resource.
-- [ ] Extend ExecutionPlan V5 with the typed initial Relationship union and strict/deep-frozen parser. Compile without re-inference.
-- [ ] Run:
+- [x] Add RED tests for one valid initial relationship plus missing Rider, missing Mount, same endpoint, missing/duplicate slot, missing Socket, reserved profile, duplicate Rider occupancy, duplicate slot occupancy, contradictory possession, extra key and old `mount` input.
+- [x] Add `SubjectMountSlotDefinitionV1[]` to Subject Definition with strict ID ordering and socket closure. Migrate current definitions to explicit empty arrays.
+- [x] Replace the all-Relationship rejection with a closed `mountedOn` validator. Do not accept generic `sourceEntityId`, `targetEntityId` or `params`.
+- [x] Normalize endpoints and slot/profile closure; lock every consumed resource.
+- [x] Extend ExecutionPlan V5 with the typed initial Relationship union and strict/deep-frozen parser. Compile without re-inference.
+- [x] Run:
 
   ```bash
   pnpm exec vitest run packages/authoring/src packages/compiler/src packages/runtime-contracts/src --no-file-parallelism --maxWorkers=1 --minWorkers=1
@@ -85,11 +92,11 @@
 
 **Produces:** locked effect Ref/Hash → exactly one trusted effect planner; no second Command handler.
 
-- [ ] Add RED tests for missing/duplicate/wrong-hash effect planner, non-canonical result, mutation attempt, forged request bytes, schema mismatch, and a manifest census proving one `action.activate` handler.
-- [ ] Implement an immutable `GameplayActionEffectRegistryV1` keyed by canonical Ref. Each planner receives a read-only planning view and immutable request resolution.
-- [ ] Make `mounted-relationship@1` depend on Core Control and Core Semantic Action, contribute zero command handlers, and register the Mount/Dismount effect planner during feature activation.
-- [ ] Extend Core Semantic Action planning to resolve the locked effect and pass the closed plan to GameplayState authorization.
-- [ ] Run:
+- [x] Add RED tests for missing/duplicate/wrong-hash effect planner, non-canonical result, mutation attempt, forged request bytes, schema mismatch, and a manifest census proving one `action.activate` handler.
+- [x] Implement an immutable `GameplayActionEffectRegistryV1` keyed by canonical Ref. Each planner receives a read-only planning view and immutable request resolution.
+- [x] Make `mounted-relationship@1` depend on Core Control and Core Semantic Action, contribute zero command handlers, and register the Mount/Dismount effect planner during feature activation.
+- [x] Extend Core Semantic Action planning to resolve the locked effect and pass the closed plan to GameplayState authorization.
+- [x] Run:
 
   ```bash
   pnpm exec vitest run packages/gameplay/src/core-semantic-action-feature.test.ts packages/gameplay/src/gameplay-feature-manager.test.ts packages/gameplay/src/mounted-relationship-feature.test.ts --no-file-parallelism --maxWorkers=1 --minWorkers=1
@@ -105,12 +112,12 @@
 
 **Produces:** one authorized transition containing Action and both Relationship types.
 
-- [ ] Add RED Mount cases: valid immediate transition, stale possession, actor mismatch, occupied slot, already mounted Rider, missing capability, distance failure, conflicting Action and every capacity boundary.
-- [ ] Add RED Dismount cases: Rider actor with Mount possession succeeds; wrong controller/relationship fails; ordinary state-only Action still requires actor = possession target.
-- [ ] Generalize Relationship state storage and private possession indices. Validate the effect plan inside GameplayState; never trust a planner-provided before-state or count.
-- [ ] Produce stable change/event order: Relationship removals by ID, Relationship additions by ID, Action started/completed; Receipt lists emitted IDs in that order and no immediate Action remains active.
-- [ ] Prove prepare/project/commit staleness and rollback with before/after immediate-state assertions.
-- [ ] Run:
+- [x] Add RED Mount cases: valid immediate transition, stale possession, actor mismatch, occupied slot, already mounted Rider, missing capability, distance failure, conflicting Action and every capacity boundary.
+- [x] Add RED Dismount cases: Rider actor with Mount possession succeeds; wrong controller/relationship fails; ordinary state-only Action still requires actor = possession target.
+- [x] Generalize Relationship state storage and private possession indices. Validate the effect plan inside GameplayState; never trust a planner-provided before-state or count.
+- [x] Produce stable change/event order: Relationship removals by ID, Relationship additions by ID, Action started/completed; Receipt lists emitted IDs in that order and no immediate Action remains active.
+- [x] Prove prepare/project/commit staleness and rollback with before/after immediate-state assertions.
+- [x] Run:
 
   ```bash
   pnpm exec vitest run packages/gameplay/src/gameplay-state.test.ts --no-file-parallelism --maxWorkers=1 --minWorkers=1
@@ -127,12 +134,12 @@
 
 **Produces:** one fixed-tick transaction whose adapter projection, WorldState, Events and Receipt agree.
 
-- [ ] Add a RED test that prepares Mount, makes the adapter throw, and proves no Relationship, possession, Event sequence or WorldState advances. Add another proving an undeclared Adapter projection write is rejected.
-- [ ] Replace possession-shaped Event construction with the typed Relationship union.
-- [ ] Extend the provider-neutral World Port with prepare/commit/rollback hooks for a closed mounted projection and exact `runtimeProjectionWriteSet`. Register ownership immediately after any native allocation.
-- [ ] Replace the blanket “Command cannot change Adapter-owned World projection” check with exact outside-write-set byte equality, changed-entry parsing and undeclared add/remove rejection. Build the WorldState-after, Event list and Receipt only from that validated prepared transition. Commit journal/state/adapter at the existing phase barrier.
-- [ ] Add reset, replacement, disposal and two-WorldSession late-command isolation tests.
-- [ ] Run:
+- [x] Add a RED test that prepares Mount, makes the adapter throw, and proves no Relationship, possession, Event sequence or WorldState advances. Add another proving an undeclared Adapter projection write is rejected.
+- [x] Replace possession-shaped Event construction with the typed Relationship union.
+- [x] Extend the provider-neutral World Port with prepare/commit/rollback hooks for a closed mounted projection and exact `runtimeProjectionWriteSet`. Register ownership immediately after any native allocation.
+- [x] Replace the blanket “Command cannot change Adapter-owned World projection” check with exact outside-write-set byte equality, changed-entry parsing and undeclared add/remove rejection. Build the WorldState-after, Event list and Receipt only from that validated prepared transition. Commit journal/state/adapter at the existing phase barrier.
+- [x] Add reset, replacement, disposal and two-WorldSession late-command isolation tests.
+- [x] Run:
 
   ```bash
   pnpm exec vitest run packages/runtime-host/src --no-file-parallelism --maxWorkers=1 --minWorkers=1
@@ -148,12 +155,15 @@
 
 **Produces:** Rider follows the skateboard slot; board alone owns movement/support; rollback and disposal are exact.
 
-- [ ] Add RED tests for asymmetric slot offset and yaw, held movement during Mount, Rider collider non-interference, Mount ledge departure/landing, reset while mounted, two pairs in one Runtime, and partial prepare/dispose throws.
-- [ ] Project Rider Subject Origin from committed Mount pose + slot + authored Rider offset. Preserve Snapshot/Visual Root at Subject Origin and project Rider locomotion as the closed `suspended` branch with no fake medium/speed.
-- [ ] Suspend Rider controller/input/body support while mounted. Do not add a second grounding query.
-- [ ] Implement deterministic Dismount candidate evaluation through the existing physics/placement authority. Add a RED case where candidate 1 is blocked and candidate 2 is selected, and one where all candidates fail without mutation.
-- [ ] Confirm the board's retained `checkSupport()` drives Ground/Air and board `supportedBy`; assert no rider-board semantic fact is fabricated.
-- [ ] Run:
+- [ ] Current RED/GREEN coverage includes asymmetric slot projection, Rider suspension/collider policy,
+  Mount movement, safe/blocked Dismount and Reset. Explicit ledge departure/landing, two mounted pairs
+  and partial native-allocation cleanup cases remain completion-hardening work.
+- [x] Project Rider Subject Origin from committed Mount pose + slot + authored Rider offset. Preserve Snapshot/Visual Root at Subject Origin and project Rider locomotion as the closed `suspended` branch with no fake medium/speed.
+- [x] Suspend Rider controller/input/body support while mounted. Do not add a second grounding query.
+- [x] Implement deterministic Dismount candidate evaluation through the existing physics/placement authority. Add a RED case where candidate 1 is blocked and candidate 2 is selected, and one where all candidates fail without mutation.
+- [ ] The board keeps the existing single `checkSupport()` locomotion authority and no rider-board fact is
+  fabricated. Publishing and asserting board `supportedBy` from retained support evidence remains open.
+- [x] Run:
 
   ```bash
   pnpm exec vitest run packages/runtime-babylon/src/runtime.test.ts packages/runtime-babylon/src/p15-conformance.test.ts --no-file-parallelism --maxWorkers=1 --minWorkers=1
@@ -171,12 +181,12 @@
 
 **Produces:** a real separate Rider and primitive skateboard fixture with bind → mount → move → dismount → move → reset.
 
-- [ ] Build the Rider from the current G Bot/Golden definition and the board from package-local primitive visual parts with one support-centered capsule approximation, one `MountStand` Socket and one stand slot.
-- [ ] Add two request resources and two Semantic Action definitions/effect locks to the fixture Bootstrap.
-- [ ] Activate the mounted Relationship feature through the canonical Bootstrap closure.
-- [ ] Add Browser tests proving exact V5 key count remains 39 and current submit/receipt/event/state/inspection calls expose the transition.
-- [ ] Add a source census proving the retired composite hoverboard asset is not referenced and no wheel/vehicle capability is claimed.
-- [ ] Add a contract assertion that `MountedOnRelationshipStateV1`, Mount/Dismount requests and Mount slots contain no Ground Motion Kernel/Profile Ref; the S1 Ground closure belongs only to the skateboard Subject capability assembly so a later dynamics closure can replace it without Relationship migration.
+- [x] Build the Rider from the current G Bot/Golden definition and the board from package-local primitive visual parts with one support-centered capsule approximation, one `MountStand` Socket and one stand slot.
+- [x] Add two request resources and two Semantic Action definitions/effect locks to the fixture Bootstrap.
+- [x] Activate the mounted Relationship feature through the canonical Bootstrap closure.
+- [x] Add Browser tests proving exact V5 key count remains 39 and current submit/receipt/event/state/inspection calls expose the transition.
+- [x] Add a source census proving the retired composite hoverboard asset is not referenced and no wheel/vehicle capability is claimed.
+- [x] Add a contract assertion that `MountedOnRelationshipStateV1`, Mount/Dismount requests and Mount slots contain no Ground Motion Kernel/Profile Ref; the S1 Ground closure belongs only to the skateboard Subject capability assembly so a later dynamics closure can replace it without Relationship migration.
 
 ## Task 8: Control Capture track closure
 
@@ -188,11 +198,13 @@
 
 **Produces:** populated Action/Event/Relationship/Snapshot tracks bound to frame and Receipt identities.
 
-- [ ] Add RED fixtures for missing Relationship row, wrong Event relationship payload, Receipt → WorldState hash mismatch, foreign WorldSession row, wrong transition Tick and post-reset leakage.
+- [ ] RED fixtures now cover missing Relationship row, wrong Event payload, Receipt → WorldState
+  mismatch and wrong transition Tick. Formal foreign-WorldSession and post-reset leakage fixtures remain
+  with the mounted Capture verifier.
 - [ ] Feed committed RuntimeHost journal records to the existing reserved NDJSON tracks in canonical sequence order.
-- [ ] Extend validation to cross-check every reference described in spec section 10; keep bundle schemaVersion 1 because paths and frame refs already reserve these tracks.
+- [x] Extend validation to cross-check every reference described in spec section 10; keep bundle schemaVersion 1 because paths and frame refs already reserve these tracks.
 - [ ] Capture frames before Mount, after Mount movement, after Dismount movement and after Reset.
-- [ ] Run the focused bundle suite and the new mounted fixture verifier.
+- [ ] Focused bundle suite passes; the formal mounted fixture Capture verifier remains to be added and run.
 
 ## Task 9: Integration and completion evidence
 
@@ -202,7 +214,7 @@
 - Modify: `docs/18-refactor-progress-and-backlog.md`
 - Modify: `README.md` only if the public capability index needs an M8 entry
 
-- [ ] Run focused tests after the final implementation edit.
+- [x] Run focused tests after the final implementation edit.
 - [ ] Run once on the same tree:
 
   ```bash

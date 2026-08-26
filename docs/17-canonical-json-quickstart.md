@@ -458,13 +458,16 @@ Screen Region、八种关闭 Constraint、Required/Preferred 与锁定 Profile/S
 
 - 任意产品 GLB 的直接接入、Compound Collider、LOD、更多拓扑、独立动画资产、
   通用姿态与完整 Semantic Actions；
-- Relationship、挂载、坐骑、拖拽、装备、武器和车辆；
+- `mountedOn` stand-ground 窄切片之外的 Relationship：seat/tether、完整坐骑、拖拽、
+  装备、武器、Joint 和车辆动力学；
 - NPC 行为、战斗、导航、玩法规则、网络与动态刚体；
 - 飞行、第一人称/自由镜头、室内、洞穴、悬挑和 Overhang 地形；
 - 通用 Terrain Mask、S1 之外的 Constraint、增量 Solver 和完整 P0.1；
-- 非空 `relationships`、非空 `rules` 和运行时动态 Spawn。
+- `mountedOn` 关闭结构之外的非空 `relationships`、非空 `rules` 和运行时动态 Spawn。
 
-`seat.mount` 目前只是可验证、可解释的 Socket 数据，不代表骑乘逻辑已经实现。
+`MountStand` 可用于当前 `mountedOn` S1；`seat.mount` 仍只是可验证、可解释的 Socket
+数据，不代表 seated riding 已实现。当前 Playground 代表场景为
+`?scene=mounted-skateboard-s1`。
 
 Rigged Subject 最小接入/验证流程：
 

@@ -148,7 +148,9 @@ Lock、物理与控制。该能力证明了“Definition 与 Instance 分离”�
 1. **S1b**：Golden 与首个产品 G Bot 的 GLB/Asset Part、Rig、Animation 与 Capsule
    Profile 纵向切片已完成；Compound Collider、LOD、更多 Profile/拓扑、独立动画
    资产与后续产品资产验收继续开放。
-2. **S2**：类型化 Relationship、Socket 对齐、事务、Receipt 与回滚。
+2. **S2**：首个 `mountedOn` stand-ground 窄切片已完成合同、Socket 对齐、事务、
+   Receipt/Event 和 Runtime 回滚主链；继续补齐正式 Capture fixture、通用 Relationship
+   Registry/Fact 投影及更多关系类型。
 3. **S3**：坐骑、拖拽、控制上下文与安全解绑。
 4. **S4**：飞行、装备和 Action Variant/Animation Binding。
 

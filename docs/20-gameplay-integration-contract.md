@@ -125,8 +125,9 @@ Harness 和 Camera Authoring 方法。调用方必须导入 `@whitebox-world/run
 接口，不根据本文子集手写 Browser 对象。
 
 Snapshot V4 不在根级重复发布控制目标。实时 UI 从
-`snapshot.world.gameplayInspection.possessedByRelationshipsById` 读取；回放和训练数据从
-`getWorldStateSnapshot(...).relationshipStatesById` 读取。
+`snapshot.world.gameplayInspection.relationshipStatesById` 读取 `possessedBy` 与
+`mountedOn`；回放和训练数据从
+`getWorldStateSnapshot(...).relationshipStatesById` 读取同一关闭 Relationship Union。
 
 ## 4. 绑定、切换和释放
 
@@ -252,14 +253,17 @@ Host 配置的 `fixedInputControllerEntityId` 是物理固定输入的唯一权�
 
 - `control.bind`、A 到 B rebind、`control.release`；
 - Command Receipt、Event journal、Gameplay Inspection、可寻址 World State；
+- `mountedOn` stand-ground 的 Mount/Dismount Semantic Action、原子 possession 切换、
+  Runtime 投影、安全下车与 Reset；
 - fixed Tick 输入、Reset/Session 隔离、Runtime Activity；
-- Snapshot V4、Browser V5、Control Capture 与当前 Route Evidence 合同。
+- Snapshot V4、Browser V5、Control Capture Action/Event/Relationship Track 与当前 Route
+  Evidence 合同。
 
 仍需独立能力 Gate 的内容：
 
 - 更完整的 Semantic Action Presentation 与动画内容映射；
 - 多 Controller 输入调度；
-- 关系型玩法切片，例如骑乘、装备、拖挂和容器；
+- `mountedOn` S1 之外的关系型玩法，例如 seated riding、装备、拖挂和容器；
 - `@whitebox-world/camera` 的命名 Profile、Context admission、View Preference、纯
   Selection/Explain 已实现；committed Gameplay Context Projection、Browser 命令、
   Registry Lock 以及 Babylon CameraDirector 消费 Selection Decision 仍需独立能力 Gate。

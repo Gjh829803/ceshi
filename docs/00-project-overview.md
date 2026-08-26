@@ -130,8 +130,12 @@ Runtime Director 也都尚未实现。
 Capability 和 Profile 定义主体，再通过多个 `subject` 节点生成独立实例。SDK
 确定性推导 Collider、Hash、Lock 和资源成本，并提供 Registry/Explain 工具。
 
-未完成：更多产品 GLB 资产、Compound Collider、完整 Semantic Actions、Relationship、
-坐骑、装备、车辆与飞行。它们分别属于 S1b 后续、S2 及之后阶段。
+新增的 M8-S1 窄切片已经交付严格 `mountedOn` Authoring/Compiler 合同、Mount/Dismount
+原子事务、`MountStand` 投影、控制切换、Rider locomotion 暂停、安全下车、Reset 与
+Action/Event/Receipt Track 交叉校验。它是人—滑板 stand-ground 行为切片，不等于完整坐骑。
+
+未完成：更多产品 GLB 资产、Compound Collider、完整 Semantic Action Presentation、
+seat/tether、装备、拖拽、车辆动力学与飞行。它们分别属于 S1b 后续、S2/S3 及之后阶段。
 
 ### Subject Authoring S1b：Golden 与首个产品 G Bot 可视切片
 
@@ -179,9 +183,12 @@ Camera Rig Track、Simulation/Render/Capture 三计数器、Render Ready Receipt
 Pass、稳定 Semantic/Instance Table、Playwright Driver、原子 Bundle、Integrity
 Validate/Inspect 和两个共享 World Identity 的 Take Fixture。
 
-未完成：完整 P1.4 WorldPackage/Registry Lock、Action/Event/Relationship Receipt、Resume、
-跨平台 Replay Metric、Motion Vector、Placement/Physics/Composition 等统一 Validation
-扩展和 Video Model Adapter。
+已补充：Control Capture 保持 Bundle V1，现可写入并校验 Action/Event/Relationship Track，
+并把 Command、Receipt、Event、World State、Snapshot 和 Frame 绑定成同一证据链。
+
+未完成：完整 P1.4 WorldPackage/Registry Lock、mounted fixture 正式多阶段 Bundle verifier、
+Resume、跨平台 Replay Metric、Motion Vector、Placement/Physics/Composition 等统一
+Validation 扩展和 Video Model Adapter。
 现有真实浏览器 Gate 是有界单帧 Probe，不冒充完整 240 帧视频级验收。
 
 ### Validation Capture/Integrity V1：首个统一报告切片

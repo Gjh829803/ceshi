@@ -1,5 +1,12 @@
 # M8-S1 `mountedOn` Human-Skateboard Vertical Slice Design
 
+> Implementation status (2026-08-26): contract/authoring/compiler, trusted Action effect,
+> Gameplay/RuntimeHost atomic transaction, Babylon stand projection/safe Dismount, Playground fixture
+> and Control Capture Track writer/validator are implemented. Final completion remains open for the
+> adversarial Runtime cases, retained-support `supportedBy` evidence, formal four-stage mounted Capture
+> verifier, full same-tree gates and completion review. Camera issue `CAM-MOUNT-1` is explicitly owned
+> by P2.4 and is not repaired inside this design slice.
+
 **Status:** implementation authority
 
 **Date:** 2026-08-26

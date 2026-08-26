@@ -217,9 +217,9 @@ Browser，而详情与产物浏览保持独立。人工试玩录制及后续视�
 | Subject Definition | 可复用主体定义，组合 Geometry/Asset、Socket、Collider Policy、Profile 和 Capability | Primitive Package/Registry Definition 已交付；Normalizer/Plan 要求完整锁定的 Capability Assembly |
 | Subject Instance | 世界中的具体主体，具有独立 Entity ID、Transform、状态和控制权 | 已交付 |
 | Visual Part | Definition 内部的可渲染组成部分，不自动成为独立 Entity | Primitive Part、Golden GLB 与首个产品 G Bot Asset Part 已交付；更多拓扑仍未完成 |
-| Subject Socket | 主体局部空间中的稳定连接点，例如手、座位或拖车钩 | 声明与编译已交付，关系绑定未交付 |
+| Subject Socket | 主体局部空间中的稳定连接点，例如手、站位、座位或拖车钩 | 声明与编译已交付；`mountedOn` S1 已使用 `MountStand` 做运行时投影，seat/tether 仍保留 |
 | Capability/Profile | 运动、控制、物理、动作等可组合能力及其锁定配置 | 首个 Ground Locomotion/Collider Profile 已交付 |
-| Relationship | `mountedOn`、装备、拖拽等实例之间的类型化 Gameplay 关系 | Runtime 控制权已使用 `possessedBy`；通用 Authoring Relationship 仍在 S2 规划中 |
+| Relationship | `mountedOn`、装备、拖拽等实例之间的类型化 Gameplay 关系 | `possessedBy` 与首个 `mountedOn` stand-ground 窄切片已实现；装备、拖拽和通用 S2/S3 仍开放 |
 | Semantic Action | 与具体动画 Clip 解耦的移动、攻击、交互等动作 | Golden 与 G Bot 的 `idle/walk/run/jump` 固定 Tick 地面切片已交付；通用 Action 协议仍未完成 |
 
 主体类别不决定能力。人、马、滑板、汽车、拖车或飞龙都使用同一套
@@ -233,12 +233,12 @@ Socket 和类型化关系表达。
 | 世界输入 | Canonical Authoring V4 → Normalized IR V4 → ExecutionPlan V5；严格 Schema、当前 Registry/Package Definition、八种 Placement Constraint 与确定性 Solver S1 | 通用 Terrain Mask、更多 Constraint、完整 P1.4 WorldPackage 发布格式 |
 | 地形 | 室外 Heightfield、基础 Relief、静态障碍、水域和物理查询 | Canonical Raster/Mask/Region Pipeline；已设计但未实现的 Hybrid Terrain、洞穴、Overhang、多层可行走表面和完整室内 |
 | 主体 | Primitive 人形/四足代理；Golden 与首个产品 G Bot 的 GLB、Rig/Animation/Collider Profile、多实例与独立控制 | 更多产品资产、Compound Collider、LOD、更多拓扑和独立动画资产 |
-| 关系 | Socket 数据可以声明和查询 | 动态 Bind、骑乘、装备、拖拽、Joint、事务与回滚 |
+| 关系 | `possessedBy`；严格 Authoring/Compiler `mountedOn`；Mount/Dismount 原子事务、站位投影、Rider locomotion 暂停与安全下车 | seat/tether、Joint、装备、拖拽、完整坐骑/车辆动力学与 Hosted Builder admission |
 | 运动与相机 | 地面移动、跳跃、第三人称跟随；WaterBody 可查询/可渲染，主体介质只发布 `ground / air` | 游泳与 `movementMedium: water`、第一人称、飞行、车辆、Camera Director 和多 Rig 切换 |
 | 自动化 | validate/build/run/capture、Registry Discovery、Definition Validate、Subject Explain、`verify route`、Browser Protocol V5、Take Driver 与 Control Capture Gate | 持久 Runtime Session、恢复续拍、多人同时控制 |
-| Capture | 单帧截图、World Runtime Snapshot V4、Simulation Take V1、Neutral/Depth/Semantic/Instance/Normal 五 Pass、原子 Bundle | Event/Action/Relationship Receipt、Motion Vector、完整 Replay/Resume 与视频 Adapter |
+| Capture | 单帧截图、World Runtime Snapshot V4、Simulation Take V1、五 Pass、原子 Bundle；Action/Event/Relationship Track 写入与交叉校验已实现 | mounted fixture 的正式多阶段 Bundle verifier、Motion Vector、完整 Replay/Resume 与视频 Adapter |
 | Validation | Canonical Browser Gate、现有物理/构图检查；Capture/Integrity V1；Route 双 Blocking Gate、R1 Heightfield Golden Fixture；R1b 的 11 个 Fixture、完整验证矩阵、Canonical Evidence/Report 与可信 Host 只读投影 | Placement/Physics/Composition/Replay/Performance 接入统一 Report、Profile 组合、compare 与完整生产 Policy |
-| Gameplay | 基础固定输入、Gameplay `possessedBy` 权威控制权与 Golden/G Bot `idle/walk/run/jump` 动作状态；Browser 不提供旁路 `bindControl` | 完整 Semantic Action、姿态、游泳、装备、NPC、导航、任务、战斗、联网 |
+| Gameplay | 基础固定输入、`possessedBy` 权威控制权、Golden/G Bot `idle/walk/run/jump`，以及 `mountedOn` S1 的 Mount/Dismount Action/Event/Receipt；Browser 不提供旁路 `bindControl` | 完整 Action Presentation、姿态、游泳、装备、NPC、导航、任务、战斗、联网 |
 | 最终视觉 | 本地白模渲染 | Render Bridge、实时世界模型和生产 Video Model Adapter |
 
 当前 Route 能力只承诺室外 Heightfield 与普通静态平台地面通行。不要把 H1/H2/H3
