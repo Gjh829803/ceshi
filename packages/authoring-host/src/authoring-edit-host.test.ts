@@ -395,7 +395,7 @@ describe("P16-B1 Authoring/Edit Host", () => {
       changeSet: readableChangeSet,
       mode: "validate",
     }) as never);
-    expect(validated.status).toBe("succeeded");
+    expect(validated.status).toBe("validated");
     await expectHostError(
       () => host.getWorldChangeReceipt(parseWorldChangeReceiptQueryV1({
         kind: "worldkit-world-change-receipt-query",
@@ -436,14 +436,22 @@ describe("P16-B1 Authoring/Edit Host", () => {
     const { host, journal, changeSet, authoringSpecHash } = createHost({
       publishRuntimeReplacement: async ({ persistDurableCommit }) => {
         host.revokeSession();
-        persistDurableCommit({
-          previous,
-          current: {
-            ...previous,
-            worldSessionId: "world-session-32",
-            simulationTick: 0,
-          },
-        });
+        try {
+          persistDurableCommit({
+            previous,
+            current: {
+              ...previous,
+              worldSessionId: "world-session-32",
+              simulationTick: 0,
+            },
+          });
+        } catch {
+          return {
+            status: "rejected",
+            failureKind: "commit-failed",
+            message: "WORLD_CHANGE_COMMIT_DENIED",
+          };
+        }
         return {
           status: "published",
           previous,
@@ -506,10 +514,18 @@ describe("P16-B1 Authoring/Edit Host", () => {
     const { host, changeSet } = createHost({
       publishRuntimeReplacement: async ({ persistDurableCommit }) => {
         host.advanceAuthorizationEpoch();
-        persistDurableCommit({
-          previous,
-          current: { ...previous, worldSessionId: "world-session-32", simulationTick: 0 },
-        });
+        try {
+          persistDurableCommit({
+            previous,
+            current: { ...previous, worldSessionId: "world-session-32", simulationTick: 0 },
+          });
+        } catch {
+          return {
+            status: "rejected",
+            failureKind: "commit-failed",
+            message: "WORLD_CHANGE_COMMIT_DENIED",
+          };
+        }
         return {
           status: "published",
           previous,
@@ -564,7 +580,7 @@ describe("P16-B1 Authoring/Edit Host", () => {
       changeSet,
       mode: "validate",
     }) as never);
-    expect(validated.status).toBe("succeeded");
+    expect(validated.status).toBe("validated");
     const receipt = await host.getWorldChangeReceipt(parseWorldChangeReceiptQueryV1({
       kind: "worldkit-world-change-receipt-query",
       schemaVersion: 1,
