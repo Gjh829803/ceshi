@@ -16,7 +16,7 @@ import type {
   CameraPreviewStateV1,
   ControlCapturePassPayloadV1,
   FixedInputV1,
-  GameplayEventsQueryResultV1,
+  WorldSessionEventsQueryResultV1,
   RuntimeActivityReceiptV1,
   RuntimeControlCaptureFrameV1,
   RouteEvidenceSelectorV1,
@@ -546,7 +546,10 @@ function adapterFixture(
     executeGameplayCommandRuntime: async () => ({
       status: "committed",
     }) as GameplayCommandReceiptV1,
-    gameplayEventsAfterRuntime: () => [],
+    executeCameraViewCommandRuntime: async () => ({
+      status: "committed",
+    }) as import("@whitebox-world/runtime-contracts").CameraViewCommandReceiptV1,
+    worldSessionEventsAfterRuntime: () => [],
     gameplayInspectionSnapshotRuntime: () => gameplayInspectionFixture(),
     worldStateSnapshotRuntime: () => undefined,
     acquireRuntimeActivityRuntime: (request) => ({
@@ -598,8 +601,6 @@ function adapterFixture(
     captureScreenshot: () => "data:image/png;base64,",
     resetRuntime: async () => snapshot,
     setPaused: () => undefined,
-    setCameraViewPreferenceRuntime: () => snapshot,
-    resetCameraViewPreferenceRuntime: () => snapshot,
     adjustCameraViewRuntime: () => snapshot,
     resetCameraViewRuntime: () => snapshot,
     getCameraPreviewStateRuntime: () => ({
@@ -650,7 +651,7 @@ function deferred<T>(): {
 }
 
 describe("installDeferredWorldkitBrowserApi", () => {
-  it("publishes exactly the 39 mandatory V5 own enumerable keys", () => {
+  it("publishes exactly the 38 mandatory V5 own enumerable keys", () => {
     const installation = installDeferredWorldkitBrowserApi({
       target: {},
       statusElement: { dataset: {} },
@@ -663,12 +664,12 @@ describe("installDeferredWorldkitBrowserApi", () => {
       "applySubjectPresetTuning",
       "captureControlFrame",
       "captureScreenshot",
+      "executeCameraViewCommand",
       "executeGameplayCommand",
       "getCameraPreviewState",
       "getCameraSnapshot",
       "getControlCaptureCapabilities",
       "getDiagnostics",
-      "getGameplayEvents",
       "getGameplayInspectionSnapshot",
       "getRouteOverlay",
       "getRoutePathReceipt",
@@ -677,6 +678,7 @@ describe("installDeferredWorldkitBrowserApi", () => {
       "getSnapshot",
       "getSubjectPresetBaseline",
       "getSubjectSnapshot",
+      "getWorldSessionEvents",
       "getWorldStateSnapshot",
       "listCompatibleProfiles",
       "listMotionKernels",
@@ -685,10 +687,8 @@ describe("installDeferredWorldkitBrowserApi", () => {
       "releaseRuntimeActivity",
       "reset",
       "resetCameraView",
-      "resetCameraViewPreference",
       "runFixedInput",
       "runHarness",
-      "setCameraViewPreference",
       "setIntent",
       "setMotionProfile",
       "setPaused",
@@ -774,7 +774,7 @@ describe("installDeferredWorldkitBrowserApi", () => {
     }));
     const adapter = adapterFixture();
     const observedQueries: [number, number][] = [];
-    adapter.gameplayEventsAfterRuntime = (afterEventSequence, maximumEventCount) => {
+    adapter.worldSessionEventsAfterRuntime = (afterEventSequence, maximumEventCount) => {
       observedQueries.push([afterEventSequence, maximumEventCount]);
       return events.filter(({ sequence }) => sequence > afterEventSequence)
         .slice(0, maximumEventCount);
@@ -786,15 +786,15 @@ describe("installDeferredWorldkitBrowserApi", () => {
     });
     await installation.initialization;
 
-    expect(installation.api.getGameplayEvents({
+    expect(installation.api.getWorldSessionEvents({
       afterEventSequence: 0,
       maximumEventCount: 2,
     })).toEqual({
       events: events.slice(0, 2),
       nextAfterEventSequence: 2,
       hasMore: true,
-    } satisfies GameplayEventsQueryResultV1);
-    expect(installation.api.getGameplayEvents({
+    } satisfies WorldSessionEventsQueryResultV1);
+    expect(installation.api.getWorldSessionEvents({
       afterEventSequence: 2,
       maximumEventCount: 2,
     })).toEqual({
@@ -802,7 +802,7 @@ describe("installDeferredWorldkitBrowserApi", () => {
       nextAfterEventSequence: 3,
       hasMore: false,
     });
-    expect(installation.api.getGameplayEvents({
+    expect(installation.api.getWorldSessionEvents({
       afterEventSequence: 3,
       maximumEventCount: 2,
     })).toEqual({
@@ -818,7 +818,7 @@ describe("installDeferredWorldkitBrowserApi", () => {
       { afterEventSequence: 0, maximumEventCount: 257 },
       { afterEventSequence: 0, maximumEventCount: 1, providerHandle: "secret" },
     ]) {
-      expect(() => installation.api.getGameplayEvents(invalidQuery)).toThrowError(
+      expect(() => installation.api.getWorldSessionEvents(invalidQuery)).toThrowError(
         expect.objectContaining({ code: "WORLDKIT_GAMEPLAY_EVENTS_QUERY_INVALID" }),
       );
     }
@@ -829,7 +829,7 @@ describe("installDeferredWorldkitBrowserApi", () => {
           throw new Error("must not execute");
         },
       });
-    expect(() => installation.api.getGameplayEvents(accessorQuery as never))
+    expect(() => installation.api.getWorldSessionEvents(accessorQuery as never))
       .toThrowError(expect.objectContaining({
         code: "WORLDKIT_GAMEPLAY_EVENTS_QUERY_INVALID",
       }));
@@ -925,20 +925,20 @@ describe("installDeferredWorldkitBrowserApi", () => {
     });
     await installation.initialization;
 
-    adapter.gameplayEventsAfterRuntime = () => [
+    adapter.worldSessionEventsAfterRuntime = () => [
       malformedEvent(2, "world-session-test"),
       malformedEvent(1, "world-session-test"),
     ];
-    expect(() => installation.api.getGameplayEvents({
+    expect(() => installation.api.getWorldSessionEvents({
       afterEventSequence: 0,
       maximumEventCount: 2,
     })).toThrowError(expect.objectContaining({
       code: "WORLDKIT_GAMEPLAY_EVENTS_PROTOCOL_INVALID",
     }));
-    adapter.gameplayEventsAfterRuntime = () => [
+    adapter.worldSessionEventsAfterRuntime = () => [
       malformedEvent(1, "world-session-other"),
     ];
-    expect(() => installation.api.getGameplayEvents({
+    expect(() => installation.api.getWorldSessionEvents({
       afterEventSequence: 0,
       maximumEventCount: 2,
     })).toThrowError(expect.objectContaining({
@@ -985,8 +985,6 @@ describe("installDeferredWorldkitBrowserApi", () => {
     const previewRequests: ApplyCameraPreviewRequestV1[] = [];
     let resetCallCount = 0;
     let previewReadCount = 0;
-    const requestedProfileSnapshot = snapshotFixture("walk");
-    const resetProfileSnapshot = snapshotFixture();
     const previewState: CameraPreviewStateV1 = {
       kind: "worldkit-camera-preview-state",
       schemaVersion: 1,
@@ -1015,13 +1013,14 @@ describe("installDeferredWorldkitBrowserApi", () => {
       tuningByProfileRef: appliedPreviewState.tuningByProfileRef,
     };
     const adapter = adapterFixture();
-    adapter.setCameraViewPreferenceRuntime = (preference) => {
-      requestedPreferences.push(preference);
-      return requestedProfileSnapshot;
-    };
-    adapter.resetCameraViewPreferenceRuntime = () => {
-      resetCallCount += 1;
-      return resetProfileSnapshot;
+    adapter.executeCameraViewCommandRuntime = async (command) => {
+      if (command.type === "view.camera-preference.set") {
+        requestedPreferences.push(command.cameraViewPreference);
+      } else {
+        resetCallCount += 1;
+      }
+      return ({ status: "committed" }) as
+        import("@whitebox-world/runtime-contracts").CameraViewCommandReceiptV1;
     };
     adapter.getCameraPreviewStateRuntime = () => {
       previewReadCount += 1;
@@ -1039,17 +1038,30 @@ describe("installDeferredWorldkitBrowserApi", () => {
     await installation.initialization;
 
     const profileRef = "worldkit://camera-profile/first-person.standard@1";
-    expect(installation.api.setCameraViewPreference?.({
-      mode: "camera-rig-profile",
-      cameraRigProfileRef: profileRef,
-    })).toBe(
-      requestedProfileSnapshot,
-    );
+    await installation.api.executeCameraViewCommand({
+      type: "view.camera-preference.set",
+      schemaVersion: 1,
+      id: "camera-command-set",
+      runtimeSessionId: "runtime-session-test",
+      worldSessionId: "world-session-test",
+      cameraEntityId: "camera.local-player",
+      cameraViewPreference: {
+        mode: "camera-rig-profile",
+        cameraRigProfileRef: profileRef,
+      },
+    });
     expect(requestedPreferences).toEqual([{
       mode: "camera-rig-profile",
       cameraRigProfileRef: profileRef,
     }]);
-    expect(installation.api.resetCameraViewPreference?.()).toBe(resetProfileSnapshot);
+    await installation.api.executeCameraViewCommand({
+      type: "view.camera-preference.reset",
+      schemaVersion: 1,
+      id: "camera-command-reset",
+      runtimeSessionId: "runtime-session-test",
+      worldSessionId: "world-session-test",
+      cameraEntityId: "camera.local-player",
+    });
     expect(resetCallCount).toBe(1);
     expect(installation.api.getCameraPreviewState?.()).toBe(previewState);
     expect(previewReadCount).toBe(1);
@@ -1685,7 +1697,7 @@ describe("installDeferredWorldkitBrowserApi", () => {
     expect(Object.isFrozen(diagnostics[0])).toBe(true);
     expect(Object.isFrozen(diagnostics[0]?.details)).toBe(true);
     expect(Object.isFrozen(diagnostics[0]?.details?.measurements)).toBe(true);
-    expect(Object.keys(installation.api)).toHaveLength(39);
+    expect(Object.keys(installation.api)).toHaveLength(38);
     expect(installation.api).not.toHaveProperty("bindControl");
     expect(JSON.stringify(installation.api)).not.toMatch(/solve|search|repair|mutate/i);
   });
@@ -1885,8 +1897,9 @@ describe("createWorldkitBrowserApiV5", () => {
     "getSnapshot",
     "getDiagnostics",
     "executeGameplayCommand",
+    "executeCameraViewCommand",
     "runFixedInput",
-    "getGameplayEvents",
+    "getWorldSessionEvents",
     "getGameplayInspectionSnapshot",
     "getWorldStateSnapshot",
     "acquireRuntimeActivity",
@@ -1907,7 +1920,7 @@ describe("createWorldkitBrowserApiV5", () => {
   it("preserves prior Browser methods, installs V5 on window.__WORLDKIT__, and deep-freezes Route Evidence", () => {
     const api = createWorldkitBrowserApiV5({});
     expect(api.version).toBe(5);
-    expect(Object.keys(api)).toHaveLength(39);
+    expect(Object.keys(api)).toHaveLength(38);
     expect(api).not.toHaveProperty("bindControl");
     for (const methodName of V5_REQUIRED_METHODS) {
       expect(typeof api[methodName]).toBe("function");

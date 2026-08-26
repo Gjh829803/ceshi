@@ -29,6 +29,11 @@ import type {
   RouteSummaryQueryResultV1,
 } from "./browser-route-evidence";
 import type { CameraTuningV1 } from "./camera-parameter-contract";
+import type {
+  CameraViewCommandReceiptV1,
+  CameraViewCommandV1,
+  CameraViewEventV1,
+} from "./camera-view-contract";
 import type { Vec3 } from "./execution-plan";
 
 export type SemanticInputActionV1 =
@@ -356,7 +361,7 @@ export interface SubjectHarnessReportV1 {
 }
 
 export const WORLDKIT_BROWSER_PROTOCOL_VERSION = 5 as const;
-export const WORLDKIT_GAMEPLAY_EVENT_PAGE_MAXIMUM_COUNT = 256 as const;
+export const WORLDKIT_WORLD_SESSION_EVENT_PAGE_MAXIMUM_COUNT = 256 as const;
 
 export interface WorldkitBrowserDiagnosticV1 {
   severity: "info" | "warning" | "error";
@@ -366,13 +371,15 @@ export interface WorldkitBrowserDiagnosticV1 {
   details?: Readonly<Record<string, unknown>>;
 }
 
-export interface GameplayEventsQueryV1 {
+export type WorldSessionEventV1 = GameplayEventV1 | CameraViewEventV1;
+
+export interface WorldSessionEventsQueryV1 {
   readonly afterEventSequence: number;
   readonly maximumEventCount: number;
 }
 
-export interface GameplayEventsQueryResultV1 {
-  readonly events: readonly GameplayEventV1[];
+export interface WorldSessionEventsQueryResultV1 {
+  readonly events: readonly WorldSessionEventV1[];
   readonly nextAfterEventSequence: number;
   readonly hasMore: boolean;
 }
@@ -419,8 +426,13 @@ export interface WorldkitBrowserApiV5 {
   executeGameplayCommand(
     command: GameplayCommandV1,
   ): Promise<GameplayCommandReceiptV1>;
+  executeCameraViewCommand(
+    command: CameraViewCommandV1,
+  ): Promise<CameraViewCommandReceiptV1>;
   runFixedInput(steps: readonly FixedInputV1[]): Promise<WorldRuntimeSnapshotV4>;
-  getGameplayEvents(query: GameplayEventsQueryV1): GameplayEventsQueryResultV1;
+  getWorldSessionEvents(
+    query: WorldSessionEventsQueryV1,
+  ): WorldSessionEventsQueryResultV1;
   getGameplayInspectionSnapshot(): GameplayInspectionSnapshotV1;
   getWorldStateSnapshot(
     request: WorldStateSnapshotRequestV1,
@@ -454,8 +466,6 @@ export interface WorldkitBrowserApiV5 {
     subjectDefinitionRef: string,
   ): SubjectPackageValidationResultV1;
   setIntent(input: FixedInputV1): Promise<WorldRuntimeSnapshotV4>;
-  setCameraViewPreference(preference: CameraViewPreferenceV1): WorldRuntimeSnapshotV4;
-  resetCameraViewPreference(): WorldRuntimeSnapshotV4;
   adjustCameraView(input: CameraViewInputV1): WorldRuntimeSnapshotV4;
   resetCameraView(): WorldRuntimeSnapshotV4;
   getCameraPreviewState(): CameraPreviewStateV1;

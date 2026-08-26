@@ -595,8 +595,9 @@ Incremental Hot Apply，以及哪些 Runtime 状态被保留、重置或替换�
   Domain 不拥有 renderer、physics、Browser、Runtime Session 或 Gameplay State。
 - [ ] GCC-0/GCC-0A/GCC-1：冻结 Browser V5/View clean break 与 committed Gameplay →
   `CameraContextSampleV1` Projection；不得保留旧命令 alias 或从 Render Pose 反推 Context。
-- [ ] GCC-2/GCC-3：把已实现的 Profile admission/Selection/Explain 接入 Registry Lock、
-  唯一 `cameraViewPreference` Command/View State 和原子拒绝语义。
+- [x] GCC-3：唯一 `cameraViewPreference` Command/Receipt/View State 已接入 RuntimeHost；
+  Camera 命令幂等重放、冲突拒绝、统一 Event Sequence、Context/Modifier/Target/fallback 自动变化
+  事件以及 Browser V5 consumer clean break 已闭环。GCC-2 的 Registry Lock 完整覆盖仍单独推进。
 - [x] GCC-4A：CameraDirector 已在提交 View 状态前解析选中 Rig、全部匹配 Modifier 与 Preview
   的最终参数并再次执行 Camera Domain 不变量校验；非法组合稳定拒绝且不修改上一 Camera 状态，
   Preview 也会针对当前 Context 全部可达 Modifier 做写入前组合准入。该子门槛完成不代表
@@ -604,8 +605,9 @@ Incremental Hot Apply，以及哪些 Runtime 状态被保留、重置或替换�
 - [x] GCC-3A：`runtime-contracts` 已冻结唯一 `view.camera-preference.set/reset` Command 与
   `camera.selection.changed` / `camera.target.unbound` Event 关闭协议，包含 Canonical
   Command Hash/Bytes、Event ID、严格字段准入和顺序列表校验。RuntimeHost Receipt、统一
-  Event Sequence 预留、staged View commit 与 Browser/CLI consumer cutover 仍属于 GCC-3B，
-  因此当前不能宣称 Camera Selection Event 已经在运行时发布。
+  GCC-3B 已在 RuntimeHost 建立 Receipt、Event capacity 预留、View revision 提交和统一
+  WorldSession Event 查询；Browser V5 只保留 `executeCameraViewCommand` 与
+  `getWorldSessionEvents`，旧同步 set/reset 与 Gameplay-only Event 查询已删除。
 - [ ] GCC-4/GCC-5：CameraDirector 消费纯 Selection Decision；Mount/Equipment/Flight 事务
   只提交 Camera 输入并与 Gameplay 一起原子回滚。
 - [ ] GCC-6/GCC-7：交付两个 Kit、Registry Lock、Browser/CLI/Take 与两个 Golden Fixture，

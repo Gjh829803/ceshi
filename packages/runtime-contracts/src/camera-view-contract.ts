@@ -28,6 +28,54 @@ export type CameraViewCommandV1 =
   | SetCameraViewPreferenceCommandV1
   | ResetCameraViewPreferenceCommandV1;
 
+interface CameraViewCommandReceiptBaseV1 {
+  readonly kind: "worldkit-camera-view-command-receipt";
+  readonly schemaVersion: 1;
+  readonly id: string;
+  readonly runtimeSessionId: string;
+  readonly worldSessionId: string;
+  readonly cameraEntityId: string;
+  readonly commandId: string;
+  readonly commandHash: `sha256:${string}`;
+  readonly commandType: CameraViewCommandV1["type"];
+  readonly simulationTick: number;
+}
+
+export type CameraViewCommandDiagnosticCodeV1 =
+  | "COMMAND_ID_CONFLICT"
+  | "RUNTIME_SESSION_NOT_FOUND"
+  | "WORLD_SESSION_STALE"
+  | "WORLD_SESSION_NOT_READY"
+  | "CAMERA_ENTITY_STALE"
+  | "CAMERA_PREFERENCE_NOT_ALLOWED"
+  | "CAMERA_FIRST_PERSON_UNAVAILABLE"
+  | "CAMERA_RESOURCE_NOT_LOCKED"
+  | "CAMERA_CONTEXT_RULE_AMBIGUOUS"
+  | "CAMERA_RUNTIME_UPDATE_FAILED"
+  | "VIEW_EVENT_CAPACITY_EXCEEDED";
+
+export interface CameraViewCommandDiagnosticV1 {
+  readonly code: CameraViewCommandDiagnosticCodeV1;
+  readonly message: string;
+}
+
+export type CameraViewCommandReceiptV1 =
+  | (CameraViewCommandReceiptBaseV1 & Readonly<{
+      status: "committed";
+      eventIds: readonly string[];
+      viewStateRevision: number;
+    }>)
+  | (CameraViewCommandReceiptBaseV1 & Readonly<{
+      status: "rejected";
+      eventIds: readonly [];
+      diagnostic: CameraViewCommandDiagnosticV1;
+    }>)
+  | (CameraViewCommandReceiptBaseV1 & Readonly<{
+      status: "failed";
+      eventIds: readonly string[];
+      diagnostic: CameraViewCommandDiagnosticV1;
+    }>);
+
 export type CameraSelectionChangedReasonV1 =
   | "context-changed"
   | "preference-changed"
@@ -266,6 +314,133 @@ export function deriveCameraViewCommandHashV1(input: unknown): `sha256:${string}
   return sha256CanonicalJson(
     parseCameraViewCommandV1(input),
   ) as `sha256:${string}`;
+}
+
+type CameraViewCommandReceiptBodyV1 = CameraViewCommandReceiptV1 extends infer Receipt
+  ? Receipt extends CameraViewCommandReceiptV1 ? Omit<Receipt, "id"> : never
+  : never;
+
+function parseReceiptEventIds(input: unknown): readonly string[] | undefined {
+  return parseStringList(input);
+}
+
+const RECEIPT_DIAGNOSTIC_CODES = new Set<CameraViewCommandDiagnosticCodeV1>([
+  "COMMAND_ID_CONFLICT",
+  "RUNTIME_SESSION_NOT_FOUND",
+  "WORLD_SESSION_STALE",
+  "WORLD_SESSION_NOT_READY",
+  "CAMERA_ENTITY_STALE",
+  "CAMERA_PREFERENCE_NOT_ALLOWED",
+  "CAMERA_FIRST_PERSON_UNAVAILABLE",
+  "CAMERA_RESOURCE_NOT_LOCKED",
+  "CAMERA_CONTEXT_RULE_AMBIGUOUS",
+  "CAMERA_RUNTIME_UPDATE_FAILED",
+  "VIEW_EVENT_CAPACITY_EXCEEDED",
+]);
+
+function parseReceiptDiagnostic(input: unknown): CameraViewCommandDiagnosticV1 | undefined {
+  const record = snapshotDataRecord(input);
+  if (
+    record === undefined ||
+    !hasExactKeys(record, ["code", "message"]) ||
+    typeof record.code !== "string" ||
+    !RECEIPT_DIAGNOSTIC_CODES.has(record.code as CameraViewCommandDiagnosticCodeV1) ||
+    !isNonEmptyString(record.message)
+  ) return undefined;
+  return Object.freeze({
+    code: record.code as CameraViewCommandDiagnosticCodeV1,
+    message: record.message,
+  });
+}
+
+function parseCameraViewCommandReceiptBodyV1(
+  input: unknown,
+): CameraViewCommandReceiptBodyV1 {
+  const schemaName = "CameraViewCommandReceiptV1";
+  const record = snapshotDataRecord(input) ?? invalid(schemaName);
+  const commandTypes = new Set<CameraViewCommandV1["type"]>([
+    "view.camera-preference.set",
+    "view.camera-preference.reset",
+  ]);
+  if (
+    record.kind !== "worldkit-camera-view-command-receipt" ||
+    record.schemaVersion !== 1 ||
+    !isNonEmptyString(record.runtimeSessionId) ||
+    !isNonEmptyString(record.worldSessionId) ||
+    !isNonEmptyString(record.cameraEntityId) ||
+    !isNonEmptyString(record.commandId) ||
+    typeof record.commandHash !== "string" ||
+    !/^sha256:[a-f0-9]{64}$/.test(record.commandHash) ||
+    typeof record.commandType !== "string" ||
+    !commandTypes.has(record.commandType as CameraViewCommandV1["type"]) ||
+    !isSafeNonNegativeInteger(record.simulationTick)
+  ) return invalid(schemaName);
+  const base = {
+    kind: "worldkit-camera-view-command-receipt" as const,
+    schemaVersion: 1 as const,
+    runtimeSessionId: record.runtimeSessionId,
+    worldSessionId: record.worldSessionId,
+    cameraEntityId: record.cameraEntityId,
+    commandId: record.commandId,
+    commandHash: record.commandHash as `sha256:${string}`,
+    commandType: record.commandType as CameraViewCommandV1["type"],
+    simulationTick: record.simulationTick,
+  };
+  const commonKeys = [
+    "kind", "schemaVersion", "runtimeSessionId", "worldSessionId", "cameraEntityId",
+    "commandId", "commandHash", "commandType", "simulationTick",
+    "status", "eventIds",
+  ] as const;
+  const eventIds = parseReceiptEventIds(record.eventIds) ?? invalid(schemaName);
+  if (
+    record.status === "committed" &&
+    hasExactKeys(record, [...commonKeys, "viewStateRevision"]) &&
+    isSafeNonNegativeInteger(record.viewStateRevision)
+  ) {
+    return deepFreeze({
+      ...base,
+      status: "committed",
+      eventIds,
+      viewStateRevision: record.viewStateRevision,
+    });
+  }
+  if (
+    (record.status === "rejected" || record.status === "failed") &&
+    hasExactKeys(record, [...commonKeys, "diagnostic"]) &&
+    (record.status === "failed" || eventIds.length === 0)
+  ) {
+    const diagnostic = parseReceiptDiagnostic(record.diagnostic) ?? invalid(schemaName);
+    return deepFreeze({
+      ...base,
+      status: record.status,
+      eventIds: record.status === "rejected" ? [] as const : eventIds,
+      diagnostic,
+    }) as CameraViewCommandReceiptBodyV1;
+  }
+  return invalid(schemaName);
+}
+
+export function deriveCameraViewCommandReceiptIdV1(input: unknown): string {
+  const body = parseCameraViewCommandReceiptBodyV1(input);
+  const hash = sha256CanonicalJson(body);
+  return `camera-view-receipt:${hash.slice("sha256:".length)}`;
+}
+
+export function parseCameraViewCommandReceiptV1(
+  input: unknown,
+): CameraViewCommandReceiptV1 {
+  const schemaName = "CameraViewCommandReceiptV1";
+  const record = snapshotDataRecord(input) ?? invalid(schemaName);
+  if (!isNonEmptyString(record.id)) return invalid(schemaName);
+  const body = parseCameraViewCommandReceiptBodyV1(Object.fromEntries(
+    Object.entries(record).filter(([key]) => key !== "id"),
+  ));
+  if (record.id !== deriveCameraViewCommandReceiptIdV1(body)) return invalid(schemaName);
+  return deepFreeze({ id: record.id, ...body } as CameraViewCommandReceiptV1);
+}
+
+export function canonicalizeCameraViewCommandReceiptV1(input: unknown): string {
+  return stringifyCanonicalJson(parseCameraViewCommandReceiptV1(input));
 }
 
 export function deriveCameraViewEventIdV1(

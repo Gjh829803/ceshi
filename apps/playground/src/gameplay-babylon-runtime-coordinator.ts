@@ -27,6 +27,7 @@ import {
 } from "@whitebox-world/runtime-babylon";
 import {
   RuntimeHost,
+  type CameraViewSelectionProjectionV1,
   type GameplayWorldAdapterFactoryV1,
   type GameplayWorldPortV1,
   type RuntimeActivityLeaseV1,
@@ -37,6 +38,8 @@ import {
   type WorldSessionPublicationV1,
 } from "@whitebox-world/runtime-host";
 import type {
+  CameraViewCommandReceiptV1,
+  CameraViewCommandV1,
   FixedInputV1,
   RuntimeActivityReceiptV1,
   RuntimeActivityRequestV1,
@@ -399,6 +402,31 @@ function cameraProjection(
   });
 }
 
+function cameraSelectionProjection(
+  runtimeProjection: BabylonRuntimeProjectionV1,
+): CameraViewSelectionProjectionV1 {
+  const camera = runtimeProjection.camera;
+  const selection = camera.selectionDecision;
+  if (selection === undefined || camera.targetEntityId === undefined) {
+    throw new Error("CAMERA_RUNTIME_UPDATE_FAILED: Camera Selection is unavailable.");
+  }
+  return Object.freeze({
+    cameraEntityId: camera.entityId,
+    activeCameraRigProfileRef: selection.activeCameraRigProfileRef,
+    activeCameraModifierRefs: Object.freeze([...selection.activeCameraModifierRefs]),
+    targetEntityId: selection.targetEntityId,
+    matchedCameraContextRuleIds: Object.freeze([...selection.matchedCameraContextRuleIds]),
+    fallbackActive: selection.fallbackActive,
+  });
+}
+
+function optionalCameraSelectionProjection(
+  runtimeProjection: BabylonRuntimeProjectionV1,
+): CameraViewSelectionProjectionV1 | undefined {
+  if (runtimeProjection.possessionTarget.mode === "unbound") return undefined;
+  return cameraSelectionProjection(runtimeProjection);
+}
+
 function subjectProjection(
   worldState: WorldStateSnapshotV1,
 ): WorldRuntimeSnapshotV4["world"]["subjectStatesByEntityId"] {
@@ -687,21 +715,64 @@ export class GameplayBabylonRuntimeCoordinatorV1 {
     return this.host.snapshot().gameplayInspection;
   }
 
-  executeGameplayCommand(
+  async executeGameplayCommand(
     command: GameplayCommandV1,
   ): Promise<GameplayCommandReceiptV1> {
-    return this.host.executeGameplayCommand(command);
+    const previous = optionalCameraSelectionProjection(this.activeRuntime().snapshot());
+    const receipt = await this.host.executeGameplayCommand(command);
+    if (receipt.status !== "committed") return receipt;
+    const next = optionalCameraSelectionProjection(this.activeRuntime().snapshot());
+    if (previous !== undefined && next !== undefined) {
+      await this.host.publishCameraSelectionObservation(previous, next);
+    } else if (
+      previous !== undefined &&
+      next === undefined &&
+      command.type === "control.release"
+    ) {
+      await this.host.publishCameraTargetUnbound(previous, "control-released");
+    }
+    return receipt;
+  }
+
+  executeCameraViewCommand(
+    command: CameraViewCommandV1,
+  ): Promise<CameraViewCommandReceiptV1> {
+    return this.host.executeCameraViewCommand(command, (parsed) => {
+      const runtime = this.activeRuntime();
+      const previous = cameraSelectionProjection(runtime.snapshot());
+      if (previous.cameraEntityId !== parsed.cameraEntityId) {
+        throw new Error("CAMERA_ENTITY_STALE");
+      }
+      if (parsed.type === "view.camera-preference.set") {
+        runtime.setCameraViewPreference(parsed.cameraViewPreference);
+      } else {
+        runtime.resetCameraViewPreference();
+      }
+      const next = cameraSelectionProjection(runtime.snapshot());
+      return Object.freeze({ previous, next });
+    });
   }
 
   async runFixedInput(input: FixedInputV1): Promise<WorldRuntimeSnapshotV4> {
-    await this.host.runFixedInput(input);
+    if (input.ticks === 0) {
+      await this.host.runFixedInput(input);
+      return this.snapshot();
+    }
+    for (let tickIndex = 0; tickIndex < input.ticks; tickIndex += 1) {
+      const previous = optionalCameraSelectionProjection(this.activeRuntime().snapshot());
+      await this.host.runFixedInput(Object.freeze({ ...input, ticks: 1 }));
+      const next = optionalCameraSelectionProjection(this.activeRuntime().snapshot());
+      if (previous !== undefined && next !== undefined) {
+        await this.host.publishCameraSelectionObservation(previous, next);
+      }
+    }
     return this.snapshot();
   }
 
   eventsAfter(
     afterEventSequence: number,
     maximumEventCount: number,
-  ): readonly GameplayEventV1[] {
+  ): ReturnType<RuntimeHost["eventsAfter"]> {
     return this.host.eventsAfter(afterEventSequence, maximumEventCount);
   }
 

@@ -350,6 +350,28 @@ describe("Gameplay Babylon Runtime coordinator", () => {
       worldSessionIdFactory: () => "world-session.mounted-havok",
     });
     const initial = coordinator.snapshot();
+    if (initial.view.camera.mode !== "tracking") {
+      throw new Error("Expected the mounted fixture Camera to be tracking.");
+    }
+    const cameraReceipt = await coordinator.executeCameraViewCommand({
+      type: "view.camera-preference.set",
+      schemaVersion: 1,
+      id: "camera-command.mounted-havok",
+      runtimeSessionId: initial.runtimeSessionId,
+      worldSessionId: initial.worldSessionId,
+      cameraEntityId: initial.view.camera.id,
+      cameraViewPreference: {
+        mode: "camera-rig-profile",
+        cameraRigProfileRef: initial.view.camera.activeCameraProfileRef,
+      },
+    });
+    expect(cameraReceipt).toMatchObject({
+      status: "committed",
+      viewStateRevision: initial.view.viewStateRevision + 1,
+    });
+    expect(coordinator.eventsAfter(0, 10).some((event) =>
+      event.type === "camera.selection.changed"
+    )).toBe(true);
     const mountRequest = {
       id: "mount-skateboard-s1",
       kind: "mount-action-request",

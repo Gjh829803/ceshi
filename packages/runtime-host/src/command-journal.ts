@@ -10,6 +10,12 @@ import {
   type Sha256HashV1,
 } from "@whitebox-world/gameplay-contracts";
 import { isNil } from "lodash-es";
+import {
+  parseCameraViewEventV1,
+  type CameraViewEventV1,
+} from "@whitebox-world/runtime-contracts";
+
+export type WorldSessionEventV1 = GameplayEventV1 | CameraViewEventV1;
 
 interface CommandJournalCapacityV1 {
   readonly maximumIdempotencyRecordCount: number;
@@ -75,13 +81,13 @@ export type CommandJournalReservationResultV1 =
   | Readonly<{ status: "event-capacity-exceeded" }>;
 
 interface EventJournalCapacityReservationV1 {
-  prepare(events: readonly GameplayEventV1[]): PreparedEventJournalPublicationV1;
+  prepare(events: readonly WorldSessionEventV1[]): PreparedEventJournalPublicationV1;
   release(): "released";
 }
 
 interface PreparedEventJournalPublicationV1 {
-  readonly events: readonly GameplayEventV1[];
-  commitPrepared(): readonly GameplayEventV1[];
+  readonly events: readonly WorldSessionEventV1[];
+  commitPrepared(): readonly WorldSessionEventV1[];
 }
 
 type EventJournalReservationResultV1 =
@@ -243,12 +249,20 @@ function parseEventReservationRequest(input: unknown): EventJournalReservationRe
   return Object.freeze({ eventCount: record.eventCount });
 }
 
-function parseEventBundle(input: unknown): readonly GameplayEventV1[] {
+function parseWorldSessionEvent(input: unknown): WorldSessionEventV1 {
+  const record = snapshotPlainRecord(input);
+  if (record?.type === "camera.selection.changed" || record?.type === "camera.target.unbound") {
+    return parseCameraViewEventV1(input);
+  }
+  return parseGameplayEventV1(input);
+}
+
+function parseEventBundle(input: unknown): readonly WorldSessionEventV1[] {
   const eventInputs = snapshotPlainArray(input);
   if (isNil(eventInputs)) {
     throw new RangeError("CommandJournal Event publication is invalid.");
   }
-  return Object.freeze(eventInputs.map((event) => parseGameplayEventV1(event)));
+  return Object.freeze(eventInputs.map(parseWorldSessionEvent));
 }
 
 function parseCommitBundle(input: unknown): Readonly<{
@@ -310,7 +324,7 @@ function parseCommitBundle(input: unknown): Readonly<{
 export class CommandJournal {
   private readonly capacity: CommandJournalCapacityV1;
   private readonly retainedCommandsById = new Map<string, RetainedCommandRecordV1>();
-  private readonly retainedEventsById = new Map<string, GameplayEventV1>();
+  private readonly retainedEventsById = new Map<string, WorldSessionEventV1>();
   private readonly retainedEventSequences = new Set<number>();
   private readonly stagedEventOwnerById = new Map<string, symbol>();
   private readonly stagedEventOwnerBySequence = new Map<number, symbol>();
@@ -352,7 +366,7 @@ export class CommandJournal {
   }
 
   private stageEventClaims(
-    events: readonly GameplayEventV1[],
+    events: readonly WorldSessionEventV1[],
     owner: symbol,
   ): void {
     if (
@@ -399,7 +413,7 @@ export class CommandJournal {
     }
   }
 
-  private retainEvents(events: readonly GameplayEventV1[]): void {
+  private retainEvents(events: readonly WorldSessionEventV1[]): void {
     for (const event of events) {
       this.retainedEventsById.set(event.id, event);
       this.retainedEventSequences.add(event.sequence);
@@ -421,7 +435,7 @@ export class CommandJournal {
     const claimOwner = Symbol("CommandJournal Event reservation");
     let state: "reserved" | "released" | "committed" = "reserved";
     let hasPreparedAlternative = false;
-    let committedEvents: readonly GameplayEventV1[] | undefined;
+    let committedEvents: readonly WorldSessionEventV1[] | undefined;
 
     const releaseReservation = (): void => {
       this.reserved.eventCount -= request.eventCount;
@@ -435,11 +449,11 @@ export class CommandJournal {
         }
         return "released";
       },
-      prepare: (eventsInput: readonly GameplayEventV1[]): PreparedEventJournalPublicationV1 => {
+      prepare: (eventsInput: readonly WorldSessionEventV1[]): PreparedEventJournalPublicationV1 => {
         if (state !== "reserved") {
           throw new Error("CommandJournal Event reservation is no longer available to prepare.");
         }
-        let events: readonly GameplayEventV1[];
+        let events: readonly WorldSessionEventV1[];
         try {
           events = parseEventBundle(eventsInput);
           if (events.length > request.eventCount) {
@@ -457,7 +471,7 @@ export class CommandJournal {
 
         return Object.freeze({
           events,
-          commitPrepared: (): readonly GameplayEventV1[] => {
+          commitPrepared: (): readonly WorldSessionEventV1[] => {
             if (state === "committed" && !isNil(committedEvents)) {
               return committedEvents;
             }
@@ -583,14 +597,14 @@ export class CommandJournal {
     return Object.freeze({ status: "reserved", reservation });
   }
 
-  getEvent(eventId: string): GameplayEventV1 | undefined {
+  getEvent(eventId: string): WorldSessionEventV1 | undefined {
     return this.retainedEventsById.get(eventId);
   }
 
   eventsAfter(
     afterSequenceInput: unknown,
     maximumCountInput: unknown,
-  ): readonly GameplayEventV1[] {
+  ): readonly WorldSessionEventV1[] {
     if (
       !isSafeNonNegativeInteger(afterSequenceInput) ||
       !isSafeNonNegativeInteger(maximumCountInput)

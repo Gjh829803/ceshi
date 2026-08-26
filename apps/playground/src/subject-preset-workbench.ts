@@ -181,8 +181,8 @@ export function cameraPreviewRequestFromDraftV1(
 
 export interface SubjectPresetWorkingDraftTransactionRuntimeV1 {
   getCameraPreviewState(): CameraPreviewStateV1;
-  setCameraRigProfile(profileRef: string): unknown;
-  resetCameraRigProfile(): unknown;
+  setCameraRigProfile(profileRef: string): Promise<unknown>;
+  resetCameraRigProfile(): Promise<unknown>;
   applyCameraPreview(request: ApplyCameraPreviewRequestV1): CameraPreviewStateV1;
   applySubjectPresetTuning(
     request: ApplySubjectPresetTuningRequestV1,
@@ -253,7 +253,7 @@ function parseGameplayProfileSelectionMemento(
  * this Workbench boundary owns the memento and restores both channels if either
  * application step fails.
  */
-export function applySubjectPresetWorkingDraftTransactionV1(input: Readonly<{
+export async function applySubjectPresetWorkingDraftTransactionV1(input: Readonly<{
   draft: SubjectPresetWorkingDraftV1;
   subjectEntityId: string;
   runtimeExpectedSubjectDefinitionHash: string;
@@ -263,7 +263,7 @@ export function applySubjectPresetWorkingDraftTransactionV1(input: Readonly<{
     | null
     | undefined;
   runtime: SubjectPresetWorkingDraftTransactionRuntimeV1;
-}>): SubjectPresetWorkingDraftTransactionResultV1 {
+}>): Promise<SubjectPresetWorkingDraftTransactionResultV1> {
   const previousGameplayProfileSelection = parseGameplayProfileSelectionMemento(
     input.previousGameplayProfileSelection,
   );
@@ -280,11 +280,11 @@ export function applySubjectPresetWorkingDraftTransactionV1(input: Readonly<{
     return { status: "failed", error };
   }
 
-  const restoreCamera = (): void => {
+  const restoreCamera = async (): Promise<void> => {
     if (isNil(input.previousCameraPreferenceRef)) {
-      input.runtime.resetCameraRigProfile();
+      await input.runtime.resetCameraRigProfile();
     } else {
-      input.runtime.setCameraRigProfile(input.previousCameraPreferenceRef);
+      await input.runtime.setCameraRigProfile(input.previousCameraPreferenceRef);
     }
     input.runtime.applyCameraPreview(copyCameraPreviewRequest(previousCameraPreviewState));
   };
@@ -304,7 +304,7 @@ export function applySubjectPresetWorkingDraftTransactionV1(input: Readonly<{
       );
     }
   };
-  const rollback = (restoreGameplayState: boolean): unknown | undefined => {
+  const rollback = async (restoreGameplayState: boolean): Promise<unknown | undefined> => {
     const errors: unknown[] = [];
     if (restoreGameplayState) {
       try {
@@ -314,7 +314,7 @@ export function applySubjectPresetWorkingDraftTransactionV1(input: Readonly<{
       }
     }
     try {
-      restoreCamera();
+      await restoreCamera();
     } catch (error) {
       errors.push(error);
     }
@@ -325,13 +325,13 @@ export function applySubjectPresetWorkingDraftTransactionV1(input: Readonly<{
 
   try {
     if (isNil(input.draft.selectedCameraPreferenceRef)) {
-      input.runtime.resetCameraRigProfile();
+      await input.runtime.resetCameraRigProfile();
     } else {
-      input.runtime.setCameraRigProfile(input.draft.selectedCameraPreferenceRef);
+      await input.runtime.setCameraRigProfile(input.draft.selectedCameraPreferenceRef);
     }
     input.runtime.applyCameraPreview(cameraPreviewRequestFromDraftV1(input.draft));
   } catch (error) {
-    const rollbackError = rollback(false);
+    const rollbackError = await rollback(false);
     return rollbackError === undefined
       ? { status: "failed", error }
       : { status: "rollback-failed", error, rollbackError };
@@ -348,7 +348,7 @@ export function applySubjectPresetWorkingDraftTransactionV1(input: Readonly<{
     if (receipt.status === "committed") {
       return { status: "committed", receipt };
     }
-    const rollbackError = rollback(false);
+      const rollbackError = await rollback(false);
     return rollbackError === undefined
       ? { status: "rejected", receipt }
       : {
@@ -357,7 +357,7 @@ export function applySubjectPresetWorkingDraftTransactionV1(input: Readonly<{
           rollbackError,
         };
   } catch (error) {
-    const rollbackError = rollback(true);
+    const rollbackError = await rollback(true);
     return rollbackError === undefined
       ? { status: "failed", error }
       : { status: "rollback-failed", error, rollbackError };

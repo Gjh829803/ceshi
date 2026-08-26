@@ -395,7 +395,7 @@ interface WorldkitBrowserApiV5 {
   getDiagnostics(): readonly WorldkitBrowserDiagnosticV1[];
   executeGameplayCommand(command: GameplayCommandV1): Promise<GameplayCommandReceiptV1>;
   runFixedInput(steps: readonly FixedInputV1[]): Promise<WorldRuntimeSnapshotV4>;
-  getGameplayEvents(query: GameplayEventsQueryV1): GameplayEventsQueryResultV1;
+  getWorldSessionEvents(query: WorldSessionEventsQueryV1): WorldSessionEventsQueryResultV1;
   getGameplayInspectionSnapshot(): GameplayInspectionSnapshotV1;
   getWorldStateSnapshot(request: WorldStateSnapshotRequestV1): WorldStateSnapshotV1;
   acquireRuntimeActivity(request: RuntimeActivityRequestV1): RuntimeActivityReceiptV1;

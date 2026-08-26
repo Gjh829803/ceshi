@@ -76,7 +76,7 @@ ready
   -> 检查 committed Receipt
   -> runFixedInput([{ actions, axes?, ticks }])
   -> 按 worldStateAfterRef 查询 WorldStateSnapshotV1
-  -> 用 getGameplayEvents 增量读取 Event
+  -> 用 getWorldSessionEvents 增量读取统一 WorldSession Event
 ```
 
 CLI、Browser 和生成类型使用同一组字段名。任何 unknown field、unknown version、非有限数字、
@@ -102,7 +102,7 @@ interface GameplayBrowserSubset {
     steps: readonly FixedInputV1[],
   ): Promise<WorldRuntimeSnapshotV4>;
 
-  getGameplayEvents(query: GameplayEventsQueryV1): GameplayEventsQueryResultV1;
+  getWorldSessionEvents(query: WorldSessionEventsQueryV1): WorldSessionEventsQueryResultV1;
   getGameplayInspectionSnapshot(): GameplayInspectionSnapshotV1;
   getWorldStateSnapshot(
     request: WorldStateSnapshotRequestV1,
@@ -226,7 +226,7 @@ Rejected Receipt 使用 `status: "rejected"`、空 `eventIds` 和
 - `relationship.removed`：旧 `possessedBy` 已移除；
 - `relationship.committed`：新 `possessedBy` 已提交。
 
-Event `sequence` 在同一 World Session 内严格递增。`getGameplayEvents()` 的 cursor 是
+Event `sequence` 在同一 World Session 内严格递增。`getWorldSessionEvents()` 的 cursor 是
 exclusive；空页的 `nextAfterEventSequence` 等于输入 cursor。
 
 `getWorldStateSnapshot({ worldStateRef })` 只接受属于当前 World Session、且仍被 Host 保留的

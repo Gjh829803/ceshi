@@ -65,6 +65,30 @@ const runtimeRoute = resolvePlaygroundRuntimeRoute(
   sceneCatalog,
 );
 const authoringMode = runtimeRoute.mode === "authoring";
+let cameraViewCommandSequence = 0;
+
+async function executeCameraPreference(
+  api: WorldkitBrowserApiV5,
+  preference?: import("@whitebox-world/runtime-contracts").CameraViewPreferenceV1,
+): Promise<void> {
+  const snapshot = api.getSnapshot();
+  if (snapshot.view.camera.mode !== "tracking") {
+    throw new Error("CAMERA_ENTITY_STALE");
+  }
+  cameraViewCommandSequence += 1;
+  const receipt = await api.executeCameraViewCommand({
+    type: preference === undefined
+      ? "view.camera-preference.reset"
+      : "view.camera-preference.set",
+    schemaVersion: 1,
+    id: `browser-camera-view-command-${cameraViewCommandSequence}`,
+    runtimeSessionId: snapshot.runtimeSessionId,
+    worldSessionId: snapshot.worldSessionId,
+    cameraEntityId: snapshot.view.camera.id,
+    ...(preference === undefined ? {} : { cameraViewPreference: preference }),
+  } as import("@whitebox-world/runtime-contracts").CameraViewCommandV1);
+  if (receipt.status !== "committed") throw new Error(receipt.diagnostic.code);
+}
 
 interface AuthoringStartupDebugV1 {
   stage: string;
@@ -528,8 +552,8 @@ interface TuningWorkbenchContextV1 {
 
 interface TuningWorkbenchControllerV1 {
   setCameraPreferenceFromCompact(preference: string): void;
-  setSelectedMotionProfileFromCompact(motionProfileRef: string): boolean;
-  reapplyWorkingDraftAfterSimulationReset(): void;
+  setSelectedMotionProfileFromCompact(motionProfileRef: string): Promise<boolean>;
+  reapplyWorkingDraftAfterSimulationReset(): Promise<void>;
   exportPublicationCandidate(): Promise<boolean>;
   bindAdapterDiagnostics(adapter: BabylonWorldAdapter): () => void;
 }
@@ -878,13 +902,14 @@ function installTuningWorkbench(
     return receipt.value;
   };
 
-  const applyWorkingDraftAtomically = (draft: SubjectPresetWorkingDraftV1): boolean => {
+  const applyWorkingDraftAtomically = async (
+    draft: SubjectPresetWorkingDraftV1,
+  ): Promise<boolean> => {
     if (
       api.applySubjectPresetTuning === undefined ||
       api.getSubjectSnapshot === undefined ||
       api.getCameraPreviewState === undefined ||
-      api.setCameraViewPreference === undefined ||
-      api.resetCameraViewPreference === undefined ||
+      api.executeCameraViewCommand === undefined ||
       api.applyCameraPreview === undefined
     ) {
       return false;
@@ -898,7 +923,7 @@ function installTuningWorkbench(
       saveStatus.textContent = "版本没有应用：当前主体与草稿锁定的定义不匹配";
       return false;
     }
-    const result = applySubjectPresetWorkingDraftTransactionV1({
+    const result = await applySubjectPresetWorkingDraftTransactionV1({
       draft,
       subjectEntityId: workbenchContext.controlledEntityId,
       runtimeExpectedSubjectDefinitionHash: activeSubject.entityState.entityDefinitionHash,
@@ -906,11 +931,11 @@ function installTuningWorkbench(
       previousGameplayProfileSelection: appliedGameplayProfileSelection,
       runtime: {
         getCameraPreviewState: () => api.getCameraPreviewState!(),
-        setCameraRigProfile: (profileRef) => api.setCameraViewPreference!({
+        setCameraRigProfile: (profileRef) => executeCameraPreference(api, {
           mode: "camera-rig-profile",
           cameraRigProfileRef: profileRef,
         }),
-        resetCameraRigProfile: () => api.resetCameraViewPreference!(),
+        resetCameraRigProfile: () => executeCameraPreference(api),
         applyCameraPreview: (request) => api.applyCameraPreview!(request),
         applySubjectPresetTuning: (request) => api.applySubjectPresetTuning!(request),
       },
@@ -949,8 +974,10 @@ function installTuningWorkbench(
     if (initialDraft !== undefined) {
       loadDraftIntoTuningState(initialDraft);
       const normalizedDraft = persistWorkingDraft();
-      if (normalizedDraft !== undefined && !applyWorkingDraftAtomically(normalizedDraft)) {
-        resetTuningStateToRegistry();
+      if (normalizedDraft !== undefined) {
+        void applyWorkingDraftAtomically(normalizedDraft).then((applied) => {
+          if (!applied) resetTuningStateToRegistry();
+        });
       }
     }
   }
@@ -1346,9 +1373,9 @@ function installTuningWorkbench(
       card.innerHTML = `<div><strong>${escapeHtml(row.displayName)}</strong><p>${escapeHtml(row.description)}</p></div><button type="button">${row.resourceRef === cameraPreference ? "当前正在使用" : "应用并预览"}</button>`;
       const button = card.querySelector("button")!;
       button.disabled = row.resourceRef === cameraPreference;
-      button.addEventListener("click", () => {
+      button.addEventListener("click", async () => {
         try {
-          api.setCameraViewPreference?.({
+          await executeCameraPreference(api, {
             mode: "camera-rig-profile",
             cameraRigProfileRef: row.resourceRef,
           });
@@ -1393,7 +1420,7 @@ function installTuningWorkbench(
     motionSelect.disabled = uniqueMotionProfiles.length === 0;
     syncMotionSelect();
   };
-  const applySelectedMotion = (motionProfileRef: string): boolean => {
+  const applySelectedMotion = async (motionProfileRef: string): Promise<boolean> => {
     if (!uniqueMotionProfiles.some((profile) => profile.resourceRef === motionProfileRef)) {
       return false;
     }
@@ -1401,10 +1428,10 @@ function installTuningWorkbench(
     syncMotionSelect();
     const draft = persistWorkingDraft();
     if (draft === undefined) return false;
-    return applyWorkingDraftAtomically(draft);
+    return await applyWorkingDraftAtomically(draft);
   };
-  motionSelect.addEventListener("change", () => {
-    if (!applySelectedMotion(motionSelect.value)) {
+  motionSelect.addEventListener("change", async () => {
+    if (!await applySelectedMotion(motionSelect.value)) {
       syncMotionSelect();
       saveStatus.textContent = "运动算法未能切换，已保留上一组锁定配置";
       return;
@@ -1481,13 +1508,13 @@ function installTuningWorkbench(
       const restoreButton = document.createElement("button");
       restoreButton.type = "button";
       restoreButton.textContent = "恢复并应用";
-      restoreButton.addEventListener("click", () => {
+      restoreButton.addEventListener("click", async () => {
         const previousDraft = createCurrentWorkingDraft();
         try {
           const restored = localRepository.restoreVersion(version.localVersionId).value;
           loadDraftIntoTuningState(restored);
           const normalized = persistWorkingDraft();
-          if (normalized === undefined || !applyWorkingDraftAtomically(normalized)) {
+          if (normalized === undefined || !await applyWorkingDraftAtomically(normalized)) {
             if (previousDraft !== undefined) {
               loadDraftIntoTuningState(previousDraft);
               localRepository.saveWorkingDraft(previousDraft);
@@ -1686,10 +1713,10 @@ function installTuningWorkbench(
       renderCameraSliders();
       persistWorkingDraft();
     },
-    setSelectedMotionProfileFromCompact(motionProfileRef: string): boolean {
+    setSelectedMotionProfileFromCompact(motionProfileRef: string): Promise<boolean> {
       return applySelectedMotion(motionProfileRef);
     },
-    reapplyWorkingDraftAfterSimulationReset(): void {
+    async reapplyWorkingDraftAfterSimulationReset(): Promise<void> {
       appliedCameraPreferenceRef = null;
       appliedGameplayProfileSelection = {
         motionProfileRef: defaultMotion?.resourceRef ?? "",
@@ -1697,7 +1724,7 @@ function installTuningWorkbench(
       };
       const draft = createCurrentWorkingDraft();
       if (draft === undefined) return;
-      applyWorkingDraftAtomically(draft);
+      await applyWorkingDraftAtomically(draft);
     },
     exportPublicationCandidate(): Promise<boolean> {
       return exportCurrent();
@@ -1857,19 +1884,17 @@ function installCapabilityAuthoringPanel(
     : defaultCameraPreference;
   if (!isNil(selectedCameraPreference)) {
     cameraSelect.value = selectedCameraPreference;
-    try {
-      api.setCameraViewPreference?.({
+    void executeCameraPreference(api, {
         mode: "camera-rig-profile",
         cameraRigProfileRef: selectedCameraPreference,
-      });
-    } catch {
+      }).catch(async () => {
       if (
         !isNil(defaultCameraPreference) &&
         defaultCameraPreference !== selectedCameraPreference
       ) {
         cameraSelect.value = defaultCameraPreference;
         try {
-          api.setCameraViewPreference?.({
+          await executeCameraPreference(api, {
             mode: "camera-rig-profile",
             cameraRigProfileRef: defaultCameraPreference,
           });
@@ -1877,7 +1902,7 @@ function installCapabilityAuthoringPanel(
           // The Runtime retains its current profile when both explicit requests fail.
         }
       }
-    }
+    });
   }
   const camera = snapshot.view.camera;
   context.innerHTML = `
@@ -1964,12 +1989,12 @@ function installCapabilityAuthoringPanel(
   packageSelect.addEventListener("change", () => {
     navigateToSubjectPackage(packageSelect.value);
   });
-  cameraSelect.addEventListener("change", () => {
+  cameraSelect.addEventListener("change", async () => {
     try {
       if (cameraSelect.value === "auto") {
-        api.resetCameraViewPreference?.();
+        await executeCameraPreference(api);
       } else {
-        api.setCameraViewPreference?.({
+        await executeCameraPreference(api, {
           mode: "camera-rig-profile",
           cameraRigProfileRef: cameraSelect.value,
         });
@@ -1980,10 +2005,10 @@ function installCapabilityAuthoringPanel(
       harnessOutput.textContent = authoringActionFailure();
     }
   });
-  requiredElement<HTMLButtonElement>("#fallback-button").addEventListener("click", () => {
+  requiredElement<HTMLButtonElement>("#fallback-button").addEventListener("click", async () => {
     const fallback = motionProfiles.find((row) => row.role === "fallback");
     if (fallback === undefined) return;
-    if (!tuningWorkbench.setSelectedMotionProfileFromCompact(fallback.resourceRef)) {
+    if (!await tuningWorkbench.setSelectedMotionProfileFromCompact(fallback.resourceRef)) {
       harnessOutput.textContent = authoringActionFailure();
       return;
     }
@@ -2366,7 +2391,9 @@ if (runtimeRoute.mode === "unknown") {
         resetSimulation: async () => {
           await browserInstallation.api.reset();
         },
-        afterSimulationReset: () => workbench?.reapplyWorkingDraftAfterSimulationReset(),
+        afterSimulationReset: () => {
+          void workbench?.reapplyWorkingDraftAfterSimulationReset();
+        },
       });
     },
     rollbackPageState() {

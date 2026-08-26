@@ -472,6 +472,133 @@ describe("WorldSession command transaction", () => {
   });
 });
 
+describe("WorldSession Camera View command transaction", () => {
+  const cameraCommand = (id = "camera-command.set") => ({
+    type: "view.camera-preference.set" as const,
+    schemaVersion: 1 as const,
+    id,
+    runtimeSessionId: RUNTIME_SESSION_ID,
+    worldSessionId: WORLD_SESSION_ID,
+    cameraEntityId: "camera.local-player",
+    cameraViewPreference: { mode: "first-person" as const },
+  });
+  const selection = (profileRef: string) => Object.freeze({
+    cameraEntityId: "camera.local-player",
+    activeCameraRigProfileRef: profileRef,
+    activeCameraModifierRefs: Object.freeze(["worldkit://camera-modifier/collision@1"]),
+    targetEntityId: heroState.id,
+    matchedCameraContextRuleIds: Object.freeze(["ground"]),
+    fallbackActive: false,
+  });
+
+  it("commits one View revision and Camera Event, then replays idempotently", async () => {
+    const { options } = createHarnessAndOptions();
+    const session = await WorldSession.create(options);
+    let executionCount = 0;
+    const executor = async () => {
+      executionCount += 1;
+      return {
+        previous: selection("worldkit://camera-profile/orbit@1"),
+        next: selection("worldkit://camera-profile/first-person@1"),
+      };
+    };
+
+    const first = await session.executeCameraViewCommand(cameraCommand(), executor);
+    const replay = await session.executeCameraViewCommand(cameraCommand(), executor);
+
+    expect(replay).toBe(first);
+    expect(executionCount).toBe(1);
+    expect(first).toMatchObject({
+      status: "committed",
+      viewStateRevision: 1,
+      eventIds: [`camera-view-event:${WORLD_SESSION_ID}:1`],
+    });
+    expect(session.snapshot()).toMatchObject({
+      publicationEpoch: 1,
+      viewState: { viewStateRevision: 1 },
+      gameplayInspection: { lastEventSequence: 1 },
+    });
+    expect(session.eventsAfter(0, 10)).toMatchObject([{
+      type: "camera.selection.changed",
+      sequence: 1,
+      reason: "preference-changed",
+      previousCameraRigProfileRef: "worldkit://camera-profile/orbit@1",
+      activeCameraRigProfileRef: "worldkit://camera-profile/first-person@1",
+    }]);
+  });
+
+  it("rejects conflicts and runtime failures without publishing a View revision", async () => {
+    const { options } = createHarnessAndOptions();
+    const session = await WorldSession.create(options);
+    const rejected = await session.executeCameraViewCommand(
+      cameraCommand("camera-command.rejected"),
+      () => { throw new Error("CAMERA_FIRST_PERSON_UNAVAILABLE"); },
+    );
+    expect(rejected).toMatchObject({
+      status: "rejected",
+      diagnostic: { code: "CAMERA_FIRST_PERSON_UNAVAILABLE" },
+    });
+    const conflict = await session.executeCameraViewCommand({
+      ...cameraCommand("camera-command.rejected"),
+      cameraViewPreference: { mode: "auto" as const },
+    }, async () => ({
+      previous: selection("before"),
+      next: selection("after"),
+    }));
+    expect(conflict).toMatchObject({
+      status: "rejected",
+      diagnostic: { code: "COMMAND_ID_CONFLICT" },
+    });
+    expect(session.snapshot()).toMatchObject({
+      publicationEpoch: 0,
+      viewState: { viewStateRevision: 0 },
+      gameplayInspection: { lastEventSequence: 0 },
+    });
+    expect(session.eventsAfter(0, 10)).toEqual([]);
+  });
+
+  it("shares the next Event sequence with following Gameplay commits", async () => {
+    const { harness, options } = createHarnessAndOptions();
+    const session = await WorldSession.create(options);
+    await session.executeCameraViewCommand(cameraCommand(), async () => ({
+      previous: selection("before"),
+      next: selection("after"),
+    }));
+    harness.queuePreparedTransition({
+      projectedWorldStateAfter: projection(),
+      projectedViewStateAfter: { viewStateRevision: 2 },
+    });
+    const gameplayReceipt = await session.executeGameplayCommand(bindCommand());
+    expect(gameplayReceipt.eventIds).toEqual([
+      `gameplay-event:${WORLD_SESSION_ID}:2`,
+    ]);
+    expect(session.eventsAfter(0, 10).map((event) => event.sequence)).toEqual([1, 2]);
+  });
+
+  it("publishes automatic Context changes and explicit target unbinds in sequence", async () => {
+    const { options } = createHarnessAndOptions();
+    const session = await WorldSession.create(options);
+    const before = selection("worldkit://camera-profile/orbit@1");
+    const mounted = {
+      ...selection("worldkit://camera-profile/orbit@1"),
+      targetEntityId: "entity.skateboard",
+      activeCameraModifierRefs: ["worldkit://camera-modifier/mounted@1"],
+      matchedCameraContextRuleIds: ["mounted"],
+    };
+    await session.publishCameraSelectionObservation(before, mounted);
+    await session.publishCameraTargetUnbound(mounted, "control-released");
+    expect(session.eventsAfter(0, 10)).toMatchObject([
+      { type: "camera.selection.changed", sequence: 1, reason: "target-rebound" },
+      { type: "camera.target.unbound", sequence: 2, reason: "control-released" },
+    ]);
+    expect(session.snapshot()).toMatchObject({
+      publicationEpoch: 2,
+      viewState: { viewStateRevision: 2 },
+      gameplayInspection: { lastEventSequence: 2 },
+    });
+  });
+});
+
 describe("WorldSession fixed input", () => {
   it("returns the same publication for zero Ticks without consulting the Adapter", async () => {
     const { harness, options } = createHarnessAndOptions();

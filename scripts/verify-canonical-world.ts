@@ -62,8 +62,9 @@ const BROWSER_PROTOCOL_V5_METHOD_NAMES = [
   "getSnapshot",
   "getDiagnostics",
   "executeGameplayCommand",
+  "executeCameraViewCommand",
   "runFixedInput",
-  "getGameplayEvents",
+  "getWorldSessionEvents",
   "getGameplayInspectionSnapshot",
   "getWorldStateSnapshot",
   "acquireRuntimeActivity",
@@ -81,8 +82,6 @@ const BROWSER_PROTOCOL_V5_METHOD_NAMES = [
   "getSubjectPresetBaseline",
   "validateSubjectPackage",
   "setIntent",
-  "setCameraViewPreference",
-  "resetCameraViewPreference",
   "adjustCameraView",
   "resetCameraView",
   "getCameraPreviewState",
@@ -526,7 +525,7 @@ async function verifyBrowserProtocolAndPhysics(): Promise<{
         forbiddenNames: FORBIDDEN_BROWSER_ROUTE_AUTHORITY_NAMES,
       },
     );
-    assert.equal(BROWSER_PROTOCOL_V5_METHOD_NAMES.length, 38);
+    assert.equal(BROWSER_PROTOCOL_V5_METHOD_NAMES.length, 37);
     assert.deepEqual(browserProtocol.missingMethodNames, []);
     assert.deepEqual(browserProtocol.forbiddenAuthorityNames, []);
     assert.deepEqual(

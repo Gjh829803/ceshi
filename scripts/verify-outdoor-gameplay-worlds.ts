@@ -438,7 +438,8 @@ async function verifyArtifactRoute(
       | undefined;
     const forbiddenGameplayMethodNames = [
       "executeGameplayCommand",
-      "getGameplayEvents",
+      "executeCameraViewCommand",
+      "getWorldSessionEvents",
       "getGameplayInspectionSnapshot",
       "getSnapshot",
       "reset",

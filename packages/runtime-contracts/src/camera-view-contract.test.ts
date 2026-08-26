@@ -5,9 +5,12 @@ import {
   cameraViewEventCanonicalBytesV1,
   canonicalizeCameraViewCommandV1,
   canonicalizeCameraViewEventV1,
+  canonicalizeCameraViewCommandReceiptV1,
   deriveCameraViewCommandHashV1,
+  deriveCameraViewCommandReceiptIdV1,
   deriveCameraViewEventIdV1,
   parseCameraViewCommandV1,
+  parseCameraViewCommandReceiptV1,
   parseCameraViewEventV1,
 } from "./camera-view-contract";
 
@@ -177,5 +180,54 @@ describe("Camera View Event V1", () => {
       fallbackActive: false,
       reason: "preference-changed",
     })).toThrow(/CameraViewEventV1/);
+  });
+});
+
+describe("Camera View Command Receipt V1", () => {
+  it("derives a canonical committed receipt with View revision evidence", () => {
+    const body = {
+      kind: "worldkit-camera-view-command-receipt",
+      schemaVersion: 1,
+      ...session,
+      commandId: "camera-command-1",
+      commandHash: `sha256:${"a".repeat(64)}`,
+      commandType: "view.camera-preference.set",
+      simulationTick: 42,
+      status: "committed",
+      eventIds: [deriveCameraViewEventIdV1(session.worldSessionId, 7)],
+      viewStateRevision: 3,
+    } as const;
+    const receipt = parseCameraViewCommandReceiptV1({
+      id: deriveCameraViewCommandReceiptIdV1(body),
+      ...body,
+    });
+    expect(receipt).toEqual({ id: deriveCameraViewCommandReceiptIdV1(body), ...body });
+    expect(canonicalizeCameraViewCommandReceiptV1(receipt)).toContain(
+      '"kind":"worldkit-camera-view-command-receipt"',
+    );
+  });
+
+  it("rejects malformed and self-inconsistent receipts", () => {
+    const body = {
+      kind: "worldkit-camera-view-command-receipt",
+      schemaVersion: 1,
+      ...session,
+      commandId: "camera-command-2",
+      commandHash: `sha256:${"b".repeat(64)}`,
+      commandType: "view.camera-preference.reset",
+      simulationTick: 42,
+      status: "rejected",
+      eventIds: [],
+      diagnostic: {
+        code: "CAMERA_PREFERENCE_NOT_ALLOWED",
+        message: "Preference rejected.",
+      },
+    } as const;
+    expect(() => parseCameraViewCommandReceiptV1({ id: "wrong", ...body }))
+      .toThrow(/CameraViewCommandReceiptV1/);
+    expect(() => deriveCameraViewCommandReceiptIdV1({
+      ...body,
+      eventIds: ["camera-view-event:world-1:1"],
+    })).toThrow(/CameraViewCommandReceiptV1/);
   });
 });

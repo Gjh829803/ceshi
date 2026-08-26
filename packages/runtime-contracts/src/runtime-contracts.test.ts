@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   WORLDKIT_BROWSER_PROTOCOL_VERSION,
-  WORLDKIT_GAMEPLAY_EVENT_PAGE_MAXIMUM_COUNT,
+  WORLDKIT_WORLD_SESSION_EVENT_PAGE_MAXIMUM_COUNT,
   EXECUTION_RESOURCE_KINDS_V1,
   canonicalExecutionResourceLockEntriesV1,
   canonicalWorldkitBrowserRouteEvidencePublicationV2,
@@ -19,8 +19,8 @@ import {
   type ExecutionPlanV5,
   type ExecutionTraversalSurfaceV1,
   type FixedInputV1,
-  type GameplayEventsQueryV1,
-  type GameplayEventsQueryResultV1,
+  type WorldSessionEventsQueryV1,
+  type WorldSessionEventsQueryResultV1,
   type RuntimeActivityRequestV1,
   type RuntimeActivityReceiptV1,
   type WorldStateSnapshotRequestV1,
@@ -564,8 +564,9 @@ describe("runtime contracts V3", () => {
       getSnapshot: () => snapshot,
       getDiagnostics: () => [diagnostic],
       executeGameplayCommand: async () => ({}) as never,
+      executeCameraViewCommand: async () => ({}) as never,
       runFixedInput: async () => snapshot,
-      getGameplayEvents: ({ afterEventSequence }) => ({
+      getWorldSessionEvents: ({ afterEventSequence }) => ({
         events: [],
         nextAfterEventSequence: afterEventSequence,
         hasMore: false,
@@ -622,8 +623,6 @@ describe("runtime contracts V3", () => {
       getSubjectPresetBaseline: () => ({}) as never,
       validateSubjectPackage: () => ({}) as never,
       setIntent: async () => snapshot,
-      setCameraViewPreference: () => snapshot,
-      resetCameraViewPreference: () => snapshot,
       adjustCameraView: () => snapshot,
       resetCameraView: () => snapshot,
       getCameraPreviewState: () => ({}) as never,
@@ -667,7 +666,7 @@ describe("runtime contracts V3", () => {
     await expect(api.ready()).resolves.toBe(snapshot);
     await expect(api.reset()).resolves.toBe(snapshot);
     expect(api.getDiagnostics()).toEqual([diagnostic]);
-    expect(Object.keys(api).sort()).toHaveLength(39);
+    expect(Object.keys(api).sort()).toHaveLength(38);
     expect(api).not.toHaveProperty("bindControl");
     expect(snapshot).not.toHaveProperty("controlledEntityId");
     expect(snapshot.world).not.toHaveProperty("controlledEntityId");
@@ -882,8 +881,9 @@ describe("runtime contracts V5 Route Evidence", () => {
       getSnapshot: () => snapshot,
       getDiagnostics: () => [],
       executeGameplayCommand: async () => ({}) as never,
+      executeCameraViewCommand: async () => ({}) as never,
       runFixedInput: async () => snapshot,
-      getGameplayEvents: ({ afterEventSequence }) => ({
+      getWorldSessionEvents: ({ afterEventSequence }) => ({
         events: [],
         nextAfterEventSequence: afterEventSequence,
         hasMore: false,
@@ -905,8 +905,6 @@ describe("runtime contracts V5 Route Evidence", () => {
       getSubjectPresetBaseline: () => ({}) as never,
       validateSubjectPackage: () => ({}) as never,
       setIntent: async () => snapshot,
-      setCameraViewPreference: () => snapshot,
-      resetCameraViewPreference: () => snapshot,
       adjustCameraView: () => snapshot,
       resetCameraView: () => snapshot,
       getCameraPreviewState: () => ({}) as never,
@@ -952,12 +950,12 @@ describe("runtime contracts V5 Route Evidence", () => {
       "applySubjectPresetTuning",
       "captureControlFrame",
       "captureScreenshot",
+      "executeCameraViewCommand",
       "executeGameplayCommand",
       "getCameraPreviewState",
       "getCameraSnapshot",
       "getControlCaptureCapabilities",
       "getDiagnostics",
-      "getGameplayEvents",
       "getGameplayInspectionSnapshot",
       "getRouteOverlay",
       "getRoutePathReceipt",
@@ -966,6 +964,7 @@ describe("runtime contracts V5 Route Evidence", () => {
       "getSnapshot",
       "getSubjectPresetBaseline",
       "getSubjectSnapshot",
+      "getWorldSessionEvents",
       "getWorldStateSnapshot",
       "listCompatibleProfiles",
       "listMotionKernels",
@@ -974,10 +973,8 @@ describe("runtime contracts V5 Route Evidence", () => {
       "releaseRuntimeActivity",
       "reset",
       "resetCameraView",
-      "resetCameraViewPreference",
       "runFixedInput",
       "runHarness",
-      "setCameraViewPreference",
       "setIntent",
       "setMotionProfile",
       "setPaused",
@@ -992,13 +989,13 @@ describe("runtime contracts V5 Route Evidence", () => {
   it("publishes exact gameplay query, world-state lookup, and Activity wire DTOs", () => {
     const query = {
       afterEventSequence: 17,
-      maximumEventCount: WORLDKIT_GAMEPLAY_EVENT_PAGE_MAXIMUM_COUNT,
-    } satisfies GameplayEventsQueryV1;
+      maximumEventCount: WORLDKIT_WORLD_SESSION_EVENT_PAGE_MAXIMUM_COUNT,
+    } satisfies WorldSessionEventsQueryV1;
     const queryResult = {
       events: [],
       nextAfterEventSequence: 17,
       hasMore: false,
-    } satisfies GameplayEventsQueryResultV1;
+    } satisfies WorldSessionEventsQueryResultV1;
     const worldStateRequest = {
       worldStateRef: "world-state:test:17",
     } satisfies WorldStateSnapshotRequestV1;
@@ -1022,7 +1019,7 @@ describe("runtime contracts V5 Route Evidence", () => {
       },
     } satisfies RuntimeActivityReceiptV1;
 
-    expect(WORLDKIT_GAMEPLAY_EVENT_PAGE_MAXIMUM_COUNT).toBe(256);
+    expect(WORLDKIT_WORLD_SESSION_EVENT_PAGE_MAXIMUM_COUNT).toBe(256);
     expect(Object.keys(query).sort()).toEqual([
       "afterEventSequence",
       "maximumEventCount",
