@@ -1,3 +1,4 @@
+import type { WorldChangeCleanupReportV1 } from "@whitebox-world/authoring-edit";
 import { isNil } from "lodash-es";
 
 import type {
@@ -12,6 +13,7 @@ class WorldChangeJournal implements WorldChangeJournalV1 {
   public readonly records = new Map<string, DurableRequestRecordV1>();
   public readonly changeSetHashes = new Map<string, DurableRequestRecordV1["changeSetHash"]>();
   public readonly revisions = new Map<string, AuthoringRevisionHeadV1>();
+  public readonly cleanupReports = new Map<string, WorldChangeCleanupReportV1>();
   public revisionSequence = 0;
   public fencingToken: string | undefined;
 }
@@ -32,6 +34,13 @@ export function requestJournalKeyV1(
 
 export function changeSetJournalKeyV1(worldId: string, changeSetId: string): string {
   return `${worldId}::${changeSetId}`;
+}
+
+export function cleanupJournalKeyV1(
+  authoringEditSessionId: string,
+  cleanupOperationId: string,
+): string {
+  return `${authoringEditSessionId}::${cleanupOperationId}`;
 }
 
 export function createWorldChangeJournalV1(): WorldChangeJournalV1 {
@@ -168,6 +177,30 @@ export function recoveryFencingTokenV1(
   journal: WorldChangeJournalV1,
 ): string | undefined {
   return asJournal(journal).fencingToken;
+}
+
+export function putCleanupReportV1(
+  journal: WorldChangeJournalV1,
+  authoringEditSessionId: string,
+  report: WorldChangeCleanupReportV1,
+): WorldChangeCleanupReportV1 {
+  const snapshot = structuredClone(report);
+  asJournal(journal).cleanupReports.set(
+    cleanupJournalKeyV1(authoringEditSessionId, report.cleanupOperationId),
+    snapshot,
+  );
+  return snapshot;
+}
+
+export function getCleanupReportV1(
+  journal: WorldChangeJournalV1,
+  authoringEditSessionId: string,
+  cleanupOperationId: string,
+): WorldChangeCleanupReportV1 | undefined {
+  const report = asJournal(journal).cleanupReports.get(
+    cleanupJournalKeyV1(authoringEditSessionId, cleanupOperationId),
+  );
+  return isNil(report) ? undefined : structuredClone(report);
 }
 
 export function isTerminalStateV1(state: DurableRequestStateV1): boolean {

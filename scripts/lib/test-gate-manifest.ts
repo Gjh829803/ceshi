@@ -106,6 +106,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "packages/runtime-contracts/src/visual-reconstruction.test.ts", lane: "contract" },
   { path: "packages/runtime-host/src/command-journal.test.ts", lane: "contract" },
   { path: "packages/runtime-host/src/gameplay-world-port.test.ts", lane: "contract" },
+  { path: "packages/runtime-host/src/publication-v2.test.ts", lane: "contract" },
   { path: "packages/runtime-host/src/runtime-host-lifecycle.test.ts", lane: "contract" },
   { path: "packages/runtime-host/src/runtime-host.test.ts", lane: "contract" },
   { path: "packages/runtime-host/src/test/fake-gameplay-world-adapter.test.ts", lane: "contract" },

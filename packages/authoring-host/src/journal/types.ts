@@ -4,6 +4,8 @@ import type {
   AuthoringEditPolicyProjectionV1,
   AuthoringEditScopeV1,
   PreparedCandidatePinV1,
+  RuntimePublicationExpectationV1,
+  RuntimePublicationIdentityV1,
   Sha256HashV1,
   WorldChangeCleanupReportQueryV1,
   WorldChangeCleanupReportV1,
@@ -17,6 +19,9 @@ import type {
   WorldChangeReceiptV1,
   WorldChangeRequestV1,
 } from "@whitebox-world/authoring-edit";
+import type { GameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
+import type { ExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
+import type { WorldPackageBuildReceiptV1 } from "@whitebox-world/world-package";
 
 import type {
   EvaluateRequiredGatesV1,
@@ -103,6 +108,50 @@ export type DurableCrashAfterStateV1 =
   | "committing"
   | "preparing-runtime";
 
+export type PublishRuntimeReplacementFailureKindV1 =
+  | "expectation-stale"
+  | "publication-mode-unsupported"
+  | "capacity-exceeded"
+  | "prepare-failed"
+  | "publication-conflict"
+  | "commit-failed";
+
+export interface TrustedRuntimeWorldConfigurationV1 {
+  readonly executionPlan: ExecutionPlanV5;
+  readonly executionPlanHash: Sha256HashV1;
+  readonly worldPackageRef: string;
+  readonly worldPackageBuildReceipt: WorldPackageBuildReceiptV1;
+  readonly gameplayBootstrap: GameplayBootstrapV1;
+}
+
+export type PublishRuntimeReplacementResultV1 =
+  | {
+      readonly status: "published";
+      readonly previous: RuntimePublicationIdentityV1;
+      readonly current: RuntimePublicationIdentityV1;
+      readonly cleanupStatus: "released" | "quarantined";
+      readonly cleanupDiagnostics: readonly WorldChangeDiagnosticV1[];
+    }
+  | {
+      readonly status: "rejected";
+      readonly failureKind: PublishRuntimeReplacementFailureKindV1;
+      readonly message: string;
+    };
+
+export type PublishRuntimeReplacementV1 = (input: {
+  readonly worldConfiguration: TrustedRuntimeWorldConfigurationV1;
+  readonly publication: {
+    readonly requestId: string;
+    readonly requestHash: Sha256HashV1;
+    readonly fencingToken: string;
+    readonly runtimeExpectation: RuntimePublicationExpectationV1;
+  };
+  readonly persistDurableCommit: (identities: {
+    readonly previous: RuntimePublicationIdentityV1;
+    readonly current: RuntimePublicationIdentityV1;
+  }) => void;
+}) => Promise<PublishRuntimeReplacementResultV1>;
+
 export interface SubmitWorldChangeRequestInputV1 {
   readonly journal: WorldChangeJournalV1;
   readonly leaseStore: PreparedCandidateLeaseStoreV1;
@@ -110,6 +159,7 @@ export interface SubmitWorldChangeRequestInputV1 {
   readonly session: AuthoringEditSessionV1;
   readonly nowUnixMilliseconds: number;
   readonly evaluateRequiredGates?: EvaluateRequiredGatesV1;
+  readonly publishRuntimeReplacement?: PublishRuntimeReplacementV1;
   readonly crashAfterState?: DurableCrashAfterStateV1;
 }
 

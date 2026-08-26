@@ -38,6 +38,7 @@ import {
 import type {
   AuthoringEditSessionV1,
   DurableCrashAfterStateV1,
+  PublishRuntimeReplacementV1,
   SubmitWorldChangeRequestResultV1,
   WorldChangeJournalV1,
 } from "./types.js";
@@ -247,6 +248,7 @@ function submit(
     readonly session?: AuthoringEditSessionV1;
     readonly crashAfterState?: DurableCrashAfterStateV1;
     readonly nowUnixMilliseconds?: number;
+    readonly publishRuntimeReplacement?: PublishRuntimeReplacementV1;
   } = {},
 ) {
   return submitWorldChangeRequestV1({
@@ -256,6 +258,9 @@ function submit(
     session: extras.session ?? session(),
     nowUnixMilliseconds: extras.nowUnixMilliseconds ?? NOW,
     ...(isNil(extras.crashAfterState) ? {} : { crashAfterState: extras.crashAfterState }),
+    ...(isNil(extras.publishRuntimeReplacement)
+      ? {}
+      : { publishRuntimeReplacement: extras.publishRuntimeReplacement }),
   });
 }
 
@@ -265,6 +270,7 @@ function recover(
   request: WorldChangeRequestV1,
   extras: {
     readonly session?: AuthoringEditSessionV1;
+    readonly publishRuntimeReplacement?: PublishRuntimeReplacementV1;
   } = {},
 ) {
   return recoverWorldChangeRequestV1({
@@ -273,6 +279,9 @@ function recover(
     request,
     session: extras.session ?? session(),
     nowUnixMilliseconds: NOW,
+    ...(isNil(extras.publishRuntimeReplacement)
+      ? {}
+      : { publishRuntimeReplacement: extras.publishRuntimeReplacement }),
   });
 }
 
@@ -303,10 +312,10 @@ function receiptQuery(requestId: string) {
 }
 
 describe("P16-R1 durable WorldChange journal", () => {
-  it("validates, queries, and returns a byte-identical retry without moving the revision head", () => {
+  it("validates, queries, and returns a byte-identical retry without moving the revision head", async () => {
     const { journal, leaseStore, changeSet, authoringSpecHash } = seededJournal();
     const request = requestFor("validate", changeSet);
-    const first = accepted(submit(journal, leaseStore, request));
+    const first = accepted(await submit(journal, leaseStore, request));
     expect(first.receipt.status).toBe("validated");
     expect(first.receipt.mode).toBe("validate");
     expect(first.receipt.publicationMode).toBe("none");
@@ -323,7 +332,7 @@ describe("P16-R1 durable WorldChange journal", () => {
       hashWorldChangeReceiptV1(first.receipt),
     );
 
-    const retry = accepted(submit(journal, leaseStore, request));
+    const retry = accepted(await submit(journal, leaseStore, request));
     expect(hashWorldChangeReceiptV1(retry.receipt)).toBe(
       hashWorldChangeReceiptV1(first.receipt),
     );
@@ -332,11 +341,11 @@ describe("P16-R1 durable WorldChange journal", () => {
     expect(head?.authoringSpecHash).toBe(authoringSpecHash);
   });
 
-  it("rejects a replay of the same Request ID with a different Request Hash", () => {
+  it("rejects a replay of the same Request ID with a different Request Hash", async () => {
     const { journal, leaseStore, changeSet } = seededJournal();
     const validate = requestFor("validate", changeSet);
-    const original = accepted(submit(journal, leaseStore, validate));
-    const conflict = accepted(submit(
+    const original = accepted(await submit(journal, leaseStore, validate));
+    const conflict = accepted(await submit(
       journal,
       leaseStore,
       requestFor("dry-run", changeSet, { id: VALIDATE_REQUEST_ID }),
@@ -359,9 +368,9 @@ describe("P16-R1 durable WorldChange journal", () => {
     );
   });
 
-  it("rejects a second ChangeSet ID with a different ChangeSet Hash", () => {
+  it("rejects a second ChangeSet ID with a different ChangeSet Hash", async () => {
     const { journal, leaseStore, changeSet, authoringSpecHash } = seededJournal();
-    accepted(submit(journal, leaseStore, requestFor("validate", changeSet)));
+    accepted(await submit(journal, leaseStore, requestFor("validate", changeSet)));
     const other = addHouseChangeSet(authoringSpecHash, {
       operations: [
         ADD_HOUSE_OPERATIONS[0]!,
@@ -379,7 +388,7 @@ describe("P16-R1 durable WorldChange journal", () => {
         },
       ],
     });
-    const conflict = accepted(submit(
+    const conflict = accepted(await submit(
       journal,
       leaseStore,
       requestFor("validate", other, { id: "request.validate.add-house.002" }),
@@ -389,9 +398,9 @@ describe("P16-R1 durable WorldChange journal", () => {
     expect(conflict.receipt.diagnostics[0]?.code).toBe("WORLD_CHANGE_SET_ID_CONFLICT");
   });
 
-  it("dry-runs into a Prepared Candidate lease without moving the revision head", () => {
+  it("dry-runs into a Prepared Candidate lease without moving the revision head", async () => {
     const { journal, leaseStore, changeSet, authoringSpecHash } = seededJournal();
-    const result = accepted(submit(
+    const result = accepted(await submit(
       journal,
       leaseStore,
       requestFor("dry-run", changeSet),
@@ -412,9 +421,9 @@ describe("P16-R1 durable WorldChange journal", () => {
     expect(head?.authoringSpecHash).toBe(authoringSpecHash);
   });
 
-  it("commits authoring-only and advances the revision head once", () => {
+  it("commits authoring-only and advances the revision head once", async () => {
     const { journal, leaseStore, changeSet, spec } = seededJournal();
-    const result = accepted(submit(
+    const result = accepted(await submit(
       journal,
       leaseStore,
       requestFor("apply-authoring", changeSet),
@@ -433,9 +442,9 @@ describe("P16-R1 durable WorldChange journal", () => {
     expect(head?.authoringSpecHash).not.toBe(hashAuthoringDocumentV4(spec));
   });
 
-  it("reuses a Dry Run Prepared Candidate on a new authoring-only Apply Request ID", () => {
+  it("reuses a Dry Run Prepared Candidate on a new authoring-only Apply Request ID", async () => {
     const { journal, leaseStore, changeSet } = seededJournal();
-    const dryRun = accepted(submit(
+    const dryRun = accepted(await submit(
       journal,
       leaseStore,
       requestFor("dry-run", changeSet),
@@ -443,7 +452,7 @@ describe("P16-R1 durable WorldChange journal", () => {
     if (dryRun.receipt.status !== "succeeded" || dryRun.receipt.mode !== "dry-run") {
       throw new Error("expected dry-run receipt");
     }
-    const apply = accepted(submit(
+    const apply = accepted(await submit(
       journal,
       leaseStore,
       requestFor("apply-authoring", changeSet, {
@@ -459,9 +468,9 @@ describe("P16-R1 durable WorldChange journal", () => {
     );
   });
 
-  it("fail-closes publish-runtime without moving the revision head", () => {
+  it("fail-closes publish-runtime without moving the revision head", async () => {
     const { journal, leaseStore, changeSet, authoringSpecHash } = seededJournal();
-    const dryRun = accepted(submit(
+    const dryRun = accepted(await submit(
       journal,
       leaseStore,
       requestFor("dry-run", changeSet),
@@ -469,7 +478,7 @@ describe("P16-R1 durable WorldChange journal", () => {
     if (dryRun.receipt.status !== "succeeded" || dryRun.receipt.mode !== "dry-run") {
       throw new Error("expected dry-run receipt");
     }
-    const publish = accepted(submit(
+    const publish = accepted(await submit(
       journal,
       leaseStore,
       requestFor("apply-publish", changeSet, {
@@ -488,9 +497,9 @@ describe("P16-R1 durable WorldChange journal", () => {
     );
   });
 
-  it("rejects an expired Authoring/Edit Session at admission", () => {
+  it("rejects an expired Authoring/Edit Session at admission", async () => {
     const { journal, leaseStore, changeSet } = seededJournal();
-    const result = accepted(submit(
+    const result = accepted(await submit(
       journal,
       leaseStore,
       requestFor("validate", changeSet),
@@ -506,10 +515,10 @@ describe("P16-R1 durable WorldChange journal", () => {
     });
   });
 
-  it("resumes the same Request after a crash at received", () => {
+  it("resumes the same Request after a crash at received", async () => {
     const { journal, leaseStore, changeSet } = seededJournal();
     const request = requestFor("validate", changeSet);
-    const crash = crashed(submit(journal, leaseStore, request, {
+    const crash = crashed(await submit(journal, leaseStore, request, {
       crashAfterState: "received",
     }));
     expect(crash.state).toBe("received");
@@ -520,21 +529,21 @@ describe("P16-R1 durable WorldChange journal", () => {
       nowUnixMilliseconds: NOW,
     });
     expect(pending).toEqual({ status: "pending", state: "received" });
-    const resumed = accepted(recover(journal, leaseStore, request));
+    const resumed = accepted(await recover(journal, leaseStore, request));
     expect(resumed.receipt.status).toBe("validated");
   });
 
-  it("commits exactly once after a crash at committing", () => {
+  it("commits exactly once after a crash at committing", async () => {
     const { journal, leaseStore, changeSet } = seededJournal();
     const request = requestFor("apply-authoring", changeSet);
-    expect(crashed(submit(journal, leaseStore, request, {
+    expect(crashed(await submit(journal, leaseStore, request, {
       crashAfterState: "committing",
     })).state).toBe("committing");
-    const first = accepted(recover(journal, leaseStore, request));
+    const first = accepted(await recover(journal, leaseStore, request));
     expect(first.receipt.status).toBe("committed");
     if (first.receipt.status !== "committed") throw new Error("expected committed");
     expect(first.receipt.committedRevisionRef).toBe("revision://basic-world/2");
-    const retry = accepted(submit(journal, leaseStore, request));
+    const retry = accepted(await submit(journal, leaseStore, request));
     expect(hashWorldChangeReceiptV1(retry.receipt)).toBe(
       hashWorldChangeReceiptV1(first.receipt),
     );
@@ -543,13 +552,13 @@ describe("P16-R1 durable WorldChange journal", () => {
     );
   });
 
-  it("rejects a second concurrent Apply on the same World", () => {
+  it("rejects a second concurrent Apply on the same World", async () => {
     const { journal, leaseStore, changeSet } = seededJournal();
     const firstRequest = requestFor("apply-authoring", changeSet);
-    expect(crashed(submit(journal, leaseStore, firstRequest, {
+    expect(crashed(await submit(journal, leaseStore, firstRequest, {
       crashAfterState: "received",
     })).state).toBe("received");
-    const second = accepted(submit(
+    const second = accepted(await submit(
       journal,
       leaseStore,
       requestFor("apply-authoring", changeSet, { id: APPLY_REQUEST_ID_B }),
@@ -557,17 +566,17 @@ describe("P16-R1 durable WorldChange journal", () => {
     expect(second.receipt.status).toBe("rejected");
     if (second.receipt.status !== "rejected") throw new Error("expected rejected");
     expect(second.receipt.diagnostics[0]?.code).toBe("WORLD_CHANGE_PUBLICATION_CONFLICT");
-    const resumed = accepted(recover(journal, leaseStore, firstRequest));
+    const resumed = accepted(await recover(journal, leaseStore, firstRequest));
     expect(resumed.receipt.status).toBe("committed");
   });
 
-  it("keeps the base revision when recovery sees an authorization epoch drift", () => {
+  it("keeps the base revision when recovery sees an authorization epoch drift", async () => {
     const { journal, leaseStore, changeSet, authoringSpecHash } = seededJournal();
     const request = requestFor("apply-authoring", changeSet);
-    expect(crashed(submit(journal, leaseStore, request, {
+    expect(crashed(await submit(journal, leaseStore, request, {
       crashAfterState: "committing",
     })).state).toBe("committing");
-    const drifted = accepted(recover(journal, leaseStore, request, {
+    const drifted = accepted(await recover(journal, leaseStore, request, {
       session: session({ authorizationEpoch: 2 }),
     }));
     expect(drifted.receipt.status).toBe("rejected");
@@ -582,9 +591,9 @@ describe("P16-R1 durable WorldChange journal", () => {
     );
   });
 
-  it("assembles Explain and Diff from the journal and reports missing Cleanup", () => {
+  it("assembles Explain and Diff from the journal and reports missing Cleanup", async () => {
     const { journal, leaseStore, changeSet } = seededJournal();
-    accepted(submit(journal, leaseStore, requestFor("validate", changeSet)));
+    accepted(await submit(journal, leaseStore, requestFor("validate", changeSet)));
     const explain = queryWorldChangeExplainV1({
       journal,
       session: session(),
@@ -634,10 +643,10 @@ describe("P16-R1 durable WorldChange journal", () => {
     expect(cleanup).toEqual({ status: "missing" });
   });
 
-  it("dry-runs from building-candidate to succeeded without persisting candidate-ready", () => {
+  it("dry-runs from building-candidate to succeeded without persisting candidate-ready", async () => {
     const { journal, leaseStore, changeSet } = seededJournal();
     const request = requestFor("dry-run", changeSet);
-    expect(crashed(submit(journal, leaseStore, request, {
+    expect(crashed(await submit(journal, leaseStore, request, {
       crashAfterState: "building-candidate",
     })).state).toBe("building-candidate");
     const pending = queryWorldChangeReceiptV1({
@@ -647,12 +656,12 @@ describe("P16-R1 durable WorldChange journal", () => {
       nowUnixMilliseconds: NOW,
     });
     expect(pending).toEqual({ status: "pending", state: "building-candidate" });
-    const resumed = accepted(recover(journal, leaseStore, request));
+    const resumed = accepted(await recover(journal, leaseStore, request));
     expect(resumed.receipt.status).toBe("succeeded");
     expect(resumed.receipt.mode).toBe("dry-run");
 
     const isolated = seededJournal();
-    const completed = accepted(submit(
+    const completed = accepted(await submit(
       isolated.journal,
       isolated.leaseStore,
       requestFor("dry-run", isolated.changeSet),
@@ -662,9 +671,9 @@ describe("P16-R1 durable WorldChange journal", () => {
     expect(completed.receipt.mode).toBe("dry-run");
   });
 
-  it("lets an expired Session read a terminal Receipt but not Apply", () => {
+  it("lets an expired Session read a terminal Receipt but not Apply", async () => {
     const { journal, leaseStore, changeSet } = seededJournal();
-    const validated = accepted(submit(
+    const validated = accepted(await submit(
       journal,
       leaseStore,
       requestFor("validate", changeSet),
@@ -690,7 +699,7 @@ describe("P16-R1 durable WorldChange journal", () => {
     expect(revoked.status).toBe("rejected");
     if (revoked.status !== "rejected") throw new Error("expected revoked query");
     expect(revoked.diagnostics[0]?.code).toBe("WORLD_CHANGE_AUTHORIZATION_STALE");
-    const apply = accepted(submit(
+    const apply = accepted(await submit(
       journal,
       leaseStore,
       requestFor("apply-authoring", changeSet),
@@ -702,7 +711,7 @@ describe("P16-R1 durable WorldChange journal", () => {
     expect(apply.receipt.diagnostics[0]?.code).toBe("WORLD_CHANGE_AUTHORIZATION_STALE");
   });
 
-  it("returns a cloned Authoring revision head", () => {
+  it("returns a cloned Authoring revision head", async () => {
     const { journal, spec } = seededJournal();
     const head = getAuthoringRevisionHeadV1(journal, spec.id);
     expect(head).toBeDefined();
@@ -713,9 +722,155 @@ describe("P16-R1 durable WorldChange journal", () => {
     expect(getAuthoringRevisionHeadV1(journal, spec.id)?.authoringSpec.id).toBe(spec.id);
   });
 
-  it("rejects Receipt query without authoring.receipt.read", () => {
+  it("publishes runtime through an injected port and keeps a byte-identical retry", async () => {
     const { journal, leaseStore, changeSet } = seededJournal();
-    accepted(submit(journal, leaseStore, requestFor("validate", changeSet)));
+    const dryRun = accepted(await submit(
+      journal,
+      leaseStore,
+      requestFor("dry-run", changeSet),
+    ));
+    if (dryRun.receipt.status !== "succeeded" || dryRun.receipt.mode !== "dry-run") {
+      throw new Error("expected dry-run receipt");
+    }
+    const found = lookupPreparedCandidateV1(
+      leaseStore,
+      dryRun.receipt.preparedCandidateRef,
+      NOW,
+    );
+    if (found.status !== "found") throw new Error("expected prepared lease");
+    const previous = {
+      runtimeSessionId: "runtime-session-9",
+      worldSessionId: "world-session-31",
+      worldPackageRootHash: `sha256:${"d".repeat(64)}` as Sha256HashV1,
+      simulationTick: 12,
+    };
+    const current = {
+      runtimeSessionId: "runtime-session-9",
+      worldSessionId: "world-session-32",
+      worldPackageRootHash: found.lease.buildIdentity.worldPackageRootHash,
+      simulationTick: 0,
+    };
+    let persistCalls = 0;
+    let portCalls = 0;
+    const publishRuntimeReplacement: PublishRuntimeReplacementV1 = async ({
+      persistDurableCommit,
+    }) => {
+      portCalls += 1;
+      persistDurableCommit({ previous, current });
+      persistCalls += 1;
+      return {
+        status: "published",
+        previous,
+        current,
+        cleanupStatus: "released",
+        cleanupDiagnostics: [],
+      };
+    };
+    const first = accepted(await submit(
+      journal,
+      leaseStore,
+      requestFor("apply-publish", changeSet, {
+        preparedCandidateRef: dryRun.receipt.preparedCandidateRef,
+      }),
+      { publishRuntimeReplacement },
+    ));
+    expect(first.receipt.status).toBe("committed");
+    expect(first.receipt.mode).toBe("apply");
+    if (
+      first.receipt.status !== "committed" ||
+      first.receipt.mode !== "apply" ||
+      first.receipt.requestedOutcome !== "publish-runtime"
+    ) {
+      throw new Error("expected publish-runtime receipt");
+    }
+    expect(first.receipt.publicationMode).toBe("full-reload");
+    expect(first.receipt.committedRevisionRef).toBe("revision://basic-world/2");
+    expect(first.receipt.previousRuntimeIdentity).toEqual(previous);
+    expect(first.receipt.currentRuntimeIdentity).toEqual(current);
+    expect(first.receipt.runtimeCleanup.statusAtCommit).toBe("scheduled");
+    expect(getAuthoringRevisionHeadV1(journal, "basic-world")?.revisionRef).toBe(
+      "revision://basic-world/2",
+    );
+    const cleanup = queryWorldChangeCleanupReportV1({
+      journal,
+      session: session(),
+      query: parseWorldChangeCleanupReportQueryV1({
+        kind: "worldkit-world-change-cleanup-report-query",
+        schemaVersion: 1,
+        id: "q.cleanup.002",
+        authoringEditSessionId: SESSION_ID,
+        cleanupOperationId: first.receipt.runtimeCleanup.cleanupOperationId,
+      }),
+      nowUnixMilliseconds: NOW,
+    });
+    expect(cleanup.status).toBe("found");
+    if (cleanup.status !== "found") throw new Error("expected cleanup report");
+    expect(cleanup.report.status).toBe("released");
+    const retry = accepted(await submit(
+      journal,
+      leaseStore,
+      requestFor("apply-publish", changeSet, {
+        preparedCandidateRef: dryRun.receipt.preparedCandidateRef,
+      }),
+      { publishRuntimeReplacement },
+    ));
+    expect(hashWorldChangeReceiptV1(retry.receipt)).toBe(
+      hashWorldChangeReceiptV1(first.receipt),
+    );
+    expect(portCalls).toBe(1);
+    expect(persistCalls).toBe(1);
+  });
+
+  it("rejects publish-runtime when the injected port reports expectation-stale", async () => {
+    const { journal, leaseStore, changeSet, authoringSpecHash } = seededJournal();
+    const dryRun = accepted(await submit(
+      journal,
+      leaseStore,
+      requestFor("dry-run", changeSet),
+    ));
+    if (dryRun.receipt.status !== "succeeded" || dryRun.receipt.mode !== "dry-run") {
+      throw new Error("expected dry-run receipt");
+    }
+    const publish = accepted(await submit(
+      journal,
+      leaseStore,
+      requestFor("apply-publish", changeSet, {
+        preparedCandidateRef: dryRun.receipt.preparedCandidateRef,
+      }),
+      {
+        publishRuntimeReplacement: async () => ({
+          status: "rejected",
+          failureKind: "expectation-stale",
+          message: "Runtime publication expectation does not match the live Runtime.",
+        }),
+      },
+    ));
+    expect(publish.receipt.status).toBe("rejected");
+    if (publish.receipt.status !== "rejected") throw new Error("expected rejected");
+    expect(publish.receipt.failurePhase).toBe("runtime-preflight");
+    expect(publish.receipt.diagnostics[0]?.code).toBe(
+      "WORLD_CHANGE_RUNTIME_EXPECTATION_STALE",
+    );
+    expect(getAuthoringRevisionHeadV1(journal, "basic-world")?.authoringSpecHash).toBe(
+      authoringSpecHash,
+    );
+    expect(queryWorldChangeCleanupReportV1({
+      journal,
+      session: session(),
+      query: parseWorldChangeCleanupReportQueryV1({
+        kind: "worldkit-world-change-cleanup-report-query",
+        schemaVersion: 1,
+        id: "q.cleanup.003",
+        authoringEditSessionId: SESSION_ID,
+        cleanupOperationId: "cleanup.apply.publish-house.001",
+      }),
+      nowUnixMilliseconds: NOW,
+    })).toEqual({ status: "missing" });
+  });
+
+  it("rejects Receipt query without authoring.receipt.read", async () => {
+    const { journal, leaseStore, changeSet } = seededJournal();
+    accepted(await submit(journal, leaseStore, requestFor("validate", changeSet)));
     const queried = queryWorldChangeReceiptV1({
       journal,
       session: session({

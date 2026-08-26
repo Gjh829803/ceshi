@@ -42,9 +42,13 @@ export type {
   QueryWorldChangeExplainResultV1,
   QueryWorldChangeReceiptInputV1,
   QueryWorldChangeReceiptResultV1,
+  PublishRuntimeReplacementFailureKindV1,
+  PublishRuntimeReplacementResultV1,
+  PublishRuntimeReplacementV1,
   SubmitWorldChangeRequestInputV1,
   SubmitWorldChangeRequestResultV1,
   TerminalRequestStateV1,
+  TrustedRuntimeWorldConfigurationV1,
   WorldChangeJournalV1,
 } from "./types.js";
 export {

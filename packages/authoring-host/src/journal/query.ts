@@ -8,7 +8,11 @@ import { isNil, uniq } from "lodash-es";
 
 import { sessionAuthorizationDiagnosticV1 } from "./authorize.js";
 import { journalArtifactIdV1 } from "./ids.js";
-import { getDurableRequestRecordV1, isTerminalStateV1 } from "./store.js";
+import {
+  getCleanupReportV1,
+  getDurableRequestRecordV1,
+  isTerminalStateV1,
+} from "./store.js";
 import type {
   DurableRequestRecordV1,
   QueryWorldChangeCleanupReportInputV1,
@@ -100,7 +104,10 @@ function assembleExplainV1(
       message:
         record.request.mode === "dry-run"
           ? "Dry Run prepared an isolated candidate without advancing the revision head."
-          : "Authoring-only commit; Runtime publication is owned by RuntimeHost publication V2.",
+          : record.request.mode === "apply" &&
+              record.request.requestedOutcome === "publish-runtime"
+            ? "Full Reload Runtime publication committed a new WorldSession at tick 0."
+            : "Authoring-only commit; Runtime publication is owned by RuntimeHost publication V2.",
       relatedIds: [],
     });
   }
@@ -224,5 +231,11 @@ export function queryWorldChangeCleanupReportV1(
     nowUnixMilliseconds: input.nowUnixMilliseconds,
   });
   if (!isNil(early)) return early;
-  return { status: "missing" };
+  const report = getCleanupReportV1(
+    input.journal,
+    input.query.authoringEditSessionId,
+    input.query.cleanupOperationId,
+  );
+  if (isNil(report)) return { status: "missing" };
+  return { status: "found", report };
 }

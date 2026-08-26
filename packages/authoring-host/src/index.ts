@@ -27,6 +27,8 @@ export type {
   QueryWorldChangeDiffResultV1,
   QueryWorldChangeExplainResultV1,
   QueryWorldChangeReceiptResultV1,
+  PublishRuntimeReplacementResultV1,
+  PublishRuntimeReplacementV1,
   SubmitWorldChangeRequestResultV1,
   WorldChangeJournalV1,
 } from "./journal/index.js";

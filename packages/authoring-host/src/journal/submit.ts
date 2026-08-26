@@ -5,6 +5,7 @@ import {
   hashWorldChangeRequestV1,
   hashWorldChangeSetV1,
   isAppliedWorldChangeSetResultV1,
+  parseWorldChangeCleanupReportV1,
   type Sha256HashV1,
   type WorldChangeAffectedIdsV1,
   type WorldChangeDiagnosticV1,
@@ -29,6 +30,7 @@ import { journalArtifactIdV1 } from "./ids.js";
 import {
   assembleAuthoringOnlyCommittedReceiptV1,
   assembleDryRunReceiptV1,
+  assemblePublishRuntimeCommittedReceiptV1,
   assembleRejectedReceiptV1,
   assembleValidatedReceiptV1,
 } from "./receipts.js";
@@ -41,10 +43,13 @@ import {
   lockedChangeSetHashV1,
   nextAuthoringRevisionRefV1,
   nonTerminalRequestCountV1,
+  putCleanupReportV1,
   putDurableRequestRecordV1,
+  recoveryFencingTokenV1,
 } from "./store.js";
 import type {
   DurableRequestRecordV1,
+  PublishRuntimeReplacementFailureKindV1,
   SubmitWorldChangeRequestInputV1,
   SubmitWorldChangeRequestResultV1,
 } from "./types.js";
@@ -119,10 +124,233 @@ function authorize(
   });
 }
 
-function advance(
+function publicationFailure(
+  failureKind: PublishRuntimeReplacementFailureKindV1,
+  message: string,
+): {
+  readonly failurePhase: WorldChangeFailurePhaseV1;
+  readonly diagnostic: WorldChangeDiagnosticV1;
+} {
+  if (failureKind === "expectation-stale") {
+    return {
+      failurePhase: "runtime-preflight",
+      diagnostic: worldChangeDiagnostic(
+        "WORLD_CHANGE_RUNTIME_EXPECTATION_STALE",
+        "/runtimeExpectation",
+        message,
+      ),
+    };
+  }
+  if (failureKind === "publication-mode-unsupported") {
+    return {
+      failurePhase: "runtime-preflight",
+      diagnostic: worldChangeDiagnostic(
+        "WORLD_CHANGE_PUBLICATION_MODE_UNSUPPORTED",
+        "/runtimeExpectation/targetPhaseBarrier",
+        message,
+      ),
+    };
+  }
+  if (failureKind === "capacity-exceeded") {
+    return {
+      failurePhase: "runtime-preflight",
+      diagnostic: worldChangeDiagnostic(
+        "WORLD_CHANGE_RUNTIME_CAPACITY_EXCEEDED",
+        "/runtimeExpectation",
+        message,
+      ),
+    };
+  }
+  if (failureKind === "publication-conflict") {
+    return {
+      failurePhase: "publication-conflict",
+      diagnostic: worldChangeDiagnostic(
+        "WORLD_CHANGE_PUBLICATION_CONFLICT",
+        "/worldId",
+        message,
+      ),
+    };
+  }
+  if (failureKind === "commit-failed") {
+    return {
+      failurePhase: "publication-commit",
+      diagnostic: worldChangeDiagnostic(
+        "WORLD_CHANGE_CANDIDATE_INVALID",
+        "/",
+        message,
+      ),
+    };
+  }
+  return {
+    failurePhase: "runtime-prepare",
+    diagnostic: worldChangeDiagnostic(
+      "WORLD_CHANGE_RUNTIME_PREPARE_FAILED",
+      "/requestedOutcome",
+      message,
+    ),
+  };
+}
+
+async function finishRuntimePublication(
   input: SubmitWorldChangeRequestInputV1,
   record: DurableRequestRecordV1,
-): SubmitWorldChangeRequestResultV1 {
+): Promise<SubmitWorldChangeRequestResultV1> {
+  if (isNil(input.publishRuntimeReplacement)) {
+    return rejectRecord(input, record, "runtime-prepare", [
+      worldChangeDiagnostic(
+        "WORLD_CHANGE_RUNTIME_PUBLICATION_REQUIRED",
+        "/requestedOutcome",
+        "Runtime publication is owned by RuntimeHost publication V2 and is not wired in this journal slice.",
+      ),
+    ]);
+  }
+  if (
+    record.request.mode !== "apply" ||
+    record.request.requestedOutcome !== "publish-runtime" ||
+    isNil(record.applied) ||
+    isNil(record.buildIdentity) ||
+    isNil(record.preparedCandidateRef) ||
+    isNil(record.pin)
+  ) {
+    return rejectRecord(input, record, "runtime-prepare", [
+      worldChangeDiagnostic(
+        "WORLD_CHANGE_CANDIDATE_INVALID",
+        "/",
+        "Publish-runtime is missing the pinned Prepared Candidate.",
+      ),
+    ]);
+  }
+  const runtimeExpectation = record.request.runtimeExpectation;
+  const found = lookupPreparedCandidateV1(
+    input.leaseStore,
+    record.preparedCandidateRef,
+    input.nowUnixMilliseconds,
+  );
+  if (
+    found.status !== "found" ||
+    found.lease.worldId !== record.request.worldId ||
+    found.lease.buildIdentity.resultAuthoringSpecHash !==
+      record.applied.resultAuthoringSpecHash
+  ) {
+    return rejectRecord(input, record, "admission", [
+      worldChangeDiagnostic(
+        "WORLD_CHANGE_PREPARED_CANDIDATE_STALE",
+        "/preparedCandidateRef",
+        "Prepared Candidate no longer matches the applied ChangeSet.",
+      ),
+    ]);
+  }
+  const revisionRef = record.pendingRevisionRef ??
+    nextAuthoringRevisionRefV1(input.journal, record.request.worldId);
+  const current = isNil(record.pendingRevisionRef)
+    ? persist(input, { ...record, pendingRevisionRef: revisionRef })
+    : record;
+  const cleanupOperationId = journalArtifactIdV1("cleanup", current.request.id);
+  let commitDenial: WorldChangeDiagnosticV1 | undefined;
+  let committedReceipt = current.receipt;
+  const published = await input.publishRuntimeReplacement({
+    worldConfiguration: {
+      executionPlan: found.lease.executionPlan,
+      executionPlanHash: found.lease.buildIdentity.executionPlanHash,
+      worldPackageRef: found.lease.worldPackageRef,
+      worldPackageBuildReceipt: found.lease.worldPackageBuildReceipt,
+      gameplayBootstrap: found.lease.gameplayBootstrap,
+    },
+    publication: {
+      requestId: current.request.id,
+      requestHash: current.requestHash,
+      fencingToken: recoveryFencingTokenV1(input.journal) ?? current.fencingToken,
+      runtimeExpectation,
+    },
+    persistDurableCommit: (identities) => {
+      const authz = authorize(input, current);
+      if (!isNil(authz)) {
+        commitDenial = authz;
+        throw new Error("WORLD_CHANGE_COMMIT_DENIED");
+      }
+      const receipt = assemblePublishRuntimeCommittedReceiptV1({
+        request: current.request,
+        requestHash: current.requestHash,
+        authoringEditPolicyHash: current.authoringEditPolicyHash,
+        changeSetHash: current.changeSetHash,
+        buildIdentity: current.buildIdentity!,
+        affectedIds: current.applied!.affectedIds,
+        operationResults: current.applied!.operationResults,
+        committedRevisionRef: revisionRef,
+        previousRuntimeIdentity: identities.previous,
+        currentRuntimeIdentity: identities.current,
+        cleanupOperationId,
+      });
+      const { pin: _pin, pendingRevisionRef: _pendingRevisionRef, ...rest } = current;
+      commitAuthoringRevisionV1(
+        input.journal,
+        {
+          worldId: current.request.worldId,
+          revisionRef,
+          authoringSpec: current.applied!.candidateAuthoringSpec,
+          authoringSpecHash: current.applied!.resultAuthoringSpecHash,
+        },
+        {
+          ...rest,
+          state: "committed",
+          receipt,
+          commitRecord: {
+            revisionRef,
+            authoringSpecHash: current.applied!.resultAuthoringSpecHash,
+          },
+        },
+      );
+      committedReceipt = receipt;
+    },
+  });
+  if (!isNil(committedReceipt)) {
+    if (published.status === "published") {
+      putCleanupReportV1(
+        input.journal,
+        current.request.authoringEditSessionId,
+        parseWorldChangeCleanupReportV1({
+          kind: "worldkit-world-change-cleanup-report",
+          schemaVersion: 1,
+          id: journalArtifactIdV1("cr", current.request.id),
+          requestId: current.request.id,
+          cleanupOperationId,
+          previousWorldSessionId: published.previous.worldSessionId,
+          status: published.cleanupStatus,
+          attemptCount: 1,
+          diagnostics: published.cleanupDiagnostics,
+        }),
+      );
+    }
+    if (!isNil(current.preparedCandidateRef) && !isNil(current.pin)) {
+      releasePreparedCandidatePinV1({
+        store: input.leaseStore,
+        preparedCandidateRef: current.preparedCandidateRef,
+        requestId: current.request.id,
+        nowUnixMilliseconds: input.nowUnixMilliseconds,
+      });
+    }
+    return { status: "accepted", receipt: committedReceipt };
+  }
+  if (!isNil(commitDenial)) {
+    return rejectRecord(input, current, "authorization", [commitDenial]);
+  }
+  if (published.status === "rejected") {
+    const mapped = publicationFailure(published.failureKind, published.message);
+    return rejectRecord(input, current, mapped.failurePhase, [mapped.diagnostic]);
+  }
+  return rejectRecord(input, current, "publication-commit", [
+    worldChangeDiagnostic(
+      "WORLD_CHANGE_CANDIDATE_INVALID",
+      "/",
+      "Runtime publication returned published without a durable commit.",
+    ),
+  ]);
+}
+
+async function advance(
+  input: SubmitWorldChangeRequestInputV1,
+  record: DurableRequestRecordV1,
+): Promise<SubmitWorldChangeRequestResultV1> {
   let current = record;
   const authz = authorize(input, current);
   if (!isNil(authz)) {
@@ -323,7 +551,13 @@ function advance(
       current.request.mode === "apply" &&
       current.request.requestedOutcome === "publish-runtime"
     ) {
-      current = persist(input, { ...current, state: "preparing-runtime" });
+      const revisionRef = current.pendingRevisionRef ??
+        nextAuthoringRevisionRefV1(input.journal, current.request.worldId);
+      current = persist(input, {
+        ...current,
+        state: "preparing-runtime",
+        pendingRevisionRef: revisionRef,
+      });
     } else {
       const revisionRef = current.pendingRevisionRef ??
         nextAuthoringRevisionRefV1(input.journal, current.request.worldId);
@@ -336,13 +570,7 @@ function advance(
   }
 
   if (current.state === "preparing-runtime") {
-    return rejectRecord(input, current, "runtime-prepare", [
-      worldChangeDiagnostic(
-        "WORLD_CHANGE_RUNTIME_PUBLICATION_REQUIRED",
-        "/requestedOutcome",
-        "Runtime publication is owned by RuntimeHost publication V2 and is not wired in this journal slice.",
-      ),
-    ]);
+    return finishRuntimePublication(input, current);
   }
 
   if (current.state === "committing") {
@@ -426,9 +654,9 @@ function advance(
   ]);
 }
 
-export function submitWorldChangeRequestV1(
+export async function submitWorldChangeRequestV1(
   input: SubmitWorldChangeRequestInputV1,
-): SubmitWorldChangeRequestResultV1 {
+): Promise<SubmitWorldChangeRequestResultV1> {
   try {
     const requestHash = hashWorldChangeRequestV1(input.request);
     const changeSetHash = hashWorldChangeSetV1(input.request.changeSet);
@@ -464,7 +692,7 @@ export function submitWorldChangeRequestV1(
       if (!isNil(existing.receipt)) {
         return { status: "accepted", receipt: existing.receipt };
       }
-      return advance(input, existing);
+      return await advance(input, existing);
     }
 
     const lockedHash = lockedChangeSetHashV1(
@@ -505,7 +733,7 @@ export function submitWorldChangeRequestV1(
       input.request.changeSet.id,
       changeSetHash,
     );
-    return advance(input, persist(input, record));
+    return await advance(input, persist(input, record));
   } catch (error) {
     if (error instanceof WorldChangeJournalCrashErrorV1) {
       return { status: "crashed", state: error.state };
@@ -514,9 +742,9 @@ export function submitWorldChangeRequestV1(
   }
 }
 
-export function resumeWorldChangeRequestV1(
+export async function resumeWorldChangeRequestV1(
   input: SubmitWorldChangeRequestInputV1,
-): SubmitWorldChangeRequestResultV1 {
+): Promise<SubmitWorldChangeRequestResultV1> {
   const existing = getDurableRequestRecordV1(
     input.journal,
     input.request.authoringEditSessionId,
@@ -526,7 +754,7 @@ export function resumeWorldChangeRequestV1(
     return submitWorldChangeRequestV1(input);
   }
   try {
-    return advance(input, existing);
+    return await advance(input, existing);
   } catch (error) {
     if (error instanceof WorldChangeJournalCrashErrorV1) {
       return { status: "crashed", state: error.state };

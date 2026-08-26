@@ -46,9 +46,9 @@ export function sweepUnreferencedPreparedCandidatesV1(input: {
   }
 }
 
-export function recoverWorldChangeRequestV1(
+export async function recoverWorldChangeRequestV1(
   input: SubmitWorldChangeRequestInputV1,
-): SubmitWorldChangeRequestResultV1 {
+): Promise<SubmitWorldChangeRequestResultV1> {
   sweepUnreferencedPreparedCandidatesV1({
     journal: input.journal,
     leaseStore: input.leaseStore,
