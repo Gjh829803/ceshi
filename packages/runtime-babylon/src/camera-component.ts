@@ -1,5 +1,6 @@
 import type { FreeCamera } from "@babylonjs/core/Cameras/freeCamera.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
+import type { CameraViewPreferenceV1 } from "@whitebox-world/camera";
 import type {
   CameraPreviewStateV1,
   CameraTuningV1,
@@ -42,12 +43,15 @@ export class CameraComponentV1 extends SceneComponentV1 {
     this.director = new CameraDirectorV1(executionPlan, camera, scene, physicsWorldQuery);
   }
 
-  requestProfile(profileRef: string): boolean {
-    return this.director.requestProfile(profileRef);
+  setViewPreference(
+    cameraContext: CameraContextV1,
+    preference: CameraViewPreferenceV1,
+  ): ReturnType<CameraDirectorV1["setViewPreference"]> {
+    return this.director.setViewPreference(cameraContext, preference);
   }
 
-  resetProfileSelection(): void {
-    this.director.resetProfileSelection();
+  resetViewPreference(): void {
+    this.director.resetViewPreference();
   }
 
   setInputActions(actions: readonly SemanticInputActionV1[]): void {

@@ -3809,9 +3809,11 @@ describe("BabylonWorldRuntime", () => {
         (subject) => subject.entityId === "pack-animal-a",
       )!;
       expect(
-        runtime.requestCameraProfile(
+        runtime.setCameraViewPreference({
+          mode: "camera-rig-profile",
+          cameraRigProfileRef:
           packAnimal.capabilityAssembly.cameraContext.defaultCameraRigProfileRef,
-        ).camera.targetEntityId,
+        }).camera.targetEntityId,
       ).toBe("pack-animal-a");
       const before = internal.readWorldProjection();
       const moved = await internal.runFixedInputTick({

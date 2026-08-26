@@ -3,6 +3,7 @@ import "@babylonjs/core/Culling/ray.js";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
 import {
+  admitCameraViewPreferenceV1,
   selectCameraViewV1,
   type CameraContextProfileV1,
   type CameraContextSampleV1,
@@ -283,7 +284,7 @@ function smoothstep01(value: number): number {
 
 export class CameraDirectorV1 {
   private initialized = false;
-  private explicitProfileRef: string | undefined;
+  private cameraViewPreference: CameraViewPreferenceV1 = Object.freeze({ mode: "auto" });
   private activeProfileRef: string;
   private activeHeadingSource: ExecutionCameraRigProfileV1["headingSource"] | undefined;
   private activeReverseHeadingPolicy:
@@ -348,14 +349,28 @@ export class CameraDirectorV1 {
     this.activeProfileRef = executionPlan.camera.rigRef;
   }
 
-  requestProfile(profileRef: string): boolean {
-    if (profileRef.trim().length === 0) return false;
-    this.explicitProfileRef = profileRef;
-    return true;
+  setViewPreference(
+    context: CameraContextV1,
+    preference: CameraViewPreferenceV1,
+  ): ReturnType<typeof admitCameraViewPreferenceV1> {
+    const admission = admitCameraViewPreferenceV1(
+      cameraContextProfileFromExecution(context),
+      preference,
+    );
+    if (!admission.ok) return admission;
+    this.cameraViewPreference = Object.freeze({ ...admission.cameraViewPreference });
+    return admission;
   }
 
-  resetProfileSelection(): void {
-    this.explicitProfileRef = undefined;
+  resetViewPreference(): void {
+    this.cameraViewPreference = Object.freeze({ mode: "auto" });
+    this.tuningByProfileRef.clear();
+    this.activeModifierRefs = [];
+    this.transitionElapsedSeconds = 0;
+    this.transitionDurationSeconds = 0;
+    this.activeInputActions.clear();
+    this.previousInputActions.clear();
+    this.resetView();
   }
 
   setInputActions(actions: readonly SemanticInputActionV1[]): void {
@@ -408,7 +423,11 @@ export class CameraDirectorV1 {
     this.targetYawOffsetRadians = 0;
     this.targetPitchOffsetRadians = 0;
     this.targetDistanceOffsetMeters = 0;
+    this.viewYawOffsetRadians = 0;
+    this.viewPitchOffsetRadians = 0;
+    this.viewDistanceOffsetMeters = 0;
     this.controlTargetYawOffsetRadians = 0;
+    this.controlViewYawOffsetRadians = 0;
     this.baseHeadingIdentity = undefined;
     this.controlBaseHeadingIdentity = undefined;
   }
@@ -824,7 +843,7 @@ export class CameraDirectorV1 {
 
   reset(): void {
     this.initialized = false;
-    this.explicitProfileRef = undefined;
+    this.cameraViewPreference = Object.freeze({ mode: "auto" });
     this.activeHeadingSource = undefined;
     this.activeReverseHeadingPolicy = undefined;
     this.tuningByProfileRef.clear();
@@ -1106,12 +1125,7 @@ export class CameraDirectorV1 {
         sample,
         simulationTick,
       ),
-      cameraViewPreference: this.explicitProfileRef === undefined
-        ? { mode: "auto" }
-        : {
-            mode: "camera-rig-profile",
-            cameraRigProfileRef: this.explicitProfileRef,
-          } satisfies CameraViewPreferenceV1,
+      cameraViewPreference: this.cameraViewPreference,
     });
     if (!selection.ok) {
       throw new Error(

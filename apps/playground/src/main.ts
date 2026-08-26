@@ -883,8 +883,8 @@ function installTuningWorkbench(
       api.applySubjectPresetTuning === undefined ||
       api.getSubjectSnapshot === undefined ||
       api.getCameraPreviewState === undefined ||
-      api.requestCameraProfile === undefined ||
-      api.resetCameraProfile === undefined ||
+      api.setCameraViewPreference === undefined ||
+      api.resetCameraViewPreference === undefined ||
       api.applyCameraPreview === undefined
     ) {
       return false;
@@ -906,8 +906,11 @@ function installTuningWorkbench(
       previousGameplayProfileSelection: appliedGameplayProfileSelection,
       runtime: {
         getCameraPreviewState: () => api.getCameraPreviewState!(),
-        requestCameraProfile: (profileRef) => api.requestCameraProfile!(profileRef),
-        resetCameraProfile: () => api.resetCameraProfile!(),
+        setCameraRigProfile: (profileRef) => api.setCameraViewPreference!({
+          mode: "camera-rig-profile",
+          cameraRigProfileRef: profileRef,
+        }),
+        resetCameraRigProfile: () => api.resetCameraViewPreference!(),
         applyCameraPreview: (request) => api.applyCameraPreview!(request),
         applySubjectPresetTuning: (request) => api.applySubjectPresetTuning!(request),
       },
@@ -1345,7 +1348,10 @@ function installTuningWorkbench(
       button.disabled = row.resourceRef === cameraPreference;
       button.addEventListener("click", () => {
         try {
-          api.requestCameraProfile?.(row.resourceRef);
+          api.setCameraViewPreference?.({
+            mode: "camera-rig-profile",
+            cameraRigProfileRef: row.resourceRef,
+          });
           cameraPreference = row.resourceRef;
           appliedCameraPreferenceRef = row.resourceRef;
           syncCompactCameraSelect();
@@ -1852,7 +1858,10 @@ function installCapabilityAuthoringPanel(
   if (!isNil(selectedCameraPreference)) {
     cameraSelect.value = selectedCameraPreference;
     try {
-      api.requestCameraProfile?.(selectedCameraPreference);
+      api.setCameraViewPreference?.({
+        mode: "camera-rig-profile",
+        cameraRigProfileRef: selectedCameraPreference,
+      });
     } catch {
       if (
         !isNil(defaultCameraPreference) &&
@@ -1860,7 +1869,10 @@ function installCapabilityAuthoringPanel(
       ) {
         cameraSelect.value = defaultCameraPreference;
         try {
-          api.requestCameraProfile?.(defaultCameraPreference);
+          api.setCameraViewPreference?.({
+            mode: "camera-rig-profile",
+            cameraRigProfileRef: defaultCameraPreference,
+          });
         } catch {
           // The Runtime retains its current profile when both explicit requests fail.
         }
@@ -1955,9 +1967,12 @@ function installCapabilityAuthoringPanel(
   cameraSelect.addEventListener("change", () => {
     try {
       if (cameraSelect.value === "auto") {
-        api.resetCameraProfile?.();
+        api.resetCameraViewPreference?.();
       } else {
-        api.requestCameraProfile?.(cameraSelect.value);
+        api.setCameraViewPreference?.({
+          mode: "camera-rig-profile",
+          cameraRigProfileRef: cameraSelect.value,
+        });
       }
       writeLocalDraft("worldkit.camera-preference", cameraSelect.value);
       tuningWorkbench.setCameraPreferenceFromCompact(cameraSelect.value);

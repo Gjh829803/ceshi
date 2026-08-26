@@ -905,8 +905,9 @@ S1b Golden、
    [实施计划](superpowers/plans/2026-08-21-p15-control-feel-state-resolver.md) 已实施、
    通过全部生产 Gate，并由 PR #10 合入 `main`；水介质、`ControlMethodProfile`、
    CLI/Browser E2E 覆盖，以及整支对抗审查仍未交付。相机 overlay 已在 Browser V5
-   基线上完成门禁与最终审查；Camera Domain 的 `cameraViewPreference` 和纯 Selection 已实现，
-   但 Browser Command/View State 与 Babylon CameraDirector 接线仍未完成；作者面板
+   基线上完成门禁与最终审查；Camera Domain 的 `cameraViewPreference`、纯 Selection、Browser
+   V5 Command/View State 与 Babylon CameraDirector Admission 已在 `codex/camera-development`
+   完成 clean break 接线，旧 Profile 请求表面已删除；作者面板
    Feel 范围与 session 数字袋类型已在 Preset 语义合同修复中收口，
    M7 不标记完成；
 8. **M8（核心实现与当前树基础门禁已完成，最终证据收口中）：Canonical World State + Typed Relationship

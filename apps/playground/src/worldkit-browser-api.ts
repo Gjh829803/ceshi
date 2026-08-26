@@ -25,6 +25,7 @@ import {
   type ApplyCameraPreviewRequestV1,
   type ApplySubjectPresetTuningRequestV1,
   type CameraPreviewStateV1,
+  type CameraViewPreferenceV1,
   type CameraViewInputV1,
   type CompatibleProfileSummaryV1,
   type ControlCaptureCapabilitiesV1,
@@ -81,8 +82,8 @@ export interface DeferredWorldkitBrowserRuntimeAdapterV1 {
   resetRuntime(): Promise<WorldRuntimeSnapshotV4>;
   setPaused(paused: boolean): void;
   disposeRuntime(): Promise<void>;
-  requestCameraProfileRuntime(profileRef: string): WorldRuntimeSnapshotV4;
-  resetCameraProfileRuntime(): WorldRuntimeSnapshotV4;
+  setCameraViewPreferenceRuntime(preference: CameraViewPreferenceV1): WorldRuntimeSnapshotV4;
+  resetCameraViewPreferenceRuntime(): WorldRuntimeSnapshotV4;
   adjustCameraViewRuntime(input: CameraViewInputV1): WorldRuntimeSnapshotV4;
   resetCameraViewRuntime(): WorldRuntimeSnapshotV4;
   getCameraPreviewStateRuntime(): CameraPreviewStateV1;
@@ -1067,20 +1068,20 @@ export function installDeferredWorldkitBrowserApi(options: {
         () => adapter.runWorldkitFixedInput([input]),
       );
     },
-    requestCameraProfile: (profileRef) => {
+    setCameraViewPreference: (preference) => {
       const adapter = requireReadyAdapter();
       return callAdapter(
-        "WORLDKIT_CAMERA_PROFILE_OPERATION_FAILED",
-        "Camera Profile operation failed.",
-        () => adapter.requestCameraProfileRuntime(profileRef),
+        "WORLDKIT_CAMERA_VIEW_PREFERENCE_OPERATION_FAILED",
+        "Camera View Preference operation failed.",
+        () => adapter.setCameraViewPreferenceRuntime(preference),
       );
     },
-    resetCameraProfile: () => {
+    resetCameraViewPreference: () => {
       const adapter = requireReadyAdapter();
       return callAdapter(
-        "WORLDKIT_CAMERA_PROFILE_OPERATION_FAILED",
-        "Camera Profile operation failed.",
-        () => adapter.resetCameraProfileRuntime(),
+        "WORLDKIT_CAMERA_VIEW_PREFERENCE_OPERATION_FAILED",
+        "Camera View Preference operation failed.",
+        () => adapter.resetCameraViewPreferenceRuntime(),
       );
     },
     adjustCameraView: (input) => {
@@ -1360,8 +1361,8 @@ export function createWorldkitBrowserApiV5(options: Readonly<{
     getSubjectPresetBaseline: notReady,
     validateSubjectPackage: notReady,
     setIntent: notReady,
-    requestCameraProfile: notReady,
-    resetCameraProfile: notReady,
+    setCameraViewPreference: notReady,
+    resetCameraViewPreference: notReady,
     adjustCameraView: notReady,
     resetCameraView: notReady,
     getCameraPreviewState: notReady,

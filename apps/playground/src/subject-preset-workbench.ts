@@ -181,8 +181,8 @@ export function cameraPreviewRequestFromDraftV1(
 
 export interface SubjectPresetWorkingDraftTransactionRuntimeV1 {
   getCameraPreviewState(): CameraPreviewStateV1;
-  requestCameraProfile(profileRef: string): unknown;
-  resetCameraProfile(): unknown;
+  setCameraRigProfile(profileRef: string): unknown;
+  resetCameraRigProfile(): unknown;
   applyCameraPreview(request: ApplyCameraPreviewRequestV1): CameraPreviewStateV1;
   applySubjectPresetTuning(
     request: ApplySubjectPresetTuningRequestV1,
@@ -282,9 +282,9 @@ export function applySubjectPresetWorkingDraftTransactionV1(input: Readonly<{
 
   const restoreCamera = (): void => {
     if (isNil(input.previousCameraPreferenceRef)) {
-      input.runtime.resetCameraProfile();
+      input.runtime.resetCameraRigProfile();
     } else {
-      input.runtime.requestCameraProfile(input.previousCameraPreferenceRef);
+      input.runtime.setCameraRigProfile(input.previousCameraPreferenceRef);
     }
     input.runtime.applyCameraPreview(copyCameraPreviewRequest(previousCameraPreviewState));
   };
@@ -325,9 +325,9 @@ export function applySubjectPresetWorkingDraftTransactionV1(input: Readonly<{
 
   try {
     if (isNil(input.draft.selectedCameraPreferenceRef)) {
-      input.runtime.resetCameraProfile();
+      input.runtime.resetCameraRigProfile();
     } else {
-      input.runtime.requestCameraProfile(input.draft.selectedCameraPreferenceRef);
+      input.runtime.setCameraRigProfile(input.draft.selectedCameraPreferenceRef);
     }
     input.runtime.applyCameraPreview(cameraPreviewRequestFromDraftV1(input.draft));
   } catch (error) {

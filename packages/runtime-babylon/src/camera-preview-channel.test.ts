@@ -36,6 +36,13 @@ const ORBIT_REF = "worldkit://camera-profile/orbit.medium@1";
 const FOLLOW_REF = "worldkit://camera-profile/follow.medium@1";
 const CHASE_REF = "worldkit://camera-profile/chase.surface-fast@1";
 
+function setCameraProfile(runtime: BabylonWorldRuntime, cameraRigProfileRef: string) {
+  return runtime.setCameraViewPreference({
+    mode: "camera-rig-profile",
+    cameraRigProfileRef,
+  });
+}
+
 function createFlatTerrainCapabilitySpec() {
   const spec = createValidAuthoringSpecV4();
   const terrain = spec.nodes.find((node) => node.kind === "terrain");
@@ -236,10 +243,12 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     const runtime = await createCameraPreviewChannelRuntime();
     try {
       await runtime.runFixedInput({ actions: [], ticks: 4 });
-      runtime.requestCameraProfile(
-        "worldkit://camera-profile/first-person.standard@1",
-      );
+      runtime.setCameraViewPreference({ mode: "first-person" });
       const beforePreview = runtime.snapshot();
+
+      expect(beforePreview.camera.selectionDecision?.cameraViewPreference).toEqual({
+        mode: "first-person",
+      });
 
       expect(() => runtime.applyCameraPreview({
         tuningByProfileRef: {
@@ -276,7 +285,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     });
     try {
       await runtime.runFixedInput({ actions: [], ticks: 4 });
-      runtime.requestCameraProfile(
+      setCameraProfile(runtime,
         "worldkit://camera-profile/first-person.standard@1",
       );
       const beforePreview = runtime.snapshot();
@@ -313,7 +322,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     });
     try {
       await runtime.runFixedInput({ actions: [], ticks: 4 });
-      runtime.requestCameraProfile(ORBIT_REF);
+      setCameraProfile(runtime, ORBIT_REF);
       const beforePreview = runtime.snapshot();
 
       runtime.applyCameraPreview({
@@ -358,7 +367,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     });
     const sceneQueries = countScenePickQueries(runtime);
     try {
-      runtime.requestCameraProfile(
+      setCameraProfile(runtime,
         "worldkit://camera-profile/first-person.standard@1",
       );
       const firstPerson = await runtime.runFixedInput({ actions: [], ticks: 4 });
@@ -369,7 +378,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       expect(firstPerson.camera.effectiveArmLengthMeters).toBeUndefined();
       expect(firstPerson.camera.isCollisionRetracted).toBeUndefined();
 
-      runtime.requestCameraProfile(ORBIT_REF);
+      setCameraProfile(runtime, ORBIT_REF);
       const thirdPerson = await runtime.runFixedInput({ actions: [], ticks: 1 });
 
       expect(sceneQueries.count()).toBe(0);
@@ -386,13 +395,13 @@ describe("camera preview channel stays out of Gameplay truth", () => {
   it("publishes a recenter delay countdown only for an enabled recenter profile", async () => {
     const runtime = await createCameraPreviewChannelRuntime();
     try {
-      runtime.requestCameraProfile("worldkit://camera-profile/follow.medium@1");
+      setCameraProfile(runtime, "worldkit://camera-profile/follow.medium@1");
       const enabled = await runtime.runFixedInput({ actions: [], ticks: 1 });
       expect(enabled.camera.recenterRemainingSeconds).toEqual(expect.any(Number));
       expect(enabled.camera.recenterRemainingSeconds).toBeGreaterThanOrEqual(0);
       expect(enabled.camera.fixedStepDeltaSeconds).toBe(1 / 60);
 
-      runtime.requestCameraProfile(ORBIT_REF);
+      setCameraProfile(runtime, ORBIT_REF);
       const off = await runtime.runFixedInput({ actions: [], ticks: 1 });
       expect(off.camera.recenterRemainingSeconds).toBeUndefined();
     } finally {
@@ -407,7 +416,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     });
     try {
       await runtime.runFixedInput({ actions: [], ticks: 4 });
-      runtime.requestCameraProfile(ORBIT_REF);
+      setCameraProfile(runtime, ORBIT_REF);
       runtime.applyCameraPreview({
         tuningByProfileRef: { [ORBIT_REF]: { distanceMeters: 6 } },
       });
@@ -452,7 +461,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     });
     try {
       await runtime.runFixedInput({ actions: [], ticks: 4 });
-      runtime.requestCameraProfile(CHASE_REF);
+      setCameraProfile(runtime, CHASE_REF);
       await runtime.runFixedInput({ actions: [], ticks: 120 });
       runtime.applyCameraPreview({
         tuningByProfileRef: {
@@ -470,7 +479,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       const beforeFovDegrees = before.camera.finalFovDegrees;
       if (beforeFovDegrees === undefined) throw new Error("Expected camera FOV telemetry.");
 
-      runtime.requestCameraProfile(ORBIT_REF);
+      setCameraProfile(runtime, ORBIT_REF);
       const firstTick = await runtime.runFixedInput({ actions: [], ticks: 1 });
       const firstTarget = smoothedCameraTarget(runtime);
       expect(firstTick.camera.profileTransitionProgressRatio).toBeLessThan(1);
@@ -517,14 +526,14 @@ describe("camera preview channel stays out of Gameplay truth", () => {
           },
         },
       });
-      runtime.requestCameraProfile(FOLLOW_REF);
+      setCameraProfile(runtime, FOLLOW_REF);
       await runtime.runFixedInput({ actions: [], ticks: 120 });
       const before = runtime.snapshot();
       const beforeTarget = smoothedCameraTarget(runtime);
       const beforeFovDegrees = before.camera.finalFovDegrees;
       if (beforeFovDegrees === undefined) throw new Error("Expected camera FOV telemetry.");
 
-      runtime.requestCameraProfile(ORBIT_REF);
+      setCameraProfile(runtime, ORBIT_REF);
       const firstTick = await runtime.runFixedInput({ actions: [], ticks: 1 });
       const firstTarget = smoothedCameraTarget(runtime);
       expect(firstTick.camera.profileTransitionProgressRatio).toBeLessThan(1);
@@ -565,7 +574,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     };
     try {
       await runtime.runFixedInput({ actions: [], ticks: 4 });
-      runtime.requestCameraProfile(ORBIT_REF);
+      setCameraProfile(runtime, ORBIT_REF);
       runtime.applyCameraPreview({
         tuningByProfileRef: { [ORBIT_REF]: { distanceMeters: 6 } },
       });
@@ -600,7 +609,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     });
     try {
       await runtime.runFixedInput({ actions: [], ticks: 4 });
-      runtime.requestCameraProfile(ORBIT_REF);
+      setCameraProfile(runtime, ORBIT_REF);
       runtime.applyCameraPreview({
         tuningByProfileRef: {
           [ORBIT_REF]: {
@@ -642,7 +651,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     const runtime = await createCameraPreviewChannelRuntime();
     try {
       await runtime.runFixedInput({ actions: [], ticks: 4 });
-      const snapshot = runtime.requestCameraProfile(ORBIT_REF);
+      const snapshot = setCameraProfile(runtime, ORBIT_REF);
 
       expect(snapshot.camera.activeCameraProfileRef).toBe(ORBIT_REF);
       expect(snapshot.camera.activeCameraModifierRefs).not.toContain(
@@ -682,8 +691,8 @@ describe("camera preview channel stays out of Gameplay truth", () => {
         firstRuntime.runFixedInput({ actions: [], ticks: 4 }),
         secondRuntime.runFixedInput({ actions: [], ticks: 4 }),
       ]);
-      firstRuntime.requestCameraProfile(ORBIT_REF);
-      secondRuntime.requestCameraProfile(ORBIT_REF);
+      setCameraProfile(firstRuntime, ORBIT_REF);
+      setCameraProfile(secondRuntime, ORBIT_REF);
       firstRuntime.applyCameraPreview({
         tuningByProfileRef: {
           [ORBIT_REF]: { distanceMeters: 4, targetHeightMeters: 1.5 },
@@ -724,7 +733,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       ) => {
         runtime.reset();
         await bindRuntimeTestPossession(runtime, "player");
-        runtime.requestCameraProfile(ORBIT_REF);
+        setCameraProfile(runtime, ORBIT_REF);
         if (previewEnabled) {
           runtime.applyCameraPreview({
             tuningByProfileRef: {
@@ -804,14 +813,14 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       // Same fixed input with and without preview keeps Subject determinism.
       runtime.reset();
       await bindRuntimeTestPossession(runtime, "player");
-      runtime.requestCameraProfile(ORBIT_REF);
+      setCameraProfile(runtime, ORBIT_REF);
       const withoutPreview = await runtime.runFixedInput({
         actions: ["move-forward"],
         ticks: 30,
       });
       runtime.reset();
       await bindRuntimeTestPossession(runtime, "player");
-      runtime.requestCameraProfile(ORBIT_REF);
+      setCameraProfile(runtime, ORBIT_REF);
       runtime.applyCameraPreview({
         tuningByProfileRef: {
           [ORBIT_REF]: { lookAheadSeconds: 1.5, targetHeightMeters: 3 },
@@ -827,7 +836,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
 
       // Runtime reset restores the locked Camera Context baseline. The
       // authoring host may explicitly reapply its current working draft.
-      runtime.requestCameraProfile(FOLLOW_REF);
+      setCameraProfile(runtime, FOLLOW_REF);
       const reset = runtime.reset();
       expect(reset.possessionTarget).toEqual({ mode: "unbound" });
       expect(runtime.getCameraPreviewState().tuningByProfileRef).toEqual({});
@@ -836,10 +845,10 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       expect(afterRebindTick.camera.activeCameraProfileRef).toBe(
         automaticProfileRef,
       );
-      runtime.requestCameraProfile(ORBIT_REF);
+      setCameraProfile(runtime, ORBIT_REF);
       expect(runtime.getCameraPreviewState().tuningByProfileRef[ORBIT_REF])
         .toBeUndefined();
-      const switched = runtime.requestCameraProfile(FOLLOW_REF);
+      const switched = setCameraProfile(runtime, FOLLOW_REF);
       expect(switched.camera).not.toHaveProperty("tuning");
       expect(runtime.getCameraPreviewState().tuningByProfileRef[FOLLOW_REF])
         .toBeUndefined();
@@ -852,7 +861,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     const runtime = await createCameraPreviewChannelRuntime();
     try {
       await runtime.runFixedInput({ actions: [], ticks: 4 });
-      runtime.requestCameraProfile(ORBIT_REF);
+      setCameraProfile(runtime, ORBIT_REF);
       runtime.adjustCameraView({ yawDeltaRadians: 1 });
       const withoutPreview = await runtime.runFixedInput({
         actions: ["move-forward"],
@@ -861,7 +870,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
 
       runtime.reset();
       await bindRuntimeTestPossession(runtime, "player");
-      runtime.requestCameraProfile(ORBIT_REF);
+      setCameraProfile(runtime, ORBIT_REF);
       runtime.applyCameraPreview({
         tuningByProfileRef: {
           [ORBIT_REF]: { lookSensitivityXRatio: 3 },
@@ -884,28 +893,37 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     }
   });
 
-  it("requestCameraProfile rejects unreachable refs without mutating the active Profile", async () => {
+  it("setCameraViewPreference rejects unreachable refs without mutating the active Profile", async () => {
     const runtime = await createCameraPreviewChannelRuntime();
     try {
       await runtime.runFixedInput({ actions: [], ticks: 4 });
-      runtime.requestCameraProfile(ORBIT_REF);
+      setCameraProfile(runtime, ORBIT_REF);
       const stableRef = runtime.snapshot().camera.activeCameraProfileRef;
 
-      expect(() => runtime.requestCameraProfile("not-a-ref")).toThrow(RangeError);
+      expect(() => setCameraProfile(runtime, "not-a-ref")).toThrow(RangeError);
       expect(() =>
-        runtime.requestCameraProfile("worldkit://camera-profile/does-not-exist@1"),
+        setCameraProfile(runtime, "worldkit://camera-profile/does-not-exist@1"),
       ).toThrow(RangeError);
       // Legacy free strings are no longer accepted by the production path.
-      expect(() => runtime.requestCameraProfile("auto")).toThrow(RangeError);
-      expect(() => runtime.requestCameraProfile("first-person")).toThrow(RangeError);
-      expect(() => runtime.requestCameraProfile("")).toThrow(RangeError);
-      expect(() => runtime.requestCameraProfile("   ")).toThrow(RangeError);
+      expect(() => setCameraProfile(runtime, "auto")).toThrow(RangeError);
+      expect(() => setCameraProfile(runtime, "first-person")).toThrow(RangeError);
+      expect(() => setCameraProfile(runtime, "")).toThrow(RangeError);
+      expect(() => setCameraProfile(runtime, "   ")).toThrow(RangeError);
       expect(runtime.snapshot().camera.activeCameraProfileRef).toBe(stableRef);
 
-      // Reset returns the Camera Context default deterministically.
-      const firstDefault = runtime.resetCameraProfile().camera.activeCameraProfileRef;
-      runtime.requestCameraProfile(FOLLOW_REF);
-      const secondDefault = runtime.resetCameraProfile().camera.activeCameraProfileRef;
+      runtime.adjustCameraView({ yawDeltaRadians: 0.4, zoomDeltaMeters: 1 });
+      // Reset returns Auto/default deterministically and clears manual view state.
+      const firstDefault = runtime.resetCameraViewPreference().camera.activeCameraProfileRef;
+      expect(runtime.snapshot().camera.selectionDecision?.cameraViewPreference).toEqual({
+        mode: "auto",
+      });
+      expect(runtime.snapshot().camera).toMatchObject({
+        viewYawOffsetRadians: 0,
+        viewPitchOffsetRadians: 0,
+        viewDistanceOffsetMeters: 0,
+      });
+      setCameraProfile(runtime, FOLLOW_REF);
+      const secondDefault = runtime.resetCameraViewPreference().camera.activeCameraProfileRef;
       expect(secondDefault).toBe(firstDefault);
     } finally {
       await runtime.dispose();
@@ -916,7 +934,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     const runtime = await createCameraPreviewChannelRuntime();
     try {
       await runtime.runFixedInput({ actions: [], ticks: 4 });
-      runtime.requestCameraProfile(ORBIT_REF);
+      setCameraProfile(runtime, ORBIT_REF);
       runtime.applyCameraPreview({
         tuningByProfileRef: { [ORBIT_REF]: { distanceMeters: 5 } },
       });
@@ -955,7 +973,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     const runtime = await createCameraPreviewChannelRuntime();
     try {
       await runtime.runFixedInput({ actions: [], ticks: 4 });
-      runtime.requestCameraProfile(ORBIT_REF);
+      setCameraProfile(runtime, ORBIT_REF);
       const forwardBefore = runtime.snapshot().subjectStatesByEntityId.player?.forwardXYZ;
       runtime.adjustCameraView({ yawDeltaRadians: 1.2, pitchDeltaRadians: 0.3 });
       // Orbit alone never rotates the Subject.
@@ -977,7 +995,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     const runtime = await createCameraPreviewChannelRuntime();
     try {
       await runtime.runFixedInput({ actions: [], ticks: 4 });
-      runtime.requestCameraProfile(ORBIT_REF);
+      setCameraProfile(runtime, ORBIT_REF);
       runtime.adjustCameraView({ yawDeltaRadians: 1.2 });
       const settled = await runtime.runFixedInput({ actions: [], ticks: 120 });
       expect(settled.camera.viewYawOffsetRadians).toBeCloseTo(1.2, 6);

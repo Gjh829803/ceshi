@@ -175,6 +175,7 @@ UE 模板中第三人称常使用 Control Rotation 决定移动方向；本项�
 | CAM-04 | Overlay、对抗性回归与端到端验证 | depends_on CAM-02、CAM-03 | 测试、Harness、Overlay 文件 | 输入：Telemetry；输出：稳定开发态诊断与验证证据 | sequential |
 | CAM-05 | 关闭 Entity/Component 生命周期、部分构造回滚与 Physics Query 释放缺口 | depends_on CAM-04 | `packages/runtime-framework/**`、Babylon Runtime 构造/Query 与回归 | 输入：组件注册和 Runtime 构造；输出：fail-closed 激活、逆序全清理、exactly-once 资源释放 | main-agent-only |
 | CAM-06 | 修复 mounted ViewTarget 的 Camera Context 投影，并覆盖 Mount/Dismount 与多 Rider 歧义 | depends_on CAM-05 | `runtime-contracts` ViewTarget Sample、Babylon Camera Context 解析与 mounted 集成测试 | 输入：Possession Target + committed `mountedOn`；输出：Rider Camera Context + 不变的物理 ViewTarget | sequential |
+| CAM-07 | 用强类型 View Preference clean break 替换旧 Profile 请求表面，并接通 Browser V5、Runtime 与 Director Admission | depends_on CAM-06 | `runtime-contracts` Browser V5、Playground Adapter/UI、Babylon Camera Component/Director 与回归 | 输入：`auto` / `first-person` / `camera-rig-profile`；输出：命令期原子拒绝、Context fallback/recovery、公开 Selection Decision | sequential |
 
 所有任务在当前已隔离的 `feat/gameplay-camera-optimization` worktree 内执行；不并行编辑 `CameraDirector` 或 `main.ts`，以避免接口和行为竞争。
 
@@ -207,3 +208,12 @@ CAM-06 不改变 `mountedOn`、Possession 或角色移动权威。Gameplay 仍�
 - 唯一 `mountedOn` 关系允许 Camera 以 `relationshipRole: "rider"` 命中 `mounted-framing`，同时继续跟随由 Relationship Profile `cameraTargetRole` 确定的 Mount ViewTarget。
 - 同一 Mount 出现多个 Rider 且无法确定本地 Rider 时，解析器保留全部关系上下文，但以 `relationshipRole: "none"` fail closed，不按排序结果猜测控制者。
 - Dismount 删除 committed `mountedOn` 后，下一次 Camera 固定更新撤销 mounted modifier；事务提交阶段继续不执行可能失败的 Camera/Animation 工作。
+
+## 14. View Preference 运行时接线（2026-08-26）
+
+CAM-07 删除 `requestCameraProfile/resetCameraProfile` 旧表面，不保留 alias。Browser V5 与
+Babylon Runtime 统一使用 `setCameraViewPreference/resetCameraViewPreference`；Director 只保存
+一个强类型 Preference，并在命令提交前复用 Camera Domain Admission。显式 Profile 不属于当前
+Context、或第一人称不可用时，命令原子拒绝且保留上一稳定 View；后续 Context 变化导致的不兼容
+仍由每 Tick Selection 进入显式 fallback，并在再次兼容时恢复原 Preference。Preference Reset
+恢复 `auto`，同时清除手动 Orbit、Transition、Modifier、Input Latch 与 Preview 状态。

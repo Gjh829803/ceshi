@@ -18,7 +18,9 @@ import type {
   CameraRelationshipRoleV1,
   CameraRigParametersV1,
   CameraSelectionDecisionV1,
+  CameraViewPreferenceV1,
 } from "@whitebox-world/camera";
+export type { CameraViewPreferenceV1 } from "@whitebox-world/camera";
 import type {
   RouteEvidenceSelectorV1,
   RouteOverlayQueryResultV2,
@@ -452,8 +454,8 @@ export interface WorldkitBrowserApiV5 {
     subjectDefinitionRef: string,
   ): SubjectPackageValidationResultV1;
   setIntent(input: FixedInputV1): Promise<WorldRuntimeSnapshotV4>;
-  requestCameraProfile(profileRef: string): WorldRuntimeSnapshotV4;
-  resetCameraProfile(): WorldRuntimeSnapshotV4;
+  setCameraViewPreference(preference: CameraViewPreferenceV1): WorldRuntimeSnapshotV4;
+  resetCameraViewPreference(): WorldRuntimeSnapshotV4;
   adjustCameraView(input: CameraViewInputV1): WorldRuntimeSnapshotV4;
   resetCameraView(): WorldRuntimeSnapshotV4;
   getCameraPreviewState(): CameraPreviewStateV1;

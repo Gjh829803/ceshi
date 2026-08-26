@@ -584,17 +584,19 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     }
   }
 
-  requestCameraProfileRuntime(profileRef: string): WorldRuntimeSnapshotV4 {
+  setCameraViewPreferenceRuntime(
+    preference: import("@whitebox-world/runtime-contracts").CameraViewPreferenceV1,
+  ): WorldRuntimeSnapshotV4 {
     this.captureReservationReceiptId = undefined;
-    this.activeRuntime().requestCameraProfile(profileRef);
+    this.activeRuntime().setCameraViewPreference(preference);
     this.render();
     this.emit();
     return this.coordinator.snapshot();
   }
 
-  resetCameraProfileRuntime(): WorldRuntimeSnapshotV4 {
+  resetCameraViewPreferenceRuntime(): WorldRuntimeSnapshotV4 {
     this.captureReservationReceiptId = undefined;
-    this.activeRuntime().resetCameraProfile();
+    this.activeRuntime().resetCameraViewPreference();
     this.render();
     this.emit();
     return this.coordinator.snapshot();

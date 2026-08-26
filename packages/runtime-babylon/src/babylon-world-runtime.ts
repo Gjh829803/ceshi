@@ -15,6 +15,7 @@ import {
 import type { PhysicsEngine } from "@babylonjs/core/Physics/v2/physicsEngine.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
 import { CONTROL_CAPTURE_PASS_IDS_V1 } from "@whitebox-world/control-capture";
+import type { CameraViewPreferenceV1 } from "@whitebox-world/camera";
 import {
   EntityRegistryV1,
   RuntimeEntityV1,
@@ -2060,7 +2061,9 @@ export class BabylonWorldRuntime {
     );
   }
 
-  requestCameraProfile(profileRef: string): BabylonRuntimeProjectionV1 {
+  setCameraViewPreference(
+    preference: CameraViewPreferenceV1,
+  ): BabylonRuntimeProjectionV1 {
     this.assertUsable();
     const controlledEntityId = this.controlledEntityId();
     const subject = this.executionPlan.subjects.find(
@@ -2071,28 +2074,23 @@ export class BabylonWorldRuntime {
         `WORLDKIT_RUNTIME_CONTROL_TARGET_NOT_FOUND: ${String(controlledEntityId)}`,
       );
     }
-    const reachable = new Set(
-      subject.capabilityAssembly.cameraContext.cameraRigProfiles
-        .map((profile) => profile.resourceRef),
-    );
-    if (!reachable.has(profileRef)) {
-      throw new RangeError(
-        "Camera Profile Ref must be reachable from the Camera Context.",
-      );
-    }
     this.synchronizeCameraViewSession();
-    if (!this.cameraComponent.requestProfile(profileRef)) {
-      throw new RangeError("Camera Profile Ref must be a non-empty string.");
+    const admission = this.cameraComponent.setViewPreference(
+      subject.capabilityAssembly.cameraContext,
+      preference,
+    );
+    if (!admission.ok) {
+      throw new RangeError(admission.diagnostics.map((row) => row.code).join(","));
     }
     this.latestRenderReadyReceipt = undefined;
     this.updateCamera();
     return this.snapshot();
   }
 
-  resetCameraProfile(): BabylonRuntimeProjectionV1 {
+  resetCameraViewPreference(): BabylonRuntimeProjectionV1 {
     this.assertUsable();
     this.synchronizeCameraViewSession();
-    this.cameraComponent.resetProfileSelection();
+    this.cameraComponent.resetViewPreference();
     this.latestRenderReadyReceipt = undefined;
     this.updateCamera();
     return this.snapshot();

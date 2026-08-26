@@ -14,8 +14,8 @@ type TransactionRuntimeDouble = {
   getCameraPreviewState(): {
     tuningByProfileRef: Readonly<Record<string, Readonly<Record<string, number>>>>;
   };
-  requestCameraProfile(profileRef: string): unknown;
-  resetCameraProfile(): unknown;
+  setCameraRigProfile(profileRef: string): unknown;
+  resetCameraRigProfile(): unknown;
   applyCameraPreview(request: {
     tuningByProfileRef: Readonly<Record<string, Readonly<Record<string, number>>>>;
   }): unknown;
@@ -294,7 +294,7 @@ describe("subject preset workbench Runtime transaction", () => {
     let gameplayApplyCount = 0;
     let cameraPreviewApplyCount = 0;
     let cameraPreviewReadCount = 0;
-    let resetCameraProfileCallCount = 0;
+    let resetCameraRigProfileCallCount = 0;
     const gameplayExpectedSubjectDefinitionHashes: string[] = [];
     const gameplayRequests: Array<{
       selectedMotionProfileRef: string;
@@ -307,11 +307,11 @@ describe("subject preset workbench Runtime transaction", () => {
           tuningByProfileRef: structuredClone(state.cameraTuningByProfileRef),
         };
       },
-      requestCameraProfile: (profileRef) => {
+      setCameraRigProfile: (profileRef) => {
         state.cameraPreferenceRef = profileRef;
       },
-      resetCameraProfile: () => {
-        resetCameraProfileCallCount += 1;
+      resetCameraRigProfile: () => {
+        resetCameraRigProfileCallCount += 1;
         state.cameraPreferenceRef = null;
       },
       applyCameraPreview: (request) => {
@@ -350,7 +350,7 @@ describe("subject preset workbench Runtime transaction", () => {
       gameplayRequests,
       gameplayExpectedSubjectDefinitionHashes,
       cameraPreviewReadCount: () => cameraPreviewReadCount,
-      resetCameraProfileCallCount: () => resetCameraProfileCallCount,
+      resetCameraRigProfileCallCount: () => resetCameraRigProfileCallCount,
     };
   };
 
@@ -457,7 +457,7 @@ describe("subject preset workbench Runtime transaction", () => {
   });
 
   it("rolls Camera Profile and preview tuning back when Gameplay rejects", () => {
-    const { runtime, state, resetCameraProfileCallCount } = createRuntime({
+    const { runtime, state, resetCameraRigProfileCallCount } = createRuntime({
       gameplayOutcome: "rejected",
     });
 
@@ -477,7 +477,7 @@ describe("subject preset workbench Runtime transaction", () => {
       motionProfileRef: baseline.defaultMotionProfile.resourceRef,
       controlFeelProfileRef: baseline.controlFeelProfile.resourceRef,
     });
-    expect(resetCameraProfileCallCount()).toBe(1);
+    expect(resetCameraRigProfileCallCount()).toBe(1);
   });
 
   it("rolls a Camera Profile mutation back when Camera preview fails", () => {

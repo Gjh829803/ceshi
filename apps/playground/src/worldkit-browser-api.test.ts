@@ -598,8 +598,8 @@ function adapterFixture(
     captureScreenshot: () => "data:image/png;base64,",
     resetRuntime: async () => snapshot,
     setPaused: () => undefined,
-    requestCameraProfileRuntime: () => snapshot,
-    resetCameraProfileRuntime: () => snapshot,
+    setCameraViewPreferenceRuntime: () => snapshot,
+    resetCameraViewPreferenceRuntime: () => snapshot,
     adjustCameraViewRuntime: () => snapshot,
     resetCameraViewRuntime: () => snapshot,
     getCameraPreviewStateRuntime: () => ({
@@ -683,12 +683,12 @@ describe("installDeferredWorldkitBrowserApi", () => {
       "listSubjectDefinitions",
       "ready",
       "releaseRuntimeActivity",
-      "requestCameraProfile",
       "reset",
-      "resetCameraProfile",
       "resetCameraView",
+      "resetCameraViewPreference",
       "runFixedInput",
       "runHarness",
+      "setCameraViewPreference",
       "setIntent",
       "setMotionProfile",
       "setPaused",
@@ -980,8 +980,8 @@ describe("installDeferredWorldkitBrowserApi", () => {
     expect(installation.api.getSnapshot()).toBe(adapter.runtimeSnapshot());
   });
 
-  it("forwards Camera Profile and preview calls through the single Browser V5 protocol", async () => {
-    const requestedProfileRefs: string[] = [];
+  it("forwards Camera View Preference and preview calls through the single Browser V5 protocol", async () => {
+    const requestedPreferences: unknown[] = [];
     const previewRequests: ApplyCameraPreviewRequestV1[] = [];
     let resetCallCount = 0;
     let previewReadCount = 0;
@@ -1015,11 +1015,11 @@ describe("installDeferredWorldkitBrowserApi", () => {
       tuningByProfileRef: appliedPreviewState.tuningByProfileRef,
     };
     const adapter = adapterFixture();
-    adapter.requestCameraProfileRuntime = (profileRef) => {
-      requestedProfileRefs.push(profileRef);
+    adapter.setCameraViewPreferenceRuntime = (preference) => {
+      requestedPreferences.push(preference);
       return requestedProfileSnapshot;
     };
-    adapter.resetCameraProfileRuntime = () => {
+    adapter.resetCameraViewPreferenceRuntime = () => {
       resetCallCount += 1;
       return resetProfileSnapshot;
     };
@@ -1039,11 +1039,17 @@ describe("installDeferredWorldkitBrowserApi", () => {
     await installation.initialization;
 
     const profileRef = "worldkit://camera-profile/first-person.standard@1";
-    expect(installation.api.requestCameraProfile?.(profileRef)).toBe(
+    expect(installation.api.setCameraViewPreference?.({
+      mode: "camera-rig-profile",
+      cameraRigProfileRef: profileRef,
+    })).toBe(
       requestedProfileSnapshot,
     );
-    expect(requestedProfileRefs).toEqual([profileRef]);
-    expect(installation.api.resetCameraProfile?.()).toBe(resetProfileSnapshot);
+    expect(requestedPreferences).toEqual([{
+      mode: "camera-rig-profile",
+      cameraRigProfileRef: profileRef,
+    }]);
+    expect(installation.api.resetCameraViewPreference?.()).toBe(resetProfileSnapshot);
     expect(resetCallCount).toBe(1);
     expect(installation.api.getCameraPreviewState?.()).toBe(previewState);
     expect(previewReadCount).toBe(1);
