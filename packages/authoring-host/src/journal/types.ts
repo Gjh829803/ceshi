@@ -222,6 +222,36 @@ export type PublishRuntimeReplacementV1 = (input: {
   }) => () => void;
 }) => Promise<PublishRuntimeReplacementResultV1>;
 
+export interface RecoverCommittedRuntimePublicationPortV1 {
+  recover(input: {
+    readonly worldId: string;
+    readonly requestId: string;
+    readonly requestHash: Sha256HashV1;
+    readonly worldConfiguration: TrustedRuntimeWorldConfigurationV1;
+    readonly committedIdentity: RuntimePublicationIdentityV1;
+  }): Promise<
+    | {
+        readonly status: "recovered";
+        readonly identity: RuntimePublicationIdentityV1;
+      }
+    | {
+        readonly status: "retryable" | "quarantined";
+        readonly diagnostics: readonly WorldChangeDiagnosticV1[];
+      }
+  >;
+  retryCleanup(input: {
+    readonly cleanupOperationId: string;
+    readonly previousWorldSessionId: string;
+    readonly attemptCount: number;
+  }): Promise<
+    | { readonly status: "released" }
+    | {
+        readonly status: "retryable" | "quarantined";
+        readonly diagnostics: readonly WorldChangeDiagnosticV1[];
+      }
+  >;
+}
+
 export interface SubmitWorldChangeRequestInputV1 {
   readonly journal: WorldChangeJournalV1;
   readonly leaseStore: PreparedCandidateLeaseStoreV1;

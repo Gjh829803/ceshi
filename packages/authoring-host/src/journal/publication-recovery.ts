@@ -36,6 +36,11 @@ export interface PendingWorldPublicationRecoveryV1 {
   readonly cleanupReport: WorldChangeCleanupReportV1;
 }
 
+export interface WorldPublicationRecoveryRecordV1
+  extends PendingWorldPublicationRecoveryV1 {
+  readonly publicationRecoveryStatus: "pending" | "recovered";
+}
+
 function publicationRecoveryConflict(message: string): never {
   throw new Error(`WORLD_CHANGE_PUBLICATION_RECOVERY_CONFLICT: ${message}`);
 }
@@ -50,13 +55,12 @@ function isTerminalCleanupStatus(
   return status === "released" || status === "quarantined";
 }
 
-export function listPendingWorldPublicationRecoveriesV1(
+export function listWorldPublicationRecoveryRecordsV1(
   journal: WorldChangeJournalV1,
-): readonly PendingWorldPublicationRecoveryV1[] {
+): readonly WorldPublicationRecoveryRecordV1[] {
   const records = listDurableRequestRecordsV1(journal);
-  const pending = listWorldPublicationRecoveryStatesV1(journal)
-    .filter((state) => state.status === "pending")
-    .map((state): PendingWorldPublicationRecoveryV1 => {
+  const publicationRecords = listWorldPublicationRecoveryStatesV1(journal)
+    .map((state): WorldPublicationRecoveryRecordV1 => {
       const matchingRecords = records.filter((record) =>
         record.request.worldId === state.worldId &&
         record.request.id === state.requestId
@@ -115,15 +119,34 @@ export function listPendingWorldPublicationRecoveriesV1(
         worldPackageRef: worldPackageRefFromRootHashV1(
           record.buildIdentity.worldPackageRootHash,
         ),
+        publicationRecoveryStatus: state.status,
         committedReceipt: committedReceipt as FullReloadCommittedReceiptV1,
         cleanupReport: parseWorldChangeCleanupReportV1(cleanupReport),
       });
     });
   return Object.freeze(orderBy(
-    pending,
+    publicationRecords,
     ["worldId", "requestId"],
     ["asc", "asc"],
   ));
+}
+
+export function listPendingWorldPublicationRecoveriesV1(
+  journal: WorldChangeJournalV1,
+): readonly PendingWorldPublicationRecoveryV1[] {
+  return Object.freeze(listWorldPublicationRecoveryRecordsV1(journal)
+    .filter(({ publicationRecoveryStatus }) =>
+      publicationRecoveryStatus === "pending"
+    )
+    .map((record) => Object.freeze({
+      worldId: record.worldId,
+      authoringEditSessionId: record.authoringEditSessionId,
+      requestId: record.requestId,
+      requestHash: record.requestHash,
+      worldPackageRef: record.worldPackageRef,
+      committedReceipt: record.committedReceipt,
+      cleanupReport: record.cleanupReport,
+    })));
 }
 
 export function markWorldPublicationRecoveredV1(

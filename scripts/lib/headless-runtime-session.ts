@@ -33,6 +33,7 @@ import {
   RuntimeHost,
   type GameplayWorldAdapterFactoryV1,
   type GameplayWorldPortV1,
+  type PublishWorldReplacementResultV1,
   type RuntimeCandidatePublicationGateInputV1,
   type RuntimeHostCreateOptionsV1,
   type RuntimeWorldAdapterDescriptorV1,
@@ -43,7 +44,7 @@ import {
   type VerifiedWorldPackageDirectoryV2,
   type WorldPackageRefV1,
 } from "@whitebox-world/world-package";
-import { isEmpty, isNil, sortBy } from "lodash-es";
+import { isEmpty, isEqual, isNil, sortBy } from "lodash-es";
 
 import {
   loadRuntimeWorldConfigurationFromPackageDirectoryV1,
@@ -191,6 +192,31 @@ export interface HeadlessRuntimeSessionV1 {
   resolvedSubjectAssetRefs(): readonly string[];
   ownershipSnapshot(): HeadlessRuntimeOwnershipSnapshotV1;
   dispose(): Promise<void>;
+}
+
+export interface HeadlessRuntimePublicationSessionV1
+  extends HeadlessRuntimeSessionV1 {
+  stageVerifiedWorldPackageV1(input: {
+    readonly worldConfiguration: RuntimeWorldConfigurationV1;
+    readonly verifiedDirectory: VerifiedWorldPackageDirectoryV2;
+  }): () => void;
+  publishWorldReplacementV1(
+    input: unknown,
+  ): Promise<PublishWorldReplacementResultV1>;
+  retryWorldSessionCleanupV1(
+    worldSessionId: string,
+  ): Promise<"released" | "quarantined">;
+}
+
+interface HeadlessRuntimeHandleV1 {
+  readonly runtime: BabylonWorldRuntime;
+  readonly port: GameplayWorldPortV1;
+  readonly assetResolver: PackageSubjectAssetResolverV1;
+}
+
+interface StagedVerifiedWorldPackageV1 {
+  readonly worldConfiguration: RuntimeWorldConfigurationV1;
+  readonly verifiedDirectory: VerifiedWorldPackageDirectoryV2;
 }
 
 function cleanupDiagnostic(
@@ -430,6 +456,114 @@ function wrapGameplayWorldPort(
   });
 }
 
+function wrapCandidateGameplayWorldPort(
+  port: GameplayWorldPortV1,
+  assetResolver: PackageSubjectAssetResolverV1,
+  onDisposed: () => void,
+): GameplayWorldPortV1 {
+  let disposeAttempt: Promise<void> | undefined;
+  let disposed = false;
+  return Object.freeze({
+    initialize: () => port.initialize(),
+    hasEntity: (entityId: string) => port.hasEntity(entityId),
+    isEntityControllable: (entityId: string) =>
+      port.isEntityControllable(entityId),
+    isActionAvailable: (
+      ...args: Parameters<GameplayWorldPortV1["isActionAvailable"]>
+    ) => port.isActionAvailable(...args),
+    prepareGameplayTransition: (
+      ...args: Parameters<GameplayWorldPortV1["prepareGameplayTransition"]>
+    ) => port.prepareGameplayTransition(...args),
+    estimateFixedInputTickCapacity: (
+      ...args: Parameters<
+        GameplayWorldPortV1["estimateFixedInputTickCapacity"]
+      >
+    ) => port.estimateFixedInputTickCapacity(...args),
+    runFixedInputTick: (
+      ...args: Parameters<GameplayWorldPortV1["runFixedInputTick"]>
+    ) => port.runFixedInputTick(...args),
+    snapshot: () => port.snapshot(),
+    dispose: () => {
+      if (disposed) return Promise.resolve();
+      if (!isNil(disposeAttempt)) return disposeAttempt;
+      const attempt = Promise.resolve()
+        .then(() => port.dispose())
+        .then(() => {
+          assetResolver.dispose();
+          disposed = true;
+          onDisposed();
+        })
+        .finally(() => {
+          if (!disposed) disposeAttempt = undefined;
+        });
+      disposeAttempt = attempt;
+      return attempt;
+    },
+  });
+}
+
+async function createCandidateRuntimeHandleV1(input: {
+  readonly runtimeSessionId: string;
+  readonly staged: StagedVerifiedWorldPackageV1;
+  readonly factories: ReturnType<typeof selectedFactories>;
+  readonly onRuntimeInitializationStage?: (
+    stage: BabylonWorldRuntimeInitializationStageV1,
+  ) => void;
+  readonly onDisposed: () => void;
+}): Promise<HeadlessRuntimeHandleV1> {
+  const assetResolver = new PackageSubjectAssetResolverV1(
+    input.staged.verifiedDirectory,
+    input.staged.worldConfiguration.worldPackageRef,
+  );
+  let engine: AbstractEngine | undefined;
+  let engineTransferred = false;
+  let runtime: BabylonWorldRuntime | undefined;
+  let rawPort: GameplayWorldPortV1 | undefined;
+  try {
+    const havokWasmBinary = await input.factories.loadHavokWasmBinary();
+    const createdEngine = input.factories.createEngine();
+    engine = createdEngine;
+    runtime = await input.factories.createBabylonRuntime({
+      executionPlan: input.staged.worldConfiguration.executionPlan,
+      runtimeSessionId: input.runtimeSessionId,
+      autoStartRenderLoop: false,
+      havokWasmBinary,
+      engineFactory: () => {
+        engineTransferred = true;
+        return createdEngine;
+      },
+      subjectAssetResolver: assetResolver,
+      ...(isNil(input.onRuntimeInitializationStage)
+        ? {}
+        : { onInitializationStage: input.onRuntimeInitializationStage }),
+    });
+    rawPort = input.factories.createGameplayWorldPort(
+      runtime,
+      HEADLESS_FIXED_INPUT_CONTROLLER_ENTITY_ID_V1,
+    );
+    const port = wrapCandidateGameplayWorldPort(
+      rawPort,
+      assetResolver,
+      input.onDisposed,
+    );
+    return Object.freeze({ runtime, port, assetResolver });
+  } catch (error) {
+    if (!isNil(rawPort)) {
+      await rawPort.dispose().catch(() => undefined);
+    } else if (!isNil(runtime)) {
+      await runtime.dispose().catch(() => undefined);
+    } else if (!isNil(engine) && !engineTransferred) {
+      try {
+        engine.dispose();
+      } catch {
+        // The original construction error remains authoritative.
+      }
+    }
+    assetResolver.dispose();
+    throw error;
+  }
+}
+
 function releaseRuntimeOwnership(
   ledger: HeadlessRuntimeOwnershipLedgerV1,
 ): void {
@@ -521,9 +655,7 @@ async function cleanupConstruction(
   return Object.freeze(diagnostics);
 }
 
-class HeadlessRuntimeSession implements HeadlessRuntimeSessionV1 {
-  readonly worldPackageRef: WorldPackageRefV1;
-  readonly worldPackageRootHash: `sha256:${string}`;
+class HeadlessRuntimeSession implements HeadlessRuntimePublicationSessionV1 {
   readonly fixedInputControllerEntityId =
     HEADLESS_FIXED_INPUT_CONTROLLER_ENTITY_ID_V1;
   #disposePromise: Promise<void> | undefined;
@@ -531,24 +663,97 @@ class HeadlessRuntimeSession implements HeadlessRuntimeSessionV1 {
   constructor(
     readonly runtimeSessionId: string,
     readonly initialWorldSessionId: string,
-    runtimeWorldConfiguration: RuntimeWorldConfigurationV1,
     private readonly runtimeHost: RuntimeHost,
+    private readonly handles: Map<string, HeadlessRuntimeHandleV1>,
+    private readonly stagedPackagesByExecutionPlanHash: Map<
+      string,
+      StagedVerifiedWorldPackageV1
+    >,
     private readonly runtime: BabylonWorldRuntime,
     private readonly gameplayWorldPort: GameplayWorldPortV1,
     private readonly assetResolver: PackageSubjectAssetResolverV1,
     private readonly ledger: HeadlessRuntimeOwnershipLedgerV1,
-  ) {
-    this.worldPackageRef = runtimeWorldConfiguration.worldPackageRef;
-    this.worldPackageRootHash =
-      runtimeWorldConfiguration.worldPackageBuildReceipt.worldPackageRootHash;
+  ) {}
+
+  get worldPackageRef(): WorldPackageRefV1 {
+    return this.runtimeHost.snapshot().worldState.worldPackageRef as WorldPackageRefV1;
+  }
+
+  get worldPackageRootHash(): `sha256:${string}` {
+    return this.runtimeHost.snapshot().worldState.worldPackageRootHash;
+  }
+
+  stageVerifiedWorldPackageV1(
+    input: StagedVerifiedWorldPackageV1,
+  ): () => void {
+    const expectedRootHash =
+      input.worldConfiguration.worldPackageBuildReceipt.worldPackageRootHash;
+    if (
+      input.verifiedDirectory.receipt.worldPackageRootHash !== expectedRootHash ||
+      input.worldConfiguration.worldPackageRef !==
+        worldPackageRefFromRootHashV1(expectedRootHash) ||
+      input.worldConfiguration.executionPlanHash !==
+        input.verifiedDirectory.receipt.manifest.executionPlanHash ||
+      !isEqual(
+        input.worldConfiguration.executionPlan,
+        input.verifiedDirectory.executionPlan,
+      ) ||
+      !isEqual(
+        input.worldConfiguration.gameplayBootstrap,
+        input.verifiedDirectory.gameplayBootstrap,
+      )
+    ) {
+      throw new Error("HEADLESS_RUNTIME_STAGED_PACKAGE_MISMATCH");
+    }
+    const key = input.worldConfiguration.executionPlanHash;
+    const existing = this.stagedPackagesByExecutionPlanHash.get(key);
+    if (!isNil(existing) && !isEqual(existing, input)) {
+      throw new Error("HEADLESS_RUNTIME_STAGED_PACKAGE_CONFLICT");
+    }
+    const staged = Object.freeze({ ...input });
+    this.stagedPackagesByExecutionPlanHash.set(key, staged);
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      if (this.stagedPackagesByExecutionPlanHash.get(key) === staged) {
+        this.stagedPackagesByExecutionPlanHash.delete(key);
+      }
+    };
+  }
+
+  publishWorldReplacementV1(
+    input: unknown,
+  ): Promise<PublishWorldReplacementResultV1> {
+    return this.runtimeHost.publishWorldReplacementV1(input);
+  }
+
+  async retryWorldSessionCleanupV1(
+    worldSessionId: string,
+  ): Promise<"released" | "quarantined"> {
+    if (worldSessionId === this.runtimeHost.currentWorldSessionId) {
+      return "quarantined";
+    }
+    const handle = this.handles.get(worldSessionId);
+    if (isNil(handle)) return "released";
+    try {
+      await handle.port.dispose();
+      return "released";
+    } catch {
+      return "quarantined";
+    }
   }
 
   snapshot(): WorldRuntimeSnapshotV4 {
+    const handle = this.handles.get(this.runtimeHost.currentWorldSessionId);
+    if (isNil(handle)) {
+      throw new Error("HEADLESS_RUNTIME_CURRENT_HANDLE_MISSING");
+    }
     return projectBabylonWorldRuntimeSnapshotV4({
       runtimeSessionId: this.runtimeSessionId,
       fixedInputControllerEntityId: this.fixedInputControllerEntityId,
       publication: this.runtimeHost.snapshot(),
-      runtimeProjection: this.runtime.snapshot(),
+      runtimeProjection: handle.runtime.snapshot(),
       hostPhase: this.runtimeHost.phase,
       isPaused: false,
     });
@@ -576,7 +781,11 @@ class HeadlessRuntimeSession implements HeadlessRuntimeSessionV1 {
   }
 
   resolvedSubjectAssetRefs(): readonly string[] {
-    return this.assetResolver.resolvedSubjectAssetRefs();
+    const handle = this.handles.get(this.runtimeHost.currentWorldSessionId);
+    if (isNil(handle)) {
+      throw new Error("HEADLESS_RUNTIME_CURRENT_HANDLE_MISSING");
+    }
+    return handle.assetResolver.resolvedSubjectAssetRefs();
   }
 
   ownershipSnapshot(): HeadlessRuntimeOwnershipSnapshotV1 {
@@ -608,7 +817,7 @@ class HeadlessRuntimeSession implements HeadlessRuntimeSessionV1 {
 async function createHeadlessRuntimeSessionInternalV1(
   input: CreateHeadlessRuntimeSessionInputV1,
   factoryInput: HeadlessRuntimeSessionFactoriesV1,
-): Promise<HeadlessRuntimeSessionV1> {
+): Promise<HeadlessRuntimePublicationSessionV1> {
   if (
     typeof input.runtimeSessionId !== "string" ||
     isEmpty(input.runtimeSessionId) ||
@@ -671,10 +880,11 @@ async function createHeadlessRuntimeSessionInternalV1(
     });
     ledger.acquire("babylon-scene-runtime");
     failureCode = "HEADLESS_RUNTIME_GAMEPLAY_PORT_CREATE_FAILED";
-    const handles = new Map<string, Readonly<{
-      runtime: BabylonWorldRuntime;
-      port: GameplayWorldPortV1;
-    }>>();
+    const handles = new Map<string, HeadlessRuntimeHandleV1>();
+    const stagedPackagesByExecutionPlanHash = new Map<
+      string,
+      StagedVerifiedWorldPackageV1
+    >();
     const port = factories.createGameplayWorldPort(
       runtime,
       HEADLESS_FIXED_INPUT_CONTROLLER_ENTITY_ID_V1,
@@ -689,26 +899,69 @@ async function createHeadlessRuntimeSessionInternalV1(
     handles.set(input.initialWorldSessionId, Object.freeze({
       runtime,
       port: gameplayWorldPort,
+      assetResolver,
     }));
     const adapterFactory: GameplayWorldAdapterFactoryV1 = Object.freeze({
-      preflightConcurrentResidency: () => Object.freeze({
-        status: "rejected" as const,
-        diagnostic: Object.freeze({
-          code: "WORLD_REPLACEMENT_CAPACITY_EXCEEDED" as const,
-          message: "Headless Runtime Session V1 owns exactly one WorldSession.",
-        }),
-      }),
+      preflightConcurrentResidency: (
+        current: RuntimeWorldAdapterDescriptorV1,
+        candidate: RuntimeWorldAdapterDescriptorV1,
+      ) => {
+        const staged = stagedPackagesByExecutionPlanHash.get(
+          candidate.executionPlanHash,
+        );
+        if (
+          current.runtimeSessionId !== input.runtimeSessionId ||
+          candidate.runtimeSessionId !== input.runtimeSessionId ||
+          !handles.has(current.worldSessionId) ||
+          isNil(staged) ||
+          !isEqual(candidate.executionPlan, staged.worldConfiguration.executionPlan)
+        ) {
+          return Object.freeze({
+            status: "rejected" as const,
+            diagnostic: Object.freeze({
+              code: "WORLD_REPLACEMENT_CAPACITY_EXCEEDED" as const,
+              message: "The verified candidate Package is not staged for residency.",
+            }),
+          });
+        }
+        return Object.freeze({ status: "accepted" as const });
+      },
       create: async (descriptor: RuntimeWorldAdapterDescriptorV1) => {
         const handle = handles.get(descriptor.worldSessionId);
+        if (!isNil(handle)) {
+          if (
+            descriptor.runtimeSessionId !== input.runtimeSessionId ||
+            descriptor.executionPlanHash !==
+              input.runtimeWorldConfiguration.executionPlanHash
+          ) {
+            throw new Error("HEADLESS_RUNTIME_ADAPTER_DESCRIPTOR_MISMATCH");
+          }
+          return handle.port;
+        }
+        const staged = stagedPackagesByExecutionPlanHash.get(
+          descriptor.executionPlanHash,
+        );
         if (
-          isNil(handle) ||
           descriptor.runtimeSessionId !== input.runtimeSessionId ||
-          descriptor.executionPlanHash !==
-            input.runtimeWorldConfiguration.executionPlanHash
+          isNil(staged) ||
+          !isEqual(descriptor.executionPlan, staged.worldConfiguration.executionPlan)
         ) {
           throw new Error("HEADLESS_RUNTIME_ADAPTER_DESCRIPTOR_MISMATCH");
         }
-        return handle.port;
+        const candidateHandle = await createCandidateRuntimeHandleV1({
+          runtimeSessionId: descriptor.runtimeSessionId,
+          staged,
+          factories,
+          ...(isNil(factoryInput.onRuntimeInitializationStage)
+            ? {}
+            : {
+              onRuntimeInitializationStage:
+                factoryInput.onRuntimeInitializationStage,
+            }),
+          onDisposed: () => handles.delete(descriptor.worldSessionId),
+        });
+        handles.set(descriptor.worldSessionId, candidateHandle);
+        return candidateHandle.port;
       },
       awaitCandidatePublicationReady: async (
         gate: RuntimeCandidatePublicationGateInputV1,
@@ -741,6 +994,7 @@ async function createHeadlessRuntimeSessionInternalV1(
       ),
     });
     failureCode = "HEADLESS_RUNTIME_WORLD_SESSION_CREATE_FAILED";
+    let worldSessionSequence = 0;
     runtimeHost = await factories.createRuntimeHost({
       runtimeSessionId: input.runtimeSessionId,
       initialWorld: input.runtimeWorldConfiguration,
@@ -768,7 +1022,12 @@ async function createHeadlessRuntimeSessionInternalV1(
           MAXIMUM_RUNTIME_ACTIVITY_RECORD_COUNT_V1,
       }),
       adapterFactory,
-      worldSessionIdFactory: () => input.initialWorldSessionId,
+      worldSessionIdFactory: () => {
+        worldSessionSequence += 1;
+        return worldSessionSequence === 1
+          ? input.initialWorldSessionId
+          : `${input.initialWorldSessionId}.replacement.${worldSessionSequence - 1}`;
+      },
     });
     ledger.acquire("runtime-host");
 
@@ -823,8 +1082,9 @@ async function createHeadlessRuntimeSessionInternalV1(
     return new HeadlessRuntimeSession(
       input.runtimeSessionId,
       input.initialWorldSessionId,
-      input.runtimeWorldConfiguration,
       runtimeHost,
+      handles,
+      stagedPackagesByExecutionPlanHash,
       runtime,
       gameplayWorldPort,
       assetResolver,
@@ -859,20 +1119,20 @@ async function createHeadlessRuntimeSessionInternalV1(
 
 export function createHeadlessRuntimeSessionV1(
   input: CreateHeadlessRuntimeSessionInputV1,
-): Promise<HeadlessRuntimeSessionV1> {
+): Promise<HeadlessRuntimePublicationSessionV1> {
   return createHeadlessRuntimeSessionInternalV1(input, {});
 }
 
 export function createHeadlessRuntimeSessionForTestV1(
   input: CreateHeadlessRuntimeSessionInputV1,
   factories: HeadlessRuntimeSessionFactoriesV1,
-): Promise<HeadlessRuntimeSessionV1> {
+): Promise<HeadlessRuntimePublicationSessionV1> {
   return createHeadlessRuntimeSessionInternalV1(input, factories);
 }
 
 export async function loadHeadlessWorldPackageV1(
   input: LoadHeadlessWorldPackageInputV1,
-): Promise<HeadlessRuntimeSessionV1> {
+): Promise<HeadlessRuntimePublicationSessionV1> {
   const loaded = await loadRuntimeWorldConfigurationFromPackageDirectoryV1({
     packageDirectoryPath: input.packageDirectoryPath,
   });

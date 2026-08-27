@@ -227,6 +227,67 @@ describe("headless Babylon Runtime Session", () => {
     }
   }, 30_000);
 
+  it("publishes a staged verified Package through RuntimeHost and snapshots only the new tick-zero Runtime", async () => {
+    const initial = await loadedBasicPackage();
+    const candidate = await loadRuntimeWorldConfigurationFromPackageDirectoryV1({
+      packageDirectoryPath: gBotPackagePath,
+    });
+    if (!("runtimeWorldConfiguration" in candidate)) {
+      throw new Error(JSON.stringify(candidate.result));
+    }
+    const session = await createHeadlessRuntimeSessionForTestV1(
+      inputFor(initial, "full-reload"),
+      {},
+    );
+    try {
+      const previous = session.snapshot();
+      const releaseStage = session.stageVerifiedWorldPackageV1({
+        worldConfiguration: candidate.runtimeWorldConfiguration,
+        verifiedDirectory: candidate.verifiedDirectory,
+      });
+      const result = await session.publishWorldReplacementV1({
+        worldConfiguration: candidate.runtimeWorldConfiguration,
+        publication: {
+          requestId: "request.full-reload.headless",
+          requestHash: `sha256:${"a".repeat(64)}`,
+          fencingToken: "fence.full-reload.headless",
+          runtimeExpectation: {
+            runtimeSessionId: session.runtimeSessionId,
+            expectedWorldSessionId: previous.worldSessionId,
+            expectedWorldPackageRootHash: session.worldPackageRootHash,
+            targetPhaseBarrier: { mode: "next-world-replacement-barrier" },
+          },
+        },
+        persistDurableCommit: () => () => undefined,
+      });
+      releaseStage();
+      if (result.status === "rejected") {
+        throw new Error(JSON.stringify(result));
+      }
+
+      expect(result).toMatchObject({
+        status: "published",
+        current: {
+          runtimeSessionId: session.runtimeSessionId,
+          simulationTick: 0,
+          worldPackageRootHash:
+            candidate.runtimeWorldConfiguration.worldPackageBuildReceipt
+              .worldPackageRootHash,
+        },
+        cleanup: { status: "released" },
+      });
+      const snapshot = session.snapshot();
+      expect(snapshot.worldSessionId).not.toBe(previous.worldSessionId);
+      expect(snapshot.world.simulationTick).toBe(0);
+      expect(snapshot.world.subjectStatesByEntityId).toHaveProperty("g-bot-primary");
+      expect(session.resolvedSubjectAssetRefs()).toEqual([
+        "worldkit://subject-asset/actor.humanoid.g-bot@2",
+      ]);
+    } finally {
+      await session.dispose();
+    }
+  }, 30_000);
+
   it("produces the same 60 fixed ticks under 30/60/120-like submission timing", async () => {
     const sessions: HeadlessRuntimeSessionV1[] = [];
     try {

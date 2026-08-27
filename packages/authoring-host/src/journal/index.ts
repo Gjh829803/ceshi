@@ -10,10 +10,12 @@ export { journalArtifactIdV1 } from "./ids.js";
 export {
   advanceWorldChangeCleanupReportV1,
   listPendingWorldPublicationRecoveriesV1,
+  listWorldPublicationRecoveryRecordsV1,
   markWorldPublicationRecoveredV1,
 } from "./publication-recovery.js";
 export type {
   PendingWorldPublicationRecoveryV1,
+  WorldPublicationRecoveryRecordV1,
 } from "./publication-recovery.js";
 export {
   queryWorldChangeCleanupReportV1,
@@ -55,6 +57,7 @@ export type {
   QueryWorldChangeExplainResultV1,
   QueryWorldChangeReceiptInputV1,
   QueryWorldChangeReceiptResultV1,
+  RecoverCommittedRuntimePublicationPortV1,
   PublishRuntimeReplacementFailureKindV1,
   PublishRuntimeReplacementResultV1,
   PublishRuntimeReplacementV1,

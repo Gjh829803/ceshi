@@ -247,11 +247,11 @@ export async function recoverCommittedWorldPublicationsV1(input: {
 - The concrete Runtime owner reuses the existing Babylon/Havok construction and RuntimeHost publication path. Before each candidate create it stages only an already verified WorldPackage configuration keyed by `executionPlanHash`; the RuntimeHost adapter factory cannot read ChangeSets or caller paths.
 - On startup recovery the owner rebuilds the committed Package with the exact committed RuntimeSession ID and WorldSession ID at Tick 0 before Host APIs reopen. It does not claim P1.4 request replay as P1.6 publication replay.
 
-- [ ] **Step 1: Write RED coordinator tests**
+- [x] **Step 1: Write RED coordinator tests**
 
 Cover no work, exact recovery, Package missing/corrupt, runtime identity divergence, retryable cleanup then release, retry limit quarantine, two worlds sorted independently, one world failure not exposing that world, and committed Receipt byte stability. The concrete Runtime-owner tests also cover real basic/G Bot Package construction, Full Reload to a second verified Package, old-session disposal, exact Tick 0 identity, multi-owner isolation, partial candidate construction, and throwing cleanup.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```bash
 pnpm exec vitest run scripts/lib/durable-world-change-runtime.test.ts scripts/lib/world-change-publication-recovery.test.ts
@@ -259,15 +259,15 @@ pnpm exec vitest run scripts/lib/durable-world-change-runtime.test.ts scripts/li
 
 Expected: FAIL because no durable Runtime owner or startup coordinator exists and the current headless adapter rejects concurrent World residency.
 
-- [ ] **Step 3: Implement verified Package reconstruction and runtime recovery**
+- [x] **Step 3: Implement verified Package reconstruction and runtime recovery**
 
 First factor the existing headless Babylon/Havok handle construction so one RuntimeHost adapter factory can create and own a verified candidate handle without duplicating engine/runtime setup. Then derive the exact Package Ref from the committed build identity, verify the directory, project `executionPlan`, `executionPlanHash`, Build Receipt, and Gameplay Bootstrap into `TrustedRuntimeWorldConfigurationV1`, and call the concrete Runtime owner. Mark publication recovered only after exact identity equality.
 
-- [ ] **Step 4: Implement bounded cleanup attempts**
+- [x] **Step 4: Implement bounded cleanup attempts**
 
 Persist `retrying` before invoking an attempt so process death cannot hide the attempt count. Persist `released` or `quarantined` afterward. Reopening and rerunning continues monotonically from the WAL; Receipt bytes and revision head never change.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 ```bash
 pnpm exec vitest run scripts/lib/durable-world-change-runtime.test.ts scripts/lib/world-change-publication-recovery.test.ts scripts/lib/headless-runtime-session.test.ts packages/authoring-host/src/journal/publication-recovery.test.ts packages/authoring-host/src/journal/publication-adversarial.test.ts
