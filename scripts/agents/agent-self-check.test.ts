@@ -4,6 +4,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { isNil } from "lodash-es";
 import { describe, expect, it } from "vitest";
 
 function run(command: string, arguments_: readonly string[]) {
@@ -218,7 +219,20 @@ Encoding profile: signed-diverging-blue-gray-orange@1 using RGB(32,64,208), RGB(
 
       world.world.environment.preset = "clear-day";
       const spawn = world.nodes.find((node: any) => node.kind === "anchor" && node.id === "spawn-main");
-      if (spawn?.placement?.kind !== "fixed") throw new Error("Ground-spawn fixture is missing.");
+      if (isNil(spawn)) throw new Error("Ground-spawn fixture is missing.");
+      if (spawn.placement.kind === "solved") {
+        if (isNil(spawn.placement.initialTransform)) {
+          throw new Error("Ground-spawn fixture has no initial transform.");
+        }
+        spawn.placement = {
+          kind: "fixed",
+          transform: structuredClone(spawn.placement.initialTransform),
+        };
+        world.constraints.placements = world.constraints.placements.filter(
+          (constraint: any) =>
+            constraint.id !== "spawn-inside" && constraint.id !== "spawn-supported",
+        );
+      }
       spawn.placement.transform.positionMetersXYZ[1] += 5;
       await writeFile(worldPath, JSON.stringify(world));
       const raisedReport = path.join(root, "builder-raised-spawn.json");

@@ -177,14 +177,18 @@
         "classId": "spawn.player"
       },
       "placement": {
-        "kind": "fixed",
-        "transform": {
+        "kind": "solved",
+        "initialTransform": {
           "positionMetersXYZ": [
             0,
             0,
             30
           ]
-        }
+        },
+        "placementConstraintIds": [
+          "spawn-inside",
+          "spawn-supported"
+        ]
       }
     },
     {
@@ -230,13 +234,43 @@
     "solverProfileRef": "worldkit://layout-solver-profile/outdoor.s1@1"
   },
   "spatial": {
-    "regions": [],
+    "regions": [
+      {
+        "id": "spawn-zone",
+        "kind": "polygon-xz",
+        "pointsMetersXZ": [
+          [-2, 28],
+          [2, 28],
+          [2, 32],
+          [-2, 32]
+        ],
+        "semanticClassId": "terrain.spawn-zone"
+      }
+    ],
     "routes": [],
     "screenRegions": [],
     "traversalAreas": []
   },
   "constraints": {
-    "placements": [],
+    "placements": [
+      {
+        "id": "spawn-inside",
+        "kind": "inside-region",
+        "requirement": "required",
+        "entityId": "spawn-main",
+        "regionId": "spawn-zone",
+        "boundaryClearanceMeters": 2
+      },
+      {
+        "id": "spawn-supported",
+        "kind": "supported-by",
+        "requirement": "required",
+        "supportedEntityId": "spawn-main",
+        "supportingEntityId": "terrain-main",
+        "maximumSupportGapMeters": 0,
+        "minimumSupportRatio": 1
+      }
+    ],
     "connectivity": []
   }
 }

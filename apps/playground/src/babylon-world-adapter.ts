@@ -354,6 +354,8 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   readonly name: string;
 
   private readonly listeners = new Set<(snapshot: WorldSnapshot) => void>();
+  private readonly initialExecutionPlan: ExecutionPlanV5;
+  private readonly initialInspections: readonly FeatureInspection[];
   private readonly keyboardInput = new PhysicalKeyboardActionTracker();
   private readonly cameraInput = new Set<CameraInputAction>();
   private keyboardCameraYawRadiansPerTick = 0;
@@ -388,9 +390,14 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     private readonly playgroundMetadata?: PlaygroundWorldMetadataV1,
   ) {
     this.name = `babylon-havok/${executionPlan.id}`;
-    this.inspections = structuredClone(
-      playgroundMetadata?.featureInspections ?? featureInspections(executionPlan),
+    this.initialExecutionPlan = executionPlan;
+    const metadataFeatureInspections = playgroundMetadata?.featureInspections;
+    this.initialInspections = structuredClone(
+      isNil(metadataFeatureInspections)
+        ? featureInspections(executionPlan)
+        : metadataFeatureInspections,
     );
+    this.inspections = structuredClone(this.initialInspections);
     this.resizeObserver = new ResizeObserver(() => this.activeRuntime().resize());
     window.addEventListener("keydown", this.handleKeyDown);
     window.addEventListener("keyup", this.handleKeyUp);
@@ -763,7 +770,11 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     this.resetAnimationClock();
     const previousCanvas = this.canvas;
     const snapshot = await this.coordinator.resetWithInitialControlBinding();
-    await this.adoptActiveWorldSurface({ previousCanvas });
+    await this.adoptActiveWorldSurface({
+      previousCanvas,
+      executionPlan: this.initialExecutionPlan,
+      inspections: this.initialInspections,
+    });
     this.emit();
     return snapshot;
   }
@@ -1256,10 +1267,15 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   private async adoptActiveWorldSurface(input: {
     readonly previousCanvas: HTMLCanvasElement;
     readonly executionPlan?: ExecutionPlanV5;
+    readonly inspections?: readonly FeatureInspection[];
   }): Promise<void> {
     if (!isNil(input.executionPlan)) {
       this.executionPlan = input.executionPlan;
-      this.inspections = structuredClone(featureInspections(input.executionPlan));
+      this.inspections = structuredClone(
+        isNil(input.inspections)
+          ? featureInspections(input.executionPlan)
+          : input.inspections,
+      );
       this.compositionCache = undefined;
     }
     const nextCanvas = this.canvas;

@@ -152,6 +152,7 @@ describe("WorldKit authoring edit browser installation", () => {
       expect(authoringSurfaces.editKeys).toEqual([...AUTHORING_EDIT_KEYS]);
       expect(authoringSurfaces.runtimeKeys).toEqual([...BROWSER_V5_KEYS]);
       expect(authoringSurfaces.runtimeHasEdit).toBe(false);
+      await authoringPage.close();
 
       const catalogPage = await browser.newPage();
       await catalogPage.goto(`http://127.0.0.1:${port}/?scene=grassland`, {

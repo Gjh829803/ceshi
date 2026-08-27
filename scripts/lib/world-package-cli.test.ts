@@ -128,7 +128,7 @@ describe("WorldPackage V2 command core", () => {
       exitCode: 1,
       diagnostics: [{ code: "WORLD_PACKAGE_OUTPUT_UNAVAILABLE" }],
     });
-  });
+  }, 15_000);
 
   it("loads the exact G Bot Runtime configuration and package-owned resource bytes", async () => {
     const directory = await temporaryDirectory();

@@ -3,6 +3,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
+import { isNil } from "lodash-es";
 
 import {
   parseWorldChangeSetV1,
@@ -80,6 +81,7 @@ interface RuntimeIdentityProbeV1 {
   readonly simulationTick: number;
   readonly worldStateRef: string;
   readonly worldPackageRootHash: Sha256HashV1;
+  readonly playerPositionMetersXYZ: readonly number[];
 }
 
 interface WorldChangeReceiptProbeV1 {
@@ -157,13 +159,45 @@ describe("WorldKit authoring edit add-house Full Reload", () => {
           simulationTick: snapshot.world.simulationTick,
           worldStateRef: snapshot.world.worldStateRef,
           worldPackageRootHash: worldState.worldPackageRootHash,
+          playerPositionMetersXYZ:
+            snapshot.world.subjectStatesByEntityId.player!.entityState.positionMetersXYZ,
         };
       });
       expect(beforeIdentity.runtimeKeys).toEqual([...BROWSER_V5_KEYS]);
 
+      const movedBeforePrepare = await page.evaluate(async () => {
+        const snapshot = await window.__WORLDKIT__!.runFixedInput([
+          { actions: ["move-forward"], ticks: 30 },
+        ]);
+        const worldState = window.__WORLDKIT__!.getWorldStateSnapshot({
+          worldStateRef: snapshot.world.worldStateRef,
+        });
+        return {
+          worldSessionId: snapshot.worldSessionId,
+          simulationTick: snapshot.world.simulationTick,
+          worldPackageRootHash: worldState.worldPackageRootHash,
+          playerPositionMetersXYZ:
+            snapshot.world.subjectStatesByEntityId.player!.entityState.positionMetersXYZ,
+        };
+      });
+      expect(movedBeforePrepare.worldSessionId).toBe(beforeIdentity.worldSessionId);
+      expect(movedBeforePrepare.worldPackageRootHash).toBe(
+        beforeIdentity.worldPackageRootHash,
+      );
+      expect(movedBeforePrepare.simulationTick).toBeGreaterThan(
+        beforeIdentity.simulationTick,
+      );
+      expect(movedBeforePrepare.playerPositionMetersXYZ).not.toEqual(
+        beforeIdentity.playerPositionMetersXYZ,
+      );
+      expect(Math.abs(
+        movedBeforePrepare.playerPositionMetersXYZ[1]! -
+          beforeIdentity.playerPositionMetersXYZ[1]!,
+      )).toBeLessThan(0.05);
+
       await page.evaluate(async (tick) => {
         await window.__WORLDKIT__!.waitForRenderReady(tick);
-      }, beforeIdentity.simulationTick);
+      }, movedBeforePrepare.simulationTick);
       const beforeRuntimePng = pngFromDataUrl(
         await page.evaluate(() => window.__WORLDKIT__!.captureScreenshot()),
       );
@@ -195,7 +229,7 @@ describe("WorldKit authoring edit add-house Full Reload", () => {
       );
       expect(staleDryRun).not.toHaveProperty("rebaseRequired");
       const currentAuthoringSpecHash = staleDryRun.currentAuthoringSpecHash;
-      if (currentAuthoringSpecHash === undefined) {
+      if (isNil(currentAuthoringSpecHash)) {
         throw new Error("stale Dry Run must return currentAuthoringSpecHash");
       }
 
@@ -222,17 +256,17 @@ describe("WorldKit authoring edit add-house Full Reload", () => {
       });
       expect(dryRun.status).toBe("succeeded");
       expect(dryRun.publicationMode).toBe("none");
-      if (dryRun.preparedCandidateRef === undefined) {
+      if (isNil(dryRun.preparedCandidateRef)) {
         throw new Error("Dry Run must return preparedCandidateRef");
       }
 
-      const applied = await page.evaluate(async ({
+      const publication = await page.evaluate(async ({
         changeSet,
         preparedCandidateRef,
         identity,
         sessionId,
-      }): Promise<WorldChangeReceiptProbeV1> => {
-        return window.__WORLDKIT_AUTHORING_EDIT__!.applyWorldChange({
+      }) => {
+        const applyPromise = window.__WORLDKIT_AUTHORING_EDIT__!.applyWorldChange({
           kind: "worldkit-world-change-request",
           schemaVersion: 1,
           id: "request.apply.add-house.browser",
@@ -249,12 +283,44 @@ describe("WorldKit authoring edit add-house Full Reload", () => {
             targetPhaseBarrier: { mode: "next-world-replacement-barrier" },
           },
         });
+        let applySettled = false;
+        void applyPromise.then(
+          () => { applySettled = true; },
+          () => { applySettled = true; },
+        );
+        const runtime = window.__WORLDKIT__!;
+        const duringPrepareSnapshot = runtime.getSnapshot();
+        const duringPrepareWorldState = runtime.getWorldStateSnapshot({
+          worldStateRef: duringPrepareSnapshot.world.worldStateRef,
+        });
+        const applyWasPending = !applySettled;
+        const afterInput = await runtime.runFixedInput([
+          { actions: ["move-right"], ticks: 12 },
+        ]);
+        const receipt = await applyPromise;
+        return {
+          receipt,
+          duringPrepare: {
+            applyWasPending,
+            worldSessionId: duringPrepareSnapshot.worldSessionId,
+            worldPackageRootHash: duringPrepareWorldState.worldPackageRootHash,
+            simulationTick: duringPrepareSnapshot.world.simulationTick,
+            playerPositionMetersXYZ:
+              duringPrepareSnapshot.world.subjectStatesByEntityId.player!.entityState
+                .positionMetersXYZ,
+            afterInputWorldSessionId: afterInput.worldSessionId,
+            afterInputSimulationTick: afterInput.world.simulationTick,
+            afterInputPlayerPositionMetersXYZ:
+              afterInput.world.subjectStatesByEntityId.player!.entityState.positionMetersXYZ,
+          },
+        };
       }, {
         changeSet: browserChangeSet,
         preparedCandidateRef: dryRun.preparedCandidateRef,
         identity: beforeIdentity,
         sessionId: PLAYGROUND_AUTHORING_EDIT_SESSION_ID,
       });
+      const applied = publication.receipt as WorldChangeReceiptProbeV1;
 
       if (applied.status !== "committed") {
         throw new Error(
@@ -263,6 +329,22 @@ describe("WorldKit authoring edit add-house Full Reload", () => {
       }
       expect(applied.requestedOutcome).toBe("publish-runtime");
       expect(applied.publicationMode).toBe("full-reload");
+      expect(publication.duringPrepare.applyWasPending).toBe(true);
+      expect(publication.duringPrepare.worldSessionId).toBe(
+        beforeIdentity.worldSessionId,
+      );
+      expect(publication.duringPrepare.worldPackageRootHash).toBe(
+        beforeIdentity.worldPackageRootHash,
+      );
+      expect(publication.duringPrepare.afterInputWorldSessionId).toBe(
+        beforeIdentity.worldSessionId,
+      );
+      expect(publication.duringPrepare.afterInputSimulationTick).toBeGreaterThan(
+        publication.duringPrepare.simulationTick,
+      );
+      expect(publication.duringPrepare.afterInputPlayerPositionMetersXYZ).not.toEqual(
+        publication.duringPrepare.playerPositionMetersXYZ,
+      );
       expect(applied.affectedIds?.nodeEntityIds).toContain("house-north");
       expect(applied.affectedIds?.resourceIds).toContain("house-blockout");
       expect(applied.currentRuntimeIdentity?.worldSessionId).not.toBe(
@@ -272,6 +354,10 @@ describe("WorldKit authoring edit add-house Full Reload", () => {
       expect(applied.currentRuntimeIdentity?.worldPackageRootHash).not.toBe(
         beforeIdentity.worldPackageRootHash,
       );
+      expect(applied.previousRuntimeIdentity).toMatchObject({
+        worldSessionId: beforeIdentity.worldSessionId,
+        worldPackageRootHash: beforeIdentity.worldPackageRootHash,
+      });
 
       await page.evaluate(async () => {
         await window.__WORLDKIT__!.waitForRenderReady(0);
@@ -290,6 +376,12 @@ describe("WorldKit authoring edit add-house Full Reload", () => {
         runtimeKeys: Object.keys(window.__WORLDKIT__ ?? {}).sort(),
         worldSessionId: window.__WORLDKIT__!.getSnapshot().worldSessionId,
         simulationTick: window.__WORLDKIT__!.getSnapshot().world.simulationTick,
+        worldPackageRootHash: window.__WORLDKIT__!.getWorldStateSnapshot({
+          worldStateRef: window.__WORLDKIT__!.getSnapshot().world.worldStateRef,
+        }).worldPackageRootHash,
+        playerPositionMetersXYZ:
+          window.__WORLDKIT__!.getSnapshot().world.subjectStatesByEntityId.player!
+            .entityState.positionMetersXYZ,
       }));
       expect(afterInspection.featureIds).toContain("house-north");
       expect(afterInspection.runtimeKeys).toEqual([...BROWSER_V5_KEYS]);
@@ -297,6 +389,51 @@ describe("WorldKit authoring edit add-house Full Reload", () => {
         applied.currentRuntimeIdentity?.worldSessionId,
       );
       expect(afterInspection.simulationTick).toBe(0);
+      expect(afterInspection.worldPackageRootHash).toBe(
+        applied.currentRuntimeIdentity?.worldPackageRootHash,
+      );
+
+      const afterMovementAndReset = await page.evaluate(async () => {
+        const runtime = window.__WORLDKIT__!;
+        const moved = await runtime.runFixedInput([
+          { actions: ["move-forward"], ticks: 24 },
+        ]);
+        const movedPositionMetersXYZ =
+          moved.world.subjectStatesByEntityId.player!.entityState.positionMetersXYZ;
+        const reset = await runtime.reset();
+        await runtime.waitForRenderReady(0);
+        const resetWorldState = runtime.getWorldStateSnapshot({
+          worldStateRef: reset.world.worldStateRef,
+        });
+        return {
+          movedWorldSessionId: moved.worldSessionId,
+          movedSimulationTick: moved.world.simulationTick,
+          movedPositionMetersXYZ,
+          resetWorldSessionId: reset.worldSessionId,
+          resetSimulationTick: reset.world.simulationTick,
+          resetWorldPackageRootHash: resetWorldState.worldPackageRootHash,
+          resetFeatureIds: window.__WHITEBOX_PLAYGROUND__
+            .inspectFeatures()
+            .map((feature) => feature.id),
+          canvasCount: document.querySelectorAll("canvas.world-canvas").length,
+        };
+      });
+      expect(afterMovementAndReset.movedWorldSessionId).toBe(
+        applied.currentRuntimeIdentity?.worldSessionId,
+      );
+      expect(afterMovementAndReset.movedSimulationTick).toBeGreaterThan(0);
+      expect(afterMovementAndReset.movedPositionMetersXYZ).not.toEqual(
+        afterInspection.playerPositionMetersXYZ,
+      );
+      expect(afterMovementAndReset.resetWorldSessionId).not.toBe(
+        afterMovementAndReset.movedWorldSessionId,
+      );
+      expect(afterMovementAndReset.resetSimulationTick).toBe(0);
+      expect(afterMovementAndReset.resetWorldPackageRootHash).toBe(
+        beforeIdentity.worldPackageRootHash,
+      );
+      expect(afterMovementAndReset.resetFeatureIds).not.toContain("house-north");
+      expect(afterMovementAndReset.canvasCount).toBe(1);
     } finally {
       await browser.close();
       await server.stop();

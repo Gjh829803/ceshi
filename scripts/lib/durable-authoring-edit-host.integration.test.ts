@@ -6,7 +6,7 @@ import path from "node:path";
 import { isEmpty, isNil } from "lodash-es";
 import { afterEach, describe, expect, it } from "vitest";
 
-const REPOSITORY_ROOT = path.resolve(import.meta.dirname, "..");
+const REPOSITORY_ROOT = path.resolve(import.meta.dirname, "../..");
 const CHILD_FIXTURE_PATH = path.join(
   REPOSITORY_ROOT,
   "scripts/fixtures/durable-authoring-edit-host-child.test-support.ts",
