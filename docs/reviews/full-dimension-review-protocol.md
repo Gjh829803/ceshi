@@ -28,7 +28,11 @@
 
 ### D1 定位与需求边界
 
-- 对照产品定位：AI 用结构化配置组装世界，SDK 负责编译、物理、验收；任何让 AI 直接触碰 Babylon/Havok、场景脚本或引擎 Handle 的设计都是缺陷。
+- 对照产品定位：Canonical/Hosted Lane 中，AI 用结构化配置组装世界，SDK 负责编译、物理、验收；
+  让该 Lane 的 AI 直接触碰 Babylon/Havok、场景脚本或引擎 Handle 仍是缺陷。ADR-0007 的独立
+  Babylon Native Scene Lane 只允许创作期视觉例外；审查它时必须同时证明单一 `sceneSource.kind`、
+  Host-owned Candidate Scene、显式 Spawn/Collider 登记，以及 SDK 独占 Havok、人物、动作、主相机、
+  固定 Tick、状态和生命周期。缺少任一边界即为缺陷。
 - 当前阶段边界是 outdoor heightfield。室内、载具、NPC 行为、洞穴、悬挑、联网必须报 capability gap，不得写成受支持能力；也不得把 gap 记成实现 bug。
 - 检查目标 / 非目标是否闭合：有没有为「先做简单版」预留的退路字段、临时旁路或未声明的隐含承诺。
 - 对照 `docs/18` 的依赖图与里程碑顺序：被审设计是否提前实现未冻结协议的公共字段；「技术探针」是否泄漏进 Canonical Schema。

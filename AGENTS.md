@@ -159,7 +159,18 @@ Automatic Planner and Builder work runs through exactly one Codex task per stage
 
 When built-ins are insufficient, define a local `defineWorldFeature(...)` and use only its tracked
 `BuildContext`. Register custom terrain through `world.terrain.custom(...)`. Scene modules must not
-add opaque renderer or physics objects directly; provider objects stay behind Runtime adapters.
+add opaque renderer or physics objects directly; provider objects stay behind Runtime adapters. This
+rule applies to the Canonical Catalog and Hosted Builder workflows.
+
+ADR-0007 defines one strictly scoped authoring-time exception for the separate Babylon Native Scene
+Lane. A Native Module may create Babylon visual objects only inside the Host-provided Candidate Scene
+and may submit Spawn and static Collider intent only through the versioned registration boundary. It
+must not create Engine, Scene, Render Loop, Havok/physics objects, the SDK main camera, Gameplay
+entities, input, timers, or an independent tick. A world selects exactly one Scene Source, so a Native
+Module must not overlay or mutate Canonical geometry. The current Native API remains a trusted-local
+experiment until the BNA production gates in
+`docs/superpowers/specs/2026-08-28-ai-friendly-babylon-native-world-authoring-design.md` pass; this
+exception does not make it available to the current Catalog or Hosted Builder workflows.
 
 ## Required properties
 

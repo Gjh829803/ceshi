@@ -1,13 +1,19 @@
 # SDK 重构总进度与 Backlog
 
 - 状态：Active，重构执行进度与剩余工作的唯一跟踪入口。
-- 基准日期：2026-08-26。
+- 能力进度基准日期：2026-08-26（本次未重算百分比）。
+- 架构状态更新至：2026-08-28。
 - 长期目标总进度：约 **68%**，合理误差范围为 ±5%。
 - 第一条 Canonical 纵向切片：约 **94%**。
-- 当前唯一世界构建入口：Canonical Authoring V4 → NormalizedWorldIR V4 → ExecutionPlan V5 →
+- 当前唯一正式生产世界构建入口：Canonical Authoring V4 → NormalizedWorldIR V4 → ExecutionPlan V5 →
   RuntimeWorldConfiguration V1 → RuntimeHost → Babylon.js/Havok；Route 在同一 V5 Plan 上生成
   WorldPackage Build Receipt → Validation Subject → Recast → Canonical Route Evidence/Report。
   Browser 只公开 Protocol V5 与 Snapshot V4；Babylon provider projection 保持 Adapter 内部合同。
+
+> ADR-0007 已接受长期的 Babylon Native Scene Lane 架构方向：Native JSON 管启动/资源/Gameplay，
+> Babylon TypeScript 管视觉，显式登记连接 SDK-owned Havok，且每个世界只选一个 Scene Source。
+> 当前只有受信本地实验切片；Native Schema、Source Union、Package/Receipt、Hosted 隔离和正式 Route
+> 尚未生产化，因此不改变上一段的当前入口和进度口径。
 
 > Golden Humanoid S1b 首个可视纵向切片已完成并进入回归；S1b 整体与 Semantic Actions 整体仍未完成.
 
@@ -102,6 +108,8 @@ Registry Lock、Browser preference 命令，以及 Babylon CameraDirector 消费
 - [`2026-08-26-p16-full-reload-b-review.md`](reviews/2026-08-26-p16-full-reload-b-review.md)：P1.6 Full Reload 首切片 Mode B 变更审查；recover 终态保护与 F1 断言已按规格复验；
 - [`2026-08-19-world-validation-report-and-quality-gates-design.md`](../docs/superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md)：量化 Gate、Metric、Evidence 和生产阻断协议；
 - [`2026-08-20-ai-authored-geometry-extension-design.md`](../docs/superpowers/specs/2026-08-20-ai-authored-geometry-extension-design.md)：未来可能需要的 AI 自定义几何能力及候选技术，仅供调研评审，不属于当前 Roadmap；
+- [`2026-08-28-ai-friendly-babylon-native-world-authoring-design.md`](../docs/superpowers/specs/2026-08-28-ai-friendly-babylon-native-world-authoring-design.md)：Canonical JSON 与 Babylon Native Scene 的长期分工、薄登记合同、统一 Gameplay Kernel、生产化依赖图和能力声明边界；
+- [`ADR-0007`](decisions/0007-canonical-and-babylon-native-authoring-lanes.md)：接受“一世界、两条互斥场景创作 Lane、一个 Babylon/Havok Kernel”的架构决策；不代表 Native 已生产可用；
 - [`21-open-source-design-reference-ledger.md`](21-open-source-design-reference-ledger.md)：开源实现/测试的持续借鉴台账；记录锁定来源、本地落点、拒绝原因和候选验证，但不单独改变能力完成度；
 - `docs/superpowers/plans/`：已经进入实施阶段的单个纵向切片计划与证据。
 
@@ -908,12 +916,33 @@ Replay、Streaming/Dispose 和自动 Diagnostic；普通 Agent 只引用稳定 P
 它们只有在目标、Owner、依赖和验收 Fixture 被明确后才拆成正式实施计划，不能
 为了提高总进度数字提前计为已开始。
 
-> **仍属未来探索、但不阻塞 P2.6：** 是否需要让 AI 超越 Registry Prototype/产品资产，
-> 自定义任意静态场景几何。目前只有一份
-> [候选技术草案](../docs/superpowers/specs/2026-08-20-ai-authored-geometry-extension-design.md)，
-> 没有选定 Recipe、MeshDraft、Sandbox 或其他开放制作 Provider。P2.6 只要求稳定的静态
-> Structure Resource/Collider/Surface 消费边界，可以先使用审核过的 Prototype 和产品 GLB；
-> AI 自定义几何只有在出现明确产品需求、Owner 和实验依据后才建立独立实施计划。
+#### P3.4 AI-friendly Babylon Native Scene Lane
+
+架构方向已由 [ADR-0007](decisions/0007-canonical-and-babylon-native-authoring-lanes.md) 接受，唯一详细权威为
+[AI 友好的 Babylon Native 世界创作长期设计](../docs/superpowers/specs/2026-08-28-ai-friendly-babylon-native-world-authoring-design.md)。
+它不是把 Native 视觉并入 Canonical Compiler，而是让每个世界在 Canonical Source 与 Native Source
+之间二选一，并在同一个 RuntimeHost/Babylon/Havok Gameplay Kernel 汇合。
+
+- [x] BNA-0：长期架构、术语、单一权威、ADR 和生产化依赖图冻结；
+- [x] BNS 实验切片：受信本地 Native Module、一个 Spawn、显式静态 Collider、SDK-owned Havok/
+  Subject/Input/Camera 和云海山门视觉/通过性证据；这不是生产完成度；
+- [ ] BNA-1：Runtime Scene Source Union、正式 Native Bootstrap、Plan-independent
+  `WorldRuntimeBootstrapV1` 与 source-neutral `WorldBuildIdentityV1`；完成受影响消费者的版本迁移，移除
+  影子 ExecutionPlan 和伪造 Plan Hash；
+- [ ] BNA-2：独立 `@whitebox-world/native-babylon` 与 `defineBabylonNativeScene`；
+- [ ] BNA-3：Bundle、依赖/资产锁、Package、Contribution Hash 与 Build Receipt；
+- [ ] BNA-4：统一 Gameplay Kernel、Profile-based Surface Admission、稳定 Surface/Subshape identity、
+  原子生命周期和对抗测试；
+- [ ] BNA-5：Trusted Local/Hosted Isolated Trust Profile、确定性、预算和安全 Gate；
+- [ ] BNA-6：在 BNA-5 后冻结评测 Profile/预算/阈值，交付 AI Checker/Explain、Golden Corpus、真实
+  视觉与人工交互评估；
+- [ ] BNA-7：正式 Capture；仅在需要时从同一冻结 Surface 派生 Route/Nav Evidence，不包含产品级
+  `goTo`、重规划或移动执行；
+- [ ] BNA-8：按 Trusted Local、Hosted、Route 三种范围分别做最终 Go/No-Go 与文档切换。
+
+在 BNA-1 至 BNA-6 完成并建立独立实施计划前，不提高总进度，不把实验 API 写入 Quickstart，也不修改
+Catalog/Hosted Builder 生产工作流。P2.6 仍可先使用审核过的 Structure Resource 和产品 GLB；Native
+Lane 不自动扩大 Cave、Overhang、双层 Route 或 NPC Navigation 的当前能力边界。
 
 ## 5. 推荐实施顺序与依赖
 

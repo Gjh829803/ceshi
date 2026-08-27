@@ -2,12 +2,14 @@
 
 - 状态：Accepted（各实施阶段仍按 Backlog 独立验收；不代表 P1.6 或完整 P1.4 已完成）
 - 日期：2026-08-18
+- 范围修订：[ADR-0007：Canonical 与 Babylon Native 场景创作双 Lane](./0007-canonical-and-babylon-native-authoring-lanes.md)。本文继续完整约束 Canonical Lane；隔离的 Babylon Native Scene Lane 不把视觉投影送入本文 Compiler。
 
 ## 决策
 
 SDK 的下一代架构采用「引擎无关协议 + 确定性编译 + 可替换 Runtime」：
 
-1. 上游 Agent 的正式输出改为声明式 AuthoringSpec JSON，不再编写 TypeScript 场景代码。
+1. Canonical Lane 上游 Agent 的正式输出改为声明式 AuthoringSpec JSON，不再编写 TypeScript 场景代码；
+   ADR-0007 的独立 Babylon Native Scene Lane 不属于该 Compiler 输入。
 2. SDK 通过 Schema 校验、Normalizer、Capability Resolver、Terrain Compiler 和确定性 Layout Solver 生成引擎无关的 NormalizedWorldIR 与可持久化 WorldPackage；AI 使用 Placement Constraint 表达空间意图，Solver 负责最终 Transform。
 3. 第一版生产 Runtime 采用 Babylon.js 与 Havok 物理，经 Port 层隔离；公共协议不包含任何引擎类型。
 4. 正式交付物是库 API、无状态 CLI、版本化 Browser Protocol、WorldPackage、Simulation Take 和 Control Capture Bundle；世界、一次操作/拍摄和实际捕获证据分别版本化与哈希，增量修改使用带基线哈希的 WorldChangeSet。

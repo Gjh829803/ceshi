@@ -6,6 +6,10 @@
 - 实验参考：用户提供的“云海山门”参考图（本地输入，不纳入仓库）
 - 上位生产决策：[ADR-0006](../../decisions/0006-authoring-spec-compiler-architecture.md)
 - 当前生产状态：[重构进度与 Backlog](../../18-refactor-progress-and-backlog.md)
+- 后续长期权威：[AI 友好的 Babylon Native 世界创作长期设计](./2026-08-28-ai-friendly-babylon-native-world-authoring-design.md)
+
+> 本文保存 2026-08-27 实验切片的范围、实现与证据。实验后的 Continue 决策及长期生产边界已经转入
+> 上述 2026-08-28 规格；若两者冲突，以长期规格和 ADR-0007 为准。
 
 ## 1. 决策摘要
 
