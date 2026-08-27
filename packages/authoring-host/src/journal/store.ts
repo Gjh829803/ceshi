@@ -374,6 +374,14 @@ export function getAuthoringRevisionHeadV1(
   return isNil(head) ? undefined : structuredClone(head);
 }
 
+export function getAuthoringRevisionHeadForStartupRecoveryV1(
+  journal: WorldChangeJournalV1,
+  worldId: string,
+): AuthoringRevisionHeadV1 | undefined {
+  const head = asJournal(journal).revisions.get(worldId);
+  return isNil(head) ? undefined : structuredClone(head);
+}
+
 export function getWorldPublicationRecoveryStateV1(
   journal: WorldChangeJournalV1,
   worldId: string,

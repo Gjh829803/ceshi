@@ -39,10 +39,12 @@ import type {
 import { worldChangeDiagnostic } from "./diagnostics.js";
 import {
   journalArtifactIdV1,
+  getDurableRequestRecordV1,
   queryWorldChangeCleanupReportV1,
   queryWorldChangeDiffV1,
   queryWorldChangeExplainV1,
   queryWorldChangeReceiptV1,
+  recoverWorldChangeRequestV1,
   sessionAuthorizationDiagnosticV1,
   submitWorldChangeRequestV1,
 } from "./journal/index.js";
@@ -138,8 +140,9 @@ export function createAuthoringEditHostV1(
   const session: AuthoringEditSessionV1 = { ...input.session };
   const includeExperimental = input.includeExperimental === true;
 
-  const submit = (request: ReturnType<typeof parseWorldChangeRequestV1>) =>
-    submitWorldChangeRequestV1({
+  const submissionInput = (
+    request: ReturnType<typeof parseWorldChangeRequestV1>,
+  ) => ({
       journal: input.journal,
       leaseStore: input.leaseStore,
       worldPackageStore: input.worldPackageStore,
@@ -162,6 +165,18 @@ export function createAuthoringEditHostV1(
         ? {}
         : { publishRuntimeReplacement: input.publishRuntimeReplacement }),
     });
+
+  const submit = (request: ReturnType<typeof parseWorldChangeRequestV1>) => {
+    const requestInput = submissionInput(request);
+    const existing = getDurableRequestRecordV1(
+      input.journal,
+      request.authoringEditSessionId,
+      request.id,
+    );
+    return !isNil(existing) && isNil(existing.receipt)
+      ? recoverWorldChangeRequestV1(requestInput)
+      : submitWorldChangeRequestV1(requestInput);
+  };
 
   const receiptFromSubmit = async (
     request: ReturnType<typeof parseWorldChangeRequestV1>,

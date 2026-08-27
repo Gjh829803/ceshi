@@ -1,7 +1,10 @@
 import {
+  chmodSync,
   closeSync,
+  constants,
   existsSync,
   fsyncSync,
+  lstatSync,
   mkdirSync,
   openSync,
   readFileSync,
@@ -20,19 +23,61 @@ import {
 import { stringifyCanonicalJson } from "@whitebox-world/protocol";
 import { isEmpty, isNil } from "lodash-es";
 
+const JOURNAL_DIRECTORY_MODE = 0o700;
+const JOURNAL_FILE_MODE = 0o600;
+
+function journalPathFail(message: string): never {
+  throw new Error(`WORLD_CHANGE_JOURNAL_PATH_UNSAFE: ${message}`);
+}
+
+function assertOwnerOnlyDirectory(directoryPath: string): void {
+  if (!existsSync(directoryPath)) {
+    mkdirSync(directoryPath, {
+      recursive: true,
+      mode: JOURNAL_DIRECTORY_MODE,
+    });
+    chmodSync(directoryPath, JOURNAL_DIRECTORY_MODE);
+  }
+  const snapshot = lstatSync(directoryPath);
+  if (
+    snapshot.isSymbolicLink() ||
+    !snapshot.isDirectory() ||
+    (snapshot.mode & 0o777) !== JOURNAL_DIRECTORY_MODE
+  ) {
+    journalPathFail("WAL parent must be a canonical owner-only 0700 directory.");
+  }
+}
+
+function assertSafeWalFile(walFilePath: string): void {
+  if (!existsSync(walFilePath)) return;
+  const snapshot = lstatSync(walFilePath);
+  if (
+    snapshot.isSymbolicLink() ||
+    !snapshot.isFile() ||
+    (snapshot.mode & 0o777) !== JOURNAL_FILE_MODE
+  ) {
+    journalPathFail("WAL must be one canonical owner-only 0600 regular file.");
+  }
+}
+
 class FileWorldChangeJournalWalV1 implements WorldChangeJournalWalV1 {
   public readonly brand = "WorldChangeJournalWalV1" as const;
 
   constructor(private readonly walFilePath: string) {}
 
   readTransactions(): readonly WorldChangeJournalTransactionV1[] {
+    assertOwnerOnlyDirectory(path.dirname(this.walFilePath));
+    assertSafeWalFile(this.walFilePath);
     if (!existsSync(this.walFilePath)) return [];
     const bytes = readFileSync(this.walFilePath);
     if (bytes.byteLength === 0) return [];
     const lastNewlineIndex = bytes.lastIndexOf(0x0a);
     if (lastNewlineIndex < bytes.byteLength - 1) {
       truncateSync(this.walFilePath, lastNewlineIndex + 1);
-      const descriptor = openSync(this.walFilePath, "r+");
+      const descriptor = openSync(
+        this.walFilePath,
+        constants.O_RDWR | constants.O_NOFOLLOW,
+      );
       try {
         fsyncSync(descriptor);
       } finally {
@@ -80,10 +125,19 @@ class FileWorldChangeJournalWalV1 implements WorldChangeJournalWalV1 {
     }
 
     const directory = path.dirname(this.walFilePath);
-    mkdirSync(directory, { recursive: true, mode: 0o700 });
+    assertOwnerOnlyDirectory(directory);
+    assertSafeWalFile(this.walFilePath);
     const didExist = existsSync(this.walFilePath);
-    const descriptor = openSync(this.walFilePath, "a", 0o600);
+    const descriptor = openSync(
+      this.walFilePath,
+      constants.O_APPEND |
+        constants.O_CREAT |
+        constants.O_WRONLY |
+        constants.O_NOFOLLOW,
+      JOURNAL_FILE_MODE,
+    );
     try {
+      chmodSync(this.walFilePath, JOURNAL_FILE_MODE);
       writeSync(descriptor, `${stringifyCanonicalJson(transaction)}\n`, undefined, "utf8");
       fsyncSync(descriptor);
     } finally {
@@ -103,9 +157,15 @@ class FileWorldChangeJournalWalV1 implements WorldChangeJournalWalV1 {
 export function createFileBackedWorldChangeJournalV1(input: {
   readonly walFilePath: string;
 }): WorldChangeJournalV1 {
-  if (isEmpty(input.walFilePath) || !path.isAbsolute(input.walFilePath)) {
+  if (
+    isEmpty(input.walFilePath) ||
+    !path.isAbsolute(input.walFilePath) ||
+    path.normalize(input.walFilePath) !== input.walFilePath
+  ) {
     throw new TypeError("File-backed WorldChange journal requires an absolute walFilePath.");
   }
+  assertOwnerOnlyDirectory(path.dirname(input.walFilePath));
+  assertSafeWalFile(input.walFilePath);
   return createWorldChangeJournalV1({
     wal: new FileWorldChangeJournalWalV1(path.normalize(input.walFilePath)),
   });

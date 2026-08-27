@@ -322,25 +322,25 @@ export async function createDurableAuthoringEditHostV1(input: {
 
 - The async factory does not return or expose the API until startup publication recovery completes. The state directory must be canonical, non-symlinked, owner-only `0700`; the WAL is `0600`.
 
-- [ ] **Step 1: Write RED composition tests**
+- [x] **Step 1: Write RED composition tests**
 
 Cover relative path rejection, symlink rejection, unsafe permissions, exact file modes, reopening the same state, mismatched initial AuthoringSpec/head rejection, and no fallback to in-memory journal.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```bash
 pnpm exec vitest run scripts/lib/durable-authoring-edit-host.test.ts
 ```
 
-- [ ] **Step 3: Implement the formal composition**
+- [x] **Step 3: Implement the formal composition**
 
 Reuse `createFileBackedWorldChangeJournalV1`, `createFileWorldPackageStoreV1`, `createAuthoringEditHostBridgeV1`, `createDurableWorldChangeRuntimeOwnerV1`, and `recoverCommittedWorldPublicationsV1`. Bind the bridge publication port directly to the concrete runtime owner and keep all Node filesystem code outside workspace packages.
 
-- [ ] **Step 4: Add a real child-process crash/restart integration test**
+- [x] **Step 4: Add a real child-process crash/restart integration test**
 
 Process A performs Dry Run and begins Apply, then exits at each injected boundary: before durable commit, after durable commit/before runtime recovery acknowledgement, and after runtime recovery/before cleanup completion. Process B opens only the same absolute state directory, proves the expected old/new revision visibility, resumes the same Request ID, returns the byte-identical committed Receipt, advances cleanup monotonically, and never creates a second Package/Request/pin.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 ```bash
 pnpm exec vitest run scripts/lib/durable-authoring-edit-host.test.ts scripts/durable-authoring-edit-host.integration.test.ts scripts/lib/authoring-edit-full-reload.integration.test.ts

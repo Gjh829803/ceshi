@@ -24,6 +24,8 @@ import {
   type AuthoringEditSessionV1,
   type PublishRuntimeReplacementResultV1,
   type PublishRuntimeReplacementV1,
+  type PreparedCandidateLeaseStoreV1,
+  type EvaluateRequiredGatesV1,
   type WorldChangeJournalV1,
 } from "@whitebox-world/authoring-host";
 import type {
@@ -127,7 +129,9 @@ export function createAuthoringEditHostSessionV1(input: {
       requiredGateProfileRefs: [],
       workloadBudget: generousBudget(),
     }),
-    hasActiveRuntimeBinding: input.hasActiveRuntimeBinding ?? true,
+    hasActiveRuntimeBinding: isNil(input.hasActiveRuntimeBinding)
+      ? true
+      : input.hasActiveRuntimeBinding,
   };
 }
 
@@ -144,6 +148,9 @@ export function createAuthoringEditHostBridgeV1(input: {
   readonly resourceArtifacts: readonly ResolvedWorldPackageResourceArtifactV2[];
   readonly nowUnixMilliseconds?: () => number;
   readonly runtimeHost?: Pick<RuntimeHost, "publishWorldReplacementV1">;
+  readonly publishRuntimeReplacement?: PublishRuntimeReplacementV1;
+  readonly leaseStore?: PreparedCandidateLeaseStoreV1;
+  readonly evaluateRequiredGates?: EvaluateRequiredGatesV1;
   readonly session?: AuthoringEditSessionV1;
   readonly journal?: WorldChangeJournalV1;
 }): AuthoringEditHostBridgeV1 {
@@ -156,8 +163,17 @@ export function createAuthoringEditHostBridgeV1(input: {
     throw new Error("WORLD_PACKAGE_HOST_INCOMPATIBLE: RuntimeHost profile mismatch");
   }
   const lockEntries = builtInRegistryLockEntriesV1();
-  const nowUnixMilliseconds = input.nowUnixMilliseconds ?? (() => Date.now());
-  const journal = input.journal ?? createWorldChangeJournalV1();
+  if (!isNil(input.runtimeHost) && !isNil(input.publishRuntimeReplacement)) {
+    throw new Error(
+      "WORLD_CHANGE_RUNTIME_PUBLICATION_PORT_CONFLICT: Bind exactly one Runtime publication port.",
+    );
+  }
+  const nowUnixMilliseconds = isNil(input.nowUnixMilliseconds)
+    ? () => Date.now()
+    : input.nowUnixMilliseconds;
+  const journal = isNil(input.journal)
+    ? createWorldChangeJournalV1()
+    : input.journal;
   const authoringSpecHash = hashAuthoringDocumentV4(input.authoringSpec) as Sha256HashV1;
   const existingHead = getAuthoringRevisionHeadV1(journal, input.authoringSpec.id);
   if (isNil(existingHead)) {
@@ -180,15 +196,19 @@ export function createAuthoringEditHostBridgeV1(input: {
   }
   const host = createAuthoringEditHostV1({
     journal,
-    leaseStore: createPreparedCandidateLeaseStoreV1(),
+    leaseStore: isNil(input.leaseStore)
+      ? createPreparedCandidateLeaseStoreV1()
+      : input.leaseStore,
     worldPackageStore: input.worldPackageStore,
     worldPackageBuildContext: input.worldPackageBuildContext,
     resourceArtifacts: input.resourceArtifacts,
-    session: input.session ?? createAuthoringEditHostSessionV1({
-      worldId: input.authoringSpec.id,
-      nowUnixMilliseconds: nowUnixMilliseconds(),
-      lockEntries,
-    }),
+    session: isNil(input.session)
+      ? createAuthoringEditHostSessionV1({
+        worldId: input.authoringSpec.id,
+        nowUnixMilliseconds: nowUnixMilliseconds(),
+        lockEntries,
+      })
+      : input.session,
     nowUnixMilliseconds,
     projectionProfile: parseAiSchemaProjectionProfileSourceV1(resolved),
     canonicalAuthoringSchema,
@@ -200,9 +220,14 @@ export function createAuthoringEditHostBridgeV1(input: {
     definitionOverrideLockEntries: [],
     projectionAllowedOverridePaths: [...FIRST_BATCH_ALLOWED_OVERRIDE_PATHS_V1],
     allowedWorldChangeOperationTypes: [...WORLD_CHANGE_OPERATION_TYPES_V1],
-    ...(isNil(input.runtimeHost)
+    ...(isNil(input.evaluateRequiredGates)
       ? {}
-      : { publishRuntimeReplacement: bindRuntimeHostPublicationPortV1(input.runtimeHost) }),
+      : { evaluateRequiredGates: input.evaluateRequiredGates }),
+    ...(!isNil(input.publishRuntimeReplacement)
+      ? { publishRuntimeReplacement: input.publishRuntimeReplacement }
+      : !isNil(input.runtimeHost)
+      ? { publishRuntimeReplacement: bindRuntimeHostPublicationPortV1(input.runtimeHost) }
+      : {}),
   });
   return {
     kind: AUTHORING_EDIT_HOST_BRIDGE_KIND,

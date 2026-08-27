@@ -13,6 +13,7 @@ export {
   advanceWorldChangeCleanupReportV1,
   createWorldChangeJournalV1,
   getAuthoringRevisionHeadV1,
+  getAuthoringRevisionHeadForStartupRecoveryV1,
   journalArtifactIdV1,
   listPendingWorldPublicationRecoveriesV1,
   listWorldPublicationRecoveryRecordsV1,

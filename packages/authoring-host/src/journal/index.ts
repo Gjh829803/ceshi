@@ -33,6 +33,7 @@ export {
 export {
   createWorldChangeJournalV1,
   getAuthoringRevisionHeadV1,
+  getAuthoringRevisionHeadForStartupRecoveryV1,
   getDurableRequestRecordV1,
   recoveryFencingTokenV1,
   seedAuthoringRevisionHeadV1,
