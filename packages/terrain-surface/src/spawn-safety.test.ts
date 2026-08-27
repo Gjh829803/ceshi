@@ -1,6 +1,5 @@
-import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
@@ -15,11 +14,37 @@ async function validateSpawnSafety(input: SpawnSafetyInput) {
   return owner.validateSpawnSafety(input);
 }
 
-function trackedFiles(...pathspecs: readonly string[]): readonly string[] {
-  return execFileSync("git", ["ls-files", "--", ...pathspecs], {
-    cwd: repositoryRoot,
-    encoding: "utf8",
-  }).trim().split("\n").filter(Boolean);
+const INVENTORY_EXCLUDED_DIRECTORIES = new Set([
+  ".git",
+  ".diversion",
+  "node_modules",
+]);
+
+function repositoryFiles(...relativeRoots: readonly string[]): readonly string[] {
+  const files: string[] = [];
+  const visit = (absoluteDirectory: string): void => {
+    for (const entry of readdirSync(absoluteDirectory, {
+      withFileTypes: true,
+    }).sort((left, right) => left.name.localeCompare(right.name))) {
+      if (entry.isDirectory()) {
+        if (!INVENTORY_EXCLUDED_DIRECTORIES.has(entry.name)) {
+          visit(resolve(absoluteDirectory, entry.name));
+        }
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      files.push(relative(
+        repositoryRoot,
+        resolve(absoluteDirectory, entry.name),
+      ).replaceAll("\\", "/"));
+    }
+  };
+
+  for (const relativeRoot of relativeRoots) {
+    const absoluteRoot = resolve(repositoryRoot, relativeRoot);
+    if (existsSync(absoluteRoot)) visit(absoluteRoot);
+  }
+  return Object.freeze(files.sort());
 }
 
 describe("validateSpawnSafety", () => {
@@ -305,7 +330,7 @@ describe("spawn-safety ownership boundary", () => {
     const testPath = /(?:^|\/)(?:__tests__|tests?)(?:\/|$)|\.(?:test|spec)\.[^.]+$/;
     const sourceViolations: string[] = [];
 
-    for (const relativePath of trackedFiles("packages", "apps", "scripts")) {
+    for (const relativePath of repositoryFiles("packages", "apps", "scripts")) {
       if (!sourceExtensions.test(relativePath) || testPath.test(relativePath)) continue;
       const absolutePath = resolve(repositoryRoot, relativePath);
       if (!existsSync(absolutePath)) continue;
@@ -318,7 +343,9 @@ describe("spawn-safety ownership boundary", () => {
     }
 
     const manifestViolations: string[] = [];
-    for (const relativePath of trackedFiles(":(glob)**/package.json")) {
+    for (const relativePath of repositoryFiles(".").filter((path) =>
+      path === "package.json" || path.endsWith("/package.json")
+    )) {
       const manifest = JSON.parse(
         readFileSync(resolve(repositoryRoot, relativePath), "utf8"),
       ) as Record<string, unknown>;

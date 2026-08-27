@@ -94,7 +94,7 @@ const LOCKED_EXECUTION_PLAN_V5 = createLockedExecutionPlanV5();
 
 interface RuntimeProbe {
   runFixedInput: ReturnType<typeof vi.fn<(input: FixedInputV1) => Promise<BabylonRuntimeProjectionV1>>>;
-  renderFrame: ReturnType<typeof vi.fn>;
+  renderFrame: ReturnType<typeof vi.fn<(interpolationAlphaRatio?: number) => void>>;
   reset: ReturnType<typeof vi.fn<() => BabylonRuntimeProjectionV1>>;
   adjustCameraView(input: CameraViewInputV1): BabylonRuntimeProjectionV1;
   getControlCaptureCapabilities: ReturnType<typeof vi.fn>;
@@ -607,6 +607,23 @@ describe("BabylonWorldAdapter frame loop", () => {
     await adapter.animate(17);
     await adapter.animate(51);
     expect(runtime.runFixedInput.mock.calls.map(([input]) => input.ticks)).toEqual([1, 2]);
+  });
+
+  it("renders live frames with accumulator alpha while explicit and paused renders stay committed", async () => {
+    const { adapter, runtime } = createAdapterProbe();
+
+    await adapter.animate(0);
+    runtime.renderFrame.mockClear();
+    await adapter.animate(1_000 / 120);
+    expect(runtime.renderFrame).toHaveBeenLastCalledWith(0.5);
+
+    adapter.render();
+    expect(runtime.renderFrame).toHaveBeenLastCalledWith(1);
+
+    adapter.setPaused(true);
+    runtime.renderFrame.mockClear();
+    await adapter.animate(1_000 / 60);
+    expect(runtime.renderFrame).toHaveBeenLastCalledWith(1);
   });
 
   it("caps catch-up work after a suspended display frame", async () => {

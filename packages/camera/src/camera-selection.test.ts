@@ -2,13 +2,14 @@ import { describe, expect, it } from "vitest";
 import {
   admitCameraContextProfileV1,
   admitCameraViewPreferenceV1,
-  selectCameraViewV1,
+  selectCameraViewV2,
   type CameraContextProfileV1,
   type CameraContextRuleV2,
-  type CameraContextSampleV1,
+  type CameraContextSampleV2,
   type CameraModifierProfileV1,
   type CameraRigParametersV1,
   type CameraRigProfileV1,
+  type CameraViewPreferenceV1,
 } from "./index.js";
 
 const DEFAULT_RIG_REF = "worldkit://camera-profile/follow.medium@1";
@@ -101,35 +102,78 @@ function profile(
   };
 }
 
-function sample(
-  overrides: Partial<CameraContextSampleV1> = {},
-): CameraContextSampleV1 {
-  const { relationshipRole = "rider", ...remainingOverrides } = overrides;
+interface CameraSampleOverridesV2 {
+  readonly committedTick?: number;
+  readonly relationshipRole?: CameraContextSampleV2["environment"]["relationshipRole"];
+  readonly relationshipContexts?: CameraContextSampleV2["environment"]["relationshipContexts"];
+  readonly movementMedium?: "ground" | "air";
+  readonly mobilityMode?: "grounded" | "airborne";
+  readonly gait?: "none" | "idle" | "walk" | "run";
+  readonly verticalPhase?: "none" | "takeoff" | "rising" | "apex" | "falling" | "landing";
+  readonly activeActionRefs?: readonly string[];
+  readonly isInterruptible?: boolean;
+  readonly socketPositionsMetersXYZById?: Readonly<Record<string, readonly [number, number, number]>>;
+  readonly cameraContextTags?: readonly string[];
+}
+
+function sample(overrides: CameraSampleOverridesV2 = {}): CameraContextSampleV2 {
+  const committedTick = overrides.committedTick ?? 42;
+  const movementMedium = overrides.movementMedium ?? "air";
+  const mobilityMode = overrides.mobilityMode ?? (
+    movementMedium === "air" ? "airborne" : "grounded"
+  );
+  const gait = overrides.gait ?? (mobilityMode === "airborne" ? "none" : "idle");
+  const verticalPhase = overrides.verticalPhase ?? (
+    mobilityMode === "airborne" ? "falling" : "none"
+  );
   return {
-    simulationTick: 42,
+    schemaVersion: 2,
+    semanticAuthorityStatus: "available",
+    committedTick,
     controlledEntityId: "rider",
     targetEntityId: "flying-sword",
-    movementMedium: "air",
-    activeMotionProfileRef: "worldkit://motion/flight@1",
-    activeMotionKernelRef: "worldkit://motion-kernel/flight@1",
-    motionTags: ["cruise"],
-    activeActionRefs: ["worldkit://action/ride@1"],
-    relationshipContexts: [
-      {
-        id: "mount-rider-sword",
-        type: "mountedOn",
-        riderEntityId: "rider",
-        mountEntityId: "flying-sword",
-        mountSlotId: "stand-slot",
-      },
-    ],
-    relationshipRole,
-    velocityMetersPerSecondXYZ: [6, 0, 8],
-    socketPositionsMetersXYZById: {
-      "camera.flight": [0, 2, -1],
+    subjectPose: {
+      positionMetersXYZ: [0, 1, 0],
+      facingYawRadians: 0.25,
     },
-    cameraContextTags: ["aim"],
-    ...remainingOverrides,
+    locomotion: {
+      schemaVersion: 2,
+      status: "active",
+      mobilityMode,
+      gait,
+      verticalPhase,
+      supportMode: mobilityMode === "airborne" ? "unsupported" : "supported",
+      movementMedium,
+      facingYawRadians: 0.25,
+      linearVelocity: mobilityMode === "airborne"
+        ? { x: 600, y: -1, z: 800 }
+        : { x: 0, y: 0, z: 0 },
+      horizontalSpeedMetersPerSecond: mobilityMode === "airborne" ? 1000 : 0,
+      committedTick,
+      phaseEnteredTick: committedTick,
+      transitionSequence: 3,
+    },
+    actionSummary: {
+      status: "available",
+      activeActionRefs: overrides.activeActionRefs ?? ["worldkit://semantic-action/ride@1"],
+      isInterruptible: overrides.isInterruptible ?? false,
+    },
+    environment: {
+      relationshipContexts: overrides.relationshipContexts ?? [
+        {
+          id: "mount-rider-sword",
+          type: "mountedOn",
+          riderEntityId: "rider",
+          mountEntityId: "flying-sword",
+          mountSlotId: "stand-slot",
+        },
+      ],
+      relationshipRole: overrides.relationshipRole ?? "rider",
+      socketPositionsMetersXYZById: overrides.socketPositionsMetersXYZById ?? {
+        "camera.flight": [0, 2, -1],
+      },
+      cameraContextTags: overrides.cameraContextTags ?? ["aim"],
+    },
   };
 }
 
@@ -138,12 +182,11 @@ const FLIGHT_RULE: CameraContextRuleV2 = {
   priority: 100,
   when: {
     allRelationshipConditions: [{ type: "mountedOn", entityRole: "mount" }],
-    motionProfileRefs: ["worldkit://motion/flight@1"],
-    motionKernelRefs: ["worldkit://motion-kernel/flight@1"],
+    mobilityModes: ["airborne"],
+    verticalPhases: ["falling"],
     movementMediums: ["air"],
-    requiredActiveActionRefs: ["worldkit://action/ride@1"],
-    minimumSpeedMetersPerSecond: 9,
-    maximumSpeedMetersPerSecond: 11,
+    requiredActiveActionRefs: ["worldkit://semantic-action/ride@1"],
+    actionInterruptibility: "non-interruptible",
     requiredSocketIds: ["camera.flight"],
   },
   cameraRigProfileRef: FLIGHT_RIG_REF,
@@ -164,6 +207,122 @@ const AIM_RULE: CameraContextRuleV2 = {
 };
 
 describe("Camera Context admission", () => {
+  it.each([
+    ["legacy Motion Kernel condition", { motionKernelRefs: ["worldkit://motion-kernel/legacy@1"] }],
+    ["unknown gait", { gaits: ["teleport"] }],
+    ["duplicate phase", { verticalPhases: ["falling", "falling"] }],
+    ["ill-formed Action ref", { requiredActiveActionRefs: ["bad\ud800ref"] }],
+    ["non-canonical Action ref", { requiredActiveActionRefs: ["action.ride"] }],
+    ["non-NFC Socket id", { requiredSocketIds: ["cafe\u0301"] }],
+    ["whitespace Socket id", { requiredSocketIds: ["camera target"] }],
+    ["duplicate Context tag", { requiredCameraContextTags: ["aim", "aim"] }],
+    ["non-canonical Context tag", { requiredCameraContextTags: ["Aim Mode"] }],
+    ["duplicate Action ref", {
+      requiredActiveActionRefs: [
+        "worldkit://semantic-action/ride@1",
+        "worldkit://semantic-action/ride@1",
+      ],
+    }],
+    ["oversized Action condition", {
+      requiredActiveActionRefs: Array.from(
+        { length: 65 },
+        (_, index) => `worldkit://semantic-action/hostile-${index}@1`,
+      ),
+    }],
+    ["non-finite minimum speed", { minimumSpeedMetersPerSecond: Number.NaN }],
+    ["negative maximum speed", { maximumSpeedMetersPerSecond: -1 }],
+    ["incoherent speed bounds", { minimumSpeedMetersPerSecond: 4, maximumSpeedMetersPerSecond: 3 }],
+    ["malformed relationship", { allRelationshipConditions: [{ type: "mountedOn", entityRole: "driver" }] }],
+  ])("rejects a strict closed V2 Rule with %s", (_label, when) => {
+    const invalid = profile([{
+      id: "hostile",
+      priority: 999,
+      when,
+      cameraRigProfileRef: FLIGHT_RIG_REF,
+    } as unknown as CameraContextRuleV2]);
+
+    expect(admitCameraContextProfileV1(invalid)).toMatchObject({
+      ok: false,
+      diagnostics: [{ code: "CAMERA_PROFILE_INVALID" }],
+    });
+    expect(selectCameraViewV2({
+      cameraContextProfile: invalid,
+      cameraContextSample: sample(),
+      cameraViewPreference: { mode: "auto" },
+    })).toMatchObject({
+      ok: false,
+      diagnostics: [{ code: "CAMERA_PROFILE_INVALID" }],
+    });
+  });
+
+  it("rejects unknown keys at every V2 Profile resource layer", () => {
+    const valid = profile([FLIGHT_RULE]);
+    const firstRule = valid.rules[0];
+    const firstRig = valid.cameraRigProfiles[0];
+    const firstModifier = valid.cameraModifierProfiles[0];
+    if (firstRule === undefined || firstRig === undefined || firstModifier === undefined) {
+      throw new Error("Camera Profile fixture is incomplete.");
+    }
+    const hostiles = [
+      { ...valid, legacyProfileRef: "worldkit://camera-context/legacy@1" },
+      {
+        ...valid,
+        rules: [{ ...firstRule, legacyRule: true }, ...valid.rules.slice(1)],
+      },
+      {
+        ...valid,
+        cameraRigProfiles: [{ ...firstRig, legacyMode: "spring-arm" }, ...valid.cameraRigProfiles.slice(1)],
+      },
+      {
+        ...valid,
+        cameraModifierProfiles: [{ ...firstModifier, legacyWeight: 1 }, ...valid.cameraModifierProfiles.slice(1)],
+      },
+    ] as unknown as CameraContextProfileV1[];
+
+    for (const hostile of hostiles) {
+      expect(admitCameraContextProfileV1(hostile)).toMatchObject({
+        ok: false,
+        diagnostics: [{ code: "CAMERA_PROFILE_INVALID" }],
+      });
+    }
+  });
+
+  it("rejects non-canonical versioned Camera resource refs", () => {
+    const valid = profile([FLIGHT_RULE]);
+    const hostile = {
+      ...valid,
+      defaultCameraRigProfileRef: "follow.medium",
+    } as CameraContextProfileV1;
+
+    expect(admitCameraContextProfileV1(hostile)).toMatchObject({
+      ok: false,
+      diagnostics: [{ code: "CAMERA_PROFILE_INVALID" }],
+    });
+  });
+
+  it("snapshots a hostile Proxy once and never rereads caller-owned Profile bytes", () => {
+    const target = profile([FLIGHT_RULE]) as unknown as Record<string, unknown>;
+    const reads: string[] = [];
+    const proxied = new Proxy(target, {
+      get: (_object, key) => {
+        reads.push(String(key));
+        throw new Error("TOCTOU_DIRECT_READ");
+      },
+    }) as unknown as CameraContextProfileV1;
+
+    const result = selectCameraViewV2({
+      cameraContextProfile: proxied,
+      cameraContextSample: sample(),
+      cameraViewPreference: { mode: "auto" },
+    });
+
+    expect(reads).toEqual([]);
+    expect(result).toMatchObject({
+      ok: true,
+      decision: { activeCameraRigProfileRef: FLIGHT_RIG_REF },
+    });
+  });
+
   it("rejects a finite Camera parameter bag whose bounds contradict its selected values", () => {
     // This catches admission that validates only field names and finiteness but
     // allows a Rig that no runtime algorithm can resolve consistently.
@@ -255,7 +414,7 @@ describe("Camera Context admission", () => {
     if (result.ok) return;
     expect(result.diagnostics.filter(
       (entry) => entry.code === "CAMERA_PROFILE_INVALID",
-    )).toHaveLength(5);
+    )).toHaveLength(1);
   });
 
   it("rejects ambiguous priorities, empty conditions, empty outputs, and unresolved resources", () => {
@@ -366,6 +525,100 @@ describe("Camera Context admission", () => {
 });
 
 describe("Camera View Preference admission", () => {
+  it.each([
+    ["legacy key", { mode: "auto", motionKernelRef: "worldkit://motion-kernel/x@1" }],
+    ["invalid mode", { mode: "bogus" }],
+    ["missing explicit ref", { mode: "camera-rig-profile" }],
+    ["extraneous auto ref", {
+      mode: "auto",
+      cameraRigProfileRef: DEFAULT_RIG_REF,
+    }],
+    ["non-canonical explicit ref", {
+      mode: "camera-rig-profile",
+      cameraRigProfileRef: "follow.medium",
+    }],
+  ])("rejects a malformed Preference with %s in both public paths", (_label, preference) => {
+    const context = profile([FLIGHT_RULE]);
+    expect(admitCameraViewPreferenceV1(
+      context,
+      preference as unknown as CameraViewPreferenceV1,
+    )).toMatchObject({
+      ok: false,
+      diagnostics: [{ code: "CAMERA_PREFERENCE_INVALID" }],
+    });
+    expect(selectCameraViewV2({
+      cameraContextProfile: context,
+      cameraContextSample: sample(),
+      cameraViewPreference: preference as unknown as CameraViewPreferenceV1,
+    })).toMatchObject({
+      ok: false,
+      diagnostics: [{ code: "CAMERA_PREFERENCE_INVALID" }],
+    });
+  });
+
+  it("snapshots one hostile Preference descriptor and never reads it again", () => {
+    let descriptorReads = 0;
+    const target = { mode: "auto" };
+    const preference = new Proxy(target, {
+      get: () => { throw new Error("PREFERENCE_DIRECT_READ"); },
+      getOwnPropertyDescriptor: (object, key) => {
+        if (key === "mode") {
+          descriptorReads += 1;
+          return {
+            configurable: true,
+            enumerable: true,
+            writable: true,
+            value: descriptorReads === 1 ? "auto" : "bogus",
+          };
+        }
+        return Reflect.getOwnPropertyDescriptor(object, key);
+      },
+    }) as unknown as CameraViewPreferenceV1;
+
+    const result = selectCameraViewV2({
+      cameraContextProfile: profile([FLIGHT_RULE]),
+      cameraContextSample: sample(),
+      cameraViewPreference: preference,
+    });
+
+    expect(descriptorReads).toBe(1);
+    expect(result).toMatchObject({
+      ok: true,
+      decision: {
+        activeCameraRigProfileRef: FLIGHT_RIG_REF,
+        cameraViewPreference: { mode: "auto" },
+      },
+    });
+  });
+
+  it.each([
+    ["accessor", Object.defineProperty({ mode: "auto" }, "legacy", {
+      enumerable: true,
+      get: () => { throw new Error("PREFERENCE_ACCESSOR_READ"); },
+    })],
+    ["throwing Proxy", new Proxy({ mode: "auto" }, {
+      ownKeys: () => { throw new Error("PREFERENCE_PROXY_REFLECTION"); },
+    })],
+  ])("fails %s Preference reflection closed in admission and selection", (_label, preference) => {
+    const context = profile([FLIGHT_RULE]);
+    for (const result of [
+      admitCameraViewPreferenceV1(
+        context,
+        preference as unknown as CameraViewPreferenceV1,
+      ),
+      selectCameraViewV2({
+        cameraContextProfile: context,
+        cameraContextSample: sample(),
+        cameraViewPreference: preference as unknown as CameraViewPreferenceV1,
+      }),
+    ]) {
+      expect(result).toMatchObject({
+        ok: false,
+        diagnostics: [{ code: "CAMERA_PREFERENCE_INVALID" }],
+      });
+    }
+  });
+
   it("rejects unavailable command-time preferences without silently changing mode", () => {
     const context = profile([FLIGHT_RULE], { firstPerson: false });
 
@@ -406,6 +659,212 @@ describe("Camera View Preference admission", () => {
 });
 
 describe("deterministic Camera selection", () => {
+  it("evaluates relationship, tag, and active-only dimensions independently while suspended", () => {
+    const active = sample();
+    const suspended: CameraContextSampleV2 = {
+      ...active,
+      locomotion: {
+        schemaVersion: 2,
+        status: "suspended",
+        suspendedByRelationshipId: "3c-task6-authority-unavailable",
+        committedTick: active.committedTick,
+        transitionSequence: 3,
+      },
+      actionSummary: { status: "unavailable" },
+    };
+    const result = selectCameraViewV2({
+      cameraContextProfile: profile([FLIGHT_RULE, AIM_RULE]),
+      cameraContextSample: suspended,
+      cameraViewPreference: { mode: "auto" },
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      decision: {
+        activeCameraRigProfileRef: DEFAULT_RIG_REF,
+        activeCameraModifierRefs: [
+          "worldkit://camera-modifier/aim@1",
+          "worldkit://camera-modifier/shared@1",
+        ],
+        matchedCameraContextRuleIds: ["aim"],
+        fallbackActive: false,
+        explain: {
+          cameraContextRules: [
+            { matched: false },
+            { matched: true, unmatchedReasons: [] },
+          ],
+        },
+      },
+    });
+  });
+
+  it("selects a relationship-owned mounted Rig for legitimate suspended locomotion", () => {
+    const mountedRule: CameraContextRuleV2 = {
+      id: "mounted-suspended",
+      priority: 200,
+      when: {
+        relationshipRoles: ["rider"],
+        allRelationshipConditions: [{ type: "mountedOn", entityRole: "rider" }],
+        locomotionStatuses: ["suspended"],
+      },
+      cameraRigProfileRef: FLIGHT_RIG_REF,
+    };
+    const active = sample();
+    const suspended: CameraContextSampleV2 = {
+      ...active,
+      locomotion: {
+        schemaVersion: 2,
+        status: "suspended",
+        suspendedByRelationshipId: "mount-rider-sword",
+        committedTick: active.committedTick,
+        transitionSequence: 4,
+      },
+    };
+
+    expect(selectCameraViewV2({
+      cameraContextProfile: profile([mountedRule]),
+      cameraContextSample: suspended,
+      cameraViewPreference: { mode: "auto" },
+    })).toMatchObject({
+      ok: true,
+      decision: {
+        activeCameraRigProfileRef: FLIGHT_RIG_REF,
+        matchedCameraContextRuleIds: ["mounted-suspended"],
+      },
+    });
+  });
+
+  it("bypasses every auto Rule while transitional semantic authority is unavailable", () => {
+    const rules: readonly CameraContextRuleV2[] = [
+      {
+        id: "tag-only",
+        priority: 130,
+        when: { requiredCameraContextTags: ["sprint"] },
+        cameraRigProfileRef: FLIGHT_RIG_REF,
+      },
+      {
+        id: "role-only",
+        priority: 120,
+        when: { relationshipRoles: ["rider"] },
+        cameraRigProfileRef: FLIGHT_RIG_REF,
+      },
+      {
+        id: "suspended-only",
+        priority: 110,
+        when: { locomotionStatuses: ["suspended"] },
+        cameraRigProfileRef: FLIGHT_RIG_REF,
+      },
+    ];
+    const active = sample();
+    const seam: CameraContextSampleV2 = {
+      ...active,
+      semanticAuthorityStatus: "unavailable",
+      locomotion: {
+        schemaVersion: 2,
+        status: "suspended",
+        suspendedByRelationshipId: "3c-task6-authority-unavailable",
+        committedTick: active.committedTick,
+        transitionSequence: 0,
+      },
+      actionSummary: { status: "unavailable" },
+      environment: {
+        relationshipRole: "none",
+        relationshipContexts: [],
+        socketPositionsMetersXYZById: {},
+        cameraContextTags: [],
+      },
+    };
+    const result = selectCameraViewV2({
+      cameraContextProfile: profile(rules),
+      cameraContextSample: seam,
+      cameraViewPreference: { mode: "auto" },
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      decision: {
+        activeCameraRigProfileRef: DEFAULT_RIG_REF,
+        activeCameraModifierRefs: [],
+        matchedCameraContextRuleIds: [],
+        fallbackActive: true,
+        diagnostics: [{ code: "CAMERA_SEMANTIC_AUTHORITY_UNAVAILABLE" }],
+        explain: {
+          cameraContextRules: [
+            { cameraContextRuleId: "tag-only", unmatchedReasons: ["semantic-authority-unavailable"] },
+            { cameraContextRuleId: "role-only", unmatchedReasons: ["semantic-authority-unavailable"] },
+            { cameraContextRuleId: "suspended-only", unmatchedReasons: ["semantic-authority-unavailable"] },
+          ],
+        },
+      },
+    });
+  });
+
+  it("honors an explicitly admitted locked Rig while unavailable auto semantics stay bypassed", () => {
+    const active = sample();
+    const seam: CameraContextSampleV2 = {
+      ...active,
+      semanticAuthorityStatus: "unavailable",
+      locomotion: {
+        schemaVersion: 2,
+        status: "suspended",
+        suspendedByRelationshipId: "3c-task6-authority-unavailable",
+        committedTick: active.committedTick,
+        transitionSequence: 0,
+      },
+      actionSummary: { status: "unavailable" },
+      environment: {
+        relationshipRole: "none",
+        relationshipContexts: [],
+        socketPositionsMetersXYZById: {},
+        cameraContextTags: [],
+      },
+    };
+
+    expect(selectCameraViewV2({
+      cameraContextProfile: profile([{
+        id: "suspended-only",
+        priority: 100,
+        when: { locomotionStatuses: ["suspended"] },
+        cameraRigProfileRef: FLIGHT_RIG_REF,
+      }]),
+      cameraContextSample: seam,
+      cameraViewPreference: {
+        mode: "camera-rig-profile",
+        cameraRigProfileRef: FLIGHT_RIG_REF,
+      },
+    })).toMatchObject({
+      ok: true,
+      decision: {
+        activeCameraRigProfileRef: FLIGHT_RIG_REF,
+        matchedCameraContextRuleIds: [],
+        diagnostics: [{ code: "CAMERA_SEMANTIC_AUTHORITY_UNAVAILABLE" }],
+      },
+    });
+  });
+
+  it("returns one recursively cloned and frozen V2 authority result", () => {
+    const input = profile([FLIGHT_RULE, AIM_RULE]);
+    const result = selectCameraViewV2({
+      cameraContextProfile: input,
+      cameraContextSample: sample(),
+      cameraViewPreference: { mode: "auto" },
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(Object.isFrozen(result)).toBe(true);
+    expect(Object.isFrozen(result.decision)).toBe(true);
+    expect(Object.isFrozen(result.decision.matchedCameraContextRuleIds)).toBe(true);
+    expect(Object.isFrozen(result.decision.diagnostics)).toBe(true);
+    expect(Object.isFrozen(result.decision.explain)).toBe(true);
+    expect(Object.isFrozen(result.decision.explain.cameraContextRules)).toBe(true);
+    expect(Object.isFrozen(result.decision.explain.cameraContextRules[0]?.unmatchedReasons)).toBe(true);
+    expect(() => {
+      (result.decision as { activeCameraRigProfileRef: string }).activeCameraRigProfileRef = "hostile";
+    }).toThrow();
+    expect(result.decision.activeCameraRigProfileRef).toBe(FLIGHT_RIG_REF);
+  });
+
   it("matches relationship roles only for the matching Camera Context sample", () => {
     const mountedRule: CameraContextRuleV2 = {
       id: "mounted-framing",
@@ -413,12 +872,12 @@ describe("deterministic Camera selection", () => {
       when: { relationshipRoles: ["rider"] },
       cameraModifierRefs: ["worldkit://camera-modifier/mounted@1"],
     };
-    const noRelationshipMatch = selectCameraViewV1({
+    const noRelationshipMatch = selectCameraViewV2({
       cameraContextProfile: profile([mountedRule]),
       cameraContextSample: sample({ relationshipRole: "none" }),
       cameraViewPreference: { mode: "camera-rig-profile", cameraRigProfileRef: DEFAULT_RIG_REF },
     });
-    const riderMatch = selectCameraViewV1({
+    const riderMatch = selectCameraViewV2({
       cameraContextProfile: profile([mountedRule]),
       cameraContextSample: sample({ relationshipRole: "rider" }),
       cameraViewPreference: { mode: "camera-rig-profile", cameraRigProfileRef: DEFAULT_RIG_REF },
@@ -443,7 +902,7 @@ describe("deterministic Camera selection", () => {
   });
 
   it("selects the highest-priority Rig and applies unique Modifiers low-to-high", () => {
-    const result = selectCameraViewV1({
+    const result = selectCameraViewV2({
       cameraContextProfile: profile([AIM_RULE, FLIGHT_RULE]),
       cameraContextSample: sample(),
       cameraViewPreference: { mode: "auto" },
@@ -452,7 +911,7 @@ describe("deterministic Camera selection", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.decision).toMatchObject({
-      simulationTick: 42,
+      committedTick: 42,
       targetEntityId: "flying-sword",
       activeCameraRigProfileRef: FLIGHT_RIG_REF,
       matchedCameraContextRuleIds: ["flight", "aim"],
@@ -472,11 +931,11 @@ describe("deterministic Camera selection", () => {
       cameraViewPreference: { mode: "auto" } as const,
     };
 
-    const left = selectCameraViewV1({
+    const left = selectCameraViewV2({
       ...input,
       cameraContextProfile: profile([FLIGHT_RULE, AIM_RULE]),
     });
-    const right = selectCameraViewV1({
+    const right = selectCameraViewV2({
       ...input,
       cameraContextProfile: profile([AIM_RULE, FLIGHT_RULE]),
     });
@@ -485,9 +944,14 @@ describe("deterministic Camera selection", () => {
   });
 
   it("preserves an incompatible explicit preference while entering the safe View", () => {
-    const result = selectCameraViewV1({
+    const result = selectCameraViewV2({
       cameraContextProfile: profile([AIM_RULE]),
-      cameraContextSample: sample({ movementMedium: "ground" }),
+      cameraContextSample: sample({
+        movementMedium: "ground",
+        mobilityMode: "grounded",
+        gait: "idle",
+        verticalPhase: "none",
+      }),
       cameraViewPreference: {
         mode: "camera-rig-profile",
         cameraRigProfileRef: FLIGHT_RIG_REF,
@@ -510,13 +974,16 @@ describe("deterministic Camera selection", () => {
   });
 
   it("explains every unmatched condition without reading provider state", () => {
-    const result = selectCameraViewV1({
+    const result = selectCameraViewV2({
       cameraContextProfile: profile([FLIGHT_RULE]),
       cameraContextSample: sample({
         movementMedium: "ground",
+        mobilityMode: "grounded",
+        gait: "idle",
+        verticalPhase: "none",
         activeActionRefs: [],
+        isInterruptible: true,
         relationshipContexts: [],
-        velocityMetersPerSecondXYZ: [0, 0, 0],
         socketPositionsMetersXYZById: {},
       }),
       cameraViewPreference: { mode: "auto" },
@@ -531,12 +998,69 @@ describe("deterministic Camera selection", () => {
         matched: false,
         unmatchedReasons: [
           "relationship-condition-not-met",
+          "mobility-mode-not-matched",
+          "vertical-phase-not-matched",
           "movement-medium-not-matched",
           "required-action-not-active",
-          "minimum-speed-not-met",
+          "action-interruptibility-not-matched",
           "required-socket-unavailable",
         ],
       },
     ]);
+  });
+
+  it.each([
+    ["takeoff", "worldkit://camera-modifier/takeoff@1"],
+    ["rising", "worldkit://camera-modifier/rising@1"],
+    ["apex", "worldkit://camera-modifier/apex@1"],
+    ["falling", "worldkit://camera-modifier/falling@1"],
+  ] as const)("selects the %s semantic phase without consulting contradictory velocity", (
+    verticalPhase,
+    modifierRef,
+  ) => {
+    const context = profile([{
+      id: `phase-${verticalPhase}`,
+      priority: 120,
+      when: { verticalPhases: [verticalPhase] },
+      cameraModifierRefs: [modifierRef],
+    }]);
+    const input: CameraContextProfileV1 = {
+      ...context,
+      cameraModifierProfiles: [
+        ...context.cameraModifierProfiles,
+        modifier(modifierRef),
+      ],
+    };
+    const result = selectCameraViewV2({
+      cameraContextProfile: input,
+      cameraContextSample: sample({ verticalPhase }),
+      cameraViewPreference: { mode: "auto" },
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      decision: {
+        activeCameraModifierRefs: [modifierRef],
+        matchedCameraContextRuleIds: [`phase-${verticalPhase}`],
+      },
+    });
+  });
+
+  it("rejects Tick/facing mismatches before semantic rule evaluation", () => {
+    const committed = sample();
+    const mismatched = {
+      ...committed,
+      locomotion: {
+        ...committed.locomotion,
+        committedTick: 41,
+        phaseEnteredTick: 41,
+      },
+    };
+
+    expect(() => selectCameraViewV2({
+      cameraContextProfile: profile([FLIGHT_RULE]),
+      cameraContextSample: mismatched,
+      cameraViewPreference: { mode: "auto" },
+    })).toThrow("3C_CAMERA_CONTEXT_UNCOMMITTED");
   });
 });

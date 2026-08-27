@@ -292,12 +292,28 @@ describe("WorldSession fixed-duration Action input arbitration", () => {
       .not.toHaveProperty("execution.blocking");
     await session.runFixedInput(input);
 
-    expect(fixedInputCalls(harness).map(({ input: forwarded }) => forwarded))
+    const calls = fixedInputCalls(harness);
+    expect(calls.map(({ input: forwarded }) => forwarded))
       .toEqual([
         { actions: ["primary-action", "camera-recenter"], ticks: 1 },
         { actions: ["primary-action", "camera-recenter"], ticks: 1 },
         input,
       ]);
+    expect(calls.map(({ actionProjection }) => actionProjection)).toEqual([
+      {
+        simulationTick: 1,
+        activeActionStatesById: {
+          "execution.blocking": expect.objectContaining({
+            id: "execution.blocking",
+            actorEntityId: heroA.id,
+            semanticActionRef: ACTION_REF,
+            mode: "active",
+          }),
+        },
+      },
+      { simulationTick: 2, activeActionStatesById: {} },
+      { simulationTick: 3, activeActionStatesById: {} },
+    ]);
     const completion = session.eventsAfter(0, 20).find(({ type }) =>
       type === "action.completed"
     );
@@ -443,4 +459,40 @@ describe("WorldSession fixed-input estimate breaches with due Actions", () => {
       expect(harness.disposeCount).toBe(1);
     },
   );
+});
+
+describe("WorldSession fixed-input Action authority transaction", () => {
+  it("projects a due completion into nextTick before prepare and rolls back Action, World and Journal on failure", async () => {
+    const { harness, options } = createHarnessAndOptions({ durationTicks: 1 });
+    const session = await WorldSession.create(options);
+    await bindAndActivate(
+      session,
+      "controller.a",
+      heroA.id,
+      "execution.rollback",
+    );
+    const before = session.snapshot();
+    const eventsBefore = session.eventsAfter(0, 20);
+    let receivedActionProjection: unknown;
+    Object.defineProperty(harness.port, "prepareFixedInputTick", {
+      configurable: true,
+      value: async (_input: unknown, actionProjection: unknown) => {
+        receivedActionProjection = actionProjection;
+        throw new Error("provider prepare failed");
+      },
+    });
+
+    await expect(session.runFixedInput({ actions: [], ticks: 1 }))
+      .rejects.toThrow("ADAPTER_FIXED_INPUT_FAILED");
+
+    expect(receivedActionProjection).toEqual({
+      simulationTick: 1,
+      activeActionStatesById: {},
+    });
+    expect(session.snapshot()).toBe(before);
+    expect(session.eventsAfter(0, 20)).toEqual(eventsBefore);
+    expect(session.snapshot().gameplayInspection.activeActionStatesById)
+      .toHaveProperty("execution.rollback");
+    expect(session.snapshot().worldState.simulationTick).toBe(0);
+  });
 });

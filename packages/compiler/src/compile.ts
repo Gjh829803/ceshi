@@ -2027,6 +2027,11 @@ export function compileWorldV5(input: CompileWorldInputV5): CompileWorldResultV5
       normalizedWorldIrHash: snapshot.normalizedWorldIrHash,
       resourceLockHash,
       resourceLockEntries,
+      actionPresentationRegistry: {
+        schemaVersion: 1,
+        bindings: [],
+        rootMotionSources: [],
+      },
       terrain,
       layout: compileExecutionLayoutV1(snapshot.normalizedWorldIr),
       traversal: {

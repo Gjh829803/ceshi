@@ -63,6 +63,7 @@ import {
   parseGameplayViewStateProjectionV1,
   parseGameplayWorldStateProjectionV1,
   parseGameplayWorldTransactionV1,
+  type GameplayFixedTickActionProjectionV1,
   type GameplayViewStateProjectionV1,
   type GameplayWorldPortV1,
   type GameplayWorldStateProjectionV1,
@@ -94,6 +95,13 @@ export interface WorldSessionPublicationV1 {
   readonly worldState: WorldStateSnapshotV1;
   readonly gameplayInspection: GameplayInspectionSnapshotV1;
   readonly viewState: GameplayViewStateProjectionV1;
+}
+
+interface PreparedFixedInputWorldPortV1 extends GameplayWorldPortV1 {
+  prepareFixedInputTick(
+    input: Readonly<Omit<FixedInputV1, "ticks"> & { ticks: 1 }>,
+    actionProjection: GameplayFixedTickActionProjectionV1,
+  ): Promise<unknown>;
 }
 
 export interface CameraViewSelectionProjectionV1 {
@@ -1612,6 +1620,23 @@ export class WorldSession {
         "Simulation Tick is exhausted.",
       );
     }
+    let prepareFixedInputTick: PreparedFixedInputWorldPortV1[
+      "prepareFixedInputTick"
+    ] | undefined;
+    try {
+      const candidate = (
+        this.options.worldPort as Partial<PreparedFixedInputWorldPortV1>
+      ).prepareFixedInputTick;
+      prepareFixedInputTick = typeof candidate === "function"
+        ? candidate
+        : undefined;
+    } catch {
+      throw sessionFailure(
+        "ADAPTER_FIXED_INPUT_FAILED",
+        "The Runtime Adapter fixed-input transaction seam is unavailable.",
+      );
+    }
+    const usesPreparedFixedInput = !isNil(prepareFixedInputTick);
 
     const activeTerminalEventCountBeforeEstimate = Object.keys(
       currentInspection.activeActionStatesById,
@@ -1649,6 +1674,13 @@ export class WorldSession {
         this.options.worldPort.estimateFixedInputTickCapacity(input),
       );
     } catch {
+      if (usesPreparedFixedInput) {
+        failureReservation.reservation.release();
+        throw sessionFailure(
+          "ADAPTER_FIXED_INPUT_FAILED",
+          "The Runtime Adapter could not estimate the fixed simulation Tick.",
+        );
+      }
       preparedEarlyFailure.commitPrepared();
       this.phaseValue = "failed";
       this.currentPublication = failureBundle.publication;
@@ -1671,6 +1703,18 @@ export class WorldSession {
     }
 
     const completionPlan = this.gameplayState.planDueActionCompletions(nextTick);
+    const completedActionExecutionIds = new Set(
+      completionPlan?.completedActionExecutionIds ?? [],
+    );
+    const actionProjection: GameplayFixedTickActionProjectionV1 = Object.freeze({
+      simulationTick: nextTick,
+      activeActionStatesById: Object.freeze(Object.fromEntries(
+        Object.entries(currentInspection.activeActionStatesById).filter(
+          ([actionExecutionId]) =>
+            !completedActionExecutionIds.has(actionExecutionId),
+        ),
+      )),
+    });
     const completionEventCount = isNil(completionPlan)
       ? 0
       : completionPlan.capacityDelta.immediateEventCount;
@@ -1710,16 +1754,38 @@ export class WorldSession {
     const preparedFailure = eventReservation.reservation.prepare([failure.event]);
 
     let projectionAfter: GameplayWorldStateProjectionV1;
+    let fixedInputTransaction: ReturnType<
+      typeof parseGameplayWorldTransactionV1
+    > | undefined;
+    let rawFixedInputTransaction: unknown;
+    let fixedInputCommitAttempted = false;
     try {
-      projectionAfter = parseGameplayWorldStateProjectionV1(
-        await this.options.worldPort.runFixedInputTick(input),
-        {
-          controllerEntityIds: this.options.controllerEntityIds,
-          relationshipStatesById: mountedRelationshipsById(
-            this.currentPublication.gameplayInspection.relationshipStatesById,
+      const validationOptions = {
+        controllerEntityIds: this.options.controllerEntityIds,
+        relationshipStatesById: mountedRelationshipsById(
+          this.currentPublication.gameplayInspection.relationshipStatesById,
+        ),
+      } as const;
+      if (usesPreparedFixedInput) {
+        rawFixedInputTransaction = await Reflect.apply(
+          prepareFixedInputTick!,
+          this.options.worldPort,
+          [input, actionProjection],
+        );
+        fixedInputTransaction = parseGameplayWorldTransactionV1(
+          rawFixedInputTransaction,
+          validationOptions,
+        );
+        projectionAfter = fixedInputTransaction.projectedWorldStateAfter;
+      } else {
+        projectionAfter = parseGameplayWorldStateProjectionV1(
+          await this.options.worldPort.runFixedInputTick(
+            input,
+            actionProjection,
           ),
-        },
-      );
+          validationOptions,
+        );
+      }
       if (projectionAfter.simulationTick !== nextTick) {
         throw new Error("FIXED_INPUT_TICK_MISMATCH");
       }
@@ -1787,15 +1853,68 @@ export class WorldSession {
         nextEpoch,
         worldState,
         inspection,
-        this.currentPublication.viewState,
+        fixedInputTransaction?.projectedViewStateAfter ??
+          this.currentPublication.viewState,
       );
       const preparedEvents = eventReservation.reservation.prepare(events);
 
+      if (!isNil(fixedInputTransaction)) {
+        try {
+          fixedInputCommitAttempted = true;
+          fixedInputTransaction.commitPrepared();
+        } catch {
+          eventReservation.reservation.release();
+          this.phaseValue = "failed";
+          await this.cleanupResources();
+          throw sessionFailure(
+            "ADAPTER_COMMIT_CONTRACT_VIOLATED",
+            "The Runtime Adapter violated the synchronous fixed-input commit contract.",
+          );
+        }
+      }
       if (!isNil(completionPlan)) this.gameplayState.commit(completionPlan);
       preparedEvents.commitPrepared();
       this.publishedWorldProjection = projectionAfter;
       this.currentPublication = nextPublication;
-    } catch {
+    } catch (error) {
+      if (usesPreparedFixedInput) {
+        eventReservation.reservation.release();
+        if (fixedInputCommitAttempted) {
+          if (error instanceof WorldSessionOperationErrorV1) throw error;
+          throw sessionFailure(
+            "ADAPTER_COMMIT_CONTRACT_VIOLATED",
+            "The Runtime Adapter violated the fixed-input commit barrier.",
+          );
+        }
+        if (!isNil(fixedInputTransaction)) {
+          try {
+            await fixedInputTransaction.abort();
+          } catch {
+            this.phaseValue = "failed";
+            await this.cleanupResources();
+            throw sessionFailure(
+              "ADAPTER_ABORT_FAILED",
+              "The Runtime Adapter could not abort the prepared fixed simulation Tick.",
+            );
+          }
+        } else if (!isNil(rawFixedInputTransaction)) {
+          try {
+            await abortUnparsedTransaction(rawFixedInputTransaction);
+          } catch {
+            this.phaseValue = "failed";
+            await this.cleanupResources();
+            throw sessionFailure(
+              "ADAPTER_ABORT_FAILED",
+              "The Runtime Adapter could not abort the invalid fixed simulation Tick.",
+            );
+          }
+        }
+        if (error instanceof WorldSessionOperationErrorV1) throw error;
+        throw sessionFailure(
+          "ADAPTER_FIXED_INPUT_FAILED",
+          "The Runtime Adapter could not prepare the fixed simulation Tick.",
+        );
+      }
       preparedFailure.commitPrepared();
       this.phaseValue = "failed";
       this.currentPublication = failure.publication;

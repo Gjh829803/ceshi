@@ -206,11 +206,12 @@ const G_BOT_SUBJECT_ASSET: SubjectAssetManifestInputV1 = {
   },
   runtimeReadiness: {
     productionReady: false,
-    runtimeStateBinding: "not-implemented",
+    runtimeStateBinding: "partial",
   },
   aiMetadata: {
     displayName: "G Bot Golden",
-    description: "Project-owned Mixamo-rigged G Bot with twenty-five art-ready semantic animation clips; runtime state binding is not implemented.",
+    description:
+      "Project-owned Mixamo-rigged G Bot with committed locomotion phase binding for its jump, fall, and landing clips; contextual Action binding remains partial.",
     semanticTags: ["biped", "g-bot", "humanoid", "rigged"],
   },
 };

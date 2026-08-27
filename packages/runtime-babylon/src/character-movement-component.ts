@@ -1,4 +1,4 @@
-import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
+import { Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import type { PhysicsBody } from "@babylonjs/core/Physics/v2/physicsBody.js";
 import type { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
@@ -12,6 +12,16 @@ import type {
   Vec3,
   ViewControlFrameV1,
 } from "@whitebox-world/runtime-contracts";
+import {
+  createCharacterMovementRuntimeV1,
+  type CharacterMovementCommandV1,
+  type CharacterMovementSnapshotV1,
+} from "@whitebox-world/character-movement";
+import type {
+  GameplayActionStateV1,
+  LocomotionCapabilityStateV2,
+} from "@whitebox-world/gameplay-contracts";
+import type { ActionPresentationRegistryV1 } from "@whitebox-world/subject-actions";
 
 import {
   compileMotionCommandV1,
@@ -23,8 +33,22 @@ import {
   type MotionKernelSnapshotV1,
   type RetainedCharacterSupportSampleV1,
 } from "./motion-kernel-runtime";
+import {
+  BABYLON_CHARACTER_BODY_PROVIDER_VERSIONS_V1,
+  createBabylonCharacterBodyPortV1,
+} from "./babylon-character-body-port";
+import {
+  GoldenHumanoid3CVNextTransactionV1,
+  type GoldenHumanoidProjectionPortV1,
+  type GoldenHumanoidTickResultV1,
+} from "./golden-humanoid-3c-vnext";
+import { FIXED_TIME_STEP_SECONDS } from "./physics";
+import {
+  CommittedRenderPoseBufferV1,
+  type CommittedRenderPoseV1,
+} from "./committed-render-pose";
 
-export interface SubjectMotionSampleV1 {
+interface LegacySubjectMotionSampleV1 {
   horizontalSpeedMetersPerSecond: number;
   runRequested: boolean;
   movementMedium: PublishedMovementMediumV1;
@@ -39,7 +63,7 @@ type PhysicsCharacterControllerBodyHostV1 = Readonly<{
 }>;
 
 function physicsBodyForCharacterController(
-  controller: MotionKernelRuntimeV1["physicsController"],
+  controller: unknown,
 ): PhysicsBody {
   const body = (controller as unknown as PhysicsCharacterControllerBodyHostV1)._body;
   if (body === undefined) throw new Error("WORLDKIT_CHARACTER_PHYSICS_BODY_UNAVAILABLE");
@@ -118,7 +142,12 @@ export class CharacterMovementComponentV1 extends EntityComponentV1 {
     this.motionKernel.synchronizeVisual();
   }
 
-  sampleMotion(runRequested: boolean): SubjectMotionSampleV1 {
+  renderVisual(_interpolationAlphaRatio: number): void {
+    // Legacy Movement writes its visual during synchronizeVisual. The Golden
+    // slice alone owns two-Snapshot render interpolation during migration.
+  }
+
+  sampleMotion(runRequested: boolean): LegacySubjectMotionSampleV1 {
     const velocity = this.motionKernel.velocity;
     return {
       horizontalSpeedMetersPerSecond: Math.hypot(velocity.x, velocity.z),
@@ -213,5 +242,390 @@ export class CharacterMovementComponentV1 extends EntityComponentV1 {
 
   protected override onDispose(): void {
     this.motionKernel.dispose();
+  }
+}
+
+export interface GoldenHumanoidSubjectControllerOptionsV1 {
+  readonly subject: ExecutionSubjectV3;
+  readonly visualRoot: TransformNode;
+  readonly transaction: GoldenHumanoid3CVNextTransactionV1;
+  readonly physicsBody?: PhysicsBody;
+}
+
+function assertGoldenHumanoidSubjectAdmissionV1(
+  subject: ExecutionSubjectV3,
+): void {
+  const control = subject.capabilityAssembly.controlProfile;
+  if (
+    control.commandKind !== "planar-vector" ||
+    control.inputSpace !== "camera-relative" ||
+    control.facingPolicy !== "align-to-move" ||
+    (control.lateralMovementPolicy !== "allowed" &&
+      control.lateralMovementPolicy !== "forbidden")
+  ) {
+    throw new Error(
+      "3C_GOLDEN_CONTROL_PROFILE_UNSUPPORTED: Golden Humanoid requires camera-relative planar-vector align-to-move Control.",
+    );
+  }
+}
+
+/**
+ * Live Golden Subject facade. It deliberately has no MotionKernel member: the
+ * injected Golden transaction owns the one CharacterMovementRuntime and the
+ * one Babylon BodyPort/native controller for this Subject.
+ */
+export class GoldenHumanoidSubjectControllerV1 extends EntityComponentV1 {
+  readonly #subject: ExecutionSubjectV3;
+  readonly #visualRoot: TransformNode;
+  readonly #transaction: GoldenHumanoid3CVNextTransactionV1;
+  readonly #physicsBody: PhysicsBody | undefined;
+  #latestTickResult: GoldenHumanoidTickResultV1 | undefined;
+  readonly #renderPoseBuffer: CommittedRenderPoseBufferV1;
+  #jumpWasHeld = false;
+  #disposed = false;
+
+  constructor(options: GoldenHumanoidSubjectControllerOptionsV1) {
+    super("character-movement");
+    if (options.subject.entityId.length === 0) {
+      throw new Error("3C_INPUT_INVALID: Golden Subject entity id is empty.");
+    }
+    assertGoldenHumanoidSubjectAdmissionV1(options.subject);
+    this.#subject = options.subject;
+    this.#visualRoot = options.visualRoot;
+    this.#transaction = options.transaction;
+    this.#physicsBody = options.physicsBody;
+    this.#renderPoseBuffer = new CommittedRenderPoseBufferV1(
+      this.#committedRenderPose(),
+    );
+    this.#applyRenderPose(this.#renderPoseBuffer.sample(1));
+  }
+
+  step(
+    actions: readonly SemanticInputActionV1[],
+    viewControlFrame: ViewControlFrameV1 = {
+      forwardXYZ: [0, 0, -1],
+      rightXYZ: [1, 0, 0],
+      committedTick: this.movementSnapshot().tick,
+    },
+    axes: Readonly<ControlInputAxesV2> = {},
+    activeActionState?: GameplayActionStateV1,
+  ): GoldenHumanoidTickResultV1 {
+    this.#assertLive();
+    const before = this.movementSnapshot();
+    if (viewControlFrame.committedTick !== before.tick) {
+      throw new Error(
+        "3C_VIEW_TICK_MISMATCH: ViewControlFrame must match the committed Movement Tick.",
+      );
+    }
+    const interpreted = compileMotionCommandV1(
+      this.#subject.capabilityAssembly.controlProfile,
+      this.#subject.controlFeel.moveResponseExponent,
+      actions,
+      viewControlFrame,
+      axes,
+    );
+    if (interpreted.kind !== "planar-vector" && interpreted.kind !== "none") {
+      throw new Error(
+        "3C_INPUT_INVALID: Golden Humanoid accepts only planar-vector Control.",
+      );
+    }
+    const jumpHeld = interpreted.kind === "planar-vector" &&
+      interpreted.jumpRequested;
+    const direction = interpreted.kind === "planar-vector"
+      ? interpreted.directionMetersXZ
+      : [0, 0] as const;
+    const hasMovementIntent = Math.hypot(direction[0], direction[1]) > 0;
+    const runRequested = interpreted.kind === "planar-vector" &&
+      interpreted.runRequested;
+    if (runRequested && !this.#subject.locomotion.allowRun) {
+      throw new Error(
+        "3C_CAPABILITY_NOT_DECLARED: run Control requires allowRun.",
+      );
+    }
+    if (hasMovementIntent && !runRequested && !this.#subject.locomotion.allowWalk) {
+      throw new Error(
+        "3C_CAPABILITY_NOT_DECLARED: walk Control requires allowWalk.",
+      );
+    }
+    if (jumpHeld && !this.#subject.locomotion.allowJump) {
+      throw new Error(
+        "3C_CAPABILITY_NOT_DECLARED: jump Control requires allowJump.",
+      );
+    }
+    const movementX = direction[0] === 0 ? 0 : direction[0];
+    const movementZ = direction[1] === 0 ? 0 : -direction[1];
+    const command: CharacterMovementCommandV1 = {
+      schemaVersion: 1,
+      tick: before.tick + 1,
+      fixedDeltaSeconds: FIXED_TIME_STEP_SECONDS,
+      // compileMotionCommand returns a world-space planar direction. At zero
+      // view yaw CharacterMovement maps [x, inputZ] to [x, -z].
+      movementInputXZ: [movementX, movementZ],
+      runRequested,
+      jumpPressed: jumpHeld && !this.#jumpWasHeld,
+      jumpHeld,
+      viewYawRadians: 0,
+      layeredMoves: [],
+    };
+    const result = this.runCommand(command, activeActionState);
+    this.#jumpWasHeld = jumpHeld;
+    return result;
+  }
+
+  runCommand(
+    command: CharacterMovementCommandV1,
+    activeActionState?: GameplayActionStateV1,
+  ): GoldenHumanoidTickResultV1 {
+    this.#assertLive();
+    const result = this.#transaction.runTick({
+      command,
+      ...(activeActionState === undefined ? {} : { activeActionState }),
+    });
+    this.#latestTickResult = result;
+    return result;
+  }
+
+  movementSnapshot(): CharacterMovementSnapshotV1 {
+    this.#assertLive();
+    return this.#transaction.snapshot();
+  }
+
+  locomotionStateV2(): LocomotionCapabilityStateV2 {
+    return this.movementSnapshot().locomotion;
+  }
+
+  latestTickResult(): GoldenHumanoidTickResultV1 | undefined {
+    this.#assertLive();
+    return this.#latestTickResult;
+  }
+
+  synchronizeVisual(): void {
+    this.#assertLive();
+    this.#renderPoseBuffer.commit(this.#committedRenderPose());
+    this.#applyRenderPose(this.#renderPoseBuffer.sample(1));
+  }
+
+  renderVisual(interpolationAlphaRatio: number): void {
+    this.#assertLive();
+    this.#applyRenderPose(this.#renderPoseBuffer.sample(interpolationAlphaRatio));
+  }
+
+  #committedRenderPose(): CommittedRenderPoseV1 {
+    const snapshot = this.movementSnapshot();
+    const offset = this.#subject.collider.centerOffsetFromSubjectOriginMetersXYZ;
+    return Object.freeze({
+      committedTick: snapshot.tick,
+      positionMetersXYZ: Object.freeze([
+        snapshot.positionMetersXYZ[0] - offset[0],
+        snapshot.positionMetersXYZ[1] - offset[1],
+        snapshot.positionMetersXYZ[2] - offset[2],
+      ]) as Vec3,
+      facingYawRadians: snapshot.facingYawRadians,
+    });
+  }
+
+  #applyRenderPose(pose: CommittedRenderPoseV1): void {
+    this.#visualRoot.position.set(
+      pose.positionMetersXYZ[0],
+      pose.positionMetersXYZ[1],
+      pose.positionMetersXYZ[2],
+    );
+    this.#visualRoot.rotationQuaternion = Quaternion.FromEulerAngles(
+      0,
+      pose.facingYawRadians,
+      0,
+    );
+  }
+
+  get subjectOrigin(): Vector3 {
+    const snapshot = this.movementSnapshot();
+    const offset = this.#subject.collider.centerOffsetFromSubjectOriginMetersXYZ;
+    return new Vector3(
+      snapshot.positionMetersXYZ[0] - offset[0],
+      snapshot.positionMetersXYZ[1] - offset[1],
+      snapshot.positionMetersXYZ[2] - offset[2],
+    );
+  }
+
+  get controllerCenter(): Vector3 {
+    return new Vector3(...this.movementSnapshot().positionMetersXYZ);
+  }
+
+  get physicsBody(): PhysicsBody {
+    this.#assertLive();
+    if (this.#physicsBody === undefined) {
+      throw new Error(
+        "WORLDKIT_CHARACTER_PHYSICS_BODY_UNAVAILABLE: Golden test facade has no native Body.",
+      );
+    }
+    return this.#physicsBody;
+  }
+
+  get velocity(): Vector3 {
+    return new Vector3(
+      ...this.movementSnapshot().linearVelocityMetersPerSecondXYZ,
+    );
+  }
+
+  get facingYawRadians(): number {
+    return this.movementSnapshot().facingYawRadians;
+  }
+
+  get forward(): Vector3 {
+    const yaw = this.facingYawRadians;
+    return new Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+  }
+
+  reset(): void {
+    this.#assertLive();
+    this.#transaction.reset();
+    this.#latestTickResult = undefined;
+    this.#jumpWasHeld = false;
+    this.#renderPoseBuffer.reset(this.#committedRenderPose());
+    this.#applyRenderPose(this.#renderPoseBuffer.sample(1));
+  }
+
+  protected override onDispose(): void {
+    if (this.#disposed) return;
+    this.#disposed = true;
+    this.#latestTickResult = undefined;
+    this.#transaction.dispose();
+  }
+
+  #assertLive(): void {
+    if (this.#disposed) {
+      throw new Error("3C_RUNTIME_DISPOSED: Golden Subject is disposed.");
+    }
+  }
+}
+
+export interface CreateGoldenHumanoidSubjectControllerOptionsV1 {
+  readonly subject: ExecutionSubjectV3;
+  readonly gravityMetersPerSecondSquaredXYZ: Vec3;
+  readonly visualRoot: TransformNode;
+  readonly scene: Scene;
+  readonly actionPresentationRegistry: ActionPresentationRegistryV1;
+  readonly projectionPorts?: readonly GoldenHumanoidProjectionPortV1[];
+}
+
+/** Allocates exactly one MovementRuntime and one Babylon BodyPort. */
+export function createGoldenHumanoidSubjectControllerV1(
+  options: CreateGoldenHumanoidSubjectControllerOptionsV1,
+): GoldenHumanoidSubjectControllerV1 {
+  const subject = options.subject;
+  assertGoldenHumanoidSubjectAdmissionV1(subject);
+  const centerOffset = subject.collider.centerOffsetFromSubjectOriginMetersXYZ;
+  const initialCenter = subject.spawnSubjectOriginPositionMetersXYZ.map(
+    (value, axis) => value + centerOffset[axis]!,
+  ) as [number, number, number];
+  const gravity = options.gravityMetersPerSecondSquaredXYZ;
+  if (gravity[0] !== 0 || gravity[2] !== 0 || gravity[1] >= 0) {
+    throw new Error(
+      "3C_INPUT_INVALID: Golden Humanoid V1 requires downward world-Y gravity.",
+    );
+  }
+  const feel = subject.controlFeel;
+  const movementRuntime = createCharacterMovementRuntimeV1({
+    schemaVersion: 1,
+    fixedDeltaSeconds: FIXED_TIME_STEP_SECONDS,
+    initialState: {
+      schemaVersion: 1,
+      tick: 0,
+      positionMetersXYZ: initialCenter,
+      facingYawRadians: subject.spawnSubjectFacingRadians,
+      linearVelocityMetersPerSecondXYZ: [0, 0, 0],
+      locomotion: {
+        schemaVersion: 2,
+        status: "active",
+        mobilityMode: "grounded",
+        gait: "idle",
+        verticalPhase: "none",
+        supportMode: "supported",
+        movementMedium: "ground",
+        facingYawRadians: subject.spawnSubjectFacingRadians,
+        linearVelocity: { x: 0, y: 0, z: 0 },
+        horizontalSpeedMetersPerSecond: 0,
+        committedTick: 0,
+        phaseEnteredTick: 0,
+        transitionSequence: 0,
+      },
+      transitionEvents: [],
+      runtimeState: {
+        schemaVersion: 1,
+        // The authored spawn is not support evidence. The first Body sample
+        // and resolution arm coyote only when they observe real support.
+        coyoteTicksRemaining: 0,
+        jumpBufferTicksRemaining: 0,
+        variableJumpHoldTicksRemaining: 0,
+        landingTicksRemaining: 0,
+        apexCrossedInAirborneEpisode: false,
+      },
+    },
+    walkSpeedMetersPerSecond: feel.walkSpeedMetersPerSecond,
+    runSpeedMetersPerSecond: feel.runSpeedMetersPerSecond,
+    accelerationMetersPerSecondSquared:
+      feel.accelerationMetersPerSecondSquared,
+    decelerationMetersPerSecondSquared:
+      feel.decelerationMetersPerSecondSquared,
+    airControlRatio: feel.airControlRatio,
+    gravityMetersPerSecondSquared: Math.abs(gravity[1]),
+    jumpSpeedMetersPerSecond: feel.jumpSpeedMetersPerSecond,
+    coyoteTimeSeconds: feel.coyoteTimeSeconds,
+    jumpBufferSeconds: feel.jumpBufferSeconds,
+    variableJumpHoldSeconds: feel.variableJumpHoldSeconds,
+    jumpHoldGravityRatio: feel.jumpHoldGravityRatio,
+    jumpReleaseGravityRatio: feel.jumpReleaseGravityRatio,
+    landingDurationTicks: 8,
+    apexEnterSpeedMetersPerSecond: 0.05,
+    apexExitSpeedMetersPerSecond: 0.15,
+  });
+  let bodyPort: ReturnType<typeof createBabylonCharacterBodyPortV1> | undefined;
+  try {
+    bodyPort = createBabylonCharacterBodyPortV1({
+      schemaVersion: 1,
+      providerVersions: BABYLON_CHARACTER_BODY_PROVIDER_VERSIONS_V1,
+      scene: options.scene,
+      fixedDeltaSeconds: FIXED_TIME_STEP_SECONDS,
+      gravityMetersPerSecondSquaredXYZ: gravity,
+      capsule: {
+        heightMeters: subject.collider.heightMeters,
+        radiusMeters: subject.collider.radiusMeters,
+      },
+      controller: {
+        keepDistanceMeters: 0.05,
+        keepContactToleranceMeters: 0.1,
+        maxSlopeDegrees: subject.collider.maxSlopeDegrees,
+        maxStepHeightMeters: subject.collider.maxStepHeightMeters,
+        characterMassKilograms: subject.collider.massKilograms,
+      },
+      resetState: {
+        positionMetersXYZ: initialCenter,
+        linearVelocityMetersPerSecondXYZ: [0, 0, 0],
+      },
+    });
+    const transaction = new GoldenHumanoid3CVNextTransactionV1({
+      subjectEntityId: subject.entityId,
+      fixedDeltaSeconds: FIXED_TIME_STEP_SECONDS,
+      movementRuntime,
+      bodyPort,
+      actionPresentationRegistry: options.actionPresentationRegistry,
+      ...(options.projectionPorts === undefined
+        ? {}
+        : { projectionPorts: options.projectionPorts }),
+    });
+    return new GoldenHumanoidSubjectControllerV1({
+      subject,
+      visualRoot: options.visualRoot,
+      transaction,
+      physicsBody: bodyPort.physicsBody,
+    });
+  } catch (error) {
+    movementRuntime.dispose();
+    try {
+      bodyPort?.dispose();
+    } catch {
+      // Preserve construction failure.
+    }
+    throw error;
   }
 }

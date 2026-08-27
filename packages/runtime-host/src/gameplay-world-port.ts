@@ -1,5 +1,6 @@
 import {
   buildWorldStateSnapshotV1,
+  type GameplayActionStateV1,
   type GameplayCapabilityStateV1,
   type GameplayRelationshipStateV1,
   type GameplaySemanticFactV1,
@@ -38,6 +39,18 @@ export interface GameplayFixedInputCapacityEstimateV1 {
   readonly maximumSemanticFactTransitionEventCount: number;
 }
 
+/**
+ * Host-owned Action authority for exactly one fixed simulation Tick. The
+ * provider consumes this committed-next projection independently from raw
+ * user input and must not infer Action state from input actions or animation.
+ */
+export interface GameplayFixedTickActionProjectionV1 {
+  readonly simulationTick: number;
+  readonly activeActionStatesById: Readonly<
+    Record<string, GameplayActionStateV1>
+  >;
+}
+
 export type FixedInputOneTickV1 = Omit<FixedInputV1, "ticks"> & Readonly<{
   ticks: 1;
 }>;
@@ -68,6 +81,7 @@ export interface GameplayWorldPortV1 {
   ): GameplayFixedInputCapacityEstimateV1;
   runFixedInputTick(
     input: FixedInputOneTickV1,
+    actionProjection: GameplayFixedTickActionProjectionV1,
   ): Promise<GameplayWorldStateProjectionV1>;
   snapshot(): GameplayWorldStateProjectionV1;
   dispose(): Promise<void>;

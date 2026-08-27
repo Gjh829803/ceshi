@@ -17,7 +17,7 @@ import type {
   CameraRelationshipContextV1,
   CameraRelationshipRoleV1,
   CameraRigParametersV1,
-  CameraSelectionDecisionV1,
+  CameraSelectionDecisionV2,
   CameraViewPreferenceV1,
 } from "@whitebox-world/camera";
 export type { CameraViewPreferenceV1 } from "@whitebox-world/camera";
@@ -254,7 +254,8 @@ export interface ViewTargetSampleV1 {
   velocityMetersPerSecondXYZ: Vec3;
   approximateRadiusMeters: number;
   socketPositionsMetersXYZById: Readonly<Record<string, Vec3>>;
-  activeMotionKernelRef: string;
+  /** Legacy-only authority identity; CharacterMovementRuntime-backed Subjects omit it. */
+  activeMotionKernelRef?: string;
   motionTags: readonly string[];
   movementMedium: PublishedMovementMediumV1;
   relationshipContexts: readonly CameraRelationshipContextV1[];
@@ -293,7 +294,7 @@ export type WorldRuntimeCameraStateV4 =
       viewYawOffsetRadians: number;
       viewPitchOffsetRadians: number;
       viewDistanceOffsetMeters: number;
-      selectionDecision?: CameraSelectionDecisionV1;
+      selectionDecision?: CameraSelectionDecisionV2;
       selectedTargetSocketId?: string;
       targetSocketPositionMetersXYZ?: Vec3;
       isTargetSocketFallback?: boolean;

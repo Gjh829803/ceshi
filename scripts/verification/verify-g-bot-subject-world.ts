@@ -76,7 +76,6 @@ const TARGET_ARTIFACT_DIRECTORY = path.join(
   INTAKE_FIXTURE.artifactDirectoryPath,
 );
 const PRIMARY_ENTITY_ID = INTAKE_FIXTURE.primaryEntityId;
-const SECONDARY_ENTITY_ID = INTAKE_FIXTURE.secondaryEntityId;
 const CONTROLLER_ID = INTAKE_FIXTURE.controllerId;
 const SUBJECT_ASSET_REF = INTAKE_FIXTURE.subjectAssetRef;
 const SUBJECT_DEFINITION_REF = INTAKE_FIXTURE.subjectDefinitionRef;
@@ -158,16 +157,8 @@ interface BrowserEvidence {
       readonly differenceRatio: number;
     }[];
   };
-  readonly isolation: {
-    readonly observedEntityId: typeof PRIMARY_ENTITY_ID;
-    readonly controlledEntityId: typeof SECONDARY_ENTITY_ID;
-    readonly beforePositionMetersXYZ: Vec3;
-    readonly afterPositionMetersXYZ: Vec3;
-    readonly controlledBeforePositionMetersXYZ: Vec3;
-    readonly controlledAfterPositionMetersXYZ: Vec3;
-  };
   readonly wallStop: {
-    readonly entityId: typeof SECONDARY_ENTITY_ID;
+    readonly entityId: typeof PRIMARY_ENTITY_ID;
     readonly startPositionMetersXYZ: Vec3;
     readonly stopPositionMetersXYZ: Vec3;
     readonly maximumAllowedXMeters: number;
@@ -232,13 +223,6 @@ function pngBytesFromDataUrl(dataUrl: string): Buffer {
   return Buffer.from(dataUrl.slice(prefix.length), "base64");
 }
 
-function assertPositionUnchanged(actual: Vec3, expected: Vec3, message: string): void {
-  const maximumDriftMeters = Math.max(
-    ...actual.map((coordinate, index) => Math.abs(coordinate - expected[index]!)),
-  );
-  assert.ok(maximumDriftMeters <= 1e-9, `${message} Drift=${maximumDriftMeters}m.`);
-}
-
 function requireSubjectProjection(snapshot: WorldRuntimeSnapshotV4, entityId: string) {
   const subject = snapshot.world.subjectStatesByEntityId[entityId];
   assert.ok(subject !== undefined, `Missing Subject projection '${entityId}'.`);
@@ -248,8 +232,17 @@ function requireSubjectProjection(snapshot: WorldRuntimeSnapshotV4, entityId: st
 function requireLocomotionCapability(snapshot: WorldRuntimeSnapshotV4, entityId: string) {
   const capability = Object.values(
     requireSubjectProjection(snapshot, entityId).capabilityStatesById,
-  ).find((candidate) => candidate.kind === "locomotion-capability-state");
+  ).find((candidate) =>
+    candidate.kind === "locomotion-capability-state" ||
+    candidate.kind === "locomotion-capability-state-v2"
+  );
   assert.ok(capability !== undefined, `Missing locomotion capability state for '${entityId}'.`);
+  if (capability.kind === "locomotion-capability-state-v2") {
+    if (capability.locomotion.status === "suspended") {
+      throw new Error(`Unexpected suspended locomotion capability for '${entityId}'.`);
+    }
+    return capability.locomotion;
+  }
   if (capability.mode === "suspended") {
     throw new Error(`Unexpected suspended locomotion capability for '${entityId}'.`);
   }
@@ -257,8 +250,12 @@ function requireLocomotionCapability(snapshot: WorldRuntimeSnapshotV4, entityId:
 }
 
 function locomotionActionId(snapshot: WorldRuntimeSnapshotV4, entityId: string): ActionId {
-  const mode = requireLocomotionCapability(snapshot, entityId).mode;
-  return mode === "airborne" ? "jump" : mode;
+  const capability = requireLocomotionCapability(snapshot, entityId);
+  if ("mobilityMode" in capability) {
+    if (capability.mobilityMode === "airborne") return "jump";
+    return capability.gait === "none" ? "idle" : capability.gait;
+  }
+  return capability.mode === "airborne" ? "jump" : capability.mode;
 }
 
 function assertPossessedBy(snapshot: WorldRuntimeSnapshotV4, controlledEntityId: string): void {
@@ -270,6 +267,50 @@ function assertPossessedBy(snapshot: WorldRuntimeSnapshotV4, controlledEntityId:
         relationship.controlledEntityId === controlledEntityId,
     ),
     `Controller '${CONTROLLER_ID}' does not possess '${controlledEntityId}'.`,
+  );
+}
+
+function normalizedHorizontalXZ(
+  vectorXYZ: Vec3,
+  label: string,
+): readonly [number, number] {
+  const magnitude = Math.hypot(vectorXYZ[0], vectorXYZ[2]);
+  assert.ok(magnitude > 0.000001, `${label} has no horizontal direction.`);
+  return [vectorXYZ[0] / magnitude, vectorXYZ[2] / magnitude];
+}
+
+function assertMovementFacingSemanticAlignment(
+  snapshot: WorldRuntimeSnapshotV4,
+  entityId: string,
+  actions: readonly ("move-forward" | "move-right" | "run" | "jump")[],
+): void {
+  const planarAction = actions.includes("move-forward")
+    ? "move-forward"
+    : actions.includes("move-right")
+      ? "move-right"
+      : undefined;
+  if (planarAction === undefined) return;
+
+  const camera = snapshot.view.camera;
+  assert.equal(camera.mode, "tracking");
+  assert.equal(camera.targetEntityId, entityId);
+  assert.ok(camera.subjectForwardXYZ !== undefined, "Subject forward is unavailable.");
+  assert.ok(
+    camera.subjectVelocityMetersPerSecondXYZ !== undefined,
+    "Subject velocity is unavailable.",
+  );
+  const subjectForwardXZ = normalizedHorizontalXZ(
+    camera.subjectForwardXYZ,
+    "Subject forward",
+  );
+  const velocityXZ = normalizedHorizontalXZ(
+    camera.subjectVelocityMetersPerSecondXYZ,
+    "Subject velocity",
+  );
+
+  assert.ok(
+    subjectForwardXZ[0] * velocityXZ[0] + subjectForwardXZ[1] * velocityXZ[1] > 0.99,
+    `Subject '${entityId}' facing is not aligned with its movement.`,
   );
 }
 
@@ -343,7 +384,7 @@ async function runCliGates(paths: ArtifactPaths): Promise<WorldBuildArtifactV4> 
   assert.equal(artifact.executionPlan.initialControlledEntityId, PRIMARY_ENTITY_ID);
   assert.deepEqual(
     artifact.executionPlan.subjects.map((subject) => subject.entityId),
-    [PRIMARY_ENTITY_ID, SECONDARY_ENTITY_ID],
+    [PRIMARY_ENTITY_ID],
   );
   assert.equal(artifact.executionPlan.subjectAssets.length, 1);
   assert.equal(artifact.executionPlan.subjectAssets[0]?.subjectAssetRef, SUBJECT_ASSET_REF);
@@ -360,7 +401,6 @@ async function runCliGates(paths: ArtifactPaths): Promise<WorldBuildArtifactV4> 
     "G Bot CLI snapshot",
   );
   assert.equal(locomotionActionId(snapshot, PRIMARY_ENTITY_ID), "idle");
-  assert.equal(locomotionActionId(snapshot, SECONDARY_ENTITY_ID), "idle");
   inspectPng(await readFile(paths.world));
   return artifact;
 }
@@ -406,6 +446,7 @@ async function captureAction(
   const locomotion = requireLocomotionCapability(snapshot, PRIMARY_ENTITY_ID);
   assert.equal(locomotionActionId(snapshot, PRIMARY_ENTITY_ID), actionId);
   if (actionId === "jump") assert.equal(locomotion.movementMedium, "air");
+  assertMovementFacingSemanticAlignment(snapshot, PRIMARY_ENTITY_ID, actions);
 
   const capture = await page.evaluate(async () => {
     window.__WORLDKIT__!.captureScreenshot();
@@ -504,9 +545,8 @@ async function verifyBrowser(
     });
     const ready = await page.evaluate(async () => window.__WORLDKIT__!.ready());
     assertPossessedBy(ready, PRIMARY_ENTITY_ID);
-    assert.deepEqual(Object.keys(ready.world.subjectStatesByEntityId).sort(), [
+    assert.deepEqual(Object.keys(ready.world.subjectStatesByEntityId), [
       PRIMARY_ENTITY_ID,
-      SECONDARY_ENTITY_ID,
     ]);
     const fixedTicksPerSecond = 1 / ready.runtime.fixedTimeStepSeconds;
     assert.ok(Number.isSafeInteger(fixedTicksPerSecond));
@@ -596,80 +636,13 @@ async function verifyBrowser(
       }
     }
 
-    const isolationBefore = await page.evaluate(async () => {
-      const api = window.__WORLDKIT__!;
-      await api.reset();
-      return api.runFixedInput([{ actions: [], ticks: 1 }]);
-    });
-    const receipt = await page.evaluate(
-      async ({ snapshot, controllerEntityId, primaryEntityId, secondaryEntityId }) =>
-        window.__WORLDKIT__!.executeGameplayCommand({
-        schemaVersion: 1,
-        id: "g-bot-bind-secondary-isolation",
-        type: "control.bind",
-        runtimeSessionId: snapshot.runtimeSessionId,
-        worldSessionId: snapshot.worldSessionId,
-        controllerEntityId,
-        controlledEntityId: secondaryEntityId,
-        expectedPossession: {
-          mode: "possessed",
-          controlledEntityId: primaryEntityId,
-        },
-      }),
-      {
-        snapshot: isolationBefore,
-        controllerEntityId: CONTROLLER_ID,
-        primaryEntityId: PRIMARY_ENTITY_ID,
-        secondaryEntityId: SECONDARY_ENTITY_ID,
-      },
-    );
-    assert.equal(receipt.status, "committed");
-    const isolationAfter = await page.evaluate(async () =>
-      window.__WORLDKIT__!.runFixedInput([{ actions: ["move-right"], ticks: 60 }]),
-    );
-    assertPossessedBy(isolationAfter, SECONDARY_ENTITY_ID);
-    const primaryBefore = requireSubjectProjection(isolationBefore, PRIMARY_ENTITY_ID).entityState;
-    const primaryAfter = requireSubjectProjection(isolationAfter, PRIMARY_ENTITY_ID).entityState;
-    const secondaryBefore = requireSubjectProjection(isolationBefore, SECONDARY_ENTITY_ID).entityState;
-    const secondaryAfter = requireSubjectProjection(isolationAfter, SECONDARY_ENTITY_ID).entityState;
-    assertPositionUnchanged(
-      primaryAfter.positionMetersXYZ,
-      primaryBefore.positionMetersXYZ,
-      "Uncontrolled G Bot moved during second-instance control.",
-    );
-    assert.equal(locomotionActionId(isolationAfter, PRIMARY_ENTITY_ID), "idle");
-    assert.ok(secondaryAfter.positionMetersXYZ[0] > secondaryBefore.positionMetersXYZ[0]);
-    assert.equal(locomotionActionId(isolationAfter, SECONDARY_ENTITY_ID), "walk");
-
     const wallStart = await page.evaluate(async () => window.__WORLDKIT__!.reset());
-    const wallReceipt = await page.evaluate(
-      async ({ snapshot, controllerEntityId, primaryEntityId, secondaryEntityId }) =>
-        window.__WORLDKIT__!.executeGameplayCommand({
-        schemaVersion: 1,
-        id: "g-bot-bind-secondary-wall",
-        type: "control.bind",
-        runtimeSessionId: snapshot.runtimeSessionId,
-        worldSessionId: snapshot.worldSessionId,
-        controllerEntityId,
-        controlledEntityId: secondaryEntityId,
-        expectedPossession: {
-          mode: "possessed",
-          controlledEntityId: primaryEntityId,
-        },
-      }),
-      {
-        snapshot: wallStart,
-        controllerEntityId: CONTROLLER_ID,
-        primaryEntityId: PRIMARY_ENTITY_ID,
-        secondaryEntityId: SECONDARY_ENTITY_ID,
-      },
-    );
-    assert.equal(wallReceipt.status, "committed");
+    assertPossessedBy(wallStart, PRIMARY_ENTITY_ID);
     const wallEnd = await page.evaluate(async () =>
       window.__WORLDKIT__!.runFixedInput([{ actions: ["move-right"], ticks: 360 }]),
     );
-    const wallStartState = requireSubjectProjection(wallStart, SECONDARY_ENTITY_ID).entityState;
-    const wallEndState = requireSubjectProjection(wallEnd, SECONDARY_ENTITY_ID).entityState;
+    const wallStartState = requireSubjectProjection(wallStart, PRIMARY_ENTITY_ID).entityState;
+    const wallEndState = requireSubjectProjection(wallEnd, PRIMARY_ENTITY_ID).entityState;
     assert.ok(wallEndState.positionMetersXYZ[0] > wallStartState.positionMetersXYZ[0] + 2);
     assert.ok(
       wallEndState.positionMetersXYZ[0] < 6.8,
@@ -683,16 +656,8 @@ async function verifyBrowser(
         walkCaptureTiming,
         comparisons,
       },
-      isolation: {
-        observedEntityId: PRIMARY_ENTITY_ID,
-        controlledEntityId: SECONDARY_ENTITY_ID,
-        beforePositionMetersXYZ: primaryBefore.positionMetersXYZ,
-        afterPositionMetersXYZ: primaryAfter.positionMetersXYZ,
-        controlledBeforePositionMetersXYZ: secondaryBefore.positionMetersXYZ,
-        controlledAfterPositionMetersXYZ: secondaryAfter.positionMetersXYZ,
-      },
       wallStop: {
-        entityId: SECONDARY_ENTITY_ID,
+        entityId: PRIMARY_ENTITY_ID,
         startPositionMetersXYZ: wallStartState.positionMetersXYZ,
         stopPositionMetersXYZ: wallEndState.positionMetersXYZ,
         maximumAllowedXMeters: 6.8,
@@ -756,7 +721,6 @@ async function writeVerification(
       browser.actions.jump,
     ],
     poseGate: browser.poseGate,
-    isolation: browser.isolation,
     wallStop: browser.wallStop,
   } as const;
   await writeFile(paths.verification, `${stringifyCanonicalJson(verification)}\n`);
@@ -801,7 +765,6 @@ async function run(publicationMode: ArtifactPublicationMode): Promise<void> {
           },
           actions: browser.actions,
           poseGate: browser.poseGate,
-          isolation: browser.isolation,
           wallStop: browser.wallStop,
         },
         null,

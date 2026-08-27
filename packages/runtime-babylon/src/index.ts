@@ -12,6 +12,14 @@ export {
   type BabylonGameplayRuntimeAccessV1,
 } from "./gameplay-world-adapter";
 export { createBabylonTraversalRuntimePortV1 } from "./traversal-runtime-port";
+export {
+  BABYLON_CHARACTER_BODY_PROVIDER_VERSIONS_V1,
+  createBabylonCharacterBodyPortV1,
+  type BabylonCharacterBodyPortOptionsV1,
+} from "./babylon-character-body-port";
+export {
+  BabylonCameraCollisionQueryPortV1,
+} from "./babylon-camera-collision-query-port";
 export * from "./subject-asset-cache";
 export * from "./subject-visual";
 export * from "./world-runtime-snapshot";

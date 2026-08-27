@@ -1,16 +1,17 @@
 import type { FreeCamera } from "@babylonjs/core/Cameras/freeCamera.js";
 import "@babylonjs/core/Culling/ray.js";
-import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
+import { Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
 import {
   admitCameraViewPreferenceV1,
   cameraRigParametersViolateInvariantsV1,
-  selectCameraViewV1,
+  selectCameraViewV2,
+  parseCameraContextSampleV2,
   type CameraContextProfileV1,
-  type CameraContextSampleV1,
+  type CameraContextSampleV2,
   type CameraDiagnosticV1,
   type CameraRigParametersV1,
-  type CameraSelectionDecisionV1,
+  type CameraSelectionDecisionV2,
   type CameraViewPreferenceV1,
 } from "@whitebox-world/camera";
 
@@ -32,10 +33,10 @@ import {
   validateCameraTuningV1,
 } from "@whitebox-world/runtime-contracts";
 import { isNil } from "lodash-es";
+import type { PhysicsWorldQueryPortV1 } from "@whitebox-world/runtime-framework";
 
 import { CameraViewSolverV1 } from "./camera-view-solver";
 import { SpringArmComponentV1 } from "./spring-arm-component";
-import type { PhysicsWorldQueryPortV1 } from "@whitebox-world/runtime-framework";
 
 export interface CameraDirectorSnapshotV1 {
   activeCameraProfileRef: string;
@@ -45,7 +46,7 @@ export interface CameraDirectorSnapshotV1 {
   viewYawOffsetRadians: number;
   viewPitchOffsetRadians: number;
   viewDistanceOffsetMeters: number;
-  selectionDecision?: CameraSelectionDecisionV1;
+  selectionDecision?: CameraSelectionDecisionV2;
   selectedTargetSocketId?: string;
   targetSocketPositionMetersXYZ?: Vec3;
   isTargetSocketFallback?: boolean;
@@ -107,6 +108,9 @@ export interface CameraDirectorTransactionStateV1 {
     activeParameters: CameraParametersV1 | undefined;
     activeLockedParameters: CameraParametersV1 | undefined;
     latestTelemetry: CameraDirectorV1["latestTelemetry"];
+    latestCommittedTick: number | undefined;
+    latestCommittedContextIdentity: string | undefined;
+    latestUpdateFailed: boolean;
   }>;
   readonly vectors: Readonly<{
     smoothedTarget: Vector3;
@@ -120,7 +124,13 @@ export interface CameraDirectorTransactionStateV1 {
     controlForward: Vector3;
     cameraPosition: Vector3;
     cameraRotation: Vector3;
-    cameraRotationQuaternion: ReturnType<NonNullable<FreeCamera["rotationQuaternion"]>["clone"]> | null;
+    cameraRotationQuaternion:
+      | { readonly status: "undefined" }
+      | { readonly status: "null" }
+      | {
+          readonly status: "value";
+          readonly xyzw: readonly [number, number, number, number];
+        };
   }>;
   readonly tuningByProfileRef: ReadonlyMap<string, CameraTuningV1>;
   readonly activeInputActions: ReadonlySet<SemanticInputActionV1>;
@@ -134,7 +144,7 @@ type CameraParametersV1 = ExecutionCameraRigProfileV1["parameters"];
 interface SelectedCameraStateV1 {
   profile: ExecutionCameraRigProfileV1;
   modifiers: readonly ExecutionCameraModifierProfileV1[];
-  decision: CameraSelectionDecisionV1;
+  decision: CameraSelectionDecisionV2;
 }
 
 function freezeVec3(value: Vector3 | readonly number[]): Vec3 {
@@ -145,8 +155,8 @@ function freezeVec3(value: Vector3 | readonly number[]): Vec3 {
 }
 
 function copySelectionDecision(
-  decision: CameraSelectionDecisionV1,
-): CameraSelectionDecisionV1 {
+  decision: CameraSelectionDecisionV2,
+): CameraSelectionDecisionV2 {
   const preference = decision.cameraViewPreference.mode === "camera-rig-profile"
     ? Object.freeze({ ...decision.cameraViewPreference })
     : Object.freeze({ ...decision.cameraViewPreference });
@@ -169,11 +179,11 @@ function copySelectionDecision(
 }
 
 function selectionDecisionWithSocketDiagnostic(
-  decision: CameraSelectionDecisionV1,
+  decision: CameraSelectionDecisionV2,
   cameraContextProfileRef: string,
   cameraRigProfileRef: string,
   isTargetSocketFallback: boolean,
-): CameraSelectionDecisionV1 {
+): CameraSelectionDecisionV2 {
   if (!isTargetSocketFallback) return decision;
   const diagnostic: CameraDiagnosticV1 = {
     severity: "error",
@@ -205,6 +215,7 @@ function cameraContextProfileFromExecution(
       // P1.5 has no water runtime sample. A water-only execution rule must be
       // unavailable rather than becoming an unconditional Camera Domain rule.
       if (
+        rule.when.motionKernelRefs !== undefined ||
         rule.when.movementMediums !== undefined &&
         movementMediums?.length === 0
       ) return [];
@@ -215,9 +226,24 @@ function cameraContextProfileFromExecution(
         ...(rule.when.relationshipRoles === undefined
           ? {}
           : { relationshipRoles: rule.when.relationshipRoles }),
-        ...(rule.when.motionKernelRefs === undefined
+        ...(rule.when.locomotionStatuses === undefined
           ? {}
-          : { motionKernelRefs: rule.when.motionKernelRefs }),
+          : { locomotionStatuses: rule.when.locomotionStatuses }),
+        ...(rule.when.mobilityModes === undefined
+          ? {}
+          : { mobilityModes: rule.when.mobilityModes }),
+        ...(rule.when.gaits === undefined
+          ? {}
+          : { gaits: rule.when.gaits }),
+        ...(rule.when.verticalPhases === undefined
+          ? {}
+          : { verticalPhases: rule.when.verticalPhases }),
+        ...(rule.when.requiredActiveActionRefs === undefined
+          ? {}
+          : { requiredActiveActionRefs: rule.when.requiredActiveActionRefs }),
+        ...(rule.when.actionInterruptibility === undefined
+          ? {}
+          : { actionInterruptibility: rule.when.actionInterruptibility }),
         ...(movementMediums === undefined
           ? {}
           : { movementMediums }),
@@ -234,6 +260,9 @@ function cameraContextProfileFromExecution(
           rule.when.requiredCameraContextTags === undefined)
           ? {}
           : {
+              // Legacy Rule vocabulary is translated for locked Profile
+              // admission only. The Task-6 seam publishes semantic authority
+              // unavailable with no matching tags, so auto Rules are bypassed.
               requiredCameraContextTags: [
                 ...(rule.when.requiredMotionTags ?? []),
                 ...(rule.when.requiredCameraContextTags ?? []),
@@ -274,27 +303,99 @@ function cameraContextProfileFromExecution(
   };
 }
 
-function cameraContextSampleFromViewTarget(
+function canonicalCameraNumber(value: number): number {
+  return Object.is(value, -0) ? 0 : value;
+}
+
+type CameraDirectorTelemetryV1 = Omit<
+  CameraDirectorSnapshotV1,
+  | "activeCameraProfileRef"
+  | "activeCameraRigRef"
+  | "activeCameraModifierRefs"
+  | "fallbackActive"
+  | "viewYawOffsetRadians"
+  | "viewPitchOffsetRadians"
+  | "viewDistanceOffsetMeters"
+>;
+
+/**
+ * Task 5 isolation seam for the live V1 WorldRuntime. Task 6 replaces this
+ * projection with the committed CharacterMovement transaction output.
+ * It never infers gait/phase from velocity, Motion Kernel or animation.
+ */
+export function legacyViewTargetToCommittedCameraContextV2ForTask6(
   sample: ViewTargetSampleV1,
-  simulationTick: number,
-): CameraContextSampleV1 {
+  committedTick: number,
+): CameraContextSampleV2 {
+  const facingYawRadians = canonicalCameraNumber(Math.atan2(
+    -sample.forwardXYZ[0],
+    -sample.forwardXYZ[2],
+  ));
   return {
-    simulationTick,
+    schemaVersion: 2,
+    semanticAuthorityStatus: "unavailable",
+    committedTick,
     controlledEntityId: sample.controlledEntityId,
     targetEntityId: sample.entityId,
-    movementMedium: sample.movementMedium,
-    activeMotionProfileRef: sample.activeMotionKernelRef,
-    activeMotionKernelRef: sample.activeMotionKernelRef,
-    motionTags: sample.motionTags,
-    activeActionRefs: [],
-    relationshipContexts: sample.relationshipContexts,
-    relationshipRole: sample.relationshipRole,
-    velocityMetersPerSecondXYZ: sample.velocityMetersPerSecondXYZ,
-    socketPositionsMetersXYZById: sample.socketPositionsMetersXYZById,
-    cameraContextTags: [
-      ...sample.cameraContextTags,
-      ...sample.motionTags,
+    subjectPose: {
+      positionMetersXYZ: [
+        canonicalCameraNumber(sample.targetPositionMetersXYZ[0]),
+        canonicalCameraNumber(sample.targetPositionMetersXYZ[1]),
+        canonicalCameraNumber(sample.targetPositionMetersXYZ[2]),
+      ],
+      facingYawRadians,
+    },
+    locomotion: {
+      schemaVersion: 2,
+      status: "suspended",
+      suspendedByRelationshipId: "3c-task6-authority-unavailable",
+      committedTick,
+      transitionSequence: 0,
+    },
+    actionSummary: { status: "unavailable" },
+    environment: {
+      relationshipContexts: [],
+      relationshipRole: "none",
+      socketPositionsMetersXYZById: {},
+      cameraContextTags: [],
+    },
+  };
+}
+
+function viewTargetFromCommittedCameraContextV2(
+  legacySample: ViewTargetSampleV1,
+  context: CameraContextSampleV2,
+): ViewTargetSampleV1 {
+  const locomotion = context.locomotion;
+  const facingYawRadians = context.subjectPose.facingYawRadians;
+  return {
+    controlledEntityId: context.controlledEntityId,
+    entityId: context.targetEntityId,
+    targetPositionMetersXYZ: context.subjectPose.positionMetersXYZ,
+    forwardXYZ: [
+      canonicalCameraNumber(-Math.sin(facingYawRadians)),
+      0,
+      canonicalCameraNumber(-Math.cos(facingYawRadians)),
     ],
+    upXYZ: [0, 1, 0],
+    velocityMetersPerSecondXYZ: locomotion.status === "active"
+      ? [
+          locomotion.linearVelocity.x,
+          locomotion.linearVelocity.y,
+          locomotion.linearVelocity.z,
+        ]
+      : [0, 0, 0],
+    approximateRadiusMeters: legacySample.approximateRadiusMeters,
+    socketPositionsMetersXYZById: context.environment.socketPositionsMetersXYZById,
+    // Legacy-only motion identity is intentionally not projected. Camera
+    // Domain consumes the committed Context V2 facts above.
+    motionTags: [],
+    movementMedium: locomotion.status === "active"
+      ? locomotion.movementMedium
+      : "ground",
+    relationshipContexts: context.environment.relationshipContexts,
+    relationshipRole: context.environment.relationshipRole,
+    cameraContextTags: context.environment.cameraContextTags,
   };
 }
 
@@ -341,6 +442,10 @@ function smoothstep01(value: number): number {
 }
 
 export class CameraDirectorV1 {
+  private latestCommittedTick: number | undefined;
+  private latestCommittedContextIdentity: string | undefined;
+  private latestUpdateFailed = false;
+  private disposed = false;
   private initialized = false;
   private cameraViewPreference: CameraViewPreferenceV1 = Object.freeze({ mode: "auto" });
   private activeProfileRef: string;
@@ -387,16 +492,7 @@ export class CameraDirectorV1 {
   private activeParameters: CameraParametersV1 | undefined;
   private activeLockedParameters: CameraParametersV1 | undefined;
   private controlForward = new Vector3(0, 0, -1);
-  private latestTelemetry: Omit<
-    CameraDirectorSnapshotV1,
-    | "activeCameraProfileRef"
-    | "activeCameraRigRef"
-    | "activeCameraModifierRefs"
-    | "fallbackActive"
-    | "viewYawOffsetRadians"
-    | "viewPitchOffsetRadians"
-    | "viewDistanceOffsetMeters"
-  > = {};
+  private latestTelemetry: CameraDirectorTelemetryV1 = {};
 
   constructor(
     private readonly executionPlan: ExecutionPlanV5,
@@ -411,6 +507,7 @@ export class CameraDirectorV1 {
     context: CameraContextV1,
     preference: CameraViewPreferenceV1,
   ): ReturnType<typeof admitCameraViewPreferenceV1> {
+    this.assertUsable();
     const admission = admitCameraViewPreferenceV1(
       cameraContextProfileFromExecution(context),
       preference,
@@ -421,6 +518,7 @@ export class CameraDirectorV1 {
   }
 
   resetViewPreference(): void {
+    this.assertUsable();
     this.cameraViewPreference = Object.freeze({ mode: "auto" });
     this.tuningByProfileRef.clear();
     this.activeModifierRefs = [];
@@ -466,6 +564,9 @@ export class CameraDirectorV1 {
         activeParameters: this.activeParameters,
         activeLockedParameters: this.activeLockedParameters,
         latestTelemetry: this.latestTelemetry,
+        latestCommittedTick: this.latestCommittedTick,
+        latestCommittedContextIdentity: this.latestCommittedContextIdentity,
+        latestUpdateFailed: this.latestUpdateFailed,
       },
       vectors: {
         smoothedTarget: this.smoothedTarget.clone(),
@@ -479,7 +580,19 @@ export class CameraDirectorV1 {
         controlForward: this.controlForward.clone(),
         cameraPosition: this.camera.position.clone(),
         cameraRotation: this.camera.rotation.clone(),
-        cameraRotationQuaternion: this.camera.rotationQuaternion?.clone() ?? null,
+        cameraRotationQuaternion: this.camera.rotationQuaternion === undefined
+          ? { status: "undefined" }
+          : this.camera.rotationQuaternion === null
+            ? { status: "null" }
+            : {
+                status: "value",
+                xyzw: [
+                  this.camera.rotationQuaternion.x,
+                  this.camera.rotationQuaternion.y,
+                  this.camera.rotationQuaternion.z,
+                  this.camera.rotationQuaternion.w,
+                ],
+              },
       },
       tuningByProfileRef: new Map(this.tuningByProfileRef),
       activeInputActions: new Set(this.activeInputActions),
@@ -489,6 +602,7 @@ export class CameraDirectorV1 {
   }
 
   restoreTransactionState(state: CameraDirectorTransactionStateV1): void {
+    this.assertUsable();
     Object.assign(this, state.values);
     this.smoothedTarget.copyFrom(state.vectors.smoothedTarget);
     this.controlLastStableVelocityForward =
@@ -508,11 +622,19 @@ export class CameraDirectorV1 {
     this.previousInputActions = new Set(state.previousInputActions);
     this.camera.position.copyFrom(state.vectors.cameraPosition);
     this.camera.rotation.copyFrom(state.vectors.cameraRotation);
-    this.camera.rotationQuaternion = state.vectors.cameraRotationQuaternion?.clone() ?? null;
+    const mutableCamera = this.camera as unknown as {
+      rotationQuaternion: Quaternion | null | undefined;
+    };
+    mutableCamera.rotationQuaternion = state.vectors.cameraRotationQuaternion.status === "undefined"
+      ? undefined
+      : state.vectors.cameraRotationQuaternion.status === "null"
+        ? null
+        : Quaternion.FromArray(state.vectors.cameraRotationQuaternion.xyzw);
     this.camera.fov = state.cameraFovRadians;
   }
 
   setInputActions(actions: readonly SemanticInputActionV1[]): void {
+    this.assertUsable();
     this.previousInputActions = this.activeInputActions;
     this.activeInputActions = new Set(actions);
     if (
@@ -526,6 +648,7 @@ export class CameraDirectorV1 {
   }
 
   adjustView(input: CameraViewInputV1): boolean {
+    this.assertUsable();
     const deltas = [
       input.yawDeltaRadians ?? 0,
       input.pitchDeltaRadians ?? 0,
@@ -559,6 +682,7 @@ export class CameraDirectorV1 {
   }
 
   resetView(): void {
+    this.assertUsable();
     this.targetYawOffsetRadians = 0;
     this.targetPitchOffsetRadians = 0;
     this.targetDistanceOffsetMeters = 0;
@@ -575,6 +699,7 @@ export class CameraDirectorV1 {
     tuningByProfileRef: Readonly<Record<string, CameraTuningV1>>,
     cameraContext: CameraContextV1,
   ): boolean {
+    this.assertUsable();
     if (Array.isArray(tuningByProfileRef)) return false;
     const profilesByRef = new Map(
       cameraContext.cameraRigProfiles.map(
@@ -643,12 +768,50 @@ export class CameraDirectorV1 {
 
   update(
     cameraContext: CameraContextV1,
-    sample: ViewTargetSampleV1,
+    legacySample: ViewTargetSampleV1,
     deltaSeconds: number,
-    simulationTick: number,
+    cameraContextSample: CameraContextSampleV2,
     springArm: SpringArmComponentV1,
   ): void {
-    const selected = this.selectProfile(cameraContext, sample, simulationTick);
+    if (this.disposed) {
+      throw new Error("3C_RUNTIME_DISPOSED: CameraDirector is disposed.");
+    }
+    const committedContext = parseCameraContextSampleV2(cameraContextSample);
+    const committedContextIdentity = JSON.stringify(committedContext);
+    if (
+      this.latestCommittedTick !== undefined &&
+      committedContext.committedTick < this.latestCommittedTick
+    ) {
+      throw new Error(
+        "3C_CAMERA_CONTEXT_UNCOMMITTED: CameraDirector rejected an older committed Tick.",
+      );
+    }
+    if (committedContext.committedTick === this.latestCommittedTick) {
+      if (committedContextIdentity !== this.latestCommittedContextIdentity) {
+        throw new Error(
+          "3C_CAMERA_CONTEXT_UNCOMMITTED: CameraDirector rejected conflicting authority bytes for one committed Tick.",
+        );
+      }
+      if (this.latestUpdateFailed) {
+        throw new Error(
+          "3C_CAMERA_QUERY_UNAVAILABLE: CameraDirector Tick already failed closed.",
+        );
+      }
+      // Profile, preview, and Orbit mutations are staged in Director state.
+      // A committed Tick owns at most one collision query and one pose commit.
+      return;
+    }
+    this.latestCommittedTick = committedContext.committedTick;
+    this.latestCommittedContextIdentity = committedContextIdentity;
+    this.latestUpdateFailed = true;
+    const beforeTransaction = this.captureTransactionState();
+    const beforeSpringArmTransaction = springArm.captureTransactionState();
+    try {
+    const sample = viewTargetFromCommittedCameraContextV2(
+      legacySample,
+      committedContext,
+    );
+    const selected = this.selectProfile(cameraContext, committedContext);
     if (selected === undefined) {
       throw new Error(
         "WORLDKIT_RUNTIME_CAMERA_PROFILE_NOT_FOUND: Camera context has no resolvable default profile.",
@@ -699,7 +862,7 @@ export class CameraDirectorV1 {
       previousProfileRef !== profile.resourceRef ||
       nextModifierRefs.join("|") !== this.activeModifierRefs.join("|")
     );
-    const followArmBasisChanged = this.initialized && (
+    const springArmBasisChanged = this.initialized && (
       previousProfileRef !== profile.resourceRef ||
       this.activeRigRef !== profile.algorithmRef
     );
@@ -708,7 +871,7 @@ export class CameraDirectorV1 {
       this.activeHeadingSource !== profile.headingSource ||
       this.activeReverseHeadingPolicy !== profile.reverseHeadingPolicy
     );
-    if (followArmBasisChanged) springArm.reset();
+    if (springArmBasisChanged) springArm.reset();
     if (selectionChanged) {
       this.transitionElapsedSeconds = 0;
       this.transitionStartPosition.copyFrom(this.camera.position);
@@ -871,14 +1034,21 @@ export class CameraDirectorV1 {
     let collisionHitEntityId: string | undefined;
     let collisionHitPositionXYZ: Vec3 | undefined;
     if (!firstPerson) {
-      const collision = springArm.solve({
-        subjectEntityId: sample.entityId,
-        desiredTarget: target,
-        desiredPosition,
-        parameters,
-        deltaSeconds,
-        physicsWorldQuery: this.physicsWorldQuery,
-      });
+      let collision: ReturnType<SpringArmComponentV1["solve"]>;
+      try {
+        collision = springArm.solve({
+          subjectEntityId: sample.controlledEntityId,
+          desiredTarget: target,
+          desiredPosition,
+          parameters,
+          deltaSeconds,
+          physicsWorldQuery: this.physicsWorldQuery,
+        });
+      } catch {
+        throw new Error(
+          "3C_CAMERA_QUERY_UNAVAILABLE: Spring Arm physics query failed closed.",
+        );
+      }
       desiredPosition = collision.position;
       safeArmLengthMeters = collision.safeArmLengthMeters;
       effectiveArmLengthMeters = collision.effectiveArmLengthMeters;
@@ -1013,9 +1183,16 @@ export class CameraDirectorV1 {
         sample.velocityMetersPerSecondXYZ,
       ),
     };
+    this.latestUpdateFailed = false;
+    } catch (error) {
+      this.restoreTransactionState(beforeTransaction);
+      springArm.restoreTransactionState(beforeSpringArmTransaction);
+      throw error;
+    }
   }
 
   reset(): void {
+    this.assertUsable();
     this.initialized = false;
     this.cameraViewPreference = Object.freeze({ mode: "auto" });
     this.activeHeadingSource = undefined;
@@ -1050,6 +1227,9 @@ export class CameraDirectorV1 {
     this.lookBackBlendRatio = 0;
     this.previousVelocity.setAll(0);
     this.lastBaseTarget = undefined;
+    this.latestCommittedTick = undefined;
+    this.latestCommittedContextIdentity = undefined;
+    this.latestUpdateFailed = false;
     this.smoothedFovRadians = Math.PI / 3;
     this.activeParameters = undefined;
     this.activeLockedParameters = undefined;
@@ -1057,27 +1237,34 @@ export class CameraDirectorV1 {
     this.latestTelemetry = {};
   }
 
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+  }
+
   snapshot(): CameraDirectorSnapshotV1 {
-    return {
+    // Read-only evidence remains available after dispose for audit/teardown.
+    return Object.freeze({
       activeCameraProfileRef: this.activeProfileRef,
       activeCameraRigRef: this.activeRigRef,
-      activeCameraModifierRefs: this.activeModifierRefs,
+      activeCameraModifierRefs: Object.freeze([...this.activeModifierRefs]),
       fallbackActive: this.fallbackActive,
       viewYawOffsetRadians: this.viewYawOffsetRadians,
       viewPitchOffsetRadians: this.viewPitchOffsetRadians,
       viewDistanceOffsetMeters: this.viewDistanceOffsetMeters,
       ...this.latestTelemetry,
-    };
+    });
   }
 
   previewState(): CameraPreviewStateV1 {
-    return {
+    // Like snapshot(), this is an immutable read and never reopens lifecycle.
+    return Object.freeze({
       kind: "worldkit-camera-preview-state",
       schemaVersion: 1,
       activeCameraProfileRef: this.activeProfileRef,
       activeCameraRigRef: this.activeRigRef,
-      activeCameraModifierRefs: this.activeModifierRefs,
-      tuningByProfileRef: Object.fromEntries(
+      activeCameraModifierRefs: Object.freeze([...this.activeModifierRefs]),
+      tuningByProfileRef: Object.freeze(Object.fromEntries(
         [...this.tuningByProfileRef]
           .sort(([leftProfileRef], [rightProfileRef]) =>
             leftProfileRef < rightProfileRef
@@ -1086,9 +1273,15 @@ export class CameraDirectorV1 {
                 ? 1
                 : 0
           )
-          .map(([profileRef, tuning]) => [profileRef, { ...tuning }]),
-      ),
-    };
+          .map(([profileRef, tuning]) => [profileRef, Object.freeze({ ...tuning })]),
+      )),
+    });
+  }
+
+  private assertUsable(): void {
+    if (this.disposed) {
+      throw new Error("3C_RUNTIME_DISPOSED: CameraDirector is disposed.");
+    }
   }
 
   private resolveBaseForward(
@@ -1290,15 +1483,11 @@ export class CameraDirectorV1 {
 
   private selectProfile(
     context: CameraContextV1,
-    sample: ViewTargetSampleV1,
-    simulationTick: number,
+    cameraContextSample: CameraContextSampleV2,
   ): SelectedCameraStateV1 | undefined {
-    const selection = selectCameraViewV1({
+    const selection = selectCameraViewV2({
       cameraContextProfile: cameraContextProfileFromExecution(context),
-      cameraContextSample: cameraContextSampleFromViewTarget(
-        sample,
-        simulationTick,
-      ),
+      cameraContextSample,
       cameraViewPreference: this.cameraViewPreference,
     });
     if (!selection.ok) {

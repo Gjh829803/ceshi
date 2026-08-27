@@ -353,7 +353,10 @@ async function verifyArtifacts(paths: CanonicalArtifactPaths): Promise<{
   for (const state of Object.values(snapshot.world.subjectStatesByEntityId)) {
     assert.ok(
       Object.values(state.capabilityStatesById).every(
-        (capability) => capability.mode === "idle",
+        (capability) => capability.kind === "locomotion-capability-state-v2"
+          ? capability.locomotion.status === "active" &&
+            capability.locomotion.gait === "idle"
+          : capability.mode === "idle",
       ),
       "Initial locomotion capability state was not idle.",
     );

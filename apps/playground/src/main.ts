@@ -45,7 +45,9 @@ import {
 } from "./subject-preset-local.js";
 import {
   applySubjectPresetWorkingDraftTransactionV1,
+  cameraPreviewRequestFromDraftV1,
   createSubjectPresetWorkbenchDraftV1,
+  subjectPresetTuningRequestFromDraftV1,
 } from "./subject-preset-workbench.js";
 import { resolvePlaygroundRuntimeRoute } from "./playground-runtime-route.js";
 import { sceneCatalog } from "./scenes/index.js";
@@ -905,8 +907,32 @@ function installTuningWorkbench(
     return receipt.value;
   };
 
+  const applyCameraDraft = async (
+    draft: SubjectPresetWorkingDraftV1,
+  ): Promise<void> => {
+    if (
+      api.executeCameraViewCommand === undefined ||
+      api.applyCameraPreview === undefined
+    ) {
+      throw new Error("SUBJECT_PRESET_CAMERA_CHANNEL_UNAVAILABLE");
+    }
+    if (draft.selectedCameraPreferenceRef === null) {
+      await executeCameraPreference(api);
+    } else {
+      await executeCameraPreference(api, {
+        mode: "camera-rig-profile",
+        cameraRigProfileRef: draft.selectedCameraPreferenceRef,
+      });
+    }
+    api.applyCameraPreview(cameraPreviewRequestFromDraftV1(draft));
+    appliedCameraPreferenceRef = normalizeCameraPreference(
+      draft.selectedCameraPreferenceRef ?? CAMERA_CONSOLE_DEFAULT_PROFILE_REF,
+    );
+  };
+
   const applyWorkingDraftAtomically = async (
     draft: SubjectPresetWorkingDraftV1,
+    options: Readonly<{ preserveCameraForGoldenLock?: boolean }> = {},
   ): Promise<boolean> => {
     if (
       api.applySubjectPresetTuning === undefined ||
@@ -944,6 +970,19 @@ function installTuningWorkbench(
       },
     });
     if (result.status === "rejected") {
+      if (
+        options.preserveCameraForGoldenLock === true &&
+        result.receipt.diagnostic?.code === "SUBJECT_PRESET_GOLDEN_RECOMPILE_REQUIRED"
+      ) {
+        try {
+          await applyCameraDraft(draft);
+          saveStatus.textContent = `镜头版本已应用；${result.receipt.diagnostic.message}`;
+          return true;
+        } catch {
+          saveStatus.textContent = "镜头版本未能恢复；Runtime 已保留上一组稳定配置";
+          return false;
+        }
+      }
       saveStatus.textContent = `版本没有应用：${result.receipt.diagnostic?.message ?? "配置与当前主体不匹配"}`;
       return false;
     }
@@ -978,7 +1017,9 @@ function installTuningWorkbench(
       loadDraftIntoTuningState(initialDraft);
       const normalizedDraft = persistWorkingDraft();
       if (normalizedDraft !== undefined) {
-        void applyWorkingDraftAtomically(normalizedDraft).then((applied) => {
+        void applyWorkingDraftAtomically(normalizedDraft, {
+          preserveCameraForGoldenLock: true,
+        }).then((applied) => {
           if (!applied) resetTuningStateToRegistry();
         });
       }
@@ -1729,7 +1770,54 @@ function installTuningWorkbench(
       };
       const draft = createCurrentWorkingDraft();
       if (draft === undefined) return;
-      await applyWorkingDraftAtomically(draft);
+      if (
+        api.getSubjectSnapshot === undefined ||
+        api.executeCameraViewCommand === undefined ||
+        api.applyCameraPreview === undefined ||
+        api.applySubjectPresetTuning === undefined
+      ) {
+        return;
+      }
+      const activeSubject = api.getSubjectSnapshot(workbenchContext.controlledEntityId);
+      if (
+        activeSubject === undefined ||
+        activeSubject.entityState.entityDefinitionRef !== draft.baseSubjectDefinitionRef ||
+        activeSubject.entityState.entityDefinitionHash.length === 0
+      ) {
+        saveStatus.textContent = "重置后未能恢复草稿：当前主体与草稿锁定的定义不匹配";
+        return;
+      }
+
+      try {
+        await applyCameraDraft(draft);
+      } catch {
+        saveStatus.textContent = "重置后未能恢复镜头草稿；Runtime 已保留重置后的安全镜头";
+        return;
+      }
+
+      try {
+        const receipt = api.applySubjectPresetTuning(subjectPresetTuningRequestFromDraftV1(
+          draft,
+          workbenchContext.controlledEntityId,
+          activeSubject.entityState.entityDefinitionHash,
+        ));
+        if (receipt.status === "committed") {
+          appliedGameplayProfileSelection = {
+            motionProfileRef: draft.selectedMotionProfileRef,
+            controlFeelProfileRef: draft.selectedControlFeelProfileRef,
+          };
+          saveStatus.textContent = "重置后已恢复镜头与可实时应用的 Gameplay 配置";
+          return;
+        }
+        if (receipt.diagnostic?.code === "SUBJECT_PRESET_GOLDEN_RECOMPILE_REQUIRED") {
+          saveStatus.textContent = "重置后已恢复镜头；Gameplay 继续使用编译锁定的 Execution Plan";
+          return;
+        }
+        saveStatus.textContent = `重置后已恢复镜头；Gameplay 未恢复：${receipt.diagnostic?.message ?? "配置与当前主体不匹配"}`;
+        return;
+      } catch {
+        saveStatus.textContent = "重置后已恢复镜头；Gameplay 恢复失败并保留重置后的 Execution Plan";
+      }
     },
     exportPublicationCandidate(): Promise<boolean> {
       return exportCurrent();
@@ -1810,7 +1898,29 @@ function installCapabilityAuthoringPanel(
   const activeDefinitionRef = requestedDefinitionRef ??
     activeSubject?.entityState.entityDefinitionRef ??
     definitions[0]!.resourceRef;
-  packageSelect.replaceChildren(...definitions.map((definition) => {
+  const activeRegistryDefinition = builtInSubjectResourceRegistry.resolveSubjectDefinition(
+    activeDefinitionRef,
+  );
+  const activeDefinitionSummary: SubjectDefinitionSummaryV1 | undefined =
+    activeRegistryDefinition !== undefined && "schemaVersion" in activeRegistryDefinition
+      ? {
+          resourceRef: activeRegistryDefinition.resourceRef,
+          contentHash: activeRegistryDefinition.contentHash,
+          displayName: activeRegistryDefinition.aiMetadata.displayName,
+          semanticClassId: activeRegistryDefinition.semanticClassId,
+          bodyTopology: activeRegistryDefinition.bodyTopology,
+          authoringAvailability: activeRegistryDefinition.authoringAvailability,
+          defaultMotionProfileRef: activeRegistryDefinition.profiles.motion.defaultMotionProfileRef,
+          controlProfileRef: activeRegistryDefinition.profiles.controlProfileRef,
+          cameraContextProfileRef: activeRegistryDefinition.profiles.cameraContextProfileRef,
+        }
+      : undefined;
+  const authoringDefinitions = definitions.some(
+      (definition) => definition.resourceRef === activeDefinitionRef,
+    ) || activeDefinitionSummary === undefined
+    ? definitions
+    : [activeDefinitionSummary, ...definitions];
+  packageSelect.replaceChildren(...authoringDefinitions.map((definition) => {
     const option = document.createElement("option");
     option.value = definition.resourceRef;
     option.textContent = `${definition.displayName} · ${definition.authoringAvailability}`;
@@ -1818,8 +1928,9 @@ function installCapabilityAuthoringPanel(
     return option;
   }));
 
-  const definition = definitions.find((row) => row.resourceRef === packageSelect.value) ??
-    definitions[0]!;
+  const definition = authoringDefinitions.find((row) => row.resourceRef === activeDefinitionRef) ??
+    authoringDefinitions[0]!;
+  packageSelect.value = definition.resourceRef;
   const activeMotionProfile = builtInSubjectResourceRegistry.resolveMotionProfile(
     definition.defaultMotionProfileRef,
   );
@@ -1977,7 +2088,7 @@ function installCapabilityAuthoringPanel(
   drafts.innerHTML = "<p>完整的运动手感滑杆、操作说明、两类控制台镜头类型和可叠加的自动行为修饰器都已移到大尺寸调控台。</p>";
 
   const tuningWorkbench = installTuningWorkbench(api, {
-    definitions,
+    definitions: authoringDefinitions,
     definition,
     activeKernel,
     motionProfiles,
@@ -2431,8 +2542,8 @@ if (runtimeRoute.mode === "unknown") {
         resetSimulation: async () => {
           await browserInstallation.api.reset();
         },
-        afterSimulationReset: () => {
-          void workbench?.reapplyWorkingDraftAfterSimulationReset();
+        afterSimulationReset: async () => {
+          await workbench?.reapplyWorkingDraftAfterSimulationReset();
         },
       });
     },
@@ -2637,11 +2748,17 @@ requiredElement<HTMLButtonElement>("#pause-button").addEventListener("click", ()
   adapter.setPaused(!adapter.isPaused());
 });
 
-requiredElement<HTMLButtonElement>("#reset-button").addEventListener("click", async () => {
+const resetButton = requiredElement<HTMLButtonElement>("#reset-button");
+resetButton.addEventListener("click", async () => {
+  resetButton.disabled = true;
+  resetButton.setAttribute("aria-busy", "true");
   try {
     await resetPlaygroundWorld();
   } catch (error) {
     window.alert(error instanceof Error ? error.message : String(error));
+  } finally {
+    resetButton.disabled = false;
+    resetButton.removeAttribute("aria-busy");
   }
 });
 
@@ -2756,6 +2873,10 @@ requiredElement<HTMLButtonElement>("#smoke-button").addEventListener("click", as
   const output = requiredElement<HTMLPreElement>("#smoke-output");
   output.textContent = "running…";
   await resetPlaygroundWorld();
+  // Match the real user path: establish the committed Camera profile on the
+  // first rendered frame before deterministic input starts.
+  adapter.render();
+  await adapter.runFixedInput([{ actions: [], ticks: 1 }]);
   const before = adapter.snapshot();
   const cameraUp = await adapter.runFixedInput([
     { actions: ["cameraUp"], ticks: 30 },
@@ -2781,6 +2902,12 @@ requiredElement<HTMLButtonElement>("#smoke-button").addEventListener("click", as
       ticks: after.tick - before.tick,
       movedMeters: Number(distance.toFixed(2)),
       finiteTransform: finite,
+      cameraPitchSamples: {
+        before: before.camera.pitch,
+        up: cameraUp.camera.pitch,
+        down: cameraDown.camera.pitch,
+        restored: after.camera.pitch,
+      },
       cameraUp: cameraUpWorks,
       cameraDown: cameraDownWorks,
     },

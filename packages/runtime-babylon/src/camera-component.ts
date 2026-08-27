@@ -1,6 +1,9 @@
 import type { FreeCamera } from "@babylonjs/core/Cameras/freeCamera.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
-import type { CameraViewPreferenceV1 } from "@whitebox-world/camera";
+import type {
+  CameraContextSampleV2,
+  CameraViewPreferenceV1,
+} from "@whitebox-world/camera";
 import type {
   CameraPreviewStateV1,
   CameraTuningV1,
@@ -110,7 +113,7 @@ export class CameraComponentV1 extends SceneComponentV1 {
     cameraContext: CameraContextV1,
     sample: ViewTargetSampleV1,
     deltaSeconds: number,
-    simulationTick: number,
+    committedCameraContext: CameraContextSampleV2,
     springArm: SpringArmComponentV1,
   ): void {
     if (this.activeSpringArm !== springArm) {
@@ -122,7 +125,7 @@ export class CameraComponentV1 extends SceneComponentV1 {
       cameraContext,
       sample,
       deltaSeconds,
-      simulationTick,
+      committedCameraContext,
       springArm,
     );
   }

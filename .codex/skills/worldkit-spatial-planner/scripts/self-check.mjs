@@ -414,126 +414,6 @@ function sha256Bytes(bytes) {
 function sha256CanonicalJson(value) {
   return sha256Bytes(canonicalJsonBytes(value));
 }
-const CAMERA_RIG_PARAMETER_NAMES_V1 = [
-  "distanceMeters",
-  "minimumDistanceMeters",
-  "maximumDistanceMeters",
-  "targetHeightMeters",
-  "shoulderOffsetMeters",
-  "pitchRadians",
-  "minimumPitchRadians",
-  "maximumPitchRadians",
-  "positionDampingPerSecond",
-  "horizontalPositionDampingPerSecond",
-  "verticalPositionDampingPerSecond",
-  "maximumPositionLagMeters",
-  "rotationDampingPerSecond",
-  "yawDampingPerSecond",
-  "pitchDampingPerSecond",
-  "collisionRadiusMeters",
-  "collisionRetractionMetersPerSecond",
-  "collisionRecoveryMetersPerSecond",
-  "baseFovDegrees",
-  "speedFovDegreesPerMeterPerSecond",
-  "maximumSpeedFovDegrees",
-  "lookAheadSeconds",
-  "accelerationLookAheadSecondsSquared",
-  "transitionSeconds",
-  "minimumHeadingSpeedMetersPerSecond",
-  "velocityHeadingDampingPerSecond",
-  "fovDampingPerSecond",
-  "horizontalDeadZoneRatio",
-  "verticalDeadZoneRatio",
-  "recenterDelaySeconds",
-  "recenterDurationSeconds",
-  "recenterMinimumSpeedMetersPerSecond",
-  "teleportSnapDistanceMeters",
-  "lookSensitivityXRatio",
-  "lookSensitivityYRatio"
-];
-const CAMERA_TUNING_PARAMETER_NAMES_V1 = [
-  "distanceMeters",
-  "targetHeightMeters",
-  "shoulderOffsetMeters",
-  "pitchRadians",
-  "positionDampingPerSecond",
-  "horizontalPositionDampingPerSecond",
-  "verticalPositionDampingPerSecond",
-  "maximumPositionLagMeters",
-  "rotationDampingPerSecond",
-  "yawDampingPerSecond",
-  "pitchDampingPerSecond",
-  "collisionRadiusMeters",
-  "collisionRetractionMetersPerSecond",
-  "collisionRecoveryMetersPerSecond",
-  "baseFovDegrees",
-  "speedFovDegreesPerMeterPerSecond",
-  "maximumSpeedFovDegrees",
-  "lookAheadSeconds",
-  "accelerationLookAheadSecondsSquared",
-  "transitionSeconds",
-  "minimumHeadingSpeedMetersPerSecond",
-  "velocityHeadingDampingPerSecond",
-  "fovDampingPerSecond",
-  "horizontalDeadZoneRatio",
-  "verticalDeadZoneRatio",
-  "recenterDelaySeconds",
-  "recenterDurationSeconds",
-  "recenterMinimumSpeedMetersPerSecond",
-  "teleportSnapDistanceMeters",
-  "lookSensitivityXRatio",
-  "lookSensitivityYRatio"
-];
-const CAMERA_RIG_PARAMETER_NAME_SET_V1 = new Set(CAMERA_RIG_PARAMETER_NAMES_V1);
-new Set(CAMERA_TUNING_PARAMETER_NAMES_V1);
-const SOCKET_FIRST_PERSON_IGNORED_MODIFIER_PARAMETERS_V1 = /* @__PURE__ */ new Set([
-  "distanceMeters",
-  "minimumDistanceMeters",
-  "maximumDistanceMeters",
-  "shoulderOffsetMeters",
-  "collisionRadiusMeters",
-  "collisionRetractionMetersPerSecond",
-  "collisionRecoveryMetersPerSecond",
-  "lookAheadSeconds",
-  "accelerationLookAheadSecondsSquared",
-  "horizontalDeadZoneRatio",
-  "verticalDeadZoneRatio"
-]);
-function isCameraRigParameterNameV1(value) {
-  return CAMERA_RIG_PARAMETER_NAME_SET_V1.has(value);
-}
-function isCameraRigParameterOverrideSupportedV1(algorithmRef, parameterName) {
-  return !algorithmRef.endsWith("/socket-first-person@1") || !SOCKET_FIRST_PERSON_IGNORED_MODIFIER_PARAMETERS_V1.has(parameterName);
-}
-function applyCameraRigParameterOverridesV1(algorithmRef, parameters, overrides) {
-  const applied = { ...parameters };
-  for (const [parameterName, value] of Object.entries(overrides)) {
-    if (value === void 0 || !isCameraRigParameterNameV1(parameterName) || !isCameraRigParameterOverrideSupportedV1(algorithmRef, parameterName)) continue;
-    applied[parameterName] = value;
-  }
-  const positionDamping = overrides.positionDampingPerSecond;
-  if (positionDamping !== void 0) {
-    if (overrides.horizontalPositionDampingPerSecond === void 0) {
-      applied.horizontalPositionDampingPerSecond = positionDamping;
-    }
-    if (overrides.verticalPositionDampingPerSecond === void 0) {
-      applied.verticalPositionDampingPerSecond = positionDamping;
-    }
-  }
-  const rotationDamping = overrides.rotationDampingPerSecond;
-  if (rotationDamping !== void 0) {
-    if (overrides.yawDampingPerSecond === void 0) {
-      applied.yawDampingPerSecond = rotationDamping;
-    }
-    if (overrides.pitchDampingPerSecond === void 0) {
-      applied.pitchDampingPerSecond = rotationDamping;
-    }
-    if (overrides.velocityHeadingDampingPerSecond === void 0) {
-      applied.velocityHeadingDampingPerSecond = rotationDamping;
-    }
-  }
-  return applied;
-}
 var freeGlobal = typeof global == "object" && global && global.Object === Object && global;
 var freeSelf = typeof self == "object" && self && self.Object === Object && self;
 var root = freeGlobal || freeSelf || Function("return this")();
@@ -1025,6 +905,205 @@ function baseUniq(array, iteratee, comparator) {
 function uniq(array) {
   return array && array.length ? baseUniq(array) : [];
 }
+function invalid(schemaName) {
+  throw new RangeError(`Value must match the closed ${schemaName} schema.`);
+}
+function snapshotDataRecord(value) {
+  if (typeof value !== "object" || isNil(value)) return void 0;
+  try {
+    const prototype = Reflect.getPrototypeOf(value);
+    if (prototype !== Object.prototype && !isNil(prototype)) return void 0;
+    const snapshot = /* @__PURE__ */ Object.create(null);
+    for (const key of Reflect.ownKeys(value)) {
+      const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
+      if (typeof key !== "string" || isNil(descriptor) || !descriptor.enumerable || !("value" in descriptor)) return void 0;
+      snapshot[key] = descriptor.value;
+    }
+    return snapshot;
+  } catch {
+    return void 0;
+  }
+}
+function hasExactKeys(value, keys) {
+  const ownKeys = Reflect.ownKeys(value);
+  return ownKeys.length === keys.length && ownKeys.every((key) => typeof key === "string" && keys.includes(key));
+}
+function isSafeNonNegativeInteger(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && !Object.is(value, -0);
+}
+function deepFreeze$1(value) {
+  if (typeof value !== "object" || isNil(value) || Object.isFrozen(value)) {
+    return value;
+  }
+  for (const key of Reflect.ownKeys(value)) {
+    const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
+    if (!isNil(descriptor) && "value" in descriptor) {
+      deepFreeze$1(descriptor.value);
+    }
+  }
+  return Object.freeze(value);
+}
+const GAMEPLAY_CAPACITY_BUDGET_KEYS = [
+  "maximumParticipantCount",
+  "maximumControllerEntityCount",
+  "maximumRelationshipStateCount",
+  "maximumActiveActionStateCount",
+  "maximumGameplayFeatureCount",
+  "maximumSemanticActionDefinitionCount",
+  "maximumSemanticFactCount",
+  "maximumSemanticFactTransitionCountPerTick",
+  "maximumIdempotencyRecordCount",
+  "maximumUsedActionExecutionIdCount",
+  "maximumRetainedReceiptCount",
+  "maximumRetainedEventCount",
+  "maximumRetainedWorldStateSnapshotCount"
+];
+function parseGameplayCapacityBudgetV1(input) {
+  const schemaName = "GameplayCapacityBudgetV1";
+  const record = snapshotDataRecord(input) ?? invalid(schemaName);
+  if (!hasExactKeys(record, GAMEPLAY_CAPACITY_BUDGET_KEYS) || !GAMEPLAY_CAPACITY_BUDGET_KEYS.every(
+    (key) => isSafeNonNegativeInteger(record[key])
+  )) invalid(schemaName);
+  return deepFreeze$1(Object.fromEntries(
+    GAMEPLAY_CAPACITY_BUDGET_KEYS.map((key) => [key, record[key]])
+  ));
+}
+parseGameplayCapacityBudgetV1({
+  maximumParticipantCount: 1,
+  maximumControllerEntityCount: 1,
+  maximumRelationshipStateCount: 1,
+  maximumActiveActionStateCount: 256,
+  maximumGameplayFeatureCount: 16,
+  maximumSemanticActionDefinitionCount: 256,
+  maximumSemanticFactCount: 4096,
+  maximumSemanticFactTransitionCountPerTick: 1024,
+  maximumIdempotencyRecordCount: 4096,
+  maximumUsedActionExecutionIdCount: 4096,
+  maximumRetainedReceiptCount: 4096,
+  maximumRetainedEventCount: 8192,
+  maximumRetainedWorldStateSnapshotCount: 4096
+});
+const CAMERA_RIG_PARAMETER_NAMES_V1 = [
+  "distanceMeters",
+  "minimumDistanceMeters",
+  "maximumDistanceMeters",
+  "targetHeightMeters",
+  "shoulderOffsetMeters",
+  "pitchRadians",
+  "minimumPitchRadians",
+  "maximumPitchRadians",
+  "positionDampingPerSecond",
+  "horizontalPositionDampingPerSecond",
+  "verticalPositionDampingPerSecond",
+  "maximumPositionLagMeters",
+  "rotationDampingPerSecond",
+  "yawDampingPerSecond",
+  "pitchDampingPerSecond",
+  "collisionRadiusMeters",
+  "collisionRetractionMetersPerSecond",
+  "collisionRecoveryMetersPerSecond",
+  "baseFovDegrees",
+  "speedFovDegreesPerMeterPerSecond",
+  "maximumSpeedFovDegrees",
+  "lookAheadSeconds",
+  "accelerationLookAheadSecondsSquared",
+  "transitionSeconds",
+  "minimumHeadingSpeedMetersPerSecond",
+  "velocityHeadingDampingPerSecond",
+  "fovDampingPerSecond",
+  "horizontalDeadZoneRatio",
+  "verticalDeadZoneRatio",
+  "recenterDelaySeconds",
+  "recenterDurationSeconds",
+  "recenterMinimumSpeedMetersPerSecond",
+  "teleportSnapDistanceMeters",
+  "lookSensitivityXRatio",
+  "lookSensitivityYRatio"
+];
+const CAMERA_TUNING_PARAMETER_NAMES_V1 = [
+  "distanceMeters",
+  "targetHeightMeters",
+  "shoulderOffsetMeters",
+  "pitchRadians",
+  "positionDampingPerSecond",
+  "horizontalPositionDampingPerSecond",
+  "verticalPositionDampingPerSecond",
+  "maximumPositionLagMeters",
+  "rotationDampingPerSecond",
+  "yawDampingPerSecond",
+  "pitchDampingPerSecond",
+  "collisionRadiusMeters",
+  "collisionRetractionMetersPerSecond",
+  "collisionRecoveryMetersPerSecond",
+  "baseFovDegrees",
+  "speedFovDegreesPerMeterPerSecond",
+  "maximumSpeedFovDegrees",
+  "lookAheadSeconds",
+  "accelerationLookAheadSecondsSquared",
+  "transitionSeconds",
+  "minimumHeadingSpeedMetersPerSecond",
+  "velocityHeadingDampingPerSecond",
+  "fovDampingPerSecond",
+  "horizontalDeadZoneRatio",
+  "verticalDeadZoneRatio",
+  "recenterDelaySeconds",
+  "recenterDurationSeconds",
+  "recenterMinimumSpeedMetersPerSecond",
+  "teleportSnapDistanceMeters",
+  "lookSensitivityXRatio",
+  "lookSensitivityYRatio"
+];
+const CAMERA_RIG_PARAMETER_NAME_SET_V1 = new Set(CAMERA_RIG_PARAMETER_NAMES_V1);
+new Set(CAMERA_TUNING_PARAMETER_NAMES_V1);
+const SOCKET_FIRST_PERSON_IGNORED_MODIFIER_PARAMETERS_V1 = /* @__PURE__ */ new Set([
+  "distanceMeters",
+  "minimumDistanceMeters",
+  "maximumDistanceMeters",
+  "shoulderOffsetMeters",
+  "collisionRadiusMeters",
+  "collisionRetractionMetersPerSecond",
+  "collisionRecoveryMetersPerSecond",
+  "lookAheadSeconds",
+  "accelerationLookAheadSecondsSquared",
+  "horizontalDeadZoneRatio",
+  "verticalDeadZoneRatio"
+]);
+function isCameraRigParameterNameV1(value) {
+  return CAMERA_RIG_PARAMETER_NAME_SET_V1.has(value);
+}
+function isCameraRigParameterOverrideSupportedV1(algorithmRef, parameterName) {
+  return !algorithmRef.endsWith("/socket-first-person@1") || !SOCKET_FIRST_PERSON_IGNORED_MODIFIER_PARAMETERS_V1.has(parameterName);
+}
+function applyCameraRigParameterOverridesV1(algorithmRef, parameters, overrides) {
+  const applied = { ...parameters };
+  for (const [parameterName, value] of Object.entries(overrides)) {
+    if (value === void 0 || !isCameraRigParameterNameV1(parameterName) || !isCameraRigParameterOverrideSupportedV1(algorithmRef, parameterName)) continue;
+    applied[parameterName] = value;
+  }
+  const positionDamping = overrides.positionDampingPerSecond;
+  if (positionDamping !== void 0) {
+    if (overrides.horizontalPositionDampingPerSecond === void 0) {
+      applied.horizontalPositionDampingPerSecond = positionDamping;
+    }
+    if (overrides.verticalPositionDampingPerSecond === void 0) {
+      applied.verticalPositionDampingPerSecond = positionDamping;
+    }
+  }
+  const rotationDamping = overrides.rotationDampingPerSecond;
+  if (rotationDamping !== void 0) {
+    if (overrides.yawDampingPerSecond === void 0) {
+      applied.yawDampingPerSecond = rotationDamping;
+    }
+    if (overrides.pitchDampingPerSecond === void 0) {
+      applied.pitchDampingPerSecond = rotationDamping;
+    }
+    if (overrides.velocityHeadingDampingPerSecond === void 0) {
+      applied.velocityHeadingDampingPerSecond = rotationDamping;
+    }
+  }
+  return applied;
+}
+new TextEncoder();
 const TRAVERSAL_DRIVER_PROFILE_REQUIRED_KEYS = [
   "kind",
   "schemaVersion",
@@ -1132,84 +1211,6 @@ Object.freeze([
   "traversal-surface-profile",
   "gameplay-bootstrap"
 ]);
-function invalid(schemaName) {
-  throw new RangeError(`Value must match the closed ${schemaName} schema.`);
-}
-function snapshotDataRecord(value) {
-  if (typeof value !== "object" || isNil(value)) return void 0;
-  try {
-    const prototype = Reflect.getPrototypeOf(value);
-    if (prototype !== Object.prototype && !isNil(prototype)) return void 0;
-    const snapshot = /* @__PURE__ */ Object.create(null);
-    for (const key of Reflect.ownKeys(value)) {
-      const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
-      if (typeof key !== "string" || isNil(descriptor) || !descriptor.enumerable || !("value" in descriptor)) return void 0;
-      snapshot[key] = descriptor.value;
-    }
-    return snapshot;
-  } catch {
-    return void 0;
-  }
-}
-function hasExactKeys(value, keys) {
-  const ownKeys = Reflect.ownKeys(value);
-  return ownKeys.length === keys.length && ownKeys.every((key) => typeof key === "string" && keys.includes(key));
-}
-function isSafeNonNegativeInteger(value) {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && !Object.is(value, -0);
-}
-function deepFreeze$1(value) {
-  if (typeof value !== "object" || isNil(value) || Object.isFrozen(value)) {
-    return value;
-  }
-  for (const key of Reflect.ownKeys(value)) {
-    const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
-    if (!isNil(descriptor) && "value" in descriptor) {
-      deepFreeze$1(descriptor.value);
-    }
-  }
-  return Object.freeze(value);
-}
-const GAMEPLAY_CAPACITY_BUDGET_KEYS = [
-  "maximumParticipantCount",
-  "maximumControllerEntityCount",
-  "maximumRelationshipStateCount",
-  "maximumActiveActionStateCount",
-  "maximumGameplayFeatureCount",
-  "maximumSemanticActionDefinitionCount",
-  "maximumSemanticFactCount",
-  "maximumSemanticFactTransitionCountPerTick",
-  "maximumIdempotencyRecordCount",
-  "maximumUsedActionExecutionIdCount",
-  "maximumRetainedReceiptCount",
-  "maximumRetainedEventCount",
-  "maximumRetainedWorldStateSnapshotCount"
-];
-function parseGameplayCapacityBudgetV1(input) {
-  const schemaName = "GameplayCapacityBudgetV1";
-  const record = snapshotDataRecord(input) ?? invalid(schemaName);
-  if (!hasExactKeys(record, GAMEPLAY_CAPACITY_BUDGET_KEYS) || !GAMEPLAY_CAPACITY_BUDGET_KEYS.every(
-    (key) => isSafeNonNegativeInteger(record[key])
-  )) invalid(schemaName);
-  return deepFreeze$1(Object.fromEntries(
-    GAMEPLAY_CAPACITY_BUDGET_KEYS.map((key) => [key, record[key]])
-  ));
-}
-parseGameplayCapacityBudgetV1({
-  maximumParticipantCount: 1,
-  maximumControllerEntityCount: 1,
-  maximumRelationshipStateCount: 1,
-  maximumActiveActionStateCount: 256,
-  maximumGameplayFeatureCount: 16,
-  maximumSemanticActionDefinitionCount: 256,
-  maximumSemanticFactCount: 4096,
-  maximumSemanticFactTransitionCountPerTick: 1024,
-  maximumIdempotencyRecordCount: 4096,
-  maximumUsedActionExecutionIdCount: 4096,
-  maximumRetainedReceiptCount: 4096,
-  maximumRetainedEventCount: 8192,
-  maximumRetainedWorldStateSnapshotCount: 4096
-});
 const WORLDKIT_RUNTIME_SESSION_REQUEST_TYPES_V1 = Object.freeze([
   "gameplay-command.execute",
   "fixed-input.run",
@@ -1407,11 +1408,11 @@ const G_BOT_SUBJECT_ASSET = {
   },
   runtimeReadiness: {
     productionReady: false,
-    runtimeStateBinding: "not-implemented"
+    runtimeStateBinding: "partial"
   },
   aiMetadata: {
     displayName: "G Bot Golden",
-    description: "Project-owned Mixamo-rigged G Bot with twenty-five art-ready semantic animation clips; runtime state binding is not implemented.",
+    description: "Project-owned Mixamo-rigged G Bot with committed locomotion phase binding for its jump, fall, and landing clips; contextual Action binding remains partial.",
     semanticTags: ["biped", "g-bot", "humanoid", "rigged"]
   }
 };

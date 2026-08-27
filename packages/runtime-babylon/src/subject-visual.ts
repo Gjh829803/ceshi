@@ -9,6 +9,9 @@ import { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
 
 import type {
+  GameplayActionStateV1,
+} from "@whitebox-world/gameplay-contracts";
+import type {
   ExecutionPlanV5,
   ExecutionRigProfileV1,
   ExecutionSubjectAssetV1,
@@ -16,6 +19,10 @@ import type {
   SubjectVisualPrimitivePartV3,
 } from "@whitebox-world/runtime-contracts";
 import type { GroundHumanoidActionIdV1 } from "@whitebox-world/subject-contracts";
+import {
+  type ActionPresentationRegistryV1,
+  type ResolvedActionPresentationV1,
+} from "@whitebox-world/subject-actions";
 
 import { SubjectAnimationPlayer } from "./subject-animation-player";
 import {
@@ -31,10 +38,26 @@ export interface SubjectVisual {
   meshes: readonly AbstractMesh[];
   socketNodesById: ReadonlyMap<string, TransformNode>;
   readonly activeActionId: GroundHumanoidActionIdV1;
-  stepAnimation(tick: number, actionId: GroundHumanoidActionIdV1): void;
+  stepAnimation(
+    presentation: ResolvedActionPresentationV1,
+    committedActionState?: GameplayActionStateV1,
+  ): void;
   applyAnimationPose(): void;
   resetAnimation(): void;
   dispose(): void;
+}
+
+function debugActionIdForPresentation(
+  presentation: ResolvedActionPresentationV1,
+): GroundHumanoidActionIdV1 {
+  const key = presentation.presentationKey;
+  if (key === "locomotion.walk") return "walk";
+  if (key === "locomotion.run") return "run";
+  if ([
+    "locomotion.takeoff", "locomotion.rising", "locomotion.apex",
+    "locomotion.falling", "locomotion.landing",
+  ].includes(key)) return "jump";
+  return "idle";
 }
 
 export interface CreateSubjectVisualOptionsV1 {
@@ -43,6 +66,7 @@ export interface CreateSubjectVisualOptionsV1 {
   material: Material;
   scene: Scene;
   subjectAssetCache: SubjectAssetCacheV1;
+  actionPresentationRegistry: ActionPresentationRegistryV1;
 }
 
 function createPartMesh(
@@ -210,6 +234,33 @@ function isDescendantOfAnyRoot(
   return false;
 }
 
+function ownedVisualAnimationTargets(
+  assetInstance: SubjectAssetInstanceV1,
+): ReadonlySet<object> {
+  const targets = new Set<object>();
+  for (const root of assetInstance.rootNodes) {
+    targets.add(root);
+    for (const descendant of root.getDescendants(false)) targets.add(descendant);
+  }
+  for (const mesh of assetInstance.meshes) {
+    targets.add(mesh);
+    const manager = mesh.morphTargetManager;
+    if (manager === null) continue;
+    for (let index = 0; index < manager.numTargets; index += 1) {
+      const target = manager.getTarget(index);
+      if (target !== null) targets.add(target);
+    }
+  }
+  for (const skeleton of assetInstance.skeletons) {
+    for (const bone of skeleton.bones) {
+      targets.add(bone);
+      const transformNode = bone.getTransformNode();
+      if (transformNode !== null) targets.add(transformNode);
+    }
+  }
+  return targets;
+}
+
 interface StaticAssetPartResetStateV1 {
   readonly node: TransformNode;
   readonly position: Vector3;
@@ -269,9 +320,12 @@ class OwnedSubjectVisual implements SubjectVisual {
     return this.animationPlayer?.activeActionId ?? this.fallbackActionId;
   }
 
-  stepAnimation(tick: number, actionId: GroundHumanoidActionIdV1): void {
-    this.fallbackActionId = actionId;
-    this.animationPlayer?.step(tick, actionId);
+  stepAnimation(
+    presentation: ResolvedActionPresentationV1,
+    committedActionState?: GameplayActionStateV1,
+  ): void {
+    this.fallbackActionId = debugActionIdForPresentation(presentation);
+    this.animationPlayer?.step(presentation, committedActionState);
   }
 
   applyAnimationPose(): void {
@@ -341,7 +395,14 @@ class OwnedSubjectVisual implements SubjectVisual {
 export async function createSubjectVisual(
   options: CreateSubjectVisualOptionsV1,
 ): Promise<SubjectVisual> {
-  const { subject, executionPlan, material, scene, subjectAssetCache } = options;
+  const {
+    subject,
+    executionPlan,
+    material,
+    scene,
+    subjectAssetCache,
+    actionPresentationRegistry,
+  } = options;
   const root = new TransformNode(`${subject.entityId}.visual-root`, scene);
   root.metadata = {
     worldkitEntityId: subject.entityId,
@@ -509,6 +570,9 @@ export async function createSubjectVisual(
       animationPlayer = new SubjectAnimationPlayer({
         animationGroups: assetInstance.animationGroups,
         animationSet,
+        actionPresentationRegistry,
+        authorityTransformNode: root,
+        ownedVisualAnimationTargets: ownedVisualAnimationTargets(assetInstance),
         subjectAssetRef: asset.subjectAssetRef,
         artifactContentHash: asset.artifactContentHash,
       });

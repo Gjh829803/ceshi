@@ -276,7 +276,20 @@ importers:
         specifier: ^4.18.1
         version: 4.18.1
 
-  packages/camera: {}
+  packages/camera:
+    dependencies:
+      '@whitebox-world/gameplay-contracts':
+        specifier: workspace:*
+        version: link:../gameplay-contracts
+
+  packages/character-movement:
+    dependencies:
+      '@whitebox-world/gameplay-contracts':
+        specifier: workspace:*
+        version: link:../gameplay-contracts
+      '@whitebox-world/protocol':
+        specifier: workspace:*
+        version: link:../protocol
 
   packages/compiler:
     dependencies:
@@ -370,6 +383,9 @@ importers:
       '@whitebox-world/camera':
         specifier: workspace:*
         version: link:../camera
+      '@whitebox-world/character-movement':
+        specifier: workspace:*
+        version: link:../character-movement
       '@whitebox-world/control-capture':
         specifier: workspace:*
         version: link:../control-capture
@@ -425,6 +441,9 @@ importers:
       '@whitebox-world/camera':
         specifier: workspace:*
         version: link:../camera
+      '@whitebox-world/character-movement':
+        specifier: workspace:*
+        version: link:../character-movement
       '@whitebox-world/control-capture':
         specifier: workspace:*
         version: link:../control-capture
@@ -434,6 +453,9 @@ importers:
       '@whitebox-world/protocol':
         specifier: workspace:*
         version: link:../protocol
+      '@whitebox-world/subject-actions':
+        specifier: workspace:*
+        version: link:../subject-actions
       '@whitebox-world/subject-contracts':
         specifier: workspace:*
         version: link:../subject-contracts
@@ -473,9 +495,15 @@ importers:
 
   packages/subject-actions:
     dependencies:
-      '@whitebox-world/subject-contracts':
+      '@whitebox-world/character-movement':
         specifier: workspace:*
-        version: link:../subject-contracts
+        version: link:../character-movement
+      '@whitebox-world/gameplay-contracts':
+        specifier: workspace:*
+        version: link:../gameplay-contracts
+      '@whitebox-world/protocol':
+        specifier: workspace:*
+        version: link:../protocol
 
   packages/subject-composition: {}
 

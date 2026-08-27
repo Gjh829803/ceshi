@@ -67,6 +67,10 @@ const ONE_TICK_INPUT = Object.freeze({
   actions: Object.freeze(["move-forward"] as const),
   ticks: 1,
 }) satisfies FixedInputOneTickV1;
+const EMPTY_ACTION_PROJECTION = Object.freeze({
+  simulationTick: 1,
+  activeActionStatesById: Object.freeze({}),
+});
 
 describe("FakeGameplayWorldPort harness", () => {
   it("initializes, queries, and snapshots a provider-neutral world deterministically", async () => {
@@ -176,9 +180,10 @@ describe("FakeGameplayWorldPort harness", () => {
       maximumSemanticFactTransitionEventCount: 2,
     });
     expect(harness.publishedWorldProjection.simulationTick).toBe(0);
-    await expect(harness.port.runFixedInputTick(ONE_TICK_INPUT)).resolves.toBe(
-      nextProjection,
-    );
+    await expect(harness.port.runFixedInputTick(
+      ONE_TICK_INPUT,
+      EMPTY_ACTION_PROJECTION,
+    )).resolves.toBe(nextProjection);
     expect(harness.publishedWorldProjection).toBe(nextProjection);
     expect(harness.calls.map((call) => call.operation)).toEqual([
       "estimate-fixed-input-tick-capacity",
