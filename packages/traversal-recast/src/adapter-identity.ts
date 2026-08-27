@@ -197,14 +197,14 @@ export const RECAST_GRAPH_PROVIDER_ADAPTER_HASH_V1 = sha256CanonicalJson(
 const AUDITED_RUNTIME_IDENTITY: TraversalRuntimeImplementationIdentityV1 =
   Object.freeze({
     runtimeBackendRef: "worldkit://runtime-backend/babylon-havok@1",
-    runtimeBackendResolvedVersion: "9.21.2+1.3.14",
+    runtimeBackendResolvedVersion: "9.23.0+1.3.14",
     runtimeBackendHash:
-      "sha256:1982272a51a0c0020df6f8b16aefcb27ab2e3542afdbc526cfa53709caaed750",
+      "sha256:36e17b65ba2ffcd4d995150ff8418cbc8caa54e1f90698c349cb7927a032a241",
     runtimeAdapterRef:
       "worldkit://runtime-adapter/babylon.character-controller@1",
     runtimeAdapterResolvedVersion: "1",
     runtimeAdapterHash:
-      "sha256:5f5d18392742ccfcb4b88da1492ff22a2ceb402bb966fe17eeeb0db8cac28c8d",
+      "sha256:1d43bafb3bea8aac66afcc127782f4d394e1c374f42f2530ea98a362576c1f44",
   });
 
 export function assertAuditedTraversalRuntimeIdentityV1(

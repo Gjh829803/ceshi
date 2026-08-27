@@ -78,7 +78,7 @@
     "benchmark:route-r1b-surface-preflight": "tsx scripts/verification/benchmark-route-r1b-surface-preflight.ts"
   },
   "dependencies": {
-    "@babylonjs/core": "9.21.2",
+    "@babylonjs/core": "9.23.0",
     "@babylonjs/havok": "1.3.14",
     "@whitebox-world/authoring": "workspace:*",
     "@whitebox-world/authoring-edit": "workspace:*",

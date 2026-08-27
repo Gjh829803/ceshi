@@ -36,7 +36,7 @@ Authoring Schema。
 | [Clipper2](https://github.com/AngusJohnson/Clipper2) / [polyclip-ts `bef480b`](https://github.com/luizbarboza/polyclip-ts/tree/bef480bf8b035777d64a4ea857df109b5931aa61) | BSL-1.0 / MIT | 候选验证 | polygon boolean、offset、整数缩放或高精度 overlay | 等 Terrain Mask / Opening 出现真实合同后 bake-off；Earcut 继续只负责 triangulation |
 | [glTF-Transform `4.4.2`](https://github.com/donmccurdy/glTF-Transform/tree/0677324a34cea46c3ef01866ef004b69d0347453) + [Khronos glTF Validator `2.0.0-dev.3.10`](https://github.com/KhronosGroup/glTF-Validator) | Apache-2.0 | 已吸收代码；已吸收测试 | NodeIO、prune、unpartition、确定性 GLB 处理；官方 glTF 2.0 结构/Accessor 校验边界 | `scripts/lib/glb-admission.ts` 是 Node-only Gate；原始/生成资产 promotion 前接线，xier120 19/19 语料通过；Babylon Runtime admission 不变 |
 | [Recast Navigation](https://github.com/recastnavigation/recastnavigation/tree/9f4ce64458dfae86e1239c525ddc219c4e9e06f1) / `recast-navigation@0.43.1` | Zlib | 现有实现一致 | NavMesh 构建/查询、Tile/Polygon/Portal/Detail Mesh 语义 | `packages/traversal-recast` Provider；WorldKit `hard-ribbon`、Surface 身份、预算与 Evidence 仍是上层权威 |
-| [Babylon.js `9.21.2`](https://github.com/BabylonJS/Babylon.js/tree/72a4c7a28caa4f18ae1f93513d1743e3f9060159) + Havok `1.3.14` | Apache-2.0 / vendor package | 现有实现一致 | 3D 数学、渲染、物理 Character、资源生命周期 | `packages/runtime-babylon`；`checkSupport()` 是唯一 Ground support Owner，不复制 Provider 状态 |
+| [Babylon.js `9.23.0`](https://github.com/BabylonJS/Babylon.js/tree/38ed028f40722504a215002fbc2fa89a2c89cf5d) + Havok `1.3.14` | Apache-2.0 / vendor package | 现有实现一致 | 3D 数学、渲染、物理 Character、资源生命周期 | `packages/runtime-babylon`；`checkSupport()` 是唯一 Ground support Owner，不复制 Provider 状态 |
 | [Godot `b56a918`](https://github.com/godotengine/godot/tree/b56a91878e7c94977e4af978968e41d0670c0a8b) | MIT | 已吸收测试 | Character step/snap 条件、SpringArm 多方向覆盖、reparent/global transform 生命周期 | 转化为真实 Babylon/Havok Traversal、Mounted、Camera adversarial fixtures；未引入 Godot 依赖 |
 | [Rapier.js `9f638c5`](https://github.com/dimforge/rapier.js/tree/9f638c5384c282a8abd22515973ac7c82ccfbc43) | Apache-2.0 | 已吸收测试；已吸收代码 | autostep 前置接地压力条件 | 不替换 Havok；`checkSupport()` 的既有结果现在显式约束 provider-local step-up；snap/slope/moving platform 仍为候选或延后 |
 | [Bevy `0de2663`](https://github.com/bevyengine/bevy/tree/0de26631b0603acdc945aeae5e05b07ce58bc4dc) | MIT OR Apache-2.0 | 现有实现一致；已吸收测试 | Relationship 单一 source-of-truth、派生投影、层级生命周期 | 旋转非对称 Mount 回归证明 `GameplayRelationshipStateV1` 仍是 Canonical 真相；Renderer parent 未替代 `mountedOn` |
@@ -189,7 +189,7 @@ Godot SpringArm 使用 camera near-plane shape 或用户指定 shape sweep；cam
 |---|---|---|---|---|
 | `CAM-COLL-01` | 已完成：真实 Havok sphere Sweep 命中薄对角 blocker | 无 | Physics World Query Provider，main-agent-only | RED/GREEN、blocker entity telemetry |
 | `CAM-COLL-02` | 已完成：L 型墙角、窄门、Spring Arm target 起点穿入三个真实 Havok Fixture | `CAM-COLL-01` | Physics World Query Provider，main-agent-only | ShapeCast + 起点 shapeProximity 全部通过 |
-| `CAM-SWEEP-01` | 已完成：Babylon/Havok ShapeCast 经 `PhysicsWorldQueryPortV1` 替换多射线近似 | `CAM-COLL-01` | Architecture main-agent-only | Provider 9.21.2 源码、Ray/Sweep 分流、过滤、确定性与 Shape dispose 证据 |
+| `CAM-SWEEP-01` | 已完成：Babylon/Havok ShapeCast 经 `PhysicsWorldQueryPortV1` 替换多射线近似 | `CAM-COLL-01` | Architecture main-agent-only | Provider 9.23.0 源码、Ray/Sweep 分流、过滤、确定性与 Shape dispose 证据 |
 | `CAM-MOUNT-01` | Mount 转移 possession 后 Rider 不被裁切，Context/Modifier 选择可解释 | M8-S1 状态与 P2.4 Camera Context | CameraDirector，sequential | 修复现有 `CAM-MOUNT-1`，不得写场景特判 |
 
 `CAM-COLL-01/02` 已证明多射线近似不足并完成 `CAM-SWEEP-01`。ShapeCast 只实现 Follow Arm 的

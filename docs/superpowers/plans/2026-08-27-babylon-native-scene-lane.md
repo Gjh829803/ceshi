@@ -6,7 +6,7 @@
 
 **Architecture:** Add a provider-specific Native Scene Module admission boundary inside `@whitebox-world/runtime-babylon`. An explicit experimental Runtime option selects native geometry, invokes one module, validates spawn/collider registrations, creates SDK-owned Havok shapes, and skips ExecutionPlan terrain/object/water construction; a separate Vite app supplies the cloud-ridge Babylon scene and a frozen gameplay bootstrap without invoking the Compiler.
 
-**Tech Stack:** TypeScript 5.9, Babylon.js 9.21.2, Havok 1.3.14, Vitest, Vite 7, Playwright/Chromium for final browser evidence, Diversion source control.
+**Tech Stack:** TypeScript 5.9, Babylon.js 9.23.0, Havok 1.3.14, Vitest, Vite 7, Playwright/Chromium for final browser evidence, Diversion source control.
 
 **Spec:** `docs/superpowers/specs/2026-08-27-babylon-native-scene-lane-design.md`
 

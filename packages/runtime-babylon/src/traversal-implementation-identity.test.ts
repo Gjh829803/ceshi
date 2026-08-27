@@ -15,8 +15,8 @@ describe("Babylon traversal implementation identity", () => {
       kind: "traversal-runtime-backend-manifest",
       schemaVersion: 1,
       resourceRef: "worldkit://runtime-backend/babylon-havok@1",
-      resolvedVersion: "9.21.2+1.3.14",
-      babylonCoreVersion: "9.21.2",
+      resolvedVersion: "9.23.0+1.3.14",
+      babylonCoreVersion: "9.23.0",
       havokPluginVersion: "1.3.14",
     });
     expect(BABYLON_TRAVERSAL_RUNTIME_ADAPTER_MANIFEST_V1).toEqual({
@@ -25,7 +25,7 @@ describe("Babylon traversal implementation identity", () => {
       resourceRef: "worldkit://runtime-adapter/babylon.character-controller@1",
       resolvedVersion: "1",
       runtimeBackendRef: "worldkit://runtime-backend/babylon-havok@1",
-      runtimeBackendResolvedVersion: "9.21.2+1.3.14",
+      runtimeBackendResolvedVersion: "9.23.0+1.3.14",
       adapterContractVersion: "character-controller-ground-support.v1",
     });
     expect(BABYLON_TRAVERSAL_RUNTIME_IMPLEMENTATION_IDENTITY_V1).toEqual({
@@ -58,6 +58,9 @@ describe("Babylon traversal implementation identity", () => {
       BABYLON_TRAVERSAL_RUNTIME_BACKEND_MANIFEST_V1.babylonCoreVersion,
     );
     expect(packageJson.dependencies["@babylonjs/loaders"]).toBe(
+      BABYLON_TRAVERSAL_RUNTIME_BACKEND_MANIFEST_V1.babylonCoreVersion,
+    );
+    expect(packageJson.dependencies["babylonjs-gltf2interface"]).toBe(
       BABYLON_TRAVERSAL_RUNTIME_BACKEND_MANIFEST_V1.babylonCoreVersion,
     );
     expect(packageJson.dependencies["@babylonjs/havok"]).toBe(

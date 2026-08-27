@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@babylonjs/core": "9.21.2",
+    "@babylonjs/core": "9.23.0",
     "@whitebox-world/runtime-babylon": "workspace:*",
     "@whitebox-world/runtime-contracts": "workspace:*"
   },
