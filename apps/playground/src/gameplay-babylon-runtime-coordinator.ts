@@ -81,6 +81,8 @@ export type GameplayBabylonRuntimeV1 = Pick<
   | "captureControlFrame"
   | "setCameraViewPreference"
   | "resetCameraViewPreference"
+  | "prepareCameraViewPreference"
+  | "prepareCameraViewPreferenceReset"
   | "adjustCameraView"
   | "resetCameraView"
   | "getCameraPreviewState"
@@ -743,13 +745,15 @@ export class GameplayBabylonRuntimeCoordinatorV1 {
       if (previous.cameraEntityId !== parsed.cameraEntityId) {
         throw new Error("CAMERA_ENTITY_STALE");
       }
-      if (parsed.type === "view.camera-preference.set") {
-        runtime.setCameraViewPreference(parsed.cameraViewPreference);
-      } else {
-        runtime.resetCameraViewPreference();
-      }
-      const next = cameraSelectionProjection(runtime.snapshot());
-      return Object.freeze({ previous, next });
+      const prepared = parsed.type === "view.camera-preference.set"
+        ? runtime.prepareCameraViewPreference(parsed.cameraViewPreference)
+        : runtime.prepareCameraViewPreferenceReset();
+      return Object.freeze({
+        previous,
+        next: cameraSelectionProjection(prepared.next),
+        commitPrepared: prepared.commitPrepared,
+        rollbackPrepared: prepared.rollbackPrepared,
+      });
     });
   }
 

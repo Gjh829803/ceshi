@@ -18,10 +18,20 @@ import {
 import {
   CameraDirectorV1,
   type CameraDirectorSnapshotV1,
+  type CameraDirectorTransactionStateV1,
 } from "./camera-director";
-import { SpringArmComponentV1 } from "./spring-arm-component";
+import {
+  SpringArmComponentV1,
+  type SpringArmTransactionStateV1,
+} from "./spring-arm-component";
 
 type CameraContextV1 = Parameters<CameraDirectorV1["update"]>[0];
+
+export interface CameraComponentTransactionStateV1 {
+  readonly director: CameraDirectorTransactionStateV1;
+  readonly activeSpringArm: SpringArmComponentV1 | undefined;
+  readonly activeSpringArmState: SpringArmTransactionStateV1 | undefined;
+}
 
 /**
  * Scene component that owns the active camera's profile selection, view control
@@ -51,6 +61,26 @@ export class CameraComponentV1 extends SceneComponentV1 {
 
   resetViewPreference(): void {
     this.director.resetViewPreference();
+  }
+
+  captureTransactionState(): CameraComponentTransactionStateV1 {
+    return Object.freeze({
+      director: this.director.captureTransactionState(),
+      activeSpringArm: this.activeSpringArm,
+      activeSpringArmState: this.activeSpringArm?.captureTransactionState(),
+    });
+  }
+
+  restoreTransactionState(state: CameraComponentTransactionStateV1): void {
+    if (this.activeSpringArm !== state.activeSpringArm) {
+      this.activeSpringArm?.reset();
+      this.activeSpringArm = state.activeSpringArm;
+      if (this.activeSpringArm !== undefined) this.attachTo(this.activeSpringArm);
+    }
+    if (state.activeSpringArmState !== undefined) {
+      state.activeSpringArm?.restoreTransactionState(state.activeSpringArmState);
+    }
+    this.director.restoreTransactionState(state.director);
   }
 
   setInputActions(actions: readonly SemanticInputActionV1[]): void {

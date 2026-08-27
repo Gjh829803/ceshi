@@ -24,6 +24,10 @@ export interface SpringArmSolveResultV1 {
   readonly collisionHitPositionXYZ?: Vec3;
 }
 
+export interface SpringArmTransactionStateV1 {
+  readonly collisionDistanceMeters: number | undefined;
+}
+
 function moveTowards(current: number, target: number, maximumDelta: number): number {
   if (Math.abs(target - current) <= maximumDelta) return target;
   return current + Math.sign(target - current) * maximumDelta;
@@ -47,6 +51,14 @@ export class SpringArmComponentV1 extends SceneComponentV1 {
 
   reset(): void {
     this.collisionDistanceMeters = undefined;
+  }
+
+  captureTransactionState(): SpringArmTransactionStateV1 {
+    return Object.freeze({ collisionDistanceMeters: this.collisionDistanceMeters });
+  }
+
+  restoreTransactionState(state: SpringArmTransactionStateV1): void {
+    this.collisionDistanceMeters = state.collisionDistanceMeters;
   }
 
   solve(input: SpringArmSolveRequestV1): SpringArmSolveResultV1 {

@@ -138,6 +138,13 @@ export interface BabylonWorldRuntimeOptions {
   onInitializationStage?(stage: BabylonWorldRuntimeInitializationStageV1): void;
 }
 
+export interface PreparedBabylonCameraViewMutationV1 {
+  readonly previous: BabylonRuntimeProjectionV1;
+  readonly next: BabylonRuntimeProjectionV1;
+  commitPrepared(): void;
+  rollbackPrepared(): void;
+}
+
 type OwnedDisposer = () => void | Promise<void>;
 
 interface BabylonGameplayPublishedStateV1 {
@@ -2094,6 +2101,67 @@ export class BabylonWorldRuntime {
     this.latestRenderReadyReceipt = undefined;
     this.updateCamera();
     return this.snapshot();
+  }
+
+  prepareCameraViewPreference(
+    preference: CameraViewPreferenceV1,
+  ): PreparedBabylonCameraViewMutationV1 {
+    return this.prepareCameraViewMutation(() => {
+      this.setCameraViewPreference(preference);
+    });
+  }
+
+  prepareCameraViewPreferenceReset(): PreparedBabylonCameraViewMutationV1 {
+    return this.prepareCameraViewMutation(() => {
+      this.resetCameraViewPreference();
+    });
+  }
+
+  private prepareCameraViewMutation(
+    apply: () => void,
+  ): PreparedBabylonCameraViewMutationV1 {
+    this.assertUsable();
+    const checkpoint = Object.freeze({
+      camera: this.cameraComponent.captureTransactionState(),
+      latestRenderReadyReceipt: this.latestRenderReadyReceipt,
+      appliedCameraViewStateRevision: this.appliedCameraViewStateRevision,
+    });
+    const restore = (): void => {
+      this.cameraComponent.restoreTransactionState(checkpoint.camera);
+      this.latestRenderReadyReceipt = checkpoint.latestRenderReadyReceipt;
+      this.appliedCameraViewStateRevision = checkpoint.appliedCameraViewStateRevision;
+    };
+    const previous = this.snapshot();
+    let next: BabylonRuntimeProjectionV1;
+    try {
+      apply();
+      next = this.snapshot();
+    } finally {
+      restore();
+    }
+    let state: "prepared" | "committed" | "rolled-back" = "prepared";
+    return Object.freeze({
+      previous,
+      next,
+      commitPrepared: (): void => {
+        if (state !== "prepared") {
+          throw new Error(`Camera View mutation is already ${state}.`);
+        }
+        try {
+          apply();
+          state = "committed";
+        } catch (error) {
+          restore();
+          state = "rolled-back";
+          throw error;
+        }
+      },
+      rollbackPrepared: (): void => {
+        if (state === "rolled-back") return;
+        restore();
+        state = "rolled-back";
+      },
+    });
   }
 
   adjustCameraView(input: CameraViewInputV1): BabylonRuntimeProjectionV1 {

@@ -71,6 +71,63 @@ export interface CameraDirectorSnapshotV1 {
   subjectVelocityMetersPerSecondXYZ?: Vec3;
 }
 
+export interface CameraDirectorTransactionStateV1 {
+  readonly values: Readonly<{
+    initialized: boolean;
+    cameraViewPreference: CameraViewPreferenceV1;
+    activeProfileRef: string;
+    activeHeadingSource: ExecutionCameraRigProfileV1["headingSource"] | undefined;
+    activeReverseHeadingPolicy:
+      | ExecutionCameraRigProfileV1["reverseHeadingPolicy"]
+      | undefined;
+    activeRigRef: string;
+    activeModifierRefs: readonly string[];
+    fallbackActive: boolean;
+    targetYawOffsetRadians: number;
+    targetPitchOffsetRadians: number;
+    targetDistanceOffsetMeters: number;
+    viewYawOffsetRadians: number;
+    viewPitchOffsetRadians: number;
+    viewDistanceOffsetMeters: number;
+    controlInitialized: boolean;
+    controlTargetYawOffsetRadians: number;
+    controlViewYawOffsetRadians: number;
+    controlBaseHeadingYawRadians: number;
+    controlBaseHeadingIdentity: string | undefined;
+    controlSecondsSinceManualViewInput: number;
+    baseHeadingYawRadians: number;
+    baseHeadingIdentity: string | undefined;
+    transitionElapsedSeconds: number;
+    transitionDurationSeconds: number;
+    transitionStartFovRadians: number;
+    secondsSinceManualViewInput: number;
+    shoulderSide: number;
+    lookBackBlendRatio: number;
+    smoothedFovRadians: number;
+    activeParameters: CameraParametersV1 | undefined;
+    activeLockedParameters: CameraParametersV1 | undefined;
+    latestTelemetry: CameraDirectorV1["latestTelemetry"];
+  }>;
+  readonly vectors: Readonly<{
+    smoothedTarget: Vector3;
+    controlLastStableVelocityForward: Vector3 | undefined;
+    controlLastBaseTarget: Vector3 | undefined;
+    lastStableVelocityForward: Vector3 | undefined;
+    transitionStartPosition: Vector3;
+    transitionStartTarget: Vector3;
+    previousVelocity: Vector3;
+    lastBaseTarget: Vector3 | undefined;
+    controlForward: Vector3;
+    cameraPosition: Vector3;
+    cameraRotation: Vector3;
+    cameraRotationQuaternion: ReturnType<NonNullable<FreeCamera["rotationQuaternion"]>["clone"]> | null;
+  }>;
+  readonly tuningByProfileRef: ReadonlyMap<string, CameraTuningV1>;
+  readonly activeInputActions: ReadonlySet<SemanticInputActionV1>;
+  readonly previousInputActions: ReadonlySet<SemanticInputActionV1>;
+  readonly cameraFovRadians: number;
+}
+
 type CameraContextV1 = ExecutionSubjectCapabilityAssemblyV1["cameraContext"];
 type CameraParametersV1 = ExecutionCameraRigProfileV1["parameters"];
 
@@ -372,6 +429,87 @@ export class CameraDirectorV1 {
     this.activeInputActions.clear();
     this.previousInputActions.clear();
     this.resetView();
+  }
+
+  captureTransactionState(): CameraDirectorTransactionStateV1 {
+    return {
+      values: {
+        initialized: this.initialized,
+        cameraViewPreference: this.cameraViewPreference,
+        activeProfileRef: this.activeProfileRef,
+        activeHeadingSource: this.activeHeadingSource,
+        activeReverseHeadingPolicy: this.activeReverseHeadingPolicy,
+        activeRigRef: this.activeRigRef,
+        activeModifierRefs: this.activeModifierRefs,
+        fallbackActive: this.fallbackActive,
+        targetYawOffsetRadians: this.targetYawOffsetRadians,
+        targetPitchOffsetRadians: this.targetPitchOffsetRadians,
+        targetDistanceOffsetMeters: this.targetDistanceOffsetMeters,
+        viewYawOffsetRadians: this.viewYawOffsetRadians,
+        viewPitchOffsetRadians: this.viewPitchOffsetRadians,
+        viewDistanceOffsetMeters: this.viewDistanceOffsetMeters,
+        controlInitialized: this.controlInitialized,
+        controlTargetYawOffsetRadians: this.controlTargetYawOffsetRadians,
+        controlViewYawOffsetRadians: this.controlViewYawOffsetRadians,
+        controlBaseHeadingYawRadians: this.controlBaseHeadingYawRadians,
+        controlBaseHeadingIdentity: this.controlBaseHeadingIdentity,
+        controlSecondsSinceManualViewInput: this.controlSecondsSinceManualViewInput,
+        baseHeadingYawRadians: this.baseHeadingYawRadians,
+        baseHeadingIdentity: this.baseHeadingIdentity,
+        transitionElapsedSeconds: this.transitionElapsedSeconds,
+        transitionDurationSeconds: this.transitionDurationSeconds,
+        transitionStartFovRadians: this.transitionStartFovRadians,
+        secondsSinceManualViewInput: this.secondsSinceManualViewInput,
+        shoulderSide: this.shoulderSide,
+        lookBackBlendRatio: this.lookBackBlendRatio,
+        smoothedFovRadians: this.smoothedFovRadians,
+        activeParameters: this.activeParameters,
+        activeLockedParameters: this.activeLockedParameters,
+        latestTelemetry: this.latestTelemetry,
+      },
+      vectors: {
+        smoothedTarget: this.smoothedTarget.clone(),
+        controlLastStableVelocityForward: this.controlLastStableVelocityForward?.clone(),
+        controlLastBaseTarget: this.controlLastBaseTarget?.clone(),
+        lastStableVelocityForward: this.lastStableVelocityForward?.clone(),
+        transitionStartPosition: this.transitionStartPosition.clone(),
+        transitionStartTarget: this.transitionStartTarget.clone(),
+        previousVelocity: this.previousVelocity.clone(),
+        lastBaseTarget: this.lastBaseTarget?.clone(),
+        controlForward: this.controlForward.clone(),
+        cameraPosition: this.camera.position.clone(),
+        cameraRotation: this.camera.rotation.clone(),
+        cameraRotationQuaternion: this.camera.rotationQuaternion?.clone() ?? null,
+      },
+      tuningByProfileRef: new Map(this.tuningByProfileRef),
+      activeInputActions: new Set(this.activeInputActions),
+      previousInputActions: new Set(this.previousInputActions),
+      cameraFovRadians: this.camera.fov,
+    };
+  }
+
+  restoreTransactionState(state: CameraDirectorTransactionStateV1): void {
+    Object.assign(this, state.values);
+    this.smoothedTarget.copyFrom(state.vectors.smoothedTarget);
+    this.controlLastStableVelocityForward =
+      state.vectors.controlLastStableVelocityForward?.clone();
+    this.controlLastBaseTarget = state.vectors.controlLastBaseTarget?.clone();
+    this.lastStableVelocityForward = state.vectors.lastStableVelocityForward?.clone();
+    this.transitionStartPosition.copyFrom(state.vectors.transitionStartPosition);
+    this.transitionStartTarget.copyFrom(state.vectors.transitionStartTarget);
+    this.previousVelocity.copyFrom(state.vectors.previousVelocity);
+    this.lastBaseTarget = state.vectors.lastBaseTarget?.clone();
+    this.controlForward.copyFrom(state.vectors.controlForward);
+    this.tuningByProfileRef.clear();
+    for (const [profileRef, tuning] of state.tuningByProfileRef) {
+      this.tuningByProfileRef.set(profileRef, tuning);
+    }
+    this.activeInputActions = new Set(state.activeInputActions);
+    this.previousInputActions = new Set(state.previousInputActions);
+    this.camera.position.copyFrom(state.vectors.cameraPosition);
+    this.camera.rotation.copyFrom(state.vectors.cameraRotation);
+    this.camera.rotationQuaternion = state.vectors.cameraRotationQuaternion?.clone() ?? null;
+    this.camera.fov = state.cameraFovRadians;
   }
 
   setInputActions(actions: readonly SemanticInputActionV1[]): void {

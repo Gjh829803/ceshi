@@ -107,6 +107,10 @@ export interface CameraViewSelectionProjectionV1 {
 export interface CameraViewCommandExecutionV1 {
   readonly previous: CameraViewSelectionProjectionV1;
   readonly next: CameraViewSelectionProjectionV1;
+  /** Applies the already prepared provider mutation. */
+  commitPrepared(): void | Promise<void>;
+  /** Restores the provider state captured before preparation or commit. */
+  rollbackPrepared(): void | Promise<void>;
 }
 
 export type CameraViewCommandExecutorV1 = (
@@ -1458,64 +1462,77 @@ export class WorldSession {
         },
       }));
     }
-    if (
-      execution.previous.cameraEntityId !== command.cameraEntityId ||
-      execution.next.cameraEntityId !== command.cameraEntityId
-    ) {
+    try {
+      if (
+        execution.previous.cameraEntityId !== command.cameraEntityId ||
+        execution.next.cameraEntityId !== command.cameraEntityId
+      ) throw new Error("CAMERA_ENTITY_STALE");
+
+      const sequence = this.currentPublication.gameplayInspection.lastEventSequence + 1;
+      const event: CameraViewEventV1 = {
+        type: "camera.selection.changed",
+        schemaVersion: 1,
+        id: deriveCameraViewEventIdV1(this.worldSessionId, sequence),
+        runtimeSessionId: this.runtimeSessionId,
+        worldSessionId: this.worldSessionId,
+        cameraEntityId: command.cameraEntityId,
+        sequence,
+        simulationTick: this.currentPublication.worldState.simulationTick,
+        previousCameraRigProfileRef: execution.previous.activeCameraRigProfileRef,
+        activeCameraRigProfileRef: execution.next.activeCameraRigProfileRef,
+        activeCameraModifierRefs: execution.next.activeCameraModifierRefs,
+        targetEntityId: execution.next.targetEntityId,
+        matchedCameraContextRuleIds: execution.next.matchedCameraContextRuleIds,
+        fallbackActive: execution.next.fallbackActive,
+        reason: command.type === "view.camera-preference.reset"
+          ? "preference-reset"
+          : "preference-changed",
+      };
+      const preparedEvents = eventReservation.reservation.prepare([event]);
+      const nextViewState = parseGameplayViewStateProjectionV1({
+        viewStateRevision: this.currentPublication.viewState.viewStateRevision + 1,
+      });
+      const nextEpoch = this.currentPublication.publicationEpoch + 1;
+      const nextInspection = Object.freeze({
+        ...this.currentPublication.gameplayInspection,
+        id: `gameplay-inspection:${this.worldSessionId}:${nextEpoch}`,
+        lastEventSequence: sequence,
+      });
+      const receiptValue = this.cameraViewReceipt(command, {
+        status: "committed",
+        eventIds: [event.id],
+        viewStateRevision: nextViewState.viewStateRevision,
+      });
+
+      await execution.commitPrepared();
+      preparedEvents.commitPrepared();
+      this.currentPublication = publication(
+        nextEpoch,
+        this.currentPublication.worldState,
+        nextInspection,
+        nextViewState,
+      );
+      return this.retainCameraViewReceipt(command, receiptValue);
+    } catch (error) {
       eventReservation.reservation.release();
+      try {
+        await execution.rollbackPrepared();
+      } catch {
+        this.phaseValue = "failed";
+      }
+      const text = error instanceof Error ? error.message : "";
+      const code = text.includes("CAMERA_ENTITY_STALE")
+        ? "CAMERA_ENTITY_STALE" as const
+        : "CAMERA_RUNTIME_UPDATE_FAILED" as const;
       return this.retainCameraViewReceipt(command, this.cameraViewReceipt(command, {
         status: "rejected",
         eventIds: [],
         diagnostic: {
-          code: "CAMERA_ENTITY_STALE",
-          message: "The Camera View command targeted another Camera Entity.",
+          code,
+          message: "The Camera View command was rolled back before View publication.",
         },
       }));
     }
-
-    const sequence = this.currentPublication.gameplayInspection.lastEventSequence + 1;
-    const event: CameraViewEventV1 = {
-      type: "camera.selection.changed",
-      schemaVersion: 1,
-      id: deriveCameraViewEventIdV1(this.worldSessionId, sequence),
-      runtimeSessionId: this.runtimeSessionId,
-      worldSessionId: this.worldSessionId,
-      cameraEntityId: command.cameraEntityId,
-      sequence,
-      simulationTick: this.currentPublication.worldState.simulationTick,
-      previousCameraRigProfileRef: execution.previous.activeCameraRigProfileRef,
-      activeCameraRigProfileRef: execution.next.activeCameraRigProfileRef,
-      activeCameraModifierRefs: execution.next.activeCameraModifierRefs,
-      targetEntityId: execution.next.targetEntityId,
-      matchedCameraContextRuleIds: execution.next.matchedCameraContextRuleIds,
-      fallbackActive: execution.next.fallbackActive,
-      reason: command.type === "view.camera-preference.reset"
-        ? "preference-reset"
-        : "preference-changed",
-    };
-    const preparedEvents = eventReservation.reservation.prepare([event]);
-    const nextViewState = parseGameplayViewStateProjectionV1({
-      viewStateRevision: this.currentPublication.viewState.viewStateRevision + 1,
-    });
-    const nextEpoch = this.currentPublication.publicationEpoch + 1;
-    const nextInspection = Object.freeze({
-      ...this.currentPublication.gameplayInspection,
-      id: `gameplay-inspection:${this.worldSessionId}:${nextEpoch}`,
-      lastEventSequence: sequence,
-    });
-    const receiptValue = this.cameraViewReceipt(command, {
-      status: "committed",
-      eventIds: [event.id],
-      viewStateRevision: nextViewState.viewStateRevision,
-    });
-    preparedEvents.commitPrepared();
-    this.currentPublication = publication(
-      nextEpoch,
-      this.currentPublication.worldState,
-      nextInspection,
-      nextViewState,
-    );
-    return this.retainCameraViewReceipt(command, receiptValue);
   }
 
   private publishParsedCameraSelectionObservation(
@@ -1530,7 +1547,7 @@ export class WorldSession {
     ) return this.currentPublication;
     const eventReservation = this.commandJournal.reserveEventCapacity({ eventCount: 1 });
     if (eventReservation.status !== "reserved") {
-      throw new Error("VIEW_EVENT_CAPACITY_EXCEEDED");
+      return this.currentPublication;
     }
     const sequence = this.currentPublication.gameplayInspection.lastEventSequence + 1;
     const reason = previous.targetEntityId !== next.targetEntityId
@@ -1584,7 +1601,7 @@ export class WorldSession {
       return this.currentPublication;
     }
     const reservation = this.commandJournal.reserveEventCapacity({ eventCount: 1 });
-    if (reservation.status !== "reserved") throw new Error("VIEW_EVENT_CAPACITY_EXCEEDED");
+    if (reservation.status !== "reserved") return this.currentPublication;
     const sequence = this.currentPublication.gameplayInspection.lastEventSequence + 1;
     const event: CameraViewEventV1 = {
       type: "camera.target.unbound",

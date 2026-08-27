@@ -490,6 +490,19 @@ describe("WorldSession Camera View command transaction", () => {
     matchedCameraContextRuleIds: Object.freeze(["ground"]),
     fallbackActive: false,
   });
+  const preparedExecution = (
+    previousProfileRef: string,
+    nextProfileRef: string,
+    lifecycle: Readonly<{
+      commitPrepared?: () => void | Promise<void>;
+      rollbackPrepared?: () => void | Promise<void>;
+    }> = {},
+  ) => ({
+    previous: selection(previousProfileRef),
+    next: selection(nextProfileRef),
+    commitPrepared: lifecycle.commitPrepared ?? (() => undefined),
+    rollbackPrepared: lifecycle.rollbackPrepared ?? (() => undefined),
+  });
 
   it("commits one View revision and Camera Event, then replays idempotently", async () => {
     const { options } = createHarnessAndOptions();
@@ -497,10 +510,10 @@ describe("WorldSession Camera View command transaction", () => {
     let executionCount = 0;
     const executor = async () => {
       executionCount += 1;
-      return {
-        previous: selection("worldkit://camera-profile/orbit@1"),
-        next: selection("worldkit://camera-profile/first-person@1"),
-      };
+      return preparedExecution(
+        "worldkit://camera-profile/orbit@1",
+        "worldkit://camera-profile/first-person@1",
+      );
     };
 
     const first = await session.executeCameraViewCommand(cameraCommand(), executor);
@@ -541,14 +554,58 @@ describe("WorldSession Camera View command transaction", () => {
     const conflict = await session.executeCameraViewCommand({
       ...cameraCommand("camera-command.rejected"),
       cameraViewPreference: { mode: "auto" as const },
-    }, async () => ({
-      previous: selection("before"),
-      next: selection("after"),
-    }));
+    }, async () => preparedExecution("before", "after"));
     expect(conflict).toMatchObject({
       status: "rejected",
       diagnostic: { code: "COMMAND_ID_CONFLICT" },
     });
+    expect(session.snapshot()).toMatchObject({
+      publicationEpoch: 0,
+      viewState: { viewStateRevision: 0 },
+      gameplayInspection: { lastEventSequence: 0 },
+    });
+    expect(session.eventsAfter(0, 10)).toEqual([]);
+  });
+
+  it("rolls the provider back when commit mutates then throws or projection is stale", async () => {
+    const { options } = createHarnessAndOptions();
+    const session = await WorldSession.create(options);
+    let providerProfileRef = "before";
+    let rollbackCount = 0;
+    const failed = await session.executeCameraViewCommand(
+      cameraCommand("camera-command.commit-throws"),
+      async () => preparedExecution("before", "after", {
+        commitPrepared: () => {
+          providerProfileRef = "after";
+          throw new Error("provider update failed after mutation");
+        },
+        rollbackPrepared: () => {
+          rollbackCount += 1;
+          providerProfileRef = "before";
+        },
+      }),
+    );
+    expect(failed).toMatchObject({
+      status: "rejected",
+      diagnostic: { code: "CAMERA_RUNTIME_UPDATE_FAILED" },
+    });
+    expect(providerProfileRef).toBe("before");
+    expect(rollbackCount).toBe(1);
+
+    const stale = await session.executeCameraViewCommand(
+      cameraCommand("camera-command.invalid-projection"),
+      async () => ({
+        ...preparedExecution("before", "after", {
+          rollbackPrepared: () => { rollbackCount += 1; },
+        }),
+        next: { ...selection("after"), cameraEntityId: "camera.other" },
+      }),
+    );
+    expect(stale).toMatchObject({
+      status: "rejected",
+      diagnostic: { code: "CAMERA_ENTITY_STALE" },
+    });
+    expect(rollbackCount).toBe(2);
     expect(session.snapshot()).toMatchObject({
       publicationEpoch: 0,
       viewState: { viewStateRevision: 0 },
@@ -567,10 +624,10 @@ describe("WorldSession Camera View command transaction", () => {
         maximumRetainedReceiptCount: 1,
       },
     });
-    await cameraFirst.executeCameraViewCommand(cameraCommand(), async () => ({
-      previous: selection("before"),
-      next: selection("after"),
-    }));
+    await cameraFirst.executeCameraViewCommand(
+      cameraCommand(),
+      async () => preparedExecution("before", "after"),
+    );
 
     const gameplayAfterCamera = await cameraFirst.executeGameplayCommand({
       ...bindCommand("command.after-camera-capacity"),
@@ -599,7 +656,7 @@ describe("WorldSession Camera View command transaction", () => {
       cameraCommand("camera-command.after-gameplay-capacity"),
       async () => {
         cameraExecutionCount += 1;
-        return { previous: selection("before"), next: selection("after") };
+        return preparedExecution("before", "after");
       },
     );
     expect(cameraAfterGameplay).toMatchObject({
@@ -612,10 +669,10 @@ describe("WorldSession Camera View command transaction", () => {
   it("shares the next Event sequence with following Gameplay commits", async () => {
     const { harness, options } = createHarnessAndOptions();
     const session = await WorldSession.create(options);
-    await session.executeCameraViewCommand(cameraCommand(), async () => ({
-      previous: selection("before"),
-      next: selection("after"),
-    }));
+    await session.executeCameraViewCommand(
+      cameraCommand(),
+      async () => preparedExecution("before", "after"),
+    );
     harness.queuePreparedTransition({
       projectedWorldStateAfter: projection(),
       projectedViewStateAfter: { viewStateRevision: 2 },
@@ -648,6 +705,35 @@ describe("WorldSession Camera View command transaction", () => {
       viewState: { viewStateRevision: 2 },
       gameplayInspection: { lastEventSequence: 2 },
     });
+  });
+
+  it("keeps a committed Gameplay receipt successful when Camera observation capacity is full", async () => {
+    const setup = createHarnessAndOptions();
+    const session = await WorldSession.create({
+      ...setup.options,
+      gameplayCapacityBudget: {
+        ...setup.options.gameplayCapacityBudget,
+        maximumRetainedEventCount: 1,
+      },
+    });
+    setup.harness.queuePreparedTransition({
+      projectedWorldStateAfter: projection(),
+      projectedViewStateAfter: { viewStateRevision: 1 },
+    });
+    const receipt = await session.executeGameplayCommand(bindCommand());
+    expect(receipt).toMatchObject({ status: "committed" });
+    const committedPublication = session.snapshot();
+
+    await expect(session.publishCameraSelectionObservation(
+      selection("before"),
+      selection("after"),
+    )).resolves.toBe(committedPublication);
+    await expect(session.publishCameraTargetUnbound(
+      selection("after"),
+      "control-released",
+    )).resolves.toBe(committedPublication);
+    expect(session.snapshot()).toBe(committedPublication);
+    expect(session.eventsAfter(0, 10)).toHaveLength(1);
   });
 });
 

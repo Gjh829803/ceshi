@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 // Test-only Registry access via a cross-workspace relative path; production
 // runtime-babylon src must not read the Registry.
@@ -1060,6 +1060,43 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       setCameraProfile(runtime, FOLLOW_REF);
       const secondDefault = runtime.resetCameraViewPreference().camera.activeCameraProfileRef;
       expect(secondDefault).toBe(firstDefault);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("prepares Camera View changes invisibly and restores all state when update throws", async () => {
+    const runtime = await createCameraPreviewChannelRuntime();
+    try {
+      await runtime.runFixedInput({ actions: [], ticks: 4 });
+      setCameraProfile(runtime, ORBIT_REF);
+      runtime.adjustCameraView({ yawDeltaRadians: 0.35, zoomDeltaMeters: 0.5 });
+      const before = runtime.snapshot().camera;
+      const prepared = runtime.prepareCameraViewPreference({
+        mode: "camera-rig-profile",
+        cameraRigProfileRef: FOLLOW_REF,
+      });
+
+      expect(runtime.snapshot().camera).toEqual(before);
+      expect(prepared.previous.camera).toEqual(before);
+      expect(prepared.next.camera.activeCameraProfileRef).toBe(FOLLOW_REF);
+      prepared.commitPrepared();
+      expect(runtime.snapshot().camera.activeCameraProfileRef).toBe(FOLLOW_REF);
+      prepared.rollbackPrepared();
+      expect(runtime.snapshot().camera).toEqual(before);
+
+      const updateSpy = vi.spyOn(
+        runtime as unknown as { updateCamera(): void },
+        "updateCamera",
+      ).mockImplementationOnce(() => {
+        throw new Error("forced update failure after preference mutation");
+      });
+      expect(() => runtime.prepareCameraViewPreference({
+        mode: "camera-rig-profile",
+        cameraRigProfileRef: CHASE_REF,
+      })).toThrow("forced update failure after preference mutation");
+      expect(runtime.snapshot().camera).toEqual(before);
+      updateSpy.mockRestore();
     } finally {
       await runtime.dispose();
     }
