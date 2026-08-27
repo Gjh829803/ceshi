@@ -1132,6 +1132,95 @@ Object.freeze([
   "traversal-surface-profile",
   "gameplay-bootstrap"
 ]);
+function invalid(schemaName) {
+  throw new RangeError(`Value must match the closed ${schemaName} schema.`);
+}
+function snapshotDataRecord(value) {
+  if (typeof value !== "object" || isNil(value)) return void 0;
+  try {
+    const prototype = Reflect.getPrototypeOf(value);
+    if (prototype !== Object.prototype && !isNil(prototype)) return void 0;
+    const snapshot = /* @__PURE__ */ Object.create(null);
+    for (const key of Reflect.ownKeys(value)) {
+      const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
+      if (typeof key !== "string" || isNil(descriptor) || !descriptor.enumerable || !("value" in descriptor)) return void 0;
+      snapshot[key] = descriptor.value;
+    }
+    return snapshot;
+  } catch {
+    return void 0;
+  }
+}
+function hasExactKeys(value, keys) {
+  const ownKeys = Reflect.ownKeys(value);
+  return ownKeys.length === keys.length && ownKeys.every((key) => typeof key === "string" && keys.includes(key));
+}
+function isSafeNonNegativeInteger(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && !Object.is(value, -0);
+}
+function deepFreeze$1(value) {
+  if (typeof value !== "object" || isNil(value) || Object.isFrozen(value)) {
+    return value;
+  }
+  for (const key of Reflect.ownKeys(value)) {
+    const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
+    if (!isNil(descriptor) && "value" in descriptor) {
+      deepFreeze$1(descriptor.value);
+    }
+  }
+  return Object.freeze(value);
+}
+const GAMEPLAY_CAPACITY_BUDGET_KEYS = [
+  "maximumParticipantCount",
+  "maximumControllerEntityCount",
+  "maximumRelationshipStateCount",
+  "maximumActiveActionStateCount",
+  "maximumGameplayFeatureCount",
+  "maximumSemanticActionDefinitionCount",
+  "maximumSemanticFactCount",
+  "maximumSemanticFactTransitionCountPerTick",
+  "maximumIdempotencyRecordCount",
+  "maximumUsedActionExecutionIdCount",
+  "maximumRetainedReceiptCount",
+  "maximumRetainedEventCount",
+  "maximumRetainedWorldStateSnapshotCount"
+];
+function parseGameplayCapacityBudgetV1(input) {
+  const schemaName = "GameplayCapacityBudgetV1";
+  const record = snapshotDataRecord(input) ?? invalid(schemaName);
+  if (!hasExactKeys(record, GAMEPLAY_CAPACITY_BUDGET_KEYS) || !GAMEPLAY_CAPACITY_BUDGET_KEYS.every(
+    (key) => isSafeNonNegativeInteger(record[key])
+  )) invalid(schemaName);
+  return deepFreeze$1(Object.fromEntries(
+    GAMEPLAY_CAPACITY_BUDGET_KEYS.map((key) => [key, record[key]])
+  ));
+}
+parseGameplayCapacityBudgetV1({
+  maximumParticipantCount: 1,
+  maximumControllerEntityCount: 1,
+  maximumRelationshipStateCount: 1,
+  maximumActiveActionStateCount: 256,
+  maximumGameplayFeatureCount: 16,
+  maximumSemanticActionDefinitionCount: 256,
+  maximumSemanticFactCount: 4096,
+  maximumSemanticFactTransitionCountPerTick: 1024,
+  maximumIdempotencyRecordCount: 4096,
+  maximumUsedActionExecutionIdCount: 4096,
+  maximumRetainedReceiptCount: 4096,
+  maximumRetainedEventCount: 8192,
+  maximumRetainedWorldStateSnapshotCount: 4096
+});
+const WORLDKIT_RUNTIME_SESSION_REQUEST_TYPES_V1 = Object.freeze([
+  "gameplay-command.execute",
+  "fixed-input.run",
+  "snapshot.get",
+  "events.get",
+  "session.close"
+]);
+new Set(
+  WORLDKIT_RUNTIME_SESSION_REQUEST_TYPES_V1
+);
+new Set(CAMERA_RIG_PARAMETER_NAMES_V1);
 const GOLDEN_HUMANOID_SUBJECT_ASSET = {
   kind: "subject-asset",
   id: "humanoid.golden",
@@ -9504,8 +9593,8 @@ function requireMultipleOf() {
       const { gen, data, schemaCode, it } = cxt;
       const prec = it.opts.multipleOfPrecision;
       const res = gen.let("res");
-      const invalid = prec ? (0, codegen_1._)`Math.abs(Math.round(${res}) - ${res}) > 1e-${prec}` : (0, codegen_1._)`${res} !== parseInt(${res})`;
-      cxt.fail$data((0, codegen_1._)`(${schemaCode} === 0 || (${res} = ${data}/${schemaCode}, ${invalid}))`);
+      const invalid2 = prec ? (0, codegen_1._)`Math.abs(Math.round(${res}) - ${res}) > 1e-${prec}` : (0, codegen_1._)`${res} !== parseInt(${res})`;
+      cxt.fail$data((0, codegen_1._)`(${schemaCode} === 0 || (${res} = ${data}/${schemaCode}, ${invalid2}))`);
     }
   };
   multipleOf.default = def;

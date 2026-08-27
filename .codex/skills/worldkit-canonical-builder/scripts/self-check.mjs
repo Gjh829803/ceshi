@@ -4143,6 +4143,507 @@ function parseExecutionPlanV5(input) {
 function hashExecutionPlanV5(input) {
   return sha256CanonicalJson(parseExecutionPlanV5(input));
 }
+function invalid$1(schemaName) {
+  throw new RangeError(`Value must match the closed ${schemaName} schema.`);
+}
+function snapshotDataRecord$1(value) {
+  if (typeof value !== "object" || isNil(value)) return void 0;
+  try {
+    const prototype = Reflect.getPrototypeOf(value);
+    if (prototype !== Object.prototype && !isNil(prototype)) return void 0;
+    const snapshot = /* @__PURE__ */ Object.create(null);
+    for (const key of Reflect.ownKeys(value)) {
+      const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
+      if (typeof key !== "string" || isNil(descriptor) || !descriptor.enumerable || !("value" in descriptor)) return void 0;
+      snapshot[key] = descriptor.value;
+    }
+    return snapshot;
+  } catch {
+    return void 0;
+  }
+}
+function hasExactKeys$1(value, keys) {
+  const ownKeys = Reflect.ownKeys(value);
+  return ownKeys.length === keys.length && ownKeys.every((key) => typeof key === "string" && keys.includes(key));
+}
+function isSafeNonNegativeInteger$1(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && !Object.is(value, -0);
+}
+function deepFreeze$4(value) {
+  if (typeof value !== "object" || isNil(value) || Object.isFrozen(value)) {
+    return value;
+  }
+  for (const key of Reflect.ownKeys(value)) {
+    const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
+    if (!isNil(descriptor) && "value" in descriptor) {
+      deepFreeze$4(descriptor.value);
+    }
+  }
+  return Object.freeze(value);
+}
+const GAMEPLAY_CAPACITY_BUDGET_KEYS = [
+  "maximumParticipantCount",
+  "maximumControllerEntityCount",
+  "maximumRelationshipStateCount",
+  "maximumActiveActionStateCount",
+  "maximumGameplayFeatureCount",
+  "maximumSemanticActionDefinitionCount",
+  "maximumSemanticFactCount",
+  "maximumSemanticFactTransitionCountPerTick",
+  "maximumIdempotencyRecordCount",
+  "maximumUsedActionExecutionIdCount",
+  "maximumRetainedReceiptCount",
+  "maximumRetainedEventCount",
+  "maximumRetainedWorldStateSnapshotCount"
+];
+function parseGameplayCapacityBudgetV1(input) {
+  const schemaName = "GameplayCapacityBudgetV1";
+  const record2 = snapshotDataRecord$1(input) ?? invalid$1(schemaName);
+  if (!hasExactKeys$1(record2, GAMEPLAY_CAPACITY_BUDGET_KEYS) || !GAMEPLAY_CAPACITY_BUDGET_KEYS.every(
+    (key) => isSafeNonNegativeInteger$1(record2[key])
+  )) invalid$1(schemaName);
+  return deepFreeze$4(Object.fromEntries(
+    GAMEPLAY_CAPACITY_BUDGET_KEYS.map((key) => [key, record2[key]])
+  ));
+}
+parseGameplayCapacityBudgetV1({
+  maximumParticipantCount: 1,
+  maximumControllerEntityCount: 1,
+  maximumRelationshipStateCount: 1,
+  maximumActiveActionStateCount: 256,
+  maximumGameplayFeatureCount: 16,
+  maximumSemanticActionDefinitionCount: 256,
+  maximumSemanticFactCount: 4096,
+  maximumSemanticFactTransitionCountPerTick: 1024,
+  maximumIdempotencyRecordCount: 4096,
+  maximumUsedActionExecutionIdCount: 4096,
+  maximumRetainedReceiptCount: 4096,
+  maximumRetainedEventCount: 8192,
+  maximumRetainedWorldStateSnapshotCount: 4096
+});
+const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
+const GAMEPLAY_COMMAND_TYPES = /* @__PURE__ */ new Set([
+  "control.bind",
+  "control.release",
+  "action.activate",
+  "action.cancel"
+]);
+function invalid(schemaName) {
+  throw new RangeError(`Value must match the closed ${schemaName} schema.`);
+}
+function snapshotDataRecord(value) {
+  if (typeof value !== "object" || isNil(value)) return void 0;
+  try {
+    if (Reflect.getPrototypeOf(value) !== Object.prototype) return void 0;
+    const snapshot = {};
+    for (const key of Reflect.ownKeys(value)) {
+      const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
+      if (typeof key !== "string" || isNil(descriptor) || !descriptor.enumerable || !("value" in descriptor)) return void 0;
+      Object.defineProperty(snapshot, key, {
+        configurable: true,
+        enumerable: true,
+        value: descriptor.value,
+        writable: true
+      });
+    }
+    return snapshot;
+  } catch {
+    return void 0;
+  }
+}
+function snapshotDataArray(value) {
+  if (!Array.isArray(value)) return void 0;
+  try {
+    if (Reflect.getPrototypeOf(value) !== Array.prototype) return void 0;
+    if (Reflect.ownKeys(value).some((key) => typeof key === "symbol")) {
+      return void 0;
+    }
+    if (Object.getOwnPropertyNames(value).length !== value.length + 1) {
+      return void 0;
+    }
+    const snapshot = [];
+    for (let index = 0; index < value.length; index += 1) {
+      const descriptor = Reflect.getOwnPropertyDescriptor(value, String(index));
+      if (isNil(descriptor) || !descriptor.enumerable || !("value" in descriptor)) return void 0;
+      snapshot.push(descriptor.value);
+    }
+    const lengthDescriptor = Reflect.getOwnPropertyDescriptor(value, "length");
+    if (isNil(lengthDescriptor) || lengthDescriptor.enumerable !== false) {
+      return void 0;
+    }
+    return snapshot;
+  } catch {
+    return void 0;
+  }
+}
+function hasExactKeys(record2, keys) {
+  const ownKeys = Reflect.ownKeys(record2);
+  return ownKeys.length === keys.length && ownKeys.every(
+    (key) => typeof key === "string" && keys.includes(key)
+  );
+}
+function isNonEmptyString(value) {
+  return typeof value === "string" && value.length > 0;
+}
+function isSha256(value) {
+  return typeof value === "string" && SHA256_PATTERN.test(value);
+}
+function isSafeNonNegativeInteger(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && !Object.is(value, -0);
+}
+function isSafePositiveInteger(value) {
+  return isSafeNonNegativeInteger(value) && value > 0;
+}
+function compareCanonicalStrings(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+function sameOrder(actual, expected) {
+  return actual.length === expected.length && actual.every(
+    (value, index) => value === expected[index]
+  );
+}
+function canonicalStringSet(input, schemaName, mode) {
+  const values = snapshotDataArray(input);
+  if (isNil(values)) invalid(schemaName);
+  if (!values.every(isNonEmptyString)) invalid(schemaName);
+  const typedValues = values;
+  if (new Set(typedValues).size !== typedValues.length) invalid(schemaName);
+  const canonical = [...typedValues].sort(compareCanonicalStrings);
+  if (mode === "strict" && !sameOrder(typedValues, canonical)) invalid(schemaName);
+  return Object.freeze(canonical);
+}
+function deepFreeze$3(value) {
+  if (typeof value !== "object" || isNil(value) || Object.isFrozen(value)) {
+    return value;
+  }
+  for (const key of Reflect.ownKeys(value)) {
+    const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
+    if (!isNil(descriptor) && "value" in descriptor) {
+      deepFreeze$3(descriptor.value);
+    }
+  }
+  return Object.freeze(value);
+}
+function parseGameplayEntityDescriptor(input, mode, schemaName) {
+  const record2 = snapshotDataRecord(input);
+  if (isNil(record2)) invalid(schemaName);
+  if (!hasExactKeys(record2, ["id", "entityDefinitionRef", "capabilityRefs"]) || !isNonEmptyString(record2.id) || !isNonEmptyString(record2.entityDefinitionRef)) invalid(schemaName);
+  return deepFreeze$3({
+    id: record2.id,
+    entityDefinitionRef: record2.entityDefinitionRef,
+    capabilityRefs: canonicalStringSet(record2.capabilityRefs, schemaName, mode)
+  });
+}
+function createGameplayEntityDescriptorV1(input) {
+  return parseGameplayEntityDescriptor(
+    input,
+    "canonicalize",
+    "GameplayEntityDescriptorV1"
+  );
+}
+function parseGameplayEntityDescriptorV1(input) {
+  return parseGameplayEntityDescriptor(input, "strict", "GameplayEntityDescriptorV1");
+}
+function parseGameplayFeatureManifestBody(input, mode) {
+  const schemaName = "GameplayFeatureManifestBodyV1";
+  const record2 = snapshotDataRecord(input);
+  if (isNil(record2)) invalid(schemaName);
+  if (!hasExactKeys(record2, [
+    "kind",
+    "id",
+    "version",
+    "resourceRef",
+    "dependencyFeatureRefs",
+    "requiredCapabilityRefs",
+    "commandTypes",
+    "resourceBudget"
+  ]) || record2.kind !== "gameplay-feature" || !isNonEmptyString(record2.id) || !isSafePositiveInteger(record2.version) || !isNonEmptyString(record2.resourceRef)) invalid(schemaName);
+  const commandTypes = canonicalStringSet(record2.commandTypes, schemaName, mode);
+  if (!commandTypes.every(
+    (type2) => GAMEPLAY_COMMAND_TYPES.has(type2)
+  )) invalid(schemaName);
+  const resourceBudget = snapshotDataRecord(record2.resourceBudget);
+  if (isNil(resourceBudget)) invalid(schemaName);
+  if (!hasExactKeys(resourceBudget, ["stateSliceCount", "commandHandlerCount"]) || resourceBudget.stateSliceCount !== 1 || !isSafeNonNegativeInteger(resourceBudget.commandHandlerCount) || resourceBudget.commandHandlerCount !== commandTypes.length) invalid(schemaName);
+  return deepFreeze$3({
+    kind: "gameplay-feature",
+    id: record2.id,
+    version: record2.version,
+    resourceRef: record2.resourceRef,
+    dependencyFeatureRefs: canonicalStringSet(
+      record2.dependencyFeatureRefs,
+      schemaName,
+      mode
+    ),
+    requiredCapabilityRefs: canonicalStringSet(
+      record2.requiredCapabilityRefs,
+      schemaName,
+      mode
+    ),
+    commandTypes,
+    resourceBudget: {
+      stateSliceCount: 1,
+      commandHandlerCount: resourceBudget.commandHandlerCount
+    }
+  });
+}
+function createGameplayFeatureManifestV1(input) {
+  const body = parseGameplayFeatureManifestBody(input, "canonicalize");
+  return deepFreeze$3({
+    ...body,
+    contentHash: sha256CanonicalJson(body)
+  });
+}
+function parseGameplayFeatureResourceLockV1(input) {
+  const schemaName = "GameplayFeatureResourceLockV1";
+  const record2 = snapshotDataRecord(input);
+  if (isNil(record2)) invalid(schemaName);
+  if (!hasExactKeys(record2, ["resourceRef", "contentHash"]) || !isNonEmptyString(record2.resourceRef) || !isSha256(record2.contentHash)) invalid(schemaName);
+  return deepFreeze$3({
+    resourceRef: record2.resourceRef,
+    contentHash: record2.contentHash
+  });
+}
+function parseGameplayActionDefinitionBody(input, mode) {
+  const schemaName = "GameplayActionDefinitionBodyV1";
+  const record2 = snapshotDataRecord(input);
+  if (isNil(record2)) invalid(schemaName);
+  if (!hasExactKeys(record2, [
+    "kind",
+    "id",
+    "version",
+    "resourceRef",
+    "executionMode",
+    "completion",
+    "effect",
+    "isMovementInputBlocked",
+    "allowedActorEntityDefinitionRefs",
+    "requiredActorCapabilityRefs",
+    "request"
+  ]) || record2.kind !== "semantic-action" || !isNonEmptyString(record2.id) || !isSafePositiveInteger(record2.version) || !isNonEmptyString(record2.resourceRef) || record2.executionMode !== "exclusive-per-subject" || typeof record2.isMovementInputBlocked !== "boolean") invalid(schemaName);
+  const completionRecord = snapshotDataRecord(record2.completion);
+  if (isNil(completionRecord)) invalid(schemaName);
+  let completion;
+  if (completionRecord.mode === "immediate" && hasExactKeys(completionRecord, ["mode"])) {
+    completion = { mode: "immediate" };
+  } else if (completionRecord.mode === "explicit-cancel" && hasExactKeys(completionRecord, ["mode"])) {
+    completion = { mode: "explicit-cancel" };
+  } else if (completionRecord.mode === "fixed-duration" && hasExactKeys(completionRecord, ["mode", "durationTicks"]) && isSafePositiveInteger(completionRecord.durationTicks)) {
+    completion = {
+      mode: "fixed-duration",
+      durationTicks: completionRecord.durationTicks
+    };
+  } else {
+    return invalid(schemaName);
+  }
+  const effectRecord = snapshotDataRecord(record2.effect);
+  if (isNil(effectRecord)) invalid(schemaName);
+  let effect;
+  if (effectRecord.mode === "state-only" && hasExactKeys(effectRecord, ["mode"])) {
+    effect = { mode: "state-only" };
+  } else if (effectRecord.mode === "trusted" && hasExactKeys(effectRecord, [
+    "mode",
+    "gameplayActionEffectRef",
+    "gameplayActionEffectHash"
+  ]) && isNonEmptyString(effectRecord.gameplayActionEffectRef) && isSha256(effectRecord.gameplayActionEffectHash)) {
+    effect = {
+      mode: "trusted",
+      gameplayActionEffectRef: effectRecord.gameplayActionEffectRef,
+      gameplayActionEffectHash: effectRecord.gameplayActionEffectHash
+    };
+  } else {
+    return invalid(schemaName);
+  }
+  const requestRecord = snapshotDataRecord(record2.request);
+  if (isNil(requestRecord)) invalid(schemaName);
+  let request;
+  if (requestRecord.mode === "none" && hasExactKeys(requestRecord, ["mode"])) {
+    request = { mode: "none" };
+  } else if (requestRecord.mode === "required" && hasExactKeys(requestRecord, [
+    "mode",
+    "actionRequestSchemaRef",
+    "actionRequestSchemaHash"
+  ]) && isNonEmptyString(requestRecord.actionRequestSchemaRef) && isSha256(requestRecord.actionRequestSchemaHash)) {
+    request = {
+      mode: "required",
+      actionRequestSchemaRef: requestRecord.actionRequestSchemaRef,
+      actionRequestSchemaHash: requestRecord.actionRequestSchemaHash
+    };
+  } else {
+    return invalid(schemaName);
+  }
+  return deepFreeze$3({
+    kind: "semantic-action",
+    id: record2.id,
+    version: record2.version,
+    resourceRef: record2.resourceRef,
+    executionMode: "exclusive-per-subject",
+    completion,
+    effect,
+    isMovementInputBlocked: record2.isMovementInputBlocked,
+    allowedActorEntityDefinitionRefs: canonicalStringSet(
+      record2.allowedActorEntityDefinitionRefs,
+      schemaName,
+      mode
+    ),
+    requiredActorCapabilityRefs: canonicalStringSet(
+      record2.requiredActorCapabilityRefs,
+      schemaName,
+      mode
+    ),
+    request
+  });
+}
+function parseGameplayActionDefinitionV1(input) {
+  const schemaName = "GameplayActionDefinitionV1";
+  const record2 = snapshotDataRecord(input);
+  if (isNil(record2)) invalid(schemaName);
+  if (!hasExactKeys(record2, [
+    "kind",
+    "id",
+    "version",
+    "resourceRef",
+    "contentHash",
+    "executionMode",
+    "completion",
+    "effect",
+    "isMovementInputBlocked",
+    "allowedActorEntityDefinitionRefs",
+    "requiredActorCapabilityRefs",
+    "request"
+  ]) || !isSha256(record2.contentHash)) invalid(schemaName);
+  const { contentHash: contentHash2, ...bodyInput } = record2;
+  let body;
+  try {
+    body = parseGameplayActionDefinitionBody(bodyInput, "strict");
+  } catch {
+    return invalid(schemaName);
+  }
+  const expectedHash = sha256CanonicalJson(body);
+  if (contentHash2 !== expectedHash) invalid(schemaName);
+  return deepFreeze$3({ ...body, contentHash: expectedHash });
+}
+function canonicalObjectCollection(input, schemaName, mode, parse, identity2) {
+  const source = snapshotDataArray(input);
+  if (isNil(source)) invalid(schemaName);
+  let parsed;
+  try {
+    parsed = source.map(parse);
+  } catch {
+    return invalid(schemaName);
+  }
+  const identities = parsed.map(identity2);
+  if (identities.some((value) => value.length === 0)) invalid(schemaName);
+  if (new Set(identities).size !== identities.length) invalid(schemaName);
+  const canonical = [...parsed].sort(
+    (left, right) => compareCanonicalStrings(identity2(left), identity2(right))
+  );
+  if (mode === "strict" && !sameOrder(identities, canonical.map(identity2))) invalid(schemaName);
+  return Object.freeze(canonical);
+}
+function parseGameplayBootstrapBody(input, mode) {
+  const schemaName = "GameplayBootstrapBodyV1";
+  const record2 = snapshotDataRecord(input);
+  if (isNil(record2)) invalid(schemaName);
+  if (!hasExactKeys(record2, [
+    "kind",
+    "id",
+    "version",
+    "resourceRef",
+    "entityDescriptors",
+    "featureResourceLocks",
+    "semanticActionDefinitions",
+    "availableCapabilityRefs"
+  ]) || record2.kind !== "gameplay-bootstrap" || !isNonEmptyString(record2.id) || !isSafePositiveInteger(record2.version) || !isNonEmptyString(record2.resourceRef)) invalid(schemaName);
+  const parseEntity = mode === "strict" ? parseGameplayEntityDescriptorV1 : (value) => createGameplayEntityDescriptorV1(
+    value
+  );
+  return deepFreeze$3({
+    kind: "gameplay-bootstrap",
+    id: record2.id,
+    version: record2.version,
+    resourceRef: record2.resourceRef,
+    entityDescriptors: canonicalObjectCollection(
+      record2.entityDescriptors,
+      schemaName,
+      mode,
+      parseEntity,
+      (value) => value.id
+    ),
+    featureResourceLocks: canonicalObjectCollection(
+      record2.featureResourceLocks,
+      schemaName,
+      mode,
+      parseGameplayFeatureResourceLockV1,
+      (value) => value.resourceRef
+    ),
+    semanticActionDefinitions: canonicalObjectCollection(
+      record2.semanticActionDefinitions,
+      schemaName,
+      mode,
+      parseGameplayActionDefinitionV1,
+      (value) => value.resourceRef
+    ),
+    availableCapabilityRefs: canonicalStringSet(
+      record2.availableCapabilityRefs,
+      schemaName,
+      mode
+    )
+  });
+}
+function createGameplayBootstrapV1(input) {
+  const body = parseGameplayBootstrapBody(input, "canonicalize");
+  return deepFreeze$3({
+    ...body,
+    contentHash: sha256CanonicalJson(body)
+  });
+}
+function parseGameplayBootstrapV1(input) {
+  const schemaName = "GameplayBootstrapV1";
+  const record2 = snapshotDataRecord(input);
+  if (isNil(record2)) invalid(schemaName);
+  if (!hasExactKeys(record2, [
+    "kind",
+    "id",
+    "version",
+    "resourceRef",
+    "contentHash",
+    "entityDescriptors",
+    "featureResourceLocks",
+    "semanticActionDefinitions",
+    "availableCapabilityRefs"
+  ]) || !isSha256(record2.contentHash)) invalid(schemaName);
+  const { contentHash: contentHash2, ...bodyInput } = record2;
+  let body;
+  try {
+    body = parseGameplayBootstrapBody(bodyInput, "strict");
+  } catch {
+    return invalid(schemaName);
+  }
+  const expectedHash = sha256CanonicalJson(body);
+  if (contentHash2 !== expectedHash) invalid(schemaName);
+  return deepFreeze$3({ ...body, contentHash: expectedHash });
+}
+function createGameplayBootstrapResourceLockEntryV1(input) {
+  const bootstrap = parseGameplayBootstrapV1(input);
+  return deepFreeze$3({
+    resourceRef: bootstrap.resourceRef,
+    resourceKind: "gameplay-bootstrap",
+    resolvedVersion: String(bootstrap.version),
+    contentHash: bootstrap.contentHash
+  });
+}
+const WORLDKIT_RUNTIME_SESSION_REQUEST_TYPES_V1 = Object.freeze([
+  "gameplay-command.execute",
+  "fixed-input.run",
+  "snapshot.get",
+  "events.get",
+  "session.close"
+]);
+new Set(
+  WORLDKIT_RUNTIME_SESSION_REQUEST_TYPES_V1
+);
+new Set(CAMERA_RIG_PARAMETER_NAMES_V1);
 const TRAVERSAL_SURFACE_PROFILE_RESOURCE_KIND = "traversal-surface-profile";
 function canonicalIdentityBaseV4(spec, normalizedBase) {
   return {
@@ -4271,18 +4772,18 @@ const BUILT_IN_OUTDOOR_PROFILE = {
     maximumDiagnostics: 256
   }
 };
-function deepFreeze$4(value) {
+function deepFreeze$2(value) {
   if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value)) deepFreeze$4(child);
+  for (const child of Object.values(value)) deepFreeze$2(child);
   return Object.freeze(value);
 }
 function resolveLayoutSolverProfileV1(resourceRef) {
   if (resourceRef !== BUILT_IN_LAYOUT_SOLVER_PROFILE_REF) {
     throw new Error(`LAYOUT_SOLVER_PROFILE_NOT_FOUND: '${resourceRef}'.`);
   }
-  const profile = deepFreeze$4(structuredClone(BUILT_IN_OUTDOOR_PROFILE));
+  const profile = deepFreeze$2(structuredClone(BUILT_IN_OUTDOOR_PROFILE));
   const contentHash2 = sha256Bytes(canonicalJsonBytes(profile));
-  return deepFreeze$4({
+  return deepFreeze$2({
     resourceRef: BUILT_IN_LAYOUT_SOLVER_PROFILE_REF,
     resolvedVersion: "1",
     contentHash: contentHash2,
@@ -6461,9 +6962,9 @@ const CONTROL_FEEL_BOUNDS = {
   jumpHoldGravityRatio: [0.1, 1],
   jumpReleaseGravityRatio: [1, 5]
 };
-function deepFreeze$3(value) {
+function deepFreeze$1(value) {
   if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value)) deepFreeze$3(child);
+  for (const child of Object.values(value)) deepFreeze$1(child);
   return Object.freeze(value);
 }
 function duplicateValue(values) {
@@ -6610,7 +7111,7 @@ function lockResource(source) {
   const hashInput = canonicalizeNewResourceCollections(
     sourceWithoutContentHash
   );
-  return deepFreeze$3({
+  return deepFreeze$1({
     ...hashInput,
     contentHash: sha256CanonicalJson(hashInput)
   });
@@ -7012,7 +7513,7 @@ function createSubjectResourceRegistry(resources) {
     resourcesByRef.set(source.resourceRef, lockResource(source));
   }
   validateReferences(resourcesByRef);
-  const stableResources = deepFreeze$3(
+  const stableResources = deepFreeze$1(
     [...resourcesByRef.values()].sort(
       (left, right) => left.resourceRef.localeCompare(right.resourceRef)
     )
@@ -7020,7 +7521,7 @@ function createSubjectResourceRegistry(resources) {
   const resolveResource = (resourceRef) => resourcesByRef.get(resourceRef);
   function listDiscoverableResources(filter) {
     if (filter?.kind === void 0) return stableResources;
-    return deepFreeze$3(stableResources.filter(
+    return deepFreeze$1(stableResources.filter(
       (resource) => resource.kind === filter.kind
     ));
   }
@@ -19324,11 +19825,11 @@ function normalizedNodesV4(spec, nodes, report, layoutSolveReportHash) {
     };
   });
 }
-function deepFreeze$2(value) {
+function deepFreeze(value) {
   if (value === null || typeof value !== "object" || Object.isFrozen(value)) {
     return value;
   }
-  for (const child of Object.values(value)) deepFreeze$2(child);
+  for (const child of Object.values(value)) deepFreeze(child);
   return Object.freeze(value);
 }
 function restoreCanonicalV4Prototypes(spec, prototypes) {
@@ -19340,7 +19841,7 @@ function restoreCanonicalV4Prototypes(spec, prototypes) {
     if (source?.traversalSurfaceBindings === void 0) {
       return structuredClone(prototype);
     }
-    const traversalSurfaceBindings = deepFreeze$2(
+    const traversalSurfaceBindings = deepFreeze(
       [...source.traversalSurfaceBindings].sort((left, right) => left.id.localeCompare(right.id)).map((binding) => structuredClone(binding))
     );
     return {
@@ -22352,496 +22853,6 @@ function compileWorldV5(input) {
       }]
     };
   }
-}
-function invalid$1(schemaName) {
-  throw new RangeError(`Value must match the closed ${schemaName} schema.`);
-}
-function snapshotDataRecord$1(value) {
-  if (typeof value !== "object" || isNil(value)) return void 0;
-  try {
-    const prototype = Reflect.getPrototypeOf(value);
-    if (prototype !== Object.prototype && !isNil(prototype)) return void 0;
-    const snapshot = /* @__PURE__ */ Object.create(null);
-    for (const key of Reflect.ownKeys(value)) {
-      const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
-      if (typeof key !== "string" || isNil(descriptor) || !descriptor.enumerable || !("value" in descriptor)) return void 0;
-      snapshot[key] = descriptor.value;
-    }
-    return snapshot;
-  } catch {
-    return void 0;
-  }
-}
-function hasExactKeys$1(value, keys) {
-  const ownKeys = Reflect.ownKeys(value);
-  return ownKeys.length === keys.length && ownKeys.every((key) => typeof key === "string" && keys.includes(key));
-}
-function isSafeNonNegativeInteger$1(value) {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && !Object.is(value, -0);
-}
-function deepFreeze$1(value) {
-  if (typeof value !== "object" || isNil(value) || Object.isFrozen(value)) {
-    return value;
-  }
-  for (const key of Reflect.ownKeys(value)) {
-    const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
-    if (!isNil(descriptor) && "value" in descriptor) {
-      deepFreeze$1(descriptor.value);
-    }
-  }
-  return Object.freeze(value);
-}
-const GAMEPLAY_CAPACITY_BUDGET_KEYS = [
-  "maximumParticipantCount",
-  "maximumControllerEntityCount",
-  "maximumRelationshipStateCount",
-  "maximumActiveActionStateCount",
-  "maximumGameplayFeatureCount",
-  "maximumSemanticActionDefinitionCount",
-  "maximumSemanticFactCount",
-  "maximumSemanticFactTransitionCountPerTick",
-  "maximumIdempotencyRecordCount",
-  "maximumUsedActionExecutionIdCount",
-  "maximumRetainedReceiptCount",
-  "maximumRetainedEventCount",
-  "maximumRetainedWorldStateSnapshotCount"
-];
-function parseGameplayCapacityBudgetV1(input) {
-  const schemaName = "GameplayCapacityBudgetV1";
-  const record2 = snapshotDataRecord$1(input) ?? invalid$1(schemaName);
-  if (!hasExactKeys$1(record2, GAMEPLAY_CAPACITY_BUDGET_KEYS) || !GAMEPLAY_CAPACITY_BUDGET_KEYS.every(
-    (key) => isSafeNonNegativeInteger$1(record2[key])
-  )) invalid$1(schemaName);
-  return deepFreeze$1(Object.fromEntries(
-    GAMEPLAY_CAPACITY_BUDGET_KEYS.map((key) => [key, record2[key]])
-  ));
-}
-parseGameplayCapacityBudgetV1({
-  maximumParticipantCount: 1,
-  maximumControllerEntityCount: 1,
-  maximumRelationshipStateCount: 1,
-  maximumActiveActionStateCount: 256,
-  maximumGameplayFeatureCount: 16,
-  maximumSemanticActionDefinitionCount: 256,
-  maximumSemanticFactCount: 4096,
-  maximumSemanticFactTransitionCountPerTick: 1024,
-  maximumIdempotencyRecordCount: 4096,
-  maximumUsedActionExecutionIdCount: 4096,
-  maximumRetainedReceiptCount: 4096,
-  maximumRetainedEventCount: 8192,
-  maximumRetainedWorldStateSnapshotCount: 4096
-});
-const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
-const GAMEPLAY_COMMAND_TYPES = /* @__PURE__ */ new Set([
-  "control.bind",
-  "control.release",
-  "action.activate",
-  "action.cancel"
-]);
-function invalid(schemaName) {
-  throw new RangeError(`Value must match the closed ${schemaName} schema.`);
-}
-function snapshotDataRecord(value) {
-  if (typeof value !== "object" || isNil(value)) return void 0;
-  try {
-    if (Reflect.getPrototypeOf(value) !== Object.prototype) return void 0;
-    const snapshot = {};
-    for (const key of Reflect.ownKeys(value)) {
-      const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
-      if (typeof key !== "string" || isNil(descriptor) || !descriptor.enumerable || !("value" in descriptor)) return void 0;
-      Object.defineProperty(snapshot, key, {
-        configurable: true,
-        enumerable: true,
-        value: descriptor.value,
-        writable: true
-      });
-    }
-    return snapshot;
-  } catch {
-    return void 0;
-  }
-}
-function snapshotDataArray(value) {
-  if (!Array.isArray(value)) return void 0;
-  try {
-    if (Reflect.getPrototypeOf(value) !== Array.prototype) return void 0;
-    if (Reflect.ownKeys(value).some((key) => typeof key === "symbol")) {
-      return void 0;
-    }
-    if (Object.getOwnPropertyNames(value).length !== value.length + 1) {
-      return void 0;
-    }
-    const snapshot = [];
-    for (let index = 0; index < value.length; index += 1) {
-      const descriptor = Reflect.getOwnPropertyDescriptor(value, String(index));
-      if (isNil(descriptor) || !descriptor.enumerable || !("value" in descriptor)) return void 0;
-      snapshot.push(descriptor.value);
-    }
-    const lengthDescriptor = Reflect.getOwnPropertyDescriptor(value, "length");
-    if (isNil(lengthDescriptor) || lengthDescriptor.enumerable !== false) {
-      return void 0;
-    }
-    return snapshot;
-  } catch {
-    return void 0;
-  }
-}
-function hasExactKeys(record2, keys) {
-  const ownKeys = Reflect.ownKeys(record2);
-  return ownKeys.length === keys.length && ownKeys.every(
-    (key) => typeof key === "string" && keys.includes(key)
-  );
-}
-function isNonEmptyString(value) {
-  return typeof value === "string" && value.length > 0;
-}
-function isSha256(value) {
-  return typeof value === "string" && SHA256_PATTERN.test(value);
-}
-function isSafeNonNegativeInteger(value) {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && !Object.is(value, -0);
-}
-function isSafePositiveInteger(value) {
-  return isSafeNonNegativeInteger(value) && value > 0;
-}
-function compareCanonicalStrings(left, right) {
-  return left < right ? -1 : left > right ? 1 : 0;
-}
-function sameOrder(actual, expected) {
-  return actual.length === expected.length && actual.every(
-    (value, index) => value === expected[index]
-  );
-}
-function canonicalStringSet(input, schemaName, mode) {
-  const values = snapshotDataArray(input);
-  if (isNil(values)) invalid(schemaName);
-  if (!values.every(isNonEmptyString)) invalid(schemaName);
-  const typedValues = values;
-  if (new Set(typedValues).size !== typedValues.length) invalid(schemaName);
-  const canonical = [...typedValues].sort(compareCanonicalStrings);
-  if (mode === "strict" && !sameOrder(typedValues, canonical)) invalid(schemaName);
-  return Object.freeze(canonical);
-}
-function deepFreeze(value) {
-  if (typeof value !== "object" || isNil(value) || Object.isFrozen(value)) {
-    return value;
-  }
-  for (const key of Reflect.ownKeys(value)) {
-    const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
-    if (!isNil(descriptor) && "value" in descriptor) {
-      deepFreeze(descriptor.value);
-    }
-  }
-  return Object.freeze(value);
-}
-function parseGameplayEntityDescriptor(input, mode, schemaName) {
-  const record2 = snapshotDataRecord(input);
-  if (isNil(record2)) invalid(schemaName);
-  if (!hasExactKeys(record2, ["id", "entityDefinitionRef", "capabilityRefs"]) || !isNonEmptyString(record2.id) || !isNonEmptyString(record2.entityDefinitionRef)) invalid(schemaName);
-  return deepFreeze({
-    id: record2.id,
-    entityDefinitionRef: record2.entityDefinitionRef,
-    capabilityRefs: canonicalStringSet(record2.capabilityRefs, schemaName, mode)
-  });
-}
-function createGameplayEntityDescriptorV1(input) {
-  return parseGameplayEntityDescriptor(
-    input,
-    "canonicalize",
-    "GameplayEntityDescriptorV1"
-  );
-}
-function parseGameplayEntityDescriptorV1(input) {
-  return parseGameplayEntityDescriptor(input, "strict", "GameplayEntityDescriptorV1");
-}
-function parseGameplayFeatureManifestBody(input, mode) {
-  const schemaName = "GameplayFeatureManifestBodyV1";
-  const record2 = snapshotDataRecord(input);
-  if (isNil(record2)) invalid(schemaName);
-  if (!hasExactKeys(record2, [
-    "kind",
-    "id",
-    "version",
-    "resourceRef",
-    "dependencyFeatureRefs",
-    "requiredCapabilityRefs",
-    "commandTypes",
-    "resourceBudget"
-  ]) || record2.kind !== "gameplay-feature" || !isNonEmptyString(record2.id) || !isSafePositiveInteger(record2.version) || !isNonEmptyString(record2.resourceRef)) invalid(schemaName);
-  const commandTypes = canonicalStringSet(record2.commandTypes, schemaName, mode);
-  if (!commandTypes.every(
-    (type2) => GAMEPLAY_COMMAND_TYPES.has(type2)
-  )) invalid(schemaName);
-  const resourceBudget = snapshotDataRecord(record2.resourceBudget);
-  if (isNil(resourceBudget)) invalid(schemaName);
-  if (!hasExactKeys(resourceBudget, ["stateSliceCount", "commandHandlerCount"]) || resourceBudget.stateSliceCount !== 1 || !isSafeNonNegativeInteger(resourceBudget.commandHandlerCount) || resourceBudget.commandHandlerCount !== commandTypes.length) invalid(schemaName);
-  return deepFreeze({
-    kind: "gameplay-feature",
-    id: record2.id,
-    version: record2.version,
-    resourceRef: record2.resourceRef,
-    dependencyFeatureRefs: canonicalStringSet(
-      record2.dependencyFeatureRefs,
-      schemaName,
-      mode
-    ),
-    requiredCapabilityRefs: canonicalStringSet(
-      record2.requiredCapabilityRefs,
-      schemaName,
-      mode
-    ),
-    commandTypes,
-    resourceBudget: {
-      stateSliceCount: 1,
-      commandHandlerCount: resourceBudget.commandHandlerCount
-    }
-  });
-}
-function createGameplayFeatureManifestV1(input) {
-  const body = parseGameplayFeatureManifestBody(input, "canonicalize");
-  return deepFreeze({
-    ...body,
-    contentHash: sha256CanonicalJson(body)
-  });
-}
-function parseGameplayFeatureResourceLockV1(input) {
-  const schemaName = "GameplayFeatureResourceLockV1";
-  const record2 = snapshotDataRecord(input);
-  if (isNil(record2)) invalid(schemaName);
-  if (!hasExactKeys(record2, ["resourceRef", "contentHash"]) || !isNonEmptyString(record2.resourceRef) || !isSha256(record2.contentHash)) invalid(schemaName);
-  return deepFreeze({
-    resourceRef: record2.resourceRef,
-    contentHash: record2.contentHash
-  });
-}
-function parseGameplayActionDefinitionBody(input, mode) {
-  const schemaName = "GameplayActionDefinitionBodyV1";
-  const record2 = snapshotDataRecord(input);
-  if (isNil(record2)) invalid(schemaName);
-  if (!hasExactKeys(record2, [
-    "kind",
-    "id",
-    "version",
-    "resourceRef",
-    "executionMode",
-    "completion",
-    "effect",
-    "isMovementInputBlocked",
-    "allowedActorEntityDefinitionRefs",
-    "requiredActorCapabilityRefs",
-    "request"
-  ]) || record2.kind !== "semantic-action" || !isNonEmptyString(record2.id) || !isSafePositiveInteger(record2.version) || !isNonEmptyString(record2.resourceRef) || record2.executionMode !== "exclusive-per-subject" || typeof record2.isMovementInputBlocked !== "boolean") invalid(schemaName);
-  const completionRecord = snapshotDataRecord(record2.completion);
-  if (isNil(completionRecord)) invalid(schemaName);
-  let completion;
-  if (completionRecord.mode === "immediate" && hasExactKeys(completionRecord, ["mode"])) {
-    completion = { mode: "immediate" };
-  } else if (completionRecord.mode === "explicit-cancel" && hasExactKeys(completionRecord, ["mode"])) {
-    completion = { mode: "explicit-cancel" };
-  } else if (completionRecord.mode === "fixed-duration" && hasExactKeys(completionRecord, ["mode", "durationTicks"]) && isSafePositiveInteger(completionRecord.durationTicks)) {
-    completion = {
-      mode: "fixed-duration",
-      durationTicks: completionRecord.durationTicks
-    };
-  } else {
-    return invalid(schemaName);
-  }
-  const effectRecord = snapshotDataRecord(record2.effect);
-  if (isNil(effectRecord)) invalid(schemaName);
-  let effect;
-  if (effectRecord.mode === "state-only" && hasExactKeys(effectRecord, ["mode"])) {
-    effect = { mode: "state-only" };
-  } else if (effectRecord.mode === "trusted" && hasExactKeys(effectRecord, [
-    "mode",
-    "gameplayActionEffectRef",
-    "gameplayActionEffectHash"
-  ]) && isNonEmptyString(effectRecord.gameplayActionEffectRef) && isSha256(effectRecord.gameplayActionEffectHash)) {
-    effect = {
-      mode: "trusted",
-      gameplayActionEffectRef: effectRecord.gameplayActionEffectRef,
-      gameplayActionEffectHash: effectRecord.gameplayActionEffectHash
-    };
-  } else {
-    return invalid(schemaName);
-  }
-  const requestRecord = snapshotDataRecord(record2.request);
-  if (isNil(requestRecord)) invalid(schemaName);
-  let request;
-  if (requestRecord.mode === "none" && hasExactKeys(requestRecord, ["mode"])) {
-    request = { mode: "none" };
-  } else if (requestRecord.mode === "required" && hasExactKeys(requestRecord, [
-    "mode",
-    "actionRequestSchemaRef",
-    "actionRequestSchemaHash"
-  ]) && isNonEmptyString(requestRecord.actionRequestSchemaRef) && isSha256(requestRecord.actionRequestSchemaHash)) {
-    request = {
-      mode: "required",
-      actionRequestSchemaRef: requestRecord.actionRequestSchemaRef,
-      actionRequestSchemaHash: requestRecord.actionRequestSchemaHash
-    };
-  } else {
-    return invalid(schemaName);
-  }
-  return deepFreeze({
-    kind: "semantic-action",
-    id: record2.id,
-    version: record2.version,
-    resourceRef: record2.resourceRef,
-    executionMode: "exclusive-per-subject",
-    completion,
-    effect,
-    isMovementInputBlocked: record2.isMovementInputBlocked,
-    allowedActorEntityDefinitionRefs: canonicalStringSet(
-      record2.allowedActorEntityDefinitionRefs,
-      schemaName,
-      mode
-    ),
-    requiredActorCapabilityRefs: canonicalStringSet(
-      record2.requiredActorCapabilityRefs,
-      schemaName,
-      mode
-    ),
-    request
-  });
-}
-function parseGameplayActionDefinitionV1(input) {
-  const schemaName = "GameplayActionDefinitionV1";
-  const record2 = snapshotDataRecord(input);
-  if (isNil(record2)) invalid(schemaName);
-  if (!hasExactKeys(record2, [
-    "kind",
-    "id",
-    "version",
-    "resourceRef",
-    "contentHash",
-    "executionMode",
-    "completion",
-    "effect",
-    "isMovementInputBlocked",
-    "allowedActorEntityDefinitionRefs",
-    "requiredActorCapabilityRefs",
-    "request"
-  ]) || !isSha256(record2.contentHash)) invalid(schemaName);
-  const { contentHash: contentHash2, ...bodyInput } = record2;
-  let body;
-  try {
-    body = parseGameplayActionDefinitionBody(bodyInput, "strict");
-  } catch {
-    return invalid(schemaName);
-  }
-  const expectedHash = sha256CanonicalJson(body);
-  if (contentHash2 !== expectedHash) invalid(schemaName);
-  return deepFreeze({ ...body, contentHash: expectedHash });
-}
-function canonicalObjectCollection(input, schemaName, mode, parse, identity2) {
-  const source = snapshotDataArray(input);
-  if (isNil(source)) invalid(schemaName);
-  let parsed;
-  try {
-    parsed = source.map(parse);
-  } catch {
-    return invalid(schemaName);
-  }
-  const identities = parsed.map(identity2);
-  if (identities.some((value) => value.length === 0)) invalid(schemaName);
-  if (new Set(identities).size !== identities.length) invalid(schemaName);
-  const canonical = [...parsed].sort(
-    (left, right) => compareCanonicalStrings(identity2(left), identity2(right))
-  );
-  if (mode === "strict" && !sameOrder(identities, canonical.map(identity2))) invalid(schemaName);
-  return Object.freeze(canonical);
-}
-function parseGameplayBootstrapBody(input, mode) {
-  const schemaName = "GameplayBootstrapBodyV1";
-  const record2 = snapshotDataRecord(input);
-  if (isNil(record2)) invalid(schemaName);
-  if (!hasExactKeys(record2, [
-    "kind",
-    "id",
-    "version",
-    "resourceRef",
-    "entityDescriptors",
-    "featureResourceLocks",
-    "semanticActionDefinitions",
-    "availableCapabilityRefs"
-  ]) || record2.kind !== "gameplay-bootstrap" || !isNonEmptyString(record2.id) || !isSafePositiveInteger(record2.version) || !isNonEmptyString(record2.resourceRef)) invalid(schemaName);
-  const parseEntity = mode === "strict" ? parseGameplayEntityDescriptorV1 : (value) => createGameplayEntityDescriptorV1(
-    value
-  );
-  return deepFreeze({
-    kind: "gameplay-bootstrap",
-    id: record2.id,
-    version: record2.version,
-    resourceRef: record2.resourceRef,
-    entityDescriptors: canonicalObjectCollection(
-      record2.entityDescriptors,
-      schemaName,
-      mode,
-      parseEntity,
-      (value) => value.id
-    ),
-    featureResourceLocks: canonicalObjectCollection(
-      record2.featureResourceLocks,
-      schemaName,
-      mode,
-      parseGameplayFeatureResourceLockV1,
-      (value) => value.resourceRef
-    ),
-    semanticActionDefinitions: canonicalObjectCollection(
-      record2.semanticActionDefinitions,
-      schemaName,
-      mode,
-      parseGameplayActionDefinitionV1,
-      (value) => value.resourceRef
-    ),
-    availableCapabilityRefs: canonicalStringSet(
-      record2.availableCapabilityRefs,
-      schemaName,
-      mode
-    )
-  });
-}
-function createGameplayBootstrapV1(input) {
-  const body = parseGameplayBootstrapBody(input, "canonicalize");
-  return deepFreeze({
-    ...body,
-    contentHash: sha256CanonicalJson(body)
-  });
-}
-function parseGameplayBootstrapV1(input) {
-  const schemaName = "GameplayBootstrapV1";
-  const record2 = snapshotDataRecord(input);
-  if (isNil(record2)) invalid(schemaName);
-  if (!hasExactKeys(record2, [
-    "kind",
-    "id",
-    "version",
-    "resourceRef",
-    "contentHash",
-    "entityDescriptors",
-    "featureResourceLocks",
-    "semanticActionDefinitions",
-    "availableCapabilityRefs"
-  ]) || !isSha256(record2.contentHash)) invalid(schemaName);
-  const { contentHash: contentHash2, ...bodyInput } = record2;
-  let body;
-  try {
-    body = parseGameplayBootstrapBody(bodyInput, "strict");
-  } catch {
-    return invalid(schemaName);
-  }
-  const expectedHash = sha256CanonicalJson(body);
-  if (contentHash2 !== expectedHash) invalid(schemaName);
-  return deepFreeze({ ...body, contentHash: expectedHash });
-}
-function createGameplayBootstrapResourceLockEntryV1(input) {
-  const bootstrap = parseGameplayBootstrapV1(input);
-  return deepFreeze({
-    resourceRef: bootstrap.resourceRef,
-    resourceKind: "gameplay-bootstrap",
-    resolvedVersion: String(bootstrap.version),
-    contentHash: bootstrap.contentHash
-  });
 }
 const CORE_CONTROL_FEATURE_REF = "worldkit://gameplay-feature/core-control@1";
 const CONTROL_TRANSITION_CAPABILITY_REF = "worldkit://runtime-capability/control-transition@1";

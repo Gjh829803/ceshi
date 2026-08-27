@@ -520,6 +520,8 @@ interface TuningWorkbenchContextV1 {
   parameterDraft: Record<string, number | boolean>;
   motionDraftStorageKey: string;
   controlledEntityId: string;
+  initialSubject: WorldRuntimeSubjectStateV4 | undefined;
+  initialCamera: WorldRuntimeSnapshotV4["view"]["camera"];
   initialCameraPreference: string;
   hostOverlay?: CapabilityDemoHostOverlayV1;
 }
@@ -571,7 +573,7 @@ function installTuningWorkbench(
   ));
   subjectSelect.addEventListener("change", () => navigateToSubjectPackage(subjectSelect.value));
   const summary = requiredElement<HTMLDivElement>("#tuning-subject-summary");
-  const currentSubject = api.getSubjectSnapshot?.(workbenchContext.controlledEntityId);
+  const currentSubject = workbenchContext.initialSubject;
   const currentLocomotionState = locomotionStateFromSubjectV4(currentSubject);
   summary.innerHTML = `
     <div><span>现在调的是</span><strong>${escapeHtml(subjectFriendlyName(workbenchContext.definition))}</strong></div>
@@ -1071,13 +1073,15 @@ function installTuningWorkbench(
     if (typeof value === "string") return value;
     return JSON.stringify(value) ?? "未报告";
   };
-  const renderCameraDiagnostics = (): void => {
-    let camera: ReturnType<NonNullable<typeof api.getCameraSnapshot>> | undefined;
+  const cameraSnapshotForDisplay = () => {
     try {
-      camera = api.getCameraSnapshot?.();
+      return api.getCameraSnapshot?.() ?? workbenchContext.initialCamera;
     } catch {
-      camera = undefined;
+      return workbenchContext.initialCamera;
     }
+  };
+  const renderCameraDiagnostics = (): void => {
+    const camera = cameraSnapshotForDisplay();
     const tracking = camera?.mode === "tracking" ? camera : undefined;
     const entries: ReadonlyArray<readonly [string, string, string]> = [
       ["Camera", formatCameraData(tracking?.id), "camera-id"],
@@ -1250,7 +1254,7 @@ function installTuningWorkbench(
       const help = document.createElement("small");
       const unit = cameraParameterUnit(setting.key);
       const renderProvenance = (): void => {
-        const camera = api.getCameraSnapshot?.();
+        const camera = cameraSnapshotForDisplay();
         const tracking = camera?.mode === "tracking" ? camera : undefined;
         const socket = tracking?.selectedTargetSocketId ??
           (tracking?.isTargetSocketFallback ? "目标高度回退" : "运行时未绑定");
@@ -1751,6 +1755,7 @@ function installAuthoringRecoveryPanel(api: WorldkitBrowserApiV5): void {
 
 function installCapabilityAuthoringPanel(
   api: WorldkitBrowserApiV5,
+  initialSnapshot: WorldRuntimeSnapshotV4,
   hostOverlay?: CapabilityDemoHostOverlayV1,
 ): TuningWorkbenchControllerV1 | undefined {
   const definitions = api.listSubjectDefinitions?.({ includeExperimental: true }) ?? [];
@@ -1762,7 +1767,7 @@ function installCapabilityAuthoringPanel(
   const context = requiredElement<HTMLDivElement>("#capability-context");
   const drafts = requiredElement<HTMLDivElement>("#parameter-drafts");
   const harnessOutput = requiredElement<HTMLPreElement>("#harness-output");
-  const snapshot = api.getSnapshot();
+  const snapshot = initialSnapshot;
   const controlledEntityId = controlledEntityIdFromSnapshotV4(snapshot);
   const activeSubject = snapshot.world.subjectStatesByEntityId[controlledEntityId];
   const requestedDefinitionRef = urlParameters.get("subjectDefinitionRef");
@@ -1943,6 +1948,8 @@ function installCapabilityAuthoringPanel(
     parameterDraft,
     motionDraftStorageKey,
     controlledEntityId,
+    initialSubject: activeSubject,
+    initialCamera: snapshot.view.camera,
     initialCameraPreference: cameraSelect.value,
     ...(hostOverlay === undefined ? {} : { hostOverlay }),
   });
@@ -2357,6 +2364,7 @@ if (runtimeRoute.mode === "unknown") {
       const workbench = runtimeRoute.mode === "authoring"
         ? installCapabilityAuthoringPanel(
             browserInstallation.api,
+            adapter.runtimeSnapshot(),
             createdHostOverlay,
           )
         : undefined;
