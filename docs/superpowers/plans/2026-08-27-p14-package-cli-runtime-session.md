@@ -129,12 +129,16 @@
 
 - Create: `scripts/lib/headless-runtime-session.ts`
 - Create: `scripts/lib/headless-runtime-session.test.ts`
+- Create: `packages/runtime-babylon/src/world-runtime-snapshot.ts`
+- Modify: `packages/runtime-babylon/src/index.ts`
+- Modify: `apps/playground/src/gameplay-babylon-runtime-coordinator.ts`
 
 **Input/output contract:**
 
 - Create Babylon `NullEngine` with deterministic lockstep and load the installed Havok WASM through Node ESM resolution.
 - Resolve Subject bytes only from verified Package `resourceBytesByRef`.
 - Compose `BabylonWorldRuntime`, `createBabylonGameplayWorldPortV1`, the Package-locked gameplay factories, one participant/controller, and `RuntimeHost`.
+- Extract the existing Playground `WorldRuntimeSnapshotV4` join into one shared Runtime-Babylon projection helper; Browser and Headless Hosts must not maintain parallel camera or Subject projection truths.
 - The ownership ledger tracks engine, scene/runtime, gameplay port, RuntimeHost, and package-backed asset resolver. `ready` is impossible until all are constructed and the initial Runtime snapshot binds the admitted Package identity.
 - Dispose marks each owned resource once, drains Runtime activity, empties the ledger, and reports aggregate cleanup diagnostics without masking the primary failure.
 

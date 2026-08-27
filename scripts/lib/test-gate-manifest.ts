@@ -232,6 +232,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "scripts/lib/file-world-package.test.ts", lane: "contract" },
   { path: "scripts/lib/g-bot-evidence.test.ts", lane: "contract" },
   { path: "scripts/lib/glb-admission.test.ts", lane: "resource-heavy", reasonCodes: ["measured-memory"] },
+  { path: "scripts/lib/headless-runtime-session.test.ts", lane: "resource-heavy", reasonCodes: ["native-havok-or-recast"] },
   { path: "scripts/lib/independent-test-gate.test.ts", lane: "contract" },
   { path: "scripts/lib/layout-artifacts.test.ts", lane: "contract" },
   { path: "scripts/lib/modular-subject-runtime-bundle.test.ts", lane: "contract" },

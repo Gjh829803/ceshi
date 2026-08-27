@@ -14,3 +14,4 @@ export {
 export { createBabylonTraversalRuntimePortV1 } from "./traversal-runtime-port";
 export * from "./subject-asset-cache";
 export * from "./subject-visual";
+export * from "./world-runtime-snapshot";
