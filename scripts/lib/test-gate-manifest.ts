@@ -230,6 +230,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "scripts/durable-authoring-edit-host.integration.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"] },
   { path: "scripts/fixtures/generate-golden-humanoid-glb.test.ts", lane: "contract" },
   { path: "scripts/lib/agent-self-check-bundle.test.ts", lane: "contract" },
+  { path: "scripts/lib/ai-schema-provider-conformance.test.ts", lane: "contract" },
   { path: "scripts/lib/artifact-directory-promotion.test.ts", lane: "contract" },
   { path: "scripts/lib/authoring-edit-cli.test.ts", lane: "contract" },
   { path: "scripts/lib/authoring-edit-full-reload.integration.test.ts", lane: "contract" },

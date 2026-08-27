@@ -380,21 +380,21 @@ export function verifyStructuredOutputProviderRoundTripV1(input: {
 
 - Provider payloads and provider-private keywords stay test/private under `scripts/lib`; no Provider name or keyword enters Authoring Schema, AI Projection artifact, ChangeSet, Receipt, generated types, CLI, or Browser API.
 
-- [ ] **Step 1: Write RED conformance fixtures**
+- [x] **Step 1: Write RED conformance fixtures**
 
 Use two materially different structured-output envelopes: a strict JSON-schema response envelope and a function/tool declaration envelope. Both must carry the same projected Canonical field names, decode to byte-identical `WorldChangeSetV1`, pass the normal parser/Canonical Validation, and produce the same ChangeSet hash.
 
-- [ ] **Step 2: Add adversarial Provider cases**
+- [x] **Step 2: Add adversarial Provider cases**
 
 Reject renamed Canonical fields, provider-private keywords embedded in public artifacts, missing required-null round-trip mappings, enum overflow bypass, unknown operations, and adapters that mutate Registry Refs.
 
-- [ ] **Step 3: Run RED, implement the private conformance harness, and run GREEN**
+- [x] **Step 3: Run RED, implement the private conformance harness, and run GREEN**
 
 ```bash
 pnpm exec vitest run scripts/lib/ai-schema-provider-conformance.test.ts packages/authoring-edit/src/schema-projection/schema-projection.test.ts packages/authoring-edit/src/world-change/world-change.test.ts
 ```
 
-- [ ] **Step 4: Audit public surfaces and commit**
+- [x] **Step 4: Audit public surfaces and commit**
 
 ```bash
 rg -n "openai|anthropic|gemini|providerPayload|input_schema|function_declaration" packages apps/playground/src scripts/worldkit.ts assets/registry
