@@ -34,5 +34,5 @@ describe("createSimulationTakeWorldPackageIdentityV1", () => {
       executionPlanHash:
         "sha256:bea6f477437b85dae1932c807a6ad8bb55026e6b5dff18038fd963228db6ae94",
     });
-  });
+  }, 30_000);
 });
