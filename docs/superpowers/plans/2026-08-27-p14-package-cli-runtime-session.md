@@ -64,12 +64,12 @@
 - `ready` binds logical `runtimeSessionUri`, `worldSessionId`, `worldPackageRef`, `worldPackageRootHash`, `fixedInputControllerEntityId`, and the exact supported request-type list.
 - Add closed `parseFixedInputV1` and `parseWorldRuntimeSnapshotV4` exports beside their existing public DTOs. `runtime-host` removes its private FixedInput dialect and consumes the public parser.
 
-- [ ] Write RED happy-path/exact-key/adversarial tests, including aliases, accessor/symbol keys, negative zero, wrong nested Gameplay/FixedInput/Snapshot DTOs, unsorted event pages, derived Receipt/Event IDs, and Request Hash domain separation.
-- [ ] Run `pnpm exec vitest run packages/runtime-contracts/src/runtime-session-protocol.test.ts` and capture the missing-export failure.
-- [ ] Implement the closed unions plus `parseRuntimeSessionRequestV1`, `canonicalRuntimeSessionReceiptV1`, `canonicalRuntimeSessionEventV1`, and `hashRuntimeSessionRequestV1`.
-- [ ] Run `pnpm exec vitest run packages/runtime-contracts/src/runtime-session-protocol.test.ts packages/runtime-contracts/src/runtime-contracts.test.ts packages/runtime-host/src/runtime-host.test.ts packages/runtime-host/src/world-session.test.ts`.
-- [ ] Run `pnpm typecheck`.
-- [ ] Commit: `feat(runtime-host): freeze runtime session protocol`.
+- [x] Write RED happy-path/exact-key/adversarial tests, including aliases, accessor/symbol keys, negative zero, wrong nested Gameplay/FixedInput/Snapshot DTOs, unsorted event pages, derived Receipt/Event IDs, and Request Hash domain separation.
+- [x] Run `pnpm exec vitest run packages/runtime-contracts/src/runtime-session-protocol.test.ts` and capture the missing-export failure.
+- [x] Implement the closed unions plus `parseRuntimeSessionRequestV1`, `canonicalRuntimeSessionReceiptV1`, `canonicalRuntimeSessionEventV1`, and `hashRuntimeSessionRequestV1`.
+- [x] Run `pnpm exec vitest run packages/runtime-contracts/src/runtime-session-protocol.test.ts packages/runtime-contracts/src/runtime-contracts.test.ts packages/runtime-host/src/runtime-host.test.ts packages/runtime-host/src/world-session.test.ts`.
+- [x] Run `pnpm typecheck`.
+- [x] Commit: `feat(runtime-host): freeze runtime session protocol`.
 
 ## Task 2: Add the durable Runtime Session WAL (`P14-RS-02`)
 
@@ -88,12 +88,12 @@
 - `session-closed` stores the final event and forbids further requests.
 - Each canonical NDJSON row binds previous-row hash and row hash. Append fsyncs the file; creation and first publication also fsync the parent directory.
 
-- [ ] Write RED tests for first open, append/reopen, same Request ID replay, changed-content conflict, concurrent append serialization, owner modes, relative/symlink rejection, corrupt complete rows, duplicate sequence, torn tail truncation, and closed-session admission.
-- [ ] Run `pnpm exec vitest run scripts/lib/runtime-session-wal.test.ts` and capture RED.
-- [ ] Implement `createFileRuntimeSessionWalV1`, `openFileRuntimeSessionWalV1`, and a narrow test-hook factory; reuse canonical JSON/hash utilities rather than custom JSON sorting.
-- [ ] Run `pnpm exec vitest run scripts/lib/runtime-session-wal.test.ts scripts/lib/file-world-change-journal.test.ts scripts/lib/file-world-package.test.ts`.
-- [ ] Run `pnpm typecheck` and `pnpm test:census`.
-- [ ] Commit: `feat(runtime-session): add durable request journal`.
+- [x] Write RED tests for first open, append/reopen, same Request ID replay, changed-content conflict, concurrent append serialization, owner modes, relative/symlink rejection, corrupt complete rows, duplicate sequence, torn tail truncation, and closed-session admission.
+- [x] Run `pnpm exec vitest run scripts/lib/runtime-session-wal.test.ts` and capture RED.
+- [x] Implement `createFileRuntimeSessionWalV1`, `openFileRuntimeSessionWalV1`, and a narrow test-hook factory; reuse canonical JSON/hash utilities rather than custom JSON sorting.
+- [x] Run `pnpm exec vitest run scripts/lib/runtime-session-wal.test.ts scripts/lib/file-world-change-journal.test.ts scripts/lib/file-world-package.test.ts`.
+- [x] Run `pnpm typecheck` and `pnpm test:census`.
+- [x] Commit: `feat(runtime-session): add durable request journal`.
 
 ## Task 3: Implement canonical Package build, inspect, and load core (`P14-RS-03`)
 
@@ -114,12 +114,12 @@
 - Load uses the same verification result to produce `RuntimeWorldConfigurationV1`; no asset or Registry lookup occurs after package verification.
 - All three public results use the §16 one-shot envelope and stable exit-code mapping; no stack or absolute local path enters the protocol result.
 
-- [ ] Write RED tests for basic and G Bot builds, deterministic roots, existing destination, flipped Manifest/GLB bytes, missing file, symlink, unsupported Host profile, and an adapter sentinel proving inspect/verification happens before Runtime construction.
-- [ ] Run `pnpm exec vitest run scripts/lib/world-package-cli.test.ts` and capture RED.
-- [ ] Implement `buildWorldPackageDirectoryV2`, `inspectWorldPackageDirectoryV2`, and `loadRuntimeWorldConfigurationFromPackageDirectoryV1` with bounded file-count/byte budgets.
-- [ ] Run `pnpm exec vitest run scripts/lib/world-package-cli.test.ts scripts/lib/file-world-package.test.ts packages/world-package/src/v2-directory.test.ts packages/world-package/src/host-admission.test.ts`.
-- [ ] Run `pnpm typecheck`.
-- [ ] Commit: `feat(worldkit): add complete package command core`.
+- [x] Write RED tests for basic and G Bot builds, deterministic roots, existing destination, flipped Manifest/GLB bytes, missing file, symlink, unsupported Host profile, and an adapter sentinel proving inspect/verification happens before Runtime construction.
+- [x] Run `pnpm exec vitest run scripts/lib/world-package-cli.test.ts` and capture RED.
+- [x] Implement `buildWorldPackageDirectoryV2`, `inspectWorldPackageDirectoryV2`, and `loadRuntimeWorldConfigurationFromPackageDirectoryV1` with bounded file-count/byte budgets.
+- [x] Run `pnpm exec vitest run scripts/lib/world-package-cli.test.ts scripts/lib/file-world-package.test.ts packages/world-package/src/v2-directory.test.ts packages/world-package/src/host-admission.test.ts`.
+- [x] Run `pnpm typecheck`.
+- [x] Commit: `feat(worldkit): add complete package command core`.
 
 ## Task 4: Compose the headless Runtime and exact ownership ledger (`P14-RS-04`)
 
@@ -142,13 +142,13 @@
 - The ownership ledger tracks engine, scene/runtime, gameplay port, RuntimeHost, and package-backed asset resolver. `ready` is impossible until all are constructed and the initial Runtime snapshot binds the admitted Package identity.
 - Dispose marks each owned resource once, drains Runtime activity, empties the ledger, and reports aggregate cleanup diagnostics without masking the primary failure.
 
-- [ ] Write RED tests for real basic and G Bot packages plus adversarial partial failures at engine, Havok, runtime, gameplay-port, WorldSession, and ready-gate stages.
-- [ ] Add disposal-order, double-close, throwing-cleanup, 30/60/120-like fixed-input timing, multi-instance isolation, and empty-ledger-before-next-create assertions required by the runtime deep-review checklist.
-- [ ] Run `pnpm exec vitest run scripts/lib/headless-runtime-session.test.ts` and capture RED.
-- [ ] Implement `createHeadlessRuntimeSessionV1` and `loadHeadlessWorldPackageV1`; use a narrow injected factory set only for failure tests.
-- [ ] Run `pnpm exec vitest run scripts/lib/headless-runtime-session.test.ts packages/runtime-babylon/src/runtime.test.ts packages/runtime-host/src/runtime-host.test.ts`.
-- [ ] Run `pnpm typecheck`.
-- [ ] Commit: `feat(runtime-session): compose headless babylon host`.
+- [x] Write RED tests for real basic and G Bot packages plus adversarial partial failures at engine, Havok, runtime, gameplay-port, WorldSession, and ready-gate stages.
+- [x] Add disposal-order, double-close, throwing-cleanup, 30/60/120-like fixed-input timing, multi-instance isolation, and empty-ledger-before-next-create assertions required by the runtime deep-review checklist.
+- [x] Run `pnpm exec vitest run scripts/lib/headless-runtime-session.test.ts` and capture RED.
+- [x] Implement `createHeadlessRuntimeSessionV1` and `loadHeadlessWorldPackageV1`; use a narrow injected factory set only for failure tests.
+- [x] Run `pnpm exec vitest run scripts/lib/headless-runtime-session.test.ts packages/runtime-babylon/src/runtime.test.ts packages/runtime-host/src/runtime-host.test.ts`.
+- [x] Run `pnpm typecheck`.
+- [x] Commit: `feat(runtime-session): compose headless babylon host`.
 
 ## Task 5: Implement recovery-aware Runtime Session execution (`P14-RS-05`)
 
@@ -168,12 +168,12 @@
 - Resume verifies Package Ref/Root, recreates the same logical IDs, replays committed mutation requests in sequence, and compares generated Receipt/publication bytes with the WAL. Divergence fails closed before `ready`.
 - Observation requests may be retained for Request ID replay but never alter reconstruction state. `session.close` writes the final transaction after exact disposal.
 
-- [ ] Write RED tests for each request type, serialization, duplicate replay, conflict, failed mutation, crash after Runtime result/before WAL append, crash after WAL append, close, and replay divergence.
-- [ ] Run `pnpm exec vitest run scripts/lib/runtime-session-executor.test.ts` and capture RED.
-- [ ] Implement `createRuntimeSessionExecutorV1` and `resumeRuntimeSessionExecutorV1`; expose no filesystem or Babylon handles in public results.
-- [ ] Run `pnpm exec vitest run scripts/lib/runtime-session-executor.test.ts scripts/lib/runtime-session-wal.test.ts scripts/lib/headless-runtime-session.test.ts`.
-- [ ] Run `pnpm typecheck`.
-- [ ] Commit: `feat(runtime-session): add durable replay executor`.
+- [x] Write RED tests for each request type, serialization, duplicate replay, conflict, failed mutation, crash after Runtime result/before WAL append, crash after WAL append, close, and replay divergence.
+- [x] Run `pnpm exec vitest run scripts/lib/runtime-session-executor.test.ts` and capture RED.
+- [x] Implement `createRuntimeSessionExecutorV1` and `resumeRuntimeSessionExecutorV1`; expose no filesystem or Babylon handles in public results.
+- [x] Run `pnpm exec vitest run scripts/lib/runtime-session-executor.test.ts scripts/lib/runtime-session-wal.test.ts scripts/lib/headless-runtime-session.test.ts`.
+- [x] Run `pnpm typecheck`.
+- [x] Commit: `feat(runtime-session): add durable replay executor`.
 
 ## Task 6: Migrate the public CLI and add the NDJSON process adapter (`P14-RS-06`)
 
@@ -205,15 +205,15 @@ worldkit run <package-directory> --interactive --protocol ndjson --headless \
 
 The existing `worldkit run <world.json> [--port ...]` remains the trusted authoring Browser route. Dispatch is by verified input kind, not extension guessing. The old `worldkit-build-artifact` producer remains callable only by the named internal script and is not given a second public CLI alias.
 
-- [ ] Write RED parser/help tests for the exact commands and invalid flag combinations; reject `--interactive` without `--protocol ndjson --headless`, `--resume` without an existing session, and Package input on Browser-only flags.
-- [ ] Write RED stream tests for first `ready`, canonical one-line receipts, malformed JSON, duplicate keys, overlong line/input budget, EOF, explicit close, SIGINT, SIGTERM, backpressure, and final `completed`/`failed` event.
-- [ ] Run `pnpm exec vitest run scripts/worldkit.test.ts scripts/lib/runtime-session-ndjson.test.ts` and capture RED.
-- [ ] Implement bounded line framing and a sequential writer; stdout receives protocol records only and stderr receives human diagnostics only.
-- [ ] Migrate `worldkit build` to V2 directory publication; route inspect/load/run to the shared services; move existing Build artifact code and formal hosted-workflow callers to the internal script without changing artifact bytes.
-- [ ] Update canonical verifiers and quickstart to treat the Package directory as the public Build output while retaining explicit internal artifact evidence where required by Studio.
-- [ ] Run `pnpm exec vitest run scripts/worldkit.test.ts scripts/lib/runtime-session-ndjson.test.ts scripts/worldkit-route-run.integration.test.ts apps/studio/server.test.mjs`.
-- [ ] Run `pnpm typecheck`, `pnpm test:census`, and `pnpm verify:workspace-boundaries`.
-- [ ] Commit: `feat(worldkit): publish durable runtime sessions`.
+- [x] Write RED parser/help tests for the exact commands and invalid flag combinations; reject `--interactive` without `--protocol ndjson --headless`, `--resume` without an existing session, and Package input on Browser-only flags.
+- [x] Write RED stream tests for first `ready`, canonical one-line receipts, malformed JSON, duplicate keys, overlong line/input budget, EOF, explicit close, SIGINT, SIGTERM, backpressure, and final `completed`/`failed` event.
+- [x] Run `pnpm exec vitest run scripts/worldkit.test.ts scripts/lib/runtime-session-ndjson.test.ts` and capture RED.
+- [x] Implement bounded line framing and a sequential writer; stdout receives protocol records only and stderr receives human diagnostics only.
+- [x] Migrate `worldkit build` to V2 directory publication; route inspect/load/run to the shared services; move existing Build artifact code and formal hosted-workflow callers to the internal script without changing artifact bytes.
+- [x] Update canonical verifiers and quickstart to treat the Package directory as the public Build output while retaining explicit internal artifact evidence where required by Studio.
+- [x] Run `pnpm exec vitest run scripts/worldkit.test.ts scripts/lib/runtime-session-ndjson.test.ts scripts/worldkit-route-run.integration.test.ts apps/studio/server.test.mjs`.
+- [x] Run `pnpm typecheck`, `pnpm test:census`, and `pnpm verify:workspace-boundaries`.
+- [x] Commit: `feat(worldkit): publish durable runtime sessions`.
 
 ## Task 7: Prove fresh-process recovery and close only the evidenced P1.4 rows (`P14-RS-07`)
 
@@ -224,17 +224,17 @@ The existing `worldkit run <world.json> [--port ...]` remains the trusted author
 - Create: `scripts/runtime-session.integration.test.ts`
 - Create: `docs/reviews/2026-08-27-p14-runtime-session-completion.md`
 - Modify: `docs/18-refactor-progress-and-backlog.md`
-- Modify: `docs/02-current-architecture.md`
+- Modify: `docs/02-sdk-architecture.md`
 
-- [ ] In process A, build basic and G Bot Package directories; in process B, inspect and load each Package and verify the same Package Ref/Root with no Registry reads after admission.
-- [ ] Start an interactive process, consume `ready`, submit at least one gameplay command and fixed-input batch, capture a snapshot, repeat a Request ID and prove byte-identical output, then kill without close.
-- [ ] Resume in a new process with the same session directory; prove the same logical Runtime/World Session IDs, equal reconstructed snapshot, continued sequence, exact duplicate replay, and successful explicit close.
-- [ ] Flip one complete WAL byte and one Package resource byte and prove fail-closed before `ready`; separately leave an unterminated WAL tail and prove bounded truncation plus successful replay.
-- [ ] Prove SIGINT and SIGTERM each dispose the ownership ledger and emit exactly one final event; prove abrupt kill emits no false completion.
-- [ ] Run focused Runtime Session tests, then `pnpm typecheck`, `pnpm verify:workspace-boundaries`, `pnpm test:census`, `pnpm test`, `pnpm build`, and the canonical/G Bot verifiers once on the final tree.
-- [ ] Audit exact Browser V5 key count, forbidden `authoring-host -> runtime-host` dependency, `rebaseRequired`, `===`/`!==`, nullish/empty checks, public CLI aliases, P1.6 spec byte stability, and leftover temporary/session directories.
-- [ ] Write the completion record separating contract evidence, fresh-process evidence, rendered evidence, and manual interaction evidence. Mark only the three P1.4 rows proven by this plan; leave P1.6 trusted-host startup publication recovery, cleanup retry, dual Provider round-trip, manual playtest, and Incremental explicitly open.
-- [ ] Commit: `docs(runtime-session): record p14 completion evidence`.
+- [x] In process A, build basic and G Bot Package directories; in process B, inspect and load each Package and verify the same Package Ref/Root with no Registry reads after admission.
+- [x] Start an interactive process, consume `ready`, submit at least one gameplay command and fixed-input batch, capture a snapshot, repeat a Request ID and prove byte-identical output, then kill without close.
+- [x] Resume in a new process with the same session directory; prove the same logical Runtime/World Session IDs, equal reconstructed snapshot, continued sequence, exact duplicate replay, and successful explicit close.
+- [x] Flip one complete WAL byte and one Package resource byte and prove fail-closed before `ready`; separately leave an unterminated WAL tail and prove bounded truncation plus successful replay.
+- [x] Prove SIGINT and SIGTERM each dispose the ownership ledger and emit exactly one final event; prove abrupt kill emits no false completion.
+- [x] Run focused Runtime Session tests, then `pnpm typecheck`, `pnpm verify:workspace-boundaries`, `pnpm test:census`, `pnpm test`, `pnpm build`, and the canonical/G Bot verifiers once on the final tree.
+- [x] Audit exact Browser V5 key count, forbidden `authoring-host -> runtime-host` dependency, `rebaseRequired`, `===`/`!==`, nullish/empty checks, public CLI aliases, P1.6 spec byte stability, and leftover temporary/session directories.
+- [x] Write the completion record separating contract evidence, fresh-process evidence, rendered evidence, and manual interaction evidence. Mark only the three P1.4 rows proven by this plan; leave P1.6 trusted-host startup publication recovery, cleanup retry, dual Provider round-trip, manual playtest, and Incremental explicitly open.
+- [x] Commit: `docs(runtime-session): record p14 completion evidence`.
 
 ## Explicit non-claims and next dependency
 

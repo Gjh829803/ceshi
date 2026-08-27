@@ -78,7 +78,8 @@ Director LLM → Render Directive SDK ────────────┘
 - Browser Protocol V5 仍是 exact 39-key Runtime 面。结构修改走独立的
   `window.__WORLDKIT_AUTHORING_EDIT__`，只出现在注入了 AuthoringSpec 的 Canonical
   Authoring 页；catalog `?scene=` 没有这个对象。这不是生产可用的世界编辑器，也不表示
-  Incremental Hot Apply 或完整 P1.4 WorldPackage 已交付。
+  Incremental Hot Apply 已交付。完整 P1.4 WorldPackage、Package CLI 与持久 headless
+  Runtime Session 已由独立 P1.4 工作流随后完成，不扩大 P1.6 G1 的范围。
 - Route Task 8 可信 Node 链路把 Authoring V4 → NormalizedWorldIR V4 →
   ExecutionPlan V5 世界依次物化为最小正式
   WorldPackage Build Receipt、Validation Subject、Recast Graph/Path、真实
@@ -194,9 +195,9 @@ Validate/Inspect 和两个共享 World Identity 的 Take Fixture。
 已补充：Control Capture 保持 Bundle V1，现可写入并校验 Action/Event/Relationship Track，
 并把 Command、Receipt、Event、World State、Snapshot 和 Frame 绑定成同一证据链。
 
-未完成：完整 P1.4 WorldPackage/Registry Lock、mounted fixture 正式多阶段 Bundle verifier、
-Resume、跨平台 Replay Metric、Motion Vector、Placement/Physics/Composition 等统一
-Validation 扩展和 Video Model Adapter。
+未完成：mounted fixture 正式多阶段 Bundle verifier、Capture Resume、跨平台 Replay
+Metric、Motion Vector、Placement/Physics/Composition 等统一 Validation 扩展、多人或
+跨 Host Runtime Session 和 Video Model Adapter。
 现有真实浏览器 Gate 是有界单帧 Probe，不冒充完整 240 帧视频级验收。
 
 ### Validation Capture/Integrity V1：首个统一报告切片

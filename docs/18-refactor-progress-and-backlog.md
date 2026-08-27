@@ -33,8 +33,9 @@
 
 > Simulation Take / Control Capture V1 已完成 60 Hz → 24 fps 精确时间映射、五 Pass
 > Babylon 捕获、Render Ready Receipt、原子 Bundle、CLI/Browser/Playwright 和真实 Chromium
-> Gate；统一 Validation 的 Capture/Integrity V1 也已进入回归。完整 P1.4 WorldPackage、
-> Placement/Physics/Composition 等统一 Gate、恢复续拍与 Video Adapter 仍未完成。
+> Gate；统一 Validation 的 Capture/Integrity V1 也已进入回归。P1.4 WorldPackage V2、
+> Package CLI 与持久 headless Runtime Session 已完成；Placement/Physics/Composition 等
+> 统一 Gate、Capture 恢复续拍与 Video Adapter 仍未完成。
 
 ## 当前执行 Epic：Babylon-only Runtime 收口（TR0–TR7）
 
@@ -117,11 +118,11 @@ Normalizer/Compiler、Runtime、CLI/Browser 和对应 Conformance Gate 的纵向
 | 工作流 | 权重 | 当前完成度 | 加权贡献 | 判断依据 |
 |---|---:|---:|---:|---|
 | 架构、边界与命名 | 8% | 96% | 7.7% | 总规格、ADR、主体/地形/3C 和 Placement/Take/Validation 专项已成稿；Validation Capture/Integrity V1 的字段与 Policy 已冻结并实现 |
-| Canonical Schema、IR、Registry 与 Compiler | 15% | 88% | 13.2% | Authoring V4 → IR V4 → Plan V5 已自包含并直接编译；旧 V3/V4 顶层协议已从已提交路径删除，Subject capability assembly 成为必填锁；完整 P1.4 发布格式与 WorldChangeSet 尚未交付 |
+| Canonical Schema、IR、Registry 与 Compiler | 15% | 88% | 13.2% | Authoring V4 → IR V4 → Plan V5 已自包含并直接编译；旧 V3/V4 顶层协议已从已提交路径删除，Subject capability assembly 成为必填锁；完整 P1.4 发布格式已交付，WorldChangeSet Full Reload 仍只是首切片 |
 | Babylon/Havok Runtime、物理与相机 | 15% | 75% | 11.25% | Heightfield、障碍、水域、多主体、第三人称、碰撞、资产主体、Placement Assertion 与五 Pass Capture 已交付；多视角与完整生产预算尚未完成 |
 | Subject LEGO 组装体系 | 15% | 45% | 6.75% | S0、S1a、Golden 与首个产品 G Bot 可视切片已完成；S1b 后续、S2、S3、S4 尚未完成 |
 | Terrain、Region 与 Placement | 12% | 74% | 8.88% | Alpha 地形和 Placement Solver S1 已运行；Route R0、R1 Heightfield 与 R1b Static Platform 已审查/门禁关闭；通用 Terrain Mask、更多 Constraint 与完整 P0.1 未完成 |
-| CLI、Browser Protocol 与自动化 | 10% | 90% | 9.0% | 已交付 Take/Capture、`verify capture|explain`；Route `verify route`、R1 Golden Fixture、可信 Host Evidence Transport、Browser V5 clean break 已完成；compare、持久 Session 和完整 Package 工具未完成 |
+| CLI、Browser Protocol 与自动化 | 10% | 90% | 9.0% | 已交付 Take/Capture、`verify capture|explain`、完整 Package `build/inspect/load` 与持久 headless Runtime Session；Route `verify route`、R1 Golden Fixture、可信 Host Evidence Transport、Browser V5 clean break 已完成；compare、Capture Resume 和多人 Session 未完成 |
 | Semantic Action、动画与 Gameplay | 8% | 80% | 6.4% | Golden 与 G Bot `idle/walk/run/jump` 已交付；G19-2 至 G19-8 的 Command/Receipt/Event/State、RuntimeHost、Babylon/Browser、Outdoor 生命周期及 current-only clean break 已完成；姿态、装备、关系与规则仍未交付 |
 | Simulation Take、控制通道与视频接入 | 10% | 70% | 7.0% | V1 Take、五 Pass、Bundle 和真实浏览器 Gate 已交付，Capture/Integrity 已进入统一 Report；完整 Replay/Resume 与模型 Adapter 未交付 |
 | 生产 Gate、默认切换与旧实现退出 | 7% | 95% | 6.65% | Canonical/资产/Placement/Capture/Route/Outdoor Gate 全绿；未发布旧路径已清理，clean-break census 为 632/0/489；HNC-F1 作为首次 Alpha 前的新一轮全面审计保留 |
@@ -426,9 +427,16 @@ WorldPackage、Resume 与完整 Replay Gate 为完成标准。
   License/NOTICE legal closure 和 Host Compatibility Gate；文件 Adapter 支持绝对目录、
   symlink-safe 读取与跨进程原子发布。完成证据见
   [`P1.4 Complete WorldPackage V2 completion record`](reviews/2026-08-27-p14-complete-world-package-v2-completion.md)。
-- [ ] CLI 支持 package、inspect、load 和 run-session。
-- [ ] Runtime Session 支持 NDJSON 或等价的有生命周期协议、Request ID、Receipt 和恢复语义。
-- [ ] 加载新 Package 前完成旧世界 Dispose、Ownership Ledger 清空和 World Ready Gate。
+- [x] CLI 支持完整 WorldPackage V2 `build`、`inspect`、`load` 和持久
+  `run-session`；旧单文件 Build Artifact 只保留为具名 trusted-host 内部入口，不形成
+  第二套公共 CLI 方言。
+- [x] Runtime Session 支持 closed canonical NDJSON 生命周期协议、Request ID、Receipt、
+  fsynced hash-chain WAL 与 fresh-process 恢复；相同 Request 精确重放、不同内容冲突、
+  complete-row 损坏和 torn-tail 策略均有真实子进程证据。
+- [x] 加载或恢复 Package 时先完成独立 V2 admission，Runtime Ready 绑定精确
+  Package Ref/Root；close、signal、失败和下一 Runtime 启动前均完成 Dispose、
+  Ownership Ledger 清空和 World Ready Gate。完成证据见
+  [`P1.4 Package CLI and Persistent Runtime Session completion record`](reviews/2026-08-27-p14-runtime-session-completion.md)。
 
 #### P1.5 Subject Control Feel、Physics Medium 与 State Resolver
 
@@ -527,8 +535,10 @@ Publication hardening 已全部折回上述核心规格；
 [`follow-up review`](reviews/2026-08-26-p16-world-change-post-freeze-hardening-follow-up.md)
 只保留发现轨迹，不拥有规范优先级。
 P16-D0 已冻结，H0–G1 已落地为 Full Reload 首切片。
-这不表示 P1.6 可用于生产，也不表示 Incremental 或完整 P1.4 已交付。完整文件所有权、
-输入输出、集成点和验收证据以专项规格 §21 为准。深度审查见
+这不表示 P1.6 可用于生产，也不表示 Incremental 已交付。完整 P1.4 已由独立
+[`P1.4 completion record`](reviews/2026-08-27-p14-runtime-session-completion.md) 后续关闭，
+不是 G1 首切片的交付物。完整文件所有权、输入输出、集成点和验收证据以专项规格 §21
+为准。深度审查见
 [`P1.6 Full Reload 变更审查`](reviews/2026-08-26-p16-full-reload-b-review.md)；
 G1 完成记录见
 [`P1.6 Full Reload G1 Completion`](reviews/2026-08-26-p16-full-reload-g1-completion.md)。
@@ -625,7 +635,8 @@ Host↔RuntimeHost 集成覆盖 stale expectation 后成功 Full Reload（新 Wo
 Chromium 安装测试证明 Edit 面隔离。页面级
 `worldkit-authoring-edit-add-house.browser.test.ts` 已在 `?authoring=1` 上
 `publish-runtime` add-house：合法 PNG before ≠ after，`inspectFeatures()` 含
-`house-north`。这不是完整 P1.4，也不是 Incremental，也不是人工操作验收。
+`house-north`。该 G1 证据本身不证明 P1.4、Incremental 或人工操作验收；P1.4 由其独立
+completion record 与 fresh-process Gate 关闭。
 
 P16-G1 证据：候选 `8ca8503` 上 `pnpm typecheck`、`pnpm test`（234 files / 2651 tests，
 含 census 与 workspace boundary 52）、`pnpm build` 通过。G1 过程中关闭了 F1 deep import、
@@ -1053,8 +1064,9 @@ S1b Golden、
    不以它代替 Backlog。H0–G1 已交付 AI Schema、WorldChangeSet、进程内 journal、
    RuntimeHost publication V2、CLI 文件模式、Authoring 页 Edit API，以及
    [`G1 first-slice Final GO`](reviews/2026-08-26-p16-full-reload-g1-completion.md)。
-   Incremental Hot Apply、完整 P1.4 Package、磁盘 WAL 和双 Provider Conformance
-   未交付，不得按生产可用宣称。
+   完整 P1.4 Package、Package CLI 与持久 Runtime Session WAL 已由独立 P1.4 工作流
+   后续交付；Incremental Hot Apply、P1.6 Host startup reconciliation/cleanup retry 和双
+   Provider Conformance 仍未交付，不得按生产可用宣称。
    P2.5 Surface/Traversal 仍按其独立状态追踪。在实现游泳、攀爬或增量 Agent 修复前，
    禁止临时增加公共字段或场景脚本旁路**。
 10. **M10：P1.1 与 P2.5 边界稳定后评审 P2.6 H1 Bridge Fixture；先验证同 XZ 双层支撑、
