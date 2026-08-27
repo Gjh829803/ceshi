@@ -110,6 +110,8 @@ export interface WorldChangeJournalV1 {
   readonly brand: "WorldChangeJournalV1";
 }
 
+export type WorldPublicationRecoveryStatusV1 = "pending" | "recovered";
+
 export type WorldChangeJournalTransactionOperationV1 =
   | {
       readonly type: "request-record-put";
@@ -134,6 +136,12 @@ export type WorldChangeJournalTransactionOperationV1 =
       readonly type: "cleanup-report-put";
       readonly key: string;
       readonly report: WorldChangeCleanupReportV1;
+    }
+  | {
+      readonly type: "publication-recovery-state-put";
+      readonly worldId: string;
+      readonly requestId: string;
+      readonly status: WorldPublicationRecoveryStatusV1;
     }
   | {
       readonly type: "recovery-fencing-token-set";

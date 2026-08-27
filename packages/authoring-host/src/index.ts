@@ -10,9 +10,12 @@ export {
   sweepExpiredPreparedCandidatesV1,
 } from "./lease-store.js";
 export {
+  advanceWorldChangeCleanupReportV1,
   createWorldChangeJournalV1,
   getAuthoringRevisionHeadV1,
   journalArtifactIdV1,
+  listPendingWorldPublicationRecoveriesV1,
+  markWorldPublicationRecoveredV1,
   queryWorldChangeCleanupReportV1,
   queryWorldChangeDiffV1,
   queryWorldChangeExplainV1,
@@ -26,6 +29,7 @@ export type {
   AuthoringEditSessionV1,
   AuthoringRevisionHeadV1,
   CreateWorldChangeJournalInputV1,
+  PendingWorldPublicationRecoveryV1,
   QueryWorldChangeCleanupReportResultV1,
   QueryWorldChangeDiffResultV1,
   QueryWorldChangeExplainResultV1,

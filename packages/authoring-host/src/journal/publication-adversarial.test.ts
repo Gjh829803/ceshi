@@ -27,10 +27,13 @@ import {
 import { describe, expect, it } from "vitest";
 
 import {
+  advanceWorldChangeCleanupReportV1,
   createPreparedCandidateLeaseStoreV1,
   createWorldChangeJournalV1,
   getAuthoringRevisionHeadV1,
+  listPendingWorldPublicationRecoveriesV1,
   lookupPreparedCandidateV1,
+  markWorldPublicationRecoveredV1,
   queryWorldChangeCleanupReportV1,
   queryWorldChangeReceiptV1,
   recoverWorldChangeRequestV1,
@@ -443,6 +446,7 @@ describe("P16-F1 Full Reload adversarial publication", () => {
       "revision-head-put",
       "request-record-put",
       "cleanup-report-put",
+      "publication-recovery-state-put",
     ]);
     const reopened = createWorldChangeJournalV1({
       wal: {
@@ -468,6 +472,84 @@ describe("P16-F1 Full Reload adversarial publication", () => {
       }),
       nowUnixMilliseconds: NOW,
     })).toEqual({ status: "pending", state: "preparing-runtime" });
+    const pending = listPendingWorldPublicationRecoveriesV1(reopened);
+    expect(pending).toHaveLength(1);
+    expect(pending[0]).toMatchObject({
+      worldId: "basic-world",
+      authoringEditSessionId: SESSION_ID,
+      requestId: applyRequest.id,
+      cleanupReport: {
+        status: "scheduled",
+        attemptCount: 0,
+      },
+    });
+    const committedReceiptHash = hashWorldChangeReceiptV1(committed.receipt);
+    markWorldPublicationRecoveredV1(
+      reopened,
+      "basic-world",
+      applyRequest.id,
+    );
+    expect(listPendingWorldPublicationRecoveriesV1(reopened)).toEqual([]);
+    expect(getAuthoringRevisionHeadV1(reopened, "basic-world")?.revisionRef).toBe(
+      "revision://basic-world/2",
+    );
+    const recoveredQuery = queryWorldChangeReceiptV1({
+      journal: reopened,
+      session: active,
+      query: parseWorldChangeReceiptQueryV1({
+        kind: "worldkit-world-change-receipt-query",
+        schemaVersion: 1,
+        id: "q.receipt.post-commit-recovered",
+        authoringEditSessionId: SESSION_ID,
+        requestId: applyRequest.id,
+      }),
+      nowUnixMilliseconds: NOW,
+    });
+    expect(recoveredQuery.status).toBe("found");
+    if (recoveredQuery.status !== "found") throw new Error("expected found");
+    expect(hashWorldChangeReceiptV1(recoveredQuery.receipt)).toBe(
+      committedReceiptHash,
+    );
+    if (cleanup.status !== "found") throw new Error("expected cleanup report");
+    const retrying = advanceWorldChangeCleanupReportV1({
+      journal: reopened,
+      authoringEditSessionId: SESSION_ID,
+      report: {
+        ...cleanup.report,
+        status: "retrying",
+        attemptCount: 1,
+        diagnostics: [
+          parseWorldChangeDiagnosticV1({
+            severity: "warning",
+            code: "WORLD_CHANGE_CLEANUP_INCOMPLETE",
+            instancePath: "/runtimeCleanup",
+            message: "Cleanup will be retried by the trusted Host.",
+          }),
+        ],
+      },
+    });
+    expect(retrying).toMatchObject({ status: "retrying", attemptCount: 1 });
+    expect(() => advanceWorldChangeCleanupReportV1({
+      journal: reopened,
+      authoringEditSessionId: SESSION_ID,
+      report: { ...retrying, status: "scheduled", attemptCount: 2 },
+    })).toThrow(/WORLD_CHANGE_CLEANUP_REPORT_CONFLICT/);
+    const released = advanceWorldChangeCleanupReportV1({
+      journal: reopened,
+      authoringEditSessionId: SESSION_ID,
+      report: {
+        ...retrying,
+        status: "released",
+        attemptCount: 2,
+        diagnostics: [],
+      },
+    });
+    expect(released).toMatchObject({ status: "released", attemptCount: 2 });
+    expect(advanceWorldChangeCleanupReportV1({
+      journal: reopened,
+      authoringEditSessionId: SESSION_ID,
+      report: released,
+    })).toEqual(released);
     const lease = lookupPreparedCandidateV1(
       leaseStore,
       dryRun.receipt.preparedCandidateRef,

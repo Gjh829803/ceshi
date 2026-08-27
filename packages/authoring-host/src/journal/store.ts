@@ -10,6 +10,7 @@ import type {
   CreateWorldChangeJournalInputV1,
   DurableRequestRecordV1,
   DurableRequestStateV1,
+  WorldPublicationRecoveryStatusV1,
   WorldChangeJournalTransactionOperationV1,
   WorldChangeJournalTransactionV1,
   WorldChangeJournalV1,
@@ -27,7 +28,13 @@ class WorldChangeJournal implements WorldChangeJournalV1 {
   public readonly revisions = new Map<string, AuthoringRevisionHeadV1>();
   public readonly cleanupReports = new Map<string, WorldChangeCleanupReportV1>();
   public readonly publicationFenceTokensByWorldId = new Map<string, string>();
-  public readonly publicationRecoveryRequestIdsByWorldId = new Map<string, string>();
+  public readonly publicationRecoveryStatesByWorldId = new Map<
+    string,
+    Readonly<{
+      requestId: string;
+      status: WorldPublicationRecoveryStatusV1;
+    }>
+  >();
   public revisionSequence = 0;
   public transactionSequence = 0;
   public lastTransactionHash: Sha256HashV1 = GENESIS_TRANSACTION_HASH;
@@ -40,23 +47,6 @@ class WorldChangeJournal implements WorldChangeJournalV1 {
       applyOperations(this, transaction.operations, true);
       this.transactionSequence = transaction.sequence;
       this.lastTransactionHash = transaction.transactionHash;
-    }
-    for (const record of this.records.values()) {
-      if (
-        record.state !== "committed" ||
-        record.receipt?.status !== "committed" ||
-        record.receipt.requestedOutcome !== "publish-runtime"
-      ) continue;
-      const cleanupReport = this.cleanupReports.get(cleanupJournalKeyV1(
-        record.request.authoringEditSessionId,
-        record.receipt.runtimeCleanup.cleanupOperationId,
-      ));
-      if (cleanupReport?.status === "scheduled") {
-        this.publicationRecoveryRequestIdsByWorldId.set(
-          record.request.worldId,
-          record.request.id,
-        );
-      }
     }
   }
 }
@@ -134,6 +124,19 @@ function assertOperation(operation: unknown): asserts operation is WorldChangeJo
       !isRecord(operation.report)
     ) {
       corrupt("cleanup-report-put operation is invalid.");
+    }
+    return;
+  }
+  if (operation.type === "publication-recovery-state-put") {
+    if (
+      !hasExactKeys(operation, ["type", "worldId", "requestId", "status"]) ||
+      typeof operation.worldId !== "string" ||
+      operation.worldId.length === 0 ||
+      typeof operation.requestId !== "string" ||
+      operation.requestId.length === 0 ||
+      !["pending", "recovered"].includes(operation.status as string)
+    ) {
+      corrupt("publication-recovery-state-put operation is invalid.");
     }
     return;
   }
@@ -247,6 +250,47 @@ function applyOperations(
       journal.cleanupReports.set(operation.key, structuredClone(operation.report));
       continue;
     }
+    if (operation.type === "publication-recovery-state-put") {
+      const current = journal.publicationRecoveryStatesByWorldId.get(
+        operation.worldId,
+      );
+      if (
+        operation.status === "recovered" &&
+        (isNil(current) || current.requestId !== operation.requestId)
+      ) {
+        if (isRecovery) {
+          corrupt(
+            `Publication recovery '${operation.worldId}' completed without its pending request.`,
+          );
+        }
+        throw new Error(
+          "WORLD_CHANGE_PUBLICATION_RECOVERY_CONFLICT: Recovery request is not pending.",
+        );
+      }
+      if (
+        operation.status === "pending" &&
+        !isNil(current) &&
+        (
+          current.status === "pending" ||
+          current.requestId === operation.requestId
+        )
+      ) {
+        if (isRecovery) {
+          corrupt(`Publication recovery '${operation.worldId}' regressed or changed request.`);
+        }
+        throw new Error(
+          "WORLD_CHANGE_PUBLICATION_RECOVERY_CONFLICT: Recovery state cannot regress or replace a pending request.",
+        );
+      }
+      journal.publicationRecoveryStatesByWorldId.set(
+        operation.worldId,
+        Object.freeze({
+          requestId: operation.requestId,
+          status: operation.status,
+        }),
+      );
+      continue;
+    }
     journal.fencingToken = operation.fencingToken;
   }
 }
@@ -316,18 +360,62 @@ export function getAuthoringRevisionHeadV1(
   journal: WorldChangeJournalV1,
   worldId: string,
 ): AuthoringRevisionHeadV1 | undefined {
-  if (asJournal(journal).publicationRecoveryRequestIdsByWorldId.has(worldId)) {
-    throw new Error(
-      "WORLD_CHANGE_PUBLICATION_RECOVERY_REQUIRED: Runtime publication must recover before the Authoring revision is exposed.",
-    );
-  }
-  if (isWorldPublicationFencedV1(journal, worldId)) {
+  if (asJournal(journal).publicationFenceTokensByWorldId.has(worldId)) {
     throw new Error(
       "WORLD_CHANGE_PUBLICATION_FENCE_ACTIVE: Authoring revision is hidden until Runtime handle swap.",
     );
   }
+  if (isWorldPublicationRecoveryPendingV1(journal, worldId)) {
+    throw new Error(
+      "WORLD_CHANGE_PUBLICATION_RECOVERY_REQUIRED: Runtime publication must recover before the Authoring revision is exposed.",
+    );
+  }
   const head = asJournal(journal).revisions.get(worldId);
   return isNil(head) ? undefined : structuredClone(head);
+}
+
+export function getWorldPublicationRecoveryStateV1(
+  journal: WorldChangeJournalV1,
+  worldId: string,
+): Readonly<{
+  readonly requestId: string;
+  readonly status: WorldPublicationRecoveryStatusV1;
+}> | undefined {
+  const state = asJournal(journal).publicationRecoveryStatesByWorldId.get(worldId);
+  return isNil(state) ? undefined : Object.freeze(structuredClone(state));
+}
+
+export function listWorldPublicationRecoveryStatesV1(
+  journal: WorldChangeJournalV1,
+): readonly Readonly<{
+  readonly worldId: string;
+  readonly requestId: string;
+  readonly status: WorldPublicationRecoveryStatusV1;
+}>[] {
+  return [...asJournal(journal).publicationRecoveryStatesByWorldId.entries()].map(
+    ([worldId, state]) => Object.freeze({ worldId, ...structuredClone(state) }),
+  );
+}
+
+export function putWorldPublicationRecoveryStateV1(
+  journal: WorldChangeJournalV1,
+  worldId: string,
+  requestId: string,
+  status: WorldPublicationRecoveryStatusV1,
+): void {
+  commitTransaction(journal, [{
+    type: "publication-recovery-state-put",
+    worldId,
+    requestId,
+    status,
+  }]);
+}
+
+export function isWorldPublicationRecoveryPendingV1(
+  journal: WorldChangeJournalV1,
+  worldId: string,
+): boolean {
+  return getWorldPublicationRecoveryStateV1(journal, worldId)?.status === "pending";
 }
 
 export function acquireWorldPublicationFenceV1(
@@ -338,7 +426,7 @@ export function acquireWorldPublicationFenceV1(
   const internals = asJournal(journal);
   if (
     internals.publicationFenceTokensByWorldId.has(worldId) ||
-    internals.publicationRecoveryRequestIdsByWorldId.has(worldId)
+    isWorldPublicationRecoveryPendingV1(journal, worldId)
   ) {
     throw new Error(
       "WORLD_CHANGE_PUBLICATION_CONFLICT: World publication fence is already held.",
@@ -361,7 +449,7 @@ export function isWorldPublicationFencedV1(
 ): boolean {
   const internals = asJournal(journal);
   return internals.publicationFenceTokensByWorldId.has(worldId) ||
-    internals.publicationRecoveryRequestIdsByWorldId.has(worldId);
+    isWorldPublicationRecoveryPendingV1(journal, worldId);
 }
 
 export function nextAuthoringRevisionRefV1(
@@ -474,6 +562,25 @@ export function commitAuthoringRevisionV1(
         cleanupReport.cleanupOperationId,
       ),
       report: structuredClone(cleanupReport),
+    });
+    if (
+      committed.state !== "committed" ||
+      committed.receipt?.status !== "committed" ||
+      committed.receipt.requestedOutcome !== "publish-runtime" ||
+      committed.receipt.publicationMode !== "full-reload" ||
+      cleanupReport.requestId !== committed.request.id ||
+      cleanupReport.cleanupOperationId !==
+        committed.receipt.runtimeCleanup.cleanupOperationId
+    ) {
+      throw new Error(
+        "WORLD_CHANGE_PUBLICATION_RECOVERY_CONFLICT: Durable publication recovery requires one matching Full Reload commit.",
+      );
+    }
+    operations.push({
+      type: "publication-recovery-state-put",
+      worldId: committed.request.worldId,
+      requestId: committed.request.id,
+      status: "pending",
     });
   }
   commitTransaction(journal, operations);

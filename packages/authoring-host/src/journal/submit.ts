@@ -35,6 +35,10 @@ import {
   assembleValidatedReceiptV1,
 } from "./receipts.js";
 import {
+  advanceWorldChangeCleanupReportV1,
+  markWorldPublicationRecoveredV1,
+} from "./publication-recovery.js";
+import {
   acquireWorldPublicationFenceV1,
   commitAuthoringRevisionV1,
   getAuthoringRevisionHeadV1,
@@ -45,7 +49,6 @@ import {
   nextAuthoringRevisionRefV1,
   isTerminalStateV1,
   nonTerminalRequestCountV1,
-  putCleanupReportV1,
   putDurableRequestRecordV1,
   recoveryFencingTokenV1,
 } from "./store.js";
@@ -385,14 +388,19 @@ async function finishRuntimePublication(
     publicationError = error;
   }
   if (published?.status === "published") {
+    markWorldPublicationRecoveredV1(
+      input.journal,
+      current.request.worldId,
+      current.request.id,
+    );
     releasePublicationFence?.();
   }
   if (!isNil(committedReceipt)) {
     if (published?.status === "published") {
-      putCleanupReportV1(
-        input.journal,
-        current.request.authoringEditSessionId,
-        parseWorldChangeCleanupReportV1({
+      advanceWorldChangeCleanupReportV1({
+        journal: input.journal,
+        authoringEditSessionId: current.request.authoringEditSessionId,
+        report: parseWorldChangeCleanupReportV1({
           kind: "worldkit-world-change-cleanup-report",
           schemaVersion: 1,
           id: journalArtifactIdV1("cr", current.request.id),
@@ -403,7 +411,7 @@ async function finishRuntimePublication(
           attemptCount: 1,
           diagnostics: published.cleanupDiagnostics,
         }),
-      );
+      });
     }
     if (
       published?.status === "published" &&

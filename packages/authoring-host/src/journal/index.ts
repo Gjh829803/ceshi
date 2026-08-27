@@ -5,6 +5,14 @@ export {
 export { WorldChangeJournalCrashErrorV1 } from "./crash.js";
 export { journalArtifactIdV1 } from "./ids.js";
 export {
+  advanceWorldChangeCleanupReportV1,
+  listPendingWorldPublicationRecoveriesV1,
+  markWorldPublicationRecoveredV1,
+} from "./publication-recovery.js";
+export type {
+  PendingWorldPublicationRecoveryV1,
+} from "./publication-recovery.js";
+export {
   queryWorldChangeCleanupReportV1,
   queryWorldChangeDiffV1,
   queryWorldChangeExplainV1,
