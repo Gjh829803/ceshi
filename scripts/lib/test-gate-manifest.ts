@@ -253,6 +253,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "scripts/lib/transactional-artifact-promotion.test.ts", lane: "contract" },
   { path: "scripts/lib/traversal-area-runtime-collision.integration.test.ts", lane: "resource-heavy", reasonCodes: ["native-havok-or-recast"] },
   { path: "scripts/lib/validation-cli.test.ts", lane: "contract" },
+  { path: "scripts/lib/world-package-cli.test.ts", lane: "contract" },
   { path: "scripts/lib/world-package-resource-resolver.test.ts", lane: "contract" },
   { path: "scripts/lib/world-package-signing.test.ts", lane: "contract" },
   { path: "scripts/lib/worldkit-server.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"] },
