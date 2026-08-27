@@ -16,8 +16,8 @@
 
 **Files:**
 
-- Create: `apps/studio/preview-bootstrap.mjs`
-- Create: `apps/studio/preview-bootstrap.test.mjs`
+- Create: `apps/studio/src/preview-bootstrap.mjs`
+- Create: `apps/studio/src/preview-bootstrap.test.mjs`
 - Modify: `apps/studio/package.json`
 
 **Step 1: Write the failing contract tests**
@@ -42,7 +42,7 @@ Add adversarial cases for record-after attempt drift, evaluation-run attempt dri
 
 **Step 2: Run RED**
 
-Run `node --test apps/studio/preview-bootstrap.test.mjs`. Confirm it fails because `preview-bootstrap.mjs` does not exist.
+Run `node --test apps/studio/src/preview-bootstrap.test.mjs`. Confirm it fails because `preview-bootstrap.mjs` does not exist.
 
 **Step 3: Implement the minimum pure owner**
 
@@ -67,7 +67,7 @@ Use a local sorted-key JSON serializer plus `node:crypto` SHA-256 because Studio
 
 **Step 4: Run GREEN and register the test**
 
-Run `node --test apps/studio/preview-bootstrap.test.mjs`, then add the file to `apps/studio/package.json`'s `test` command and run `pnpm --filter @whitebox-world/studio test`.
+Run `node --test apps/studio/src/preview-bootstrap.test.mjs`, then add the file to `apps/studio/package.json`'s `test` command and run `pnpm --filter @whitebox-world/studio test`.
 
 **Step 5: Commit**
 
@@ -77,10 +77,10 @@ Commit the pure authority slice as `feat(studio): assemble atomic preview bootst
 
 **Files:**
 
-- Modify: `apps/studio/server.mjs`
-- Modify: `apps/studio/server.test.mjs`
-- Modify: `apps/studio/public-proxy.mjs`
-- Modify: `apps/studio/public-proxy.test.mjs`
+- Modify: `apps/studio/src/server.mjs`
+- Modify: `apps/studio/src/server.test.mjs`
+- Modify: `apps/studio/src/public-proxy.mjs`
+- Modify: `apps/studio/src/public-proxy.test.mjs`
 
 **Step 1: Write failing HTTP and allowlist tests**
 
@@ -95,7 +95,7 @@ Add public-proxy assertions that the new GET route is forwarded and the two remo
 
 **Step 2: Run RED**
 
-Run `node --test apps/studio/server.test.mjs --test-name-pattern='preview bootstrap'` and `node --test apps/studio/public-proxy.test.mjs --test-name-pattern='public Studio pages'`. Confirm the new route/allowlist expectations fail.
+Run `node --test apps/studio/src/server.test.mjs --test-name-pattern='preview bootstrap'` and `node --test apps/studio/src/public-proxy.test.mjs --test-name-pattern='public Studio pages'`. Confirm the new route/allowlist expectations fail.
 
 **Step 3: Implement the route boundary**
 

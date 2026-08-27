@@ -652,9 +652,9 @@ git commit -m "feat: expose multi-subject browser protocol"
 
 **Files:**
 - Create: `examples/authoring/multi-subject-world.json`
-- Modify: `scripts/worldkit.ts`
-- Modify: `scripts/worldkit.test.ts`
-- Modify: `scripts/verify-canonical-world.ts`
+- Modify: `scripts/cli/worldkit.ts`
+- Modify: `scripts/cli/worldkit.test.ts`
+- Modify: `scripts/verification/verify-canonical-world.ts`
 - Modify: `docs/17-canonical-json-quickstart.md`
 - Modify: `README.md`
 
@@ -732,7 +732,7 @@ Expected: PASS with strict parsing, deterministic V2 artifact, two subject IDs, 
 
 - [x] **Step 6: Inspect the generated screenshot**
 
-Open `artifacts/examples/basic-world/world.png` or the multi-subject output with the local image viewer. Confirm the humanoid and quadruped proxy are both visible, placed on terrain, not overlapping blockers, and framed by the controlled subject's camera. If composition fails, change only fixture placement or camera authoring values; do not add scene-specific runtime logic.
+Open `examples/evidence/basic-world/world.png` or the multi-subject output with the local image viewer. Confirm the humanoid and quadruped proxy are both visible, placed on terrain, not overlapping blockers, and framed by the controlled subject's camera. If composition fails, change only fixture placement or camera authoring values; do not add scene-specific runtime logic.
 
 - [x] **Step 7: Commit the vertical slice**
 
@@ -747,8 +747,8 @@ git commit -m "feat: ship multi-subject visible slice"
 
 **Files:**
 - Modify if evidence changed: `docs/superpowers/plans/2026-08-19-subject-foundation-visible-slice.md`
-- Create: `artifacts/examples/multi-subject-world/.gitignore`
-- Create: `artifacts/examples/multi-subject-world/.gitkeep`
+- Create: `examples/evidence/multi-subject-world/.gitignore`
+- Create: `examples/evidence/multi-subject-world/.gitkeep`
 
 **Interfaces:**
 - Produces: an auditable completion statement and a clean boundary for the next `attachedTo` / `mountedOn` Relationship plan.

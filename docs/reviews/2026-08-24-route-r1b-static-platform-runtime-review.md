@@ -52,12 +52,12 @@ break 到 V5，并发布多 Surface Route Evidence V2：
 - `1140:1268:packages/traversal/src/build-input.ts`：严格 admission 与 canonical hash；
 - `348:359:packages/runtime-contracts/src/runtime-session.ts`：Browser Protocol V5
   常量与公共 API；
-- `195:212:scripts/verify-route-r1b-static-platform.ts`：两条冻结失败诊断；
-- `555:563:scripts/verify-route-r1b-static-platform.ts`：两种 verifier-only fault
+- `195:212:scripts/verification/verify-route-r1b-static-platform.ts`：两条冻结失败诊断；
+- `555:563:scripts/verification/verify-route-r1b-static-platform.ts`：两种 verifier-only fault
   与固定 Fixture ID 的闭合映射；
 - `501:557:scripts/lib/route-validation-runner.ts`：Graph correlation adversary 与
   withdraw-support Runtime 路径；
-- `152:173:scripts/verify-route-r1b-static-platform.test.ts`：wrong-collider 与
+- `152:173:scripts/verification/verify-route-r1b-static-platform.test.ts`：wrong-collider 与
   platform-edge-fall oracle。
 
 证据层级为 `static-read` 与 `automated-contract`。这不等于 rendered-visual 或

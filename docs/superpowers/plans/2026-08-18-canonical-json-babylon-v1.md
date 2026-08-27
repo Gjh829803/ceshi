@@ -390,8 +390,8 @@ git commit -m "feat: load canonical JSON worlds in playground"
 ### Task 6: CLI Validate, Build, Run, and Playwright Capture
 
 **Files:**
-- Create: `scripts/worldkit.ts`
-- Create: `scripts/worldkit.test.ts`
+- Create: `scripts/cli/worldkit.ts`
+- Create: `scripts/cli/worldkit.test.ts`
 - Create: `scripts/lib/worldkit-server.ts`
 - Modify: `package.json`
 - Modify: `pnpm-lock.yaml`
@@ -411,7 +411,7 @@ expect(await validateFile(invalidPath)).toMatchObject({ ok: false, exitCode: 2 }
 
 - [ ] **Step 2: Run CLI tests and verify failure**
 
-Run: `pnpm vitest run scripts/worldkit.test.ts`
+Run: `pnpm vitest run scripts/cli/worldkit.test.ts`
 
 Expected: FAIL because the CLI module is missing.
 
@@ -429,7 +429,7 @@ Expected: FAIL because the CLI module is missing.
 
 - [ ] **Step 5: Run CLI tests, typecheck, and help smoke**
 
-Run: `pnpm vitest run scripts/worldkit.test.ts && pnpm worldkit --help && pnpm typecheck`
+Run: `pnpm vitest run scripts/cli/worldkit.test.ts && pnpm worldkit --help && pnpm typecheck`
 
 Expected: tests PASS, help lists four commands, typecheck exits 0.
 
@@ -445,9 +445,9 @@ git commit -m "feat: add worldkit CLI and Playwright capture"
 **Files:**
 - Create: `examples/authoring/basic-world.json`
 - Create: `examples/authoring/invalid-world.json`
-- Create: `artifacts/examples/basic-world/.gitkeep`
+- Create: `examples/evidence/basic-world/.gitkeep`
 - Create: `docs/17-canonical-json-quickstart.md`
-- Create: `scripts/verify-canonical-world.ts`
+- Create: `scripts/verification/verify-canonical-world.ts`
 - Modify: `package.json`
 - Modify: `README.md`
 
@@ -465,8 +465,8 @@ The fixture contains one rolling terrain, one elliptical lake, three collision-e
 
 ```text
 worldkit validate examples/authoring/basic-world.json
-worldkit build examples/authoring/basic-world.json --output artifacts/examples/basic-world/world.normalized.json
-worldkit capture examples/authoring/basic-world.json --output artifacts/examples/basic-world/world.png --snapshot artifacts/examples/basic-world/snapshot.json
+worldkit build examples/authoring/basic-world.json --output examples/evidence/basic-world/world.normalized.json
+worldkit capture examples/authoring/basic-world.json --output examples/evidence/basic-world/world.png --snapshot examples/evidence/basic-world/snapshot.json
 assert PNG signature and non-trivial dimensions
 assert runtimeBackend=babylon-havok
 assert physics.backend=havok and physics.ready=true
@@ -487,12 +487,12 @@ Expected: typecheck/build exit 0, all unit/integration tests PASS, V1 verifier p
 
 - [ ] **Step 5: Inspect the captured world visually**
 
-Open `artifacts/examples/basic-world/world.png` and verify visible terrain relief, water surface, tower, two walls, whitebox subject, and third-person composition. If any required element is absent or materially occluded, adjust the fixture/compiler/runtime and rerun Step 4.
+Open `examples/evidence/basic-world/world.png` and verify visible terrain relief, water surface, tower, two walls, whitebox subject, and third-person composition. If any required element is absent or materially occluded, adjust the fixture/compiler/runtime and rerun Step 4.
 
 - [ ] **Step 6: Commit Task 7**
 
 ```bash
-git add README.md package.json examples docs/17-canonical-json-quickstart.md scripts/verify-canonical-world.ts artifacts/examples/basic-world/.gitkeep
+git add README.md package.json examples docs/17-canonical-json-quickstart.md scripts/verification/verify-canonical-world.ts examples/evidence/basic-world/.gitkeep
 git commit -m "feat: ship canonical JSON world vertical slice"
 ```
 

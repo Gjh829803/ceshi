@@ -143,7 +143,7 @@ git commit -m "feat: add strict subject onboarding manifests"
 **Files:**
 - Create: `scripts/lib/subject-onboarding.ts`
 - Create: `scripts/lib/subject-onboarding.test.ts`
-- Modify: `scripts/worldkit.ts`
+- Modify: `scripts/cli/worldkit.ts`
 
 **Interfaces:**
 - Produces: `planSubjectOnboardingV1`
@@ -189,7 +189,7 @@ Expected: PASS.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add scripts/lib/subject-onboarding.ts scripts/lib/subject-onboarding.test.ts scripts/worldkit.ts
+git add scripts/lib/subject-onboarding.ts scripts/lib/subject-onboarding.test.ts scripts/cli/worldkit.ts
 git commit -m "feat: add subject onboarding generator"
 ```
 

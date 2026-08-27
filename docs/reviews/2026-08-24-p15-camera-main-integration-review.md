@@ -19,9 +19,9 @@
 - 安装依赖：Babylon.js `9.21.2`、Havok `1.3.14`；版本来自根
   `package.json`、`packages/runtime-babylon/package.json` 与 lockfile。
 - 权威依据：
-  - [`P1.5 Camera Tuning cleanup plan`](../superpowers/plans/2026-08-23-p15-camera-tuning-cleanup.md)
-  - [`Context-driven Gameplay Camera composition design`](../superpowers/specs/2026-08-24-context-driven-gameplay-camera-composition-design.md)
-  - [`AI-first Lego SDK design`](../superpowers/specs/2026-08-17-ai-first-lego-game-sdk-design.md)
+  - [`P1.5 Camera Tuning cleanup plan`](../../docs/superpowers/plans/2026-08-23-p15-camera-tuning-cleanup.md)
+  - [`Context-driven Gameplay Camera composition design`](../../docs/superpowers/specs/2026-08-24-context-driven-gameplay-camera-composition-design.md)
+  - [`AI-first Lego SDK design`](../../docs/superpowers/specs/2026-08-17-ai-first-lego-game-sdk-design.md)
   - [`docs/18 refactor progress`](../18-refactor-progress-and-backlog.md)
 
 ### 1.1 当前结论

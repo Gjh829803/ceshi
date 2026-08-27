@@ -4,7 +4,7 @@
 - 版本：v0.2
 - 日期：2026-08-19
 - 产品输入：《世界模型底层引擎主体资产与 3C 配置体系》v0.1
-- 技术基线：[AI-first LEGO Game SDK 设计](./superpowers/specs/2026-08-17-ai-first-lego-game-sdk-design.md)
+- 技术基线：[AI-first LEGO Game SDK 设计](../docs/superpowers/specs/2026-08-17-ai-first-lego-game-sdk-design.md)
 
 > 实现状态（2026-08-20）：S1a 已交付 Canonical Authoring V2、Registry/Package
 > Primitive Subject Definition、Socket、自动 Capsule、Definition Hash、Resource
@@ -17,7 +17,7 @@
 >
 > P1.5 Control Feel / Physics Medium / State Resolver 的公共字段、支撑权威和第一切片
 > 范围以已冻结的
-> [`2026-08-21-control-feel-physics-medium-state-resolver-design.md`](superpowers/specs/2026-08-21-control-feel-physics-medium-state-resolver-design.md)
+> [`2026-08-21-control-feel-physics-medium-state-resolver-design.md`](../docs/superpowers/specs/2026-08-21-control-feel-physics-medium-state-resolver-design.md)
 > 为实施权威。本文保留产品概念说明，但以下旧名和旧字段不再是公共合同：
 >
 > | 本文历史/产品名 | Canonical kind / field | 处理 |
@@ -216,9 +216,9 @@ Clip”的模块化结构，完整目录、命令和当前资产修改清单见
 也不存在旧合并 GLB 的公开兼容入口。
 
 本节的 Bone Mapping 与动作要求只适用于 Rigged Subject。首个产品实例仍是 G Bot，接入路由见
-[`product-asset-intake.md`](./superpowers/skills/product-asset-intake.md)。无 Rig、无动画的
+[`product-asset-intake.md`](../docs/superpowers/skills/product-asset-intake.md)。无 Rig、无动画的
 Static GLB 批次不能借用本节的 Rig/Animation Set 合同；它们必须走
-[`product-asset-intake-static-assets.md`](./superpowers/skills/product-asset-intake-static-assets.md)，
+[`product-asset-intake-static-assets.md`](../docs/superpowers/skills/product-asset-intake-static-assets.md)，
 以独立的 Asset、Collider 和 schema-v3 Subject Definition 注册并验证。静态资产目前只
 获得已实现的 ground Character capability；车、飞行器、骑乘组合的外观不等于 vehicle、
 flight、mount 或 NPC Runtime 行为。
@@ -250,8 +250,8 @@ Asset、Animation Set、Collider Profile 和 Subject Definition Registry 内容�
 ```bash
 pnpm worldkit validate examples/authoring/rigged-subject-world.json --json
 pnpm worldkit capture examples/authoring/rigged-subject-world.json \
-  --output artifacts/examples/rigged-subject-world/world.png \
-  --snapshot artifacts/examples/rigged-subject-world/snapshot.json \
+  --output examples/evidence/rigged-subject-world/world.png \
+  --snapshot examples/evidence/rigged-subject-world/snapshot.json \
   --json
 pnpm verify:rigged-subject
 ```
@@ -606,9 +606,9 @@ interface RuntimeSnapshot {
 ## 13. 资产接入流水线
 
 每个产品资产包按固定流程接入。当前可执行模板见
-[`product-asset-intake`](superpowers/skills/product-asset-intake.md) 与
+[`product-asset-intake`](../docs/superpowers/skills/product-asset-intake.md) 与
 [`模块化 Subject 资产导入与修改清单`](20-modular-subject-source-assets.md)，以及
-[`Product Asset Intake Template`](superpowers/specs/2026-08-21-product-asset-intake-template-design.md)。
+[`Product Asset Intake Template`](../docs/superpowers/specs/2026-08-21-product-asset-intake-template-design.md)。
 G Bot 是第一条 Fixture，不是第二个产品人物的完成证据。
 
 每个产品资产包按固定流程接入：

@@ -544,8 +544,8 @@ git commit -m "feat: freeze traversal lock and evidence contracts"
 **Files:**
 - Create: `examples/traversal/route-r0-contract.json`
 - Create: `examples/traversal/route-r0-lock-mismatch.json`
-- Create: `scripts/verify-route-r0-contract.ts`
-- Create: `scripts/verify-route-r0-contract.test.ts`
+- Create: `scripts/verification/verify-route-r0-contract.ts`
+- Create: `scripts/verification/verify-route-r0-contract.test.ts`
 - Modify: `package.json`
 - Modify: `README.md`
 - Modify: `docs/18-refactor-progress-and-backlog.md`
@@ -575,7 +575,7 @@ expect(result).toEqual({
 
 - [ ] **Step 2: Run the RED gate**
 
-Run: `pnpm vitest run scripts/verify-route-r0-contract.test.ts`
+Run: `pnpm vitest run scripts/verification/verify-route-r0-contract.test.ts`
 Expected: FAIL because the verifier and fixtures do not exist.
 
 - [ ] **Step 3: Implement the deterministic verifier and fixtures**
@@ -594,7 +594,7 @@ Mark only the Backlog R0 field-freeze item complete and link the command evidenc
 - [ ] **Step 6: Commit Task 5**
 
 ```bash
-git add examples/traversal/route-r0-contract.json examples/traversal/route-r0-lock-mismatch.json scripts/verify-route-r0-contract.ts scripts/verify-route-r0-contract.test.ts package.json README.md docs/18-refactor-progress-and-backlog.md
+git add examples/traversal/route-r0-contract.json examples/traversal/route-r0-lock-mismatch.json scripts/verification/verify-route-r0-contract.ts scripts/verification/verify-route-r0-contract.test.ts package.json README.md docs/18-refactor-progress-and-backlog.md
 git commit -m "test: add route r0 conformance gate"
 ```
 

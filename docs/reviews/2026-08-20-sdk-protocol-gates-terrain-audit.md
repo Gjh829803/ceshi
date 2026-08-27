@@ -68,7 +68,7 @@
 
 CLI：
 
-```313:327:scripts/worldkit.ts
+```313:327:scripts/cli/worldkit.ts
 export function listRegistryResources(
   resourceKind: "subject-definition",
 ) {
@@ -111,7 +111,7 @@ Canonical `worldkit capture`：
 2. `api.ready()`（这步对）；
 3. `requestAnimationFrame` 两次；
 4. `setPaused(true)` + **`reset()`**（永远拍 spawn 姿态）；
-5. `captureVisibleWorldWithRetries`：采样像素 RGB 种类 `< 4` 就重试，最多 8 次（`scripts/worldkit.ts:510-524, 600-660`）。
+5. `captureVisibleWorldWithRetries`：采样像素 RGB 种类 `< 4` 就重试，最多 8 次（`scripts/cli/worldkit.ts:510-524, 600-660`）。
 
 总规格 §18：「Capture Gate 必须等待 ViewReceipt 和下一次 Render Ready，不能用任意延时猜测镜头已经稳定。」色数阈值是「画面不是纯色」探针，不是镜头/Tick/Package 绑定。黑帧或未编译 shader 可能假失败；几乎单色但合法的白膜也可能假失败。它比 `sleep` 好，仍不是协议。
 
@@ -150,8 +150,8 @@ Babylon **Mesh 与 Havok 共用同一份 `heightSamplesMeters`**（方阵 remap�
 
 判定函数本身是对的：`pass = score ≥ minimumScore ∧ 每个 region ∧ 每个 anchor`（`sdk-world-adapter.ts:904-906`）。断的是**后续阶段不消费这个结果**。
 
-- `scripts/export-scene-plan.ts:105-123`：`plan:scene` 只校验 plan-lock + 编译产物，就把 `workflowStage: "verified"` 写进 `manifest.json`。
-- `scripts/validate-visual-package.ts`：只核 lock/hash 与样式图，不读 composition report。
+- `scripts/scenes/export-scene-plan.ts:105-123`：`plan:scene` 只校验 plan-lock + 编译产物，就把 `workflowStage: "verified"` 写进 `manifest.json`。
+- `scripts/visual/validate-visual-package.ts`：只核 lock/hash 与样式图，不读 composition report。
 - 手工「构图」按钮只在 `report?.pass` 时导出（`main.ts:1217-1220`）；Studio 用的 `captureArtifacts=1` **无论 pass 与否**都 `exportOpeningFrame`（`main.ts:1235-1236`）。
 - Vite `/__whitebox/write-opening-frame`（`vite.config.mjs:160-178`）只检查 report 字段类型，**不拒绝 `pass: false`，也不在服务端重算门禁**。客户端可 POST `pass: true`。
 
@@ -169,7 +169,7 @@ Layout 把 `registryLockHash` 设成 subject 的 `resourceLockHash`，solver pro
 
 ## 门禁对照 ValidationReport：A / B / C
 
-设计要求版本化 Profile、Blocking/Advisory 分列、截图不能当权威、缺指标 = `incomplete`。现状全部是 ad-hoc 脚本 + `artifacts/examples/**/verification.json`。这本身是 **C（协议缺口）**，backlog 已写明未冻结。
+设计要求版本化 Profile、Blocking/Advisory 分列、截图不能当权威、缺指标 = `incomplete`。现状全部是 ad-hoc 脚本 + `examples/evidence/**/verification.json`。这本身是 **C（协议缺口）**，backlog 已写明未冻结。
 
 在 C 成立的前提下，现有脚本仍分好坏：
 
@@ -271,7 +271,7 @@ Layout Solver Profile 不进 Resource Lock：见 P1-7。
 - `pnpm plan:check` 按当前源码重算 lock，和文件字节对比。源漂了会红。
 - **不是签名。** 任何人可跑 `pnpm plan:freeze` 覆写 `plan-lock.json`。这是本机 trusted host 约定，不是出版本真实性。
 - Builder 场景实现文件不进 lock（设计如此：Builder 允许写 `scenes/<id>.ts`，不许改计划源和两张规划图）。
-- `scripts/run-scene-agent.sh` 用路径 allowlist 限制 Builder / Visual Bible 可写文件。绕过脚本直接改文件，lock 管不到实现几何——实现几何本来就不在 lock 里。Visual Bible 改白膜几何，要靠流程/人工，没有编译期几何哈希。
+- `scripts/agents/run-scene-agent.sh` 用路径 allowlist 限制 Builder / Visual Bible 可写文件。绕过脚本直接改文件，lock 管不到实现几何——实现几何本来就不在 lock 里。Visual Bible 改白膜几何，要靠流程/人工，没有编译期几何哈希。
 
 ### 构图门禁
 
@@ -283,7 +283,7 @@ Layout Solver Profile 不进 Resource Lock：见 P1-7。
 
 Studio 在 `plan:scene` exit 0 后标 `ready`，构图失败只提示「构图待调整」，不降级 status。和 P1-6 是同一条产品谎言。
 
-`apps/studio/server.mjs:96` 有 `image == null`（用户规则要求 `===` / `isNil`），属旧栈纪律，不是 Canonical 协议洞。
+`apps/studio/src/server.mjs:96` 有 `image == null`（用户规则要求 `===` / `isNil`），属旧栈纪律，不是 Canonical 协议洞。
 
 `agent:visual` 白名单能挡住 Agent 改场景几何；`visual:finalize` 不比对白膜场景源哈希。人绕过 launcher 改 `scenes/*.ts` 再 finalize，校验仍可能过（P3 宿主外路径）。
 

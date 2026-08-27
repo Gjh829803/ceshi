@@ -13,7 +13,7 @@
   filesystem publication, content-addressed store, and active trusted consumer
   migration.
 - Authority:
-  [`P1.4 Complete WorldPackage V2 implementation plan`](../superpowers/plans/2026-08-27-p14-complete-world-package-v2.md).
+  [`P1.4 Complete WorldPackage V2 implementation plan`](../../docs/superpowers/plans/2026-08-27-p14-complete-world-package-v2.md).
 - P1.6 authority status remains *Detailed design；implementation not started*.
 
 This closes the complete V2 package format prerequisite. It does not close all

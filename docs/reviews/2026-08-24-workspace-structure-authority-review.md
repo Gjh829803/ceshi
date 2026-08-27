@@ -37,9 +37,9 @@
   覆盖 D1–D6；Runtime 判断继续受
   [`runtime-deep-review-checklist.md`](runtime-deep-review-checklist.md) 约束。
 - 实现依据：
-  [`2026-08-26-authority-root-cause-closure-design.md`](../superpowers/specs/2026-08-26-authority-root-cause-closure-design.md)
+  [`2026-08-26-authority-root-cause-closure-design.md`](../../docs/superpowers/specs/2026-08-26-authority-root-cause-closure-design.md)
   与
-  [`2026-08-26-authority-root-cause-closure-implementation-plan.md`](../superpowers/plans/2026-08-26-authority-root-cause-closure-implementation-plan.md)。
+  [`2026-08-26-authority-root-cause-closure-implementation-plan.md`](../../docs/superpowers/plans/2026-08-26-authority-root-cause-closure-implementation-plan.md)。
 - P0：已确认的静默正确性或冻结边界破坏；P1：公共命令、事实源、发布入口或 blocking evidence
   不可信；P2：尚未造成静默错误、但需要计划化治理的工程边界与可维护性债。
 - 一个概念只允许一个 public owner；unreleased private Schema 采用 clean break，不用永久 alias
@@ -80,7 +80,7 @@
 |---|---:|---|---|
 | `WS-07B` | 后续 1 | Public Schema/generated drift 会影响正确性，但 Planner、Builder 与 Hosted wire 的当前高风险切片已闭合；全仓一次性推广成本高 | 按 public contract family 建唯一 source、正负 parity、unknown-key/round-trip；每次只迁一个领域，禁止私有 deep import 换小 bundle |
 | `WS-05B/C` | 后续 2 | 当前 52 条历史 debt 是工程边界债，不是 52 个产品 bug；`WS-05A` 已阻止新增并要求 debt 只能下降 | 按 owner 批次消减 exact ledger；补必要 `/testing` exports 与每包 direct deps/tsconfig；每批要求 debt count 下降、零 cycle、无 wildcard |
-| `WS-08` | 后续 3 | `scripts/worldkit.ts`、Studio server、recording/Host tooling 偏大，但当前 authority、lifecycle 与 entrypoint 已闭合；立即拆包协调成本最高 | 先稳定 Host primitives，再抽正式 package；保持 Runtime/Camera/Capture 唯一 owner；用 CLI snapshots、readiness/lifecycle 和 build graph 证明无行为变化 |
+| `WS-08` | 后续 3 | `scripts/cli/worldkit.ts`、Studio server、recording/Host tooling 偏大，但当前 authority、lifecycle 与 entrypoint 已闭合；立即拆包协调成本最高 | 先稳定 Host primitives，再抽正式 package；保持 Runtime/Camera/Capture 唯一 owner；用 CLI snapshots、readiness/lifecycle 和 build graph 证明无行为变化 |
 
 推荐顺序是 `WS-07B → WS-05B/C → WS-08`。前两项提高机械正确性与依赖纪律；WS-08 主要提升长期
 可维护性，应在 public contracts 稳定后分阶段做。52 是当前 ledger 的真实数量；此前 55 中有 3 条已被

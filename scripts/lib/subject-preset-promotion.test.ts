@@ -39,7 +39,7 @@ import {
   main as worldkitMain,
   parseWorldkitArgs,
   WorldkitUsageError,
-} from "../worldkit";
+} from "../cli/worldkit";
 
 const execFile = promisify(execFileCallback);
 const repositoryRoot = path.resolve(import.meta.dirname, "../..");

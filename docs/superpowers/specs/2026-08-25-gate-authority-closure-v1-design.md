@@ -16,16 +16,16 @@ This slice implements `WS-06A`, `WS-06B`, and the Site portion of `WS-00`. It do
 
 - Root `pnpm test` already performs the fail-closed Vitest census followed by contract and resource-heavy lanes. `pnpm test:scenes` is a narrower duplicate and is not part of this slice's final gate.
 - `apps/playground/vite-host.test.ts` imports `apps/playground/vite.config.test.mjs`, and the importing test is in the contract manifest. The audit claim that CI does not consume this Vite config is stale and must be withdrawn.
-- `scripts/agent-self-check.test.ts` currently rebuilds the tracked Builder bundle before comparing source and bundle behavior. That makes the default root test a self-healing producer.
+- `scripts/agents/agent-self-check.test.ts` currently rebuilds the tracked Builder bundle before comparing source and bundle behavior. That makes the default root test a self-healing producer.
 - Four Browser verifiers validate real Runtime behavior and then unconditionally promote staging output into tracked golden directories.
-- Six root Node `.test.mjs` files exist, but `scripts/image-delivery.test.mjs` is not in a gate and imports a removed visual-plan producer. The Site build/test is also outside CI.
+- Six root Node `.test.mjs` files exist, but `scripts/visual/image-delivery.test.mjs` is not in a gate and imports a removed visual-plan producer. The Site build/test is also outside CI.
 - The Site points at a deleted `/legacy/index.html`. Restoring that Legacy bundle is forbidden.
 
 ## 3. Authority model
 
 | State or action | Single owner | Read-only consumers |
 | --- | --- | --- |
-| Builder self-check source | `scripts/agent-builder-self-check.ts` | bundle checker and source-side parity execution |
+| Builder self-check source | `scripts/agents/agent-builder-self-check.ts` | bundle checker and source-side parity execution |
 | Tracked Builder bundle bytes | `pnpm generate:agent-self-check` | `pnpm check:agent-self-check`, root self-check behavior test, CI |
 | Browser verifier staging evidence | the invoked verifier process | default `verify:*` result summary |
 | Tracked Browser golden directories | explicit `verify:*:update` scripts | default `verify:*`, reviews, documentation |
@@ -37,7 +37,7 @@ No default `test`, `check`, `verify`, `typecheck`, or `build` command may update
 
 ## 4. Builder bundle contract
 
-`scripts/build-agent-self-check.mjs` remains the low-level deterministic bundler but accepts an explicit output directory. `pnpm generate:agent-self-check` is the only package script that selects the tracked skill directory.
+`scripts/agents/build-agent-self-check.mjs` remains the low-level deterministic bundler but accepts an explicit output directory. `pnpm generate:agent-self-check` is the only package script that selects the tracked skill directory.
 
 `pnpm check:agent-self-check` builds into a temporary directory, byte-compares the resulting `self-check.mjs` with the tracked bundle, reports stale or missing output, and removes the temporary directory in `finally`. It never runs the tracked producer first.
 
@@ -97,7 +97,7 @@ The final clean-tree assertion detects any accidental tracked write by any prece
 
 | ID | Goal and independently verifiable deliverable | `depends_on` | `blocks` | Exclusive ownership | Input/output contract and integration point | Required evidence | Mode |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| GAC-01 | Builder generate/check separation | — | GAC-04 | `scripts/build-agent-self-check.mjs`, new checker, `scripts/agent-self-check.test.ts`, Builder package scripts, its manifest row | source TS + tracked bundle → temporary byte comparison; tracked output only through `generate:agent-self-check` | stale-bundle RED, temporary-output GREEN, behavior parity, clean tree | main-agent-only |
+| GAC-01 | Builder generate/check separation | — | GAC-04 | `scripts/agents/build-agent-self-check.mjs`, new checker, `scripts/agents/agent-self-check.test.ts`, Builder package scripts, its manifest row | source TS + tracked bundle → temporary byte comparison; tracked output only through `generate:agent-self-check` | stale-bundle RED, temporary-output GREEN, behavior parity, clean tree | main-agent-only |
 | GAC-02 | Browser verifier check/update split | — | GAC-04 | artifact publication helper/tests, four verifier entrypoints, four package-script pairs | verified staging directory + explicit mode → inventory-only check or atomic promotion | check leaves target unchanged; update replaces target; bad args reject; four real check runs leave tree clean | main-agent-only |
 | GAC-03 | Independent Node/Site gate and current Site | — | GAC-04 | independent manifest/runner/tests, root scripts, CI lane, `sites/world-sdk-blueprint/**` | discovered suites must equal manifest; runner executes each lane once | orphan/stale/duplicate REDs; image delivery GREEN; Site build/render GREEN | main-agent-only |
 | GAC-04 | Integration, documentation, and audit disposition | GAC-01, GAC-02, GAC-03 | — | `.github/workflows/ci.yml`, README/current gate docs, audit report | one current tree and one coverage matrix | focused suites, census, typecheck, root test, build, clean-tree, independent review | main-agent-only |

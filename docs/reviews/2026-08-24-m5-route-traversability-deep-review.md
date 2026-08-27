@@ -37,7 +37,7 @@
 
 完整门禁还发现并关闭了一个原报告未列出的集成缺口：Recast Path 出现 successive turns 时，Driver 的 2.4m lookahead 会切过转角，而冻结的 3D support station 只能按单 Tick 物理步长推进，最终在真实 Havok runner 中误报 `runtime-stalled`。`79952d1` 增加动态方向跟随 RED，并把 lookahead/projection 限制在当前直线段；`acd4a69` 同步 R1b verifier 的基础设施状态 oracle。该修复不放宽 stalled、deviation、support 或 arrival 阈值。
 
-直接合入 `main` 前的最终 `pnpm test` 首轮还发现 `scripts/verify-route-r1b-static-platform.test.ts` 保留了 `acd4a69` 之前的三个镜像预期：生产 verifier 与冻结 R1b 规格都已要求 profile/correlation missing/ambiguous 为 `incomplete / unavailable`，该 contract test 却仍断言 `failed`。当前失败作为 RED 后，只把这三个测试预期同步为 `incomplete`；focused test 5/5 与随后完整 `pnpm test` 均通过，生产实现未改变。
+直接合入 `main` 前的最终 `pnpm test` 首轮还发现 `scripts/verification/verify-route-r1b-static-platform.test.ts` 保留了 `acd4a69` 之前的三个镜像预期：生产 verifier 与冻结 R1b 规格都已要求 profile/correlation missing/ambiguous 为 `incomplete / unavailable`，该 contract test 却仍断言 `failed`。当前失败作为 RED 后，只把这三个测试预期同步为 `incomplete`；focused test 5/5 与随后完整 `pnpm test` 均通过，生产实现未改变。
 
 ### 0A.2 最终门禁证据
 
@@ -104,7 +104,7 @@
 | P1 公开 Report 可接受 Required Route 子集 | **仍存在** | 公开输入仍只有 caller rows：`route-evaluator.ts:69-75,1826-1901`。Trusted orchestrator 在 `route-validation-orchestrator.ts:824-906` 当前会遍历完整 Plan，所以这里仍定为公共合同缺口，而非已证明 CLI 主路径假通过。 |
 | P1 V2 Route evidence 使用 v1 MIME | **仍存在** | failure/graph/path/probe 仍分别使用 `v1+json`：`route-evaluator.ts:1161-1168,1197-1204,1302-1318,1458-1468`；`validate-v2.ts:1027-1056` 仍只要求非空字符串。 |
 | P1 SubjectController 部分构造泄漏 | **仍存在，且仍是 pre-existing debt** | 最新失败注入 3/3 均 `created=2,released=0`；allocation 后仍有 throwing work：`motion-kernel-runtime.ts:442-463`，host 到成功后才登记 disposer：`babylon-world-runtime.ts:601-620`。 |
-| P1 Hosted Studio 导入未绑定 Route report | **新增，存在** | 生产 runner 在 `scripts/run-spatial-world-agent.sh:211-226` 对 `requiresTrustedRouteValidation` 执行 Route gate；但 `apps/studio/server.mjs:672-701,953-1030` 的 deliverable/admission 不要求或校验该 report，随后在 `:1061-1098` 直接标 `ready/passed`。 |
+| P1 Hosted Studio 导入未绑定 Route report | **新增，存在** | 生产 runner 在 `scripts/agents/run-spatial-world-agent.sh:211-226` 对 `requiresTrustedRouteValidation` 执行 Route gate；但 `apps/studio/src/server.mjs:672-701,953-1030` 的 deliverable/admission 不要求或校验该 report，随后在 `:1061-1098` 直接标 `ready/passed`。 |
 | P1 Visual Capture 配置失败泄漏 Runtime | **新增，存在** | `main.ts:1998-2016` 在 Adapter 创建成功后先 configure、后登记 owner；未知 entity 在 `babylon-world-adapter.ts:668-683` 抛错，Browser catch `worldkit-browser-api.ts:1209-1247` 只能释放已登记 owner。最小所有权复现为 `disposed=0,status=error`。 |
 | P1 V2 pre-Graph Surface failure 状态误标 | **新增确认，存在** | 冻结规格要求 profile/correlation failure 为 `incomplete / unavailable`；`connectivity-result.ts:892-923` 却只接受其 `unreachable / unavailable`，`evaluate-route.ts:844-852,977-985` 也按 unreachable 生产。当前 focused tests 把错误状态固化为绿测。 |
 | P1 overlap correlation failure 的 Y 坐标硬编码 0 | **新增确认，存在** | `evaluate-route.ts:977-985` 把 overlap witness 的 XZ 与常量 Y=0 拼成 XYZ。真实 elevated fixture 的两个候选 Surface 顶面均为 0.25m，最小复现仍输出 `[6,0,3.666…]`。 |
@@ -190,7 +190,7 @@ Medium finding 已撤回；runner timeout 则必须通过门禁编排修复并�
 目标是提高修复迭代效率，同时不削弱 `pnpm test` 的完整覆盖语义：
 
 1. `pnpm test` 保持唯一完整 wrapper，顺序调用并行的 contract lane 与串行的 resource-heavy lane；任一 lane 失败即整体失败。
-2. resource-heavy manifest 必须显式列出文件，首批至少包括 `scripts/lib/route-validation-runner.test.ts`、`scripts/worldkit-route-run.integration.test.ts`、`scripts/verification-browser-launch.test.ts`，以及经计时确认会启动 Havok/Recast/Playwright/Vite 子进程的 Runtime suites。不能用继续增加 180 秒 timeout 替代串行隔离。
+2. resource-heavy manifest 必须显式列出文件，首批至少包括 `scripts/lib/route-validation-runner.test.ts`、`scripts/cli/worldkit-route-run.integration.test.ts`、`scripts/verification/verification-browser-launch.test.ts`，以及经计时确认会启动 Havok/Recast/Playwright/Vite 子进程的 Runtime suites。不能用继续增加 180 秒 timeout 替代串行隔离。
 3. 增加自动 census：根据 `vitest.config.ts` 的 root include 收集全部测试文件，并断言每个文件恰好属于一个 lane（union 等于 root 集、intersection 为空）；这样 lane manifest 漏项会在门禁自身 fail closed。
 4. 实现期先跑 finding 对应的 focused RED/GREEN；源码、Schema、fixture 或 generated artifact 的变化只作废其依赖证据。跨 authority 的 station、Envelope、Report 修复必须重跑相关完整 lane；stair-step 相关改动继续重跑真实 Havok/R1b lane。
 5. 最终树上每个相关完整 lane 恰好运行一次；`typecheck`、`build`、R0/R1/R1b、Browser Route integration、Studio、LWDP 与 clean-break 仍是 root Vitest 之外的显式闭包，不能因 lane 拆分省略。
@@ -414,7 +414,7 @@ Medium finding 已撤回；runner timeout 则必须通过门禁编排修复并�
 
 ### [P1] [D4/D6] Hosted Studio 导入可绕过 Required Route Validation Report
 
-- 证据（static-read）：生产 runner 读取 trusted Builder receipt 的 `requiresTrustedRouteValidation`，并在为 true 时执行 `worldkit verify route`，见 `scripts/run-spatial-world-agent.sh:211-226`。但是 Studio 的 deliverable inventory 与 `hasTrustedWhiteboxArtifacts()` required paths 不包含 Route report，见 `apps/studio/server.mjs:672-701,953-966`；admission 对 Authoring 只检查 `kind/schemaVersion/id`，也不检查 Builder receipt 的 Route-required flag，见 `:998-1030`；通过后直接写入 `ready/passed`，见 `:1061-1098`。现有 `server.test.mjs:842-858` 绿测只证明一个没有 Required Route flag 的浅工件可以导入，不能作为“Required Route 缺 report 仍 passed”的动态 RED。
+- 证据（static-read）：生产 runner 读取 trusted Builder receipt 的 `requiresTrustedRouteValidation`，并在为 true 时执行 `worldkit verify route`，见 `scripts/agents/run-spatial-world-agent.sh:211-226`。但是 Studio 的 deliverable inventory 与 `hasTrustedWhiteboxArtifacts()` required paths 不包含 Route report，见 `apps/studio/src/server.mjs:672-701,953-966`；admission 对 Authoring 只检查 `kind/schemaVersion/id`，也不检查 Builder receipt 的 Route-required flag，见 `:998-1030`；通过后直接写入 `ready/passed`，见 `:1061-1098`。现有 `server.test.mjs:842-858` 绿测只证明一个没有 Required Route flag 的浅工件可以导入，不能作为“Required Route 缺 report 仍 passed”的动态 RED。
 - 期望：当 Canonical Authoring/Builder receipt 声明存在 Required Route 时，import/recovery 必须要求可发现、canonical 且绑定同一 Authoring/IR/ExecutionPlan/Resource Lock hashes 的 Route Validation Report；缺失、失败或跨世界 report 必须 fail closed。
 - 影响：正常生成链路会执行 M5 Blocking Gate，但已有产物导入/恢复链路可跳过它并在 Studio 中显示通过，形成同一工件的双重准入权威。
 - 建议：由固定 manifest 指向 nonce report；admission 从可信 Builder receipt 决定是否必需，复用 canonical validator 验证 report/hash closure。增加 Required Route 缺失、错误 hash、failed report 与 exact passing report 四组测试。

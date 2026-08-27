@@ -188,7 +188,7 @@ flowchart TB
 
 | 层 | 核心职责 | 明确不负责 | 当前主要代码 |
 |---|---|---|---|
-| L1 接入层 | 给人、Agent、Host 和自动化程序提供稳定入口，并把 Provider 能力投影回唯一 Canonical 方言 | 不包含第二套 Provider 私有世界语义 | `scripts/worldkit.ts`、`apps/playground`；AI Schema Provider Adapter 尚在设计 |
+| L1 接入层 | 给人、Agent、Host 和自动化程序提供稳定入口，并把 Provider 能力投影回唯一 Canonical 方言 | 不包含第二套 Provider 私有世界语义 | `scripts/cli/worldkit.ts`、`apps/playground`；AI Schema Provider Adapter 尚在设计 |
 | L2 公共协议层 | 定义 AI 可以写什么、Host 可以调用什么、Runtime 返回什么 | 不执行地形、物理或渲染 | `packages/protocol`、`packages/authoring` 的公开 Schema、`packages/runtime-contracts` |
 | L3 解析与编译层 | 校验、资源/地形/Region 解析、Constraint 求解、最终 IR 投影和确定性编译 | 不创建 Babylon Scene、Mesh 或 Havok Body | `packages/authoring`、`packages/layout-solver`、`packages/compiler` |
 | L4 数据边界 | 保存版本化、可哈希、可验证的世界与操作计划 | 不包含可变运行时 Handle | IR、Resource Lock、ExecutionPlan、Simulation Take V1；完整 WorldPackage V2 目录、Manifest、Root、Build Receipt、Legal/Host/签名合同、内容寻址 Store、Package CLI 与持久 Runtime Session WAL 已实现 |
@@ -495,10 +495,10 @@ Babylon-backed catalog gameplay 和 artifact-only 捕获，但三者共享同一
 
 ## 10. 相关设计文档
 
-- [AI-first LEGO 游戏 SDK 总体设计](superpowers/specs/2026-08-17-ai-first-lego-game-sdk-design.md)
-- [Canonical Runtime State 与 Semantic Projection 设计](superpowers/specs/2026-08-22-canonical-runtime-state-and-semantic-projection-design.md)
-- [可扩展 Subject Authoring 设计](superpowers/specs/2026-08-19-extensible-subject-authoring-design.md)
-- [Placement Constraint 与 Layout Solver 设计](superpowers/specs/2026-08-19-placement-constraint-layout-solver-design.md)
-- [Simulation Take 与 Control Capture 设计](superpowers/specs/2026-08-19-simulation-take-control-capture-design.md)
-- [World Validation Report 与质量门禁设计](superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md)
-- [ADR-0006：AuthoringSpec 编译架构与 Babylon Runtime](../decisions/0006-authoring-spec-compiler-architecture.md)
+- [AI-first LEGO 游戏 SDK 总体设计](../docs/superpowers/specs/2026-08-17-ai-first-lego-game-sdk-design.md)
+- [Canonical Runtime State 与 Semantic Projection 设计](../docs/superpowers/specs/2026-08-22-canonical-runtime-state-and-semantic-projection-design.md)
+- [可扩展 Subject Authoring 设计](../docs/superpowers/specs/2026-08-19-extensible-subject-authoring-design.md)
+- [Placement Constraint 与 Layout Solver 设计](../docs/superpowers/specs/2026-08-19-placement-constraint-layout-solver-design.md)
+- [Simulation Take 与 Control Capture 设计](../docs/superpowers/specs/2026-08-19-simulation-take-control-capture-design.md)
+- [World Validation Report 与质量门禁设计](../docs/superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md)
+- [ADR-0006：AuthoringSpec 编译架构与 Babylon Runtime](../docs/decisions/0006-authoring-spec-compiler-architecture.md)

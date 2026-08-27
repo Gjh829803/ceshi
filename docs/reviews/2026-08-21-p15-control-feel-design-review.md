@@ -6,7 +6,7 @@
   [`full-dimension-review-protocol.md`](full-dimension-review-protocol.md) 执行规格审查，
   并额外执行 Support / Medium / Feel 单一权威审查。
 - 对象：
-  [`2026-08-21-control-feel-physics-medium-state-resolver-design.md`](../superpowers/specs/2026-08-21-control-feel-physics-medium-state-resolver-design.md)。
+  [`2026-08-21-control-feel-physics-medium-state-resolver-design.md`](../../docs/superpowers/specs/2026-08-21-control-feel-physics-medium-state-resolver-design.md)。
 - PR：#8，分支 `cursor/p15-control-feel-design-39e1`，目标 `main`。
 - 审查输入 HEAD：`ef921774cf76e35945a42f2286c653e1aa77851a`；同一 PR 上直接修订，
   未新开平行规格。

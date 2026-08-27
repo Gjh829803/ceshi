@@ -77,7 +77,7 @@ This plan delivers **R1 Heightfield Route only**. It does not close M5 by itself
 - Modify: `packages/compiler/package.json`
 - Modify: `packages/runtime-babylon/src/runtime.test.ts`
 - Verify: `apps/playground/src/authoring-loader.test.ts`
-- Modify: `scripts/worldkit.test.ts`
+- Modify: `scripts/cli/worldkit.test.ts`
 - Modify: `scripts/lib/worldkit-pipeline.ts`
 - Modify: `pnpm-lock.yaml`
 
@@ -173,7 +173,7 @@ Prove that `compileResolvedTraversalLockV1()`:
 Run:
 
 ```bash
-pnpm vitest run packages/authoring/src/normalize-v4.test.ts packages/authoring/src/subject-definition-normalizer.test.ts packages/subject-registry/src/subject-registry.test.ts packages/subject-registry/src/capability-registry.test.ts packages/compiler/src/compile.test.ts packages/compiler/src/compile-v5.test.ts packages/compiler/src/compile-traversal-lock.test.ts packages/runtime-contracts/src/runtime-contracts.test.ts packages/traversal/src/collider-subshape-id.test.ts packages/runtime-babylon/src/runtime.test.ts apps/playground/src/authoring-loader.test.ts scripts/worldkit.test.ts
+pnpm vitest run packages/authoring/src/normalize-v4.test.ts packages/authoring/src/subject-definition-normalizer.test.ts packages/subject-registry/src/subject-registry.test.ts packages/subject-registry/src/capability-registry.test.ts packages/compiler/src/compile.test.ts packages/compiler/src/compile-v5.test.ts packages/compiler/src/compile-traversal-lock.test.ts packages/runtime-contracts/src/runtime-contracts.test.ts packages/traversal/src/collider-subshape-id.test.ts packages/runtime-babylon/src/runtime.test.ts apps/playground/src/authoring-loader.test.ts scripts/cli/worldkit.test.ts
 pnpm verify:route-r0-contract
 pnpm typecheck
 pnpm test
@@ -862,8 +862,8 @@ still follow Task 8.
 - Create: `scripts/lib/route-validation-cli.test.ts`
 - Modify: `scripts/lib/validation-cli.ts`
 - Modify: `scripts/lib/validation-cli.test.ts`
-- Modify: `scripts/worldkit.ts`
-- Modify: `scripts/worldkit.test.ts`
+- Modify: `scripts/cli/worldkit.ts`
+- Modify: `scripts/cli/worldkit.test.ts`
 - Modify: `scripts/lib/worldkit-server.ts`
 - Modify: `scripts/lib/worldkit-server.test.ts`
 - Modify: `packages/runtime-contracts/src/runtime-session.ts`
@@ -878,9 +878,9 @@ still follow Task 8.
 - Modify: `apps/playground/src/babylon-world-adapter.ts`
 - Modify: `apps/playground/src/playground-world.ts`
 - Modify: `packages/runtime-babylon/src/physics.ts`
-- Modify: `scripts/verify-canonical-world.ts`
-- Modify: `scripts/verify-placement-layout.ts`
-- Create: `scripts/worldkit-route-run.integration.test.ts`
+- Modify: `scripts/verification/verify-canonical-world.ts`
+- Modify: `scripts/verification/verify-placement-layout.ts`
+- Create: `scripts/cli/worldkit-route-run.integration.test.ts`
 - Modify: `README.md`
 - Modify: `docs/00-project-overview.md`
 - Modify: `docs/02-sdk-architecture.md`
@@ -937,7 +937,7 @@ Implement the complete `WorldkitBrowserApiV4` and update host wiring, CLI/Playwr
 Run:
 
 ```bash
-pnpm vitest run packages/traversal/src/route-overlay.test.ts packages/world-package/src/manifest.test.ts packages/world-package/src/build-receipt.test.ts packages/validation/src/world-package-validation-subject.test.ts packages/validation/src/route-evidence-publication.test.ts scripts/lib/route-validation-orchestrator.test.ts scripts/lib/route-validation-runner.test.ts scripts/lib/route-validation-cli.test.ts scripts/lib/validation-cli.test.ts scripts/worldkit.test.ts scripts/worldkit-route-run.integration.test.ts scripts/lib/worldkit-server.test.ts packages/runtime-contracts/src/runtime-contracts.test.ts apps/playground/src/authoring-loader.test.ts apps/playground/src/worldkit-browser-api.test.ts
+pnpm vitest run packages/traversal/src/route-overlay.test.ts packages/world-package/src/manifest.test.ts packages/world-package/src/build-receipt.test.ts packages/validation/src/world-package-validation-subject.test.ts packages/validation/src/route-evidence-publication.test.ts scripts/lib/route-validation-orchestrator.test.ts scripts/lib/route-validation-runner.test.ts scripts/lib/route-validation-cli.test.ts scripts/lib/validation-cli.test.ts scripts/cli/worldkit.test.ts scripts/cli/worldkit-route-run.integration.test.ts scripts/lib/worldkit-server.test.ts packages/runtime-contracts/src/runtime-contracts.test.ts apps/playground/src/authoring-loader.test.ts apps/playground/src/worldkit-browser-api.test.ts
 pnpm typecheck
 pnpm verify:canonical
 pnpm verify:placement-layout
@@ -976,7 +976,7 @@ Recorded completion evidence at `c778794`:
 - Create: `examples/traversal/r1-heightfield/fail-start-surface.json`
 - Create: `examples/traversal/r1-heightfield/fail-budget.json`
 - Create: `examples/traversal/r1-heightfield/fail-outside-detour.json`
-- Create: `scripts/verify-route-r1-heightfield.ts`
+- Create: `scripts/verification/verify-route-r1-heightfield.ts`
 - Modify: `package.json`
 
 **Gate:** `pnpm verify:route-r1-heightfield`
@@ -1012,7 +1012,7 @@ The script must assert expected exit/status/diagnostic for each fixture accordin
 Add:
 
 ```json
-"verify:route-r1-heightfield": "tsx scripts/verify-route-r1-heightfield.ts"
+"verify:route-r1-heightfield": "tsx scripts/verification/verify-route-r1-heightfield.ts"
 ```
 
 Run: `pnpm verify:route-r1-heightfield`
@@ -1034,7 +1034,7 @@ Expected: PASS against the final reviewed fixture containing both Task 3A `route
 - Modify: `docs/18-refactor-progress-and-backlog.md`
 - Modify: `README.md`
 - Modify: `docs/17-canonical-json-quickstart.md`
-- Modify: `scripts/verify-canonical-world.ts`
+- Modify: `scripts/verification/verify-canonical-world.ts`
 - Create: `docs/reviews/2026-08-22-route-r1-heightfield-runtime-review.md`
 
 - [x] **Step 1: Run all mandatory gates**

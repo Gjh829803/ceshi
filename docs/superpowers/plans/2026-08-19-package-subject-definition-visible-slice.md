@@ -84,7 +84,7 @@ Final conformance evidence (2026-08-19):
 - `packages/compiler/`: stable materialization from NormalizedWorldIRV2 into ExecutionPlanV3.
 - `packages/runtime-babylon/`: map Subject Origin to Havok Character Controller center and back.
 - `apps/playground/`: load V2 worlds and expose Browser Protocol V3.
-- `scripts/worldkit.ts`: versioned Build Artifact V3 plus Registry, Definition Validate, and Subject Explain CLI commands.
+- `scripts/cli/worldkit.ts`: versioned Build Artifact V3 plus Registry, Definition Validate, and Subject Explain CLI commands.
 
 ---
 
@@ -966,9 +966,9 @@ git commit -m "feat: run subjects from support origin"
 - Create: `scripts/lib/worldkit-pipeline.ts`
 - Create: `scripts/lib/subject-explain.ts`
 - Modify: `package.json`
-- Modify: `scripts/worldkit.ts`
-- Modify: `scripts/worldkit.test.ts`
-- Modify: `scripts/verify-canonical-world.ts`
+- Modify: `scripts/cli/worldkit.ts`
+- Modify: `scripts/cli/worldkit.test.ts`
+- Modify: `scripts/verification/verify-canonical-world.ts`
 - Modify: `packages/authoring/src/index.ts`
 - Modify: `packages/authoring/src/parse.ts`
 - Modify: `packages/authoring/src/normalize.ts`
@@ -1039,7 +1039,7 @@ Add stable ordering, missing Ref/Entity diagnostics, invalid standalone Definiti
 
 - [x] **Step 2: Run CLI tests and verify failure**
 
-Run: `pnpm vitest run scripts/worldkit.test.ts`
+Run: `pnpm vitest run scripts/cli/worldkit.test.ts`
 
 Expected: FAIL because nested discovery commands and V3 artifacts are absent.
 
@@ -1069,7 +1069,7 @@ Make the versionless parser accept only AuthoringSpecV2, make the versionless No
 
 - [x] **Step 9: Run CLI and full type tests**
 
-Run: `pnpm vitest run scripts/worldkit.test.ts`
+Run: `pnpm vitest run scripts/cli/worldkit.test.ts`
 
 Run: `pnpm typecheck`
 
@@ -1090,11 +1090,11 @@ git commit -m "feat: explain subject definitions from cli"
 - Create: `examples/authoring/package-subject-world.json`
 - Update: `examples/authoring/basic-world.json`
 - Update: `examples/authoring/multi-subject-world.json`
-- Modify: `scripts/verify-canonical-world.ts`
-- Generated during verification: `artifacts/examples/package-subject-world/world.build.json`
-- Generated during verification: `artifacts/examples/package-subject-world/world.png`
-- Generated during verification: `artifacts/examples/package-subject-world/snapshot.json`
-- Generated during verification: `artifacts/examples/package-subject-world/explain.json`
+- Modify: `scripts/verification/verify-canonical-world.ts`
+- Generated during verification: `examples/evidence/package-subject-world/world.build.json`
+- Generated during verification: `examples/evidence/package-subject-world/world.png`
+- Generated during verification: `examples/evidence/package-subject-world/snapshot.json`
+- Generated during verification: `examples/evidence/package-subject-world/explain.json`
 
 **Interfaces:**
 - Consumes: completed V2 pipeline and Browser Protocol V3.
@@ -1156,12 +1156,12 @@ Expected: all commands PASS. The verifier prints normalized IR V2, ExecutionPlan
 
 - [x] **Step 6: Inspect the generated screenshot**
 
-Open `artifacts/examples/package-subject-world/world.png` and verify the Humanoid plus two distinct quadruped whitebox proxies are visible, grounded, separated, and not intersecting obvious terrain/obstacles. Record the exact visual result in the plan progress section.
+Open `examples/evidence/package-subject-world/world.png` and verify the Humanoid plus two distinct quadruped whitebox proxies are visible, grounded, separated, and not intersecting obvious terrain/obstacles. Record the exact visual result in the plan progress section.
 
 - [x] **Step 7: Commit**
 
 ```bash
-git add examples scripts/verify-canonical-world.ts artifacts/examples/package-subject-world
+git add examples scripts/verification/verify-canonical-world.ts examples/evidence/package-subject-world
 git commit -m "test: verify package subject world end to end"
 ```
 
@@ -1189,10 +1189,10 @@ Document:
 
 ```text
 pnpm worldkit validate examples/authoring/package-subject-world.json --json
-pnpm worldkit build examples/authoring/package-subject-world.json --output artifacts/examples/package-subject-world/world.build.json --json
+pnpm worldkit build examples/authoring/package-subject-world.json --output examples/evidence/package-subject-world/world.build.json --json
 pnpm worldkit subject explain examples/authoring/package-subject-world.json --entity-id pack-animal-a --json
 pnpm worldkit run examples/authoring/package-subject-world.json
-pnpm worldkit capture examples/authoring/package-subject-world.json --output artifacts/examples/package-subject-world/world.png --snapshot artifacts/examples/package-subject-world/snapshot.json --json
+pnpm worldkit capture examples/authoring/package-subject-world.json --output examples/evidence/package-subject-world/world.png --snapshot examples/evidence/package-subject-world/snapshot.json --json
 ```
 
 State that Authoring V2 is the only accepted input, V1 was never released and has been removed, and S1a does not support assets, relationships, mounts, equipment, vehicles, animations, NPC behavior, or flight.

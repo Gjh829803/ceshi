@@ -191,7 +191,7 @@ CAM-01 至 CAM-04 已按顺序实施。CAM-04 在公开 `WorldRuntimeCameraState
 - `node_modules\\.bin\\vitest.cmd run apps/playground/src/gameplay-babylon-runtime-coordinator.test.ts packages/runtime-babylon/src/camera-preview-channel.test.ts apps/playground/src/babylon-world-adapter.test.ts`：3 文件、48 tests 通过；
 - `node_modules\\.bin\\tsc.cmd --noEmit`：退出 0；
 - `corepack pnpm@10.14.0 build`：Playground Vite production build 通过；
-- `node_modules\\.bin\\tsx.cmd scripts/verify-g-bot-subject-world.ts`：退出 0，idle/walk/run/jump、主体隔离和墙体停步验证通过。
+- `node_modules\\.bin\\tsx.cmd scripts/verification/verify-g-bot-subject-world.ts`：退出 0，idle/walk/run/jump、主体隔离和墙体停步验证通过。
 
 ## 12. 生命周期继续硬化（2026-08-26）
 

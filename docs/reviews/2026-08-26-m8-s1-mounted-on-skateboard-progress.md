@@ -4,8 +4,8 @@
 - Branch: `main`
 - Status: core vertical slice and current-tree base gates implemented; targeted hardening, formal mounted
   Capture evidence and final completion review remain open
-- Authority: [design](../superpowers/specs/2026-08-26-m8-s1-mounted-on-skateboard-design.md),
-  [implementation plan](../superpowers/plans/2026-08-26-m8-s1-mounted-on-skateboard-implementation-plan.md),
+- Authority: [design](../../docs/superpowers/specs/2026-08-26-m8-s1-mounted-on-skateboard-design.md),
+  [implementation plan](../../docs/superpowers/plans/2026-08-26-m8-s1-mounted-on-skateboard-implementation-plan.md),
   [central backlog](../18-refactor-progress-and-backlog.md)
 
 ## Implemented

@@ -66,7 +66,7 @@ Visual Bible: styled tri-views + rendered opening frame
 
 ## 最小场景
 
-新场景必须先给出完整 WorldSpec。为避免这里复制一大段不完整字段，请直接从 [`templates/outdoor-scene.ts`](../templates/outdoor-scene.ts) 开始；下面只展示白膜实现部分：
+新场景必须先给出完整 WorldSpec。为避免这里复制一大段不完整字段，请直接从 [`examples/templates/outdoor-scene.ts`](../examples/templates/outdoor-scene.ts) 开始；下面只展示白膜实现部分：
 
 ```ts
 import { definePlannedOutdoorScene } from "@whitebox-world/world";
@@ -96,7 +96,7 @@ export const scene = definePlannedOutdoorScene({
 });
 ```
 
-完整模板见 [`templates/outdoor-scene.ts`](../templates/outdoor-scene.ts)。
+完整模板见 [`examples/templates/outdoor-scene.ts`](../examples/templates/outdoor-scene.ts)。
 
 ### 出生方向与参考镜头
 

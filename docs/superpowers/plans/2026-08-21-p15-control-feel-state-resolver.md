@@ -18,7 +18,7 @@
 ## Global Constraints
 
 - First slice is Ground/Air humanoid Character only. Do not publish `movementMedium: "water"`.
-- Do not add Validation Report, CLI, or Browser protocol fields. Do not edit `scripts/worldkit.ts`, `scripts/worldkit.test.ts`, root `package.json`, `pnpm-lock.yaml`, `docs/18-refactor-progress-and-backlog.md` until Task 8, `docs/superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md`, `packages/validation/**`, or `packages/control-capture/src/control-capture-bundle.ts`.
+- Do not add Validation Report, CLI, or Browser protocol fields. Do not edit `scripts/cli/worldkit.ts`, `scripts/cli/worldkit.test.ts`, root `package.json`, `pnpm-lock.yaml`, `docs/18-refactor-progress-and-backlog.md` until Task 8, `docs/superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md`, `packages/validation/**`, or `packages/control-capture/src/control-capture-bundle.ts`.
 - Do not add a new workspace package. Put the collider support helper in `@whitebox-world/terrain-surface`.
 - Clean Break: no aliases for deleted speed fields, motion parameter bags, `ground-water-air.standard@1`, or ray bootstrap flags.
 - Public kinds are exactly `control-profile`, `control-feel-profile`, `locomotion-profile`, `medium-profile`. Do not introduce `control-method-profile` or `physics-medium-profile`.

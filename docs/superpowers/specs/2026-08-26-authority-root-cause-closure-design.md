@@ -103,7 +103,7 @@ Move the deterministic spawn-safety algorithm and types from `@whitebox-world/te
 
 ### 2.9 Portable Planner parity (`WS-07A`)
 
-Create one source `scripts/agent-planner-self-check.ts` that consumes `parseSceneBriefV1`. Extend the existing explicit build/check mechanism to generate and byte-compare both Planner and Builder portable bundles. Source and tracked bundle must agree for positive and negative fixtures, including duplicate visual-target names, a second Subject, and a movement label longer than 48 characters.
+Create one source `scripts/agents/agent-planner-self-check.ts` that consumes `parseSceneBriefV1`. Extend the existing explicit build/check mechanism to generate and byte-compare both Planner and Builder portable bundles. Source and tracked bundle must agree for positive and negative fixtures, including duplicate visual-target names, a second Subject, and a movement label longer than 48 characters.
 
 The Planner receipt continues to hash raw Scene Brief bytes because Studio joins that exact artifact. Canonical parse diagnostics are adapted to the receipt shape; they are not reimplemented.
 

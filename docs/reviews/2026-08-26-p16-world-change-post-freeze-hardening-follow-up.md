@@ -5,7 +5,7 @@
 - Date: 2026-08-26
 - Base: `main@e4da05e0a6b5d42b6fb23417616ae50cbfa8b287`
 - Authority under review: `docs/superpowers/specs/2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md`
-- Historical amendment: [`P1.6 WorldChangeSet Publication Hardening 历史增补记录`](../superpowers/specs/2026-08-26-p16-world-change-publication-hardening-amendment.md)
+- Historical amendment: [`P1.6 WorldChangeSet Publication Hardening 历史增补记录`](../../docs/superpowers/specs/2026-08-26-p16-world-change-publication-hardening-amendment.md)
 - Change class: design-only public-contract hardening; implementation remains not started
 
 This follow-up reviews the already-hardened P1.6 design for remaining type/transition mismatches. All dispositions have since been consolidated into the core specification; the linked amendment is historical and non-normative. This work does not add Runtime Spawn, Terrain Hot Apply, a new Browser key, or any production claim.

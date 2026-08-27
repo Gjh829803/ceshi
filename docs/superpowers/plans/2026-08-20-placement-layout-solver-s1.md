@@ -435,26 +435,26 @@ git commit -m "feat: compile solved layout execution plans"
 - Modify: `packages/runtime-babylon/src/runtime.test.ts`
 - Modify: `apps/playground/src/babylon-world-adapter.ts`
 - Modify: `apps/playground/src/authoring-loader.test.ts`
-- Modify: `scripts/worldkit.ts`
-- Modify: `scripts/worldkit.test.ts`
+- Modify: `scripts/cli/worldkit.ts`
+- Modify: `scripts/cli/worldkit.test.ts`
 - Modify: `examples/authoring/basic-world.json`
 - Modify: `examples/authoring/invalid-world.json`
 - Modify: `examples/authoring/multi-subject-world.json`
 - Modify: `examples/authoring/package-subject-world.json`
 - Modify: `examples/authoring/rigged-subject-world.json`
-- Modify: `artifacts/examples/package-subject-world/explain.json`
-- Modify: `artifacts/examples/package-subject-world/snapshot.json`
-- Modify: `artifacts/examples/package-subject-world/world.build.json`
-- Modify: `artifacts/examples/package-subject-world/world.png`
-- Modify: `artifacts/examples/rigged-subject-world/explain.json`
-- Modify: `artifacts/examples/rigged-subject-world/idle.png`
-- Modify: `artifacts/examples/rigged-subject-world/jump.png`
-- Modify: `artifacts/examples/rigged-subject-world/run.png`
-- Modify: `artifacts/examples/rigged-subject-world/snapshot.json`
-- Modify: `artifacts/examples/rigged-subject-world/verification.json`
-- Modify: `artifacts/examples/rigged-subject-world/walk.png`
-- Modify: `artifacts/examples/rigged-subject-world/world.build.json`
-- Modify: `artifacts/examples/rigged-subject-world/world.png`
+- Modify: `examples/evidence/package-subject-world/explain.json`
+- Modify: `examples/evidence/package-subject-world/snapshot.json`
+- Modify: `examples/evidence/package-subject-world/world.build.json`
+- Modify: `examples/evidence/package-subject-world/world.png`
+- Modify: `examples/evidence/rigged-subject-world/explain.json`
+- Modify: `examples/evidence/rigged-subject-world/idle.png`
+- Modify: `examples/evidence/rigged-subject-world/jump.png`
+- Modify: `examples/evidence/rigged-subject-world/run.png`
+- Modify: `examples/evidence/rigged-subject-world/snapshot.json`
+- Modify: `examples/evidence/rigged-subject-world/verification.json`
+- Modify: `examples/evidence/rigged-subject-world/walk.png`
+- Modify: `examples/evidence/rigged-subject-world/world.build.json`
+- Modify: `examples/evidence/rigged-subject-world/world.png`
 
 **Interfaces:**
 - Public defaults become V3/V3/V4; V2 Authoring schema/types and V3 ExecutionPlan exports are removed.
@@ -491,8 +491,8 @@ git commit -m "feat: switch canonical runtime to solved layout contracts"
 **Files:**
 - Create: `scripts/lib/layout-artifacts.ts`
 - Create: `scripts/lib/layout-artifacts.test.ts`
-- Modify: `scripts/worldkit.ts`
-- Modify: `scripts/worldkit.test.ts`
+- Modify: `scripts/cli/worldkit.ts`
+- Modify: `scripts/cli/worldkit.test.ts`
 - Modify: `package.json`
 - Modify: `pnpm-lock.yaml`
 
@@ -506,7 +506,7 @@ Cover JSON stdout/stderr, exact exit codes for invalid/unsatisfied/budget/proces
 
 - [x] **Step 2: Run RED gate**
 
-Run: `pnpm vitest run scripts/worldkit.test.ts scripts/lib/layout-artifacts.test.ts`
+Run: `pnpm vitest run scripts/cli/worldkit.test.ts scripts/lib/layout-artifacts.test.ts`
 Expected: FAIL because layout commands do not exist.
 
 - [x] **Step 3: Implement CLI orchestration and artifacts**
@@ -515,13 +515,13 @@ Reuse `artifact-directory-promotion.ts`; never partially replace a good output. 
 
 - [x] **Step 4: Run CLI/type gates**
 
-Run: `pnpm vitest run scripts/worldkit.test.ts scripts/lib/layout-artifacts.test.ts && pnpm typecheck`
+Run: `pnpm vitest run scripts/cli/worldkit.test.ts scripts/lib/layout-artifacts.test.ts && pnpm typecheck`
 Expected: PASS.
 
 - [x] **Step 5: Commit**
 
 ```bash
-git add scripts/lib/layout-artifacts.ts scripts/lib/layout-artifacts.test.ts scripts/worldkit.ts scripts/worldkit.test.ts package.json pnpm-lock.yaml
+git add scripts/lib/layout-artifacts.ts scripts/lib/layout-artifacts.test.ts scripts/cli/worldkit.ts scripts/cli/worldkit.test.ts package.json pnpm-lock.yaml
 git commit -m "feat: expose deterministic layout cli"
 ```
 
@@ -529,13 +529,13 @@ git commit -m "feat: expose deterministic layout cli"
 
 **Files:**
 - Create: `examples/authoring/placement-coastal-world.json`
-- Create: `scripts/verify-placement-layout.ts`
-- Create: `scripts/verify-placement-layout.test.ts`
-- Create: `artifacts/examples/placement-coastal-world/layout-report.json`
-- Create: `artifacts/examples/placement-coastal-world/normalized-world-ir.json`
-- Create: `artifacts/examples/placement-coastal-world/world.build.json`
-- Create: `artifacts/examples/placement-coastal-world/world.png`
-- Create: `artifacts/examples/placement-coastal-world/verification.json`
+- Create: `scripts/verification/verify-placement-layout.ts`
+- Create: `scripts/verification/verify-placement-layout.test.ts`
+- Create: `examples/evidence/placement-coastal-world/layout-report.json`
+- Create: `examples/evidence/placement-coastal-world/normalized-world-ir.json`
+- Create: `examples/evidence/placement-coastal-world/world.build.json`
+- Create: `examples/evidence/placement-coastal-world/world.png`
+- Create: `examples/evidence/placement-coastal-world/verification.json`
 - Modify: `apps/playground/src/worldkit-browser-api.ts`
 - Modify: `apps/playground/src/worldkit-browser-api.test.ts`
 - Modify: `package.json`
@@ -574,7 +574,7 @@ Expected: PASS; only the documented Vite chunk warning may remain.
 - [x] **Step 7: Commit**
 
 ```bash
-git add examples/authoring/placement-coastal-world.json scripts/verify-placement-layout.ts scripts/verify-placement-layout.test.ts artifacts/examples/placement-coastal-world apps/playground/src/worldkit-browser-api.ts apps/playground/src/worldkit-browser-api.test.ts package.json
+git add examples/authoring/placement-coastal-world.json scripts/verification/verify-placement-layout.ts scripts/verification/verify-placement-layout.test.ts examples/evidence/placement-coastal-world apps/playground/src/worldkit-browser-api.ts apps/playground/src/worldkit-browser-api.test.ts package.json
 git commit -m "test: verify solved coastal layout end to end"
 ```
 

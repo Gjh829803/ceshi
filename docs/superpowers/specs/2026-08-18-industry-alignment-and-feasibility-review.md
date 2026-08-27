@@ -63,7 +63,7 @@ ECMAScript 只规定 `Math.sin/cos/exp/pow` 等超越函数为实现近似，不
 
 ### 4.1 对照结构化输出硬上限（核实于 2026-08-18）
 
-以 [OpenAI Structured Outputs 已发布限制](https://developers.openai.com/api/docs/guides/structured-outputs) 为参照（strict 模式）：属性总数上限 5,000、嵌套 10 层、全 Schema 枚举值 1,000 个、总字符 120,000；根级禁 `anyOf`；对象必须 `additionalProperties: false` 且字段全 required（可选字段转 nullable）。据此发现两条缺口，均已补进总规格：
+以 [OpenAI Structured Outputs 已发布限制](https://developers.openai.com/api/docs/superpowers/skills/structured-outputs) 为参照（strict 模式）：属性总数上限 5,000、嵌套 10 层、全 Schema 枚举值 1,000 个、总字符 120,000；根级禁 `anyOf`；对象必须 `additionalProperties: false` 且字段全 required（可选字段转 nullable）。据此发现两条缺口，均已补进总规格：
 
 1. **嵌套深度**：AuthoringSpec 天然深度不浅（根 → `nodes[]` → 节点 → `components{}` → 组件 → 参数已达 6 层），叠加受控嵌套易破 10 层。已补：AI Schema Profile 声明深度预算，受控嵌套默认只投影一层（总规格 §7.5、§8.1）。
 2. **枚举与规模预算**：注册表全量投影为 enum 会超上限。已补：Projector 把提供方规模上限作为显式预算，超限枚举按声明策略降级为 `pattern`/`format` 引用并由 Canonical Schema 兜底（总规格 §7.5）。

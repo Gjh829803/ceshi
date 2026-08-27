@@ -58,7 +58,7 @@
 | Task 8：页面不生产证据；V3 Route 输入拒绝；Browser V4 只加四个只读 getter | **已复验，成立** |
 | Task 8 Cursor CR `TIMEOUT` | **已复验，仍成立**。不得改写成 `GO` |
 | Task 9：11 个 Authoring V4 fixture + 可信管道 + traversalAreas 只裁 Graph | **已复验，成立**。`fail-start-surface` 的 *runtime unmatched/ambiguous* 表述与 oracle 表不一致，见下方 P1；已用同一 blocking gate 的 Havok Probe 测试补上 |
-| Handoff：通用 Vitest 不得递归跑完整 R1 重型门禁 | **已复验，成立**（`b1c20a5`；`scripts/verify-route-r1-heightfield.test.ts` 只留 zero-match fail-closed） |
+| Handoff：通用 Vitest 不得递归跑完整 R1 重型门禁 | **已复验，成立**（`b1c20a5`；`scripts/verification/verify-route-r1-heightfield.test.ts` 只留 zero-match fail-closed） |
 | `pnpm verify:route-r0-contract` 打印 “R1/R1b runtime capability not implemented” | **已失效**。R1 Heightfield 已实现。`5de4ee7` 改为 “this command does not prove R1/R1b runtime capability” |
 | R1b 未实现 | **capability gap，不是 bug** |
 
@@ -81,7 +81,7 @@
 
 ### [P2] [D5] R1 provider 扫描仍以禁止 key 为主
 
-- 证据（`static-read`）：`scripts/verify-route-r1-heightfield.ts` 的 `FORBIDDEN_PROVIDER_HANDLE_KEYS` 抓 `providerHandle` / `tileRef` 等 key，不扫 string leaf。CLI 另有 runner-failure 投影，不把 raw provider cause 送进公共诊断。Canonical 身份 Ref 有意包含 `worldkit://runtime-backend/babylon-havok@1`；Snapshot V3 仍冻结 `runtimeBackend: "babylon-havok"`。对全体 string 做 `/babylon|havok|recast/` 会误伤已审计身份。
+- 证据（`static-read`）：`scripts/verification/verify-route-r1-heightfield.ts` 的 `FORBIDDEN_PROVIDER_HANDLE_KEYS` 抓 `providerHandle` / `tileRef` 等 key，不扫 string leaf。CLI 另有 runner-failure 投影，不把 raw provider cause 送进公共诊断。Canonical 身份 Ref 有意包含 `worldkit://runtime-backend/babylon-havok@1`；Snapshot V3 仍冻结 `runtimeBackend: "babylon-havok"`。对全体 string 做 `/babylon|havok|recast/` 会误伤已审计身份。
 - 期望：Canonical Report / Evidence 无 Recast polyRef、WASM pointer、Babylon/Havok handle。已审计 Backend 身份 Ref 可以保留。
 - 影响：若内部 throw 文案漏进 Report message，key 扫描不会红。当前 CLI 投影与 package `public-boundary` 测试仍挡住主路径。
 - 建议：以后若要加强，只扫未审计的 provider 句子/句柄，不要禁掉锁定 Backend Ref。

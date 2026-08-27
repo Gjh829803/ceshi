@@ -119,7 +119,7 @@ Populate only evidence-backed family-specific rows and record source experiment,
 
 - [ ] **Step 4: Run manifest and link checks GREEN**
 
-Run: `pnpm exec vitest run packages/terrain-compiler/src/exemplar-manifest.test.ts scripts/planner-skill.test.ts`
+Run: `pnpm exec vitest run packages/terrain-compiler/src/exemplar-manifest.test.ts scripts/agents/planner-skill.test.ts`
 
 Expected: all tests pass and every accepted asset hash matches.
 
@@ -143,7 +143,7 @@ Run:
 ```bash
 pnpm verify:workspace-boundaries
 pnpm test:census
-pnpm exec vitest run packages/terrain-compiler/src/**/*.test.ts scripts/planner-skill.test.ts
+pnpm exec vitest run packages/terrain-compiler/src/**/*.test.ts scripts/agents/planner-skill.test.ts
 pnpm typecheck
 ```
 
@@ -156,7 +156,7 @@ Expected: no forbidden production imports.
 - [ ] **Step 4: Commit milestone 1**
 
 ```bash
-git add AGENTS.md package.json pnpm-lock.yaml packages/terrain-compiler assets/terrain-height-intent scripts/lib/test-gate-manifest.ts .codex/skills/worldkit-spatial-planner/references docs/superpowers docs/reviews
+git add AGENTS.md package.json pnpm-lock.yaml packages/terrain-compiler assets/terrain-height-intent scripts/lib/test-gate-manifest.ts .codex/skills/worldkit-spatial-planner/references .superpowers docs/reviews
 git commit -m "refactor: promote terrain compiler package"
 ```
 
@@ -207,14 +207,14 @@ Assert a globally high but varied raster compiles around `baseHeightMeters`, the
 ### Task 5: Extend Planner outputs and self-check
 
 **Files:**
-- Modify: `scripts/agent-planner-self-check.ts`
-- Modify: `scripts/agent-planner-self-check.test.ts`
+- Modify: `scripts/agents/agent-planner-self-check.ts`
+- Modify: `scripts/agents/agent-planner-self-check.test.ts`
 - Regenerate: `.codex/skills/worldkit-spatial-planner/scripts/self-check.mjs`
 - Modify: `.codex/skills/worldkit-spatial-planner/SKILL.md`
 - Modify: `.codex/skills/worldkit-spatial-planner/references/terrain-height-intent-prompt.md`
-- Modify: `scripts/run-spatial-world-agent.sh`
-- Modify: `scripts/planner-skill.test.ts`
-- Modify: `scripts/agent-self-check.test.ts`
+- Modify: `scripts/agents/run-spatial-world-agent.sh`
+- Modify: `scripts/agents/planner-skill.test.ts`
+- Modify: `scripts/agents/agent-self-check.test.ts`
 
 **Interfaces:**
 - Planner self-check adds required `--terrain-prompt` and `--terrain-intent` paths.
@@ -226,7 +226,7 @@ Create real tiny PNG fixtures for valid signed variation, constant raster, inval
 
 - [ ] **Step 2: Run tests and verify RED**
 
-Run: `pnpm exec vitest run scripts/agent-planner-self-check.test.ts scripts/planner-skill.test.ts`
+Run: `pnpm exec vitest run scripts/agents/agent-planner-self-check.test.ts scripts/agents/planner-skill.test.ts`
 
 Expected: FAIL because the new arguments and receipt fields are absent.
 
@@ -241,7 +241,7 @@ Run:
 ```bash
 pnpm generate:agent-self-check
 pnpm check:agent-self-check
-pnpm exec vitest run scripts/agent-planner-self-check.test.ts scripts/agent-self-check.test.ts scripts/planner-skill.test.ts
+pnpm exec vitest run scripts/agents/agent-planner-self-check.test.ts scripts/agents/agent-self-check.test.ts scripts/agents/planner-skill.test.ts
 ```
 
 - [ ] **Step 5: Update Planner launch contract**
@@ -251,9 +251,9 @@ Declare the scene prompt and PNG as outputs of the existing Planner task, includ
 ### Task 6: Add trusted Host terrain finalization
 
 **Files:**
-- Create: `scripts/finalize-scene-terrain.ts`
-- Create: `scripts/finalize-scene-terrain.test.ts`
-- Modify: `scripts/run-spatial-world-agent.sh`
+- Create: `scripts/scenes/finalize-scene-terrain.ts`
+- Create: `scripts/scenes/finalize-scene-terrain.test.ts`
+- Modify: `scripts/agents/run-spatial-world-agent.sh`
 - Modify: `scripts/lib/test-gate-manifest.ts`
 - Modify: workflow tests that exercise the launcher
 
@@ -267,7 +267,7 @@ Cover successful publication, Planner hash mismatch, Builder hash mismatch, bloc
 
 - [ ] **Step 2: Run tests and verify RED**
 
-Run: `pnpm exec vitest run scripts/finalize-scene-terrain.test.ts`
+Run: `pnpm exec vitest run scripts/scenes/finalize-scene-terrain.test.ts`
 
 Expected: FAIL because the finalizer is missing.
 
@@ -286,9 +286,9 @@ Make Builder write and self-check `authoring.builder.json`; after Host receipt p
 ### Task 7: Expose terrain stages and artifacts in Studio
 
 **Files:**
-- Modify: `apps/studio/server.mjs`
-- Modify: `apps/studio/server.test.mjs`
-- Modify: `apps/studio/preview-bootstrap.mjs` and focused tests if its required-artifact model consumes Authoring inputs
+- Modify: `apps/studio/src/server.mjs`
+- Modify: `apps/studio/src/server.test.mjs`
+- Modify: `apps/studio/src/preview-bootstrap.mjs` and focused tests if its required-artifact model consumes Authoring inputs
 - Modify: hosted workflow documentation
 
 **Interfaces:**

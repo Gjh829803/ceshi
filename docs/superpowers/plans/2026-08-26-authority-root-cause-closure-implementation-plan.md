@@ -17,7 +17,7 @@
 - `docs/superpowers/specs/2026-08-26-authority-root-cause-closure-design.md`
 - `packages/protocol/src/canonical-json.ts`
 - `packages/authoring/src/{parse.ts,validate-v4.ts,subject-preset-candidate.ts}`
-- `apps/studio/preview-bootstrap.mjs`
+- `apps/studio/src/preview-bootstrap.mjs`
 - corresponding tests
 
 **Steps:**
@@ -53,11 +53,11 @@
 
 **Files:**
 
-- `scripts/finalize-spatial-build.ts/.test.ts`
-- `scripts/agent-builder-self-check.ts`
-- `scripts/agent-self-check.test.ts`
-- `scripts/builder-skill.test.ts`
-- `scripts/run-spatial-world-agent.sh`
+- `scripts/scenes/finalize-spatial-build.ts/.test.ts`
+- `scripts/agents/agent-builder-self-check.ts`
+- `scripts/agents/agent-self-check.test.ts`
+- `scripts/agents/builder-skill.test.ts`
+- `scripts/agents/run-spatial-world-agent.sh`
 - `.codex/skills/worldkit-canonical-builder/references/canonical-template.md`
 - generated `.codex/skills/worldkit-canonical-builder/scripts/self-check.mjs`
 - `docs/22-hosted-scene-brief-and-evaluation.md`
@@ -79,7 +79,7 @@
 
 **Files:**
 
-- `scripts/worldkit.ts`
+- `scripts/cli/worldkit.ts`
 - Playground capture API/adapter/startup/main files and focused tests
 - Studio server/recording files and tests
 - styled/visual reconstruction scripts, Python consumer, Runtime Contracts visual reconstruction DTO
@@ -103,11 +103,11 @@
 
 **Files:**
 
-- `apps/studio/preview-bootstrap.mjs/.test.mjs`
-- `apps/studio/server.mjs/.test.mjs`
+- `apps/studio/src/preview-bootstrap.mjs/.test.mjs`
+- `apps/studio/src/server.mjs/.test.mjs`
 - `apps/playground/src/authoring-loader.ts/.test.ts`
 - `apps/playground/src/main.ts`
-- `apps/studio/public-proxy.mjs/.test.mjs`
+- `apps/studio/src/public-proxy.mjs/.test.mjs`
 - `docs/15-creator-studio.md`
 
 **Steps:**
@@ -186,9 +186,9 @@
 
 **Files:**
 
-- Create `apps/studio/owned-process.mjs/.test.mjs`
-- Create `apps/studio/public-server.mjs/.test.mjs`
-- Modify `apps/studio/public-proxy.mjs/.test.mjs`
+- Create `apps/studio/src/owned-process.mjs/.test.mjs`
+- Create `apps/studio/src/public-server.mjs/.test.mjs`
+- Modify `apps/studio/src/public-proxy.mjs/.test.mjs`
 - Modify app/root package scripts, config example, docs 15
 
 **RED:**
@@ -232,7 +232,7 @@
 
 **Files:**
 
-- Create `scripts/agent-planner-self-check.ts`
+- Create `scripts/agents/agent-planner-self-check.ts`
 - Extend bundle builder/check library/tests and root scripts
 - Replace generated Planner checker
 - update Studio expected validator version/fixtures and docs 22

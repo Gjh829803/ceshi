@@ -736,10 +736,10 @@ git commit -am "feat: project gameplay through babylon runtime"
 - Modify: `scripts/lib/simulation-take-runner.test.ts`
 - Modify: `scripts/lib/simulation-take-cli.ts`
 - Modify: Simulation Take CLI tests，completion fetch 后先以 `rg` 锁定 exact paths
-- Modify: `scripts/verify-canonical-world.ts`
-- Modify: `scripts/verify-g-bot-subject-world.ts`
-- Modify: `scripts/verify-rigged-subject-world.ts`
-- Modify: `scripts/verify-placement-layout.ts`
+- Modify: `scripts/verification/verify-canonical-world.ts`
+- Modify: `scripts/verification/verify-g-bot-subject-world.ts`
+- Modify: `scripts/verification/verify-rigged-subject-world.ts`
+- Modify: `scripts/verification/verify-placement-layout.ts`
 
 **Interfaces:**
 - Consumes: R1b Route Evidence V2、Task 2–7。
@@ -819,7 +819,7 @@ G19-6 为 Final GO、可独立合入；本文状态仍不代表已经合入 main
 - Port/Rework: outdoor import/loader/fixtures/tests
 - Modify: `apps/playground/src/playground-world.ts`
 - Modify: `apps/playground/src/main.ts`
-- Create: `scripts/verify-outdoor-gameplay.ts`
+- Create: `scripts/verification/verify-outdoor-gameplay-worlds.ts`
 - Modify: `package.json`
 - Modify: `pnpm-lock.yaml`
 

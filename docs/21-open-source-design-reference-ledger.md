@@ -121,7 +121,7 @@ X-right/Z-up cross-product 符号。`pointOnSegment` 的米制 epsilon、边界 
 
 现有 glTF-Transform 管线与 Babylon Runtime admission 各自正确，但都不是官方 glTF 2.0
 conformance Validator。先在
-[`2026-08-26-glb-admission-profile-design.md`](superpowers/specs/2026-08-26-glb-admission-profile-design.md)
+[`2026-08-26-glb-admission-profile-design.md`](../docs/superpowers/specs/2026-08-26-glb-admission-profile-design.md)
 冻结边界，再把 Khronos Validator 接入 Node 可信资产 intake/build，原始输入与生成输出均校验；
 WorldKit 继续拥有自包含、extension allowlist、产品 inventory、预算、Hash/长度和 Registry Lock，
 Babylon 继续拥有实际加载 inventory、cache/instance/dispose。malformed matrix 必须同时证明
@@ -229,7 +229,7 @@ Godot SpringArm 使用 camera near-plane shape 或用户指定 shape sweep；cam
 - 根 `pnpm test` 的 Contract lane：192 个文件、2,073 个测试全部通过；Resource-heavy lane 的
   22 个文件中 21 个、416 个测试中 415 个通过，唯一失败准确暴露了 robust orientation 变更后
   过期的 Builder standalone self-check bundle。
-- 用正式 `pnpm generate:agent-self-check` 重新生成后，`scripts/agent-self-check.test.ts` 2/2 与
+- 用正式 `pnpm generate:agent-self-check` 重新生成后，`scripts/agents/agent-self-check.test.ts` 2/2 与
   `pnpm check:agent-self-check` 通过。该修复只改变生成 bundle，故没有重跑不受影响的 Runtime lane。
 - GLB adapter、模块化 Source/Runtime Bundle 共 3 个文件 25/25 测试通过；Golden/G Bot 的
   modularize/runtime-bundle freshness check 通过；xier120 19/19 均通过官方 admission、Babylon

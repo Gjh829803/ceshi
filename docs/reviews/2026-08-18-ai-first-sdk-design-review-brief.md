@@ -33,9 +33,9 @@ AuthoringSpec
 
 本轮专项规格：
 
-- [Placement Constraint 与确定性 Layout Solver](../superpowers/specs/2026-08-19-placement-constraint-layout-solver-design.md)
-- [Simulation Take 与 Control Capture Bundle](../superpowers/specs/2026-08-19-simulation-take-control-capture-design.md)
-- [World Validation Report 与质量门禁](../superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md)
+- [Placement Constraint 与确定性 Layout Solver](../../docs/superpowers/specs/2026-08-19-placement-constraint-layout-solver-design.md)
+- [Simulation Take 与 Control Capture Bundle](../../docs/superpowers/specs/2026-08-19-simulation-take-control-capture-design.md)
+- [World Validation Report 与质量门禁](../../docs/superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md)
 
 三份设计已经成稿，代码尚未交付。本次评审应先确认公共边界和字段级开放项，再
 编写实施计划，不能把“设计完成”当成 Runtime 能力完成。

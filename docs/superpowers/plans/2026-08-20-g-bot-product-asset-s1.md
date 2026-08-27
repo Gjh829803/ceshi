@@ -146,7 +146,7 @@ git commit -m "feat: register G Bot product subject"
 
 **Files:**
 - Create: `examples/authoring/g-bot-subject-world.json`
-- Test: `scripts/worldkit.test.ts`
+- Test: `scripts/cli/worldkit.test.ts`
 - Modify: `package.json`
 
 **Interfaces:**
@@ -159,7 +159,7 @@ Add a test that loads the G Bot example, compiles exactly one G Bot asset/rig/an
 
 - [x] **Step 2: Run the focused CLI test and verify RED**
 
-Run: `pnpm vitest run scripts/worldkit.test.ts -t "G Bot"`
+Run: `pnpm vitest run scripts/cli/worldkit.test.ts -t "G Bot"`
 
 Expected: the example file is missing.
 
@@ -175,7 +175,7 @@ Run:
 pnpm worldkit validate examples/authoring/g-bot-subject-world.json --json
 pnpm worldkit build examples/authoring/g-bot-subject-world.json --output /tmp/g-bot-world.build.json --json
 pnpm worldkit subject explain examples/authoring/g-bot-subject-world.json --entity-id g-bot-primary --json
-pnpm vitest run scripts/worldkit.test.ts
+pnpm vitest run scripts/cli/worldkit.test.ts
 ```
 
 Expected: all commands exit zero and the compiled chain names only canonical refs.
@@ -183,26 +183,26 @@ Expected: all commands exit zero and the compiled chain names only canonical ref
 - [x] **Step 5: Commit Task 3**
 
 ```bash
-git add examples/authoring/g-bot-subject-world.json scripts/worldkit.test.ts package.json
+git add examples/authoring/g-bot-subject-world.json scripts/cli/worldkit.test.ts package.json
 git commit -m "feat: add G Bot authoring example"
 ```
 
 ### Task 4: Prove the product asset in the real browser runtime
 
 **Files:**
-- Create: `scripts/verify-g-bot-subject-world.ts`
+- Create: `scripts/verification/verify-g-bot-subject-world.ts`
 - Create: `scripts/lib/g-bot-evidence.ts`
 - Test: `scripts/lib/g-bot-evidence.test.ts`
 - Modify: `package.json`
-- Create: `artifacts/examples/g-bot-subject-world/world.build.json`
-- Create: `artifacts/examples/g-bot-subject-world/world.png`
-- Create: `artifacts/examples/g-bot-subject-world/snapshot.json`
-- Create: `artifacts/examples/g-bot-subject-world/explain.json`
-- Create: `artifacts/examples/g-bot-subject-world/idle.png`
-- Create: `artifacts/examples/g-bot-subject-world/walk.png`
-- Create: `artifacts/examples/g-bot-subject-world/run.png`
-- Create: `artifacts/examples/g-bot-subject-world/jump.png`
-- Create: `artifacts/examples/g-bot-subject-world/verification.json`
+- Create: `examples/evidence/g-bot-subject-world/world.build.json`
+- Create: `examples/evidence/g-bot-subject-world/world.png`
+- Create: `examples/evidence/g-bot-subject-world/snapshot.json`
+- Create: `examples/evidence/g-bot-subject-world/explain.json`
+- Create: `examples/evidence/g-bot-subject-world/idle.png`
+- Create: `examples/evidence/g-bot-subject-world/walk.png`
+- Create: `examples/evidence/g-bot-subject-world/run.png`
+- Create: `examples/evidence/g-bot-subject-world/jump.png`
+- Create: `examples/evidence/g-bot-subject-world/verification.json`
 
 **Interfaces:**
 - Produces: `pnpm verify:g-bot-subject` as the single product-asset Gate.
@@ -256,15 +256,15 @@ Expected: Golden and G Bot verifiers both pass with no server/temp/backup residu
 - [x] **Step 8: Commit Task 4**
 
 ```bash
-git add scripts/verify-g-bot-subject-world.ts scripts/lib/g-bot-evidence.ts scripts/lib/g-bot-evidence.test.ts package.json artifacts/examples/g-bot-subject-world
+git add scripts/verification/verify-g-bot-subject-world.ts scripts/lib/g-bot-evidence.ts scripts/lib/g-bot-evidence.test.ts package.json examples/evidence/g-bot-subject-world
 git commit -m "test: verify G Bot subject end to end"
 ```
 
 ### Task 5: Regenerate renamed contracts, update docs, and close the branch
 
 **Files:**
-- Modify: `artifacts/examples/rigged-subject-world/world.build.json`
-- Modify: `artifacts/examples/rigged-subject-world/verification.json`
+- Modify: `examples/evidence/rigged-subject-world/world.build.json`
+- Modify: `examples/evidence/rigged-subject-world/verification.json`
 - Modify: `docs/16-subject-assets-3c-integration.md`
 - Modify: `docs/18-refactor-progress-and-backlog.md`
 - Modify: `docs/superpowers/specs/2026-08-19-asset-subject-s1b-visible-slice-design.md`
@@ -313,7 +313,7 @@ Expected: every Gate passes; only existing deprecation/chunk-size advisories may
 Inspect `git diff --stat`, `git diff`, resource hashes, PNGs, process/temp residue, and commit history. Mark completed plan checkboxes only after their evidence exists.
 
 ```bash
-git add README.md docs artifacts/examples/rigged-subject-world
+git add README.md docs examples/evidence/rigged-subject-world
 git commit -m "docs: complete G Bot product asset slice"
 ```
 

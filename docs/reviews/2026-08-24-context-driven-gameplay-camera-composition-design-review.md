@@ -12,7 +12,7 @@
   - `pnpm typecheck`：exit 0。
   - `pnpm build`：exit 0；保留既有大 Chunk warning，本次文档变更未改变 bundle。
   - `pnpm test`：首次在全并行机器负载下 exit 1，1577 项中 1575 通过，两个真实 Route/Havok 集成项超时。
-  - `pnpm exec vitest run scripts/worldkit-route-run.integration.test.ts scripts/lib/route-validation-runner.test.ts --no-file-parallelism`：exit 0，2 files / 13 tests；证明前述失败为并发时限而非行为失败。
+  - `pnpm exec vitest run scripts/cli/worldkit-route-run.integration.test.ts scripts/lib/route-validation-runner.test.ts --no-file-parallelism`：exit 0，2 files / 13 tests；证明前述失败为并发时限而非行为失败。
   - `git diff --check`：exit 0。
 
 ## 2. 旧结论复验

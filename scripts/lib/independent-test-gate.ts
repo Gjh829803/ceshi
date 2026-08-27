@@ -28,12 +28,12 @@ export interface IndependentTestCommandV1 {
 
 export const INDEPENDENT_TEST_MANIFEST_V1: readonly IndependentTestManifestEntryV1[] =
   Object.freeze([
-    { path: "scripts/image-delivery.test.mjs", lane: "node" },
-    { path: "scripts/local-codex-task.test.mjs", lane: "node" },
-    { path: "scripts/lwdp-codex-profile.test.mjs", lane: "node" },
-    { path: "scripts/lwdp-generation-client.test.mjs", lane: "node" },
-    { path: "scripts/seedance25-media-conformance.test.mjs", lane: "node" },
-    { path: "scripts/write-lwdp-t2i-manifest.test.mjs", lane: "node" },
+    { path: "scripts/agents/local-codex-task.test.mjs", lane: "node" },
+    { path: "scripts/agents/lwdp-codex-profile.test.mjs", lane: "node" },
+    { path: "scripts/agents/lwdp-generation-client.test.mjs", lane: "node" },
+    { path: "scripts/agents/write-lwdp-t2i-manifest.test.mjs", lane: "node" },
+    { path: "scripts/visual/image-delivery.test.mjs", lane: "node" },
+    { path: "scripts/visual/seedance25-media-conformance.test.mjs", lane: "node" },
     {
       path: "sites/world-sdk-blueprint/tests/rendered-html.test.mjs",
       lane: "site",
@@ -117,12 +117,21 @@ async function discoverMatchingFiles(input: {
   readonly directory: string;
   readonly matches: (filename: string) => boolean;
 }): Promise<readonly string[]> {
-  const absoluteDirectory = path.join(input.repositoryRoot, input.directory);
-  const entries = await readdir(absoluteDirectory, { withFileTypes: true });
-  return entries
-    .filter((entry) => entry.isFile() && input.matches(entry.name))
-    .map((entry) => path.posix.join(input.directory, entry.name))
-    .sort();
+  const matchedPaths: string[] = [];
+  async function visit(relativeDirectory: string): Promise<void> {
+    const absoluteDirectory = path.join(input.repositoryRoot, relativeDirectory);
+    const entries = await readdir(absoluteDirectory, { withFileTypes: true });
+    await Promise.all(entries.map(async (entry) => {
+      const relativePath = path.posix.join(relativeDirectory, entry.name);
+      if (entry.isDirectory()) {
+        await visit(relativePath);
+      } else if (entry.isFile() && input.matches(entry.name)) {
+        matchedPaths.push(relativePath);
+      }
+    }));
+  }
+  await visit(input.directory);
+  return matchedPaths.sort();
 }
 
 export async function discoverIndependentTestFilesV1(

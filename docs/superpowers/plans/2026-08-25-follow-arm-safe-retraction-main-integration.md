@@ -83,7 +83,7 @@
 3. 将 T2/T3 通过的安全修复应用在合并后的最终树；若 main 已改动相同接口，重跑对应回归后才继续。
 4. 重新生成由 main 要求的验证产物；`git diff --check` 后提交一条完整中文规范集成提交。
 
-**Verification:** `git diff <merge-base>...HEAD --check`；`pnpm exec vitest run` 对所有受影响 runtime、registry、playground 测试；`pnpm typecheck`、`pnpm build`、`pnpm exec tsx scripts/verify-g-bot-subject-world.ts`。
+**Verification:** `git diff <merge-base>...HEAD --check`；`pnpm exec vitest run` 对所有受影响 runtime、registry、playground 测试；`pnpm typecheck`、`pnpm build`、`pnpm exec tsx scripts/verification/verify-g-bot-subject-world.ts`。
 
 ## Task 5: 全量验证、CI 与 PR 更新
 

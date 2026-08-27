@@ -37,7 +37,7 @@ The following are explicitly **not** bulk-renamed by this plan: current nested c
 
 | ID | Goal and independently verifiable deliverable | depends_on | blocks | Exclusive ownership | Execution mode |
 | --- | --- | --- | --- | --- | --- |
-| HNC-00 | Freeze the match families and verifier regression cases | UCCB-50 | HNC-10, HNC-20, HNC-30 | `scripts/verify-unreleased-clean-break.ts`, its focused test | sequential |
+| HNC-00 | Freeze the match families and verifier regression cases | UCCB-50 | HNC-10, HNC-20, HNC-30 | `scripts/verification/verify-unreleased-clean-break.ts`, its focused test | sequential |
 | HNC-10 | Remove superseded public names, aliases and package exports | HNC-00, UCCB-60 | HNC-40 | affected package `src/index.ts`, declaration files and focused tests | main-agent-only |
 | HNC-20 | Remove hidden compatibility behavior: converters, union acceptors, dual reads/writes and fallback ownership | HNC-00, UCCB-50 | HNC-40 | Runtime/Host/Browser/CLI implementation and focused tests | sequential |
 | HNC-30 | Regenerate or replace serialized fixtures and generated artifacts that still encode superseded contracts | HNC-00, UCCB-60 | HNC-40 | `examples/**`, generated `artifacts/**`, owning generators and verifiers | sequential |
@@ -87,8 +87,8 @@ placement semantics rather than improve cleanliness.
 ### Task 1: Freeze the machine census
 
 **Files:**
-- Modify: `scripts/verify-unreleased-clean-break.ts`
-- Test: `scripts/verify-unreleased-clean-break.test.ts`
+- Modify: `scripts/verification/verify-unreleased-clean-break.ts`
+- Test: `scripts/verification/verify-unreleased-clean-break.test.ts`
 - Reference: `docs/superpowers/specs/2026-08-24-unreleased-compatibility-clean-break-design.md`
 
 **Interfaces:**
@@ -101,7 +101,7 @@ placement semantics rather than improve cleanliness.
 
 - [x] **Step 2: Run the focused verifier test and confirm the new regression fails before implementation**
 
-  Run: `pnpm vitest run scripts/verify-unreleased-clean-break.test.ts`
+  Run: `pnpm vitest run scripts/verification/verify-unreleased-clean-break.test.ts`
 
 - [x] **Step 3: Implement family-based classification without treating every version suffix as debt**
 
@@ -109,7 +109,7 @@ placement semantics rather than improve cleanliness.
 
 - [x] **Step 4: Run the focused test and live census**
 
-  Run: `pnpm vitest run scripts/verify-unreleased-clean-break.test.ts && pnpm verify:unreleased-clean-break`
+  Run: `pnpm vitest run scripts/verification/verify-unreleased-clean-break.test.ts && pnpm verify:unreleased-clean-break`
 
   Expected: focused tests pass and the live command reports `forbiddenMatchCount: 0` only when active superseded paths are absent.
 
@@ -175,7 +175,7 @@ placement semantics rather than improve cleanliness.
 **Files:**
 - Modify: current fixtures under `examples/**` through their owning authoring source.
 - Regenerate: changed canonical outputs under `artifacts/**` through the repository verifier/generator commands.
-- Test: `scripts/verify-unreleased-clean-break.test.ts` and owning artifact verifiers.
+- Test: `scripts/verification/verify-unreleased-clean-break.test.ts` and owning artifact verifiers.
 
 **Interfaces:**
 - Consumes: current Authoring V4 and current generators.

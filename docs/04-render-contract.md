@@ -2,8 +2,8 @@
 
 > 状态：Design。当前 Canonical Runtime 尚未实现多 Pass Control Capture Bundle，也
 > 没有连接世界模型；本地画面只是白模预览。字段、Hash、时间和目录的权威设计见
-> [Simulation Take 与 Control Capture Bundle](superpowers/specs/2026-08-19-simulation-take-control-capture-design.md)，
-> 质量验收见 [World Validation Report 与质量门禁](superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md)。
+> [Simulation Take 与 Control Capture Bundle](../docs/superpowers/specs/2026-08-19-simulation-take-control-capture-design.md)，
+> 质量验收见 [World Validation Report 与质量门禁](../docs/superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md)。
 
 ## 1. 定位
 

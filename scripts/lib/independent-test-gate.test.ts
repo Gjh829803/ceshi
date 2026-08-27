@@ -92,12 +92,12 @@ describe("independent test repository census", () => {
       }),
     ).toEqual({
       nodeTestFiles: [
-        "scripts/image-delivery.test.mjs",
-        "scripts/local-codex-task.test.mjs",
-        "scripts/lwdp-codex-profile.test.mjs",
-        "scripts/lwdp-generation-client.test.mjs",
-        "scripts/seedance25-media-conformance.test.mjs",
-        "scripts/write-lwdp-t2i-manifest.test.mjs",
+        "scripts/agents/local-codex-task.test.mjs",
+        "scripts/agents/lwdp-codex-profile.test.mjs",
+        "scripts/agents/lwdp-generation-client.test.mjs",
+        "scripts/agents/write-lwdp-t2i-manifest.test.mjs",
+        "scripts/visual/image-delivery.test.mjs",
+        "scripts/visual/seedance25-media-conformance.test.mjs",
       ],
       siteTestFiles: [
         "sites/world-sdk-blueprint/tests/rendered-html.test.mjs",

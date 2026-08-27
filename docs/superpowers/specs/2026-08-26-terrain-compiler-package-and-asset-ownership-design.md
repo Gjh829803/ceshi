@@ -383,7 +383,7 @@ adapters.
 The integration creates no additional Codex or external T2I job. The existing unified
 Planner task invokes built-in image generation one additional time after it has written
 the Scene Brief and World Plan. Cloud and local backends continue through
-`scripts/run-codex-task.mjs` with one Planner task and one Builder task.
+`scripts/agents/run-codex-task.mjs` with one Planner task and one Builder task.
 
 ### 8.2 Planner output contract
 

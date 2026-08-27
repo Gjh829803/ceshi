@@ -40,7 +40,7 @@
 ## 当前执行 Epic：Babylon-only Runtime 收口（TR0–TR7）
 
 当前主线执行计划是
-[`2026-08-25-babylon-only-threejs-retirement.md`](superpowers/plans/2026-08-25-babylon-only-threejs-retirement.md)。
+[`2026-08-25-babylon-only-threejs-retirement.md`](../docs/superpowers/plans/2026-08-25-babylon-only-threejs-retirement.md)。
 它保留 Plan-first、Opening Composition、Studio preview、planning capture 和 SDK-derived
 tri-view 产品合同，同时把 gameplay、catalog 和 artifact-only 路由收口到同一个
 Babylon/Havok Runtime。TR0–TR7 已随 `main@01ee4b9` 完成首次合入；合入后 Cursor 深审为
@@ -76,32 +76,32 @@ Registry Lock、Browser preference 命令，以及 Babylon CameraDirector 消费
 
 - [`00-project-overview.md`](00-project-overview.md)：产品范围、角色边界和当前可交付能力的真相；
 - [`17-canonical-json-quickstart.md`](17-canonical-json-quickstart.md)：当前唯一可用协议和命令；
-- [`2026-08-17-ai-first-lego-game-sdk-design.md`](superpowers/specs/2026-08-17-ai-first-lego-game-sdk-design.md)：长期架构规格；
-- [`2026-08-17-terrain-authoring-pipeline-design.md`](superpowers/specs/2026-08-17-terrain-authoring-pipeline-design.md)：地形专项规格；
-- [`2026-08-21-hybrid-terrain-and-non-heightfield-topology-design.md`](superpowers/specs/2026-08-21-hybrid-terrain-and-non-heightfield-topology-design.md)：桥梁、悬挑、洞口、洞穴和多层可行走表面的长期专项规格；
+- [`2026-08-17-ai-first-lego-game-sdk-design.md`](../docs/superpowers/specs/2026-08-17-ai-first-lego-game-sdk-design.md)：长期架构规格；
+- [`2026-08-17-terrain-authoring-pipeline-design.md`](../docs/superpowers/specs/2026-08-17-terrain-authoring-pipeline-design.md)：地形专项规格；
+- [`2026-08-21-hybrid-terrain-and-non-heightfield-topology-design.md`](../docs/superpowers/specs/2026-08-21-hybrid-terrain-and-non-heightfield-topology-design.md)：桥梁、悬挑、洞口、洞穴和多层可行走表面的长期专项规格；
 - [`2026-08-21-hybrid-terrain-design-review.md`](reviews/2026-08-21-hybrid-terrain-design-review.md)：对该专项的业界对照审查；方向成立，H0 合同未冻前不开始 H1；
-- [`2026-08-19-extensible-subject-authoring-design.md`](superpowers/specs/2026-08-19-extensible-subject-authoring-design.md)：主体组装、Relationship、坐骑、装备和飞行的专项规格；
-- [`2026-08-19-asset-subject-s1b-visible-slice-design.md`](superpowers/specs/2026-08-19-asset-subject-s1b-visible-slice-design.md)：首个 GLB/Rig/Animation/Collider Profile 资产主体纵向切片；
-- [`2026-08-20-g-bot-product-asset-s1-design.md`](superpowers/specs/2026-08-20-g-bot-product-asset-s1-design.md)：首个真实产品人物 G Bot 的版本化映射与可视验收；
-- [`2026-08-21-product-asset-intake-template-design.md`](superpowers/specs/2026-08-21-product-asset-intake-template-design.md)：把 G Bot Gate 固化为后续产品资产接入模板；执行步骤见 [`product-asset-intake`](superpowers/skills/product-asset-intake.md)；
-- [`2026-08-19-placement-constraint-layout-solver-design.md`](superpowers/specs/2026-08-19-placement-constraint-layout-solver-design.md)：AI 空间意图、最终 Transform 求解与冲突报告专项规格；
-- [`2026-08-19-simulation-take-control-capture-design.md`](superpowers/specs/2026-08-19-simulation-take-control-capture-design.md)：WorldPackage、Take、Session、多 Pass Capture 与视频 Adapter 边界；
-- [`2026-08-22-canonical-runtime-state-and-semantic-projection-design.md`](superpowers/specs/2026-08-22-canonical-runtime-state-and-semantic-projection-design.md)：Canonical World/View/Runtime Status、Typed Relationship、Semantic Fact、Action/Event Receipt 与世界模型轨迹边界；
-- [`2026-08-24-gameplay-framework-r1b-integration-design.md`](superpowers/specs/2026-08-24-gameplay-framework-r1b-integration-design.md)：Gameplay Framework、RuntimeHost、R1b、Camera 与 Browser V5 的唯一所有权和事务融合合同；执行见同名实施计划；
+- [`2026-08-19-extensible-subject-authoring-design.md`](../docs/superpowers/specs/2026-08-19-extensible-subject-authoring-design.md)：主体组装、Relationship、坐骑、装备和飞行的专项规格；
+- [`2026-08-19-asset-subject-s1b-visible-slice-design.md`](../docs/superpowers/specs/2026-08-19-asset-subject-s1b-visible-slice-design.md)：首个 GLB/Rig/Animation/Collider Profile 资产主体纵向切片；
+- [`2026-08-20-g-bot-product-asset-s1-design.md`](../docs/superpowers/specs/2026-08-20-g-bot-product-asset-s1-design.md)：首个真实产品人物 G Bot 的版本化映射与可视验收；
+- [`2026-08-21-product-asset-intake-template-design.md`](../docs/superpowers/specs/2026-08-21-product-asset-intake-template-design.md)：把 G Bot Gate 固化为后续产品资产接入模板；执行步骤见 [`product-asset-intake`](../docs/superpowers/skills/product-asset-intake.md)；
+- [`2026-08-19-placement-constraint-layout-solver-design.md`](../docs/superpowers/specs/2026-08-19-placement-constraint-layout-solver-design.md)：AI 空间意图、最终 Transform 求解与冲突报告专项规格；
+- [`2026-08-19-simulation-take-control-capture-design.md`](../docs/superpowers/specs/2026-08-19-simulation-take-control-capture-design.md)：WorldPackage、Take、Session、多 Pass Capture 与视频 Adapter 边界；
+- [`2026-08-22-canonical-runtime-state-and-semantic-projection-design.md`](../docs/superpowers/specs/2026-08-22-canonical-runtime-state-and-semantic-projection-design.md)：Canonical World/View/Runtime Status、Typed Relationship、Semantic Fact、Action/Event Receipt 与世界模型轨迹边界；
+- [`2026-08-24-gameplay-framework-r1b-integration-design.md`](../docs/superpowers/specs/2026-08-24-gameplay-framework-r1b-integration-design.md)：Gameplay Framework、RuntimeHost、R1b、Camera 与 Browser V5 的唯一所有权和事务融合合同；执行见同名实施计划；
 - [`2026-08-24-gameplay-browser-g19-6-review.md`](reviews/2026-08-24-gameplay-browser-g19-6-review.md)：G19-6 Browser V5/Snapshot V4、RuntimeHost Activity 与 consumer cutover 的 Final GO disposition；completion review 已由 `5ffd031` 合入 `main`；
 - [`2026-08-24-g19-7-outdoor-gameplay-completion.md`](reviews/2026-08-24-g19-7-outdoor-gameplay-completion.md)：G19-7 六场景 Gameplay 与 artifact-only 生命周期的完成证据；
-- [`2026-08-24-unreleased-compatibility-clean-break-design.md`](superpowers/specs/2026-08-24-unreleased-compatibility-clean-break-design.md)：G19-8 未发布协议 clean break 的权威边界、UCCB 依赖图与零消费者门禁；
-- [`2026-08-25-historical-naming-and-compatibility-path-cleanup-plan.md`](superpowers/plans/2026-08-25-historical-naming-and-compatibility-path-cleanup-plan.md)：UCCB-65 历史命名、公共导出、隐式兼容行为、生成资产与延期清理账本的专项执行计划；
+- [`2026-08-24-unreleased-compatibility-clean-break-design.md`](../docs/superpowers/specs/2026-08-24-unreleased-compatibility-clean-break-design.md)：G19-8 未发布协议 clean break 的权威边界、UCCB 依赖图与零消费者门禁；
+- [`2026-08-25-historical-naming-and-compatibility-path-cleanup-plan.md`](../docs/superpowers/plans/2026-08-25-historical-naming-and-compatibility-path-cleanup-plan.md)：UCCB-65 历史命名、公共导出、隐式兼容行为、生成资产与延期清理账本的专项执行计划；
 - [`2026-08-25-gameplay-g19-8-completion.md`](reviews/2026-08-25-gameplay-g19-8-completion.md)：G19-8 current-only clean break、全量门禁与 Final GO disposition；
 - [`2026-08-26-m8-s1-mounted-on-skateboard-progress.md`](reviews/2026-08-26-m8-s1-mounted-on-skateboard-progress.md)：M8-S1 已实现核心链路、当前证据、明确剩余门禁与 `CAM-MOUNT-1` 的快速接续入口；
 - [`2026-08-24-workspace-structure-authority-review.md`](reviews/2026-08-24-workspace-structure-authority-review.md)：Workspace authority 根因闭包、门禁 invalidation 策略，以及 `WS-07B → WS-05B/C → WS-08` 结构治理任务的唯一详细裁决；
-- [`2026-08-24-context-driven-gameplay-camera-composition-design.md`](superpowers/specs/2026-08-24-context-driven-gameplay-camera-composition-design.md)：Kit、Relationship、Action、Equipment、Flight 与 Camera Context/Director 的设计输入；Camera Domain 已实现的部分和剩余集成以本页 P2.4 为准；
+- [`2026-08-24-context-driven-gameplay-camera-composition-design.md`](../docs/superpowers/specs/2026-08-24-context-driven-gameplay-camera-composition-design.md)：Kit、Relationship、Action、Equipment、Flight 与 Camera Context/Director 的设计输入；Camera Domain 已实现的部分和剩余集成以本页 P2.4 为准；
 - [`2026-08-25-context-driven-camera-package-boundary-review.md`](reviews/2026-08-25-context-driven-camera-package-boundary-review.md)：Camera 分包决策的历史审查证据，不是 active 实现状态或可用入口；
-- [`2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md`](superpowers/specs/2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md)：P1.6 AI Schema Projection、受控覆盖、WorldChangeSet、幂等 Journal、Full Reload Runtime 发布与后续 Incremental Hot Apply 的专项实施权威；
+- [`2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md`](../docs/superpowers/specs/2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md)：P1.6 AI Schema Projection、受控覆盖、WorldChangeSet、幂等 Journal、Full Reload Runtime 发布与后续 Incremental Hot Apply 的专项实施权威；
 - [`2026-08-26-p16-ai-schema-world-change-set-design-review.md`](reviews/2026-08-26-p16-ai-schema-world-change-set-design-review.md)：P1.6 专项规格的全维度设计审查、Runtime authority map 与当前源码复验证据；
 - [`2026-08-26-p16-full-reload-b-review.md`](reviews/2026-08-26-p16-full-reload-b-review.md)：P1.6 Full Reload 首切片 Mode B 变更审查；recover 终态保护与 F1 断言已按规格复验；
-- [`2026-08-19-world-validation-report-and-quality-gates-design.md`](superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md)：量化 Gate、Metric、Evidence 和生产阻断协议；
-- [`2026-08-20-ai-authored-geometry-extension-design.md`](superpowers/specs/2026-08-20-ai-authored-geometry-extension-design.md)：未来可能需要的 AI 自定义几何能力及候选技术，仅供调研评审，不属于当前 Roadmap；
+- [`2026-08-19-world-validation-report-and-quality-gates-design.md`](../docs/superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md)：量化 Gate、Metric、Evidence 和生产阻断协议；
+- [`2026-08-20-ai-authored-geometry-extension-design.md`](../docs/superpowers/specs/2026-08-20-ai-authored-geometry-extension-design.md)：未来可能需要的 AI 自定义几何能力及候选技术，仅供调研评审，不属于当前 Roadmap；
 - [`21-open-source-design-reference-ledger.md`](21-open-source-design-reference-ledger.md)：开源实现/测试的持续借鉴台账；记录锁定来源、本地落点、拒绝原因和候选验证，但不单独改变能力完成度；
 - `docs/superpowers/plans/`：已经进入实施阶段的单个纵向切片计划与证据。
 
@@ -157,8 +157,8 @@ Capture V1 是独立的新纵向切片，不改变该 90% 口径。
 
 完成证据：
 
-- [`Subject Foundation Visible Slice`](superpowers/plans/2026-08-19-subject-foundation-visible-slice.md)：49 项完成、0 项打开；
-- [`Package Subject Definition Visible Slice`](superpowers/plans/2026-08-19-package-subject-definition-visible-slice.md)：73 项完成、0 项打开。
+- [`Subject Foundation Visible Slice`](../docs/superpowers/plans/2026-08-19-subject-foundation-visible-slice.md)：49 项完成、0 项打开；
+- [`Package Subject Definition Visible Slice`](../docs/superpowers/plans/2026-08-19-package-subject-definition-visible-slice.md)：73 项完成、0 项打开。
 
 ### 3.3 Subject S1b Golden 与首个产品 G Bot 可视切片
 
@@ -239,7 +239,7 @@ P1.5、P1.6、P2.5 与 P2.6 是把既有总体设计和产品对接契约显式�
 目标：让 AI 表达空间意图和硬约束，由 SDK 生成可解释的最终 Transform，而不是
 要求模型为所有实例猜绝对坐标。
 
-- [x] 编写 [Placement Constraint / Layout Solver 专项设计](superpowers/specs/2026-08-19-placement-constraint-layout-solver-design.md)。
+- [x] 编写 [Placement Constraint / Layout Solver 专项设计](../docs/superpowers/specs/2026-08-19-placement-constraint-layout-solver-design.md)。
 - [x] 评审并冻结专项设计中的字段、版本、首批 Constraint 与 Fixture（方案 2 的原始冻结发生于
   2026-08-20；当前实现已 clean break 迁移到 Authoring V4 / NormalizedWorldIR V4 / ExecutionPlan V5）。
 - [x] 冻结 Placement Constraint 与 Gameplay Relationship 的协议边界。
@@ -252,12 +252,12 @@ P1.5、P1.6、P2.5 与 P2.6 是把既有总体设计和产品对接契约显式�
 - [x] Browser Fixture 覆盖接地、无穿插、Spawn/Route 坡度和 Opening Shot Anchor。
 - [x] Golden Fixture 证明相同输入和 Lock 在连续/并发执行中得到相同 Transform 与 Report Hash。
 - [ ] 引入通用 Terrain Mask 与内容寻址 Region 数据，不复制 Heightfield/Water 真相。
-- [x] 编写 [Route Graph 与主体可通行性专项设计](superpowers/specs/2026-08-21-route-graph-and-traversability-design.md)，
+- [x] 编写 [Route Graph 与主体可通行性专项设计](../docs/superpowers/specs/2026-08-21-route-graph-and-traversability-design.md)，
   并完成 [作者审查](reviews/2026-08-21-route-graph-traversability-design-review.md)与
   [独立审查/处置](reviews/2026-08-21-route-graph-traversability-independent-review.md)；明确
   AI Route 意图、`hard-ribbon`、分层 3D Graph、单一 Traversal Lock、真实控制器 Gate 与
   M5 完成标准。
-- [x] 编写 [R0 实施计划](superpowers/plans/2026-08-21-route-graph-traversability-r0-implementation-plan.md)，
+- [x] 编写 [R0 实施计划](../docs/superpowers/plans/2026-08-21-route-graph-traversability-r0-implementation-plan.md)，
   将 Planner Route 归一化、Surface 身份、Lock/Driver、Metric/Diagnostic 和 Conformance
   拆成可追踪任务；计划完成不等于字段已冻结。
 - [x] R0 实施并冻结 `connected-by-route`、Traversal Graph、`resolvedTraversalLockHash`、
@@ -266,7 +266,7 @@ P1.5、P1.6、P2.5 与 P2.6 是把既有总体设计和产品对接契约显式�
   合同，不表示 `route-connectivity` / `route-runtime-conformance` 已实现。已评 Runtime
   Metric 必须引用 `route-runtime-probe-receipt`；主体步高/坡度/净空/缝隙阈值来自 Lock，
   不写进 Validation Profile。
-- [x] 编写 [R1 Heightfield 实施计划](superpowers/plans/2026-08-22-route-graph-traversability-r1-heightfield-implementation-plan.md)，
+- [x] 编写 [R1 Heightfield 实施计划](../docs/superpowers/plans/2026-08-22-route-graph-traversability-r1-heightfield-implementation-plan.md)，
   将 Authoring V4 → IR V4 → ExecutionPlan V5、Recast Provider Adapter、确定性 Graph/Query、
   单一 `checkSupport()` Runtime Evidence、真实 Babylon/Havok Probe、双 Blocking Gate、CLI/Browser
   与对抗 Fixture 拆成可追踪任务。计划成稿本身不等于 Runtime 已实现；Heightfield Runtime 由下一勾选项关闭。
@@ -304,7 +304,7 @@ P0.1 整体仍以上述三项开放能力及生产范围扩展为完成标准。
 目标：把“世界是什么”“本次怎样操作/拍摄”“输出给视频模型的控制信号”分成
 三个独立、可哈希和可重放的制品。
 
-- [x] 编写 [Simulation Take / Control Capture Bundle 专项设计](superpowers/specs/2026-08-19-simulation-take-control-capture-design.md)。
+- [x] 编写 [Simulation Take / Control Capture Bundle 专项设计](../docs/superpowers/specs/2026-08-19-simulation-take-control-capture-design.md)。
 - [x] 评审并冻结 V1 字段、`web-v1` 编码 Profile、时间映射与两个 Fixture。
 - [x] 冻结 V1 Simulation Take、Runtime Session、Control Capture Bundle 与过渡期 WorldPackage Root Hash 的引用关系。
 - [x] 定义 V1 Scripted Controller、Control Intent/Camera Rig Track、Tick Range 和 Capture Schedule。
@@ -330,7 +330,7 @@ WorldPackage、Resume 与完整 Replay Gate 为完成标准。
 目标：用统一、可解释、可哈希的 Profile/Report 决定世界和控制制品能否进入下一
 阶段，避免不同脚本各用一套阈值或以总体分数掩盖关键失败。
 
-- [x] 编写 [World Validation Report 与质量门禁专项设计](superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md)。
+- [x] 编写 [World Validation Report 与质量门禁专项设计](../docs/superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md)。
 - [x] 冻结 Capture/Integrity V1 的 ValidationProfile、ValidationReport、Gate、Metric、Evidence 与 Canonical Hash；其他 Subject Union 后续按版本扩展。
 - [x] 冻结并测试 Blocking/Advisory、Required Missing、Incomplete 和 Policy Decision 语义。
 - [x] 定义并实现 Capture Completeness、Capture Ownership 与 Bundle Integrity 三个首批 Gate；Schema/Layout/Physics/Route/Composition/Replay/Performance 仍待接入。
@@ -341,7 +341,7 @@ WorldPackage、Resume 与完整 Replay Gate 为完成标准。
 
 已完成切片证据：
 
-- [Validation Capture/Integrity V1 实施计划](superpowers/plans/2026-08-21-validation-capture-integrity-v1.md)；
+- [Validation Capture/Integrity V1 实施计划](../docs/superpowers/plans/2026-08-21-validation-capture-integrity-v1.md)；
 - `pnpm verify:validation-capture`：正常、缺 Pass、坏 Depth、混 Take、坏 Hash 五类确定性 Fixture；
 - `packages/validation` 与 `worldkit verify capture|explain`。
 
@@ -351,8 +351,8 @@ WorldPackage、Resume 与完整 Replay Gate 为完成标准。
 #### P0.4 白模到生成式视频的第一条纵向切片
 
 - [x] 冻结一个不进入 Canonical Schema 的 Video Model Adapter 接口：
-  [专项设计](superpowers/specs/2026-08-26-m6-video-model-adapter-design.md)与
-  [实施计划](superpowers/plans/2026-08-26-m6-video-model-adapter-implementation-plan.md)已定义
+  [专项设计](../docs/superpowers/specs/2026-08-26-m6-video-model-adapter-design.md)与
+  [实施计划](../docs/superpowers/plans/2026-08-26-m6-video-model-adapter-implementation-plan.md)已定义
   gate-passed Control Capture 输入、provider-neutral Request/Run、exactly-once submission、
   输出 conformance 与结构一致性报告；接口冻结不等于 Provider 纵向切片已实现。
 - [ ] 选择一个首批模型/工作流作为实验 Adapter，并单独记录许可证与运行环境。
@@ -381,14 +381,14 @@ WorldPackage、Resume 与完整 Replay Gate 为完成标准。
 #### P1.2 Subject S1b：资产型 Definition 与扩展 Collider
 
 - [x] 接受首个 GLB/版本化 Asset Part、Rig Binding、Animation Set、Collider Profile、Host Resolver 和资产 Provenance 字段级设计。
-- [x] 按 [`Asset Subject S1b 可视切片实施计划`](superpowers/plans/2026-08-19-asset-subject-s1b-visible-slice.md) 打通 Golden Humanoid 的 Canonical → Babylon/Havok → CLI/Browser 纵向链路。
+- [x] 按 [`Asset Subject S1b 可视切片实施计划`](../docs/superpowers/plans/2026-08-19-asset-subject-s1b-visible-slice.md) 打通 Golden Humanoid 的 Canonical → Babylon/Havok → CLI/Browser 纵向链路。
 - [ ] 支持 Compound Collider 和更多确定性 Collider Derivation Profile。
 - [x] 为 Golden 切片定义并验证 Pivot、Forward Axis、Scale、Socket/Bone Binding 与单位检查。
 - [ ] 建立资产导入、License/Hash、预算、LOD、Skeleton 和动画 Clip 验收。
 - [ ] 证明 Primitive 白模可以替换为人形、四足或非人形资产而不改变 Entity ID 和 Gameplay 身份。
 - [x] Golden 切片中缺少 Rig、Clip、Collider 或 Socket 时返回稳定 Diagnostic，不静默猜测。
 - [x] 把 G Bot 的 Manifest/Registry/Gate 固化为
-  [`Product Asset Intake Template`](superpowers/specs/2026-08-21-product-asset-intake-template-design.md)
+  [`Product Asset Intake Template`](../docs/superpowers/specs/2026-08-21-product-asset-intake-template-design.md)
   与 Fixture `examples/product-asset-intakes/humanoid.g-bot@2.json`；未接入第二个产品 GLB。
 
 #### P1.3 Semantic Action 与 Animation Binding
@@ -447,10 +447,10 @@ Babylon/Havok Adapter 的硬编码分支中。字段职责以
 专项评审；本 Backlog 不提前冻结最终公共字段名。
 
 首条 Ground/Air 纵向切片已按
-[`P1.5 Control Feel / State Resolver 首切片实施计划`](superpowers/plans/2026-08-21-p15-control-feel-state-resolver.md)
+[`P1.5 Control Feel / State Resolver 首切片实施计划`](../docs/superpowers/plans/2026-08-21-p15-control-feel-state-resolver.md)
 实施并通过全部生产 Gate（typecheck、test、build、verify:canonical /
 placement-layout / rigged-subject / g-bot-subject）；专项规格见
-[`Control Feel、Physics Medium 与 State Resolver 设计`](superpowers/specs/2026-08-21-control-feel-physics-medium-state-resolver-design.md)。
+[`Control Feel、Physics Medium 与 State Resolver 设计`](../docs/superpowers/specs/2026-08-21-control-feel-physics-medium-state-resolver-design.md)。
 水/游泳介质、Hybrid Surface、统一 Validation 与新 CLI/Browser 协议字段均未随该切片交付。
 
 - [x] 评审并冻结 `LocomotionProfile` 与 `ControlFeelProfile` 的唯一字段归属：前者负责
@@ -512,7 +512,7 @@ placement-layout / rigged-subject / g-bot-subject）；专项规格见
      Runtime、Canonical、Placement、Rigged、G Bot 与 Validation Capture 门禁已通过；两条
      full-suite Route 超时已串行通过并完成 `main` 对拍，确认是资源竞争而非 Camera
      regression。实施边界和例外见
-     [`P1.5 相机收尾`](superpowers/plans/2026-08-23-p15-camera-tuning-cleanup.md)。
+     [`P1.5 相机收尾`](../docs/superpowers/plans/2026-08-23-p15-camera-tuning-cleanup.md)。
   2. [ ] P1.5 + Subject Preset 合并后的整支分支对抗审查另开，不把它当成合入门禁。
 
 完成标准：仅替换版本化 Profile 就能改变主体的加减速、转向、介质重力/阻力和浮力，
@@ -526,11 +526,11 @@ placement-layout / rigged-subject / g-bot-subject）；专项规格见
 第二套公共方言。
 
 专项详细设计已经冻结为
-[`P1.6 AI Schema、WorldChangeSet 与 Runtime Structural Publication 设计`](superpowers/specs/2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md)，
+[`P1.6 AI Schema、WorldChangeSet 与 Runtime Structural Publication 设计`](../docs/superpowers/specs/2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md)，
 审查证据见
 [`P1.6 AI Schema / WorldChangeSet 设计审查`](reviews/2026-08-26-p16-ai-schema-world-change-set-design-review.md)。
 Publication hardening 已全部折回上述核心规格；
-[`历史 amendment`](superpowers/specs/2026-08-26-p16-world-change-publication-hardening-amendment.md)
+[`历史 amendment`](../docs/superpowers/specs/2026-08-26-p16-world-change-publication-hardening-amendment.md)
 和
 [`follow-up review`](reviews/2026-08-26-p16-world-change-post-freeze-hardening-follow-up.md)
 只保留发现轨迹，不拥有规范优先级。
@@ -693,7 +693,7 @@ Incremental Hot Apply，以及哪些 Runtime 状态被保留、重置或替换�
 
 #### P2.1 Subject S2：类型化 Relationship Framework
 
-- [x] 按 [Canonical Runtime State 与 Semantic Projection 设计](superpowers/specs/2026-08-22-canonical-runtime-state-and-semantic-projection-design.md) 冻结 World State、View State、Runtime Status 与 Transition Log 四个公共投影；不扩充现有 `SubjectRuntimeStateV3` 大对象。
+- [x] 按 [Canonical Runtime State 与 Semantic Projection 设计](../docs/superpowers/specs/2026-08-22-canonical-runtime-state-and-semantic-projection-design.md) 冻结 World State、View State、Runtime Status 与 Transition Log 四个公共投影；不扩充现有 `SubjectRuntimeStateV3` 大对象。
 - [x] 增加由 ExecutionPlan Resource Lock 约束的 `capabilityStatesById`，使用关闭 Capability State Schema，禁止自由 `state: Record<string, unknown>` 袋。
 - [x] 首个 Relationship Manifest Registry 与角色化 `riderEntityId` / `mountEntityId` / `mountSlotId` 端点；seat/tether 仍保留。
 - [x] `mountedOn` 初始 Relationship 编译与动态 Mount/Dismount 事务边界。
@@ -723,7 +723,7 @@ Incremental Hot Apply，以及哪些 Runtime 状态被保留、重置或替换�
 
 #### P2.4 多 Controller、相机模式与受控操作
 
-- [x] 完成并评审 [上下文驱动 Gameplay 与 Camera 组合设计](superpowers/specs/2026-08-24-context-driven-gameplay-camera-composition-design.md)；接受 Kit → committed state → Camera Context → CameraDirector 单向链路、唯一 View Preference 和代表性 Fixture。
+- [x] 完成并评审 [上下文驱动 Gameplay 与 Camera 组合设计](../docs/superpowers/specs/2026-08-24-context-driven-gameplay-camera-composition-design.md)；接受 Kit → committed state → Camera Context → CameraDirector 单向链路、唯一 View Preference 和代表性 Fixture。
 - [x] `@whitebox-world/camera` 已 clean-break 为 provider-neutral Domain，交付关闭的命名
   Rig/Modifier/Context Profile、`CameraContextSampleV1`、`CameraViewPreferenceV1`、Context/
   Preference admission、纯 `selectCameraViewV1`、fallback diagnostic 与 explain。
@@ -792,7 +792,7 @@ Sensor 和 Capability 组合触发，而不是按 Mesh 名称、颜色、材质�
 
 目标：长期支持桥梁、桥洞、垂直崖壁、天然拱门、悬挑、洞口和可进入洞穴，同时保留
 Heightfield 在大面积户外地表上的性能、确定性和工具链优势。采用
-[`Hybrid Terrain 与非 Heightfield 特殊地形设计`](superpowers/specs/2026-08-21-hybrid-terrain-and-non-heightfield-topology-design.md)
+[`Hybrid Terrain 与非 Heightfield 特殊地形设计`](../docs/superpowers/specs/2026-08-21-hybrid-terrain-and-non-heightfield-topology-design.md)
 冻结的 Heightfield + Opening + Static Structure + Traversal Surface + Region/Portal 组合，
 不建立全 Mesh/全 Voxel 第二世界，也不让 AI 接触 Babylon/Havok。
 
@@ -868,7 +868,7 @@ Replay、Streaming/Dispose 和自动 Diagnostic；普通 Agent 只引用稳定 P
 #### P3.2 Babylon-only Runtime 收口
 
 - [x] TR0 已冻结依赖图与产品保留合同；执行权威为
-  [Babylon-only Runtime 收口实施计划](superpowers/plans/2026-08-25-babylon-only-threejs-retirement.md)。
+  [Babylon-only Runtime 收口实施计划](../docs/superpowers/plans/2026-08-25-babylon-only-threejs-retirement.md)。
 - [x] TR1/TR3/TR4 已随 `main@01ee4b9` 移除旧 geometry/Runtime/bake 路径，并建立
   provider-neutral Camera Domain 与 GLB-first intake；复核分支补齐非均匀 TRS、反射与 shear
   对抗测试，以及 Camera 参数不变量的单一所有权。
@@ -898,7 +898,7 @@ Replay、Streaming/Dispose 和自动 Diagnostic；普通 Agent 只引用稳定 P
 
 > **仍属未来探索、但不阻塞 P2.6：** 是否需要让 AI 超越 Registry Prototype/产品资产，
 > 自定义任意静态场景几何。目前只有一份
-> [候选技术草案](superpowers/specs/2026-08-20-ai-authored-geometry-extension-design.md)，
+> [候选技术草案](../docs/superpowers/specs/2026-08-20-ai-authored-geometry-extension-design.md)，
 > 没有选定 Recipe、MeshDraft、Sandbox 或其他开放制作 Provider。P2.6 只要求稳定的静态
 > Structure Resource/Collider/Surface 消费边界，可以先使用审核过的 Prototype 和产品 GLB；
 > AI 自定义几何只有在出现明确产品需求、Owner 和实验依据后才建立独立实施计划。
@@ -967,7 +967,7 @@ Placement S1、Simulation Take / Control Capture V1 与 Validation Capture/Integ
 | WS-07B | **待开始；结构治理后续 1** | 按 public contract family 扩展唯一 source/generated parity；每次只迁一个领域 | `ARC-INT` 已完成 / 阻塞相关 Schema release | 正负 parity、unknown-key、round-trip、tracked bytes；禁止用私有 deep import 换取小 bundle |
 | WS-05B/C | **待开始；结构治理后续 2** | 按 owner 批次消减当前 52 条 exact workspace boundary debt；补必要 `/testing` exports、direct deps 与 per-package tsconfig | `ARC-INT` 已完成 / 阻塞 `WS-08` 的相关 package extraction | debt count 单调下降、zero stale/new、zero cycles、无 wildcard |
 | WS-08 | **待开始；结构治理后续 3** | 稳定 Host primitives 后拆分 Host/Studio/CLI composition package，不改变 Runtime/Camera/Capture authority | public contracts 稳定且相关 `WS-05B/C` debt 已清 / 无 | CLI snapshots、readiness/shutdown lifecycle、build graph、Studio E2E |
-| M8-S1 | 核心实现与 review hardening 已完成；最终 Capture/Completion 收口中 | `mountedOn` 合同、编译、Action effect、Gameplay/Host 原子事务、Babylon Rider 投影、Physics-authority 安全下车、Playground 与 Track validator；[专项设计](superpowers/specs/2026-08-26-m8-s1-mounted-on-skateboard-design.md) / [实施计划](superpowers/plans/2026-08-26-m8-s1-mounted-on-skateboard-implementation-plan.md) / [进展记录](reviews/2026-08-26-m8-s1-mounted-on-skateboard-progress.md) | G19 已完成 | 本轮独立 review 已逐项复现处置，补齐 Physics/边界、控制权不变量、五 Event Capture 与 Builder 禁止项；新树 9/496 affected、190/2,057 contract、typecheck/build、clean-break 与 6+6 Outdoor verifier 通过，resource-heavy 仅有既有固定 5s 负载抖动且失败文件分别复跑通过；剩余 Runtime 对抗 hardening、`supportedBy`、正式四阶段 Capture verifier 及最终新树 review；`CAM-MOUNT-1` 归 P2.4 |
+| M8-S1 | 核心实现与 review hardening 已完成；最终 Capture/Completion 收口中 | `mountedOn` 合同、编译、Action effect、Gameplay/Host 原子事务、Babylon Rider 投影、Physics-authority 安全下车、Playground 与 Track validator；[专项设计](../docs/superpowers/specs/2026-08-26-m8-s1-mounted-on-skateboard-design.md) / [实施计划](../docs/superpowers/plans/2026-08-26-m8-s1-mounted-on-skateboard-implementation-plan.md) / [进展记录](reviews/2026-08-26-m8-s1-mounted-on-skateboard-progress.md) | G19 已完成 | 本轮独立 review 已逐项复现处置，补齐 Physics/边界、控制权不变量、五 Event Capture 与 Builder 禁止项；新树 9/496 affected、190/2,057 contract、typecheck/build、clean-break 与 6+6 Outdoor verifier 通过，resource-heavy 仅有既有固定 5s 负载抖动且失败文件分别复跑通过；剩余 Runtime 对抗 hardening、`supportedBy`、正式四阶段 Capture verifier 及最终新树 review；`CAM-MOUNT-1` 归 P2.4 |
 
 结构治理固定按 `WS-07B → WS-05B/C → WS-08` 推荐；`M8-S1` 仍是产品能力主线，两条 lane 不得
 因表格相邻而被解释为可以共享 owner 或跳过各自依赖。上述 WS 项的范围、延期理由、ownership、
@@ -976,7 +976,7 @@ execution mode 与验收合同以
 本表只提供不会丢失的中央发现入口与当前状态。
 
 G19-8 的 clean-break 子任务以
-[`未发布协议兼容层 Clean Break 设计`](superpowers/specs/2026-08-24-unreleased-compatibility-clean-break-design.md)
+[`未发布协议兼容层 Clean Break 设计`](../docs/superpowers/specs/2026-08-24-unreleased-compatibility-clean-break-design.md)
 为权威。当前状态如下；“已完成”只表示相应提交与聚焦证据存在，不替代最终全量门禁：
 
 | UCCB | 状态 | 当前提交 / 证据 | 剩余边界 |
@@ -998,7 +998,7 @@ Traversal V2 与 Browser V5）不是兼容债务，不能因版本号较小而�
 和 deadline；没有完整登记的延期不允许通过 G19-8。
 
 UCCB-65 的任务账本见
-[`历史命名与兼容路径清理专项计划`](superpowers/plans/2026-08-25-historical-naming-and-compatibility-path-cleanup-plan.md)。
+[`历史命名与兼容路径清理专项计划`](../docs/superpowers/plans/2026-08-25-historical-naming-and-compatibility-path-cleanup-plan.md)。
 该任务不以“删除所有低版本后缀”为目标：尚无替代版本且仍是唯一权威的嵌套合同必须保留并登记
 为 `current-authority`；只有已有当前替代实现的旧名称、alias、converter、双读写和 fallback 才进入
 `superseded-delete`。
@@ -1023,8 +1023,8 @@ S1b Golden、
 都已进入回归，下一步：
 
 1. **M1（已完成）：把 G Bot 的交付 Manifest/Registry 映射/Gate 固化为后续产品资产接入模板**
-   （专项 [`product-asset-intake-template`](superpowers/specs/2026-08-21-product-asset-intake-template-design.md)，
-   执行 [`product-asset-intake`](superpowers/skills/product-asset-intake.md)；G Bot Fixture
+   （专项 [`product-asset-intake-template`](../docs/superpowers/specs/2026-08-21-product-asset-intake-template-design.md)，
+   执行 [`product-asset-intake`](../docs/superpowers/skills/product-asset-intake.md)；G Bot Fixture
    `examples/product-asset-intakes/humanoid.g-bot@2.json`）；
 2. **M2（已完成）：冻结 Take/Capture V1 首条实施范围**；
 3. **M3（已完成）：实现五 Pass Capture 窄纵向切片并复用 Placement World Identity/Hash**；
@@ -1040,13 +1040,13 @@ S1b Golden、
    H1/H2/H3、动态平台、
    NPC/public `goTo`、车辆等能力继续由后续里程碑拥有；
 6. **M6：在 Placement + Take + Validation 闭环上接入实验 Video Model Adapter**：
-   [专项设计](superpowers/specs/2026-08-26-m6-video-model-adapter-design.md)与
-   [实施计划](superpowers/plans/2026-08-26-m6-video-model-adapter-implementation-plan.md)已冻结
+   [专项设计](../docs/superpowers/specs/2026-08-26-m6-video-model-adapter-design.md)与
+   [实施计划](../docs/superpowers/plans/2026-08-26-m6-video-model-adapter-implementation-plan.md)已冻结
    provider-neutral 边界、passed Capture/Validation admission、Seedance 首适配器、
    exactly-once submission、输出 conformance 与一致性报告；当前是设计完成，未标记实现完成；
 7. **M7（Ground/Air 首切片已完成）：继续扩展 P1.5 Control Feel/Physics Medium/State
    Resolver**：首条 Ground/Air 切片的
-   [实施计划](superpowers/plans/2026-08-21-p15-control-feel-state-resolver.md) 已实施、
+   [实施计划](../docs/superpowers/plans/2026-08-21-p15-control-feel-state-resolver.md) 已实施、
    通过全部生产 Gate，并由 PR #10 合入 `main`；水介质、`ControlMethodProfile`、
    CLI/Browser E2E 覆盖，以及整支对抗审查仍未交付。相机 overlay 已在 Browser V5
    基线上完成门禁与最终审查；Camera Domain 的 `cameraViewPreference`、纯 Selection、Browser
@@ -1058,8 +1058,8 @@ S1b Golden、
    人—滑板窄可视切片**：G19-2/G19-4 已交付 Canonical Gameplay 合同、provider-neutral
    RuntimeHost staging 和 WorldPackage membership；G19-6 至 G19-8 已完成并通过 Final GO。
    当前已按
-   [M8-S1 专项设计](superpowers/specs/2026-08-26-m8-s1-mounted-on-skateboard-design.md)与
-   [实施计划](superpowers/plans/2026-08-26-m8-s1-mounted-on-skateboard-implementation-plan.md)
+   [M8-S1 专项设计](../docs/superpowers/specs/2026-08-26-m8-s1-mounted-on-skateboard-design.md)与
+   [实施计划](../docs/superpowers/plans/2026-08-26-m8-s1-mounted-on-skateboard-implementation-plan.md)
    实现 `mountedOn` 权威关系、Mount/Dismount Action、Receipt/Event、Babylon 投影、
    Safe Dismount、Browser Fixture 与 Capture Track validator；独立 review 后又补齐了只依赖静态
    环境接触与 `checkSupport()` 的隔离下车探针、admitted bounds、骑乘控制权不变量、五 Event
@@ -1070,7 +1070,7 @@ S1b Golden、
    authority。`CAM-MOUNT-1` 由 P2.4 相机专项修复；不向 `SubjectRuntimeStateV3` 追加字段，
    也不先铺开 seat/tether、轮子动力学、特技、车辆或 Hosted Builder admission；
 9. **M9（P1.6 Full Reload 首切片已落地，未生产可用）**：P1.6 以
-   [`WorldChangeSet 专项设计`](superpowers/specs/2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md)
+   [`WorldChangeSet 专项设计`](../docs/superpowers/specs/2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md)
    为唯一实施权威；规格文档状态行仍写 *implementation not started*，那是文档元数据，
    不以它代替 Backlog。H0–G1 已交付 AI Schema、WorldChangeSet、进程内 journal、
    RuntimeHost publication V2、CLI 文件模式、Authoring 页 Edit API，以及

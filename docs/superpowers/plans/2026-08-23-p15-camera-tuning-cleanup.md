@@ -114,8 +114,8 @@ Matrix 和 Pixels，Control Capture 的 `frameHash` 也会相应变化。
 - `apps/playground/src/worldkit-browser-api.ts` + `worldkit-browser-api.test.ts`
 - `apps/playground/src/subject-preset-workbench.ts` + `subject-preset-workbench.test.ts`
 - `apps/playground/src/main.ts`
-- `scripts/verify-canonical-world.ts`
-- `artifacts/examples/package-subject-world/snapshot.json`（确定性裁剪）
+- `scripts/verification/verify-canonical-world.ts`
+- `examples/evidence/package-subject-world/snapshot.json`（确定性裁剪）
 - `docs/18-refactor-progress-and-backlog.md`、`.gitignore`
 
 未改动（早期清单多列，现澄清）：`camera-parameter-contract.ts`（`CameraTuningV1`

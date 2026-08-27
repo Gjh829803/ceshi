@@ -30,7 +30,7 @@
 | Markdown fence parity check | 0（60，偶数） | 文档结构 |
 | `git diff --check` | 0 | whitespace/patch integrity |
 | `pnpm test`（worktree 基线） | 1 | contract 191 files / 2,065 tests 全过；resource-heavy 20 files / 404 tests 通过，`agent-self-check` 1 项在全套资源竞争下超过 30 秒 |
-| `pnpm exec vitest run --config vitest.resource-heavy.config.ts scripts/agent-self-check.test.ts` | 0 | 超时文件定向复跑 2/2 通过；首项 20.6 秒，证实不是本次文档回归 |
+| `pnpm exec vitest run --config vitest.resource-heavy.config.ts scripts/agents/agent-self-check.test.ts` | 0 | 超时文件定向复跑 2/2 通过；首项 20.6 秒，证实不是本次文档回归 |
 
 未因初次文档变更运行 `pnpm typecheck`、`pnpm build`、Browser verifier 或视觉/人工交互。
 worktree 创建时按隔离基线要求运行了 root `pnpm test`；其唯一超时已按同一配置定向复跑通过。

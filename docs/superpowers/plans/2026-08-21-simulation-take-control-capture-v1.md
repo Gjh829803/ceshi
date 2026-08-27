@@ -108,11 +108,11 @@
 ### Task 5: Add CLI Take runner, bundle commands, and two acceptance Takes
 
 **Files:**
-- Modify: `scripts/worldkit.ts`
-- Modify: `scripts/worldkit.test.ts`
+- Modify: `scripts/cli/worldkit.ts`
+- Modify: `scripts/cli/worldkit.test.ts`
 - Create: `scripts/lib/simulation-take-runner.ts`
 - Create: `scripts/lib/simulation-take-runner.test.ts`
-- Create: `scripts/verify-control-capture.ts`
+- Create: `scripts/verification/verify-control-capture.ts`
 - Create: `examples/takes/coastal-walk-opening.take.json`
 - Create: `examples/takes/coastal-orbit-run.take.json`
 - Modify: `package.json`

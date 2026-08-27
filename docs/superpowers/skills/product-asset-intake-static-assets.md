@@ -119,7 +119,7 @@ xier120 的实现位置分别是
 | Authoring Loader / World Package artifact 收集 | `apps/playground/src/authoring-loader.ts` 使用 `PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1` 与 `PLAYGROUND_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1` 调用 `resolveWorldPackageSubjectAssetArtifactsV1` |
 | xier120 的已有 batch 级映射 | `XIER120_SUBJECT_ASSET_URI_BY_REF_V1` 与 `XIER120_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1`；它们只属于 xier120，通用 Playground 映射由 spread 合成 |
 | Trusted `worldkit run` preflight | `scripts/lib/route-validation-runner.ts` 在 schema-v4 `worldkit run` 启动 Host 前调用 `resolveWorldPackageResourceArtifactsV1`；该函数使用 `scripts/lib/world-package-resource-resolver.ts` 的 `DEFAULT_WORLD_PACKAGE_RESOURCE_MAPPING_BY_REF_V1` 独立读取、锁定并校验 public asset bytes |
-| Trusted `worldkit run` Host | `pnpm worldkit run` 通过 `scripts/worldkit.ts` 启动带 `?authoring=1` 的受信 Host；它先经过上行 preflight，再加载同一 Authoring Loader 和 Runtime Resolver |
+| Trusted `worldkit run` Host | `pnpm worldkit run` 通过 `scripts/cli/worldkit.ts` 启动带 `?authoring=1` 的受信 Host；它先经过上行 preflight，再加载同一 Authoring Loader 和 Runtime Resolver |
 
 Host URL 必须以 `/subject-assets/` 开头，并同 Registry 锁定的 `artifactContentHash`、
 `byteLength` 匹配。新的非 xier120 batch 必须维护四个相互独立的映射面：
@@ -193,8 +193,8 @@ pnpm worldkit run examples/authoring/xier120-subject-gallery.json
 ```
 
 其持久的渲染/人工记录位于
-`artifacts/examples/xier120-subject-gallery/gallery.png` 和
-`artifacts/examples/xier120-subject-gallery/manual-check.json`。这些是 xier120 的先例，
+`examples/evidence/xier120-subject-gallery/gallery.png` 和
+`examples/evidence/xier120-subject-gallery/manual-check.json`。这些是 xier120 的先例，
 不是新 batch 可以复用的通过证书。该例对全部 19 个 Definition 完成自动化和渲染检查；
 人工 trusted-host interaction 仅覆盖 animal、vehicle、composition 三个代表类别，
 不是 19 个资产逐项手工通过的声明。

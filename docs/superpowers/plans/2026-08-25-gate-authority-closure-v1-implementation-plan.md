@@ -23,9 +23,9 @@
 
 **Files:**
 
-- Modify: `scripts/build-agent-self-check.mjs`
-- Create: `scripts/check-agent-self-check.ts`
-- Modify: `scripts/agent-self-check.test.ts`
+- Modify: `scripts/agents/build-agent-self-check.mjs`
+- Create: `scripts/agents/check-agent-self-check.ts`
+- Modify: `scripts/agents/agent-self-check.test.ts`
 - Modify: `scripts/lib/test-gate-manifest.ts`
 - Modify: `package.json`
 - Modify: `docs/22-hosted-scene-brief-and-evaluation.md`
@@ -44,10 +44,10 @@
 
 - Modify: `scripts/lib/artifact-directory-promotion.ts`
 - Modify: `scripts/lib/artifact-directory-promotion.test.ts`
-- Modify: `scripts/verify-canonical-world.ts`
-- Modify: `scripts/verify-placement-layout.ts`
-- Modify: `scripts/verify-rigged-subject-world.ts`
-- Modify: `scripts/verify-g-bot-subject-world.ts`
+- Modify: `scripts/verification/verify-canonical-world.ts`
+- Modify: `scripts/verification/verify-placement-layout.ts`
+- Modify: `scripts/verification/verify-rigged-subject-world.ts`
+- Modify: `scripts/verification/verify-g-bot-subject-world.ts`
 - Modify: `package.json`
 
 **Contract:** no arguments means read-only `check`; `--update` means validated atomic promotion; any other argument fails. Check validates exact staging inventory and leaves the target unchanged.
@@ -64,9 +64,9 @@
 
 - Create: `scripts/lib/independent-test-gate.ts`
 - Create: `scripts/lib/independent-test-gate.test.ts`
-- Create: `scripts/run-independent-test-gate.ts`
+- Create: `scripts/testing/run-independent-test-gate.ts`
 - Modify: `scripts/lib/test-gate-manifest.ts`
-- Modify: `scripts/image-delivery.test.mjs`
+- Modify: `scripts/visual/image-delivery.test.mjs`
 - Modify: `sites/world-sdk-blueprint/app/page.tsx`
 - Modify: `sites/world-sdk-blueprint/app/globals.css`
 - Modify: `sites/world-sdk-blueprint/tests/rendered-html.test.mjs`

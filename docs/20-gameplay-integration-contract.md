@@ -300,4 +300,4 @@ Clip 名推断动作。
 - `packages/runtime-contracts/src/runtime-session.ts`
 - `packages/runtime-host/src/runtime-host.ts`
 - `packages/runtime-host/src/world-session.ts`
-- [`2026-08-24-gameplay-framework-r1b-integration-design.md`](superpowers/specs/2026-08-24-gameplay-framework-r1b-integration-design.md)
+- [`2026-08-24-gameplay-framework-r1b-integration-design.md`](../docs/superpowers/specs/2026-08-24-gameplay-framework-r1b-integration-design.md)

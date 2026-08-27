@@ -289,7 +289,7 @@ Graph` 输出。应借鉴的是“先发现真实 Registry 资源、再组合、
 
 ### 5.2 必须新增的设计一：Placement Constraint 与确定性 Solver
 
-当前 [`AuthoringSpec V2 Schema`](../../../packages/authoring/src/authoring-spec-v2.schema.json) 中的 `constraints` 仍是关闭未知字段的空保留对象，实例主要依赖最终 Transform。该方式可以支撑当前 S1a，但不足以让 AI 稳定搭建开放世界。
+本文研究时使用的 `AuthoringSpec V2 Schema` 中，`constraints` 仍是关闭未知字段的空保留对象，实例主要依赖最终 Transform。该历史 Schema 已在未发布迁移中删除；当时的方式可以支撑 S1a，但不足以让 AI 稳定搭建开放世界。
 
 未来应增加独立的 Placement Constraint 判别 Union，至少覆盖：
 

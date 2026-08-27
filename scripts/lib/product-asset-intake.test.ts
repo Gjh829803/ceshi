@@ -31,7 +31,7 @@ function validFixture(): ProductAssetIntakeFixtureV1 {
     productAssetManifestPath: "assets/subjects/humanoid/g-bot/asset.manifest.json",
     productActionManifestPath: "assets/subjects/humanoid/g-bot/action-manifest.json",
     authoringWorldPath: "examples/authoring/g-bot-subject-world.json",
-    artifactDirectoryPath: "artifacts/examples/g-bot-subject-world",
+    artifactDirectoryPath: "examples/evidence/g-bot-subject-world",
     primaryEntityId: "g-bot-primary",
     secondaryEntityId: "g-bot-secondary",
     controllerId: "controller-primary",

@@ -989,8 +989,8 @@ itself close Task 10, R1b, or M5; the Task 10 evidence below now closes all thre
 - Create: `examples/traversal/r1b-static-platform/fail-overlapping-surfaces.world.json`
 - Create: `examples/traversal/r1b-static-platform/fail-runtime-overlapping-surfaces.world.json`
 - Modify: `examples/traversal/route-r0-contract.json`
-- Create: `scripts/verify-route-r1b-static-platform.ts`
-- Create: `scripts/verify-route-r1b-static-platform.test.ts`
+- Create: `scripts/verification/verify-route-r1b-static-platform.ts`
+- Create: `scripts/verification/verify-route-r1b-static-platform.test.ts`
 - Modify: `packages/traversal/src/build-input.ts`
 - Modify: `packages/traversal/src/build-input.test.ts`
 - Modify: `packages/traversal/src/graph-contract.ts`
@@ -1045,10 +1045,10 @@ itself close Task 10, R1b, or M5; the Task 10 evidence below now closes all thre
 - Modify: `scripts/lib/worldkit-route-evidence-transport.ts`
 - Modify: `scripts/lib/worldkit-server.ts`
 - Modify: `scripts/lib/worldkit-server.test.ts`
-- Modify: `scripts/worldkit-route-run.integration.test.ts`
-- Modify: `scripts/worldkit.test.ts`
-- Modify: `scripts/verify-route-r0-contract.ts`
-- Modify: `scripts/verify-route-r1-heightfield.ts`
+- Modify: `scripts/cli/worldkit-route-run.integration.test.ts`
+- Modify: `scripts/cli/worldkit.test.ts`
+- Modify: `scripts/verification/verify-route-r0-contract.ts`
+- Modify: `scripts/verification/verify-route-r1-heightfield.ts`
 - Modify: `docs/17-canonical-json-quickstart.md`
 - Modify: `package.json`
 
@@ -1071,7 +1071,7 @@ or prose-only family.
 - [x] **Step 2: Verify gate RED**
 
 ```bash
-pnpm vitest run scripts/verify-route-r1b-static-platform.test.ts
+pnpm vitest run scripts/verification/verify-route-r1b-static-platform.test.ts
 ```
 
 Expected: FAIL because the verifier and fixtures do not exist.
@@ -1115,7 +1115,7 @@ The verifier must execute the equivalent family-based scan so a newly discovered
 ! rg -n --pcre2 \
   '\b(?:[A-Za-z0-9_]*HeightfieldRouteBuildInput[A-Za-z0-9_]*V1|HeightfieldRouteTerrainSourceV1|HeightfieldRouteBuildBudgetEvidenceV1|StaticBlockingColliderV1|[A-Za-z0-9_]*RequiredHeightfieldRoute[A-Za-z0-9_]*V1|[A-Za-z0-9_]*HeightfieldRouteConnectivityResult[A-Za-z0-9_]*V1|[A-Za-z0-9_]*HeightfieldTraversalGraph[A-Za-z0-9_]*V1|[A-Za-z0-9_]*QueryRequiredRoute[A-Za-z0-9_]*V1|[A-Za-z0-9_]*TraversalGraphV1|[A-Za-z0-9_]*RoutePathReceipt[A-Za-z0-9_]*V1|[A-Za-z0-9_]*RouteOverlay[A-Za-z0-9_]*V1|[A-Za-z0-9_]*RouteConnectivity(?:Failure|Unavailable|Complete)[A-Za-z0-9_]*V1|ROUTE_CONNECTIVITY_FAILURE_CODES_V1|[A-Za-z0-9_]*RouteRuntimeProbe[A-Za-z0-9_]*V1|ROUTE_RUNTIME_PROBE_ERROR_CODES_V1|RouteConnectivityOperationAbortedErrorV1|queryRequiredRouteV1|[A-Za-z0-9_]*RouteThresholdRejection(?:Proof|Reason)[A-Za-z0-9_]*V1|[A-Za-z0-9_]*RouteEvidence(?:Publication|Projection)[A-Za-z0-9_]*V1|WorldkitBrowserApiV4|blockingColliderIdentities|heightfield-tile-estimate|not-required-empty-source)\b' \
   packages apps scripts examples README.md docs/17-canonical-json-quickstart.md
-pnpm vitest run scripts/verify-route-r1b-static-platform.test.ts -t "legacy consumer census"
+pnpm vitest run scripts/verification/verify-route-r1b-static-platform.test.ts -t "legacy consumer census"
 ```
 
 Expected: `rg` prints no matches, the census reports zero across all fixed roots, and the parsed R0 fixture assertion proves Graph V2 rather than relying on text absence.
@@ -1127,7 +1127,7 @@ fixture proofs and reported zero legacy consumers.
 - [x] **Step 6: Run Task 9 gates and commit**
 
 ```bash
-pnpm vitest run packages/traversal/src packages/traversal-recast/src packages/validation/src/route.test.ts packages/validation/src/route-evaluator.test.ts packages/validation/src/route-evidence-publication.test.ts packages/validation/src/route-runtime-probe.test.ts scripts/verify-route-r1b-static-platform.test.ts scripts/lib/route-validation-orchestrator.test.ts scripts/lib/route-validation-cli.test.ts scripts/lib/route-runtime-probe.integration.test.ts scripts/lib/traversal-area-runtime-collision.integration.test.ts scripts/lib/worldkit-server.test.ts scripts/worldkit-route-run.integration.test.ts scripts/worldkit.test.ts apps/playground/src/authoring-loader.test.ts apps/playground/src/worldkit-browser-api.test.ts
+pnpm vitest run packages/traversal/src packages/traversal-recast/src packages/validation/src/route.test.ts packages/validation/src/route-evaluator.test.ts packages/validation/src/route-evidence-publication.test.ts packages/validation/src/route-runtime-probe.test.ts scripts/verification/verify-route-r1b-static-platform.test.ts scripts/lib/route-validation-orchestrator.test.ts scripts/lib/route-validation-cli.test.ts scripts/lib/route-runtime-probe.integration.test.ts scripts/lib/traversal-area-runtime-collision.integration.test.ts scripts/lib/worldkit-server.test.ts scripts/cli/worldkit-route-run.integration.test.ts scripts/cli/worldkit.test.ts apps/playground/src/authoring-loader.test.ts apps/playground/src/worldkit-browser-api.test.ts
 pnpm verify:route-r0-contract
 pnpm verify:route-r1-heightfield
 pnpm verify:route-r1b-static-platform

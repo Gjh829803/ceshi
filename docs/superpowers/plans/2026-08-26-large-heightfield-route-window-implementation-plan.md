@@ -12,7 +12,7 @@
 | LW1 | Freeze scale and route-window design | — | LW2–LW6 | design/spec and this plan | current schema/profile/runtime evidence -> approved V1 boundary | link/diff review | main-agent-only |
 | LW2 | Add provider-neutral route-window estimator | LW1 | LW4 | `packages/traversal/src/build-budget.*`, traversal exports | closed route/grid/profile input -> admitted expanded bounds + tile estimate or structured budget error | focused Vitest RED/GREEN | sequential |
 | LW3 | Add large-raster base quantization | LW1 | LW5 | `scripts/terrain-height-intent/quantize-*`, compiler/report tests | constrained metric field + protected mask -> deterministic `0.1m` unlocked samples with exact protected samples | focused Vitest plus serialized-byte assertion | parallel-safe after LW1 |
-| LW4 | Add Builder scale/window evidence and fail-fast diagnostic | LW2 | LW5 | `scripts/agent-builder-self-check.ts` and focused tests | Authoring routes + compiled terrain + built-in profile -> ordered evidence/diagnostics | host self-check tests | sequential |
+| LW4 | Add Builder scale/window evidence and fail-fast diagnostic | LW2 | LW5 | `scripts/agents/agent-builder-self-check.ts` and focused tests | Authoring routes + compiled terrain + built-in profile -> ordered evidence/diagnostics | host self-check tests | sequential |
 | LW5 | Synchronize Builder skill, generated checker, and launcher | LW3, LW4 | LW6 | Builder Skill/reference/template, launcher, generated `self-check.mjs`, skill tests | approved V1 rules -> executable Agent guidance with source-equivalent checker | builder skill tests and bundle parity | sequential |
 | LWR | Close the terrain adversarial-review blockers discovered after `d1d7f8b` | LW3 | LW6 | terrain constraint solver, compiler call, focused regressions, remediation review | adversarial probes -> final-raster Route revalidation, conservative protected rasterization, height-range fail-closed | focused RED/GREEN, real-case replay, Authoring/Layout validation | main-agent-only |
 | LW6 | Prove large-world capacity and finish second functional commit | LW5, LWR | — | integration fixture/evidence, review doc, Git commit | final tree -> 2km contract evidence, 1km Babylon topology/capture evidence, commit | scoped gates, typecheck, build if inputs require, visual inspection, diff check | main-agent-only |
@@ -63,7 +63,7 @@ chain and the coordination cost would exceed the saved time.
 - [x] Document the `1024`-vertex operational cap, `1.25–2.5m` cell guidance, measured budget formula,
   explicit shared seam Anchors, and empty connectivity for open ground.
 - [x] Add a segmented-route JSON example without inventing a new public field.
-- [x] Update `scripts/run-spatial-world-agent.sh` with the same canonical terminology.
+- [x] Update `scripts/agents/run-spatial-world-agent.sh` with the same canonical terminology.
 - [x] Regenerate the Builder standalone self-check with `pnpm generate:agent-self-check`.
 - [x] Run Builder skill tests, source/bundle parity, and the standalone host/agent receipt comparison.
 

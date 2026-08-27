@@ -679,8 +679,8 @@ ExecutionPlan V4 → Babylon/Havok → CLI/Browser 的首个纵向切片：
 - 两个 Subject 的位置与 `activeActionId` 独立，Havok 墙体停止有效；篡改 GLB 后
   Browser 稳定返回 `SUBJECT_ASSET_HASH_MISMATCH` 且磁盘资产 Hash 不变。
 
-实现证据位于 `artifacts/examples/rigged-subject-world/verification.json`，一键 Gate 为
+实现证据位于 `examples/evidence/rigged-subject-world/verification.json`，一键 Gate 为
 `pnpm verify:rigged-subject`。G Bot 的独立证据位于
-`artifacts/examples/g-bot-subject-world/verification.json`，一键 Gate 为
+`examples/evidence/g-bot-subject-world/verification.json`，一键 Gate 为
 `pnpm verify:g-bot-subject`。这两个结果不把任意后续产品资产、Compound Collider、
 LOD、更多身体拓扑、独立动画资产、通用姿态、游泳、装备、坐骑或飞行标记为完成。

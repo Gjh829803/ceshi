@@ -26,7 +26,7 @@ import {
 } from "@whitebox-world/world-package/testing";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { parseWorldkitArgs, WorldkitUsageError } from "../worldkit";
+import { parseWorldkitArgs, WorldkitUsageError } from "../cli/worldkit";
 import {
   AUTHORING_EDIT_CONNECTION_PROFILE_KIND,
   CONSTRAINED_JSON_PROFILE_REF,

@@ -33,9 +33,9 @@ AuthoringSpec V4
 pnpm install
 pnpm worldkit validate examples/authoring/package-subject-world.json --json
 pnpm worldkit build examples/authoring/package-subject-world.json \
-  --output artifacts/examples/package-subject-world/world.package --json
-pnpm worldkit inspect artifacts/examples/package-subject-world/world.package --json
-pnpm worldkit load artifacts/examples/package-subject-world/world.package \
+  --output examples/evidence/package-subject-world/world.package --json
+pnpm worldkit inspect examples/evidence/package-subject-world/world.package --json
+pnpm worldkit load examples/evidence/package-subject-world/world.package \
   --headless --json
 pnpm worldkit subject explain examples/authoring/package-subject-world.json \
   --entity-id pack-animal-a --json
@@ -47,7 +47,7 @@ pnpm worldkit run examples/authoring/package-subject-world.json
 NDJSON stdin/stdout；不要把该协议安装到 Browser Protocol：
 
 ```bash
-pnpm worldkit run artifacts/examples/package-subject-world/world.package \
+pnpm worldkit run examples/evidence/package-subject-world/world.package \
   --interactive --protocol ndjson --headless \
   --session-directory /absolute/path/to/runtime-session
 ```
@@ -60,8 +60,8 @@ pnpm worldkit run artifacts/examples/package-subject-world/world.package \
 
 ```bash
 pnpm worldkit capture examples/authoring/package-subject-world.json \
-  --output artifacts/examples/package-subject-world/world.png \
-  --snapshot artifacts/examples/package-subject-world/snapshot.json --json
+  --output examples/evidence/package-subject-world/world.png \
+  --snapshot examples/evidence/package-subject-world/snapshot.json --json
 ```
 
 首次截图若提示 Chromium 不存在，执行：
@@ -462,7 +462,7 @@ CLI 对应命令是 `worldkit schema project`、`worldkit registry search` 和
 P1.6 首切片只证明 Full Reload；Incremental Hot Apply 和 P1.6 生产可用性都还没交付。
 完整 P1.4 Package/CLI/持久 Runtime Session 已由独立 P1.4 工作流随后完成，不扩大
 P1.6 G1 的范围。权威合同见
-[P1.6 专项规格](superpowers/specs/2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md)。
+[P1.6 专项规格](../docs/superpowers/specs/2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md)。
 
 Agent 读 Receipt 时按关闭字段分支，不要发明同义字段：
 
@@ -530,8 +530,8 @@ Rigged Subject 最小接入/验证流程：
 ```bash
 pnpm worldkit validate examples/authoring/rigged-subject-world.json --json
 pnpm worldkit capture examples/authoring/rigged-subject-world.json \
-  --output artifacts/examples/rigged-subject-world/world.png \
-  --snapshot artifacts/examples/rigged-subject-world/snapshot.json \
+  --output examples/evidence/rigged-subject-world/world.png \
+  --snapshot examples/evidence/rigged-subject-world/snapshot.json \
   --json
 pnpm verify:rigged-subject
 ```

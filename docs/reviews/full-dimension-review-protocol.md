@@ -36,7 +36,7 @@
 
 ### D2 Schema 与 AI-friendly
 
-命名与结构逐条对照 `AGENTS.md` 的 Schema 规则和 [`2026-08-17-ai-first-lego-game-sdk-design.md`](../superpowers/specs/2026-08-17-ai-first-lego-game-sdk-design.md)：
+命名与结构逐条对照 `AGENTS.md` 的 Schema 规则和 [`2026-08-17-ai-first-lego-game-sdk-design.md`](../../docs/superpowers/specs/2026-08-17-ai-first-lego-game-sdk-design.md)：
 
 - 一个概念一个词；出现同义公共字段、provider 方言或要求 adapter 在两种叫法间翻译，即缺陷。
 - 数值字段名必须自带单位与坐标域（`Meters` / `Seconds` / `Radians` / `Ratio` / `XYZ` / `XZ` 等）；靠 prose 解释单位的字段即缺陷。

@@ -113,4 +113,4 @@ Feature presence 抵消。Whitebox tri-view 必须由已验证的 Babylon Runtim
 
 当前迁移与最终集成状态见
 [SDK 重构总进度与 Backlog](18-refactor-progress-and-backlog.md)和
-[Babylon-only Runtime 收口实施计划](superpowers/plans/2026-08-25-babylon-only-threejs-retirement.md)。
+[Babylon-only Runtime 收口实施计划](../docs/superpowers/plans/2026-08-25-babylon-only-threejs-retirement.md)。

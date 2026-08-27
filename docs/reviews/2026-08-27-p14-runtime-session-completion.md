@@ -10,7 +10,7 @@
   transport, durable Request ID replay, fresh-process recovery, and exact
   Runtime ownership cleanup.
 - Authority:
-  [`P1.4 Package CLI and Persistent Runtime Session implementation plan`](../superpowers/plans/2026-08-27-p14-package-cli-runtime-session.md).
+  [`P1.4 Package CLI and Persistent Runtime Session implementation plan`](../../docs/superpowers/plans/2026-08-27-p14-package-cli-runtime-session.md).
 - Package prerequisite:
   [`P1.4 Complete WorldPackage V2 completion record`](2026-08-27-p14-complete-world-package-v2-completion.md).
 - P1.6 authority status remains *Detailed design；implementation not started*.
@@ -63,7 +63,7 @@ exactly 39 keys and does not expose a Runtime Session alias.
 
 ## Fresh-process evidence
 
-`scripts/runtime-session.integration.test.ts` uses real child processes and
+`scripts/cli/runtime-session.integration.test.ts` uses real child processes and
 disposable absolute Package/Session directories. All five integration tests
 passed:
 

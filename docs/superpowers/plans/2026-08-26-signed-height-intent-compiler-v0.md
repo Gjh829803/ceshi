@@ -529,7 +529,7 @@ Do not select V4 merely because it looks better.
 
 - [x] **Step 4: Run scoped completion gates**
 
-Run: `pnpm exec vitest run scripts/terrain-height-intent/*.test.ts scripts/lib/test-gate-census.test.ts scripts/planner-skill.test.ts`
+Run: `pnpm exec vitest run scripts/terrain-height-intent/*.test.ts scripts/lib/test-gate-census.test.ts scripts/agents/planner-skill.test.ts`
 
 Run: `pnpm check:agent-self-check`
 

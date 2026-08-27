@@ -255,9 +255,9 @@ Socket 和类型化关系表达。
 pnpm install
 pnpm worldkit validate examples/authoring/package-subject-world.json --json
 pnpm worldkit build examples/authoring/package-subject-world.json \
-  --output artifacts/examples/package-subject-world/world.package --json
-pnpm worldkit inspect artifacts/examples/package-subject-world/world.package --json
-pnpm worldkit load artifacts/examples/package-subject-world/world.package \
+  --output examples/evidence/package-subject-world/world.package --json
+pnpm worldkit inspect examples/evidence/package-subject-world/world.package --json
+pnpm worldkit load examples/evidence/package-subject-world/world.package \
   --headless --json
 ```
 
@@ -357,8 +357,8 @@ pnpm dev:g-bot:refresh
 
 ```bash
 pnpm worldkit capture examples/authoring/package-subject-world.json \
-  --output artifacts/examples/package-subject-world/world.png \
-  --snapshot artifacts/examples/package-subject-world/snapshot.json --json
+  --output examples/evidence/package-subject-world/world.png \
+  --snapshot examples/evidence/package-subject-world/snapshot.json --json
 ```
 
 校验并运行一个确定性 Simulation Take，生成五 Pass Control Capture Bundle：
@@ -405,8 +405,8 @@ pnpm verify:placement-layout
 ```bash
 pnpm worldkit validate examples/authoring/rigged-subject-world.json --json
 pnpm worldkit capture examples/authoring/rigged-subject-world.json \
-  --output artifacts/examples/rigged-subject-world/world.png \
-  --snapshot artifacts/examples/rigged-subject-world/snapshot.json \
+  --output examples/evidence/rigged-subject-world/world.png \
+  --snapshot examples/evidence/rigged-subject-world/snapshot.json \
   --json
 pnpm verify:rigged-subject
 ```
@@ -574,7 +574,7 @@ Gameplay 合同、引擎无关规则、Runtime Host 生命周期和 Babylon Adap
 | 路径 | 职责 |
 |---|---|
 | `apps/playground/` | Canonical Runtime 页面、Babylon-backed catalog/artifact 场景和浏览器验证入口 |
-| `scripts/worldkit.ts` | SDK CLI |
+| `scripts/cli/worldkit.ts` | SDK CLI |
 
 Compiler 和 Runtime 不能反向读取 Agent Prompt；Runtime Adapter 不能把 Babylon
 对象泄漏到公共协议；场景模块不能为了创建内容而修改 Runtime、Physics 或 Camera
@@ -663,12 +663,12 @@ Browser、示例和门禁。若本轮确实无法删除某个旧路径，技术�
 
 ### 架构决策
 
-- [ADR-0001：向 Agent 暴露主体套餐](decisions/0001-subject-kits.md)
-- [ADR-0002：第一、二期范围](decisions/0002-phased-scope.md)
-- [ADR-0003：Agent、Director 与 World Model 边界](decisions/0003-agent-director-world-model-boundaries.md)
-- [ADR-0004：新场景采用 Plan-first 创作](decisions/0004-plan-first-world-authoring.md)
-- [ADR-0005：分离 Planner、Builder 与 Visual Bible](decisions/0005-separated-planner-builder-visual-bible.md)
-- [ADR-0006：AuthoringSpec 编译架构与 Babylon Runtime](decisions/0006-authoring-spec-compiler-architecture.md)
+- [ADR-0001：向 Agent 暴露主体套餐](docs/decisions/0001-subject-kits.md)
+- [ADR-0002：第一、二期范围](docs/decisions/0002-phased-scope.md)
+- [ADR-0003：Agent、Director 与 World Model 边界](docs/decisions/0003-agent-director-world-model-boundaries.md)
+- [ADR-0004：新场景采用 Plan-first 创作](docs/decisions/0004-plan-first-world-authoring.md)
+- [ADR-0005：分离 Planner、Builder 与 Visual Bible](docs/decisions/0005-separated-planner-builder-visual-bible.md)
+- [ADR-0006：AuthoringSpec 编译架构与 Babylon Runtime](docs/decisions/0006-authoring-spec-compiler-architecture.md)
 
 ## Catalog 场景与创作制品
 

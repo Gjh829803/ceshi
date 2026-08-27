@@ -199,7 +199,7 @@ serialized.
 
 ### 4.4 Fixture selection authority
 
-`scripts/verify-route-r1b-static-platform.ts` derives injections from the
+`scripts/verification/verify-route-r1b-static-platform.ts` derives injections from the
 closed fixture ID rather than let an arbitrary fixture caller choose them:
 
 ```text

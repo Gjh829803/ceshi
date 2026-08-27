@@ -4,7 +4,7 @@
 
 范围：`xier120.quadruped-animal`、`xier120.quadruped-ridable` 的源 FBX；不修改 Runtime、Schema、Registry 或生成资产
 
-判定依据：[`2026-08-24-xier120-non-human-static-subject-intake-design.md`](../superpowers/specs/2026-08-24-xier120-non-human-static-subject-intake-design.md) §5.6
+判定依据：[`2026-08-24-xier120-non-human-static-subject-intake-design.md`](../../docs/superpowers/specs/2026-08-24-xier120-non-human-static-subject-intake-design.md) §5.6
 
 ## 结论
 

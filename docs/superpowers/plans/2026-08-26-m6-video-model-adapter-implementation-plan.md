@@ -87,7 +87,7 @@
 - Create: `scripts/providers/seedance25-reference-video-adapter.py`
 - Create: provider unit tests with mocked HTTP/AWS/subprocess boundaries
 - Create: `docs/integrations/video-model/seedance25-ark-experimental.md`
-- Move: shared probe/conformance mechanics out of `scripts/run-seedance25-reference-video.py`
+- Move: shared probe/conformance mechanics out of `scripts/visual/run-seedance25-reference-video.py`
 - Create: `config/video-model-adapters/seedance25-reference-video.json`
 - Modify/delete: old direct runner/config only after all callers migrate
 
@@ -105,7 +105,7 @@
 **Files:**
 
 - Create: `packages/video-model/src/video-media-conformance.ts` or a package-owned process wrapper
-- Move/update: `scripts/seedance25-media-conformance.test.mjs`
+- Move/update: `scripts/visual/seedance25-media-conformance.test.mjs`
 - Test: provider-neutral media fixture matrix
 
 **Produces:** raw provider video → exact final MP4 artifact/provenance.
@@ -134,8 +134,8 @@
 
 **Files:**
 
-- Modify: `apps/studio/recording-workbench.mjs`
-- Modify: `apps/studio/recording-workbench.test.mjs`
+- Modify: `apps/studio/src/recording-workbench.mjs`
+- Modify: `apps/studio/src/recording-workbench.test.mjs`
 - Modify: Studio UI/API/proxy files owning the current Generate action
 
 **Produces:** user-selected passed Capture → queued Run → source/control/final/report downloads.
@@ -151,7 +151,7 @@
 **Files:**
 
 - Create: one M6 fixture manifest under `examples/` or the current verifier-owned fixture root
-- Create: `scripts/verify-video-model-adapter.ts`
+- Create: `scripts/verification/verify-video-model-adapter.ts`
 - Create: `docs/reviews/2026-08-26-m6-video-model-adapter-completion.md`
 - Modify: `docs/18-refactor-progress-and-backlog.md`, `docs/23-recording-and-video-workbench.md`, `docs/11-world-model-team-handoff.md`
 

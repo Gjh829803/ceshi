@@ -5,7 +5,7 @@
 - 审查者：Cursor Grok 4.6
 - 审查 HEAD：`3faf4f140229d869d4f1e5c7d531555e82832594`（`main`）
 - 范围：今天把产品级 G Bot GLB 接入 Canonical 管线的实现——Registry 清单、Rig、AnimationSet、Host 解析、Babylon 加载/骨骼校验/动画播放、Authoring 示例与 verify 门禁。不重复 `docs/reviews/2026-08-20-capability-runtime-code-review.md` 里的运动 skip / 相机 dt / 水域体积，除非与模型绑定直接相交。
-- 方法：对照 `built-in-resource-manifests.ts`、`built-in-subject-definitions.ts`、`assets/subjects/humanoid/g-bot/*`、`subject-visual.ts`、`subject-animation-player.ts`、`subject-asset-cache.ts`、`ground-humanoid-action-resolver.ts`、`worldkit-asset-resolver.ts`、`examples/authoring/g-bot-subject-world.json`、`scripts/verify-g-bot-subject-world.ts`；并用本机文件核验 GLB 的 `byteLength` / `sha256`。
+- 方法：对照 `built-in-resource-manifests.ts`、`built-in-subject-definitions.ts`、`assets/subjects/humanoid/g-bot/*`、`subject-visual.ts`、`subject-animation-player.ts`、`subject-asset-cache.ts`、`ground-humanoid-action-resolver.ts`、`worldkit-asset-resolver.ts`、`examples/authoring/g-bot-subject-world.json`、`scripts/verification/verify-g-bot-subject-world.ts`；并用本机文件核验 GLB 的 `byteLength` / `sha256`。
 - 结论先行：**绑定方式是大型项目该走的路（content-addressed、契约冻结、Host 才有 URI）。实现大体合理，没有「把 GLB 塞进场景」的回潮。真正的问题是同一产品出现两套 Definition、25 个 clip 锁进运行时枚举却只有 4 个会被选中、以及 sidecar 清单与运行时校验不完全同构。**
 
 ## 1. 今天实际接上的是什么

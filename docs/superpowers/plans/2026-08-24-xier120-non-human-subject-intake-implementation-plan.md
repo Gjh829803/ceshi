@@ -235,8 +235,8 @@
 
 **Files:**
 - Create: `examples/authoring/xier120-subject-gallery.json`
-- Create: `scripts/verify-xier120-subjects.ts`
-- Create: `scripts/verify-xier120-subjects.test.ts`
+- Create: `scripts/verification/verify-xier120-subjects.ts`
+- Create: `scripts/verification/verify-xier120-subjects.test.ts`
 - Modify: `package.json`
 
 **Interfaces:**
@@ -249,7 +249,7 @@
 
 - [ ] **Step 2: Run verifier test and verify RED**
 
-  Run: `pnpm vitest run scripts/verify-xier120-subjects.test.ts`
+  Run: `pnpm vitest run scripts/verification/verify-xier120-subjects.test.ts`
 
 - [ ] **Step 3: Implement verifier and 19-entry Gallery world**
 
@@ -264,9 +264,9 @@
 ### Task 7: Rendered and Manual Runtime Evidence
 
 **Files:**
-- Create: `artifacts/examples/xier120-subject-gallery/verification.json`
-- Create: `artifacts/examples/xier120-subject-gallery/gallery.png`
-- Create: `artifacts/examples/xier120-subject-gallery/manual-check.json`
+- Create: `examples/evidence/xier120-subject-gallery/verification.json`
+- Create: `examples/evidence/xier120-subject-gallery/gallery.png`
+- Create: `examples/evidence/xier120-subject-gallery/manual-check.json`
 
 **Interfaces:**
 - Consumes: the actual `worldkit run` URL and Browser API Subject selection.

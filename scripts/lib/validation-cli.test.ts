@@ -32,7 +32,7 @@ import {
   verifyControlCaptureFileV1,
   writeValidationReportFileNoReplaceV1,
 } from "./validation-cli";
-import { main } from "../worldkit";
+import { main } from "../cli/worldkit";
 
 const temporaryDirectories: string[] = [];
 

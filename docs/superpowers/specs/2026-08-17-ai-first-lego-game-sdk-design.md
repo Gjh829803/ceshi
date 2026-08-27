@@ -2339,7 +2339,7 @@ Pass、ID Table、Depth 单位、Camera Matrix、Tick/Frame 映射和 Hash 归�
 
 ### 与现有 ADR 和创作工作流的关系
 
-架构级决策记录在 [ADR-0006：AuthoringSpec 编译架构与 Babylon Runtime](../../../decisions/0006-authoring-spec-compiler-architecture.md)（Proposed，随本文评审一同定稿）：
+架构级决策记录在 [ADR-0006：AuthoringSpec 编译架构与 Babylon Runtime](../../decisions/0006-authoring-spec-compiler-architecture.md)（Accepted；各实施阶段仍按 Backlog 独立验收）：
 
 - ADR-0001 的 Subject Kit 方向被继承为 AI-facing Kit 层，不被推翻。
 - ADR-0004 与 ADR-0005 的原则（Plan-first、四类证据、角色分离、冻结门禁）由 AuthoringSpec、Evidence 分类、WorldChangeSet 和 Production Gates 继承；其具体载体（`plans/<catalog-id>.ts`、`plan-lock.json`、`agent:plan/build/visual` 脚本链）在阶段 F 由新协议取代，届时两份 ADR 标记为 Superseded by ADR-0006。

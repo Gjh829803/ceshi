@@ -4,9 +4,9 @@
 - 评审范围：`34137c4` 之后的 Simulation Take、Capture Profile、Runtime/Browser
   Capture Protocol、Babylon 五 Pass、Playwright Runner、原子 Bundle 与 CLI。
 - 对照规格：
-  [`2026-08-19-simulation-take-control-capture-design.md`](../superpowers/specs/2026-08-19-simulation-take-control-capture-design.md)
+  [`2026-08-19-simulation-take-control-capture-design.md`](../../docs/superpowers/specs/2026-08-19-simulation-take-control-capture-design.md)
 - 实施计划：
-  [`2026-08-21-simulation-take-control-capture-v1.md`](../superpowers/plans/2026-08-21-simulation-take-control-capture-v1.md)
+  [`2026-08-21-simulation-take-control-capture-v1.md`](../../docs/superpowers/plans/2026-08-21-simulation-take-control-capture-v1.md)
 - Runtime Checklist：[`runtime-deep-review-checklist.md`](./runtime-deep-review-checklist.md)
 - 结论：V1 窄纵向切片的架构边界、确定性时间映射、Runtime Authority、五 Pass
   真实性和 Bundle 引用完整性成立；最终合入结论以本文第 7 节新鲜全量门禁为准。

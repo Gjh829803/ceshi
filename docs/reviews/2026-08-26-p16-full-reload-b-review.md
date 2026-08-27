@@ -7,7 +7,7 @@
   transition、lifetime 与 evidence 条目。
 - 对象：`cursor/p16-world-changeset-runtime-publication-1ccf` 相对 `origin/main`。
 - 权威规格：
-  [`2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md`](../superpowers/specs/2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md)。
+  [`2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md`](../../docs/superpowers/specs/2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md)。
   规格文档状态行仍为 *Detailed design；implementation not started*；那是文档元数据，
   不以它代替 Backlog 的 first-slice 完成口径，也不把它改成 Implemented。
 - 审查基线：修复前 HEAD `2f2bacc`；本记录覆盖随后的 recover 终态保护、F1 断言修正、

@@ -540,7 +540,7 @@ packages/runtime-contracts
 packages/runtime-babylon
   owns: visual meshes, Havok controller center mapping, origin synchronization
 
-scripts/worldkit.ts
+scripts/cli/worldkit.ts
   owns: CLI routing and serialization; does not reimplement validation or composition
 ```
 

@@ -26,7 +26,7 @@
 
 | 证据层级 | 命令或制品 | 结果 |
 | --- | --- | --- |
-| automated-contract | `pnpm exec vitest run scripts/terrain-height-intent/*.test.ts scripts/lib/test-gate-census.test.ts scripts/planner-skill.test.ts` | exit `0`；12 files / 56 tests passed |
+| automated-contract | `pnpm exec vitest run scripts/terrain-height-intent/*.test.ts scripts/lib/test-gate-census.test.ts scripts/agents/planner-skill.test.ts` | exit `0`；12 files / 56 tests passed |
 | automated-contract | `pnpm check:agent-self-check` | exit `0` |
 | automated-contract | `pnpm typecheck` | exit `0` |
 | automated-contract | `pnpm worldkit validate artifacts/terrain-experiments/013-grand-canyon-courier/authoring-v0.compiled.json --json` | exit `0`；ExecutionPlan 与 Normalized IR 均生成稳定 hash |

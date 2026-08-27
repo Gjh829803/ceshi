@@ -46,7 +46,7 @@
 - Modify: `packages/world/package.json`
 - Modify: `packages/world/src/terrain.ts`
 - Modify: `packages/world/src/scene.test.ts`
-- Modify: `scripts/verify-placement-layout.ts`
+- Modify: `scripts/verification/verify-placement-layout.ts`
 - Modify generated canonical example artifacts whose hashes or execution fields change.
 
 **Interfaces:**
@@ -92,7 +92,7 @@
 - Modify: `packages/subject-registry/src/subject-resource-registry.ts`
 - Modify: `packages/subject-registry/src/subject-registry.test.ts`
 - Modify: `assets/registry/subject-definitions/catalog.json`
-- Modify: G Bot Authoring example and deterministic artifacts under `examples/authoring/` and `artifacts/examples/`.
+- Modify: G Bot Authoring example and deterministic artifacts under `examples/authoring/` and `examples/evidence/`.
 - Modify: `apps/playground/src/worldkit-browser-api.test.ts`
 - Modify: `packages/runtime-babylon/src/capability-runtime.test.ts`
 - Modify: G Bot verifier expectations and generated evidence when hashes change.
@@ -134,8 +134,8 @@
 - Modify: `packages/testkit/src/spawn-safety.ts`
 - Modify: `packages/testkit/src/testkit.test.ts`
 - Create or modify: a pure composition-gate helper under `scripts/lib/` with focused tests.
-- Modify: `scripts/export-scene-plan.ts`
-- Modify: `scripts/validate-visual-package.ts`
+- Modify: `scripts/scenes/export-scene-plan.ts`
+- Modify: `scripts/visual/validate-visual-package.ts`
 - Modify: `apps/playground/vite.config.mjs`
 - Modify: `apps/playground/src/worldkit-browser-api.ts`
 - Modify: `apps/playground/src/worldkit-browser-api.test.ts`

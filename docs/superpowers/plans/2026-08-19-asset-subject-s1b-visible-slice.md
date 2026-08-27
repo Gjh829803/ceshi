@@ -42,7 +42,7 @@
 - `packages/runtime-babylon/src/subject-animation-player.ts`: Babylon AnimationGroup mapping, fixed-tick sampling, blending, reset, dispose.
 - `apps/playground/src/worldkit-asset-resolver.ts`: same-origin built-in asset resolver owned by the Playground Host.
 - `examples/authoring/rigged-subject-world.json`: canonical end-to-end asset Subject fixture.
-- `scripts/verify-rigged-subject-world.ts`: CLI/Browser/physics/action/screenshot conformance gate.
+- `scripts/verification/verify-rigged-subject-world.ts`: CLI/Browser/physics/action/screenshot conformance gate.
 
 ### Modified files
 
@@ -71,8 +71,8 @@
 - `apps/playground/src/babylon-world-adapter.ts`: `run` key/input mapping and Host Resolver injection.
 - `apps/playground/src/main.ts`: stable Action HUD from runtime snapshot.
 - `scripts/lib/subject-explain.ts`: Asset/Rig/Animation/Collider explanation and lock entries.
-- `scripts/worldkit.ts`, `scripts/worldkit.test.ts`: registry discovery and asset Subject CLI coverage.
-- `scripts/verify-canonical-world.ts`: regression adaptation for the Walk/Run field rename.
+- `scripts/cli/worldkit.ts`, `scripts/cli/worldkit.test.ts`: registry discovery and asset Subject CLI coverage.
+- `scripts/verification/verify-canonical-world.ts`: regression adaptation for the Walk/Run field rename.
 - `README.md`, `docs/16-subject-assets-3c-integration.md`, `docs/18-refactor-progress-and-backlog.md`, `docs/superpowers/specs/2026-08-19-extensible-subject-authoring-design.md`: status, commands, handoff, and remaining scope.
 
 ---
@@ -305,8 +305,8 @@ git commit -m "feat: register rigged subject resources"
 - Modify: `packages/compiler/src/compile.ts`
 - Modify: `packages/compiler/src/compile.test.ts`
 - Modify: `scripts/lib/subject-explain.ts`
-- Modify: `scripts/worldkit.ts`
-- Modify: `scripts/worldkit.test.ts`
+- Modify: `scripts/cli/worldkit.ts`
+- Modify: `scripts/cli/worldkit.test.ts`
 
 **Interfaces:**
 - Consumes: Task 2 exact registry graph.
@@ -1172,8 +1172,8 @@ git commit -m "feat: animate rigged Babylon subjects"
 - Modify: `apps/playground/src/authoring-loader.test.ts`
 - Modify: `apps/playground/src/main.ts`
 - Modify: `scripts/lib/subject-explain.ts`
-- Modify: `scripts/worldkit.ts`
-- Modify: `scripts/worldkit.test.ts`
+- Modify: `scripts/cli/worldkit.ts`
+- Modify: `scripts/cli/worldkit.test.ts`
 
 **Interfaces:**
 - Consumes: Task 7 Runtime.
@@ -1222,7 +1222,7 @@ built-in mapping.
 
 - [ ] **Step 2: Run focused tests and verify missing resolver/example failures**
 
-Run: `pnpm vitest run scripts/worldkit.test.ts apps/playground/src/authoring-loader.test.ts apps/playground/src/worldkit-asset-resolver.test.ts`
+Run: `pnpm vitest run scripts/cli/worldkit.test.ts apps/playground/src/authoring-loader.test.ts apps/playground/src/worldkit-asset-resolver.test.ts`
 
 Expected: FAIL because the Host mapping and rigged example do not exist.
 
@@ -1271,7 +1271,7 @@ engine handles.
 
 - [ ] **Step 6: Run CLI, Playground, and build gates**
 
-Run: `pnpm vitest run scripts/worldkit.test.ts apps/playground/src`
+Run: `pnpm vitest run scripts/cli/worldkit.test.ts apps/playground/src`
 
 Run: `pnpm build`
 
@@ -1291,23 +1291,23 @@ git commit -m "feat: expose rigged subjects through CLI and browser"
 ### Task 9: Rigged Subject End-to-End Conformance
 
 **Files:**
-- Create: `scripts/verify-rigged-subject-world.ts`
+- Create: `scripts/verification/verify-rigged-subject-world.ts`
 - Modify: `package.json`
-- Modify: `scripts/verify-canonical-world.ts`
-- Modify: `scripts/worldkit.ts`
+- Modify: `scripts/verification/verify-canonical-world.ts`
+- Modify: `scripts/cli/worldkit.ts`
 - Modify: `scripts/lib/worldkit-server.ts`
 - Create: `scripts/lib/worldkit-server.test.ts`
 - Create: `scripts/lib/artifact-directory-promotion.ts`
 - Create: `scripts/lib/artifact-directory-promotion.test.ts`
 - Modify: `apps/playground/vite.config.mjs`
 - Modify: `examples/authoring/package-subject-world.json`
-- Modify: `artifacts/examples/package-subject-world/`
-- Create: `artifacts/examples/rigged-subject-world/`
+- Modify: `examples/evidence/package-subject-world/`
+- Create: `examples/evidence/rigged-subject-world/`
 
 **Interfaces:**
 - Consumes: rigged Canonical example and Browser Protocol V3.
 - Produces command `pnpm verify:rigged-subject` and evidence under
-  `artifacts/examples/rigged-subject-world/`:
+  `examples/evidence/rigged-subject-world/`:
   - `world.build.json`
   - `world.png`
   - `idle.png`, `walk.png`, `run.png`, `jump.png`
@@ -1419,7 +1419,7 @@ Action states.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add package.json scripts/verify-rigged-subject-world.ts scripts/verify-canonical-world.ts scripts/worldkit.ts scripts/lib/worldkit-server.ts scripts/lib/worldkit-server.test.ts scripts/lib/artifact-directory-promotion.ts scripts/lib/artifact-directory-promotion.test.ts apps/playground/vite.config.mjs examples/authoring/package-subject-world.json artifacts/examples/package-subject-world artifacts/examples/rigged-subject-world
+git add package.json scripts/verification/verify-rigged-subject-world.ts scripts/verification/verify-canonical-world.ts scripts/cli/worldkit.ts scripts/lib/worldkit-server.ts scripts/lib/worldkit-server.test.ts scripts/lib/artifact-directory-promotion.ts scripts/lib/artifact-directory-promotion.test.ts apps/playground/vite.config.mjs examples/authoring/package-subject-world.json examples/evidence/package-subject-world examples/evidence/rigged-subject-world
 git commit -m "test: verify rigged subject end to end"
 ```
 
@@ -1455,8 +1455,8 @@ one-command Gate:
 ```bash
 pnpm worldkit validate examples/authoring/rigged-subject-world.json --json
 pnpm worldkit capture examples/authoring/rigged-subject-world.json \
-  --output artifacts/examples/rigged-subject-world/world.png \
-  --snapshot artifacts/examples/rigged-subject-world/snapshot.json \
+  --output examples/evidence/rigged-subject-world/world.png \
+  --snapshot examples/evidence/rigged-subject-world/snapshot.json \
   --json
 pnpm verify:rigged-subject
 ```
@@ -1496,7 +1496,7 @@ audit_roots=(
   apps
   scripts
   examples/authoring
-  artifacts/examples
+  examples/evidence
   sites/world-sdk-blueprint
 )
 
@@ -1586,7 +1586,7 @@ const collect = (directory) => {
     else if (entry.isFile() && path.endsWith(".json")) jsonFiles.push(path);
   }
 };
-collect("artifacts/examples");
+collect("examples/evidence");
 
 const violations = [];
 const providerPattern = /babylon|havok/i;
@@ -1662,7 +1662,7 @@ Run:
 
 ```bash
 if rg -n "Xbot|local-humanoid" \
-  packages/runtime-babylon examples/authoring scripts/verify-rigged-subject-world.ts; then
+  packages/runtime-babylon examples/authoring scripts/verification/verify-rigged-subject-world.ts; then
   exit 1
 else
   test $? -eq 1
@@ -1772,7 +1772,7 @@ current contracts do not treat `idle/walk/run/jump` as the permanent limit.
 | 10. Documentation, Product Handoff, and Final Audit | Complete | initial docs `dbdc729ca77c7f43bf9a66f2788c1dc1fe153bad`; audit fixes `fe675401068fca2dfeb03032869afafe7ec10fd9`, `0f3321a1364571313b0cc9d2af8155b8e3c01b7a`; `this evidence sync commit` | 36/340 tests, 2/18 scene tests, typecheck, build, both verifiers, hardened boundary audits and documentation contract audit pass; only documented Vite large-chunk warning |
 
 Task 9 的精确机器证据来自提交后的
-`artifacts/examples/rigged-subject-world/verification.json`：Authoring Spec
+`examples/evidence/rigged-subject-world/verification.json`：Authoring Spec
 `sha256:abd4865be5fe4c483757174c3ed70d63bb7c9266e3f518b124889e53f15ceb37`，
 Golden GLB
 `sha256:1095fd65c754d53e6db3757ab5e1c9e5e9dcea2581f85d40f37ea4890ee8c2c2`，

@@ -62,8 +62,8 @@
 **Files:**
 - Create: `scripts/lib/validation-cli.ts`
 - Create: `scripts/lib/validation-cli.test.ts`
-- Modify: `scripts/worldkit.ts`
-- Modify: `scripts/worldkit.test.ts`
+- Modify: `scripts/cli/worldkit.ts`
+- Modify: `scripts/cli/worldkit.test.ts`
 
 - [x] Write RED parser tests for exact positional/option rules, duplicate or missing options, and command separation from legacy `capture validate|inspect`.
 - [x] Write RED command tests proving atomic report output, deterministic JSON response fields, exit codes `0/2/3/1`, and explain lookup by exact Gate ID.
@@ -74,7 +74,7 @@
 ### Task 4: Add an end-to-end conformance gate
 
 **Files:**
-- Create: `scripts/verify-validation-capture.ts`
+- Create: `scripts/verification/verify-validation-capture.ts`
 - Modify: `package.json`
 
 - [x] Write the bounded verifier around a generated two-frame Bundle; do not launch Babylon or Playwright because this layer validates an already produced artifact.

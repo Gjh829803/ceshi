@@ -82,7 +82,7 @@ Before this handoff, the following commands passed on the Task 9 implementation:
 
 After the four review closures, a full `pnpm test` reached 143 files / 1408
 tests but two unrelated integration tests timed out under resource contention.
-The cause was that `scripts/verify-route-r1-heightfield.test.ts` invoked the
+The cause was that `scripts/verification/verify-route-r1-heightfield.test.ts` invoked the
 complete R1 gate inside the general Vitest run, while that gate recursively
 spawned seven exact Vitest checks and the full Babylon/Havok fixture matrix.
 Both timed-out tests had passed independently.

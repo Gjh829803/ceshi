@@ -29,7 +29,7 @@
 - Create: `scripts/lib/test-gate-manifest.ts`
 - Create: `scripts/lib/test-gate-census.ts`
 - Create: `scripts/lib/test-gate-census.test.ts`
-- Create: `scripts/verify-test-gate-census.ts`
+- Create: `scripts/testing/verify-test-gate-census.ts`
 
 **Interfaces:**
 
@@ -122,14 +122,14 @@ try {
 
 - [ ] **Step 5: Populate the complete current-tree manifest**
 
-Classify every root-discovered test explicitly. Use the resource-heavy list and reason criteria frozen in the spec; classify `scripts/verification-browser-launch.test.ts` as `contract`. Keep all rows lexically sorted.
+Classify every root-discovered test explicitly. Use the resource-heavy list and reason criteria frozen in the spec; classify `scripts/verification/verification-browser-launch.test.ts` as `contract`. Keep all rows lexically sorted.
 
 - [ ] **Step 6: Run focused GREEN and commit**
 
 Run the Step 2 command and `git diff --check`. Commit:
 
 ```bash
-git add scripts/lib/test-gate-manifest.ts scripts/lib/test-gate-census.ts scripts/lib/test-gate-census.test.ts scripts/verify-test-gate-census.ts
+git add scripts/lib/test-gate-manifest.ts scripts/lib/test-gate-census.ts scripts/lib/test-gate-census.test.ts scripts/testing/verify-test-gate-census.ts
 git commit -m "test: add fail-closed test lane census"
 ```
 
@@ -175,7 +175,7 @@ Set exactly:
 ```json
 {
   "test": "pnpm test:census && pnpm test:contract && pnpm test:resource-heavy",
-  "test:census": "tsx scripts/verify-test-gate-census.ts",
+  "test:census": "tsx scripts/testing/verify-test-gate-census.ts",
   "test:contract": "vitest run --config vitest.contract.config.ts",
   "test:resource-heavy": "vitest run --config vitest.resource-heavy.config.ts",
   "test:focused": "vitest run"
@@ -494,7 +494,7 @@ pnpm verify:route-r1-heightfield
 pnpm verify:route-r1b-static-platform
 pnpm verify:canonical
 pnpm verify:unreleased-clean-break
-pnpm exec vitest run scripts/worldkit-route-run.integration.test.ts --no-file-parallelism --maxWorkers=1 --minWorkers=1
+pnpm exec vitest run scripts/cli/worldkit-route-run.integration.test.ts --no-file-parallelism --maxWorkers=1 --minWorkers=1
 ```
 
 - [ ] **Step 3: Repeat the complete wrapper**

@@ -89,7 +89,7 @@ Manifest、Hash 和 Evidence。两个 Take 复用同一世界但拥有不同 Tak
 
 - `packages/authoring`、`packages/compiler`、`packages/contracts`：当前 Canonical Authoring、Normalized IR、Resource Lock 与编译底座。
 - `packages/runtime-babylon`、`packages/runtime-contracts`：当前 Canonical Babylon/Havok Runtime、ExecutionPlan、Session 与 Port。
-- `apps/playground/src/main.ts`、`packages/runtime-contracts` 与 `scripts/worldkit.ts`：Browser Protocol、Snapshot、截图和 CLI 入口。
+- `apps/playground/src/main.ts`、`packages/runtime-contracts` 与 `scripts/cli/worldkit.ts`：Browser Protocol、Snapshot、截图和 CLI 入口。
 - `apps/playground/src/babylon-world-adapter.ts` 与 `babylon-artifact-renderer.ts`：当前
   gameplay、catalog、Opening Composition、planning capture 和 tri-view Runtime 入口。
 - `packages/world`：Terrain、Water、Landmark、FeatureRegistry、规划工件和场景 DSL；只输出
@@ -130,5 +130,5 @@ pnpm build
 
 详细实验状态见 [当前实验与验证记录](10-current-experiments.md)，完整目标契约见
 [世界模型渲染与控制制品契约](04-render-contract.md)、
-[Simulation Take 与 Control Capture Bundle](superpowers/specs/2026-08-19-simulation-take-control-capture-design.md) 和
-[World Validation Report 与质量门禁](superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md)。
+[Simulation Take 与 Control Capture Bundle](../docs/superpowers/specs/2026-08-19-simulation-take-control-capture-design.md) 和
+[World Validation Report 与质量门禁](../docs/superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md)。

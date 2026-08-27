@@ -5,7 +5,7 @@
 - Date: 2026-08-25.
 - Mode: Mode A design-spec review, with runtime authority and Legacy cleanup coverage.
 - Review object:
-  [`2026-08-24-context-driven-gameplay-camera-composition-design.md`](../superpowers/specs/2026-08-24-context-driven-gameplay-camera-composition-design.md),
+  [`2026-08-24-context-driven-gameplay-camera-composition-design.md`](../../docs/superpowers/specs/2026-08-24-context-driven-gameplay-camera-composition-design.md),
   the P2.4/P3.2 task linkage in
   [`18-refactor-progress-and-backlog.md`](../18-refactor-progress-and-backlog.md), and the related
   README/AGENTS package guidance.

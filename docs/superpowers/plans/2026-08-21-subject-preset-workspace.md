@@ -367,7 +367,7 @@ git commit -m "feat: add locked subject preset candidates"
 **Files:**
 - Create: `scripts/lib/subject-preset-promotion.ts`
 - Create: `scripts/lib/subject-preset-promotion.test.ts`
-- Modify: `scripts/worldkit.ts`
+- Modify: `scripts/cli/worldkit.ts`
 - Modify: `package.json`
 
 **Interfaces:**

@@ -183,13 +183,13 @@
 
 - Create: `scripts/lib/runtime-session-ndjson.ts`
 - Create: `scripts/lib/runtime-session-ndjson.test.ts`
-- Modify: `scripts/worldkit.ts`
-- Modify: `scripts/worldkit.test.ts`
-- Create: `scripts/build-world-artifact.ts` for trusted-host internal workflows only
-- Modify: `scripts/run-spatial-world-agent.sh`
-- Modify: `scripts/verify-canonical-world.ts`
-- Modify: `scripts/verify-rigged-subject-world.ts`
-- Modify: `scripts/verify-g-bot-subject-world.ts`
+- Modify: `scripts/cli/worldkit.ts`
+- Modify: `scripts/cli/worldkit.test.ts`
+- Create: `scripts/cli/build-world-artifact.ts` for trusted-host internal workflows only
+- Modify: `scripts/agents/run-spatial-world-agent.sh`
+- Modify: `scripts/verification/verify-canonical-world.ts`
+- Modify: `scripts/verification/verify-rigged-subject-world.ts`
+- Modify: `scripts/verification/verify-g-bot-subject-world.ts`
 - Modify: `README.md`
 - Modify: `docs/17-canonical-json-quickstart.md`
 
@@ -207,11 +207,11 @@ The existing `worldkit run <world.json> [--port ...]` remains the trusted author
 
 - [x] Write RED parser/help tests for the exact commands and invalid flag combinations; reject `--interactive` without `--protocol ndjson --headless`, `--resume` without an existing session, and Package input on Browser-only flags.
 - [x] Write RED stream tests for first `ready`, canonical one-line receipts, malformed JSON, duplicate keys, overlong line/input budget, EOF, explicit close, SIGINT, SIGTERM, backpressure, and final `completed`/`failed` event.
-- [x] Run `pnpm exec vitest run scripts/worldkit.test.ts scripts/lib/runtime-session-ndjson.test.ts` and capture RED.
+- [x] Run `pnpm exec vitest run scripts/cli/worldkit.test.ts scripts/lib/runtime-session-ndjson.test.ts` and capture RED.
 - [x] Implement bounded line framing and a sequential writer; stdout receives protocol records only and stderr receives human diagnostics only.
 - [x] Migrate `worldkit build` to V2 directory publication; route inspect/load/run to the shared services; move existing Build artifact code and formal hosted-workflow callers to the internal script without changing artifact bytes.
 - [x] Update canonical verifiers and quickstart to treat the Package directory as the public Build output while retaining explicit internal artifact evidence where required by Studio.
-- [x] Run `pnpm exec vitest run scripts/worldkit.test.ts scripts/lib/runtime-session-ndjson.test.ts scripts/worldkit-route-run.integration.test.ts apps/studio/server.test.mjs`.
+- [x] Run `pnpm exec vitest run scripts/cli/worldkit.test.ts scripts/lib/runtime-session-ndjson.test.ts scripts/cli/worldkit-route-run.integration.test.ts apps/studio/src/server.test.mjs`.
 - [x] Run `pnpm typecheck`, `pnpm test:census`, and `pnpm verify:workspace-boundaries`.
 - [x] Commit: `feat(worldkit): publish durable runtime sessions`.
 
@@ -221,7 +221,7 @@ The existing `worldkit run <world.json> [--port ...]` remains the trusted author
 
 **Files:**
 
-- Create: `scripts/runtime-session.integration.test.ts`
+- Create: `scripts/cli/runtime-session.integration.test.ts`
 - Create: `docs/reviews/2026-08-27-p14-runtime-session-completion.md`
 - Modify: `docs/18-refactor-progress-and-backlog.md`
 - Modify: `docs/02-sdk-architecture.md`

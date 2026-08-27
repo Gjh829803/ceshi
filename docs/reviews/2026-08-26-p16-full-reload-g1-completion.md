@@ -11,7 +11,7 @@
 - Disposition: **First-slice Final GO — not production GO**.
 - Scope: Slice B Full Reload 首切片（H0–F1 + G1 全量合同门禁）。
 - Authority:
-  [`2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md`](../superpowers/specs/2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md)。
+  [`2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md`](../../docs/superpowers/specs/2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md)。
   规格文档状态行仍为 *Detailed design；implementation not started*；不以它代替
   Backlog 的 first-slice 完成口径，也不把它改成 Implemented。
 - 当前安装依赖：Babylon.js `9.21.2`、Havok `1.3.14`（`package.json`）。
@@ -63,7 +63,7 @@ G1 复跑前，本环境按 CI 安装了 `pillow`（`python3 -m pip install pill
 2. `allowedOverridePaths` 成为 Subject Definition 必填后，Builder Skill 示例编不过。
    模板补 `[]`，并写明 AI 必须带这个字段。
 3. `simulation-take-cli` 的 placement-coastal 身份哈希仍是 H0 之前的值。已与
-   `artifacts/examples/placement-coastal-world/world.build.json` 对齐。
+   `examples/evidence/placement-coastal-world/world.build.json` 对齐。
 4. Planner/Builder `self-check.mjs` 相对当前 Schema 过期。已
    `pnpm generate:agent-self-check`，`pnpm check:agent-self-check` 通过。
 5. Playground `publishWorldReplacementV1` 只委托 RuntimeHost，不换可见 canvas、

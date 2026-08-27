@@ -3,7 +3,7 @@
 ## 阅读顺序（给其他审查者）
 
 1. 先读被审规格：
-   [`docs/superpowers/specs/2026-08-21-hybrid-terrain-and-non-heightfield-topology-design.md`](../superpowers/specs/2026-08-21-hybrid-terrain-and-non-heightfield-topology-design.md)。
+   [`docs/superpowers/specs/2026-08-21-hybrid-terrain-and-non-heightfield-topology-design.md`](../../docs/superpowers/specs/2026-08-21-hybrid-terrain-and-non-heightfield-topology-design.md)。
 2. 再读本文。本文不重写规格，也不开始 H1 实现。
 3. 现网权威以 `docs/17-canonical-json-quickstart.md` 和
    `docs/18-refactor-progress-and-backlog.md` 为准。WorldPackage / Take /

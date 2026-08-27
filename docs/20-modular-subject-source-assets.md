@@ -63,7 +63,7 @@ pnpm assets:subjects:runtime-bundles:check
 pnpm vitest run \
   scripts/lib/modular-subject-source.test.ts \
   scripts/lib/subject-source-migration-audit.test.ts \
-  scripts/modular-subject-source-packages.test.ts
+  scripts/assets/modular-subject-source-packages.test.ts
 ```
 
 `modularize` 是现有合并来源的一次性恢复/审计工具；日常产品更新直接发布新版本的

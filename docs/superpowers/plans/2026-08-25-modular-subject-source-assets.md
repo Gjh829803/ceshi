@@ -184,8 +184,8 @@ git commit -m "feat(assets): add deterministic subject source recovery"
 
 **Files:**
 - Create: `scripts/lib/modular-subject-source-catalog.ts`
-- Create: `scripts/modular-subject-source-packages.ts`
-- Create: `scripts/modular-subject-source-packages.test.ts`
+- Create: `scripts/assets/modular-subject-source-packages.ts`
+- Create: `scripts/assets/modular-subject-source-packages.test.ts`
 - Modify: `package.json`
 
 **Interfaces:**
@@ -206,7 +206,7 @@ In temporary directories, execute the real CLI library against Golden and assert
 Run:
 
 ```bash
-pnpm vitest run scripts/modular-subject-source-packages.test.ts
+pnpm vitest run scripts/assets/modular-subject-source-packages.test.ts
 ```
 
 Expected: FAIL because the CLI library does not exist.
@@ -237,14 +237,14 @@ bytes, reports every mismatch deterministically, and removes only its owned temp
 Add:
 
 ```json
-"assets:subjects:modularize": "tsx scripts/modular-subject-source-packages.ts --write",
-"assets:subjects:modularize:check": "tsx scripts/modular-subject-source-packages.ts --check"
+"assets:subjects:modularize": "tsx scripts/assets/modular-subject-source-packages.ts --write",
+"assets:subjects:modularize:check": "tsx scripts/assets/modular-subject-source-packages.ts --check"
 ```
 
 Run:
 
 ```bash
-pnpm vitest run scripts/lib/modular-subject-source.test.ts scripts/modular-subject-source-packages.test.ts
+pnpm vitest run scripts/lib/modular-subject-source.test.ts scripts/assets/modular-subject-source-packages.test.ts
 ```
 
 Expected: PASS.
@@ -252,7 +252,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit Task 2**
 
 ```bash
-git add package.json scripts/lib/modular-subject-source-catalog.ts scripts/modular-subject-source-packages.ts scripts/modular-subject-source-packages.test.ts
+git add package.json scripts/lib/modular-subject-source-catalog.ts scripts/assets/modular-subject-source-packages.ts scripts/assets/modular-subject-source-packages.test.ts
 git commit -m "feat(assets): add modular subject package CLI"
 ```
 
@@ -300,7 +300,7 @@ inventories using the Task 1 inspector; do not accept manifest-only evidence.
 ```bash
 pnpm vitest run \
   scripts/lib/modular-subject-source.test.ts \
-  scripts/modular-subject-source-packages.test.ts \
+  scripts/assets/modular-subject-source-packages.test.ts \
   scripts/lib/g-bot-evidence.test.ts \
   scripts/fixtures/generate-golden-humanoid-glb.test.ts
 ```
@@ -321,8 +321,8 @@ git commit -m "feat(assets): recover modular G Bot and Golden sources"
 **Files:**
 - Create: `scripts/lib/subject-source-migration-audit.ts`
 - Create: `scripts/lib/subject-source-migration-audit.test.ts`
-- Modify: `scripts/modular-subject-source-packages.ts`
-- Modify: `scripts/modular-subject-source-packages.test.ts`
+- Modify: `scripts/assets/modular-subject-source-packages.ts`
+- Modify: `scripts/assets/modular-subject-source-packages.test.ts`
 - Create: `assets/subjects/packages/migration-inventory.json`
 - Create: `docs/20-modular-subject-source-assets.md`
 - Modify: `docs/16-subject-assets-3c-integration.md`
@@ -413,7 +413,7 @@ Run `git diff --check` and manually verify every local link and command.
 - [ ] **Step 5: Commit Task 4**
 
 ```bash
-git add scripts/lib/subject-source-migration-audit.ts scripts/lib/subject-source-migration-audit.test.ts scripts/modular-subject-source-packages.ts scripts/modular-subject-source-packages.test.ts assets/subjects/packages/migration-inventory.json docs/20-modular-subject-source-assets.md docs/16-subject-assets-3c-integration.md docs/superpowers/skills/product-asset-intake.md docs/superpowers/skills/product-asset-intake-static-assets.md
+git add scripts/lib/subject-source-migration-audit.ts scripts/lib/subject-source-migration-audit.test.ts scripts/assets/modular-subject-source-packages.ts scripts/assets/modular-subject-source-packages.test.ts assets/subjects/packages/migration-inventory.json docs/20-modular-subject-source-assets.md docs/16-subject-assets-3c-integration.md docs/superpowers/skills/product-asset-intake.md docs/superpowers/skills/product-asset-intake-static-assets.md
 git commit -m "docs(assets): publish subject migration corrections"
 ```
 
@@ -434,7 +434,7 @@ git commit -m "docs(assets): publish subject migration corrections"
 pnpm assets:subjects:modularize:check
 pnpm vitest run \
   scripts/lib/modular-subject-source.test.ts \
-  scripts/modular-subject-source-packages.test.ts \
+  scripts/assets/modular-subject-source-packages.test.ts \
   scripts/lib/subject-source-migration-audit.test.ts
 ```
 
@@ -444,7 +444,7 @@ pnpm vitest run \
 pnpm vitest run \
   scripts/lib/g-bot-evidence.test.ts \
   scripts/fixtures/generate-golden-humanoid-glb.test.ts \
-  scripts/verify-xier120-subjects.test.ts \
+  scripts/verification/verify-xier120-subjects.test.ts \
   packages/subject-registry/src/xier120-subjects.test.ts
 pnpm verify:g-bot-subject
 pnpm verify:rigged-subject
@@ -528,8 +528,8 @@ git commit -m "feat(assets): assemble modular subject runtime bundles"
 ### Task 7: Publish and activate Runtime Bundles
 
 **Files:**
-- Create: `scripts/modular-subject-runtime-bundles.ts`
-- Create: `scripts/modular-subject-runtime-bundles.test.ts`
+- Create: `scripts/assets/modular-subject-runtime-bundles.ts`
+- Create: `scripts/assets/modular-subject-runtime-bundles.test.ts`
 - Create: `assets/subjects/runtime-bundles/seedleap/{g-bot,golden-humanoid}/v1/runtime-bundle.manifest.json`
 - Create: `apps/playground/public/subject-assets/humanoid/g-bot/v2/g-bot.glb`
 - Create: `apps/playground/public/subject-assets/humanoid/golden/v2/golden-humanoid.glb`
@@ -557,7 +557,7 @@ mapping, and Registry length/hash equality with the generated public file.
 - [ ] **Step 2: Run RED**
 
 ```bash
-pnpm vitest run scripts/modular-subject-runtime-bundles.test.ts packages/subject-registry/src/subject-registry.test.ts apps/playground/src/worldkit-asset-resolver.test.ts
+pnpm vitest run scripts/assets/modular-subject-runtime-bundles.test.ts packages/subject-registry/src/subject-registry.test.ts apps/playground/src/worldkit-asset-resolver.test.ts
 ```
 
 - [ ] **Step 3: Implement publication and activation**
@@ -572,7 +572,7 @@ fallback mappings or aliases.
 
 ```bash
 pnpm assets:subjects:runtime-bundles:check
-pnpm vitest run scripts/lib/modular-subject-runtime-bundle.test.ts scripts/modular-subject-runtime-bundles.test.ts packages/subject-registry/src/subject-registry.test.ts apps/playground/src/worldkit-asset-resolver.test.ts scripts/lib/world-package-resource-resolver.test.ts
+pnpm vitest run scripts/lib/modular-subject-runtime-bundle.test.ts scripts/assets/modular-subject-runtime-bundles.test.ts packages/subject-registry/src/subject-registry.test.ts apps/playground/src/worldkit-asset-resolver.test.ts scripts/lib/world-package-resource-resolver.test.ts
 git add package.json scripts assets/subjects/runtime-bundles assets/subjects/humanoid/g-bot/asset.manifest.json apps/playground/public apps/playground/src/worldkit-asset-resolver.ts packages/subject-registry/src/built-in-resource-manifests.ts examples/product-asset-intakes/humanoid.g-bot@2.json
 git commit -m "feat(assets): activate modular subject runtime bundles"
 ```
@@ -598,7 +598,7 @@ Subject Definition Ref`, both write/check commands, version/update rules, and th
 ```bash
 pnpm assets:subjects:modularize:check
 pnpm assets:subjects:runtime-bundles:check
-pnpm vitest run scripts/lib/modular-subject-source.test.ts scripts/lib/modular-subject-runtime-bundle.test.ts scripts/modular-subject-source-packages.test.ts scripts/modular-subject-runtime-bundles.test.ts packages/subject-registry/src/subject-registry.test.ts apps/playground/src/worldkit-asset-resolver.test.ts scripts/lib/world-package-resource-resolver.test.ts packages/runtime-babylon/src/runtime.test.ts
+pnpm vitest run scripts/lib/modular-subject-source.test.ts scripts/lib/modular-subject-runtime-bundle.test.ts scripts/assets/modular-subject-source-packages.test.ts scripts/assets/modular-subject-runtime-bundles.test.ts packages/subject-registry/src/subject-registry.test.ts apps/playground/src/worldkit-asset-resolver.test.ts scripts/lib/world-package-resource-resolver.test.ts packages/runtime-babylon/src/runtime.test.ts
 pnpm typecheck
 git diff --check
 ```
