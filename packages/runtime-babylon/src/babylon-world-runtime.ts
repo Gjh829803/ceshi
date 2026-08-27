@@ -103,18 +103,7 @@ import {
   createBabylonObjectMeshV1,
   createBabylonWaterMeshV1,
 } from "./scene-geometry";
-
-function canonicalizeSignedZero(value: number): number {
-  return Object.is(value, -0) ? 0 : value;
-}
-
-function canonicalizeVec3(value: readonly [number, number, number]): Vec3 {
-  return Object.freeze([
-    canonicalizeSignedZero(value[0]),
-    canonicalizeSignedZero(value[1]),
-    canonicalizeSignedZero(value[2]),
-  ]) as Vec3;
-}
+import { canonicalizeSignedZero, canonicalizeVec3 } from "./canonical-numbers";
 
 export type BabylonWorldRuntimeInitializationStageV1 =
   | "engine"

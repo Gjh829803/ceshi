@@ -18,6 +18,11 @@ import type {
 } from "@whitebox-world/runtime-contracts";
 import { orderBy, uniqBy } from "lodash-es";
 
+import {
+  canonicalizeMatrix4ColumnMajor,
+  canonicalizeSignedZero,
+  canonicalizeVec3,
+} from "./canonical-numbers";
 import type { BabylonRuntimeProjectionV1 } from "./runtime-projection";
 
 interface CaptureClassifiedMeshV1 {
@@ -504,6 +509,26 @@ async function captureNormalPass(
   }
 }
 
+export function canonicalizeControlCaptureCameraV1(
+  camera: ControlCaptureCameraV1,
+): ControlCaptureCameraV1 {
+  return {
+    ...camera,
+    positionMetersXYZ: canonicalizeVec3(camera.positionMetersXYZ),
+    forwardXYZ: canonicalizeVec3(camera.forwardXYZ),
+    upXYZ: canonicalizeVec3(camera.upXYZ),
+    verticalFovRadians: canonicalizeSignedZero(camera.verticalFovRadians),
+    nearClipMeters: canonicalizeSignedZero(camera.nearClipMeters),
+    farClipMeters: canonicalizeSignedZero(camera.farClipMeters),
+    viewMatrixColumnMajor: canonicalizeMatrix4ColumnMajor(
+      camera.viewMatrixColumnMajor,
+    ),
+    projectionMatrixColumnMajor: canonicalizeMatrix4ColumnMajor(
+      camera.projectionMatrixColumnMajor,
+    ),
+  };
+}
+
 function captureCamera(
   engine: AbstractEngine,
   camera: Camera,
@@ -523,7 +548,7 @@ function captureCamera(
     0,
     engine.useReverseDepthBuffer,
   );
-  return {
+  return canonicalizeControlCaptureCameraV1({
     cameraEntityId,
     cameraRigRef,
     positionMetersXYZ: camera.globalPosition.asArray(),
@@ -534,7 +559,7 @@ function captureCamera(
     farClipMeters: camera.maxZ,
     viewMatrixColumnMajor: Array.from(camera.getViewMatrix(true).asArray()),
     projectionMatrixColumnMajor: Array.from(projection.asArray()),
-  };
+  });
 }
 
 export async function captureBabylonControlFrameV1(
