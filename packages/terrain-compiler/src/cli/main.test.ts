@@ -252,4 +252,25 @@ describe("terrain:intent:compile CLI", { timeout: 30_000 }, () => {
     await expectMissing(paths.outputAuthoringPath);
     await expectMissing(paths.reportPath);
   });
+
+  it("does not publish either output for off-ramp source colors", async () => {
+    const paths = await fixture();
+    const pixels = new Uint8Array(5 * 5 * 3);
+    for (let index = 0; index < 5 * 5; index += 1) {
+      pixels[index * 3] = 0;
+      pixels[index * 3 + 1] = 255;
+      pixels[index * 3 + 2] = 0;
+    }
+    await writeFile(
+      paths.imagePath,
+      await sharp(pixels, { raw: { width: 5, height: 5, channels: 3 } }).png().toBuffer(),
+    );
+
+    const result = await runCli(validArgs(paths));
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("TERRAIN_INTENT_COLOR_RESIDUAL_EXCEEDED");
+    await expectMissing(paths.outputAuthoringPath);
+    await expectMissing(paths.reportPath);
+  });
 });

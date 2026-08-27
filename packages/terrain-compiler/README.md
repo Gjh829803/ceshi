@@ -34,6 +34,21 @@ Planner or Host image generation
 The package never calls an image provider and never creates Runtime, Babylon, or Havok
 objects. Runtime consumes only final Authoring height samples.
 
+## Admission and status semantics
+
+Compiler profile `terrain-height-intent-compiler@2` fails closed when the projected
+source colors exceed either the mean `60 RGB units` or p95 `90 RGB units` residual
+limit. Failure emits `TERRAIN_INTENT_COLOR_RESIDUAL_EXCEEDED` and returns neither an
+output Authoring hash nor a compiled AuthoringSpec. These limits match the earlier
+Planner self-check, so the package API and `pnpm terrain:intent:compile` cannot bypass
+the hosted transport-color gate.
+
+`status: "passed"` means PNG transport, signed-ramp admission, deterministic scalar
+projection, and declared Authoring constraints passed. It does not prove that the image
+captured the intended semantic topology or opening composition. Formal hosted acceptance
+still requires the receipt-bound Planner check, trusted Route validation when declared,
+Runtime capture, and composition/visual inspection.
+
 ## Developer CLI
 
 From the repository root:

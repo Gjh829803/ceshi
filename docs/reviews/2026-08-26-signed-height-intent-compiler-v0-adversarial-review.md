@@ -1,5 +1,11 @@
 # Signed Height Intent Compiler V0 对抗审查
 
+> **后续状态（2026-08-27）：本报告是历史 NO-GO，不是当前树结论。** 三个 required-constraint
+> P0 已在 `19c5636` 修复；颜色 residual P1 随
+> `terrain-height-intent-compiler@2` 在 compiler API 与稳定 CLI 中失败关闭。处置与当前证据见
+> [`2026-08-26-signed-height-intent-compiler-v0-remediation-review.md`](2026-08-26-signed-height-intent-compiler-v0-remediation-review.md)。
+> 下文的 `NO-GO` 只适用于审查对象 `d1d7f8b`，不得作为最新 `main` 的发布结论。
+
 独立通道审查。不复述作者自审结论。作者审查声称「无 P0/P1/P2」；本审查回
 `d1d7f8b` 源码、实施计划与 Codex 复现后，**不接受该结论**。当前结论：**NO-GO**。
 

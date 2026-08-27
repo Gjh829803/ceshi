@@ -40,6 +40,10 @@ const idPattern = /^[a-z0-9][a-z0-9-]{2,79}$/;
 // parallel historical workflow implementations in the runtime.
 export const workflowPolicyVersion = 4;
 const codexBackendValues = new Set(["cloud", "local"]);
+const trustedTerrainCompilerVersions = new Set([
+  "terrain-height-intent-compiler@1",
+  "terrain-height-intent-compiler@2",
+]);
 const allowedRootSceneAssets = new Set([
   "world-plan.png",
   "opening-shot.png",
@@ -1292,7 +1296,7 @@ export function createStudio(options = {}) {
       terrainReport.sourcePngHash !== terrainIntentHash ||
       terrainManifest?.kind !== "worldkit-terrain-compilation-manifest" ||
       terrainManifest.schemaVersion !== 1 || terrainManifest.sceneId !== sceneId ||
-      terrainManifest.compiler?.compilerVersion !== "terrain-height-intent-compiler@1" ||
+      !trustedTerrainCompilerVersions.has(terrainManifest.compiler?.compilerVersion) ||
       terrainManifest.compiler?.normalizationProfileId !== "signed-diverging-blue-gray-orange-median-datum@1" ||
       terrainManifest.inputs?.plannerReceiptHash !== plannerReceiptHash ||
       terrainManifest.inputs?.terrainHeightIntentPromptHash !== terrainPromptHash ||

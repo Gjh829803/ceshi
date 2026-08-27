@@ -54,7 +54,11 @@ function canonicalJson(value) {
 async function writeTrustedWhiteboxArtifacts(
   fakeRepoRoot,
   sceneId,
-  { requiresRouteValidation = false, routeReportMode = "exact" } = {},
+  {
+    compilerVersion = "terrain-height-intent-compiler@1",
+    requiresRouteValidation = false,
+    routeReportMode = "exact",
+  } = {},
 ) {
   const artifactRoot = path.join(fakeRepoRoot, "artifacts/scenes", sceneId);
   const planRoot = path.join(fakeRepoRoot, "apps/playground/public/scene-plans", sceneId);
@@ -182,7 +186,7 @@ async function writeTrustedWhiteboxArtifacts(
     sceneId,
     runId: "fixture-run",
     compiler: {
-      compilerVersion: "terrain-height-intent-compiler@1",
+      compilerVersion,
       normalizationProfileId: "signed-diverging-blue-gray-orange-median-datum@1",
     },
     inputs: {
@@ -1482,6 +1486,27 @@ test("imports a complete current whitebox chain with passed trusted receipts", a
   const fakeRepoRoot = await temporaryRoot(".test-repo-");
   const sceneId = "trusted-import-world";
   await writeTrustedWhiteboxArtifacts(fakeRepoRoot, sceneId);
+
+  const studio = createStudio({ repoRoot: fakeRepoRoot, dataRoot, autoRunJobs: false });
+  const origin = await listen(studio);
+  try {
+    const payload = await (await fetch(`${origin}/api/worlds`)).json();
+    assert.equal(payload.worlds.length, 1);
+    assert.equal(payload.worlds[0].sceneId, sceneId);
+    assert.equal(payload.worlds[0].status, "ready");
+    assert.equal(payload.worlds[0].outcome, "passed");
+  } finally {
+    await studio.shutdown();
+  }
+});
+
+test("imports a trusted whitebox chain compiled with terrain compiler v2", async () => {
+  const dataRoot = await temporaryRoot(".test-data-");
+  const fakeRepoRoot = await temporaryRoot(".test-repo-");
+  const sceneId = "trusted-compiler-v2-world";
+  await writeTrustedWhiteboxArtifacts(fakeRepoRoot, sceneId, {
+    compilerVersion: "terrain-height-intent-compiler@2",
+  });
 
   const studio = createStudio({ repoRoot: fakeRepoRoot, dataRoot, autoRunJobs: false });
   const origin = await listen(studio);

@@ -144,7 +144,7 @@ describe("scene terrain finalizer", () => {
       sceneId: SCENE_ID,
       runId: "test-run",
       compiler: {
-        compilerVersion: "terrain-height-intent-compiler@1",
+        compilerVersion: "terrain-height-intent-compiler@2",
         normalizationProfileId:
           "signed-diverging-blue-gray-orange-median-datum@1",
       },

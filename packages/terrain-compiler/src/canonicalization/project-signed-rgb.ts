@@ -3,6 +3,8 @@ export const SIGNED_HEIGHT_INTENT_PROFILE = Object.freeze({
   depressionRgb: Object.freeze([32, 64, 208] as const),
   datumRgb: Object.freeze([128, 128, 128] as const),
   elevationRgb: Object.freeze([224, 96, 32] as const),
+  maximumMeanRampResidualRgbUnits: 60,
+  maximumP95RampResidualRgbUnits: 90,
 });
 
 export interface SignedHeightIntentRgbInput {

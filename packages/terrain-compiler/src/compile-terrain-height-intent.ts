@@ -15,7 +15,10 @@ import {
 } from "./raster/normalize-signed-height-raster";
 import { prefilterScalarRasterForDownsample } from
   "./raster/prefilter-scalar-raster";
-import { projectSignedHeightIntentRgb } from
+import {
+  SIGNED_HEIGHT_INTENT_PROFILE,
+  projectSignedHeightIntentRgb,
+} from
   "./canonicalization/project-signed-rgb";
 import { quantizeUnprotectedTerrainHeightSamplesMeters } from
   "./raster/quantize-height-samples";
@@ -36,7 +39,7 @@ const LARGE_GRID_BASE_SAMPLE_QUANTUM_METERS = 0.1;
 export const TERRAIN_HEIGHT_INTENT_NORMALIZATION_PROFILE =
   "signed-diverging-blue-gray-orange-median-datum@1" as const;
 export const TERRAIN_HEIGHT_INTENT_COMPILER_VERSION =
-  "terrain-height-intent-compiler@1" as const;
+  "terrain-height-intent-compiler@2" as const;
 
 export interface TerrainHeightIntentCompileReport {
   readonly kind: "worldkit-terrain-height-intent-compile-report";
@@ -81,6 +84,33 @@ export interface CompileTerrainHeightIntentInput {
 
 function hasBlockingDiagnostic(diagnostics: readonly TerrainIntentDiagnostic[]): boolean {
   return diagnostics.some((diagnostic) => diagnostic.severity === "blocking");
+}
+
+function projectionAdmissionDiagnostics(
+  summary: TerrainIntentProjectionSummary,
+): readonly TerrainIntentDiagnostic[] {
+  const {
+    maximumMeanRampResidualRgbUnits,
+    maximumP95RampResidualRgbUnits,
+  } = SIGNED_HEIGHT_INTENT_PROFILE;
+  if (
+    summary.meanRampResidualRgbUnits <= maximumMeanRampResidualRgbUnits &&
+    summary.p95RampResidualRgbUnits <= maximumP95RampResidualRgbUnits
+  ) {
+    return [];
+  }
+  return [{
+    severity: "blocking",
+    code: "TERRAIN_INTENT_COLOR_RESIDUAL_EXCEEDED",
+    instancePath: "/sourcePngBytes",
+    message: "Height Intent colors exceed the signed transport ramp residual limits.",
+    details: {
+      meanRampResidualRgbUnits: summary.meanRampResidualRgbUnits,
+      p95RampResidualRgbUnits: summary.p95RampResidualRgbUnits,
+      maximumMeanRampResidualRgbUnits,
+      maximumP95RampResidualRgbUnits,
+    },
+  }];
 }
 
 function failedResult(input: {
@@ -137,15 +167,19 @@ export async function compileTerrainHeightIntent(
   const projectionSummary = summarizeTerrainIntentProjection(projection);
   const inputAuthoringSpecHash = sha256CanonicalJson(input.authoringSpec) as Sha256Hash;
   const derived = deriveTerrainConstraintsFromAuthoringV4(input.authoringSpec);
+  const inputDiagnostics = [
+    ...derived.diagnostics,
+    ...projectionAdmissionDiagnostics(projectionSummary),
+  ];
 
-  if (hasBlockingDiagnostic(derived.diagnostics)) {
+  if (hasBlockingDiagnostic(inputDiagnostics)) {
     return failedResult({
       terrainEntityId: derived.terrainEntityId,
       sourcePngHash: canonicalRgb.sourcePngHash,
       canonicalRgbHash: canonicalRgb.canonicalRgbHash,
       inputAuthoringSpecHash,
       projection: projectionSummary,
-      diagnostics: derived.diagnostics,
+      diagnostics: inputDiagnostics,
     });
   }
 
@@ -221,7 +255,7 @@ export async function compileTerrainHeightIntent(
     heightSamplesMeters: metricGrid,
     constraints: derived.constraints,
   });
-  const diagnostics = [...derived.diagnostics, ...constrained.diagnostics];
+  const diagnostics = [...inputDiagnostics, ...constrained.diagnostics];
 
   if (hasBlockingDiagnostic(diagnostics)) {
     return failedResult({

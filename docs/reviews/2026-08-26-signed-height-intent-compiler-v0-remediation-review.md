@@ -64,3 +64,15 @@ clamp 或额外平滑改变已接受地形。
 
 最终 root test、typecheck、Builder bundle parity、build 和 diff closure 与 Large Heightfield V1
 一起在第二个功能 commit 前执行并记录。
+
+## 2026-08-27 compiler admission 最终闭环
+
+原 P1 的 hosted 绕过边界已进一步关闭。Planner self-check 仍在任务内尽早拒绝超出 mean `60`
+或 p95 `90 RGB units` 的颜色 residual；`terrain-height-intent-compiler@2` 现在独立执行同一
+admission policy。直接调用 package API 或 `pnpm terrain:intent:compile` 时，off-ramp PNG 会产生
+`TERRAIN_INTENT_COLOR_RESIDUAL_EXCEEDED` blocking diagnostic，不返回 output Authoring hash 或
+compiled AuthoringSpec，CLI 也不会发布任一输出文件。
+
+这不把颜色 residual 升格为宏观拓扑证明。Compiler `passed` 只闭合 transport、signed projection
+和声明约束；正式场景接受仍要求 receipt-bound Planner check、所需 trusted Route validation、
+Runtime capture 与 composition/visual inspection。

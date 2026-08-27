@@ -143,6 +143,33 @@ async function neutralIntentPng(): Promise<Uint8Array> {
   }).png().toBuffer();
 }
 
+async function offRampIntentPng(): Promise<Uint8Array> {
+  const bytes = new Uint8Array(9 * 9 * 3);
+  for (let index = 0; index < 9 * 9; index += 1) {
+    bytes[index * 3] = 0;
+    bytes[index * 3 + 1] = 255;
+    bytes[index * 3 + 2] = 0;
+  }
+  return sharp(bytes, {
+    raw: { width: 9, height: 9, channels: 3 },
+  }).png().toBuffer();
+}
+
+async function moderateResidualIntentPng(): Promise<Uint8Array> {
+  const bytes = new Uint8Array(9 * 9 * 3);
+  for (let index = 0; index < 9 * 9; index += 1) {
+    const color = index < (9 * 9) / 2
+      ? [120, 96, 216]
+      : [216, 112, 120];
+    bytes[index * 3] = color[0]!;
+    bytes[index * 3 + 1] = color[1]!;
+    bytes[index * 3 + 2] = color[2]!;
+  }
+  return sharp(bytes, {
+    raw: { width: 9, height: 9, channels: 3 },
+  }).png().toBuffer();
+}
+
 async function globallyHighVariedIntentPng(): Promise<Uint8Array> {
   const bytes = new Uint8Array(9 * 9 * 3);
   const colors = [
@@ -215,6 +242,39 @@ describe("compileTerrainHeightIntent", () => {
       sha256CanonicalJson(first.compiledAuthoringSpec),
     );
     expect(stringifyCanonicalJson(authoringSpec)).toBe(inputBefore);
+  });
+
+  it("fails closed before publication when source colors exceed the signed ramp residual limits", async () => {
+    const result = await compileTerrainHeightIntent({
+      sourcePngBytes: await offRampIntentPng(),
+      authoringSpec: focusedCompileSpec(),
+    });
+
+    expect(result.report.status).toBe("failed");
+    expect(result.report.outputAuthoringSpecHash).toBeUndefined();
+    expect(result.compiledAuthoringSpec).toBeUndefined();
+    expect(result.report.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        severity: "blocking",
+        code: "TERRAIN_INTENT_COLOR_RESIDUAL_EXCEEDED",
+        instancePath: "/sourcePngBytes",
+      }),
+    ]));
+  });
+
+  it("accepts the same moderate Image2 color cast allowed by Planner admission", async () => {
+    const authoringSpec = focusedCompileSpec();
+    authoringSpec.spatial.routes = [];
+    authoringSpec.constraints.placements = authoringSpec.constraints.placements.filter(
+      ({ kind }) => kind !== "within-slope-limit",
+    );
+    const result = await compileTerrainHeightIntent({
+      sourcePngBytes: await moderateResidualIntentPng(),
+      authoringSpec,
+    });
+
+    expect(result.report.status, JSON.stringify(result.report.diagnostics)).toBe("passed");
+    expect(result.compiledAuthoringSpec).toBeDefined();
   });
 
   it("records compact base quantization only above the large-grid threshold", async () => {
