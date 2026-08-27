@@ -244,6 +244,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "scripts/lib/route-validation-cli.test.ts", lane: "contract" },
   { path: "scripts/lib/route-validation-orchestrator.test.ts", lane: "resource-heavy", reasonCodes: ["measured-duration"] },
   { path: "scripts/lib/route-validation-runner.test.ts", lane: "resource-heavy", reasonCodes: ["measured-duration"] },
+  { path: "scripts/lib/runtime-session-executor.test.ts", lane: "contract" },
   { path: "scripts/lib/runtime-session-wal.test.ts", lane: "contract" },
   { path: "scripts/lib/simulation-take-cli.test.ts", lane: "contract" },
   { path: "scripts/lib/simulation-take-runner.test.ts", lane: "contract" },
