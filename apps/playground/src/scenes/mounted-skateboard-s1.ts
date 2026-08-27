@@ -165,6 +165,11 @@ const SKATEBOARD_DEFINITION: PackageSubjectDefinitionV1 = {
   relationshipCapabilityRefs: [MOUNTED_ON_CAPABILITY_REF],
   actionOrPoseSetRef: "worldkit://pose-set/static.whitebox@1",
   renderBindingProfileRef: "worldkit://render-binding/subject.standard@1",
+  allowedOverridePaths: [
+    "profiles.controlFeelProfileRef",
+    "profiles.controlProfileRef",
+    "profiles.motion.defaultMotionProfileRef",
+  ],
   aiMetadata: {
     displayName: "S1 whitebox skateboard",
     description:

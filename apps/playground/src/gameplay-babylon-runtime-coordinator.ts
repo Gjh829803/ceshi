@@ -7,7 +7,6 @@ import {
 } from "@whitebox-world/gameplay";
 import {
   DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
-  deriveWorldStateSnapshotRefV1,
   type GameplayCommandReceiptV1,
   type GameplayCommandV1,
   type GameplayDiagnosticV1,
@@ -18,8 +17,8 @@ import {
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import {
   BabylonWorldRuntime,
-  FIXED_TIME_STEP_SECONDS,
   createBabylonGameplayWorldPortV1,
+  projectBabylonWorldRuntimeSnapshotV4,
   type BabylonWorldRuntimeInitializationStageV1,
   type BabylonRuntimeProjectionV1,
   type SubjectAssetCacheOptionsV1,
@@ -29,11 +28,13 @@ import {
   RuntimeHost,
   type GameplayWorldAdapterFactoryV1,
   type GameplayWorldPortV1,
+  type PublishWorldReplacementResultV1,
   type RuntimeActivityLeaseV1,
   type RuntimeActivityRecordV1,
   type RuntimeCandidatePublicationGateInputV1,
   type RuntimeWorldAdapterDescriptorV1,
   type RuntimeWorldConfigurationV1,
+  type RuntimeWorldPublicationIdentitiesV1,
   type WorldSessionPublicationV1,
 } from "@whitebox-world/runtime-host";
 import type {
@@ -228,201 +229,6 @@ function wrapOwnedPort(
   });
 }
 
-function activePossessionEntityId(
-  inspection: GameplayInspectionSnapshotV1,
-): string | undefined {
-  const relationships = Object.values(
-    inspection.relationshipStatesById,
-  ).filter(
-    (relationship) =>
-      relationship.type === "possessedBy" &&
-      relationship.controllerEntityId === PLAYGROUND_CONTROLLER_ENTITY_ID_V1,
-  );
-  if (relationships.length > 1) {
-    throw new Error(
-      "WORLDKIT_RUNTIME_POSSESSION_INVALID: Multiple canonical control owners were published.",
-    );
-  }
-  const relationship = relationships[0];
-  return relationship?.type === "possessedBy"
-    ? relationship.controlledEntityId
-    : undefined;
-}
-
-function cameraProjection(
-  publication: WorldSessionPublicationV1,
-  runtimeProjection: BabylonRuntimeProjectionV1,
-): WorldRuntimeSnapshotV4["view"]["camera"] {
-  const controlledEntityId = activePossessionEntityId(
-    publication.gameplayInspection,
-  );
-  if (isNil(controlledEntityId)) return Object.freeze({ mode: "unbound" });
-  const camera = runtimeProjection.camera;
-  if (
-    isNil(camera.activeCameraProfileRef) ||
-    isNil(camera.activeCameraRigRef) ||
-    isNil(camera.activeCameraModifierRefs) ||
-    isNil(camera.safeFallbackActive) ||
-    isNil(camera.viewYawOffsetRadians) ||
-    isNil(camera.viewPitchOffsetRadians) ||
-    isNil(camera.viewDistanceOffsetMeters) ||
-    isNil(camera.selectionDecision) ||
-    isNil(camera.isTargetSocketFallback) ||
-    isNil(camera.desiredTargetPositionMetersXYZ) ||
-    isNil(camera.desiredPositionMetersXYZ) ||
-    isNil(camera.actualPositionMetersXYZ) ||
-    isNil(camera.finalFovDegrees) ||
-    isNil(camera.positionLagXYZ) ||
-    isNil(camera.rotationLagRadiansXYZ) ||
-    isNil(camera.fixedStepDeltaSeconds) ||
-    isNil(camera.resolvedParameters) ||
-    isNil(camera.previewParameterOverrides) ||
-    isNil(camera.profileTransitionProgressRatio) ||
-    isNil(camera.controlForwardXYZ) ||
-    isNil(camera.subjectForwardXYZ) ||
-    isNil(camera.subjectVelocityMetersPerSecondXYZ)
-  ) {
-    throw new Error(
-      "WORLDKIT_RUNTIME_CAMERA_STATE_INVALID: Bound camera state is incomplete.",
-    );
-  }
-  return Object.freeze({
-    mode: "tracking",
-    id: camera.entityId,
-    targetEntityId: controlledEntityId,
-    positionMetersXYZ: Object.freeze([...camera.positionMetersXYZ]) as
-      readonly [number, number, number],
-    activeCameraProfileRef: camera.activeCameraProfileRef,
-    activeCameraRigRef: camera.activeCameraRigRef,
-    activeCameraModifierRefs: Object.freeze([
-      ...camera.activeCameraModifierRefs,
-    ]),
-    safeFallbackActive: camera.safeFallbackActive,
-    viewYawOffsetRadians: camera.viewYawOffsetRadians,
-    viewPitchOffsetRadians: camera.viewPitchOffsetRadians,
-    viewDistanceOffsetMeters: camera.viewDistanceOffsetMeters,
-    selectionDecision: Object.freeze({
-      ...camera.selectionDecision,
-      activeCameraModifierRefs: Object.freeze([
-        ...camera.selectionDecision.activeCameraModifierRefs,
-      ]),
-      matchedCameraContextRuleIds: Object.freeze([
-        ...camera.selectionDecision.matchedCameraContextRuleIds,
-      ]),
-      cameraViewPreference: Object.freeze({
-        ...camera.selectionDecision.cameraViewPreference,
-      }),
-      diagnostics: Object.freeze(camera.selectionDecision.diagnostics.map(
-        (diagnostic) => Object.freeze({ ...diagnostic }),
-      )),
-      explain: Object.freeze({
-        ...camera.selectionDecision.explain,
-        cameraViewPreference: Object.freeze({
-          ...camera.selectionDecision.explain.cameraViewPreference,
-        }),
-        cameraContextRules: Object.freeze(
-          camera.selectionDecision.explain.cameraContextRules.map((rule) =>
-            Object.freeze({
-              ...rule,
-              unmatchedReasons: Object.freeze([...rule.unmatchedReasons]),
-            })
-          ),
-        ),
-        appliedCameraModifierRefs: Object.freeze([
-          ...camera.selectionDecision.explain.appliedCameraModifierRefs,
-        ]),
-      }),
-    }),
-    ...(camera.selectedTargetSocketId === undefined
-      ? {}
-      : { selectedTargetSocketId: camera.selectedTargetSocketId }),
-    ...(camera.targetSocketPositionMetersXYZ === undefined
-      ? {}
-      : {
-          targetSocketPositionMetersXYZ: Object.freeze([
-            ...camera.targetSocketPositionMetersXYZ,
-          ]) as readonly [number, number, number],
-        }),
-    isTargetSocketFallback: camera.isTargetSocketFallback,
-    desiredTargetPositionMetersXYZ: Object.freeze([
-      ...camera.desiredTargetPositionMetersXYZ,
-    ]) as readonly [number, number, number],
-    desiredPositionMetersXYZ: Object.freeze([
-      ...camera.desiredPositionMetersXYZ,
-    ]) as readonly [number, number, number],
-    actualPositionMetersXYZ: Object.freeze([
-      ...camera.actualPositionMetersXYZ,
-    ]) as readonly [number, number, number],
-    finalFovDegrees: camera.finalFovDegrees,
-    ...(camera.requestedArmLengthMeters === undefined
-      ? {}
-      : { requestedArmLengthMeters: camera.requestedArmLengthMeters }),
-    ...(camera.safeArmLengthMeters === undefined
-      ? {}
-      : { safeArmLengthMeters: camera.safeArmLengthMeters }),
-    ...(camera.effectiveArmLengthMeters === undefined
-      ? {}
-      : { effectiveArmLengthMeters: camera.effectiveArmLengthMeters }),
-    ...(camera.isCollisionRetracted === undefined
-      ? {}
-      : { isCollisionRetracted: camera.isCollisionRetracted }),
-    ...(camera.collisionHitEntityId === undefined
-      ? {}
-      : { collisionHitEntityId: camera.collisionHitEntityId }),
-    ...(camera.collisionHitPositionXYZ === undefined
-      ? {}
-      : {
-          collisionHitPositionXYZ: Object.freeze([
-            ...camera.collisionHitPositionXYZ,
-          ]) as readonly [number, number, number],
-        }),
-    positionLagXYZ: Object.freeze([...camera.positionLagXYZ]) as
-      readonly [number, number, number],
-    rotationLagRadiansXYZ: Object.freeze([...camera.rotationLagRadiansXYZ]) as
-      readonly [number, number, number],
-    ...(camera.recenterRemainingSeconds === undefined
-      ? {}
-      : { recenterRemainingSeconds: camera.recenterRemainingSeconds }),
-    fixedStepDeltaSeconds: camera.fixedStepDeltaSeconds,
-    resolvedParameters: Object.freeze({ ...camera.resolvedParameters }),
-    previewParameterOverrides: Object.freeze({
-      ...camera.previewParameterOverrides,
-    }),
-    profileTransitionProgressRatio: camera.profileTransitionProgressRatio,
-    controlForwardXYZ: Object.freeze([...camera.controlForwardXYZ]) as
-      readonly [number, number, number],
-    subjectForwardXYZ: Object.freeze([...camera.subjectForwardXYZ]) as
-      readonly [number, number, number],
-    subjectVelocityMetersPerSecondXYZ: Object.freeze([
-      ...camera.subjectVelocityMetersPerSecondXYZ,
-    ]) as readonly [number, number, number],
-  });
-}
-
-function subjectProjection(
-  worldState: WorldStateSnapshotV1,
-): WorldRuntimeSnapshotV4["world"]["subjectStatesByEntityId"] {
-  const result: Record<
-    string,
-    WorldRuntimeSnapshotV4["world"]["subjectStatesByEntityId"][string]
-  > = {};
-  for (const [entityId, entityState] of Object.entries(
-    worldState.entityStatesById,
-  )) {
-    if (entityState.kind !== "spatial-entity-state") continue;
-    result[entityId] = Object.freeze({
-      entityState,
-      capabilityStatesById: Object.freeze(Object.fromEntries(
-        Object.entries(worldState.capabilityStatesById).filter(
-          ([, capabilityState]) =>
-            capabilityState.ownerEntityId === entityId,
-        ),
-      )),
-    });
-  }
-  return Object.freeze(result);
-}
-
 function publicActivityReceipt(
   request: RuntimeActivityRequestV1,
   record: RuntimeActivityRecordV1,
@@ -529,13 +335,6 @@ export class GameplayBabylonRuntimeCoordinatorV1 {
         if (isNil(handle)) {
           throw new Error("WORLDKIT_RUNTIME_CANDIDATE_HANDLE_NOT_FOUND");
         }
-        if (
-          activePossessionEntityId(publication.gameplayInspection) !==
-            options.initialWorldConfiguration.executionPlan
-              .initialControlledEntityId
-        ) {
-          throw new Error("WORLDKIT_RUNTIME_CANDIDATE_CONTROL_NOT_BOUND");
-        }
         await handle.runtime.renderFrameWhenReady();
       },
     });
@@ -603,23 +402,7 @@ export class GameplayBabylonRuntimeCoordinatorV1 {
       handles,
     );
     try {
-      const receipt = await host.executeGameplayCommand({
-        schemaVersion: 1,
-        id: `command.playground.initial-bind.${host.currentWorldSessionId}`,
-        type: "control.bind",
-        runtimeSessionId: options.runtimeSessionId,
-        worldSessionId: host.currentWorldSessionId,
-        controllerEntityId: PLAYGROUND_CONTROLLER_ENTITY_ID_V1,
-        controlledEntityId:
-          options.initialWorldConfiguration.executionPlan
-            .initialControlledEntityId,
-        expectedPossession: { mode: "unbound" },
-      });
-      if (receipt.status !== "committed") {
-        throw new Error(
-          `${receipt.diagnostic.code}: Initial control binding was rejected.`,
-        );
-      }
+      await coordinator.bindInitialControl(host.currentWorldSessionId);
       await coordinator.activeRuntime().renderFrameWhenReady();
       return coordinator;
     } catch (error) {
@@ -643,43 +426,13 @@ export class GameplayBabylonRuntimeCoordinatorV1 {
   snapshot(): WorldRuntimeSnapshotV4 {
     const publication = this.host.snapshot();
     const runtimeProjection = this.activeRuntime().snapshot();
-    const hostPhase = this.host.phase;
-    return Object.freeze({
-      kind: "worldkit-runtime-snapshot",
-      schemaVersion: 4,
+    return projectBabylonWorldRuntimeSnapshotV4({
       runtimeSessionId: this.host.runtimeSessionId,
-      worldSessionId: publication.worldState.worldSessionId,
-      world: Object.freeze({
-        publicationEpoch: publication.publicationEpoch,
-        simulationTick: publication.worldState.simulationTick,
-        worldStateRef: deriveWorldStateSnapshotRefV1({
-          runtimeSessionId: publication.worldState.runtimeSessionId,
-          worldSessionId: publication.worldState.worldSessionId,
-          worldStateHash: publication.worldState.worldStateHash,
-        }),
-        worldStateHash: publication.worldState.worldStateHash,
-        subjectStatesByEntityId: subjectProjection(publication.worldState),
-        gameplayInspection: publication.gameplayInspection,
-      }),
-      view: Object.freeze({
-        viewStateRevision: publication.viewState.viewStateRevision,
-        camera: cameraProjection(publication, runtimeProjection),
-      }),
-      runtime: Object.freeze({
-        phase: hostPhase === "failed"
-          ? "failed" as const
-          : hostPhase === "disposed"
-          ? "disposed" as const
-          : "ready" as const,
-        isPaused: this.paused,
-        fixedTimeStepSeconds: FIXED_TIME_STEP_SECONDS,
-      }),
-      resources: Object.freeze({
-        phase: hostPhase === "failed" ? "failed" as const : "ready" as const,
-        meshCount: runtimeProjection.resources.meshes,
-        physicsBodyCount: runtimeProjection.resources.bodies,
-        terrainSampleCount: runtimeProjection.resources.terrainSamples,
-      }),
+      fixedInputControllerEntityId: PLAYGROUND_CONTROLLER_ENTITY_ID_V1,
+      publication,
+      runtimeProjection,
+      hostPhase: this.host.phase,
+      isPaused: this.paused,
     });
   }
 
@@ -691,6 +444,48 @@ export class GameplayBabylonRuntimeCoordinatorV1 {
     command: GameplayCommandV1,
   ): Promise<GameplayCommandReceiptV1> {
     return this.host.executeGameplayCommand(command);
+  }
+
+  currentRuntimePublicationIdentity(): RuntimeWorldPublicationIdentitiesV1 {
+    const publication = this.host.snapshot();
+    return Object.freeze({
+      runtimeSessionId: this.host.runtimeSessionId,
+      worldSessionId: this.host.currentWorldSessionId,
+      worldPackageRootHash: publication.worldState.worldPackageRootHash,
+      simulationTick: publication.worldState.simulationTick,
+    });
+  }
+
+  async publishWorldReplacementV1(
+    input: unknown,
+  ): Promise<PublishWorldReplacementResultV1> {
+    const result = await this.host.publishWorldReplacementV1(input);
+    if (result.status === "published") {
+      try {
+        await this.bindInitialControl(result.current.worldSessionId);
+      } catch {
+        // Publication already committed. Control bind must not unwind it.
+      }
+    }
+    return result;
+  }
+
+  private async bindInitialControl(worldSessionId: string): Promise<void> {
+    const receipt = await this.host.executeGameplayCommand({
+      schemaVersion: 1,
+      id: `command.playground.initial-bind.${worldSessionId}`,
+      type: "control.bind",
+      runtimeSessionId: this.host.runtimeSessionId,
+      worldSessionId,
+      controllerEntityId: PLAYGROUND_CONTROLLER_ENTITY_ID_V1,
+      controlledEntityId: this.initialControlledEntityId,
+      expectedPossession: { mode: "unbound" },
+    });
+    if (receipt.status !== "committed") {
+      throw new Error(
+        `${receipt.diagnostic.code}: Initial control binding was rejected.`,
+      );
+    }
   }
 
   async runFixedInput(input: FixedInputV1): Promise<WorldRuntimeSnapshotV4> {

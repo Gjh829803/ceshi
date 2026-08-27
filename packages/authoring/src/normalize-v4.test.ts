@@ -135,8 +135,15 @@ describe("normalizeAuthoringSpecV4", () => {
       expect(Object.isFrozen(prototype.traversalSurfaceBindings)).toBe(true);
       expect(Object.isFrozen(prototype.traversalSurfaceBindings?.[0])).toBe(true);
     }
-    expect(first.normalizedWorldIrHash).toBe(reversed.normalizedWorldIrHash);
-    expect(first.value?.authoringSpecHash).toBe(reversed.value?.authoringSpecHash);
+    expect(first.normalizedWorldIrHash).not.toBe(reversed.normalizedWorldIrHash);
+    expect(first.value?.authoringSpecHash).not.toBe(
+      reversed.value?.authoringSpecHash,
+    );
+    expect(first.layoutSolveReport?.layoutInputHash).toBe(
+      reversed.layoutSolveReport?.layoutInputHash,
+    );
+    expect(first.value?.resources.prototypes.map((prototype) => prototype.id))
+      .toEqual(reversed.value?.resources.prototypes.map((prototype) => prototype.id));
   });
 
   it("locks each distinct resolved Profile receipt with exact canonical bytes", () => {
@@ -256,14 +263,17 @@ describe("normalizeAuthoringSpecV4", () => {
     expect(changedConnectivity.value?.authoringSpecHash).not.toBe(
       baseline.value?.authoringSpecHash,
     );
-    expect(changedConnectivity.layoutSolveReport?.authoringSpecHash).toBe(
-      baseline.layoutSolveReport?.authoringSpecHash,
+    expect(changedConnectivity.layoutSolveReport?.layoutInputHash).toBe(
+      baseline.layoutSolveReport?.layoutInputHash,
     );
     expect(baseline.value?.authoringSpecHash).not.toBe(
       baseline.normalizedWorldIrHash,
     );
-    expect(baseline.value?.authoringSpecHash).not.toBe(
+    expect(baseline.value?.authoringSpecHash).toBe(
       baseline.layoutSolveReport?.authoringSpecHash,
+    );
+    expect(baseline.value?.authoringSpecHash).not.toBe(
+      baseline.layoutSolveReport?.layoutInputHash,
     );
   });
 
@@ -290,7 +300,7 @@ describe("normalizeAuthoringSpecV4", () => {
           resources: layoutResources,
         }),
       ),
-    ).toBe(layoutSolveReport.authoringSpecHash);
+    ).toBe(layoutSolveReport.layoutInputHash);
     expect(layoutResources.resourceLockHash).toBe(
       layoutSolveReport.registryLockHash,
     );
@@ -311,16 +321,6 @@ describe("normalizeAuthoringSpecV4", () => {
       routeId: "main-route",
     };
     const reorderedSource = routeWorld();
-    const reordered: AuthoringSpecV4 = {
-      ...reorderedSource,
-      constraints: {
-        ...reorderedSource.constraints,
-        connectivity: [
-          zRoute,
-          ...reorderedSource.constraints.connectivity,
-        ].reverse(),
-      },
-    };
     const firstWithBoth: AuthoringSpecV4 = {
       ...first,
       constraints: {
@@ -333,12 +333,25 @@ describe("normalizeAuthoringSpecV4", () => {
     };
 
     const firstResult = normalizeAuthoringSpecV4(firstWithBoth);
-    const reorderedResult = normalizeAuthoringSpecV4(reordered);
-    expect(firstResult.normalizedWorldIrHash).toBe(reorderedResult.normalizedWorldIrHash);
-    expect(firstResult.value?.authoringSpecHash).toBe(
+    const reorderedResult = normalizeAuthoringSpecV4({
+      ...reorderedSource,
+      constraints: {
+        ...reorderedSource.constraints,
+        connectivity: [
+          zRoute,
+          ...reorderedSource.constraints.connectivity,
+        ],
+      },
+    });
+    expect(firstResult.normalizedWorldIrHash).not.toBe(
+      reorderedResult.normalizedWorldIrHash,
+    );
+    expect(firstResult.value?.authoringSpecHash).not.toBe(
       reorderedResult.value?.authoringSpecHash,
     );
     expect(firstResult.value?.layout.connectivityRequirements.map((row) => row.constraintId))
+      .toEqual(["hero-to-goal", "z-route"]);
+    expect(reorderedResult.value?.layout.connectivityRequirements.map((row) => row.constraintId))
       .toEqual(["hero-to-goal", "z-route"]);
 
     const changedSource = routeWorld();

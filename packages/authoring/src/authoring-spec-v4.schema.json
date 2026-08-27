@@ -1848,6 +1848,43 @@
         },
         "spawnAnchorEntityId": {
           "$ref": "#/$defs/id"
+        },
+        "overrides": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/definitionResourceRefOverride"
+          }
+        }
+      }
+    },
+    "definitionResourceRefOverride": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "path",
+        "resourceRef"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "kind": {
+          "const": "resource-ref"
+        },
+        "path": {
+          "enum": [
+            "profiles.controlFeelProfileRef",
+            "profiles.controlProfileRef",
+            "profiles.motion.defaultMotionProfileRef"
+          ]
+        },
+        "resourceRef": {
+          "type": "string",
+          "format": "worldkit-resource-ref"
         }
       }
     },

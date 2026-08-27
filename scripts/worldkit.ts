@@ -1,6 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { execFile as execFileCallback } from "node:child_process";
-import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  readFile,
+  realpath,
+  rename,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -28,8 +36,26 @@ import {
   builtInSubjectResourceRegistry,
   type SubjectRegistryResourceV3,
 } from "@whitebox-world/subject-registry";
+import {
+  REGISTRY_RESOURCE_KINDS_V1,
+  type RegistryResourceKindV1,
+} from "@whitebox-world/authoring-edit";
 import { isNil } from "lodash-es";
+import { Logger } from "@babylonjs/core/Misc/logger.js";
 
+import {
+  runChangeApplyV1,
+  runChangeCleanupV1,
+  runChangeDiffV1,
+  runChangeDryRunV1,
+  runChangeExplainV1,
+  runChangeReceiptV1,
+  runChangeValidateV1,
+  runRegistrySearchV1,
+  runSchemaProjectV1,
+  redactAuthoringEditJsonV1,
+  type AuthoringEditCliResultV1,
+} from "./lib/authoring-edit-cli";
 import { explainSubjectFile } from "./lib/subject-explain";
 import {
   createRenderEnvironmentDiagnosticsV1,
@@ -76,6 +102,21 @@ import {
   publicRouteValidationRunnerFailureV1,
   verifyRouteFileV1,
 } from "./lib/route-validation-cli";
+import {
+  WORLDKIT_CLI_PROTOCOL_VERSION_V1,
+  WORLDKIT_SDK_VERSION_V1,
+  WORLDKIT_SPEC_VERSION_V1,
+  buildWorldPackageDirectoryV2,
+  inspectWorldPackageDirectoryV2,
+  loadRuntimeWorldConfigurationFromPackageDirectoryV1,
+  type WorldPackageCommandResultV1,
+} from "./lib/world-package-cli";
+import { createHeadlessRuntimeSessionV1 } from "./lib/headless-runtime-session";
+import {
+  createRuntimeSessionExecutorV1,
+  resumeRuntimeSessionExecutorV1,
+} from "./lib/runtime-session-executor";
+import { runRuntimeSessionNdjsonV1 } from "./lib/runtime-session-ndjson";
 
 const execFile = promisify(execFileCallback);
 const REPOSITORY_ROOT = path.resolve(
@@ -86,11 +127,28 @@ const HELP = `worldkit - Canonical JSON whitebox world SDK
 
 Usage:
   worldkit validate <file> [--json]
-  worldkit build <file> --output <file> [--json]
-  worldkit run <file> [--port <port>] [--refresh-dependencies] [--json]
+  worldkit build <world.json> --output <package-directory> [--json]
+  worldkit inspect <package-directory> [--json]
+  worldkit load <package-directory> --headless [--json]
+  worldkit run <world.json> [--port <port>] [--refresh-dependencies] [--json]
+  worldkit run <package-directory> --interactive --protocol ndjson --headless
+    --session-directory <absolute-directory> [--resume]
   worldkit capture <file> --output <png> [--snapshot <json>] [--triview-output <directory> --implementation-map <json>] [--port <port>] [--json]
   worldkit registry list --kind <resource-kind> [--json]
   worldkit registry describe --resource-ref <ref> [--json]
+  worldkit registry search --lock <registry-lock.json> --kind <resource-kind>
+    [--tag <semantic-tag>] [--after-resource-ref <ref>] [--limit <count>] [--json]
+  worldkit schema project <world.json> --profile <resource-ref> --output <projection.json> [--json]
+  worldkit change validate <change-set.json> [--json]
+  worldkit change dry-run <world.json> --change-set <change-set.json>
+    --output <candidate-directory> [--json]
+  worldkit change diff <world-change-receipt.json> [--json]
+  worldkit change explain <world-change-receipt.json>
+    [--operation-id <id>] [--diagnostic-code <code>] [--json]
+  worldkit change apply <world.json> --change-set <change-set.json>
+    --output <new-world.json> --receipt <world-change-receipt.json> --write [--json]
+  worldkit change receipt --request-id <id> [--connection-profile <file>] [--json]
+  worldkit change cleanup --cleanup-operation-id <id> [--connection-profile <file>] [--json]
   worldkit subject-definition validate <file> [--json]
   worldkit subject explain <world-file> --entity-id <id> [--json]
   worldkit brief validate <scene-brief.md> [--json]
@@ -121,12 +179,21 @@ export type WorldkitArgs =
   | { command: "help"; json: false }
   | { command: "validate"; inputPath: string; json: boolean }
   | { command: "build"; inputPath: string; outputPath: string; json: boolean }
+  | { command: "inspect"; packageDirectoryPath: string; json: boolean }
+  | { command: "load"; packageDirectoryPath: string; headless: true; json: boolean }
   | {
-      command: "run";
+      command: "run-browser";
       inputPath: string;
       port?: number;
       refreshDependencies?: boolean;
       json: boolean;
+    }
+  | {
+      command: "run-session";
+      packageDirectoryPath: string;
+      sessionDirectoryPath: string;
+      resume: boolean;
+      json: false;
     }
   | {
       command: "capture";
@@ -219,7 +286,60 @@ export type WorldkitArgs =
       (
         | { entityId: string; constraintId?: never }
         | { constraintId: string; entityId?: never }
-      ));
+      ))
+  | {
+      command: "schema-project";
+      inputPath: string;
+      profileRef: string;
+      outputPath: string;
+      json: boolean;
+    }
+  | {
+      command: "registry-search";
+      lockPath: string;
+      resourceKind: RegistryResourceKindV1;
+      semanticTags: readonly string[];
+      afterResourceRef?: string;
+      limit?: number;
+      json: boolean;
+    }
+  | { command: "change-validate"; inputPath: string; json: boolean }
+  | {
+      command: "change-dry-run";
+      inputPath: string;
+      changeSetPath: string;
+      outputPath: string;
+      json: boolean;
+    }
+  | { command: "change-diff"; inputPath: string; json: boolean }
+  | {
+      command: "change-explain";
+      inputPath: string;
+      operationId?: string;
+      diagnosticCode?: string;
+      json: boolean;
+    }
+  | {
+      command: "change-apply";
+      inputPath: string;
+      changeSetPath: string;
+      outputPath: string;
+      receiptPath: string;
+      write: true;
+      json: boolean;
+    }
+  | {
+      command: "change-receipt";
+      requestId: string;
+      connectionProfilePath?: string;
+      json: boolean;
+    }
+  | {
+      command: "change-cleanup";
+      cleanupOperationId: string;
+      connectionProfilePath?: string;
+      json: boolean;
+    };
 
 export interface WorldkitCommandResult {
   ok: boolean;
@@ -278,6 +398,25 @@ function takeOption(tokens: string[], option: string): string | undefined {
   }
   tokens.splice(index, 2);
   return value;
+}
+
+function takeAllOptions(tokens: string[], option: string): string[] {
+  const values: string[] = [];
+  let index = tokens.indexOf(option);
+  while (index !== -1) {
+    const value = tokens[index + 1];
+    if (value === undefined || value.startsWith("--")) {
+      throw new WorldkitUsageError(`${option} requires a value.`);
+    }
+    values.push(value);
+    tokens.splice(index, 2);
+    index = tokens.indexOf(option);
+  }
+  return values;
+}
+
+function isRegistryResourceKind(value: string): value is RegistryResourceKindV1 {
+  return (REGISTRY_RESOURCE_KINDS_V1 as readonly string[]).includes(value);
 }
 
 function takeRequiredPositional(tokens: string[], label: string): string {
@@ -524,6 +663,35 @@ export function parseWorldkitArgs(arguments_: readonly string[]): WorldkitArgs {
       rejectRemaining(tokens, "registry describe");
       return { command: "registry-describe", resourceRef, json };
     }
+    if (operation === "search") {
+      const lockPath = takeOption(tokens, "--lock");
+      const resourceKind = takeOption(tokens, "--kind");
+      const semanticTags = takeAllOptions(tokens, "--tag");
+      const afterResourceRef = takeOption(tokens, "--after-resource-ref");
+      const limitValue = takeOption(tokens, "--limit");
+      if (lockPath === undefined) {
+        throw new WorldkitUsageError(
+          "registry search requires --lock <registry-lock.json>.",
+        );
+      }
+      if (resourceKind === undefined || !isRegistryResourceKind(resourceKind)) {
+        throw new WorldkitUsageError(
+          "registry search requires --kind <resource-kind>.",
+        );
+      }
+      rejectRemaining(tokens, "registry search");
+      return {
+        command: "registry-search",
+        lockPath,
+        resourceKind,
+        semanticTags,
+        ...(afterResourceRef === undefined ? {} : { afterResourceRef }),
+        ...(limitValue === undefined
+          ? {}
+          : { limit: parsePositiveIntegerOption(limitValue, "--limit") }),
+        json,
+      };
+    }
     throw new WorldkitUsageError(`Unknown registry operation '${operation}'.`);
   }
 
@@ -599,6 +767,153 @@ export function parseWorldkitArgs(arguments_: readonly string[]): WorldkitArgs {
     throw new WorldkitUsageError(`Unknown layout operation '${operation}'.`);
   }
 
+  if (command === "schema") {
+    const operation = takeRequiredPositional(tokens, "schema operation");
+    if (operation !== "project") {
+      throw new WorldkitUsageError(`Unknown schema operation '${operation}'.`);
+    }
+    const inputPath = takeRequiredPositional(tokens, "world.json");
+    const profileRef = takeOption(tokens, "--profile");
+    const outputPath = takeOption(tokens, "--output");
+    if (profileRef === undefined) {
+      throw new WorldkitUsageError(
+        "schema project requires --profile <resource-ref>.",
+      );
+    }
+    if (outputPath === undefined) {
+      throw new WorldkitUsageError(
+        "schema project requires --output <projection.json>.",
+      );
+    }
+    rejectRemaining(tokens, "schema project");
+    return { command: "schema-project", inputPath, profileRef, outputPath, json };
+  }
+
+  if (command === "change") {
+    const operation = takeRequiredPositional(tokens, "change operation");
+    if (operation === "validate") {
+      const inputPath = takeRequiredPositional(tokens, "change-set.json");
+      rejectRemaining(tokens, "change validate");
+      return { command: "change-validate", inputPath, json };
+    }
+    if (operation === "dry-run") {
+      const inputPath = takeRequiredPositional(tokens, "world.json");
+      const changeSetPath = takeOption(tokens, "--change-set");
+      const outputPath = takeOption(tokens, "--output");
+      if (changeSetPath === undefined) {
+        throw new WorldkitUsageError(
+          "change dry-run requires --change-set <change-set.json>.",
+        );
+      }
+      if (outputPath === undefined) {
+        throw new WorldkitUsageError(
+          "change dry-run requires --output <candidate-directory>.",
+        );
+      }
+      rejectRemaining(tokens, "change dry-run");
+      return {
+        command: "change-dry-run",
+        inputPath,
+        changeSetPath,
+        outputPath,
+        json,
+      };
+    }
+    if (operation === "diff") {
+      const inputPath = takeRequiredPositional(tokens, "world-change-receipt.json");
+      rejectRemaining(tokens, "change diff");
+      return { command: "change-diff", inputPath, json };
+    }
+    if (operation === "explain") {
+      const inputPath = takeRequiredPositional(tokens, "world-change-receipt.json");
+      const operationId = takeOption(tokens, "--operation-id");
+      const diagnosticCode = takeOption(tokens, "--diagnostic-code");
+      if (operationId !== undefined && diagnosticCode !== undefined) {
+        throw new WorldkitUsageError(
+          "change explain accepts only one of --operation-id or --diagnostic-code.",
+        );
+      }
+      rejectRemaining(tokens, "change explain");
+      return {
+        command: "change-explain",
+        inputPath,
+        ...(operationId === undefined ? {} : { operationId }),
+        ...(diagnosticCode === undefined ? {} : { diagnosticCode }),
+        json,
+      };
+    }
+    if (operation === "apply") {
+      const inputPath = takeRequiredPositional(tokens, "world.json");
+      const changeSetPath = takeOption(tokens, "--change-set");
+      const outputPath = takeOption(tokens, "--output");
+      const receiptPath = takeOption(tokens, "--receipt");
+      const write = takeFlag(tokens, "--write");
+      if (changeSetPath === undefined) {
+        throw new WorldkitUsageError(
+          "change apply requires --change-set <change-set.json>.",
+        );
+      }
+      if (outputPath === undefined) {
+        throw new WorldkitUsageError(
+          "change apply requires --output <new-world.json>.",
+        );
+      }
+      if (receiptPath === undefined) {
+        throw new WorldkitUsageError(
+          "change apply requires --receipt <world-change-receipt.json>.",
+        );
+      }
+      if (!write) {
+        throw new WorldkitUsageError(
+          "change apply requires explicit --write.",
+        );
+      }
+      rejectRemaining(tokens, "change apply");
+      return {
+        command: "change-apply",
+        inputPath,
+        changeSetPath,
+        outputPath,
+        receiptPath,
+        write: true,
+        json,
+      };
+    }
+    if (operation === "receipt") {
+      const requestId = takeOption(tokens, "--request-id");
+      const connectionProfilePath = takeOption(tokens, "--connection-profile");
+      if (requestId === undefined) {
+        throw new WorldkitUsageError(
+          "change receipt requires --request-id <id>.",
+        );
+      }
+      rejectRemaining(tokens, "change receipt");
+      return {
+        command: "change-receipt",
+        requestId,
+        ...(connectionProfilePath === undefined ? {} : { connectionProfilePath }),
+        json,
+      };
+    }
+    if (operation === "cleanup") {
+      const cleanupOperationId = takeOption(tokens, "--cleanup-operation-id");
+      const connectionProfilePath = takeOption(tokens, "--connection-profile");
+      if (cleanupOperationId === undefined) {
+        throw new WorldkitUsageError(
+          "change cleanup requires --cleanup-operation-id <id>.",
+        );
+      }
+      rejectRemaining(tokens, "change cleanup");
+      return {
+        command: "change-cleanup",
+        cleanupOperationId,
+        ...(connectionProfilePath === undefined ? {} : { connectionProfilePath }),
+        json,
+      };
+    }
+    throw new WorldkitUsageError(`Unknown change operation '${operation}'.`);
+  }
+
   const inputPath = takeRequiredPositional(tokens, `${command ?? "command"} input file`);
   if (command === "validate") {
     rejectRemaining(tokens, "validate");
@@ -607,17 +922,65 @@ export function parseWorldkitArgs(arguments_: readonly string[]): WorldkitArgs {
   if (command === "build") {
     const outputPath = takeOption(tokens, "--output");
     if (outputPath === undefined) {
-      throw new WorldkitUsageError("build requires --output <file>.");
+      throw new WorldkitUsageError("build requires --output <package-directory>.");
     }
     rejectRemaining(tokens, "build");
     return { command, inputPath, outputPath, json };
   }
+  if (command === "inspect") {
+    rejectRemaining(tokens, "inspect");
+    return { command, packageDirectoryPath: inputPath, json };
+  }
+  if (command === "load") {
+    const headless = takeFlag(tokens, "--headless");
+    if (!headless) {
+      throw new WorldkitUsageError("load requires --headless.");
+    }
+    rejectRemaining(tokens, "load");
+    return { command, packageDirectoryPath: inputPath, headless: true, json };
+  }
   if (command === "run") {
     const portValue = takeOption(tokens, "--port");
     const refreshDependencies = takeFlag(tokens, "--refresh-dependencies");
+    const interactive = takeFlag(tokens, "--interactive");
+    const protocol = takeOption(tokens, "--protocol");
+    const headless = takeFlag(tokens, "--headless");
+    const sessionDirectoryPath = takeOption(tokens, "--session-directory");
+    const resume = takeFlag(tokens, "--resume");
     rejectRemaining(tokens, "run");
+    const requestsRuntimeSession = interactive || !isNil(protocol) || headless ||
+      !isNil(sessionDirectoryPath) || resume;
+    if (requestsRuntimeSession) {
+      if (
+        !interactive ||
+        protocol !== "ndjson" ||
+        !headless ||
+        isNil(sessionDirectoryPath)
+      ) {
+        throw new WorldkitUsageError(
+          "run --interactive requires --protocol ndjson --headless and --session-directory <absolute-directory>.",
+        );
+      }
+      if (!path.isAbsolute(sessionDirectoryPath)) {
+        throw new WorldkitUsageError(
+          "--session-directory must be an absolute directory.",
+        );
+      }
+      if (!isNil(portValue) || refreshDependencies || json) {
+        throw new WorldkitUsageError(
+          "Interactive NDJSON Runtime Sessions do not accept Browser flags or --json.",
+        );
+      }
+      return {
+        command: "run-session",
+        packageDirectoryPath: inputPath,
+        sessionDirectoryPath,
+        resume,
+        json: false,
+      };
+    }
     return {
-      command,
+      command: "run-browser",
       inputPath,
       ...(portValue === undefined ? {} : { port: parsePort(portValue) }),
       ...(refreshDependencies ? { refreshDependencies: true } : {}),
@@ -839,48 +1202,71 @@ async function writeAtomic(
   }
 }
 
+function packageCommandFailure(
+  command: "build" | "inspect" | "load",
+  exitCode: 1 | 2 | 3 | 4 | 5 | 6,
+  code: string,
+  message: string,
+): WorldPackageCommandResultV1 {
+  return Object.freeze({
+    kind: "worldkit-package-command-result",
+    schemaVersion: 1,
+    protocolVersion: WORLDKIT_CLI_PROTOCOL_VERSION_V1,
+    sdkVersion: WORLDKIT_SDK_VERSION_V1,
+    specVersion: WORLDKIT_SPEC_VERSION_V1,
+    command,
+    ok: false,
+    exitCode,
+    diagnostics: Object.freeze([Object.freeze({
+      severity: "error" as const,
+      code,
+      instancePath: "",
+      message,
+    })]),
+  });
+}
+
+async function withBabylonProtocolSilence<T>(
+  operation: () => Promise<T>,
+): Promise<T> {
+  const previousLog = Logger.Log;
+  const previousWarn = Logger.Warn;
+  const previousError = Logger.Error;
+  Logger.LogLevels = Logger.NoneLogLevel;
+  try {
+    return await operation();
+  } finally {
+    Logger.Log = previousLog;
+    Logger.Warn = previousWarn;
+    Logger.Error = previousError;
+  }
+}
+
 export async function buildFile(
   inputPath: string,
   outputPath: string,
-): Promise<WorldkitCommandResult> {
-  const absoluteInputPath = path.resolve(inputPath);
-  const absoluteOutputPath = path.resolve(outputPath);
-  if (absoluteInputPath === absoluteOutputPath) {
-    return cliFailure(
-      "CLI_OUTPUT_OVERWRITES_INPUT",
-      "Build output must not overwrite the AuthoringSpec input.",
-    );
-  }
-  const pipeline = await loadWorldkitRoutePipeline(absoluteInputPath);
-  if (!pipeline.ok) return pipeline;
-  const artifact = {
-    kind: "worldkit-build-artifact",
-    schemaVersion: 4,
-    normalizedWorldIrHash: pipeline.normalizedWorldIrHash,
-    executionPlanHash: pipeline.executionPlanHash,
-    normalizedWorldIr: pipeline.normalizedWorldIr,
-    executionPlan: pipeline.executionPlan,
-  } as const;
+): Promise<WorldPackageCommandResultV1> {
+  const requestedOutputPath = path.resolve(outputPath);
+  const requestedParentPath = path.dirname(requestedOutputPath);
+  let canonicalParentPath: string;
   try {
-    await writeAtomic(
-      absoluteOutputPath,
-      `${stringifyCanonicalJson(artifact)}\n`,
-    );
-  } catch (error) {
-    return cliFailure(
-      "CLI_OUTPUT_WRITE_FAILED",
-      `Unable to write build artifact '${absoluteOutputPath}'.`,
-      { cause: error instanceof Error ? error.message : String(error) },
+    await mkdir(requestedParentPath, { recursive: true });
+    canonicalParentPath = await realpath(requestedParentPath);
+  } catch {
+    return packageCommandFailure(
+      "build",
+      1,
+      "WORLD_PACKAGE_OUTPUT_UNAVAILABLE",
+      "The WorldPackage output parent directory is unavailable.",
     );
   }
-  return {
-    ok: true,
-    exitCode: 0,
-    diagnostics: [],
-    normalizedWorldIrHash: pipeline.normalizedWorldIrHash,
-    executionPlanHash: pipeline.executionPlanHash,
-    outputPath: absoluteOutputPath,
-  };
+  return buildWorldPackageDirectoryV2({
+    inputPath: path.resolve(inputPath),
+    outputDirectoryPath: path.join(
+      canonicalParentPath,
+      path.basename(requestedOutputPath),
+    ),
+  });
 }
 
 export async function captureVisibleWorldWithRetries<
@@ -1393,6 +1779,7 @@ type PrintableResult = {
   validationReportHash?: string;
   validationStatus?: string;
   outputPath?: string;
+  receiptPath?: string;
   evidenceDirectory?: string;
   snapshotPath?: string;
   triviewOutputPath?: string;
@@ -1405,12 +1792,21 @@ type PrintableResult = {
   planHash?: string;
   writtenLogicalPaths?: readonly string[];
   humanReadableText?: string;
+  requestId?: string;
+  receipt?: AuthoringEditCliResultV1["receipt"];
+  projection?: AuthoringEditCliResultV1["projection"];
+  searchReceipt?: AuthoringEditCliResultV1["searchReceipt"];
+  explain?: AuthoringEditCliResultV1["explain"];
+  diff?: AuthoringEditCliResultV1["diff"];
+  cleanupReport?: AuthoringEditCliResultV1["cleanupReport"];
 };
 
 function printResult(result: PrintableResult, json: boolean): void {
   if (json) {
     const { humanReadableText: _humanReadableText, ...machineResult } = result;
-    process.stdout.write(`${stringifyCanonicalJson(machineResult)}\n`);
+    process.stdout.write(
+      `${stringifyCanonicalJson(redactAuthoringEditJsonV1(machineResult))}\n`,
+    );
     return;
   }
   if (result.ok) {
@@ -1425,6 +1821,8 @@ function printResult(result: PrintableResult, json: boolean): void {
     }
     const details = [
       result.outputPath,
+      result.receiptPath,
+      result.requestId,
       result.evidenceDirectory,
       result.validationReportHash,
       result.snapshotPath,
@@ -1450,6 +1848,18 @@ async function runUntilSignal(
   refreshDependencies: boolean,
   json: boolean,
 ): Promise<number> {
+  try {
+    if ((await stat(path.resolve(inputPath))).isDirectory()) {
+      const result = cliFailure(
+        "CLI_RUN_INPUT_KIND_MISMATCH",
+        "A WorldPackage directory requires run --interactive --protocol ndjson --headless.",
+      );
+      printResult(result, json);
+      return result.exitCode;
+    }
+  } catch {
+    // The shared input reader below owns the stable unavailable-input result.
+  }
   const input = await readWorldkitInput(inputPath);
   if (!input.ok) {
     printResult(input, json);
@@ -1547,6 +1957,148 @@ async function runUntilSignal(
   return 0;
 }
 
+export async function inspectPackageDirectory(
+  packageDirectoryPath: string,
+): Promise<WorldPackageCommandResultV1> {
+  let canonicalPackageDirectoryPath: string;
+  try {
+    canonicalPackageDirectoryPath = await realpath(
+      path.resolve(packageDirectoryPath),
+    );
+  } catch {
+    return packageCommandFailure(
+      "inspect",
+      2,
+      "WORLD_PACKAGE_INPUT_INVALID",
+      "The WorldPackage directory is unavailable.",
+    );
+  }
+  return inspectWorldPackageDirectoryV2({
+    packageDirectoryPath: canonicalPackageDirectoryPath,
+  });
+}
+
+export async function loadPackageHeadless(
+  packageDirectoryPath: string,
+): Promise<WorldPackageCommandResultV1> {
+  let canonicalPackageDirectoryPath: string;
+  try {
+    canonicalPackageDirectoryPath = await realpath(
+      path.resolve(packageDirectoryPath),
+    );
+  } catch {
+    return packageCommandFailure(
+      "load",
+      2,
+      "WORLD_PACKAGE_INPUT_INVALID",
+      "The WorldPackage directory is unavailable.",
+    );
+  }
+  const loaded = await loadRuntimeWorldConfigurationFromPackageDirectoryV1({
+    packageDirectoryPath: canonicalPackageDirectoryPath,
+  });
+  if (!("runtimeWorldConfiguration" in loaded)) return loaded.result;
+  try {
+    await withBabylonProtocolSilence(async () => {
+      const session = await createHeadlessRuntimeSessionV1({
+        runtimeSessionId: `runtime-session.load.${randomUUID()}`,
+        initialWorldSessionId: `world-session.load.${randomUUID()}`,
+        runtimeWorldConfiguration: loaded.runtimeWorldConfiguration,
+        verifiedDirectory: loaded.verifiedDirectory,
+      });
+      await session.dispose();
+    });
+    return loaded.result;
+  } catch {
+    return packageCommandFailure(
+      "load",
+      5,
+      "WORLD_PACKAGE_RUNTIME_READY_FAILED",
+      "The admitted WorldPackage did not reach and cleanly leave World Ready.",
+    );
+  }
+}
+
+function processTerminationSignal(): Readonly<{
+  promise: Promise<"SIGINT" | "SIGTERM">;
+  cleanup(): void;
+}> {
+  let resolveSignal!: (signal: "SIGINT" | "SIGTERM") => void;
+  const promise = new Promise<"SIGINT" | "SIGTERM">((resolve) => {
+    resolveSignal = resolve;
+  });
+  const onSigint = (): void => resolveSignal("SIGINT");
+  const onSigterm = (): void => resolveSignal("SIGTERM");
+  process.once("SIGINT", onSigint);
+  process.once("SIGTERM", onSigterm);
+  return Object.freeze({
+    promise,
+    cleanup: () => {
+      process.off("SIGINT", onSigint);
+      process.off("SIGTERM", onSigterm);
+    },
+  });
+}
+
+async function runRuntimeSession(
+  packageDirectoryPath: string,
+  sessionDirectoryPath: string,
+  resume: boolean,
+): Promise<number> {
+  const walFilePath = path.join(
+    sessionDirectoryPath,
+    "runtime-session.wal.ndjson",
+  );
+  if (resume) {
+    try {
+      if (!(await stat(walFilePath)).isFile()) {
+        throw new Error("not a file");
+      }
+    } catch {
+      process.stderr.write(
+        "--resume requires an existing Runtime Session WAL in --session-directory.\n",
+      );
+      return 2;
+    }
+  }
+
+  try {
+    return await withBabylonProtocolSilence(async () => {
+      const canonicalPackageDirectoryPath = await realpath(
+        path.resolve(packageDirectoryPath),
+      );
+      const executor = resume
+        ? await resumeRuntimeSessionExecutorV1({
+            packageDirectoryPath: canonicalPackageDirectoryPath,
+            walFilePath,
+          })
+        : await createRuntimeSessionExecutorV1({
+            packageDirectoryPath: canonicalPackageDirectoryPath,
+            walFilePath,
+            runtimeSessionId: `runtime-session.${randomUUID()}`,
+            initialWorldSessionId: `world-session.${randomUUID()}`,
+          });
+      const signal = processTerminationSignal();
+      try {
+        const result = await runRuntimeSessionNdjsonV1({
+          executor,
+          input: process.stdin,
+          output: process.stdout,
+          terminationSignal: signal.promise,
+        });
+        return result.exitCode;
+      } finally {
+        signal.cleanup();
+      }
+    });
+  } catch {
+    process.stderr.write(
+      "Runtime Session creation or recovery failed before the ready Event.\n",
+    );
+    return 1;
+  }
+}
+
 export async function main(
   arguments_: readonly string[] = process.argv.slice(2),
 ): Promise<number> {
@@ -1563,13 +2115,30 @@ export async function main(
     process.stdout.write(HELP);
     return 0;
   }
-  if (parsed.command === "run") {
+  if (parsed.command === "run-browser") {
     return runUntilSignal(
       parsed.inputPath,
       parsed.port,
       parsed.refreshDependencies === true,
       parsed.json,
     );
+  }
+  if (parsed.command === "run-session") {
+    return runRuntimeSession(
+      parsed.packageDirectoryPath,
+      parsed.sessionDirectoryPath,
+      parsed.resume,
+    );
+  }
+  if (parsed.command === "inspect") {
+    const result = await inspectPackageDirectory(parsed.packageDirectoryPath);
+    printResult(result, parsed.json);
+    return result.exitCode;
+  }
+  if (parsed.command === "load") {
+    const result = await loadPackageHeadless(parsed.packageDirectoryPath);
+    printResult(result, parsed.json);
+    return result.exitCode;
   }
   if (parsed.command === "take-validate") {
     const result = await validateSimulationTakeFileV1(parsed.inputPath);
@@ -1646,6 +2215,88 @@ export async function main(
       parsed.inputPath,
       parsed.gateId,
     );
+    printResult(result, parsed.json);
+    return result.exitCode;
+  }
+  if (parsed.command === "schema-project") {
+    const result = await runSchemaProjectV1({
+      worldJsonPath: parsed.inputPath,
+      profileRef: parsed.profileRef,
+      outputPath: parsed.outputPath,
+    });
+    printResult(result, parsed.json);
+    return result.exitCode;
+  }
+  if (parsed.command === "registry-search") {
+    const result = await runRegistrySearchV1({
+      lockPath: parsed.lockPath,
+      resourceKind: parsed.resourceKind,
+      semanticTags: parsed.semanticTags,
+      ...(parsed.afterResourceRef === undefined
+        ? {}
+        : { afterResourceRef: parsed.afterResourceRef }),
+      ...(parsed.limit === undefined ? {} : { limit: parsed.limit }),
+    });
+    printResult(result, parsed.json);
+    return result.exitCode;
+  }
+  if (parsed.command === "change-validate") {
+    const result = await runChangeValidateV1({ changeSetPath: parsed.inputPath });
+    printResult(result, parsed.json);
+    return result.exitCode;
+  }
+  if (parsed.command === "change-dry-run") {
+    const result = await runChangeDryRunV1({
+      worldJsonPath: parsed.inputPath,
+      changeSetPath: parsed.changeSetPath,
+      outputPath: parsed.outputPath,
+    });
+    printResult(result, parsed.json);
+    return result.exitCode;
+  }
+  if (parsed.command === "change-diff") {
+    const result = await runChangeDiffV1({ receiptPath: parsed.inputPath });
+    printResult(result, parsed.json);
+    return result.exitCode;
+  }
+  if (parsed.command === "change-explain") {
+    const result = await runChangeExplainV1({
+      receiptPath: parsed.inputPath,
+      ...(parsed.operationId === undefined ? {} : { operationId: parsed.operationId }),
+      ...(parsed.diagnosticCode === undefined
+        ? {}
+        : { diagnosticCode: parsed.diagnosticCode }),
+    });
+    printResult(result, parsed.json);
+    return result.exitCode;
+  }
+  if (parsed.command === "change-apply") {
+    const result = await runChangeApplyV1({
+      worldJsonPath: parsed.inputPath,
+      changeSetPath: parsed.changeSetPath,
+      outputPath: parsed.outputPath,
+      receiptPath: parsed.receiptPath,
+    });
+    printResult(result, parsed.json);
+    return result.exitCode;
+  }
+  if (parsed.command === "change-receipt") {
+    const result = await runChangeReceiptV1({
+      requestId: parsed.requestId,
+      ...(parsed.connectionProfilePath === undefined
+        ? {}
+        : { connectionProfilePath: parsed.connectionProfilePath }),
+    });
+    printResult(result, parsed.json);
+    return result.exitCode;
+  }
+  if (parsed.command === "change-cleanup") {
+    const result = await runChangeCleanupV1({
+      cleanupOperationId: parsed.cleanupOperationId,
+      ...(parsed.connectionProfilePath === undefined
+        ? {}
+        : { connectionProfilePath: parsed.connectionProfilePath }),
+    });
     printResult(result, parsed.json);
     return result.exitCode;
   }

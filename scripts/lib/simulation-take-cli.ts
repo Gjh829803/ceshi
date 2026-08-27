@@ -23,7 +23,11 @@ import type {
   RuntimeControlCaptureFrameV1,
   WorldRuntimeSnapshotV4,
 } from "@whitebox-world/runtime-contracts";
-import { createWorldPackageBuildReceiptV1 } from "@whitebox-world/world-package";
+import {
+  createWorldPackageV2,
+  verifyWorldPackageDirectoryV2,
+  worldPackageRefFromRootHashV1,
+} from "@whitebox-world/world-package";
 import type { Browser, Page } from "playwright";
 
 import {
@@ -46,8 +50,9 @@ import {
   type WorldkitRoutePipelineSuccess,
 } from "./worldkit-pipeline";
 import {
-  resolveWorldPackageResourceArtifactsV1,
-} from "./world-package-resource-resolver";
+  createTrustedWorldPackageBuildContextV2,
+  resolveTrustedWorldPackageResourceArtifactsV2,
+} from "./trusted-world-package-v2";
 import { startWorldkitServer, type WorldkitServerHandle } from "./worldkit-server";
 
 interface SimulationTakeWorldPackageIdentityV1 {
@@ -107,11 +112,15 @@ export async function createSimulationTakeWorldPackageIdentityV1(
   pipeline: WorldkitRoutePipelineSuccess,
 ): Promise<SimulationTakeWorldPackageIdentityV1> {
   const packageId = `${pipeline.authoringSpec.id}.${pipeline.authoringSpec.seed}`;
-  const resourceArtifacts = await resolveWorldPackageResourceArtifactsV1(
+  const resourceArtifacts = await resolveTrustedWorldPackageResourceArtifactsV2(
     pipeline.normalizedWorldIr,
   );
-  const buildReceipt = createWorldPackageBuildReceiptV1({
+  const directory = createWorldPackageV2({
     packageId,
+    ...createTrustedWorldPackageBuildContextV2({
+      title: `${pipeline.authoringSpec.id} simulation take package`,
+      resourceArtifacts,
+    }),
     authoringSpec: pipeline.authoringSpec,
     normalizedWorldIr: pipeline.normalizedWorldIr,
     layoutSolveResult: {
@@ -123,11 +132,14 @@ export async function createSimulationTakeWorldPackageIdentityV1(
     gameplayBootstrap: pipeline.gameplayBootstrap,
     resourceArtifacts,
   });
+  const verified = verifyWorldPackageDirectoryV2(directory);
   return {
-    worldPackageRef: `worldkit://world-package/${packageId}@1`,
-    worldPackageRootHash: buildReceipt.worldPackageRootHash,
-    normalizedWorldIrHash: buildReceipt.manifest.normalizedWorldIrHash,
-    executionPlanHash: buildReceipt.manifest.executionPlanHash,
+    worldPackageRef: worldPackageRefFromRootHashV1(
+      verified.receipt.worldPackageRootHash,
+    ),
+    worldPackageRootHash: verified.receipt.worldPackageRootHash,
+    normalizedWorldIrHash: verified.receipt.manifest.normalizedWorldIrHash,
+    executionPlanHash: verified.receipt.manifest.executionPlanHash,
   };
 }
 

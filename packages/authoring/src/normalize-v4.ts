@@ -6,7 +6,7 @@ import {
 import { resolveTraversalSurfaceProfileV1 } from "@whitebox-world/traversal";
 
 import { sha256CanonicalJson } from "./canonical-json.js";
-import { canonicalAuthoringIdentityV4 } from "./canonical-authoring-identity-v4.js";
+import { hashAuthoringDocumentV4 } from "./canonical-authoring-identity-v4.js";
 import { resolveAuthoringLayoutV4 } from "./layout-input.js";
 import { normalizeAuthoringBaseV4 } from "./normalize.js";
 import { ResourceLockBuilderV1 } from "./resource-lock.js";
@@ -287,9 +287,7 @@ export function normalizeAuthoringSpecV4(
     ...canonicalBase,
     kind: "worldkit-normalized-world",
     schemaVersion: 4,
-    authoringSpecHash: sha256CanonicalJson(
-      canonicalAuthoringIdentityV4(spec, canonicalBase),
-    ) as `sha256:${string}`,
+    authoringSpecHash: hashAuthoringDocumentV4(spec),
     nodes: normalizedNodesV4(
       spec,
       normalizedBase.nodes,

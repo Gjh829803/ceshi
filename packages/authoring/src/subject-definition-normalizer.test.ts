@@ -478,13 +478,13 @@ describe("Package Subject Definition normalization", () => {
 
     expect(result.ok).toBe(true);
     expect(packageDefinitionHash(result)).toBe(
-      "sha256:9c441f90c004b56755c0d5a88ad21d70e0df6e635e198441612c016cd777e3a6",
+      "sha256:585638b6b3aec312af0fbdfab3d05ac9d9c8ab3e97b91f4382cb8e0307775b76",
     );
     expect(result.value?.resources.resourceLockHash).toBe(
-      "sha256:76a46a6021ba1af424fec8f9d2ad58e74e6abfd74f6fccb65ca9ab43a5c8f600",
+      "sha256:a61ac85453c3bded88a6951f514589c2caf402ca15c33cdbc9edb2ba6e36011d",
     );
     expect(result.normalizedWorldIrHash).toBe(
-      "sha256:54007ef65ba8324c1abdad76a1568c2181841515d0527e95f30d9e021f61be32",
+      "sha256:9f2d3466f5a97c9f2b9e16cdb4866777e6d09553cbb327066784767ede0cc51e",
     );
   });
 
@@ -1235,7 +1235,7 @@ describe("Package Subject Definition normalization", () => {
     });
   });
 
-  it("makes Definition and world hashes insensitive to order-only changes", () => {
+  it("keeps Definition hashes order-insensitive while Authoring document hash follows collection order", () => {
     const first = normalizeAuthoringSpecV4(createValidPackageSubjectWorld());
     const reordered = normalizeAuthoringSpecV4(
       createValidPackageSubjectWorld({ reverseDefinitionCollections: true }),
@@ -1244,7 +1244,8 @@ describe("Package Subject Definition normalization", () => {
     expect(first.ok).toBe(true);
     expect(reordered.ok).toBe(true);
     expect(packageDefinitionHash(reordered)).toBe(packageDefinitionHash(first));
-    expect(reordered.normalizedWorldIrHash).toBe(first.normalizedWorldIrHash);
+    expect(reordered.value?.authoringSpecHash).not.toBe(first.value?.authoringSpecHash);
+    expect(reordered.normalizedWorldIrHash).not.toBe(first.normalizedWorldIrHash);
   });
 
   it("changes Definition Hash for semantic geometry changes", () => {

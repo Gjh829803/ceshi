@@ -34,6 +34,7 @@ const EXPECTED_SUBJECT_RESOURCE_KINDS = [
   "harness-profile",
   "pose-set-profile",
   "render-binding-profile",
+  "ai-schema-projection-profile",
 ] as const;
 
 const EXPECTED_GROUND_HUMANOID_ACTION_IDS = [

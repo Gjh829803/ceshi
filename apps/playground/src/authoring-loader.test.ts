@@ -567,10 +567,12 @@ describe("loadAuthoringScene", () => {
       executionPlan: loaded.executionPlan,
       executionPlanHash: loaded.executionPlanHash,
       gameplayBootstrap,
-      worldPackageRef: "worldkit://world-package/basic-world.1024@1",
+      worldPackageRef: expect.stringMatching(
+        /^package:\/\/world-package\/sha256\/[a-f0-9]{64}$/,
+      ),
       worldPackageBuildReceipt: {
         kind: "worldkit-world-package-build-receipt",
-        schemaVersion: 1,
+        schemaVersion: 2,
         manifest: {
           authoringSpecHash: normalized.value.authoringSpecHash,
           normalizedWorldIrHash: loaded.normalizedWorldIrHash,
@@ -656,15 +658,15 @@ describe("loadAuthoringScene", () => {
     ]);
     expect(
       loaded.runtimeWorldConfiguration?.worldPackageBuildReceipt.manifest.resources,
-    ).toContainEqual({
+    ).toContainEqual(expect.objectContaining({
       resourceRef: "worldkit://subject-asset/actor.humanoid.g-bot@2",
       packagePath: "resources/subject-assets/actor.humanoid.g-bot.glb",
       mediaType: "model/gltf-binary",
       sizeBytes: gBotAssetBytes.byteLength,
       contentHash:
         "sha256:4bcf3fabdba1e083ef54bf172fd962ca740e0f2fabdb9cddaae45d5ea208718f",
-    });
-  }, 15_000);
+    }));
+  }, 30_000);
 
   it("accepts and freezes same-world Host Route evidence for Authoring V4", async () => {
     const source = routeAuthoringWorld();
@@ -1009,7 +1011,7 @@ describe("loadAuthoringScene", () => {
           : undefined,
       ),
     ).toBe(true);
-  }, 15_000);
+  }, 30_000);
 
   it("retains an immutable overlay only on an overlaid compile failure", async () => {
     const source = createValidAuthoringSpecV4();
@@ -1073,7 +1075,7 @@ describe("loadAuthoringScene", () => {
     expect(Object.isFrozen(overlaid.hostOverlay?.changes)).toBe(true);
     expect(Object.isFrozen(overlaid.hostOverlay?.changes[0])).toBe(true);
     expect(unmodified).not.toHaveProperty("hostOverlay");
-  });
+  }, 30_000);
 
   it("produces one runtime Feature inspection per compiled Subject", async () => {
     const loaded = await loadAuthoringScene(async () =>

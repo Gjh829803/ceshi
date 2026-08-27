@@ -34,10 +34,10 @@ import {
   type GameplayModeV1,
   type GameplayTransitionPlanV1,
 } from "@whitebox-world/gameplay";
-import type {
-  ControlInputAxesV2,
-  FixedInputV1,
-  SemanticInputActionV1,
+import {
+  parseFixedInputV1,
+  type FixedInputV1,
+  type SemanticInputActionV1,
 } from "@whitebox-world/runtime-contracts";
 import { isEqual, isNil } from "lodash-es";
 
@@ -88,24 +88,6 @@ interface ParsedWorldSessionCreateOptionsV1 extends WorldSessionCreateOptionsV1 
 }
 
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
-const MAXIMUM_FIXED_INPUT_TICK_COUNT = 36_000;
-const SEMANTIC_INPUT_ACTIONS = new Set<SemanticInputActionV1>([
-  "move-forward",
-  "move-backward",
-  "move-left",
-  "move-right",
-  "jump",
-  "run",
-  "boost",
-  "brake",
-  "handbrake",
-  "primary-action",
-  "secondary-action",
-  "aim",
-  "camera-recenter",
-  "camera-look-back",
-  "camera-shoulder-swap",
-]);
 const MOVEMENT_INPUT_ACTIONS = new Set<SemanticInputActionV1>([
   "move-forward",
   "move-backward",
@@ -198,69 +180,6 @@ function isSafeNonNegativeInteger(input: unknown): input is number {
     Number.isSafeInteger(input) &&
     input >= 0 &&
     !Object.is(input, -0);
-}
-
-function isFiniteNumberInRange(
-  input: unknown,
-  minimum: number,
-  maximum: number,
-): input is number {
-  return typeof input === "number" &&
-    Number.isFinite(input) &&
-    input >= minimum &&
-    input <= maximum;
-}
-
-function parseFixedInput(input: unknown): FixedInputV1 {
-  const record = snapshotDataRecord(input);
-  const hasAxes = !isNil(record) && hasExactKeys(record, [
-    "actions",
-    "axes",
-    "ticks",
-  ]);
-  if (
-    isNil(record) ||
-    (!hasExactKeys(record, ["actions", "ticks"]) && !hasAxes) ||
-    !isSafeNonNegativeInteger(record.ticks) ||
-    record.ticks > MAXIMUM_FIXED_INPUT_TICK_COUNT
-  ) return invalid("FixedInputV1");
-  const actionInputs = snapshotDataArray(record.actions);
-  if (
-    isNil(actionInputs) ||
-    actionInputs.some((action) =>
-      typeof action !== "string" ||
-      !SEMANTIC_INPUT_ACTIONS.has(action as SemanticInputActionV1)
-    )
-  ) return invalid("FixedInputV1");
-
-  let axes: Readonly<ControlInputAxesV2> | undefined;
-  if (hasAxes) {
-    const axesRecord = snapshotDataRecord(record.axes);
-    const keys = [
-      "moveXRatio",
-      "moveYRatio",
-      "throttleRatio",
-      "brakeRatio",
-    ] as const;
-    if (
-      isNil(axesRecord) ||
-      Reflect.ownKeys(axesRecord).some((key) =>
-        typeof key !== "string" || !keys.includes(key as typeof keys[number])
-      ) ||
-      [axesRecord.moveXRatio, axesRecord.moveYRatio].some((value) =>
-        !isNil(value) && !isFiniteNumberInRange(value, -1, 1)
-      ) ||
-      [axesRecord.throttleRatio, axesRecord.brakeRatio].some((value) =>
-        !isNil(value) && !isFiniteNumberInRange(value, 0, 1)
-      )
-    ) return invalid("FixedInputV1");
-    axes = Object.freeze({ ...axesRecord }) as Readonly<ControlInputAxesV2>;
-  }
-  return Object.freeze({
-    actions: Object.freeze([...actionInputs] as SemanticInputActionV1[]),
-    ...(!isNil(axes) ? { axes } : {}),
-    ticks: record.ticks,
-  });
 }
 
 function parseParticipants(input: unknown): readonly GameplayParticipantStateV1[] {
@@ -903,7 +822,7 @@ export class WorldSession {
   }
 
   runFixedInput(input: unknown): Promise<WorldSessionPublicationV1> {
-    const fixedInput = parseFixedInput(input);
+    const fixedInput = parseFixedInputV1(input);
     return this.enqueueMutation(() => this.runParsedFixedInput(fixedInput));
   }
 

@@ -174,6 +174,8 @@ describe("Canonical Builder skill", () => {
     expect(template).toContain("humanoid.g-bot@2");
     expect(controlledSubjects).toContain("one complete package-local Subject silhouette");
     expect(controlledSubjects).toContain("documented ground closure");
+    expect(controlledSubjects).toContain('"allowedOverridePaths": []');
+    expect(controlledSubjects).toContain("Every package-local Subject Definition must include `allowedOverridePaths`");
     expect(controlledSubjects).not.toContain("humanoid.board.surface-slide@1");
     expect(controlledSubjects).not.toContain("humanoid.wingsuit.unpowered-glide@1");
     expect(modularSubjects).toContain("humanoid.g-bot@2");

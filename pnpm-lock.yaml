@@ -25,6 +25,12 @@ importers:
       '@whitebox-world/authoring':
         specifier: workspace:*
         version: link:packages/authoring
+      '@whitebox-world/authoring-edit':
+        specifier: workspace:*
+        version: link:packages/authoring-edit
+      '@whitebox-world/authoring-host':
+        specifier: workspace:*
+        version: link:packages/authoring-host
       '@whitebox-world/compiler':
         specifier: workspace:*
         version: link:packages/compiler
@@ -46,6 +52,9 @@ importers:
       '@whitebox-world/runtime-contracts':
         specifier: workspace:*
         version: link:packages/runtime-contracts
+      '@whitebox-world/runtime-host':
+        specifier: workspace:*
+        version: link:packages/runtime-host
       '@whitebox-world/subject-contracts':
         specifier: workspace:*
         version: link:packages/subject-contracts
@@ -131,6 +140,12 @@ importers:
       '@whitebox-world/authoring':
         specifier: workspace:*
         version: link:../../packages/authoring
+      '@whitebox-world/authoring-edit':
+        specifier: workspace:*
+        version: link:../../packages/authoring-edit
+      '@whitebox-world/authoring-host':
+        specifier: workspace:*
+        version: link:../../packages/authoring-host
       '@whitebox-world/compiler':
         specifier: workspace:*
         version: link:../../packages/compiler
@@ -224,6 +239,48 @@ importers:
       jsonc-parser:
         specifier: ^3.3.1
         version: 3.3.1
+      lodash-es:
+        specifier: ^4.18.1
+        version: 4.18.1
+
+  packages/authoring-edit:
+    dependencies:
+      '@whitebox-world/authoring':
+        specifier: workspace:*
+        version: link:../authoring
+      '@whitebox-world/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      lodash-es:
+        specifier: ^4.18.1
+        version: 4.18.1
+
+  packages/authoring-host:
+    dependencies:
+      '@whitebox-world/authoring':
+        specifier: workspace:*
+        version: link:../authoring
+      '@whitebox-world/authoring-edit':
+        specifier: workspace:*
+        version: link:../authoring-edit
+      '@whitebox-world/compiler':
+        specifier: workspace:*
+        version: link:../compiler
+      '@whitebox-world/gameplay':
+        specifier: workspace:*
+        version: link:../gameplay
+      '@whitebox-world/gameplay-contracts':
+        specifier: workspace:*
+        version: link:../gameplay-contracts
+      '@whitebox-world/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      '@whitebox-world/runtime-contracts':
+        specifier: workspace:*
+        version: link:../runtime-contracts
+      '@whitebox-world/world-package':
+        specifier: workspace:*
+        version: link:../world-package
       lodash-es:
         specifier: ^4.18.1
         version: 4.18.1
@@ -580,6 +637,12 @@ importers:
       '@whitebox-world/runtime-contracts':
         specifier: workspace:*
         version: link:../runtime-contracts
+      '@whitebox-world/subject-registry':
+        specifier: workspace:*
+        version: link:../subject-registry
+      jsonc-parser:
+        specifier: ^3.3.1
+        version: 3.3.1
       lodash-es:
         specifier: ^4.18.1
         version: 4.18.1

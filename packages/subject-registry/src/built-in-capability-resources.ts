@@ -7,6 +7,7 @@ import motionKernels from "../../../assets/registry/motion-kernels/catalog.json"
 import motionProfiles from "../../../assets/registry/motion-profiles/catalog.json";
 import poseAndRenderCatalog from "../../../assets/registry/pose-and-render-profiles/catalog.json";
 import relationshipProfiles from "../../../assets/registry/relationship-profiles/catalog.json";
+import aiSchemaProjectionProfiles from "../../../assets/registry/ai-schema-projection-profiles/catalog.json";
 
 import type { CapabilityManifestInputV1 } from "./types-v2";
 import type { SubjectCapabilityResourceInputV1 } from "./types-v3";
@@ -140,6 +141,7 @@ export const BUILT_IN_CAPABILITY_RESOURCES = [
   ...harnessProfiles,
   ...poseAndRenderCatalog.poseSets,
   ...poseAndRenderCatalog.renderBindings,
+  ...aiSchemaProjectionProfiles,
 ] as unknown as readonly SubjectCapabilityResourceInputV1[];
 
 export const BUILT_IN_CAPABILITY_MANIFESTS = CAPABILITY_MANIFESTS;

@@ -8,6 +8,7 @@ function report(): LayoutSolveReportV1 {
     schemaVersion: 1,
     id: "report-test",
     authoringSpecHash: `sha256:${"a".repeat(64)}`,
+    layoutInputHash: `sha256:${"e".repeat(64)}`,
     registryLockHash: `sha256:${"b".repeat(64)}`,
     solverProfileRef: "worldkit://layout-solver-profile/outdoor.s1@1",
     resolvedVersion: "1",

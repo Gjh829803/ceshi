@@ -26,9 +26,11 @@ import {
 } from "@whitebox-world/runtime-contracts";
 import {
   assertWorldPackageAccessorFreeDataGraphV1,
-  assertWorldPackageBuildReceiptV1,
-  assertWorldPackageGameplayBootstrapMembershipV1,
-  type WorldPackageBuildReceiptV1,
+  assertWorldPackageBuildReceiptV2,
+  assertWorldPackageGameplayBootstrapMembershipV2,
+  worldPackageRootHashFromRefV1,
+  type WorldPackageBuildReceiptV2,
+  type WorldPackageRefV1,
 } from "@whitebox-world/world-package";
 import { isNil } from "lodash-es";
 
@@ -412,8 +414,8 @@ export class RuntimeActivityCoordinator {
 export interface RuntimeWorldConfigurationV1 {
   readonly executionPlan: ExecutionPlanV5;
   readonly executionPlanHash: Sha256HashV1;
-  readonly worldPackageRef: string;
-  readonly worldPackageBuildReceipt: WorldPackageBuildReceiptV1;
+  readonly worldPackageRef: WorldPackageRefV1;
+  readonly worldPackageBuildReceipt: WorldPackageBuildReceiptV2;
   readonly gameplayBootstrap: GameplayBootstrapV1;
 }
 
@@ -472,6 +474,80 @@ export interface RuntimeWorldReplacementRequestV1 {
   readonly worldConfiguration: RuntimeWorldConfigurationV1;
 }
 
+export interface RuntimeWorldPublicationExpectationV1 {
+  readonly runtimeSessionId: string;
+  readonly expectedWorldSessionId: string;
+  readonly expectedWorldPackageRootHash: Sha256HashV1;
+  readonly targetPhaseBarrier:
+    | { readonly mode: "next-world-replacement-barrier" }
+    | {
+        readonly mode: "fixed-tick";
+        readonly expectedSimulationTick: number;
+      };
+}
+
+export interface RuntimeWorldPublicationEnvelopeV1 {
+  readonly requestId: string;
+  readonly requestHash: Sha256HashV1;
+  readonly fencingToken: string;
+  readonly runtimeExpectation: RuntimeWorldPublicationExpectationV1;
+}
+
+export interface RuntimeWorldPublicationIdentitiesV1 {
+  readonly runtimeSessionId: string;
+  readonly worldSessionId: string;
+  readonly worldPackageRootHash: Sha256HashV1;
+  readonly simulationTick: number;
+}
+
+export type PersistDurableWorldCommitV1 = (identities: {
+  readonly previous: RuntimeWorldPublicationIdentitiesV1;
+  readonly current: RuntimeWorldPublicationIdentitiesV1;
+}) => () => void;
+
+export type RuntimeWorldPublicationFailureKindV1 =
+  | "expectation-stale"
+  | "publication-mode-unsupported"
+  | "capacity-exceeded"
+  | "prepare-failed"
+  | "publication-conflict"
+  | "commit-failed";
+
+export type PublishWorldReplacementResultV1 =
+  | {
+      readonly status: "published";
+      readonly publication: WorldSessionPublicationV1;
+      readonly previous: RuntimeWorldPublicationIdentitiesV1;
+      readonly current: RuntimeWorldPublicationIdentitiesV1;
+      readonly cleanup: {
+        readonly status: "released" | "quarantined";
+        readonly diagnostics: readonly GameplayDiagnosticV1[];
+      };
+    }
+  | {
+      readonly status: "rejected";
+      readonly failureKind: RuntimeWorldPublicationFailureKindV1;
+      readonly message: string;
+    };
+
+interface PublicationReplacementContextV1 {
+  readonly expectation: RuntimeWorldPublicationExpectationV1;
+  readonly persistDurableCommit?: PersistDurableWorldCommitV1;
+}
+
+interface ReplacementOutcomeV1 {
+  readonly publication: WorldSessionPublicationV1;
+  readonly previous: RuntimeWorldPublicationIdentitiesV1;
+  readonly current: RuntimeWorldPublicationIdentitiesV1;
+  readonly cleanupStatus: "released" | "quarantined";
+}
+
+interface ParsedPublishWorldReplacementV1 {
+  readonly worldConfiguration: RuntimeWorldConfigurationV1;
+  readonly publication: RuntimeWorldPublicationEnvelopeV1;
+  readonly persistDurableCommit?: PersistDurableWorldCommitV1;
+}
+
 export interface RuntimeHostInitialControlBindingV1 {
   readonly controllerEntityId: string;
   readonly controlledEntityId: string;
@@ -512,6 +588,213 @@ function hostFailure(
   message: string,
 ): RuntimeHostOperationErrorV1 {
   return new RuntimeHostOperationErrorV1(code, message);
+}
+
+class PublicationExpectationErrorV1 extends Error {
+  readonly name = "PublicationExpectationErrorV1" as const;
+
+  constructor() {
+    super("Runtime publication expectation does not match the live Runtime.");
+  }
+}
+
+class PublicationCommitErrorV1 extends Error {
+  readonly name = "PublicationCommitErrorV1" as const;
+
+  constructor(cause: unknown) {
+    super(
+      cause instanceof Error
+        ? cause.message
+        : "Durable publication commit failed.",
+    );
+  }
+}
+
+function isSafeNonNegativeInteger(input: unknown): input is number {
+  return typeof input === "number" && Number.isSafeInteger(input) && input >= 0;
+}
+
+function publicationIdentitiesV1(
+  runtimeSessionId: string,
+  worldSession: WorldSession,
+  configuration: RuntimeWorldConfigurationV1,
+): RuntimeWorldPublicationIdentitiesV1 {
+  return Object.freeze({
+    runtimeSessionId,
+    worldSessionId: worldSession.worldSessionId,
+    worldPackageRootHash:
+      configuration.worldPackageBuildReceipt.worldPackageRootHash,
+    simulationTick: worldSession.snapshot().worldState.simulationTick,
+  });
+}
+
+function parseRuntimeWorldPublicationExpectation(
+  input: unknown,
+): RuntimeWorldPublicationExpectationV1 {
+  const record = snapshotDataRecord(input);
+  const barrier = isNil(record)
+    ? undefined
+    : snapshotDataRecord(record.targetPhaseBarrier);
+  if (
+    isNil(record) ||
+    isNil(barrier) ||
+    !hasExactKeys(record, [
+      "runtimeSessionId",
+      "expectedWorldSessionId",
+      "expectedWorldPackageRootHash",
+      "targetPhaseBarrier",
+    ]) ||
+    !isNonEmptyString(record.runtimeSessionId) ||
+    !isNonEmptyString(record.expectedWorldSessionId) ||
+    !isSha256Hash(record.expectedWorldPackageRootHash)
+  ) {
+    throw new RangeError(
+      "Value must match the closed RuntimeWorldPublicationExpectationV1 schema.",
+    );
+  }
+  if (
+    barrier.mode === "next-world-replacement-barrier" &&
+    hasExactKeys(barrier, ["mode"])
+  ) {
+    return Object.freeze({
+      runtimeSessionId: record.runtimeSessionId,
+      expectedWorldSessionId: record.expectedWorldSessionId,
+      expectedWorldPackageRootHash: record.expectedWorldPackageRootHash,
+      targetPhaseBarrier: Object.freeze({
+        mode: "next-world-replacement-barrier" as const,
+      }),
+    });
+  }
+  if (
+    barrier.mode === "fixed-tick" &&
+    hasExactKeys(barrier, ["mode", "expectedSimulationTick"]) &&
+    isSafeNonNegativeInteger(barrier.expectedSimulationTick)
+  ) {
+    return Object.freeze({
+      runtimeSessionId: record.runtimeSessionId,
+      expectedWorldSessionId: record.expectedWorldSessionId,
+      expectedWorldPackageRootHash: record.expectedWorldPackageRootHash,
+      targetPhaseBarrier: Object.freeze({
+        mode: "fixed-tick" as const,
+        expectedSimulationTick: barrier.expectedSimulationTick,
+      }),
+    });
+  }
+  throw new RangeError(
+    "Value must match the closed RuntimeWorldPublicationExpectationV1 schema.",
+  );
+}
+
+function parseRuntimeWorldPublicationEnvelope(
+  input: unknown,
+): RuntimeWorldPublicationEnvelopeV1 {
+  const record = snapshotDataRecord(input);
+  if (
+    isNil(record) ||
+    !hasExactKeys(record, [
+      "requestId",
+      "requestHash",
+      "fencingToken",
+      "runtimeExpectation",
+    ]) ||
+    !isNonEmptyString(record.requestId) ||
+    !isSha256Hash(record.requestHash) ||
+    !isNonEmptyString(record.fencingToken)
+  ) {
+    throw new RangeError(
+      "Value must match the closed RuntimeWorldPublicationEnvelopeV1 schema.",
+    );
+  }
+  return Object.freeze({
+    requestId: record.requestId,
+    requestHash: record.requestHash,
+    fencingToken: record.fencingToken,
+    runtimeExpectation: parseRuntimeWorldPublicationExpectation(
+      record.runtimeExpectation,
+    ),
+  });
+}
+
+function parsePublishWorldReplacementInput(
+  input: unknown,
+): ParsedPublishWorldReplacementV1 {
+  const record = snapshotDataRecord(input);
+  const hasCommit = !isNil(record) && Object.hasOwn(record, "persistDurableCommit");
+  if (
+    isNil(record) ||
+    (hasCommit
+      ? !hasExactKeys(record, [
+          "worldConfiguration",
+          "publication",
+          "persistDurableCommit",
+        ]) || typeof record.persistDurableCommit !== "function"
+      : !hasExactKeys(record, ["worldConfiguration", "publication"]))
+  ) {
+    throw new RangeError(
+      "Value must match the closed PublishWorldReplacementInputV1 schema.",
+    );
+  }
+  return Object.freeze({
+    worldConfiguration: parseRuntimeWorldConfiguration(record.worldConfiguration),
+    publication: parseRuntimeWorldPublicationEnvelope(record.publication),
+    ...(hasCommit
+      ? {
+          persistDurableCommit: record.persistDurableCommit as
+            PersistDurableWorldCommitV1,
+        }
+      : {}),
+  });
+}
+
+function mapPublicationReplacementError(
+  error: unknown,
+): Extract<PublishWorldReplacementResultV1, { status: "rejected" }> {
+  if (error instanceof PublicationExpectationErrorV1) {
+    return {
+      status: "rejected",
+      failureKind: "expectation-stale",
+      message: error.message,
+    };
+  }
+  if (error instanceof PublicationCommitErrorV1) {
+    return {
+      status: "rejected",
+      failureKind: "commit-failed",
+      message: error.message,
+    };
+  }
+  if (error instanceof RuntimeHostOperationErrorV1) {
+    if (
+      error.diagnostic.code === "RUNTIME_HOST_CAPACITY_EXCEEDED" ||
+      error.diagnostic.code === "WORLD_REPLACEMENT_CAPACITY_EXCEEDED"
+    ) {
+      return {
+        status: "rejected",
+        failureKind: "capacity-exceeded",
+        message: error.diagnostic.message,
+      };
+    }
+    if (
+      error.diagnostic.code === "WORLD_REPLACEMENT_BLOCKED_BY_ACTIVE_ACTIVITY" ||
+      error.diagnostic.code === "WORLD_SESSION_NOT_READY"
+    ) {
+      return {
+        status: "rejected",
+        failureKind: "publication-conflict",
+        message: error.diagnostic.message,
+      };
+    }
+    return {
+      status: "rejected",
+      failureKind: "prepare-failed",
+      message: error.diagnostic.message,
+    };
+  }
+  return {
+    status: "rejected",
+    failureKind: "prepare-failed",
+    message: "The candidate WorldSession could not be constructed.",
+  };
 }
 
 function snapshotDataArray(input: unknown): readonly unknown[] | undefined {
@@ -583,18 +866,24 @@ function parseRuntimeWorldConfiguration(
     );
   }
   let executionPlan: ExecutionPlanV5;
-  let worldPackageBuildReceipt: WorldPackageBuildReceiptV1;
+  const receiptRecord = snapshotDataRecord(record.worldPackageBuildReceipt);
+  if (!isNil(receiptRecord) && receiptRecord.schemaVersion === 1) {
+    throw new RangeError(
+      "WORLD_PACKAGE_VERSION_UNSUPPORTED: RuntimeWorldConfigurationV1 requires WorldPackage V2",
+    );
+  }
+  let worldPackageBuildReceipt: WorldPackageBuildReceiptV2;
   let gameplayBootstrap: GameplayBootstrapV1;
   try {
     executionPlan = parseExecutionPlanV5(record.executionPlan);
     if (hashExecutionPlanV5(executionPlan) !== record.executionPlanHash) {
       throw new RangeError("ExecutionPlanV5 hash mismatch.");
     }
-    worldPackageBuildReceipt = assertWorldPackageBuildReceiptV1(
+    worldPackageBuildReceipt = assertWorldPackageBuildReceiptV2(
       record.worldPackageBuildReceipt,
     );
     gameplayBootstrap = parseGameplayBootstrapV1(record.gameplayBootstrap);
-    assertWorldPackageGameplayBootstrapMembershipV1({
+    assertWorldPackageGameplayBootstrapMembershipV2({
       executionPlan,
       gameplayBootstrap,
       worldPackageBuildReceipt,
@@ -606,7 +895,9 @@ function parseRuntimeWorldConfiguration(
   }
   if (
     worldPackageBuildReceipt.manifest.executionPlanHash !==
-      record.executionPlanHash
+      record.executionPlanHash ||
+    worldPackageRootHashFromRefV1(record.worldPackageRef) !==
+      worldPackageBuildReceipt.worldPackageRootHash
   ) {
     throw new RangeError(
       "Value must match the closed RuntimeWorldConfigurationV1 schema.",
@@ -615,7 +906,7 @@ function parseRuntimeWorldConfiguration(
   return Object.freeze({
     executionPlan,
     executionPlanHash: record.executionPlanHash,
-    worldPackageRef: record.worldPackageRef,
+    worldPackageRef: record.worldPackageRef as WorldPackageRefV1,
     worldPackageBuildReceipt,
     gameplayBootstrap,
   });
@@ -1049,6 +1340,7 @@ export class RuntimeHost {
   }
 
   snapshot(): WorldSessionPublicationV1 {
+    this.assertObservationAllowed();
     return this.currentWorldSession.snapshot();
   }
 
@@ -1073,6 +1365,7 @@ export class RuntimeHost {
   }
 
   getWorldStateSnapshot(worldStateRef: string): WorldStateSnapshotV1 | undefined {
+    this.assertObservationAllowed();
     return this.currentWorldSession.getWorldStateSnapshot(worldStateRef);
   }
 
@@ -1080,6 +1373,7 @@ export class RuntimeHost {
     afterEventSequence: number,
     maximumEventCount: number,
   ): readonly GameplayEventV1[] {
+    this.assertObservationAllowed();
     return this.currentWorldSession.eventsAfter(
       afterEventSequence,
       maximumEventCount,
@@ -1087,6 +1381,7 @@ export class RuntimeHost {
   }
 
   runtimeActivitySnapshot(): RuntimeActivityCoordinatorSnapshotV1 {
+    this.assertObservationAllowed();
     return this.activityCoordinator.snapshot();
   }
 
@@ -1108,6 +1403,59 @@ export class RuntimeHost {
   replaceWorld(input: unknown): Promise<WorldSessionPublicationV1> {
     const configuration = parseReplacementRequest(input);
     return this.startReplacement(configuration);
+  }
+
+  publishWorldReplacementV1(input: unknown): Promise<PublishWorldReplacementResultV1> {
+    let parsed: ParsedPublishWorldReplacementV1;
+    try {
+      parsed = parsePublishWorldReplacementInput(input);
+    } catch {
+      return Promise.resolve({
+        status: "rejected",
+        failureKind: "prepare-failed",
+        message: "Value must match the closed PublishWorldReplacementInputV1 schema.",
+      });
+    }
+    if (parsed.publication.runtimeExpectation.targetPhaseBarrier.mode === "fixed-tick") {
+      return Promise.resolve({
+        status: "rejected",
+        failureKind: "publication-mode-unsupported",
+        message: "Full Reload V1 only accepts next-world-replacement-barrier.",
+      });
+    }
+    if (!this.matchesPublicationExpectation(parsed.publication.runtimeExpectation)) {
+      return Promise.resolve({
+        status: "rejected",
+        failureKind: "expectation-stale",
+        message: "Runtime publication expectation does not match the live Runtime.",
+      });
+    }
+    if (!isNil(this.replacementOperationPromise)) {
+      return Promise.resolve({
+        status: "rejected",
+        failureKind: "publication-conflict",
+        message: "A World replacement is already in progress.",
+      });
+    }
+    const published = this.performPublicationReplacement(parsed);
+    const tracked = published.then((result) => {
+      if (result.status === "published") return result.publication;
+      throw hostFailure(
+        result.failureKind === "capacity-exceeded"
+          ? "RUNTIME_HOST_CAPACITY_EXCEEDED"
+          : result.failureKind === "publication-conflict"
+            ? "WORLD_SESSION_NOT_READY"
+            : "WORLD_SESSION_FAILED",
+        result.message,
+      );
+    });
+    this.replacementOperationPromise = tracked;
+    void tracked.finally(() => {
+      if (this.replacementOperationPromise === tracked) {
+        this.replacementOperationPromise = undefined;
+      }
+    }).catch(() => undefined);
+    return published;
   }
 
   resetWithInitialControlBinding(
@@ -1133,7 +1481,7 @@ export class RuntimeHost {
     const operation = this.performReplacement(
       configuration,
       initialControlBinding,
-    );
+    ).then((outcome) => outcome.publication);
     this.replacementOperationPromise = operation;
     void operation.finally(() => {
       if (this.replacementOperationPromise === operation) {
@@ -1194,10 +1542,56 @@ export class RuntimeHost {
     return this.disposePromise;
   }
 
+  private matchesPublicationExpectation(
+    expectation: RuntimeWorldPublicationExpectationV1,
+  ): boolean {
+    return expectation.runtimeSessionId === this.runtimeSessionId &&
+      expectation.expectedWorldSessionId === this.currentWorldSessionId &&
+      expectation.expectedWorldPackageRootHash ===
+        this.currentConfiguration.worldPackageBuildReceipt.worldPackageRootHash;
+  }
+
+  private async performPublicationReplacement(
+    parsed: ParsedPublishWorldReplacementV1,
+  ): Promise<PublishWorldReplacementResultV1> {
+    try {
+      const outcome = await this.performReplacement(
+        parsed.worldConfiguration,
+        undefined,
+        {
+          expectation: parsed.publication.runtimeExpectation,
+          ...(isNil(parsed.persistDurableCommit)
+            ? {}
+            : { persistDurableCommit: parsed.persistDurableCommit }),
+        },
+      );
+      return {
+        status: "published",
+        publication: outcome.publication,
+        previous: outcome.previous,
+        current: outcome.current,
+        cleanup: {
+          status: outcome.cleanupStatus,
+          diagnostics: outcome.cleanupStatus === "quarantined"
+            ? [
+                diagnostic(
+                  "WORLD_SESSION_FAILED",
+                  "The replaced WorldSession could not be released cleanly.",
+                ),
+              ]
+            : [],
+        },
+      };
+    } catch (error) {
+      return mapPublicationReplacementError(error);
+    }
+  }
+
   private async performReplacement(
     configuration: RuntimeWorldConfigurationV1,
     initialControlBinding?: RuntimeHostInitialControlBindingV1,
-  ): Promise<WorldSessionPublicationV1> {
+    publication?: PublicationReplacementContextV1,
+  ): Promise<ReplacementOutcomeV1> {
     const token = await this.enqueueMutation(async () => {
       if (this.disposeRequested || this.phaseValue === "failed" ||
         this.phaseValue === "disposed") {
@@ -1349,18 +1743,46 @@ export class RuntimeHost {
           token.previousWorldSession.phase !== "ready" ||
           activity.runtimeActivityEpoch !== token.runtimeActivityEpoch ||
           activity.activeRuntimeActivityCount !== 0
-        ) return false;
+        ) return undefined;
+        if (
+          !isNil(publication) &&
+          !this.matchesPublicationExpectation(publication.expectation)
+        ) {
+          throw new PublicationExpectationErrorV1();
+        }
+        const previous = publicationIdentitiesV1(
+          this.runtimeSessionId,
+          token.previousWorldSession,
+          token.previousConfiguration,
+        );
+        const current = publicationIdentitiesV1(
+          this.runtimeSessionId,
+          candidate!,
+          token.candidateConfiguration,
+        );
         this.replacementCommitPending = true;
+        let releaseDurableCommitFence: (() => void) | undefined;
         try {
+          if (!isNil(publication?.persistDurableCommit)) {
+            try {
+              releaseDurableCommitFence = publication.persistDurableCommit({
+                previous,
+                current,
+              });
+            } catch (error) {
+              throw new PublicationCommitErrorV1(error);
+            }
+          }
           this.currentWorldSession = candidate!;
           this.currentConfiguration = token.candidateConfiguration;
           this.worldSessionGeneration += 1;
         } finally {
           this.replacementCommitPending = false;
+          releaseDurableCommitFence?.();
         }
-        return true;
+        return { previous, current };
       });
-      if (!swapped) {
+      if (isNil(swapped)) {
         throw hostFailure(
           this.disposeRequested
             ? "WORLD_SESSION_NOT_READY"
@@ -1371,20 +1793,33 @@ export class RuntimeHost {
           "World replacement was cancelled before publication.",
         );
       }
+      let cleanupStatus: ReplacementOutcomeV1["cleanupStatus"] = "released";
       try {
         await token.previousWorldSession.dispose();
       } catch {
-        throw hostFailure(
-          "WORLD_SESSION_FAILED",
-          "The replaced WorldSession could not be released cleanly.",
-        );
+        if (isNil(publication)) {
+          throw hostFailure(
+            "WORLD_SESSION_FAILED",
+            "The replaced WorldSession could not be released cleanly.",
+          );
+        }
+        cleanupStatus = "quarantined";
       }
-      return candidate.snapshot();
+      return {
+        publication: candidate.snapshot(),
+        previous: swapped.previous,
+        current: swapped.current,
+        cleanupStatus,
+      };
     } catch (error) {
       if (!isNil(candidate) && candidate !== this.currentWorldSession) {
         await candidate.dispose().catch(() => undefined);
       }
-      if (error instanceof RuntimeHostOperationErrorV1) {
+      if (
+        error instanceof RuntimeHostOperationErrorV1 ||
+        error instanceof PublicationExpectationErrorV1 ||
+        error instanceof PublicationCommitErrorV1
+      ) {
         throw error;
       }
       throw hostFailure(
@@ -1410,6 +1845,15 @@ export class RuntimeHost {
       "WORLD_SESSION_NOT_READY",
       "Runtime Host is not accepting mutations.",
     );
+  }
+
+  private assertObservationAllowed(): void {
+    if (this.replacementCommitPending) {
+      throw hostFailure(
+        "WORLD_SESSION_NOT_READY",
+        "Runtime publication fence is committing a World replacement.",
+      );
+    }
   }
 
   private synchronizePhaseFromCurrent(): void {

@@ -267,6 +267,20 @@ export interface RenderBindingProfileInputV1
   )[];
 }
 
+export interface AiSchemaProjectionProfileInputV1
+  extends CapabilityResourceBaseInputV1 {
+  kind: "ai-schema-projection-profile";
+  schemaVersion: 1;
+  maximumPropertyCount: number;
+  maximumNestingDepth: number;
+  maximumEnumValueCount: number;
+  maximumSchemaBytes: number;
+  maximumRegistrySearchResultCount: number;
+  optionalFieldMode:
+    | "native-optional"
+    | "required-nullable-with-round-trip-map";
+}
+
 export interface RegistrySubjectDefinitionInputV3 {
   kind: "subject-definition";
   schemaVersion: 3;
@@ -306,6 +320,7 @@ export interface RegistrySubjectDefinitionInputV3 {
   relationshipCapabilityRefs: readonly string[];
   actionOrPoseSetRef: string;
   renderBindingProfileRef: string;
+  allowedOverridePaths: readonly string[];
   aiMetadata: SubjectResourceAiMetadataV1;
 }
 
@@ -325,6 +340,8 @@ export type RelationshipProfileV1 = WithContentHash<RelationshipProfileInputV1>;
 export type HarnessProfileV1 = WithContentHash<HarnessProfileInputV1>;
 export type PoseSetProfileV1 = WithContentHash<PoseSetProfileInputV1>;
 export type RenderBindingProfileV1 = WithContentHash<RenderBindingProfileInputV1>;
+export type AiSchemaProjectionProfileV1 =
+  WithContentHash<AiSchemaProjectionProfileInputV1>;
 export type RegistrySubjectDefinitionV3 = WithContentHash<RegistrySubjectDefinitionInputV3>;
 
 export type SubjectCapabilityResourceInputV1 =
@@ -340,7 +357,8 @@ export type SubjectCapabilityResourceInputV1 =
   | RelationshipProfileInputV1
   | HarnessProfileInputV1
   | PoseSetProfileInputV1
-  | RenderBindingProfileInputV1;
+  | RenderBindingProfileInputV1
+  | AiSchemaProjectionProfileInputV1;
 
 export type SubjectCapabilityResourceV1 =
   | MotionKernelDefinitionV1
@@ -355,7 +373,8 @@ export type SubjectCapabilityResourceV1 =
   | RelationshipProfileV1
   | HarnessProfileV1
   | PoseSetProfileV1
-  | RenderBindingProfileV1;
+  | RenderBindingProfileV1
+  | AiSchemaProjectionProfileV1;
 
 export type SubjectRegistryResourceInputV3 =
   | SubjectRegistryResourceInputV1
@@ -428,4 +447,7 @@ export interface SubjectResourceRegistryV3 {
   resolveHarnessProfile(resourceRef: string): HarnessProfileV1 | undefined;
   resolvePoseSetProfile(resourceRef: string): PoseSetProfileV1 | undefined;
   resolveRenderBindingProfile(resourceRef: string): RenderBindingProfileV1 | undefined;
+  resolveAiSchemaProjectionProfile(
+    resourceRef: string,
+  ): AiSchemaProjectionProfileV1 | undefined;
 }

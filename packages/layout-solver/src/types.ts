@@ -250,6 +250,7 @@ export interface ResolvedLayoutInputV1 {
   readonly schemaVersion: 1;
   readonly id: string;
   readonly authoringSpecHash: `sha256:${string}`;
+  readonly layoutInputHash: `sha256:${string}`;
   readonly registryLockHash: `sha256:${string}`;
   readonly solverProfile: Readonly<{
     solverProfileRef: string;
@@ -307,6 +308,7 @@ export interface LayoutSolveReportV1 {
   readonly schemaVersion: 1;
   readonly id: string;
   readonly authoringSpecHash: `sha256:${string}`;
+  readonly layoutInputHash: `sha256:${string}`;
   readonly registryLockHash: `sha256:${string}`;
   readonly solverProfileRef: string;
   readonly resolvedVersion: string;

@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./testing": "./src/testing.ts"
   },
   "dependencies": {
     "@whitebox-world/authoring": "workspace:*",
@@ -13,6 +14,8 @@
     "@whitebox-world/layout-solver": "workspace:*",
     "@whitebox-world/protocol": "workspace:*",
     "@whitebox-world/runtime-contracts": "workspace:*",
+    "@whitebox-world/subject-registry": "workspace:*",
+    "jsonc-parser": "^3.3.1",
     "lodash-es": "^4.18.1"
   }
 }

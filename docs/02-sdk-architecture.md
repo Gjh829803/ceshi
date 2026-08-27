@@ -109,7 +109,7 @@ flowchart TB
     end
 
     subgraph L7["L7 运行时层 · Runtime"]
-        SESSION["Formal Runtime Session<br/>设计；当前 Browser Runtime 已有"]
+        SESSION["Runtime Session<br/>持久 Headless + Browser Runtime"]
         BWR["BabylonWorldRuntime"]
         TICK["Fixed Tick Loop"]
         CTRL["Subject Controller + Control Binding"]
@@ -191,10 +191,10 @@ flowchart TB
 | L1 接入层 | 给人、Agent、Host 和自动化程序提供稳定入口，并把 Provider 能力投影回唯一 Canonical 方言 | 不包含第二套 Provider 私有世界语义 | `scripts/worldkit.ts`、`apps/playground`；AI Schema Provider Adapter 尚在设计 |
 | L2 公共协议层 | 定义 AI 可以写什么、Host 可以调用什么、Runtime 返回什么 | 不执行地形、物理或渲染 | `packages/protocol`、`packages/authoring` 的公开 Schema、`packages/runtime-contracts` |
 | L3 解析与编译层 | 校验、资源/地形/Region 解析、Constraint 求解、最终 IR 投影和确定性编译 | 不创建 Babylon Scene、Mesh 或 Havok Body | `packages/authoring`、`packages/layout-solver`、`packages/compiler` |
-| L4 数据边界 | 保存版本化、可哈希、可验证的世界与操作计划 | 不包含可变运行时 Handle | IR、Resource Lock、ExecutionPlan、Simulation Take V1；Task 8 最小 WorldPackage Manifest/Root/Build Receipt 已实现，完整 P1.4 发布包仍在设计 |
+| L4 数据边界 | 保存版本化、可哈希、可验证的世界与操作计划 | 不包含可变运行时 Handle | IR、Resource Lock、ExecutionPlan、Simulation Take V1；完整 WorldPackage V2 目录、Manifest、Root、Build Receipt、Legal/Host/签名合同、内容寻址 Store、Package CLI 与持久 Runtime Session WAL 已实现 |
 | L5 领域层 | 定义世界、主体、Capability、Relationship、动作、控制、相机、物理和 Runtime Port 的引擎无关语义 | 不决定 Babylon API 的调用方式 | 当前分布在 `packages/authoring`、`subject-composition`、`subject-actions`、`subject-registry` 与 `runtime-contracts`；通用 Capability/Relationship/Port 仍未完成 |
 | L6 引擎适配层 | 把 ExecutionPlan 和资产字节翻译为 Babylon/Havok 对象，并把锁定 Traversal 输入交给 Recast Provider | 不补写 AI 意图、不修改 Schema、不把 Provider Handle 写入协议 | `packages/runtime-babylon` 与 `packages/traversal-recast` |
-| L7 运行时层 | Session、固定 Tick、控制绑定、物理移动、动画状态、相机跟随和 Snapshot | 不重新求解 Placement，不读取 Registry URI | `packages/runtime-babylon`；正式持久 Session 尚在设计 |
+| L7 运行时层 | Session、固定 Tick、控制绑定、物理移动、动画状态、相机跟随和 Snapshot | 不重新求解 Placement，不读取 Registry URI | `packages/runtime-host`、`packages/runtime-babylon`；可信 Node 组合已实现持久 headless Runtime Session、fresh-process replay 与精确 ownership cleanup |
 | L8 证据层 | 输出截图、状态、Hash、指标和下游模型输入 | 不用视觉结果掩盖结构错误，页面不生产可信 Route 证据 | snapshot/screenshot、五 Pass Control Capture Bundle V1；Capture/Integrity 与 Route 双 Blocking Gate、Canonical Evidence/Report 已完成 Task 8 |
 
 `Registry` 是横跨 L2、L3 和 L5 的“乐高零件目录”：公共面提供可发现的 Ref 和
@@ -292,17 +292,24 @@ AuthoringSpec V4 ─────────→  NormalizedWorldIR V4 ───�
 
 ### 5.4 WorldPackage Build Receipt：可信验证主体的根
 
-Task 8 在独立的 `@whitebox-world/world-package` 包中实现最小正式
-`WorldPackageManifestV1`、Package Root 与 `WorldPackageBuildReceiptV1`。该包是
+Task 8 最初在独立的 `@whitebox-world/world-package` 包中实现最小正式
+`WorldPackageManifestV1`、Package Root 与 `WorldPackageBuildReceiptV1`；当前 active
+trusted publication 已迁移到完整 `WorldPackageManifestV2` / `WorldPackageBuildReceiptV2`
+目录。该包是
 Authoring、Compiler、Runtime Contracts 和 Layout Solver 多个领域制品的装配边界，
 不属于 `@whitebox-world/protocol` 的通用字节/Hash 基础层；这是实施审查后的依赖方向
 修正，不是公共语义变更。
 
-Build Receipt 交叉绑定 `authoringSpecHash`、`normalizedWorldIrHash`、
-`executionPlanHash`、`resourceLockHash` 与 `layoutSolveReportHash`。Validation Subject、
-CLI 和可信 Host 只能消费这一个权威 Root，不能把过渡期 Take/Capture identity 或
-`WorldBuildArtifactV3` 重新命名为 Package Root。该最小合同服务 Route Task 8，不表示
-完整 P1.4 目录、签名、许可证和 Host Compatibility 已完成。
+V2 Build Receipt 交叉绑定 `authoringSpecHash`、`normalizedWorldIrHash`、
+`executionPlanHash`、`registryLockHash`、`layoutSolveReportHash`、Gameplay Bootstrap、
+完整文件清单、资源与 legal closure。Provider-neutral verifier 在 Runtime adapter 创建前
+重放 owner parser、逐文件 Hash、Package Root 和 Host Compatibility；Node Adapter 另负责
+symlink-safe 原子目录发布与可选 Ed25519 信任策略。V1 继续以明确 V1 名称服务迁移和历史
+验证，不是 V2 alias。Validation Subject、CLI 和可信 Host 只能消费 verified V2 Root，
+不能把 Take/Capture identity 或 `WorldBuildArtifactV3` 重新命名为 Package Root。
+公共 `worldkit build/inspect/load` 与 headless NDJSON `run-session` 已在可信 Node Host
+完成，包含 Request/Receipt、hash-chain WAL、fresh-process 恢复、损坏拒绝、signal/close
+和精确 ownership cleanup。Browser Protocol V5 不承载该 Session 协议。
 
 ## 6. 从 JSON 到截图的运行时序列
 
@@ -351,8 +358,10 @@ sequenceDiagram
 精确 Tick Schedule，并由 `Control Capture Bundle V1` 把同一 Render Ready 状态的
 Neutral Color、Linear Depth、Semantic、Instance、Normal 绑定到原子证据包。
 Capture/Integrity V1 再通过 Node Adapter 复用 Bundle Validator，输出独立 Canonical
-Validation Report；它不反向修改 Bundle，也不接触 Babylon。完整 P1.4 WorldPackage、
-Receipt Track、Resume，以及 Placement/Physics/Composition 等统一报告扩展仍是后续能力。
+Validation Report；它不反向修改 Bundle，也不接触 Babylon。WorldPackage V2 目录、
+trusted consumer migration、Package CLI、持久 headless Runtime Session、Receipt WAL 与
+fresh-process Resume 已完成；Placement/Physics/Composition 等统一报告扩展、Capture
+恢复续拍与多人 Session 仍是后续能力。
 
 Route 世界另有一条只在可信 Node/Host 中执行的验证链路：
 
@@ -475,8 +484,8 @@ Babylon-backed catalog gameplay 和 artifact-only 捕获，但三者共享同一
 - 通用 Relationship、骑乘、装备、拖拽、Joint 和事务回滚；
 - 通用 Semantic Action、攻击、游泳、飞行、车辆和 NPC；
 - 任意产品资产自动 Retarget、Compound Collider、LOD 和更多拓扑；
-- 完整 P1.4 WorldPackage 发布格式（Task 8 的最小 Manifest/Root/Build Receipt 已实现）、WorldChangeSet、持久 Runtime Session；
-- 完整 Replay/Resume、Event/Action/Relationship Receipt、Motion Vector 和视频 Adapter；
+- Browser/多人 Runtime Session、Capture 恢复续拍和跨 Host Session 迁移；
+- 完整 Capture Replay/Resume、Motion Vector 和视频 Adapter；
 - Placement/Physics/Composition/Replay/Performance 等统一 Validation 扩展，以及生产
   Video Model Adapter；
 - 室内、洞穴、Overhang、联网和完整 Gameplay。

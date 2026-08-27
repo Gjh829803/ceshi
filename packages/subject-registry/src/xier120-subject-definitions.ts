@@ -1,5 +1,6 @@
 import type { SubjectBodyTopologyV2 } from "@whitebox-world/subject-contracts";
 
+import { FIRST_SLICE_ALLOWED_OVERRIDE_PATHS } from "./subject-resource-registry";
 import type { RegistrySubjectDefinitionInputV3 } from "./types-v3";
 
 interface Xier120SubjectClassificationV1 {
@@ -101,6 +102,7 @@ export const XIER120_SUBJECT_DEFINITIONS = Object.freeze(
       actionOrPoseSetRef: "worldkit://pose-set/static.whitebox@1",
       renderBindingProfileRef:
         "worldkit://render-binding/subject.standard@1",
+      allowedOverridePaths: FIRST_SLICE_ALLOWED_OVERRIDE_PATHS,
       aiMetadata: {
         displayName: row.displayName,
         description:

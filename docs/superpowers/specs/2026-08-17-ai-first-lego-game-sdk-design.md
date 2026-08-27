@@ -1848,7 +1848,7 @@ check baseAuthoringSpecHash and changeSetId
 - 默认是 `dry-run`，只有显式 `apply` 才写出新 AuthoringSpec；CLI 不就地覆盖输入文件。
 - 任一 Operation 或 Gate 失败都不产生部分提交。
 - 相同 `changeSetId + baseAuthoringSpecHash + ChangeSet Hash` 重试返回同一 Receipt；相同 `changeSetId` 携带不同内容必须失败。
-- `baseAuthoringSpecHash` 不匹配返回 `WORLD_CHANGESET_BASE_AUTHORING_SPEC_MISMATCH`，并给出当前 AuthoringSpec Hash 与机器可读 rebase 所需的冲突 ID，不能静默套用到新世界。
+- `baseAuthoringSpecHash` 不匹配返回 `WORLD_CHANGE_BASE_AUTHORING_SPEC_MISMATCH`（公共码以 P1.6 专项为准），并给出 `currentAuthoringSpecHash` 与 `conflictingIds`；不要新增 `rebaseRequired` 同义字段，不能静默套用到新世界。
 - ChangeReceipt 明确记录 `baseAuthoringSpecHash`、`resultAuthoringSpecHash`、`normalizedWorldIrHash`、受影响实体/资源、Diagnostic、实际应用的迁移和安全修复；不得使用未定义对象的通用 `worldHash` 字段。
 - 增量编译结果必须通过 Differential Test，证明它与对最终 AuthoringSpec 做一次完整 normalize/build 的 Canonical Output 完全相同。
 

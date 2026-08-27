@@ -63,6 +63,9 @@ describe("scene terrain finalizer", () => {
         signedIntentPng(),
       ]);
     const builderAuthoring = JSON.parse(originalAuthoringSource);
+    for (const definition of builderAuthoring.resources.subjectDefinitions) {
+      definition.allowedOverridePaths = [];
+    }
     const terrain = builderAuthoring.nodes.find(
       (node: { kind: string }) => node.kind === "terrain",
     );

@@ -13,6 +13,37 @@ export {
   assertWorldPackageGameplayBootstrapMembershipV1,
   createWorldPackageBuildReceiptV1,
 } from "./build-receipt.js";
+export {
+  assertWorldPackageBuildReceiptV2,
+  assertWorldPackageHostCompatibilityV2,
+  assertWorldPackageGameplayBootstrapMembershipV2,
+  assertWorldPackageMigrationReportV1,
+  canonicalWorldPackageManifestV2,
+  canonicalWorldPackageSignatureEnvelopeV1,
+  hashWorldPackageManifestV2,
+  hashWorldPackageRootV2,
+  migrateWorldPackageBuildReceiptV1ToV2,
+  worldPackageSignatureEnvelopeBytesV1,
+} from "./v2-contract.js";
+export {
+  assembleWorldPackageDirectoryV2,
+  verifyWorldPackageDirectoryV2,
+} from "./v2-directory.js";
+export { createWorldPackageV2 } from "./v2-build.js";
+export {
+  BABYLON_WEB_HOST_COMPATIBILITY_PROFILE_HASH_V1,
+  BABYLON_WEB_HOST_COMPATIBILITY_PROFILE_REF_V1,
+  BABYLON_WEB_HOST_COMPATIBILITY_PROFILE_V1,
+  BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V2,
+  BABYLON_WEB_WORLD_PACKAGE_HOST_POLICY_V1,
+} from "./babylon-web-host-profile.js";
+export {
+  assertWorldPackageStoreRefMatchesDirectoryV1,
+  canonicalWorldPackageDirectoryForStoreV1,
+  equalWorldPackageDirectoryBytesV1,
+  worldPackageRefFromRootHashV1,
+  worldPackageRootHashFromRefV1,
+} from "./store.js";
 export type {
   CreateWorldPackageBuildReceiptInputV1,
   ResolvedWorldPackageResourceArtifactV1,
@@ -24,3 +55,38 @@ export type {
   WorldPackageResourceArtifactV1,
   WorldPackageSha256HashV1,
 } from "./types.js";
+export type {
+  MigrateWorldPackageBuildReceiptV1ToV2Input,
+  MigrateWorldPackageBuildReceiptV1ToV2Result,
+  WorldPackageBuildReceiptV2,
+  WorldPackageDistributionPolicyV2,
+  WorldPackageHostCompatibilityV2,
+  WorldPackageGameplayBootstrapMembershipInputV2,
+  WorldPackageHostPolicyV1,
+  WorldPackageHostSignaturePolicyV1,
+  WorldPackageLegalDocumentV2,
+  WorldPackageManifestV2,
+  WorldPackageMigrationReportV1,
+  WorldPackageResourceArtifactV2,
+  WorldPackageSignatureEnvelopeV1,
+  WorldPackageTrustedCompatibilityProfileV1,
+  WorldPackageV1ToV2MigrationContextV1,
+} from "./v2-types.js";
+export type {
+  AssembleWorldPackageDirectoryV2Input,
+  VerifiedWorldPackageDirectoryV2,
+  WorldPackageDirectoryFileV2,
+  WorldPackageDirectoryV2,
+} from "./v2-directory.js";
+export type {
+  CreateWorldPackageV2Input,
+  ResolvedWorldPackageResourceArtifactV2,
+  WorldPackageGeneratedResourceProvenanceV2,
+  WorldPackageLicenseDocumentInputV2,
+  WorldPackageBuildContextV2,
+} from "./v2-build.js";
+export type {
+  WorldPackageRefV1,
+  WorldPackageStorePutResultV1,
+  WorldPackageStoreV1,
+} from "./store.js";

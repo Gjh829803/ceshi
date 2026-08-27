@@ -54,6 +54,7 @@ import { createAndStartArtifactRenderer } from "./artifact-renderer-lifecycle.js
 import { installPageExitDisposal } from "./page-exit-lifecycle.js";
 import { installWorldkitAuthoringCaptureApi } from "./worldkit-authoring-capture-api.js";
 import { initializePlaygroundAdapterV1 } from "./playground-adapter-startup.js";
+import { createIndexedDbWorldPackageStoreV1 } from "./indexeddb-world-package-store.js";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (app === null) throw new Error("Missing #app container");
@@ -519,6 +520,8 @@ interface TuningWorkbenchContextV1 {
   parameterDraft: Record<string, number | boolean>;
   motionDraftStorageKey: string;
   controlledEntityId: string;
+  initialSubject: WorldRuntimeSubjectStateV4 | undefined;
+  initialCamera: WorldRuntimeSnapshotV4["view"]["camera"];
   initialCameraPreference: string;
   hostOverlay?: CapabilityDemoHostOverlayV1;
 }
@@ -570,7 +573,7 @@ function installTuningWorkbench(
   ));
   subjectSelect.addEventListener("change", () => navigateToSubjectPackage(subjectSelect.value));
   const summary = requiredElement<HTMLDivElement>("#tuning-subject-summary");
-  const currentSubject = api.getSubjectSnapshot?.(workbenchContext.controlledEntityId);
+  const currentSubject = workbenchContext.initialSubject;
   const currentLocomotionState = locomotionStateFromSubjectV4(currentSubject);
   summary.innerHTML = `
     <div><span>现在调的是</span><strong>${escapeHtml(subjectFriendlyName(workbenchContext.definition))}</strong></div>
@@ -1070,13 +1073,15 @@ function installTuningWorkbench(
     if (typeof value === "string") return value;
     return JSON.stringify(value) ?? "未报告";
   };
-  const renderCameraDiagnostics = (): void => {
-    let camera: ReturnType<NonNullable<typeof api.getCameraSnapshot>> | undefined;
+  const cameraSnapshotForDisplay = () => {
     try {
-      camera = api.getCameraSnapshot?.();
+      return api.getCameraSnapshot?.() ?? workbenchContext.initialCamera;
     } catch {
-      camera = undefined;
+      return workbenchContext.initialCamera;
     }
+  };
+  const renderCameraDiagnostics = (): void => {
+    const camera = cameraSnapshotForDisplay();
     const tracking = camera?.mode === "tracking" ? camera : undefined;
     const entries: ReadonlyArray<readonly [string, string, string]> = [
       ["Camera", formatCameraData(tracking?.id), "camera-id"],
@@ -1249,7 +1254,7 @@ function installTuningWorkbench(
       const help = document.createElement("small");
       const unit = cameraParameterUnit(setting.key);
       const renderProvenance = (): void => {
-        const camera = api.getCameraSnapshot?.();
+        const camera = cameraSnapshotForDisplay();
         const tracking = camera?.mode === "tracking" ? camera : undefined;
         const socket = tracking?.selectedTargetSocketId ??
           (tracking?.isTargetSocketFallback ? "目标高度回退" : "运行时未绑定");
@@ -1750,6 +1755,7 @@ function installAuthoringRecoveryPanel(api: WorldkitBrowserApiV5): void {
 
 function installCapabilityAuthoringPanel(
   api: WorldkitBrowserApiV5,
+  initialSnapshot: WorldRuntimeSnapshotV4,
   hostOverlay?: CapabilityDemoHostOverlayV1,
 ): TuningWorkbenchControllerV1 | undefined {
   const definitions = api.listSubjectDefinitions?.({ includeExperimental: true }) ?? [];
@@ -1761,7 +1767,7 @@ function installCapabilityAuthoringPanel(
   const context = requiredElement<HTMLDivElement>("#capability-context");
   const drafts = requiredElement<HTMLDivElement>("#parameter-drafts");
   const harnessOutput = requiredElement<HTMLPreElement>("#harness-output");
-  const snapshot = api.getSnapshot();
+  const snapshot = initialSnapshot;
   const controlledEntityId = controlledEntityIdFromSnapshotV4(snapshot);
   const activeSubject = snapshot.world.subjectStatesByEntityId[controlledEntityId];
   const requestedDefinitionRef = urlParameters.get("subjectDefinitionRef");
@@ -1942,6 +1948,8 @@ function installCapabilityAuthoringPanel(
     parameterDraft,
     motionDraftStorageKey,
     controlledEntityId,
+    initialSubject: activeSubject,
+    initialCamera: snapshot.view.camera,
     initialCameraPreference: cameraSelect.value,
     ...(hostOverlay === undefined ? {} : { hostOverlay }),
   });
@@ -2182,6 +2190,7 @@ if (runtimeRoute.mode === "unknown") {
     diagnostics: [runtimeRoute.diagnostic],
   }, null, 2))}</pre>`;
 } else if (runtimeRoute.mode !== "artifact-only") {
+  const worldPackageStore = createIndexedDbWorldPackageStoreV1();
   let createdAdapter: BabylonWorldAdapter | null = null;
   let createdHostOverlay: CapabilityDemoHostOverlayV1 | undefined;
   let createdPlaygroundMetadata:
@@ -2205,6 +2214,7 @@ if (runtimeRoute.mode === "unknown") {
       startupStage = "authoring-load";
       const worldId = urlParameters.get("world");
       const authoringOptions = {
+        worldPackageStore,
         ...(isNil(subjectDefinitionRef) ? {} : { subjectDefinitionRef }),
       };
       if (isNil(worldId)) {
@@ -2233,6 +2243,7 @@ if (runtimeRoute.mode === "unknown") {
           aspectRatio: viewport.clientWidth > 0 && viewport.clientHeight > 0
             ? viewport.clientWidth / viewport.clientHeight
             : 16 / 9,
+          worldPackageStore,
           ...(isNil(subjectDefinitionRef) ? {} : { subjectDefinitionRef }),
         },
       );
@@ -2311,20 +2322,49 @@ if (runtimeRoute.mode === "unknown") {
   let authoringCaptureInstallation:
     | ReturnType<typeof installWorldkitAuthoringCaptureApi>
     | undefined;
+  let authoringEditInstallation:
+    | { dispose(): void }
+    | undefined;
   let disposeAuthoringWorkbenchAdapterBinding: (() => void) | undefined;
   const pageLifecycle = createGameplayPageLifecycle({
     initialization: browserInstallation.initialization,
     getAdapter: () => createdAdapter,
-    setup(adapter) {
+    async setup(adapter) {
       if (runtimeRoute.mode === "authoring") {
         authoringCaptureInstallation = installWorldkitAuthoringCaptureApi(
           window,
           adapter,
         );
+        if (
+          prepared?.loaded.ok === true &&
+          !isNil(prepared.loaded.authoringSpec) &&
+          !isNil(prepared.loaded.worldPackageBuildContext) &&
+          !isNil(prepared.loaded.worldPackageResourceArtifacts) &&
+          "publishWorldReplacementV1" in adapter
+        ) {
+          const [{ installWorldkitAuthoringEditApi }, { createPlaygroundAuthoringEditHostV1 }] =
+            await Promise.all([
+              import("./worldkit-authoring-edit-api.js"),
+              import("./worldkit-authoring-edit-host.js"),
+            ]);
+          authoringEditInstallation = installWorldkitAuthoringEditApi(
+            window,
+            createPlaygroundAuthoringEditHostV1({
+              authoringSpec: prepared.loaded.authoringSpec,
+              worldPackageStore,
+              worldPackageBuildContext:
+                prepared.loaded.worldPackageBuildContext,
+              resourceArtifacts:
+                prepared.loaded.worldPackageResourceArtifacts,
+              publishWorldReplacement: (input) => adapter.publishWorldReplacementV1(input),
+            }),
+          );
+        }
       }
       const workbench = runtimeRoute.mode === "authoring"
         ? installCapabilityAuthoringPanel(
             browserInstallation.api,
+            adapter.runtimeSnapshot(),
             createdHostOverlay,
           )
         : undefined;
@@ -2346,6 +2386,7 @@ if (runtimeRoute.mode === "unknown") {
       disposeAuthoringWorkbenchAdapterBinding?.();
       disposeAuthoringWorkbenchAdapterBinding = undefined;
       authoringCaptureInstallation?.dispose();
+      authoringEditInstallation?.dispose();
       await browserInstallation.dispose();
     },
   });

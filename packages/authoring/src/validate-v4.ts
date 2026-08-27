@@ -84,6 +84,81 @@ const validateCanonicalAuthoringSpecV4 = ajv.compile<AuthoringSpecV4>(
   authoringSpecV4Schema,
 );
 
+export const AUTHORING_SCHEMA_FRAGMENT_DEFS_V4 = [
+  "prototype",
+  "objectNode",
+  "anchorNode",
+  "cameraNode",
+  "subjectNode",
+  "terrainNode",
+  "waterNode",
+  "spatialRegion",
+  "route",
+  "screenRegion",
+  "traversalArea",
+  "relationship",
+  "proceduralSource",
+  "placementConstraint",
+  "connectivityConstraint",
+  "startup",
+] as const;
+
+export type AuthoringSchemaFragmentDefV4 =
+  (typeof AUTHORING_SCHEMA_FRAGMENT_DEFS_V4)[number];
+
+const fragmentValidators = new Map<
+  AuthoringSchemaFragmentDefV4,
+  ReturnType<typeof ajv.compile>
+>();
+
+function fragmentValidator(defName: AuthoringSchemaFragmentDefV4) {
+  const existing = fragmentValidators.get(defName);
+  if (!isNil(existing)) return existing;
+  const validator = ajv.compile({
+    $id: `worldkit://schema/authoring-spec@4/fragment/${defName}`,
+    $ref: `worldkit://schema/authoring-spec@4#/$defs/${defName}`,
+  });
+  fragmentValidators.set(defName, validator);
+  return validator;
+}
+
+function canonicalJsonAdmissionResult<T>(value: unknown): AuthoringResult<T> | undefined {
+  try {
+    assertCanonicalJsonValue(value);
+    return undefined;
+  } catch (error) {
+    if (error instanceof CanonicalJsonAdmissionError) {
+      return {
+        ok: false,
+        diagnostics: [{
+          severity: "error",
+          code: "AUTHORING_JSON_NEGATIVE_ZERO",
+          instancePath: error.instancePath,
+          message: "Negative zero is not allowed in Canonical JSON.",
+        }],
+      };
+    }
+    throw error;
+  }
+}
+
+export function validateAuthoringFragmentV4<T>(
+  defName: AuthoringSchemaFragmentDefV4,
+  value: unknown,
+): AuthoringResult<T> {
+  const admission = canonicalJsonAdmissionResult<T>(value);
+  if (!isNil(admission)) return admission;
+  const validator = fragmentValidator(defName);
+  if (!validator(value)) {
+    const errors = validator.errors;
+    return {
+      ok: false,
+      diagnostics: (isNil(errors) ? [] : errors).map(diagnosticFor),
+    };
+  }
+  return { ok: true, value: value as T, diagnostics: [] };
+}
+
 function pointerSegment(value: string): string {
   return value.replace(/~/g, "~0").replace(/\//g, "~1");
 }
@@ -148,6 +223,35 @@ function duplicateIdDiagnostics(spec: AuthoringSpecV4): AuthoringDiagnostic[] {
       seen.add(row.id);
     });
   }
+  spec.nodes.forEach((node, nodeIndex) => {
+    const overrides = node.kind === "subject" ? node.overrides : undefined;
+    if (isNil(overrides) || isEmpty(overrides)) return;
+    const seenIds = new Set<string>();
+    const seenPaths = new Set<string>();
+    overrides.forEach((override, overrideIndex) => {
+      const instancePath = `/nodes/${nodeIndex}/overrides/${overrideIndex}`;
+      if (seenIds.has(override.id)) {
+        diagnostics.push({
+          severity: "error",
+          code: "AUTHORING_DUPLICATE_ID",
+          instancePath: `${instancePath}/id`,
+          message: `Duplicate id '${override.id}' is not allowed in this collection.`,
+          details: { id: override.id },
+        });
+      }
+      seenIds.add(override.id);
+      if (seenPaths.has(override.path)) {
+        diagnostics.push({
+          severity: "error",
+          code: "AUTHORING_DUPLICATE_BINDING",
+          instancePath: `${instancePath}/path`,
+          message: `Duplicate override path '${override.path}' is not allowed on one Subject.`,
+          details: { id: override.path },
+        });
+      }
+      seenPaths.add(override.path);
+    });
+  });
   spec.resources.prototypes.forEach((prototype, prototypeIndex) => {
     const seen = new Set<string>();
     prototype.traversalSurfaceBindings?.forEach((binding, bindingIndex) => {
@@ -368,22 +472,8 @@ function traversalAreaDiagnostics(spec: AuthoringSpecV4): AuthoringDiagnostic[] 
 export function validateAuthoringSpecV4(
   value: unknown,
 ): AuthoringResult<AuthoringSpecV4> {
-  try {
-    assertCanonicalJsonValue(value);
-  } catch (error) {
-    if (error instanceof CanonicalJsonAdmissionError) {
-      return {
-        ok: false,
-        diagnostics: [{
-          severity: "error",
-          code: "AUTHORING_JSON_NEGATIVE_ZERO",
-          instancePath: error.instancePath,
-          message: "Negative zero is not allowed in Canonical JSON.",
-        }],
-      };
-    }
-    throw error;
-  }
+  const admission = canonicalJsonAdmissionResult<AuthoringSpecV4>(value);
+  if (!isNil(admission)) return admission;
   if (!validateCanonicalAuthoringSpecV4(value)) {
     const errors = validateCanonicalAuthoringSpecV4.errors;
     return {
