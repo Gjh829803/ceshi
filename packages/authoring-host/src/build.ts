@@ -341,5 +341,6 @@ async function prepareTrustedCandidateV1Async(
     validationReports,
     validationReportsHash,
     sizeBytes,
+    createdAtUnixMilliseconds,
   };
 }

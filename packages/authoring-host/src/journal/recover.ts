@@ -11,6 +11,7 @@ import {
   listDurableRequestRecordsV1,
   setRecoveryFencingTokenV1,
 } from "./store.js";
+import { rehydratePreparedCandidateForRecoveryV1 } from "./candidate-recovery.js";
 import { resumeWorldChangeRequestV1 } from "./submit.js";
 import type {
   SubmitWorldChangeRequestInputV1,
@@ -54,6 +55,14 @@ export async function recoverWorldChangeRequestV1(
     leaseStore: input.leaseStore,
     nowUnixMilliseconds: input.nowUnixMilliseconds,
     fencingToken: `recover.${input.request.id}`,
+  });
+  await rehydratePreparedCandidateForRecoveryV1({
+    journal: input.journal,
+    leaseStore: input.leaseStore,
+    worldPackageStore: input.worldPackageStore,
+    authoringEditSessionId: input.request.authoringEditSessionId,
+    requestId: input.request.id,
+    nowUnixMilliseconds: input.nowUnixMilliseconds,
   });
   const { crashAfterState: _crashAfterState, ...resumeInput } = input;
   return resumeWorldChangeRequestV1(resumeInput);

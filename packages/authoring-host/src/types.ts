@@ -69,6 +69,7 @@ export type PrepareTrustedCandidateResultV1 =
       readonly validationReports: readonly WorldChangeValidationReportBindingV1[];
       readonly validationReportsHash: Sha256HashV1;
       readonly sizeBytes: number;
+      readonly createdAtUnixMilliseconds: number;
     }
   | {
       readonly status: "rejected";

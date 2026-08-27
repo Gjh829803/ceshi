@@ -1,4 +1,7 @@
 export {
+  rehydratePreparedCandidateForRecoveryV1,
+} from "./candidate-recovery.js";
+export {
   requiredWorldChangeScopesV1,
   sessionAuthorizationDiagnosticV1,
 } from "./authorize.js";

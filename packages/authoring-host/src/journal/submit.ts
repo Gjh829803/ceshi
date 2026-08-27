@@ -605,6 +605,10 @@ async function advance(
         buildIdentity: found.lease.buildIdentity,
         validationReports: found.lease.validationReports,
         validationReportsHash: found.lease.validationReportsHash,
+        requiredGateProfileRefs: found.lease.requiredGateProfileRefs,
+        preparedCandidateCreatedAtUnixMilliseconds:
+          found.lease.createdAtUnixMilliseconds,
+        preparedCandidateSizeBytes: found.lease.sizeBytes,
         expiresAtUnixMilliseconds: found.lease.expiresAtUnixMilliseconds,
         state: "candidate-ready",
       });
@@ -647,6 +651,10 @@ async function advance(
           buildIdentity: prepared.buildIdentity,
           validationReports: prepared.validationReports,
           validationReportsHash: prepared.validationReportsHash,
+          requiredGateProfileRefs: input.session.policy.requiredGateProfileRefs,
+          preparedCandidateCreatedAtUnixMilliseconds:
+            prepared.createdAtUnixMilliseconds,
+          preparedCandidateSizeBytes: prepared.sizeBytes,
           expiresAtUnixMilliseconds: prepared.preparedCandidateExpiresAtUnixMilliseconds,
           state: "dry-run-succeeded",
           receipt,
@@ -659,6 +667,10 @@ async function advance(
         buildIdentity: prepared.buildIdentity,
         validationReports: prepared.validationReports,
         validationReportsHash: prepared.validationReportsHash,
+        requiredGateProfileRefs: input.session.policy.requiredGateProfileRefs,
+        preparedCandidateCreatedAtUnixMilliseconds:
+          prepared.createdAtUnixMilliseconds,
+        preparedCandidateSizeBytes: prepared.sizeBytes,
         expiresAtUnixMilliseconds: prepared.preparedCandidateExpiresAtUnixMilliseconds,
         state: "candidate-ready",
       });
@@ -823,6 +835,7 @@ export async function submitWorldChangeRequestV1(
       changeSetHash,
       state: "received",
       fencingToken: "journal",
+      requiredGateProfileRefs: input.session.policy.requiredGateProfileRefs,
     };
     if (!isNil(lockedHash) && lockedHash !== changeSetHash) {
       const receipt = assembleRejectedReceiptV1({

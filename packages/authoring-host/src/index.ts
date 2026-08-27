@@ -20,6 +20,7 @@ export {
   queryWorldChangeDiffV1,
   queryWorldChangeExplainV1,
   queryWorldChangeReceiptV1,
+  rehydratePreparedCandidateForRecoveryV1,
   recoverWorldChangeRequestV1,
   seedAuthoringRevisionHeadV1,
   submitWorldChangeRequestV1,

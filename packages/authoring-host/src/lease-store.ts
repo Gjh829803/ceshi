@@ -1,6 +1,6 @@
 import { parsePreparedCandidatePinV1 } from "@whitebox-world/authoring-edit";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
-import { isNil } from "lodash-es";
+import { isEqual, isNil } from "lodash-es";
 
 import { worldChangeDiagnostic } from "./diagnostics.js";
 import type {
@@ -74,6 +74,22 @@ export function putPreparedCandidateLeaseV1(
   lease: PreparedCandidateLeaseV1,
 ): void {
   asStore(store).leases.set(lease.preparedCandidateRef, structuredClone(lease));
+}
+
+export function rehydratePreparedCandidateLeaseV1(
+  store: PreparedCandidateLeaseStoreV1,
+  lease: PreparedCandidateLeaseV1,
+): "rehydrated" | "existing" {
+  const internals = asStore(store);
+  const existing = internals.leases.get(lease.preparedCandidateRef);
+  if (!isNil(existing)) {
+    if (isEqual(existing, lease)) return "existing";
+    throw new Error(
+      "WORLD_CHANGE_PREPARED_CANDIDATE_RECOVERY_CONFLICT: Candidate Ref already has a different lease identity.",
+    );
+  }
+  internals.leases.set(lease.preparedCandidateRef, structuredClone(lease));
+  return "rehydrated";
 }
 
 export function lookupPreparedCandidateV1(

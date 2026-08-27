@@ -96,6 +96,9 @@ export interface DurableRequestRecordV1 {
   readonly buildIdentity?: WorldChangeBuildIdentityV1;
   readonly validationReports?: readonly WorldChangeValidationReportBindingV1[];
   readonly validationReportsHash?: Sha256HashV1;
+  readonly requiredGateProfileRefs?: readonly string[];
+  readonly preparedCandidateCreatedAtUnixMilliseconds?: number;
+  readonly preparedCandidateSizeBytes?: number;
   readonly expiresAtUnixMilliseconds?: number;
   readonly receipt?: WorldChangeReceiptV1;
   readonly pendingRevisionRef?: string;
