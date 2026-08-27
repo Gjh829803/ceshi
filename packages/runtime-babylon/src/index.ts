@@ -1,4 +1,5 @@
 export * from "./babylon-world-runtime";
+export * from "./native-scene-module";
 export * from "./runtime-projection";
 export * from "./artifact-capture";
 export {

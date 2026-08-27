@@ -10,6 +10,7 @@ import { LoadAssetContainerAsync } from "@babylonjs/core/Loading/sceneLoader.js"
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
 import { Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
+import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 import {
   CharacterSupportedState,
@@ -649,6 +650,7 @@ async function createRuntime(
     | "subjectAssetResolver"
     | "subjectAssetCacheOptions"
     | "onInitializationStage"
+    | "nativeScene"
   > = {},
   bindInitialPossession = true,
 ): Promise<BabylonWorldRuntime> {
@@ -1044,6 +1046,119 @@ async function createRuntimeWithPackageSubject(): Promise<{
 }
 
 describe("BabylonWorldRuntime", () => {
+  it("runs native scene geometry without constructing ExecutionPlan world geometry", async () => {
+    const executionPlan = createFlatPackageExecutionPlan();
+    let buildCount = 0;
+    let moduleOwnedPlatform: Mesh | undefined;
+    const runtime = await createRuntime(executionPlan, {
+      nativeScene: {
+        spawnMarkerId: "player-spawn",
+        module: {
+          kind: "babylon-native-scene-module",
+          id: "native-runtime-test",
+          build(context) {
+            buildCount += 1;
+            const platform = MeshBuilder.CreateBox(
+              "native-foreground-platform",
+              { width: 12, height: 1, depth: 16 },
+              context.scene,
+            );
+            platform.position.set(0, -0.5, 0);
+            moduleOwnedPlatform = platform;
+            const destination = MeshBuilder.CreateBox(
+              "native-raised-destination",
+              { width: 6, height: 1, depth: 6 },
+              context.scene,
+            );
+            destination.position.set(0, 0.5, -10);
+            context.registerSpawnMarker({
+              id: "player-spawn",
+              positionMetersXYZ: [0, 2, 4],
+              facingRadians: 0,
+            });
+            context.registerStaticCollisionMesh({
+              id: "foreground-platform",
+              mesh: platform,
+              surfaceKind: "walkable",
+              frictionRatio: 0.9,
+            });
+            context.registerStaticCollisionMesh({
+              id: "raised-destination",
+              mesh: destination,
+              surfaceKind: "walkable",
+            });
+          },
+        },
+        budget: {
+          maximumStaticColliderCount: 2,
+          maximumStaticColliderVertexCount: 64,
+          maximumStaticColliderTriangleCount: 24,
+        },
+      },
+    });
+    try {
+      const scene = (runtime as unknown as { scene: Scene }).scene;
+      expect(buildCount).toBe(1);
+      expect(scene.getMeshByName(executionPlan.terrain.entityId)).toBeNull();
+      for (const object of executionPlan.objects) {
+        expect(scene.getMeshByName(object.entityId)).toBeNull();
+      }
+      for (const water of executionPlan.waters) {
+        expect(scene.getMeshByName(water.entityId)).toBeNull();
+      }
+      expect(scene.getMeshByName("worldkit.native-collider.foreground-platform")?.metadata)
+        .toMatchObject({
+          worldkitEntityId: "foreground-platform",
+          worldkitNativeSurfaceKind: "walkable",
+        });
+      expect(scene.getMeshByName("worldkit.native-collider.raised-destination")?.metadata)
+        .toMatchObject({
+          worldkitEntityId: "raised-destination",
+          worldkitNativeSurfaceKind: "walkable",
+        });
+
+      expect(scene.getMeshByName("worldkit.native-collider.foreground-platform"))
+        .not.toBe(moduleOwnedPlatform);
+      moduleOwnedPlatform?.dispose();
+      const settled = await runtime.runFixedInput({ actions: [], ticks: 180 });
+      expect(settled.subjectStatesByEntityId.player).toMatchObject({
+        movementMedium: "ground",
+        activeActionId: "idle",
+      });
+      expect(settled.subjectStatesByEntityId.player!.positionMetersXYZ[2])
+        .toBeCloseTo(4, 1);
+      expect(executionPlan.subjects.find(({ entityId }) => entityId === "player")!
+        .spawnSubjectOriginPositionMetersXYZ).not.toEqual([0, 2, 4]);
+    } finally {
+      await runtime.dispose();
+    }
+  }, 15_000);
+
+  it("rejects a Native spawn marker that does not match the bootstrap binding", async () => {
+    const executionPlan = createFlatPackageExecutionPlan();
+    await expect(createRuntime(executionPlan, {
+      nativeScene: {
+        spawnMarkerId: "expected-spawn",
+        module: {
+          kind: "babylon-native-scene-module",
+          id: "native-spawn-mismatch-test",
+          build(context) {
+            context.registerSpawnMarker({
+              id: "different-spawn",
+              positionMetersXYZ: [0, 2, 0],
+              facingRadians: 0,
+            });
+          },
+        },
+        budget: {
+          maximumStaticColliderCount: 0,
+          maximumStaticColliderVertexCount: 0,
+          maximumStaticColliderTriangleCount: 0,
+        },
+      },
+    })).rejects.toThrow("WORLDKIT_NATIVE_SCENE_SPAWN_MARKER_MISMATCH");
+  }, 15_000);
+
   it("keeps Simulation Tick and Render Frame authority separate with reset-safe receipts", async () => {
     const runtime = await createFlatPackageRuntime();
     try {

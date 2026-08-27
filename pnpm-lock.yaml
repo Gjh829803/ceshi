@@ -123,6 +123,25 @@ importers:
         specifier: ^3.2.4
         version: 3.2.7(@types/node@24.13.3)(tsx@4.23.12)(yaml@2.9.0)
 
+  apps/native-scene-playground:
+    dependencies:
+      '@babylonjs/core':
+        specifier: 9.21.2
+        version: 9.21.2
+      '@whitebox-world/runtime-babylon':
+        specifier: workspace:*
+        version: link:../../packages/runtime-babylon
+      '@whitebox-world/runtime-contracts':
+        specifier: workspace:*
+        version: link:../../packages/runtime-contracts
+    devDependencies:
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+      vite:
+        specifier: ^7.1.2
+        version: 7.3.6(@types/node@24.13.3)(tsx@4.23.12)(yaml@2.9.0)
+
   apps/playground:
     dependencies:
       '@babylonjs/core':

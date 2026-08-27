@@ -104,12 +104,20 @@ import {
   createBabylonWaterMeshV1,
 } from "./scene-geometry";
 import { canonicalizeSignedZero, canonicalizeVec3 } from "./canonical-numbers";
+import {
+  buildBabylonNativeSceneContributionV1,
+  type BabylonNativeSceneAdmissionBudgetV1,
+  type BabylonNativeSceneModuleV1,
+  type BabylonNativeSceneSpawnMarkerV1,
+  type BabylonNativeStaticCollisionMeshV1,
+} from "./native-scene-module";
 
 export type BabylonWorldRuntimeInitializationStageV1 =
   | "engine"
   | "scene"
   | "havok"
   | "terrain"
+  | "native-scene"
   | "subjects"
   | "camera"
   | "ready";
@@ -124,6 +132,12 @@ export interface BabylonWorldRuntimeOptions {
   havokWasmBinary?: ArrayBuffer;
   subjectAssetResolver?: SubjectAssetResolverV1;
   subjectAssetCacheOptions?: SubjectAssetCacheOptionsV1;
+  /** Experimental provider-specific visual geometry lane. Canonical omission remains the default. */
+  nativeScene?: Readonly<{
+    module: BabylonNativeSceneModuleV1;
+    spawnMarkerId: string;
+    budget: BabylonNativeSceneAdmissionBudgetV1;
+  }>;
   onInitializationStage?(stage: BabylonWorldRuntimeInitializationStageV1): void;
 }
 
@@ -426,6 +440,63 @@ function configureAtmosphere(
   sun.intensity = preset === "night" ? 0.22 : 1.1;
 }
 
+function executionPlanWithNativeSpawn(
+  executionPlan: ExecutionPlanV5,
+  spawnMarker: BabylonNativeSceneSpawnMarkerV1,
+): ExecutionPlanV5 {
+  const initialControlledEntityId = executionPlan.initialControlledEntityId;
+  return Object.freeze({
+    ...executionPlan,
+    subjects: Object.freeze(executionPlan.subjects.map((subject) =>
+      subject.entityId === initialControlledEntityId
+        ? Object.freeze({
+            ...subject,
+            spawnSubjectOriginPositionMetersXYZ: spawnMarker.positionMetersXYZ,
+            spawnSubjectFacingRadians: spawnMarker.facingRadians,
+          })
+        : subject
+    )),
+  });
+}
+
+function nativeColliderMetadata(
+  mesh: Mesh,
+  entityId: string,
+  surfaceKind: "walkable" | "obstacle",
+): void {
+  const retained = typeof mesh.metadata === "object" && !isNil(mesh.metadata)
+    ? mesh.metadata as Readonly<Record<string, unknown>>
+    : {};
+  mesh.metadata = {
+    ...retained,
+    worldkitEntityId: entityId,
+    worldkitNativeSurfaceKind: surfaceKind,
+  };
+}
+
+function createOwnedNativeCollisionMesh(
+  collider: BabylonNativeStaticCollisionMeshV1,
+  scene: Scene,
+): Mesh {
+  const mesh = new Mesh(`worldkit.native-collider.${collider.id}`, scene);
+  const normals: number[] = [];
+  VertexData.ComputeNormals(
+    collider.worldPositionsMetersXYZ,
+    collider.triangleIndices,
+    normals,
+  );
+  const vertexData = new VertexData();
+  vertexData.positions = [...collider.worldPositionsMetersXYZ];
+  vertexData.indices = [...collider.triangleIndices];
+  vertexData.normals = normals;
+  vertexData.applyToMesh(mesh, false);
+  nativeColliderMetadata(mesh, collider.id, collider.surfaceKind);
+  mesh.isVisible = false;
+  mesh.isPickable = false;
+  mesh.computeWorldMatrix(true);
+  return mesh;
+}
+
 async function disposeOwnedStack(
   ownedDisposers: readonly OwnedDisposer[],
 ): Promise<void> {
@@ -461,7 +532,7 @@ export class BabylonWorldRuntime {
   private appliedCameraViewStateRevision = 0;
   private traversalConfigurationEpoch = 0;
   private readonly aggregates: PhysicsAggregate[] = [];
-  private readonly ownedTerrainShape: PhysicsShape;
+  private readonly ownedTerrainShape: PhysicsShape | undefined;
   private readonly staticCollisionMeshes: readonly StaticCollisionMeshEntryV1[];
   private readonly entityRegistry: EntityRegistryV1;
   private readonly characterEntitiesByEntityId: ReadonlyMap<string, BabylonCharacterEntityV1>;
@@ -472,6 +543,7 @@ export class BabylonWorldRuntime {
   private readonly renderLoop: () => void;
   private readonly autoStartRenderLoop: boolean;
   private readonly ownedDisposers: readonly OwnedDisposer[];
+  private readonly terrainSampleCount: number;
   private activeInputActions: readonly SemanticInputActionV1[] = [];
   private activeInputAxes: Readonly<ControlInputAxesV2> = {};
   private gameplayPublishedState: BabylonGameplayPublishedStateV1;
@@ -487,12 +559,13 @@ export class BabylonWorldRuntime {
     subjectVisuals: readonly SubjectVisual[],
     camera: FreeCamera,
     cameraComponent: CameraComponentV1,
-    ownedTerrainShape: PhysicsShape,
+    ownedTerrainShape: PhysicsShape | undefined,
     aggregates: PhysicsAggregate[],
     staticCollisionMeshes: readonly StaticCollisionMeshEntryV1[],
     ownedDisposers: readonly OwnedDisposer[],
     autoStartRenderLoop: boolean,
     creationExecutionPlanHash: `sha256:${string}` | undefined,
+    terrainSampleCount: number,
   ) {
     this.gameplayPublishedState = Object.freeze({
       possessionTarget: Object.freeze({ mode: "unbound" }),
@@ -517,6 +590,7 @@ export class BabylonWorldRuntime {
     this.renderLoop = () => this.renderFrame();
     this.autoStartRenderLoop = autoStartRenderLoop;
     this.#creationExecutionPlanHash = creationExecutionPlanHash;
+    this.terrainSampleCount = terrainSampleCount;
     this.initializeInitialMountedRelationships();
     this.updateCamera();
     if (autoStartRenderLoop) this.engine.runRenderLoop(this.renderLoop);
@@ -556,9 +630,9 @@ export class BabylonWorldRuntime {
         `WORLDKIT_RUNTIME_CONTROL_TARGET_NOT_FOUND: ${initialControlledEntityId}`,
       );
     }
-    const creationExecutionPlanHash = sha256CanonicalJson(
-      options.executionPlan,
-    ) as `sha256:${string}`;
+    const creationExecutionPlanHash = isNil(options.nativeScene)
+      ? sha256CanonicalJson(options.executionPlan) as `sha256:${string}`
+      : undefined;
     const ownedDisposers: OwnedDisposer[] = [];
     options.onInitializationStage?.("engine");
     const engine = options.engineFactory?.() ?? new Engine(options.canvas!, true, { preserveDrawingBuffer: true, stencil: true });
@@ -577,46 +651,88 @@ export class BabylonWorldRuntime {
       const physicsWorldQuery = new BabylonHavokPhysicsWorldQueryV1(scene, havokPlugin);
       ownedDisposers.push(() => physicsWorldQuery.dispose());
       const entityRegistry = new EntityRegistryV1();
-      options.onInitializationStage?.("terrain");
-      configureAtmosphere(scene, options.executionPlan.atmospherePreset);
       const materials = createWhiteboxMaterials(scene);
-
-      const terrainMesh = createTerrainMesh(options.executionPlan.terrain, materials.terrain, scene);
-      const terrainShape: PhysicsShape = new PhysicsShapeMesh(terrainMesh, scene);
       const aggregates: PhysicsAggregate[] = [];
-      ownedDisposers.push(() => terrainShape.dispose());
-      const terrainAggregate = new PhysicsAggregate(
-        terrainMesh,
-        terrainShape,
-        { mass: 0, friction: 0.9, restitution: 0 },
-        scene,
-      );
-      aggregates.push(terrainAggregate);
-      ownedDisposers.push(() => terrainAggregate.dispose());
-
-      for (const water of options.executionPlan.waters) {
-        createBabylonWaterMeshV1(water, materials, scene);
-      }
-      for (const object of options.executionPlan.objects) {
-        createBabylonObjectMeshV1(object, materials, scene);
-      }
+      let terrainShape: PhysicsShape | undefined;
       const staticCollisionMeshes: StaticCollisionMeshEntryV1[] = [];
-      for (const collider of options.executionPlan.staticColliders) {
-        const mesh = createStaticCollisionMesh(collider, scene);
-        const shape = new PhysicsShapeMesh(mesh, scene);
-        ownedDisposers.push(() => shape.dispose());
-        const aggregate = new PhysicsAggregate(
-          mesh,
-          shape,
-          { mass: 0, friction: 0.75, restitution: 0 },
+      let executionPlan = options.executionPlan;
+      let terrainSampleCount = options.executionPlan.terrain.heightSamplesMeters.length;
+      if (isNil(options.nativeScene)) {
+        options.onInitializationStage?.("terrain");
+        configureAtmosphere(scene, options.executionPlan.atmospherePreset);
+        const terrainMesh = createTerrainMesh(
+          options.executionPlan.terrain,
+          materials.terrain,
           scene,
         );
-        aggregates.push(aggregate);
-        staticCollisionMeshes.push({ collider, mesh });
-        ownedDisposers.push(() => aggregate.dispose());
-      }
+        terrainShape = new PhysicsShapeMesh(terrainMesh, scene);
+        ownedDisposers.push(() => terrainShape?.dispose());
+        const terrainAggregate = new PhysicsAggregate(
+          terrainMesh,
+          terrainShape,
+          { mass: 0, friction: 0.9, restitution: 0 },
+          scene,
+        );
+        aggregates.push(terrainAggregate);
+        ownedDisposers.push(() => terrainAggregate.dispose());
 
-      revalidateRuntimeLayoutAssertions(options.executionPlan);
+        for (const water of options.executionPlan.waters) {
+          createBabylonWaterMeshV1(water, materials, scene);
+        }
+        for (const object of options.executionPlan.objects) {
+          createBabylonObjectMeshV1(object, materials, scene);
+        }
+        for (const collider of options.executionPlan.staticColliders) {
+          const mesh = createStaticCollisionMesh(collider, scene);
+          const shape = new PhysicsShapeMesh(mesh, scene);
+          ownedDisposers.push(() => shape.dispose());
+          const aggregate = new PhysicsAggregate(
+            mesh,
+            shape,
+            { mass: 0, friction: 0.75, restitution: 0 },
+            scene,
+          );
+          aggregates.push(aggregate);
+          staticCollisionMeshes.push({ collider, mesh });
+          ownedDisposers.push(() => aggregate.dispose());
+        }
+        revalidateRuntimeLayoutAssertions(options.executionPlan);
+      } else {
+        options.onInitializationStage?.("native-scene");
+        const contribution = await buildBabylonNativeSceneContributionV1({
+          scene,
+          module: options.nativeScene.module,
+          budget: options.nativeScene.budget,
+        });
+        if (contribution.spawnMarker.id !== options.nativeScene.spawnMarkerId) {
+          throw new Error(
+            "WORLDKIT_NATIVE_SCENE_SPAWN_MARKER_MISMATCH: Native Scene Spawn Marker does not match the Bootstrap binding.",
+          );
+        }
+        executionPlan = executionPlanWithNativeSpawn(
+          options.executionPlan,
+          contribution.spawnMarker,
+        );
+        terrainSampleCount = 0;
+        for (const collider of contribution.staticCollisionMeshes) {
+          const collisionMesh = createOwnedNativeCollisionMesh(collider, scene);
+          ownedDisposers.push(() => collisionMesh.dispose());
+          const shape = new PhysicsShapeMesh(collisionMesh, scene);
+          ownedDisposers.push(() => shape.dispose());
+          const aggregate = new PhysicsAggregate(
+            collisionMesh,
+            shape,
+            {
+              mass: 0,
+              friction: collider.frictionRatio,
+              restitution: collider.restitutionRatio,
+            },
+            scene,
+          );
+          aggregates.push(aggregate);
+          ownedDisposers.push(() => aggregate.dispose());
+        }
+      }
 
       options.onInitializationStage?.("subjects");
       const subjectAssetCache = new SubjectAssetCacheV1(
@@ -627,13 +743,13 @@ export class BabylonWorldRuntime {
       ownedDisposers.push(() => subjectAssetCache.dispose());
       const characterEntitiesByEntityId = new Map<string, BabylonCharacterEntityV1>();
       const subjectVisuals: SubjectVisual[] = [];
-      const sortedSubjects = [...options.executionPlan.subjects].sort((left, right) =>
+      const sortedSubjects = [...executionPlan.subjects].sort((left, right) =>
         left.entityId.localeCompare(right.entityId),
       );
       for (const subject of sortedSubjects) {
         const visual = await createSubjectVisual({
           subject,
-          executionPlan: options.executionPlan,
+          executionPlan,
           material: materials.subject,
           scene,
           subjectAssetCache,
@@ -643,11 +759,13 @@ export class BabylonWorldRuntime {
         const character = new BabylonCharacterEntityV1({
           subject,
           gravityMetersPerSecondSquaredXYZ:
-            options.executionPlan.gravityMetersPerSecondSquaredXYZ,
+            executionPlan.gravityMetersPerSecondSquaredXYZ,
           visualRoot: visual.root,
           scene,
           waterSurfaceHeightAtSubjectOrigin: (subjectOrigin) =>
-            waterSurfaceHeightAtSubjectOrigin(options.executionPlan, subjectOrigin),
+            isNil(options.nativeScene)
+              ? waterSurfaceHeightAtSubjectOrigin(executionPlan, subjectOrigin)
+              : undefined,
         });
         entityRegistry.register(character.entity);
         // Register entity rollback immediately. The registry itself is added to
@@ -659,7 +777,7 @@ export class BabylonWorldRuntime {
       }
 
       options.onInitializationStage?.("camera");
-      const cameraPlan = options.executionPlan.camera;
+      const cameraPlan = executionPlan.camera;
       const camera = new FreeCamera(cameraPlan.cameraEntityId, Vector3.Zero(), scene);
       camera.fov = (cameraPlan.fovDegrees * Math.PI) / 180;
       camera.minZ = 0.05;
@@ -667,7 +785,7 @@ export class BabylonWorldRuntime {
       const cameraEntity = entityRegistry.register(new RuntimeEntityV1(cameraPlan.cameraEntityId));
       ownedDisposers.push(() => cameraEntity.dispose());
       const cameraComponent = cameraEntity.registerComponent(new CameraComponentV1(
-        options.executionPlan,
+        executionPlan,
         camera,
         scene,
         physicsWorldQuery,
@@ -677,7 +795,7 @@ export class BabylonWorldRuntime {
 
       options.onInitializationStage?.("ready");
       return new BabylonWorldRuntime(
-        options.executionPlan,
+        executionPlan,
         options.runtimeSessionId ?? "runtime-session-local",
         engine,
         scene,
@@ -692,6 +810,7 @@ export class BabylonWorldRuntime {
         ownedDisposers,
         options.engineFactory === undefined && options.autoStartRenderLoop !== false,
         creationExecutionPlanHash,
+        terrainSampleCount,
       );
     } catch (error) {
       try {
@@ -1752,7 +1871,7 @@ export class BabylonWorldRuntime {
       resources: {
         meshes: this.scene.meshes.length,
         bodies: (this.scene.getPhysicsEngine() as PhysicsEngine | null)?.getBodies().length ?? 0,
-        terrainSamples: this.executionPlan.terrain.heightSamplesMeters.length,
+        terrainSamples: this.terrainSampleCount,
       },
     };
   }
