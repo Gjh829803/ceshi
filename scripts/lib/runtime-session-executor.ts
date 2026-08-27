@@ -30,12 +30,12 @@ import {
   loadRuntimeWorldConfigurationFromPackageDirectoryV1,
 } from "./world-package-cli";
 
-type RuntimeSessionReadyEventV1 = Extract<
+export type RuntimeSessionReadyEventV1 = Extract<
   RuntimeSessionEventV1,
   { type: "ready" }
 >;
 
-type RuntimeSessionFinalEventV1 = Extract<
+export type RuntimeSessionFinalEventV1 = Extract<
   RuntimeSessionEventV1,
   { type: "completed" | "failed" }
 >;
@@ -83,6 +83,10 @@ export interface ResumeRuntimeSessionExecutorInputV1 {
 export interface RuntimeSessionExecutorV1 {
   readonly readyEvent: RuntimeSessionReadyEventV1;
   execute(request: unknown): Promise<RuntimeSessionReceiptV1>;
+  terminalEvent(): RuntimeSessionFinalEventV1 | undefined;
+  terminate(
+    diagnostic?: RuntimeSessionDiagnosticV1,
+  ): Promise<RuntimeSessionFinalEventV1>;
 }
 
 type ExecutorStateV1 = "active" | "closed" | "failed" | "crashed";
@@ -293,6 +297,20 @@ class RuntimeSessionExecutor implements RuntimeSessionExecutorV1 {
     return operation;
   }
 
+  terminalEvent(): RuntimeSessionFinalEventV1 | undefined {
+    return this.wal.snapshot().finalEvent;
+  }
+
+  terminate(
+    diagnostic?: RuntimeSessionDiagnosticV1,
+  ): Promise<RuntimeSessionFinalEventV1> {
+    const operation = this.#tail.then(() =>
+      this.terminateSerialized(diagnostic)
+    );
+    this.#tail = operation.then(() => undefined, () => undefined);
+    return operation;
+  }
+
   async replayCommitted(
     entry: RuntimeSessionWalCommittedRequestV1,
   ): Promise<RuntimeSessionReceiptV1> {
@@ -361,6 +379,26 @@ class RuntimeSessionExecutor implements RuntimeSessionExecutorV1 {
       this.wal.appendClosed(finalEvent(this.readyEvent, "completed"));
     }
     return receipt;
+  }
+
+  private async terminateSerialized(
+    diagnostic?: RuntimeSessionDiagnosticV1,
+  ): Promise<RuntimeSessionFinalEventV1> {
+    const durableFinalEvent = this.wal.snapshot().finalEvent;
+    if (!isNil(durableFinalEvent)) return durableFinalEvent;
+
+    let finalDiagnostic = diagnostic;
+    try {
+      await this.session?.dispose();
+    } catch {
+      finalDiagnostic ??= INTERNAL_FAILURE_DIAGNOSTIC;
+    }
+    const event = isNil(finalDiagnostic)
+      ? finalEvent(this.readyEvent, "completed")
+      : finalEvent(this.readyEvent, "failed", finalDiagnostic);
+    this.state = event.type === "completed" ? "closed" : "failed";
+    this.wal.appendClosed(event);
+    return event;
   }
 
   private async invoke(

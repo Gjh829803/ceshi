@@ -31,6 +31,7 @@ import {
 } from "./lib/artifact-directory-promotion";
 import { launchChromiumWithSystemFallback } from "./lib/playwright-browser-launch";
 import { startWorldkitServer } from "./lib/worldkit-server";
+import { buildWorldArtifactFileV1 } from "./build-world-artifact";
 import { main as worldkitMain } from "./worldkit";
 
 const REPOSITORY_ROOT = fileURLToPath(new URL("../", import.meta.url));
@@ -165,6 +166,7 @@ function inspectPng(bytes: Buffer): { width: number; height: number } {
 }
 
 async function runCliGates(paths: CanonicalArtifactPaths): Promise<void> {
+  const packageDirectoryPath = path.join(paths.directory, "world.package");
   assert.equal(
     await worldkitMain(["validate", INPUT_PATH, "--json"]),
     0,
@@ -176,15 +178,32 @@ async function runCliGates(paths: CanonicalArtifactPaths): Promise<void> {
     "worldkit validate must reject unknown fields.",
   );
   assert.equal(
-    await worldkitMain(["build", INPUT_PATH, "--output", paths.build, "--json"]),
+    await worldkitMain([
+      "build",
+      INPUT_PATH,
+      "--output",
+      packageDirectoryPath,
+      "--json",
+    ]),
     0,
-    "worldkit build must emit the canonical V4 build artifact.",
+    "worldkit build must emit the complete WorldPackage V2 directory.",
+  );
+  assert.equal(
+    await worldkitMain(["inspect", packageDirectoryPath, "--json"]),
+    0,
+    "worldkit inspect must independently admit the complete Package.",
+  );
+  await rm(packageDirectoryPath, { recursive: true, force: true });
+  assert.equal(
+    (await buildWorldArtifactFileV1(INPUT_PATH, paths.build)).exitCode,
+    0,
+    "The trusted-host internal build artifact must remain available.",
   );
   const firstBuildBytes = await readFile(paths.build, "utf8");
   assert.equal(
-    await worldkitMain(["build", INPUT_PATH, "--output", paths.build, "--json"]),
+    (await buildWorldArtifactFileV1(INPUT_PATH, paths.build)).exitCode,
     0,
-    "Repeated worldkit build must succeed.",
+    "Repeated internal build artifact compilation must succeed.",
   );
   assert.equal(
     await readFile(paths.build, "utf8"),

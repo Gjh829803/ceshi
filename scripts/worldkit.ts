@@ -1,6 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { execFile as execFileCallback } from "node:child_process";
-import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  readFile,
+  realpath,
+  rename,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -33,6 +41,7 @@ import {
   type RegistryResourceKindV1,
 } from "@whitebox-world/authoring-edit";
 import { isNil } from "lodash-es";
+import { Logger } from "@babylonjs/core/Misc/logger.js";
 
 import {
   runChangeApplyV1,
@@ -93,6 +102,21 @@ import {
   publicRouteValidationRunnerFailureV1,
   verifyRouteFileV1,
 } from "./lib/route-validation-cli";
+import {
+  WORLDKIT_CLI_PROTOCOL_VERSION_V1,
+  WORLDKIT_SDK_VERSION_V1,
+  WORLDKIT_SPEC_VERSION_V1,
+  buildWorldPackageDirectoryV2,
+  inspectWorldPackageDirectoryV2,
+  loadRuntimeWorldConfigurationFromPackageDirectoryV1,
+  type WorldPackageCommandResultV1,
+} from "./lib/world-package-cli";
+import { createHeadlessRuntimeSessionV1 } from "./lib/headless-runtime-session";
+import {
+  createRuntimeSessionExecutorV1,
+  resumeRuntimeSessionExecutorV1,
+} from "./lib/runtime-session-executor";
+import { runRuntimeSessionNdjsonV1 } from "./lib/runtime-session-ndjson";
 
 const execFile = promisify(execFileCallback);
 const REPOSITORY_ROOT = path.resolve(
@@ -103,8 +127,12 @@ const HELP = `worldkit - Canonical JSON whitebox world SDK
 
 Usage:
   worldkit validate <file> [--json]
-  worldkit build <file> --output <file> [--json]
-  worldkit run <file> [--port <port>] [--refresh-dependencies] [--json]
+  worldkit build <world.json> --output <package-directory> [--json]
+  worldkit inspect <package-directory> [--json]
+  worldkit load <package-directory> --headless [--json]
+  worldkit run <world.json> [--port <port>] [--refresh-dependencies] [--json]
+  worldkit run <package-directory> --interactive --protocol ndjson --headless
+    --session-directory <absolute-directory> [--resume]
   worldkit capture <file> --output <png> [--snapshot <json>] [--triview-output <directory> --implementation-map <json>] [--port <port>] [--json]
   worldkit registry list --kind <resource-kind> [--json]
   worldkit registry describe --resource-ref <ref> [--json]
@@ -151,12 +179,21 @@ export type WorldkitArgs =
   | { command: "help"; json: false }
   | { command: "validate"; inputPath: string; json: boolean }
   | { command: "build"; inputPath: string; outputPath: string; json: boolean }
+  | { command: "inspect"; packageDirectoryPath: string; json: boolean }
+  | { command: "load"; packageDirectoryPath: string; headless: true; json: boolean }
   | {
-      command: "run";
+      command: "run-browser";
       inputPath: string;
       port?: number;
       refreshDependencies?: boolean;
       json: boolean;
+    }
+  | {
+      command: "run-session";
+      packageDirectoryPath: string;
+      sessionDirectoryPath: string;
+      resume: boolean;
+      json: false;
     }
   | {
       command: "capture";
@@ -885,17 +922,65 @@ export function parseWorldkitArgs(arguments_: readonly string[]): WorldkitArgs {
   if (command === "build") {
     const outputPath = takeOption(tokens, "--output");
     if (outputPath === undefined) {
-      throw new WorldkitUsageError("build requires --output <file>.");
+      throw new WorldkitUsageError("build requires --output <package-directory>.");
     }
     rejectRemaining(tokens, "build");
     return { command, inputPath, outputPath, json };
   }
+  if (command === "inspect") {
+    rejectRemaining(tokens, "inspect");
+    return { command, packageDirectoryPath: inputPath, json };
+  }
+  if (command === "load") {
+    const headless = takeFlag(tokens, "--headless");
+    if (!headless) {
+      throw new WorldkitUsageError("load requires --headless.");
+    }
+    rejectRemaining(tokens, "load");
+    return { command, packageDirectoryPath: inputPath, headless: true, json };
+  }
   if (command === "run") {
     const portValue = takeOption(tokens, "--port");
     const refreshDependencies = takeFlag(tokens, "--refresh-dependencies");
+    const interactive = takeFlag(tokens, "--interactive");
+    const protocol = takeOption(tokens, "--protocol");
+    const headless = takeFlag(tokens, "--headless");
+    const sessionDirectoryPath = takeOption(tokens, "--session-directory");
+    const resume = takeFlag(tokens, "--resume");
     rejectRemaining(tokens, "run");
+    const requestsRuntimeSession = interactive || !isNil(protocol) || headless ||
+      !isNil(sessionDirectoryPath) || resume;
+    if (requestsRuntimeSession) {
+      if (
+        !interactive ||
+        protocol !== "ndjson" ||
+        !headless ||
+        isNil(sessionDirectoryPath)
+      ) {
+        throw new WorldkitUsageError(
+          "run --interactive requires --protocol ndjson --headless and --session-directory <absolute-directory>.",
+        );
+      }
+      if (!path.isAbsolute(sessionDirectoryPath)) {
+        throw new WorldkitUsageError(
+          "--session-directory must be an absolute directory.",
+        );
+      }
+      if (!isNil(portValue) || refreshDependencies || json) {
+        throw new WorldkitUsageError(
+          "Interactive NDJSON Runtime Sessions do not accept Browser flags or --json.",
+        );
+      }
+      return {
+        command: "run-session",
+        packageDirectoryPath: inputPath,
+        sessionDirectoryPath,
+        resume,
+        json: false,
+      };
+    }
     return {
-      command,
+      command: "run-browser",
       inputPath,
       ...(portValue === undefined ? {} : { port: parsePort(portValue) }),
       ...(refreshDependencies ? { refreshDependencies: true } : {}),
@@ -1117,48 +1202,71 @@ async function writeAtomic(
   }
 }
 
+function packageCommandFailure(
+  command: "build" | "inspect" | "load",
+  exitCode: 1 | 2 | 3 | 4 | 5 | 6,
+  code: string,
+  message: string,
+): WorldPackageCommandResultV1 {
+  return Object.freeze({
+    kind: "worldkit-package-command-result",
+    schemaVersion: 1,
+    protocolVersion: WORLDKIT_CLI_PROTOCOL_VERSION_V1,
+    sdkVersion: WORLDKIT_SDK_VERSION_V1,
+    specVersion: WORLDKIT_SPEC_VERSION_V1,
+    command,
+    ok: false,
+    exitCode,
+    diagnostics: Object.freeze([Object.freeze({
+      severity: "error" as const,
+      code,
+      instancePath: "",
+      message,
+    })]),
+  });
+}
+
+async function withBabylonProtocolSilence<T>(
+  operation: () => Promise<T>,
+): Promise<T> {
+  const previousLog = Logger.Log;
+  const previousWarn = Logger.Warn;
+  const previousError = Logger.Error;
+  Logger.LogLevels = Logger.NoneLogLevel;
+  try {
+    return await operation();
+  } finally {
+    Logger.Log = previousLog;
+    Logger.Warn = previousWarn;
+    Logger.Error = previousError;
+  }
+}
+
 export async function buildFile(
   inputPath: string,
   outputPath: string,
-): Promise<WorldkitCommandResult> {
-  const absoluteInputPath = path.resolve(inputPath);
-  const absoluteOutputPath = path.resolve(outputPath);
-  if (absoluteInputPath === absoluteOutputPath) {
-    return cliFailure(
-      "CLI_OUTPUT_OVERWRITES_INPUT",
-      "Build output must not overwrite the AuthoringSpec input.",
-    );
-  }
-  const pipeline = await loadWorldkitRoutePipeline(absoluteInputPath);
-  if (!pipeline.ok) return pipeline;
-  const artifact = {
-    kind: "worldkit-build-artifact",
-    schemaVersion: 4,
-    normalizedWorldIrHash: pipeline.normalizedWorldIrHash,
-    executionPlanHash: pipeline.executionPlanHash,
-    normalizedWorldIr: pipeline.normalizedWorldIr,
-    executionPlan: pipeline.executionPlan,
-  } as const;
+): Promise<WorldPackageCommandResultV1> {
+  const requestedOutputPath = path.resolve(outputPath);
+  const requestedParentPath = path.dirname(requestedOutputPath);
+  let canonicalParentPath: string;
   try {
-    await writeAtomic(
-      absoluteOutputPath,
-      `${stringifyCanonicalJson(artifact)}\n`,
-    );
-  } catch (error) {
-    return cliFailure(
-      "CLI_OUTPUT_WRITE_FAILED",
-      `Unable to write build artifact '${absoluteOutputPath}'.`,
-      { cause: error instanceof Error ? error.message : String(error) },
+    await mkdir(requestedParentPath, { recursive: true });
+    canonicalParentPath = await realpath(requestedParentPath);
+  } catch {
+    return packageCommandFailure(
+      "build",
+      1,
+      "WORLD_PACKAGE_OUTPUT_UNAVAILABLE",
+      "The WorldPackage output parent directory is unavailable.",
     );
   }
-  return {
-    ok: true,
-    exitCode: 0,
-    diagnostics: [],
-    normalizedWorldIrHash: pipeline.normalizedWorldIrHash,
-    executionPlanHash: pipeline.executionPlanHash,
-    outputPath: absoluteOutputPath,
-  };
+  return buildWorldPackageDirectoryV2({
+    inputPath: path.resolve(inputPath),
+    outputDirectoryPath: path.join(
+      canonicalParentPath,
+      path.basename(requestedOutputPath),
+    ),
+  });
 }
 
 export async function captureVisibleWorldWithRetries<
@@ -1740,6 +1848,18 @@ async function runUntilSignal(
   refreshDependencies: boolean,
   json: boolean,
 ): Promise<number> {
+  try {
+    if ((await stat(path.resolve(inputPath))).isDirectory()) {
+      const result = cliFailure(
+        "CLI_RUN_INPUT_KIND_MISMATCH",
+        "A WorldPackage directory requires run --interactive --protocol ndjson --headless.",
+      );
+      printResult(result, json);
+      return result.exitCode;
+    }
+  } catch {
+    // The shared input reader below owns the stable unavailable-input result.
+  }
   const input = await readWorldkitInput(inputPath);
   if (!input.ok) {
     printResult(input, json);
@@ -1837,6 +1957,148 @@ async function runUntilSignal(
   return 0;
 }
 
+export async function inspectPackageDirectory(
+  packageDirectoryPath: string,
+): Promise<WorldPackageCommandResultV1> {
+  let canonicalPackageDirectoryPath: string;
+  try {
+    canonicalPackageDirectoryPath = await realpath(
+      path.resolve(packageDirectoryPath),
+    );
+  } catch {
+    return packageCommandFailure(
+      "inspect",
+      2,
+      "WORLD_PACKAGE_INPUT_INVALID",
+      "The WorldPackage directory is unavailable.",
+    );
+  }
+  return inspectWorldPackageDirectoryV2({
+    packageDirectoryPath: canonicalPackageDirectoryPath,
+  });
+}
+
+export async function loadPackageHeadless(
+  packageDirectoryPath: string,
+): Promise<WorldPackageCommandResultV1> {
+  let canonicalPackageDirectoryPath: string;
+  try {
+    canonicalPackageDirectoryPath = await realpath(
+      path.resolve(packageDirectoryPath),
+    );
+  } catch {
+    return packageCommandFailure(
+      "load",
+      2,
+      "WORLD_PACKAGE_INPUT_INVALID",
+      "The WorldPackage directory is unavailable.",
+    );
+  }
+  const loaded = await loadRuntimeWorldConfigurationFromPackageDirectoryV1({
+    packageDirectoryPath: canonicalPackageDirectoryPath,
+  });
+  if (!("runtimeWorldConfiguration" in loaded)) return loaded.result;
+  try {
+    await withBabylonProtocolSilence(async () => {
+      const session = await createHeadlessRuntimeSessionV1({
+        runtimeSessionId: `runtime-session.load.${randomUUID()}`,
+        initialWorldSessionId: `world-session.load.${randomUUID()}`,
+        runtimeWorldConfiguration: loaded.runtimeWorldConfiguration,
+        verifiedDirectory: loaded.verifiedDirectory,
+      });
+      await session.dispose();
+    });
+    return loaded.result;
+  } catch {
+    return packageCommandFailure(
+      "load",
+      5,
+      "WORLD_PACKAGE_RUNTIME_READY_FAILED",
+      "The admitted WorldPackage did not reach and cleanly leave World Ready.",
+    );
+  }
+}
+
+function processTerminationSignal(): Readonly<{
+  promise: Promise<"SIGINT" | "SIGTERM">;
+  cleanup(): void;
+}> {
+  let resolveSignal!: (signal: "SIGINT" | "SIGTERM") => void;
+  const promise = new Promise<"SIGINT" | "SIGTERM">((resolve) => {
+    resolveSignal = resolve;
+  });
+  const onSigint = (): void => resolveSignal("SIGINT");
+  const onSigterm = (): void => resolveSignal("SIGTERM");
+  process.once("SIGINT", onSigint);
+  process.once("SIGTERM", onSigterm);
+  return Object.freeze({
+    promise,
+    cleanup: () => {
+      process.off("SIGINT", onSigint);
+      process.off("SIGTERM", onSigterm);
+    },
+  });
+}
+
+async function runRuntimeSession(
+  packageDirectoryPath: string,
+  sessionDirectoryPath: string,
+  resume: boolean,
+): Promise<number> {
+  const walFilePath = path.join(
+    sessionDirectoryPath,
+    "runtime-session.wal.ndjson",
+  );
+  if (resume) {
+    try {
+      if (!(await stat(walFilePath)).isFile()) {
+        throw new Error("not a file");
+      }
+    } catch {
+      process.stderr.write(
+        "--resume requires an existing Runtime Session WAL in --session-directory.\n",
+      );
+      return 2;
+    }
+  }
+
+  try {
+    return await withBabylonProtocolSilence(async () => {
+      const canonicalPackageDirectoryPath = await realpath(
+        path.resolve(packageDirectoryPath),
+      );
+      const executor = resume
+        ? await resumeRuntimeSessionExecutorV1({
+            packageDirectoryPath: canonicalPackageDirectoryPath,
+            walFilePath,
+          })
+        : await createRuntimeSessionExecutorV1({
+            packageDirectoryPath: canonicalPackageDirectoryPath,
+            walFilePath,
+            runtimeSessionId: `runtime-session.${randomUUID()}`,
+            initialWorldSessionId: `world-session.${randomUUID()}`,
+          });
+      const signal = processTerminationSignal();
+      try {
+        const result = await runRuntimeSessionNdjsonV1({
+          executor,
+          input: process.stdin,
+          output: process.stdout,
+          terminationSignal: signal.promise,
+        });
+        return result.exitCode;
+      } finally {
+        signal.cleanup();
+      }
+    });
+  } catch {
+    process.stderr.write(
+      "Runtime Session creation or recovery failed before the ready Event.\n",
+    );
+    return 1;
+  }
+}
+
 export async function main(
   arguments_: readonly string[] = process.argv.slice(2),
 ): Promise<number> {
@@ -1853,13 +2115,30 @@ export async function main(
     process.stdout.write(HELP);
     return 0;
   }
-  if (parsed.command === "run") {
+  if (parsed.command === "run-browser") {
     return runUntilSignal(
       parsed.inputPath,
       parsed.port,
       parsed.refreshDependencies === true,
       parsed.json,
     );
+  }
+  if (parsed.command === "run-session") {
+    return runRuntimeSession(
+      parsed.packageDirectoryPath,
+      parsed.sessionDirectoryPath,
+      parsed.resume,
+    );
+  }
+  if (parsed.command === "inspect") {
+    const result = await inspectPackageDirectory(parsed.packageDirectoryPath);
+    printResult(result, parsed.json);
+    return result.exitCode;
+  }
+  if (parsed.command === "load") {
+    const result = await loadPackageHeadless(parsed.packageDirectoryPath);
+    printResult(result, parsed.json);
+    return result.exitCode;
   }
   if (parsed.command === "take-validate") {
     const result = await validateSimulationTakeFileV1(parsed.inputPath);

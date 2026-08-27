@@ -77,7 +77,7 @@ export type WorldPackageCommandFailureV1 =
   WorldPackageCommandEnvelopeV1 &
   Readonly<{
     readonly ok: false;
-    readonly exitCode: 1 | 2 | 3 | 4 | 6;
+    readonly exitCode: 1 | 2 | 3 | 4 | 5 | 6;
     readonly diagnostics: readonly WorldkitDiagnostic[];
   }>;
 

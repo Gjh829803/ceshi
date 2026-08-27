@@ -33,11 +33,28 @@ AuthoringSpec V4
 pnpm install
 pnpm worldkit validate examples/authoring/package-subject-world.json --json
 pnpm worldkit build examples/authoring/package-subject-world.json \
-  --output artifacts/examples/package-subject-world/world.build.json --json
+  --output artifacts/examples/package-subject-world/world.package --json
+pnpm worldkit inspect artifacts/examples/package-subject-world/world.package --json
+pnpm worldkit load artifacts/examples/package-subject-world/world.package \
+  --headless --json
 pnpm worldkit subject explain examples/authoring/package-subject-world.json \
   --entity-id pack-animal-a --json
 pnpm worldkit run examples/authoring/package-subject-world.json
 ```
+
+`worldkit build` 的公开输出是完整 WorldPackage V2 目录，不再是单个
+`worldkit-build-artifact` JSON。外部进程需要持续控制时，使用独立 Session 目录和
+NDJSON stdin/stdout；不要把该协议安装到 Browser Protocol：
+
+```bash
+pnpm worldkit run artifacts/examples/package-subject-world/world.package \
+  --interactive --protocol ndjson --headless \
+  --session-directory /absolute/path/to/runtime-session
+```
+
+进程退出后以同一个 Package 和 Session 目录追加 `--resume` 即可恢复；首条 stdout
+记录是 `ready`，后续每个 Request 对应一个 canonical Receipt，最终记录为
+`completed` 或 `failed`。
 
 浏览器使用 `WASD` 移动、`Space` 跳跃。生成截图和运行时快照：
 

@@ -260,7 +260,8 @@ run_builder_gates() {
     --world "$artifact_root/authoring.json" \
     --map-draft "$artifact_root/implementation-map.draft.json" \
     --output "$artifact_root/scene-implementation-map.json" &&
-  "$pnpm_bin" worldkit build "$artifact_root/authoring.json" \
+  "$pnpm_bin" exec tsx scripts/build-world-artifact.ts \
+    "$artifact_root/authoring.json" \
     --output "$artifact_root/world.build.json" --json &&
   route_validation_required="$("$node_bin" -e 'const fs=require("node:fs");const report=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(report.requiresTrustedRouteValidation===true?"1":"0")' "$artifact_root/final-authoring-self-check.json")" &&
   if [[ "$route_validation_required" == "1" ]]; then

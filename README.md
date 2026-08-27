@@ -253,8 +253,17 @@ Socket 和类型化关系表达。
 pnpm install
 pnpm worldkit validate examples/authoring/package-subject-world.json --json
 pnpm worldkit build examples/authoring/package-subject-world.json \
-  --output artifacts/examples/package-subject-world/world.build.json --json
+  --output artifacts/examples/package-subject-world/world.package --json
+pnpm worldkit inspect artifacts/examples/package-subject-world/world.package --json
+pnpm worldkit load artifacts/examples/package-subject-world/world.package \
+  --headless --json
 ```
+
+`worldkit build` 公开发布完整 WorldPackage V2 目录。需要跨进程持续控制与崩溃恢复时，
+使用 `worldkit run <package-directory> --interactive --protocol ndjson --headless
+--session-directory <absolute-directory>`；恢复同一逻辑 Session 时追加 `--resume`。
+Browser Protocol V5 仍保持 exact 39 keys，NDJSON Runtime Session 不挂到
+`window.__WORLDKIT__`。
 
 查看 Package Subject Definition 的确定性解析结果：
 
