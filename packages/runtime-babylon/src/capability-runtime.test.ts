@@ -15,6 +15,13 @@ import { BABYLON_GAMEPLAY_RUNTIME_INTERNAL } from "./gameplay-runtime-internal";
 import { bindRuntimeTestPossession } from "./runtime-test-possession";
 import { compileRuntimeTestPlanV5 } from "./runtime-test-plan";
 
+function setCameraProfile(runtime: BabylonWorldRuntime, cameraRigProfileRef: string) {
+  return runtime.setCameraViewPreference({
+    mode: "camera-rig-profile",
+    cameraRigProfileRef,
+  });
+}
+
 const havokWasmBytes = await readFile(
   createRequire(import.meta.url).resolve(
     "@babylonjs/havok/lib/esm/HavokPhysics.wasm",
@@ -40,8 +47,8 @@ const cameraViewSolverSource = await readFile(
   new URL("./camera-view-solver.ts", import.meta.url),
   "utf8",
 ).catch(() => "");
-const followArmSolverSource = await readFile(
-  new URL("./follow-arm-solver.ts", import.meta.url),
+const springArmComponentSource = await readFile(
+  new URL("./spring-arm-component.ts", import.meta.url),
   "utf8",
 ).catch(() => "");
 
@@ -153,19 +160,19 @@ async function createBoundGbotRuntime(
 describe("capability package runtime smoke tests", () => {
   it("keeps Camera Director independent from controls and real-world subject categories", () => {
     expect(cameraDirectorSource).not.toMatch(
-      /controlProfile|SubjectController|ExecutionSubjectV3|humanoid|vehicle|category\s*===/,
+      /controlProfile|CharacterMovementComponentV1|ExecutionSubjectV3|humanoid|vehicle|category\s*===/,
     );
   });
 
-  it("keeps view and Follow Arm solving outside the Camera Director", () => {
+  it("keeps view and Spring Arm solving outside the Camera Director", () => {
     expect(cameraDirectorSource).not.toMatch(
       /pickWithRay|collisionDistanceMeters|collisionShortenedPosition/,
     );
     expect(cameraViewSolverSource).toContain("export class CameraViewSolverV1");
     expect(cameraViewSolverSource).not.toMatch(/FreeCamera|ViewControlFrame|Gameplay/);
-    expect(followArmSolverSource).toContain("export class FollowArmSolverV1");
-    expect(followArmSolverSource).toContain("pickWithRay");
-    expect(followArmSolverSource).not.toMatch(/FreeCamera|ViewControlFrame|Gameplay/);
+    expect(springArmComponentSource).toContain("export class SpringArmComponentV1");
+    expect(springArmComponentSource).toContain("sweepSphere");
+    expect(springArmComponentSource).not.toMatch(/FreeCamera|ViewControlFrame|Gameplay/);
   });
 
   it("keeps the manual orbit heading through sprint framing activation and release", async () => {
@@ -178,7 +185,7 @@ describe("capability package runtime smoke tests", () => {
       return [offsetX / length, offsetZ / length] as const;
     };
     try {
-      runtime.requestCameraProfile("worldkit://camera-profile/orbit.medium@1");
+      setCameraProfile(runtime, "worldkit://camera-profile/orbit.medium@1");
       runtime.adjustCameraView({ yawDeltaRadians: 1.2 });
       await runtime.runFixedInput({ actions: [], ticks: 120 });
       await runtime.runFixedInput({ actions: ["move-forward"], ticks: 120 });
@@ -255,7 +262,7 @@ describe("capability package runtime smoke tests", () => {
           .camera.activeCameraModifierRefs,
       ).toContain("worldkit://camera-modifier/sprint-emphasis@1");
       for (const [cameraProfileRef, cameraRigRef] of CAMERA_PROFILES) {
-        const camera = runtime.requestCameraProfile(cameraProfileRef).camera;
+        const camera = setCameraProfile(runtime, cameraProfileRef).camera;
         expect(camera).toMatchObject({
           activeCameraProfileRef: cameraProfileRef,
           activeCameraRigRef: cameraRigRef,
@@ -263,7 +270,7 @@ describe("capability package runtime smoke tests", () => {
         });
         expect(camera.positionMetersXYZ.every(Number.isFinite)).toBe(true);
       }
-      runtime.requestCameraProfile("worldkit://camera-profile/first-person.standard@1");
+      setCameraProfile(runtime, "worldkit://camera-profile/first-person.standard@1");
       expect(() => runtime.applyCameraPreview({
         tuningByProfileRef: {
           "worldkit://camera-profile/first-person.standard@1": { distanceMeters: 6 },
@@ -276,7 +283,7 @@ describe("capability package runtime smoke tests", () => {
           } as never,
         },
       })).toThrow(/SUBJECT_PRESET_INVALID_CAMERA_TUNING/);
-      runtime.requestCameraProfile("worldkit://camera-profile/orbit.medium@1");
+      setCameraProfile(runtime, "worldkit://camera-profile/orbit.medium@1");
       const adjustedCamera = runtime.adjustCameraView({
         yawDeltaRadians: 0.5,
         pitchDeltaRadians: 0.2,
@@ -316,10 +323,10 @@ describe("capability package runtime smoke tests", () => {
         },
       })).toThrow(/SUBJECT_PRESET_INVALID_CAMERA_TUNING/);
       runtime.resetCameraView();
-      expect(runtime.resetCameraProfile().camera).not.toHaveProperty("preference");
+      expect(runtime.resetCameraViewPreference().camera).not.toHaveProperty("preference");
       runtime.reset();
       await bindRuntimeTestPossession(runtime, "player");
-      runtime.requestCameraProfile("worldkit://camera-profile/orbit.medium@1");
+      setCameraProfile(runtime, "worldkit://camera-profile/orbit.medium@1");
       const runRenderedFixedInput = async (
         actions: readonly ("move-left")[],
         ticks: number,
@@ -349,14 +356,14 @@ describe("capability package runtime smoke tests", () => {
 
       runtime.reset();
       await bindRuntimeTestPossession(runtime, "player");
-      runtime.requestCameraProfile("worldkit://camera-profile/orbit.medium@1");
+      setCameraProfile(runtime, "worldkit://camera-profile/orbit.medium@1");
       const movingNormally = await runtime.runFixedInput({
         actions: ["move-forward"],
         ticks: 60,
       });
       runtime.reset();
       await bindRuntimeTestPossession(runtime, "player");
-      runtime.requestCameraProfile("worldkit://camera-profile/orbit.medium@1");
+      setCameraProfile(runtime, "worldkit://camera-profile/orbit.medium@1");
       const movingWhileLookingBack = await runtime.runFixedInput({
         actions: ["move-forward", "camera-look-back"],
         ticks: 60,
@@ -372,14 +379,14 @@ describe("capability package runtime smoke tests", () => {
 
       runtime.reset();
       await bindRuntimeTestPossession(runtime, "player");
-      runtime.requestCameraProfile("worldkit://camera-profile/orbit.medium@1");
+      setCameraProfile(runtime, "worldkit://camera-profile/orbit.medium@1");
       runtime.applyCameraPreview({
         tuningByProfileRef: {
           "worldkit://camera-profile/orbit.medium@1": { distanceMeters: 6 },
         },
       });
       expect(
-        runtime.requestCameraProfile("worldkit://camera-profile/follow.medium@1")
+        setCameraProfile(runtime, "worldkit://camera-profile/follow.medium@1")
           .camera,
       ).not.toHaveProperty("tuning");
       expect(
@@ -391,9 +398,9 @@ describe("capability package runtime smoke tests", () => {
           .tuningByProfileRef["worldkit://camera-profile/orbit.medium@1"],
       ).toEqual({ distanceMeters: 6 });
 
-      runtime.requestCameraProfile("worldkit://camera-profile/orbit.medium@1");
+      setCameraProfile(runtime, "worldkit://camera-profile/orbit.medium@1");
       const beforeTransition = runtime.snapshot().camera.positionMetersXYZ;
-      const firstTransitionFrame = runtime.requestCameraProfile(
+      const firstTransitionFrame = setCameraProfile(runtime,
         "worldkit://camera-profile/follow.medium@1",
       ).camera.positionMetersXYZ;
       expect(firstTransitionFrame).toEqual(beforeTransition);
@@ -567,7 +574,7 @@ describe("capability package runtime smoke tests", () => {
     const executionPlan = createGbotCapabilityExecutionPlan();
     const runtime = await createBoundGbotRuntime(executionPlan);
     try {
-      runtime.requestCameraProfile("worldkit://camera-profile/orbit.medium@1");
+      setCameraProfile(runtime, "worldkit://camera-profile/orbit.medium@1");
       runtime.adjustCameraView({
         yawDeltaRadians: 0.8,
         pitchDeltaRadians: 0.25,
@@ -723,7 +730,7 @@ describe("capability package runtime smoke tests", () => {
       expect(afterTick.subjectStatesByEntityId.player!.activeControlFeelProfileRef)
         .toBe(HEAVY_FEEL_REF);
 
-      runtime.requestCameraProfile(followProfile.resourceRef);
+      setCameraProfile(runtime, followProfile.resourceRef);
       const orbitPreview = runtime.applyCameraPreview({
         tuningByProfileRef: { [orbitProfile.resourceRef]: { targetHeightMeters: 1.4 } },
       });
@@ -764,7 +771,7 @@ describe("capability package runtime smoke tests", () => {
     try {
       await runtime.runFixedInput({ actions: [], ticks: 4 });
       const automaticCameraProfileRef = runtime.snapshot().camera.activeCameraProfileRef;
-      runtime.requestCameraProfile(followProfile.resourceRef);
+      setCameraProfile(runtime, followProfile.resourceRef);
       const orbitPreview = runtime.applyCameraPreview({
         tuningByProfileRef: { [orbitProfile.resourceRef]: { targetHeightMeters: 1.4 } },
       });

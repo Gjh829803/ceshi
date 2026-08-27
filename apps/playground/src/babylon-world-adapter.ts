@@ -606,20 +606,14 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     }
   }
 
-  requestCameraProfileRuntime(profileRef: string): WorldRuntimeSnapshotV4 {
+  async executeCameraViewCommandRuntime(
+    command: import("@whitebox-world/runtime-contracts").CameraViewCommandV1,
+  ): Promise<import("@whitebox-world/runtime-contracts").CameraViewCommandReceiptV1> {
     this.captureReservationReceiptId = undefined;
-    this.activeRuntime().requestCameraProfile(profileRef);
+    const receipt = await this.coordinator.executeCameraViewCommand(command);
     this.render();
     this.emit();
-    return this.coordinator.snapshot();
-  }
-
-  resetCameraProfileRuntime(): WorldRuntimeSnapshotV4 {
-    this.captureReservationReceiptId = undefined;
-    this.activeRuntime().resetCameraProfile();
-    this.render();
-    this.emit();
-    return this.coordinator.snapshot();
+    return receipt;
   }
 
   adjustCameraViewRuntime(input: CameraViewInputV1): WorldRuntimeSnapshotV4 {
@@ -708,6 +702,13 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     return this.coordinator.executeGameplayCommand(command);
   }
 
+  worldSessionEventsAfterRuntime(
+    afterEventSequence: number,
+    maximumEventCount: number,
+  ): ReturnType<GameplayBabylonRuntimeCoordinatorV1["eventsAfter"]> {
+    return this.coordinator.eventsAfter(afterEventSequence, maximumEventCount);
+  }
+
   currentRuntimePublicationIdentity(): RuntimeWorldPublicationIdentitiesV1 {
     return this.coordinator.currentRuntimePublicationIdentity();
   }
@@ -730,13 +731,6 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
       }
     }
     return result;
-  }
-
-  gameplayEventsAfterRuntime(
-    afterEventSequence: number,
-    maximumEventCount: number,
-  ): readonly GameplayEventV1[] {
-    return this.coordinator.eventsAfter(afterEventSequence, maximumEventCount);
   }
 
   gameplayInspectionSnapshotRuntime(): GameplayInspectionSnapshotV1 {

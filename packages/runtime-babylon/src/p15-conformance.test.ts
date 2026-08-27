@@ -32,7 +32,7 @@ import {
   compileRuntimeTestPlanV5,
   createRuntimeTestGameplayBootstrapLockV1,
 } from "./runtime-test-plan";
-import type { SubjectController } from "./subject-controller";
+import type { CharacterMovementComponentV1 } from "./character-movement-component";
 
 const MEDIUM_FEEL_REF = "worldkit://control-feel-profile/humanoid.medium-ground@1";
 const HEAVY_FEEL_REF = "worldkit://control-feel-profile/humanoid.heavy-ground@1";
@@ -230,12 +230,14 @@ async function tickUntil(
 function controllerFor(
   runtime: BabylonWorldRuntime,
   entityId: string,
-): SubjectController {
+): CharacterMovementComponentV1 {
   const controller = (runtime as unknown as {
-    subjectControllersByEntityId: ReadonlyMap<string, SubjectController>;
-  }).subjectControllersByEntityId.get(entityId);
+    characterEntitiesByEntityId: ReadonlyMap<string, {
+      movement: CharacterMovementComponentV1;
+    }>;
+  }).characterEntitiesByEntityId.get(entityId)?.movement;
   if (controller === undefined) {
-    throw new Error(`Missing Subject controller '${entityId}'.`);
+    throw new Error(`Missing CharacterMovement component '${entityId}'.`);
   }
   return controller;
 }
@@ -438,7 +440,7 @@ describe("P1.5 conformance: closed Ground/Air Feel slice", () => {
       // the controller regression behind the later jump assertion.
       const controller = controllerFor(runtime, "player");
       let supportBeforeDeparture:
-        | ReturnType<SubjectController["retainedCharacterSupportSample"]>
+        | ReturnType<CharacterMovementComponentV1["retainedCharacterSupportSample"]>
         | undefined;
       let departed:
         | { state: SubjectRuntimeState; elapsedTicks: number }
@@ -696,7 +698,7 @@ describe("P1.5 conformance: closed Ground/Air Feel slice", () => {
     try {
       const internals = runtime as unknown as {
         scene: Scene;
-        subjectControllersByEntityId: ReadonlyMap<string, unknown>;
+        characterEntitiesByEntityId: ReadonlyMap<string, unknown>;
       };
       const countListeners = (): Record<string, number> => ({
         beforeRender: internals.scene.onBeforeRenderObservable.observers.length,
@@ -705,7 +707,7 @@ describe("P1.5 conformance: closed Ground/Air Feel slice", () => {
           internals.scene.onBeforeAnimationsObservable.observers.length,
       });
       const baselineResources = runtime.snapshot().resources;
-      const baselineControllers = internals.subjectControllersByEntityId.size;
+      const baselineControllers = internals.characterEntitiesByEntityId.size;
       const baselineListeners = countListeners();
 
       for (let cycle = 0; cycle < 3; cycle += 1) {
@@ -728,7 +730,7 @@ describe("P1.5 conformance: closed Ground/Air Feel slice", () => {
         expect(reset.possessionTarget).toEqual({ mode: "unbound" });
         expect(reset.resources.bodies).toBe(baselineResources.bodies);
         expect(reset.resources.meshes).toBe(baselineResources.meshes);
-        expect(internals.subjectControllersByEntityId.size).toBe(
+        expect(internals.characterEntitiesByEntityId.size).toBe(
           baselineControllers,
         );
         expect(countListeners()).toEqual(baselineListeners);

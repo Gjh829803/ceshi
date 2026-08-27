@@ -15,6 +15,7 @@
     "@whitebox-world/gameplay-contracts": "workspace:*",
     "@whitebox-world/protocol": "workspace:*",
     "@whitebox-world/runtime-contracts": "workspace:*",
+    "@whitebox-world/runtime-framework": "workspace:*",
     "@whitebox-world/runtime-host": "workspace:*",
     "@whitebox-world/subject-actions": "workspace:*",
     "@whitebox-world/subject-contracts": "workspace:*",

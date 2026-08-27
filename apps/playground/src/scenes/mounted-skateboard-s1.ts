@@ -45,6 +45,14 @@ export const MOUNTED_SKATEBOARD_S1_MOUNT_COMMAND_ID =
   "command.mounted-skateboard-s1.mount" as const;
 export const MOUNTED_SKATEBOARD_S1_DISMOUNT_COMMAND_ID =
   "command.mounted-skateboard-s1.dismount" as const;
+export const MOUNTED_SKATEBOARD_S1_MOUNT_REQUEST = Object.freeze({
+  id: "mount-skateboard-s1",
+  kind: "mount-action-request" as const,
+  mountEntityId: MOUNTED_SKATEBOARD_S1_BOARD_ENTITY_ID,
+  mountSlotId: "stand",
+  riderEntityId: "player",
+  schemaVersion: 1 as const,
+});
 
 const G_BOT_DEFINITION_REF =
   "worldkit://subject-definition/humanoid.g-bot@2" as const;
@@ -58,6 +66,13 @@ export const MOUNTED_SKATEBOARD_S1_RELATIONSHIP_ID =
     type: "mountedOn",
     acceptedActionCommandId: MOUNTED_SKATEBOARD_S1_MOUNT_COMMAND_ID,
   })}` as const;
+export const MOUNTED_SKATEBOARD_S1_DISMOUNT_REQUEST = Object.freeze({
+  id: "dismount-skateboard-s1",
+  kind: "dismount-action-request" as const,
+  mountedOnRelationshipId: MOUNTED_SKATEBOARD_S1_RELATIONSHIP_ID,
+  riderEntityId: "player",
+  schemaVersion: 1 as const,
+});
 
 const SKATEBOARD_DEFINITION: PackageSubjectDefinitionV1 = {
   id: "skateboard.s1",
@@ -355,26 +370,13 @@ export function createMountedSkateboardS1GameplayResourcesV1(
       MOUNTED_SKATEBOARD_S1_DISMOUNT_REQUEST_REF,
       DISMOUNT_ACTION_REQUEST_SCHEMA_REF,
       DISMOUNT_ACTION_REQUEST_SCHEMA_HASH,
-      {
-        id: "dismount-skateboard-s1",
-        kind: "dismount-action-request",
-        mountedOnRelationshipId: MOUNTED_SKATEBOARD_S1_RELATIONSHIP_ID,
-        riderEntityId: "player",
-        schemaVersion: 1,
-      },
+      MOUNTED_SKATEBOARD_S1_DISMOUNT_REQUEST,
     ),
     requestResource(
       MOUNTED_SKATEBOARD_S1_MOUNT_REQUEST_REF,
       MOUNT_ACTION_REQUEST_SCHEMA_REF,
       MOUNT_ACTION_REQUEST_SCHEMA_HASH,
-      {
-        id: "mount-skateboard-s1",
-        kind: "mount-action-request",
-        mountEntityId: MOUNTED_SKATEBOARD_S1_BOARD_ENTITY_ID,
-        mountSlotId: "stand",
-        riderEntityId: "player",
-        schemaVersion: 1,
-      },
+      MOUNTED_SKATEBOARD_S1_MOUNT_REQUEST,
     ),
   ]);
   const requestByRef = new Map(

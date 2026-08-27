@@ -2,16 +2,16 @@
 
 **状态：** 已实施
 **日期：** 2026-08-25
-**适用分支：** `feat/gameplay-camera-optimization`
+**适用分支：** `codex/camera-development`
 
 ## 1. 目标与范围
 
-将 G Bot 的摄像机 Authoring 控制台重构为可观察、可调试的 UE 风格 Inspector，并使 Runtime 内部职责清晰地分为 Camera View 与第三人称 Follow Arm 两部分。
+将 G Bot 的摄像机 Authoring 控制台重构为可观察、可调试的 UE 风格 Inspector，并使 Runtime 按 Entity / Component 分层：角色移动、第三人称 Spring Arm 与 Camera 各自拥有独立生命周期和状态。
 
 用户可在控制台选择两种镜头类型：
 
-- **第一人称**：固定映射至 `first-person.standard`；Camera View 直接取 `FirstPersonView` Socket，不创建或执行 Follow Arm。
-- **第三人称：自由环绕**：固定映射至 `orbit.medium`；Camera View 使用第三人称目标 Socket，Follow Arm 负责期望臂长、Lag、碰撞缩臂与恢复。
+- **第一人称**：固定映射至 `first-person.standard`；Camera Component 直接取 `FirstPersonView` Socket，不激活 Spring Arm。
+- **第三人称：自由环绕**：固定映射至 `orbit.medium`；Camera Component 使用第三人称目标 Socket，Spring Arm Component 负责期望臂长、Lag、碰撞缩臂与恢复。
 
 冲刺、瞄准等当前已支持的 Gameplay Context 可以叠加已声明的 Camera Modifier，但不得在用户手动选择上述类型后替换基础 Profile 或改变 `kind`。它们只能修改最终参数、FOV 或过渡。Registry 中的水面规则保留为 P2.5 游泳/攀爬切片的声明能力；当前 P1.5 Runtime 只发布 `ground | air`，控制台必须显示水面规则不可用，不能通过 Adapter 或别名伪造 `water` 状态。
 
@@ -28,23 +28,26 @@
 
 ## 3. 运行时架构与权威
 
-`CameraDirector` 继续是唯一的相机状态、最终 POV 和运行时选择权威。它不再以一个大方法隐式承担所有职责，而是在其内部组合两个无 Babylon Handle 的 Solver：
+`RuntimeEntityV1` 和 `SceneComponentV1` 提供通用生命周期/挂接边界。`CharacterMovementComponentV1` 包装既有 Motion Kernel；`SpringArmComponentV1` 独占第三人称臂长与碰撞状态；`CameraComponentV1` 负责绑定 Spring Arm 与 Babylon `FreeCamera`。`CameraDirector` 仍是唯一的相机选择、最终 POV 和 View Control Frame 权威，但不再拥有碰撞缩臂状态。
 
 ```text
-CameraDirector
-├── CameraViewSolver
-│   ├── 选择后的 Profile / Modifier / Preview Override
-│   ├── 目标 Socket、输入 yaw/pitch/zoom、Pitch/FOV、切换 Blend
-│   └── Final ViewControlFrame 和 Final Camera Pose
-└── FollowArmSolver                    # third-person only
+BabylonCharacterEntityV1 (RuntimeEntityV1)
+├── VisualRoot (SceneComponentV1)
+├── CharacterMovementComponentV1      # Motion Kernel / support / locomotion
+└── SpringArmComponentV1              # third-person only
     ├── Arm origin、Target/Socket Offset、Desired Arm Length
     ├── Position/Rotation Lag、Substep、Maximum Lag
-    └── Collision Probe、Safe Arm Length、Retraction/Recovery
+    └── PhysicsWorldQueryPortV1：ProbeSize=0 Raycast；>0 Havok Sphere ShapeCast
+
+Camera RuntimeEntityV1
+└── CameraComponentV1
+    ├── CameraDirector：选择、Socket、输入 yaw/pitch/zoom、Pitch/FOV、Blend
+    └── FreeCamera adapter：只消费最终安全 pose
 ```
 
-`CameraViewSolver` 与 `FollowArmSolver` 是 `CameraDirector` 的运行时内部对象，不是新的 Gameplay State、Babylon Component 或公开 Authoring Schema。`FreeCamera` 仍仅是 Babylon 适配对象。`MotionKernel` 保持角色速度与面朝方向权威；它只消费 View Control Frame 中已定义的输入，不读取或写入摄像机内部状态。
+`SpringArmComponentV1` 与 `CameraComponentV1` 都不是 Gameplay State 或公开 Authoring Schema。`FreeCamera` 仍仅是 Babylon 适配对象。`MotionKernel` 保持角色速度与面朝方向权威；它只消费 View Control Frame 中已定义的输入，不读取或写入摄像机内部状态。
 
-第一人称的 Follow Arm 状态明确为 `disabled`；第三人称明确为 `collision-follow`。不得通过一个可空的共享参数包让第一人称偷偷获得碰撞缩臂路径。
+第一人称的 Spring Arm 状态明确为 `disabled`；第三人称明确为 `collision-follow`。不得通过一个可空的共享参数包让第一人称偷偷获得碰撞缩臂路径。
 
 ## 4. 类型选择、规则选择和配置来源
 
@@ -52,8 +55,8 @@ CameraDirector
 
 | 控制台选择 | 锁定 Base Profile | Runtime 结构 |
 | --- | --- | --- |
-| 第一人称 | `first-person.standard` | `CameraViewSolver`，Follow Arm disabled |
-| 第三人称：自由环绕 | `orbit.medium` | `CameraViewSolver` + collision-follow `FollowArmSolver` |
+| 第一人称 | `first-person.standard` | `CameraComponentV1`，Spring Arm disabled |
+| 第三人称：自由环绕 | `orbit.medium` | `CameraComponentV1` + collision-follow `SpringArmComponentV1` |
 
 运行时只允许一个 Camera Selection Decision。`packages/camera` 中的 Profile Admission/Selection 决定必须成为 `CameraDirector` 的输入；Director 不得保留第二套独立的 Context Rule 匹配实现。
 
@@ -170,6 +173,11 @@ UE 模板中第三人称常使用 Control Rotation 决定移动方向；本项�
 | CAM-02 | 从 Director 内部抽取 View/Follow Arm Solver，保留 Final POV 行为 | depends_on CAM-01; blocks CAM-03、CAM-04 | `packages/runtime-babylon/src/camera-director.ts`、新增内部 solver 文件、运行时测试 | 输入：Selected Decision、View Target；输出：Pose/Arm State/Telemetry | sequential |
 | CAM-03 | 控制台按基础/专家/诊断/发布分层，并消费 Telemetry | depends_on CAM-01、CAM-02; blocks CAM-04 | `apps/playground/src/main.ts`、Browser/Preview 适配与 UI 测试 | 输入：Telemetry、Profile Ranges；输出：Validated Preview Override 与只读诊断 | sequential |
 | CAM-04 | Overlay、对抗性回归与端到端验证 | depends_on CAM-02、CAM-03 | 测试、Harness、Overlay 文件 | 输入：Telemetry；输出：稳定开发态诊断与验证证据 | sequential |
+| CAM-05 | 关闭 Entity/Component 生命周期、部分构造回滚与 Physics Query 释放缺口 | depends_on CAM-04 | `packages/runtime-framework/**`、Babylon Runtime 构造/Query 与回归 | 输入：组件注册和 Runtime 构造；输出：fail-closed 激活、逆序全清理、exactly-once 资源释放 | main-agent-only |
+| CAM-06 | 修复 mounted ViewTarget 的 Camera Context 投影，并覆盖 Mount/Dismount 与多 Rider 歧义 | depends_on CAM-05 | `runtime-contracts` ViewTarget Sample、Babylon Camera Context 解析与 mounted 集成测试 | 输入：Possession Target + committed `mountedOn`；输出：Rider Camera Context + 不变的物理 ViewTarget | sequential |
+| CAM-07 | 用强类型 View Preference clean break 替换旧 Profile 请求表面，并接通 Browser V5、Runtime 与 Director Admission | depends_on CAM-06 | `runtime-contracts` Browser V5、Playground Adapter/UI、Babylon Camera Component/Director 与回归 | 输入：`auto` / `first-person` / `camera-rig-profile`；输出：命令期原子拒绝、Context fallback/recovery、公开 Selection Decision | sequential |
+| CAM-08 | 在 View 状态提交前校验 Rig、全部命中 Modifier 与 Preview 的最终参数组合 | depends_on CAM-07 | Babylon Camera Component/Director 与 Preview 集成回归 | 输入：Selection Decision + Rig + ordered Modifiers + Preview；输出：合法 resolved parameters 或无 Camera 状态突变的稳定拒绝 | sequential |
+| CAM-09 | 冻结 Camera View Command/Event 关闭协议，再接入 WorldSession 唯一排序、Receipt 与 staged View commit | depends_on CAM-08 | `runtime-contracts` Camera View 协议、`runtime-host` Session/Journal、Babylon View transaction 与回归 | 输入：Session-bound Preference Command + committed Selection；输出：Receipt、View revision 和统一 sequence 的 Selection/Unbound Event | main-agent-only |
 
 所有任务在当前已隔离的 `feat/gameplay-camera-optimization` worktree 内执行；不并行编辑 `CameraDirector` 或 `main.ts`，以避免接口和行为竞争。
 
@@ -184,3 +192,52 @@ CAM-01 至 CAM-04 已按顺序实施。CAM-04 在公开 `WorldRuntimeCameraState
 - `node_modules\\.bin\\tsc.cmd --noEmit`：退出 0；
 - `corepack pnpm@10.14.0 build`：Playground Vite production build 通过；
 - `node_modules\\.bin\\tsx.cmd scripts/verify-g-bot-subject-world.ts`：退出 0，idle/walk/run/jump、主体隔离和墙体停步验证通过。
+
+## 12. 生命周期继续硬化（2026-08-26）
+
+CAM-05 不增加兼容层，也不把 UE 的类名作为第二套公共术语。项目继续以 `RuntimeEntityV1`、`EntityComponentV1`、`SceneComponentV1` 为唯一 canonical 名称；它们在职责上分别对应 UE 的 Actor、ActorComponent 与 SceneComponent。
+
+- Component 生命周期为 `constructed → activating → active → disposing → disposed`。激活失败是终止性失败：先清理部分构造资源，再由 Entity 逆注册顺序回滚全部兄弟组件；不得留下“状态显示 active、资源却未完成”的半激活对象。
+- Entity 或 Registry 销毁时，一个 disposer 抛错不能阻断其他 owner；完成全部清理后统一抛出稳定的聚合错误。已激活 Entity/Registry 支持动态组件/实体注册，并立即进入 active 状态；动态激活失败只移除失败对象，不污染既有 active owner。
+- 已进入 disposing/disposed 的 Scene Component 不得重新挂接，也不得成为新的父节点。跨 Entity 的 Camera → Spring Arm 挂接仍允许，因为它表示 ViewTarget 关系，不把 Possession 或 Gameplay State 复制进组件树。
+- 每个 Babylon Character Entity 与 Camera Entity 在注册后立即加入 Runtime 部分构造回滚栈；即使后续 Subject、Physics Body、Camera 或 Registry 激活失败，也必须释放已创建的 Character Controller。
+- Physics World Query 的 Entity→Body 绑定拒绝空 ID 和重复 ID；所有按 Probe 半径缓存的 Havok Shape 必须逐个尝试释放，单个 provider disposer 失败不得跳过其余 Shape。
+
+## 13. Mounted ViewTarget 上下文（2026-08-26）
+
+CAM-06 不改变 `mountedOn`、Possession 或角色移动权威。Gameplay 仍决定受控 Mount，Camera 只消费已提交的关系投影：`ViewTargetSampleV1.entityId` 保留实际取景目标，`controlledEntityId` 表示 Camera Domain 的 Rider 控制上下文，`relationshipContexts` 携带与目标相关的 canonical 关系。
+
+- 唯一 `mountedOn` 关系允许 Camera 以 `relationshipRole: "rider"` 命中 `mounted-framing`，同时继续跟随由 Relationship Profile `cameraTargetRole` 确定的 Mount ViewTarget。
+- 同一 Mount 出现多个 Rider 且无法确定本地 Rider 时，解析器保留全部关系上下文，但以 `relationshipRole: "none"` fail closed，不按排序结果猜测控制者。
+- Dismount 删除 committed `mountedOn` 后，下一次 Camera 固定更新撤销 mounted modifier；事务提交阶段继续不执行可能失败的 Camera/Animation 工作。
+
+## 14. View Preference 运行时接线（2026-08-26）
+
+CAM-07 删除 `requestCameraProfile/resetCameraProfile` 旧表面，不保留 alias。Babylon Runtime
+内部仍以 `setCameraViewPreference/resetCameraViewPreference` 应用已准入命令；Browser V5 只公开
+异步 `executeCameraViewCommand`，不暴露同步写入口。Director 只保存
+一个强类型 Preference，并在命令提交前复用 Camera Domain Admission。显式 Profile 不属于当前
+Context、或第一人称不可用时，命令原子拒绝且保留上一稳定 View；后续 Context 变化导致的不兼容
+仍由每 Tick Selection 进入显式 fallback，并在再次兼容时恢复原 Preference。Preference Reset
+恢复 `auto`，同时清除手动 Orbit、Transition、Modifier、Input Latch 与 Preview 状态。
+
+## 15. 最终参数组合校验（2026-08-26）
+
+CAM-08 在 `CameraDirector` 写入 Active Profile、Modifier、Transition、Follow Arm 或 Telemetry
+之前，对选中 Rig 与全部有序 Modifier 合并后的锁定参数，以及继续叠加 Preview 后的最终参数，
+再次执行 Camera Domain 不变量校验。非法组合以
+`WORLDKIT_RUNTIME_CAMERA_RESOLVED_PARAMETERS_INVALID` 稳定拒绝，并保留上一 Camera 状态。
+Preview Admission 还会在写入预览状态前逐一验证当前 Context 中全部可达 Modifier，避免一个
+只对基础 Rig 合法的调参在 Modifier 激活后制造非法 View。该项只关闭 GCC-4 的最终参数门槛；
+统一 WorldSession Camera Selection Event 与完整 Golden Fixture 仍未完成。
+
+## 16. Camera View Command/Event 关闭协议（2026-08-26）
+
+CAM-09A 已在 `runtime-contracts` 冻结 `view.camera-preference.set/reset`、
+`camera.selection.changed` 与 `camera.target.unbound` 的 provider-neutral 关闭协议，并提供严格
+Parser、Canonical JSON/Bytes、Command Hash 与 Event ID 派生。Camera Modifier 与 Context Rule
+列表保留 Selection Decision 的确定顺序，同时拒绝重复项、未知字段、访问器和旧命令 alias。
+
+该步骤只完成公共值对象与协议准入，不代表 RuntimeHost 已经发布 Camera Event。CAM-09B 仍需
+定义 View Command Receipt，把 View transaction 接入 WorldSession 的唯一 mutation queue 与统一
+Event Sequence，并保证失败时不推进 View revision、不发布 Event、也不修改 CameraDirector。

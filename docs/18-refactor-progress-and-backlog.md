@@ -731,11 +731,19 @@ Incremental Hot Apply，以及哪些 Runtime 状态被保留、重置或替换�
   Domain 不拥有 renderer、physics、Browser、Runtime Session 或 Gameplay State。
 - [ ] GCC-0/GCC-0A/GCC-1：冻结 Browser V5/View clean break 与 committed Gameplay →
   `CameraContextSampleV1` Projection；不得保留旧命令 alias 或从 Render Pose 反推 Context。
-- [ ] GCC-2/GCC-3：把已实现的 Profile admission/Selection/Explain 接入 Registry Lock、
-  唯一 `cameraViewPreference` Command/View State 和原子拒绝语义。
-- [ ] GCC-4 接线前必须解析选中 Rig 与全部匹配 Modifier 的最终参数，并对合并结果再次执行
-  Camera Domain 不变量校验；当前 admission 只保证单个完整 Rig 与单个 partial Modifier 各自
-  合法，不宣称跨 Rule/Profile 组合已经闭环。
+- [x] GCC-3：唯一 `cameraViewPreference` Command/Receipt/View State 已接入 RuntimeHost；
+  Camera 命令幂等重放、冲突拒绝、统一 Event Sequence、Context/Modifier/Target/fallback 自动变化
+  事件以及 Browser V5 consumer clean break 已闭环。GCC-2 的 Registry Lock 完整覆盖仍单独推进。
+- [x] GCC-4A：CameraDirector 已在提交 View 状态前解析选中 Rig、全部匹配 Modifier 与 Preview
+  的最终参数并再次执行 Camera Domain 不变量校验；非法组合稳定拒绝且不修改上一 Camera 状态，
+  Preview 也会针对当前 Context 全部可达 Modifier 做写入前组合准入。该子门槛完成不代表
+  GCC-4 的 Selection Event、Golden Fixture 或最终生产验收已经闭环。
+- [x] GCC-3A：`runtime-contracts` 已冻结唯一 `view.camera-preference.set/reset` Command 与
+  `camera.selection.changed` / `camera.target.unbound` Event 关闭协议，包含 Canonical
+  Command Hash/Bytes、Event ID、严格字段准入和顺序列表校验。RuntimeHost Receipt、统一
+  GCC-3B 已在 RuntimeHost 建立 Receipt、Event capacity 预留、View revision 提交和统一
+  WorldSession Event 查询；Browser V5 只保留 `executeCameraViewCommand` 与
+  `getWorldSessionEvents`，旧同步 set/reset 与 Gameplay-only Event 查询已删除。
 - [ ] GCC-4/GCC-5：CameraDirector 消费纯 Selection Decision；Mount/Equipment/Flight 事务
   只提交 Camera 输入并与 Gameplay 一起原子回滚。
 - [ ] GCC-6/GCC-7：交付两个 Kit、Registry Lock、Browser/CLI/Take 与两个 Golden Fixture，
@@ -747,14 +755,16 @@ Incremental Hot Apply，以及哪些 Runtime 状态被保留、重置或替换�
 - [ ] Browser/CLI 支持观察、控制、截图权限分离。
 - [ ] 为上游 Agent 提供 Registry Search、Dry Run、Explain、Diff 和结构化修复工具，不提供底层引擎对象。
 
-已知问题 `CAM-MOUNT-1`（2026-08-26，开放）：在 Playground
-`?scene=mounted-skateboard-s1` 中提交 Mount Action、把 Possession 从 Rider 切到 skateboard
-并运行固定输入后，Babylon CameraDirector 的跟随距离会异常缩短，渲染画面贴近并裁切 Rider。
-同一轮 Browser V5 证据确认 `mountedOn`、Possession、Rider `suspended`、Mount 移动、Dismount
-和 Reset 状态均正确，因此该问题当前限定为控制目标切换后的 Camera Context/碰撞取景专项，
-不回滚 M8-S1 Relationship 数据链路，也不在 M8-S1 内临时修改相机所有权。后续由 P2.4
-GCC-4/GCC-5 复现、定根因并增加 rendered visual 回归；本地 Playwright 复现截图名为
-`output/playwright/mounted-skateboard-s1-after-mount-move.png`。
+已知问题 `CAM-MOUNT-1`（2026-08-26，已修复）：根因是 Possession 切到 skateboard 后，
+Babylon ViewTarget Sample 把 `relationshipRole` 固定发布为 `none` 并丢弃 committed
+`mountedOn` 上下文，导致 `mounted-framing` 从未命中，镜头继续使用 5m 基础臂长。
+CAM-06 现在分离 Camera Domain 的 Rider 控制上下文与实际 Mount ViewTarget：唯一 Rider
+命中 7m mounted modifier，多 Rider 歧义 fail closed，Dismount 后下一 Camera 固定更新撤销 modifier。
+真实 Havok 集成回归确认 Mount/移动/Dismount 全链路、请求臂长 7m 且有效臂长大于 6m；
+Legacy Playground 的 `mounted-skateboard-s1` 已增加场景专用 Mount/Dismount 验收控件；控件只提交
+Browser V5 `action.activate` 并从 Snapshot/Inspection/Camera Telemetry 显示结果，不成为第二状态权威。
+真实浏览器验收确认 Mount 后 `skateboard / skateboard / mounted-framing / 7m`，Dismount 后恢复
+`player / player / none / 5m`，Reset 后可重复单周期验收；正式四阶段 Capture Bundle verifier 仍归 M8-S1。
 
 #### P2.5 Surface Semantics 与 Traversal Capability
 
@@ -1039,8 +1049,9 @@ S1b Golden、
    [实施计划](superpowers/plans/2026-08-21-p15-control-feel-state-resolver.md) 已实施、
    通过全部生产 Gate，并由 PR #10 合入 `main`；水介质、`ControlMethodProfile`、
    CLI/Browser E2E 覆盖，以及整支对抗审查仍未交付。相机 overlay 已在 Browser V5
-   基线上完成门禁与最终审查；Camera Domain 的 `cameraViewPreference` 和纯 Selection 已实现，
-   但 Browser Command/View State 与 Babylon CameraDirector 接线仍未完成；作者面板
+   基线上完成门禁与最终审查；Camera Domain 的 `cameraViewPreference`、纯 Selection、Browser
+   V5 Command/View State 与 Babylon CameraDirector Admission 已在 `codex/camera-development`
+   完成 clean break 接线，旧 Profile 请求表面已删除；作者面板
    Feel 范围与 session 数字袋类型已在 Preset 语义合同修复中收口，
    M7 不标记完成；
 8. **M8（核心实现与当前树基础门禁已完成，最终证据收口中）：Canonical World State + Typed Relationship

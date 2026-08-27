@@ -513,10 +513,10 @@ function toVec3(value: CartesianVector): Vec3 {
 
 function createRuntimeDebugProbe(runtime: BabylonWorldRuntime): RuntimeDebugProbe {
   const internals = runtime as unknown as {
-    subjectControllersByEntityId: ReadonlyMap<string, ControllerProbe>;
+    characterEntitiesByEntityId: ReadonlyMap<string, { movement: ControllerProbe }>;
   };
   const controllerFor = (subjectEntityId: string): ControllerProbe => {
-    const controller = internals.subjectControllersByEntityId.get(subjectEntityId);
+    const controller = internals.characterEntitiesByEntityId.get(subjectEntityId)?.movement;
     if (controller === undefined) throw new Error(`Missing Subject '${subjectEntityId}'.`);
     return controller;
   };
@@ -645,7 +645,10 @@ async function createRuntime(
   executionPlan: ExecutionPlanV5,
   options: Pick<
     BabylonWorldRuntimeOptions,
-    "engineFactory" | "subjectAssetResolver" | "subjectAssetCacheOptions"
+    | "engineFactory"
+    | "subjectAssetResolver"
+    | "subjectAssetCacheOptions"
+    | "onInitializationStage"
   > = {},
   bindInitialPossession = true,
 ): Promise<BabylonWorldRuntime> {
@@ -1268,6 +1271,24 @@ describe("BabylonWorldRuntime", () => {
 
     expect(error).toBe(supportFailure);
     expect(disposeController).toHaveBeenCalledTimes(1);
+  });
+
+  it("rolls back registered character components when camera-stage initialization fails", async () => {
+    const initializationFailure = new Error("TEST_CAMERA_STAGE_INITIALIZATION_FAILURE");
+    const disposeController = vi.spyOn(
+      PhysicsCharacterController.prototype,
+      "dispose",
+    );
+    const executionPlan = createFlatPackageExecutionPlan();
+
+    const error = await createRuntime(executionPlan, {
+      onInitializationStage: (stage) => {
+        if (stage === "camera") throw initializationFailure;
+      },
+    }).catch((reason) => reason as unknown);
+
+    expect(error).toBe(initializationFailure);
+    expect(disposeController).toHaveBeenCalledTimes(executionPlan.subjects.length);
   });
 
   it("preserves the controller construction failure when rollback also throws", async () => {
@@ -4102,16 +4123,16 @@ describe("BabylonWorldRuntime", () => {
         controlledEntityId: "pack-animal-a",
       });
       const runtimeInternals = runtime as unknown as {
-        cameraDirector: { reset(): void };
+        cameraComponent: { reset(): void };
         updateCameraForEntity(entityId: string): void;
-        subjectControllersByEntityId: ReadonlyMap<string, { stop(): void }>;
+        characterEntitiesByEntityId: ReadonlyMap<string, { movement: { stop(): void } }>;
         subjectVisualsByEntityId: ReadonlyMap<
           string,
           { stepAnimation(tick: number, actionId: string): void }
         >;
       };
-      const previousController = runtimeInternals.subjectControllersByEntityId
-        .get("player")!;
+      const previousController = runtimeInternals.characterEntitiesByEntityId
+        .get("player")!.movement;
       const previousVisual = runtimeInternals.subjectVisualsByEntityId
         .get("player")!;
 
@@ -4121,7 +4142,7 @@ describe("BabylonWorldRuntime", () => {
       vi.spyOn(previousVisual, "stepAnimation").mockImplementation(() => {
         throw new Error("animation mutation must not run during publication");
       });
-      vi.spyOn(runtimeInternals.cameraDirector, "reset").mockImplementation(() => {
+      vi.spyOn(runtimeInternals.cameraComponent, "reset").mockImplementation(() => {
         throw new Error("Camera reset must not run during publication");
       });
       vi.spyOn(runtimeInternals, "updateCameraForEntity").mockImplementation(() => {
@@ -4222,9 +4243,11 @@ describe("BabylonWorldRuntime", () => {
         (subject) => subject.entityId === "pack-animal-a",
       )!;
       expect(
-        runtime.requestCameraProfile(
+        runtime.setCameraViewPreference({
+          mode: "camera-rig-profile",
+          cameraRigProfileRef:
           packAnimal.capabilityAssembly.cameraContext.defaultCameraRigProfileRef,
-        ).camera.targetEntityId,
+        }).camera.targetEntityId,
       ).toBe("pack-animal-a");
       const before = internal.readWorldProjection();
       const moved = await internal.runFixedInputTick({

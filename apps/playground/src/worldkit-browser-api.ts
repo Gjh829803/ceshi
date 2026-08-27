@@ -2,7 +2,6 @@ import type { SubjectAssetRuntimeErrorCodeV1 } from "@whitebox-world/runtime-bab
 import type {
   GameplayCommandReceiptV1,
   GameplayCommandV1,
-  GameplayEventV1,
   GameplayInspectionSnapshotV1,
   WorldStateSnapshotV1,
 } from "@whitebox-world/gameplay-contracts";
@@ -18,13 +17,16 @@ import {
   CAMERA_TUNING_SAFETY_LIMITS_V1,
   CONTROL_FEEL_PARAMETER_BOUNDS_V1,
   CONTROL_FEEL_PARAMETER_NAMES_V1,
-  WORLDKIT_GAMEPLAY_EVENT_PAGE_MAXIMUM_COUNT,
+  WORLDKIT_WORLD_SESSION_EVENT_PAGE_MAXIMUM_COUNT,
   WORLDKIT_BROWSER_PROTOCOL_VERSION,
   canonicalWorldkitBrowserRouteEvidencePublicationV2,
   canonicalRouteEvidenceSelectorV1,
   type ApplyCameraPreviewRequestV1,
   type ApplySubjectPresetTuningRequestV1,
   type CameraPreviewStateV1,
+  type CameraViewCommandReceiptV1,
+  type CameraViewCommandV1,
+  type CameraViewPreferenceV1,
   type CameraViewInputV1,
   type CompatibleProfileSummaryV1,
   type ControlCaptureCapabilitiesV1,
@@ -44,6 +46,7 @@ import {
   type RuntimeActivityRequestV1,
   type RuntimeActivityReceiptV1,
   type WorldRuntimeSnapshotV4,
+  type WorldSessionEventV1,
   type SubjectHarnessReportV1,
   type SubjectPresetTuningReceiptV1,
   type WorldkitBrowserApiV5,
@@ -56,13 +59,16 @@ export interface DeferredWorldkitBrowserRuntimeAdapterV1 {
   executeGameplayCommandRuntime(
     command: GameplayCommandV1,
   ): Promise<GameplayCommandReceiptV1>;
+  executeCameraViewCommandRuntime(
+    command: CameraViewCommandV1,
+  ): Promise<CameraViewCommandReceiptV1>;
   runWorldkitFixedInput(
     steps: readonly FixedInputV1[],
   ): Promise<WorldRuntimeSnapshotV4>;
-  gameplayEventsAfterRuntime(
+  worldSessionEventsAfterRuntime(
     afterEventSequence: number,
     maximumEventCount: number,
-  ): readonly GameplayEventV1[];
+  ): readonly WorldSessionEventV1[];
   gameplayInspectionSnapshotRuntime(): GameplayInspectionSnapshotV1;
   worldStateSnapshotRuntime(
     worldStateRef: string,
@@ -81,8 +87,6 @@ export interface DeferredWorldkitBrowserRuntimeAdapterV1 {
   resetRuntime(): Promise<WorldRuntimeSnapshotV4>;
   setPaused(paused: boolean): void;
   disposeRuntime(): Promise<void>;
-  requestCameraProfileRuntime(profileRef: string): WorldRuntimeSnapshotV4;
-  resetCameraProfileRuntime(): WorldRuntimeSnapshotV4;
   adjustCameraViewRuntime(input: CameraViewInputV1): WorldRuntimeSnapshotV4;
   resetCameraViewRuntime(): WorldRuntimeSnapshotV4;
   getCameraPreviewStateRuntime(): CameraPreviewStateV1;
@@ -243,7 +247,7 @@ function isNonEmptyString(input: unknown): input is string {
   return typeof input === "string" && input.length > 0;
 }
 
-function parseGameplayEventsQuery(input: unknown): Readonly<{
+function parseWorldSessionEventsQuery(input: unknown): Readonly<{
   afterEventSequence: number;
   maximumEventCount: number;
 }> {
@@ -258,7 +262,7 @@ function parseGameplayEventsQuery(input: unknown): Readonly<{
     !Number.isSafeInteger(record.maximumEventCount) ||
     (record.maximumEventCount as number) < 1 ||
     (record.maximumEventCount as number) >
-      WORLDKIT_GAMEPLAY_EVENT_PAGE_MAXIMUM_COUNT
+      WORLDKIT_WORLD_SESSION_EVENT_PAGE_MAXIMUM_COUNT
   ) throw boundaryError(
     "WORLDKIT_GAMEPLAY_EVENTS_QUERY_INVALID",
     "Gameplay Event query is invalid.",
@@ -269,8 +273,8 @@ function parseGameplayEventsQuery(input: unknown): Readonly<{
   });
 }
 
-function validateGameplayEventLookaheadPage(
-  input: readonly GameplayEventV1[],
+function validateWorldSessionEventLookaheadPage(
+  input: readonly WorldSessionEventV1[],
   query: Readonly<{
     afterEventSequence: number;
     maximumEventCount: number;
@@ -281,7 +285,7 @@ function validateGameplayEventLookaheadPage(
   try {
     if (!Array.isArray(input) || input.length > query.maximumEventCount + 1) {
       throw boundaryError(
-        "WORLDKIT_GAMEPLAY_EVENTS_PROTOCOL_INVALID",
+        "WORLDKIT_WORLD_SESSION_EVENTS_PROTOCOL_INVALID",
         "Gameplay Event publication violated the Browser protocol.",
       );
     }
@@ -293,7 +297,7 @@ function validateGameplayEventLookaheadPage(
         event.runtimeSessionId !== runtimeSessionId ||
         event.worldSessionId !== worldSessionId
       ) throw boundaryError(
-        "WORLDKIT_GAMEPLAY_EVENTS_PROTOCOL_INVALID",
+        "WORLDKIT_WORLD_SESSION_EVENTS_PROTOCOL_INVALID",
         "Gameplay Event publication violated the Browser protocol.",
       );
       previousSequence = event.sequence;
@@ -301,7 +305,7 @@ function validateGameplayEventLookaheadPage(
   } catch (error) {
     if (error instanceof WorldkitBrowserBoundaryErrorV1) throw error;
     throw boundaryError(
-      "WORLDKIT_GAMEPLAY_EVENTS_PROTOCOL_INVALID",
+      "WORLDKIT_WORLD_SESSION_EVENTS_PROTOCOL_INVALID",
       "Gameplay Event publication violated the Browser protocol.",
     );
   }
@@ -808,6 +812,15 @@ export function installDeferredWorldkitBrowserApi(options: {
         () => adapter.executeGameplayCommandRuntime(command),
       );
     },
+    executeCameraViewCommand: async (command) => {
+      await startupPromise;
+      const adapter = requireReadyAdapter();
+      return callAdapterAsync(
+        "WORLDKIT_CAMERA_VIEW_COMMAND_EXECUTION_FAILED",
+        "Camera View command execution failed.",
+        () => adapter.executeCameraViewCommandRuntime(command),
+      );
+    },
     runFixedInput: async (steps) => {
       await startupPromise;
       const adapter = requireReadyAdapter();
@@ -817,8 +830,8 @@ export function installDeferredWorldkitBrowserApi(options: {
         () => adapter.runWorldkitFixedInput(steps),
       );
     },
-    getGameplayEvents: (input) => {
-      const query = parseGameplayEventsQuery(input);
+    getWorldSessionEvents: (input) => {
+      const query = parseWorldSessionEventsQuery(input);
       const adapter = requireReadyAdapter();
       const current = callAdapter(
         "WORLDKIT_RUNTIME_SNAPSHOT_FAILED",
@@ -826,14 +839,14 @@ export function installDeferredWorldkitBrowserApi(options: {
         () => adapter.runtimeSnapshot(),
       );
       const pageWithLookahead = callAdapter(
-        "WORLDKIT_GAMEPLAY_EVENTS_QUERY_FAILED",
-        "Gameplay Event query failed.",
-        () => adapter.gameplayEventsAfterRuntime(
+        "WORLDKIT_WORLD_SESSION_EVENTS_QUERY_FAILED",
+        "WorldSession Event query failed.",
+        () => adapter.worldSessionEventsAfterRuntime(
           query.afterEventSequence,
           query.maximumEventCount + 1,
         ),
       );
-      validateGameplayEventLookaheadPage(
+      validateWorldSessionEventLookaheadPage(
         pageWithLookahead,
         query,
         current.runtimeSessionId,
@@ -841,8 +854,8 @@ export function installDeferredWorldkitBrowserApi(options: {
       );
       const hasMore = pageWithLookahead.length > query.maximumEventCount;
       const events = callAdapter(
-        "WORLDKIT_GAMEPLAY_EVENTS_PROTOCOL_INVALID",
-        "Gameplay Event publication violated the Browser protocol.",
+        "WORLDKIT_WORLD_SESSION_EVENTS_PROTOCOL_INVALID",
+        "WorldSession Event publication violated the Browser protocol.",
         () => immutableBrowserCopy(
           pageWithLookahead.slice(0, query.maximumEventCount),
         ),
@@ -1065,22 +1078,6 @@ export function installDeferredWorldkitBrowserApi(options: {
         "WORLDKIT_FIXED_INPUT_EXECUTION_FAILED",
         "Fixed Input execution failed.",
         () => adapter.runWorldkitFixedInput([input]),
-      );
-    },
-    requestCameraProfile: (profileRef) => {
-      const adapter = requireReadyAdapter();
-      return callAdapter(
-        "WORLDKIT_CAMERA_PROFILE_OPERATION_FAILED",
-        "Camera Profile operation failed.",
-        () => adapter.requestCameraProfileRuntime(profileRef),
-      );
-    },
-    resetCameraProfile: () => {
-      const adapter = requireReadyAdapter();
-      return callAdapter(
-        "WORLDKIT_CAMERA_PROFILE_OPERATION_FAILED",
-        "Camera Profile operation failed.",
-        () => adapter.resetCameraProfileRuntime(),
       );
     },
     adjustCameraView: (input) => {
@@ -1341,8 +1338,9 @@ export function createWorldkitBrowserApiV5(options: Readonly<{
     getSnapshot: notReady,
     getDiagnostics: notReady,
     executeGameplayCommand: notReady,
+    executeCameraViewCommand: notReady,
     runFixedInput: notReady,
-    getGameplayEvents: notReady,
+    getWorldSessionEvents: notReady,
     getGameplayInspectionSnapshot: notReady,
     getWorldStateSnapshot: notReady,
     acquireRuntimeActivity: notReady,
@@ -1360,8 +1358,6 @@ export function createWorldkitBrowserApiV5(options: Readonly<{
     getSubjectPresetBaseline: notReady,
     validateSubjectPackage: notReady,
     setIntent: notReady,
-    requestCameraProfile: notReady,
-    resetCameraProfile: notReady,
     adjustCameraView: notReady,
     resetCameraView: notReady,
     getCameraPreviewState: notReady,

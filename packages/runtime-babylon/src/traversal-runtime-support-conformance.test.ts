@@ -329,13 +329,15 @@ function controllerFor(
   runtime: BabylonWorldRuntime,
   entityId: string,
 ): SupportInspectableController {
-  const controller = (runtime as unknown as {
-    subjectControllersByEntityId: Map<string, SupportInspectableController>;
-  }).subjectControllersByEntityId.get(entityId);
-  if (controller === undefined) {
-    throw new Error(`Missing Subject controller '${entityId}'.`);
+  const character = (runtime as unknown as {
+    characterEntitiesByEntityId: Map<string, {
+      movement: SupportInspectableController;
+    }>;
+  }).characterEntitiesByEntityId.get(entityId);
+  if (character === undefined) {
+    throw new Error(`Missing Character Entity '${entityId}'.`);
   }
-  return controller;
+  return character.movement;
 }
 
 describe("Traversal runtime support conformance", () => {

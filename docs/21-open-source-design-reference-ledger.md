@@ -177,22 +177,23 @@ prepare/project/commit 比直接改场景树更稳，但还应补齐：
 
 ### 4.3 第三人称视角与碰撞
 
-WorldKit 当前 `FollowArmSolverV1` 采用中心、左右、上下和四个对角方向共九条 Babylon picking ray
-近似一个 collision radius，并已覆盖受控主体排除、立即缩臂、限速恢复、异常 delta 与 telemetry。
+WorldKit 当前 `SpringArmComponentV1` 通过 provider-neutral `PhysicsWorldQueryPortV1` 调用真正的
+Babylon/Havok sphere ShapeCast；`collisionRadiusMeters=0` 时才退化为 physics Raycast。组件已覆盖
+受控主体排除、立即缩臂、限速恢复、异常 delta 与 telemetry；Provider 还在 ShapeCast 前使用
+`shapeProximity(maxDistance=0)` 关闭探针起点已穿入障碍物时 Havok 不返回 cast hit 的缺口。
 Godot SpringArm 使用 camera near-plane shape 或用户指定 shape sweep；camera-controls 使用近裁剪面
-四角射线。两者共同说明“单中心 ray 不足”；此前五射线方案对薄对角障碍的缺口已经复现并关闭，
-near-plane corner、墙角和起点穿入仍需分别验证。
+四角射线。两者共同说明“单中心 ray 不足”；本项目已用真实 Havok 回归覆盖薄对角障碍、L 型墙角、
+窄门和起点穿入，而不再用多射线近似 Sweep。
 
 | 验证 ID | 交付物 | depends_on | Owner / 执行模式 | 所需证据 |
 |---|---|---|---|---|
-| `CAM-COLL-01` | 已完成：真实 Babylon 薄对角 blocker 击穿五 ray，并由九 ray 覆盖 | 无 | Follow Arm Provider Adapter，main-agent-only | RED/GREEN、blocker entity telemetry |
-| `CAM-COLL-02` | 已完成：L 型墙角、窄门、Follow Arm target 起点穿入三个真实 Babylon Fixture | `CAM-COLL-01` | Follow Arm Provider Adapter，main-agent-only | 九 ray 全部通过；临时退化为中心 ray 时墙角/窄门稳定 RED；无需 shape cast 或生产改动 |
-| `CAM-SWEEP-01` | 若 `CAM-COLL-01` 证实缺陷，比较 Babylon/Havok shape cast、near-plane corners 与现状 | `CAM-COLL-01` | Architecture main-agent-only | Provider 版本源码、性能预算、过滤层、确定性与 dispose 证据 |
+| `CAM-COLL-01` | 已完成：真实 Havok sphere Sweep 命中薄对角 blocker | 无 | Physics World Query Provider，main-agent-only | RED/GREEN、blocker entity telemetry |
+| `CAM-COLL-02` | 已完成：L 型墙角、窄门、Spring Arm target 起点穿入三个真实 Havok Fixture | `CAM-COLL-01` | Physics World Query Provider，main-agent-only | ShapeCast + 起点 shapeProximity 全部通过 |
+| `CAM-SWEEP-01` | 已完成：Babylon/Havok ShapeCast 经 `PhysicsWorldQueryPortV1` 替换多射线近似 | `CAM-COLL-01` | Architecture main-agent-only | Provider 9.21.2 源码、Ray/Sweep 分流、过滤、确定性与 Shape dispose 证据 |
 | `CAM-MOUNT-01` | Mount 转移 possession 后 Rider 不被裁切，Context/Modifier 选择可解释 | M8-S1 状态与 P2.4 Camera Context | CameraDirector，sequential | 修复现有 `CAM-MOUNT-1`，不得写场景特判 |
 
-`CAM-COLL-01/02` 已证明并关闭当前已知 ray 覆盖缺口，所以当前没有足够证据引入 shape cast。
-未来若连续 sweep、非点状 near-plane 或高速穿越出现新复现，shape cast 也只应替换 Follow Arm 的
-碰撞查询 Provider，不得接管 Orbit、Target、Profile、Context 或固定 Tick View publication。
+`CAM-COLL-01/02` 已证明多射线近似不足并完成 `CAM-SWEEP-01`。ShapeCast 只实现 Follow Arm 的
+碰撞查询 Provider，不接管 Orbit、Target、Profile、Context 或固定 Tick View publication。
 
 ## 5. 几何与资产候选的推进顺序
 

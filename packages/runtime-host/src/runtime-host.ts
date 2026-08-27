@@ -37,8 +37,12 @@ import { isNil } from "lodash-es";
 import type { GameplayWorldPortV1 } from "./gameplay-world-port";
 import {
   WorldSession,
+  type CameraViewCommandExecutorV1,
+  type CameraViewSelectionProjectionV1,
   type WorldSessionPublicationV1,
 } from "./world-session";
+import type { WorldSessionEventV1 } from "./command-journal";
+import type { CameraViewCommandReceiptV1 } from "@whitebox-world/runtime-contracts";
 
 export type RuntimeActivityKindV1 =
   | "runtime-run"
@@ -1354,6 +1358,41 @@ export class RuntimeHost {
     });
   }
 
+  executeCameraViewCommand(
+    input: unknown,
+    executor: CameraViewCommandExecutorV1,
+  ): Promise<CameraViewCommandReceiptV1> {
+    return this.enqueueMutation(async () => {
+      this.assertMutationAllowed();
+      const receipt = await this.currentWorldSession.executeCameraViewCommand(input, executor);
+      this.synchronizePhaseFromCurrent();
+      return receipt;
+    });
+  }
+
+  publishCameraSelectionObservation(
+    previous: CameraViewSelectionProjectionV1,
+    next: CameraViewSelectionProjectionV1,
+  ): Promise<WorldSessionPublicationV1> {
+    return this.enqueueMutation(async () => {
+      this.assertMutationAllowed();
+      return await this.currentWorldSession.publishCameraSelectionObservation(
+        previous,
+        next,
+      );
+    });
+  }
+
+  publishCameraTargetUnbound(
+    previous: CameraViewSelectionProjectionV1,
+    reason: "control-released" | "target-disposed" | "world-replaced",
+  ): Promise<WorldSessionPublicationV1> {
+    return this.enqueueMutation(async () => {
+      this.assertMutationAllowed();
+      return await this.currentWorldSession.publishCameraTargetUnbound(previous, reason);
+    });
+  }
+
   runFixedInput(input: unknown): Promise<WorldSessionPublicationV1> {
     const fixedInput = cloneCanonicalData(input, "FixedInputV1");
     return this.enqueueMutation(async () => {
@@ -1372,7 +1411,7 @@ export class RuntimeHost {
   eventsAfter(
     afterEventSequence: number,
     maximumEventCount: number,
-  ): readonly GameplayEventV1[] {
+  ): readonly WorldSessionEventV1[] {
     this.assertObservationAllowed();
     return this.currentWorldSession.eventsAfter(
       afterEventSequence,

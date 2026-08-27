@@ -1,6 +1,8 @@
 import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
+import type { PhysicsBody } from "@babylonjs/core/Physics/v2/physicsBody.js";
 import type { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
+import { EntityComponentV1 } from "@whitebox-world/runtime-framework";
 
 import type {
   ExecutionSubjectV3,
@@ -32,7 +34,24 @@ export interface SubjectMotionSampleV1 {
  * Input interpretation and movement execution are owned by
  * separate runtimes; this class only commits them on the same fixed-tick boundary.
  */
-export class SubjectController {
+type PhysicsCharacterControllerBodyHostV1 = Readonly<{
+  _body?: PhysicsBody;
+}>;
+
+function physicsBodyForCharacterController(
+  controller: MotionKernelRuntimeV1["physicsController"],
+): PhysicsBody {
+  const body = (controller as unknown as PhysicsCharacterControllerBodyHostV1)._body;
+  if (body === undefined) throw new Error("WORLDKIT_CHARACTER_PHYSICS_BODY_UNAVAILABLE");
+  return body;
+}
+
+/**
+ * Entity component boundary around the existing Motion Kernel. The kernel keeps
+ * its sole authority for support, gravity and locomotion state; this component
+ * contributes lifecycle and fixed-phase integration to the new framework.
+ */
+export class CharacterMovementComponentV1 extends EntityComponentV1 {
   private readonly motionKernel: MotionKernelRuntimeV1;
   readonly physicsController: MotionKernelRuntimeV1["physicsController"];
 
@@ -45,6 +64,7 @@ export class SubjectController {
       subjectOrigin: Vector3,
     ) => number | undefined,
   ) {
+    super("character-movement");
     this.motionKernel = new MotionKernelRuntimeV1(
       subject,
       gravityMetersPerSecondSquaredXYZ,
@@ -158,6 +178,10 @@ export class SubjectController {
     return this.motionKernel.facingYawRadians;
   }
 
+  get physicsBody(): PhysicsBody {
+    return physicsBodyForCharacterController(this.physicsController);
+  }
+
   get forward(): Vector3 {
     return this.motionKernel.forward;
   }
@@ -187,7 +211,7 @@ export class SubjectController {
     this.motionKernel.stop();
   }
 
-  dispose(): void {
+  protected override onDispose(): void {
     this.motionKernel.dispose();
   }
 }

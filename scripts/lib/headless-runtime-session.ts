@@ -572,7 +572,7 @@ class HeadlessRuntimeSession implements HeadlessRuntimeSessionV1 {
     return this.runtimeHost.eventsAfter(
       afterEventSequence,
       maximumEventCount,
-    );
+    ).filter((event): event is GameplayEventV1 => "kind" in event);
   }
 
   resolvedSubjectAssetRefs(): readonly string[] {

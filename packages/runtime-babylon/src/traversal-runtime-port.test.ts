@@ -466,12 +466,23 @@ function privateFloat32ToleranceMeters(operationMagnitudeMeters: number): number
   return 1e-6 + 2 * (2 ** -23) * Math.max(1, operationMagnitudeMeters);
 }
 
+function inspectCharacterMovement<T>(
+  runtime: BabylonWorldRuntime,
+  entityId: string,
+): T {
+  const character = (runtime as unknown as {
+    characterEntitiesByEntityId: ReadonlyMap<string, { movement: T }>;
+  }).characterEntitiesByEntityId.get(entityId);
+  if (character === undefined) {
+    throw new Error(`Missing Character Entity '${entityId}'.`);
+  }
+  return character.movement;
+}
+
 function spyPlayerCheckSupport(runtime: BabylonWorldRuntime) {
-  const controller = (runtime as unknown as {
-    subjectControllersByEntityId: Map<string, {
-      physicsController: { checkSupport: (...args: unknown[]) => unknown };
-    }>;
-  }).subjectControllersByEntityId.get("player")!;
+  const controller = inspectCharacterMovement<{
+    physicsController: { checkSupport: (...args: unknown[]) => unknown };
+  }>(runtime, "player");
   return vi.spyOn(controller.physicsController, "checkSupport");
 }
 
@@ -1080,11 +1091,9 @@ describe("createBabylonTraversalRuntimePortV1", () => {
         "TRAVERSAL_RUNTIME_EVIDENCE_UNAVAILABLE",
       );
 
-      const controller = (runtime as unknown as {
-        subjectControllersByEntityId: Map<string, {
-          physicsController: { checkSupport: (...args: unknown[]) => unknown };
-        }>;
-      }).subjectControllersByEntityId.get("player")!;
+      const controller = inspectCharacterMovement<{
+        physicsController: { checkSupport: (...args: unknown[]) => unknown };
+      }>(runtime, "player");
       const supportSpy = vi.spyOn(controller.physicsController, "checkSupport");
       const resetEvidence = port.resetToStartAnchor({
         startAnchorEntityId: "spawn-main",
@@ -1429,12 +1438,10 @@ describe("createBabylonTraversalRuntimePortV1", () => {
       const evidence = port.resetToStartAnchor({
         startAnchorEntityId: "spawn-main",
       });
-      const controller = (runtime as unknown as {
-        subjectControllersByEntityId: Map<string, {
-          controllerCenter: { x: number; y: number; z: number };
-          motionSnapshot(): { forwardXYZ: readonly number[] };
-        }>;
-      }).subjectControllersByEntityId.get("player")!;
+      const controller = inspectCharacterMovement<{
+        controllerCenter: { x: number; y: number; z: number };
+        motionSnapshot(): { forwardXYZ: readonly number[] };
+      }>(runtime, "player");
       const offset = fixture.traversalLockReceipt.lock
         .colliderCenterOffsetMetersXYZ;
 
@@ -1469,16 +1476,14 @@ describe("createBabylonTraversalRuntimePortV1", () => {
       port.resetToStartAnchor({ startAnchorEntityId: "spawn-main" });
       const cameraFrameSpy = vi.spyOn(
         (runtime as unknown as {
-          cameraDirector: { controlFrame: (...args: unknown[]) => unknown };
-        }).cameraDirector,
+          cameraComponent: { controlFrame: (...args: unknown[]) => unknown };
+        }).cameraComponent,
         "controlFrame",
       );
 
-      const controller = (runtime as unknown as {
-        subjectControllersByEntityId: Map<string, {
-          physicsController: { checkSupport: (...args: unknown[]) => unknown };
-        }>;
-      }).subjectControllersByEntityId.get("player")!;
+      const controller = inspectCharacterMovement<{
+        physicsController: { checkSupport: (...args: unknown[]) => unknown };
+      }>(runtime, "player");
       const supportSpy = vi.spyOn(controller.physicsController, "checkSupport");
       const before = port.readLatestTickEvidence();
 
@@ -1577,7 +1582,7 @@ describe("createBabylonTraversalRuntimePortV1", () => {
       });
       port.resetToStartAnchor({ startAnchorEntityId: "spawn-main" });
       const internal = runtime[BABYLON_TRAVERSAL_RUNTIME_INTERNAL]();
-      const controller = internal.readSubjectController("player")!;
+      const controller = internal.readCharacterMovement("player")!;
       vi.spyOn(controller.physicsController, "checkSupport")
         .mockImplementationOnce(() => {
           throw new Error("native support failure");
@@ -1604,7 +1609,7 @@ describe("createBabylonTraversalRuntimePortV1", () => {
       });
       port.resetToStartAnchor({ startAnchorEntityId: "spawn-main" });
       const internal = runtime[BABYLON_TRAVERSAL_RUNTIME_INTERNAL]();
-      const controller = internal.readSubjectController("player")!;
+      const controller = internal.readCharacterMovement("player")!;
       vi.spyOn(controller.physicsController, "checkSupport")
         .mockImplementationOnce(() => {
           throw new Error("native support failure");
@@ -1663,11 +1668,9 @@ describe("createBabylonTraversalRuntimePortV1", () => {
         "player",
         fallbackMotionProfileRef,
       )).toBe(true);
-      const controller = (runtime as unknown as {
-        subjectControllersByEntityId: Map<string, {
-          physicsController: { checkSupport: (...args: unknown[]) => unknown };
-        }>;
-      }).subjectControllersByEntityId.get("player")!;
+      const controller = inspectCharacterMovement<{
+        physicsController: { checkSupport: (...args: unknown[]) => unknown };
+      }>(runtime, "player");
       const supportSpy = vi.spyOn(controller.physicsController, "checkSupport");
 
       expectRuntimeCode(
@@ -1689,11 +1692,9 @@ describe("createBabylonTraversalRuntimePortV1", () => {
         traversalLockReceipt: fixture.traversalLockReceipt,
       });
       port.resetToStartAnchor({ startAnchorEntityId: "spawn-main" });
-      const controller = (runtime as unknown as {
-        subjectControllersByEntityId: Map<string, {
-          physicsController: { maxSlopeCosine: number };
-        }>;
-      }).subjectControllersByEntityId.get("player")!;
+      const controller = inspectCharacterMovement<{
+        physicsController: { maxSlopeCosine: number };
+      }>(runtime, "player");
       controller.physicsController.maxSlopeCosine -= 0.1;
 
       expectRuntimeCode(
@@ -1910,11 +1911,11 @@ describe("createBabylonTraversalRuntimePortV1", () => {
     const fixture = compileFixture(routeWorld(createValidPackageSubjectWorldV4()));
     const runtime = await createRuntime(fixture.executionPlan);
     try {
-      const controllers = (runtime as unknown as {
-        subjectControllersByEntityId: Map<string, {
-          physicsController: { checkSupport: (...args: unknown[]) => unknown };
+      const controllers = [...(runtime as unknown as {
+        characterEntitiesByEntityId: ReadonlyMap<string, {
+          movement: { physicsController: { checkSupport: (...args: unknown[]) => unknown } };
         }>;
-      }).subjectControllersByEntityId;
+      }).characterEntitiesByEntityId.values()].map((character) => character.movement);
       const supportSpies = [...controllers.values()].map((controller) =>
         vi.spyOn(controller.physicsController, "checkSupport")
       );
@@ -2030,11 +2031,9 @@ describe("createBabylonTraversalRuntimePortV1", () => {
     const fixture = compileFixture();
     const runtime = await createRuntime(fixture.executionPlan);
     try {
-      const controller = (runtime as unknown as {
-        subjectControllersByEntityId: Map<string, {
-          physicsController: { checkSupport: (...args: unknown[]) => unknown };
-        }>;
-      }).subjectControllersByEntityId.get("player")!;
+      const controller = inspectCharacterMovement<{
+        physicsController: { checkSupport: (...args: unknown[]) => unknown };
+      }>(runtime, "player");
       const original = controller.physicsController.checkSupport.bind(
         controller.physicsController,
       );

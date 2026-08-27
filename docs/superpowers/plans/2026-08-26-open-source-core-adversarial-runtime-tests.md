@@ -10,6 +10,13 @@
 
 **Spec:** `docs/21-open-source-design-reference-ledger.md`
 
+> Integration reconciliation (2026-08-26): `codex/camera-development` replaced the temporary nine-ray
+> `FollowArmSolverV1` closure with `SpringArmComponentV1` plus provider-neutral
+> `PhysicsWorldQueryPortV1`. The accepted adversarial fixtures now live in
+> `babylon-physics-world-query.test.ts` and run against real Havok ShapeCast/shapeProximity. The task
+> history below remains useful RED/GREEN provenance; the reconciled paths and final implementation are
+> authoritative in the ledger and completion review.
+
 ## Global Constraints
 
 - `checkSupport()` remains the only Ground support owner; no terrain-height, ray, or AABB grounding path may be added.
@@ -24,7 +31,7 @@
 
 | ID | Goal and independently verifiable deliverable | depends_on | blocks | Exclusive ownership | Input → output contract and integration point | Evidence | Mode |
 |---|---|---|---|---|---|---|---|
-| `CAM-COLL-01` | Detect a thin diagonal blocker inside the configured Follow Arm collision cross-section using a real Babylon Scene fixture | none | `CAM-SWEEP-01` | `packages/runtime-babylon/src/follow-arm-solver.ts`, its focused test | Existing `FollowArmSolveRequestV1` → unchanged `FollowArmSolveResultV1`; integration stays inside `FollowArmSolverV1.solve()` | RED on five probes, GREEN on the minimum provider-local probe closure; focused test | sequential, main-agent-only |
+| `CAM-COLL-01` | Detect a thin diagonal blocker inside the configured Follow Arm collision cross-section using real Havok | none | `CAM-SWEEP-01` | `packages/runtime-babylon/src/babylon-physics-world-query.ts`, its focused test | `SphereSweepRequestV1` → `SphereSweepHitV1`; integration stays behind `PhysicsWorldQueryPortV1` | RED on ray/multi-ray approximation, GREEN on true ShapeCast; focused test | sequential, main-agent-only |
 | `MNT-XFORM-01` | Prove a rotated Mount and asymmetric local Socket/slot offset produce the same Rider world pose in prepared projection, committed controller/visual, and the next fixed Tick | `CAM-COLL-01` only for shared review ordering | `MNT-PAIR-01` | mounted section of `packages/runtime-babylon/src/runtime.test.ts`; production `mountedPose()` only if RED | Frozen Mount pose + local Socket/slot → Rider Subject Origin and yaw; `mountedOn` remains source-of-truth | Real Havok Runtime, immediate pre/post commit, visual/controller/snapshot, reset cleanup | sequential, main-agent-only |
 | `TRAV-STEP-01` | Prove the same admitted static step is climbed while grounded but cannot pull an airborne Character upward | `MNT-XFORM-01` only for shared fixture ownership | `TRAV-SNAP-01` | traversal section of `packages/runtime-babylon/src/runtime.test.ts`; `motion-kernel-runtime.ts` only if RED | Existing Character collider `maxStepHeightMeters` + fixed input → real Havok position/support state | Grounded/airborne paired fixture, immediate support state, fixed-tick final pose | sequential, main-agent-only |
 | `OS-LEDGER-02` | Update the living ledger with adopted files, outcome, and exact fresh gates | all three slices | none | `docs/21-open-source-design-reference-ledger.md` | Candidate rows → `已吸收测试` or documented rejected hypothesis | Link/claim inspection and `git diff --check` | sequential, main-agent-only |

@@ -391,6 +391,9 @@ importers:
       '@whitebox-world/runtime-contracts':
         specifier: workspace:*
         version: link:../runtime-contracts
+      '@whitebox-world/runtime-framework':
+        specifier: workspace:*
+        version: link:../runtime-framework
       '@whitebox-world/runtime-host':
         specifier: workspace:*
         version: link:../runtime-host
@@ -449,6 +452,12 @@ importers:
       lodash-es:
         specifier: ^4.18.1
         version: 4.18.1
+
+  packages/runtime-framework:
+    devDependencies:
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@24.13.3)(tsx@4.23.12)(yaml@2.9.0)
 
   packages/runtime-host:
     dependencies:

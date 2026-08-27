@@ -1,10 +1,10 @@
-# Follow Arm 安全回缩与主线集成 Implementation Plan
+# Spring Arm 安全回缩与主线集成 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` to execute each implementation task with a scoped review before proceeding.
 
-**Goal:** 修复第三人称 Follow Arm 在首帧与极近障碍时未及时回缩、以及解算后位置阻尼重新越过安全距离的问题；随后在独立 worktree 中将最新远端 `main` 合入 PR #31 的功能分支，并以最终合并树重新完成验证。
+**Goal:** 修复第三人称 Spring Arm 在首帧与极近障碍时未及时回缩、以及解算后位置阻尼重新越过安全距离的问题；随后在独立 worktree 中将最新远端 `main` 合入 PR #31 的功能分支，并以最终合并树重新完成验证。
 
-**Architecture:** `FollowArmSolverV1` 只负责每 tick 的 sweep、安全距离与臂长状态；`CameraDirector` 必须将解算后的安全姿态作为碰撞收缩时的最终 pose，不能再以位置阻尼或转场插值跨越该边界。`MotionKernelRuntimeV1` 继续独占 Subject facing。Git 集成由主代理在干净 worktree 中串行完成，绝不触碰当前脏工作区。
+**Architecture:** `SpringArmComponentV1` 通过 `PhysicsWorldQueryPortV1` 独占每 tick 的 Sweep、安全距离与臂长状态；`BabylonHavokPhysicsWorldQueryV1` 使用 Havok `shapeCast` 执行真实球形 Sweep，`ProbeSize=0` 才改用物理 Raycast。`CameraComponentV1` 持有 Camera Director，并将解算后的安全姿态作为碰撞收缩时的最终 pose，不能再以位置阻尼或转场插值跨越该边界。`MotionKernelRuntimeV1` 继续独占 Subject facing。Git 集成由主代理在干净 worktree 中串行完成，绝不触碰当前脏工作区。
 
 **Tech Stack:** TypeScript、Babylon.js、Vitest、pnpm、Git/GitHub CLI。
 
@@ -25,7 +25,7 @@
 | ID | 依赖 | 产物/接口 | 文件所有权 | 模式 |
 | --- | --- | --- | --- | --- |
 | T1 | 无 | 已验证远端 main SHA 与干净集成 worktree | `.worktrees/camera-optimization-integration`、Git refs | main-agent-only |
-| T2 | T1 | 不会把最小构图距离当作安全下限的 Follow Arm | `follow-arm-solver.ts`、其单元测试 | sequential |
+| T2 | T1 | 不会把最小构图距离当作安全下限的 Spring Arm | `spring-arm-component.ts`、其单元测试 | sequential |
 | T3 | T2 | 解算后位置/转场不能越界的 Camera Director 安全 pose | `camera-director.ts`、预览通道回归 | sequential |
 | T4 | T1,T3 | main 三方语义比对、合并冲突解决和最终验证产物 | 集成分支、生成产物 | main-agent-only |
 | T5 | T4 | 全量门禁、GitHub CI 与 PR #31 状态证据 | 验证日志、PR 描述 | main-agent-only |
@@ -44,19 +44,19 @@
 
 **Verification:** `git status --porcelain`、`git rev-parse origin/main`、`git merge-base`、`git diff --check`。
 
-## Task 2: Follow Arm sweep 的即时安全回缩
+## Task 2: Spring Arm sweep 的即时安全回缩
 
 **Files:**
-- Modify: `packages/runtime-babylon/src/follow-arm-solver.ts`
-- Create: `packages/runtime-babylon/src/follow-arm-solver.test.ts`
+- Modify: `packages/runtime-babylon/src/spring-arm-component.ts`
+- Create: `packages/runtime-babylon/src/spring-arm-component.test.ts`
 
 **Steps:**
-1. 先新增直接调用 `FollowArmSolverV1` 的失败回归：`minimumDistanceMeters` 大于极近命中安全距离时，首个 tick 的 effective 不得超过命中距离减半径；同一测试还验证无遮挡恢复的单调且速率受限行为。
-2. 将命中距离减 `collisionRadiusMeters` 后的非负长度定义为本 tick `safeArmLengthMeters`；不得与 `minimumDistanceMeters` 取 max。
+1. 先新增直接调用 `SpringArmComponentV1` 的失败回归：`minimumDistanceMeters` 大于极近命中安全距离时，首个 tick 的 effective 不得超过球 Sweep 返回的中心轨迹命中距离；同一测试还验证无遮挡恢复的单调且速率受限行为。
+2. 将 Havok ShapeCast 返回的中心轨迹命中距离定义为本 tick `safeArmLengthMeters`；球的半径已由 Sweep 形状计算，不得二次减 `collisionRadiusMeters`，也不得与 `minimumDistanceMeters` 取 max。
 3. 阻挡或安全距离变小：将 solver 内部长度直接 clamp 到安全长度，不调用收缩速率插值。无阻挡且安全长度变大：仅以 `collisionRecoveryMetersPerSecond * max(0, deltaSeconds)` 逐步恢复，且最终 clamp 到本 tick safe。
-4. 保持现有五射线探针、Subject 自身过滤、命中遥测和 reset 语义不变。
+4. 删除五射线近似；仅由物理查询端口执行一次 Sphere Sweep（`ProbeSize=0` 时一次 Raycast），保持 Subject 自身过滤、命中遥测和 reset 语义。
 
-**Verification:** `pnpm exec vitest run packages/runtime-babylon/src/follow-arm-solver.test.ts`；测试必须包含首帧极近障碍、持续遮挡、无遮挡恢复和 Subject 自过滤。
+**Verification:** `pnpm exec vitest run packages/runtime-babylon/src/spring-arm-component.test.ts packages/runtime-babylon/src/babylon-physics-world-query.test.ts`；测试必须包含首帧极近障碍、持续遮挡、无遮挡恢复、Subject 自过滤，以及 ShapeCast/Raycast 分支。
 
 ## Task 3: Camera Director 对安全 pose 的后处理约束
 
@@ -68,7 +68,7 @@
 1. 先将现有阻挡测试加强为首个 orbit tick 即断言 `effectiveArmLengthMeters <= safeArmLengthMeters`，并以极近 blocker 验证不会因位置阻尼留下超安全有效臂长。
 2. 定义碰撞收缩为不可滞后的安全边界：当 `isCollisionRetracted` 为真，Camera Director 直接采用 Follow Arm position，跳过会向旧 pose 回插的 position lag 与 transition position 插值；target/FOV 仍可按原规则平滑。
 3. 无阻挡恢复继续允许既有 position damping，但只使用 solver 已限速且不超过当 tick 安全距离的 desired position。
-4. 保持第一人称没有 Follow Arm telemetry/sweep 的行为不变。
+4. 保持第一人称没有 Spring Arm telemetry/sweep 的行为不变。
 
 **Verification:** `pnpm exec vitest run packages/runtime-babylon/src/camera-preview-channel.test.ts packages/runtime-babylon/src/capability-runtime.test.ts`；验证首帧、极近、sprint modifier 前后、退出遮挡、第一人称与至少 30/60/120 Hz-like fixed-input 节奏。
 

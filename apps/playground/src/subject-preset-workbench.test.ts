@@ -14,8 +14,8 @@ type TransactionRuntimeDouble = {
   getCameraPreviewState(): {
     tuningByProfileRef: Readonly<Record<string, Readonly<Record<string, number>>>>;
   };
-  requestCameraProfile(profileRef: string): unknown;
-  resetCameraProfile(): unknown;
+  setCameraRigProfile(profileRef: string): unknown;
+  resetCameraRigProfile(): unknown;
   applyCameraPreview(request: {
     tuningByProfileRef: Readonly<Record<string, Readonly<Record<string, number>>>>;
   }): unknown;
@@ -294,7 +294,7 @@ describe("subject preset workbench Runtime transaction", () => {
     let gameplayApplyCount = 0;
     let cameraPreviewApplyCount = 0;
     let cameraPreviewReadCount = 0;
-    let resetCameraProfileCallCount = 0;
+    let resetCameraRigProfileCallCount = 0;
     const gameplayExpectedSubjectDefinitionHashes: string[] = [];
     const gameplayRequests: Array<{
       selectedMotionProfileRef: string;
@@ -307,11 +307,11 @@ describe("subject preset workbench Runtime transaction", () => {
           tuningByProfileRef: structuredClone(state.cameraTuningByProfileRef),
         };
       },
-      requestCameraProfile: (profileRef) => {
+      setCameraRigProfile: (profileRef) => {
         state.cameraPreferenceRef = profileRef;
       },
-      resetCameraProfile: () => {
-        resetCameraProfileCallCount += 1;
+      resetCameraRigProfile: () => {
+        resetCameraRigProfileCallCount += 1;
         state.cameraPreferenceRef = null;
       },
       applyCameraPreview: (request) => {
@@ -350,14 +350,14 @@ describe("subject preset workbench Runtime transaction", () => {
       gameplayRequests,
       gameplayExpectedSubjectDefinitionHashes,
       cameraPreviewReadCount: () => cameraPreviewReadCount,
-      resetCameraProfileCallCount: () => resetCameraProfileCallCount,
+      resetCameraRigProfileCallCount: () => resetCameraRigProfileCallCount,
     };
   };
 
-  it("fails closed when the explicit authoring profile-selection memento is missing", () => {
+  it("fails closed when the explicit authoring profile-selection memento is missing", async () => {
     const { runtime, state, gameplayRequests, cameraPreviewReadCount } = createRuntime();
 
-    const result = applySubjectPresetWorkingDraftTransactionV1({
+    const result = await applySubjectPresetWorkingDraftTransactionV1({
       draft: createDraft(),
       subjectEntityId: "player",
       runtimeExpectedSubjectDefinitionHash: runtimeSubjectDefinitionHash,
@@ -375,10 +375,10 @@ describe("subject preset workbench Runtime transaction", () => {
     expect(state.cameraPreferenceRef).toBeNull();
   });
 
-  it("rejects legacy V3 snapshot aliases instead of treating them as a memento", () => {
+  it("rejects legacy V3 snapshot aliases instead of treating them as a memento", async () => {
     const { runtime, gameplayRequests, cameraPreviewReadCount } = createRuntime();
 
-    const result = applySubjectPresetWorkingDraftTransactionV1({
+    const result = await applySubjectPresetWorkingDraftTransactionV1({
       draft: createDraft(),
       subjectEntityId: "player",
       runtimeExpectedSubjectDefinitionHash: runtimeSubjectDefinitionHash,
@@ -400,10 +400,10 @@ describe("subject preset workbench Runtime transaction", () => {
     expect(cameraPreviewReadCount()).toBe(0);
   });
 
-  it("rejects a profile-selection memento whose refs have the wrong Registry kinds", () => {
+  it("rejects a profile-selection memento whose refs have the wrong Registry kinds", async () => {
     const { runtime, gameplayRequests, cameraPreviewReadCount } = createRuntime();
 
-    const result = applySubjectPresetWorkingDraftTransactionV1({
+    const result = await applySubjectPresetWorkingDraftTransactionV1({
       draft: createDraft(),
       subjectEntityId: "player",
       runtimeExpectedSubjectDefinitionHash: runtimeSubjectDefinitionHash,
@@ -423,7 +423,7 @@ describe("subject preset workbench Runtime transaction", () => {
     expect(cameraPreviewReadCount()).toBe(0);
   });
 
-  it("restores Gameplay from the explicit Workbench memento after a partial failure", () => {
+  it("restores Gameplay from the explicit Workbench memento after a partial failure", async () => {
     const { runtime, gameplayRequests } = createRuntime({
       gameplayOutcome: "throw-after-mutation",
     });
@@ -433,7 +433,7 @@ describe("subject preset workbench Runtime transaction", () => {
         "worldkit://control-feel-profile/humanoid.medium-ground@1",
     };
 
-    const result = applyTransaction({
+    const result = await applyTransaction({
       draft: createDraft(),
       subjectEntityId: "player",
       previousCameraPreferenceRef: null,
@@ -456,12 +456,12 @@ describe("subject preset workbench Runtime transaction", () => {
     ]);
   });
 
-  it("rolls Camera Profile and preview tuning back when Gameplay rejects", () => {
-    const { runtime, state, resetCameraProfileCallCount } = createRuntime({
+  it("rolls Camera Profile and preview tuning back when Gameplay rejects", async () => {
+    const { runtime, state, resetCameraRigProfileCallCount } = createRuntime({
       gameplayOutcome: "rejected",
     });
 
-    const result = applyTransaction({
+    const result = await applyTransaction({
       draft: createDraft(),
       subjectEntityId: "player",
       previousCameraPreferenceRef: null,
@@ -477,15 +477,15 @@ describe("subject preset workbench Runtime transaction", () => {
       motionProfileRef: baseline.defaultMotionProfile.resourceRef,
       controlFeelProfileRef: baseline.controlFeelProfile.resourceRef,
     });
-    expect(resetCameraProfileCallCount()).toBe(1);
+    expect(resetCameraRigProfileCallCount()).toBe(1);
   });
 
-  it("rolls a Camera Profile mutation back when Camera preview fails", () => {
+  it("rolls a Camera Profile mutation back when Camera preview fails", async () => {
     const { runtime, state } = createRuntime({
       cameraOutcome: "throw-after-preview-mutation",
     });
 
-    const result = applyTransaction({
+    const result = await applyTransaction({
       draft: createDraft(),
       subjectEntityId: "player",
       previousCameraPreferenceRef: null,
@@ -503,10 +503,10 @@ describe("subject preset workbench Runtime transaction", () => {
     });
   });
 
-  it("compensates both Gameplay and Camera when Gameplay throws after mutation", () => {
+  it("compensates both Gameplay and Camera when Gameplay throws after mutation", async () => {
     const { runtime, state } = createRuntime({ gameplayOutcome: "throw-after-mutation" });
 
-    const result = applyTransaction({
+    const result = await applyTransaction({
       draft: createDraft(),
       subjectEntityId: "player",
       previousCameraPreferenceRef: null,
@@ -524,12 +524,12 @@ describe("subject preset workbench Runtime transaction", () => {
     });
   });
 
-  it("keeps Registry draft locks distinct from the Runtime subject hash for apply and rollback", () => {
+  it("keeps Registry draft locks distinct from the Runtime subject hash for apply and rollback", async () => {
     const { runtime, gameplayExpectedSubjectDefinitionHashes } = createRuntime({
       gameplayOutcome: "throw-after-mutation",
     });
 
-    const result = applyTransaction({
+    const result = await applyTransaction({
       draft: createDraft(),
       subjectEntityId: "player",
       runtimeExpectedSubjectDefinitionHash: runtimeSubjectDefinitionHash,

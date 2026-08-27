@@ -350,6 +350,28 @@ describe("Gameplay Babylon Runtime coordinator", () => {
       worldSessionIdFactory: () => "world-session.mounted-havok",
     });
     const initial = coordinator.snapshot();
+    if (initial.view.camera.mode !== "tracking") {
+      throw new Error("Expected the mounted fixture Camera to be tracking.");
+    }
+    const cameraReceipt = await coordinator.executeCameraViewCommand({
+      type: "view.camera-preference.set",
+      schemaVersion: 1,
+      id: "camera-command.mounted-havok",
+      runtimeSessionId: initial.runtimeSessionId,
+      worldSessionId: initial.worldSessionId,
+      cameraEntityId: initial.view.camera.id,
+      cameraViewPreference: {
+        mode: "camera-rig-profile",
+        cameraRigProfileRef: initial.view.camera.activeCameraProfileRef,
+      },
+    });
+    expect(cameraReceipt).toMatchObject({
+      status: "committed",
+      viewStateRevision: initial.view.viewStateRevision + 1,
+    });
+    expect(coordinator.eventsAfter(0, 10).some((event) =>
+      event.type === "camera.selection.changed"
+    )).toBe(true);
     const mountRequest = {
       id: "mount-skateboard-s1",
       kind: "mount-action-request",
@@ -400,6 +422,18 @@ describe("Gameplay Babylon Runtime coordinator", () => {
         suspendedByRelationshipId: MOUNTED_SKATEBOARD_S1_RELATIONSHIP_ID,
       }),
     );
+    expect(afterBoardMove.view.camera).toMatchObject({
+      mode: "tracking",
+      targetEntityId: "skateboard",
+      activeCameraModifierRefs: [
+        "worldkit://camera-modifier/mounted-framing@1",
+      ],
+      requestedArmLengthMeters: 7,
+    });
+    expect(afterBoardMove.view.camera.mode).toBe("tracking");
+    if (afterBoardMove.view.camera.mode === "tracking") {
+      expect(afterBoardMove.view.camera.effectiveArmLengthMeters).toBeGreaterThan(6);
+    }
 
     const dismountRequest = {
       id: "dismount-skateboard-s1",
@@ -441,6 +475,11 @@ describe("Gameplay Babylon Runtime coordinator", () => {
       independentlyMoved.world.subjectStatesByEntityId.player!
         .entityState.positionMetersXYZ[2],
     ).toBeLessThan(riderBeforeIndependentMove[2]);
+    expect(independentlyMoved.view.camera).toMatchObject({
+      mode: "tracking",
+      targetEntityId: "player",
+      activeCameraModifierRefs: [],
+    });
 
     await coordinator.dispose();
   }, 30_000);

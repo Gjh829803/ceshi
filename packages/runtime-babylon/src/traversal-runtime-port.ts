@@ -495,7 +495,7 @@ class BabylonTraversalRuntimePortV1 implements TraversalRuntimePortV1 {
         traversingEntityId: this.traversingEntityId,
         walkDirectionWorldXZ: [direction[0]!, direction[1]!],
       });
-      const postTickController = this.#host.readSubjectController(
+      const postTickController = this.#host.readCharacterMovement(
         this.traversingEntityId,
       );
       if (
@@ -543,7 +543,7 @@ class BabylonTraversalRuntimePortV1 implements TraversalRuntimePortV1 {
     if (!isEqual(currentPaperLock.lock, this.#lock)) {
       fail("TRAVERSAL_RUNTIME_LOCK_MISMATCH");
     }
-    const controller = this.#host.readSubjectController(this.traversingEntityId);
+    const controller = this.#host.readCharacterMovement(this.traversingEntityId);
     if (isNil(controller)) {
       fail("TRAVERSAL_RUNTIME_LIVE_LOCK_MISMATCH");
     }
@@ -566,7 +566,7 @@ class BabylonTraversalRuntimePortV1 implements TraversalRuntimePortV1 {
 
   private createEvidenceClosed(
     controller: NonNullable<ReturnType<
-      BabylonTraversalRuntimeInternalV1["readSubjectController"]
+      BabylonTraversalRuntimeInternalV1["readCharacterMovement"]
     >>,
   ): TraversalRuntimeTickEvidenceV1 {
     try {
@@ -580,7 +580,7 @@ class BabylonTraversalRuntimePortV1 implements TraversalRuntimePortV1 {
 
   private createEvidence(
     controller: NonNullable<ReturnType<
-      BabylonTraversalRuntimeInternalV1["readSubjectController"]
+      BabylonTraversalRuntimeInternalV1["readCharacterMovement"]
     >>,
   ): TraversalRuntimeTickEvidenceV1 {
     const sample = controller.retainedCharacterSupportSample();
@@ -658,7 +658,7 @@ export function createBabylonTraversalRuntimePortV1(input: Readonly<{
   if (host.readControlledEntityId() !== lock.subjectEntityId) {
     fail("TRAVERSAL_RUNTIME_NOT_CONTROLLED");
   }
-  const controller = host.readSubjectController(lock.subjectEntityId);
+  const controller = host.readCharacterMovement(lock.subjectEntityId);
   if (isNil(controller)) {
     fail("TRAVERSAL_RUNTIME_LIVE_LOCK_MISMATCH");
   }
