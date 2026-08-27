@@ -128,11 +128,28 @@ export interface ObjectNodeSpecV2 {
   transform: TransformSpecV2;
 }
 
+export const FIRST_BATCH_ALLOWED_OVERRIDE_PATHS_V1 = [
+  "profiles.controlFeelProfileRef",
+  "profiles.controlProfileRef",
+  "profiles.motion.defaultMotionProfileRef",
+] as const;
+
+export type FirstBatchAllowedOverridePathV1 =
+  (typeof FIRST_BATCH_ALLOWED_OVERRIDE_PATHS_V1)[number];
+
+export interface DefinitionResourceRefOverrideV1 {
+  readonly id: string;
+  readonly kind: "resource-ref";
+  readonly path: string;
+  readonly resourceRef: string;
+}
+
 export interface SubjectNodeSpecV2 {
   id: string;
   kind: "subject";
   subjectDefinitionRef: string;
   spawnAnchorEntityId?: string;
+  overrides?: readonly DefinitionResourceRefOverrideV1[];
 }
 
 export interface CameraNodeSpecV2 {
@@ -264,6 +281,7 @@ export interface PackageSubjectDefinitionV1 {
   relationshipCapabilityRefs: readonly string[];
   actionOrPoseSetRef: string;
   renderBindingProfileRef: string;
+  allowedOverridePaths: readonly string[];
   aiMetadata: {
     displayName: string;
     description: string;
@@ -494,6 +512,7 @@ export interface NormalizedSubjectDefinitionV2 {
   capabilityRefs: readonly string[];
   locomotionCapabilityRef: string;
   locomotionCapabilityHash: string;
+  allowedOverridePaths: readonly string[];
   profiles: {
     physicsBodyProfileRef: string;
     locomotionProfileRef: string;

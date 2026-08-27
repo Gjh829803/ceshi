@@ -836,19 +836,42 @@ describe("compileWorldV5", () => {
     expect(changedConnectivity.executionPlan!.authoringSpecHash).not.toBe(
       baseline.executionPlan!.authoringSpecHash,
     );
-    const v4Payload = (plan: NonNullable<typeof baseline.executionPlan>) => {
+    const documentIndependentPlan = (
+      plan: NonNullable<typeof baseline.executionPlan>,
+    ) => {
       const {
         schemaVersion: _schemaVersion,
         authoringSpecHash: _authoringSpecHash,
         normalizedWorldIrHash: _normalizedWorldIrHash,
         traversal: _traversal,
         staticColliders: _staticColliders,
+        layout,
         ...payload
       } = plan;
-      return payload;
+      return {
+        ...payload,
+        layout: {
+          solverProfileRef: layout.solverProfileRef,
+          resolvedVersion: layout.resolvedVersion,
+          solverProfileHash: layout.solverProfileHash,
+          regions: layout.regions,
+          routes: layout.routes,
+          screenRegions: layout.screenRegions,
+          layoutAssertions: layout.layoutAssertions,
+          placementsByEntityId: Object.fromEntries(
+            Object.entries(layout.placementsByEntityId).map(([entityId, placement]) => {
+              const {
+                layoutSolveReportHash: _layoutSolveReportHash,
+                ...placementProvenance
+              } = placement.placementProvenance;
+              return [entityId, { ...placement, placementProvenance }];
+            }),
+          ),
+        },
+      };
     };
-    expect(v4Payload(changedConnectivity.executionPlan!)).toEqual(
-      v4Payload(baseline.executionPlan!),
+    expect(documentIndependentPlan(changedConnectivity.executionPlan!)).toEqual(
+      documentIndependentPlan(baseline.executionPlan!),
     );
     expect(changedSurface.executionPlan!.traversal.surfaces[0]!.traversalSurfaceId)
       .not.toBe(baseline.executionPlan!.traversal.surfaces[0]!.traversalSurfaceId);

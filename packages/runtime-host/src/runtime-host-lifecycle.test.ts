@@ -1,534 +1,73 @@
-import {
-  createGameplayBootstrapResourceLockEntryV1,
-  createGameplayBootstrapV1,
-  DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
-  gameplayBootstrapCanonicalBytesV1,
-  type ControllerEntityStateV1,
-  type GameplayParticipantStateV1,
-  type SpatialEntityStateV1,
-} from "@whitebox-world/gameplay-contracts";
-import {
-  CONTROL_TRANSITION_CAPABILITY_REF,
-  createCoreControlFeatureFactoryV1,
-  type GameplayModeV1,
-} from "@whitebox-world/gameplay";
-import {
-  canonicalJsonBytes,
-  sha256Bytes,
-  sha256CanonicalJson,
-} from "@whitebox-world/protocol";
+import { DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1 } from "@whitebox-world/gameplay-contracts";
+import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import type { ExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
-import {
-  canonicalWorldPackageFileIntegrityEntriesV1,
-  canonicalWorldPackageManifestV1,
-  GAMEPLAY_BOOTSTRAP_MEDIA_TYPE_V1,
-  GAMEPLAY_BOOTSTRAP_PACKAGE_PATH_V1,
-  hashWorldPackageManifestV1,
-  hashWorldPackageRootV1,
-  type WorldPackageBuildReceiptV1,
-  type WorldPackageFileIntegrityEntryV1,
-  type WorldPackageSha256HashV1,
-} from "@whitebox-world/world-package";
+import type { WorldPackageSha256HashV1 } from "@whitebox-world/world-package";
 import { describe, expect, it, vi } from "vitest";
 
-import type { GameplayWorldPortV1 } from "./gameplay-world-port";
-import * as runtimeHostModule from "./runtime-host";
-import type {
-  RuntimeActivityAcquireResultV1,
-} from "./runtime-host";
-import {
-  createFakeGameplayWorldPortHarnessV1,
-  type FakeGameplayWorldPortHarnessV1,
-} from "./test/fake-gameplay-world-adapter";
 import type { WorldSessionPublicationV1 } from "./world-session";
 
-const HASH_A = `sha256:${"a".repeat(64)}` as const;
-const HASH_B = `sha256:${"b".repeat(64)}` as const;
-const HASH_C = `sha256:${"c".repeat(64)}` as const;
-const HASH_D = `sha256:${"d".repeat(64)}` as const;
-const RUNTIME_SESSION_ID = "runtime.lifecycle";
-const INITIAL_WORLD_PACKAGE_REF = "worldkit://world-package/initial@1";
-const REPLACEMENT_WORLD_PACKAGE_REF = "worldkit://world-package/replacement@1";
+import {
+  HASH_A,
+  HASH_B,
+  INITIAL_WORLD_PACKAGE_REF,
+  REPLACEMENT_WORLD_PACKAGE_REF,
+  RUNTIME_SESSION_ID,
+  controllerState,
+  createAdapterFactoryHarness,
+  createBuildReceipt,
+  createHost,
+  createPortHarness,
+  heroState,
+  hostOptions,
+  mutableWorldConfiguration,
+  participantState,
+  projection,
+  replacementRequest,
+  runtimeHostConstructor,
+} from "./test/runtime-host-lifecycle-harness";
 
-/*
- * RuntimeHost is intentionally exercised through the frozen Task 4 public
- * shape instead of importing a not-yet-implemented named export. This keeps
- * the RED lifecycle suite in the typecheck graph while the implementation is
- * still being introduced in runtime-host.ts.
- */
-interface RuntimeHostUnderTestV1 {
-  readonly phase: runtimeHostModule.RuntimeHostPhaseV1;
-  readonly currentWorldSessionId: string;
-  snapshot(): WorldSessionPublicationV1;
-  runFixedInput(input: unknown): Promise<WorldSessionPublicationV1>;
-  replaceWorld(world: unknown): Promise<WorldSessionPublicationV1>;
-  reset(): Promise<WorldSessionPublicationV1>;
-  resetWithInitialControlBinding(
-    input: unknown,
-  ): Promise<WorldSessionPublicationV1>;
-  runtimeActivitySnapshot(): runtimeHostModule.RuntimeActivityCoordinatorSnapshotV1;
-  acquireRuntimeActivity(input: unknown): RuntimeActivityAcquireResultV1;
-  dispose(): Promise<void>;
-}
-
-interface RuntimeHostConstructorUnderTestV1 {
-  create(input: unknown): Promise<RuntimeHostUnderTestV1>;
-}
-
-function runtimeHostConstructor(): RuntimeHostConstructorUnderTestV1 {
-  const candidate = (runtimeHostModule as Readonly<Record<string, unknown>>)
-    .RuntimeHost;
-  if (
-    typeof candidate !== "function" ||
-    typeof (candidate as { readonly create?: unknown }).create !== "function"
-  ) {
-    throw new Error("RED: RuntimeHost lifecycle is not implemented yet.");
-  }
-  return candidate as unknown as RuntimeHostConstructorUnderTestV1;
-}
-
-const participantState = Object.freeze({
-  id: "participant.primary",
-  mode: "active",
-}) satisfies GameplayParticipantStateV1;
-
-const controllerState = Object.freeze({
-  id: "controller.primary",
-  kind: "controller-entity-state",
-  controllerDefinitionRef: "worldkit://controller-definition/local@1",
-  controllerDefinitionHash: HASH_A,
-  participantId: participantState.id,
-  lifecycleMode: "active",
-  inputMode: "human",
-}) satisfies ControllerEntityStateV1;
-
-const heroState = Object.freeze({
-  id: "entity.hero",
-  kind: "spatial-entity-state",
-  entityDefinitionRef: "worldkit://entity-definition/hero@1",
-  entityDefinitionHash: HASH_A,
-  semanticClassId: "character.humanoid",
-  lifecycleMode: "active",
-  positionMetersXYZ: [0, 0, 0] as const,
-  rotationQuaternionXYZW: [0, 0, 0, 1] as const,
-  scaleRatioXYZ: [1, 1, 1] as const,
-  linearVelocityMetersPerSecondXYZ: [0, 0, 0] as const,
-}) satisfies SpatialEntityStateV1;
-
-const controlFeatureFactory = createCoreControlFeatureFactoryV1();
-const gameplayBootstrap = createGameplayBootstrapV1({
-  kind: "gameplay-bootstrap",
-  id: "gameplay.lifecycle",
-  version: 1,
-  resourceRef: "worldkit://gameplay-bootstrap/lifecycle@1",
-  entityDescriptors: [{
-    id: heroState.id,
-    entityDefinitionRef: heroState.entityDefinitionRef,
-    capabilityRefs: [CONTROL_TRANSITION_CAPABILITY_REF],
-  }],
-  featureResourceLocks: [{
-    resourceRef: controlFeatureFactory.manifest.resourceRef,
-    contentHash: controlFeatureFactory.manifest.contentHash,
-  }],
-  semanticActionDefinitions: [],
-  availableCapabilityRefs: [CONTROL_TRANSITION_CAPABILITY_REF],
-});
-const gameplayBootstrapResourceLock =
-  createGameplayBootstrapResourceLockEntryV1(gameplayBootstrap);
-const gameplayResourceLock = Object.freeze([gameplayBootstrapResourceLock]);
-const gameplayResourceLockHash = sha256CanonicalJson(
-  gameplayResourceLock,
-) as WorldPackageSha256HashV1;
-
-const gameplayMode = Object.freeze({
-  gameplayModeRef: "worldkit://gameplay-mode/exploration@1",
-  evaluateCommand: () => Object.freeze({ status: "accepted" as const }),
-}) satisfies GameplayModeV1;
-
-function projection(simulationTick = 0) {
-  return Object.freeze({
-    simulationTick,
-    spatialEntityStatesById: Object.freeze({ [heroState.id]: heroState }),
-    capabilityStatesById: Object.freeze({}),
-    semanticFactsById: Object.freeze({}),
-  });
-}
-
-function createPortHarness(): FakeGameplayWorldPortHarnessV1 {
-  return createFakeGameplayWorldPortHarnessV1({
-    initialWorldProjection: projection(),
-    controllableEntityIds: [heroState.id],
-  });
-}
-
-interface AdapterFactoryHarnessV1 {
-  readonly factory: Readonly<{
-    preflightConcurrentResidency: ReturnType<typeof vi.fn>;
-    create: ReturnType<typeof vi.fn>;
-    awaitCandidatePublicationReady: ReturnType<typeof vi.fn>;
-  }>;
-  readonly ports: readonly FakeGameplayWorldPortHarnessV1[];
-}
-
-function createAdapterFactoryHarness(
-  ports: readonly FakeGameplayWorldPortHarnessV1[],
-): AdapterFactoryHarnessV1 {
-  let index = 0;
-  return Object.freeze({
-    ports,
-    factory: Object.freeze({
-      preflightConcurrentResidency: vi.fn(() =>
-        Object.freeze({ status: "accepted" as const })
-      ),
-      create: vi.fn(async (): Promise<GameplayWorldPortV1> => {
-        const port = ports[index];
-        index += 1;
-        if (port === undefined) {
-          throw new Error("private fake adapter exhaustion");
-        }
-        return port.port;
-      }),
-      awaitCandidatePublicationReady: vi.fn(async () => undefined),
-    }),
-  });
-}
-
-function createExecutionPlan(worldPackageRef: string): ExecutionPlanV5 {
-  const worldId = worldPackageRef === INITIAL_WORLD_PACKAGE_REF
-    ? "world.lifecycle.initial"
-    : "world.lifecycle.replacement";
-  const controlFeel = {
-    resourceRef: "worldkit://control-feel-profile/humanoid.medium-ground@1",
-    contentHash: HASH_A,
-    walkSpeedMetersPerSecond: 2,
-    runSpeedMetersPerSecond: 4,
-    jumpSpeedMetersPerSecond: 5,
-    accelerationMetersPerSecondSquared: 16,
-    decelerationMetersPerSecondSquared: 20,
-    turnRateRadiansPerSecond: 8,
-    moveResponseExponent: 1,
-    airControlRatio: 0.25,
-    coyoteTimeSeconds: 0.1,
-    jumpBufferSeconds: 0.1,
-    variableJumpHoldSeconds: 0.15,
-    jumpHoldGravityRatio: 0.5,
-    jumpReleaseGravityRatio: 1.5,
-  } as const;
-  return {
-    kind: "worldkit-execution-plan",
-    schemaVersion: 5,
-    id: worldId,
-    seed: 24,
-    runtimeBackend: "babylon-havok",
-    authoringSpecHash: HASH_A,
-    normalizedWorldIrHash: HASH_B,
-    resourceLockHash: gameplayResourceLockHash,
-    resourceLockEntries: gameplayResourceLock,
-    coordinateSystem: "right-handed-y-up-minus-z-forward",
-    gravityMetersPerSecondSquaredXYZ: [0, -9.81, 0],
-    atmospherePreset: "clear-day",
-    terrain: {
-      entityId: "terrain.main",
-      centerMetersXZ: [0, 0],
-      sizeMetersXZ: [16, 16],
-      resolutionCellsXZ: [2, 2],
-      heightSamplesMeters: [0, 0, 0, 0],
-      heightSamplesHash: sha256CanonicalJson([0, 0, 0, 0]),
-      minimumHeightMeters: 0,
-      maximumHeightMeters: 0,
-      semanticClassId: "terrain.ground",
-    },
-    waters: [],
-    objects: [],
-    subjectAssets: [],
-    rigProfiles: [],
-    animationSets: [],
-    colliderProfiles: [],
-    initialControlledEntityId: heroState.id,
-    initialRelationships: [],
-    subjects: [{
-      entityId: heroState.id,
-      subjectDefinitionRef: heroState.entityDefinitionRef,
-      subjectDefinitionHash: heroState.entityDefinitionHash,
-      bodyTopology: "biped",
-      semanticClassId: heroState.semanticClassId,
-      spawnAnchorEntityId: "anchor.spawn",
-      spawnSubjectOriginPositionMetersXYZ: [0, 0, 0],
-      spawnSubjectFacingRadians: 0,
-      forwardDirection: "-z",
-      visualParts: [{
-        id: "body",
-        kind: "primitive",
-        shape: { kind: "capsule", radiusMeters: 0.35, heightMeters: 1.8 },
-        localTransform: {
-          positionMetersXYZ: [0, 0.9, 0],
-          rotationEulerRadiansXYZ: [0, 0, 0],
-        },
-        semanticTags: ["body"],
-      }],
-      visualBinding: { mode: "static" },
-    sockets: [],
-    mountSlots: [],
-      collider: {
-        kind: "capsule",
-        radiusMeters: 0.35,
-        heightMeters: 1.8,
-        centerOffsetFromSubjectOriginMetersXYZ: [0, 0.9, 0],
-        massKilograms: 70,
-        maxSlopeDegrees: 42,
-        maxStepHeightMeters: 0.4,
-      },
-      locomotion: {
-        allowWalk: true,
-        allowRun: true,
-        allowJump: true,
-      },
-      locomotionCapabilityRef: "worldkit://capability/locomotion.ground@1",
-      locomotionCapabilityHash: HASH_A,
-      physicsBodyProfileRef: "worldkit://physics-body-profile/humanoid@1",
-      locomotionProfileRef: "worldkit://locomotion-profile/humanoid.ground@1",
-      controlFeel,
-      availableControlFeels: [controlFeel],
-      capabilityAssembly: {
-        authoringAvailability: "recommended",
-        physicsBodyProfileRef: "worldkit://physics-body-profile/humanoid@1",
-        locomotionProfileRef: "worldkit://locomotion-profile/humanoid.ground@1",
-        defaultMotionProfile: {
-          resourceRef: "worldkit://motion-profile/free-ground@1",
-          contentHash: HASH_A,
-          motionKernelRef: "worldkit://motion-kernel/free-ground@1",
-          motionTags: ["ground"],
-        },
-        optionalMotionProfiles: [],
-        fallbackMotionProfile: {
-          resourceRef: "worldkit://motion-profile/safe-ground@1",
-          contentHash: HASH_B,
-          motionKernelRef: "worldkit://motion-kernel/free-ground@1",
-          motionTags: ["ground", "fallback"],
-        },
-        motionKernels: [{
-          resourceRef: "worldkit://motion-kernel/free-ground@1",
-          implementationId: "free-ground",
-          commandKind: "planar-vector",
-          supportedMediums: ["ground", "air"],
-          fallbackMotionProfileRef: "worldkit://motion-profile/safe-ground@1",
-          deterministic: true,
-        }],
-        controlProfile: {
-          resourceRef: "worldkit://control-profile/planar.camera-relative@1",
-          contentHash: HASH_C,
-          commandKind: "planar-vector",
-          inputSpace: "camera-relative",
-          facingPolicy: "align-to-move",
-          lateralMovementPolicy: "allowed",
-          moveDeadzoneRatio: 0.1,
-        },
-        cameraContext: {
-          resourceRef: "worldkit://camera-context/default@1",
-          defaultCameraRigProfileRef: "worldkit://camera/third-person.standard@1",
-          rules: [],
-          cameraRigProfiles: [],
-          cameraModifierProfiles: [],
-        },
-        mediumProfile: {
-          resourceRef: "worldkit://medium-profile/ground-air.standard@1",
-          air: { gravityRatio: 1, linearDragPerSecond: 0 },
-        },
-        relationshipProfiles: [],
-        harnessProfileRef: "worldkit://harness-profile/subject.standard@1",
-        requiredHarnessCheckIds: [],
-        actionOrPoseSetRef: "worldkit://pose-set/static.whitebox@1",
-        renderBindingProfileRef: "worldkit://render-binding/subject.standard@1",
-      },
-    }],
-    camera: {
-      cameraEntityId: "camera.main",
-      rigRef: "worldkit://camera/third-person.standard@1",
-      targetEntityId: heroState.id,
-      pitchRadians: 0.2,
-      distanceMeters: 4,
-      targetHeightMeters: 1.2,
-      fovDegrees: 60,
-      manualSwitchAllowed: true,
-      aspectRatio: 16 / 9,
-    },
-    resourceUsage: {
-      vertices: 0,
-      triangles: 0,
-      colliders: 2,
-    },
-    layout: {
-      solverProfileRef: "worldkit://layout-solver-profile/test@1",
-      resolvedVersion: "1",
-      solverProfileHash: HASH_C,
-      layoutSolveReportHash: HASH_D,
-      regions: [],
-      routes: [],
-      screenRegions: [],
-      placementsByEntityId: {},
-      layoutAssertions: [],
-    },
-    traversal: {
-      surfaces: [],
-      traversalAreas: [],
-      connectivityRequirements: [],
-      anchorEntityIds: ["anchor.spawn"],
-    },
-    staticColliders: [],
-  };
-}
-
-function jsonIntegrityEntry(
-  path: string,
-  value: unknown,
-  hash?: WorldPackageSha256HashV1,
-): WorldPackageFileIntegrityEntryV1 {
-  const bytes = canonicalJsonBytes(value);
-  return {
-    path,
-    mediaType: "application/json",
-    sizeBytes: bytes.byteLength,
-    sha256: hash ?? sha256CanonicalJson(value) as WorldPackageSha256HashV1,
-  };
-}
-
-function createBuildReceipt(
-  executionPlan: ExecutionPlanV5,
-  executionPlanHash: WorldPackageSha256HashV1,
-): WorldPackageBuildReceiptV1 {
-  const manifest = canonicalWorldPackageManifestV1({
-    kind: "worldkit-world-package-manifest",
-    schemaVersion: 1,
-    id: `${executionPlan.id}.package`,
-    packageFormatVersion: 1,
-    worldId: executionPlan.id,
-    seed: executionPlan.seed,
-    runtimeTarget: "babylon-web",
-    canonicalizationProfile: "canonical-json-jcs@1",
-    hashAlgorithm: "sha256",
-    authoringSchemaVersion: 4,
-    normalizedWorldIrSchemaVersion: 4,
-    executionPlanSchemaVersion: 5,
-    authoringSpecHash: executionPlan.authoringSpecHash,
-    normalizedWorldIrHash: executionPlan.normalizedWorldIrHash,
-    executionPlanHash,
-    resourceLockHash: executionPlan.resourceLockHash,
-    layoutSolveReportHash: executionPlan.layout.layoutSolveReportHash,
-    initialControlledEntityId: executionPlan.initialControlledEntityId,
-    entryPoint: {
-      executionPlanPath: "targets/babylon-web/execution-plan.json",
-    },
-    resources: [{
-      resourceRef: gameplayBootstrap.resourceRef,
-      packagePath: GAMEPLAY_BOOTSTRAP_PACKAGE_PATH_V1,
-      mediaType: GAMEPLAY_BOOTSTRAP_MEDIA_TYPE_V1,
-      sizeBytes: gameplayBootstrapCanonicalBytesV1(gameplayBootstrap).byteLength,
-      contentHash: sha256Bytes(
-        gameplayBootstrapCanonicalBytesV1(gameplayBootstrap),
-      ) as WorldPackageSha256HashV1,
-    }],
-  });
-  const manifestHash = hashWorldPackageManifestV1(manifest);
-  const fileIntegrityEntries = canonicalWorldPackageFileIntegrityEntriesV1([
-    jsonIntegrityEntry("manifest.json", manifest, manifestHash),
-    jsonIntegrityEntry(
-      "world.normalized.json",
-      { fixture: executionPlan.id },
-      manifest.normalizedWorldIrHash,
-    ),
-    jsonIntegrityEntry(
-      "registry-lock.json",
-      executionPlan.resourceLockEntries,
-      manifest.resourceLockHash,
-    ),
-    jsonIntegrityEntry(
-      "layout-solve-report.json",
-      { fixture: executionPlan.id },
-      manifest.layoutSolveReportHash,
-    ),
-    jsonIntegrityEntry(
-      manifest.entryPoint.executionPlanPath,
-      executionPlan,
-      executionPlanHash,
-    ),
-    {
-      path: GAMEPLAY_BOOTSTRAP_PACKAGE_PATH_V1,
-      mediaType: GAMEPLAY_BOOTSTRAP_MEDIA_TYPE_V1,
-      sizeBytes: gameplayBootstrapCanonicalBytesV1(gameplayBootstrap).byteLength,
-      sha256: sha256Bytes(
-        gameplayBootstrapCanonicalBytesV1(gameplayBootstrap),
-      ) as WorldPackageSha256HashV1,
-    },
-  ]);
-  return Object.freeze({
-    kind: "worldkit-world-package-build-receipt",
-    schemaVersion: 1,
-    manifest,
-    manifestHash,
-    fileIntegrityEntries,
-    worldPackageRootHash: hashWorldPackageRootV1(fileIntegrityEntries),
-  });
-}
-
-function mutableWorldConfiguration(worldPackageRef: string) {
-  const executionPlan = createExecutionPlan(worldPackageRef);
-  const executionPlanHash = sha256CanonicalJson(
-    executionPlan,
-  ) as WorldPackageSha256HashV1;
-  return {
-    executionPlan,
-    executionPlanHash,
-    worldPackageRef,
-    worldPackageBuildReceipt: createBuildReceipt(executionPlan, executionPlanHash),
-    gameplayBootstrap,
-  };
-}
-
-function replacementRequest(worldPackageRef: string) {
-  return { worldConfiguration: mutableWorldConfiguration(worldPackageRef) };
-}
-
-function worldSessionIdFactory(ids: readonly string[]): () => string {
-  let index = 0;
-  return () => ids[index++] ?? `unexpected-world-session-${index}`;
-}
-
-function hostOptions(
-  adapterFactory: AdapterFactoryHarnessV1["factory"],
-  ids: readonly string[],
-  overrides: Readonly<Record<string, unknown>> = {},
-) {
-  return {
-    runtimeSessionId: RUNTIME_SESSION_ID,
-    initialWorld: mutableWorldConfiguration(INITIAL_WORLD_PACKAGE_REF),
-    participantStates: [participantState],
-    controllerStates: [controllerState],
-    fixedInputControllerEntityId: controllerState.id,
-    gameplayModeFactory: () => gameplayMode,
-    gameplayFeatureFactories: [controlFeatureFactory],
-    gameplayCapacityBudget: DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
-    runtimeHostCapacityBudget: {
-      maximumWorldSessionCount: 8,
-      maximumRuntimeActivityRecordCount: 8,
-    },
-    adapterFactory,
-    worldSessionIdFactory: worldSessionIdFactory(ids),
-    ...overrides,
-  };
-}
-
-async function createHost(
-  ports: readonly FakeGameplayWorldPortHarnessV1[],
-  ids: readonly string[] = ["world-session.initial", "world-session.next"],
-  overrides: Readonly<Record<string, unknown>> = {},
-) {
-  const adapter = createAdapterFactoryHarness(ports);
-  const options = hostOptions(adapter.factory, ids, overrides);
-  const host = await runtimeHostConstructor().create(options);
-  return { adapter, host, options };
-}
 
 describe("RuntimeHost lifecycle isolation and admission", () => {
+  it("rejects WorldPackage V1 explicitly before adapter creation", async () => {
+    const port = createPortHarness();
+    const adapter = createAdapterFactoryHarness([port]);
+    const baseline = mutableWorldConfiguration(INITIAL_WORLD_PACKAGE_REF);
+    const initialWorld = {
+      ...baseline,
+      worldPackageBuildReceipt: {
+        ...baseline.worldPackageBuildReceipt,
+        schemaVersion: 1,
+      },
+    };
+
+    await expect(runtimeHostConstructor().create(hostOptions(
+      adapter.factory,
+      ["world-session.v1-forbidden"],
+      { initialWorld },
+    ))).rejects.toThrow("WORLD_PACKAGE_VERSION_UNSUPPORTED");
+    expect(adapter.factory.create).not.toHaveBeenCalled();
+    expect(port.calls).toEqual([]);
+  });
+
+  it("rejects a content Ref that does not match the verified V2 Package Root", async () => {
+    const port = createPortHarness();
+    const adapter = createAdapterFactoryHarness([port]);
+    const baseline = mutableWorldConfiguration(INITIAL_WORLD_PACKAGE_REF);
+    const initialWorld = {
+      ...baseline,
+      worldPackageRef:
+        `package://world-package/sha256/${"f".repeat(64)}`,
+    };
+
+    await expect(runtimeHostConstructor().create(hostOptions(
+      adapter.factory,
+      ["world-session.ref-mismatch"],
+      { initialWorld },
+    ))).rejects.toThrow(/RuntimeWorldConfigurationV1/);
+    expect(adapter.factory.create).not.toHaveBeenCalled();
+    expect(port.calls).toEqual([]);
+  });
+
   it("publishes immutable provider-neutral Runtime Activity counters without lease authority", async () => {
     const current = createPortHarness();
     const { host } = await createHost([current]);

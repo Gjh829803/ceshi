@@ -38,6 +38,24 @@ function errorCode(error: unknown): string | undefined {
   return (error as NodeJS.ErrnoException).code;
 }
 
+async function moveDirectory(
+  fileSystem: ArtifactDirectoryPromotionFileSystem,
+  from: string,
+  to: string,
+): Promise<void> {
+  try {
+    await fileSystem.rename(from, to);
+  } catch (error) {
+    if (errorCode(error) !== "EXDEV") throw error;
+    await fileSystem.cp(from, to, {
+      recursive: true,
+      errorOnExist: true,
+      force: false,
+    });
+    await fileSystem.rm(from, { recursive: true, force: true });
+  }
+}
+
 async function assertExactFiles(
   directory: string,
   expectedFilenames: readonly string[],
@@ -100,18 +118,18 @@ export async function promoteArtifactDirectory(
   const backupDirectory = `${targetDirectory}.backup-${randomUUID()}`;
   let hadTarget = true;
   try {
-    await fileSystem.rename(targetDirectory, backupDirectory);
+    await moveDirectory(fileSystem, targetDirectory, backupDirectory);
   } catch (error) {
     if (errorCode(error) !== "ENOENT") throw error;
     hadTarget = false;
   }
 
   try {
-    await fileSystem.rename(temporaryDirectory, targetDirectory);
+    await moveDirectory(fileSystem, temporaryDirectory, targetDirectory);
   } catch (publicationError) {
     if (!hadTarget) throw publicationError;
     try {
-      await fileSystem.rename(backupDirectory, targetDirectory);
+      await moveDirectory(fileSystem, backupDirectory, targetDirectory);
     } catch (rollbackError) {
       try {
         await fileSystem.cp(backupDirectory, targetDirectory, {

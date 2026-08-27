@@ -23,6 +23,7 @@ import {
   parseArtifactPublicationMode,
   type ArtifactPublicationMode,
 } from "./lib/artifact-directory-promotion";
+import { buildWorldArtifactFileV1 } from "./build-world-artifact";
 import {
   inspectProductAssetEvidence,
   type ProductAssetEvidenceV1,
@@ -288,14 +289,30 @@ async function inspectProductAsset(): Promise<ProductAssetEvidenceV1> {
 }
 
 async function runCliGates(paths: ArtifactPaths): Promise<WorldBuildArtifactV4> {
+  const packageDirectoryPath = path.join(paths.directory, "world.package");
   assert.equal(await worldkitMain(["validate", INPUT_PATH, "--json"]), 0);
   assert.equal(
-    await worldkitMain(["build", INPUT_PATH, "--output", paths.build, "--json"]),
+    await worldkitMain([
+      "build",
+      INPUT_PATH,
+      "--output",
+      packageDirectoryPath,
+      "--json",
+    ]),
+    0,
+  );
+  assert.equal(
+    await worldkitMain(["inspect", packageDirectoryPath, "--json"]),
+    0,
+  );
+  await rm(packageDirectoryPath, { recursive: true, force: true });
+  assert.equal(
+    (await buildWorldArtifactFileV1(INPUT_PATH, paths.build)).exitCode,
     0,
   );
   const firstBuild = await readFile(paths.build);
   assert.equal(
-    await worldkitMain(["build", INPUT_PATH, "--output", paths.build, "--json"]),
+    (await buildWorldArtifactFileV1(INPUT_PATH, paths.build)).exitCode,
     0,
   );
   assert.ok((await readFile(paths.build)).equals(firstBuild));

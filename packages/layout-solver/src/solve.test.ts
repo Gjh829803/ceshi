@@ -61,6 +61,7 @@ function input(
     schemaVersion: 1,
     id: "solver-test",
     authoringSpecHash: `sha256:${"a".repeat(64)}`,
+    layoutInputHash: `sha256:${"e".repeat(64)}`,
     registryLockHash: `sha256:${"b".repeat(64)}`,
     solverProfile: {
       solverProfileRef: BUILT_IN_LAYOUT_SOLVER_PROFILE_REF,
@@ -299,6 +300,22 @@ describe("deterministic layout solver", () => {
         diagnostics: expect.arrayContaining([
           expect.objectContaining({ instancePath: "/solverProfile/solverProfileRef" }),
           expect.objectContaining({ instancePath: "/worldBounds" }),
+        ]),
+      },
+    });
+  });
+
+  it("rejects a missing or malformed layoutInputHash without borrowing authoringSpecHash", () => {
+    const invalid = {
+      ...input([]),
+      layoutInputHash: "sha256:not-a-hash",
+    } as ResolvedLayoutInputV1;
+    expect(solveLayoutV1(invalid, profile())).toMatchObject({
+      status: "invalid-input",
+      report: {
+        authoringSpecHash: invalid.authoringSpecHash,
+        diagnostics: expect.arrayContaining([
+          expect.objectContaining({ instancePath: "/layoutInputHash" }),
         ]),
       },
     });

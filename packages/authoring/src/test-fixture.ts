@@ -219,6 +219,11 @@ function createPackageSubjectDefinition(
     relationshipCapabilityRefs: [],
     actionOrPoseSetRef: "worldkit://pose-set/static.whitebox@1",
     renderBindingProfileRef: "worldkit://render-binding/subject.standard@1",
+    allowedOverridePaths: [
+      "profiles.controlFeelProfileRef",
+      "profiles.controlProfileRef",
+      "profiles.motion.defaultMotionProfileRef",
+    ],
     aiMetadata: {
       displayName: "Coastal pack animal",
       description: "A controllable quadruped whitebox proxy for outdoor traversal tests.",
@@ -371,6 +376,11 @@ export function createValidRiggedPackageDefinition(): PackageSubjectDefinitionV1
     actionOrPoseSetRef:
       "worldkit://animation-set/humanoid.ground.golden@2",
     renderBindingProfileRef: "worldkit://render-binding/subject.standard@1",
+    allowedOverridePaths: [
+      "profiles.controlFeelProfileRef",
+      "profiles.controlProfileRef",
+      "profiles.motion.defaultMotionProfileRef",
+    ],
     aiMetadata: {
       displayName: "Package rigged Golden humanoid",
       description: "A package definition that exercises the complete rigged asset graph.",

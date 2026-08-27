@@ -1,3 +1,4 @@
+import { FIRST_SLICE_ALLOWED_OVERRIDE_PATHS } from "./subject-resource-registry";
 import type { RegistrySubjectDefinitionInputV3 } from "./types-v3";
 
 const SHARED_COORDINATE_CONVENTION = {
@@ -95,6 +96,7 @@ const HUMANOID_THIRD_PERSON_DEFINITION: RegistrySubjectDefinitionInputV3 = {
   relationshipCapabilityRefs: [],
   actionOrPoseSetRef: "worldkit://pose-set/static.whitebox@1",
   renderBindingProfileRef: "worldkit://render-binding/subject.standard@1",
+  allowedOverridePaths: FIRST_SLICE_ALLOWED_OVERRIDE_PATHS,
   aiMetadata: {
     displayName: "Third-person humanoid",
     description: "A controllable humanoid whitebox proxy for outdoor traversal.",
@@ -227,6 +229,7 @@ const QUADRUPED_GROUND_PROXY_DEFINITION: RegistrySubjectDefinitionInputV3 = {
   relationshipCapabilityRefs: [],
   actionOrPoseSetRef: "worldkit://pose-set/static.whitebox@1",
   renderBindingProfileRef: "worldkit://render-binding/subject.standard@1",
+  allowedOverridePaths: FIRST_SLICE_ALLOWED_OVERRIDE_PATHS,
   aiMetadata: {
     displayName: "Ground quadruped proxy",
     description: "A controllable quadruped whitebox proxy for outdoor traversal tests.",
@@ -302,6 +305,7 @@ const RIGGED_GOLDEN_HUMANOID_DEFINITION: RegistrySubjectDefinitionInputV3 = {
   relationshipCapabilityRefs: [],
   actionOrPoseSetRef: "worldkit://animation-set/humanoid.ground.golden@2",
   renderBindingProfileRef: "worldkit://render-binding/subject.standard@1",
+  allowedOverridePaths: FIRST_SLICE_ALLOWED_OVERRIDE_PATHS,
   aiMetadata: {
     displayName: "Rigged Golden humanoid",
     description: "Project-owned rigged humanoid for the complete asset Subject pipeline.",
@@ -433,6 +437,7 @@ export const G_BOT_HUMANOID_DEFINITION: RegistrySubjectDefinitionInputV3 = {
   relationshipCapabilityRefs: [],
   actionOrPoseSetRef: "worldkit://animation-set/humanoid.ground.g-bot@2",
   renderBindingProfileRef: "worldkit://render-binding/subject.standard@1",
+  allowedOverridePaths: FIRST_SLICE_ALLOWED_OVERRIDE_PATHS,
   aiMetadata: {
     displayName: "G Bot humanoid",
     description:

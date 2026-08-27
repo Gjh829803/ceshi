@@ -8,6 +8,8 @@ Create a polyline route only when the brief explicitly describes a restricted co
 
 Emit AuthoringSpec V4. Open worlds keep `spatial.routes`, `spatial.traversalAreas`, and `constraints.connectivity` empty. For an explicitly constrained ground connection, use Route R1 when its ribbon lies on one Heightfield, or R1B when it crosses an unambiguous single-layer chain of explicitly bound ordinary static steps, decks, platforms, or ramps. The trusted Host then runs the frozen Recast Graph/Path and real Babylon/Havok controller probe. Dynamic/overlapping surfaces, bridge-underpass dual layers, caves, flight volumes, and underwater volumes do not receive connectivity claims.
 
+`maximumTiles` limits one required Route build window, not world bounds. The Builder self-check records the conservative window estimate. If one long diagonal or bent route exceeds it, author stable ordered route segments. The destination Anchor entity of segment N must be the same entity as the start Anchor of segment N+1; do not duplicate co-located seam Anchors or ask the Host to invent them.
+
 Polygon region:
 
 ```json

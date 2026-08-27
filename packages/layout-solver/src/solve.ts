@@ -58,6 +58,7 @@ function validateInput(
   ) add("");
   const hashPattern = /^sha256:[a-f0-9]{64}$/;
   if (!hashPattern.test(input.authoringSpecHash)) add("/authoringSpecHash");
+  if (!hashPattern.test(input.layoutInputHash)) add("/layoutInputHash");
   if (!hashPattern.test(input.registryLockHash)) add("/registryLockHash");
   if (
     input.solverProfile.contentHash !== sha256CanonicalJson(profile) ||
@@ -318,6 +319,7 @@ function reportBase(
     schemaVersion: 1,
     id: `${input.id}-layout`,
     authoringSpecHash: input.authoringSpecHash,
+    layoutInputHash: input.layoutInputHash,
     registryLockHash: input.registryLockHash,
     solverProfileRef: input.solverProfile.solverProfileRef,
     resolvedVersion: input.solverProfile.resolvedVersion,

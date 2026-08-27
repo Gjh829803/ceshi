@@ -215,6 +215,8 @@ The default shown above is an open world: empty routes and connectivity are corr
 
 For an eligible R1B connection across ordinary static steps, decks, platforms, or ramps, keep the same route and connectivity row and add the exact `traversalSurfaceBindings` shown in `resource-catalog.md` to every traversed collision-enabled Prototype. Do not add connectivity for dynamic/overlapping surfaces, bridge-underpass dual layers, caves, flight, or underwater movement.
 
+If self-check reports `ROUTE_BUILD_WINDOW_BUDGET_EXCEEDED`, replace that single row with ordered rows such as `spawn-main -> route-seam-001` and `route-seam-001 -> destination-main`. Add one real Anchor node `route-seam-001`; use that exact ID as the first row's `destinationAnchorEntityId` and the second row's `startAnchorEntityId`. Each row references its own stable route ID and preserves the real polyline points for its portion. Do not increase `maximumTiles`, duplicate the seam Anchor, or use segmented routes for ordinary open ground.
+
 ## Implementation-map draft
 
 Write:

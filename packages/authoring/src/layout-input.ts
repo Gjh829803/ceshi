@@ -10,8 +10,10 @@ import {
 
 import { isNil } from "lodash-es";
 
-import { sha256CanonicalJson } from "./canonical-json.js";
-import { canonicalAuthoringLayoutIdentityV4 } from "./canonical-authoring-identity-v4.js";
+import {
+  hashAuthoringDocumentV4,
+  hashAuthoringLayoutInputV4,
+} from "./canonical-authoring-identity-v4.js";
 import { normalizeAuthoringBaseV4 } from "./normalize.js";
 import type {
   AuthoringDiagnostic,
@@ -293,9 +295,8 @@ export function resolveAuthoringLayoutV4(
     spec,
     normalizedBase.value,
     resolvedSolverProfile,
-    sha256CanonicalJson(
-      canonicalAuthoringLayoutIdentityV4(spec, normalizedBase.value),
-    ) as `sha256:${string}`,
+    hashAuthoringDocumentV4(spec),
+    hashAuthoringLayoutInputV4(spec, normalizedBase.value),
   );
 }
 
@@ -304,6 +305,7 @@ function resolveValidatedAuthoringLayout(
   normalized: NormalizedWorldBase,
   resolvedSolverProfile: ResolvedLayoutSolverProfileV1,
   authoringSpecHash: `sha256:${string}`,
+  layoutInputHash: `sha256:${string}`,
 ): ResolveAuthoringLayoutV4Result {
   const prototypeByRef = new Map(normalized.resources.prototypes.map((prototype) => [
     `package://prototype/${prototype.id}@${prototype.version}`,
@@ -379,6 +381,7 @@ function resolveValidatedAuthoringLayout(
     schemaVersion: 1,
     id: spec.id,
     authoringSpecHash,
+    layoutInputHash,
     registryLockHash: normalized.resources.resourceLockHash as `sha256:${string}`,
     solverProfile: {
       solverProfileRef: resolvedSolverProfile.resourceRef,

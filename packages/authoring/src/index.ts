@@ -1,7 +1,8 @@
 export * from "./canonical-json";
 export {
-  canonicalAuthoringIdentityV4,
   canonicalAuthoringLayoutIdentityV4,
+  hashAuthoringDocumentV4,
+  hashAuthoringLayoutInputV4,
   projectNormalizedWorldResourcesToLayoutIdentityV4,
 } from "./canonical-authoring-identity-v4";
 export { BUILT_IN_LAYOUT_SOLVER_PROFILE_REF } from "@whitebox-world/layout-solver";

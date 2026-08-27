@@ -1,6 +1,6 @@
 import {
-  canonicalAuthoringIdentityV4,
-  canonicalAuthoringLayoutIdentityV4,
+  hashAuthoringDocumentV4,
+  hashAuthoringLayoutInputV4,
   projectNormalizedWorldResourcesToLayoutIdentityV4,
   validateAuthoringSpecV4,
 } from "@whitebox-world/authoring";
@@ -314,9 +314,7 @@ export function createWorldPackageBuildReceiptV1(
     fail(code, "layoutSolveResult", "must be a solved LayoutSolveResultV1");
   }
 
-  const authoringSpecHash = sha256CanonicalJson(
-    canonicalAuthoringIdentityV4(spec, world),
-  ) as WorldPackageSha256HashV1;
+  const authoringSpecHash = hashAuthoringDocumentV4(spec);
   const normalizedWorldIrHash = sha256CanonicalJson(world) as WorldPackageSha256HashV1;
   const executionPlanHash = sha256CanonicalJson(plan) as WorldPackageSha256HashV1;
   const layoutSolveReportHash = hashLayoutSolveReportV1(layout.report);
@@ -338,12 +336,10 @@ export function createWorldPackageBuildReceiptV1(
   const layoutResources = projectNormalizedWorldResourcesToLayoutIdentityV4(
     world.resources,
   );
-  const layoutAuthoringSpecHash = sha256CanonicalJson(
-    canonicalAuthoringLayoutIdentityV4(spec, {
-      ...world,
-      resources: layoutResources,
-    }),
-  );
+  const layoutInputHash = hashAuthoringLayoutInputV4(spec, {
+    ...world,
+    resources: layoutResources,
+  });
   const requireBinding = (
     actual: unknown,
     expected: unknown,
@@ -369,9 +365,8 @@ export function createWorldPackageBuildReceiptV1(
   requireBinding(layout.layoutSolveReportHash, layoutSolveReportHash, "layoutSolveResult/layoutSolveReportHash");
   requireBinding(world.layout.layoutSolveReportHash, layoutSolveReportHash, "normalizedWorldIr/layout/layoutSolveReportHash");
   requireBinding(plan.layout.layoutSolveReportHash, layoutSolveReportHash, "executionPlan/layout/layoutSolveReportHash");
-  // Layout evidence binds the canonical V4 layout identity while the full V4
-  // identity remains authoritative for the WorldPackage.
-  requireBinding(layout.report.authoringSpecHash, layoutAuthoringSpecHash, "layoutSolveResult/report/authoringSpecHash");
+  requireBinding(layout.report.authoringSpecHash, authoringSpecHash, "layoutSolveResult/report/authoringSpecHash");
+  requireBinding(layout.report.layoutInputHash, layoutInputHash, "layoutSolveResult/report/layoutInputHash");
   requireBinding(layout.report.registryLockHash, layoutResources.resourceLockHash, "layoutSolveResult/report/registryLockHash");
   requireBinding(layout.report.solverProfileRef, world.layout.solverProfileRef, "normalizedWorldIr/layout/solverProfileRef");
   requireBinding(layout.report.resolvedVersion, world.layout.resolvedVersion, "normalizedWorldIr/layout/resolvedVersion");

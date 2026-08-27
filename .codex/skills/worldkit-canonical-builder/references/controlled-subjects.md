@@ -108,6 +108,7 @@ When a bound visual assembly is needed but ordinary ground locomotion is explici
   "relationshipCapabilityRefs": [],
   "actionOrPoseSetRef": "worldkit://animation-set/humanoid.ground.g-bot@2",
   "renderBindingProfileRef": "worldkit://render-binding/subject.standard@1",
+  "allowedOverridePaths": [],
   "aiMetadata": {
     "displayName": "Humanoid on board ground proxy",
     "description": "One controlled ground Subject with a rigidly bound board shape.",
@@ -119,6 +120,8 @@ When a bound visual assembly is needed but ordinary ground locomotion is explici
 Reference it as `package://subject-definition/humanoid-board-ground@1`. The board moves with the humanoid and shares its camera/control entity, but this definition still uses ordinary ground locomotion. It does not satisfy a Scene Brief whose explicit movement mode is `陆地滑行`; use it only when the brief permits a ground-walk proxy.
 
 `controlFeelProfileRef` is required by the current main Subject Definition contract. Use the exact registered profile that matches the assembly; do not copy numeric feel parameters into the Subject Definition.
+
+Every package-local Subject Definition must include `allowedOverridePaths`. Use `[]` when the definition does not open first-batch override paths. Paths must be lexicographically sorted and stay inside the first-batch ceiling.
 
 ## Unmatched motion-changing assemblies
 

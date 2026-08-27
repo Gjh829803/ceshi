@@ -14,17 +14,24 @@ import type {
   NormalizedSubjectAssetV1,
   NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
-import { XIER120_SUBJECT_ASSET_MANIFESTS } from "@whitebox-world/subject-registry";
+import {
+  builtInSubjectResourceRegistry,
+  createSubjectResourceRegistry,
+  XIER120_SUBJECT_ASSET_MANIFESTS,
+  type SubjectAssetManifestV1,
+} from "@whitebox-world/subject-registry";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
   DEFAULT_WORLD_PACKAGE_RESOURCE_MAPPING_BY_REF_V1,
   resolveWorldPackageResourceArtifactsV1,
+  resolveWorldPackageResourceArtifactsV2,
   WorldPackageResourceResolveInfrastructureErrorV1,
   type WorldPackageResourceMappingV1,
 } from "./world-package-resource-resolver.js";
 
 const temporaryDirectories: string[] = [];
+const HASH_A = `sha256:${"a".repeat(64)}` as const;
 
 async function temporaryPublicRoot(): Promise<string> {
   const directory = await mkdtemp(
@@ -64,6 +71,74 @@ function subjectAsset(
       skeletonCount: 0,
       boneCount: 0,
       animationClipNames: [],
+    },
+  };
+}
+
+function subjectAssetManifest(
+  resourceRef: string,
+  bytes: Uint8Array,
+  provenance: SubjectAssetManifestV1["provenance"] = {
+    licenseSpdxId: "LicenseRef-Project-Owned",
+    redistributionPolicy: "allowed",
+    sourceUri: "worldkit-source://fixture/example.glb",
+    author: "Fixture Author",
+  },
+): SubjectAssetManifestV1 {
+  const input: SubjectAssetManifestV1 = {
+    kind: "subject-asset",
+    id: "example",
+    version: 1,
+    resourceRef,
+    format: "glb",
+    artifact: {
+      mediaType: "model/gltf-binary",
+      byteLength: bytes.byteLength,
+      contentHash: hashBytes(bytes),
+    },
+    coordinateConvention: {
+      forwardAxis: "-Z",
+      upAxis: "+Y",
+      metersPerUnit: 1,
+      pivot: "support-center",
+    },
+    bounds: {
+      minimumMetersXYZ: [-0.5, 0, -0.5],
+      maximumMetersXYZ: [0.5, 1, 0.5],
+    },
+    inventory: {
+      meshCount: 1,
+      vertexCount: 3,
+      triangleCount: 1,
+      skeletonCount: 0,
+      boneCount: 0,
+      animationClipNames: [],
+    },
+    provenance,
+    aiMetadata: {
+      displayName: "Example",
+      description: "Fixture",
+      semanticTags: ["fixture"],
+    },
+    contentHash: `sha256:${"f".repeat(64)}`,
+  };
+  return createSubjectResourceRegistry([input]).resolveSubjectAsset(resourceRef)!;
+}
+
+function normalizedSubjectAssetFromManifest(
+  manifest: SubjectAssetManifestV1,
+  bytes: Uint8Array,
+): NormalizedSubjectAssetV1 {
+  return {
+    ...subjectAsset(manifest.resourceRef, bytes),
+    subjectAssetManifestHash: manifest.contentHash,
+    inventory: {
+      meshCount: manifest.inventory.meshCount,
+      vertexCount: manifest.inventory.vertexCount,
+      triangleCount: manifest.inventory.triangleCount,
+      skeletonCount: manifest.inventory.skeletonCount,
+      boneCount: manifest.inventory.boneCount,
+      animationClipNames: manifest.inventory.animationClipNames,
     },
   };
 }
@@ -426,5 +501,177 @@ describe("resolveWorldPackageResourceArtifactsV1", () => {
       ),
       "invalid-resource-mapping",
     );
+  });
+});
+
+describe("resolveWorldPackageResourceArtifactsV2", () => {
+  it("joins exact admitted Registry provenance and a declared legal document", async () => {
+    const publicRoot = await temporaryPublicRoot();
+    const bytes = new Uint8Array([0x67, 0x6c, 0x54, 0x46, 0x02]);
+    const resourceRef = "worldkit://subject-asset/example@1";
+    const manifest = subjectAssetManifest(resourceRef, bytes);
+    const normalized = normalizedSubjectAssetFromManifest(manifest, bytes);
+    await writePublicAsset(publicRoot, "/example.glb", bytes);
+
+    const result = await resolveWorldPackageResourceArtifactsV2(
+      normalizedWorldIr([normalized]),
+      {
+        publicRoot,
+        resourceMappingByRef: {
+          [resourceRef]: mapping("/example.glb"),
+        },
+        subjectAssetManifests: [manifest],
+        licenseDocuments: [{
+          id: "project-owned",
+          spdxLicenseExpression: "LicenseRef-Project-Owned",
+        }],
+      },
+    );
+
+    expect(result).toEqual([{
+      resourceRef,
+      packagePath: "resources/subject-assets/test.glb",
+      mediaType: "model/gltf-binary",
+      bytes,
+      subjectAssetManifestHash: manifest.contentHash,
+      licenseDocumentId: "project-owned",
+      licenseSpdxExpression: "LicenseRef-Project-Owned",
+      redistributionPolicy: "allowed",
+      sourceUri: "worldkit-source://fixture/example.glb",
+      author: "Fixture Author",
+    }]);
+  });
+
+  it.each([
+    "actor.humanoid.g-bot@2",
+    "xier120.biped-animal@1",
+  ])("preserves real built-in provenance for %s", async (resourceSlug) => {
+    const resourceRef = `worldkit://subject-asset/${resourceSlug}`;
+    const manifest = builtInSubjectResourceRegistry.resolveSubjectAsset(resourceRef)!;
+    const mappingRow = DEFAULT_WORLD_PACKAGE_RESOURCE_MAPPING_BY_REF_V1[resourceRef]!;
+    const bytes = new Uint8Array(await readFile(new URL(
+      `../../apps/playground/public${mappingRow.publicUri}`,
+      import.meta.url,
+    )));
+    const normalized = normalizedSubjectAssetFromManifest(manifest, bytes);
+    const licenseDocumentId = manifest.provenance.redistributionPolicy === "allowed"
+      ? "project-owned"
+      : "loopit-private";
+
+    const result = await resolveWorldPackageResourceArtifactsV2(
+      normalizedWorldIr([normalized]),
+      {
+        subjectAssetManifests: [manifest],
+        licenseDocuments: [{
+          id: licenseDocumentId,
+          spdxLicenseExpression: manifest.provenance.licenseSpdxId,
+        }],
+      },
+    );
+
+    expect(result[0]).toMatchObject({
+      resourceRef,
+      redistributionPolicy: manifest.provenance.redistributionPolicy,
+      licenseDocumentId,
+      ...(manifest.provenance.author === undefined
+        ? {}
+        : { author: manifest.provenance.author }),
+    });
+  });
+
+  it("rejects missing or drifted manifests and unresolved legal provenance", async () => {
+    const publicRoot = await temporaryPublicRoot();
+    const bytes = new Uint8Array([1, 2, 3]);
+    const resourceRef = "worldkit://subject-asset/example@1";
+    const manifest = subjectAssetManifest(resourceRef, bytes);
+    const normalized = normalizedSubjectAssetFromManifest(manifest, bytes);
+    await writePublicAsset(publicRoot, "/example.glb", bytes);
+    const baseOptions = {
+      publicRoot,
+      resourceMappingByRef: { [resourceRef]: mapping("/example.glb") },
+      licenseDocuments: [{
+        id: "project-owned",
+        spdxLicenseExpression: "LicenseRef-Project-Owned",
+      }],
+    };
+
+    await expectInfrastructureFailure(
+      resolveWorldPackageResourceArtifactsV2(normalizedWorldIr([normalized]), {
+        ...baseOptions,
+        subjectAssetManifests: [],
+      }),
+      "asset-manifest-mismatch",
+    );
+    await expectInfrastructureFailure(
+      resolveWorldPackageResourceArtifactsV2(normalizedWorldIr([{
+        ...normalized,
+        subjectAssetManifestHash: HASH_A,
+      }]), {
+        ...baseOptions,
+        subjectAssetManifests: [manifest],
+      }),
+      "asset-manifest-mismatch",
+    );
+    await expectInfrastructureFailure(
+      resolveWorldPackageResourceArtifactsV2(normalizedWorldIr([normalized]), {
+        ...baseOptions,
+        subjectAssetManifests: [manifest],
+        licenseDocuments: [],
+      }),
+      "license-document-missing",
+    );
+  });
+
+  it("rejects ambiguous duplicate legal-document SPDX bindings", async () => {
+    const publicRoot = await temporaryPublicRoot();
+    const bytes = new Uint8Array([1, 2, 3]);
+    const resourceRef = "worldkit://subject-asset/example@1";
+    const manifest = subjectAssetManifest(resourceRef, bytes);
+    const normalized = normalizedSubjectAssetFromManifest(manifest, bytes);
+
+    await expectInfrastructureFailure(
+      resolveWorldPackageResourceArtifactsV2(normalizedWorldIr([normalized]), {
+        publicRoot,
+        resourceMappingByRef: { [resourceRef]: mapping("/example.glb") },
+        subjectAssetManifests: [manifest],
+        licenseDocuments: [
+          {
+            id: "first",
+            spdxLicenseExpression: "LicenseRef-Project-Owned",
+          },
+          {
+            id: "second",
+            spdxLicenseExpression: "LicenseRef-Project-Owned",
+          },
+        ],
+      }),
+      "duplicate-license-document",
+    );
+  });
+
+  it("rejects accessor-bearing V2 options without invoking the getter", async () => {
+    const publicRoot = await temporaryPublicRoot();
+    let getterInvocations = 0;
+    const options: Record<string, unknown> = {
+      publicRoot,
+      resourceMappingByRef: {},
+      licenseDocuments: [],
+    };
+    Object.defineProperty(options, "subjectAssetManifests", {
+      enumerable: true,
+      get() {
+        getterInvocations += 1;
+        return [];
+      },
+    });
+
+    await expectInfrastructureFailure(
+      resolveWorldPackageResourceArtifactsV2(
+        normalizedWorldIr([]),
+        options as never,
+      ),
+      "invalid-resource-mapping",
+    );
+    expect(getterInvocations).toBe(0);
   });
 });

@@ -50,6 +50,7 @@ import {
   validateSubjectDefinitionFile,
   WorldkitUsageError,
 } from "./worldkit";
+import { buildWorldArtifactFileV1 } from "./build-world-artifact";
 
 const temporaryDirectories: string[] = [];
 
@@ -189,23 +190,33 @@ describe("worldkit CLI", () => {
 
   it("validates and builds V4 worlds through the shared CLI surface", async () => {
     const directory = await createTemporaryDirectory();
-    const inputPath = await writeRouteWorld(directory);
-    const outputPath = path.join(directory, "route-world.build.json");
+    const inputPath = path.resolve(
+      fileURLToPath(new URL("../examples/authoring/basic-world.json", import.meta.url)),
+    );
+    const outputPath = path.join(directory, "route-world.package");
 
     const validation = await validateFile(inputPath);
     const build = await buildFile(inputPath, outputPath);
-    const artifact = JSON.parse(await readFile(outputPath, "utf8"));
+    if (!build.ok) throw new Error(JSON.stringify(build));
+    const manifest = JSON.parse(
+      await readFile(path.join(outputPath, "manifest.json"), "utf8"),
+    );
 
     expect(validation).toMatchObject({
       ok: true,
       normalizedWorldIrHash: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
       executionPlanHash: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
     });
-    expect(build).toMatchObject({ ok: true, outputPath });
-    expect(artifact).toMatchObject({
-      kind: "worldkit-build-artifact",
-      normalizedWorldIr: { schemaVersion: 4 },
-      executionPlan: { schemaVersion: 5 },
+    expect(build).toMatchObject({
+      kind: "worldkit-package-command-result",
+      command: "build",
+      ok: true,
+      protocolVersion: 1,
+      packageFormatVersion: 2,
+    });
+    expect(manifest).toMatchObject({
+      kind: "worldkit-world-package-manifest",
+      schemaVersion: 2,
     });
   });
 
@@ -218,7 +229,7 @@ describe("worldkit CLI", () => {
         "--json",
       ]),
     ).toEqual({
-      command: "run",
+      command: "run-browser",
       inputPath: "world.json",
       refreshDependencies: true,
       json: true,
@@ -601,6 +612,33 @@ describe("worldkit CLI", () => {
     expect(() => parseWorldkitArgs(["build", "world.json"])).toThrow(
       WorldkitUsageError,
     );
+    expect(() => parseWorldkitArgs([
+      "run",
+      "world.package",
+      "--interactive",
+    ])).toThrow("--protocol ndjson --headless");
+    expect(() => parseWorldkitArgs([
+      "run",
+      "world.package",
+      "--interactive",
+      "--protocol",
+      "ndjson",
+      "--headless",
+      "--session-directory",
+      "relative/session",
+    ])).toThrow("absolute directory");
+    expect(() => parseWorldkitArgs([
+      "run",
+      "world.package",
+      "--interactive",
+      "--protocol",
+      "ndjson",
+      "--headless",
+      "--session-directory",
+      "/tmp/worldkit-session",
+      "--port",
+      "5173",
+    ])).toThrow("do not accept Browser flags");
     expect(() =>
       parseWorldkitArgs(["registry", "list", "--json"]),
     ).toThrow(WorldkitUsageError);
@@ -698,6 +736,78 @@ describe("worldkit CLI", () => {
         "--output", "bundle", "--width-pixels", "320",
       ]),
     ).toThrow("take run requires --height-pixels <integer>");
+  });
+
+  it("parses the exact Package inspect, load, and interactive run dialect", () => {
+    expect(parseWorldkitArgs(["inspect", "world.package", "--json"])).toEqual({
+      command: "inspect",
+      packageDirectoryPath: "world.package",
+      json: true,
+    });
+    expect(parseWorldkitArgs([
+      "load",
+      "world.package",
+      "--headless",
+      "--json",
+    ])).toEqual({
+      command: "load",
+      packageDirectoryPath: "world.package",
+      headless: true,
+      json: true,
+    });
+    expect(parseWorldkitArgs([
+      "run",
+      "world.package",
+      "--interactive",
+      "--protocol",
+      "ndjson",
+      "--headless",
+      "--session-directory",
+      "/tmp/worldkit-session",
+      "--resume",
+    ])).toEqual({
+      command: "run-session",
+      packageDirectoryPath: "world.package",
+      sessionDirectoryPath: "/tmp/worldkit-session",
+      resume: true,
+      json: false,
+    });
+  });
+
+  it("rejects --resume before reading stdin when the Session WAL is missing", async () => {
+    const directory = await createTemporaryDirectory();
+    let stdout = "";
+    let stderr = "";
+    const stdoutWrite = vi.spyOn(process.stdout, "write").mockImplementation(
+      (chunk) => {
+        stdout += String(chunk);
+        return true;
+      },
+    );
+    const stderrWrite = vi.spyOn(process.stderr, "write").mockImplementation(
+      (chunk) => {
+        stderr += String(chunk);
+        return true;
+      },
+    );
+    try {
+      await expect(main([
+        "run",
+        path.join(directory, "missing.package"),
+        "--interactive",
+        "--protocol",
+        "ndjson",
+        "--headless",
+        "--session-directory",
+        path.join(directory, "missing-session"),
+        "--resume",
+      ])).resolves.toBe(2);
+    } finally {
+      stdoutWrite.mockRestore();
+      stderrWrite.mockRestore();
+    }
+    expect(stdout).toBe("");
+    expect(stderr).toContain("--resume requires an existing Runtime Session WAL");
   });
 
   it("prints one canonical JSON result and keeps stderr empty for layout commands", async () => {
@@ -1284,7 +1394,10 @@ describe("worldkit CLI", () => {
     const outputPath = path.join(directory, "g-bot.build.json");
 
     const validation = await validateFile(G_BOT_SUBJECT_WORLD_PATH);
-    const build = await buildFile(G_BOT_SUBJECT_WORLD_PATH, outputPath);
+    const build = await buildWorldArtifactFileV1(
+      G_BOT_SUBJECT_WORLD_PATH,
+      outputPath,
+    );
     const explanation = await explainSubjectFile(
       G_BOT_SUBJECT_WORLD_PATH,
       "g-bot-primary",
@@ -1368,9 +1481,9 @@ describe("worldkit CLI", () => {
     const outputPath = path.join(directory, "dist", "world.build.json");
 
     const validation = await validateFile(inputPath);
-    const first = await buildFile(inputPath, outputPath);
+    const first = await buildWorldArtifactFileV1(inputPath, outputPath);
     const firstBytes = await readFile(outputPath, "utf8");
-    const second = await buildFile(inputPath, outputPath);
+    const second = await buildWorldArtifactFileV1(inputPath, outputPath);
     const secondBytes = await readFile(outputPath, "utf8");
     const artifact = JSON.parse(firstBytes) as Record<string, unknown>;
 

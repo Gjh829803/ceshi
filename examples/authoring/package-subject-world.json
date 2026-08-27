@@ -284,6 +284,11 @@
         "relationshipCapabilityRefs": [],
         "actionOrPoseSetRef": "worldkit://pose-set/static.whitebox@1",
         "renderBindingProfileRef": "worldkit://render-binding/subject.standard@1",
+        "allowedOverridePaths": [
+          "profiles.controlFeelProfileRef",
+          "profiles.controlProfileRef",
+          "profiles.motion.defaultMotionProfileRef"
+        ],
         "aiMetadata": {
           "displayName": "Coastal pack animal",
           "description": "A package-local controllable quadruped whitebox proxy used to verify deterministic composition and independent runtime instances.",

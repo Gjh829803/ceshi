@@ -347,4 +347,64 @@ describe("current AuthoringSpec", () => {
       ]),
     );
   });
+
+  it("requires sorted first-batch allowedOverridePaths on Package Definitions", () => {
+    const definition = createValidPackageSubjectWorld().resources
+      .subjectDefinitions[0]!;
+    expect(validatePackageSubjectDefinition({
+      ...definition,
+      allowedOverridePaths: [],
+    }).ok).toBe(true);
+    expect(validatePackageSubjectDefinition({
+      ...definition,
+      allowedOverridePaths: [
+        "profiles.motion.defaultMotionProfileRef",
+        "profiles.controlFeelProfileRef",
+      ],
+    }).ok).toBe(false);
+    expect(validatePackageSubjectDefinition({
+      ...definition,
+      allowedOverridePaths: ["id"],
+    }).ok).toBe(false);
+  });
+
+  it("accepts optional Subject instance Resource Ref overrides and rejects duplicate ids", () => {
+    const spec = createValidPackageSubjectWorld();
+    const subject = spec.nodes.find((node) => node.kind === "subject");
+    expect(subject).toBeDefined();
+    const override = {
+      id: "override.feel.heavy",
+      kind: "resource-ref" as const,
+      path: "profiles.controlFeelProfileRef",
+      resourceRef: "worldkit://control-feel-profile/humanoid.heavy-ground@1",
+    };
+    expect(validateAuthoringSpecV4({
+      ...spec,
+      nodes: spec.nodes.map((node) =>
+        node === subject ? { ...node, overrides: [override] } : node,
+      ),
+    }).ok).toBe(true);
+    expect(validateAuthoringSpecV4({
+      ...spec,
+      nodes: spec.nodes.map((node) =>
+        node === subject
+          ? { ...node, overrides: [override, { ...override, path: "profiles.controlProfileRef" }] }
+          : node,
+      ),
+    }).ok).toBe(false);
+    expect(validateAuthoringSpecV4({
+      ...spec,
+      nodes: spec.nodes.map((node) =>
+        node === subject
+          ? {
+              ...node,
+              overrides: [
+                override,
+                { ...override, id: "override.feel.duplicate-path" },
+              ],
+            }
+          : node,
+      ),
+    }).ok).toBe(false);
+  });
 });

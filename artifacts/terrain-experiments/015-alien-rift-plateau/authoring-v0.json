@@ -1,0 +1,134 @@
+{
+  "kind": "worldkit-authoring-spec",
+  "schemaVersion": 4,
+  "id": "terrain-intent-alien-rift-plateau-v0",
+  "seed": 20260828,
+  "provenance": {
+    "userPrompt": "Image-reference terrain experiment: stable elevated entry plateau, deep open-ended central rift and channel bed, and connected side plateaus. Spacecraft, base, crystals, trees, and rock spires remain outside Terrain ownership."
+  },
+  "world": {
+    "coordinateSystem": "right-handed-y-up-minus-z-forward",
+    "bounds": {
+      "centerMetersXZ": [0, 0],
+      "sizeMetersXZ": [320, 240],
+      "heightRangeMeters": [-50, 70]
+    },
+    "gravityMetersPerSecondSquaredXYZ": [0, -9.81, 0],
+    "environment": { "preset": "clear-day" },
+    "resourceBudget": {
+      "maxVertices": 30000,
+      "maxTriangles": 60000,
+      "maxColliders": 8
+    }
+  },
+  "resources": {
+    "prototypes": [],
+    "subjectDefinitions": []
+  },
+  "layout": {
+    "solverProfileRef": "worldkit://layout-solver-profile/outdoor.s1@1"
+  },
+  "spatial": {
+    "traversalAreas": [],
+    "regions": [
+      {
+        "id": "entry-plateau-spawn-region",
+        "kind": "polygon-xz",
+        "pointsMetersXZ": [[-62, 82], [-30, 82], [-30, 112], [-62, 112]],
+        "semanticClassId": "region.spawn-plateau"
+      }
+    ],
+    "routes": [],
+    "screenRegions": []
+  },
+  "nodes": [
+    {
+      "id": "terrain-main",
+      "kind": "terrain",
+      "components": {
+        "terrain": {
+          "source": {
+            "kind": "procedural",
+            "relief": "flat",
+            "baseHeightMeters": 0
+          },
+          "grid": {
+            "centerMetersXZ": [0, 0],
+            "sizeMetersXZ": [320, 240],
+            "resolutionCellsXZ": [161, 121]
+          },
+          "semantic": { "classId": "terrain.alien-rift-plateau" }
+        }
+      }
+    },
+    {
+      "id": "spawn-main",
+      "kind": "anchor",
+      "semantic": { "classId": "spawn.player" },
+      "placement": {
+        "kind": "fixed",
+        "transform": {
+          "positionMetersXYZ": [-46, 35, 97],
+          "rotationEulerRadiansXYZ": [0, 0, 0]
+        }
+      }
+    },
+    {
+      "id": "player",
+      "kind": "subject",
+      "subjectDefinitionRef": "worldkit://subject-definition/humanoid.third-person@1",
+      "spawnAnchorEntityId": "spawn-main"
+    },
+    {
+      "id": "camera-main",
+      "kind": "camera",
+      "components": {
+        "cameraRig": {
+          "defaultRigRef": "worldkit://camera/third-person.standard@1",
+          "allowedRigRefs": ["worldkit://camera/third-person.standard@1"],
+          "target": {
+            "targetEntityId": "player",
+            "targetHeightMeters": 1.2
+          },
+          "thirdPerson": {
+            "pitchRadians": 0.38,
+            "distanceMeters": 7,
+            "targetHeightMeters": 1.2,
+            "fovDegrees": 66,
+            "aspectRatio": 1.570469798657718
+          },
+          "manualSwitchAllowed": false
+        }
+      }
+    }
+  ],
+  "relationships": [],
+  "rules": [],
+  "startup": {
+    "spawnAnchorEntityId": "spawn-main",
+    "controlledEntityId": "player",
+    "cameraEntityId": "camera-main"
+  },
+  "constraints": {
+    "connectivity": [],
+    "placements": [
+      {
+        "id": "spawn-inside-plateau",
+        "kind": "inside-region",
+        "requirement": "required",
+        "entityId": "spawn-main",
+        "regionId": "entry-plateau-spawn-region",
+        "boundaryClearanceMeters": 4
+      },
+      {
+        "id": "spawn-supported",
+        "kind": "supported-by",
+        "requirement": "required",
+        "supportedEntityId": "spawn-main",
+        "supportingEntityId": "terrain-main",
+        "maximumSupportGapMeters": 0,
+        "minimumSupportRatio": 1
+      }
+    ]
+  }
+}

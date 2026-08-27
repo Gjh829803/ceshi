@@ -21,6 +21,7 @@ import type {
   CameraViewPreferenceV1,
 } from "@whitebox-world/camera";
 export type { CameraViewPreferenceV1 } from "@whitebox-world/camera";
+import { isNil } from "lodash-es";
 import type {
   RouteEvidenceSelectorV1,
   RouteOverlayQueryResultV2,
@@ -68,6 +69,165 @@ export interface FixedInputV1 {
   actions: readonly SemanticInputActionV1[];
   axes?: Readonly<ControlInputAxesV2>;
   ticks: number;
+}
+
+const MAXIMUM_FIXED_INPUT_TICK_COUNT_V1 = 36_000;
+const SEMANTIC_INPUT_ACTIONS_V1 = new Set<SemanticInputActionV1>([
+  "move-forward",
+  "move-backward",
+  "move-left",
+  "move-right",
+  "jump",
+  "run",
+  "boost",
+  "brake",
+  "handbrake",
+  "primary-action",
+  "secondary-action",
+  "aim",
+  "camera-recenter",
+  "camera-look-back",
+  "camera-shoulder-swap",
+]);
+
+function invalidRuntimeContract(schemaName: string): never {
+  throw new RangeError(`Value must match the closed ${schemaName} schema.`);
+}
+
+function snapshotRuntimeContractRecord(
+  value: unknown,
+): Record<string, unknown> | undefined {
+  if (typeof value !== "object" || isNil(value)) return undefined;
+  try {
+    const prototype = Reflect.getPrototypeOf(value);
+    if (!isNil(prototype) && prototype !== Object.prototype) return undefined;
+    const snapshot = Object.create(null) as Record<string, unknown>;
+    for (const key of Reflect.ownKeys(value)) {
+      const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
+      if (
+        typeof key !== "string" ||
+        isNil(descriptor) ||
+        !descriptor.enumerable ||
+        !("value" in descriptor)
+      ) return undefined;
+      snapshot[key] = descriptor.value;
+    }
+    return snapshot;
+  } catch {
+    return undefined;
+  }
+}
+
+function snapshotRuntimeContractArray(
+  value: unknown,
+): readonly unknown[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  try {
+    if (Reflect.getPrototypeOf(value) !== Array.prototype) return undefined;
+    if (Reflect.ownKeys(value).some((key) => typeof key === "symbol")) {
+      return undefined;
+    }
+    if (Object.getOwnPropertyNames(value).length !== value.length + 1) {
+      return undefined;
+    }
+    const snapshot: unknown[] = [];
+    for (let index = 0; index < value.length; index += 1) {
+      const descriptor = Reflect.getOwnPropertyDescriptor(value, String(index));
+      if (
+        isNil(descriptor) ||
+        !descriptor.enumerable ||
+        !("value" in descriptor)
+      ) return undefined;
+      snapshot.push(descriptor.value);
+    }
+    return snapshot;
+  } catch {
+    return undefined;
+  }
+}
+
+function hasExactRuntimeContractKeys(
+  record: Readonly<Record<string, unknown>>,
+  keys: readonly string[],
+): boolean {
+  const actual = Reflect.ownKeys(record);
+  return actual.length === keys.length && actual.every(
+    (key) => typeof key === "string" && keys.includes(key),
+  );
+}
+
+function isSafeRuntimeContractTick(value: unknown): value is number {
+  return typeof value === "number" &&
+    Number.isSafeInteger(value) &&
+    value >= 0 &&
+    !Object.is(value, -0) &&
+    value <= MAXIMUM_FIXED_INPUT_TICK_COUNT_V1;
+}
+
+function isRuntimeContractAxis(
+  value: unknown,
+  minimum: number,
+  maximum: number,
+): value is number {
+  return typeof value === "number" &&
+    Number.isFinite(value) &&
+    !Object.is(value, -0) &&
+    value >= minimum &&
+    value <= maximum;
+}
+
+export function parseFixedInputV1(value: unknown): FixedInputV1 {
+  const schemaName = "FixedInputV1";
+  const record = snapshotRuntimeContractRecord(value) ??
+    invalidRuntimeContract(schemaName);
+  const hasAxes = hasExactRuntimeContractKeys(record, [
+    "actions",
+    "axes",
+    "ticks",
+  ]);
+  if (
+    (!hasExactRuntimeContractKeys(record, ["actions", "ticks"]) && !hasAxes) ||
+    !isSafeRuntimeContractTick(record.ticks)
+  ) return invalidRuntimeContract(schemaName);
+  const actions = snapshotRuntimeContractArray(record.actions);
+  if (
+    isNil(actions) ||
+    actions.some((action) =>
+      typeof action !== "string" ||
+      !SEMANTIC_INPUT_ACTIONS_V1.has(action as SemanticInputActionV1)
+    )
+  ) return invalidRuntimeContract(schemaName);
+  let axes: Readonly<ControlInputAxesV2> | undefined;
+  if (hasAxes) {
+    const axesRecord = snapshotRuntimeContractRecord(record.axes) ??
+      invalidRuntimeContract(schemaName);
+    const axisKeys = [
+      "moveXRatio",
+      "moveYRatio",
+      "throttleRatio",
+      "brakeRatio",
+    ] as const;
+    if (
+      Reflect.ownKeys(axesRecord).some((key) =>
+        typeof key !== "string" ||
+        !axisKeys.includes(key as typeof axisKeys[number])
+      ) ||
+      ["moveXRatio", "moveYRatio"].some((key) =>
+        Object.hasOwn(axesRecord, key) &&
+        !isRuntimeContractAxis(axesRecord[key], -1, 1)
+      ) ||
+      ["throttleRatio", "brakeRatio"].some((key) =>
+        Object.hasOwn(axesRecord, key) &&
+        !isRuntimeContractAxis(axesRecord[key], 0, 1)
+      )
+    ) return invalidRuntimeContract(schemaName);
+    axes = Object.freeze({ ...axesRecord }) as Readonly<ControlInputAxesV2>;
+  }
+  return Object.freeze({
+    actions: Object.freeze([...actions] as SemanticInputActionV1[]),
+    ...(!isNil(axes) ? { axes } : {}),
+    ticks: record.ticks,
+  });
 }
 
 export interface CameraViewInputV1 {
@@ -380,6 +540,18 @@ export interface WorldSessionEventsQueryV1 {
 
 export interface WorldSessionEventsQueryResultV1 {
   readonly events: readonly WorldSessionEventV1[];
+  readonly nextAfterEventSequence: number;
+  readonly hasMore: boolean;
+}
+
+/** Durable Runtime Session V1 currently replays Gameplay events only. */
+export interface GameplayEventsQueryV1 {
+  readonly afterEventSequence: number;
+  readonly maximumEventCount: number;
+}
+
+export interface GameplayEventsQueryResultV1 {
+  readonly events: readonly GameplayEventV1[];
   readonly nextAfterEventSequence: number;
   readonly hasMore: boolean;
 }

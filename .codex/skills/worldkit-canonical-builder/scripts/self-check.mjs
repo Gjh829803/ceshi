@@ -1056,6 +1056,7 @@ function baseUniq(array, iteratee, comparator) {
 function uniq(array) {
   return array && array.length ? baseUniq(array) : [];
 }
+const BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF = "worldkit://traversal-graph-builder-profile/outdoor-humanoid.heightfield-r1@1";
 const BUILT_IN_GROUND_STATIC_TRAVERSAL_SURFACE_PROFILE_REF = "worldkit://traversal-surface-profile/ground.static@1";
 const TRAVERSAL_DRIVER_PROFILE_REQUIRED_KEYS = [
   "kind",
@@ -1103,7 +1104,7 @@ const TRAVERSAL_GRAPH_BUILDER_PROFILE_V2_REQUIRED_KEYS = [
   "minimumEquivalentPlaneNormalDotRatio",
   "maximumTraversalSurfaceTrianglePairTestCount"
 ];
-new Set(
+const TRAVERSAL_GRAPH_BUILDER_PROFILE_V2_ALLOWED_KEYS = new Set(
   TRAVERSAL_GRAPH_BUILDER_PROFILE_V2_REQUIRED_KEYS
 );
 const TRAVERSAL_SURFACE_PROFILE_REQUIRED_KEYS = [
@@ -1115,6 +1116,29 @@ const TRAVERSAL_SURFACE_PROFILE_REQUIRED_KEYS = [
 const TRAVERSAL_SURFACE_PROFILE_ALLOWED_KEYS = new Set(
   TRAVERSAL_SURFACE_PROFILE_REQUIRED_KEYS
 );
+const BUILT_IN_HEIGHTFIELD_R1_GRAPH_BUILDER_PROFILE = {
+  kind: "traversal-graph-builder-profile",
+  schemaVersion: 2,
+  clearanceMarginMeters: 0.05,
+  voxelCellSizeMeters: 0.15,
+  voxelCellHeightMeters: 0.1,
+  tileSizeCells: 64,
+  maximumEdgeLengthMeters: 2.4,
+  maximumSimplificationErrorMeters: 0.15,
+  positionQuantizationMeters: 1e-3,
+  slopeCostWeight: 1,
+  stepCostWeight: 1,
+  maximumNodes: 1e5,
+  maximumEdges: 2e5,
+  maximumTiles: 1024,
+  maximumSearchSteps: 1e5,
+  maximumTraversalSurfaceCount: 61,
+  minimumEquivalentPlaneNormalDotRatio: 0.99999,
+  maximumTraversalSurfaceTrianglePairTestCount: 4e6
+};
+({
+  ...BUILT_IN_HEIGHTFIELD_R1_GRAPH_BUILDER_PROFILE
+});
 const BUILT_IN_GROUND_STATIC_TRAVERSAL_SURFACE_PROFILE = {
   kind: "traversal-surface-profile",
   schemaVersion: 1,
@@ -1154,6 +1178,43 @@ function rejectForbiddenAndMissingKeys(source, allowedKeys, requiredKeys, forbid
     throw new Error(`${missingCode}: '${missingKey}'.`);
   }
 }
+function requireFiniteNumber(value, code2, field) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new Error(`${code2}: '${field}' must be a finite number.`);
+  }
+  return value;
+}
+function requirePositiveNumber(value, code2, field, maximum) {
+  const numberValue = requireFiniteNumber(value, code2, field);
+  if (!(numberValue > 0) || numberValue > maximum) {
+    throw new Error(`${code2}: '${field}' must be > 0 and <= ${maximum}.`);
+  }
+  return numberValue;
+}
+function requireNonNegativeNumber(value, code2, field, maximum) {
+  const numberValue = requireFiniteNumber(value, code2, field);
+  if (numberValue < 0 || numberValue > maximum) {
+    throw new Error(`${code2}: '${field}' must be >= 0 and <= ${maximum}.`);
+  }
+  return numberValue;
+}
+function requireNumberInRange(value, code2, field, minimum, maximum) {
+  const numberValue = requireFiniteNumber(value, code2, field);
+  if (numberValue < minimum || numberValue > maximum) {
+    throw new Error(
+      `${code2}: '${field}' must be >= ${minimum} and <= ${maximum}.`
+    );
+  }
+  return numberValue;
+}
+function requireSafeIntegerInRange(value, code2, field, minimum, maximum) {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < minimum || value > maximum) {
+    throw new Error(
+      `${code2}: '${field}' must be a safe integer from ${minimum} through ${maximum}.`
+    );
+  }
+  return value;
+}
 function validateTraversalSurfaceProfileV1(value) {
   const source = requirePlainProfile(value, "TRAVERSAL_SURFACE_PROFILE_NOT_PLAIN");
   rejectForbiddenAndMissingKeys(
@@ -1184,6 +1245,152 @@ function validateTraversalSurfaceProfileV1(value) {
     );
   }
 }
+function validateTraversalGraphBuilderProfileV2(value) {
+  const source = requirePlainProfile(
+    value,
+    "TRAVERSAL_GRAPH_BUILDER_PROFILE_NOT_PLAIN"
+  );
+  rejectForbiddenAndMissingKeys(
+    source,
+    TRAVERSAL_GRAPH_BUILDER_PROFILE_V2_ALLOWED_KEYS,
+    TRAVERSAL_GRAPH_BUILDER_PROFILE_V2_REQUIRED_KEYS,
+    "TRAVERSAL_GRAPH_BUILDER_FIELD_FORBIDDEN",
+    "TRAVERSAL_GRAPH_BUILDER_FIELD_MISSING"
+  );
+  if (source.kind !== "traversal-graph-builder-profile") {
+    throw new Error(
+      "TRAVERSAL_GRAPH_BUILDER_KIND_MISMATCH: kind must be traversal-graph-builder-profile."
+    );
+  }
+  if (source.schemaVersion !== 2) {
+    throw new Error(
+      "TRAVERSAL_GRAPH_BUILDER_SCHEMA_VERSION_MISMATCH: schemaVersion must be 2."
+    );
+  }
+  requireNonNegativeNumber(
+    source.clearanceMarginMeters,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "clearanceMarginMeters",
+    2
+  );
+  const voxelCellSizeMeters = requireNumberInRange(
+    source.voxelCellSizeMeters,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "voxelCellSizeMeters",
+    1e-3,
+    4
+  );
+  requireNumberInRange(
+    source.voxelCellHeightMeters,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "voxelCellHeightMeters",
+    1e-3,
+    2
+  );
+  requireSafeIntegerInRange(
+    source.tileSizeCells,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "tileSizeCells",
+    16,
+    1024
+  );
+  const maximumEdgeLengthMeters = requirePositiveNumber(
+    source.maximumEdgeLengthMeters,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "maximumEdgeLengthMeters",
+    256
+  );
+  if (maximumEdgeLengthMeters < voxelCellSizeMeters) {
+    throw new Error(
+      "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID: 'maximumEdgeLengthMeters' must be at least one voxelCellSizeMeters."
+    );
+  }
+  requirePositiveNumber(
+    source.maximumSimplificationErrorMeters,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "maximumSimplificationErrorMeters",
+    16
+  );
+  requirePositiveNumber(
+    source.positionQuantizationMeters,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "positionQuantizationMeters",
+    1
+  );
+  requireNonNegativeNumber(
+    source.slopeCostWeight,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "slopeCostWeight",
+    100
+  );
+  requireNonNegativeNumber(
+    source.stepCostWeight,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "stepCostWeight",
+    100
+  );
+  requireSafeIntegerInRange(
+    source.maximumNodes,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "maximumNodes",
+    1,
+    1e6
+  );
+  requireSafeIntegerInRange(
+    source.maximumEdges,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "maximumEdges",
+    1,
+    2e6
+  );
+  requireSafeIntegerInRange(
+    source.maximumTiles,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "maximumTiles",
+    1,
+    4096
+  );
+  requireSafeIntegerInRange(
+    source.maximumSearchSteps,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "maximumSearchSteps",
+    1,
+    1e6
+  );
+  requireSafeIntegerInRange(
+    source.maximumTraversalSurfaceCount,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "maximumTraversalSurfaceCount",
+    1,
+    1e6
+  );
+  requirePositiveNumber(
+    source.minimumEquivalentPlaneNormalDotRatio,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "minimumEquivalentPlaneNormalDotRatio",
+    1
+  );
+  requireSafeIntegerInRange(
+    source.maximumTraversalSurfaceTrianglePairTestCount,
+    "TRAVERSAL_GRAPH_BUILDER_NUMBER_INVALID",
+    "maximumTraversalSurfaceTrianglePairTestCount",
+    1,
+    Number.MAX_SAFE_INTEGER - 1
+  );
+}
+function resolveTraversalGraphBuilderProfileV2(resourceRef) {
+  let profile;
+  {
+    profile = structuredClone(BUILT_IN_HEIGHTFIELD_R1_GRAPH_BUILDER_PROFILE);
+  }
+  validateTraversalGraphBuilderProfileV2(profile);
+  return deepFreeze$5({
+    resourceRef,
+    resolvedVersion: "1",
+    contentHash: contentHashOf(profile),
+    profile: deepFreeze$5(profile)
+  });
+}
 function resolveTraversalSurfaceProfileV1(resourceRef) {
   if (resourceRef !== BUILT_IN_GROUND_STATIC_TRAVERSAL_SURFACE_PROFILE_REF) {
     throw new Error(`TRAVERSAL_SURFACE_PROFILE_NOT_FOUND: '${resourceRef}'.`);
@@ -1196,6 +1403,233 @@ function resolveTraversalSurfaceProfileV1(resourceRef) {
     contentHash: contentHashOf(profile),
     profile: deepFreeze$5(profile)
   });
+}
+const MICROMETERS_PER_METER = 1e6;
+class TraversalGraphBuildBudgetExceededErrorV1 extends Error {
+  code = "ROUTE_GRAPH_BUDGET_EXCEEDED";
+  tilesX;
+  tilesZ;
+  estimatedTiles;
+  maximumTiles;
+  minimumMetersXZ;
+  maximumMetersXZ;
+  constructor(input) {
+    super(
+      `ROUTE_GRAPH_BUDGET_EXCEEDED: estimated ${input.estimate.estimatedTiles} tiles exceeds maximumTiles ${input.maximumTiles}.`
+    );
+    this.name = "TraversalGraphBuildBudgetExceededErrorV1";
+    this.tilesX = input.estimate.tilesX;
+    this.tilesZ = input.estimate.tilesZ;
+    this.estimatedTiles = input.estimate.estimatedTiles;
+    this.maximumTiles = input.maximumTiles;
+    this.minimumMetersXZ = Object.freeze([...input.minimumMetersXZ]);
+    this.maximumMetersXZ = Object.freeze([...input.maximumMetersXZ]);
+  }
+}
+function failBudget(message) {
+  throw new Error(`TRAVERSAL_GRAPH_BUILD_BUDGET_INVALID: ${message}`);
+}
+function quantizeTraversalMetersToMicrometersV1(valueMeters) {
+  if (!Number.isFinite(valueMeters)) {
+    failBudget("meter value must be finite.");
+  }
+  const micrometers = Math.round(valueMeters * MICROMETERS_PER_METER);
+  if (!Number.isSafeInteger(micrometers)) {
+    failBudget("meter value exceeds deterministic micrometer range.");
+  }
+  return micrometers;
+}
+function requirePositiveMeters(value, field) {
+  if (!Number.isFinite(value) || !(value > 0)) {
+    failBudget(`'${field}' must be finite and > 0.`);
+  }
+  const micrometers = quantizeTraversalMetersToMicrometersV1(value);
+  if (!(micrometers > 0)) {
+    failBudget(`'${field}' must be at least one micrometer.`);
+  }
+  return micrometers;
+}
+function requireBoundsTuple(value, field) {
+  if (!Array.isArray(value) || value.length !== 2) {
+    failBudget(`'${field}' must be a finite 2-tuple.`);
+  }
+  quantizeTraversalMetersToMicrometersV1(value[0]);
+  quantizeTraversalMetersToMicrometersV1(value[1]);
+  return value;
+}
+function estimateHeightfieldTileCountV1(input) {
+  const widthMicrometers = requirePositiveMeters(input.widthMeters, "widthMeters");
+  const depthMicrometers = requirePositiveMeters(input.depthMeters, "depthMeters");
+  const voxelCellSizeMicrometers = requirePositiveMeters(
+    input.voxelCellSizeMeters,
+    "voxelCellSizeMeters"
+  );
+  if (!Number.isSafeInteger(input.tileSizeCells) || !(input.tileSizeCells > 0)) {
+    failBudget("'tileSizeCells' must be a positive safe integer.");
+  }
+  const tileSizeMicrometers = input.tileSizeCells * voxelCellSizeMicrometers;
+  if (!Number.isSafeInteger(tileSizeMicrometers)) {
+    failBudget("tile span exceeds deterministic micrometer range.");
+  }
+  const tilesX = Math.ceil(widthMicrometers / tileSizeMicrometers);
+  const tilesZ = Math.ceil(depthMicrometers / tileSizeMicrometers);
+  const estimatedTiles = tilesX * tilesZ;
+  if (!Number.isSafeInteger(estimatedTiles)) {
+    failBudget("estimated tile count exceeds safe integer range.");
+  }
+  return { tilesX, tilesZ, estimatedTiles };
+}
+function assertTraversalGraphBuildBudgetV1(input) {
+  if (!Number.isSafeInteger(input.maximumTiles) || !(input.maximumTiles > 0)) {
+    failBudget("'maximumTiles' must be a positive safe integer.");
+  }
+  const minimumMetersXZ = requireBoundsTuple(
+    input.minimumMetersXZ,
+    "minimumMetersXZ"
+  );
+  const maximumMetersXZ = requireBoundsTuple(
+    input.maximumMetersXZ,
+    "maximumMetersXZ"
+  );
+  const minimumXMicrometers = quantizeTraversalMetersToMicrometersV1(
+    minimumMetersXZ[0]
+  );
+  const minimumZMicrometers = quantizeTraversalMetersToMicrometersV1(
+    minimumMetersXZ[1]
+  );
+  const maximumXMicrometers = quantizeTraversalMetersToMicrometersV1(
+    maximumMetersXZ[0]
+  );
+  const maximumZMicrometers = quantizeTraversalMetersToMicrometersV1(
+    maximumMetersXZ[1]
+  );
+  const widthMicrometers = maximumXMicrometers - minimumXMicrometers;
+  const depthMicrometers = maximumZMicrometers - minimumZMicrometers;
+  if (!(widthMicrometers > 0) || !(depthMicrometers > 0)) {
+    failBudget(
+      "minimumMetersXZ and maximumMetersXZ must define positive X and Z extents after micrometer normalization."
+    );
+  }
+  const estimate2 = estimateHeightfieldTileCountV1({
+    widthMeters: widthMicrometers / MICROMETERS_PER_METER,
+    depthMeters: depthMicrometers / MICROMETERS_PER_METER,
+    tileSizeCells: input.tileSizeCells,
+    voxelCellSizeMeters: input.voxelCellSizeMeters
+  });
+  if (estimate2.estimatedTiles > input.maximumTiles) {
+    throw new TraversalGraphBuildBudgetExceededErrorV1({
+      estimate: estimate2,
+      maximumTiles: input.maximumTiles,
+      minimumMetersXZ,
+      maximumMetersXZ
+    });
+  }
+  return estimate2;
+}
+function requireRoutePointsMicrometers(pointsMetersXZ) {
+  if (!Array.isArray(pointsMetersXZ) || pointsMetersXZ.length < 2) {
+    failBudget("'pointsMetersXZ' must contain at least two finite 2-tuples.");
+  }
+  const pointsMicrometers = pointsMetersXZ.map((point, index) => {
+    if (!Array.isArray(point) || point.length !== 2) {
+      failBudget(`'pointsMetersXZ[${index}]' must be a finite 2-tuple.`);
+    }
+    return [
+      quantizeTraversalMetersToMicrometersV1(point[0]),
+      quantizeTraversalMetersToMicrometersV1(point[1])
+    ];
+  });
+  const hasNonZeroSegment = pointsMicrometers.slice(1).some((point, index) => {
+    const previous = pointsMicrometers[index];
+    return point[0] !== previous[0] || point[1] !== previous[1];
+  });
+  if (!hasNonZeroSegment) {
+    failBudget("'pointsMetersXZ' must contain a non-zero segment after micrometer normalization.");
+  }
+  return pointsMicrometers;
+}
+function safeMicrometerSum(left, right, field) {
+  const result2 = left + right;
+  if (!Number.isSafeInteger(result2)) {
+    failBudget(`'${field}' exceeds deterministic micrometer range.`);
+  }
+  return result2;
+}
+function metersFromMicrometers(value) {
+  const meters = value / MICROMETERS_PER_METER;
+  return Object.is(meters, -0) ? 0 : meters;
+}
+function estimateRouteBuildWindowTileCountV1(input) {
+  if (input === null || typeof input !== "object" || Array.isArray(input)) {
+    failBudget("route build-window input must be an object.");
+  }
+  const pointsMicrometers = requireRoutePointsMicrometers(input.pointsMetersXZ);
+  const widthMicrometers = requirePositiveMeters(input.widthMeters, "widthMeters");
+  if (!Array.isArray(input.terrainCellSizeMetersXZ) || input.terrainCellSizeMetersXZ.length !== 2) {
+    failBudget("'terrainCellSizeMetersXZ' must be a positive finite 2-tuple.");
+  }
+  const terrainCellXMicrometers = requirePositiveMeters(
+    input.terrainCellSizeMetersXZ[0],
+    "terrainCellSizeMetersXZ[0]"
+  );
+  const terrainCellZMicrometers = requirePositiveMeters(
+    input.terrainCellSizeMetersXZ[1],
+    "terrainCellSizeMetersXZ[1]"
+  );
+  const halfWidthMicrometers = Math.ceil(widthMicrometers / 2);
+  const guardXMicrometers = safeMicrometerSum(
+    halfWidthMicrometers,
+    terrainCellXMicrometers,
+    "route build-window X guard"
+  );
+  const guardZMicrometers = safeMicrometerSum(
+    halfWidthMicrometers,
+    terrainCellZMicrometers,
+    "route build-window Z guard"
+  );
+  const xMicrometers = pointsMicrometers.map((point) => point[0]);
+  const zMicrometers = pointsMicrometers.map((point) => point[1]);
+  const minimumXMicrometers = safeMicrometerSum(
+    Math.min(...xMicrometers),
+    -guardXMicrometers,
+    "minimumMetersXZ[0]"
+  );
+  const minimumZMicrometers = safeMicrometerSum(
+    Math.min(...zMicrometers),
+    -guardZMicrometers,
+    "minimumMetersXZ[1]"
+  );
+  const maximumXMicrometers = safeMicrometerSum(
+    Math.max(...xMicrometers),
+    guardXMicrometers,
+    "maximumMetersXZ[0]"
+  );
+  const maximumZMicrometers = safeMicrometerSum(
+    Math.max(...zMicrometers),
+    guardZMicrometers,
+    "maximumMetersXZ[1]"
+  );
+  const minimumMetersXZ = [
+    metersFromMicrometers(minimumXMicrometers),
+    metersFromMicrometers(minimumZMicrometers)
+  ];
+  const maximumMetersXZ = [
+    metersFromMicrometers(maximumXMicrometers),
+    metersFromMicrometers(maximumZMicrometers)
+  ];
+  const estimate2 = assertTraversalGraphBuildBudgetV1({
+    minimumMetersXZ,
+    maximumMetersXZ,
+    tileSizeCells: input.tileSizeCells,
+    voxelCellSizeMeters: input.voxelCellSizeMeters,
+    maximumTiles: input.maximumTiles
+  });
+  return {
+    minimumMetersXZ,
+    maximumMetersXZ,
+    ...estimate2,
+    maximumTiles: input.maximumTiles
+  };
 }
 const TRAVERSAL_SURFACE_QUERY_AREA_EPSILON_SQUARE_METERS_V1 = 1e-10;
 class TriangleWorldGeometryNonFiniteErrorV1 extends Error {
@@ -2355,7 +2789,8 @@ const SUBJECT_RESOURCE_KINDS_V1 = Object.freeze([
   "relationship-profile",
   "harness-profile",
   "pose-set-profile",
-  "render-binding-profile"
+  "render-binding-profile",
+  "ai-schema-projection-profile"
 ]);
 const GROUND_HUMANOID_ACTION_IDS_V1 = Object.freeze([
   "idle",
@@ -3708,6 +4143,507 @@ function parseExecutionPlanV5(input) {
 function hashExecutionPlanV5(input) {
   return sha256CanonicalJson(parseExecutionPlanV5(input));
 }
+function invalid$1(schemaName) {
+  throw new RangeError(`Value must match the closed ${schemaName} schema.`);
+}
+function snapshotDataRecord$1(value) {
+  if (typeof value !== "object" || isNil(value)) return void 0;
+  try {
+    const prototype = Reflect.getPrototypeOf(value);
+    if (prototype !== Object.prototype && !isNil(prototype)) return void 0;
+    const snapshot = /* @__PURE__ */ Object.create(null);
+    for (const key of Reflect.ownKeys(value)) {
+      const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
+      if (typeof key !== "string" || isNil(descriptor) || !descriptor.enumerable || !("value" in descriptor)) return void 0;
+      snapshot[key] = descriptor.value;
+    }
+    return snapshot;
+  } catch {
+    return void 0;
+  }
+}
+function hasExactKeys$1(value, keys) {
+  const ownKeys = Reflect.ownKeys(value);
+  return ownKeys.length === keys.length && ownKeys.every((key) => typeof key === "string" && keys.includes(key));
+}
+function isSafeNonNegativeInteger$1(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && !Object.is(value, -0);
+}
+function deepFreeze$4(value) {
+  if (typeof value !== "object" || isNil(value) || Object.isFrozen(value)) {
+    return value;
+  }
+  for (const key of Reflect.ownKeys(value)) {
+    const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
+    if (!isNil(descriptor) && "value" in descriptor) {
+      deepFreeze$4(descriptor.value);
+    }
+  }
+  return Object.freeze(value);
+}
+const GAMEPLAY_CAPACITY_BUDGET_KEYS = [
+  "maximumParticipantCount",
+  "maximumControllerEntityCount",
+  "maximumRelationshipStateCount",
+  "maximumActiveActionStateCount",
+  "maximumGameplayFeatureCount",
+  "maximumSemanticActionDefinitionCount",
+  "maximumSemanticFactCount",
+  "maximumSemanticFactTransitionCountPerTick",
+  "maximumIdempotencyRecordCount",
+  "maximumUsedActionExecutionIdCount",
+  "maximumRetainedReceiptCount",
+  "maximumRetainedEventCount",
+  "maximumRetainedWorldStateSnapshotCount"
+];
+function parseGameplayCapacityBudgetV1(input) {
+  const schemaName = "GameplayCapacityBudgetV1";
+  const record2 = snapshotDataRecord$1(input) ?? invalid$1(schemaName);
+  if (!hasExactKeys$1(record2, GAMEPLAY_CAPACITY_BUDGET_KEYS) || !GAMEPLAY_CAPACITY_BUDGET_KEYS.every(
+    (key) => isSafeNonNegativeInteger$1(record2[key])
+  )) invalid$1(schemaName);
+  return deepFreeze$4(Object.fromEntries(
+    GAMEPLAY_CAPACITY_BUDGET_KEYS.map((key) => [key, record2[key]])
+  ));
+}
+parseGameplayCapacityBudgetV1({
+  maximumParticipantCount: 1,
+  maximumControllerEntityCount: 1,
+  maximumRelationshipStateCount: 1,
+  maximumActiveActionStateCount: 256,
+  maximumGameplayFeatureCount: 16,
+  maximumSemanticActionDefinitionCount: 256,
+  maximumSemanticFactCount: 4096,
+  maximumSemanticFactTransitionCountPerTick: 1024,
+  maximumIdempotencyRecordCount: 4096,
+  maximumUsedActionExecutionIdCount: 4096,
+  maximumRetainedReceiptCount: 4096,
+  maximumRetainedEventCount: 8192,
+  maximumRetainedWorldStateSnapshotCount: 4096
+});
+const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
+const GAMEPLAY_COMMAND_TYPES = /* @__PURE__ */ new Set([
+  "control.bind",
+  "control.release",
+  "action.activate",
+  "action.cancel"
+]);
+function invalid(schemaName) {
+  throw new RangeError(`Value must match the closed ${schemaName} schema.`);
+}
+function snapshotDataRecord(value) {
+  if (typeof value !== "object" || isNil(value)) return void 0;
+  try {
+    if (Reflect.getPrototypeOf(value) !== Object.prototype) return void 0;
+    const snapshot = {};
+    for (const key of Reflect.ownKeys(value)) {
+      const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
+      if (typeof key !== "string" || isNil(descriptor) || !descriptor.enumerable || !("value" in descriptor)) return void 0;
+      Object.defineProperty(snapshot, key, {
+        configurable: true,
+        enumerable: true,
+        value: descriptor.value,
+        writable: true
+      });
+    }
+    return snapshot;
+  } catch {
+    return void 0;
+  }
+}
+function snapshotDataArray(value) {
+  if (!Array.isArray(value)) return void 0;
+  try {
+    if (Reflect.getPrototypeOf(value) !== Array.prototype) return void 0;
+    if (Reflect.ownKeys(value).some((key) => typeof key === "symbol")) {
+      return void 0;
+    }
+    if (Object.getOwnPropertyNames(value).length !== value.length + 1) {
+      return void 0;
+    }
+    const snapshot = [];
+    for (let index = 0; index < value.length; index += 1) {
+      const descriptor = Reflect.getOwnPropertyDescriptor(value, String(index));
+      if (isNil(descriptor) || !descriptor.enumerable || !("value" in descriptor)) return void 0;
+      snapshot.push(descriptor.value);
+    }
+    const lengthDescriptor = Reflect.getOwnPropertyDescriptor(value, "length");
+    if (isNil(lengthDescriptor) || lengthDescriptor.enumerable !== false) {
+      return void 0;
+    }
+    return snapshot;
+  } catch {
+    return void 0;
+  }
+}
+function hasExactKeys(record2, keys) {
+  const ownKeys = Reflect.ownKeys(record2);
+  return ownKeys.length === keys.length && ownKeys.every(
+    (key) => typeof key === "string" && keys.includes(key)
+  );
+}
+function isNonEmptyString(value) {
+  return typeof value === "string" && value.length > 0;
+}
+function isSha256(value) {
+  return typeof value === "string" && SHA256_PATTERN.test(value);
+}
+function isSafeNonNegativeInteger(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && !Object.is(value, -0);
+}
+function isSafePositiveInteger(value) {
+  return isSafeNonNegativeInteger(value) && value > 0;
+}
+function compareCanonicalStrings(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+function sameOrder(actual, expected) {
+  return actual.length === expected.length && actual.every(
+    (value, index) => value === expected[index]
+  );
+}
+function canonicalStringSet(input, schemaName, mode) {
+  const values = snapshotDataArray(input);
+  if (isNil(values)) invalid(schemaName);
+  if (!values.every(isNonEmptyString)) invalid(schemaName);
+  const typedValues = values;
+  if (new Set(typedValues).size !== typedValues.length) invalid(schemaName);
+  const canonical = [...typedValues].sort(compareCanonicalStrings);
+  if (mode === "strict" && !sameOrder(typedValues, canonical)) invalid(schemaName);
+  return Object.freeze(canonical);
+}
+function deepFreeze$3(value) {
+  if (typeof value !== "object" || isNil(value) || Object.isFrozen(value)) {
+    return value;
+  }
+  for (const key of Reflect.ownKeys(value)) {
+    const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
+    if (!isNil(descriptor) && "value" in descriptor) {
+      deepFreeze$3(descriptor.value);
+    }
+  }
+  return Object.freeze(value);
+}
+function parseGameplayEntityDescriptor(input, mode, schemaName) {
+  const record2 = snapshotDataRecord(input);
+  if (isNil(record2)) invalid(schemaName);
+  if (!hasExactKeys(record2, ["id", "entityDefinitionRef", "capabilityRefs"]) || !isNonEmptyString(record2.id) || !isNonEmptyString(record2.entityDefinitionRef)) invalid(schemaName);
+  return deepFreeze$3({
+    id: record2.id,
+    entityDefinitionRef: record2.entityDefinitionRef,
+    capabilityRefs: canonicalStringSet(record2.capabilityRefs, schemaName, mode)
+  });
+}
+function createGameplayEntityDescriptorV1(input) {
+  return parseGameplayEntityDescriptor(
+    input,
+    "canonicalize",
+    "GameplayEntityDescriptorV1"
+  );
+}
+function parseGameplayEntityDescriptorV1(input) {
+  return parseGameplayEntityDescriptor(input, "strict", "GameplayEntityDescriptorV1");
+}
+function parseGameplayFeatureManifestBody(input, mode) {
+  const schemaName = "GameplayFeatureManifestBodyV1";
+  const record2 = snapshotDataRecord(input);
+  if (isNil(record2)) invalid(schemaName);
+  if (!hasExactKeys(record2, [
+    "kind",
+    "id",
+    "version",
+    "resourceRef",
+    "dependencyFeatureRefs",
+    "requiredCapabilityRefs",
+    "commandTypes",
+    "resourceBudget"
+  ]) || record2.kind !== "gameplay-feature" || !isNonEmptyString(record2.id) || !isSafePositiveInteger(record2.version) || !isNonEmptyString(record2.resourceRef)) invalid(schemaName);
+  const commandTypes = canonicalStringSet(record2.commandTypes, schemaName, mode);
+  if (!commandTypes.every(
+    (type2) => GAMEPLAY_COMMAND_TYPES.has(type2)
+  )) invalid(schemaName);
+  const resourceBudget = snapshotDataRecord(record2.resourceBudget);
+  if (isNil(resourceBudget)) invalid(schemaName);
+  if (!hasExactKeys(resourceBudget, ["stateSliceCount", "commandHandlerCount"]) || resourceBudget.stateSliceCount !== 1 || !isSafeNonNegativeInteger(resourceBudget.commandHandlerCount) || resourceBudget.commandHandlerCount !== commandTypes.length) invalid(schemaName);
+  return deepFreeze$3({
+    kind: "gameplay-feature",
+    id: record2.id,
+    version: record2.version,
+    resourceRef: record2.resourceRef,
+    dependencyFeatureRefs: canonicalStringSet(
+      record2.dependencyFeatureRefs,
+      schemaName,
+      mode
+    ),
+    requiredCapabilityRefs: canonicalStringSet(
+      record2.requiredCapabilityRefs,
+      schemaName,
+      mode
+    ),
+    commandTypes,
+    resourceBudget: {
+      stateSliceCount: 1,
+      commandHandlerCount: resourceBudget.commandHandlerCount
+    }
+  });
+}
+function createGameplayFeatureManifestV1(input) {
+  const body = parseGameplayFeatureManifestBody(input, "canonicalize");
+  return deepFreeze$3({
+    ...body,
+    contentHash: sha256CanonicalJson(body)
+  });
+}
+function parseGameplayFeatureResourceLockV1(input) {
+  const schemaName = "GameplayFeatureResourceLockV1";
+  const record2 = snapshotDataRecord(input);
+  if (isNil(record2)) invalid(schemaName);
+  if (!hasExactKeys(record2, ["resourceRef", "contentHash"]) || !isNonEmptyString(record2.resourceRef) || !isSha256(record2.contentHash)) invalid(schemaName);
+  return deepFreeze$3({
+    resourceRef: record2.resourceRef,
+    contentHash: record2.contentHash
+  });
+}
+function parseGameplayActionDefinitionBody(input, mode) {
+  const schemaName = "GameplayActionDefinitionBodyV1";
+  const record2 = snapshotDataRecord(input);
+  if (isNil(record2)) invalid(schemaName);
+  if (!hasExactKeys(record2, [
+    "kind",
+    "id",
+    "version",
+    "resourceRef",
+    "executionMode",
+    "completion",
+    "effect",
+    "isMovementInputBlocked",
+    "allowedActorEntityDefinitionRefs",
+    "requiredActorCapabilityRefs",
+    "request"
+  ]) || record2.kind !== "semantic-action" || !isNonEmptyString(record2.id) || !isSafePositiveInteger(record2.version) || !isNonEmptyString(record2.resourceRef) || record2.executionMode !== "exclusive-per-subject" || typeof record2.isMovementInputBlocked !== "boolean") invalid(schemaName);
+  const completionRecord = snapshotDataRecord(record2.completion);
+  if (isNil(completionRecord)) invalid(schemaName);
+  let completion;
+  if (completionRecord.mode === "immediate" && hasExactKeys(completionRecord, ["mode"])) {
+    completion = { mode: "immediate" };
+  } else if (completionRecord.mode === "explicit-cancel" && hasExactKeys(completionRecord, ["mode"])) {
+    completion = { mode: "explicit-cancel" };
+  } else if (completionRecord.mode === "fixed-duration" && hasExactKeys(completionRecord, ["mode", "durationTicks"]) && isSafePositiveInteger(completionRecord.durationTicks)) {
+    completion = {
+      mode: "fixed-duration",
+      durationTicks: completionRecord.durationTicks
+    };
+  } else {
+    return invalid(schemaName);
+  }
+  const effectRecord = snapshotDataRecord(record2.effect);
+  if (isNil(effectRecord)) invalid(schemaName);
+  let effect;
+  if (effectRecord.mode === "state-only" && hasExactKeys(effectRecord, ["mode"])) {
+    effect = { mode: "state-only" };
+  } else if (effectRecord.mode === "trusted" && hasExactKeys(effectRecord, [
+    "mode",
+    "gameplayActionEffectRef",
+    "gameplayActionEffectHash"
+  ]) && isNonEmptyString(effectRecord.gameplayActionEffectRef) && isSha256(effectRecord.gameplayActionEffectHash)) {
+    effect = {
+      mode: "trusted",
+      gameplayActionEffectRef: effectRecord.gameplayActionEffectRef,
+      gameplayActionEffectHash: effectRecord.gameplayActionEffectHash
+    };
+  } else {
+    return invalid(schemaName);
+  }
+  const requestRecord = snapshotDataRecord(record2.request);
+  if (isNil(requestRecord)) invalid(schemaName);
+  let request;
+  if (requestRecord.mode === "none" && hasExactKeys(requestRecord, ["mode"])) {
+    request = { mode: "none" };
+  } else if (requestRecord.mode === "required" && hasExactKeys(requestRecord, [
+    "mode",
+    "actionRequestSchemaRef",
+    "actionRequestSchemaHash"
+  ]) && isNonEmptyString(requestRecord.actionRequestSchemaRef) && isSha256(requestRecord.actionRequestSchemaHash)) {
+    request = {
+      mode: "required",
+      actionRequestSchemaRef: requestRecord.actionRequestSchemaRef,
+      actionRequestSchemaHash: requestRecord.actionRequestSchemaHash
+    };
+  } else {
+    return invalid(schemaName);
+  }
+  return deepFreeze$3({
+    kind: "semantic-action",
+    id: record2.id,
+    version: record2.version,
+    resourceRef: record2.resourceRef,
+    executionMode: "exclusive-per-subject",
+    completion,
+    effect,
+    isMovementInputBlocked: record2.isMovementInputBlocked,
+    allowedActorEntityDefinitionRefs: canonicalStringSet(
+      record2.allowedActorEntityDefinitionRefs,
+      schemaName,
+      mode
+    ),
+    requiredActorCapabilityRefs: canonicalStringSet(
+      record2.requiredActorCapabilityRefs,
+      schemaName,
+      mode
+    ),
+    request
+  });
+}
+function parseGameplayActionDefinitionV1(input) {
+  const schemaName = "GameplayActionDefinitionV1";
+  const record2 = snapshotDataRecord(input);
+  if (isNil(record2)) invalid(schemaName);
+  if (!hasExactKeys(record2, [
+    "kind",
+    "id",
+    "version",
+    "resourceRef",
+    "contentHash",
+    "executionMode",
+    "completion",
+    "effect",
+    "isMovementInputBlocked",
+    "allowedActorEntityDefinitionRefs",
+    "requiredActorCapabilityRefs",
+    "request"
+  ]) || !isSha256(record2.contentHash)) invalid(schemaName);
+  const { contentHash: contentHash2, ...bodyInput } = record2;
+  let body;
+  try {
+    body = parseGameplayActionDefinitionBody(bodyInput, "strict");
+  } catch {
+    return invalid(schemaName);
+  }
+  const expectedHash = sha256CanonicalJson(body);
+  if (contentHash2 !== expectedHash) invalid(schemaName);
+  return deepFreeze$3({ ...body, contentHash: expectedHash });
+}
+function canonicalObjectCollection(input, schemaName, mode, parse, identity2) {
+  const source = snapshotDataArray(input);
+  if (isNil(source)) invalid(schemaName);
+  let parsed;
+  try {
+    parsed = source.map(parse);
+  } catch {
+    return invalid(schemaName);
+  }
+  const identities = parsed.map(identity2);
+  if (identities.some((value) => value.length === 0)) invalid(schemaName);
+  if (new Set(identities).size !== identities.length) invalid(schemaName);
+  const canonical = [...parsed].sort(
+    (left, right) => compareCanonicalStrings(identity2(left), identity2(right))
+  );
+  if (mode === "strict" && !sameOrder(identities, canonical.map(identity2))) invalid(schemaName);
+  return Object.freeze(canonical);
+}
+function parseGameplayBootstrapBody(input, mode) {
+  const schemaName = "GameplayBootstrapBodyV1";
+  const record2 = snapshotDataRecord(input);
+  if (isNil(record2)) invalid(schemaName);
+  if (!hasExactKeys(record2, [
+    "kind",
+    "id",
+    "version",
+    "resourceRef",
+    "entityDescriptors",
+    "featureResourceLocks",
+    "semanticActionDefinitions",
+    "availableCapabilityRefs"
+  ]) || record2.kind !== "gameplay-bootstrap" || !isNonEmptyString(record2.id) || !isSafePositiveInteger(record2.version) || !isNonEmptyString(record2.resourceRef)) invalid(schemaName);
+  const parseEntity = mode === "strict" ? parseGameplayEntityDescriptorV1 : (value) => createGameplayEntityDescriptorV1(
+    value
+  );
+  return deepFreeze$3({
+    kind: "gameplay-bootstrap",
+    id: record2.id,
+    version: record2.version,
+    resourceRef: record2.resourceRef,
+    entityDescriptors: canonicalObjectCollection(
+      record2.entityDescriptors,
+      schemaName,
+      mode,
+      parseEntity,
+      (value) => value.id
+    ),
+    featureResourceLocks: canonicalObjectCollection(
+      record2.featureResourceLocks,
+      schemaName,
+      mode,
+      parseGameplayFeatureResourceLockV1,
+      (value) => value.resourceRef
+    ),
+    semanticActionDefinitions: canonicalObjectCollection(
+      record2.semanticActionDefinitions,
+      schemaName,
+      mode,
+      parseGameplayActionDefinitionV1,
+      (value) => value.resourceRef
+    ),
+    availableCapabilityRefs: canonicalStringSet(
+      record2.availableCapabilityRefs,
+      schemaName,
+      mode
+    )
+  });
+}
+function createGameplayBootstrapV1(input) {
+  const body = parseGameplayBootstrapBody(input, "canonicalize");
+  return deepFreeze$3({
+    ...body,
+    contentHash: sha256CanonicalJson(body)
+  });
+}
+function parseGameplayBootstrapV1(input) {
+  const schemaName = "GameplayBootstrapV1";
+  const record2 = snapshotDataRecord(input);
+  if (isNil(record2)) invalid(schemaName);
+  if (!hasExactKeys(record2, [
+    "kind",
+    "id",
+    "version",
+    "resourceRef",
+    "contentHash",
+    "entityDescriptors",
+    "featureResourceLocks",
+    "semanticActionDefinitions",
+    "availableCapabilityRefs"
+  ]) || !isSha256(record2.contentHash)) invalid(schemaName);
+  const { contentHash: contentHash2, ...bodyInput } = record2;
+  let body;
+  try {
+    body = parseGameplayBootstrapBody(bodyInput, "strict");
+  } catch {
+    return invalid(schemaName);
+  }
+  const expectedHash = sha256CanonicalJson(body);
+  if (contentHash2 !== expectedHash) invalid(schemaName);
+  return deepFreeze$3({ ...body, contentHash: expectedHash });
+}
+function createGameplayBootstrapResourceLockEntryV1(input) {
+  const bootstrap = parseGameplayBootstrapV1(input);
+  return deepFreeze$3({
+    resourceRef: bootstrap.resourceRef,
+    resourceKind: "gameplay-bootstrap",
+    resolvedVersion: String(bootstrap.version),
+    contentHash: bootstrap.contentHash
+  });
+}
+const WORLDKIT_RUNTIME_SESSION_REQUEST_TYPES_V1 = Object.freeze([
+  "gameplay-command.execute",
+  "fixed-input.run",
+  "snapshot.get",
+  "events.get",
+  "session.close"
+]);
+new Set(
+  WORLDKIT_RUNTIME_SESSION_REQUEST_TYPES_V1
+);
+new Set(CAMERA_RIG_PARAMETER_NAMES_V1);
 const TRAVERSAL_SURFACE_PROFILE_RESOURCE_KIND = "traversal-surface-profile";
 function canonicalIdentityBaseV4(spec, normalizedBase) {
   return {
@@ -3790,19 +4726,8 @@ function projectNormalizedWorldResourcesToLayoutIdentityV4(resources) {
     resourceLockHash: sha256CanonicalJson(resourceLock)
   };
 }
-function canonicalAuthoringIdentityV4(spec, normalizedBase) {
-  const baseIdentity = canonicalIdentityBaseV4(spec, normalizedBase);
-  return {
-    ...baseIdentity,
-    spatial: {
-      ...baseIdentity.spatial,
-      traversalAreas: [...spec.spatial.traversalAreas].sort((left, right) => left.id.localeCompare(right.id)).map((row) => structuredClone(row))
-    },
-    constraints: {
-      placements: baseIdentity.constraints.placements,
-      connectivity: [...spec.constraints.connectivity].sort((left, right) => left.id.localeCompare(right.id)).map((row) => structuredClone(row))
-    }
-  };
+function hashAuthoringDocumentV4(spec) {
+  return sha256CanonicalJson(spec);
 }
 function canonicalAuthoringLayoutIdentityV4(spec, normalizedBase) {
   return canonicalIdentityBaseV4(spec, {
@@ -3811,6 +4736,11 @@ function canonicalAuthoringLayoutIdentityV4(spec, normalizedBase) {
       normalizedBase.resources
     )
   });
+}
+function hashAuthoringLayoutInputV4(spec, normalizedBase) {
+  return sha256CanonicalJson(
+    canonicalAuthoringLayoutIdentityV4(spec, normalizedBase)
+  );
 }
 const BUILT_IN_LAYOUT_SOLVER_PROFILE_REF = "worldkit://layout-solver-profile/outdoor.s1@1";
 const BUILT_IN_OUTDOOR_PROFILE = {
@@ -3842,18 +4772,18 @@ const BUILT_IN_OUTDOOR_PROFILE = {
     maximumDiagnostics: 256
   }
 };
-function deepFreeze$4(value) {
+function deepFreeze$2(value) {
   if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value)) deepFreeze$4(child);
+  for (const child of Object.values(value)) deepFreeze$2(child);
   return Object.freeze(value);
 }
 function resolveLayoutSolverProfileV1(resourceRef) {
   if (resourceRef !== BUILT_IN_LAYOUT_SOLVER_PROFILE_REF) {
     throw new Error(`LAYOUT_SOLVER_PROFILE_NOT_FOUND: '${resourceRef}'.`);
   }
-  const profile = deepFreeze$4(structuredClone(BUILT_IN_OUTDOOR_PROFILE));
+  const profile = deepFreeze$2(structuredClone(BUILT_IN_OUTDOOR_PROFILE));
   const contentHash2 = sha256Bytes(canonicalJsonBytes(profile));
-  return deepFreeze$4({
+  return deepFreeze$2({
     resourceRef: BUILT_IN_LAYOUT_SOLVER_PROFILE_REF,
     resolvedVersion: "1",
     contentHash: contentHash2,
@@ -4747,6 +5677,7 @@ function validateInput(input, profile) {
   if (input.kind !== "worldkit-resolved-layout-input" || input.schemaVersion !== 1 || !Number.isInteger(input.seed) || input.seed < 0) add("");
   const hashPattern = /^sha256:[a-f0-9]{64}$/;
   if (!hashPattern.test(input.authoringSpecHash)) add("/authoringSpecHash");
+  if (!hashPattern.test(input.layoutInputHash)) add("/layoutInputHash");
   if (!hashPattern.test(input.registryLockHash)) add("/registryLockHash");
   if (input.solverProfile.contentHash !== sha256CanonicalJson(profile) || !hashPattern.test(input.solverProfile.contentHash)) add("/solverProfile/contentHash");
   if (!/^worldkit:\/\/layout-solver-profile\/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$/.test(
@@ -4935,6 +5866,7 @@ function reportBase(input, status) {
     schemaVersion: 1,
     id: `${input.id}-layout`,
     authoringSpecHash: input.authoringSpecHash,
+    layoutInputHash: input.layoutInputHash,
     registryLockHash: input.registryLockHash,
     solverProfileRef: input.solverProfile.solverProfileRef,
     resolvedVersion: input.solverProfile.resolvedVersion,
@@ -5567,6 +6499,1130 @@ const BUILT_IN_SUBJECT_RESOURCE_MANIFESTS = [
   VERTICAL_CHARACTER_CAPSULE_PROFILE,
   CAPABILITY_VERTICAL_CAPSULE_PROFILE
 ];
+function selectableControlFeelProfileRefsV1(profiles2) {
+  if (isNil(profiles2.controlFeelProfileRef) || profiles2.controlFeelProfileRef === "") {
+    throw new Error(
+      "SUBJECT_CONTROL_FEEL_PROFILE_REQUIRED: default Control Feel Profile is missing."
+    );
+  }
+  if (!Array.isArray(profiles2.allowedControlFeelProfileRefs) || isEmpty(profiles2.allowedControlFeelProfileRefs)) {
+    throw new Error(
+      "SUBJECT_CONTROL_FEEL_ALLOWED_REQUIRED: allowed Control Feel Profile refs are missing."
+    );
+  }
+  const uniqueAllowed = uniq(profiles2.allowedControlFeelProfileRefs);
+  if (uniqueAllowed.length !== profiles2.allowedControlFeelProfileRefs.length) {
+    throw new Error(
+      "SUBJECT_CONTROL_FEEL_ALLOWED_DUPLICATE: allowed Control Feel Profile refs must be unique."
+    );
+  }
+  if (!uniqueAllowed.includes(profiles2.controlFeelProfileRef)) {
+    throw new Error(
+      `SUBJECT_CONTROL_FEEL_DEFAULT_NOT_ALLOWED: '${profiles2.controlFeelProfileRef}' is not in allowedControlFeelProfileRefs.`
+    );
+  }
+  return [
+    profiles2.controlFeelProfileRef,
+    ...uniqueAllowed.filter((resourceRef) => resourceRef !== profiles2.controlFeelProfileRef)
+  ];
+}
+const RELATIONSHIP_PROFILE_REF_BY_CAPABILITY_REF_V1 = Object.freeze({
+  "worldkit://capability/relationship.mounted-on@1": "worldkit://relationship-profile/mounted-on.stand-ground@1",
+  "worldkit://capability/relationship.seat@1": "worldkit://relationship-profile/seat.driver@1",
+  "worldkit://capability/relationship.tether@1": "worldkit://relationship-profile/tether.standard@1"
+});
+function edge(sourceResourceRef, sourcePath, targetResourceRef, expectedResourceKinds, type2) {
+  return Object.freeze({
+    sourceResourceRef,
+    sourcePath,
+    targetResourceRef,
+    expectedResourceKinds: Object.freeze([...expectedResourceKinds]),
+    type: type2
+  });
+}
+function edgesForRefs(sourceResourceRef, sourcePath, targetResourceRefs, expectedResourceKinds, type2) {
+  return targetResourceRefs.map((targetResourceRef, index) => edge(
+    sourceResourceRef,
+    `${sourcePath}/${index}`,
+    targetResourceRef,
+    expectedResourceKinds,
+    type2
+  ));
+}
+function listSubjectRegistryReferenceEdgesV1(resource) {
+  const sourceResourceRef = resource.resourceRef;
+  const edges = [];
+  switch (resource.kind) {
+    case "rig-profile":
+      edges.push(...edgesForRefs(
+        sourceResourceRef,
+        "/compatibleSubjectAssetRefs",
+        resource.compatibleSubjectAssetRefs,
+        ["subject-asset"],
+        "metadata"
+      ));
+      break;
+    case "animation-set":
+      edges.push(
+        edge(
+          sourceResourceRef,
+          "/subjectAssetRef",
+          resource.subjectAssetRef,
+          ["subject-asset"],
+          "dependency"
+        ),
+        edge(
+          sourceResourceRef,
+          "/rigProfileRef",
+          resource.rigProfileRef,
+          ["rig-profile"],
+          "dependency"
+        )
+      );
+      break;
+    case "capability":
+      edges.push(
+        ...edgesForRefs(
+          sourceResourceRef,
+          "/requiredCapabilityRefs",
+          resource.requiredCapabilityRefs,
+          ["capability"],
+          "dependency"
+        ),
+        ...edgesForRefs(
+          sourceResourceRef,
+          "/conflictingCapabilityRefs",
+          resource.conflictingCapabilityRefs,
+          ["capability"],
+          "metadata"
+        )
+      );
+      break;
+    case "locomotion-profile":
+      edges.push(...edgesForRefs(
+        sourceResourceRef,
+        "/requiredCapabilityRefs",
+        resource.requiredCapabilityRefs,
+        ["capability"],
+        "dependency"
+      ));
+      break;
+    case "motion-kernel":
+      edges.push(
+        ...edgesForRefs(
+          sourceResourceRef,
+          "/requiredCapabilityRefs",
+          resource.requiredCapabilityRefs,
+          ["capability"],
+          "dependency"
+        ),
+        edge(
+          sourceResourceRef,
+          "/fallbackMotionProfileRef",
+          resource.fallbackMotionProfileRef,
+          ["motion-profile"],
+          "back-reference"
+        )
+      );
+      break;
+    case "motion-profile":
+      edges.push(edge(
+        sourceResourceRef,
+        "/motionKernelRef",
+        resource.motionKernelRef,
+        ["motion-kernel"],
+        "dependency"
+      ));
+      break;
+    case "camera-rig-profile":
+      edges.push(edge(
+        sourceResourceRef,
+        "/algorithmRef",
+        resource.algorithmRef,
+        ["camera-rig-algorithm"],
+        "dependency"
+      ));
+      break;
+    case "camera-context-profile":
+      edges.push(edge(
+        sourceResourceRef,
+        "/defaultCameraRigProfileRef",
+        resource.defaultCameraRigProfileRef,
+        ["camera-rig-profile"],
+        "dependency"
+      ));
+      if (resource.firstPersonCameraRigProfileRef !== void 0) {
+        edges.push(edge(
+          sourceResourceRef,
+          "/firstPersonCameraRigProfileRef",
+          resource.firstPersonCameraRigProfileRef,
+          ["camera-rig-profile"],
+          "dependency"
+        ));
+      }
+      resource.rules.forEach((rule, ruleIndex) => {
+        edges.push(...edgesForRefs(
+          sourceResourceRef,
+          `/rules/${ruleIndex}/when/motionKernelRefs`,
+          rule.when.motionKernelRefs ?? [],
+          ["motion-kernel"],
+          "metadata"
+        ));
+        if (rule.cameraRigProfileRef !== void 0) {
+          edges.push(edge(
+            sourceResourceRef,
+            `/rules/${ruleIndex}/cameraRigProfileRef`,
+            rule.cameraRigProfileRef,
+            ["camera-rig-profile"],
+            "dependency"
+          ));
+        }
+        edges.push(...edgesForRefs(
+          sourceResourceRef,
+          `/rules/${ruleIndex}/cameraModifierRefs`,
+          rule.cameraModifierRefs ?? [],
+          ["camera-modifier-profile"],
+          "dependency"
+        ));
+      });
+      break;
+    case "subject-definition":
+      resource.visualParts.forEach((visualPart, partIndex) => {
+        if (visualPart.kind !== "asset") return;
+        edges.push(edge(
+          sourceResourceRef,
+          `/visualParts/${partIndex}/subjectAssetRef`,
+          visualPart.subjectAssetRef,
+          ["subject-asset"],
+          "dependency"
+        ));
+      });
+      if (resource.visualBinding.mode === "rigged") {
+        edges.push(
+          edge(
+            sourceResourceRef,
+            "/visualBinding/rigProfileRef",
+            resource.visualBinding.rigProfileRef,
+            ["rig-profile"],
+            "dependency"
+          ),
+          edge(
+            sourceResourceRef,
+            "/visualBinding/animationSetRef",
+            resource.visualBinding.animationSetRef,
+            ["animation-set"],
+            "dependency"
+          )
+        );
+      }
+      edges.push(edge(
+        sourceResourceRef,
+        resource.colliderPolicy.kind === "profile" ? "/colliderPolicy/colliderProfileRef" : "/colliderPolicy/colliderDerivationProfileRef",
+        resource.colliderPolicy.kind === "profile" ? resource.colliderPolicy.colliderProfileRef : resource.colliderPolicy.colliderDerivationProfileRef,
+        [resource.colliderPolicy.kind === "profile" ? "collider-profile" : "collider-derivation-profile"],
+        "dependency"
+      ));
+      edges.push(
+        ...edgesForRefs(
+          sourceResourceRef,
+          "/capabilityRefs",
+          resource.capabilityRefs,
+          ["capability"],
+          "dependency"
+        ),
+        edge(
+          sourceResourceRef,
+          "/profiles/physicsBodyProfileRef",
+          resource.profiles.physicsBodyProfileRef,
+          ["physics-body-profile"],
+          "dependency"
+        ),
+        edge(
+          sourceResourceRef,
+          "/profiles/locomotionProfileRef",
+          resource.profiles.locomotionProfileRef,
+          ["locomotion-profile"],
+          "dependency"
+        ),
+        edge(
+          sourceResourceRef,
+          "/profiles/controlFeelProfileRef",
+          resource.profiles.controlFeelProfileRef,
+          ["control-feel-profile"],
+          "dependency"
+        ),
+        ...edgesForRefs(
+          sourceResourceRef,
+          "/profiles/allowedControlFeelProfileRefs",
+          resource.profiles.allowedControlFeelProfileRefs,
+          ["control-feel-profile"],
+          "dependency"
+        ),
+        edge(
+          sourceResourceRef,
+          "/profiles/motion/defaultMotionProfileRef",
+          resource.profiles.motion.defaultMotionProfileRef,
+          ["motion-profile"],
+          "dependency"
+        ),
+        ...edgesForRefs(
+          sourceResourceRef,
+          "/profiles/motion/optionalMotionProfileRefs",
+          resource.profiles.motion.optionalMotionProfileRefs,
+          ["motion-profile"],
+          "dependency"
+        ),
+        edge(
+          sourceResourceRef,
+          "/profiles/motion/fallbackMotionProfileRef",
+          resource.profiles.motion.fallbackMotionProfileRef,
+          ["motion-profile"],
+          "dependency"
+        ),
+        edge(
+          sourceResourceRef,
+          "/profiles/controlProfileRef",
+          resource.profiles.controlProfileRef,
+          ["control-profile"],
+          "dependency"
+        ),
+        edge(
+          sourceResourceRef,
+          "/profiles/cameraContextProfileRef",
+          resource.profiles.cameraContextProfileRef,
+          ["camera-context-profile"],
+          "dependency"
+        ),
+        edge(
+          sourceResourceRef,
+          "/profiles/mediumProfileRef",
+          resource.profiles.mediumProfileRef,
+          ["medium-profile"],
+          "dependency"
+        ),
+        edge(
+          sourceResourceRef,
+          "/profiles/harnessProfileRef",
+          resource.profiles.harnessProfileRef,
+          ["harness-profile"],
+          "dependency"
+        ),
+        ...edgesForRefs(
+          sourceResourceRef,
+          "/relationshipCapabilityRefs",
+          resource.relationshipCapabilityRefs,
+          ["capability"],
+          "dependency"
+        ),
+        edge(
+          sourceResourceRef,
+          "/actionOrPoseSetRef",
+          resource.actionOrPoseSetRef,
+          ["animation-set", "pose-set-profile"],
+          "dependency"
+        ),
+        edge(
+          sourceResourceRef,
+          "/renderBindingProfileRef",
+          resource.renderBindingProfileRef,
+          ["render-binding-profile"],
+          "dependency"
+        )
+      );
+      resource.relationshipCapabilityRefs.forEach((capabilityRef, index) => {
+        const relationshipProfileRef = RELATIONSHIP_PROFILE_REF_BY_CAPABILITY_REF_V1[capabilityRef];
+        if (relationshipProfileRef === void 0) return;
+        edges.push(edge(
+          sourceResourceRef,
+          `/relationshipCapabilityRefs/${index}`,
+          relationshipProfileRef,
+          ["relationship-profile"],
+          "dependency"
+        ));
+      });
+      break;
+  }
+  return Object.freeze(edges);
+}
+const FIRST_SLICE_ALLOWED_OVERRIDE_PATHS = [
+  "profiles.controlFeelProfileRef",
+  "profiles.controlProfileRef",
+  "profiles.motion.defaultMotionProfileRef"
+];
+const OVERRIDE_PATH_PATTERN = /^[a-z][A-Za-z0-9]*(?:\.[a-z][A-Za-z0-9]*)*$/;
+function assertAllowedOverridePath(path2) {
+  if (!FIRST_SLICE_ALLOWED_OVERRIDE_PATHS.some(
+    (allowedPath) => allowedPath === path2
+  )) {
+    throw new Error(`SUBJECT_OVERRIDE_FORBIDDEN: '${path2}'.`);
+  }
+}
+function validateAllowedOverridePaths(resourceRef, paths) {
+  if (!Array.isArray(paths)) {
+    throw new Error(`SUBJECT_OVERRIDE_PATHS_INVALID: '${resourceRef}'.`);
+  }
+  const seen = /* @__PURE__ */ new Set();
+  let previous;
+  for (const path2 of paths) {
+    if (typeof path2 !== "string" || !OVERRIDE_PATH_PATTERN.test(path2)) {
+      throw new Error(`SUBJECT_OVERRIDE_PATHS_INVALID: '${resourceRef}'.`);
+    }
+    if (seen.has(path2)) {
+      throw new Error(`SUBJECT_OVERRIDE_PATHS_INVALID: '${resourceRef}'.`);
+    }
+    seen.add(path2);
+    if (!isNil(previous) && previous.localeCompare(path2) >= 0) {
+      throw new Error(`SUBJECT_OVERRIDE_PATHS_INVALID: '${resourceRef}'.`);
+    }
+    previous = path2;
+    assertAllowedOverridePath(path2);
+  }
+}
+const LOCOMOTION_ALLOWED_KEYS = /* @__PURE__ */ new Set([
+  "kind",
+  "id",
+  "version",
+  "resourceRef",
+  "aiMetadata",
+  "requiredCapabilityRefs",
+  "allowWalk",
+  "allowRun",
+  "allowJump"
+]);
+const LOCOMOTION_SPEED_FIELD_PATTERN = /Speed|Acceleration|Deceleration|TurnRate|Gravity|Slope|StepHeight|Seconds|Meters|Radians|Ratio/;
+const LOCOMOTION_FORBIDDEN_OBJECT_KEYS = /* @__PURE__ */ new Set([
+  "locomotion",
+  "parameters",
+  "tuning",
+  "supportedMediums",
+  "allowedMotionKernelRefs"
+]);
+const MOTION_ALLOWED_KEYS = /* @__PURE__ */ new Set([
+  "kind",
+  "id",
+  "version",
+  "resourceRef",
+  "authoringAvailability",
+  "aiMetadata",
+  "motionKernelRef",
+  "motionTags"
+]);
+const AI_SCHEMA_PROJECTION_PROFILE_ALLOWED_KEYS = /* @__PURE__ */ new Set([
+  "kind",
+  "schemaVersion",
+  "id",
+  "version",
+  "resourceRef",
+  "authoringAvailability",
+  "aiMetadata",
+  "maximumPropertyCount",
+  "maximumNestingDepth",
+  "maximumEnumValueCount",
+  "maximumSchemaBytes",
+  "maximumRegistrySearchResultCount",
+  "optionalFieldMode",
+  "contentHash"
+]);
+const MOTION_KERNEL_ALLOWED_KEYS = /* @__PURE__ */ new Set([
+  "kind",
+  "id",
+  "version",
+  "resourceRef",
+  "authoringAvailability",
+  "aiMetadata",
+  "implementationId",
+  "commandKind",
+  "supportedMediums",
+  "supportedBodyKinds",
+  "requiredCapabilityRefs",
+  "fallbackMotionProfileRef",
+  "deterministic",
+  "runtimeStatus",
+  "contentHash"
+]);
+const MOTION_NUMERIC_FIELD_PATTERN = /Speed|Acceleration|Deceleration|TurnRate|Gravity|Slope|StepHeight|Seconds|Meters|Radians|Ratio/;
+const MEDIUM_FORBIDDEN_KEYS = /* @__PURE__ */ new Set([
+  "supportedMediums",
+  "ground",
+  "water",
+  "gravityScale"
+]);
+const CONTROL_FEEL_BOUNDS = {
+  walkSpeedMetersPerSecond: [0, 8],
+  runSpeedMetersPerSecond: [0, 12],
+  jumpSpeedMetersPerSecond: [0, 12],
+  accelerationMetersPerSecondSquared: [0, 60],
+  decelerationMetersPerSecondSquared: [0, 80],
+  turnRateRadiansPerSecond: [0, 20],
+  moveResponseExponent: [1, 3],
+  airControlRatio: [0, 1],
+  coyoteTimeSeconds: [0, 0.4],
+  jumpBufferSeconds: [0, 0.4],
+  variableJumpHoldSeconds: [0, 0.5],
+  jumpHoldGravityRatio: [0.1, 1],
+  jumpReleaseGravityRatio: [1, 5]
+};
+function deepFreeze$1(value) {
+  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
+  for (const child of Object.values(value)) deepFreeze$1(child);
+  return Object.freeze(value);
+}
+function duplicateValue(values) {
+  const seen = /* @__PURE__ */ new Set();
+  for (const value of values) {
+    if (seen.has(value)) return value;
+    seen.add(value);
+  }
+  return void 0;
+}
+function validateAnimationSet(source) {
+  const duplicateRequiredActionId = duplicateValue(source.requiredActionIds);
+  if (duplicateRequiredActionId !== void 0) {
+    throw new Error(
+      `SUBJECT_REGISTRY_DUPLICATE_ACTION_ID: '${duplicateRequiredActionId}' in '${source.resourceRef}'.`
+    );
+  }
+  const duplicateBindingActionId = duplicateValue(
+    source.animationBindings.map((binding) => binding.actionId)
+  );
+  if (duplicateBindingActionId !== void 0) {
+    throw new Error(
+      `SUBJECT_REGISTRY_DUPLICATE_ACTION_ID: '${duplicateBindingActionId}' in '${source.resourceRef}'.`
+    );
+  }
+  const duplicateClipName = duplicateValue(
+    source.animationBindings.map((binding) => binding.sourceClipName)
+  );
+  if (duplicateClipName !== void 0) {
+    throw new Error(
+      `SUBJECT_REGISTRY_DUPLICATE_CLIP_MAPPING: '${duplicateClipName}' in '${source.resourceRef}'.`
+    );
+  }
+}
+function validateSubjectAsset(source) {
+  const duplicateClipName = duplicateValue(source.inventory.animationClipNames);
+  if (duplicateClipName !== void 0) {
+    throw new Error(
+      `SUBJECT_REGISTRY_DUPLICATE_CLIP_NAME: '${duplicateClipName}' in '${source.resourceRef}'.`
+    );
+  }
+}
+function validateCanonicalizedSemanticTags(source) {
+  const duplicateSemanticTag = duplicateValue(source.aiMetadata.semanticTags);
+  if (duplicateSemanticTag !== void 0) {
+    throw new Error(
+      `SUBJECT_REGISTRY_DUPLICATE_SEMANTIC_TAG: '${duplicateSemanticTag}' in '${source.resourceRef}'.`
+    );
+  }
+}
+function validateRigProfile(source) {
+  const duplicateBoneId = duplicateValue(source.requiredBoneIds);
+  if (duplicateBoneId !== void 0) {
+    throw new Error(
+      `SUBJECT_REGISTRY_DUPLICATE_BONE_ID: '${duplicateBoneId}' in '${source.resourceRef}'.`
+    );
+  }
+  const duplicateCompatibleRef = duplicateValue(source.compatibleSubjectAssetRefs);
+  if (duplicateCompatibleRef !== void 0) {
+    throw new Error(
+      `SUBJECT_REGISTRY_DUPLICATE_COMPATIBLE_REF: '${duplicateCompatibleRef}' in '${source.resourceRef}'.`
+    );
+  }
+}
+function validateColliderProfile(source) {
+  const duplicateBodyTopology = duplicateValue(source.supportedBodyTopologies);
+  if (duplicateBodyTopology !== void 0) {
+    throw new Error(
+      `SUBJECT_REGISTRY_DUPLICATE_BODY_TOPOLOGY: '${duplicateBodyTopology}' in '${source.resourceRef}'.`
+    );
+  }
+}
+function sortedStrings$1(values) {
+  return [...values].sort((left, right) => left.localeCompare(right));
+}
+function canonicalizeNewResourceCollections(source) {
+  const input = structuredClone(source);
+  switch (input.kind) {
+    case "subject-asset":
+      return {
+        ...input,
+        inventory: {
+          ...input.inventory,
+          animationClipNames: sortedStrings$1(input.inventory.animationClipNames)
+        },
+        aiMetadata: {
+          ...input.aiMetadata,
+          semanticTags: sortedStrings$1(input.aiMetadata.semanticTags)
+        }
+      };
+    case "rig-profile":
+      return {
+        ...input,
+        compatibleSubjectAssetRefs: sortedStrings$1(input.compatibleSubjectAssetRefs),
+        requiredBoneIds: sortedStrings$1(input.requiredBoneIds),
+        sourceNodeNameByBoneId: Object.fromEntries(
+          Object.entries(input.sourceNodeNameByBoneId).sort(([left], [right]) => left.localeCompare(right))
+        ),
+        aiMetadata: {
+          ...input.aiMetadata,
+          semanticTags: sortedStrings$1(input.aiMetadata.semanticTags)
+        }
+      };
+    case "animation-set":
+      return {
+        ...input,
+        requiredActionIds: sortedStrings$1(input.requiredActionIds),
+        animationBindings: [...input.animationBindings].sort((left, right) => left.actionId.localeCompare(right.actionId)),
+        aiMetadata: {
+          ...input.aiMetadata,
+          semanticTags: sortedStrings$1(input.aiMetadata.semanticTags)
+        }
+      };
+    case "collider-profile":
+      return {
+        ...input,
+        supportedBodyTopologies: sortedStrings$1(input.supportedBodyTopologies),
+        aiMetadata: {
+          ...input.aiMetadata,
+          semanticTags: sortedStrings$1(input.aiMetadata.semanticTags)
+        }
+      };
+    case "subject-definition":
+      return {
+        ...input,
+        allowedOverridePaths: sortedStrings$1(input.allowedOverridePaths),
+        aiMetadata: {
+          ...input.aiMetadata,
+          semanticTags: sortedStrings$1(input.aiMetadata.semanticTags)
+        }
+      };
+    default:
+      return {
+        ...input,
+        aiMetadata: {
+          ...input.aiMetadata,
+          semanticTags: sortedStrings$1(input.aiMetadata.semanticTags)
+        }
+      };
+  }
+}
+function lockResource(source) {
+  const { contentHash: _ignoredContentHash, ...sourceWithoutContentHash } = source;
+  const hashInput = canonicalizeNewResourceCollections(
+    sourceWithoutContentHash
+  );
+  return deepFreeze$1({
+    ...hashInput,
+    contentHash: sha256CanonicalJson(hashInput)
+  });
+}
+function validateLocomotionProfile(source) {
+  const rawSource = source;
+  for (const key of Object.keys(rawSource)) {
+    if (LOCOMOTION_FORBIDDEN_OBJECT_KEYS.has(key)) {
+      throw new Error(
+        key === "locomotion" ? `LOCOMOTION_PROFILE_SPEED_FORBIDDEN: '${source.resourceRef}'.` : `LOCOMOTION_PROFILE_FIELD_FORBIDDEN: '${source.resourceRef}'.`
+      );
+    }
+    if (!LOCOMOTION_ALLOWED_KEYS.has(key)) {
+      throw new Error(
+        LOCOMOTION_SPEED_FIELD_PATTERN.test(key) ? `LOCOMOTION_PROFILE_SPEED_FORBIDDEN: '${source.resourceRef}'.` : `LOCOMOTION_PROFILE_FIELD_FORBIDDEN: '${source.resourceRef}'.`
+      );
+    }
+  }
+  if (source.allowWalk !== true) {
+    throw new Error(
+      `LOCOMOTION_PROFILE_FIELD_FORBIDDEN: '${source.resourceRef}' requires allowWalk === true.`
+    );
+  }
+}
+function validateMotionProfile(source) {
+  const rawSource = source;
+  if ("parameters" in rawSource || "safetyLimits" in rawSource || "authoringRanges" in rawSource) {
+    throw new Error(
+      `MOTION_PROFILE_NUMERIC_BAG_FORBIDDEN: '${source.resourceRef}'.`
+    );
+  }
+  for (const key of Object.keys(rawSource)) {
+    if (!MOTION_ALLOWED_KEYS.has(key) && MOTION_NUMERIC_FIELD_PATTERN.test(key)) {
+      throw new Error(
+        `MOTION_PROFILE_NUMERIC_BAG_FORBIDDEN: '${source.resourceRef}'.`
+      );
+    }
+  }
+}
+function validateMotionKernel(source) {
+  const unknownField2 = Object.keys(source).find(
+    (fieldName) => !MOTION_KERNEL_ALLOWED_KEYS.has(fieldName)
+  );
+  if (unknownField2 !== void 0) {
+    throw new Error(
+      `SUBJECT_REGISTRY_UNKNOWN_FIELD: '${unknownField2}' in '${source.resourceRef}'.`
+    );
+  }
+}
+function isFiniteInRange(value, minimum, maximum) {
+  return Number.isFinite(value) && value >= minimum && value <= maximum;
+}
+function validateControlFeelProfile(source) {
+  for (const [fieldName, [minimum, maximum]] of Object.entries(CONTROL_FEEL_BOUNDS)) {
+    const value = source[fieldName];
+    if (typeof value !== "number" || !isFiniteInRange(value, minimum, maximum)) {
+      throw new Error(
+        `CONTROL_FEEL_PROFILE_INVALID: '${fieldName}' in '${source.resourceRef}'.`
+      );
+    }
+  }
+  if (source.walkSpeedMetersPerSecond > source.runSpeedMetersPerSecond) {
+    throw new Error(
+      `CONTROL_FEEL_PROFILE_INVALID: walkSpeedMetersPerSecond exceeds runSpeedMetersPerSecond in '${source.resourceRef}'.`
+    );
+  }
+  if (source.airControlRatio < 0 || source.airControlRatio > 1) {
+    throw new Error(
+      `CONTROL_FEEL_PROFILE_INVALID: airControlRatio in '${source.resourceRef}'.`
+    );
+  }
+  if (source.jumpHoldGravityRatio < 0 || source.jumpHoldGravityRatio > 1) {
+    throw new Error(
+      `CONTROL_FEEL_PROFILE_INVALID: jumpHoldGravityRatio in '${source.resourceRef}'.`
+    );
+  }
+  if (source.jumpReleaseGravityRatio < 1) {
+    throw new Error(
+      `CONTROL_FEEL_PROFILE_INVALID: jumpReleaseGravityRatio in '${source.resourceRef}'.`
+    );
+  }
+}
+function validateControlProfile(source) {
+  if (!Number.isFinite(source.moveDeadzoneRatio) || source.moveDeadzoneRatio < 0 || source.moveDeadzoneRatio > 0.4) {
+    throw new Error(
+      `SUBJECT_REGISTRY_INVALID_CONTROL_INPUT_TUNING: '${source.resourceRef}'.`
+    );
+  }
+  const hasExecutablePolicyCombination = (() => {
+    switch (source.commandKind) {
+      case "planar-vector":
+        return source.inputSpace === "camera-relative" && (source.facingPolicy === "align-to-move" || source.facingPolicy === "align-to-view");
+      case "none":
+        return source.inputSpace === "none" && source.facingPolicy === "fixed" && source.lateralMovementPolicy === "forbidden";
+      default:
+        return false;
+    }
+  })();
+  if (!hasExecutablePolicyCombination) {
+    throw new Error(
+      `SUBJECT_REGISTRY_INVALID_CONTROL_PROFILE_COMBINATION: '${source.resourceRef}'.`
+    );
+  }
+}
+function validateMediumProfile(source) {
+  const rawSource = source;
+  for (const key of Object.keys(rawSource)) {
+    if (MEDIUM_FORBIDDEN_KEYS.has(key)) {
+      throw new Error(
+        `MEDIUM_PROFILE_FIELD_FORBIDDEN: '${source.resourceRef}'.`
+      );
+    }
+  }
+  const ground = rawSource.ground;
+  if (ground !== void 0 && typeof ground === "object" && ground !== null && "groundingToleranceMeters" in ground) {
+    throw new Error(
+      `MEDIUM_PROFILE_FIELD_FORBIDDEN: '${source.resourceRef}'.`
+    );
+  }
+  if (!isFiniteInRange(source.air.gravityRatio, 0, 4) || !isFiniteInRange(source.air.linearDragPerSecond, 0, 20)) {
+    throw new Error(
+      `MEDIUM_PROFILE_FIELD_FORBIDDEN: '${source.resourceRef}'.`
+    );
+  }
+}
+function validateAiSchemaProjectionProfile(source) {
+  const unknownField2 = Object.keys(source).find(
+    (fieldName) => !AI_SCHEMA_PROJECTION_PROFILE_ALLOWED_KEYS.has(fieldName)
+  );
+  if (unknownField2 !== void 0) {
+    throw new Error(
+      `SUBJECT_REGISTRY_UNKNOWN_FIELD: '${unknownField2}' in '${source.resourceRef}'.`
+    );
+  }
+  if (source.schemaVersion !== 1) {
+    throw new Error(
+      `AI_SCHEMA_PROJECTION_PROFILE_INVALID: '${source.resourceRef}'.`
+    );
+  }
+  if (source.authoringAvailability !== "recommended" && source.authoringAvailability !== "advanced" && source.authoringAvailability !== "experimental") {
+    throw new Error(
+      `AI_SCHEMA_PROJECTION_PROFILE_INVALID: '${source.resourceRef}'.`
+    );
+  }
+  const budgetFields = [
+    source.maximumPropertyCount,
+    source.maximumNestingDepth,
+    source.maximumEnumValueCount,
+    source.maximumSchemaBytes,
+    source.maximumRegistrySearchResultCount
+  ];
+  if (budgetFields.some(
+    (value) => !Number.isSafeInteger(value) || value <= 0 || Object.is(value, -0)
+  )) {
+    throw new Error(
+      `AI_SCHEMA_PROJECTION_PROFILE_INVALID: '${source.resourceRef}'.`
+    );
+  }
+  if (source.optionalFieldMode !== "native-optional" && source.optionalFieldMode !== "required-nullable-with-round-trip-map") {
+    throw new Error(
+      `AI_SCHEMA_PROJECTION_PROFILE_INVALID: '${source.resourceRef}'.`
+    );
+  }
+}
+function validatePhysicsBodyProfile(source) {
+  const { maxSlopeDegrees, maxStepHeightMeters } = source.physicsBody;
+  if (!Number.isFinite(maxSlopeDegrees) || maxSlopeDegrees <= 0 || maxSlopeDegrees > 90 || !Number.isFinite(maxStepHeightMeters) || maxStepHeightMeters < 0 || maxStepHeightMeters > 2) {
+    throw new Error(
+      `PHYSICS_BODY_TRAVERSAL_LIMIT_INVALID: '${source.resourceRef}'.`
+    );
+  }
+}
+function validateSubjectDefinitionV3(source) {
+  validateAllowedOverridePaths(source.resourceRef, source.allowedOverridePaths);
+  const controlFeelProfileRef = source.profiles.controlFeelProfileRef;
+  if (isNil(controlFeelProfileRef) || controlFeelProfileRef === "") {
+    throw new Error(
+      `SUBJECT_CONTROL_FEEL_PROFILE_REQUIRED: '${source.resourceRef}'.`
+    );
+  }
+  selectableControlFeelProfileRefsV1(source.profiles);
+  if (source.profiles.motion.defaultMotionProfileRef === source.profiles.motion.fallbackMotionProfileRef) {
+    throw new Error(`MOTION_FALLBACK_DEFAULT_COLLISION: '${source.resourceRef}'.`);
+  }
+}
+function hasInvalidCameraParameters(parameters) {
+  const negativeAllowed = /* @__PURE__ */ new Set([
+    "shoulderOffsetMeters",
+    "pitchRadians",
+    "minimumPitchRadians",
+    "maximumPitchRadians"
+  ]);
+  const containsInvalidNumber = Object.entries(parameters).some(
+    ([name, value]) => !Number.isFinite(value) || !negativeAllowed.has(name) && value < 0
+  );
+  const minimumDistance = parameters.minimumDistanceMeters;
+  const maximumDistance = parameters.maximumDistanceMeters;
+  const distance2 = parameters.distanceMeters;
+  const minimumPitch = parameters.minimumPitchRadians;
+  const maximumPitch = parameters.maximumPitchRadians;
+  const pitch = parameters.pitchRadians;
+  return containsInvalidNumber || minimumDistance !== void 0 && maximumDistance !== void 0 && minimumDistance > maximumDistance || distance2 !== void 0 && minimumDistance !== void 0 && distance2 < minimumDistance || distance2 !== void 0 && maximumDistance !== void 0 && distance2 > maximumDistance || minimumPitch !== void 0 && maximumPitch !== void 0 && minimumPitch > maximumPitch || pitch !== void 0 && minimumPitch !== void 0 && pitch < minimumPitch || pitch !== void 0 && maximumPitch !== void 0 && pitch > maximumPitch || parameters.horizontalDeadZoneRatio !== void 0 && parameters.horizontalDeadZoneRatio > 1 || parameters.verticalDeadZoneRatio !== void 0 && parameters.verticalDeadZoneRatio > 1 || parameters.baseFovDegrees !== void 0 && (parameters.baseFovDegrees <= 0 || parameters.baseFovDegrees >= 180) || parameters.baseFovDegrees !== void 0 && parameters.maximumSpeedFovDegrees !== void 0 && parameters.baseFovDegrees + parameters.maximumSpeedFovDegrees >= 180 || parameters.lookSensitivityXRatio !== void 0 && parameters.lookSensitivityXRatio <= 0 || parameters.lookSensitivityYRatio !== void 0 && parameters.lookSensitivityYRatio <= 0;
+}
+function validateCameraProfile(source) {
+  const unknownParameterName = Object.keys(source.parameters).find(
+    (parameterName) => !isCameraRigParameterNameV1(parameterName)
+  );
+  if (unknownParameterName !== void 0) {
+    throw new Error(
+      `SUBJECT_REGISTRY_UNKNOWN_CAMERA_PARAMETER: '${unknownParameterName}' in '${source.resourceRef}'.`
+    );
+  }
+  const missingParameterName = CAMERA_RIG_PARAMETER_NAMES_V1.find(
+    (parameterName) => !Object.prototype.hasOwnProperty.call(source.parameters, parameterName)
+  );
+  if (missingParameterName !== void 0) {
+    throw new Error(
+      `SUBJECT_REGISTRY_MISSING_CAMERA_PARAMETER: '${missingParameterName}' in '${source.resourceRef}'.`
+    );
+  }
+  if (hasInvalidCameraParameters(source.parameters)) {
+    throw new Error(
+      `SUBJECT_REGISTRY_INVALID_CAMERA_PARAMETERS: '${source.resourceRef}'.`
+    );
+  }
+  const expectedAlgorithmRefByBaseMode = {
+    "first-person": "worldkit://camera-rig/socket-first-person@1",
+    "free-orbit": "worldkit://camera-rig/orbit-follow@1",
+    "stable-follow": "worldkit://camera-rig/orbit-follow@1",
+    "speed-chase": "worldkit://camera-rig/velocity-chase@1",
+    "flight-horizon": "worldkit://camera-rig/flight-horizon@1"
+  };
+  if (source.algorithmRef !== expectedAlgorithmRefByBaseMode[source.baseMode]) {
+    throw new Error(
+      `SUBJECT_REGISTRY_CAMERA_MODE_ALGORITHM_MISMATCH: '${source.resourceRef}' declares '${source.baseMode}' with '${source.algorithmRef}'.`
+    );
+  }
+  for (const [parameterName, range] of Object.entries(source.authoringRanges ?? {})) {
+    const parameterValue = source.parameters[parameterName];
+    if (typeof parameterValue !== "number" || ![range.minimum, range.maximum, range.step].every(Number.isFinite) || range.minimum > range.maximum || range.step <= 0 || parameterValue < range.minimum || parameterValue > range.maximum) {
+      throw new Error(
+        `SUBJECT_REGISTRY_INVALID_AUTHORING_RANGE: '${parameterName}' in '${source.resourceRef}'.`
+      );
+    }
+  }
+}
+function validateCameraModifierProfile(source) {
+  const unknownParameterName = Object.keys(source.parameterOverrides).find(
+    (parameterName) => !isCameraRigParameterNameV1(parameterName)
+  );
+  if (unknownParameterName !== void 0) {
+    throw new Error(
+      `SUBJECT_REGISTRY_UNKNOWN_CAMERA_PARAMETER: '${unknownParameterName}' in '${source.resourceRef}'.`
+    );
+  }
+  const nonFiniteParameter = Object.entries(source.parameterOverrides).find(
+    ([, value]) => !Number.isFinite(value)
+  );
+  if (nonFiniteParameter !== void 0) {
+    throw new Error(
+      `SUBJECT_REGISTRY_NON_FINITE_PARAMETER: '${nonFiniteParameter[0]}' in '${source.resourceRef}'.`
+    );
+  }
+  if (hasInvalidCameraParameters(source.parameterOverrides)) {
+    throw new Error(
+      `SUBJECT_REGISTRY_INVALID_CAMERA_MODIFIER_PARAMETERS: '${source.resourceRef}'.`
+    );
+  }
+}
+function validateReferences(resourcesByRef) {
+  for (const resource of resourcesByRef.values()) {
+    for (const referenceEdge of listSubjectRegistryReferenceEdgesV1(resource)) {
+      const resolved = resourcesByRef.get(referenceEdge.targetResourceRef);
+      if (resolved === void 0 || !referenceEdge.expectedResourceKinds.includes(resolved.kind)) {
+        const expectedKinds = referenceEdge.expectedResourceKinds.join(" or ");
+        throw new Error(
+          `SUBJECT_REGISTRY_MISSING_REFERENCE: '${resource.resourceRef}' requires ${expectedKinds} '${referenceEdge.targetResourceRef}' at '${referenceEdge.sourcePath}'.`
+        );
+      }
+    }
+  }
+  for (const resource of resourcesByRef.values()) {
+    if (resource.kind === "motion-profile") {
+      const kernel = resourcesByRef.get(resource.motionKernelRef);
+      if (kernel?.kind === "motion-kernel" && kernel.runtimeStatus === "reserved") {
+        throw new Error(
+          `SUBJECT_REGISTRY_RESERVED_KERNEL_PROFILE: '${resource.resourceRef}' targets '${kernel.resourceRef}'.`
+        );
+      }
+    }
+    if (resource.kind === "camera-rig-profile") {
+      const algorithm = resourcesByRef.get(resource.algorithmRef);
+      if (algorithm?.kind === "camera-rig-algorithm" && algorithm.runtimeStatus === "reserved") {
+        throw new Error(
+          `SUBJECT_REGISTRY_RESERVED_CAMERA_ALGORITHM: '${resource.resourceRef}' targets '${algorithm.resourceRef}'.`
+        );
+      }
+    }
+    if (resource.kind === "camera-context-profile") {
+      const reachableBaseProfileRefs = /* @__PURE__ */ new Set([
+        resource.defaultCameraRigProfileRef,
+        ...resource.firstPersonCameraRigProfileRef === void 0 ? [] : [resource.firstPersonCameraRigProfileRef],
+        ...resource.rules.flatMap(
+          (rule) => rule.cameraRigProfileRef === void 0 ? [] : [rule.cameraRigProfileRef]
+        )
+      ]);
+      const reachableModifiers = [...new Set(
+        resource.rules.flatMap((rule) => rule.cameraModifierRefs ?? [])
+      )].flatMap((modifierRef) => {
+        const modifier = resourcesByRef.get(modifierRef);
+        return modifier?.kind === "camera-modifier-profile" ? [modifier] : [];
+      });
+      const modifierSequences = [
+        ...reachableModifiers.map((modifier) => [modifier]),
+        ...reachableModifiers.flatMap(
+          (first) => reachableModifiers.flatMap(
+            (second) => first.resourceRef === second.resourceRef ? [] : [[first, second]]
+          )
+        )
+      ];
+      for (const baseProfileRef of reachableBaseProfileRefs) {
+        const baseProfile = resourcesByRef.get(baseProfileRef);
+        if (baseProfile?.kind !== "camera-rig-profile") continue;
+        for (const modifiers2 of modifierSequences) {
+          const composedParameters = modifiers2.reduce(
+            (parameters, modifier) => applyCameraRigParameterOverridesV1(
+              baseProfile.algorithmRef,
+              parameters,
+              modifier.parameterOverrides
+            ),
+            { ...baseProfile.parameters }
+          );
+          if (!hasInvalidCameraParameters(composedParameters)) continue;
+          throw new Error(
+            `SUBJECT_REGISTRY_INVALID_CAMERA_CONTEXT_PARAMETERS: '${resource.resourceRef}' combines '${baseProfileRef}' with '${modifiers2.map((modifier) => modifier.resourceRef).join("', '")}'.`
+          );
+        }
+      }
+    }
+    if (resource.kind === "subject-definition" && "schemaVersion" in resource) {
+      const subject = resource;
+      const defaultMotion = resourcesByRef.get(
+        subject.profiles.motion.defaultMotionProfileRef
+      );
+      const fallbackMotion = resourcesByRef.get(
+        subject.profiles.motion.fallbackMotionProfileRef
+      );
+      if (defaultMotion?.kind === "motion-profile" && fallbackMotion?.kind === "motion-profile") {
+        if (!(fallbackMotion.motionTags.includes("safe") && fallbackMotion.motionTags.includes("stopped"))) {
+          throw new Error(`MOTION_FALLBACK_NOT_SAFE_STOP: '${subject.resourceRef}'.`);
+        }
+        if (defaultMotion.motionTags.includes("safe") && defaultMotion.motionTags.includes("stopped")) {
+          throw new Error(`MOTION_DEFAULT_SAFE_STOP_FORBIDDEN: '${subject.resourceRef}'.`);
+        }
+      }
+      const motion = resourcesByRef.get(subject.profiles.motion.defaultMotionProfileRef);
+      const control = resourcesByRef.get(subject.profiles.controlProfileRef);
+      const kernel = motion?.kind === "motion-profile" ? resourcesByRef.get(motion.motionKernelRef) : void 0;
+      if (kernel?.kind === "motion-kernel" && control?.kind === "control-profile" && kernel.commandKind !== control.commandKind) {
+        throw new Error(
+          `SUBJECT_REGISTRY_COMMAND_KIND_MISMATCH: '${subject.resourceRef}' uses '${kernel.commandKind}' with '${control.commandKind}'.`
+        );
+      }
+    }
+  }
+}
+function createSubjectResourceRegistry(resources) {
+  const resourcesByRef = /* @__PURE__ */ new Map();
+  for (const source of resources) {
+    if (resourcesByRef.has(source.resourceRef)) {
+      throw new Error(`SUBJECT_REGISTRY_DUPLICATE_REF: '${source.resourceRef}'.`);
+    }
+    if (source.kind === "subject-asset") validateSubjectAsset(source);
+    if (source.kind === "animation-set") validateAnimationSet(source);
+    if (source.kind === "rig-profile") validateRigProfile(source);
+    if (source.kind === "collider-profile") validateColliderProfile(source);
+    if (source.kind === "locomotion-profile") validateLocomotionProfile(source);
+    if (source.kind === "physics-body-profile") validatePhysicsBodyProfile(source);
+    if (source.kind === "motion-profile") validateMotionProfile(source);
+    if (source.kind === "control-feel-profile") validateControlFeelProfile(source);
+    if (source.kind === "control-profile") validateControlProfile(source);
+    if (source.kind === "medium-profile") validateMediumProfile(source);
+    if (source.kind === "camera-rig-profile") validateCameraProfile(source);
+    if (source.kind === "camera-modifier-profile") validateCameraModifierProfile(source);
+    if (source.kind === "subject-definition") {
+      const resourceRef = source.resourceRef;
+      if (!("schemaVersion" in source) || source.schemaVersion !== 3) {
+        throw new Error(
+          `SUBJECT_REGISTRY_SUBJECT_DEFINITION_VERSION_NOT_SUPPORTED: '${resourceRef}'.`
+        );
+      }
+      validateSubjectDefinitionV3(source);
+    }
+    if (source.kind === "ai-schema-projection-profile") {
+      validateAiSchemaProjectionProfile(source);
+    }
+    if (source.kind === "motion-kernel") validateMotionKernel(source);
+    validateCanonicalizedSemanticTags(source);
+    resourcesByRef.set(source.resourceRef, lockResource(source));
+  }
+  validateReferences(resourcesByRef);
+  const stableResources = deepFreeze$1(
+    [...resourcesByRef.values()].sort(
+      (left, right) => left.resourceRef.localeCompare(right.resourceRef)
+    )
+  );
+  const resolveResource = (resourceRef) => resourcesByRef.get(resourceRef);
+  function listDiscoverableResources(filter) {
+    if (filter?.kind === void 0) return stableResources;
+    return deepFreeze$1(stableResources.filter(
+      (resource) => resource.kind === filter.kind
+    ));
+  }
+  return Object.freeze({
+    resolveResource,
+    listDiscoverableResources,
+    listReferenceEdges: listSubjectRegistryReferenceEdgesV1,
+    resolveSubjectAsset(resourceRef) {
+      const resource = resolveResource(resourceRef);
+      return resource?.kind === "subject-asset" ? resource : void 0;
+    },
+    resolveRigProfile(resourceRef) {
+      const resource = resolveResource(resourceRef);
+      return resource?.kind === "rig-profile" ? resource : void 0;
+    },
+    resolveAnimationSet(resourceRef) {
+      const resource = resolveResource(resourceRef);
+      return resource?.kind === "animation-set" ? resource : void 0;
+    },
+    resolveColliderProfile(resourceRef) {
+      const resource = resolveResource(resourceRef);
+      return resource?.kind === "collider-profile" ? resource : void 0;
+    },
+    resolveSubjectDefinition(resourceRef) {
+      const resource = resolveResource(resourceRef);
+      return resource?.kind === "subject-definition" ? resource : void 0;
+    },
+    resolveCapability(resourceRef) {
+      const resource = resolveResource(resourceRef);
+      return resource?.kind === "capability" ? resource : void 0;
+    },
+    resolvePhysicsBodyProfile(resourceRef) {
+      const resource = resolveResource(resourceRef);
+      return resource?.kind === "physics-body-profile" ? resource : void 0;
+    },
+    resolveLocomotionProfile(resourceRef) {
+      const resource = resolveResource(resourceRef);
+      return resource?.kind === "locomotion-profile" ? resource : void 0;
+    },
+    resolveColliderDerivationProfile(resourceRef) {
+      const resource = resolveResource(resourceRef);
+      return resource?.kind === "collider-derivation-profile" ? resource : void 0;
+    },
+    resolveMotionKernel(resourceRef) {
+      const resource = resolveResource(resourceRef);
+      return resource?.kind === "motion-kernel" ? resource : void 0;
+    },
+    resolveMotionProfile(resourceRef) {
+      const resource = resolveResource(resourceRef);
+      return resource?.kind === "motion-profile" ? resource : void 0;
+    },
+    resolveControlFeelProfile(resourceRef) {
+      const resource = resolveResource(resourceRef);
+      return resource?.kind === "control-feel-profile" ? resource : void 0;
+    },
+    resolveControlProfile(resourceRef) {
+      const resource = resolveResource(resourceRef);
+      return resource?.kind === "control-profile" ? resource : void 0;
+    },
+    resolveCameraRigAlgorithm(resourceRef) {
+      const resource = resolveResource(resourceRef);
+      return resource?.kind === "camera-rig-algorithm" ? resource : void 0;
+    },
+    resolveCameraRigProfile(resourceRef) {
+      const resource = resolveResource(resourceRef);
+      return resource?.kind === "camera-rig-profile" ? resource : void 0;
+    },
+    resolveCameraModifierProfile(resourceRef) {
+      const resource = resolveResource(resourceRef);
+      return resource?.kind === "camera-modifier-profile" ? resource : void 0;
+    },
+    resolveCameraContextProfile(resourceRef) {
+      const resource = resolveResource(resourceRef);
+      return resource?.kind === "camera-context-profile" ? resource : void 0;
+    },
+    resolveMediumProfile(resourceRef) {
+      const resource = resolveResource(resourceRef);
+      return resource?.kind === "medium-profile" ? resource : void 0;
+    },
+    resolveRelationshipProfile(resourceRef) {
+      const resource = resolveResource(resourceRef);
+      return resource?.kind === "relationship-profile" ? resource : void 0;
+    },
+    resolveHarnessProfile(resourceRef) {
+      const resource = resolveResource(resourceRef);
+      return resource?.kind === "harness-profile" ? resource : void 0;
+    },
+    resolvePoseSetProfile(resourceRef) {
+      const resource = resolveResource(resourceRef);
+      return resource?.kind === "pose-set-profile" ? resource : void 0;
+    },
+    resolveRenderBindingProfile(resourceRef) {
+      const resource = resolveResource(resourceRef);
+      return resource?.kind === "render-binding-profile" ? resource : void 0;
+    },
+    resolveAiSchemaProjectionProfile(resourceRef) {
+      const resource = resolveResource(resourceRef);
+      return resource?.kind === "ai-schema-projection-profile" ? resource : void 0;
+    }
+  });
+}
 const SHARED_COORDINATE_CONVENTION$2 = {
   forwardAxis: "-Z",
   upAxis: "+Y",
@@ -5647,6 +7703,7 @@ const HUMANOID_THIRD_PERSON_DEFINITION = {
   relationshipCapabilityRefs: [],
   actionOrPoseSetRef: "worldkit://pose-set/static.whitebox@1",
   renderBindingProfileRef: "worldkit://render-binding/subject.standard@1",
+  allowedOverridePaths: FIRST_SLICE_ALLOWED_OVERRIDE_PATHS,
   aiMetadata: {
     displayName: "Third-person humanoid",
     description: "A controllable humanoid whitebox proxy for outdoor traversal.",
@@ -5775,6 +7832,7 @@ const QUADRUPED_GROUND_PROXY_DEFINITION = {
   relationshipCapabilityRefs: [],
   actionOrPoseSetRef: "worldkit://pose-set/static.whitebox@1",
   renderBindingProfileRef: "worldkit://render-binding/subject.standard@1",
+  allowedOverridePaths: FIRST_SLICE_ALLOWED_OVERRIDE_PATHS,
   aiMetadata: {
     displayName: "Ground quadruped proxy",
     description: "A controllable quadruped whitebox proxy for outdoor traversal tests.",
@@ -5846,6 +7904,7 @@ const RIGGED_GOLDEN_HUMANOID_DEFINITION = {
   relationshipCapabilityRefs: [],
   actionOrPoseSetRef: "worldkit://animation-set/humanoid.ground.golden@2",
   renderBindingProfileRef: "worldkit://render-binding/subject.standard@1",
+  allowedOverridePaths: FIRST_SLICE_ALLOWED_OVERRIDE_PATHS,
   aiMetadata: {
     displayName: "Rigged Golden humanoid",
     description: "Project-owned rigged humanoid for the complete asset Subject pipeline.",
@@ -5972,6 +8031,7 @@ const G_BOT_HUMANOID_DEFINITION = {
   relationshipCapabilityRefs: [],
   actionOrPoseSetRef: "worldkit://animation-set/humanoid.ground.g-bot@2",
   renderBindingProfileRef: "worldkit://render-binding/subject.standard@1",
+  allowedOverridePaths: FIRST_SLICE_ALLOWED_OVERRIDE_PATHS,
   aiMetadata: {
     displayName: "G Bot humanoid",
     description: "Product-authored rigged G Bot assembled with canonical ground control and physics profiles.",
@@ -6771,6 +8831,31 @@ const relationshipProfiles = [
     }
   }
 ];
+const aiSchemaProjectionProfiles = [
+  {
+    kind: "ai-schema-projection-profile",
+    schemaVersion: 1,
+    id: "constrained-json",
+    version: 1,
+    resourceRef: "worldkit://ai-schema-projection-profile/constrained-json@1",
+    authoringAvailability: "recommended",
+    maximumPropertyCount: 512,
+    maximumNestingDepth: 8,
+    maximumEnumValueCount: 32,
+    maximumSchemaBytes: 65536,
+    maximumRegistrySearchResultCount: 32,
+    optionalFieldMode: "native-optional",
+    aiMetadata: {
+      displayName: "Constrained JSON Schema Projection",
+      description: "Provider-neutral JSON Schema 2020-12 projection with closed enum, optional-field, and byte budgets.",
+      semanticTags: [
+        "ai-schema",
+        "constrained-json",
+        "projection"
+      ]
+    }
+  }
+];
 const CAPABILITY_MANIFESTS = [
   {
     kind: "capability",
@@ -6898,1027 +8983,11 @@ const BUILT_IN_CAPABILITY_RESOURCES = [
   ...relationshipProfiles,
   ...harnessProfiles,
   ...poseAndRenderCatalog.poseSets,
-  ...poseAndRenderCatalog.renderBindings
+  ...poseAndRenderCatalog.renderBindings,
+  ...aiSchemaProjectionProfiles
 ];
 const BUILT_IN_CAPABILITY_MANIFESTS = CAPABILITY_MANIFESTS;
-const subjectDefinitionsV3 = /* @__PURE__ */ JSON.parse('[{"kind":"subject-definition","schemaVersion":3,"id":"animal.quadruped.forward-steer","version":1,"resourceRef":"worldkit://subject-definition/animal.quadruped.forward-steer@1","authoringAvailability":"advanced","category":"animal","bodyTopology":"quadruped","semanticClassId":"subject.animal.quadruped","coordinateConvention":{"forwardAxis":"-Z","upAxis":"+Y","metersPerUnit":1,"pivot":"support-center"},"visualParts":[{"id":"body","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[0.8,0.7,1.5]},"localTransform":{"positionMetersXYZ":[0,0.8,0],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["body"]},{"id":"head","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[0.55,0.55,0.6]},"localTransform":{"positionMetersXYZ":[0,0.95,-0.95],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["head"]},{"id":"legs","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[0.65,0.65,1.1]},"localTransform":{"positionMetersXYZ":[0,0.33,0],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["legs"]}],"visualBinding":{"mode":"static"},"sockets":[{"id":"CameraTarget3D","kind":"local","localTransform":{"positionMetersXYZ":[0,1,0],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","target"]},{"id":"LookAhead","kind":"local","localTransform":{"positionMetersXYZ":[0,0.9,-1.2],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","look-ahead"]},{"id":"MountSeat","kind":"local","localTransform":{"positionMetersXYZ":[0,1.25,0],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["mount","relationship"]}],"colliderPolicy":{"kind":"derive","colliderDerivationProfileRef":"worldkit://collider-derivation-profile/vertical-capability-capsule@1"},"capabilityRefs":["worldkit://capability/locomotion.forward-steer@1"],"profiles":{"physicsBodyProfileRef":"worldkit://physics-body-profile/character.capability-medium@1","locomotionProfileRef":"worldkit://locomotion-profile/ground.standard@1","motion":{"defaultMotionProfileRef":"worldkit://motion-profile/free-ground.humanoid-medium@1","optionalMotionProfileRefs":["worldkit://motion-profile/safe-ground@1"],"fallbackMotionProfileRef":"worldkit://motion-profile/safe-ground@1"},"controlProfileRef":"worldkit://control-profile/planar.camera-relative@1","cameraContextProfileRef":"worldkit://camera-context/capability-driven.default@1","mediumProfileRef":"worldkit://medium-profile/ground-air.standard@1","harnessProfileRef":"worldkit://harness-profile/subject.standard@1","controlFeelProfileRef":"worldkit://control-feel-profile/humanoid.medium-ground@1","allowedControlFeelProfileRefs":["worldkit://control-feel-profile/humanoid.medium-ground@1","worldkit://control-feel-profile/humanoid.heavy-ground@1"]},"relationshipCapabilityRefs":["worldkit://capability/relationship.mounted-on@1"],"actionOrPoseSetRef":"worldkit://pose-set/static.whitebox@1","renderBindingProfileRef":"worldkit://render-binding/subject.standard@1","aiMetadata":{"displayName":"Quadruped Forward Steer","description":"Whitebox quadruped using the reusable K02 forward-steer kernel.","semanticTags":["animal","forward-steer","quadruped","whitebox"]}},{"kind":"subject-definition","schemaVersion":3,"id":"animal.quadruped.forward-steer","version":2,"resourceRef":"worldkit://subject-definition/animal.quadruped.forward-steer@2","authoringAvailability":"advanced","category":"animal","bodyTopology":"quadruped","semanticClassId":"subject.animal.quadruped","coordinateConvention":{"forwardAxis":"-Z","upAxis":"+Y","metersPerUnit":1,"pivot":"support-center"},"visualParts":[{"id":"body","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[0.8,0.7,1.5]},"localTransform":{"positionMetersXYZ":[0,0.8,0],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["body"]},{"id":"head","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[0.55,0.55,0.6]},"localTransform":{"positionMetersXYZ":[0,0.95,-0.95],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["head"]},{"id":"legs","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[0.65,0.65,1.1]},"localTransform":{"positionMetersXYZ":[0,0.33,0],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["legs"]}],"visualBinding":{"mode":"static"},"sockets":[{"id":"CameraTarget3D","kind":"local","localTransform":{"positionMetersXYZ":[0,1,0],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","target"]},{"id":"LookAhead","kind":"local","localTransform":{"positionMetersXYZ":[0,0.9,-1.2],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","look-ahead"]},{"id":"MountSeat","kind":"local","localTransform":{"positionMetersXYZ":[0,1.25,0],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["mount","relationship"]}],"colliderPolicy":{"kind":"derive","colliderDerivationProfileRef":"worldkit://collider-derivation-profile/vertical-capability-capsule@1"},"capabilityRefs":["worldkit://capability/locomotion.forward-steer@1"],"profiles":{"physicsBodyProfileRef":"worldkit://physics-body-profile/character.capability-medium@1","locomotionProfileRef":"worldkit://locomotion-profile/ground.standard@1","motion":{"defaultMotionProfileRef":"worldkit://motion-profile/free-ground.humanoid-medium@1","optionalMotionProfileRefs":["worldkit://motion-profile/safe-ground@1"],"fallbackMotionProfileRef":"worldkit://motion-profile/safe-ground@1"},"controlProfileRef":"worldkit://control-profile/planar.camera-relative@1","cameraContextProfileRef":"worldkit://camera-context/capability-driven.quadruped-official@1","mediumProfileRef":"worldkit://medium-profile/ground-air.standard@1","harnessProfileRef":"worldkit://harness-profile/subject.standard@1","controlFeelProfileRef":"worldkit://control-feel-profile/subject.animal.quadruped.forward-steer.default@1","allowedControlFeelProfileRefs":["worldkit://control-feel-profile/subject.animal.quadruped.forward-steer.default@1"]},"relationshipCapabilityRefs":["worldkit://capability/relationship.mounted-on@1"],"actionOrPoseSetRef":"worldkit://pose-set/static.whitebox@1","renderBindingProfileRef":"worldkit://render-binding/subject.standard@1","aiMetadata":{"displayName":"Quadruped Forward Steer Official v2","description":"Reviewed quadruped public default with versioned P1.5 Control Feel and Camera Profiles.","semanticTags":["animal","forward-steer","official","quadruped","whitebox"]}},{"kind":"subject-definition","schemaVersion":3,"id":"glider.paraglider.unpowered","version":1,"resourceRef":"worldkit://subject-definition/glider.paraglider.unpowered@1","authoringAvailability":"experimental","category":"composite","bodyTopology":"glider","semanticClassId":"subject.glider.paraglider","coordinateConvention":{"forwardAxis":"-Z","upAxis":"+Y","metersPerUnit":1,"pivot":"support-center"},"visualParts":[{"id":"pilot","kind":"primitive","shape":{"kind":"capsule","radiusMeters":0.28,"heightMeters":1.45},"localTransform":{"positionMetersXYZ":[0,0.725,0],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["pilot"]},{"id":"canopy","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[5.5,0.18,1.7]},"localTransform":{"positionMetersXYZ":[0,4.2,0.3],"rotationEulerRadiansXYZ":[0.08,0,0]},"colliderContribution":"exclude","semanticTags":["canopy","wing"]}],"visualBinding":{"mode":"static"},"sockets":[{"id":"TetherSource","kind":"local","localTransform":{"positionMetersXYZ":[0,1.55,0],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["pilot","tether"]},{"id":"TetherTarget","kind":"local","localTransform":{"positionMetersXYZ":[0,3.9,0.2],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["canopy","tether"]},{"id":"CameraTarget3D","kind":"local","localTransform":{"positionMetersXYZ":[0,1.4,0],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","target"]},{"id":"LookAhead","kind":"local","localTransform":{"positionMetersXYZ":[0,1.5,-3],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","look-ahead"]}],"colliderPolicy":{"kind":"derive","colliderDerivationProfileRef":"worldkit://collider-derivation-profile/vertical-capability-capsule@1"},"capabilityRefs":["worldkit://capability/locomotion.unpowered-glide@1","worldkit://capability/relationship.tether@1"],"profiles":{"physicsBodyProfileRef":"worldkit://physics-body-profile/character.capability-medium@1","locomotionProfileRef":"worldkit://locomotion-profile/ground.standard@1","motion":{"defaultMotionProfileRef":"worldkit://motion-profile/free-ground.humanoid-medium@1","optionalMotionProfileRefs":["worldkit://motion-profile/safe-ground@1"],"fallbackMotionProfileRef":"worldkit://motion-profile/safe-ground@1"},"controlProfileRef":"worldkit://control-profile/planar.camera-relative@1","cameraContextProfileRef":"worldkit://camera-context/capability-driven.default@1","mediumProfileRef":"worldkit://medium-profile/ground-air.standard@1","harnessProfileRef":"worldkit://harness-profile/subject.standard@1","controlFeelProfileRef":"worldkit://control-feel-profile/humanoid.medium-ground@1","allowedControlFeelProfileRefs":["worldkit://control-feel-profile/humanoid.medium-ground@1"]},"relationshipCapabilityRefs":["worldkit://capability/relationship.tether@1"],"actionOrPoseSetRef":"worldkit://pose-set/static.whitebox@1","renderBindingProfileRef":"worldkit://render-binding/subject.standard@1","aiMetadata":{"displayName":"Unpowered Paraglider","description":"Whitebox pilot and canopy package using K08 unpowered glide and R03 tether facts.","semanticTags":["air","glide","paraglider","whitebox"]}},{"kind":"subject-definition","schemaVersion":3,"id":"surface-craft.ice-skimmer","version":1,"resourceRef":"worldkit://subject-definition/surface-craft.ice-skimmer@1","authoringAvailability":"experimental","category":"vehicle","bodyTopology":"surface-craft","semanticClassId":"subject.surface-craft.skimmer","coordinateConvention":{"forwardAxis":"-Z","upAxis":"+Y","metersPerUnit":1,"pivot":"support-center"},"visualParts":[{"id":"deck","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[1.4,0.25,2.8]},"localTransform":{"positionMetersXYZ":[0,0.125,0],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["deck","skimmer"]},{"id":"seat","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[0.7,0.7,0.8]},"localTransform":{"positionMetersXYZ":[0,0.7,0.3],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["seat"]}],"visualBinding":{"mode":"static"},"sockets":[{"id":"DriverSeat","kind":"local","localTransform":{"positionMetersXYZ":[0,0.95,0.25],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["driver","seat"]},{"id":"CameraTarget3D","kind":"local","localTransform":{"positionMetersXYZ":[0,0.9,0],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","target"]},{"id":"LookAhead","kind":"local","localTransform":{"positionMetersXYZ":[0,0.5,-2.5],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","look-ahead"]}],"colliderPolicy":{"kind":"derive","colliderDerivationProfileRef":"worldkit://collider-derivation-profile/vertical-capability-capsule@1"},"capabilityRefs":["worldkit://capability/locomotion.forward-steer@1","worldkit://capability/locomotion.surface-slide@1","worldkit://capability/relationship.seat@1"],"profiles":{"physicsBodyProfileRef":"worldkit://physics-body-profile/character.capability-medium@1","locomotionProfileRef":"worldkit://locomotion-profile/ground.standard@1","motion":{"defaultMotionProfileRef":"worldkit://motion-profile/free-ground.humanoid-medium@1","optionalMotionProfileRefs":["worldkit://motion-profile/safe-ground@1"],"fallbackMotionProfileRef":"worldkit://motion-profile/safe-ground@1"},"controlProfileRef":"worldkit://control-profile/planar.camera-relative@1","cameraContextProfileRef":"worldkit://camera-context/capability-driven.default@1","mediumProfileRef":"worldkit://medium-profile/ground-air.standard@1","harnessProfileRef":"worldkit://harness-profile/subject.standard@1","controlFeelProfileRef":"worldkit://control-feel-profile/humanoid.medium-ground@1","allowedControlFeelProfileRefs":["worldkit://control-feel-profile/humanoid.medium-ground@1"]},"relationshipCapabilityRefs":["worldkit://capability/relationship.seat@1"],"actionOrPoseSetRef":"worldkit://pose-set/static.whitebox@1","renderBindingProfileRef":"worldkit://render-binding/subject.standard@1","aiMetadata":{"displayName":"Ice Skimmer","description":"Whitebox surface craft using K04 slope, friction and inertia motion.","semanticTags":["ice","skimmer","surface-slide","whitebox"]}},{"kind":"subject-definition","schemaVersion":3,"id":"vehicle.four-wheel.arcade","version":1,"resourceRef":"worldkit://subject-definition/vehicle.four-wheel.arcade@1","authoringAvailability":"experimental","category":"vehicle","bodyTopology":"four-wheel","semanticClassId":"subject.vehicle.four-wheel","coordinateConvention":{"forwardAxis":"-Z","upAxis":"+Y","metersPerUnit":1,"pivot":"support-center"},"visualParts":[{"id":"body","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[1.8,0.8,3.6]},"localTransform":{"positionMetersXYZ":[0,0.4,0],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["body","vehicle"]},{"id":"cabin","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[1.45,0.75,1.7]},"localTransform":{"positionMetersXYZ":[0,1.3,0.15],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["cabin"]}],"visualBinding":{"mode":"static"},"sockets":[{"id":"DriverSeat","kind":"local","localTransform":{"positionMetersXYZ":[-0.35,1.25,0.25],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["driver","seat"]},{"id":"CameraTarget3D","kind":"local","localTransform":{"positionMetersXYZ":[0,1.1,0],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","target"]},{"id":"LookAhead","kind":"local","localTransform":{"positionMetersXYZ":[0,0.8,-3],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","look-ahead"]}],"colliderPolicy":{"kind":"derive","colliderDerivationProfileRef":"worldkit://collider-derivation-profile/vertical-capability-capsule@1"},"capabilityRefs":["worldkit://capability/locomotion.forward-steer@1","worldkit://capability/locomotion.wheeled@1","worldkit://capability/relationship.seat@1"],"profiles":{"physicsBodyProfileRef":"worldkit://physics-body-profile/character.capability-medium@1","locomotionProfileRef":"worldkit://locomotion-profile/ground.standard@1","motion":{"defaultMotionProfileRef":"worldkit://motion-profile/free-ground.humanoid-medium@1","optionalMotionProfileRefs":["worldkit://motion-profile/safe-ground@1"],"fallbackMotionProfileRef":"worldkit://motion-profile/safe-ground@1"},"controlProfileRef":"worldkit://control-profile/planar.camera-relative@1","cameraContextProfileRef":"worldkit://camera-context/capability-driven.default@1","mediumProfileRef":"worldkit://medium-profile/ground-air.standard@1","harnessProfileRef":"worldkit://harness-profile/subject.standard@1","controlFeelProfileRef":"worldkit://control-feel-profile/humanoid.medium-ground@1","allowedControlFeelProfileRefs":["worldkit://control-feel-profile/humanoid.medium-ground@1"]},"relationshipCapabilityRefs":["worldkit://capability/relationship.seat@1"],"actionOrPoseSetRef":"worldkit://pose-set/static.whitebox@1","renderBindingProfileRef":"worldkit://render-binding/subject.standard@1","aiMetadata":{"displayName":"Four-wheel Arcade","description":"Whitebox four-wheel package using simplified deterministic K03 motion.","semanticTags":["arcade","four-wheel","vehicle","whitebox"]}},{"kind":"subject-definition","schemaVersion":3,"id":"watercraft.kayak.surface","version":1,"resourceRef":"worldkit://subject-definition/watercraft.kayak.surface@1","authoringAvailability":"experimental","category":"composite","bodyTopology":"watercraft","semanticClassId":"subject.watercraft.kayak","coordinateConvention":{"forwardAxis":"-Z","upAxis":"+Y","metersPerUnit":1,"pivot":"support-center"},"visualParts":[{"id":"hull","kind":"primitive","shape":{"kind":"capsule","radiusMeters":0.42,"heightMeters":3.2},"localTransform":{"positionMetersXYZ":[0,0.42,0],"rotationEulerRadiansXYZ":[1.5707963267948966,0,0]},"colliderContribution":"include","semanticTags":["hull","kayak"]},{"id":"paddler","kind":"primitive","shape":{"kind":"capsule","radiusMeters":0.25,"heightMeters":1.15},"localTransform":{"positionMetersXYZ":[0,0.85,0],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"exclude","semanticTags":["paddler"]}],"visualBinding":{"mode":"static"},"sockets":[{"id":"DriverSeat","kind":"local","localTransform":{"positionMetersXYZ":[0,0.55,0],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["driver","seat"]},{"id":"CameraTarget3D","kind":"local","localTransform":{"positionMetersXYZ":[0,1,0],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","target"]},{"id":"LookAhead","kind":"local","localTransform":{"positionMetersXYZ":[0,0.4,-2.3],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","look-ahead"]}],"colliderPolicy":{"kind":"derive","colliderDerivationProfileRef":"worldkit://collider-derivation-profile/vertical-capability-capsule@1"},"capabilityRefs":["worldkit://capability/locomotion.water-surface@1","worldkit://capability/relationship.seat@1"],"profiles":{"physicsBodyProfileRef":"worldkit://physics-body-profile/character.capability-medium@1","locomotionProfileRef":"worldkit://locomotion-profile/ground.standard@1","motion":{"defaultMotionProfileRef":"worldkit://motion-profile/free-ground.humanoid-medium@1","optionalMotionProfileRefs":["worldkit://motion-profile/safe-ground@1"],"fallbackMotionProfileRef":"worldkit://motion-profile/safe-ground@1"},"controlProfileRef":"worldkit://control-profile/planar.camera-relative@1","cameraContextProfileRef":"worldkit://camera-context/capability-driven.default@1","mediumProfileRef":"worldkit://medium-profile/ground-air.standard@1","harnessProfileRef":"worldkit://harness-profile/subject.standard@1","controlFeelProfileRef":"worldkit://control-feel-profile/humanoid.medium-ground@1","allowedControlFeelProfileRefs":["worldkit://control-feel-profile/humanoid.medium-ground@1"]},"relationshipCapabilityRefs":["worldkit://capability/relationship.seat@1"],"actionOrPoseSetRef":"worldkit://pose-set/static.whitebox@1","renderBindingProfileRef":"worldkit://render-binding/subject.standard@1","aiMetadata":{"displayName":"Kayak Surface Package","description":"Whitebox kayak and paddler package using K06 water-surface motion.","semanticTags":["kayak","water-surface","watercraft","whitebox"]}}]');
-function selectableControlFeelProfileRefsV1(profiles2) {
-  if (isNil(profiles2.controlFeelProfileRef) || profiles2.controlFeelProfileRef === "") {
-    throw new Error(
-      "SUBJECT_CONTROL_FEEL_PROFILE_REQUIRED: default Control Feel Profile is missing."
-    );
-  }
-  if (!Array.isArray(profiles2.allowedControlFeelProfileRefs) || isEmpty(profiles2.allowedControlFeelProfileRefs)) {
-    throw new Error(
-      "SUBJECT_CONTROL_FEEL_ALLOWED_REQUIRED: allowed Control Feel Profile refs are missing."
-    );
-  }
-  const uniqueAllowed = uniq(profiles2.allowedControlFeelProfileRefs);
-  if (uniqueAllowed.length !== profiles2.allowedControlFeelProfileRefs.length) {
-    throw new Error(
-      "SUBJECT_CONTROL_FEEL_ALLOWED_DUPLICATE: allowed Control Feel Profile refs must be unique."
-    );
-  }
-  if (!uniqueAllowed.includes(profiles2.controlFeelProfileRef)) {
-    throw new Error(
-      `SUBJECT_CONTROL_FEEL_DEFAULT_NOT_ALLOWED: '${profiles2.controlFeelProfileRef}' is not in allowedControlFeelProfileRefs.`
-    );
-  }
-  return [
-    profiles2.controlFeelProfileRef,
-    ...uniqueAllowed.filter((resourceRef) => resourceRef !== profiles2.controlFeelProfileRef)
-  ];
-}
-const RELATIONSHIP_PROFILE_REF_BY_CAPABILITY_REF_V1 = Object.freeze({
-  "worldkit://capability/relationship.mounted-on@1": "worldkit://relationship-profile/mounted-on.stand-ground@1",
-  "worldkit://capability/relationship.seat@1": "worldkit://relationship-profile/seat.driver@1",
-  "worldkit://capability/relationship.tether@1": "worldkit://relationship-profile/tether.standard@1"
-});
-function edge(sourceResourceRef, sourcePath, targetResourceRef, expectedResourceKinds, type2) {
-  return Object.freeze({
-    sourceResourceRef,
-    sourcePath,
-    targetResourceRef,
-    expectedResourceKinds: Object.freeze([...expectedResourceKinds]),
-    type: type2
-  });
-}
-function edgesForRefs(sourceResourceRef, sourcePath, targetResourceRefs, expectedResourceKinds, type2) {
-  return targetResourceRefs.map((targetResourceRef, index) => edge(
-    sourceResourceRef,
-    `${sourcePath}/${index}`,
-    targetResourceRef,
-    expectedResourceKinds,
-    type2
-  ));
-}
-function listSubjectRegistryReferenceEdgesV1(resource) {
-  const sourceResourceRef = resource.resourceRef;
-  const edges = [];
-  switch (resource.kind) {
-    case "rig-profile":
-      edges.push(...edgesForRefs(
-        sourceResourceRef,
-        "/compatibleSubjectAssetRefs",
-        resource.compatibleSubjectAssetRefs,
-        ["subject-asset"],
-        "metadata"
-      ));
-      break;
-    case "animation-set":
-      edges.push(
-        edge(
-          sourceResourceRef,
-          "/subjectAssetRef",
-          resource.subjectAssetRef,
-          ["subject-asset"],
-          "dependency"
-        ),
-        edge(
-          sourceResourceRef,
-          "/rigProfileRef",
-          resource.rigProfileRef,
-          ["rig-profile"],
-          "dependency"
-        )
-      );
-      break;
-    case "capability":
-      edges.push(
-        ...edgesForRefs(
-          sourceResourceRef,
-          "/requiredCapabilityRefs",
-          resource.requiredCapabilityRefs,
-          ["capability"],
-          "dependency"
-        ),
-        ...edgesForRefs(
-          sourceResourceRef,
-          "/conflictingCapabilityRefs",
-          resource.conflictingCapabilityRefs,
-          ["capability"],
-          "metadata"
-        )
-      );
-      break;
-    case "locomotion-profile":
-      edges.push(...edgesForRefs(
-        sourceResourceRef,
-        "/requiredCapabilityRefs",
-        resource.requiredCapabilityRefs,
-        ["capability"],
-        "dependency"
-      ));
-      break;
-    case "motion-kernel":
-      edges.push(
-        ...edgesForRefs(
-          sourceResourceRef,
-          "/requiredCapabilityRefs",
-          resource.requiredCapabilityRefs,
-          ["capability"],
-          "dependency"
-        ),
-        edge(
-          sourceResourceRef,
-          "/fallbackMotionProfileRef",
-          resource.fallbackMotionProfileRef,
-          ["motion-profile"],
-          "back-reference"
-        )
-      );
-      break;
-    case "motion-profile":
-      edges.push(edge(
-        sourceResourceRef,
-        "/motionKernelRef",
-        resource.motionKernelRef,
-        ["motion-kernel"],
-        "dependency"
-      ));
-      break;
-    case "camera-rig-profile":
-      edges.push(edge(
-        sourceResourceRef,
-        "/algorithmRef",
-        resource.algorithmRef,
-        ["camera-rig-algorithm"],
-        "dependency"
-      ));
-      break;
-    case "camera-context-profile":
-      edges.push(edge(
-        sourceResourceRef,
-        "/defaultCameraRigProfileRef",
-        resource.defaultCameraRigProfileRef,
-        ["camera-rig-profile"],
-        "dependency"
-      ));
-      if (resource.firstPersonCameraRigProfileRef !== void 0) {
-        edges.push(edge(
-          sourceResourceRef,
-          "/firstPersonCameraRigProfileRef",
-          resource.firstPersonCameraRigProfileRef,
-          ["camera-rig-profile"],
-          "dependency"
-        ));
-      }
-      resource.rules.forEach((rule, ruleIndex) => {
-        edges.push(...edgesForRefs(
-          sourceResourceRef,
-          `/rules/${ruleIndex}/when/motionKernelRefs`,
-          rule.when.motionKernelRefs ?? [],
-          ["motion-kernel"],
-          "metadata"
-        ));
-        if (rule.cameraRigProfileRef !== void 0) {
-          edges.push(edge(
-            sourceResourceRef,
-            `/rules/${ruleIndex}/cameraRigProfileRef`,
-            rule.cameraRigProfileRef,
-            ["camera-rig-profile"],
-            "dependency"
-          ));
-        }
-        edges.push(...edgesForRefs(
-          sourceResourceRef,
-          `/rules/${ruleIndex}/cameraModifierRefs`,
-          rule.cameraModifierRefs ?? [],
-          ["camera-modifier-profile"],
-          "dependency"
-        ));
-      });
-      break;
-    case "subject-definition":
-      resource.visualParts.forEach((visualPart, partIndex) => {
-        if (visualPart.kind !== "asset") return;
-        edges.push(edge(
-          sourceResourceRef,
-          `/visualParts/${partIndex}/subjectAssetRef`,
-          visualPart.subjectAssetRef,
-          ["subject-asset"],
-          "dependency"
-        ));
-      });
-      if (resource.visualBinding.mode === "rigged") {
-        edges.push(
-          edge(
-            sourceResourceRef,
-            "/visualBinding/rigProfileRef",
-            resource.visualBinding.rigProfileRef,
-            ["rig-profile"],
-            "dependency"
-          ),
-          edge(
-            sourceResourceRef,
-            "/visualBinding/animationSetRef",
-            resource.visualBinding.animationSetRef,
-            ["animation-set"],
-            "dependency"
-          )
-        );
-      }
-      edges.push(edge(
-        sourceResourceRef,
-        resource.colliderPolicy.kind === "profile" ? "/colliderPolicy/colliderProfileRef" : "/colliderPolicy/colliderDerivationProfileRef",
-        resource.colliderPolicy.kind === "profile" ? resource.colliderPolicy.colliderProfileRef : resource.colliderPolicy.colliderDerivationProfileRef,
-        [resource.colliderPolicy.kind === "profile" ? "collider-profile" : "collider-derivation-profile"],
-        "dependency"
-      ));
-      edges.push(
-        ...edgesForRefs(
-          sourceResourceRef,
-          "/capabilityRefs",
-          resource.capabilityRefs,
-          ["capability"],
-          "dependency"
-        ),
-        edge(
-          sourceResourceRef,
-          "/profiles/physicsBodyProfileRef",
-          resource.profiles.physicsBodyProfileRef,
-          ["physics-body-profile"],
-          "dependency"
-        ),
-        edge(
-          sourceResourceRef,
-          "/profiles/locomotionProfileRef",
-          resource.profiles.locomotionProfileRef,
-          ["locomotion-profile"],
-          "dependency"
-        ),
-        edge(
-          sourceResourceRef,
-          "/profiles/controlFeelProfileRef",
-          resource.profiles.controlFeelProfileRef,
-          ["control-feel-profile"],
-          "dependency"
-        ),
-        ...edgesForRefs(
-          sourceResourceRef,
-          "/profiles/allowedControlFeelProfileRefs",
-          resource.profiles.allowedControlFeelProfileRefs,
-          ["control-feel-profile"],
-          "dependency"
-        ),
-        edge(
-          sourceResourceRef,
-          "/profiles/motion/defaultMotionProfileRef",
-          resource.profiles.motion.defaultMotionProfileRef,
-          ["motion-profile"],
-          "dependency"
-        ),
-        ...edgesForRefs(
-          sourceResourceRef,
-          "/profiles/motion/optionalMotionProfileRefs",
-          resource.profiles.motion.optionalMotionProfileRefs,
-          ["motion-profile"],
-          "dependency"
-        ),
-        edge(
-          sourceResourceRef,
-          "/profiles/motion/fallbackMotionProfileRef",
-          resource.profiles.motion.fallbackMotionProfileRef,
-          ["motion-profile"],
-          "dependency"
-        ),
-        edge(
-          sourceResourceRef,
-          "/profiles/controlProfileRef",
-          resource.profiles.controlProfileRef,
-          ["control-profile"],
-          "dependency"
-        ),
-        edge(
-          sourceResourceRef,
-          "/profiles/cameraContextProfileRef",
-          resource.profiles.cameraContextProfileRef,
-          ["camera-context-profile"],
-          "dependency"
-        ),
-        edge(
-          sourceResourceRef,
-          "/profiles/mediumProfileRef",
-          resource.profiles.mediumProfileRef,
-          ["medium-profile"],
-          "dependency"
-        ),
-        edge(
-          sourceResourceRef,
-          "/profiles/harnessProfileRef",
-          resource.profiles.harnessProfileRef,
-          ["harness-profile"],
-          "dependency"
-        ),
-        ...edgesForRefs(
-          sourceResourceRef,
-          "/relationshipCapabilityRefs",
-          resource.relationshipCapabilityRefs,
-          ["capability"],
-          "dependency"
-        ),
-        edge(
-          sourceResourceRef,
-          "/actionOrPoseSetRef",
-          resource.actionOrPoseSetRef,
-          ["animation-set", "pose-set-profile"],
-          "dependency"
-        ),
-        edge(
-          sourceResourceRef,
-          "/renderBindingProfileRef",
-          resource.renderBindingProfileRef,
-          ["render-binding-profile"],
-          "dependency"
-        )
-      );
-      resource.relationshipCapabilityRefs.forEach((capabilityRef, index) => {
-        const relationshipProfileRef = RELATIONSHIP_PROFILE_REF_BY_CAPABILITY_REF_V1[capabilityRef];
-        if (relationshipProfileRef === void 0) return;
-        edges.push(edge(
-          sourceResourceRef,
-          `/relationshipCapabilityRefs/${index}`,
-          relationshipProfileRef,
-          ["relationship-profile"],
-          "dependency"
-        ));
-      });
-      break;
-  }
-  return Object.freeze(edges);
-}
-const LOCOMOTION_ALLOWED_KEYS = /* @__PURE__ */ new Set([
-  "kind",
-  "id",
-  "version",
-  "resourceRef",
-  "aiMetadata",
-  "requiredCapabilityRefs",
-  "allowWalk",
-  "allowRun",
-  "allowJump"
-]);
-const LOCOMOTION_SPEED_FIELD_PATTERN = /Speed|Acceleration|Deceleration|TurnRate|Gravity|Slope|StepHeight|Seconds|Meters|Radians|Ratio/;
-const LOCOMOTION_FORBIDDEN_OBJECT_KEYS = /* @__PURE__ */ new Set([
-  "locomotion",
-  "parameters",
-  "tuning",
-  "supportedMediums",
-  "allowedMotionKernelRefs"
-]);
-const MOTION_ALLOWED_KEYS = /* @__PURE__ */ new Set([
-  "kind",
-  "id",
-  "version",
-  "resourceRef",
-  "authoringAvailability",
-  "aiMetadata",
-  "motionKernelRef",
-  "motionTags"
-]);
-const MOTION_KERNEL_ALLOWED_KEYS = /* @__PURE__ */ new Set([
-  "kind",
-  "id",
-  "version",
-  "resourceRef",
-  "authoringAvailability",
-  "aiMetadata",
-  "implementationId",
-  "commandKind",
-  "supportedMediums",
-  "supportedBodyKinds",
-  "requiredCapabilityRefs",
-  "fallbackMotionProfileRef",
-  "deterministic",
-  "runtimeStatus",
-  "contentHash"
-]);
-const MOTION_NUMERIC_FIELD_PATTERN = /Speed|Acceleration|Deceleration|TurnRate|Gravity|Slope|StepHeight|Seconds|Meters|Radians|Ratio/;
-const MEDIUM_FORBIDDEN_KEYS = /* @__PURE__ */ new Set([
-  "supportedMediums",
-  "ground",
-  "water",
-  "gravityScale"
-]);
-const CONTROL_FEEL_BOUNDS = {
-  walkSpeedMetersPerSecond: [0, 8],
-  runSpeedMetersPerSecond: [0, 12],
-  jumpSpeedMetersPerSecond: [0, 12],
-  accelerationMetersPerSecondSquared: [0, 60],
-  decelerationMetersPerSecondSquared: [0, 80],
-  turnRateRadiansPerSecond: [0, 20],
-  moveResponseExponent: [1, 3],
-  airControlRatio: [0, 1],
-  coyoteTimeSeconds: [0, 0.4],
-  jumpBufferSeconds: [0, 0.4],
-  variableJumpHoldSeconds: [0, 0.5],
-  jumpHoldGravityRatio: [0.1, 1],
-  jumpReleaseGravityRatio: [1, 5]
-};
-function deepFreeze$3(value) {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value)) deepFreeze$3(child);
-  return Object.freeze(value);
-}
-function duplicateValue(values) {
-  const seen = /* @__PURE__ */ new Set();
-  for (const value of values) {
-    if (seen.has(value)) return value;
-    seen.add(value);
-  }
-  return void 0;
-}
-function validateAnimationSet(source) {
-  const duplicateRequiredActionId = duplicateValue(source.requiredActionIds);
-  if (duplicateRequiredActionId !== void 0) {
-    throw new Error(
-      `SUBJECT_REGISTRY_DUPLICATE_ACTION_ID: '${duplicateRequiredActionId}' in '${source.resourceRef}'.`
-    );
-  }
-  const duplicateBindingActionId = duplicateValue(
-    source.animationBindings.map((binding) => binding.actionId)
-  );
-  if (duplicateBindingActionId !== void 0) {
-    throw new Error(
-      `SUBJECT_REGISTRY_DUPLICATE_ACTION_ID: '${duplicateBindingActionId}' in '${source.resourceRef}'.`
-    );
-  }
-  const duplicateClipName = duplicateValue(
-    source.animationBindings.map((binding) => binding.sourceClipName)
-  );
-  if (duplicateClipName !== void 0) {
-    throw new Error(
-      `SUBJECT_REGISTRY_DUPLICATE_CLIP_MAPPING: '${duplicateClipName}' in '${source.resourceRef}'.`
-    );
-  }
-}
-function validateSubjectAsset(source) {
-  const duplicateClipName = duplicateValue(source.inventory.animationClipNames);
-  if (duplicateClipName !== void 0) {
-    throw new Error(
-      `SUBJECT_REGISTRY_DUPLICATE_CLIP_NAME: '${duplicateClipName}' in '${source.resourceRef}'.`
-    );
-  }
-}
-function validateCanonicalizedSemanticTags(source) {
-  const duplicateSemanticTag = duplicateValue(source.aiMetadata.semanticTags);
-  if (duplicateSemanticTag !== void 0) {
-    throw new Error(
-      `SUBJECT_REGISTRY_DUPLICATE_SEMANTIC_TAG: '${duplicateSemanticTag}' in '${source.resourceRef}'.`
-    );
-  }
-}
-function validateRigProfile(source) {
-  const duplicateBoneId = duplicateValue(source.requiredBoneIds);
-  if (duplicateBoneId !== void 0) {
-    throw new Error(
-      `SUBJECT_REGISTRY_DUPLICATE_BONE_ID: '${duplicateBoneId}' in '${source.resourceRef}'.`
-    );
-  }
-  const duplicateCompatibleRef = duplicateValue(source.compatibleSubjectAssetRefs);
-  if (duplicateCompatibleRef !== void 0) {
-    throw new Error(
-      `SUBJECT_REGISTRY_DUPLICATE_COMPATIBLE_REF: '${duplicateCompatibleRef}' in '${source.resourceRef}'.`
-    );
-  }
-}
-function validateColliderProfile(source) {
-  const duplicateBodyTopology = duplicateValue(source.supportedBodyTopologies);
-  if (duplicateBodyTopology !== void 0) {
-    throw new Error(
-      `SUBJECT_REGISTRY_DUPLICATE_BODY_TOPOLOGY: '${duplicateBodyTopology}' in '${source.resourceRef}'.`
-    );
-  }
-}
-function sortedStrings$1(values) {
-  return [...values].sort((left, right) => left.localeCompare(right));
-}
-function canonicalizeNewResourceCollections(source) {
-  const input = structuredClone(source);
-  switch (input.kind) {
-    case "subject-asset":
-      return {
-        ...input,
-        inventory: {
-          ...input.inventory,
-          animationClipNames: sortedStrings$1(input.inventory.animationClipNames)
-        },
-        aiMetadata: {
-          ...input.aiMetadata,
-          semanticTags: sortedStrings$1(input.aiMetadata.semanticTags)
-        }
-      };
-    case "rig-profile":
-      return {
-        ...input,
-        compatibleSubjectAssetRefs: sortedStrings$1(input.compatibleSubjectAssetRefs),
-        requiredBoneIds: sortedStrings$1(input.requiredBoneIds),
-        sourceNodeNameByBoneId: Object.fromEntries(
-          Object.entries(input.sourceNodeNameByBoneId).sort(([left], [right]) => left.localeCompare(right))
-        ),
-        aiMetadata: {
-          ...input.aiMetadata,
-          semanticTags: sortedStrings$1(input.aiMetadata.semanticTags)
-        }
-      };
-    case "animation-set":
-      return {
-        ...input,
-        requiredActionIds: sortedStrings$1(input.requiredActionIds),
-        animationBindings: [...input.animationBindings].sort((left, right) => left.actionId.localeCompare(right.actionId)),
-        aiMetadata: {
-          ...input.aiMetadata,
-          semanticTags: sortedStrings$1(input.aiMetadata.semanticTags)
-        }
-      };
-    case "collider-profile":
-      return {
-        ...input,
-        supportedBodyTopologies: sortedStrings$1(input.supportedBodyTopologies),
-        aiMetadata: {
-          ...input.aiMetadata,
-          semanticTags: sortedStrings$1(input.aiMetadata.semanticTags)
-        }
-      };
-    default:
-      return {
-        ...input,
-        aiMetadata: {
-          ...input.aiMetadata,
-          semanticTags: sortedStrings$1(input.aiMetadata.semanticTags)
-        }
-      };
-  }
-}
-function lockResource(source) {
-  const { contentHash: _ignoredContentHash, ...sourceWithoutContentHash } = source;
-  const hashInput = canonicalizeNewResourceCollections(
-    sourceWithoutContentHash
-  );
-  return deepFreeze$3({
-    ...hashInput,
-    contentHash: sha256CanonicalJson(hashInput)
-  });
-}
-function validateLocomotionProfile(source) {
-  const rawSource = source;
-  for (const key of Object.keys(rawSource)) {
-    if (LOCOMOTION_FORBIDDEN_OBJECT_KEYS.has(key)) {
-      throw new Error(
-        key === "locomotion" ? `LOCOMOTION_PROFILE_SPEED_FORBIDDEN: '${source.resourceRef}'.` : `LOCOMOTION_PROFILE_FIELD_FORBIDDEN: '${source.resourceRef}'.`
-      );
-    }
-    if (!LOCOMOTION_ALLOWED_KEYS.has(key)) {
-      throw new Error(
-        LOCOMOTION_SPEED_FIELD_PATTERN.test(key) ? `LOCOMOTION_PROFILE_SPEED_FORBIDDEN: '${source.resourceRef}'.` : `LOCOMOTION_PROFILE_FIELD_FORBIDDEN: '${source.resourceRef}'.`
-      );
-    }
-  }
-  if (source.allowWalk !== true) {
-    throw new Error(
-      `LOCOMOTION_PROFILE_FIELD_FORBIDDEN: '${source.resourceRef}' requires allowWalk === true.`
-    );
-  }
-}
-function validateMotionProfile(source) {
-  const rawSource = source;
-  if ("parameters" in rawSource || "safetyLimits" in rawSource || "authoringRanges" in rawSource) {
-    throw new Error(
-      `MOTION_PROFILE_NUMERIC_BAG_FORBIDDEN: '${source.resourceRef}'.`
-    );
-  }
-  for (const key of Object.keys(rawSource)) {
-    if (!MOTION_ALLOWED_KEYS.has(key) && MOTION_NUMERIC_FIELD_PATTERN.test(key)) {
-      throw new Error(
-        `MOTION_PROFILE_NUMERIC_BAG_FORBIDDEN: '${source.resourceRef}'.`
-      );
-    }
-  }
-}
-function validateMotionKernel(source) {
-  const unknownField2 = Object.keys(source).find(
-    (fieldName) => !MOTION_KERNEL_ALLOWED_KEYS.has(fieldName)
-  );
-  if (unknownField2 !== void 0) {
-    throw new Error(
-      `SUBJECT_REGISTRY_UNKNOWN_FIELD: '${unknownField2}' in '${source.resourceRef}'.`
-    );
-  }
-}
-function isFiniteInRange(value, minimum, maximum) {
-  return Number.isFinite(value) && value >= minimum && value <= maximum;
-}
-function validateControlFeelProfile(source) {
-  for (const [fieldName, [minimum, maximum]] of Object.entries(CONTROL_FEEL_BOUNDS)) {
-    const value = source[fieldName];
-    if (typeof value !== "number" || !isFiniteInRange(value, minimum, maximum)) {
-      throw new Error(
-        `CONTROL_FEEL_PROFILE_INVALID: '${fieldName}' in '${source.resourceRef}'.`
-      );
-    }
-  }
-  if (source.walkSpeedMetersPerSecond > source.runSpeedMetersPerSecond) {
-    throw new Error(
-      `CONTROL_FEEL_PROFILE_INVALID: walkSpeedMetersPerSecond exceeds runSpeedMetersPerSecond in '${source.resourceRef}'.`
-    );
-  }
-  if (source.airControlRatio < 0 || source.airControlRatio > 1) {
-    throw new Error(
-      `CONTROL_FEEL_PROFILE_INVALID: airControlRatio in '${source.resourceRef}'.`
-    );
-  }
-  if (source.jumpHoldGravityRatio < 0 || source.jumpHoldGravityRatio > 1) {
-    throw new Error(
-      `CONTROL_FEEL_PROFILE_INVALID: jumpHoldGravityRatio in '${source.resourceRef}'.`
-    );
-  }
-  if (source.jumpReleaseGravityRatio < 1) {
-    throw new Error(
-      `CONTROL_FEEL_PROFILE_INVALID: jumpReleaseGravityRatio in '${source.resourceRef}'.`
-    );
-  }
-}
-function validateControlProfile(source) {
-  if (!Number.isFinite(source.moveDeadzoneRatio) || source.moveDeadzoneRatio < 0 || source.moveDeadzoneRatio > 0.4) {
-    throw new Error(
-      `SUBJECT_REGISTRY_INVALID_CONTROL_INPUT_TUNING: '${source.resourceRef}'.`
-    );
-  }
-  const hasExecutablePolicyCombination = (() => {
-    switch (source.commandKind) {
-      case "planar-vector":
-        return source.inputSpace === "camera-relative" && (source.facingPolicy === "align-to-move" || source.facingPolicy === "align-to-view");
-      case "none":
-        return source.inputSpace === "none" && source.facingPolicy === "fixed" && source.lateralMovementPolicy === "forbidden";
-      default:
-        return false;
-    }
-  })();
-  if (!hasExecutablePolicyCombination) {
-    throw new Error(
-      `SUBJECT_REGISTRY_INVALID_CONTROL_PROFILE_COMBINATION: '${source.resourceRef}'.`
-    );
-  }
-}
-function validateMediumProfile(source) {
-  const rawSource = source;
-  for (const key of Object.keys(rawSource)) {
-    if (MEDIUM_FORBIDDEN_KEYS.has(key)) {
-      throw new Error(
-        `MEDIUM_PROFILE_FIELD_FORBIDDEN: '${source.resourceRef}'.`
-      );
-    }
-  }
-  const ground = rawSource.ground;
-  if (ground !== void 0 && typeof ground === "object" && ground !== null && "groundingToleranceMeters" in ground) {
-    throw new Error(
-      `MEDIUM_PROFILE_FIELD_FORBIDDEN: '${source.resourceRef}'.`
-    );
-  }
-  if (!isFiniteInRange(source.air.gravityRatio, 0, 4) || !isFiniteInRange(source.air.linearDragPerSecond, 0, 20)) {
-    throw new Error(
-      `MEDIUM_PROFILE_FIELD_FORBIDDEN: '${source.resourceRef}'.`
-    );
-  }
-}
-function validatePhysicsBodyProfile(source) {
-  const { maxSlopeDegrees, maxStepHeightMeters } = source.physicsBody;
-  if (!Number.isFinite(maxSlopeDegrees) || maxSlopeDegrees <= 0 || maxSlopeDegrees > 90 || !Number.isFinite(maxStepHeightMeters) || maxStepHeightMeters < 0 || maxStepHeightMeters > 2) {
-    throw new Error(
-      `PHYSICS_BODY_TRAVERSAL_LIMIT_INVALID: '${source.resourceRef}'.`
-    );
-  }
-}
-function validateSubjectDefinitionV3(source) {
-  const controlFeelProfileRef = source.profiles.controlFeelProfileRef;
-  if (isNil(controlFeelProfileRef) || controlFeelProfileRef === "") {
-    throw new Error(
-      `SUBJECT_CONTROL_FEEL_PROFILE_REQUIRED: '${source.resourceRef}'.`
-    );
-  }
-  selectableControlFeelProfileRefsV1(source.profiles);
-  if (source.profiles.motion.defaultMotionProfileRef === source.profiles.motion.fallbackMotionProfileRef) {
-    throw new Error(`MOTION_FALLBACK_DEFAULT_COLLISION: '${source.resourceRef}'.`);
-  }
-}
-function hasInvalidCameraParameters(parameters) {
-  const negativeAllowed = /* @__PURE__ */ new Set([
-    "shoulderOffsetMeters",
-    "pitchRadians",
-    "minimumPitchRadians",
-    "maximumPitchRadians"
-  ]);
-  const containsInvalidNumber = Object.entries(parameters).some(
-    ([name, value]) => !Number.isFinite(value) || !negativeAllowed.has(name) && value < 0
-  );
-  const minimumDistance = parameters.minimumDistanceMeters;
-  const maximumDistance = parameters.maximumDistanceMeters;
-  const distance2 = parameters.distanceMeters;
-  const minimumPitch = parameters.minimumPitchRadians;
-  const maximumPitch = parameters.maximumPitchRadians;
-  const pitch = parameters.pitchRadians;
-  return containsInvalidNumber || minimumDistance !== void 0 && maximumDistance !== void 0 && minimumDistance > maximumDistance || distance2 !== void 0 && minimumDistance !== void 0 && distance2 < minimumDistance || distance2 !== void 0 && maximumDistance !== void 0 && distance2 > maximumDistance || minimumPitch !== void 0 && maximumPitch !== void 0 && minimumPitch > maximumPitch || pitch !== void 0 && minimumPitch !== void 0 && pitch < minimumPitch || pitch !== void 0 && maximumPitch !== void 0 && pitch > maximumPitch || parameters.horizontalDeadZoneRatio !== void 0 && parameters.horizontalDeadZoneRatio > 1 || parameters.verticalDeadZoneRatio !== void 0 && parameters.verticalDeadZoneRatio > 1 || parameters.baseFovDegrees !== void 0 && (parameters.baseFovDegrees <= 0 || parameters.baseFovDegrees >= 180) || parameters.baseFovDegrees !== void 0 && parameters.maximumSpeedFovDegrees !== void 0 && parameters.baseFovDegrees + parameters.maximumSpeedFovDegrees >= 180 || parameters.lookSensitivityXRatio !== void 0 && parameters.lookSensitivityXRatio <= 0 || parameters.lookSensitivityYRatio !== void 0 && parameters.lookSensitivityYRatio <= 0;
-}
-function validateCameraProfile(source) {
-  const unknownParameterName = Object.keys(source.parameters).find(
-    (parameterName) => !isCameraRigParameterNameV1(parameterName)
-  );
-  if (unknownParameterName !== void 0) {
-    throw new Error(
-      `SUBJECT_REGISTRY_UNKNOWN_CAMERA_PARAMETER: '${unknownParameterName}' in '${source.resourceRef}'.`
-    );
-  }
-  const missingParameterName = CAMERA_RIG_PARAMETER_NAMES_V1.find(
-    (parameterName) => !Object.prototype.hasOwnProperty.call(source.parameters, parameterName)
-  );
-  if (missingParameterName !== void 0) {
-    throw new Error(
-      `SUBJECT_REGISTRY_MISSING_CAMERA_PARAMETER: '${missingParameterName}' in '${source.resourceRef}'.`
-    );
-  }
-  if (hasInvalidCameraParameters(source.parameters)) {
-    throw new Error(
-      `SUBJECT_REGISTRY_INVALID_CAMERA_PARAMETERS: '${source.resourceRef}'.`
-    );
-  }
-  const expectedAlgorithmRefByBaseMode = {
-    "first-person": "worldkit://camera-rig/socket-first-person@1",
-    "free-orbit": "worldkit://camera-rig/orbit-follow@1",
-    "stable-follow": "worldkit://camera-rig/orbit-follow@1",
-    "speed-chase": "worldkit://camera-rig/velocity-chase@1",
-    "flight-horizon": "worldkit://camera-rig/flight-horizon@1"
-  };
-  if (source.algorithmRef !== expectedAlgorithmRefByBaseMode[source.baseMode]) {
-    throw new Error(
-      `SUBJECT_REGISTRY_CAMERA_MODE_ALGORITHM_MISMATCH: '${source.resourceRef}' declares '${source.baseMode}' with '${source.algorithmRef}'.`
-    );
-  }
-  for (const [parameterName, range] of Object.entries(source.authoringRanges ?? {})) {
-    const parameterValue = source.parameters[parameterName];
-    if (typeof parameterValue !== "number" || ![range.minimum, range.maximum, range.step].every(Number.isFinite) || range.minimum > range.maximum || range.step <= 0 || parameterValue < range.minimum || parameterValue > range.maximum) {
-      throw new Error(
-        `SUBJECT_REGISTRY_INVALID_AUTHORING_RANGE: '${parameterName}' in '${source.resourceRef}'.`
-      );
-    }
-  }
-}
-function validateCameraModifierProfile(source) {
-  const unknownParameterName = Object.keys(source.parameterOverrides).find(
-    (parameterName) => !isCameraRigParameterNameV1(parameterName)
-  );
-  if (unknownParameterName !== void 0) {
-    throw new Error(
-      `SUBJECT_REGISTRY_UNKNOWN_CAMERA_PARAMETER: '${unknownParameterName}' in '${source.resourceRef}'.`
-    );
-  }
-  const nonFiniteParameter = Object.entries(source.parameterOverrides).find(
-    ([, value]) => !Number.isFinite(value)
-  );
-  if (nonFiniteParameter !== void 0) {
-    throw new Error(
-      `SUBJECT_REGISTRY_NON_FINITE_PARAMETER: '${nonFiniteParameter[0]}' in '${source.resourceRef}'.`
-    );
-  }
-  if (hasInvalidCameraParameters(source.parameterOverrides)) {
-    throw new Error(
-      `SUBJECT_REGISTRY_INVALID_CAMERA_MODIFIER_PARAMETERS: '${source.resourceRef}'.`
-    );
-  }
-}
-function validateReferences(resourcesByRef) {
-  for (const resource of resourcesByRef.values()) {
-    for (const referenceEdge of listSubjectRegistryReferenceEdgesV1(resource)) {
-      const resolved = resourcesByRef.get(referenceEdge.targetResourceRef);
-      if (resolved === void 0 || !referenceEdge.expectedResourceKinds.includes(resolved.kind)) {
-        const expectedKinds = referenceEdge.expectedResourceKinds.join(" or ");
-        throw new Error(
-          `SUBJECT_REGISTRY_MISSING_REFERENCE: '${resource.resourceRef}' requires ${expectedKinds} '${referenceEdge.targetResourceRef}' at '${referenceEdge.sourcePath}'.`
-        );
-      }
-    }
-  }
-  for (const resource of resourcesByRef.values()) {
-    if (resource.kind === "motion-profile") {
-      const kernel = resourcesByRef.get(resource.motionKernelRef);
-      if (kernel?.kind === "motion-kernel" && kernel.runtimeStatus === "reserved") {
-        throw new Error(
-          `SUBJECT_REGISTRY_RESERVED_KERNEL_PROFILE: '${resource.resourceRef}' targets '${kernel.resourceRef}'.`
-        );
-      }
-    }
-    if (resource.kind === "camera-rig-profile") {
-      const algorithm = resourcesByRef.get(resource.algorithmRef);
-      if (algorithm?.kind === "camera-rig-algorithm" && algorithm.runtimeStatus === "reserved") {
-        throw new Error(
-          `SUBJECT_REGISTRY_RESERVED_CAMERA_ALGORITHM: '${resource.resourceRef}' targets '${algorithm.resourceRef}'.`
-        );
-      }
-    }
-    if (resource.kind === "camera-context-profile") {
-      const reachableBaseProfileRefs = /* @__PURE__ */ new Set([
-        resource.defaultCameraRigProfileRef,
-        ...resource.firstPersonCameraRigProfileRef === void 0 ? [] : [resource.firstPersonCameraRigProfileRef],
-        ...resource.rules.flatMap(
-          (rule) => rule.cameraRigProfileRef === void 0 ? [] : [rule.cameraRigProfileRef]
-        )
-      ]);
-      const reachableModifiers = [...new Set(
-        resource.rules.flatMap((rule) => rule.cameraModifierRefs ?? [])
-      )].flatMap((modifierRef) => {
-        const modifier = resourcesByRef.get(modifierRef);
-        return modifier?.kind === "camera-modifier-profile" ? [modifier] : [];
-      });
-      const modifierSequences = [
-        ...reachableModifiers.map((modifier) => [modifier]),
-        ...reachableModifiers.flatMap(
-          (first) => reachableModifiers.flatMap(
-            (second) => first.resourceRef === second.resourceRef ? [] : [[first, second]]
-          )
-        )
-      ];
-      for (const baseProfileRef of reachableBaseProfileRefs) {
-        const baseProfile = resourcesByRef.get(baseProfileRef);
-        if (baseProfile?.kind !== "camera-rig-profile") continue;
-        for (const modifiers2 of modifierSequences) {
-          const composedParameters = modifiers2.reduce(
-            (parameters, modifier) => applyCameraRigParameterOverridesV1(
-              baseProfile.algorithmRef,
-              parameters,
-              modifier.parameterOverrides
-            ),
-            { ...baseProfile.parameters }
-          );
-          if (!hasInvalidCameraParameters(composedParameters)) continue;
-          throw new Error(
-            `SUBJECT_REGISTRY_INVALID_CAMERA_CONTEXT_PARAMETERS: '${resource.resourceRef}' combines '${baseProfileRef}' with '${modifiers2.map((modifier) => modifier.resourceRef).join("', '")}'.`
-          );
-        }
-      }
-    }
-    if (resource.kind === "subject-definition" && "schemaVersion" in resource) {
-      const subject = resource;
-      const defaultMotion = resourcesByRef.get(
-        subject.profiles.motion.defaultMotionProfileRef
-      );
-      const fallbackMotion = resourcesByRef.get(
-        subject.profiles.motion.fallbackMotionProfileRef
-      );
-      if (defaultMotion?.kind === "motion-profile" && fallbackMotion?.kind === "motion-profile") {
-        if (!(fallbackMotion.motionTags.includes("safe") && fallbackMotion.motionTags.includes("stopped"))) {
-          throw new Error(`MOTION_FALLBACK_NOT_SAFE_STOP: '${subject.resourceRef}'.`);
-        }
-        if (defaultMotion.motionTags.includes("safe") && defaultMotion.motionTags.includes("stopped")) {
-          throw new Error(`MOTION_DEFAULT_SAFE_STOP_FORBIDDEN: '${subject.resourceRef}'.`);
-        }
-      }
-      const motion = resourcesByRef.get(subject.profiles.motion.defaultMotionProfileRef);
-      const control = resourcesByRef.get(subject.profiles.controlProfileRef);
-      const kernel = motion?.kind === "motion-profile" ? resourcesByRef.get(motion.motionKernelRef) : void 0;
-      if (kernel?.kind === "motion-kernel" && control?.kind === "control-profile" && kernel.commandKind !== control.commandKind) {
-        throw new Error(
-          `SUBJECT_REGISTRY_COMMAND_KIND_MISMATCH: '${subject.resourceRef}' uses '${kernel.commandKind}' with '${control.commandKind}'.`
-        );
-      }
-    }
-  }
-}
-function createSubjectResourceRegistry(resources) {
-  const resourcesByRef = /* @__PURE__ */ new Map();
-  for (const source of resources) {
-    if (resourcesByRef.has(source.resourceRef)) {
-      throw new Error(`SUBJECT_REGISTRY_DUPLICATE_REF: '${source.resourceRef}'.`);
-    }
-    if (source.kind === "subject-asset") validateSubjectAsset(source);
-    if (source.kind === "animation-set") validateAnimationSet(source);
-    if (source.kind === "rig-profile") validateRigProfile(source);
-    if (source.kind === "collider-profile") validateColliderProfile(source);
-    if (source.kind === "locomotion-profile") validateLocomotionProfile(source);
-    if (source.kind === "physics-body-profile") validatePhysicsBodyProfile(source);
-    if (source.kind === "motion-profile") validateMotionProfile(source);
-    if (source.kind === "control-feel-profile") validateControlFeelProfile(source);
-    if (source.kind === "control-profile") validateControlProfile(source);
-    if (source.kind === "medium-profile") validateMediumProfile(source);
-    if (source.kind === "camera-rig-profile") validateCameraProfile(source);
-    if (source.kind === "camera-modifier-profile") validateCameraModifierProfile(source);
-    if (source.kind === "subject-definition") {
-      if (!("schemaVersion" in source) || source.schemaVersion !== 3) {
-        throw new Error(
-          `SUBJECT_REGISTRY_SUBJECT_DEFINITION_VERSION_NOT_SUPPORTED: '${source.resourceRef}'.`
-        );
-      }
-      validateSubjectDefinitionV3(source);
-    }
-    if (source.kind === "motion-kernel") validateMotionKernel(source);
-    validateCanonicalizedSemanticTags(source);
-    resourcesByRef.set(source.resourceRef, lockResource(source));
-  }
-  validateReferences(resourcesByRef);
-  const stableResources = deepFreeze$3(
-    [...resourcesByRef.values()].sort(
-      (left, right) => left.resourceRef.localeCompare(right.resourceRef)
-    )
-  );
-  const resolveResource = (resourceRef) => resourcesByRef.get(resourceRef);
-  function listDiscoverableResources(filter) {
-    if (filter?.kind === void 0) return stableResources;
-    return deepFreeze$3(stableResources.filter(
-      (resource) => resource.kind === filter.kind
-    ));
-  }
-  return Object.freeze({
-    resolveResource,
-    listDiscoverableResources,
-    listReferenceEdges: listSubjectRegistryReferenceEdgesV1,
-    resolveSubjectAsset(resourceRef) {
-      const resource = resolveResource(resourceRef);
-      return resource?.kind === "subject-asset" ? resource : void 0;
-    },
-    resolveRigProfile(resourceRef) {
-      const resource = resolveResource(resourceRef);
-      return resource?.kind === "rig-profile" ? resource : void 0;
-    },
-    resolveAnimationSet(resourceRef) {
-      const resource = resolveResource(resourceRef);
-      return resource?.kind === "animation-set" ? resource : void 0;
-    },
-    resolveColliderProfile(resourceRef) {
-      const resource = resolveResource(resourceRef);
-      return resource?.kind === "collider-profile" ? resource : void 0;
-    },
-    resolveSubjectDefinition(resourceRef) {
-      const resource = resolveResource(resourceRef);
-      return resource?.kind === "subject-definition" ? resource : void 0;
-    },
-    resolveCapability(resourceRef) {
-      const resource = resolveResource(resourceRef);
-      return resource?.kind === "capability" ? resource : void 0;
-    },
-    resolvePhysicsBodyProfile(resourceRef) {
-      const resource = resolveResource(resourceRef);
-      return resource?.kind === "physics-body-profile" ? resource : void 0;
-    },
-    resolveLocomotionProfile(resourceRef) {
-      const resource = resolveResource(resourceRef);
-      return resource?.kind === "locomotion-profile" ? resource : void 0;
-    },
-    resolveColliderDerivationProfile(resourceRef) {
-      const resource = resolveResource(resourceRef);
-      return resource?.kind === "collider-derivation-profile" ? resource : void 0;
-    },
-    resolveMotionKernel(resourceRef) {
-      const resource = resolveResource(resourceRef);
-      return resource?.kind === "motion-kernel" ? resource : void 0;
-    },
-    resolveMotionProfile(resourceRef) {
-      const resource = resolveResource(resourceRef);
-      return resource?.kind === "motion-profile" ? resource : void 0;
-    },
-    resolveControlFeelProfile(resourceRef) {
-      const resource = resolveResource(resourceRef);
-      return resource?.kind === "control-feel-profile" ? resource : void 0;
-    },
-    resolveControlProfile(resourceRef) {
-      const resource = resolveResource(resourceRef);
-      return resource?.kind === "control-profile" ? resource : void 0;
-    },
-    resolveCameraRigAlgorithm(resourceRef) {
-      const resource = resolveResource(resourceRef);
-      return resource?.kind === "camera-rig-algorithm" ? resource : void 0;
-    },
-    resolveCameraRigProfile(resourceRef) {
-      const resource = resolveResource(resourceRef);
-      return resource?.kind === "camera-rig-profile" ? resource : void 0;
-    },
-    resolveCameraModifierProfile(resourceRef) {
-      const resource = resolveResource(resourceRef);
-      return resource?.kind === "camera-modifier-profile" ? resource : void 0;
-    },
-    resolveCameraContextProfile(resourceRef) {
-      const resource = resolveResource(resourceRef);
-      return resource?.kind === "camera-context-profile" ? resource : void 0;
-    },
-    resolveMediumProfile(resourceRef) {
-      const resource = resolveResource(resourceRef);
-      return resource?.kind === "medium-profile" ? resource : void 0;
-    },
-    resolveRelationshipProfile(resourceRef) {
-      const resource = resolveResource(resourceRef);
-      return resource?.kind === "relationship-profile" ? resource : void 0;
-    },
-    resolveHarnessProfile(resourceRef) {
-      const resource = resolveResource(resourceRef);
-      return resource?.kind === "harness-profile" ? resource : void 0;
-    },
-    resolvePoseSetProfile(resourceRef) {
-      const resource = resolveResource(resourceRef);
-      return resource?.kind === "pose-set-profile" ? resource : void 0;
-    },
-    resolveRenderBindingProfile(resourceRef) {
-      const resource = resolveResource(resourceRef);
-      return resource?.kind === "render-binding-profile" ? resource : void 0;
-    }
-  });
-}
+const subjectDefinitionsV3 = /* @__PURE__ */ JSON.parse('[{"kind":"subject-definition","schemaVersion":3,"id":"animal.quadruped.forward-steer","version":1,"resourceRef":"worldkit://subject-definition/animal.quadruped.forward-steer@1","authoringAvailability":"advanced","category":"animal","bodyTopology":"quadruped","semanticClassId":"subject.animal.quadruped","coordinateConvention":{"forwardAxis":"-Z","upAxis":"+Y","metersPerUnit":1,"pivot":"support-center"},"visualParts":[{"id":"body","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[0.8,0.7,1.5]},"localTransform":{"positionMetersXYZ":[0,0.8,0],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["body"]},{"id":"head","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[0.55,0.55,0.6]},"localTransform":{"positionMetersXYZ":[0,0.95,-0.95],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["head"]},{"id":"legs","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[0.65,0.65,1.1]},"localTransform":{"positionMetersXYZ":[0,0.33,0],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["legs"]}],"visualBinding":{"mode":"static"},"sockets":[{"id":"CameraTarget3D","kind":"local","localTransform":{"positionMetersXYZ":[0,1,0],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","target"]},{"id":"LookAhead","kind":"local","localTransform":{"positionMetersXYZ":[0,0.9,-1.2],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","look-ahead"]},{"id":"MountSeat","kind":"local","localTransform":{"positionMetersXYZ":[0,1.25,0],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["mount","relationship"]}],"colliderPolicy":{"kind":"derive","colliderDerivationProfileRef":"worldkit://collider-derivation-profile/vertical-capability-capsule@1"},"capabilityRefs":["worldkit://capability/locomotion.forward-steer@1"],"profiles":{"physicsBodyProfileRef":"worldkit://physics-body-profile/character.capability-medium@1","locomotionProfileRef":"worldkit://locomotion-profile/ground.standard@1","motion":{"defaultMotionProfileRef":"worldkit://motion-profile/free-ground.humanoid-medium@1","optionalMotionProfileRefs":["worldkit://motion-profile/safe-ground@1"],"fallbackMotionProfileRef":"worldkit://motion-profile/safe-ground@1"},"controlProfileRef":"worldkit://control-profile/planar.camera-relative@1","cameraContextProfileRef":"worldkit://camera-context/capability-driven.default@1","mediumProfileRef":"worldkit://medium-profile/ground-air.standard@1","harnessProfileRef":"worldkit://harness-profile/subject.standard@1","controlFeelProfileRef":"worldkit://control-feel-profile/humanoid.medium-ground@1","allowedControlFeelProfileRefs":["worldkit://control-feel-profile/humanoid.medium-ground@1","worldkit://control-feel-profile/humanoid.heavy-ground@1"]},"relationshipCapabilityRefs":["worldkit://capability/relationship.mounted-on@1"],"actionOrPoseSetRef":"worldkit://pose-set/static.whitebox@1","renderBindingProfileRef":"worldkit://render-binding/subject.standard@1","allowedOverridePaths":["profiles.controlFeelProfileRef","profiles.controlProfileRef","profiles.motion.defaultMotionProfileRef"],"aiMetadata":{"displayName":"Quadruped Forward Steer","description":"Whitebox quadruped using the reusable K02 forward-steer kernel.","semanticTags":["animal","forward-steer","quadruped","whitebox"]}},{"kind":"subject-definition","schemaVersion":3,"id":"animal.quadruped.forward-steer","version":2,"resourceRef":"worldkit://subject-definition/animal.quadruped.forward-steer@2","authoringAvailability":"advanced","category":"animal","bodyTopology":"quadruped","semanticClassId":"subject.animal.quadruped","coordinateConvention":{"forwardAxis":"-Z","upAxis":"+Y","metersPerUnit":1,"pivot":"support-center"},"visualParts":[{"id":"body","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[0.8,0.7,1.5]},"localTransform":{"positionMetersXYZ":[0,0.8,0],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["body"]},{"id":"head","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[0.55,0.55,0.6]},"localTransform":{"positionMetersXYZ":[0,0.95,-0.95],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["head"]},{"id":"legs","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[0.65,0.65,1.1]},"localTransform":{"positionMetersXYZ":[0,0.33,0],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["legs"]}],"visualBinding":{"mode":"static"},"sockets":[{"id":"CameraTarget3D","kind":"local","localTransform":{"positionMetersXYZ":[0,1,0],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","target"]},{"id":"LookAhead","kind":"local","localTransform":{"positionMetersXYZ":[0,0.9,-1.2],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","look-ahead"]},{"id":"MountSeat","kind":"local","localTransform":{"positionMetersXYZ":[0,1.25,0],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["mount","relationship"]}],"colliderPolicy":{"kind":"derive","colliderDerivationProfileRef":"worldkit://collider-derivation-profile/vertical-capability-capsule@1"},"capabilityRefs":["worldkit://capability/locomotion.forward-steer@1"],"profiles":{"physicsBodyProfileRef":"worldkit://physics-body-profile/character.capability-medium@1","locomotionProfileRef":"worldkit://locomotion-profile/ground.standard@1","motion":{"defaultMotionProfileRef":"worldkit://motion-profile/free-ground.humanoid-medium@1","optionalMotionProfileRefs":["worldkit://motion-profile/safe-ground@1"],"fallbackMotionProfileRef":"worldkit://motion-profile/safe-ground@1"},"controlProfileRef":"worldkit://control-profile/planar.camera-relative@1","cameraContextProfileRef":"worldkit://camera-context/capability-driven.quadruped-official@1","mediumProfileRef":"worldkit://medium-profile/ground-air.standard@1","harnessProfileRef":"worldkit://harness-profile/subject.standard@1","controlFeelProfileRef":"worldkit://control-feel-profile/subject.animal.quadruped.forward-steer.default@1","allowedControlFeelProfileRefs":["worldkit://control-feel-profile/subject.animal.quadruped.forward-steer.default@1"]},"relationshipCapabilityRefs":["worldkit://capability/relationship.mounted-on@1"],"actionOrPoseSetRef":"worldkit://pose-set/static.whitebox@1","renderBindingProfileRef":"worldkit://render-binding/subject.standard@1","allowedOverridePaths":["profiles.controlFeelProfileRef","profiles.controlProfileRef","profiles.motion.defaultMotionProfileRef"],"aiMetadata":{"displayName":"Quadruped Forward Steer Official v2","description":"Reviewed quadruped public default with versioned P1.5 Control Feel and Camera Profiles.","semanticTags":["animal","forward-steer","official","quadruped","whitebox"]}},{"kind":"subject-definition","schemaVersion":3,"id":"glider.paraglider.unpowered","version":1,"resourceRef":"worldkit://subject-definition/glider.paraglider.unpowered@1","authoringAvailability":"experimental","category":"composite","bodyTopology":"glider","semanticClassId":"subject.glider.paraglider","coordinateConvention":{"forwardAxis":"-Z","upAxis":"+Y","metersPerUnit":1,"pivot":"support-center"},"visualParts":[{"id":"pilot","kind":"primitive","shape":{"kind":"capsule","radiusMeters":0.28,"heightMeters":1.45},"localTransform":{"positionMetersXYZ":[0,0.725,0],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["pilot"]},{"id":"canopy","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[5.5,0.18,1.7]},"localTransform":{"positionMetersXYZ":[0,4.2,0.3],"rotationEulerRadiansXYZ":[0.08,0,0]},"colliderContribution":"exclude","semanticTags":["canopy","wing"]}],"visualBinding":{"mode":"static"},"sockets":[{"id":"TetherSource","kind":"local","localTransform":{"positionMetersXYZ":[0,1.55,0],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["pilot","tether"]},{"id":"TetherTarget","kind":"local","localTransform":{"positionMetersXYZ":[0,3.9,0.2],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["canopy","tether"]},{"id":"CameraTarget3D","kind":"local","localTransform":{"positionMetersXYZ":[0,1.4,0],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","target"]},{"id":"LookAhead","kind":"local","localTransform":{"positionMetersXYZ":[0,1.5,-3],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","look-ahead"]}],"colliderPolicy":{"kind":"derive","colliderDerivationProfileRef":"worldkit://collider-derivation-profile/vertical-capability-capsule@1"},"capabilityRefs":["worldkit://capability/locomotion.unpowered-glide@1","worldkit://capability/relationship.tether@1"],"profiles":{"physicsBodyProfileRef":"worldkit://physics-body-profile/character.capability-medium@1","locomotionProfileRef":"worldkit://locomotion-profile/ground.standard@1","motion":{"defaultMotionProfileRef":"worldkit://motion-profile/free-ground.humanoid-medium@1","optionalMotionProfileRefs":["worldkit://motion-profile/safe-ground@1"],"fallbackMotionProfileRef":"worldkit://motion-profile/safe-ground@1"},"controlProfileRef":"worldkit://control-profile/planar.camera-relative@1","cameraContextProfileRef":"worldkit://camera-context/capability-driven.default@1","mediumProfileRef":"worldkit://medium-profile/ground-air.standard@1","harnessProfileRef":"worldkit://harness-profile/subject.standard@1","controlFeelProfileRef":"worldkit://control-feel-profile/humanoid.medium-ground@1","allowedControlFeelProfileRefs":["worldkit://control-feel-profile/humanoid.medium-ground@1"]},"relationshipCapabilityRefs":["worldkit://capability/relationship.tether@1"],"actionOrPoseSetRef":"worldkit://pose-set/static.whitebox@1","renderBindingProfileRef":"worldkit://render-binding/subject.standard@1","allowedOverridePaths":["profiles.controlFeelProfileRef","profiles.controlProfileRef","profiles.motion.defaultMotionProfileRef"],"aiMetadata":{"displayName":"Unpowered Paraglider","description":"Whitebox pilot and canopy package using K08 unpowered glide and R03 tether facts.","semanticTags":["air","glide","paraglider","whitebox"]}},{"kind":"subject-definition","schemaVersion":3,"id":"surface-craft.ice-skimmer","version":1,"resourceRef":"worldkit://subject-definition/surface-craft.ice-skimmer@1","authoringAvailability":"experimental","category":"vehicle","bodyTopology":"surface-craft","semanticClassId":"subject.surface-craft.skimmer","coordinateConvention":{"forwardAxis":"-Z","upAxis":"+Y","metersPerUnit":1,"pivot":"support-center"},"visualParts":[{"id":"deck","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[1.4,0.25,2.8]},"localTransform":{"positionMetersXYZ":[0,0.125,0],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["deck","skimmer"]},{"id":"seat","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[0.7,0.7,0.8]},"localTransform":{"positionMetersXYZ":[0,0.7,0.3],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["seat"]}],"visualBinding":{"mode":"static"},"sockets":[{"id":"DriverSeat","kind":"local","localTransform":{"positionMetersXYZ":[0,0.95,0.25],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["driver","seat"]},{"id":"CameraTarget3D","kind":"local","localTransform":{"positionMetersXYZ":[0,0.9,0],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","target"]},{"id":"LookAhead","kind":"local","localTransform":{"positionMetersXYZ":[0,0.5,-2.5],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","look-ahead"]}],"colliderPolicy":{"kind":"derive","colliderDerivationProfileRef":"worldkit://collider-derivation-profile/vertical-capability-capsule@1"},"capabilityRefs":["worldkit://capability/locomotion.forward-steer@1","worldkit://capability/locomotion.surface-slide@1","worldkit://capability/relationship.seat@1"],"profiles":{"physicsBodyProfileRef":"worldkit://physics-body-profile/character.capability-medium@1","locomotionProfileRef":"worldkit://locomotion-profile/ground.standard@1","motion":{"defaultMotionProfileRef":"worldkit://motion-profile/free-ground.humanoid-medium@1","optionalMotionProfileRefs":["worldkit://motion-profile/safe-ground@1"],"fallbackMotionProfileRef":"worldkit://motion-profile/safe-ground@1"},"controlProfileRef":"worldkit://control-profile/planar.camera-relative@1","cameraContextProfileRef":"worldkit://camera-context/capability-driven.default@1","mediumProfileRef":"worldkit://medium-profile/ground-air.standard@1","harnessProfileRef":"worldkit://harness-profile/subject.standard@1","controlFeelProfileRef":"worldkit://control-feel-profile/humanoid.medium-ground@1","allowedControlFeelProfileRefs":["worldkit://control-feel-profile/humanoid.medium-ground@1"]},"relationshipCapabilityRefs":["worldkit://capability/relationship.seat@1"],"actionOrPoseSetRef":"worldkit://pose-set/static.whitebox@1","renderBindingProfileRef":"worldkit://render-binding/subject.standard@1","allowedOverridePaths":["profiles.controlFeelProfileRef","profiles.controlProfileRef","profiles.motion.defaultMotionProfileRef"],"aiMetadata":{"displayName":"Ice Skimmer","description":"Whitebox surface craft using K04 slope, friction and inertia motion.","semanticTags":["ice","skimmer","surface-slide","whitebox"]}},{"kind":"subject-definition","schemaVersion":3,"id":"vehicle.four-wheel.arcade","version":1,"resourceRef":"worldkit://subject-definition/vehicle.four-wheel.arcade@1","authoringAvailability":"experimental","category":"vehicle","bodyTopology":"four-wheel","semanticClassId":"subject.vehicle.four-wheel","coordinateConvention":{"forwardAxis":"-Z","upAxis":"+Y","metersPerUnit":1,"pivot":"support-center"},"visualParts":[{"id":"body","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[1.8,0.8,3.6]},"localTransform":{"positionMetersXYZ":[0,0.4,0],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["body","vehicle"]},{"id":"cabin","kind":"primitive","shape":{"kind":"box","sizeMetersXYZ":[1.45,0.75,1.7]},"localTransform":{"positionMetersXYZ":[0,1.3,0.15],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"include","semanticTags":["cabin"]}],"visualBinding":{"mode":"static"},"sockets":[{"id":"DriverSeat","kind":"local","localTransform":{"positionMetersXYZ":[-0.35,1.25,0.25],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["driver","seat"]},{"id":"CameraTarget3D","kind":"local","localTransform":{"positionMetersXYZ":[0,1.1,0],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","target"]},{"id":"LookAhead","kind":"local","localTransform":{"positionMetersXYZ":[0,0.8,-3],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","look-ahead"]}],"colliderPolicy":{"kind":"derive","colliderDerivationProfileRef":"worldkit://collider-derivation-profile/vertical-capability-capsule@1"},"capabilityRefs":["worldkit://capability/locomotion.forward-steer@1","worldkit://capability/locomotion.wheeled@1","worldkit://capability/relationship.seat@1"],"profiles":{"physicsBodyProfileRef":"worldkit://physics-body-profile/character.capability-medium@1","locomotionProfileRef":"worldkit://locomotion-profile/ground.standard@1","motion":{"defaultMotionProfileRef":"worldkit://motion-profile/free-ground.humanoid-medium@1","optionalMotionProfileRefs":["worldkit://motion-profile/safe-ground@1"],"fallbackMotionProfileRef":"worldkit://motion-profile/safe-ground@1"},"controlProfileRef":"worldkit://control-profile/planar.camera-relative@1","cameraContextProfileRef":"worldkit://camera-context/capability-driven.default@1","mediumProfileRef":"worldkit://medium-profile/ground-air.standard@1","harnessProfileRef":"worldkit://harness-profile/subject.standard@1","controlFeelProfileRef":"worldkit://control-feel-profile/humanoid.medium-ground@1","allowedControlFeelProfileRefs":["worldkit://control-feel-profile/humanoid.medium-ground@1"]},"relationshipCapabilityRefs":["worldkit://capability/relationship.seat@1"],"actionOrPoseSetRef":"worldkit://pose-set/static.whitebox@1","renderBindingProfileRef":"worldkit://render-binding/subject.standard@1","allowedOverridePaths":["profiles.controlFeelProfileRef","profiles.controlProfileRef","profiles.motion.defaultMotionProfileRef"],"aiMetadata":{"displayName":"Four-wheel Arcade","description":"Whitebox four-wheel package using simplified deterministic K03 motion.","semanticTags":["arcade","four-wheel","vehicle","whitebox"]}},{"kind":"subject-definition","schemaVersion":3,"id":"watercraft.kayak.surface","version":1,"resourceRef":"worldkit://subject-definition/watercraft.kayak.surface@1","authoringAvailability":"experimental","category":"composite","bodyTopology":"watercraft","semanticClassId":"subject.watercraft.kayak","coordinateConvention":{"forwardAxis":"-Z","upAxis":"+Y","metersPerUnit":1,"pivot":"support-center"},"visualParts":[{"id":"hull","kind":"primitive","shape":{"kind":"capsule","radiusMeters":0.42,"heightMeters":3.2},"localTransform":{"positionMetersXYZ":[0,0.42,0],"rotationEulerRadiansXYZ":[1.5707963267948966,0,0]},"colliderContribution":"include","semanticTags":["hull","kayak"]},{"id":"paddler","kind":"primitive","shape":{"kind":"capsule","radiusMeters":0.25,"heightMeters":1.15},"localTransform":{"positionMetersXYZ":[0,0.85,0],"rotationEulerRadiansXYZ":[0,0,0]},"colliderContribution":"exclude","semanticTags":["paddler"]}],"visualBinding":{"mode":"static"},"sockets":[{"id":"DriverSeat","kind":"local","localTransform":{"positionMetersXYZ":[0,0.55,0],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["driver","seat"]},{"id":"CameraTarget3D","kind":"local","localTransform":{"positionMetersXYZ":[0,1,0],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","target"]},{"id":"LookAhead","kind":"local","localTransform":{"positionMetersXYZ":[0,0.4,-2.3],"rotationEulerRadiansXYZ":[0,0,0]},"semanticTags":["camera","look-ahead"]}],"colliderPolicy":{"kind":"derive","colliderDerivationProfileRef":"worldkit://collider-derivation-profile/vertical-capability-capsule@1"},"capabilityRefs":["worldkit://capability/locomotion.water-surface@1","worldkit://capability/relationship.seat@1"],"profiles":{"physicsBodyProfileRef":"worldkit://physics-body-profile/character.capability-medium@1","locomotionProfileRef":"worldkit://locomotion-profile/ground.standard@1","motion":{"defaultMotionProfileRef":"worldkit://motion-profile/free-ground.humanoid-medium@1","optionalMotionProfileRefs":["worldkit://motion-profile/safe-ground@1"],"fallbackMotionProfileRef":"worldkit://motion-profile/safe-ground@1"},"controlProfileRef":"worldkit://control-profile/planar.camera-relative@1","cameraContextProfileRef":"worldkit://camera-context/capability-driven.default@1","mediumProfileRef":"worldkit://medium-profile/ground-air.standard@1","harnessProfileRef":"worldkit://harness-profile/subject.standard@1","controlFeelProfileRef":"worldkit://control-feel-profile/humanoid.medium-ground@1","allowedControlFeelProfileRefs":["worldkit://control-feel-profile/humanoid.medium-ground@1"]},"relationshipCapabilityRefs":["worldkit://capability/relationship.seat@1"],"actionOrPoseSetRef":"worldkit://pose-set/static.whitebox@1","renderBindingProfileRef":"worldkit://render-binding/subject.standard@1","allowedOverridePaths":["profiles.controlFeelProfileRef","profiles.controlProfileRef","profiles.motion.defaultMotionProfileRef"],"aiMetadata":{"displayName":"Kayak Surface Package","description":"Whitebox kayak and paddler package using K06 water-surface motion.","semanticTags":["kayak","water-surface","watercraft","whitebox"]}}]');
 const XIER120_STATIC_RESOURCE_ROWS = [
   {
     slug: "aerial-cockpit",
@@ -8340,6 +9409,7 @@ const XIER120_SUBJECT_DEFINITIONS = Object.freeze(
       relationshipCapabilityRefs: [],
       actionOrPoseSetRef: "worldkit://pose-set/static.whitebox@1",
       renderBindingProfileRef: "worldkit://render-binding/subject.standard@1",
+      allowedOverridePaths: FIRST_SLICE_ALLOWED_OVERRIDE_PATHS,
       aiMetadata: {
         displayName: row.displayName,
         description: `${row.displayName} as one static xier120 visual driven only by the existing ground Character capability; no vehicle, flight, mount, NPC, rig, or animation behavior is claimed.`,
@@ -8507,7 +9577,7 @@ Object.freeze(
   )
 );
 const schemaVersion = 1;
-const defaults$1 = [{ "subjectDefinitionId": "animal.quadruped.forward-steer", "subjectDefinitionRef": "worldkit://subject-definition/animal.quadruped.forward-steer@2", "subjectDefinitionContentHash": "sha256:4f53ebb7edf027ae8a6dffcc152041cc5343fac9c2244a4d73f4235293e3f69b" }, { "subjectDefinitionId": "glider.paraglider.unpowered", "subjectDefinitionRef": "worldkit://subject-definition/glider.paraglider.unpowered@1", "subjectDefinitionContentHash": "sha256:8d0d7e0dd662703e613f7c143c350d7ab7cd8424e92e37aa8bb914006a5cf06f" }, { "subjectDefinitionId": "humanoid.g-bot", "subjectDefinitionRef": "worldkit://subject-definition/humanoid.g-bot@2", "subjectDefinitionContentHash": "sha256:1f5c9007ce5f7a6e707d4809e51401bf9c0a9532ecc57e88930b9015e2dac92b" }, { "subjectDefinitionId": "surface-craft.ice-skimmer", "subjectDefinitionRef": "worldkit://subject-definition/surface-craft.ice-skimmer@1", "subjectDefinitionContentHash": "sha256:4dfaed753c6417e89ad386473f0c833cc3f75ed6cfdb154aa90e6436fdd2b92b" }, { "subjectDefinitionId": "vehicle.four-wheel.arcade", "subjectDefinitionRef": "worldkit://subject-definition/vehicle.four-wheel.arcade@1", "subjectDefinitionContentHash": "sha256:d9860837867a5125a7b5cdb5570ee9babdd8a93c40dac8b31b349863a2ed1f81" }, { "subjectDefinitionId": "watercraft.kayak.surface", "subjectDefinitionRef": "worldkit://subject-definition/watercraft.kayak.surface@1", "subjectDefinitionContentHash": "sha256:2a02e0520efa69b4d6a4c74481866329418f3dc5c14bb967ba502ee51f6e0d8a" }];
+const defaults$1 = [{ "subjectDefinitionId": "animal.quadruped.forward-steer", "subjectDefinitionRef": "worldkit://subject-definition/animal.quadruped.forward-steer@2", "subjectDefinitionContentHash": "sha256:927bf5808649646af09e4f9a724227e4ecbdf7b916697a0438059a8d3b13f53d" }, { "subjectDefinitionId": "glider.paraglider.unpowered", "subjectDefinitionRef": "worldkit://subject-definition/glider.paraglider.unpowered@1", "subjectDefinitionContentHash": "sha256:c1c734f9f60caebfaad76eb57ab407a3fc6579af351cb1e6b92d257e4d72a7c9" }, { "subjectDefinitionId": "humanoid.g-bot", "subjectDefinitionRef": "worldkit://subject-definition/humanoid.g-bot@2", "subjectDefinitionContentHash": "sha256:0428f0bf18495ff665715e4c4007e86192735bcfeb9d38d4c6d765f5501335fd" }, { "subjectDefinitionId": "surface-craft.ice-skimmer", "subjectDefinitionRef": "worldkit://subject-definition/surface-craft.ice-skimmer@1", "subjectDefinitionContentHash": "sha256:89ba730ac21d417bfbff8c64864bc279b70a5b89825ccad677bbb253c9235f2e" }, { "subjectDefinitionId": "vehicle.four-wheel.arcade", "subjectDefinitionRef": "worldkit://subject-definition/vehicle.four-wheel.arcade@1", "subjectDefinitionContentHash": "sha256:34ed61ef26371b76c1e6b490f0289251a949a6560db3c90cd0592b047a96b790" }, { "subjectDefinitionId": "watercraft.kayak.surface", "subjectDefinitionRef": "worldkit://subject-definition/watercraft.kayak.surface@1", "subjectDefinitionContentHash": "sha256:c22dfe537d31dc0611495a46c0ab847e57ebf2dc37ab44a33993879fd8f4ed71" }];
 const defaultCatalog = {
   schemaVersion,
   defaults: defaults$1
@@ -9997,6 +11067,7 @@ function normalizeSubjectDefinitionV2(request) {
     capabilityRefs,
     locomotionCapabilityRef: locomotionCapability.resourceRef,
     locomotionCapabilityHash: locomotionCapability.contentHash,
+    allowedOverridePaths: sortedStrings(definition.allowedOverridePaths),
     profiles: structuredClone(definition.profiles),
     locomotion: {
       allowWalk: locomotionProfile.allowWalk,
@@ -17399,7 +18470,7 @@ const type$1 = "object";
 const additionalProperties$1 = false;
 const required$1 = ["kind", "schemaVersion", "id", "seed", "layout", "spatial", "world", "resources", "nodes", "relationships", "rules", "startup", "constraints"];
 const properties$1 = { "kind": { "const": "worldkit-authoring-spec" }, "schemaVersion": { "const": 4 }, "id": { "$ref": "#/$defs/id" }, "seed": { "type": "integer", "minimum": 0, "maximum": 4294967295 }, "provenance": { "$ref": "#/$defs/provenance" }, "layout": { "type": "object", "additionalProperties": false, "required": ["solverProfileRef"], "properties": { "solverProfileRef": { "type": "string", "format": "layout-solver-profile-ref" } } }, "spatial": { "type": "object", "additionalProperties": false, "required": ["regions", "routes", "traversalAreas", "screenRegions"], "properties": { "regions": { "type": "array", "maxItems": 256, "items": { "$ref": "#/$defs/spatialRegion" } }, "routes": { "type": "array", "maxItems": 256, "items": { "$ref": "#/$defs/route" } }, "traversalAreas": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/traversalArea" } }, "screenRegions": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/screenRegion" } } } }, "world": { "$ref": "#/$defs/world" }, "resources": { "type": "object", "additionalProperties": false, "required": ["prototypes", "subjectDefinitions"], "properties": { "prototypes": { "type": "array", "maxItems": 4096, "items": { "$ref": "#/$defs/prototype" } }, "subjectDefinitions": { "type": "array", "maxItems": 256, "items": { "$ref": "worldkit://schema/subject-definition@1" } } } }, "nodes": { "type": "array", "minItems": 4, "maxItems": 1e4, "items": { "oneOf": [{ "$ref": "#/$defs/terrainNode" }, { "$ref": "#/$defs/waterNode" }, { "$ref": "#/$defs/objectNode" }, { "$ref": "#/$defs/subjectNode" }, { "$ref": "#/$defs/cameraNode" }, { "$ref": "#/$defs/anchorNode" }] } }, "relationships": { "type": "array", "maxItems": 1e4, "items": { "$ref": "#/$defs/relationship" } }, "rules": { "type": "array", "maxItems": 1e4, "items": { "$ref": "#/$defs/rule" } }, "startup": { "$ref": "#/$defs/startup" }, "constraints": { "type": "object", "additionalProperties": false, "required": ["placements", "connectivity"], "properties": { "placements": { "type": "array", "maxItems": 128, "items": { "$ref": "#/$defs/placementConstraint" } }, "connectivity": { "type": "array", "maxItems": 128, "items": { "$ref": "#/$defs/connectivityConstraint" } } } } };
-const $defs$1 = /* @__PURE__ */ JSON.parse('{"uv":{"type":"array","prefixItems":[{"type":"number","minimum":0,"maximum":1},{"type":"number","minimum":0,"maximum":1}],"items":false,"minItems":2,"maxItems":2},"spatialRegion":{"type":"object","additionalProperties":false,"required":["id","kind","pointsMetersXZ","semanticClassId"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"polygon-xz"},"pointsMetersXZ":{"type":"array","minItems":3,"maxItems":4096,"items":{"$ref":"#/$defs/vec2"}},"minimumHeightMeters":{"type":"number"},"maximumHeightMeters":{"type":"number"},"semanticClassId":{"type":"string","minLength":1,"maxLength":128}}},"route":{"type":"object","additionalProperties":false,"required":["id","kind","pointsMetersXZ","widthMeters","locomotionProfileRef"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"polyline-xz"},"pointsMetersXZ":{"type":"array","minItems":2,"maxItems":4096,"items":{"$ref":"#/$defs/vec2"}},"widthMeters":{"type":"number","exclusiveMinimum":0},"locomotionProfileRef":{"type":"string","format":"locomotion-profile-ref"}}},"traversalArea":{"type":"object","additionalProperties":false,"required":["id","kind","pointsMetersXZ","surfaceEntityId","mode"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"polygon-xz"},"pointsMetersXZ":{"type":"array","minItems":3,"maxItems":128,"items":{"$ref":"#/$defs/vec2"}},"surfaceEntityId":{"$ref":"#/$defs/id"},"mode":{"const":"blocked"}}},"screenRegion":{"type":"object","additionalProperties":false,"required":["id","kind","minimumUv","maximumUv"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"rectangle-uv"},"minimumUv":{"$ref":"#/$defs/uv"},"maximumUv":{"$ref":"#/$defs/uv"}}},"placement":{"oneOf":[{"type":"object","additionalProperties":false,"required":["kind","transform"],"properties":{"kind":{"const":"fixed"},"transform":{"$ref":"#/$defs/transform"}}},{"type":"object","additionalProperties":false,"required":["kind","placementConstraintIds"],"properties":{"kind":{"const":"solved"},"initialTransform":{"$ref":"#/$defs/transform"},"placementConstraintIds":{"type":"array","minItems":1,"maxItems":128,"uniqueItems":true,"items":{"$ref":"#/$defs/id"}}}}]},"objectNode":{"type":"object","additionalProperties":false,"required":["id","kind","prototypeRef","placement"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"object"},"prototypeRef":{"type":"string","format":"package-prototype-ref"},"placement":{"$ref":"#/$defs/placement"}}},"anchorNode":{"type":"object","additionalProperties":false,"required":["id","kind","placement","semantic"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"anchor"},"placement":{"$ref":"#/$defs/placement"},"semantic":{"$ref":"#/$defs/semantic"}}},"cameraNode":{"type":"object","additionalProperties":false,"required":["id","kind","components"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"camera"},"components":{"type":"object","additionalProperties":false,"required":["cameraRig"],"properties":{"cameraRig":{"type":"object","additionalProperties":false,"required":["defaultRigRef","allowedRigRefs","target","thirdPerson","manualSwitchAllowed"],"properties":{"defaultRigRef":{"$ref":"#/$defs/resourceRef"},"allowedRigRefs":{"type":"array","minItems":1,"maxItems":16,"uniqueItems":true,"items":{"$ref":"#/$defs/resourceRef"}},"target":{"type":"object","additionalProperties":false,"required":["targetEntityId"],"properties":{"targetEntityId":{"$ref":"#/$defs/id"},"targetHeightMeters":{"type":"number"}}},"thirdPerson":{"type":"object","additionalProperties":false,"required":["pitchRadians","distanceMeters","targetHeightMeters","fovDegrees","aspectRatio"],"properties":{"pitchRadians":{"type":"number","minimum":-0.95,"maximum":0.65},"distanceMeters":{"type":"number","minimum":1.8,"maximum":8},"targetHeightMeters":{"type":"number","minimum":0.5,"maximum":4.5},"fovDegrees":{"type":"number","minimum":35,"maximum":90},"aspectRatio":{"type":"number","minimum":0.25,"maximum":4}}},"manualSwitchAllowed":{"type":"boolean"}}}}}}},"insideRegionConstraint":{"type":"object","additionalProperties":false,"required":["id","kind","requirement","entityId","regionId","boundaryClearanceMeters"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"inside-region"},"requirement":{"enum":["required","preferred"]},"preferenceWeightRatio":{"type":"number","exclusiveMinimum":0,"maximum":1},"entityId":{"$ref":"#/$defs/id"},"regionId":{"$ref":"#/$defs/id"},"boundaryClearanceMeters":{"type":"number","minimum":0}},"allOf":[{"$ref":"#/$defs/requirementWeight"}]},"outsideRegionConstraint":{"type":"object","additionalProperties":false,"required":["id","kind","requirement","entityId","regionId","boundaryClearanceMeters"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"outside-region"},"requirement":{"enum":["required","preferred"]},"preferenceWeightRatio":{"type":"number","exclusiveMinimum":0,"maximum":1},"entityId":{"$ref":"#/$defs/id"},"regionId":{"$ref":"#/$defs/id"},"boundaryClearanceMeters":{"type":"number","minimum":0}},"allOf":[{"$ref":"#/$defs/requirementWeight"}]},"distanceRangeConstraint":{"type":"object","additionalProperties":false,"required":["id","kind","requirement","entityId","referenceEntityId","minimumDistanceMeters","maximumDistanceMeters"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"distance-range"},"requirement":{"enum":["required","preferred"]},"preferenceWeightRatio":{"type":"number","exclusiveMinimum":0,"maximum":1},"entityId":{"$ref":"#/$defs/id"},"referenceEntityId":{"$ref":"#/$defs/id"},"minimumDistanceMeters":{"type":"number","minimum":0},"maximumDistanceMeters":{"type":"number","minimum":0}},"allOf":[{"$ref":"#/$defs/requirementWeight"}]},"facesEntityConstraint":{"type":"object","additionalProperties":false,"required":["id","kind","requirement","facingEntityId","targetEntityId","maximumAngularDeviationDegrees"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"faces-entity"},"requirement":{"enum":["required","preferred"]},"preferenceWeightRatio":{"type":"number","exclusiveMinimum":0,"maximum":1},"facingEntityId":{"$ref":"#/$defs/id"},"targetEntityId":{"$ref":"#/$defs/id"},"maximumAngularDeviationDegrees":{"type":"number","minimum":0,"maximum":180}},"allOf":[{"$ref":"#/$defs/requirementWeight"}]},"supportedByConstraint":{"type":"object","additionalProperties":false,"required":["id","kind","requirement","supportedEntityId","supportingEntityId","maximumSupportGapMeters","minimumSupportRatio"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"supported-by"},"requirement":{"enum":["required","preferred"]},"preferenceWeightRatio":{"type":"number","exclusiveMinimum":0,"maximum":1},"supportedEntityId":{"$ref":"#/$defs/id"},"supportingEntityId":{"$ref":"#/$defs/id"},"maximumSupportGapMeters":{"type":"number","minimum":0},"minimumSupportRatio":{"type":"number","minimum":0,"maximum":1}},"allOf":[{"$ref":"#/$defs/requirementWeight"}]},"minimumClearanceConstraint":{"type":"object","additionalProperties":false,"required":["id","kind","requirement","entityId","clearanceMeters"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"minimum-clearance"},"requirement":{"enum":["required","preferred"]},"preferenceWeightRatio":{"type":"number","exclusiveMinimum":0,"maximum":1},"entityId":{"$ref":"#/$defs/id"},"clearanceMeters":{"type":"number","minimum":0},"otherEntityIds":{"type":"array","minItems":1,"maxItems":256,"uniqueItems":true,"items":{"$ref":"#/$defs/id"}},"semanticClassIds":{"type":"array","minItems":1,"maxItems":256,"uniqueItems":true,"items":{"type":"string","minLength":1,"maxLength":128}}},"oneOf":[{"type":"object","properties":{"otherEntityIds":true},"required":["otherEntityIds"],"not":{"type":"object","properties":{"semanticClassIds":true},"required":["semanticClassIds"]}},{"type":"object","properties":{"semanticClassIds":true},"required":["semanticClassIds"],"not":{"type":"object","properties":{"otherEntityIds":true},"required":["otherEntityIds"]}}],"allOf":[{"$ref":"#/$defs/requirementWeight"}]},"withinSlopeLimitConstraint":{"type":"object","additionalProperties":false,"required":["id","kind","requirement","terrainEntityId","maximumSlopeDegrees"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"within-slope-limit"},"requirement":{"enum":["required","preferred"]},"preferenceWeightRatio":{"type":"number","exclusiveMinimum":0,"maximum":1},"entityId":{"$ref":"#/$defs/id"},"routeId":{"$ref":"#/$defs/id"},"terrainEntityId":{"$ref":"#/$defs/id"},"maximumSlopeDegrees":{"type":"number","minimum":0,"maximum":90}},"oneOf":[{"type":"object","properties":{"entityId":true},"required":["entityId"],"not":{"type":"object","properties":{"routeId":true},"required":["routeId"]}},{"type":"object","properties":{"routeId":true},"required":["routeId"],"not":{"type":"object","properties":{"entityId":true},"required":["entityId"]}}],"allOf":[{"$ref":"#/$defs/requirementWeight"}]},"visibleInCameraRegionConstraint":{"type":"object","additionalProperties":false,"required":["id","kind","requirement","visibleEntityId","cameraEntityId","screenRegionId","minimumVisibleRatio","minimumProjectedAreaRatio"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"visible-in-camera-region"},"requirement":{"enum":["required","preferred"]},"preferenceWeightRatio":{"type":"number","exclusiveMinimum":0,"maximum":1},"visibleEntityId":{"$ref":"#/$defs/id"},"cameraEntityId":{"$ref":"#/$defs/id"},"screenRegionId":{"$ref":"#/$defs/id"},"minimumVisibleRatio":{"type":"number","minimum":0,"maximum":1},"minimumProjectedAreaRatio":{"type":"number","minimum":0,"maximum":1}},"allOf":[{"$ref":"#/$defs/requirementWeight"}]},"requirementWeight":{"type":"object","properties":{"requirement":{"enum":["required","preferred"]},"preferenceWeightRatio":{"type":"number","exclusiveMinimum":0,"maximum":1}},"if":{"type":"object","properties":{"requirement":{"const":"preferred"}},"required":["requirement"]},"then":{"type":"object","properties":{"preferenceWeightRatio":true},"required":["preferenceWeightRatio"]},"else":{"type":"object","not":{"type":"object","properties":{"preferenceWeightRatio":true},"required":["preferenceWeightRatio"]}}},"connectedByRouteConstraint":{"type":"object","additionalProperties":false,"required":["id","kind","requirement","traversingEntityId","startAnchorEntityId","destinationAnchorEntityId","routeId"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"connected-by-route"},"requirement":{"const":"required"},"traversingEntityId":{"$ref":"#/$defs/id"},"startAnchorEntityId":{"$ref":"#/$defs/id"},"destinationAnchorEntityId":{"$ref":"#/$defs/id"},"routeId":{"$ref":"#/$defs/id"}}},"connectivityConstraint":{"oneOf":[{"$ref":"#/$defs/connectedByRouteConstraint"}]},"placementConstraint":{"oneOf":[{"$ref":"#/$defs/insideRegionConstraint"},{"$ref":"#/$defs/outsideRegionConstraint"},{"$ref":"#/$defs/distanceRangeConstraint"},{"$ref":"#/$defs/facesEntityConstraint"},{"$ref":"#/$defs/supportedByConstraint"},{"$ref":"#/$defs/minimumClearanceConstraint"},{"$ref":"#/$defs/withinSlopeLimitConstraint"},{"$ref":"#/$defs/visibleInCameraRegionConstraint"}]},"id":{"type":"string","pattern":"^[a-z0-9][a-z0-9.-]{0,63}$"},"resourceRef":{"type":"string","format":"worldkit-resource-ref"},"positiveNumber":{"type":"number","exclusiveMinimum":0},"vec2":{"type":"array","prefixItems":[{"type":"number"},{"type":"number"}],"items":false,"minItems":2,"maxItems":2},"positiveVec2":{"type":"array","prefixItems":[{"$ref":"#/$defs/positiveNumber"},{"$ref":"#/$defs/positiveNumber"}],"items":false,"minItems":2,"maxItems":2},"vec3":{"type":"array","prefixItems":[{"type":"number"},{"type":"number"},{"type":"number"}],"items":false,"minItems":3,"maxItems":3},"positiveVec3":{"type":"array","prefixItems":[{"$ref":"#/$defs/positiveNumber"},{"$ref":"#/$defs/positiveNumber"},{"$ref":"#/$defs/positiveNumber"}],"items":false,"minItems":3,"maxItems":3},"semantic":{"type":"object","additionalProperties":false,"required":["classId"],"properties":{"classId":{"type":"string","minLength":1,"maxLength":128}}},"transform":{"type":"object","additionalProperties":false,"required":["positionMetersXYZ"],"properties":{"positionMetersXYZ":{"$ref":"#/$defs/vec3"},"rotationEulerRadiansXYZ":{"$ref":"#/$defs/vec3"},"scaleXYZ":{"$ref":"#/$defs/positiveVec3"}}},"provenance":{"type":"object","additionalProperties":false,"properties":{"userPrompt":{"type":"string","maxLength":20000},"referenceImages":{"type":"array","maxItems":64,"items":{"type":"object","additionalProperties":false,"required":["assetRef","evidenceClass"],"properties":{"assetRef":{"$ref":"#/$defs/resourceRef"},"evidenceClass":{"enum":["user-explicit","reference-visible","planner-inferred"]}}}}}},"world":{"type":"object","additionalProperties":false,"required":["coordinateSystem","bounds","gravityMetersPerSecondSquaredXYZ","environment","resourceBudget"],"properties":{"coordinateSystem":{"const":"right-handed-y-up-minus-z-forward"},"bounds":{"type":"object","additionalProperties":false,"required":["centerMetersXZ","sizeMetersXZ","heightRangeMeters"],"properties":{"centerMetersXZ":{"$ref":"#/$defs/vec2"},"sizeMetersXZ":{"$ref":"#/$defs/positiveVec2"},"heightRangeMeters":{"type":"array","prefixItems":[{"type":"number"},{"type":"number"}],"items":false,"minItems":2,"maxItems":2}}},"gravityMetersPerSecondSquaredXYZ":{"$ref":"#/$defs/vec3"},"environment":{"type":"object","additionalProperties":false,"required":["preset"],"properties":{"preset":{"enum":["clear-day","golden-hour","overcast","night"]}}},"resourceBudget":{"type":"object","additionalProperties":false,"required":["maxVertices","maxTriangles","maxColliders"],"properties":{"maxVertices":{"type":"integer","minimum":1},"maxTriangles":{"type":"integer","minimum":1},"maxColliders":{"type":"integer","minimum":1}}}}},"traversalSurfaceBinding":{"type":"object","additionalProperties":false,"required":["id","kind","logicalSubshapeId","traversalSurfaceProfileRef"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"collider-subshape"},"logicalSubshapeId":{"$ref":"#/$defs/id"},"traversalSurfaceProfileRef":{"type":"string","format":"traversal-surface-profile-ref"}}},"prototype":{"oneOf":[{"type":"object","additionalProperties":false,"required":["id","version","kind","primitive","sizeMetersXYZ","collisionEnabled"],"properties":{"id":{"$ref":"#/$defs/id"},"version":{"const":1},"kind":{"const":"primitive"},"primitive":{"const":"box"},"sizeMetersXYZ":{"$ref":"#/$defs/positiveVec3"},"collisionEnabled":{"type":"boolean"},"traversalSurfaceBindings":{"type":"array","items":{"$ref":"#/$defs/traversalSurfaceBinding"}},"semantic":{"$ref":"#/$defs/semantic"}}},{"type":"object","additionalProperties":false,"required":["id","version","kind","primitive","radiusMeters","collisionEnabled"],"properties":{"id":{"$ref":"#/$defs/id"},"version":{"const":1},"kind":{"const":"primitive"},"primitive":{"const":"sphere"},"radiusMeters":{"$ref":"#/$defs/positiveNumber"},"collisionEnabled":{"type":"boolean"},"traversalSurfaceBindings":{"type":"array","items":{"$ref":"#/$defs/traversalSurfaceBinding"}},"semantic":{"$ref":"#/$defs/semantic"}}},{"type":"object","additionalProperties":false,"required":["id","version","kind","primitive","radiusMeters","heightMeters","collisionEnabled"],"properties":{"id":{"$ref":"#/$defs/id"},"version":{"const":1},"kind":{"const":"primitive"},"primitive":{"const":"cylinder"},"radiusMeters":{"$ref":"#/$defs/positiveNumber"},"heightMeters":{"$ref":"#/$defs/positiveNumber"},"collisionEnabled":{"type":"boolean"},"traversalSurfaceBindings":{"type":"array","items":{"$ref":"#/$defs/traversalSurfaceBinding"}},"semantic":{"$ref":"#/$defs/semantic"}}},{"type":"object","additionalProperties":false,"required":["id","version","kind","primitive","radiusMeters","heightMeters","collisionEnabled"],"properties":{"id":{"$ref":"#/$defs/id"},"version":{"const":1},"kind":{"const":"primitive"},"primitive":{"const":"cone"},"radiusMeters":{"$ref":"#/$defs/positiveNumber"},"heightMeters":{"$ref":"#/$defs/positiveNumber"},"collisionEnabled":{"type":"boolean"},"traversalSurfaceBindings":{"type":"array","items":{"$ref":"#/$defs/traversalSurfaceBinding"}},"semantic":{"$ref":"#/$defs/semantic"}}}]},"proceduralSource":{"type":"object","additionalProperties":false,"required":["kind","relief"],"properties":{"kind":{"const":"procedural"},"relief":{"enum":["flat","plain","hills","mountains"]},"baseHeightMeters":{"type":"number"},"amplitudeMeters":{"type":"number","minimum":0},"frequencyPerMeter":{"$ref":"#/$defs/positiveNumber"},"octaves":{"type":"integer","minimum":1,"maximum":8},"lacunarityRatio":{"$ref":"#/$defs/positiveNumber"},"persistenceRatio":{"type":"number","exclusiveMinimum":0,"maximum":1}}},"terrainNode":{"type":"object","additionalProperties":false,"required":["id","kind","components"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"terrain"},"components":{"type":"object","additionalProperties":false,"required":["terrain"],"properties":{"terrain":{"type":"object","additionalProperties":false,"required":["source","grid"],"properties":{"source":{"$ref":"#/$defs/proceduralSource"},"grid":{"type":"object","additionalProperties":false,"required":["centerMetersXZ","sizeMetersXZ","resolutionCellsXZ"],"properties":{"centerMetersXZ":{"$ref":"#/$defs/vec2"},"sizeMetersXZ":{"$ref":"#/$defs/positiveVec2"},"resolutionCellsXZ":{"type":"array","prefixItems":[{"type":"integer","minimum":2,"maximum":1025},{"type":"integer","minimum":2,"maximum":1025}],"items":false,"minItems":2,"maxItems":2},"heightSamplesMeters":{"type":"array","minItems":4,"maxItems":1048576,"items":{"type":"number"}}}},"semantic":{"$ref":"#/$defs/semantic"}}}}}}},"waterBoundary":{"oneOf":[{"type":"object","additionalProperties":false,"required":["kind","centerMetersXZ","radiusMeters"],"properties":{"kind":{"const":"circle"},"centerMetersXZ":{"$ref":"#/$defs/vec2"},"radiusMeters":{"$ref":"#/$defs/positiveNumber"}}},{"type":"object","additionalProperties":false,"required":["kind","centerMetersXZ","radiusMetersXZ"],"properties":{"kind":{"const":"ellipse"},"centerMetersXZ":{"$ref":"#/$defs/vec2"},"radiusMetersXZ":{"$ref":"#/$defs/positiveVec2"}}},{"type":"object","additionalProperties":false,"required":["kind","pointsMetersXZ"],"properties":{"kind":{"const":"polygon"},"pointsMetersXZ":{"type":"array","minItems":3,"maxItems":4096,"items":{"$ref":"#/$defs/vec2"}}}}]},"waterNode":{"type":"object","additionalProperties":false,"required":["id","kind","components"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"water"},"components":{"type":"object","additionalProperties":false,"required":["water"],"properties":{"water":{"type":"object","additionalProperties":false,"required":["terrainEntityId","boundary","depthMeters"],"properties":{"terrainEntityId":{"$ref":"#/$defs/id"},"boundary":{"$ref":"#/$defs/waterBoundary"},"depthMeters":{"$ref":"#/$defs/positiveNumber"},"shoreWidthMeters":{"type":"number","minimum":0},"waterLevelMeters":{"type":"number"},"traversalMode":{"enum":["blocked","swimmable","walkable"]},"semantic":{"$ref":"#/$defs/semantic"}}}}}}},"subjectNode":{"type":"object","additionalProperties":false,"required":["id","kind","subjectDefinitionRef"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"subject"},"subjectDefinitionRef":{"type":"string","format":"subject-definition-ref"},"spawnAnchorEntityId":{"$ref":"#/$defs/id"}}},"relationship":{"type":"object","additionalProperties":false,"required":["id","type","schemaVersion","riderEntityId","mountEntityId","mountSlotId"],"properties":{"id":{"$ref":"#/$defs/id"},"type":{"const":"mountedOn"},"schemaVersion":{"const":1},"riderEntityId":{"$ref":"#/$defs/id"},"mountEntityId":{"$ref":"#/$defs/id"},"mountSlotId":{"$ref":"#/$defs/id"}}},"rule":{"type":"object","additionalProperties":false,"required":["id","kind"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"type":"string","minLength":1}}},"startup":{"type":"object","additionalProperties":false,"required":["spawnAnchorEntityId","controlledEntityId","cameraEntityId"],"properties":{"spawnAnchorEntityId":{"$ref":"#/$defs/id"},"controlledEntityId":{"$ref":"#/$defs/id"},"cameraEntityId":{"$ref":"#/$defs/id"}}}}');
+const $defs$1 = /* @__PURE__ */ JSON.parse('{"uv":{"type":"array","prefixItems":[{"type":"number","minimum":0,"maximum":1},{"type":"number","minimum":0,"maximum":1}],"items":false,"minItems":2,"maxItems":2},"spatialRegion":{"type":"object","additionalProperties":false,"required":["id","kind","pointsMetersXZ","semanticClassId"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"polygon-xz"},"pointsMetersXZ":{"type":"array","minItems":3,"maxItems":4096,"items":{"$ref":"#/$defs/vec2"}},"minimumHeightMeters":{"type":"number"},"maximumHeightMeters":{"type":"number"},"semanticClassId":{"type":"string","minLength":1,"maxLength":128}}},"route":{"type":"object","additionalProperties":false,"required":["id","kind","pointsMetersXZ","widthMeters","locomotionProfileRef"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"polyline-xz"},"pointsMetersXZ":{"type":"array","minItems":2,"maxItems":4096,"items":{"$ref":"#/$defs/vec2"}},"widthMeters":{"type":"number","exclusiveMinimum":0},"locomotionProfileRef":{"type":"string","format":"locomotion-profile-ref"}}},"traversalArea":{"type":"object","additionalProperties":false,"required":["id","kind","pointsMetersXZ","surfaceEntityId","mode"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"polygon-xz"},"pointsMetersXZ":{"type":"array","minItems":3,"maxItems":128,"items":{"$ref":"#/$defs/vec2"}},"surfaceEntityId":{"$ref":"#/$defs/id"},"mode":{"const":"blocked"}}},"screenRegion":{"type":"object","additionalProperties":false,"required":["id","kind","minimumUv","maximumUv"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"rectangle-uv"},"minimumUv":{"$ref":"#/$defs/uv"},"maximumUv":{"$ref":"#/$defs/uv"}}},"placement":{"oneOf":[{"type":"object","additionalProperties":false,"required":["kind","transform"],"properties":{"kind":{"const":"fixed"},"transform":{"$ref":"#/$defs/transform"}}},{"type":"object","additionalProperties":false,"required":["kind","placementConstraintIds"],"properties":{"kind":{"const":"solved"},"initialTransform":{"$ref":"#/$defs/transform"},"placementConstraintIds":{"type":"array","minItems":1,"maxItems":128,"uniqueItems":true,"items":{"$ref":"#/$defs/id"}}}}]},"objectNode":{"type":"object","additionalProperties":false,"required":["id","kind","prototypeRef","placement"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"object"},"prototypeRef":{"type":"string","format":"package-prototype-ref"},"placement":{"$ref":"#/$defs/placement"}}},"anchorNode":{"type":"object","additionalProperties":false,"required":["id","kind","placement","semantic"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"anchor"},"placement":{"$ref":"#/$defs/placement"},"semantic":{"$ref":"#/$defs/semantic"}}},"cameraNode":{"type":"object","additionalProperties":false,"required":["id","kind","components"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"camera"},"components":{"type":"object","additionalProperties":false,"required":["cameraRig"],"properties":{"cameraRig":{"type":"object","additionalProperties":false,"required":["defaultRigRef","allowedRigRefs","target","thirdPerson","manualSwitchAllowed"],"properties":{"defaultRigRef":{"$ref":"#/$defs/resourceRef"},"allowedRigRefs":{"type":"array","minItems":1,"maxItems":16,"uniqueItems":true,"items":{"$ref":"#/$defs/resourceRef"}},"target":{"type":"object","additionalProperties":false,"required":["targetEntityId"],"properties":{"targetEntityId":{"$ref":"#/$defs/id"},"targetHeightMeters":{"type":"number"}}},"thirdPerson":{"type":"object","additionalProperties":false,"required":["pitchRadians","distanceMeters","targetHeightMeters","fovDegrees","aspectRatio"],"properties":{"pitchRadians":{"type":"number","minimum":-0.95,"maximum":0.65},"distanceMeters":{"type":"number","minimum":1.8,"maximum":8},"targetHeightMeters":{"type":"number","minimum":0.5,"maximum":4.5},"fovDegrees":{"type":"number","minimum":35,"maximum":90},"aspectRatio":{"type":"number","minimum":0.25,"maximum":4}}},"manualSwitchAllowed":{"type":"boolean"}}}}}}},"insideRegionConstraint":{"type":"object","additionalProperties":false,"required":["id","kind","requirement","entityId","regionId","boundaryClearanceMeters"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"inside-region"},"requirement":{"enum":["required","preferred"]},"preferenceWeightRatio":{"type":"number","exclusiveMinimum":0,"maximum":1},"entityId":{"$ref":"#/$defs/id"},"regionId":{"$ref":"#/$defs/id"},"boundaryClearanceMeters":{"type":"number","minimum":0}},"allOf":[{"$ref":"#/$defs/requirementWeight"}]},"outsideRegionConstraint":{"type":"object","additionalProperties":false,"required":["id","kind","requirement","entityId","regionId","boundaryClearanceMeters"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"outside-region"},"requirement":{"enum":["required","preferred"]},"preferenceWeightRatio":{"type":"number","exclusiveMinimum":0,"maximum":1},"entityId":{"$ref":"#/$defs/id"},"regionId":{"$ref":"#/$defs/id"},"boundaryClearanceMeters":{"type":"number","minimum":0}},"allOf":[{"$ref":"#/$defs/requirementWeight"}]},"distanceRangeConstraint":{"type":"object","additionalProperties":false,"required":["id","kind","requirement","entityId","referenceEntityId","minimumDistanceMeters","maximumDistanceMeters"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"distance-range"},"requirement":{"enum":["required","preferred"]},"preferenceWeightRatio":{"type":"number","exclusiveMinimum":0,"maximum":1},"entityId":{"$ref":"#/$defs/id"},"referenceEntityId":{"$ref":"#/$defs/id"},"minimumDistanceMeters":{"type":"number","minimum":0},"maximumDistanceMeters":{"type":"number","minimum":0}},"allOf":[{"$ref":"#/$defs/requirementWeight"}]},"facesEntityConstraint":{"type":"object","additionalProperties":false,"required":["id","kind","requirement","facingEntityId","targetEntityId","maximumAngularDeviationDegrees"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"faces-entity"},"requirement":{"enum":["required","preferred"]},"preferenceWeightRatio":{"type":"number","exclusiveMinimum":0,"maximum":1},"facingEntityId":{"$ref":"#/$defs/id"},"targetEntityId":{"$ref":"#/$defs/id"},"maximumAngularDeviationDegrees":{"type":"number","minimum":0,"maximum":180}},"allOf":[{"$ref":"#/$defs/requirementWeight"}]},"supportedByConstraint":{"type":"object","additionalProperties":false,"required":["id","kind","requirement","supportedEntityId","supportingEntityId","maximumSupportGapMeters","minimumSupportRatio"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"supported-by"},"requirement":{"enum":["required","preferred"]},"preferenceWeightRatio":{"type":"number","exclusiveMinimum":0,"maximum":1},"supportedEntityId":{"$ref":"#/$defs/id"},"supportingEntityId":{"$ref":"#/$defs/id"},"maximumSupportGapMeters":{"type":"number","minimum":0},"minimumSupportRatio":{"type":"number","minimum":0,"maximum":1}},"allOf":[{"$ref":"#/$defs/requirementWeight"}]},"minimumClearanceConstraint":{"type":"object","additionalProperties":false,"required":["id","kind","requirement","entityId","clearanceMeters"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"minimum-clearance"},"requirement":{"enum":["required","preferred"]},"preferenceWeightRatio":{"type":"number","exclusiveMinimum":0,"maximum":1},"entityId":{"$ref":"#/$defs/id"},"clearanceMeters":{"type":"number","minimum":0},"otherEntityIds":{"type":"array","minItems":1,"maxItems":256,"uniqueItems":true,"items":{"$ref":"#/$defs/id"}},"semanticClassIds":{"type":"array","minItems":1,"maxItems":256,"uniqueItems":true,"items":{"type":"string","minLength":1,"maxLength":128}}},"oneOf":[{"type":"object","properties":{"otherEntityIds":true},"required":["otherEntityIds"],"not":{"type":"object","properties":{"semanticClassIds":true},"required":["semanticClassIds"]}},{"type":"object","properties":{"semanticClassIds":true},"required":["semanticClassIds"],"not":{"type":"object","properties":{"otherEntityIds":true},"required":["otherEntityIds"]}}],"allOf":[{"$ref":"#/$defs/requirementWeight"}]},"withinSlopeLimitConstraint":{"type":"object","additionalProperties":false,"required":["id","kind","requirement","terrainEntityId","maximumSlopeDegrees"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"within-slope-limit"},"requirement":{"enum":["required","preferred"]},"preferenceWeightRatio":{"type":"number","exclusiveMinimum":0,"maximum":1},"entityId":{"$ref":"#/$defs/id"},"routeId":{"$ref":"#/$defs/id"},"terrainEntityId":{"$ref":"#/$defs/id"},"maximumSlopeDegrees":{"type":"number","minimum":0,"maximum":90}},"oneOf":[{"type":"object","properties":{"entityId":true},"required":["entityId"],"not":{"type":"object","properties":{"routeId":true},"required":["routeId"]}},{"type":"object","properties":{"routeId":true},"required":["routeId"],"not":{"type":"object","properties":{"entityId":true},"required":["entityId"]}}],"allOf":[{"$ref":"#/$defs/requirementWeight"}]},"visibleInCameraRegionConstraint":{"type":"object","additionalProperties":false,"required":["id","kind","requirement","visibleEntityId","cameraEntityId","screenRegionId","minimumVisibleRatio","minimumProjectedAreaRatio"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"visible-in-camera-region"},"requirement":{"enum":["required","preferred"]},"preferenceWeightRatio":{"type":"number","exclusiveMinimum":0,"maximum":1},"visibleEntityId":{"$ref":"#/$defs/id"},"cameraEntityId":{"$ref":"#/$defs/id"},"screenRegionId":{"$ref":"#/$defs/id"},"minimumVisibleRatio":{"type":"number","minimum":0,"maximum":1},"minimumProjectedAreaRatio":{"type":"number","minimum":0,"maximum":1}},"allOf":[{"$ref":"#/$defs/requirementWeight"}]},"requirementWeight":{"type":"object","properties":{"requirement":{"enum":["required","preferred"]},"preferenceWeightRatio":{"type":"number","exclusiveMinimum":0,"maximum":1}},"if":{"type":"object","properties":{"requirement":{"const":"preferred"}},"required":["requirement"]},"then":{"type":"object","properties":{"preferenceWeightRatio":true},"required":["preferenceWeightRatio"]},"else":{"type":"object","not":{"type":"object","properties":{"preferenceWeightRatio":true},"required":["preferenceWeightRatio"]}}},"connectedByRouteConstraint":{"type":"object","additionalProperties":false,"required":["id","kind","requirement","traversingEntityId","startAnchorEntityId","destinationAnchorEntityId","routeId"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"connected-by-route"},"requirement":{"const":"required"},"traversingEntityId":{"$ref":"#/$defs/id"},"startAnchorEntityId":{"$ref":"#/$defs/id"},"destinationAnchorEntityId":{"$ref":"#/$defs/id"},"routeId":{"$ref":"#/$defs/id"}}},"connectivityConstraint":{"oneOf":[{"$ref":"#/$defs/connectedByRouteConstraint"}]},"placementConstraint":{"oneOf":[{"$ref":"#/$defs/insideRegionConstraint"},{"$ref":"#/$defs/outsideRegionConstraint"},{"$ref":"#/$defs/distanceRangeConstraint"},{"$ref":"#/$defs/facesEntityConstraint"},{"$ref":"#/$defs/supportedByConstraint"},{"$ref":"#/$defs/minimumClearanceConstraint"},{"$ref":"#/$defs/withinSlopeLimitConstraint"},{"$ref":"#/$defs/visibleInCameraRegionConstraint"}]},"id":{"type":"string","pattern":"^[a-z0-9][a-z0-9.-]{0,63}$"},"resourceRef":{"type":"string","format":"worldkit-resource-ref"},"positiveNumber":{"type":"number","exclusiveMinimum":0},"vec2":{"type":"array","prefixItems":[{"type":"number"},{"type":"number"}],"items":false,"minItems":2,"maxItems":2},"positiveVec2":{"type":"array","prefixItems":[{"$ref":"#/$defs/positiveNumber"},{"$ref":"#/$defs/positiveNumber"}],"items":false,"minItems":2,"maxItems":2},"vec3":{"type":"array","prefixItems":[{"type":"number"},{"type":"number"},{"type":"number"}],"items":false,"minItems":3,"maxItems":3},"positiveVec3":{"type":"array","prefixItems":[{"$ref":"#/$defs/positiveNumber"},{"$ref":"#/$defs/positiveNumber"},{"$ref":"#/$defs/positiveNumber"}],"items":false,"minItems":3,"maxItems":3},"semantic":{"type":"object","additionalProperties":false,"required":["classId"],"properties":{"classId":{"type":"string","minLength":1,"maxLength":128}}},"transform":{"type":"object","additionalProperties":false,"required":["positionMetersXYZ"],"properties":{"positionMetersXYZ":{"$ref":"#/$defs/vec3"},"rotationEulerRadiansXYZ":{"$ref":"#/$defs/vec3"},"scaleXYZ":{"$ref":"#/$defs/positiveVec3"}}},"provenance":{"type":"object","additionalProperties":false,"properties":{"userPrompt":{"type":"string","maxLength":20000},"referenceImages":{"type":"array","maxItems":64,"items":{"type":"object","additionalProperties":false,"required":["assetRef","evidenceClass"],"properties":{"assetRef":{"$ref":"#/$defs/resourceRef"},"evidenceClass":{"enum":["user-explicit","reference-visible","planner-inferred"]}}}}}},"world":{"type":"object","additionalProperties":false,"required":["coordinateSystem","bounds","gravityMetersPerSecondSquaredXYZ","environment","resourceBudget"],"properties":{"coordinateSystem":{"const":"right-handed-y-up-minus-z-forward"},"bounds":{"type":"object","additionalProperties":false,"required":["centerMetersXZ","sizeMetersXZ","heightRangeMeters"],"properties":{"centerMetersXZ":{"$ref":"#/$defs/vec2"},"sizeMetersXZ":{"$ref":"#/$defs/positiveVec2"},"heightRangeMeters":{"type":"array","prefixItems":[{"type":"number"},{"type":"number"}],"items":false,"minItems":2,"maxItems":2}}},"gravityMetersPerSecondSquaredXYZ":{"$ref":"#/$defs/vec3"},"environment":{"type":"object","additionalProperties":false,"required":["preset"],"properties":{"preset":{"enum":["clear-day","golden-hour","overcast","night"]}}},"resourceBudget":{"type":"object","additionalProperties":false,"required":["maxVertices","maxTriangles","maxColliders"],"properties":{"maxVertices":{"type":"integer","minimum":1},"maxTriangles":{"type":"integer","minimum":1},"maxColliders":{"type":"integer","minimum":1}}}}},"traversalSurfaceBinding":{"type":"object","additionalProperties":false,"required":["id","kind","logicalSubshapeId","traversalSurfaceProfileRef"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"collider-subshape"},"logicalSubshapeId":{"$ref":"#/$defs/id"},"traversalSurfaceProfileRef":{"type":"string","format":"traversal-surface-profile-ref"}}},"prototype":{"oneOf":[{"type":"object","additionalProperties":false,"required":["id","version","kind","primitive","sizeMetersXYZ","collisionEnabled"],"properties":{"id":{"$ref":"#/$defs/id"},"version":{"const":1},"kind":{"const":"primitive"},"primitive":{"const":"box"},"sizeMetersXYZ":{"$ref":"#/$defs/positiveVec3"},"collisionEnabled":{"type":"boolean"},"traversalSurfaceBindings":{"type":"array","items":{"$ref":"#/$defs/traversalSurfaceBinding"}},"semantic":{"$ref":"#/$defs/semantic"}}},{"type":"object","additionalProperties":false,"required":["id","version","kind","primitive","radiusMeters","collisionEnabled"],"properties":{"id":{"$ref":"#/$defs/id"},"version":{"const":1},"kind":{"const":"primitive"},"primitive":{"const":"sphere"},"radiusMeters":{"$ref":"#/$defs/positiveNumber"},"collisionEnabled":{"type":"boolean"},"traversalSurfaceBindings":{"type":"array","items":{"$ref":"#/$defs/traversalSurfaceBinding"}},"semantic":{"$ref":"#/$defs/semantic"}}},{"type":"object","additionalProperties":false,"required":["id","version","kind","primitive","radiusMeters","heightMeters","collisionEnabled"],"properties":{"id":{"$ref":"#/$defs/id"},"version":{"const":1},"kind":{"const":"primitive"},"primitive":{"const":"cylinder"},"radiusMeters":{"$ref":"#/$defs/positiveNumber"},"heightMeters":{"$ref":"#/$defs/positiveNumber"},"collisionEnabled":{"type":"boolean"},"traversalSurfaceBindings":{"type":"array","items":{"$ref":"#/$defs/traversalSurfaceBinding"}},"semantic":{"$ref":"#/$defs/semantic"}}},{"type":"object","additionalProperties":false,"required":["id","version","kind","primitive","radiusMeters","heightMeters","collisionEnabled"],"properties":{"id":{"$ref":"#/$defs/id"},"version":{"const":1},"kind":{"const":"primitive"},"primitive":{"const":"cone"},"radiusMeters":{"$ref":"#/$defs/positiveNumber"},"heightMeters":{"$ref":"#/$defs/positiveNumber"},"collisionEnabled":{"type":"boolean"},"traversalSurfaceBindings":{"type":"array","items":{"$ref":"#/$defs/traversalSurfaceBinding"}},"semantic":{"$ref":"#/$defs/semantic"}}}]},"proceduralSource":{"type":"object","additionalProperties":false,"required":["kind","relief"],"properties":{"kind":{"const":"procedural"},"relief":{"enum":["flat","plain","hills","mountains"]},"baseHeightMeters":{"type":"number"},"amplitudeMeters":{"type":"number","minimum":0},"frequencyPerMeter":{"$ref":"#/$defs/positiveNumber"},"octaves":{"type":"integer","minimum":1,"maximum":8},"lacunarityRatio":{"$ref":"#/$defs/positiveNumber"},"persistenceRatio":{"type":"number","exclusiveMinimum":0,"maximum":1}}},"terrainNode":{"type":"object","additionalProperties":false,"required":["id","kind","components"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"terrain"},"components":{"type":"object","additionalProperties":false,"required":["terrain"],"properties":{"terrain":{"type":"object","additionalProperties":false,"required":["source","grid"],"properties":{"source":{"$ref":"#/$defs/proceduralSource"},"grid":{"type":"object","additionalProperties":false,"required":["centerMetersXZ","sizeMetersXZ","resolutionCellsXZ"],"properties":{"centerMetersXZ":{"$ref":"#/$defs/vec2"},"sizeMetersXZ":{"$ref":"#/$defs/positiveVec2"},"resolutionCellsXZ":{"type":"array","prefixItems":[{"type":"integer","minimum":2,"maximum":1025},{"type":"integer","minimum":2,"maximum":1025}],"items":false,"minItems":2,"maxItems":2},"heightSamplesMeters":{"type":"array","minItems":4,"maxItems":1048576,"items":{"type":"number"}}}},"semantic":{"$ref":"#/$defs/semantic"}}}}}}},"waterBoundary":{"oneOf":[{"type":"object","additionalProperties":false,"required":["kind","centerMetersXZ","radiusMeters"],"properties":{"kind":{"const":"circle"},"centerMetersXZ":{"$ref":"#/$defs/vec2"},"radiusMeters":{"$ref":"#/$defs/positiveNumber"}}},{"type":"object","additionalProperties":false,"required":["kind","centerMetersXZ","radiusMetersXZ"],"properties":{"kind":{"const":"ellipse"},"centerMetersXZ":{"$ref":"#/$defs/vec2"},"radiusMetersXZ":{"$ref":"#/$defs/positiveVec2"}}},{"type":"object","additionalProperties":false,"required":["kind","pointsMetersXZ"],"properties":{"kind":{"const":"polygon"},"pointsMetersXZ":{"type":"array","minItems":3,"maxItems":4096,"items":{"$ref":"#/$defs/vec2"}}}}]},"waterNode":{"type":"object","additionalProperties":false,"required":["id","kind","components"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"water"},"components":{"type":"object","additionalProperties":false,"required":["water"],"properties":{"water":{"type":"object","additionalProperties":false,"required":["terrainEntityId","boundary","depthMeters"],"properties":{"terrainEntityId":{"$ref":"#/$defs/id"},"boundary":{"$ref":"#/$defs/waterBoundary"},"depthMeters":{"$ref":"#/$defs/positiveNumber"},"shoreWidthMeters":{"type":"number","minimum":0},"waterLevelMeters":{"type":"number"},"traversalMode":{"enum":["blocked","swimmable","walkable"]},"semantic":{"$ref":"#/$defs/semantic"}}}}}}},"subjectNode":{"type":"object","additionalProperties":false,"required":["id","kind","subjectDefinitionRef"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"subject"},"subjectDefinitionRef":{"type":"string","format":"subject-definition-ref"},"spawnAnchorEntityId":{"$ref":"#/$defs/id"},"overrides":{"type":"array","maxItems":16,"uniqueItems":true,"items":{"$ref":"#/$defs/definitionResourceRefOverride"}}}},"definitionResourceRefOverride":{"type":"object","additionalProperties":false,"required":["id","kind","path","resourceRef"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"const":"resource-ref"},"path":{"enum":["profiles.controlFeelProfileRef","profiles.controlProfileRef","profiles.motion.defaultMotionProfileRef"]},"resourceRef":{"type":"string","format":"worldkit-resource-ref"}}},"relationship":{"type":"object","additionalProperties":false,"required":["id","type","schemaVersion","riderEntityId","mountEntityId","mountSlotId"],"properties":{"id":{"$ref":"#/$defs/id"},"type":{"const":"mountedOn"},"schemaVersion":{"const":1},"riderEntityId":{"$ref":"#/$defs/id"},"mountEntityId":{"$ref":"#/$defs/id"},"mountSlotId":{"$ref":"#/$defs/id"}}},"rule":{"type":"object","additionalProperties":false,"required":["id","kind"],"properties":{"id":{"$ref":"#/$defs/id"},"kind":{"type":"string","minLength":1}}},"startup":{"type":"object","additionalProperties":false,"required":["spawnAnchorEntityId","controlledEntityId","cameraEntityId"],"properties":{"spawnAnchorEntityId":{"$ref":"#/$defs/id"},"controlledEntityId":{"$ref":"#/$defs/id"},"cameraEntityId":{"$ref":"#/$defs/id"}}}}');
 const authoringSpecV4Schema = {
   $schema: $schema$1,
   $id: $id$1,
@@ -17413,8 +18484,8 @@ const $schema = "https://json-schema.org/draft/2020-12/schema";
 const $id = "worldkit://schema/subject-definition@1";
 const type = "object";
 const additionalProperties = false;
-const required = ["id", "version", "kind", "authoringAvailability", "category", "bodyTopology", "semanticClassId", "coordinateConvention", "visualParts", "visualBinding", "sockets", "mountSlots", "colliderPolicy", "capabilityRefs", "profiles", "relationshipCapabilityRefs", "actionOrPoseSetRef", "renderBindingProfileRef", "aiMetadata"];
-const properties = { "id": { "$ref": "#/$defs/id" }, "version": { "const": 1 }, "kind": { "const": "subject-definition" }, "authoringAvailability": { "enum": ["recommended", "advanced", "experimental"] }, "category": { "enum": ["human", "animal", "custom"] }, "bodyTopology": { "enum": ["biped", "quadruped", "custom"] }, "semanticClassId": { "$ref": "#/$defs/nonEmptyString" }, "coordinateConvention": { "type": "object", "additionalProperties": false, "required": ["forwardAxis", "upAxis", "metersPerUnit", "pivot"], "properties": { "forwardAxis": { "const": "-Z" }, "upAxis": { "const": "+Y" }, "metersPerUnit": { "const": 1 }, "pivot": { "const": "support-center" } } }, "visualParts": { "type": "array", "minItems": 1, "maxItems": 128, "items": { "$ref": "#/$defs/visualPart" } }, "visualBinding": { "$ref": "#/$defs/visualBinding" }, "sockets": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/socket" } }, "mountSlots": { "type": "array", "maxItems": 16, "items": { "$ref": "#/$defs/mountSlot" } }, "colliderPolicy": { "$ref": "#/$defs/colliderPolicy" }, "capabilityRefs": { "type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true, "items": { "type": "string", "format": "capability-ref" } }, "profiles": { "type": "object", "additionalProperties": false, "required": ["physicsBodyProfileRef", "locomotionProfileRef", "controlFeelProfileRef", "allowedControlFeelProfileRefs", "motion", "controlProfileRef", "cameraContextProfileRef", "mediumProfileRef", "harnessProfileRef"], "properties": { "physicsBodyProfileRef": { "type": "string", "format": "physics-body-profile-ref" }, "locomotionProfileRef": { "type": "string", "format": "locomotion-profile-ref" }, "controlFeelProfileRef": { "type": "string", "pattern": "^worldkit://control-feel-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "allowedControlFeelProfileRefs": { "type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true, "items": { "type": "string", "pattern": "^worldkit://control-feel-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" } }, "motion": { "type": "object", "additionalProperties": false, "required": ["defaultMotionProfileRef", "optionalMotionProfileRefs", "fallbackMotionProfileRef"], "properties": { "defaultMotionProfileRef": { "type": "string", "pattern": "^worldkit://motion-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "optionalMotionProfileRefs": { "type": "array", "maxItems": 16, "uniqueItems": true, "items": { "type": "string", "pattern": "^worldkit://motion-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" } }, "fallbackMotionProfileRef": { "type": "string", "pattern": "^worldkit://motion-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" } } }, "controlProfileRef": { "type": "string", "pattern": "^worldkit://control-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "cameraContextProfileRef": { "type": "string", "pattern": "^worldkit://camera-context/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "mediumProfileRef": { "type": "string", "pattern": "^worldkit://medium-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "harnessProfileRef": { "type": "string", "pattern": "^worldkit://harness-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" } } }, "relationshipCapabilityRefs": { "type": "array", "maxItems": 16, "uniqueItems": true, "items": { "type": "string", "format": "capability-ref" } }, "actionOrPoseSetRef": { "type": "string", "pattern": "^worldkit://(?:animation-set|pose-set)/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "renderBindingProfileRef": { "type": "string", "pattern": "^worldkit://render-binding/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "aiMetadata": { "type": "object", "additionalProperties": false, "required": ["displayName", "description", "semanticTags"], "properties": { "displayName": { "type": "string", "minLength": 1, "maxLength": 120 }, "description": { "type": "string", "minLength": 1, "maxLength": 1e3 }, "semanticTags": { "$ref": "#/$defs/semanticTags" } } } };
+const required = ["id", "version", "kind", "authoringAvailability", "category", "bodyTopology", "semanticClassId", "coordinateConvention", "visualParts", "visualBinding", "sockets", "mountSlots", "colliderPolicy", "capabilityRefs", "profiles", "relationshipCapabilityRefs", "actionOrPoseSetRef", "renderBindingProfileRef", "allowedOverridePaths", "aiMetadata"];
+const properties = { "id": { "$ref": "#/$defs/id" }, "version": { "const": 1 }, "kind": { "const": "subject-definition" }, "authoringAvailability": { "enum": ["recommended", "advanced", "experimental"] }, "category": { "enum": ["human", "animal", "custom"] }, "bodyTopology": { "enum": ["biped", "quadruped", "custom"] }, "semanticClassId": { "$ref": "#/$defs/nonEmptyString" }, "coordinateConvention": { "type": "object", "additionalProperties": false, "required": ["forwardAxis", "upAxis", "metersPerUnit", "pivot"], "properties": { "forwardAxis": { "const": "-Z" }, "upAxis": { "const": "+Y" }, "metersPerUnit": { "const": 1 }, "pivot": { "const": "support-center" } } }, "visualParts": { "type": "array", "minItems": 1, "maxItems": 128, "items": { "$ref": "#/$defs/visualPart" } }, "visualBinding": { "$ref": "#/$defs/visualBinding" }, "sockets": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/socket" } }, "mountSlots": { "type": "array", "maxItems": 16, "items": { "$ref": "#/$defs/mountSlot" } }, "colliderPolicy": { "$ref": "#/$defs/colliderPolicy" }, "capabilityRefs": { "type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true, "items": { "type": "string", "format": "capability-ref" } }, "profiles": { "type": "object", "additionalProperties": false, "required": ["physicsBodyProfileRef", "locomotionProfileRef", "controlFeelProfileRef", "allowedControlFeelProfileRefs", "motion", "controlProfileRef", "cameraContextProfileRef", "mediumProfileRef", "harnessProfileRef"], "properties": { "physicsBodyProfileRef": { "type": "string", "format": "physics-body-profile-ref" }, "locomotionProfileRef": { "type": "string", "format": "locomotion-profile-ref" }, "controlFeelProfileRef": { "type": "string", "pattern": "^worldkit://control-feel-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "allowedControlFeelProfileRefs": { "type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true, "items": { "type": "string", "pattern": "^worldkit://control-feel-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" } }, "motion": { "type": "object", "additionalProperties": false, "required": ["defaultMotionProfileRef", "optionalMotionProfileRefs", "fallbackMotionProfileRef"], "properties": { "defaultMotionProfileRef": { "type": "string", "pattern": "^worldkit://motion-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "optionalMotionProfileRefs": { "type": "array", "maxItems": 16, "uniqueItems": true, "items": { "type": "string", "pattern": "^worldkit://motion-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" } }, "fallbackMotionProfileRef": { "type": "string", "pattern": "^worldkit://motion-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" } } }, "controlProfileRef": { "type": "string", "pattern": "^worldkit://control-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "cameraContextProfileRef": { "type": "string", "pattern": "^worldkit://camera-context/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "mediumProfileRef": { "type": "string", "pattern": "^worldkit://medium-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "harnessProfileRef": { "type": "string", "pattern": "^worldkit://harness-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" } } }, "relationshipCapabilityRefs": { "type": "array", "maxItems": 16, "uniqueItems": true, "items": { "type": "string", "format": "capability-ref" } }, "actionOrPoseSetRef": { "type": "string", "pattern": "^worldkit://(?:animation-set|pose-set)/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "renderBindingProfileRef": { "type": "string", "pattern": "^worldkit://render-binding/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "allowedOverridePaths": { "type": "array", "maxItems": 3, "uniqueItems": true, "items": { "enum": ["profiles.controlFeelProfileRef", "profiles.controlProfileRef", "profiles.motion.defaultMotionProfileRef"] } }, "aiMetadata": { "type": "object", "additionalProperties": false, "required": ["displayName", "description", "semanticTags"], "properties": { "displayName": { "type": "string", "minLength": 1, "maxLength": 120 }, "description": { "type": "string", "minLength": 1, "maxLength": 1e3 }, "semanticTags": { "$ref": "#/$defs/semanticTags" } } } };
 const allOf = [{ "if": { "properties": { "visualBinding": { "type": "object", "required": ["mode"], "properties": { "mode": { "const": "rigged" } } } } }, "then": { "properties": { "visualParts": { "type": "array", "contains": { "type": "object", "required": ["kind"], "properties": { "kind": { "const": "asset" } } }, "minContains": 1 } } } }];
 const $defs = { "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$" }, "socketId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9.-]{0,63}$" }, "nonEmptyString": { "type": "string", "minLength": 1, "maxLength": 128 }, "positiveNumber": { "type": "number", "exclusiveMinimum": 0 }, "vec3": { "type": "array", "prefixItems": [{ "type": "number" }, { "type": "number" }, { "type": "number" }], "items": false, "minItems": 3, "maxItems": 3 }, "positiveVec3": { "type": "array", "prefixItems": [{ "$ref": "#/$defs/positiveNumber" }, { "$ref": "#/$defs/positiveNumber" }, { "$ref": "#/$defs/positiveNumber" }], "items": false, "minItems": 3, "maxItems": 3 }, "semanticTags": { "type": "array", "maxItems": 32, "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$" } }, "localTransform": { "type": "object", "additionalProperties": false, "required": ["positionMetersXYZ"], "properties": { "positionMetersXYZ": { "$ref": "#/$defs/vec3" }, "rotationEulerRadiansXYZ": { "$ref": "#/$defs/vec3" } } }, "assetLocalTransform": { "type": "object", "additionalProperties": false, "required": ["positionMetersXYZ", "scaleXYZ"], "properties": { "positionMetersXYZ": { "$ref": "#/$defs/vec3" }, "rotationEulerRadiansXYZ": { "$ref": "#/$defs/vec3" }, "scaleXYZ": { "$ref": "#/$defs/positiveVec3" } } }, "shape": { "oneOf": [{ "type": "object", "additionalProperties": false, "required": ["kind", "sizeMetersXYZ"], "properties": { "kind": { "const": "box" }, "sizeMetersXYZ": { "$ref": "#/$defs/positiveVec3" } } }, { "type": "object", "additionalProperties": false, "required": ["kind", "radiusMeters"], "properties": { "kind": { "const": "sphere" }, "radiusMeters": { "$ref": "#/$defs/positiveNumber" } } }, { "type": "object", "additionalProperties": false, "required": ["kind", "radiusMeters", "heightMeters"], "properties": { "kind": { "const": "cylinder" }, "radiusMeters": { "$ref": "#/$defs/positiveNumber" }, "heightMeters": { "$ref": "#/$defs/positiveNumber" } } }, { "type": "object", "additionalProperties": false, "required": ["kind", "radiusMeters", "heightMeters"], "properties": { "kind": { "const": "capsule" }, "radiusMeters": { "$ref": "#/$defs/positiveNumber" }, "heightMeters": { "$ref": "#/$defs/positiveNumber" } } }] }, "visualPart": { "oneOf": [{ "type": "object", "additionalProperties": false, "required": ["id", "kind", "shape", "localTransform", "colliderContribution", "semanticTags"], "properties": { "id": { "$ref": "#/$defs/id" }, "kind": { "const": "primitive" }, "shape": { "$ref": "#/$defs/shape" }, "localTransform": { "$ref": "#/$defs/localTransform" }, "colliderContribution": { "enum": ["include", "exclude"] }, "semanticTags": { "$ref": "#/$defs/semanticTags" } } }, { "type": "object", "additionalProperties": false, "required": ["id", "kind", "subjectAssetRef", "localTransform", "appearance", "semanticTags"], "properties": { "id": { "$ref": "#/$defs/id" }, "kind": { "const": "asset" }, "subjectAssetRef": { "type": "string", "pattern": "^worldkit://subject-asset/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "localTransform": { "$ref": "#/$defs/assetLocalTransform" }, "appearance": { "type": "object", "additionalProperties": false, "required": ["mode"], "properties": { "mode": { "const": "whitebox-neutral" } } }, "semanticTags": { "$ref": "#/$defs/semanticTags" } } }] }, "visualBinding": { "oneOf": [{ "type": "object", "additionalProperties": false, "required": ["mode"], "properties": { "mode": { "const": "static" } } }, { "type": "object", "additionalProperties": false, "required": ["mode", "rigProfileRef", "animationSetRef"], "properties": { "mode": { "const": "rigged" }, "rigProfileRef": { "type": "string", "pattern": "^worldkit://rig-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" }, "animationSetRef": { "type": "string", "pattern": "^worldkit://animation-set/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" } } }] }, "colliderPolicy": { "oneOf": [{ "type": "object", "additionalProperties": false, "required": ["kind", "colliderDerivationProfileRef"], "properties": { "kind": { "const": "derive" }, "colliderDerivationProfileRef": { "type": "string", "format": "collider-derivation-profile-ref" } } }, { "type": "object", "additionalProperties": false, "required": ["kind", "colliderProfileRef"], "properties": { "kind": { "const": "profile" }, "colliderProfileRef": { "type": "string", "pattern": "^worldkit://collider-profile/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$" } } }] }, "socket": { "oneOf": [{ "type": "object", "additionalProperties": false, "required": ["id", "kind", "localTransform", "semanticTags"], "properties": { "id": { "$ref": "#/$defs/socketId" }, "kind": { "const": "local" }, "localTransform": { "$ref": "#/$defs/localTransform" }, "semanticTags": { "$ref": "#/$defs/semanticTags" } } }, { "type": "object", "additionalProperties": false, "required": ["id", "kind", "boneId", "offsetTransform", "semanticTags"], "properties": { "id": { "$ref": "#/$defs/socketId" }, "kind": { "const": "bone" }, "boneId": { "enum": ["hips", "spine", "chest", "neck", "head", "upper-arm.left", "lower-arm.left", "hand.left", "upper-arm.right", "lower-arm.right", "hand.right", "upper-leg.left", "lower-leg.left", "foot.left", "upper-leg.right", "lower-leg.right", "foot.right"] }, "offsetTransform": { "$ref": "#/$defs/localTransform" }, "semanticTags": { "$ref": "#/$defs/semanticTags" } } }] }, "mountSlot": { "type": "object", "additionalProperties": false, "required": ["id", "kind", "mode", "mountSocketId", "riderSubjectOriginOffsetMetersXYZ", "dismountCandidateOffsetsMetersXYZ"], "properties": { "id": { "$ref": "#/$defs/id" }, "kind": { "const": "mount-slot" }, "mode": { "const": "stand" }, "mountSocketId": { "$ref": "#/$defs/socketId" }, "riderSubjectOriginOffsetMetersXYZ": { "$ref": "#/$defs/vec3" }, "dismountCandidateOffsetsMetersXYZ": { "type": "array", "minItems": 1, "maxItems": 8, "uniqueItems": true, "items": { "$ref": "#/$defs/vec3" } } } } };
 const subjectDefinitionV1Schema = {
@@ -17485,6 +18556,25 @@ ajv$1.addSchema(subjectDefinitionV1Schema);
 const validateCanonicalAuthoringSpecV4 = ajv$1.compile(
   authoringSpecV4Schema
 );
+function canonicalJsonAdmissionResult(value) {
+  try {
+    assertCanonicalJsonValue(value);
+    return void 0;
+  } catch (error) {
+    if (error instanceof CanonicalJsonAdmissionError) {
+      return {
+        ok: false,
+        diagnostics: [{
+          severity: "error",
+          code: "AUTHORING_JSON_NEGATIVE_ZERO",
+          instancePath: error.instancePath,
+          message: "Negative zero is not allowed in Canonical JSON."
+        }]
+      };
+    }
+    throw error;
+  }
+}
 function pointerSegment$1(value) {
   return value.replace(/~/g, "~0").replace(/\//g, "~1");
 }
@@ -17531,6 +18621,35 @@ function duplicateIdDiagnostics(spec) {
       seen.add(row.id);
     });
   }
+  spec.nodes.forEach((node, nodeIndex) => {
+    const overrides = node.kind === "subject" ? node.overrides : void 0;
+    if (isNil(overrides) || isEmpty(overrides)) return;
+    const seenIds = /* @__PURE__ */ new Set();
+    const seenPaths = /* @__PURE__ */ new Set();
+    overrides.forEach((override, overrideIndex) => {
+      const instancePath = `/nodes/${nodeIndex}/overrides/${overrideIndex}`;
+      if (seenIds.has(override.id)) {
+        diagnostics.push({
+          severity: "error",
+          code: "AUTHORING_DUPLICATE_ID",
+          instancePath: `${instancePath}/id`,
+          message: `Duplicate id '${override.id}' is not allowed in this collection.`,
+          details: { id: override.id }
+        });
+      }
+      seenIds.add(override.id);
+      if (seenPaths.has(override.path)) {
+        diagnostics.push({
+          severity: "error",
+          code: "AUTHORING_DUPLICATE_BINDING",
+          instancePath: `${instancePath}/path`,
+          message: `Duplicate override path '${override.path}' is not allowed on one Subject.`,
+          details: { id: override.path }
+        });
+      }
+      seenPaths.add(override.path);
+    });
+  });
   spec.resources.prototypes.forEach((prototype, prototypeIndex) => {
     const seen = /* @__PURE__ */ new Set();
     prototype.traversalSurfaceBindings?.forEach((binding, bindingIndex) => {
@@ -17714,22 +18833,8 @@ function traversalAreaDiagnostics(spec) {
   return diagnostics;
 }
 function validateAuthoringSpecV4(value) {
-  try {
-    assertCanonicalJsonValue(value);
-  } catch (error) {
-    if (error instanceof CanonicalJsonAdmissionError) {
-      return {
-        ok: false,
-        diagnostics: [{
-          severity: "error",
-          code: "AUTHORING_JSON_NEGATIVE_ZERO",
-          instancePath: error.instancePath,
-          message: "Negative zero is not allowed in Canonical JSON."
-        }]
-      };
-    }
-    throw error;
-  }
+  const admission = canonicalJsonAdmissionResult(value);
+  if (!isNil(admission)) return admission;
   if (!validateCanonicalAuthoringSpecV4(value)) {
     const errors2 = validateCanonicalAuthoringSpecV4.errors;
     return {
@@ -18566,12 +19671,11 @@ function resolveAuthoringLayoutV4(value, options = {}) {
     spec,
     normalizedBase.value,
     resolvedSolverProfile,
-    sha256CanonicalJson(
-      canonicalAuthoringLayoutIdentityV4(spec, normalizedBase.value)
-    )
+    hashAuthoringDocumentV4(spec),
+    hashAuthoringLayoutInputV4(spec, normalizedBase.value)
   );
 }
-function resolveValidatedAuthoringLayout(spec, normalized, resolvedSolverProfile, authoringSpecHash) {
+function resolveValidatedAuthoringLayout(spec, normalized, resolvedSolverProfile, authoringSpecHash, layoutInputHash) {
   const prototypeByRef = new Map(normalized.resources.prototypes.map((prototype) => [
     `package://prototype/${prototype.id}@${prototype.version}`,
     prototype
@@ -18628,6 +19732,7 @@ function resolveValidatedAuthoringLayout(spec, normalized, resolvedSolverProfile
     schemaVersion: 1,
     id: spec.id,
     authoringSpecHash,
+    layoutInputHash,
     registryLockHash: normalized.resources.resourceLockHash,
     solverProfile: {
       solverProfileRef: resolvedSolverProfile.resourceRef,
@@ -18720,11 +19825,11 @@ function normalizedNodesV4(spec, nodes, report, layoutSolveReportHash) {
     };
   });
 }
-function deepFreeze$2(value) {
+function deepFreeze(value) {
   if (value === null || typeof value !== "object" || Object.isFrozen(value)) {
     return value;
   }
-  for (const child of Object.values(value)) deepFreeze$2(child);
+  for (const child of Object.values(value)) deepFreeze(child);
   return Object.freeze(value);
 }
 function restoreCanonicalV4Prototypes(spec, prototypes) {
@@ -18736,7 +19841,7 @@ function restoreCanonicalV4Prototypes(spec, prototypes) {
     if (source?.traversalSurfaceBindings === void 0) {
       return structuredClone(prototype);
     }
-    const traversalSurfaceBindings = deepFreeze$2(
+    const traversalSurfaceBindings = deepFreeze(
       [...source.traversalSurfaceBindings].sort((left, right) => left.id.localeCompare(right.id)).map((binding) => structuredClone(binding))
     );
     return {
@@ -18865,9 +19970,7 @@ function normalizeAuthoringSpecV4(value, options = {}) {
     ...canonicalBase,
     kind: "worldkit-normalized-world",
     schemaVersion: 4,
-    authoringSpecHash: sha256CanonicalJson(
-      canonicalAuthoringIdentityV4(spec, canonicalBase)
-    ),
+    authoringSpecHash: hashAuthoringDocumentV4(spec),
     nodes: normalizedNodesV4(
       spec,
       normalizedBase.nodes,
@@ -21751,496 +22854,6 @@ function compileWorldV5(input) {
     };
   }
 }
-function invalid$1(schemaName) {
-  throw new RangeError(`Value must match the closed ${schemaName} schema.`);
-}
-function snapshotDataRecord$1(value) {
-  if (typeof value !== "object" || isNil(value)) return void 0;
-  try {
-    const prototype = Reflect.getPrototypeOf(value);
-    if (prototype !== Object.prototype && !isNil(prototype)) return void 0;
-    const snapshot = /* @__PURE__ */ Object.create(null);
-    for (const key of Reflect.ownKeys(value)) {
-      const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
-      if (typeof key !== "string" || isNil(descriptor) || !descriptor.enumerable || !("value" in descriptor)) return void 0;
-      snapshot[key] = descriptor.value;
-    }
-    return snapshot;
-  } catch {
-    return void 0;
-  }
-}
-function hasExactKeys$1(value, keys) {
-  const ownKeys = Reflect.ownKeys(value);
-  return ownKeys.length === keys.length && ownKeys.every((key) => typeof key === "string" && keys.includes(key));
-}
-function isSafeNonNegativeInteger$1(value) {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && !Object.is(value, -0);
-}
-function deepFreeze$1(value) {
-  if (typeof value !== "object" || isNil(value) || Object.isFrozen(value)) {
-    return value;
-  }
-  for (const key of Reflect.ownKeys(value)) {
-    const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
-    if (!isNil(descriptor) && "value" in descriptor) {
-      deepFreeze$1(descriptor.value);
-    }
-  }
-  return Object.freeze(value);
-}
-const GAMEPLAY_CAPACITY_BUDGET_KEYS = [
-  "maximumParticipantCount",
-  "maximumControllerEntityCount",
-  "maximumRelationshipStateCount",
-  "maximumActiveActionStateCount",
-  "maximumGameplayFeatureCount",
-  "maximumSemanticActionDefinitionCount",
-  "maximumSemanticFactCount",
-  "maximumSemanticFactTransitionCountPerTick",
-  "maximumIdempotencyRecordCount",
-  "maximumUsedActionExecutionIdCount",
-  "maximumRetainedReceiptCount",
-  "maximumRetainedEventCount",
-  "maximumRetainedWorldStateSnapshotCount"
-];
-function parseGameplayCapacityBudgetV1(input) {
-  const schemaName = "GameplayCapacityBudgetV1";
-  const record2 = snapshotDataRecord$1(input) ?? invalid$1(schemaName);
-  if (!hasExactKeys$1(record2, GAMEPLAY_CAPACITY_BUDGET_KEYS) || !GAMEPLAY_CAPACITY_BUDGET_KEYS.every(
-    (key) => isSafeNonNegativeInteger$1(record2[key])
-  )) invalid$1(schemaName);
-  return deepFreeze$1(Object.fromEntries(
-    GAMEPLAY_CAPACITY_BUDGET_KEYS.map((key) => [key, record2[key]])
-  ));
-}
-parseGameplayCapacityBudgetV1({
-  maximumParticipantCount: 1,
-  maximumControllerEntityCount: 1,
-  maximumRelationshipStateCount: 1,
-  maximumActiveActionStateCount: 256,
-  maximumGameplayFeatureCount: 16,
-  maximumSemanticActionDefinitionCount: 256,
-  maximumSemanticFactCount: 4096,
-  maximumSemanticFactTransitionCountPerTick: 1024,
-  maximumIdempotencyRecordCount: 4096,
-  maximumUsedActionExecutionIdCount: 4096,
-  maximumRetainedReceiptCount: 4096,
-  maximumRetainedEventCount: 8192,
-  maximumRetainedWorldStateSnapshotCount: 4096
-});
-const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
-const GAMEPLAY_COMMAND_TYPES = /* @__PURE__ */ new Set([
-  "control.bind",
-  "control.release",
-  "action.activate",
-  "action.cancel"
-]);
-function invalid(schemaName) {
-  throw new RangeError(`Value must match the closed ${schemaName} schema.`);
-}
-function snapshotDataRecord(value) {
-  if (typeof value !== "object" || isNil(value)) return void 0;
-  try {
-    if (Reflect.getPrototypeOf(value) !== Object.prototype) return void 0;
-    const snapshot = {};
-    for (const key of Reflect.ownKeys(value)) {
-      const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
-      if (typeof key !== "string" || isNil(descriptor) || !descriptor.enumerable || !("value" in descriptor)) return void 0;
-      Object.defineProperty(snapshot, key, {
-        configurable: true,
-        enumerable: true,
-        value: descriptor.value,
-        writable: true
-      });
-    }
-    return snapshot;
-  } catch {
-    return void 0;
-  }
-}
-function snapshotDataArray(value) {
-  if (!Array.isArray(value)) return void 0;
-  try {
-    if (Reflect.getPrototypeOf(value) !== Array.prototype) return void 0;
-    if (Reflect.ownKeys(value).some((key) => typeof key === "symbol")) {
-      return void 0;
-    }
-    if (Object.getOwnPropertyNames(value).length !== value.length + 1) {
-      return void 0;
-    }
-    const snapshot = [];
-    for (let index = 0; index < value.length; index += 1) {
-      const descriptor = Reflect.getOwnPropertyDescriptor(value, String(index));
-      if (isNil(descriptor) || !descriptor.enumerable || !("value" in descriptor)) return void 0;
-      snapshot.push(descriptor.value);
-    }
-    const lengthDescriptor = Reflect.getOwnPropertyDescriptor(value, "length");
-    if (isNil(lengthDescriptor) || lengthDescriptor.enumerable !== false) {
-      return void 0;
-    }
-    return snapshot;
-  } catch {
-    return void 0;
-  }
-}
-function hasExactKeys(record2, keys) {
-  const ownKeys = Reflect.ownKeys(record2);
-  return ownKeys.length === keys.length && ownKeys.every(
-    (key) => typeof key === "string" && keys.includes(key)
-  );
-}
-function isNonEmptyString(value) {
-  return typeof value === "string" && value.length > 0;
-}
-function isSha256(value) {
-  return typeof value === "string" && SHA256_PATTERN.test(value);
-}
-function isSafeNonNegativeInteger(value) {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && !Object.is(value, -0);
-}
-function isSafePositiveInteger(value) {
-  return isSafeNonNegativeInteger(value) && value > 0;
-}
-function compareCanonicalStrings(left, right) {
-  return left < right ? -1 : left > right ? 1 : 0;
-}
-function sameOrder(actual, expected) {
-  return actual.length === expected.length && actual.every(
-    (value, index) => value === expected[index]
-  );
-}
-function canonicalStringSet(input, schemaName, mode) {
-  const values = snapshotDataArray(input);
-  if (isNil(values)) invalid(schemaName);
-  if (!values.every(isNonEmptyString)) invalid(schemaName);
-  const typedValues = values;
-  if (new Set(typedValues).size !== typedValues.length) invalid(schemaName);
-  const canonical = [...typedValues].sort(compareCanonicalStrings);
-  if (mode === "strict" && !sameOrder(typedValues, canonical)) invalid(schemaName);
-  return Object.freeze(canonical);
-}
-function deepFreeze(value) {
-  if (typeof value !== "object" || isNil(value) || Object.isFrozen(value)) {
-    return value;
-  }
-  for (const key of Reflect.ownKeys(value)) {
-    const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
-    if (!isNil(descriptor) && "value" in descriptor) {
-      deepFreeze(descriptor.value);
-    }
-  }
-  return Object.freeze(value);
-}
-function parseGameplayEntityDescriptor(input, mode, schemaName) {
-  const record2 = snapshotDataRecord(input);
-  if (isNil(record2)) invalid(schemaName);
-  if (!hasExactKeys(record2, ["id", "entityDefinitionRef", "capabilityRefs"]) || !isNonEmptyString(record2.id) || !isNonEmptyString(record2.entityDefinitionRef)) invalid(schemaName);
-  return deepFreeze({
-    id: record2.id,
-    entityDefinitionRef: record2.entityDefinitionRef,
-    capabilityRefs: canonicalStringSet(record2.capabilityRefs, schemaName, mode)
-  });
-}
-function createGameplayEntityDescriptorV1(input) {
-  return parseGameplayEntityDescriptor(
-    input,
-    "canonicalize",
-    "GameplayEntityDescriptorV1"
-  );
-}
-function parseGameplayEntityDescriptorV1(input) {
-  return parseGameplayEntityDescriptor(input, "strict", "GameplayEntityDescriptorV1");
-}
-function parseGameplayFeatureManifestBody(input, mode) {
-  const schemaName = "GameplayFeatureManifestBodyV1";
-  const record2 = snapshotDataRecord(input);
-  if (isNil(record2)) invalid(schemaName);
-  if (!hasExactKeys(record2, [
-    "kind",
-    "id",
-    "version",
-    "resourceRef",
-    "dependencyFeatureRefs",
-    "requiredCapabilityRefs",
-    "commandTypes",
-    "resourceBudget"
-  ]) || record2.kind !== "gameplay-feature" || !isNonEmptyString(record2.id) || !isSafePositiveInteger(record2.version) || !isNonEmptyString(record2.resourceRef)) invalid(schemaName);
-  const commandTypes = canonicalStringSet(record2.commandTypes, schemaName, mode);
-  if (!commandTypes.every(
-    (type2) => GAMEPLAY_COMMAND_TYPES.has(type2)
-  )) invalid(schemaName);
-  const resourceBudget = snapshotDataRecord(record2.resourceBudget);
-  if (isNil(resourceBudget)) invalid(schemaName);
-  if (!hasExactKeys(resourceBudget, ["stateSliceCount", "commandHandlerCount"]) || resourceBudget.stateSliceCount !== 1 || !isSafeNonNegativeInteger(resourceBudget.commandHandlerCount) || resourceBudget.commandHandlerCount !== commandTypes.length) invalid(schemaName);
-  return deepFreeze({
-    kind: "gameplay-feature",
-    id: record2.id,
-    version: record2.version,
-    resourceRef: record2.resourceRef,
-    dependencyFeatureRefs: canonicalStringSet(
-      record2.dependencyFeatureRefs,
-      schemaName,
-      mode
-    ),
-    requiredCapabilityRefs: canonicalStringSet(
-      record2.requiredCapabilityRefs,
-      schemaName,
-      mode
-    ),
-    commandTypes,
-    resourceBudget: {
-      stateSliceCount: 1,
-      commandHandlerCount: resourceBudget.commandHandlerCount
-    }
-  });
-}
-function createGameplayFeatureManifestV1(input) {
-  const body = parseGameplayFeatureManifestBody(input, "canonicalize");
-  return deepFreeze({
-    ...body,
-    contentHash: sha256CanonicalJson(body)
-  });
-}
-function parseGameplayFeatureResourceLockV1(input) {
-  const schemaName = "GameplayFeatureResourceLockV1";
-  const record2 = snapshotDataRecord(input);
-  if (isNil(record2)) invalid(schemaName);
-  if (!hasExactKeys(record2, ["resourceRef", "contentHash"]) || !isNonEmptyString(record2.resourceRef) || !isSha256(record2.contentHash)) invalid(schemaName);
-  return deepFreeze({
-    resourceRef: record2.resourceRef,
-    contentHash: record2.contentHash
-  });
-}
-function parseGameplayActionDefinitionBody(input, mode) {
-  const schemaName = "GameplayActionDefinitionBodyV1";
-  const record2 = snapshotDataRecord(input);
-  if (isNil(record2)) invalid(schemaName);
-  if (!hasExactKeys(record2, [
-    "kind",
-    "id",
-    "version",
-    "resourceRef",
-    "executionMode",
-    "completion",
-    "effect",
-    "isMovementInputBlocked",
-    "allowedActorEntityDefinitionRefs",
-    "requiredActorCapabilityRefs",
-    "request"
-  ]) || record2.kind !== "semantic-action" || !isNonEmptyString(record2.id) || !isSafePositiveInteger(record2.version) || !isNonEmptyString(record2.resourceRef) || record2.executionMode !== "exclusive-per-subject" || typeof record2.isMovementInputBlocked !== "boolean") invalid(schemaName);
-  const completionRecord = snapshotDataRecord(record2.completion);
-  if (isNil(completionRecord)) invalid(schemaName);
-  let completion;
-  if (completionRecord.mode === "immediate" && hasExactKeys(completionRecord, ["mode"])) {
-    completion = { mode: "immediate" };
-  } else if (completionRecord.mode === "explicit-cancel" && hasExactKeys(completionRecord, ["mode"])) {
-    completion = { mode: "explicit-cancel" };
-  } else if (completionRecord.mode === "fixed-duration" && hasExactKeys(completionRecord, ["mode", "durationTicks"]) && isSafePositiveInteger(completionRecord.durationTicks)) {
-    completion = {
-      mode: "fixed-duration",
-      durationTicks: completionRecord.durationTicks
-    };
-  } else {
-    return invalid(schemaName);
-  }
-  const effectRecord = snapshotDataRecord(record2.effect);
-  if (isNil(effectRecord)) invalid(schemaName);
-  let effect;
-  if (effectRecord.mode === "state-only" && hasExactKeys(effectRecord, ["mode"])) {
-    effect = { mode: "state-only" };
-  } else if (effectRecord.mode === "trusted" && hasExactKeys(effectRecord, [
-    "mode",
-    "gameplayActionEffectRef",
-    "gameplayActionEffectHash"
-  ]) && isNonEmptyString(effectRecord.gameplayActionEffectRef) && isSha256(effectRecord.gameplayActionEffectHash)) {
-    effect = {
-      mode: "trusted",
-      gameplayActionEffectRef: effectRecord.gameplayActionEffectRef,
-      gameplayActionEffectHash: effectRecord.gameplayActionEffectHash
-    };
-  } else {
-    return invalid(schemaName);
-  }
-  const requestRecord = snapshotDataRecord(record2.request);
-  if (isNil(requestRecord)) invalid(schemaName);
-  let request;
-  if (requestRecord.mode === "none" && hasExactKeys(requestRecord, ["mode"])) {
-    request = { mode: "none" };
-  } else if (requestRecord.mode === "required" && hasExactKeys(requestRecord, [
-    "mode",
-    "actionRequestSchemaRef",
-    "actionRequestSchemaHash"
-  ]) && isNonEmptyString(requestRecord.actionRequestSchemaRef) && isSha256(requestRecord.actionRequestSchemaHash)) {
-    request = {
-      mode: "required",
-      actionRequestSchemaRef: requestRecord.actionRequestSchemaRef,
-      actionRequestSchemaHash: requestRecord.actionRequestSchemaHash
-    };
-  } else {
-    return invalid(schemaName);
-  }
-  return deepFreeze({
-    kind: "semantic-action",
-    id: record2.id,
-    version: record2.version,
-    resourceRef: record2.resourceRef,
-    executionMode: "exclusive-per-subject",
-    completion,
-    effect,
-    isMovementInputBlocked: record2.isMovementInputBlocked,
-    allowedActorEntityDefinitionRefs: canonicalStringSet(
-      record2.allowedActorEntityDefinitionRefs,
-      schemaName,
-      mode
-    ),
-    requiredActorCapabilityRefs: canonicalStringSet(
-      record2.requiredActorCapabilityRefs,
-      schemaName,
-      mode
-    ),
-    request
-  });
-}
-function parseGameplayActionDefinitionV1(input) {
-  const schemaName = "GameplayActionDefinitionV1";
-  const record2 = snapshotDataRecord(input);
-  if (isNil(record2)) invalid(schemaName);
-  if (!hasExactKeys(record2, [
-    "kind",
-    "id",
-    "version",
-    "resourceRef",
-    "contentHash",
-    "executionMode",
-    "completion",
-    "effect",
-    "isMovementInputBlocked",
-    "allowedActorEntityDefinitionRefs",
-    "requiredActorCapabilityRefs",
-    "request"
-  ]) || !isSha256(record2.contentHash)) invalid(schemaName);
-  const { contentHash: contentHash2, ...bodyInput } = record2;
-  let body;
-  try {
-    body = parseGameplayActionDefinitionBody(bodyInput, "strict");
-  } catch {
-    return invalid(schemaName);
-  }
-  const expectedHash = sha256CanonicalJson(body);
-  if (contentHash2 !== expectedHash) invalid(schemaName);
-  return deepFreeze({ ...body, contentHash: expectedHash });
-}
-function canonicalObjectCollection(input, schemaName, mode, parse, identity2) {
-  const source = snapshotDataArray(input);
-  if (isNil(source)) invalid(schemaName);
-  let parsed;
-  try {
-    parsed = source.map(parse);
-  } catch {
-    return invalid(schemaName);
-  }
-  const identities = parsed.map(identity2);
-  if (identities.some((value) => value.length === 0)) invalid(schemaName);
-  if (new Set(identities).size !== identities.length) invalid(schemaName);
-  const canonical = [...parsed].sort(
-    (left, right) => compareCanonicalStrings(identity2(left), identity2(right))
-  );
-  if (mode === "strict" && !sameOrder(identities, canonical.map(identity2))) invalid(schemaName);
-  return Object.freeze(canonical);
-}
-function parseGameplayBootstrapBody(input, mode) {
-  const schemaName = "GameplayBootstrapBodyV1";
-  const record2 = snapshotDataRecord(input);
-  if (isNil(record2)) invalid(schemaName);
-  if (!hasExactKeys(record2, [
-    "kind",
-    "id",
-    "version",
-    "resourceRef",
-    "entityDescriptors",
-    "featureResourceLocks",
-    "semanticActionDefinitions",
-    "availableCapabilityRefs"
-  ]) || record2.kind !== "gameplay-bootstrap" || !isNonEmptyString(record2.id) || !isSafePositiveInteger(record2.version) || !isNonEmptyString(record2.resourceRef)) invalid(schemaName);
-  const parseEntity = mode === "strict" ? parseGameplayEntityDescriptorV1 : (value) => createGameplayEntityDescriptorV1(
-    value
-  );
-  return deepFreeze({
-    kind: "gameplay-bootstrap",
-    id: record2.id,
-    version: record2.version,
-    resourceRef: record2.resourceRef,
-    entityDescriptors: canonicalObjectCollection(
-      record2.entityDescriptors,
-      schemaName,
-      mode,
-      parseEntity,
-      (value) => value.id
-    ),
-    featureResourceLocks: canonicalObjectCollection(
-      record2.featureResourceLocks,
-      schemaName,
-      mode,
-      parseGameplayFeatureResourceLockV1,
-      (value) => value.resourceRef
-    ),
-    semanticActionDefinitions: canonicalObjectCollection(
-      record2.semanticActionDefinitions,
-      schemaName,
-      mode,
-      parseGameplayActionDefinitionV1,
-      (value) => value.resourceRef
-    ),
-    availableCapabilityRefs: canonicalStringSet(
-      record2.availableCapabilityRefs,
-      schemaName,
-      mode
-    )
-  });
-}
-function createGameplayBootstrapV1(input) {
-  const body = parseGameplayBootstrapBody(input, "canonicalize");
-  return deepFreeze({
-    ...body,
-    contentHash: sha256CanonicalJson(body)
-  });
-}
-function parseGameplayBootstrapV1(input) {
-  const schemaName = "GameplayBootstrapV1";
-  const record2 = snapshotDataRecord(input);
-  if (isNil(record2)) invalid(schemaName);
-  if (!hasExactKeys(record2, [
-    "kind",
-    "id",
-    "version",
-    "resourceRef",
-    "contentHash",
-    "entityDescriptors",
-    "featureResourceLocks",
-    "semanticActionDefinitions",
-    "availableCapabilityRefs"
-  ]) || !isSha256(record2.contentHash)) invalid(schemaName);
-  const { contentHash: contentHash2, ...bodyInput } = record2;
-  let body;
-  try {
-    body = parseGameplayBootstrapBody(bodyInput, "strict");
-  } catch {
-    return invalid(schemaName);
-  }
-  const expectedHash = sha256CanonicalJson(body);
-  if (contentHash2 !== expectedHash) invalid(schemaName);
-  return deepFreeze({ ...body, contentHash: expectedHash });
-}
-function createGameplayBootstrapResourceLockEntryV1(input) {
-  const bootstrap = parseGameplayBootstrapV1(input);
-  return deepFreeze({
-    resourceRef: bootstrap.resourceRef,
-    resourceKind: "gameplay-bootstrap",
-    resolvedVersion: String(bootstrap.version),
-    contentHash: bootstrap.contentHash
-  });
-}
 const CORE_CONTROL_FEATURE_REF = "worldkit://gameplay-feature/core-control@1";
 const CONTROL_TRANSITION_CAPABILITY_REF = "worldkit://runtime-capability/control-transition@1";
 const manifest = createGameplayFeatureManifestV1({
@@ -22369,7 +22982,138 @@ createGameplayFeatureManifestV1({
   commandTypes: [],
   resourceBudget: { stateSliceCount: 1, commandHandlerCount: 0 }
 });
-const BUILDER_SELF_CHECK_VERSION = "worldkit-builder-self-check-v5";
+const ORDINARY_WORLD_TARGET_MAXIMUM_VERTICES_V1 = 12e4;
+const LARGE_WORLD_MAXIMUM_RESOLUTION_VERTICES_PER_AXIS_V1 = 1024;
+const RECOMMENDED_MINIMUM_CELL_SIZE_METERS_V1 = 1.25;
+const RECOMMENDED_MAXIMUM_CELL_SIZE_METERS_V1 = 2.5;
+function compareCanonicalString(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+function terrainScaleEvidence(authoringSpec) {
+  const terrains = authoringSpec.nodes.filter((node) => node.kind === "terrain");
+  if (terrains.length !== 1) {
+    throw new Error("BUILDER_LARGE_WORLD_TERRAIN_CARDINALITY_INVALID");
+  }
+  const terrain = terrains[0];
+  const sizeMetersXZ = terrain.components.terrain.grid.sizeMetersXZ;
+  const resolutionVerticesXZ = terrain.components.terrain.grid.resolutionCellsXZ;
+  const cellSizeMetersXZ = [
+    sizeMetersXZ[0] / (resolutionVerticesXZ[0] - 1),
+    sizeMetersXZ[1] / (resolutionVerticesXZ[1] - 1)
+  ];
+  const terrainVertexCount = resolutionVerticesXZ[0] * resolutionVerticesXZ[1];
+  const terrainTriangleCount = (resolutionVerticesXZ[0] - 1) * (resolutionVerticesXZ[1] - 1) * 2;
+  const recommendedCellSizeRangeSatisfied = cellSizeMetersXZ.every(
+    (cellSizeMeters) => cellSizeMeters >= RECOMMENDED_MINIMUM_CELL_SIZE_METERS_V1 && cellSizeMeters <= RECOMMENDED_MAXIMUM_CELL_SIZE_METERS_V1
+  );
+  const isInsideLargeProfile = resolutionVerticesXZ.every(
+    (resolutionVertices) => resolutionVertices <= LARGE_WORLD_MAXIMUM_RESOLUTION_VERTICES_PER_AXIS_V1
+  ) && cellSizeMetersXZ.every(
+    (cellSizeMeters) => cellSizeMeters <= RECOMMENDED_MAXIMUM_CELL_SIZE_METERS_V1
+  );
+  return {
+    terrainEntityId: terrain.id,
+    sizeMetersXZ: [...sizeMetersXZ],
+    resolutionVerticesXZ: [...resolutionVerticesXZ],
+    cellSizeMetersXZ,
+    terrainVertexCount,
+    terrainTriangleCount,
+    operationalProfile: terrainVertexCount <= ORDINARY_WORLD_TARGET_MAXIMUM_VERTICES_V1 ? "ordinary-single-heightfield-v1" : isInsideLargeProfile ? "large-single-heightfield-v1" : "outside-large-single-heightfield-v1",
+    recommendedCellSizeRangeSatisfied
+  };
+}
+function collectBuilderLargeWorldEvidenceV1(authoringSpec) {
+  const scaleEvidence = terrainScaleEvidence(authoringSpec);
+  const profile = resolveTraversalGraphBuilderProfileV2(
+    BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF
+  ).profile;
+  const routesById = new Map(
+    authoringSpec.spatial.routes.map((route) => [route.id, route])
+  );
+  const routeBuildWindowEvidence = [];
+  const diagnostics = [];
+  const connectivity = [...authoringSpec.constraints.connectivity].sort(
+    (left, right) => compareCanonicalString(left.id, right.id) || compareCanonicalString(left.routeId, right.routeId)
+  );
+  for (const constraint of connectivity) {
+    const route = routesById.get(constraint.routeId);
+    const instancePath = `/constraints/connectivity/${constraint.id}`;
+    if (route === void 0) {
+      diagnostics.push({
+        code: "ROUTE_BUILD_WINDOW_ESTIMATE_INVALID",
+        message: `Required route '${constraint.routeId}' is unavailable for build-window estimation.`,
+        instancePath,
+        details: {
+          constraintId: constraint.id,
+          routeId: constraint.routeId
+        }
+      });
+      continue;
+    }
+    try {
+      const estimate2 = estimateRouteBuildWindowTileCountV1({
+        pointsMetersXZ: route.pointsMetersXZ,
+        widthMeters: route.widthMeters,
+        terrainCellSizeMetersXZ: scaleEvidence.cellSizeMetersXZ,
+        tileSizeCells: profile.tileSizeCells,
+        voxelCellSizeMeters: profile.voxelCellSizeMeters,
+        maximumTiles: profile.maximumTiles
+      });
+      routeBuildWindowEvidence.push({
+        constraintId: constraint.id,
+        routeId: route.id,
+        ...estimate2,
+        status: "admitted"
+      });
+    } catch (error) {
+      if (error instanceof TraversalGraphBuildBudgetExceededErrorV1) {
+        routeBuildWindowEvidence.push({
+          constraintId: constraint.id,
+          routeId: route.id,
+          minimumMetersXZ: error.minimumMetersXZ,
+          maximumMetersXZ: error.maximumMetersXZ,
+          tilesX: error.tilesX,
+          tilesZ: error.tilesZ,
+          estimatedTiles: error.estimatedTiles,
+          maximumTiles: error.maximumTiles,
+          status: "budget-exceeded"
+        });
+        diagnostics.push({
+          code: "ROUTE_BUILD_WINDOW_BUDGET_EXCEEDED",
+          message: `Required route '${route.id}' exceeds the trusted single-build Tile budget; split it into ordered segments that share explicit seam Anchors.`,
+          instancePath,
+          details: {
+            constraintId: constraint.id,
+            routeId: route.id,
+            tilesX: error.tilesX,
+            tilesZ: error.tilesZ,
+            estimatedTiles: error.estimatedTiles,
+            maximumTiles: error.maximumTiles,
+            minimumMetersXZ: error.minimumMetersXZ,
+            maximumMetersXZ: error.maximumMetersXZ,
+            repair: "split-with-shared-seam-anchors"
+          }
+        });
+      } else {
+        diagnostics.push({
+          code: "ROUTE_BUILD_WINDOW_ESTIMATE_INVALID",
+          message: error instanceof Error ? error.message : String(error),
+          instancePath,
+          details: {
+            constraintId: constraint.id,
+            routeId: route.id
+          }
+        });
+      }
+    }
+  }
+  return {
+    terrainScaleEvidence: scaleEvidence,
+    routeBuildWindowEvidence,
+    diagnostics
+  };
+}
+const BUILDER_SELF_CHECK_VERSION = "worldkit-builder-self-check-v6";
 const SPAWN_GROUND_TOLERANCE_METERS = 0.15;
 function option(arguments_, name) {
   const index = arguments_.indexOf(name);
@@ -22546,6 +23290,7 @@ async function runBuilderSelfCheck(options) {
   }
   const parsed = parseAuthoringSpecV4(worldSource);
   let compiledExecutionPlan;
+  let largeWorldEvidence;
   if (!parsed.ok || parsed.value === void 0) {
     diagnostics.push(...parsed.diagnostics.map((diagnostic2) => ({
       code: diagnostic2.code,
@@ -22564,6 +23309,8 @@ async function runBuilderSelfCheck(options) {
         details: diagnostic2.details
       })));
     } else {
+      largeWorldEvidence = collectBuilderLargeWorldEvidenceV1(parsed.value);
+      diagnostics.push(...largeWorldEvidence.diagnostics);
       const compiled = compileWorldV5({
         normalizedWorldIr: normalized.value,
         normalizedWorldIrHash: normalized.normalizedWorldIrHash,
@@ -22607,6 +23354,10 @@ async function runBuilderSelfCheck(options) {
     sceneId: options.sceneId,
     status: diagnostics.length === 0 ? "passed" : "failed",
     requiresTrustedRouteValidation: parsed.ok && parsed.value !== void 0 && parsed.value.constraints.connectivity.length > 0,
+    ...largeWorldEvidence === void 0 ? {} : {
+      terrainScaleEvidence: largeWorldEvidence.terrainScaleEvidence,
+      routeBuildWindowEvidence: largeWorldEvidence.routeBuildWindowEvidence
+    },
     inputs: {
       sceneBriefHash: contentHash(briefSource),
       authoringSpecHash: contentHash(worldSource),

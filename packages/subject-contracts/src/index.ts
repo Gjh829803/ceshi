@@ -21,6 +21,7 @@ export const SUBJECT_RESOURCE_KINDS_V1 = Object.freeze([
   "harness-profile",
   "pose-set-profile",
   "render-binding-profile",
+  "ai-schema-projection-profile",
 ] as const);
 
 export type SubjectResourceKindV1 = typeof SUBJECT_RESOURCE_KINDS_V1[number];

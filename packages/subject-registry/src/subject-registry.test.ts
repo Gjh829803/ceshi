@@ -9,6 +9,7 @@ import {
 import {
   builtInSubjectResourceRegistry,
   createSubjectResourceRegistry,
+  FIRST_SLICE_ALLOWED_OVERRIDE_PATHS,
   XIER120_SUBJECT_DEFINITIONS,
 } from "./index";
 import type {
@@ -284,6 +285,46 @@ describe("subject resource registry", () => {
     });
   });
 
+  it("makes allowedOverridePaths the Definition-owned first-slice ceiling", () => {
+    const definitions = builtInSubjectResourceRegistry.listDiscoverableResources({
+      kind: "subject-definition",
+    });
+    expect(FIRST_SLICE_ALLOWED_OVERRIDE_PATHS).toEqual([
+      "profiles.controlFeelProfileRef",
+      "profiles.controlProfileRef",
+      "profiles.motion.defaultMotionProfileRef",
+    ]);
+    expect(definitions.every((definition) =>
+      definition.allowedOverridePaths.join(",") ===
+        FIRST_SLICE_ALLOWED_OVERRIDE_PATHS.join(","),
+    )).toBe(true);
+
+    const seed = definitions[0]!;
+    const { contentHash: _seedHash, ...seedInput } = seed;
+    expect(sha256CanonicalJson({
+      ...seedInput,
+      allowedOverridePaths: [],
+    })).not.toBe(seed.contentHash);
+
+    const invalid = (allowedOverridePaths: unknown) =>
+      createSubjectResourceRegistry([{
+        ...seed,
+        allowedOverridePaths: allowedOverridePaths as string[],
+      }]);
+    expect(() => invalid(undefined)).toThrowError(/SUBJECT_OVERRIDE_PATHS_INVALID/);
+    expect(() => invalid([
+      "profiles.motion.defaultMotionProfileRef",
+      "profiles.controlFeelProfileRef",
+    ])).toThrowError(/SUBJECT_OVERRIDE_PATHS_INVALID/);
+    expect(() => invalid([
+      "profiles.controlFeelProfileRef",
+      "profiles.controlFeelProfileRef",
+    ])).toThrowError(/SUBJECT_OVERRIDE_PATHS_INVALID/);
+    expect(() => invalid(["profiles[0].controlFeelProfileRef"]))
+      .toThrowError(/SUBJECT_OVERRIDE_PATHS_INVALID/);
+    expect(() => invalid(["id"])).toThrowError(/SUBJECT_OVERRIDE_FORBIDDEN/);
+  });
+
   it("locks every immutable manifest with a canonical content hash", () => {
     for (const resource of builtInSubjectResourceRegistry.listDiscoverableResources()) {
       const { contentHash, ...hashInput } = resource;
@@ -395,6 +436,36 @@ describe("subject resource registry", () => {
         supportOriginToleranceMeters: 0.01,
       },
     });
+    const projectionProfile = builtInSubjectResourceRegistry.resolveAiSchemaProjectionProfile(
+      "worldkit://ai-schema-projection-profile/constrained-json@1",
+    );
+    expect(projectionProfile).toMatchObject({
+      kind: "ai-schema-projection-profile",
+      schemaVersion: 1,
+      id: "constrained-json",
+      version: 1,
+      optionalFieldMode: "native-optional",
+      maximumPropertyCount: 512,
+      maximumNestingDepth: 8,
+      maximumEnumValueCount: 32,
+      maximumSchemaBytes: 65_536,
+      maximumRegistrySearchResultCount: 32,
+    });
+    expect(projectionProfile?.authoringAvailability).toBe("recommended");
+    expect(projectionProfile).not.toHaveProperty("provider");
+    const { contentHash, ...hashInput } = projectionProfile!;
+    expect(contentHash).toBe(sha256CanonicalJson(hashInput));
+    expect(
+      builtInSubjectResourceRegistry.listDiscoverableResources({
+        kind: "ai-schema-projection-profile",
+      }),
+    ).toEqual([projectionProfile]);
+    expect(() => createSubjectResourceRegistry([
+      {
+        ...hashInput,
+        provider: "openai",
+      } as never,
+    ])).toThrowError(/SUBJECT_REGISTRY_UNKNOWN_FIELD/);
   });
 
   it("resolves the exact Golden asset binding graph", () => {
@@ -730,7 +801,7 @@ describe("subject resource registry", () => {
       {
         resourceRef: G_BOT_SUBJECT_DEFINITION_REF,
         contentHash:
-          "sha256:1f5c9007ce5f7a6e707d4809e51401bf9c0a9532ecc57e88930b9015e2dac92b",
+          "sha256:0428f0bf18495ff665715e4c4007e86192735bcfeb9d38d4c6d765f5501335fd",
       },
     ]);
   });

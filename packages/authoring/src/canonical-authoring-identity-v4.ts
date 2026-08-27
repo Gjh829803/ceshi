@@ -118,26 +118,10 @@ export function projectNormalizedWorldResourcesToLayoutIdentityV4(
   };
 }
 
-export function canonicalAuthoringIdentityV4(
+export function hashAuthoringDocumentV4(
   spec: AuthoringSpecV4,
-  normalizedBase: NormalizedWorldBase,
-) {
-  const baseIdentity = canonicalIdentityBaseV4(spec, normalizedBase);
-  return {
-    ...baseIdentity,
-    spatial: {
-      ...baseIdentity.spatial,
-      traversalAreas: [...spec.spatial.traversalAreas]
-        .sort((left, right) => left.id.localeCompare(right.id))
-        .map((row) => structuredClone(row)),
-    },
-    constraints: {
-      placements: baseIdentity.constraints.placements,
-      connectivity: [...spec.constraints.connectivity]
-        .sort((left, right) => left.id.localeCompare(right.id))
-        .map((row) => structuredClone(row)),
-    },
-  };
+): `sha256:${string}` {
+  return sha256CanonicalJson(spec) as `sha256:${string}`;
 }
 
 export function canonicalAuthoringLayoutIdentityV4(
@@ -150,4 +134,13 @@ export function canonicalAuthoringLayoutIdentityV4(
       normalizedBase.resources as NormalizedWorldResourcesV4,
     ),
   });
+}
+
+export function hashAuthoringLayoutInputV4(
+  spec: AuthoringSpecV4,
+  normalizedBase: NormalizedWorldBase,
+): `sha256:${string}` {
+  return sha256CanonicalJson(
+    canonicalAuthoringLayoutIdentityV4(spec, normalizedBase),
+  ) as `sha256:${string}`;
 }

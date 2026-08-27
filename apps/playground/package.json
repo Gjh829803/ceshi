@@ -11,6 +11,8 @@
   "dependencies": {
     "@babylonjs/core": "9.21.2",
     "@whitebox-world/authoring": "workspace:*",
+    "@whitebox-world/authoring-edit": "workspace:*",
+    "@whitebox-world/authoring-host": "workspace:*",
     "@whitebox-world/compiler": "workspace:*",
     "@whitebox-world/contracts": "workspace:*",
     "@whitebox-world/gameplay": "workspace:*",

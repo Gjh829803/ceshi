@@ -33,11 +33,28 @@ AuthoringSpec V4
 pnpm install
 pnpm worldkit validate examples/authoring/package-subject-world.json --json
 pnpm worldkit build examples/authoring/package-subject-world.json \
-  --output artifacts/examples/package-subject-world/world.build.json --json
+  --output artifacts/examples/package-subject-world/world.package --json
+pnpm worldkit inspect artifacts/examples/package-subject-world/world.package --json
+pnpm worldkit load artifacts/examples/package-subject-world/world.package \
+  --headless --json
 pnpm worldkit subject explain examples/authoring/package-subject-world.json \
   --entity-id pack-animal-a --json
 pnpm worldkit run examples/authoring/package-subject-world.json
 ```
+
+`worldkit build` 的公开输出是完整 WorldPackage V2 目录，不再是单个
+`worldkit-build-artifact` JSON。外部进程需要持续控制时，使用独立 Session 目录和
+NDJSON stdin/stdout；不要把该协议安装到 Browser Protocol：
+
+```bash
+pnpm worldkit run artifacts/examples/package-subject-world/world.package \
+  --interactive --protocol ndjson --headless \
+  --session-directory /absolute/path/to/runtime-session
+```
+
+进程退出后以同一个 Package 和 Session 目录追加 `--resume` 即可恢复；首条 stdout
+记录是 `ready`，后续每个 Request 对应一个 canonical Receipt，最终记录为
+`completed` 或 `failed`。
 
 浏览器使用 `WASD` 移动、`Space` 跳跃。生成截图和运行时快照：
 
@@ -420,6 +437,45 @@ interface WorldkitBrowserApiV5 {
 Discovery、Subject Harness 和 Camera Authoring 方法以
 `WorldkitBrowserApiV5` 类型定义为准。`window.__WORLDKIT__` 只暴露 V5，不保留旧版本
 对象或方法别名。
+
+### 7.1 Authoring/Edit 是另一条控制面
+
+增删房屋、主体、地形或资源 **不要** 调用 `executeGameplayCommand`，也不要给
+`window.__WORLDKIT__` 增加方法。结构写入走独立的受信 Authoring/Edit API：
+
+```text
+window.__WORLDKIT__                  # Browser Protocol V5，exact 39 keys，Runtime
+window.__WORLDKIT_AUTHORING_EDIT__   # 仅 Canonical Authoring 页；10 个可枚举成员
+```
+
+安装条件：`worldkit run <world.json>`（或等价的注入 AuthoringSpec）打开
+`?authoring=1`，并且 adapter 暴露 `publishWorldReplacementV1`。`pnpm dev` +
+`?authoring=1` 会被拒绝。`?scene=` catalog 页只有 V5，没有 Edit API。
+
+CLI 对应命令是 `worldkit schema project`、`worldkit registry search` 和
+`worldkit change *`。文件模式 `change apply` 只写新的 Authoring JSON
+（`authoring-only`）。要把 Candidate 发布到正在运行的 Runtime，使用 Authoring 页
+的 `applyWorldChange` 且 `requestedOutcome: "publish-runtime"`，并带上
+`preparedCandidateRef` 与 Runtime expectation。不要发明第二套 LiveChange 方言，
+也不要把 token 放进 CLI 参数或 Receipt。
+
+P1.6 首切片只证明 Full Reload；Incremental Hot Apply 和 P1.6 生产可用性都还没交付。
+完整 P1.4 Package/CLI/持久 Runtime Session 已由独立 P1.4 工作流随后完成，不扩大
+P1.6 G1 的范围。权威合同见
+[P1.6 专项规格](superpowers/specs/2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md)。
+
+Agent 读 Receipt 时按关闭字段分支，不要发明同义字段：
+
+- `WORLD_CHANGE_BASE_AUTHORING_SPEC_MISMATCH`：读 `currentAuthoringSpecHash`，拉取
+  Current AuthoringSpec，重新规划 Preconditions，创建**新的** ChangeSet ID 和
+  Request ID。Receipt **没有** `rebaseRequired`。`conflictingIds` 是 ChangeSet
+  打算改写的 Target，不是完整 Base→Current 文档 diff。
+- `getWorldChangeReceipt` 在 missing / pending 时抛 Host 本地错误
+  （`WORLD_CHANGE_RECEIPT_MISSING` / `PENDING`），这些码不在封闭 Diagnostic 表里。
+  终态才返回 Receipt。
+- `WORLD_CHANGE_CANDIDATE_INVALID` 且 `failurePhase: "publication-commit"` 表示
+  publication commit 失败，不是 Candidate 编译失败。先看 `failurePhase`，不要只看
+  code。
 
 固定输入使用 `move-forward / move-backward / move-left / move-right / jump / run`
 和明确 tick 数。控制权通过 `executeGameplayCommand` 提交关闭的 `control.bind` /

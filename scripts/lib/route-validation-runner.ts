@@ -36,9 +36,10 @@ import {
   type WorldPackageValidationSubjectV1,
 } from "@whitebox-world/validation";
 import {
-  createWorldPackageBuildReceiptV1,
-  type ResolvedWorldPackageResourceArtifactV1,
-  type WorldPackageBuildReceiptV1,
+  createWorldPackageV2,
+  verifyWorldPackageDirectoryV2,
+  type ResolvedWorldPackageResourceArtifactV2,
+  type WorldPackageBuildReceiptV2,
 } from "@whitebox-world/world-package";
 import { isNil } from "lodash-es";
 
@@ -53,7 +54,10 @@ import {
   createRouteSurfaceCorrelationMissingProjectionV2,
 } from "./route-r1b-fixture-proofs.js";
 import { loadWorldkitRoutePipeline } from "./worldkit-pipeline";
-import { resolveWorldPackageResourceArtifactsV1 } from "./world-package-resource-resolver";
+import {
+  createTrustedWorldPackageBuildContextV2,
+  resolveTrustedWorldPackageResourceArtifactsV2,
+} from "./trusted-world-package-v2";
 
 type Hash = `sha256:${string}`;
 
@@ -137,7 +141,7 @@ export interface TrustedRouteRenderScheduleStatsV1 {
 }
 
 export interface TrustedRouteValidationResultV1 {
-  readonly worldPackageBuildReceipt: WorldPackageBuildReceiptV1;
+  readonly worldPackageBuildReceipt: WorldPackageBuildReceiptV2;
   readonly subject: WorldPackageValidationSubjectV1;
   readonly report: ValidationReportV2;
   readonly validationReportHash: Hash;
@@ -367,7 +371,10 @@ function requireRuntimePhysicsAggregatesV1(runtime: unknown):
  * are snapshotted at construction and detached for every resolution.
  */
 export function createWorldPackageSubjectAssetResolverV1(
-  artifacts: readonly ResolvedWorldPackageResourceArtifactV1[],
+  artifacts: readonly Pick<
+    ResolvedWorldPackageResourceArtifactV2,
+    "resourceRef" | "packagePath" | "mediaType" | "bytes"
+  >[],
 ): SubjectAssetResolverV1 {
   const artifactsByRef = new Map<string, Readonly<{
     packagePath: string;
@@ -470,9 +477,9 @@ export async function runTrustedRouteValidationV1(
       { diagnostics: pipeline.diagnostics },
     );
   }
-  let resourceArtifacts: readonly ResolvedWorldPackageResourceArtifactV1[];
+  let resourceArtifacts: readonly ResolvedWorldPackageResourceArtifactV2[];
   try {
-    resourceArtifacts = await resolveWorldPackageResourceArtifactsV1(
+    resourceArtifacts = await resolveTrustedWorldPackageResourceArtifactsV2(
       pipeline.normalizedWorldIr,
     );
   } catch (error) {
@@ -487,8 +494,12 @@ export async function runTrustedRouteValidationV1(
     report: pipeline.layoutSolveReport,
     layoutSolveReportHash: pipeline.layoutSolveReportHash,
   });
-  const worldPackageBuildReceipt = createWorldPackageBuildReceiptV1({
+  const directory = createWorldPackageV2({
     packageId: `${pipeline.authoringSpec.id}.world-package`,
+    ...createTrustedWorldPackageBuildContextV2({
+      title: `${pipeline.authoringSpec.id} trusted route validation package`,
+      resourceArtifacts,
+    }),
     authoringSpec: pipeline.authoringSpec,
     normalizedWorldIr: pipeline.normalizedWorldIr,
     layoutSolveResult,
@@ -496,14 +507,9 @@ export async function runTrustedRouteValidationV1(
     gameplayBootstrap: pipeline.gameplayBootstrap,
     resourceArtifacts,
   });
-  const subject = createWorldPackageValidationSubjectV1({
-    worldPackageBuildReceipt,
-    authoringSpec: pipeline.authoringSpec,
-    normalizedWorldIr: pipeline.normalizedWorldIr,
-    layoutSolveResult,
-    executionPlan: pipeline.executionPlan,
-    gameplayBootstrap: pipeline.gameplayBootstrap,
-  });
+  const verifiedDirectory = verifyWorldPackageDirectoryV2(directory);
+  const worldPackageBuildReceipt = verifiedDirectory.receipt;
+  const subject = createWorldPackageValidationSubjectV1(verifiedDirectory);
   const runtimeAssetResolver = createWorldPackageSubjectAssetResolverV1(
     resourceArtifacts,
   );

@@ -21,9 +21,10 @@ describe("normalizeAuthoringSpecV4", () => {
     const second = normalizeAuthoringSpecV4(ordered);
 
     expect(first.ok).toBe(true);
-    expect(first.value).toEqual(second.value);
+    expect(second.ok).toBe(true);
+    expect(first.value?.authoringSpecHash).not.toBe(second.value?.authoringSpecHash);
+    expect(first.normalizedWorldIrHash).not.toBe(second.normalizedWorldIrHash);
     expect(first.normalizedWorldIrHash).toMatch(/^sha256:[a-f0-9]{64}$/);
-    expect(first.normalizedWorldIrHash).toBe(second.normalizedWorldIrHash);
     expect(first.value?.nodes.map((node) => node.id)).toEqual([
       "camera-main",
       "lake-main",
@@ -36,6 +37,9 @@ describe("normalizeAuthoringSpecV4", () => {
       "terrain-main",
       "wall-east",
     ]);
+    expect(first.value?.nodes.map((node) => node.id)).toEqual(
+      second.value?.nodes.map((node) => node.id),
+    );
     expect(first.value?.nodes.find((node) => node.id === "wall-east")).toMatchObject({
       transform: {
         positionMetersXYZ: [12, 2, 10],

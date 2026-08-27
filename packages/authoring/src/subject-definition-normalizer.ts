@@ -1080,6 +1080,7 @@ export function normalizeSubjectDefinitionV2(
     capabilityRefs,
     locomotionCapabilityRef: locomotionCapability.resourceRef,
     locomotionCapabilityHash: locomotionCapability.contentHash,
+    allowedOverridePaths: sortedStrings(definition.allowedOverridePaths),
     profiles: structuredClone(definition.profiles),
     locomotion: {
       allowWalk: locomotionProfile.allowWalk,

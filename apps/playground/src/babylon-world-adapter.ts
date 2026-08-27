@@ -1,24 +1,25 @@
-import type {
-  ApplyCameraPreviewRequestV1,
-  ApplySubjectPresetTuningRequestV1,
-  CameraPreviewStateV1,
-  CameraViewInputV1,
-  ControlCaptureCapabilitiesV1,
-  ControlCaptureRequestV1,
-  ExecutionPlanV5,
-  FixedInputV1,
-  RenderReadyReceiptV1,
-  RuntimeControlCaptureFrameV1,
-  VisualCaptureGroupV1,
-  SemanticInputActionV1,
-  RuntimeActivityReceiptV1,
-  RuntimeActivityRequestV1,
-  WorldRuntimeSnapshotV4,
-  SubjectPresetTuningReceiptV1,
-  WorldkitBrowserDiagnosticV1,
-  WhiteboxTriviewCaptureV1,
+import {
+  parseExecutionPlanV5,
+  validateVisualCaptureGroupsV1,
+  type ApplyCameraPreviewRequestV1,
+  type ApplySubjectPresetTuningRequestV1,
+  type CameraPreviewStateV1,
+  type CameraViewInputV1,
+  type ControlCaptureCapabilitiesV1,
+  type ControlCaptureRequestV1,
+  type ExecutionPlanV5,
+  type FixedInputV1,
+  type RenderReadyReceiptV1,
+  type RuntimeControlCaptureFrameV1,
+  type VisualCaptureGroupV1,
+  type SemanticInputActionV1,
+  type RuntimeActivityReceiptV1,
+  type RuntimeActivityRequestV1,
+  type WorldRuntimeSnapshotV4,
+  type SubjectPresetTuningReceiptV1,
+  type WorldkitBrowserDiagnosticV1,
+  type WhiteboxTriviewCaptureV1,
 } from "@whitebox-world/runtime-contracts";
-import { validateVisualCaptureGroupsV1 } from "@whitebox-world/runtime-contracts";
 import type {
   GameplayCommandReceiptV1,
   GameplayCommandV1,
@@ -32,7 +33,11 @@ import {
   type BabylonRuntimeProjectionV1,
   type BabylonWorldRuntimeOptions,
 } from "@whitebox-world/runtime-babylon";
-import type { RuntimeWorldConfigurationV1 } from "@whitebox-world/runtime-host";
+import type {
+  PublishWorldReplacementResultV1,
+  RuntimeWorldConfigurationV1,
+  RuntimeWorldPublicationIdentitiesV1,
+} from "@whitebox-world/runtime-host";
 import type { GameplayActionRequestResolverV1 } from "@whitebox-world/gameplay";
 import { isNil } from "lodash-es";
 
@@ -245,6 +250,23 @@ export function activeActionForControlledSubject(
   return controlledSubject.activeActionId;
 }
 
+function publishedExecutionPlanFields(input: unknown): {
+  readonly executionPlan?: ExecutionPlanV5;
+} {
+  if (isNil(input) || typeof input !== "object") return {};
+  const worldConfiguration = Reflect.get(input, "worldConfiguration");
+  if (isNil(worldConfiguration) || typeof worldConfiguration !== "object") {
+    return {};
+  }
+  const executionPlan = Reflect.get(worldConfiguration, "executionPlan");
+  if (isNil(executionPlan)) return {};
+  try {
+    return { executionPlan: parseExecutionPlanV5(executionPlan) };
+  } catch {
+    return {};
+  }
+}
+
 export function featureInspections(plan: ExecutionPlanV5): readonly FeatureInspection[] {
   return [
     {
@@ -338,7 +360,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   private keyboardCameraPitchRadiansPerTick = 0;
   private lastArrowInputClearReason: ArrowInputClearReasonV1 = "startup";
   private lastPossessedControlledEntityId: string | undefined;
-  private readonly inspections: readonly FeatureInspection[];
+  private inspections: readonly FeatureInspection[];
   private readonly resizeObserver: ResizeObserver;
   private animationFrameId: number | null = null;
   private frame = 0;
@@ -361,7 +383,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   private visualCaptureGroups: readonly VisualCaptureGroupV1[] = [];
 
   private constructor(
-    private readonly executionPlan: ExecutionPlanV5,
+    private executionPlan: ExecutionPlanV5,
     private readonly coordinator: GameplayBabylonRuntimeCoordinatorV1,
     private readonly playgroundMetadata?: PlaygroundWorldMetadataV1,
   ) {
@@ -687,6 +709,30 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     return this.coordinator.eventsAfter(afterEventSequence, maximumEventCount);
   }
 
+  currentRuntimePublicationIdentity(): RuntimeWorldPublicationIdentitiesV1 {
+    return this.coordinator.currentRuntimePublicationIdentity();
+  }
+
+  async publishWorldReplacementV1(
+    input: unknown,
+  ): Promise<PublishWorldReplacementResultV1> {
+    const previousCanvas = this.canvas;
+    const result = await this.coordinator.publishWorldReplacementV1(input);
+    if (result.status === "published") {
+      try {
+        await this.adoptActiveWorldSurface({
+          previousCanvas,
+          ...publishedExecutionPlanFields(input),
+        });
+        this.resetAnimationClock();
+        this.emit();
+      } catch {
+        // Publication already committed. Surface adoption must not unwind it.
+      }
+    }
+    return result;
+  }
+
   gameplayInspectionSnapshotRuntime(): GameplayInspectionSnapshotV1 {
     return this.coordinator.getGameplayInspectionSnapshot();
   }
@@ -717,16 +763,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     this.resetAnimationClock();
     const previousCanvas = this.canvas;
     const snapshot = await this.coordinator.resetWithInitialControlBinding();
-    const nextCanvas = this.canvas;
-    if (previousCanvas !== nextCanvas) {
-      this.detachCanvas(previousCanvas);
-      this.attachCanvas(nextCanvas);
-      if (this.mountedContainer !== undefined) {
-        previousCanvas.replaceWith(nextCanvas);
-        this.activeRuntime().resize();
-        nextCanvas.focus();
-      }
-    }
+    await this.adoptActiveWorldSurface({ previousCanvas });
     this.emit();
     return snapshot;
   }
@@ -1214,6 +1251,27 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     canvas.removeEventListener("pointerup", this.handleCameraPointerUp);
     canvas.removeEventListener("pointercancel", this.handleCameraPointerUp);
     canvas.removeEventListener("wheel", this.handleCameraWheel);
+  }
+
+  private async adoptActiveWorldSurface(input: {
+    readonly previousCanvas: HTMLCanvasElement;
+    readonly executionPlan?: ExecutionPlanV5;
+  }): Promise<void> {
+    if (!isNil(input.executionPlan)) {
+      this.executionPlan = input.executionPlan;
+      this.inspections = structuredClone(featureInspections(input.executionPlan));
+      this.compositionCache = undefined;
+    }
+    const nextCanvas = this.canvas;
+    if (input.previousCanvas === nextCanvas) return;
+    this.detachCanvas(input.previousCanvas);
+    this.attachCanvas(nextCanvas);
+    if (this.mountedContainer !== undefined) {
+      input.previousCanvas.replaceWith(nextCanvas);
+      this.activeRuntime().resize();
+      nextCanvas.focus();
+      await this.activeRuntime().renderFrameWhenReady();
+    }
   }
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {

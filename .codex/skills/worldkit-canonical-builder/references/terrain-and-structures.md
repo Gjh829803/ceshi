@@ -24,7 +24,7 @@ Canonical AuthoringSpec V4 supports a procedural Heightfield source:
 - `hills`: broad hill country or cloud/land masses with moderate relief
 - `mountains`: intentionally steep large-scale relief
 
-The terrain grid requires `centerMetersXZ`, positive `sizeMetersXZ`, and integer `resolutionCellsXZ` values between 2 and 1025. Use enough cells to preserve collision shape without spending the whole vertex budget. A practical starting density is roughly 1.25–2.5 meters per cell for a gameplay-critical base surface.
+The terrain grid requires `centerMetersXZ`, positive `sizeMetersXZ`, and integer `resolutionCellsXZ` values between 2 and 1025. Use enough cells to preserve collision shape without spending the whole vertex budget. A practical starting density is roughly 1.25–2.5 meters per cell for a gameplay-critical base surface. For the current explicitly large `1–2km` operational profile, use at most `1024` vertices per axis so explicit generated samples remain inside the existing item contract; `801 x 801` over `2000m x 2000m` gives `2.5m` cells. This remains one fully resident Heightfield, not streaming.
 
 ## Deriving world surfaces
 
@@ -74,7 +74,7 @@ Do not force every semantic surface into the Heightfield. A complex world is nor
 - Flight, underwater, vehicles, caves, interiors, and other unsupported production movement or topology requests are capability gaps. Stop with an explicit diagnostic instead of authoring a production recipe or substituting ordinary ground movement.
 - Branch on the brief's movement mode and navigation prose before authoring Canonical routes.
 - Open land: use broad collision-enabled Terrain or constructed ground to cover the complete playable footprint. Everything outside collision blockers is traversable. Do not add route polylines, road strips, fences, corridors, or ramps unless the world itself explicitly contains them.
-- Explicit restricted connection: preserve a continuous path from spawn to every named destination. Give every traversable level actual collision-enabled support, describe the connection with Canonical routes, and ensure transitions overlap within the Subject's step/slope envelope.
+- Explicit restricted connection: preserve a continuous path from spawn to every named destination. Give every traversable level actual collision-enabled support, describe the connection with Canonical routes, and ensure transitions overlap within the Subject's step/slope envelope. When self-check reports `ROUTE_BUILD_WINDOW_BUDGET_EXCEEDED`, split only that connection into ordered route rows and reuse the exact same seam Anchor as the previous destination and next start.
 - Only constrained ground routes use route-width and route-slope rules; keep ordinary ground-humanoid route slopes below about 35° for margin against the 42° maximum.
 - Flatten or explicitly support the spawn footprint. For every ground-supported Subject, prefer an S1-solved spawn Anchor with a small `inside-region` zone plus required `supported-by` Terrain and `within-slope-limit` constraints. The region must include the exact intended entry X/Z and remain small enough that solving cannot relocate the composition.
 - Place the spawn Anchor at the Subject support origin, not at capsule center height. On procedural relief, never assume that `baseHeightMeters` is the local support height and never guess Y. Let the supported solved placement sample the Heightfield, or use the Builder self-check's reported `requiredSubjectOriginYMeters` to correct an exact fixed Anchor.
@@ -86,7 +86,7 @@ Do not force every semantic surface into the Heightfield. A complex world is nor
 
 - Reuse Prototypes for repeated structure.
 - `maxVertices`, `maxTriangles`, and `maxColliders` are required hard budgets; the current compiler rejects every overrun. Preserve world completeness by choosing an appropriate budget up front, then reduce non-essential complexity when measured output exceeds any limit.
-- Keep `maxVertices` at or below `120000` and estimated compiled use below `100000` vertices so the controlled Subject and later corrections retain headroom. Set deliberate practical triangle and collider ceilings for the authored world.
+- For ordinary worlds, retain the existing target below about `100000` compiled vertices and normally declare no more than `120000`. For an explicitly large `1–2km` world, derive Terrain cost as `columns * rows` vertices and `2 * (columns - 1) * (rows - 1)` triangles, add the actual other geometry plus deliberate headroom, and declare those blocking totals. Do not spend the enlarged budget on decorative repetition.
 - Use a `65x65` or similarly modest Terrain grid for background-dominant scenes; use `129x129` only when gameplay-critical ground relief justifies it. Never spend dense Terrain resolution on distant scenery.
 - Keep background silhouettes collision-disabled and reuse a small Prototype set. When validation reports `COMPILER_RESOURCE_BUDGET_EXCEEDED` for vertices, triangles, or colliders, reduce Terrain resolution, repeated geometry, unique masses, or unnecessary collision as appropriate to the measured cause.
 - Prefer one Prototype/Object per named landmark when it preserves the recognizable whole shape.
