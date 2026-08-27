@@ -118,7 +118,7 @@ Normalizer/Compiler、Runtime、CLI/Browser 和对应 Conformance Gate 的纵向
 | 工作流 | 权重 | 当前完成度 | 加权贡献 | 判断依据 |
 |---|---:|---:|---:|---|
 | 架构、边界与命名 | 8% | 96% | 7.7% | 总规格、ADR、主体/地形/3C 和 Placement/Take/Validation 专项已成稿；Validation Capture/Integrity V1 的字段与 Policy 已冻结并实现 |
-| Canonical Schema、IR、Registry 与 Compiler | 15% | 88% | 13.2% | Authoring V4 → IR V4 → Plan V5 已自包含并直接编译；旧 V3/V4 顶层协议已从已提交路径删除，Subject capability assembly 成为必填锁；完整 P1.4 发布格式已交付，WorldChangeSet Full Reload 仍只是首切片 |
+| Canonical Schema、IR、Registry 与 Compiler | 15% | 88% | 13.2% | Authoring V4 → IR V4 → Plan V5 已自包含并直接编译；旧 V3/V4 顶层协议已从已提交路径删除，Subject capability assembly 成为必填锁；完整 P1.4 发布格式与 WorldChangeSet Full Reload 正式 Host 闭环已交付，Incremental 仍开放 |
 | Babylon/Havok Runtime、物理与相机 | 15% | 75% | 11.25% | Heightfield、障碍、水域、多主体、第三人称、碰撞、资产主体、Placement Assertion 与五 Pass Capture 已交付；多视角与完整生产预算尚未完成 |
 | Subject LEGO 组装体系 | 15% | 45% | 6.75% | S0、S1a、Golden 与首个产品 G Bot 可视切片已完成；S1b 后续、S2、S3、S4 尚未完成 |
 | Terrain、Region 与 Placement | 12% | 74% | 8.88% | Alpha 地形和 Placement Solver S1 已运行；Route R0、R1 Heightfield 与 R1b Static Platform 已审查/门禁关闭；通用 Terrain Mask、更多 Constraint 与完整 P0.1 未完成 |
@@ -534,8 +534,10 @@ Publication hardening 已全部折回上述核心规格；
 和
 [`follow-up review`](reviews/2026-08-26-p16-world-change-post-freeze-hardening-follow-up.md)
 只保留发现轨迹，不拥有规范优先级。
-P16-D0 已冻结，H0–G1 已落地为 Full Reload 首切片。
-这不表示 P1.6 可用于生产，也不表示 Incremental 已交付。完整 P1.4 已由独立
+P16-D0 已冻结，H0–G1 的 Full Reload 首切片与其非 Incremental production closure
+均已落地；完成证据见
+[`P1.6 Full Reload production closure`](reviews/2026-08-27-p16-full-reload-production-closure.md)。
+这不表示完整 P1.6 已完成，也不表示 Incremental 已交付。完整 P1.4 已由独立
 [`P1.4 completion record`](reviews/2026-08-27-p14-runtime-session-completion.md) 后续关闭，
 不是 G1 首切片的交付物。完整文件所有权、输入输出、集成点和验收证据以专项规格 §21
 为准。深度审查见
@@ -551,14 +553,14 @@ G1 完成记录见
 | P16-S1 | [x] 已完成 | AI Schema Projector、Profile Registry kind、预算降级、Projection Receipt | P16-A0、P16-H0、P1.4 Registry Lock shape / P16-B1、P16-F1 |
 | P16-O1 | [x] 已完成 | 通用 `allowedOverridePaths` 与 Resource Ref Override validator | P16-A0、P16-S1 contract / P16-C1、P16-F1 |
 | P16-C1 | [x] 已完成 | WorldChangeSet、Precondition、Operation、Candidate Diff 纯实现 | P16-A0、P16-H0 / P16-P1、P16-R1 |
-| P16-P1 | [x] 已完成 first-slice host | 完整 Normalize/Solve/Compile/最小 Package Receipt/Gates Candidate pipeline 与 in-memory lease pin/expiry/GC | P16-C1、P1.4 最小 Manifest/Build Receipt / P16-R1、P16-H1、P16-CLI1 |
-| P16-R1 | [x] 已完成 first-slice host | in-memory durable idempotency journal、admission epoch/pin owner、revision head、Receipt/Cleanup Report Query/Explain/Diff | P16-C1、P16-P1 / P16-H1、P16-B1、P16-CLI1 |
-| P16-H1 | [x] 已完成 first-slice host | RuntimeHost publication V2：Commit-time authorization/CAS、commit point、cleanup quarantine | P16-P1、P16-R1 / P16-B1、P16-F1 |
+| P16-P1 | [x] Full Reload closure | 完整 Normalize/Solve/Compile/Package/Gates Candidate pipeline；不可变 Package Store 可重建原 pin/expiry，不延长 lease | P16-C1、P1.4 Package V2 / P16-R1、P16-H1、P16-CLI1 |
+| P16-R1 | [x] Full Reload closure | 可注入 file WAL 的幂等 journal、revision head、持久 publication recovery 与单调 cleanup retry；页内 demo 仍明确为 in-memory | P16-C1、P16-P1 / P16-H1、P16-B1、P16-CLI1 |
+| P16-H1 | [x] Full Reload closure | RuntimeHost publication V2 + durable Runtime owner：Commit-time authorization/CAS、startup exact-identity recovery、bounded cleanup quarantine | P16-P1、P16-R1 / P16-B1、P16-F1 |
 | P16-CLI1 | [x] 已完成 first-slice | Schema/Registry/Change CLI；文件模式 Apply 为 authoring-only | P16-S1、P16-C1、P16-P1、P16-R1 / P16-F1 |
 | P16-B1 | [x] 已完成 first-slice | Trusted Authoring/Edit API 装在 `__WORLDKIT_AUTHORING_EDIT__`，V5 仍 exact 39 keys | P16-S1、P16-O1、P16-R1、P16-H1 / P16-F1 |
-| P16-F1 | [x] 已完成 first-slice evidence | Add House / Terrain golden、pin/GC、Commit 前/后撤权、quarantine、Host↔RuntimeHost 集成 | P16-O1、P16-P1、P16-R1、P16-H1、P16-CLI1、P16-B1 / P16-G1 |
+| P16-F1 | [x] Full Reload closure evidence | Add House / Terrain、双 Provider、file WAL crash/restart、pin rehydration、fence、cleanup、Browser rendered 与人工交互 | P16-O1、P16-P1、P16-R1、P16-H1、P16-CLI1、P16-B1 / P16-G1 |
 | P16-I1 | [ ] 后续切片 | Handler Registry、fixed-tick Hot Apply、Differential Runtime Conformance | P16-F1、独立批准的 Incremental plan / P16-G2 |
-| P16-G1 | [x] 已完成 first-slice Final GO | Full Reload 首切片合同门禁；规格文档状态行仍保持 implementation not started；不是生产可用 | P16-F1 / 无 |
+| P16-G1 | [x] Full Reload production-closure GO | 正式 file-backed Host + fresh-process + Browser/manual 门禁；规格头仍保持 implementation not started；不含 Incremental | P16-F1 / 无 |
 | P16-G2 | [ ] 后续集成 | Incremental 第二切片 Final GO | P16-I1 / 无 |
 
 P16-H0 证据：公开 `authoringSpecHash` / `baseAuthoringSpecHash` 使用 `hashAuthoringDocumentV4`
@@ -594,30 +596,32 @@ P16-C1 证据：`applyWorldChangeSetV1` 在隔离 Candidate 上执行领域 Oper
 affectedIds，不进入 Normalize/Compile/Package。验证：focused world-change 测试、
 `pnpm typecheck`、`pnpm test:census`。这不是 P1.6 生产可用声明。
 
-P16-P1 证据：新增 `@whitebox-world/authoring-host`，调用现有 Normalize / `createCoreGameplayBootstrapV1`
-/ Compile / `createWorldPackageBuildReceiptV1` 做 Trusted Candidate Build，并提供 in-memory
-lease pin/expiry/GC 与 Policy Hash binding。复用 P1.4 **最小** Manifest/Build Receipt，不发明
-完整 Package 目录、签名、License 或 Host Compatibility。声明的 Required Gate 必须经 Host 注入的
+P16-P1 证据：`@whitebox-world/authoring-host` 调用现有 Normalize / `createCoreGameplayBootstrapV1`
+/ Compile / WorldPackage V2 做 Trusted Candidate Build，并提供 lease pin/expiry/GC 与 Policy
+Hash binding。正式 composition 将 Package 写入经过验证的不可变 file Store；fresh-process
+恢复只按 durable build identity 重建原 lease/pin，不延长到期时间或接受 caller path。声明的 Required Gate 必须经 Host 注入的
 现有 runner 执行，缺 runner 或失败都 fail-closed 且不写 lease。验证：focused authoring-host
 测试、`pnpm typecheck`、`pnpm test:census`、`pnpm verify:workspace-boundaries`。这不是 P1.6
 生产可用声明，也不表示 P1.4 整体完成。
 
-P16-R1 证据：`@whitebox-world/authoring-host` 增加 in-memory journal 与 revision head。
+P16-R1 证据：`@whitebox-world/authoring-host` 提供 provider-neutral journal/WAL port 与 revision head。
 `(sessionId, requestId)` 锁定 Request/Policy Hash，`(worldId, changeSetId)` 锁定 ChangeSet Hash；
 相同三元组重试返回 byte-identical Receipt。validate 只跑 C1；dry-run 跑 C1+P1 写 lease 不 pin；
 authoring-only Apply 在同一 transaction 写 commit record + new revision head + immutable Receipt。
 无 `publishRuntimeReplacement` 时 `publish-runtime` 仍 fail-closed 为
 `WORLD_CHANGE_RUNTIME_PUBLICATION_REQUIRED`。H1 接线后，Host 在 commit barrier 调用
 RuntimeHost `publishWorldReplacementV1`；Commit 前撤权保留旧世界，Commit 后撤权/过期
-不得改写 immutable Receipt。这是进程内 journal，不是磁盘 WAL。验证：focused journal 测试、
-`pnpm typecheck`、`pnpm test:census`、`pnpm verify:workspace-boundaries`。这不是 P1.6
-生产可用声明。
+不得改写 immutable Receipt。`scripts/lib/file-world-change-journal.ts` 提供 owner-private、
+拒 symlink/unsafe mode 的正式文件 WAL；publication recovery 与 cleanup 进度进入同一 hash
+chain，fresh-process 门禁覆盖 commit 前退出、commit 后退出与重放。Playground 页内 Host
+仍明确使用 in-memory WAL，不冒充正式 composition。
 
 P16-H1 证据：`RuntimeHost.publishWorldReplacementV1` 在 persistDurableCommit 成功后才
 swap handle；旧 Session dispose 失败记 quarantine，不回滚已发布世界。`replaceWorld` 仍保留。
-`fencingToken` 由 journal 持有，RuntimeHost 本切片只做 Session/Package CAS。
-`snapshot()` 不走 mutation 队列，Prepare 期间旧世界可继续 tick。验证：`publication-v2`
-与 lifecycle 测试。这不是生产可用声明。
+`fencingToken` 由 journal 持有，RuntimeHost 只做 Session/Package CAS。durable Runtime owner
+从已验证 Package 重建 committed RuntimeSession/WorldSession/Root/Tick 0；身份分歧或 Package
+损坏保持 fenced。Prepare 期间旧世界仍可 tick；durable commit-to-swap fence 拒 Snapshot、
+Event 与 input。cleanup 重试达到上限后持久化 quarantine。
 
 P16-CLI1 证据：`worldkit schema project` / `registry search` / `change *` 复用同一 parser。
 文件模式 Apply 固定 `authoring-only`，禁止 in-place 覆盖，Dry Run 与 Apply 使用不同
@@ -638,6 +642,13 @@ Chromium 安装测试证明 Edit 面隔离。页面级
 `house-north`。该 G1 证据本身不证明 P1.4、Incremental 或人工操作验收；P1.4 由其独立
 completion record 与 fresh-process Gate 关闭。
 
+P16-F1 production-closure 追加证据：`scripts/lib/ai-schema-provider-conformance.test.ts`
+证明严格 JSON Schema envelope 与 function/tool envelope 经过同一 parser 后产生 byte-identical
+Canonical WorldChangeSet 与 Hash，并拒绝 alias/unknown/Provider 私有字段。正式 Host 的 child
+process 测试证明 Candidate pin rehydrate、commit exactly once、启动 publication recovery 与
+cleanup 单调推进。Browser add-house 证明 Prepare 期间旧 Session 继续移动、发布后首个可观察
+Snapshot 与 Receipt 同为新 Package/WorldSession/Tick 0、Reset 恢复初始 inspection 且单 canvas。
+
 P16-G1 证据：候选 `8ca8503` 上 `pnpm typecheck`、`pnpm test`（234 files / 2651 tests，
 含 census 与 workspace boundary 52）、`pnpm build` 通过。G1 过程中关闭了 F1 deep import、
 Builder `allowedOverridePaths` 模板、Take 身份哈希、self-check bundle 过期，以及页面级
@@ -651,7 +662,8 @@ add-house rendered verifier。完成记录：
 - [x] Registry 枚举超过 Provider 结构化输出预算时，只能按 Profile 降级为带
   `format`/`pattern` 的 Canonical Ref；字段名称、语义和验证规则不得改变。
 - [x] 实现跨 Definition 通用的 `allowedOverridePaths` 校验器与拒绝诊断（O1）。
-  `definition-override-set` 尚未接入 journal Apply；当前 golden 不用这条 Operation。
+  `definition-override-set` 已由 Host 将 Definition/Profile/Policy 交集校验上下文注入 journal
+  Apply；越权路径在 Candidate Build 前 fail-closed。
   Override 仍不能修改版本/Hash、权限、Provider 类型或未开放 Collider/Socket 内部结构。
 - [x] 冻结 `WorldChangeSet`/`WorldChangeReceipt`：稳定 ID、`baseAuthoringSpecHash`、
   Precondition、Dry Run、原子提交、幂等重试。增量/全量编译等价性留给 Incremental 切片。
@@ -660,8 +672,8 @@ add-house rendered verifier。完成记录：
 - [x] 明确两条写入平面：已有实体状态走固定 Tick Gameplay Command；结构修改只走
   `WorldChangeSet`。Browser V5 与 Authoring/Edit 分成两个 window 对象。
 - [x] 第一条生产切片采用 Full Reload：隔离 Candidate 完成 Apply、完整
-  Normalize/Compile/最小 Package Receipt 与声明的 Gate，再准备 Replacement Runtime；
-  Ready 后才 swap handle。任一步失败保留旧世界。journal 是进程内 Map，不是磁盘 WAL。
+  Normalize/Compile/Package Receipt 与声明的 Gate，再准备 Replacement Runtime；Ready 后才
+  swap handle。任一步失败保留旧世界。正式 composition 使用 file WAL；页内 demo 才是 Map。
 - [x] Full Reload 默认新 WorldSession、Tick 0；Receipt 列出 world-wide `runtimeStateEffects`，
   Full Reload 的 `exceptions` 必须为空。
 - [ ] 第二条切片才支持受限 Incremental Hot Apply：每种 Operation/Node Kind 必须声明
@@ -678,11 +690,11 @@ add-house rendered verifier。完成记录：
 - [x] CLI/Browser 提供 Schema Profile、Registry Search、Dry Run、Explain、Diff、Apply 和
   Receipt；结构写入只对受信 Authoring/Edit Session Scope 开放。文件模式 Apply 不发布
   Runtime。`load` 只允许加载 Host 已批准的不可变 Package。
-- [ ] Conformance 覆盖 Schema 规模预算、Provider 降级、非法 Override、过期 Base Hash、
-  重复 Request、Replacement Runtime 准备失败时旧世界仍可运行、Full Reload 状态重置、
-  Incremental 未影响实体状态保留、部分失败回滚、增量/全量结果等价和 Migration Golden
-  Fixture。双 Provider round-trip 仍未关闭。页面级加房屋 Chromium verifier 已关
-  first-slice rendered，不是生产编辑器。
+- [ ] Conformance 的 Full Reload 部分已覆盖 Schema 规模预算、双 Provider round-trip、
+  Provider 降级、非法 Override、过期 Base Hash、重复 Request、Prepare 失败保留旧世界、
+  状态重置与 fresh-process replay。仍待 Incremental 的未影响实体状态保留、部分失败回滚、
+  增量/全量等价与后续 Migration Golden。页面级加房屋与人工操作已关闭 Full Reload
+  rendered/interaction 证据，但不是生产编辑器。
 
 完成标准：至少两个结构化输出 Provider 使用同一 Canonical 字段生成有效世界；一次 AI
 修复通过 WorldChangeSet 原子应用并可重放，Adapter、CLI 和 Browser 不产生同义字段或
@@ -1069,15 +1081,17 @@ S1b Golden、
    verifier及其失效门禁重跑和最终 review，并保持 `supportedBy` 只来自既有 Physics support
    authority。`CAM-MOUNT-1` 由 P2.4 相机专项修复；不向 `SubjectRuntimeStateV3` 追加字段，
    也不先铺开 seat/tether、轮子动力学、特技、车辆或 Hosted Builder admission；
-9. **M9（P1.6 Full Reload 首切片已落地，未生产可用）**：P1.6 以
+9. **M9（P1.6 Full Reload 正式 Host 闭环已落地，Incremental 仍开放）**：P1.6 以
    [`WorldChangeSet 专项设计`](../docs/superpowers/specs/2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md)
    为唯一实施权威；规格文档状态行仍写 *implementation not started*，那是文档元数据，
-   不以它代替 Backlog。H0–G1 已交付 AI Schema、WorldChangeSet、进程内 journal、
-   RuntimeHost publication V2、CLI 文件模式、Authoring 页 Edit API，以及
-   [`G1 first-slice Final GO`](reviews/2026-08-26-p16-full-reload-g1-completion.md)。
+   不以它代替 Backlog。H0–G1 已交付 AI Schema、WorldChangeSet、可注入 WAL journal、
+   RuntimeHost publication V2、CLI 文件模式、Authoring 页 Edit API；正式 composition
+   已补齐 file WAL、Candidate rehydrate、startup reconciliation、bounded cleanup、双
+   Provider 与 Browser/manual 证据，见
+   [`Full Reload production closure`](reviews/2026-08-27-p16-full-reload-production-closure.md)。
    完整 P1.4 Package、Package CLI 与持久 Runtime Session WAL 已由独立 P1.4 工作流
-   后续交付；Incremental Hot Apply、P1.6 Host startup reconciliation/cleanup retry 和双
-   Provider Conformance 仍未交付，不得按生产可用宣称。
+   后续交付；Incremental Hot Apply、差分等价与 P16-G2 仍未交付，不得把 Full Reload
+   closure 宣称为完整 P1.6、生产编辑器或 Incremental GO。
    P2.5 Surface/Traversal 仍按其独立状态追踪。在实现游泳、攀爬或增量 Agent 修复前，
    禁止临时增加公共字段或场景脚本旁路**。
 10. **M10：P1.1 与 P2.5 边界稳定后评审 P2.6 H1 Bridge Fixture；先验证同 XZ 双层支撑、

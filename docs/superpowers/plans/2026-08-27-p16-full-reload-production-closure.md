@@ -75,11 +75,11 @@ export function advanceWorldChangeCleanupReportV1(input: {
 - Add a closed internal journal transaction operation `publication-recovery-state-put` carrying `worldId`, `requestId`, and `status: "pending" | "recovered"`. This operation is Host-private WAL state, not a public Browser/CLI DTO.
 - `getAuthoringRevisionHeadV1`, Receipt Query, Explain, and Diff fail closed or remain pending while the exact world has `pending` publication recovery. Cleanup `retrying` alone does not hide an already recovered revision.
 
-- [ ] **Step 1: Write RED tests for recovery visibility and cleanup transitions**
+- [x] **Step 1: Write RED tests for recovery visibility and cleanup transitions**
 
 Add tests proving: a reopened WAL with durable commit plus pending publication recovery hides the revision and returns a pending Receipt query; `markWorldPublicationRecoveredV1` atomically exposes the existing committed Receipt/revision without changing Receipt bytes; `scheduled → retrying → released` and `scheduled/retrying → quarantined` are accepted; reverse transitions, changed IDs, decreased/equal attempt counts, and query-triggered attempts are rejected.
 
-- [ ] **Step 2: Run the focused tests and capture RED**
+- [x] **Step 2: Run the focused tests and capture RED**
 
 Run:
 
@@ -89,15 +89,15 @@ pnpm exec vitest run packages/authoring-host/src/journal/publication-recovery.te
 
 Expected: FAIL because publication recovery is inferred only from a scheduled cleanup report and has no durable completion transition or cleanup state-machine validator.
 
-- [ ] **Step 3: Implement the closed WAL operation and recovery selectors**
+- [x] **Step 3: Implement the closed WAL operation and recovery selectors**
 
 Project and validate every WAL operation with exact keys, include the new operation in the hash chain, rebuild the pending map during replay, return frozen defensive values, and sort recoveries by `worldId` then `requestId`.
 
-- [ ] **Step 4: Implement monotonic cleanup advancement**
+- [x] **Step 4: Implement monotonic cleanup advancement**
 
 Require the same `id`, `requestId`, `cleanupOperationId`, and `previousWorldSessionId`; require `attemptCount + 1` for each attempted transition; allow idempotent byte-identical terminal replay; reject every other transition with `WORLD_CHANGE_CLEANUP_REPORT_CONFLICT` as a Host-private error. Queries remain read-only.
 
-- [ ] **Step 5: Run focused tests and package boundaries**
+- [x] **Step 5: Run focused tests and package boundaries**
 
 Run:
 
@@ -108,7 +108,7 @@ pnpm typecheck
 
 Expected: all pass; `authoring-host` still has no `runtime-host` dependency.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/authoring-host/src/journal
@@ -146,11 +146,11 @@ export async function rehydratePreparedCandidateForRecoveryV1(input: {
 - Derive `worldPackageRef` only through `worldPackageRefFromRootHashV1(record.buildIdentity.worldPackageRootHash)`. Never accept a caller-supplied path or Ref.
 - Rebuild the in-memory lease only after the stored directory verifies and its receipt hashes exactly match the durable `buildIdentity`. Preserve the original expiration and pin identity; do not extend the lease or mint a second pin.
 
-- [ ] **Step 1: Write RED recovery tests with a fresh lease store**
+- [x] **Step 1: Write RED recovery tests with a fresh lease store**
 
 Cover process-like reopen with the same file WorldPackage store but a new empty lease store, missing/corrupt Package, changed validation-report hash, expired unpinned Candidate, expired pinned Candidate, and duplicate rehydration.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```bash
 pnpm exec vitest run packages/authoring-host/src/journal/candidate-recovery.test.ts packages/authoring-host/src/journal/journal.test.ts
@@ -158,15 +158,15 @@ pnpm exec vitest run packages/authoring-host/src/journal/candidate-recovery.test
 
 Expected: the existing recovery path fails because it assumes the old in-memory lease store survives restart.
 
-- [ ] **Step 3: Implement verified lease reconstruction**
+- [x] **Step 3: Implement verified lease reconstruction**
 
 Use the durable record as identity authority and the verified Package store as byte authority. Reconstruct `PreparedCandidateLeaseV1` with the original session, ChangeSet, Base, Policy, Validation Reports, expiration, and pin; reject divergence before calling `resumeWorldChangeRequestV1`.
 
-- [ ] **Step 4: Integrate rehydration into `recoverWorldChangeRequestV1`**
+- [x] **Step 4: Integrate rehydration into `recoverWorldChangeRequestV1`**
 
 Run the recovery sweep, rehydrate when required, then resume the same Request ID. A terminal committed/rejected record remains byte-identical and never rebuilds a Candidate.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 ```bash
 pnpm exec vitest run packages/authoring-host/src/journal/candidate-recovery.test.ts packages/authoring-host/src/journal/journal.test.ts packages/authoring-host/src/lease-store.test.ts packages/authoring-host/src/prepared-candidate.test.ts
@@ -281,7 +281,7 @@ git commit -m "feat(authoring-host): reconcile committed runtime publication"
 **Files:**
 - Create: `scripts/lib/durable-authoring-edit-host.ts`
 - Create: `scripts/lib/durable-authoring-edit-host.test.ts`
-- Create: `scripts/durable-authoring-edit-host.integration.test.ts`
+- Create: `scripts/lib/durable-authoring-edit-host.integration.test.ts`
 - Modify: `scripts/lib/authoring-edit-host-bridge.ts`
 - Modify: `scripts/lib/file-world-change-journal.ts`
 - Modify: `scripts/lib/test-gate-manifest.ts`
@@ -343,10 +343,10 @@ Process A performs Dry Run and begins Apply, then exits at each injected boundar
 - [x] **Step 5: Verify and commit**
 
 ```bash
-pnpm exec vitest run scripts/lib/durable-authoring-edit-host.test.ts scripts/durable-authoring-edit-host.integration.test.ts scripts/lib/authoring-edit-full-reload.integration.test.ts
+pnpm exec vitest run scripts/lib/durable-authoring-edit-host.test.ts scripts/lib/durable-authoring-edit-host.integration.test.ts scripts/lib/authoring-edit-full-reload.integration.test.ts
 pnpm typecheck
 pnpm verify:workspace-boundaries
-git add scripts/lib/durable-authoring-edit-host.ts scripts/lib/durable-authoring-edit-host.test.ts scripts/durable-authoring-edit-host.integration.test.ts scripts/lib/authoring-edit-host-bridge.ts scripts/lib/file-world-change-journal.ts scripts/lib/test-gate-manifest.ts
+git add scripts/lib/durable-authoring-edit-host.ts scripts/lib/durable-authoring-edit-host.test.ts scripts/lib/durable-authoring-edit-host.integration.test.ts scripts/lib/authoring-edit-host-bridge.ts scripts/lib/file-world-change-journal.ts scripts/lib/test-gate-manifest.ts
 git commit -m "feat(worldkit): compose durable authoring edit host"
 ```
 
@@ -420,17 +420,17 @@ Expected audit: provider-specific terms appear only in the private conformance f
 - Consumes: the formal Host completion evidence, existing add-house/terrain fixtures, Browser Protocol V5, existing scene verifiers, and manual keyboard/mouse interaction.
 - Produces: one source-backed completion record separating automated contract, fresh-process, Browser numeric, rendered visual, and manual interaction evidence. It must still state that Incremental is not implemented.
 
-- [ ] **Step 1: Extend Browser evidence only where current coverage is missing**
+- [x] **Step 1: Extend Browser evidence only where current coverage is missing**
 
 Prove the old world accepts movement and returns its old Snapshot while Candidate Prepare is pending; prove the publication fence rejects Snapshot/Event/input only during durable commit-to-swap; prove the first observable post-swap Snapshot and Receipt reference the same new Package/WorldSession at Tick 0; prove the added house remains visible and ordinary catalog pages still do not install Edit API.
 
-- [ ] **Step 2: Run focused Browser and Runtime gates**
+- [x] **Step 2: Run focused Browser and Runtime gates**
 
 ```bash
 pnpm exec vitest run apps/playground/src/worldkit-authoring-edit-add-house.browser.test.ts apps/playground/src/worldkit-authoring-edit-api.browser.test.ts apps/playground/src/worldkit-ready-reset.browser.test.ts packages/runtime-host/src/publication-v2.test.ts scripts/lib/authoring-edit-full-reload.integration.test.ts
 ```
 
-- [ ] **Step 3: Run the real manual playtest**
+- [x] **Step 3: Run the real manual playtest**
 
 Start only through:
 
@@ -440,10 +440,10 @@ pnpm worldkit run examples/authoring/basic-world.json
 
 Open the printed trusted Authoring URL. Using real keyboard/mouse interaction: move and rotate the initial subject, perform add-house Dry Run then Apply through the Authoring/Edit surface, verify the old page remains interactive during Prepare, verify the new house appears after publication, move again in the new WorldSession, reset once, and verify only one canvas remains. Record exact observed Session IDs, Tick reset, visible house, controls, and any environment limitation. Do not use `pnpm dev + ?authoring=1`.
 
-- [ ] **Step 4: Run final repository gates once on the final code tree**
+- [x] **Step 4: Run final repository gates once on the final code tree**
 
 ```bash
-pnpm exec tsx scripts/check-agent-self-check.ts
+pnpm check:agent-self-check
 pnpm typecheck
 pnpm verify:workspace-boundaries
 pnpm test:census
@@ -457,18 +457,18 @@ pnpm verify:g-bot-subject
 
 Expected: all pass; Browser V5 exact 39; existing scene rendering remains valid.
 
-- [ ] **Step 5: Perform the final invariant audit**
+- [x] **Step 5: Perform the final invariant audit**
 
 ```bash
 rg -n "rebaseRequired" packages apps scripts docs/superpowers/specs/2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md
-pnpm exec tsx scripts/check-test-census.ts
+pnpm test:census
 git diff --check
 git diff --exit-code origin/main -- docs/superpowers/specs/2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md
 ```
 
 Also inspect `packages/authoring-host/package.json`, Browser API key census, strict equality/nullish checks in every touched production file, and leftover Host/session/temp directories.
 
-- [ ] **Step 6: Update truth docs and commit**
+- [x] **Step 6: Update truth docs and commit**
 
 Mark only the Full Reload production-closure evidence actually proven. Leave P16-I1 and P16-G2 open, leave the specification header unchanged, distinguish the in-page demo from the formal file-backed Host, and retain historical reviews as historical evidence.
 

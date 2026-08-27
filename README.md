@@ -335,9 +335,11 @@ pnpm worldkit change apply <world.json> --change-set <change-set.json> \
 
 文件模式 `change apply` 只提交 Authoring head（`authoring-only`，`publicationMode: "none"`），
 不会 Full Reload 正在运行的页面。`publish-runtime` 只通过受信 Host / Authoring 页
-Edit API。P1.6 首切片不是生产可用，也不以自身作为完整 P1.4 的交付证据。
-P1.4 已由独立 Package CLI / persistent Runtime Session 工作流随后完成；这不会扩大
-P1.6 G1 的范围或授权 Incremental。
+Edit API。正式 Host composition 使用 owner-private 文件 WAL、不可变 WorldPackage Store、
+启动 publication recovery 与有界 cleanup retry；Playground 页内 Host 仍只是明确命名的
+in-memory 演示面。Full Reload 闭环不以自身作为完整 P1.6 的交付证据，也不授权
+Incremental；`fixed-tick` 仍稳定拒绝。完整 P1.4 已由独立 Package CLI / persistent
+Runtime Session 工作流关闭。
 
 看到 `WORLD_CHANGE_BASE_AUTHORING_SPEC_MISMATCH` 时：读取 Receipt 的
 `currentAuthoringSpecHash`，对当前 Authoring 重新规划，并换新的 ChangeSet ID。
@@ -542,7 +544,7 @@ Validation 词汇。它不构建 Traversal Graph，不跑 Character Controller�
 | `packages/world/` | `world.*` Authoring DSL、Feature、Terrain、Landmark、规划工件与场景规格 | AI/场景作者入口 | 直接创建 Provider 对象或修改 Runtime 内部 |
 | `packages/authoring/` | Authoring V4 Schema、Parser、Normalizer、Resource Lock、Preset Candidate 与 Normalized IR V4 | AI Schema 与 Authoring Pipeline | 执行 Babylon/Havok 或反向读取 Runtime State |
 | `packages/authoring-edit/` | AI Schema Projection、Registry Search、Override Policy、WorldChangeSet/Request/Receipt 纯合同 | Authoring/Edit DTO 与 parser | 持有 journal、文件系统、Browser 或 Runtime handle |
-| `packages/authoring-host/` | Trusted Candidate Build、in-memory journal、Authoring/Edit Host API | 受信 Host 编排 | 依赖 `runtime-host` 或直接改 Babylon Scene |
+| `packages/authoring-host/` | Trusted Candidate Build、可注入 WAL journal、publication recovery、Authoring/Edit Host API | Provider-neutral 受信 Host 编排；正式文件持久化 composition 在 `scripts/lib/` | 依赖 `runtime-host` 或直接改 Babylon Scene |
 | `packages/layout-solver/` | 候选生成、Constraint Evaluator、确定性搜索和 Layout Report | 引擎无关 Solver 合同 | 直接修改场景或依赖渲染结果 |
 | `packages/compiler/` | NormalizedWorldIR V4 到锁定 ExecutionPlan V5 的确定性编译 | Compiler API | 读取 Prompt、执行 Gameplay 或创建引擎对象 |
 | `packages/world-package/` | WorldPackage Manifest、Package Root、Build Closure 与 Receipt | 正式内容包合同 | 保存运行时 Handle 或未锁定草稿 |

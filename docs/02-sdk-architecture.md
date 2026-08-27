@@ -57,7 +57,7 @@ flowchart LR
 ```mermaid
 flowchart TB
     subgraph L1["L1 接入层 · Integration"]
-        AIP["AI Schema Profile / Provider Adapter<br/>设计"]
+        AIP["AI Schema Profile / Provider Adapter<br/>已实现"]
         TS["TypeScript API"]
         CLI["worldkit CLI"]
         BP["Browser Protocol V5"]
@@ -68,12 +68,12 @@ flowchart TB
         AS["Canonical AuthoringSpec V4"]
         RP["Registry Query / Package Definitions"]
         CP["Commands · Events · Snapshots<br/>部分实现"]
-        WCS["WorldChangeSet<br/>设计"]
+        WCS["WorldChangeSet<br/>Full Reload 已实现"]
         DIAG["Stable Diagnostics"]
     end
 
     subgraph L3["L3 世界解析与编译层 · Authoring & Compilation"]
-        CHANGE["WorldChangeSet Validate / Apply<br/>设计"]
+        CHANGE["WorldChangeSet Validate / Apply<br/>已实现"]
         SV["Schema + Semantic Validation"]
         RR["Registry Resolution + Resource Lock"]
         PREP["Base Normalization + Terrain / Region Resolution"]
@@ -188,7 +188,7 @@ flowchart TB
 
 | 层 | 核心职责 | 明确不负责 | 当前主要代码 |
 |---|---|---|---|
-| L1 接入层 | 给人、Agent、Host 和自动化程序提供稳定入口，并把 Provider 能力投影回唯一 Canonical 方言 | 不包含第二套 Provider 私有世界语义 | `scripts/cli/worldkit.ts`、`apps/playground`；AI Schema Provider Adapter 尚在设计 |
+| L1 接入层 | 给人、Agent、Host 和自动化程序提供稳定入口，并把 Provider 能力投影回唯一 Canonical 方言 | 不包含第二套 Provider 私有世界语义 | `scripts/cli/worldkit.ts`、`apps/playground`；AI Schema 与双 Provider conformance 已实现 |
 | L2 公共协议层 | 定义 AI 可以写什么、Host 可以调用什么、Runtime 返回什么 | 不执行地形、物理或渲染 | `packages/protocol`、`packages/authoring` 的公开 Schema、`packages/runtime-contracts` |
 | L3 解析与编译层 | 校验、资源/地形/Region 解析、Constraint 求解、最终 IR 投影和确定性编译 | 不创建 Babylon Scene、Mesh 或 Havok Body | `packages/authoring`、`packages/layout-solver`、`packages/compiler` |
 | L4 数据边界 | 保存版本化、可哈希、可验证的世界与操作计划 | 不包含可变运行时 Handle | IR、Resource Lock、ExecutionPlan、Simulation Take V1；完整 WorldPackage V2 目录、Manifest、Root、Build Receipt、Legal/Host/签名合同、内容寻址 Store、Package CLI 与持久 Runtime Session WAL 已实现 |
@@ -390,7 +390,7 @@ Receipt 与 Overlay。页面不能构图、发任意 Path Query、启动 Havok P
 | 修改类型 | 示例 | 协议 | 当前状态 |
 |---|---|---|---|
 | Runtime 状态操作 | 移动、跳跃、攻击、切换控制目标 | Gameplay Command + 固定 Tick Intent | Browser V5 部分实现；控制权由 Gameplay possession 单一持有 |
-| Authoring 结构修改 | 增加人物、房屋、障碍，删除实体，替换地形 | `WorldChangeSet` | 设计，尚未实现 |
+| Authoring 结构修改 | 增加人物、房屋、障碍，删除实体，替换地形 | `WorldChangeSet` | Full Reload 已闭环；Incremental 未实现 |
 
 LLM 不直接执行 `scene.add(mesh)`、修改 DOM 或创建 Havok Body。结构修改必须通过受信
 Host/Browser Edit API 进入以下链路：
@@ -408,14 +408,18 @@ flowchart LR
     HOT --> RECEIPT
 ```
 
-第一阶段采用隔离构建和原子 Full Reload：Replacement Runtime Ready 后才切换句柄，失败
-时旧世界继续运行；新 Runtime 默认从 Tick 0 启动，不隐式继承旧位置、速度、Action、
-Controller Binding 或 Camera 状态。后续增量热更新只允许有 Transaction Handler 的
+第一阶段已经采用隔离构建和原子 Full Reload：正式 composition 以文件 WAL 和不可变
+WorldPackage Store 持久化请求、Candidate pin、commit、publication recovery 与 cleanup
+进度；启动恢复完成前对应 World 保持 fenced。Replacement Runtime Ready 后才切换句柄，
+失败时旧世界继续运行；新 Runtime 默认从 Tick 0 启动，不隐式继承旧位置、速度、Action、
+Controller Binding 或 Camera 状态。`authoring-host` 仍不依赖 `runtime-host`，两者只在受信
+shell composition 连接。后续增量热更新只允许有 Transaction Handler 的
 Operation/Node Kind，并在固定 Tick Phase Barrier 同时提交逻辑、渲染和物理变化；地形、
 全局物理、Major Schema/Profile、插件等变化仍强制 Full Reload。
 
-因此“画面运行时让 LLM 加一个人或一栋房屋”是明确的长期能力，但不属于当前 Browser
-Protocol V5。详细事务、状态保留和权限边界见总体设计 §16.4–16.5，实施任务见 P1.6。
+因此“画面运行时让 LLM 加一栋房屋”已经有受信 Full Reload 路径，但不属于 Browser
+Protocol V5，也不等于生产编辑器或 Incremental。详细事务、状态保留和权限边界见总体
+设计 §16.4–16.5，剩余实施任务见 P1.6。
 
 ## 7. 核心代码包与依赖边界
 

@@ -77,9 +77,11 @@ Director LLM → Render Directive SDK ────────────┘
   只改 Authoring JSON，不把 Full Reload 伪装成已随 `pnpm worldkit change apply` 发布。
 - Browser Protocol V5 仍是 exact 39-key Runtime 面。结构修改走独立的
   `window.__WORLDKIT_AUTHORING_EDIT__`，只出现在注入了 AuthoringSpec 的 Canonical
-  Authoring 页；catalog `?scene=` 没有这个对象。这不是生产可用的世界编辑器，也不表示
-  Incremental Hot Apply 已交付。完整 P1.4 WorldPackage、Package CLI 与持久 headless
-  Runtime Session 已由独立 P1.4 工作流随后完成，不扩大 P1.6 G1 的范围。
+  Authoring 页；catalog `?scene=` 没有这个对象。Full Reload 的正式 Host composition
+  已使用 owner-private 文件 WAL、不可变 Package Store、启动恢复与有界 cleanup retry
+  闭环；页内 Host 仍是 in-memory 演示面。这不表示 Incremental Hot Apply 或完整 P1.6
+  已交付。完整 P1.4 WorldPackage、Package CLI 与持久 headless Runtime Session 由独立
+  P1.4 工作流拥有。
 - Route Task 8 可信 Node 链路把 Authoring V4 → NormalizedWorldIR V4 →
   ExecutionPlan V5 世界依次物化为最小正式
   WorldPackage Build Receipt、Validation Subject、Recast Graph/Path、真实

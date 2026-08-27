@@ -459,9 +459,11 @@ CLI 对应命令是 `worldkit schema project`、`worldkit registry search` 和
 `preparedCandidateRef` 与 Runtime expectation。不要发明第二套 LiveChange 方言，
 也不要把 token 放进 CLI 参数或 Receipt。
 
-P1.6 首切片只证明 Full Reload；Incremental Hot Apply 和 P1.6 生产可用性都还没交付。
-完整 P1.4 Package/CLI/持久 Runtime Session 已由独立 P1.4 工作流随后完成，不扩大
-P1.6 G1 的范围。权威合同见
+Full Reload 正式 composition 已证明文件 WAL、不可变 Package、fresh-process recovery、
+有界 cleanup retry、双 Provider round-trip 与页面原子换世界。Playground 页内 Host 仍是
+in-memory 演示面，不是正式持久 Host。Incremental Hot Apply 和完整 P1.6 仍未交付；
+`fixed-tick` 保持稳定拒绝。完整 P1.4 Package/CLI/持久 Runtime Session 由独立 P1.4
+工作流拥有。权威合同见
 [P1.6 专项规格](../docs/superpowers/specs/2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md)。
 
 Agent 读 Receipt 时按关闭字段分支，不要发明同义字段：

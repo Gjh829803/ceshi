@@ -1,5 +1,10 @@
 # P1.6 Full Reload 变更审查（Mode B）
 
+> **Historical first-slice review.** 本报告的 open findings 以当时 observation point 为准；
+> 2026-08-27 的处置状态与正式 Host evidence 见
+> [`2026-08-27-p16-full-reload-production-closure.md`](2026-08-27-p16-full-reload-production-closure.md)。
+> Incremental 仍开放。
+
 ## 1. 审查元数据
 
 - 模式：B，分支 diff 变更审查；因 H1/B1 触及 RuntimeHost publication、Browser/CLI

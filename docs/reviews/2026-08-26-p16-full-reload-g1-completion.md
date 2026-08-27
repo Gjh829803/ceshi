@@ -1,5 +1,11 @@
 # P1.6 Full Reload G1 Completion Record
 
+> **Historical first-slice record.** 2026-08-27 的正式 Full Reload Host、file WAL、
+> fresh-process recovery、双 Provider 与人工验收闭环见
+> [`2026-08-27-p16-full-reload-production-closure.md`](2026-08-27-p16-full-reload-production-closure.md)。
+> 下文“仍开放”描述的是 `8ca8503` observation point；不得用它覆盖后续记录，也不得把
+> 后续 Full Reload closure 误读为 Incremental GO。
+
 ## Status
 
 - Date: 2026-08-26.
