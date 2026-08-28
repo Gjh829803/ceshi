@@ -1,3 +1,5 @@
+import { worldPackageRefFromRootHashV1 } from "@whitebox-world/world-identity";
+
 import {
   parseWorldChangeDiagnosticV1,
   type RuntimePublicationIdentityV1,
@@ -11,7 +13,6 @@ import type {
 import type { WorldRuntimeSnapshotV4 } from "@whitebox-world/runtime-contracts";
 import type { PublishWorldReplacementResultV1 } from "@whitebox-world/runtime-host";
 import {
-  worldPackageRefFromRootHashV1,
   type VerifiedWorldPackageDirectoryV2,
   type WorldPackageStoreV1,
 } from "@whitebox-world/world-package";

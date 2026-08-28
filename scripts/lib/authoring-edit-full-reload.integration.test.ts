@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,7 +9,6 @@ import { createValidAuthoringSpec } from "@whitebox-world/authoring/testing";
 import {
   parseWorldChangeRequestV1,
   parseWorldChangeSetV1,
-  type Sha256HashV1,
 } from "@whitebox-world/authoring-edit";
 import { getAuthoringRevisionHeadV1 } from "@whitebox-world/authoring-host";
 import {

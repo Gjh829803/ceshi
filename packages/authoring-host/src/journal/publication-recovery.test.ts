@@ -1,9 +1,10 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import {
   AUTHORING_EDIT_SCOPES_V1,
   parseAuthoringEditPolicyProjectionV1,
   parseWorldChangeCleanupReportQueryV1,
   parseWorldChangeCleanupReportV1,
-  type Sha256HashV1,
   type WorldChangeCleanupReportV1,
 } from "@whitebox-world/authoring-edit";
 import { describe, expect, it } from "vitest";

@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import {
   closeSync,
   constants,
@@ -32,8 +34,6 @@ import {
   stringifyCanonicalJson,
 } from "@whitebox-world/protocol";
 import { isEmpty, isNil } from "lodash-es";
-
-type Sha256HashV1 = `sha256:${string}`;
 
 interface RuntimeSessionWalTransactionBaseV1 {
   readonly kind: "worldkit-runtime-session-wal-transaction";

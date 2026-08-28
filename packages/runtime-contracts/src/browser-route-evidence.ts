@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import {
   assertRouteRuntimeProbeReceiptContextV2,
   canonicalRouteOverlayV2,
@@ -12,8 +14,6 @@ import {
   type RouteRuntimeProbeReceiptV2,
 } from "@whitebox-world/traversal";
 import { isEqual, isNil, isPlainObject } from "lodash-es";
-
-import type { Sha256HashV1 } from "@whitebox-world/control-capture";
 
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const ZERO_HASH = `sha256:${"0".repeat(64)}`;
@@ -330,7 +330,6 @@ export interface WorldkitBrowserRouteEvidencePublicationV2 {
   readonly routes: readonly WorldkitBrowserRouteEvidenceProjectionV2[];
 }
 
-
 function canonicalProjectionV2(
   value: unknown,
   publication: Readonly<{
@@ -470,7 +469,6 @@ function canonicalProjectionV2(
     }),
   };
 }
-
 
 export function canonicalWorldkitBrowserRouteEvidencePublicationV2(
   value: unknown,

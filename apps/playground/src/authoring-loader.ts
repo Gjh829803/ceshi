@@ -1,3 +1,5 @@
+import { worldPackageRefFromRootHashV1 } from "@whitebox-world/world-identity";
+
 import {
   hashAuthoringDocumentV4,
   normalizeAuthoringSpecV4,
@@ -42,7 +44,6 @@ import {
   assertWorldPackageHostCompatibilityV2,
   createWorldPackageV2,
   verifyWorldPackageDirectoryV2,
-  worldPackageRefFromRootHashV1,
   type ResolvedWorldPackageResourceArtifactV2,
   type WorldPackageBuildContextV2,
   type WorldPackageStoreV1,

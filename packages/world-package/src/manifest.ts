@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { isNil, isPlainObject } from "lodash-es";
 
@@ -5,7 +7,6 @@ import type {
   WorldPackageFileIntegrityEntryV1,
   WorldPackageManifestV1,
   WorldPackageResourceArtifactV1,
-  WorldPackageSha256HashV1,
 } from "./types.js";
 
 type UnknownRecord = Record<string, unknown>;
@@ -173,11 +174,11 @@ function requireHash(
   value: unknown,
   path: string,
   code: string,
-): WorldPackageSha256HashV1 {
+): Sha256HashV1 {
   if (typeof value !== "string" || !HASH_PATTERN.test(value) || value === ZERO_HASH) {
     fail(code, path, "must be a non-zero lowercase sha256 hash");
   }
-  return value as WorldPackageSha256HashV1;
+  return value as Sha256HashV1;
 }
 
 function requireResourceRef(value: unknown, path: string, code: string): string {
@@ -323,8 +324,8 @@ export function canonicalWorldPackageManifestV1(
 
 export function hashWorldPackageManifestV1(
   value: unknown,
-): WorldPackageSha256HashV1 {
-  return sha256CanonicalJson(canonicalWorldPackageManifestV1(value)) as WorldPackageSha256HashV1;
+): Sha256HashV1 {
+  return sha256CanonicalJson(canonicalWorldPackageManifestV1(value)) as Sha256HashV1;
 }
 
 function canonicalIntegrityEntry(
@@ -361,7 +362,7 @@ export function canonicalWorldPackageFileIntegrityEntriesV1(
 
 export function hashWorldPackageRootV1(
   value: unknown,
-): WorldPackageSha256HashV1 {
+): Sha256HashV1 {
   const files = canonicalWorldPackageFileIntegrityEntriesV1(value);
   if (files.length === 0) {
     fail("WORLD_PACKAGE_ROOT_INVALID", "files", "must contain at least one file");
@@ -371,7 +372,7 @@ export function hashWorldPackageRootV1(
     canonicalizationProfile: "canonical-json-jcs@1",
     hashAlgorithm: "sha256",
     files,
-  }) as WorldPackageSha256HashV1;
+  }) as Sha256HashV1;
 }
 
 export function deepFreeze<T>(

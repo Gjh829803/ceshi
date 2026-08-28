@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -10,7 +12,6 @@ import {
   parseWorldChangeRequestV1,
   parseWorldChangeSetV1,
   WORLD_CHANGE_OPERATION_TYPES_V1,
-  type Sha256HashV1,
   type WorldChangeOperationV1,
   type WorldChangeSetV1,
 } from "@whitebox-world/authoring-edit";

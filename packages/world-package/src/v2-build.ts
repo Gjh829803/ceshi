@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import type {
   AuthoringSpecV4,
   NormalizedWorldIRV4,
@@ -34,7 +36,6 @@ import type {
   WorldPackageHostCompatibilityV2,
   WorldPackageManifestV2,
 } from "./v2-types.js";
-import type { WorldPackageSha256HashV1 } from "./types.js";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -95,7 +96,7 @@ export interface ResolvedWorldPackageResourceArtifactV2 {
   readonly packagePath: string;
   readonly mediaType: string;
   readonly bytes: Uint8Array;
-  readonly subjectAssetManifestHash: WorldPackageSha256HashV1;
+  readonly subjectAssetManifestHash: Sha256HashV1;
   readonly licenseDocumentId: string;
   readonly licenseSpdxExpression: string;
   readonly redistributionPolicy: "allowed" | "internal-only" | "prohibited";
@@ -123,7 +124,7 @@ export interface CreateWorldPackageV2Input {
   readonly title: string;
   readonly sdkVersion: string;
   readonly distributionPolicy: WorldPackageDistributionPolicyV2;
-  readonly canonicalAuthoringSchemaHash: WorldPackageSha256HashV1;
+  readonly canonicalAuthoringSchemaHash: Sha256HashV1;
   readonly aiSchemaProjectionProfile: WorldPackageManifestV2["aiSchemaProjectionProfile"];
   readonly hostCompatibility: WorldPackageHostCompatibilityV2;
   readonly authoringSpec: AuthoringSpecV4;
@@ -158,7 +159,7 @@ interface CanonicalLegalDocument {
   readonly path: `LICENSES/${string}`;
   readonly text: string;
   readonly bytes: Uint8Array;
-  readonly contentHash: WorldPackageSha256HashV1;
+  readonly contentHash: Sha256HashV1;
 }
 
 function buildFail(path: string, message: string): never {
@@ -235,7 +236,7 @@ function requirePolicy(
   return value;
 }
 
-function requireHash(value: unknown, path: string): WorldPackageSha256HashV1 {
+function requireHash(value: unknown, path: string): Sha256HashV1 {
   if (
     typeof value !== "string" ||
     !/^sha256:[0-9a-f]{64}$/.test(value) ||
@@ -243,7 +244,7 @@ function requireHash(value: unknown, path: string): WorldPackageSha256HashV1 {
   ) {
     buildFail(path, "must be a non-zero lowercase sha256 hash");
   }
-  return value as WorldPackageSha256HashV1;
+  return value as Sha256HashV1;
 }
 
 function optionalString(
@@ -381,7 +382,7 @@ function canonicalLegalDocuments(
       path: licensePath as `LICENSES/${string}`,
       text,
       bytes,
-      contentHash: sha256Bytes(bytes) as WorldPackageSha256HashV1,
+      contentHash: sha256Bytes(bytes) as Sha256HashV1,
     };
   }).sort((left, right) =>
     left.id < right.id
@@ -578,7 +579,7 @@ function createWorldPackageV2Internal(
       path: "NOTICE",
       mediaType: "text/plain; charset=utf-8",
       sizeBytes: noticeBytes.byteLength,
-      sha256: sha256Bytes(noticeBytes) as WorldPackageSha256HashV1,
+      sha256: sha256Bytes(noticeBytes) as Sha256HashV1,
     },
   ].sort((left, right) => left.path < right.path ? -1 : left.path > right.path ? 1 : 0);
 
@@ -588,7 +589,7 @@ function createWorldPackageV2Internal(
       title: requireString(record.title, "title"),
       sdkVersion: requireString(record.sdkVersion, "sdkVersion"),
       canonicalAuthoringSchemaHash:
-        record.canonicalAuthoringSchemaHash as WorldPackageSha256HashV1,
+        record.canonicalAuthoringSchemaHash as Sha256HashV1,
       aiSchemaProjectionProfile:
         record.aiSchemaProjectionProfile as WorldPackageManifestV2["aiSchemaProjectionProfile"],
       worldBounds: (record.authoringSpec as AuthoringSpecV4).world.bounds,

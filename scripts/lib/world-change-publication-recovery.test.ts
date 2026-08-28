@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -7,7 +9,6 @@ import {
   parseWorldChangeRequestV1,
   parseWorldChangeSetV1,
   type RuntimePublicationIdentityV1,
-  type Sha256HashV1,
   type WorldChangeDiagnosticV1,
 } from "@whitebox-world/authoring-edit";
 import {

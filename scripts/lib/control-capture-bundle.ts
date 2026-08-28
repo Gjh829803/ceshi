@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import {
   access,
   lstat,
@@ -17,7 +19,6 @@ import {
   compileSimulationTakeV1,
   type CompiledSimulationTakeV1,
   type ControlCapturePassIdV1,
-  type Sha256HashV1,
 } from "@whitebox-world/control-capture";
 import {
   sha256Bytes,

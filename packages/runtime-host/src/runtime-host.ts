@@ -1,3 +1,7 @@
+import { worldPackageRootHashFromRefV1, type WorldPackageRefV1 } from "@whitebox-world/world-identity";
+
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import {
   parseGameplayBootstrapV1,
   parseGameplayCapacityBudgetV1,
@@ -11,7 +15,6 @@ import {
   type GameplayDiagnosticCodeV1,
   type GameplayEventV1,
   type GameplayParticipantStateV1,
-  type Sha256HashV1,
   type WorldStateSnapshotV1,
 } from "@whitebox-world/gameplay-contracts";
 import type {
@@ -28,9 +31,7 @@ import {
   assertWorldPackageAccessorFreeDataGraphV1,
   assertWorldPackageBuildReceiptV2,
   assertWorldPackageGameplayBootstrapMembershipV2,
-  worldPackageRootHashFromRefV1,
   type WorldPackageBuildReceiptV2,
-  type WorldPackageRefV1,
 } from "@whitebox-world/world-package";
 import { isNil } from "lodash-es";
 

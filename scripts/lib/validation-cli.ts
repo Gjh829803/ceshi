@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import { randomUUID } from "node:crypto";
 import {
   link,
@@ -18,7 +20,6 @@ import {
   type EvidenceArtifactV1,
   type EvidenceArtifactV2,
   type GateResultV2,
-  type Sha256HashV1,
   type ValidationDiagnosticV1,
   type ValidationDiagnosticV2,
   type ValidationReportStatusV1,

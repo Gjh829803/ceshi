@@ -1,23 +1,23 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import type { AuthoringSpecV4, NormalizedWorldIRV4 } from "@whitebox-world/authoring";
 import type { GameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
 import type { LayoutSolveResultV1 } from "@whitebox-world/layout-solver";
 import type { ExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
-
-export type WorldPackageSha256HashV1 = `sha256:${string}`;
 
 export interface WorldPackageResourceArtifactV1 {
   readonly resourceRef: string;
   readonly packagePath: string;
   readonly mediaType: string;
   readonly sizeBytes: number;
-  readonly contentHash: WorldPackageSha256HashV1;
+  readonly contentHash: Sha256HashV1;
 }
 
 export interface WorldPackageFileIntegrityEntryV1 {
   readonly path: string;
   readonly mediaType: string;
   readonly sizeBytes: number;
-  readonly sha256: WorldPackageSha256HashV1;
+  readonly sha256: Sha256HashV1;
 }
 
 export interface WorldPackageManifestV1 {
@@ -33,11 +33,11 @@ export interface WorldPackageManifestV1 {
   readonly authoringSchemaVersion: 4;
   readonly normalizedWorldIrSchemaVersion: 4;
   readonly executionPlanSchemaVersion: 5;
-  readonly authoringSpecHash: WorldPackageSha256HashV1;
-  readonly normalizedWorldIrHash: WorldPackageSha256HashV1;
-  readonly executionPlanHash: WorldPackageSha256HashV1;
-  readonly resourceLockHash: WorldPackageSha256HashV1;
-  readonly layoutSolveReportHash: WorldPackageSha256HashV1;
+  readonly authoringSpecHash: Sha256HashV1;
+  readonly normalizedWorldIrHash: Sha256HashV1;
+  readonly executionPlanHash: Sha256HashV1;
+  readonly resourceLockHash: Sha256HashV1;
+  readonly layoutSolveReportHash: Sha256HashV1;
   readonly initialControlledEntityId: string;
   readonly entryPoint: Readonly<{
     readonly executionPlanPath: "targets/babylon-web/execution-plan.json";
@@ -49,9 +49,9 @@ export interface WorldPackageBuildReceiptV1 {
   readonly kind: "worldkit-world-package-build-receipt";
   readonly schemaVersion: 1;
   readonly manifest: WorldPackageManifestV1;
-  readonly manifestHash: WorldPackageSha256HashV1;
+  readonly manifestHash: Sha256HashV1;
   readonly fileIntegrityEntries: readonly WorldPackageFileIntegrityEntryV1[];
-  readonly worldPackageRootHash: WorldPackageSha256HashV1;
+  readonly worldPackageRootHash: Sha256HashV1;
 }
 
 export interface WorldPackageBuildClosureV1 {

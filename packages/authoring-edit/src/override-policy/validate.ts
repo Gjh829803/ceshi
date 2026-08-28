@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import { intersection, isNil, sortBy } from "lodash-es";
 
 import { parseDefinitionResourceRefOverrideV1, parseWorldChangeDiagnosticV1 } from "../authoring-edit.js";
@@ -8,7 +10,6 @@ import {
   isSha256,
   snapshotDataArray,
   snapshotDataRecord,
-  type Sha256HashV1,
 } from "../parse-kernel.js";
 import {
   FIRST_BATCH_ALLOWED_OVERRIDE_PATHS_V1,

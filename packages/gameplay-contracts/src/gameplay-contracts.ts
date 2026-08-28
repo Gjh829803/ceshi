@@ -1,11 +1,11 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import {
   canonicalJsonBytes,
   sha256CanonicalJson,
   stringifyCanonicalJson,
 } from "@whitebox-world/protocol";
 import { isNil } from "lodash-es";
-
-export type Sha256HashV1 = `sha256:${string}`;
 
 export type ExpectedPossessionV1 =
   | Readonly<{ mode: "unbound" }>

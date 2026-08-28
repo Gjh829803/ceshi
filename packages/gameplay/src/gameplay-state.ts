@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import {
   buildWorldStateSnapshotV1,
   deriveGameplayCommandHashV1,
@@ -23,7 +25,6 @@ import {
   type GameplaySemanticFactV1,
   type MountedOnRelationshipStateV1,
   type PossessedByRelationshipStateV1,
-  type Sha256HashV1,
   type SpatialEntityStateV1,
   type WorldStateSnapshotV1,
 } from "@whitebox-world/gameplay-contracts";

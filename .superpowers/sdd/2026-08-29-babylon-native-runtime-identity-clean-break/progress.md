@@ -33,7 +33,7 @@ Ruling: generated examples and scene evidence are regenerated only through their
 ## Progress
 
 - BNA1-00: complete in the census commit; baseline, retained stash, versions, schema/parity gate, generated files, ownership graph, and terminal dispositions recorded.
-- BNA1-01: not started.
+- BNA1-01: complete. RED failed because `world-build-identity.js` did not exist. GREEN owns `Sha256HashV1` only in Protocol, moves Package Ref ownership out of WorldPackage, adds the closed source-neutral identity parser/canonical bytes/hash, and registers identity plus dependency/ownership tests. Focused Identity/Package Store tests passed (13), the broader migrated contract sample passed (323), workspace boundary and test census passed, and typecheck passed.
 - BNA1-02: not started.
 - BNA1-03: not started.
 - BNA1-04: not started.

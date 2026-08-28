@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import { hashAuthoringDocumentV4, type AuthoringSpecV4 } from "@whitebox-world/authoring";
 import canonicalAuthoringSchema from "@whitebox-world/authoring/schema";
 import {
@@ -11,7 +13,6 @@ import {
   parseWorldChangeDiagnosticV1,
   type AuthoringEditScopeV1,
   type RegistrySearchResultV1,
-  type Sha256HashV1,
   type WorldChangeDiagnosticV1,
 } from "@whitebox-world/authoring-edit";
 import {

@@ -1,3 +1,7 @@
+import { worldPackageRefFromRootHashV1 } from "@whitebox-world/world-identity";
+
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import {
   hashAuthoringDocumentV4,
   normalizeAuthoringSpecV4,
@@ -11,7 +15,6 @@ import {
   parseWorldChangeDiagnosticV1,
   WORLD_CHANGE_OPERATION_TYPES_V1,
   type AuthoringEditPolicyProjectionV1,
-  type Sha256HashV1,
   type WorldChangeDiagnosticV1,
 } from "@whitebox-world/authoring-edit";
 import { compileWorldV5 } from "@whitebox-world/compiler";
@@ -22,7 +25,6 @@ import {
 import { canonicalJsonBytes } from "@whitebox-world/protocol";
 import {
   createWorldPackageV2,
-  worldPackageRefFromRootHashV1,
 } from "@whitebox-world/world-package";
 import {
   createInMemoryWorldPackageStoreV1,

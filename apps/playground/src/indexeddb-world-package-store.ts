@@ -1,12 +1,15 @@
 import {
+  worldPackageRefFromRootHashV1,
+  worldPackageRootHashFromRefV1,
+  type WorldPackageRefV1,
+} from "@whitebox-world/world-identity";
+
+import {
   assertWorldPackageStoreRefMatchesDirectoryV1,
   canonicalWorldPackageDirectoryForStoreV1,
   equalWorldPackageDirectoryBytesV1,
   verifyWorldPackageDirectoryV2,
-  worldPackageRefFromRootHashV1,
-  worldPackageRootHashFromRefV1,
   type WorldPackageDirectoryV2,
-  type WorldPackageRefV1,
   type WorldPackageStoreV1,
 } from "@whitebox-world/world-package";
 import { isNil } from "lodash-es";

@@ -1,7 +1,8 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import {
   hashAuthoringEditPolicyProjectionV1,
   type AuthoringEditScopeV1,
-  type Sha256HashV1,
   type WorldChangeDiagnosticV1,
   type WorldChangeRequestV1,
 } from "@whitebox-world/authoring-edit";

@@ -41,8 +41,6 @@ export {
   assertWorldPackageStoreRefMatchesDirectoryV1,
   canonicalWorldPackageDirectoryForStoreV1,
   equalWorldPackageDirectoryBytesV1,
-  worldPackageRefFromRootHashV1,
-  worldPackageRootHashFromRefV1,
 } from "./store.js";
 export type {
   CreateWorldPackageBuildReceiptInputV1,
@@ -53,7 +51,6 @@ export type {
   WorldPackageManifestV1,
   WorldPackageGameplayBootstrapMembershipInputV1,
   WorldPackageResourceArtifactV1,
-  WorldPackageSha256HashV1,
 } from "./types.js";
 export type {
   MigrateWorldPackageBuildReceiptV1ToV2Input,
@@ -85,8 +82,4 @@ export type {
   WorldPackageLicenseDocumentInputV2,
   WorldPackageBuildContextV2,
 } from "./v2-build.js";
-export type {
-  WorldPackageRefV1,
-  WorldPackageStorePutResultV1,
-  WorldPackageStoreV1,
-} from "./store.js";
+export type { WorldPackageStorePutResultV1, WorldPackageStoreV1 } from "./store.js";

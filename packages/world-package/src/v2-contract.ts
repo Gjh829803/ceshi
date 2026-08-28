@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import {
   canonicalJsonBytes,
   sha256Bytes,
@@ -26,7 +28,6 @@ import {
 } from "./build-receipt.js";
 import type {
   WorldPackageFileIntegrityEntryV1,
-  WorldPackageSha256HashV1,
 } from "./types.js";
 import type {
   MigrateWorldPackageBuildReceiptV1ToV2Input,
@@ -250,11 +251,11 @@ function requireResourceRef(value: unknown, path: string): string {
   return ref;
 }
 
-function requireHash(value: unknown, path: string): WorldPackageSha256HashV1 {
+function requireHash(value: unknown, path: string): Sha256HashV1 {
   if (typeof value !== "string" || !HASH_PATTERN.test(value) || value === ZERO_HASH) {
     fail(path, "must be a non-zero lowercase sha256 hash");
   }
-  return value as WorldPackageSha256HashV1;
+  return value as Sha256HashV1;
 }
 
 function requireNonNegativeSafeInteger(value: unknown, path: string): number {
@@ -648,10 +649,10 @@ export function canonicalWorldPackageManifestV2(
 
 export function hashWorldPackageManifestV2(
   value: unknown,
-): WorldPackageSha256HashV1 {
+): Sha256HashV1 {
   return sha256CanonicalJson(
     canonicalWorldPackageManifestV2(value),
-  ) as WorldPackageSha256HashV1;
+  ) as Sha256HashV1;
 }
 
 function receiptFail(path: string, message: string): never {
@@ -678,7 +679,7 @@ function requireReceiptRecord(value: unknown): UnknownRecord {
 
 export function hashWorldPackageRootV2(
   value: unknown,
-): WorldPackageSha256HashV1 {
+): Sha256HashV1 {
   if (!isPlainDenseArray(value)) {
     throw new Error(
       "WORLD_PACKAGE_ROOT_V2_INVALID: files must be a plain dense array",
@@ -695,7 +696,7 @@ export function hashWorldPackageRootV2(
     canonicalizationProfile: "canonical-json-jcs@1",
     hashAlgorithm: "sha256",
     files,
-  }) as WorldPackageSha256HashV1;
+  }) as Sha256HashV1;
 }
 
 export function assertWorldPackageBuildReceiptV2(
@@ -1161,7 +1162,7 @@ export function assertWorldPackageGameplayBootstrapMembershipV2(
   const bootstrapBytes = gameplayBootstrapCanonicalBytesV1(gameplayBootstrap);
   const bootstrapHash = sha256Bytes(
     bootstrapBytes,
-  ) as WorldPackageSha256HashV1;
+  ) as Sha256HashV1;
   const manifestRows = receipt.manifest.resources.filter((resource) =>
     resource.resourceRef === gameplayBootstrap.resourceRef ||
     resource.packagePath === GAMEPLAY_BOOTSTRAP_PACKAGE_PATH_V1

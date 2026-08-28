@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import {
   canonicalJsonBytes,
   sha256CanonicalJson,
@@ -5,7 +7,7 @@ import {
 } from "@whitebox-world/protocol";
 import { isNil } from "lodash-es";
 
-import type { GameplayCommandV1, Sha256HashV1 } from "./gameplay-contracts";
+import type { GameplayCommandV1 } from "./gameplay-contracts";
 
 export interface GameplayEntityDescriptorV1 {
   readonly id: string;

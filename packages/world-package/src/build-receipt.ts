@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import {
   hashAuthoringDocumentV4,
   hashAuthoringLayoutInputV4,
@@ -41,7 +43,6 @@ import type {
   WorldPackageFileIntegrityEntryV1,
   WorldPackageManifestV1,
   WorldPackageResourceArtifactV1,
-  WorldPackageSha256HashV1,
   WorldPackageGameplayBootstrapMembershipInputV1,
 } from "./types.js";
 
@@ -109,11 +110,11 @@ function requireString(value: unknown, path: string, code: string): string {
   return value;
 }
 
-function requireHash(value: unknown, path: string, code: string): WorldPackageSha256HashV1 {
+function requireHash(value: unknown, path: string, code: string): Sha256HashV1 {
   if (typeof value !== "string" || !HASH_PATTERN.test(value) || value === ZERO_HASH) {
     fail(code, path, "must be a non-zero lowercase sha256 hash");
   }
-  return value as WorldPackageSha256HashV1;
+  return value as Sha256HashV1;
 }
 
 function assertNoAllZeroHashValues(
@@ -195,7 +196,7 @@ function jsonIntegrityEntry(path: string, value: unknown): WorldPackageFileInteg
     path,
     mediaType: "application/json",
     sizeBytes: bytes.byteLength,
-    sha256: sha256Bytes(bytes) as WorldPackageSha256HashV1,
+    sha256: sha256Bytes(bytes) as Sha256HashV1,
   };
 }
 
@@ -245,7 +246,7 @@ function canonicalResolvedResources(
   const manifestRows = rows.map((row): WorldPackageResourceArtifactV1 => {
     const expected = expectedByRef.get(row.resourceRef);
     if (isNil(expected)) fail(code, "resourceArtifacts", `unexpected resource '${row.resourceRef}'`);
-    const contentHash = sha256Bytes(row.bytes) as WorldPackageSha256HashV1;
+    const contentHash = sha256Bytes(row.bytes) as Sha256HashV1;
     if (
       row.mediaType !== expected.mediaType ||
       row.bytes.byteLength !== expected.byteLength ||
@@ -315,8 +316,8 @@ export function createWorldPackageBuildReceiptV1(
   }
 
   const authoringSpecHash = hashAuthoringDocumentV4(spec);
-  const normalizedWorldIrHash = sha256CanonicalJson(world) as WorldPackageSha256HashV1;
-  const executionPlanHash = sha256CanonicalJson(plan) as WorldPackageSha256HashV1;
+  const normalizedWorldIrHash = sha256CanonicalJson(world) as Sha256HashV1;
+  const executionPlanHash = sha256CanonicalJson(plan) as Sha256HashV1;
   const layoutSolveReportHash = hashLayoutSolveReportV1(layout.report);
   const normalizedResourceLock = canonicalExecutionResourceLockEntriesV1(
     world.resources.resourceLock,
@@ -329,10 +330,10 @@ export function createWorldPackageBuildReceiptV1(
   );
   const normalizedResourceLockHash = sha256CanonicalJson(
     normalizedResourceLock,
-  ) as WorldPackageSha256HashV1;
+  ) as Sha256HashV1;
   const resourceLockHash = sha256CanonicalJson(
     planResourceLock,
-  ) as WorldPackageSha256HashV1;
+  ) as Sha256HashV1;
   const layoutResources = projectNormalizedWorldResourcesToLayoutIdentityV4(
     world.resources,
   );
@@ -457,7 +458,7 @@ export function createWorldPackageBuildReceiptV1(
   );
   const gameplayBootstrapArtifactHash = sha256Bytes(
     gameplayBootstrapBytes,
-  ) as WorldPackageSha256HashV1;
+  ) as Sha256HashV1;
   const gameplayBootstrapManifestRow: WorldPackageResourceArtifactV1 = {
     resourceRef: gameplayBootstrap.resourceRef,
     packagePath: GAMEPLAY_BOOTSTRAP_PACKAGE_PATH_V1,
@@ -663,7 +664,7 @@ export function assertWorldPackageGameplayBootstrapMembershipV1(
   }
   const executionPlanHash = sha256CanonicalJson(
     plan,
-  ) as WorldPackageSha256HashV1;
+  ) as Sha256HashV1;
   if (receipt.manifest.executionPlanHash !== executionPlanHash) {
     fail(code, "executionPlan", "does not match the receipt Manifest Plan identity");
   }
@@ -702,7 +703,7 @@ export function assertWorldPackageGameplayBootstrapMembershipV1(
   );
   const bootstrapArtifactHash = sha256Bytes(
     bootstrapBytes,
-  ) as WorldPackageSha256HashV1;
+  ) as Sha256HashV1;
   const manifestRows = receipt.manifest.resources.filter(
     (row) =>
       row.resourceRef === gameplayBootstrap.resourceRef ||

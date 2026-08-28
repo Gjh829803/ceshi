@@ -1,6 +1,7 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import type {
   ControlCapturePassIdV1,
-  Sha256HashV1,
 } from "@whitebox-world/control-capture";
 import type {
   GameplayCommandReceiptV1,

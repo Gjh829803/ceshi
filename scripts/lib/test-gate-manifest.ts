@@ -222,6 +222,8 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "packages/validation/src/route.test.ts", lane: "contract" },
   { path: "packages/validation/src/validation.test.ts", lane: "contract" },
   { path: "packages/validation/src/world-package-validation-subject.test.ts", lane: "contract" },
+  { path: "packages/world-identity/src/package-boundary.test.ts", lane: "contract" },
+  { path: "packages/world-identity/src/world-build-identity.test.ts", lane: "contract" },
   { path: "packages/world-package/src/build-receipt.test.ts", lane: "contract" },
   { path: "packages/world-package/src/manifest.test.ts", lane: "contract" },
   { path: "packages/world-package/src/store.test.ts", lane: "contract" },

@@ -1,3 +1,5 @@
+import { worldPackageRefFromRootHashV1, type WorldPackageRefV1 } from "@whitebox-world/world-identity";
+
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 
@@ -40,9 +42,7 @@ import {
   type RuntimeWorldConfigurationV1,
 } from "@whitebox-world/runtime-host";
 import {
-  worldPackageRefFromRootHashV1,
   type VerifiedWorldPackageDirectoryV2,
-  type WorldPackageRefV1,
 } from "@whitebox-world/world-package";
 import { isEmpty, isEqual, isNil, sortBy } from "lodash-es";
 

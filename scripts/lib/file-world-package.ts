@@ -1,16 +1,19 @@
 import {
+  worldPackageRefFromRootHashV1,
+  worldPackageRootHashFromRefV1,
+  type WorldPackageRefV1,
+} from "@whitebox-world/world-identity";
+
+import {
   assembleWorldPackageDirectoryV2,
   assertWorldPackageStoreRefMatchesDirectoryV1,
   assertWorldPackageBuildReceiptV2,
   canonicalWorldPackageDirectoryForStoreV1,
   equalWorldPackageDirectoryBytesV1,
   verifyWorldPackageDirectoryV2,
-  worldPackageRefFromRootHashV1,
-  worldPackageRootHashFromRefV1,
   type WorldPackageBuildReceiptV2,
   type WorldPackageDirectoryFileV2,
   type WorldPackageDirectoryV2,
-  type WorldPackageRefV1,
   type WorldPackageStorePutResultV1,
   type WorldPackageStoreV1,
 } from "@whitebox-world/world-package";

@@ -1,8 +1,9 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import { mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import type { Sha256HashV1 } from "@whitebox-world/authoring-edit";
 import { createInMemoryWorldPackageStoreV1 } from "@whitebox-world/world-package/testing";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 

@@ -1,6 +1,8 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 
-import type { Sha256HashV1, ValidationReportV1 } from "./types";
+import type { ValidationReportV1 } from "./types";
 import type { ValidationReportV2 } from "./types-v2";
 
 export * from "./types";

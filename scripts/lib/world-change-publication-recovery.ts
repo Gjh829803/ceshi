@@ -1,3 +1,5 @@
+import { worldPackageRefFromRootHashV1 } from "@whitebox-world/world-identity";
+
 import {
   parseWorldChangeCleanupReportV1,
   parseWorldChangeDiagnosticV1,
@@ -13,7 +15,6 @@ import {
   type WorldChangeJournalV1,
 } from "@whitebox-world/authoring-host";
 import {
-  worldPackageRefFromRootHashV1,
   type WorldPackageStoreV1,
 } from "@whitebox-world/world-package";
 import { isEmpty, isEqual, isNil } from "lodash-es";

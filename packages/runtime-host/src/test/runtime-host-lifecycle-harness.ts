@@ -1,3 +1,7 @@
+import { worldPackageRefFromRootHashV1 } from "@whitebox-world/world-identity";
+
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import {
   createGameplayBootstrapResourceLockEntryV1,
   createGameplayBootstrapV1,
@@ -27,11 +31,9 @@ import {
   hashWorldPackageManifestV1,
   hashWorldPackageRootV1,
   migrateWorldPackageBuildReceiptV1ToV2,
-  worldPackageRefFromRootHashV1,
   type WorldPackageBuildReceiptV1,
   type WorldPackageBuildReceiptV2,
   type WorldPackageFileIntegrityEntryV1,
-  type WorldPackageSha256HashV1,
 } from "@whitebox-world/world-package";
 import { vi } from "vitest";
 
@@ -145,7 +147,7 @@ const gameplayBootstrapResourceLock =
 const gameplayResourceLock = Object.freeze([gameplayBootstrapResourceLock]);
 const gameplayResourceLockHash = sha256CanonicalJson(
   gameplayResourceLock,
-) as WorldPackageSha256HashV1;
+) as Sha256HashV1;
 
 const gameplayMode = Object.freeze({
   gameplayModeRef: "worldkit://gameplay-mode/exploration@1",
@@ -395,20 +397,20 @@ function createExecutionPlan(
 function jsonIntegrityEntry(
   path: string,
   value: unknown,
-  hash?: WorldPackageSha256HashV1,
+  hash?: Sha256HashV1,
 ): WorldPackageFileIntegrityEntryV1 {
   const bytes = canonicalJsonBytes(value);
   return {
     path,
     mediaType: "application/json",
     sizeBytes: bytes.byteLength,
-    sha256: hash ?? sha256CanonicalJson(value) as WorldPackageSha256HashV1,
+    sha256: hash ?? sha256CanonicalJson(value) as Sha256HashV1,
   };
 }
 
 export function createBuildReceipt(
   executionPlan: ExecutionPlanV5,
-  executionPlanHash: WorldPackageSha256HashV1,
+  executionPlanHash: Sha256HashV1,
 ): WorldPackageBuildReceiptV2 {
   const manifest = canonicalWorldPackageManifestV1({
     kind: "worldkit-world-package-manifest",
@@ -439,7 +441,7 @@ export function createBuildReceipt(
       sizeBytes: gameplayBootstrapCanonicalBytesV1(gameplayBootstrap).byteLength,
       contentHash: sha256Bytes(
         gameplayBootstrapCanonicalBytesV1(gameplayBootstrap),
-      ) as WorldPackageSha256HashV1,
+      ) as Sha256HashV1,
     }],
   });
   const manifestHash = hashWorldPackageManifestV1(manifest);
@@ -471,7 +473,7 @@ export function createBuildReceipt(
       sizeBytes: gameplayBootstrapCanonicalBytesV1(gameplayBootstrap).byteLength,
       sha256: sha256Bytes(
         gameplayBootstrapCanonicalBytesV1(gameplayBootstrap),
-      ) as WorldPackageSha256HashV1,
+      ) as Sha256HashV1,
     },
   ]);
   const sourceReceipt: WorldPackageBuildReceiptV1 = Object.freeze({
@@ -519,7 +521,7 @@ export function createBuildReceipt(
           path: "LICENSES/project-owned.txt",
           mediaType: "text/plain; charset=utf-8",
           sizeBytes: licenseBytes.byteLength,
-          contentHash: sha256Bytes(licenseBytes) as WorldPackageSha256HashV1,
+          contentHash: sha256Bytes(licenseBytes) as Sha256HashV1,
         }],
       },
       hostCompatibility: BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V2,
@@ -533,13 +535,13 @@ export function createBuildReceipt(
           path: "LICENSES/project-owned.txt",
           mediaType: "text/plain; charset=utf-8",
           sizeBytes: licenseBytes.byteLength,
-          sha256: sha256Bytes(licenseBytes) as WorldPackageSha256HashV1,
+          sha256: sha256Bytes(licenseBytes) as Sha256HashV1,
         },
         {
           path: "NOTICE",
           mediaType: "text/plain; charset=utf-8",
           sizeBytes: noticeBytes.byteLength,
-          sha256: sha256Bytes(noticeBytes) as WorldPackageSha256HashV1,
+          sha256: sha256Bytes(noticeBytes) as Sha256HashV1,
         },
       ],
     },
@@ -552,7 +554,7 @@ function mutableWorldConfigurationForKind(
   const executionPlan = createExecutionPlan(worldKind);
   const executionPlanHash = sha256CanonicalJson(
     executionPlan,
-  ) as WorldPackageSha256HashV1;
+  ) as Sha256HashV1;
   const worldPackageBuildReceipt = createBuildReceipt(
     executionPlan,
     executionPlanHash,

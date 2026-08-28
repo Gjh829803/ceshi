@@ -1,3 +1,7 @@
+import { type WorldPackageRefV1 } from "@whitebox-world/world-identity";
+
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import type { AuthoringSpecV4 } from "@whitebox-world/authoring";
 import type { ApplyWorldChangeSetResultV1 } from "@whitebox-world/authoring-edit";
 import type {
@@ -6,7 +10,6 @@ import type {
   PreparedCandidatePinV1,
   RuntimePublicationExpectationV1,
   RuntimePublicationIdentityV1,
-  Sha256HashV1,
   WorldChangeCleanupReportQueryV1,
   WorldChangeCleanupReportV1,
   WorldChangeDiagnosticV1,
@@ -27,7 +30,6 @@ import type {
   ResolvedWorldPackageResourceArtifactV2,
   WorldPackageBuildContextV2,
   WorldPackageBuildReceiptV2,
-  WorldPackageRefV1,
   WorldPackageStoreV1,
 } from "@whitebox-world/world-package";
 

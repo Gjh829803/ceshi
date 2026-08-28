@@ -1,6 +1,6 @@
-import { isNil } from "lodash-es";
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
 
-export type Sha256HashV1 = `sha256:${string}`;
+import { isNil } from "lodash-es";
 
 export const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
 export const ZERO_HASH = `sha256:${"0".repeat(64)}` as const;

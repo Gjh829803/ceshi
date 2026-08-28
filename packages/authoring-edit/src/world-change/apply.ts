@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import {
   hashAuthoringDocumentV4,
   validateAuthoringSpecV4,
@@ -23,7 +25,7 @@ import {
   type DefinitionOverrideLockEntryV1,
   type DefinitionOverrideOwnerV1,
 } from "../override-policy/index.js";
-import { deepFreeze, type Sha256HashV1 } from "../parse-kernel.js";
+import { deepFreeze } from "../parse-kernel.js";
 import type {
   AuthoringEditBudgetIdV1,
   AuthoringEditWorkloadBudgetV1,

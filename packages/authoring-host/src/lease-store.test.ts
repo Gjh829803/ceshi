@@ -1,8 +1,9 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import { createValidAuthoringSpec } from "@whitebox-world/authoring/testing";
 import {
   parseAuthoringEditPolicyProjectionV1,
   WORLD_CHANGE_OPERATION_TYPES_V1,
-  type Sha256HashV1,
 } from "@whitebox-world/authoring-edit";
 import {
   createInMemoryWorldPackageStoreV1,

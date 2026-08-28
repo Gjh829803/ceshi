@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import { randomBytes, randomUUID } from "node:crypto";
 import {
   mkdir,
@@ -54,7 +56,6 @@ import {
   type RegistryResourceKindV1,
   type RegistrySearchReceiptV1,
   type RegistrySearchResultV1,
-  type Sha256HashV1,
   type WorldChangeCleanupReportV1,
   type WorldChangeDiffV1,
   type WorldChangeExplainV1,

@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import {
   hashAuthoringDocumentV4,
   type AuthoringSpecV4,
@@ -20,7 +22,6 @@ import {
   parseAuthoringEditWorkloadBudgetV1,
   parseWorldChangeSetV1,
   type AuthoringEditWorkloadBudgetV1,
-  type Sha256HashV1,
   type WorldChangeOperationV1,
   type WorldChangeSetV1,
   type WorldChangeTargetV1,

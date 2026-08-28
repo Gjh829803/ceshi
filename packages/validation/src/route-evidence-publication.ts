@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import { canonicalJsonBytes, sha256Bytes, sha256CanonicalJson } from "@whitebox-world/protocol";
 import {
   canonicalWorldkitBrowserRouteEvidencePublicationV2,
@@ -36,7 +38,6 @@ import type {
   ValidationReportV2,
   WorldPackageValidationSubjectV1,
 } from "./types-v2.js";
-import type { Sha256HashV1 } from "./types.js";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -340,8 +341,6 @@ function requireRouteSetArtifact(
 function hashValidationReportV2(report: ValidationReportV2): Sha256HashV1 {
   return sha256CanonicalJson(report) as Sha256HashV1;
 }
-
-
 
 function expectedOverlayV2(
   row: RouteValidationRowInputV2,

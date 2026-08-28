@@ -1,3 +1,5 @@
+import { worldPackageRefFromRootHashV1 } from "@whitebox-world/world-identity";
+
 import {
   normalizeAuthoringSpecV4,
   validateAuthoringSpecV4,
@@ -10,7 +12,6 @@ import {
 } from "@whitebox-world/gameplay-contracts";
 import {
   createWorldPackageV2,
-  worldPackageRefFromRootHashV1,
   type WorldPackageDirectoryV2,
 } from "@whitebox-world/world-package";
 import { generateKeyPairSync } from "node:crypto";

@@ -1,3 +1,7 @@
+import { worldPackageRefFromRootHashV1 } from "@whitebox-world/world-identity";
+
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import { access } from "node:fs/promises";
 import path from "node:path";
 
@@ -5,7 +9,6 @@ import {
   compileSimulationTakeV1,
   SimulationTakeValidationErrorV1,
   type CompiledSimulationTakeV1,
-  type Sha256HashV1,
 } from "@whitebox-world/control-capture";
 import type {
   GameplayCommandReceiptV1,
@@ -26,7 +29,6 @@ import type {
 import {
   createWorldPackageV2,
   verifyWorldPackageDirectoryV2,
-  worldPackageRefFromRootHashV1,
 } from "@whitebox-world/world-package";
 import type { Browser, Page } from "playwright";
 

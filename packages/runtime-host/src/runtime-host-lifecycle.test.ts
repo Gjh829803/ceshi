@@ -1,7 +1,9 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import { DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1 } from "@whitebox-world/gameplay-contracts";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import type { ExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
-import type { WorldPackageSha256HashV1 } from "@whitebox-world/world-package";
+
 import { describe, expect, it, vi } from "vitest";
 
 import type { WorldSessionPublicationV1 } from "./world-session";
@@ -25,7 +27,6 @@ import {
   replacementRequest,
   runtimeHostConstructor,
 } from "./test/runtime-host-lifecycle-harness";
-
 
 describe("RuntimeHost lifecycle isolation and admission", () => {
   it("rejects WorldPackage V1 explicitly before adapter creation", async () => {
@@ -201,7 +202,7 @@ describe("RuntimeHost lifecycle isolation and admission", () => {
     } as unknown as ExecutionPlanV5;
     const executionPlanHash = sha256CanonicalJson(
       executionPlan,
-    ) as WorldPackageSha256HashV1;
+    ) as Sha256HashV1;
     const initialWorld = {
       ...baseline,
       executionPlan,
@@ -252,7 +253,7 @@ describe("RuntimeHost lifecycle isolation and admission", () => {
     } as ExecutionPlanV5;
     const executionPlanHash = sha256CanonicalJson(
       executionPlan,
-    ) as WorldPackageSha256HashV1;
+    ) as Sha256HashV1;
     const initialWorld = {
       ...baseline,
       executionPlan,
@@ -290,7 +291,7 @@ describe("RuntimeHost lifecycle isolation and admission", () => {
     } as unknown as ExecutionPlanV5;
     const executionPlanHash = sha256CanonicalJson(
       executionPlan,
-    ) as WorldPackageSha256HashV1;
+    ) as Sha256HashV1;
 
     expect(() => host.replaceWorld({
       worldConfiguration: {

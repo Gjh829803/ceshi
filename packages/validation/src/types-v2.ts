@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import type {
   BooleanAssertionMetricDefinitionV1,
   BooleanAssertionMetricResultV1,
@@ -7,7 +9,6 @@ import type {
   HashEqualityMetricResultV1,
   SetEqualityMetricDefinitionV1,
   SetEqualityMetricResultV1,
-  Sha256HashV1,
   ValidationDiagnosticCodeV1,
   ValidationGateRequirementV1,
   ValidationGateStatusV1,

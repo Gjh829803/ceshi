@@ -1,3 +1,5 @@
+import { type WorldPackageRefV1 } from "@whitebox-world/world-identity";
+
 import {
   WORLDKIT_RUNTIME_SESSION_PROTOCOL_VERSION,
   WORLDKIT_RUNTIME_SESSION_REQUEST_TYPES_V1,
@@ -13,7 +15,7 @@ import {
   type RuntimeSessionReceiptV1,
   type RuntimeSessionRequestV1,
 } from "@whitebox-world/runtime-contracts";
-import type { WorldPackageRefV1 } from "@whitebox-world/world-package";
+
 import { isEmpty, isNil } from "lodash-es";
 
 import {

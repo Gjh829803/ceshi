@@ -1,3 +1,5 @@
+import { worldPackageRefFromRootHashV1, worldPackageRootHashFromRefV1 } from "@whitebox-world/world-identity";
+
 import {
   normalizeAuthoringSpecV4,
   validateAuthoringSpecV4,
@@ -16,8 +18,6 @@ import basicWorldDocument from "../../../examples/authoring/basic-world.json";
 import {
   assembleWorldPackageDirectoryV2,
   createWorldPackageV2,
-  worldPackageRefFromRootHashV1,
-  worldPackageRootHashFromRefV1,
   type WorldPackageDirectoryV2,
 } from "./index.js";
 import {

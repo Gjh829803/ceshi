@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import { hashAuthoringDocumentV4 } from "@whitebox-world/authoring";
 import { appendFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -16,7 +18,6 @@ import {
   WORLD_CHANGE_OPERATION_TYPES_V1,
   type AuthoringEditPolicyProjectionV1,
   type AuthoringEditScopeV1,
-  type Sha256HashV1,
   type WorldChangeOperationV1,
   type WorldChangeRequestV1,
   type WorldChangeSetV1,

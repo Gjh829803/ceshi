@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import {
   hashAuthoringDocumentV4,
   normalizeAuthoringSpecV4,
@@ -7,7 +9,6 @@ import {
 import {
   hashAuthoringEditPolicyProjectionV1,
   parseWorldChangeValidationReportBindingV1,
-  type Sha256HashV1,
   type WorldChangeBuildIdentityV1,
   type WorldChangeDiagnosticV1,
   type WorldChangeFailurePhaseV1,

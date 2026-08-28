@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import {
   deriveGameplayCommandHashV1,
   deriveGameplayCommandReceiptIdV1,
@@ -21,7 +23,6 @@ import {
   type GameplayParticipantStateV1,
   type GameplayRelationshipStateV1,
   type GameplaySemanticFactV1,
-  type Sha256HashV1,
   type WorldStateSnapshotV1,
 } from "@whitebox-world/gameplay-contracts";
 import {

@@ -1,4 +1,5 @@
-import type { Sha256HashV1 } from "@whitebox-world/control-capture";
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 
 export interface BabylonNativeInitialCameraV1 {

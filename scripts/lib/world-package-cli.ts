@@ -1,13 +1,13 @@
+import { worldPackageRefFromRootHashV1, type WorldPackageRefV1 } from "@whitebox-world/world-identity";
+
 import path from "node:path";
 
 import {
   BABYLON_WEB_WORLD_PACKAGE_HOST_POLICY_V1,
   createWorldPackageV2,
-  worldPackageRefFromRootHashV1,
   type VerifiedWorldPackageDirectoryV2,
   type WorldPackageDirectoryV2,
   type WorldPackageHostPolicyV1,
-  type WorldPackageRefV1,
 } from "@whitebox-world/world-package";
 import type { RuntimeWorldConfigurationV1 } from "@whitebox-world/runtime-host";
 

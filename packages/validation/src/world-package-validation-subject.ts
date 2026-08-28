@@ -1,10 +1,11 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { hashExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
 import {
   assertWorldPackageBuildReceiptV2,
   assertWorldPackageGameplayBootstrapMembershipV2,
   type VerifiedWorldPackageDirectoryV2,
-  type WorldPackageSha256HashV1,
 } from "@whitebox-world/world-package";
 import { isEqual, isNil, isPlainObject } from "lodash-es";
 
@@ -14,8 +15,8 @@ function fail(message: string): never {
   throw new Error(`WORLD_PACKAGE_VALIDATION_SUBJECT_INPUT_INVALID: ${message}`);
 }
 
-function asHash(value: string): WorldPackageSha256HashV1 {
-  return value as WorldPackageSha256HashV1;
+function asHash(value: string): Sha256HashV1 {
+  return value as Sha256HashV1;
 }
 
 /**

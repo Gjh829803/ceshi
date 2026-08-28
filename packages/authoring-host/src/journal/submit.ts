@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import {
   applyWorldChangeSetV1,
   assembleWorldChangeDiffV1,
@@ -6,7 +8,6 @@ import {
   hashWorldChangeSetV1,
   isAppliedWorldChangeSetResultV1,
   parseWorldChangeCleanupReportV1,
-  type Sha256HashV1,
   type WorldChangeAffectedIdsV1,
   type WorldChangeDiagnosticV1,
   type WorldChangeFailurePhaseV1,

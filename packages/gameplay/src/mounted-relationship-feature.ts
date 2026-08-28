@@ -1,9 +1,10 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import {
   createGameplayFeatureManifestV1,
   type GameplayRelationshipStateV1,
   type MountedOnRelationshipStateV1,
   type PossessedByRelationshipStateV1,
-  type Sha256HashV1,
 } from "@whitebox-world/gameplay-contracts";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { isNil } from "lodash-es";

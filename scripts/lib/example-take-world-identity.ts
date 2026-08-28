@@ -1,6 +1,7 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import {
   compileSimulationTakeV1,
-  type Sha256HashV1,
   type SimulationTakeV1,
 } from "@whitebox-world/control-capture";
 
