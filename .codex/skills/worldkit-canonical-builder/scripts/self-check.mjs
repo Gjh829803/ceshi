@@ -256,7 +256,7 @@ const SHA256_K = /* @__PURE__ */ Uint32Array.from([
   3329325298
 ]);
 const SHA256_W = /* @__PURE__ */ new Uint32Array(64);
-class SHA256 extends HashMD {
+let SHA256$1 = class SHA256 extends HashMD {
   constructor(outputLen = 32) {
     super(64, outputLen, 8, false);
     this.A = SHA256_IV[0] | 0;
@@ -325,9 +325,9 @@ class SHA256 extends HashMD {
     this.set(0, 0, 0, 0, 0, 0, 0, 0);
     clean(this.buffer);
   }
-}
-const sha256$1 = /* @__PURE__ */ createHasher(() => new SHA256());
-const sha256 = sha256$1;
+};
+const sha256$2 = /* @__PURE__ */ createHasher(() => new SHA256$1());
+const sha256$1 = sha256$2;
 class CanonicalJsonAdmissionError extends TypeError {
   code;
   instancePath;
@@ -411,130 +411,10 @@ function canonicalJsonBytes(value) {
   return new TextEncoder().encode(stringifyCanonicalJson(value));
 }
 function sha256Bytes(bytes) {
-  return `sha256:${bytesToHex(sha256(bytes))}`;
+  return `sha256:${bytesToHex(sha256$1(bytes))}`;
 }
 function sha256CanonicalJson(value) {
   return sha256Bytes(canonicalJsonBytes(value));
-}
-const CAMERA_RIG_PARAMETER_NAMES_V1 = [
-  "distanceMeters",
-  "minimumDistanceMeters",
-  "maximumDistanceMeters",
-  "targetHeightMeters",
-  "shoulderOffsetMeters",
-  "pitchRadians",
-  "minimumPitchRadians",
-  "maximumPitchRadians",
-  "positionDampingPerSecond",
-  "horizontalPositionDampingPerSecond",
-  "verticalPositionDampingPerSecond",
-  "maximumPositionLagMeters",
-  "rotationDampingPerSecond",
-  "yawDampingPerSecond",
-  "pitchDampingPerSecond",
-  "collisionRadiusMeters",
-  "collisionRetractionMetersPerSecond",
-  "collisionRecoveryMetersPerSecond",
-  "baseFovDegrees",
-  "speedFovDegreesPerMeterPerSecond",
-  "maximumSpeedFovDegrees",
-  "lookAheadSeconds",
-  "accelerationLookAheadSecondsSquared",
-  "transitionSeconds",
-  "minimumHeadingSpeedMetersPerSecond",
-  "velocityHeadingDampingPerSecond",
-  "fovDampingPerSecond",
-  "horizontalDeadZoneRatio",
-  "verticalDeadZoneRatio",
-  "recenterDelaySeconds",
-  "recenterDurationSeconds",
-  "recenterMinimumSpeedMetersPerSecond",
-  "teleportSnapDistanceMeters",
-  "lookSensitivityXRatio",
-  "lookSensitivityYRatio"
-];
-const CAMERA_TUNING_PARAMETER_NAMES_V1 = [
-  "distanceMeters",
-  "targetHeightMeters",
-  "shoulderOffsetMeters",
-  "pitchRadians",
-  "positionDampingPerSecond",
-  "horizontalPositionDampingPerSecond",
-  "verticalPositionDampingPerSecond",
-  "maximumPositionLagMeters",
-  "rotationDampingPerSecond",
-  "yawDampingPerSecond",
-  "pitchDampingPerSecond",
-  "collisionRadiusMeters",
-  "collisionRetractionMetersPerSecond",
-  "collisionRecoveryMetersPerSecond",
-  "baseFovDegrees",
-  "speedFovDegreesPerMeterPerSecond",
-  "maximumSpeedFovDegrees",
-  "lookAheadSeconds",
-  "accelerationLookAheadSecondsSquared",
-  "transitionSeconds",
-  "minimumHeadingSpeedMetersPerSecond",
-  "velocityHeadingDampingPerSecond",
-  "fovDampingPerSecond",
-  "horizontalDeadZoneRatio",
-  "verticalDeadZoneRatio",
-  "recenterDelaySeconds",
-  "recenterDurationSeconds",
-  "recenterMinimumSpeedMetersPerSecond",
-  "teleportSnapDistanceMeters",
-  "lookSensitivityXRatio",
-  "lookSensitivityYRatio"
-];
-const CAMERA_RIG_PARAMETER_NAME_SET_V1 = new Set(CAMERA_RIG_PARAMETER_NAMES_V1);
-new Set(CAMERA_TUNING_PARAMETER_NAMES_V1);
-const SOCKET_FIRST_PERSON_IGNORED_MODIFIER_PARAMETERS_V1 = /* @__PURE__ */ new Set([
-  "distanceMeters",
-  "minimumDistanceMeters",
-  "maximumDistanceMeters",
-  "shoulderOffsetMeters",
-  "collisionRadiusMeters",
-  "collisionRetractionMetersPerSecond",
-  "collisionRecoveryMetersPerSecond",
-  "lookAheadSeconds",
-  "accelerationLookAheadSecondsSquared",
-  "horizontalDeadZoneRatio",
-  "verticalDeadZoneRatio"
-]);
-function isCameraRigParameterNameV1(value) {
-  return CAMERA_RIG_PARAMETER_NAME_SET_V1.has(value);
-}
-function isCameraRigParameterOverrideSupportedV1(algorithmRef, parameterName) {
-  return !algorithmRef.endsWith("/socket-first-person@1") || !SOCKET_FIRST_PERSON_IGNORED_MODIFIER_PARAMETERS_V1.has(parameterName);
-}
-function applyCameraRigParameterOverridesV1(algorithmRef, parameters, overrides) {
-  const applied = { ...parameters };
-  for (const [parameterName, value] of Object.entries(overrides)) {
-    if (value === void 0 || !isCameraRigParameterNameV1(parameterName) || !isCameraRigParameterOverrideSupportedV1(algorithmRef, parameterName)) continue;
-    applied[parameterName] = value;
-  }
-  const positionDamping = overrides.positionDampingPerSecond;
-  if (positionDamping !== void 0) {
-    if (overrides.horizontalPositionDampingPerSecond === void 0) {
-      applied.horizontalPositionDampingPerSecond = positionDamping;
-    }
-    if (overrides.verticalPositionDampingPerSecond === void 0) {
-      applied.verticalPositionDampingPerSecond = positionDamping;
-    }
-  }
-  const rotationDamping = overrides.rotationDampingPerSecond;
-  if (rotationDamping !== void 0) {
-    if (overrides.yawDampingPerSecond === void 0) {
-      applied.yawDampingPerSecond = rotationDamping;
-    }
-    if (overrides.pitchDampingPerSecond === void 0) {
-      applied.pitchDampingPerSecond = rotationDamping;
-    }
-    if (overrides.velocityHeadingDampingPerSecond === void 0) {
-      applied.velocityHeadingDampingPerSecond = rotationDamping;
-    }
-  }
-  return applied;
 }
 var freeGlobal = typeof global == "object" && global && global.Object === Object && global;
 var freeSelf = typeof self == "object" && self && self.Object === Object && self;
@@ -1056,6 +936,743 @@ function baseUniq(array, iteratee, comparator) {
 function uniq(array) {
   return array && array.length ? baseUniq(array) : [];
 }
+function invalid$2(schemaName) {
+  throw new RangeError(`Value must match the closed ${schemaName} schema.`);
+}
+function snapshotDataRecord$1(value) {
+  if (typeof value !== "object" || isNil(value)) return void 0;
+  try {
+    const prototype = Reflect.getPrototypeOf(value);
+    if (prototype !== Object.prototype && !isNil(prototype)) return void 0;
+    const snapshot = /* @__PURE__ */ Object.create(null);
+    for (const key of Reflect.ownKeys(value)) {
+      const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
+      if (typeof key !== "string" || isNil(descriptor) || !descriptor.enumerable || !("value" in descriptor)) return void 0;
+      snapshot[key] = descriptor.value;
+    }
+    return snapshot;
+  } catch {
+    return void 0;
+  }
+}
+function hasExactKeys$1(value, keys) {
+  const ownKeys2 = Reflect.ownKeys(value);
+  return ownKeys2.length === keys.length && ownKeys2.every((key) => typeof key === "string" && keys.includes(key));
+}
+function isSafeNonNegativeInteger$1(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && !Object.is(value, -0);
+}
+function deepFreeze$5(value) {
+  if (typeof value !== "object" || isNil(value) || Object.isFrozen(value)) {
+    return value;
+  }
+  for (const key of Reflect.ownKeys(value)) {
+    const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
+    if (!isNil(descriptor) && "value" in descriptor) {
+      deepFreeze$5(descriptor.value);
+    }
+  }
+  return Object.freeze(value);
+}
+const GAMEPLAY_CAPACITY_BUDGET_KEYS = [
+  "maximumParticipantCount",
+  "maximumControllerEntityCount",
+  "maximumRelationshipStateCount",
+  "maximumActiveActionStateCount",
+  "maximumGameplayFeatureCount",
+  "maximumSemanticActionDefinitionCount",
+  "maximumSemanticFactCount",
+  "maximumSemanticFactTransitionCountPerTick",
+  "maximumIdempotencyRecordCount",
+  "maximumUsedActionExecutionIdCount",
+  "maximumRetainedReceiptCount",
+  "maximumRetainedEventCount",
+  "maximumRetainedWorldStateSnapshotCount"
+];
+function parseGameplayCapacityBudgetV1(input) {
+  const schemaName = "GameplayCapacityBudgetV1";
+  const record2 = snapshotDataRecord$1(input) ?? invalid$2(schemaName);
+  if (!hasExactKeys$1(record2, GAMEPLAY_CAPACITY_BUDGET_KEYS) || !GAMEPLAY_CAPACITY_BUDGET_KEYS.every(
+    (key) => isSafeNonNegativeInteger$1(record2[key])
+  )) invalid$2(schemaName);
+  return deepFreeze$5(Object.fromEntries(
+    GAMEPLAY_CAPACITY_BUDGET_KEYS.map((key) => [key, record2[key]])
+  ));
+}
+parseGameplayCapacityBudgetV1({
+  maximumParticipantCount: 1,
+  maximumControllerEntityCount: 1,
+  maximumRelationshipStateCount: 1,
+  maximumActiveActionStateCount: 256,
+  maximumGameplayFeatureCount: 16,
+  maximumSemanticActionDefinitionCount: 256,
+  maximumSemanticFactCount: 4096,
+  maximumSemanticFactTransitionCountPerTick: 1024,
+  maximumIdempotencyRecordCount: 4096,
+  maximumUsedActionExecutionIdCount: 4096,
+  maximumRetainedReceiptCount: 4096,
+  maximumRetainedEventCount: 8192,
+  maximumRetainedWorldStateSnapshotCount: 4096
+});
+const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
+const GAMEPLAY_COMMAND_TYPES = /* @__PURE__ */ new Set([
+  "control.bind",
+  "control.release",
+  "action.activate",
+  "action.cancel"
+]);
+function invalid$1(schemaName) {
+  throw new RangeError(`Value must match the closed ${schemaName} schema.`);
+}
+function snapshotDataRecord(value) {
+  if (typeof value !== "object" || isNil(value)) return void 0;
+  try {
+    if (Reflect.getPrototypeOf(value) !== Object.prototype) return void 0;
+    const snapshot = {};
+    for (const key of Reflect.ownKeys(value)) {
+      const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
+      if (typeof key !== "string" || isNil(descriptor) || !descriptor.enumerable || !("value" in descriptor)) return void 0;
+      Object.defineProperty(snapshot, key, {
+        configurable: true,
+        enumerable: true,
+        value: descriptor.value,
+        writable: true
+      });
+    }
+    return snapshot;
+  } catch {
+    return void 0;
+  }
+}
+function snapshotDataArray(value) {
+  if (!Array.isArray(value)) return void 0;
+  try {
+    if (Reflect.getPrototypeOf(value) !== Array.prototype) return void 0;
+    if (Reflect.ownKeys(value).some((key) => typeof key === "symbol")) {
+      return void 0;
+    }
+    if (Object.getOwnPropertyNames(value).length !== value.length + 1) {
+      return void 0;
+    }
+    const snapshot = [];
+    for (let index = 0; index < value.length; index += 1) {
+      const descriptor = Reflect.getOwnPropertyDescriptor(value, String(index));
+      if (isNil(descriptor) || !descriptor.enumerable || !("value" in descriptor)) return void 0;
+      snapshot.push(descriptor.value);
+    }
+    const lengthDescriptor = Reflect.getOwnPropertyDescriptor(value, "length");
+    if (isNil(lengthDescriptor) || lengthDescriptor.enumerable !== false) {
+      return void 0;
+    }
+    return snapshot;
+  } catch {
+    return void 0;
+  }
+}
+function hasExactKeys(record2, keys) {
+  const ownKeys2 = Reflect.ownKeys(record2);
+  return ownKeys2.length === keys.length && ownKeys2.every(
+    (key) => typeof key === "string" && keys.includes(key)
+  );
+}
+function isNonEmptyString(value) {
+  return typeof value === "string" && value.length > 0;
+}
+function isSha256(value) {
+  return typeof value === "string" && SHA256_PATTERN.test(value);
+}
+function isSafeNonNegativeInteger(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && !Object.is(value, -0);
+}
+function isSafePositiveInteger(value) {
+  return isSafeNonNegativeInteger(value) && value > 0;
+}
+function compareCanonicalStrings(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+function sameOrder(actual, expected) {
+  return actual.length === expected.length && actual.every(
+    (value, index) => value === expected[index]
+  );
+}
+function canonicalStringSet(input, schemaName, mode) {
+  const values = snapshotDataArray(input);
+  if (isNil(values)) invalid$1(schemaName);
+  if (!values.every(isNonEmptyString)) invalid$1(schemaName);
+  const typedValues = values;
+  if (new Set(typedValues).size !== typedValues.length) invalid$1(schemaName);
+  const canonical = [...typedValues].sort(compareCanonicalStrings);
+  if (mode === "strict" && !sameOrder(typedValues, canonical)) invalid$1(schemaName);
+  return Object.freeze(canonical);
+}
+function deepFreeze$4(value) {
+  if (typeof value !== "object" || isNil(value) || Object.isFrozen(value)) {
+    return value;
+  }
+  for (const key of Reflect.ownKeys(value)) {
+    const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
+    if (!isNil(descriptor) && "value" in descriptor) {
+      deepFreeze$4(descriptor.value);
+    }
+  }
+  return Object.freeze(value);
+}
+function parseGameplayEntityDescriptor(input, mode, schemaName) {
+  const record2 = snapshotDataRecord(input);
+  if (isNil(record2)) invalid$1(schemaName);
+  if (!hasExactKeys(record2, ["id", "entityDefinitionRef", "capabilityRefs"]) || !isNonEmptyString(record2.id) || !isNonEmptyString(record2.entityDefinitionRef)) invalid$1(schemaName);
+  return deepFreeze$4({
+    id: record2.id,
+    entityDefinitionRef: record2.entityDefinitionRef,
+    capabilityRefs: canonicalStringSet(record2.capabilityRefs, schemaName, mode)
+  });
+}
+function createGameplayEntityDescriptorV1(input) {
+  return parseGameplayEntityDescriptor(
+    input,
+    "canonicalize",
+    "GameplayEntityDescriptorV1"
+  );
+}
+function parseGameplayEntityDescriptorV1(input) {
+  return parseGameplayEntityDescriptor(input, "strict", "GameplayEntityDescriptorV1");
+}
+function parseGameplayFeatureManifestBody(input, mode) {
+  const schemaName = "GameplayFeatureManifestBodyV1";
+  const record2 = snapshotDataRecord(input);
+  if (isNil(record2)) invalid$1(schemaName);
+  if (!hasExactKeys(record2, [
+    "kind",
+    "id",
+    "version",
+    "resourceRef",
+    "dependencyFeatureRefs",
+    "requiredCapabilityRefs",
+    "commandTypes",
+    "resourceBudget"
+  ]) || record2.kind !== "gameplay-feature" || !isNonEmptyString(record2.id) || !isSafePositiveInteger(record2.version) || !isNonEmptyString(record2.resourceRef)) invalid$1(schemaName);
+  const commandTypes = canonicalStringSet(record2.commandTypes, schemaName, mode);
+  if (!commandTypes.every(
+    (type2) => GAMEPLAY_COMMAND_TYPES.has(type2)
+  )) invalid$1(schemaName);
+  const resourceBudget = snapshotDataRecord(record2.resourceBudget);
+  if (isNil(resourceBudget)) invalid$1(schemaName);
+  if (!hasExactKeys(resourceBudget, ["stateSliceCount", "commandHandlerCount"]) || resourceBudget.stateSliceCount !== 1 || !isSafeNonNegativeInteger(resourceBudget.commandHandlerCount) || resourceBudget.commandHandlerCount !== commandTypes.length) invalid$1(schemaName);
+  return deepFreeze$4({
+    kind: "gameplay-feature",
+    id: record2.id,
+    version: record2.version,
+    resourceRef: record2.resourceRef,
+    dependencyFeatureRefs: canonicalStringSet(
+      record2.dependencyFeatureRefs,
+      schemaName,
+      mode
+    ),
+    requiredCapabilityRefs: canonicalStringSet(
+      record2.requiredCapabilityRefs,
+      schemaName,
+      mode
+    ),
+    commandTypes,
+    resourceBudget: {
+      stateSliceCount: 1,
+      commandHandlerCount: resourceBudget.commandHandlerCount
+    }
+  });
+}
+function createGameplayFeatureManifestV1(input) {
+  const body = parseGameplayFeatureManifestBody(input, "canonicalize");
+  return deepFreeze$4({
+    ...body,
+    contentHash: sha256CanonicalJson(body)
+  });
+}
+function parseGameplayFeatureResourceLockV1(input) {
+  const schemaName = "GameplayFeatureResourceLockV1";
+  const record2 = snapshotDataRecord(input);
+  if (isNil(record2)) invalid$1(schemaName);
+  if (!hasExactKeys(record2, ["resourceRef", "contentHash"]) || !isNonEmptyString(record2.resourceRef) || !isSha256(record2.contentHash)) invalid$1(schemaName);
+  return deepFreeze$4({
+    resourceRef: record2.resourceRef,
+    contentHash: record2.contentHash
+  });
+}
+function parseGameplayActionDefinitionBody(input, mode) {
+  const schemaName = "GameplayActionDefinitionBodyV1";
+  const record2 = snapshotDataRecord(input);
+  if (isNil(record2)) invalid$1(schemaName);
+  if (!hasExactKeys(record2, [
+    "kind",
+    "id",
+    "version",
+    "resourceRef",
+    "executionMode",
+    "completion",
+    "effect",
+    "isMovementInputBlocked",
+    "allowedActorEntityDefinitionRefs",
+    "requiredActorCapabilityRefs",
+    "request"
+  ]) || record2.kind !== "semantic-action" || !isNonEmptyString(record2.id) || !isSafePositiveInteger(record2.version) || !isNonEmptyString(record2.resourceRef) || record2.executionMode !== "exclusive-per-subject" || typeof record2.isMovementInputBlocked !== "boolean") invalid$1(schemaName);
+  const completionRecord = snapshotDataRecord(record2.completion);
+  if (isNil(completionRecord)) invalid$1(schemaName);
+  let completion;
+  if (completionRecord.mode === "immediate" && hasExactKeys(completionRecord, ["mode"])) {
+    completion = { mode: "immediate" };
+  } else if (completionRecord.mode === "explicit-cancel" && hasExactKeys(completionRecord, ["mode"])) {
+    completion = { mode: "explicit-cancel" };
+  } else if (completionRecord.mode === "fixed-duration" && hasExactKeys(completionRecord, ["mode", "durationTicks"]) && isSafePositiveInteger(completionRecord.durationTicks)) {
+    completion = {
+      mode: "fixed-duration",
+      durationTicks: completionRecord.durationTicks
+    };
+  } else {
+    return invalid$1(schemaName);
+  }
+  const effectRecord = snapshotDataRecord(record2.effect);
+  if (isNil(effectRecord)) invalid$1(schemaName);
+  let effect;
+  if (effectRecord.mode === "state-only" && hasExactKeys(effectRecord, ["mode"])) {
+    effect = { mode: "state-only" };
+  } else if (effectRecord.mode === "trusted" && hasExactKeys(effectRecord, [
+    "mode",
+    "gameplayActionEffectRef",
+    "gameplayActionEffectHash"
+  ]) && isNonEmptyString(effectRecord.gameplayActionEffectRef) && isSha256(effectRecord.gameplayActionEffectHash)) {
+    effect = {
+      mode: "trusted",
+      gameplayActionEffectRef: effectRecord.gameplayActionEffectRef,
+      gameplayActionEffectHash: effectRecord.gameplayActionEffectHash
+    };
+  } else {
+    return invalid$1(schemaName);
+  }
+  const requestRecord = snapshotDataRecord(record2.request);
+  if (isNil(requestRecord)) invalid$1(schemaName);
+  let request;
+  if (requestRecord.mode === "none" && hasExactKeys(requestRecord, ["mode"])) {
+    request = { mode: "none" };
+  } else if (requestRecord.mode === "required" && hasExactKeys(requestRecord, [
+    "mode",
+    "actionRequestSchemaRef",
+    "actionRequestSchemaHash"
+  ]) && isNonEmptyString(requestRecord.actionRequestSchemaRef) && isSha256(requestRecord.actionRequestSchemaHash)) {
+    request = {
+      mode: "required",
+      actionRequestSchemaRef: requestRecord.actionRequestSchemaRef,
+      actionRequestSchemaHash: requestRecord.actionRequestSchemaHash
+    };
+  } else {
+    return invalid$1(schemaName);
+  }
+  return deepFreeze$4({
+    kind: "semantic-action",
+    id: record2.id,
+    version: record2.version,
+    resourceRef: record2.resourceRef,
+    executionMode: "exclusive-per-subject",
+    completion,
+    effect,
+    isMovementInputBlocked: record2.isMovementInputBlocked,
+    allowedActorEntityDefinitionRefs: canonicalStringSet(
+      record2.allowedActorEntityDefinitionRefs,
+      schemaName,
+      mode
+    ),
+    requiredActorCapabilityRefs: canonicalStringSet(
+      record2.requiredActorCapabilityRefs,
+      schemaName,
+      mode
+    ),
+    request
+  });
+}
+function parseGameplayActionDefinitionV1(input) {
+  const schemaName = "GameplayActionDefinitionV1";
+  const record2 = snapshotDataRecord(input);
+  if (isNil(record2)) invalid$1(schemaName);
+  if (!hasExactKeys(record2, [
+    "kind",
+    "id",
+    "version",
+    "resourceRef",
+    "contentHash",
+    "executionMode",
+    "completion",
+    "effect",
+    "isMovementInputBlocked",
+    "allowedActorEntityDefinitionRefs",
+    "requiredActorCapabilityRefs",
+    "request"
+  ]) || !isSha256(record2.contentHash)) invalid$1(schemaName);
+  const { contentHash: contentHash2, ...bodyInput } = record2;
+  let body;
+  try {
+    body = parseGameplayActionDefinitionBody(bodyInput, "strict");
+  } catch {
+    return invalid$1(schemaName);
+  }
+  const expectedHash = sha256CanonicalJson(body);
+  if (contentHash2 !== expectedHash) invalid$1(schemaName);
+  return deepFreeze$4({ ...body, contentHash: expectedHash });
+}
+function canonicalObjectCollection(input, schemaName, mode, parse, identity2) {
+  const source = snapshotDataArray(input);
+  if (isNil(source)) invalid$1(schemaName);
+  let parsed;
+  try {
+    parsed = source.map(parse);
+  } catch {
+    return invalid$1(schemaName);
+  }
+  const identities = parsed.map(identity2);
+  if (identities.some((value) => value.length === 0)) invalid$1(schemaName);
+  if (new Set(identities).size !== identities.length) invalid$1(schemaName);
+  const canonical = [...parsed].sort(
+    (left, right) => compareCanonicalStrings(identity2(left), identity2(right))
+  );
+  if (mode === "strict" && !sameOrder(identities, canonical.map(identity2))) invalid$1(schemaName);
+  return Object.freeze(canonical);
+}
+function parseGameplayBootstrapBody(input, mode) {
+  const schemaName = "GameplayBootstrapBodyV1";
+  const record2 = snapshotDataRecord(input);
+  if (isNil(record2)) invalid$1(schemaName);
+  if (!hasExactKeys(record2, [
+    "kind",
+    "id",
+    "version",
+    "resourceRef",
+    "entityDescriptors",
+    "featureResourceLocks",
+    "semanticActionDefinitions",
+    "availableCapabilityRefs"
+  ]) || record2.kind !== "gameplay-bootstrap" || !isNonEmptyString(record2.id) || !isSafePositiveInteger(record2.version) || !isNonEmptyString(record2.resourceRef)) invalid$1(schemaName);
+  const parseEntity = mode === "strict" ? parseGameplayEntityDescriptorV1 : (value) => createGameplayEntityDescriptorV1(
+    value
+  );
+  return deepFreeze$4({
+    kind: "gameplay-bootstrap",
+    id: record2.id,
+    version: record2.version,
+    resourceRef: record2.resourceRef,
+    entityDescriptors: canonicalObjectCollection(
+      record2.entityDescriptors,
+      schemaName,
+      mode,
+      parseEntity,
+      (value) => value.id
+    ),
+    featureResourceLocks: canonicalObjectCollection(
+      record2.featureResourceLocks,
+      schemaName,
+      mode,
+      parseGameplayFeatureResourceLockV1,
+      (value) => value.resourceRef
+    ),
+    semanticActionDefinitions: canonicalObjectCollection(
+      record2.semanticActionDefinitions,
+      schemaName,
+      mode,
+      parseGameplayActionDefinitionV1,
+      (value) => value.resourceRef
+    ),
+    availableCapabilityRefs: canonicalStringSet(
+      record2.availableCapabilityRefs,
+      schemaName,
+      mode
+    )
+  });
+}
+function createGameplayBootstrapV1(input) {
+  const body = parseGameplayBootstrapBody(input, "canonicalize");
+  return deepFreeze$4({
+    ...body,
+    contentHash: sha256CanonicalJson(body)
+  });
+}
+function parseGameplayBootstrapV1(input) {
+  const schemaName = "GameplayBootstrapV1";
+  const record2 = snapshotDataRecord(input);
+  if (isNil(record2)) invalid$1(schemaName);
+  if (!hasExactKeys(record2, [
+    "kind",
+    "id",
+    "version",
+    "resourceRef",
+    "contentHash",
+    "entityDescriptors",
+    "featureResourceLocks",
+    "semanticActionDefinitions",
+    "availableCapabilityRefs"
+  ]) || !isSha256(record2.contentHash)) invalid$1(schemaName);
+  const { contentHash: contentHash2, ...bodyInput } = record2;
+  let body;
+  try {
+    body = parseGameplayBootstrapBody(bodyInput, "strict");
+  } catch {
+    return invalid$1(schemaName);
+  }
+  const expectedHash = sha256CanonicalJson(body);
+  if (contentHash2 !== expectedHash) invalid$1(schemaName);
+  return deepFreeze$4({ ...body, contentHash: expectedHash });
+}
+function createGameplayBootstrapResourceLockEntryV1(input) {
+  const bootstrap = parseGameplayBootstrapV1(input);
+  return deepFreeze$4({
+    resourceRef: bootstrap.resourceRef,
+    resourceKind: "gameplay-bootstrap",
+    resolvedVersion: String(bootstrap.version),
+    contentHash: bootstrap.contentHash
+  });
+}
+const CAMERA_RIG_PARAMETER_NAMES_V1 = [
+  "distanceMeters",
+  "minimumDistanceMeters",
+  "maximumDistanceMeters",
+  "targetHeightMeters",
+  "shoulderOffsetMeters",
+  "pitchRadians",
+  "minimumPitchRadians",
+  "maximumPitchRadians",
+  "positionDampingPerSecond",
+  "horizontalPositionDampingPerSecond",
+  "verticalPositionDampingPerSecond",
+  "maximumPositionLagMeters",
+  "rotationDampingPerSecond",
+  "yawDampingPerSecond",
+  "pitchDampingPerSecond",
+  "collisionRadiusMeters",
+  "collisionRetractionMetersPerSecond",
+  "collisionRecoveryMetersPerSecond",
+  "baseFovDegrees",
+  "speedFovDegreesPerMeterPerSecond",
+  "maximumSpeedFovDegrees",
+  "lookAheadSeconds",
+  "accelerationLookAheadSecondsSquared",
+  "transitionSeconds",
+  "minimumHeadingSpeedMetersPerSecond",
+  "velocityHeadingDampingPerSecond",
+  "fovDampingPerSecond",
+  "horizontalDeadZoneRatio",
+  "verticalDeadZoneRatio",
+  "recenterDelaySeconds",
+  "recenterDurationSeconds",
+  "recenterMinimumSpeedMetersPerSecond",
+  "teleportSnapDistanceMeters",
+  "lookSensitivityXRatio",
+  "lookSensitivityYRatio"
+];
+const CAMERA_TUNING_PARAMETER_NAMES_V1 = [
+  "distanceMeters",
+  "targetHeightMeters",
+  "shoulderOffsetMeters",
+  "pitchRadians",
+  "positionDampingPerSecond",
+  "horizontalPositionDampingPerSecond",
+  "verticalPositionDampingPerSecond",
+  "maximumPositionLagMeters",
+  "rotationDampingPerSecond",
+  "yawDampingPerSecond",
+  "pitchDampingPerSecond",
+  "collisionRadiusMeters",
+  "collisionRetractionMetersPerSecond",
+  "collisionRecoveryMetersPerSecond",
+  "baseFovDegrees",
+  "speedFovDegreesPerMeterPerSecond",
+  "maximumSpeedFovDegrees",
+  "lookAheadSeconds",
+  "accelerationLookAheadSecondsSquared",
+  "transitionSeconds",
+  "minimumHeadingSpeedMetersPerSecond",
+  "velocityHeadingDampingPerSecond",
+  "fovDampingPerSecond",
+  "horizontalDeadZoneRatio",
+  "verticalDeadZoneRatio",
+  "recenterDelaySeconds",
+  "recenterDurationSeconds",
+  "recenterMinimumSpeedMetersPerSecond",
+  "teleportSnapDistanceMeters",
+  "lookSensitivityXRatio",
+  "lookSensitivityYRatio"
+];
+const CAMERA_RIG_PARAMETER_NAME_SET_V1 = new Set(CAMERA_RIG_PARAMETER_NAMES_V1);
+new Set(CAMERA_TUNING_PARAMETER_NAMES_V1);
+const SOCKET_FIRST_PERSON_IGNORED_MODIFIER_PARAMETERS_V1 = /* @__PURE__ */ new Set([
+  "distanceMeters",
+  "minimumDistanceMeters",
+  "maximumDistanceMeters",
+  "shoulderOffsetMeters",
+  "collisionRadiusMeters",
+  "collisionRetractionMetersPerSecond",
+  "collisionRecoveryMetersPerSecond",
+  "lookAheadSeconds",
+  "accelerationLookAheadSecondsSquared",
+  "horizontalDeadZoneRatio",
+  "verticalDeadZoneRatio"
+]);
+function isCameraRigParameterNameV1(value) {
+  return CAMERA_RIG_PARAMETER_NAME_SET_V1.has(value);
+}
+function isCameraRigParameterOverrideSupportedV1(algorithmRef, parameterName) {
+  return !algorithmRef.endsWith("/socket-first-person@1") || !SOCKET_FIRST_PERSON_IGNORED_MODIFIER_PARAMETERS_V1.has(parameterName);
+}
+function applyCameraRigParameterOverridesV1(algorithmRef, parameters, overrides) {
+  const applied = { ...parameters };
+  for (const [parameterName, value] of Object.entries(overrides)) {
+    if (value === void 0 || !isCameraRigParameterNameV1(parameterName) || !isCameraRigParameterOverrideSupportedV1(algorithmRef, parameterName)) continue;
+    applied[parameterName] = value;
+  }
+  const positionDamping = overrides.positionDampingPerSecond;
+  if (positionDamping !== void 0) {
+    if (overrides.horizontalPositionDampingPerSecond === void 0) {
+      applied.horizontalPositionDampingPerSecond = positionDamping;
+    }
+    if (overrides.verticalPositionDampingPerSecond === void 0) {
+      applied.verticalPositionDampingPerSecond = positionDamping;
+    }
+  }
+  const rotationDamping = overrides.rotationDampingPerSecond;
+  if (rotationDamping !== void 0) {
+    if (overrides.yawDampingPerSecond === void 0) {
+      applied.yawDampingPerSecond = rotationDamping;
+    }
+    if (overrides.pitchDampingPerSecond === void 0) {
+      applied.pitchDampingPerSecond = rotationDamping;
+    }
+    if (overrides.velocityHeadingDampingPerSecond === void 0) {
+      applied.velocityHeadingDampingPerSecond = rotationDamping;
+    }
+  }
+  return applied;
+}
+const ROOT_MOTION_RESOURCE_REF_PATTERN_V1 = /^worldkit:\/\/root-motion\/([a-z0-9]+(?:[.-][a-z0-9]+)*)@([1-9][0-9]*)$/;
+function isWellFormedUnicodeV1(value) {
+  for (let index = 0; index < value.length; index += 1) {
+    const code2 = value.charCodeAt(index);
+    if (code2 >= 55296 && code2 <= 56319) {
+      const next2 = value.charCodeAt(index + 1);
+      if (!(next2 >= 56320 && next2 <= 57343)) return false;
+      index += 1;
+    } else if (code2 >= 56320 && code2 <= 57343) return false;
+  }
+  return true;
+}
+function parseRootMotionResourceRefV1(input) {
+  const match = typeof input === "string" && isWellFormedUnicodeV1(input) ? ROOT_MOTION_RESOURCE_REF_PATTERN_V1.exec(input) : null;
+  const canonicalId = match?.[1];
+  const version = match?.[2] === void 0 ? Number.NaN : Number(match[2]);
+  if (match === null || canonicalId === void 0 || canonicalId.length > 64 || !Number.isSafeInteger(version) || version <= 0) {
+    throw new RangeError("3C_LAYERED_MOVE_SOURCE_UNRESOLVED: invalid Root Motion ResourceRef.");
+  }
+  return input;
+}
+new TextEncoder();
+function failSample(detail) {
+  throw new RangeError(`3C_ROOT_MOTION_SAMPLE_INVALID: ${detail}`);
+}
+function failHash() {
+  throw new RangeError("3C_ROOT_MOTION_HASH_MISMATCH: locked Root Motion hash does not match canonical samples.");
+}
+function dataRecord$2(input) {
+  if (typeof input !== "object" || input === null) failSample("expected a plain data object.");
+  const prototype = Reflect.getPrototypeOf(input);
+  if (prototype !== Object.prototype && prototype !== null) failSample("expected a plain data object.");
+  const result2 = /* @__PURE__ */ Object.create(null);
+  for (const key of Reflect.ownKeys(input)) {
+    const descriptor = Reflect.getOwnPropertyDescriptor(input, key);
+    if (typeof key !== "string" || descriptor === void 0 || !descriptor.enumerable || !("value" in descriptor)) {
+      failSample("accessors, symbols and non-enumerable fields are forbidden.");
+    }
+    result2[key] = descriptor.value;
+  }
+  return result2;
+}
+function exact$1(value, keys) {
+  const ownKeys2 = Reflect.ownKeys(value);
+  return ownKeys2.length === keys.length && ownKeys2.every(
+    (key) => typeof key === "string" && keys.includes(key)
+  );
+}
+function finite(value) {
+  return typeof value === "number" && Number.isFinite(value) && !Object.is(value, -0);
+}
+function strictArray$1(input) {
+  if (!Array.isArray(input) || Reflect.getPrototypeOf(input) !== Array.prototype) {
+    return failSample("expected a canonical dense array.");
+  }
+  const ownKeys2 = Reflect.ownKeys(input);
+  if (ownKeys2.some((key) => typeof key === "symbol") || ownKeys2.length !== input.length + 1) {
+    return failSample("expected a canonical dense array.");
+  }
+  const values = [];
+  for (let index = 0; index < input.length; index += 1) {
+    const descriptor = Reflect.getOwnPropertyDescriptor(input, String(index));
+    if (descriptor === void 0 || !descriptor.enumerable || !("value" in descriptor)) {
+      return failSample("expected a canonical dense array.");
+    }
+    values.push(descriptor.value);
+  }
+  return values;
+}
+function vec3(input) {
+  const values = strictArray$1(input);
+  if (values.length !== 3 || !values.every(finite)) failSample("translation must be a finite XYZ vector.");
+  return Object.freeze([values[0], values[1], values[2]]);
+}
+function parseSample(input) {
+  const value = dataRecord$2(input);
+  if (!exact$1(value, ["translationDeltaMetersXYZ", "facingYawDeltaRadians"]) || !finite(value.facingYawDeltaRadians)) failSample("sample shape is invalid.");
+  return Object.freeze({
+    translationDeltaMetersXYZ: vec3(value.translationDeltaMetersXYZ),
+    facingYawDeltaRadians: value.facingYawDeltaRadians
+  });
+}
+function parseBody$1(input) {
+  const value = dataRecord$2(input);
+  if (!exact$1(value, ["schemaVersion", "resourceRef", "fixedDeltaSeconds", "samples"]) || value.schemaVersion !== 1 || !finite(value.fixedDeltaSeconds) || value.fixedDeltaSeconds <= 0) {
+    failSample("source header is invalid.");
+  }
+  let resourceRef;
+  try {
+    resourceRef = parseRootMotionResourceRefV1(value.resourceRef);
+  } catch {
+    return failSample("source ResourceRef is invalid.");
+  }
+  const samples = strictArray$1(value.samples).map(parseSample);
+  if (samples.length === 0) failSample("at least one fixed-Tick sample is required.");
+  return Object.freeze({
+    schemaVersion: 1,
+    resourceRef,
+    fixedDeltaSeconds: value.fixedDeltaSeconds,
+    samples: Object.freeze(samples)
+  });
+}
+function hashBody(body) {
+  return sha256CanonicalJson({
+    schemaVersion: body.schemaVersion,
+    resourceRef: body.resourceRef,
+    fixedDeltaSeconds: body.fixedDeltaSeconds,
+    samples: body.samples.map((sample) => ({
+      translationDeltaMetersXYZ: [...sample.translationDeltaMetersXYZ],
+      facingYawDeltaRadians: sample.facingYawDeltaRadians
+    }))
+  });
+}
+function parseLockedRootMotionSourceV1(input) {
+  const value = dataRecord$2(input);
+  if (!exact$1(value, ["schemaVersion", "resourceRef", "contentHash", "fixedDeltaSeconds", "samples"])) {
+    failSample("locked source shape is invalid.");
+  }
+  const body = parseBody$1({
+    schemaVersion: value.schemaVersion,
+    resourceRef: value.resourceRef,
+    fixedDeltaSeconds: value.fixedDeltaSeconds,
+    samples: value.samples
+  });
+  if (typeof value.contentHash !== "string" || !/^sha256:[a-f0-9]{64}$/.test(value.contentHash) || value.contentHash !== hashBody(body)) failHash();
+  return Object.freeze({ ...body, contentHash: value.contentHash });
+}
 const BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF = "worldkit://traversal-graph-builder-profile/outdoor-humanoid.heightfield-r1@1";
 const BUILT_IN_GROUND_STATIC_TRAVERSAL_SURFACE_PROFILE_REF = "worldkit://traversal-surface-profile/ground.static@1";
 const TRAVERSAL_DRIVER_PROFILE_REQUIRED_KEYS = [
@@ -1145,9 +1762,9 @@ const BUILT_IN_GROUND_STATIC_TRAVERSAL_SURFACE_PROFILE = {
   traversalMode: "ground",
   faceSelectionMode: "subject-slope-compatible"
 };
-function deepFreeze$5(value) {
+function deepFreeze$3(value) {
   if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value)) deepFreeze$5(child);
+  for (const child of Object.values(value)) deepFreeze$3(child);
   return Object.freeze(value);
 }
 function contentHashOf(value) {
@@ -1384,11 +2001,11 @@ function resolveTraversalGraphBuilderProfileV2(resourceRef) {
     profile = structuredClone(BUILT_IN_HEIGHTFIELD_R1_GRAPH_BUILDER_PROFILE);
   }
   validateTraversalGraphBuilderProfileV2(profile);
-  return deepFreeze$5({
+  return deepFreeze$3({
     resourceRef,
     resolvedVersion: "1",
     contentHash: contentHashOf(profile),
-    profile: deepFreeze$5(profile)
+    profile: deepFreeze$3(profile)
   });
 }
 function resolveTraversalSurfaceProfileV1(resourceRef) {
@@ -1397,11 +2014,11 @@ function resolveTraversalSurfaceProfileV1(resourceRef) {
   }
   const profile = structuredClone(BUILT_IN_GROUND_STATIC_TRAVERSAL_SURFACE_PROFILE);
   validateTraversalSurfaceProfileV1(profile);
-  return deepFreeze$5({
+  return deepFreeze$3({
     resourceRef: BUILT_IN_GROUND_STATIC_TRAVERSAL_SURFACE_PROFILE_REF,
     resolvedVersion: "1",
     contentHash: contentHashOf(profile),
-    profile: deepFreeze$5(profile)
+    profile: deepFreeze$3(profile)
   });
 }
 const MICROMETERS_PER_METER = 1e6;
@@ -2819,6 +3436,27 @@ const GROUND_HUMANOID_ACTION_IDS_V1 = Object.freeze([
   "emote.angry",
   "dance.rumba"
 ]);
+const HUMANOID_ANIMATION_SEMANTIC_FAMILIES_V1 = Object.freeze([
+  "ground",
+  "airborne",
+  "flight",
+  "water",
+  "posture",
+  "combat",
+  "emote",
+  "dance"
+]);
+const AUTOMATIC_LOCOMOTION_PRESENTATION_KEYS_V1 = Object.freeze([
+  "locomotion.suspended",
+  "locomotion.idle",
+  "locomotion.walk",
+  "locomotion.run",
+  "locomotion.takeoff",
+  "locomotion.rising",
+  "locomotion.apex",
+  "locomotion.falling",
+  "locomotion.landing"
+]);
 const BIPED_BONE_IDS_V1 = Object.freeze([
   "hips",
   "spine",
@@ -2859,6 +3497,367 @@ function isBipedBoneIdV1(value) {
 }
 function isSubjectBodyTopologyV2(value) {
   return includesSerializedTerm(SUBJECT_BODY_TOPOLOGIES_V2, value);
+}
+const SHA2562 = /^sha256:[a-f0-9]{64}$/;
+const ACTION_PRESENTATION_REF = /^worldkit:\/\/action-presentation\/([a-z0-9]+(?:[.-][a-z0-9]+)*)@([1-9][0-9]*)$/;
+const SEMANTIC_ACTION_REF = /^worldkit:\/\/semantic-action\/([a-z0-9]+(?:[.-][a-z0-9]+)*)@([1-9][0-9]*)$/;
+const ACTION_PRESENTATION_KEY = /^action\.([a-z0-9]+(?:[.-][a-z0-9]+)*)$/;
+const ACTION_PRESENTATION_BINDING_CAPACITY_V1 = 256;
+const ACTION_PRESENTATION_ROOT_SOURCE_CAPACITY_V1 = 256;
+const ACTION_PRESENTATION_ROOT_SAMPLES_PER_SOURCE_CAPACITY_V1 = 4096;
+const ACTION_PRESENTATION_ROOT_SAMPLES_TOTAL_CAPACITY_V1 = 16384;
+const ACTION_PRESENTATION_PLAYBACK_SPEED_RATIO_MAX_V1 = 16;
+const ACTION_PRESENTATION_BLEND_DURATION_TICKS_MAX_V1 = 600;
+function invalid(detail) {
+  throw new RangeError(`3C_INPUT_INVALID: ${detail}`);
+}
+function unresolved(detail) {
+  throw new RangeError(`3C_LAYERED_MOVE_SOURCE_UNRESOLVED: ${detail}`);
+}
+function ownDescriptor(input, key) {
+  try {
+    return Reflect.getOwnPropertyDescriptor(input, key);
+  } catch {
+    return invalid("Action presentation reflection failed closed.");
+  }
+}
+function prototypeOf(input) {
+  try {
+    return Reflect.getPrototypeOf(input);
+  } catch {
+    return invalid("Action presentation reflection failed closed.");
+  }
+}
+function ownKeys(input) {
+  try {
+    return Reflect.ownKeys(input);
+  } catch {
+    return invalid("Action presentation reflection failed closed.");
+  }
+}
+function dataRecord$1(input) {
+  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+    return invalid("Action presentation data must be a plain object.");
+  }
+  const prototype = prototypeOf(input);
+  if (prototype !== Object.prototype && prototype !== null) {
+    return invalid("Action presentation data must be a plain object.");
+  }
+  const result2 = /* @__PURE__ */ Object.create(null);
+  for (const key of ownKeys(input)) {
+    const descriptor = ownDescriptor(input, key);
+    if (typeof key !== "string" || descriptor === void 0 || !descriptor.enumerable || !("value" in descriptor)) {
+      return invalid("Action presentation data cannot contain symbols, accessors, or hidden fields.");
+    }
+    result2[key] = descriptor.value;
+  }
+  return result2;
+}
+function exact(record2, keys) {
+  const actual = Reflect.ownKeys(record2);
+  return actual.length === keys.length && actual.every(
+    (key) => typeof key === "string" && keys.includes(key)
+  );
+}
+function boundedArrayLength(input, capacity, capacityLabel) {
+  const lengthDescriptor = typeof input === "object" && input !== null ? ownDescriptor(input, "length") : void 0;
+  if (!Array.isArray(input) || prototypeOf(input) !== Array.prototype || lengthDescriptor === void 0 || !("value" in lengthDescriptor) || lengthDescriptor.enumerable || !Number.isSafeInteger(lengthDescriptor.value) || lengthDescriptor.value < 0 || (capacity !== void 0 && lengthDescriptor.value > capacity ? invalid(`${capacityLabel ?? "Collection"} capacity exceeded.`) : false)) {
+    return invalid("Action presentation collections must be canonical dense Arrays.");
+  }
+  return lengthDescriptor.value;
+}
+function strictArray(input, capacity, capacityLabel) {
+  const length = boundedArrayLength(input, capacity, capacityLabel);
+  const keys = ownKeys(input);
+  if (keys.some((key) => typeof key === "symbol") || keys.length !== length + 1) {
+    return invalid("Action presentation collections must be canonical dense Arrays.");
+  }
+  const result2 = [];
+  for (let index = 0; index < length; index += 1) {
+    const descriptor = ownDescriptor(input, String(index));
+    if (descriptor === void 0 || !descriptor.enumerable || !("value" in descriptor)) {
+      return invalid("Action presentation collections must be canonical dense Arrays.");
+    }
+    result2.push(descriptor.value);
+  }
+  return result2;
+}
+function snapshotRootMotionSampleInput(input) {
+  const value = dataRecord$1(input);
+  const translation = strictArray(
+    value.translationDeltaMetersXYZ,
+    3,
+    "Root Motion sample translation"
+  );
+  return Object.freeze({
+    ...value,
+    translationDeltaMetersXYZ: Object.freeze([...translation])
+  });
+}
+function snapshotRootMotionSourceInput(input) {
+  const value = dataRecord$1(input);
+  const samples = strictArray(
+    value.samples,
+    ACTION_PRESENTATION_ROOT_SAMPLES_PER_SOURCE_CAPACITY_V1,
+    "Root Motion samples-per-source"
+  );
+  return Object.freeze({
+    ...value,
+    samples: Object.freeze(samples.map(snapshotRootMotionSampleInput))
+  });
+}
+function stableString(input, maximumLength) {
+  return typeof input === "string" && input.length > 0 && input.length <= maximumLength && isWellFormedUnicodeV1(input) && input.normalize("NFC") === input;
+}
+function canonicalResourceRef(input, pattern2, label) {
+  const match = typeof input === "string" && isWellFormedUnicodeV1(input) ? pattern2.exec(input) : null;
+  const id2 = match?.[1];
+  const versionText = match?.[2];
+  const version = versionText === void 0 ? Number.NaN : Number(versionText);
+  if (id2 === void 0 || id2.length > 64 || !Number.isSafeInteger(version) || version <= 0) {
+    return invalid(`${label} must be a canonical versioned ResourceRef.`);
+  }
+  return input;
+}
+function sha256(input, label) {
+  if (typeof input !== "string" || !SHA2562.test(input)) {
+    return invalid(`${label} must be a canonical SHA-256 hash.`);
+  }
+  return input;
+}
+function presentationKey(input) {
+  const match = typeof input === "string" && isWellFormedUnicodeV1(input) ? ACTION_PRESENTATION_KEY.exec(input) : null;
+  if (match?.[1] === void 0 || match[1].length > 64) {
+    return invalid("presentationKey must be a canonical action.* key.");
+  }
+  return input;
+}
+function safeNonNegativeInteger(input, label) {
+  if (typeof input !== "number" || !Number.isSafeInteger(input) || input < 0 || Object.is(input, -0)) return invalid(`${label} must be a non-negative safe integer.`);
+  return input;
+}
+function signedSafeInteger(input, label) {
+  if (typeof input !== "number" || !Number.isSafeInteger(input) || Object.is(input, -0)) {
+    return invalid(`${label} must be a signed safe integer.`);
+  }
+  return input;
+}
+function clip(input) {
+  const value = dataRecord$1(input);
+  if (!exact(value, [
+    "sourceClipName",
+    "loopMode",
+    "playbackSpeedRatio",
+    "blendDurationTicks"
+  ]) || !stableString(value.sourceClipName, 256) || value.loopMode !== "repeat" && value.loopMode !== "once" || typeof value.playbackSpeedRatio !== "number" || !Number.isFinite(value.playbackSpeedRatio) || value.playbackSpeedRatio <= 0 || value.playbackSpeedRatio > ACTION_PRESENTATION_PLAYBACK_SPEED_RATIO_MAX_V1 || Object.is(value.playbackSpeedRatio, -0)) {
+    return invalid("Action presentation Clip data is not canonical.");
+  }
+  const blendDurationTicks = safeNonNegativeInteger(
+    value.blendDurationTicks,
+    "blendDurationTicks"
+  );
+  if (blendDurationTicks > ACTION_PRESENTATION_BLEND_DURATION_TICKS_MAX_V1) {
+    return invalid("blendDurationTicks exceeds the frozen presentation budget.");
+  }
+  return Object.freeze({
+    sourceClipName: value.sourceClipName,
+    loopMode: value.loopMode,
+    playbackSpeedRatio: value.playbackSpeedRatio,
+    blendDurationTicks
+  });
+}
+function rootMotion(input) {
+  const value = dataRecord$1(input);
+  if (value.mode === "none") {
+    if (!exact(value, ["mode"])) return invalid("none Root Motion must have a closed shape.");
+    return Object.freeze({ mode: "none" });
+  }
+  if (value.mode !== "locked" || !exact(value, [
+    "mode",
+    "rootMotionSourceRef",
+    "rootMotionSourceHash",
+    "priority"
+  ])) return invalid("Root Motion binding must have a closed discriminated shape.");
+  let rootMotionSourceRef;
+  try {
+    rootMotionSourceRef = parseRootMotionResourceRefV1(value.rootMotionSourceRef);
+  } catch {
+    return invalid("Root Motion binding ResourceRef is not canonical.");
+  }
+  return Object.freeze({
+    mode: "locked",
+    rootMotionSourceRef,
+    rootMotionSourceHash: sha256(value.rootMotionSourceHash, "rootMotionSourceHash"),
+    priority: signedSafeInteger(value.priority, "Root Motion priority")
+  });
+}
+function parseBody(input) {
+  const value = dataRecord$1(input);
+  if (!exact(value, [
+    "kind",
+    "schemaVersion",
+    "resourceRef",
+    "presentationKey",
+    "semanticActionRef",
+    "semanticActionHash",
+    "isInterruptible",
+    "clip",
+    "rootMotion"
+  ]) || value.kind !== "action-presentation-binding" || value.schemaVersion !== 1 || typeof value.isInterruptible !== "boolean") {
+    return invalid("ActionPresentationBindingV1 body has an invalid closed shape.");
+  }
+  return Object.freeze({
+    kind: "action-presentation-binding",
+    schemaVersion: 1,
+    resourceRef: canonicalResourceRef(
+      value.resourceRef,
+      ACTION_PRESENTATION_REF,
+      "Action presentation binding Ref"
+    ),
+    presentationKey: presentationKey(value.presentationKey),
+    semanticActionRef: canonicalResourceRef(
+      value.semanticActionRef,
+      SEMANTIC_ACTION_REF,
+      "Semantic Action Ref"
+    ),
+    semanticActionHash: sha256(value.semanticActionHash, "semanticActionHash"),
+    isInterruptible: value.isInterruptible,
+    clip: clip(value.clip),
+    rootMotion: rootMotion(value.rootMotion)
+  });
+}
+function canonicalBody(body) {
+  return {
+    kind: body.kind,
+    schemaVersion: body.schemaVersion,
+    resourceRef: body.resourceRef,
+    presentationKey: body.presentationKey,
+    semanticActionRef: body.semanticActionRef,
+    semanticActionHash: body.semanticActionHash,
+    isInterruptible: body.isInterruptible,
+    clip: {
+      sourceClipName: body.clip.sourceClipName,
+      loopMode: body.clip.loopMode,
+      playbackSpeedRatio: body.clip.playbackSpeedRatio,
+      blendDurationTicks: body.clip.blendDurationTicks
+    },
+    rootMotion: body.rootMotion.mode === "none" ? { mode: "none" } : {
+      mode: "locked",
+      rootMotionSourceRef: body.rootMotion.rootMotionSourceRef,
+      rootMotionSourceHash: body.rootMotion.rootMotionSourceHash,
+      priority: body.rootMotion.priority
+    }
+  };
+}
+function hashActionPresentationBindingV1(input) {
+  return sha256CanonicalJson(canonicalBody(parseBody(input)));
+}
+function parseActionPresentationBindingV1(input) {
+  const value = dataRecord$1(input);
+  if (!exact(value, [
+    "kind",
+    "schemaVersion",
+    "resourceRef",
+    "contentHash",
+    "presentationKey",
+    "semanticActionRef",
+    "semanticActionHash",
+    "isInterruptible",
+    "clip",
+    "rootMotion"
+  ])) return invalid("ActionPresentationBindingV1 has an invalid closed shape.");
+  const body = parseBody({
+    kind: value.kind,
+    schemaVersion: value.schemaVersion,
+    resourceRef: value.resourceRef,
+    presentationKey: value.presentationKey,
+    semanticActionRef: value.semanticActionRef,
+    semanticActionHash: value.semanticActionHash,
+    isInterruptible: value.isInterruptible,
+    clip: value.clip,
+    rootMotion: value.rootMotion
+  });
+  const contentHash2 = sha256(value.contentHash, "contentHash");
+  if (contentHash2 !== hashActionPresentationBindingV1(body)) {
+    return invalid("Action presentation binding content hash does not match canonical bytes.");
+  }
+  return Object.freeze({ ...body, contentHash: contentHash2 });
+}
+function createActionPresentationRegistryV1(input) {
+  const value = dataRecord$1(input);
+  if (!exact(value, ["schemaVersion", "bindings", "rootMotionSources"]) || value.schemaVersion !== 1) {
+    return invalid("Action presentation registry has an invalid closed shape.");
+  }
+  const bindingInputs = strictArray(
+    value.bindings,
+    ACTION_PRESENTATION_BINDING_CAPACITY_V1,
+    "Action presentation binding"
+  );
+  const rootMotionSourceInputs = strictArray(
+    value.rootMotionSources,
+    ACTION_PRESENTATION_ROOT_SOURCE_CAPACITY_V1,
+    "Root Motion source"
+  );
+  const rootMotionSourceSnapshots = [];
+  let totalRootMotionSamples = 0;
+  for (const source of rootMotionSourceInputs) {
+    const snapshot = snapshotRootMotionSourceInput(source);
+    totalRootMotionSamples += snapshot.samples.length;
+    if (totalRootMotionSamples > ACTION_PRESENTATION_ROOT_SAMPLES_TOTAL_CAPACITY_V1) {
+      return invalid("aggregate Root Motion sample capacity exceeded.");
+    }
+    rootMotionSourceSnapshots.push(snapshot);
+  }
+  const bindings = bindingInputs.map(parseActionPresentationBindingV1);
+  const rootMotionSources = rootMotionSourceSnapshots.map(
+    (source) => parseLockedRootMotionSourceV1(source)
+  );
+  const byBindingRef = /* @__PURE__ */ new Map();
+  const byPresentation = /* @__PURE__ */ new Map();
+  const byActionRef = /* @__PURE__ */ new Map();
+  for (const binding of bindings) {
+    if (byBindingRef.has(binding.resourceRef) || byPresentation.has(binding.presentationKey) || byActionRef.has(binding.semanticActionRef)) {
+      return invalid("Action presentation bindings contain a duplicate or ambiguous selector.");
+    }
+    byBindingRef.set(binding.resourceRef, binding);
+    byPresentation.set(binding.presentationKey, binding);
+    byActionRef.set(binding.semanticActionRef, binding);
+  }
+  const sourceByRef = /* @__PURE__ */ new Map();
+  for (const source of rootMotionSources) {
+    if (sourceByRef.has(source.resourceRef)) {
+      return invalid("Root Motion registry contains a duplicate ResourceRef.");
+    }
+    sourceByRef.set(source.resourceRef, source);
+  }
+  for (const binding of bindings) {
+    if (binding.rootMotion.mode === "none") continue;
+    const source = sourceByRef.get(binding.rootMotion.rootMotionSourceRef);
+    if (source === void 0 || source.contentHash !== binding.rootMotion.rootMotionSourceHash) {
+      return unresolved("locked Action binding does not resolve to its exact Root Motion source.");
+    }
+  }
+  const stableBindings = Object.freeze([...bindings].sort(
+    (left, right) => left.resourceRef < right.resourceRef ? -1 : left.resourceRef > right.resourceRef ? 1 : 0
+  ));
+  return Object.freeze({
+    bindings: stableBindings,
+    resolveAction: (semanticActionRef, semanticActionHash) => {
+      const candidate = byActionRef.get(semanticActionRef);
+      if (!SHA2562.test(semanticActionHash) || candidate?.semanticActionHash !== semanticActionHash) return void 0;
+      return candidate;
+    },
+    resolveBinding: (ref2, hash) => {
+      if (!SHA2562.test(hash)) return void 0;
+      const candidate = byBindingRef.get(ref2);
+      return candidate?.contentHash === hash ? candidate : void 0;
+    },
+    resolvePresentation: (key) => byPresentation.get(key),
+    resolveRootMotionSource: (ref2, hash) => {
+      const source = sourceByRef.get(ref2);
+      return SHA2562.test(hash) && source?.contentHash === hash ? source : void 0;
+    }
+  });
 }
 const EXECUTION_RESOURCE_KINDS_V1 = Object.freeze([
   ...SUBJECT_RESOURCE_KINDS_V1,
@@ -2924,6 +3923,7 @@ const EXECUTION_PLAN_V5_FIELDS = [
   "rigProfiles",
   "animationSets",
   "colliderProfiles",
+  "actionPresentationRegistry",
   "initialControlledEntityId",
   "subjects",
   "initialRelationships",
@@ -3217,6 +4217,8 @@ function validateAnimationSet$1(input) {
     const row = exactDataRecord(binding, [
       "actionId",
       "sourceClipName",
+      "semanticFamily",
+      "automaticPresentationKeys",
       "loopMode",
       "playbackSpeedRatio",
       "blendDurationSeconds",
@@ -3224,6 +4226,10 @@ function validateAnimationSet$1(input) {
     ]);
     requireGroundHumanoidActionId(row.actionId);
     requireString(row.sourceClipName);
+    requireLiteral(row.semanticFamily, HUMANOID_ANIMATION_SEMANTIC_FAMILIES_V1);
+    dataArray(row.automaticPresentationKeys).forEach(
+      (key) => requireLiteral(key, AUTOMATIC_LOCOMOTION_PRESENTATION_KEYS_V1)
+    );
     requireLiteral(row.loopMode, ["repeat", "once"]);
     requireFinite(row.playbackSpeedRatio);
     requireFinite(row.blendDurationSeconds);
@@ -3279,6 +4285,12 @@ function validateCameraContextRule(input) {
   requireFinite(value.priority);
   const when = exactDataRecord(value.when, [], [
     "relationshipRoles",
+    "locomotionStatuses",
+    "mobilityModes",
+    "gaits",
+    "verticalPhases",
+    "requiredActiveActionRefs",
+    "actionInterruptibility",
     "motionKernelRefs",
     "requiredMotionTags",
     "movementMediums",
@@ -3289,6 +4301,11 @@ function validateCameraContextRule(input) {
   ]);
   for (const key of [
     "relationshipRoles",
+    "locomotionStatuses",
+    "mobilityModes",
+    "gaits",
+    "verticalPhases",
+    "requiredActiveActionRefs",
     "motionKernelRefs",
     "requiredMotionTags",
     "movementMediums",
@@ -3296,6 +4313,9 @@ function validateCameraContextRule(input) {
     "requiredCameraContextTags"
   ]) {
     if (Object.hasOwn(when, key)) requireStringArray(when[key]);
+  }
+  if (Object.hasOwn(when, "actionInterruptibility") && when.actionInterruptibility !== "interruptible" && when.actionInterruptibility !== "non-interruptible") {
+    invalidExecutionPlanV5();
   }
   if (Object.hasOwn(when, "minimumSpeedMetersPerSecond")) {
     requireFinite(when.minimumSpeedMetersPerSecond);
@@ -4066,6 +5086,28 @@ function deepFreezeExecutionPlan(value) {
   Object.values(value).forEach(deepFreezeExecutionPlan);
   return Object.freeze(value);
 }
+function parseExecutionActionPresentationRegistryV1(input) {
+  const data = exactDataRecord(input, [
+    "schemaVersion",
+    "bindings",
+    "rootMotionSources"
+  ]);
+  const admitted = createActionPresentationRegistryV1(data);
+  const rootMotionSources = dataArray(data.rootMotionSources).map((source) => {
+    const row = dataRecord(source);
+    const admittedSource = admitted.resolveRootMotionSource(
+      requireString(row.resourceRef),
+      requireHash(row.contentHash)
+    );
+    if (admittedSource === void 0) return invalidExecutionPlanV5();
+    return admittedSource;
+  }).sort((left, right) => left.resourceRef.localeCompare(right.resourceRef));
+  return Object.freeze({
+    schemaVersion: 1,
+    bindings: admitted.bindings,
+    rootMotionSources: Object.freeze(rootMotionSources)
+  });
+}
 function parseExecutionPlanV5(input) {
   try {
     const snapshot = snapshotExecutionPlanData(input);
@@ -4094,6 +5136,9 @@ function parseExecutionPlanV5(input) {
     dataArray(plan.rigProfiles).forEach(validateRigProfile$1);
     dataArray(plan.animationSets).forEach(validateAnimationSet$1);
     dataArray(plan.colliderProfiles).forEach(validateColliderProfile$1);
+    plan.actionPresentationRegistry = parseExecutionActionPresentationRegistryV1(
+      plan.actionPresentationRegistry
+    );
     const initialControlledEntityId = requireString(
       plan.initialControlledEntityId
     );
@@ -4142,496 +5187,6 @@ function parseExecutionPlanV5(input) {
 }
 function hashExecutionPlanV5(input) {
   return sha256CanonicalJson(parseExecutionPlanV5(input));
-}
-function invalid$1(schemaName) {
-  throw new RangeError(`Value must match the closed ${schemaName} schema.`);
-}
-function snapshotDataRecord$1(value) {
-  if (typeof value !== "object" || isNil(value)) return void 0;
-  try {
-    const prototype = Reflect.getPrototypeOf(value);
-    if (prototype !== Object.prototype && !isNil(prototype)) return void 0;
-    const snapshot = /* @__PURE__ */ Object.create(null);
-    for (const key of Reflect.ownKeys(value)) {
-      const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
-      if (typeof key !== "string" || isNil(descriptor) || !descriptor.enumerable || !("value" in descriptor)) return void 0;
-      snapshot[key] = descriptor.value;
-    }
-    return snapshot;
-  } catch {
-    return void 0;
-  }
-}
-function hasExactKeys$1(value, keys) {
-  const ownKeys = Reflect.ownKeys(value);
-  return ownKeys.length === keys.length && ownKeys.every((key) => typeof key === "string" && keys.includes(key));
-}
-function isSafeNonNegativeInteger$1(value) {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && !Object.is(value, -0);
-}
-function deepFreeze$4(value) {
-  if (typeof value !== "object" || isNil(value) || Object.isFrozen(value)) {
-    return value;
-  }
-  for (const key of Reflect.ownKeys(value)) {
-    const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
-    if (!isNil(descriptor) && "value" in descriptor) {
-      deepFreeze$4(descriptor.value);
-    }
-  }
-  return Object.freeze(value);
-}
-const GAMEPLAY_CAPACITY_BUDGET_KEYS = [
-  "maximumParticipantCount",
-  "maximumControllerEntityCount",
-  "maximumRelationshipStateCount",
-  "maximumActiveActionStateCount",
-  "maximumGameplayFeatureCount",
-  "maximumSemanticActionDefinitionCount",
-  "maximumSemanticFactCount",
-  "maximumSemanticFactTransitionCountPerTick",
-  "maximumIdempotencyRecordCount",
-  "maximumUsedActionExecutionIdCount",
-  "maximumRetainedReceiptCount",
-  "maximumRetainedEventCount",
-  "maximumRetainedWorldStateSnapshotCount"
-];
-function parseGameplayCapacityBudgetV1(input) {
-  const schemaName = "GameplayCapacityBudgetV1";
-  const record2 = snapshotDataRecord$1(input) ?? invalid$1(schemaName);
-  if (!hasExactKeys$1(record2, GAMEPLAY_CAPACITY_BUDGET_KEYS) || !GAMEPLAY_CAPACITY_BUDGET_KEYS.every(
-    (key) => isSafeNonNegativeInteger$1(record2[key])
-  )) invalid$1(schemaName);
-  return deepFreeze$4(Object.fromEntries(
-    GAMEPLAY_CAPACITY_BUDGET_KEYS.map((key) => [key, record2[key]])
-  ));
-}
-parseGameplayCapacityBudgetV1({
-  maximumParticipantCount: 1,
-  maximumControllerEntityCount: 1,
-  maximumRelationshipStateCount: 1,
-  maximumActiveActionStateCount: 256,
-  maximumGameplayFeatureCount: 16,
-  maximumSemanticActionDefinitionCount: 256,
-  maximumSemanticFactCount: 4096,
-  maximumSemanticFactTransitionCountPerTick: 1024,
-  maximumIdempotencyRecordCount: 4096,
-  maximumUsedActionExecutionIdCount: 4096,
-  maximumRetainedReceiptCount: 4096,
-  maximumRetainedEventCount: 8192,
-  maximumRetainedWorldStateSnapshotCount: 4096
-});
-const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
-const GAMEPLAY_COMMAND_TYPES = /* @__PURE__ */ new Set([
-  "control.bind",
-  "control.release",
-  "action.activate",
-  "action.cancel"
-]);
-function invalid(schemaName) {
-  throw new RangeError(`Value must match the closed ${schemaName} schema.`);
-}
-function snapshotDataRecord(value) {
-  if (typeof value !== "object" || isNil(value)) return void 0;
-  try {
-    if (Reflect.getPrototypeOf(value) !== Object.prototype) return void 0;
-    const snapshot = {};
-    for (const key of Reflect.ownKeys(value)) {
-      const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
-      if (typeof key !== "string" || isNil(descriptor) || !descriptor.enumerable || !("value" in descriptor)) return void 0;
-      Object.defineProperty(snapshot, key, {
-        configurable: true,
-        enumerable: true,
-        value: descriptor.value,
-        writable: true
-      });
-    }
-    return snapshot;
-  } catch {
-    return void 0;
-  }
-}
-function snapshotDataArray(value) {
-  if (!Array.isArray(value)) return void 0;
-  try {
-    if (Reflect.getPrototypeOf(value) !== Array.prototype) return void 0;
-    if (Reflect.ownKeys(value).some((key) => typeof key === "symbol")) {
-      return void 0;
-    }
-    if (Object.getOwnPropertyNames(value).length !== value.length + 1) {
-      return void 0;
-    }
-    const snapshot = [];
-    for (let index = 0; index < value.length; index += 1) {
-      const descriptor = Reflect.getOwnPropertyDescriptor(value, String(index));
-      if (isNil(descriptor) || !descriptor.enumerable || !("value" in descriptor)) return void 0;
-      snapshot.push(descriptor.value);
-    }
-    const lengthDescriptor = Reflect.getOwnPropertyDescriptor(value, "length");
-    if (isNil(lengthDescriptor) || lengthDescriptor.enumerable !== false) {
-      return void 0;
-    }
-    return snapshot;
-  } catch {
-    return void 0;
-  }
-}
-function hasExactKeys(record2, keys) {
-  const ownKeys = Reflect.ownKeys(record2);
-  return ownKeys.length === keys.length && ownKeys.every(
-    (key) => typeof key === "string" && keys.includes(key)
-  );
-}
-function isNonEmptyString(value) {
-  return typeof value === "string" && value.length > 0;
-}
-function isSha256(value) {
-  return typeof value === "string" && SHA256_PATTERN.test(value);
-}
-function isSafeNonNegativeInteger(value) {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && !Object.is(value, -0);
-}
-function isSafePositiveInteger(value) {
-  return isSafeNonNegativeInteger(value) && value > 0;
-}
-function compareCanonicalStrings(left, right) {
-  return left < right ? -1 : left > right ? 1 : 0;
-}
-function sameOrder(actual, expected) {
-  return actual.length === expected.length && actual.every(
-    (value, index) => value === expected[index]
-  );
-}
-function canonicalStringSet(input, schemaName, mode) {
-  const values = snapshotDataArray(input);
-  if (isNil(values)) invalid(schemaName);
-  if (!values.every(isNonEmptyString)) invalid(schemaName);
-  const typedValues = values;
-  if (new Set(typedValues).size !== typedValues.length) invalid(schemaName);
-  const canonical = [...typedValues].sort(compareCanonicalStrings);
-  if (mode === "strict" && !sameOrder(typedValues, canonical)) invalid(schemaName);
-  return Object.freeze(canonical);
-}
-function deepFreeze$3(value) {
-  if (typeof value !== "object" || isNil(value) || Object.isFrozen(value)) {
-    return value;
-  }
-  for (const key of Reflect.ownKeys(value)) {
-    const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
-    if (!isNil(descriptor) && "value" in descriptor) {
-      deepFreeze$3(descriptor.value);
-    }
-  }
-  return Object.freeze(value);
-}
-function parseGameplayEntityDescriptor(input, mode, schemaName) {
-  const record2 = snapshotDataRecord(input);
-  if (isNil(record2)) invalid(schemaName);
-  if (!hasExactKeys(record2, ["id", "entityDefinitionRef", "capabilityRefs"]) || !isNonEmptyString(record2.id) || !isNonEmptyString(record2.entityDefinitionRef)) invalid(schemaName);
-  return deepFreeze$3({
-    id: record2.id,
-    entityDefinitionRef: record2.entityDefinitionRef,
-    capabilityRefs: canonicalStringSet(record2.capabilityRefs, schemaName, mode)
-  });
-}
-function createGameplayEntityDescriptorV1(input) {
-  return parseGameplayEntityDescriptor(
-    input,
-    "canonicalize",
-    "GameplayEntityDescriptorV1"
-  );
-}
-function parseGameplayEntityDescriptorV1(input) {
-  return parseGameplayEntityDescriptor(input, "strict", "GameplayEntityDescriptorV1");
-}
-function parseGameplayFeatureManifestBody(input, mode) {
-  const schemaName = "GameplayFeatureManifestBodyV1";
-  const record2 = snapshotDataRecord(input);
-  if (isNil(record2)) invalid(schemaName);
-  if (!hasExactKeys(record2, [
-    "kind",
-    "id",
-    "version",
-    "resourceRef",
-    "dependencyFeatureRefs",
-    "requiredCapabilityRefs",
-    "commandTypes",
-    "resourceBudget"
-  ]) || record2.kind !== "gameplay-feature" || !isNonEmptyString(record2.id) || !isSafePositiveInteger(record2.version) || !isNonEmptyString(record2.resourceRef)) invalid(schemaName);
-  const commandTypes = canonicalStringSet(record2.commandTypes, schemaName, mode);
-  if (!commandTypes.every(
-    (type2) => GAMEPLAY_COMMAND_TYPES.has(type2)
-  )) invalid(schemaName);
-  const resourceBudget = snapshotDataRecord(record2.resourceBudget);
-  if (isNil(resourceBudget)) invalid(schemaName);
-  if (!hasExactKeys(resourceBudget, ["stateSliceCount", "commandHandlerCount"]) || resourceBudget.stateSliceCount !== 1 || !isSafeNonNegativeInteger(resourceBudget.commandHandlerCount) || resourceBudget.commandHandlerCount !== commandTypes.length) invalid(schemaName);
-  return deepFreeze$3({
-    kind: "gameplay-feature",
-    id: record2.id,
-    version: record2.version,
-    resourceRef: record2.resourceRef,
-    dependencyFeatureRefs: canonicalStringSet(
-      record2.dependencyFeatureRefs,
-      schemaName,
-      mode
-    ),
-    requiredCapabilityRefs: canonicalStringSet(
-      record2.requiredCapabilityRefs,
-      schemaName,
-      mode
-    ),
-    commandTypes,
-    resourceBudget: {
-      stateSliceCount: 1,
-      commandHandlerCount: resourceBudget.commandHandlerCount
-    }
-  });
-}
-function createGameplayFeatureManifestV1(input) {
-  const body = parseGameplayFeatureManifestBody(input, "canonicalize");
-  return deepFreeze$3({
-    ...body,
-    contentHash: sha256CanonicalJson(body)
-  });
-}
-function parseGameplayFeatureResourceLockV1(input) {
-  const schemaName = "GameplayFeatureResourceLockV1";
-  const record2 = snapshotDataRecord(input);
-  if (isNil(record2)) invalid(schemaName);
-  if (!hasExactKeys(record2, ["resourceRef", "contentHash"]) || !isNonEmptyString(record2.resourceRef) || !isSha256(record2.contentHash)) invalid(schemaName);
-  return deepFreeze$3({
-    resourceRef: record2.resourceRef,
-    contentHash: record2.contentHash
-  });
-}
-function parseGameplayActionDefinitionBody(input, mode) {
-  const schemaName = "GameplayActionDefinitionBodyV1";
-  const record2 = snapshotDataRecord(input);
-  if (isNil(record2)) invalid(schemaName);
-  if (!hasExactKeys(record2, [
-    "kind",
-    "id",
-    "version",
-    "resourceRef",
-    "executionMode",
-    "completion",
-    "effect",
-    "isMovementInputBlocked",
-    "allowedActorEntityDefinitionRefs",
-    "requiredActorCapabilityRefs",
-    "request"
-  ]) || record2.kind !== "semantic-action" || !isNonEmptyString(record2.id) || !isSafePositiveInteger(record2.version) || !isNonEmptyString(record2.resourceRef) || record2.executionMode !== "exclusive-per-subject" || typeof record2.isMovementInputBlocked !== "boolean") invalid(schemaName);
-  const completionRecord = snapshotDataRecord(record2.completion);
-  if (isNil(completionRecord)) invalid(schemaName);
-  let completion;
-  if (completionRecord.mode === "immediate" && hasExactKeys(completionRecord, ["mode"])) {
-    completion = { mode: "immediate" };
-  } else if (completionRecord.mode === "explicit-cancel" && hasExactKeys(completionRecord, ["mode"])) {
-    completion = { mode: "explicit-cancel" };
-  } else if (completionRecord.mode === "fixed-duration" && hasExactKeys(completionRecord, ["mode", "durationTicks"]) && isSafePositiveInteger(completionRecord.durationTicks)) {
-    completion = {
-      mode: "fixed-duration",
-      durationTicks: completionRecord.durationTicks
-    };
-  } else {
-    return invalid(schemaName);
-  }
-  const effectRecord = snapshotDataRecord(record2.effect);
-  if (isNil(effectRecord)) invalid(schemaName);
-  let effect;
-  if (effectRecord.mode === "state-only" && hasExactKeys(effectRecord, ["mode"])) {
-    effect = { mode: "state-only" };
-  } else if (effectRecord.mode === "trusted" && hasExactKeys(effectRecord, [
-    "mode",
-    "gameplayActionEffectRef",
-    "gameplayActionEffectHash"
-  ]) && isNonEmptyString(effectRecord.gameplayActionEffectRef) && isSha256(effectRecord.gameplayActionEffectHash)) {
-    effect = {
-      mode: "trusted",
-      gameplayActionEffectRef: effectRecord.gameplayActionEffectRef,
-      gameplayActionEffectHash: effectRecord.gameplayActionEffectHash
-    };
-  } else {
-    return invalid(schemaName);
-  }
-  const requestRecord = snapshotDataRecord(record2.request);
-  if (isNil(requestRecord)) invalid(schemaName);
-  let request;
-  if (requestRecord.mode === "none" && hasExactKeys(requestRecord, ["mode"])) {
-    request = { mode: "none" };
-  } else if (requestRecord.mode === "required" && hasExactKeys(requestRecord, [
-    "mode",
-    "actionRequestSchemaRef",
-    "actionRequestSchemaHash"
-  ]) && isNonEmptyString(requestRecord.actionRequestSchemaRef) && isSha256(requestRecord.actionRequestSchemaHash)) {
-    request = {
-      mode: "required",
-      actionRequestSchemaRef: requestRecord.actionRequestSchemaRef,
-      actionRequestSchemaHash: requestRecord.actionRequestSchemaHash
-    };
-  } else {
-    return invalid(schemaName);
-  }
-  return deepFreeze$3({
-    kind: "semantic-action",
-    id: record2.id,
-    version: record2.version,
-    resourceRef: record2.resourceRef,
-    executionMode: "exclusive-per-subject",
-    completion,
-    effect,
-    isMovementInputBlocked: record2.isMovementInputBlocked,
-    allowedActorEntityDefinitionRefs: canonicalStringSet(
-      record2.allowedActorEntityDefinitionRefs,
-      schemaName,
-      mode
-    ),
-    requiredActorCapabilityRefs: canonicalStringSet(
-      record2.requiredActorCapabilityRefs,
-      schemaName,
-      mode
-    ),
-    request
-  });
-}
-function parseGameplayActionDefinitionV1(input) {
-  const schemaName = "GameplayActionDefinitionV1";
-  const record2 = snapshotDataRecord(input);
-  if (isNil(record2)) invalid(schemaName);
-  if (!hasExactKeys(record2, [
-    "kind",
-    "id",
-    "version",
-    "resourceRef",
-    "contentHash",
-    "executionMode",
-    "completion",
-    "effect",
-    "isMovementInputBlocked",
-    "allowedActorEntityDefinitionRefs",
-    "requiredActorCapabilityRefs",
-    "request"
-  ]) || !isSha256(record2.contentHash)) invalid(schemaName);
-  const { contentHash: contentHash2, ...bodyInput } = record2;
-  let body;
-  try {
-    body = parseGameplayActionDefinitionBody(bodyInput, "strict");
-  } catch {
-    return invalid(schemaName);
-  }
-  const expectedHash = sha256CanonicalJson(body);
-  if (contentHash2 !== expectedHash) invalid(schemaName);
-  return deepFreeze$3({ ...body, contentHash: expectedHash });
-}
-function canonicalObjectCollection(input, schemaName, mode, parse, identity2) {
-  const source = snapshotDataArray(input);
-  if (isNil(source)) invalid(schemaName);
-  let parsed;
-  try {
-    parsed = source.map(parse);
-  } catch {
-    return invalid(schemaName);
-  }
-  const identities = parsed.map(identity2);
-  if (identities.some((value) => value.length === 0)) invalid(schemaName);
-  if (new Set(identities).size !== identities.length) invalid(schemaName);
-  const canonical = [...parsed].sort(
-    (left, right) => compareCanonicalStrings(identity2(left), identity2(right))
-  );
-  if (mode === "strict" && !sameOrder(identities, canonical.map(identity2))) invalid(schemaName);
-  return Object.freeze(canonical);
-}
-function parseGameplayBootstrapBody(input, mode) {
-  const schemaName = "GameplayBootstrapBodyV1";
-  const record2 = snapshotDataRecord(input);
-  if (isNil(record2)) invalid(schemaName);
-  if (!hasExactKeys(record2, [
-    "kind",
-    "id",
-    "version",
-    "resourceRef",
-    "entityDescriptors",
-    "featureResourceLocks",
-    "semanticActionDefinitions",
-    "availableCapabilityRefs"
-  ]) || record2.kind !== "gameplay-bootstrap" || !isNonEmptyString(record2.id) || !isSafePositiveInteger(record2.version) || !isNonEmptyString(record2.resourceRef)) invalid(schemaName);
-  const parseEntity = mode === "strict" ? parseGameplayEntityDescriptorV1 : (value) => createGameplayEntityDescriptorV1(
-    value
-  );
-  return deepFreeze$3({
-    kind: "gameplay-bootstrap",
-    id: record2.id,
-    version: record2.version,
-    resourceRef: record2.resourceRef,
-    entityDescriptors: canonicalObjectCollection(
-      record2.entityDescriptors,
-      schemaName,
-      mode,
-      parseEntity,
-      (value) => value.id
-    ),
-    featureResourceLocks: canonicalObjectCollection(
-      record2.featureResourceLocks,
-      schemaName,
-      mode,
-      parseGameplayFeatureResourceLockV1,
-      (value) => value.resourceRef
-    ),
-    semanticActionDefinitions: canonicalObjectCollection(
-      record2.semanticActionDefinitions,
-      schemaName,
-      mode,
-      parseGameplayActionDefinitionV1,
-      (value) => value.resourceRef
-    ),
-    availableCapabilityRefs: canonicalStringSet(
-      record2.availableCapabilityRefs,
-      schemaName,
-      mode
-    )
-  });
-}
-function createGameplayBootstrapV1(input) {
-  const body = parseGameplayBootstrapBody(input, "canonicalize");
-  return deepFreeze$3({
-    ...body,
-    contentHash: sha256CanonicalJson(body)
-  });
-}
-function parseGameplayBootstrapV1(input) {
-  const schemaName = "GameplayBootstrapV1";
-  const record2 = snapshotDataRecord(input);
-  if (isNil(record2)) invalid(schemaName);
-  if (!hasExactKeys(record2, [
-    "kind",
-    "id",
-    "version",
-    "resourceRef",
-    "contentHash",
-    "entityDescriptors",
-    "featureResourceLocks",
-    "semanticActionDefinitions",
-    "availableCapabilityRefs"
-  ]) || !isSha256(record2.contentHash)) invalid(schemaName);
-  const { contentHash: contentHash2, ...bodyInput } = record2;
-  let body;
-  try {
-    body = parseGameplayBootstrapBody(bodyInput, "strict");
-  } catch {
-    return invalid(schemaName);
-  }
-  const expectedHash = sha256CanonicalJson(body);
-  if (contentHash2 !== expectedHash) invalid(schemaName);
-  return deepFreeze$3({ ...body, contentHash: expectedHash });
-}
-function createGameplayBootstrapResourceLockEntryV1(input) {
-  const bootstrap = parseGameplayBootstrapV1(input);
-  return deepFreeze$3({
-    resourceRef: bootstrap.resourceRef,
-    resourceKind: "gameplay-bootstrap",
-    resolvedVersion: String(bootstrap.version),
-    contentHash: bootstrap.contentHash
-  });
 }
 const WORLDKIT_RUNTIME_SESSION_REQUEST_TYPES_V1 = Object.freeze([
   "gameplay-command.execute",
@@ -6135,6 +6690,8 @@ const GOLDEN_GROUND_ANIMATION_SET = {
     {
       actionId: "idle",
       sourceClipName: "idle",
+      semanticFamily: "ground",
+      automaticPresentationKeys: ["locomotion.suspended", "locomotion.idle"],
       loopMode: "repeat",
       playbackSpeedRatio: 1,
       blendDurationSeconds: 0.2,
@@ -6143,6 +6700,8 @@ const GOLDEN_GROUND_ANIMATION_SET = {
     {
       actionId: "walk",
       sourceClipName: "walk",
+      semanticFamily: "ground",
+      automaticPresentationKeys: ["locomotion.walk"],
       loopMode: "repeat",
       playbackSpeedRatio: 1,
       blendDurationSeconds: 0.2,
@@ -6151,6 +6710,8 @@ const GOLDEN_GROUND_ANIMATION_SET = {
     {
       actionId: "run",
       sourceClipName: "run",
+      semanticFamily: "ground",
+      automaticPresentationKeys: ["locomotion.run"],
       loopMode: "repeat",
       playbackSpeedRatio: 1,
       blendDurationSeconds: 0.15,
@@ -6159,6 +6720,14 @@ const GOLDEN_GROUND_ANIMATION_SET = {
     {
       actionId: "jump",
       sourceClipName: "jump",
+      semanticFamily: "airborne",
+      automaticPresentationKeys: [
+        "locomotion.takeoff",
+        "locomotion.rising",
+        "locomotion.apex",
+        "locomotion.falling",
+        "locomotion.landing"
+      ],
       loopMode: "once",
       playbackSpeedRatio: 1,
       blendDurationSeconds: 0.1,
@@ -6234,11 +6803,11 @@ const G_BOT_SUBJECT_ASSET = {
   },
   runtimeReadiness: {
     productionReady: false,
-    runtimeStateBinding: "not-implemented"
+    runtimeStateBinding: "partial"
   },
   aiMetadata: {
     displayName: "G Bot Golden",
-    description: "Project-owned Mixamo-rigged G Bot with twenty-five art-ready semantic animation clips; runtime state binding is not implemented.",
+    description: "Project-owned Mixamo-rigged G Bot with one continuous ordinary-jump Clip across committed locomotion phases; contextual fall and hard-landing binding remains partial.",
     semanticTags: ["biped", "g-bot", "humanoid", "rigged"]
   }
 };
@@ -6277,31 +6846,37 @@ const G_BOT_MIXAMO_RIG_PROFILE = {
   }
 };
 const G_BOT_ACTION_BINDINGS = [
-  ["idle", "repeat", 0.2],
-  ["idle.gaming", "repeat", 0.2],
-  ["walk", "repeat", 0.15],
-  ["walk.step", "once", 0.12],
-  ["run", "repeat", 0.12],
-  ["jump", "once", 0.1],
-  ["fall", "repeat", 0.12],
-  ["land.hard", "once", 0.08],
-  ["land.hard.alt", "once", 0.08],
-  ["fly", "repeat", 0.18],
-  ["float", "repeat", 0.2],
-  ["swim.surface", "repeat", 0.18],
-  ["swim.tread", "repeat", 0.2],
-  ["swim.exit", "once", 0.15],
-  ["sit", "once", 0.2],
-  ["sit.idle", "repeat", 0.2],
-  ["sit.ground.idle", "repeat", 0.2],
-  ["sit.toStand", "once", 0.15],
-  ["stand", "once", 0.18],
-  ["lay.idle", "repeat", 0.2],
-  ["roll.toRun", "once", 0.08],
-  ["fight.enter", "once", 0.12],
-  ["emote.salute", "once", 0.15],
-  ["emote.angry", "once", 0.15],
-  ["dance.rumba", "repeat", 0.2]
+  ["idle", "repeat", 0.2, "ground", ["locomotion.suspended", "locomotion.idle"]],
+  ["idle.gaming", "repeat", 0.2, "posture", []],
+  ["walk", "repeat", 0.15, "ground", ["locomotion.walk"]],
+  ["walk.step", "once", 0.12, "ground", []],
+  ["run", "repeat", 0.12, "ground", ["locomotion.run"]],
+  ["jump", "once", 0.1, "airborne", [
+    "locomotion.takeoff",
+    "locomotion.rising",
+    "locomotion.apex",
+    "locomotion.falling",
+    "locomotion.landing"
+  ]],
+  ["fall", "repeat", 0.12, "airborne", []],
+  ["land.hard", "once", 0.08, "airborne", []],
+  ["land.hard.alt", "once", 0.08, "airborne", []],
+  ["fly", "repeat", 0.18, "flight", []],
+  ["float", "repeat", 0.2, "flight", []],
+  ["swim.surface", "repeat", 0.18, "water", []],
+  ["swim.tread", "repeat", 0.2, "water", []],
+  ["swim.exit", "once", 0.15, "water", []],
+  ["sit", "once", 0.2, "posture", []],
+  ["sit.idle", "repeat", 0.2, "posture", []],
+  ["sit.ground.idle", "repeat", 0.2, "posture", []],
+  ["sit.toStand", "once", 0.15, "posture", []],
+  ["stand", "once", 0.18, "posture", []],
+  ["lay.idle", "repeat", 0.2, "posture", []],
+  ["roll.toRun", "once", 0.08, "ground", []],
+  ["fight.enter", "once", 0.12, "combat", []],
+  ["emote.salute", "once", 0.15, "emote", []],
+  ["emote.angry", "once", 0.15, "emote", []],
+  ["dance.rumba", "repeat", 0.2, "dance", []]
 ];
 const G_BOT_GROUND_ANIMATION_SET = {
   kind: "animation-set",
@@ -6313,9 +6888,11 @@ const G_BOT_GROUND_ANIMATION_SET = {
   defaultActionId: "idle",
   requiredActionIds: G_BOT_ACTION_BINDINGS.map(([actionId]) => actionId),
   animationBindings: G_BOT_ACTION_BINDINGS.map(
-    ([actionId, loopMode, blendDurationSeconds]) => ({
+    ([actionId, loopMode, blendDurationSeconds, semanticFamily, automaticPresentationKeys]) => ({
       actionId,
       sourceClipName: actionId,
+      semanticFamily,
+      automaticPresentationKeys,
       loopMode,
       playbackSpeedRatio: 1,
       blendDurationSeconds,
@@ -6998,6 +7575,31 @@ function validateAnimationSet(source) {
       `SUBJECT_REGISTRY_DUPLICATE_CLIP_MAPPING: '${duplicateClipName}' in '${source.resourceRef}'.`
     );
   }
+  const automaticKeys = source.animationBindings.flatMap(
+    (binding) => binding.automaticPresentationKeys
+  );
+  const duplicateAutomaticKey = duplicateValue(automaticKeys);
+  if (duplicateAutomaticKey !== void 0) {
+    throw new Error(
+      `SUBJECT_REGISTRY_DUPLICATE_PRESENTATION_KEY: '${duplicateAutomaticKey}' in '${source.resourceRef}'.`
+    );
+  }
+  const groundKeys = /* @__PURE__ */ new Set([
+    "locomotion.suspended",
+    "locomotion.idle",
+    "locomotion.walk",
+    "locomotion.run"
+  ]);
+  for (const binding of source.animationBindings) {
+    for (const key of binding.automaticPresentationKeys) {
+      const expectedFamily = groundKeys.has(key) ? "ground" : "airborne";
+      if (binding.semanticFamily !== expectedFamily) {
+        throw new Error(
+          `SUBJECT_REGISTRY_PRESENTATION_FAMILY_MISMATCH: '${key}' cannot bind '${binding.semanticFamily}' in '${source.resourceRef}'.`
+        );
+      }
+    }
+  }
 }
 function validateSubjectAsset(source) {
   const duplicateClipName = duplicateValue(source.inventory.animationClipNames);
@@ -7072,7 +7674,12 @@ function canonicalizeNewResourceCollections(source) {
       return {
         ...input,
         requiredActionIds: sortedStrings$1(input.requiredActionIds),
-        animationBindings: [...input.animationBindings].sort((left, right) => left.actionId.localeCompare(right.actionId)),
+        animationBindings: [...input.animationBindings].map((binding) => ({
+          ...binding,
+          automaticPresentationKeys: sortedStrings$1(
+            binding.automaticPresentationKeys
+          )
+        })).sort((left, right) => left.actionId.localeCompare(right.actionId)),
         aiMetadata: {
           ...input.aiMetadata,
           semanticTags: sortedStrings$1(input.aiMetadata.semanticTags)
@@ -9736,6 +10343,8 @@ function normalizeAnimationSet(resource) {
     animationBindings: resource.animationBindings.map((binding) => ({
       actionId: binding.actionId,
       sourceClipName: binding.sourceClipName,
+      semanticFamily: binding.semanticFamily,
+      automaticPresentationKeys: [...binding.automaticPresentationKeys],
       loopMode: binding.loopMode,
       playbackSpeedRatio: binding.playbackSpeedRatio,
       blendDurationSeconds: binding.blendDurationSeconds,
@@ -20007,7 +20616,7 @@ function normalizeAuthoringSpecV4(value, options = {}) {
 function createScanner(text, ignoreTrivia = false) {
   const len = text.length;
   let pos = 0, value = "", tokenOffset = 0, token = 16, lineNumber = 0, lineStartOffset = 0, tokenLineStartOffset = 0, prevTokenLineStartOffset = 0, scanError = 0;
-  function scanHexDigits(count, exact) {
+  function scanHexDigits(count, exact2) {
     let digits = 0;
     let value2 = 0;
     while (digits < count || false) {
@@ -21683,6 +22292,8 @@ function compileAnimationSetV1(resource) {
     animationBindings: resource.animationBindings.map((binding) => ({
       actionId: binding.actionId,
       sourceClipName: binding.sourceClipName,
+      semanticFamily: binding.semanticFamily,
+      automaticPresentationKeys: [...binding.automaticPresentationKeys],
       loopMode: binding.loopMode,
       playbackSpeedRatio: binding.playbackSpeedRatio,
       blendDurationSeconds: binding.blendDurationSeconds,
@@ -22826,6 +23437,11 @@ function compileWorldV5(input) {
       normalizedWorldIrHash: snapshot.normalizedWorldIrHash,
       resourceLockHash,
       resourceLockEntries,
+      actionPresentationRegistry: {
+        schemaVersion: 1,
+        bindings: [],
+        rootMotionSources: []
+      },
       terrain,
       layout: compileExecutionLayoutV1(snapshot.normalizedWorldIr),
       traversal: {

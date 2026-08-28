@@ -305,6 +305,69 @@ describe("Runtime Session V1 public DTOs", () => {
     })).toThrow("closed WorldRuntimeSnapshotV4 schema");
   });
 
+  it("accepts every public Camera diagnostic code in a tracking Snapshot", () => {
+    const snapshot = snapshotFixture();
+    const cameraContextProfileRef = "worldkit://camera-context/test@1";
+    const cameraRigProfileRef = "worldkit://camera-profile/test@1";
+    const cameraViewPreference = { mode: "auto" as const };
+    const diagnostics = [
+      {
+        severity: "warning" as const,
+        code: "CAMERA_PREFERENCE_INVALID" as const,
+        message: "The requested Camera preference is invalid.",
+        cameraContextProfileRef,
+      },
+      {
+        severity: "warning" as const,
+        code: "CAMERA_SEMANTIC_AUTHORITY_UNAVAILABLE" as const,
+        message: "Committed Camera semantic authority is unavailable.",
+        cameraContextProfileRef,
+      },
+    ];
+    const trackingSnapshot: WorldRuntimeSnapshotV4 = {
+      ...snapshot,
+      view: {
+        ...snapshot.view,
+        camera: {
+          mode: "tracking",
+          id: "camera-main",
+          targetEntityId: "player",
+          positionMetersXYZ: [0, 4, 5],
+          activeCameraProfileRef: cameraRigProfileRef,
+          activeCameraRigRef: "worldkit://camera-rig/orbit-follow@1",
+          activeCameraModifierRefs: [],
+          safeFallbackActive: true,
+          viewYawOffsetRadians: 0,
+          viewPitchOffsetRadians: 0,
+          viewDistanceOffsetMeters: 0,
+          fixedStepDeltaSeconds: 1 / 60,
+          selectionDecision: {
+            schemaVersion: 2,
+            committedTick: 0,
+            targetEntityId: "player",
+            activeCameraRigProfileRef: cameraRigProfileRef,
+            activeCameraModifierRefs: [],
+            matchedCameraContextRuleIds: [],
+            cameraViewPreference,
+            fallbackActive: true,
+            diagnostics,
+            explain: {
+              cameraViewPreference,
+              cameraContextRules: [],
+              selectedCameraRigProfileRef: cameraRigProfileRef,
+              appliedCameraModifierRefs: [],
+              fallbackActive: true,
+            },
+          },
+        },
+      },
+    };
+
+    expect(parseWorldRuntimeSnapshotV4(trackingSnapshot)).toEqual(
+      trackingSnapshot,
+    );
+  });
+
   it("parses succeeded and rejected Receipts and verifies the derived id", () => {
     const request = requestFixtures()[2]! as Extract<
       RuntimeSessionRequestV1,

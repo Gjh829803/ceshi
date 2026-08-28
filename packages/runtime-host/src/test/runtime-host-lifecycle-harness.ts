@@ -253,6 +253,11 @@ function createExecutionPlan(
     rigProfiles: [],
     animationSets: [],
     colliderProfiles: [],
+    actionPresentationRegistry: {
+      schemaVersion: 1,
+      bindings: [],
+      rootMotionSources: [],
+    },
     initialControlledEntityId: heroState.id,
     initialRelationships: [],
     subjects: [{

@@ -501,9 +501,9 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     });
   }
 
-  render(): void {
+  render(interpolationAlphaRatio = 1): void {
     if (this.captureReservationReceiptId !== undefined) return;
-    this.activeRuntime().renderFrame();
+    this.activeRuntime().renderFrame(interpolationAlphaRatio);
     this.frame += 1;
   }
 
@@ -1411,7 +1411,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
       }
     }
     if (this.disposed) return;
-    this.render();
+    this.render(this.renderInterpolationAlphaRatio());
     this.emit();
     this.scheduleAnimationFrame();
   }
@@ -1450,6 +1450,17 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
       this.fixedStepAccumulatorSeconds - ticks * FIXED_TIME_STEP_SECONDS,
     );
     return ticks;
+  }
+
+  private renderInterpolationAlphaRatio(): number {
+    if (this.paused) return 1;
+    return Math.min(
+      1,
+      Math.max(
+        0,
+        this.fixedStepAccumulatorSeconds / FIXED_TIME_STEP_SECONDS,
+      ),
+    );
   }
 
   private resetAnimationClock(): void {

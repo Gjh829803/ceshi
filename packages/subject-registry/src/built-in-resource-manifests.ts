@@ -1,6 +1,8 @@
 import {
   BIPED_BONE_IDS_V1,
+  type AutomaticLocomotionPresentationKeyV1,
   type GroundHumanoidActionIdV1,
+  type HumanoidAnimationSemanticFamilyV1,
 } from "@whitebox-world/subject-contracts";
 
 import type {
@@ -105,6 +107,8 @@ const GOLDEN_GROUND_ANIMATION_SET: AnimationSetManifestInputV1 = {
     {
       actionId: "idle",
       sourceClipName: "idle",
+      semanticFamily: "ground",
+      automaticPresentationKeys: ["locomotion.suspended", "locomotion.idle"],
       loopMode: "repeat",
       playbackSpeedRatio: 1,
       blendDurationSeconds: 0.2,
@@ -113,6 +117,8 @@ const GOLDEN_GROUND_ANIMATION_SET: AnimationSetManifestInputV1 = {
     {
       actionId: "walk",
       sourceClipName: "walk",
+      semanticFamily: "ground",
+      automaticPresentationKeys: ["locomotion.walk"],
       loopMode: "repeat",
       playbackSpeedRatio: 1,
       blendDurationSeconds: 0.2,
@@ -121,6 +127,8 @@ const GOLDEN_GROUND_ANIMATION_SET: AnimationSetManifestInputV1 = {
     {
       actionId: "run",
       sourceClipName: "run",
+      semanticFamily: "ground",
+      automaticPresentationKeys: ["locomotion.run"],
       loopMode: "repeat",
       playbackSpeedRatio: 1,
       blendDurationSeconds: 0.15,
@@ -129,6 +137,14 @@ const GOLDEN_GROUND_ANIMATION_SET: AnimationSetManifestInputV1 = {
     {
       actionId: "jump",
       sourceClipName: "jump",
+      semanticFamily: "airborne",
+      automaticPresentationKeys: [
+        "locomotion.takeoff",
+        "locomotion.rising",
+        "locomotion.apex",
+        "locomotion.falling",
+        "locomotion.landing",
+      ],
       loopMode: "once",
       playbackSpeedRatio: 1,
       blendDurationSeconds: 0.1,
@@ -206,11 +222,12 @@ const G_BOT_SUBJECT_ASSET: SubjectAssetManifestInputV1 = {
   },
   runtimeReadiness: {
     productionReady: false,
-    runtimeStateBinding: "not-implemented",
+    runtimeStateBinding: "partial",
   },
   aiMetadata: {
     displayName: "G Bot Golden",
-    description: "Project-owned Mixamo-rigged G Bot with twenty-five art-ready semantic animation clips; runtime state binding is not implemented.",
+    description:
+      "Project-owned Mixamo-rigged G Bot with one continuous ordinary-jump Clip across committed locomotion phases; contextual fall and hard-landing binding remains partial.",
     semanticTags: ["biped", "g-bot", "humanoid", "rigged"],
   },
 };
@@ -251,35 +268,40 @@ const G_BOT_MIXAMO_RIG_PROFILE: RigProfileManifestInputV1 = {
 };
 
 const G_BOT_ACTION_BINDINGS = [
-  ["idle", "repeat", 0.2],
-  ["idle.gaming", "repeat", 0.2],
-  ["walk", "repeat", 0.15],
-  ["walk.step", "once", 0.12],
-  ["run", "repeat", 0.12],
-  ["jump", "once", 0.1],
-  ["fall", "repeat", 0.12],
-  ["land.hard", "once", 0.08],
-  ["land.hard.alt", "once", 0.08],
-  ["fly", "repeat", 0.18],
-  ["float", "repeat", 0.2],
-  ["swim.surface", "repeat", 0.18],
-  ["swim.tread", "repeat", 0.2],
-  ["swim.exit", "once", 0.15],
-  ["sit", "once", 0.2],
-  ["sit.idle", "repeat", 0.2],
-  ["sit.ground.idle", "repeat", 0.2],
-  ["sit.toStand", "once", 0.15],
-  ["stand", "once", 0.18],
-  ["lay.idle", "repeat", 0.2],
-  ["roll.toRun", "once", 0.08],
-  ["fight.enter", "once", 0.12],
-  ["emote.salute", "once", 0.15],
-  ["emote.angry", "once", 0.15],
-  ["dance.rumba", "repeat", 0.2],
+  ["idle", "repeat", 0.2, "ground", ["locomotion.suspended", "locomotion.idle"]],
+  ["idle.gaming", "repeat", 0.2, "posture", []],
+  ["walk", "repeat", 0.15, "ground", ["locomotion.walk"]],
+  ["walk.step", "once", 0.12, "ground", []],
+  ["run", "repeat", 0.12, "ground", ["locomotion.run"]],
+  ["jump", "once", 0.1, "airborne", [
+    "locomotion.takeoff", "locomotion.rising", "locomotion.apex",
+    "locomotion.falling", "locomotion.landing",
+  ]],
+  ["fall", "repeat", 0.12, "airborne", []],
+  ["land.hard", "once", 0.08, "airborne", []],
+  ["land.hard.alt", "once", 0.08, "airborne", []],
+  ["fly", "repeat", 0.18, "flight", []],
+  ["float", "repeat", 0.2, "flight", []],
+  ["swim.surface", "repeat", 0.18, "water", []],
+  ["swim.tread", "repeat", 0.2, "water", []],
+  ["swim.exit", "once", 0.15, "water", []],
+  ["sit", "once", 0.2, "posture", []],
+  ["sit.idle", "repeat", 0.2, "posture", []],
+  ["sit.ground.idle", "repeat", 0.2, "posture", []],
+  ["sit.toStand", "once", 0.15, "posture", []],
+  ["stand", "once", 0.18, "posture", []],
+  ["lay.idle", "repeat", 0.2, "posture", []],
+  ["roll.toRun", "once", 0.08, "ground", []],
+  ["fight.enter", "once", 0.12, "combat", []],
+  ["emote.salute", "once", 0.15, "emote", []],
+  ["emote.angry", "once", 0.15, "emote", []],
+  ["dance.rumba", "repeat", 0.2, "dance", []],
 ] as const satisfies readonly [
   GroundHumanoidActionIdV1,
   "repeat" | "once",
   number,
+  HumanoidAnimationSemanticFamilyV1,
+  readonly AutomaticLocomotionPresentationKeyV1[],
 ][];
 
 const G_BOT_GROUND_ANIMATION_SET: AnimationSetManifestInputV1 = {
@@ -292,9 +314,11 @@ const G_BOT_GROUND_ANIMATION_SET: AnimationSetManifestInputV1 = {
   defaultActionId: "idle",
   requiredActionIds: G_BOT_ACTION_BINDINGS.map(([actionId]) => actionId),
   animationBindings: G_BOT_ACTION_BINDINGS.map(
-    ([actionId, loopMode, blendDurationSeconds]) => ({
+    ([actionId, loopMode, blendDurationSeconds, semanticFamily, automaticPresentationKeys]) => ({
       actionId,
       sourceClipName: actionId,
+      semanticFamily,
+      automaticPresentationKeys,
       loopMode,
       playbackSpeedRatio: 1,
       blendDurationSeconds,

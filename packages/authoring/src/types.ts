@@ -1,6 +1,8 @@
 import type {
+  AutomaticLocomotionPresentationKeyV1,
   BipedBoneIdV1,
   GroundHumanoidActionIdV1,
+  HumanoidAnimationSemanticFamilyV1,
   SubjectBodyTopologyV2,
   SubjectResourceKindV1,
 } from "@whitebox-world/subject-contracts";
@@ -472,6 +474,8 @@ export interface NormalizedRigProfileV1 {
 export interface NormalizedAnimationBindingV1 {
   actionId: GroundHumanoidActionIdV1;
   sourceClipName: string;
+  semanticFamily: HumanoidAnimationSemanticFamilyV1;
+  automaticPresentationKeys: readonly AutomaticLocomotionPresentationKeyV1[];
   loopMode: "repeat" | "once";
   playbackSpeedRatio: number;
   blendDurationSeconds: number;

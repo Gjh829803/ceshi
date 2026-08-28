@@ -2007,6 +2007,80 @@ describe("createWorldkitBrowserApiV5", () => {
 });
 
 describe("Authoring camera console", () => {
+  it("reapplies the selected Golden camera preference after Reset when gameplay tuning is compiler-locked", async () => {
+    const port = await availableLoopbackPort();
+    const worktreeRoot = resolve(import.meta.dirname, "../../..");
+    const vite = spawn(
+      process.execPath,
+      [
+        resolve(worktreeRoot, "node_modules/vite/bin/vite.js"),
+        "--config",
+        "vite.config.mjs",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        String(port),
+      ],
+      {
+        cwd: resolve(worktreeRoot, "apps/playground"),
+        env: {
+          ...process.env,
+          WORLDKIT_AUTHORING_SPEC_PATH: resolve(
+            worktreeRoot,
+            "examples/authoring/rigged-subject-world.json",
+          ),
+        },
+        stdio: "pipe",
+      },
+    );
+    expect(vite.spawnfile).toBe(process.execPath);
+    let viteOutput = "";
+    vite.stdout?.on("data", (chunk: Buffer) => {
+      viteOutput += chunk.toString();
+    });
+    vite.stderr?.on("data", (chunk: Buffer) => {
+      viteOutput += chunk.toString();
+    });
+    let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
+    try {
+      browser = await chromium.launch({ headless: true });
+      const url = `http://127.0.0.1:${port}/?authoring=1`;
+      await waitForAuthoringPage(url);
+      const page = await browser.newPage();
+      await page.addInitScript(() => {
+        localStorage.clear();
+      });
+      await page.goto(url, { waitUntil: "domcontentloaded" });
+      await page.locator("#open-tuning-button:not([hidden])").waitFor({ timeout: 45_000 });
+
+      const orbitProfileRef = "worldkit://camera-profile/orbit.medium@1";
+      expect(await page.locator("#camera-preference-select").inputValue()).toBe(orbitProfileRef);
+      expect(await page.evaluate(() => {
+        const camera = window.__WORLDKIT__!.getCameraSnapshot?.();
+        return camera?.mode === "tracking" ? camera.activeCameraProfileRef : undefined;
+      })).toBe(orbitProfileRef);
+
+      await page.locator("#reset-button").click();
+
+      expect(await page.locator("#camera-preference-select").inputValue()).toBe(orbitProfileRef);
+      await expect.poll(() => page.locator("#reset-button").isEnabled()).toBe(true);
+      expect(await page.locator("#tuning-save-status").textContent())
+        .toBe("重置后已恢复镜头；Gameplay 继续使用编译锁定的 Execution Plan");
+      expect(await page.evaluate(() => {
+        const camera = window.__WORLDKIT__!.getCameraSnapshot?.();
+        return camera?.mode === "tracking" ? camera.activeCameraProfileRef : undefined;
+      })).toBe(orbitProfileRef);
+    } catch (error) {
+      throw new Error(
+        `AUTHORING_CAMERA_RESET_E2E_FAILED: ${viteOutput.slice(-4_000)}`,
+        { cause: error },
+      );
+    } finally {
+      await browser?.close();
+      await stopDirectViteProcess(vite);
+    }
+  }, 120_000);
+
   it("renders only the two supported types, conditionally exposes Follow Arm controls, and reads runtime telemetry", async () => {
     const port = await availableLoopbackPort();
     const worktreeRoot = resolve(import.meta.dirname, "../../..");
@@ -2256,7 +2330,8 @@ describe("Authoring camera console", () => {
       const migratedDraft = await page.evaluate(() => JSON.parse(
         localStorage.getItem("worldkit.subject-preset-local.v1") ?? "{}",
       ).drafts?.[0]);
-      expect(await page.locator("#tuning-save-status").textContent()).not.toContain("版本没有应用");
+      expect(await page.locator("#tuning-save-status").textContent())
+        .toContain("Golden Subject tuning is compiler-locked");
       expect(migratedDraft.cameraOverridesByProfileRef[
         "worldkit://camera-profile/first-person.standard@1"
       ]?.values).toMatchObject({ baseFovDegrees: 100 });

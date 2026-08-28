@@ -1,4 +1,5 @@
 export * from "./camera-parameter-contract";
+export * from "@whitebox-world/character-movement";
 export * from "./camera-view-contract";
 export * from "./browser-route-evidence";
 export * from "./capture-targets";

@@ -11,6 +11,12 @@
 
 > Golden Humanoid S1b 首个可视纵向切片已完成并进入回归；S1b 整体与 Semantic Actions 整体仍未完成.
 
+> 2026-08-27：3C vNext Task 6 已在 Diversion 分支完成 Golden 单人带骨骼角色纵向集成：
+> `CharacterMovementRuntime + BodyPort + Locomotion V2 + LayeredMove + committed Action/Animation/Camera`
+> 共用一个固定 Tick 事务。全仓 Task 7 clean break、多主体/坐骑迁移和两轮人工
+> `FeelReviewReceipt` 仍未完成，Profile 保持 `experimental`。当前证据与环境失败清单见
+> [`3C vNext Golden Humanoid 集成进度审查`](reviews/2026-08-27-whitebox-3c-vnext-golden-progress.md)。
+
 > 首个产品资产 G Bot 已通过独立 Registry/CLI/Babylon/Havok/Browser Gate；这只代表
 > 当前版本 G Bot 的 `idle/walk/run/jump`，不代表任意产品包或其余 21 个 Clip 已开放。
 

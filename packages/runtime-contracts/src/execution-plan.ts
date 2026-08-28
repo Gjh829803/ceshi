@@ -1,15 +1,29 @@
 import {
+  AUTOMATIC_LOCOMOTION_PRESENTATION_KEYS_V1,
+  HUMANOID_ANIMATION_SEMANTIC_FAMILIES_V1,
   SUBJECT_RESOURCE_KINDS_V1,
   isBipedBoneIdV1,
   isGroundHumanoidActionIdV1,
   isSubjectBodyTopologyV2,
   type BipedBoneIdV1,
+  type AutomaticLocomotionPresentationKeyV1,
   type GroundHumanoidActionIdV1,
+  type HumanoidAnimationSemanticFamilyV1,
   type SubjectBodyTopologyV2,
 } from "@whitebox-world/subject-contracts";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
-import type { MountedOnRelationshipStateV1 } from "@whitebox-world/gameplay-contracts";
+import type {
+  GaitV2,
+  MobilityModeV2,
+  MountedOnRelationshipStateV1,
+  VerticalPhaseV2,
+} from "@whitebox-world/gameplay-contracts";
 import type { TraversalSurfaceIdentityV1 } from "@whitebox-world/traversal";
+import {
+  createActionPresentationRegistryV1,
+  type ActionPresentationBindingV1,
+} from "@whitebox-world/subject-actions";
+import type { LockedRootMotionSourceV1 } from "@whitebox-world/character-movement";
 import { isNil } from "lodash-es";
 
 import {
@@ -113,6 +127,8 @@ export interface ExecutionRigProfileV1 {
 export interface ExecutionAnimationBindingV1 {
   actionId: GroundHumanoidActionIdV1;
   sourceClipName: string;
+  semanticFamily: HumanoidAnimationSemanticFamilyV1;
+  automaticPresentationKeys: readonly AutomaticLocomotionPresentationKeyV1[];
   loopMode: "repeat" | "once";
   playbackSpeedRatio: number;
   blendDurationSeconds: number;
@@ -277,6 +293,12 @@ export interface ExecutionCameraContextRuleV1 {
   priority: number;
   when: {
     relationshipRoles?: readonly ("none" | "rider" | "driver" | "passenger" | "tethered")[];
+    locomotionStatuses?: readonly ("active" | "suspended")[];
+    mobilityModes?: readonly MobilityModeV2[];
+    gaits?: readonly GaitV2[];
+    verticalPhases?: readonly VerticalPhaseV2[];
+    requiredActiveActionRefs?: readonly string[];
+    actionInterruptibility?: "interruptible" | "non-interruptible";
     motionKernelRefs?: readonly string[];
     requiredMotionTags?: readonly string[];
     movementMediums?: readonly ExecutionMovementMediumV1[];
@@ -635,6 +657,12 @@ export function canonicalExecutionResourceLockEntriesV1(
   return Object.freeze(rows);
 }
 
+export interface ExecutionActionPresentationRegistryV1 {
+  readonly schemaVersion: 1;
+  readonly bindings: readonly ActionPresentationBindingV1[];
+  readonly rootMotionSources: readonly LockedRootMotionSourceV1[];
+}
+
 export interface ExecutionPlanV5 {
   readonly kind: "worldkit-execution-plan";
   readonly schemaVersion: 5;
@@ -655,6 +683,7 @@ export interface ExecutionPlanV5 {
   readonly rigProfiles: readonly ExecutionRigProfileV1[];
   readonly animationSets: readonly ExecutionAnimationSetV1[];
   readonly colliderProfiles: readonly ExecutionColliderProfileV1[];
+  readonly actionPresentationRegistry: ExecutionActionPresentationRegistryV1;
   readonly initialControlledEntityId: string;
   readonly subjects: readonly ExecutionSubjectV3[];
   readonly initialRelationships: readonly MountedOnRelationshipStateV1[];
@@ -702,6 +731,7 @@ const EXECUTION_PLAN_V5_FIELDS = [
   "rigProfiles",
   "animationSets",
   "colliderProfiles",
+  "actionPresentationRegistry",
   "initialControlledEntityId",
   "subjects",
   "initialRelationships",
@@ -1069,6 +1099,8 @@ function validateAnimationSet(input: unknown): void {
     const row = exactDataRecord(binding, [
       "actionId",
       "sourceClipName",
+      "semanticFamily",
+      "automaticPresentationKeys",
       "loopMode",
       "playbackSpeedRatio",
       "blendDurationSeconds",
@@ -1076,6 +1108,10 @@ function validateAnimationSet(input: unknown): void {
     ]);
     requireGroundHumanoidActionId(row.actionId);
     requireString(row.sourceClipName);
+    requireLiteral(row.semanticFamily, HUMANOID_ANIMATION_SEMANTIC_FAMILIES_V1);
+    dataArray(row.automaticPresentationKeys).forEach((key) =>
+      requireLiteral(key, AUTOMATIC_LOCOMOTION_PRESENTATION_KEYS_V1)
+    );
     requireLiteral(row.loopMode, ["repeat", "once"]);
     requireFinite(row.playbackSpeedRatio);
     requireFinite(row.blendDurationSeconds);
@@ -1139,6 +1175,12 @@ function validateCameraContextRule(input: unknown): void {
   requireFinite(value.priority);
   const when = exactDataRecord(value.when, [], [
     "relationshipRoles",
+    "locomotionStatuses",
+    "mobilityModes",
+    "gaits",
+    "verticalPhases",
+    "requiredActiveActionRefs",
+    "actionInterruptibility",
     "motionKernelRefs",
     "requiredMotionTags",
     "movementMediums",
@@ -1149,6 +1191,11 @@ function validateCameraContextRule(input: unknown): void {
   ]);
   for (const key of [
     "relationshipRoles",
+    "locomotionStatuses",
+    "mobilityModes",
+    "gaits",
+    "verticalPhases",
+    "requiredActiveActionRefs",
     "motionKernelRefs",
     "requiredMotionTags",
     "movementMediums",
@@ -1156,6 +1203,11 @@ function validateCameraContextRule(input: unknown): void {
     "requiredCameraContextTags",
   ]) {
     if (Object.hasOwn(when, key)) requireStringArray(when[key]);
+  }
+  if (Object.hasOwn(when, "actionInterruptibility") &&
+    when.actionInterruptibility !== "interruptible" &&
+    when.actionInterruptibility !== "non-interruptible") {
+    invalidExecutionPlanV5();
   }
   if (Object.hasOwn(when, "minimumSpeedMetersPerSecond")) {
     requireFinite(when.minimumSpeedMetersPerSecond);
@@ -1971,6 +2023,31 @@ function deepFreezeExecutionPlan<Value>(value: Value): Value {
   return Object.freeze(value);
 }
 
+function parseExecutionActionPresentationRegistryV1(
+  input: unknown,
+): ExecutionPlanV5["actionPresentationRegistry"] {
+  const data = exactDataRecord(input, [
+    "schemaVersion",
+    "bindings",
+    "rootMotionSources",
+  ]);
+  const admitted = createActionPresentationRegistryV1(data);
+  const rootMotionSources = dataArray(data.rootMotionSources).map((source) => {
+    const row = dataRecord(source);
+    const admittedSource = admitted.resolveRootMotionSource(
+      requireString(row.resourceRef),
+      requireHash(row.contentHash),
+    );
+    if (admittedSource === undefined) return invalidExecutionPlanV5();
+    return admittedSource;
+  }).sort((left, right) => left.resourceRef.localeCompare(right.resourceRef));
+  return Object.freeze({
+    schemaVersion: 1,
+    bindings: admitted.bindings,
+    rootMotionSources: Object.freeze(rootMotionSources),
+  });
+}
+
 export function parseExecutionPlanV5(input: unknown): ExecutionPlanV5 {
   try {
     const snapshot = snapshotExecutionPlanData(input);
@@ -1999,6 +2076,10 @@ export function parseExecutionPlanV5(input: unknown): ExecutionPlanV5 {
     dataArray(plan.rigProfiles).forEach(validateRigProfile);
     dataArray(plan.animationSets).forEach(validateAnimationSet);
     dataArray(plan.colliderProfiles).forEach(validateColliderProfile);
+    plan.actionPresentationRegistry =
+      parseExecutionActionPresentationRegistryV1(
+        plan.actionPresentationRegistry,
+      );
     const initialControlledEntityId = requireString(
       plan.initialControlledEntityId,
     );

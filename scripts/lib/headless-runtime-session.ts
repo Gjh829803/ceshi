@@ -439,7 +439,10 @@ function wrapGameplayWorldPort(
     ) => port.estimateFixedInputTickCapacity(fixedInput),
     runFixedInputTick: (
       fixedInput: Parameters<GameplayWorldPortV1["runFixedInputTick"]>[0],
-    ) => port.runFixedInputTick(fixedInput),
+      actionProjection: Parameters<
+        GameplayWorldPortV1["runFixedInputTick"]
+      >[1],
+    ) => port.runFixedInputTick(fixedInput, actionProjection),
     snapshot: () => port.snapshot(),
     dispose: () => {
       if (!isNil(disposePromise)) return disposePromise;

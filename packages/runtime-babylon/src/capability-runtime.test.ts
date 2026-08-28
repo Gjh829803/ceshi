@@ -175,7 +175,7 @@ describe("capability package runtime smoke tests", () => {
     expect(springArmComponentSource).not.toMatch(/FreeCamera|ViewControlFrame|Gameplay/);
   });
 
-  it("keeps the manual orbit heading through sprint framing activation and release", async () => {
+  it("keeps manual orbit heading when raw sprint input has no committed Camera semantic", async () => {
     const runtime = await createBoundGbotRuntime(createGbotCapabilityExecutionPlan());
     const horizontalCameraOffset = (snapshot: ReturnType<typeof runtime.snapshot>) => {
       const subject = snapshot.subjectStatesByEntityId.player!;
@@ -200,7 +200,7 @@ describe("capability package runtime smoke tests", () => {
       const afterRelease = await runtime.runFixedInput({ actions: [], ticks: 120 });
       const releasedOffset = horizontalCameraOffset(afterRelease);
 
-      expect(sprinting.camera.activeCameraModifierRefs).toContain(
+      expect(sprinting.camera.activeCameraModifierRefs).not.toContain(
         "worldkit://camera-modifier/sprint-emphasis@1",
       );
       expect(sprinting.camera.activeCameraProfileRef).toBe(
@@ -250,19 +250,22 @@ describe("capability package runtime smoke tests", () => {
         ticks: 30,
       });
       expect(snapshot.subjectStatesByEntityId.player).toMatchObject({
-        activeMotionKernelRef: "worldkit://motion-kernel/free-ground@1",
         activeActionId: "walk",
       });
+      expect(snapshot.subjectStatesByEntityId.player).not.toHaveProperty(
+        "activeMotionKernelRef",
+      );
       expect(
         (await runtime.runFixedInput({ actions: ["aim"], ticks: 1 })).camera
           .activeCameraModifierRefs,
-      ).toContain("worldkit://camera-modifier/aim-framing@1");
+      ).not.toContain("worldkit://camera-modifier/aim-framing@1");
       expect(
         (await runtime.runFixedInput({ actions: ["move-forward", "run"], ticks: 1 }))
           .camera.activeCameraModifierRefs,
-      ).toContain("worldkit://camera-modifier/sprint-emphasis@1");
+      ).not.toContain("worldkit://camera-modifier/sprint-emphasis@1");
       for (const [cameraProfileRef, cameraRigRef] of CAMERA_PROFILES) {
-        const camera = setCameraProfile(runtime, cameraProfileRef).camera;
+        setCameraProfile(runtime, cameraProfileRef);
+        const camera = (await runtime.runFixedInput({ actions: [], ticks: 1 })).camera;
         expect(camera).toMatchObject({
           activeCameraProfileRef: cameraProfileRef,
           activeCameraRigRef: cameraRigRef,
@@ -284,11 +287,15 @@ describe("capability package runtime smoke tests", () => {
         },
       })).toThrow(/SUBJECT_PRESET_INVALID_CAMERA_TUNING/);
       setCameraProfile(runtime, "worldkit://camera-profile/orbit.medium@1");
-      const adjustedCamera = runtime.adjustCameraView({
+      await runtime.runFixedInput({ actions: [], ticks: 1 });
+      runtime.adjustCameraView({
         yawDeltaRadians: 0.5,
         pitchDeltaRadians: 0.2,
         zoomDeltaMeters: 1,
-      }).camera;
+      });
+      const adjustedCamera = (
+        await runtime.runFixedInput({ actions: [], ticks: 1 })
+      ).camera;
       expect(adjustedCamera.viewYawOffsetRadians).toBeGreaterThan(0);
       expect(adjustedCamera.viewPitchOffsetRadians).toBeGreaterThan(0);
       expect(adjustedCamera.viewDistanceOffsetMeters).toBeGreaterThan(0);
@@ -415,51 +422,31 @@ describe("capability package runtime smoke tests", () => {
 
       runtime.reset();
       await bindRuntimeTestPossession(runtime, "player");
-      expect(
+      const beforeRejectedFeelOverride = runtime.snapshot();
+      expect(() =>
         runtime.requestControlFeelProfile(
           "player",
           "worldkit://control-feel-profile/humanoid.heavy-ground@1",
         ),
-      ).toBe(true);
-      const slowAcceleration = await runtime.runFixedInput({
-        actions: ["move-forward"],
-        ticks: 6,
-      });
-      runtime.reset();
-      await bindRuntimeTestPossession(runtime, "player");
+      ).toThrow(/^SUBJECT_OVERRIDE_FORBIDDEN/);
+      expect(runtime.snapshot()).toEqual(beforeRejectedFeelOverride);
       expect(
         runtime.requestControlFeelProfile(
           "player",
           "worldkit://control-feel-profile/humanoid.medium-ground@1",
         ),
       ).toBe(true);
-      const fastAcceleration = await runtime.runFixedInput({
+      const compilerLockedFeel = await runtime.runFixedInput({
         actions: ["move-forward"],
         ticks: 6,
       });
-      expect(fastAcceleration.subjectStatesByEntityId.player!.speedMetersPerSecond)
-        .toBeGreaterThan(
-          slowAcceleration.subjectStatesByEntityId.player!.speedMetersPerSecond!,
-        );
-
-      runtime.reset();
-      await bindRuntimeTestPossession(runtime, "player");
-      runtime.requestControlFeelProfile(
-        "player",
-        "worldkit://control-feel-profile/humanoid.heavy-ground@1",
-      );
-      const slowTurn = await runtime.runFixedInput({ actions: ["move-left"], ticks: 10 });
-      runtime.reset();
-      await bindRuntimeTestPossession(runtime, "player");
-      runtime.requestControlFeelProfile(
-        "player",
-        "worldkit://control-feel-profile/humanoid.medium-ground@1",
-      );
-      const fastTurn = await runtime.runFixedInput({ actions: ["move-left"], ticks: 10 });
-      expect(Math.abs(fastTurn.subjectStatesByEntityId.player!.forwardXYZ![0]))
-        .toBeGreaterThan(
-          Math.abs(slowTurn.subjectStatesByEntityId.player!.forwardXYZ![0]),
-        );
+      expect(
+        compilerLockedFeel.subjectStatesByEntityId.player!
+          .activeControlFeelProfileRef,
+      ).toBe(MEDIUM_FEEL_REF);
+      expect(
+        compilerLockedFeel.subjectStatesByEntityId.player!.speedMetersPerSecond,
+      ).toBeGreaterThan(0);
       expect(() => runtime.requestControlFeelProfile(
         "player",
         "worldkit://control-feel-profile/unknown.unlisted@1",
@@ -531,7 +518,7 @@ describe("capability package runtime smoke tests", () => {
       })).toThrow(/SUBJECT_PRESET_INVALID_CAMERA_TUNING/);
 
       const controlProfile = exactControlProfile;
-      const committedPreset = runtime.applySubjectPresetTuning({
+      const rejectedCompilerLockedFeel = runtime.applySubjectPresetTuning({
         subjectEntityId: "player",
         expectedSubjectDefinitionRef: subjectDefinitionRef,
         expectedSubjectDefinitionContentHash:
@@ -541,27 +528,19 @@ describe("capability package runtime smoke tests", () => {
           "worldkit://control-feel-profile/humanoid.heavy-ground@1",
         selectedControlProfileRef: controlProfile.resourceRef,
       });
-      expect(committedPreset.status).toBe("committed");
-      expect(committedPreset.snapshot.camera).not.toHaveProperty("tuning");
-      expect(committedPreset.snapshot.camera).not.toHaveProperty("preference");
-      expect(committedPreset.snapshot.subjectStatesByEntityId.player)
+      expect(rejectedCompilerLockedFeel.status).toBe("rejected");
+      expect(rejectedCompilerLockedFeel.snapshot).toEqual(beforeRejectedPreset);
+      const afterFeelTick = await runtime.runFixedInput({ actions: [], ticks: 1 });
+      expect(afterFeelTick.subjectStatesByEntityId.player)
         .toMatchObject({
           activeControlFeelProfileRef:
             "worldkit://control-feel-profile/humanoid.medium-ground@1",
           activePhysicsBodyProfileRef:
             "worldkit://physics-body-profile/character.capability-medium@1",
         });
-      const afterFeelTick = await runtime.runFixedInput({ actions: [], ticks: 1 });
-      expect(afterFeelTick.subjectStatesByEntityId.player)
-        .toMatchObject({
-          activeControlFeelProfileRef:
-            "worldkit://control-feel-profile/humanoid.heavy-ground@1",
-          activePhysicsBodyProfileRef:
-            "worldkit://physics-body-profile/character.capability-medium@1",
-        });
-      expect(committedPreset.snapshot.subjectStatesByEntityId.player)
+      expect(rejectedCompilerLockedFeel.snapshot.subjectStatesByEntityId.player)
         .not.toHaveProperty("controlFeelParameterTuning");
-      expect(committedPreset.snapshot.subjectStatesByEntityId.player)
+      expect(rejectedCompilerLockedFeel.snapshot.subjectStatesByEntityId.player)
         .not.toHaveProperty("controlParameterTuning");
       expect((await runtime.runHarness("player")).passed).toBe(true);
     } finally {
@@ -621,7 +600,7 @@ describe("capability package runtime smoke tests", () => {
     }
   });
 
-  it("executes a switched Profile from its locked Kernel descriptor instead of parsing its Ref", async () => {
+  it("rejects runtime Motion Profile switching for the Golden Humanoid authority", async () => {
     const baseExecutionPlan = createGbotCapabilityExecutionPlan();
     const executionPlan = structuredClone(baseExecutionPlan);
     const subject = executionPlan.subjects[0]!;
@@ -655,13 +634,18 @@ describe("capability package runtime smoke tests", () => {
     const runtime = await createBoundGbotRuntime(executionPlan);
     try {
       const initialZ = runtime.snapshot().subjectStatesByEntityId.player!.positionMetersXYZ[2];
-      expect(runtime.requestMotionProfile("player", optionalProfile.resourceRef)).toBe(true);
+      const beforeRejectedOverride = runtime.snapshot();
+      expect(() => runtime.requestMotionProfile(
+        "player",
+        optionalProfile.resourceRef,
+      )).toThrow(/^SUBJECT_OVERRIDE_FORBIDDEN/);
+      expect(runtime.snapshot()).toEqual(beforeRejectedOverride);
       const moved = await runtime.runFixedInput({
         actions: ["move-forward"],
         ticks: 60,
       });
-      expect(moved.subjectStatesByEntityId.player?.activeMotionKernelRef).toBe(
-        aliasedKernelRef,
+      expect(moved.subjectStatesByEntityId.player).not.toHaveProperty(
+        "activeMotionKernelRef",
       );
       expect(
         Math.abs(moved.subjectStatesByEntityId.player!.positionMetersXYZ[2] - initialZ),
@@ -695,7 +679,7 @@ describe("capability package runtime smoke tests", () => {
     }
   });
 
-  it("commits Control Feel on the next tick and clears authoring Camera state across reset", async () => {
+  it("keeps every Golden Control Feel locked and reset clears Camera authoring state", async () => {
     const baseExecutionPlan = createGbotCapabilityExecutionPlan();
     const executionPlan = withExtraCapabilitySubject(baseExecutionPlan);
     const playerSubject = executionPlan.subjects[0]!;
@@ -715,7 +699,8 @@ describe("capability package runtime smoke tests", () => {
       const beforePlayer = beforeRequest.subjectStatesByEntityId.player!;
       expect(beforePlayer.activeControlFeelProfileRef).toBe(MEDIUM_FEEL_REF);
 
-      expect(runtime.requestControlFeelProfile("player", HEAVY_FEEL_REF)).toBe(true);
+      expect(() => runtime.requestControlFeelProfile("player", HEAVY_FEEL_REF))
+        .toThrow("SUBJECT_OVERRIDE_FORBIDDEN: Golden Control Feel is compiler-locked.");
       const queued = runtime.snapshot();
       expect(queued.tick).toBe(beforeRequest.tick);
       expect(queued.subjectStatesByEntityId.player).toMatchObject({
@@ -725,10 +710,9 @@ describe("capability package runtime smoke tests", () => {
       });
 
       expect(runtime.requestControlFeelProfile("player", MEDIUM_FEEL_REF)).toBe(true);
-      expect(runtime.requestControlFeelProfile("player", HEAVY_FEEL_REF)).toBe(true);
       const afterTick = await runtime.runFixedInput({ actions: [], ticks: 1 });
       expect(afterTick.subjectStatesByEntityId.player!.activeControlFeelProfileRef)
-        .toBe(HEAVY_FEEL_REF);
+        .toBe(MEDIUM_FEEL_REF);
 
       setCameraProfile(runtime, followProfile.resourceRef);
       const orbitPreview = runtime.applyCameraPreview({
@@ -740,15 +724,16 @@ describe("capability package runtime smoke tests", () => {
       await bindRuntimeTestPossession(runtime, "player");
       const afterReset = await runtime.runFixedInput({ actions: [], ticks: 1 });
       expect(afterReset.subjectStatesByEntityId.player!.activeControlFeelProfileRef)
-        .toBe(HEAVY_FEEL_REF);
+        .toBe(MEDIUM_FEEL_REF);
       expect(afterReset.camera).not.toHaveProperty("tuning");
       expect(afterReset.camera.activeCameraProfileRef).toBe(automaticCameraProfileRef);
       expect(runtime.getCameraPreviewState().tuningByProfileRef).toEqual({});
 
-      expect(runtime.requestControlFeelProfile("extra", HEAVY_FEEL_REF)).toBe(true);
+      expect(() => runtime.requestControlFeelProfile("extra", HEAVY_FEEL_REF))
+        .toThrow("SUBJECT_OVERRIDE_FORBIDDEN: Golden Control Feel is compiler-locked.");
       const extraAfterTick = await runtime.runFixedInput({ actions: [], ticks: 1 });
       expect(extraAfterTick.subjectStatesByEntityId.extra!.activeControlFeelProfileRef)
-        .toBe(HEAVY_FEEL_REF);
+        .toBe(MEDIUM_FEEL_REF);
       expect(extraAfterTick.camera).not.toHaveProperty("tuning");
     } finally {
       await runtime.dispose();
@@ -798,7 +783,7 @@ describe("capability package runtime smoke tests", () => {
     }
   }, 15_000);
 
-  it("zeros locomotion intent when safe-ground fallback is active even if move is held", async () => {
+  it("rejects runtime safe-ground fallback injection for the Golden Humanoid authority", async () => {
     const executionPlan = createGbotCapabilityExecutionPlan();
     const runtime = await createBoundGbotRuntime(executionPlan);
     try {
@@ -810,21 +795,24 @@ describe("capability package runtime smoke tests", () => {
       expect(movingPlayer.speedMetersPerSecond ?? 0).toBeGreaterThan(0.4);
       const movingZ = movingPlayer.positionMetersXYZ[2];
 
-      expect(runtime.requestMotionProfile(
+      const beforeRejectedOverride = runtime.snapshot();
+      expect(() => runtime.requestMotionProfile(
         "player",
         "worldkit://motion-profile/safe-ground@1",
-      )).toBe(true);
-      const stopped = await runtime.runFixedInput({
+      )).toThrow(/^SUBJECT_OVERRIDE_FORBIDDEN/);
+      expect(runtime.snapshot()).toEqual(beforeRejectedOverride);
+      const continued = await runtime.runFixedInput({
         actions: ["move-forward", "jump"],
         ticks: 90,
       });
-      const stoppedPlayer = stopped.subjectStatesByEntityId.player!;
-      expect(stoppedPlayer.safeFallbackActive).toBe(true);
-      expect(stoppedPlayer.activeMotionProfileRef).toBe(
+      const continuedPlayer = continued.subjectStatesByEntityId.player!;
+      expect(continuedPlayer.safeFallbackActive).toBe(false);
+      expect(continuedPlayer.activeMotionProfileRef).not.toBe(
         "worldkit://motion-profile/safe-ground@1",
       );
-      expect(stoppedPlayer.speedMetersPerSecond ?? 1).toBeLessThan(0.05);
-      expect(Math.abs(stoppedPlayer.positionMetersXYZ[2] - movingZ)).toBeLessThan(0.35);
+      expect(
+        Math.abs(continuedPlayer.positionMetersXYZ[2] - movingZ),
+      ).toBeGreaterThan(0.35);
     } finally {
       await runtime.dispose();
     }

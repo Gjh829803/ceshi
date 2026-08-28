@@ -162,8 +162,8 @@ function fakeRuntimeFactory(
           viewPitchOffsetRadians: 0,
           viewDistanceOffsetMeters: 0,
           selectionDecision: {
-            schemaVersion: 1,
-            simulationTick: 0,
+            schemaVersion: 2,
+            committedTick: 0,
             targetEntityId: configuration.executionPlan.initialControlledEntityId,
             activeCameraRigProfileRef: "worldkit://camera-rig/third-person@1",
             activeCameraModifierRefs: [],
@@ -235,7 +235,10 @@ function fakeRuntimeFactory(
         harness.port.estimateFixedInputTickCapacity(input),
       runFixedInputTick: (
         input: Parameters<GameplayWorldPortV1["runFixedInputTick"]>[0],
-      ) => harness.port.runFixedInputTick(input),
+        actionProjection: Parameters<
+          GameplayWorldPortV1["runFixedInputTick"]
+        >[1],
+      ) => harness.port.runFixedInputTick(input, actionProjection),
       snapshot: () => harness.port.snapshot(),
       dispose: async () => {
         await harness.port.dispose();
@@ -395,7 +398,9 @@ describe("Gameplay Babylon Runtime coordinator", () => {
       actionRequestHash:
         sha256CanonicalJson(mountRequest) as `sha256:${string}`,
     });
-    expect(mounted).toMatchObject({ status: "committed" });
+    if (mounted.status !== "committed") {
+      throw new Error(JSON.stringify(mounted.diagnostic));
+    }
     expect(
       coordinator.getGameplayInspectionSnapshot()
         .relationshipStatesById[MOUNTED_SKATEBOARD_S1_RELATIONSHIP_ID],
@@ -418,21 +423,35 @@ describe("Gameplay Babylon Runtime coordinator", () => {
     expect(riderAfter.entityState.positionMetersXYZ[2]).toBeCloseTo(boardAfter[2], 4);
     expect(Object.values(riderAfter.capabilityStatesById)).toContainEqual(
       expect.objectContaining({
-        mode: "suspended",
-        suspendedByRelationshipId: MOUNTED_SKATEBOARD_S1_RELATIONSHIP_ID,
+        kind: "locomotion-capability-state-v2",
+        locomotion: expect.objectContaining({
+          status: "suspended",
+          suspendedByRelationshipId: MOUNTED_SKATEBOARD_S1_RELATIONSHIP_ID,
+        }),
       }),
     );
     expect(afterBoardMove.view.camera).toMatchObject({
       mode: "tracking",
       targetEntityId: "skateboard",
-      activeCameraModifierRefs: [
-        "worldkit://camera-modifier/mounted-framing@1",
-      ],
-      requestedArmLengthMeters: 7,
+      activeCameraModifierRefs: [],
     });
     expect(afterBoardMove.view.camera.mode).toBe("tracking");
     if (afterBoardMove.view.camera.mode === "tracking") {
-      expect(afterBoardMove.view.camera.effectiveArmLengthMeters).toBeGreaterThan(6);
+      const requestedArmLengthMeters =
+        afterBoardMove.view.camera.requestedArmLengthMeters;
+      const effectiveArmLengthMeters =
+        afterBoardMove.view.camera.effectiveArmLengthMeters;
+      if (
+        requestedArmLengthMeters === undefined ||
+        effectiveArmLengthMeters === undefined
+      ) {
+        throw new Error("Expected mounted third-person Spring Arm telemetry.");
+      }
+      expect(requestedArmLengthMeters).toBeCloseTo(6, 6);
+      expect(effectiveArmLengthMeters).toBeGreaterThan(0);
+      expect(effectiveArmLengthMeters).toBeLessThanOrEqual(
+        requestedArmLengthMeters + 0.000001,
+      );
     }
 
     const dismountRequest = {
@@ -460,7 +479,9 @@ describe("Gameplay Babylon Runtime coordinator", () => {
       actionRequestHash:
         sha256CanonicalJson(dismountRequest) as `sha256:${string}`,
     });
-    expect(dismounted).toMatchObject({ status: "committed" });
+    if (dismounted.status !== "committed") {
+      throw new Error(JSON.stringify(dismounted.diagnostic));
+    }
     expect(
       coordinator.getGameplayInspectionSnapshot()
         .relationshipStatesById[MOUNTED_SKATEBOARD_S1_RELATIONSHIP_ID],

@@ -20,6 +20,8 @@ import {
   parseGameplayDiagnosticV1,
   parseGameplayEventV1,
   parseGameplayInspectionSnapshotV1,
+  parseLocomotionCapabilityStateV2,
+  parseLocomotionTransitionEventV1,
   parseGameplaySemanticFactV1,
   parseWorldStateSnapshotV1,
   type GameplayCapacityBudgetV1,
@@ -36,6 +38,155 @@ import { isNil } from "lodash-es";
 import {
   parseGameplaySemanticFactV1 as parseGameplaySemanticFactV1FromBarrel,
 } from "@whitebox-world/gameplay-contracts";
+
+const activeLocomotionV2 = {
+  schemaVersion: 2,
+  status: "active",
+  mobilityMode: "airborne",
+  gait: "none",
+  verticalPhase: "rising",
+  supportMode: "unsupported",
+  movementMedium: "air",
+  facingYawRadians: 0.25,
+  linearVelocity: { x: 1, y: 2, z: -3 },
+  horizontalSpeedMetersPerSecond: Math.sqrt(10),
+  committedTick: 12,
+  phaseEnteredTick: 10,
+  transitionSequence: 4,
+} as const;
+
+describe("LocomotionCapabilityStateV2", () => {
+  it("parses and deeply freezes the exact active state", () => {
+    const parsed = parseLocomotionCapabilityStateV2(activeLocomotionV2);
+
+    expect(parsed).toEqual(activeLocomotionV2);
+    expect(Object.isFrozen(parsed)).toBe(true);
+    expect(parsed.status).toBe("active");
+    if (parsed.status !== "active") throw new Error("Expected active locomotion.");
+    expect(Object.isFrozen(parsed.linearVelocity)).toBe(true);
+  });
+
+  it("keeps the suspended branch closed over relationship and sequence only", () => {
+    const suspended = {
+      schemaVersion: 2,
+      status: "suspended",
+      suspendedByRelationshipId: "mounted-on-primary",
+      committedTick: 18,
+      transitionSequence: 7,
+    } as const;
+
+    expect(parseLocomotionCapabilityStateV2(suspended)).toEqual(suspended);
+    expect(() => parseLocomotionCapabilityStateV2({
+      ...suspended,
+      linearVelocity: { x: 0, y: 0, z: 0 },
+    })).toThrow("closed LocomotionCapabilityStateV2 schema");
+  });
+
+  it.each([
+    ["grounded rising", {
+      ...activeLocomotionV2,
+      mobilityMode: "grounded",
+      movementMedium: "ground",
+      supportMode: "supported",
+    }],
+    ["airborne supported", {
+      ...activeLocomotionV2,
+      supportMode: "supported",
+    }],
+    ["grounded air medium", {
+      ...activeLocomotionV2,
+      mobilityMode: "grounded",
+      supportMode: "supported",
+    }],
+    ["airborne walk gait", {
+      ...activeLocomotionV2,
+      gait: "walk",
+    }],
+    ["phase entered after commit", {
+      ...activeLocomotionV2,
+      phaseEnteredTick: 13,
+    }],
+  ])("rejects the illegal %s combination", (_label, input) => {
+    expect(() => parseLocomotionCapabilityStateV2(input)).toThrow(
+      "closed LocomotionCapabilityStateV2 schema",
+    );
+  });
+
+  it.each([
+    ["unknown key", { ...activeLocomotionV2, providerHandle: "native" }],
+    ["NaN facing", { ...activeLocomotionV2, facingYawRadians: Number.NaN }],
+    ["infinite velocity", {
+      ...activeLocomotionV2,
+      linearVelocity: { x: 1, y: Number.POSITIVE_INFINITY, z: 0 },
+    }],
+    ["negative speed", {
+      ...activeLocomotionV2,
+      horizontalSpeedMetersPerSecond: -1,
+    }],
+    ["derived horizontal speed mismatch", {
+      ...activeLocomotionV2,
+      horizontalSpeedMetersPerSecond: 99,
+    }],
+    ["fractional tick", { ...activeLocomotionV2, committedTick: 1.5 }],
+  ])("rejects %s", (_label, input) => {
+    expect(() => parseLocomotionCapabilityStateV2(input)).toThrow(
+      "closed LocomotionCapabilityStateV2 schema",
+    );
+  });
+});
+
+describe("LocomotionTransitionEventV1", () => {
+  const eventBase = {
+    schemaVersion: 1,
+    committedTick: 12,
+    transitionSequence: 4,
+  } as const;
+
+  it.each([
+    ["phase-changed", {
+      ...eventBase,
+      type: "phase-changed",
+      fromVerticalPhase: "rising",
+      toVerticalPhase: "apex",
+    }],
+    ["apex-crossed", { ...eventBase, type: "apex-crossed" }],
+    ["landed", { ...eventBase, type: "landed" }],
+  ])("parses and freezes exactly one %s schema", (_label, event) => {
+    const parsed = parseLocomotionTransitionEventV1(event);
+
+    expect(parsed).toEqual(event);
+    expect(Object.isFrozen(parsed)).toBe(true);
+  });
+
+  it.each([
+    ["phase fields on apex", {
+      ...eventBase,
+      type: "apex-crossed",
+      fromVerticalPhase: "rising",
+      toVerticalPhase: "apex",
+    }],
+    ["missing phase target", {
+      ...eventBase,
+      type: "phase-changed",
+      fromVerticalPhase: "rising",
+    }],
+    ["identity phase transition", {
+      ...eventBase,
+      type: "phase-changed",
+      fromVerticalPhase: "apex",
+      toVerticalPhase: "apex",
+    }],
+    ["non-finite sequence", {
+      ...eventBase,
+      type: "landed",
+      transitionSequence: Number.POSITIVE_INFINITY,
+    }],
+  ])("rejects %s", (_label, event) => {
+    expect(() => parseLocomotionTransitionEventV1(event)).toThrow(
+      "closed LocomotionTransitionEventV1 schema",
+    );
+  });
+});
 
 const bindCommand = {
   schemaVersion: 1,

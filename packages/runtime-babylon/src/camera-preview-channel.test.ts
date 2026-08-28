@@ -1,8 +1,12 @@
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 
+import { FreeCamera } from "@babylonjs/core/Cameras/freeCamera.js";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
-import type { Scene } from "@babylonjs/core/scene.pure.js";
+import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
+import { Scene } from "@babylonjs/core/scene.js";
+import type { ViewTargetSampleV1 } from "@whitebox-world/runtime-contracts";
+import type { PhysicsWorldQueryPortV1 } from "@whitebox-world/runtime-framework";
 import { describe, expect, it, vi } from "vitest";
 
 // Test-only Registry access via a cross-workspace relative path; production
@@ -11,6 +15,11 @@ import { builtInSubjectResourceRegistry } from "../../subject-registry/src/index
 
 import { createValidAuthoringSpecV4 } from "../../authoring/src/test-fixture";
 import { BabylonWorldRuntime } from "./babylon-world-runtime";
+import {
+  CameraDirectorV1,
+  legacyViewTargetToCommittedCameraContextV2ForTask6,
+} from "./camera-director";
+import { SpringArmComponentV1 } from "./spring-arm-component";
 import { bindRuntimeTestPossession } from "./runtime-test-possession";
 import { compileRuntimeTestPlanV5 } from "./runtime-test-plan";
 
@@ -153,13 +162,13 @@ async function createCameraPreviewChannelRuntime(options?: {
       {
         id: "test-invalid-distance",
         priority: 2_001,
-        when: { requiredCameraContextTags: ["aim"] },
+        when: { gaits: ["run"] },
         cameraModifierRefs: [distanceModifierRef],
       },
       {
         id: "test-invalid-maximum",
         priority: 2_000,
-        when: { requiredCameraContextTags: ["sprint"] },
+        when: { gaits: ["run"] },
         cameraModifierRefs: [maximumModifierRef],
       },
     ];
@@ -284,13 +293,21 @@ function expectSafeActualArm(camera: ReturnType<BabylonWorldRuntime["snapshot"]>
     actualPositionMetersXYZ === undefined ||
     desiredTargetPositionMetersXYZ === undefined
   ) {
-    throw new Error("Expected collision-retracted Follow Arm telemetry.");
+    throw new Error("Expected collision-retracted Spring Arm telemetry.");
   }
   expect(camera.isCollisionRetracted).toBe(true);
   expect(distanceMeters(
     actualPositionMetersXYZ,
     desiredTargetPositionMetersXYZ,
   )).toBeLessThanOrEqual(safeArmLengthMeters + 0.000001);
+}
+
+function subjectStateWithoutLocomotionCommittedTick(input: unknown): unknown {
+  const clone = JSON.parse(JSON.stringify(input)) as {
+    locomotion?: Record<string, unknown>;
+  };
+  if (clone.locomotion !== undefined) delete clone.locomotion.committedTick;
+  return clone;
 }
 
 function expectTargetAndFovRemainTransitioning(
@@ -321,7 +338,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       const before = runtime.snapshot().camera;
 
       await expect(runtime.runFixedInput({
-        actions: ["aim", "run"],
+        actions: ["move-forward", "run"],
         ticks: 1,
       })).rejects.toThrow(/WORLDKIT_RUNTIME_CAMERA_RESOLVED_PARAMETERS_INVALID/);
 
@@ -379,6 +396,8 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     try {
       await runtime.runFixedInput({ actions: [], ticks: 4 });
       runtime.setCameraViewPreference({ mode: "first-person" });
+      // Preference changes are staged; a new committed Tick owns the next pose.
+      await runtime.runFixedInput({ actions: [], ticks: 1 });
       const beforePreview = runtime.snapshot();
 
       expect(beforePreview.camera.selectionDecision?.cameraViewPreference).toEqual({
@@ -399,8 +418,12 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       expect(afterPreview.subjectStatesByEntityId).toEqual(
         beforePreview.subjectStatesByEntityId,
       );
-      expect(afterPreview.camera).toHaveProperty("selectedTargetSocketId");
-      expect(afterPreview.camera).toHaveProperty("targetSocketPositionMetersXYZ");
+      expect(afterPreview.camera.selectedTargetSocketId).toBeUndefined();
+      expect(afterPreview.camera.targetSocketPositionMetersXYZ).toBeUndefined();
+      expect(afterPreview.camera.isTargetSocketFallback).toBe(true);
+      expect(afterPreview.camera.selectionDecision?.diagnostics).toContainEqual(
+        expect.objectContaining({ code: "CAMERA_REQUIRED_SOCKET_MISSING" }),
+      );
       expect(afterPreview.camera).toHaveProperty("finalFovDegrees");
       expect(afterPreview.camera).toHaveProperty("rotationLagRadiansXYZ");
       expect(afterPreview.camera).toHaveProperty("fixedStepDeltaSeconds");
@@ -423,6 +446,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       setCameraProfile(runtime,
         "worldkit://camera-profile/first-person.standard@1",
       );
+      await runtime.runFixedInput({ actions: [], ticks: 1 });
       const beforePreview = runtime.snapshot();
 
       runtime.applyCameraPreview({
@@ -432,10 +456,15 @@ describe("camera preview channel stays out of Gameplay truth", () => {
           },
         },
       });
-      const afterPreview = runtime.snapshot();
+      const afterPreview = await runtime.runFixedInput({ actions: [], ticks: 1 });
 
-      expect(afterPreview.subjectStatesByEntityId).toEqual(
-        beforePreview.subjectStatesByEntityId,
+      const beforeSubject = beforePreview.subjectStatesByEntityId.player;
+      const afterSubject = afterPreview.subjectStatesByEntityId.player;
+      expect(afterSubject?.locomotion?.committedTick).toBe(
+        (beforeSubject?.locomotion?.committedTick ?? -1) + 1,
+      );
+      expect(subjectStateWithoutLocomotionCommittedTick(afterSubject)).toEqual(
+        subjectStateWithoutLocomotionCommittedTick(beforeSubject),
       );
       expect(afterPreview.camera.isTargetSocketFallback).toBe(true);
       expect(afterPreview.camera.targetSocketPositionMetersXYZ).toBeUndefined();
@@ -458,6 +487,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     try {
       await runtime.runFixedInput({ actions: [], ticks: 4 });
       setCameraProfile(runtime, ORBIT_REF);
+      await runtime.runFixedInput({ actions: [], ticks: 1 });
       const beforePreview = runtime.snapshot();
 
       runtime.applyCameraPreview({
@@ -544,7 +574,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     }
   }, 15_000);
 
-  it("uses the Follow Arm safe position on the first orbit tick into an extremely close blocker", async () => {
+  it("uses the Spring Arm safe position on the first orbit tick into an extremely close blocker", async () => {
     const runtime = await createCameraPreviewChannelRuntime({
       blockCameraArm: true,
       cameraBlockerZMeters: 31,
@@ -572,7 +602,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       }
       const safeArmLengthMeters = collided.camera.safeArmLengthMeters;
       if (safeArmLengthMeters === undefined) {
-        throw new Error("Expected collision-retracted Follow Arm telemetry.");
+        throw new Error("Expected collision-retracted Spring Arm telemetry.");
       }
       const desiredTarget = collided.camera.desiredTargetPositionMetersXYZ;
       const actualPosition = collided.camera.actualPositionMetersXYZ;
@@ -691,7 +721,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     }
   }, 15_000);
 
-  it("keeps a collision-retracted Follow Arm continuous across sprint modifier activation and release", async () => {
+  it("keeps a collision-retracted Spring Arm continuous while raw sprint input remains semantically unavailable", async () => {
     const runtime = await createCameraPreviewChannelRuntime({
       blockCameraArm: true,
     });
@@ -703,7 +733,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
         requestedArmLengthMeters === undefined ||
         safeArmLengthMeters === undefined ||
         effectiveArmLengthMeters === undefined
-      ) throw new Error("Expected collision-retracted Follow Arm telemetry.");
+      ) throw new Error("Expected collision-retracted Spring Arm telemetry.");
       expect(effectiveArmLengthMeters).toBeLessThanOrEqual(safeArmLengthMeters + 0.000001);
       expect(effectiveArmLengthMeters).toBeLessThan(requestedArmLengthMeters);
     };
@@ -721,7 +751,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
         ticks: 1,
       });
       expect(sprinting.camera.activeCameraProfileRef).toBe(ORBIT_REF);
-      expect(sprinting.camera.activeCameraModifierRefs).toContain(
+      expect(sprinting.camera.activeCameraModifierRefs).not.toContain(
         "worldkit://camera-modifier/sprint-emphasis@1",
       );
       assertSafeRetractedArm(sprinting.camera);
@@ -763,7 +793,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
         const snapshot = await runtime.runFixedInput({ actions: [], ticks: 1 });
         const effectiveArmLengthMeters = snapshot.camera.effectiveArmLengthMeters;
         if (effectiveArmLengthMeters === undefined) {
-          throw new Error("Expected third-person Follow Arm telemetry.");
+          throw new Error("Expected third-person Spring Arm telemetry.");
         }
         recoverySamples.push(effectiveArmLengthMeters);
         requestedArmLengthMeters = snapshot.camera.requestedArmLengthMeters;
@@ -786,7 +816,8 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     const runtime = await createCameraPreviewChannelRuntime();
     try {
       await runtime.runFixedInput({ actions: [], ticks: 4 });
-      const snapshot = setCameraProfile(runtime, ORBIT_REF);
+      setCameraProfile(runtime, ORBIT_REF);
+      const snapshot = await runtime.runFixedInput({ actions: [], ticks: 1 });
 
       expect(snapshot.camera.activeCameraProfileRef).toBe(ORBIT_REF);
       expect(snapshot.camera.activeCameraModifierRefs).not.toContain(
@@ -838,6 +869,10 @@ describe("camera preview channel stays out of Gameplay truth", () => {
           [ORBIT_REF]: { distanceMeters: 7, targetHeightMeters: 2.75 },
         },
       });
+      await Promise.all([
+        firstRuntime.runFixedInput({ actions: [], ticks: 1 }),
+        secondRuntime.runFixedInput({ actions: [], ticks: 1 }),
+      ]);
 
       expect(firstRuntime.getCameraPreviewState().tuningByProfileRef).toEqual({
         [ORBIT_REF]: { distanceMeters: 4, targetHeightMeters: 1.5 },
@@ -1011,15 +1046,24 @@ describe("camera preview channel stays out of Gameplay truth", () => {
           [ORBIT_REF]: { lookSensitivityXRatio: 3 },
         },
       });
+      // Commit the staged Profile + Preview before applying input that reads
+      // the resolved sensitivity.
+      await runtime.runFixedInput({ actions: [], ticks: 1 });
       runtime.adjustCameraView({ yawDeltaRadians: 1 });
       const withPreview = await runtime.runFixedInput({
         actions: ["move-forward"],
         ticks: 30,
       });
 
-      expect(withPreview.subjectStatesByEntityId.player).toEqual(
+      expect(withPreview.subjectStatesByEntityId.player?.locomotion?.committedTick)
+        .toBe(withPreview.tick);
+      expect(withoutPreview.subjectStatesByEntityId.player?.locomotion?.committedTick)
+        .toBe(withoutPreview.tick);
+      expect(subjectStateWithoutLocomotionCommittedTick(
+        withPreview.subjectStatesByEntityId.player,
+      )).toEqual(subjectStateWithoutLocomotionCommittedTick(
         withoutPreview.subjectStatesByEntityId.player,
-      );
+      ));
       expect(withPreview.camera.positionMetersXYZ).not.toEqual(
         withoutPreview.camera.positionMetersXYZ,
       );
@@ -1033,6 +1077,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     try {
       await runtime.runFixedInput({ actions: [], ticks: 4 });
       setCameraProfile(runtime, ORBIT_REF);
+      await runtime.runFixedInput({ actions: [], ticks: 1 });
       const stableRef = runtime.snapshot().camera.activeCameraProfileRef;
 
       expect(() => setCameraProfile(runtime, "not-a-ref")).toThrow(RangeError);
@@ -1048,7 +1093,9 @@ describe("camera preview channel stays out of Gameplay truth", () => {
 
       runtime.adjustCameraView({ yawDeltaRadians: 0.4, zoomDeltaMeters: 1 });
       // Reset returns Auto/default deterministically and clears manual view state.
-      const firstDefault = runtime.resetCameraViewPreference().camera.activeCameraProfileRef;
+      runtime.resetCameraViewPreference();
+      const firstDefault = (await runtime.runFixedInput({ actions: [], ticks: 1 }))
+        .camera.activeCameraProfileRef;
       expect(runtime.snapshot().camera.selectionDecision?.cameraViewPreference).toEqual({
         mode: "auto",
       });
@@ -1058,7 +1105,10 @@ describe("camera preview channel stays out of Gameplay truth", () => {
         viewDistanceOffsetMeters: 0,
       });
       setCameraProfile(runtime, FOLLOW_REF);
-      const secondDefault = runtime.resetCameraViewPreference().camera.activeCameraProfileRef;
+      await runtime.runFixedInput({ actions: [], ticks: 1 });
+      runtime.resetCameraViewPreference();
+      const secondDefault = (await runtime.runFixedInput({ actions: [], ticks: 1 }))
+        .camera.activeCameraProfileRef;
       expect(secondDefault).toBe(firstDefault);
     } finally {
       await runtime.dispose();
@@ -1070,6 +1120,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     try {
       await runtime.runFixedInput({ actions: [], ticks: 4 });
       setCameraProfile(runtime, ORBIT_REF);
+      await runtime.runFixedInput({ actions: [], ticks: 1 });
       runtime.adjustCameraView({ yawDeltaRadians: 0.35, zoomDeltaMeters: 0.5 });
       const before = runtime.snapshot().camera;
       const prepared = runtime.prepareCameraViewPreference({
@@ -1079,9 +1130,13 @@ describe("camera preview channel stays out of Gameplay truth", () => {
 
       expect(runtime.snapshot().camera).toEqual(before);
       expect(prepared.previous.camera).toEqual(before);
-      expect(prepared.next.camera.activeCameraProfileRef).toBe(FOLLOW_REF);
+      // A prepared preference only stages Camera state; it cannot re-query or
+      // commit a second pose for the already committed Tick.
+      expect(prepared.next.camera).toEqual(before);
       prepared.commitPrepared();
-      expect(runtime.snapshot().camera.activeCameraProfileRef).toBe(FOLLOW_REF);
+      expect(runtime.snapshot().camera).toEqual(before);
+      expect((await runtime.runFixedInput({ actions: [], ticks: 1 }))
+        .camera.activeCameraProfileRef).toBe(FOLLOW_REF);
       prepared.rollbackPrepared();
       expect(runtime.snapshot().camera).toEqual(before);
 
@@ -1146,14 +1201,43 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     try {
       await runtime.runFixedInput({ actions: [], ticks: 4 });
       setCameraProfile(runtime, ORBIT_REF);
-      const forwardBefore = runtime.snapshot().subjectStatesByEntityId.player?.forwardXYZ;
-      runtime.adjustCameraView({ yawDeltaRadians: 1.2, pitchDeltaRadians: 0.3 });
-      // Orbit alone never rotates the Subject.
-      expect(runtime.snapshot().subjectStatesByEntityId.player?.forwardXYZ)
-        .toEqual(forwardBefore);
+      await runtime.runFixedInput({ actions: [], ticks: 1 });
+      const beforeOrbit = runtime.snapshot();
+      const subjectBefore = beforeOrbit.subjectStatesByEntityId.player;
+      const facingBytesBefore = JSON.stringify(subjectBefore?.forwardXYZ);
+      const locomotionBytesBefore = JSON.stringify({
+        locomotionMode: subjectBefore?.locomotionMode,
+        movementMedium: subjectBefore?.movementMedium,
+        speedMetersPerSecond: subjectBefore?.speedMetersPerSecond,
+        activeMotionProfileRef: subjectBefore?.activeMotionProfileRef,
+        activeMotionKernelRef: subjectBefore?.activeMotionKernelRef,
+        motionTags: subjectBefore?.motionTags,
+      });
+      const cameraPoseBytesBefore = JSON.stringify(beforeOrbit.camera.positionMetersXYZ);
+      const staged = runtime.adjustCameraView({
+        yawDeltaRadians: 1.2,
+        pitchDeltaRadians: 0.3,
+      });
+      // Orbit input only stages CameraDirector state. The already committed
+      // Camera pose, Subject facing and Locomotion projection stay byte-identical.
+      expect(JSON.stringify(staged.camera.positionMetersXYZ)).toBe(cameraPoseBytesBefore);
+      expect(JSON.stringify(staged.subjectStatesByEntityId.player?.forwardXYZ))
+        .toBe(facingBytesBefore);
+      expect(JSON.stringify({
+        locomotionMode: staged.subjectStatesByEntityId.player?.locomotionMode,
+        movementMedium: staged.subjectStatesByEntityId.player?.movementMedium,
+        speedMetersPerSecond: staged.subjectStatesByEntityId.player?.speedMetersPerSecond,
+        activeMotionProfileRef: staged.subjectStatesByEntityId.player?.activeMotionProfileRef,
+        activeMotionKernelRef: staged.subjectStatesByEntityId.player?.activeMotionKernelRef,
+        motionTags: staged.subjectStatesByEntityId.player?.motionTags,
+      })).toBe(locomotionBytesBefore);
+      const committedOrbit = await runtime.runFixedInput({ actions: [], ticks: 1 });
+      expect(JSON.stringify(committedOrbit.camera.positionMetersXYZ))
+        .not.toBe(cameraPoseBytesBefore);
       // Moving afterwards turns the Subject toward the committed view direction.
       const moved = await runtime.runFixedInput({ actions: ["move-forward"], ticks: 10 });
-      expect(moved.subjectStatesByEntityId.player?.forwardXYZ).not.toEqual(forwardBefore);
+      expect(JSON.stringify(moved.subjectStatesByEntityId.player?.forwardXYZ))
+        .not.toBe(facingBytesBefore);
       // Reset clears the user view offsets immediately.
       const afterReset = runtime.reset().camera;
       expect(afterReset.viewYawOffsetRadians).toBe(0);
@@ -1190,6 +1274,292 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       expect(recentered.camera.viewYawOffsetRadians).toBeCloseTo(0, 6);
     } finally {
       await runtime.dispose();
+    }
+  });
+
+  it("accepts only byte-identical committed Context on a repeated Director Tick", () => {
+    const executionPlan = compileRuntimeTestPlanV5(
+      createFlatTerrainCapabilitySpec(),
+      { subjectResourceRegistry: builtInSubjectResourceRegistry },
+    );
+    const subject = executionPlan.subjects[0];
+    if (subject === undefined) throw new Error("CameraDirector fixture Subject missing.");
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    const camera = new FreeCamera("camera.test", Vector3.Zero(), scene);
+    let queryCount = 0;
+    const queryPort: PhysicsWorldQueryPortV1 = {
+      sweepSphere: () => {
+        queryCount += 1;
+        return undefined;
+      },
+    };
+    const director = new CameraDirectorV1(executionPlan, camera, scene, queryPort);
+    const springArm = new SpringArmComponentV1();
+    const sample: ViewTargetSampleV1 = {
+      controlledEntityId: subject.entityId,
+      entityId: subject.entityId,
+      targetPositionMetersXYZ: [0, 1, 0],
+      forwardXYZ: [0, 0, -1],
+      upXYZ: [0, 1, 0],
+      velocityMetersPerSecondXYZ: [0, 0, 0],
+      approximateRadiusMeters: 0.5,
+      socketPositionsMetersXYZById: {},
+      activeMotionKernelRef: "worldkit://motion-kernel/test@1",
+      motionTags: [],
+      movementMedium: "ground",
+      relationshipContexts: [],
+      relationshipRole: "none",
+      cameraContextTags: [],
+    };
+    try {
+      const context = legacyViewTargetToCommittedCameraContextV2ForTask6(sample, 7);
+      director.update(
+        subject.capabilityAssembly.cameraContext,
+        sample,
+        1 / 60,
+        context,
+        springArm,
+      );
+      const poseBytes = JSON.stringify(camera.position.asArray());
+      director.adjustView({ yawDeltaRadians: 0.5 });
+      director.update(
+        subject.capabilityAssembly.cameraContext,
+        // This legacy placeholder is not a solver authority input.
+        { ...sample, approximateRadiusMeters: 99 },
+        1 / 60,
+        structuredClone(context),
+        springArm,
+      );
+      expect(queryCount).toBe(1);
+      expect(JSON.stringify(camera.position.asArray())).toBe(poseBytes);
+
+      const conflictingContext = {
+        ...structuredClone(context),
+        subjectPose: {
+          ...context.subjectPose,
+          positionMetersXYZ: [1, 1, 0] as const,
+        },
+      };
+      expect(() => director.update(
+        subject.capabilityAssembly.cameraContext,
+        sample,
+        1 / 60,
+        conflictingContext,
+        springArm,
+      )).toThrow("3C_CAMERA_CONTEXT_UNCOMMITTED");
+      expect(() => director.update(
+        subject.capabilityAssembly.cameraContext,
+        sample,
+        1 / 60,
+        legacyViewTargetToCommittedCameraContextV2ForTask6(sample, 6),
+        springArm,
+      )).toThrow("3C_CAMERA_CONTEXT_UNCOMMITTED");
+      expect(queryCount).toBe(1);
+    } finally {
+      director.dispose();
+      engine.dispose();
+    }
+  });
+
+  it("publishes the legacy seam as explicitly unavailable with neutral semantic environment", () => {
+    const executionPlan = compileRuntimeTestPlanV5(
+      createFlatTerrainCapabilitySpec(),
+      { subjectResourceRegistry: builtInSubjectResourceRegistry },
+    );
+    const subject = executionPlan.subjects[0];
+    if (subject === undefined) throw new Error("CameraDirector fixture Subject missing.");
+    const sample: ViewTargetSampleV1 = {
+      controlledEntityId: subject.entityId,
+      entityId: subject.entityId,
+      targetPositionMetersXYZ: [0, 1, 0],
+      forwardXYZ: [0, 0, -1],
+      upXYZ: [0, 1, 0],
+      velocityMetersPerSecondXYZ: [4, 10, 0],
+      approximateRadiusMeters: 0.5,
+      socketPositionsMetersXYZById: { head: [0, 2, 0] },
+      activeMotionKernelRef: "worldkit://motion-kernel/legacy@1",
+      motionTags: ["sprint"],
+      movementMedium: "air",
+      relationshipContexts: [],
+      relationshipRole: "rider",
+      cameraContextTags: ["legacy-context", "sprint"],
+    };
+
+    const context = legacyViewTargetToCommittedCameraContextV2ForTask6(sample, 17);
+    const movingGroundContext = legacyViewTargetToCommittedCameraContextV2ForTask6({
+      ...sample,
+      velocityMetersPerSecondXYZ: [8, 0, 0],
+      movementMedium: "ground",
+      motionTags: ["run", "sprint"],
+    }, 18);
+
+    expect(context.locomotion).toEqual({
+      schemaVersion: 2,
+      status: "suspended",
+      suspendedByRelationshipId: "3c-task6-authority-unavailable",
+      committedTick: 17,
+      transitionSequence: 0,
+    });
+    expect(context.semanticAuthorityStatus).toBe("unavailable");
+    expect(context.actionSummary).toEqual({ status: "unavailable" });
+    expect(context.environment).toEqual({
+      relationshipRole: "none",
+      relationshipContexts: [],
+      socketPositionsMetersXYZById: {},
+      cameraContextTags: [],
+    });
+    expect(movingGroundContext.locomotion).toEqual({
+      schemaVersion: 2,
+      status: "suspended",
+      suspendedByRelationshipId: "3c-task6-authority-unavailable",
+      committedTick: 18,
+      transitionSequence: 0,
+    });
+    expect(movingGroundContext.semanticAuthorityStatus).toBe("unavailable");
+    expect(movingGroundContext.actionSummary).toEqual({ status: "unavailable" });
+    expect(movingGroundContext.environment).toEqual({
+      relationshipRole: "none",
+      relationshipContexts: [],
+      socketPositionsMetersXYZById: {},
+      cameraContextTags: [],
+    });
+  });
+
+  it("rolls a failed Tick back atomically and preserves the next Profile transition", () => {
+    const executionPlan = compileRuntimeTestPlanV5(
+      createFlatTerrainCapabilitySpec(),
+      { subjectResourceRegistry: builtInSubjectResourceRegistry },
+    );
+    const subject = executionPlan.subjects[0];
+    if (subject === undefined) throw new Error("CameraDirector fixture Subject missing.");
+    const cameraContext = subject.capabilityAssembly.cameraContext;
+    const alternateProfileRef = cameraContext.rules
+      .flatMap((rule) => rule.cameraRigProfileRef === undefined ? [] : [rule.cameraRigProfileRef])
+      .find((ref) => ref !== cameraContext.defaultCameraRigProfileRef);
+    if (alternateProfileRef === undefined) throw new Error("Alternate Camera Profile missing.");
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    const camera = new FreeCamera("camera.atomic", Vector3.Zero(), scene);
+    let failQuery = false;
+    const queryPort: PhysicsWorldQueryPortV1 = {
+      sweepSphere: () => {
+        if (failQuery) throw new Error("provider failure");
+        return undefined;
+      },
+    };
+    const director = new CameraDirectorV1(executionPlan, camera, scene, queryPort);
+    const springArm = new SpringArmComponentV1();
+    const sample: ViewTargetSampleV1 = {
+      controlledEntityId: subject.entityId,
+      entityId: subject.entityId,
+      targetPositionMetersXYZ: [0, 1, 0],
+      forwardXYZ: [0, 0, -1],
+      upXYZ: [0, 1, 0],
+      velocityMetersPerSecondXYZ: [0, 0, 0],
+      approximateRadiusMeters: 0.5,
+      socketPositionsMetersXYZById: {},
+      activeMotionKernelRef: "worldkit://motion-kernel/test@1",
+      motionTags: [],
+      movementMedium: "ground",
+      relationshipContexts: [],
+      relationshipRole: "none",
+      cameraContextTags: [],
+    };
+    const poseBytes = () => JSON.stringify({
+      position: camera.position.asArray(),
+      rotation: camera.rotation.asArray(),
+      rotationQuaternionState: camera.rotationQuaternion === undefined
+        ? "undefined"
+        : camera.rotationQuaternion === null
+          ? "null"
+          : camera.rotationQuaternion.asArray(),
+      fov: camera.fov,
+    });
+    try {
+      director.update(cameraContext, sample, 1 / 60,
+        legacyViewTargetToCommittedCameraContextV2ForTask6(sample, 1), springArm);
+      expect(director.setViewPreference(cameraContext, {
+        mode: "camera-rig-profile",
+        cameraRigProfileRef: alternateProfileRef,
+      }).ok).toBe(true);
+      const beforeSnapshot = JSON.stringify(director.snapshot());
+      const beforePose = poseBytes();
+      failQuery = true;
+      expect(() => director.update(cameraContext, sample, 1 / 60,
+        legacyViewTargetToCommittedCameraContextV2ForTask6(sample, 2), springArm))
+        .toThrow("3C_CAMERA_QUERY_UNAVAILABLE");
+      expect(JSON.stringify(director.snapshot())).toBe(beforeSnapshot);
+      expect(poseBytes()).toBe(beforePose);
+      expect(() => director.update(cameraContext, sample, 1 / 60,
+        legacyViewTargetToCommittedCameraContextV2ForTask6(sample, 2), springArm))
+        .toThrow("3C_CAMERA_QUERY_UNAVAILABLE");
+
+      failQuery = false;
+      director.update(cameraContext, sample, 1 / 60,
+        legacyViewTargetToCommittedCameraContextV2ForTask6(sample, 3), springArm);
+      expect(director.snapshot()).toMatchObject({
+        activeCameraProfileRef: alternateProfileRef,
+        profileTransitionProgressRatio: 0,
+      });
+    } finally {
+      director.dispose();
+      engine.dispose();
+    }
+  });
+
+  it("resets Director state without owning the injected physics port, then closes lifecycle", () => {
+    const executionPlan = compileRuntimeTestPlanV5(
+      createFlatTerrainCapabilitySpec(),
+      { subjectResourceRegistry: builtInSubjectResourceRegistry },
+    );
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    const queryPort: PhysicsWorldQueryPortV1 = {
+      sweepSphere: () => undefined,
+    };
+    const director = new CameraDirectorV1(
+      executionPlan,
+      new FreeCamera("camera.test", Vector3.Zero(), scene),
+      scene,
+      queryPort,
+    );
+    try {
+      director.reset();
+      director.dispose();
+      director.dispose();
+      const snapshotBytes = JSON.stringify(director.snapshot());
+      const previewBytes = JSON.stringify(director.previewState());
+      expect(Object.isFrozen(director.snapshot())).toBe(true);
+      expect(Object.isFrozen(director.snapshot().activeCameraModifierRefs)).toBe(true);
+      expect(Object.isFrozen(director.previewState())).toBe(true);
+      expect(Object.isFrozen(director.previewState().activeCameraModifierRefs)).toBe(true);
+      expect(Object.isFrozen(director.previewState().tuningByProfileRef)).toBe(true);
+      const postDisposeMutators = [
+        () => director.setViewPreference(
+          executionPlan.subjects[0]!.capabilityAssembly.cameraContext,
+          {
+            mode: "camera-rig-profile",
+            cameraRigProfileRef: "worldkit://camera-profile/hostile@1",
+          },
+        ),
+        () => director.resetViewPreference(),
+        () => director.setInputActions(["camera-shoulder-swap"]),
+        () => director.adjustView({ yawDeltaRadians: 0.5 }),
+        () => director.resetView(),
+        () => director.applyPreview(
+          {},
+          executionPlan.subjects[0]!.capabilityAssembly.cameraContext,
+        ),
+        () => director.reset(),
+      ];
+      for (const mutate of postDisposeMutators) {
+        expect(mutate).toThrow("3C_RUNTIME_DISPOSED");
+        expect(JSON.stringify(director.snapshot())).toBe(snapshotBytes);
+        expect(JSON.stringify(director.previewState())).toBe(previewBytes);
+      }
+    } finally {
+      engine.dispose();
     }
   });
 });

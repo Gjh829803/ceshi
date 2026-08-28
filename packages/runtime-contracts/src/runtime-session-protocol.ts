@@ -1,13 +1,13 @@
 import {
   parseGameplayCommandReceiptV1,
   parseGameplayCommandV1,
+  parseGameplayCapabilityStateV1,
   parseGameplayEventV1,
   parseGameplayInspectionSnapshotV1,
   type GameplayCapabilityStateV1,
   type GameplayCommandReceiptV1,
   type GameplayCommandV1,
   type GameplayEventV1,
-  type LocomotionCapabilityStateV1,
   type Sha256HashV1,
   type SpatialEntityStateV1,
 } from "@whitebox-world/gameplay-contracts";
@@ -16,7 +16,7 @@ import {
   cameraRigParametersViolateInvariantsV1,
   type CameraDiagnosticV1,
   type CameraRigParametersV1,
-  type CameraSelectionDecisionV1,
+  type CameraSelectionDecisionV2,
   type CameraSelectionExplainV1,
   type CameraViewPreferenceV1,
 } from "@whitebox-world/camera";
@@ -176,9 +176,11 @@ const CAMERA_DIAGNOSTIC_CODES = new Set<CameraDiagnosticV1["code"]>([
   "CAMERA_PROFILE_INVALID",
   "CAMERA_CONTEXT_RULE_AMBIGUOUS",
   "CAMERA_CONTEXT_RULE_INVALID",
+  "CAMERA_PREFERENCE_INVALID",
   "CAMERA_PREFERENCE_NOT_ALLOWED",
   "CAMERA_FIRST_PERSON_UNAVAILABLE",
   "CAMERA_REQUIRED_SOCKET_MISSING",
+  "CAMERA_SEMANTIC_AUTHORITY_UNAVAILABLE",
   "CAMERA_PREFERENCE_CONTEXT_INCOMPATIBLE",
 ]);
 const CAMERA_PARAMETER_NAMES = new Set<string>(CAMERA_RIG_PARAMETER_NAMES_V1);
@@ -401,52 +403,6 @@ function validateSpatialEntityStateV1(value: unknown): SpatialEntityStateV1 {
   return canonicalClone(record, schemaName) as unknown as SpatialEntityStateV1;
 }
 
-function validateLocomotionCapabilityStateV1(
-  value: unknown,
-): LocomotionCapabilityStateV1 {
-  const schemaName = "WorldRuntimeSnapshotV4";
-  const record = snapshotDataRecord(value) ?? invalid(schemaName);
-  const common = [
-    "id",
-    "kind",
-    "ownerEntityId",
-    "locomotionCapabilityRef",
-    "locomotionCapabilityHash",
-    "mode",
-  ] as const;
-  if (
-    !isNonEmptyString(record.id) ||
-    record.kind !== "locomotion-capability-state" ||
-    !isNonEmptyString(record.ownerEntityId) ||
-    !isNonEmptyString(record.locomotionCapabilityRef) ||
-    !isSha256(record.locomotionCapabilityHash)
-  ) return invalid(schemaName);
-  if (record.mode === "suspended") {
-    if (
-      !hasExactKeys(record, [...common, "suspendedByRelationshipId"]) ||
-      !isNonEmptyString(record.suspendedByRelationshipId)
-    ) return invalid(schemaName);
-  } else if (
-    ["idle", "walk", "run", "airborne"].includes(record.mode as string)
-  ) {
-    if (
-      !hasExactKeys(record, [
-        ...common,
-        "movementMedium",
-        "facingYawRadians",
-        "speedMetersPerSecond",
-      ]) ||
-      !["ground", "air"].includes(record.movementMedium as string) ||
-      !isFiniteNumber(record.facingYawRadians) ||
-      !isFiniteNumber(record.speedMetersPerSecond) ||
-      record.speedMetersPerSecond < 0
-    ) return invalid(schemaName);
-  } else {
-    return invalid(schemaName);
-  }
-  return canonicalClone(record, schemaName) as unknown as LocomotionCapabilityStateV1;
-}
-
 function validateSubjectStateV4(value: unknown): WorldRuntimeSubjectStateV4 {
   const schemaName = "WorldRuntimeSnapshotV4";
   const record = snapshotDataRecord(value) ?? invalid(schemaName);
@@ -458,7 +414,8 @@ function validateSubjectStateV4(value: unknown): WorldRuntimeSubjectStateV4 {
     invalid(schemaName);
   const capabilities: Record<string, GameplayCapabilityStateV1> = {};
   for (const [id, capabilityValue] of Object.entries(capabilityRecords)) {
-    const capability = validateLocomotionCapabilityStateV1(capabilityValue);
+    const capability = parseGameplayCapabilityStateV1(capabilityValue) ??
+      invalid(schemaName);
     if (id !== capability.id || capability.ownerEntityId !== entityState.id) {
       return invalid(schemaName);
     }
@@ -545,14 +502,14 @@ function validateCameraSelectionExplainV1(
   return canonicalClone(record, schemaName) as unknown as CameraSelectionExplainV1;
 }
 
-function validateCameraSelectionDecisionV1(
+function validateCameraSelectionDecisionV2(
   value: unknown,
-): CameraSelectionDecisionV1 {
+): CameraSelectionDecisionV2 {
   const schemaName = "WorldRuntimeSnapshotV4";
   const record = snapshotDataRecord(value) ?? invalid(schemaName);
   if (!hasExactKeys(record, [
     "schemaVersion",
-    "simulationTick",
+    "committedTick",
     "targetEntityId",
     "activeCameraRigProfileRef",
     "activeCameraModifierRefs",
@@ -562,8 +519,8 @@ function validateCameraSelectionDecisionV1(
     "diagnostics",
     "explain",
   ]) ||
-    record.schemaVersion !== 1 ||
-    !isSafeNonNegativeInteger(record.simulationTick) ||
+    record.schemaVersion !== 2 ||
+    !isSafeNonNegativeInteger(record.committedTick) ||
     !isNonEmptyString(record.targetEntityId) ||
     !isNonEmptyString(record.activeCameraRigProfileRef) ||
     isNil(stringArray(record.activeCameraModifierRefs, { requireUnique: true })) ||
@@ -574,7 +531,7 @@ function validateCameraSelectionDecisionV1(
   validateCameraSelectionExplainV1(record.explain);
   const diagnostics = snapshotDataArray(record.diagnostics) ?? invalid(schemaName);
   diagnostics.forEach(validateCameraDiagnosticV1);
-  return canonicalClone(record, schemaName) as unknown as CameraSelectionDecisionV1;
+  return canonicalClone(record, schemaName) as unknown as CameraSelectionDecisionV2;
 }
 
 function validateCameraParametersV1(
@@ -702,7 +659,7 @@ function validateRuntimeCameraStateV4(
       !isFiniteNumberInRange(record.profileTransitionProgressRatio, 0, 1))
   ) return invalid(schemaName);
   if (Object.hasOwn(record, "selectionDecision")) {
-    validateCameraSelectionDecisionV1(record.selectionDecision);
+    validateCameraSelectionDecisionV2(record.selectionDecision);
   }
   if (Object.hasOwn(record, "resolvedParameters")) {
     validateCameraParametersV1(record.resolvedParameters, true);
