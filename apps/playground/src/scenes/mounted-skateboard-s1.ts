@@ -418,6 +418,9 @@ export function createMountedSkateboardS1GameplayResourcesV1(
         ACTION_PROJECTION_CAPABILITY_REF,
         CONTROL_TRANSITION_CAPABILITY_REF,
       ]),
+      initialRelationshipStates: normalizedWorldIr.relationships.map(
+        (relationship) => ({ ...relationship, establishedSimulationTick: 0 }),
+      ),
     }),
     actionRequests,
     gameplayActionRequestResolver,

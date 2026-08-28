@@ -68,6 +68,9 @@ export function createRuntimeTestGameplayBootstrapLockV1(
     worldId: normalizedWorldIr.id,
     worldSeed: normalizedWorldIr.seed,
     entityDescriptors,
+    initialRelationshipStates: normalizedWorldIr.relationships.map(
+      (relationship) => ({ ...relationship, establishedSimulationTick: 0 }),
+    ),
   });
   return createGameplayBootstrapResourceLockEntryV1(gameplayBootstrap);
 }

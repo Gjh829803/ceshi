@@ -34,7 +34,23 @@ Ruling: generated examples and scene evidence are regenerated only through their
 
 - BNA1-00: complete in the census commit; baseline, retained stash, versions, schema/parity gate, generated files, ownership graph, and terminal dispositions recorded.
 - BNA1-01: complete. RED failed because `world-build-identity.js` did not exist. GREEN owns `Sha256HashV1` only in Protocol, moves Package Ref ownership out of WorldPackage, adds the closed source-neutral identity parser/canonical bytes/hash, and registers identity plus dependency/ownership tests. Focused Identity/Package Store tests passed (13), the broader migrated contract sample passed (323), workspace boundary and test census passed, and typecheck passed.
-- BNA1-02: not started.
+- BNA1-02: complete in the current pending commit. Gameplay RED produced 13
+  Bootstrap failures before `initialRelationshipStates` became a required,
+  ID-canonical, accessor-free, body-hashed field. Runtime Bootstrap RED then
+  rejected the asymmetric full-closure fixture until the asset Transform and
+  Subject collider schemas were closed over their exact current fields. GREEN
+  adds the Draft 2020-12 Schema/export, exact detached Parser, canonical body
+  hash/full bytes, Gameplay-lock and controlled/Camera Subject closure, nested
+  DTO closure coverage, signed-zero rejection, and production schema validation
+  through the package-declared Ajv dependency. Runtime-owned DTO names moved out
+  of `execution-plan.ts`; the temporary V5 Plan retains only an internal
+  descriptor-plus-placement composition for migration evidence. All Bootstrap
+  factories now publish initial relationships explicitly; normalized-world
+  callers preserve the prior Plan relationships and genuinely relationship-free
+  fixtures use `[]`. Evidence: focused Bootstrap tests 28/28, broad affected
+  Runtime/Gameplay/Compiler/Babylon tests 531/531, workspace boundary floor,
+  test census (304 total / 272 contract / 32 resource-heavy), typecheck, and
+  `git diff --check` passed.
 - BNA1-03: not started.
 - BNA1-04: not started.
 - BNA1-05: not started.

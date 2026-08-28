@@ -129,6 +129,7 @@ function gameplayBootstrap(
     featureResourceLocks: [],
     semanticActionDefinitions: [],
     availableCapabilityRefs: [],
+    initialRelationshipStates: [],
   });
 }
 
@@ -219,6 +220,8 @@ describe("WorldPackageBuildReceiptV1", () => {
         ...input.gameplayBootstrap.availableCapabilityRefs,
         "worldkit://runtime-capability/changed@1",
       ],
+      initialRelationshipStates:
+        input.gameplayBootstrap.initialRelationshipStates,
     });
 
     expect(() => assertWorldPackageGameplayBootstrapMembershipV1({
@@ -296,6 +299,8 @@ describe("WorldPackageBuildReceiptV1", () => {
       semanticActionDefinitions:
         input.gameplayBootstrap.semanticActionDefinitions,
       availableCapabilityRefs: input.gameplayBootstrap.availableCapabilityRefs,
+      initialRelationshipStates:
+        input.gameplayBootstrap.initialRelationshipStates,
     });
 
     expect(() => assertWorldPackageGameplayBootstrapMembershipV1({

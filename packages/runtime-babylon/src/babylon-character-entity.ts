@@ -4,7 +4,9 @@ import {
   RuntimeEntityV1,
   SceneComponentV1,
 } from "@whitebox-world/runtime-framework";
-import type { ExecutionSubjectV3, Vec3 } from "@whitebox-world/runtime-contracts";
+import type { ExecutionPlanV5, Vec3 } from "@whitebox-world/runtime-contracts";
+
+type ExecutionPlanSubjectV5 = ExecutionPlanV5["subjects"][number];
 
 import {
   CharacterMovementComponentV1,
@@ -33,7 +35,7 @@ export class BabylonCharacterEntityV1 {
   readonly springArm: SpringArmComponentV1;
 
   constructor(options: {
-    readonly subject: ExecutionSubjectV3;
+    readonly subject: ExecutionPlanSubjectV5;
     readonly gravityMetersPerSecondSquaredXYZ: Vec3;
     readonly visualRoot: TransformNode;
     readonly scene: Scene;

@@ -90,6 +90,7 @@ const gameplayBootstrap = createGameplayBootstrapV1({
   }],
   semanticActionDefinitions: [],
   availableCapabilityRefs: [CONTROL_TRANSITION_CAPABILITY_REF],
+  initialRelationshipStates: [],
 });
 
 const gameplayMode = Object.freeze({

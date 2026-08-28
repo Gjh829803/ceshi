@@ -34,6 +34,7 @@ const GAMEPLAY_BOOTSTRAP_RESOURCE_LOCK =
     featureResourceLocks: [],
     semanticActionDefinitions: [],
     availableCapabilityRefs: [],
+    initialRelationshipStates: [],
   }));
 
 function routeWorld(): AuthoringSpecV4 {

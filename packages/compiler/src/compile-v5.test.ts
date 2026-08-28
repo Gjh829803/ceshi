@@ -81,6 +81,7 @@ const GAMEPLAY_BOOTSTRAP_LOCK =
     featureResourceLocks: [],
     semanticActionDefinitions: [],
     availableCapabilityRefs: [],
+    initialRelationshipStates: [],
   }));
 
 function routeWorld(options: {

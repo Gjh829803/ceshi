@@ -141,6 +141,7 @@ export const gameplayBootstrap = createGameplayBootstrapV1({
   }],
   semanticActionDefinitions: [],
   availableCapabilityRefs: [CONTROL_TRANSITION_CAPABILITY_REF],
+  initialRelationshipStates: [],
 });
 const gameplayBootstrapResourceLock =
   createGameplayBootstrapResourceLockEntryV1(gameplayBootstrap);

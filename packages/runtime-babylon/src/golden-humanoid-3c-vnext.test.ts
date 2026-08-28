@@ -19,7 +19,9 @@ import {
 import { describe, expect, it, vi } from "vitest";
 import type { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
-import type { ExecutionSubjectV3 } from "@whitebox-world/runtime-contracts";
+import type { ExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
+
+type ExecutionPlanSubjectV5 = ExecutionPlanV5["subjects"][number];
 
 import {
   GOLDEN_HUMANOID_TICK_STAGES_V1,
@@ -321,9 +323,9 @@ function semanticAction(
 }
 
 function goldenSubject(overrides: Readonly<{
-  locomotion?: ExecutionSubjectV3["locomotion"];
-  controlProfile?: ExecutionSubjectV3["capabilityAssembly"]["controlProfile"];
-}> = {}): ExecutionSubjectV3 {
+  locomotion?: ExecutionPlanSubjectV5["locomotion"];
+  controlProfile?: ExecutionPlanSubjectV5["capabilityAssembly"]["controlProfile"];
+}> = {}): ExecutionPlanSubjectV5 {
   const controlProfile = overrides.controlProfile ?? {
     resourceRef: "worldkit://control/third-person@1",
     contentHash: HASH_A,
@@ -359,7 +361,7 @@ function goldenSubject(overrides: Readonly<{
         motionTags: ["humanoid"],
       },
     },
-  } as unknown as ExecutionSubjectV3;
+  } as unknown as ExecutionPlanSubjectV5;
 }
 
 function visualRootSpy(): TransformNode {

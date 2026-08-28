@@ -11,8 +11,8 @@ import { isEqual, sortBy, uniq, uniqBy } from "lodash-es";
 
 import { sha256Bytes } from "@whitebox-world/protocol";
 import type {
-  ExecutionSubjectAssetV1,
-  SubjectAssetInventoryV1,
+  RuntimeSubjectAssetV1,
+  RuntimeSubjectAssetInventoryV1,
 } from "@whitebox-world/runtime-contracts";
 
 export interface SubjectAssetResolveRequestV1 {
@@ -142,20 +142,20 @@ export function isSubjectAssetRuntimeErrorV1(
 
 interface CacheEntryV1 {
   key: string;
-  descriptor: ExecutionSubjectAssetV1;
-  inventory: SubjectAssetInventoryV1;
+  descriptor: RuntimeSubjectAssetV1;
+  inventory: RuntimeSubjectAssetInventoryV1;
   container: AssetContainer;
   refCount: number;
 }
 
 interface PendingEntryV1 {
-  descriptor: ExecutionSubjectAssetV1;
+  descriptor: RuntimeSubjectAssetV1;
   promise: Promise<CacheEntryV1>;
 }
 
 function assetDiagnostic(
   code: SubjectAssetRuntimeErrorCodeV1,
-  asset: ExecutionSubjectAssetV1,
+  asset: RuntimeSubjectAssetV1,
 ): SubjectAssetRuntimeErrorV1 {
   return new SubjectAssetRuntimeErrorV1(code, {
     subjectAssetRef: asset.subjectAssetRef,
@@ -165,7 +165,7 @@ function assetDiagnostic(
 
 function sanitizedDisposalFailure(
   error: unknown,
-  asset?: ExecutionSubjectAssetV1,
+  asset?: RuntimeSubjectAssetV1,
 ): SubjectAssetRuntimeErrorV1 {
   if (isSubjectAssetRuntimeErrorV1(error)) return error;
   return asset === undefined
@@ -175,13 +175,13 @@ function sanitizedDisposalFailure(
 
 function sanitizedPostParseFailure(
   error: unknown,
-  asset: ExecutionSubjectAssetV1,
+  asset: RuntimeSubjectAssetV1,
 ): SubjectAssetRuntimeErrorV1 {
   if (isSubjectAssetRuntimeErrorV1(error)) return error;
   return assetDiagnostic("SUBJECT_ASSET_FORMAT_UNSUPPORTED", asset);
 }
 
-function copyDescriptor(asset: ExecutionSubjectAssetV1): ExecutionSubjectAssetV1 {
+function copyDescriptor(asset: RuntimeSubjectAssetV1): RuntimeSubjectAssetV1 {
   return {
     ...asset,
     inventory: {
@@ -216,13 +216,13 @@ function validateConfiguredLimits(
   return { ...configured };
 }
 
-function validateDescriptorFormat(asset: ExecutionSubjectAssetV1): void {
+function validateDescriptorFormat(asset: RuntimeSubjectAssetV1): void {
   if (asset.mediaType !== "model/gltf-binary" || asset.format !== "glb") {
     throw assetDiagnostic("SUBJECT_ASSET_FORMAT_UNSUPPORTED", asset);
   }
 }
 
-function inventoryValues(inventory: SubjectAssetInventoryV1): readonly number[] {
+function inventoryValues(inventory: RuntimeSubjectAssetInventoryV1): readonly number[] {
   return [
     inventory.meshCount,
     inventory.vertexCount,
@@ -234,7 +234,7 @@ function inventoryValues(inventory: SubjectAssetInventoryV1): readonly number[] 
 }
 
 function validateExpectedLimits(
-  asset: ExecutionSubjectAssetV1,
+  asset: RuntimeSubjectAssetV1,
   limits: SubjectAssetRuntimeLimitsV1,
 ): void {
   const inventory = asset.inventory;
@@ -262,8 +262,8 @@ function validateExpectedLimits(
 }
 
 function validateActualLimits(
-  asset: ExecutionSubjectAssetV1,
-  inventory: SubjectAssetInventoryV1,
+  asset: RuntimeSubjectAssetV1,
+  inventory: RuntimeSubjectAssetInventoryV1,
   limits: SubjectAssetRuntimeLimitsV1,
 ): void {
   if (
@@ -278,7 +278,7 @@ function validateActualLimits(
   }
 }
 
-function normalizedInventory(inventory: SubjectAssetInventoryV1): SubjectAssetInventoryV1 {
+function normalizedInventory(inventory: RuntimeSubjectAssetInventoryV1): RuntimeSubjectAssetInventoryV1 {
   return {
     ...inventory,
     animationClipNames: sortBy(inventory.animationClipNames),
@@ -286,8 +286,8 @@ function normalizedInventory(inventory: SubjectAssetInventoryV1): SubjectAssetIn
 }
 
 function validateExactInventory(
-  asset: ExecutionSubjectAssetV1,
-  actual: SubjectAssetInventoryV1,
+  asset: RuntimeSubjectAssetV1,
+  actual: RuntimeSubjectAssetInventoryV1,
 ): void {
   if (uniq(actual.animationClipNames).length !== actual.animationClipNames.length) {
     throw assetDiagnostic("SUBJECT_ASSET_INVENTORY_MISMATCH", asset);
@@ -298,9 +298,9 @@ function validateExactInventory(
 }
 
 function validateDescriptorConsistency(
-  requested: ExecutionSubjectAssetV1,
-  frozen: ExecutionSubjectAssetV1,
-  actual?: SubjectAssetInventoryV1,
+  requested: RuntimeSubjectAssetV1,
+  frozen: RuntimeSubjectAssetV1,
+  actual?: RuntimeSubjectAssetInventoryV1,
 ): void {
   if (requested.byteLength !== frozen.byteLength) {
     throw assetDiagnostic("SUBJECT_ASSET_LENGTH_MISMATCH", requested);
@@ -313,7 +313,7 @@ function validateDescriptorConsistency(
 
 function parseSelfContainedGlbJson(
   bytes: Uint8Array,
-  asset: ExecutionSubjectAssetV1,
+  asset: RuntimeSubjectAssetV1,
 ): Record<string, unknown> {
   const unsupported = (): never => {
     throw assetDiagnostic("SUBJECT_ASSET_FORMAT_UNSUPPORTED", asset);
@@ -398,7 +398,7 @@ function parseSelfContainedGlbJson(
 
 function validateForbiddenContainerContent(
   container: AssetContainer,
-  asset: ExecutionSubjectAssetV1,
+  asset: RuntimeSubjectAssetV1,
 ): void {
   const hasForbiddenTopLevel =
     container.cameras.length > 0 ||
@@ -414,8 +414,8 @@ function validateForbiddenContainerContent(
 
 function inspectContainerInventory(
   container: AssetContainer,
-  asset: ExecutionSubjectAssetV1,
-): SubjectAssetInventoryV1 {
+  asset: RuntimeSubjectAssetV1,
+): RuntimeSubjectAssetInventoryV1 {
   validateForbiddenContainerContent(container, asset);
   const renderableMeshes = container.meshes.filter(
     (mesh): mesh is Mesh => mesh instanceof Mesh && mesh.geometry !== null,
@@ -450,7 +450,7 @@ class SubjectAssetInstance implements SubjectAssetInstanceV1 {
 
   constructor(
     private readonly nativeEntries: InstantiatedEntries,
-    private readonly descriptor: ExecutionSubjectAssetV1,
+    private readonly descriptor: RuntimeSubjectAssetV1,
     readonly rootNodes: readonly TransformNode[],
     readonly meshes: readonly AbstractMesh[],
     readonly skeletons: readonly Skeleton[],
@@ -585,7 +585,7 @@ export class SubjectAssetCacheV1 {
     this.runtimeLimits = validateConfiguredLimits(options?.runtimeLimits);
   }
 
-  async acquire(asset: ExecutionSubjectAssetV1): Promise<SubjectAssetLeaseV1> {
+  async acquire(asset: RuntimeSubjectAssetV1): Promise<SubjectAssetLeaseV1> {
     if (this.closed) throw assetDiagnostic("SUBJECT_ASSET_CACHE_DISPOSED", asset);
     validateDescriptorFormat(asset);
     validateExpectedLimits(asset, this.runtimeLimits);
@@ -680,7 +680,7 @@ export class SubjectAssetCacheV1 {
 
   private async loadEntry(
     key: string,
-    asset: ExecutionSubjectAssetV1,
+    asset: RuntimeSubjectAssetV1,
   ): Promise<CacheEntryV1> {
     let resolved: ResolvedSubjectAssetBytesV1;
     try {

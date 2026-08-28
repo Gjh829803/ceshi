@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import type { ExecutionMotionProfileV1 } from "@whitebox-world/runtime-contracts";
+import type { RuntimeMotionProfileV1 } from "@whitebox-world/runtime-contracts";
 
 import { MotionModeResolverV1 } from "./motion-mode-resolver";
 
-function profile(id: string): ExecutionMotionProfileV1 {
+function profile(id: string): RuntimeMotionProfileV1 {
   return {
     resourceRef: `worldkit://motion-profile/${id}@1`,
     contentHash: `sha256:test-motion-profile-${id}`,
@@ -13,7 +13,7 @@ function profile(id: string): ExecutionMotionProfileV1 {
   };
 }
 
-const valid = (candidate: ExecutionMotionProfileV1): boolean =>
+const valid = (candidate: RuntimeMotionProfileV1): boolean =>
   !candidate.motionTags.includes("invalid");
 
 describe("MotionModeResolverV1", () => {

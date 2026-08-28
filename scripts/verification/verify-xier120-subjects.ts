@@ -20,7 +20,7 @@ import {
 } from "@whitebox-world/runtime-babylon";
 import type {
   ExecutionPlanV5,
-  ExecutionSubjectAssetV1,
+  RuntimeSubjectAssetV1,
 } from "@whitebox-world/runtime-contracts";
 import {
   XIER120_SUBJECT_DEFINITIONS,
@@ -161,6 +161,9 @@ function createGameplayBootstrap(normalizedWorldIr: NormalizedWorldIRV4) {
     worldId: normalizedWorldIr.id,
     worldSeed: normalizedWorldIr.seed,
     entityDescriptors,
+    initialRelationshipStates: normalizedWorldIr.relationships.map(
+      (relationship) => ({ ...relationship, establishedSimulationTick: 0 }),
+    ),
   });
 }
 
@@ -231,7 +234,7 @@ async function verifyCacheLifecycle(
   subjectDefinitionRef: string,
   subjectAssetRef: string,
   colliderProfileRef: string,
-  asset: ExecutionSubjectAssetV1,
+  asset: RuntimeSubjectAssetV1,
   assetBytes: Uint8Array,
 ): Promise<Pick<
   Xier120SubjectActualUseResultV1,

@@ -66,6 +66,7 @@ const GAMEPLAY_BOOTSTRAP = createGameplayBootstrapV1({
   featureResourceLocks: [],
   semanticActionDefinitions: [],
   availableCapabilityRefs: [],
+  initialRelationshipStates: [],
 });
 
 function locomotionCapability(simulationTick: number) {

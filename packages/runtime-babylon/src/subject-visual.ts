@@ -13,11 +13,11 @@ import type {
 } from "@whitebox-world/gameplay-contracts";
 import type {
   ExecutionPlanV5,
-  ExecutionRigProfileV1,
-  ExecutionSubjectAssetV1,
-  ExecutionSubjectV3,
-  SubjectVisualPrimitivePartV3,
+  RuntimeRigProfileV1,
+  RuntimeSubjectAssetV1,
+  RuntimeSubjectVisualPrimitivePartV1,
 } from "@whitebox-world/runtime-contracts";
+type ExecutionPlanSubjectV5 = ExecutionPlanV5["subjects"][number];
 import type { GroundHumanoidActionIdV1 } from "@whitebox-world/subject-contracts";
 import {
   type ActionPresentationRegistryV1,
@@ -61,7 +61,7 @@ function debugActionIdForPresentation(
 }
 
 export interface CreateSubjectVisualOptionsV1 {
-  subject: ExecutionSubjectV3;
+  subject: ExecutionPlanSubjectV5;
   executionPlan: ExecutionPlanV5;
   material: Material;
   scene: Scene;
@@ -71,7 +71,7 @@ export interface CreateSubjectVisualOptionsV1 {
 
 function createPartMesh(
   subjectEntityId: string,
-  part: SubjectVisualPrimitivePartV3,
+  part: RuntimeSubjectVisualPrimitivePartV1,
   scene: Scene,
 ): Mesh {
   const name = `${subjectEntityId}.${part.id}`;
@@ -130,7 +130,7 @@ function applyLocalTransform(
 
 function assetError(
   code: SubjectAssetRuntimeErrorCodeV1,
-  asset?: ExecutionSubjectAssetV1,
+  asset?: RuntimeSubjectAssetV1,
 ): SubjectAssetRuntimeErrorV1 {
   return new SubjectAssetRuntimeErrorV1(
     code,
@@ -148,7 +148,7 @@ function exactResource<T>(
   ref: string,
   getRef: (resource: T) => string,
   code: SubjectAssetRuntimeErrorCodeV1,
-  asset?: ExecutionSubjectAssetV1,
+  asset?: RuntimeSubjectAssetV1,
 ): T {
   const matches = resources.filter((resource) => getRef(resource) === ref);
   if (matches.length !== 1) throw assetError(code, asset);
@@ -162,8 +162,8 @@ interface ValidatedRigV1 {
 
 function validateRig(
   instance: SubjectAssetInstanceV1,
-  rigProfile: ExecutionRigProfileV1,
-  asset: ExecutionSubjectAssetV1,
+  rigProfile: RuntimeRigProfileV1,
+  asset: RuntimeSubjectAssetV1,
 ): ValidatedRigV1 {
   if (instance.skeletons.length !== 1) {
     throw assetError("SUBJECT_ASSET_RIG_INCOMPATIBLE", asset);
@@ -201,7 +201,7 @@ function validateRootMotion(
   animationGroups: readonly AnimationGroup[],
   skeletonRootBone: Bone,
   mappedBones: ReadonlyMap<string, Bone>,
-  asset: ExecutionSubjectAssetV1,
+  asset: RuntimeSubjectAssetV1,
 ): void {
   const forbiddenTargets = new Set<unknown>();
   for (const bone of [skeletonRootBone, mappedBones.get("hips")]) {
@@ -311,7 +311,7 @@ class OwnedSubjectVisual implements SubjectVisual {
       readonly StaticAssetPartResetStateV1[],
     private readonly staticOwnedMaterial: Material | undefined,
     private readonly animationPlayer: SubjectAnimationPlayer | undefined,
-    private readonly assetDescriptor: ExecutionSubjectAssetV1 | undefined,
+    private readonly assetDescriptor: RuntimeSubjectAssetV1 | undefined,
     private readonly assetInstance: SubjectAssetInstanceV1 | undefined,
     private readonly assetLease: SubjectAssetLeaseV1 | undefined,
   ) {}
@@ -416,7 +416,7 @@ export async function createSubjectVisual(
   let assetLease: SubjectAssetLeaseV1 | undefined;
   let assetInstance: SubjectAssetInstanceV1 | undefined;
   let animationPlayer: SubjectAnimationPlayer | undefined;
-  let assetDescriptor: ExecutionSubjectAssetV1 | undefined;
+  let assetDescriptor: RuntimeSubjectAssetV1 | undefined;
   let staticOwnedMaterial: Material | undefined;
 
   try {

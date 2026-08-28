@@ -45,11 +45,11 @@ import {
   createValidRiggedPackageSubjectWorldV4,
 } from "../../authoring/src/test-fixture";
 import type {
-  ExecutionAnimationSetV1,
+  RuntimeAnimationSetV1,
   ExecutionObjectV3,
   ExecutionPlanV5,
   ExecutionStaticColliderV1,
-  ExecutionSubjectAssetV1,
+  RuntimeSubjectAssetV1,
   FixedInputV1,
   Vec3,
 } from "@whitebox-world/runtime-contracts";
@@ -193,7 +193,7 @@ const goldenSubjectAssetDescriptor = {
     boneCount: 18,
     animationClipNames: ["idle", "jump", "run", "walk"],
   },
-} as const satisfies ExecutionSubjectAssetV1;
+} as const satisfies RuntimeSubjectAssetV1;
 
 function buildStaticTriangleGlb(): Uint8Array {
   const positions = [
@@ -296,7 +296,7 @@ const staticSubjectAssetDescriptor = {
     boneCount: 0,
     animationClipNames: [],
   },
-} as const satisfies ExecutionSubjectAssetV1;
+} as const satisfies RuntimeSubjectAssetV1;
 
 interface MutableGlbJson {
   extras?: Record<string, unknown>;
@@ -356,8 +356,8 @@ function mutateGlbJson(
 
 function descriptorForBytes(
   bytes: Uint8Array,
-  overrides: Partial<ExecutionSubjectAssetV1> = {},
-): ExecutionSubjectAssetV1 {
+  overrides: Partial<RuntimeSubjectAssetV1> = {},
+): RuntimeSubjectAssetV1 {
   return {
     ...goldenSubjectAssetDescriptor,
     artifactContentHash: sha256Bytes(bytes),
@@ -367,7 +367,7 @@ function descriptorForBytes(
       ...overrides.inventory,
     },
     ...overrides,
-  } as ExecutionSubjectAssetV1;
+  } as RuntimeSubjectAssetV1;
 }
 
 function createAssetScene(): { engine: NullEngine; scene: Scene } {
@@ -425,8 +425,8 @@ function ownedAnimationTargets(
 }
 
 function createAnimationSet(
-  overrides: Partial<ExecutionAnimationSetV1> = {},
-): ExecutionAnimationSetV1 {
+  overrides: Partial<RuntimeAnimationSetV1> = {},
+): RuntimeAnimationSetV1 {
   return {
     animationSetRef: "worldkit://animation-set/test@1",
     subjectAssetRef: goldenSubjectAssetDescriptor.subjectAssetRef,
@@ -664,6 +664,9 @@ function compileRouteExecutionPlan(spec: AuthoringSpecV4): ExecutionPlanV5 {
     worldId: normalized.value.id,
     worldSeed: normalized.value.seed,
     entityDescriptors,
+    initialRelationshipStates: normalized.value.relationships.map(
+      (relationship) => ({ ...relationship, establishedSimulationTick: 0 }),
+    ),
   });
   const compiled = compileWorldV5({
     normalizedWorldIr: normalized.value,
@@ -6479,7 +6482,7 @@ describe("SubjectAssetCacheV1", () => {
       mediaType: "model/gltf+json",
       format: "gltf",
       byteLength: defaultSubjectAssetRuntimeLimits.maxByteLengthBytes + 1,
-    } as unknown as ExecutionSubjectAssetV1;
+    } as unknown as RuntimeSubjectAssetV1;
     await expect(new SubjectAssetCacheV1(scene).acquire(unsupported)).rejects.toThrow(
       /SUBJECT_ASSET_FORMAT_UNSUPPORTED/,
     );
@@ -6881,7 +6884,7 @@ describe("SubjectAssetCacheV1", () => {
         return { bytes: goldenSubjectAssetBytes, sourceLabel: "memory" };
       },
     });
-    const mismatchedDescriptor: ExecutionSubjectAssetV1 = {
+    const mismatchedDescriptor: RuntimeSubjectAssetV1 = {
       ...goldenSubjectAssetDescriptor,
       inventory: {
         ...goldenSubjectAssetDescriptor.inventory,

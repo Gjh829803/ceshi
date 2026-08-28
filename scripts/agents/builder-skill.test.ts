@@ -43,6 +43,9 @@ function gameplayBootstrapResourceLock(normalizedWorldIr: NormalizedWorldIRV4) {
       worldId: normalizedWorldIr.id,
       worldSeed: normalizedWorldIr.seed,
       entityDescriptors,
+      initialRelationshipStates: normalizedWorldIr.relationships.map(
+        (relationship) => ({ ...relationship, establishedSimulationTick: 0 }),
+      ),
     }),
   );
 }

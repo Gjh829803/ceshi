@@ -166,6 +166,7 @@ function createHarnessAndOptions(input: Readonly<{
       ACTION_PROJECTION_CAPABILITY_REF,
       CONTROL_TRANSITION_CAPABILITY_REF,
     ],
+    initialRelationshipStates: [],
   });
   const harness = createFakeGameplayWorldPortHarnessV1({
     initialWorldProjection: projection(

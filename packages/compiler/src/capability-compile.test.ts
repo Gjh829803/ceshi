@@ -6,7 +6,7 @@ import {
   createGameplayBootstrapV1,
 } from "@whitebox-world/gameplay-contracts";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
-import type { ExecutionSubjectCapabilityAssemblyV1 } from "@whitebox-world/runtime-contracts";
+import type { RuntimeSubjectCapabilityAssemblyV1 } from "@whitebox-world/runtime-contracts";
 import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
 
 import {
@@ -24,6 +24,7 @@ const GAMEPLAY_BOOTSTRAP_LOCK =
     featureResourceLocks: [],
     semanticActionDefinitions: [],
     availableCapabilityRefs: [],
+    initialRelationshipStates: [],
   }));
 
 const IMPLEMENTED_PACKAGES = [
@@ -54,7 +55,7 @@ const UNAVAILABLE_RELATIONSHIP_PACKAGES = [
 function compilePackage(
   subjectDefinitionRef: string,
 ): {
-  assembly: ExecutionSubjectCapabilityAssemblyV1;
+  assembly: RuntimeSubjectCapabilityAssemblyV1;
   lockedResourceRefs: readonly string[];
 } {
   const spec = createValidAuthoringSpec();

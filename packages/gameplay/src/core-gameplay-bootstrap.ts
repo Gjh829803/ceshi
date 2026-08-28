@@ -2,6 +2,7 @@ import {
   createGameplayBootstrapV1,
   type GameplayBootstrapV1,
   type GameplayEntityDescriptorV1,
+  type GameplayRelationshipStateV1,
 } from "@whitebox-world/gameplay-contracts";
 import { uniq } from "lodash-es";
 
@@ -14,6 +15,7 @@ export interface CoreGameplayBootstrapInputV1 {
   readonly worldId: string;
   readonly worldSeed: number;
   readonly entityDescriptors: readonly GameplayEntityDescriptorV1[];
+  readonly initialRelationshipStates: readonly GameplayRelationshipStateV1[];
 }
 
 /**
@@ -43,5 +45,6 @@ export function createCoreGameplayBootstrapV1(
       ),
       CONTROL_TRANSITION_CAPABILITY_REF,
     ]),
+    initialRelationshipStates: input.initialRelationshipStates,
   });
 }

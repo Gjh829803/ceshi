@@ -139,6 +139,7 @@ const gameplayBootstrap = createGameplayBootstrapV1({
     ACTION_PROJECTION_CAPABILITY_REF,
     CONTROL_TRANSITION_CAPABILITY_REF,
   ],
+  initialRelationshipStates: [],
 });
 
 const gameplayMode = Object.freeze({

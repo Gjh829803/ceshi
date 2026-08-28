@@ -13,7 +13,10 @@ import type {
   PrototypeTraversalSurfaceBindingV1,
   Vec2,
 } from "@whitebox-world/authoring";
-import { sha256CanonicalJson } from "@whitebox-world/protocol";
+import {
+  sha256CanonicalJson,
+  type Sha256HashV1,
+} from "@whitebox-world/protocol";
 import { BIPED_BONE_IDS_V1 } from "@whitebox-world/subject-contracts";
 import {
   sampleTriangleHeightfieldSurface,
@@ -26,23 +29,24 @@ import {
   hashExecutionPlanV5,
   parseExecutionPlanV5,
   type CompileDiagnostic,
-  type ExecutionAnimationSetV1,
-  type ExecutionColliderProfileV1,
+  type RuntimeAnimationSetV1,
+  type RuntimeColliderProfileV1,
   type ExecutionObjectPrimitiveV3,
   type ExecutionObjectV3,
   type ExecutionPlanV5,
   type GameplayBootstrapExecutionResourceLockV1,
   type ExecutionLayoutAssertionV1,
   type ExecutionLayoutPlacementV1,
-  type ExecutionRigProfileV1,
-  type ExecutionSubjectAssetV1,
-  type ExecutionSubjectV3,
+  type RuntimeRigProfileV1,
+  type RuntimeSubjectAssetV1,
   type ExecutionTerrainV3,
   type ExecutionWaterBoundaryV3,
   type ExecutionWaterV3,
-  type SubjectSocketV3,
-  type SubjectVisualPartV3,
+  type RuntimeSubjectSocketV1,
+  type RuntimeSubjectVisualPartV1,
 } from "@whitebox-world/runtime-contracts";
+
+type ExecutionPlanSubjectV5 = ExecutionPlanV5["subjects"][number];
 import type {
   CompileWorldResultV5,
   ExecutionConnectivityRequirementV1,
@@ -395,7 +399,7 @@ function staticObjectFootprintV3(
 }
 
 function validateCompiledSpawnFootprintsV3(
-  subjects: readonly ExecutionSubjectV3[],
+  subjects: readonly ExecutionPlanSubjectV5[],
   waters: readonly ExecutionWaterV3[],
   objects: readonly ExecutionObjectV3[],
 ): CompileDiagnostic[] {
@@ -473,11 +477,11 @@ function validateCompiledSpawnFootprintsV3(
 }
 
 interface CompiledSubjectsV3 {
-  subjects: ExecutionSubjectV3[];
-  subjectAssets: ExecutionSubjectAssetV1[];
-  rigProfiles: ExecutionRigProfileV1[];
-  animationSets: ExecutionAnimationSetV1[];
-  colliderProfiles: ExecutionColliderProfileV1[];
+  subjects: ExecutionPlanSubjectV5[];
+  subjectAssets: RuntimeSubjectAssetV1[];
+  rigProfiles: RuntimeRigProfileV1[];
+  animationSets: RuntimeAnimationSetV1[];
+  colliderProfiles: RuntimeColliderProfileV1[];
   resourceCost: { vertices: number; triangles: number; colliders: number };
 }
 
@@ -516,7 +520,7 @@ function requireNormalizedResourceRowV3<T>(
 
 function compileSubjectAssetV1(
   resource: NormalizedSubjectAssetV1,
-): ExecutionSubjectAssetV1 {
+): RuntimeSubjectAssetV1 {
   return {
     subjectAssetRef: resource.subjectAssetRef,
     artifactContentHash: resource.artifactContentHash,
@@ -536,7 +540,7 @@ function compileSubjectAssetV1(
 
 function compileRigProfileV1(
   resource: NormalizedRigProfileV1,
-): ExecutionRigProfileV1 {
+): RuntimeRigProfileV1 {
   for (const boneId of BIPED_BONE_IDS_V1) {
     const hasMapping = Object.prototype.hasOwnProperty.call(
       resource.sourceNodeNameByBoneId,
@@ -583,7 +587,7 @@ function compileRigProfileV1(
 
 function compileAnimationSetV1(
   resource: NormalizedAnimationSetV1,
-): ExecutionAnimationSetV1 {
+): RuntimeAnimationSetV1 {
   return {
     animationSetRef: resource.animationSetRef,
     subjectAssetRef: resource.subjectAssetRef,
@@ -605,7 +609,7 @@ function compileAnimationSetV1(
 
 function compileColliderProfileV1(
   resource: NormalizedColliderProfileV1,
-): ExecutionColliderProfileV1 {
+): RuntimeColliderProfileV1 {
   return {
     colliderProfileRef: resource.colliderProfileRef,
     supportedBodyTopologies: [...resource.supportedBodyTopologies],
@@ -624,7 +628,7 @@ function compileColliderProfileV1(
 
 function compileSubjectVisualPartV3(
   part: NormalizedSubjectVisualPartV2,
-): SubjectVisualPartV3 {
+): RuntimeSubjectVisualPartV1 {
   if (part.kind === "asset") {
     return {
       id: part.id,
@@ -660,7 +664,7 @@ function compileSubjectVisualPartV3(
   };
 }
 
-function compileSubjectSocketV3(socket: NormalizedSubjectSocketV2): SubjectSocketV3 {
+function compileSubjectSocketV3(socket: NormalizedSubjectSocketV2): RuntimeSubjectSocketV1 {
   if (socket.kind === "bone") {
     return {
       id: socket.id,
@@ -702,10 +706,10 @@ function compileSubjectSocketV3(socket: NormalizedSubjectSocketV2): SubjectSocke
 
 function compileCapabilityAssemblyV1(
   assembly: NonNullable<NormalizedSubjectDefinitionV2["capabilityAssembly"]>,
-): NonNullable<ExecutionSubjectV3["capabilityAssembly"]> {
+): NonNullable<ExecutionPlanSubjectV5["capabilityAssembly"]> {
   const compileMotionProfile = (
     profile: typeof assembly.defaultMotionProfile,
-  ): NonNullable<ExecutionSubjectV3["capabilityAssembly"]>["defaultMotionProfile"] => ({
+  ): NonNullable<ExecutionPlanSubjectV5["capabilityAssembly"]>["defaultMotionProfile"] => ({
     resourceRef: profile.resourceRef,
     contentHash: profile.contentHash,
     motionKernelRef: profile.motionKernelRef,
@@ -713,7 +717,7 @@ function compileCapabilityAssemblyV1(
   });
   const compileMotionKernel = (
     motionKernel: typeof assembly.motionKernels[number],
-  ): NonNullable<ExecutionSubjectV3["capabilityAssembly"]>["motionKernels"][number] => {
+  ): NonNullable<ExecutionPlanSubjectV5["capabilityAssembly"]>["motionKernels"][number] => {
     const implementationId = motionKernel.implementationId;
     if (
       implementationId !== "free-ground" &&
@@ -829,7 +833,7 @@ function compileCapabilityAssemblyV1(
 
 function colliderProfileMatchesDefinitionV3(
   profile: NormalizedColliderProfileV1,
-  definitionCollider: ExecutionSubjectV3["collider"],
+  definitionCollider: ExecutionPlanSubjectV5["collider"],
 ): boolean {
   const profileCollider = profile.collider;
   return profileCollider.kind === definitionCollider.kind &&
@@ -890,7 +894,7 @@ function compileSubjectsV3(
         node.kind === "subject",
     )
     .sort((left, right) => left.id.localeCompare(right.id))
-    .map((node): ExecutionSubjectV3 => {
+    .map((node): ExecutionPlanSubjectV5 => {
       const definition = definitionsByRef.get(node.subjectDefinitionRef);
       if (definition === undefined) {
         throw new Error(
@@ -1049,7 +1053,8 @@ function compileSubjectsV3(
       return {
         entityId: node.id,
         subjectDefinitionRef: definition.subjectDefinitionRef,
-        subjectDefinitionHash: definition.subjectDefinitionHash,
+        subjectDefinitionHash:
+          definition.subjectDefinitionHash as Sha256HashV1,
         bodyTopology: definition.bodyTopology,
         semanticClassId: definition.semanticClassId,
         spawnAnchorEntityId: spawnAnchor.id,
@@ -1098,7 +1103,8 @@ function compileSubjectsV3(
           allowJump: definition.locomotion.allowJump,
         },
         locomotionCapabilityRef: locomotionCapabilityLock.resourceRef,
-        locomotionCapabilityHash: locomotionCapabilityLock.contentHash,
+        locomotionCapabilityHash:
+          locomotionCapabilityLock.contentHash as Sha256HashV1,
         physicsBodyProfileRef: definition.profiles.physicsBodyProfileRef,
         locomotionProfileRef: definition.profiles.locomotionProfileRef,
         controlFeel: {

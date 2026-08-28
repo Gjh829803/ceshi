@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { ExecutionControlProfileV1 } from "@whitebox-world/runtime-contracts";
+import type { RuntimeControlProfileV1 } from "@whitebox-world/runtime-contracts";
 
 import {
   compileMotionCommandV1,
@@ -14,9 +14,9 @@ const DEFAULT_VIEW_FRAME = {
 } as const;
 
 function profile(
-  commandKind: ExecutionControlProfileV1["commandKind"],
-  inputSpace: ExecutionControlProfileV1["inputSpace"],
-): ExecutionControlProfileV1 {
+  commandKind: RuntimeControlProfileV1["commandKind"],
+  inputSpace: RuntimeControlProfileV1["inputSpace"],
+): RuntimeControlProfileV1 {
   return {
     resourceRef: `worldkit://control-profile/test.${commandKind}@1`,
     contentHash: "sha256:test-control-profile",

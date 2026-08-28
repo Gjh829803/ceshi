@@ -5,13 +5,14 @@ import type { Scene } from "@babylonjs/core/scene.pure.js";
 import { EntityComponentV1 } from "@whitebox-world/runtime-framework";
 
 import type {
-  ExecutionSubjectV3,
+  ExecutionPlanV5,
   ControlInputAxesV2,
   PublishedMovementMediumV1,
   SemanticInputActionV1,
   Vec3,
   ViewControlFrameV1,
 } from "@whitebox-world/runtime-contracts";
+type ExecutionPlanSubjectV5 = ExecutionPlanV5["subjects"][number];
 import {
   createCharacterMovementRuntimeV1,
   hashCharacterMovementStateV1,
@@ -82,7 +83,7 @@ export class CharacterMovementComponentV1 extends EntityComponentV1 {
   readonly physicsController: MotionKernelRuntimeV1["physicsController"];
 
   constructor(
-    private readonly subject: ExecutionSubjectV3,
+    private readonly subject: ExecutionPlanSubjectV5,
     gravityMetersPerSecondSquaredXYZ: Vec3,
     readonly visualRoot: TransformNode,
     scene: Scene,
@@ -267,7 +268,7 @@ export class CharacterMovementComponentV1 extends EntityComponentV1 {
 }
 
 export interface GoldenHumanoidSubjectControllerOptionsV1 {
-  readonly subject: ExecutionSubjectV3;
+  readonly subject: ExecutionPlanSubjectV5;
   readonly visualRoot: TransformNode;
   readonly transaction: GoldenHumanoid3CVNextTransactionV1;
   readonly physicsBody?: PhysicsBody;
@@ -293,7 +294,7 @@ export interface GoldenHumanoidRenderPoseDiagnosticV1 {
 }
 
 function assertGoldenHumanoidSubjectAdmissionV1(
-  subject: ExecutionSubjectV3,
+  subject: ExecutionPlanSubjectV5,
 ): void {
   const control = subject.capabilityAssembly.controlProfile;
   if (
@@ -315,7 +316,7 @@ function assertGoldenHumanoidSubjectAdmissionV1(
  * one Babylon BodyPort/native controller for this Subject.
  */
 export class GoldenHumanoidSubjectControllerV1 extends EntityComponentV1 {
-  readonly #subject: ExecutionSubjectV3;
+  readonly #subject: ExecutionPlanSubjectV5;
   readonly #visualRoot: TransformNode;
   readonly #transaction: GoldenHumanoid3CVNextTransactionV1;
   readonly #physicsBody: PhysicsBody | undefined;
@@ -750,7 +751,7 @@ export class GoldenHumanoidSubjectControllerV1 extends EntityComponentV1 {
 }
 
 export interface CreateGoldenHumanoidSubjectControllerOptionsV1 {
-  readonly subject: ExecutionSubjectV3;
+  readonly subject: ExecutionPlanSubjectV5;
   readonly gravityMetersPerSecondSquaredXYZ: Vec3;
   readonly visualRoot: TransformNode;
   readonly scene: Scene;

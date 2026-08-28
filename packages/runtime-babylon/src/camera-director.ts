@@ -19,10 +19,10 @@ import type {
   CameraPreviewStateV1,
   CameraTuningV1,
   CameraViewInputV1,
-  ExecutionCameraModifierProfileV1,
-  ExecutionCameraRigProfileV1,
+  RuntimeCameraModifierProfileV1,
+  RuntimeCameraRigProfileV1,
   ExecutionPlanV5,
-  ExecutionSubjectCapabilityAssemblyV1,
+  RuntimeSubjectCapabilityAssemblyV1,
   LocomotionModeV1,
   SemanticInputActionV1,
   Vec3,
@@ -78,9 +78,9 @@ export interface CameraDirectorTransactionStateV1 {
     initialized: boolean;
     cameraViewPreference: CameraViewPreferenceV1;
     activeProfileRef: string;
-    activeHeadingSource: ExecutionCameraRigProfileV1["headingSource"] | undefined;
+    activeHeadingSource: RuntimeCameraRigProfileV1["headingSource"] | undefined;
     activeReverseHeadingPolicy:
-      | ExecutionCameraRigProfileV1["reverseHeadingPolicy"]
+      | RuntimeCameraRigProfileV1["reverseHeadingPolicy"]
       | undefined;
     activeRigRef: string;
     activeModifierRefs: readonly string[];
@@ -140,12 +140,12 @@ export interface CameraDirectorTransactionStateV1 {
   readonly cameraFovRadians: number;
 }
 
-type CameraContextV1 = ExecutionSubjectCapabilityAssemblyV1["cameraContext"];
-type CameraParametersV1 = ExecutionCameraRigProfileV1["parameters"];
+type CameraContextV1 = RuntimeSubjectCapabilityAssemblyV1["cameraContext"];
+type CameraParametersV1 = RuntimeCameraRigProfileV1["parameters"];
 
 interface SelectedCameraStateV1 {
-  profile: ExecutionCameraRigProfileV1;
-  modifiers: readonly ExecutionCameraModifierProfileV1[];
+  profile: RuntimeCameraRigProfileV1;
+  modifiers: readonly RuntimeCameraModifierProfileV1[];
   decision: CameraSelectionDecisionV2;
 }
 
@@ -539,9 +539,9 @@ export class CameraDirectorV1 {
   private initialized = false;
   private cameraViewPreference: CameraViewPreferenceV1 = Object.freeze({ mode: "auto" });
   private activeProfileRef: string;
-  private activeHeadingSource: ExecutionCameraRigProfileV1["headingSource"] | undefined;
+  private activeHeadingSource: RuntimeCameraRigProfileV1["headingSource"] | undefined;
   private activeReverseHeadingPolicy:
-    | ExecutionCameraRigProfileV1["reverseHeadingPolicy"]
+    | RuntimeCameraRigProfileV1["reverseHeadingPolicy"]
     | undefined;
   private activeRigRef = "worldkit://camera-rig/orbit-follow@1";
   private activeModifierRefs: readonly string[] = [];
@@ -925,7 +925,7 @@ export class CameraDirectorV1 {
       );
     }
     const baseProfile = selected.profile;
-    const profile: ExecutionCameraRigProfileV1 = selected.modifiers.reduce(
+    const profile: RuntimeCameraRigProfileV1 = selected.modifiers.reduce(
       (current, modifier) => ({
         ...current,
         ...(modifier.headingSourceOverride === undefined
@@ -1393,7 +1393,7 @@ export class CameraDirectorV1 {
   }
 
   private resolveBaseForward(
-    profile: ExecutionCameraRigProfileV1,
+    profile: RuntimeCameraRigProfileV1,
     parameters: CameraParametersV1,
     sample: ViewTargetSampleV1,
     velocity: Vector3,
@@ -1437,7 +1437,7 @@ export class CameraDirectorV1 {
   }
 
   private resolveControlBaseForward(
-    profile: ExecutionCameraRigProfileV1,
+    profile: RuntimeCameraRigProfileV1,
     parameters: CameraParametersV1,
     sample: ViewTargetSampleV1,
     velocity: Vector3,
@@ -1484,7 +1484,7 @@ export class CameraDirectorV1 {
   }
 
   private applyAutomaticRecentering(
-    profile: ExecutionCameraRigProfileV1,
+    profile: RuntimeCameraRigProfileV1,
     parameters: CameraParametersV1,
     sample: ViewTargetSampleV1,
     velocity: Vector3,
@@ -1521,7 +1521,7 @@ export class CameraDirectorV1 {
   }
 
   private applyControlAutomaticRecentering(
-    profile: ExecutionCameraRigProfileV1,
+    profile: RuntimeCameraRigProfileV1,
     parameters: CameraParametersV1,
     sample: ViewTargetSampleV1,
     velocity: Vector3,

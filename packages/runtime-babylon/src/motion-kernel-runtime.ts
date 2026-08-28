@@ -8,12 +8,13 @@ import type { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
 
 import type {
-  ExecutionMotionProfileV1,
-  ExecutionSubjectV3,
+  RuntimeMotionProfileV1,
+  ExecutionPlanV5,
   LocomotionModeV1,
   PublishedMovementMediumV1,
   Vec3,
 } from "@whitebox-world/runtime-contracts";
+type ExecutionPlanSubjectV5 = ExecutionPlanV5["subjects"][number];
 import {
   resolveCharacterStateV1,
   type CharacterSupportStateV1,
@@ -74,9 +75,9 @@ export interface MotionKernelLiveLockStateV1 {
   readonly mediumProfileRef: string;
 }
 
-type ControlFeelSurfaceV1 = ExecutionSubjectV3["controlFeel"];
+type ControlFeelSurfaceV1 = ExecutionPlanSubjectV5["controlFeel"];
 
-function requireControlFeel(subject: ExecutionSubjectV3): ControlFeelSurfaceV1 {
+function requireControlFeel(subject: ExecutionPlanSubjectV5): ControlFeelSurfaceV1 {
   const feel = subject.controlFeel;
   if (feel === undefined || feel === null || feel.resourceRef === "") {
     throw new Error(
@@ -119,7 +120,7 @@ function kernelScalar(
   name: string,
   fallback: number,
 ): number {
-  const value = (feel as Record<string, number | string>)[name];
+  const value = (feel as unknown as Record<string, number | string>)[name];
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
@@ -257,7 +258,7 @@ export class MotionKernelRuntimeV1 {
   private currentMovementMedium: PublishedMovementMediumV1 = "air";
 
   constructor(
-    private readonly subject: ExecutionSubjectV3,
+    private readonly subject: ExecutionPlanSubjectV5,
     gravityMetersPerSecondSquaredXYZ: Vec3,
     private readonly visualRoot: TransformNode,
     private readonly scene: Scene,
@@ -1169,7 +1170,7 @@ export class MotionKernelRuntimeV1 {
     this.physicsController.integrate(FIXED_TIME_STEP_SECONDS, support, appliedGravity);
   }
 
-  private get activeProfile(): ExecutionMotionProfileV1 {
+  private get activeProfile(): RuntimeMotionProfileV1 {
     return this.motionModeResolver.currentProfile;
   }
 

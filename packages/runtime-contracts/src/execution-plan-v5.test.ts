@@ -13,8 +13,8 @@ import {
   hashExecutionPlanV5,
   parseExecutionPlanV5,
   type ExecutionPlanV5,
-  type ExecutionSubjectCapabilityAssemblyV1,
 } from "./execution-plan";
+import type { RuntimeSubjectCapabilityAssemblyV1 } from "./world-runtime-bootstrap";
 
 const HASH = `sha256:${"a".repeat(64)}` as const;
 
@@ -67,7 +67,7 @@ function actionPresentationRegistryFixture() {
   };
 }
 
-function capabilityAssemblyFixture(): ExecutionSubjectCapabilityAssemblyV1 {
+function capabilityAssemblyFixture(): RuntimeSubjectCapabilityAssemblyV1 {
   const motionProfile = {
     resourceRef: "worldkit://motion-profile/test@1",
     contentHash: HASH,

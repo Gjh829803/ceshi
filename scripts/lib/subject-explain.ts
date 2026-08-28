@@ -2,9 +2,7 @@ import type {
   NormalizedSubjectDefinitionV2,
   ResolvedResourceLockEntryV1,
 } from "@whitebox-world/authoring";
-import type {
-  ExecutionSubjectV3,
-} from "@whitebox-world/runtime-contracts";
+import type { RuntimeSubjectDescriptorV1 } from "@whitebox-world/runtime-contracts";
 
 import {
   cliFailure,
@@ -24,12 +22,12 @@ export interface SubjectExplanationV1 {
   visualParts: NormalizedSubjectDefinitionV2["visualParts"];
   visualBinding: NormalizedSubjectDefinitionV2["visualBinding"];
   sockets: NormalizedSubjectDefinitionV2["sockets"];
-  collider: ExecutionSubjectV3["collider"] &
+  collider: RuntimeSubjectDescriptorV1["collider"] &
     (
       | { colliderDerivationProfileRef: string }
       | { colliderProfileRef: string }
     );
-  locomotion: ExecutionSubjectV3["locomotion"];
+  locomotion: RuntimeSubjectDescriptorV1["locomotion"];
   resourceCost: NormalizedSubjectDefinitionV2["resourceCost"];
   resourceLockHash: string;
   resourceLockEntries: readonly ResolvedResourceLockEntryV1[];

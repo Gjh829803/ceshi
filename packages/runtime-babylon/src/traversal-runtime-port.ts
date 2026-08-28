@@ -2,8 +2,8 @@ import {
   canonicalExecutionResourceLockEntriesV1,
   type ExecutionPlanV5,
   type ExecutionResourceKindV1,
-  type ExecutionSubjectV3,
 } from "@whitebox-world/runtime-contracts";
+type ExecutionPlanSubjectV5 = ExecutionPlanV5["subjects"][number];
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import {
   canonicalTraversalRuntimeTickEvidenceV1,
@@ -47,7 +47,7 @@ function exactPlanAndReceiptLock(
   receipt: ResolvedTraversalLockReceiptV1,
 ): {
   readonly lock: ResolvedTraversalLockV1;
-  readonly subject: ExecutionSubjectV3;
+  readonly subject: ExecutionPlanSubjectV5;
 } {
   let canonicalReceipt: ResolvedTraversalLockReceiptV1;
   try {

@@ -57,6 +57,7 @@ const GAMEPLAY_BOOTSTRAP_LOCK =
     featureResourceLocks: [],
     semanticActionDefinitions: [],
     availableCapabilityRefs: [],
+    initialRelationshipStates: [],
   }));
 
 function compileWorld(input: {
@@ -1460,6 +1461,7 @@ describe("compileWorld", () => {
           featureResourceLocks: [],
           semanticActionDefinitions: [],
           availableCapabilityRefs: [],
+          initialRelationshipStates: [],
         }));
       const compiled = compileWorldV5({
         normalizedWorldIr: normalized.value,

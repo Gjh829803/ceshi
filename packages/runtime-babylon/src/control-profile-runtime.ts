@@ -1,6 +1,6 @@
 import type {
   ControlInputAxesV2,
-  ExecutionControlProfileV1,
+  RuntimeControlProfileV1,
   SemanticInputActionV1,
   ViewControlFrameV1,
 } from "@whitebox-world/runtime-contracts";
@@ -51,7 +51,7 @@ function clampRatio(value: number): number {
 }
 
 export function hasForwardControlIntentV1(
-  profile: ExecutionControlProfileV1,
+  profile: RuntimeControlProfileV1,
   moveResponseExponent: number,
   actions: readonly SemanticInputActionV1[],
   axes: Readonly<ControlInputAxesV2> = {},
@@ -82,7 +82,7 @@ function normalizedAxis(
 }
 
 function resolveControlAxesV1(
-  profile: ExecutionControlProfileV1,
+  profile: RuntimeControlProfileV1,
   moveResponseExponent: number,
   actions: readonly SemanticInputActionV1[],
   axes: Readonly<ControlInputAxesV2>,
@@ -114,7 +114,7 @@ function resolveThrottleV1(
 }
 
 export function compileMotionCommandV1(
-  profile: ExecutionControlProfileV1,
+  profile: RuntimeControlProfileV1,
   moveResponseExponent: number,
   actions: readonly SemanticInputActionV1[],
   viewControlFrame: ViewControlFrameV1,

@@ -68,6 +68,7 @@ function trustedClosure(authoringSpec: AuthoringSpecV4) {
     featureResourceLocks: [],
     semanticActionDefinitions: [],
     availableCapabilityRefs: [],
+    initialRelationshipStates: [],
   });
   const compiled = compileWorldV5({
     normalizedWorldIr: normalized.value,

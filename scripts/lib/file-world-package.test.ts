@@ -95,6 +95,7 @@ function createDirectoryFixture(): WorldPackageDirectoryV2 {
     featureResourceLocks: [],
     semanticActionDefinitions: [],
     availableCapabilityRefs: [],
+    initialRelationshipStates: [],
   });
   const compiled = compileWorldV5({
     normalizedWorldIr: normalized.value,

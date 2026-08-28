@@ -66,6 +66,7 @@ const GAMEPLAY_BOOTSTRAP_RESOURCE_LOCK =
     featureResourceLocks: [],
     semanticActionDefinitions: [],
     availableCapabilityRefs: [],
+    initialRelationshipStates: [],
   }));
 
 interface PreparedFixture {

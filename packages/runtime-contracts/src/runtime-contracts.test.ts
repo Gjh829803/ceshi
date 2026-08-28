@@ -6,12 +6,11 @@ import {
   EXECUTION_RESOURCE_KINDS_V1,
   canonicalExecutionResourceLockEntriesV1,
   canonicalWorldkitBrowserRouteEvidencePublicationV2,
-  type ExecutionAnimationSetV1,
-  type ExecutionColliderProfileV1,
-  type ExecutionRigProfileV1,
-  type ExecutionSubjectAssetV1,
-  type ExecutionSubjectCapabilityAssemblyV1,
-  type ExecutionSubjectV3,
+  type RuntimeAnimationSetV1,
+  type RuntimeColliderProfileV1,
+  type RuntimeRigProfileV1,
+  type RuntimeSubjectAssetV1,
+  type RuntimeSubjectCapabilityAssemblyV1,
   type ExecutionLayoutAssertionV1,
   type ExecutionStaticColliderV1,
   type ExecutionStaticColliderTraversalSurfaceV1,
@@ -29,6 +28,7 @@ import {
   type WorldkitBrowserRouteEvidencePublicationV2,
   type WorldkitBrowserDiagnosticV1,
 } from "./index";
+type ExecutionPlanSubjectV5 = ExecutionPlanV5["subjects"][number];
 import type {
   GameplayInspectionSnapshotV1,
   WorldStateSnapshotV1,
@@ -36,7 +36,7 @@ import type {
 
 const ROUTE_PUBLICATION_HASH = `sha256:${"a".repeat(64)}` as const;
 
-function capabilityAssemblyFixture(): ExecutionSubjectCapabilityAssemblyV1 {
+function capabilityAssemblyFixture(): RuntimeSubjectCapabilityAssemblyV1 {
   const motionProfile = {
     resourceRef: "worldkit://motion-profile/test@1",
     contentHash: ROUTE_PUBLICATION_HASH,
@@ -352,7 +352,7 @@ describe("runtime contracts V3", () => {
     }])).toThrowError("EXECUTION_RESOURCE_LOCK_INVALID");
   });
 
-  it("separates Subject Origin from Collider center in ExecutionSubjectV3", () => {
+  it("separates Subject Origin from Collider center in ExecutionPlanSubjectV5", () => {
     const subject = {
       entityId: "pack-animal-a",
       subjectDefinitionRef:
@@ -423,7 +423,7 @@ describe("runtime contracts V3", () => {
         },
       ],
       capabilityAssembly: capabilityAssemblyFixture(),
-    } satisfies ExecutionSubjectV3;
+    } satisfies ExecutionPlanSubjectV5;
 
     expect(subject).toMatchObject({
       subjectDefinitionRef:
@@ -457,7 +457,7 @@ describe("runtime contracts V3", () => {
         boneCount: 18,
         animationClipNames: ["idle", "jump", "run", "walk"],
       },
-    } satisfies ExecutionSubjectAssetV1;
+    } satisfies RuntimeSubjectAssetV1;
     const rigProfile = {
       rigProfileRef: "worldkit://rig-profile/biped.golden@2",
       bodyTopology: "biped",
@@ -482,7 +482,7 @@ describe("runtime contracts V3", () => {
         "lower-leg.right": "lower-leg.right",
         "foot.right": "foot.right",
       },
-    } satisfies ExecutionRigProfileV1;
+    } satisfies RuntimeRigProfileV1;
     const animationSet = {
       animationSetRef: "worldkit://animation-set/humanoid.ground.golden@2",
       subjectAssetRef: subjectAsset.subjectAssetRef,
@@ -501,7 +501,7 @@ describe("runtime contracts V3", () => {
           rootMotionMode: "in-place",
         },
       ],
-    } satisfies ExecutionAnimationSetV1;
+    } satisfies RuntimeAnimationSetV1;
     const colliderProfile = {
       colliderProfileRef: "worldkit://collider-profile/humanoid.medium-capsule@1",
       supportedBodyTopologies: ["biped"],
@@ -511,7 +511,7 @@ describe("runtime contracts V3", () => {
         heightMeters: 1.92,
         centerOffsetFromSubjectOriginMetersXYZ: [0, 0.96, 0],
       },
-    } satisfies ExecutionColliderProfileV1;
+    } satisfies RuntimeColliderProfileV1;
 
     expect(Object.keys(subjectAsset).sort()).toEqual([
       "artifactContentHash",

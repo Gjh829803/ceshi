@@ -9,3 +9,4 @@ export * from "./execution-plan";
 export * from "./runtime-session";
 export * from "./runtime-session-protocol";
 export * from "./visual-reconstruction";
+export * from "./world-runtime-bootstrap";

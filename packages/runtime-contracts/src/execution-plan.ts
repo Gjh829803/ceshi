@@ -31,6 +31,14 @@ import {
   type CameraRigParameterNameV1,
   type CameraRigParametersV1,
 } from "./camera-parameter-contract";
+import type {
+  RuntimeActionPresentationRegistryV1,
+  RuntimeAnimationSetV1,
+  RuntimeColliderProfileV1,
+  RuntimeRigProfileV1,
+  RuntimeSubjectAssetV1,
+  RuntimeSubjectDescriptorV1,
+} from "./world-runtime-bootstrap";
 
 export type Vec2 = readonly [x: number, z: number];
 export type Vec3 = readonly [x: number, y: number, z: number];
@@ -92,340 +100,17 @@ export interface ExecutionObjectV3 {
   semanticClassId: string;
 }
 
-export type SubjectVisualPrimitiveV3 =
-  | { kind: "box"; sizeMetersXYZ: Vec3 }
-  | { kind: "sphere"; radiusMeters: number }
-  | { kind: "cylinder"; radiusMeters: number; heightMeters: number }
-  | { kind: "capsule"; radiusMeters: number; heightMeters: number };
-
-export interface SubjectAssetInventoryV1 {
-  meshCount: number;
-  vertexCount: number;
-  triangleCount: number;
-  skeletonCount: number;
-  boneCount: number;
-  animationClipNames: readonly string[];
-}
-
-export interface ExecutionSubjectAssetV1 {
-  subjectAssetRef: string;
-  artifactContentHash: string;
-  byteLength: number;
-  mediaType: "model/gltf-binary";
-  format: "glb";
-  inventory: SubjectAssetInventoryV1;
-}
-
-export interface ExecutionRigProfileV1 {
-  rigProfileRef: string;
-  bodyTopology: "biped";
-  skeletonRootBoneName: string;
-  requiredBoneIds: readonly BipedBoneIdV1[];
-  sourceNodeNameByBoneId: Readonly<Record<BipedBoneIdV1, string>>;
-}
-
-export interface ExecutionAnimationBindingV1 {
-  actionId: GroundHumanoidActionIdV1;
-  sourceClipName: string;
-  semanticFamily: HumanoidAnimationSemanticFamilyV1;
-  automaticPresentationKeys: readonly AutomaticLocomotionPresentationKeyV1[];
-  loopMode: "repeat" | "once";
-  playbackSpeedRatio: number;
-  blendDurationSeconds: number;
-  rootMotionMode: "in-place";
-}
-
-export interface ExecutionAnimationSetV1 {
-  animationSetRef: string;
-  subjectAssetRef: string;
-  rigProfileRef: string;
-  defaultActionId: GroundHumanoidActionIdV1;
-  requiredActionIds: readonly GroundHumanoidActionIdV1[];
-  animationBindings: readonly ExecutionAnimationBindingV1[];
-}
-
-export interface ExecutionSubjectCapsuleV1 {
-  kind: "capsule";
-  radiusMeters: number;
-  heightMeters: number;
-  centerOffsetFromSubjectOriginMetersXYZ: Vec3;
-}
-
-export interface ExecutionColliderProfileV1 {
-  colliderProfileRef: string;
-  supportedBodyTopologies: readonly SubjectBodyTopologyV2[];
-  collider: ExecutionSubjectCapsuleV1;
-}
-
-export interface SubjectVisualPrimitivePartV3 {
-  id: string;
-  kind: "primitive";
-  shape: SubjectVisualPrimitiveV3;
-  localTransform: {
-    positionMetersXYZ: Vec3;
-    rotationEulerRadiansXYZ: Vec3;
-  };
-  semanticTags: readonly string[];
-}
-
-export interface SubjectVisualAssetPartV3 {
-  id: string;
-  kind: "asset";
-  subjectAssetRef: string;
-  localTransform: {
-    positionMetersXYZ: Vec3;
-    rotationEulerRadiansXYZ: Vec3;
-    scaleXYZ: Vec3;
-  };
-  appearance: { mode: "whitebox-neutral" };
-  semanticTags: readonly string[];
-}
-
-export type SubjectVisualPartV3 =
-  | SubjectVisualPrimitivePartV3
-  | SubjectVisualAssetPartV3;
-
-export interface SubjectLocalSocketV3 {
-  id: string;
-  kind: "local";
-  localTransform: {
-    positionMetersXYZ: Vec3;
-    rotationEulerRadiansXYZ: Vec3;
-  };
-  semanticTags: readonly string[];
-}
-
-export interface SubjectBoneSocketV3 {
-  id: string;
-  kind: "bone";
-  boneId: BipedBoneIdV1;
-  offsetTransform: {
-    positionMetersXYZ: Vec3;
-    rotationEulerRadiansXYZ: Vec3;
-  };
-  semanticTags: readonly string[];
-}
-
-export type SubjectSocketV3 = SubjectLocalSocketV3 | SubjectBoneSocketV3;
-
-export type ExecutionSubjectVisualBindingV1 =
-  | { mode: "static" }
-  | {
-      mode: "rigged";
-      rigProfileRef: string;
-      animationSetRef: string;
-    };
-
-export type ExecutionMovementMediumV1 = "ground" | "water" | "air";
-export type ExecutionMotionCommandKindV1 =
-  | "planar-vector"
-  | "throttle-steer"
-  | "flight-attitude"
-  | "none";
-
-export interface ExecutionMotionProfileV1 {
-  resourceRef: string;
-  contentHash: string;
-  motionKernelRef: string;
-  motionTags: readonly string[];
-}
-
-export interface ExecutionMotionKernelDefinitionV1 {
-  resourceRef: string;
-  implementationId:
-    | "free-ground"
-    | "forward-steer"
-    | "wheeled-arcade"
-    | "surface-slide"
-    | "water-surface"
-    | "unpowered-glide";
-  commandKind: ExecutionMotionCommandKindV1;
-  supportedMediums: readonly ExecutionMovementMediumV1[];
-  fallbackMotionProfileRef: string;
-  deterministic: true;
-}
-
-export interface ExecutionControlProfileV1 {
-  resourceRef: string;
-  contentHash: string;
-  commandKind: ExecutionMotionCommandKindV1;
-  inputSpace: "camera-relative" | "subject-local" | "flight-frame" | "none";
-  facingPolicy:
-    | "align-to-move"
-    | "align-to-view"
-    | "steering-derived"
-    | "flight-derived"
-    | "fixed";
-  lateralMovementPolicy: "allowed" | "forbidden";
-  moveDeadzoneRatio: number;
-}
-
-export interface ExecutionCameraRigProfileV1 {
-  resourceRef: string;
-  contentHash: string;
-  baseMode:
-    | "first-person"
-    | "free-orbit"
-    | "stable-follow"
-    | "speed-chase"
-    | "flight-horizon";
-  algorithmRef: string;
-  headingSource: "view" | "target-forward" | "target-velocity";
-  reverseHeadingPolicy: "follow-velocity" | "preserve-target-forward";
-  recenterMode: "off" | "forward-motion" | "always";
-  preferredSocketIds: readonly string[];
-  parameters: CameraRigParametersV1;
-  authoringRanges?: Readonly<Partial<
-    Record<CameraRigParameterNameV1, { minimum: number; maximum: number; step: number }>
-  >>;
-}
-
-export interface ExecutionCameraModifierProfileV1 {
-  resourceRef: string;
-  parameterOverrides: Readonly<Partial<ExecutionCameraRigProfileV1["parameters"]>>;
-  headingSourceOverride?: ExecutionCameraRigProfileV1["headingSource"];
-  reverseHeadingPolicyOverride?: ExecutionCameraRigProfileV1["reverseHeadingPolicy"];
-  recenterModeOverride?: ExecutionCameraRigProfileV1["recenterMode"];
-}
-
-export interface ExecutionCameraContextRuleV1 {
-  id: string;
-  priority: number;
-  when: {
-    relationshipRoles?: readonly ("none" | "rider" | "driver" | "passenger" | "tethered")[];
-    locomotionStatuses?: readonly ("active" | "suspended")[];
-    mobilityModes?: readonly MobilityModeV2[];
-    gaits?: readonly GaitV2[];
-    verticalPhases?: readonly VerticalPhaseV2[];
-    requiredActiveActionRefs?: readonly string[];
-    actionInterruptibility?: "interruptible" | "non-interruptible";
-    motionKernelRefs?: readonly string[];
-    requiredMotionTags?: readonly string[];
-    movementMediums?: readonly ExecutionMovementMediumV1[];
-    minimumSpeedMetersPerSecond?: number;
-    maximumSpeedMetersPerSecond?: number;
-    requiredSocketIds?: readonly string[];
-    requiredCameraContextTags?: readonly string[];
-  };
-  cameraRigProfileRef?: string;
-  cameraModifierRefs?: readonly string[];
-}
-
-export interface ExecutionSubjectCapabilityAssemblyV1 {
-  authoringAvailability: "recommended" | "advanced" | "experimental";
-  physicsBodyProfileRef: string;
-  locomotionProfileRef: string;
-  defaultMotionProfile: ExecutionMotionProfileV1;
-  optionalMotionProfiles: readonly ExecutionMotionProfileV1[];
-  fallbackMotionProfile: ExecutionMotionProfileV1;
-  motionKernels: readonly ExecutionMotionKernelDefinitionV1[];
-  controlProfile: ExecutionControlProfileV1;
-  cameraContext: {
-    resourceRef: string;
-    defaultCameraRigProfileRef: string;
-    firstPersonCameraRigProfileRef?: string;
-    rules: readonly ExecutionCameraContextRuleV1[];
-    cameraRigProfiles: readonly ExecutionCameraRigProfileV1[];
-    cameraModifierProfiles: readonly ExecutionCameraModifierProfileV1[];
-  };
-  mediumProfile: {
-    resourceRef: string;
-    air: { gravityRatio: number; linearDragPerSecond: number };
-  };
-  relationshipProfiles: readonly (
-    | Readonly<{
-        resourceRef: string;
-        relationshipType: "mountedOn";
-        requiredRiderSocketIds: readonly string[];
-        requiredMountSocketIds: readonly string[];
-        controlTransferMode: "keep-rider" | "to-mount" | "none";
-        cameraTargetRole: "controlled-entity" | "rider" | "mount";
-        maximumMountDistanceMeters?: number;
-      }>
-    | Readonly<{
-        resourceRef: string;
-        relationshipType: "seat";
-        requiredOccupantSocketIds: readonly string[];
-        requiredSeatSocketIds: readonly string[];
-      }>
-    | Readonly<{
-        resourceRef: string;
-        relationshipType: "tether";
-        requiredTetheredSocketIds: readonly string[];
-        requiredTetherAnchorSocketIds: readonly string[];
-      }>
-  )[];
-  harnessProfileRef: string;
-  requiredHarnessCheckIds: readonly string[];
-  actionOrPoseSetRef: string;
-  renderBindingProfileRef: string;
-}
-
-export interface ExecutionSubjectV3 {
-  entityId: string;
-  subjectDefinitionRef: string;
-  subjectDefinitionHash: string;
-  bodyTopology: SubjectBodyTopologyV2;
-  semanticClassId: string;
+type ExecutionPlanSubjectV5 = Omit<
+  RuntimeSubjectDescriptorV1,
+  "subjectDefinitionHash" | "capabilityAssembly" | "visualParts"
+> & {
+  subjectDefinitionHash: RuntimeSubjectDescriptorV1["subjectDefinitionHash"];
+  capabilityAssembly: RuntimeSubjectDescriptorV1["capabilityAssembly"];
+  visualParts: RuntimeSubjectDescriptorV1["visualParts"];
   spawnAnchorEntityId: string;
   spawnSubjectOriginPositionMetersXYZ: Vec3;
   spawnSubjectFacingRadians: number;
-  forwardDirection: "-z";
-  visualParts: readonly SubjectVisualPartV3[];
-  visualBinding: ExecutionSubjectVisualBindingV1;
-  sockets: readonly SubjectSocketV3[];
-  mountSlots: readonly ExecutionSubjectMountSlotV1[];
-  collider: {
-    kind: "capsule";
-    radiusMeters: number;
-    heightMeters: number;
-    centerOffsetFromSubjectOriginMetersXYZ: Vec3;
-    massKilograms: number;
-    maxSlopeDegrees: number;
-    maxStepHeightMeters: number;
-  };
-  locomotion: {
-    allowWalk: boolean;
-    allowRun: boolean;
-    allowJump: boolean;
-  };
-  locomotionCapabilityRef: string;
-  locomotionCapabilityHash: string;
-  physicsBodyProfileRef: string;
-  locomotionProfileRef: string;
-  controlFeel: {
-    resourceRef: string;
-    contentHash: string;
-    walkSpeedMetersPerSecond: number;
-    runSpeedMetersPerSecond: number;
-    jumpSpeedMetersPerSecond: number;
-    accelerationMetersPerSecondSquared: number;
-    decelerationMetersPerSecondSquared: number;
-    turnRateRadiansPerSecond: number;
-    moveResponseExponent: number;
-    airControlRatio: number;
-    coyoteTimeSeconds: number;
-    jumpBufferSeconds: number;
-    variableJumpHoldSeconds: number;
-    jumpHoldGravityRatio: number;
-    jumpReleaseGravityRatio: number;
-  };
-  /**
-   * Compiler-locked Feel surfaces the Runtime may switch among. Copied from
-   * Registry at compile time; the Runtime never reverse-reads the Registry.
-   */
-  availableControlFeels: readonly ExecutionSubjectV3["controlFeel"][];
-  capabilityAssembly: ExecutionSubjectCapabilityAssemblyV1;
-}
-
-export interface ExecutionSubjectMountSlotV1 {
-  readonly id: string;
-  readonly kind: "mount-slot";
-  readonly mode: "stand";
-  readonly mountSocketId: string;
-  readonly riderSubjectOriginOffsetMetersXYZ: Vec3;
-  readonly dismountCandidateOffsetsMetersXYZ: readonly Vec3[];
-}
+};
 
 interface ExecutionCameraCore {
   cameraEntityId: string;
@@ -657,12 +342,6 @@ export function canonicalExecutionResourceLockEntriesV1(
   return Object.freeze(rows);
 }
 
-export interface ExecutionActionPresentationRegistryV1 {
-  readonly schemaVersion: 1;
-  readonly bindings: readonly ActionPresentationBindingV1[];
-  readonly rootMotionSources: readonly LockedRootMotionSourceV1[];
-}
-
 export interface ExecutionPlanV5 {
   readonly kind: "worldkit-execution-plan";
   readonly schemaVersion: 5;
@@ -679,13 +358,13 @@ export interface ExecutionPlanV5 {
   readonly terrain: ExecutionTerrainV3;
   readonly waters: readonly ExecutionWaterV3[];
   readonly objects: readonly ExecutionObjectV3[];
-  readonly subjectAssets: readonly ExecutionSubjectAssetV1[];
-  readonly rigProfiles: readonly ExecutionRigProfileV1[];
-  readonly animationSets: readonly ExecutionAnimationSetV1[];
-  readonly colliderProfiles: readonly ExecutionColliderProfileV1[];
-  readonly actionPresentationRegistry: ExecutionActionPresentationRegistryV1;
+  readonly subjectAssets: readonly RuntimeSubjectAssetV1[];
+  readonly rigProfiles: readonly RuntimeRigProfileV1[];
+  readonly animationSets: readonly RuntimeAnimationSetV1[];
+  readonly colliderProfiles: readonly RuntimeColliderProfileV1[];
+  readonly actionPresentationRegistry: RuntimeActionPresentationRegistryV1;
   readonly initialControlledEntityId: string;
-  readonly subjects: readonly ExecutionSubjectV3[];
+  readonly subjects: readonly ExecutionPlanSubjectV5[];
   readonly initialRelationships: readonly MountedOnRelationshipStateV1[];
   readonly camera: ExecutionCameraV5;
   readonly resourceUsage: Readonly<{

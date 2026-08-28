@@ -13,6 +13,14 @@ describe("createCoreGameplayBootstrapV1", () => {
     const bootstrap = createCoreGameplayBootstrapV1({
       worldId: "route-world",
       worldSeed: 42,
+      initialRelationshipStates: [{
+        id: "relationship:player-controller",
+        type: "possessedBy",
+        schemaVersion: 1,
+        controlledEntityId: "player",
+        controllerEntityId: "controller.player",
+        establishedSimulationTick: 0,
+      }],
       entityDescriptors: [{
         id: "player",
         entityDefinitionRef: "worldkit://subject-definition/humanoid@1",
@@ -31,6 +39,14 @@ describe("createCoreGameplayBootstrapV1", () => {
       CONTROL_TRANSITION_CAPABILITY_REF,
       "worldkit://runtime-capability/ground-locomotion@1",
     ]);
+    expect(bootstrap.initialRelationshipStates).toEqual([{
+      id: "relationship:player-controller",
+      type: "possessedBy",
+      schemaVersion: 1,
+      controlledEntityId: "player",
+      controllerEntityId: "controller.player",
+      establishedSimulationTick: 0,
+    }]);
     expect(bootstrap).toMatchObject({
       id: "route-world.gameplay",
       version: 1,

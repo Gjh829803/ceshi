@@ -1,7 +1,7 @@
 import type {
   CameraRigParameterNameV1,
   CameraRigParametersV1,
-  ExecutionCameraContextRuleV1,
+  RuntimeCameraContextRuleV1,
 } from "@whitebox-world/runtime-contracts";
 import type { SubjectBodyTopologyV2 } from "@whitebox-world/subject-contracts";
 
@@ -174,7 +174,7 @@ export type RelationshipRoleV1 =
 export interface CameraContextRuleV1 {
   id: string;
   priority: number;
-  when: ExecutionCameraContextRuleV1["when"];
+  when: RuntimeCameraContextRuleV1["when"];
   cameraRigProfileRef?: string;
   cameraModifierRefs?: readonly string[];
 }

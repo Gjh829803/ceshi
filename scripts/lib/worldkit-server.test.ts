@@ -86,6 +86,9 @@ function gameplayBootstrapResourceLock(
         ...entityDescriptors.flatMap((descriptor) => descriptor.capabilityRefs),
         CONTROL_TRANSITION_CAPABILITY_REF,
       ]),
+      initialRelationshipStates: normalizedWorldIr.relationships.map(
+        (relationship) => ({ ...relationship, establishedSimulationTick: 0 }),
+      ),
     }),
   );
 }

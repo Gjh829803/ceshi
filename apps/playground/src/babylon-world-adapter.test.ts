@@ -75,6 +75,9 @@ function createLockedExecutionPlanV5(): ExecutionPlanV5 {
     worldId: normalized.value.id,
     worldSeed: normalized.value.seed,
     entityDescriptors: gameplayEntityDescriptors(normalized.value),
+    initialRelationshipStates: normalized.value.relationships.map(
+      (relationship) => ({ ...relationship, establishedSimulationTick: 0 }),
+    ),
   });
   const compiled = compileWorldV5({
     normalizedWorldIr: normalized.value,

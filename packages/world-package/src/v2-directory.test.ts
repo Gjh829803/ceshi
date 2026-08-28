@@ -94,6 +94,7 @@ function trustedBuildInput(
     featureResourceLocks: [],
     semanticActionDefinitions: [],
     availableCapabilityRefs: [],
+    initialRelationshipStates: [],
   });
   const compiled = compileWorldV5({
     normalizedWorldIr: normalized.value,
