@@ -535,6 +535,7 @@ export class BabylonWorldRuntime {
   private disposed = false;
   private latestRenderReadyReceipt: RenderReadyReceiptV1 | undefined;
   private appliedCameraViewStateRevision = 0;
+  private pendingCameraHeadingLockBeforeNextTick = false;
   private traversalConfigurationEpoch = 0;
   private readonly aggregates: PhysicsAggregate[] = [];
   private readonly ownedTerrainShape: PhysicsShape;
@@ -575,6 +576,7 @@ export class BabylonWorldRuntime {
       CameraComponentV1["captureTransactionState"]
     >;
     beforeCameraFovRadians: number;
+    beforePendingCameraHeadingLockBeforeNextTick: boolean;
   }> | undefined;
   readonly #creationExecutionPlanHash: `sha256:${string}` | undefined;
 
@@ -1021,7 +1023,7 @@ export class BabylonWorldRuntime {
     }
     if (input.ticks > 0) this.latestRenderReadyReceipt = undefined;
     for (let index = 0; index < input.ticks; index += 1) {
-      this.synchronizePublishedCameraView(0);
+      this.lockPublishedCameraHeadingBeforeTick();
       const controlledEntityId = this.controlledEntityId();
       const targetIsBound = controlledEntityId !== undefined;
       this.activeInputActions = targetIsBound ? [...input.actions] : [];
@@ -1295,7 +1297,11 @@ export class BabylonWorldRuntime {
       projectedViewStateAfter,
       commitPrepared: (): void => {
         if (lifecycle !== "prepared") return;
-        if (targetChanged) this.cameraComponent.resetViewPreference();
+        if (targetChanged) {
+          this.cameraComponent.resetViewPreference();
+          this.pendingCameraHeadingLockBeforeNextTick =
+            !isNil(previousControlledEntityId);
+        }
         lifecycle = "committed";
         this.gameplayPublishedState = stagedState;
         this.traversalConfigurationEpoch = traversalConfigurationEpochAfter;
@@ -1919,11 +1925,14 @@ export class BabylonWorldRuntime {
     const beforeCameraTransactionState =
       this.cameraComponent.captureTransactionState();
     const beforeCameraFovRadians = this.camera.fov;
+    const beforePendingCameraHeadingLockBeforeNextTick =
+      this.pendingCameraHeadingLockBeforeNextTick;
     this.preparedGoldenFixedInput = Object.freeze({
       beforeRuntimeProjection,
       beforeWorldProjection,
       beforeCameraTransactionState,
       beforeCameraFovRadians,
+      beforePendingCameraHeadingLockBeforeNextTick,
     });
     let projectedWorldStateAfter: ReturnType<
       BabylonGameplayRuntimeInternalV1["readWorldProjection"]
@@ -1997,6 +2006,7 @@ export class BabylonWorldRuntime {
       this.tick = 0;
       this.gameplayPublishedState = baseline;
       this.appliedCameraViewStateRevision = baseline.viewProjection.viewStateRevision;
+      this.pendingCameraHeadingLockBeforeNextTick = false;
       this.activeInputActions = EMPTY_INPUT_ACTIONS;
       this.activeInputAxes = EMPTY_INPUT_AXES;
       this.cameraComponent.restoreTransactionState(
@@ -2015,6 +2025,8 @@ export class BabylonWorldRuntime {
           historic.actionProjection,
         );
       }
+      this.pendingCameraHeadingLockBeforeNextTick =
+        prepared.beforePendingCameraHeadingLockBeforeNextTick;
       this.preparedGoldenFixedInput = undefined;
       const restoredProjection = this.snapshot();
       if (
@@ -2040,6 +2052,7 @@ export class BabylonWorldRuntime {
       throw new RangeError("Gameplay Runtime input must contain exactly one fixed Tick.");
     }
     this.assertActionProjectionForNextTick(actionProjection);
+    this.assertAdmittedGoldenActionProjection(actionProjection);
     this.latestRenderReadyReceipt = undefined;
     const targetEntityId = this.gameplayPublishedState.possessionTarget.mode ===
         "possessed"
@@ -2051,7 +2064,7 @@ export class BabylonWorldRuntime {
       ? { ...input.axes }
       : {};
     this.cameraComponent.setInputActions(this.activeInputActions);
-    this.synchronizePublishedCameraView(0);
+    this.lockPublishedCameraHeadingBeforeTick();
     const viewControlFrame = this.cameraComponent.controlFrame(this.tick);
     for (const subject of this.executionPlan.subjects) {
       const controller = this.controllerFor(subject.entityId);
@@ -2096,6 +2109,17 @@ export class BabylonWorldRuntime {
       throw new Error(
         "3C_ACTION_TICK_MISMATCH: committed Action projection must match the next Movement Tick.",
       );
+    }
+  }
+
+  private assertAdmittedGoldenActionProjection(
+    actionProjection: GameplayFixedTickActionProjectionV1,
+  ): void {
+    for (const subject of this.executionPlan.subjects) {
+      if (!isGoldenHumanoidControllerV1(this.controllerFor(subject.entityId))) {
+        continue;
+      }
+      this.goldenActionStateForSubject(actionProjection, subject.entityId);
     }
   }
 
@@ -2555,6 +2579,7 @@ export class BabylonWorldRuntime {
     });
     this.initializeInitialMountedRelationships();
     this.appliedCameraViewStateRevision = 0;
+    this.pendingCameraHeadingLockBeforeNextTick = false;
     this.goldenFixedInputHistory = [];
     this.goldenReplayBaselineState = undefined;
     this.activeInputActions = [];
@@ -2757,6 +2782,18 @@ export class BabylonWorldRuntime {
     if (controlledEntityId !== undefined) {
       this.updateCameraForEntity(controlledEntityId);
     }
+  }
+
+  private lockPublishedCameraHeadingBeforeTick(): void {
+    if (!this.pendingCameraHeadingLockBeforeNextTick) {
+      return;
+    }
+    // Possessed A→B rebind must lock heading from the new Subject before
+    // controlFrame is read. Initial unbound→possess leaves this false so the
+    // first Golden Tick publishes one Motion Kernel Camera Context, and render
+    // can still initialize the unused published view.
+    this.synchronizePublishedCameraView(0);
+    this.pendingCameraHeadingLockBeforeNextTick = false;
   }
 
   private synchronizePublishedCameraView(deltaSeconds = 0): void {

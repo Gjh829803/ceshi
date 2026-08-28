@@ -473,8 +473,10 @@ export class GroundAwarePhysicsCharacterController extends PhysicsCharacterContr
           isSurfaceDynamic: false,
         }
       : surfaceInfo;
+    // Walk-speed look-ahead may only fire on SUPPORTED ground. SLIDING is
+    // Havok contact against a wall or box face, not an authored step-up.
     this.stepUpEnabledForCurrentIntegrate =
-      effectiveSurfaceInfo.supportedState !== CharacterSupportedState.UNSUPPORTED;
+      effectiveSurfaceInfo.supportedState === CharacterSupportedState.SUPPORTED;
     try {
       super.integrate(deltaTime, effectiveSurfaceInfo, gravity);
       if (!leavesSupport) {
