@@ -543,24 +543,23 @@ import {
 } from "@whitebox-world/native-babylon";
 ```
 
-Babylon 原生能力继续直接从一个冻结的官方 Import Profile 导入。不得在同一代 Golden 中混用
-namespace、root barrel、深层路径和旧 `babylonjs` 方言。
+Babylon 原生能力继续直接从冻结的 **Deep ESM Import Profile** 导入。不得使用 bare
+`@babylonjs/core` root barrel、namespace import、旧 `babylonjs` 方言，或在同一代 Golden 中混用路径。
 
 ```ts
-// 仅展示候选写法；BNA-2 选择 Import Profile 后，所有正式示例必须机械统一。
-import {
-  Color3,
-  MeshBuilder,
-  StandardMaterial,
-  Vector3,
-} from "@babylonjs/core";
+import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
+import { Color3 } from "@babylonjs/core/Maths/math.color.js";
+import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
+import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
+import { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 ```
 
-BNA-2 必须用同一参考场景与同一 Agent 提示对候选 Import Profile 做 bake-off，并同时记录首轮生成/
-修复成功率、Typecheck、Bundle bytes/module graph、启动/解析时间和 forbidden-import census。当前
-`@babylonjs/core@9.23.0` 的 root index 属于 package 标记的 side-effectful index 范围，因此不能仅凭
-“模型更熟悉”提前冻结 root barrel。选定结果进入 `nativeSceneApiRef`/Profile 和 Golden；之后只保留一套
-公开写法。
+BNA-2 bake-off 见 `docs/reviews/2026-08-28-babylon-native-import-profile-bakeoff.md`。在当前
+`@babylonjs/core@9.23.0` 上，同一五符号 Deep ESM fixture 稳定产生 330 modules / 2,884,740 bytes；
+root barrel 因 package 标记的 side-effectful index 在超过 150 秒后仍未完成，已被工程门禁淘汰。淘汰候选
+不进入永久 Test Lane；`@whitebox-world/native-babylon` 的 Package Boundary 直接禁止它。未来 Babylon
+升级时重做一次性 bake-off 并 current-only 替换本结论，不并存两套公开写法。BNA-6 再用冻结后的唯一
+Profile 测量模型首轮生成/修复成功率，不能用生成便利性推翻本边界。
 
 `@whitebox-world/native-babylon` 不重写 `MeshBuilder`、`Material`、`Light` 或 Transform API。
 它只提供 `defineBabylonNativeScene`、BuildContext、登记合同、资源 Resolver 和结构化诊断类型。

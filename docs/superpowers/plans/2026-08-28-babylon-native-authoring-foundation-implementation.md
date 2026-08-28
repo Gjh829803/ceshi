@@ -46,73 +46,37 @@ The Foundation review is an internal engineering checkpoint, not a supported com
 ### Task 1: Freeze the Babylon Import Profile with reproducible evidence
 
 **Files:**
-- Create: `scripts/benchmarks/babylon-native-import-profile.test.ts`
-- Create: `scripts/benchmarks/babylon-native-import-profile.ts`
-- Create: `scripts/benchmarks/fixtures/babylon-native-root-import.ts`
-- Create: `scripts/benchmarks/fixtures/babylon-native-deep-import.ts`
 - Create: `docs/reviews/2026-08-28-babylon-native-import-profile-bakeoff.md`
-- Modify: `package.json`
-- Modify: `scripts/lib/test-gate-manifest.ts`
+- Create: `artifacts/native-import-profile/bakeoff.json`
+- Modify: `docs/superpowers/specs/2026-08-28-ai-friendly-babylon-native-world-authoring-design.md`
 
 **Interfaces:**
-- Consumes: the installed `@babylonjs/core@9.23.0`, Vite's programmatic build API, and two source-equivalent scene fixtures.
-- Produces: root command `pnpm benchmark:native-import-profile`, a deterministic JSON measurement object, and a checked-in decision selecting exactly one public Import Profile.
+- Consumes: the installed `@babylonjs/core@9.23.0`, its package side-effect declaration, Vite's programmatic build API, and two source-equivalent temporary scene fixtures.
+- Produces: immutable decision evidence selecting exactly one public Import Profile. The rejected candidate is not retained as a recurring repository test or supported dialect.
 
-- [ ] **Step 1: Write the failing benchmark contract test**
+- [x] **Step 1: Run the source-equivalent one-time bake-off**
 
-Create a test that imports `measureBabylonNativeImportProfilesV1()` and asserts two candidates named `root-barrel` and `deep-esm`, identical required Babylon symbols, positive output bytes/module counts, no external imports, and stable ordering:
+Use equivalent temporary fixtures that reference exactly `Color3`, `MeshBuilder`, `StandardMaterial`, `TransformNode`, and `Vector3`. Build with the installed Vite API, `minify: false`, `sourcemap: false`, `write: false`, ES output, and no external imports. Record exact environment, bytes, module count, elapsed time and any bounded rejection.
 
-```ts
-it("measures the two source-equivalent Babylon import profiles", async () => {
-  const result = await measureBabylonNativeImportProfilesV1({
-    workspaceRoot: process.cwd(),
-  });
-  expect(result.schemaVersion).toBe(1);
-  expect(result.candidates.map(({ id }) => id)).toEqual([
-    "deep-esm",
-    "root-barrel",
-  ]);
-  expect(result.candidates.every(({ outputBytes, moduleCount }) =>
-    outputBytes > 0 && moduleCount > 0
-  )).toBe(true);
-  expect(result.candidates.every(({ requiredSymbols }) =>
-    requiredSymbols.join(",") ===
-      "Color3,MeshBuilder,StandardMaterial,TransformNode,Vector3"
-  )).toBe(true);
-});
-```
+- [x] **Step 2: Reject an unbounded candidate honestly**
 
-- [ ] **Step 2: Run the focused test and verify RED**
+Do not turn a rejected Import Profile into a permanent resource-heavy contract test. If the candidate does not complete within the engineering observation budget, stop it, record the elapsed lower bound and `null` for unavailable bytes/module count, and reject it. Never synthesize measurement values.
 
-Run:
+- [x] **Step 3: Freeze Deep ESM as the only current dialect**
+
+Update the authoritative Spec and review with the selected exact deep module paths. Root barrel, namespace imports, and mixed import styles are forbidden in Native modules and examples.
+
+- [x] **Step 4: Bind the decision to permanent enforcement**
+
+Task 3's package-boundary test must fail on bare `@babylonjs/core`, namespace imports, old `babylonjs`, or imports outside the frozen deep-path allowlist. That behavior test, not rerunning the discarded candidate, is the durable regression gate.
+
+- [x] **Step 5: Commit the decision evidence**
+
+Run `git diff --check`, verify the JSON parses, and commit:
 
 ```bash
-pnpm vitest run scripts/benchmarks/babylon-native-import-profile.test.ts
-```
-
-Expected: FAIL because `babylon-native-import-profile.ts` does not exist.
-
-- [ ] **Step 3: Implement the two fixtures and deterministic measurement**
-
-Both fixtures create the same five-symbol, no-render-loop module. Build each through Vite with minification disabled and a temporary output directory created by `mkdtemp`; collect emitted JavaScript bytes, module count, elapsed seconds, and the exact imported Babylon module IDs. Sort all arrays before returning, remove the temporary directory in `finally`, and never write benchmark output outside the explicit `--output` path.
-
-- [ ] **Step 4: Verify GREEN and freeze the decision**
-
-Run the focused test, then:
-
-```bash
-pnpm benchmark:native-import-profile -- --output artifacts/native-import-profile/bakeoff.json
-```
-
-Expected: both commands exit `0`. Write the measured values and decision to the review. Select `deep-esm` unless the measured root-barrel candidate has no additional module/byte/startup cost and passes the same forbidden-import census; record the exact exception if root-barrel wins.
-
-- [ ] **Step 5: Register the test and commit**
-
-Add the test as `contract`, add the stable root script, run `pnpm test:census`, and commit:
-
-```bash
-git add package.json scripts/benchmarks scripts/lib/test-gate-manifest.ts docs/reviews/2026-08-28-babylon-native-import-profile-bakeoff.md
-git commit -m "test: freeze Babylon native import profile"
+git add artifacts/native-import-profile/bakeoff.json docs/reviews/2026-08-28-babylon-native-import-profile-bakeoff.md docs/superpowers/specs/2026-08-28-ai-friendly-babylon-native-world-authoring-design.md docs/superpowers/plans/2026-08-28-babylon-native-authoring-foundation-implementation.md
+git commit -m "docs: freeze Babylon native import profile"
 ```
 
 ---
