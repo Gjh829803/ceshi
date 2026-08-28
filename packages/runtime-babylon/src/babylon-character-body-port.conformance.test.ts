@@ -528,6 +528,48 @@ describe("Babylon 9.23.0 / Havok 1.3.14 Character Body conformance", () => {
     30_000,
   );
 
+  it("uses a fully supported step height without amplifying the horizontal proposal", async () => {
+    const { scene } = await realScene();
+    addStaticBox(scene, "floor", new Vector3(0, -0.1, 0), new Vector3(10, 0.2, 10));
+    addStaticBox(
+      scene,
+      "step",
+      new Vector3(1.7, 0.1, 0),
+      new Vector3(2, 0.2, 4),
+    );
+    const port = createBabylonCharacterBodyPortV1({
+      ...realPortOptions(scene),
+      capsule: { heightMeters: 1.92, radiusMeters: 0.32 },
+      resetState: {
+        positionMetersXYZ: [0.4, 0.96, 0],
+        linearVelocityMetersPerSecondXYZ: [0, 0, 0],
+      },
+    });
+    disposals.push(() => port.dispose());
+    const token = createMovementTickTokenV1();
+    const sample = port.beginTick({ token, tick: 1 });
+    expect(sample.support.mode).toBe("supported");
+
+    const resolution = port.resolve({
+      token,
+      proposal: {
+        schemaVersion: 1,
+        token,
+        tick: 1,
+        translationDeltaMetersXYZ: [0.04, 0, 0],
+        proposedLinearVelocityMetersPerSecondXYZ: [2.4, 0, 0],
+        proposedFacingYawRadians: 0,
+        layeredMoves: [],
+      },
+    });
+    const tolerance = BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1;
+    expect(resolution.appliedTranslationMetersXYZ[0]).toBeGreaterThan(0);
+    expect(resolution.appliedTranslationMetersXYZ[0])
+      .toBeLessThanOrEqual(0.04 + tolerance);
+    expect(resolution.appliedTranslationMetersXYZ[1]).toBeGreaterThan(0.15);
+    expect(resolution.support.mode).toBe("supported");
+  }, 30_000);
+
   it("climbs a 0.25m step across walk-speed ticks without remaining on the riser", async () => {
     const { scene } = await realScene();
     addStaticBox(scene, "floor", new Vector3(0, -0.1, 0), new Vector3(16, 0.2, 8));

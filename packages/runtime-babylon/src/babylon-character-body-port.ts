@@ -492,25 +492,83 @@ export class GroundAwarePhysicsCharacterController extends PhysicsCharacterContr
       1,
       requestedHorizontalMeters / preflightHorizontalMeters,
     );
-    const candidate = snapshot.position.add(
+    const proportionalCandidate = snapshot.position.add(
       preflightDisplacement.scale(progressRatio),
     );
-    this._refreshManifoldAtPosition(candidate);
-    const manifold = this.privateHost()._manifold;
+    const fullHeightCandidate = snapshot.position.add(
+      preflightHorizontal.scale(progressRatio),
+    ).add(this.up.scale(stepHeight));
     const minimumWalkableAlignment = Math.max(this.maxSlopeCosine, 0.1);
-    const hasSafeLanding = manifold.some((contact) =>
-      contact.bodyB.body.getMotionType(contact.bodyB.index) !==
-        DYNAMIC_PHYSICS_MOTION_TYPE &&
-      Vector3.Dot(contact.normal, this.up) >= minimumWalkableAlignment &&
-      contact.distance <= this.keepContactTolerance + this.keepDistance
-    );
-    const penetratesBlockingSurface = manifold.some((contact) =>
-      Vector3.Dot(contact.normal, this.up) < minimumWalkableAlignment &&
-      contact.distance < -this.keepDistance
-    );
-    if (!hasSafeLanding || penetratesBlockingSurface) {
+    const settleSafeLanding = (candidate: Vector3): Vector3 | undefined => {
+      this._refreshManifoldAtPosition(candidate);
+      let manifold = this.privateHost()._manifold;
+      let walkableContacts = manifold.filter((contact) =>
+        contact.bodyB.body.getMotionType(contact.bodyB.index) !==
+          DYNAMIC_PHYSICS_MOTION_TYPE &&
+        Vector3.Dot(contact.normal, this.up) >= minimumWalkableAlignment
+      );
+      let penetratesBlockingSurface = manifold.some((contact) =>
+        Vector3.Dot(contact.normal, this.up) < minimumWalkableAlignment &&
+        contact.distance < -this.keepDistance
+      );
+      if (penetratesBlockingSurface) return undefined;
+      if (walkableContacts.some((contact) =>
+        contact.distance <= this.keepContactTolerance
+      )) return candidate;
+
+      const nearbyWalkableContacts = walkableContacts.filter((contact) =>
+        contact.distance <= this.keepContactTolerance + this.keepDistance
+      );
+      if (nearbyWalkableContacts.length === 0) return undefined;
+      const targetDistance = Math.max(
+        this.keepContactTolerance - Math.min(this.keepDistance, 0.001),
+        0,
+      );
+      const landingDrop = Math.min(...nearbyWalkableContacts.map((contact) =>
+        (contact.distance - targetDistance) /
+        Vector3.Dot(contact.normal, this.up)
+      ));
+      if (!(landingDrop > 0)) return undefined;
+      const settledCandidate = candidate.subtract(this.up.scale(landingDrop));
+      const settledStepHeight = Vector3.Dot(
+        settledCandidate.subtract(snapshot.position),
+        this.up,
+      );
+      if (!(settledStepHeight > 1e-4) ||
+        settledStepHeight >
+          this.maxStepHeight + BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1) {
+        return undefined;
+      }
+
+      this._refreshManifoldAtPosition(settledCandidate);
+      manifold = this.privateHost()._manifold;
+      walkableContacts = manifold.filter((contact) =>
+        contact.bodyB.body.getMotionType(contact.bodyB.index) !==
+          DYNAMIC_PHYSICS_MOTION_TYPE &&
+        Vector3.Dot(contact.normal, this.up) >= minimumWalkableAlignment
+      );
+      penetratesBlockingSurface = manifold.some((contact) =>
+        Vector3.Dot(contact.normal, this.up) < minimumWalkableAlignment &&
+        contact.distance < -this.keepDistance
+      );
+      return !penetratesBlockingSurface && walkableContacts.some((contact) =>
+          contact.distance <= this.keepContactTolerance
+        )
+        ? settledCandidate
+        : undefined;
+    };
+
+    // Prefer the complete legal step height at this Tick's exact horizontal
+    // progress. When the clipped position has not reached a real walkable
+    // contact yet, retain the earlier proportional, support-preserving path.
+    let candidate = settleSafeLanding(fullHeightCandidate);
+    if (candidate === undefined) {
       this.restoreTransactionalState(snapshot);
-      return -1;
+      candidate = settleSafeLanding(proportionalCandidate);
+      if (candidate === undefined) {
+        this.restoreTransactionalState(snapshot);
+        return -1;
+      }
     }
     const displacement = candidate.subtract(snapshot.position);
     this.privateHost()._lastDisplacement.copyFrom(displacement);
