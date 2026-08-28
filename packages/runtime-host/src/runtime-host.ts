@@ -1,4 +1,8 @@
-import { worldPackageRootHashFromRefV1, type WorldPackageRefV1 } from "@whitebox-world/world-identity";
+import {
+  hashWorldBuildIdentityV1,
+  parseWorldBuildIdentityV1,
+  type WorldBuildIdentityV1,
+} from "@whitebox-world/world-identity";
 
 import type { Sha256HashV1 } from "@whitebox-world/protocol";
 
@@ -23,16 +27,15 @@ import type {
   GameplayModeV1,
 } from "@whitebox-world/gameplay";
 import {
-  hashExecutionPlanV5,
-  parseExecutionPlanV5,
-  type ExecutionPlanV5,
+  parseBabylonNativeSceneBootstrapV1,
+  hashCanonicalSceneExecutionPlanV1,
+  parseCanonicalSceneExecutionPlanV1,
+  parseWorldRuntimeBootstrapV1,
+  type BabylonNativeSceneBootstrapV1,
+  type CanonicalSceneExecutionPlanV1,
+  type WorldRuntimeBootstrapV1,
 } from "@whitebox-world/runtime-contracts";
-import {
-  assertWorldPackageAccessorFreeDataGraphV1,
-  assertWorldPackageBuildReceiptV2,
-  assertWorldPackageGameplayBootstrapMembershipV2,
-  type WorldPackageBuildReceiptV2,
-} from "@whitebox-world/world-package";
+import { assertWorldPackageAccessorFreeDataGraphV1 } from "@whitebox-world/world-package";
 import { isNil } from "lodash-es";
 
 import type { GameplayWorldPortV1 } from "./gameplay-world-port";
@@ -416,12 +419,26 @@ export class RuntimeActivityCoordinator {
   }
 }
 
+export type NativeSceneModuleBundleRefV1 =
+  `package://native-scene-module/sha256/${string}`;
+
+export type RuntimeSceneSourceV1 =
+  | Readonly<{
+      kind: "canonical-execution-plan";
+      executionPlan: CanonicalSceneExecutionPlanV1;
+      executionPlanHash: Sha256HashV1;
+    }>
+  | Readonly<{
+      kind: "babylon-native-scene";
+      bootstrap: BabylonNativeSceneBootstrapV1;
+      sceneModuleBundleRef: NativeSceneModuleBundleRefV1;
+    }>;
+
 export interface RuntimeWorldConfigurationV1 {
-  readonly executionPlan: ExecutionPlanV5;
-  readonly executionPlanHash: Sha256HashV1;
-  readonly worldPackageRef: WorldPackageRefV1;
-  readonly worldPackageBuildReceipt: WorldPackageBuildReceiptV2;
+  readonly worldBuildIdentity: WorldBuildIdentityV1;
   readonly gameplayBootstrap: GameplayBootstrapV1;
+  readonly worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
+  readonly sceneSource: RuntimeSceneSourceV1;
 }
 
 export interface RuntimeHostCapacityBudgetV1 {
@@ -432,8 +449,13 @@ export interface RuntimeHostCapacityBudgetV1 {
 export interface RuntimeWorldAdapterDescriptorV1 {
   readonly runtimeSessionId: string;
   readonly worldSessionId: string;
-  readonly executionPlan: ExecutionPlanV5;
-  readonly executionPlanHash: Sha256HashV1;
+  readonly worldBuildIdentity: WorldBuildIdentityV1;
+  readonly gameplayBootstrap: GameplayBootstrapV1;
+  readonly worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
+  readonly sceneSource: Extract<
+    RuntimeSceneSourceV1,
+    { readonly kind: "canonical-execution-plan" }
+  >;
 }
 
 export type ConcurrentResidencyPreflightResultV1 =
@@ -627,8 +649,7 @@ function publicationIdentitiesV1(
   return Object.freeze({
     runtimeSessionId,
     worldSessionId: worldSession.worldSessionId,
-    worldPackageRootHash:
-      configuration.worldPackageBuildReceipt.worldPackageRootHash,
+    worldPackageRootHash: configuration.worldBuildIdentity.worldPackageRootHash,
     simulationTick: worldSession.snapshot().worldState.simulationTick,
   });
 }
@@ -739,8 +760,12 @@ function parsePublishWorldReplacementInput(
       "Value must match the closed PublishWorldReplacementInputV1 schema.",
     );
   }
+  const worldConfiguration = parseRuntimeWorldConfiguration(
+    record.worldConfiguration,
+  );
+  requireCanonicalRuntimeConfiguration(worldConfiguration);
   return Object.freeze({
-    worldConfiguration: parseRuntimeWorldConfiguration(record.worldConfiguration),
+    worldConfiguration,
     publication: parseRuntimeWorldPublicationEnvelope(record.publication),
     ...(hasCommit
       ? {
@@ -857,63 +882,119 @@ function parseRuntimeWorldConfiguration(
   if (
     isNil(record) ||
     !hasExactKeys(record, [
-      "executionPlan",
-      "executionPlanHash",
-      "worldPackageRef",
-      "worldPackageBuildReceipt",
+      "worldBuildIdentity",
       "gameplayBootstrap",
-    ]) ||
-    !isSha256Hash(record.executionPlanHash) ||
-    !isNonEmptyString(record.worldPackageRef)
+      "worldRuntimeBootstrap",
+      "sceneSource",
+    ])
   ) {
     throw new RangeError(
       "Value must match the closed RuntimeWorldConfigurationV1 schema.",
     );
   }
-  let executionPlan: ExecutionPlanV5;
-  const receiptRecord = snapshotDataRecord(record.worldPackageBuildReceipt);
-  if (!isNil(receiptRecord) && receiptRecord.schemaVersion === 1) {
-    throw new RangeError(
-      "WORLD_PACKAGE_VERSION_UNSUPPORTED: RuntimeWorldConfigurationV1 requires WorldPackage V2",
-    );
-  }
-  let worldPackageBuildReceipt: WorldPackageBuildReceiptV2;
+  let worldBuildIdentity: WorldBuildIdentityV1;
   let gameplayBootstrap: GameplayBootstrapV1;
+  let worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
+  let sceneSource: RuntimeSceneSourceV1;
   try {
-    executionPlan = parseExecutionPlanV5(record.executionPlan);
-    if (hashExecutionPlanV5(executionPlan) !== record.executionPlanHash) {
-      throw new RangeError("ExecutionPlanV5 hash mismatch.");
-    }
-    worldPackageBuildReceipt = assertWorldPackageBuildReceiptV2(
-      record.worldPackageBuildReceipt,
-    );
+    worldBuildIdentity = parseWorldBuildIdentityV1(record.worldBuildIdentity);
     gameplayBootstrap = parseGameplayBootstrapV1(record.gameplayBootstrap);
-    assertWorldPackageGameplayBootstrapMembershipV2({
-      executionPlan,
-      gameplayBootstrap,
-      worldPackageBuildReceipt,
-    });
+    worldRuntimeBootstrap = parseWorldRuntimeBootstrapV1(
+      record.worldRuntimeBootstrap,
+    );
+    const sourceRecord = snapshotDataRecord(record.sceneSource);
+    if (isNil(sourceRecord)) throw new Error("Scene Source invalid.");
+    if (
+      sourceRecord.kind === "canonical-execution-plan" &&
+      hasExactKeys(sourceRecord, ["kind", "executionPlan", "executionPlanHash"]) &&
+      isSha256Hash(sourceRecord.executionPlanHash)
+    ) {
+      const executionPlan = parseCanonicalSceneExecutionPlanV1(
+        sourceRecord.executionPlan,
+      );
+      if (hashCanonicalSceneExecutionPlanV1(executionPlan) !== sourceRecord.executionPlanHash) {
+        throw new Error("Canonical Scene Plan hash mismatch.");
+      }
+      sceneSource = Object.freeze({
+        kind: "canonical-execution-plan",
+        executionPlan,
+        executionPlanHash: sourceRecord.executionPlanHash,
+      });
+    } else if (
+      sourceRecord.kind === "babylon-native-scene" &&
+      hasExactKeys(sourceRecord, ["kind", "bootstrap", "sceneModuleBundleRef"]) &&
+      typeof sourceRecord.sceneModuleBundleRef === "string" &&
+      /^package:\/\/native-scene-module\/sha256\/[a-f0-9]{64}$/.test(
+        sourceRecord.sceneModuleBundleRef,
+      )
+    ) {
+      sceneSource = Object.freeze({
+        kind: "babylon-native-scene",
+        bootstrap: parseBabylonNativeSceneBootstrapV1(sourceRecord.bootstrap),
+        sceneModuleBundleRef:
+          sourceRecord.sceneModuleBundleRef as NativeSceneModuleBundleRefV1,
+      });
+    } else {
+      throw new Error("Scene Source invalid.");
+    }
   } catch {
     throw new RangeError(
       "Value must match the closed RuntimeWorldConfigurationV1 schema.",
     );
   }
+  const runtimeSubjects = worldRuntimeBootstrap.subjectRuntimeDescriptors;
+  const initialRuntimeSubjects = runtimeSubjects.filter((subject) =>
+    subject.entityId === worldRuntimeBootstrap.initialControlledEntityId
+  );
   if (
-    worldPackageBuildReceipt.manifest.executionPlanHash !==
-      record.executionPlanHash ||
-    worldPackageRootHashFromRefV1(record.worldPackageRef) !==
-      worldPackageBuildReceipt.worldPackageRootHash
+    worldBuildIdentity.gameplayBootstrapHash !== gameplayBootstrap.contentHash ||
+    worldBuildIdentity.worldRuntimeBootstrapHash !==
+      worldRuntimeBootstrap.contentHash ||
+    worldRuntimeBootstrap.gameplayBootstrapRef !== gameplayBootstrap.resourceRef ||
+    worldRuntimeBootstrap.gameplayBootstrapHash !== gameplayBootstrap.contentHash ||
+    initialRuntimeSubjects.length !== 1 ||
+    gameplayBootstrap.entityDescriptors.some((gameplayEntity) => {
+      const runtimeSubject = runtimeSubjects.find((subject) =>
+        subject.entityId === gameplayEntity.id
+      );
+      return isNil(runtimeSubject) ||
+        runtimeSubject.subjectDefinitionRef !==
+          gameplayEntity.entityDefinitionRef;
+    }) ||
+    runtimeSubjects.some((runtimeSubject) =>
+      !gameplayBootstrap.entityDescriptors.some((gameplayEntity) =>
+        gameplayEntity.id === runtimeSubject.entityId
+      )
+    )
   ) {
     throw new RangeError(
       "Value must match the closed RuntimeWorldConfigurationV1 schema.",
     );
   }
+  if (sceneSource.kind === "canonical-execution-plan") {
+    if (
+      worldBuildIdentity.sceneSourceIdentity.kind !==
+        "canonical-execution-plan" ||
+      worldBuildIdentity.sceneSourceIdentity.executionPlanHash !==
+        sceneSource.executionPlanHash ||
+      sceneSource.executionPlan.worldRuntimeBootstrapHash !==
+        worldRuntimeBootstrap.contentHash ||
+      sceneSource.executionPlan.worldRuntimeBootstrapRef.length === 0
+    ) {
+      throw new RangeError(
+        "Value must match the closed RuntimeWorldConfigurationV1 schema.",
+      );
+    }
+  } else if (worldBuildIdentity.sceneSourceIdentity.kind !== "babylon-native-scene") {
+    throw new RangeError(
+      "Value must match the closed RuntimeWorldConfigurationV1 schema.",
+    );
+  }
   return Object.freeze({
-    executionPlan,
-    executionPlanHash: record.executionPlanHash,
-    worldPackageRef: record.worldPackageRef as WorldPackageRefV1,
-    worldPackageBuildReceipt,
+    worldBuildIdentity,
     gameplayBootstrap,
+    worldRuntimeBootstrap,
+    sceneSource,
   });
 }
 
@@ -1090,6 +1171,7 @@ function parseRuntimeHostCreateOptions(
     "Value must match the closed RuntimeHostCreateOptionsV1 schema.",
   );
   const initialWorld = parseRuntimeWorldConfiguration(record.initialWorld);
+  requireCanonicalRuntimeConfiguration(initialWorld);
   const gameplayCapacityBudget = parseGameplayCapacityBudgetV1(
     record.gameplayCapacityBudget,
   );
@@ -1162,7 +1244,24 @@ function parseReplacementRequest(input: unknown): RuntimeWorldConfigurationV1 {
       "Value must match the closed RuntimeWorldReplacementRequestV1 schema.",
     );
   }
-  return parseRuntimeWorldConfiguration(record.worldConfiguration);
+  const configuration = parseRuntimeWorldConfiguration(record.worldConfiguration);
+  requireCanonicalRuntimeConfiguration(configuration);
+  return configuration;
+}
+
+function requireCanonicalRuntimeConfiguration(
+  configuration: RuntimeWorldConfigurationV1,
+): asserts configuration is RuntimeWorldConfigurationV1 & Readonly<{
+  sceneSource: Extract<
+    RuntimeSceneSourceV1,
+    { readonly kind: "canonical-execution-plan" }
+  >;
+}> {
+  if (configuration.sceneSource.kind !== "canonical-execution-plan") {
+    throw new Error(
+      "WORLDKIT_NATIVE_SCENE_PRODUCTION_NOT_ADMITTED: formal Native Runtime admission requires BNA-3 and BNA-4.",
+    );
+  }
 }
 
 function parseInitialControlBinding(
@@ -1223,11 +1322,14 @@ function descriptor(
   worldSessionId: string,
   configuration: RuntimeWorldConfigurationV1,
 ): RuntimeWorldAdapterDescriptorV1 {
+  requireCanonicalRuntimeConfiguration(configuration);
   return Object.freeze({
     runtimeSessionId,
     worldSessionId,
-    executionPlan: configuration.executionPlan,
-    executionPlanHash: configuration.executionPlanHash,
+    worldBuildIdentity: configuration.worldBuildIdentity,
+    gameplayBootstrap: configuration.gameplayBootstrap,
+    worldRuntimeBootstrap: configuration.worldRuntimeBootstrap,
+    sceneSource: configuration.sceneSource,
   });
 }
 
@@ -1307,12 +1409,10 @@ export class RuntimeHost {
       worldSession = await WorldSession.create({
         runtimeSessionId: options.runtimeSessionId,
         worldSessionId,
-        worldPackageRef: options.initialWorld.worldPackageRef,
-        worldPackageRootHash:
-          options.initialWorld.worldPackageBuildReceipt.worldPackageRootHash,
-        executionPlanHash: options.initialWorld.executionPlanHash,
+        worldBuildIdentity: options.initialWorld.worldBuildIdentity,
         gameplayBootstrap: options.initialWorld.gameplayBootstrap,
-        initialRelationships: options.initialWorld.executionPlan.initialRelationships,
+        initialRelationships:
+          options.initialWorld.gameplayBootstrap.initialRelationshipStates,
         participantStates: options.participantStates,
         controllerStates: options.controllerStates,
         fixedInputControllerEntityId: options.fixedInputControllerEntityId,
@@ -1588,7 +1688,7 @@ export class RuntimeHost {
     return expectation.runtimeSessionId === this.runtimeSessionId &&
       expectation.expectedWorldSessionId === this.currentWorldSessionId &&
       expectation.expectedWorldPackageRootHash ===
-        this.currentConfiguration.worldPackageBuildReceipt.worldPackageRootHash;
+        this.currentConfiguration.worldBuildIdentity.worldPackageRootHash;
   }
 
   private async performPublicationReplacement(
@@ -1724,12 +1824,10 @@ export class RuntimeHost {
       candidate = await WorldSession.create({
         runtimeSessionId: this.runtimeSessionId,
         worldSessionId: token.candidateWorldSessionId,
-        worldPackageRef: configuration.worldPackageRef,
-        worldPackageRootHash:
-          configuration.worldPackageBuildReceipt.worldPackageRootHash,
-        executionPlanHash: configuration.executionPlanHash,
+        worldBuildIdentity: configuration.worldBuildIdentity,
         gameplayBootstrap: configuration.gameplayBootstrap,
-        initialRelationships: configuration.executionPlan.initialRelationships,
+        initialRelationships:
+          configuration.gameplayBootstrap.initialRelationshipStates,
         participantStates: this.options.participantStates,
         controllerStates: this.options.controllerStates,
         fixedInputControllerEntityId: this.options.fixedInputControllerEntityId,

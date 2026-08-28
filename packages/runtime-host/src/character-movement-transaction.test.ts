@@ -17,6 +17,7 @@ import {
   type GameplayWorldTransactionV1,
 } from "./gameplay-world-port.js";
 import { WorldSession } from "./world-session.js";
+import { createTestWorldBuildIdentityV1 } from "./test/world-build-identity-fixture.js";
 
 const HASH = `sha256:${"a".repeat(64)}` as const;
 
@@ -254,9 +255,7 @@ function sessionOptions(worldPort: GameplayWorldPortV1) {
   return {
     runtimeSessionId: "runtime.character-movement-transaction",
     worldSessionId: "world.character-movement-transaction",
-    worldPackageRef: "worldkit://world-package/character-movement-transaction@1",
-    worldPackageRootHash: HASH,
-    executionPlanHash: HASH,
+    worldBuildIdentity: createTestWorldBuildIdentityV1(HASH),
     gameplayBootstrap: GAMEPLAY_BOOTSTRAP,
     initialRelationships: [],
     participantStates: [PARTICIPANT],

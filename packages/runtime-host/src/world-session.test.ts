@@ -18,12 +18,12 @@ import { describe, expect, it } from "vitest";
 import {
   createFakeGameplayWorldPortHarnessV1,
 } from "./test/fake-gameplay-world-adapter";
+import { createTestWorldBuildIdentityV1 } from "./test/world-build-identity-fixture";
 import { WorldSession } from "./world-session";
 
 const HASH = `sha256:${"a".repeat(64)}` as const;
 const RUNTIME_SESSION_ID = "runtime.primary";
 const WORLD_SESSION_ID = "world.primary";
-const WORLD_PACKAGE_REF = "worldkit://world-package/test-world@1";
 
 const participantState = Object.freeze({
   id: "participant.primary",
@@ -123,9 +123,7 @@ function createHarnessAndOptions() {
     options: {
       runtimeSessionId: RUNTIME_SESSION_ID,
       worldSessionId: WORLD_SESSION_ID,
-      worldPackageRef: WORLD_PACKAGE_REF,
-      worldPackageRootHash: HASH,
-      executionPlanHash: HASH,
+      worldBuildIdentity: createTestWorldBuildIdentityV1(HASH),
       gameplayBootstrap,
       initialRelationships: [],
       participantStates: [participantState],

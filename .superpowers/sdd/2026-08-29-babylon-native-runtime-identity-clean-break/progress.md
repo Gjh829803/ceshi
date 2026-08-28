@@ -105,7 +105,17 @@ Ruling: generated examples and scene evidence are regenerated only through their
   passed 150/150 after the boundary dependency assertion was updated; file
   adapter/signing security regressions passed 17/17; typecheck, old Package
   symbol/path census, and `git diff --check` passed.
-- BNA1-07: not started.
+- BNA1-07: complete in the pending RuntimeHost commit. The Host parses one
+  exact World Build Identity, Gameplay Bootstrap, Runtime Bootstrap, and closed
+  Scene Source. Canonical admission cross-checks the full closure and publishes
+  only `worldBuildIdentityHash` to generic Session/Gameplay/Snapshot state;
+  initial relationships come only from Gameplay Bootstrap. The Native member
+  is parsed but fails with
+  `WORLDKIT_NATIVE_SCENE_PRODUCTION_NOT_ADMITTED` before adapter invocation or
+  Candidate allocation. Atomic Canonical rollback and current-session state
+  ownership remain unchanged. Evidence: RuntimeHost, WorldSession, Gameplay
+  state/contracts, character transaction, state store, and lifecycle tests
+  passed 494/494; typecheck and `git diff --check` passed.
 - BNA1-08: not started.
 - BNA1-09A: not started.
 - BNA1-09B: not started.

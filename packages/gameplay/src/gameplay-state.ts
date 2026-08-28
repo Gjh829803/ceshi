@@ -132,7 +132,7 @@ export interface GameplayWorldStateProjectionContextV1 {
   readonly simulationTick: number;
   readonly worldPackageRef: string;
   readonly worldPackageRootHash: Sha256HashV1;
-  readonly executionPlanHash: Sha256HashV1;
+  readonly worldBuildIdentityHash: Sha256HashV1;
   readonly spatialEntityStatesById: Readonly<Record<string, SpatialEntityStateV1>>;
   readonly capabilityStatesById: Readonly<
     Record<string, GameplayCapabilityStateV1>
@@ -1226,7 +1226,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
       simulationTick: context.simulationTick,
       worldPackageRef: context.worldPackageRef,
       worldPackageRootHash: context.worldPackageRootHash,
-      executionPlanHash: context.executionPlanHash,
+      worldBuildIdentityHash: context.worldBuildIdentityHash,
       entityStatesById,
       capabilityStatesById: context.capabilityStatesById,
       relationshipStatesById,

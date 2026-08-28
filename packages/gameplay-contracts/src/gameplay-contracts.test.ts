@@ -1008,7 +1008,7 @@ const worldStateSnapshotInput = {
   simulationTick: 12,
   worldPackageRef: "worldkit://world-package/g-bot@1",
   worldPackageRootHash: HASH_A,
-  executionPlanHash: HASH_B,
+  worldBuildIdentityHash: HASH_B,
   entityStatesById: {
     "g-bot-primary": spatialEntityState,
     "controller-primary": controllerEntityState,
@@ -1034,9 +1034,9 @@ const worldStateSnapshot = buildWorldStateSnapshotV1(
 );
 
 const WORLD_STATE_GOLDEN_HASH =
-  "sha256:d379e8c5447b4d456b7ed74ab0213452fc9e406252deca6f5e731096126eee68" as const;
+  "sha256:ad16de84009c118144a649af8bc46e44c09febe5cd1eb37d08998bbc1f2a59a3" as const;
 const WORLD_STATE_GOLDEN_ID =
-  "world-state:661dc9f864d54022085a53ded5cffab5080b39ffdd3daa82e832d67f942885ec" as const;
+  "world-state:1f56997271f2ec9621e210f6f81cf6e91be93c4f1bb1df0da11897d269b422dc" as const;
 
 function worldStateBuildInputOf(
   input: object,
@@ -1165,7 +1165,7 @@ describe("WorldStateSnapshotV1", () => {
     const tamperedInputs = [
       { ...worldStateSnapshot, simulationTick: 13 },
       { ...worldStateSnapshot, worldPackageRootHash: HASH_C },
-      { ...worldStateSnapshot, executionPlanHash: HASH_C },
+      { ...worldStateSnapshot, worldBuildIdentityHash: HASH_C },
       {
         ...worldStateSnapshot,
         entityStatesById: {
