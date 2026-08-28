@@ -35,6 +35,15 @@ import {
 import type { BabylonNativeHostRandomV1 } from "./random.js";
 
 export type {
+  BabylonNativeLockedAssetResolverV1,
+} from "./assets.js";
+export type {
+  BabylonNativeSceneModuleV1,
+} from "./module.js";
+export type { BabylonNativeHostRandomV1 } from "./random.js";
+export { createBabylonNativeHostRandomV1 } from "./random.js";
+
+export type {
   BabylonNativeContributionTraversalBindingV1,
   BabylonNativeSceneContributionV1,
   BabylonNativeSpawnMarkerContributionV1,

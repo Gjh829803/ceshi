@@ -16,7 +16,9 @@ import { createCloudRidgeNativeSceneControllerV1 } from
   "./cloud-ridge-scene.js";
 import {
   CLOUD_RIDGE_GAMEPLAY_EXECUTION_PLAN_V1,
+  CLOUD_RIDGE_NATIVE_ADMISSION_BUDGET_V1,
   CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1,
+  cloudRidgeLockedAssetResolver,
   cloudRidgeSubjectAssetResolver,
 } from "./native-bootstrap.js";
 import "./style.css";
@@ -27,7 +29,8 @@ const CONTROLLED_ENTITY_ID =
 const NATIVE_SCENE_FACTORIES_BY_REF: Readonly<
   Record<string, typeof createCloudRidgeNativeSceneControllerV1>
 > = Object.freeze({
-  "app://native-scene/cloud-ridge": createCloudRidgeNativeSceneControllerV1,
+  "worldkit://native-scene/cloud-ridge@1":
+    createCloudRidgeNativeSceneControllerV1,
 });
 const nativeSceneFactory =
   NATIVE_SCENE_FACTORIES_BY_REF[CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1.sceneModuleRef];
@@ -35,9 +38,6 @@ if (nativeSceneFactory === undefined) {
   throw new Error("WORLDKIT_NATIVE_SCENE_MODULE_REF_UNRESOLVED");
 }
 const nativeScene = nativeSceneFactory();
-if (nativeScene.module.id !== CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1.sceneModuleId) {
-  throw new Error("WORLDKIT_NATIVE_SCENE_MODULE_ID_MISMATCH");
-}
 
 interface NativeSceneSpikeProbeV1 {
   readonly ready: true;
@@ -158,9 +158,10 @@ async function start(): Promise<void> {
     autoStartRenderLoop: false,
     subjectAssetResolver: cloudRidgeSubjectAssetResolver,
     nativeScene: {
+      bootstrap: CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1,
       module: nativeScene.module,
-      spawnMarkerId: CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1.spawnMarkerId,
-      budget: CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1.staticCollisionBudget,
+      assets: cloudRidgeLockedAssetResolver,
+      budget: CLOUD_RIDGE_NATIVE_ADMISSION_BUDGET_V1,
     },
     onInitializationStage(stage) {
       loadingStage.textContent = initializationLabel(stage);

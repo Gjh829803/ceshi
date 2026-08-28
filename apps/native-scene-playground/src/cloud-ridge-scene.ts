@@ -10,9 +10,11 @@ import { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 import { VertexData } from "@babylonjs/core/Meshes/mesh.vertexData.js";
 import { Scene } from "@babylonjs/core/scene.js";
 import type {
+  BabylonNativeHostRandomV1,
   BabylonNativeSceneBuildContextV1,
   BabylonNativeSceneModuleV1,
-} from "@whitebox-world/runtime-babylon";
+} from "@whitebox-world/native-babylon";
+import { defineBabylonNativeScene } from "@whitebox-world/native-babylon";
 
 interface SceneMaterials {
   readonly foregroundRocks: readonly StandardMaterial[];
@@ -27,26 +29,6 @@ interface SceneMaterials {
   readonly waterfall: StandardMaterial;
   readonly sun: StandardMaterial;
   readonly collisionDebug: StandardMaterial;
-}
-
-interface SeededRandom {
-  next(): number;
-  range(minimum: number, maximum: number): number;
-  pick<T>(values: readonly T[]): T;
-}
-
-function createSeededRandom(seed: number): SeededRandom {
-  let state = seed >>> 0;
-  const next = (): number => {
-    state = (Math.imul(state, 1_664_525) + 1_013_904_223) >>> 0;
-    return state / 0x1_0000_0000;
-  };
-  return {
-    next,
-    range: (minimum, maximum) => minimum + (maximum - minimum) * next(),
-    pick: <T>(values: readonly T[]): T =>
-      values[Math.min(values.length - 1, Math.floor(next() * values.length))]!,
-  };
 }
 
 function standardMaterial(
@@ -227,22 +209,40 @@ function createCollisionProxies(
   gatePlatform.isVisible = false;
   gatePlatform.isPickable = false;
 
-  context.registerStaticCollisionMesh({
+  context.registration.registerStaticCollider({
     id: "foreground-platform",
     mesh: foreground,
-    surfaceKind: "walkable",
+    traversalBinding: {
+      kind: "static-surface",
+      surfaceEntityId: "foreground-platform",
+      logicalSubshapeId: "primary",
+      traversalSurfaceProfileRef:
+        "worldkit://traversal-surface-profile/ground.static@1",
+    },
     frictionRatio: 0.92,
   });
-  context.registerStaticCollisionMesh({
+  context.registration.registerStaticCollider({
     id: "primary-path",
     mesh: path,
-    surfaceKind: "walkable",
+    traversalBinding: {
+      kind: "static-surface",
+      surfaceEntityId: "primary-path",
+      logicalSubshapeId: "primary",
+      traversalSurfaceProfileRef:
+        "worldkit://traversal-surface-profile/ground.static@1",
+    },
     frictionRatio: 0.94,
   });
-  context.registerStaticCollisionMesh({
+  context.registration.registerStaticCollider({
     id: "gate-platform",
     mesh: gatePlatform,
-    surfaceKind: "walkable",
+    traversalBinding: {
+      kind: "static-surface",
+      surfaceEntityId: "gate-platform",
+      logicalSubshapeId: "primary",
+      traversalSurfaceProfileRef:
+        "worldkit://traversal-surface-profile/ground.static@1",
+    },
     frictionRatio: 0.92,
   });
   return Object.freeze([foreground, path, gatePlatform]);
@@ -251,7 +251,7 @@ function createCollisionProxies(
 function createRockSlabs(
   scene: Scene,
   materials: SceneMaterials,
-  random: SeededRandom,
+  random: BabylonNativeHostRandomV1,
 ): void {
   const foregroundBase = MeshBuilder.CreateCylinder(
     "foreground-cliff-mass",
@@ -270,7 +270,7 @@ function createRockSlabs(
 
   for (let index = 0; index < 42; index += 1) {
     const angle = random.range(0, Math.PI * 2);
-    const radius = Math.sqrt(random.next()) * 17;
+    const radius = Math.sqrt(random.nextRatio()) * 17;
     const x = Math.cos(angle) * radius;
     const z = 20 + Math.sin(angle) * radius * 0.68;
     if (z < 7 && Math.abs(x) < 8) continue;
@@ -353,7 +353,7 @@ function createRockSpire(
   name: string,
   scene: Scene,
   materials: SceneMaterials,
-  random: SeededRandom,
+  random: BabylonNativeHostRandomV1,
   position: readonly [number, number, number],
   height: number,
   radius: number,
@@ -398,7 +398,7 @@ function createTree(
   name: string,
   scene: Scene,
   materials: SceneMaterials,
-  random: SeededRandom,
+  random: BabylonNativeHostRandomV1,
   position: readonly [number, number, number],
   scale: number,
 ): TransformNode {
@@ -438,7 +438,7 @@ function createTree(
 function createMountainsAndTrees(
   scene: Scene,
   materials: SceneMaterials,
-  random: SeededRandom,
+  random: BabylonNativeHostRandomV1,
 ): void {
   const spires = [
     ["mountain-left-primary", [-34, -9, -16], 47, 12],
@@ -575,7 +575,7 @@ function createCloudBank(
   name: string,
   scene: Scene,
   materials: SceneMaterials,
-  random: SeededRandom,
+  random: BabylonNativeHostRandomV1,
   center: readonly [number, number, number],
   extent: readonly [number, number, number],
   count: number,
@@ -611,6 +611,7 @@ function createWaterfall(
   width: number,
   height: number,
   yawRadians: number,
+  random: BabylonNativeHostRandomV1,
 ): void {
   const fall = MeshBuilder.CreatePlane(
     name,
@@ -625,7 +626,7 @@ function createWaterfall(
   for (let ribbon = 0; ribbon < 3; ribbon += 1) {
     const strand = MeshBuilder.CreatePlane(
       `${name}.strand-${ribbon}`,
-      { width: width * 0.16, height: height * randomRange(ribbon, 0.82, 1.03), sideOrientation: Mesh.DOUBLESIDE },
+      { width: width * 0.16, height: height * random.range(0.82, 1.03), sideOrientation: Mesh.DOUBLESIDE },
       scene,
     );
     strand.position.copyFrom(fall.position);
@@ -637,15 +638,10 @@ function createWaterfall(
   }
 }
 
-function randomRange(seed: number, minimum: number, maximum: number): number {
-  const fraction = ((seed * 1_103_515_245 + 12_345) >>> 0) / 0x1_0000_0000;
-  return minimum + (maximum - minimum) * fraction;
-}
-
 function createAtmosphere(
   scene: Scene,
   materials: SceneMaterials,
-  random: SeededRandom,
+  random: BabylonNativeHostRandomV1,
 ): void {
   scene.clearColor = new Color4(0.42, 0.55, 0.61, 1);
   scene.ambientColor = new Color3(0.26, 0.30, 0.30);
@@ -741,6 +737,7 @@ function createAtmosphere(
     3.4,
     22,
     -0.18,
+    random,
   );
   createWaterfall(
     "waterfall-left-secondary",
@@ -750,6 +747,7 @@ function createAtmosphere(
     2.3,
     17,
     0.22,
+    random,
   );
 }
 
@@ -770,12 +768,12 @@ export function createCloudRidgeNativeSceneControllerV1():
     }
   };
 
-  const module: BabylonNativeSceneModuleV1 = Object.freeze({
+  const module: BabylonNativeSceneModuleV1 = defineBabylonNativeScene({
     kind: "babylon-native-scene-module",
     id: "cloud-ridge-native-spike",
     build(context: BabylonNativeSceneBuildContextV1): void {
       const scene = context.scene;
-      const random = createSeededRandom(0x5eed_c10d);
+      const random = context.random;
       const materials = createMaterials(scene);
 
       createAtmosphere(scene, materials, random);
@@ -785,7 +783,7 @@ export function createCloudRidgeNativeSceneControllerV1():
       collisionMeshes = createCollisionProxies(context, materials);
       applyCollisionDebugVisibility();
 
-      context.registerSpawnMarker({
+      context.registration.registerSpawnMarker({
         id: "player-spawn",
         positionMetersXYZ: [0, 2.2, 18],
         facingRadians: 0,

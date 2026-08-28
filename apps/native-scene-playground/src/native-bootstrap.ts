@@ -1,51 +1,21 @@
-import type { ExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
-import { parseExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
 import type {
+  BabylonNativeSceneBootstrapV1,
+  ExecutionPlanV5,
+} from "@whitebox-world/runtime-contracts";
+import {
+  parseBabylonNativeSceneBootstrapV1,
+  parseExecutionPlanV5,
+} from "@whitebox-world/runtime-contracts";
+import type {
+  BabylonNativeLockedAssetResolverV1,
   BabylonNativeSceneAdmissionBudgetV1,
+} from "@whitebox-world/native-babylon/host";
+import type {
   SubjectAssetResolverV1,
 } from "@whitebox-world/runtime-babylon";
 
 import gBotWorldBuild from
   "../../../examples/evidence/g-bot-subject-world/world.build.json";
-
-export interface BabylonNativeWorldBootstrapV1 {
-  readonly kind: "babylon-native-world-bootstrap";
-  readonly schemaVersion: 1;
-  readonly id: string;
-  readonly sceneModuleRef: string;
-  readonly sceneModuleId: string;
-  readonly gravityMetersPerSecondSquaredXYZ: readonly [number, number, number];
-  readonly controlledSubjectDefinitionRef: string;
-  readonly spawnMarkerId: string;
-  readonly cameraRigRef: string;
-  readonly actionOrPoseSetRef: string;
-  readonly staticCollisionBudget: BabylonNativeSceneAdmissionBudgetV1;
-}
-
-export const CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1: BabylonNativeWorldBootstrapV1 =
-  Object.freeze({
-    kind: "babylon-native-world-bootstrap",
-    schemaVersion: 1,
-    id: "cloud-ridge-native-spike",
-    sceneModuleRef: "app://native-scene/cloud-ridge",
-    sceneModuleId: "cloud-ridge-native-spike",
-    gravityMetersPerSecondSquaredXYZ: Object.freeze([
-      0,
-      -9.81,
-      0,
-    ]) as readonly [number, number, number],
-    controlledSubjectDefinitionRef:
-      "worldkit://subject-definition/humanoid.g-bot@2",
-    spawnMarkerId: "player-spawn",
-    cameraRigRef: "worldkit://camera/third-person.standard@1",
-    actionOrPoseSetRef:
-      "worldkit://animation-set/humanoid.ground.g-bot@2",
-    staticCollisionBudget: Object.freeze({
-      maximumStaticColliderCount: 3,
-      maximumStaticColliderVertexCount: 256,
-      maximumStaticColliderTriangleCount: 1_000,
-    }),
-  });
 
 const frozenGbotPlan = parseExecutionPlanV5(
   (gBotWorldBuild as Readonly<{ executionPlan: unknown }>).executionPlan,
@@ -56,24 +26,50 @@ const controlledSubject = frozenGbotPlan.subjects.find(
 if (controlledSubject === undefined) {
   throw new Error("WORLDKIT_NATIVE_SCENE_BOOTSTRAP_SUBJECT_MISSING");
 }
-if (
-  controlledSubject.subjectDefinitionRef !==
-    CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1.controlledSubjectDefinitionRef
-) {
-  throw new Error("WORLDKIT_NATIVE_SCENE_BOOTSTRAP_SUBJECT_REF_MISMATCH");
+const gameplayBootstrapRef = frozenGbotPlan.resourceLockEntries.find(
+  ({ resourceKind }) => resourceKind === "gameplay-bootstrap",
+)?.resourceRef;
+if (gameplayBootstrapRef === undefined) {
+  throw new Error("WORLDKIT_NATIVE_SCENE_GAMEPLAY_BOOTSTRAP_REF_MISSING");
 }
-if (
-  frozenGbotPlan.camera.rigRef !==
-    CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1.cameraRigRef
-) {
-  throw new Error("WORLDKIT_NATIVE_SCENE_BOOTSTRAP_CAMERA_RIG_REF_MISMATCH");
-}
-if (
-  controlledSubject.capabilityAssembly.actionOrPoseSetRef !==
-    CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1.actionOrPoseSetRef
-) {
-  throw new Error("WORLDKIT_NATIVE_SCENE_BOOTSTRAP_ACTION_SET_REF_MISMATCH");
-}
+
+export const CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1:
+  BabylonNativeSceneBootstrapV1 = parseBabylonNativeSceneBootstrapV1({
+    kind: "babylon-native-scene-bootstrap",
+    schemaVersion: 1,
+    id: "cloud-ridge-native",
+    sceneModuleRef: "worldkit://native-scene/cloud-ridge@1",
+    nativeSceneApiRef: "worldkit://native-scene-api/babylon@1",
+    nativeSceneProfileRef:
+      "worldkit://native-scene-profile/whitebox.standard@1",
+    gameplayBootstrapRef,
+    initialControlledEntityId: frozenGbotPlan.initialControlledEntityId,
+    gravityMetersPerSecondSquaredXYZ:
+      frozenGbotPlan.gravityMetersPerSecondSquaredXYZ,
+    initialCamera: {
+      mode: "third-person",
+      pitchRadians: frozenGbotPlan.camera.pitchRadians,
+      distanceMeters: frozenGbotPlan.camera.distanceMeters,
+      fovDegrees: frozenGbotPlan.camera.fovDegrees,
+      targetHeightMeters: frozenGbotPlan.camera.targetHeightMeters,
+    },
+    seed: 0x5eed_c10d,
+    spawnMarkerId: "player-spawn",
+  });
+
+export const CLOUD_RIDGE_NATIVE_ADMISSION_BUDGET_V1:
+  BabylonNativeSceneAdmissionBudgetV1 = Object.freeze({
+    maximumStaticColliderCount: 3,
+    maximumStaticColliderVertexCount: 256,
+    maximumStaticColliderTriangleCount: 1_000,
+  });
+
+export const cloudRidgeLockedAssetResolver:
+  BabylonNativeLockedAssetResolverV1 = Object.freeze({
+    async resolve() {
+      throw new Error("WORLDKIT_NATIVE_SCENE_ASSET_NOT_SELECTED");
+    },
+  });
 
 /**
  * Frozen gameplay/resource closure only. Native Runtime ignores its terrain,
@@ -86,6 +82,14 @@ export const CLOUD_RIDGE_GAMEPLAY_EXECUTION_PLAN_V1: ExecutionPlanV5 =
     id: "cloud-ridge-native-gameplay-bootstrap",
     gravityMetersPerSecondSquaredXYZ:
       CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1.gravityMetersPerSecondSquaredXYZ,
+    camera: Object.freeze({
+      ...frozenGbotPlan.camera,
+      pitchRadians: CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1.initialCamera.pitchRadians,
+      distanceMeters: CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1.initialCamera.distanceMeters,
+      fovDegrees: CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1.initialCamera.fovDegrees,
+      targetHeightMeters:
+        CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1.initialCamera.targetHeightMeters,
+    }),
     subjects: Object.freeze([controlledSubject]),
     initialRelationships: Object.freeze([]),
   });

@@ -37,6 +37,7 @@ import type {
   ApplySubjectPresetTuningRequestV1,
   CameraPreviewStateV1,
   CameraViewInputV1,
+  BabylonNativeSceneBootstrapV1,
   ControlCaptureCapabilitiesV1,
   ControlCaptureRequestV1,
   ControlInputAxesV2,
@@ -56,6 +57,16 @@ import type {
   Vec3,
   ViewTargetSampleV1,
 } from "@whitebox-world/runtime-contracts";
+import {
+  buildBabylonNativeSceneCandidateV1,
+  createBabylonNativeHostRandomV1,
+  type BabylonNativeLockedAssetResolverV1,
+  type BabylonNativeSceneAdmissionBudgetV1,
+  type BabylonNativeSceneContributionV1,
+  type BabylonNativeSceneModuleV1,
+  type BabylonNativeSpawnMarkerContributionV1,
+  type BabylonNativeStaticColliderContributionV1,
+} from "@whitebox-world/native-babylon/host";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import type {
   ActionPresentationRegistryV1,
@@ -130,14 +141,6 @@ import {
   canonicalizeSignedZero,
   canonicalizeVec3,
 } from "./canonical-numbers";
-import {
-  buildBabylonNativeSceneContributionV1,
-  type BabylonNativeSceneAdmissionBudgetV1,
-  type BabylonNativeSceneModuleV1,
-  type BabylonNativeSceneSpawnMarkerV1,
-  type BabylonNativeStaticCollisionMeshV1,
-} from "./native-scene-module";
-
 function committedPresentationFromLocomotionMode(
   committedTick: number,
   locomotionMode: LocomotionModeV1 | "suspended",
@@ -179,8 +182,9 @@ export interface BabylonWorldRuntimeOptions {
   subjectAssetCacheOptions?: SubjectAssetCacheOptionsV1;
   /** Experimental provider-specific visual geometry lane. Canonical omission remains the default. */
   nativeScene?: Readonly<{
+    bootstrap: BabylonNativeSceneBootstrapV1;
     module: BabylonNativeSceneModuleV1;
-    spawnMarkerId: string;
+    assets: BabylonNativeLockedAssetResolverV1;
     budget: BabylonNativeSceneAdmissionBudgetV1;
   }>;
   onInitializationStage?(stage: BabylonWorldRuntimeInitializationStageV1): void;
@@ -518,11 +522,29 @@ function configureAtmosphere(
 
 function executionPlanWithNativeSpawn(
   executionPlan: ExecutionPlanV5,
-  spawnMarker: BabylonNativeSceneSpawnMarkerV1,
+  bootstrap: BabylonNativeSceneBootstrapV1,
+  spawnMarker: BabylonNativeSpawnMarkerContributionV1,
 ): ExecutionPlanV5 {
+  if (
+    executionPlan.initialControlledEntityId !==
+      bootstrap.initialControlledEntityId
+  ) {
+    throw new Error(
+      "WORLDKIT_NATIVE_SCENE_CONTROLLED_ENTITY_MISMATCH: Native Bootstrap and Gameplay closure must select the same controlled entity.",
+    );
+  }
   const initialControlledEntityId = executionPlan.initialControlledEntityId;
   return Object.freeze({
     ...executionPlan,
+    gravityMetersPerSecondSquaredXYZ:
+      bootstrap.gravityMetersPerSecondSquaredXYZ,
+    camera: Object.freeze({
+      ...executionPlan.camera,
+      pitchRadians: bootstrap.initialCamera.pitchRadians,
+      distanceMeters: bootstrap.initialCamera.distanceMeters,
+      fovDegrees: bootstrap.initialCamera.fovDegrees,
+      targetHeightMeters: bootstrap.initialCamera.targetHeightMeters,
+    }),
     subjects: Object.freeze(executionPlan.subjects.map((subject) =>
       subject.entityId === initialControlledEntityId
         ? Object.freeze({
@@ -538,7 +560,7 @@ function executionPlanWithNativeSpawn(
 function nativeColliderMetadata(
   mesh: Mesh,
   entityId: string,
-  surfaceKind: "walkable" | "obstacle",
+  traversalBinding: BabylonNativeStaticColliderContributionV1["traversalBinding"],
 ): void {
   const retained = typeof mesh.metadata === "object" && !isNil(mesh.metadata)
     ? mesh.metadata as Readonly<Record<string, unknown>>
@@ -546,12 +568,19 @@ function nativeColliderMetadata(
   mesh.metadata = {
     ...retained,
     worldkitEntityId: entityId,
-    worldkitNativeSurfaceKind: surfaceKind,
+    worldkitNativeTraversalKind: traversalBinding.kind,
+    ...(traversalBinding.kind === "static-surface"
+      ? {
+          worldkitTraversalSurfaceId: traversalBinding.traversalSurfaceId,
+          worldkitTraversalSurfaceProfileRef:
+            traversalBinding.traversalSurfaceProfileRef,
+        }
+      : {}),
   };
 }
 
 function createOwnedNativeCollisionMesh(
-  collider: BabylonNativeStaticCollisionMeshV1,
+  collider: BabylonNativeStaticColliderContributionV1,
   scene: Scene,
 ): Mesh {
   const mesh = new Mesh(`worldkit.native-collider.${collider.id}`, scene);
@@ -566,7 +595,7 @@ function createOwnedNativeCollisionMesh(
   vertexData.indices = [...collider.triangleIndices];
   vertexData.normals = normals;
   vertexData.applyToMesh(mesh, false);
-  nativeColliderMetadata(mesh, collider.id, collider.surfaceKind);
+  nativeColliderMetadata(mesh, collider.id, collider.traversalBinding);
   mesh.isVisible = false;
   mesh.isPickable = false;
   mesh.computeWorldMatrix(true);
@@ -760,10 +789,41 @@ export class BabylonWorldRuntime {
       const scene = new Scene(engine);
       ownedDisposers.push(() => scene.dispose());
       scene.useRightHandedSystem = true;
+      let executionPlan = options.executionPlan;
+      let nativeContribution: BabylonNativeSceneContributionV1 | undefined;
+      if (!isNil(options.nativeScene)) {
+        options.onInitializationStage?.("native-scene");
+        const nativeResult = await buildBabylonNativeSceneCandidateV1({
+          scene,
+          bootstrap: options.nativeScene.bootstrap,
+          module: options.nativeScene.module,
+          random: createBabylonNativeHostRandomV1(
+            options.nativeScene.bootstrap.seed,
+          ),
+          assets: options.nativeScene.assets,
+          budget: options.nativeScene.budget,
+        });
+        if (nativeResult.outcome !== "passed") {
+          const problem = nativeResult.checkResult.diagnostics.find(
+            ({ severity }) => severity === "error",
+          );
+          throw new Error(
+            problem === undefined
+              ? "WORLDKIT_NATIVE_SCENE_CONTRIBUTION_REJECTED: Native Scene Contribution was rejected."
+              : `${problem.code}: ${problem.message}`,
+          );
+        }
+        nativeContribution = nativeResult.contribution;
+        executionPlan = executionPlanWithNativeSpawn(
+          options.executionPlan,
+          options.nativeScene.bootstrap,
+          nativeContribution.spawnMarker,
+        );
+      }
       options.onInitializationStage?.("havok");
       const havokPlugin = await enableHavokPhysics(
         scene,
-        options.executionPlan.gravityMetersPerSecondSquaredXYZ,
+        executionPlan.gravityMetersPerSecondSquaredXYZ,
         options.havokWasmBinary,
       );
       const physicsWorldQuery = new BabylonHavokPhysicsWorldQueryV1(scene, havokPlugin);
@@ -773,7 +833,6 @@ export class BabylonWorldRuntime {
       const aggregates: PhysicsAggregate[] = [];
       let terrainShape: PhysicsShape | undefined;
       const staticCollisionMeshes: StaticCollisionMeshEntryV1[] = [];
-      let executionPlan = options.executionPlan;
       let terrainSampleCount = options.executionPlan.terrain.heightSamplesMeters.length;
       if (isNil(options.nativeScene)) {
         options.onInitializationStage?.("terrain");
@@ -837,23 +896,13 @@ export class BabylonWorldRuntime {
         }
         revalidateRuntimeLayoutAssertions(options.executionPlan);
       } else {
-        options.onInitializationStage?.("native-scene");
-        const contribution = await buildBabylonNativeSceneContributionV1({
-          scene,
-          module: options.nativeScene.module,
-          budget: options.nativeScene.budget,
-        });
-        if (contribution.spawnMarker.id !== options.nativeScene.spawnMarkerId) {
+        terrainSampleCount = 0;
+        if (nativeContribution === undefined) {
           throw new Error(
-            "WORLDKIT_NATIVE_SCENE_SPAWN_MARKER_MISMATCH: Native Scene Spawn Marker does not match the Bootstrap binding.",
+            "WORLDKIT_NATIVE_SCENE_CONTRIBUTION_MISSING: Native Scene Contribution must pass before physics attachment.",
           );
         }
-        executionPlan = executionPlanWithNativeSpawn(
-          options.executionPlan,
-          contribution.spawnMarker,
-        );
-        terrainSampleCount = 0;
-        for (const collider of contribution.staticCollisionMeshes) {
+        for (const collider of nativeContribution.staticColliders) {
           const collisionMesh = createOwnedNativeCollisionMesh(collider, scene);
           ownedDisposers.push(() => collisionMesh.dispose());
           const shape = new PhysicsShapeMesh(collisionMesh, scene);

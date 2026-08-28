@@ -15,6 +15,7 @@ export interface TestGateManifestEntryV1 {
 
 export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.freeze([
   { path: "apps/native-scene-playground/src/cloud-ridge-scene.test.ts", lane: "contract" },
+  { path: "apps/native-scene-playground/src/native-package-migration.test.ts", lane: "contract" },
   { path: "apps/playground/src/artifact-renderer-lifecycle.test.ts", lane: "contract" },
   { path: "apps/playground/src/artifact-write-capability.test.ts", lane: "contract" },
   { path: "apps/playground/src/authoring-export.test.ts", lane: "contract" },
@@ -117,7 +118,6 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "packages/runtime-babylon/src/golden-humanoid-3c-vnext.test.ts", lane: "contract" },
   { path: "packages/runtime-babylon/src/golden-humanoid-presentation-context.test.ts", lane: "contract" },
   { path: "packages/runtime-babylon/src/motion-mode-resolver.test.ts", lane: "contract" },
-  { path: "packages/runtime-babylon/src/native-scene-module.test.ts", lane: "contract" },
   { path: "packages/runtime-babylon/src/p15-conformance.test.ts", lane: "resource-heavy", reasonCodes: ["native-havok-or-recast"] },
   { path: "packages/runtime-babylon/src/p15-runtime-debt-repro.test.ts", lane: "resource-heavy", reasonCodes: ["native-havok-or-recast"] },
   { path: "packages/runtime-babylon/src/polygon-triangulation.test.ts", lane: "contract" },

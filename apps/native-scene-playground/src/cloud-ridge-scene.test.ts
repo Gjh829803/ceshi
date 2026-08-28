@@ -3,14 +3,18 @@ import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { buildBabylonNativeSceneContributionV1 } from
-  "@whitebox-world/runtime-babylon";
+import {
+  buildBabylonNativeSceneCandidateV1,
+  createBabylonNativeHostRandomV1,
+} from "@whitebox-world/native-babylon/host";
 
 import { createCloudRidgeNativeSceneControllerV1 } from
   "./cloud-ridge-scene.js";
 import {
   CLOUD_RIDGE_GAMEPLAY_EXECUTION_PLAN_V1,
+  CLOUD_RIDGE_NATIVE_ADMISSION_BUDGET_V1,
   CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1,
+  cloudRidgeLockedAssetResolver,
 } from "./native-bootstrap.js";
 
 const retainedEngines: NullEngine[] = [];
@@ -23,21 +27,35 @@ describe("cloud ridge Babylon Native scene", () => {
   it("keeps the bootstrap resource refs identical to the frozen gameplay closure", () => {
     const subject = CLOUD_RIDGE_GAMEPLAY_EXECUTION_PLAN_V1.subjects[0]!;
     expect(CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1).toEqual({
-      kind: "babylon-native-world-bootstrap",
+      kind: "babylon-native-scene-bootstrap",
       schemaVersion: 1,
-      id: "cloud-ridge-native-spike",
-      sceneModuleRef: "app://native-scene/cloud-ridge",
-      sceneModuleId: "cloud-ridge-native-spike",
+      id: "cloud-ridge-native",
+      sceneModuleRef: "worldkit://native-scene/cloud-ridge@1",
+      nativeSceneApiRef: "worldkit://native-scene-api/babylon@1",
+      nativeSceneProfileRef:
+        "worldkit://native-scene-profile/whitebox.standard@1",
+      gameplayBootstrapRef:
+        "worldkit://gameplay-bootstrap/g-bot-subject-world.8201@1",
+      initialControlledEntityId:
+        CLOUD_RIDGE_GAMEPLAY_EXECUTION_PLAN_V1.initialControlledEntityId,
       gravityMetersPerSecondSquaredXYZ: [0, -9.81, 0],
-      controlledSubjectDefinitionRef: subject.subjectDefinitionRef,
-      spawnMarkerId: "player-spawn",
-      cameraRigRef: CLOUD_RIDGE_GAMEPLAY_EXECUTION_PLAN_V1.camera.rigRef,
-      actionOrPoseSetRef: subject.capabilityAssembly.actionOrPoseSetRef,
-      staticCollisionBudget: {
-        maximumStaticColliderCount: 3,
-        maximumStaticColliderVertexCount: 256,
-        maximumStaticColliderTriangleCount: 1_000,
+      initialCamera: {
+        mode: "third-person",
+        pitchRadians: 0.18,
+        distanceMeters: 5,
+        fovDegrees: 56,
+        targetHeightMeters: 1.2,
       },
+      seed: 0x5eed_c10d,
+      spawnMarkerId: "player-spawn",
+    });
+    expect(subject.subjectDefinitionRef).toBe(
+      "worldkit://subject-definition/humanoid.g-bot@2",
+    );
+    expect(CLOUD_RIDGE_NATIVE_ADMISSION_BUDGET_V1).toEqual({
+      maximumStaticColliderCount: 3,
+      maximumStaticColliderVertexCount: 256,
+      maximumStaticColliderTriangleCount: 1_000,
     });
     expect(CLOUD_RIDGE_GAMEPLAY_EXECUTION_PLAN_V1.initialRelationships)
       .toEqual([]);
@@ -55,21 +73,29 @@ describe("cloud ridge Babylon Native scene", () => {
     const scene = new Scene(engine);
     const nativeScene = createCloudRidgeNativeSceneControllerV1();
 
-    const contribution = await buildBabylonNativeSceneContributionV1({
+    const result = await buildBabylonNativeSceneCandidateV1({
       scene,
+      bootstrap: CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1,
       module: nativeScene.module,
-      budget: CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1.staticCollisionBudget,
+      random: createBabylonNativeHostRandomV1(
+        CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1.seed,
+      ),
+      assets: cloudRidgeLockedAssetResolver,
+      budget: CLOUD_RIDGE_NATIVE_ADMISSION_BUDGET_V1,
     });
+    expect(result.outcome).toBe("passed");
+    if (result.outcome !== "passed") return;
+    const contribution = result.contribution;
 
     expect(contribution.spawnMarker).toEqual({
       id: "player-spawn",
       positionMetersXYZ: [0, 2.2, 18],
       facingRadians: 0,
     });
-    expect(contribution.staticCollisionMeshes.map(({ id }) => id)).toEqual([
+    expect(contribution.staticColliders.map(({ id }) => id)).toEqual([
       "foreground-platform",
-      "primary-path",
       "gate-platform",
+      "primary-path",
     ]);
     expect(scene.getMeshByName("gate-main-beam")).not.toBeNull();
     expect(scene.getMeshByName("mountain-left-primary")).not.toBeNull();
@@ -78,19 +104,17 @@ describe("cloud ridge Babylon Native scene", () => {
     expect(scene.getMeshByName("waterfall-right-primary")).not.toBeNull();
     expect(scene.lights.length).toBeGreaterThanOrEqual(2);
 
-    const collisionMeshNames = new Set(
-      contribution.staticCollisionMeshes.map(({ sourceMesh }) => sourceMesh.name),
-    );
+    const collisionMeshNames = new Set([
+      "collision-foreground-platform",
+      "collision-primary-path",
+      "collision-gate-platform",
+    ]);
     expect(collisionMeshNames.has("cloud-bank-left")).toBe(false);
     expect(collisionMeshNames.has("mountain-left-primary")).toBe(false);
     expect(collisionMeshNames.has("waterfall-right-primary")).toBe(false);
 
-    const path = contribution.staticCollisionMeshes.find(
-      ({ id }) => id === "primary-path",
-    )!.sourceMesh;
-    const gatePlatform = contribution.staticCollisionMeshes.find(
-      ({ id }) => id === "gate-platform",
-    )!.sourceMesh;
+    const path = scene.getMeshByName("collision-primary-path")!;
+    const gatePlatform = scene.getMeshByName("collision-gate-platform")!;
     const pathPositions = path.getVerticesData(VertexBuffer.PositionKind)!;
     const pathSummitZMeters = pathPositions
       .filter((_value, index) => index % 3 === 2 && pathPositions[index - 1] === 14);
@@ -104,17 +128,21 @@ describe("cloud ridge Babylon Native scene", () => {
     expect(gatePlatform.getBoundingInfo().boundingBox.maximumWorld.y)
       .toBeCloseTo(13.7, 6);
 
-    expect(contribution.staticCollisionMeshes.every(
-      ({ sourceMesh }) => !sourceMesh.isVisible && sourceMesh.visibility === 0,
+    const collisionMeshes = [...collisionMeshNames]
+      .map((name) => scene.getMeshByName(name)!);
+    expect(collisionMeshes.every(
+      (mesh) => !mesh.isVisible && mesh.visibility === 0,
     )).toBe(true);
     nativeScene.setCollisionDebugVisible(true);
-    expect(contribution.staticCollisionMeshes.every(
-      ({ sourceMesh }) =>
-        sourceMesh.isVisible && sourceMesh.visibility === 0.48,
+    expect(collisionMeshes.every(
+      (mesh) => mesh.isVisible && mesh.visibility === 0.48,
     )).toBe(true);
     nativeScene.setCollisionDebugVisible(false);
-    expect(contribution.staticCollisionMeshes.every(
-      ({ sourceMesh }) => !sourceMesh.isVisible && sourceMesh.visibility === 0,
+    expect(collisionMeshes.every(
+      (mesh) => !mesh.isVisible && mesh.visibility === 0,
+    )).toBe(true);
+    expect(contribution.staticColliders.every(
+      (collider) => !Object.hasOwn(collider, "mesh"),
     )).toBe(true);
   });
 });

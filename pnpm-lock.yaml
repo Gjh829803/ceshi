@@ -128,6 +128,9 @@ importers:
       '@babylonjs/core':
         specifier: 9.23.0
         version: 9.23.0
+      '@whitebox-world/native-babylon':
+        specifier: workspace:*
+        version: link:../../packages/native-babylon
       '@whitebox-world/runtime-babylon':
         specifier: workspace:*
         version: link:../../packages/runtime-babylon
@@ -423,6 +426,9 @@ importers:
       '@whitebox-world/gameplay-contracts':
         specifier: workspace:*
         version: link:../gameplay-contracts
+      '@whitebox-world/native-babylon':
+        specifier: workspace:*
+        version: link:../native-babylon
       '@whitebox-world/protocol':
         specifier: workspace:*
         version: link:../protocol
