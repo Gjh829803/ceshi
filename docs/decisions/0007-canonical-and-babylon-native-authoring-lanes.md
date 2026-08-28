@@ -66,6 +66,11 @@ Schema 校验、确定性编译、资源锁、WorldPackage、Route、ChangeSet �
     结构/渲染/通过性验收和性能优化思想，但替换其 Three.js Adapter、持久 Block Manifest、Block
     Compiler 与旧 Runtime。Profile 可以维护单次 Build Epoch 的 package-local 内存 Layout；不得发布逐块
     JSON、增加第三个 Scene Source，或让 Layout 成为 Gameplay Ground/Route 的第二真相。
+16. 项目尚未发布，所有本 ADR 触及的合同采用 current-only clean break。最终接受树对同一概念只允许
+    一个名称、一个 Parser、一个公共入口和一个状态 Owner；禁止旧字段 alias、双 Parser、deprecated
+    re-export、兼容 Adapter、旧/新 Runtime 开关或并存的 V1/V2/V3。`schemaVersion`/类型版本后缀只标识
+    当前唯一协议。Schema、类型、consumer、Fixture、Golden、Package、Receipt 与文档必须在同一集成
+    切片迁移并删除旧实现。Canonical/Native 两个 Source 是长期产品能力，不是 legacy/new 兼容层。
 
 ## 对既有 ADR 的关系
 

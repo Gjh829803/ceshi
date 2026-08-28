@@ -121,6 +121,27 @@ Babylon Native Code 的价值是直接使用成熟引擎的完整场景表达力
 7. 生产制品必须锁定输入、依赖、资产与贡献 Hash；不能用一个匿名 Vite Bundle 冒充 WorldPackage。
 8. Canonical 与 Native 的能力声明和证据分开；一条 Lane 的通过不能替另一条 Lane 背书。
 
+### 2.3 未发布项目的 Clean Break 原则
+
+本项目尚未对外发布，因此本文涉及的公共合同、实验 API、Fixture 和生成制品一律按 **current-only
+clean break** 实施，不为仓库历史保留兼容负担：
+
+- 一个被接受的 tree 对同一概念只允许一个当前名称、一个 Parser、一个公共入口和一个状态 Owner；
+- 禁止保留旧字段 alias、optional 双字段、旧/新 Parser fallback、deprecated re-export、桥接 Adapter、
+  两套 Package 或按场景选择 legacy/new Runtime 的开关；
+- 改名或换合同必须在同一集成切片更新 Schema、类型、全部 consumer、Fixture、Golden、Package、Receipt
+  与文档，然后删除旧实现；不能以“以后再清理”完成该切片；
+- Feature branch 可以用多个 RED/GREEN commit 完成迁移，但中间 tree 不是可接受能力状态；最终 GO、PR 或
+  发布候选不得同时含新旧合同；
+- `schemaVersion: 1` 和类型名中的 `V1` 只表示当前唯一序列化合同的身份，不授权同时维护 V1/V2/V3。
+  在首次发布前若合同改变，可以直接重写当前私有版本，或升级后彻底删除旧版本；不得并行保留；
+- Canonical 与 Native 两个 `sceneSource.kind` 是长期并列的产品能力，不是 legacy/new 兼容层；两者共用
+  Kernel 且每个世界只选一个 Source，因此不违反本原则。
+
+实验 `@whitebox-world/runtime-babylon` Native 导出、`surfaceKind`、影子 ExecutionPlan 和把
+`executionPlanHash` 当通用世界身份的做法都属于必须被最终切片删除的旧实现，不得通过 alias 或 Adapter
+继续存活。
+
 ## 3. 目标与非目标
 
 ### 3.1 目标
@@ -265,8 +286,9 @@ interface WorldBuildIdentityV1 {
 - Canonical Route、Authoring Edit 和 Plan-specific Validation 可以继续显式使用 `executionPlanHash`；
   它们不因此自动支持 Native Source。
 - Browser、Snapshot、WorldSession、Runtime Adapter、Capture Manifest、Take、Validation Subject 和
-  Package Receipt 的受影响协议必须做完整 consumer census，并通过显式版本升级/clean break 迁移，
-  不能增加一个 optional alias 后让两种身份并存。
+  Package Receipt 的受影响协议必须做完整 consumer census，并在当前未发布阶段通过
+  current-only clean break 一次迁移。若名称或结构升级，旧版本必须在同一迁移切片删除；不能增加
+  optional alias、兜底推断或 legacy hash 旁路。
 - `worldPackageRootHash` 仍是完整 Package 身份；`sceneSourceIdentity` 解释该 Package 的场景来源，
   `gameplayBootstrapHash` 和 `worldRuntimeBootstrapHash` 绑定共用 Kernel 输入。
 - Route/Nav 若未来支持 Native，必须绑定同一个 `nativeSceneContributionHash` 及其冻结 Surface，而不是
@@ -370,16 +392,18 @@ Parser 重新计算并要求完全相等；完整 artifact bytes Hash 由 Packag
 - 持有相应 Registry Resource Lock 与 `contentHash`；
 - 不包含 Terrain、Water、Structure、Static Scene Mesh 或 Provider Handle。
 
-Native Host Assembler 从 Bootstrap JSON、`GameplayBootstrapV1` 和 Registry Lock 产生该合同。Canonical
-迁移必须分为两个有明确权威的状态：
+Native Host Assembler 从 Bootstrap JSON、`GameplayBootstrapV1` 和 Registry Lock 产生该合同。实现过程
+可以分为两个有明确权威的内部状态，但只有终态可以成为接受的集成结果：
 
-1. **过渡态**：`ExecutionPlanV5` 仍是 Canonical Subject/Camera/Gravity 唯一来源；Host 从它产生
+1. **迁移中的内部状态**：`ExecutionPlanV5` 仍是 Canonical Subject/Camera/Gravity 唯一来源；Host 从它产生
    receipt-bound `WorldRuntimeBootstrap` 派生投影，并用 exact-equality/hash Gate 证明字段一致。Runtime
-   只能在 Gate 通过后消费投影，不能让 Plan 与 Bootstrap 分别可编辑。
+   只能在 Gate 通过后消费投影，不能让 Plan 与 Bootstrap 分别可编辑。该状态只服务 Feature branch 的
+   迁移验证，不是可发布协议，也不得留下兼容开关。
 2. **终态**：下一版 Canonical Execution Plan 移除内联的 Runtime Subject closure、Camera 与 Gravity
    权威，改为引用 `worldRuntimeBootstrapRef`/Hash；它只保留 Terrain、Water、Structure、Static
-   Surface、Subject Scene Instance/Placement 与 Traversal 等 Scene Source 数据。该迁移使用显式协议
-   版本或经批准的 current-only clean break，不永久保留两份字段。
+   Surface、Subject Scene Instance/Placement 与 Traversal 等 Scene Source 数据。该迁移使用
+   current-only clean break：若升级协议版本，旧类型、Parser、字段、Fixture 和生成制品必须在同一集成
+   切片删除并重建，终态不保留两份字段。
 
 终态下，两条 Lane 的 Runtime Kernel 只消费 `WorldRuntimeBootstrap`，不再直接依赖 Scene Source 中
 偶然存在的 Subject/Camera 字段。Canonical Subject 的空间 Placement 仍由 Canonical Scene Source
@@ -1064,8 +1088,11 @@ Contribution 与 SDK 创建的 Havok。Profile 的详细 Package 处置、场景
   Typecheck 判定兼容。
 - `nativeSceneApiRef` 只在边界合同不兼容时升级；新增 Babylon 功能通常只升级 Engine/Profile，
   不需要修改项目自有 Scene DSL，因为本设计没有 Scene DSL。
-- 未发布私有 API 可以经明确批准 Clean Break；一旦外部采用，Rename 必须同步 Schema、类型、示例、
-  Parser、迁移和 Conformance。
+- 当前仓库全部相关 API/Schema 均未发布，本设计默认使用 Clean Break，而不是把兼容作为默认成本；
+  Rename 必须同步 Schema、类型、全部 consumer、示例、Fixture、Golden、Parser 和 Conformance，并删除
+  旧入口、旧字段与旧制品。
+- 首次外部发布之后才允许为真实采用者设计版本迁移；在此之前不得为了假想用户保留 deprecated
+  re-export、alias 字段、双 Parser 或 legacy/new Runtime 分支。
 - Native V1 不接受 `WorldChangeSet`。Source/Bootstrap 变化必须产生新的 Package Root 和
   `WorldBuildIdentityV1`，再由 RuntimeHost 原子 Full Reload replacement；这只是发布替换语义，不是
   Native ChangeSet。未来 Native Edit/Incremental 能力必须另立版本化协议、Receipt 和等价性 Gate。
@@ -1151,8 +1178,9 @@ Authoring V4 -> IR V4 -> ExecutionPlan V5 -> RuntimeWorldConfiguration V1 -> Bab
 
 - 目标与独立交付物：冻结闭合 `sceneSource` Union、Native Bootstrap Schema、Plan-independent
   `WorldRuntimeBootstrap` 与 source-neutral `WorldBuildIdentity`；移除 Native 对影子 ExecutionPlan 的
-  依赖，同时复用 `GameplayBootstrapV1`；Canonical 先建立 V5 exact-equality 派生 Gate，再迁移到只引用
-  World Runtime Bootstrap 的下一版 Scene Plan，终态不保留双字段；同时冻结 Scene Authoring Route
+  依赖，同时复用 `GameplayBootstrapV1`；Canonical 先在 Feature branch 建立 V5 exact-equality 派生
+  Gate，再以 current-only clean break 切换到只引用 World Runtime Bootstrap 的当前 Scene Plan，接受树中
+  不保留旧类型、旧 Parser、alias、双字段或 legacy/new 选择；同时冻结 Scene Authoring Route
   Decision、Authoring Attempt 与 Runtime Candidate Scene 的身份/失效语义，禁止静默换 Lane/策略。
 - `depends_on`：BNA-0。
 - `blocks`：BNA-3、BNA-4、BNA-7、BNA-8。
@@ -1169,7 +1197,7 @@ Authoring V4 -> IR V4 -> ExecutionPlan V5 -> RuntimeWorldConfiguration V1 -> Bab
 - 验证证据：exact-key/union/hash/mismatch 负向测试、Canonical 回归、所有 `executionPlanHash` consumer
   census、V5 projection exact equality、终态无重复 Runtime closure、无 ghost/fake Plan Hash、
   Browser/State/Capture identity migration、route/attempt identity 与换路失效测试，以及 current-only clean
-  break。
+  break；最终 source census 必须证明旧字段、旧 Parser、旧导出、兼容 Adapter 和旧 Fixture 为零。
 - 执行模式：`main-agent-only`。
 
 ### BNA-2：独立 Babylon Native Authoring 包

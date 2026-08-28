@@ -49,6 +49,11 @@ Profile-local authoring inventory
 - Profile 不增加第三个 `sceneSource.kind`；
 - Babylon Module 及其冻结后的 Contribution 才是最终场景制品权威。
 
+旧 Block World 代码只作为固定提交中的迁移来源，不作为依赖或兼容层。可复用的纯算法实现和测试在新
+Package Owner 下直接迁移并更换类型边界；旧 Package、旧导出、旧 DTO、Manifest、Compiler、Runtime
+分支和 re-export 在最终接受树中全部不存在。实现过程中不得通过 alias 或双 API 让新 Profile 同时支持
+旧 Block World 与新 Native 方言。
+
 允许生成期存在临时 Scene Brief、关系图、布局草图和 package-local 的内存 Block Layout。禁止的是把这些
 中间结构升级为可持久化的第二套场景协议、Runtime 输入或跨 Lane 几何真相。
 
@@ -316,8 +321,8 @@ BWB 首个视觉/静态碰撞切片。
 | `packages/block-world-three` | 不迁移 | Native Module 直接使用 Babylon；不保留 Three binding/extraction |
 | `packages/block-world-compiler` | 不迁移 | 不再编译 AuthoringSpec/ExecutionPlan |
 | `packages/block-world` 持久 Manifest/Presets | 不迁移 | 不建立第三个 Scene Source 或公开逐块 JSON |
-| shapes/grid/palette | 重写后保留 | `@whitebox-world/native-babylon-block-profile` |
-| occupancy/layout/checker | 保留算法思想 | package-local in-memory layout + authoring diagnostics |
+| shapes/grid/palette | 直接迁移纯算法实现并更换类型边界 | `@whitebox-world/native-babylon-block-profile`；不依赖旧 Package |
+| occupancy/layout/checker | 测试先行后迁移可复用算法 | package-local in-memory layout + authoring diagnostics；不迁移旧 DTO |
 | smooth surface / cliff boundary | 条件保留 | 只产出显式登记并冻结的 Static Collider Mesh；Traversal 使用同一登记的关闭 binding |
 | clustering/chunking/thin instances | 条件保留 | Host/Adapter 内部优化，先正确后性能 |
 | old movement/preset/transition runtime | 不迁移 | 当前 SDK 3C、Action、Camera、State 和 `checkSupport()` |
