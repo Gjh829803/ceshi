@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@whitebox-world/authoring": "workspace:*",
+    "@whitebox-world/gameplay-contracts": "workspace:*",
     "@whitebox-world/protocol": "workspace:*",
     "@whitebox-world/runtime-contracts": "workspace:*",
     "@whitebox-world/subject-contracts": "workspace:*",
@@ -16,7 +17,6 @@
     "lodash-es": "^4.18.1"
   },
   "devDependencies": {
-    "@whitebox-world/gameplay-contracts": "workspace:*",
     "@whitebox-world/subject-registry": "workspace:*"
   }
 }

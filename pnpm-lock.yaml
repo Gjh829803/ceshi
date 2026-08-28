@@ -327,6 +327,9 @@ importers:
       '@whitebox-world/authoring':
         specifier: workspace:*
         version: link:../authoring
+      '@whitebox-world/gameplay-contracts':
+        specifier: workspace:*
+        version: link:../gameplay-contracts
       '@whitebox-world/protocol':
         specifier: workspace:*
         version: link:../protocol
@@ -346,9 +349,6 @@ importers:
         specifier: ^4.18.1
         version: 4.18.1
     devDependencies:
-      '@whitebox-world/gameplay-contracts':
-        specifier: workspace:*
-        version: link:../gameplay-contracts
       '@whitebox-world/subject-registry':
         specifier: workspace:*
         version: link:../subject-registry

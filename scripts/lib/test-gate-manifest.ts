@@ -80,6 +80,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "packages/compiler/src/compile-traversal-lock.test.ts", lane: "contract" },
   { path: "packages/compiler/src/compile-v5.test.ts", lane: "contract" },
   { path: "packages/compiler/src/compile.test.ts", lane: "contract" },
+  { path: "packages/compiler/src/project-execution-plan-v5.test.ts", lane: "contract" },
   { path: "packages/control-capture/src/control-capture.test.ts", lane: "contract" },
   { path: "packages/gameplay-contracts/src/gameplay-artifacts.test.ts", lane: "contract" },
   { path: "packages/gameplay-contracts/src/gameplay-contracts.test.ts", lane: "contract" },

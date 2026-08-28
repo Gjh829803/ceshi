@@ -51,7 +51,7 @@ Ruling: generated examples and scene evidence are regenerated only through their
   Runtime/Gameplay/Compiler/Babylon tests 531/531, workspace boundary floor,
   test census (304 total / 272 contract / 32 resource-heavy), typecheck, and
   `git diff --check` passed.
-- BNA1-03: complete in the current pending commit. The focused RED failed on
+- BNA1-03: complete in `8410cb3`. The focused RED failed on
   the intentionally missing package and implementation. GREEN adds the closed
   Canonical / Babylon Native / Capability Gap Route union, immutable Canonical
   / Native Attempt inputs, mutually exclusive completed / rejected / tool-error
@@ -64,7 +64,26 @@ Ruling: generated examples and scene evidence are regenerated only through their
   WorldPackage, provider, or asset-production layers. Evidence: focused tests
   17/17, workspace boundary floor, test census (306 total / 274 contract / 32
   resource-heavy), typecheck, and `git diff --check` passed.
-- BNA1-04: not started.
+- BNA1-04: complete in the current pending commit. The missing-projector RED
+  failed before the temporary migration implementation existed. GREEN uses one
+  asymmetric parsed V5 fixture with nondefault gravity/Camera, a rigged Subject,
+  multiple Control Feels, mounted relationship state, water, static Collider,
+  Heightfield and static Traversal Surfaces, layout placements, and a full
+  mixed Resource Lock. Machine-checked field accounting covers every actual V5
+  top-level key exactly once and explicitly deletes only Host-owned
+  `runtimeBackend` and render-target-owned Camera `aspectRatio`. The projector
+  requires exact Gameplay lock and relationship equality, partitions Subject
+  placement from Runtime descriptors and Scene locks from Runtime locks, and
+  recomputes independent hashes. The same fixture generated the durable receipt
+  with source commit and exact four-artifact hashes; normal test mode revalidates
+  it without rewriting. The Compiler gate exposed two stale golden V5 hashes
+  left by BNA1-02's new required empty relationship field changing the Gameplay
+  Bootstrap/full-lock hash; only those two deterministic expectations changed.
+  Evidence: projection 5/5, Compiler 84/84, Runtime Contracts 79/79, workspace
+  boundary floor, test census (307 total / 275 contract / 32 resource-heavy),
+  typecheck, and `git diff --check` passed. The review explicitly marks this as
+  migration-only, non-production-admission evidence and requires the temporary
+  projector/test to be deleted by BNA1-05.
 - BNA1-05: not started.
 - BNA1-06: not started.
 - BNA1-07: not started.
