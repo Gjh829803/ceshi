@@ -7,7 +7,6 @@ import type {
 } from "@whitebox-world/authoring";
 import type {
   ResolvedWorldPackageResourceArtifactV1,
-  ResolvedWorldPackageResourceArtifactV2,
 } from "@whitebox-world/world-package";
 import { assertWorldPackageAccessorFreeDataGraphV1 } from "@whitebox-world/world-package";
 import {
@@ -15,6 +14,13 @@ import {
   type SubjectAssetManifestV1,
 } from "@whitebox-world/subject-registry";
 import { isEmpty, isEqual, isNil } from "lodash-es";
+
+interface ResolvedWorldPackageResourceBytesV1 {
+  readonly resourceRef: string;
+  readonly packagePath: string;
+  readonly mediaType: string;
+  readonly bytes: Uint8Array;
+}
 
 import {
   XIER120_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1,
@@ -27,22 +33,22 @@ export interface WorldPackageResourceMappingV1 {
   readonly mediaType: "model/gltf-binary";
 }
 
-export interface ResolveWorldPackageResourceArtifactsOptionsV1 {
+export interface ResolveWorldPackageResourceBytesOptionsV1 {
   readonly publicRoot?: string;
   readonly resourceMappingByRef?: Readonly<
     Record<string, WorldPackageResourceMappingV1>
   >;
 }
 
-export interface WorldPackageResourceLicenseDocumentV2 {
+export interface WorldPackageResourceLicenseDocumentV1 {
   readonly id: string;
   readonly spdxLicenseExpression: string;
 }
 
-export interface ResolveWorldPackageResourceArtifactsOptionsV2
-  extends ResolveWorldPackageResourceArtifactsOptionsV1 {
+export interface ResolveWorldPackageResourceArtifactsOptionsV1
+  extends ResolveWorldPackageResourceBytesOptionsV1 {
   readonly subjectAssetManifests: readonly SubjectAssetManifestV1[];
-  readonly licenseDocuments: readonly WorldPackageResourceLicenseDocumentV2[];
+  readonly licenseDocuments: readonly WorldPackageResourceLicenseDocumentV1[];
 }
 
 export type WorldPackageResourceResolveFailureReasonV1 =
@@ -128,12 +134,12 @@ const DEFAULT_PUBLIC_ROOT = path.resolve(
 );
 
 const MAPPING_FIELDS = ["publicUri", "packagePath", "mediaType"] as const;
-const V2_OPTION_REQUIRED_FIELDS = [
+const OPTION_REQUIRED_FIELDS = [
   "subjectAssetManifests",
   "licenseDocuments",
 ] as const;
-const V2_OPTION_ALLOWED_FIELDS = [
-  ...V2_OPTION_REQUIRED_FIELDS,
+const OPTION_ALLOWED_FIELDS = [
+  ...OPTION_REQUIRED_FIELDS,
   "publicRoot",
   "resourceMappingByRef",
 ] as const;
@@ -426,10 +432,10 @@ async function readLockedResourceBytes(
   return bytes;
 }
 
-export async function resolveWorldPackageResourceArtifactsV1(
+export async function resolveWorldPackageResourceBytesV1(
   normalizedWorldIr: NormalizedWorldIRV4,
-  options: ResolveWorldPackageResourceArtifactsOptionsV1 = {},
-): Promise<readonly ResolvedWorldPackageResourceArtifactV1[]> {
+  options: ResolveWorldPackageResourceBytesOptionsV1 = {},
+): Promise<readonly ResolvedWorldPackageResourceBytesV1[]> {
   const subjectAssets = snapshotSubjectAssets(normalizedWorldIr);
   if (isEmpty(subjectAssets)) return Object.freeze([]);
 
@@ -441,7 +447,7 @@ export async function resolveWorldPackageResourceArtifactsV1(
   const publicRoot = await canonicalPublicRoot(
     options.publicRoot ?? DEFAULT_PUBLIC_ROOT,
   );
-  const artifacts: ResolvedWorldPackageResourceArtifactV1[] = [];
+  const artifacts: ResolvedWorldPackageResourceBytesV1[] = [];
   for (let index = 0; index < subjectAssets.length; index += 1) {
     const asset = subjectAssets[index]!;
     const mapping = mappings[index]!;
@@ -466,15 +472,15 @@ function isPlainDenseArray(value: unknown): value is readonly unknown[] {
   );
 }
 
-function snapshotLicenseDocumentsV2(
+function snapshotLicenseDocumentsV1(
   value: unknown,
-): ReadonlyMap<string, WorldPackageResourceLicenseDocumentV2> {
+): ReadonlyMap<string, WorldPackageResourceLicenseDocumentV1> {
   if (!isPlainDenseArray(value)) {
     throw infrastructureFailure("invalid-license-document");
   }
   const bySpdxExpression = new Map<
     string,
-    WorldPackageResourceLicenseDocumentV2
+    WorldPackageResourceLicenseDocumentV1
   >();
   const ids = new Set<string>();
   for (const candidate of value) {
@@ -506,9 +512,9 @@ function snapshotLicenseDocumentsV2(
   return bySpdxExpression;
 }
 
-function snapshotResolveOptionsV2(
+function snapshotResolveOptionsV1(
   value: unknown,
-): ResolveWorldPackageResourceArtifactsOptionsV2 {
+): ResolveWorldPackageResourceArtifactsOptionsV1 {
   try {
     assertWorldPackageAccessorFreeDataGraphV1(
       value,
@@ -523,10 +529,10 @@ function snapshotResolveOptionsV2(
   const descriptors = Object.getOwnPropertyDescriptors(value);
   const fields = Object.keys(descriptors);
   if (
-    fields.some((field) => !V2_OPTION_ALLOWED_FIELDS.includes(
-      field as (typeof V2_OPTION_ALLOWED_FIELDS)[number],
+    fields.some((field) => !OPTION_ALLOWED_FIELDS.includes(
+      field as (typeof OPTION_ALLOWED_FIELDS)[number],
     )) ||
-    V2_OPTION_REQUIRED_FIELDS.some((field) => !Object.hasOwn(descriptors, field))
+    OPTION_REQUIRED_FIELDS.some((field) => !Object.hasOwn(descriptors, field))
   ) {
     throw infrastructureFailure("invalid-resource-mapping");
   }
@@ -534,7 +540,7 @@ function snapshotResolveOptionsV2(
     subjectAssetManifests: descriptors.subjectAssetManifests!.value as
       readonly SubjectAssetManifestV1[],
     licenseDocuments: descriptors.licenseDocuments!.value as
-      readonly WorldPackageResourceLicenseDocumentV2[],
+      readonly WorldPackageResourceLicenseDocumentV1[],
     ...(isNil(descriptors.publicRoot)
       ? {}
       : { publicRoot: descriptors.publicRoot.value as string }),
@@ -547,7 +553,7 @@ function snapshotResolveOptionsV2(
   };
 }
 
-function snapshotSubjectAssetManifestsV2(
+function snapshotSubjectAssetManifestsV1(
   subjectAssets: readonly LockedSubjectAssetSnapshotV1[],
   value: unknown,
 ): ReadonlyMap<string, SubjectAssetManifestV1> {
@@ -649,17 +655,17 @@ function snapshotSubjectAssetManifestsV2(
   return manifestsByRef;
 }
 
-export async function resolveWorldPackageResourceArtifactsV2(
+export async function resolveWorldPackageResourceArtifactsV1(
   normalizedWorldIr: NormalizedWorldIRV4,
-  options: ResolveWorldPackageResourceArtifactsOptionsV2,
-): Promise<readonly ResolvedWorldPackageResourceArtifactV2[]> {
-  const snapshotOptions = snapshotResolveOptionsV2(options);
+  options: ResolveWorldPackageResourceArtifactsOptionsV1,
+): Promise<readonly ResolvedWorldPackageResourceArtifactV1[]> {
+  const snapshotOptions = snapshotResolveOptionsV1(options);
   const subjectAssets = snapshotSubjectAssets(normalizedWorldIr);
-  const manifestsByRef = snapshotSubjectAssetManifestsV2(
+  const manifestsByRef = snapshotSubjectAssetManifestsV1(
     subjectAssets,
     snapshotOptions.subjectAssetManifests,
   );
-  const licenseBySpdxExpression = snapshotLicenseDocumentsV2(
+  const licenseBySpdxExpression = snapshotLicenseDocumentsV1(
     snapshotOptions.licenseDocuments,
   );
   const provenanceByRef = new Map<string, Readonly<{
@@ -696,7 +702,7 @@ export async function resolveWorldPackageResourceArtifactsV2(
     }));
   }
 
-  const artifacts = await resolveWorldPackageResourceArtifactsV1(
+  const artifacts = await resolveWorldPackageResourceBytesV1(
     normalizedWorldIr,
     {
       ...(isNil(snapshotOptions.publicRoot)

@@ -7,9 +7,9 @@ import {
 import { isNil } from "lodash-es";
 
 import type {
-  CreateWorldPackageV2Input,
-  WorldPackageBuildContextV2,
-} from "./v2-build.js";
+  CreateWorldPackageV1Input,
+  WorldPackageBuildContextV1,
+} from "./package-build.js";
 import {
   assertWorldPackageStoreRefMatchesDirectoryV1,
   canonicalWorldPackageDirectoryForStoreV1,
@@ -17,12 +17,12 @@ import {
   type WorldPackageStorePutResultV1,
   type WorldPackageStoreV1,
 } from "./store.js";
-import { verifyWorldPackageDirectoryV2 } from "./v2-directory.js";
-import type { WorldPackageDistributionPolicyV2 } from "./v2-types.js";
-import { BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V2 } from "./babylon-web-host-profile.js";
+import { verifyWorldPackageDirectoryV1 } from "./package-directory.js";
+import type { WorldPackageDistributionPolicyV1 } from "./package-types.js";
+import { BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V1 } from "./babylon-web-host-profile.js";
 
-export type WorldPackageFixtureContextV2 = Pick<
-  CreateWorldPackageV2Input,
+export type WorldPackageFixtureContextV1 = Pick<
+  CreateWorldPackageV1Input,
   | "packageId"
   | "title"
   | "sdkVersion"
@@ -36,12 +36,12 @@ export type WorldPackageFixtureContextV2 = Pick<
   | "includeAuthoringSpec"
 >;
 
-export function createWorldPackageFixtureContextV2(input: {
+export function createWorldPackageFixtureContextV1(input: {
   readonly packageId: string;
   readonly title?: string;
-  readonly distributionPolicy?: WorldPackageDistributionPolicyV2;
-}): WorldPackageFixtureContextV2 {
-  const title = isNil(input.title) ? "WorldPackage V2 Test Fixture" : input.title;
+  readonly distributionPolicy?: WorldPackageDistributionPolicyV1;
+}): WorldPackageFixtureContextV1 {
+  const title = isNil(input.title) ? "WorldPackage Test Fixture" : input.title;
   const distributionPolicy = isNil(input.distributionPolicy)
     ? "redistributable"
     : input.distributionPolicy;
@@ -58,7 +58,7 @@ export function createWorldPackageFixtureContextV2(input: {
       resourceRef: "worldkit://ai-schema-projection-profile/constrained-json@1",
       contentHash: `sha256:${"b".repeat(64)}`,
     },
-    hostCompatibility: BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V2,
+    hostCompatibility: BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V1,
     generatedResourceProvenance: {
       licenseDocumentId: "project-owned",
       licenseSpdxExpression: "LicenseRef-Project-Owned",
@@ -78,11 +78,11 @@ export function createWorldPackageFixtureContextV2(input: {
   };
 }
 
-export function createWorldPackageBuildContextFixtureV2(input: {
+export function createWorldPackageBuildContextFixtureV1(input: {
   readonly title?: string;
-  readonly distributionPolicy?: WorldPackageDistributionPolicyV2;
-} = {}): WorldPackageBuildContextV2 {
-  const { packageId: _packageId, ...context } = createWorldPackageFixtureContextV2({
+  readonly distributionPolicy?: WorldPackageDistributionPolicyV1;
+} = {}): WorldPackageBuildContextV1 {
+  const { packageId: _packageId, ...context } = createWorldPackageFixtureContextV1({
     packageId: "test-fixture.package",
     ...input,
   });
@@ -117,7 +117,7 @@ class InMemoryWorldPackageStoreV1 implements WorldPackageStoreV1 {
     const directory = this.#directoriesByRef.get(worldPackageRef);
     if (isNil(directory)) return undefined;
     assertWorldPackageStoreRefMatchesDirectoryV1(worldPackageRef, directory);
-    return verifyWorldPackageDirectoryV2(directory);
+    return verifyWorldPackageDirectoryV1(directory);
   }
 }
 

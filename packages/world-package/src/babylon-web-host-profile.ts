@@ -3,9 +3,9 @@ import type { Sha256HashV1 } from "@whitebox-world/protocol";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 
 import type {
-  WorldPackageHostCompatibilityV2,
+  WorldPackageHostCompatibilityV1,
   WorldPackageHostPolicyV1,
-} from "./v2-types.js";
+} from "./package-types.js";
 
 export const BABYLON_WEB_HOST_COMPATIBILITY_PROFILE_REF_V1 =
   "worldkit://host-compatibility/babylon-web@1" as const;
@@ -24,17 +24,17 @@ export const BABYLON_WEB_HOST_COMPATIBILITY_PROFILE_HASH_V1 =
     BABYLON_WEB_HOST_COMPATIBILITY_PROFILE_V1,
   ) as Sha256HashV1;
 
-export const BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V2 = Object.freeze({
+export const BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V1 = Object.freeze({
   profileRef: BABYLON_WEB_HOST_COMPATIBILITY_PROFILE_REF_V1,
   profileHash: BABYLON_WEB_HOST_COMPATIBILITY_PROFILE_HASH_V1,
   runtimeContractVersion: 1,
   requiredFeatureIds: Object.freeze(["runtime.full-reload-v1"]),
-}) satisfies WorldPackageHostCompatibilityV2;
+}) satisfies WorldPackageHostCompatibilityV1;
 
 export const BABYLON_WEB_WORLD_PACKAGE_HOST_POLICY_V1 = Object.freeze({
   acceptedRuntimeTargets: Object.freeze(["babylon-web"] as const),
-  acceptedPackageFormatVersions: Object.freeze([2] as const),
-  acceptedManifestSchemaVersions: Object.freeze([2] as const),
+  acceptedPackageFormatVersions: Object.freeze([1] as const),
+  acceptedManifestSchemaVersions: Object.freeze([1] as const),
   runtimeContractVersion: 1,
   supportedFeatureIds: Object.freeze(["runtime.full-reload-v1"]),
   trustedCompatibilityProfiles: Object.freeze([Object.freeze({

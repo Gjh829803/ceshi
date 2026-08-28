@@ -1,4 +1,4 @@
-import { type WorldPackageRefV1 } from "@whitebox-world/world-identity";
+import { type WorldBuildIdentityV1 } from "@whitebox-world/world-identity";
 
 import type { Sha256HashV1 } from "@whitebox-world/protocol";
 
@@ -25,11 +25,13 @@ import type {
   WorldChangeValidationReportBindingV1,
 } from "@whitebox-world/authoring-edit";
 import type { GameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
-import type { ExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
 import type {
-  ResolvedWorldPackageResourceArtifactV2,
-  WorldPackageBuildContextV2,
-  WorldPackageBuildReceiptV2,
+  CanonicalSceneExecutionPlanV1,
+  WorldRuntimeBootstrapV1,
+} from "@whitebox-world/runtime-contracts";
+import type {
+  ResolvedWorldPackageResourceArtifactV1,
+  WorldPackageBuildContextV1,
   WorldPackageStoreV1,
 } from "@whitebox-world/world-package";
 
@@ -189,11 +191,14 @@ export type PublishRuntimeReplacementFailureKindV1 =
   | "commit-failed";
 
 export interface TrustedRuntimeWorldConfigurationV1 {
-  readonly executionPlan: ExecutionPlanV5;
-  readonly executionPlanHash: Sha256HashV1;
-  readonly worldPackageRef: WorldPackageRefV1;
-  readonly worldPackageBuildReceipt: WorldPackageBuildReceiptV2;
+  readonly worldBuildIdentity: WorldBuildIdentityV1;
   readonly gameplayBootstrap: GameplayBootstrapV1;
+  readonly worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
+  readonly sceneSource: Readonly<{
+    readonly kind: "canonical-execution-plan";
+    readonly executionPlan: CanonicalSceneExecutionPlanV1;
+    readonly executionPlanHash: Sha256HashV1;
+  }>;
 }
 
 export type PublishRuntimeReplacementResultV1 =
@@ -258,8 +263,8 @@ export interface SubmitWorldChangeRequestInputV1 {
   readonly journal: WorldChangeJournalV1;
   readonly leaseStore: PreparedCandidateLeaseStoreV1;
   readonly worldPackageStore: WorldPackageStoreV1;
-  readonly worldPackageBuildContext: WorldPackageBuildContextV2;
-  readonly resourceArtifacts: readonly ResolvedWorldPackageResourceArtifactV2[];
+  readonly worldPackageBuildContext: WorldPackageBuildContextV1;
+  readonly resourceArtifacts: readonly ResolvedWorldPackageResourceArtifactV1[];
   readonly request: WorldChangeRequestV1;
   readonly session: AuthoringEditSessionV1;
   readonly nowUnixMilliseconds: number;

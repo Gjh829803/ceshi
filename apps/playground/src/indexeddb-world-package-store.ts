@@ -8,8 +8,8 @@ import {
   assertWorldPackageStoreRefMatchesDirectoryV1,
   canonicalWorldPackageDirectoryForStoreV1,
   equalWorldPackageDirectoryBytesV1,
-  verifyWorldPackageDirectoryV2,
-  type WorldPackageDirectoryV2,
+  verifyWorldPackageDirectoryV1,
+  type WorldPackageDirectoryV1,
   type WorldPackageStoreV1,
 } from "@whitebox-world/world-package";
 import { isNil } from "lodash-es";
@@ -87,7 +87,7 @@ export function createIndexedDbWorldPackageStoreV1(
           await requestResult(store.add(directory, worldPackageRef));
         } else {
           const existing = canonicalWorldPackageDirectoryForStoreV1(
-            existingValue as WorldPackageDirectoryV2,
+            existingValue as WorldPackageDirectoryV1,
           );
           assertWorldPackageStoreRefMatchesDirectoryV1(worldPackageRef, existing);
           if (!equalWorldPackageDirectoryBytesV1(existing, directory)) {
@@ -122,7 +122,7 @@ export function createIndexedDbWorldPackageStoreV1(
       );
       await completion;
       if (isNil(value)) return undefined;
-      const verified = verifyWorldPackageDirectoryV2(value);
+      const verified = verifyWorldPackageDirectoryV1(value);
       if (
         verified.receipt.worldPackageRootHash !==
           worldPackageRootHashFromRefV1(worldPackageRef)

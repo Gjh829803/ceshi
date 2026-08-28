@@ -14,6 +14,7 @@ const EXPECTED_DEPENDENCIES = [
   "@whitebox-world/gameplay-contracts",
   "@whitebox-world/protocol",
   "@whitebox-world/runtime-contracts",
+  "@whitebox-world/world-identity",
   "@whitebox-world/world-package",
   "lodash-es",
 ] as const;
@@ -46,7 +47,7 @@ function productionTypeScriptFiles(directory: string): readonly string[] {
 }
 
 describe("@whitebox-world/authoring-host package boundary", () => {
-  it("depends only on Authoring, Edit, Compiler, Gameplay, Package, Runtime Contracts, and protocol", () => {
+  it("depends only on Authoring, Edit, Compiler, Gameplay, Package, Runtime Contracts, World Identity, and Protocol", () => {
     const manifest = JSON.parse(
       readFileSync(join(PACKAGE_DIRECTORY, "package.json"), "utf8"),
     ) as {

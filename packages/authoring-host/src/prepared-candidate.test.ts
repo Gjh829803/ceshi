@@ -17,18 +17,18 @@ import {
   type AuthoringEditPolicyProjectionV1,
   type WorldChangeDiagnosticV1,
 } from "@whitebox-world/authoring-edit";
-import { compileWorldV5 } from "@whitebox-world/compiler";
+import { compileCanonicalWorldV1 } from "@whitebox-world/compiler";
 import { createCoreGameplayBootstrapV1 } from "@whitebox-world/gameplay";
 import {
   createGameplayBootstrapResourceLockEntryV1,
 } from "@whitebox-world/gameplay-contracts";
 import { canonicalJsonBytes } from "@whitebox-world/protocol";
 import {
-  createWorldPackageV2,
+  createWorldPackageV1,
 } from "@whitebox-world/world-package";
 import {
   createInMemoryWorldPackageStoreV1,
-  createWorldPackageBuildContextFixtureV2,
+  createWorldPackageBuildContextFixtureV1,
 } from "@whitebox-world/world-package/testing";
 import { isNil } from "lodash-es";
 import { describe, expect, it } from "vitest";
@@ -141,18 +141,19 @@ function expectedHashes(spec: AuthoringSpecV4) {
       (relationship) => ({ ...relationship, establishedSimulationTick: 0 }),
     ),
   });
-  const compiled = compileWorldV5({
+  const compiled = compileCanonicalWorldV1({
     normalizedWorldIr,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
-    gameplayBootstrapResourceLock:
-      createGameplayBootstrapResourceLockEntryV1(gameplayBootstrap),
+    gameplayBootstrap,
+    worldRuntimeBootstrapRef:
+      `worldkit://world-runtime-bootstrap/${normalizedWorldIr.id}@1`,
   });
-  if (!compiled.ok || isNil(compiled.executionPlan) || isNil(compiled.executionPlanHash)) {
+  if (!compiled.ok || isNil(compiled.canonicalSceneExecutionPlan) || isNil(compiled.executionPlanHash)) {
     throw new Error(`expected fixture compile: ${JSON.stringify(compiled.diagnostics)}`);
   }
-  const directory = createWorldPackageV2({
+  const directory = createWorldPackageV1({
     packageId: `${spec.id}.package`,
-    ...createWorldPackageBuildContextFixtureV2(),
+    ...createWorldPackageBuildContextFixtureV1(),
     authoringSpec: spec,
     normalizedWorldIr,
     layoutSolveResult: {
@@ -160,8 +161,9 @@ function expectedHashes(spec: AuthoringSpecV4) {
       report: normalized.layoutSolveReport,
       layoutSolveReportHash: normalized.layoutSolveReportHash,
     },
-    executionPlan: compiled.executionPlan,
+    executionPlan: compiled.canonicalSceneExecutionPlan,
     gameplayBootstrap,
+    worldRuntimeBootstrap: compiled.worldRuntimeBootstrap,
     resourceArtifacts: [],
   });
   const receipt = directory.receipt;
@@ -201,7 +203,7 @@ async function prepare(
       policy: selectedPolicy,
       store,
       worldPackageStore,
-      worldPackageBuildContext: createWorldPackageBuildContextFixtureV2(),
+      worldPackageBuildContext: createWorldPackageBuildContextFixtureV1(),
       resourceArtifacts: [],
       nowUnixMilliseconds: extras.nowUnixMilliseconds ?? NOW,
       ...(isNil(extras.evaluateRequiredGates)

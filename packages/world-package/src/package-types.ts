@@ -1,19 +1,27 @@
-import type { Sha256HashV1 } from "@whitebox-world/protocol";
-
-import type { ExecutionResourceLockEntryV1 } from "@whitebox-world/runtime-contracts";
-import type { ExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
 import type { GameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
-
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
 import type {
-  WorldPackageBuildReceiptV1,
-  WorldPackageFileIntegrityEntryV1,
-} from "./types.js";
+  CanonicalResourceLockEntryV1,
+  CanonicalSceneExecutionPlanV1,
+  WorldRuntimeBootstrapV1,
+} from "@whitebox-world/runtime-contracts";
+import type {
+  WorldBuildIdentityV1,
+  WorldPackageRefV1,
+} from "@whitebox-world/world-identity";
 
-export type WorldPackageDistributionPolicyV2 =
+export type WorldPackageDistributionPolicyV1 =
   | "internal-only"
   | "redistributable";
 
-export interface WorldPackageLegalDocumentV2 {
+export interface WorldPackageFileIntegrityEntryV1 {
+  readonly path: string;
+  readonly mediaType: string;
+  readonly sizeBytes: number;
+  readonly contentHash: Sha256HashV1;
+}
+
+export interface WorldPackageLegalDocumentV1 {
   readonly id: string;
   readonly spdxLicenseExpression: string;
   readonly path: `LICENSES/${string}`;
@@ -22,7 +30,7 @@ export interface WorldPackageLegalDocumentV2 {
   readonly contentHash: Sha256HashV1;
 }
 
-export interface WorldPackageResourceArtifactV2 {
+export interface WorldPackageResourceArtifactV1 {
   readonly resourceRef: string;
   readonly packagePath: string;
   readonly mediaType: string;
@@ -34,7 +42,7 @@ export interface WorldPackageResourceArtifactV2 {
   readonly author?: string;
 }
 
-export interface WorldPackageHostCompatibilityV2 {
+export interface WorldPackageHostCompatibilityV1 {
   readonly profileRef: string;
   readonly profileHash: Sha256HashV1;
   readonly runtimeContractVersion: 1;
@@ -47,9 +55,7 @@ export interface WorldPackageTrustedCompatibilityProfileV1 {
 }
 
 export type WorldPackageHostSignaturePolicyV1 =
-  | Readonly<{
-      readonly mode: "not-required";
-    }>
+  | Readonly<{ readonly mode: "not-required" }>
   | Readonly<{
       readonly mode: "required";
       readonly trustDomain: string;
@@ -57,23 +63,23 @@ export type WorldPackageHostSignaturePolicyV1 =
 
 export interface WorldPackageHostPolicyV1 {
   readonly acceptedRuntimeTargets: readonly ["babylon-web"];
-  readonly acceptedPackageFormatVersions: readonly [2];
-  readonly acceptedManifestSchemaVersions: readonly [2];
+  readonly acceptedPackageFormatVersions: readonly [1];
+  readonly acceptedManifestSchemaVersions: readonly [1];
   readonly runtimeContractVersion: 1;
   readonly supportedFeatureIds: readonly string[];
   readonly trustedCompatibilityProfiles:
     readonly WorldPackageTrustedCompatibilityProfileV1[];
   readonly allowedDistributionPolicies:
-    readonly WorldPackageDistributionPolicyV2[];
+    readonly WorldPackageDistributionPolicyV1[];
   readonly signaturePolicy: WorldPackageHostSignaturePolicyV1;
 }
 
-export interface WorldPackageManifestV2 {
+export interface WorldPackageManifestV1 {
   readonly kind: "worldkit-world-package-manifest";
-  readonly schemaVersion: 2;
+  readonly schemaVersion: 1;
   readonly id: string;
   readonly title: string;
-  readonly packageFormatVersion: 2;
+  readonly packageFormatVersion: 1;
   readonly sdkVersion: string;
   readonly worldId: string;
   readonly seed: number;
@@ -89,10 +95,13 @@ export interface WorldPackageManifestV2 {
     readonly contentHash: Sha256HashV1;
   }>;
   readonly normalizedWorldIrSchemaVersion: 4;
-  readonly executionPlanSchemaVersion: 5;
+  readonly canonicalSceneExecutionPlanSchemaVersion: 1;
+  readonly worldRuntimeBootstrapSchemaVersion: 1;
   readonly authoringSpecHash: Sha256HashV1;
   readonly normalizedWorldIrHash: Sha256HashV1;
   readonly executionPlanHash: Sha256HashV1;
+  readonly gameplayBootstrapHash: Sha256HashV1;
+  readonly worldRuntimeBootstrapHash: Sha256HashV1;
   readonly registryLockHash: Sha256HashV1;
   readonly layoutSolveReportHash: Sha256HashV1;
   readonly initialControlledEntityId: string;
@@ -106,33 +115,40 @@ export interface WorldPackageManifestV2 {
     readonly maximumTriangles: number;
     readonly maximumColliders: number;
   }>;
-  readonly lockedResources: readonly ExecutionResourceLockEntryV1[];
+  readonly lockedResources: readonly CanonicalResourceLockEntryV1[];
   readonly entryPoint: Readonly<{
-    readonly executionPlanPath: "targets/babylon-web/execution-plan.json";
+    readonly canonicalSceneExecutionPlanPath:
+      "targets/babylon-web/canonical-scene-execution-plan.json";
     readonly gameplayBootstrapPath: "gameplay/bootstrap.json";
+    readonly worldRuntimeBootstrapPath:
+      "runtime/world-runtime-bootstrap.json";
   }>;
   readonly legal: Readonly<{
-    readonly distributionPolicy: WorldPackageDistributionPolicyV2;
+    readonly distributionPolicy: WorldPackageDistributionPolicyV1;
     readonly noticePath: "NOTICE";
-    readonly licenseDocuments: readonly WorldPackageLegalDocumentV2[];
+    readonly licenseDocuments: readonly WorldPackageLegalDocumentV1[];
   }>;
-  readonly hostCompatibility: WorldPackageHostCompatibilityV2;
-  readonly resources: readonly WorldPackageResourceArtifactV2[];
+  readonly hostCompatibility: WorldPackageHostCompatibilityV1;
+  readonly resources: readonly WorldPackageResourceArtifactV1[];
 }
 
-export interface WorldPackageBuildReceiptV2 {
+export interface WorldPackageBuildReceiptV1 {
   readonly kind: "worldkit-world-package-build-receipt";
-  readonly schemaVersion: 2;
-  readonly manifest: WorldPackageManifestV2;
+  readonly schemaVersion: 1;
+  readonly manifest: WorldPackageManifestV1;
   readonly manifestHash: Sha256HashV1;
   readonly fileIntegrityEntries: readonly WorldPackageFileIntegrityEntryV1[];
   readonly worldPackageRootHash: Sha256HashV1;
+  readonly worldPackageRef: WorldPackageRefV1;
+  readonly worldBuildIdentity: WorldBuildIdentityV1;
+  readonly worldBuildIdentityHash: Sha256HashV1;
 }
 
-export interface WorldPackageGameplayBootstrapMembershipInputV2 {
-  readonly executionPlan: ExecutionPlanV5;
+export interface WorldPackageGameplayBootstrapMembershipInputV1 {
+  readonly canonicalSceneExecutionPlan: CanonicalSceneExecutionPlanV1;
   readonly gameplayBootstrap: GameplayBootstrapV1;
-  readonly worldPackageBuildReceipt: WorldPackageBuildReceiptV2;
+  readonly worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
+  readonly worldPackageBuildReceipt: WorldPackageBuildReceiptV1;
 }
 
 export interface WorldPackageSignatureEnvelopeV1 {
@@ -140,46 +156,10 @@ export interface WorldPackageSignatureEnvelopeV1 {
   readonly schemaVersion: 1;
   readonly packageRootHash: Sha256HashV1;
   readonly packageId: string;
-  readonly packageFormatVersion: 2;
+  readonly packageFormatVersion: 1;
   readonly runtimeTarget: "babylon-web";
   readonly signatureAlgorithm: "ed25519";
   readonly keyId: string;
   readonly trustDomain: string;
   readonly signedAt: string;
-}
-
-export interface WorldPackageMigrationReportV1 {
-  readonly kind: "worldkit-world-package-migration-report";
-  readonly schemaVersion: 1;
-  readonly sourceManifestSchemaVersion: 1;
-  readonly targetManifestSchemaVersion: 2;
-  readonly sourceWorldPackageRootHash: Sha256HashV1;
-  readonly targetWorldPackageRootHash: Sha256HashV1;
-  readonly sourceManifestHash: Sha256HashV1;
-  readonly targetManifestHash: Sha256HashV1;
-  readonly migratedFieldIds: readonly string[];
-}
-
-export interface WorldPackageV1ToV2MigrationContextV1 {
-  readonly title: string;
-  readonly sdkVersion: string;
-  readonly canonicalAuthoringSchemaHash: Sha256HashV1;
-  readonly aiSchemaProjectionProfile: WorldPackageManifestV2["aiSchemaProjectionProfile"];
-  readonly worldBounds: WorldPackageManifestV2["worldBounds"];
-  readonly resourceBudget: WorldPackageManifestV2["resourceBudget"];
-  readonly lockedResources: WorldPackageManifestV2["lockedResources"];
-  readonly legal: WorldPackageManifestV2["legal"];
-  readonly hostCompatibility: WorldPackageManifestV2["hostCompatibility"];
-  readonly resources: WorldPackageManifestV2["resources"];
-  readonly v2OnlyFileIntegrityEntries: readonly WorldPackageFileIntegrityEntryV1[];
-}
-
-export interface MigrateWorldPackageBuildReceiptV1ToV2Input {
-  readonly sourceReceipt: WorldPackageBuildReceiptV1;
-  readonly context: WorldPackageV1ToV2MigrationContextV1;
-}
-
-export interface MigrateWorldPackageBuildReceiptV1ToV2Result {
-  readonly receipt: WorldPackageBuildReceiptV2;
-  readonly report: WorldPackageMigrationReportV1;
 }

@@ -93,7 +93,18 @@ Ruling: generated examples and scene evidence are regenerated only through their
   Canonical Plan, Runtime Contracts, Compiler, Traversal Lock, Capability
   Compile, and Authoring normalization focused gates passed 95/95; the
   executable/source V5 symbol census, typecheck, and `git diff --check` passed.
-- BNA1-06: not started.
+- BNA1-06: complete in the pending Package commit. WorldPackage now has one
+  current schema/format pair, three explicit Canonical entry artifacts, and a
+  post-root World Build Identity whose transport file is excluded from the
+  Root inventory. The directory verifier, memory/file/IndexedDB stores,
+  signing, resource resolution, Authoring Host preparation/recovery, and
+  Validation projection were migrated without V1/V2 aliases. The file adapter
+  additionally verifies byte-exact integrity, receipt, and identity transport
+  metadata instead of reconstructing past tampering. Evidence: Package,
+  Authoring Host, Validation subject, store/resolver/signing focused gates
+  passed 150/150 after the boundary dependency assertion was updated; file
+  adapter/signing security regressions passed 17/17; typecheck, old Package
+  symbol/path census, and `git diff --check` passed.
 - BNA1-07: not started.
 - BNA1-08: not started.
 - BNA1-09A: not started.

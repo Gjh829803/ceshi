@@ -17,7 +17,7 @@ import {
 } from "@whitebox-world/authoring-edit";
 import {
   createInMemoryWorldPackageStoreV1,
-  createWorldPackageBuildContextFixtureV2,
+  createWorldPackageBuildContextFixtureV1,
 } from "@whitebox-world/world-package/testing";
 import type { WorldPackageStoreV1 } from "@whitebox-world/world-package";
 import { isNil } from "lodash-es";
@@ -49,7 +49,7 @@ const EXAMPLES_ROOT = join(
   dirname(fileURLToPath(import.meta.url)),
   "../../../../examples/authoring",
 );
-const WORLD_PACKAGE_BUILD_CONTEXT = createWorldPackageBuildContextFixtureV2();
+const WORLD_PACKAGE_BUILD_CONTEXT = createWorldPackageBuildContextFixtureV1();
 
 function session(): AuthoringEditSessionV1 {
   return {

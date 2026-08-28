@@ -305,12 +305,15 @@ async function finishRuntimePublication(
   try {
     published = await input.publishRuntimeReplacement({
       worldConfiguration: {
-        executionPlan: verifiedWorldPackage.executionPlan,
-        executionPlanHash:
-          verifiedWorldPackage.receipt.manifest.executionPlanHash,
-        worldPackageRef: found.lease.worldPackageRef,
-        worldPackageBuildReceipt: verifiedWorldPackage.receipt,
+        worldBuildIdentity: verifiedWorldPackage.receipt.worldBuildIdentity,
         gameplayBootstrap: verifiedWorldPackage.gameplayBootstrap,
+        worldRuntimeBootstrap: verifiedWorldPackage.worldRuntimeBootstrap,
+        sceneSource: {
+          kind: "canonical-execution-plan",
+          executionPlan: verifiedWorldPackage.executionPlan,
+          executionPlanHash:
+            verifiedWorldPackage.receipt.manifest.executionPlanHash,
+        },
       },
       publication: {
         requestId: current.request.id,

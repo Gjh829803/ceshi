@@ -26,7 +26,7 @@ import {
 import { isNil } from "lodash-es";
 import {
   createInMemoryWorldPackageStoreV1,
-  createWorldPackageBuildContextFixtureV2,
+  createWorldPackageBuildContextFixtureV1,
 } from "@whitebox-world/world-package/testing";
 import { describe, expect, it } from "vitest";
 
@@ -68,7 +68,7 @@ const VALIDATION_REPORT = {
   status: "passed",
 } as const;
 const WORLD_PACKAGE_STORE = createInMemoryWorldPackageStoreV1();
-const WORLD_PACKAGE_BUILD_CONTEXT = createWorldPackageBuildContextFixtureV2();
+const WORLD_PACKAGE_BUILD_CONTEXT = createWorldPackageBuildContextFixtureV1();
 
 const HOUSE_PROTOTYPE = {
   id: "house-blockout",

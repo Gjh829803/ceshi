@@ -1,40 +1,23 @@
 export {
   assertWorldPackageAccessorFreeDataGraphV1,
+  assertWorldPackageBuildReceiptV1,
+  assertWorldPackageGameplayBootstrapMembershipV1,
+  assertWorldPackageHostCompatibilityV1,
   canonicalWorldPackageFileIntegrityEntriesV1,
   canonicalWorldPackageManifestV1,
+  canonicalWorldPackageSignatureEnvelopeV1,
+  equalWorldPackageHostCompatibilityV1,
   hashWorldPackageManifestV1,
   hashWorldPackageRootV1,
-} from "./manifest.js";
-export {
-  GAMEPLAY_BOOTSTRAP_MEDIA_TYPE_V1,
-  GAMEPLAY_BOOTSTRAP_PACKAGE_PATH_V1,
-  assertWorldPackageBuildReceiptV1,
-  assertWorldPackageBuildReceiptClosureV1,
-  assertWorldPackageGameplayBootstrapMembershipV1,
-  createWorldPackageBuildReceiptV1,
-} from "./build-receipt.js";
-export {
-  assertWorldPackageBuildReceiptV2,
-  assertWorldPackageHostCompatibilityV2,
-  assertWorldPackageGameplayBootstrapMembershipV2,
-  assertWorldPackageMigrationReportV1,
-  canonicalWorldPackageManifestV2,
-  canonicalWorldPackageSignatureEnvelopeV1,
-  hashWorldPackageManifestV2,
-  hashWorldPackageRootV2,
-  migrateWorldPackageBuildReceiptV1ToV2,
   worldPackageSignatureEnvelopeBytesV1,
-} from "./v2-contract.js";
-export {
-  assembleWorldPackageDirectoryV2,
-  verifyWorldPackageDirectoryV2,
-} from "./v2-directory.js";
-export { createWorldPackageV2 } from "./v2-build.js";
+} from "./package-contract.js";
+export { assembleWorldPackageDirectoryV1, verifyWorldPackageDirectoryV1 } from "./package-directory.js";
+export { createWorldPackageV1 } from "./package-build.js";
 export {
   BABYLON_WEB_HOST_COMPATIBILITY_PROFILE_HASH_V1,
   BABYLON_WEB_HOST_COMPATIBILITY_PROFILE_REF_V1,
   BABYLON_WEB_HOST_COMPATIBILITY_PROFILE_V1,
-  BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V2,
+  BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V1,
   BABYLON_WEB_WORLD_PACKAGE_HOST_POLICY_V1,
 } from "./babylon-web-host-profile.js";
 export {
@@ -43,43 +26,30 @@ export {
   equalWorldPackageDirectoryBytesV1,
 } from "./store.js";
 export type {
-  CreateWorldPackageBuildReceiptInputV1,
-  ResolvedWorldPackageResourceArtifactV1,
-  WorldPackageBuildClosureV1,
   WorldPackageBuildReceiptV1,
+  WorldPackageDistributionPolicyV1,
   WorldPackageFileIntegrityEntryV1,
-  WorldPackageManifestV1,
   WorldPackageGameplayBootstrapMembershipInputV1,
-  WorldPackageResourceArtifactV1,
-} from "./types.js";
-export type {
-  MigrateWorldPackageBuildReceiptV1ToV2Input,
-  MigrateWorldPackageBuildReceiptV1ToV2Result,
-  WorldPackageBuildReceiptV2,
-  WorldPackageDistributionPolicyV2,
-  WorldPackageHostCompatibilityV2,
-  WorldPackageGameplayBootstrapMembershipInputV2,
+  WorldPackageHostCompatibilityV1,
   WorldPackageHostPolicyV1,
   WorldPackageHostSignaturePolicyV1,
-  WorldPackageLegalDocumentV2,
-  WorldPackageManifestV2,
-  WorldPackageMigrationReportV1,
-  WorldPackageResourceArtifactV2,
+  WorldPackageLegalDocumentV1,
+  WorldPackageManifestV1,
+  WorldPackageResourceArtifactV1,
   WorldPackageSignatureEnvelopeV1,
   WorldPackageTrustedCompatibilityProfileV1,
-  WorldPackageV1ToV2MigrationContextV1,
-} from "./v2-types.js";
+} from "./package-types.js";
 export type {
-  AssembleWorldPackageDirectoryV2Input,
-  VerifiedWorldPackageDirectoryV2,
-  WorldPackageDirectoryFileV2,
-  WorldPackageDirectoryV2,
-} from "./v2-directory.js";
+  AssembleWorldPackageDirectoryV1Input,
+  VerifiedWorldPackageDirectoryV1,
+  WorldPackageDirectoryFileV1,
+  WorldPackageDirectoryV1,
+} from "./package-directory.js";
 export type {
-  CreateWorldPackageV2Input,
-  ResolvedWorldPackageResourceArtifactV2,
-  WorldPackageGeneratedResourceProvenanceV2,
-  WorldPackageLicenseDocumentInputV2,
-  WorldPackageBuildContextV2,
-} from "./v2-build.js";
+  CreateWorldPackageV1Input,
+  ResolvedWorldPackageResourceArtifactV1,
+  WorldPackageGeneratedResourceProvenanceV1,
+  WorldPackageLicenseDocumentInputV1,
+  WorldPackageBuildContextV1,
+} from "./package-build.js";
 export type { WorldPackageStorePutResultV1, WorldPackageStoreV1 } from "./store.js";

@@ -2,17 +2,17 @@ import canonicalAuthoringSchema from "@whitebox-world/authoring/schema";
 import { hashCanonicalAuthoringSchemaV1 } from "@whitebox-world/authoring-edit";
 import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
 import {
-  BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V2,
-  type ResolvedWorldPackageResourceArtifactV2,
-  type WorldPackageBuildContextV2,
-  type WorldPackageLicenseDocumentInputV2,
+  BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V1,
+  type ResolvedWorldPackageResourceArtifactV1,
+  type WorldPackageBuildContextV1,
+  type WorldPackageLicenseDocumentInputV1,
 } from "@whitebox-world/world-package";
 import { isNil } from "lodash-es";
 
 const CONSTRAINED_JSON_PROFILE_REF =
   "worldkit://ai-schema-projection-profile/constrained-json@1";
 
-const LICENSE_BY_SPDX_EXPRESSION = new Map<string, WorldPackageLicenseDocumentInputV2>([
+const LICENSE_BY_SPDX_EXPRESSION = new Map<string, WorldPackageLicenseDocumentInputV1>([
   ["LicenseRef-Project-Owned", Object.freeze({
     id: "project-owned",
     spdxLicenseExpression: "LicenseRef-Project-Owned",
@@ -27,11 +27,11 @@ const LICENSE_BY_SPDX_EXPRESSION = new Map<string, WorldPackageLicenseDocumentIn
   })],
 ]);
 
-export function createPlaygroundWorldPackageBuildContextV2(input: {
+export function createPlaygroundWorldPackageBuildContextV1(input: {
   readonly title: string;
-  readonly resourceArtifacts: readonly ResolvedWorldPackageResourceArtifactV2[];
+  readonly resourceArtifacts: readonly ResolvedWorldPackageResourceArtifactV1[];
   readonly includeAuthoringSpec: boolean;
-}): WorldPackageBuildContextV2 {
+}): WorldPackageBuildContextV1 {
   const projectionProfile =
     builtInSubjectResourceRegistry.resolveAiSchemaProjectionProfile(
       CONSTRAINED_JSON_PROFILE_REF,
@@ -69,7 +69,7 @@ export function createPlaygroundWorldPackageBuildContextV2(input: {
       resourceRef: projectionProfile.resourceRef,
       contentHash: projectionProfile.contentHash as `sha256:${string}`,
     }),
-    hostCompatibility: BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V2,
+    hostCompatibility: BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V1,
     generatedResourceProvenance: Object.freeze({
       licenseDocumentId: "project-owned",
       licenseSpdxExpression: "LicenseRef-Project-Owned",

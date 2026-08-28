@@ -1,97 +1,36 @@
-import type { Sha256HashV1 } from "@whitebox-world/protocol";
-
-import type {
-  AuthoringSpecV4,
-  NormalizedWorldIRV4,
-} from "@whitebox-world/authoring";
+import { hashAuthoringDocumentV4, type AuthoringSpecV4, type NormalizedWorldIRV4 } from "@whitebox-world/authoring";
 import type { GameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
 import { gameplayBootstrapCanonicalBytesV1 } from "@whitebox-world/gameplay-contracts";
 import type { LayoutSolveResultV1 } from "@whitebox-world/layout-solver";
+import { canonicalJsonBytes, sha256Bytes, sha256CanonicalJson, type Sha256HashV1 } from "@whitebox-world/protocol";
 import {
-  canonicalJsonBytes,
-  sha256Bytes,
-} from "@whitebox-world/protocol";
-import type { ExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
-import { isEmpty, isNil, isPlainObject } from "lodash-es";
+  canonicalResourceLockEntriesV1,
+  hashCanonicalSceneExecutionPlanV1,
+  parseCanonicalSceneExecutionPlanV1,
+  parseWorldRuntimeBootstrapV1,
+  worldRuntimeBootstrapCanonicalBytesV1,
+  type CanonicalSceneExecutionPlanV1,
+  type WorldRuntimeBootstrapV1,
+} from "@whitebox-world/runtime-contracts";
+import {
+  hashWorldBuildIdentityV1,
+  worldPackageRefFromRootHashV1,
+  type WorldBuildIdentityV1,
+} from "@whitebox-world/world-identity";
+import { isNil } from "lodash-es";
 
 import {
-  assertWorldPackageBuildReceiptClosureV1,
-  createWorldPackageBuildReceiptV1,
-} from "./build-receipt.js";
-import {
-  assertSafeWorldPackagePathV1,
-  assertWorldPackageAccessorFreeDataGraphV1,
-  copyAdmittedWorldPackageBytesV1,
-} from "./manifest.js";
-import {
-  migrateWorldPackageBuildReceiptV1ToV2,
-} from "./v2-contract.js";
-import {
-  assembleWorldPackageDirectoryV2,
-  type WorldPackageDirectoryFileV2,
-  type WorldPackageDirectoryV2,
-} from "./v2-directory.js";
-import type {
-  WorldPackageDistributionPolicyV2,
-  WorldPackageHostCompatibilityV2,
-  WorldPackageManifestV2,
-} from "./v2-types.js";
+  canonicalWorldPackageFileIntegrityEntriesV1,
+  canonicalWorldPackageManifestV1,
+  hashWorldPackageManifestV1,
+  hashWorldPackageRootV1,
+} from "./package-contract.js";
+import { assembleWorldPackageDirectoryV1, type WorldPackageDirectoryFileV1, type WorldPackageDirectoryV1 } from "./package-directory.js";
+import type { WorldPackageDistributionPolicyV1, WorldPackageHostCompatibilityV1, WorldPackageManifestV1 } from "./package-types.js";
 
-type UnknownRecord = Record<string, unknown>;
+const HASH_PATTERN = /^sha256:[a-f0-9]{64}$/;
 
-const INPUT_FIELDS = [
-  "packageId",
-  "title",
-  "sdkVersion",
-  "distributionPolicy",
-  "canonicalAuthoringSchemaHash",
-  "aiSchemaProjectionProfile",
-  "hostCompatibility",
-  "authoringSpec",
-  "normalizedWorldIr",
-  "layoutSolveResult",
-  "executionPlan",
-  "gameplayBootstrap",
-  "resourceArtifacts",
-  "generatedResourceProvenance",
-  "licenseDocuments",
-  "noticeText",
-  "includeAuthoringSpec",
-] as const;
-const RESOURCE_REQUIRED_FIELDS = [
-  "resourceRef",
-  "packagePath",
-  "mediaType",
-  "bytes",
-  "subjectAssetManifestHash",
-  "licenseDocumentId",
-  "licenseSpdxExpression",
-  "redistributionPolicy",
-] as const;
-const RESOURCE_ALLOWED_FIELDS = [
-  ...RESOURCE_REQUIRED_FIELDS,
-  "sourceUri",
-  "author",
-] as const;
-const GENERATED_PROVENANCE_REQUIRED_FIELDS = [
-  "licenseDocumentId",
-  "licenseSpdxExpression",
-  "redistributionPolicy",
-] as const;
-const GENERATED_PROVENANCE_ALLOWED_FIELDS = [
-  ...GENERATED_PROVENANCE_REQUIRED_FIELDS,
-  "sourceUri",
-  "author",
-] as const;
-const LICENSE_DOCUMENT_FIELDS = [
-  "id",
-  "spdxLicenseExpression",
-  "path",
-  "text",
-] as const;
-const UTF8_BOM = "\ufeff";
-
-export interface ResolvedWorldPackageResourceArtifactV2 {
+export interface ResolvedWorldPackageResourceArtifactV1 {
   readonly resourceRef: string;
   readonly packagePath: string;
   readonly mediaType: string;
@@ -104,7 +43,7 @@ export interface ResolvedWorldPackageResourceArtifactV2 {
   readonly author?: string;
 }
 
-export interface WorldPackageGeneratedResourceProvenanceV2 {
+export interface WorldPackageGeneratedResourceProvenanceV1 {
   readonly licenseDocumentId: string;
   readonly licenseSpdxExpression: string;
   readonly redistributionPolicy: "allowed" | "internal-only" | "prohibited";
@@ -112,575 +51,246 @@ export interface WorldPackageGeneratedResourceProvenanceV2 {
   readonly author?: string;
 }
 
-export interface WorldPackageLicenseDocumentInputV2 {
+export interface WorldPackageLicenseDocumentInputV1 {
   readonly id: string;
   readonly spdxLicenseExpression: string;
   readonly path: `LICENSES/${string}`;
   readonly text: string;
 }
 
-export interface CreateWorldPackageV2Input {
+export interface CreateWorldPackageV1Input {
   readonly packageId: string;
   readonly title: string;
   readonly sdkVersion: string;
-  readonly distributionPolicy: WorldPackageDistributionPolicyV2;
+  readonly distributionPolicy: WorldPackageDistributionPolicyV1;
   readonly canonicalAuthoringSchemaHash: Sha256HashV1;
-  readonly aiSchemaProjectionProfile: WorldPackageManifestV2["aiSchemaProjectionProfile"];
-  readonly hostCompatibility: WorldPackageHostCompatibilityV2;
+  readonly aiSchemaProjectionProfile: WorldPackageManifestV1["aiSchemaProjectionProfile"];
+  readonly hostCompatibility: WorldPackageHostCompatibilityV1;
   readonly authoringSpec: AuthoringSpecV4;
   readonly normalizedWorldIr: NormalizedWorldIRV4;
   readonly layoutSolveResult: LayoutSolveResultV1;
-  readonly executionPlan: ExecutionPlanV5;
+  readonly executionPlan: CanonicalSceneExecutionPlanV1;
   readonly gameplayBootstrap: GameplayBootstrapV1;
-  readonly resourceArtifacts: readonly ResolvedWorldPackageResourceArtifactV2[];
-  readonly generatedResourceProvenance: WorldPackageGeneratedResourceProvenanceV2;
-  readonly licenseDocuments: readonly WorldPackageLicenseDocumentInputV2[];
+  readonly worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
+  readonly resourceArtifacts: readonly ResolvedWorldPackageResourceArtifactV1[];
+  readonly generatedResourceProvenance: WorldPackageGeneratedResourceProvenanceV1;
+  readonly licenseDocuments: readonly WorldPackageLicenseDocumentInputV1[];
   readonly noticeText: string;
   readonly includeAuthoringSpec: boolean;
 }
 
-export type WorldPackageBuildContextV2 = Pick<
-  CreateWorldPackageV2Input,
-  | "title"
-  | "sdkVersion"
-  | "distributionPolicy"
-  | "canonicalAuthoringSchemaHash"
-  | "aiSchemaProjectionProfile"
-  | "hostCompatibility"
-  | "generatedResourceProvenance"
-  | "licenseDocuments"
-  | "noticeText"
-  | "includeAuthoringSpec"
->;
+export type WorldPackageBuildContextV1 = Pick<CreateWorldPackageV1Input,
+  "title" | "sdkVersion" | "distributionPolicy" | "canonicalAuthoringSchemaHash" |
+  "aiSchemaProjectionProfile" | "hostCompatibility" | "generatedResourceProvenance" |
+  "licenseDocuments" | "noticeText" | "includeAuthoringSpec">;
 
-interface CanonicalLegalDocument {
+interface LegalDocument {
   readonly id: string;
   readonly spdxLicenseExpression: string;
   readonly path: `LICENSES/${string}`;
-  readonly text: string;
   readonly bytes: Uint8Array;
   readonly contentHash: Sha256HashV1;
 }
 
-function buildFail(path: string, message: string): never {
-  throw new Error(
-    `WORLD_PACKAGE_V2_BUILD_INVALID: ${isEmpty(path) ? message : `${path}: ${message}`}`,
-  );
-}
-
-function exactRecord(
-  value: unknown,
-  requiredFields: readonly string[],
-  allowedFields: readonly string[],
-  path: string,
-): UnknownRecord {
-  if (isNil(value) || !isPlainObject(value)) {
-    buildFail(path, "expected a plain object");
-  }
-  const record = value as UnknownRecord;
-  const allowed = new Set(allowedFields);
-  const unknown = Object.keys(record).find((field) => !allowed.has(field));
-  if (!isNil(unknown)) buildFail(path, `unknown field '${unknown}'`);
-  for (const field of requiredFields) {
-    if (!Object.hasOwn(record, field) || isNil(record[field])) {
-      buildFail(path, `missing field '${field}'`);
-    }
-  }
-  return record;
-}
-
-function isPlainDenseArray(value: unknown): value is readonly unknown[] {
-  return (
-    Array.isArray(value) &&
-    Object.getPrototypeOf(value) === Array.prototype &&
-    Object.getOwnPropertyNames(value).length === value.length + 1
-  );
-}
-
-function requireArray(value: unknown, path: string): readonly unknown[] {
-  if (!isPlainDenseArray(value)) buildFail(path, "must be a plain dense array");
-  return value;
+function invalid(path: string, message: string): never {
+  throw new Error(`WORLD_PACKAGE_BUILD_INVALID: ${path.length === 0 ? message : `${path}: ${message}`}`);
 }
 
 function requireString(value: unknown, path: string): string {
-  if (typeof value !== "string" || isEmpty(value) || value.trim() !== value) {
-    buildFail(path, "must be a non-empty canonical string");
-  }
-  return value;
-}
-
-function requireText(value: unknown, path: string): string {
-  if (
-    typeof value !== "string" ||
-    isEmpty(value) ||
-    value.startsWith(UTF8_BOM) ||
-    value.includes("\u0000") ||
-    value.normalize("NFC") !== value
-  ) {
-    buildFail(path, "must be non-empty canonical UTF-8 text without BOM or NUL");
-  }
-  return value;
-}
-
-function requirePolicy(
-  value: unknown,
-  path: string,
-): ResolvedWorldPackageResourceArtifactV2["redistributionPolicy"] {
-  if (
-    value !== "allowed" &&
-    value !== "internal-only" &&
-    value !== "prohibited"
-  ) {
-    buildFail(path, "invalid redistribution policy");
+  if (typeof value !== "string" || value.length === 0 || value.trim() !== value || value.normalize("NFC") !== value) {
+    invalid(path, "must be a non-empty canonical string");
   }
   return value;
 }
 
 function requireHash(value: unknown, path: string): Sha256HashV1 {
-  if (
-    typeof value !== "string" ||
-    !/^sha256:[0-9a-f]{64}$/.test(value) ||
-    value === `sha256:${"0".repeat(64)}`
-  ) {
-    buildFail(path, "must be a non-zero lowercase sha256 hash");
+  if (typeof value !== "string" || !HASH_PATTERN.test(value) || value === `sha256:${"0".repeat(64)}`) {
+    invalid(path, "must be a non-zero lowercase SHA-256 hash");
   }
   return value as Sha256HashV1;
 }
 
-function optionalString(
-  record: UnknownRecord,
-  field: "sourceUri" | "author",
-  path: string,
-): Readonly<Record<string, string>> {
-  const value = record[field];
-  return isNil(value) ? {} : { [field]: requireString(value, `${path}/${field}`) };
-}
-
-function canonicalResources(
-  value: unknown,
-): readonly ResolvedWorldPackageResourceArtifactV2[] {
-  const resources = requireArray(value, "resourceArtifacts").map((candidate, index) => {
-    const path = `resourceArtifacts/${index}`;
-    const row = exactRecord(
-      candidate,
-      RESOURCE_REQUIRED_FIELDS,
-      RESOURCE_ALLOWED_FIELDS,
-      path,
-    );
-    if (
-      !(row.bytes instanceof Uint8Array) ||
-      Object.getPrototypeOf(row.bytes) !== Uint8Array.prototype
-    ) {
-      buildFail(`${path}/bytes`, "must be a plain Uint8Array");
-    }
-    return {
-      resourceRef: requireString(row.resourceRef, `${path}/resourceRef`),
-      packagePath: assertSafeWorldPackagePathV1(
-        row.packagePath,
-        `${path}/packagePath`,
-        "WORLD_PACKAGE_V2_BUILD_INVALID",
-      ),
-      mediaType: requireString(row.mediaType, `${path}/mediaType`),
-      bytes: copyAdmittedWorldPackageBytesV1(row.bytes),
-      subjectAssetManifestHash: requireHash(
-        row.subjectAssetManifestHash,
-        `${path}/subjectAssetManifestHash`,
-      ),
-      licenseDocumentId: requireString(
-        row.licenseDocumentId,
-        `${path}/licenseDocumentId`,
-      ),
-      licenseSpdxExpression: requireString(
-        row.licenseSpdxExpression,
-        `${path}/licenseSpdxExpression`,
-      ),
-      redistributionPolicy: requirePolicy(
-        row.redistributionPolicy,
-        `${path}/redistributionPolicy`,
-      ),
-      ...optionalString(row, "sourceUri", path),
-      ...optionalString(row, "author", path),
-    } as ResolvedWorldPackageResourceArtifactV2;
-  }).sort((left, right) =>
-    left.resourceRef < right.resourceRef
-      ? -1
-      : left.resourceRef > right.resourceRef
-        ? 1
-        : left.packagePath < right.packagePath
-          ? -1
-          : left.packagePath > right.packagePath
-            ? 1
-            : 0
-  );
-  if (
-    new Set(resources.map((resource) => resource.resourceRef)).size !== resources.length ||
-    new Set(resources.map((resource) => resource.packagePath)).size !== resources.length
-  ) {
-    buildFail("resourceArtifacts", "resource Refs and package paths must be unique");
+function requireBytes(value: unknown, path: string): Uint8Array {
+  if (!(value instanceof Uint8Array) || Object.getPrototypeOf(value) !== Uint8Array.prototype) {
+    invalid(path, "must be a plain Uint8Array");
   }
-  return resources;
+  return new Uint8Array(value);
 }
 
-function canonicalGeneratedProvenance(
-  value: unknown,
-): WorldPackageGeneratedResourceProvenanceV2 {
-  const path = "generatedResourceProvenance";
-  const row = exactRecord(
-    value,
-    GENERATED_PROVENANCE_REQUIRED_FIELDS,
-    GENERATED_PROVENANCE_ALLOWED_FIELDS,
-    path,
-  );
-  return {
-    licenseDocumentId: requireString(
-      row.licenseDocumentId,
-      `${path}/licenseDocumentId`,
-    ),
-    licenseSpdxExpression: requireString(
-      row.licenseSpdxExpression,
-      `${path}/licenseSpdxExpression`,
-    ),
-    redistributionPolicy: requirePolicy(
-      row.redistributionPolicy,
-      `${path}/redistributionPolicy`,
-    ),
-    ...optionalString(row, "sourceUri", path),
-    ...optionalString(row, "author", path),
-  } as WorldPackageGeneratedResourceProvenanceV2;
+function requireSafePath(value: unknown, path: string): string {
+  const result = requireString(value, path);
+  const segments = result.split("/");
+  if (result.startsWith("/") || result.includes("\\") || /[\u0000-\u001f\u007f]/.test(result) ||
+    segments.some((segment) => segment.length === 0 || segment === "." || segment === ".." || segment.includes(":"))) {
+    invalid(path, "must be a safe package-local path");
+  }
+  return result;
 }
 
-function canonicalLegalDocuments(
-  value: unknown,
-  noticeText: string,
-): readonly CanonicalLegalDocument[] {
-  const documents = requireArray(value, "licenseDocuments").map((candidate, index) => {
-    const path = `licenseDocuments/${index}`;
-    const row = exactRecord(
-      candidate,
-      LICENSE_DOCUMENT_FIELDS,
-      LICENSE_DOCUMENT_FIELDS,
-      path,
-    );
-    const licensePath = assertSafeWorldPackagePathV1(
-      row.path,
-      `${path}/path`,
-      "WORLD_PACKAGE_V2_BUILD_INVALID",
-    );
-    if (!licensePath.startsWith("LICENSES/")) {
-      buildFail(`${path}/path`, "must be inside LICENSES/");
+function requireCanonicalText(value: unknown, path: string): string {
+  if (
+    typeof value !== "string" || value.length === 0 ||
+    value.normalize("NFC") !== value || value.startsWith("\ufeff") ||
+    value.includes("\u0000")
+  ) invalid(path, "must be non-empty canonical UTF-8 text without BOM or NUL");
+  const text = value;
+  return text;
+}
+
+function jsonFile(path: string, value: unknown): WorldPackageDirectoryFileV1 {
+  return { path, mediaType: "application/json", bytes: canonicalJsonBytes(value) };
+}
+
+function canonicalResources(input: readonly ResolvedWorldPackageResourceArtifactV1[]): readonly ResolvedWorldPackageResourceArtifactV1[] {
+  if (!Array.isArray(input)) invalid("resourceArtifacts", "must be an array");
+  const rows = input.map((candidate, index) => {
+    const path = `resourceArtifacts/${index}`;
+    if (!["allowed", "internal-only", "prohibited"].includes(candidate.redistributionPolicy)) {
+      invalid(`${path}/redistributionPolicy`, "is invalid");
     }
-    const text = requireText(row.text, `${path}/text`);
-    const bytes = copyAdmittedWorldPackageBytesV1(
-      new TextEncoder().encode(text),
-    );
-    return {
-      id: requireString(row.id, `${path}/id`),
-      spdxLicenseExpression: requireString(
-        row.spdxLicenseExpression,
-        `${path}/spdxLicenseExpression`,
-      ),
-      path: licensePath as `LICENSES/${string}`,
-      text,
+    return Object.freeze({
+      resourceRef: requireString(candidate.resourceRef, `${path}/resourceRef`),
+      packagePath: requireSafePath(candidate.packagePath, `${path}/packagePath`),
+      mediaType: requireString(candidate.mediaType, `${path}/mediaType`),
+      bytes: requireBytes(candidate.bytes, `${path}/bytes`),
+      subjectAssetManifestHash: requireHash(candidate.subjectAssetManifestHash, `${path}/subjectAssetManifestHash`),
+      licenseDocumentId: requireString(candidate.licenseDocumentId, `${path}/licenseDocumentId`),
+      licenseSpdxExpression: requireString(candidate.licenseSpdxExpression, `${path}/licenseSpdxExpression`),
+      redistributionPolicy: candidate.redistributionPolicy,
+      ...(isNil(candidate.sourceUri) ? {} : { sourceUri: requireString(candidate.sourceUri, `${path}/sourceUri`) }),
+      ...(isNil(candidate.author) ? {} : { author: requireString(candidate.author, `${path}/author`) }),
+    });
+  }).sort((left, right) => left.resourceRef.localeCompare(right.resourceRef));
+  if (new Set(rows.map((row) => row.resourceRef)).size !== rows.length || new Set(rows.map((row) => row.packagePath)).size !== rows.length) {
+    invalid("resourceArtifacts", "resource Refs and paths must be unique");
+  }
+  return Object.freeze(rows);
+}
+
+function canonicalLegalDocuments(input: readonly WorldPackageLicenseDocumentInputV1[], noticeText: string): readonly LegalDocument[] {
+  if (!Array.isArray(input) || input.length === 0) invalid("licenseDocuments", "must contain at least one document");
+  const rows = input.map((document, index) => {
+    const path = `licenseDocuments/${index}`;
+    const packagePath = requireSafePath(document.path, `${path}/path`);
+    if (!packagePath.startsWith("LICENSES/")) invalid(`${path}/path`, "must be inside LICENSES/");
+    const bytes = new TextEncoder().encode(requireCanonicalText(document.text, `${path}/text`));
+    return Object.freeze({
+      id: requireString(document.id, `${path}/id`),
+      spdxLicenseExpression: requireString(document.spdxLicenseExpression, `${path}/spdxLicenseExpression`),
+      path: packagePath as `LICENSES/${string}`,
       bytes,
       contentHash: sha256Bytes(bytes) as Sha256HashV1,
-    };
-  }).sort((left, right) =>
-    left.id < right.id
-      ? -1
-      : left.id > right.id
-        ? 1
-        : left.path < right.path
-          ? -1
-          : left.path > right.path
-            ? 1
-            : 0
-  );
-  if (isEmpty(documents)) {
-    buildFail("licenseDocuments", "must contain at least one legal document");
+    });
+  }).sort((left, right) => left.id.localeCompare(right.id));
+  if (new Set(rows.map((row) => row.id)).size !== rows.length || new Set(rows.map((row) => row.path)).size !== rows.length || rows.some((row) => !noticeText.includes(row.path))) {
+    invalid("licenseDocuments", "documents must be unique and named by NOTICE");
   }
-  if (
-    new Set(documents.map((document) => document.id)).size !== documents.length ||
-    new Set(documents.map((document) => document.path)).size !== documents.length
-  ) {
-    buildFail("licenseDocuments", "IDs and paths must be unique");
-  }
-  for (const document of documents) {
-    if (!noticeText.includes(document.path)) {
-      buildFail("noticeText", `must reference '${document.path}'`);
-    }
-  }
-  return documents;
+  return Object.freeze(rows);
 }
 
-function assertLegalClosure(
-  distributionPolicy: WorldPackageDistributionPolicyV2,
-  resources: readonly ResolvedWorldPackageResourceArtifactV2[],
-  generated: WorldPackageGeneratedResourceProvenanceV2,
-  documents: readonly CanonicalLegalDocument[],
-): void {
-  const allProvenance = [...resources, generated];
-  if (
-    allProvenance.some((resource) => resource.redistributionPolicy === "prohibited") ||
-    (distributionPolicy === "redistributable" &&
-      allProvenance.some((resource) =>
-        resource.redistributionPolicy !== "allowed"
-      ))
-  ) {
-    buildFail("distributionPolicy", "conflicts with resource redistribution policy");
+function assertLegalClosure(input: CreateWorldPackageV1Input, resources: readonly ResolvedWorldPackageResourceArtifactV1[], documents: readonly LegalDocument[]): void {
+  const provenance = [...resources, input.generatedResourceProvenance];
+  if (provenance.some((row) => row.redistributionPolicy === "prohibited") ||
+    (input.distributionPolicy === "redistributable" && provenance.some((row) => row.redistributionPolicy !== "allowed"))) {
+    invalid("distributionPolicy", "conflicts with resource policy");
   }
-  const documentIds = new Set(documents.map((document) => document.id));
-  if (allProvenance.some((resource) => !documentIds.has(resource.licenseDocumentId))) {
-    buildFail("licenseDocuments", "every resource must bind one legal document");
-  }
-  const usedDocumentIds = new Set(
-    allProvenance.map((resource) => resource.licenseDocumentId),
-  );
-  if (documents.some((document) => !usedDocumentIds.has(document.id))) {
-    buildFail("licenseDocuments", "unused legal documents are forbidden");
-  }
-  const documentById = new Map(documents.map((document) => [document.id, document]));
-  if (allProvenance.some((resource) =>
-    documentById.get(resource.licenseDocumentId)?.spdxLicenseExpression !==
-      resource.licenseSpdxExpression
-  )) {
-    buildFail("licenseDocuments", "resource SPDX provenance does not match its document");
+  const documentById = new Map(documents.map((row) => [row.id, row]));
+  if (provenance.some((row) => documentById.get(row.licenseDocumentId)?.spdxLicenseExpression !== row.licenseSpdxExpression)) {
+    invalid("licenseDocuments", "resource legal provenance is not closed");
   }
 }
 
-function assertSubjectAssetManifestClosure(
-  resources: readonly ResolvedWorldPackageResourceArtifactV2[],
-  normalizedWorldIr: NormalizedWorldIRV4,
-): void {
-  const assetsByRef = new Map(
-    normalizedWorldIr.resources.subjectAssets.map((asset) => [
-      asset.subjectAssetRef,
-      asset,
-    ]),
-  );
-  if (assetsByRef.size !== resources.length) {
-    buildFail("resourceArtifacts", "must contain every and only locked Subject Asset");
+function createWorldPackageV1Internal(input: CreateWorldPackageV1Input): WorldPackageDirectoryV1 {
+  const plan = parseCanonicalSceneExecutionPlanV1(input.executionPlan);
+  const runtime = parseWorldRuntimeBootstrapV1(input.worldRuntimeBootstrap);
+  const gameplay = input.gameplayBootstrap;
+  const executionPlanHash = hashCanonicalSceneExecutionPlanV1(plan);
+  if (gameplay.contentHash !== runtime.gameplayBootstrapHash || gameplay.resourceRef !== runtime.gameplayBootstrapRef ||
+    plan.worldRuntimeBootstrapHash !== runtime.contentHash || plan.id !== input.normalizedWorldIr.id ||
+    plan.normalizedWorldIrHash !== sha256CanonicalJson(input.normalizedWorldIr) ||
+    plan.authoringSpecHash !== hashAuthoringDocumentV4(input.authoringSpec) ||
+    input.layoutSolveResult.layoutSolveReportHash !== plan.layout.layoutSolveReportHash ||
+    !gameplay.entityDescriptors.some((row) => row.id === runtime.initialControlledEntityId)) {
+    invalid("closure", "Canonical artifacts do not form one world");
   }
-  for (const resource of resources) {
-    const asset = assetsByRef.get(resource.resourceRef);
-    if (
-      isNil(asset) ||
-      asset.subjectAssetManifestHash !== resource.subjectAssetManifestHash
-    ) {
-      buildFail(
-        `resourceArtifacts/${resource.resourceRef}/subjectAssetManifestHash`,
-        "does not match NormalizedWorldIRV4",
-      );
-    }
-  }
-}
 
-function jsonFile(path: string, value: unknown): WorldPackageDirectoryFileV2 {
-  return {
-    path,
-    mediaType: "application/json",
-    bytes: copyAdmittedWorldPackageBytesV1(canonicalJsonBytes(value)),
-  };
-}
-
-function createWorldPackageV2Internal(
-  input: CreateWorldPackageV2Input,
-): WorldPackageDirectoryV2 {
-  assertWorldPackageAccessorFreeDataGraphV1(
-    input,
-    "WORLD_PACKAGE_V2_BUILD_ACCESSOR_FORBIDDEN",
-  );
-  const record = exactRecord(input, INPUT_FIELDS, INPUT_FIELDS, "");
-  if (
-    record.distributionPolicy !== "internal-only" &&
-    record.distributionPolicy !== "redistributable"
-  ) {
-    buildFail("distributionPolicy", "invalid package distribution policy");
+  const resources = canonicalResources(input.resourceArtifacts);
+  const assetsByRef = new Map(input.normalizedWorldIr.resources.subjectAssets.map((asset) => [asset.subjectAssetRef, asset]));
+  if (resources.length !== assetsByRef.size || resources.some((resource) => assetsByRef.get(resource.resourceRef)?.subjectAssetManifestHash !== resource.subjectAssetManifestHash)) {
+    invalid("resourceArtifacts", "must contain every and only Subject Asset");
   }
-  if (typeof record.includeAuthoringSpec !== "boolean") {
-    buildFail("includeAuthoringSpec", "must be boolean");
-  }
-  const distributionPolicy = record.distributionPolicy;
-  const noticeText = requireText(record.noticeText, "noticeText");
-  const noticeBytes = copyAdmittedWorldPackageBytesV1(
-    new TextEncoder().encode(noticeText),
-  );
-  const resources = canonicalResources(record.resourceArtifacts);
-  const generatedProvenance = canonicalGeneratedProvenance(
-    record.generatedResourceProvenance,
-  );
-  const legalDocuments = canonicalLegalDocuments(
-    record.licenseDocuments,
-    noticeText,
-  );
-  assertSubjectAssetManifestClosure(
-    resources,
-    record.normalizedWorldIr as NormalizedWorldIRV4,
-  );
-  assertLegalClosure(
-    distributionPolicy,
-    resources,
-    generatedProvenance,
-    legalDocuments,
-  );
+  const noticeText = requireCanonicalText(input.noticeText, "noticeText");
+  const noticeBytes = new TextEncoder().encode(noticeText);
+  const legalDocuments = canonicalLegalDocuments(input.licenseDocuments, noticeText);
+  assertLegalClosure(input, resources, legalDocuments);
 
-  const v1Receipt = createWorldPackageBuildReceiptV1({
-    packageId: requireString(record.packageId, "packageId"),
-    authoringSpec: record.authoringSpec as AuthoringSpecV4,
-    normalizedWorldIr: record.normalizedWorldIr as NormalizedWorldIRV4,
-    layoutSolveResult: record.layoutSolveResult as LayoutSolveResultV1,
-    executionPlan: record.executionPlan as ExecutionPlanV5,
-    gameplayBootstrap: record.gameplayBootstrap as GameplayBootstrapV1,
-    resourceArtifacts: resources.map((resource) => ({
-      resourceRef: resource.resourceRef,
-      packagePath: resource.packagePath,
-      mediaType: resource.mediaType,
-      bytes: resource.bytes,
-    })),
-    includeAuthoringSpec: record.includeAuthoringSpec,
-  });
-  assertWorldPackageBuildReceiptClosureV1(v1Receipt, {
-    authoringSpec: record.authoringSpec as AuthoringSpecV4,
-    normalizedWorldIr: record.normalizedWorldIr as NormalizedWorldIRV4,
-    layoutSolveResult: record.layoutSolveResult as LayoutSolveResultV1,
-    executionPlan: record.executionPlan as ExecutionPlanV5,
-    gameplayBootstrap: record.gameplayBootstrap as GameplayBootstrapV1,
+  const lockedResources = canonicalResourceLockEntriesV1([...plan.sceneResourceLockEntries, ...runtime.runtimeResourceLockEntries]);
+  const runtimeBytes = worldRuntimeBootstrapCanonicalBytesV1(runtime);
+  const gameplayBytes = gameplayBootstrapCanonicalBytesV1(gameplay);
+  const generated = input.generatedResourceProvenance;
+  const manifestResources = [
+    ...resources.map((resource) => ({ resourceRef: resource.resourceRef, packagePath: resource.packagePath, mediaType: resource.mediaType,
+      sizeBytes: resource.bytes.byteLength, contentHash: sha256Bytes(resource.bytes) as Sha256HashV1,
+      licenseDocumentId: resource.licenseDocumentId, redistributionPolicy: resource.redistributionPolicy,
+      ...(isNil(resource.sourceUri) ? {} : { sourceUri: resource.sourceUri }), ...(isNil(resource.author) ? {} : { author: resource.author }) })),
+    { resourceRef: gameplay.resourceRef, packagePath: "gameplay/bootstrap.json", mediaType: "application/vnd.worldkit.gameplay-bootstrap+json",
+      sizeBytes: gameplayBytes.byteLength, contentHash: sha256Bytes(gameplayBytes) as Sha256HashV1,
+      licenseDocumentId: generated.licenseDocumentId, redistributionPolicy: generated.redistributionPolicy,
+      ...(isNil(generated.sourceUri) ? {} : { sourceUri: generated.sourceUri }), ...(isNil(generated.author) ? {} : { author: generated.author }) },
+    { resourceRef: plan.worldRuntimeBootstrapRef, packagePath: "runtime/world-runtime-bootstrap.json", mediaType: "application/vnd.worldkit.world-runtime-bootstrap+json",
+      sizeBytes: runtimeBytes.byteLength, contentHash: sha256Bytes(runtimeBytes) as Sha256HashV1,
+      licenseDocumentId: generated.licenseDocumentId, redistributionPolicy: generated.redistributionPolicy,
+      ...(isNil(generated.sourceUri) ? {} : { sourceUri: generated.sourceUri }), ...(isNil(generated.author) ? {} : { author: generated.author }) },
+  ].sort((left, right) => left.resourceRef.localeCompare(right.resourceRef));
+
+  const budget = input.authoringSpec.world.resourceBudget;
+  const manifest = canonicalWorldPackageManifestV1({
+    kind: "worldkit-world-package-manifest", schemaVersion: 1, id: requireString(input.packageId, "packageId"),
+    title: requireString(input.title, "title"), packageFormatVersion: 1, sdkVersion: requireString(input.sdkVersion, "sdkVersion"),
+    worldId: plan.id, seed: plan.seed, runtimeTarget: "babylon-web", canonicalizationProfile: "canonical-json-jcs@1", hashAlgorithm: "sha256",
+    authoringSchema: { schemaVersion: 4, contentHash: requireHash(input.canonicalAuthoringSchemaHash, "canonicalAuthoringSchemaHash") },
+    aiSchemaProjectionProfile: input.aiSchemaProjectionProfile, normalizedWorldIrSchemaVersion: 4,
+    canonicalSceneExecutionPlanSchemaVersion: 1, worldRuntimeBootstrapSchemaVersion: 1,
+    authoringSpecHash: plan.authoringSpecHash, normalizedWorldIrHash: plan.normalizedWorldIrHash, executionPlanHash,
+    gameplayBootstrapHash: gameplay.contentHash, worldRuntimeBootstrapHash: runtime.contentHash,
+    registryLockHash: sha256CanonicalJson(lockedResources) as Sha256HashV1,
+    layoutSolveReportHash: plan.layout.layoutSolveReportHash, initialControlledEntityId: runtime.initialControlledEntityId,
+    worldBounds: input.authoringSpec.world.bounds,
+    resourceBudget: { maximumVertices: budget.maxVertices, maximumTriangles: budget.maxTriangles, maximumColliders: budget.maxColliders },
+    lockedResources,
+    entryPoint: { canonicalSceneExecutionPlanPath: "targets/babylon-web/canonical-scene-execution-plan.json", gameplayBootstrapPath: "gameplay/bootstrap.json", worldRuntimeBootstrapPath: "runtime/world-runtime-bootstrap.json" },
+    legal: { distributionPolicy: input.distributionPolicy, noticePath: "NOTICE", licenseDocuments: legalDocuments.map((document) => ({ id: document.id, spdxLicenseExpression: document.spdxLicenseExpression, path: document.path, mediaType: "text/plain; charset=utf-8", sizeBytes: document.bytes.byteLength, contentHash: document.contentHash })) },
+    hostCompatibility: input.hostCompatibility, resources: manifestResources,
   });
 
-  const resourcesByRef = new Map(resources.map((resource) => [
-    resource.resourceRef,
-    resource,
-  ]));
-  const manifestResources = v1Receipt.manifest.resources.map((resource) => {
-    const provenance = resource.packagePath === "gameplay/bootstrap.json"
-      ? generatedProvenance
-      : resourcesByRef.get(resource.resourceRef);
-    if (isNil(provenance)) {
-      buildFail(
-        `resourceArtifacts/${resource.resourceRef}`,
-        "legal provenance is missing",
-      );
-    }
-    return {
-      ...resource,
-      licenseDocumentId: provenance.licenseDocumentId,
-      redistributionPolicy: provenance.redistributionPolicy,
-      ...(isNil(provenance.sourceUri) ? {} : { sourceUri: provenance.sourceUri }),
-      ...(isNil(provenance.author) ? {} : { author: provenance.author }),
-    };
-  });
-  const v2OnlyFileIntegrityEntries = [
-    ...legalDocuments.map((document) => ({
-      path: document.path,
-      mediaType: "text/plain; charset=utf-8",
-      sizeBytes: document.bytes.byteLength,
-      sha256: document.contentHash,
-    })),
-    {
-      path: "NOTICE",
-      mediaType: "text/plain; charset=utf-8",
-      sizeBytes: noticeBytes.byteLength,
-      sha256: sha256Bytes(noticeBytes) as Sha256HashV1,
-    },
-  ].sort((left, right) => left.path < right.path ? -1 : left.path > right.path ? 1 : 0);
-
-  const migrated = migrateWorldPackageBuildReceiptV1ToV2({
-    sourceReceipt: v1Receipt,
-    context: {
-      title: requireString(record.title, "title"),
-      sdkVersion: requireString(record.sdkVersion, "sdkVersion"),
-      canonicalAuthoringSchemaHash:
-        record.canonicalAuthoringSchemaHash as Sha256HashV1,
-      aiSchemaProjectionProfile:
-        record.aiSchemaProjectionProfile as WorldPackageManifestV2["aiSchemaProjectionProfile"],
-      worldBounds: (record.authoringSpec as AuthoringSpecV4).world.bounds,
-      resourceBudget: {
-        maximumVertices: (record.authoringSpec as AuthoringSpecV4)
-          .world.resourceBudget.maxVertices,
-        maximumTriangles: (record.authoringSpec as AuthoringSpecV4)
-          .world.resourceBudget.maxTriangles,
-        maximumColliders: (record.authoringSpec as AuthoringSpecV4)
-          .world.resourceBudget.maxColliders,
-      },
-      lockedResources: (record.executionPlan as ExecutionPlanV5).resourceLockEntries,
-      legal: {
-        distributionPolicy,
-        noticePath: "NOTICE",
-        licenseDocuments: legalDocuments.map((document) => ({
-          id: document.id,
-          spdxLicenseExpression: document.spdxLicenseExpression,
-          path: document.path,
-          mediaType: "text/plain; charset=utf-8",
-          sizeBytes: document.bytes.byteLength,
-          contentHash: document.contentHash,
-        })),
-      },
-      hostCompatibility:
-        record.hostCompatibility as WorldPackageHostCompatibilityV2,
-      resources: manifestResources,
-      v2OnlyFileIntegrityEntries,
-    },
-  });
-
-  const rootFiles: WorldPackageDirectoryFileV2[] = [
-    jsonFile("manifest.json", migrated.receipt.manifest),
-    ...(record.includeAuthoringSpec
-      ? [jsonFile("authoring-spec.json", record.authoringSpec)]
-      : []),
-    jsonFile("world.normalized.json", record.normalizedWorldIr),
-    jsonFile(
-      "registry-lock.json",
-      (record.executionPlan as ExecutionPlanV5).resourceLockEntries,
-    ),
-    jsonFile(
-      "layout-solve-report.json",
-      (record.layoutSolveResult as LayoutSolveResultV1).report,
-    ),
-    jsonFile(
-      "targets/babylon-web/execution-plan.json",
-      record.executionPlan,
-    ),
-    {
-      path: "gameplay/bootstrap.json",
-      mediaType: "application/vnd.worldkit.gameplay-bootstrap+json",
-      bytes: copyAdmittedWorldPackageBytesV1(
-        gameplayBootstrapCanonicalBytesV1(record.gameplayBootstrap),
-      ),
-    },
-    ...resources.map((resource) => ({
-      path: resource.packagePath,
-      mediaType: resource.mediaType,
-      bytes: resource.bytes,
-    })),
+  const rootFiles: WorldPackageDirectoryFileV1[] = [
+    jsonFile("manifest.json", manifest), ...(input.includeAuthoringSpec ? [jsonFile("authoring-spec.json", input.authoringSpec)] : []),
+    jsonFile("world.normalized.json", input.normalizedWorldIr), jsonFile("registry-lock.json", lockedResources),
+    jsonFile("layout-solve-report.json", input.layoutSolveResult.report),
+    jsonFile("targets/babylon-web/canonical-scene-execution-plan.json", plan),
+    { path: "gameplay/bootstrap.json", mediaType: "application/vnd.worldkit.gameplay-bootstrap+json", bytes: gameplayBytes },
+    { path: "runtime/world-runtime-bootstrap.json", mediaType: "application/vnd.worldkit.world-runtime-bootstrap+json", bytes: runtimeBytes },
+    ...resources.map((resource) => ({ path: resource.packagePath, mediaType: resource.mediaType, bytes: resource.bytes })),
     { path: "NOTICE", mediaType: "text/plain; charset=utf-8", bytes: noticeBytes },
-    ...legalDocuments.map((document) => ({
-      path: document.path,
-      mediaType: "text/plain; charset=utf-8",
-      bytes: document.bytes,
-    })),
+    ...legalDocuments.map((document) => ({ path: document.path, mediaType: "text/plain; charset=utf-8", bytes: document.bytes })),
   ];
-  return assembleWorldPackageDirectoryV2({
-    receipt: migrated.receipt,
-    files: rootFiles,
-  });
+  const entries = canonicalWorldPackageFileIntegrityEntriesV1(rootFiles.map((file) => ({ path: file.path, mediaType: file.mediaType, sizeBytes: file.bytes.byteLength, contentHash: sha256Bytes(file.bytes) as Sha256HashV1 })));
+  const worldPackageRootHash = hashWorldPackageRootV1(entries);
+  const worldPackageRef = worldPackageRefFromRootHashV1(worldPackageRootHash);
+  const worldBuildIdentity: WorldBuildIdentityV1 = Object.freeze({ kind: "world-build-identity", schemaVersion: 1,
+    id: `${manifest.id}.world-build`, worldPackageRef, worldPackageRootHash, gameplayBootstrapHash: gameplay.contentHash,
+    worldRuntimeBootstrapHash: runtime.contentHash, sceneSourceIdentity: Object.freeze({ kind: "canonical-execution-plan", executionPlanHash }) });
+  const receipt = Object.freeze({ kind: "worldkit-world-package-build-receipt" as const, schemaVersion: 1 as const, manifest,
+    manifestHash: hashWorldPackageManifestV1(manifest), fileIntegrityEntries: entries, worldPackageRootHash, worldPackageRef,
+    worldBuildIdentity, worldBuildIdentityHash: hashWorldBuildIdentityV1(worldBuildIdentity) });
+  return assembleWorldPackageDirectoryV1({ receipt, files: rootFiles });
 }
 
-export function createWorldPackageV2(
-  input: CreateWorldPackageV2Input,
-): WorldPackageDirectoryV2 {
+export function createWorldPackageV1(input: CreateWorldPackageV1Input): WorldPackageDirectoryV1 {
   try {
-    return createWorldPackageV2Internal(input);
+    return createWorldPackageV1Internal(input);
   } catch (error) {
-    if (
-      error instanceof Error &&
-      error.message.startsWith("WORLD_PACKAGE_V2_BUILD_INVALID")
-    ) {
-      throw error;
-    }
-    buildFail(
-      "",
-      `trusted build closure validation failed: ${
-        error instanceof Error ? error.message : "unknown owner failure"
-      }`,
-    );
+    if (error instanceof Error && error.message.startsWith("WORLD_PACKAGE_BUILD_INVALID")) throw error;
+    invalid("", `trusted build closure validation failed: ${error instanceof Error ? error.message : "unknown owner failure"}`);
   }
 }

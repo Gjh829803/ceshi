@@ -1,13 +1,13 @@
 import { canonicalJsonBytes } from "@whitebox-world/protocol";
 import {
-  assembleWorldPackageDirectoryV2,
-  assertWorldPackageHostCompatibilityV2,
+  assembleWorldPackageDirectoryV1,
+  assertWorldPackageHostCompatibilityV1,
   canonicalWorldPackageSignatureEnvelopeV1,
-  verifyWorldPackageDirectoryV2,
+  verifyWorldPackageDirectoryV1,
   worldPackageSignatureEnvelopeBytesV1,
-  type VerifiedWorldPackageDirectoryV2,
-  type WorldPackageDirectoryFileV2,
-  type WorldPackageDirectoryV2,
+  type VerifiedWorldPackageDirectoryV1,
+  type WorldPackageDirectoryFileV1,
+  type WorldPackageDirectoryV1,
   type WorldPackageHostPolicyV1,
   type WorldPackageSignatureEnvelopeV1,
 } from "@whitebox-world/world-package";
@@ -35,6 +35,7 @@ const SIGNATURE_FILE_MEDIA_TYPE = "application/json";
 const TRANSPORT_METADATA_PATHS = new Set([
   "integrity.json",
   "world-package-build-receipt.json",
+  "world-build-identity.json",
 ]);
 const SAFE_KEY_ID_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,126}[A-Za-z0-9])?$/;
 
@@ -55,16 +56,16 @@ export interface WorldPackageTrustedPublicKeyV1 {
   readonly publicKey: WorldPackageNodePublicKeyV1;
 }
 
-export interface SignWorldPackageDirectoryV2Input {
-  readonly directory: WorldPackageDirectoryV2;
+export interface SignWorldPackageDirectoryV1Input {
+  readonly directory: WorldPackageDirectoryV1;
   readonly keyId: string;
   readonly trustDomain: string;
   readonly signedAt: string;
   readonly privateKey: WorldPackageNodePrivateKeyV1;
 }
 
-export interface VerifyWorldPackageForHostV2Input {
-  readonly directory: WorldPackageDirectoryV2;
+export interface VerifyWorldPackageForHostV1Input {
+  readonly directory: WorldPackageDirectoryV1;
   readonly hostPolicy: WorldPackageHostPolicyV1;
   readonly trustedPublicKeys: readonly WorldPackageTrustedPublicKeyV1[];
 }
@@ -171,8 +172,8 @@ function canonicalSignatureBytes(value: unknown): Uint8Array {
 }
 
 function parseSignatureFile(
-  file: WorldPackageDirectoryFileV2,
-  directory: WorldPackageDirectoryV2,
+  file: WorldPackageDirectoryFileV1,
+  directory: WorldPackageDirectoryV1,
 ): Readonly<{
   envelope: WorldPackageSignatureEnvelopeV1;
   signatureBytes: Uint8Array;
@@ -278,10 +279,10 @@ function canonicalTrustedPublicKeys(
 }
 
 function verifyDirectoryWithSignatureErrorMapping(
-  directory: WorldPackageDirectoryV2,
-): VerifiedWorldPackageDirectoryV2 {
+  directory: WorldPackageDirectoryV1,
+): VerifiedWorldPackageDirectoryV1 {
   try {
-    return verifyWorldPackageDirectoryV2(directory);
+    return verifyWorldPackageDirectoryV1(directory);
   } catch (error) {
     if (
       error instanceof Error &&
@@ -358,9 +359,9 @@ function isEqualStringKeys(
   );
 }
 
-export function signWorldPackageDirectoryV2(
-  input: SignWorldPackageDirectoryV2Input,
-): WorldPackageDirectoryV2 {
+export function signWorldPackageDirectoryV1(
+  input: SignWorldPackageDirectoryV1Input,
+): WorldPackageDirectoryV1 {
   verifyDirectoryWithSignatureErrorMapping(input.directory);
   const keyId = requireSafeKeyId(input.keyId);
   const envelope = canonicalWorldPackageSignatureEnvelopeV1({
@@ -368,7 +369,7 @@ export function signWorldPackageDirectoryV2(
     schemaVersion: 1,
     packageRootHash: input.directory.receipt.worldPackageRootHash,
     packageId: input.directory.receipt.manifest.id,
-    packageFormatVersion: 2,
+    packageFormatVersion: 1,
     runtimeTarget: input.directory.receipt.manifest.runtimeTarget,
     signatureAlgorithm: "ed25519",
     keyId,
@@ -393,7 +394,7 @@ export function signWorldPackageDirectoryV2(
   const rootFiles = input.directory.files.filter((file) =>
     !TRANSPORT_METADATA_PATHS.has(file.path)
   );
-  return assembleWorldPackageDirectoryV2({
+  return assembleWorldPackageDirectoryV1({
     receipt: input.directory.receipt,
     files: rootFiles,
     signatureFiles: [
@@ -407,17 +408,17 @@ export function signWorldPackageDirectoryV2(
   });
 }
 
-export function verifyWorldPackageForHostV2(
-  input: VerifyWorldPackageForHostV2Input,
-): VerifiedWorldPackageDirectoryV2 {
+export function verifyWorldPackageForHostV1(
+  input: VerifyWorldPackageForHostV1Input,
+): VerifiedWorldPackageDirectoryV1 {
   const verified = verifyDirectoryWithSignatureErrorMapping(input.directory);
   const signaturePolicy = requireHostSignaturePolicy(input.hostPolicy);
   if (isEmpty(input.directory.signatureFiles)) {
     if (signaturePolicy.mode === "required") {
       signatureRequired();
     }
-    assertWorldPackageHostCompatibilityV2(
-      verified.receipt.manifest,
+    assertWorldPackageHostCompatibilityV1(
+      verified.receipt,
       input.hostPolicy,
     );
     return verified;
@@ -455,8 +456,8 @@ export function verifyWorldPackageForHostV2(
   ) {
     signatureUntrusted("no signature belongs to the required trust domain");
   }
-  assertWorldPackageHostCompatibilityV2(
-    verified.receipt.manifest,
+  assertWorldPackageHostCompatibilityV1(
+    verified.receipt,
     input.hostPolicy,
   );
   return verified;

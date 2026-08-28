@@ -30,9 +30,9 @@ import {
 import type { PublishWorldReplacementResultV1 } from "@whitebox-world/runtime-host";
 import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
 import {
-  BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V2,
-  type ResolvedWorldPackageResourceArtifactV2,
-  type WorldPackageBuildContextV2,
+  BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V1,
+  type ResolvedWorldPackageResourceArtifactV1,
+  type WorldPackageBuildContextV1,
   type WorldPackageStoreV1,
 } from "@whitebox-world/world-package";
 import { isEqual, isNil } from "lodash-es";
@@ -181,8 +181,8 @@ export function createPlaygroundAuthoringEditSessionV1(input: {
 export function createPlaygroundAuthoringEditHostV1(input: {
   readonly authoringSpec: AuthoringSpecV4;
   readonly worldPackageStore: WorldPackageStoreV1;
-  readonly worldPackageBuildContext: WorldPackageBuildContextV2;
-  readonly resourceArtifacts: readonly ResolvedWorldPackageResourceArtifactV2[];
+  readonly worldPackageBuildContext: WorldPackageBuildContextV1;
+  readonly resourceArtifacts: readonly ResolvedWorldPackageResourceArtifactV1[];
   readonly nowUnixMilliseconds?: () => number;
   readonly publishWorldReplacement?: (
     value: unknown,
@@ -192,7 +192,7 @@ export function createPlaygroundAuthoringEditHostV1(input: {
   if (
     !isEqual(
       input.worldPackageBuildContext.hostCompatibility,
-      BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V2,
+      BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V1,
     )
   ) {
     throw new Error("WORLD_PACKAGE_HOST_INCOMPATIBLE: Playground profile mismatch");
