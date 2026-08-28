@@ -73,28 +73,30 @@ cloud_s3_root="${WORLDKIT_LWDP_S3_ROOT:-s3://leap-world-us-east-2/world-model/pl
 codex_output_prefix="${cloud_s3_root%/}/$scene_id/$codex_run_nonce"
 reference_asset_args=()
 reference_index=0
-for source_path in "${image_sources[@]}"; do
-  if [[ ! -f "$source_path" || ! -r "$source_path" || -L "$source_path" ]]; then
-    echo "Reference must be a readable regular non-symlink file: $source_path" >&2
-    exit 2
-  fi
-  extension="${source_path##*.}"
-  case "$extension" in
-    png|PNG) extension="png" ;;
-    jpg|JPG|jpeg|JPEG) extension="jpg" ;;
-    webp|WEBP) extension="webp" ;;
-    *) echo "Unsupported reference image format: .$extension" >&2; exit 2 ;;
-  esac
-  staged_path="$task_tmp/input/reference-$reference_index.$extension"
-  public_path="$public_plan_root/reference-$reference_index.$extension"
-  /bin/cp -- "$source_path" "$staged_path"
-  /bin/chmod 0444 "$staged_path"
-  /bin/cp -- "$source_path" "$public_path"
-  media_type="image/$extension"
-  [[ "$extension" == "jpg" ]] && media_type="image/jpeg"
-  reference_asset_args+=(--asset "reference-$reference_index::$staged_path::image::$media_type")
-  reference_index=$((reference_index + 1))
-done
+if [[ ${#image_sources[@]} -gt 0 ]]; then
+  for source_path in "${image_sources[@]}"; do
+    if [[ ! -f "$source_path" || ! -r "$source_path" || -L "$source_path" ]]; then
+      echo "Reference must be a readable regular non-symlink file: $source_path" >&2
+      exit 2
+    fi
+    extension="${source_path##*.}"
+    case "$extension" in
+      png|PNG) extension="png" ;;
+      jpg|JPG|jpeg|JPEG) extension="jpg" ;;
+      webp|WEBP) extension="webp" ;;
+      *) echo "Unsupported reference image format: .$extension" >&2; exit 2 ;;
+    esac
+    staged_path="$task_tmp/input/reference-$reference_index.$extension"
+    public_path="$public_plan_root/reference-$reference_index.$extension"
+    /bin/cp -- "$source_path" "$staged_path"
+    /bin/chmod 0444 "$staged_path"
+    /bin/cp -- "$source_path" "$public_path"
+    media_type="image/$extension"
+    [[ "$extension" == "jpg" ]] && media_type="image/jpeg"
+    reference_asset_args+=(--asset "reference-$reference_index::$staged_path::image::$media_type")
+    reference_index=$((reference_index + 1))
+  done
+fi
 
 run_codex() {
   "$node_bin" scripts/agents/run-codex-task.mjs --backend "$codex_backend" --repo-root "$project_root" "$@" --execution-profile formal
@@ -137,7 +139,7 @@ if [[ "$mode" == "full" || "$mode" == "plan" ]]; then
     --instruction-file "$planner_prompt_file" \
     --context ".codex/skills/worldkit-spatial-planner" \
     --context "assets/terrain-height-intent" \
-    "${reference_asset_args[@]}" \
+    "${reference_asset_args[@]+"${reference_asset_args[@]}"}" \
     --output "artifacts/scenes/$scene_id/scene-brief.md::$artifact_root/scene-brief.md::text/markdown" \
     --output "artifacts/scenes/$scene_id/planner-self-check.json::$artifact_root/planner-self-check.json::application/json" \
     --output "artifacts/scenes/$scene_id/terrain-height-intent-prompt.md::$artifact_root/terrain-height-intent-prompt.md::text/markdown" \
@@ -214,7 +216,7 @@ run_codex \
   --context "apps/playground/public/scene-plans/$scene_id/world-plan.png" \
   --context "apps/playground/public/scene-plans/$scene_id/entry-whitebox-target.png" \
   --context "apps/playground/public/scene-plans/$scene_id/terrain-height-intent.png" \
-  "${reference_asset_args[@]}" \
+  "${reference_asset_args[@]+"${reference_asset_args[@]}"}" \
   --asset "world-plan::$public_plan_root/world-plan.png::image::image/png" \
   --asset "entry-whitebox-target::$public_plan_root/entry-whitebox-target.png::image::image/png" \
   --asset "terrain-height-intent::$public_plan_root/terrain-height-intent.png::image::image/png" \
