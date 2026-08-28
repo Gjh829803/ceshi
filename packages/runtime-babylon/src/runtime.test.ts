@@ -2179,6 +2179,40 @@ describe("BabylonWorldRuntime", () => {
     await runtime.dispose();
   });
 
+  it("keeps orbit heading after rebinding a Golden Subject then strafing", async () => {
+    const runtime = await createRiggedRuntime(createTwoRiggedSubjectExecutionPlan());
+    try {
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      runtime.reset();
+      await bindRuntimeTestPossession(runtime, "player");
+      const idle = await internal.prepareFixedInputTick!({
+        actions: [],
+        ticks: 1,
+      }, emptyActionProjection(runtime.snapshot().tick + 1));
+      idle.commitPrepared();
+      await bindRuntimeTestPossession(runtime, "hero-b");
+      const start = runtime.snapshot();
+      expect(start.camera.activeCameraProfileRef).toBe(ORBIT_CAMERA_PROFILE_REF);
+      const startX = start.subjectStatesByEntityId["hero-b"]!.positionMetersXYZ[0];
+      const startForward = start.camera.controlForwardXYZ!;
+      for (let tick = 0; tick < 60; tick += 1) {
+        const prepared = await internal.prepareFixedInputTick!({
+          actions: ["move-right"],
+          ticks: 1,
+        }, emptyActionProjection(runtime.snapshot().tick + 1));
+        prepared.commitPrepared();
+      }
+      const moved = runtime.snapshot();
+      expect(moved.camera.activeCameraProfileRef).toBe(ORBIT_CAMERA_PROFILE_REF);
+      expect(moved.subjectStatesByEntityId["hero-b"]!.positionMetersXYZ[0])
+        .toBeGreaterThan(startX + 2);
+      expect(moved.camera.controlForwardXYZ![0]).toBeCloseTo(startForward[0], 2);
+      expect(moved.camera.controlForwardXYZ![2]).toBeCloseTo(startForward[2], 2);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
   it("prepares twelve idle Golden Host ticks for two rigged Subjects", async () => {
     const runtime = await createRiggedRuntime(createTwoRiggedSubjectExecutionPlan());
     try {

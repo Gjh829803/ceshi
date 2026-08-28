@@ -1021,6 +1021,7 @@ export class BabylonWorldRuntime {
     }
     if (input.ticks > 0) this.latestRenderReadyReceipt = undefined;
     for (let index = 0; index < input.ticks; index += 1) {
+      this.synchronizePublishedCameraView(0);
       const controlledEntityId = this.controlledEntityId();
       const targetIsBound = controlledEntityId !== undefined;
       this.activeInputActions = targetIsBound ? [...input.actions] : [];
@@ -2050,6 +2051,7 @@ export class BabylonWorldRuntime {
       ? { ...input.axes }
       : {};
     this.cameraComponent.setInputActions(this.activeInputActions);
+    this.synchronizePublishedCameraView(0);
     const viewControlFrame = this.cameraComponent.controlFrame(this.tick);
     for (const subject of this.executionPlan.subjects) {
       const controller = this.controllerFor(subject.entityId);
@@ -2677,14 +2679,7 @@ export class BabylonWorldRuntime {
         "3C_RENDER_INTERPOLATION_INVALID: alpha must be finite from 0 through 1.",
       );
     }
-    const controlledEntityId = this.controlledEntityId();
-    if (
-      controlledEntityId !== undefined &&
-      this.appliedCameraViewStateRevision !==
-        this.gameplayPublishedState.viewProjection.viewStateRevision
-    ) {
-      this.updateCameraForEntity(controlledEntityId, 0);
-    }
+    this.synchronizePublishedCameraView(0);
     for (const subject of this.executionPlan.subjects) {
       this.controllerFor(subject.entityId).renderVisual(interpolationAlphaRatio);
     }
@@ -2762,6 +2757,18 @@ export class BabylonWorldRuntime {
     if (controlledEntityId !== undefined) {
       this.updateCameraForEntity(controlledEntityId);
     }
+  }
+
+  private synchronizePublishedCameraView(deltaSeconds = 0): void {
+    const controlledEntityId = this.controlledEntityId();
+    if (
+      isNil(controlledEntityId) ||
+      this.appliedCameraViewStateRevision ===
+        this.gameplayPublishedState.viewProjection.viewStateRevision
+    ) {
+      return;
+    }
+    this.updateCameraForEntity(controlledEntityId, deltaSeconds);
   }
 
   private synchronizeCameraViewSession(): void {
