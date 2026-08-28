@@ -155,6 +155,9 @@ describe("WorldPackage command core", () => {
     expect(
       loaded.runtimeWorldConfiguration.worldBuildIdentity.worldPackageRootHash,
     ).toBe(built.worldPackageRootHash);
+    expect(loaded.result.worldBuildIdentityHash).toBe(
+      built.worldBuildIdentityHash,
+    );
     expect(
       loaded.runtimeWorldConfiguration.sceneSource.kind ===
           "canonical-execution-plan"

@@ -90,8 +90,11 @@ async function writeTrustedWhiteboxArtifacts(
   const normalizedWorldIr = {
     kind: "normalized-world-ir",
     schemaVersion: 4,
+    resources: { resourceLockHash },
   };
   const normalizedWorldIrHash = hash(canonicalJson(normalizedWorldIr));
+  const worldPackageRootHash = `sha256:${"a".repeat(64)}`;
+  const worldBuildIdentityHash = `sha256:${"d".repeat(64)}`;
   const visualTarget = {
     visualTargetId: "player-subject",
     runtimeEntityIds: ["player"],
@@ -119,11 +122,12 @@ async function writeTrustedWhiteboxArtifacts(
       }]
     : [];
   const executionPlan = {
-    kind: "worldkit-execution-plan",
-    schemaVersion: 5,
+    kind: "worldkit-canonical-scene-execution-plan",
+    schemaVersion: 1,
     authoringSpecHash,
     normalizedWorldIrHash,
-    resourceLockHash,
+    sceneResourceLockHash: resourceLockHash,
+    sceneResourceLockEntries: [],
     layout: { layoutSolveReportHash },
     traversal: {
       connectivityRequirements: requiredRoutes.map((route) => ({
@@ -136,7 +140,7 @@ async function writeTrustedWhiteboxArtifacts(
   const captureTargets = {
     kind: "worldkit-whitebox-triview-manifest",
     schemaVersion: 1,
-    executionPlanHash,
+    worldBuildIdentityHash,
     whiteboxTriviews: [{
       ...visualTarget,
       views: ["front", "right", "back"],
@@ -227,6 +231,7 @@ async function writeTrustedWhiteboxArtifacts(
       kind: "worldkit-build-artifact",
       schemaVersion: 4,
       normalizedWorldIrHash,
+      worldBuildIdentityHash,
       executionPlanHash,
       normalizedWorldIr,
       executionPlan,
@@ -235,6 +240,7 @@ async function writeTrustedWhiteboxArtifacts(
     writeFile(path.join(artifactRoot, "runtime-snapshot.json"), JSON.stringify({
       kind: "worldkit-runtime-snapshot",
       schemaVersion: 4,
+      worldBuildIdentityHash,
     })),
     writeFile(path.join(artifactRoot, "triviews/whitebox-triview-manifest.json"), JSON.stringify(captureTargets)),
     writeFile(path.join(triViewRoot, "whitebox-triview.png"), png),
@@ -256,9 +262,11 @@ async function writeTrustedWhiteboxArtifacts(
       status: routeReportMode === "failed" ? "failed" : "passed",
       subject: {
         kind: "world-package",
+        worldPackageRootHash,
         authoringSpecHash,
         normalizedWorldIrHash,
-        executionPlanHash: routeReportMode === "mismatched" ? resourceLockHash : executionPlanHash,
+        worldBuildIdentityHash:
+          routeReportMode === "mismatched" ? resourceLockHash : worldBuildIdentityHash,
         resourceLockHash,
         layoutSolveReportHash,
       },
@@ -1497,7 +1505,7 @@ test("does not import a three-file artifact fragment as a passed world", async (
     writeFile(path.join(artifactRoot, "triviews/whitebox-triview-manifest.json"), JSON.stringify({
       kind: "worldkit-whitebox-triview-manifest",
       schemaVersion: 1,
-      executionPlanHash: `sha256:${"a".repeat(64)}`,
+      worldBuildIdentityHash: `sha256:${"a".repeat(64)}`,
       whiteboxTriviews: [],
     })),
   ]);

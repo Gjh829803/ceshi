@@ -23,7 +23,7 @@ import {
 import { stringifyCanonicalJson } from "@whitebox-world/protocol";
 import {
   createInMemoryWorldPackageStoreV1,
-  createWorldPackageBuildContextFixtureV2,
+  createWorldPackageBuildContextFixtureV1,
 } from "@whitebox-world/world-package/testing";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -570,7 +570,7 @@ describe("P16-CLI1 live transport and credential redaction", () => {
       journal,
       leaseStore,
       worldPackageStore: createInMemoryWorldPackageStoreV1(),
-      worldPackageBuildContext: createWorldPackageBuildContextFixtureV2(),
+      worldPackageBuildContext: createWorldPackageBuildContextFixtureV1(),
       resourceArtifacts: [],
       session,
       nowUnixMilliseconds,

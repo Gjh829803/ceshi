@@ -111,11 +111,12 @@ describe("WorldPackageValidationSubjectV1 verified boundary", () => {
       worldPackageRootHash: verified.receipt.worldPackageRootHash,
       authoringSpecHash: verified.receipt.manifest.authoringSpecHash,
       normalizedWorldIrHash: verified.receipt.manifest.normalizedWorldIrHash,
-      executionPlanHash: verified.receipt.manifest.executionPlanHash,
+      worldBuildIdentityHash: verified.receipt.worldBuildIdentityHash,
       resourceLockHash: verified.receipt.manifest.registryLockHash,
       layoutSolveReportHash: verified.receipt.manifest.layoutSolveReportHash,
     });
     expect(createWorldPackageValidationSubjectV1(verified)).toEqual(subject);
+    expect(subject).not.toHaveProperty("executionPlanHash");
   });
 
   it("rejects caller-forged verified Plan and Registry closure fields", () => {

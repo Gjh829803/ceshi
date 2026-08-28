@@ -8,12 +8,9 @@ import {
 } from "@whitebox-world/authoring";
 import {
   compileResolvedTraversalLockV1,
-  compileWorldV5,
+  compileCanonicalWorldV1,
 } from "@whitebox-world/compiler";
-import {
-  createGameplayBootstrapResourceLockEntryV1,
-  createGameplayBootstrapV1,
-} from "@whitebox-world/gameplay-contracts";
+import { createGameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
 import {
   BABYLON_TRAVERSAL_RUNTIME_IMPLEMENTATION_IDENTITY_V1,
   BabylonWorldRuntime,
@@ -43,8 +40,7 @@ const havokWasmBinary = havokWasmBytes.buffer.slice(
   havokWasmBytes.byteOffset,
   havokWasmBytes.byteOffset + havokWasmBytes.byteLength,
 ) as ArrayBuffer;
-const GAMEPLAY_BOOTSTRAP_RESOURCE_LOCK =
-  createGameplayBootstrapResourceLockEntryV1(createGameplayBootstrapV1({
+const GAMEPLAY_BOOTSTRAP = createGameplayBootstrapV1({
     kind: "gameplay-bootstrap",
     id: "traversal-area-runtime-collision-test.gameplay",
     version: 1,
@@ -55,7 +51,7 @@ const GAMEPLAY_BOOTSTRAP_RESOURCE_LOCK =
     semanticActionDefinitions: [],
     availableCapabilityRefs: [],
     initialRelationshipStates: [],
-  }));
+  });
 
 function traversalAreaAtSpawnWorld(): AuthoringSpecV4 {
   const source = createValidAuthoringSpec();
@@ -163,17 +159,20 @@ describe("Traversal Area Runtime collision separation", () => {
       isNil(normalized.value) ||
       isNil(normalized.normalizedWorldIrHash)
     ) throw new Error(JSON.stringify(normalized.diagnostics));
-    const compiled = compileWorldV5({
+    const compiled = compileCanonicalWorldV1({
       normalizedWorldIr: normalized.value,
       normalizedWorldIrHash: normalized.normalizedWorldIrHash,
-      gameplayBootstrapResourceLock: GAMEPLAY_BOOTSTRAP_RESOURCE_LOCK,
+      gameplayBootstrap: GAMEPLAY_BOOTSTRAP,
+      worldRuntimeBootstrapRef:
+        `worldkit://world-runtime-bootstrap/${normalized.value.id}@1`,
     });
-    if (!compiled.ok || isNil(compiled.executionPlan)) {
+    if (!compiled.ok || isNil(compiled.canonicalSceneExecutionPlan)) {
       throw new Error(JSON.stringify(compiled.diagnostics));
     }
     const traversalLockReceipt = compileResolvedTraversalLockV1({
       normalizedWorldIr: normalized.value,
-      executionPlan: compiled.executionPlan,
+      canonicalSceneExecutionPlan: compiled.canonicalSceneExecutionPlan,
+      worldRuntimeBootstrap: compiled.worldRuntimeBootstrap,
       traversingEntityId: "player",
       runtimeImplementationIdentity:
         BABYLON_TRAVERSAL_RUNTIME_IMPLEMENTATION_IDENTITY_V1,
@@ -185,7 +184,7 @@ describe("Traversal Area Runtime collision separation", () => {
       ),
     });
     const buildInputReceipt = createRouteBuildInputFromPlanV2({
-      executionPlan: compiled.executionPlan,
+      executionPlan: compiled.canonicalSceneExecutionPlan,
       capabilityEnvelope: capabilityEnvelope.envelope,
       traversalLockReceipt,
       constraintId: "hero-to-goal",
@@ -203,7 +202,12 @@ describe("Traversal Area Runtime collision separation", () => {
     }
 
     const runtime = await BabylonWorldRuntime.create({
-      executionPlan: compiled.executionPlan,
+      sceneSource: {
+        kind: "canonical-execution-plan",
+        executionPlan: compiled.canonicalSceneExecutionPlan,
+      },
+      worldRuntimeBootstrap: compiled.worldRuntimeBootstrap,
+      gameplayBootstrap: GAMEPLAY_BOOTSTRAP,
       havokWasmBinary,
       autoStartRenderLoop: false,
       engineFactory: () => new NullEngine({

@@ -8,9 +8,9 @@ import { createInMemoryWorldPackageStoreV1 } from "@whitebox-world/world-package
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { createDurableWorldChangeRuntimeOwnerV1 } from "./durable-world-change-runtime";
-import { readWorldPackageDirectoryV2 } from "./file-world-package";
+import { readWorldPackageDirectoryV1 } from "./file-world-package";
 import {
-  buildWorldPackageDirectoryV2,
+  buildWorldPackageDirectoryV1,
   loadRuntimeWorldConfigurationFromPackageDirectoryV1,
 } from "./world-package-cli";
 
@@ -35,7 +35,20 @@ async function loadPackage(packageDirectoryPath: string) {
   if (!("runtimeWorldConfiguration" in loaded)) {
     throw new Error(JSON.stringify(loaded.result));
   }
-  return loaded;
+  if (loaded.runtimeWorldConfiguration.sceneSource.kind !==
+      "canonical-execution-plan") {
+    throw new Error("Expected a Canonical Scene Source package.");
+  }
+  return Object.freeze({
+    ...loaded,
+    runtimeWorldConfiguration: Object.freeze({
+      worldBuildIdentity: loaded.runtimeWorldConfiguration.worldBuildIdentity,
+      gameplayBootstrap: loaded.runtimeWorldConfiguration.gameplayBootstrap,
+      worldRuntimeBootstrap:
+        loaded.runtimeWorldConfiguration.worldRuntimeBootstrap,
+      sceneSource: loaded.runtimeWorldConfiguration.sceneSource,
+    }),
+  });
 }
 
 beforeAll(async () => {
@@ -45,11 +58,11 @@ beforeAll(async () => {
   basicPackagePath = path.join(temporaryRoot, "basic.package");
   gBotPackagePath = path.join(temporaryRoot, "g-bot.package");
   const [basic, gBot] = await Promise.all([
-    buildWorldPackageDirectoryV2({
+    buildWorldPackageDirectoryV1({
       inputPath: BASIC_WORLD_PATH,
       outputDirectoryPath: basicPackagePath,
     }),
-    buildWorldPackageDirectoryV2({
+    buildWorldPackageDirectoryV1({
       inputPath: G_BOT_WORLD_PATH,
       outputDirectoryPath: gBotPackagePath,
     }),
@@ -66,12 +79,12 @@ describe("durable World Change Runtime owner", () => {
     const store = createInMemoryWorldPackageStoreV1();
     const initial = await loadPackage(basicPackagePath);
     const candidate = await loadPackage(gBotPackagePath);
-    await store.put(await readWorldPackageDirectoryV2({
+    await store.put(await readWorldPackageDirectoryV1({
       packageDirectoryPath: basicPackagePath,
       maximumTotalBytes: 100_000_000,
       maximumFileCount: 1_000,
     }));
-    await store.put(await readWorldPackageDirectoryV2({
+    await store.put(await readWorldPackageDirectoryV1({
       packageDirectoryPath: gBotPackagePath,
       maximumTotalBytes: 100_000_000,
       maximumFileCount: 1_000,
@@ -95,7 +108,7 @@ describe("durable World Change Runtime owner", () => {
             runtimeSessionId: owner.runtimeSessionId,
             expectedWorldSessionId: previous.worldSessionId,
             expectedWorldPackageRootHash:
-              initial.runtimeWorldConfiguration.worldPackageBuildReceipt
+              initial.runtimeWorldConfiguration.worldBuildIdentity
                 .worldPackageRootHash,
             targetPhaseBarrier: { mode: "next-world-replacement-barrier" },
           },
@@ -108,7 +121,7 @@ describe("durable World Change Runtime owner", () => {
           runtimeSessionId: owner.runtimeSessionId,
           simulationTick: 0,
           worldPackageRootHash:
-            candidate.runtimeWorldConfiguration.worldPackageBuildReceipt
+            candidate.runtimeWorldConfiguration.worldBuildIdentity
               .worldPackageRootHash,
         },
         cleanupStatus: "released",
@@ -129,7 +142,7 @@ describe("durable World Change Runtime owner", () => {
     const store = createInMemoryWorldPackageStoreV1();
     const initial = await loadPackage(basicPackagePath);
     const committed = await loadPackage(gBotPackagePath);
-    await store.put(await readWorldPackageDirectoryV2({
+    await store.put(await readWorldPackageDirectoryV1({
       packageDirectoryPath: gBotPackagePath,
       maximumTotalBytes: 100_000_000,
       maximumFileCount: 1_000,
@@ -146,7 +159,7 @@ describe("durable World Change Runtime owner", () => {
         runtimeSessionId: owner.runtimeSessionId,
         worldSessionId: "world-session.committed-exact",
         worldPackageRootHash:
-          committed.runtimeWorldConfiguration.worldPackageBuildReceipt
+          committed.runtimeWorldConfiguration.worldBuildIdentity
             .worldPackageRootHash,
         simulationTick: 0,
       } as const;
@@ -191,7 +204,7 @@ describe("durable World Change Runtime owner", () => {
           runtimeSessionId: owner.runtimeSessionId,
           worldSessionId: "world-session.invalid-tick",
           worldPackageRootHash:
-            initial.runtimeWorldConfiguration.worldPackageBuildReceipt
+            initial.runtimeWorldConfiguration.worldBuildIdentity
               .worldPackageRootHash,
           simulationTick: 1,
         },

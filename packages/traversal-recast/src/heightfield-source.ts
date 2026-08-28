@@ -1,11 +1,9 @@
-import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import {
-  canonicalExecutionResourceLockEntriesV1,
-  type ExecutionPlanV5,
-  type ExecutionStaticColliderV1,
-  type ExecutionTransformV3,
-  type ExecutionWaterBoundaryV3,
-  type ExecutionWaterV3,
+  type CanonicalSceneExecutionPlanV1,
+  type CanonicalSceneStaticColliderV1,
+  type CanonicalSceneTransformV1,
+  type CanonicalSceneWaterBoundaryV1,
+  type CanonicalSceneWaterV1,
 } from "@whitebox-world/runtime-contracts";
 import {
   emitTransformedStaticColliderTriangleMeshV1,
@@ -36,7 +34,7 @@ import {
   type TraversalCapabilityEnvelopeV1,
   type TraversalSurfaceIdentityV1,
 } from "@whitebox-world/traversal";
-import { isEmpty, isEqual, isNil } from "lodash-es";
+import { isEmpty, isNil } from "lodash-es";
 
 type Vec2 = readonly [number, number];
 type Vec3 = readonly [number, number, number];
@@ -49,7 +47,7 @@ const GEOMETRY_EPSILON = 1e-10;
 
 export type RouteBuildInputFromPlanInvalidReasonV2 =
   | "input-invalid"
-  | "plan-not-v5"
+  | "plan-invalid"
   | "hash-invalid"
   | "constraint-not-found"
   | "constraint-ambiguous"
@@ -79,7 +77,7 @@ export class RouteBuildInputFromPlanInvalidErrorV2 extends Error {
 }
 
 export interface CreateRouteBuildInputFromPlanInputV2 {
-  readonly executionPlan: ExecutionPlanV5;
+  readonly executionPlan: CanonicalSceneExecutionPlanV1;
   readonly capabilityEnvelope: TraversalCapabilityEnvelopeV1;
   readonly traversalLockReceipt: ResolvedTraversalLockReceiptV1;
   readonly constraintId: string;
@@ -328,7 +326,7 @@ function canonicalSoup(triangles: readonly Triangle[]): CanonicalTriangleSoupV1 
     : { positionsMetersXYZ, triangleIndices };
 }
 
-function heightfieldTriangles(plan: ExecutionPlanV5): {
+function heightfieldTriangles(plan: CanonicalSceneExecutionPlanV1): {
   readonly emitterHash: `sha256:${string}`;
   readonly triangles: readonly Triangle[];
 } {
@@ -439,7 +437,7 @@ function pointInPolygonInclusive(point: Vec2, polygon: readonly Vec2[]): boolean
 }
 
 function normalizedWaterBoundary(
-  boundary: ExecutionWaterBoundaryV3,
+  boundary: CanonicalSceneWaterBoundaryV1,
 ): BlockedWaterBoundaryV1 {
   switch (boundary.kind) {
     case "circle":
@@ -528,7 +526,7 @@ function triangleIntersectsBoundary(triangle3: Triangle, boundary: BlockedWaterB
 
 function triangleIntersectsWaterVolume(
   triangle: Triangle,
-  water: ExecutionWaterV3,
+  water: CanonicalSceneWaterV1,
   boundary: BlockedWaterBoundaryV1,
 ): boolean {
   requireFinite(water.waterLevelMeters, `${water.entityId}.waterLevelMeters`);
@@ -545,7 +543,7 @@ function triangleIntersectsWaterVolume(
 
 function applyWaterSemantics(
   sourceTriangles: readonly Triangle[],
-  waters: readonly ExecutionWaterV3[],
+  waters: readonly CanonicalSceneWaterV1[],
   terrainEntityId: string,
 ): {
   readonly triangles: readonly Triangle[];
@@ -612,7 +610,7 @@ function applyWaterSemantics(
 
 function applyTraversalAreaSemantics(
   sourceTriangles: readonly Triangle[],
-  traversalAreas: ExecutionPlanV5["traversal"]["traversalAreas"],
+  traversalAreas: CanonicalSceneExecutionPlanV1["traversal"]["traversalAreas"],
   terrainEntityId: string,
 ): {
   readonly triangles: readonly Triangle[];
@@ -772,7 +770,7 @@ function colliderIntersectsRibbon(
   return minimumDistance <= widthMeters / 2 + GEOMETRY_EPSILON;
 }
 
-function colliderSoup(collider: ExecutionStaticColliderV1): CanonicalTriangleSoupV1 {
+function colliderSoup(collider: CanonicalSceneStaticColliderV1): CanonicalTriangleSoupV1 {
   const transform = collider.transform;
   requireVec3(transform.positionMetersXYZ, "collider transform position");
   requireVec3(transform.rotationEulerRadiansXYZ, "collider transform rotation");
@@ -791,7 +789,7 @@ function colliderSoup(collider: ExecutionStaticColliderV1): CanonicalTriangleSou
 }
 
 function relevantBlockingColliders(
-  colliders: readonly ExecutionStaticColliderV1[],
+  colliders: readonly CanonicalSceneStaticColliderV1[],
   points: readonly Vec2[],
   widthMeters: number,
 ): readonly StaticColliderSourceV1[] {
@@ -848,47 +846,40 @@ function requirePlanAndEnvelope(input: CreateRouteBuildInputFromPlanInputV2): vo
   if (!isNil(unknownField)) {
     failStructural("input-invalid", `unknown factory field '${unknownField}'.`);
   }
-  if (input.executionPlan?.schemaVersion !== 5) {
-    failStructural("plan-not-v5", "ExecutionPlanV5 is required.");
+  if (input.executionPlan?.schemaVersion !== 1) {
+    failStructural("plan-invalid", "Canonical Scene Execution Plan is required.");
   }
   if (
-    input.executionPlan.kind !== "worldkit-execution-plan" ||
+    input.executionPlan.kind !== "worldkit-canonical-scene-execution-plan" ||
     input.executionPlan.coordinateSystem !==
       "right-handed-y-up-minus-z-forward"
   ) {
     failStructural(
       "contract-invalid",
-      "ExecutionPlanV5 kind and coordinateSystem must be canonical.",
+      "Scene Plan kind and coordinateSystem must be canonical.",
+    );
+  }
+  if (
+    isNil(input.traversalLockReceipt) ||
+    typeof input.traversalLockReceipt !== "object" ||
+    Array.isArray(input.traversalLockReceipt) ||
+    isNil(input.traversalLockReceipt.lock) ||
+    typeof input.traversalLockReceipt.lock !== "object" ||
+    Array.isArray(input.traversalLockReceipt.lock)
+  ) {
+    failStructural(
+      "input-invalid",
+      "traversalLockReceipt must contain one resolved traversal lock.",
     );
   }
   for (const [name, value] of [
     ["authoringSpecHash", input.executionPlan.authoringSpecHash],
     ["layoutSolveReportHash", input.executionPlan.layout?.layoutSolveReportHash],
-    ["resourceLockHash", input.executionPlan.resourceLockHash],
+    ["resourceLockHash", input.traversalLockReceipt?.lock?.resourceLockHash],
   ] as const) {
     if (typeof value !== "string" || !SHA256_PATTERN.test(value)) {
       failStructural("hash-invalid", `${name} must be a lowercase sha256 hash.`);
     }
-  }
-  let canonicalResourceLock: ReturnType<
-    typeof canonicalExecutionResourceLockEntriesV1
-  >;
-  try {
-    canonicalResourceLock = canonicalExecutionResourceLockEntriesV1(
-      input.executionPlan.resourceLockEntries,
-    );
-  } catch {
-    failStructural("contract-invalid", "Execution Resource Lock entries are malformed.");
-  }
-  if (
-    !isEqual(input.executionPlan.resourceLockEntries, canonicalResourceLock) ||
-    sha256CanonicalJson(canonicalResourceLock) !==
-      input.executionPlan.resourceLockHash
-  ) {
-    failStructural(
-      "hash-invalid",
-      "Execution Resource Lock entries do not match resourceLockHash.",
-    );
   }
   if (typeof input.constraintId !== "string" || input.constraintId.length === 0) {
     failStructural("input-invalid", "constraintId must be a non-empty string.");
@@ -912,13 +903,13 @@ function requirePlanAndEnvelope(input: CreateRouteBuildInputFromPlanInputV2): vo
     isNil(input.executionPlan.layout) ||
     !Array.isArray(input.executionPlan.layout.routes) ||
     isNil(input.executionPlan.layout.placementsByEntityId) ||
-    !Array.isArray(input.executionPlan.subjects) ||
+    !Array.isArray(input.executionPlan.subjectInstances) ||
     !Array.isArray(input.executionPlan.staticColliders) ||
     !Array.isArray(input.executionPlan.waters)
   ) {
     failStructural(
       "contract-invalid",
-      "ExecutionPlanV5 traversal source fields are malformed.",
+      "Canonical Scene Plan traversal source fields are malformed.",
     );
   }
 }
@@ -929,7 +920,7 @@ export function createRouteBuildInputFromPlanV2(
   requirePlanAndEnvelope(input);
   const plan = input.executionPlan;
   const envelope = input.capabilityEnvelope;
-  if (plan.resourceLockHash !== envelope.resourceLockHash) {
+  if (input.traversalLockReceipt.lock.resourceLockHash !== envelope.resourceLockHash) {
     failSemantic(
       "ROUTE_TRAVERSAL_LOCK_MISMATCH",
       "Execution Plan and Capability Envelope use different Resource Locks.",
@@ -952,7 +943,9 @@ export function createRouteBuildInputFromPlanV2(
   const requirement = requirements[0]!;
   if (
     requirement.traversingEntityId !== envelope.subjectEntityId ||
-    plan.subjects.filter((subject) => subject.entityId === requirement.traversingEntityId).length !== 1
+    plan.subjectInstances.filter((subject) =>
+      subject.entityId === requirement.traversingEntityId
+    ).length !== 1
   ) {
     failStructural("subject-mismatch", "connectivity Subject does not match the locked Capability Envelope.");
   }
@@ -1169,7 +1162,7 @@ export function createRouteBuildInputFromPlanV2(
     schemaVersion: 2,
     authoringSpecHash: plan.authoringSpecHash,
     layoutSolveReportHash: plan.layout.layoutSolveReportHash as `sha256:${string}`,
-    resourceLockHash: plan.resourceLockHash as `sha256:${string}`,
+    resourceLockHash: input.traversalLockReceipt.lock.resourceLockHash,
     connectivityRequirement: {
       constraintId: requirement.constraintId,
       traversingEntityId: requirement.traversingEntityId,
@@ -1412,3 +1405,4 @@ export function collectUnboundStaticCollidersV2(
     return !boundKeys.has(key) && !isEmpty(collider.triangleSoup.positionsMetersXYZ);
   });
 }
+import { sha256CanonicalJson } from "@whitebox-world/protocol";

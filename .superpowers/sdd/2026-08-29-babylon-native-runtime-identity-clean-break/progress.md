@@ -145,7 +145,28 @@ Ruling: generated examples and scene evidence are regenerated only through their
   Take, WAL, and Session tests passed 112/112 across 16 files; typecheck,
   workspace boundary floor (49 registered debt entries), test census (304
   total / 272 contract / 32 resource-heavy), and `git diff --check` passed.
-- BNA1-09B: not started.
-- BNA1-09C: not started.
+- BNA1-09B: complete in the pending transport checkpoint. Generic
+  WorldPackage Validation subjects, non-Route CLI results, build artifacts,
+  Package summaries, Studio trusted-import persistence, Runtime Snapshots, and
+  Whitebox tri-view manifests now carry `worldBuildIdentityHash`; closed
+  generic readers reject the former Plan field instead of accepting an alias.
+  The trusted build-artifact command derives the same deterministic identity
+  as `worldkit validate` from the complete Canonical WorldPackage and includes
+  the independent Gameplay Bootstrap needed by the runtime configuration.
+  Evidence: Validation/Route focused tests 144/144, Studio 75/75, CLI and
+  Package command tests 41/41, typecheck, workspace boundary floor, test census
+  (304 total / 272 contract / 32 resource-heavy), and `git diff --check`
+  passed.
+- BNA1-09C: complete in the pending Canonical-consumer checkpoint. Route,
+  Authoring Edit, Full Reload, and World Change remain explicitly bound to the
+  terminal `CanonicalSceneExecutionPlanV1` and `executionPlanHash`; no generic
+  World Build hash substitutes for Plan identity. Route resources now use the
+  existing authoring/runtime traversal closure (excluding Gameplay Bootstrap),
+  rather than incorrectly comparing either the complete WorldPackage lock or
+  the Scene-only lock. Browser Route publication uses the Route receipt lock,
+  while its generic Validation subject uses World Build identity. Evidence:
+  Authoring Edit/Host and World Change tests 62/62, Route evaluator/publication
+  tests within the 144-test Validation gate, Heightfield source 22/22, trusted
+  Route runner 12/12, and real `worldkit run` Route transport 1/1 passed.
 - BNA1-09D: not started.
 - BNA1-10: not started.

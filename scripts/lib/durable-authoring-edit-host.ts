@@ -11,8 +11,8 @@ import {
   type EvaluateRequiredGatesV1,
 } from "@whitebox-world/authoring-host";
 import type {
-  ResolvedWorldPackageResourceArtifactV2,
-  WorldPackageBuildContextV2,
+  ResolvedWorldPackageResourceArtifactV1,
+  WorldPackageBuildContextV1,
 } from "@whitebox-world/world-package";
 import { isEmpty, isNil } from "lodash-es";
 
@@ -66,8 +66,8 @@ async function ensureOwnerOnlyDirectory(
 export async function createDurableAuthoringEditHostV1(input: {
   readonly stateDirectoryPath: string;
   readonly authoringSpec: AuthoringSpecV4;
-  readonly worldPackageBuildContext: WorldPackageBuildContextV2;
-  readonly resourceArtifacts: readonly ResolvedWorldPackageResourceArtifactV2[];
+  readonly worldPackageBuildContext: WorldPackageBuildContextV1;
+  readonly resourceArtifacts: readonly ResolvedWorldPackageResourceArtifactV1[];
   readonly session: AuthoringEditSessionV1;
   readonly runtimeOwner: DurableWorldChangeRuntimeOwnerV1;
   readonly evaluateRequiredGates?: EvaluateRequiredGatesV1;

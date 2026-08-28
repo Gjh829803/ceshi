@@ -61,7 +61,7 @@ export function createWorldPackageValidationSubjectV1(
     worldPackageRootHash: receipt.worldPackageRootHash,
     authoringSpecHash: asHash(manifest.authoringSpecHash),
     normalizedWorldIrHash: asHash(manifest.normalizedWorldIrHash),
-    executionPlanHash: asHash(manifest.executionPlanHash),
+    worldBuildIdentityHash: receipt.worldBuildIdentityHash,
     resourceLockHash: asHash(manifest.registryLockHash),
     layoutSolveReportHash: asHash(manifest.layoutSolveReportHash),
   });

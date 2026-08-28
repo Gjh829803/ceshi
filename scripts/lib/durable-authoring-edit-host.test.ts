@@ -12,7 +12,7 @@ import path from "node:path";
 
 import { createValidAuthoringSpec } from "@whitebox-world/authoring/testing";
 import type { PublishRuntimeReplacementV1 } from "@whitebox-world/authoring-host";
-import { createWorldPackageBuildContextFixtureV2 } from "@whitebox-world/world-package/testing";
+import { createWorldPackageBuildContextFixtureV1 } from "@whitebox-world/world-package/testing";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createAuthoringEditHostSessionV1 } from "./authoring-edit-host-bridge";
@@ -58,7 +58,7 @@ function inputFor(
   return {
     stateDirectoryPath,
     authoringSpec,
-    worldPackageBuildContext: createWorldPackageBuildContextFixtureV2(),
+    worldPackageBuildContext: createWorldPackageBuildContextFixtureV1(),
     resourceArtifacts: [],
     session: createAuthoringEditHostSessionV1({
       worldId: authoringSpec.id,

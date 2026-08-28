@@ -62,7 +62,7 @@ const SUBJECT_FIELDS = [
   "worldPackageRootHash",
   "authoringSpecHash",
   "normalizedWorldIrHash",
-  "executionPlanHash",
+  "worldBuildIdentityHash",
   "resourceLockHash",
   "layoutSolveReportHash",
 ] as const;
@@ -517,6 +517,10 @@ export function createWorldkitBrowserRouteEvidencePublicationV2(
     const rebuiltReport = createRouteValidationReportV2({
       reportId: snapshot.validationReport.id,
       subject: snapshot.subject,
+      executionPlanHash:
+        snapshot.validationReport.routeValidationSetReceipt.executionPlanHash,
+      resourceLockHash:
+        snapshot.validationReport.routeValidationSetReceipt.resourceLockHash,
       dependencyReportRefs: snapshot.validationReport.dependencyReportRefs,
       validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
       requiredRoutes:
@@ -549,8 +553,8 @@ export function createWorldkitBrowserRouteEvidencePublicationV2(
       worldPackageRootHash: snapshot.subject.worldPackageRootHash,
       authoringSpecHash: snapshot.subject.authoringSpecHash,
       normalizedWorldIrHash: snapshot.subject.normalizedWorldIrHash,
-      executionPlanHash: snapshot.subject.executionPlanHash,
-      resourceLockHash: snapshot.subject.resourceLockHash,
+      executionPlanHash: receipt.executionPlanHash,
+      resourceLockHash: receipt.resourceLockHash,
       layoutSolveReportHash: snapshot.subject.layoutSolveReportHash,
       validationReportHash: rebuiltReportHash,
       routeValidationSetReceiptHash: hashRouteValidationSetReceiptV1(receipt),

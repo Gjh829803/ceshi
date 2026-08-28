@@ -19,7 +19,7 @@ import {
 } from "@whitebox-world/authoring-host";
 import {
   createInMemoryWorldPackageStoreV1,
-  createWorldPackageBuildContextFixtureV2,
+  createWorldPackageBuildContextFixtureV1,
 } from "@whitebox-world/world-package/testing";
 import { isNil } from "lodash-es";
 import { describe, expect, it, vi } from "vitest";
@@ -72,7 +72,7 @@ async function committedFixture() {
       runtimeSessionId: "runtime-session.recovery",
       worldSessionId: "world-session.committed",
       worldPackageRootHash:
-        input.worldConfiguration.worldPackageBuildReceipt.worldPackageRootHash,
+        input.worldConfiguration.worldBuildIdentity.worldPackageRootHash,
       simulationTick: 0,
     } as const;
     const releaseFence = input.persistDurableCommit({ previous, current });
@@ -83,7 +83,7 @@ async function committedFixture() {
   const bridge = createAuthoringEditHostBridgeV1({
     authoringSpec: spec,
     worldPackageStore,
-    worldPackageBuildContext: createWorldPackageBuildContextFixtureV2(),
+    worldPackageBuildContext: createWorldPackageBuildContextFixtureV1(),
     resourceArtifacts: [],
     runtimeHost: { publishWorldReplacementV1 } as never,
     nowUnixMilliseconds: () => 1_700_000_000_000,

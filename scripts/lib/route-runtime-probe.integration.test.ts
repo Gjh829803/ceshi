@@ -8,18 +8,18 @@ import {
 } from "@whitebox-world/authoring";
 import {
   compileResolvedTraversalLockV1,
-  compileWorldV5,
+  compileCanonicalWorldV1,
 } from "@whitebox-world/compiler";
-import {
-  createGameplayBootstrapResourceLockEntryV1,
-  createGameplayBootstrapV1,
-} from "@whitebox-world/gameplay-contracts";
+import { createGameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
 import {
   BabylonWorldRuntime,
   BABYLON_TRAVERSAL_RUNTIME_IMPLEMENTATION_IDENTITY_V1,
   createBabylonTraversalRuntimePortV1,
 } from "@whitebox-world/runtime-babylon";
-import type { ExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
+import type {
+  CanonicalSceneExecutionPlanV1,
+  WorldRuntimeBootstrapV1,
+} from "@whitebox-world/runtime-contracts";
 import {
   BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
   BUILT_IN_TRAVERSAL_DRIVER_PROFILE_REF,
@@ -59,8 +59,7 @@ const havokWasmBinary = havokWasmBytes.buffer.slice(
   havokWasmBytes.byteOffset,
   havokWasmBytes.byteOffset + havokWasmBytes.byteLength,
 ) as ArrayBuffer;
-const GAMEPLAY_BOOTSTRAP_RESOURCE_LOCK =
-  createGameplayBootstrapResourceLockEntryV1(createGameplayBootstrapV1({
+const GAMEPLAY_BOOTSTRAP = createGameplayBootstrapV1({
     kind: "gameplay-bootstrap",
     id: "route-runtime-probe-test.gameplay",
     version: 1,
@@ -70,10 +69,11 @@ const GAMEPLAY_BOOTSTRAP_RESOURCE_LOCK =
     semanticActionDefinitions: [],
     availableCapabilityRefs: [],
     initialRelationshipStates: [],
-  }));
+  });
 
 interface RealRouteFixture {
-  readonly executionPlan: ExecutionPlanV5;
+  readonly executionPlan: CanonicalSceneExecutionPlanV1;
+  readonly worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
   readonly traversalLockReceipt: ResolvedTraversalLockReceiptV1;
   readonly routePathReceipt: RoutePathReceiptV2;
 }
@@ -187,17 +187,20 @@ async function prepareRealRouteFixture(
   ) {
     throw new Error(`Route fixture normalization failed: ${JSON.stringify(normalized.diagnostics)}`);
   }
-  const compiled = compileWorldV5({
+  const compiled = compileCanonicalWorldV1({
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
-    gameplayBootstrapResourceLock: GAMEPLAY_BOOTSTRAP_RESOURCE_LOCK,
+    gameplayBootstrap: GAMEPLAY_BOOTSTRAP,
+    worldRuntimeBootstrapRef:
+      `worldkit://world-runtime-bootstrap/${normalized.value.id}@1`,
   });
-  if (!compiled.ok || isNil(compiled.executionPlan)) {
+  if (!compiled.ok || isNil(compiled.canonicalSceneExecutionPlan)) {
     throw new Error(`Route fixture compilation failed: ${JSON.stringify(compiled.diagnostics)}`);
   }
   const traversalLockReceipt = compileResolvedTraversalLockV1({
     normalizedWorldIr: normalized.value,
-    executionPlan: compiled.executionPlan,
+    canonicalSceneExecutionPlan: compiled.canonicalSceneExecutionPlan,
+    worldRuntimeBootstrap: compiled.worldRuntimeBootstrap,
     traversingEntityId: "player",
     runtimeImplementationIdentity:
       BABYLON_TRAVERSAL_RUNTIME_IMPLEMENTATION_IDENTITY_V1,
@@ -210,7 +213,7 @@ async function prepareRealRouteFixture(
     graphBuilderProfile,
   });
   const buildInputReceipt = createRouteBuildInputFromPlanV2({
-    executionPlan: compiled.executionPlan,
+    executionPlan: compiled.canonicalSceneExecutionPlan,
     capabilityEnvelope: capabilityEnvelope.envelope,
     traversalLockReceipt,
     constraintId: "hero-to-goal",
@@ -222,7 +225,8 @@ async function prepareRealRouteFixture(
     throw new Error(`Real Recast route fixture was not complete: ${JSON.stringify(routeResult)}`);
   }
   return {
-    executionPlan: compiled.executionPlan,
+    executionPlan: compiled.canonicalSceneExecutionPlan,
+    worldRuntimeBootstrap: compiled.worldRuntimeBootstrap,
     traversalLockReceipt,
     routePathReceipt: routeResult.routePathReceipt,
   };
@@ -231,11 +235,13 @@ async function prepareRealRouteFixture(
 async function createRuntimeHarness(
   fixture: RealRouteFixture,
   runtimeSessionId: string,
-  executionPlan: ExecutionPlanV5 = fixture.executionPlan,
+  executionPlan: CanonicalSceneExecutionPlanV1 = fixture.executionPlan,
 ) {
   let engine: NullEngine | undefined;
   const runtime = await BabylonWorldRuntime.create({
-    executionPlan,
+    sceneSource: { kind: "canonical-execution-plan", executionPlan },
+    worldRuntimeBootstrap: fixture.worldRuntimeBootstrap,
+    gameplayBootstrap: GAMEPLAY_BOOTSTRAP,
     runtimeSessionId,
     havokWasmBinary,
     autoStartRenderLoop: false,
@@ -324,7 +330,7 @@ function staticBoxCollider(input: Readonly<{
   };
 }
 
-function withBlockingWall(fixture: RealRouteFixture): ExecutionPlanV5 {
+function withBlockingWall(fixture: RealRouteFixture): CanonicalSceneExecutionPlanV1 {
   return {
     ...fixture.executionPlan,
     staticColliders: [
@@ -341,7 +347,7 @@ function withBlockingWall(fixture: RealRouteFixture): ExecutionPlanV5 {
 function withStaticSupportAtStart(
   fixture: RealRouteFixture,
   heightMeters: number,
-): ExecutionPlanV5 {
+): CanonicalSceneExecutionPlanV1 {
   const plan = structuredClone(fixture.executionPlan);
   const placement = plan.layout.placementsByEntityId["spawn-main"]!;
   const [x, , z] = placement.transform.positionMetersXYZ;
@@ -565,7 +571,7 @@ describe("Route R1 fixed-tick probe with real Recast and Babylon/Havok", () => {
       expect(receipt.metrics.wrongSupportSurfaceCount).toBe(0);
       expect(harness.runtime.snapshot().resources.bodies).toBe(
         fixture.executionPlan.staticColliders.length +
-          fixture.executionPlan.subjects.length +
+          fixture.worldRuntimeBootstrap.subjectRuntimeDescriptors.length +
           2,
       );
     } finally {

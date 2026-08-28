@@ -57,7 +57,7 @@ const SUBJECT: WorldPackageValidationSubjectV1 = {
   worldPackageRootHash: HASH_A,
   authoringSpecHash: HASH_A,
   normalizedWorldIrHash: HASH_B,
-  executionPlanHash: HASH_C,
+  worldBuildIdentityHash: HASH_C,
   resourceLockHash: HASH_B,
   layoutSolveReportHash: HASH_C,
 };
@@ -411,7 +411,7 @@ function completeProbe(
     authoringSpecHash: SUBJECT.authoringSpecHash,
     layoutSolveReportHash: SUBJECT.layoutSolveReportHash,
     resourceLockHash: SUBJECT.resourceLockHash,
-    executionPlanHash: SUBJECT.executionPlanHash,
+        executionPlanHash: HASH_C,
     resolvedTraversalLockHash: lock.resolvedTraversalLockHash,
     runtimeImplementationIdentity,
     fixedTimeStepSeconds: 1 / 60,
@@ -445,7 +445,7 @@ function completeProbe(
       authoringSpecHash: routePath.authoringSpecHash,
       layoutSolveReportHash: routePath.layoutSolveReportHash,
       resourceLockHash: routePath.resourceLockHash,
-      executionPlanHash: SUBJECT.executionPlanHash,
+          executionPlanHash: HASH_C,
       routeBuildInputHash: routePath.routeBuildInputHash,
       traversalGraphHash: routePath.traversalGraphHash,
       resolvedTraversalLockHash: routePath.resolvedTraversalLockHash,
@@ -622,6 +622,8 @@ function input(options: Parameters<typeof rowInput>[0] = {}): CreateRouteValidat
   return {
     reportId: "main-route-validation",
     subject: SUBJECT,
+    executionPlanHash: HASH_C,
+    resourceLockHash: HASH_B,
     dependencyReportRefs: [],
     validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
     requiredRoutes: [requiredRouteForRow(row)],
@@ -841,6 +843,8 @@ function failedConnectivityInput(
   return {
     reportId: "main-route-validation",
     subject: SUBJECT,
+    executionPlanHash: HASH_C,
+    resourceLockHash: HASH_B,
     dependencyReportRefs: [],
     validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
     requiredRoutes: [requiredRouteForRow(row)],
@@ -1081,7 +1085,7 @@ describe("createRouteValidationReportV2", () => {
     })).toThrow("must be unique and sorted by constraintId then routeId");
     expect(() => createRouteValidationReportV2({
       ...input(),
-      subject: { ...SUBJECT, executionPlanHash: HASH_A },
+      executionPlanHash: HASH_A,
       requiredRoutes: [requiredRoutes[0]!],
       rows: [first],
     })).toThrow();
@@ -1159,6 +1163,8 @@ describe("createRouteValidationReportV2", () => {
     const baseline = input();
     const contribution = evaluateRouteValidationRowV2({
       subject: baseline.subject,
+      executionPlanHash: baseline.executionPlanHash,
+      resourceLockHash: baseline.resourceLockHash,
       validationProfile: baseline.validationProfile,
       row: onlyRow(baseline),
     });
@@ -2048,7 +2054,7 @@ function completeProbeV2(
     authoringSpecHash: SUBJECT.authoringSpecHash,
     layoutSolveReportHash: SUBJECT.layoutSolveReportHash,
     resourceLockHash: SUBJECT.resourceLockHash,
-    executionPlanHash: SUBJECT.executionPlanHash,
+    executionPlanHash: HASH_C,
     resolvedTraversalLockHash: lock.resolvedTraversalLockHash,
     runtimeImplementationIdentity,
     fixedTimeStepSeconds: 1 / 60,
@@ -2082,7 +2088,7 @@ function completeProbeV2(
       authoringSpecHash: routePath.authoringSpecHash,
       layoutSolveReportHash: routePath.layoutSolveReportHash,
       resourceLockHash: routePath.resourceLockHash,
-      executionPlanHash: SUBJECT.executionPlanHash,
+      executionPlanHash: HASH_C,
       routeBuildInputHash: routePath.routeBuildInputHash,
       traversalGraphHash: routePath.traversalGraphHash,
       resolvedTraversalLockHash: routePath.resolvedTraversalLockHash,
@@ -2151,6 +2157,8 @@ describe("createRouteValidationReportV2 Path/Probe V2 rows", () => {
     const report = createRouteValidationReportV2({
       reportId: "v2-route-validation",
       subject: SUBJECT,
+      executionPlanHash: HASH_C,
+      resourceLockHash: HASH_B,
       validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
       requiredRoutes: [requiredRouteForRow(row)],
       rows: [row],

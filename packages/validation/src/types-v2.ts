@@ -137,7 +137,7 @@ export interface WorldPackageValidationSubjectV1 {
   readonly worldPackageRootHash: Sha256HashV1;
   readonly authoringSpecHash: Sha256HashV1;
   readonly normalizedWorldIrHash: Sha256HashV1;
-  readonly executionPlanHash: Sha256HashV1;
+  readonly worldBuildIdentityHash: Sha256HashV1;
   readonly resourceLockHash: Sha256HashV1;
   readonly layoutSolveReportHash: Sha256HashV1;
 }

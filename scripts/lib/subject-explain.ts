@@ -81,7 +81,8 @@ export async function explainSubjectFile(
   const pipeline = await loadWorldkitRoutePipeline(inputPath);
   if (!pipeline.ok) return pipeline;
 
-  const executionSubject = pipeline.executionPlan.subjects.find(
+  const executionSubject = pipeline.worldRuntimeBootstrap
+    .subjectRuntimeDescriptors.find(
     (subject) => subject.entityId === entityId,
   );
   if (executionSubject === undefined) {
@@ -90,7 +91,8 @@ export async function explainSubjectFile(
       `Subject Entity '${entityId}' does not exist in the compiled world.`,
       {
         entityId,
-        availableEntityIds: pipeline.executionPlan.subjects.map(
+        availableEntityIds: pipeline.worldRuntimeBootstrap
+          .subjectRuntimeDescriptors.map(
           (subject) => subject.entityId,
         ),
       },

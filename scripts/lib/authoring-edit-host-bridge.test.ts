@@ -7,7 +7,7 @@ import {
 } from "@whitebox-world/authoring-host";
 import {
   createInMemoryWorldPackageStoreV1,
-  createWorldPackageBuildContextFixtureV2,
+  createWorldPackageBuildContextFixtureV1,
 } from "@whitebox-world/world-package/testing";
 import { describe, expect, it, vi } from "vitest";
 
@@ -23,7 +23,7 @@ const PACKAGE_REF = `package://world-package/sha256/${"d".repeat(64)}` as const;
 function worldPackageInputs() {
   return {
     worldPackageStore: createInMemoryWorldPackageStoreV1(),
-    worldPackageBuildContext: createWorldPackageBuildContextFixtureV2(),
+    worldPackageBuildContext: createWorldPackageBuildContextFixtureV1(),
     resourceArtifacts: [],
   } as const;
 }
@@ -92,11 +92,14 @@ describe("P16-B1 Authoring/Edit Host bridge", () => {
     const port = bindRuntimeHostPublicationPortV1({ publishWorldReplacementV1 });
     const published = await port({
       worldConfiguration: {
-        executionPlan: {} as never,
-        executionPlanHash: HASH,
-        worldPackageRef: PACKAGE_REF,
-        worldPackageBuildReceipt: {} as never,
+        worldBuildIdentity: { worldPackageRef: PACKAGE_REF } as never,
         gameplayBootstrap: {} as never,
+        worldRuntimeBootstrap: {} as never,
+        sceneSource: {
+          kind: "canonical-execution-plan",
+          executionPlan: {} as never,
+          executionPlanHash: HASH,
+        },
       },
       publication: {
         requestId: "request.apply.publish-house.001",
@@ -159,11 +162,14 @@ describe("P16-B1 Authoring/Edit Host bridge", () => {
     });
     const published = await port({
       worldConfiguration: {
-        executionPlan: {} as never,
-        executionPlanHash: HASH,
-        worldPackageRef: PACKAGE_REF,
-        worldPackageBuildReceipt: {} as never,
+        worldBuildIdentity: { worldPackageRef: PACKAGE_REF } as never,
         gameplayBootstrap: {} as never,
+        worldRuntimeBootstrap: {} as never,
+        sceneSource: {
+          kind: "canonical-execution-plan",
+          executionPlan: {} as never,
+          executionPlanHash: HASH,
+        },
       },
       publication: {
         requestId: "request.apply.publish-house.002",

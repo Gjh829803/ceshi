@@ -36,10 +36,10 @@ import {
   type WorldPackageValidationSubjectV1,
 } from "@whitebox-world/validation";
 import {
-  createWorldPackageV2,
-  verifyWorldPackageDirectoryV2,
-  type ResolvedWorldPackageResourceArtifactV2,
-  type WorldPackageBuildReceiptV2,
+  createWorldPackageV1,
+  verifyWorldPackageDirectoryV1,
+  type ResolvedWorldPackageResourceArtifactV1,
+  type WorldPackageBuildReceiptV1,
 } from "@whitebox-world/world-package";
 import { isNil } from "lodash-es";
 
@@ -55,9 +55,9 @@ import {
 } from "./route-r1b-fixture-proofs.js";
 import { loadWorldkitRoutePipeline } from "./worldkit-pipeline";
 import {
-  createTrustedWorldPackageBuildContextV2,
-  resolveTrustedWorldPackageResourceArtifactsV2,
-} from "./trusted-world-package-v2";
+  createTrustedWorldPackageBuildContextV1,
+  resolveTrustedWorldPackageResourceArtifactsV1,
+} from "./trusted-world-package";
 
 type Hash = `sha256:${string}`;
 
@@ -141,7 +141,7 @@ export interface TrustedRouteRenderScheduleStatsV1 {
 }
 
 export interface TrustedRouteValidationResultV1 {
-  readonly worldPackageBuildReceipt: WorldPackageBuildReceiptV2;
+  readonly worldPackageBuildReceipt: WorldPackageBuildReceiptV1;
   readonly subject: WorldPackageValidationSubjectV1;
   readonly report: ValidationReportV2;
   readonly validationReportHash: Hash;
@@ -372,7 +372,7 @@ function requireRuntimePhysicsAggregatesV1(runtime: unknown):
  */
 export function createWorldPackageSubjectAssetResolverV1(
   artifacts: readonly Pick<
-    ResolvedWorldPackageResourceArtifactV2,
+    ResolvedWorldPackageResourceArtifactV1,
     "resourceRef" | "packagePath" | "mediaType" | "bytes"
   >[],
 ): SubjectAssetResolverV1 {
@@ -477,9 +477,9 @@ export async function runTrustedRouteValidationV1(
       { diagnostics: pipeline.diagnostics },
     );
   }
-  let resourceArtifacts: readonly ResolvedWorldPackageResourceArtifactV2[];
+  let resourceArtifacts: readonly ResolvedWorldPackageResourceArtifactV1[];
   try {
-    resourceArtifacts = await resolveTrustedWorldPackageResourceArtifactsV2(
+    resourceArtifacts = await resolveTrustedWorldPackageResourceArtifactsV1(
       pipeline.normalizedWorldIr,
     );
   } catch (error) {
@@ -494,9 +494,9 @@ export async function runTrustedRouteValidationV1(
     report: pipeline.layoutSolveReport,
     layoutSolveReportHash: pipeline.layoutSolveReportHash,
   });
-  const directory = createWorldPackageV2({
+  const directory = createWorldPackageV1({
     packageId: `${pipeline.authoringSpec.id}.world-package`,
-    ...createTrustedWorldPackageBuildContextV2({
+    ...createTrustedWorldPackageBuildContextV1({
       title: `${pipeline.authoringSpec.id} trusted route validation package`,
       resourceArtifacts,
     }),
@@ -505,9 +505,10 @@ export async function runTrustedRouteValidationV1(
     layoutSolveResult,
     executionPlan: pipeline.executionPlan,
     gameplayBootstrap: pipeline.gameplayBootstrap,
+    worldRuntimeBootstrap: pipeline.worldRuntimeBootstrap,
     resourceArtifacts,
   });
-  const verifiedDirectory = verifyWorldPackageDirectoryV2(directory);
+  const verifiedDirectory = verifyWorldPackageDirectoryV1(directory);
   const worldPackageBuildReceipt = verifiedDirectory.receipt;
   const subject = createWorldPackageValidationSubjectV1(verifiedDirectory);
   const runtimeAssetResolver = createWorldPackageSubjectAssetResolverV1(
@@ -522,6 +523,7 @@ export async function runTrustedRouteValidationV1(
 
   const orchestration = await orchestrateRouteValidationV1({
     executionPlan: pipeline.executionPlan,
+    worldRuntimeBootstrap: pipeline.worldRuntimeBootstrap,
     subject,
     reportId: `${pipeline.authoringSpec.id}.route-validation`,
     runtimeAssetResolver,
@@ -529,7 +531,8 @@ export async function runTrustedRouteValidationV1(
     compileTraversalLock: ({ executionPlan, traversingEntityId }) =>
       compileResolvedTraversalLockV1({
         normalizedWorldIr: pipeline.normalizedWorldIr,
-        executionPlan,
+        canonicalSceneExecutionPlan: executionPlan,
+        worldRuntimeBootstrap: pipeline.worldRuntimeBootstrap,
         traversingEntityId,
         runtimeImplementationIdentity:
           runtimeBabylon.BABYLON_TRAVERSAL_RUNTIME_IMPLEMENTATION_IDENTITY_V1,
@@ -555,7 +558,12 @@ export async function runTrustedRouteValidationV1(
       const havokWasmBytes = input.havokWasmBytes ??
         await loadHavokWasmBytesOnce();
       const runtime = await runtimeBabylon.BabylonWorldRuntime.create({
-        executionPlan: input.executionPlan,
+        sceneSource: {
+          kind: "canonical-execution-plan",
+          executionPlan: input.executionPlan,
+        },
+        worldRuntimeBootstrap: pipeline.worldRuntimeBootstrap,
+        gameplayBootstrap: pipeline.gameplayBootstrap,
         runtimeSessionId: input.runtimeSessionId,
         havokWasmBinary: copyArrayBuffer(
           input.havokWasmBytes ?? havokWasmBytes,

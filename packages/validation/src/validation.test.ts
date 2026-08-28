@@ -1042,7 +1042,7 @@ function validWorldPackageReport(): ValidationReportV2 {
       worldPackageRootHash: HASH_A,
       authoringSpecHash: HASH_B,
       normalizedWorldIrHash: HASH_C,
-      executionPlanHash: HASH_A,
+      worldBuildIdentityHash: HASH_A,
       resourceLockHash: HASH_B,
       layoutSolveReportHash: HASH_C,
     },

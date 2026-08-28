@@ -10,7 +10,7 @@ import {
   type AuthoringSpecV4,
   type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
-import { compileWorldV5 } from "@whitebox-world/compiler";
+import { compileCanonicalWorldV1 } from "@whitebox-world/compiler";
 import {
   createGameplayBootstrapResourceLockEntryV1,
   createGameplayBootstrapV1,
@@ -50,7 +50,7 @@ const coreControlManifest = createGameplayFeatureManifestV1({
   resourceBudget: { stateSliceCount: 1, commandHandlerCount: 2 },
 });
 
-function gameplayBootstrapResourceLock(
+function gameplayBootstrap(
   normalizedWorldIr: NormalizedWorldIRV4,
 ) {
   const entityDescriptors = normalizedWorldIr.nodes
@@ -69,8 +69,7 @@ function gameplayBootstrapResourceLock(
         capabilityRefs: definition.capabilityRefs,
       };
     });
-  return createGameplayBootstrapResourceLockEntryV1(
-    createGameplayBootstrapV1({
+  return createGameplayBootstrapV1({
       kind: "gameplay-bootstrap",
       id: `${normalizedWorldIr.id}.gameplay`,
       version: 1,
@@ -89,8 +88,7 @@ function gameplayBootstrapResourceLock(
       initialRelationshipStates: normalizedWorldIr.relationships.map(
         (relationship) => ({ ...relationship, establishedSimulationTick: 0 }),
       ),
-    }),
-  );
+    });
 }
 
 function routeEvidencePublication(
@@ -181,15 +179,16 @@ function sameWorldRouteEvidencePublication(
   ) {
     throw new Error("Route server fixture did not normalize.");
   }
-  const compiled = compileWorldV5({
+  const compiled = compileCanonicalWorldV1({
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
-    gameplayBootstrapResourceLock:
-      gameplayBootstrapResourceLock(normalized.value),
+    gameplayBootstrap: gameplayBootstrap(normalized.value),
+    worldRuntimeBootstrapRef:
+      `worldkit://world-runtime-bootstrap/${normalized.value.id}@1`,
   });
   if (
     !compiled.ok ||
-    compiled.executionPlan === undefined ||
+    compiled.canonicalSceneExecutionPlan === undefined ||
     compiled.executionPlanHash === undefined
   ) {
     throw new Error("Route server fixture did not compile.");
@@ -200,7 +199,7 @@ function sameWorldRouteEvidencePublication(
       normalized.normalizedWorldIrHash as `sha256:${string}`,
     executionPlanHash: compiled.executionPlanHash as `sha256:${string}`,
     resourceLockHash:
-      compiled.executionPlan.resourceLockHash as `sha256:${string}`,
+      normalized.value.resources.resourceLockHash as `sha256:${string}`,
     layoutSolveReportHash:
       normalized.layoutSolveReportHash as `sha256:${string}`,
   });

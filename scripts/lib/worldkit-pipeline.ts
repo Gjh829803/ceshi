@@ -9,15 +9,18 @@ import {
   type NormalizeAuthoringResultV4,
   type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
-import { compileWorldV5 } from "@whitebox-world/compiler";
+import {
+  compileCanonicalWorldV1,
+  type CompileDiagnostic,
+} from "@whitebox-world/compiler";
 import { createCoreGameplayBootstrapV1 } from "@whitebox-world/gameplay";
 import {
   createGameplayBootstrapResourceLockEntryV1,
   type GameplayBootstrapV1,
 } from "@whitebox-world/gameplay-contracts";
 import type {
-  CompileDiagnostic,
-  ExecutionPlanV5,
+  CanonicalSceneExecutionPlanV1,
+  WorldRuntimeBootstrapV1,
 } from "@whitebox-world/runtime-contracts";
 import { isNil } from "lodash-es";
 
@@ -51,8 +54,9 @@ export interface WorldkitRoutePipelineSuccess {
   layoutSolveReport: NonNullable<NormalizeAuthoringResultV4["layoutSolveReport"]>;
   layoutSolveReportHash: `sha256:${string}`;
   gameplayBootstrap: GameplayBootstrapV1;
-  executionPlan: ExecutionPlanV5;
+  executionPlan: CanonicalSceneExecutionPlanV1;
   executionPlanHash: string;
+  worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
 }
 
 function createRuntimeGameplayBootstrap(
@@ -146,14 +150,14 @@ export async function loadWorldkitRoutePipeline(
     return { ok: false, exitCode: 2, diagnostics: normalized.diagnostics };
   }
   const gameplayBootstrap = createRuntimeGameplayBootstrap(normalized.value);
-  const compiled = compileWorldV5({
+  const compiled = compileCanonicalWorldV1({
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
-    gameplayBootstrapResourceLock:
-      createGameplayBootstrapResourceLockEntryV1(gameplayBootstrap),
+    gameplayBootstrap,
+    worldRuntimeBootstrapRef:
+      `worldkit://world-runtime-bootstrap/${normalized.value.id}@1`,
   });
-  if (!compiled.ok || compiled.executionPlan === undefined ||
-    compiled.executionPlanHash === undefined) {
+  if (!compiled.ok) {
     return { ok: false, exitCode: 2, diagnostics: compiled.diagnostics };
   }
   return {
@@ -167,7 +171,8 @@ export async function loadWorldkitRoutePipeline(
     layoutSolveReport: normalized.layoutSolveReport,
     layoutSolveReportHash: normalized.layoutSolveReportHash,
     gameplayBootstrap,
-    executionPlan: compiled.executionPlan,
+    executionPlan: compiled.canonicalSceneExecutionPlan,
     executionPlanHash: compiled.executionPlanHash,
+    worldRuntimeBootstrap: compiled.worldRuntimeBootstrap,
   };
 }

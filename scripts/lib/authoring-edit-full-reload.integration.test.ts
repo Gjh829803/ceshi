@@ -13,7 +13,7 @@ import {
 import { getAuthoringRevisionHeadV1 } from "@whitebox-world/authoring-host";
 import {
   createInMemoryWorldPackageStoreV1,
-  createWorldPackageBuildContextFixtureV2,
+  createWorldPackageBuildContextFixtureV1,
 } from "@whitebox-world/world-package/testing";
 import { describe, expect, it } from "vitest";
 
@@ -51,7 +51,7 @@ describe("P16-F1 Full Reload Host and RuntimeHost integration", () => {
     const bridge = createAuthoringEditHostBridgeV1({
       authoringSpec: spec,
       worldPackageStore: createInMemoryWorldPackageStoreV1(),
-      worldPackageBuildContext: createWorldPackageBuildContextFixtureV2(),
+      worldPackageBuildContext: createWorldPackageBuildContextFixtureV1(),
       resourceArtifacts: [],
       runtimeHost,
       nowUnixMilliseconds: () => 1_700_000_000_000,

@@ -11,12 +11,14 @@ import {
   loadWorldkitRoutePipeline,
   type WorldkitDiagnostic,
 } from "../lib/worldkit-pipeline";
+import { createTrustedCanonicalWorldPackageV1 } from "../lib/trusted-world-package";
 
 export interface InternalWorldBuildArtifactResultV1 {
   readonly ok: boolean;
   readonly exitCode: number;
   readonly diagnostics: readonly WorldkitDiagnostic[];
   readonly normalizedWorldIrHash?: string;
+  readonly worldBuildIdentityHash?: string;
   readonly executionPlanHash?: string;
   readonly outputPath?: string;
 }
@@ -54,13 +56,27 @@ export async function buildWorldArtifactFileV1(
   }
   const pipeline = await loadWorldkitRoutePipeline(absoluteInputPath);
   if (!pipeline.ok) return pipeline;
+  let worldBuildIdentityHash: `sha256:${string}`;
+  try {
+    const directory = await createTrustedCanonicalWorldPackageV1(pipeline);
+    worldBuildIdentityHash = directory.receipt.worldBuildIdentityHash;
+  } catch (error) {
+    return cliFailure(
+      "WORLD_BUILD_IDENTITY_UNAVAILABLE",
+      "The complete World Build identity could not be created.",
+      { cause: error instanceof Error ? error.message : String(error) },
+    );
+  }
   const artifact = {
     kind: "worldkit-build-artifact",
     schemaVersion: 4,
     normalizedWorldIrHash: pipeline.normalizedWorldIrHash,
+    worldBuildIdentityHash,
     executionPlanHash: pipeline.executionPlanHash,
     normalizedWorldIr: pipeline.normalizedWorldIr,
     executionPlan: pipeline.executionPlan,
+    gameplayBootstrap: pipeline.gameplayBootstrap,
+    worldRuntimeBootstrap: pipeline.worldRuntimeBootstrap,
   } as const;
   try {
     await writeAtomic(
@@ -79,6 +95,7 @@ export async function buildWorldArtifactFileV1(
     exitCode: 0,
     diagnostics: [],
     normalizedWorldIrHash: pipeline.normalizedWorldIrHash,
+    worldBuildIdentityHash,
     executionPlanHash: pipeline.executionPlanHash,
     outputPath: absoluteOutputPath,
   };

@@ -13,7 +13,7 @@ import type {
 import type { WorldRuntimeSnapshotV4 } from "@whitebox-world/runtime-contracts";
 import type { PublishWorldReplacementResultV1 } from "@whitebox-world/runtime-host";
 import {
-  type VerifiedWorldPackageDirectoryV2,
+  type VerifiedWorldPackageDirectoryV1,
   type WorldPackageStoreV1,
 } from "@whitebox-world/world-package";
 import { isEqual, isNil } from "lodash-es";
@@ -58,15 +58,18 @@ function identityFor(
 
 function verifiedConfigurationMatches(
   configuration: TrustedRuntimeWorldConfigurationV1,
-  directory: VerifiedWorldPackageDirectoryV2,
+  directory: VerifiedWorldPackageDirectoryV1,
 ): boolean {
   const rootHash = directory.receipt.worldPackageRootHash;
-  return configuration.worldPackageRef === worldPackageRefFromRootHashV1(rootHash) &&
-    configuration.worldPackageBuildReceipt.worldPackageRootHash === rootHash &&
-    configuration.executionPlanHash === directory.receipt.manifest.executionPlanHash &&
-    isEqual(configuration.worldPackageBuildReceipt, directory.receipt) &&
-    isEqual(configuration.executionPlan, directory.executionPlan) &&
-    isEqual(configuration.gameplayBootstrap, directory.gameplayBootstrap);
+  return configuration.worldBuildIdentity.worldPackageRef ===
+      worldPackageRefFromRootHashV1(rootHash) &&
+    configuration.worldBuildIdentity.worldPackageRootHash === rootHash &&
+    isEqual(configuration.worldBuildIdentity, directory.receipt.worldBuildIdentity) &&
+    configuration.sceneSource.executionPlanHash ===
+      directory.receipt.manifest.executionPlanHash &&
+    isEqual(configuration.sceneSource.executionPlan, directory.executionPlan) &&
+    isEqual(configuration.gameplayBootstrap, directory.gameplayBootstrap) &&
+    isEqual(configuration.worldRuntimeBootstrap, directory.worldRuntimeBootstrap);
 }
 
 function mapPublishedResult(
@@ -117,7 +120,7 @@ class DurableWorldChangeRuntimeOwner implements DurableWorldChangeRuntimeOwnerV1
       });
     }
     const directory = await this.worldPackageStore.get(
-      input.worldConfiguration.worldPackageRef,
+      input.worldConfiguration.worldBuildIdentity.worldPackageRef,
     );
     if (
       isNil(directory) ||
@@ -153,7 +156,7 @@ class DurableWorldChangeRuntimeOwner implements DurableWorldChangeRuntimeOwnerV1
           input.committedIdentity.runtimeSessionId !== this.runtimeSessionId ||
           input.committedIdentity.simulationTick !== 0 ||
           input.committedIdentity.worldPackageRootHash !==
-            input.worldConfiguration.worldPackageBuildReceipt.worldPackageRootHash
+            input.worldConfiguration.worldBuildIdentity.worldPackageRootHash
         ) {
           return Object.freeze({
             status: "quarantined" as const,
@@ -174,7 +177,7 @@ class DurableWorldChangeRuntimeOwner implements DurableWorldChangeRuntimeOwnerV1
         this.#recoveryInProgress = true;
         try {
           const directory = await this.worldPackageStore.get(
-            input.worldConfiguration.worldPackageRef,
+            input.worldConfiguration.worldBuildIdentity.worldPackageRef,
           );
           if (
             isNil(directory) ||
@@ -267,7 +270,7 @@ export async function createDurableWorldChangeRuntimeOwnerV1(input: {
   readonly runtimeSessionId: string;
   readonly initialWorldSessionId: string;
   readonly initialWorldConfiguration: TrustedRuntimeWorldConfigurationV1;
-  readonly initialVerifiedDirectory: VerifiedWorldPackageDirectoryV2;
+  readonly initialVerifiedDirectory: VerifiedWorldPackageDirectoryV1;
   readonly worldPackageStore: WorldPackageStoreV1;
 }): Promise<DurableWorldChangeRuntimeOwnerV1> {
   if (

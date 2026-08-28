@@ -1538,8 +1538,6 @@ function assertEvidenceArtifactIdentities(
   if (
     receipt.authoringSpecHash !== report.subject.authoringSpecHash ||
     receipt.normalizedWorldIrHash !== report.subject.normalizedWorldIrHash ||
-    receipt.executionPlanHash !== report.subject.executionPlanHash ||
-    receipt.resourceLockHash !== report.subject.resourceLockHash ||
     receipt.layoutSolveReportHash !== report.subject.layoutSolveReportHash
   ) {
     addReferenceInvalid(
@@ -1922,7 +1920,7 @@ export function validateValidationReportV2(
           "worldPackageRootHash",
           "authoringSpecHash",
           "normalizedWorldIrHash",
-          "executionPlanHash",
+          "worldBuildIdentityHash",
           "resourceLockHash",
           "layoutSolveReportHash",
         ],
@@ -1933,7 +1931,11 @@ export function validateValidationReportV2(
       requireHash(subject.worldPackageRootHash, "/subject/worldPackageRootHash", diagnostics);
       requireHash(subject.authoringSpecHash, "/subject/authoringSpecHash", diagnostics);
       requireHash(subject.normalizedWorldIrHash, "/subject/normalizedWorldIrHash", diagnostics);
-      requireHash(subject.executionPlanHash, "/subject/executionPlanHash", diagnostics);
+      requireHash(
+        subject.worldBuildIdentityHash,
+        "/subject/worldBuildIdentityHash",
+        diagnostics,
+      );
       requireHash(subject.resourceLockHash, "/subject/resourceLockHash", diagnostics);
       requireHash(subject.layoutSolveReportHash, "/subject/layoutSolveReportHash", diagnostics);
     }

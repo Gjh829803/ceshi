@@ -133,7 +133,7 @@ afterEach(async () => {
 });
 
 describe("worldkit CLI", () => {
-  it("loads V4 Route worlds through the V4/V5 pipeline", async () => {
+  it("loads V4 Route worlds through the terminal Canonical Scene Plan pipeline", async () => {
     const directory = await createTemporaryDirectory();
     const inputPath = await writeRouteWorld(directory);
     const route = await loadWorldkitRoutePipeline(inputPath);
@@ -151,11 +151,14 @@ describe("worldkit CLI", () => {
         status: "solved",
       },
       layoutSolveReportHash: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
-      executionPlan: { schemaVersion: 5 },
+      executionPlan: {
+        kind: "worldkit-canonical-scene-execution-plan",
+        schemaVersion: 1,
+      },
     });
   });
 
-  it("locks the authoritative core-control feature into Route V5 plans", async () => {
+  it("locks the authoritative core-control feature into Canonical Route plans", async () => {
     const directory = await createTemporaryDirectory();
     const inputPath = await writeRouteWorld(directory);
     const route = await loadWorldkitRoutePipeline(inputPath);
@@ -176,7 +179,7 @@ describe("worldkit CLI", () => {
     expect(route.gameplayBootstrap.availableCapabilityRefs).toContain(
       CONTROL_TRANSITION_CAPABILITY_REF,
     );
-    expect(route.executionPlan.resourceLockEntries).toContainEqual({
+    expect(route.worldRuntimeBootstrap.runtimeResourceLockEntries).toContainEqual({
       resourceRef: route.gameplayBootstrap.resourceRef,
       resourceKind: "gameplay-bootstrap",
       resolvedVersion: "1",
@@ -205,18 +208,18 @@ describe("worldkit CLI", () => {
     expect(validation).toMatchObject({
       ok: true,
       normalizedWorldIrHash: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
-      executionPlanHash: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+      worldBuildIdentityHash: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
     });
     expect(build).toMatchObject({
       kind: "worldkit-package-command-result",
       command: "build",
       ok: true,
       protocolVersion: 1,
-      packageFormatVersion: 2,
+      packageFormatVersion: 1,
     });
     expect(manifest).toMatchObject({
       kind: "worldkit-world-package-manifest",
-      schemaVersion: 2,
+      schemaVersion: 1,
     });
   });
 
@@ -1419,7 +1422,7 @@ describe("worldkit CLI", () => {
     });
     const artifactText = await readFile(outputPath, "utf8");
     const artifact = JSON.parse(artifactText) as {
-      executionPlan: {
+      worldRuntimeBootstrap: {
         subjectAssets: Array<{ subjectAssetRef: string }>;
         rigProfiles: Array<{ skeletonRootBoneName: string }>;
         animationSets: Array<{ animationBindings: Array<{ actionId: string }> }>;
@@ -1427,7 +1430,7 @@ describe("worldkit CLI", () => {
       };
     };
 
-    expect(artifact.executionPlan.subjectAssets).toEqual([
+    expect(artifact.worldRuntimeBootstrap.subjectAssets).toEqual([
       {
         subjectAssetRef: "worldkit://subject-asset/actor.humanoid.g-bot@2",
         artifactContentHash:
@@ -1438,15 +1441,15 @@ describe("worldkit CLI", () => {
         mediaType: "model/gltf-binary",
       },
     ]);
-    expect(artifact.executionPlan.rigProfiles).toEqual([
+    expect(artifact.worldRuntimeBootstrap.rigProfiles).toEqual([
       expect.objectContaining({ skeletonRootBoneName: "mixamorig:Hips" }),
     ]);
     expect(
-      artifact.executionPlan.animationSets[0]?.animationBindings.map(
+      artifact.worldRuntimeBootstrap.animationSets[0]?.animationBindings.map(
         (binding) => binding.actionId,
       ),
     ).toEqual(G_BOT_ACTION_IDS);
-    expect(artifact.executionPlan.colliderProfiles).toEqual([
+    expect(artifact.worldRuntimeBootstrap.colliderProfiles).toEqual([
       expect.objectContaining({
         colliderProfileRef:
           "worldkit://collider-profile/humanoid.g-bot-capsule@1",
@@ -1475,7 +1478,7 @@ describe("worldkit CLI", () => {
     });
   });
 
-  it("validates V4 files and builds deterministic V4/V5 artifacts", async () => {
+  it("validates V4 files and builds deterministic artifacts with one World Build identity", async () => {
     const directory = await createTemporaryDirectory();
     const inputPath = await writePackageWorld(directory);
     const outputPath = path.join(directory, "dist", "world.build.json");
@@ -1487,18 +1490,32 @@ describe("worldkit CLI", () => {
     const secondBytes = await readFile(outputPath, "utf8");
     const artifact = JSON.parse(firstBytes) as Record<string, unknown>;
 
-    expect(validation).toMatchObject({ ok: true, exitCode: 0, diagnostics: [] });
-    expect(first).toMatchObject({ ok: true, exitCode: 0, outputPath });
+    expect(validation).toMatchObject({
+      ok: true,
+      exitCode: 0,
+      diagnostics: [],
+      worldBuildIdentityHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+    });
+    expect(first).toMatchObject({
+      ok: true,
+      exitCode: 0,
+      outputPath,
+      worldBuildIdentityHash: validation.worldBuildIdentityHash,
+    });
     expect(second.ok).toBe(true);
     expect(firstBytes).toBe(secondBytes);
     expect(artifact).toMatchObject({
       kind: "worldkit-build-artifact",
       schemaVersion: 4,
+      worldBuildIdentityHash: validation.worldBuildIdentityHash,
       normalizedWorldIr: { schemaVersion: 4 },
       executionPlan: {
-        schemaVersion: 5,
-        runtimeBackend: "babylon-havok",
-        initialControlledEntityId: "player",
+        kind: "worldkit-canonical-scene-execution-plan",
+        schemaVersion: 1,
+      },
+      gameplayBootstrap: {
+        kind: "gameplay-bootstrap",
+        version: 1,
       },
     });
     expect(firstBytes).not.toContain(["kit", "Ref"].join(""));

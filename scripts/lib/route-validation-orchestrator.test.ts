@@ -5,17 +5,18 @@ import {
 } from "@whitebox-world/authoring";
 import {
   compileResolvedTraversalLockV1,
-  compileWorldV5,
+  compileCanonicalWorldV1,
 } from "@whitebox-world/compiler";
-import {
-  createGameplayBootstrapResourceLockEntryV1,
-  createGameplayBootstrapV1,
-} from "@whitebox-world/gameplay-contracts";
+import { createGameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
 import {
   canonicalJsonBytes,
   sha256CanonicalJson,
 } from "@whitebox-world/protocol";
-import type { ExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
+import {
+  canonicalResourceLockEntriesV1,
+  type CanonicalSceneExecutionPlanV1,
+  type WorldRuntimeBootstrapV1,
+} from "@whitebox-world/runtime-contracts";
 import {
   BABYLON_TRAVERSAL_RUNTIME_IMPLEMENTATION_IDENTITY_V1,
 } from "@whitebox-world/runtime-babylon";
@@ -55,8 +56,7 @@ import {
 } from "./route-validation-orchestrator.js";
 
 type Hash = `sha256:${string}`;
-const GAMEPLAY_BOOTSTRAP_RESOURCE_LOCK =
-  createGameplayBootstrapResourceLockEntryV1(createGameplayBootstrapV1({
+const GAMEPLAY_BOOTSTRAP = createGameplayBootstrapV1({
     kind: "gameplay-bootstrap",
     id: "route-validation-orchestrator-test.gameplay",
     version: 1,
@@ -67,11 +67,12 @@ const GAMEPLAY_BOOTSTRAP_RESOURCE_LOCK =
     semanticActionDefinitions: [],
     availableCapabilityRefs: [],
     initialRelationshipStates: [],
-  }));
+  });
 
 interface PreparedFixture {
   readonly normalizedWorldIr: NormalizedWorldIRV4;
-  readonly executionPlan: ExecutionPlanV5;
+  readonly executionPlan: CanonicalSceneExecutionPlanV1;
+  readonly worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
   readonly subject: WorldPackageValidationSubjectV1;
 }
 
@@ -252,14 +253,23 @@ function createRouteAuthoringSpec(input: Readonly<{
   };
 }
 
-function subjectForPlan(executionPlan: ExecutionPlanV5): WorldPackageValidationSubjectV1 {
+function subjectForPlan(
+  executionPlan: CanonicalSceneExecutionPlanV1,
+  worldRuntimeBootstrap: WorldRuntimeBootstrapV1,
+): WorldPackageValidationSubjectV1 {
   return Object.freeze({
     kind: "world-package",
     worldPackageRootHash: `sha256:${"f".repeat(64)}` as Hash,
     authoringSpecHash: executionPlan.authoringSpecHash,
     normalizedWorldIrHash: executionPlan.normalizedWorldIrHash as Hash,
-    executionPlanHash: sha256CanonicalJson(executionPlan) as Hash,
-    resourceLockHash: executionPlan.resourceLockHash as Hash,
+    worldBuildIdentityHash: sha256CanonicalJson({
+      worldPackageRootHash: `sha256:${"f".repeat(64)}`,
+      executionPlanHash: sha256CanonicalJson(executionPlan),
+    }) as Hash,
+    resourceLockHash: sha256CanonicalJson(canonicalResourceLockEntriesV1([
+      ...executionPlan.sceneResourceLockEntries,
+      ...worldRuntimeBootstrap.runtimeResourceLockEntries,
+    ])) as Hash,
     layoutSolveReportHash: executionPlan.layout.layoutSolveReportHash as Hash,
   });
 }
@@ -273,23 +283,29 @@ function prepareFixture(spec: AuthoringSpecV4): PreparedFixture {
   ) {
     throw new Error(`normalization failed: ${JSON.stringify(normalized.diagnostics)}`);
   }
-  const compiled = compileWorldV5({
+  const compiled = compileCanonicalWorldV1({
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
-    gameplayBootstrapResourceLock: GAMEPLAY_BOOTSTRAP_RESOURCE_LOCK,
+    gameplayBootstrap: GAMEPLAY_BOOTSTRAP,
+    worldRuntimeBootstrapRef:
+      `worldkit://world-runtime-bootstrap/${normalized.value.id}@1`,
   });
-  if (!compiled.ok || isNil(compiled.executionPlan)) {
+  if (!compiled.ok || isNil(compiled.canonicalSceneExecutionPlan)) {
     throw new Error(`compilation failed: ${JSON.stringify(compiled.diagnostics)}`);
   }
   return {
     normalizedWorldIr: normalized.value,
-    executionPlan: compiled.executionPlan,
-    subject: subjectForPlan(compiled.executionPlan),
+    executionPlan: compiled.canonicalSceneExecutionPlan,
+    worldRuntimeBootstrap: compiled.worldRuntimeBootstrap,
+    subject: subjectForPlan(
+      compiled.canonicalSceneExecutionPlan,
+      compiled.worldRuntimeBootstrap,
+    ),
   };
 }
 
 function fakeRuntimePort(input: Readonly<{
-  executionPlan: ExecutionPlanV5;
+  executionPlan: CanonicalSceneExecutionPlanV1;
   lockReceipt: ResolvedTraversalLockReceiptV1;
   routePathReceipt: RoutePathReceiptV2;
   stalled?: boolean;
@@ -299,7 +315,7 @@ function fakeRuntimePort(input: Readonly<{
   const world = {
     authoringSpecHash: input.executionPlan.authoringSpecHash,
     layoutSolveReportHash: input.executionPlan.layout.layoutSolveReportHash as Hash,
-    resourceLockHash: input.executionPlan.resourceLockHash as Hash,
+    resourceLockHash: lock.lock.resourceLockHash,
     executionPlanHash: sha256CanonicalJson(input.executionPlan) as Hash,
   };
   const runtimeImplementationIdentity = {
@@ -426,7 +442,8 @@ function operationsForFixture(
     compileTraversalLock: ({ executionPlan, traversingEntityId }) =>
       compileResolvedTraversalLockV1({
         normalizedWorldIr: fixture.normalizedWorldIr,
-        executionPlan,
+        canonicalSceneExecutionPlan: executionPlan,
+        worldRuntimeBootstrap: fixture.worldRuntimeBootstrap,
         traversingEntityId,
         runtimeImplementationIdentity:
           BABYLON_TRAVERSAL_RUNTIME_IMPLEMENTATION_IDENTITY_V1,
@@ -470,6 +487,7 @@ describe("orchestrateRouteValidationV1", () => {
   it("runs the real compile, Recast, probe, overlay, and report contracts for a passing Route", async () => {
     const result = await orchestrateRouteValidationV1({
       executionPlan: complete.executionPlan,
+      worldRuntimeBootstrap: complete.worldRuntimeBootstrap,
       subject: complete.subject,
       reportId: "route-real-pass",
     }, operationsForFixture(complete));
@@ -544,6 +562,7 @@ describe("orchestrateRouteValidationV1", () => {
 
     await orchestrateRouteValidationV1({
       executionPlan: complete.executionPlan,
+      worldRuntimeBootstrap: complete.worldRuntimeBootstrap,
       subject: complete.subject,
       reportId: "route-stage-order",
     }, operations);
@@ -564,7 +583,7 @@ describe("orchestrateRouteValidationV1", () => {
   }, 60_000);
 
   it("produces the canonical zero-row failed report without compiling a lock or creating a Runtime", async () => {
-    const executionPlan: ExecutionPlanV5 = {
+    const executionPlan: CanonicalSceneExecutionPlanV1 = {
       ...complete.executionPlan,
       traversal: {
         ...complete.executionPlan.traversal,
@@ -579,7 +598,8 @@ describe("orchestrateRouteValidationV1", () => {
     });
     const result = await orchestrateRouteValidationV1({
       executionPlan,
-      subject: subjectForPlan(executionPlan),
+      worldRuntimeBootstrap: complete.worldRuntimeBootstrap,
+      subject: subjectForPlan(executionPlan, complete.worldRuntimeBootstrap),
       reportId: "route-zero",
     }, operations);
 
@@ -596,6 +616,7 @@ describe("orchestrateRouteValidationV1", () => {
     const operations = operationsForFixture(complete, { compileTraversalLock });
     const input = {
       executionPlan: complete.executionPlan,
+      worldRuntimeBootstrap: complete.worldRuntimeBootstrap,
       subject: complete.subject,
       reportId: " route-invalid ",
       providerHandle: 42,
@@ -618,6 +639,7 @@ describe("orchestrateRouteValidationV1", () => {
     const dependencyReportRefs = ["report://dependency/one"];
     const input = {
       executionPlan: complete.executionPlan,
+      worldRuntimeBootstrap: complete.worldRuntimeBootstrap,
       subject,
       reportId: `route-hidden-${target}`,
       dependencyReportRefs,
@@ -649,7 +671,8 @@ describe("orchestrateRouteValidationV1", () => {
 
     await expect(orchestrateRouteValidationV1({
       executionPlan,
-      subject: subjectForPlan(executionPlan),
+      worldRuntimeBootstrap: complete.worldRuntimeBootstrap,
+      subject: subjectForPlan(executionPlan, complete.worldRuntimeBootstrap),
       reportId: "route-hidden-plan-field",
     }, operations)).rejects.toThrow(
       "ROUTE_VALIDATION_ORCHESTRATION_INPUT_INVALID",
@@ -661,6 +684,7 @@ describe("orchestrateRouteValidationV1", () => {
     const createRuntimeLease = vi.fn();
     const result = await orchestrateRouteValidationV1({
       executionPlan: unreachable.executionPlan,
+      worldRuntimeBootstrap: unreachable.worldRuntimeBootstrap,
       subject: unreachable.subject,
       reportId: "route-unreachable",
     }, operationsForFixture(unreachable, { createRuntimeLease }));
@@ -680,6 +704,7 @@ describe("orchestrateRouteValidationV1", () => {
     const createRuntimeLease = vi.fn();
     const result = await orchestrateRouteValidationV1({
       executionPlan: complete.executionPlan,
+      worldRuntimeBootstrap: complete.worldRuntimeBootstrap,
       subject: complete.subject,
       reportId: "route-incomplete",
     }, operationsForFixture(complete, {
@@ -708,6 +733,7 @@ describe("orchestrateRouteValidationV1", () => {
     const createReport = vi.fn(createRouteValidationReportV2);
     await expect(orchestrateRouteValidationV1({
       executionPlan: complete.executionPlan,
+      worldRuntimeBootstrap: complete.worldRuntimeBootstrap,
       subject: complete.subject,
       reportId: "route-provider-error",
     }, operationsForFixture(complete, {
@@ -723,6 +749,7 @@ describe("orchestrateRouteValidationV1", () => {
   it("keeps a closed failed Probe receipt as gameplay evidence", async () => {
     const result = await orchestrateRouteValidationV1({
       executionPlan: complete.executionPlan,
+      worldRuntimeBootstrap: complete.worldRuntimeBootstrap,
       subject: complete.subject,
       reportId: "route-probe-failure",
     }, operationsForFixture(complete, {
@@ -778,6 +805,7 @@ describe("orchestrateRouteValidationV1", () => {
 
     await expect(orchestrateRouteValidationV1({
       executionPlan: complete.executionPlan,
+      worldRuntimeBootstrap: complete.worldRuntimeBootstrap,
       subject: complete.subject,
       reportId: `route-runtime-${identityKind}-mismatch`,
     }, operations)).rejects.toThrow(
@@ -819,6 +847,7 @@ describe("orchestrateRouteValidationV1", () => {
 
     await expect(orchestrateRouteValidationV1({
       executionPlan: complete.executionPlan,
+      worldRuntimeBootstrap: complete.worldRuntimeBootstrap,
       subject: complete.subject,
       reportId: `route-${phase}-error`,
     }, operations)).rejects.toThrow(message);
@@ -839,6 +868,7 @@ describe("orchestrateRouteValidationV1", () => {
 
     const rejection = await orchestrateRouteValidationV1({
       executionPlan: complete.executionPlan,
+      worldRuntimeBootstrap: complete.worldRuntimeBootstrap,
       subject: complete.subject,
       reportId: "route-aggregate-error",
     }, operations).then(
@@ -863,11 +893,13 @@ describe("orchestrateRouteValidationV1", () => {
     });
     const first = await orchestrateRouteValidationV1({
       executionPlan: multiple.executionPlan,
+      worldRuntimeBootstrap: multiple.worldRuntimeBootstrap,
       subject: multiple.subject,
       reportId: "route-multiple",
     }, operations);
     const second = await orchestrateRouteValidationV1({
       executionPlan: multiple.executionPlan,
+      worldRuntimeBootstrap: multiple.worldRuntimeBootstrap,
       subject: multiple.subject,
       reportId: "route-multiple",
     }, operationsForFixture(multiple));
@@ -889,6 +921,7 @@ describe("orchestrateRouteValidationV1", () => {
     const createReport = vi.fn(createRouteValidationReportV2);
     const result = await orchestrateRouteValidationV1({
       executionPlan: complete.executionPlan,
+      worldRuntimeBootstrap: complete.worldRuntimeBootstrap,
       subject: complete.subject,
       reportId: "route-byte-identity",
     }, operationsForFixture(complete, { createReport }));
@@ -921,11 +954,13 @@ describe("orchestrateRouteValidationV1", () => {
   it("keeps publication rows 1:1 in canonical order and omits overlays for failed rows", async () => {
     const completeResult = await orchestrateRouteValidationV1({
       executionPlan: multiple.executionPlan,
+      worldRuntimeBootstrap: multiple.worldRuntimeBootstrap,
       subject: multiple.subject,
       reportId: "route-publication-order",
     }, operationsForFixture(multiple));
     const unreachableResult = await orchestrateRouteValidationV1({
       executionPlan: unreachable.executionPlan,
+      worldRuntimeBootstrap: unreachable.worldRuntimeBootstrap,
       subject: unreachable.subject,
       reportId: "route-publication-unreachable",
     }, operationsForFixture(unreachable));
@@ -977,6 +1012,7 @@ describe("orchestrateRouteValidationV1", () => {
 
     await expect(orchestrateRouteValidationV1({
       executionPlan: complete.executionPlan,
+      worldRuntimeBootstrap: complete.worldRuntimeBootstrap,
       subject: complete.subject,
       reportId: "route-report-binding",
     }, operationsForFixture(complete, { createReport }))).rejects.toThrow(
@@ -992,6 +1028,7 @@ describe("orchestrateRouteValidationV1", () => {
     );
     const promise = orchestrateRouteValidationV1({
       executionPlan: complete.executionPlan,
+      worldRuntimeBootstrap: complete.worldRuntimeBootstrap,
       subject: complete.subject,
       reportId: "route-runtime-assets",
       runtimeAssetResolver: resolver,

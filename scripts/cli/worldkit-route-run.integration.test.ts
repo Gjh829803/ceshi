@@ -195,7 +195,7 @@ describe("worldkit run trusted Route Host transport", () => {
         authoringSpecHash: pipeline.normalizedWorldIr.authoringSpecHash,
         normalizedWorldIrHash: pipeline.normalizedWorldIrHash,
         executionPlanHash: pipeline.executionPlanHash,
-        resourceLockHash: pipeline.executionPlan.resourceLockHash,
+        resourceLockHash: pipeline.normalizedWorldIr.resources.resourceLockHash,
         layoutSolveReportHash: pipeline.layoutSolveReportHash,
       };
       const port = await allocateAvailablePort();

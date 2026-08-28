@@ -1149,17 +1149,24 @@ export function createStudio(options = {}) {
     ) return false;
     const subject = report.subject;
     const receipt = report.routeValidationSetReceipt;
-    const expectedIdentity = {
+    const expectedSharedIdentity = {
       authoringSpecHash: executionPlan.authoringSpecHash,
       normalizedWorldIrHash: build.normalizedWorldIrHash,
-      executionPlanHash: build.executionPlanHash,
-      resourceLockHash: executionPlan.resourceLockHash,
       layoutSolveReportHash: executionPlan.layout?.layoutSolveReportHash,
     };
-    for (const [field, expected] of Object.entries(expectedIdentity)) {
+    for (const [field, expected] of Object.entries(expectedSharedIdentity)) {
       if (!/^sha256:[a-f0-9]{64}$/.test(expected ?? "")) return false;
       if (subject?.[field] !== expected || receipt?.[field] !== expected) return false;
     }
+    if (
+      subject?.worldBuildIdentityHash !== build.worldBuildIdentityHash ||
+      Object.hasOwn(subject ?? {}, "executionPlanHash") ||
+      !/^sha256:[a-f0-9]{64}$/.test(subject?.worldPackageRootHash ?? "") ||
+      !/^sha256:[a-f0-9]{64}$/.test(subject?.resourceLockHash ?? "") ||
+      receipt?.executionPlanHash !== build.executionPlanHash ||
+      receipt?.resourceLockHash !==
+        build.normalizedWorldIr?.resources?.resourceLockHash
+    ) return false;
     const expectedSetHash = hashCanonicalJson({
       kind: "route-validation-required-route-set",
       schemaVersion: 1,
@@ -1321,11 +1328,15 @@ export function createStudio(options = {}) {
       !Array.isArray(implementationMap.visualTargetMappings) || implementationMap.visualTargetMappings.length === 0 ||
       !Array.isArray(implementationMap.visualCaptureGroups) || implementationMap.visualCaptureGroups.length === 0 ||
       build?.kind !== "worldkit-build-artifact" || build.schemaVersion !== 4 ||
-      build.executionPlan?.kind !== "worldkit-execution-plan" || build.executionPlan.schemaVersion !== 5 ||
+      build.executionPlan?.kind !== "worldkit-canonical-scene-execution-plan" ||
+      build.executionPlan.schemaVersion !== 1 ||
+      !/^sha256:[a-f0-9]{64}$/.test(build.worldBuildIdentityHash ?? "") ||
       !/^sha256:[a-f0-9]{64}$/.test(build.executionPlanHash ?? "") ||
       snapshot?.kind !== "worldkit-runtime-snapshot" || snapshot.schemaVersion !== 4 ||
+      snapshot.worldBuildIdentityHash !== build.worldBuildIdentityHash ||
       captureTargets?.kind !== "worldkit-whitebox-triview-manifest" || captureTargets.schemaVersion !== 1 ||
-      captureTargets.executionPlanHash !== build.executionPlanHash ||
+      captureTargets.worldBuildIdentityHash !== build.worldBuildIdentityHash ||
+      Object.hasOwn(captureTargets, "executionPlanHash") ||
       !Array.isArray(captureTargets.whiteboxTriviews) || captureTargets.whiteboxTriviews.length === 0 ||
       captureTargets.whiteboxTriviews.length > 5
     ) return false;

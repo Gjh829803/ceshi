@@ -52,6 +52,7 @@ export interface WorldPackageCommandSummaryV1 {
   readonly manifestHash: `sha256:${string}`;
   readonly authoringSpecHash: `sha256:${string}`;
   readonly normalizedWorldIrHash: `sha256:${string}`;
+  readonly worldBuildIdentityHash: `sha256:${string}`;
   readonly executionPlanHash: `sha256:${string}`;
   readonly registryLockHash: `sha256:${string}`;
   readonly layoutSolveReportHash: `sha256:${string}`;
@@ -164,6 +165,7 @@ function summary(
     manifestHash: receipt.manifestHash,
     authoringSpecHash: manifest.authoringSpecHash,
     normalizedWorldIrHash: manifest.normalizedWorldIrHash,
+    worldBuildIdentityHash: receipt.worldBuildIdentityHash,
     executionPlanHash: manifest.executionPlanHash,
     registryLockHash: manifest.registryLockHash,
     layoutSolveReportHash: manifest.layoutSolveReportHash,
