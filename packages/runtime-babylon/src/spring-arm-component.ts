@@ -4,7 +4,7 @@ import {
   SceneComponentV1,
   type PhysicsWorldQueryPortV1,
 } from "@whitebox-world/runtime-framework";
-import type { Vec3 } from "@whitebox-world/runtime-contracts";
+import type { RuntimeVec3V1 } from "@whitebox-world/runtime-contracts";
 
 export interface SpringArmSolveRequestV1 {
   readonly subjectEntityId: string;
@@ -21,7 +21,7 @@ export interface SpringArmSolveResultV1 {
   readonly effectiveArmLengthMeters: number;
   readonly isCollisionRetracted: boolean;
   readonly collisionHitEntityId?: string;
-  readonly collisionHitPositionXYZ?: Vec3;
+  readonly collisionHitPositionXYZ?: RuntimeVec3V1;
 }
 
 export interface SpringArmTransactionStateV1 {
@@ -33,8 +33,8 @@ function moveTowards(current: number, target: number, maximumDelta: number): num
   return current + Math.sign(target - current) * maximumDelta;
 }
 
-function freezeVec3(value: Vector3): Vec3 {
-  return Object.freeze([value.x, value.y, value.z]) as Vec3;
+function freezeVec3(value: Vector3): RuntimeVec3V1 {
+  return Object.freeze([value.x, value.y, value.z]) as RuntimeVec3V1;
 }
 
 /**
@@ -100,7 +100,7 @@ export class SpringArmComponentV1 extends SceneComponentV1 {
       isCollisionRetracted: effectiveArmLengthMeters < distance - 0.000001,
       ...(hit?.hitEntityId === undefined ? {} : { collisionHitEntityId: hit.hitEntityId }),
       ...(hit === undefined ? {} : {
-        collisionHitPositionXYZ: Object.freeze([...hit.hitPositionMetersXYZ]) as Vec3,
+        collisionHitPositionXYZ: Object.freeze([...hit.hitPositionMetersXYZ]) as RuntimeVec3V1,
       }),
     };
   }

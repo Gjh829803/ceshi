@@ -4,14 +4,14 @@ import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
 import { VertexData } from "@babylonjs/core/Meshes/mesh.vertexData.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
 import type {
-  ExecutionObjectV3,
-  ExecutionWaterV3,
+  CanonicalSceneObjectV1,
+  CanonicalSceneWaterV1,
 } from "@whitebox-world/runtime-contracts";
 
 import type { WhiteboxMaterials } from "./materials.js";
 import { triangulatePolygonMetersXZV1 } from "./polygon-triangulation.js";
 
-function applyTransform(mesh: Mesh, object: ExecutionObjectV3): void {
+function applyTransform(mesh: Mesh, object: CanonicalSceneObjectV1): void {
   mesh.position = new Vector3(...object.transform.positionMetersXYZ);
   const [rotationX, rotationY, rotationZ] =
     object.transform.rotationEulerRadiansXYZ;
@@ -28,7 +28,7 @@ function applyTransform(mesh: Mesh, object: ExecutionObjectV3): void {
 }
 
 export function createBabylonObjectMeshV1(
-  object: ExecutionObjectV3,
+  object: CanonicalSceneObjectV1,
   materials: WhiteboxMaterials,
   scene: Scene,
 ): Mesh {
@@ -69,7 +69,7 @@ export function createBabylonObjectMeshV1(
 }
 
 export function createBabylonWaterMeshV1(
-  water: ExecutionWaterV3,
+  water: CanonicalSceneWaterV1,
   materials: WhiteboxMaterials,
   scene: Scene,
 ): Mesh {

@@ -4,7 +4,7 @@ import { HavokPlugin } from "@babylonjs/core/Physics/v2/Plugins/havokPlugin.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
 import "@babylonjs/core/Physics/joinedPhysicsEngineComponent.js";
 
-import type { Vec3 } from "@whitebox-world/runtime-contracts";
+import type { RuntimeVec3V1 } from "@whitebox-world/runtime-contracts";
 
 let browserHavokPromise: ReturnType<typeof HavokPhysics> | undefined;
 let injectedHavokPromise: ReturnType<typeof HavokPhysics> | undefined;
@@ -20,7 +20,7 @@ export const FIXED_TIME_STEP_SECONDS = 1 / 60;
 
 export async function enableHavokPhysics(
   scene: Scene,
-  gravity: Vec3,
+  gravity: RuntimeVec3V1,
   wasmBinary?: ArrayBuffer,
 ): Promise<HavokPlugin> {
   const havokPromise = wasmBinary === undefined

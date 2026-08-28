@@ -3,12 +3,12 @@ import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js"
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
 import { createValidAuthoringSpec } from "@whitebox-world/authoring/testing";
-import type { ExecutionTerrainV3 } from "@whitebox-world/runtime-contracts";
+import type { CanonicalSceneTerrainV1 } from "@whitebox-world/runtime-contracts";
 import * as terrainSurface from "@whitebox-world/terrain-surface";
 import { describe, expect, it } from "vitest";
 
 import { createTerrainMesh } from "./terrain.js";
-import { compileRuntimeTestPlanV5 } from "./runtime-test-plan.js";
+import { compileRuntimeTestScenePlanV1 } from "./runtime-test-plan.js";
 
 type HeightfieldEmitter = (
   input: terrainSurface.TriangleHeightfieldSurfaceInput,
@@ -30,7 +30,7 @@ function emitter(): HeightfieldEmitter {
 
 describe("Babylon terrain topology", () => {
   it("uses canonical non-square mesh bytes without changing world placement", () => {
-    const terrain: ExecutionTerrainV3 = {
+    const terrain: CanonicalSceneTerrainV1 = {
       entityId: "terrain-offset",
       centerMetersXZ: [10, -4],
       sizeMetersXZ: [4, 6],
@@ -94,7 +94,7 @@ describe("Babylon terrain topology", () => {
   });
 
   it("does not retain a partial Mesh when canonical input validation fails", () => {
-    const terrain: ExecutionTerrainV3 = {
+    const terrain: CanonicalSceneTerrainV1 = {
       entityId: "terrain-invalid",
       centerMetersXZ: [0, 0],
       sizeMetersXZ: [2, 2],
@@ -138,7 +138,7 @@ describe("Babylon terrain topology", () => {
     terrainNode.components.terrain.source.relief = "flat";
     terrainNode.components.terrain.source.baseHeightMeters = 0;
     terrainNode.components.terrain.source.amplitudeMeters = 0;
-    const terrain = compileRuntimeTestPlanV5(authoring).terrain;
+    const terrain = compileRuntimeTestScenePlanV1(authoring).terrain;
     const engine = new NullEngine();
     const scene = new Scene(engine);
     const material = new StandardMaterial("terrain-material-large-1km", scene);

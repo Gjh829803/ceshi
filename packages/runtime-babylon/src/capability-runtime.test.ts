@@ -2,7 +2,11 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
-import type { ExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
+import { createGameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
+import {
+  createWorldRuntimeBootstrapV1,
+  type CanonicalSceneExecutionPlanV1,
+} from "@whitebox-world/runtime-contracts";
 import { describe, expect, it } from "vitest";
 
 // Test-only Registry access via a cross-workspace relative path (matching the
@@ -13,7 +17,13 @@ import { createValidAuthoringSpecV4 } from "../../authoring/src/test-fixture";
 import { BabylonWorldRuntime } from "./babylon-world-runtime";
 import { BABYLON_GAMEPLAY_RUNTIME_INTERNAL } from "./gameplay-runtime-internal";
 import { bindRuntimeTestPossession } from "./runtime-test-possession";
-import { compileRuntimeTestPlanV5 } from "./runtime-test-plan";
+import {
+  compileRuntimeTestScenePlanV1,
+  registerRuntimeTestWorldArtifactsV1,
+  runtimeTestSubjectsForPlanV1,
+  runtimeTestWorldArtifactsForPlanV1,
+  runtimeTestWorldInputForPlanV1,
+} from "./runtime-test-plan";
 
 function setCameraProfile(runtime: BabylonWorldRuntime, cameraRigProfileRef: string) {
   return runtime.setCameraViewPreference({
@@ -79,27 +89,91 @@ const CAMERA_PROFILES = [
 const MEDIUM_FEEL_REF = "worldkit://control-feel-profile/humanoid.medium-ground@1";
 const HEAVY_FEEL_REF = "worldkit://control-feel-profile/humanoid.heavy-ground@1";
 
-function withExtraCapabilitySubject(executionPlan: ExecutionPlanV5): ExecutionPlanV5 {
-  const player = executionPlan.subjects[0];
+function rebuildRuntimeBootstrap(
+  executionPlan: CanonicalSceneExecutionPlanV1,
+  patch: Partial<
+    Omit<
+      ReturnType<typeof runtimeTestWorldArtifactsForPlanV1>["worldRuntimeBootstrap"],
+      "contentHash"
+    >
+  >,
+) {
+  const { contentHash: _contentHash, ...body } =
+    runtimeTestWorldArtifactsForPlanV1(executionPlan).worldRuntimeBootstrap;
+  return createWorldRuntimeBootstrapV1({ ...body, ...patch });
+}
+
+function withExtraCapabilitySubject(executionPlan: CanonicalSceneExecutionPlanV1): CanonicalSceneExecutionPlanV1 {
+  const artifacts = runtimeTestWorldArtifactsForPlanV1(executionPlan);
+  const player = runtimeTestSubjectsForPlanV1(executionPlan)[0];
   if (player === undefined) {
     throw new Error("Expected a compiled capability Subject.");
   }
-  return {
-    ...executionPlan,
-    subjects: [
-      player,
-      {
-        ...player,
-        entityId: "extra",
-        spawnAnchorEntityId: "spawn-extra",
-        spawnSubjectOriginPositionMetersXYZ: [
-          player.spawnSubjectOriginPositionMetersXYZ[0] + 4,
-          player.spawnSubjectOriginPositionMetersXYZ[1],
-          player.spawnSubjectOriginPositionMetersXYZ[2],
-        ],
-      },
+  const subjects = [
+    player,
+    {
+      ...player,
+      entityId: "extra",
+      spawnAnchorEntityId: "spawn-extra",
+      spawnSubjectOriginPositionMetersXYZ: [
+        player.spawnSubjectOriginPositionMetersXYZ[0] + 4,
+        player.spawnSubjectOriginPositionMetersXYZ[1],
+        player.spawnSubjectOriginPositionMetersXYZ[2],
+      ] as const,
+    },
+  ] as const;
+  const playerEntityDescriptor = artifacts.gameplayBootstrap.entityDescriptors
+    .find((descriptor) => descriptor.id === player.entityId);
+  if (playerEntityDescriptor === undefined) {
+    throw new Error("Expected a compiled capability Gameplay entity.");
+  }
+  const {
+    contentHash: _gameplayBootstrapContentHash,
+    ...gameplayBootstrapBody
+  } = artifacts.gameplayBootstrap;
+  const gameplayBootstrap = createGameplayBootstrapV1({
+    ...gameplayBootstrapBody,
+    entityDescriptors: [
+      ...artifacts.gameplayBootstrap.entityDescriptors,
+      { ...playerEntityDescriptor, id: "extra" },
     ],
+  });
+  const nextBootstrap = rebuildRuntimeBootstrap(executionPlan, {
+    gameplayBootstrapRef: gameplayBootstrap.resourceRef,
+    gameplayBootstrapHash: gameplayBootstrap.contentHash,
+    runtimeResourceLockEntries:
+      artifacts.worldRuntimeBootstrap.runtimeResourceLockEntries.map((entry) =>
+        entry.resourceKind === "gameplay-bootstrap"
+          ? { ...entry, contentHash: gameplayBootstrap.contentHash }
+          : entry
+      ),
+    subjectRuntimeDescriptors: subjects.map((subject) => {
+      const {
+        spawnAnchorEntityId: _spawnAnchorEntityId,
+        spawnSubjectOriginPositionMetersXYZ: _spawnSubjectOriginPositionMetersXYZ,
+        spawnSubjectFacingRadians: _spawnSubjectFacingRadians,
+        ...descriptor
+      } = subject;
+      return descriptor;
+    }),
+  });
+  const nextPlan: CanonicalSceneExecutionPlanV1 = {
+    ...executionPlan,
+    worldRuntimeBootstrapHash: nextBootstrap.contentHash,
+    subjectInstances: subjects.map((subject) => ({
+      entityId: subject.entityId,
+      spawnAnchorEntityId: subject.spawnAnchorEntityId,
+      subjectOriginPositionMetersXYZ: subject.spawnSubjectOriginPositionMetersXYZ,
+      subjectFacingRadians: subject.spawnSubjectFacingRadians,
+    })),
   };
+  registerRuntimeTestWorldArtifactsV1({
+    ...artifacts,
+    executionPlan: nextPlan,
+    gameplayBootstrap,
+    worldRuntimeBootstrap: nextBootstrap,
+  });
+  return nextPlan;
 }
 
 function createFlatTerrainCapabilitySpec() {
@@ -117,7 +191,7 @@ function createFlatTerrainCapabilitySpec() {
   return spec;
 }
 
-function createGbotCapabilityExecutionPlan(): ExecutionPlanV5 {
+function createGbotCapabilityExecutionPlan(): CanonicalSceneExecutionPlanV1 {
   const spec = createFlatTerrainCapabilitySpec();
   const subject = spec.nodes.find((node) => node.kind === "subject");
   if (subject?.kind !== "subject") {
@@ -125,16 +199,16 @@ function createGbotCapabilityExecutionPlan(): ExecutionPlanV5 {
   }
   subject.subjectDefinitionRef =
     "worldkit://subject-definition/humanoid.g-bot@2";
-  return compileRuntimeTestPlanV5(spec, {
+  return compileRuntimeTestScenePlanV1(spec, {
     subjectResourceRegistry: builtInSubjectResourceRegistry,
   });
 }
 
 async function createBoundGbotRuntime(
-  executionPlan: ExecutionPlanV5,
+  executionPlan: CanonicalSceneExecutionPlanV1,
 ): Promise<BabylonWorldRuntime> {
   const runtime = await BabylonWorldRuntime.create({
-    executionPlan,
+    ...runtimeTestWorldInputForPlanV1(executionPlan),
     havokWasmBinary,
     subjectAssetResolver: {
       async resolveSubjectAsset() {
@@ -152,7 +226,8 @@ async function createBoundGbotRuntime(
   });
   await bindRuntimeTestPossession(
     runtime,
-    executionPlan.initialControlledEntityId,
+    runtimeTestWorldArtifactsForPlanV1(executionPlan).worldRuntimeBootstrap
+      .initialControlledEntityId,
   );
   return runtime;
 }
@@ -225,14 +300,15 @@ describe("capability package runtime smoke tests", () => {
     const subjectDefinitionRef =
       "worldkit://subject-definition/humanoid.g-bot@2";
     const executionPlan = createGbotCapabilityExecutionPlan();
-    const gBotAssetPart = executionPlan.subjects[0]?.visualParts.find(
+    const subject = runtimeTestSubjectsForPlanV1(executionPlan)[0];
+    const gBotAssetPart = subject?.visualParts.find(
       (part) => part.id === "body.asset",
     );
     expect(gBotAssetPart?.localTransform.rotationEulerRadiansXYZ[1]).toBeCloseTo(
       Math.PI,
       12,
     );
-    expect(executionPlan.subjects[0]?.sockets.map((socket) => socket.id).sort())
+    expect(subject?.sockets.map((socket) => socket.id).sort())
       .toEqual([
         "CameraTarget3D",
         "FirstPersonView",
@@ -242,7 +318,7 @@ describe("capability package runtime smoke tests", () => {
         "ThirdPersonTarget",
         "hand.right",
       ]);
-    expect(executionPlan.subjects[0]?.capabilityAssembly).toBeDefined();
+    expect(subject?.capabilityAssembly).toBeDefined();
     const runtime = await createBoundGbotRuntime(executionPlan);
     try {
       const snapshot = await runtime.runFixedInput({
@@ -463,7 +539,8 @@ describe("capability package runtime smoke tests", () => {
       expect(runtime.snapshot().subjectStatesByEntityId.player)
         .not.toHaveProperty("controlParameterTuning");
 
-      const capabilityAssembly = executionPlan.subjects[0]!.capabilityAssembly;
+      const capabilitySubject = runtimeTestSubjectsForPlanV1(executionPlan)[0]!;
+      const capabilityAssembly = capabilitySubject.capabilityAssembly;
       const defaultMotionProfileRef = capabilityAssembly.defaultMotionProfile.resourceRef;
       const orbitProfile = capabilityAssembly.cameraContext.cameraRigProfiles.find(
         (profile) =>
@@ -488,7 +565,7 @@ describe("capability package runtime smoke tests", () => {
         subjectEntityId: "player",
         expectedSubjectDefinitionRef: subjectDefinitionRef,
         expectedSubjectDefinitionContentHash:
-          executionPlan.subjects[0]!.subjectDefinitionHash,
+          capabilitySubject.subjectDefinitionHash,
         selectedMotionProfileRef: defaultMotionProfileRef,
         selectedControlFeelProfileRef:
           "worldkit://control-feel-profile/unknown.unlisted@1",
@@ -501,7 +578,7 @@ describe("capability package runtime smoke tests", () => {
         subjectEntityId: "player",
         expectedSubjectDefinitionRef: subjectDefinitionRef,
         expectedSubjectDefinitionContentHash:
-          executionPlan.subjects[0]!.subjectDefinitionHash,
+          capabilitySubject.subjectDefinitionHash,
         selectedMotionProfileRef: defaultMotionProfileRef,
         selectedControlFeelProfileRef,
         selectedControlProfileRef:
@@ -522,7 +599,7 @@ describe("capability package runtime smoke tests", () => {
         subjectEntityId: "player",
         expectedSubjectDefinitionRef: subjectDefinitionRef,
         expectedSubjectDefinitionContentHash:
-          executionPlan.subjects[0]!.subjectDefinitionHash,
+          capabilitySubject.subjectDefinitionHash,
         selectedMotionProfileRef: defaultMotionProfileRef,
         selectedControlFeelProfileRef:
           "worldkit://control-feel-profile/humanoid.heavy-ground@1",
@@ -571,16 +648,26 @@ describe("capability package runtime smoke tests", () => {
 
   it("applies unsupported gravity to the canonical G Bot instead of hovering", async () => {
     const baseExecutionPlan = createGbotCapabilityExecutionPlan();
-    const executionPlan = {
+    const baseArtifacts = runtimeTestWorldArtifactsForPlanV1(baseExecutionPlan);
+    const initialControlledEntityId =
+      baseArtifacts.worldRuntimeBootstrap.initialControlledEntityId;
+    const executionPlan: CanonicalSceneExecutionPlanV1 = {
       ...structuredClone(baseExecutionPlan),
       waters: [],
+      subjectInstances: baseExecutionPlan.subjectInstances.map((subject) =>
+        subject.entityId === initialControlledEntityId
+          ? { ...subject, subjectOriginPositionMetersXYZ: [0, 8, 30] }
+          : subject
+      ),
     };
-    const initialControlledEntityId = executionPlan.initialControlledEntityId;
-    const controlledSubject = executionPlan.subjects.find(
+    const controlledSubject = executionPlan.subjectInstances.find(
       (subject) => subject.entityId === initialControlledEntityId,
     );
     if (controlledSubject === undefined) throw new Error("Controlled Subject missing.");
-    controlledSubject.spawnSubjectOriginPositionMetersXYZ = [0, 8, 30];
+    registerRuntimeTestWorldArtifactsV1({
+      ...baseArtifacts,
+      executionPlan,
+    });
     const runtime = await createBoundGbotRuntime(executionPlan);
     try {
       const landed = await runtime.runFixedInput({ actions: [], ticks: 300 });
@@ -602,8 +689,9 @@ describe("capability package runtime smoke tests", () => {
 
   it("rejects runtime Motion Profile switching for the Golden Humanoid authority", async () => {
     const baseExecutionPlan = createGbotCapabilityExecutionPlan();
-    const executionPlan = structuredClone(baseExecutionPlan);
-    const subject = executionPlan.subjects[0]!;
+    const artifacts = runtimeTestWorldArtifactsForPlanV1(baseExecutionPlan);
+    let executionPlan = structuredClone(baseExecutionPlan);
+    const subject = structuredClone(runtimeTestSubjectsForPlanV1(baseExecutionPlan)[0]!);
     const assembly = subject.capabilityAssembly;
     const originalKernelRef = "worldkit://motion-kernel/free-ground@1";
     const aliasedKernelRef = "worldkit://motion-kernel/custom-steering-implementation@1";
@@ -630,6 +718,29 @@ describe("capability package runtime smoke tests", () => {
       }
     }
     optionalKernel.resourceRef = aliasedKernelRef;
+    const {
+      spawnAnchorEntityId: _spawnAnchorEntityId,
+      spawnSubjectOriginPositionMetersXYZ: _spawnSubjectOriginPositionMetersXYZ,
+      spawnSubjectFacingRadians: _spawnSubjectFacingRadians,
+      ...subjectDescriptor
+    } = subject;
+    const worldRuntimeBootstrap = rebuildRuntimeBootstrap(baseExecutionPlan, {
+      subjectRuntimeDescriptors:
+        artifacts.worldRuntimeBootstrap.subjectRuntimeDescriptors.map(
+          (candidate) => candidate.entityId === subject.entityId
+            ? subjectDescriptor
+            : candidate,
+        ),
+    });
+    executionPlan = {
+      ...executionPlan,
+      worldRuntimeBootstrapHash: worldRuntimeBootstrap.contentHash,
+    };
+    registerRuntimeTestWorldArtifactsV1({
+      ...artifacts,
+      executionPlan,
+      worldRuntimeBootstrap,
+    });
 
     const runtime = await createBoundGbotRuntime(executionPlan);
     try {
@@ -682,8 +793,12 @@ describe("capability package runtime smoke tests", () => {
   it("keeps every Golden Control Feel locked and reset clears Camera authoring state", async () => {
     const baseExecutionPlan = createGbotCapabilityExecutionPlan();
     const executionPlan = withExtraCapabilitySubject(baseExecutionPlan);
-    const playerSubject = executionPlan.subjects[0]!;
-    const extraSubject = executionPlan.subjects[1]!;
+    const subjects = runtimeTestSubjectsForPlanV1(executionPlan);
+    const playerSubject = subjects.find((subject) => subject.entityId === "player");
+    const extraSubject = subjects.find((subject) => subject.entityId === "extra");
+    if (playerSubject === undefined || extraSubject === undefined) {
+      throw new Error("Expected two capability Subjects.");
+    }
     const capabilityAssembly = playerSubject.capabilityAssembly;
     const orbitProfile = capabilityAssembly.cameraContext.cameraRigProfiles.find(
       (profile) => profile.resourceRef === "worldkit://camera-profile/orbit.medium@1",
@@ -743,8 +858,12 @@ describe("capability package runtime smoke tests", () => {
   it("clears the previous owner's Camera selection and preview after Gameplay possession commit", async () => {
     const baseExecutionPlan = createGbotCapabilityExecutionPlan();
     const executionPlan = withExtraCapabilitySubject(baseExecutionPlan);
-    const playerSubject = executionPlan.subjects[0]!;
-    const extraSubject = executionPlan.subjects[1]!;
+    const subjects = runtimeTestSubjectsForPlanV1(executionPlan);
+    const playerSubject = subjects.find((subject) => subject.entityId === "player");
+    const extraSubject = subjects.find((subject) => subject.entityId === "extra");
+    if (playerSubject === undefined || extraSubject === undefined) {
+      throw new Error("Expected two capability Subjects.");
+    }
     const capabilityAssembly = playerSubject.capabilityAssembly;
     const orbitProfile = capabilityAssembly.cameraContext.cameraRigProfiles.find(
       (profile) => profile.resourceRef === "worldkit://camera-profile/orbit.medium@1",

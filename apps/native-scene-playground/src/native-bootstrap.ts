@@ -1,11 +1,11 @@
 import type {
   BabylonNativeSceneBootstrapV1,
-  ExecutionPlanV5,
 } from "@whitebox-world/runtime-contracts";
 import {
   parseBabylonNativeSceneBootstrapV1,
-  parseExecutionPlanV5,
+  parseWorldRuntimeBootstrapV1,
 } from "@whitebox-world/runtime-contracts";
+import { parseGameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
 import type {
   BabylonNativeLockedAssetResolverV1,
   BabylonNativeSceneAdmissionBudgetV1,
@@ -14,23 +14,32 @@ import type {
   SubjectAssetResolverV1,
 } from "@whitebox-world/runtime-babylon";
 
-import gBotWorldBuild from
-  "../../../examples/evidence/g-bot-subject-world/world.build.json";
+import cloudRidgeGameplayBootstrap from
+  "./cloud-ridge-gameplay-bootstrap.json";
+import cloudRidgeWorldRuntimeBootstrap from
+  "./cloud-ridge-world-runtime-bootstrap.json";
 
-const frozenGbotPlan = parseExecutionPlanV5(
-  (gBotWorldBuild as Readonly<{ executionPlan: unknown }>).executionPlan,
+export const CLOUD_RIDGE_GAMEPLAY_BOOTSTRAP_V1 = parseGameplayBootstrapV1(
+  cloudRidgeGameplayBootstrap,
 );
-const controlledSubject = frozenGbotPlan.subjects.find(
-  ({ entityId }) => entityId === frozenGbotPlan.initialControlledEntityId,
+export const CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1 =
+  parseWorldRuntimeBootstrapV1(cloudRidgeWorldRuntimeBootstrap);
+const controlledSubject =
+  CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1.subjectRuntimeDescriptors.find(
+    ({ entityId }) =>
+      entityId ===
+        CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1.initialControlledEntityId,
 );
 if (controlledSubject === undefined) {
   throw new Error("WORLDKIT_NATIVE_SCENE_BOOTSTRAP_SUBJECT_MISSING");
 }
-const gameplayBootstrapRef = frozenGbotPlan.resourceLockEntries.find(
-  ({ resourceKind }) => resourceKind === "gameplay-bootstrap",
-)?.resourceRef;
-if (gameplayBootstrapRef === undefined) {
-  throw new Error("WORLDKIT_NATIVE_SCENE_GAMEPLAY_BOOTSTRAP_REF_MISSING");
+if (
+  CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1.gameplayBootstrapRef !==
+      CLOUD_RIDGE_GAMEPLAY_BOOTSTRAP_V1.resourceRef ||
+  CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1.gameplayBootstrapHash !==
+      CLOUD_RIDGE_GAMEPLAY_BOOTSTRAP_V1.contentHash
+) {
+  throw new Error("WORLDKIT_NATIVE_SCENE_GAMEPLAY_BOOTSTRAP_MISMATCH");
 }
 
 export const CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1:
@@ -42,16 +51,22 @@ export const CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1:
     nativeSceneApiRef: "worldkit://native-scene-api/babylon@1",
     nativeSceneProfileRef:
       "worldkit://native-scene-profile/whitebox.standard@1",
-    gameplayBootstrapRef,
-    initialControlledEntityId: frozenGbotPlan.initialControlledEntityId,
+    gameplayBootstrapRef: CLOUD_RIDGE_GAMEPLAY_BOOTSTRAP_V1.resourceRef,
+    initialControlledEntityId:
+      CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1.initialControlledEntityId,
     gravityMetersPerSecondSquaredXYZ:
-      frozenGbotPlan.gravityMetersPerSecondSquaredXYZ,
+      CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1
+        .gravityMetersPerSecondSquaredXYZ,
     initialCamera: {
       mode: "third-person",
-      pitchRadians: frozenGbotPlan.camera.pitchRadians,
-      distanceMeters: frozenGbotPlan.camera.distanceMeters,
-      fovDegrees: frozenGbotPlan.camera.fovDegrees,
-      targetHeightMeters: frozenGbotPlan.camera.targetHeightMeters,
+      pitchRadians:
+        CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1.initialCamera.pitchRadians,
+      distanceMeters:
+        CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1.initialCamera.distanceMeters,
+      fovDegrees:
+        CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1.initialCamera.fovDegrees,
+      targetHeightMeters:
+        CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1.initialCamera.targetHeightMeters,
     },
     seed: 0x5eed_c10d,
     spawnMarkerId: "player-spawn",
@@ -69,29 +84,6 @@ export const cloudRidgeLockedAssetResolver:
     async resolve() {
       throw new Error("WORLDKIT_NATIVE_SCENE_ASSET_NOT_SELECTED");
     },
-  });
-
-/**
- * Frozen gameplay/resource closure only. Native Runtime ignores its terrain,
- * water, object and static-collider geometry and replaces the initial spawn
- * from the registered marker without mutating this value.
- */
-export const CLOUD_RIDGE_GAMEPLAY_EXECUTION_PLAN_V1: ExecutionPlanV5 =
-  Object.freeze({
-    ...frozenGbotPlan,
-    id: "cloud-ridge-native-gameplay-bootstrap",
-    gravityMetersPerSecondSquaredXYZ:
-      CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1.gravityMetersPerSecondSquaredXYZ,
-    camera: Object.freeze({
-      ...frozenGbotPlan.camera,
-      pitchRadians: CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1.initialCamera.pitchRadians,
-      distanceMeters: CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1.initialCamera.distanceMeters,
-      fovDegrees: CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1.initialCamera.fovDegrees,
-      targetHeightMeters:
-        CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1.initialCamera.targetHeightMeters,
-    }),
-    subjects: Object.freeze([controlledSubject]),
-    initialRelationships: Object.freeze([]),
   });
 
 const SUBJECT_ASSET_URI_BY_REF: Readonly<Record<string, string>> = Object.freeze({

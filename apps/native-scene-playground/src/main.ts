@@ -15,9 +15,10 @@ import type {
 import { createCloudRidgeNativeSceneControllerV1 } from
   "./cloud-ridge-scene.js";
 import {
-  CLOUD_RIDGE_GAMEPLAY_EXECUTION_PLAN_V1,
+  CLOUD_RIDGE_GAMEPLAY_BOOTSTRAP_V1,
   CLOUD_RIDGE_NATIVE_ADMISSION_BUDGET_V1,
   CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1,
+  CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1,
   cloudRidgeLockedAssetResolver,
   cloudRidgeSubjectAssetResolver,
 } from "./native-bootstrap.js";
@@ -25,7 +26,7 @@ import "./style.css";
 
 const FIXED_INPUT_CONTROLLER_ENTITY_ID = "native-scene-controller";
 const CONTROLLED_ENTITY_ID =
-  CLOUD_RIDGE_GAMEPLAY_EXECUTION_PLAN_V1.initialControlledEntityId;
+  CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1.initialControlledEntityId;
 const NATIVE_SCENE_FACTORIES_BY_REF: Readonly<
   Record<string, typeof createCloudRidgeNativeSceneControllerV1>
 > = Object.freeze({
@@ -152,17 +153,19 @@ async function start(): Promise<void> {
   viewport.prepend(canvas);
 
   const runtime = await BabylonWorldRuntime.create({
-    executionPlan: CLOUD_RIDGE_GAMEPLAY_EXECUTION_PLAN_V1,
-    runtimeSessionId: `native-scene-${crypto.randomUUID()}`,
-    canvas,
-    autoStartRenderLoop: false,
-    subjectAssetResolver: cloudRidgeSubjectAssetResolver,
-    nativeScene: {
+    worldRuntimeBootstrap: CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1,
+    gameplayBootstrap: CLOUD_RIDGE_GAMEPLAY_BOOTSTRAP_V1,
+    sceneSource: {
+      kind: "babylon-native-scene",
       bootstrap: CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1,
       module: nativeScene.module,
       assets: cloudRidgeLockedAssetResolver,
       budget: CLOUD_RIDGE_NATIVE_ADMISSION_BUDGET_V1,
     },
+    runtimeSessionId: `native-scene-${crypto.randomUUID()}`,
+    canvas,
+    autoStartRenderLoop: false,
+    subjectAssetResolver: cloudRidgeSubjectAssetResolver,
     onInitializationStage(stage) {
       loadingStage.textContent = initializationLabel(stage);
     },

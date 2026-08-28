@@ -1,9 +1,11 @@
 import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import type {
-  ExecutionPlanV5,
-  ExecutionStaticColliderV1,
-  Vec3,
+  CanonicalSceneExecutionPlanV1,
+  CanonicalSceneStaticColliderV1,
+  RuntimeVec3V1,
+  WorldRuntimeBootstrapV1,
 } from "@whitebox-world/runtime-contracts";
+import type { BabylonRuntimeSubjectV1 } from "./runtime-subject";
 
 import type { CharacterMovementComponentV1 } from "./character-movement-component";
 
@@ -12,12 +14,14 @@ export const BABYLON_TRAVERSAL_RUNTIME_INTERNAL = Symbol(
 );
 
 export interface StaticCollisionMeshEntryV1 {
-  readonly collider: ExecutionStaticColliderV1;
+  readonly collider: CanonicalSceneStaticColliderV1;
   readonly mesh: Mesh;
 }
 
 export interface BabylonTraversalRuntimeInternalV1 {
-  readExecutionPlan(): ExecutionPlanV5;
+  readCanonicalSceneExecutionPlan(): CanonicalSceneExecutionPlanV1;
+  readWorldRuntimeBootstrap(): WorldRuntimeBootstrapV1;
+  readRuntimeSubjects(): readonly BabylonRuntimeSubjectV1[];
   readCreationExecutionPlanHash(): `sha256:${string}` | undefined;
   readControlledEntityId(): string | undefined;
   readConfigurationEpoch(): number;
@@ -27,7 +31,7 @@ export interface BabylonTraversalRuntimeInternalV1 {
   readStaticCollisionMeshes(): readonly StaticCollisionMeshEntryV1[];
   resetToTraversalAnchor(input: Readonly<{
     traversingEntityId: string;
-    subjectOriginPositionMetersXYZ: Vec3;
+    subjectOriginPositionMetersXYZ: RuntimeVec3V1;
     facingYawRadians: number;
   }>): void;
   runTraversalFixedTick(input: Readonly<{

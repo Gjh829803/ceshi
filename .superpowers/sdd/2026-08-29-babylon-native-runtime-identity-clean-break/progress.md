@@ -116,7 +116,21 @@ Ruling: generated examples and scene evidence are regenerated only through their
   ownership remain unchanged. Evidence: RuntimeHost, WorldSession, Gameplay
   state/contracts, character transaction, state store, and lifecycle tests
   passed 494/494; typecheck and `git diff --check` passed.
-- BNA1-08: not started.
+- BNA1-08: complete in the pending Babylon shared-kernel commit. Canonical
+  construction now consumes only `CanonicalSceneExecutionPlanV1`, while
+  Subject, physics, control, Camera, and fixed-Tick initialization consume the
+  independently parsed `WorldRuntimeBootstrapV1`. The explicitly trusted-local
+  Native playground parses checked-in Gameplay and Runtime Bootstrap artifacts,
+  registers its existing Spawn Marker/static Collider contribution, and enters
+  the same Kernel without compiling, loading, hashing, or fabricating a
+  Canonical Plan. Formal RuntimeHost Native admission remains rejected before
+  allocation by BNA1-07. Structural coverage scans the Native runtime sources
+  for forbidden Plan/compiler names; behavioral coverage preserves Native
+  geometry, contribution, movement/collision/jump/Camera/reset, cleanup, and
+  isolation while exercising Canonical placement separately. Evidence: all
+  Runtime Babylon and Native playground tests passed 495/495 across 31 files;
+  `pnpm typecheck`, `pnpm build`, `pnpm build:native-scene`, the Native-source
+  forbidden-symbol census, and `git diff --check` passed.
 - BNA1-09A: not started.
 - BNA1-09B: not started.
 - BNA1-09C: not started.

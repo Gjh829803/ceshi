@@ -41,11 +41,11 @@ import type {
   ControlCaptureCapabilitiesV1,
   ControlCaptureRequestV1,
   ControlInputAxesV2,
-  ExecutionLayoutAssertionV1,
-  ExecutionLayoutPlacementV1,
-  ExecutionPlanV5,
-  ExecutionStaticColliderV1,
-  ExecutionWaterBoundaryV3,
+  CanonicalSceneLayoutAssertionV1,
+  CanonicalSceneLayoutPlacementV1,
+  CanonicalSceneExecutionPlanV1,
+  CanonicalSceneStaticColliderV1,
+  CanonicalSceneWaterBoundaryV1,
   FixedInputV1,
   LocomotionModeV1,
   PublishedMovementMediumV1,
@@ -53,10 +53,12 @@ import type {
   SemanticInputActionV1,
   SubjectHarnessReportV1,
   SubjectPresetTuningReceiptV1,
-  Vec2,
-  Vec3,
+  CanonicalSceneVec2V1,
+  RuntimeVec3V1,
   ViewTargetSampleV1,
+  WorldRuntimeBootstrapV1,
 } from "@whitebox-world/runtime-contracts";
+import type { GameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
 import {
   buildBabylonNativeSceneCandidateV1,
   createBabylonNativeHostRandomV1,
@@ -141,6 +143,11 @@ import {
   canonicalizeSignedZero,
   canonicalizeVec3,
 } from "./canonical-numbers";
+import {
+  resolveBabylonNativeRuntimeSubjectsV1,
+  resolveBabylonRuntimeSubjectsV1,
+  type BabylonRuntimeSubjectV1,
+} from "./runtime-subject";
 function committedPresentationFromLocomotionMode(
   committedTick: number,
   locomotionMode: LocomotionModeV1 | "suspended",
@@ -170,8 +177,9 @@ export type BabylonWorldRuntimeInitializationStageV1 =
   | "camera"
   | "ready";
 
-export interface BabylonWorldRuntimeOptions {
-  executionPlan: ExecutionPlanV5;
+interface BabylonWorldRuntimeCommonOptionsV1 {
+  worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
+  gameplayBootstrap: GameplayBootstrapV1;
   runtimeSessionId?: string;
   canvas?: HTMLCanvasElement;
   engineFactory?: () => AbstractEngine;
@@ -180,15 +188,24 @@ export interface BabylonWorldRuntimeOptions {
   havokWasmBinary?: ArrayBuffer;
   subjectAssetResolver?: SubjectAssetResolverV1;
   subjectAssetCacheOptions?: SubjectAssetCacheOptionsV1;
-  /** Experimental provider-specific visual geometry lane. Canonical omission remains the default. */
-  nativeScene?: Readonly<{
-    bootstrap: BabylonNativeSceneBootstrapV1;
-    module: BabylonNativeSceneModuleV1;
-    assets: BabylonNativeLockedAssetResolverV1;
-    budget: BabylonNativeSceneAdmissionBudgetV1;
-  }>;
   onInitializationStage?(stage: BabylonWorldRuntimeInitializationStageV1): void;
 }
+
+export type BabylonWorldRuntimeOptions = BabylonWorldRuntimeCommonOptionsV1 &
+  Readonly<{
+    sceneSource:
+      | Readonly<{
+          kind: "canonical-execution-plan";
+          executionPlan: CanonicalSceneExecutionPlanV1;
+        }>
+      | Readonly<{
+          kind: "babylon-native-scene";
+          bootstrap: BabylonNativeSceneBootstrapV1;
+          module: BabylonNativeSceneModuleV1;
+          assets: BabylonNativeLockedAssetResolverV1;
+          budget: BabylonNativeSceneAdmissionBudgetV1;
+        }>;
+  }>;
 
 export interface PreparedBabylonCameraViewMutationV1 {
   readonly previous: BabylonRuntimeProjectionV1;
@@ -213,6 +230,32 @@ interface BabylonMountedRelationshipProjectionV1 {
   readonly relationship: MountedOnRelationshipStateV1;
   readonly riderCollisionFilterMembershipMask: number;
   readonly riderCollisionFilterCollideMask: number;
+}
+
+function assertRuntimeSubjectSetV1(
+  runtimeSubjects: readonly BabylonRuntimeSubjectV1[],
+  initialControlledEntityId: string,
+): void {
+  if (runtimeSubjects.length === 0) {
+    throw new Error("WORLDKIT_RUNTIME_SUBJECTS_EMPTY");
+  }
+  const subjectEntityIds = new Set<string>();
+  for (const subject of runtimeSubjects) {
+    if (subject.capabilityAssembly === undefined) {
+      throw new Error(
+        `WORLDKIT_RUNTIME_CAPABILITY_ASSEMBLY_REQUIRED: ${subject.entityId}`,
+      );
+    }
+    if (subjectEntityIds.has(subject.entityId)) {
+      throw new Error(`WORLDKIT_RUNTIME_SUBJECT_DUPLICATE: ${subject.entityId}`);
+    }
+    subjectEntityIds.add(subject.entityId);
+  }
+  if (!subjectEntityIds.has(initialControlledEntityId)) {
+    throw new Error(
+      `WORLDKIT_RUNTIME_CONTROL_TARGET_NOT_FOUND: ${initialControlledEntityId}`,
+    );
+  }
 }
 
 type GameplayFixedTickActionProjectionV1 = Parameters<
@@ -276,13 +319,13 @@ export function isWorldRuntimeLayoutAssertionErrorV1(
 }
 
 interface RuntimeLayoutBoundsV1 {
-  readonly minimumMetersXYZ: Vec3;
-  readonly maximumMetersXYZ: Vec3;
+  readonly minimumMetersXYZ: RuntimeVec3V1;
+  readonly maximumMetersXYZ: RuntimeVec3V1;
 }
 
 function runtimeLayoutBounds(
-  executionPlan: ExecutionPlanV5,
-  placement: ExecutionLayoutPlacementV1,
+  executionPlan: CanonicalSceneExecutionPlanV1,
+  placement: CanonicalSceneLayoutPlacementV1,
 ): RuntimeLayoutBoundsV1 {
   const object = executionPlan.objects.find((row) => row.entityId === placement.entityId);
   const halfExtents = object === undefined
@@ -315,14 +358,14 @@ function runtimeLayoutBounds(
   return {
     minimumMetersXYZ: placement.transform.positionMetersXYZ.map((value, axis) =>
       value - rotated[axis]!
-    ) as unknown as Vec3,
+    ) as unknown as RuntimeVec3V1,
     maximumMetersXYZ: placement.transform.positionMetersXYZ.map((value, axis) =>
       value + rotated[axis]!
-    ) as unknown as Vec3,
+    ) as unknown as RuntimeVec3V1,
   };
 }
 
-function runtimeSupportSamples(bounds: RuntimeLayoutBoundsV1): readonly Vec2[] {
+function runtimeSupportSamples(bounds: RuntimeLayoutBoundsV1): readonly CanonicalSceneVec2V1[] {
   const minimum = bounds.minimumMetersXYZ;
   const maximum = bounds.maximumMetersXYZ;
   return [
@@ -357,8 +400,8 @@ function runtimeAabbsOverlap(
 }
 
 function revalidateSupportAssertion(
-  executionPlan: ExecutionPlanV5,
-  assertion: Extract<ExecutionLayoutAssertionV1, { kind: "supported-by" }>,
+  executionPlan: CanonicalSceneExecutionPlanV1,
+  assertion: Extract<CanonicalSceneLayoutAssertionV1, { kind: "supported-by" }>,
   boundsByEntityId: Readonly<Record<string, RuntimeLayoutBoundsV1>>,
 ): boolean {
   const supported = boundsByEntityId[assertion.supportedEntityId];
@@ -403,8 +446,8 @@ function revalidateSupportAssertion(
 }
 
 function revalidateClearanceAssertion(
-  assertion: Extract<ExecutionLayoutAssertionV1, { kind: "minimum-clearance" }>,
-  executionPlan: ExecutionPlanV5,
+  assertion: Extract<CanonicalSceneLayoutAssertionV1, { kind: "minimum-clearance" }>,
+  executionPlan: CanonicalSceneExecutionPlanV1,
   boundsByEntityId: Readonly<Record<string, RuntimeLayoutBoundsV1>>,
 ): boolean {
   const entity = boundsByEntityId[assertion.entityId];
@@ -421,7 +464,9 @@ function revalidateClearanceAssertion(
   return minimumClearance + (assertion.tolerances.overlapMeters ?? 0) >= assertion.clearanceMeters;
 }
 
-function revalidateRuntimeLayoutAssertions(executionPlan: ExecutionPlanV5): void {
+function revalidateRuntimeLayoutAssertions(
+  executionPlan: CanonicalSceneExecutionPlanV1,
+): void {
   const placements = Object.values(executionPlan.layout.placementsByEntityId);
   const boundsByEntityId = Object.fromEntries(placements.map((placement) => [
     placement.entityId,
@@ -438,7 +483,7 @@ function revalidateRuntimeLayoutAssertions(executionPlan: ExecutionPlanV5): void
 }
 
 function createStaticCollisionMesh(
-  collider: ExecutionStaticColliderV1,
+  collider: CanonicalSceneStaticColliderV1,
   scene: Scene,
 ): Mesh {
   const topology = emitStaticColliderTriangleMeshV1(collider.shape);
@@ -466,7 +511,7 @@ function createStaticCollisionMesh(
   return mesh;
 }
 
-function containsPoint(boundary: ExecutionWaterBoundaryV3, x: number, z: number): boolean {
+function containsPoint(boundary: CanonicalSceneWaterBoundaryV1, x: number, z: number): boolean {
   if (boundary.kind === "circle") {
     const dx = x - boundary.centerMetersXZ[0];
     const dz = z - boundary.centerMetersXZ[1];
@@ -490,7 +535,7 @@ function containsPoint(boundary: ExecutionWaterBoundaryV3, x: number, z: number)
 }
 
 function waterSurfaceHeightAtSubjectOrigin(
-  executionPlan: ExecutionPlanV5,
+  executionPlan: CanonicalSceneExecutionPlanV1,
   subjectOrigin: Vector3,
 ): number | undefined {
   return executionPlan.waters.find((water) =>
@@ -504,7 +549,7 @@ function waterSurfaceHeightAtSubjectOrigin(
 
 function configureAtmosphere(
   scene: Scene,
-  preset: ExecutionPlanV5["atmospherePreset"],
+  preset: CanonicalSceneExecutionPlanV1["atmospherePreset"],
 ): void {
   const colors = {
     "clear-day": new Color4(0.55, 0.78, 0.92, 1),
@@ -518,43 +563,6 @@ function configureAtmosphere(
   ambient.intensity = preset === "night" ? 0.3 : 0.72;
   const sun = new DirectionalLight("worldkit.light.sun", new Vector3(-0.45, -1, 0.35), scene);
   sun.intensity = preset === "night" ? 0.22 : 1.1;
-}
-
-function executionPlanWithNativeSpawn(
-  executionPlan: ExecutionPlanV5,
-  bootstrap: BabylonNativeSceneBootstrapV1,
-  spawnMarker: BabylonNativeSpawnMarkerContributionV1,
-): ExecutionPlanV5 {
-  if (
-    executionPlan.initialControlledEntityId !==
-      bootstrap.initialControlledEntityId
-  ) {
-    throw new Error(
-      "WORLDKIT_NATIVE_SCENE_CONTROLLED_ENTITY_MISMATCH: Native Bootstrap and Gameplay closure must select the same controlled entity.",
-    );
-  }
-  const initialControlledEntityId = executionPlan.initialControlledEntityId;
-  return Object.freeze({
-    ...executionPlan,
-    gravityMetersPerSecondSquaredXYZ:
-      bootstrap.gravityMetersPerSecondSquaredXYZ,
-    camera: Object.freeze({
-      ...executionPlan.camera,
-      pitchRadians: bootstrap.initialCamera.pitchRadians,
-      distanceMeters: bootstrap.initialCamera.distanceMeters,
-      fovDegrees: bootstrap.initialCamera.fovDegrees,
-      targetHeightMeters: bootstrap.initialCamera.targetHeightMeters,
-    }),
-    subjects: Object.freeze(executionPlan.subjects.map((subject) =>
-      subject.entityId === initialControlledEntityId
-        ? Object.freeze({
-            ...subject,
-            spawnSubjectOriginPositionMetersXYZ: spawnMarker.positionMetersXYZ,
-            spawnSubjectFacingRadians: spawnMarker.facingRadians,
-          })
-        : subject
-    )),
-  });
 }
 
 function nativeColliderMetadata(
@@ -684,7 +692,10 @@ export class BabylonWorldRuntime {
   readonly #creationExecutionPlanHash: `sha256:${string}` | undefined;
 
   private constructor(
-    private readonly executionPlan: ExecutionPlanV5,
+    private readonly executionPlan: CanonicalSceneExecutionPlanV1 | undefined,
+    private readonly worldRuntimeBootstrap: WorldRuntimeBootstrapV1,
+    private readonly gameplayBootstrap: GameplayBootstrapV1,
+    private readonly runtimeSubjects: readonly BabylonRuntimeSubjectV1[],
     private readonly runtimeSessionId: string,
     private readonly engine: AbstractEngine,
     private readonly scene: Scene,
@@ -706,6 +717,7 @@ export class BabylonWorldRuntime {
     autoStartRenderLoop: boolean,
     creationExecutionPlanHash: `sha256:${string}` | undefined,
     terrainSampleCount: number,
+    private readonly expectedPhysicsBodyCount: number,
   ) {
     this.gameplayPublishedState = Object.freeze({
       possessionTarget: Object.freeze({ mode: "unbound" }),
@@ -741,44 +753,50 @@ export class BabylonWorldRuntime {
   }
 
   static async create(options: BabylonWorldRuntimeOptions): Promise<BabylonWorldRuntime> {
-    if ((options.executionPlan as { schemaVersion?: unknown }).schemaVersion !== 5) {
+    const canonicalScenePlan = options.sceneSource.kind ===
+        "canonical-execution-plan"
+      ? options.sceneSource.executionPlan
+      : undefined;
+    const nativeScene = options.sceneSource.kind === "babylon-native-scene"
+      ? options.sceneSource
+      : undefined;
+    if (
+      !isNil(canonicalScenePlan) &&
+      (canonicalScenePlan.kind !==
+        "worldkit-canonical-scene-execution-plan" ||
+      canonicalScenePlan.schemaVersion !== 1)
+    ) {
       throw new Error(
-        "WORLDKIT_RUNTIME_EXECUTION_PLAN_V5_REQUIRED: Babylon Runtime requires ExecutionPlanV5.",
+        "WORLDKIT_RUNTIME_CANONICAL_SCENE_PLAN_REQUIRED",
       );
     }
-    if (options.executionPlan.runtimeBackend !== "babylon-havok") {
-      throw new Error(`WORLDKIT_RUNTIME_BACKEND_UNSUPPORTED: ${options.executionPlan.runtimeBackend as string}`);
+    if (
+      options.worldRuntimeBootstrap.gameplayBootstrapRef !==
+        options.gameplayBootstrap.resourceRef ||
+      options.worldRuntimeBootstrap.gameplayBootstrapHash !==
+        options.gameplayBootstrap.contentHash
+    ) {
+      throw new Error("WORLDKIT_RUNTIME_GAMEPLAY_BOOTSTRAP_MISMATCH");
     }
-    if (options.executionPlan.subjects.length === 0) {
-      throw new Error("WORLDKIT_RUNTIME_SUBJECTS_EMPTY");
-    }
-    const subjectEntityIds = new Set<string>();
-    for (const subject of options.executionPlan.subjects) {
-      if (subject.capabilityAssembly === undefined) {
-        throw new Error(
-          `WORLDKIT_RUNTIME_CAPABILITY_ASSEMBLY_REQUIRED: ${subject.entityId}`,
+    let runtimeSubjects = isNil(canonicalScenePlan)
+      ? Object.freeze([]) as readonly BabylonRuntimeSubjectV1[]
+      : resolveBabylonRuntimeSubjectsV1(
+          canonicalScenePlan,
+          options.worldRuntimeBootstrap,
         );
-      }
-      if (subjectEntityIds.has(subject.entityId)) {
-        throw new Error(`WORLDKIT_RUNTIME_SUBJECT_DUPLICATE: ${subject.entityId}`);
-      }
-      subjectEntityIds.add(subject.entityId);
+    const initialControlledEntityId =
+      options.worldRuntimeBootstrap.initialControlledEntityId;
+    if (!isNil(canonicalScenePlan)) {
+      assertRuntimeSubjectSetV1(runtimeSubjects, initialControlledEntityId);
     }
     if (options.engineFactory === undefined && options.canvas === undefined) {
       throw new TypeError("BabylonWorldRuntime requires canvas or engineFactory.");
     }
-    const initialControlledEntityId =
-      options.executionPlan.initialControlledEntityId;
-    if (!subjectEntityIds.has(initialControlledEntityId)) {
-      throw new Error(
-        `WORLDKIT_RUNTIME_CONTROL_TARGET_NOT_FOUND: ${initialControlledEntityId}`,
-      );
-    }
     const actionPresentationRegistry = createActionPresentationRegistryV1(
-      options.executionPlan.actionPresentationRegistry,
+      options.worldRuntimeBootstrap.actionPresentationRegistry,
     );
-    const creationExecutionPlanHash = isNil(options.nativeScene)
-      ? sha256CanonicalJson(options.executionPlan) as `sha256:${string}`
+    const creationExecutionPlanHash = !isNil(canonicalScenePlan)
+      ? sha256CanonicalJson(canonicalScenePlan) as `sha256:${string}`
       : undefined;
     const ownedDisposers: OwnedDisposer[] = [];
     options.onInitializationStage?.("engine");
@@ -789,19 +807,23 @@ export class BabylonWorldRuntime {
       const scene = new Scene(engine);
       ownedDisposers.push(() => scene.dispose());
       scene.useRightHandedSystem = true;
-      let executionPlan = options.executionPlan;
+      const executionPlan = canonicalScenePlan;
+      let effectiveRuntimeSubjects = runtimeSubjects;
+      let effectiveGravityMetersPerSecondSquaredXYZ =
+        options.worldRuntimeBootstrap.gravityMetersPerSecondSquaredXYZ;
+      let effectiveCamera = options.worldRuntimeBootstrap.initialCamera;
       let nativeContribution: BabylonNativeSceneContributionV1 | undefined;
-      if (!isNil(options.nativeScene)) {
+      if (!isNil(nativeScene)) {
         options.onInitializationStage?.("native-scene");
         const nativeResult = await buildBabylonNativeSceneCandidateV1({
           scene,
-          bootstrap: options.nativeScene.bootstrap,
-          module: options.nativeScene.module,
+          bootstrap: nativeScene.bootstrap,
+          module: nativeScene.module,
           random: createBabylonNativeHostRandomV1(
-            options.nativeScene.bootstrap.seed,
+            nativeScene.bootstrap.seed,
           ),
-          assets: options.nativeScene.assets,
-          budget: options.nativeScene.budget,
+          assets: nativeScene.assets,
+          budget: nativeScene.budget,
         });
         if (nativeResult.outcome !== "passed") {
           const problem = nativeResult.checkResult.diagnostics.find(
@@ -814,16 +836,50 @@ export class BabylonWorldRuntime {
           );
         }
         nativeContribution = nativeResult.contribution;
-        executionPlan = executionPlanWithNativeSpawn(
-          options.executionPlan,
-          options.nativeScene.bootstrap,
-          nativeContribution.spawnMarker,
+        if (
+          options.worldRuntimeBootstrap.initialControlledEntityId !==
+            nativeScene.bootstrap.initialControlledEntityId ||
+          options.worldRuntimeBootstrap.gameplayBootstrapRef !==
+            nativeScene.bootstrap.gameplayBootstrapRef ||
+          !options.worldRuntimeBootstrap.gravityMetersPerSecondSquaredXYZ.every(
+            (value, index) => Object.is(
+              value,
+              nativeScene.bootstrap.gravityMetersPerSecondSquaredXYZ[index],
+            ),
+          ) ||
+          !Object.is(
+            options.worldRuntimeBootstrap.initialCamera.pitchRadians,
+            nativeScene.bootstrap.initialCamera.pitchRadians,
+          ) ||
+          !Object.is(
+            options.worldRuntimeBootstrap.initialCamera.distanceMeters,
+            nativeScene.bootstrap.initialCamera.distanceMeters,
+          ) ||
+          !Object.is(
+            options.worldRuntimeBootstrap.initialCamera.fovDegrees,
+            nativeScene.bootstrap.initialCamera.fovDegrees,
+          ) ||
+          !Object.is(
+            options.worldRuntimeBootstrap.initialCamera.targetHeightMeters,
+            nativeScene.bootstrap.initialCamera.targetHeightMeters,
+          )
+        ) {
+          throw new Error(
+            "WORLDKIT_NATIVE_SCENE_RUNTIME_BOOTSTRAP_MISMATCH: Native Bootstrap must match the shared Runtime Bootstrap.",
+          );
+        }
+        const admittedNativeContribution = nativeContribution;
+        runtimeSubjects = resolveBabylonNativeRuntimeSubjectsV1(
+          options.worldRuntimeBootstrap,
+          admittedNativeContribution.spawnMarker,
         );
+        assertRuntimeSubjectSetV1(runtimeSubjects, initialControlledEntityId);
+        effectiveRuntimeSubjects = runtimeSubjects;
       }
       options.onInitializationStage?.("havok");
       const havokPlugin = await enableHavokPhysics(
         scene,
-        executionPlan.gravityMetersPerSecondSquaredXYZ,
+        effectiveGravityMetersPerSecondSquaredXYZ,
         options.havokWasmBinary,
       );
       const physicsWorldQuery = new BabylonHavokPhysicsWorldQueryV1(scene, havokPlugin);
@@ -833,16 +889,16 @@ export class BabylonWorldRuntime {
       const aggregates: PhysicsAggregate[] = [];
       let terrainShape: PhysicsShape | undefined;
       const staticCollisionMeshes: StaticCollisionMeshEntryV1[] = [];
-      let terrainSampleCount = options.executionPlan.terrain.heightSamplesMeters.length;
-      if (isNil(options.nativeScene)) {
+      let terrainSampleCount = executionPlan?.terrain.heightSamplesMeters.length ?? 0;
+      if (!isNil(executionPlan)) {
         options.onInitializationStage?.("terrain");
-        configureAtmosphere(scene, options.executionPlan.atmospherePreset);
+        configureAtmosphere(scene, executionPlan.atmospherePreset);
         const terrainMesh = createTerrainMesh(
-          options.executionPlan.terrain,
+          executionPlan.terrain,
           materials.terrain,
           scene,
         );
-        const terrain = options.executionPlan.terrain;
+        const terrain = executionPlan.terrain;
         const firstTerrainHeight = terrain.heightSamplesMeters[0]!;
         const isFlatTerrain = terrain.heightSamplesMeters.every((height) =>
           height === firstTerrainHeight
@@ -874,13 +930,13 @@ export class BabylonWorldRuntime {
         aggregates.push(terrainAggregate);
         ownedDisposers.push(() => terrainAggregate.dispose());
 
-        for (const water of options.executionPlan.waters) {
+        for (const water of executionPlan.waters) {
           createBabylonWaterMeshV1(water, materials, scene);
         }
-        for (const object of options.executionPlan.objects) {
+        for (const object of executionPlan.objects) {
           createBabylonObjectMeshV1(object, materials, scene);
         }
-        for (const collider of options.executionPlan.staticColliders) {
+        for (const collider of executionPlan.staticColliders) {
           const mesh = createStaticCollisionMesh(collider, scene);
           const shape = new PhysicsShapeMesh(mesh, scene);
           ownedDisposers.push(() => shape.dispose());
@@ -894,7 +950,7 @@ export class BabylonWorldRuntime {
           staticCollisionMeshes.push({ collider, mesh });
           ownedDisposers.push(() => aggregate.dispose());
         }
-        revalidateRuntimeLayoutAssertions(options.executionPlan);
+        revalidateRuntimeLayoutAssertions(executionPlan);
       } else {
         terrainSampleCount = 0;
         if (nativeContribution === undefined) {
@@ -923,7 +979,7 @@ export class BabylonWorldRuntime {
       }
 
       options.onInitializationStage?.("camera");
-      const cameraPlan = executionPlan.camera;
+      const cameraPlan = effectiveCamera;
       const camera = new FreeCamera(cameraPlan.cameraEntityId, Vector3.Zero(), scene);
       camera.fov = (cameraPlan.fovDegrees * Math.PI) / 180;
       camera.minZ = 0.05;
@@ -933,7 +989,7 @@ export class BabylonWorldRuntime {
       );
       ownedDisposers.push(() => cameraEntity.dispose());
       const cameraComponent = cameraEntity.registerComponent(new CameraComponentV1(
-        executionPlan,
+        effectiveCamera,
         camera,
         scene,
         physicsWorldQuery,
@@ -957,13 +1013,13 @@ export class BabylonWorldRuntime {
       >();
       const characterEntitiesByEntityId = new Map<string, BabylonCharacterEntityV1>();
       const subjectVisuals: SubjectVisual[] = [];
-      const sortedSubjects = [...executionPlan.subjects].sort((left, right) =>
+      const sortedSubjects = [...effectiveRuntimeSubjects].sort((left, right) =>
         left.entityId.localeCompare(right.entityId),
       );
       for (const subject of sortedSubjects) {
         const visual = await createSubjectVisual({
           subject,
-          executionPlan,
+          worldRuntimeBootstrap: options.worldRuntimeBootstrap,
           material: materials.subject,
           scene,
           subjectAssetCache,
@@ -1115,7 +1171,7 @@ export class BabylonWorldRuntime {
           controller = createGoldenHumanoidSubjectControllerV1({
             subject,
             gravityMetersPerSecondSquaredXYZ:
-              executionPlan.gravityMetersPerSecondSquaredXYZ,
+              effectiveGravityMetersPerSecondSquaredXYZ,
             visualRoot: visual.root,
             scene,
             actionPresentationRegistry,
@@ -1124,11 +1180,11 @@ export class BabylonWorldRuntime {
         } else {
           controller = new CharacterMovementComponentV1(
             subject,
-            executionPlan.gravityMetersPerSecondSquaredXYZ,
+            effectiveGravityMetersPerSecondSquaredXYZ,
             visual.root,
             scene,
             (subjectOrigin) =>
-              isNil(options.nativeScene)
+              !isNil(executionPlan)
                 ? waterSurfaceHeightAtSubjectOrigin(executionPlan, subjectOrigin)
                 : undefined,
           );
@@ -1136,11 +1192,11 @@ export class BabylonWorldRuntime {
         const character = new BabylonCharacterEntityV1({
           subject,
           gravityMetersPerSecondSquaredXYZ:
-            executionPlan.gravityMetersPerSecondSquaredXYZ,
+            effectiveGravityMetersPerSecondSquaredXYZ,
           visualRoot: visual.root,
           scene,
           waterSurfaceHeightAtSubjectOrigin: (subjectOrigin) =>
-            isNil(options.nativeScene)
+            !isNil(executionPlan)
               ? waterSurfaceHeightAtSubjectOrigin(executionPlan, subjectOrigin)
               : undefined,
           movement: controller,
@@ -1162,6 +1218,9 @@ export class BabylonWorldRuntime {
       options.onInitializationStage?.("ready");
       runtime = new BabylonWorldRuntime(
         executionPlan,
+        options.worldRuntimeBootstrap,
+        options.gameplayBootstrap,
+        effectiveRuntimeSubjects,
         options.runtimeSessionId ?? "runtime-session-local",
         engine,
         scene,
@@ -1180,6 +1239,8 @@ export class BabylonWorldRuntime {
         options.engineFactory === undefined && options.autoStartRenderLoop !== false,
         creationExecutionPlanHash,
         terrainSampleCount,
+        executionPlan?.sceneResourceUsage.colliders ??
+          runtimeSubjects.length + (nativeContribution?.staticColliders.length ?? 0),
       );
       return runtime;
     } catch (error) {
@@ -1208,7 +1269,7 @@ export class BabylonWorldRuntime {
         : {};
       this.cameraComponent.setInputActions(this.activeInputActions);
       const viewControlFrame = this.cameraComponent.controlFrame(this.tick);
-      for (const subject of this.executionPlan.subjects) {
+      for (const subject of this.runtimeSubjects) {
         const controller = this.controllerFor(subject.entityId);
         if (!isNil(this.gameplayPublishedState
           .mountedRelationshipsByRiderEntityId[subject.entityId])) {
@@ -1242,7 +1303,14 @@ export class BabylonWorldRuntime {
 
   [BABYLON_TRAVERSAL_RUNTIME_INTERNAL](): BabylonTraversalRuntimeInternalV1 {
     return {
-      readExecutionPlan: () => this.executionPlan,
+      readCanonicalSceneExecutionPlan: () => {
+        if (isNil(this.executionPlan)) {
+          throw new Error("WORLDKIT_RUNTIME_CANONICAL_SCENE_PLAN_REQUIRED");
+        }
+        return this.executionPlan;
+      },
+      readWorldRuntimeBootstrap: () => this.worldRuntimeBootstrap,
+      readRuntimeSubjects: () => this.runtimeSubjects,
       readCreationExecutionPlanHash: () => this.#creationExecutionPlanHash,
       readControlledEntityId: () => this.controlledEntityId(),
       readConfigurationEpoch: () => this.traversalConfigurationEpoch,
@@ -1261,9 +1329,7 @@ export class BabylonWorldRuntime {
   }
 
   [BABYLON_GAMEPLAY_RUNTIME_INTERNAL](): BabylonGameplayRuntimeInternalV1 {
-    const executionPlan = this.executionPlan;
     const internal: BabylonGameplayRuntimeInternalV1 = {
-      readExecutionPlan: () => executionPlan,
       readPossessionTarget: () => this.gameplayPublishedState.possessionTarget,
       readWorldProjection: () => this.gameplayWorldProjection(),
       readViewProjection: () => this.gameplayPublishedState.viewProjection,
@@ -1289,7 +1355,7 @@ export class BabylonWorldRuntime {
       dispose: () => this.dispose(),
     };
     if (
-      this.executionPlan.initialRelationships.length === 0 &&
+      this.gameplayBootstrap.initialRelationshipStates.length === 0 &&
       [...this.characterEntitiesByEntityId.values()].every((character) =>
         isGoldenHumanoidControllerV1(character.movement)
       )
@@ -1322,7 +1388,7 @@ export class BabylonWorldRuntime {
     }
     const spatialEntityStatesById: Record<string, SpatialEntityStateV1> = {};
     const capabilityStatesById: Record<string, GameplayCapabilityStateV1> = {};
-    for (const subject of this.executionPlan.subjects) {
+    for (const subject of this.runtimeSubjects) {
       const controller = this.controllerFor(subject.entityId);
       const origin = controller.subjectOrigin;
       const velocity = controller.velocity;
@@ -1504,7 +1570,7 @@ export class BabylonWorldRuntime {
   private mountedPose(
     relationship: MountedOnRelationshipStateV1,
   ): Readonly<{ subjectOrigin: Vector3; facingYawRadians: number }> {
-    const mountSubject = this.executionPlan.subjects.find(
+    const mountSubject = this.runtimeSubjects.find(
       (subject) => subject.entityId === relationship.mountEntityId,
     );
     const slot = mountSubject?.mountSlots.find(
@@ -1542,12 +1608,13 @@ export class BabylonWorldRuntime {
   }
 
   private initializeInitialMountedRelationships(): void {
-    if (this.executionPlan.initialRelationships.length === 0) return;
+    if (this.gameplayBootstrap.initialRelationshipStates.length === 0) return;
     const mountedRelationshipsByRiderEntityId: Record<
       string,
       BabylonMountedRelationshipProjectionV1
     > = {};
-    for (const relationship of this.executionPlan.initialRelationships) {
+    for (const relationship of this.gameplayBootstrap.initialRelationshipStates) {
+      if (relationship.type !== "mountedOn") continue;
       const rider = this.controllerFor(relationship.riderEntityId);
       const pose = this.mountedPose(relationship);
       const collisionFilters = rider.collisionFilterMasks();
@@ -1619,13 +1686,13 @@ export class BabylonWorldRuntime {
     const rider = this.characterEntitiesByEntityId.get(
       relationship.riderEntityId,
     )?.movement;
-    const riderSubject = this.executionPlan.subjects.find(
+    const riderSubject = this.runtimeSubjects.find(
       (subject) => subject.entityId === relationship.riderEntityId,
     );
     const riderVisual = this.subjectVisualsByEntityId.get(
       relationship.riderEntityId,
     );
-    const mount = this.executionPlan.subjects.find(
+    const mount = this.runtimeSubjects.find(
       (subject) => subject.entityId === relationship.mountEntityId,
     );
     const profile = mount?.capabilityAssembly.relationshipProfiles.find(
@@ -1798,10 +1865,10 @@ export class BabylonWorldRuntime {
   private safeDismountSubjectOrigin(
     relationship: MountedOnRelationshipStateV1,
   ): Readonly<{ subjectOrigin: Vector3; facingYawRadians: number }> {
-    const riderSubject = this.executionPlan.subjects.find(
+    const riderSubject = this.runtimeSubjects.find(
       (subject) => subject.entityId === relationship.riderEntityId,
     );
-    const mountSubject = this.executionPlan.subjects.find(
+    const mountSubject = this.runtimeSubjects.find(
       (subject) => subject.entityId === relationship.mountEntityId,
     );
     const slot = mountSubject?.mountSlots.find(
@@ -1825,6 +1892,9 @@ export class BabylonWorldRuntime {
       mounted.relationship.id !== relationship.id
     ) throw new Error("WORLDKIT_DISMOUNT_SLOT_UNAVAILABLE");
     const mountOrigin = mountController.subjectOrigin;
+    if (isNil(this.executionPlan)) {
+      throw new Error("WORLDKIT_NATIVE_SCENE_RELATIONSHIP_UNSUPPORTED");
+    }
     const terrainMinimumX = this.executionPlan.terrain.centerMetersXZ[0] -
       this.executionPlan.terrain.sizeMetersXZ[0] / 2;
     const terrainMaximumX = this.executionPlan.terrain.centerMetersXZ[0] +
@@ -1858,7 +1928,7 @@ export class BabylonWorldRuntime {
         new Vector3(...riderSubject.collider.centerOffsetFromSubjectOriginMetersXYZ),
       );
       const candidateRadius = riderSubject.collider.radiusMeters;
-      const isBlockedBySubject = this.executionPlan.subjects.some((subject) => {
+      const isBlockedBySubject = this.runtimeSubjects.some((subject) => {
         if (subject.entityId === relationship.riderEntityId) return false;
         const controller = this.characterEntitiesByEntityId.get(
           subject.entityId,
@@ -1892,7 +1962,7 @@ export class BabylonWorldRuntime {
     const rider = this.characterEntitiesByEntityId.get(
       relationship.riderEntityId,
     )?.movement;
-    const riderSubject = this.executionPlan.subjects.find(
+    const riderSubject = this.runtimeSubjects.find(
       (subject) => subject.entityId === relationship.riderEntityId,
     );
     if (
@@ -2249,7 +2319,7 @@ export class BabylonWorldRuntime {
     this.cameraComponent.setInputActions(this.activeInputActions);
     this.lockPublishedCameraHeadingBeforeTick();
     const viewControlFrame = this.cameraComponent.controlFrame(this.tick);
-    for (const subject of this.executionPlan.subjects) {
+    for (const subject of this.runtimeSubjects) {
       const controller = this.controllerFor(subject.entityId);
       if (!isNil(this.gameplayPublishedState
         .mountedRelationshipsByRiderEntityId[subject.entityId])) {
@@ -2298,7 +2368,7 @@ export class BabylonWorldRuntime {
   private assertAdmittedGoldenActionProjection(
     actionProjection: GameplayFixedTickActionProjectionV1,
   ): void {
-    for (const subject of this.executionPlan.subjects) {
+    for (const subject of this.runtimeSubjects) {
       if (!isGoldenHumanoidControllerV1(this.controllerFor(subject.entityId))) {
         continue;
       }
@@ -2336,7 +2406,7 @@ export class BabylonWorldRuntime {
     if (physicsEngine === null) throw new Error("WORLDKIT_HAVOK_ENGINE_MISSING");
     physicsEngine._step(FIXED_TIME_STEP_SECONDS);
     this.tick += 1;
-    for (const subject of this.executionPlan.subjects) {
+    for (const subject of this.runtimeSubjects) {
       const controller = this.controllerFor(subject.entityId);
       const visual = this.visualFor(subject.entityId);
       if (!isNil(this.gameplayPublishedState
@@ -2375,7 +2445,7 @@ export class BabylonWorldRuntime {
     physicsEngine._step(FIXED_TIME_STEP_SECONDS);
     this.tick += 1;
     const controlledEntityId = this.controlledEntityId();
-    for (const subject of this.executionPlan.subjects) {
+    for (const subject of this.runtimeSubjects) {
       const controller = this.controllerFor(subject.entityId);
       const visual = this.visualFor(subject.entityId);
       if (!isNil(this.gameplayPublishedState
@@ -2421,7 +2491,7 @@ export class BabylonWorldRuntime {
 
   private resetToTraversalAnchor(input: Readonly<{
     traversingEntityId: string;
-    subjectOriginPositionMetersXYZ: Vec3;
+    subjectOriginPositionMetersXYZ: RuntimeVec3V1;
     facingYawRadians: number;
   }>): void {
     this.assertUsable();
@@ -2430,7 +2500,7 @@ export class BabylonWorldRuntime {
     }
     this.legacyControllerFor(input.traversingEntityId);
     this.traversalConfigurationEpoch += 1;
-    for (const subject of this.executionPlan.subjects) {
+    for (const subject of this.runtimeSubjects) {
       const controller = this.controllerFor(subject.entityId);
       if (subject.entityId === input.traversingEntityId) {
         this.legacyControllerFor(subject.entityId).resetAt(
@@ -2464,7 +2534,7 @@ export class BabylonWorldRuntime {
     this.activeInputActions = [];
     this.activeInputAxes = {};
     this.cameraComponent.setInputActions([]);
-    for (const subject of this.executionPlan.subjects) {
+    for (const subject of this.runtimeSubjects) {
       const controller = this.controllerFor(subject.entityId);
       if (subject.entityId === input.traversingEntityId) {
         this.legacyControllerFor(subject.entityId).stepCommand({
@@ -2502,7 +2572,7 @@ export class BabylonWorldRuntime {
       string,
       BabylonRuntimeProjectionV1["subjectStatesByEntityId"][string]
     > = {};
-    for (const subject of this.executionPlan.subjects) {
+    for (const subject of this.runtimeSubjects) {
       const controller = this.controllerFor(subject.entityId);
       const subjectOrigin = controller.subjectOrigin;
       const velocity = controller.velocity;
@@ -2583,7 +2653,7 @@ export class BabylonWorldRuntime {
       subjectStatesByEntityId,
       physics: { backend: "havok", ready: true, fixedTimeStepSeconds: FIXED_TIME_STEP_SECONDS },
       camera: {
-        entityId: this.executionPlan.camera.cameraEntityId,
+        entityId: this.worldRuntimeBootstrap.initialCamera.cameraEntityId,
         ...(controlledEntityId === undefined
           ? {}
           : { targetEntityId: controlledEntityId }),
@@ -2872,7 +2942,7 @@ export class BabylonWorldRuntime {
         renderReadyReceiptId: receipt.id,
         widthPixels: request.widthPixels,
         heightPixels: request.heightPixels,
-        cameraEntityId: this.executionPlan.camera.cameraEntityId,
+        cameraEntityId: this.worldRuntimeBootstrap.initialCamera.cameraEntityId,
         cameraRigRef,
         snapshot,
       });
@@ -2895,7 +2965,7 @@ export class BabylonWorldRuntime {
       );
     }
     this.synchronizePublishedCameraView(0);
-    for (const subject of this.executionPlan.subjects) {
+    for (const subject of this.runtimeSubjects) {
       this.controllerFor(subject.entityId).renderVisual(interpolationAlphaRatio);
     }
     for (const visual of this.subjectVisuals) visual.applyAnimationPose();
@@ -3033,7 +3103,7 @@ export class BabylonWorldRuntime {
     deltaSeconds = FIXED_TIME_STEP_SECONDS,
   ): void {
     this.synchronizeCameraViewSession();
-    const subject = this.executionPlan.subjects.find(
+    const subject = this.runtimeSubjects.find(
       (candidate) => candidate.entityId === entityId,
     );
     if (subject === undefined) {
@@ -3119,7 +3189,7 @@ export class BabylonWorldRuntime {
     const origin = controller.subjectOrigin;
     const velocity = controller.velocity;
     const motion = controller.motionSnapshot();
-    const socketPositionsMetersXYZById: Record<string, Vec3> = {};
+    const socketPositionsMetersXYZById: Record<string, RuntimeVec3V1> = {};
     visual.root.computeWorldMatrix(true);
     for (const [socketId, socketNode] of visual.socketNodesById) {
       socketNode.computeWorldMatrix(true);
@@ -3193,7 +3263,7 @@ export class BabylonWorldRuntime {
   ): BabylonRuntimeProjectionV1 {
     this.assertUsable();
     const controlledEntityId = this.controlledEntityId();
-    const subject = this.executionPlan.subjects.find(
+    const subject = this.runtimeSubjects.find(
       (candidate) => candidate.entityId === controlledEntityId,
     );
     if (subject === undefined) {
@@ -3324,7 +3394,7 @@ export class BabylonWorldRuntime {
       throw new Error("SUBJECT_PRESET_INVALID_CAMERA_TUNING");
     }
     const controlledEntityId = this.controlledEntityId();
-    const subject = this.executionPlan.subjects.find(
+    const subject = this.runtimeSubjects.find(
       (candidate) => candidate.entityId === controlledEntityId,
     );
     if (subject === undefined) {
@@ -3347,7 +3417,7 @@ export class BabylonWorldRuntime {
     this.assertUsable();
     const controller = this.controllerFor(subjectEntityId);
     if (isGoldenHumanoidControllerV1(controller)) {
-      const subject = this.executionPlan.subjects.find(
+      const subject = this.runtimeSubjects.find(
         (candidate) => candidate.entityId === subjectEntityId,
       )!;
       if (motionProfileRef !== subject.locomotionProfileRef) {
@@ -3367,7 +3437,7 @@ export class BabylonWorldRuntime {
     this.assertUsable();
     const controller = this.controllerFor(subjectEntityId);
     if (isGoldenHumanoidControllerV1(controller)) {
-      const subject = this.executionPlan.subjects.find(
+      const subject = this.runtimeSubjects.find(
         (candidate) => candidate.entityId === subjectEntityId,
       )!;
       if (resourceRef !== subject.controlFeel.resourceRef) {
@@ -3395,7 +3465,7 @@ export class BabylonWorldRuntime {
       diagnostic: { code, message },
       snapshot: this.snapshot(),
     });
-    const subject = this.executionPlan.subjects.find(
+    const subject = this.runtimeSubjects.find(
       (candidate) => candidate.entityId === request.subjectEntityId,
     );
     if (subject === undefined) {
@@ -3471,7 +3541,7 @@ export class BabylonWorldRuntime {
 
   async runHarness(subjectEntityId: string): Promise<SubjectHarnessReportV1> {
     this.assertUsable();
-    const subject = this.executionPlan.subjects.find((row) => row.entityId === subjectEntityId);
+    const subject = this.runtimeSubjects.find((row) => row.entityId === subjectEntityId);
     if (subject === undefined) throw new Error(`WORLDKIT_RUNTIME_SUBJECT_NOT_FOUND: ${subjectEntityId}`);
     const controller = this.controllerFor(subjectEntityId);
     const golden = isGoldenHumanoidControllerV1(controller);
@@ -3556,7 +3626,7 @@ export class BabylonWorldRuntime {
       },
       {
         checkId: "H06",
-        status: (this.scene.getPhysicsEngine() as PhysicsEngine | null)?.getBodies().length === this.executionPlan.resourceUsage.colliders
+          status: (this.scene.getPhysicsEngine() as PhysicsEngine | null)?.getBodies().length === this.expectedPhysicsBodyCount
           ? "passed"
           : "not-exercised",
         message: "Runtime resource ownership is tracked for disposal.",

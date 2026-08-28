@@ -21,11 +21,11 @@ import type {
   CameraViewInputV1,
   RuntimeCameraModifierProfileV1,
   RuntimeCameraRigProfileV1,
-  ExecutionPlanV5,
+  WorldRuntimeInitialCameraV1,
   RuntimeSubjectCapabilityAssemblyV1,
   LocomotionModeV1,
   SemanticInputActionV1,
-  Vec3,
+  RuntimeVec3V1,
   ViewControlFrameV1,
   ViewTargetSampleV1,
 } from "@whitebox-world/runtime-contracts";
@@ -49,28 +49,28 @@ export interface CameraDirectorSnapshotV1 {
   viewDistanceOffsetMeters: number;
   selectionDecision?: CameraSelectionDecisionV2;
   selectedTargetSocketId?: string;
-  targetSocketPositionMetersXYZ?: Vec3;
+  targetSocketPositionMetersXYZ?: RuntimeVec3V1;
   isTargetSocketFallback?: boolean;
-  desiredTargetPositionMetersXYZ?: Vec3;
-  desiredPositionMetersXYZ?: Vec3;
-  actualPositionMetersXYZ?: Vec3;
+  desiredTargetPositionMetersXYZ?: RuntimeVec3V1;
+  desiredPositionMetersXYZ?: RuntimeVec3V1;
+  actualPositionMetersXYZ?: RuntimeVec3V1;
   finalFovDegrees?: number;
   requestedArmLengthMeters?: number;
   safeArmLengthMeters?: number;
   effectiveArmLengthMeters?: number;
   isCollisionRetracted?: boolean;
   collisionHitEntityId?: string;
-  collisionHitPositionXYZ?: Vec3;
-  positionLagXYZ?: Vec3;
-  rotationLagRadiansXYZ?: Vec3;
+  collisionHitPositionXYZ?: RuntimeVec3V1;
+  positionLagXYZ?: RuntimeVec3V1;
+  rotationLagRadiansXYZ?: RuntimeVec3V1;
   recenterRemainingSeconds?: number;
   fixedStepDeltaSeconds?: number;
   resolvedParameters?: Readonly<CameraRigParametersV1>;
   previewParameterOverrides?: Readonly<Partial<CameraRigParametersV1>>;
   profileTransitionProgressRatio?: number;
-  controlForwardXYZ?: Vec3;
-  subjectForwardXYZ?: Vec3;
-  subjectVelocityMetersPerSecondXYZ?: Vec3;
+  controlForwardXYZ?: RuntimeVec3V1;
+  subjectForwardXYZ?: RuntimeVec3V1;
+  subjectVelocityMetersPerSecondXYZ?: RuntimeVec3V1;
 }
 
 export interface CameraDirectorTransactionStateV1 {
@@ -149,11 +149,11 @@ interface SelectedCameraStateV1 {
   decision: CameraSelectionDecisionV2;
 }
 
-function freezeVec3(value: Vector3 | readonly number[]): Vec3 {
+function freezeVec3(value: Vector3 | readonly number[]): RuntimeVec3V1 {
   if (value instanceof Vector3) {
-    return Object.freeze([value.x, value.y, value.z]) as Vec3;
+    return Object.freeze([value.x, value.y, value.z]) as RuntimeVec3V1;
   }
-  return Object.freeze([value[0], value[1], value[2]]) as Vec3;
+  return Object.freeze([value[0], value[1], value[2]]) as RuntimeVec3V1;
 }
 
 function copySelectionDecision(
@@ -586,12 +586,12 @@ export class CameraDirectorV1 {
   private latestTelemetry: CameraDirectorTelemetryV1 = {};
 
   constructor(
-    private readonly executionPlan: ExecutionPlanV5,
+    private readonly initialCamera: WorldRuntimeInitialCameraV1,
     private readonly camera: FreeCamera,
     private readonly scene: Scene,
     private readonly physicsWorldQuery: PhysicsWorldQueryPortV1,
   ) {
-    this.activeProfileRef = executionPlan.camera.rigRef;
+    this.activeProfileRef = initialCamera.cameraRigProfileRef;
   }
 
   setViewPreference(
@@ -774,7 +774,7 @@ export class CameraDirectorV1 {
     return true;
   }
 
-  initializeControlHeading(forwardXYZ: Vec3): void {
+  initializeControlHeading(forwardXYZ: RuntimeVec3V1): void {
     this.assertUsable();
     const forward = horizontalDirection(new Vector3(...forwardXYZ)) ??
       new Vector3(0, 0, -1);
@@ -1139,7 +1139,7 @@ export class CameraDirectorV1 {
     let effectiveArmLengthMeters: number | undefined;
     let isCollisionRetracted: boolean | undefined;
     let collisionHitEntityId: string | undefined;
-    let collisionHitPositionXYZ: Vec3 | undefined;
+    let collisionHitPositionXYZ: RuntimeVec3V1 | undefined;
     if (!firstPerson) {
       let collision: ReturnType<SpringArmComponentV1["solve"]>;
       try {

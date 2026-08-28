@@ -1,0 +1,28 @@
+{
+  "kind": "gameplay-bootstrap",
+  "id": "g-bot-subject-world.gameplay",
+  "version": 1,
+  "resourceRef": "worldkit://gameplay-bootstrap/g-bot-subject-world.8201@1",
+  "entityDescriptors": [
+    {
+      "id": "g-bot-primary",
+      "entityDefinitionRef": "worldkit://subject-definition/humanoid.g-bot@2",
+      "capabilityRefs": [
+        "worldkit://capability/locomotion.ground@1"
+      ]
+    }
+  ],
+  "featureResourceLocks": [
+    {
+      "resourceRef": "worldkit://gameplay-feature/core-control@1",
+      "contentHash": "sha256:8a272bb1774559927aea2d42aaf33d57969986e5065e112d5517db787e83c8f1"
+    }
+  ],
+  "semanticActionDefinitions": [],
+  "availableCapabilityRefs": [
+    "worldkit://capability/locomotion.ground@1",
+    "worldkit://runtime-capability/control-transition@1"
+  ],
+  "initialRelationshipStates": [],
+  "contentHash": "sha256:4a19d57d06b8aecae4929cf2bfa7377c147949ce9e60e3a9875075351955def7"
+}

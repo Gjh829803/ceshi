@@ -12,9 +12,10 @@ import {
 import { createCloudRidgeNativeSceneControllerV1 } from
   "./cloud-ridge-scene.js";
 import {
-  CLOUD_RIDGE_GAMEPLAY_EXECUTION_PLAN_V1,
+  CLOUD_RIDGE_GAMEPLAY_BOOTSTRAP_V1,
   CLOUD_RIDGE_NATIVE_ADMISSION_BUDGET_V1,
   CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1,
+  CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1,
   cloudRidgeLockedAssetResolver,
 } from "./native-bootstrap.js";
 
@@ -32,7 +33,8 @@ afterEach(() => {
 
 describe("cloud ridge Babylon Native scene", () => {
   it("keeps the bootstrap resource refs identical to the frozen gameplay closure", () => {
-    const subject = CLOUD_RIDGE_GAMEPLAY_EXECUTION_PLAN_V1.subjects[0]!;
+    const subject = CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1
+      .subjectRuntimeDescriptors[0]!;
     expect(CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1).toEqual({
       kind: "babylon-native-scene-bootstrap",
       schemaVersion: 1,
@@ -44,7 +46,7 @@ describe("cloud ridge Babylon Native scene", () => {
       gameplayBootstrapRef:
         "worldkit://gameplay-bootstrap/g-bot-subject-world.8201@1",
       initialControlledEntityId:
-        CLOUD_RIDGE_GAMEPLAY_EXECUTION_PLAN_V1.initialControlledEntityId,
+        CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1.initialControlledEntityId,
       gravityMetersPerSecondSquaredXYZ: [0, -9.81, 0],
       initialCamera: {
         mode: "third-person",
@@ -64,7 +66,7 @@ describe("cloud ridge Babylon Native scene", () => {
       maximumStaticColliderVertexCount: 256,
       maximumStaticColliderTriangleCount: 1_000,
     });
-    expect(CLOUD_RIDGE_GAMEPLAY_EXECUTION_PLAN_V1.initialRelationships)
+    expect(CLOUD_RIDGE_GAMEPLAY_BOOTSTRAP_V1.initialRelationshipStates)
       .toEqual([]);
   });
 

@@ -1,9 +1,9 @@
 import {
-  canonicalExecutionResourceLockEntriesV1,
-  type ExecutionPlanV5,
-  type ExecutionResourceKindV1,
+  canonicalResourceLockEntriesV1,
+  type CanonicalSceneExecutionPlanV1,
+  type CanonicalResourceKindV1,
+  type WorldRuntimeBootstrapV1,
 } from "@whitebox-world/runtime-contracts";
-type ExecutionPlanSubjectV5 = ExecutionPlanV5["subjects"][number];
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import {
   canonicalTraversalRuntimeTickEvidenceV1,
@@ -25,6 +25,7 @@ import {
 import { isEmpty, isEqual, isNil } from "lodash-es";
 
 import type { BabylonWorldRuntime } from "./babylon-world-runtime";
+import type { BabylonRuntimeSubjectV1 } from "./runtime-subject";
 import { FIXED_TIME_STEP_SECONDS } from "./physics";
 import type {
   MotionKernelLiveLockStateV1,
@@ -43,11 +44,13 @@ function fail(code: TraversalRuntimeErrorV1["code"]): never {
 }
 
 function exactPlanAndReceiptLock(
-  plan: ExecutionPlanV5,
+  plan: CanonicalSceneExecutionPlanV1,
+  runtimeBootstrap: WorldRuntimeBootstrapV1,
+  subjects: readonly BabylonRuntimeSubjectV1[],
   receipt: ResolvedTraversalLockReceiptV1,
 ): {
   readonly lock: ResolvedTraversalLockV1;
-  readonly subject: ExecutionPlanSubjectV5;
+  readonly subject: BabylonRuntimeSubjectV1;
 } {
   let canonicalReceipt: ResolvedTraversalLockReceiptV1;
   try {
@@ -76,14 +79,14 @@ function exactPlanAndReceiptLock(
   )) {
     fail("TRAVERSAL_RUNTIME_LOCK_MISMATCH");
   }
-  const subject = plan.subjects.find(
+  const subject = subjects.find(
     (candidate) => candidate.entityId === lock.subjectEntityId,
   );
   if (isNil(subject) || isNil(subject.capabilityAssembly)) {
     fail("TRAVERSAL_RUNTIME_LOCK_MISMATCH");
   }
   const assembly = subject.capabilityAssembly;
-  const colliderProfile = plan.colliderProfiles.find(
+  const colliderProfile = runtimeBootstrap.colliderProfiles.find(
     (candidate) => candidate.colliderProfileRef === lock.colliderProfileRef,
   );
   const motionKernel = assembly.motionKernels.find(
@@ -91,28 +94,31 @@ function exactPlanAndReceiptLock(
   );
   const resourceLockEntryMatches = (
     resourceRef: string,
-    resourceKind: ExecutionResourceKindV1,
+    resourceKind: CanonicalResourceKindV1,
     contentHash: string,
-  ): boolean => plan.resourceLockEntries.filter(
+  ): boolean => canonicalResourceLock.filter(
     (entry) =>
       entry.resourceRef === resourceRef &&
       entry.resourceKind === resourceKind &&
       entry.contentHash === contentHash,
   ).length === 1;
   let canonicalResourceLock: ReturnType<
-    typeof canonicalExecutionResourceLockEntriesV1
+    typeof canonicalResourceLockEntriesV1
   >;
   try {
-    canonicalResourceLock = canonicalExecutionResourceLockEntriesV1(
-      plan.resourceLockEntries,
+    canonicalResourceLock = canonicalResourceLockEntriesV1(
+      [
+        ...plan.sceneResourceLockEntries,
+        ...runtimeBootstrap.runtimeResourceLockEntries.filter(
+          (entry) => entry.resourceKind !== "gameplay-bootstrap",
+        ),
+      ],
     );
   } catch {
     fail("TRAVERSAL_RUNTIME_LOCK_MISMATCH");
   }
   const resourceLocksMatch =
-    isEqual(plan.resourceLockEntries, canonicalResourceLock) &&
-    sha256CanonicalJson(canonicalResourceLock) === plan.resourceLockHash &&
-    lock.resourceLockHash === plan.resourceLockHash &&
+    sha256CanonicalJson(canonicalResourceLock) === lock.resourceLockHash &&
     resourceLockEntryMatches(
       lock.colliderProfileRef,
       "collider-profile",
@@ -237,7 +243,7 @@ function liveLockMatches(
 }
 
 function collectCanonicalTraversalSurfaceSources(
-  plan: ExecutionPlanV5,
+  plan: CanonicalSceneExecutionPlanV1,
 ):
   | {
     status: "ok";
@@ -302,7 +308,7 @@ function collectCanonicalTraversalSurfaceSources(
 }
 
 function classifySurface(
-  plan: ExecutionPlanV5,
+  plan: CanonicalSceneExecutionPlanV1,
   sample: RetainedCharacterSupportSampleV1,
   live: MotionKernelLiveLockStateV1,
 ): CharacterSupportSurfaceResolutionV1 {
@@ -364,7 +370,9 @@ class BabylonTraversalRuntimePortV1 implements TraversalRuntimePortV1 {
   #initializedEpoch: number | undefined;
   #runtimeUnavailable = false;
   readonly #host: BabylonTraversalRuntimeInternalV1;
-  readonly #plan: ExecutionPlanV5;
+  readonly #plan: CanonicalSceneExecutionPlanV1;
+  readonly #runtimeBootstrap: WorldRuntimeBootstrapV1;
+  readonly #subjects: readonly BabylonRuntimeSubjectV1[];
   readonly #receipt: ResolvedTraversalLockReceiptV1;
   readonly #lock: ResolvedTraversalLockV1;
   readonly #authoringSpecHash: `sha256:${string}`;
@@ -375,19 +383,23 @@ class BabylonTraversalRuntimePortV1 implements TraversalRuntimePortV1 {
 
   public constructor(
     host: BabylonTraversalRuntimeInternalV1,
-    plan: ExecutionPlanV5,
+    plan: CanonicalSceneExecutionPlanV1,
+    runtimeBootstrap: WorldRuntimeBootstrapV1,
+    subjects: readonly BabylonRuntimeSubjectV1[],
     receipt: ResolvedTraversalLockReceiptV1,
     lock: ResolvedTraversalLockV1,
     executionPlanHash: `sha256:${string}`,
   ) {
     this.#host = host;
     this.#plan = plan;
+    this.#runtimeBootstrap = runtimeBootstrap;
+    this.#subjects = subjects;
     this.#receipt = receipt;
     this.#lock = lock;
     this.#authoringSpecHash = plan.authoringSpecHash;
     this.#layoutSolveReportHash =
       plan.layout.layoutSolveReportHash as `sha256:${string}`;
-    this.#resourceLockHash = plan.resourceLockHash as `sha256:${string}`;
+    this.#resourceLockHash = lock.resourceLockHash;
     this.#executionPlanHash = executionPlanHash;
     this.#resolvedTraversalLockHash = receipt.resolvedTraversalLockHash;
     Object.freeze(this);
@@ -521,7 +533,7 @@ class BabylonTraversalRuntimePortV1 implements TraversalRuntimePortV1 {
     if (this.#host.readControlledEntityId() !== this.traversingEntityId) {
       fail("TRAVERSAL_RUNTIME_NOT_CONTROLLED");
     }
-    const plan = this.#host.readExecutionPlan();
+    const plan = this.#host.readCanonicalSceneExecutionPlan();
     if (plan !== this.#plan) {
       fail("TRAVERSAL_RUNTIME_LOCK_MISMATCH");
     }
@@ -535,11 +547,16 @@ class BabylonTraversalRuntimePortV1 implements TraversalRuntimePortV1 {
       currentExecutionPlanHash !== this.#executionPlanHash ||
       plan.authoringSpecHash !== this.#authoringSpecHash ||
       plan.layout.layoutSolveReportHash !== this.#layoutSolveReportHash ||
-      plan.resourceLockHash !== this.#resourceLockHash
+      this.#lock.resourceLockHash !== this.#resourceLockHash
     ) {
       fail("TRAVERSAL_RUNTIME_WORLD_IDENTITY_MISMATCH");
     }
-    const currentPaperLock = exactPlanAndReceiptLock(this.#plan, this.#receipt);
+    const currentPaperLock = exactPlanAndReceiptLock(
+      this.#plan,
+      this.#runtimeBootstrap,
+      this.#subjects,
+      this.#receipt,
+    );
     if (!isEqual(currentPaperLock.lock, this.#lock)) {
       fail("TRAVERSAL_RUNTIME_LOCK_MISMATCH");
     }
@@ -640,7 +657,9 @@ export function createBabylonTraversalRuntimePortV1(input: Readonly<{
   if (isNil(host.readControlledEntityId())) {
     fail("TRAVERSAL_RUNTIME_NOT_CONTROLLED");
   }
-  const plan = host.readExecutionPlan();
+  const plan = host.readCanonicalSceneExecutionPlan();
+  const runtimeBootstrap = host.readWorldRuntimeBootstrap();
+  const subjects = host.readRuntimeSubjects();
   const creationExecutionPlanHash = host.readCreationExecutionPlanHash();
   let currentExecutionPlanHash: `sha256:${string}`;
   try {
@@ -654,7 +673,12 @@ export function createBabylonTraversalRuntimePortV1(input: Readonly<{
   ) {
     fail("TRAVERSAL_RUNTIME_WORLD_IDENTITY_MISMATCH");
   }
-  const { lock } = exactPlanAndReceiptLock(plan, input.traversalLockReceipt);
+  const { lock } = exactPlanAndReceiptLock(
+    plan,
+    runtimeBootstrap,
+    subjects,
+    input.traversalLockReceipt,
+  );
   if (host.readControlledEntityId() !== lock.subjectEntityId) {
     fail("TRAVERSAL_RUNTIME_NOT_CONTROLLED");
   }
@@ -671,6 +695,8 @@ export function createBabylonTraversalRuntimePortV1(input: Readonly<{
   return new BabylonTraversalRuntimePortV1(
     host,
     plan,
+    runtimeBootstrap,
+    subjects,
     input.traversalLockReceipt,
     lock,
     currentExecutionPlanHash,

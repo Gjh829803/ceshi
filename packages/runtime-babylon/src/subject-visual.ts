@@ -12,12 +12,12 @@ import type {
   GameplayActionStateV1,
 } from "@whitebox-world/gameplay-contracts";
 import type {
-  ExecutionPlanV5,
   RuntimeRigProfileV1,
   RuntimeSubjectAssetV1,
   RuntimeSubjectVisualPrimitivePartV1,
+  WorldRuntimeBootstrapV1,
 } from "@whitebox-world/runtime-contracts";
-type ExecutionPlanSubjectV5 = ExecutionPlanV5["subjects"][number];
+import type { BabylonRuntimeSubjectV1 } from "./runtime-subject";
 import type { GroundHumanoidActionIdV1 } from "@whitebox-world/subject-contracts";
 import {
   type ActionPresentationRegistryV1,
@@ -61,8 +61,8 @@ function debugActionIdForPresentation(
 }
 
 export interface CreateSubjectVisualOptionsV1 {
-  subject: ExecutionPlanSubjectV5;
-  executionPlan: ExecutionPlanV5;
+  subject: BabylonRuntimeSubjectV1;
+  worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
   material: Material;
   scene: Scene;
   subjectAssetCache: SubjectAssetCacheV1;
@@ -397,7 +397,7 @@ export async function createSubjectVisual(
 ): Promise<SubjectVisual> {
   const {
     subject,
-    executionPlan,
+    worldRuntimeBootstrap,
     material,
     scene,
     subjectAssetCache,
@@ -429,7 +429,7 @@ export async function createSubjectVisual(
     }
     if (subject.visualBinding.mode === "static" && assetParts.length > 0) {
       assetDescriptor = exactResource(
-        executionPlan.subjectAssets,
+        worldRuntimeBootstrap.subjectAssets,
         assetParts[0]!.subjectAssetRef,
         (resource) => resource.subjectAssetRef,
         "SUBJECT_ASSET_RIG_INCOMPATIBLE",
@@ -460,7 +460,7 @@ export async function createSubjectVisual(
       }
 
       const asset = exactResource(
-        executionPlan.subjectAssets,
+        worldRuntimeBootstrap.subjectAssets,
         part.subjectAssetRef,
         (resource) => resource.subjectAssetRef,
         "SUBJECT_ASSET_RIG_INCOMPATIBLE",
@@ -495,14 +495,14 @@ export async function createSubjectVisual(
         continue;
       }
       const rigProfile = exactResource(
-        executionPlan.rigProfiles,
+        worldRuntimeBootstrap.rigProfiles,
         subject.visualBinding.rigProfileRef,
         (resource) => resource.rigProfileRef,
         "SUBJECT_ASSET_RIG_INCOMPATIBLE",
         asset,
       );
       const animationSet = exactResource(
-        executionPlan.animationSets,
+        worldRuntimeBootstrap.animationSets,
         subject.visualBinding.animationSetRef,
         (resource) => resource.animationSetRef,
         "SUBJECT_ASSET_ANIMATION_MISSING",
