@@ -1564,6 +1564,27 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       movementMedium: "air",
       committedTick: 10,
     });
+
+    const signedZero = committedCameraContextFromMotionKernelV1(
+      {
+        ...sample,
+        targetPositionMetersXYZ: [0, 0.56, -0],
+        velocityMetersPerSecondXYZ: [-0, -0, -0],
+        cameraContextTags: [],
+      },
+      11,
+      "idle",
+      -0,
+    );
+    expect(signedZero.subjectPose.positionMetersXYZ).toEqual([0, 0.56, 0]);
+    expect(signedZero.subjectPose.facingYawRadians).toBe(0);
+    expect(signedZero.locomotion).toMatchObject({
+      status: "active",
+      mobilityMode: "grounded",
+      gait: "idle",
+      linearVelocity: { x: 0, y: 0, z: 0 },
+      horizontalSpeedMetersPerSecond: 0,
+    });
   });
 
   it("rolls a failed Tick back atomically and preserves the next Profile transition", () => {

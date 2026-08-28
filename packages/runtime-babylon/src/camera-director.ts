@@ -380,14 +380,18 @@ export function committedCameraContextFromMotionKernelV1(
 ): CameraContextSampleV2 {
   const canonicalFacingYawRadians = canonicalCameraNumber(facingYawRadians);
   const linearVelocity = {
-    x: sample.velocityMetersPerSecondXYZ[0],
-    y: sample.velocityMetersPerSecondXYZ[1],
-    z: sample.velocityMetersPerSecondXYZ[2],
+    x: canonicalCameraNumber(sample.velocityMetersPerSecondXYZ[0]),
+    y: canonicalCameraNumber(sample.velocityMetersPerSecondXYZ[1]),
+    z: canonicalCameraNumber(sample.velocityMetersPerSecondXYZ[2]),
   };
-  const horizontalSpeedMetersPerSecond = Math.hypot(
-    linearVelocity.x,
-    linearVelocity.z,
+  const horizontalSpeedMetersPerSecond = canonicalCameraNumber(
+    Math.hypot(linearVelocity.x, linearVelocity.z),
   );
+  const positionMetersXYZ = [
+    canonicalCameraNumber(sample.targetPositionMetersXYZ[0]),
+    canonicalCameraNumber(sample.targetPositionMetersXYZ[1]),
+    canonicalCameraNumber(sample.targetPositionMetersXYZ[2]),
+  ] as const;
   const airborne = locomotionMode === "airborne" ||
     sample.movementMedium === "air";
   return parseCameraContextSampleV2({
@@ -397,11 +401,7 @@ export function committedCameraContextFromMotionKernelV1(
     controlledEntityId: sample.controlledEntityId,
     targetEntityId: sample.entityId,
     subjectPose: {
-      positionMetersXYZ: [
-        sample.targetPositionMetersXYZ[0],
-        sample.targetPositionMetersXYZ[1],
-        sample.targetPositionMetersXYZ[2],
-      ],
+      positionMetersXYZ,
       facingYawRadians: canonicalFacingYawRadians,
     },
     locomotion: airborne
