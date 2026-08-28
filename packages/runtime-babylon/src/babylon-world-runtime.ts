@@ -2235,6 +2235,12 @@ export class BabylonWorldRuntime {
       const controlled = this.controllerFor(controlledEntityId);
       if (!isGoldenHumanoidControllerV1(controlled)) {
         this.updateCameraForEntity(controlledEntityId);
+      } else {
+        // Motion Kernel already published this Tick's Camera Context. Stamp the
+        // view revision so a later render cannot reset() the session and snap
+        // heading onto post-step velocity.
+        this.appliedCameraViewStateRevision =
+          this.gameplayPublishedState.viewProjection.viewStateRevision;
       }
     }
   }
