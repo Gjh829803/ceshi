@@ -474,6 +474,47 @@ export class GroundAwarePhysicsCharacterController extends PhysicsCharacterContr
       this.restoreTransactionalState(snapshot);
       return -1;
     }
+    const preflightPosition = this.getPosition().clone();
+    const preflightDisplacement = preflightPosition.subtract(snapshot.position);
+    const stepHeight = Vector3.Dot(preflightDisplacement, this.up);
+    this.restoreTransactionalState(snapshot);
+    if (!(stepHeight > 1e-4) ||
+      stepHeight > this.maxStepHeight + BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1) {
+      return -1;
+    }
+
+    const preflightHorizontal = preflightDisplacement.subtract(
+      this.up.scale(stepHeight),
+    );
+    const preflightHorizontalMeters = preflightHorizontal.length();
+    if (!(preflightHorizontalMeters > 1e-6)) return -1;
+    const progressRatio = Math.min(
+      1,
+      requestedHorizontalMeters / preflightHorizontalMeters,
+    );
+    const candidate = snapshot.position.add(
+      preflightDisplacement.scale(progressRatio),
+    );
+    this._refreshManifoldAtPosition(candidate);
+    const manifold = this.privateHost()._manifold;
+    const minimumWalkableAlignment = Math.max(this.maxSlopeCosine, 0.1);
+    const hasSafeLanding = manifold.some((contact) =>
+      contact.bodyB.body.getMotionType(contact.bodyB.index) !==
+        DYNAMIC_PHYSICS_MOTION_TYPE &&
+      Vector3.Dot(contact.normal, this.up) >= minimumWalkableAlignment &&
+      contact.distance <= this.keepContactTolerance + this.keepDistance
+    );
+    const penetratesBlockingSurface = manifold.some((contact) =>
+      Vector3.Dot(contact.normal, this.up) < minimumWalkableAlignment &&
+      contact.distance < -this.keepDistance
+    );
+    if (!hasSafeLanding || penetratesBlockingSurface) {
+      this.restoreTransactionalState(snapshot);
+      return -1;
+    }
+    const displacement = candidate.subtract(snapshot.position);
+    this.privateHost()._lastDisplacement.copyFrom(displacement);
+    this.setPosition(candidate);
     this.stepUpAppliedForCurrentIntegrate = true;
     return remainingTime;
   }
@@ -970,8 +1011,6 @@ function assertProposalWasNotAmplified(
   maxStepHeightMeters: number,
   maxSlopeCosine: number,
   maximumActiveContactDistanceMeters: number,
-  stepUpHorizontalAllowanceMeters: number,
-  didStepUp: boolean,
   maximumSolverCorrectionMeters: number,
   contacts: readonly BabylonCharacterBodyNativeContactV1[],
 ): void {
@@ -1011,9 +1050,6 @@ function assertProposalWasNotAmplified(
     );
   const proposedVertical = dot(proposed, up);
   const appliedVertical = dot(supportAdjustedApplied, up);
-  const horizontalAllowanceMeters = support.mode !== "unsupported" && didStepUp
-    ? stepUpHorizontalAllowanceMeters
-    : 0;
   if (!finite(maximumSolverCorrectionMeters) || maximumSolverCorrectionMeters < 0 ||
     maximumSolverCorrectionMeters >
       BABYLON_CHARACTER_CONTROLLER_COLLISION_TOLERANCE_METERS_V1) {
@@ -1024,7 +1060,7 @@ function assertProposalWasNotAmplified(
     proposed,
     up,
   );
-  if (progress.applied > progress.proposedMagnitude + horizontalAllowanceMeters +
+  if (progress.applied > progress.proposedMagnitude +
     maximumSolverCorrectionMeters +
       BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1) {
     invalid("native collision resolution amplified horizontal proposal progress.");
@@ -1051,7 +1087,6 @@ function assertProposalWasNotAmplified(
     (component, axis) => component - appliedVerticalVector[axis]!,
   ));
   if (appliedHorizontalMagnitude > proposedHorizontalMagnitude +
-    horizontalAllowanceMeters +
     maximumSolverCorrectionMeters +
     BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1) {
     invalid("native collision resolution amplified horizontal proposal magnitude.");
@@ -1848,10 +1883,6 @@ class BabylonCharacterBodyPortV1
         this.configuration.maxSlopeCosine,
         this.options.controller.keepDistanceMeters +
           this.options.controller.keepContactToleranceMeters,
-        this.options.capsule.radiusMeters +
-          this.options.controller.keepDistanceMeters +
-          STEP_UP_FORWARD_CLEARANCE_METERS,
-        integrateResult.didStepUp,
         integrateResult.maximumSolverCorrectionMeters,
         contacts,
       );

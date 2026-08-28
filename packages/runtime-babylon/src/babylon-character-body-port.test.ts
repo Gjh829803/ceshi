@@ -817,7 +817,7 @@ describe("BabylonCharacterBodyPortV1 transaction", () => {
     port.dispose();
   });
 
-  it("accepts bounded padded step-up progress when the native landing is slightly lower", () => {
+  it("rejects padded step-up progress beyond the exact horizontal proposal", () => {
     const { driver, port } = createPort();
     driver.didStepUpDuringIntegrate = true;
     driver.onIntegrate = () => {
@@ -830,7 +830,7 @@ describe("BabylonCharacterBodyPortV1 transaction", () => {
     expect(() => port.resolve({
       token,
       proposal: proposal(token, 1, [0.01, 0, 0], [0.6, 0, 0]),
-    })).not.toThrow();
+    })).toThrow("3C_INPUT_INVALID");
     port.dispose();
   });
 

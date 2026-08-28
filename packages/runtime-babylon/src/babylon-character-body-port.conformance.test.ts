@@ -475,12 +475,12 @@ describe("Babylon 9.23.0 / Havok 1.3.14 Character Body conformance", () => {
   }, 30_000);
 
   it.each([
-    ["tiny legal step", 0.2, 0.01, true],
-    ["normal legal step", 0.2, 0.5, true],
-    ["too-tall step", 0.5, 0.5, false],
+    ["tiny partial-step proposal", 0.2, 0.01, "partial"],
+    ["normal legal step", 0.2, 0.5, "landing"],
+    ["too-tall step", 0.5, 0.5, "none"],
   ] as const)(
     "keeps %s progress within the exact proposal and bounded step height",
-    async (_case, stepHeight, requestedX, shouldStepUp) => {
+    async (_case, stepHeight, requestedX, expectedVerticalProgress) => {
       const { scene } = await realScene();
       addStaticBox(scene, "floor", new Vector3(0, -0.1, 0), new Vector3(10, 0.2, 10));
       addStaticBox(
@@ -508,19 +508,19 @@ describe("Babylon 9.23.0 / Havok 1.3.14 Character Body conformance", () => {
         },
       });
       const tolerance = BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1;
-      const stepUpLookaheadMeters = 0.35 + 0.05 + 0.02;
-      const maximumHorizontalMeters = shouldStepUp
-        ? Math.max(requestedX, stepUpLookaheadMeters)
-        : requestedX;
       expect(resolution.appliedTranslationMetersXYZ[0])
-        .toBeLessThanOrEqual(maximumHorizontalMeters + tolerance);
+        .toBeLessThanOrEqual(requestedX + tolerance);
       expect(resolution.appliedTranslationMetersXYZ[0]).toBeGreaterThanOrEqual(-tolerance);
       expect(resolution.appliedTranslationMetersXYZ[1])
         .toBeLessThanOrEqual(0.3 + tolerance);
-      if (shouldStepUp) {
+      if (expectedVerticalProgress === "landing") {
         expect(resolution.appliedTranslationMetersXYZ[1]).toBeGreaterThan(0.15);
       }
-      if (!shouldStepUp) {
+      if (expectedVerticalProgress === "partial") {
+        expect(resolution.appliedTranslationMetersXYZ[1]).toBeGreaterThan(tolerance);
+        expect(resolution.appliedTranslationMetersXYZ[1]).toBeLessThan(0.15);
+      }
+      if (expectedVerticalProgress === "none") {
         expect(Math.abs(resolution.appliedTranslationMetersXYZ[1]))
           .toBeLessThanOrEqual(tolerance);
       }
@@ -568,12 +568,12 @@ describe("Babylon 9.23.0 / Havok 1.3.14 Character Body conformance", () => {
     expect(positionX).toBeGreaterThan(1.2);
   }, 30_000);
 
-  it("climbs a 0.25m step when integrate is driven by velocity like Motion Kernel", async () => {
+  it("climbs a 0.25m step when the native controller receives exact Motion Kernel translations", async () => {
     const { scene } = await realScene();
     addStaticBox(scene, "floor", new Vector3(0, -0.1, 0), new Vector3(24, 0.2, 8));
     addStaticBox(scene, "step", new Vector3(5.5, 0.125, 0), new Vector3(3, 0.25, 4));
     const controller = new GroundAwarePhysicsCharacterController(
-      new Vector3(2, 0.9, 0),
+      new Vector3(2, 0.95, 0),
       { capsuleHeight: 1.8, capsuleRadius: 0.35 },
       scene,
     );
@@ -582,7 +582,6 @@ describe("Babylon 9.23.0 / Havok 1.3.14 Character Body conformance", () => {
     controller.maxSlopeCosine = Math.cos((42 * Math.PI) / 180);
     controller.maxStepHeight = 0.3;
     disposals.push(() => controller.dispose());
-    const gravity = new Vector3(0, -9.81, 0);
     const gravityDirection = new Vector3(0, -1, 0);
     const fixedDeltaSeconds = 1 / 60;
     for (let tick = 1; tick <= 180; tick += 1) {
@@ -593,8 +592,12 @@ describe("Babylon 9.23.0 / Havok 1.3.14 Character Body conformance", () => {
         const intoSurface = Vector3.Dot(desired, normal);
         if (intoSurface < 0) desired.subtractInPlace(normal.scale(intoSurface));
       }
-      controller.setVelocity(desired);
-      controller.integrate(fixedDeltaSeconds, support, gravity);
+      controller.prepareExactTranslation(
+        desired.scale(fixedDeltaSeconds),
+        desired,
+        fixedDeltaSeconds,
+      );
+      controller.integrate(fixedDeltaSeconds, support, Vector3.Zero());
       if (controller.getPosition().x > 4.2 && controller.getPosition().y > 1.05) {
         break;
       }
