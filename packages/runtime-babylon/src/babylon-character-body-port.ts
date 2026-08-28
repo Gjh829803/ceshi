@@ -440,11 +440,9 @@ export class GroundAwarePhysicsCharacterController extends PhysicsCharacterContr
       );
     }
 
-    // Babylon needs a capsule-scale look-ahead to discover some legal steps.
-    // Run that padded query transactionally and roll it back. Prefer a landing
-    // reachable by this iteration's exact horizontal time budget; if that
-    // candidate is still on the riser, commit the preflight landing as a
-    // discrete step-up correction instead of rejecting the climb.
+    // A walk-speed tick cannot reach the tread: the capsule is still on the
+    // riser after one frame. Commit the padded preflight landing instead of a
+    // time-budget hover that only grazes the lip.
     const snapshot = this.captureTransactionalState();
     const paddedTime = minimumProbeMeters / horizontalSpeed;
     const preflightConsumed = super._tryStepUp(
@@ -457,44 +455,6 @@ export class GroundAwarePhysicsCharacterController extends PhysicsCharacterContr
       this.restoreTransactionalState(snapshot);
       return -1;
     }
-    const preflightPosition = this.getPosition().clone();
-    const stepHeight = Vector3.Dot(
-      preflightPosition.subtract(snapshot.position),
-      this.up,
-    );
-    this.restoreTransactionalState(snapshot);
-    if (!(stepHeight > 1e-4) ||
-      stepHeight > this.maxStepHeight + BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1) {
-      return -1;
-    }
-
-    const candidate = snapshot.position
-      .add(horizontalVelocity.scale(remainingTime))
-      .add(this.up.scale(stepHeight));
-    this._refreshManifoldAtPosition(candidate);
-    const manifold = this.privateHost()._manifold;
-    const minimumWalkableAlignment = Math.max(this.maxSlopeCosine, 0.1);
-    const hasSafeLanding = manifold.some((contact) =>
-      contact.bodyB.body.getMotionType(contact.bodyB.index) !==
-        DYNAMIC_PHYSICS_MOTION_TYPE &&
-      Vector3.Dot(contact.normal, this.up) >= minimumWalkableAlignment &&
-      contact.distance <= this.keepContactTolerance + this.keepDistance
-    );
-    const penetratesBlockingSurface = manifold.some((contact) =>
-      Vector3.Dot(contact.normal, this.up) < minimumWalkableAlignment &&
-      contact.distance < -this.keepDistance
-    );
-    if (!hasSafeLanding || penetratesBlockingSurface) {
-      this.restoreTransactionalState(snapshot);
-      const displacement = preflightPosition.subtract(snapshot.position);
-      this.privateHost()._lastDisplacement.copyFrom(displacement);
-      this.setPosition(preflightPosition);
-      this._refreshManifoldAtPosition(preflightPosition);
-      return remainingTime;
-    }
-    const displacement = candidate.subtract(snapshot.position);
-    this.privateHost()._lastDisplacement.copyFrom(displacement);
-    this.setPosition(candidate);
     return remainingTime;
   }
 
