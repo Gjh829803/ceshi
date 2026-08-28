@@ -108,6 +108,7 @@ describe("BabylonNativeHostRandomV1", () => {
 
     expect(sequence(7301)).toEqual(sequence(7301));
     expect(sequence(7301)).not.toEqual(sequence(7302));
+    expect(sequence(7301)).not.toEqual(sequence(7301 + 0x1_0000_0000));
   });
 
   it("preserves the LCG sequence used by existing Native visual modules", () => {

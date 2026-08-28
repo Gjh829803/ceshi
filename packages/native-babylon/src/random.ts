@@ -16,7 +16,10 @@ function initialState(seed: number): number {
   if (!validFinite(seed) || !Number.isSafeInteger(seed) || seed < 0) {
     return invalidSeed();
   }
-  return seed >>> 0;
+  const lower = seed >>> 0;
+  const upper = Math.floor(seed / 0x1_0000_0000) >>> 0;
+  if (upper === 0) return lower;
+  return (lower ^ Math.imul(upper, 0x9e37_79b1) ^ 0x6d2b_79f5) >>> 0;
 }
 
 export function createBabylonNativeHostRandomV1(

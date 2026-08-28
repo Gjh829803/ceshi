@@ -6,6 +6,8 @@ import { describe, expect, it } from "vitest";
 const REPOSITORY_ROOT = new URL("../../../", import.meta.url);
 const execFileAsync = promisify(execFile);
 const IMPORT_OR_EXPORT_FROM_PATTERN = /\b(?:import|export)\s+(?:type\s+)?[\s\S]*?\s+from\s+["']([^"']+)["']/g;
+const SIDE_EFFECT_IMPORT_PATTERN = /\bimport\s*["']([^"']+)["']/g;
+const DYNAMIC_IMPORT_PATTERN = /\bimport\s*\(\s*["']([^"']+)["']\s*\)/g;
 
 async function source(path: string): Promise<string> {
   return readFile(new URL(path, REPOSITORY_ROOT), "utf8");
@@ -30,8 +32,12 @@ async function trackedTypeScriptSourcePaths(): Promise<readonly string[]> {
 }
 
 function importsLegacyRuntimeNativeSceneModule(source: string): boolean {
-  for (const match of source.matchAll(IMPORT_OR_EXPORT_FROM_PATTERN)) {
-    const specifier = match[1]!;
+  const specifiers = [
+    ...source.matchAll(IMPORT_OR_EXPORT_FROM_PATTERN),
+    ...source.matchAll(SIDE_EFFECT_IMPORT_PATTERN),
+    ...source.matchAll(DYNAMIC_IMPORT_PATTERN),
+  ].map((match) => match[1]!);
+  for (const specifier of specifiers) {
     const withoutExtension = specifier.replace(/\.js$/, "");
     const pathSegments = withoutExtension.split("/");
     if (
@@ -58,6 +64,18 @@ describe("Babylon Native package migration", () => {
     ] as const) {
       expect(importsLegacyRuntimeNativeSceneModule(
         `${declaration} "${specifier}";`,
+      )).toBe(true);
+    }
+    for (const specifier of [
+      "./native-scene-module.js",
+      "../../runtime/native-scene-module",
+      "@whitebox-world/runtime-babylon/legacy/native-scene-module.js",
+    ]) {
+      expect(importsLegacyRuntimeNativeSceneModule(
+        `${"import"} "${specifier}";`,
+      )).toBe(true);
+      expect(importsLegacyRuntimeNativeSceneModule(
+        `${"import"}("${specifier}");`,
       )).toBe(true);
     }
     expect(importsLegacyRuntimeNativeSceneModule(
