@@ -151,6 +151,8 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "packages/runtime-host/src/world-session-mounted.test.ts", lane: "contract" },
   { path: "packages/runtime-host/src/world-session.test.ts", lane: "contract" },
   { path: "packages/runtime-host/src/world-state-artifact-store.test.ts", lane: "contract" },
+  { path: "packages/scene-authoring-contracts/src/package-boundary.test.ts", lane: "contract" },
+  { path: "packages/scene-authoring-contracts/src/scene-authoring-contracts.test.ts", lane: "contract" },
   { path: "packages/subject-actions/src/action-presentation-registry.test.ts", lane: "contract" },
   { path: "packages/subject-actions/src/action-presentation-resolver.test.ts", lane: "contract" },
   { path: "packages/subject-actions/src/character-state-resolver.test.ts", lane: "contract" },

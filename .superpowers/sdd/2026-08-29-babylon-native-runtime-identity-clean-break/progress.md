@@ -34,7 +34,7 @@ Ruling: generated examples and scene evidence are regenerated only through their
 
 - BNA1-00: complete in the census commit; baseline, retained stash, versions, schema/parity gate, generated files, ownership graph, and terminal dispositions recorded.
 - BNA1-01: complete. RED failed because `world-build-identity.js` did not exist. GREEN owns `Sha256HashV1` only in Protocol, moves Package Ref ownership out of WorldPackage, adds the closed source-neutral identity parser/canonical bytes/hash, and registers identity plus dependency/ownership tests. Focused Identity/Package Store tests passed (13), the broader migrated contract sample passed (323), workspace boundary and test census passed, and typecheck passed.
-- BNA1-02: complete in the current pending commit. Gameplay RED produced 13
+- BNA1-02: complete in `886a3d3`. Gameplay RED produced 13
   Bootstrap failures before `initialRelationshipStates` became a required,
   ID-canonical, accessor-free, body-hashed field. Runtime Bootstrap RED then
   rejected the asymmetric full-closure fixture until the asset Transform and
@@ -51,7 +51,19 @@ Ruling: generated examples and scene evidence are regenerated only through their
   Runtime/Gameplay/Compiler/Babylon tests 531/531, workspace boundary floor,
   test census (304 total / 272 contract / 32 resource-heavy), typecheck, and
   `git diff --check` passed.
-- BNA1-03: not started.
+- BNA1-03: complete in the current pending commit. The focused RED failed on
+  the intentionally missing package and implementation. GREEN adds the closed
+  Canonical / Babylon Native / Capability Gap Route union, immutable Canonical
+  / Native Attempt inputs, mutually exclusive completed / rejected / tool-error
+  Results, direct Protocol hash ownership, canonical bytes and whole-object
+  hashes, uint32 Seed rejection including signed zero, recursively accessor-free
+  parsing, sorted set-like refs/assets/reason codes with duplicate rejection,
+  and fail-closed `route-decision` / `source-authoring` invalidation without a
+  speculative `runtime-replay` member. The package depends only on Protocol and
+  lodash-es and does not enter Authoring, Compiler, Runtime, Babylon,
+  WorldPackage, provider, or asset-production layers. Evidence: focused tests
+  17/17, workspace boundary floor, test census (306 total / 274 contract / 32
+  resource-heavy), typecheck, and `git diff --check` passed.
 - BNA1-04: not started.
 - BNA1-05: not started.
 - BNA1-06: not started.
