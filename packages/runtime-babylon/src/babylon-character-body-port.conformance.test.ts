@@ -508,12 +508,16 @@ describe("Babylon 9.21.2 / Havok 1.3.14 Character Body conformance", () => {
         },
       });
       const tolerance = BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1;
+      const stepUpLookaheadMeters = 0.35 + 0.05 + 0.02;
+      const maximumHorizontalMeters = shouldStepUp
+        ? Math.max(requestedX, stepUpLookaheadMeters)
+        : requestedX;
       expect(resolution.appliedTranslationMetersXYZ[0])
-        .toBeLessThanOrEqual(requestedX + tolerance);
+        .toBeLessThanOrEqual(maximumHorizontalMeters + tolerance);
       expect(resolution.appliedTranslationMetersXYZ[0]).toBeGreaterThanOrEqual(-tolerance);
       expect(resolution.appliedTranslationMetersXYZ[1])
         .toBeLessThanOrEqual(0.3 + tolerance);
-      if (shouldStepUp && requestedX >= 0.5) {
+      if (shouldStepUp) {
         expect(resolution.appliedTranslationMetersXYZ[1]).toBeGreaterThan(0.15);
       }
       if (!shouldStepUp) {
@@ -523,6 +527,81 @@ describe("Babylon 9.21.2 / Havok 1.3.14 Character Body conformance", () => {
     },
     30_000,
   );
+
+  it("climbs a 0.25m step across walk-speed ticks without remaining on the riser", async () => {
+    const { scene } = await realScene();
+    addStaticBox(scene, "floor", new Vector3(0, -0.1, 0), new Vector3(16, 0.2, 8));
+    addStaticBox(scene, "step", new Vector3(2.5, 0.125, 0), new Vector3(3, 0.25, 4));
+    const port = createBabylonCharacterBodyPortV1({
+      ...realPortOptions(scene),
+      resetState: {
+        positionMetersXYZ: [0, 0.95, 0],
+        linearVelocityMetersPerSecondXYZ: [0, 0, 0],
+      },
+    });
+    disposals.push(() => port.dispose());
+    const walkDeltaX = 1.4 / 60;
+    let positionX = 0;
+    let positionY = 0.95;
+    for (let tick = 1; tick <= 90; tick += 1) {
+      const token = createMovementTickTokenV1();
+      const sample = port.beginTick({ token, tick });
+      expect(sample.support.mode).toBe("supported");
+      const resolution = port.resolve({
+        token,
+        proposal: {
+          schemaVersion: 1,
+          token,
+          tick,
+          translationDeltaMetersXYZ: [walkDeltaX, 0, 0],
+          proposedLinearVelocityMetersPerSecondXYZ: [1.4, 0, 0],
+          proposedFacingYawRadians: -Math.PI / 2,
+          layeredMoves: [],
+        },
+      });
+      port.commitTick(token);
+      positionX = resolution.positionMetersXYZ[0];
+      positionY = resolution.positionMetersXYZ[1];
+      if (positionX > 2 && positionY > 1.05) break;
+    }
+    expect(positionY).toBeGreaterThan(1.05);
+    expect(positionX).toBeGreaterThan(1.2);
+  }, 30_000);
+
+  it("climbs a 0.25m step when integrate is driven by velocity like Motion Kernel", async () => {
+    const { scene } = await realScene();
+    addStaticBox(scene, "floor", new Vector3(0, -0.1, 0), new Vector3(24, 0.2, 8));
+    addStaticBox(scene, "step", new Vector3(5.5, 0.125, 0), new Vector3(3, 0.25, 4));
+    const controller = new GroundAwarePhysicsCharacterController(
+      new Vector3(2, 0.9, 0),
+      { capsuleHeight: 1.8, capsuleRadius: 0.35 },
+      scene,
+    );
+    controller.keepDistance = 0.05;
+    controller.keepContactTolerance = 0.1;
+    controller.maxSlopeCosine = Math.cos((42 * Math.PI) / 180);
+    controller.maxStepHeight = 0.3;
+    disposals.push(() => controller.dispose());
+    const gravity = new Vector3(0, -9.81, 0);
+    const gravityDirection = new Vector3(0, -1, 0);
+    const fixedDeltaSeconds = 1 / 60;
+    for (let tick = 1; tick <= 180; tick += 1) {
+      const support = controller.checkSupport(fixedDeltaSeconds, gravityDirection);
+      const desired = new Vector3(1.4, 0, 0);
+      if (support.supportedState !== CharacterSupportedState.UNSUPPORTED) {
+        const normal = support.averageSurfaceNormal.clone().normalize();
+        const intoSurface = Vector3.Dot(desired, normal);
+        if (intoSurface < 0) desired.subtractInPlace(normal.scale(intoSurface));
+      }
+      controller.setVelocity(desired);
+      controller.integrate(fixedDeltaSeconds, support, gravity);
+      if (controller.getPosition().x > 4.2 && controller.getPosition().y > 1.05) {
+        break;
+      }
+    }
+    expect(controller.getPosition().y).toBeGreaterThan(1.05);
+    expect(controller.getPosition().x).toBeGreaterThan(4.2);
+  }, 30_000);
 
   it("keeps a positive upward exact proposal unsupported across the next real support sample", async () => {
     const { scene } = await realScene();

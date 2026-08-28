@@ -23,6 +23,7 @@ import type {
   ExecutionCameraRigProfileV1,
   ExecutionPlanV5,
   ExecutionSubjectCapabilityAssemblyV1,
+  LocomotionModeV1,
   SemanticInputActionV1,
   Vec3,
   ViewControlFrameV1,
@@ -32,7 +33,7 @@ import {
   applyCameraRigParameterOverridesV1,
   validateCameraTuningV1,
 } from "@whitebox-world/runtime-contracts";
-import { isNil } from "lodash-es";
+import { isEmpty, isNil } from "lodash-es";
 import type { PhysicsWorldQueryPortV1 } from "@whitebox-world/runtime-framework";
 
 import { CameraViewSolverV1 } from "./camera-view-solver";
@@ -219,6 +220,20 @@ function cameraContextProfileFromExecution(
         rule.when.movementMediums !== undefined &&
         movementMediums?.length === 0
       ) return [];
+      const requiredMotionTags = rule.when.requiredMotionTags ?? [];
+      const leftoverMotionTags = requiredMotionTags.filter(
+        (tag) => tag !== "free-ground",
+      );
+      const requiredCameraContextTags = [
+        ...leftoverMotionTags,
+        ...(rule.when.requiredCameraContextTags ?? []),
+      ];
+      const mobilityModes = [
+        ...(rule.when.mobilityModes ?? []),
+        ...(requiredMotionTags.includes("free-ground")
+          ? (["grounded"] as const)
+          : []),
+      ].filter((mode, index, modes) => modes.indexOf(mode) === index);
       return {
         id: rule.id,
         priority: rule.priority,
@@ -229,9 +244,7 @@ function cameraContextProfileFromExecution(
         ...(rule.when.locomotionStatuses === undefined
           ? {}
           : { locomotionStatuses: rule.when.locomotionStatuses }),
-        ...(rule.when.mobilityModes === undefined
-          ? {}
-          : { mobilityModes: rule.when.mobilityModes }),
+        ...(isEmpty(mobilityModes) ? {} : { mobilityModes }),
         ...(rule.when.gaits === undefined
           ? {}
           : { gaits: rule.when.gaits }),
@@ -256,18 +269,9 @@ function cameraContextProfileFromExecution(
         ...(rule.when.requiredSocketIds === undefined
           ? {}
           : { requiredSocketIds: rule.when.requiredSocketIds }),
-        ...((rule.when.requiredMotionTags === undefined &&
-          rule.when.requiredCameraContextTags === undefined)
+        ...(isEmpty(requiredCameraContextTags)
           ? {}
-          : {
-              // Legacy Rule vocabulary is translated for locked Profile
-              // admission only. The Task-6 seam publishes semantic authority
-              // unavailable with no matching tags, so auto Rules are bypassed.
-              requiredCameraContextTags: [
-                ...(rule.when.requiredMotionTags ?? []),
-                ...(rule.when.requiredCameraContextTags ?? []),
-              ],
-            }),
+          : { requiredCameraContextTags }),
         },
         ...(rule.cameraRigProfileRef === undefined
           ? {}
@@ -360,6 +364,91 @@ export function legacyViewTargetToCommittedCameraContextV2ForTask6(
       cameraContextTags: [],
     },
   };
+}
+
+/**
+ * Live Motion Kernel subjects still own support and locomotion. Publish those
+ * committed facts as Camera Context V2 so automatic Rules can select a view.
+ * Do not reuse the Task-6 unavailable seam: that seam must not invent gait or
+ * phase, and it bypasses every auto Rule including free-ground → orbit.
+ */
+export function committedCameraContextFromMotionKernelV1(
+  sample: ViewTargetSampleV1,
+  committedTick: number,
+  locomotionMode: LocomotionModeV1,
+  facingYawRadians: number,
+): CameraContextSampleV2 {
+  const canonicalFacingYawRadians = canonicalCameraNumber(facingYawRadians);
+  const linearVelocity = {
+    x: canonicalCameraNumber(sample.velocityMetersPerSecondXYZ[0]),
+    y: canonicalCameraNumber(sample.velocityMetersPerSecondXYZ[1]),
+    z: canonicalCameraNumber(sample.velocityMetersPerSecondXYZ[2]),
+  };
+  const horizontalSpeedMetersPerSecond = canonicalCameraNumber(
+    Math.hypot(linearVelocity.x, linearVelocity.z),
+  );
+  const positionMetersXYZ = [
+    canonicalCameraNumber(sample.targetPositionMetersXYZ[0]),
+    canonicalCameraNumber(sample.targetPositionMetersXYZ[1]),
+    canonicalCameraNumber(sample.targetPositionMetersXYZ[2]),
+  ] as const;
+  const airborne = locomotionMode === "airborne" ||
+    sample.movementMedium === "air";
+  return parseCameraContextSampleV2({
+    schemaVersion: 2,
+    semanticAuthorityStatus: "available",
+    committedTick,
+    controlledEntityId: sample.controlledEntityId,
+    targetEntityId: sample.entityId,
+    subjectPose: {
+      positionMetersXYZ,
+      facingYawRadians: canonicalFacingYawRadians,
+    },
+    locomotion: airborne
+      ? {
+          schemaVersion: 2,
+          status: "active",
+          mobilityMode: "airborne",
+          gait: "none",
+          verticalPhase: linearVelocity.y > 0 ? "rising" : "falling",
+          supportMode: "unsupported",
+          movementMedium: "air",
+          facingYawRadians: canonicalFacingYawRadians,
+          linearVelocity,
+          horizontalSpeedMetersPerSecond,
+          committedTick,
+          phaseEnteredTick: 0,
+          transitionSequence: 0,
+        }
+      : {
+          schemaVersion: 2,
+          status: "active",
+          mobilityMode: "grounded",
+          gait: locomotionMode === "walk" || locomotionMode === "run"
+            ? locomotionMode
+            : "idle",
+          verticalPhase: "none",
+          supportMode: "supported",
+          movementMedium: "ground",
+          facingYawRadians: canonicalFacingYawRadians,
+          linearVelocity,
+          horizontalSpeedMetersPerSecond,
+          committedTick,
+          phaseEnteredTick: 0,
+          transitionSequence: 0,
+        },
+    actionSummary: {
+      status: "available",
+      activeActionRefs: [],
+      isInterruptible: true,
+    },
+    environment: {
+      relationshipRole: sample.relationshipRole,
+      relationshipContexts: sample.relationshipContexts,
+      socketPositionsMetersXYZById: sample.socketPositionsMetersXYZById,
+      cameraContextTags: [...sample.cameraContextTags],
+    },
+  });
 }
 
 function viewTargetFromCommittedCameraContextV2(
