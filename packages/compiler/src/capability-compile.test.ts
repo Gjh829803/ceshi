@@ -1,21 +1,20 @@
 import { describe, expect, it } from "vitest";
 
 import { normalizeAuthoringSpecV4 } from "@whitebox-world/authoring";
+import { createGameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
 import {
-  createGameplayBootstrapResourceLockEntryV1,
-  createGameplayBootstrapV1,
-} from "@whitebox-world/gameplay-contracts";
-import { sha256CanonicalJson } from "@whitebox-world/protocol";
+  sha256CanonicalJson,
+  type Sha256HashV1,
+} from "@whitebox-world/protocol";
 import type { RuntimeSubjectCapabilityAssemblyV1 } from "@whitebox-world/runtime-contracts";
 import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
 
 import {
   createValidAuthoringSpecV4 as createValidAuthoringSpec,
 } from "../../authoring/src/test-fixture";
-import { compileWorldV5 } from "./index";
+import { compileCanonicalWorldV1 } from "./index";
 
-const GAMEPLAY_BOOTSTRAP_LOCK =
-  createGameplayBootstrapResourceLockEntryV1(createGameplayBootstrapV1({
+const GAMEPLAY_BOOTSTRAP = createGameplayBootstrapV1({
     kind: "gameplay-bootstrap",
     id: "capability-compile-test.gameplay",
     version: 1,
@@ -25,7 +24,7 @@ const GAMEPLAY_BOOTSTRAP_LOCK =
     semanticActionDefinitions: [],
     availableCapabilityRefs: [],
     initialRelationshipStates: [],
-  }));
+  });
 
 const IMPLEMENTED_PACKAGES = [
   {
@@ -73,17 +72,20 @@ function compilePackage(
   ) {
     throw new Error(`Capability package failed to normalize: ${JSON.stringify(normalized.diagnostics)}`);
   }
-  const compiled = compileWorldV5({
+  const compiled = compileCanonicalWorldV1({
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
-    gameplayBootstrapResourceLock: GAMEPLAY_BOOTSTRAP_LOCK,
+    gameplayBootstrap: GAMEPLAY_BOOTSTRAP,
+    worldRuntimeBootstrapRef:
+      `worldkit://world-runtime-bootstrap/${normalized.value.id}@1`,
   });
-  if (!compiled.ok || compiled.executionPlan === undefined) {
+  if (!compiled.ok) {
     throw new Error(`Capability package failed to compile: ${JSON.stringify(compiled.diagnostics)}`);
   }
-  const assembly = compiled.executionPlan.subjects[0]?.capabilityAssembly;
+  const assembly = compiled.worldRuntimeBootstrap
+    .subjectRuntimeDescriptors[0]?.capabilityAssembly;
   if (assembly === undefined) {
-    throw new Error("Capability assembly was not projected into the Execution Plan.");
+    throw new Error("Capability assembly was not projected into the Runtime Bootstrap.");
   }
   return {
     assembly,
@@ -183,10 +185,12 @@ describe("capability-driven Subject compilation", () => {
     }
     definition.capabilityAssembly.relationshipProfiles = [reservedSeat];
 
-    expect(compileWorldV5({
+    expect(compileCanonicalWorldV1({
       normalizedWorldIr: forged,
-      normalizedWorldIrHash: sha256CanonicalJson(forged),
-      gameplayBootstrapResourceLock: GAMEPLAY_BOOTSTRAP_LOCK,
+      normalizedWorldIrHash: sha256CanonicalJson(forged) as Sha256HashV1,
+      gameplayBootstrap: GAMEPLAY_BOOTSTRAP,
+      worldRuntimeBootstrapRef:
+        `worldkit://world-runtime-bootstrap/${forged.id}@1`,
     })).toMatchObject({
       ok: false,
       diagnostics: [{

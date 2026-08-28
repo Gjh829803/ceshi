@@ -15,8 +15,15 @@ import type {
 } from "@whitebox-world/authoring";
 import {
   sha256CanonicalJson,
+  stringifyCanonicalJson,
   type Sha256HashV1,
 } from "@whitebox-world/protocol";
+import {
+  createGameplayBootstrapResourceLockEntryV1,
+  parseGameplayBootstrapV1,
+  type GameplayBootstrapResourceLockEntryV1,
+  type GameplayBootstrapV1,
+} from "@whitebox-world/gameplay-contracts";
 import { BIPED_BONE_IDS_V1 } from "@whitebox-world/subject-contracts";
 import {
   sampleTriangleHeightfieldSurface,
@@ -25,36 +32,37 @@ import {
   type SpawnStaticBlockingObject,
 } from "@whitebox-world/terrain-surface";
 import {
-  canonicalExecutionResourceLockEntriesV1,
-  hashExecutionPlanV5,
-  parseExecutionPlanV5,
-  type CompileDiagnostic,
+  canonicalResourceLockEntriesV1,
+  createCanonicalSceneExecutionPlanV1,
+  createWorldRuntimeBootstrapV1,
+  hashCanonicalSceneExecutionPlanV1,
+  type CanonicalSceneConnectivityRequirementV1,
+  type CanonicalSceneExecutionPlanV1,
+  type CanonicalSceneHeightfieldTraversalSurfaceV1,
+  type CanonicalSceneLayoutAssertionV1,
+  type CanonicalSceneLayoutPlacementV1,
+  type CanonicalSceneLayoutV1,
+  type CanonicalSceneObjectPrimitiveV1,
+  type CanonicalSceneObjectV1,
+  type CanonicalSceneResourceLockEntryV1,
+  type CanonicalSceneStaticColliderShapeV1,
+  type CanonicalSceneStaticColliderTraversalSurfaceV1,
+  type CanonicalSceneStaticColliderV1,
+  type CanonicalSceneTerrainV1,
+  type CanonicalSceneTraversalAreaV1,
+  type CanonicalSceneWaterBoundaryV1,
+  type CanonicalSceneWaterV1,
   type RuntimeAnimationSetV1,
   type RuntimeColliderProfileV1,
-  type ExecutionObjectPrimitiveV3,
-  type ExecutionObjectV3,
-  type ExecutionPlanV5,
-  type GameplayBootstrapExecutionResourceLockV1,
-  type ExecutionLayoutAssertionV1,
-  type ExecutionLayoutPlacementV1,
   type RuntimeRigProfileV1,
   type RuntimeSubjectAssetV1,
-  type ExecutionTerrainV3,
-  type ExecutionWaterBoundaryV3,
-  type ExecutionWaterV3,
+  type RuntimeSubjectCapabilityAssemblyV1,
+  type RuntimeSubjectDescriptorV1,
   type RuntimeSubjectSocketV1,
   type RuntimeSubjectVisualPartV1,
-} from "@whitebox-world/runtime-contracts";
-
-type ExecutionPlanSubjectV5 = ExecutionPlanV5["subjects"][number];
-import type {
-  CompileWorldResultV5,
-  ExecutionConnectivityRequirementV1,
-  ExecutionHeightfieldTraversalSurfaceV1,
-  ExecutionTraversalAreaV1,
-  ExecutionStaticColliderShapeV1,
-  ExecutionStaticColliderV1,
-  ExecutionStaticColliderTraversalSurfaceV1,
+  type RuntimeResourceKindV1,
+  type RuntimeResourceLockEntryV1,
+  type WorldRuntimeBootstrapV1,
 } from "@whitebox-world/runtime-contracts";
 import {
   deriveColliderSubshapeIdV1,
@@ -96,25 +104,42 @@ interface CompileWorldCoreInput {
   normalizedWorldIr: NormalizedWorldCompileView;
 }
 
+interface CompiledSubjectV1 extends RuntimeSubjectDescriptorV1 {
+  readonly spawnAnchorEntityId: string;
+  readonly spawnSubjectOriginPositionMetersXYZ: readonly [number, number, number];
+  readonly spawnSubjectFacingRadians: number;
+}
+
+interface CompiledCameraV1 {
+  readonly cameraEntityId: string;
+  readonly rigRef: "worldkit://camera/third-person.standard@1";
+  readonly targetEntityId: string;
+  readonly pitchRadians: number;
+  readonly distanceMeters: number;
+  readonly targetHeightMeters: number;
+  readonly fovDegrees: number;
+  readonly aspectRatio: number;
+  readonly manualSwitchAllowed: boolean;
+}
+
 interface CompiledWorldComponents {
-  readonly id: ExecutionPlanV5["id"];
-  readonly seed: ExecutionPlanV5["seed"];
-  readonly runtimeBackend: ExecutionPlanV5["runtimeBackend"];
-  readonly coordinateSystem: ExecutionPlanV5["coordinateSystem"];
+  readonly id: string;
+  readonly seed: number;
+  readonly coordinateSystem: CanonicalSceneExecutionPlanV1["coordinateSystem"];
   readonly gravityMetersPerSecondSquaredXYZ:
-    ExecutionPlanV5["gravityMetersPerSecondSquaredXYZ"];
-  readonly atmospherePreset: ExecutionPlanV5["atmospherePreset"];
-  readonly terrain: ExecutionPlanV5["terrain"];
-  readonly waters: ExecutionPlanV5["waters"];
-  readonly objects: ExecutionPlanV5["objects"];
-  readonly subjectAssets: ExecutionPlanV5["subjectAssets"];
-  readonly rigProfiles: ExecutionPlanV5["rigProfiles"];
-  readonly animationSets: ExecutionPlanV5["animationSets"];
-  readonly colliderProfiles: ExecutionPlanV5["colliderProfiles"];
+    WorldRuntimeBootstrapV1["gravityMetersPerSecondSquaredXYZ"];
+  readonly atmospherePreset: CanonicalSceneExecutionPlanV1["atmospherePreset"];
+  readonly terrain: CanonicalSceneTerrainV1;
+  readonly waters: readonly CanonicalSceneWaterV1[];
+  readonly objects: readonly CanonicalSceneObjectV1[];
+  readonly subjectAssets: readonly RuntimeSubjectAssetV1[];
+  readonly rigProfiles: readonly RuntimeRigProfileV1[];
+  readonly animationSets: readonly RuntimeAnimationSetV1[];
+  readonly colliderProfiles: readonly RuntimeColliderProfileV1[];
   readonly controlledEntityId: string;
-  readonly subjects: ExecutionPlanV5["subjects"];
-  readonly camera: ExecutionPlanV5["camera"];
-  readonly resourceUsage: ExecutionPlanV5["resourceUsage"];
+  readonly subjects: readonly CompiledSubjectV1[];
+  readonly camera: CompiledCameraV1;
+  readonly resourceUsage: CanonicalSceneExecutionPlanV1["sceneResourceUsage"];
 }
 
 interface CompileWorldCoreResult {
@@ -123,11 +148,33 @@ interface CompileWorldCoreResult {
   readonly diagnostics: readonly CompileDiagnostic[];
 }
 
-export interface CompileWorldInputV5 {
-  readonly normalizedWorldIr: NormalizedWorldIRV4;
-  readonly normalizedWorldIrHash: string;
-  readonly gameplayBootstrapResourceLock: GameplayBootstrapExecutionResourceLockV1;
+export interface CompileDiagnostic {
+  readonly severity: "info" | "warning" | "error";
+  readonly code: string;
+  readonly instancePath: string;
+  readonly message: string;
+  readonly details?: Readonly<Record<string, unknown>>;
 }
+
+export interface CompileCanonicalWorldInputV1 {
+  readonly normalizedWorldIr: NormalizedWorldIRV4;
+  readonly normalizedWorldIrHash: Sha256HashV1;
+  readonly gameplayBootstrap: GameplayBootstrapV1;
+  readonly worldRuntimeBootstrapRef: string;
+}
+
+export type CompileCanonicalWorldResultV1 =
+  | Readonly<{
+      ok: true;
+      canonicalSceneExecutionPlan: CanonicalSceneExecutionPlanV1;
+      executionPlanHash: Sha256HashV1;
+      worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
+      diagnostics: readonly CompileDiagnostic[];
+    }>
+  | Readonly<{
+      ok: false;
+      diagnostics: readonly CompileDiagnostic[];
+    }>;
 
 class CompilerInputAccessorErrorV1 extends Error {}
 
@@ -152,15 +199,15 @@ function assertCompilerInputAccessorFreeV1(
   }
 }
 
-function snapshotCompileWorldInputV5(
-  input: CompileWorldInputV5,
-): CompileWorldInputV5 {
+function snapshotCompileCanonicalWorldInputV1(
+  input: CompileCanonicalWorldInputV1,
+): CompileCanonicalWorldInputV1 {
   assertCompilerInputAccessorFreeV1(input);
   return structuredClone(input);
 }
 
 export function sampleTerrainHeight(
-  terrain: ExecutionTerrainV3,
+  terrain: CanonicalSceneTerrainV1,
   pointMetersXZ: Vec2,
 ): number {
   const [columns, rows] = terrain.resolutionCellsXZ;
@@ -196,7 +243,7 @@ function findOnlyNodeV4<K extends NormalizedWorldNodeV4["kind"]>(
   return node;
 }
 
-function compileTerrainV3(world: NormalizedWorldCompileView): ExecutionTerrainV3 {
+function compileTerrainV3(world: NormalizedWorldCompileView): CanonicalSceneTerrainV1 {
   const node = findOnlyNodeV4(world.nodes, "terrain");
   const terrain = node.components.terrain;
   const source = terrain.source;
@@ -249,14 +296,14 @@ function compileTerrainV3(world: NormalizedWorldCompileView): ExecutionTerrainV3
     sizeMetersXZ: [...terrain.grid.sizeMetersXZ],
     resolutionCellsXZ: [...terrain.grid.resolutionCellsXZ],
     heightSamplesMeters: heights,
-    heightSamplesHash: sha256CanonicalJson(heights),
+    heightSamplesHash: sha256CanonicalJson(heights) as Sha256HashV1,
     minimumHeightMeters,
     maximumHeightMeters,
     semanticClassId: terrain.semantic?.classId ?? "terrain.ground",
   };
 }
 
-function boundaryCenterV3(boundary: ExecutionWaterBoundaryV3): Vec2 {
+function boundaryCenterV3(boundary: CanonicalSceneWaterBoundaryV1): Vec2 {
   if (boundary.kind !== "polygon") return boundary.centerMetersXZ;
   const total = boundary.pointsMetersXZ.reduce<Vec2>(
     (sum, point) => [sum[0] + point[0], sum[1] + point[1]],
@@ -270,8 +317,8 @@ function boundaryCenterV3(boundary: ExecutionWaterBoundaryV3): Vec2 {
 
 function compileWatersV3(
   world: NormalizedWorldCompileView,
-  terrain: ExecutionTerrainV3,
-): ExecutionWaterV3[] {
+  terrain: CanonicalSceneTerrainV1,
+): CanonicalSceneWaterV1[] {
   return world.nodes
     .filter(
       (node): node is Extract<NormalizedWorldNodeV4, { kind: "water" }> =>
@@ -279,7 +326,7 @@ function compileWatersV3(
     )
     .map((node) => {
       const water = node.components.water;
-      const boundary = structuredClone(water.boundary) as ExecutionWaterBoundaryV3;
+      const boundary = structuredClone(water.boundary) as CanonicalSceneWaterBoundaryV1;
       return {
         entityId: node.id,
         terrainEntityId: water.terrainEntityId,
@@ -298,7 +345,7 @@ function compileWatersV3(
 
 function resolvePrimitiveV3(
   prototype: PrimitivePrototypeSpecV2,
-): ExecutionObjectPrimitiveV3 {
+): CanonicalSceneObjectPrimitiveV1 {
   switch (prototype.primitive) {
     case "box":
       return { kind: "box", sizeMetersXYZ: [...prototype.sizeMetersXYZ] };
@@ -314,7 +361,7 @@ function resolvePrimitiveV3(
   }
 }
 
-function compileObjectsV3(world: NormalizedWorldCompileView): ExecutionObjectV3[] {
+function compileObjectsV3(world: NormalizedWorldCompileView): CanonicalSceneObjectV1[] {
   const prototypes = new Map(
     world.resources.prototypes.map((prototype) => [
       `${prototype.id}@${prototype.version}`,
@@ -350,7 +397,7 @@ function compileObjectsV3(world: NormalizedWorldCompileView): ExecutionObjectV3[
 }
 
 function staticObjectFootprintV3(
-  object: ExecutionObjectV3,
+  object: CanonicalSceneObjectV1,
 ): SpawnStaticBlockingObject | undefined {
   const [rotationX, rotationY, rotationZ] = object.transform.rotationEulerRadiansXYZ;
   if (Math.abs(rotationX) > 1e-8 || Math.abs(rotationZ) > 1e-8) return undefined;
@@ -399,9 +446,9 @@ function staticObjectFootprintV3(
 }
 
 function validateCompiledSpawnFootprintsV3(
-  subjects: readonly ExecutionPlanSubjectV5[],
-  waters: readonly ExecutionWaterV3[],
-  objects: readonly ExecutionObjectV3[],
+  subjects: readonly CompiledSubjectV1[],
+  waters: readonly CanonicalSceneWaterV1[],
+  objects: readonly CanonicalSceneObjectV1[],
 ): CompileDiagnostic[] {
   const diagnostics: CompileDiagnostic[] = [];
   const blockers = objects
@@ -477,7 +524,7 @@ function validateCompiledSpawnFootprintsV3(
 }
 
 interface CompiledSubjectsV3 {
-  subjects: ExecutionPlanSubjectV5[];
+  subjects: CompiledSubjectV1[];
   subjectAssets: RuntimeSubjectAssetV1[];
   rigProfiles: RuntimeRigProfileV1[];
   animationSets: RuntimeAnimationSetV1[];
@@ -706,10 +753,10 @@ function compileSubjectSocketV3(socket: NormalizedSubjectSocketV2): RuntimeSubje
 
 function compileCapabilityAssemblyV1(
   assembly: NonNullable<NormalizedSubjectDefinitionV2["capabilityAssembly"]>,
-): NonNullable<ExecutionPlanSubjectV5["capabilityAssembly"]> {
+): NonNullable<CompiledSubjectV1["capabilityAssembly"]> {
   const compileMotionProfile = (
     profile: typeof assembly.defaultMotionProfile,
-  ): NonNullable<ExecutionPlanSubjectV5["capabilityAssembly"]>["defaultMotionProfile"] => ({
+  ): NonNullable<CompiledSubjectV1["capabilityAssembly"]>["defaultMotionProfile"] => ({
     resourceRef: profile.resourceRef,
     contentHash: profile.contentHash,
     motionKernelRef: profile.motionKernelRef,
@@ -717,7 +764,7 @@ function compileCapabilityAssemblyV1(
   });
   const compileMotionKernel = (
     motionKernel: typeof assembly.motionKernels[number],
-  ): NonNullable<ExecutionPlanSubjectV5["capabilityAssembly"]>["motionKernels"][number] => {
+  ): NonNullable<CompiledSubjectV1["capabilityAssembly"]>["motionKernels"][number] => {
     const implementationId = motionKernel.implementationId;
     if (
       implementationId !== "free-ground" &&
@@ -833,7 +880,7 @@ function compileCapabilityAssemblyV1(
 
 function colliderProfileMatchesDefinitionV3(
   profile: NormalizedColliderProfileV1,
-  definitionCollider: ExecutionPlanSubjectV5["collider"],
+  definitionCollider: CompiledSubjectV1["collider"],
 ): boolean {
   const profileCollider = profile.collider;
   return profileCollider.kind === definitionCollider.kind &&
@@ -894,7 +941,7 @@ function compileSubjectsV3(
         node.kind === "subject",
     )
     .sort((left, right) => left.id.localeCompare(right.id))
-    .map((node): ExecutionPlanSubjectV5 => {
+    .map((node): CompiledSubjectV1 => {
       const definition = definitionsByRef.get(node.subjectDefinitionRef);
       if (definition === undefined) {
         throw new Error(
@@ -1177,7 +1224,7 @@ function compileSubjectsV3(
 }
 
 function primitiveResourceCostV3(
-  primitive: ExecutionObjectPrimitiveV3,
+  primitive: CanonicalSceneObjectPrimitiveV1,
 ): { vertices: number; triangles: number } {
   switch (primitive.kind) {
     case "box":
@@ -1192,7 +1239,7 @@ function primitiveResourceCostV3(
 }
 
 function waterResourceCostV3(
-  boundary: ExecutionWaterBoundaryV3,
+  boundary: CanonicalSceneWaterBoundaryV1,
 ): { vertices: number; triangles: number } {
   const vertices =
     boundary.kind === "polygon" ? boundary.pointsMetersXZ.length : 64;
@@ -1294,7 +1341,6 @@ function compileWorldCore(input: CompileWorldCoreInput): CompileWorldCoreResult 
     const components: CompiledWorldComponents = {
       id: world.id,
       seed: world.seed,
-      runtimeBackend: "babylon-havok",
       coordinateSystem: world.world.coordinateSystem,
       gravityMetersPerSecondSquaredXYZ: [
         ...world.world.gravityMetersPerSecondSquaredXYZ,
@@ -1419,7 +1465,7 @@ function assertionToleranceKeys(
 
 function assertionBase(
   assertion: NormalizedLayoutAssertionV1,
-): Pick<ExecutionLayoutAssertionV1, "constraintId" | "evidenceEntityIds" | "measurements" | "tolerances"> {
+): Pick<CanonicalSceneLayoutAssertionV1, "constraintId" | "evidenceEntityIds" | "measurements" | "tolerances"> {
   return {
     constraintId: assertion.constraintId,
     evidenceEntityIds: [...assertion.evidenceEntityIds],
@@ -1436,7 +1482,7 @@ function assertionBase(
 
 function projectLayoutAssertionV1(
   assertion: NormalizedLayoutAssertionV1,
-): ExecutionLayoutAssertionV1 {
+): CanonicalSceneLayoutAssertionV1 {
   const base = assertionBase(assertion);
   switch (assertion.kind) {
     case "inside-region":
@@ -1463,7 +1509,7 @@ function projectLayoutAssertionV1(
 
 function projectPlacementV1(
   node: Extract<NormalizedWorldIRV4["nodes"][number], { kind: "object" | "anchor" }>,
-): ExecutionLayoutPlacementV1 {
+): CanonicalSceneLayoutPlacementV1 {
   return {
     entityId: node.id,
     transform: {
@@ -1499,8 +1545,8 @@ type NormalizedLayoutCompileView = Readonly<{
 
 function compileLockedTerrainV4(
   world: Pick<NormalizedLayoutCompileView, "layout">,
-  baseline: ExecutionTerrainV3,
-): ExecutionTerrainV3 {
+  baseline: CanonicalSceneTerrainV1,
+): CanonicalSceneTerrainV1 {
   const heightfield = world.layout.heightfields.find((row) => row.terrainEntityId === baseline.entityId);
   if (heightfield === undefined) throw new Error("COMPILER_LAYOUT_HEIGHTFIELD_MISSING");
   const expectedLength = heightfield.resolutionVerticesXZ[0] * heightfield.resolutionVerticesXZ[1];
@@ -1531,9 +1577,9 @@ function compileLockedTerrainV4(
   };
 }
 
-function compileExecutionLayoutV1(
+function compileCanonicalSceneLayoutV1(
   world: NormalizedLayoutCompileView,
-): ExecutionPlanV5["layout"] {
+): CanonicalSceneLayoutV1 {
   const placements = world.nodes
     .filter((node): node is Extract<typeof node, { kind: "object" | "anchor" }> =>
       node.kind === "object" || node.kind === "anchor")
@@ -1595,7 +1641,7 @@ function compileExecutionLayoutV1(
 
 function compileTraversalAreaV1(
   area: NormalizedWorldIRV4["layout"]["traversalAreas"][number],
-): ExecutionTraversalAreaV1 {
+): CanonicalSceneTraversalAreaV1 {
   return {
     id: area.id,
     kind: area.kind,
@@ -1606,8 +1652,8 @@ function compileTraversalAreaV1(
 }
 
 function compileHeightfieldTraversalSurfaceV1(
-  terrain: ExecutionTerrainV3,
-): ExecutionHeightfieldTraversalSurfaceV1 {
+  terrain: CanonicalSceneTerrainV1,
+): CanonicalSceneHeightfieldTraversalSurfaceV1 {
   const surfaceEntityId = terrain.entityId;
   const colliderSubshapeId = deriveColliderSubshapeIdV1(
     surfaceEntityId,
@@ -1634,8 +1680,8 @@ function compileHeightfieldTraversalSurfaceV1(
 }
 
 function staticColliderShapeV1(
-  primitive: ExecutionObjectV3["primitive"],
-): ExecutionStaticColliderShapeV1 {
+  primitive: CanonicalSceneObjectV1["primitive"],
+): CanonicalSceneStaticColliderShapeV1 {
   switch (primitive.kind) {
     case "box":
       return { kind: "box", sizeMetersXYZ: [...primitive.sizeMetersXYZ] };
@@ -1652,8 +1698,8 @@ function staticColliderShapeV1(
 }
 
 function compileStaticColliderV1(
-  object: ExecutionObjectV3,
-): ExecutionStaticColliderV1 {
+  object: CanonicalSceneObjectV1,
+): CanonicalSceneStaticColliderV1 {
   const logicalSubshapeId = "primary";
   const colliderSubshapeId = deriveColliderSubshapeIdV1(
     object.entityId,
@@ -1730,9 +1776,9 @@ function compileStaticColliderTraversalSurfaceV1(input: {
   readonly prototypeVersion: number;
   readonly binding: PrototypeTraversalSurfaceBindingV1;
   readonly entityId: string;
-  readonly staticColliders: readonly ExecutionStaticColliderV1[];
+  readonly staticColliders: readonly CanonicalSceneStaticColliderV1[];
   readonly resourceLock: NormalizedWorldIRV4["resources"]["resourceLock"];
-}): ExecutionStaticColliderTraversalSurfaceV1 {
+}): CanonicalSceneStaticColliderTraversalSurfaceV1 {
   const matchingColliders = input.staticColliders.filter(
     (collider) =>
       collider.entityId === input.entityId &&
@@ -1820,11 +1866,11 @@ function compileStaticColliderTraversalSurfaceV1(input: {
 
 function compileStaticColliderTraversalSurfacesV1(
   world: NormalizedWorldIRV4,
-  staticColliders: readonly ExecutionStaticColliderV1[],
+  staticColliders: readonly CanonicalSceneStaticColliderV1[],
   resourceLock: NormalizedWorldIRV4["resources"]["resourceLock"],
-): readonly ExecutionStaticColliderTraversalSurfaceV1[] {
+): readonly CanonicalSceneStaticColliderTraversalSurfaceV1[] {
   const objectNodes = world.nodes.filter((node) => node.kind === "object");
-  const surfaces: ExecutionStaticColliderTraversalSurfaceV1[] = [];
+  const surfaces: CanonicalSceneStaticColliderTraversalSurfaceV1[] = [];
   for (const prototype of world.resources.prototypes) {
     const bindings = (prototype.traversalSurfaceBindings ?? []).map((binding) =>
       canonicalPrototypeTraversalSurfaceBindingV1(binding, prototype.id));
@@ -1888,14 +1934,16 @@ function requireUniqueNodeEntityIdsV1(
 
 function compileConnectivityRequirementV1(
   requirement: NormalizedWorldIRV4["layout"]["connectivityRequirements"][number],
-): ExecutionConnectivityRequirementV1 {
+): CanonicalSceneConnectivityRequirementV1 {
   return structuredClone(requirement);
 }
 
-export function compileWorldV5(input: CompileWorldInputV5): CompileWorldResultV5 {
-  let snapshot: CompileWorldInputV5;
+export function compileCanonicalWorldV1(
+  input: CompileCanonicalWorldInputV1,
+): CompileCanonicalWorldResultV1 {
+  let snapshot: CompileCanonicalWorldInputV1;
   try {
-    snapshot = snapshotCompileWorldInputV5(input);
+    snapshot = snapshotCompileCanonicalWorldInputV1(input);
   } catch (cause) {
     return {
       ok: false,
@@ -1931,7 +1979,7 @@ export function compileWorldV5(input: CompileWorldInputV5): CompileWorldResultV5
   }
 
   try {
-    const normalizedResourceLockEntries = canonicalExecutionResourceLockEntriesV1(
+    const normalizedResourceLockEntries = canonicalResourceLockEntriesV1(
       snapshot.normalizedWorldIr.resources.resourceLock,
     ) as NormalizedWorldIRV4["resources"]["resourceLock"];
     const normalizedResourceLockHash = sha256CanonicalJson(
@@ -1943,10 +1991,12 @@ export function compileWorldV5(input: CompileWorldInputV5): CompileWorldResultV5
     ) {
       throw new Error("Resource Lock hash does not match canonical entries.");
     }
-    let gameplayBootstrapResourceLock: GameplayBootstrapExecutionResourceLockV1;
+    let gameplayBootstrap: GameplayBootstrapV1;
+    let gameplayBootstrapResourceLock: GameplayBootstrapResourceLockEntryV1;
     try {
-      const [canonicalBootstrap] = canonicalExecutionResourceLockEntriesV1([
-        snapshot.gameplayBootstrapResourceLock,
+      gameplayBootstrap = parseGameplayBootstrapV1(snapshot.gameplayBootstrap);
+      const [canonicalBootstrap] = canonicalResourceLockEntriesV1([
+        createGameplayBootstrapResourceLockEntryV1(gameplayBootstrap),
       ]);
       if (
         isNil(canonicalBootstrap) ||
@@ -1958,23 +2008,51 @@ export function compileWorldV5(input: CompileWorldInputV5): CompileWorldResultV5
         throw new TypeError("Invalid Gameplay Bootstrap Resource Lock.");
       }
       gameplayBootstrapResourceLock = canonicalBootstrap as
-        GameplayBootstrapExecutionResourceLockV1;
+        GameplayBootstrapResourceLockEntryV1;
     } catch {
       return {
         ok: false,
         diagnostics: [{
           severity: "error",
           code: "COMPILER_GAMEPLAY_BOOTSTRAP_LOCK_INVALID",
-          instancePath: "/gameplayBootstrapResourceLock",
-          message: "The Gameplay Bootstrap Resource Lock must be one unique gameplay-bootstrap row.",
+          instancePath: "/gameplayBootstrap",
+          message: "Gameplay Bootstrap must parse and produce one unique gameplay-bootstrap Resource Lock row.",
         }],
       };
     }
-    const resourceLockEntries = canonicalExecutionResourceLockEntriesV1([
-      ...normalizedResourceLockEntries,
+    const sceneResourceLockEntries:
+      readonly CanonicalSceneResourceLockEntryV1[] =
+      normalizedResourceLockEntries
+        .filter((entry) => entry.resourceKind === "traversal-surface-profile")
+        .map((entry) => ({
+          resourceRef: entry.resourceRef,
+          resourceKind: "traversal-surface-profile",
+          resolvedVersion: entry.resolvedVersion,
+          contentHash: entry.contentHash as Sha256HashV1,
+        }));
+    const runtimeResourceLockEntries: readonly RuntimeResourceLockEntryV1[] =
+      canonicalResourceLockEntriesV1([
+      ...normalizedResourceLockEntries.filter(
+        (entry) => entry.resourceKind !== "traversal-surface-profile",
+      ),
       gameplayBootstrapResourceLock,
-    ]);
-    const resourceLockHash = sha256CanonicalJson(resourceLockEntries);
+      ]).map((entry) => ({
+        resourceRef: entry.resourceRef,
+        resourceKind: entry.resourceKind as RuntimeResourceKindV1,
+        resolvedVersion: entry.resolvedVersion,
+        contentHash: entry.contentHash as Sha256HashV1,
+      }));
+    const sceneResourceRefs = new Set(
+      sceneResourceLockEntries.map((entry) => entry.resourceRef),
+    );
+    if (
+      sceneResourceLockEntries.length + runtimeResourceLockEntries.length !==
+        normalizedResourceLockEntries.length + 1 ||
+      runtimeResourceLockEntries.some((entry) =>
+        sceneResourceRefs.has(entry.resourceRef))
+    ) {
+      throw new Error("Resource Lock partition is ambiguous or incomplete.");
+    }
     requireUniquePrototypeIdentitiesV1(
       snapshot.normalizedWorldIr.resources.prototypes,
     );
@@ -2020,28 +2098,96 @@ export function compileWorldV5(input: CompileWorldInputV5): CompileWorldResultV5
       controlledEntityId: initialControlledEntityId,
       ...componentsWithoutControlledEntity
     } = compiledCurrent.components;
-    const plan = parseExecutionPlanV5({
-      kind: "worldkit-execution-plan",
-      ...componentsWithoutControlledEntity,
-      schemaVersion: 5,
+    const initialRelationships = snapshot.normalizedWorldIr.relationships
+      .map((relationship) => ({
+        ...structuredClone(relationship),
+        establishedSimulationTick: 0,
+      }))
+      .sort((left, right) => left.id.localeCompare(right.id));
+    if (
+      stringifyCanonicalJson(initialRelationships) !==
+      stringifyCanonicalJson(gameplayBootstrap.initialRelationshipStates)
+    ) {
+      return {
+        ok: false,
+        diagnostics: [{
+          severity: "error",
+          code: "COMPILER_GAMEPLAY_BOOTSTRAP_RELATIONSHIP_MISMATCH",
+          instancePath: "/gameplayBootstrap/initialRelationshipStates",
+          message: "Gameplay Bootstrap initial relationships must exactly match NormalizedWorldIRV4.",
+        }],
+      };
+    }
+    const subjectRuntimeDescriptors = componentsWithoutControlledEntity.subjects
+      .map((subject) => {
+        const {
+          spawnAnchorEntityId: _spawnAnchorEntityId,
+          spawnSubjectOriginPositionMetersXYZ: _position,
+          spawnSubjectFacingRadians: _facing,
+          ...descriptor
+        } = subject;
+        return descriptor;
+      });
+    const worldRuntimeBootstrap = createWorldRuntimeBootstrapV1({
+      kind: "world-runtime-bootstrap",
+      schemaVersion: 1,
+      id: `${componentsWithoutControlledEntity.id}.runtime-bootstrap`,
+      gameplayBootstrapRef: gameplayBootstrap.resourceRef,
+      gameplayBootstrapHash: gameplayBootstrap.contentHash,
       initialControlledEntityId,
-      initialRelationships: snapshot.normalizedWorldIr.relationships
-        .map((relationship) => ({
-          ...structuredClone(relationship),
-          establishedSimulationTick: 0,
-        }))
-        .sort((left, right) => left.id.localeCompare(right.id)),
-      authoringSpecHash: snapshot.normalizedWorldIr.authoringSpecHash,
-      normalizedWorldIrHash: snapshot.normalizedWorldIrHash,
-      resourceLockHash,
-      resourceLockEntries,
+      gravityMetersPerSecondSquaredXYZ:
+        componentsWithoutControlledEntity.gravityMetersPerSecondSquaredXYZ,
+      initialCamera: {
+        mode: "third-person",
+        cameraEntityId: componentsWithoutControlledEntity.camera.cameraEntityId,
+        targetEntityId: componentsWithoutControlledEntity.camera.targetEntityId,
+        cameraRigProfileRef: componentsWithoutControlledEntity.camera.rigRef,
+        pitchRadians: componentsWithoutControlledEntity.camera.pitchRadians,
+        distanceMeters: componentsWithoutControlledEntity.camera.distanceMeters,
+        targetHeightMeters: componentsWithoutControlledEntity.camera.targetHeightMeters,
+        fovDegrees: componentsWithoutControlledEntity.camera.fovDegrees,
+        manualSwitchAllowed:
+          componentsWithoutControlledEntity.camera.manualSwitchAllowed,
+      },
+      subjectAssets: componentsWithoutControlledEntity.subjectAssets,
+      rigProfiles: componentsWithoutControlledEntity.rigProfiles,
+      animationSets: componentsWithoutControlledEntity.animationSets,
+      colliderProfiles: componentsWithoutControlledEntity.colliderProfiles,
       actionPresentationRegistry: {
         schemaVersion: 1,
         bindings: [],
         rootMotionSources: [],
       },
+      subjectRuntimeDescriptors,
+      runtimeResourceLockEntries,
+    });
+    const canonicalSceneExecutionPlan = createCanonicalSceneExecutionPlanV1({
+      kind: "worldkit-canonical-scene-execution-plan",
+      schemaVersion: 1,
+      id: componentsWithoutControlledEntity.id,
+      seed: componentsWithoutControlledEntity.seed,
+      authoringSpecHash: snapshot.normalizedWorldIr.authoringSpecHash,
+      normalizedWorldIrHash: snapshot.normalizedWorldIrHash,
+      coordinateSystem: componentsWithoutControlledEntity.coordinateSystem,
+      atmospherePreset: componentsWithoutControlledEntity.atmospherePreset,
+      worldRuntimeBootstrapRef: snapshot.worldRuntimeBootstrapRef,
+      worldRuntimeBootstrapHash: worldRuntimeBootstrap.contentHash,
+      sceneResourceLockHash: sha256CanonicalJson(sceneResourceLockEntries) as Sha256HashV1,
+      sceneResourceLockEntries,
       terrain,
-      layout: compileExecutionLayoutV1(snapshot.normalizedWorldIr),
+      waters: componentsWithoutControlledEntity.waters,
+      objects: componentsWithoutControlledEntity.objects,
+      subjectInstances: componentsWithoutControlledEntity.subjects.map(
+        (subject) => ({
+          entityId: subject.entityId,
+          spawnAnchorEntityId: subject.spawnAnchorEntityId,
+          subjectOriginPositionMetersXYZ:
+            subject.spawnSubjectOriginPositionMetersXYZ,
+          subjectFacingRadians: subject.spawnSubjectFacingRadians,
+        }),
+      ),
+      sceneResourceUsage: componentsWithoutControlledEntity.resourceUsage,
+      layout: compileCanonicalSceneLayoutV1(snapshot.normalizedWorldIr),
       traversal: {
         surfaces: traversalSurfaces,
         traversalAreas: snapshot.normalizedWorldIr.layout.traversalAreas
@@ -2060,8 +2206,11 @@ export function compileWorldV5(input: CompileWorldInputV5): CompileWorldResultV5
     });
     return {
       ok: true,
-      executionPlan: plan,
-      executionPlanHash: hashExecutionPlanV5(plan),
+      canonicalSceneExecutionPlan,
+      executionPlanHash: hashCanonicalSceneExecutionPlanV1(
+        canonicalSceneExecutionPlan,
+      ),
+      worldRuntimeBootstrap,
       diagnostics: [],
     };
   } catch (cause) {

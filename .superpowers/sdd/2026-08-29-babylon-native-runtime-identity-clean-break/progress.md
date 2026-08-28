@@ -84,7 +84,15 @@ Ruling: generated examples and scene evidence are regenerated only through their
   typecheck, and `git diff --check` passed. The review explicitly marks this as
   migration-only, non-production-admission evidence and requires the temporary
   projector/test to be deleted by BNA1-05.
-- BNA1-05: not started.
+- BNA1-05: complete in the pending terminal-compiler commit. The Canonical
+  compiler now emits exactly one `CanonicalSceneExecutionPlanV1` plus one
+  `WorldRuntimeBootstrapV1`; Scene placement/traversal/static geometry and
+  Runtime Subject/physics/control/camera closure have disjoint owners. The V5
+  Plan parser/compiler/projector and their executable tests are deleted, and
+  direct consumers use the new current-only names without aliases. Evidence:
+  Canonical Plan, Runtime Contracts, Compiler, Traversal Lock, Capability
+  Compile, and Authoring normalization focused gates passed 95/95; the
+  executable/source V5 symbol census, typecheck, and `git diff --check` passed.
 - BNA1-06: not started.
 - BNA1-07: not started.
 - BNA1-08: not started.

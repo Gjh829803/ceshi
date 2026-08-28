@@ -40,8 +40,9 @@ non-overlapping source slices.
 
 ## Asymmetric evidence
 
-The fixture intentionally combines facts that would expose a shallow or lossy
-projection:
+The fixture intentionally compiles one coherent `AuthoringSpecV4` / Normalized
+World IR containing facts that would expose a shallow or lossy projection. It
+does not splice independently compiled Plans:
 
 - gravity `[0.35, -12.5, 0.15]`;
 - nondefault camera pitch, distance, target height, FOV, and a viewport aspect
@@ -60,11 +61,11 @@ IDs, exact hashes, field accounting, asymmetric fact IDs, and focused command
 summary:
 
 - source V5 hash:
-  `sha256:c67f57423daa412961a3413ab983fa99887fbedd4e98b3c40fae2d3739608866`
+  `sha256:1f4e8f3b6e5d12bf1ec05b61494a0012a6f81d6523922080d6a1d6f56d7615dd`
 - projected Canonical Scene Plan hash:
-  `sha256:a371353a28042b9dd2b1d418f3882e909f52c0f6e1f83234a76322c6f4f7231b`
+  `sha256:e8c4c2499becae9ce339e229d44ebedf7e1462043da3adf8beccea1e880c40e1`
 - World Runtime Bootstrap hash:
-  `sha256:4135e6ac82db65f76232fc063190b5f707fc4e7122c7481ab4112d09ff54a55e`
+  `sha256:a085029ad5ee5bc1a918bda2d24cf3f6f4d3a0c57e2289c6edad391884eeec14`
 - Gameplay Bootstrap hash:
   `sha256:4e2d449fee190864fc11f35645a35e0b1a2220475d2c2d7b89e84d33ed6333c4`
 - focused command: `pnpm vitest run

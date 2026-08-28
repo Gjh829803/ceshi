@@ -36,7 +36,7 @@ import type {
   CameraViewCommandV1,
   CameraViewEventV1,
 } from "./camera-view-contract";
-import type { Vec3 } from "./execution-plan";
+import type { RuntimeVec3V1 } from "./world-runtime-bootstrap";
 
 export type SemanticInputActionV1 =
   | "move-forward"
@@ -241,20 +241,20 @@ export type PublishedMovementMediumV1 = "ground" | "air";
 export type LocomotionModeV1 = "idle" | "walk" | "run" | "airborne";
 
 export interface ViewControlFrameV1 {
-  forwardXYZ: Vec3;
-  rightXYZ: Vec3;
+  forwardXYZ: RuntimeVec3V1;
+  rightXYZ: RuntimeVec3V1;
   committedTick: number;
 }
 
 export interface ViewTargetSampleV1 {
   controlledEntityId: string;
   entityId: string;
-  targetPositionMetersXYZ: Vec3;
-  forwardXYZ: Vec3;
-  upXYZ: Vec3;
-  velocityMetersPerSecondXYZ: Vec3;
+  targetPositionMetersXYZ: RuntimeVec3V1;
+  forwardXYZ: RuntimeVec3V1;
+  upXYZ: RuntimeVec3V1;
+  velocityMetersPerSecondXYZ: RuntimeVec3V1;
   approximateRadiusMeters: number;
-  socketPositionsMetersXYZById: Readonly<Record<string, Vec3>>;
+  socketPositionsMetersXYZById: Readonly<Record<string, RuntimeVec3V1>>;
   /** Legacy-only authority identity; CharacterMovementRuntime-backed Subjects omit it. */
   activeMotionKernelRef?: string;
   motionTags: readonly string[];
@@ -287,7 +287,7 @@ export type WorldRuntimeCameraStateV4 =
       mode: "tracking";
       id: string;
       targetEntityId: string;
-      positionMetersXYZ: Vec3;
+      positionMetersXYZ: RuntimeVec3V1;
       activeCameraProfileRef: string;
       activeCameraRigRef: string;
       activeCameraModifierRefs: readonly string[];
@@ -297,28 +297,28 @@ export type WorldRuntimeCameraStateV4 =
       viewDistanceOffsetMeters: number;
       selectionDecision?: CameraSelectionDecisionV2;
       selectedTargetSocketId?: string;
-      targetSocketPositionMetersXYZ?: Vec3;
+      targetSocketPositionMetersXYZ?: RuntimeVec3V1;
       isTargetSocketFallback?: boolean;
-      desiredTargetPositionMetersXYZ?: Vec3;
-      desiredPositionMetersXYZ?: Vec3;
-      actualPositionMetersXYZ?: Vec3;
+      desiredTargetPositionMetersXYZ?: RuntimeVec3V1;
+      desiredPositionMetersXYZ?: RuntimeVec3V1;
+      actualPositionMetersXYZ?: RuntimeVec3V1;
       finalFovDegrees?: number;
       requestedArmLengthMeters?: number;
       safeArmLengthMeters?: number;
       effectiveArmLengthMeters?: number;
       isCollisionRetracted?: boolean;
       collisionHitEntityId?: string;
-      collisionHitPositionXYZ?: Vec3;
-      positionLagXYZ?: Vec3;
-      rotationLagRadiansXYZ?: Vec3;
+      collisionHitPositionXYZ?: RuntimeVec3V1;
+      positionLagXYZ?: RuntimeVec3V1;
+      rotationLagRadiansXYZ?: RuntimeVec3V1;
       recenterRemainingSeconds?: number;
       fixedStepDeltaSeconds: number;
       resolvedParameters?: Readonly<CameraRigParametersV1>;
       previewParameterOverrides?: Readonly<Partial<CameraRigParametersV1>>;
       profileTransitionProgressRatio?: number;
-      controlForwardXYZ?: Vec3;
-      subjectForwardXYZ?: Vec3;
-      subjectVelocityMetersPerSecondXYZ?: Vec3;
+      controlForwardXYZ?: RuntimeVec3V1;
+      subjectForwardXYZ?: RuntimeVec3V1;
+      subjectVelocityMetersPerSecondXYZ?: RuntimeVec3V1;
     }>;
 
 export interface WorldRuntimeSubjectStateV4 {
@@ -417,9 +417,9 @@ export interface ControlCapturePassPayloadV1 {
 export interface ControlCaptureCameraV1 {
   readonly cameraEntityId: string;
   readonly cameraRigRef: string;
-  readonly positionMetersXYZ: Vec3;
-  readonly forwardXYZ: Vec3;
-  readonly upXYZ: Vec3;
+  readonly positionMetersXYZ: RuntimeVec3V1;
+  readonly forwardXYZ: RuntimeVec3V1;
+  readonly upXYZ: RuntimeVec3V1;
   readonly verticalFovRadians: number;
   readonly nearClipMeters: number;
   readonly farClipMeters: number;

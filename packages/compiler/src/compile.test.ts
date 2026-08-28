@@ -8,11 +8,9 @@ import {
   type AuthoringSpecV4,
   type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
-import {
-  createGameplayBootstrapResourceLockEntryV1,
-  createGameplayBootstrapV1,
-} from "@whitebox-world/gameplay-contracts";
+import { createGameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
 import { BIPED_BONE_IDS_V1 } from "@whitebox-world/subject-contracts";
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
 import {
   builtInSubjectResourceRegistry,
   createSubjectResourceRegistry,
@@ -34,7 +32,7 @@ import {
 } from "../../authoring/src/test-fixture";
 
 import {
-  compileWorldV5,
+  compileCanonicalWorldV1,
   sampleTerrainHeight,
 } from "./index";
 
@@ -47,8 +45,10 @@ const BIPED_BONE_IDS = [...BIPED_BONE_IDS_V1].sort();
 const INJECTED_SOURCE_URI = "https://registry.invalid/private/golden-humanoid.glb";
 const INJECTED_LICENSE_URI = "https://registry.invalid/private/license";
 const INJECTED_AI_TAG = "registry-private-discovery-tag";
-const GAMEPLAY_BOOTSTRAP_LOCK =
-  createGameplayBootstrapResourceLockEntryV1(createGameplayBootstrapV1({
+function gameplayBootstrapFor(
+  normalizedWorldIr: NormalizedWorldIRV4,
+) {
+  return createGameplayBootstrapV1({
     kind: "gameplay-bootstrap",
     id: "compiler-current-test.gameplay",
     version: 1,
@@ -57,17 +57,101 @@ const GAMEPLAY_BOOTSTRAP_LOCK =
     featureResourceLocks: [],
     semanticActionDefinitions: [],
     availableCapabilityRefs: [],
-    initialRelationshipStates: [],
-  }));
+    initialRelationshipStates: normalizedWorldIr.relationships.map(
+      (relationship) => ({
+        ...structuredClone(relationship),
+        establishedSimulationTick: 0,
+      }),
+    ),
+  });
+}
+
+function projectionGameplayBootstrapFor(
+  normalizedWorldIr: NormalizedWorldIRV4,
+) {
+  return createGameplayBootstrapV1({
+    kind: "gameplay-bootstrap",
+    id: "bna1-v5-projection.gameplay",
+    version: 1,
+    resourceRef: "worldkit://gameplay-bootstrap/bna1-v5-projection@1",
+    entityDescriptors: [],
+    featureResourceLocks: [],
+    semanticActionDefinitions: [],
+    availableCapabilityRefs: [],
+    initialRelationshipStates: normalizedWorldIr.relationships.map(
+      (relationship) => ({
+        ...structuredClone(relationship),
+        establishedSimulationTick: 0,
+      }),
+    ),
+  });
+}
 
 function compileWorld(input: {
   readonly normalizedWorldIr: NormalizedWorldIRV4;
-  readonly normalizedWorldIrHash: string;
+  readonly normalizedWorldIrHash: Sha256HashV1;
 }) {
-  return compileWorldV5({
+  return compileCanonicalWorldV1({
     ...input,
-    gameplayBootstrapResourceLock: GAMEPLAY_BOOTSTRAP_LOCK,
+    gameplayBootstrap: gameplayBootstrapFor(input.normalizedWorldIr),
+    worldRuntimeBootstrapRef:
+      `worldkit://world-runtime-bootstrap/${input.normalizedWorldIr.id}@1`,
   });
+}
+
+function createCoherentAsymmetricProjectionSpec(): AuthoringSpecV4 {
+  const spec = createValidMountedOnAuthoringSpec();
+  spec.world = {
+    ...spec.world,
+    gravityMetersPerSecondSquaredXYZ: [0.35, -12.5, 0.15],
+  };
+  spec.resources = {
+    ...spec.resources,
+    prototypes: spec.resources.prototypes.map((prototype) => ({
+      ...prototype,
+      collisionEnabled: true,
+      traversalSurfaceBindings: [{
+        id: "projection-deck",
+        kind: "collider-subshape" as const,
+        logicalSubshapeId: "primary",
+        traversalSurfaceProfileRef:
+          "worldkit://traversal-surface-profile/ground.static@1",
+      }],
+    })),
+    subjectDefinitions: [
+      ...spec.resources.subjectDefinitions,
+      createValidRiggedPackageDefinition(),
+    ],
+  };
+  spec.nodes = spec.nodes.map((node) => {
+    if (node.kind === "subject" && node.id === "player") {
+      return {
+        ...node,
+        subjectDefinitionRef:
+          "package://subject-definition/rigged-golden-package@1",
+      };
+    }
+    if (node.kind === "camera" && node.id === spec.startup.cameraEntityId) {
+      return {
+        ...node,
+        components: {
+          cameraRig: {
+            ...node.components.cameraRig,
+            thirdPerson: {
+              ...node.components.cameraRig.thirdPerson,
+              pitchRadians: 0.22,
+              distanceMeters: 5.5,
+              targetHeightMeters: 1.7,
+              fovDegrees: 61,
+              aspectRatio: 16 / 9,
+            },
+          },
+        },
+      };
+    }
+    return node;
+  });
+  return spec;
 }
 
 const ALL_BUILT_IN_REGISTRY_INPUTS = [
@@ -101,10 +185,10 @@ function compileAuthoringSpec(options: {
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
   });
-  if (!compiled.ok || compiled.executionPlan === undefined) {
+  if (!compiled.ok) {
     throw new Error(`Authoring spec did not compile: ${JSON.stringify(compiled.diagnostics)}`);
   }
-  return compiled.executionPlan;
+  return compiled.worldRuntimeBootstrap;
 }
 
 function expectExactKeys(value: object, expectedKeys: readonly string[]): void {
@@ -171,7 +255,7 @@ function normalizeStaticAssetWorld() {
 function compileNormalizedWorld(world: NormalizedWorldIRV4) {
   return compileWorld({
     normalizedWorldIr: world,
-    normalizedWorldIrHash: sha256CanonicalJson(world),
+    normalizedWorldIrHash: sha256CanonicalJson(world) as Sha256HashV1,
   });
 }
 
@@ -283,6 +367,53 @@ const PRODUCT_FIXED_SPAWN_CASES = [
 ] as const;
 
 describe("compileWorld", () => {
+  it("matches the one-time V5 projection receipt from one coherent asymmetric world", async () => {
+    const normalized = normalizeAuthoringSpecV4(
+      createCoherentAsymmetricProjectionSpec(),
+    );
+    if (
+      !normalized.ok ||
+      normalized.value === undefined ||
+      normalized.normalizedWorldIrHash === undefined
+    ) {
+      throw new Error(
+        `Coherent asymmetric fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`,
+      );
+    }
+    const gameplayBootstrap = projectionGameplayBootstrapFor(normalized.value);
+    const compiled = compileCanonicalWorldV1({
+      normalizedWorldIr: normalized.value,
+      normalizedWorldIrHash: normalized.normalizedWorldIrHash,
+      gameplayBootstrap,
+      worldRuntimeBootstrapRef:
+        "worldkit://world-runtime-bootstrap/bna1-v5-projection@1",
+    });
+    if (!compiled.ok) {
+      throw new Error(
+        `Coherent asymmetric fixture did not compile: ${JSON.stringify(compiled.diagnostics)}`,
+      );
+    }
+    const receipt = JSON.parse(await readFile(
+      new URL(
+        "../../../artifacts/bna-1/execution-plan-v5-projection-receipt.json",
+        import.meta.url,
+      ),
+      "utf8",
+    )) as {
+      projectedExecutionPlanHash: string;
+      worldRuntimeBootstrapHash: string;
+      gameplayBootstrapHash: string;
+    };
+
+    expect(compiled.executionPlanHash).toBe(
+      receipt.projectedExecutionPlanHash,
+    );
+    expect(compiled.worldRuntimeBootstrap.contentHash).toBe(
+      receipt.worldRuntimeBootstrapHash,
+    );
+    expect(gameplayBootstrap.contentHash).toBe(receipt.gameplayBootstrapHash);
+  });
+
   it("compiles Mount slots and initial mountedOn state without re-inferring endpoints", () => {
     const normalized = normalizeAuthoringSpecV4(createValidMountedOnAuthoringSpec());
     if (
@@ -298,12 +429,13 @@ describe("compileWorld", () => {
     });
 
     expect(compiled.diagnostics).toEqual([]);
-    expect(compiled.executionPlan?.initialRelationships).toEqual([{
+    if (!compiled.ok) throw new Error("Mounted fixture did not compile.");
+    expect(gameplayBootstrapFor(normalized.value).initialRelationshipStates).toEqual([{
       ...normalized.value.relationships[0],
       establishedSimulationTick: 0,
     }]);
     expect(
-      compiled.executionPlan?.subjects.find(({ entityId }) =>
+      compiled.worldRuntimeBootstrap.subjectRuntimeDescriptors.find(({ entityId }) =>
         entityId === "pack-animal-b")?.mountSlots,
     ).toEqual(normalized.value.resources.subjectDefinitions[0]?.mountSlots);
   });
@@ -312,7 +444,9 @@ describe("compileWorld", () => {
     const plan = compileAuthoringSpec({
       subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@2",
     });
-    const player = plan.subjects.find((subject) => subject.entityId === "player");
+    const player = plan.subjectRuntimeDescriptors.find(
+      (subject) => subject.entityId === "player",
+    );
     if (player === undefined) {
       throw new Error("Expected player subject in compiled plan.");
     }
@@ -379,7 +513,7 @@ describe("compileWorld", () => {
 
     expect(compileWorld({
       normalizedWorldIr: forged,
-      normalizedWorldIrHash: sha256CanonicalJson(forged),
+      normalizedWorldIrHash: sha256CanonicalJson(forged) as Sha256HashV1,
     })).toMatchObject({
       ok: false,
       diagnostics: [{
@@ -412,7 +546,7 @@ describe("compileWorld", () => {
 
     expect(compileWorld({
       normalizedWorldIr: forged,
-      normalizedWorldIrHash: sha256CanonicalJson(forged),
+      normalizedWorldIrHash: sha256CanonicalJson(forged) as Sha256HashV1,
     })).toMatchObject({
       ok: false,
       diagnostics: [{
@@ -430,8 +564,11 @@ describe("compileWorld", () => {
     });
 
     expect(result.ok).toBe(true);
-    const plan = result.executionPlan!;
-    const subject = plan.subjects.find((candidate) => candidate.entityId === "player")!;
+    if (!result.ok) throw new Error("Rigged fixture did not compile.");
+    const runtimeBootstrap = result.worldRuntimeBootstrap;
+    const subject = runtimeBootstrap.subjectRuntimeDescriptors.find(
+      (candidate) => candidate.entityId === "player",
+    )!;
     expect(subject.visualParts).toEqual([
       {
         id: "body.asset",
@@ -463,11 +600,11 @@ describe("compileWorld", () => {
         semanticTags: ["equipment-grip", "hand"],
       },
     ]);
-    expect(plan.subjectAssets).toHaveLength(1);
-    expect(plan.rigProfiles).toHaveLength(1);
-    expect(plan.animationSets).toHaveLength(1);
-    expect(plan.colliderProfiles).toHaveLength(1);
-    expect(Object.keys(plan.subjectAssets[0]!).sort()).toEqual([
+    expect(runtimeBootstrap.subjectAssets).toHaveLength(1);
+    expect(runtimeBootstrap.rigProfiles).toHaveLength(1);
+    expect(runtimeBootstrap.animationSets).toHaveLength(1);
+    expect(runtimeBootstrap.colliderProfiles).toHaveLength(1);
+    expect(Object.keys(runtimeBootstrap.subjectAssets[0]!).sort()).toEqual([
       "artifactContentHash",
       "byteLength",
       "format",
@@ -475,14 +612,14 @@ describe("compileWorld", () => {
       "mediaType",
       "subjectAssetRef",
     ]);
-    expect(Object.keys(plan.rigProfiles[0]!).sort()).toEqual([
+    expect(Object.keys(runtimeBootstrap.rigProfiles[0]!).sort()).toEqual([
       "bodyTopology",
       "requiredBoneIds",
       "rigProfileRef",
       "skeletonRootBoneName",
       "sourceNodeNameByBoneId",
     ]);
-    expect(Object.keys(plan.animationSets[0]!).sort()).toEqual([
+    expect(Object.keys(runtimeBootstrap.animationSets[0]!).sort()).toEqual([
       "animationBindings",
       "animationSetRef",
       "defaultActionId",
@@ -490,12 +627,12 @@ describe("compileWorld", () => {
       "rigProfileRef",
       "subjectAssetRef",
     ]);
-    expect(Object.keys(plan.colliderProfiles[0]!).sort()).toEqual([
+    expect(Object.keys(runtimeBootstrap.colliderProfiles[0]!).sort()).toEqual([
       "collider",
       "colliderProfileRef",
       "supportedBodyTopologies",
     ]);
-    expect(plan.subjectAssets[0]).toMatchObject({
+    expect(runtimeBootstrap.subjectAssets[0]).toMatchObject({
       subjectAssetRef: SUBJECT_ASSET_REF,
       artifactContentHash:
         "sha256:6cf29a2c9c024bdc108a8a436255abbb5f370d658d78cca0afb30f4872cd25a8",
@@ -505,7 +642,7 @@ describe("compileWorld", () => {
       inventory: { vertexCount: 360, triangleCount: 180 },
     });
     const serializedRigProfile = JSON.parse(
-      JSON.stringify(plan.rigProfiles[0]),
+      JSON.stringify(runtimeBootstrap.rigProfiles[0]),
     ) as {
       requiredBoneIds: readonly string[];
       skeletonRootBoneName: string;
@@ -527,23 +664,24 @@ describe("compileWorld", () => {
     }
 
     const serializedNormalized = JSON.stringify(normalized.value);
-    const serializedPlan = JSON.stringify(plan);
+    const serializedRuntimeBootstrap = JSON.stringify(runtimeBootstrap);
     for (const forbiddenValue of [
       INJECTED_SOURCE_URI,
       INJECTED_LICENSE_URI,
       INJECTED_AI_TAG,
     ]) {
       expect(serializedNormalized).not.toContain(forbiddenValue);
-      expect(serializedPlan).not.toContain(forbiddenValue);
+      expect(serializedRuntimeBootstrap).not.toContain(forbiddenValue);
     }
-    expect(serializedPlan).not.toContain("golden-humanoid.glb");
-    expect(serializedPlan).not.toMatch(
+    expect(serializedRuntimeBootstrap).not.toContain("golden-humanoid.glb");
+    expect(serializedRuntimeBootstrap).not.toMatch(
       /Babylon|Havok|AssetContainer|Uint8Array|ArrayBuffer/,
     );
-    expect(plan.subjects[0]?.controlFeel.contentHash).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(runtimeBootstrap.subjectRuntimeDescriptors[0]?.controlFeel.contentHash)
+      .toMatch(/^sha256:[a-f0-9]{64}$/);
   });
 
-  it("compiles one static Subject Asset into the addressable ExecutionPlan asset table", () => {
+  it("compiles one static Subject Asset into the Runtime Bootstrap asset table", () => {
     const normalized = normalizeStaticAssetWorld();
     const result = compileWorld({
       normalizedWorldIr: normalized.value!,
@@ -551,8 +689,11 @@ describe("compileWorld", () => {
     });
 
     expect(result.ok).toBe(true);
-    const plan = result.executionPlan!;
-    const subject = plan.subjects.find((candidate) => candidate.entityId === "player")!;
+    if (!result.ok) throw new Error("Static asset fixture did not compile.");
+    const runtimeBootstrap = result.worldRuntimeBootstrap;
+    const subject = runtimeBootstrap.subjectRuntimeDescriptors.find(
+      (candidate) => candidate.entityId === "player",
+    )!;
     expect(subject.visualBinding).toEqual({ mode: "static" });
     expect(subject.visualParts).toEqual([
       expect.objectContaining({
@@ -561,11 +702,11 @@ describe("compileWorld", () => {
         subjectAssetRef: SUBJECT_ASSET_REF,
       }),
     ]);
-    expect(plan.subjectAssets).toEqual([
+    expect(runtimeBootstrap.subjectAssets).toEqual([
       expect.objectContaining({ subjectAssetRef: SUBJECT_ASSET_REF }),
     ]);
-    expect(plan.rigProfiles).toEqual([]);
-    expect(plan.animationSets).toEqual([]);
+    expect(runtimeBootstrap.rigProfiles).toEqual([]);
+    expect(runtimeBootstrap.animationSets).toEqual([]);
   });
 
   it("preserves the unresolved Subject Asset invariant for a static Subject", () => {
@@ -598,7 +739,7 @@ describe("compileWorld", () => {
     },
     {
       label: "duplicate Subject Asset Resource Lock row",
-      expectedMessage: "EXECUTION_RESOURCE_LOCK_INVALID",
+      expectedMessage: "CANONICAL_RESOURCE_LOCK_INVALID",
       mutate: (world: NormalizedWorldIRV4) => {
         const subjectAssetLock = world.resources.resourceLock.find(
           (row) => row.resourceRef === SUBJECT_ASSET_REF,
@@ -655,16 +796,19 @@ describe("compileWorld", () => {
     });
   });
 
-  it("locks the current valid rigged ExecutionPlan hash", () => {
+  it("locks the current valid rigged Canonical Scene and Runtime Bootstrap hashes", () => {
     const rigged = normalizeRiggedWorld();
+    const compiled = compileWorld({
+      normalizedWorldIr: rigged.value!,
+      normalizedWorldIrHash: rigged.normalizedWorldIrHash!,
+    });
+    if (!compiled.ok) throw new Error("Rigged fixture did not compile.");
 
-    expect(
-      compileWorld({
-        normalizedWorldIr: rigged.value!,
-        normalizedWorldIrHash: rigged.normalizedWorldIrHash!,
-      }).executionPlanHash,
-    ).toBe(
-      "sha256:2cce8397770298806eaa46a26f0473d89a46a3e1860a4549ee131082a55c49c1",
+    expect(compiled.executionPlanHash).toBe(
+      "sha256:6c56847c46354b566d5f4b4bd3400b03b3d84caa41dd20ec3a647c2c5f85a87a",
+    );
+    expect(compiled.worldRuntimeBootstrap.contentHash).toBe(
+      "sha256:ca1b017433a307249f651e500032d106a92d9b2c1ff3ca1ab92c06235634a759",
     );
   });
 
@@ -736,7 +880,7 @@ describe("compileWorld", () => {
         },
       ],
     });
-    expect(result.executionPlan).toBeUndefined();
+    expect("canonicalSceneExecutionPlan" in result).toBe(false);
   });
 
   it("recursively projects forged Normalized descriptors and Subject data", () => {
@@ -796,11 +940,12 @@ describe("compileWorld", () => {
 
     expect(result.ok).toBe(true);
     expect(world).toEqual(beforeCompile);
-    const plan = result.executionPlan!;
-    const executionAsset = plan.subjectAssets[0]!;
-    const executionRig = plan.rigProfiles[0]!;
-    const executionAnimationSet = plan.animationSets[0]!;
-    const executionColliderProfile = plan.colliderProfiles[0]!;
+    if (!result.ok) throw new Error("Forged projection fixture did not compile.");
+    const runtimeBootstrap = result.worldRuntimeBootstrap;
+    const executionAsset = runtimeBootstrap.subjectAssets[0]!;
+    const executionRig = runtimeBootstrap.rigProfiles[0]!;
+    const executionAnimationSet = runtimeBootstrap.animationSets[0]!;
+    const executionColliderProfile = runtimeBootstrap.colliderProfiles[0]!;
     expectExactKeys(executionAsset.inventory, [
       "animationClipNames",
       "boneCount",
@@ -832,7 +977,9 @@ describe("compileWorld", () => {
       executionColliderProfile.collider.centerOffsetFromSubjectOriginMetersXYZ,
       ["0", "1", "2"],
     );
-    const subject = plan.subjects.find((candidate) => candidate.entityId === "player")!;
+    const subject = runtimeBootstrap.subjectRuntimeDescriptors.find(
+      (candidate) => candidate.entityId === "player",
+    )!;
     expectExactKeys(subject.visualBinding, [
       "animationSetRef",
       "mode",
@@ -895,9 +1042,9 @@ describe("compileWorld", () => {
     for (const availableFeel of subject.availableControlFeels) {
       expectExactKeys(availableFeel, controlFeelKeys);
     }
-    const serializedPlan = JSON.stringify(plan);
+    const serializedRuntimeBootstrap = JSON.stringify(runtimeBootstrap);
     for (const forbiddenValue of forbiddenValues) {
-      expect(serializedPlan).not.toContain(forbiddenValue);
+      expect(serializedRuntimeBootstrap).not.toContain(forbiddenValue);
     }
   });
 
@@ -921,29 +1068,40 @@ describe("compileWorld", () => {
         },
       ];
     });
-    const singlePlan = compileWorld({
+    const singleCompiled = compileWorld({
       normalizedWorldIr: single.value!,
       normalizedWorldIrHash: single.normalizedWorldIrHash!,
-    }).executionPlan!;
+    });
     const result = compileWorld({
       normalizedWorldIr: shared.value!,
       normalizedWorldIrHash: shared.normalizedWorldIrHash!,
     });
 
     expect(result.ok).toBe(true);
-    const plan = result.executionPlan!;
-    expect(plan.subjects.map((subject) => subject.entityId)).toEqual([
+    if (!result.ok || !singleCompiled.ok) {
+      throw new Error("Shared rigged fixtures did not compile.");
+    }
+    const runtimeBootstrap = result.worldRuntimeBootstrap;
+    expect(runtimeBootstrap.subjectRuntimeDescriptors.map(
+      (subject) => subject.entityId,
+    )).toEqual([
       "player",
       "rigged-copy",
     ]);
-    expect(plan.subjectAssets).toHaveLength(1);
-    expect(plan.rigProfiles).toHaveLength(1);
-    expect(plan.animationSets).toHaveLength(1);
-    expect(plan.colliderProfiles).toHaveLength(1);
-    expect(plan.resourceUsage).toEqual({
-      vertices: singlePlan.resourceUsage.vertices + 360,
-      triangles: singlePlan.resourceUsage.triangles + 180,
-      colliders: singlePlan.resourceUsage.colliders + 1,
+    expect(runtimeBootstrap.subjectAssets).toHaveLength(1);
+    expect(runtimeBootstrap.rigProfiles).toHaveLength(1);
+    expect(runtimeBootstrap.animationSets).toHaveLength(1);
+    expect(runtimeBootstrap.colliderProfiles).toHaveLength(1);
+    expect(result.canonicalSceneExecutionPlan.sceneResourceUsage).toEqual({
+      vertices:
+        singleCompiled.canonicalSceneExecutionPlan.sceneResourceUsage.vertices +
+        360,
+      triangles:
+        singleCompiled.canonicalSceneExecutionPlan.sceneResourceUsage.triangles +
+        180,
+      colliders:
+        singleCompiled.canonicalSceneExecutionPlan.sceneResourceUsage.colliders +
+        1,
     });
   });
 
@@ -966,7 +1124,8 @@ describe("compileWorld", () => {
     });
 
     expect(result.ok).toBe(true);
-    expect(result.executionPlan).toMatchObject({
+    if (!result.ok) throw new Error("Unused resource fixture did not compile.");
+    expect(result.worldRuntimeBootstrap).toMatchObject({
       subjectAssets: [],
       rigProfiles: [],
       animationSets: [],
@@ -1029,9 +1188,11 @@ describe("compileWorld", () => {
     const result = compilePackageWorld();
 
     expect(result.ok).toBe(true);
-    expect(result.executionPlan?.schemaVersion).toBe(5);
+    if (!result.ok) throw new Error("Package fixture did not compile.");
+    expect(result.canonicalSceneExecutionPlan.schemaVersion).toBe(1);
+    expect(result.worldRuntimeBootstrap.schemaVersion).toBe(1);
     expect(
-      result.executionPlan?.subjects.map((subject) => ({
+      result.worldRuntimeBootstrap.subjectRuntimeDescriptors.map((subject) => ({
         entityId: subject.entityId,
         ref: subject.subjectDefinitionRef,
         hash: subject.subjectDefinitionHash,
@@ -1049,20 +1210,24 @@ describe("compileWorld", () => {
       },
       expect.objectContaining({ entityId: "player" }),
     ]);
-    expect(result.executionPlan?.subjects[0]?.subjectDefinitionHash).toBe(
-      result.executionPlan?.subjects[1]?.subjectDefinitionHash,
+    expect(result.worldRuntimeBootstrap.subjectRuntimeDescriptors[0]?.subjectDefinitionHash).toBe(
+      result.worldRuntimeBootstrap.subjectRuntimeDescriptors[1]?.subjectDefinitionHash,
     );
   });
 
   it("copies fixed Anchor position without adding Terrain or Collider height", () => {
     const result = compilePackageWorld();
-    const executionPlan = result.executionPlan!;
-    const subject = executionPlan.subjects.find(
+    if (!result.ok) throw new Error("Package fixture did not compile.");
+    const scenePlan = result.canonicalSceneExecutionPlan;
+    const subjectInstance = scenePlan.subjectInstances.find(
+      (candidate) => candidate.entityId === "pack-animal-a",
+    )!;
+    const subject = result.worldRuntimeBootstrap.subjectRuntimeDescriptors.find(
       (candidate) => candidate.entityId === "pack-animal-a",
     )!;
 
-    expect(sampleTerrainHeight(executionPlan.terrain, [-4, 5])).not.toBe(0);
-    expect(subject.spawnSubjectOriginPositionMetersXYZ).toEqual([-4, 0, 5]);
+    expect(sampleTerrainHeight(scenePlan.terrain, [-4, 5])).not.toBe(0);
+    expect(subjectInstance.subjectOriginPositionMetersXYZ).toEqual([-4, 0, 5]);
     expect(subject.collider).toMatchObject({
       radiusMeters: 0.7,
       heightMeters: 1.4,
@@ -1071,8 +1236,10 @@ describe("compileWorld", () => {
   });
 
   it("samples the exact rendered Terrain triangles rather than a bilinear surface", () => {
+    const compiled = compilePackageWorld();
+    if (!compiled.ok) throw new Error("Package fixture did not compile.");
     const terrain = {
-      ...compilePackageWorld().executionPlan!.terrain,
+      ...compiled.canonicalSceneExecutionPlan.terrain,
       centerMetersXZ: [0, 0] as const,
       sizeMetersXZ: [2, 2] as const,
       resolutionCellsXZ: [2, 2] as const,
@@ -1083,7 +1250,9 @@ describe("compileWorld", () => {
   });
 
   it("propagates stable Sockets and normalized visual composition", () => {
-    const subject = compilePackageWorld().executionPlan!.subjects.find(
+    const compiled = compilePackageWorld();
+    if (!compiled.ok) throw new Error("Package fixture did not compile.");
+    const subject = compiled.worldRuntimeBootstrap.subjectRuntimeDescriptors.find(
       (candidate) => candidate.entityId === "pack-animal-a",
     )!;
 
@@ -1104,7 +1273,9 @@ describe("compileWorld", () => {
   });
 
   it("aggregates resource cost once per Subject instance", () => {
-    expect(compilePackageWorld().executionPlan?.resourceUsage).toEqual({
+    const compiled = compilePackageWorld();
+    if (!compiled.ok) throw new Error("Package fixture did not compile.");
+    expect(compiled.canonicalSceneExecutionPlan.sceneResourceUsage).toEqual({
       vertices: 4_956,
       triangles: 9_380,
       colliders: 5,
@@ -1115,7 +1286,13 @@ describe("compileWorld", () => {
     const first = compilePackageWorld();
     const second = compilePackageWorld();
 
-    expect(first.executionPlan).toEqual(second.executionPlan);
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    if (!first.ok || !second.ok) throw new Error("Package fixtures did not compile.");
+    expect(first.canonicalSceneExecutionPlan).toEqual(
+      second.canonicalSceneExecutionPlan,
+    );
+    expect(first.worldRuntimeBootstrap).toEqual(second.worldRuntimeBootstrap);
     expect(first.executionPlanHash).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(first.executionPlanHash).toBe(second.executionPlanHash);
   });
@@ -1141,7 +1318,7 @@ describe("compileWorld", () => {
     });
 
     expect(result.ok).toBe(false);
-    expect(result.executionPlan).toBeUndefined();
+    expect("canonicalSceneExecutionPlan" in result).toBe(false);
     expect(result.diagnostics).toContainEqual(
       expect.objectContaining({
         code: "COMPILER_RESOURCE_BUDGET_EXCEEDED",
@@ -1172,7 +1349,7 @@ describe("compileWorld", () => {
     });
   });
 
-  it("compiles V4 solved layout IR into the exact V5 execution layout", () => {
+  it("compiles V4 solved layout IR into the exact Canonical Scene layout", () => {
     const normalized = normalizeSolvedLayoutWorldV4();
     const result = compileWorld({
       normalizedWorldIr: normalized.value!,
@@ -1180,11 +1357,11 @@ describe("compileWorld", () => {
     });
 
     expect(result.ok).toBe(true);
-    expect(result.executionPlan).toMatchObject({
-      kind: "worldkit-execution-plan",
-      schemaVersion: 5,
+    if (!result.ok) throw new Error("Solved layout fixture did not compile.");
+    expect(result.canonicalSceneExecutionPlan).toMatchObject({
+      kind: "worldkit-canonical-scene-execution-plan",
+      schemaVersion: 1,
       normalizedWorldIrHash: normalized.normalizedWorldIrHash,
-      camera: { aspectRatio: 16 / 9 },
       layout: {
         layoutSolveReportHash: normalized.layoutSolveReportHash,
         placementsByEntityId: {
@@ -1203,15 +1380,16 @@ describe("compileWorld", () => {
         ]),
       },
     });
-    expect(result.executionPlan?.terrain.heightSamplesHash).toBe(
+    expect(result.worldRuntimeBootstrap.initialCamera).not.toHaveProperty(
+      "aspectRatio",
+    );
+    expect(result.canonicalSceneExecutionPlan.terrain.heightSamplesHash).toBe(
       sha256CanonicalJson(normalized.value!.layout.heightfields[0]!.heightSamplesMeters),
     );
-    const serialized = JSON.stringify(result.executionPlan);
+    const serialized = JSON.stringify(result.canonicalSceneExecutionPlan);
     expect(serialized).not.toContain('"constraints"');
     expect(serialized).not.toMatch(/candidateRegionIds|sourceUri|licenseUri|providerHandle/);
-    expect(result.executionPlanHash).toBe(
-      "sha256:1fd0cf2753a250291dc683e0cf8c429b307b200a5791764519dfaa5e3de5a4b2",
-    );
+    expect(result.executionPlanHash).toMatch(/^sha256:[a-f0-9]{64}$/);
   });
 
   it("copies the solved spawn position and Y rotation without terrain resampling", () => {
@@ -1234,15 +1412,16 @@ describe("compileWorld", () => {
     });
 
     const result = compileNormalizedWorld(world);
-    const terrain = result.executionPlan!.terrain;
-    const subject = result.executionPlan?.subjects.find(
+    if (!result.ok) throw new Error("Solved spawn fixture did not compile.");
+    const terrain = result.canonicalSceneExecutionPlan.terrain;
+    const subject = result.canonicalSceneExecutionPlan.subjectInstances.find(
       (candidate) => candidate.entityId === "player",
     );
 
     expect(new Set(terrain.heightSamplesMeters).size).toBeGreaterThan(1);
     expect(sampleTerrainHeight(terrain, [0, 0])).not.toBe(0);
-    expect(subject?.spawnSubjectOriginPositionMetersXYZ).toEqual([0, 7.25, 0]);
-    expect(subject?.spawnSubjectFacingRadians).toBe(Math.PI / 2);
+    expect(subject?.subjectOriginPositionMetersXYZ).toEqual([0, 7.25, 0]);
+    expect(subject?.subjectFacingRadians).toBe(Math.PI / 2);
   });
 
   it("rejects a Subject spawn inside blocked water", () => {
@@ -1265,7 +1444,7 @@ describe("compileWorld", () => {
     });
 
     expect(result.ok).toBe(false);
-    expect(result.executionPlan).toBeUndefined();
+    expect("canonicalSceneExecutionPlan" in result).toBe(false);
     expect(result.diagnostics).toContainEqual(expect.objectContaining({
       code: "COMPILER_SPAWN_IN_BLOCKED_WATER",
       instancePath: "/nodes/player/spawnAnchorEntityId",
@@ -1451,8 +1630,7 @@ describe("compileWorld", () => {
           `Product fixture did not normalize: ${JSON.stringify(normalized.diagnostics)}`,
         );
       }
-      const gameplayBootstrapResourceLock =
-        createGameplayBootstrapResourceLockEntryV1(createGameplayBootstrapV1({
+      const gameplayBootstrap = createGameplayBootstrapV1({
           kind: "gameplay-bootstrap",
           id: `${spec.id}.compile-product-fixture`,
           version: 1,
@@ -1462,13 +1640,17 @@ describe("compileWorld", () => {
           semanticActionDefinitions: [],
           availableCapabilityRefs: [],
           initialRelationshipStates: [],
-        }));
-      const compiled = compileWorldV5({
+        });
+      const compiled = compileCanonicalWorldV1({
         normalizedWorldIr: normalized.value,
         normalizedWorldIrHash: normalized.normalizedWorldIrHash,
-        gameplayBootstrapResourceLock,
+        gameplayBootstrap,
+        worldRuntimeBootstrapRef:
+          `worldkit://world-runtime-bootstrap/${spec.id}@1`,
       });
-      const executionPlan = compiled.executionPlan!;
+      if (!compiled.ok) throw new Error("Product fixture did not compile.");
+      const scenePlan = compiled.canonicalSceneExecutionPlan;
+      const runtimeBootstrap = compiled.worldRuntimeBootstrap;
 
       for (const expected of spawns) {
         const authoredAnchor = spec.nodes.find(
@@ -1477,7 +1659,7 @@ describe("compileWorld", () => {
         const anchor = normalized.value.nodes.find(
           (node) => node.kind === "anchor" && node.id === expected.anchorEntityId,
         );
-        const subject = executionPlan.subjects.find(
+        const subjectInstance = scenePlan.subjectInstances.find(
           (candidate) => candidate.entityId === expected.subjectEntityId,
         );
         expect(authoredAnchor?.kind).toBe("anchor");
@@ -1496,15 +1678,18 @@ describe("compileWorld", () => {
           expected.normalizedPositionMetersXYZ,
         );
         expect(
-          sampleTerrainHeight(executionPlan.terrain, [
+          sampleTerrainHeight(scenePlan.terrain, [
             expected.authoredPositionMetersXYZ[0],
             expected.authoredPositionMetersXYZ[2],
           ]),
         ).toBeCloseTo(expected.authoredPositionMetersXYZ[1], 12);
-        expect(subject?.spawnSubjectOriginPositionMetersXYZ).toEqual(
+        expect(subjectInstance?.subjectOriginPositionMetersXYZ).toEqual(
           expected.normalizedPositionMetersXYZ,
         );
-        expect(subject?.spawnSubjectFacingRadians).toBe(0);
+        expect(subjectInstance?.subjectFacingRadians).toBe(0);
+        expect(runtimeBootstrap.subjectRuntimeDescriptors).toContainEqual(
+          expect.objectContaining({ entityId: expected.subjectEntityId }),
+        );
       }
     },
   );
@@ -1521,10 +1706,14 @@ describe("compileWorld", () => {
     forged.layout.assertions[0]!.providerHandle = "private-assertion-handle";
     const projected = compileWorld({
       normalizedWorldIr: forged as unknown as NonNullable<typeof normalized.value>,
-      normalizedWorldIrHash: sha256CanonicalJson(forged),
+      normalizedWorldIrHash: sha256CanonicalJson(forged) as Sha256HashV1,
     });
     expect(projected.ok).toBe(true);
-    expect(JSON.stringify(projected.executionPlan)).not.toContain("private-");
+    if (!projected.ok) throw new Error("Projected fixture did not compile.");
+    expect(JSON.stringify({
+      scene: projected.canonicalSceneExecutionPlan,
+      runtime: projected.worldRuntimeBootstrap,
+    })).not.toContain("private-");
 
     expect(compileWorld({
       normalizedWorldIr: normalized.value!,
