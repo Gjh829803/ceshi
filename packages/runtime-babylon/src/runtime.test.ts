@@ -2179,6 +2179,26 @@ describe("BabylonWorldRuntime", () => {
     await runtime.dispose();
   });
 
+  it("prepares twelve idle Golden Host ticks for two rigged Subjects", async () => {
+    const runtime = await createRiggedRuntime(createTwoRiggedSubjectExecutionPlan());
+    try {
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      expect(internal.prepareFixedInputTick).toBeTypeOf("function");
+      runtime.reset();
+      await bindRuntimeTestPossession(runtime, "player");
+      for (let tick = 0; tick < 12; tick += 1) {
+        const prepared = await internal.prepareFixedInputTick!({
+          actions: [],
+          ticks: 1,
+        }, emptyActionProjection(runtime.snapshot().tick + 1));
+        prepared.commitPrepared();
+      }
+      expect(runtime.snapshot().tick).toBe(12);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
   it("prepares, aborts, and commits one real Golden Gameplay Tick without early publication", async () => {
     const runtime = await createRiggedRuntime();
     try {
