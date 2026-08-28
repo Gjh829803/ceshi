@@ -186,6 +186,20 @@ describe("BabylonNativeSceneBootstrapV1", () => {
     ]) expectInvalid(input);
   });
 
+  it("accepts only unsigned 32-bit deterministic seeds", () => {
+    expect(parseBabylonNativeSceneBootstrapV1({
+      ...VALID_BOOTSTRAP,
+      seed: 0xffff_ffff,
+    }).seed).toBe(0xffff_ffff);
+    for (const seed of [0x1_0000_0000, -1, -0, 1.5]) {
+      expectInvalid({ ...VALID_BOOTSTRAP, seed });
+      expect(() => hashBabylonNativeSceneBootstrapV1({
+        ...VALID_BOOTSTRAP,
+        seed,
+      })).toThrow(/BabylonNativeSceneBootstrapV1/);
+    }
+  });
+
   it("hashes only canonical parsed Bootstrap data", () => {
     const hash = hashBabylonNativeSceneBootstrapV1(VALID_BOOTSTRAP);
     expect(hash).toBe(

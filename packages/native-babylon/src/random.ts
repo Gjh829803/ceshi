@@ -9,17 +9,19 @@ function validFinite(value: number): boolean {
 }
 
 function invalidSeed(): never {
-  throw new TypeError("Babylon Native random seed must be a non-negative safe integer.");
+  throw new TypeError("Babylon Native random seed must be an unsigned 32-bit integer.");
 }
 
 function initialState(seed: number): number {
-  if (!validFinite(seed) || !Number.isSafeInteger(seed) || seed < 0) {
+  if (
+    !validFinite(seed) ||
+    !Number.isSafeInteger(seed) ||
+    seed < 0 ||
+    seed > 0xffff_ffff
+  ) {
     return invalidSeed();
   }
-  const lower = seed >>> 0;
-  const upper = Math.floor(seed / 0x1_0000_0000) >>> 0;
-  if (upper === 0) return lower;
-  return (lower ^ Math.imul(upper, 0x9e37_79b1) ^ 0x6d2b_79f5) >>> 0;
+  return seed;
 }
 
 export function createBabylonNativeHostRandomV1(

@@ -339,7 +339,7 @@ Native JSON 是小型、闭合、可哈希的启动合同，不是详细场景�
   算法仍由 SDK 和锁定资源拥有。
 - `initialCamera`：只表达开场第三人称构图，数值由锁定 Camera Profile 校验；它不创建 Babylon Camera，
   也不改变 SDK 对后续镜头控制的所有权。Subject 初始朝向仍来自登记 Spawn 的 `facingRadians`。
-- `seed`：Host PRNG 的唯一场景随机输入。
+- `seed`：Host PRNG 的唯一场景随机输入；必须是 `0..0xffffffff` 的无符号 32 位整数，且拒绝 `-0`、小数和越界值。该域与 Native V1 LCG 状态完全一致。
 - `spawnMarkerId`：把 JSON 启动意图绑定到 Module 恰好一次登记的本地标记。
 
 Native V1 只允许 `WorldRuntimeBootstrap.subjectRuntimeDescriptors` 中恰好一个空间 Subject，且其
@@ -579,7 +579,7 @@ export interface BabylonNativeSceneBuildContext {
 
 - `scene`：由 Host 创建的 Runtime Candidate Scene。Module 不创建或替换 Engine/Scene。
 - `bootstrap`：已解析、冻结的 Bootstrap，只读。
-- `random`：由 `seed` 派生的确定性随机源；禁止 `Math.random()`。
+- `random`：由 uint32 `seed` 派生的确定性随机源；禁止 `Math.random()`。
 - `assets`：只解析已经通过 source-neutral Asset Admission、进入 Registry/Package Lock 的精确 `...Ref`；
   Resolver 必须复验 class-specific Manifest/Build Record、字节 Hash、Import Profile、Admission Receipt 和
   Publication Receipt，

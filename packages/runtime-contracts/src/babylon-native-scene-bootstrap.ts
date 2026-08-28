@@ -62,6 +62,7 @@ const NATIVE_SCENE_PROFILE_REF_PATTERN =
   resourceRefPattern("native-scene-profile");
 const GAMEPLAY_BOOTSTRAP_REF_PATTERN =
   resourceRefPattern("gameplay-bootstrap");
+const MAX_NATIVE_DETERMINISTIC_SEED = 0xffff_ffff;
 
 function invalidBootstrap(): never {
   throw new TypeError(
@@ -167,9 +168,13 @@ function positiveNumber(input: unknown): number {
   return value;
 }
 
-function safeNonNegativeInteger(input: unknown): number {
+function unsigned32BitInteger(input: unknown): number {
   const value = finiteNumber(input);
-  if (!Number.isSafeInteger(value) || value < 0) return invalidBootstrap();
+  if (
+    !Number.isSafeInteger(value) ||
+    value < 0 ||
+    value > MAX_NATIVE_DETERMINISTIC_SEED
+  ) return invalidBootstrap();
   return value;
 }
 
@@ -231,7 +236,7 @@ export function parseBabylonNativeSceneBootstrapV1(
       record.gravityMetersPerSecondSquaredXYZ,
     ),
     initialCamera: initialCamera(record.initialCamera),
-    seed: safeNonNegativeInteger(record.seed),
+    seed: unsigned32BitInteger(record.seed),
     spawnMarkerId: nonEmptyIdentity(record.spawnMarkerId),
   });
 }

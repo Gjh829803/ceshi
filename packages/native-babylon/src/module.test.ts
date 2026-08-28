@@ -108,7 +108,6 @@ describe("BabylonNativeHostRandomV1", () => {
 
     expect(sequence(7301)).toEqual(sequence(7301));
     expect(sequence(7301)).not.toEqual(sequence(7302));
-    expect(sequence(7301)).not.toEqual(sequence(7301 + 0x1_0000_0000));
   });
 
   it("preserves the LCG sequence used by existing Native visual modules", () => {
@@ -140,8 +139,10 @@ describe("BabylonNativeHostRandomV1", () => {
   });
 
   it("rejects invalid seeds, ranges, and empty picks", () => {
-    expect(() => createBabylonNativeHostRandomV1(-1)).toThrow(/seed/);
-    expect(() => createBabylonNativeHostRandomV1(Number.MAX_SAFE_INTEGER + 1)).toThrow(/seed/);
+    expect(() => createBabylonNativeHostRandomV1(0xffff_ffff)).not.toThrow();
+    for (const seed of [0x1_0000_0000, -1, -0, 1.5]) {
+      expect(() => createBabylonNativeHostRandomV1(seed)).toThrow(/seed/);
+    }
     const random = createBabylonNativeHostRandomV1(1);
     expect(() => random.range(2, 2)).toThrow(/range/);
     expect(() => random.range(-0, 2)).toThrow(/range/);
