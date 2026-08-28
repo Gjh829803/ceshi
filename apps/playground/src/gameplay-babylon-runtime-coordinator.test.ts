@@ -71,28 +71,44 @@ async function worldConfiguration() {
   return loaded.runtimeWorldConfiguration;
 }
 
+function canonicalScenePlan(configuration: RuntimeWorldConfigurationV1) {
+  if (configuration.sceneSource.kind !== "canonical-execution-plan") {
+    throw new Error("Expected a Canonical Scene Source fixture.");
+  }
+  return configuration.sceneSource.executionPlan;
+}
+
 function worldProjection(
   configuration: RuntimeWorldConfigurationV1,
 ): GameplayWorldStateProjectionV1 {
   return Object.freeze({
     simulationTick: 0,
     spatialEntityStatesById: Object.freeze(Object.fromEntries(
-      configuration.executionPlan.subjects.map((subject) => [
-        subject.entityId,
-        Object.freeze({
-          id: subject.entityId,
-          kind: "spatial-entity-state" as const,
-          entityDefinitionRef: subject.subjectDefinitionRef,
-          entityDefinitionHash:
-            subject.subjectDefinitionHash as `sha256:${string}`,
-          semanticClassId: subject.semanticClassId,
-          lifecycleMode: "active" as const,
-          positionMetersXYZ: subject.spawnSubjectOriginPositionMetersXYZ,
-          rotationQuaternionXYZW: [0, 0, 0, 1] as const,
-          scaleRatioXYZ: [1, 1, 1] as const,
-          linearVelocityMetersPerSecondXYZ: [0, 0, 0] as const,
-        }),
-      ]),
+      configuration.worldRuntimeBootstrap.subjectRuntimeDescriptors.map(
+        (subject) => {
+          const placement = canonicalScenePlan(configuration).subjectInstances
+            .find(({ entityId }) => entityId === subject.entityId);
+          if (placement === undefined) {
+            throw new Error(`Missing Subject placement '${subject.entityId}'.`);
+          }
+          return [
+            subject.entityId,
+            Object.freeze({
+              id: subject.entityId,
+              kind: "spatial-entity-state" as const,
+              entityDefinitionRef: subject.subjectDefinitionRef,
+              entityDefinitionHash:
+                subject.subjectDefinitionHash as `sha256:${string}`,
+              semanticClassId: subject.semanticClassId,
+              lifecycleMode: "active" as const,
+              positionMetersXYZ: placement.subjectOriginPositionMetersXYZ,
+              rotationQuaternionXYZW: [0, 0, 0, 1] as const,
+              scaleRatioXYZ: [1, 1, 1] as const,
+              linearVelocityMetersPerSecondXYZ: [0, 0, 0] as const,
+            }),
+          ];
+        },
+      ),
     )),
     capabilityStatesById: Object.freeze({}),
     semanticFactsById: Object.freeze({}),
@@ -122,7 +138,8 @@ function fakeRuntimeFactory(
   }: Readonly<{ canvas: HTMLCanvasElement }>): Promise<GameplayBabylonRuntimeBundleV1> => {
     const harness = createFakeGameplayWorldPortHarnessV1({
       initialWorldProjection: worldProjection(configuration),
-      controllableEntityIds: configuration.executionPlan.subjects.map(
+      controllableEntityIds: configuration.worldRuntimeBootstrap
+        .subjectRuntimeDescriptors.map(
         ({ entityId }) => entityId,
       ),
     });
@@ -157,12 +174,13 @@ function fakeRuntimeFactory(
         possessionTarget: {
           mode: "possessed",
           controlledEntityId:
-            configuration.executionPlan.initialControlledEntityId,
+            configuration.worldRuntimeBootstrap.initialControlledEntityId,
         },
         subjectStatesByEntityId: {},
         camera: {
           entityId: "camera.main",
-          targetEntityId: configuration.executionPlan.initialControlledEntityId,
+          targetEntityId:
+            configuration.worldRuntimeBootstrap.initialControlledEntityId,
           positionMetersXYZ: [1, 2, 3],
           activeCameraProfileRef: "worldkit://camera-profile/third-person@1",
           activeCameraRigRef: "worldkit://camera-rig/third-person@1",
@@ -174,7 +192,8 @@ function fakeRuntimeFactory(
           selectionDecision: {
             schemaVersion: 2,
             committedTick: 0,
-            targetEntityId: configuration.executionPlan.initialControlledEntityId,
+            targetEntityId:
+              configuration.worldRuntimeBootstrap.initialControlledEntityId,
             activeCameraRigProfileRef: "worldkit://camera-rig/third-person@1",
             activeCameraModifierRefs: [],
             matchedCameraContextRuleIds: [],
@@ -380,7 +399,12 @@ describe("Gameplay Babylon Runtime coordinator", () => {
       >[0]["runtimeBundleFactory"]>>[0],
     ): Promise<GameplayBabylonRuntimeBundleV1> => {
       const runtime = await BabylonWorldRuntime.create({
-        executionPlan: input.descriptor.executionPlan,
+        sceneSource: {
+          kind: "canonical-execution-plan",
+          executionPlan: input.descriptor.sceneSource.executionPlan,
+        },
+        worldRuntimeBootstrap: input.descriptor.worldRuntimeBootstrap,
+        gameplayBootstrap: input.descriptor.gameplayBootstrap,
         runtimeSessionId: input.descriptor.runtimeSessionId,
         autoStartRenderLoop: false,
         engineFactory: () => new NullEngine({
@@ -647,7 +671,7 @@ describe("Gameplay Babylon Runtime coordinator", () => {
     )).toEqual([
       expect.objectContaining({
           controlledEntityId:
-            configuration.executionPlan.initialControlledEntityId,
+            configuration.worldRuntimeBootstrap.initialControlledEntityId,
           controllerEntityId: PLAYGROUND_CONTROLLER_ENTITY_ID_V1,
       }),
     ]);
@@ -706,7 +730,7 @@ describe("Gameplay Babylon Runtime coordinator", () => {
       expectedPossession: {
         mode: "possessed",
         controlledEntityId:
-          configuration.executionPlan.initialControlledEntityId,
+          configuration.worldRuntimeBootstrap.initialControlledEntityId,
       },
     })).resolves.toMatchObject({ status: "committed" });
 
@@ -720,12 +744,14 @@ describe("Gameplay Babylon Runtime coordinator", () => {
       runtimeSessionId: released.runtimeSessionId,
       worldSessionId: released.worldSessionId,
       controllerEntityId: PLAYGROUND_CONTROLLER_ENTITY_ID_V1,
-      controlledEntityId: configuration.executionPlan.initialControlledEntityId,
+      controlledEntityId:
+        configuration.worldRuntimeBootstrap.initialControlledEntityId,
       expectedPossession: { mode: "unbound" },
     })).resolves.toMatchObject({ status: "committed" });
     expect(coordinator.snapshot().view.camera).toMatchObject({
       mode: "tracking",
-      targetEntityId: configuration.executionPlan.initialControlledEntityId,
+      targetEntityId:
+        configuration.worldRuntimeBootstrap.initialControlledEntityId,
       selectedTargetSocketId: "ThirdPersonView",
       requestedArmLengthMeters: 6,
       safeArmLengthMeters: 3,
@@ -768,7 +794,7 @@ describe("Gameplay Babylon Runtime coordinator", () => {
     )).toEqual([
       expect.objectContaining({
         controlledEntityId:
-          configuration.executionPlan.initialControlledEntityId,
+          configuration.worldRuntimeBootstrap.initialControlledEntityId,
         controllerEntityId: PLAYGROUND_CONTROLLER_ENTITY_ID_V1,
       }),
     ]);

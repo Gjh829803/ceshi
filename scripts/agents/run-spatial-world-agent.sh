@@ -59,8 +59,23 @@ public_plan_root="$project_root/apps/playground/public/scene-plans/$scene_id"
 temporary_root="$project_root/.codex-tmp"
 mkdir -p "$artifact_root" "$public_plan_root" "$temporary_root"
 task_tmp="$(mktemp -d "$temporary_root/spatial-agent.XXXXXX")"
+authoring_attempt_started=false
+authoring_attempt_completed=false
+authoring_attempt_path=""
+authoring_attempt_result_path=""
 cleanup() {
+  exit_status=$?
+  if [[ "$authoring_attempt_started" == true && "$authoring_attempt_completed" == false && -s "$authoring_attempt_path" ]]; then
+    "$pnpm_bin" exec tsx scripts/scenes/record-scene-authoring-attempt.ts reject \
+      --scene-id "$scene_id" \
+      --run-id "$codex_run_nonce" \
+      --attempt "$authoring_attempt_path" \
+      --outcome rejected \
+      --diagnostic-ref "worldkit://diagnostic/hosted-canonical-authoring-rejected@1" \
+      --result-output "$authoring_attempt_result_path" >/dev/null 2>&1 || true
+  fi
   case "$task_tmp" in "$temporary_root"/spatial-agent.*) /bin/rm -rf -- "$task_tmp" ;; esac
+  return "$exit_status"
 }
 trap cleanup EXIT
 mkdir -p "$task_tmp/input" "$task_tmp/runtime"
@@ -122,7 +137,7 @@ The map draft shape is {kind:'worldkit-scene-brief-implementation-map-draft',sch
 
 Before finishing, run this standalone validator bundled inside the Skill:
 node .codex/skills/worldkit-canonical-builder/scripts/self-check.mjs --scene-id '$scene_id' --brief artifacts/scenes/$scene_id/scene-brief.md --world artifacts/scenes/$scene_id/authoring.builder.json --map-draft artifacts/scenes/$scene_id/implementation-map.draft.json --report artifacts/scenes/$scene_id/builder-self-check.json
-It is generated from the current repository source and contains Authoring V4 validation, IR V4 / ExecutionPlan V5 compilation, layout, Registry closure, resource-budget and implementation-map checks. If it exits nonzero, read its JSON diagnostics, repair authoring.builder.json and implementation-map.draft.json inside this same task, and run it again. Use at most three self-repair cycles. Finish only when builder-self-check.json has status 'passed'. The trusted Host replays the source-equivalent validator once after delivery; it does not start a separate Repair Agent."
+It is generated from the current repository source and contains Authoring V4 validation, IR V4 compilation into the terminal Canonical Scene Plan and independent World Runtime Bootstrap, layout, Registry closure, resource-budget and implementation-map checks. If it exits nonzero, read its JSON diagnostics, repair authoring.builder.json and implementation-map.draft.json inside this same task, and run it again. Use at most three self-repair cycles. Finish only when builder-self-check.json has status 'passed'. The trusted Host replays the source-equivalent validator once after delivery; it does not start a separate Repair Agent."
 
 if [[ "$mode" == "full" || "$mode" == "plan" ]]; then
   echo "WORLDKIT_STAGE planner"
@@ -238,6 +253,19 @@ builder_host_receipt="$task_tmp/builder-self-check.host.json"
   exit 2
 }
 
+authoring_attempt_root="$artifact_root/scene-authoring-attempts/$codex_run_nonce"
+authoring_route_decision_path="$authoring_attempt_root/route-decision.json"
+authoring_attempt_path="$authoring_attempt_root/attempt.json"
+authoring_attempt_result_path="$authoring_attempt_root/result.json"
+"$pnpm_bin" exec tsx scripts/scenes/record-scene-authoring-attempt.ts begin \
+  --scene-id "$scene_id" \
+  --run-id "$codex_run_nonce" \
+  --brief "$artifact_root/scene-brief.md" \
+  --authoring-input "$artifact_root/authoring.builder.json" \
+  --route-decision-output "$authoring_route_decision_path" \
+  --attempt-output "$authoring_attempt_path"
+authoring_attempt_started=true
+
 echo "WORLDKIT_STAGE terrain-compilation"
 "$pnpm_bin" exec tsx scripts/scenes/finalize-scene-terrain.ts \
   --scene-id "$scene_id" \
@@ -302,6 +330,18 @@ run_builder_gates() {
     --output "$artifact_root/entry-third-person-validation.json"
 }
 run_builder_gates
+
+"$pnpm_bin" exec tsx scripts/scenes/record-scene-authoring-attempt.ts complete \
+  --scene-id "$scene_id" \
+  --run-id "$codex_run_nonce" \
+  --attempt "$authoring_attempt_path" \
+  --authored-source "$artifact_root/authoring.json" \
+  --evidence-ref "worldkit://evidence/canonical-world-build/$scene_id/$codex_run_nonce@1" \
+  --evidence-ref "worldkit://evidence/entry-third-person/$scene_id/$codex_run_nonce@1" \
+  --evidence-ref "worldkit://evidence/runtime-snapshot/$scene_id/$codex_run_nonce@1" \
+  --evidence-ref "worldkit://evidence/whitebox-triview/$scene_id/$codex_run_nonce@1" \
+  --result-output "$authoring_attempt_result_path"
+authoring_attempt_completed=true
 
 primary_user_frame=""
 for candidate in "$public_plan_root"/reference-0.png "$public_plan_root"/reference-0.jpg "$public_plan_root"/reference-0.webp; do

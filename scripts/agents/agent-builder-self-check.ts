@@ -11,17 +11,15 @@ import {
   type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
 import {
-  compileWorldV5,
+  compileCanonicalWorldV1,
   sampleTerrainHeight,
 } from "@whitebox-world/compiler";
 import { createCoreGameplayBootstrapV1 } from "@whitebox-world/gameplay";
 import {
-  createGameplayBootstrapResourceLockEntryV1,
-} from "@whitebox-world/gameplay-contracts";
-import {
   validateSceneBriefImplementationMapDraftV1,
-  type ExecutionPlanV5,
+  type CanonicalSceneExecutionPlanV1,
   type SceneBriefImplementationMapDraftV1,
+  type WorldRuntimeBootstrapV1,
 } from "@whitebox-world/runtime-contracts";
 import { isNil } from "lodash-es";
 
@@ -52,7 +50,7 @@ function contentHash(source: string): `sha256:${string}` {
   return `sha256:${createHash("sha256").update(source).digest("hex")}`;
 }
 
-function gameplayBootstrapResourceLock(
+function gameplayBootstrap(
   normalizedWorldIr: NormalizedWorldIRV4,
 ) {
   const entityDescriptors = normalizedWorldIr.nodes
@@ -73,16 +71,14 @@ function gameplayBootstrapResourceLock(
         capabilityRefs: definition.capabilityRefs,
       };
     });
-  return createGameplayBootstrapResourceLockEntryV1(
-    createCoreGameplayBootstrapV1({
+  return createCoreGameplayBootstrapV1({
       worldId: normalizedWorldIr.id,
       worldSeed: normalizedWorldIr.seed,
       entityDescriptors,
       initialRelationshipStates: normalizedWorldIr.relationships.map(
         (relationship) => ({ ...relationship, establishedSimulationTick: 0 }),
       ),
-    }),
-  );
+    });
 }
 
 function whiteboxLightingDiagnostics(authoring: any): SelfCheckDiagnostic[] {
@@ -97,7 +93,7 @@ function whiteboxLightingDiagnostics(authoring: any): SelfCheckDiagnostic[] {
 }
 
 function subjectUsesGroundSupport(
-  subject: ExecutionPlanV5["subjects"][number],
+  subject: WorldRuntimeBootstrapV1["subjectRuntimeDescriptors"][number],
 ): boolean {
   const assembly = subject.capabilityAssembly;
   if (assembly !== undefined) {
@@ -111,19 +107,30 @@ function subjectUsesGroundSupport(
 }
 
 function spawnGroundingDiagnostics(
-  executionPlan: ExecutionPlanV5,
+  executionPlan: CanonicalSceneExecutionPlanV1,
+  worldRuntimeBootstrap: WorldRuntimeBootstrapV1,
 ): SelfCheckDiagnostic[] {
   const diagnostics: SelfCheckDiagnostic[] = [];
-  for (const subject of executionPlan.subjects) {
+  for (const subject of worldRuntimeBootstrap.subjectRuntimeDescriptors) {
     if (!subjectUsesGroundSupport(subject)) continue;
+    const placement = executionPlan.subjectInstances.find(
+      ({ entityId }) => entityId === subject.entityId,
+    );
+    if (isNil(placement)) {
+      diagnostics.push({
+        code: "SPAWN_PLACEMENT_MISSING",
+        message: `Ground-controlled Subject '${subject.entityId}' has no Scene placement.`,
+      });
+      continue;
+    }
     const hasVerifiedConstructedSupport = executionPlan.layout.layoutAssertions.some(
       (assertion) =>
         assertion.kind === "supported-by" &&
-        assertion.supportedEntityId === subject.spawnAnchorEntityId &&
+        assertion.supportedEntityId === placement.spawnAnchorEntityId &&
         assertion.supportingEntityId !== executionPlan.terrain.entityId,
     );
     if (hasVerifiedConstructedSupport) continue;
-    const origin = subject.spawnSubjectOriginPositionMetersXYZ;
+    const origin = placement.subjectOriginPositionMetersXYZ;
     const centerOffset = subject.collider.centerOffsetFromSubjectOriginMetersXYZ;
     const feetPosition = [
       origin[0] + centerOffset[0],
@@ -153,7 +160,7 @@ function spawnGroundingDiagnostics(
       instancePath: `/nodes/${subject.entityId}/spawnAnchorEntityId`,
       details: {
         subjectEntityId: subject.entityId,
-        spawnAnchorEntityId: subject.spawnAnchorEntityId,
+        spawnAnchorEntityId: placement.spawnAnchorEntityId,
         feetPositionMetersXYZ: feetPosition,
         terrainHeightMeters: terrainHeight,
         supportGapMeters,
@@ -258,7 +265,8 @@ export async function runBuilderSelfCheck(options: {
     })));
   }
   const parsed = parseAuthoringSpecV4(worldSource);
-  let compiledExecutionPlan: ExecutionPlanV5 | undefined;
+  let compiledExecutionPlan: CanonicalSceneExecutionPlanV1 | undefined;
+  let compiledWorldRuntimeBootstrap: WorldRuntimeBootstrapV1 | undefined;
   let largeWorldEvidence: BuilderLargeWorldEvidenceV1 | undefined;
   if (!parsed.ok || parsed.value === undefined) {
     diagnostics.push(...parsed.diagnostics.map((diagnostic) => ({
@@ -280,11 +288,12 @@ export async function runBuilderSelfCheck(options: {
     } else {
       largeWorldEvidence = collectBuilderLargeWorldEvidenceV1(parsed.value);
       diagnostics.push(...largeWorldEvidence.diagnostics);
-      const compiled = compileWorldV5({
+      const compiled = compileCanonicalWorldV1({
         normalizedWorldIr: normalized.value,
         normalizedWorldIrHash: normalized.normalizedWorldIrHash,
-        gameplayBootstrapResourceLock:
-          gameplayBootstrapResourceLock(normalized.value),
+        gameplayBootstrap: gameplayBootstrap(normalized.value),
+        worldRuntimeBootstrapRef:
+          `worldkit://world-runtime-bootstrap/${normalized.value.id}@1`,
       });
       if (!compiled.ok) {
         diagnostics.push(...compiled.diagnostics.map((diagnostic) => ({
@@ -293,26 +302,33 @@ export async function runBuilderSelfCheck(options: {
           instancePath: diagnostic.instancePath,
           details: diagnostic.details,
         })));
-      } else if (compiled.executionPlan === undefined) {
+      } else if (compiled.canonicalSceneExecutionPlan === undefined) {
         diagnostics.push({
           code: "COMPILER_EXECUTION_PLAN_MISSING",
           message: "Compiler reported success without an ExecutionPlan.",
         });
       } else {
-        compiledExecutionPlan = compiled.executionPlan;
-        diagnostics.push(...spawnGroundingDiagnostics(compiled.executionPlan));
+        compiledExecutionPlan = compiled.canonicalSceneExecutionPlan;
+        compiledWorldRuntimeBootstrap = compiled.worldRuntimeBootstrap;
+        diagnostics.push(...spawnGroundingDiagnostics(
+          compiled.canonicalSceneExecutionPlan,
+          compiled.worldRuntimeBootstrap,
+        ));
       }
     }
   }
-  if (diagnostics.length === 0 && brief.ok && parsed.ok && parsed.value !== undefined && compiledExecutionPlan !== undefined) {
+  if (diagnostics.length === 0 && brief.ok && parsed.ok && parsed.value !== undefined && compiledExecutionPlan !== undefined && compiledWorldRuntimeBootstrap !== undefined) {
     diagnostics.push(...implementationMapDiagnostics({
       sceneId: options.sceneId,
       draftSource: mapDraftSource,
       authoringId: parsed.value.id,
       visualTargetIds: brief.value.visualTargets.map(({ id }) => id),
-      controlledEntityId: compiledExecutionPlan.initialControlledEntityId,
+      controlledEntityId:
+        compiledWorldRuntimeBootstrap.initialControlledEntityId,
       runtimeEntityIds: new Set([
-        ...compiledExecutionPlan.subjects.map(({ entityId }) => entityId),
+        ...compiledWorldRuntimeBootstrap.subjectRuntimeDescriptors.map(
+          ({ entityId }) => entityId,
+        ),
         ...compiledExecutionPlan.objects.map(({ entityId }) => entityId),
       ]),
     }));

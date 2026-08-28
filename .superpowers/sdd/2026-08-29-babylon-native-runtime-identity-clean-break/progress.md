@@ -168,5 +168,24 @@ Ruling: generated examples and scene evidence are regenerated only through their
   Authoring Edit/Host and World Change tests 62/62, Route evaluator/publication
   tests within the 144-test Validation gate, Heightfield source 22/22, trusted
   Route runner 12/12, and real `worldkit run` Route transport 1/1 passed.
-- BNA1-09D: not started.
+- BNA1-09D: complete in the pending orchestration checkpoint. Playground
+  loading, Babylon adoption/Full Reload, Gameplay coordination, and outdoor
+  scene startup now consume the split Canonical Scene Source plus independent
+  World Runtime Bootstrap while preserving explicit Plan identity only where
+  the caller actually stages or replaces a Plan. The Hosted Canonical workflow
+  now publishes immutable per-run Route Decision, Authoring Attempt, and
+  completed/rejected Attempt Result records at the trusted
+  Builder-to-finalization boundary. The completed Result binds the final
+  Canonical Authoring source and whitebox evidence; rejected Results cannot
+  carry authored-source fields. This integration does not admit a Native
+  decision, create a Native WorldPackage identity, or weaken the formal
+  pre-allocation rejection. Builder and Planner self-check bundles were
+  regenerated through `pnpm generate:agent-self-check` and verified through
+  their owner. Evidence: Playground callers 116/116; orchestration record and
+  Builder launcher tests 6/6; Builder/Planner bundle replay 2/2; remaining
+  script/clean-break regressions 22/22; Canonical, Placement/Layout, Rigged
+  Subject, G Bot, and all 19 xier120 actual-use verifiers passed; test census
+  passed (305 total / 273 contract / 32 resource-heavy); `pnpm typecheck`,
+  `pnpm build`, `pnpm build:native-scene`, bundle parity, shell syntax, and
+  `git diff --check` passed.
 - BNA1-10: not started.

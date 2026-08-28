@@ -165,7 +165,12 @@ async function createProductionRuntimeBundle(
   input: GameplayBabylonRuntimeBundleFactoryInputV1,
 ): Promise<GameplayBabylonRuntimeBundleV1> {
   const runtime = await BabylonWorldRuntime.create({
-    executionPlan: input.descriptor.executionPlan,
+    sceneSource: {
+      kind: "canonical-execution-plan",
+      executionPlan: input.descriptor.sceneSource.executionPlan,
+    },
+    worldRuntimeBootstrap: input.descriptor.worldRuntimeBootstrap,
+    gameplayBootstrap: input.descriptor.gameplayBootstrap,
     runtimeSessionId: input.descriptor.runtimeSessionId,
     canvas: input.canvas,
     autoStartRenderLoop: false,
@@ -654,7 +659,8 @@ export class GameplayBabylonRuntimeCoordinatorV1 {
     });
     const coordinator = new GameplayBabylonRuntimeCoordinatorV1(
       host,
-      options.initialWorldConfiguration.executionPlan.initialControlledEntityId,
+      options.initialWorldConfiguration.worldRuntimeBootstrap
+        .initialControlledEntityId,
       handles,
     );
     try {

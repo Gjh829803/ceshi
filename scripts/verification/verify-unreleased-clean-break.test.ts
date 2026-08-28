@@ -162,7 +162,7 @@ describe("verify:unreleased-clean-break", () => {
       path.join(fixtureRoot, "packages", "runtime", "current-version.ts"),
       [
         "if (authoring.schemaVersion === 4) useCurrentAuthoring(authoring);",
-        "if (plan.schemaVersion !== 5) throw new Error('ExecutionPlanV5 required');",
+        "if (plan.schemaVersion !== 5) throw new Error('CanonicalSceneExecutionPlanV1 required');",
       ].join("\n"),
       "utf8",
     );

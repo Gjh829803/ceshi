@@ -110,7 +110,7 @@ describe("loadOutdoorGameplaySceneV1", () => {
   });
 
   it.each(Object.entries(sceneCatalog))(
-    "compiles catalog scene %s through Authoring V4 and ExecutionPlan V5",
+    "compiles catalog scene %s through Authoring V4 and the Canonical Scene Plan",
     async (sceneCatalogId, sceneDefinition) => {
       const result = await loadOutdoorGameplaySceneV1(sceneDefinition, {
         sceneCatalogId,
@@ -122,14 +122,24 @@ describe("loadOutdoorGameplaySceneV1", () => {
 
       expect(result.ok, `${sceneCatalogId}: ${JSON.stringify(result.diagnostics)}`).toBe(true);
       expect(result.executionPlan).toMatchObject({
-        kind: "worldkit-execution-plan",
-        schemaVersion: 5,
-        initialControlledEntityId: "player",
+        kind: "worldkit-canonical-scene-execution-plan",
+        schemaVersion: 1,
       });
-      expect(result.runtimeWorldConfiguration?.executionPlan).toBe(result.executionPlan);
+      expect(result.runtimeWorldConfiguration?.sceneSource).toMatchObject({
+        kind: "canonical-execution-plan",
+        executionPlan: result.executionPlan,
+        executionPlanHash: result.executionPlanHash,
+      });
+      expect(
+        result.runtimeWorldConfiguration?.worldRuntimeBootstrap
+          .initialControlledEntityId,
+      ).toBe("player");
       expect(result.executionPlan?.terrain.resolutionCellsXZ[0]).toBeGreaterThan(2);
       expect(result.executionPlan?.terrain.resolutionCellsXZ[1]).toBeGreaterThan(2);
-      expect(result.executionPlan?.subjects.map((subject) => subject.entityId)).toContain("player");
+      expect(
+        result.runtimeWorldConfiguration?.worldRuntimeBootstrap
+          .subjectRuntimeDescriptors.map((subject) => subject.entityId),
+      ).toContain("player");
       expect(result.playgroundMetadata?.sceneCatalogId).toBe(sceneCatalogId);
       expect(result.playgroundMetadata?.featureInspections.length).toBeGreaterThan(0);
     },
@@ -148,8 +158,9 @@ describe("loadOutdoorGameplaySceneV1", () => {
 
     expect(result.ok, JSON.stringify(result.diagnostics)).toBe(true);
     expect(
-      result.executionPlan?.subjects.find(({ entityId }) =>
-        entityId === "skateboard")?.mountSlots,
+      result.runtimeWorldConfiguration?.worldRuntimeBootstrap
+        .subjectRuntimeDescriptors.find(({ entityId }) =>
+          entityId === "skateboard")?.mountSlots,
     ).toHaveLength(1);
     expect(
       result.runtimeWorldConfiguration?.gameplayBootstrap
@@ -173,8 +184,8 @@ describe("loadOutdoorGameplaySceneV1", () => {
     expect(second.ok).toBe(true);
     expect(second.normalizedWorldIrHash).toBe(first.normalizedWorldIrHash);
     expect(second.executionPlanHash).toBe(first.executionPlanHash);
-    expect(second.runtimeWorldConfiguration?.worldPackageBuildReceipt.worldPackageRootHash)
-      .toBe(first.runtimeWorldConfiguration?.worldPackageBuildReceipt.worldPackageRootHash);
+    expect(second.runtimeWorldConfiguration?.worldBuildIdentity.worldPackageRootHash)
+      .toBe(first.runtimeWorldConfiguration?.worldBuildIdentity.worldPackageRootHash);
   }, 20_000);
 
   it("preserves terrain samples, content, spawn facing, and camera framing", async () => {
@@ -191,8 +202,12 @@ describe("loadOutdoorGameplaySceneV1", () => {
         result.executionPlan?.terrain.resolutionCellsXZ[1]!);
     expect(result.executionPlan?.objects.length).toBeGreaterThan(0);
     expect(result.executionPlan?.waters.length).toBeGreaterThan(0);
-    expect(result.executionPlan?.subjects[0]?.spawnSubjectFacingRadians)
+    expect(result.executionPlan?.subjectInstances[0]?.subjectFacingRadians)
       .toBeCloseTo(compiledScene.spawn.facingRadians, 6);
-    expect(result.executionPlan?.camera.aspectRatio).toBe(4 / 3);
+    expect(result.runtimeWorldConfiguration?.worldRuntimeBootstrap.initialCamera)
+      .toMatchObject({
+        mode: "third-person",
+        targetEntityId: "player",
+      });
   }, 60_000);
 });

@@ -1,5 +1,6 @@
 import {
-  parseExecutionPlanV5,
+  parseCanonicalSceneExecutionPlanV1,
+  parseWorldRuntimeBootstrapV1,
   validateVisualCaptureGroupsV1,
   type ApplyCameraPreviewRequestV1,
   type ApplySubjectPresetTuningRequestV1,
@@ -7,7 +8,7 @@ import {
   type CameraViewInputV1,
   type ControlCaptureCapabilitiesV1,
   type ControlCaptureRequestV1,
-  type ExecutionPlanV5,
+  type CanonicalSceneExecutionPlanV1,
   type FixedInputV1,
   type RenderReadyReceiptV1,
   type RuntimeControlCaptureFrameV1,
@@ -16,6 +17,7 @@ import {
   type RuntimeActivityReceiptV1,
   type RuntimeActivityRequestV1,
   type WorldRuntimeSnapshotV4,
+  type WorldRuntimeBootstrapV1,
   type SubjectPresetTuningReceiptV1,
   type WorldkitBrowserDiagnosticV1,
   type WhiteboxTriviewCaptureV1,
@@ -250,24 +252,43 @@ export function activeActionForControlledSubject(
   return controlledSubject.activeActionId;
 }
 
-function publishedExecutionPlanFields(input: unknown): {
-  readonly executionPlan?: ExecutionPlanV5;
+function publishedRuntimeConfigurationFields(input: unknown): {
+  readonly executionPlan?: CanonicalSceneExecutionPlanV1;
+  readonly worldRuntimeBootstrap?: WorldRuntimeBootstrapV1;
 } {
   if (isNil(input) || typeof input !== "object") return {};
   const worldConfiguration = Reflect.get(input, "worldConfiguration");
   if (isNil(worldConfiguration) || typeof worldConfiguration !== "object") {
     return {};
   }
-  const executionPlan = Reflect.get(worldConfiguration, "executionPlan");
-  if (isNil(executionPlan)) return {};
+  const sceneSource = Reflect.get(worldConfiguration, "sceneSource");
+  const worldRuntimeBootstrap = Reflect.get(
+    worldConfiguration,
+    "worldRuntimeBootstrap",
+  );
+  if (
+    isNil(sceneSource) ||
+    typeof sceneSource !== "object" ||
+    Reflect.get(sceneSource, "kind") !== "canonical-execution-plan" ||
+    isNil(worldRuntimeBootstrap)
+  ) return {};
   try {
-    return { executionPlan: parseExecutionPlanV5(executionPlan) };
+    return {
+      executionPlan: parseCanonicalSceneExecutionPlanV1(
+        Reflect.get(sceneSource, "executionPlan"),
+      ),
+      worldRuntimeBootstrap:
+        parseWorldRuntimeBootstrapV1(worldRuntimeBootstrap),
+    };
   } catch {
     return {};
   }
 }
 
-export function featureInspections(plan: ExecutionPlanV5): readonly FeatureInspection[] {
+export function featureInspections(
+  plan: CanonicalSceneExecutionPlanV1,
+  worldRuntimeBootstrap: WorldRuntimeBootstrapV1,
+): readonly FeatureInspection[] {
   return [
     {
       id: plan.terrain.entityId,
@@ -316,7 +337,7 @@ export function featureInspections(plan: ExecutionPlanV5): readonly FeatureInspe
       ],
       diagnostics: [],
     })),
-    ...plan.subjects.map<FeatureInspection>((subject) => ({
+    ...worldRuntimeBootstrap.subjectRuntimeDescriptors.map<FeatureInspection>((subject) => ({
       id: subject.entityId,
       type: `runtime.subject-${subject.bodyTopology}`,
       version: 1,
@@ -339,12 +360,15 @@ export function featureInspections(plan: ExecutionPlanV5): readonly FeatureInspe
       diagnostics: [],
     })),
     {
-      id: plan.camera.cameraEntityId,
+      id: worldRuntimeBootstrap.initialCamera.cameraEntityId,
       type: "runtime.camera-third-person",
       version: 1,
       status: "ready",
-      parameters: { ...plan.camera },
-      resources: [{ id: `${plan.camera.cameraEntityId}.semantic`, kind: "semantic" }],
+      parameters: { ...worldRuntimeBootstrap.initialCamera },
+      resources: [{
+        id: `${worldRuntimeBootstrap.initialCamera.cameraEntityId}.semantic`,
+        kind: "semantic",
+      }],
       diagnostics: [],
     },
   ];
@@ -354,7 +378,8 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   readonly name: string;
 
   private readonly listeners = new Set<(snapshot: WorldSnapshot) => void>();
-  private readonly initialExecutionPlan: ExecutionPlanV5;
+  private readonly initialExecutionPlan: CanonicalSceneExecutionPlanV1;
+  private readonly initialWorldRuntimeBootstrap: WorldRuntimeBootstrapV1;
   private readonly initialInspections: readonly FeatureInspection[];
   private readonly keyboardInput = new PhysicalKeyboardActionTracker();
   private readonly cameraInput = new Set<CameraInputAction>();
@@ -385,16 +410,18 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   private visualCaptureGroups: readonly VisualCaptureGroupV1[] = [];
 
   private constructor(
-    private executionPlan: ExecutionPlanV5,
+    private executionPlan: CanonicalSceneExecutionPlanV1,
+    private worldRuntimeBootstrap: WorldRuntimeBootstrapV1,
     private readonly coordinator: GameplayBabylonRuntimeCoordinatorV1,
     private readonly playgroundMetadata?: PlaygroundWorldMetadataV1,
   ) {
     this.name = `babylon-havok/${executionPlan.id}`;
     this.initialExecutionPlan = executionPlan;
+    this.initialWorldRuntimeBootstrap = worldRuntimeBootstrap;
     const metadataFeatureInspections = playgroundMetadata?.featureInspections;
     this.initialInspections = structuredClone(
       isNil(metadataFeatureInspections)
-        ? featureInspections(executionPlan)
+        ? featureInspections(executionPlan, worldRuntimeBootstrap)
         : metadataFeatureInspections,
     );
     this.inspections = structuredClone(this.initialInspections);
@@ -417,6 +444,9 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     runtimeWorldConfiguration: RuntimeWorldConfigurationV1,
     options: BabylonWorldAdapterCreateOptionsV1 = {},
   ): Promise<BabylonWorldAdapter> {
+    if (runtimeWorldConfiguration.sceneSource.kind !== "canonical-execution-plan") {
+      throw new Error("WORLDKIT_PLAYGROUND_CANONICAL_SCENE_REQUIRED");
+    }
     const coordinator = await createGameplayBabylonRuntimeCoordinatorV1({
       runtimeSessionId: crypto.randomUUID(),
       initialWorldConfiguration: runtimeWorldConfiguration,
@@ -441,7 +471,8 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     });
     try {
       return new BabylonWorldAdapter(
-        runtimeWorldConfiguration.executionPlan,
+        runtimeWorldConfiguration.sceneSource.executionPlan,
+        runtimeWorldConfiguration.worldRuntimeBootstrap,
         coordinator,
         options.playgroundMetadata,
       );
@@ -729,7 +760,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
       try {
         await this.adoptActiveWorldSurface({
           previousCanvas,
-          ...publishedExecutionPlanFields(input),
+          ...publishedRuntimeConfigurationFields(input),
         });
         this.resetAnimationClock();
         this.emit();
@@ -773,6 +804,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     await this.adoptActiveWorldSurface({
       previousCanvas,
       executionPlan: this.initialExecutionPlan,
+      worldRuntimeBootstrap: this.initialWorldRuntimeBootstrap,
       inspections: this.initialInspections,
     });
     this.emit();
@@ -792,7 +824,9 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
       throw new Error(`WORLDKIT_CAPTURE_GROUPS_INVALID: ${diagnostics.map(({ code, instancePath, message }) => `${code} ${instancePath}: ${message}`).join(" ")}`);
     }
     const capturableEntityIds = new Set([
-      ...this.executionPlan.subjects.map(({ entityId }) => entityId),
+      ...this.worldRuntimeBootstrap.subjectRuntimeDescriptors.map(
+        ({ entityId }) => entityId,
+      ),
       ...this.executionPlan.objects.map(({ entityId }) => entityId),
     ]);
     for (const target of groups) {
@@ -1148,24 +1182,28 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   }
 
   private artifactOpeningCameraPose() {
-    const subject = this.executionPlan.subjects.find(
-      (candidate) => candidate.entityId === this.executionPlan.camera.targetEntityId,
+    const initialCamera = this.worldRuntimeBootstrap.initialCamera;
+    const subject = this.worldRuntimeBootstrap.subjectRuntimeDescriptors.find(
+      (candidate) => candidate.entityId === initialCamera.targetEntityId,
     );
-    if (subject === undefined) {
+    const instance = this.executionPlan.subjectInstances.find(
+      (candidate) => candidate.entityId === initialCamera.targetEntityId,
+    );
+    if (subject === undefined || instance === undefined) {
       throw new Error("BABYLON_ARTIFACT_CAMERA_TARGET_UNAVAILABLE");
     }
     return {
       targetPositionMetersXYZ: [
-        subject.spawnSubjectOriginPositionMetersXYZ[0],
-        subject.spawnSubjectOriginPositionMetersXYZ[1] +
+        instance.subjectOriginPositionMetersXYZ[0],
+        instance.subjectOriginPositionMetersXYZ[1] +
           subject.collider.centerOffsetFromSubjectOriginMetersXYZ[1],
-        subject.spawnSubjectOriginPositionMetersXYZ[2],
+        instance.subjectOriginPositionMetersXYZ[2],
       ] as const,
-      targetHeightMeters: this.executionPlan.camera.targetHeightMeters,
-      facingYawRadians: subject.spawnSubjectFacingRadians,
-      pitchRadians: this.executionPlan.camera.pitchRadians,
-      distanceMeters: this.executionPlan.camera.distanceMeters,
-      fovDegrees: this.executionPlan.camera.fovDegrees,
+      targetHeightMeters: initialCamera.targetHeightMeters,
+      facingYawRadians: instance.subjectFacingRadians,
+      pitchRadians: initialCamera.pitchRadians,
+      distanceMeters: initialCamera.distanceMeters,
+      fovDegrees: initialCamera.fovDegrees,
     };
   }
 
@@ -1205,13 +1243,15 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
       camera: {
         position: snapshot.camera.positionMetersXYZ,
         yaw: cameraYawOffsetRadians,
-        pitch: this.executionPlan.camera.pitchRadians + cameraPitchOffsetRadians,
-        distance: this.executionPlan.camera.distanceMeters + cameraDistanceOffsetMeters,
+        pitch: this.worldRuntimeBootstrap.initialCamera.pitchRadians +
+          cameraPitchOffsetRadians,
+        distance: this.worldRuntimeBootstrap.initialCamera.distanceMeters +
+          cameraDistanceOffsetMeters,
       },
       features: this.inspections,
       performance: {
         fps: this.displayFramesPerSecond,
-        triangles: this.executionPlan.resourceUsage.triangles,
+        triangles: this.executionPlan.sceneResourceUsage.triangles,
         drawCalls: this.runtimeSnapshot().resources.meshCount,
       },
     };
@@ -1266,14 +1306,22 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
 
   private async adoptActiveWorldSurface(input: {
     readonly previousCanvas: HTMLCanvasElement;
-    readonly executionPlan?: ExecutionPlanV5;
+    readonly executionPlan?: CanonicalSceneExecutionPlanV1;
+    readonly worldRuntimeBootstrap?: WorldRuntimeBootstrapV1;
     readonly inspections?: readonly FeatureInspection[];
   }): Promise<void> {
-    if (!isNil(input.executionPlan)) {
+    if (isNil(input.executionPlan) !== isNil(input.worldRuntimeBootstrap)) {
+      throw new Error("WORLDKIT_PLAYGROUND_WORLD_CONFIGURATION_INCOMPLETE");
+    }
+    if (!isNil(input.executionPlan) && !isNil(input.worldRuntimeBootstrap)) {
       this.executionPlan = input.executionPlan;
+      this.worldRuntimeBootstrap = input.worldRuntimeBootstrap;
       this.inspections = structuredClone(
         isNil(input.inspections)
-          ? featureInspections(input.executionPlan)
+          ? featureInspections(
+              input.executionPlan,
+              input.worldRuntimeBootstrap,
+            )
           : input.inspections,
       );
       this.compositionCache = undefined;

@@ -99,7 +99,7 @@ When the plan requests geometry outside current capability, create the minimum h
 
 ## Route R1/R1B boundary
 
-- Authoring V4 compiles to ExecutionPlan V5 with a Host-derived Gameplay Bootstrap. A required `connected-by-route` constraint is eligible for trusted validation when its complete ribbon lies on one Heightfield (R1) or on an unambiguous connected chain of the Heightfield plus explicitly bound ordinary static surfaces (R1B).
+- Authoring V4 compiles to one terminal `CanonicalSceneExecutionPlanV1` and one independent `WorldRuntimeBootstrapV1` with a Host-derived `GameplayBootstrapV1`. A required `connected-by-route` constraint is eligible for trusted validation when its complete ribbon lies on one Heightfield (R1) or on an unambiguous connected chain of the Heightfield plus explicitly bound ordinary static surfaces (R1B).
 - An R1B step, deck, platform, or ramp must be a collision-enabled Object whose Prototype declares one exact `collider-subshape` traversal binding for logical subshape `primary` using `worldkit://traversal-surface-profile/ground.static@1`.
 - Collision-enabled Objects without that binding remain static blockers. Never promote every collider to a navigable surface.
 - Dynamic platforms, overlapping/stacked walkable surfaces, bridge-underpass dual layers, caves, unsupported multi-level structures, flight volumes, and underwater volumes remain outside trusted Route publication. Keep connectivity empty for those cases.

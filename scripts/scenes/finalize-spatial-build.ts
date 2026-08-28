@@ -133,7 +133,7 @@ export async function finalizeSceneBuild(options: {
     ({ role }) => role === "primary-subject",
   );
   if (!primaryVisualGroup?.runtimeEntityIds.includes(
-    pipeline.executionPlan.initialControlledEntityId,
+    pipeline.worldRuntimeBootstrap.initialControlledEntityId,
   )) {
     errors.push("The primary subject visual group must contain the startup-controlled Subject.");
   }
@@ -148,7 +148,9 @@ export async function finalizeSceneBuild(options: {
   const targetIds = new Set(selectedVisualTargets.map(({ visualTargetId }) => visualTargetId));
   const unmappedTargetIds = new Set(targetIds);
   const runtimeEntityIds = new Set([
-    ...pipeline.executionPlan.subjects.map(({ entityId }) => entityId),
+    ...pipeline.worldRuntimeBootstrap.subjectRuntimeDescriptors.map(
+      ({ entityId }) => entityId,
+    ),
     ...pipeline.executionPlan.objects.map(({ entityId }) => entityId),
   ]);
   const mappedRuntimeEntityIds = new Set<string>();

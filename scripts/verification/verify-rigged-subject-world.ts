@@ -16,8 +16,9 @@ import {
   type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
 import type {
-  ExecutionPlanV5,
-  Vec3,
+  CanonicalSceneExecutionPlanV1,
+  RuntimeVec3V1,
+  WorldRuntimeBootstrapV1,
   WorldRuntimeSnapshotV4,
   WorldkitBrowserDiagnosticV1,
 } from "@whitebox-world/runtime-contracts";
@@ -87,7 +88,8 @@ interface WorldBuildArtifactV4 {
   normalizedWorldIrHash: string;
   executionPlanHash: string;
   normalizedWorldIr: NormalizedWorldIRV4;
-  executionPlan: ExecutionPlanV5;
+  executionPlan: CanonicalSceneExecutionPlanV1;
+  worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
 }
 
 interface ArtifactPaths {
@@ -112,7 +114,7 @@ interface ActionCaptureEvidence extends PngInspection {
   tick: number;
   actionId: ActionId;
   subjectEntityId: typeof PRIMARY_ENTITY_ID;
-  positionMetersXYZ: Vec3;
+  positionMetersXYZ: RuntimeVec3V1;
   movementMedium: "ground" | "air";
   subjectSilhouette: SubjectPoseEvidenceV1;
 }
@@ -148,19 +150,19 @@ interface BrowserEvidence {
   isolation: {
     observedEntityId: typeof PRIMARY_ENTITY_ID;
     controlledEntityId: typeof SECONDARY_ENTITY_ID;
-    beforePositionMetersXYZ: Vec3;
-    afterPositionMetersXYZ: Vec3;
+    beforePositionMetersXYZ: RuntimeVec3V1;
+    afterPositionMetersXYZ: RuntimeVec3V1;
     beforeActiveActionId: ActionId;
     afterActiveActionId: ActionId;
-    controlledBeforePositionMetersXYZ: Vec3;
+    controlledBeforePositionMetersXYZ: RuntimeVec3V1;
     controlledBeforeActiveActionId: ActionId;
-    controlledAfterPositionMetersXYZ: Vec3;
+    controlledAfterPositionMetersXYZ: RuntimeVec3V1;
     controlledAfterActiveActionId: ActionId;
   };
   wallStop: {
     entityId: typeof SECONDARY_ENTITY_ID;
-    startPositionMetersXYZ: Vec3;
-    stopPositionMetersXYZ: Vec3;
+    startPositionMetersXYZ: RuntimeVec3V1;
+    stopPositionMetersXYZ: RuntimeVec3V1;
     maximumAllowedXMeters: number;
   };
   tamper: {
@@ -234,7 +236,11 @@ function pngBytesFromDataUrl(dataUrl: string): Buffer {
   return Buffer.from(dataUrl.slice(prefix.length), "base64");
 }
 
-function assertPositionUnchanged(actual: Vec3, expected: Vec3, message: string): void {
+function assertPositionUnchanged(
+  actual: RuntimeVec3V1,
+  expected: RuntimeVec3V1,
+  message: string,
+): void {
   const maximumDriftMeters = Math.max(
     ...actual.map((coordinate, index) => Math.abs(coordinate - expected[index]!)),
   );
@@ -330,14 +336,22 @@ async function runCliGates(paths: ArtifactPaths): Promise<WorldBuildArtifactV4> 
   assert.equal(artifact.kind, "worldkit-build-artifact");
   assert.equal(artifact.schemaVersion, 4);
   assert.equal(artifact.normalizedWorldIr.schemaVersion, 4);
-  assert.equal(artifact.executionPlan.schemaVersion, 5);
-  assert.equal(artifact.executionPlan.initialControlledEntityId, PRIMARY_ENTITY_ID);
+  assert.equal(artifact.executionPlan.schemaVersion, 1);
+  assert.equal(
+    artifact.worldRuntimeBootstrap.initialControlledEntityId,
+    PRIMARY_ENTITY_ID,
+  );
   assert.deepEqual(
-    artifact.executionPlan.subjects.map((subject) => subject.entityId),
+    artifact.worldRuntimeBootstrap.subjectRuntimeDescriptors.map(
+      (subject) => subject.entityId,
+    ),
     [PRIMARY_ENTITY_ID, SECONDARY_ENTITY_ID],
   );
-  assert.equal(artifact.executionPlan.subjectAssets.length, 1);
-  assert.equal(artifact.executionPlan.subjectAssets[0]?.subjectAssetRef, SUBJECT_ASSET_REF);
+  assert.equal(artifact.worldRuntimeBootstrap.subjectAssets.length, 1);
+  assert.equal(
+    artifact.worldRuntimeBootstrap.subjectAssets[0]?.subjectAssetRef,
+    SUBJECT_ASSET_REF,
+  );
   const explanationArtifact = parseJson<SubjectExplanationSuccessV1>(
     await readFile(paths.explain, "utf8"),
     "Rigged explain artifact",
@@ -476,7 +490,7 @@ async function verifyBrowser(
     await readFile(ASSET_PATH),
     "walk",
   );
-  const animationSets = artifact.executionPlan.animationSets.filter(
+  const animationSets = artifact.worldRuntimeBootstrap.animationSets.filter(
     (animationSet) => animationSet.subjectAssetRef === SUBJECT_ASSET_REF,
   );
   assert.equal(animationSets.length, 1);
@@ -701,7 +715,7 @@ async function verifyBrowser(
     let routeHits = 0;
     let responseStatus = 0;
     let responseContentType = "";
-    const compiledAsset = artifact.executionPlan.subjectAssets.find(
+    const compiledAsset = artifact.worldRuntimeBootstrap.subjectAssets.find(
       (asset) => asset.subjectAssetRef === SUBJECT_ASSET_REF,
     );
     assert.ok(compiledAsset !== undefined);
@@ -839,7 +853,7 @@ async function writeVerification(
     await readFile(paths.snapshot, "utf8"),
     "Rigged CLI snapshot",
   );
-  const asset = artifact.executionPlan.subjectAssets[0];
+  const asset = artifact.worldRuntimeBootstrap.subjectAssets[0];
   assert.ok(asset !== undefined);
   assert.equal(
     sha256(await readFile(ASSET_PATH)),
@@ -920,7 +934,8 @@ async function run(publicationMode: ArtifactPublicationMode): Promise<void> {
       hashes: {
         normalizedWorldIr: artifact.normalizedWorldIrHash,
         executionPlan: artifact.executionPlanHash,
-        subjectAsset: artifact.executionPlan.subjectAssets[0]?.artifactContentHash,
+        subjectAsset:
+          artifact.worldRuntimeBootstrap.subjectAssets[0]?.artifactContentHash,
       },
       actionScreenshots: browser.actions,
       poseGate: browser.poseGate,

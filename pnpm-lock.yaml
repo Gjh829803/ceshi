@@ -55,6 +55,9 @@ importers:
       '@whitebox-world/runtime-host':
         specifier: workspace:*
         version: link:packages/runtime-host
+      '@whitebox-world/scene-authoring-contracts':
+        specifier: workspace:*
+        version: link:packages/scene-authoring-contracts
       '@whitebox-world/subject-contracts':
         specifier: workspace:*
         version: link:packages/subject-contracts
