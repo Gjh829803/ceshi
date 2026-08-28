@@ -505,6 +505,10 @@ importers:
       lodash-es:
         specifier: ^4.18.1
         version: 4.18.1
+    devDependencies:
+      ajv:
+        specifier: ^8.17.1
+        version: 8.20.0
 
   packages/runtime-framework:
     devDependencies:

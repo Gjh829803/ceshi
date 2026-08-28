@@ -7,7 +7,10 @@ import {
   type BabylonNativeSceneBootstrapV1,
 } from "@whitebox-world/runtime-contracts";
 
-import type { BabylonNativeLockedAssetResolverV1 } from "./assets.js";
+import type {
+  BabylonNativeLockedAssetResolverV1,
+  BabylonNativeLockedAssetV1,
+} from "./assets.js";
 import {
   createBabylonNativeStaticColliderContributionV1,
   hashBabylonNativeSceneContributionV1,
@@ -365,6 +368,21 @@ interface RetainedColliderV1 {
   readonly frozen: BabylonNativeStaticColliderContributionV1;
 }
 
+function createIsolatedAssetResolver(
+  resolver: BabylonNativeLockedAssetResolverV1,
+): BabylonNativeLockedAssetResolverV1 {
+  return Object.freeze({
+    async resolve(request): Promise<Readonly<BabylonNativeLockedAssetV1>> {
+      const asset = await resolver.resolve(request);
+      return Object.freeze({
+        ...asset,
+        bytes: Uint8Array.from(asset.bytes),
+        importMetadata: Object.freeze({ ...asset.importMetadata }),
+      });
+    },
+  });
+}
+
 export async function buildBabylonNativeSceneCandidateV1(
   input: BuildBabylonNativeSceneCandidateInputV1,
 ): Promise<BuildBabylonNativeSceneCandidateResultV1> {
@@ -377,7 +395,17 @@ export async function buildBabylonNativeSceneCandidateV1(
 
   try {
     validateBudget(input.budget);
-    const module = defineBabylonNativeScene(input.module);
+    let module: BabylonNativeSceneModuleV1;
+    try {
+      module = defineBabylonNativeScene(input.module);
+    } catch {
+      throw failure(
+        "WORLDKIT_NATIVE_SCENE_MODULE_DEFINITION_INVALID",
+        "Native Scene Module failed its closed definition parser.",
+        "Export one plain babylon-native-scene-module with id and build only.",
+        { stage: "source-admission" },
+      );
+    }
     let acceptingRegistrations = true;
     let spawnMarker: BabylonNativeSceneContributionV1["spawnMarker"] | undefined;
     let firstRegistrationFailure: NativeSceneAdmissionFailure | undefined;
@@ -622,7 +650,7 @@ export async function buildBabylonNativeSceneCandidateV1(
       scene: input.scene,
       bootstrap,
       random: input.random,
-      assets: input.assets,
+      assets: createIsolatedAssetResolver(input.assets),
       registration,
     });
     try {

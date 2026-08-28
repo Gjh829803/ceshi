@@ -16,8 +16,10 @@ export interface BabylonNativeStaticGeometryImportMetadataV1 {
 }
 
 /**
- * Immutable bytes plus the exact admission/publication identities that the
- * Host revalidated before exposing an asset to Native authoring code.
+ * Caller-owned bytes plus the exact admission/publication identities that the
+ * Host revalidated before exposing an asset to Native authoring code. Every
+ * resolve() call receives a fresh byte buffer; mutating it cannot alter Host
+ * state or a later resolution.
  */
 export interface BabylonNativeLockedAssetV1 {
   readonly kind: "babylon-native-locked-asset";
@@ -31,7 +33,7 @@ export interface BabylonNativeLockedAssetV1 {
   readonly classBuildRecordHash: string;
   readonly resourceManifestHash: string;
   readonly artifactContentHash: string;
-  readonly bytes: Readonly<Uint8Array>;
+  readonly bytes: Uint8Array;
   readonly importMetadata: Readonly<BabylonNativeStaticGeometryImportMetadataV1>;
 }
 

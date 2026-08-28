@@ -1,5 +1,7 @@
+import Ajv2020 from "ajv/dist/2020.js";
 import { describe, expect, it } from "vitest";
 
+import bootstrapSchema from "./babylon-native-scene-bootstrap-v1.schema.json";
 import {
   hashBabylonNativeSceneBootstrapV1,
   parseBabylonNativeSceneBootstrapV1,
@@ -34,6 +36,59 @@ function expectInvalid(input: unknown): void {
 }
 
 describe("BabylonNativeSceneBootstrapV1", () => {
+  it("keeps the published JSON Schema and exact parser aligned", () => {
+    const validate = new Ajv2020({ allErrors: true, strict: true }).compile(
+      bootstrapSchema,
+    );
+    const cases = [
+      VALID_BOOTSTRAP,
+      { ...VALID_BOOTSTRAP, geometry: [] },
+      { ...VALID_BOOTSTRAP, schemaVersion: 2 },
+      { ...VALID_BOOTSTRAP, id: "" },
+      { ...VALID_BOOTSTRAP, sceneModuleRef: "worldkit://native-scene/cloud-ridge@latest" },
+      { ...VALID_BOOTSTRAP, seed: -1 },
+      { ...VALID_BOOTSTRAP, seed: 0x1_0000_0000 },
+      {
+        ...VALID_BOOTSTRAP,
+        gravityMetersPerSecondSquaredXYZ: [0, -9.81],
+      },
+      {
+        ...VALID_BOOTSTRAP,
+        initialCamera: { ...VALID_BOOTSTRAP.initialCamera, distanceMeters: 0 },
+      },
+      {
+        ...VALID_BOOTSTRAP,
+        initialCamera: { ...VALID_BOOTSTRAP.initialCamera, fovDegrees: 180 },
+      },
+    ];
+
+    for (const candidate of cases) {
+      const schemaAccepted = validate(candidate);
+      let parserAccepted = true;
+      try {
+        parseBabylonNativeSceneBootstrapV1(candidate);
+      } catch {
+        parserAccepted = false;
+      }
+      expect(parserAccepted, JSON.stringify(validate.errors)).toBe(schemaAccepted);
+    }
+  });
+
+  it("documents signed zero as an exact-parser invariant beyond JSON Schema equality", () => {
+    const validate = new Ajv2020({ allErrors: true, strict: true }).compile(
+      bootstrapSchema,
+    );
+    const inMemorySignedZero = { ...VALID_BOOTSTRAP, seed: -0 };
+
+    expect(validate(inMemorySignedZero)).toBe(true);
+    expectInvalid(inMemorySignedZero);
+
+    const wireRoundTrip = JSON.parse(JSON.stringify(inMemorySignedZero));
+    expect(validate(wireRoundTrip)).toBe(true);
+    expect(parseBabylonNativeSceneBootstrapV1(wireRoundTrip).seed).toBe(0);
+    expect(Object.is(wireRoundTrip.seed, -0)).toBe(false);
+  });
+
   it("parses a detached deeply frozen Native Bootstrap snapshot", () => {
     const mutable = {
       ...VALID_BOOTSTRAP,

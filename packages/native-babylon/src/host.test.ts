@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   createBabylonNativeHostRandomV1,
   defineBabylonNativeScene,
+  type BabylonNativeLockedAssetV1,
   type BabylonNativeLockedAssetResolverV1,
   type BabylonNativeSceneBuildContextV1,
   type BabylonNativeSceneModuleV1,
@@ -108,6 +109,14 @@ function rejectedCode(
     : result.checkResult.diagnostics.find(({ severity }) => severity === "error")?.code;
 }
 
+function rejectedStage(
+  result: BuildBabylonNativeSceneCandidateResultV1,
+): string | undefined {
+  return result.outcome === "passed"
+    ? undefined
+    : result.checkResult.diagnostics.find(({ severity }) => severity === "error")?.stage;
+}
+
 afterEach(() => {
   while (retainedEngines.length > 0) retainedEngines.pop()?.dispose();
 });
@@ -127,6 +136,104 @@ describe("buildBabylonNativeSceneCandidateV1", () => {
     expect(result.outcome).toBe("rejected");
     expect(result.checkResult.checkedInput).toEqual({ kind: "unresolved-world" });
     expect(rejectedCode(result)).toBe("WORLDKIT_NATIVE_SCENE_BOOTSTRAP_INVALID");
+  });
+
+  it.each([
+    ["wrong kind", {
+      kind: "legacy-native-scene-module",
+      id: "native-scene-test",
+      build() {},
+    }],
+    ["missing build", {
+      kind: "babylon-native-scene-module",
+      id: "native-scene-test",
+    }],
+    ["throwing accessor", (() => {
+      const candidate = {
+        kind: "babylon-native-scene-module",
+        id: "native-scene-test",
+      } as Record<string, unknown>;
+      Object.defineProperty(candidate, "build", {
+        enumerable: true,
+        get() {
+          throw new Error("untrusted accessor must not escape");
+        },
+      });
+      return candidate;
+    })()],
+  ] as const)("reports malformed Module definition (%s) at source admission", async (
+    _case,
+    module,
+  ) => {
+    const result = await buildBabylonNativeSceneCandidateV1({
+      scene: createScene(),
+      bootstrap: BOOTSTRAP,
+      module: module as never,
+      random: createBabylonNativeHostRandomV1(BOOTSTRAP.seed),
+      assets: ASSETS,
+      budget: DEFAULT_BUDGET,
+    });
+
+    expect(rejectedCode(result)).toBe(
+      "WORLDKIT_NATIVE_SCENE_MODULE_DEFINITION_INVALID",
+    );
+    expect(rejectedStage(result)).toBe("source-admission");
+  });
+
+  it("isolates each resolved asset byte buffer from Module mutation", async () => {
+    const sharedBytes = new Uint8Array([1, 2, 3, 4]);
+    const lockedAsset: BabylonNativeLockedAssetV1 = {
+      kind: "babylon-native-locked-asset",
+      schemaVersion: 1,
+      assetResourceRef: "worldkit://asset/cloud-ridge@1",
+      assetAdmissionReceiptRef: "worldkit://asset-admission/cloud-ridge@1",
+      assetAdmissionReceiptHash: `sha256:${"1".repeat(64)}`,
+      assetPublicationReceiptRef: "worldkit://asset-publication/cloud-ridge@1",
+      assetPublicationReceiptHash: `sha256:${"2".repeat(64)}`,
+      classBuildRecordRef: "worldkit://class-build/cloud-ridge@1",
+      classBuildRecordHash: `sha256:${"3".repeat(64)}`,
+      resourceManifestHash: `sha256:${"4".repeat(64)}`,
+      artifactContentHash: `sha256:${"5".repeat(64)}`,
+      bytes: sharedBytes,
+      importMetadata: {
+        kind: "static-geometry-glb",
+        mediaType: "model/gltf-binary",
+        format: "glb",
+        gltfVersion: "2.0",
+        localForwardAxis: "-Z",
+        localUpAxis: "+Y",
+        metersPerUnit: 1,
+        pivot: "support-center",
+      },
+    };
+    const assets: BabylonNativeLockedAssetResolverV1 = Object.freeze({
+      async resolve() {
+        return lockedAsset;
+      },
+    });
+    let secondResolution: Uint8Array | undefined;
+    const result = await buildBabylonNativeSceneCandidateV1({
+      scene: createScene(),
+      bootstrap: BOOTSTRAP,
+      module: moduleWithBuild(async (context) => {
+        const first = await context.assets.resolve({
+          assetResourceRef: lockedAsset.assetResourceRef,
+        });
+        first.bytes[0] = 99;
+        const second = await context.assets.resolve({
+          assetResourceRef: lockedAsset.assetResourceRef,
+        });
+        secondResolution = second.bytes;
+        registerSpawn(context);
+      }),
+      random: createBabylonNativeHostRandomV1(BOOTSTRAP.seed),
+      assets,
+      budget: DEFAULT_BUDGET,
+    });
+
+    expect(result.outcome).toBe("passed");
+    expect([...sharedBytes]).toEqual([1, 2, 3, 4]);
+    expect([...(secondResolution ?? [])]).toEqual([1, 2, 3, 4]);
   });
 
   it("freezes transformed indexed geometry without Babylon handles", async () => {
