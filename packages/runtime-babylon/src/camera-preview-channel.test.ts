@@ -1587,6 +1587,51 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     });
   });
 
+  it("publishes Motion Kernel mounted Gameplay relationship ids as Camera Context V2", () => {
+    const relationshipId = `mounted-on:sha256:${"ef".repeat(32)}`;
+    const sample: ViewTargetSampleV1 = {
+      controlledEntityId: "player",
+      entityId: "skateboard",
+      targetPositionMetersXYZ: [2, 0.2, -1],
+      forwardXYZ: [0, 0, -1],
+      upXYZ: [0, 1, 0],
+      velocityMetersPerSecondXYZ: [0, 0, -1.5],
+      approximateRadiusMeters: 0.4,
+      socketPositionsMetersXYZById: {},
+      motionTags: ["free-ground"],
+      movementMedium: "ground",
+      relationshipRole: "rider",
+      relationshipContexts: [{
+        id: relationshipId,
+        type: "mountedOn",
+        riderEntityId: "player",
+        mountEntityId: "skateboard",
+        mountSlotId: "stand",
+      }],
+      cameraContextTags: ["forward-intent"],
+    };
+
+    const context = committedCameraContextFromMotionKernelV1(
+      sample,
+      12,
+      "idle",
+      0,
+    );
+    expect(context.semanticAuthorityStatus).toBe("available");
+    expect(context.controlledEntityId).toBe("player");
+    expect(context.targetEntityId).toBe("skateboard");
+    expect(context.environment).toMatchObject({
+      relationshipRole: "rider",
+      relationshipContexts: [{
+        id: relationshipId,
+        type: "mountedOn",
+        riderEntityId: "player",
+        mountEntityId: "skateboard",
+        mountSlotId: "stand",
+      }],
+    });
+  });
+
   it("rolls a failed Tick back atomically and preserves the next Profile transition", () => {
     const executionPlan = compileRuntimeTestPlanV5(
       createFlatTerrainCapabilitySpec(),

@@ -301,6 +301,32 @@ describe("CameraContextSampleV2", () => {
         }],
       },
     }],
+    ["leading-colon relationship id", {
+      ...committedCameraContextV2,
+      environment: {
+        ...committedCameraContextV2.environment,
+        relationshipContexts: [{
+          id: ":mounted-on-primary",
+          type: "mountedOn",
+          riderEntityId: "g-bot-primary",
+          mountEntityId: "skateboard",
+          mountSlotId: "stand",
+        }],
+      },
+    }],
+    ["empty-segment relationship id", {
+      ...committedCameraContextV2,
+      environment: {
+        ...committedCameraContextV2.environment,
+        relationshipContexts: [{
+          id: "mounted-on::sha256",
+          type: "mountedOn",
+          riderEntityId: "g-bot-primary",
+          mountEntityId: "skateboard",
+          mountSlotId: "stand",
+        }],
+      },
+    }],
     ["whitespace relationship slot id", {
       ...committedCameraContextV2,
       environment: {
@@ -349,6 +375,56 @@ describe("CameraContextSampleV2", () => {
     expect(() => parseCameraContextSampleV2(input)).toThrow(
       "closed CameraContextSampleV2 schema",
     );
+  });
+
+  it("accepts Gameplay-derived mounted relationship ids in Camera Context", () => {
+    const relationshipId = `mounted-on:sha256:${"ab".repeat(32)}`;
+    const parsed = parseCameraContextSampleV2({
+      ...committedCameraContextV2,
+      environment: {
+        ...committedCameraContextV2.environment,
+        relationshipRole: "rider",
+        relationshipContexts: [{
+          id: relationshipId,
+          type: "mountedOn",
+          riderEntityId: "g-bot-primary",
+          mountEntityId: "skateboard",
+          mountSlotId: "stand",
+        }],
+      },
+    });
+
+    expect(parsed.environment.relationshipRole).toBe("rider");
+    expect(parsed.environment.relationshipContexts).toEqual([{
+      id: relationshipId,
+      type: "mountedOn",
+      riderEntityId: "g-bot-primary",
+      mountEntityId: "skateboard",
+      mountSlotId: "stand",
+    }]);
+  });
+
+  it("accepts Gameplay-derived relationship ids as the suspended authority", () => {
+    const relationshipId = `mounted-on:sha256:${"cd".repeat(32)}`;
+    const parsed = parseCameraContextSampleV2({
+      ...committedCameraContextV2,
+      locomotion: {
+        schemaVersion: 2,
+        status: "suspended",
+        suspendedByRelationshipId: relationshipId,
+        committedTick: 41,
+        transitionSequence: 6,
+      },
+      actionSummary: { status: "unavailable" },
+    });
+
+    expect(parsed.locomotion).toEqual({
+      schemaVersion: 2,
+      status: "suspended",
+      suspendedByRelationshipId: relationshipId,
+      committedTick: 41,
+      transitionSequence: 6,
+    });
   });
 
   it("accepts the authoritative suspended locomotion branch without fabricated yaw", () => {

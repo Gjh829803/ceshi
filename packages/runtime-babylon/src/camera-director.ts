@@ -92,6 +92,7 @@ export interface CameraDirectorTransactionStateV1 {
     viewPitchOffsetRadians: number;
     viewDistanceOffsetMeters: number;
     controlInitialized: boolean;
+    controlHeadingLockedUntilProfileBind: boolean;
     controlTargetYawOffsetRadians: number;
     controlViewYawOffsetRadians: number;
     controlBaseHeadingYawRadians: number;
@@ -554,6 +555,7 @@ export class CameraDirectorV1 {
   private viewDistanceOffsetMeters = 0;
   private readonly tuningByProfileRef = new Map<string, CameraTuningV1>();
   private controlInitialized = false;
+  private controlHeadingLockedUntilProfileBind = false;
   private controlTargetYawOffsetRadians = 0;
   private controlViewYawOffsetRadians = 0;
   private controlBaseHeadingYawRadians = Math.PI;
@@ -636,6 +638,8 @@ export class CameraDirectorV1 {
         viewPitchOffsetRadians: this.viewPitchOffsetRadians,
         viewDistanceOffsetMeters: this.viewDistanceOffsetMeters,
         controlInitialized: this.controlInitialized,
+        controlHeadingLockedUntilProfileBind:
+          this.controlHeadingLockedUntilProfileBind,
         controlTargetYawOffsetRadians: this.controlTargetYawOffsetRadians,
         controlViewYawOffsetRadians: this.controlViewYawOffsetRadians,
         controlBaseHeadingYawRadians: this.controlBaseHeadingYawRadians,
@@ -770,6 +774,19 @@ export class CameraDirectorV1 {
     return true;
   }
 
+  initializeControlHeading(forwardXYZ: Vec3): void {
+    this.assertUsable();
+    const forward = horizontalDirection(new Vector3(...forwardXYZ)) ??
+      new Vector3(0, 0, -1);
+    this.controlForward.copyFrom(forward);
+    this.controlBaseHeadingYawRadians = directionYaw(forward);
+    this.controlLastStableVelocityForward = forward.clone();
+    this.controlTargetYawOffsetRadians = 0;
+    this.controlViewYawOffsetRadians = 0;
+    this.controlInitialized = true;
+    this.controlHeadingLockedUntilProfileBind = true;
+  }
+
   resetView(): void {
     this.assertUsable();
     this.targetYawOffsetRadians = 0;
@@ -782,6 +799,7 @@ export class CameraDirectorV1 {
     this.controlViewYawOffsetRadians = 0;
     this.baseHeadingIdentity = undefined;
     this.controlBaseHeadingIdentity = undefined;
+    this.controlHeadingLockedUntilProfileBind = false;
   }
 
   applyPreview(
@@ -1296,6 +1314,7 @@ export class CameraDirectorV1 {
     this.viewPitchOffsetRadians = 0;
     this.viewDistanceOffsetMeters = 0;
     this.controlInitialized = false;
+    this.controlHeadingLockedUntilProfileBind = false;
     this.controlTargetYawOffsetRadians = 0;
     this.controlViewYawOffsetRadians = 0;
     this.controlBaseHeadingYawRadians = Math.PI;
@@ -1429,8 +1448,11 @@ export class CameraDirectorV1 {
       new Vector3(0, 0, -1);
     if (this.controlBaseHeadingIdentity !== identity) {
       this.controlBaseHeadingIdentity = identity;
-      this.controlBaseHeadingYawRadians = directionYaw(targetForward);
-      this.controlLastStableVelocityForward = targetForward.clone();
+      if (!this.controlHeadingLockedUntilProfileBind) {
+        this.controlBaseHeadingYawRadians = directionYaw(targetForward);
+        this.controlLastStableVelocityForward = targetForward.clone();
+      }
+      this.controlHeadingLockedUntilProfileBind = false;
     }
     let desired = targetForward;
     if (profile.headingSource === "view") {

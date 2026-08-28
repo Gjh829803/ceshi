@@ -493,6 +493,8 @@ export class GroundAwarePhysicsCharacterController extends PhysicsCharacterContr
           isSurfaceDynamic: false,
         }
       : surfaceInfo;
+    // Walk-speed look-ahead may only fire on SUPPORTED ground. SLIDING is
+    // Havok contact against a wall or box face, not an authored step-up.
     this.stepUpEnabledForCurrentIntegrate =
       effectiveSurfaceInfo.supportedState === CharacterSupportedState.SUPPORTED;
     this.stepUpAppliedForCurrentIntegrate = false;
@@ -851,6 +853,14 @@ function canonicalContact(
     distanceMeters: value.distanceMeters as number,
     motionType: value.motionType as BabylonCharacterBodyNativeMotionTypeV1,
   });
+}
+
+function proposalLeavesSupportUpward(
+  proposal: MovementProposalV1,
+  up: MovementVec3V1,
+): boolean {
+  return dot(proposal.translationDeltaMetersXYZ, up) >
+    BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1;
 }
 
 function assertContactConeCoherent(
@@ -1652,6 +1662,7 @@ interface BodyTransactionV1 {
   readonly sample: BodySampleV1;
   readonly nativeSupport: BabylonCharacterBodyNativeSupportV1;
   readonly beginCheckpoint: unknown;
+  readonly upwardSupportDepartureActive: boolean;
 }
 
 const tokenOwners = new WeakMap<object, BodyTokenOwnerV1>();
@@ -1668,6 +1679,7 @@ class BabylonCharacterBodyPortV1
   private serial = 0;
   private beginAttemptEpoch = 0;
   private transaction: BodyTransactionV1 | undefined;
+  private upwardSupportDepartureActive = false;
   private disposed = false;
 
   constructor(
@@ -1766,6 +1778,7 @@ class BabylonCharacterBodyPortV1
         sample,
         nativeSupport,
         beginCheckpoint: checkpoint,
+        upwardSupportDepartureActive: this.upwardSupportDepartureActive,
       });
       return sample;
     } catch (error) {
@@ -1848,8 +1861,6 @@ class BabylonCharacterBodyPortV1
       if (!finite(translationDifference)) invalid("translation difference is invalid.");
       const post = this.projectPostContacts(
         proposal,
-        appliedTranslation,
-        nativeVelocity,
         position,
         contacts,
       );
@@ -1898,8 +1909,17 @@ class BabylonCharacterBodyPortV1
         }
       }
       known.status = "resolved";
+      this.upwardSupportDepartureActive = proposalLeavesSupportUpward(
+        proposal,
+        freezeVec3(
+          this.configuration.gravityDirectionXYZ.map((value) =>
+            value === 0 ? 0 : -value
+          ),
+        ),
+      );
       return resolution;
     } catch (error) {
+      this.upwardSupportDepartureActive = transaction.upwardSupportDepartureActive;
       this.restorePreservingPrimary(checkpoint);
       if (!integrateRollbackExternallySafe && !this.disposed) {
         try {
@@ -1950,6 +1970,7 @@ class BabylonCharacterBodyPortV1
       this.driver.restoreState(transaction.beginCheckpoint);
       parseVec3(this.driver.getPositionMetersXYZ());
       parseVec3(this.driver.getLinearVelocityMetersPerSecondXYZ());
+      this.upwardSupportDepartureActive = transaction.upwardSupportDepartureActive;
     } catch (error) {
       try {
         this.dispose();
@@ -1997,6 +2018,7 @@ class BabylonCharacterBodyPortV1
     this.generation += 1;
     this.serial += 1;
     this.transaction = undefined;
+    this.upwardSupportDepartureActive = false;
   }
 
   collisionFilterMasks(): Readonly<{
@@ -2096,8 +2118,13 @@ class BabylonCharacterBodyPortV1
     const up = freezeVec3(
       this.configuration.gravityDirectionXYZ.map((value) => value === 0 ? 0 : -value),
     );
-    if (dot(velocity, up) > BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1 ||
-      nativeSupport.mode === "unsupported") {
+    if (
+      this.upwardSupportDepartureActive &&
+      dot(velocity, up) > 0
+    ) {
+      return Object.freeze({ mode: "unsupported" });
+    }
+    if (nativeSupport.mode === "unsupported") {
       return Object.freeze({ mode: "unsupported" });
     }
     const normal = normalized(
@@ -2123,8 +2150,6 @@ class BabylonCharacterBodyPortV1
 
   private projectPostContacts(
     proposal: MovementProposalV1,
-    appliedTranslation: MovementVec3V1,
-    velocity: MovementVec3V1,
     position: MovementVec3V1,
     contacts: readonly BabylonCharacterBodyNativeContactV1[],
   ): Pick<BodyResolutionV1, "support" | "hasCeilingContact"> {
@@ -2134,9 +2159,7 @@ class BabylonCharacterBodyPortV1
     const inContact = contacts.filter((contact) =>
       contact.distanceMeters <= this.options.controller.keepContactToleranceMeters
     );
-    const movingUp =
-      dot(appliedTranslation, up) > BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1 &&
-      dot(velocity, up) > BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1;
+    const movingUp = proposalLeavesSupportUpward(proposal, up);
     const supporting = movingUp
       ? []
       : inContact.filter((contact) => dot(contact.normalXYZ, up) > 0.08);

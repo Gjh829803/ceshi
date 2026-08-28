@@ -606,6 +606,8 @@ export class BabylonWorldRuntime {
   private disposed = false;
   private latestRenderReadyReceipt: RenderReadyReceiptV1 | undefined;
   private appliedCameraViewStateRevision = 0;
+  private pendingCameraHeadingLockBeforeNextTick = false;
+  private pendingPublishedCameraViewSyncBeforeNextTick = false;
   private traversalConfigurationEpoch = 0;
   private readonly aggregates: PhysicsAggregate[] = [];
   private readonly ownedTerrainShape: PhysicsShape | undefined;
@@ -647,6 +649,8 @@ export class BabylonWorldRuntime {
       CameraComponentV1["captureTransactionState"]
     >;
     beforeCameraFovRadians: number;
+    beforePendingCameraHeadingLockBeforeNextTick: boolean;
+    beforePendingPublishedCameraViewSyncBeforeNextTick: boolean;
   }> | undefined;
   readonly #creationExecutionPlanHash: `sha256:${string}` | undefined;
 
@@ -1146,6 +1150,7 @@ export class BabylonWorldRuntime {
     }
     if (input.ticks > 0) this.latestRenderReadyReceipt = undefined;
     for (let index = 0; index < input.ticks; index += 1) {
+      this.lockPublishedCameraHeadingBeforeTick();
       const controlledEntityId = this.controlledEntityId();
       const targetIsBound = controlledEntityId !== undefined;
       this.activeInputActions = targetIsBound ? [...input.actions] : [];
@@ -1419,7 +1424,12 @@ export class BabylonWorldRuntime {
       projectedViewStateAfter,
       commitPrepared: (): void => {
         if (lifecycle !== "prepared") return;
-        if (targetChanged) this.cameraComponent.resetViewPreference();
+        if (targetChanged) {
+          this.cameraComponent.resetViewPreference();
+          this.pendingCameraHeadingLockBeforeNextTick = true;
+          this.pendingPublishedCameraViewSyncBeforeNextTick =
+            !isNil(previousControlledEntityId);
+        }
         lifecycle = "committed";
         this.gameplayPublishedState = stagedState;
         this.traversalConfigurationEpoch = traversalConfigurationEpochAfter;
@@ -2043,11 +2053,17 @@ export class BabylonWorldRuntime {
     const beforeCameraTransactionState =
       this.cameraComponent.captureTransactionState();
     const beforeCameraFovRadians = this.camera.fov;
+    const beforePendingCameraHeadingLockBeforeNextTick =
+      this.pendingCameraHeadingLockBeforeNextTick;
+    const beforePendingPublishedCameraViewSyncBeforeNextTick =
+      this.pendingPublishedCameraViewSyncBeforeNextTick;
     this.preparedGoldenFixedInput = Object.freeze({
       beforeRuntimeProjection,
       beforeWorldProjection,
       beforeCameraTransactionState,
       beforeCameraFovRadians,
+      beforePendingCameraHeadingLockBeforeNextTick,
+      beforePendingPublishedCameraViewSyncBeforeNextTick,
     });
     let projectedWorldStateAfter: ReturnType<
       BabylonGameplayRuntimeInternalV1["readWorldProjection"]
@@ -2121,6 +2137,8 @@ export class BabylonWorldRuntime {
       this.tick = 0;
       this.gameplayPublishedState = baseline;
       this.appliedCameraViewStateRevision = baseline.viewProjection.viewStateRevision;
+      this.pendingCameraHeadingLockBeforeNextTick = false;
+      this.pendingPublishedCameraViewSyncBeforeNextTick = false;
       this.activeInputActions = EMPTY_INPUT_ACTIONS;
       this.activeInputAxes = EMPTY_INPUT_AXES;
       this.cameraComponent.restoreTransactionState(
@@ -2139,6 +2157,10 @@ export class BabylonWorldRuntime {
           historic.actionProjection,
         );
       }
+      this.pendingCameraHeadingLockBeforeNextTick =
+        prepared.beforePendingCameraHeadingLockBeforeNextTick;
+      this.pendingPublishedCameraViewSyncBeforeNextTick =
+        prepared.beforePendingPublishedCameraViewSyncBeforeNextTick;
       this.preparedGoldenFixedInput = undefined;
       const restoredProjection = this.snapshot();
       if (
@@ -2164,6 +2186,7 @@ export class BabylonWorldRuntime {
       throw new RangeError("Gameplay Runtime input must contain exactly one fixed Tick.");
     }
     this.assertActionProjectionForNextTick(actionProjection);
+    this.assertAdmittedGoldenActionProjection(actionProjection);
     this.latestRenderReadyReceipt = undefined;
     const targetEntityId = this.gameplayPublishedState.possessionTarget.mode ===
         "possessed"
@@ -2175,6 +2198,7 @@ export class BabylonWorldRuntime {
       ? { ...input.axes }
       : {};
     this.cameraComponent.setInputActions(this.activeInputActions);
+    this.lockPublishedCameraHeadingBeforeTick();
     const viewControlFrame = this.cameraComponent.controlFrame(this.tick);
     for (const subject of this.executionPlan.subjects) {
       const controller = this.controllerFor(subject.entityId);
@@ -2219,6 +2243,17 @@ export class BabylonWorldRuntime {
       throw new Error(
         "3C_ACTION_TICK_MISMATCH: committed Action projection must match the next Movement Tick.",
       );
+    }
+  }
+
+  private assertAdmittedGoldenActionProjection(
+    actionProjection: GameplayFixedTickActionProjectionV1,
+  ): void {
+    for (const subject of this.executionPlan.subjects) {
+      if (!isGoldenHumanoidControllerV1(this.controllerFor(subject.entityId))) {
+        continue;
+      }
+      this.goldenActionStateForSubject(actionProjection, subject.entityId);
     }
   }
 
@@ -2325,6 +2360,12 @@ export class BabylonWorldRuntime {
       const controlled = this.controllerFor(controlledEntityId);
       if (!isGoldenHumanoidControllerV1(controlled)) {
         this.updateCameraForEntity(controlledEntityId);
+      } else {
+        // Motion Kernel already published this Tick's Camera Context. Stamp the
+        // view revision so a later render cannot reset() the session and snap
+        // heading onto post-step velocity.
+        this.appliedCameraViewStateRevision =
+          this.gameplayPublishedState.viewProjection.viewStateRevision;
       }
     }
   }
@@ -2678,6 +2719,8 @@ export class BabylonWorldRuntime {
     });
     this.initializeInitialMountedRelationships();
     this.appliedCameraViewStateRevision = 0;
+    this.pendingCameraHeadingLockBeforeNextTick = false;
+    this.pendingPublishedCameraViewSyncBeforeNextTick = false;
     this.goldenFixedInputHistory = [];
     this.goldenReplayBaselineState = undefined;
     this.activeInputActions = [];
@@ -2802,14 +2845,7 @@ export class BabylonWorldRuntime {
         "3C_RENDER_INTERPOLATION_INVALID: alpha must be finite from 0 through 1.",
       );
     }
-    const controlledEntityId = this.controlledEntityId();
-    if (
-      controlledEntityId !== undefined &&
-      this.appliedCameraViewStateRevision !==
-        this.gameplayPublishedState.viewProjection.viewStateRevision
-    ) {
-      this.updateCameraForEntity(controlledEntityId, 0);
-    }
+    this.synchronizePublishedCameraView(0);
     for (const subject of this.executionPlan.subjects) {
       this.controllerFor(subject.entityId).renderVisual(interpolationAlphaRatio);
     }
@@ -2889,6 +2925,49 @@ export class BabylonWorldRuntime {
     }
   }
 
+  private lockPublishedCameraHeadingBeforeTick(): void {
+    if (
+      !this.pendingCameraHeadingLockBeforeNextTick &&
+      !this.pendingPublishedCameraViewSyncBeforeNextTick
+    ) {
+      return;
+    }
+    const controlledEntityId = this.controlledEntityId();
+    if (!isNil(controlledEntityId)) {
+      if (this.pendingCameraHeadingLockBeforeNextTick) {
+        // Initial bind locks control heading from Subject facing without
+        // publishing a Camera Context. The Golden Tick still owns the one
+        // Motion Kernel update().
+        const facingYawRadians =
+          this.controllerFor(controlledEntityId).facingYawRadians;
+        this.cameraComponent.initializeControlHeading([
+          canonicalizeSignedZero(-Math.sin(facingYawRadians)),
+          0,
+          canonicalizeSignedZero(-Math.cos(facingYawRadians)),
+        ]);
+      }
+      if (this.pendingPublishedCameraViewSyncBeforeNextTick) {
+        // Possessed A→B rebind must publish the new view before controlFrame
+        // so orbit heading is taken from the new Subject, not the previous one.
+        this.synchronizePublishedCameraView(0);
+      }
+    }
+    this.pendingCameraHeadingLockBeforeNextTick = false;
+    this.pendingPublishedCameraViewSyncBeforeNextTick = false;
+  }
+
+  private synchronizePublishedCameraView(deltaSeconds = 0): void {
+    const controlledEntityId = this.controlledEntityId();
+    if (
+      isNil(controlledEntityId) ||
+      this.appliedCameraViewStateRevision ===
+        this.gameplayPublishedState.viewProjection.viewStateRevision
+    ) {
+      return;
+    }
+    this.updateCameraForEntity(controlledEntityId, deltaSeconds);
+  }
+
   private synchronizeCameraViewSession(): void {
     const publishedViewStateRevision =
       this.gameplayPublishedState.viewProjection.viewStateRevision;
@@ -2913,6 +2992,8 @@ export class BabylonWorldRuntime {
         `WORLDKIT_RUNTIME_CONTROL_TARGET_NOT_FOUND: ${entityId}`,
       );
     }
+    this.pendingCameraHeadingLockBeforeNextTick = false;
+    this.pendingPublishedCameraViewSyncBeforeNextTick = false;
     const controller = this.controllerFor(subject.entityId);
     if (isGoldenHumanoidControllerV1(controller)) {
       let context = this.latestGoldenCameraContextsByEntityId.get(
