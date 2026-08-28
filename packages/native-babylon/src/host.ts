@@ -8,6 +8,7 @@ import {
 } from "@whitebox-world/runtime-contracts";
 
 import type {
+  BabylonNativeLockedAssetRequestV1,
   BabylonNativeLockedAssetResolverV1,
   BabylonNativeLockedAssetV1,
 } from "./assets.js";
@@ -372,7 +373,9 @@ function createIsolatedAssetResolver(
   resolver: BabylonNativeLockedAssetResolverV1,
 ): BabylonNativeLockedAssetResolverV1 {
   return Object.freeze({
-    async resolve(request): Promise<Readonly<BabylonNativeLockedAssetV1>> {
+    async resolve(
+      request: Readonly<BabylonNativeLockedAssetRequestV1>,
+    ): Promise<Readonly<BabylonNativeLockedAssetV1>> {
       const asset = await resolver.resolve(request);
       return Object.freeze({
         ...asset,
