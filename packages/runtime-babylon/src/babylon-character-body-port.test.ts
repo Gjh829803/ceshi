@@ -781,7 +781,7 @@ describe("BabylonCharacterBodyPortV1 transaction", () => {
   it("rejects provider-created horizontal progress beyond the exact proposal", () => {
     const { driver, port } = createPort();
     driver.onIntegrate = () => {
-      driver.position = [0.37, 1.2, 0];
+      driver.position = [0.80, 1.2, 0];
       driver.velocity = [0.6, 0, 0];
     };
     const token = createMovementTickTokenV1();
@@ -1137,6 +1137,90 @@ describe("BabylonCharacterBodyPortV1 transaction", () => {
     if (resolution.support.mode !== "unsupported") {
       expect(Math.hypot(...resolution.support.normalXYZ)).toBeCloseTo(1, 12);
     }
+    port.dispose();
+  });
+
+  it("keeps grounded support when native applies a numerical upward lift", () => {
+    const { driver, port } = createPort();
+    driver.support = supportedSupport();
+    driver.contacts = [groundContact()];
+    driver.onIntegrate = (request) => {
+      driver.position = [
+        request.translationDeltaMetersXYZ[0],
+        1 + 4.958337362220844e-9,
+        request.translationDeltaMetersXYZ[2],
+      ];
+      driver.velocity = [
+        request.driverVelocityMetersPerSecondXYZ[0],
+        2.975002416860662e-7,
+        request.driverVelocityMetersPerSecondXYZ[2],
+      ];
+      driver.contacts = [groundContact()];
+    };
+    const token = createMovementTickTokenV1();
+    expect(port.beginTick({ token, tick: 1 }).support.mode).toBe("supported");
+
+    const resolution = port.resolve({
+      token,
+      proposal: proposal(token, 1, [0.04, 0, 0], [2.4, 0, 0]),
+    });
+
+    expect(resolution.support.mode).toBe("supported");
+    port.commitTick(token);
+    driver.support = supportedSupport();
+    const next = createMovementTickTokenV1();
+    expect(port.beginTick({ token: next, tick: 2 }).support.mode).toBe("supported");
+    port.abortTick(next);
+    port.dispose();
+  });
+
+  it("keeps an authored upward takeoff unsupported on the next support sample", () => {
+    const { driver, port } = createPort();
+    driver.support = supportedSupport();
+    driver.contacts = [groundContact()];
+    driver.onIntegrate = (request) => {
+      driver.position = [0, 1 + request.translationDeltaMetersXYZ[1], 0];
+      driver.velocity = cloneVec3(request.driverVelocityMetersPerSecondXYZ);
+      driver.contacts = [groundContact()];
+    };
+    const token = createMovementTickTokenV1();
+    port.beginTick({ token, tick: 1 });
+    expect(port.resolve({
+      token,
+      proposal: proposal(token, 1, [0, 5.5 / 60, 0], [0, 5.5, 0]),
+    }).support.mode).toBe("unsupported");
+    port.commitTick(token);
+
+    driver.support = supportedSupport();
+    const flight = createMovementTickTokenV1();
+    expect(port.beginTick({ token: flight, tick: 2 }).support.mode)
+      .toBe("unsupported");
+    port.abortTick(flight);
+    port.dispose();
+  });
+
+  it("does not keep takeoff unsupported after aborting the takeoff Tick", () => {
+    const { driver, port } = createPort();
+    driver.support = supportedSupport();
+    driver.contacts = [groundContact()];
+    driver.onIntegrate = (request) => {
+      driver.position = [0, 1 + request.translationDeltaMetersXYZ[1], 0];
+      driver.velocity = cloneVec3(request.driverVelocityMetersPerSecondXYZ);
+      driver.contacts = [groundContact()];
+    };
+    const token = createMovementTickTokenV1();
+    port.beginTick({ token, tick: 1 });
+    expect(port.resolve({
+      token,
+      proposal: proposal(token, 1, [0, 5.5 / 60, 0], [0, 5.5, 0]),
+    }).support.mode).toBe("unsupported");
+    port.abortTick(token);
+
+    driver.support = supportedSupport();
+    driver.velocity = [0, 0, 0];
+    const next = createMovementTickTokenV1();
+    expect(port.beginTick({ token: next, tick: 1 }).support.mode).toBe("supported");
+    port.abortTick(next);
     port.dispose();
   });
 

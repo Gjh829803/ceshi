@@ -153,6 +153,16 @@ const gBotAuthoringSpec = JSON.parse(
   ),
 ) as AuthoringSpecV4;
 
+const publishedRiggedAuthoringSpec = JSON.parse(
+  await readFile(
+    new URL(
+      "../../../examples/authoring/rigged-subject-world.json",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+) as AuthoringSpecV4;
+
 describe("Babylon runtime fixture compilation", () => {
   it("keeps the product G Bot control fixture flat", () => {
     const executionPlan = compileRouteExecutionPlan(structuredClone(gBotAuthoringSpec));
@@ -1046,6 +1056,10 @@ function createTwoRiggedSubjectExecutionPlan(): ExecutionPlanV5 {
       },
     ],
   };
+}
+
+function createPublishedRiggedExecutionPlan(): ExecutionPlanV5 {
+  return compileExecutionPlan(structuredClone(publishedRiggedAuthoringSpec));
 }
 
 async function expectRiggedRuntimeFailure(
@@ -2208,6 +2222,85 @@ describe("BabylonWorldRuntime", () => {
         .toBeGreaterThan(startX + 2);
       expect(moved.camera.controlForwardXYZ![0]).toBeCloseTo(startForward[0], 2);
       expect(moved.camera.controlForwardXYZ![2]).toBeCloseTo(startForward[2], 2);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("keeps a Golden Subject grounded and orbiting while strafing on the published heightfield", async () => {
+    const runtime = await createRiggedRuntime(createPublishedRiggedExecutionPlan());
+    try {
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      runtime.reset();
+      await bindRuntimeTestPossession(runtime, "rigged-primary");
+      const idle = await internal.prepareFixedInputTick!({
+        actions: [],
+        ticks: 1,
+      }, emptyActionProjection(runtime.snapshot().tick + 1));
+      idle.commitPrepared();
+      await bindRuntimeTestPossession(runtime, "rigged-secondary");
+      const start = runtime.snapshot();
+      const startX = start.subjectStatesByEntityId["rigged-secondary"]!.positionMetersXYZ[0];
+      const ticks: Array<{
+        tick: number;
+        profile: string | undefined;
+        mobilityMode: string | undefined;
+        supportMode: string | undefined;
+        positionMetersXYZ: readonly [number, number, number];
+      }> = [];
+      for (let tick = 0; tick < 60; tick += 1) {
+        const prepared = await internal.prepareFixedInputTick!({
+          actions: ["move-right"],
+          ticks: 1,
+        }, emptyActionProjection(runtime.snapshot().tick + 1));
+        prepared.commitPrepared();
+        const current = runtime.snapshot();
+        const secondary = current.subjectStatesByEntityId["rigged-secondary"] as {
+          positionMetersXYZ: readonly [number, number, number];
+          locomotion?: { mobilityMode?: string; supportMode?: string };
+        };
+        ticks.push({
+          tick: current.tick,
+          profile: current.camera.activeCameraProfileRef,
+          mobilityMode: secondary.locomotion?.mobilityMode,
+          supportMode: secondary.locomotion?.supportMode,
+          positionMetersXYZ: secondary.positionMetersXYZ,
+        });
+      }
+      const moved = runtime.snapshot();
+      const secondary = moved.subjectStatesByEntityId["rigged-secondary"] as {
+        positionMetersXYZ: readonly [number, number, number];
+        locomotion?: { mobilityMode?: string; gait?: string; supportMode?: string };
+      };
+      expect(moved.camera.activeCameraProfileRef).toBe(ORBIT_CAMERA_PROFILE_REF);
+      expect(secondary.locomotion).toMatchObject({
+        mobilityMode: "grounded",
+        gait: "walk",
+        supportMode: "supported",
+      });
+      expect(secondary.positionMetersXYZ[0]).toBeGreaterThan(startX);
+      expect(secondary.positionMetersXYZ[0]).toBeLessThan(6.2);
+      const firstAirborne = ticks.find((row) => row.mobilityMode === "airborne");
+      expect(firstAirborne, JSON.stringify(ticks.slice(0, 8), null, 2)).toBeUndefined();
+      for (let tick = 0; tick < 300; tick += 1) {
+        const prepared = await internal.prepareFixedInputTick!({
+          actions: ["move-right"],
+          ticks: 1,
+        }, emptyActionProjection(runtime.snapshot().tick + 1));
+        prepared.commitPrepared();
+      }
+      const wallStop = runtime.snapshot();
+      const wallSecondary = wallStop.subjectStatesByEntityId["rigged-secondary"] as {
+        positionMetersXYZ: readonly [number, number, number];
+        locomotion?: { mobilityMode?: string; supportMode?: string };
+      };
+      expect(wallStop.camera.activeCameraProfileRef).toBe(ORBIT_CAMERA_PROFILE_REF);
+      expect(wallSecondary.locomotion).toMatchObject({
+        mobilityMode: "grounded",
+        supportMode: "supported",
+      });
+      expect(wallSecondary.positionMetersXYZ[0]).toBeGreaterThan(startX + 2);
+      expect(wallSecondary.positionMetersXYZ[0]).toBeLessThan(6.2);
     } finally {
       await runtime.dispose();
     }
