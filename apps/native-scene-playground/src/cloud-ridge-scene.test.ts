@@ -1,6 +1,6 @@
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
-import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
+import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -20,7 +20,7 @@ import {
 
 const retainedEngines: NullEngine[] = [];
 
-function localAxisExtent(mesh: Mesh, axis: 0 | 1 | 2): number {
+function localAxisExtent(mesh: AbstractMesh, axis: 0 | 1 | 2): number {
   const positions = mesh.getVerticesData(VertexBuffer.PositionKind)!;
   const values = positions.filter((_value, index) => index % 3 === axis);
   return Math.max(...values) - Math.min(...values);

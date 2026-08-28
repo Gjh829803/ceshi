@@ -138,9 +138,9 @@ clean break** 实施，不为仓库历史保留兼容负担：
 - Canonical 与 Native 两个 `sceneSource.kind` 是长期并列的产品能力，不是 legacy/new 兼容层；两者共用
   Kernel 且每个世界只选一个 Source，因此不违反本原则。
 
-实验 `@whitebox-world/runtime-babylon` Native 导出、`surfaceKind`、影子 ExecutionPlan 和把
-`executionPlanHash` 当通用世界身份的做法都属于必须被最终切片删除的旧实现，不得通过 alias 或 Adapter
-继续存活。
+实验期的 `@whitebox-world/runtime-babylon` Native 根导出和 `surfaceKind` 已由 Foundation
+current-only 迁移删除；影子 ExecutionPlan 和把 `executionPlanHash` 当通用世界身份的做法仍属于
+BNA-1 必须删除的旧实现。两类旧合同都不得通过 alias 或 Adapter 继续存活。
 
 ## 3. 目标与非目标
 
@@ -563,7 +563,8 @@ Profile 测量模型首轮生成/修复成功率，不能用生成便利性推�
 
 `@whitebox-world/native-babylon` 不重写 `MeshBuilder`、`Material`、`Light` 或 Transform API。
 它只提供 `defineBabylonNativeScene`、BuildContext、登记合同、资源 Resolver 和结构化诊断类型。
-当前实验 API 位于 `@whitebox-world/runtime-babylon` 根导出；该位置不是长期公共入口。
+当前 Foundation 已把 AI-facing API 迁移到该包根入口，并把 Candidate Admission/Contribution Host
+能力隔离在 `@whitebox-world/native-babylon/host`；这仍只是内部实验 checkpoint，不是 Native 生产入口。
 
 ### 7.2 目标 BuildContext
 
@@ -1121,12 +1122,12 @@ AI 用 Three 生成原始 GLB，经资产类别 Build Record 和只读 Asset Adm
 
 | 能力 | 2026-08-28 当前事实 | 本设计目标 |
 |---|---|---|
-| Native Module API | 实验 V1 位于 `@whitebox-world/runtime-babylon` 根导出 | 独立 `@whitebox-world/native-babylon` |
-| Bootstrap | App 内 TypeScript interface + 常量，无正式 Schema/Parser/Hash | 闭合、版本化、可哈希 JSON |
+| Native Module API | Foundation 已迁移到独立 `@whitebox-world/native-babylon` root；Host 能力只从 `/host` 消费 | 完成 BNA-2 后续闭合、BNA-3 至 BNA-6，并通过 BNA-8 disposition 后，才可成为 receipt-bound、经 Authority/Runtime Replay Gate 的生产入口 |
+| Bootstrap | 已有闭合、版本化、可哈希的 `BabylonNativeSceneBootstrapV1` Parser；仍由实验 Runtime option 消费 | 进入 BNA-1 闭合 `sceneSource`、Plan-independent Runtime Bootstrap 与 Build Identity |
 | Gameplay 复用 | 克隆 G Bot `ExecutionPlanV5`，Native 忽略其场景几何 | 复用 `GameplayBootstrapV1` + Plan-independent `WorldRuntimeBootstrap`，无影子 Plan |
 | 通用世界身份 | 多个 Runtime/State/Capture 合同硬编码 `executionPlanHash` | `WorldBuildIdentity` 区分 Source；Plan-specific 合同仍显式用 Plan Hash |
 | Runtime Source | `BabylonWorldRuntime.create({ nativeScene })` 实验选项 | RuntimeHost 闭合 `sceneSource` Union |
-| 登记 | 一个 Spawn + 静态 Mesh Collider，基础预算与冻结快照 | Profile Ref、结构化诊断、正式 Contribution Hash |
+| 登记 | 一个 Spawn + 必填闭合 `traversalBinding` 的静态 Mesh Collider；已有 Host 预算、结构化诊断、稳定 Subshape/Surface ID 与无 Handle Contribution Hash | BNA-3/BNA-4 增加 Package/Receipt 绑定、Source/Authority/Runtime Replay 与生产 Surface Admission |
 | Physics/Subject/Camera | 已由 SDK/Havok 接管并通过实验移动 | 继续使用同一生产 Kernel，不复制 Runtime |
 | 场景效果 | `cloud-ridge` 已显示核心构图并有通过性 Probe | Golden Corpus、正式 Visual/Interaction Gate |
 | Package/Receipt | 无 Native WorldPackage/Build Receipt | Bundle/依赖/资产/贡献完整身份 |

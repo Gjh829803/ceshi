@@ -941,9 +941,16 @@ Replay、Streaming/Dispose 和自动 Diagnostic；普通 Agent 只引用稳定 P
 - [ ] BNA-1：Runtime Scene Source Union、正式 Native Bootstrap、Plan-independent
   `WorldRuntimeBootstrapV1`、source-neutral `WorldBuildIdentityV1`、`SceneAuthoringRouteDecisionV1` 与
   `SceneAuthoringAttemptV1`/`SceneAuthoringAttemptResultV1`；完成受影响消费者的版本迁移，移除影子
-  ExecutionPlan 和伪造 Plan Hash；
+  ExecutionPlan 和伪造 Plan Hash；其中闭合、可哈希的 `BabylonNativeSceneBootstrapV1` Parser 是已通过
+  集成门禁的窄 Bootstrap 内部 checkpoint，不代表 BNA-1 身份 clean break 完成；
 - [ ] BNA-2：独立 `@whitebox-world/native-babylon` 与 `defineBabylonNativeScene`；Block Profile 保持为
   BWB-1 的可选独立包，不塞入 core API 形成默认 DSL；
+  - [x] BNA-2 Foundation 内部 checkpoint：AI-facing root / Host-only subpath、唯一 Deep ESM Import
+    Profile、Host uint32 随机源、锁定资产 Resolver 接口、闭合诊断、冻结无 Handle 的 Collider
+    Contribution/Hash、预算/登记 Admission 与 `cloud-ridge` current-only 迁移已通过本轮合同、Runtime、
+    Build、浏览器和人工保真门禁；这不是兼容承诺或生产支持；
+  - [ ] BNA-2 后续生产闭合仍需 Source Admission、Authority Audit、Runtime Replay、正式 CLI/exit
+    证据和 BNA-6 AI 生成/修复评测；不得用本 checkpoint 提前关闭 BNA-3+ 或 BNA-4 生产 Gate；
 - [ ] BNA-3：Bundle、依赖/资产锁、Package、Contribution Hash 与 Build Receipt；只消费已发布的
   class-specific Resource Ref，并绑定 Route Decision Hash/completed Attempt Result，不执行资产生产或发布；
 - [ ] BNA-4：统一 Gameplay Kernel、Profile-based Surface Admission、稳定 Surface/Subshape identity、
