@@ -131,7 +131,20 @@ Ruling: generated examples and scene evidence are regenerated only through their
   Runtime Babylon and Native playground tests passed 495/495 across 31 files;
   `pnpm typecheck`, `pnpm build`, `pnpm build:native-scene`, the Native-source
   forbidden-symbol census, and `git diff --check` passed.
-- BNA1-09A: not started.
+- BNA1-09A: complete in the pending generic-protocol commit. Runtime Session
+  ready events, Simulation Takes, Whitebox tri-view manifests, Control Capture
+  bundle identity files/manifests/inspection, and the headless Session boundary
+  now require `worldBuildIdentityHash`. Their closed parsers reject the former
+  generic `executionPlanHash`; Route Browser evidence and Canonical staging
+  retain explicit Plan identity. The Control Capture reader additionally checks
+  exact current manifest/identity key sets, and Runtime Session durable binding
+  compares World Build identity before resume. One trusted Canonical
+  WorldPackage builder now supplies the same deterministic package/root/build
+  identity to build, capture, and Take callers instead of reconstructing
+  task-specific roots. Evidence: focused Runtime Contracts, Control Capture,
+  Take, WAL, and Session tests passed 112/112 across 16 files; typecheck,
+  workspace boundary floor (49 registered debt entries), test census (304
+  total / 272 contract / 32 resource-heavy), and `git diff --check` passed.
 - BNA1-09B: not started.
 - BNA1-09C: not started.
 - BNA1-09D: not started.

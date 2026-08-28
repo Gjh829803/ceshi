@@ -145,6 +145,7 @@ export type RuntimeSessionEventV1 =
       runtimeSessionUri: `worldkit://runtime-session/${string}`;
       worldPackageRef: `package://world-package/sha256/${string}`;
       worldPackageRootHash: Sha256HashV1;
+      worldBuildIdentityHash: Sha256HashV1;
       fixedInputControllerEntityId: string;
       supportedRequestTypes:
         typeof WORLDKIT_RUNTIME_SESSION_REQUEST_TYPES_V1;
@@ -976,12 +977,14 @@ function parseRuntimeSessionEventBodyV1(
       "runtimeSessionUri",
       "worldPackageRef",
       "worldPackageRootHash",
+      "worldBuildIdentityHash",
       "fixedInputControllerEntityId",
       "supportedRequestTypes",
     ]) ||
       record.runtimeSessionUri !==
         `worldkit://runtime-session/${encodeURIComponent(record.runtimeSessionId)}` ||
       !isSha256(record.worldPackageRootHash) ||
+      !isSha256(record.worldBuildIdentityHash) ||
       !isNonEmptyString(record.fixedInputControllerEntityId)
     ) return invalid(schemaName);
     const refMatch = typeof record.worldPackageRef === "string"

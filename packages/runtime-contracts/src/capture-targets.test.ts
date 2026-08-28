@@ -127,7 +127,7 @@ describe("hosted visual capture contracts", () => {
     const value: WhiteboxTriviewManifestV1 = {
       kind: "worldkit-whitebox-triview-manifest",
       schemaVersion: 1,
-      executionPlanHash: hash,
+      worldBuildIdentityHash: hash,
       whiteboxTriviews: [{
         ...group("traveler", ["traveler"]),
         views: ["front", "right", "back"],
@@ -135,6 +135,21 @@ describe("hosted visual capture contracts", () => {
       }],
     };
     expect(validateWhiteboxTriviewManifestV1(value)).toEqual([]);
+
+    expect(validateWhiteboxTriviewManifestV1({
+      ...value,
+      worldBuildIdentityHash: undefined,
+      executionPlanHash: hash,
+    })).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: "HOSTED_VISUAL_UNKNOWN_FIELD",
+        instancePath: "/executionPlanHash",
+      }),
+      expect.objectContaining({
+        code: "HOSTED_VISUAL_WORLD_BUILD_IDENTITY_HASH_INVALID",
+        instancePath: "/worldBuildIdentityHash",
+      }),
+    ]));
 
     expect(validateWhiteboxTriviewManifestV1({
       ...value,

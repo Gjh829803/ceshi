@@ -72,13 +72,6 @@
       "removalGate": "Replace with an explicitly exported public or testing subpath."
     },
     {
-      "importer": "packages/compiler/src/compile-v5.test.ts",
-      "specifier": "../../authoring/src/test-fixture",
-      "owner": "@whitebox-world/authoring",
-      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
-      "removalGate": "Replace with an explicitly exported public or testing subpath."
-    },
-    {
       "importer": "packages/compiler/src/compile.test.ts",
       "specifier": "../../authoring/src/test-fixture",
       "owner": "@whitebox-world/authoring",
@@ -180,13 +173,6 @@
       "importer": "packages/validation/src/route-evidence-publication.test.ts",
       "specifier": "../../../apps/playground/src/worldkit-browser-api.js",
       "owner": "@whitebox-world/playground",
-      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
-      "removalGate": "Replace with an explicitly exported public or testing subpath."
-    },
-    {
-      "importer": "packages/world-package/src/build-receipt.test.ts",
-      "specifier": "../../authoring/src/test-fixture.js",
-      "owner": "@whitebox-world/authoring",
       "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
       "removalGate": "Replace with an explicitly exported public or testing subpath."
     },

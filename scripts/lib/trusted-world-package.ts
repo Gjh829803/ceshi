@@ -4,8 +4,10 @@ import { hashCanonicalAuthoringSchemaV1 } from "@whitebox-world/authoring-edit";
 import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
 import {
   BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V1,
+  createWorldPackageV1,
   type ResolvedWorldPackageResourceArtifactV1,
   type WorldPackageBuildContextV1,
+  type WorldPackageDirectoryV1,
   type WorldPackageLicenseDocumentInputV1,
 } from "@whitebox-world/world-package";
 import { isEmpty, isNil } from "lodash-es";
@@ -14,6 +16,7 @@ import {
   resolveWorldPackageResourceArtifactsV1,
   type ResolveWorldPackageResourceBytesOptionsV1,
 } from "./world-package-resource-resolver";
+import type { WorldkitRoutePipelineSuccess } from "./worldkit-pipeline";
 
 const CONSTRAINED_JSON_PROFILE_REF =
   "worldkit://ai-schema-projection-profile/constrained-json@1";
@@ -134,5 +137,31 @@ export function createTrustedWorldPackageBuildContextV1(input: {
       `See ${document.path}.`
     ).join("\n")}\n`,
     includeAuthoringSpec: true,
+  });
+}
+
+export async function createTrustedCanonicalWorldPackageV1(
+  pipeline: WorldkitRoutePipelineSuccess,
+): Promise<WorldPackageDirectoryV1> {
+  const resourceArtifacts = await resolveTrustedWorldPackageResourceArtifactsV1(
+    pipeline.normalizedWorldIr,
+  );
+  return createWorldPackageV1({
+    packageId: `${pipeline.authoringSpec.id}.world-package`,
+    ...createTrustedWorldPackageBuildContextV1({
+      title: `${pipeline.authoringSpec.id} WorldPackage`,
+      resourceArtifacts,
+    }),
+    authoringSpec: pipeline.authoringSpec,
+    normalizedWorldIr: pipeline.normalizedWorldIr,
+    layoutSolveResult: Object.freeze({
+      status: pipeline.layoutSolveReport.status,
+      report: pipeline.layoutSolveReport,
+      layoutSolveReportHash: pipeline.layoutSolveReportHash,
+    }),
+    executionPlan: pipeline.executionPlan,
+    gameplayBootstrap: pipeline.gameplayBootstrap,
+    worldRuntimeBootstrap: pipeline.worldRuntimeBootstrap,
+    resourceArtifacts,
   });
 }

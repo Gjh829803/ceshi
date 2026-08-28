@@ -45,6 +45,7 @@ export type RuntimeSessionFinalEventV1 = Extract<
 export interface AdmittedRuntimeSessionPackageV1 {
   readonly worldPackageRef: WorldPackageRefV1;
   readonly worldPackageRootHash: `sha256:${string}`;
+  readonly worldBuildIdentityHash: `sha256:${string}`;
   readonly createSession: (input: Readonly<{
     readonly runtimeSessionId: string;
     readonly initialWorldSessionId: string;
@@ -184,6 +185,7 @@ function readyEvent(
       `worldkit://runtime-session/${encodeURIComponent(input.runtimeSessionId)}`,
     worldPackageRef: input.package.worldPackageRef,
     worldPackageRootHash: input.package.worldPackageRootHash,
+    worldBuildIdentityHash: input.package.worldBuildIdentityHash,
     fixedInputControllerEntityId: input.fixedInputControllerEntityId,
     supportedRequestTypes: WORLDKIT_RUNTIME_SESSION_REQUEST_TYPES_V1,
   }) as RuntimeSessionReadyEventV1;
@@ -219,9 +221,10 @@ async function defaultAdmitPackage(
   }
   const { runtimeWorldConfiguration, verifiedDirectory } = loaded;
   return Object.freeze({
-    worldPackageRef: runtimeWorldConfiguration.worldPackageRef,
+    worldPackageRef: runtimeWorldConfiguration.worldBuildIdentity.worldPackageRef,
     worldPackageRootHash:
-      runtimeWorldConfiguration.worldPackageBuildReceipt.worldPackageRootHash,
+      runtimeWorldConfiguration.worldBuildIdentity.worldPackageRootHash,
+    worldBuildIdentityHash: verifiedDirectory.receipt.worldBuildIdentityHash,
     createSession: ({
       runtimeSessionId,
       initialWorldSessionId,
@@ -251,6 +254,7 @@ function assertSessionBinding(
     session.initialWorldSessionId !== ready.worldSessionId ||
     session.worldPackageRef !== ready.worldPackageRef ||
     session.worldPackageRootHash !== ready.worldPackageRootHash ||
+    session.worldBuildIdentityHash !== ready.worldBuildIdentityHash ||
     session.fixedInputControllerEntityId !== ready.fixedInputControllerEntityId
   ) {
     throw new Error(
@@ -266,6 +270,7 @@ function assertPackageBinding(
   if (
     admitted.worldPackageRef !== ready.worldPackageRef ||
     admitted.worldPackageRootHash !== ready.worldPackageRootHash
+    || admitted.worldBuildIdentityHash !== ready.worldBuildIdentityHash
   ) {
     throw new Error(
       "RUNTIME_SESSION_PACKAGE_MISMATCH: Admitted Package Ref/Root differs from the durable Session.",

@@ -49,6 +49,7 @@ function readyEvent(): Extract<RuntimeSessionEventV1, { type: "ready" }> {
     runtimeSessionUri: "worldkit://runtime-session/runtime-session-primary",
     worldPackageRef: `package://world-package/sha256/${"a".repeat(64)}`,
     worldPackageRootHash: ROOT_HASH,
+    worldBuildIdentityHash: ROOT_HASH,
     fixedInputControllerEntityId: "controller-primary",
     supportedRequestTypes: WORLDKIT_RUNTIME_SESSION_REQUEST_TYPES_V1,
   } as const;

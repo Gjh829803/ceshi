@@ -75,6 +75,7 @@ export interface SimulationTakeV1 {
   readonly id: string;
   readonly worldPackageRef: string;
   readonly worldPackageRootHash: Sha256HashV1;
+  readonly worldBuildIdentityHash: Sha256HashV1;
   readonly seed: number;
   readonly simulationTickRate: SimulationTickRateV1;
   readonly startTick: number;

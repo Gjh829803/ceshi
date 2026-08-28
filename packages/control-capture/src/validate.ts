@@ -395,7 +395,8 @@ function checkUniqueIds(
 export function validateSimulationTakeV1(input: unknown): SimulationTakeValidationResultV1 {
   const diagnostics: SimulationTakeDiagnosticV1[] = [];
   const row = readObject(input, "", [
-    "kind", "schemaVersion", "id", "worldPackageRef", "worldPackageRootHash", "seed",
+    "kind", "schemaVersion", "id", "worldPackageRef", "worldPackageRootHash",
+    "worldBuildIdentityHash", "seed",
     "simulationTickRate", "startTick", "endTickExclusive", "controllers", "tracks",
     "captureSchedule", "captureProfileRef", "captureEncodingProfileRef",
   ], diagnostics);
@@ -409,6 +410,11 @@ export function validateSimulationTakeV1(input: unknown): SimulationTakeValidati
   const idOk = isTrimmedString(row.id, "/id", diagnostics);
   const packageRefOk = isTrimmedString(row.worldPackageRef, "/worldPackageRef", diagnostics);
   const packageHashOk = isHash(row.worldPackageRootHash, "/worldPackageRootHash", diagnostics);
+  const worldBuildIdentityHashOk = isHash(
+    row.worldBuildIdentityHash,
+    "/worldBuildIdentityHash",
+    diagnostics,
+  );
   const seedOk = isSafeInteger(row.seed, "/seed", diagnostics);
   const startOk = isSafeInteger(row.startTick, "/startTick", diagnostics);
   const endOk = isSafeInteger(row.endTickExclusive, "/endTickExclusive", diagnostics, 1);
@@ -467,7 +473,8 @@ export function validateSimulationTakeV1(input: unknown): SimulationTakeValidati
   }
 
   if (diagnostics.length > 0 || row.kind !== "worldkit-simulation-take" || row.schemaVersion !== 1 ||
-    !idOk || !packageRefOk || !packageHashOk || !seedOk || !startOk || !endOk ||
+    !idOk || !packageRefOk || !packageHashOk || !worldBuildIdentityHashOk ||
+    !seedOk || !startOk || !endOk ||
     rate === undefined || !rateNumeratorOk || !rateDenominatorOk ||
     controllerInputs === undefined || controllers.length !== controllerInputs.length ||
     trackInputs === undefined || tracks.length !== trackInputs.length || schedule === undefined) {
@@ -482,6 +489,7 @@ export function validateSimulationTakeV1(input: unknown): SimulationTakeValidati
       id: row.id as string,
       worldPackageRef: row.worldPackageRef as string,
       worldPackageRootHash: row.worldPackageRootHash as Sha256HashV1,
+      worldBuildIdentityHash: row.worldBuildIdentityHash as Sha256HashV1,
       seed: row.seed as number,
       simulationTickRate: {
         numeratorTicks: rate.numeratorTicks as number,

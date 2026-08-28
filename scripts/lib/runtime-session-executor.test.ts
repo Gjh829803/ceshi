@@ -159,6 +159,7 @@ class FakeHeadlessRuntimeSession implements HeadlessRuntimeSessionV1 {
   readonly initialWorldSessionId = WORLD_SESSION_ID;
   readonly worldPackageRef = WORLD_PACKAGE_REF;
   readonly worldPackageRootHash = HASH_A;
+  readonly worldBuildIdentityHash = HASH_B;
   readonly fixedInputControllerEntityId = CONTROLLER_ENTITY_ID;
   readonly calls: string[] = [];
   disposeCount = 0;
@@ -231,6 +232,7 @@ function admittedPackage(
   return {
     worldPackageRef: WORLD_PACKAGE_REF,
     worldPackageRootHash: HASH_A,
+    worldBuildIdentityHash: HASH_B,
     createSession: async ({ runtimeSessionId, initialWorldSessionId }) => {
       expect(runtimeSessionId).toBe(RUNTIME_SESSION_ID);
       expect(initialWorldSessionId).toBe(WORLD_SESSION_ID);

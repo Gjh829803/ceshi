@@ -4,7 +4,6 @@ import path from "node:path";
 
 import {
   BABYLON_WEB_WORLD_PACKAGE_HOST_POLICY_V1,
-  createWorldPackageV1,
   type VerifiedWorldPackageDirectoryV1,
   type WorldPackageDirectoryV1,
   type WorldPackageHostPolicyV1,
@@ -20,8 +19,7 @@ import {
   type WorldPackageTrustedPublicKeyV1,
 } from "./world-package-signing";
 import {
-  createTrustedWorldPackageBuildContextV1,
-  resolveTrustedWorldPackageResourceArtifactsV1,
+  createTrustedCanonicalWorldPackageV1,
 } from "./trusted-world-package";
 import {
   loadWorldkitRoutePipeline,
@@ -268,27 +266,7 @@ export async function buildWorldPackageDirectoryV1(input: {
   }
   let directory: WorldPackageDirectoryV1;
   try {
-    const resourceArtifacts = await resolveTrustedWorldPackageResourceArtifactsV1(
-      pipeline.normalizedWorldIr,
-    );
-    directory = createWorldPackageV1({
-      packageId: `${pipeline.authoringSpec.id}.world-package`,
-      ...createTrustedWorldPackageBuildContextV1({
-        title: `${pipeline.authoringSpec.id} WorldPackage`,
-        resourceArtifacts,
-      }),
-      authoringSpec: pipeline.authoringSpec,
-      normalizedWorldIr: pipeline.normalizedWorldIr,
-      layoutSolveResult: Object.freeze({
-        status: pipeline.layoutSolveReport.status,
-        report: pipeline.layoutSolveReport,
-        layoutSolveReportHash: pipeline.layoutSolveReportHash,
-      }),
-      executionPlan: pipeline.executionPlan,
-      gameplayBootstrap: pipeline.gameplayBootstrap,
-      worldRuntimeBootstrap: pipeline.worldRuntimeBootstrap,
-      resourceArtifacts,
-    });
+    directory = await createTrustedCanonicalWorldPackageV1(pipeline);
     verifyWorldPackageForHostV1({
       directory,
       hostPolicy: BABYLON_WEB_WORLD_PACKAGE_HOST_POLICY_V1,
