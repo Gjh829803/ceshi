@@ -200,6 +200,17 @@ class TransactionBodyPort implements GoldenCharacterBodyTransactionPortV1 {
     this.resolutionSupport = undefined;
   }
 
+  resetToState(state: Readonly<{
+    positionMetersXYZ: readonly [number, number, number];
+    linearVelocityMetersPerSecondXYZ: readonly [number, number, number];
+  }>): void {
+    this.position = [...state.positionMetersXYZ];
+    this.velocity = [...state.linearVelocityMetersPerSecondXYZ];
+    this.#before = undefined;
+    this.#token = undefined;
+    this.resolutionSupport = undefined;
+  }
+
   dispose(): void {}
 }
 
@@ -420,7 +431,7 @@ describe("Golden Humanoid 3C vNext transaction", () => {
     },
   );
 
-  it("commits authority before Camera prepare and fails closed without pretending to roll it back", () => {
+  it("rolls exact Movement and Body authority back when Camera prepare fails", () => {
     const animation = new ProjectionPort();
     const camera = new ProjectionPort();
     camera.failPrepare = true;
@@ -431,35 +442,47 @@ describe("Golden Humanoid 3C vNext transaction", () => {
     expect(() => transaction.runTick({ command: command(1, { movementInputXZ: [0, 1] }) }))
       .toThrow("PROJECTION_PREPARE_FAILED");
 
-    expect(movement.snapshot().tick).toBe(1);
-    expect(movement.snapshot()).not.toEqual(beforeMovement);
+    expect(movement.snapshot()).toEqual(beforeMovement);
     expect(JSON.stringify({ position: body.position, velocity: body.velocity, support: body.support }))
-      .not.toBe(beforeBody);
-    expect(body.abortCalls).toBe(0);
-    expect(body.commitCalls).toBe(1);
+      .toBe(beforeBody);
+    expect(body.abortCalls).toBe(1);
+    expect(body.commitCalls).toBe(0);
     expect(animation.abortCalls).toBe(1);
     expect(animation.commitCalls).toBe(0);
-    expect(() => transaction.runTick({ command: command(2) }))
-      .toThrow("3C_PROJECTION_FAILED_CLOSED");
+    transaction.reset(beforeMovement);
+    camera.failPrepare = false;
+    expect(transaction.runTick({ command: command(1) }).commit.tick).toBe(1);
   });
 
-  it("keeps committed authority when Animation prepare fails and closes projection", () => {
+  it("rolls exact Movement and Body authority back when Animation prepare fails", () => {
     const animation = new ProjectionPort();
     animation.failPrepare = true;
     const { body, movement, transaction } = createHarness({ projections: [animation] });
-    const before = movement.snapshot();
+    const beforeMovement = movement.snapshot();
+    const beforeBody = JSON.stringify({
+      position: body.position,
+      velocity: body.velocity,
+      support: body.support,
+    });
 
     expect(() => transaction.runTick({ command: command(1) }))
       .toThrow("PROJECTION_PREPARE_FAILED");
 
-    expect(movement.snapshot().tick).toBe(1);
-    expect(movement.snapshot()).not.toEqual(before);
-    expect(body.abortCalls).toBe(0);
-    expect(body.commitCalls).toBe(1);
+    expect(movement.snapshot()).toEqual(beforeMovement);
+    expect(JSON.stringify({
+      position: body.position,
+      velocity: body.velocity,
+      support: body.support,
+    })).toBe(beforeBody);
+    expect(body.abortCalls).toBe(1);
+    expect(body.commitCalls).toBe(0);
     expect(animation.committed).toBe(false);
+    transaction.reset(beforeMovement);
+    animation.failPrepare = false;
+    expect(transaction.runTick({ command: command(1) }).commit.tick).toBe(1);
   });
 
-  it("aborts projection handles but preserves committed authority when projection commit fails", () => {
+  it("rolls projection, Movement and Body authority back when projection commit fails", () => {
     const animation = new ProjectionPort();
     const camera = new ProjectionPort();
     camera.failCommit = true;
@@ -478,19 +501,19 @@ describe("Golden Humanoid 3C vNext transaction", () => {
     }))
       .toThrow("PROJECTION_COMMIT_FAILED");
 
-    expect(movement.snapshot().tick).toBe(1);
-    expect(movement.snapshot()).not.toEqual(before);
+    expect(movement.snapshot()).toEqual(before);
     expect(JSON.stringify({
       position: body.position,
       velocity: body.velocity,
       support: body.support,
-    })).not.toBe(nativeBefore);
+    })).toBe(nativeBefore);
     expect(animation.committed).toBe(false);
     expect(camera.committed).toBe(false);
-    expect(body.commitCalls).toBe(1);
-    expect(body.abortCalls).toBe(0);
-    expect(() => transaction.runTick({ command: command(2) }))
-      .toThrow("3C_PROJECTION_FAILED_CLOSED");
+    expect(body.commitCalls).toBe(0);
+    expect(body.abortCalls).toBe(1);
+    transaction.reset(before);
+    camera.failCommit = false;
+    expect(transaction.runTick({ command: command(1) }).commit.tick).toBe(1);
   });
 
   it("restores Movement and native state when reconcile fails after Body resolve", () => {
@@ -787,29 +810,13 @@ describe("Golden Humanoid 3C vNext transaction", () => {
     expect(result.presentation.committedTick).toBe(result.commit.tick);
   });
 
-  it("isolates two sessions, rejects old/same-Tick replay and preserves deterministic hashes across render cadence", () => {
+  it("isolates two sessions and rejects old or same-Tick replay", () => {
     const a = createHarness();
     const b = createHarness();
-    const renderCadences = [30, 60, 120];
-    const hashes = renderCadences.map(() => {
-      const lane = createHarness();
-      for (let tick = 1; tick <= 12; tick += 1) {
-        lane.transaction.runTick({
-          command: command(tick, {
-            movementInputXZ: [0.25, 0.75],
-            runRequested: tick > 4,
-            jumpPressed: tick === 3,
-            jumpHeld: tick >= 3 && tick <= 6,
-          }),
-        });
-      }
-      return lane.movement.snapshot().stateHash;
-    });
 
     a.transaction.runTick({ command: command(1, { movementInputXZ: [0, 1] }) });
     expect(b.movement.snapshot().tick).toBe(0);
     expect(() => a.transaction.runTick({ command: command(1) })).toThrow("3C_INPUT_INVALID");
-    expect(new Set(hashes).size).toBe(1);
   });
 
   it("keeps a committed snapshot immutable when observers attempt reentrant mutation", () => {
@@ -883,6 +890,7 @@ describe("Golden Humanoid 3C vNext transaction", () => {
     const authoritativeBeforeRender = structuredClone(current);
 
     controller.renderVisual(0.5);
+    const diagnostic = controller.renderPoseDiagnostic(0.5);
 
     expect(visualRoot.position.x).toBeCloseTo(
       (previous.positionMetersXYZ[0] + current.positionMetersXYZ[0]) / 2,
@@ -897,12 +905,55 @@ describe("Golden Humanoid 3C vNext transaction", () => {
       12,
     );
     expect(controller.movementSnapshot()).toEqual(authoritativeBeforeRender);
+    expect(diagnostic).toMatchObject({
+      schemaVersion: 1,
+      committedTick: current.tick,
+      committedSubjectOriginYMeters: current.positionMetersXYZ[1] - 1,
+      previousFixedSubjectOriginYMeters: previous.positionMetersXYZ[1] - 1,
+      currentFixedSubjectOriginYMeters: current.positionMetersXYZ[1] - 1,
+      renderInterpolatedSubjectOriginYMeters:
+        (previous.positionMetersXYZ[1] + current.positionMetersXYZ[1]) / 2 - 1,
+      visualRootYMeters:
+        (previous.positionMetersXYZ[1] + current.positionMetersXYZ[1]) / 2 - 1,
+    });
+    expect(Object.isFrozen(diagnostic)).toBe(true);
+    expect(Object.isFrozen(diagnostic.correction)).toBe(true);
 
     controller.reset();
     controller.renderVisual(0);
     expect(visualRoot.position.x).toBe(0);
     expect(visualRoot.position.y).toBe(0);
     expect(visualRoot.position.z).toBe(0);
+  });
+
+  it("keeps committed hashes identical under actual 30/60/120-like render sampling", () => {
+    const runLane = (renderHertz: 30 | 60 | 120): string => {
+      const harness = createHarness();
+      const controller = new GoldenHumanoidSubjectControllerV1({
+        subject: goldenSubject(),
+        visualRoot: visualRootSpy(),
+        transaction: harness.transaction,
+      });
+      for (let tick = 1; tick <= 120; tick += 1) {
+        controller.step([
+          "move-forward",
+          ...(tick > 20 ? ["run" as const] : []),
+          ...(tick >= 30 && tick <= 35 ? ["jump" as const] : []),
+        ]);
+        controller.synchronizeVisual();
+        if (renderHertz === 30) {
+          if (tick % 2 === 0) controller.renderVisual(1);
+        } else if (renderHertz === 60) {
+          controller.renderVisual(1);
+        } else {
+          controller.renderVisual(0.5);
+          controller.renderVisual(1);
+        }
+      }
+      return controller.movementSnapshot().stateHash;
+    };
+
+    expect(new Set([runLane(30), runLane(60), runLane(120)]).size).toBe(1);
   });
 
   it("rejects a stale ViewControlFrame before command or Body admission", () => {

@@ -50,6 +50,8 @@ function goldenAnimationSetInput(): AnimationSetManifestInputV1 {
       {
         actionId: "idle",
         sourceClipName: "idle",
+        semanticFamily: "ground",
+        automaticPresentationKeys: ["locomotion.suspended", "locomotion.idle"],
         loopMode: "repeat",
         playbackSpeedRatio: 1,
         blendDurationSeconds: 0.2,
@@ -58,6 +60,8 @@ function goldenAnimationSetInput(): AnimationSetManifestInputV1 {
       {
         actionId: "walk",
         sourceClipName: "walk",
+        semanticFamily: "ground",
+        automaticPresentationKeys: ["locomotion.walk"],
         loopMode: "repeat",
         playbackSpeedRatio: 1,
         blendDurationSeconds: 0.2,
@@ -66,6 +70,8 @@ function goldenAnimationSetInput(): AnimationSetManifestInputV1 {
       {
         actionId: "run",
         sourceClipName: "run",
+        semanticFamily: "ground",
+        automaticPresentationKeys: ["locomotion.run"],
         loopMode: "repeat",
         playbackSpeedRatio: 1,
         blendDurationSeconds: 0.15,
@@ -74,6 +80,11 @@ function goldenAnimationSetInput(): AnimationSetManifestInputV1 {
       {
         actionId: "jump",
         sourceClipName: "jump",
+        semanticFamily: "airborne",
+        automaticPresentationKeys: [
+          "locomotion.takeoff", "locomotion.rising", "locomotion.apex",
+          "locomotion.falling", "locomotion.landing",
+        ],
         loopMode: "once",
         playbackSpeedRatio: 1,
         blendDurationSeconds: 0.1,
@@ -688,6 +699,41 @@ describe("subject resource registry", () => {
         .resolveAnimationSet(G_BOT_ANIMATION_SET_REF)
         ?.animationBindings.map((binding) => binding.actionId),
     ).toEqual(G_BOT_ACTION_IDS);
+    expect(
+      builtInSubjectResourceRegistry
+        .resolveAnimationSet(G_BOT_ANIMATION_SET_REF)
+        ?.animationBindings.map((binding) => ({
+          actionId: binding.actionId,
+          semanticFamily: binding.semanticFamily,
+          automaticPresentationKeys: binding.automaticPresentationKeys,
+        })),
+    ).toEqual([
+      { actionId: "dance.rumba", semanticFamily: "dance", automaticPresentationKeys: [] },
+      { actionId: "emote.angry", semanticFamily: "emote", automaticPresentationKeys: [] },
+      { actionId: "emote.salute", semanticFamily: "emote", automaticPresentationKeys: [] },
+      { actionId: "fall", semanticFamily: "airborne", automaticPresentationKeys: [] },
+      { actionId: "fight.enter", semanticFamily: "combat", automaticPresentationKeys: [] },
+      { actionId: "float", semanticFamily: "flight", automaticPresentationKeys: [] },
+      { actionId: "fly", semanticFamily: "flight", automaticPresentationKeys: [] },
+      { actionId: "idle", semanticFamily: "ground", automaticPresentationKeys: ["locomotion.idle", "locomotion.suspended"] },
+      { actionId: "idle.gaming", semanticFamily: "posture", automaticPresentationKeys: [] },
+      { actionId: "jump", semanticFamily: "airborne", automaticPresentationKeys: ["locomotion.apex", "locomotion.falling", "locomotion.landing", "locomotion.rising", "locomotion.takeoff"] },
+      { actionId: "land.hard", semanticFamily: "airborne", automaticPresentationKeys: [] },
+      { actionId: "land.hard.alt", semanticFamily: "airborne", automaticPresentationKeys: [] },
+      { actionId: "lay.idle", semanticFamily: "posture", automaticPresentationKeys: [] },
+      { actionId: "roll.toRun", semanticFamily: "ground", automaticPresentationKeys: [] },
+      { actionId: "run", semanticFamily: "ground", automaticPresentationKeys: ["locomotion.run"] },
+      { actionId: "sit", semanticFamily: "posture", automaticPresentationKeys: [] },
+      { actionId: "sit.ground.idle", semanticFamily: "posture", automaticPresentationKeys: [] },
+      { actionId: "sit.idle", semanticFamily: "posture", automaticPresentationKeys: [] },
+      { actionId: "sit.toStand", semanticFamily: "posture", automaticPresentationKeys: [] },
+      { actionId: "stand", semanticFamily: "posture", automaticPresentationKeys: [] },
+      { actionId: "swim.exit", semanticFamily: "water", automaticPresentationKeys: [] },
+      { actionId: "swim.surface", semanticFamily: "water", automaticPresentationKeys: [] },
+      { actionId: "swim.tread", semanticFamily: "water", automaticPresentationKeys: [] },
+      { actionId: "walk", semanticFamily: "ground", automaticPresentationKeys: ["locomotion.walk"] },
+      { actionId: "walk.step", semanticFamily: "ground", automaticPresentationKeys: [] },
+    ]);
 
     expect(
       builtInSubjectResourceRegistry.resolveColliderProfile(
@@ -781,7 +827,7 @@ describe("subject resource registry", () => {
       {
         resourceRef: G_BOT_SUBJECT_ASSET_REF,
         contentHash:
-          "sha256:502a489be4a4443ddc94e2459156e91a444bbeab721af6f01ab9b593302b2eb6",
+          "sha256:23aae2c10473825c773712e1ce3ce7191580e05ed56601edec096b6075fc1c1d",
       },
       {
         resourceRef: G_BOT_RIG_PROFILE_REF,
@@ -791,7 +837,7 @@ describe("subject resource registry", () => {
       {
         resourceRef: G_BOT_ANIMATION_SET_REF,
         contentHash:
-          "sha256:5af2ac07e7dfcf4c6647399022b42c70c7ae7824604fc341d750cb337de1fa27",
+          "sha256:bb70277c009d3a73ae64d9abe24a7b289b8613ebf6bbd87e11a10d2d820e41e2",
       },
       {
         resourceRef: G_BOT_COLLIDER_PROFILE_REF,

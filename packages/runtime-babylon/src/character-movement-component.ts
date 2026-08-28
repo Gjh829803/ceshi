@@ -14,6 +14,7 @@ import type {
 } from "@whitebox-world/runtime-contracts";
 import {
   createCharacterMovementRuntimeV1,
+  hashCharacterMovementStateV1,
   type CharacterMovementCommandV1,
   type CharacterMovementSnapshotV1,
 } from "@whitebox-world/character-movement";
@@ -36,6 +37,7 @@ import {
 import {
   BABYLON_CHARACTER_BODY_PROVIDER_VERSIONS_V1,
   createBabylonCharacterBodyPortV1,
+  type BabylonCharacterBodyRuntimePortV1,
 } from "./babylon-character-body-port";
 import {
   GoldenHumanoid3CVNextTransactionV1,
@@ -219,7 +221,11 @@ export class CharacterMovementComponentV1 extends EntityComponentV1 {
     this.motionKernel.reset();
   }
 
-  resetAt(subjectOriginMetersXYZ: Vec3, facingYawRadians: number): void {
+  resetAt(
+    subjectOriginMetersXYZ: Vec3,
+    facingYawRadians: number,
+    _committedTick?: number,
+  ): void {
     this.motionKernel.resetAt(
       new Vector3(...subjectOriginMetersXYZ),
       facingYawRadians,
@@ -236,6 +242,21 @@ export class CharacterMovementComponentV1 extends EntityComponentV1 {
     );
   }
 
+  collisionFilterMasks(): Readonly<{
+    membershipMask: number;
+    collideMask: number;
+  }> {
+    return Object.freeze({
+      membershipMask: this.physicsController.shape.filterMembershipMask,
+      collideMask: this.physicsController.shape.filterCollideMask,
+    });
+  }
+
+  setCollisionFilterMasks(membershipMask: number, collideMask: number): void {
+    this.physicsController.shape.filterMembershipMask = membershipMask;
+    this.physicsController.shape.filterCollideMask = collideMask;
+  }
+
   stop(): void {
     this.motionKernel.stop();
   }
@@ -250,6 +271,25 @@ export interface GoldenHumanoidSubjectControllerOptionsV1 {
   readonly visualRoot: TransformNode;
   readonly transaction: GoldenHumanoid3CVNextTransactionV1;
   readonly physicsBody?: PhysicsBody;
+  readonly bodyPort?: BabylonCharacterBodyRuntimePortV1;
+}
+
+export interface GoldenHumanoidRenderPoseDiagnosticV1 {
+  readonly schemaVersion: 1;
+  readonly committedTick: number;
+  readonly bodyOriginYMeters: number;
+  readonly committedSubjectOriginYMeters: number;
+  readonly previousFixedSubjectOriginYMeters: number;
+  readonly currentFixedSubjectOriginYMeters: number;
+  readonly renderInterpolatedSubjectOriginYMeters: number;
+  readonly visualRootYMeters: number;
+  readonly supportMode: "supported" | "sliding" | "unsupported";
+  readonly supportNormalXYZ?: Vec3;
+  readonly supportDistanceMeters?: number;
+  readonly correction: Readonly<{
+    kind: "none" | "snap-down" | "step-up" | "collision-limited";
+    appliedMinusProposedYMeters: number;
+  }>;
 }
 
 function assertGoldenHumanoidSubjectAdmissionV1(
@@ -279,6 +319,7 @@ export class GoldenHumanoidSubjectControllerV1 extends EntityComponentV1 {
   readonly #visualRoot: TransformNode;
   readonly #transaction: GoldenHumanoid3CVNextTransactionV1;
   readonly #physicsBody: PhysicsBody | undefined;
+  readonly #bodyPort: BabylonCharacterBodyRuntimePortV1 | undefined;
   #latestTickResult: GoldenHumanoidTickResultV1 | undefined;
   readonly #renderPoseBuffer: CommittedRenderPoseBufferV1;
   #jumpWasHeld = false;
@@ -294,6 +335,7 @@ export class GoldenHumanoidSubjectControllerV1 extends EntityComponentV1 {
     this.#visualRoot = options.visualRoot;
     this.#transaction = options.transaction;
     this.#physicsBody = options.physicsBody;
+    this.#bodyPort = options.bodyPort;
     this.#renderPoseBuffer = new CommittedRenderPoseBufferV1(
       this.#committedRenderPose(),
     );
@@ -410,6 +452,62 @@ export class GoldenHumanoidSubjectControllerV1 extends EntityComponentV1 {
     this.#applyRenderPose(this.#renderPoseBuffer.sample(interpolationAlphaRatio));
   }
 
+  renderPoseDiagnostic(
+    interpolationAlphaRatio: number,
+  ): GoldenHumanoidRenderPoseDiagnosticV1 {
+    this.#assertLive();
+    const snapshot = this.movementSnapshot();
+    const offsetY = this.#subject.collider.centerOffsetFromSubjectOriginMetersXYZ[1];
+    const history = this.#renderPoseBuffer.diagnosticSnapshot();
+    const interpolated = this.#renderPoseBuffer.sample(interpolationAlphaRatio);
+    const body = this.#transaction.latestBodyDiagnostic();
+    const bodyCenterY = body?.resolution.positionMetersXYZ[1] ??
+      snapshot.positionMetersXYZ[1];
+    const subjectOriginY = snapshot.positionMetersXYZ[1] - offsetY;
+    const support = body?.resolution.support;
+    const proposedY = body?.proposal.translationDeltaMetersXYZ[1] ?? 0;
+    const appliedY = body?.resolution.appliedTranslationMetersXYZ[1] ?? proposedY;
+    const correctionY = appliedY - proposedY;
+    const horizontalProposal = body === undefined
+      ? 0
+      : Math.hypot(
+          body.proposal.translationDeltaMetersXYZ[0],
+          body.proposal.translationDeltaMetersXYZ[2],
+        );
+    const correctionKind = Math.abs(correctionY) <= 1e-9
+      ? "none"
+      : correctionY < 0 && support?.mode !== "unsupported"
+        ? "snap-down"
+        : correctionY > 0 && horizontalProposal > 0 &&
+            support?.mode !== "unsupported"
+          ? "step-up"
+          : "collision-limited";
+    return Object.freeze({
+      schemaVersion: 1,
+      committedTick: snapshot.tick,
+      bodyOriginYMeters: bodyCenterY - offsetY,
+      committedSubjectOriginYMeters: subjectOriginY,
+      previousFixedSubjectOriginYMeters: history.previous.positionMetersXYZ[1],
+      currentFixedSubjectOriginYMeters: history.current.positionMetersXYZ[1],
+      renderInterpolatedSubjectOriginYMeters: interpolated.positionMetersXYZ[1],
+      visualRootYMeters: this.#visualRoot.position.y,
+      supportMode: support?.mode ??
+        (snapshot.locomotion.status === "active"
+          ? snapshot.locomotion.supportMode
+          : "unsupported"),
+      ...(support === undefined || support.mode === "unsupported"
+        ? {}
+        : {
+            supportNormalXYZ: Object.freeze([...support.normalXYZ]) as Vec3,
+            supportDistanceMeters: subjectOriginY - support.pointMetersXYZ[1],
+          }),
+      correction: Object.freeze({
+        kind: correctionKind,
+        appliedMinusProposedYMeters: correctionY,
+      }),
+    });
+  }
+
   #committedRenderPose(): CommittedRenderPoseV1 {
     const snapshot = this.movementSnapshot();
     const offset = this.#subject.collider.centerOffsetFromSubjectOriginMetersXYZ;
@@ -476,6 +574,99 @@ export class GoldenHumanoidSubjectControllerV1 extends EntityComponentV1 {
     return new Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
   }
 
+  collisionFilterMasks(): Readonly<{
+    membershipMask: number;
+    collideMask: number;
+  }> {
+    return this.#requireBodyPort().collisionFilterMasks();
+  }
+
+  setCollisionFilterMasks(membershipMask: number, collideMask: number): void {
+    this.#requireBodyPort().setCollisionFilterMasks(
+      membershipMask,
+      collideMask,
+    );
+  }
+
+  probeGroundPlacementAt(
+    desiredSubjectOriginMetersXYZ: Vec3,
+    filterMembershipMask: number,
+    filterCollideMask: number,
+  ): Vec3 | undefined {
+    const offset = this.#subject.collider.centerOffsetFromSubjectOriginMetersXYZ;
+    const placement = this.#requireBodyPort().probeGroundPlacementAt(
+      [
+        desiredSubjectOriginMetersXYZ[0] + offset[0],
+        desiredSubjectOriginMetersXYZ[1] + offset[1],
+        desiredSubjectOriginMetersXYZ[2] + offset[2],
+      ],
+      filterMembershipMask,
+      filterCollideMask,
+    );
+    return placement === undefined
+      ? undefined
+      : [
+          placement[0] - offset[0],
+          placement[1] - offset[1],
+          placement[2] - offset[2],
+        ];
+  }
+
+  projectSuspendedAt(
+    subjectOriginMetersXYZ: Vec3,
+    facingYawRadians: number,
+    suspendedByRelationshipId: string,
+    committedTick = this.movementSnapshot().tick,
+  ): void {
+    const before = this.movementSnapshot();
+    const transitionSequence = before.locomotion.status === "suspended" &&
+        before.locomotion.suspendedByRelationshipId === suspendedByRelationshipId
+      ? before.locomotion.transitionSequence
+      : this.#nextTransitionSequence(before.locomotion.transitionSequence);
+    this.#resetAtSnapshot({
+      subjectOriginMetersXYZ,
+      facingYawRadians,
+      committedTick,
+      locomotion: {
+        schemaVersion: 2,
+        status: "suspended",
+        suspendedByRelationshipId,
+        committedTick,
+        transitionSequence,
+      },
+    });
+  }
+
+  resetAt(
+    subjectOriginMetersXYZ: Vec3,
+    facingYawRadians: number,
+    committedTick = this.movementSnapshot().tick,
+  ): void {
+    const before = this.movementSnapshot();
+    this.#resetAtSnapshot({
+      subjectOriginMetersXYZ,
+      facingYawRadians,
+      committedTick,
+      locomotion: {
+        schemaVersion: 2,
+        status: "active",
+        mobilityMode: "grounded",
+        gait: "idle",
+        verticalPhase: "none",
+        supportMode: "supported",
+        movementMedium: "ground",
+        facingYawRadians,
+        linearVelocity: { x: 0, y: 0, z: 0 },
+        horizontalSpeedMetersPerSecond: 0,
+        committedTick,
+        phaseEnteredTick: committedTick,
+        transitionSequence: this.#nextTransitionSequence(
+          before.locomotion.transitionSequence,
+        ),
+      },
+    });
+  }
+
   reset(): void {
     this.#assertLive();
     this.#transaction.reset();
@@ -496,6 +687,65 @@ export class GoldenHumanoidSubjectControllerV1 extends EntityComponentV1 {
     if (this.#disposed) {
       throw new Error("3C_RUNTIME_DISPOSED: Golden Subject is disposed.");
     }
+  }
+
+  #resetAtSnapshot(input: Readonly<{
+    subjectOriginMetersXYZ: Vec3;
+    facingYawRadians: number;
+    committedTick: number;
+    locomotion: LocomotionCapabilityStateV2;
+  }>): void {
+    if (!Number.isSafeInteger(input.committedTick) || input.committedTick < 0) {
+      throw new Error("3C_INPUT_INVALID: relationship Tick is invalid.");
+    }
+    const offset = this.#subject.collider.centerOffsetFromSubjectOriginMetersXYZ;
+    const state = {
+      schemaVersion: 1 as const,
+      tick: input.committedTick,
+      positionMetersXYZ: [
+        input.subjectOriginMetersXYZ[0] + offset[0],
+        input.subjectOriginMetersXYZ[1] + offset[1],
+        input.subjectOriginMetersXYZ[2] + offset[2],
+      ] as const,
+      facingYawRadians: input.facingYawRadians,
+      linearVelocityMetersPerSecondXYZ: [0, 0, 0] as const,
+      locomotion: input.locomotion,
+      transitionEvents: [],
+      runtimeState: {
+        schemaVersion: 1 as const,
+        coyoteTicksRemaining: 0,
+        jumpBufferTicksRemaining: 0,
+        variableJumpHoldTicksRemaining: 0,
+        landingTicksRemaining: 0,
+        apexCrossedInAirborneEpisode: false,
+      },
+    };
+    const snapshot = Object.freeze({
+      ...state,
+      stateHash: hashCharacterMovementStateV1(state),
+    });
+    this.#transaction.reset(snapshot);
+    this.#latestTickResult = undefined;
+    this.#jumpWasHeld = false;
+    this.#renderPoseBuffer.commit(this.#committedRenderPose());
+    this.#applyRenderPose(this.#renderPoseBuffer.sample(1));
+  }
+
+  #nextTransitionSequence(current: number): number {
+    if (current === Number.MAX_SAFE_INTEGER) {
+      throw new Error("3C_INPUT_INVALID: transition sequence exhausted.");
+    }
+    return current + 1;
+  }
+
+  #requireBodyPort(): BabylonCharacterBodyRuntimePortV1 {
+    this.#assertLive();
+    if (this.#bodyPort === undefined) {
+      throw new Error(
+        "WORLDKIT_CHARACTER_BODY_PORT_UNAVAILABLE: Golden test facade has no runtime Body adapter.",
+      );
+    }
+    return this.#bodyPort;
   }
 }
 
@@ -618,6 +868,7 @@ export function createGoldenHumanoidSubjectControllerV1(
       visualRoot: options.visualRoot,
       transaction,
       physicsBody: bodyPort.physicsBody,
+      bodyPort,
     });
   } catch (error) {
     movementRuntime.dispose();

@@ -423,8 +423,11 @@ describe("Gameplay Babylon Runtime coordinator", () => {
     expect(riderAfter.entityState.positionMetersXYZ[2]).toBeCloseTo(boardAfter[2], 4);
     expect(Object.values(riderAfter.capabilityStatesById)).toContainEqual(
       expect.objectContaining({
-        mode: "suspended",
-        suspendedByRelationshipId: MOUNTED_SKATEBOARD_S1_RELATIONSHIP_ID,
+        kind: "locomotion-capability-state-v2",
+        locomotion: expect.objectContaining({
+          status: "suspended",
+          suspendedByRelationshipId: MOUNTED_SKATEBOARD_S1_RELATIONSHIP_ID,
+        }),
       }),
     );
     expect(afterBoardMove.view.camera).toMatchObject({
@@ -476,7 +479,9 @@ describe("Gameplay Babylon Runtime coordinator", () => {
       actionRequestHash:
         sha256CanonicalJson(dismountRequest) as `sha256:${string}`,
     });
-    expect(dismounted).toMatchObject({ status: "committed" });
+    if (dismounted.status !== "committed") {
+      throw new Error(JSON.stringify(dismounted.diagnostic));
+    }
     expect(
       coordinator.getGameplayInspectionSnapshot()
         .relationshipStatesById[MOUNTED_SKATEBOARD_S1_RELATIONSHIP_ID],

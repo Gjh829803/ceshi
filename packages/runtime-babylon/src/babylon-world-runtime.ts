@@ -1031,6 +1031,10 @@ export class BabylonWorldRuntime {
       const viewControlFrame = this.cameraComponent.controlFrame(this.tick);
       for (const subject of this.executionPlan.subjects) {
         const controller = this.controllerFor(subject.entityId);
+        if (!isNil(this.gameplayPublishedState
+          .mountedRelationshipsByRiderEntityId[subject.entityId])) {
+          continue;
+        }
         const controlled = subject.entityId === controlledEntityId;
         if (isGoldenHumanoidControllerV1(controller)) {
           controller.step(
@@ -1129,10 +1133,12 @@ export class BabylonWorldRuntime {
     return internal;
   }
 
-  private gameplayWorldProjection(): ReturnType<
+  private gameplayWorldProjection(
+    includePreparedState = false,
+  ): ReturnType<
     BabylonGameplayRuntimeInternalV1["readWorldProjection"]
   > {
-    if (this.preparedGoldenFixedInput !== undefined) {
+    if (!includePreparedState && this.preparedGoldenFixedInput !== undefined) {
       return this.preparedGoldenFixedInput.beforeWorldProjection;
     }
     const spatialEntityStatesById: Record<string, SpatialEntityStateV1> = {};
@@ -1357,21 +1363,18 @@ export class BabylonWorldRuntime {
       BabylonMountedRelationshipProjectionV1
     > = {};
     for (const relationship of this.executionPlan.initialRelationships) {
-      const rider = this.legacyControllerFor(relationship.riderEntityId);
+      const rider = this.controllerFor(relationship.riderEntityId);
       const pose = this.mountedPose(relationship);
+      const collisionFilters = rider.collisionFilterMasks();
       const staged = Object.freeze({
         relationship,
         riderCollisionFilterMembershipMask:
-          rider.physicsController.shape.filterMembershipMask,
+          collisionFilters.membershipMask,
         riderCollisionFilterCollideMask:
-          rider.physicsController.shape.filterCollideMask,
+          collisionFilters.collideMask,
       });
-      rider.physicsController.shape.filterMembershipMask = 0;
-      rider.physicsController.shape.filterCollideMask = 0;
-      rider.projectSuspendedAt(
-        [pose.subjectOrigin.x, pose.subjectOrigin.y, pose.subjectOrigin.z],
-        pose.facingYawRadians,
-      );
+      rider.setCollisionFilterMasks(0, 0);
+      this.projectMountedRider(rider, relationship, pose, this.tick);
       mountedRelationshipsByRiderEntityId[relationship.riderEntityId] = staged;
     }
     this.gameplayPublishedState = Object.freeze({
@@ -1380,6 +1383,44 @@ export class BabylonWorldRuntime {
         mountedRelationshipsByRiderEntityId,
       ),
     });
+  }
+
+  private nextGoldenTransitionSequence(
+    locomotion: LocomotionCapabilityStateV2,
+    suspendedByRelationshipId?: string,
+  ): number {
+    if (
+      suspendedByRelationshipId !== undefined &&
+      locomotion.status === "suspended" &&
+      locomotion.suspendedByRelationshipId === suspendedByRelationshipId
+    ) return locomotion.transitionSequence;
+    if (locomotion.transitionSequence === Number.MAX_SAFE_INTEGER) {
+      throw new Error("3C_INPUT_INVALID: transition sequence exhausted.");
+    }
+    return locomotion.transitionSequence + 1;
+  }
+
+  private projectMountedRider(
+    rider: LiveSubjectControllerV1,
+    relationship: MountedOnRelationshipStateV1,
+    pose: Readonly<{ subjectOrigin: Vector3; facingYawRadians: number }>,
+    committedTick: number,
+  ): void {
+    const subjectOrigin = [
+      pose.subjectOrigin.x,
+      pose.subjectOrigin.y,
+      pose.subjectOrigin.z,
+    ] as const;
+    if (isGoldenHumanoidControllerV1(rider)) {
+      rider.projectSuspendedAt(
+        subjectOrigin,
+        pose.facingYawRadians,
+        relationship.id,
+        committedTick,
+      );
+      return;
+    }
+    rider.projectSuspendedAt(subjectOrigin, pose.facingYawRadians);
   }
 
   private async prepareMountedRelationshipTransition(
@@ -1410,7 +1451,6 @@ export class BabylonWorldRuntime {
     );
     if (
       isNil(rider) ||
-      isGoldenHumanoidControllerV1(rider) ||
       isNil(riderSubject) ||
       isNil(riderVisual) ||
       isNil(mount) ||
@@ -1448,16 +1488,36 @@ export class BabylonWorldRuntime {
     const halfYawRadians = pose.facingYawRadians / 2;
     const capabilityStateId =
       `capability-state:${relationship.riderEntityId}:locomotion`;
-    const suspendedCapability: GameplayCapabilityStateV1 = Object.freeze({
-      id: capabilityStateId,
-      kind: "locomotion-capability-state",
-      ownerEntityId: relationship.riderEntityId,
-      locomotionCapabilityRef: riderSubject.locomotionCapabilityRef,
-      locomotionCapabilityHash:
-        riderSubject.locomotionCapabilityHash as `sha256:${string}`,
-      mode: "suspended",
-      suspendedByRelationshipId: relationship.id,
-    });
+    const suspendedCapability: GameplayCapabilityStateV1 =
+      isGoldenHumanoidControllerV1(rider)
+        ? Object.freeze({
+            id: capabilityStateId,
+            kind: "locomotion-capability-state-v2" as const,
+            ownerEntityId: relationship.riderEntityId,
+            locomotionCapabilityRef: riderSubject.locomotionCapabilityRef,
+            locomotionCapabilityHash:
+              riderSubject.locomotionCapabilityHash as `sha256:${string}`,
+            locomotion: Object.freeze({
+              schemaVersion: 2 as const,
+              status: "suspended" as const,
+              suspendedByRelationshipId: relationship.id,
+              committedTick: this.tick,
+              transitionSequence: this.nextGoldenTransitionSequence(
+                rider.locomotionStateV2(),
+                relationship.id,
+              ),
+            }),
+          })
+        : Object.freeze({
+            id: capabilityStateId,
+            kind: "locomotion-capability-state" as const,
+            ownerEntityId: relationship.riderEntityId,
+            locomotionCapabilityRef: riderSubject.locomotionCapabilityRef,
+            locomotionCapabilityHash:
+              riderSubject.locomotionCapabilityHash as `sha256:${string}`,
+            mode: "suspended" as const,
+            suspendedByRelationshipId: relationship.id,
+          });
     const projectedWorldStateAfter = Object.freeze({
       ...baseProjection,
       spatialEntityStatesById: Object.freeze({
@@ -1488,13 +1548,12 @@ export class BabylonWorldRuntime {
       viewStateRevision:
         this.gameplayPublishedState.viewProjection.viewStateRevision + 1,
     });
+    const collisionFilters = rider.collisionFilterMasks();
     const stagedRelationship: BabylonMountedRelationshipProjectionV1 =
       Object.freeze({
         relationship,
-        riderCollisionFilterMembershipMask:
-          rider.physicsController.shape.filterMembershipMask,
-        riderCollisionFilterCollideMask:
-          rider.physicsController.shape.filterCollideMask,
+        riderCollisionFilterMembershipMask: collisionFilters.membershipMask,
+        riderCollisionFilterCollideMask: collisionFilters.collideMask,
       });
     const stagedState: BabylonGameplayPublishedStateV1 = Object.freeze({
       possessionTarget: input.possessionTarget,
@@ -1518,18 +1577,23 @@ export class BabylonWorldRuntime {
       projectedViewStateAfter,
       commitPrepared: (): void => {
         if (lifecycle !== "prepared") return;
-        lifecycle = "committed";
-        rider.physicsController.shape.filterMembershipMask = 0;
-        rider.physicsController.shape.filterCollideMask = 0;
-        rider.projectSuspendedAt(
-          [pose.subjectOrigin.x, pose.subjectOrigin.y, pose.subjectOrigin.z],
-          pose.facingYawRadians,
-        );
-        this.gameplayPublishedState = stagedState;
-        this.traversalConfigurationEpoch = traversalConfigurationEpochAfter;
-        this.activeInputActions = EMPTY_INPUT_ACTIONS;
-        this.activeInputAxes = EMPTY_INPUT_AXES;
-        this.latestRenderReadyReceipt = undefined;
+        const beforeFilters = rider.collisionFilterMasks();
+        try {
+          rider.setCollisionFilterMasks(0, 0);
+          this.projectMountedRider(rider, relationship, pose, this.tick);
+          this.gameplayPublishedState = stagedState;
+          this.traversalConfigurationEpoch = traversalConfigurationEpochAfter;
+          this.activeInputActions = EMPTY_INPUT_ACTIONS;
+          this.activeInputAxes = EMPTY_INPUT_AXES;
+          this.latestRenderReadyReceipt = undefined;
+          lifecycle = "committed";
+        } catch (error) {
+          rider.setCollisionFilterMasks(
+            beforeFilters.membershipMask,
+            beforeFilters.collideMask,
+          );
+          throw error;
+        }
       },
       abort: (): Promise<void> => {
         if (!isNil(abortPromise)) return abortPromise;
@@ -1572,7 +1636,6 @@ export class BabylonWorldRuntime {
       isNil(slot) ||
       isNil(mountController) ||
       isNil(riderController) ||
-      isGoldenHumanoidControllerV1(riderController) ||
       isNil(mounted) ||
       mounted.relationship.id !== relationship.id
     ) throw new Error("WORLDKIT_DISMOUNT_SLOT_UNAVAILABLE");
@@ -1651,7 +1714,6 @@ export class BabylonWorldRuntime {
       isNil(mounted) ||
       mounted.relationship.id !== relationship.id ||
       isNil(rider) ||
-      isGoldenHumanoidControllerV1(rider) ||
       isNil(riderSubject)
     ) throw new Error("WORLDKIT_DISMOUNT_RELATIONSHIP_STALE");
     const placement = this.safeDismountSubjectOrigin(relationship);
@@ -1663,6 +1725,49 @@ export class BabylonWorldRuntime {
     const halfYawRadians = placement.facingYawRadians / 2;
     const capabilityStateId =
       `capability-state:${relationship.riderEntityId}:locomotion`;
+    const dismountedCapability: GameplayCapabilityStateV1 =
+      isGoldenHumanoidControllerV1(rider)
+        ? Object.freeze({
+            id: capabilityStateId,
+            kind: "locomotion-capability-state-v2" as const,
+            ownerEntityId: relationship.riderEntityId,
+            locomotionCapabilityRef: riderSubject.locomotionCapabilityRef,
+            locomotionCapabilityHash:
+              riderSubject.locomotionCapabilityHash as `sha256:${string}`,
+            locomotion: Object.freeze({
+              schemaVersion: 2 as const,
+              status: "active" as const,
+              mobilityMode: "grounded" as const,
+              gait: "idle" as const,
+              verticalPhase: "none" as const,
+              supportMode: "supported" as const,
+              movementMedium: "ground" as const,
+              facingYawRadians: canonicalizeSignedZero(
+                placement.facingYawRadians,
+              ),
+              linearVelocity: Object.freeze({ x: 0, y: 0, z: 0 }),
+              horizontalSpeedMetersPerSecond: 0,
+              committedTick: this.tick,
+              phaseEnteredTick: this.tick,
+              transitionSequence: this.nextGoldenTransitionSequence(
+                rider.locomotionStateV2(),
+              ),
+            }),
+          })
+        : Object.freeze({
+            id: capabilityStateId,
+            kind: "locomotion-capability-state" as const,
+            ownerEntityId: relationship.riderEntityId,
+            locomotionCapabilityRef: riderSubject.locomotionCapabilityRef,
+            locomotionCapabilityHash:
+              riderSubject.locomotionCapabilityHash as `sha256:${string}`,
+            mode: "idle" as const,
+            movementMedium: "ground" as const,
+            facingYawRadians: canonicalizeSignedZero(
+              placement.facingYawRadians,
+            ),
+            speedMetersPerSecond: 0,
+          });
     const projectedWorldStateAfter: ReturnType<
       BabylonGameplayRuntimeInternalV1["readWorldProjection"]
     > =
@@ -1689,20 +1794,7 @@ export class BabylonWorldRuntime {
         }),
         capabilityStatesById: Object.freeze({
           ...baseProjection.capabilityStatesById,
-          [capabilityStateId]: Object.freeze({
-            id: capabilityStateId,
-            kind: "locomotion-capability-state" as const,
-            ownerEntityId: relationship.riderEntityId,
-            locomotionCapabilityRef: riderSubject.locomotionCapabilityRef,
-            locomotionCapabilityHash:
-              riderSubject.locomotionCapabilityHash as `sha256:${string}`,
-            mode: "idle" as const,
-            movementMedium: "ground" as const,
-            facingYawRadians: canonicalizeSignedZero(
-              placement.facingYawRadians,
-            ),
-            speedMetersPerSecond: 0,
-          }),
+          [capabilityStateId]: dismountedCapability,
         }),
       });
     const mountedRelationshipsByRiderEntityId = {
@@ -1734,24 +1826,34 @@ export class BabylonWorldRuntime {
       projectedViewStateAfter,
       commitPrepared: (): void => {
         if (lifecycle !== "prepared") return;
-        lifecycle = "committed";
-        rider.physicsController.shape.filterMembershipMask =
-          mounted.riderCollisionFilterMembershipMask;
-        rider.physicsController.shape.filterCollideMask =
-          mounted.riderCollisionFilterCollideMask;
-        rider.resetAt(
-          [
-            placement.subjectOrigin.x,
-            placement.subjectOrigin.y,
-            placement.subjectOrigin.z,
-          ],
-          placement.facingYawRadians,
-        );
-        this.gameplayPublishedState = stagedState;
-        this.traversalConfigurationEpoch = traversalConfigurationEpochAfter;
-        this.activeInputActions = EMPTY_INPUT_ACTIONS;
-        this.activeInputAxes = EMPTY_INPUT_AXES;
-        this.latestRenderReadyReceipt = undefined;
+        const beforeFilters = rider.collisionFilterMasks();
+        try {
+          rider.setCollisionFilterMasks(
+            mounted.riderCollisionFilterMembershipMask,
+            mounted.riderCollisionFilterCollideMask,
+          );
+          rider.resetAt(
+            [
+              placement.subjectOrigin.x,
+              placement.subjectOrigin.y,
+              placement.subjectOrigin.z,
+            ],
+            placement.facingYawRadians,
+            this.tick,
+          );
+          this.gameplayPublishedState = stagedState;
+          this.traversalConfigurationEpoch = traversalConfigurationEpochAfter;
+          this.activeInputActions = EMPTY_INPUT_ACTIONS;
+          this.activeInputAxes = EMPTY_INPUT_AXES;
+          this.latestRenderReadyReceipt = undefined;
+          lifecycle = "committed";
+        } catch (error) {
+          rider.setCollisionFilterMasks(
+            beforeFilters.membershipMask,
+            beforeFilters.collideMask,
+          );
+          throw error;
+        }
       },
       abort: (): Promise<void> => {
         if (!isNil(abortPromise)) return abortPromise;
@@ -1815,16 +1917,31 @@ export class BabylonWorldRuntime {
     const beforeCameraTransactionState =
       this.cameraComponent.captureTransactionState();
     const beforeCameraFovRadians = this.camera.fov;
-    const projectedWorldStateAfter = await this.runGameplayFixedInputTick(
-      admittedInput,
-      admittedActionProjection,
-    );
     this.preparedGoldenFixedInput = Object.freeze({
       beforeRuntimeProjection,
       beforeWorldProjection,
       beforeCameraTransactionState,
       beforeCameraFovRadians,
     });
+    let projectedWorldStateAfter: ReturnType<
+      BabylonGameplayRuntimeInternalV1["readWorldProjection"]
+    >;
+    try {
+      projectedWorldStateAfter = await this.runGameplayFixedInputTick(
+        admittedInput,
+        admittedActionProjection,
+      );
+    } catch (error) {
+      try {
+        await this.restoreGoldenPreparedFixedInput();
+      } catch (rollbackError) {
+        throw new AggregateError(
+          [error, rollbackError],
+          "Golden Runtime Tick prepare failed and its checkpoint could not be restored.",
+        );
+      }
+      throw error;
+    }
     let lifecycle: "prepared" | "committed" | "aborted" = "prepared";
     let abortPromise: Promise<void> | undefined;
     return Object.freeze({
@@ -1937,12 +2054,6 @@ export class BabylonWorldRuntime {
       const controller = this.controllerFor(subject.entityId);
       if (!isNil(this.gameplayPublishedState
         .mountedRelationshipsByRiderEntityId[subject.entityId])) {
-        if (isGoldenHumanoidControllerV1(controller)) {
-          throw new Error(
-            "3C_INPUT_INVALID: Golden Humanoid mounting requires the V2 relationship adapter.",
-          );
-        }
-        controller.stop();
         continue;
       }
       const isTarget = subject.entityId === targetEntityId;
@@ -1969,7 +2080,7 @@ export class BabylonWorldRuntime {
       }
     }
     this.commitGameplayFixedTick(targetEntityId);
-    return this.gameplayWorldProjection();
+    return this.gameplayWorldProjection(true);
   }
 
   private assertActionProjectionForNextTick(
@@ -2038,15 +2149,7 @@ export class BabylonWorldRuntime {
       ))) {
       const pose = this.mountedPose(mounted.relationship);
       const rider = this.controllerFor(mounted.relationship.riderEntityId);
-      if (isGoldenHumanoidControllerV1(rider)) {
-        throw new Error(
-          "3C_INPUT_INVALID: Golden Humanoid mounting requires the V2 relationship adapter.",
-        );
-      }
-      rider.projectSuspendedAt(
-        [pose.subjectOrigin.x, pose.subjectOrigin.y, pose.subjectOrigin.z],
-        pose.facingYawRadians,
-      );
+      this.projectMountedRider(rider, mounted.relationship, pose, this.tick);
       this.visualFor(mounted.relationship.riderEntityId)
         .stepAnimation(committedPresentationFromLocomotionMode(
           this.tick,
@@ -2065,6 +2168,10 @@ export class BabylonWorldRuntime {
     for (const subject of this.executionPlan.subjects) {
       const controller = this.controllerFor(subject.entityId);
       const visual = this.visualFor(subject.entityId);
+      if (!isNil(this.gameplayPublishedState
+        .mountedRelationshipsByRiderEntityId[subject.entityId])) {
+        continue;
+      }
       controller.synchronizeVisual();
       if (!isGoldenHumanoidControllerV1(controller)) {
         visual.stepAnimation(committedPresentationFromLocomotionMode(
@@ -2072,6 +2179,21 @@ export class BabylonWorldRuntime {
           controller.motionSnapshot().locomotionMode,
         ));
       }
+    }
+    for (const mounted of Object.values(
+      this.gameplayPublishedState.mountedRelationshipsByRiderEntityId,
+    ).sort((left, right) =>
+      left.relationship.riderEntityId.localeCompare(
+        right.relationship.riderEntityId,
+      ))) {
+      const pose = this.mountedPose(mounted.relationship);
+      const rider = this.controllerFor(mounted.relationship.riderEntityId);
+      this.projectMountedRider(rider, mounted.relationship, pose, this.tick);
+      this.visualFor(mounted.relationship.riderEntityId)
+        .stepAnimation(committedPresentationFromLocomotionMode(
+          this.tick,
+          "suspended",
+        ));
     }
     if (controlledEntityId !== undefined) {
       const controlled = this.controllerFor(controlledEntityId);
@@ -2407,11 +2529,11 @@ export class BabylonWorldRuntime {
     for (const mounted of Object.values(
       this.gameplayPublishedState.mountedRelationshipsByRiderEntityId,
     )) {
-      const rider = this.legacyControllerFor(mounted.relationship.riderEntityId);
-      rider.physicsController.shape.filterMembershipMask =
-        mounted.riderCollisionFilterMembershipMask;
-      rider.physicsController.shape.filterCollideMask =
-        mounted.riderCollisionFilterCollideMask;
+      const rider = this.controllerFor(mounted.relationship.riderEntityId);
+      rider.setCollisionFilterMasks(
+        mounted.riderCollisionFilterMembershipMask,
+        mounted.riderCollisionFilterCollideMask,
+      );
     }
     for (const projection of this.goldenProjectionsByEntityId.values()) {
       projection.reset();
@@ -2422,6 +2544,7 @@ export class BabylonWorldRuntime {
       character.movement.reset();
     }
     for (const visual of this.subjectVisuals) visual.resetAnimation();
+    this.tick = 0;
     this.gameplayPublishedState = Object.freeze({
       possessionTarget: Object.freeze({ mode: "unbound" }),
       mountedRelationshipsByRiderEntityId: Object.freeze({}),
@@ -2429,7 +2552,6 @@ export class BabylonWorldRuntime {
     });
     this.initializeInitialMountedRelationships();
     this.appliedCameraViewStateRevision = 0;
-    this.tick = 0;
     this.goldenFixedInputHistory = [];
     this.goldenReplayBaselineState = undefined;
     this.activeInputActions = [];

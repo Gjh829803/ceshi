@@ -422,6 +422,8 @@ function createAnimationSet(
       {
         actionId: "idle",
         sourceClipName: "idle",
+        semanticFamily: "ground",
+        automaticPresentationKeys: ["locomotion.suspended", "locomotion.idle"],
         loopMode: "repeat",
         playbackSpeedRatio: 1,
         blendDurationSeconds: 0,
@@ -430,6 +432,8 @@ function createAnimationSet(
       {
         actionId: "walk",
         sourceClipName: "walk",
+        semanticFamily: "ground",
+        automaticPresentationKeys: ["locomotion.walk"],
         loopMode: "repeat",
         playbackSpeedRatio: 1.5,
         blendDurationSeconds: 0.5,
@@ -438,6 +442,8 @@ function createAnimationSet(
       {
         actionId: "run",
         sourceClipName: "run",
+        semanticFamily: "ground",
+        automaticPresentationKeys: ["locomotion.run"],
         loopMode: "repeat",
         playbackSpeedRatio: 1,
         blendDurationSeconds: 0.25,
@@ -446,6 +452,11 @@ function createAnimationSet(
       {
         actionId: "jump",
         sourceClipName: "jump",
+        semanticFamily: "airborne",
+        automaticPresentationKeys: [
+          "locomotion.takeoff", "locomotion.rising", "locomotion.apex",
+          "locomotion.falling", "locomotion.landing",
+        ],
         loopMode: "once",
         playbackSpeedRatio: 2,
         blendDurationSeconds: 0,
@@ -2196,6 +2207,50 @@ describe("BabylonWorldRuntime", () => {
     }
   });
 
+  it("restores the exact world checkpoint when Golden prepare fails after an earlier Subject mutates", async () => {
+    const runtime = await createRiggedRuntime(createTwoRiggedSubjectExecutionPlan());
+    try {
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      expect(internal.prepareFixedInputTick).toBeTypeOf("function");
+      const beforeRuntime = runtime.snapshot();
+      const beforeWorld = internal.readWorldProjection();
+      const conflictingAction = (id: string) => Object.freeze({
+        id,
+        kind: "action-state" as const,
+        semanticActionRef: "worldkit://semantic-action/test-conflict@1",
+        semanticActionHash: `sha256:${"c".repeat(64)}` as const,
+        actorEntityId: "hero-b",
+        mode: "active" as const,
+        startedSimulationTick: 1,
+        lastTransitionSimulationTick: 1,
+      });
+      const first = conflictingAction("action-execution:hero-b:first");
+      const second = conflictingAction("action-execution:hero-b:second");
+
+      await expect(internal.prepareFixedInputTick!(
+        { actions: ["move-forward"], ticks: 1 },
+        Object.freeze({
+          simulationTick: 1,
+          activeActionStatesById: Object.freeze({
+            [first.id]: first,
+            [second.id]: second,
+          }),
+        }),
+      )).rejects.toThrow("3C_ACTION_AUTHORITY_AMBIGUOUS");
+
+      expect(runtime.snapshot()).toEqual(beforeRuntime);
+      expect(internal.readWorldProjection()).toEqual(beforeWorld);
+      const recovered = await internal.prepareFixedInputTick!(
+        { actions: [], ticks: 1 },
+        emptyActionProjection(1),
+      );
+      recovered.commitPrepared();
+      expect(runtime.snapshot().tick).toBe(1);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
 const RUNTIME_ACTION_HASH = `sha256:${"a".repeat(64)}` as const;
 const RUNTIME_STATE_ONLY_ACTION_HASH = `sha256:${"b".repeat(64)}` as const;
 const runtimeRootMotionBody = {
@@ -2832,6 +2887,66 @@ function emptyActionProjection(simulationTick: number) {
     await runtime.dispose();
   });
 
+  it("keeps product G Bot short and held jumps on one continuous jump Clip", async () => {
+    const runtime = await createRuntime(
+      compileRouteExecutionPlan(structuredClone(gBotAuthoringSpec)),
+      { subjectAssetResolver: createMemoryResolver(gBotSubjectAssetBytes) },
+    );
+    try {
+      const visual = createSubjectVisualProbe(runtime).visual("g-bot-primary");
+      const animationPlayer = visual.animationPlayer!;
+      const runJump = async (heldTicks: number): Promise<Set<string>> => {
+        runtime.reset();
+        await bindRuntimeTestPossession(runtime, "g-bot-primary");
+        const phases = new Set<string>();
+        let lastJumpNormalizedTime: number | undefined;
+        for (let tick = 1; tick <= 240; tick += 1) {
+          const snapshot = await runtime.runFixedInput({
+            actions: tick <= heldTicks ? ["jump"] : [],
+            ticks: 1,
+          });
+          runtime.renderFrame();
+          const subject = snapshot.subjectStatesByEntityId["g-bot-primary"]!;
+          const locomotion = subject.locomotion!;
+          expect(locomotion.status).toBe("active");
+          if (locomotion.status !== "active") {
+            throw new Error("Golden G-Bot Locomotion unexpectedly suspended.");
+          }
+          const phase = locomotion.verticalPhase;
+          const telemetry = animationPlayer.debugTelemetry();
+          phases.add(phase);
+          expect(telemetry.committedTick).toBe(snapshot.tick);
+          expect(telemetry.sourceClipName.startsWith("swim.")).toBe(false);
+          if (["takeoff", "rising", "apex", "falling", "landing"].includes(phase)) {
+            expect(telemetry.sourceClipName).toBe("jump");
+            if (lastJumpNormalizedTime !== undefined) {
+              expect(telemetry.normalizedTime).toBeGreaterThan(lastJumpNormalizedTime);
+            }
+            lastJumpNormalizedTime = telemetry.normalizedTime;
+          }
+          if (tick > heldTicks && phase === "none" &&
+            locomotion.mobilityMode === "grounded") break;
+        }
+        return phases;
+      };
+
+      const shortJumpPhases = await runJump(1);
+      const heldJumpPhases = await runJump(6);
+      for (const phases of [shortJumpPhases, heldJumpPhases]) {
+        expect(phases).toEqual(new Set([
+          "takeoff",
+          "rising",
+          "apex",
+          "falling",
+          "landing",
+          "none",
+        ]));
+      }
+    } finally {
+      await runtime.dispose();
+    }
+  }, 30_000);
+
   it("keeps one product G Bot grounded, walking, and blocked by its wall", async () => {
     const executionPlan = compileRouteExecutionPlan(structuredClone(gBotAuthoringSpec));
     const runtime = await createRuntime(
@@ -2893,6 +3008,136 @@ function emptyActionProjection(simulationTick: number) {
       await runtime.dispose();
     }
   });
+
+  it("keeps every product G Bot Y layer within the 120-second grounded P0 budget", async () => {
+    const runtime = await createRuntime(
+      compileRouteExecutionPlan(structuredClone(gBotAuthoringSpec)),
+      { subjectAssetResolver: createMemoryResolver(gBotSubjectAssetBytes) },
+    );
+    try {
+      runtime.reset();
+      await bindRuntimeTestPossession(runtime, "g-bot-primary");
+      const visual = createSubjectVisualProbe(runtime).visual("g-bot-primary");
+      const movement = (runtime as unknown as {
+        characterEntitiesByEntityId: ReadonlyMap<string, {
+          movement: {
+            renderPoseDiagnostic(interpolationAlphaRatio: number): {
+              committedTick: number;
+              bodyOriginYMeters: number;
+              committedSubjectOriginYMeters: number;
+              previousFixedSubjectOriginYMeters: number;
+              currentFixedSubjectOriginYMeters: number;
+              renderInterpolatedSubjectOriginYMeters: number;
+              visualRootYMeters: number;
+              supportMode: string;
+              supportNormalXYZ?: Vec3;
+              supportDistanceMeters?: number;
+              correction: {
+                kind: string;
+                appliedMinusProposedYMeters: number;
+              };
+            };
+          };
+        }>;
+      }).characterEntitiesByEntityId.get("g-bot-primary")!.movement;
+      const skeleton = visual.assetInstance!.skeletons[0]!;
+      const hips = skeleton.bones.find((bone) => bone.name === "mixamorig:Hips")!;
+      const clipAudit = visual.assetInstance!.animationGroups.map((group) => ({
+        name: group.name,
+        from: group.from,
+        to: group.to,
+        framesPerSecond: [...new Set(group.targetedAnimations.map(
+          (targeted) => targeted.animation.framePerSecond,
+        ))],
+        forbiddenRootOrHipsPositionTargets: group.targetedAnimations
+          .filter((targeted) => targeted.animation.targetProperty.startsWith("position"))
+          .filter((targeted) => {
+            const targetName = (targeted.target as { name?: string }).name;
+            return targeted.target === hips ||
+              targetName === "g-bot-primary.mixamorig:Hips";
+          })
+          .map((targeted) => (targeted.target as { name?: string }).name ?? "<unnamed>"),
+      }));
+
+      expect(clipAudit).toHaveLength(25);
+      expect(clipAudit.every((clip) =>
+        Number.isFinite(clip.from) &&
+        Number.isFinite(clip.to) &&
+        clip.from < clip.to &&
+        clip.framesPerSecond.length === 1 &&
+        clip.framesPerSecond[0] === 60 &&
+        clip.forbiddenRootOrHipsPositionTargets.length === 0
+      )).toBe(true);
+      for (const actions of [
+        ["move-right"],
+        ["move-right", "run"],
+      ] as const) {
+        runtime.reset();
+        await bindRuntimeTestPossession(runtime, "g-bot-primary");
+        const layers = {
+          bodyOrigin: [] as number[],
+          committedSubject: [] as number[],
+          previousFixed: [] as number[],
+          currentFixed: [] as number[],
+          renderInterpolated: [] as number[],
+          visualRoot: [] as number[],
+          hipsLocal: [] as number[],
+          hipsWorld: [] as number[],
+        };
+        for (let tick = 0; tick < 7_200; tick += 1) {
+          const snapshot = await runtime.runFixedInput({ actions, ticks: 1 });
+          runtime.renderFrame(1);
+          visual.root.computeWorldMatrix(true);
+          const pose = movement.renderPoseDiagnostic(1);
+          expect(pose.committedTick).toBe(tick + 1);
+          expect(pose.supportMode).toBe("supported");
+          expect(Math.hypot(...pose.supportNormalXYZ!)).toBeCloseTo(1, 6);
+          expect(pose.supportNormalXYZ![1]).toBeGreaterThan(
+            Math.cos(42 * Math.PI / 180),
+          );
+          expect(Math.abs(pose.supportDistanceMeters ?? Number.POSITIVE_INFINITY))
+            .toBeLessThanOrEqual(0.1);
+          expect(Number.isFinite(pose.correction.appliedMinusProposedYMeters))
+            .toBe(true);
+          layers.bodyOrigin.push(pose.bodyOriginYMeters);
+          layers.committedSubject.push(
+            snapshot.subjectStatesByEntityId["g-bot-primary"]!.positionMetersXYZ[1],
+          );
+          layers.previousFixed.push(pose.previousFixedSubjectOriginYMeters);
+          layers.currentFixed.push(pose.currentFixedSubjectOriginYMeters);
+          layers.renderInterpolated.push(pose.renderInterpolatedSubjectOriginYMeters);
+          layers.visualRoot.push(pose.visualRootYMeters);
+          layers.hipsLocal.push(hips.getPosition().y);
+          layers.hipsWorld.push(hips.getAbsolutePosition(visual.assetPartRoots![0]).y);
+        }
+        const summary = Object.fromEntries(
+          Object.entries(layers).map(([key, values]) => [key, {
+            minimum: Math.min(...values),
+            maximum: Math.max(...values),
+            peakToPeak: Math.max(...values) - Math.min(...values),
+            maximumSingleFrameDelta: Math.max(
+              0,
+              ...values.slice(1).map((value, index) =>
+                Math.abs(value - values[index]!)
+              ),
+            ),
+          }]),
+        );
+        expect(Object.values(layers).every((values) => values.every(Number.isFinite)))
+          .toBe(true);
+        expect(summary.committedSubject!.peakToPeak).toBeLessThanOrEqual(0.002);
+        expect(summary.visualRoot!.peakToPeak).toBeLessThanOrEqual(0.001);
+        expect(summary.visualRoot!.maximumSingleFrameDelta).toBeLessThanOrEqual(0.005);
+        expect(summary.bodyOrigin!.peakToPeak).toBeLessThanOrEqual(0.002);
+        expect(summary.currentFixed!.peakToPeak).toBeLessThanOrEqual(0.002);
+        expect(summary.renderInterpolated!.peakToPeak).toBeLessThanOrEqual(0.002);
+        expect(summary.hipsLocal!.peakToPeak).toBeLessThanOrEqual(0.001);
+        expect(summary.hipsWorld!.peakToPeak).toBeLessThanOrEqual(0.001);
+      }
+    } finally {
+      await runtime.dispose();
+    }
+  }, 60_000);
 
   it("keeps two rigged Subjects on isolated Skeleton, Clip, Socket, and Action state", async () => {
     const basePlan = createTwoRiggedSubjectExecutionPlan();

@@ -66,6 +66,10 @@ export interface BabylonCharacterBodyTransactionPortV1
   extends CharacterBodyPortV1 {
   commitTick(token: MovementTickTokenV1): void;
   abortTick(token: MovementTickTokenV1): void;
+  resetToState(state: Readonly<{
+    positionMetersXYZ: MovementVec3V1;
+    linearVelocityMetersPerSecondXYZ: MovementVec3V1;
+  }>): void;
 }
 
 export interface BabylonCharacterBodyNativeAllocationV1 {
@@ -1641,7 +1645,7 @@ interface BodyTransactionV1 {
 const tokenOwners = new WeakMap<object, BodyTokenOwnerV1>();
 
 class BabylonCharacterBodyPortV1
-  implements BabylonCharacterBodyTransactionPortV1 {
+  implements BabylonCharacterBodyRuntimePortV1 {
   private readonly portId = Symbol("BabylonCharacterBodyPortV1");
   private readonly tokenRecords = new WeakMap<object, BodyTokenRecordV1>();
   private readonly beginAttempts = new WeakMap<
@@ -1943,26 +1947,32 @@ class BabylonCharacterBodyPortV1
   }
 
   reset(): void {
+    this.resetToState(this.options.resetState);
+  }
+
+  resetToState(input: Readonly<{
+    positionMetersXYZ: MovementVec3V1;
+    linearVelocityMetersPerSecondXYZ: MovementVec3V1;
+  }>): void {
     this.assertLive();
+    const positionInput = parseVec3(input.positionMetersXYZ);
+    const velocityInput = parseVec3(input.linearVelocityMetersPerSecondXYZ);
     const checkpoint = this.driver.captureState();
     try {
-      this.driver.setPositionMetersXYZ(this.options.resetState.positionMetersXYZ);
-      this.driver.setLinearVelocityMetersPerSecondXYZ(
-        this.options.resetState.linearVelocityMetersPerSecondXYZ,
-      );
+      this.driver.setPositionMetersXYZ(positionInput);
+      this.driver.setLinearVelocityMetersPerSecondXYZ(velocityInput);
       this.driver.synchronizeAfterTeleport?.();
       const position = parseVec3(this.driver.getPositionMetersXYZ());
       const velocity = parseVec3(
         this.driver.getLinearVelocityMetersPerSecondXYZ(),
       );
       if (position.some((component, axis) =>
-        Math.abs(component - this.options.resetState.positionMetersXYZ[axis]!) >
+        Math.abs(component - positionInput[axis]!) >
           BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1
       ) || velocity.some((component, axis) =>
-        Math.abs(component -
-          this.options.resetState.linearVelocityMetersPerSecondXYZ[axis]!) >
+        Math.abs(component - velocityInput[axis]!) >
           BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1
-      )) invalid("native reset did not restore the configured physical snapshot.");
+      )) invalid("native reset did not restore the requested physical snapshot.");
     } catch (error) {
       this.restorePreservingPrimary(checkpoint);
       throw error;
@@ -1970,6 +1980,85 @@ class BabylonCharacterBodyPortV1
     this.generation += 1;
     this.serial += 1;
     this.transaction = undefined;
+  }
+
+  collisionFilterMasks(): Readonly<{
+    membershipMask: number;
+    collideMask: number;
+  }> {
+    const shape = this.physicsBody.shape;
+    if (shape === null) {
+      throw new Error(
+        "WORLDKIT_CHARACTER_PHYSICS_SHAPE_UNAVAILABLE: Golden Body has no collision Shape.",
+      );
+    }
+    return Object.freeze({
+      membershipMask: shape.filterMembershipMask,
+      collideMask: shape.filterCollideMask,
+    });
+  }
+
+  setCollisionFilterMasks(membershipMask: number, collideMask: number): void {
+    if (!Number.isSafeInteger(membershipMask) ||
+      !Number.isSafeInteger(collideMask)) {
+      invalid("collision filter masks must be safe integers.");
+    }
+    const shape = this.physicsBody.shape;
+    if (shape === null) {
+      throw new Error(
+        "WORLDKIT_CHARACTER_PHYSICS_SHAPE_UNAVAILABLE: Golden Body has no collision Shape.",
+      );
+    }
+    const beforeMembershipMask = shape.filterMembershipMask;
+    const beforeCollideMask = shape.filterCollideMask;
+    try {
+      shape.filterMembershipMask = membershipMask;
+      shape.filterCollideMask = collideMask;
+    } catch (error) {
+      shape.filterMembershipMask = beforeMembershipMask;
+      shape.filterCollideMask = beforeCollideMask;
+      throw error;
+    }
+  }
+
+  probeGroundPlacementAt(
+    desiredControllerCenterMetersXYZ: MovementVec3V1,
+    filterMembershipMask: number,
+    filterCollideMask: number,
+  ): MovementVec3V1 | undefined {
+    this.assertLive();
+    const desiredCenter = parseVec3(desiredControllerCenterMetersXYZ);
+    const probe = createGroundAwareControllerInternal(
+      new Vector3(...desiredCenter),
+      {
+        capsuleHeight: this.options.capsule.heightMeters,
+        capsuleRadius: this.options.capsule.radiusMeters,
+      },
+      this.options.scene,
+    );
+    try {
+      probe.keepDistance = this.options.controller.keepDistanceMeters;
+      probe.keepContactTolerance =
+        this.options.controller.keepContactToleranceMeters;
+      probe.maxSlopeCosine = this.configuration.maxSlopeCosine;
+      probe.maxStepHeight = this.options.controller.maxStepHeightMeters;
+      probe.characterMass = this.options.controller.characterMassKilograms;
+      probe.shape.filterMembershipMask = filterMembershipMask;
+      probe.shape.filterCollideMask = filterCollideMask;
+      const result = probe.probeGroundPlacementAt(
+        new Vector3(...desiredCenter),
+        new Vector3(...this.configuration.gravityDirectionXYZ),
+      );
+      return result === undefined
+        ? undefined
+        : freezeVec3([
+            result.controllerCenter.x,
+            result.controllerCenter.y,
+            result.controllerCenter.z,
+          ]);
+    } finally {
+      probe.dispose();
+    }
   }
 
   dispose(): void {
@@ -2186,6 +2275,16 @@ function createBabylonCharacterBodyPortWithNativeDriverV1(
 export interface BabylonCharacterBodyRuntimePortV1
   extends BabylonCharacterBodyTransactionPortV1 {
   readonly physicsBody: PhysicsBody;
+  collisionFilterMasks(): Readonly<{
+    membershipMask: number;
+    collideMask: number;
+  }>;
+  setCollisionFilterMasks(membershipMask: number, collideMask: number): void;
+  probeGroundPlacementAt(
+    desiredControllerCenterMetersXYZ: MovementVec3V1,
+    filterMembershipMask: number,
+    filterCollideMask: number,
+  ): MovementVec3V1 | undefined;
 }
 
 export function createBabylonCharacterBodyPortV1(

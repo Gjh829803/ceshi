@@ -1,11 +1,14 @@
 import {
   hashCharacterMovementStateV1,
   parseCharacterMovementCommandV1,
+  type BodyResolutionV1,
+  type BodySampleV1,
   type CharacterBodyPortV1,
   type CharacterMovementCommandV1,
   type CharacterMovementRuntimeV1,
   type CharacterMovementSnapshotV1,
   type MovementCommitV1,
+  type MovementProposalV1,
   type MovementTickTokenV1,
 } from "@whitebox-world/character-movement";
 import {
@@ -45,6 +48,10 @@ export interface GoldenCharacterBodyTransactionPortV1
   extends CharacterBodyPortV1 {
   commitTick(token: MovementTickTokenV1): void;
   abortTick(token: MovementTickTokenV1): void;
+  resetToState(state: Readonly<{
+    positionMetersXYZ: readonly [number, number, number];
+    linearVelocityMetersPerSecondXYZ: readonly [number, number, number];
+  }>): void;
 }
 
 export interface GoldenHumanoidPreparedProjectionV1 {
@@ -74,6 +81,13 @@ export interface GoldenHumanoidTickResultV1 {
   readonly commit: MovementCommitV1;
   readonly presentation: ResolvedActionPresentationV1;
   readonly stateHash: `sha256:${string}`;
+}
+
+export interface GoldenHumanoidBodyDiagnosticV1 {
+  readonly tick: number;
+  readonly sample: BodySampleV1;
+  readonly proposal: MovementProposalV1;
+  readonly resolution: BodyResolutionV1;
 }
 
 export interface GoldenHumanoid3CVNextTransactionOptionsV1 {
@@ -187,7 +201,8 @@ export class GoldenHumanoid3CVNextTransactionV1 {
   readonly #failedTicks = new Set<number>();
   #running = false;
   #disposed = false;
-  #projectionFailedClosed = false;
+  #rollbackFailedClosed = false;
+  #latestBodyDiagnostic: GoldenHumanoidBodyDiagnosticV1 | undefined;
 
   constructor(
     readonly options: GoldenHumanoid3CVNextTransactionOptionsV1,
@@ -211,7 +226,6 @@ export class GoldenHumanoid3CVNextTransactionV1 {
     let token: MovementTickTokenV1 | undefined;
     let bodyBegun = false;
     let movementAdvanced = false;
-    let authorityCommitted = false;
     const prepared: GoldenHumanoidPreparedProjectionV1[] = [];
     const before = this.options.movementRuntime.snapshot();
     let commandTick: number | undefined;
@@ -290,9 +304,6 @@ export class GoldenHumanoid3CVNextTransactionV1 {
           }));
         }
       }
-      this.options.bodyPort.commitTick(token);
-      authorityCommitted = true;
-
       this.#stage("animation-camera-projection");
       const presentation = prepareActionPresentation(
         commit.tick,
@@ -325,39 +336,50 @@ export class GoldenHumanoid3CVNextTransactionV1 {
       this.#stage("render-interpolation");
       for (const projection of prepared) projection.commit();
       const snapshot = this.options.movementRuntime.snapshot();
-      return Object.freeze({
+      const result = Object.freeze({
         commit,
         presentation,
         stateHash: snapshot.stateHash,
       });
+      // Body commit is the final irreversible publication. Every fallible
+      // projection prepare/commit and semantic snapshot has completed while
+      // the native begin checkpoint is still abortable.
+      this.options.bodyPort.commitTick(token);
+      this.#latestBodyDiagnostic = Object.freeze({
+        tick: commit.tick,
+        sample,
+        proposal,
+        resolution: bodyResolution,
+      });
+      return result;
     } catch (error) {
+      let rollbackFailed = false;
       for (const projection of [...prepared].reverse()) {
         try {
           projection.abort();
         } catch {
           // Preserve the first prepare/commit failure while continuing rollback.
+          rollbackFailed = true;
         }
-      }
-      if (authorityCommitted) {
-        this.#projectionFailedClosed = true;
-        throw error;
       }
       if (token !== undefined && bodyBegun) {
         try {
           this.options.bodyPort.abortTick(token);
         } catch {
           // Preserve the primary failure. Provider abort is specified fail-closed.
+          rollbackFailed = true;
         }
       }
       if (token !== undefined || movementAdvanced) {
         try {
           this.options.movementRuntime.reset(before);
         } catch {
-          // Preserve the primary failure and leave the transaction unusable.
-          this.#disposed = true;
+          // Preserve the primary failure and leave the transaction fail-closed.
+          rollbackFailed = true;
         }
       }
       if (commandTick !== undefined) this.#failedTicks.add(commandTick);
+      if (rollbackFailed) this.#rollbackFailedClosed = true;
       throw error;
     } finally {
       this.#running = false;
@@ -369,14 +391,31 @@ export class GoldenHumanoid3CVNextTransactionV1 {
     if (this.#running) {
       throw failure("3C_TICK_TOKEN_STALE", "Golden Tick is active during reset.");
     }
-    this.options.bodyPort.reset();
+    const before = this.options.movementRuntime.snapshot();
     this.options.movementRuntime.reset(snapshot);
+    const after = this.options.movementRuntime.snapshot();
+    try {
+      this.options.bodyPort.resetToState({
+        positionMetersXYZ: after.positionMetersXYZ,
+        linearVelocityMetersPerSecondXYZ:
+          after.linearVelocityMetersPerSecondXYZ,
+      });
+    } catch (error) {
+      this.options.movementRuntime.reset(before);
+      throw error;
+    }
+    this.#latestBodyDiagnostic = undefined;
     this.#failedTicks.clear();
   }
 
   snapshot(): CharacterMovementSnapshotV1 {
     this.#assertNotDisposed();
     return this.options.movementRuntime.snapshot();
+  }
+
+  latestBodyDiagnostic(): GoldenHumanoidBodyDiagnosticV1 | undefined {
+    this.#assertNotDisposed();
+    return this.#latestBodyDiagnostic;
   }
 
   dispose(): void {
@@ -393,10 +432,10 @@ export class GoldenHumanoid3CVNextTransactionV1 {
 
   #assertRunnable(): void {
     this.#assertNotDisposed();
-    if (this.#projectionFailedClosed) {
+    if (this.#rollbackFailedClosed) {
       throw failure(
-        "3C_PROJECTION_FAILED_CLOSED",
-        "committed authority outlived a failed projection; the coordinator is closed.",
+        "3C_ROLLBACK_FAILED_CLOSED",
+        "a failed Golden Tick could not restore every transaction participant.",
       );
     }
   }
