@@ -110,6 +110,19 @@ describe("BabylonNativeHostRandomV1", () => {
     expect(sequence(7301)).not.toEqual(sequence(7302));
   });
 
+  it("preserves the LCG sequence used by existing Native visual modules", () => {
+    const random = createBabylonNativeHostRandomV1(0x5eed_c10d);
+    expect([
+      random.nextRatio(),
+      random.nextRatio(),
+      random.nextRatio(),
+    ]).toEqual([
+      0.639433803036809,
+      0.7870678172912449,
+      0.2946446822024882,
+    ]);
+  });
+
   it("does not consult Math.random", () => {
     const spy = vi.spyOn(Math, "random").mockImplementation(() => {
       throw new Error("ambient randomness used");

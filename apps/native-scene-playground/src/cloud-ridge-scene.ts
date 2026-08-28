@@ -31,6 +31,15 @@ interface SceneMaterials {
   readonly collisionDebug: StandardMaterial;
 }
 
+// Preserved c312871 geometry values. These are not stream draws: both
+// waterfalls used this index-derived shape, so keeping them out of the shared
+// Host stream preserves every later authored random decision exactly.
+const LEGACY_WATERFALL_STRAND_HEIGHT_RATIOS = Object.freeze([
+  0.820000603601802,
+  0.8739563582045957,
+  0.9279121128073893,
+] as const);
+
 function standardMaterial(
   name: string,
   scene: Scene,
@@ -611,7 +620,6 @@ function createWaterfall(
   width: number,
   height: number,
   yawRadians: number,
-  random: BabylonNativeHostRandomV1,
 ): void {
   const fall = MeshBuilder.CreatePlane(
     name,
@@ -626,7 +634,11 @@ function createWaterfall(
   for (let ribbon = 0; ribbon < 3; ribbon += 1) {
     const strand = MeshBuilder.CreatePlane(
       `${name}.strand-${ribbon}`,
-      { width: width * 0.16, height: height * random.range(0.82, 1.03), sideOrientation: Mesh.DOUBLESIDE },
+      {
+        width: width * 0.16,
+        height: height * LEGACY_WATERFALL_STRAND_HEIGHT_RATIOS[ribbon]!,
+        sideOrientation: Mesh.DOUBLESIDE,
+      },
       scene,
     );
     strand.position.copyFrom(fall.position);
@@ -737,7 +749,6 @@ function createAtmosphere(
     3.4,
     22,
     -0.18,
-    random,
   );
   createWaterfall(
     "waterfall-left-secondary",
@@ -747,7 +758,6 @@ function createAtmosphere(
     2.3,
     17,
     0.22,
-    random,
   );
 }
 

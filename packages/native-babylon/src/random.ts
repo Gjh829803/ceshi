@@ -16,9 +16,7 @@ function initialState(seed: number): number {
   if (!validFinite(seed) || !Number.isSafeInteger(seed) || seed < 0) {
     return invalidSeed();
   }
-  const lower = seed >>> 0;
-  const upper = Math.floor(seed / 0x1_0000_0000) >>> 0;
-  return (lower ^ Math.imul(upper, 0x9e37_79b1) ^ 0x6d2b_79f5) >>> 0;
+  return seed >>> 0;
 }
 
 export function createBabylonNativeHostRandomV1(
@@ -27,11 +25,8 @@ export function createBabylonNativeHostRandomV1(
   let state = initialState(seed);
 
   const nextRatio = (): number => {
-    state = (state + 0x6d2b_79f5) >>> 0;
-    let mixed = state;
-    mixed = Math.imul(mixed ^ (mixed >>> 15), mixed | 1);
-    mixed ^= mixed + Math.imul(mixed ^ (mixed >>> 7), mixed | 61);
-    return ((mixed ^ (mixed >>> 14)) >>> 0) / 0x1_0000_0000;
+    state = (Math.imul(state, 1_664_525) + 1_013_904_223) >>> 0;
+    return state / 0x1_0000_0000;
   };
 
   return Object.freeze({

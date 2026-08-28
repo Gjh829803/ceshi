@@ -1,5 +1,6 @@
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
+import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -18,6 +19,12 @@ import {
 } from "./native-bootstrap.js";
 
 const retainedEngines: NullEngine[] = [];
+
+function localAxisExtent(mesh: Mesh, axis: 0 | 1 | 2): number {
+  const positions = mesh.getVerticesData(VertexBuffer.PositionKind)!;
+  const values = positions.filter((_value, index) => index % 3 === axis);
+  return Math.max(...values) - Math.min(...values);
+}
 
 afterEach(() => {
   while (retainedEngines.length > 0) retainedEngines.pop()?.dispose();
@@ -103,6 +110,89 @@ describe("cloud ridge Babylon Native scene", () => {
     expect(scene.getMeshByName("cloud-bank-left")).not.toBeNull();
     expect(scene.getMeshByName("waterfall-right-primary")).not.toBeNull();
     expect(scene.lights.length).toBeGreaterThanOrEqual(2);
+
+    // These baselines are the c312871 LCG output for seed 0x5eed_c10d.
+    // They protect visual continuity while the sole random authority moves to Host.
+    const firstCloud = scene.getMeshByName("cloud-bank-left")!;
+    expect(firstCloud.position.asArray()).toEqual([
+      -23.30717745423317,
+      5.296542538329959,
+      -28.374872245825827,
+    ]);
+    expect(firstCloud.scaling.asArray()).toEqual([
+      10.729977486422285,
+      1.7488197574391962,
+      5.4229568594601005,
+    ]);
+
+    const primaryMountain = scene.getMeshByName("mountain-left-primary")!;
+    expect(primaryMountain.position.asArray()).toEqual([
+      0.46222282765433187,
+      5.64,
+      -0.759693981707096,
+    ]);
+    expect(primaryMountain.scaling.asArray()).toEqual([
+      0.9980582506209611,
+      1,
+      0.8598343188129366,
+    ]);
+    expect(primaryMountain.rotation.asArray()).toEqual([
+      0,
+      -0.19885834981687367,
+      -0.04586609588004649,
+    ]);
+
+    const firstTree = scene.getTransformNodeByName("pine-foreground-left.root")!;
+    expect(firstTree.rotation.y).toBe(-1.4825962701885123);
+    expect(scene.getMeshByName("pine-foreground-left.trunk")!.rotation.z)
+      .toBe(-0.045739916600286964);
+    const firstCrown = scene.getMeshByName("pine-foreground-left.crown-0")!;
+    expect(firstCrown.position.asArray()).toEqual([
+      0.022222190327011046,
+      3.9099999999999997,
+      -0.05230065789772199,
+    ]);
+    expect(firstCrown.scaling.asArray()).toEqual([
+      1.3425433238502593,
+      0.28,
+      1.1028635921888053,
+    ]);
+
+    const firstStone = scene.getMeshByName("foreground-stone-00")!;
+    expect(firstStone.position.asArray()).toEqual([
+      -13.012308482672681,
+      -0.2763811016175896,
+      20.015402656617297,
+    ]);
+    expect(firstStone.rotation.asArray()).toEqual([
+      -0.024159106586594137,
+      0.4231960931327194,
+      -0.02429303400218487,
+    ]);
+    expect([
+      localAxisExtent(firstStone, 0),
+      localAxisExtent(firstStone, 1),
+      localAxisExtent(firstStone, 2),
+    ]).toEqual([
+      2.721219802182168,
+      0.21393532844725996,
+      3.0888145204633473,
+    ]);
+
+    expect([0, 1, 2].map((ribbon) =>
+      localAxisExtent(scene.getMeshByName(`waterfall-right-primary.strand-${ribbon}`)!, 1)
+    )).toEqual([
+      18.040013279239645,
+      19.227039880501106,
+      20.414066481762564,
+    ]);
+    expect([0, 1, 2].map((ribbon) =>
+      localAxisExtent(scene.getMeshByName(`waterfall-left-secondary.strand-${ribbon}`)!, 1)
+    )).toEqual([
+      13.940010261230634,
+      14.857258089478128,
+      15.774505917725618,
+    ]);
 
     const collisionMeshNames = new Set([
       "collision-foreground-platform",
