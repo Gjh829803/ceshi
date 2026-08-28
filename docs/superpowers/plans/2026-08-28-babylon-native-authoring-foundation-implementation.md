@@ -198,7 +198,7 @@ export function defineBabylonNativeScene(
 
 `BabylonNativeSceneBuildContextV1` contains only `scene`, parsed `bootstrap`, deterministic `random`, locked `assets`, and `registration`. `registration` exposes only `registerSpawnMarker()` and `registerStaticCollider()`.
 
-- [ ] **Step 1: Write the package-boundary RED test**
+- [x] **Step 1: Write the package-boundary RED test**
 
 Read the package manifest and root index source. Assert direct dependencies contain exactly the used packages, Babylon is exactly `9.23.0`, and the source tree has no imports from Runtime Babylon, Havok, Camera, Character Movement, Authoring, Compiler, Terrain Compiler, World, DOM, Node file-system, or network modules.
 
@@ -209,7 +209,7 @@ it("keeps the AI-facing package outside Runtime ownership", async () => {
 });
 ```
 
-- [ ] **Step 2: Run the boundary test and verify RED**
+- [x] **Step 2: Run the boundary test and verify RED**
 
 Run:
 
@@ -219,19 +219,19 @@ pnpm vitest run packages/native-babylon/src/package-boundary.test.ts
 
 Expected: FAIL because the package does not exist.
 
-- [ ] **Step 3: Add the package and minimal root API**
+- [x] **Step 3: Add the package and minimal root API**
 
 Create the package with only the root export `.`. Implement `defineBabylonNativeScene()` as an exact immutable definition guard: canonical non-empty `id`, required `kind`, callable `build`, no extra own keys, no accessor/symbol fields, and no retained mutable wrapper. Declare only the dependencies used by this task: `@babylonjs/core@9.23.0` and `@whitebox-world/runtime-contracts`; Task 4 adds the Host subpath and Protocol dependency when they first have production consumers.
 
-- [ ] **Step 4: Add deterministic random and locked-asset interfaces**
+- [x] **Step 4: Add deterministic random and locked-asset interfaces**
 
 Implement a seed-derived PRNG with `nextRatio()`, `range(minimum, maximum)`, and `pick(values)`; test equal seeds produce byte-equal sequences, different seeds differ, empty `pick` rejects, and no `Math.random` call occurs. Define the locked resolver request/result interface using only `assetResourceRef`, locked Hash/Receipt identity, immutable bytes, and semantic import metadata; do not add URL/path/cache/provider fields.
 
-- [ ] **Step 5: Add closed diagnostic types and parser tests**
+- [x] **Step 5: Add closed diagnostic types and parser tests**
 
 Implement the exact `NativeSceneDiagnosticMeasurementV1`, `NativeSceneDiagnosticV1`, and `NativeSceneCheckResultV1` unions from Spec section 12.2. Tests reject `passed + error`, `rejected + warnings-only`, `tool-error` without a tooling Error, absolute source paths, unknown stages/location kinds, unqualified numeric measurements, and asset identities in `checkedInput`.
 
-- [ ] **Step 6: Verify GREEN and commit**
+- [x] **Step 6: Verify GREEN and commit**
 
 Run:
 
