@@ -40,7 +40,7 @@ The terminal tree must satisfy all of the following:
 
 ### 1. Low-level source-neutral identity package
 
-First make `@whitebox-world/protocol` the sole low-level owner of `Sha256HashV1`; remove its current ownership from `@whitebox-world/control-capture` and update every consumer directly without a re-export. Then create `@whitebox-world/world-identity` with only `@whitebox-world/protocol` and `lodash-es` as direct dependencies. Move the content-addressed World Package Ref type and its two conversion functions out of `@whitebox-world/world-package`; update every consumer to import the sole owner directly.
+First make `@whitebox-world/protocol` the sole low-level owner of `Sha256HashV1`; remove the current local definitions, aliases, and re-exports from `@whitebox-world/control-capture`, `@whitebox-world/gameplay-contracts`, `@whitebox-world/authoring-edit`, `@whitebox-world/validation`, and `@whitebox-world/world-package`. In particular, delete `WorldPackageSha256HashV1` rather than retaining it as an alias, and update every consumer to import `Sha256HashV1` directly from Protocol. Then create `@whitebox-world/world-identity` with only `@whitebox-world/protocol` and `lodash-es` as direct dependencies. Move the content-addressed World Package Ref type and its two conversion functions out of `@whitebox-world/world-package`; update every consumer to import the sole owner directly.
 
 ```ts
 export type WorldPackageRefV1 =
@@ -76,7 +76,7 @@ The identity package exports exactly:
 - `worldPackageRefFromRootHashV1(hash)`;
 - `worldPackageRootHashFromRefV1(ref)`.
 
-`Sha256HashV1` is imported from `@whitebox-world/protocol` everywhere; neither World Identity nor Control Capture owns or re-exports a competing alias. `WorldBuildIdentityV1` has no embedded `contentHash`; `hashWorldBuildIdentityV1` hashes the complete parsed object. Parsing requires exact own keys, accessor-free ordinary data, a non-zero lower-case SHA-256 Package Ref whose decoded hash equals `worldPackageRootHash`, and a closed source discriminator.
+`Sha256HashV1` is imported from `@whitebox-world/protocol` everywhere; no package owns or re-exports a competing definition or alias, including the former `WorldPackageSha256HashV1` name. `WorldBuildIdentityV1` has no embedded `contentHash`; `hashWorldBuildIdentityV1` hashes the complete parsed object. Parsing requires exact own keys, accessor-free ordinary data, a non-zero lower-case SHA-256 Package Ref whose decoded hash equals `worldPackageRootHash`, and a closed source discriminator.
 
 ### 2. Gameplay startup and Plan-independent Runtime Bootstrap
 
@@ -339,7 +339,7 @@ The comparison is fail-closed. A changed Route Decision returns `route-decision`
 | ID | Goal and independently verifiable deliverable | depends_on | blocks | Exclusive owner | Execution mode |
 |---|---|---|---|---|---|
 | BNA1-00 | Freeze baseline and exact generic-vs-Plan-specific hash census | accepted Foundation plus its review-fix checkpoint | BNA1-01, BNA1-02, BNA1-03, BNA1-04, BNA1-05, BNA1-06, BNA1-07, BNA1-08, BNA1-09A, BNA1-09B, BNA1-09C, BNA1-09D, BNA1-10 | census review and BNA-1 ledger | `main-agent-only` |
-| BNA1-01 | Move SHA-256 type and Package Ref to their source-neutral owners; add World Build Identity | BNA1-00 | BNA1-02, 06, 07, 09A | `packages/protocol/`, `packages/world-identity/`, and the migrated hash/ref symbols | `main-agent-only` |
+| BNA1-01 | Move SHA-256 type and Package Ref to their source-neutral owners; add World Build Identity | BNA1-00 | BNA1-02, 06, 07, 09A | `packages/protocol/`, `packages/world-identity/`, all package-local hash definitions/aliases/re-exports, and the migrated hash/ref symbols | `main-agent-only` |
 | BNA1-02 | Freeze Gameplay startup and World Runtime Bootstrap contracts | BNA1-01 | BNA1-04, BNA1-05, BNA1-06, BNA1-07, BNA1-08, BNA1-09A, BNA1-09B, BNA1-09C, BNA1-09D | Gameplay startup fields and Runtime Bootstrap DTOs | `main-agent-only` |
 | BNA1-03 | Freeze Route Decision and fail-closed Authoring Attempt invalidation | BNA1-01 | BNA1-09D, 10 | `packages/scene-authoring-contracts/` | `main-agent-only` |
 | BNA1-04 | Prove exact V5-to-Bootstrap/Scene projection on the feature branch | BNA1-02 | BNA1-05 | temporary migration projector and receipt evidence | `main-agent-only` |
@@ -361,7 +361,7 @@ Shared resources (`pnpm-lock.yaml`, root `package.json`, `tsconfig.json`, and `s
 
 **Goal:** Make the migration scope auditable before changing contracts.
 
-**Deliverable:** A review that classifies every current `executionPlanHash`, `ExecutionPlanV5`, compiler, Package, Runtime, Browser, Capture, Take, Validation, CLI, Studio, artifact, and fixture consumer as either Plan-specific-retain, generic-migrate, or legacy-delete.
+**Deliverable:** A review that classifies every current `Sha256HashV1` and `WorldPackageSha256HashV1` definition, alias, re-export, and consumer, plus every current `executionPlanHash`, `ExecutionPlanV5`, compiler, Package, Runtime, Browser, Capture, Take, Validation, CLI, Studio, artifact, and fixture consumer, as either Plan-specific-retain, generic-migrate, or legacy-delete.
 
 **Files:**
 
@@ -374,7 +374,7 @@ Shared resources (`pnpm-lock.yaml`, root `package.json`, `tsconfig.json`, and `s
 **Integration point:** This review becomes the checklist consumed by BNA1-09A through BNA1-09D and the zero-census verifier in BNA1-10.
 
 - [ ] Record `git status --short --branch`, `git rev-parse HEAD`, `git merge-base --is-ancestor origin/main HEAD`, and the retained Task 5 stash hash without modifying the stash.
-- [ ] Run `rg -n` for `ExecutionPlanV5`, `compileWorldV5`, `parseExecutionPlanV5`, `hashExecutionPlanV5`, `executionPlanHash`, `RuntimeWorldConfigurationV1`, `WorldStateSnapshotV1`, `WorldPackageBuildReceiptV1`, and `WorldPackageBuildReceiptV2` across the scoped roots.
+- [ ] Run `rg -n` for `Sha256HashV1`, `WorldPackageSha256HashV1`, `ExecutionPlanV5`, `compileWorldV5`, `parseExecutionPlanV5`, `hashExecutionPlanV5`, `executionPlanHash`, `RuntimeWorldConfigurationV1`, `WorldStateSnapshotV1`, `WorldPackageBuildReceiptV1`, and `WorldPackageBuildReceiptV2` across the scoped roots. For both hash type names, record every declaration, alias, re-export, import, and consumer with its current owner and BNA1-01 disposition.
 - [ ] Classify Plan-specific retention narrowly: Canonical Authoring Edit, Canonical Plan/Package verification, Route R1/R1B inputs and evidence, and Canonical Plan compiler outputs. Everything else migrates to `worldBuildIdentity` or `worldBuildIdentityHash`.
 - [ ] Record the exact generated artifacts that must be regenerated rather than hand-edited.
 - [ ] Verify the exported `babylon-native-scene-bootstrap-v1.schema.json` compiles under Draft 2020-12, its parity/signed-zero tests pass, and no second Native Bootstrap wire schema exists.
@@ -393,14 +393,18 @@ git commit -m "docs: freeze BNA-1 identity migration census"
 
 **Goal:** Give Package, Runtime, Gameplay, and output protocols one dependency-safe world identity.
 
-**Deliverable:** `@whitebox-world/world-identity` with the exact contracts and functions frozen above; all World Package Ref consumers import this sole owner.
+**Deliverable:** `@whitebox-world/world-identity` with the exact contracts and functions frozen above; all SHA-256 consumers import Protocol directly, and all World Package Ref consumers import World Identity directly.
 
 **Files:**
 
 - Create: `packages/protocol/src/hash.ts`
 - Modify: `packages/protocol/src/index.ts`
 - Modify: `packages/control-capture/src/types.ts`
-- Modify: every current `Sha256HashV1` consumer found by BNA1-00
+- Modify: `packages/gameplay-contracts/**`
+- Modify: `packages/authoring-edit/**`
+- Modify: `packages/validation/**`
+- Modify: `packages/world-package/**`
+- Modify: every current `Sha256HashV1` or `WorldPackageSha256HashV1` consumer found by BNA1-00
 - Create: `packages/world-identity/package.json`
 - Create: `packages/world-identity/src/index.ts`
 - Create: `packages/world-identity/src/world-build-identity.ts`
@@ -409,22 +413,23 @@ git commit -m "docs: freeze BNA-1 identity migration census"
 - Modify: package manifests for direct dependency declarations
 - Modify: `pnpm-lock.yaml`
 - Modify: `scripts/lib/test-gate-manifest.ts`
-- Delete ownership from: `packages/world-package/src/store.ts` and `packages/world-package/src/index.ts`
+- Delete SHA-256 ownership, aliases, and re-exports from: `packages/control-capture/**`, `packages/gameplay-contracts/**`, `packages/authoring-edit/**`, `packages/validation/**`, and `packages/world-package/**`
+- Delete Package Ref ownership from: `packages/world-package/src/store.ts` and `packages/world-package/src/index.ts`
 
 **Input / output contract:** One protocol-owned SHA-256 branded string type plus accessor-free unknown data -> frozen `WorldBuildIdentityV1`, canonical bytes, or stable rejection; Package Root hash <-> content-addressed Package Ref.
 
 **Integration point:** WorldPackage receipt derivation and Runtime Candidate configuration.
 
-- [ ] Write a RED ownership test proving `Sha256HashV1` is exported only by Protocol and that Control Capture has no local definition or re-export. Write Identity RED tests for exact keys, both source members, canonical hashes, deep freeze, Package Ref/root equality, unknown/missing keys, accessor/symbol/prototype objects, zero/upper-case/malformed hashes, wrong discriminators, cross-source fields, and Native contribution hash mismatch data.
+- [ ] Write a RED ownership test that scans all `packages/**` source exports and proves Protocol contains the only `Sha256HashV1` declaration, no package defines or re-exports an alias of it, `WorldPackageSha256HashV1` no longer exists, and every package consumer imports `Sha256HashV1` from Protocol directly. Do not limit this test to Control Capture. Write Identity RED tests for exact keys, both source members, canonical hashes, deep freeze, Package Ref/root equality, unknown/missing keys, accessor/symbol/prototype objects, zero/upper-case/malformed hashes, wrong discriminators, cross-source fields, and Native contribution hash mismatch data.
 - [ ] Run `pnpm vitest run packages/world-identity/src/world-build-identity.test.ts` and record the missing-package RED.
-- [ ] Move `Sha256HashV1` to Protocol and update all imports in one current-only pass; delete the Control Capture definition without an alias. Implement the minimal identity package and parser without importing WorldPackage, Runtime, Gameplay, Babylon, Havok, DOM, Node file-system, or network modules.
+- [ ] Move `Sha256HashV1` to Protocol and update all imports in one current-only pass; delete the Control Capture, Gameplay Contracts, Authoring Edit, and Validation definitions and re-exports without aliases; replace and delete `WorldPackageSha256HashV1` across WorldPackage and every downstream consumer. Implement the minimal identity package and parser without importing WorldPackage, Runtime, Gameplay, Babylon, Havok, DOM, Node file-system, or network modules.
 - [ ] Update every Package Ref import in the same commit; remove its public export from WorldPackage rather than re-exporting it.
 - [ ] Add a package-boundary test proving the low-level dependency direction and register both tests as contract tests.
 - [ ] Run the focused tests, `pnpm verify:workspace-boundaries`, and `pnpm typecheck`.
 - [ ] Commit:
 
 ```bash
-git add packages/protocol packages/control-capture packages/world-identity packages/world-package packages/runtime-host packages/authoring-host apps scripts pnpm-lock.yaml
+git add packages/protocol packages/control-capture packages/gameplay-contracts packages/authoring-edit packages/validation packages/world-identity packages/world-package packages/runtime-host packages/authoring-host apps scripts pnpm-lock.yaml
 git commit -m "feat(identity): add source-neutral world build identity"
 ```
 
