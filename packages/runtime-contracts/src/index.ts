@@ -1,3 +1,4 @@
+export * from "./babylon-native-scene-bootstrap";
 export * from "./camera-parameter-contract";
 export * from "@whitebox-world/character-movement";
 export * from "./camera-view-contract";

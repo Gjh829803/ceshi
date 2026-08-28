@@ -125,6 +125,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "packages/runtime-babylon/src/traversal-implementation-identity.test.ts", lane: "contract" },
   { path: "packages/runtime-babylon/src/traversal-runtime-port.test.ts", lane: "resource-heavy", reasonCodes: ["native-havok-or-recast"] },
   { path: "packages/runtime-babylon/src/traversal-runtime-support-conformance.test.ts", lane: "resource-heavy", reasonCodes: ["native-havok-or-recast"] },
+  { path: "packages/runtime-contracts/src/babylon-native-scene-bootstrap.test.ts", lane: "contract" },
   { path: "packages/runtime-contracts/src/camera-parameter-contract.test.ts", lane: "contract" },
   { path: "packages/runtime-contracts/src/camera-view-contract.test.ts", lane: "contract" },
   { path: "packages/runtime-contracts/src/capture-targets.test.ts", lane: "contract" },

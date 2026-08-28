@@ -120,7 +120,7 @@ export interface BabylonNativeSceneBootstrapV1 {
 }
 ```
 
-- [ ] **Step 1: Write exact-schema RED tests**
+- [x] **Step 1: Write exact-schema RED tests**
 
 The passing fixture uses the `cloud-ridge-native` values from Spec section 6.1. Add table-driven rejection cases for unknown/missing keys, accessor/symbol/prototype objects, wrong discriminators, invalid refs, duplicate semantic identity expressed through aliases, non-finite numbers, signed zero, unsafe/negative seed, non-positive distance, FOV outside `(0, 180)`, and empty IDs. Assert parsed output and nested arrays/objects are frozen.
 
@@ -139,7 +139,7 @@ it("hashes canonical parsed Bootstrap data", () => {
 });
 ```
 
-- [ ] **Step 2: Run tests and verify RED**
+- [x] **Step 2: Run tests and verify RED**
 
 Run:
 
@@ -149,11 +149,11 @@ pnpm vitest run packages/runtime-contracts/src/babylon-native-scene-bootstrap.te
 
 Expected: FAIL because the module and exports do not exist.
 
-- [ ] **Step 3: Implement the minimal parser and hash**
+- [x] **Step 3: Implement the minimal parser and hash**
 
 Use exact own-key checks, accessor-free snapshots, explicit WorldKit Ref patterns, finite no-signed-zero tuples, and recursive freezing. The Parser performs structural validation only; Camera Profile compatibility and Host budget authorization remain later Admission gates.
 
-- [ ] **Step 4: Verify GREEN, export, and commit**
+- [x] **Step 4: Verify GREEN, export, and commit**
 
 Run the focused test and `pnpm typecheck`. Register the test as `contract`, then commit:
 
