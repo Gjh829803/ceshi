@@ -82,7 +82,7 @@ import {
   GoldenHumanoidSubjectControllerV1,
   createGoldenHumanoidSubjectControllerV1,
 } from "./character-movement-component";
-import { legacyViewTargetToCommittedCameraContextV2ForTask6 } from "./camera-director";
+import { committedCameraContextFromMotionKernelV1 } from "./camera-director";
 import { hasForwardControlIntentV1 } from "./control-profile-runtime";
 import {
   isSubjectAssetRuntimeErrorV1,
@@ -2913,11 +2913,11 @@ export class BabylonWorldRuntime {
     let committedCameraContext =
       this.latestLegacyCameraContextsByEntityId.get(subject.entityId);
     if (committedCameraContext?.committedTick !== this.tick) {
-      // The migration seam may project the legacy pose, but it must not promote
-      // live animation sockets, raw input tags, or legacy relationships into
-      // committed Camera authority. Those remain presentation-only inputs.
-      committedCameraContext = parseCameraContextSampleV2(
-        legacyViewTargetToCommittedCameraContextV2ForTask6(sample, this.tick),
+      committedCameraContext = committedCameraContextFromMotionKernelV1(
+        sample,
+        this.tick,
+        motion.locomotionMode,
+        controller.facingYawRadians,
       );
       this.latestLegacyCameraContextsByEntityId.set(
         subject.entityId,

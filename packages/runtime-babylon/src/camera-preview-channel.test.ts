@@ -5,6 +5,7 @@ import { FreeCamera } from "@babylonjs/core/Cameras/freeCamera.js";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import { Scene } from "@babylonjs/core/scene.js";
+import { parseCameraContextSampleV2 } from "@whitebox-world/camera";
 import type { ViewTargetSampleV1 } from "@whitebox-world/runtime-contracts";
 import type { PhysicsWorldQueryPortV1 } from "@whitebox-world/runtime-framework";
 import { describe, expect, it, vi } from "vitest";
@@ -17,6 +18,7 @@ import { createValidAuthoringSpecV4 } from "../../authoring/src/test-fixture";
 import { BabylonWorldRuntime } from "./babylon-world-runtime";
 import {
   CameraDirectorV1,
+  committedCameraContextFromMotionKernelV1,
   legacyViewTargetToCommittedCameraContextV2ForTask6,
 } from "./camera-director";
 import { SpringArmComponentV1 } from "./spring-arm-component";
@@ -1423,6 +1425,144 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       relationshipContexts: [],
       socketPositionsMetersXYZById: {},
       cameraContextTags: [],
+    });
+  });
+
+  it("maps leftover free-ground motion tags to grounded mobility so auto view selects orbit.medium", () => {
+    const executionPlan = compileRuntimeTestPlanV5(
+      createFlatTerrainCapabilitySpec(),
+      { subjectResourceRegistry: builtInSubjectResourceRegistry },
+    );
+    const subject = executionPlan.subjects[0];
+    if (subject === undefined) throw new Error("CameraDirector fixture Subject missing.");
+    const sample: ViewTargetSampleV1 = {
+      controlledEntityId: subject.entityId,
+      entityId: subject.entityId,
+      targetPositionMetersXYZ: [0, 1, 0],
+      forwardXYZ: [0, 0, -1],
+      upXYZ: [0, 1, 0],
+      velocityMetersPerSecondXYZ: [0.4, 0, 0],
+      approximateRadiusMeters: 0.5,
+      socketPositionsMetersXYZById: {},
+      motionTags: ["free-ground"],
+      movementMedium: "ground",
+      relationshipContexts: [],
+      relationshipRole: "none",
+      cameraContextTags: [],
+    };
+    const groundedContext = parseCameraContextSampleV2({
+      schemaVersion: 2,
+      semanticAuthorityStatus: "available",
+      committedTick: 3,
+      controlledEntityId: subject.entityId,
+      targetEntityId: subject.entityId,
+      subjectPose: {
+        positionMetersXYZ: [0, 1, 0],
+        facingYawRadians: 0,
+      },
+      locomotion: {
+        schemaVersion: 2,
+        status: "active",
+        mobilityMode: "grounded",
+        gait: "walk",
+        verticalPhase: "none",
+        supportMode: "supported",
+        movementMedium: "ground",
+        facingYawRadians: 0,
+        linearVelocity: { x: 0.4, y: 0, z: 0 },
+        horizontalSpeedMetersPerSecond: 0.4,
+        committedTick: 3,
+        phaseEnteredTick: 0,
+        transitionSequence: 0,
+      },
+      actionSummary: {
+        status: "available",
+        activeActionRefs: [],
+        isInterruptible: true,
+      },
+      environment: {
+        relationshipRole: "none",
+        relationshipContexts: [],
+        socketPositionsMetersXYZById: {},
+        cameraContextTags: [],
+      },
+    });
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    const camera = new FreeCamera("camera.free-ground", Vector3.Zero(), scene);
+    const director = new CameraDirectorV1(executionPlan, camera, scene, {
+      sweepSphere: () => undefined,
+    });
+    const springArm = new SpringArmComponentV1();
+    try {
+      director.update(
+        subject.capabilityAssembly.cameraContext,
+        sample,
+        1 / 60,
+        groundedContext,
+        springArm,
+      );
+      expect(director.snapshot().activeCameraProfileRef).toBe(ORBIT_REF);
+      expect(director.snapshot().selectionDecision?.explain.fallbackActive)
+        .toBe(false);
+    } finally {
+      director.dispose();
+      engine.dispose();
+    }
+  });
+
+  it("publishes Motion Kernel locomotion as available Camera Context V2", () => {
+    const sample: ViewTargetSampleV1 = {
+      controlledEntityId: "player",
+      entityId: "player",
+      targetPositionMetersXYZ: [1, 0.56, 2],
+      forwardXYZ: [0, 0, -1],
+      upXYZ: [0, 1, 0],
+      velocityMetersPerSecondXYZ: [1.2, 0, 0],
+      approximateRadiusMeters: 0.35,
+      socketPositionsMetersXYZById: {},
+      motionTags: ["free-ground", "ground", "jump"],
+      movementMedium: "ground",
+      relationshipContexts: [],
+      relationshipRole: "none",
+      cameraContextTags: ["forward-intent"],
+    };
+
+    const grounded = committedCameraContextFromMotionKernelV1(
+      sample,
+      9,
+      "walk",
+      0,
+    );
+    expect(grounded.semanticAuthorityStatus).toBe("available");
+    expect(grounded.locomotion).toMatchObject({
+      status: "active",
+      mobilityMode: "grounded",
+      gait: "walk",
+      movementMedium: "ground",
+      committedTick: 9,
+    });
+    expect(grounded.environment.cameraContextTags).toEqual(["forward-intent"]);
+
+    const airborne = committedCameraContextFromMotionKernelV1(
+      {
+        ...sample,
+        movementMedium: "air",
+        velocityMetersPerSecondXYZ: [0.2, 3, 0],
+        cameraContextTags: [],
+      },
+      10,
+      "airborne",
+      0,
+    );
+    expect(airborne.locomotion).toMatchObject({
+      status: "active",
+      mobilityMode: "airborne",
+      gait: "none",
+      verticalPhase: "rising",
+      supportMode: "unsupported",
+      movementMedium: "air",
+      committedTick: 10,
     });
   });
 

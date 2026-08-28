@@ -5301,6 +5301,42 @@ function emptyActionProjection(simulationTick: number) {
     }
   });
 
+  it("keeps free-ground camera-relative strafe on a stable view heading", async () => {
+    const { runtime } = await createRuntimeWithPackageSubject();
+    try {
+      await bindRuntimeTestPossession(runtime, "player");
+      const start = await runtime.runFixedInput({ actions: [], ticks: 1 });
+      expect(start.camera.activeCameraProfileRef).toBe(ORBIT_CAMERA_PROFILE_REF);
+      const startX = start.subjectStatesByEntityId.player!.positionMetersXYZ[0];
+      const startForward = start.camera.controlForwardXYZ!;
+
+      const moved = await runtime.runFixedInput({
+        actions: ["move-right"],
+        ticks: 120,
+      });
+      const player = moved.subjectStatesByEntityId.player!;
+      const controlForward = moved.camera.controlForwardXYZ!;
+      expect(moved.camera.activeCameraProfileRef).toBe(ORBIT_CAMERA_PROFILE_REF);
+      expect(player.positionMetersXYZ[0]).toBeGreaterThan(startX + 2);
+      expect(player.positionMetersXYZ[0]).toBeLessThan(6.2);
+      expect(controlForward[0]).toBeCloseTo(startForward[0], 2);
+      expect(controlForward[2]).toBeCloseTo(startForward[2], 2);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("selects orbit.medium for grounded Golden auto view", async () => {
+    const runtime = await createRiggedRuntime();
+    try {
+      await bindRuntimeTestPossession(runtime, "player");
+      const snapshot = await runtime.runFixedInput({ actions: [], ticks: 1 });
+      expect(snapshot.camera.activeCameraProfileRef).toBe(ORBIT_CAMERA_PROFILE_REF);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
   it("aligns the Golden Subject front with off-axis camera-relative movement", async () => {
     const runtime = await createRiggedRuntime();
     try {
