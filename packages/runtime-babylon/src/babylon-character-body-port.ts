@@ -441,8 +441,10 @@ export class GroundAwarePhysicsCharacterController extends PhysicsCharacterContr
     }
 
     // Babylon needs a capsule-scale look-ahead to discover some legal steps.
-    // Run that padded query transactionally, roll it back, then commit only a
-    // landing reachable by this iteration's exact horizontal time budget.
+    // Run that padded query transactionally and roll it back. Prefer a landing
+    // reachable by this iteration's exact horizontal time budget; if that
+    // candidate is still on the riser, commit the preflight landing as a
+    // discrete step-up correction instead of rejecting the climb.
     const snapshot = this.captureTransactionalState();
     const paddedTime = minimumProbeMeters / horizontalSpeed;
     const preflightConsumed = super._tryStepUp(
@@ -484,7 +486,11 @@ export class GroundAwarePhysicsCharacterController extends PhysicsCharacterContr
     );
     if (!hasSafeLanding || penetratesBlockingSurface) {
       this.restoreTransactionalState(snapshot);
-      return -1;
+      const displacement = preflightPosition.subtract(snapshot.position);
+      this.privateHost()._lastDisplacement.copyFrom(displacement);
+      this.setPosition(preflightPosition);
+      this._refreshManifoldAtPosition(preflightPosition);
+      return remainingTime;
     }
     const displacement = candidate.subtract(snapshot.position);
     this.privateHost()._lastDisplacement.copyFrom(displacement);
@@ -971,6 +977,7 @@ function assertProposalWasNotAmplified(
   maxStepHeightMeters: number,
   maxSlopeCosine: number,
   maximumActiveContactDistanceMeters: number,
+  stepUpHorizontalAllowanceMeters: number,
   contacts: readonly BabylonCharacterBodyNativeContactV1[],
 ): void {
   const surfaceVelocity = support.mode === "unsupported"
@@ -1007,17 +1014,24 @@ function assertProposalWasNotAmplified(
       up,
       projectionNormal,
     );
+  const proposedVertical = dot(proposed, up);
+  const appliedVertical = dot(supportAdjustedApplied, up);
+  const isGroundedStepUp = support.mode !== "unsupported" &&
+    appliedVertical > BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1 &&
+    appliedVertical <= maxStepHeightMeters +
+      BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1;
+  const horizontalAllowanceMeters = isGroundedStepUp
+    ? stepUpHorizontalAllowanceMeters
+    : 0;
   const progress = horizontalProgressAlongProposal(
     horizontalGuardApplied,
     proposed,
     up,
   );
-  if (progress.applied > progress.proposedMagnitude +
+  if (progress.applied > progress.proposedMagnitude + horizontalAllowanceMeters +
     BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1) {
     invalid("native collision resolution amplified horizontal proposal progress.");
   }
-  const proposedVertical = dot(proposed, up);
-  const appliedVertical = dot(supportAdjustedApplied, up);
   const stepHeightAllowanceMeters = support.mode === "unsupported"
     ? 0
     : maxStepHeightMeters;
@@ -1038,6 +1052,7 @@ function assertProposalWasNotAmplified(
     (component, axis) => component - appliedVerticalVector[axis]!,
   ));
   if (appliedHorizontalMagnitude > proposedHorizontalMagnitude +
+    horizontalAllowanceMeters +
     BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1) {
     invalid("native collision resolution amplified horizontal proposal magnitude.");
   }
@@ -1823,6 +1838,9 @@ class BabylonCharacterBodyPortV1
         this.configuration.maxSlopeCosine,
         this.options.controller.keepDistanceMeters +
           this.options.controller.keepContactToleranceMeters,
+        this.options.capsule.radiusMeters +
+          this.options.controller.keepDistanceMeters +
+          STEP_UP_FORWARD_CLEARANCE_METERS,
         contacts,
       );
       const translationDifference = Math.max(...delta.map((component, axis) =>

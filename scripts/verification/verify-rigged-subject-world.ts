@@ -46,6 +46,7 @@ import {
 } from "../lib/worldkit-server";
 import { buildWorldArtifactFileV1 } from "../cli/build-world-artifact";
 import { main as worldkitMain } from "../cli/worldkit";
+import { requireActivePublishedLocomotionV1 } from "./locomotion-capability-state.js";
 
 const REPOSITORY_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const INPUT_PATH = path.join(
@@ -247,14 +248,7 @@ function requireSubjectProjection(snapshot: WorldRuntimeSnapshotV4, entityId: st
 }
 
 function requireLocomotionCapability(snapshot: WorldRuntimeSnapshotV4, entityId: string) {
-  const capability = Object.values(
-    requireSubjectProjection(snapshot, entityId).capabilityStatesById,
-  ).find((candidate) => candidate.kind === "locomotion-capability-state");
-  assert.ok(capability !== undefined, `Missing locomotion capability state for '${entityId}'.`);
-  if (capability.mode === "suspended") {
-    throw new Error(`Unexpected suspended locomotion capability for '${entityId}'.`);
-  }
-  return capability;
+  return requireActivePublishedLocomotionV1(snapshot, entityId);
 }
 
 function locomotionActionId(snapshot: WorldRuntimeSnapshotV4, entityId: string): ActionId {

@@ -47,6 +47,7 @@ import { startWorldkitServer, type WorldkitServerHandle } from "../lib/worldkit-
 import { launchChromiumWithSystemFallback } from "../lib/playwright-browser-launch";
 import { main as worldkitMain } from "../cli/worldkit";
 import { PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1 } from "../../apps/playground/src/worldkit-asset-resolver";
+import { requireActivePublishedLocomotionV1 } from "./locomotion-capability-state.js";
 
 const REPOSITORY_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const INTAKE_FIXTURE = parseProductAssetIntakeFixtureV1(
@@ -230,32 +231,12 @@ function requireSubjectProjection(snapshot: WorldRuntimeSnapshotV4, entityId: st
 }
 
 function requireLocomotionCapability(snapshot: WorldRuntimeSnapshotV4, entityId: string) {
-  const capability = Object.values(
-    requireSubjectProjection(snapshot, entityId).capabilityStatesById,
-  ).find((candidate) =>
-    candidate.kind === "locomotion-capability-state" ||
-    candidate.kind === "locomotion-capability-state-v2"
-  );
-  assert.ok(capability !== undefined, `Missing locomotion capability state for '${entityId}'.`);
-  if (capability.kind === "locomotion-capability-state-v2") {
-    if (capability.locomotion.status === "suspended") {
-      throw new Error(`Unexpected suspended locomotion capability for '${entityId}'.`);
-    }
-    return capability.locomotion;
-  }
-  if (capability.mode === "suspended") {
-    throw new Error(`Unexpected suspended locomotion capability for '${entityId}'.`);
-  }
-  return capability;
+  return requireActivePublishedLocomotionV1(snapshot, entityId);
 }
 
 function locomotionActionId(snapshot: WorldRuntimeSnapshotV4, entityId: string): ActionId {
-  const capability = requireLocomotionCapability(snapshot, entityId);
-  if ("mobilityMode" in capability) {
-    if (capability.mobilityMode === "airborne") return "jump";
-    return capability.gait === "none" ? "idle" : capability.gait;
-  }
-  return capability.mode === "airborne" ? "jump" : capability.mode;
+  const mode = requireLocomotionCapability(snapshot, entityId).mode;
+  return mode === "airborne" ? "jump" : mode;
 }
 
 function assertPossessedBy(snapshot: WorldRuntimeSnapshotV4, controlledEntityId: string): void {
@@ -308,9 +289,18 @@ function assertMovementFacingSemanticAlignment(
     "Subject velocity",
   );
 
+  const alignment =
+    subjectForwardXZ[0] * velocityXZ[0] + subjectForwardXZ[1] * velocityXZ[1];
   assert.ok(
-    subjectForwardXZ[0] * velocityXZ[0] + subjectForwardXZ[1] * velocityXZ[1] > 0.99,
-    `Subject '${entityId}' facing is not aligned with its movement.`,
+    alignment > 0.99,
+    [
+      `Subject '${entityId}' facing is not aligned with its movement.`,
+      `alignment=${alignment}`,
+      `forwardXZ=${JSON.stringify(subjectForwardXZ)}`,
+      `velocityXZ=${JSON.stringify(velocityXZ)}`,
+      `subjectForwardXYZ=${JSON.stringify(camera.subjectForwardXYZ)}`,
+      `subjectVelocity=${JSON.stringify(camera.subjectVelocityMetersPerSecondXYZ)}`,
+    ].join(" "),
   );
 }
 

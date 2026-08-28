@@ -512,12 +512,45 @@ async function requiredDiversionText(
   }
 }
 
-interface PriorLedgerContextV1 {
+export interface PriorLedgerContextV1 {
   readonly prior?: unknown;
   readonly allowGenesis: boolean;
 }
 
-async function readGitPriorLedgerV1(
+async function optionalGitText(
+  repositoryRoot: string,
+  args: readonly string[],
+): Promise<string | undefined> {
+  try {
+    return (await execFileAsync("git", [...args], {
+      cwd: repositoryRoot,
+      encoding: "utf8",
+    })).stdout;
+  } catch {
+    return undefined;
+  }
+}
+
+function parseSchema2Ledger(text: string, source: string): unknown {
+  let candidate: unknown;
+  try {
+    candidate = JSON.parse(text);
+  } catch {
+    return fail(
+      "3C_MIGRATION_PRIOR_UNAVAILABLE",
+      `${source} ledger JSON could not be read`,
+    );
+  }
+  if (record(candidate)?.schemaVersion !== 2) {
+    return fail(
+      "3C_MIGRATION_PRIOR_UNAVAILABLE",
+      `${source} does not contain an accepted schema-2 ledger`,
+    );
+  }
+  return candidate;
+}
+
+export async function readGitPriorLedgerV1(
   repositoryRoot: string,
   currentText: string,
 ): Promise<PriorLedgerContextV1> {
@@ -550,19 +583,24 @@ async function readGitPriorLedgerV1(
     if (headCommit === GOLDEN_3C_LEDGER_GENESIS_COMMIT) {
       return { allowGenesis: true };
     }
-    const parentText = await requiredGitText(
+    const firstParent = (await optionalGitText(
       repositoryRoot,
-      ["show", "HEAD^:config/3c-migration-ledger.json"],
-      "3C_MIGRATION_PRIOR_UNAVAILABLE",
-    );
-    const candidate = JSON.parse(parentText) as unknown;
-    if (record(candidate)?.schemaVersion !== 2) {
-      return fail(
-        "3C_MIGRATION_PRIOR_UNAVAILABLE",
-        "HEAD^ does not contain an accepted schema-2 ledger",
-      );
+      ["rev-parse", "--verify", "HEAD^1"],
+    ))?.trim();
+    if (firstParent === undefined || firstParent === "") {
+      return { allowGenesis: true };
     }
-    return { prior: candidate, allowGenesis: false };
+    const parentText = await optionalGitText(
+      repositoryRoot,
+      ["show", `${firstParent}:config/3c-migration-ledger.json`],
+    );
+    if (parentText === undefined) {
+      return { allowGenesis: true };
+    }
+    return {
+      prior: parseSchema2Ledger(parentText, "HEAD^1"),
+      allowGenesis: false,
+    };
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("3C_MIGRATION_")) {
       throw error;
