@@ -433,7 +433,9 @@ describe("Gameplay Babylon Runtime coordinator", () => {
     expect(afterBoardMove.view.camera).toMatchObject({
       mode: "tracking",
       targetEntityId: "skateboard",
-      activeCameraModifierRefs: [],
+      activeCameraModifierRefs: [
+        "worldkit://camera-modifier/mounted-framing@1",
+      ],
     });
     expect(afterBoardMove.view.camera.mode).toBe("tracking");
     if (afterBoardMove.view.camera.mode === "tracking") {
@@ -447,7 +449,7 @@ describe("Gameplay Babylon Runtime coordinator", () => {
       ) {
         throw new Error("Expected mounted third-person Spring Arm telemetry.");
       }
-      expect(requestedArmLengthMeters).toBeCloseTo(6, 6);
+      expect(requestedArmLengthMeters).toBeCloseTo(7, 6);
       expect(effectiveArmLengthMeters).toBeGreaterThan(0);
       expect(effectiveArmLengthMeters).toBeLessThanOrEqual(
         requestedArmLengthMeters + 0.000001,
