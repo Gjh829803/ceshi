@@ -7,6 +7,8 @@ const PACKAGE_ROOT = new URL("../", import.meta.url);
 const SOURCE_ROOT = new URL("./", import.meta.url);
 
 const ALLOWED_BABYLON_IMPORTS = new Set([
+  "@babylonjs/core/Buffers/buffer.js",
+  "@babylonjs/core/Maths/math.vector.js",
   "@babylonjs/core/Meshes/mesh.js",
   "@babylonjs/core/scene.js",
 ]);
@@ -31,15 +33,19 @@ function importSpecifiers(source: string): readonly string[] {
 }
 
 describe("@whitebox-world/native-babylon package boundary", () => {
-  it("declares only its direct root dependencies and one AI-facing export", async () => {
+  it("separates the AI-facing root from the trusted Host subpath", async () => {
     const manifest = JSON.parse(
       await readFile(new URL("package.json", PACKAGE_ROOT), "utf8"),
     ) as Record<string, unknown>;
 
     expect(manifest.name).toBe("@whitebox-world/native-babylon");
-    expect(manifest.exports).toEqual({ ".": "./src/index.ts" });
+    expect(manifest.exports).toEqual({
+      ".": "./src/index.ts",
+      "./host": "./src/host.ts",
+    });
     expect(manifest.dependencies).toEqual({
       "@babylonjs/core": "9.23.0",
+      "@whitebox-world/protocol": "workspace:*",
       "@whitebox-world/runtime-contracts": "workspace:*",
     });
   });

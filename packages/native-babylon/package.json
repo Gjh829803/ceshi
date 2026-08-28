@@ -4,10 +4,12 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./host": "./src/host.ts"
   },
   "dependencies": {
     "@babylonjs/core": "9.23.0",
+    "@whitebox-world/protocol": "workspace:*",
     "@whitebox-world/runtime-contracts": "workspace:*"
   }
 }

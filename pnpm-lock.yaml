@@ -387,6 +387,9 @@ importers:
       '@babylonjs/core':
         specifier: 9.23.0
         version: 9.23.0
+      '@whitebox-world/protocol':
+        specifier: workspace:*
+        version: link:../protocol
       '@whitebox-world/runtime-contracts':
         specifier: workspace:*
         version: link:../runtime-contracts

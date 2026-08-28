@@ -289,7 +289,7 @@ export interface BabylonNativeStaticColliderRegistrationV1 {
 
 The frozen Contribution stores Spawn, collider ID, canonical world positions, triangle indices, material ratios, and the closed traversal binding. It stores neither `Mesh` nor another Babylon handle. The Host build result may retain a provider-local debug map separately, but that map never enters canonical bytes or the Contribution Hash.
 
-- [ ] **Step 1: Port the experimental behavior into new-owner RED tests**
+- [x] **Step 1: Port the experimental behavior into new-owner RED tests**
 
 Copy the behavior matrix, not the implementation, from `packages/runtime-babylon/src/native-scene-module.test.ts`. The new tests must cover exactly-one Spawn, duplicate IDs, foreign/disposed Mesh, finite indexed triangles, world transforms, build-time and post-build mutation, Thin Instances, provider Physics, late registration, Collider count/vertex/triangle budgets, deterministic registration sorting, required closed traversal binding, and immutable no-handle output.
 
@@ -303,7 +303,7 @@ expect(result.contributionHash).toBe(
 );
 ```
 
-- [ ] **Step 2: Run tests and verify RED**
+- [x] **Step 2: Run tests and verify RED**
 
 Run:
 
@@ -313,15 +313,15 @@ pnpm vitest run packages/native-babylon/src/host.test.ts packages/native-babylon
 
 Expected: FAIL because the Host builder and Contribution contract do not exist.
 
-- [ ] **Step 3: Extract the validated geometry mechanics**
+- [x] **Step 3: Extract the validated geometry mechanics**
 
 Add the `./host` package export and direct `@whitebox-world/protocol` dependency. Move the already-tested finite/index/world-transform mechanics from the experimental Runtime file into the new Host owner, adapting inputs to `registration.registerStaticCollider()` and outputs to the handle-free Contribution. Preserve stable error codes as structured diagnostics and use the new measurement/location unions rather than arbitrary error details.
 
-- [ ] **Step 4: Add deterministic canonicalization and hash**
+- [x] **Step 4: Add deterministic canonicalization and hash**
 
 Sort Spawn/Collider data by stable ID, canonicalize signed zero at the Babylon provider publication boundary, hash only parsed handle-free Contribution data, and prove registration call order does not change bytes or Hash. Reject any geometry or binding drift after Build closure.
 
-- [ ] **Step 5: Verify GREEN and commit**
+- [x] **Step 5: Verify GREEN and commit**
 
 Run the focused tests, `pnpm typecheck`, and `pnpm test:census`. Register both tests as `contract`, then commit:
 
