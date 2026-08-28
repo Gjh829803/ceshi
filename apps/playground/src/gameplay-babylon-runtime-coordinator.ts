@@ -27,8 +27,11 @@ import {
 import {
   RuntimeHost,
   type CameraViewSelectionProjectionV1,
+  type FixedInputOneTickV1,
+  type GameplayFixedTickActionProjectionV1,
   type GameplayWorldAdapterFactoryV1,
   type GameplayWorldPortV1,
+  type GameplayWorldTransactionV1,
   type PublishWorldReplacementResultV1,
   type RuntimeActivityLeaseV1,
   type RuntimeActivityRecordV1,
@@ -200,8 +203,17 @@ function wrapOwnedPort(
   port: GameplayWorldPortV1,
   onDisposed: () => void,
 ): GameplayWorldPortV1 {
+  type PreparedFixedInputWorldPortV1 = GameplayWorldPortV1 & Readonly<{
+    prepareFixedInputTick?: (
+      input: FixedInputOneTickV1,
+      actionProjection: GameplayFixedTickActionProjectionV1,
+    ) => Promise<GameplayWorldTransactionV1>;
+  }>;
+  const providerPrepareFixedInputTick = (
+    port as PreparedFixedInputWorldPortV1
+  ).prepareFixedInputTick;
   let disposePromise: Promise<void> | undefined;
-  return Object.freeze({
+  const ownedPort: PreparedFixedInputWorldPortV1 = {
     initialize: () => port.initialize(),
     hasEntity: (entityId: string) => port.hasEntity(entityId),
     isEntityControllable: (entityId: string) =>
@@ -234,7 +246,23 @@ function wrapOwnedPort(
       );
       return disposePromise;
     },
-  });
+  };
+  if (typeof providerPrepareFixedInputTick === "function") {
+    Object.defineProperty(ownedPort, "prepareFixedInputTick", {
+      configurable: false,
+      enumerable: false,
+      writable: false,
+      value: (
+        input: FixedInputOneTickV1,
+        actionProjection: GameplayFixedTickActionProjectionV1,
+      ) => Reflect.apply(
+        providerPrepareFixedInputTick,
+        port,
+        [input, actionProjection],
+      ),
+    });
+  }
+  return Object.freeze(ownedPort);
 }
 
 function activePossessionEntityId(

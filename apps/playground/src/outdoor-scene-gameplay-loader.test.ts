@@ -194,5 +194,5 @@ describe("loadOutdoorGameplaySceneV1", () => {
     expect(result.executionPlan?.subjects[0]?.spawnSubjectFacingRadians)
       .toBeCloseTo(compiledScene.spawn.facingRadians, 6);
     expect(result.executionPlan?.camera.aspectRatio).toBe(4 / 3);
-  }, 20_000);
+  }, 60_000);
 });

@@ -17,10 +17,14 @@ export function findLocomotionCapabilityState(
 ): GameplayCapabilityStateV1 | undefined {
   const subject = snapshot.world.subjectStatesByEntityId[entityId];
   if (isNil(subject)) return undefined;
-  return Object.values(subject.capabilityStatesById).find((candidate) =>
+  const candidates = Object.values(subject.capabilityStatesById).filter((candidate) =>
     candidate.kind === "locomotion-capability-state" ||
     candidate.kind === "locomotion-capability-state-v2"
   );
+  if (candidates.length > 1) {
+    throw new Error(`Ambiguous locomotion capability state for '${entityId}'.`);
+  }
+  return candidates[0];
 }
 
 export function requireActivePublishedLocomotionV1(

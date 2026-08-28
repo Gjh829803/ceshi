@@ -28,14 +28,14 @@ import {
 } from "@whitebox-world/character-movement";
 
 export const BABYLON_CHARACTER_BODY_PROVIDER_VERSIONS_V1 = Object.freeze({
-  babylonJs: "9.21.2",
+  babylonJs: "9.23.0",
   havok: "1.3.14",
 } as const);
 
 export interface BabylonCharacterBodyPortOptionsV1 {
   readonly schemaVersion: 1;
   readonly providerVersions: Readonly<{
-    babylonJs: "9.21.2";
+    babylonJs: "9.23.0";
     havok: "1.3.14";
   }>;
   readonly scene: Scene;
@@ -115,6 +115,11 @@ export interface BabylonCharacterBodyNativeIntegrateRequestV1 {
   readonly supportBeforeIntegrate: BabylonCharacterBodyNativeSupportV1;
 }
 
+export interface BabylonCharacterBodyNativeIntegrateResultV1 {
+  readonly didStepUp: boolean;
+  readonly maximumSolverCorrectionMeters: number;
+}
+
 /** @internal Narrow seam used by the focused adapter tests. */
 export interface BabylonCharacterBodyNativeDriverV1 {
   configure(configuration: BabylonCharacterBodyNativeConfigurationV1): void;
@@ -128,7 +133,9 @@ export interface BabylonCharacterBodyNativeDriverV1 {
     fixedDeltaSeconds: number,
     gravityDirectionXYZ: MovementVec3V1,
   ): BabylonCharacterBodyNativeSupportV1;
-  integrateExactTranslation(request: BabylonCharacterBodyNativeIntegrateRequestV1): void;
+  integrateExactTranslation(
+    request: BabylonCharacterBodyNativeIntegrateRequestV1,
+  ): BabylonCharacterBodyNativeIntegrateResultV1;
   isIntegrateRollbackExternallySafe(): boolean;
   readCurrentContacts(): readonly BabylonCharacterBodyNativeContactV1[];
   getPhysicsBody?(): PhysicsBody;
@@ -196,6 +203,10 @@ const DYNAMIC_PHYSICS_MOTION_TYPE = 2;
 const SNAP_DOWN_UPWARD_SPEED_LIMIT_METERS_PER_SECOND = 0.5;
 const SNAP_DOWN_MINIMUM_DROP_METERS = 1e-4;
 const SNAP_DOWN_SURFACE_NORMAL_ALIGNMENT_EPSILON = 1e-3;
+// Babylon's Character Controller simplex solver uses a 1e-4 collision epsilon.
+// Keep provider resolution tolerance local to this adapter; protocol and
+// published-state coherence continue to use the stricter SDK tolerance.
+const BABYLON_CHARACTER_CONTROLLER_COLLISION_TOLERANCE_METERS_V1 = 1e-4;
 
 function cloneManifoldContact(
   contact: BabylonManifoldContactV1,
@@ -223,6 +234,8 @@ function cloneBodyPositionTracking(
  */
 export class GroundAwarePhysicsCharacterController extends PhysicsCharacterController {
   private stepUpEnabledForCurrentIntegrate = false;
+  private stepUpAppliedForCurrentIntegrate = false;
+  private lastIntegrateAppliedStepUp = false;
   private exactTranslationLeavesSupportForCurrentIntegrate = false;
   private ownedResourcesDisposed = false;
 
@@ -353,6 +366,10 @@ export class GroundAwarePhysicsCharacterController extends PhysicsCharacterContr
     if (primary !== undefined) throw primary;
   }
 
+  didStepUpDuringLastIntegrate(): boolean {
+    return this.lastIntegrateAppliedStepUp;
+  }
+
   readCurrentContacts(): readonly BabylonCharacterBodyNativeContactV1[] {
     return Object.freeze(this.privateHost()._manifold.map((contact) => {
       const motionType = contact.bodyB.body.getMotionType(contact.bodyB.index);
@@ -432,17 +449,19 @@ export class GroundAwarePhysicsCharacterController extends PhysicsCharacterContr
     const minimumProbeMeters =
       radiusMeters + this.keepDistance + STEP_UP_FORWARD_CLEARANCE_METERS;
     if (requestedHorizontalMeters >= minimumProbeMeters) {
-      return super._tryStepUp(
+      const consumed = super._tryStepUp(
         remainingTime,
         inputVelocity,
         simplexOutput,
         constraints,
       );
+      if (consumed >= 0) this.stepUpAppliedForCurrentIntegrate = true;
+      return consumed;
     }
 
-    // A walk-speed tick cannot reach the tread: the capsule is still on the
-    // riser after one frame. Commit the padded preflight landing instead of a
-    // time-budget hover that only grazes the lip.
+    // Babylon needs a capsule-scale look-ahead to discover some legal steps.
+    // Run that padded query transactionally, roll it back, then commit only a
+    // landing reachable by this iteration's exact horizontal time budget.
     const snapshot = this.captureTransactionalState();
     const paddedTime = minimumProbeMeters / horizontalSpeed;
     const preflightConsumed = super._tryStepUp(
@@ -455,6 +474,7 @@ export class GroundAwarePhysicsCharacterController extends PhysicsCharacterContr
       this.restoreTransactionalState(snapshot);
       return -1;
     }
+    this.stepUpAppliedForCurrentIntegrate = true;
     return remainingTime;
   }
 
@@ -474,14 +494,17 @@ export class GroundAwarePhysicsCharacterController extends PhysicsCharacterContr
         }
       : surfaceInfo;
     this.stepUpEnabledForCurrentIntegrate =
-      effectiveSurfaceInfo.supportedState !== CharacterSupportedState.UNSUPPORTED;
+      effectiveSurfaceInfo.supportedState === CharacterSupportedState.SUPPORTED;
+    this.stepUpAppliedForCurrentIntegrate = false;
     try {
       super.integrate(deltaTime, effectiveSurfaceInfo, gravity);
       if (!leavesSupport) {
         this.snapDownToWalkableSupport(effectiveSurfaceInfo);
       }
     } finally {
+      this.lastIntegrateAppliedStepUp = this.stepUpAppliedForCurrentIntegrate;
       this.stepUpEnabledForCurrentIntegrate = false;
+      this.stepUpAppliedForCurrentIntegrate = false;
       this.exactTranslationLeavesSupportForCurrentIntegrate = false;
     }
   }
@@ -938,6 +961,8 @@ function assertProposalWasNotAmplified(
   maxSlopeCosine: number,
   maximumActiveContactDistanceMeters: number,
   stepUpHorizontalAllowanceMeters: number,
+  didStepUp: boolean,
+  maximumSolverCorrectionMeters: number,
   contacts: readonly BabylonCharacterBodyNativeContactV1[],
 ): void {
   const surfaceVelocity = support.mode === "unsupported"
@@ -976,20 +1001,22 @@ function assertProposalWasNotAmplified(
     );
   const proposedVertical = dot(proposed, up);
   const appliedVertical = dot(supportAdjustedApplied, up);
-  const isGroundedStepUp = support.mode !== "unsupported" &&
-    appliedVertical > BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1 &&
-    appliedVertical <= maxStepHeightMeters +
-      BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1;
-  const horizontalAllowanceMeters = isGroundedStepUp
+  const horizontalAllowanceMeters = support.mode !== "unsupported" && didStepUp
     ? stepUpHorizontalAllowanceMeters
     : 0;
+  if (!finite(maximumSolverCorrectionMeters) || maximumSolverCorrectionMeters < 0 ||
+    maximumSolverCorrectionMeters >
+      BABYLON_CHARACTER_CONTROLLER_COLLISION_TOLERANCE_METERS_V1) {
+    invalid("native collision solver correction receipt is invalid.");
+  }
   const progress = horizontalProgressAlongProposal(
     horizontalGuardApplied,
     proposed,
     up,
   );
   if (progress.applied > progress.proposedMagnitude + horizontalAllowanceMeters +
-    BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1) {
+    maximumSolverCorrectionMeters +
+      BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1) {
     invalid("native collision resolution amplified horizontal proposal progress.");
   }
   const stepHeightAllowanceMeters = support.mode === "unsupported"
@@ -997,9 +1024,11 @@ function assertProposalWasNotAmplified(
     : maxStepHeightMeters;
   const minimumVertical =
     Math.min(0, proposedVertical) - stepHeightAllowanceMeters -
+    maximumSolverCorrectionMeters -
     BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1;
   const maximumVertical =
     Math.max(0, proposedVertical) + stepHeightAllowanceMeters +
+    maximumSolverCorrectionMeters +
     BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1;
   if (appliedVertical < minimumVertical || appliedVertical > maximumVertical) {
     invalid("native collision resolution amplified vertical proposal beyond max step height.");
@@ -1013,6 +1042,7 @@ function assertProposalWasNotAmplified(
   ));
   if (appliedHorizontalMagnitude > proposedHorizontalMagnitude +
     horizontalAllowanceMeters +
+    maximumSolverCorrectionMeters +
     BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1) {
     invalid("native collision resolution amplified horizontal proposal magnitude.");
   }
@@ -1177,7 +1207,9 @@ class BabylonPhysicsCharacterControllerDriverV1
     });
   }
 
-  integrateExactTranslation(request: BabylonCharacterBodyNativeIntegrateRequestV1): void {
+  integrateExactTranslation(
+    request: BabylonCharacterBodyNativeIntegrateRequestV1,
+  ): BabylonCharacterBodyNativeIntegrateResultV1 {
     this.controller.prepareExactTranslation(
       new Vector3(...request.translationDeltaMetersXYZ),
       new Vector3(...request.driverVelocityMetersPerSecondXYZ),
@@ -1205,6 +1237,11 @@ class BabylonPhysicsCharacterControllerDriverV1
       // translation. Applying provider gravity here would double-integrate it.
       Vector3.ZeroReadOnly as Vector3,
     );
+    return Object.freeze({
+      didStepUp: this.controller.didStepUpDuringLastIntegrate(),
+      maximumSolverCorrectionMeters:
+        BABYLON_CHARACTER_CONTROLLER_COLLISION_TOLERANCE_METERS_V1,
+    });
   }
 
   isIntegrateRollbackExternallySafe(): boolean {
@@ -1779,7 +1816,7 @@ class BabylonCharacterBodyPortV1
     const integrateRollbackExternallySafe =
       this.driver.isIntegrateRollbackExternallySafe() === true;
     try {
-      this.driver.integrateExactTranslation(integrateRequest);
+      const integrateResult = this.driver.integrateExactTranslation(integrateRequest);
       const position = parseVec3(this.driver.getPositionMetersXYZ());
       const nativeVelocity = parseVec3(
         this.driver.getLinearVelocityMetersPerSecondXYZ(),
@@ -1801,6 +1838,8 @@ class BabylonCharacterBodyPortV1
         this.options.capsule.radiusMeters +
           this.options.controller.keepDistanceMeters +
           STEP_UP_FORWARD_CLEARANCE_METERS,
+        integrateResult.didStepUp,
+        integrateResult.maximumSolverCorrectionMeters,
         contacts,
       );
       const translationDifference = Math.max(...delta.map((component, axis) =>

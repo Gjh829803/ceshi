@@ -234,6 +234,7 @@ const CAMERA_RESOURCE_ID_V2 = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/;
 const CAMERA_SOCKET_ID_V2 = /^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$/;
 const CAMERA_CONTEXT_TAG_V2 = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/;
 const CAMERA_ENTITY_ID_V2 = /^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$/;
+const CAMERA_RELATIONSHIP_ID_V1 = /^[A-Za-z0-9]+(?:[._:-][A-Za-z0-9]+)*$/;
 
 function cameraVersionedResourceRefV2(value: unknown, kind: string): value is string {
   if (!cameraString(value)) return false;
@@ -258,6 +259,11 @@ function cameraContextTagV2(value: unknown): value is string {
 
 function cameraEntityIdV2(value: unknown): value is string {
   return cameraString(value) && value.length <= 128 && CAMERA_ENTITY_ID_V2.test(value);
+}
+
+function cameraRelationshipIdV1(value: unknown): value is string {
+  return cameraString(value) && value.length <= 128 &&
+    CAMERA_RELATIONSHIP_ID_V1.test(value);
 }
 
 /** Strict snapshot-once parser for the closed Camera View Preference union. */
@@ -288,7 +294,7 @@ function parseCameraRelationshipContextV1(
   const value = cameraRecord(input) ?? cameraInvalid(schemaName);
   if (value.type === "possessedBy") {
     if (!cameraExact(value, ["id", "type", "controlledEntityId", "controllerEntityId"]) ||
-      !cameraEntityIdV2(value.id) || !cameraEntityIdV2(value.controlledEntityId) ||
+      !cameraRelationshipIdV1(value.id) || !cameraEntityIdV2(value.controlledEntityId) ||
       !cameraEntityIdV2(value.controllerEntityId)) cameraInvalid(schemaName);
     return Object.freeze({
       id: value.id,
@@ -299,7 +305,7 @@ function parseCameraRelationshipContextV1(
   }
   if (value.type === "mountedOn") {
     if (!cameraExact(value, ["id", "type", "riderEntityId", "mountEntityId", "mountSlotId"]) ||
-      !cameraEntityIdV2(value.id) || !cameraEntityIdV2(value.riderEntityId) ||
+      !cameraRelationshipIdV1(value.id) || !cameraEntityIdV2(value.riderEntityId) ||
       !cameraEntityIdV2(value.mountEntityId) || !cameraSocketIdV2(value.mountSlotId)) cameraInvalid(schemaName);
     return Object.freeze({
       id: value.id,
@@ -311,7 +317,7 @@ function parseCameraRelationshipContextV1(
   }
   if (value.type === "equippedAt") {
     if (!cameraExact(value, ["id", "type", "itemEntityId", "wearerEntityId", "equipmentSlotId"]) ||
-      !cameraEntityIdV2(value.id) || !cameraEntityIdV2(value.itemEntityId) ||
+      !cameraRelationshipIdV1(value.id) || !cameraEntityIdV2(value.itemEntityId) ||
       !cameraEntityIdV2(value.wearerEntityId) || !cameraSocketIdV2(value.equipmentSlotId)) cameraInvalid(schemaName);
     return Object.freeze({
       id: value.id,
@@ -361,7 +367,7 @@ export function parseCameraContextSampleV2(input: unknown): CameraContextSampleV
     cameraContextUncommitted();
   }
   if (locomotion.status === "suspended" &&
-    !cameraEntityIdV2(locomotion.suspendedByRelationshipId)) cameraInvalid(schemaName);
+    !cameraRelationshipIdV1(locomotion.suspendedByRelationshipId)) cameraInvalid(schemaName);
   const action = cameraRecord(record.actionSummary) ?? cameraInvalid(schemaName);
   let actionSummary: CameraContextSampleV2["actionSummary"];
   if (action.status === "unavailable") {

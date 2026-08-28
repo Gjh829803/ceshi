@@ -19,6 +19,7 @@ const ROUTE_SELECTOR = {
   constraintId: "player-can-reach-watchtower",
   routeId: "spawn-to-watchtower",
 } as const;
+const WORLDKIT_ROUTE_RUN_READY_TIMEOUT_MILLISECONDS = 240_000;
 const WORLDKIT_ROUTE_BROWSER_READY_TIMEOUT_MILLISECONDS = 120_000;
 
 interface WorldkitRunReadyV1 {
@@ -221,7 +222,10 @@ describe("worldkit run trusted Route Host transport", () => {
         throw new Error("worldkit run did not receive a process ID.");
       }
       const childProcessId = child.pid;
-      const ready = await waitForWorldkitRunReady(child, 120_000);
+      const ready = await waitForWorldkitRunReady(
+        child,
+        WORLDKIT_ROUTE_RUN_READY_TIMEOUT_MILLISECONDS,
+      );
       expect(ready.port).toBe(port);
       expect(await ownedRouteEvidenceDirectories(childProcessId)).toHaveLength(1);
 

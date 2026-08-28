@@ -100,6 +100,53 @@ describe("CameraContextSampleV2", () => {
     expect(Object.isFrozen(parsed.environment.socketPositionsMetersXYZById.head)).toBe(true);
   });
 
+  it("accepts canonical Gameplay Relationship IDs in Camera context", () => {
+    const relationshipId = `mounted-on:sha256:${"a".repeat(64)}`;
+    const parsed = parseCameraContextSampleV2({
+      ...committedCameraContextV2,
+      environment: {
+        relationshipRole: "rider",
+        relationshipContexts: [{
+          id: relationshipId,
+          type: "mountedOn",
+          riderEntityId: "rider-primary",
+          mountEntityId: "skateboard",
+          mountSlotId: "stand",
+        }],
+        socketPositionsMetersXYZById: {},
+        cameraContextTags: [],
+      },
+    });
+
+    expect(parsed.environment.relationshipContexts).toEqual([{
+      id: relationshipId,
+      type: "mountedOn",
+      riderEntityId: "rider-primary",
+      mountEntityId: "skateboard",
+      mountSlotId: "stand",
+    }]);
+  });
+
+  it("accepts a canonical Gameplay Relationship ID as suspended authority", () => {
+    const relationshipId = `mounted-on:sha256:${"b".repeat(64)}`;
+    const parsed = parseCameraContextSampleV2({
+      ...committedCameraContextV2,
+      locomotion: {
+        schemaVersion: 2,
+        status: "suspended",
+        suspendedByRelationshipId: relationshipId,
+        committedTick: 41,
+        transitionSequence: 6,
+      },
+      actionSummary: { status: "unavailable" },
+    });
+
+    expect(parsed.locomotion).toMatchObject({
+      status: "suspended",
+      suspendedByRelationshipId: relationshipId,
+    });
+  });
+
   it.each([
     ["grounded rising locomotion", {
       ...committedCameraContextV2,

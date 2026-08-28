@@ -154,6 +154,16 @@ const gBotAuthoringSpec = JSON.parse(
   ),
 ) as AuthoringSpecV4;
 
+const riggedSubjectAuthoringSpec = JSON.parse(
+  await readFile(
+    new URL(
+      "../../../examples/authoring/rigged-subject-world.json",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+) as AuthoringSpecV4;
+
 describe("Babylon runtime fixture compilation", () => {
   it("keeps the product G Bot control fixture flat", () => {
     const executionPlan = compileRouteExecutionPlan(structuredClone(gBotAuthoringSpec));
@@ -2314,6 +2324,31 @@ describe("BabylonWorldRuntime", () => {
     }
   });
 
+  it("prepares 360 committed wall-contact ticks for the secondary rigged Subject", async () => {
+    const runtime = await createRiggedRuntime(
+      compileRouteExecutionPlan(structuredClone(riggedSubjectAuthoringSpec)),
+    );
+    try {
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      expect(internal.prepareFixedInputTick).toBeTypeOf("function");
+      runtime.reset();
+      await bindRuntimeTestPossession(runtime, "rigged-secondary");
+      for (let tick = 0; tick < 360; tick += 1) {
+        const prepared = await internal.prepareFixedInputTick!({
+          actions: ["move-right"],
+          ticks: 1,
+        }, emptyActionProjection(runtime.snapshot().tick + 1));
+        prepared.commitPrepared();
+      }
+      expect(
+        runtime.snapshot().subjectStatesByEntityId["rigged-secondary"]!
+          .positionMetersXYZ[0],
+      ).toBeLessThan(6.2);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
   it("prepares, aborts, and commits one real Golden Gameplay Tick without early publication", async () => {
     const runtime = await createRiggedRuntime();
     try {
@@ -3209,6 +3244,9 @@ function emptyActionProjection(simulationTick: number) {
       ] as const) {
         runtime.reset();
         await bindRuntimeTestPossession(runtime, "g-bot-primary");
+        const reverseActions = actions.length === 2
+          ? (["move-left", "run"] as const)
+          : (["move-left"] as const);
         const layers = {
           bodyOrigin: [] as number[],
           committedSubject: [] as number[],
@@ -3220,7 +3258,10 @@ function emptyActionProjection(simulationTick: number) {
           hipsWorld: [] as number[],
         };
         for (let tick = 0; tick < 7_200; tick += 1) {
-          const snapshot = await runtime.runFixedInput({ actions, ticks: 1 });
+          const snapshot = await runtime.runFixedInput({
+            actions: tick % 480 < 240 ? actions : reverseActions,
+            ticks: 1,
+          });
           runtime.renderFrame(1);
           visual.root.computeWorldMatrix(true);
           const pose = movement.renderPoseDiagnostic(1);

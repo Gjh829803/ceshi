@@ -85,6 +85,8 @@ class FakeNativeDriver implements BabylonCharacterBodyNativeDriverV1 {
   throwDuringRestore: unknown;
   throwDuringDispose: unknown;
   integrateRollbackExternallySafe = true;
+  didStepUpDuringIntegrate = false;
+  maximumSolverCorrectionMeters = 0;
   malformedPositionAfterIntegrate = false;
   onIntegrate: ((request: BabylonCharacterBodyNativeIntegrateRequestV1) => void) | undefined;
   lastIntegrateRequest: BabylonCharacterBodyNativeIntegrateRequestV1 | undefined;
@@ -146,7 +148,7 @@ class FakeNativeDriver implements BabylonCharacterBodyNativeDriverV1 {
     return this.support;
   }
 
-  integrateExactTranslation(request: BabylonCharacterBodyNativeIntegrateRequestV1): void {
+  integrateExactTranslation(request: BabylonCharacterBodyNativeIntegrateRequestV1) {
     this.integrateCalls += 1;
     this.lastIntegrateRequest = request;
     this.position = [
@@ -157,6 +159,10 @@ class FakeNativeDriver implements BabylonCharacterBodyNativeDriverV1 {
     this.velocity = cloneVec3(request.driverVelocityMetersPerSecondXYZ);
     this.onIntegrate?.(request);
     if (this.throwDuringIntegrate !== undefined) throw this.throwDuringIntegrate;
+    return Object.freeze({
+      didStepUp: this.didStepUpDuringIntegrate,
+      maximumSolverCorrectionMeters: this.maximumSolverCorrectionMeters,
+    });
   }
 
   isIntegrateRollbackExternallySafe(): boolean {
@@ -791,6 +797,40 @@ describe("BabylonCharacterBodyPortV1 transaction", () => {
       token,
       proposal: proposal(token, 1, [0.01, 0, 0], [0.6, 0, 0]),
     })).toThrow("3C_INPUT_INVALID");
+    port.dispose();
+  });
+
+  it("accepts bounded Babylon solver correction without treating it as motion amplification", () => {
+    const { driver, port } = createPort();
+    driver.maximumSolverCorrectionMeters = 1e-4;
+    driver.onIntegrate = () => {
+      driver.position = [0.01005, 1, 0];
+      driver.velocity = [0.6, 0, 0];
+    };
+    const token = createMovementTickTokenV1();
+    port.beginTick({ token, tick: 1 });
+
+    expect(() => port.resolve({
+      token,
+      proposal: proposal(token, 1, [0.01, 0, 0], [0.6, 0, 0]),
+    })).not.toThrow();
+    port.dispose();
+  });
+
+  it("accepts bounded padded step-up progress when the native landing is slightly lower", () => {
+    const { driver, port } = createPort();
+    driver.didStepUpDuringIntegrate = true;
+    driver.onIntegrate = () => {
+      driver.position = [0.15, 0.997, 0];
+      driver.velocity = [0.6, 0, 0];
+    };
+    const token = createMovementTickTokenV1();
+    port.beginTick({ token, tick: 1 });
+
+    expect(() => port.resolve({
+      token,
+      proposal: proposal(token, 1, [0.01, 0, 0], [0.6, 0, 0]),
+    })).not.toThrow();
     port.dispose();
   });
 

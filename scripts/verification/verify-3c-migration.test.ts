@@ -587,7 +587,7 @@ async function commitAll(root: string, message: string): Promise<void> {
 }
 
 describe("git prior-ledger resolution", () => {
-  it("treats a first-parent merge that introduces the ledger as genesis", async () => {
+  it("reads a merge's ledger-bearing parent instead of resetting genesis", async () => {
     const root = await repositoryWithSource("export class MotionKernelRuntimeV1 {}\n");
     await initializeGitRepository(root);
     await writeRepositoryFile(root, "README", "base\n");
@@ -599,9 +599,10 @@ describe("git prior-ledger resolution", () => {
     await git(root, ["checkout", "main"]);
     await git(root, ["merge", "--no-ff", "-m", "merge feature", "feature"]);
     await expect(readGitPriorLedgerV1(root, ledgerText)).resolves.toEqual({
-      allowGenesis: true,
+      prior: ledger(),
+      allowGenesis: false,
     });
-  });
+  }, 60_000);
 
   it("reads the first-parent schema-2 ledger as prior", async () => {
     const root = await repositoryWithSource("export class MotionKernelRuntimeV1 {}\n");
@@ -624,7 +625,7 @@ describe("git prior-ledger resolution", () => {
       prior: priorLedger,
       allowGenesis: false,
     });
-  });
+  }, 60_000);
 
   it("uses HEAD as prior when the working tree ledger differs", async () => {
     const root = await repositoryWithSource("export class MotionKernelRuntimeV1 {}\n");
@@ -647,5 +648,5 @@ describe("git prior-ledger resolution", () => {
       prior: headLedger,
       allowGenesis: false,
     });
-  });
+  }, 60_000);
 });

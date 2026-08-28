@@ -66,7 +66,7 @@ interface RayFanHitV1 {
 }
 
 /**
- * Babylon 9.21.2 provider adapter for the existing fixed nine-ray Camera arm approximation.
+ * Babylon 9.23.0 provider adapter for the existing fixed nine-ray Camera arm approximation.
  * Public hit distance/position are the safe Camera-center pose, never a raw ray contact.
  */
 export class BabylonCameraCollisionQueryPortV1 implements CameraCollisionQueryPortV1 {
@@ -147,7 +147,7 @@ export class BabylonCameraCollisionQueryPortV1 implements CameraCollisionQueryPo
           if (Math.abs(longitudinal - hit.distance) > NATIVE_DISTANCE_TOLERANCE_METERS_V1 ||
             lateral > NATIVE_DISTANCE_TOLERANCE_METERS_V1) queryUnavailable();
         }
-        // Use the picked face normal from locked Babylon 9.21.2. Interpolated
+        // Use the picked face normal from locked Babylon 9.23.0. Interpolated
         // vertex normals can be undefined for low-level/CPU picking fixtures;
         // malformed face evidence still fails closed below.
         const nativeNormal = hit.faceId === -1

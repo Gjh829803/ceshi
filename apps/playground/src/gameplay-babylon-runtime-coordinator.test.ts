@@ -6,8 +6,11 @@ import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
 
 import { createValidAuthoringSpec } from "../../../packages/authoring/src/test-fixture";
 import type {
+  FixedInputOneTickV1,
+  GameplayFixedTickActionProjectionV1,
   GameplayWorldPortV1,
   GameplayWorldStateProjectionV1,
+  GameplayWorldTransactionV1,
   RuntimeWorldConfigurationV1,
 } from "@whitebox-world/runtime-host";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
@@ -106,9 +109,14 @@ interface FakeRuntimeV1 {
 
 function fakeRuntimeFactory(
   configuration: RuntimeWorldConfigurationV1,
-  options: Readonly<{ rejectCandidateRender?: boolean }> = {},
+  options: Readonly<{
+    rejectCandidateRender?: boolean;
+    usePreparedFixedInput?: boolean;
+  }> = {},
 ) {
   const runtimes: FakeRuntimeV1[] = [];
+  const prepareFixedInputTick = vi.fn();
+  const legacyFixedInputTick = vi.fn();
   const factory = vi.fn(async ({
     canvas,
   }: Readonly<{ canvas: HTMLCanvasElement }>): Promise<GameplayBabylonRuntimeBundleV1> => {
@@ -118,6 +126,8 @@ function fakeRuntimeFactory(
         ({ entityId }) => entityId,
       ),
     });
+    let preparedProjection = worldProjection(configuration);
+    let runtimeTick = preparedProjection.simulationTick;
     let renderFrameIndex = 0;
     const dispose = vi.fn(async () => undefined);
     const renderFrame = vi.fn(() => {
@@ -142,7 +152,7 @@ function fakeRuntimeFactory(
       dispose,
       snapshot: (): BabylonRuntimeProjectionV1 => ({
         runtimeBackend: "babylon-havok",
-        tick: harness.publishedWorldProjection.simulationTick,
+        tick: runtimeTick,
         ready: true,
         possessionTarget: {
           mode: "possessed",
@@ -210,8 +220,31 @@ function fakeRuntimeFactory(
       }),
     };
     runtimes.push(runtime);
-    const gameplayWorldPort: GameplayWorldPortV1 = Object.freeze({
-      initialize: () => harness.port.initialize(),
+    const preparedFixedInput = async (
+      input: FixedInputOneTickV1,
+      _actionProjection: GameplayFixedTickActionProjectionV1,
+    ): Promise<GameplayWorldTransactionV1> => {
+      prepareFixedInputTick(input);
+      const projectedWorldStateAfter = Object.freeze({
+        ...preparedProjection,
+        simulationTick: preparedProjection.simulationTick + 1,
+      });
+      return Object.freeze({
+        projectedWorldStateAfter,
+        projectedViewStateAfter: Object.freeze({ viewStateRevision: 0 }),
+        commitPrepared: () => {
+          preparedProjection = projectedWorldStateAfter;
+          runtimeTick = projectedWorldStateAfter.simulationTick;
+        },
+        abort: async () => undefined,
+      });
+    };
+    const gameplayWorldPort: GameplayWorldPortV1 & {
+      readonly prepareFixedInputTick?: typeof preparedFixedInput;
+    } = Object.freeze({
+      initialize: () => options.usePreparedFixedInput === true
+        ? Promise.resolve(preparedProjection)
+        : harness.port.initialize(),
       hasEntity: (entityId: string) => harness.port.hasEntity(entityId),
       isEntityControllable: (entityId: string) =>
         harness.port.isEntityControllable(entityId),
@@ -238,8 +271,19 @@ function fakeRuntimeFactory(
         actionProjection: Parameters<
           GameplayWorldPortV1["runFixedInputTick"]
         >[1],
-      ) => harness.port.runFixedInputTick(input, actionProjection),
-      snapshot: () => harness.port.snapshot(),
+      ) => {
+        legacyFixedInputTick(input);
+        if (options.usePreparedFixedInput === true) {
+          return Promise.reject(new Error("legacy fixed-input path must not run"));
+        }
+        return harness.port.runFixedInputTick(input, actionProjection);
+      },
+      ...(options.usePreparedFixedInput === true
+        ? { prepareFixedInputTick: preparedFixedInput }
+        : {}),
+      snapshot: () => options.usePreparedFixedInput === true
+        ? preparedProjection
+        : harness.port.snapshot(),
       dispose: async () => {
         await harness.port.dispose();
         await runtime.dispose();
@@ -250,7 +294,7 @@ function fakeRuntimeFactory(
       gameplayWorldPort,
     });
   });
-  return { factory, runtimes };
+  return { factory, runtimes, prepareFixedInputTick, legacyFixedInputTick };
 }
 
 function fakeDocument(): Pick<Document, "createElement"> {
@@ -278,6 +322,27 @@ async function createHarness(
 }
 
 describe("Gameplay Babylon Runtime coordinator", () => {
+  it("preserves the prepared fixed-input seam through the owned-port wrapper", async () => {
+    const configuration = await worldConfiguration();
+    const runtimeFactory = fakeRuntimeFactory(configuration, {
+      usePreparedFixedInput: true,
+    });
+    const coordinator = await createGameplayBabylonRuntimeCoordinatorV1({
+      runtimeSessionId: "runtime.prepared-fixed-input",
+      initialWorldConfiguration: configuration,
+      document: fakeDocument(),
+      runtimeBundleFactory: runtimeFactory.factory,
+      worldSessionIdFactory: () => "world-session.prepared-fixed-input",
+    });
+
+    const after = await coordinator.runFixedInput({ actions: [], ticks: 1 });
+
+    expect(after.world.simulationTick).toBe(1);
+    expect(runtimeFactory.prepareFixedInputTick).toHaveBeenCalledOnce();
+    expect(runtimeFactory.legacyFixedInputTick).not.toHaveBeenCalled();
+    await coordinator.dispose();
+  });
+
   it("runs Mount, board movement, Dismount, and Rider movement through real Havok", async () => {
     vi.stubGlobal("location", { origin: "https://playground.test" });
     const gBotBytes = new Uint8Array(await readFile(fileURLToPath(new URL(
@@ -433,7 +498,9 @@ describe("Gameplay Babylon Runtime coordinator", () => {
     expect(afterBoardMove.view.camera).toMatchObject({
       mode: "tracking",
       targetEntityId: "skateboard",
-      activeCameraModifierRefs: [],
+      activeCameraModifierRefs: [
+        "worldkit://camera-modifier/mounted-framing@1",
+      ],
     });
     expect(afterBoardMove.view.camera.mode).toBe("tracking");
     if (afterBoardMove.view.camera.mode === "tracking") {
@@ -447,8 +514,8 @@ describe("Gameplay Babylon Runtime coordinator", () => {
       ) {
         throw new Error("Expected mounted third-person Spring Arm telemetry.");
       }
-      expect(requestedArmLengthMeters).toBeCloseTo(6, 6);
-      expect(effectiveArmLengthMeters).toBeGreaterThan(0);
+      expect(requestedArmLengthMeters).toBeCloseTo(7, 6);
+      expect(effectiveArmLengthMeters).toBeGreaterThan(6);
       expect(effectiveArmLengthMeters).toBeLessThanOrEqual(
         requestedArmLengthMeters + 0.000001,
       );

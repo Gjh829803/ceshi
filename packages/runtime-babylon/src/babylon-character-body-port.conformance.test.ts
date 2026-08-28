@@ -153,7 +153,7 @@ function expectConstructionSurfaces(
   expect(actual.addTransformNode).toBe(expected.addTransformNode);
 }
 
-describe("Babylon 9.21.2 / Havok 1.3.14 Character Body conformance", () => {
+describe("Babylon 9.23.0 / Havok 1.3.14 Character Body conformance", () => {
   it("locks installed versions and the real constructor/protected/method surface", async () => {
     const corePackage = JSON.parse(await readFile(
       require.resolve("@babylonjs/core/package.json"),

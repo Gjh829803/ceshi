@@ -101,4 +101,59 @@ describe("published locomotion capability", () => {
       "player",
     )).toThrow("Unexpected suspended locomotion capability for 'player'.");
   });
+
+  it("rejects two locomotion authorities for one Subject", () => {
+    const snapshot = snapshotWithCapability("player", {
+      id: "capability-state:player:locomotion-v1",
+      kind: "locomotion-capability-state",
+      ownerEntityId: "player",
+      locomotionCapabilityRef: "worldkit://capability/locomotion.ground@1",
+      locomotionCapabilityHash: `sha256:${"a".repeat(64)}`,
+      mode: "idle",
+      movementMedium: "ground",
+      facingYawRadians: 0,
+      speedMetersPerSecond: 0,
+    });
+    const subject = snapshot.world.subjectStatesByEntityId.player!;
+    const ambiguous = {
+      ...snapshot,
+      world: {
+        ...snapshot.world,
+        subjectStatesByEntityId: {
+          player: {
+            ...subject,
+            capabilityStatesById: {
+              ...subject.capabilityStatesById,
+              "capability-state:player:locomotion-v2": {
+                id: "capability-state:player:locomotion-v2",
+                kind: "locomotion-capability-state-v2",
+                ownerEntityId: "player",
+                locomotionCapabilityRef:
+                  "worldkit://capability/locomotion.ground@1",
+                locomotionCapabilityHash: `sha256:${"b".repeat(64)}`,
+                locomotion: {
+                  schemaVersion: 2,
+                  status: "active",
+                  mobilityMode: "grounded",
+                  gait: "idle",
+                  verticalPhase: "none",
+                  supportMode: "supported",
+                  movementMedium: "ground",
+                  facingYawRadians: 0,
+                  linearVelocity: { x: 0, y: 0, z: 0 },
+                  horizontalSpeedMetersPerSecond: 0,
+                  committedTick: 0,
+                  phaseEnteredTick: 0,
+                  transitionSequence: 0,
+                },
+              },
+            },
+          },
+        },
+      },
+    } as WorldRuntimeSnapshotV4;
+
+    expect(() => findLocomotionCapabilityState(ambiguous, "player"))
+      .toThrow("Ambiguous locomotion capability state for 'player'.");
+  });
 });

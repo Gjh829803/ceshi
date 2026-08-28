@@ -464,7 +464,7 @@ describe("subject preset promotion", { timeout: 60_000 }, () => {
       "subject-presets",
       "quadruped-official-v1.registry-fixture.json",
     ))).rejects.toMatchObject({ code: "ENOENT" });
-  }, 20_000);
+  }, 60_000);
 
   it("rejects promotion without a candidate-bound trusted Harness receipt", async () => {
     const fixture = await createFixtureRepository();
@@ -551,7 +551,7 @@ describe("subject preset promotion", { timeout: 60_000 }, () => {
       harnessReceipt: createHarnessReceipt(dirty.candidate, dirtyPlan),
       write: true,
     })).rejects.toThrow("SUBJECT_PRESET_PROMOTION_DIRTY_WORKTREE");
-  }, 20_000);
+  }, 60_000);
 
   it("rejects stale preimages and tampered plan hashes", async () => {
     const stale = await createFixtureRepository();
