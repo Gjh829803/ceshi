@@ -1126,7 +1126,7 @@ AI 用 Three 生成原始 GLB，经资产类别 Build Record 和只读 Asset Adm
 | Bootstrap | 已有闭合、版本化、可哈希的 `BabylonNativeSceneBootstrapV1` Parser；仍由实验 Runtime option 消费 | 进入 BNA-1 闭合 `sceneSource`、Plan-independent Runtime Bootstrap 与 Build Identity |
 | Gameplay 复用 | 克隆 G Bot `ExecutionPlanV5`，Native 忽略其场景几何 | 复用 `GameplayBootstrapV1` + Plan-independent `WorldRuntimeBootstrap`，无影子 Plan |
 | 通用世界身份 | 多个 Runtime/State/Capture 合同硬编码 `executionPlanHash` | `WorldBuildIdentity` 区分 Source；Plan-specific 合同仍显式用 Plan Hash |
-| Runtime Source | `BabylonWorldRuntime.create({ nativeScene })` 实验选项 | RuntimeHost 闭合 `sceneSource` Union |
+| Runtime Source | `BabylonWorldRuntime.create({ nativeScene })` 实验选项 | BNA-1 冻结 RuntimeHost 闭合 `sceneSource` Union，但 Native member 在 BNA-3/BNA-4 前 fail-closed；BNA-4 才接通正式 Native admission |
 | 登记 | 一个 Spawn + 必填闭合 `traversalBinding` 的静态 Mesh Collider；已有 Host 预算、结构化诊断、稳定 Subshape/Surface ID 与无 Handle Contribution Hash | BNA-3/BNA-4 增加 Package/Receipt 绑定、Source/Authority/Runtime Replay 与生产 Surface Admission |
 | Physics/Subject/Camera | 已由 SDK/Havok 接管并通过实验移动 | 继续使用同一生产 Kernel，不复制 Runtime |
 | 场景效果 | `cloud-ridge` 已显示核心构图并有通过性 Probe | Golden Corpus、正式 Visual/Interaction Gate |
@@ -1182,6 +1182,10 @@ Authoring V4 -> IR V4 -> ExecutionPlan V5 -> RuntimeWorldConfiguration V1 -> Bab
   Gate，再以 current-only clean break 切换到只引用 World Runtime Bootstrap 的当前 Scene Plan，接受树中
   不保留旧类型、旧 Parser、alias、双字段或 legacy/new 选择；同时冻结 Scene Authoring Route
   Decision、Authoring Attempt 与 Runtime Candidate Scene 的身份/失效语义，禁止静默换 Lane/策略。
+- 阶段边界：BNA-1 只迁移正式 Canonical RuntimeHost identity，并让已解析 Native member 在 adapter/
+  Candidate 分配前返回稳定 capability rejection。Trusted-local Cloud Ridge 可在显式实验 harness 中证明
+  无 shadow Plan 的共享 Kernel；BNA-3 提供正式 Package/Receipt 后，只有 BNA-4 可以移除该 rejection
+  并接通 Native RuntimeHost admission。
 - `depends_on`：BNA-0。
 - `blocks`：BNA-3、BNA-4、BNA-7、BNA-8。
 - 独占所有权：RuntimeWorldConfiguration 下一版本、Native Bootstrap Schema/Parser、
@@ -1193,7 +1197,8 @@ Authoring V4 -> IR V4 -> ExecutionPlan V5 -> RuntimeWorldConfiguration V1 -> Bab
   inputs + selected published resource refs -> Authoring Attempt；completed Attempt Result + Bootstrap +
   Gameplay Bootstrap + locked Registry refs ->
   Runtime Scene Source + World Runtime Bootstrap + World Build Identity。
-- 集成点：RuntimeHost Candidate load/create/replace 入口。
+- 集成点：RuntimeHost configuration Parser、Canonical Candidate load/create/replace，以及 Native
+  pre-allocation capability gate；不在 BNA-1 创建正式 Native Candidate。
 - 验证证据：exact-key/union/hash/mismatch 负向测试、Canonical 回归、所有 `executionPlanHash` consumer
   census、V5 projection exact equality、终态无重复 Runtime closure、无 ghost/fake Plan Hash、
   Browser/State/Capture identity migration、route/attempt identity 与换路失效测试，以及 current-only clean
@@ -1241,7 +1246,8 @@ Authoring V4 -> IR V4 -> ExecutionPlan V5 -> RuntimeWorldConfiguration V1 -> Bab
 
 - 目标与独立交付物：把 Gameplay Kernel 从 Plan Scene Builder 抽离；用 V2 登记 Profile、冻结 Collider
   Contribution 及稳定 `surfaceEntityId`/`colliderSubshapeId`/`traversalSurfaceId`，并用
-  `WorldRuntimeBootstrap`、SDK Havok 和单一 Spawn/Camera/Subject 接通 Native Source。
+  `WorldRuntimeBootstrap`、SDK Havok 和单一 Spawn/Camera/Subject 接通 Native Source；在 BNA-3 Package/
+  Receipt identity 验证通过后移除 BNA-1 的 formal Native capability rejection。
 - `depends_on`：BNA-1、BNA-2、BNA-3。
 - `blocks`：BNA-6、BNA-7、BNA-8。
 - 独占所有权：Babylon Native Scene Builder、Havok Contribution Adapter、Runtime Candidate Scene

@@ -1,7 +1,7 @@
 # Babylon Native Import Profile Bake-off
 
-**Date:** 2026-08-28  
-**Decision:** ACCEPT Deep ESM; REJECT root barrel  
+**Date:** 2026-08-28
+**Decision:** ACCEPT Deep ESM; REJECT root barrel
 **Artifact:** `artifacts/native-import-profile/bakeoff.json`
 
 ## Question

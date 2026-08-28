@@ -353,7 +353,7 @@ git commit -m "feat(native): freeze scene contributions"
 - Consumes: `@whitebox-world/native-babylon` root from scene code and `@whitebox-world/native-babylon/host` from Runtime Babylon.
 - Produces: unchanged cloud-ridge visuals/controls and SDK-owned Havok behavior with no remaining Runtime Babylon authoring re-export.
 
-- [ ] **Step 1: Write the migration RED test**
+- [x] **Step 1: Write the migration RED test**
 
 Assert the cloud-ridge module imports `defineBabylonNativeScene` from the new root, Runtime Babylon imports only the Host subpath, `runtime-babylon/src/index.ts` no longer exports Native authoring types, and no tracked source imports `native-scene-module` from Runtime Babylon.
 
@@ -366,7 +366,7 @@ expect(runtimeSource).toContain(
 );
 ```
 
-- [ ] **Step 2: Run the migration test and verify RED**
+- [x] **Step 2: Run the migration test and verify RED**
 
 Run:
 
@@ -376,11 +376,11 @@ pnpm vitest run apps/native-scene-playground/src/native-package-migration.test.t
 
 Expected: FAIL because the spike still imports the experimental Runtime Babylon API.
 
-- [ ] **Step 3: Switch the consumers and remove the old owner**
+- [x] **Step 3: Switch the consumers and remove the old owner**
 
 Add direct workspace dependencies, update the cloud-ridge module to `defineBabylonNativeScene()`, replace `BabylonNativeWorldBootstrapV1` with the sole parsed `BabylonNativeSceneBootstrapV1`, and change every collider registration from `surfaceKind` to the closed traversal binding. Runtime Babylon consumes the Host result, creates the same private collision Mesh/Havok objects, and retains Physics/Character/Camera ownership. Delete the old source, test, types and Runtime Babylon exports after all new-owner tests are green; do not leave a deprecated re-export, alias field, fallback Parser or adapter shim.
 
-- [ ] **Step 4: Prove no visual or gameplay regression**
+- [x] **Step 4: Prove no visual or gameplay regression**
 
 Run:
 
@@ -393,7 +393,7 @@ pnpm build:native-scene
 
 Expected: all commands pass; the scene test still finds `player-spawn`, the three explicit collision proxies, the T gate, and both primary mountain silhouettes.
 
-- [ ] **Step 5: Update the test census and commit**
+- [x] **Step 5: Update the test census and commit**
 
 Remove the deleted test from the census, register the migration test, update the lockfile using pnpm, and commit:
 
@@ -415,7 +415,7 @@ git commit -m "refactor(native): move authoring API out of runtime"
 - Consumes: Tasks 1-5 on one exact tree.
 - Produces: accepted/rejected BNA-2 foundation evidence and the stable dependency boundary for the Block Profile implementation plan.
 
-- [ ] **Step 1: Run focused contract gates**
+- [x] **Step 1: Run focused contract gates**
 
 ```bash
 pnpm vitest run packages/runtime-contracts/src/babylon-native-scene-bootstrap.test.ts
@@ -426,7 +426,7 @@ pnpm vitest run apps/native-scene-playground/src/cloud-ridge-scene.test.ts apps/
 
 Expected: all selected tests pass without warnings.
 
-- [ ] **Step 2: Run affected repository gates once**
+- [x] **Step 2: Run affected repository gates once**
 
 ```bash
 pnpm verify:workspace-boundaries
@@ -441,15 +441,15 @@ pnpm verify:3c-migration
 
 Expected: every command exits `0`. `pnpm test:contract` subsumes the focused contract files on the same tree; do not rerun `pnpm test` afterward unless the test-gate census proves an uncovered lane.
 
-- [ ] **Step 3: Run the real browser/manual preservation check**
+- [x] **Step 3: Run the real browser/manual preservation check**
 
 Start `pnpm dev:native-scene -- --host 127.0.0.1`, open the printed URL without `?authoring=1`, enable the collision overlay, and verify movement, jump, camera orbit/recenter, reset, T-gate visibility, and the three registered proxies. Record the exact URL, starting/ending position, grounded state, browser errors, and screenshot path in the review.
 
-- [ ] **Step 4: Perform the full-dimension change review**
+- [x] **Step 4: Perform the full-dimension change review**
 
 Apply `docs/reviews/full-dimension-review-protocol.md` in change-review mode and `docs/reviews/runtime-deep-review-checklist.md` for the Runtime migration. The review must separately report automated contracts, rendered evidence, and manual interaction evidence, and must not claim WorldPackage, Route, Hosted, Block Profile, or Native production completion.
 
-- [ ] **Step 5: Update backlog truth and commit**
+- [x] **Step 5: Update backlog truth and commit**
 
 Mark only the BNA-2 foundation and narrow Bootstrap slice complete as an internal checkpoint. Keep BNA-1 identity clean break, BNA-3+, and BWB-1+ open; do not call the Native Lane production-ready or introduce compatibility promises. Commit:
 
@@ -458,6 +458,6 @@ git add docs/18-refactor-progress-and-backlog.md docs/reviews/2026-08-28-babylon
 git commit -m "docs: record native authoring foundation evidence"
 ```
 
-- [ ] **Step 6: Write the BNA-1 identity clean-break plan**
+- [x] **Step 6: Write the BNA-1 identity clean-break plan**
 
 Immediately after this internal review, invoke `superpowers:writing-plans` for BNA-1. That plan must replace the shadow ExecutionPlan and generic `executionPlanHash` assumptions across the complete consumer census, rebuild all affected fixtures/artifacts, and delete old fields, Parsers and adapters in the accepted tree. Only after the BNA-1/BNA-4 boundaries are stable should a separate BWB-1 through BWB-5 plan port engine-neutral algorithms from `codex/block-world-sdk-v2@618d96b4e297d90d13ee6d1bf9be1e0b83423dbe`; it must not merge/cherry-pick the old branch or restore Block Manifest/Compiler/Runtime packages.
