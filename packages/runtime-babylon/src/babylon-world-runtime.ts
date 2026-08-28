@@ -536,6 +536,7 @@ export class BabylonWorldRuntime {
   private latestRenderReadyReceipt: RenderReadyReceiptV1 | undefined;
   private appliedCameraViewStateRevision = 0;
   private pendingCameraHeadingLockBeforeNextTick = false;
+  private pendingPublishedCameraViewSyncBeforeNextTick = false;
   private traversalConfigurationEpoch = 0;
   private readonly aggregates: PhysicsAggregate[] = [];
   private readonly ownedTerrainShape: PhysicsShape;
@@ -577,6 +578,7 @@ export class BabylonWorldRuntime {
     >;
     beforeCameraFovRadians: number;
     beforePendingCameraHeadingLockBeforeNextTick: boolean;
+    beforePendingPublishedCameraViewSyncBeforeNextTick: boolean;
   }> | undefined;
   readonly #creationExecutionPlanHash: `sha256:${string}` | undefined;
 
@@ -1300,6 +1302,8 @@ export class BabylonWorldRuntime {
         if (targetChanged) {
           this.cameraComponent.resetViewPreference();
           this.pendingCameraHeadingLockBeforeNextTick = true;
+          this.pendingPublishedCameraViewSyncBeforeNextTick =
+            !isNil(previousControlledEntityId);
         }
         lifecycle = "committed";
         this.gameplayPublishedState = stagedState;
@@ -1926,12 +1930,15 @@ export class BabylonWorldRuntime {
     const beforeCameraFovRadians = this.camera.fov;
     const beforePendingCameraHeadingLockBeforeNextTick =
       this.pendingCameraHeadingLockBeforeNextTick;
+    const beforePendingPublishedCameraViewSyncBeforeNextTick =
+      this.pendingPublishedCameraViewSyncBeforeNextTick;
     this.preparedGoldenFixedInput = Object.freeze({
       beforeRuntimeProjection,
       beforeWorldProjection,
       beforeCameraTransactionState,
       beforeCameraFovRadians,
       beforePendingCameraHeadingLockBeforeNextTick,
+      beforePendingPublishedCameraViewSyncBeforeNextTick,
     });
     let projectedWorldStateAfter: ReturnType<
       BabylonGameplayRuntimeInternalV1["readWorldProjection"]
@@ -2006,6 +2013,7 @@ export class BabylonWorldRuntime {
       this.gameplayPublishedState = baseline;
       this.appliedCameraViewStateRevision = baseline.viewProjection.viewStateRevision;
       this.pendingCameraHeadingLockBeforeNextTick = false;
+      this.pendingPublishedCameraViewSyncBeforeNextTick = false;
       this.activeInputActions = EMPTY_INPUT_ACTIONS;
       this.activeInputAxes = EMPTY_INPUT_AXES;
       this.cameraComponent.restoreTransactionState(
@@ -2026,6 +2034,8 @@ export class BabylonWorldRuntime {
       }
       this.pendingCameraHeadingLockBeforeNextTick =
         prepared.beforePendingCameraHeadingLockBeforeNextTick;
+      this.pendingPublishedCameraViewSyncBeforeNextTick =
+        prepared.beforePendingPublishedCameraViewSyncBeforeNextTick;
       this.preparedGoldenFixedInput = undefined;
       const restoredProjection = this.snapshot();
       if (
@@ -2579,6 +2589,7 @@ export class BabylonWorldRuntime {
     this.initializeInitialMountedRelationships();
     this.appliedCameraViewStateRevision = 0;
     this.pendingCameraHeadingLockBeforeNextTick = false;
+    this.pendingPublishedCameraViewSyncBeforeNextTick = false;
     this.goldenFixedInputHistory = [];
     this.goldenReplayBaselineState = undefined;
     this.activeInputActions = [];
@@ -2784,22 +2795,34 @@ export class BabylonWorldRuntime {
   }
 
   private lockPublishedCameraHeadingBeforeTick(): void {
-    if (!this.pendingCameraHeadingLockBeforeNextTick) {
+    if (
+      !this.pendingCameraHeadingLockBeforeNextTick &&
+      !this.pendingPublishedCameraViewSyncBeforeNextTick
+    ) {
       return;
     }
     const controlledEntityId = this.controlledEntityId();
     if (!isNil(controlledEntityId)) {
-      // Possession resets view preference. Lock control heading from the new
-      // Subject facing before controlFrame is read, without publishing a Camera
-      // Context. The Golden Tick still owns the one Motion Kernel update().
-      const facingYawRadians = this.controllerFor(controlledEntityId).facingYawRadians;
-      this.cameraComponent.initializeControlHeading([
-        canonicalizeSignedZero(-Math.sin(facingYawRadians)),
-        0,
-        canonicalizeSignedZero(-Math.cos(facingYawRadians)),
-      ]);
+      if (this.pendingCameraHeadingLockBeforeNextTick) {
+        // Initial bind locks control heading from Subject facing without
+        // publishing a Camera Context. The Golden Tick still owns the one
+        // Motion Kernel update().
+        const facingYawRadians =
+          this.controllerFor(controlledEntityId).facingYawRadians;
+        this.cameraComponent.initializeControlHeading([
+          canonicalizeSignedZero(-Math.sin(facingYawRadians)),
+          0,
+          canonicalizeSignedZero(-Math.cos(facingYawRadians)),
+        ]);
+      }
+      if (this.pendingPublishedCameraViewSyncBeforeNextTick) {
+        // Possessed A→B rebind must publish the new view before controlFrame
+        // so orbit heading is taken from the new Subject, not the previous one.
+        this.synchronizePublishedCameraView(0);
+      }
     }
     this.pendingCameraHeadingLockBeforeNextTick = false;
+    this.pendingPublishedCameraViewSyncBeforeNextTick = false;
   }
 
   private synchronizePublishedCameraView(deltaSeconds = 0): void {
