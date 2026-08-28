@@ -1294,6 +1294,7 @@ export class BabylonWorldRuntime {
       projectedViewStateAfter,
       commitPrepared: (): void => {
         if (lifecycle !== "prepared") return;
+        if (targetChanged) this.cameraComponent.resetViewPreference();
         lifecycle = "committed";
         this.gameplayPublishedState = stagedState;
         this.traversalConfigurationEpoch = traversalConfigurationEpochAfter;

@@ -679,7 +679,7 @@ describe("capability package runtime smoke tests", () => {
     }
   });
 
-  it("commits Control Feel on the next tick and clears authoring Camera state across reset", async () => {
+  it("keeps every Golden Control Feel locked and reset clears Camera authoring state", async () => {
     const baseExecutionPlan = createGbotCapabilityExecutionPlan();
     const executionPlan = withExtraCapabilitySubject(baseExecutionPlan);
     const playerSubject = executionPlan.subjects[0]!;
@@ -699,7 +699,8 @@ describe("capability package runtime smoke tests", () => {
       const beforePlayer = beforeRequest.subjectStatesByEntityId.player!;
       expect(beforePlayer.activeControlFeelProfileRef).toBe(MEDIUM_FEEL_REF);
 
-      expect(runtime.requestControlFeelProfile("player", HEAVY_FEEL_REF)).toBe(true);
+      expect(() => runtime.requestControlFeelProfile("player", HEAVY_FEEL_REF))
+        .toThrow("SUBJECT_OVERRIDE_FORBIDDEN: Golden Control Feel is compiler-locked.");
       const queued = runtime.snapshot();
       expect(queued.tick).toBe(beforeRequest.tick);
       expect(queued.subjectStatesByEntityId.player).toMatchObject({
@@ -709,10 +710,9 @@ describe("capability package runtime smoke tests", () => {
       });
 
       expect(runtime.requestControlFeelProfile("player", MEDIUM_FEEL_REF)).toBe(true);
-      expect(runtime.requestControlFeelProfile("player", HEAVY_FEEL_REF)).toBe(true);
       const afterTick = await runtime.runFixedInput({ actions: [], ticks: 1 });
       expect(afterTick.subjectStatesByEntityId.player!.activeControlFeelProfileRef)
-        .toBe(HEAVY_FEEL_REF);
+        .toBe(MEDIUM_FEEL_REF);
 
       setCameraProfile(runtime, followProfile.resourceRef);
       const orbitPreview = runtime.applyCameraPreview({
@@ -724,15 +724,16 @@ describe("capability package runtime smoke tests", () => {
       await bindRuntimeTestPossession(runtime, "player");
       const afterReset = await runtime.runFixedInput({ actions: [], ticks: 1 });
       expect(afterReset.subjectStatesByEntityId.player!.activeControlFeelProfileRef)
-        .toBe(HEAVY_FEEL_REF);
+        .toBe(MEDIUM_FEEL_REF);
       expect(afterReset.camera).not.toHaveProperty("tuning");
       expect(afterReset.camera.activeCameraProfileRef).toBe(automaticCameraProfileRef);
       expect(runtime.getCameraPreviewState().tuningByProfileRef).toEqual({});
 
-      expect(runtime.requestControlFeelProfile("extra", HEAVY_FEEL_REF)).toBe(true);
+      expect(() => runtime.requestControlFeelProfile("extra", HEAVY_FEEL_REF))
+        .toThrow("SUBJECT_OVERRIDE_FORBIDDEN: Golden Control Feel is compiler-locked.");
       const extraAfterTick = await runtime.runFixedInput({ actions: [], ticks: 1 });
       expect(extraAfterTick.subjectStatesByEntityId.extra!.activeControlFeelProfileRef)
-        .toBe(HEAVY_FEEL_REF);
+        .toBe(MEDIUM_FEEL_REF);
       expect(extraAfterTick.camera).not.toHaveProperty("tuning");
     } finally {
       await runtime.dispose();
