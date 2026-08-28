@@ -2,8 +2,8 @@
   "kind": "worldkit-simulation-take",
   "schemaVersion": 1,
   "id": "coastal-orbit-run",
-  "worldPackageRef": "package://world-package/sha256/8dd52f869efbbeac7eb1f7ccb901c68ba8634e4ffe666a8268de66757f711fc6",
-  "worldPackageRootHash": "sha256:8dd52f869efbbeac7eb1f7ccb901c68ba8634e4ffe666a8268de66757f711fc6",
+  "worldPackageRef": "package://world-package/sha256/710ce805e0348c314572425018c66b9982efafe11abb93657eba9db3c44d83ad",
+  "worldPackageRootHash": "sha256:710ce805e0348c314572425018c66b9982efafe11abb93657eba9db3c44d83ad",
   "seed": 731991,
   "simulationTickRate": {
     "numeratorTicks": 60,
