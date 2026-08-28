@@ -11,6 +11,7 @@ import type {
   ExecutionPlanV5,
   SemanticInputActionV1,
   ViewControlFrameV1,
+  Vec3,
   ViewTargetSampleV1,
 } from "@whitebox-world/runtime-contracts";
 import {
@@ -64,6 +65,10 @@ export class CameraComponentV1 extends SceneComponentV1 {
 
   resetViewPreference(): void {
     this.director.resetViewPreference();
+  }
+
+  initializeControlHeading(forwardXYZ: Vec3): void {
+    this.director.initializeControlHeading(forwardXYZ);
   }
 
   captureTransactionState(): CameraComponentTransactionStateV1 {

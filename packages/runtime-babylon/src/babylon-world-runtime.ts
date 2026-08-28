@@ -1299,8 +1299,7 @@ export class BabylonWorldRuntime {
         if (lifecycle !== "prepared") return;
         if (targetChanged) {
           this.cameraComponent.resetViewPreference();
-          this.pendingCameraHeadingLockBeforeNextTick =
-            !isNil(previousControlledEntityId);
+          this.pendingCameraHeadingLockBeforeNextTick = true;
         }
         lifecycle = "committed";
         this.gameplayPublishedState = stagedState;
@@ -2788,11 +2787,18 @@ export class BabylonWorldRuntime {
     if (!this.pendingCameraHeadingLockBeforeNextTick) {
       return;
     }
-    // Possessed A→B rebind must lock heading from the new Subject before
-    // controlFrame is read. Initial unbound→possess leaves this false so the
-    // first Golden Tick publishes one Motion Kernel Camera Context, and render
-    // can still initialize the unused published view.
-    this.synchronizePublishedCameraView(0);
+    const controlledEntityId = this.controlledEntityId();
+    if (!isNil(controlledEntityId)) {
+      // Possession resets view preference. Lock control heading from the new
+      // Subject facing before controlFrame is read, without publishing a Camera
+      // Context. The Golden Tick still owns the one Motion Kernel update().
+      const facingYawRadians = this.controllerFor(controlledEntityId).facingYawRadians;
+      this.cameraComponent.initializeControlHeading([
+        canonicalizeSignedZero(-Math.sin(facingYawRadians)),
+        0,
+        canonicalizeSignedZero(-Math.cos(facingYawRadians)),
+      ]);
+    }
     this.pendingCameraHeadingLockBeforeNextTick = false;
   }
 

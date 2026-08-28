@@ -770,6 +770,18 @@ export class CameraDirectorV1 {
     return true;
   }
 
+  initializeControlHeading(forwardXYZ: Vec3): void {
+    this.assertUsable();
+    const forward = horizontalDirection(new Vector3(...forwardXYZ)) ??
+      new Vector3(0, 0, -1);
+    this.controlForward.copyFrom(forward);
+    this.controlBaseHeadingYawRadians = directionYaw(forward);
+    this.controlLastStableVelocityForward = forward.clone();
+    this.controlTargetYawOffsetRadians = 0;
+    this.controlViewYawOffsetRadians = 0;
+    this.controlInitialized = true;
+  }
+
   resetView(): void {
     this.assertUsable();
     this.targetYawOffsetRadians = 0;
