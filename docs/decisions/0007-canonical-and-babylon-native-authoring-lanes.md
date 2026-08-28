@@ -3,6 +3,8 @@
 - 状态：Accepted（架构方向已接受；Native 生产化仍按 Backlog 独立验收）
 - 日期：2026-08-28
 - 详细设计：[AI 友好的 Babylon Native 世界创作长期设计](../superpowers/specs/2026-08-28-ai-friendly-babylon-native-world-authoring-design.md)
+- 首个创作 Profile：[Babylon Native Block Whitebox 创作 Profile 长期设计](../superpowers/specs/2026-08-28-babylon-native-block-whitebox-profile-design.md)
+- 资产供应链：[Source-neutral 资产生产与准入长期设计](../superpowers/specs/2026-08-28-source-neutral-asset-production-and-admission-design.md)
 - 实验依据：[Babylon Native Scene Lane 实验设计](../superpowers/specs/2026-08-27-babylon-native-scene-lane-design.md)
 
 ## 背景
@@ -46,6 +48,24 @@ Schema 校验、确定性编译、资源锁、WorldPackage、Route、ChangeSet �
     Scene、Physics、Camera 和 Lifecycle 继续统一到 Babylon/Havok。
 12. Skill 可以辅助 AI 拆场景和修复错误，但 Schema、类型、Profile、Golden 和诊断是正确性权威；
     API 不依赖某个隐藏 Skill 才能正确使用。
+13. 生成模型、素材库、DCC、Three.js 或场景重建工具属于两条 Lane 之前的 source-neutral 离线资产
+    生产阶段。其原始输出首先是不可信、不可变 Candidate；需要修整时必须由资产类别 Owner 产生新的
+    Build Record/字节，Asset Admission 只读验收，资产类别 Publisher 再原子发布并生成 Publication
+    Receipt。只有发布为内容寻址 `...Ref` 并进入 Asset Lock 后，
+    才可由当前被选择的 Scene Source 引用和放置；该阶段不增加
+    `sceneSource.kind`，不拥有世界 Placement，也不产生 Spawn、Collider、Route、Camera 或 Gameplay。
+14. 单资产生产可以独立发生；Host 必须在生成 Scene Module、组装完整 Scene Authoring Attempt 或采用
+    某个已发布资产前冻结 `SceneAuthoringRouteDecisionV1`。切换
+    Canonical/Native、ground-first/locked-asset composition、Source、Asset、Seed 或 Profile 必须创建新的
+    `SceneAuthoringAttemptV1` 并重放受影响的场景 Gate；不得在同一 Attempt 内静默换 Lane、追加发布后
+    Dressing Overlay，或复用旧 Source/Package/Contribution/Collider/Route 证据为新视觉背书。Asset
+    Admission/Publication 由内容字节、Profile、License 和 Provenance 决定；这些身份完全不变时可跨
+    Attempt/Lane 复用，不由场景路线反向拥有。
+15. Native Lane 的首个参考图白膜方法采用 `Babylon Native Block Whitebox Profile`。它完整吸收
+    `codex/block-world-sdk-v2@618d96b` 中有效的米制方块、真实体积、空间剖面、调色板、视觉分组、
+    结构/渲染/通过性验收和性能优化思想，但替换其 Three.js Adapter、持久 Block Manifest、Block
+    Compiler 与旧 Runtime。Profile 可以维护单次 Build Epoch 的 package-local 内存 Layout；不得发布逐块
+    JSON、增加第三个 Scene Source，或让 Layout 成为 Gameplay Ground/Route 的第二真相。
 
 ## 对既有 ADR 的关系
 
@@ -64,6 +84,15 @@ Schema 校验、确定性编译、资源锁、WorldPackage、Route、ChangeSet �
 - JSON 不被删除；它继续承担世界身份、资源、Gameplay、自动化、Compiler、Route 和 ChangeSet 价值。
 - 项目会新增一个 Provider-specific Authoring 包和一种 Runtime Scene Source，但不会新增第二套
   Gameplay Runtime、Physics、Camera、State 或 Browser Protocol。
+- Block Whitebox 作为可选 Native Profile/Helper 存在，而不是新的 World Protocol。它可以直接创建
+  Babylon Mesh，并从同一内存布局辅助产生 core `StaticColliderContribution` 及其关闭
+  `traversalBinding`；Host 冻结后仍由 SDK 创建 Havok，未登记视觉对象默认没有 Gameplay Physics。
+  Visual Group 只属于 Profile-local Capture/诊断 inventory，不是 Native V1 Contribution。
+- 离线 Asset Production 可以更换 Provider，但它只发布经资产类别 Build Record 闭合、再被只读
+  Admission 接受并由原子 Publication 完成的锁定资源；完整房间/关卡重建在 V1 只保留 artifact-only
+  研究证据，不能进入 Registry、
+  Runtime，也不能成为地表、碰撞、Route 或 WorldPackage 权威。开放户外默认使用 ground/terrain-first，
+  再由被选择的 Scene Source 布置已发布的独立资产。
 - Native V1 不支持 `WorldChangeSet`。Source/Bootstrap 修改必须构建新的 Package/World Build Identity，
   再由 RuntimeHost 做 Full Reload replacement；未来 Native Edit/Incremental 协议必须另立版本化设计。
   Route、导航和 Hosted 任意代码同样需要独立 Gate，不能从视觉/碰撞实验推导。
@@ -78,3 +107,11 @@ Schema 校验、确定性编译、资源锁、WorldPackage、Route、ChangeSet �
 - **Native Code 自己创建物理、人物和相机**：会产生第二套 Runtime 与状态真相。
 - **同时提供 Three.js 与 Babylon Endpoint**：会重新引入双引擎桥接、两套生命周期和长期测试矩阵。
 - **把 Babylon 再包成完整自有 API**：本质上恢复了要避免的内部场景协议和 Compiler 循环。
+- **把旧 Block World 三个 Package 原样迁移**：会保留 Three -> Manifest -> Compiler -> Babylon 的
+  跨引擎重复链路。只重写其中与方块创作、检查和优化有关的算法思想。
+- **禁止一切生成期结构化布局**：会失去 Occupancy、坡面、边界、Chunk 和确定性检查。允许关闭的内存
+  Layout，但它不能持久化、进入 Runtime 或替代冻结 Contribution。
+- **把生成场景 Manifest 作为第三条 Scene Source**：会让 Provider Pipeline 拥有世界 Placement，重新
+  引入隐藏视觉 Compiler，并与 Canonical/Native 的几何和生命周期权威冲突。
+- **在 Runtime 或 Scene publish 后生成/回退资产**：会让网络、费用、文件存在性和 Provider 状态决定
+  正在运行的世界，破坏 Asset Lock、Package Root、确定性和原子替换。

@@ -7,6 +7,8 @@
 - 决策记录：[ADR-0007](../../decisions/0007-canonical-and-babylon-native-authoring-lanes.md)
 - 上位基础：[AI-first LEGO 游戏 SDK 设计](./2026-08-17-ai-first-lego-game-sdk-design.md)
 - 实验依据：[Babylon Native Scene Lane 实验设计](./2026-08-27-babylon-native-scene-lane-design.md)
+- 首个创作 Profile：[Babylon Native Block Whitebox 创作 Profile 长期设计](./2026-08-28-babylon-native-block-whitebox-profile-design.md)
+- 资产供应链：[Source-neutral 资产生产与准入长期设计](./2026-08-28-source-neutral-asset-production-and-admission-design.md)
 - 当前实施真相：[SDK 重构总进度与 Backlog](../../18-refactor-progress-and-backlog.md)
 
 > 本文是 Canonical JSON 与 Babylon Native Scene 长期分工的唯一详细设计权威。
@@ -25,6 +27,9 @@
 - **Babylon Native Scene Lane**：AI 用小型 Bootstrap JSON 选择世界资源和运行策略，再用
   Babylon Native TypeScript 创建视觉场景。视觉不经过项目自建的场景 Compiler；只有显式登记的
   Spawn、Collider 和后续受控语义贡献进入 SDK。
+- **Babylon Native Block Whitebox Profile**：Native Lane 的首个参考图白膜方法；继承固定米制方块、
+  真实体积、稳定调色板、结构/视觉/通过性检查等构造原则，但不引入持久 Block Manifest、第三个 Scene
+  Source 或 Block Compiler。
 - **SDK Runtime**：无论场景来自哪条 Lane，人物、动作、输入、相机、固定 Tick、Havok、状态、
   查询、回执、Capture 和生命周期都只有一套权威实现。
 
@@ -47,6 +52,19 @@ Babylon TypeScript ---> Babylon Scene + explicit registrations -----+
                                                                     v
                                                    Babylon/Havok Gameplay Kernel
 ```
+
+两条 Lane 都可以消费同一条离线资产供应链，但供应链不进入 `RuntimeSceneSource`：
+
+```text
+provider / library / DCC / reconstruction
+  -> immutable untrusted raw asset candidate
+  -> asset-class-owned Build Record / normalized bytes
+  -> asset admission + immutable Registry ref
+  -> selected Scene Source references and places the asset
+```
+
+生成或重建系统不拥有世界 Placement、Scene Graph、Spawn、Collider、Route 或 Gameplay。它只能在场景
+构建前提供被锁定的资源；Scene Source 发布后不存在第三个 Dressing Pass。
 
 Native Lane 不采用以下循环：
 
@@ -126,6 +144,8 @@ Babylon Native Code 的价值是直接使用成熟引擎的完整场景表达力
 - 不因为 Native 场景能显示就宣称 Route、自动寻路、WorldChangeSet、Hosted 安全或生产发布已完成。
 - 不提供一个并行 Three.js Runtime Endpoint；Three.js 代码可以作为离线 GLB/资产制作来源，但不成为
   第二套在线 Scene、Camera、Physics 和 Lifecycle。
+- 不在 Native `build()`、Canonical Compiler 或 Runtime load 期间调用生成模型、下载任意 URL、转换
+  Candidate 或按本机文件存在性选择回退资产。
 - 不在 V1 支持动态刚体、移动平台、NPC 行为、车辆、洞穴双层 Route、飞行体积或水下导航。
 
 ## 4. 单一权威与职责矩阵
@@ -143,7 +163,7 @@ Babylon Native Code 的价值是直接使用成熟引擎的完整场景表达力
 | Ground Support 与运动介质 | Physics Runtime | 同一 Physics Runtime | 单一 `checkSupport()` 路径 |
 | 固定时间、状态、Event、Receipt | RuntimeHost | RuntimeHost | RuntimeHost |
 | Route/导航证明 | 受支持 Canonical Surface | 未默认提供；未来只能来自同一冻结 Surface | Trusted Route/Navigation Host |
-| 生命周期与销毁 | Runtime Host | Runtime Host | Candidate Scene + Session 原子所有权 |
+| 生命周期与销毁 | Runtime Host | Runtime Host | Runtime Candidate Scene + Session 原子所有权 |
 
 ### 4.1 人物使用 JSON，视觉场景使用 Native Code
 
@@ -197,6 +217,12 @@ type RuntimeSceneSource =
 - 从一种 Source 切换到另一种 Source 是世界来源变更，必须 Full Reload、重新打包和生成新 Receipt。
 - V1 不允许 `canonical-execution-plan` 内再挂 `nativeOverlayRef`，也不允许 Native Module 导入并修改
   Canonical Runtime Scene。
+- Source-neutral Asset Production/Admission 位于该 Union 之前。它只产生 Candidate、Receipt 和锁定
+  Resource Ref，不得新增 Union 成员，也不得用完整场景 Manifest 绕开某个已选择的 Source。
+- 单资产生产可以独立发生；Host 在生成 Scene Module 或组装完整场景 Attempt 前冻结
+  `SceneAuthoringRouteDecisionV1`。任何 Lane、组合策略、
+  Source、Asset、Seed 或 Profile 切换都会创建新的 `SceneAuthoringAttemptV1`，并使受影响的场景级 Gate/
+  Receipt 失效。未变化资产的 Admission Receipt 仍按内容身份复用，不由 Attempt 拥有。
 
 这个 Union 是消除割裂的关键：上层 WorldSession 和 Gameplay 不需要知道几何由哪种语言创作；
 Scene Builder 知道 Source 类型，但没有第二套 Subject、Camera 或 Physics Runtime。
@@ -308,6 +334,8 @@ role-qualified 的 `subjectSpawnBindings`（每项包含 `subjectEntityId` 与 `
 - 主相机实例、输入事件或每帧更新；
 - Collider 数量、顶点数、三角数等可被 AI 任意放宽的裸预算；
 - Provider Handle、URL、文件路径或未锁定 npm 依赖。
+- Asset Production Request、Provider/model 选择、Candidate 路径、费用或 Cache key；这些属于离线 Host，
+  Bootstrap 只引用最终被接受并锁定的资源。
 
 ### 6.3 Plan-independent `WorldRuntimeBootstrap`
 
@@ -360,7 +388,22 @@ Native Host Assembler 从 Bootstrap JSON、`GameplayBootstrapV1` 和 Registry Lo
 这一步是有价值的内部协议：它描述的是 SDK 自己拥有的 Gameplay/Physics/Camera 启动闭包，而不是复制
 Babylon 视觉 API。Assembler 可以做 Schema/Registry/Hash 校验，但不得投影或重写 Native Scene Graph。
 
-### 6.4 Canonical JSON 仍适合什么
+### 6.4 场景 Lane 与创作策略路由
+
+Host 必须在生成 Scene Module 或组装完整场景 Attempt 前冻结一次
+`SceneAuthoringRouteDecisionV1`。单资产生产是可跨场景复用的独立离线工作，不以 Scene Route 为身份。
+路由顺序固定为：Trust/当前发布能力 -> 必需
+Route/ChangeSet/确定性能力 -> 开放或封闭空间与可交互拓扑 -> 视觉身份与构图 -> 许可证/资源/费用。
+后项不能覆盖前项 Blocking Gate。
+
+| 条件 | `SceneAuthoringRouteDecisionV1` |
+|---|---|
+| BNA-8 前的正式生产请求，或 Hosted Native 尚未通过安全 Gate | Canonical 或明确 Capability Gap |
+| 必须使用 Route R1/R1B、WorldChangeSet、确定性 Solver 或不可信 Hosted 数据 | Canonical |
+| 开放户外、参考图要求独特轮廓，且不存在未支持 Gameplay 能力 | Native ground-first：由 Native 创作地表/静态拓扑，再组合 admitted assets |
+| 外观没有强约束，或已有许可证与质量均合格的 Registry 资产，且两条 Lane 都满足硬要求 | 默认 Canonical；locked-asset 是上游 sourcing/composition 策略，不是 Scene Source |
+| 室内、洞穴、封闭高保真整景、多层动态表面 | 当前 Capability Gap 或 research-only；不得借“可显示”宣称支持 |
+| 视觉目标与 Route/ChangeSet 等硬要求冲突 | Change Request 或显式用户决策；不得 overlay 两条 Lane |
 
 优先选择 Canonical Lane 的场景：
 
@@ -378,6 +421,90 @@ Babylon 视觉 API。Assembler 可以做 Schema/Registry/Hash 校验，但不得
 - 视觉层次、雾、天空、云海、灯光和材质对可读性非常重要；
 - Schema 扩展成本明显高于直接调用成熟 Babylon API；
 - 第一目标是高质量白膜场景复原，且 V1 可接受 Full Reload。
+
+场景重建模型可以为 Native 提供深度、多视角提示或被 Build/Admission 接受的独立静态 Mesh，但开放
+户外默认仍是 ground/terrain-first。整房间/整关卡 `scene-shell` 在 V1 只允许作为 artifact-only 研究证据，
+不能发布 `assetRef`、进入 Package 或被 Native 加载。重建输出若尺度任意、仅覆盖相机可见表面或存在
+天空幕布、深度拉伸、孔洞和不连续表面，不能直接成为 Gameplay 地表。
+
+### 6.5 Scene Authoring Attempt 与 Runtime Candidate Scene
+
+`SceneAuthoringAttemptV1` 是一次完整场景创作运行的不可变身份，绑定
+`SceneAuthoringRouteDecisionV1` Hash、参考/Brief、Bootstrap 或 Authoring 输入、Module 生成输入、被选择的
+**已发布 Asset Resource Ref/Publication Receipt Ref**、Seed/Profile、验收目标和证据要求。它不引用 raw
+Candidate 或未完成的 Production Result；Asset Production/Admission 失败属于独立的上游结果，不通过伪造
+场景 Attempt 记录。它不是单个 Provider invocation，不是 `RuntimeSceneSource`，也没有已发布的
+`WorldBuildIdentity`。
+
+```ts
+interface SceneAuthoringAttemptV1 {
+  readonly kind: "scene-authoring-attempt";
+  readonly schemaVersion: 1;
+  readonly id: string;
+  readonly sceneAuthoringRouteDecisionRef: string;
+  readonly sceneAuthoringRouteDecisionHash: string;
+  readonly sceneBriefRef: string;
+  readonly sceneBriefHash: string;
+  readonly sourceInput:
+    | Readonly<{
+        kind: "canonical";
+        authoringInputRef: string;
+        authoringInputHash: string;
+      }>
+    | Readonly<{
+        kind: "babylon-native";
+        bootstrapInputRef: string;
+        bootstrapInputHash: string;
+        moduleGenerationInputRef: string;
+        moduleGenerationInputHash: string;
+      }>;
+  readonly selectedAssetResources: readonly Readonly<{
+    assetResourceRef: string;
+    assetPublicationReceiptRef: string;
+    assetPublicationReceiptHash: string;
+  }>[];
+  readonly seed: number;
+  readonly authoringProfileRef: string;
+  readonly acceptanceTargetRefs: readonly string[];
+  readonly requiredEvidenceProfileRefs: readonly string[];
+}
+
+type SceneAuthoringAttemptResultV1 =
+  | Readonly<{
+      kind: "scene-authoring-attempt-result";
+      schemaVersion: 1;
+      id: string;
+      sceneAuthoringAttemptRef: string;
+      sceneAuthoringAttemptHash: string;
+      outcome: "completed";
+      authoredSourceRef: string;
+      authoredSourceHash: string;
+      evidenceRefs: readonly string[];
+    }>
+  | Readonly<{
+      kind: "scene-authoring-attempt-result";
+      schemaVersion: 1;
+      id: string;
+      sceneAuthoringAttemptRef: string;
+      sceneAuthoringAttemptHash: string;
+      outcome: "rejected" | "tool-error";
+      diagnosticRefs: readonly string[];
+    }>;
+```
+
+`selectedAssetResources` 只负责冻结选择，不把 Asset Schema 复制进 BNA-1。BNA-3 校验每个 Publication
+Receipt、Resource Manifest 与 Package Asset Lock 的 exact identity。
+
+本文第 7.3 节的 **Runtime Candidate Scene** 只表示 Host 创建、尚未附着 Havok、Subject、Camera 和
+fixed Tick 的临时 Babylon Scene。两者不得简称为同一个 Candidate，也不得共享身份：
+
+- `SceneAuthoringAttemptResultV1.outcome` 为 `rejected` 或 `tool-error` 时，不产生新的 WorldPackage/
+  World Build/场景生产能力证据；已在此前独立通过
+  Admission 的内容寻址资产不被回滚或作废；
+- Runtime Candidate Scene 失败时，原子销毁临时 Scene，当前已发布世界保持不变；
+- 改变 Lane、组合策略、Source、Asset、Seed、Profile 或验收目标必须创建新 Authoring Attempt；
+- 新 Attempt 必须从最早受影响的场景 Gate 重放，不能复用旧 Source/Package/Contribution/Collider 或
+  Route Evidence；只有 Asset 字节、Admission Profile、License 或 Provenance 变化才重跑 Asset Admission。
 
 ## 7. Babylon Native Author API
 
@@ -427,10 +554,13 @@ export interface BabylonNativeSceneBuildContext {
 }
 ```
 
-- `scene`：由 Host 创建的 Candidate Scene。Module 不创建或替换 Engine/Scene。
+- `scene`：由 Host 创建的 Runtime Candidate Scene。Module 不创建或替换 Engine/Scene。
 - `bootstrap`：已解析、冻结的 Bootstrap，只读。
 - `random`：由 `seed` 派生的确定性随机源；禁止 `Math.random()`。
-- `assets`：只解析 Registry Lock 中的 `...Ref`，不接受任意 URL。
+- `assets`：只解析已经通过 source-neutral Asset Admission、进入 Registry/Package Lock 的精确 `...Ref`；
+  Resolver 必须复验 class-specific Manifest/Build Record、字节 Hash、Import Profile、Admission Receipt 和
+  Publication Receipt，
+  不接受 Candidate ID、裸路径、任意 URL、Provider Handle 或运行时 `assets.has(...)` 回退。
 - `registration`：唯一 Gameplay 交界面。
 
 最小 V1 登记面：
@@ -471,7 +601,7 @@ Runtime Owner 设计，不能用可选参数袋提前占位。
 
 V1 的 `build()` 不是持续存在的 Scene Controller。目标 Host 必须按以下顺序建立能力闭包：
 
-1. 创建尚未附着 SDK Havok、Controlled Subject 和主相机的 Candidate Scene，记录 Engine/Scene、
+1. 创建尚未附着 SDK Havok、Controlled Subject 和主相机的 Runtime Candidate Scene，记录 Engine/Scene、
    Active Camera、Physics、Render callback、Observable/listener 与 Action Manager 基线；
 2. 恰好调用一次 `build(context): void | Promise<void>`；Module 不能返回 Controller、Disposer、Update
    callback 或其他持续执行 Handle，`registration` 只在该 Promise settlement 前开放；
@@ -565,7 +695,7 @@ binding 漂移、非确定输出或 Receipt 篡改都必须产生稳定 mismatch
 V1 可以证明玩家在真实 Havok Surface 上落地、移动和通过固定 Probe，但不自动发布 Route 或 NavMesh。
 未来若 Native Lane 需要 Route/Nav Evidence：
 
-1. 导航输入必须来自同一份冻结 Collider/Traversal Surface Contribution；
+1. 导航输入必须来自同一份冻结 Static Collider Contribution 及其关闭 Traversal Surface binding；
 2. Recast 或其他导航结果是该 Surface 的派生制品，不得重新扫描视觉 Mesh；
 3. Route Profile、Agent 尺寸、坡度、台阶和 Portal 继续由 Trusted Host 校验；
 4. 未通过正式 Gate 时，只能报告 Manual/Probe Passability，不能写成 Route Evidence。
@@ -603,7 +733,8 @@ Native Runtime。具体不变量：
 - `checkSupport()`、Subject Facing、Action、Camera Orbit 和 Runtime State 不因 Lane 改变；
 - Scene Source 的差异只通过 source-neutral `WorldBuildIdentity` 发布，不污染 Browser Protocol 的
   Gameplay 状态字段；
-- Candidate 构建、Admission、发布和 Dispose 保持原子：部分构造失败不能污染当前世界。
+- Runtime Candidate 构建、Contribution Admission、Promotion 和 Dispose 保持原子：部分构造失败不能污染
+  当前世界；上游 Asset Publication 使用自己的原子边界。
 
 ## 10. Package、Hash 与 Receipt
 
@@ -613,9 +744,14 @@ Native Module 是代码，因此比 JSON 更需要完整身份。生产 Native �
 - Scene Module 源/Bundle 的内容 Hash；
 - `nativeSceneApiRef` 与解析后的版本/Hash；
 - `nativeSceneProfileRef` 与解析后的版本/Hash；
+- `sceneAuthoringRouteDecisionHash`、completed `sceneAuthoringAttemptResultRef`/Hash 与对应 Attempt ID/Hash；
 - Host/tenant 授权的 Profile/Cap identity、逐项 effective budget 和实际用量；
 - npm/Babylon/Havok 的 `resolvedVersion` 与依赖锁 Hash；
-- 所有 `assetRef`、实际字节 Hash、许可证和来源；
+- 所有 `assetRef`、Manifest/实际字节 Hash、许可证和来源，以及对应 Asset Admission Profile/Receipt Hash、
+  Asset Publication Receipt Hash；
+- Asset Manifest 所引用的 Production Request/Result/Receipt Hash、Provider/模型 `resolvedVersion`、输入
+  Hash、Seed、坐标/尺度/Forward/Pivot、Inventory 和 class-specific Build Record；这些是来源证据，不让
+  Provider Handle 进入 Runtime；
 - `GameplayBootstrapV1` 的 Ref 与 `contentHash`；
 - `WorldRuntimeBootstrap` 的 Ref 与 `contentHash`；
 - `GameplayBootstrapV1`、`WorldRuntimeBootstrap`、Native Module 和所有登记项的完整传递 Registry Lock，
@@ -623,6 +759,10 @@ Native Module 是代码，因此比 JSON 更需要完整身份。生产 Native �
 - source-neutral `WorldBuildIdentityV1` 的 canonical bytes 与 Hash；
 - 冻结 Spawn/Collider Contribution 的 canonical Hash；
 - Admission Profile、诊断和构建结果。
+
+Candidate 目录、Provider Cache、Unknown submission、Rejected Receipt、未接受字节和 artifact-only
+`scene-shell` 不得进入 Native WorldPackage Root。BNA-3 只消费 source-neutral Asset Publication 完成的
+不可变 Resource Ref；它不负责调用 Provider、执行 class-specific Build 或补全缺失的资产证据。
 
 Host 必须为 Native Source 产生正式 Package/Build Receipt 变体，不能伪造一个没有被消费的
 ExecutionPlan，也不能只用 Vite 文件名当可信 Receipt。具体 Package 版本在 BNA-1/BNA-3 中冻结；任何
@@ -663,7 +803,7 @@ AI 远程生成并执行任意 Babylon TypeScript 是不同的威胁模型。在
 - 依赖 allowlist、静态导入和 Bundle 资源上限；
 - 无网络、DOM、存储、环境变量、动态代码和跨世界访问；
 - CPU、内存、构建时间、Scene Node、Texture、Shader、Collider 与资产预算；
-- Candidate Scene 失败/超时时可强制终止且不污染 Host；
+- Runtime Candidate Scene 失败/超时时可强制终止且不污染 Host；
 - Bundle、依赖和输出可重放并生成完整 Receipt。
 
 当前完整 `Scene` 暴露只在 Trusted Local 实验中存在，它本身不是安全沙箱。Hosted Isolated 可以采用
@@ -693,7 +833,8 @@ AI 友好不等于减少所有约束，而是让约束少、稳定、可发现�
 ### 12.1 一套方言
 
 - 一个入口：`defineBabylonNativeScene`。
-- 一个 Provider 包：`@whitebox-world/native-babylon`。
+- 一个核心 Provider/Registration 包：`@whitebox-world/native-babylon`。可选创作 Profile Helper 可以独立
+  发包，但不得定义第二个 Scene Source、Registration Authority 或 Runtime。
 - 一个 Babylon Import Profile：首代由 BNA-2 bake-off 冻结，发布后只保留一套公开方言。
 - 一套单位与坐标：米、`+Y` 向上、`-Z` 为主体前方、角度字段使用 Radians。
 - 一个显式登记对象：`registration`。
@@ -729,13 +870,18 @@ interface NativeSceneDiagnosticV1 {
   readonly id: string;
   readonly severity: "warning" | "error";
   readonly stage:
+    | "routing"
+    | "capability"
     | "bootstrap"
     | "tooling"
     | "dependency"
     | "typecheck"
     | "bundle"
     | "build"
-    | "admission"
+    | "source-admission"
+    | "contribution-admission"
+    | "authority-audit"
+    | "runtime-replay"
     | "runtime"
     | "capture";
   readonly code: string;
@@ -749,6 +895,13 @@ interface NativeSceneDiagnosticV1 {
         columnNumber: number;
       }>
     | Readonly<{ kind: "registration"; registrationId: string }>
+    | Readonly<{ kind: "asset-resource"; assetResourceRef: string }>
+    | Readonly<{
+        kind: "asset-lock";
+        assetResourceRef: string;
+        assetAdmissionReceiptRef: string;
+        assetPublicationReceiptRef: string;
+      }>
     | Readonly<{
         kind: "world";
         positionMetersXYZ: readonly [number, number, number];
@@ -787,22 +940,56 @@ Bootstrap 尚未解析或工具在解析前失败时，Check Result 使用
 包含一条 Error；`tool-error` 至少包含一条 `stage: "tooling"` 的 Error。Parser、CLI 与 Golden 必须用
 负向用例拒绝 `passed + error`、`rejected + warnings-only` 和 `tool-error` 无 tooling Error 的组合。
 
+Asset Candidate 使用 source-neutral 资产设计中独立的 Asset Production/Admission/Publication Result，不扩张
+`NativeSceneCheckResultV1.checkedInput` 来同时承担 Asset 和 Module 身份。Native Check 只校验 Package
+中已发布、已锁定的 Asset Resource/Admission/Publication Receipt 与 Module 消费关系；缺失资源使用
+`location.kind: "asset-resource"`，三者 identity 不一致使用 `location.kind: "asset-lock"`。Rejected 或
+tool-error 的 Asset Result 发生在 Package 之前，必须原样由 APA 工具返回，不能为了塞进 Native Diagnostic
+伪造不存在的 Resource Ref，也不能复制其 stage、code、measurement 或 Provider details 为另一套字段。
+
 - 完整 TypeScript 类型、JSDoc 和最小可运行示例；
 - 稳定错误码、Module/Collider/Marker ID、世界坐标和预算差额；
 - `worldkit native check` 与 `worldkit native explain` 等只读检查入口；
-- 构建失败、Admission 失败、运行失败和视觉 Gate 的分层报告；
+- 构建失败、Source/Contribution Admission、Authority Audit、Runtime Replay、运行失败和视觉 Gate 的
+  分层报告；
 - 同一个 Agent Task 内最多三次 bounded self-repair，Host 重放 Checker；
 - 不把 Babylon/Havok 的裸异常当公共诊断。
 
 `worldkit native check <world-directory> --json` 的 stdout 始终只输出一个闭合
 `NativeSceneCheckResultV1` JSON：`outcome: "passed"` 对应 exit code `0`；Bootstrap/Typecheck/Bundle/
-Admission/Capability 拒绝对应 `outcome: "rejected"` 和 exit code `1`；工具自身或环境失败对应
+Source Admission/Contribution Admission/Authority Audit/Runtime Replay/Capability 拒绝对应
+`outcome: "rejected"` 和 exit code `1`；工具自身或环境失败对应
 `outcome: "tool-error"` 和 exit code `2`。人类日志只写 stderr。`worldkit native explain` 使用同一
 Diagnostic DTO。
 上述 CLI 名称和语义是目标接口，当前尚未实现。BNA-2 的交付输出必须包含结构化 Diagnostics，不能只
 返回 build callback 或字符串 Error。
 
-### 12.3 Golden Corpus
+### 12.3 失败处置与回退
+
+`SceneAuthoringAttemptResultV1` rejection 与 Runtime Candidate Scene rollback 是两件事：
+
+- 当前 Scene Authoring Attempt `rejected` 或 `tool-error` 不得产生新的 WorldPackage、World Build Receipt 或
+  场景 Production capability evidence，但不撤销已独立完成的 Asset Publication；
+- Asset Admission/Publication `rejected` 或 `tool-error` 不得为该输入产生新的 Registry Resource；当前已
+  发布世界和此前独立发布的资产保持不变；
+- bounded self-repair 的每一轮都创建新的 `SceneAuthoringAttemptV1` identity。Source、Asset、Lane、组合策略、Seed、
+  Profile、预算或验收目标变化会使受影响的场景 Receipt/Hash 失效，并从最早受影响 Gate 重放；未变化
+  资产的 Admission/Publication Receipt 不随场景 Attempt 失效；
+- Asset 格式、许可证、预算或视觉质量失败时，只能提交新的 Asset Production Request，或由资产类别
+  Owner 使用新的 Build 输入/Profile 产生新的 Build Record/字节；允许的下一步是新的生成
+  尝试、通过同等 Admission/Publication 的授权资产、在验收目标不变时使用 Primitive/ground-first
+  composition，或
+  明确 Capability Gap；
+- 场景重建不一致时不得无界重滚。切换 ground-first、授权资产或 Lane 必须形成新的
+  `SceneAuthoringRouteDecisionV1` 与 `SceneAuthoringAttemptV1`，不得静默降级、不得把必需 Gameplay
+  能力改写成装饰视觉；
+- Source Admission、Authority/Security 或 Runtime Replay 失败没有“旧 Collider + 新视觉”回退：Host
+  原子销毁 Runtime Candidate Scene，保留当前世界并返回稳定诊断。
+
+回退选择必须在 Package build 前冻结并进入 Receipt；Native Module 不在 Runtime 内查询文件存在性或
+Provider 状态。外部工具推荐的室内/封闭重建路线不能覆盖 WorldKit 当前能力边界。
+
+### 12.4 Golden Corpus
 
 至少维护以下正向 Golden：
 
@@ -814,15 +1001,21 @@ Diagnostic DTO。
 6. `cloud-ridge`：参考图白膜、T 字山门、柱状山峰、云海与真实通过性。
 
 负向 Golden 至少覆盖：重复 Spawn/Collider ID、错误 Scene Mesh、NaN/Infinity、空几何、越界索引、
-Thin Instance、已有 Physics Body、预算超限、登记关闭后写入、未锁定 Asset、网络/随机/时间访问、
-Module throw、部分构造清理、双实例隔离和 Visual/Collider 错位。
+Thin Instance、已有 Physics Body、预算超限、登记关闭后写入、未锁定 Asset、Asset Receipt/字节 Hash
+不一致、错误尺度/Forward/Pivot、缺失许可证、artifact-only `scene-shell` 试图进入 Registry/Package/Runtime、
+网络/随机/时间
+访问、Module throw、部分构造清理、双实例隔离、Visual/Collider 错位，以及拒绝后静默换 Lane/Asset
+并复用旧证据。
 
 BNA-6 开始生成前必须冻结 `NativeSceneEvaluationProfile`：模型与版本、reasoning effort、共同用户任务、
 参考图/Brief Hash、两条 Lane 各自公开且版本锁定的 contract docs 与 system/task prompt Hash、实际
 context token 数、相同有效生成/修复预算、Bootstrap/API/Import Profile、Dependency Lock、Seed、最大
-三轮修复、Case 列表和每项 Blocking Threshold。每个适用 Case 使用同一用户参考、Scene Brief、模型、
-reasoning effort 和预算分别生成 Canonical 与 Native 候选；由于输出合同不同，两条 Lane 可以附带各自
-已冻结的合同说明，但不得加入未登记的针对性提示。随后分开量化：
+三轮修复、Case 列表和每项 Blocking Threshold；还必须冻结 `SceneAuthoringRouteDecisionV1`、组合策略、
+是否允许 published asset/reconstruction research candidate、对应 Production/Admission/Publication Receipt
+Hash 和相同有效
+资产生产预算。每个适用 Case 使用同一用户参考、Scene Brief、模型、reasoning effort 和预算分别生成
+Canonical 与 Native 候选；由于输出合同不同，两条 Lane 可以附带各自已冻结的合同说明，但不得加入
+未登记的针对性提示，也不得给一条 Lane 临时追加未计费的生成资产。随后分开量化：
 
 - Typecheck/Bundle/Admission 首轮与三轮内成功率；
 - 关键地形/结构/语义目标、Opening Frame region/anchor 和白膜轮廓；
@@ -841,11 +1034,25 @@ Three visual baseline**：冻结同一模型、用户参考、Scene Brief、reas
 复杂山峰/峡谷/阶梯参考 Case 上表现出预先定义的结构或构图改善，同时保持 SDK Physics/Camera Gate；
 否则应回到 Change/Stop disposition，而不是因为 API 已经实现就默认继续。
 
-### 12.4 Skill 的定位
+### 12.5 Skill 的定位
 
 Skill 可以教 AI 如何从参考图拆解前景/中景/背景、如何选择低模 Collider 和如何跑 Checker，但它不是
 正确性的必要条件，也不保存私有字段。Schema、类型、Profile、Golden 和诊断才是稳定合同。即使没有
 Skill，一个通用 Coding Agent 也应能依靠公开 API 和错误信息完成场景；有 Skill 时只提升首轮成功率。
+
+### 12.6 Block Whitebox 是 Profile，不是 Protocol
+
+参考图白膜的首个推荐方法由
+[Babylon Native Block Whitebox 创作 Profile](./2026-08-28-babylon-native-block-whitebox-profile-design.md)
+定义。它允许一个可选 `@whitebox-world/native-babylon-block-profile` 包在单次 Build Epoch 中维护
+package-local 的内存 Block Layout，用于固定形状、Occupancy、连续坡面、边界、Chunk 和 authoring
+diagnostics；Profile Helper 必须返回真实 Babylon 对象，普通 Babylon `MeshBuilder` 始终可直接使用。
+
+该内存 Layout 不是可序列化 `BlockWorldManifest`、Runtime 输入或第二状态权威。它只能在 Finalize 时
+产生结构诊断、Profile-local Visual Group inventory，以及 core Registration 已冻结的显式 Spawn/Static
+Collider Contribution；Traversal 只使用同一 Collider 登记的关闭 binding。Runtime 只信 Host 冻结的
+Contribution 与 SDK 创建的 Havok。Profile 的详细 Package 处置、场景构造原则、碰撞同源派生、Corpus
+和 BWB 工作图以上述文档为唯一权威。
 
 ## 13. 版本与升级策略
 
@@ -880,7 +1087,8 @@ Three Endpoint 会引入：
 - 很容易重新出现 Three 视觉真相与 Babylon 物理真相的漂移。
 
 因此，Native Scene 的对外代码与底层 Runtime 都使用 Babylon。Three.js 可以继续作为离线制作工具：
-AI 用 Three 生成 GLB，经过资产 Admission 后由 Babylon 加载；这不创建第二个运行时 Endpoint。
+AI 用 Three 生成原始 GLB，经资产类别 Build Record 和只读 Asset Admission 后由 Babylon 加载；这不创建
+第二个运行时 Endpoint。
 若未来要恢复 Three Runtime，必须单独 ADR、Provider Parity 和完整生产 Gate，不能作为本设计的兼容层。
 
 ## 15. 当前实现事实与目标差距
@@ -896,6 +1104,7 @@ AI 用 Three 生成 GLB，经过资产 Admission 后由 Babylon 加载；这不�
 | Physics/Subject/Camera | 已由 SDK/Havok 接管并通过实验移动 | 继续使用同一生产 Kernel，不复制 Runtime |
 | 场景效果 | `cloud-ridge` 已显示核心构图并有通过性 Probe | Golden Corpus、正式 Visual/Interaction Gate |
 | Package/Receipt | 无 Native WorldPackage/Build Receipt | Bundle/依赖/资产/贡献完整身份 |
+| Asset Production/Admission | 无已实现的 source-neutral Request/Candidate/Build/Admission/Publication 合同；实验只消费本地 GLB | 由独立 APA 设计经 class-specific Build、只读 Admission 与原子 Publication 产生 locked assetRef，Native 只消费，不调用 Provider |
 | 安全 | 受信本地实验，完整 Scene 访问 | Trusted Local 生产 Profile；Hosted 需隔离 Gate |
 | Route/寻路 | 无正式 Route/Nav Evidence | 可选地从同一冻结 Surface 派生并独立验收 |
 | WorldChangeSet | 未支持 | Native V1 明确不支持；Source/Bootstrap 变化构建新 Package/Identity 并由 RuntimeHost Full Reload replacement |
@@ -910,6 +1119,10 @@ Authoring V4 -> IR V4 -> ExecutionPlan V5 -> RuntimeWorldConfiguration V1 -> Bab
 |---|---|
 | 两条 Lane 变成两套游戏引擎 | Scene Builder 可分，Gameplay Kernel、Havok、Subject、Camera、State 不分 |
 | JSON 与 Native 同时写几何 | 每个世界恰好一个 `sceneSource.kind`，V1 禁止 overlay |
+| Asset Production 变成第三条 Scene Source | raw Candidate -> class Build -> read-only Admission -> atomic Publication；只发布独立 locked Ref，世界 Placement 仍由所选 Source 独占，发布后无 Dressing Pass |
+| 重建 Mesh 被误当米制 Gameplay 地表 | 独立 Mesh 需尺度/Build/Admission；整房间 `scene-shell` 只作 artifact-only 研究；Gameplay 使用独立代理、显式登记和 SDK Surface Admission |
+| 失败后静默换 Lane、资产或策略 | 冻结 `SceneAuthoringRouteDecisionV1`；变化创建新 `SceneAuthoringAttemptV1` 并重放受影响场景 Gate，未变化 Asset Admission/Publication 可复用 |
+| Provider 状态污染 Runtime | 仅离线一次提交/对账；Runtime 只消费 Asset Lock，不访问 Provider/Cache/任意 URL |
 | Native 代码绕过 Host | Build-only、禁止 Physics/Camera/Input/Tick、Candidate 原子发布、最终 Admission |
 | Visual/Collider 漂移 | 显式代理、世界坐标冻结、Contribution Hash、Debug Overlay、Full Reload |
 | 影子 ExecutionPlan 形成幽灵真相 | Runtime Source Union + `GameplayBootstrapV1` + `WorldRuntimeBootstrap` + source-neutral `WorldBuildIdentity` |
@@ -924,7 +1137,8 @@ Authoring V4 -> IR V4 -> ExecutionPlan V5 -> RuntimeWorldConfiguration V1 -> Bab
 
 ### BNA-0：冻结长期架构权威
 
-- 目标与独立交付物：接受“一世界、两 Lane、一 Kernel”，交付本文、ADR-0007、文档指针和 Mode A 审查。
+- 目标与独立交付物：接受“一世界、两 Lane、一 Kernel”，交付本文、ADR-0007、source-neutral Asset
+  Production/Admission 指针和 Mode A 审查。
 - `depends_on`：ADR-0006、2026-08-27 实验切片和用户 Continue 决策。
 - `blocks`：BNA-1 至 BNA-8。
 - 独占所有权：跨 Lane 架构、术语、Source/Gameplay/Runtime 权威分工。
@@ -938,24 +1152,31 @@ Authoring V4 -> IR V4 -> ExecutionPlan V5 -> RuntimeWorldConfiguration V1 -> Bab
 - 目标与独立交付物：冻结闭合 `sceneSource` Union、Native Bootstrap Schema、Plan-independent
   `WorldRuntimeBootstrap` 与 source-neutral `WorldBuildIdentity`；移除 Native 对影子 ExecutionPlan 的
   依赖，同时复用 `GameplayBootstrapV1`；Canonical 先建立 V5 exact-equality 派生 Gate，再迁移到只引用
-  World Runtime Bootstrap 的下一版 Scene Plan，终态不保留双字段。
+  World Runtime Bootstrap 的下一版 Scene Plan，终态不保留双字段；同时冻结 Scene Authoring Route
+  Decision、Authoring Attempt 与 Runtime Candidate Scene 的身份/失效语义，禁止静默换 Lane/策略。
 - `depends_on`：BNA-0。
 - `blocks`：BNA-3、BNA-4、BNA-7、BNA-8。
 - 独占所有权：RuntimeWorldConfiguration 下一版本、Native Bootstrap Schema/Parser、
   `WorldRuntimeBootstrap`、`WorldBuildIdentity`，以及 WorldSession/State/Adapter/Browser/Capture/Take/
-  Validation 中 source-neutral identity 的版本迁移；不得同时改 Native API 实现。
-- 输入/输出合同：Bootstrap + Gameplay Bootstrap + locked Registry refs -> Runtime Scene Source +
-  World Runtime Bootstrap + World Build Identity。
+  Validation 中 source-neutral identity 的版本迁移；同时独占 `SceneAuthoringRouteDecisionV1`、
+  `SceneAuthoringAttemptV1` 与 `SceneAuthoringAttemptResultV1` Schema/Parser/Hash，不拥有 Asset
+  Request/Result/Admission/Publication；不得同时改 Native API 实现。
+- 输入/输出合同：Scene Brief/capability/trust facts -> Route Decision；Route Decision + Authoring/Module
+  inputs + selected published resource refs -> Authoring Attempt；completed Attempt Result + Bootstrap +
+  Gameplay Bootstrap + locked Registry refs ->
+  Runtime Scene Source + World Runtime Bootstrap + World Build Identity。
 - 集成点：RuntimeHost Candidate load/create/replace 入口。
 - 验证证据：exact-key/union/hash/mismatch 负向测试、Canonical 回归、所有 `executionPlanHash` consumer
   census、V5 projection exact equality、终态无重复 Runtime closure、无 ghost/fake Plan Hash、
-  Browser/State/Capture identity migration 和 current-only clean break。
-- 执行模式：`main-agent-only`，公共合同冻结后其测试迁移可 `parallel-safe`。
+  Browser/State/Capture identity migration、route/attempt identity 与换路失效测试，以及 current-only clean
+  break。
+- 执行模式：`main-agent-only`。
 
 ### BNA-2：独立 Babylon Native Authoring 包
 
 - 目标与独立交付物：创建 `@whitebox-world/native-babylon`、`defineBabylonNativeScene`、BuildContext、
-  单一 Import Profile 和结构化诊断。
+  单一 Import Profile 和结构化诊断；拆分 Source/Contribution Admission、Authority Audit 与 Runtime
+  Replay stage，并只引用独立 Asset Check/Admission Result。
 - `depends_on`：BNA-0；与 BNA-1 只在已冻结的 Bootstrap 类型处集成。
 - `blocks`：BNA-3、BNA-4、BNA-5、BNA-6。
 - 独占所有权：Native Author API、Provider-specific 登记类型、示例 import 风格；不修改 RuntimeHost。
@@ -964,17 +1185,24 @@ Authoring V4 -> IR V4 -> ExecutionPlan V5 -> RuntimeWorldConfiguration V1 -> Bab
 - 集成点：Native Scene Builder 的 Module Resolver。
 - 验证证据：public export census、API type tests、diagnostic/CLI exit tests、旧实验 App 编译迁移，以及
   同图同提示 Import Profile bake-off 的生成成功率、bundle/module graph 和启动成本。
-- 执行模式：合同冻结后 `parallel-safe`。
+- 执行模式：`main-agent-only`。
+
+本任务只建立 core Native API。可选 `@whitebox-world/native-babylon-block-profile` 由 BWB-1 独占，
+不得塞入 core 包形成隐式默认 DSL；BWB-1 只有在本任务 BuildContext/Import Profile 冻结后才能接入。
 
 ### BNA-3：Native Bundle、资源锁、Package 与 Receipt
 
 - 目标与独立交付物：建立 Module Bundle、依赖/资产锁、Bootstrap/Contribution Hash 和正式 Package/
-  Build Receipt 变体，并按第 10 节顺序在 Package Root 计算后派生、绑定 BNA-1 `WorldBuildIdentity`。
+  Build Receipt 变体，并按第 10 节顺序在 Package Root 计算后派生、绑定 BNA-1 `WorldBuildIdentity`；
+  Package/Receipt 同时绑定 `sceneAuthoringRouteDecisionHash` 与 completed
+  `sceneAuthoringAttemptResultRef`/Hash；只消费 APA 已发布资源或同等手工 Golden
+  Admission/Publication，不执行 Provider/Candidate promotion。
 - `depends_on`：BNA-1、BNA-2。
 - `blocks`：BNA-4、BNA-5、BNA-6、BNA-7、BNA-8。
-- 独占所有权：Native Bundle manifest、Package manifest 变体、Receipt 和 Host Resolver；不修改 Physics。
-- 输入/输出合同：source module + locks + seed/profile + World Runtime Bootstrap -> immutable
-  bundle/package/receipt/build identity。
+- 独占所有权：Native Bundle manifest、Package manifest 变体、Receipt 和 Host Resolver；不修改 Physics，
+  不拥有 source-neutral Asset Production/Admission。
+- 输入/输出合同：completed Authoring Attempt Result + source module + published asset refs/receipts + locks + seed/profile
+  + World Runtime Bootstrap -> immutable bundle/package/receipt/build identity。
 - 集成点：WorldPackage build/load 与 RuntimeHost preflight。
 - 验证证据：reproducible bytes/hash、tamper/missing asset/version mismatch、atomic promotion、clean rebuild；
   root inventory 明确排除 Identity/Receipt transport metadata、无自引用 Hash、Root 后派生 Identity 的
@@ -988,8 +1216,8 @@ Authoring V4 -> IR V4 -> ExecutionPlan V5 -> RuntimeWorldConfiguration V1 -> Bab
   `WorldRuntimeBootstrap`、SDK Havok 和单一 Spawn/Camera/Subject 接通 Native Source。
 - `depends_on`：BNA-1、BNA-2、BNA-3。
 - `blocks`：BNA-6、BNA-7、BNA-8。
-- 独占所有权：Babylon Native Scene Builder、Havok Contribution Adapter、Candidate lifecycle 和 Debug
-  Overlay；不得改 Gameplay 状态权威。
+- 独占所有权：Babylon Native Scene Builder、Havok Contribution Adapter、Runtime Candidate Scene
+  lifecycle 和 Debug Overlay；不得改 Authoring Attempt、Asset Production 或 Gameplay 状态权威。
 - 输入/输出合同：parsed Native Source + closed traversal bindings + registrations -> admitted Scene +
   frozen collider/surface identity + SDK-owned physics/session。
 - 集成点：BabylonWorldRuntime/RuntimeHost create、reset、replace 和 dispose。
@@ -998,7 +1226,7 @@ Authoring V4 -> IR V4 -> ExecutionPlan V5 -> RuntimeWorldConfiguration V1 -> Bab
   reference、observer/listener census、Build 后 mutation、Active Camera/Physics/Render ownership audit；
   Runtime actual-vs-locked Contribution Hash exact match、登记重排同 Hash、缺失/新增 Collider、Transform/
   geometry/binding drift 和 tampered Receipt mismatch 的 fail-before-publish 负向证明。
-- 执行模式：`sequential`，最终集成 `main-agent-only`。
+- 执行模式：`main-agent-only`。
 
 ### BNA-5：确定性、预算与 Trust Profile
 
@@ -1013,22 +1241,27 @@ Authoring V4 -> IR V4 -> ExecutionPlan V5 -> RuntimeWorldConfiguration V1 -> Bab
 - 验证证据：网络/DOM/环境/动态 import/超时/内存/节点/贴图/Collider 对抗测试和凭据泄漏 census；
   `scene.dispose/getEngine/registerBeforeRender/enablePhysics`、Observables、额外 Camera/Physics 构造的逃逸
   尝试；Hosted 进程/Worker/Origin 的强制终止和主 Runtime 无污染证明。
-- 执行模式：`sequential`；Threat Model 独立评审可 `parallel-safe`。
+- 执行模式：`sequential`。
 
 ### BNA-6：AI 工具、Golden Corpus 与场景复原评估
 
 - 目标与独立交付物：提供 `check/explain`、最小 API 文档、Golden/negative Corpus、自修复 Checker 和
   多类参考图白膜评估；正式跑数前冻结 `NativeSceneEvaluationProfile`、lane-specific contract context、
-  预算和 Blocking Threshold，结果产生后不得修改；用非产品离线 Three visual baseline 单独量化模型
-  熟悉度，不创建 Three Runtime Endpoint。
+  Route Decision、资产生产/准入方式、预算和 Blocking Threshold，结果产生后不得修改；用非产品离线
+  Three visual baseline 单独量化模型熟悉度，不创建 Three Runtime Endpoint，并覆盖拒绝后的显式回退
+  与禁止静默换路。
 - `depends_on`：BNA-2、BNA-3、BNA-4、BNA-5。
 - `blocks`：BNA-8。
 - 独占所有权：Native examples、fixtures、CLI diagnostics、AI authoring guide/可选 Skill、视觉评估制品。
-- 输入/输出合同：reference + bootstrap/module -> checked package + layered evidence。
+- 输入/输出合同：reference + route decision + bootstrap/module + admitted asset refs -> checked package +
+  layered evidence。
 - 集成点：CLI、Studio/Playground 和真实 Chromium Capture。
 - 验证证据：正负 Golden、Canonical/Native/离线 Three 三臂冻结基准、首轮/修复成功率、结构 Gate、
   rendered visual、manual interaction。
-- 执行模式：Corpus cases `parallel-safe`，最终结果归并 `main-agent-only`。
+- 执行模式：`sequential`。
+
+BNA-6 提供 Native 通用评测框架；Block Profile 专属的山地、T 字空间、台阶、建筑、有限室内视觉及负向
+Corpus 由 BWB-5 冻结。BWB 结果不能跳过 BNA 通用 Trust、Package、Kernel 或 Capability Gate。
 
 ### BNA-7：Capture 与 Route/Nav Evidence
 
@@ -1046,7 +1279,8 @@ Authoring V4 -> IR V4 -> ExecutionPlan V5 -> RuntimeWorldConfiguration V1 -> Bab
 ### BNA-8：生产 Go/No-Go 与文档切换
 
 - 目标与独立交付物：按 Trust Profile 分别裁决 Trusted Local、Hosted Native 和 Route 能力，更新
-  AGENTS、Quickstart、Backlog、公开 API 与迁移说明。
+  AGENTS、Quickstart、Backlog、公开 API、Asset Production/Admission 指针与迁移说明；不得把 research
+  reconstruction candidate 写成生产 Scene 能力。
 - `depends_on`：Trusted Local 至少 BNA-1 至 BNA-6；Hosted 还必须完成 BNA-5 Hosted Gate；Route
   声明还必须完成 BNA-7。
 - `blocks`：Native Lane 对外 Production 声明。
@@ -1098,6 +1332,11 @@ BNA-7 -> BNA-8 (Route scope only)
 
 > **JSON 管世界身份、资源、Gameplay 与启动；Babylon Native Code 管视觉场景；显式登记表达物理意图；
 > SDK 管 Havok、人物、动作、相机、状态、证据与生命周期。**
+
+离线 Asset Production 只提出不可变原始 Candidate，资产类别 Owner 用 Build Record 产生目标字节，
+Asset Admission 只读决定资格，资产类别 Publisher 再原子发布锁定资源；这些层都不拥有世界 Placement
+或运行时真相。被选择的 Scene
+Source 决定资源如何进入世界，SDK 决定哪些冻结贡献成为物理与 Gameplay。
 
 本设计不要求为统一而把所有东西塞进 JSON，也不以自由为名把 Runtime 交给任意代码。它用
 `sceneSource` 互斥消除几何双权威，用 `GameplayBootstrapV1`、Plan-independent

@@ -6,9 +6,9 @@
 >
 > 原则：只使用仓库导出的 Canonical 类型和当前协议；不复制 DTO，不做版本探测，不保留兼容别名。
 
-## 0. 唯一当前协议链路
+## 0. 当前唯一生产协议链路
 
-世界输入、编译和 Runtime 只有一条当前链路：
+当前已经实现并允许正式对接的世界输入、编译和 Runtime 只有一条生产链路：
 
 ```text
 AuthoringSpec V4
@@ -17,6 +17,11 @@ AuthoringSpec V4
   -> Babylon/Havok Runtime
   -> Runtime Snapshot V4 / Browser Protocol V5
 ```
+
+[ADR-0007](decisions/0007-canonical-and-babylon-native-authoring-lanes.md) 已接受未来互斥的 Babylon
+Native Scene Lane；其 [长期设计](superpowers/specs/2026-08-28-ai-friendly-babylon-native-world-authoring-design.md)
+与 [Block Whitebox Profile](superpowers/specs/2026-08-28-babylon-native-block-whitebox-profile-design.md)
+仍在 BNA/BWB 生产门禁前，不是本合同的第二个当前入口，也不改变下面 Browser/Gameplay exact 类型。
 
 这是一条不向开发历史兼容的关闭合同。更早的输入、IR、Plan、Snapshot 和 Browser
 形状不提供解析、迁移、字段别名或 feature detection。对接方必须同步当前 `main`，然后直接按
@@ -285,7 +290,7 @@ Clip 名推断动作。
 
 ## 9. 可直接交给对接 AI 的指令
 
-> 使用当前 `main` 的唯一协议链路 AuthoringSpec V4 → NormalizedWorldIR V4 → ExecutionPlan V5
+> 使用当前 `main` 的唯一生产协议链路 AuthoringSpec V4 → NormalizedWorldIR V4 → ExecutionPlan V5
 > → Runtime Snapshot V4 / Browser Protocol V5。直接从
 > `@whitebox-world/gameplay-contracts` 和 `@whitebox-world/runtime-contracts` 导入 exact 类型，
 > 不复制 DTO、不写兼容 alias、不做 feature detection。真实 transport 只通过

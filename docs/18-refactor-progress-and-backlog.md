@@ -15,6 +15,10 @@
 > 当前只有受信本地实验切片；Native Schema、Source Union、Package/Receipt、Hosted 隔离和正式 Route
 > 尚未生产化，因此不改变上一段的当前入口和进度口径。
 
+> Source-neutral Asset Production/Admission 已形成 Proposed 设计：只在两条 Scene Source 之前生产原始
+> Candidate，经资产类别 Build Record 与只读 Admission 后发布资源；不增加第三条 Scene Source。APA 尚未
+> 实施，不提高完成度；整房间/整关卡 `scene-shell` 在 V1 仅为 artifact-only 研究证据。
+
 > Golden Humanoid S1b 首个可视纵向切片已完成并进入回归；S1b 整体与 Semantic Actions 整体仍未完成.
 
 > 2026-08-27：3C vNext Task 6 已在 Diversion 分支完成 Golden 单人带骨骼角色纵向集成：
@@ -115,6 +119,8 @@ Registry Lock、Browser preference 命令，以及 Babylon CameraDirector 消费
 - [`2026-08-19-world-validation-report-and-quality-gates-design.md`](../docs/superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md)：量化 Gate、Metric、Evidence 和生产阻断协议；
 - [`2026-08-20-ai-authored-geometry-extension-design.md`](../docs/superpowers/specs/2026-08-20-ai-authored-geometry-extension-design.md)：未来可能需要的 AI 自定义几何能力及候选技术，仅供调研评审，不属于当前 Roadmap；
 - [`2026-08-28-ai-friendly-babylon-native-world-authoring-design.md`](../docs/superpowers/specs/2026-08-28-ai-friendly-babylon-native-world-authoring-design.md)：Canonical JSON 与 Babylon Native Scene 的长期分工、薄登记合同、统一 Gameplay Kernel、生产化依赖图和能力声明边界；
+- [`2026-08-28-babylon-native-block-whitebox-profile-design.md`](../docs/superpowers/specs/2026-08-28-babylon-native-block-whitebox-profile-design.md)：Native Lane 首个参考图白膜 Profile；继承方块分支的构造、检查和优化思想，但不迁移 Three Adapter、持久 Manifest 或 Block Compiler；
+- [`2026-08-28-source-neutral-asset-production-and-admission-design.md`](../docs/superpowers/specs/2026-08-28-source-neutral-asset-production-and-admission-design.md)：两条 Scene Source 之前的 Provider-neutral Candidate、资产类别 Build Record、只读 Admission、Registry 发布和回退边界；当前为 Proposed，尚未实施；
 - [`ADR-0007`](decisions/0007-canonical-and-babylon-native-authoring-lanes.md)：接受“一世界、两条互斥场景创作 Lane、一个 Babylon/Havok Kernel”的架构决策；不代表 Native 已生产可用；
 - [`21-open-source-design-reference-ledger.md`](21-open-source-design-reference-ledger.md)：开源实现/测试的持续借鉴台账；记录锁定来源、本地落点、拒绝原因和候选验证，但不单独改变能力完成度；
 - `docs/superpowers/plans/`：已经进入实施阶段的单个纵向切片计划与证据。
@@ -933,15 +939,18 @@ Replay、Streaming/Dispose 和自动 Diagnostic；普通 Agent 只引用稳定 P
 - [x] BNS 实验切片：受信本地 Native Module、一个 Spawn、显式静态 Collider、SDK-owned Havok/
   Subject/Input/Camera 和云海山门视觉/通过性证据；这不是生产完成度；
 - [ ] BNA-1：Runtime Scene Source Union、正式 Native Bootstrap、Plan-independent
-  `WorldRuntimeBootstrapV1` 与 source-neutral `WorldBuildIdentityV1`；完成受影响消费者的版本迁移，移除
-  影子 ExecutionPlan 和伪造 Plan Hash；
-- [ ] BNA-2：独立 `@whitebox-world/native-babylon` 与 `defineBabylonNativeScene`；
-- [ ] BNA-3：Bundle、依赖/资产锁、Package、Contribution Hash 与 Build Receipt；
+  `WorldRuntimeBootstrapV1`、source-neutral `WorldBuildIdentityV1`、`SceneAuthoringRouteDecisionV1` 与
+  `SceneAuthoringAttemptV1`/`SceneAuthoringAttemptResultV1`；完成受影响消费者的版本迁移，移除影子
+  ExecutionPlan 和伪造 Plan Hash；
+- [ ] BNA-2：独立 `@whitebox-world/native-babylon` 与 `defineBabylonNativeScene`；Block Profile 保持为
+  BWB-1 的可选独立包，不塞入 core API 形成默认 DSL；
+- [ ] BNA-3：Bundle、依赖/资产锁、Package、Contribution Hash 与 Build Receipt；只消费已发布的
+  class-specific Resource Ref，并绑定 Route Decision Hash/completed Attempt Result，不执行资产生产或发布；
 - [ ] BNA-4：统一 Gameplay Kernel、Profile-based Surface Admission、稳定 Surface/Subshape identity、
   原子生命周期和对抗测试；
 - [ ] BNA-5：Trusted Local/Hosted Isolated Trust Profile、确定性、预算和安全 Gate；
-- [ ] BNA-6：在 BNA-5 后冻结评测 Profile/预算/阈值，交付 AI Checker/Explain、Golden Corpus、真实
-  视觉与人工交互评估；
+- [ ] BNA-6：在 BNA-5 后冻结评测 Profile/预算/阈值、Route Decision、资产身份与同等生产预算，交付 AI
+  Checker/Explain、Golden Corpus、真实视觉与人工交互评估；Block 专属 Corpus 由 BWB-5 闭合；
 - [ ] BNA-7：正式 Capture；仅在需要时从同一冻结 Surface 派生 Route/Nav Evidence，不包含产品级
   `goTo`、重规划或移动执行；
 - [ ] BNA-8：按 Trusted Local、Hosted、Route 三种范围分别做最终 Go/No-Go 与文档切换。
@@ -949,6 +958,52 @@ Replay、Streaming/Dispose 和自动 Diagnostic；普通 Agent 只引用稳定 P
 在 BNA-1 至 BNA-6 完成并建立独立实施计划前，不提高总进度，不把实验 API 写入 Quickstart，也不修改
 Catalog/Hosted Builder 生产工作流。P2.6 仍可先使用审核过的 Structure Resource 和产品 GLB；Native
 Lane 不自动扩大 Cave、Overhang、双层 Route 或 NPC Navigation 的当前能力边界。
+
+#### P3.5 Source-neutral Asset Production / Admission
+
+详细权威为
+[Source-neutral 资产生产与准入长期设计](../docs/superpowers/specs/2026-08-28-source-neutral-asset-production-and-admission-design.md)。
+该工作流是 BNA/Canonical 之前的资源供应链，不是新的 Scene Source；当前全部为 Proposed/未实施，
+不追溯扩大已经完成的 BNA-0，也不提高总进度。
+
+- [ ] APA-0：完成书面规格、ADR/Native 指针、GameFactory 固定源码证据与 Mode A/B 审查；
+- [ ] APA-G0：在唯一 `packages/geometry-assets/**` Owner 冻结新的
+  `StaticGeometryAssetManifestV1`/`StaticGeometryBuildRecordV1`，不复用旧 Compiler/Collider 字段，不启用
+  Exploratory Canonical Geometry Compiler；
+- [ ] APA-1：冻结 Candidate Manifest、Production Request/Result/Receipt、Admission Result/Receipt/Profile、
+  Publication Result/Receipt 和关闭 Diagnostic；source-neutral 合同不复制 Static Geometry Manifest；
+- [ ] APA-2：实现不可变 Candidate Store、资产类别 Build 调度与只读 Admission；
+- [ ] APA-3：实现 exactly-once/可对账 Provider Router，再接一个真实 Provider；
+- [ ] APA-4：由 Static Geometry Owner 原子发布 Registry Ref/Publication Receipt；不修改 Canonical-only WorldPackage V2，也不先发明
+  Native Package 变体；
+- [ ] APA-5：完成单体 Landmark 纵向实验；`scene-shell` 只作 artifact-only 研究并验证 publish/package/load
+  Fail Closed；
+- [ ] APA-6：冻结 Golden、阈值与 scoped GO/NO-GO；真实 Native Package 集成仍由 BNA-3 独占。
+
+#### P3.6 Babylon Native Block Whitebox Profile
+
+详细权威为
+[Babylon Native Block Whitebox 创作 Profile 长期设计](../docs/superpowers/specs/2026-08-28-babylon-native-block-whitebox-profile-design.md)。
+该 Profile 采用 `JSON Control Plane + Babylon Native Block Whitebox + Frozen Contributions + SDK/Havok`
+组合；它不是第三条 Scene Source，也不恢复旧分支的 Three/Manifest/Compiler。当前全部为设计接受、实现
+未开始，不提高 Native 生产完成度。
+
+- [x] BWB-0：冻结 Profile、旧分支 `618d96b` 处置、外部证据、能力边界、依赖工作图和
+  [Mode A 审查](reviews/2026-08-28-babylon-native-block-whitebox-profile-design-review.md)；
+- [ ] BWB-1：在 BNA-2 后创建可选 `@whitebox-world/native-babylon-block-profile`，冻结 shape/grid/
+  palette、Build-epoch-local Layout 与 diagnostics；
+- [ ] BWB-2：重写 Occupancy、重叠、坡面输入、边界、Visual Group 和预算 Checker，不复制旧 DTO/
+  Preset/Compiler；
+- [ ] BWB-3：接入直接 Babylon Mesh、稳定视觉组和 Opening/top-down/侧视的 Build-Epoch-local authoring
+  screenshots；它们不是 BNA-7 formal WorldPackage/Browser Capture；
+- [ ] BWB-4：在 BNA-4 后从同一内存 Layout 产生 core Static Collider Contribution 及其关闭
+  `traversalBinding`，由 SDK 冻结并创建 Havok；不新增独立 Traversal/Visual Group Contribution，
+  Runtime 不查询 Layout 或第二 Height Sampler；
+- [ ] BWB-5：冻结山地、T 字空间、台阶、建筑、有限室内视觉及负向 Corpus，闭合结构、profile-local
+  screenshots、BNA-4 Collider overlay、Spawn Support、真实人物通过性和人工交互证据；
+- [ ] BWB-6：BWB-5 正确性成立后评估 Thin Instance、Chunk、Collider coalescing，交付 Profile-side
+  eligibility/grouping、等价 fixture、资源 benchmark 和 BNA-4 优化提案；不直接修改 Runtime/Havok，
+  不改变 AI-facing Schema 或 Contribution 语义。
 
 ## 5. 推荐实施顺序与依赖
 
@@ -982,11 +1037,23 @@ P1.1 Terrain / Region / Mask + P2.5 Surface Query + Static Structure Resource
 P1.4 WorldPackage + P1.6 AI Schema / WorldChangeSet + P2.4 Controller/Camera/Driver
   └── P3.1 Production Gates（复用 P0.3 协议并扩展生产 Profile）
         └── P3.2 默认切换
+
+Native Scene 独立候选链：
+
+BNA-0 -> BNA-1 + BNA-2
+BNA-1 + BNA-2 -> BNA-3 -> BNA-4 -> BNA-5 -> BNA-6
+BNA-2 -> BWB-1 -> BWB-2 -> BWB-3
+BNA-4 + BWB-2 -> BWB-4
+BNA-5 + BNA-6 + BWB-3 + BWB-4 -> BWB-5 -> BWB-6
+
+APA-0..APA-6 只提供 source-neutral 已发布资产；BNA-3 才把已发布 Resource Ref 纳入 Native Package。
 ```
 
 Placement S1、Simulation Take / Control Capture V1 与 Validation Capture/Integrity V1
 已形成回归纵向切片；后续 Validation 扩展仍应保持窄纵向切片；
 不要同时启动坐骑、装备、飞行、NPC 和室内，避免再次形成无法验收的大重构。
+这里的“室内”指正式多层 Surface/Camera/Navigation/Gameplay 能力；BWB-5 仅保留有限室内视觉 Case，
+用于证明白膜表达和局部碰撞，不改变该产品边界。
 
 ## 6. 下一里程碑
 
