@@ -2867,6 +2867,8 @@ export class BabylonWorldRuntime {
         `WORLDKIT_RUNTIME_CONTROL_TARGET_NOT_FOUND: ${entityId}`,
       );
     }
+    this.pendingCameraHeadingLockBeforeNextTick = false;
+    this.pendingPublishedCameraViewSyncBeforeNextTick = false;
     const controller = this.controllerFor(subject.entityId);
     if (isGoldenHumanoidControllerV1(controller)) {
       let context = this.latestGoldenCameraContextsByEntityId.get(
