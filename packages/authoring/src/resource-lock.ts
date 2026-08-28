@@ -95,6 +95,8 @@ function normalizeAnimationSet(
     animationBindings: resource.animationBindings.map((binding) => ({
       actionId: binding.actionId,
       sourceClipName: binding.sourceClipName,
+      semanticFamily: binding.semanticFamily,
+      automaticPresentationKeys: [...binding.automaticPresentationKeys],
       loopMode: binding.loopMode,
       playbackSpeedRatio: binding.playbackSpeedRatio,
       blendDurationSeconds: binding.blendDurationSeconds,

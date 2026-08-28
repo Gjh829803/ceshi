@@ -2194,6 +2194,31 @@ function validateAnimationSet(source) {
       `SUBJECT_REGISTRY_DUPLICATE_CLIP_MAPPING: '${duplicateClipName}' in '${source.resourceRef}'.`
     );
   }
+  const automaticKeys = source.animationBindings.flatMap(
+    (binding) => binding.automaticPresentationKeys
+  );
+  const duplicateAutomaticKey = duplicateValue(automaticKeys);
+  if (duplicateAutomaticKey !== void 0) {
+    throw new Error(
+      `SUBJECT_REGISTRY_DUPLICATE_PRESENTATION_KEY: '${duplicateAutomaticKey}' in '${source.resourceRef}'.`
+    );
+  }
+  const groundKeys = /* @__PURE__ */ new Set([
+    "locomotion.suspended",
+    "locomotion.idle",
+    "locomotion.walk",
+    "locomotion.run"
+  ]);
+  for (const binding of source.animationBindings) {
+    for (const key of binding.automaticPresentationKeys) {
+      const expectedFamily = groundKeys.has(key) ? "ground" : "airborne";
+      if (binding.semanticFamily !== expectedFamily) {
+        throw new Error(
+          `SUBJECT_REGISTRY_PRESENTATION_FAMILY_MISMATCH: '${key}' cannot bind '${binding.semanticFamily}' in '${source.resourceRef}'.`
+        );
+      }
+    }
+  }
 }
 function validateSubjectAsset(source) {
   const duplicateClipName = duplicateValue(source.inventory.animationClipNames);
@@ -2268,7 +2293,12 @@ function canonicalizeNewResourceCollections(source) {
       return {
         ...input,
         requiredActionIds: sortedStrings(input.requiredActionIds),
-        animationBindings: [...input.animationBindings].sort((left, right) => left.actionId.localeCompare(right.actionId)),
+        animationBindings: [...input.animationBindings].map((binding) => ({
+          ...binding,
+          automaticPresentationKeys: sortedStrings(
+            binding.automaticPresentationKeys
+          )
+        })).sort((left, right) => left.actionId.localeCompare(right.actionId)),
         aiMetadata: {
           ...input.aiMetadata,
           semanticTags: sortedStrings(input.aiMetadata.semanticTags)

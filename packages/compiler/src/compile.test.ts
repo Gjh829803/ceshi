@@ -256,14 +256,8 @@ const PRODUCT_FIXED_SPAWN_CASES = [
       {
         anchorEntityId: "spawn-g-bot-primary",
         subjectEntityId: "g-bot-primary",
-        authoredPositionMetersXYZ: [-2, 0.4327890520288841, 18],
-        normalizedPositionMetersXYZ: [-2, 0.433, 18],
-      },
-      {
-        anchorEntityId: "spawn-g-bot-secondary",
-        subjectEntityId: "g-bot-secondary",
-        authoredPositionMetersXYZ: [2, 0.4328405709186983, 18],
-        normalizedPositionMetersXYZ: [2, 0.433, 18],
+        authoredPositionMetersXYZ: [-2, 0, 18],
+        normalizedPositionMetersXYZ: [-2, 0, 18],
       },
     ],
   },
@@ -669,7 +663,7 @@ describe("compileWorld", () => {
         normalizedWorldIrHash: rigged.normalizedWorldIrHash!,
       }).executionPlanHash,
     ).toBe(
-      "sha256:66c9515ba70942093333d8fa4d56b71d11801ddb0f8e965cd02f0613996f1616",
+      "sha256:69664f9f15ec8fe397d34670aee445c9b952088d47582d84075b6a55a36a4cc7",
     );
   });
 
@@ -818,10 +812,12 @@ describe("compileWorld", () => {
     for (const binding of executionAnimationSet.animationBindings) {
       expectExactKeys(binding, [
         "actionId",
+        "automaticPresentationKeys",
         "blendDurationSeconds",
         "loopMode",
         "playbackSpeedRatio",
         "rootMotionMode",
+        "semanticFamily",
         "sourceClipName",
       ]);
     }

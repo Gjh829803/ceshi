@@ -53,15 +53,26 @@ interface ActiveAnimationV1 {
   actionStartTick: number;
 }
 
+interface WeightedActiveAnimationV1 {
+  readonly active: ActiveAnimationV1;
+  readonly startWeight: number;
+}
+
 interface AnimationTransitionV1 {
-  source: ActiveAnimationV1;
-  target: ActiveAnimationV1;
-  transitionStartTick: number;
-  durationTicks: number;
+  readonly sources: readonly WeightedActiveAnimationV1[];
+  readonly target: ActiveAnimationV1;
+  readonly targetStartWeight: number;
+  readonly transitionStartTick: number;
+  readonly durationTicks: number;
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
+}
+
+interface EffectiveAnimationWeightV1 {
+  readonly active: ActiveAnimationV1;
+  readonly weight: number;
 }
 
 export interface AnimationPresentationDebugTelemetryV1 {
@@ -75,35 +86,37 @@ export interface AnimationPresentationDebugTelemetryV1 {
   readonly actionExecutionId?: string;
 }
 
-const PRESENTATION_KEYS_BY_AUTOMATIC_ACTION_ID = Object.freeze({
-  idle: Object.freeze([
-    "locomotion.suspended",
-    "locomotion.idle",
-  ]),
-  walk: Object.freeze(["locomotion.walk"]),
-  run: Object.freeze(["locomotion.run"]),
-  jump: Object.freeze([
-    "locomotion.takeoff",
-    "locomotion.rising",
-    "locomotion.apex",
-  ]),
-} as const);
+const GROUND_AUTOMATIC_PRESENTATION_KEYS = new Set<SemanticPresentationKeyV1>([
+  "locomotion.suspended",
+  "locomotion.idle",
+  "locomotion.walk",
+  "locomotion.run",
+]);
+
+const AUTOMATIC_PRESENTATION_KEYS = new Set<SemanticPresentationKeyV1>([
+  ...GROUND_AUTOMATIC_PRESENTATION_KEYS,
+  "locomotion.takeoff",
+  "locomotion.rising",
+  "locomotion.apex",
+  "locomotion.falling",
+  "locomotion.landing",
+]);
+
+const ANIMATION_SEMANTIC_FAMILIES = new Set([
+  "ground",
+  "airborne",
+  "flight",
+  "water",
+  "posture",
+  "combat",
+  "emote",
+  "dance",
+]);
 
 const ANIMATION_PRESENTATION_FRAMES_PER_SECOND_MAX_V1 = 480;
 const ANIMATION_PRESENTATION_ABSOLUTE_FRAME_MAX_V1 = 1_000_000;
 const ANIMATION_PRESENTATION_FRAME_SPAN_MAX_V1 = 1_000_000;
 export const MAX_ANIMATION_ELAPSED_TICKS_V1 = 2_147_483_647;
-
-function presentationKeysForAutomaticAction(
-  actionId: GroundHumanoidActionIdV1,
-): readonly SemanticPresentationKeyV1[] | undefined {
-  if (actionId === "idle" || actionId === "walk" ||
-    actionId === "run" || actionId === "jump") {
-    return PRESENTATION_KEYS_BY_AUTOMATIC_ACTION_ID[actionId] as
-      readonly SemanticPresentationKeyV1[];
-  }
-  return undefined;
-}
 
 export class SubjectAnimationPlayer {
   private readonly animationsByPresentationKey: ReadonlyMap<
@@ -253,17 +266,8 @@ export class SubjectAnimationPlayer {
     const transition = this.transition;
     const blendWeight = transition === undefined
       ? 1
-      : transition.durationTicks === 0
-        ? 1
-        : clamp(
-            this.checkedElapsedTicks(
-              this.latestTick,
-              transition.transitionStartTick,
-            ) /
-              transition.durationTicks,
-            0,
-            1,
-          );
+      : this.effectiveTransitionWeights(transition, this.latestTick)
+          .find(({ active }) => active === transition.target)?.weight ?? 0;
     return Object.freeze({
       schemaVersion: 1,
       committedTick: this.latestTick,
@@ -422,10 +426,6 @@ export class SubjectAnimationPlayer {
       result.set(presentationKey, { presentationKey, ...clip });
     };
     const seenLegacyActionIds = new Set<GroundHumanoidActionIdV1>();
-    const clipsByLegacyActionId = new Map<
-      GroundHumanoidActionIdV1,
-      Omit<ValidatedPresentationAnimationV1, "presentationKey">
-    >();
     for (const binding of this.options.animationSet.animationBindings) {
       if (
         !Number.isFinite(binding.playbackSpeedRatio) ||
@@ -437,7 +437,9 @@ export class SubjectAnimationPlayer {
         Object.is(binding.blendDurationSeconds, -0) ||
         binding.blendDurationSeconds / FIXED_TIME_STEP_SECONDS >
           ACTION_PRESENTATION_BLEND_DURATION_TICKS_MAX_V1 ||
-        binding.rootMotionMode !== "in-place"
+        binding.rootMotionMode !== "in-place" ||
+        !ANIMATION_SEMANTIC_FAMILIES.has(binding.semanticFamily) ||
+        !Array.isArray(binding.automaticPresentationKeys)
       ) {
         incompatible();
       }
@@ -453,26 +455,19 @@ export class SubjectAnimationPlayer {
         binding.playbackSpeedRatio,
         blendDurationTicks,
       );
-      clipsByLegacyActionId.set(binding.actionId, clip);
-      const presentationKeys = presentationKeysForAutomaticAction(binding.actionId);
-      if (presentationKeys !== undefined) {
-        for (const key of presentationKeys) bindPresentation(key, clip);
+      for (const key of binding.automaticPresentationKeys) {
+        if (!AUTOMATIC_PRESENTATION_KEYS.has(key)) incompatible();
+        const expectedFamily = GROUND_AUTOMATIC_PRESENTATION_KEYS.has(key)
+          ? "ground"
+          : "airborne";
+        if (binding.semanticFamily !== expectedFamily) incompatible();
+        bindPresentation(key, clip);
       }
     }
     for (const actionId of this.options.animationSet.requiredActionIds) {
       if (!seenLegacyActionIds.has(actionId)) {
         incompatible();
       }
-    }
-    const jumpClip = clipsByLegacyActionId.get("jump");
-    const fallingClip = clipsByLegacyActionId.get("fall") ?? jumpClip;
-    const landingClip = clipsByLegacyActionId.get("land.hard") ??
-      clipsByLegacyActionId.get("land.hard.alt") ?? jumpClip;
-    if (fallingClip !== undefined) {
-      bindPresentation("locomotion.falling", fallingClip);
-    }
-    if (landingClip !== undefined) {
-      bindPresentation("locomotion.landing", landingClip);
     }
     for (const binding of this.options.actionPresentationRegistry.bindings) {
       bindPresentation(binding.presentationKey, validateClip(
@@ -508,18 +503,32 @@ export class SubjectAnimationPlayer {
     targetAnimation: ValidatedPresentationAnimationV1,
     presentation: ResolvedActionPresentationV1,
   ): void {
-    if (this.transition !== undefined) {
-      this.transition.source.animation.group.stop();
-      this.transition.target.animation.group.setWeightForAllAnimatables(1);
-    }
-    const source = this.current;
+    const effectiveSources = this.transition === undefined
+      ? [{ active: this.current, weight: 1 }]
+      : this.effectiveTransitionWeights(this.transition, tick);
     const target = { animation: targetAnimation, presentation, actionStartTick: tick };
     this.startPaused(targetAnimation);
-    targetAnimation.group.setWeightForAllAnimatables(0);
+    let targetStartWeight = 0;
+    const sourcesByGroup = new Map<AnimationGroup, WeightedActiveAnimationV1>();
+    for (const source of effectiveSources) {
+      if (source.weight <= 0) continue;
+      if (source.active.animation.group === targetAnimation.group) {
+        targetStartWeight += source.weight;
+        continue;
+      }
+      const existing = sourcesByGroup.get(source.active.animation.group);
+      sourcesByGroup.set(source.active.animation.group, {
+        active: source.active,
+        startWeight: (existing?.startWeight ?? 0) + source.weight,
+      });
+    }
+    targetStartWeight = clamp(targetStartWeight, 0, 1);
+    targetAnimation.group.setWeightForAllAnimatables(targetStartWeight);
     this.current = target;
     this.transition = {
-      source,
+      sources: Object.freeze([...sourcesByGroup.values()]),
       target,
+      targetStartWeight,
       transitionStartTick: tick,
       durationTicks: targetAnimation.blendDurationTicks,
     };
@@ -532,6 +541,26 @@ export class SubjectAnimationPlayer {
       this.sampleActive(this.current, tick);
       return;
     }
+    const weights = this.effectiveTransitionWeights(transition, tick);
+    for (const { active, weight } of weights) {
+      active.animation.group.setWeightForAllAnimatables(weight);
+      this.sampleActive(active, tick);
+    }
+    const targetWeight = weights.find(({ active }) =>
+      active === transition.target
+    )?.weight ?? 0;
+    if (targetWeight >= 1) {
+      for (const source of transition.sources) {
+        source.active.animation.group.stop();
+      }
+      this.transition = undefined;
+    }
+  }
+
+  private effectiveTransitionWeights(
+    transition: AnimationTransitionV1,
+    tick: number,
+  ): readonly EffectiveAnimationWeightV1[] {
     const alpha = transition.durationTicks === 0
       ? 1
       : clamp(
@@ -540,14 +569,18 @@ export class SubjectAnimationPlayer {
           0,
           1,
         );
-    transition.source.animation.group.setWeightForAllAnimatables(1 - alpha);
-    transition.target.animation.group.setWeightForAllAnimatables(alpha);
-    this.sampleActive(transition.source, tick);
-    this.sampleActive(transition.target, tick);
-    if (alpha >= 1) {
-      transition.source.animation.group.stop();
-      this.transition = undefined;
-    }
+    const remaining = 1 - alpha;
+    return Object.freeze([
+      ...transition.sources.map((source) => Object.freeze({
+        active: source.active,
+        weight: source.startWeight * remaining,
+      })),
+      Object.freeze({
+        active: transition.target,
+        weight: transition.targetStartWeight +
+          (1 - transition.targetStartWeight) * alpha,
+      }),
+    ]);
   }
 
   private sampleActive(active: ActiveAnimationV1, tick: number): void {

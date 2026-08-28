@@ -6,6 +6,11 @@ export interface CommittedRenderPoseV1 {
   readonly facingYawRadians: number;
 }
 
+export interface CommittedRenderPoseDiagnosticSnapshotV1 {
+  readonly previous: CommittedRenderPoseV1;
+  readonly current: CommittedRenderPoseV1;
+}
+
 function copyPose(pose: CommittedRenderPoseV1): CommittedRenderPoseV1 {
   if (
     !Number.isSafeInteger(pose.committedTick) ||
@@ -57,6 +62,13 @@ export class CommittedRenderPoseBufferV1 {
     }
     this.#previous = this.#current;
     this.#current = admitted;
+  }
+
+  diagnosticSnapshot(): CommittedRenderPoseDiagnosticSnapshotV1 {
+    return Object.freeze({
+      previous: copyPose(this.#previous),
+      current: copyPose(this.#current),
+    });
   }
 
   sample(interpolationAlphaRatio: number): CommittedRenderPoseV1 {

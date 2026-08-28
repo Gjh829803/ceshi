@@ -57,6 +57,35 @@ export const GROUND_HUMANOID_ACTION_IDS_V1 = Object.freeze([
 export type GroundHumanoidActionIdV1 =
   typeof GROUND_HUMANOID_ACTION_IDS_V1[number];
 
+export const HUMANOID_ANIMATION_SEMANTIC_FAMILIES_V1 = Object.freeze([
+  "ground",
+  "airborne",
+  "flight",
+  "water",
+  "posture",
+  "combat",
+  "emote",
+  "dance",
+] as const);
+
+export type HumanoidAnimationSemanticFamilyV1 =
+  typeof HUMANOID_ANIMATION_SEMANTIC_FAMILIES_V1[number];
+
+export const AUTOMATIC_LOCOMOTION_PRESENTATION_KEYS_V1 = Object.freeze([
+  "locomotion.suspended",
+  "locomotion.idle",
+  "locomotion.walk",
+  "locomotion.run",
+  "locomotion.takeoff",
+  "locomotion.rising",
+  "locomotion.apex",
+  "locomotion.falling",
+  "locomotion.landing",
+] as const);
+
+export type AutomaticLocomotionPresentationKeyV1 =
+  typeof AUTOMATIC_LOCOMOTION_PRESENTATION_KEYS_V1[number];
+
 export const BIPED_BONE_IDS_V1 = Object.freeze([
   "hips",
   "spine",

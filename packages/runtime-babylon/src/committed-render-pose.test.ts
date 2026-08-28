@@ -65,4 +65,24 @@ describe("CommittedRenderPoseBufferV1", () => {
     expect(() => buffer.sample(-0.01)).toThrow(RangeError);
     expect(() => buffer.sample(1.01)).toThrow(RangeError);
   });
+
+  it("exposes an immutable copy of both committed poses for read-only diagnostics", () => {
+    const previous = pose(11, [1, 2, 3], 0.25);
+    const current = pose(12, [4, 5, 6], 0.5);
+    const buffer = new CommittedRenderPoseBufferV1(previous);
+    buffer.commit(current);
+
+    const diagnostic = buffer.diagnosticSnapshot();
+
+    expect(diagnostic).toEqual({ previous, current });
+    expect(Object.isFrozen(diagnostic)).toBe(true);
+    expect(Object.isFrozen(diagnostic.previous)).toBe(true);
+    expect(Object.isFrozen(diagnostic.previous.positionMetersXYZ)).toBe(true);
+    expect(Object.isFrozen(diagnostic.current)).toBe(true);
+    expect(Object.isFrozen(diagnostic.current.positionMetersXYZ)).toBe(true);
+    expect(() => {
+      (diagnostic.current.positionMetersXYZ as unknown as number[])[1] = 999;
+    }).toThrow(TypeError);
+    expect(buffer.sample(1)).toEqual(current);
+  });
 });

@@ -481,10 +481,10 @@ describe("Package Subject Definition normalization", () => {
       "sha256:f3cd49aaa47748ff1ff938663ac9ee1df98faea222ef93782340aedf7fa0f635",
     );
     expect(result.value?.resources.resourceLockHash).toBe(
-      "sha256:8a6367dc877e71f4c8eb8606280ace9b6d84340f18258c244d84fa0ba482821a",
+      "sha256:1b75df2d354eba57136dbe6cae7f1bc081584bdef099d6d494514de74234c334",
     );
     expect(result.normalizedWorldIrHash).toBe(
-      "sha256:d56053b86d20c6e1e1b7de5851511515d07d26f6df5399d7e95200d24f77b722",
+      "sha256:3966f7d366f4f537c1ee4f93cb00c106fce56d29746c66fa914b557386b796ab",
     );
   });
 
@@ -721,10 +721,12 @@ describe("Package Subject Definition normalization", () => {
     for (const binding of animationSet.animationBindings) {
       expectExactKeys(binding, [
         "actionId",
+        "automaticPresentationKeys",
         "blendDurationSeconds",
         "loopMode",
         "playbackSpeedRatio",
         "rootMotionMode",
+        "semanticFamily",
         "sourceClipName",
       ]);
     }

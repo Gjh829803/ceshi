@@ -79,18 +79,27 @@ const animationSet: ExecutionAnimationSetV1 = {
   animationBindings: [
     {
       actionId: "idle", sourceClipName: "Idle", loopMode: "repeat",
+      semanticFamily: "ground",
+      automaticPresentationKeys: ["locomotion.suspended", "locomotion.idle"],
       playbackSpeedRatio: 1, blendDurationSeconds: 0, rootMotionMode: "in-place",
     },
     {
       actionId: "walk", sourceClipName: "Walk", loopMode: "repeat",
+      semanticFamily: "ground", automaticPresentationKeys: ["locomotion.walk"],
       playbackSpeedRatio: 1, blendDurationSeconds: 0.1, rootMotionMode: "in-place",
     },
     {
       actionId: "run", sourceClipName: "Run", loopMode: "repeat",
+      semanticFamily: "ground", automaticPresentationKeys: ["locomotion.run"],
       playbackSpeedRatio: 1, blendDurationSeconds: 0.1, rootMotionMode: "in-place",
     },
     {
       actionId: "jump", sourceClipName: "Jump", loopMode: "once",
+      semanticFamily: "airborne",
+      automaticPresentationKeys: [
+        "locomotion.takeoff", "locomotion.rising", "locomotion.apex",
+        "locomotion.falling", "locomotion.landing",
+      ],
       playbackSpeedRatio: 1, blendDurationSeconds: 0.1, rootMotionMode: "in-place",
     },
   ],
@@ -104,13 +113,24 @@ const gBotLikeAnimationSet: ExecutionAnimationSetV1 = {
     "land.hard",
   ],
   animationBindings: [
-    ...animationSet.animationBindings,
+    ...animationSet.animationBindings.map((binding) => binding.actionId === "jump"
+      ? {
+          ...binding,
+          automaticPresentationKeys: [
+            "locomotion.takeoff",
+            "locomotion.rising",
+            "locomotion.apex",
+          ] as const,
+        }
+      : binding),
     {
       actionId: "fall", sourceClipName: "Fall", loopMode: "repeat",
+      semanticFamily: "airborne", automaticPresentationKeys: ["locomotion.falling"],
       playbackSpeedRatio: 1, blendDurationSeconds: 0.12, rootMotionMode: "in-place",
     },
     {
       actionId: "land.hard", sourceClipName: "LandHard", loopMode: "once",
+      semanticFamily: "airborne", automaticPresentationKeys: ["locomotion.landing"],
       playbackSpeedRatio: 1, blendDurationSeconds: 0.08, rootMotionMode: "in-place",
     },
   ],
@@ -292,6 +312,76 @@ describe("SubjectAnimationPlayer committed presentation", () => {
     player.applyPose();
     expect(groups[5]!.animatables[0]?.weight).toBe(1);
     expect(player.debugTelemetry().isTransitioning).toBe(false);
+
+    player.dispose();
+    scene.dispose();
+    engine.dispose();
+  });
+
+  it("preserves the blended airborne pose when falling and landing interrupt in-flight transitions", () => {
+    const { engine, scene, root } = sceneFixture();
+    const groups = ["Idle", "Walk", "Run", "Jump", "Fall", "LandHard"].map(
+      (name) => clipGroup(scene, name),
+    );
+    const player = new SubjectAnimationPlayer({
+      animationGroups: groups,
+      animationSet: gBotLikeAnimationSet,
+      actionPresentationRegistry: emptyRegistry,
+      authorityTransformNode: root,
+      ownedVisualAnimationTargets: ownedTargets(groups),
+      subjectAssetRef: gBotLikeAnimationSet.subjectAssetRef,
+      artifactContentHash: `sha256:${"a".repeat(64)}`,
+    });
+    const airborne = (
+      tick: number,
+      verticalPhase: "rising" | "falling",
+      phaseEnteredTick: number,
+    ) => locomotion(tick, {
+      mobilityMode: "airborne",
+      gait: "none",
+      verticalPhase,
+      supportMode: "unsupported",
+      movementMedium: "air",
+      linearVelocity: { x: 0, y: verticalPhase === "falling" ? -2 : 2, z: 0 },
+      phaseEnteredTick,
+    });
+    const weights = (): readonly number[] => groups.map(
+      (group) => group.animatables[0]?.weight ?? 0,
+    );
+
+    player.step(resolveActionPresentationV1(
+      committed(1, airborne(1, "rising", 1)),
+      emptyRegistry,
+    ));
+    player.applyPose();
+    expect(weights()).toEqual([1, 0, 0, 0, 0, 0]);
+
+    player.step(resolveActionPresentationV1(
+      committed(2, airborne(2, "falling", 2)),
+      emptyRegistry,
+    ));
+    player.applyPose();
+    const fallingEntry = weights();
+    expect(fallingEntry.reduce((sum, weight) => sum + weight, 0)).toBeCloseTo(1, 10);
+    expect(fallingEntry[0]).toBeGreaterThan(0.5);
+    expect(fallingEntry[3]).toBeGreaterThan(0);
+    expect(fallingEntry[3]).toBeLessThan(0.5);
+    expect(fallingEntry[4]).toBe(0);
+
+    player.step(resolveActionPresentationV1(
+      committed(3, locomotion(3, {
+        verticalPhase: "landing",
+        phaseEnteredTick: 3,
+      })),
+      emptyRegistry,
+    ));
+    player.applyPose();
+    const landingEntry = weights();
+    expect(landingEntry.reduce((sum, weight) => sum + weight, 0)).toBeCloseTo(1, 10);
+    expect(landingEntry[0]).toBeGreaterThan(0);
+    expect(landingEntry[3]).toBeGreaterThan(0);
+    expect(landingEntry[4]).toBeGreaterThan(0);
+    expect(landingEntry[5]).toBe(0);
 
     player.dispose();
     scene.dispose();
@@ -889,6 +979,8 @@ describe("SubjectAnimationPlayer committed presentation", () => {
         {
           actionId: "emote.salute",
           sourceClipName: "Salute",
+          semanticFamily: "emote",
+          automaticPresentationKeys: [],
           loopMode: "once",
           playbackSpeedRatio: 1,
           blendDurationSeconds: 0.1,
@@ -934,6 +1026,40 @@ describe("SubjectAnimationPlayer committed presentation", () => {
 
     player.dispose();
     expect(saluteStop).toHaveBeenCalledTimes(2);
+    scene.dispose();
+    engine.dispose();
+  });
+
+  it("rejects a water-family binding even when it claims an airborne presentation key", () => {
+    const wrongFamilySet = {
+      ...animationSet,
+      animationBindings: animationSet.animationBindings.map((binding) => ({
+        ...binding,
+        semanticFamily: binding.actionId === "jump" ? "water" : "ground",
+        automaticPresentationKeys: binding.actionId === "idle"
+          ? ["locomotion.suspended", "locomotion.idle"]
+          : binding.actionId === "walk"
+            ? ["locomotion.walk"]
+            : binding.actionId === "run"
+              ? ["locomotion.run"]
+              : ["locomotion.takeoff", "locomotion.rising", "locomotion.apex"],
+      })),
+    } as unknown as ExecutionAnimationSetV1;
+    const { engine, scene, root } = sceneFixture();
+    const groups = ["Idle", "Walk", "Run", "Jump"].map((name) =>
+      clipGroup(scene, name)
+    );
+
+    expect(() => new SubjectAnimationPlayer({
+      animationGroups: groups,
+      animationSet: wrongFamilySet,
+      actionPresentationRegistry: emptyRegistry,
+      authorityTransformNode: root,
+      ownedVisualAnimationTargets: ownedTargets(groups),
+      subjectAssetRef: wrongFamilySet.subjectAssetRef,
+      artifactContentHash: `sha256:${"a".repeat(64)}`,
+    })).toThrow("SUBJECT_ASSET_ANIMATION_INCOMPATIBLE");
+
     scene.dispose();
     engine.dispose();
   });

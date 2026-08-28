@@ -1,7 +1,9 @@
 import type { CompositionPrimitiveV1, Vec3 } from "@whitebox-world/subject-composition";
 import type {
+  AutomaticLocomotionPresentationKeyV1,
   BipedBoneIdV1,
   GroundHumanoidActionIdV1,
+  HumanoidAnimationSemanticFamilyV1,
   SubjectBodyTopologyV2,
 } from "@whitebox-world/subject-contracts";
 
@@ -70,6 +72,8 @@ export interface RigProfileManifestInputV1 extends SubjectRegistryResourceBaseIn
 export interface AnimationBindingV1 {
   actionId: GroundHumanoidActionIdV1;
   sourceClipName: string;
+  semanticFamily: HumanoidAnimationSemanticFamilyV1;
+  automaticPresentationKeys: readonly AutomaticLocomotionPresentationKeyV1[];
   loopMode: "repeat" | "once";
   playbackSpeedRatio: number;
   blendDurationSeconds: number;

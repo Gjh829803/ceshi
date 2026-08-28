@@ -1,10 +1,14 @@
 import {
+  AUTOMATIC_LOCOMOTION_PRESENTATION_KEYS_V1,
+  HUMANOID_ANIMATION_SEMANTIC_FAMILIES_V1,
   SUBJECT_RESOURCE_KINDS_V1,
   isBipedBoneIdV1,
   isGroundHumanoidActionIdV1,
   isSubjectBodyTopologyV2,
   type BipedBoneIdV1,
+  type AutomaticLocomotionPresentationKeyV1,
   type GroundHumanoidActionIdV1,
+  type HumanoidAnimationSemanticFamilyV1,
   type SubjectBodyTopologyV2,
 } from "@whitebox-world/subject-contracts";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
@@ -123,6 +127,8 @@ export interface ExecutionRigProfileV1 {
 export interface ExecutionAnimationBindingV1 {
   actionId: GroundHumanoidActionIdV1;
   sourceClipName: string;
+  semanticFamily: HumanoidAnimationSemanticFamilyV1;
+  automaticPresentationKeys: readonly AutomaticLocomotionPresentationKeyV1[];
   loopMode: "repeat" | "once";
   playbackSpeedRatio: number;
   blendDurationSeconds: number;
@@ -1093,6 +1099,8 @@ function validateAnimationSet(input: unknown): void {
     const row = exactDataRecord(binding, [
       "actionId",
       "sourceClipName",
+      "semanticFamily",
+      "automaticPresentationKeys",
       "loopMode",
       "playbackSpeedRatio",
       "blendDurationSeconds",
@@ -1100,6 +1108,10 @@ function validateAnimationSet(input: unknown): void {
     ]);
     requireGroundHumanoidActionId(row.actionId);
     requireString(row.sourceClipName);
+    requireLiteral(row.semanticFamily, HUMANOID_ANIMATION_SEMANTIC_FAMILIES_V1);
+    dataArray(row.automaticPresentationKeys).forEach((key) =>
+      requireLiteral(key, AUTOMATIC_LOCOMOTION_PRESENTATION_KEYS_V1)
+    );
     requireLiteral(row.loopMode, ["repeat", "once"]);
     requireFinite(row.playbackSpeedRatio);
     requireFinite(row.blendDurationSeconds);

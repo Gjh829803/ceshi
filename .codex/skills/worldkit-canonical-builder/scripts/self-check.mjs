@@ -3436,6 +3436,27 @@ const GROUND_HUMANOID_ACTION_IDS_V1 = Object.freeze([
   "emote.angry",
   "dance.rumba"
 ]);
+const HUMANOID_ANIMATION_SEMANTIC_FAMILIES_V1 = Object.freeze([
+  "ground",
+  "airborne",
+  "flight",
+  "water",
+  "posture",
+  "combat",
+  "emote",
+  "dance"
+]);
+const AUTOMATIC_LOCOMOTION_PRESENTATION_KEYS_V1 = Object.freeze([
+  "locomotion.suspended",
+  "locomotion.idle",
+  "locomotion.walk",
+  "locomotion.run",
+  "locomotion.takeoff",
+  "locomotion.rising",
+  "locomotion.apex",
+  "locomotion.falling",
+  "locomotion.landing"
+]);
 const BIPED_BONE_IDS_V1 = Object.freeze([
   "hips",
   "spine",
@@ -4196,6 +4217,8 @@ function validateAnimationSet$1(input) {
     const row = exactDataRecord(binding, [
       "actionId",
       "sourceClipName",
+      "semanticFamily",
+      "automaticPresentationKeys",
       "loopMode",
       "playbackSpeedRatio",
       "blendDurationSeconds",
@@ -4203,6 +4226,10 @@ function validateAnimationSet$1(input) {
     ]);
     requireGroundHumanoidActionId(row.actionId);
     requireString(row.sourceClipName);
+    requireLiteral(row.semanticFamily, HUMANOID_ANIMATION_SEMANTIC_FAMILIES_V1);
+    dataArray(row.automaticPresentationKeys).forEach(
+      (key) => requireLiteral(key, AUTOMATIC_LOCOMOTION_PRESENTATION_KEYS_V1)
+    );
     requireLiteral(row.loopMode, ["repeat", "once"]);
     requireFinite(row.playbackSpeedRatio);
     requireFinite(row.blendDurationSeconds);
@@ -7548,6 +7575,31 @@ function validateAnimationSet(source) {
       `SUBJECT_REGISTRY_DUPLICATE_CLIP_MAPPING: '${duplicateClipName}' in '${source.resourceRef}'.`
     );
   }
+  const automaticKeys = source.animationBindings.flatMap(
+    (binding) => binding.automaticPresentationKeys
+  );
+  const duplicateAutomaticKey = duplicateValue(automaticKeys);
+  if (duplicateAutomaticKey !== void 0) {
+    throw new Error(
+      `SUBJECT_REGISTRY_DUPLICATE_PRESENTATION_KEY: '${duplicateAutomaticKey}' in '${source.resourceRef}'.`
+    );
+  }
+  const groundKeys = /* @__PURE__ */ new Set([
+    "locomotion.suspended",
+    "locomotion.idle",
+    "locomotion.walk",
+    "locomotion.run"
+  ]);
+  for (const binding of source.animationBindings) {
+    for (const key of binding.automaticPresentationKeys) {
+      const expectedFamily = groundKeys.has(key) ? "ground" : "airborne";
+      if (binding.semanticFamily !== expectedFamily) {
+        throw new Error(
+          `SUBJECT_REGISTRY_PRESENTATION_FAMILY_MISMATCH: '${key}' cannot bind '${binding.semanticFamily}' in '${source.resourceRef}'.`
+        );
+      }
+    }
+  }
 }
 function validateSubjectAsset(source) {
   const duplicateClipName = duplicateValue(source.inventory.animationClipNames);
@@ -7622,7 +7674,12 @@ function canonicalizeNewResourceCollections(source) {
       return {
         ...input,
         requiredActionIds: sortedStrings$1(input.requiredActionIds),
-        animationBindings: [...input.animationBindings].sort((left, right) => left.actionId.localeCompare(right.actionId)),
+        animationBindings: [...input.animationBindings].map((binding) => ({
+          ...binding,
+          automaticPresentationKeys: sortedStrings$1(
+            binding.automaticPresentationKeys
+          )
+        })).sort((left, right) => left.actionId.localeCompare(right.actionId)),
         aiMetadata: {
           ...input.aiMetadata,
           semanticTags: sortedStrings$1(input.aiMetadata.semanticTags)
@@ -10286,6 +10343,8 @@ function normalizeAnimationSet(resource) {
     animationBindings: resource.animationBindings.map((binding) => ({
       actionId: binding.actionId,
       sourceClipName: binding.sourceClipName,
+      semanticFamily: binding.semanticFamily,
+      automaticPresentationKeys: [...binding.automaticPresentationKeys],
       loopMode: binding.loopMode,
       playbackSpeedRatio: binding.playbackSpeedRatio,
       blendDurationSeconds: binding.blendDurationSeconds,
@@ -22233,6 +22292,8 @@ function compileAnimationSetV1(resource) {
     animationBindings: resource.animationBindings.map((binding) => ({
       actionId: binding.actionId,
       sourceClipName: binding.sourceClipName,
+      semanticFamily: binding.semanticFamily,
+      automaticPresentationKeys: [...binding.automaticPresentationKeys],
       loopMode: binding.loopMode,
       playbackSpeedRatio: binding.playbackSpeedRatio,
       blendDurationSeconds: binding.blendDurationSeconds,
