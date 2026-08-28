@@ -253,6 +253,11 @@ describe("compileWorldV5", () => {
       executionPlan: {
         schemaVersion: 5,
         initialControlledEntityId: "player",
+        actionPresentationRegistry: {
+          schemaVersion: 1,
+          bindings: [],
+          rootMotionSources: [],
+        },
       },
     });
   });

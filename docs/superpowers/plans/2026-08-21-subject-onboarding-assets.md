@@ -63,7 +63,10 @@ Expected: FAIL.
 
 - [ ] **Step 3: Resolve exact source files before copying**
 
-Read only `.fbx` beneath `D:\01_Workspace\01_Loopit\07_world_model\引擎编辑器\模型资产\载具`; assert count `12`, every resolved path remains beneath that directory, and every file is below GitHub's 100 MB single-file limit.
+Require the external asset root through `WHITEBOX_SUBJECT_SOURCE_ROOT`, then read only `.fbx`
+beneath its `载具` child directory. Fail closed when the variable is absent; assert count `12`,
+every resolved path remains beneath that configured directory, and every file is below GitHub's
+100 MB single-file limit. The SDK repository path is never an asset-source locator.
 
 - [ ] **Step 4: Copy binaries with stable English ids**
 

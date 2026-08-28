@@ -55,6 +55,17 @@ import type {
 } from "@whitebox-world/runtime-contracts";
 import { emitTransformedStaticColliderTriangleMeshV1 } from "@whitebox-world/terrain-surface";
 import { parseGameplayWorldStateProjectionV1 } from "@whitebox-world/runtime-host";
+import {
+  hashRootMotionSourceV1,
+  type RootMotionSourceBodyV1,
+} from "@whitebox-world/character-movement";
+import {
+  createActionPresentationRegistryV1,
+  hashActionPresentationBindingV1,
+  type ActionPresentationBindingBodyV1,
+  type LocomotionPresentationKeyV1,
+  type ResolvedActionPresentationV1,
+} from "@whitebox-world/subject-actions";
 import { isNil } from "lodash-es";
 
 import {
@@ -71,6 +82,7 @@ import {
   type BabylonWorldRuntimeOptions,
 } from "./index";
 import { BABYLON_GAMEPLAY_RUNTIME_INTERNAL } from "./gameplay-runtime-internal";
+import { CameraComponentV1 } from "./camera-component";
 import { bindRuntimeTestPossession } from "./runtime-test-possession";
 import { compileRuntimeTestPlanV5 } from "./runtime-test-plan";
 import { SubjectAnimationPlayer } from "./subject-animation-player";
@@ -98,6 +110,7 @@ const havokWasmBinary = havokWasmBytes.buffer.slice(
   havokWasmBytes.byteOffset,
   havokWasmBytes.byteOffset + havokWasmBytes.byteLength,
 ) as ArrayBuffer;
+const ORBIT_CAMERA_PROFILE_REF = "worldkit://camera-profile/orbit.medium@1";
 
 const goldenSubjectAssetBytes = new Uint8Array(
   await readFile(
@@ -142,15 +155,12 @@ const gBotAuthoringSpec = JSON.parse(
 ) as AuthoringSpecV4;
 
 describe("Babylon runtime fixture compilation", () => {
-  it("keeps the real G Bot authored heightfield non-flat", () => {
+  it("keeps the product G Bot control fixture flat", () => {
     const executionPlan = compileRouteExecutionPlan(structuredClone(gBotAuthoringSpec));
     const uniqueHeights = new Set(executionPlan.terrain.heightSamplesMeters);
 
-    expect(uniqueHeights.size).toBeGreaterThan(1);
-    expect(sampleExecutionTerrainHeight(executionPlan.terrain, -2, 18)).toBeCloseTo(
-      0.4327890520288841,
-      12,
-    );
+    expect(uniqueHeights).toEqual(new Set([0]));
+    expect(sampleExecutionTerrainHeight(executionPlan.terrain, -2, 18)).toBe(0);
   });
 });
 
@@ -392,6 +402,14 @@ function createClipGroup(
   return group;
 }
 
+function ownedAnimationTargets(
+  groups: readonly AnimationGroup[],
+): ReadonlySet<object> {
+  return new Set(groups.flatMap((group) =>
+    group.targetedAnimations.map((targeted) => targeted.target as object)
+  ));
+}
+
 function createAnimationSet(
   overrides: Partial<ExecutionAnimationSetV1> = {},
 ): ExecutionAnimationSetV1 {
@@ -405,6 +423,8 @@ function createAnimationSet(
       {
         actionId: "idle",
         sourceClipName: "idle",
+        semanticFamily: "ground",
+        automaticPresentationKeys: ["locomotion.suspended", "locomotion.idle"],
         loopMode: "repeat",
         playbackSpeedRatio: 1,
         blendDurationSeconds: 0,
@@ -413,6 +433,8 @@ function createAnimationSet(
       {
         actionId: "walk",
         sourceClipName: "walk",
+        semanticFamily: "ground",
+        automaticPresentationKeys: ["locomotion.walk"],
         loopMode: "repeat",
         playbackSpeedRatio: 1.5,
         blendDurationSeconds: 0.5,
@@ -421,6 +443,8 @@ function createAnimationSet(
       {
         actionId: "run",
         sourceClipName: "run",
+        semanticFamily: "ground",
+        automaticPresentationKeys: ["locomotion.run"],
         loopMode: "repeat",
         playbackSpeedRatio: 1,
         blendDurationSeconds: 0.25,
@@ -429,6 +453,11 @@ function createAnimationSet(
       {
         actionId: "jump",
         sourceClipName: "jump",
+        semanticFamily: "airborne",
+        automaticPresentationKeys: [
+          "locomotion.takeoff", "locomotion.rising", "locomotion.apex",
+          "locomotion.falling", "locomotion.landing",
+        ],
         loopMode: "once",
         playbackSpeedRatio: 2,
         blendDurationSeconds: 0,
@@ -437,6 +466,29 @@ function createAnimationSet(
     ],
     ...overrides,
   };
+}
+
+const EMPTY_ACTION_PRESENTATION_REGISTRY_V1 =
+  createActionPresentationRegistryV1({
+    schemaVersion: 1,
+    bindings: [],
+    rootMotionSources: [],
+  });
+
+function resolvedAutomaticPresentation(
+  tick: number,
+  actionId: "idle" | "walk" | "run" | "jump",
+): ResolvedActionPresentationV1 {
+  const presentationKey: LocomotionPresentationKeyV1 = actionId === "jump"
+    ? "locomotion.rising"
+    : `locomotion.${actionId}`;
+  return Object.freeze({
+    schemaVersion: 1,
+    committedTick: tick,
+    source: "locomotion",
+    presentationKey,
+    layeredMoves: Object.freeze([]),
+  });
 }
 
 function animationFrame(group: AnimationGroup): number {
@@ -486,6 +538,7 @@ interface SubjectVisualInternals extends SubjectVisual {
   assetLease?: SubjectAssetLeaseV1;
   primitiveMeshes?: readonly Mesh[];
   assetPartRoots?: readonly TransformNode[];
+  animationPlayer?: SubjectAnimationPlayer;
 }
 
 interface SubjectVisualProbe {
@@ -1276,7 +1329,7 @@ describe("BabylonWorldRuntime", () => {
     await runtime.dispose();
   });
 
-  it("publishes support-derived state for uncontrolled grounded subjects every tick", async () => {
+  it("publishes committed Locomotion V2 for uncontrolled grounded subjects every tick", async () => {
     const runtime = await createRiggedRuntime(createTwoRiggedSubjectExecutionPlan());
     try {
       // Let both subjects settle from their bootstrap onto the terrain.
@@ -1285,25 +1338,36 @@ describe("BabylonWorldRuntime", () => {
       expect(settled.movementMedium).toBe("ground");
       const settledHeightMeters = settled.positionMetersXYZ[1];
 
-      // Only a per-tick support publish moves the extra's published Feel ref
-      // off the compiled value; a frozen stale state would keep medium-ground.
+      const compiledFeelRef = settled.activeControlFeelProfileRef;
       expect(
+        runtime.requestControlFeelProfile(
+          "hero-b",
+          compiledFeelRef,
+        ),
+      ).toBe(true);
+      expect(() =>
         runtime.requestControlFeelProfile(
           "hero-b",
           "worldkit://control-feel-profile/humanoid.heavy-ground@1",
         ),
-      ).toBe(true);
+      ).toThrow(/^SUBJECT_OVERRIDE_FORBIDDEN/);
       const after = await runtime.runFixedInput({
         actions: ["move-forward"],
         ticks: 2,
       });
       const extra = after.subjectStatesByEntityId["hero-b"]!;
       expect(extra.movementMedium).toBe("ground");
-      expect(extra.activeControlFeelProfileRef).toBe(
-        "worldkit://control-feel-profile/humanoid.heavy-ground@1",
-      );
-      // The idle extra receives support publishes but is not simulated with
-      // player input or gravity integration: it stays put on the ground.
+      expect(extra.activeControlFeelProfileRef).toBe(compiledFeelRef);
+      expect(extra.locomotion).toMatchObject({
+        schemaVersion: 2,
+        status: "active",
+        committedTick: after.tick,
+        mobilityMode: "grounded",
+        gait: "idle",
+        supportMode: "supported",
+      });
+      // The idle extra receives a neutral-input transaction and committed
+      // support state, but never inherits the possessed actor's input.
       expect(extra.positionMetersXYZ[1]).toBeCloseTo(settledHeightMeters, 5);
       expect(Math.hypot(
         extra.velocityMetersPerSecondXYZ[0],
@@ -1388,8 +1452,8 @@ describe("BabylonWorldRuntime", () => {
     expect(disposeController).toHaveBeenCalledTimes(1);
   });
 
-  it("rolls back registered character components when camera-stage initialization fails", async () => {
-    const initializationFailure = new Error("TEST_CAMERA_STAGE_INITIALIZATION_FAILURE");
+  it("rolls back registered character components when ready-stage initialization fails", async () => {
+    const initializationFailure = new Error("TEST_READY_STAGE_INITIALIZATION_FAILURE");
     const disposeController = vi.spyOn(
       PhysicsCharacterController.prototype,
       "dispose",
@@ -1398,7 +1462,7 @@ describe("BabylonWorldRuntime", () => {
 
     const error = await createRuntime(executionPlan, {
       onInitializationStage: (stage) => {
-        if (stage === "camera") throw initializationFailure;
+        if (stage === "ready") throw initializationFailure;
       },
     }).catch((reason) => reason as unknown);
 
@@ -1777,6 +1841,7 @@ describe("BabylonWorldRuntime", () => {
           material,
           scene,
           subjectAssetCache: cache,
+          actionPresentationRegistry: EMPTY_ACTION_PRESENTATION_REGISTRY_V1,
         })).rejects.toMatchObject({ code: "SUBJECT_ASSET_RIG_INCOMPATIBLE" });
         expect(acquire).not.toHaveBeenCalled();
         expect(
@@ -1946,6 +2011,7 @@ describe("BabylonWorldRuntime", () => {
           material,
           scene,
           subjectAssetCache: cache,
+          actionPresentationRegistry: EMPTY_ACTION_PRESENTATION_REGISTRY_V1,
         }).catch((reason) => reason as unknown);
         const cacheInternals = cache as unknown as {
           leases: ReadonlySet<SubjectAssetLeaseV1>;
@@ -1986,6 +2052,7 @@ describe("BabylonWorldRuntime", () => {
           material,
           scene,
           subjectAssetCache: cache,
+          actionPresentationRegistry: EMPTY_ACTION_PRESENTATION_REGISTRY_V1,
         }) as SubjectVisualInternals;
         const instance = visual.assetInstance!;
         const lease = visual.assetLease!;
@@ -2124,6 +2191,7 @@ describe("BabylonWorldRuntime", () => {
           material,
           scene,
           subjectAssetCache: cache,
+          actionPresentationRegistry: EMPTY_ACTION_PRESENTATION_REGISTRY_V1,
         }).catch((reason) => reason as unknown);
 
         expect(error).toMatchObject({ code: "SUBJECT_ASSET_SOCKET_BONE_MISSING" });
@@ -2172,23 +2240,473 @@ describe("BabylonWorldRuntime", () => {
     expect(runtime.snapshot().subjectStatesByEntityId.player?.activeActionId).toBe("idle");
 
     const walking = await runtime.runFixedInput({ actions: ["move-right"], ticks: 2 });
-    expect(walking.subjectStatesByEntityId.player?.activeActionId).toBe("walk");
+    expect(walking.subjectStatesByEntityId.player).toMatchObject({
+      activeActionId: "walk",
+      locomotion: {
+        schemaVersion: 2,
+        status: "active",
+        gait: "walk",
+        committedTick: walking.tick,
+      },
+    });
 
     const running = await runtime.runFixedInput({
       actions: ["move-right", "run"],
       ticks: 2,
     });
-    expect(running.subjectStatesByEntityId.player?.activeActionId).toBe("run");
+    expect(running.subjectStatesByEntityId.player).toMatchObject({
+      activeActionId: "run",
+      locomotion: {
+        schemaVersion: 2,
+        status: "active",
+        gait: "run",
+        committedTick: running.tick,
+      },
+    });
 
     const jumping = await runtime.runFixedInput({ actions: ["jump"], ticks: 4 });
     expect(jumping.subjectStatesByEntityId.player?.activeActionId).toBe("jump");
+    expect(jumping.subjectStatesByEntityId.player).toMatchObject({
+      locomotion: {
+        schemaVersion: 2,
+        status: "active",
+        mobilityMode: "airborne",
+        committedTick: jumping.tick,
+      },
+    });
+    expect(["takeoff", "rising", "apex", "falling"]).toContain(
+      (jumping.subjectStatesByEntityId.player as unknown as {
+        locomotion: { verticalPhase: string };
+      }).locomotion.verticalPhase,
+    );
     const idleAgain = await runtime.runFixedInput({ actions: [], ticks: 180 });
-    expect(idleAgain.subjectStatesByEntityId.player?.activeActionId).toBe("idle");
+    expect(idleAgain.subjectStatesByEntityId.player).toMatchObject({
+      activeActionId: "idle",
+      locomotion: {
+        schemaVersion: 2,
+        status: "active",
+        mobilityMode: "grounded",
+        gait: "idle",
+        committedTick: idleAgain.tick,
+      },
+    });
 
     await runtime.dispose();
   });
 
-  it("loads the Registry G Bot with a Hips-root Mixamo rig and four semantic Actions", async () => {
+  it("prepares, aborts, and commits one real Golden Gameplay Tick without early publication", async () => {
+    const runtime = await createRiggedRuntime();
+    try {
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      expect(internal.prepareFixedInputTick).toBeTypeOf("function");
+      const before = runtime.snapshot();
+
+      const aborted = await internal.prepareFixedInputTick!({
+        actions: ["move-right"],
+        ticks: 1,
+      }, emptyActionProjection(before.tick + 1));
+      expect(runtime.snapshot()).toEqual(before);
+      expect(aborted.projectedWorldStateAfter.simulationTick).toBe(before.tick + 1);
+      await aborted.abort();
+      expect(runtime.snapshot()).toEqual(before);
+
+      const committed = await internal.prepareFixedInputTick!({
+        actions: ["move-right"],
+        ticks: 1,
+      }, emptyActionProjection(before.tick + 1));
+      expect(runtime.snapshot()).toEqual(before);
+      committed.commitPrepared();
+      expect(runtime.snapshot().tick).toBe(before.tick + 1);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("restores the exact world checkpoint when Golden prepare fails after an earlier Subject mutates", async () => {
+    const runtime = await createRiggedRuntime(createTwoRiggedSubjectExecutionPlan());
+    try {
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      expect(internal.prepareFixedInputTick).toBeTypeOf("function");
+      const beforeRuntime = runtime.snapshot();
+      const beforeWorld = internal.readWorldProjection();
+      const conflictingAction = (id: string) => Object.freeze({
+        id,
+        kind: "action-state" as const,
+        semanticActionRef: "worldkit://semantic-action/test-conflict@1",
+        semanticActionHash: `sha256:${"c".repeat(64)}` as const,
+        actorEntityId: "hero-b",
+        mode: "active" as const,
+        startedSimulationTick: 1,
+        lastTransitionSimulationTick: 1,
+      });
+      const first = conflictingAction("action-execution:hero-b:first");
+      const second = conflictingAction("action-execution:hero-b:second");
+
+      await expect(internal.prepareFixedInputTick!(
+        { actions: ["move-forward"], ticks: 1 },
+        Object.freeze({
+          simulationTick: 1,
+          activeActionStatesById: Object.freeze({
+            [first.id]: first,
+            [second.id]: second,
+          }),
+        }),
+      )).rejects.toThrow("3C_ACTION_AUTHORITY_AMBIGUOUS");
+
+      expect(runtime.snapshot()).toEqual(beforeRuntime);
+      expect(internal.readWorldProjection()).toEqual(beforeWorld);
+      const recovered = await internal.prepareFixedInputTick!(
+        { actions: [], ticks: 1 },
+        emptyActionProjection(1),
+      );
+      recovered.commitPrepared();
+      expect(runtime.snapshot().tick).toBe(1);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+const RUNTIME_ACTION_HASH = `sha256:${"a".repeat(64)}` as const;
+const RUNTIME_STATE_ONLY_ACTION_HASH = `sha256:${"b".repeat(64)}` as const;
+const runtimeRootMotionBody = {
+  schemaVersion: 1,
+  resourceRef: "worldkit://root-motion/runtime-dash@1",
+  fixedDeltaSeconds: 1 / 60,
+  samples: [
+    { translationDeltaMetersXYZ: [0.5, 0, 0], facingYawDeltaRadians: 0 },
+  ],
+} as const satisfies RootMotionSourceBodyV1;
+const runtimeRootMotionHash = hashRootMotionSourceV1(runtimeRootMotionBody);
+const runtimeActionBindingBody = {
+  kind: "action-presentation-binding",
+  schemaVersion: 1,
+  resourceRef: "worldkit://action-presentation/runtime-dash@1",
+  presentationKey: "action.runtime-dash",
+  semanticActionRef: "worldkit://semantic-action/runtime-dash@1",
+  semanticActionHash: RUNTIME_ACTION_HASH,
+  isInterruptible: true,
+  clip: {
+    sourceClipName: "run",
+    loopMode: "once",
+    playbackSpeedRatio: 1,
+    blendDurationTicks: 0,
+  },
+  rootMotion: {
+    mode: "locked",
+    rootMotionSourceRef: runtimeRootMotionBody.resourceRef,
+    rootMotionSourceHash: runtimeRootMotionHash,
+    priority: 100,
+  },
+} as const satisfies ActionPresentationBindingBodyV1;
+const runtimeActionBinding = {
+  ...runtimeActionBindingBody,
+  contentHash: hashActionPresentationBindingV1(runtimeActionBindingBody),
+};
+const runtimeStateOnlyActionBindingBody = {
+  kind: "action-presentation-binding",
+  schemaVersion: 1,
+  resourceRef: "worldkit://action-presentation/runtime-emote@1",
+  presentationKey: "action.runtime-emote",
+  semanticActionRef: "worldkit://semantic-action/runtime-emote@1",
+  semanticActionHash: RUNTIME_STATE_ONLY_ACTION_HASH,
+  isInterruptible: true,
+  clip: {
+    sourceClipName: "idle",
+    loopMode: "once",
+    playbackSpeedRatio: 1,
+    blendDurationTicks: 0,
+  },
+  rootMotion: { mode: "none" },
+} as const satisfies ActionPresentationBindingBodyV1;
+const runtimeStateOnlyActionBinding = {
+  ...runtimeStateOnlyActionBindingBody,
+  contentHash: hashActionPresentationBindingV1(
+    runtimeStateOnlyActionBindingBody,
+  ),
+};
+const RUNTIME_ACTION_PRESENTATION_REGISTRY_V1 = {
+  schemaVersion: 1 as const,
+  bindings: [runtimeActionBinding, runtimeStateOnlyActionBinding],
+  rootMotionSources: [{
+    ...runtimeRootMotionBody,
+    contentHash: runtimeRootMotionHash,
+  }],
+};
+
+function emptyActionProjection(simulationTick: number) {
+  return Object.freeze({
+    simulationTick,
+    activeActionStatesById: Object.freeze({}),
+  });
+}
+
+  it("reuses the latest committed Golden Camera Context for same-Tick and manual Camera updates", async () => {
+    const update = vi.spyOn(CameraComponentV1.prototype, "update");
+    const runtime = await createRiggedRuntime();
+    try {
+      update.mockClear();
+      await runtime.runFixedInput({ actions: ["move-right"], ticks: 1 });
+      expect(update).toHaveBeenCalledTimes(1);
+      const committedContext = update.mock.calls[0]?.[3];
+      expect(committedContext).toMatchObject({
+        schemaVersion: 2,
+        semanticAuthorityStatus: "available",
+        committedTick: 1,
+      });
+      update.mockClear();
+      runtime.adjustCameraView({ yawDeltaRadians: 0.1 });
+      expect(update).toHaveBeenCalledTimes(1);
+      expect(update.mock.calls[0]?.[3]).toBe(committedContext);
+    } finally {
+      await runtime.dispose();
+      update.mockRestore();
+    }
+  });
+
+  it("admits only plan-locked Action presentation refs for the Golden actor", async () => {
+    const executionPlan: ExecutionPlanV5 = {
+      ...createFlatRiggedExecutionPlan(),
+      actionPresentationRegistry: RUNTIME_ACTION_PRESENTATION_REGISTRY_V1,
+    };
+    const runtime = await createRiggedRuntime(executionPlan);
+    try {
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      expect(internal.hasLockedActionPresentation(
+        executionPlan.subjects[0]!.entityId,
+        runtimeActionBinding.semanticActionRef,
+      )).toBe(true);
+      expect(internal.hasLockedActionPresentation(
+        "missing-subject",
+        runtimeActionBinding.semanticActionRef,
+      )).toBe(false);
+      expect(internal.hasLockedActionPresentation(
+        executionPlan.subjects[0]!.entityId,
+        "worldkit://semantic-action/not-locked@1",
+      )).toBe(false);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("projects committed state-only and collision-limited Root Motion Actions on the Golden Tick", async () => {
+    const base = createFlatRiggedExecutionPlan();
+    const collisionTransform = {
+      positionMetersXYZ: [0.65, 2, 30] as const,
+      rotationEulerRadiansXYZ: [0, 0, 0] as const,
+      scaleXYZ: [1, 1, 1] as const,
+    };
+    const executionPlan: ExecutionPlanV5 = {
+      ...base,
+      actionPresentationRegistry: RUNTIME_ACTION_PRESENTATION_REGISTRY_V1,
+      staticColliders: [
+        ...base.staticColliders,
+        {
+          entityId: "runtime-action-wall",
+          logicalSubshapeId: "primary",
+          colliderSubshapeId: "collider:runtime-action-wall:primary",
+          colliderHash: sha256CanonicalJson({
+            shape: { kind: "box", sizeMetersXYZ: [0.2, 4, 4] },
+            transform: collisionTransform,
+          }) as `sha256:${string}`,
+          transform: collisionTransform,
+          shape: { kind: "box", sizeMetersXYZ: [0.2, 4, 4] },
+        },
+      ],
+    };
+    const animationStep = vi.spyOn(SubjectAnimationPlayer.prototype, "step");
+    const cameraUpdate = vi.spyOn(CameraComponentV1.prototype, "update");
+    const runtime = await createRiggedRuntime(executionPlan);
+    try {
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      animationStep.mockClear();
+      cameraUpdate.mockClear();
+      const stateOnlyAction = Object.freeze({
+        id: "runtime-emote-1",
+        kind: "action-state" as const,
+        semanticActionRef: runtimeStateOnlyActionBinding.semanticActionRef,
+        semanticActionHash: runtimeStateOnlyActionBinding.semanticActionHash,
+        actorEntityId: "player",
+        mode: "active" as const,
+        startedSimulationTick: 1,
+        lastTransitionSimulationTick: 1,
+      });
+      const beforeStateOnly = runtime.snapshot();
+      await internal.runFixedInputTick(
+        { actions: [], ticks: 1 },
+        {
+          simulationTick: 1,
+          activeActionStatesById: { [stateOnlyAction.id]: stateOnlyAction },
+        },
+      );
+      const afterStateOnly = runtime.snapshot();
+      expect(afterStateOnly.subjectStatesByEntityId.player!.positionMetersXYZ)
+        .toEqual(beforeStateOnly.subjectStatesByEntityId.player!.positionMetersXYZ);
+      expect(afterStateOnly.subjectStatesByEntityId.player!.locomotion)
+        .toMatchObject({ committedTick: 1 });
+      expect(animationStep).toHaveBeenCalledTimes(1);
+      expect(animationStep.mock.calls[0]?.[0]).toMatchObject({
+        source: "action",
+        committedTick: 1,
+        actionExecutionId: stateOnlyAction.id,
+        layeredMoves: [],
+      });
+      expect(animationStep.mock.calls[0]?.[1]).toEqual(stateOnlyAction);
+      const stateOnlyCameraContexts = cameraUpdate.mock.calls.map(
+        (call) => call[3],
+      );
+      expect(stateOnlyCameraContexts.length).toBeGreaterThanOrEqual(1);
+      expect(new Set(stateOnlyCameraContexts).size).toBe(1);
+      expect(stateOnlyCameraContexts[0]).toMatchObject({
+        committedTick: 1,
+        locomotion: { committedTick: 1 },
+        actionSummary: {
+          status: "available",
+          activeActionRefs: [stateOnlyAction.semanticActionRef],
+          isInterruptible: true,
+        },
+      });
+
+      animationStep.mockClear();
+      cameraUpdate.mockClear();
+      const rootMotionAction = Object.freeze({
+        id: "runtime-dash-1",
+        kind: "action-state" as const,
+        semanticActionRef: runtimeActionBinding.semanticActionRef,
+        semanticActionHash: runtimeActionBinding.semanticActionHash,
+        actorEntityId: "player",
+        mode: "active" as const,
+        startedSimulationTick: 2,
+        lastTransitionSimulationTick: 2,
+      });
+      const beforeRootMotion = runtime.snapshot();
+      await internal.runFixedInputTick(
+        { actions: [], ticks: 1 },
+        {
+          simulationTick: 2,
+          activeActionStatesById: { [rootMotionAction.id]: rootMotionAction },
+        },
+      );
+      const afterRootMotion = runtime.snapshot();
+      const attemptedDelta = runtimeRootMotionBody.samples[0]
+        .translationDeltaMetersXYZ[0];
+      const resolvedDelta =
+        afterRootMotion.subjectStatesByEntityId.player!.positionMetersXYZ[0] -
+        beforeRootMotion.subjectStatesByEntityId.player!.positionMetersXYZ[0];
+      expect(animationStep.mock.calls[0]?.[0]).toMatchObject({
+        source: "action",
+        committedTick: 2,
+        actionExecutionId: rootMotionAction.id,
+        layeredMoves: [{
+          kind: "root-motion",
+          translationDeltaMetersXYZ: [attemptedDelta, 0, 0],
+        }],
+      });
+      expect(resolvedDelta).toBeLessThan(attemptedDelta);
+      expect(afterRootMotion.subjectStatesByEntityId.player!.locomotion)
+        .toMatchObject({ committedTick: 2 });
+      const rootMotionCameraContexts = cameraUpdate.mock.calls.map(
+        (call) => call[3],
+      );
+      expect(rootMotionCameraContexts.length).toBeGreaterThanOrEqual(1);
+      expect(new Set(rootMotionCameraContexts).size).toBe(1);
+      expect(rootMotionCameraContexts[0]).toMatchObject({
+        committedTick: 2,
+        locomotion: { committedTick: 2 },
+        actionSummary: {
+          activeActionRefs: [rootMotionAction.semanticActionRef],
+        },
+      });
+    } finally {
+      await runtime.dispose();
+      animationStep.mockRestore();
+      cameraUpdate.mockRestore();
+    }
+  });
+
+  it("fails closed on Action Tick ambiguity and replays the committed Action projection", async () => {
+    const executionPlan: ExecutionPlanV5 = {
+      ...createFlatRiggedExecutionPlan(),
+      actionPresentationRegistry: RUNTIME_ACTION_PRESENTATION_REGISTRY_V1,
+    };
+    const runtime = await createRiggedRuntime(executionPlan);
+    try {
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      const stateOnlyAction = Object.freeze({
+        id: "runtime-emote-replay",
+        kind: "action-state" as const,
+        semanticActionRef: runtimeStateOnlyActionBinding.semanticActionRef,
+        semanticActionHash: runtimeStateOnlyActionBinding.semanticActionHash,
+        actorEntityId: "player",
+        mode: "active" as const,
+        startedSimulationTick: 1,
+        lastTransitionSimulationTick: 1,
+      });
+      const rootMotionAction = Object.freeze({
+        id: "runtime-dash-ambiguous",
+        kind: "action-state" as const,
+        semanticActionRef: runtimeActionBinding.semanticActionRef,
+        semanticActionHash: runtimeActionBinding.semanticActionHash,
+        actorEntityId: "player",
+        mode: "active" as const,
+        startedSimulationTick: 1,
+        lastTransitionSimulationTick: 1,
+      });
+      const before = runtime.snapshot();
+      await expect(internal.runFixedInputTick(
+        { actions: [], ticks: 1 },
+        {
+          simulationTick: 2,
+          activeActionStatesById: {},
+        },
+      )).rejects.toThrow("3C_ACTION_TICK_MISMATCH");
+      expect(runtime.snapshot()).toEqual(before);
+      await expect(internal.runFixedInputTick(
+        { actions: [], ticks: 1 },
+        {
+          simulationTick: 1,
+          activeActionStatesById: {
+            [stateOnlyAction.id]: stateOnlyAction,
+            [rootMotionAction.id]: rootMotionAction,
+          },
+        },
+      )).rejects.toThrow("3C_ACTION_AUTHORITY_AMBIGUOUS");
+      expect(runtime.snapshot()).toEqual(before);
+
+      const first = await internal.prepareFixedInputTick!(
+        { actions: [], ticks: 1 },
+        {
+          simulationTick: 1,
+          activeActionStatesById: {
+            [stateOnlyAction.id]: stateOnlyAction,
+          },
+        },
+      );
+      first.commitPrepared();
+      const committedFirstAction = runtime.snapshot();
+      expect(committedFirstAction.tick).toBe(1);
+      const secondAction = Object.freeze({
+        ...rootMotionAction,
+        id: "runtime-dash-aborted",
+        startedSimulationTick: 2,
+        lastTransitionSimulationTick: 2,
+      });
+      const second = await internal.prepareFixedInputTick!(
+        { actions: [], ticks: 1 },
+        {
+          simulationTick: 2,
+          activeActionStatesById: {
+            [secondAction.id]: secondAction,
+          },
+        },
+      );
+      await second.abort();
+      expect(runtime.snapshot()).toEqual(committedFirstAction);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("loads one Registry G Bot with a Hips-root Mixamo rig and correct locomotion Clips", async () => {
     const spec = createValidAuthoringSpecV4();
     spec.nodes = spec.nodes.map((node) =>
       node.kind === "subject" && node.id === "player"
@@ -2199,20 +2717,7 @@ describe("BabylonWorldRuntime", () => {
           }
         : node,
     );
-    const baseExecutionPlan = compileFlatTerrainExecutionPlan(spec);
-    const primarySubject = baseExecutionPlan.subjects[0]!;
-    const executionPlan: ExecutionPlanV5 = {
-      ...baseExecutionPlan,
-      subjects: [
-        primarySubject,
-        {
-          ...primarySubject,
-          entityId: "g-bot-secondary",
-          spawnAnchorEntityId: "spawn-g-bot-secondary",
-          spawnSubjectOriginPositionMetersXYZ: [4, 0, 30],
-        },
-      ],
-    };
+    const executionPlan = compileFlatTerrainExecutionPlan(spec);
     expect(executionPlan.rigProfiles).toEqual([
       expect.objectContaining({
         skeletonRootBoneName: "mixamorig:Hips",
@@ -2227,6 +2732,24 @@ describe("BabylonWorldRuntime", () => {
       subjectAssetResolver: createMemoryResolver(gBotSubjectAssetBytes),
     });
     await runtime.ready;
+    const probe = createSubjectVisualProbe(runtime);
+    const visual = probe.visual("player");
+    const gameplayInternal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+    const initialVNextSnapshot = runtime.snapshot();
+    const initialCommittedPosition = initialVNextSnapshot.subjectStatesByEntityId.player!
+      .positionMetersXYZ;
+    expect(gameplayInternal.prepareFixedInputTick).toBeTypeOf("function");
+    expect(initialVNextSnapshot.subjectStatesByEntityId.player).toMatchObject({
+      locomotion: {
+        schemaVersion: 2,
+        status: "active",
+        mobilityMode: "grounded",
+        committedTick: 0,
+      },
+    });
+    expect(
+      initialVNextSnapshot.subjectStatesByEntityId.player?.activeMotionKernelRef,
+    ).toBeUndefined();
     const adjustedCamera = runtime.adjustCameraView({ yawDeltaRadians: Math.PI / 2 });
     const cameraForwardXYZ = adjustedCamera.camera.controlForwardXYZ!;
     const cameraRelativeStep = await runtime.runFixedInput({
@@ -2235,6 +2758,32 @@ describe("BabylonWorldRuntime", () => {
     });
     const cameraRelativeVelocity = cameraRelativeStep
       .subjectStatesByEntityId.player!.velocityMetersPerSecondXYZ;
+    expect(() => runtime.renderFrame(Number.NaN)).toThrow(
+      "3C_RENDER_INTERPOLATION_INVALID",
+    );
+    expect(() => runtime.renderFrame(-0.01)).toThrow(
+      "3C_RENDER_INTERPOLATION_INVALID",
+    );
+    expect(() => runtime.renderFrame(1.01)).toThrow(
+      "3C_RENDER_INTERPOLATION_INVALID",
+    );
+    runtime.renderFrame(0.5);
+    const committedPosition = cameraRelativeStep.subjectStatesByEntityId.player!
+      .positionMetersXYZ;
+    expect(visual.root.position.x).toBeCloseTo(
+      (initialCommittedPosition[0] + committedPosition[0]) / 2,
+      8,
+    );
+    expect(visual.root.position.y).toBeCloseTo(
+      (initialCommittedPosition[1] + committedPosition[1]) / 2,
+      8,
+    );
+    expect(visual.root.position.z).toBeCloseTo(
+      (initialCommittedPosition[2] + committedPosition[2]) / 2,
+      8,
+    );
+    expect(runtime.snapshot()).toEqual(cameraRelativeStep);
+    runtime.renderFrame();
     const horizontalSpeed = Math.hypot(cameraRelativeVelocity[0], cameraRelativeVelocity[2]);
     expect(horizontalSpeed).toBeGreaterThan(0.000001);
     expect(
@@ -2262,27 +2811,15 @@ describe("BabylonWorldRuntime", () => {
     ).toBeGreaterThan(0.999999);
     runtime.reset();
     await bindRuntimeTestPossession(runtime, "player");
-    const probe = createSubjectVisualProbe(runtime);
-    const visual = probe.visual("player");
-    const secondaryVisual = probe.visual("g-bot-secondary");
     const primaryInstance = visual.assetInstance!;
-    const secondaryInstance = secondaryVisual.assetInstance!;
     const primaryAssetPartRoot = visual.assetPartRoots![0]!;
     const primaryHandSocket = visual.socketNodesById.get("hand.right")!;
-    const secondaryHandSocket = secondaryVisual.socketNodesById.get("hand.right")!;
     expect(primaryInstance.skeletons[0]?.bones).toHaveLength(65);
     expect(
       primaryInstance.skeletons[0]?.bones
         .filter((bone) => bone.getParent() === null)
         .map((bone) => bone.name),
     ).toEqual(["mixamorig:Hips"]);
-    expect(primaryInstance.rootNodes[0]).not.toBe(secondaryInstance.rootNodes[0]);
-    expect(primaryInstance.meshes[0]).not.toBe(secondaryInstance.meshes[0]);
-    expect(primaryInstance.skeletons[0]).not.toBe(secondaryInstance.skeletons[0]);
-    expect(primaryInstance.animationGroups[0]).not.toBe(
-      secondaryInstance.animationGroups[0],
-    );
-    expect(primaryHandSocket).not.toBe(secondaryHandSocket);
     expect(primaryAssetPartRoot.rotationQuaternion?.toEulerAngles().y).toBeCloseTo(
       Math.PI,
     );
@@ -2308,6 +2845,20 @@ describe("BabylonWorldRuntime", () => {
       (await runtime.runFixedInput({ actions: ["move-right"], ticks: 2 }))
         .subjectStatesByEntityId.player?.activeActionId,
     ).toBe("walk");
+    runtime.renderFrame();
+    expect(visual.animationPlayer?.debugTelemetry()).toMatchObject({
+      presentationKey: "locomotion.walk",
+      sourceClipName: "walk",
+    });
+    expect(
+      primaryInstance.animationGroups.find((group) => group.name === "walk")
+        ?.isStarted,
+    ).toBe(true);
+    expect(
+      primaryInstance.animationGroups
+        .filter((group) => group.name.startsWith("swim."))
+        .some((group) => group.isStarted),
+    ).toBe(false);
     expect(
       (await runtime.runFixedInput({ actions: ["move-right", "run"], ticks: 30 }))
         .subjectStatesByEntityId.player?.activeActionId,
@@ -2317,10 +2868,6 @@ describe("BabylonWorldRuntime", () => {
       primaryInstance.animationGroups.find((group) => group.name === "run")
         ?.isStarted,
     ).toBe(true);
-    expect(
-      secondaryInstance.animationGroups.find((group) => group.name === "run")
-        ?.isStarted,
-    ).toBeFalsy();
     expect(
       relativeSocketPosition(primaryHandSocket, visual.root)
         .subtract(primaryHandPositionBefore)
@@ -2336,16 +2883,74 @@ describe("BabylonWorldRuntime", () => {
       movementMedium: "ground",
       velocityMetersPerSecondXYZ: [expect.any(Number), 0, expect.any(Number)],
     });
-    expect(
-      runtime.snapshot().subjectStatesByEntityId["g-bot-secondary"]
-        ?.activeActionId,
-    ).toBe("idle");
     visual.dispose();
     expect(primaryHandSocket.isDisposed()).toBe(true);
     expect(primaryInstance.rootNodes[0]?.isDisposed()).toBe(true);
-    expect(secondaryHandSocket.isDisposed()).toBe(false);
-    expect(secondaryInstance.rootNodes[0]?.isDisposed()).toBe(false);
     await runtime.dispose();
+  });
+
+  it("reuses one committed Golden Camera Context across same-Tick presentation mutations", async () => {
+    const runtime = await createRuntime(
+      compileRouteExecutionPlan(structuredClone(gBotAuthoringSpec)),
+      { subjectAssetResolver: createMemoryResolver(gBotSubjectAssetBytes) },
+    );
+    try {
+      const cameraComponent = Reflect.get(runtime, "cameraComponent") as
+        CameraComponentV1;
+      const cameraUpdate = vi.spyOn(cameraComponent, "update");
+      await bindRuntimeTestPossession(runtime, "g-bot-primary");
+      await runtime.runFixedInput({ actions: [], ticks: 1 });
+      runtime.adjustCameraView({ yawDeltaRadians: 0.1 });
+      const firstCommittedContext = cameraUpdate.mock.calls.at(-1)?.[3];
+      expect(firstCommittedContext).toMatchObject({
+        semanticAuthorityStatus: "available",
+        committedTick: 1,
+        controlledEntityId: "g-bot-primary",
+        targetEntityId: "g-bot-primary",
+        actionSummary: {
+          status: "available",
+          activeActionRefs: [],
+          isInterruptible: true,
+        },
+        environment: {
+          relationshipContexts: [],
+          relationshipRole: "none",
+          socketPositionsMetersXYZById: {},
+          cameraContextTags: [],
+        },
+      });
+
+      const presentationOnlySocket = createSubjectVisualProbe(runtime)
+        .visual("g-bot-primary")
+        .socketNodesById.get("hand.right");
+      if (presentationOnlySocket === undefined) {
+        throw new Error("G Bot hand socket fixture missing.");
+      }
+      presentationOnlySocket.position.x += 0.5;
+
+      expect(() => runtime.adjustCameraView({ yawDeltaRadians: 0.1 }))
+        .not.toThrow();
+      expect(cameraUpdate.mock.calls.at(-1)?.[3]).toBe(firstCommittedContext);
+
+      await runtime.runFixedInput({ actions: ["move-forward"], ticks: 1 });
+      const nextCommittedContext = cameraUpdate.mock.calls.at(-1)?.[3];
+      expect(nextCommittedContext).not.toBe(firstCommittedContext);
+      expect(nextCommittedContext).toMatchObject({
+        semanticAuthorityStatus: "available",
+        committedTick: 2,
+        controlledEntityId: "g-bot-primary",
+        targetEntityId: "g-bot-primary",
+        actionSummary: { status: "available", activeActionRefs: [] },
+        environment: {
+          relationshipContexts: [],
+          relationshipRole: "none",
+          socketPositionsMetersXYZById: {},
+          cameraContextTags: [],
+        },
+      });
+    } finally {
+      await runtime.dispose();
+    }
   });
 
   it("samples the G Bot pose once when many fixed Ticks share one rendered frame", async () => {
@@ -2380,7 +2985,7 @@ describe("BabylonWorldRuntime", () => {
     await runtime.dispose();
   }, 20_000);
 
-  it("lands the product G Bot on its authored heightfield after one jump input", async () => {
+  it("lands the product G Bot after one jump input", async () => {
     const runtime = await createRuntime(
       compileRouteExecutionPlan(structuredClone(gBotAuthoringSpec)),
       { subjectAssetResolver: createMemoryResolver(gBotSubjectAssetBytes) },
@@ -2396,6 +3001,258 @@ describe("BabylonWorldRuntime", () => {
     });
     await runtime.dispose();
   });
+
+  it("keeps product G Bot short and held jumps on one continuous jump Clip", async () => {
+    const runtime = await createRuntime(
+      compileRouteExecutionPlan(structuredClone(gBotAuthoringSpec)),
+      { subjectAssetResolver: createMemoryResolver(gBotSubjectAssetBytes) },
+    );
+    try {
+      const visual = createSubjectVisualProbe(runtime).visual("g-bot-primary");
+      const animationPlayer = visual.animationPlayer!;
+      const runJump = async (heldTicks: number): Promise<Set<string>> => {
+        runtime.reset();
+        await bindRuntimeTestPossession(runtime, "g-bot-primary");
+        const phases = new Set<string>();
+        let lastJumpNormalizedTime: number | undefined;
+        for (let tick = 1; tick <= 240; tick += 1) {
+          const snapshot = await runtime.runFixedInput({
+            actions: tick <= heldTicks ? ["jump"] : [],
+            ticks: 1,
+          });
+          runtime.renderFrame();
+          const subject = snapshot.subjectStatesByEntityId["g-bot-primary"]!;
+          const locomotion = subject.locomotion!;
+          expect(locomotion.status).toBe("active");
+          if (locomotion.status !== "active") {
+            throw new Error("Golden G-Bot Locomotion unexpectedly suspended.");
+          }
+          const phase = locomotion.verticalPhase;
+          const telemetry = animationPlayer.debugTelemetry();
+          phases.add(phase);
+          expect(telemetry.committedTick).toBe(snapshot.tick);
+          expect(telemetry.sourceClipName.startsWith("swim.")).toBe(false);
+          if (["takeoff", "rising", "apex", "falling", "landing"].includes(phase)) {
+            expect(telemetry.sourceClipName).toBe("jump");
+            if (lastJumpNormalizedTime !== undefined) {
+              expect(telemetry.normalizedTime).toBeGreaterThan(lastJumpNormalizedTime);
+            }
+            lastJumpNormalizedTime = telemetry.normalizedTime;
+          }
+          if (tick > heldTicks && phase === "none" &&
+            locomotion.mobilityMode === "grounded") break;
+        }
+        return phases;
+      };
+
+      const shortJumpPhases = await runJump(1);
+      const heldJumpPhases = await runJump(6);
+      for (const phases of [shortJumpPhases, heldJumpPhases]) {
+        expect(phases).toEqual(new Set([
+          "takeoff",
+          "rising",
+          "apex",
+          "falling",
+          "landing",
+          "none",
+        ]));
+      }
+    } finally {
+      await runtime.dispose();
+    }
+  }, 30_000);
+
+  it("keeps one product G Bot grounded, walking, and blocked by its wall", async () => {
+    const executionPlan = compileRouteExecutionPlan(structuredClone(gBotAuthoringSpec));
+    const runtime = await createRuntime(
+      executionPlan,
+      { subjectAssetResolver: createMemoryResolver(gBotSubjectAssetBytes) },
+    );
+    try {
+      runtime.reset();
+      await bindRuntimeTestPossession(runtime, "g-bot-primary");
+      expect(
+        (await runtime.runFixedInput({ actions: [], ticks: 1 }))
+          .subjectStatesByEntityId["g-bot-primary"],
+        "lost support before movement input",
+      ).toMatchObject({
+        activeActionId: "idle",
+        movementMedium: "ground",
+        locomotion: { mobilityMode: "grounded", verticalPhase: "none" },
+      });
+      for (let tick = 0; tick < 120; tick += 1) {
+        const snapshot = await runtime.runFixedInput({
+          actions: ["move-forward"],
+          ticks: 1,
+        });
+        const subjectState = snapshot.subjectStatesByEntityId["g-bot-primary"]!;
+        expect(
+          subjectState,
+          `lost grounded walk at fixed tick ${tick + 1}`,
+        ).toMatchObject({
+          activeActionId: "walk",
+          movementMedium: "ground",
+          locomotion: {
+            mobilityMode: "grounded",
+            verticalPhase: "none",
+          },
+        });
+      }
+      runtime.renderFrame();
+      const visual = createSubjectVisualProbe(runtime).visual("g-bot-primary");
+      expect(visual.animationPlayer?.debugTelemetry()).toMatchObject({
+        presentationKey: "locomotion.walk",
+        sourceClipName: "walk",
+      });
+      expect(
+        visual.assetInstance?.animationGroups
+          .filter((group) => group.name.startsWith("swim."))
+          .some((group) => group.isStarted),
+      ).toBe(false);
+
+      runtime.reset();
+      await bindRuntimeTestPossession(runtime, "g-bot-primary");
+      const wallStop = await runtime.runFixedInput({
+        actions: ["move-right"],
+        ticks: 360,
+      });
+      const wallStopPosition =
+        wallStop.subjectStatesByEntityId["g-bot-primary"]!.positionMetersXYZ;
+      expect(wallStopPosition[0], JSON.stringify(wallStopPosition)).toBeLessThan(6.8);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("keeps every product G Bot Y layer within the 120-second grounded P0 budget", async () => {
+    const runtime = await createRuntime(
+      compileRouteExecutionPlan(structuredClone(gBotAuthoringSpec)),
+      { subjectAssetResolver: createMemoryResolver(gBotSubjectAssetBytes) },
+    );
+    try {
+      runtime.reset();
+      await bindRuntimeTestPossession(runtime, "g-bot-primary");
+      const visual = createSubjectVisualProbe(runtime).visual("g-bot-primary");
+      const movement = (runtime as unknown as {
+        characterEntitiesByEntityId: ReadonlyMap<string, {
+          movement: {
+            renderPoseDiagnostic(interpolationAlphaRatio: number): {
+              committedTick: number;
+              bodyOriginYMeters: number;
+              committedSubjectOriginYMeters: number;
+              previousFixedSubjectOriginYMeters: number;
+              currentFixedSubjectOriginYMeters: number;
+              renderInterpolatedSubjectOriginYMeters: number;
+              visualRootYMeters: number;
+              supportMode: string;
+              supportNormalXYZ?: Vec3;
+              supportDistanceMeters?: number;
+              correction: {
+                kind: string;
+                appliedMinusProposedYMeters: number;
+              };
+            };
+          };
+        }>;
+      }).characterEntitiesByEntityId.get("g-bot-primary")!.movement;
+      const skeleton = visual.assetInstance!.skeletons[0]!;
+      const hips = skeleton.bones.find((bone) => bone.name === "mixamorig:Hips")!;
+      const clipAudit = visual.assetInstance!.animationGroups.map((group) => ({
+        name: group.name,
+        from: group.from,
+        to: group.to,
+        framesPerSecond: [...new Set(group.targetedAnimations.map(
+          (targeted) => targeted.animation.framePerSecond,
+        ))],
+        forbiddenRootOrHipsPositionTargets: group.targetedAnimations
+          .filter((targeted) => targeted.animation.targetProperty.startsWith("position"))
+          .filter((targeted) => {
+            const targetName = (targeted.target as { name?: string }).name;
+            return targeted.target === hips ||
+              targetName === "g-bot-primary.mixamorig:Hips";
+          })
+          .map((targeted) => (targeted.target as { name?: string }).name ?? "<unnamed>"),
+      }));
+
+      expect(clipAudit).toHaveLength(25);
+      expect(clipAudit.every((clip) =>
+        Number.isFinite(clip.from) &&
+        Number.isFinite(clip.to) &&
+        clip.from < clip.to &&
+        clip.framesPerSecond.length === 1 &&
+        clip.framesPerSecond[0] === 60 &&
+        clip.forbiddenRootOrHipsPositionTargets.length === 0
+      )).toBe(true);
+      for (const actions of [
+        ["move-right"],
+        ["move-right", "run"],
+      ] as const) {
+        runtime.reset();
+        await bindRuntimeTestPossession(runtime, "g-bot-primary");
+        const layers = {
+          bodyOrigin: [] as number[],
+          committedSubject: [] as number[],
+          previousFixed: [] as number[],
+          currentFixed: [] as number[],
+          renderInterpolated: [] as number[],
+          visualRoot: [] as number[],
+          hipsLocal: [] as number[],
+          hipsWorld: [] as number[],
+        };
+        for (let tick = 0; tick < 7_200; tick += 1) {
+          const snapshot = await runtime.runFixedInput({ actions, ticks: 1 });
+          runtime.renderFrame(1);
+          visual.root.computeWorldMatrix(true);
+          const pose = movement.renderPoseDiagnostic(1);
+          expect(pose.committedTick).toBe(tick + 1);
+          expect(pose.supportMode).toBe("supported");
+          expect(Math.hypot(...pose.supportNormalXYZ!)).toBeCloseTo(1, 6);
+          expect(pose.supportNormalXYZ![1]).toBeGreaterThan(
+            Math.cos(42 * Math.PI / 180),
+          );
+          expect(Math.abs(pose.supportDistanceMeters ?? Number.POSITIVE_INFINITY))
+            .toBeLessThanOrEqual(0.1);
+          expect(Number.isFinite(pose.correction.appliedMinusProposedYMeters))
+            .toBe(true);
+          layers.bodyOrigin.push(pose.bodyOriginYMeters);
+          layers.committedSubject.push(
+            snapshot.subjectStatesByEntityId["g-bot-primary"]!.positionMetersXYZ[1],
+          );
+          layers.previousFixed.push(pose.previousFixedSubjectOriginYMeters);
+          layers.currentFixed.push(pose.currentFixedSubjectOriginYMeters);
+          layers.renderInterpolated.push(pose.renderInterpolatedSubjectOriginYMeters);
+          layers.visualRoot.push(pose.visualRootYMeters);
+          layers.hipsLocal.push(hips.getPosition().y);
+          layers.hipsWorld.push(hips.getAbsolutePosition(visual.assetPartRoots![0]).y);
+        }
+        const summary = Object.fromEntries(
+          Object.entries(layers).map(([key, values]) => [key, {
+            minimum: Math.min(...values),
+            maximum: Math.max(...values),
+            peakToPeak: Math.max(...values) - Math.min(...values),
+            maximumSingleFrameDelta: Math.max(
+              0,
+              ...values.slice(1).map((value, index) =>
+                Math.abs(value - values[index]!)
+              ),
+            ),
+          }]),
+        );
+        expect(Object.values(layers).every((values) => values.every(Number.isFinite)))
+          .toBe(true);
+        expect(summary.committedSubject!.peakToPeak).toBeLessThanOrEqual(0.002);
+        expect(summary.visualRoot!.peakToPeak).toBeLessThanOrEqual(0.001);
+        expect(summary.visualRoot!.maximumSingleFrameDelta).toBeLessThanOrEqual(0.005);
+        expect(summary.bodyOrigin!.peakToPeak).toBeLessThanOrEqual(0.002);
+        expect(summary.currentFixed!.peakToPeak).toBeLessThanOrEqual(0.002);
+        expect(summary.renderInterpolated!.peakToPeak).toBeLessThanOrEqual(0.002);
+        expect(summary.hipsLocal!.peakToPeak).toBeLessThanOrEqual(0.001);
+        expect(summary.hipsWorld!.peakToPeak).toBeLessThanOrEqual(0.001);
+      }
+    } finally {
+      await runtime.dispose();
+    }
+  }, 60_000);
 
   it("keeps two rigged Subjects on isolated Skeleton, Clip, Socket, and Action state", async () => {
     const basePlan = createTwoRiggedSubjectExecutionPlan();
@@ -2493,12 +3350,15 @@ describe("BabylonWorldRuntime", () => {
       );
     };
     const rootPositionBefore = playerVisual.root.getAbsolutePosition().clone();
+    expect(rootPositionBefore.asArray()).toEqual(
+      runtime.snapshot().subjectStatesByEntityId.player!.positionMetersXYZ,
+    );
     const relativeSocketBefore = relativeSocketPosition(
       handSocket,
       playerVisual.root,
     );
-    playerVisual.stepAnimation(0, "run");
-    playerVisual.stepAnimation(30, "run");
+    playerVisual.stepAnimation(resolvedAutomaticPresentation(0, "run"));
+    playerVisual.stepAnimation(resolvedAutomaticPresentation(30, "run"));
     runtime.renderFrame();
     const relativeSocketAfter = relativeSocketPosition(
       handSocket,
@@ -3106,6 +3966,17 @@ describe("BabylonWorldRuntime", () => {
     );
     try {
       await groundedRuntime.runFixedInput({ actions: [], ticks: 5 });
+      for (const runtime of [groundedRuntime, airborneStepRuntime, airborneControlRuntime]) {
+        runtime.setCameraViewPreference({
+          mode: "camera-rig-profile",
+          cameraRigProfileRef: ORBIT_CAMERA_PROFILE_REF,
+        });
+      }
+      await Promise.all([
+        groundedRuntime.runFixedInput({ actions: [], ticks: 1 }),
+        airborneStepRuntime.runFixedInput({ actions: [], ticks: 1 }),
+        airborneControlRuntime.runFixedInput({ actions: [], ticks: 1 }),
+      ]);
       const climbed = await groundedRuntime.runFixedInput({
         actions: ["move-right"],
         ticks: 45,
@@ -3182,6 +4053,11 @@ describe("BabylonWorldRuntime", () => {
     const runtime = await createRuntime(executionPlan);
     try {
       await runtime.runFixedInput({ actions: [], ticks: 5 });
+      runtime.setCameraViewPreference({
+        mode: "camera-rig-profile",
+        cameraRigProfileRef: ORBIT_CAMERA_PROFILE_REF,
+      });
+      await runtime.runFixedInput({ actions: [], ticks: 1 });
       const landed = await runtime.runFixedInput({
         actions: ["move-right"],
         ticks: 240,
@@ -3548,7 +4424,9 @@ describe("BabylonWorldRuntime", () => {
       const moved = await internal.runFixedInputTick({
         actions: ["move-right"],
         ticks: 1,
-      });
+      }, emptyActionProjection(
+        internal.readWorldProjection().simulationTick + 1,
+      ));
       const movedRider = moved.spatialEntityStatesById["pack-animal-a"]!;
       const movedMount = moved.spatialEntityStatesById["pack-animal-b"]!;
       expect(movedRider.positionMetersXYZ[0]).toBeCloseTo(
@@ -3599,7 +4477,9 @@ describe("BabylonWorldRuntime", () => {
       const riderMoved = await internal.runFixedInputTick({
         actions: ["move-left"],
         ticks: 1,
-      });
+      }, emptyActionProjection(
+        internal.readWorldProjection().simulationTick + 1,
+      ));
       expect(riderMoved.spatialEntityStatesById[
         "pack-animal-a"
       ]!.positionMetersXYZ).not.toEqual(riderBeforeIndependentMove);
@@ -3711,7 +4591,12 @@ describe("BabylonWorldRuntime", () => {
         expectedRiderPosition.map((value) => expect.closeTo(value, 6)),
       );
 
-      const afterTick = await internal.runFixedInputTick({ actions: [], ticks: 1 });
+      const afterTick = await internal.runFixedInputTick(
+        { actions: [], ticks: 1 },
+        emptyActionProjection(
+          internal.readWorldProjection().simulationTick + 1,
+        ),
+      );
       expect(afterTick.spatialEntityStatesById[
         "pack-animal-a"
       ]!.positionMetersXYZ).toEqual(
@@ -3879,7 +4764,9 @@ describe("BabylonWorldRuntime", () => {
       const afterTick = await internal.runFixedInputTick({
         actions: ["move-right"],
         ticks: 1,
-      });
+      }, emptyActionProjection(
+        internal.readWorldProjection().simulationTick + 1,
+      ));
       const riderAAfterTick = afterTick.spatialEntityStatesById["rider-a"]!;
       const mountAAfterTick = afterTick.spatialEntityStatesById["mount-a"]!;
       const riderBAfterTick = afterTick.spatialEntityStatesById["rider-b"]!;
@@ -4232,7 +5119,9 @@ describe("BabylonWorldRuntime", () => {
       await internal.runFixedInputTick({
         actions: ["move-right", "run"],
         ticks: 1,
-      });
+      }, emptyActionProjection(
+        internal.readWorldProjection().simulationTick + 1,
+      ));
       const prepared = await internal.preparePossessionTarget({
         mode: "possessed",
         controlledEntityId: "pack-animal-a",
@@ -4243,7 +5132,7 @@ describe("BabylonWorldRuntime", () => {
         characterEntitiesByEntityId: ReadonlyMap<string, { movement: { stop(): void } }>;
         subjectVisualsByEntityId: ReadonlyMap<
           string,
-          { stepAnimation(tick: number, actionId: string): void }
+          { stepAnimation(presentation: ResolvedActionPresentationV1): void }
         >;
       };
       const previousController = runtimeInternals.characterEntitiesByEntityId
@@ -4345,7 +5234,9 @@ describe("BabylonWorldRuntime", () => {
       const playerMoving = await internal.runFixedInputTick({
         actions: ["move-right", "run"],
         ticks: 1,
-      });
+      }, emptyActionProjection(
+        internal.readWorldProjection().simulationTick + 1,
+      ));
       expect(playerMoving.capabilityStatesById[
         "capability-state:player:locomotion"
       ]).toMatchObject({ mode: "run" });
@@ -4368,7 +5259,9 @@ describe("BabylonWorldRuntime", () => {
       const moved = await internal.runFixedInputTick({
         actions: ["move-right"],
         ticks: 1,
-      });
+      }, emptyActionProjection(
+        internal.readWorldProjection().simulationTick + 1,
+      ));
 
       expect(runtime.snapshot().subjectStatesByEntityId.player!.activeActionId)
         .toBe("idle");
@@ -4408,7 +5301,9 @@ describe("BabylonWorldRuntime", () => {
       await internal.runFixedInputTick({
         actions: ["move-right", "camera-recenter"],
         ticks: 1,
-      });
+      }, emptyActionProjection(
+        internal.readWorldProjection().simulationTick + 1,
+      ));
 
       expect(internal.readPossessionTarget()).toEqual({ mode: "unbound" });
       const { targetEntityId: _releasedTargetEntityId, ...frozenCamera } =
@@ -4430,7 +5325,9 @@ describe("BabylonWorldRuntime", () => {
       await expect(internal.runFixedInputTick({
         actions: [],
         ticks: 2,
-      } as never)).rejects.toThrow(/one fixed Tick/i);
+      } as never, emptyActionProjection(
+        internal.readWorldProjection().simulationTick + 1,
+      ))).rejects.toThrow(/one fixed Tick/i);
       expect(internal.readPossessionTarget()).toEqual({
         mode: "possessed",
         controlledEntityId: "player",
@@ -4519,6 +5416,67 @@ describe("BabylonWorldRuntime", () => {
     }
   });
 
+  it("aligns the Golden Subject front with off-axis camera-relative movement", async () => {
+    const runtime = await createRiggedRuntime();
+    try {
+      await bindRuntimeTestPossession(runtime, "player");
+      runtime.setCameraViewPreference({
+        mode: "camera-rig-profile",
+        cameraRigProfileRef: ORBIT_CAMERA_PROFILE_REF,
+      });
+      await runtime.runFixedInput({ actions: [], ticks: 1 });
+      runtime.adjustCameraView({ yawDeltaRadians: 0.9 });
+      const offAxisCamera = await runtime.runFixedInput({ actions: [], ticks: 1 });
+      const cameraForwardXYZ = offAxisCamera.camera.controlForwardXYZ!;
+
+      const snapshot = await runtime.runFixedInput({
+        actions: ["move-forward"],
+        ticks: 1,
+      });
+      const subject = snapshot.subjectStatesByEntityId.player!;
+      const horizontalVelocity = Math.hypot(
+        subject.velocityMetersPerSecondXYZ[0],
+        subject.velocityMetersPerSecondXYZ[2],
+      );
+      const horizontalSubjectForward = Math.hypot(
+        subject.forwardXYZ[0],
+        subject.forwardXYZ[2],
+      );
+      const horizontalCameraForward = Math.hypot(
+        cameraForwardXYZ[0],
+        cameraForwardXYZ[2],
+      );
+      expect(horizontalVelocity).toBeGreaterThan(0.000001);
+      expect(horizontalSubjectForward).toBeGreaterThan(0.000001);
+      expect(horizontalCameraForward).toBeGreaterThan(0.000001);
+
+      const velocityDirectionXZ = [
+        subject.velocityMetersPerSecondXYZ[0] / horizontalVelocity,
+        subject.velocityMetersPerSecondXYZ[2] / horizontalVelocity,
+      ] as const;
+      const subjectForwardDirectionXZ = [
+        subject.forwardXYZ[0] / horizontalSubjectForward,
+        subject.forwardXYZ[2] / horizontalSubjectForward,
+      ] as const;
+      const cameraForwardDirectionXZ = [
+        cameraForwardXYZ[0] / horizontalCameraForward,
+        cameraForwardXYZ[2] / horizontalCameraForward,
+      ] as const;
+      expect(Math.abs(cameraForwardDirectionXZ[0])).toBeGreaterThan(0.1);
+      expect(Math.abs(cameraForwardDirectionXZ[1])).toBeGreaterThan(0.1);
+      expect(
+        subjectForwardDirectionXZ[0] * velocityDirectionXZ[0] +
+          subjectForwardDirectionXZ[1] * velocityDirectionXZ[1],
+      ).toBeGreaterThan(0.999);
+      expect(
+        velocityDirectionXZ[0] * cameraForwardDirectionXZ[0] +
+          velocityDirectionXZ[1] * cameraForwardDirectionXZ[1],
+      ).toBeGreaterThan(0.999999);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
   it("keeps the locked capability motion active after reset", async () => {
     const { runtime } = await createRuntimeWithPackageSubject();
     try {
@@ -4556,6 +5514,11 @@ describe("BabylonWorldRuntime", () => {
     });
     const runtime = await createRuntime(executionPlan);
 
+    runtime.setCameraViewPreference({
+      mode: "camera-rig-profile",
+      cameraRigProfileRef: ORBIT_CAMERA_PROFILE_REF,
+    });
+    await runtime.runFixedInput({ actions: [], ticks: 1 });
     const snapshot = await runtime.runFixedInput(moveRightForTicks(90));
 
     expect(snapshot.subjectStatesByEntityId.player!.positionMetersXYZ[0]).toBeGreaterThan(3);
@@ -4739,35 +5702,38 @@ describe("SubjectAnimationPlayer", () => {
     const player = new SubjectAnimationPlayer({
       animationGroups: [idle, walk, run, jump],
       animationSet: createAnimationSet(),
+      actionPresentationRegistry: EMPTY_ACTION_PRESENTATION_REGISTRY_V1,
+      authorityTransformNode: new TransformNode("animation-authority-root", scene),
+      ownedVisualAnimationTargets: ownedAnimationTargets([idle, walk, run, jump]),
       subjectAssetRef: goldenSubjectAssetDescriptor.subjectAssetRef,
       artifactContentHash: goldenSubjectAssetDescriptor.artifactContentHash,
     });
 
     expect(animationFrame(idle)).toBe(10);
-    player.step(60, "idle");
+    player.step(resolvedAutomaticPresentation(60, "idle"));
     player.applyPose();
     expect(animationFrame(idle)).toBe(40);
 
-    player.step(60, "walk");
+    player.step(resolvedAutomaticPresentation(61, "walk"));
     player.applyPose();
     expect(animationFrame(walk)).toBe(5);
     expect(animationWeight(idle)).toBe(1);
     expect(animationWeight(walk)).toBe(0);
-    player.step(75, "walk");
+    player.step(resolvedAutomaticPresentation(76, "walk"));
     player.applyPose();
     expect(animationFrame(walk)).toBeCloseTo(12.5, 8);
     expect(animationWeight(idle)).toBeCloseTo(0.5, 8);
     expect(animationWeight(walk)).toBeCloseTo(0.5, 8);
-    player.step(90, "walk");
+    player.step(resolvedAutomaticPresentation(91, "walk"));
     player.applyPose();
     expect(animationFrame(walk)).toBe(20);
     expect(animationWeight(walk)).toBe(1);
     expect(idle.isStarted).toBe(false);
 
-    player.step(90, "jump");
+    player.step(resolvedAutomaticPresentation(92, "jump"));
     player.applyPose();
     expect(animationFrame(jump)).toBe(7);
-    player.step(150, "jump");
+    player.step(resolvedAutomaticPresentation(152, "jump"));
     player.applyPose();
     expect(animationFrame(jump)).toBe(27);
 
@@ -4788,13 +5754,16 @@ describe("SubjectAnimationPlayer", () => {
     const player = new SubjectAnimationPlayer({
       animationGroups: groups,
       animationSet: createAnimationSet(),
+      actionPresentationRegistry: EMPTY_ACTION_PRESENTATION_REGISTRY_V1,
+      authorityTransformNode: new TransformNode("interrupt-authority-root", scene),
+      ownedVisualAnimationTargets: ownedAnimationTargets(groups),
       subjectAssetRef: goldenSubjectAssetDescriptor.subjectAssetRef,
       artifactContentHash: goldenSubjectAssetDescriptor.artifactContentHash,
     });
 
-    player.step(1, "walk");
-    player.step(2, "run");
-    player.step(3, "jump");
+    player.step(resolvedAutomaticPresentation(1, "walk"));
+    player.step(resolvedAutomaticPresentation(2, "run"));
+    player.step(resolvedAutomaticPresentation(3, "jump"));
     player.applyPose();
 
     expect(groups.filter((group) => group.isStarted)).toHaveLength(1);
@@ -4812,6 +5781,9 @@ describe("SubjectAnimationPlayer", () => {
     const player = new SubjectAnimationPlayer({
       animationGroups: groups,
       animationSet: createAnimationSet(),
+      actionPresentationRegistry: EMPTY_ACTION_PRESENTATION_REGISTRY_V1,
+      authorityTransformNode: new TransformNode("dispose-authority-root", scene),
+      ownedVisualAnimationTargets: ownedAnimationTargets(groups),
       subjectAssetRef: goldenSubjectAssetDescriptor.subjectAssetRef,
       artifactContentHash: goldenSubjectAssetDescriptor.artifactContentHash,
     });
@@ -4882,11 +5854,15 @@ describe("SubjectAnimationPlayer", () => {
       ],
     ]) {
       const { engine, scene } = createAssetScene();
+      const groups = invalidGroups(scene);
       const error = (() => {
         try {
           return new SubjectAnimationPlayer({
-            animationGroups: invalidGroups(scene),
+            animationGroups: groups,
             animationSet: createAnimationSet(),
+            actionPresentationRegistry: EMPTY_ACTION_PRESENTATION_REGISTRY_V1,
+            authorityTransformNode: new TransformNode("invalid-authority-root", scene),
+            ownedVisualAnimationTargets: ownedAnimationTargets(groups),
             subjectAssetRef: goldenSubjectAssetDescriptor.subjectAssetRef,
             artifactContentHash: goldenSubjectAssetDescriptor.artifactContentHash,
           });
@@ -4916,16 +5892,20 @@ describe("SubjectAnimationPlayer", () => {
     ];
     for (const invalidIdleGroup of invalidIdleGroups) {
       const { engine, scene } = createAssetScene();
+      const groups = [
+        invalidIdleGroup(scene),
+        createClipGroup(scene, "walk"),
+        createClipGroup(scene, "run"),
+        createClipGroup(scene, "jump"),
+      ];
       const error = (() => {
         try {
           return new SubjectAnimationPlayer({
-            animationGroups: [
-              invalidIdleGroup(scene),
-              createClipGroup(scene, "walk"),
-              createClipGroup(scene, "run"),
-              createClipGroup(scene, "jump"),
-            ],
+            animationGroups: groups,
             animationSet: createAnimationSet(),
+            actionPresentationRegistry: EMPTY_ACTION_PRESENTATION_REGISTRY_V1,
+            authorityTransformNode: new TransformNode("range-authority-root", scene),
+            ownedVisualAnimationTargets: ownedAnimationTargets(groups),
             subjectAssetRef: goldenSubjectAssetDescriptor.subjectAssetRef,
             artifactContentHash: goldenSubjectAssetDescriptor.artifactContentHash,
           });
@@ -4963,6 +5943,9 @@ describe("SubjectAnimationPlayer", () => {
           return new SubjectAnimationPlayer({
             animationGroups: groups,
             animationSet,
+            actionPresentationRegistry: EMPTY_ACTION_PRESENTATION_REGISTRY_V1,
+            authorityTransformNode: new TransformNode("binding-authority-root", scene),
+            ownedVisualAnimationTargets: ownedAnimationTargets(groups),
             subjectAssetRef: goldenSubjectAssetDescriptor.subjectAssetRef,
             artifactContentHash: goldenSubjectAssetDescriptor.artifactContentHash,
           });

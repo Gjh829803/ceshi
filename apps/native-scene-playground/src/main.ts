@@ -198,11 +198,18 @@ async function start(): Promise<void> {
     }
     inputTail = inputTail.then(async () => {
       for (let tick = 0; tick < input.ticks; tick += 1) {
-        await gameplayPort.runFixedInputTick({
-          actions: input.actions,
-          ...(input.axes === undefined ? {} : { axes: input.axes }),
-          ticks: 1,
-        });
+        const nextSimulationTick = gameplayPort.snapshot().simulationTick + 1;
+        await gameplayPort.runFixedInputTick(
+          {
+            actions: input.actions,
+            ...(input.axes === undefined ? {} : { axes: input.axes }),
+            ticks: 1,
+          },
+          Object.freeze({
+            simulationTick: nextSimulationTick,
+            activeActionStatesById: Object.freeze({}),
+          }),
+        );
       }
       return runtime.snapshot();
     });

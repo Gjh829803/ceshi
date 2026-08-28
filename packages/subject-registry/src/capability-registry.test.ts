@@ -390,7 +390,7 @@ describe("capability-driven subject registry", () => {
     });
   });
 
-  it("locks the current 25-clip G Bot artifact and keeps runtime state binding explicitly unready", () => {
+  it("locks the current 25-clip G Bot artifact and reports partial committed state binding", () => {
     const asset = builtInSubjectResourceRegistry.resolveSubjectAsset(
       "worldkit://subject-asset/actor.humanoid.g-bot@2",
     );
@@ -415,7 +415,7 @@ describe("capability-driven subject registry", () => {
       },
       runtimeReadiness: {
         productionReady: false,
-        runtimeStateBinding: "not-implemented",
+        runtimeStateBinding: "partial",
       },
     });
     expect(actionSet?.requiredActionIds).toEqual([...G_BOT_CLIPS].sort());

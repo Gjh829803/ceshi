@@ -1,5 +1,6 @@
 import type {
   FixedInputOneTickV1,
+  GameplayFixedTickActionProjectionV1,
   GameplayFixedInputCapacityEstimateV1,
   GameplayWorldPortV1,
   GameplayWorldStateProjectionV1,
@@ -55,6 +56,18 @@ function nextPossessionTarget(
     transition.type === "action.cancel" ||
     transition.type === "action.complete"
   ) {
+    const actionExecutions = transition.actionChanges.map((change) =>
+      change.operation === "add" ? change.after : change.before
+    );
+    if (
+      actionExecutions.length > 0 &&
+      actionExecutions.every(({ state }) =>
+        internal.hasLockedActionPresentation(
+          state.actorEntityId,
+          state.semanticActionRef,
+        )
+      )
+    ) return undefined;
     return fail("GAMEPLAY_ACTION_PRESENTATION_UNAVAILABLE");
   }
 
@@ -242,10 +255,42 @@ function providerNeutralTransaction(
 }
 
 class BabylonGameplayWorldPortV1 implements GameplayWorldPortV1 {
+  declare readonly prepareFixedInputTick?: (
+    input: FixedInputOneTickV1,
+    actionProjection: GameplayFixedTickActionProjectionV1,
+  ) => Promise<GameplayWorldTransactionV1>;
+
   constructor(
     private readonly internal: BabylonGameplayRuntimeInternalV1,
     private readonly fixedInputControllerEntityId: string,
-  ) {}
+  ) {
+    const providerPrepareFixedInputTick = internal.prepareFixedInputTick;
+    if (typeof providerPrepareFixedInputTick === "function") {
+      Object.defineProperty(this, "prepareFixedInputTick", {
+        configurable: false,
+        enumerable: false,
+        writable: false,
+        value: async (
+          input: FixedInputOneTickV1,
+          actionProjection: GameplayFixedTickActionProjectionV1,
+        ): Promise<GameplayWorldTransactionV1> => {
+          assertSingleFixedTick(input);
+          try {
+            return providerNeutralTransaction(await Reflect.apply(
+              providerPrepareFixedInputTick,
+              internal,
+              [input, actionProjection],
+            ));
+          } catch {
+            throw portError(
+              "ADAPTER_FIXED_INPUT_FAILED",
+              "Gameplay World Port could not prepare fixed input.",
+            );
+          }
+        },
+      });
+    }
+  }
 
   initialize(): Promise<GameplayWorldStateProjectionV1> {
     try {
@@ -268,17 +313,27 @@ class BabylonGameplayWorldPortV1 implements GameplayWorldPortV1 {
 
   isActionAvailable(
     actorEntityId: string,
-    _semanticActionRef: string,
+    semanticActionRef: string,
     transition: GameplayWorldTransitionV1,
   ): boolean {
     // State-only presentation remains fail-closed. A trusted mounted effect is
     // already locked by Ref+Hash and is revalidated in prepare, so it does not
     // require an unrelated animation mapping.
-    return transition.type === "action.activate" &&
+    if (transition.type !== "action.activate") return false;
+    if (
       "trustedActionEffectPlan" in transition &&
       transition.trustedActionEffectPlan?.kind ===
         "mounted-relationship-effect-plan" &&
-      this.internal.hasEntity(actorEntityId);
+      this.internal.hasEntity(actorEntityId)
+    ) return true;
+    const actionExecutions = transition.actionChanges.map((change) =>
+      change.operation === "add" ? change.after : change.before
+    );
+    return actionExecutions.length > 0 && actionExecutions.every(({ state }) =>
+      state.actorEntityId === actorEntityId &&
+      state.semanticActionRef === semanticActionRef &&
+      this.internal.hasLockedActionPresentation(actorEntityId, semanticActionRef)
+    );
   }
 
   async prepareGameplayTransition(
@@ -333,10 +388,11 @@ class BabylonGameplayWorldPortV1 implements GameplayWorldPortV1 {
 
   async runFixedInputTick(
     input: FixedInputOneTickV1,
+    actionProjection: GameplayFixedTickActionProjectionV1,
   ): Promise<GameplayWorldStateProjectionV1> {
     assertSingleFixedTick(input);
     try {
-      return await this.internal.runFixedInputTick(input);
+      return await this.internal.runFixedInputTick(input, actionProjection);
     } catch {
       throw portError(
         "ADAPTER_FIXED_INPUT_FAILED",

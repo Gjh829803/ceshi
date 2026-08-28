@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
+import {
+  hashRootMotionSourceV1,
+  type RootMotionSourceBodyV1,
+} from "@whitebox-world/character-movement";
+import {
+  hashActionPresentationBindingV1,
+  type ActionPresentationBindingBodyV1,
+} from "@whitebox-world/subject-actions";
 
 import {
   hashExecutionPlanV5,
@@ -9,6 +17,55 @@ import {
 } from "./execution-plan";
 
 const HASH = `sha256:${"a".repeat(64)}` as const;
+
+const rootMotionBody = {
+  schemaVersion: 1,
+  resourceRef: "worldkit://root-motion/execution-plan-test@1",
+  fixedDeltaSeconds: 1 / 60,
+  samples: [{
+    translationDeltaMetersXYZ: [0, 0, 0.1],
+    facingYawDeltaRadians: 0,
+  }],
+} as const satisfies RootMotionSourceBodyV1;
+const rootMotionSource = {
+  ...rootMotionBody,
+  contentHash: hashRootMotionSourceV1(rootMotionBody),
+};
+const actionPresentationBindingBody = {
+  kind: "action-presentation-binding",
+  schemaVersion: 1,
+  resourceRef: "worldkit://action-presentation/execution-plan-test@1",
+  presentationKey: "action.execution-plan-test",
+  semanticActionRef: "worldkit://semantic-action/execution-plan-test@1",
+  semanticActionHash: HASH,
+  isInterruptible: true,
+  clip: {
+    sourceClipName: "ExecutionPlanTest",
+    loopMode: "once",
+    playbackSpeedRatio: 1,
+    blendDurationTicks: 3,
+  },
+  rootMotion: {
+    mode: "locked",
+    rootMotionSourceRef: rootMotionSource.resourceRef,
+    rootMotionSourceHash: rootMotionSource.contentHash,
+    priority: 100,
+  },
+} as const satisfies ActionPresentationBindingBodyV1;
+const actionPresentationBinding = {
+  ...actionPresentationBindingBody,
+  contentHash: hashActionPresentationBindingV1(
+    actionPresentationBindingBody,
+  ),
+};
+
+function actionPresentationRegistryFixture() {
+  return {
+    schemaVersion: 1 as const,
+    bindings: [actionPresentationBinding],
+    rootMotionSources: [rootMotionSource],
+  };
+}
 
 function capabilityAssemblyFixture(): ExecutionSubjectCapabilityAssemblyV1 {
   const motionProfile = {
@@ -96,6 +153,11 @@ function planFixture(): ExecutionPlanV5 {
     rigProfiles: [],
     animationSets: [],
     colliderProfiles: [],
+    actionPresentationRegistry: {
+      schemaVersion: 1,
+      bindings: [],
+      rootMotionSources: [],
+    },
     initialControlledEntityId: "player",
     subjects: [{
       entityId: "player",
@@ -182,6 +244,83 @@ function planFixture(): ExecutionPlanV5 {
 }
 
 describe("ExecutionPlanV5 canonical boundary", () => {
+  it("requires a closed, hash-locked Action Presentation registry", () => {
+    const {
+      actionPresentationRegistry: _missingRegistry,
+      ...missingRegistry
+    } = planFixture();
+    expect(() => parseExecutionPlanV5(missingRegistry)).toThrowError(
+      "EXECUTION_PLAN_V5_INVALID",
+    );
+
+    const unknownRegistryKey = {
+      ...planFixture(),
+      actionPresentationRegistry: {
+        ...actionPresentationRegistryFixture(),
+        legacyAlias: true,
+      },
+    };
+    expect(() => parseExecutionPlanV5(unknownRegistryKey)).toThrowError(
+      "EXECUTION_PLAN_V5_INVALID",
+    );
+
+    const badBindingHash = {
+      ...planFixture(),
+      actionPresentationRegistry: {
+        ...actionPresentationRegistryFixture(),
+        bindings: [{ ...actionPresentationBinding, contentHash: HASH }],
+      },
+    };
+    expect(() => parseExecutionPlanV5(badBindingHash)).toThrowError(
+      "EXECUTION_PLAN_V5_INVALID",
+    );
+
+    const badSourceHash = {
+      ...planFixture(),
+      actionPresentationRegistry: {
+        ...actionPresentationRegistryFixture(),
+        rootMotionSources: [{ ...rootMotionSource, contentHash: HASH }],
+      },
+    };
+    expect(() => parseExecutionPlanV5(badSourceHash)).toThrowError(
+      "EXECUTION_PLAN_V5_INVALID",
+    );
+  });
+
+  it("admits, detaches and deeply freezes a serializable non-empty Action Presentation registry", () => {
+    const registry = actionPresentationRegistryFixture();
+    const input = {
+      ...planFixture(),
+      actionPresentationRegistry: registry,
+    };
+    const parsed = parseExecutionPlanV5(input);
+
+    expect(parsed.actionPresentationRegistry).toEqual(registry);
+    expect(parsed.actionPresentationRegistry).not.toBe(registry);
+    expect(Object.isFrozen(parsed.actionPresentationRegistry)).toBe(true);
+    expect(Object.isFrozen(parsed.actionPresentationRegistry.bindings)).toBe(true);
+    expect(Object.isFrozen(parsed.actionPresentationRegistry.bindings[0]?.clip)).toBe(true);
+    expect(Object.isFrozen(parsed.actionPresentationRegistry.rootMotionSources)).toBe(true);
+    expect(Object.isFrozen(
+      parsed.actionPresentationRegistry.rootMotionSources[0]?.samples[0]
+        ?.translationDeltaMetersXYZ,
+    )).toBe(true);
+    expect(JSON.parse(JSON.stringify(parsed.actionPresentationRegistry))).toEqual(
+      registry,
+    );
+    expect(hashExecutionPlanV5(input)).toBe(
+      hashExecutionPlanV5(structuredClone(input)),
+    );
+    expect(hashExecutionPlanV5(input)).not.toBe(hashExecutionPlanV5({
+      ...input,
+      actionPresentationRegistry: {
+        schemaVersion: 1,
+        bindings: [],
+        rootMotionSources: [],
+      },
+    }));
+  });
+
   it("parses an accessor-free closed Plan into a detached deeply frozen value", () => {
     const input = planFixture();
     const parsed = parseExecutionPlanV5(input);
@@ -195,6 +334,41 @@ describe("ExecutionPlanV5 canonical boundary", () => {
 
     (input.terrain.heightSamplesMeters as number[])[0] = 9;
     expect(parsed.terrain.heightSamplesMeters[0]).toBe(0);
+  });
+
+  it("preserves committed Locomotion and Action Camera rule predicates", () => {
+    const input = structuredClone(planFixture());
+    input.subjects[0]!.capabilityAssembly.cameraContext.rules = [{
+      id: "run-action",
+      priority: 100,
+      when: {
+        locomotionStatuses: ["active"],
+        mobilityModes: ["grounded"],
+        gaits: ["run"],
+        verticalPhases: ["none"],
+        requiredActiveActionRefs: ["worldkit://semantic-action/aim@1"],
+        actionInterruptibility: "interruptible",
+      },
+      cameraModifierRefs: ["worldkit://camera-modifier/run@1"],
+    }];
+
+    expect(parseExecutionPlanV5(input).subjects[0]!.capabilityAssembly
+      .cameraContext.rules).toEqual(
+      input.subjects[0]!.capabilityAssembly.cameraContext.rules,
+    );
+
+    const invalid = structuredClone(input) as unknown as {
+      subjects: Array<{
+        capabilityAssembly: {
+          cameraContext: { rules: Array<{ when: Record<string, unknown> }> };
+        };
+      }>;
+    };
+    invalid.subjects[0]!.capabilityAssembly.cameraContext.rules[0]!.when
+      .actionInterruptibility = "sometimes";
+    expect(() => parseExecutionPlanV5(invalid)).toThrowError(
+      "EXECUTION_PLAN_V5_INVALID",
+    );
   });
 
   it("parses only closed initial mountedOn state with Subject and slot closure", () => {

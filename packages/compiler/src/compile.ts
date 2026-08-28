@@ -593,6 +593,8 @@ function compileAnimationSetV1(
     animationBindings: resource.animationBindings.map((binding) => ({
       actionId: binding.actionId,
       sourceClipName: binding.sourceClipName,
+      semanticFamily: binding.semanticFamily,
+      automaticPresentationKeys: [...binding.automaticPresentationKeys],
       loopMode: binding.loopMode,
       playbackSpeedRatio: binding.playbackSpeedRatio,
       blendDurationSeconds: binding.blendDurationSeconds,
@@ -2027,6 +2029,11 @@ export function compileWorldV5(input: CompileWorldInputV5): CompileWorldResultV5
       normalizedWorldIrHash: snapshot.normalizedWorldIrHash,
       resourceLockHash,
       resourceLockEntries,
+      actionPresentationRegistry: {
+        schemaVersion: 1,
+        bindings: [],
+        rootMotionSources: [],
+      },
       terrain,
       layout: compileExecutionLayoutV1(snapshot.normalizedWorldIr),
       traversal: {

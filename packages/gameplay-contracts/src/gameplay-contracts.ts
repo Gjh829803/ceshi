@@ -964,7 +964,232 @@ export type LocomotionCapabilityStateV1 = LocomotionCapabilityStateBaseV1 &
       }>
   );
 
-export type GameplayCapabilityStateV1 = LocomotionCapabilityStateV1;
+export type MobilityModeV2 = "grounded" | "airborne";
+export type GaitV2 = "none" | "idle" | "walk" | "run";
+export type VerticalPhaseV2 =
+  | "none"
+  | "takeoff"
+  | "rising"
+  | "apex"
+  | "falling"
+  | "landing";
+export type SupportModeV2 = "supported" | "sliding" | "unsupported";
+
+export interface ActiveLocomotionCapabilityStateV2 {
+  readonly schemaVersion: 2;
+  readonly status: "active";
+  readonly mobilityMode: MobilityModeV2;
+  readonly gait: GaitV2;
+  readonly verticalPhase: VerticalPhaseV2;
+  readonly supportMode: SupportModeV2;
+  readonly movementMedium: "ground" | "air";
+  readonly facingYawRadians: number;
+  readonly linearVelocity: Readonly<{ x: number; y: number; z: number }>;
+  readonly horizontalSpeedMetersPerSecond: number;
+  readonly committedTick: number;
+  readonly phaseEnteredTick: number;
+  readonly transitionSequence: number;
+}
+
+export interface SuspendedLocomotionCapabilityStateV2 {
+  readonly schemaVersion: 2;
+  readonly status: "suspended";
+  readonly suspendedByRelationshipId: string;
+  readonly committedTick: number;
+  readonly transitionSequence: number;
+}
+
+export type LocomotionCapabilityStateV2 =
+  | ActiveLocomotionCapabilityStateV2
+  | SuspendedLocomotionCapabilityStateV2;
+
+/** Identity envelope used by canonical World State maps for committed V2 locomotion. */
+export interface LocomotionCapabilityStateEnvelopeV2 {
+  readonly id: string;
+  readonly kind: "locomotion-capability-state-v2";
+  readonly ownerEntityId: string;
+  readonly locomotionCapabilityRef: string;
+  readonly locomotionCapabilityHash: Sha256HashV1;
+  readonly locomotion: LocomotionCapabilityStateV2;
+}
+
+export type GameplayCapabilityStateV1 =
+  | LocomotionCapabilityStateV1
+  | LocomotionCapabilityStateEnvelopeV2;
+
+interface LocomotionTransitionEventBaseV1 {
+  readonly schemaVersion: 1;
+  readonly committedTick: number;
+  readonly transitionSequence: number;
+}
+
+export type LocomotionTransitionEventV1 =
+  | (LocomotionTransitionEventBaseV1 & Readonly<{
+      type: "phase-changed";
+      fromVerticalPhase: VerticalPhaseV2;
+      toVerticalPhase: VerticalPhaseV2;
+    }>)
+  | (LocomotionTransitionEventBaseV1 & Readonly<{ type: "apex-crossed" }>)
+  | (LocomotionTransitionEventBaseV1 & Readonly<{ type: "landed" }>);
+
+const MOBILITY_MODES_V2 = new Set<MobilityModeV2>(["grounded", "airborne"]);
+const GAITS_V2 = new Set<GaitV2>(["none", "idle", "walk", "run"]);
+const VERTICAL_PHASES_V2 = new Set<VerticalPhaseV2>([
+  "none",
+  "takeoff",
+  "rising",
+  "apex",
+  "falling",
+  "landing",
+]);
+const SUPPORT_MODES_V2 = new Set<SupportModeV2>([
+  "supported",
+  "sliding",
+  "unsupported",
+]);
+
+export function parseLocomotionCapabilityStateV2(
+  input: unknown,
+): LocomotionCapabilityStateV2 {
+  const schemaName = "LocomotionCapabilityStateV2";
+  const record = snapshotDataRecord(input) ?? invalid(schemaName);
+  if (
+    record.schemaVersion !== 2 ||
+    !isSafeNonNegativeInteger(record.committedTick) ||
+    !isSafeNonNegativeInteger(record.transitionSequence)
+  ) invalid(schemaName);
+  if (record.status === "suspended") {
+    if (!hasExactKeys(record, [
+      "schemaVersion",
+      "status",
+      "suspendedByRelationshipId",
+      "committedTick",
+      "transitionSequence",
+    ]) || !isNonEmptyString(record.suspendedByRelationshipId)) invalid(schemaName);
+    return Object.freeze({
+      schemaVersion: 2,
+      status: "suspended",
+      suspendedByRelationshipId: record.suspendedByRelationshipId,
+      committedTick: record.committedTick,
+      transitionSequence: record.transitionSequence,
+    }) as SuspendedLocomotionCapabilityStateV2;
+  }
+  if (record.status !== "active" || !hasExactKeys(record, [
+    "schemaVersion",
+    "status",
+    "mobilityMode",
+    "gait",
+    "verticalPhase",
+    "supportMode",
+    "movementMedium",
+    "facingYawRadians",
+    "linearVelocity",
+    "horizontalSpeedMetersPerSecond",
+    "committedTick",
+    "phaseEnteredTick",
+    "transitionSequence",
+  ])) invalid(schemaName);
+  const velocity = snapshotDataRecord(record.linearVelocity) ?? invalid(schemaName);
+  if (
+    !hasExactKeys(velocity, ["x", "y", "z"]) ||
+    !isFiniteNumber(velocity.x) ||
+    !isFiniteNumber(velocity.y) ||
+    !isFiniteNumber(velocity.z) ||
+    typeof record.mobilityMode !== "string" ||
+    !MOBILITY_MODES_V2.has(record.mobilityMode as MobilityModeV2) ||
+    typeof record.gait !== "string" ||
+    !GAITS_V2.has(record.gait as GaitV2) ||
+    typeof record.verticalPhase !== "string" ||
+    !VERTICAL_PHASES_V2.has(record.verticalPhase as VerticalPhaseV2) ||
+    typeof record.supportMode !== "string" ||
+    !SUPPORT_MODES_V2.has(record.supportMode as SupportModeV2) ||
+    !isFiniteNumber(record.facingYawRadians) ||
+    !isFiniteNumber(record.horizontalSpeedMetersPerSecond) ||
+    record.horizontalSpeedMetersPerSecond < 0 ||
+    record.horizontalSpeedMetersPerSecond !== Math.hypot(velocity.x, velocity.z) ||
+    !isSafeNonNegativeInteger(record.phaseEnteredTick) ||
+    record.phaseEnteredTick > record.committedTick
+  ) invalid(schemaName);
+  const isGrounded = record.mobilityMode === "grounded";
+  if (
+    (isGrounded && (
+      record.movementMedium !== "ground" ||
+      record.supportMode === "unsupported" ||
+      !["none", "landing"].includes(record.verticalPhase as string) ||
+      record.gait === "none"
+    )) ||
+    (!isGrounded && (
+      record.movementMedium !== "air" ||
+      record.supportMode !== "unsupported" ||
+      !["takeoff", "rising", "apex", "falling"].includes(record.verticalPhase as string) ||
+      record.gait !== "none"
+    ))
+  ) invalid(schemaName);
+  return deepFreeze({
+    schemaVersion: 2,
+    status: "active",
+    mobilityMode: record.mobilityMode as MobilityModeV2,
+    gait: record.gait as GaitV2,
+    verticalPhase: record.verticalPhase as VerticalPhaseV2,
+    supportMode: record.supportMode as SupportModeV2,
+    movementMedium: record.movementMedium as "ground" | "air",
+    facingYawRadians: record.facingYawRadians,
+    linearVelocity: { x: velocity.x, y: velocity.y, z: velocity.z },
+    horizontalSpeedMetersPerSecond: record.horizontalSpeedMetersPerSecond,
+    committedTick: record.committedTick,
+    phaseEnteredTick: record.phaseEnteredTick,
+    transitionSequence: record.transitionSequence,
+  }) as ActiveLocomotionCapabilityStateV2;
+}
+
+export function parseLocomotionTransitionEventV1(
+  input: unknown,
+): LocomotionTransitionEventV1 {
+  const schemaName = "LocomotionTransitionEventV1";
+  const record = snapshotDataRecord(input) ?? invalid(schemaName);
+  if (
+    record.schemaVersion !== 1 ||
+    !isSafeNonNegativeInteger(record.committedTick) ||
+    !isSafeNonNegativeInteger(record.transitionSequence)
+  ) invalid(schemaName);
+  const base = {
+    schemaVersion: 1 as const,
+    committedTick: record.committedTick,
+    transitionSequence: record.transitionSequence,
+  };
+  if (record.type === "phase-changed") {
+    if (!hasExactKeys(record, [
+      "schemaVersion",
+      "type",
+      "fromVerticalPhase",
+      "toVerticalPhase",
+      "committedTick",
+      "transitionSequence",
+    ]) ||
+      typeof record.fromVerticalPhase !== "string" ||
+      !VERTICAL_PHASES_V2.has(record.fromVerticalPhase as VerticalPhaseV2) ||
+      typeof record.toVerticalPhase !== "string" ||
+      !VERTICAL_PHASES_V2.has(record.toVerticalPhase as VerticalPhaseV2) ||
+      record.fromVerticalPhase === record.toVerticalPhase
+    ) invalid(schemaName);
+    return Object.freeze({
+      ...base,
+      type: "phase-changed",
+      fromVerticalPhase: record.fromVerticalPhase as VerticalPhaseV2,
+      toVerticalPhase: record.toVerticalPhase as VerticalPhaseV2,
+    });
+  }
+  if (record.type === "apex-crossed" || record.type === "landed") {
+    if (!hasExactKeys(record, [
+      "schemaVersion",
+      "type",
+      "committedTick",
+      "transitionSequence",
+    ])) invalid(schemaName);
+    return Object.freeze({ ...base, type: record.type });
+  }
+  return invalid(schemaName);
+}
 
 export interface PossessedByRelationshipStateV1 {
   readonly id: string;
@@ -1208,9 +1433,12 @@ function parseGameplayEntityStateV1(input: unknown): GameplayEntityStateV1 | und
   return undefined;
 }
 
-function parseLocomotionCapabilityStateV1(
+function parseLegacyLocomotionCapabilityState(
   input: unknown,
-): LocomotionCapabilityStateV1 | undefined {
+): Extract<
+  GameplayCapabilityStateV1,
+  { readonly kind: "locomotion-capability-state" }
+> | undefined {
   const record = snapshotDataRecord(input);
   const baseKeys = [
     "id",
@@ -1265,6 +1493,37 @@ function parseLocomotionCapabilityStateV1(
     facingYawRadians: record.facingYawRadians,
     speedMetersPerSecond: record.speedMetersPerSecond,
   };
+}
+
+export function parseGameplayCapabilityStateV1(
+  input: unknown,
+): GameplayCapabilityStateV1 | undefined {
+  const legacy = parseLegacyLocomotionCapabilityState(input);
+  if (legacy !== undefined) return legacy;
+  const record = snapshotDataRecord(input);
+  if (isNil(record) || !hasExactKeys(record, [
+    "id",
+    "kind",
+    "ownerEntityId",
+    "locomotionCapabilityRef",
+    "locomotionCapabilityHash",
+    "locomotion",
+  ]) || record.kind !== "locomotion-capability-state-v2" ||
+    !isNonEmptyString(record.id) || !isNonEmptyString(record.ownerEntityId) ||
+    !isNonEmptyString(record.locomotionCapabilityRef) ||
+    !isSha256(record.locomotionCapabilityHash)) return undefined;
+  try {
+    return Object.freeze({
+      id: record.id,
+      kind: "locomotion-capability-state-v2",
+      ownerEntityId: record.ownerEntityId,
+      locomotionCapabilityRef: record.locomotionCapabilityRef,
+      locomotionCapabilityHash: record.locomotionCapabilityHash,
+      locomotion: parseLocomotionCapabilityStateV2(record.locomotion),
+    });
+  } catch {
+    return undefined;
+  }
 }
 
 function parsePossessedByRelationshipStateV1(
@@ -1713,7 +1972,7 @@ function parseWorldStateSnapshotBuildInputV1(
   ) ?? invalid(schemaName);
   const capabilityStatesById = parseIdMap(
     record.capabilityStatesById,
-    parseLocomotionCapabilityStateV1,
+    parseGameplayCapabilityStateV1,
   ) ?? invalid(schemaName);
   const relationshipStatesById = parseIdMap(
     record.relationshipStatesById,
@@ -1779,10 +2038,22 @@ function parseWorldStateSnapshotBuildInputV1(
       getOwnMapValue(entityStatesById, capability.ownerEntityId)?.kind !==
         "spatial-entity-state"
     ) invalid(schemaName);
-    if (capability.mode === "suspended") {
+    let suspendedByRelationshipId: string | undefined;
+    if (capability.kind === "locomotion-capability-state-v2") {
+      if (capability.locomotion.committedTick !== simulationTick) {
+        invalid(schemaName);
+      }
+      if (capability.locomotion.status === "suspended") {
+        suspendedByRelationshipId =
+          capability.locomotion.suspendedByRelationshipId;
+      }
+    } else if (capability.mode === "suspended") {
+      suspendedByRelationshipId = capability.suspendedByRelationshipId;
+    }
+    if (suspendedByRelationshipId !== undefined) {
       const relationship = getOwnMapValue(
         relationshipStatesById,
-        capability.suspendedByRelationshipId,
+        suspendedByRelationshipId,
       );
       if (
         relationship?.type !== "mountedOn" ||

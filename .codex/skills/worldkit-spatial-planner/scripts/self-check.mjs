@@ -414,126 +414,6 @@ function sha256Bytes(bytes) {
 function sha256CanonicalJson(value) {
   return sha256Bytes(canonicalJsonBytes(value));
 }
-const CAMERA_RIG_PARAMETER_NAMES_V1 = [
-  "distanceMeters",
-  "minimumDistanceMeters",
-  "maximumDistanceMeters",
-  "targetHeightMeters",
-  "shoulderOffsetMeters",
-  "pitchRadians",
-  "minimumPitchRadians",
-  "maximumPitchRadians",
-  "positionDampingPerSecond",
-  "horizontalPositionDampingPerSecond",
-  "verticalPositionDampingPerSecond",
-  "maximumPositionLagMeters",
-  "rotationDampingPerSecond",
-  "yawDampingPerSecond",
-  "pitchDampingPerSecond",
-  "collisionRadiusMeters",
-  "collisionRetractionMetersPerSecond",
-  "collisionRecoveryMetersPerSecond",
-  "baseFovDegrees",
-  "speedFovDegreesPerMeterPerSecond",
-  "maximumSpeedFovDegrees",
-  "lookAheadSeconds",
-  "accelerationLookAheadSecondsSquared",
-  "transitionSeconds",
-  "minimumHeadingSpeedMetersPerSecond",
-  "velocityHeadingDampingPerSecond",
-  "fovDampingPerSecond",
-  "horizontalDeadZoneRatio",
-  "verticalDeadZoneRatio",
-  "recenterDelaySeconds",
-  "recenterDurationSeconds",
-  "recenterMinimumSpeedMetersPerSecond",
-  "teleportSnapDistanceMeters",
-  "lookSensitivityXRatio",
-  "lookSensitivityYRatio"
-];
-const CAMERA_TUNING_PARAMETER_NAMES_V1 = [
-  "distanceMeters",
-  "targetHeightMeters",
-  "shoulderOffsetMeters",
-  "pitchRadians",
-  "positionDampingPerSecond",
-  "horizontalPositionDampingPerSecond",
-  "verticalPositionDampingPerSecond",
-  "maximumPositionLagMeters",
-  "rotationDampingPerSecond",
-  "yawDampingPerSecond",
-  "pitchDampingPerSecond",
-  "collisionRadiusMeters",
-  "collisionRetractionMetersPerSecond",
-  "collisionRecoveryMetersPerSecond",
-  "baseFovDegrees",
-  "speedFovDegreesPerMeterPerSecond",
-  "maximumSpeedFovDegrees",
-  "lookAheadSeconds",
-  "accelerationLookAheadSecondsSquared",
-  "transitionSeconds",
-  "minimumHeadingSpeedMetersPerSecond",
-  "velocityHeadingDampingPerSecond",
-  "fovDampingPerSecond",
-  "horizontalDeadZoneRatio",
-  "verticalDeadZoneRatio",
-  "recenterDelaySeconds",
-  "recenterDurationSeconds",
-  "recenterMinimumSpeedMetersPerSecond",
-  "teleportSnapDistanceMeters",
-  "lookSensitivityXRatio",
-  "lookSensitivityYRatio"
-];
-const CAMERA_RIG_PARAMETER_NAME_SET_V1 = new Set(CAMERA_RIG_PARAMETER_NAMES_V1);
-new Set(CAMERA_TUNING_PARAMETER_NAMES_V1);
-const SOCKET_FIRST_PERSON_IGNORED_MODIFIER_PARAMETERS_V1 = /* @__PURE__ */ new Set([
-  "distanceMeters",
-  "minimumDistanceMeters",
-  "maximumDistanceMeters",
-  "shoulderOffsetMeters",
-  "collisionRadiusMeters",
-  "collisionRetractionMetersPerSecond",
-  "collisionRecoveryMetersPerSecond",
-  "lookAheadSeconds",
-  "accelerationLookAheadSecondsSquared",
-  "horizontalDeadZoneRatio",
-  "verticalDeadZoneRatio"
-]);
-function isCameraRigParameterNameV1(value) {
-  return CAMERA_RIG_PARAMETER_NAME_SET_V1.has(value);
-}
-function isCameraRigParameterOverrideSupportedV1(algorithmRef, parameterName) {
-  return !algorithmRef.endsWith("/socket-first-person@1") || !SOCKET_FIRST_PERSON_IGNORED_MODIFIER_PARAMETERS_V1.has(parameterName);
-}
-function applyCameraRigParameterOverridesV1(algorithmRef, parameters, overrides) {
-  const applied = { ...parameters };
-  for (const [parameterName, value] of Object.entries(overrides)) {
-    if (value === void 0 || !isCameraRigParameterNameV1(parameterName) || !isCameraRigParameterOverrideSupportedV1(algorithmRef, parameterName)) continue;
-    applied[parameterName] = value;
-  }
-  const positionDamping = overrides.positionDampingPerSecond;
-  if (positionDamping !== void 0) {
-    if (overrides.horizontalPositionDampingPerSecond === void 0) {
-      applied.horizontalPositionDampingPerSecond = positionDamping;
-    }
-    if (overrides.verticalPositionDampingPerSecond === void 0) {
-      applied.verticalPositionDampingPerSecond = positionDamping;
-    }
-  }
-  const rotationDamping = overrides.rotationDampingPerSecond;
-  if (rotationDamping !== void 0) {
-    if (overrides.yawDampingPerSecond === void 0) {
-      applied.yawDampingPerSecond = rotationDamping;
-    }
-    if (overrides.pitchDampingPerSecond === void 0) {
-      applied.pitchDampingPerSecond = rotationDamping;
-    }
-    if (overrides.velocityHeadingDampingPerSecond === void 0) {
-      applied.velocityHeadingDampingPerSecond = rotationDamping;
-    }
-  }
-  return applied;
-}
 var freeGlobal = typeof global == "object" && global && global.Object === Object && global;
 var freeSelf = typeof self == "object" && self && self.Object === Object && self;
 var root = freeGlobal || freeSelf || Function("return this")();
@@ -1025,6 +905,205 @@ function baseUniq(array, iteratee, comparator) {
 function uniq(array) {
   return array && array.length ? baseUniq(array) : [];
 }
+function invalid(schemaName) {
+  throw new RangeError(`Value must match the closed ${schemaName} schema.`);
+}
+function snapshotDataRecord(value) {
+  if (typeof value !== "object" || isNil(value)) return void 0;
+  try {
+    const prototype = Reflect.getPrototypeOf(value);
+    if (prototype !== Object.prototype && !isNil(prototype)) return void 0;
+    const snapshot = /* @__PURE__ */ Object.create(null);
+    for (const key of Reflect.ownKeys(value)) {
+      const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
+      if (typeof key !== "string" || isNil(descriptor) || !descriptor.enumerable || !("value" in descriptor)) return void 0;
+      snapshot[key] = descriptor.value;
+    }
+    return snapshot;
+  } catch {
+    return void 0;
+  }
+}
+function hasExactKeys(value, keys) {
+  const ownKeys = Reflect.ownKeys(value);
+  return ownKeys.length === keys.length && ownKeys.every((key) => typeof key === "string" && keys.includes(key));
+}
+function isSafeNonNegativeInteger(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && !Object.is(value, -0);
+}
+function deepFreeze$1(value) {
+  if (typeof value !== "object" || isNil(value) || Object.isFrozen(value)) {
+    return value;
+  }
+  for (const key of Reflect.ownKeys(value)) {
+    const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
+    if (!isNil(descriptor) && "value" in descriptor) {
+      deepFreeze$1(descriptor.value);
+    }
+  }
+  return Object.freeze(value);
+}
+const GAMEPLAY_CAPACITY_BUDGET_KEYS = [
+  "maximumParticipantCount",
+  "maximumControllerEntityCount",
+  "maximumRelationshipStateCount",
+  "maximumActiveActionStateCount",
+  "maximumGameplayFeatureCount",
+  "maximumSemanticActionDefinitionCount",
+  "maximumSemanticFactCount",
+  "maximumSemanticFactTransitionCountPerTick",
+  "maximumIdempotencyRecordCount",
+  "maximumUsedActionExecutionIdCount",
+  "maximumRetainedReceiptCount",
+  "maximumRetainedEventCount",
+  "maximumRetainedWorldStateSnapshotCount"
+];
+function parseGameplayCapacityBudgetV1(input) {
+  const schemaName = "GameplayCapacityBudgetV1";
+  const record = snapshotDataRecord(input) ?? invalid(schemaName);
+  if (!hasExactKeys(record, GAMEPLAY_CAPACITY_BUDGET_KEYS) || !GAMEPLAY_CAPACITY_BUDGET_KEYS.every(
+    (key) => isSafeNonNegativeInteger(record[key])
+  )) invalid(schemaName);
+  return deepFreeze$1(Object.fromEntries(
+    GAMEPLAY_CAPACITY_BUDGET_KEYS.map((key) => [key, record[key]])
+  ));
+}
+parseGameplayCapacityBudgetV1({
+  maximumParticipantCount: 1,
+  maximumControllerEntityCount: 1,
+  maximumRelationshipStateCount: 1,
+  maximumActiveActionStateCount: 256,
+  maximumGameplayFeatureCount: 16,
+  maximumSemanticActionDefinitionCount: 256,
+  maximumSemanticFactCount: 4096,
+  maximumSemanticFactTransitionCountPerTick: 1024,
+  maximumIdempotencyRecordCount: 4096,
+  maximumUsedActionExecutionIdCount: 4096,
+  maximumRetainedReceiptCount: 4096,
+  maximumRetainedEventCount: 8192,
+  maximumRetainedWorldStateSnapshotCount: 4096
+});
+const CAMERA_RIG_PARAMETER_NAMES_V1 = [
+  "distanceMeters",
+  "minimumDistanceMeters",
+  "maximumDistanceMeters",
+  "targetHeightMeters",
+  "shoulderOffsetMeters",
+  "pitchRadians",
+  "minimumPitchRadians",
+  "maximumPitchRadians",
+  "positionDampingPerSecond",
+  "horizontalPositionDampingPerSecond",
+  "verticalPositionDampingPerSecond",
+  "maximumPositionLagMeters",
+  "rotationDampingPerSecond",
+  "yawDampingPerSecond",
+  "pitchDampingPerSecond",
+  "collisionRadiusMeters",
+  "collisionRetractionMetersPerSecond",
+  "collisionRecoveryMetersPerSecond",
+  "baseFovDegrees",
+  "speedFovDegreesPerMeterPerSecond",
+  "maximumSpeedFovDegrees",
+  "lookAheadSeconds",
+  "accelerationLookAheadSecondsSquared",
+  "transitionSeconds",
+  "minimumHeadingSpeedMetersPerSecond",
+  "velocityHeadingDampingPerSecond",
+  "fovDampingPerSecond",
+  "horizontalDeadZoneRatio",
+  "verticalDeadZoneRatio",
+  "recenterDelaySeconds",
+  "recenterDurationSeconds",
+  "recenterMinimumSpeedMetersPerSecond",
+  "teleportSnapDistanceMeters",
+  "lookSensitivityXRatio",
+  "lookSensitivityYRatio"
+];
+const CAMERA_TUNING_PARAMETER_NAMES_V1 = [
+  "distanceMeters",
+  "targetHeightMeters",
+  "shoulderOffsetMeters",
+  "pitchRadians",
+  "positionDampingPerSecond",
+  "horizontalPositionDampingPerSecond",
+  "verticalPositionDampingPerSecond",
+  "maximumPositionLagMeters",
+  "rotationDampingPerSecond",
+  "yawDampingPerSecond",
+  "pitchDampingPerSecond",
+  "collisionRadiusMeters",
+  "collisionRetractionMetersPerSecond",
+  "collisionRecoveryMetersPerSecond",
+  "baseFovDegrees",
+  "speedFovDegreesPerMeterPerSecond",
+  "maximumSpeedFovDegrees",
+  "lookAheadSeconds",
+  "accelerationLookAheadSecondsSquared",
+  "transitionSeconds",
+  "minimumHeadingSpeedMetersPerSecond",
+  "velocityHeadingDampingPerSecond",
+  "fovDampingPerSecond",
+  "horizontalDeadZoneRatio",
+  "verticalDeadZoneRatio",
+  "recenterDelaySeconds",
+  "recenterDurationSeconds",
+  "recenterMinimumSpeedMetersPerSecond",
+  "teleportSnapDistanceMeters",
+  "lookSensitivityXRatio",
+  "lookSensitivityYRatio"
+];
+const CAMERA_RIG_PARAMETER_NAME_SET_V1 = new Set(CAMERA_RIG_PARAMETER_NAMES_V1);
+new Set(CAMERA_TUNING_PARAMETER_NAMES_V1);
+const SOCKET_FIRST_PERSON_IGNORED_MODIFIER_PARAMETERS_V1 = /* @__PURE__ */ new Set([
+  "distanceMeters",
+  "minimumDistanceMeters",
+  "maximumDistanceMeters",
+  "shoulderOffsetMeters",
+  "collisionRadiusMeters",
+  "collisionRetractionMetersPerSecond",
+  "collisionRecoveryMetersPerSecond",
+  "lookAheadSeconds",
+  "accelerationLookAheadSecondsSquared",
+  "horizontalDeadZoneRatio",
+  "verticalDeadZoneRatio"
+]);
+function isCameraRigParameterNameV1(value) {
+  return CAMERA_RIG_PARAMETER_NAME_SET_V1.has(value);
+}
+function isCameraRigParameterOverrideSupportedV1(algorithmRef, parameterName) {
+  return !algorithmRef.endsWith("/socket-first-person@1") || !SOCKET_FIRST_PERSON_IGNORED_MODIFIER_PARAMETERS_V1.has(parameterName);
+}
+function applyCameraRigParameterOverridesV1(algorithmRef, parameters, overrides) {
+  const applied = { ...parameters };
+  for (const [parameterName, value] of Object.entries(overrides)) {
+    if (value === void 0 || !isCameraRigParameterNameV1(parameterName) || !isCameraRigParameterOverrideSupportedV1(algorithmRef, parameterName)) continue;
+    applied[parameterName] = value;
+  }
+  const positionDamping = overrides.positionDampingPerSecond;
+  if (positionDamping !== void 0) {
+    if (overrides.horizontalPositionDampingPerSecond === void 0) {
+      applied.horizontalPositionDampingPerSecond = positionDamping;
+    }
+    if (overrides.verticalPositionDampingPerSecond === void 0) {
+      applied.verticalPositionDampingPerSecond = positionDamping;
+    }
+  }
+  const rotationDamping = overrides.rotationDampingPerSecond;
+  if (rotationDamping !== void 0) {
+    if (overrides.yawDampingPerSecond === void 0) {
+      applied.yawDampingPerSecond = rotationDamping;
+    }
+    if (overrides.pitchDampingPerSecond === void 0) {
+      applied.pitchDampingPerSecond = rotationDamping;
+    }
+    if (overrides.velocityHeadingDampingPerSecond === void 0) {
+      applied.velocityHeadingDampingPerSecond = rotationDamping;
+    }
+  }
+  return applied;
+}
+new TextEncoder();
 const TRAVERSAL_DRIVER_PROFILE_REQUIRED_KEYS = [
   "kind",
   "schemaVersion",
@@ -1132,84 +1211,6 @@ Object.freeze([
   "traversal-surface-profile",
   "gameplay-bootstrap"
 ]);
-function invalid(schemaName) {
-  throw new RangeError(`Value must match the closed ${schemaName} schema.`);
-}
-function snapshotDataRecord(value) {
-  if (typeof value !== "object" || isNil(value)) return void 0;
-  try {
-    const prototype = Reflect.getPrototypeOf(value);
-    if (prototype !== Object.prototype && !isNil(prototype)) return void 0;
-    const snapshot = /* @__PURE__ */ Object.create(null);
-    for (const key of Reflect.ownKeys(value)) {
-      const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
-      if (typeof key !== "string" || isNil(descriptor) || !descriptor.enumerable || !("value" in descriptor)) return void 0;
-      snapshot[key] = descriptor.value;
-    }
-    return snapshot;
-  } catch {
-    return void 0;
-  }
-}
-function hasExactKeys(value, keys) {
-  const ownKeys = Reflect.ownKeys(value);
-  return ownKeys.length === keys.length && ownKeys.every((key) => typeof key === "string" && keys.includes(key));
-}
-function isSafeNonNegativeInteger(value) {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && !Object.is(value, -0);
-}
-function deepFreeze$1(value) {
-  if (typeof value !== "object" || isNil(value) || Object.isFrozen(value)) {
-    return value;
-  }
-  for (const key of Reflect.ownKeys(value)) {
-    const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
-    if (!isNil(descriptor) && "value" in descriptor) {
-      deepFreeze$1(descriptor.value);
-    }
-  }
-  return Object.freeze(value);
-}
-const GAMEPLAY_CAPACITY_BUDGET_KEYS = [
-  "maximumParticipantCount",
-  "maximumControllerEntityCount",
-  "maximumRelationshipStateCount",
-  "maximumActiveActionStateCount",
-  "maximumGameplayFeatureCount",
-  "maximumSemanticActionDefinitionCount",
-  "maximumSemanticFactCount",
-  "maximumSemanticFactTransitionCountPerTick",
-  "maximumIdempotencyRecordCount",
-  "maximumUsedActionExecutionIdCount",
-  "maximumRetainedReceiptCount",
-  "maximumRetainedEventCount",
-  "maximumRetainedWorldStateSnapshotCount"
-];
-function parseGameplayCapacityBudgetV1(input) {
-  const schemaName = "GameplayCapacityBudgetV1";
-  const record = snapshotDataRecord(input) ?? invalid(schemaName);
-  if (!hasExactKeys(record, GAMEPLAY_CAPACITY_BUDGET_KEYS) || !GAMEPLAY_CAPACITY_BUDGET_KEYS.every(
-    (key) => isSafeNonNegativeInteger(record[key])
-  )) invalid(schemaName);
-  return deepFreeze$1(Object.fromEntries(
-    GAMEPLAY_CAPACITY_BUDGET_KEYS.map((key) => [key, record[key]])
-  ));
-}
-parseGameplayCapacityBudgetV1({
-  maximumParticipantCount: 1,
-  maximumControllerEntityCount: 1,
-  maximumRelationshipStateCount: 1,
-  maximumActiveActionStateCount: 256,
-  maximumGameplayFeatureCount: 16,
-  maximumSemanticActionDefinitionCount: 256,
-  maximumSemanticFactCount: 4096,
-  maximumSemanticFactTransitionCountPerTick: 1024,
-  maximumIdempotencyRecordCount: 4096,
-  maximumUsedActionExecutionIdCount: 4096,
-  maximumRetainedReceiptCount: 4096,
-  maximumRetainedEventCount: 8192,
-  maximumRetainedWorldStateSnapshotCount: 4096
-});
 const WORLDKIT_RUNTIME_SESSION_REQUEST_TYPES_V1 = Object.freeze([
   "gameplay-command.execute",
   "fixed-input.run",
@@ -1308,6 +1309,8 @@ const GOLDEN_GROUND_ANIMATION_SET = {
     {
       actionId: "idle",
       sourceClipName: "idle",
+      semanticFamily: "ground",
+      automaticPresentationKeys: ["locomotion.suspended", "locomotion.idle"],
       loopMode: "repeat",
       playbackSpeedRatio: 1,
       blendDurationSeconds: 0.2,
@@ -1316,6 +1319,8 @@ const GOLDEN_GROUND_ANIMATION_SET = {
     {
       actionId: "walk",
       sourceClipName: "walk",
+      semanticFamily: "ground",
+      automaticPresentationKeys: ["locomotion.walk"],
       loopMode: "repeat",
       playbackSpeedRatio: 1,
       blendDurationSeconds: 0.2,
@@ -1324,6 +1329,8 @@ const GOLDEN_GROUND_ANIMATION_SET = {
     {
       actionId: "run",
       sourceClipName: "run",
+      semanticFamily: "ground",
+      automaticPresentationKeys: ["locomotion.run"],
       loopMode: "repeat",
       playbackSpeedRatio: 1,
       blendDurationSeconds: 0.15,
@@ -1332,6 +1339,14 @@ const GOLDEN_GROUND_ANIMATION_SET = {
     {
       actionId: "jump",
       sourceClipName: "jump",
+      semanticFamily: "airborne",
+      automaticPresentationKeys: [
+        "locomotion.takeoff",
+        "locomotion.rising",
+        "locomotion.apex",
+        "locomotion.falling",
+        "locomotion.landing"
+      ],
       loopMode: "once",
       playbackSpeedRatio: 1,
       blendDurationSeconds: 0.1,
@@ -1407,11 +1422,11 @@ const G_BOT_SUBJECT_ASSET = {
   },
   runtimeReadiness: {
     productionReady: false,
-    runtimeStateBinding: "not-implemented"
+    runtimeStateBinding: "partial"
   },
   aiMetadata: {
     displayName: "G Bot Golden",
-    description: "Project-owned Mixamo-rigged G Bot with twenty-five art-ready semantic animation clips; runtime state binding is not implemented.",
+    description: "Project-owned Mixamo-rigged G Bot with one continuous ordinary-jump Clip across committed locomotion phases; contextual fall and hard-landing binding remains partial.",
     semanticTags: ["biped", "g-bot", "humanoid", "rigged"]
   }
 };
@@ -1450,31 +1465,37 @@ const G_BOT_MIXAMO_RIG_PROFILE = {
   }
 };
 const G_BOT_ACTION_BINDINGS = [
-  ["idle", "repeat", 0.2],
-  ["idle.gaming", "repeat", 0.2],
-  ["walk", "repeat", 0.15],
-  ["walk.step", "once", 0.12],
-  ["run", "repeat", 0.12],
-  ["jump", "once", 0.1],
-  ["fall", "repeat", 0.12],
-  ["land.hard", "once", 0.08],
-  ["land.hard.alt", "once", 0.08],
-  ["fly", "repeat", 0.18],
-  ["float", "repeat", 0.2],
-  ["swim.surface", "repeat", 0.18],
-  ["swim.tread", "repeat", 0.2],
-  ["swim.exit", "once", 0.15],
-  ["sit", "once", 0.2],
-  ["sit.idle", "repeat", 0.2],
-  ["sit.ground.idle", "repeat", 0.2],
-  ["sit.toStand", "once", 0.15],
-  ["stand", "once", 0.18],
-  ["lay.idle", "repeat", 0.2],
-  ["roll.toRun", "once", 0.08],
-  ["fight.enter", "once", 0.12],
-  ["emote.salute", "once", 0.15],
-  ["emote.angry", "once", 0.15],
-  ["dance.rumba", "repeat", 0.2]
+  ["idle", "repeat", 0.2, "ground", ["locomotion.suspended", "locomotion.idle"]],
+  ["idle.gaming", "repeat", 0.2, "posture", []],
+  ["walk", "repeat", 0.15, "ground", ["locomotion.walk"]],
+  ["walk.step", "once", 0.12, "ground", []],
+  ["run", "repeat", 0.12, "ground", ["locomotion.run"]],
+  ["jump", "once", 0.1, "airborne", [
+    "locomotion.takeoff",
+    "locomotion.rising",
+    "locomotion.apex",
+    "locomotion.falling",
+    "locomotion.landing"
+  ]],
+  ["fall", "repeat", 0.12, "airborne", []],
+  ["land.hard", "once", 0.08, "airborne", []],
+  ["land.hard.alt", "once", 0.08, "airborne", []],
+  ["fly", "repeat", 0.18, "flight", []],
+  ["float", "repeat", 0.2, "flight", []],
+  ["swim.surface", "repeat", 0.18, "water", []],
+  ["swim.tread", "repeat", 0.2, "water", []],
+  ["swim.exit", "once", 0.15, "water", []],
+  ["sit", "once", 0.2, "posture", []],
+  ["sit.idle", "repeat", 0.2, "posture", []],
+  ["sit.ground.idle", "repeat", 0.2, "posture", []],
+  ["sit.toStand", "once", 0.15, "posture", []],
+  ["stand", "once", 0.18, "posture", []],
+  ["lay.idle", "repeat", 0.2, "posture", []],
+  ["roll.toRun", "once", 0.08, "ground", []],
+  ["fight.enter", "once", 0.12, "combat", []],
+  ["emote.salute", "once", 0.15, "emote", []],
+  ["emote.angry", "once", 0.15, "emote", []],
+  ["dance.rumba", "repeat", 0.2, "dance", []]
 ];
 const G_BOT_GROUND_ANIMATION_SET = {
   kind: "animation-set",
@@ -1486,9 +1507,11 @@ const G_BOT_GROUND_ANIMATION_SET = {
   defaultActionId: "idle",
   requiredActionIds: G_BOT_ACTION_BINDINGS.map(([actionId]) => actionId),
   animationBindings: G_BOT_ACTION_BINDINGS.map(
-    ([actionId, loopMode, blendDurationSeconds]) => ({
+    ([actionId, loopMode, blendDurationSeconds, semanticFamily, automaticPresentationKeys]) => ({
       actionId,
       sourceClipName: actionId,
+      semanticFamily,
+      automaticPresentationKeys,
       loopMode,
       playbackSpeedRatio: 1,
       blendDurationSeconds,
@@ -2171,6 +2194,31 @@ function validateAnimationSet(source) {
       `SUBJECT_REGISTRY_DUPLICATE_CLIP_MAPPING: '${duplicateClipName}' in '${source.resourceRef}'.`
     );
   }
+  const automaticKeys = source.animationBindings.flatMap(
+    (binding) => binding.automaticPresentationKeys
+  );
+  const duplicateAutomaticKey = duplicateValue(automaticKeys);
+  if (duplicateAutomaticKey !== void 0) {
+    throw new Error(
+      `SUBJECT_REGISTRY_DUPLICATE_PRESENTATION_KEY: '${duplicateAutomaticKey}' in '${source.resourceRef}'.`
+    );
+  }
+  const groundKeys = /* @__PURE__ */ new Set([
+    "locomotion.suspended",
+    "locomotion.idle",
+    "locomotion.walk",
+    "locomotion.run"
+  ]);
+  for (const binding of source.animationBindings) {
+    for (const key of binding.automaticPresentationKeys) {
+      const expectedFamily = groundKeys.has(key) ? "ground" : "airborne";
+      if (binding.semanticFamily !== expectedFamily) {
+        throw new Error(
+          `SUBJECT_REGISTRY_PRESENTATION_FAMILY_MISMATCH: '${key}' cannot bind '${binding.semanticFamily}' in '${source.resourceRef}'.`
+        );
+      }
+    }
+  }
 }
 function validateSubjectAsset(source) {
   const duplicateClipName = duplicateValue(source.inventory.animationClipNames);
@@ -2245,7 +2293,12 @@ function canonicalizeNewResourceCollections(source) {
       return {
         ...input,
         requiredActionIds: sortedStrings(input.requiredActionIds),
-        animationBindings: [...input.animationBindings].sort((left, right) => left.actionId.localeCompare(right.actionId)),
+        animationBindings: [...input.animationBindings].map((binding) => ({
+          ...binding,
+          automaticPresentationKeys: sortedStrings(
+            binding.automaticPresentationKeys
+          )
+        })).sort((left, right) => left.actionId.localeCompare(right.actionId)),
         aiMetadata: {
           ...input.aiMetadata,
           semanticTags: sortedStrings(input.aiMetadata.semanticTags)

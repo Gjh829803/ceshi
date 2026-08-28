@@ -26,6 +26,7 @@ import {
   MotionModeResolverV1,
   type MotionModeFailureCodeV1,
 } from "./motion-mode-resolver";
+import { createGroundAwareControllerInternal } from "./babylon-character-body-port";
 import { FIXED_TIME_STEP_SECONDS } from "./physics";
 
 export interface MotionKernelSnapshotV1 {
@@ -217,217 +218,6 @@ function requestedFromCommand(command: MotionCommandV1): {
   return { moveRequested: false, runRequested: false };
 }
 
-const STEP_UP_FORWARD_CLEARANCE_METERS = 0.02;
-
-type StepUpSimplexOutput = Parameters<
-  PhysicsCharacterController["_tryStepUp"]
->[2];
-type StepUpConstraints = Parameters<
-  PhysicsCharacterController["_tryStepUp"]
->[3];
-
-type PhysicsCharacterControllerCastCollectorHost = {
-  readonly _castCollector: unknown;
-};
-
-type PhysicsCharacterControllerManifoldHost = {
-  readonly _manifold: Array<Readonly<{
-    bodyB: {
-      body: { getMotionType(index: number): number };
-      index: number;
-    };
-    distance: number;
-    normal: Vector3;
-  }>>;
-};
-
-const STATIC_PHYSICS_MOTION_TYPE = 0;
-const DYNAMIC_PHYSICS_MOTION_TYPE = 2;
-const SNAP_DOWN_UPWARD_SPEED_LIMIT_METERS_PER_SECOND = 0.5;
-const SNAP_DOWN_MINIMUM_DROP_METERS = 1e-4;
-const SNAP_DOWN_SURFACE_NORMAL_ALIGNMENT_EPSILON = 1e-3;
-
-function physicsCharacterControllerCastCollector(
-  controller: PhysicsCharacterController,
-): unknown {
-  return (controller as unknown as PhysicsCharacterControllerCastCollectorHost)
-    ._castCollector;
-}
-
-class GroundAwarePhysicsCharacterController extends PhysicsCharacterController {
-  private stepUpEnabledForCurrentIntegrate = false;
-
-  probeGroundPlacementAt(
-    desiredControllerCenter: Vector3,
-    gravityDirection: Vector3,
-  ): Readonly<{ controllerCenter: Vector3; support: CharacterSurfaceInfo }> | undefined {
-    const manifold = (this as unknown as PhysicsCharacterControllerManifoldHost)
-      ._manifold;
-    const maximumVerticalAdjustmentMeters = Math.max(
-      this.maxStepHeight,
-      this.keepDistance + this.keepContactTolerance,
-    );
-    const stepMeters = Math.max(this.keepContactTolerance / 2, 0.01);
-    const verticalOffsetsMeters = [0];
-    for (
-      let distanceMeters = stepMeters;
-      distanceMeters <= maximumVerticalAdjustmentMeters + 1e-9;
-      distanceMeters += stepMeters
-    ) {
-      verticalOffsetsMeters.push(-distanceMeters, distanceMeters);
-    }
-    for (const verticalOffsetMeters of verticalOffsetsMeters) {
-      const controllerCenter = desiredControllerCenter.add(
-        this.up.scale(verticalOffsetMeters),
-      );
-      this.setPosition(controllerCenter);
-      this._refreshManifoldAtPosition(controllerCenter);
-      const staticContacts = manifold.filter(({ bodyB }) =>
-        bodyB.body.getMotionType(bodyB.index) === STATIC_PHYSICS_MOTION_TYPE
-      );
-      manifold.splice(0, manifold.length, ...staticContacts);
-      const support = this.checkSupport(FIXED_TIME_STEP_SECONDS, gravityDirection);
-      if (support.supportedState === CharacterSupportedState.UNSUPPORTED) continue;
-      if (manifold.some((contact) =>
-        contact.distance < -this.keepDistance &&
-        Vector3.Dot(contact.normal, this.up) < this.maxSlopeCosine
-      )) continue;
-      return Object.freeze({ controllerCenter, support });
-    }
-    return undefined;
-  }
-
-  protected override _tryStepUp(
-    remainingTime: number,
-    inputVelocity: Vector3,
-    simplexOutput: StepUpSimplexOutput,
-    constraints: StepUpConstraints,
-  ): number {
-    if (!this.stepUpEnabledForCurrentIntegrate) {
-      return -1;
-    }
-    const verticalSpeed = Vector3.Dot(inputVelocity, this.up);
-    const horizontalVelocity = inputVelocity.subtract(this.up.scale(verticalSpeed));
-    const horizontalSpeed = horizontalVelocity.length();
-    if (!(horizontalSpeed > 1e-6)) {
-      return super._tryStepUp(
-        remainingTime,
-        inputVelocity,
-        simplexOutput,
-        constraints,
-      );
-    }
-    const radiusMeters = this.shapeOptions.capsuleRadius ?? 0;
-    const minForwardMeters =
-      radiusMeters + this.keepDistance + STEP_UP_FORWARD_CLEARANCE_METERS;
-    const paddedRemainingTime = Math.max(
-      remainingTime,
-      minForwardMeters / horizontalSpeed,
-    );
-    const consumed = super._tryStepUp(
-      paddedRemainingTime,
-      inputVelocity,
-      simplexOutput,
-      constraints,
-    );
-    if (consumed < 0) {
-      return consumed;
-    }
-    return Math.min(consumed, remainingTime);
-  }
-
-  override integrate(
-    deltaTime: number,
-    surfaceInfo: CharacterSurfaceInfo,
-    gravity: Vector3,
-  ): void {
-    this.stepUpEnabledForCurrentIntegrate =
-      surfaceInfo.supportedState !== CharacterSupportedState.UNSUPPORTED;
-    try {
-      super.integrate(deltaTime, surfaceInfo, gravity);
-    } finally {
-      this.stepUpEnabledForCurrentIntegrate = false;
-    }
-    this.snapDownToWalkableSupport(surfaceInfo);
-  }
-
-  private snapDownToWalkableSupport(
-    supportBeforeIntegrate: CharacterSurfaceInfo,
-  ): void {
-    if (
-      Vector3.Dot(this.getVelocity(), this.up) >
-      SNAP_DOWN_UPWARD_SPEED_LIMIT_METERS_PER_SECOND
-    ) {
-      return;
-    }
-    const maxStepHeight = this.maxStepHeight;
-    if (!(maxStepHeight > 0)) {
-      return;
-    }
-    const keepDistance = this.keepDistance;
-    const downDistance = maxStepHeight + keepDistance * 2;
-    const position = this.getPosition();
-    const velocity = this.getVelocity();
-    const verticalSpeed = Vector3.Dot(velocity, this.up);
-    const horizontalVelocity = velocity.subtract(this.up.scale(verticalSpeed));
-    const horizontalSpeed = horizontalVelocity.length();
-    const radiusMeters = this.shapeOptions.capsuleRadius ?? 0;
-    const probeOrigin = horizontalSpeed > 1e-6
-      ? position.add(
-          horizontalVelocity.scale(
-            (radiusMeters + keepDistance) / horizontalSpeed,
-          ),
-        )
-      : position;
-    const downEnd = probeOrigin.subtract(this.up.scale(downDistance));
-    this._castWithCollectors(
-      probeOrigin,
-      downEnd,
-      physicsCharacterControllerCastCollector(this),
-    );
-    const hit = this._getClosestCastHit();
-    if (isNil(hit) || isNil(hit.body)) {
-      return;
-    }
-    if (hit.body.body.getMotionType(hit.body.index) === DYNAMIC_PHYSICS_MOTION_TYPE) {
-      return;
-    }
-    const maxSlopeCosineEps = 0.1;
-    if (
-      Vector3.Dot(hit.normal, this.up) <
-      Math.max(this.maxSlopeCosine, maxSlopeCosineEps)
-    ) {
-      return;
-    }
-    if (
-      supportBeforeIntegrate.supportedState !==
-        CharacterSupportedState.UNSUPPORTED &&
-      Vector3.Dot(
-        hit.normal,
-        supportBeforeIntegrate.averageSurfaceNormal,
-      ) < 1 - SNAP_DOWN_SURFACE_NORMAL_ALIGNMENT_EPSILON
-    ) {
-      // A supported capsule cast can first touch the rounded Minkowski edge
-      // of the surface it is leaving. Snapping to that transient normal
-      // fabricates a SLIDING support tick and clears valid coyote time. A
-      // real continuation of the current plane keeps the same normal; after
-      // support is lost, any independently walkable landing remains eligible.
-      return;
-    }
-    const probeDrop = hit.fraction * downDistance - keepDistance;
-    const landingDrop = probeDrop + Vector3.Dot(probeOrigin.subtract(position), this.up);
-    if (
-      landingDrop <= SNAP_DOWN_MINIMUM_DROP_METERS ||
-      landingDrop > maxStepHeight
-    ) {
-      return;
-    }
-    const landingPosition = position.subtract(this.up.scale(landingDrop));
-    this.setPosition(landingPosition);
-    this._refreshManifoldAtPosition(landingPosition);
-  }
-}
-
 export class MotionKernelRuntimeV1 {
   readonly physicsController: PhysicsCharacterController;
   private readonly gravity: Vector3;
@@ -503,7 +293,7 @@ export class MotionKernelRuntimeV1 {
     this.lastRequestedMotionProfileRef = this.motionModeResolver.currentProfile.resourceRef;
 
     const spawnSubjectOrigin = new Vector3(...subject.spawnSubjectOriginPositionMetersXYZ);
-    this.physicsController = new GroundAwarePhysicsCharacterController(
+    this.physicsController = createGroundAwareControllerInternal(
       spawnSubjectOrigin.add(this.colliderCenterOffset),
       {
         capsuleHeight: subject.collider.heightMeters,
@@ -590,7 +380,7 @@ export class MotionKernelRuntimeV1 {
     filterMembershipMask: number,
     filterCollideMask: number,
   ): Vector3 | undefined {
-    const probe = new GroundAwarePhysicsCharacterController(
+    const probe = createGroundAwareControllerInternal(
       desiredSubjectOrigin.add(this.colliderCenterOffset),
       {
         capsuleHeight: this.subject.collider.heightMeters,

@@ -493,6 +493,8 @@ describe("runtime contracts V3", () => {
         {
           actionId: "run",
           sourceClipName: "run",
+          semanticFamily: "ground",
+          automaticPresentationKeys: ["locomotion.run"],
           loopMode: "repeat",
           playbackSpeedRatio: 1,
           blendDurationSeconds: 0.15,

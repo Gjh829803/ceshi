@@ -70,7 +70,17 @@ function compileFlatPackagePlan(): ExecutionPlanV5 {
         }
       : node,
   );
-  return compileRuntimeTestPlanV5(spec);
+  const plan = compileRuntimeTestPlanV5(spec);
+  return {
+    ...plan,
+    // P1.5 is the retained legacy conformance suite. A static visual binding
+    // keeps this fixture on that path instead of accidentally admitting the
+    // single-rigged-subject Golden Humanoid vNext vertical slice.
+    subjects: plan.subjects.map((subject) => ({
+      ...subject,
+      visualBinding: { mode: "static" as const },
+    })),
+  };
 }
 
 /**
@@ -447,7 +457,7 @@ describe("P1.5 conformance: closed Ground/Air Feel slice", () => {
         | undefined;
       for (let tick = 0; tick < 300; tick += 1) {
         const snapshot = await runtime.runFixedInput({
-          actions: ["move-right"],
+          actions: ["move-forward"],
           ticks: 1,
         });
         const state = snapshot.subjectStatesByEntityId.player!;
@@ -459,13 +469,13 @@ describe("P1.5 conformance: closed Ground/Air Feel slice", () => {
         supportBeforeDeparture = support;
       }
       expect(departed).toBeDefined();
-      expect(departed!.state.positionMetersXYZ[0]).toBeGreaterThan(1.5);
+      expect(Math.abs(departed!.state.positionMetersXYZ[2])).toBeGreaterThan(1.5);
       expect(supportBeforeDeparture?.supportState).toBe("supported");
 
       // Coyote from the supported ledge still allows the jump one tick into
       // the fall.
       const jumped = await runtime.runFixedInput({
-        actions: ["move-right", "jump"],
+        actions: ["move-forward", "jump"],
         ticks: 1,
       });
       expect(
@@ -489,7 +499,7 @@ describe("P1.5 conformance: closed Ground/Air Feel slice", () => {
   it("4a. snaps a grounded 0.25 m descent without pulling a rising Jump down", async () => {
     const runtime = await createConformanceRuntime(
       playerOnlyPlan({
-        spawnMetersXYZ: [1.5, 0.3, 0],
+        spawnMetersXYZ: [0, 0.3, -1.5],
         objects: [
           staticBox({
             entityId: "low-step",
@@ -515,12 +525,12 @@ describe("P1.5 conformance: closed Ground/Air Feel slice", () => {
       let descended: SubjectRuntimeState | undefined;
       for (let tick = 0; tick < 120; tick += 1) {
         const snapshot = await runtime.runFixedInput({
-          actions: ["move-right"],
+          actions: ["move-forward"],
           ticks: 1,
         });
         const state = snapshot.subjectStatesByEntityId.player!;
         descentMediums.push(state.movementMedium);
-        if (state.positionMetersXYZ[0] > 2.25 && state.positionMetersXYZ[1] < 0.1) {
+        if (state.positionMetersXYZ[2] < -2.25 && state.positionMetersXYZ[1] < 0.1) {
           descended = state;
           break;
         }
@@ -541,24 +551,24 @@ describe("P1.5 conformance: closed Ground/Air Feel slice", () => {
       const takeoffY = runtime.snapshot()
         .subjectStatesByEntityId.player!.positionMetersXYZ[1];
       let rising = await runtime.runFixedInput({
-        actions: ["move-right", "run", "jump"],
+        actions: ["move-forward", "run", "jump"],
         ticks: 1,
       });
       for (let tick = 0; tick < 20; tick += 1) {
         const state = rising.subjectStatesByEntityId.player!;
         if (
-          state.positionMetersXYZ[0] > 1.9 &&
+          state.positionMetersXYZ[2] < -1.9 &&
           state.velocityMetersPerSecondXYZ[1] > 0
         ) {
           break;
         }
         rising = await runtime.runFixedInput({
-          actions: ["move-right", "run", "jump"],
+          actions: ["move-forward", "run", "jump"],
           ticks: 1,
         });
       }
       const risingState = rising.subjectStatesByEntityId.player!;
-      expect(risingState.positionMetersXYZ[0]).toBeGreaterThan(1.9);
+      expect(risingState.positionMetersXYZ[2]).toBeLessThan(-1.9);
       expect(risingState.positionMetersXYZ[1]).toBeGreaterThan(takeoffY + 0.1);
       expect(risingState.velocityMetersPerSecondXYZ[1]).toBeGreaterThan(0);
       expect(risingState.movementMedium).toBe("air");

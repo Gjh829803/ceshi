@@ -2,6 +2,7 @@ import type { GameplayWorldTransitionV1 } from "../gameplay-world-port";
 import type {
   FixedInputOneTickV1,
   GameplayFixedInputCapacityEstimateV1,
+  GameplayFixedTickActionProjectionV1,
   GameplayViewStateProjectionV1,
   GameplayWorldPortV1,
   GameplayWorldStateProjectionV1,
@@ -40,6 +41,7 @@ export interface FakeGameplayWorldPortCallV1 {
   readonly transitionType?: GameplayWorldTransitionV1["type"];
   readonly transitionId?: string;
   readonly input?: FixedInputOneTickV1;
+  readonly actionProjection?: GameplayFixedTickActionProjectionV1;
 }
 
 export interface FakeDeferredV1<Value> {
@@ -362,11 +364,13 @@ class FakeGameplayWorldPortHarness
 
   runFixedInputTick(
     input: FixedInputOneTickV1,
+    actionProjection: GameplayFixedTickActionProjectionV1,
   ): Promise<GameplayWorldStateProjectionV1> {
     this.requireSingleTick(input);
     this.record({
       operation: "run-fixed-input-tick",
       input: freezeFixedInput(input),
+      actionProjection,
     });
     const failure = this.takeFailure("run-fixed-input-tick");
     if (!isNil(failure) && failure.mode === "throw") throw failure.error;
