@@ -394,13 +394,15 @@ exact 包含：
   census 必须明确记录空增量；Geometry 的 direct callback property `onGeometryUpdated` 必须为 nullish，
   Buffer 当前仍是空增量。
 
-Build 前，Host 对 Scene、Engine 和 provider static/global surface 做 baseline，并在 Scene 的公开
-`onNewMeshAddedObservable`、`onNewTransformNodeAddedObservable`、`onNewMaterialAddedObservable`、
-`onNewLightAddedObservable`、`onNewGeometryAddedObservable` 上安装临时 Host observer。对象一暴露给 Scene，
-Host 就按有效继承类型记录其公开 callback Observable、setter-backed Observable、direct callback property、
-Behavior/retained-object collection 的 provider-owned 初始 identity/order，并在实例上安装可恢复的 direct
-callback accessor probe；不等到 Build 返回后才猜测初值。Host instrumentation observer 不属于 Module，
-且必须在 `finally` 移除并恢复原 descriptor，恢复后 Scene/Engine/static surface 仍须与原 baseline exact 相等。
+Build 前，Host 对 Scene、Engine 和 provider static/global surface 做 baseline，并在 Candidate Scene instance 上
+包装同步 collection insertion 方法：`addMesh`、`addTransformNode`、`addMaterial`、`addLight` 和
+`pushGeometry`。wrapper 必须在调用原 Babylon 方法之前按传入对象的有效继承类型记录公开 callback
+Observable、setter-backed Observable、direct callback property、Behavior/retained-object collection 的
+provider-owned 初始 identity/order，并安装可恢复的 direct callback accessor probe；这才是 Module 获得构造
+结果前的公开同步边界。Babylon 9.23.0 的 `onNewMeshAddedObservable`、`onNewMaterialAddedObservable`、
+`onNewLightAddedObservable` 和 `onNewGeometryAddedObservable` 通过 `TimingTools.SetImmediate` 延后通知，不能
+承担准入边界，也不能用来采集 provider baseline。Host wrappers 必须在 `finally` 恢复原 descriptor，恢复后
+Scene/Engine/static surface 仍须与原 baseline exact 相等。
 
 普通新对象的 Build-end callback 面必须与记录的 provider baseline exact 相等且没有 Module closure。
 Host-owned `BABYLON_NATIVE_ALLOWED_PROVIDER_CALLBACK_TRANSITIONS_V1` 是唯一允许的构造期变化机器清单；
@@ -408,7 +410,7 @@ Babylon 9.23.0 当前 exact 只有 `StandardMaterial` 这一条：`Material` 基
 随后 `StandardMaterial` 构造器会通过 `_attachImageProcessingConfiguration(null)` 在共享的
 `scene.imageProcessingConfiguration.onUpdateParameters` 上增加一个 provider observer，并把
 `getRenderTargetTextures` 从 nullish 赋为 provider function。因此 Audit 只允许每个刚暴露的 exact
-`StandardMaterial` 出现一次、按该安装顺序发生的 provider observer add 和一次
+`StandardMaterial` 在同步 `addMaterial` wrapper 中登记一次、按该安装顺序发生的 provider observer add 和一次
 `getRenderTargetTextures` identity transition；记录 `Observable.add()` 返回的公开 `Observer` identity 和
 最终公开 function identity。任何额外、缺失、重排、后续替换或无法归属到该同步构造窗口的变化都拒绝。
 不得读取 `_imageProcessingConfiguration`、`_imageProcessingObserver` 或其他私有字段。
@@ -417,6 +419,12 @@ Source Admission 按 TypeChecker symbol 拒绝 Module 对上述 direct callback/
 使用 `doNotAdd`/等价跳过 Scene 登记的构造路径，以及手工调用 Scene 的 add/remove Mesh、TransformNode、
 Material、Light、Geometry collection API；这样 Module 不能先在 Host 观察不到的对象上安装 callback 再手工
 加入 Candidate。运行时 probe 负责核实 provider identity 与残留状态；两者不能互相替代。
+
+Host-boundary runtime discovery 只遍历公开 own data-property descriptor 和机器清单中显式批准、经安装源码证明
+不会产生副作用的 eager object path；不得为了“发现更多对象”而泛化调用 public getter。尤其不能读取会懒创建
+对象的 `scene.defaultMaterial`、`scene.collisionCoordinator` 或未来未知 getter，否则 census 本身会新增 Material、
+observer 或其他 authority state。TypeScript Program 必须枚举 public object-valued accessor；新增/未分类 accessor
+先使 census 失败。回归必须证明 discovery 前后 Material/observer/Scene collection exact 不变。
 
 Host-owned nested object 另有一个唯一机器清单
 `BABYLON_NATIVE_AUDITED_NESTED_AUTHORITY_SURFACES_V1`。在 Babylon 9.23.0 的冻结 Candidate factory 与

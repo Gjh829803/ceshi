@@ -742,6 +742,11 @@ An exact `StandardMaterial` construction must be a positive regression: its one 
 `ImageProcessingConfiguration` observer and non-null provider `getRenderTargetTextures` function
 must pass. A second observer, a replacement direct function, a missing/reordered provider observer,
 or a PostProcessManager mutation must fail.
+Add an adversarial programmatic Module that assigns a direct callback immediately after each Mesh,
+Material, Light, TransformNode, or Geometry constructor returns; the synchronous insertion wrapper
+must already be active and reject it even though the corresponding `onNew*AddedObservable` has not
+fired. Separately freeze the installed-version timing fact that Material/Mesh/Light/Geometry new-object
+notifications are deferred and therefore are not an authority signal.
 
 Run:
 
@@ -774,20 +779,24 @@ Capture only public values/identities:
   `scene.postProcessManager.onBeforeRenderObservable`;
 - original own-property descriptors for instrumented methods.
 
-Before Build, subscribe temporary Host observers to Scene's public new-Mesh, new-TransformNode,
-new-Material, new-Light, and new-Geometry Observables. When an object is exposed, apply the single
-inherited surface map in
+Before Build, install restorable Candidate Scene instance wrappers for the synchronous public
+collection insertion methods `addMesh`, `addTransformNode`, `addMaterial`, `addLight`, and
+`pushGeometry`. Before delegating to the original Babylon method, apply the single inherited surface
+map in
 `BABYLON_NATIVE_AUDITED_CREATED_OBJECT_CALLBACK_SURFACES_V1`; every Observable observer
 snapshot, callback setter backing Observable, direct callback identity, and Behavior/retained-object
 collection is captured as its provider baseline, and restorable per-instance direct-callback accessors
-are installed before Module code regains control. The exact Babylon 9.23.0 map includes the
+are installed before Module code can receive the completed constructor result. Do not use
+`onNew*AddedObservable` as this boundary: in Babylon 9.23.0 Mesh, Material, Light, and Geometry add
+notifications use `TimingTools.SetImmediate` and arrive after constructor return. The exact map includes the
 Node, TransformNode, AbstractMesh, Mesh, Material/StandardMaterial, and Light surfaces in
 the approved design; Geometry has the direct `onGeometryUpdated` callback while Buffer and
 concrete Light types must have an explicit empty increment rather than being silently omitted.
 
 Instrument the public `scene.imageProcessingConfiguration.onUpdateParameters.add` during Build.
-Babylon exposes a `StandardMaterial` from its base constructor before the subclass finishes; allow
-exactly one synchronous provider add for each just-exposed exact `StandardMaterial`, record the
+Babylon inserts a `StandardMaterial` from its base constructor before the subclass finishes; allow
+exactly one synchronous provider add for each exact `StandardMaterial` first seen by the
+`addMaterial` wrapper, record the
 returned public `Observer` identity, then require exactly one provider assignment of
 `getRenderTargetTextures` to close that construction window. At Build settlement, the nested observer
 list must equal baseline plus the recorded live provider observers in encounter order, and the direct
@@ -802,7 +811,7 @@ exact sequence, reject fail-closed.
 After Build, enumerate every Candidate-owned object through public Scene collections and registration
 references. Require its callback surfaces to equal the captured provider identities/order and contain
 no Module closure; Behavior/retained-object collections remain empty. In `finally`, remove all Host
-new-object observers and restore every accessor/method descriptor before comparing the original
+collection wrappers and restore every accessor/method descriptor before comparing the original
 Scene/Engine/static baselines.
 
 Install instance wrappers for all
@@ -835,15 +844,22 @@ only `scene.pure.d.ts` is not accepted as the sole evidence.
 
 Add a source-backed provider-order test that freezes the legal Babylon 9.23.0 `StandardMaterial`
 constructor sequence described above. It must fail when an upgrade changes exposure/add/assignment
-order so the Host cannot silently relabel an unknown callback as provider-owned.
+order so the Host cannot silently relabel an unknown callback as provider-owned. The same test covers
+all five synchronous collection insertion methods and proves wrapper installation/restoration does not
+change Babylon collection behavior.
 
 Add a cycle-safe Host-boundary runtime discovery test over the pre-Build Candidate's public
-Babylon-owned object graph. It must compare every discovered nested Observable or direct
-function-valued callback path with
+Babylon-owned object graph. It may traverse only public own data-property descriptors and exact
+source-approved eager object paths; it must not invoke generic public getters such as
+`scene.defaultMaterial` or `scene.collisionCoordinator`. Compare every discovered nested Observable or
+direct function-valued callback path with
 `BABYLON_NATIVE_AUDITED_NESTED_AUTHORITY_SURFACES_V1`; the current exact extra path is
 `scene.imageProcessingConfiguration.onUpdateParameters` plus
 `scene.postProcessManager.onBeforeRenderObservable`. Do not merge these nested paths
-into the 65 direct Scene keys or silently stop traversal at either containing object.
+into the 65 direct Scene keys or silently stop traversal at either containing object. The TypeScript
+Program census must enumerate public object-valued accessors and reject an unclassified addition;
+runtime regression must prove discovery leaves Material count, observer lists, and every Scene
+collection unchanged.
 
 - [ ] **Step 5: Integrate audit around the entire Build Epoch**
 
