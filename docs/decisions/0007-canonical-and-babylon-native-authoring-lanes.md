@@ -84,8 +84,9 @@ Schema 校验、确定性编译、资源锁、WorldPackage、Route、ChangeSet �
 
 ## 结果
 
-- AI 对复杂参考场景可以直接使用 Babylon 公开 API，视觉能力不再受自有形状目录限制；模型生成成功率
-  仍由 BNA-2/BNA-6 的冻结基准验证，不把“更熟悉”当作既成事实。
+- AI 对复杂参考场景可以直接使用 Babylon 公开 API，视觉能力不再受自有形状目录限制；BNA-2 的一次性
+  bake-off 只冻结工程 Import 方言，模型生成与修复成功率只由 BNA-6 的同图冻结基准验证，不把“更熟悉”
+  当作既成事实。
 - JSON 不被删除；它继续承担世界身份、资源、Gameplay、自动化、Compiler、Route 和 ChangeSet 价值。
 - 项目会新增一个 Provider-specific Authoring 包和一种 Runtime Scene Source，但不会新增第二套
   Gameplay Runtime、Physics、Camera、State 或 Browser Protocol。

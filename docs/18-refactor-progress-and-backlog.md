@@ -953,7 +953,10 @@ Replay、Streaming/Dispose 和自动 Diagnostic；普通 Agent 只引用稳定 P
     Contribution/Hash、预算/登记 Admission 与 `cloud-ridge` current-only 迁移已通过本轮合同、Runtime、
     Build、浏览器和人工保真门禁；这不是兼容承诺或生产支持；
   - [ ] BNA-2 后续生产闭合仍需 Source Admission、Authority Audit、Runtime Replay、正式 CLI/exit
-    证据和 BNA-6 AI 生成/修复评测；不得用本 checkpoint 提前关闭 BNA-3+ 或 BNA-4 生产 Gate；
+    证据；专项设计见
+    [BNA-2 生产闭环设计](superpowers/specs/2026-08-29-babylon-native-authoring-production-closure-design.md)。
+    BNA-6 AI 生成/修复评测在 BNA-5 后独立执行，不反向成为 BNA-2 依赖；不得用本 checkpoint 提前关闭
+    BNA-3+ 或 BNA-4 生产 Gate；
 - [ ] BNA-3：Bundle、依赖/资产锁、Package、Contribution Hash 与 Build Receipt；只消费已发布的
   class-specific Resource Ref，并绑定 Route Decision Hash/completed Attempt Result，不执行资产生产或发布；
 - [ ] BNA-4：统一 Gameplay Kernel、Profile-based Surface Admission、稳定 Surface/Subshape identity、
@@ -1053,7 +1056,8 @@ Native Scene 独立候选链：
 
 BNA-0 -> BNA-1 + BNA-2
 BNA-1 + BNA-2 -> BNA-3 -> BNA-4 -> BNA-5 -> BNA-6
-BNA-2 -> BWB-1 -> BWB-2 -> BWB-3
+BNA-2 -> BWB-1 -> BWB-2
+BWB-1 + BWB-2 + BNA-3 -> BWB-3
 BNA-4 + BWB-2 -> BWB-4
 BNA-5 + BNA-6 + BWB-3 + BWB-4 -> BWB-5 -> BWB-6
 

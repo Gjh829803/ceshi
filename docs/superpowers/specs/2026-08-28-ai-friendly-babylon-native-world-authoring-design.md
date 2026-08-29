@@ -98,8 +98,8 @@ Babylon Native Code 的价值是直接使用成熟引擎的完整场景表达力
 - 独特山峰、峡谷、断崖、阶梯、平台和建筑剪影；
 - 任意 Mesh 层级、程序化几何、CSG、实例、GLB 和视觉代理；
 - 材质、灯光、雾、天空、云海、粒子、动画与后处理；
-- 可直接利用 Babylon 的公开文档、示例和类型系统；具体模型生成成功率由 BNA-2/BNA-6 基准验证，
-  不以训练数据印象代替证据；
+- 可直接利用 Babylon 的公开文档、示例和类型系统；BNA-2 bake-off 只冻结工程 Import 方言，具体模型
+  生成与修复成功率由 BNA-6 独占验证，不以训练数据印象代替证据；
 - 新视觉效果无需先扩充 Schema、Compiler、IR、Adapter 和迁移器。
 
 这两种能力解决的问题不同。删除 JSON 会失去确定性、自动化与安全边界；强迫所有视觉都进入 JSON
@@ -941,8 +941,9 @@ interface NativeSceneCheckResultV1 {
 `count`、`bytes` 或 `duration-seconds`，并使用
 `actualCount/maximumCount`、`actualBytes/maximumBytes`、`actualSeconds/maximumSeconds` 等带单位字段；
 不得把 provider 异常或任意 `details/params` 对象作为公共机器合同。
-`location.kind === "source"` 时，`sourcePath` 必须是 Module Bundle 内使用 `/` 分隔的 canonical
-relative path；不得输出绝对 Host 路径、Workspace 路径或临时目录。
+`location.kind === "source"` 时，`sourcePath` 必须是相对 Native `world-directory`、使用 `/` 分隔的
+canonical relative path；不得输出绝对 Host 路径、Workspace 路径或临时目录。BNA-3 Bundle 必须原样
+保留同一相对路径，不得把同一个字段重新解释为另一套 bundle-internal 路径方言。
 Bootstrap 尚未解析或工具在解析前失败时，Check Result 使用
 `checkedInput: { kind: "unresolved-world" }`，不能伪造 `sceneModuleRef`；解析成功后必须使用
 `native-scene-module` 成员。Module 身份只由 Result-level `checkedInput` 拥有，Diagnostic 不重复
@@ -952,8 +953,11 @@ Bootstrap 尚未解析或工具在解析前失败时，Check Result 使用
 负向用例拒绝 `passed + error`、`rejected + warnings-only` 和 `tool-error` 无 tooling Error 的组合。
 
 Asset Candidate 使用 source-neutral 资产设计中独立的 Asset Production/Admission/Publication Result，不扩张
-`NativeSceneCheckResultV1.checkedInput` 来同时承担 Asset 和 Module 身份。Native Check 只校验 Package
-中已发布、已锁定的 Asset Resource/Admission/Publication Receipt 与 Module 消费关系；缺失资源使用
+`NativeSceneCheckResultV1.checkedInput` 来同时承担 Asset 和 Module 身份。BNA-2 的
+`worldkit native check <world-directory>` 是 workspace/module 检查且明确 asset-free；任何
+`context.assets.resolve()` 都 fail-closed，它不校验尚不存在的 Package/Receipt。BNA-3 才定义独立的
+Package/Asset admission 入口，校验 Package 中已发布、已锁定的 Asset Resource/Admission/Publication
+Receipt 与 Module 消费关系；该入口不得复用 BNA-2 CLI 名称来形成同名双语义。缺失资源使用
 `location.kind: "asset-resource"`，三者 identity 不一致使用 `location.kind: "asset-lock"`。Rejected 或
 tool-error 的 Asset Result 发生在 Package 之前，必须原样由 APA 工具返回，不能为了塞进 Native Diagnostic
 伪造不存在的 Resource Ref，也不能复制其 stage、code、measurement 或 Provider details 为另一套字段。
@@ -1198,17 +1202,21 @@ RuntimeWorldConfiguration V1 -> Babylon/Havok。
 
 ### BNA-2：独立 Babylon Native Authoring 包
 
+- 后续生产闭环的专项实施权威为
+  [`2026-08-29-babylon-native-authoring-production-closure-design.md`](./2026-08-29-babylon-native-authoring-production-closure-design.md)。
 - 目标与独立交付物：创建 `@whitebox-world/native-babylon`、`defineBabylonNativeScene`、BuildContext、
   单一 Import Profile 和结构化诊断；拆分 Source/Contribution Admission、Authority Audit 与 Runtime
   Replay stage，并只引用独立 Asset Check/Admission Result。
 - `depends_on`：BNA-0；与 BNA-1 只在已冻结的 Bootstrap 类型处集成。
 - `blocks`：BNA-3、BNA-4、BNA-5、BNA-6。
 - 独占所有权：Native Author API、Provider-specific 登记类型、示例 import 风格；不修改 RuntimeHost。
-- 输入/输出合同：Module definition -> typed build callback、pending registrations 和闭合
-  `NativeSceneCheckResultV1`。
+- 输入/输出合同：单 Candidate Module definition -> typed build callback、pending registrations 和闭合
+  `BabylonNativeSceneCandidateAdmissionResultV1`；双 Candidate Replay -> 无 Handle Contribution/hash 与
+  `NativeSceneCheckResultV1`；`worldkit native check/explain` 发布同一个 Check DTO。
 - 集成点：Native Scene Builder 的 Module Resolver。
 - 验证证据：public export census、API type tests、diagnostic/CLI exit tests、旧实验 App 编译迁移，以及
-  同图同提示 Import Profile bake-off 的生成成功率、bundle/module graph 和启动成本。
+  bundle/module graph、Authority Audit、双 Candidate Runtime Replay 和启动成本。Import Profile 的工程
+  方言由一次性 bake-off 冻结；同图同提示的模型生成/修复成功率由 BNA-6 独占，不反向成为 BNA-2 依赖。
 - 执行模式：`main-agent-only`。
 
 本任务只建立 core Native API。可选 `@whitebox-world/native-babylon-block-profile` 由 BWB-1 独占，
@@ -1253,13 +1261,17 @@ RuntimeWorldConfiguration V1 -> Babylon/Havok。
   geometry/binding drift 和 tampered Receipt mismatch 的 fail-before-publish 负向证明。
 - 执行模式：`main-agent-only`。
 
-### BNA-5：确定性、预算与 Trust Profile
+### BNA-5：Hosted 隔离、Tenant Hard Cap 与 Trust Profile
 
-- 目标与独立交付物：落实 PRNG、依赖 allowlist、无网络/时间/动态代码规则、资源预算、Trusted Local
-  Profile、Host/tenant hard cap、effective budget 计算和 Hosted threat model/gates。
+- 目标与独立交付物：消费 BNA-2 已冻结的 PRNG、依赖 allowlist、Source/Authority Admission、Profile
+  Registry、CLI Diagnostics 与本地结构 cap；增加 Hosted Worker/Origin 强制隔离、timeout/kill、凭据与
+  环境隔离、Host/tenant hard cap、`min(BNA-2 profile cap, host/tenant cap)` effective budget 计算和 Hosted
+  threat model/gates，不重建 BNA-2 静态/动态检查合同。
 - `depends_on`：BNA-2、BNA-3、BNA-4。
 - `blocks`：Hosted Native、BNA-6、BNA-8。
-- 独占所有权：Native Scene Profile Registry、构建执行隔离、静态/动态 Admission 和安全诊断。
+- 独占所有权：Hosted Worker/Origin lifecycle、timeout/kill、凭据/环境隔离、Host/tenant entitlement 与
+  effective-budget policy、Hosted threat model 和隔离诊断；Native Scene Profile Registry、Source/
+  Authority Admission、CLI/安全诊断继续由 BNA-2 独占。
 - 输入/输出合同：requested profile + Host/tenant allowlist/hard cap + bundle + transitive asset/resource lock
   -> allowed/rejected build、effective/actual budget 与 diagnostics。
 - 集成点：Module build runner 与 RuntimeHost preflight。
@@ -1268,16 +1280,18 @@ RuntimeWorldConfiguration V1 -> Babylon/Havok。
   尝试；Hosted 进程/Worker/Origin 的强制终止和主 Runtime 无污染证明。
 - 执行模式：`sequential`。
 
-### BNA-6：AI 工具、Golden Corpus 与场景复原评估
+### BNA-6：AI 文档、Golden Corpus 与场景复原评估
 
-- 目标与独立交付物：提供 `check/explain`、最小 API 文档、Golden/negative Corpus、自修复 Checker 和
-  多类参考图白膜评估；正式跑数前冻结 `NativeSceneEvaluationProfile`、lane-specific contract context、
+- 目标与独立交付物：消费 BNA-2 已冻结的 `worldkit native check/explain`，提供最小 API 文档、
+  Golden/negative Corpus、bounded self-repair 流程和多类参考图白膜评估；正式跑数前冻结
+  `NativeSceneEvaluationProfile`、lane-specific contract context、
   Route Decision、资产生产/准入方式、预算和 Blocking Threshold，结果产生后不得修改；用非产品离线
   Three visual baseline 单独量化模型熟悉度，不创建 Three Runtime Endpoint，并覆盖拒绝后的显式回退
   与禁止静默换路。
 - `depends_on`：BNA-2、BNA-3、BNA-4、BNA-5。
 - `blocks`：BNA-8。
-- 独占所有权：Native examples、fixtures、CLI diagnostics、AI authoring guide/可选 Skill、视觉评估制品。
+- 独占所有权：Native 评测 examples/fixtures、evaluation profile、Corpus/阈值、AI authoring guide/可选
+  Skill 与视觉评估制品；CLI 与 Diagnostics 继续由 BNA-2 独占。
 - 输入/输出合同：reference + route decision + bootstrap/module + admitted asset refs -> checked package +
   layered evidence。
 - 集成点：CLI、Studio/Playground 和真实 Chromium Capture。
