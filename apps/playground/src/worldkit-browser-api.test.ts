@@ -1915,17 +1915,19 @@ describe("installDeferredWorldkitBrowserApi", () => {
     expect(adapter.disposeCount).toBe(1);
   });
 
-  it("pauses simulation before mount and resumes only after the ready snapshot", async () => {
+  it("pauses simulation before mount and publishes the resumed ready state", async () => {
     const pageSetup = deferred<void>();
     const events: string[] = [];
-    const snapshot = snapshotFixture();
+    const initialSnapshot = snapshotFixture();
+    let paused = false;
     const adapter = Object.assign(adapterFixture(), {
       configureVisualCaptureGroups() {
         events.push("configure");
         return [];
       },
-      setPaused(paused: boolean) {
-        events.push(paused ? "pause" : "unpause");
+      setPaused(nextPaused: boolean) {
+        paused = nextPaused;
+        events.push(nextPaused ? "pause" : "unpause");
       },
       mount() {
         events.push("mount");
@@ -1935,7 +1937,13 @@ describe("installDeferredWorldkitBrowserApi", () => {
       },
       runtimeSnapshot() {
         events.push("snapshot");
-        return snapshot;
+        return {
+          ...initialSnapshot,
+          runtime: {
+            ...initialSnapshot.runtime,
+            isPaused: paused,
+          },
+        };
       },
     });
     const installation = installDeferredWorldkitBrowserApi({
@@ -1957,8 +1965,17 @@ describe("installDeferredWorldkitBrowserApi", () => {
     expect(events).toEqual(["pause", "mount", "render"]);
 
     pageSetup.resolve();
-    await expect(installation.api.ready()).resolves.toEqual(snapshot);
-    expect(events).toEqual(["pause", "mount", "render", "snapshot", "unpause"]);
+    const readySnapshot = await installation.api.ready();
+    expect(readySnapshot.runtime.isPaused).toBe(false);
+    expect(adapter.runtimeSnapshot().runtime.isPaused).toBe(false);
+    expect(events).toEqual([
+      "pause",
+      "mount",
+      "render",
+      "unpause",
+      "snapshot",
+      "snapshot",
+    ]);
   });
 
   it("owns the playground Adapter before visual target configuration can fail", async () => {
