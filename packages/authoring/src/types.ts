@@ -1,3 +1,4 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
 import type {
   AutomaticLocomotionPresentationKeyV1,
   BipedBoneIdV1,
@@ -371,7 +372,7 @@ export interface NormalizeAuthoringOptions {
 
 export interface NormalizeAuthoringBaseResult
   extends AuthoringResult<NormalizedWorldBase> {
-  normalizedWorldIrHash?: string;
+  normalizedWorldIrHash?: Sha256HashV1;
 }
 
 export interface NormalizedTransformV2 {

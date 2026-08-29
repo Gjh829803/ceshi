@@ -1,4 +1,4 @@
-import type { ExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
+import type { CanonicalSceneExecutionPlanV1 } from "@whitebox-world/runtime-contracts";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import {
   emitStaticColliderTriangleMeshV1,
@@ -31,33 +31,32 @@ type DeepMutable<T> = T extends object
   : T;
 
 interface HeightfieldSourcePlanFixture {
-  kind: ExecutionPlanV5["kind"];
-  schemaVersion: 5;
-  authoringSpecHash: ExecutionPlanV5["authoringSpecHash"];
-  resourceLockEntries: DeepMutable<ExecutionPlanV5["resourceLockEntries"]>;
-  resourceLockHash: string;
-  coordinateSystem: ExecutionPlanV5["coordinateSystem"];
-  terrain: DeepMutable<ExecutionPlanV5["terrain"]>;
-  waters: DeepMutable<ExecutionPlanV5["waters"]>;
-  subjects: Array<{ entityId: string }>;
-  staticColliders: DeepMutable<ExecutionPlanV5["staticColliders"]>;
+  kind: CanonicalSceneExecutionPlanV1["kind"];
+  schemaVersion: 1;
+  authoringSpecHash: CanonicalSceneExecutionPlanV1["authoringSpecHash"];
+  routeResourceLockHash: string;
+  coordinateSystem: CanonicalSceneExecutionPlanV1["coordinateSystem"];
+  terrain: DeepMutable<CanonicalSceneExecutionPlanV1["terrain"]>;
+  waters: DeepMutable<CanonicalSceneExecutionPlanV1["waters"]>;
+  subjectInstances: Array<{ entityId: string }>;
+  staticColliders: DeepMutable<CanonicalSceneExecutionPlanV1["staticColliders"]>;
   layout: {
     layoutSolveReportHash: string;
-    routes: DeepMutable<ExecutionPlanV5["layout"]["routes"]>;
+    routes: DeepMutable<CanonicalSceneExecutionPlanV1["layout"]["routes"]>;
     placementsByEntityId: Record<
       string,
       DeepMutable<
-        ExecutionPlanV5["layout"]["placementsByEntityId"][string]
+        CanonicalSceneExecutionPlanV1["layout"]["placementsByEntityId"][string]
       >
     >;
   };
-  traversal: DeepMutable<ExecutionPlanV5["traversal"]>;
+  traversal: DeepMutable<CanonicalSceneExecutionPlanV1["traversal"]>;
 }
 
 type MutablePlacement = DeepMutable<
-  ExecutionPlanV5["layout"]["placementsByEntityId"][string]
+  CanonicalSceneExecutionPlanV1["layout"]["placementsByEntityId"][string]
 >;
-type MutableWater = DeepMutable<ExecutionPlanV5["waters"][number]>;
+type MutableWater = DeepMutable<CanonicalSceneExecutionPlanV1["waters"][number]>;
 type MutableWaterBoundary = MutableWater["boundary"];
 
 function placement(
@@ -86,23 +85,14 @@ function flatSamples(columns: number, rows: number, heightMeters = 0): number[] 
 }
 
 function basePlan(): HeightfieldSourcePlanFixture {
-  const resourceLockEntries = [{
-    resourceRef: "worldkit://capability/locomotion.ground@1",
-    resourceKind: "capability" as const,
-    resolvedVersion: "1",
-    contentHash: HASH_A,
-  }, {
-    resourceRef: "worldkit://subject-definition/player@1",
-    resourceKind: "subject-definition" as const,
-    resolvedVersion: "1",
-    contentHash: HASH_A,
-  }];
   return {
-    kind: "worldkit-execution-plan",
-    schemaVersion: 5,
+    kind: "worldkit-canonical-scene-execution-plan",
+    schemaVersion: 1,
     authoringSpecHash: HASH_A,
-    resourceLockEntries,
-    resourceLockHash: sha256CanonicalJson(resourceLockEntries),
+    routeResourceLockHash: sha256CanonicalJson([
+      "worldkit://capability/locomotion.ground@1",
+      "worldkit://subject-definition/player@1",
+    ]),
     coordinateSystem: "right-handed-y-up-minus-z-forward",
     terrain: {
       entityId: "terrain-main",
@@ -116,7 +106,7 @@ function basePlan(): HeightfieldSourcePlanFixture {
       semanticClassId: "terrain.ground",
     },
     waters: [],
-    subjects: [{ entityId: "player" }],
+    subjectInstances: [{ entityId: "player" }],
     staticColliders: [],
     layout: {
       layoutSolveReportHash: HASH_A,
@@ -156,14 +146,21 @@ function basePlan(): HeightfieldSourcePlanFixture {
   };
 }
 
+function executionPlanForFixture(
+  plan: HeightfieldSourcePlanFixture,
+): CanonicalSceneExecutionPlanV1 {
+  const { routeResourceLockHash: _, ...executionPlan } = plan;
+  return executionPlan as unknown as CanonicalSceneExecutionPlanV1;
+}
+
 function build(plan: HeightfieldSourcePlanFixture = basePlan()) {
   const traversalLockReceipt = createRecastTestLockReceiptV1({
-    resourceLockHash: plan.resourceLockHash as `sha256:${string}`,
+    resourceLockHash: plan.routeResourceLockHash as `sha256:${string}`,
   });
   return createRouteBuildInputFromPlanV2({
-    executionPlan: plan as unknown as ExecutionPlanV5,
+    executionPlan: executionPlanForFixture(plan),
     capabilityEnvelope: createRecastTestEnvelopeV1({
-      resourceLockHash: plan.resourceLockHash as `sha256:${string}`,
+      resourceLockHash: plan.routeResourceLockHash as `sha256:${string}`,
     }),
     traversalLockReceipt,
     constraintId: "hero-to-goal",
@@ -847,13 +844,13 @@ describe("Heightfield Route R1 locked source assembly", () => {
     const envelopePlan = basePlan();
     const traversalLockReceipt = createRecastTestLockReceiptV1({
       maxSlopeDegrees: 35,
-      resourceLockHash: envelopePlan.resourceLockHash as `sha256:${string}`,
+      resourceLockHash: envelopePlan.routeResourceLockHash as `sha256:${string}`,
     });
     const envelopeHash = createRouteBuildInputFromPlanV2({
-      executionPlan: envelopePlan as unknown as ExecutionPlanV5,
+      executionPlan: executionPlanForFixture(envelopePlan),
       capabilityEnvelope: createRecastTestEnvelopeV1({
         maxSlopeDegrees: 35,
-        resourceLockHash: envelopePlan.resourceLockHash as `sha256:${string}`,
+        resourceLockHash: envelopePlan.routeResourceLockHash as `sha256:${string}`,
       }),
       traversalLockReceipt,
       constraintId: "hero-to-goal",
@@ -864,40 +861,20 @@ describe("Heightfield Route R1 locked source assembly", () => {
     expect(hashes.has(baseline)).toBe(false);
   });
 
-  it("rejects deleted, changed, or reordered Execution Resource Lock rows", () => {
+  it("rejects a Capability Envelope bound to a different Route Resource Lock", () => {
     const baseline = basePlan();
     const capabilityEnvelope = createRecastTestEnvelopeV1({
-      resourceLockHash: baseline.resourceLockHash as `sha256:${string}`,
+      resourceLockHash: baseline.routeResourceLockHash as `sha256:${string}`,
     });
     const traversalLockReceipt = createRecastTestLockReceiptV1({
-      resourceLockHash: baseline.resourceLockHash as `sha256:${string}`,
+      resourceLockHash: HASH_A,
     });
-    const buildTampered = (plan: HeightfieldSourcePlanFixture) =>
-      createRouteBuildInputFromPlanV2({
-        executionPlan: plan as unknown as ExecutionPlanV5,
-        capabilityEnvelope,
-        traversalLockReceipt,
-        constraintId: "hero-to-goal",
-      });
-
-    const deleted = basePlan();
-    deleted.resourceLockEntries.splice(0, 1);
-    deleted.resourceLockHash = sha256CanonicalJson(deleted.resourceLockEntries);
-    expect(() => buildTampered(deleted)).toThrow(
-      "ROUTE_TRAVERSAL_LOCK_MISMATCH",
-    );
-
-    const changed = basePlan();
-    changed.resourceLockEntries[0]!.contentHash =
-      "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-    changed.resourceLockHash = sha256CanonicalJson(changed.resourceLockEntries);
-    expect(() => buildTampered(changed)).toThrow(
-      "ROUTE_TRAVERSAL_LOCK_MISMATCH",
-    );
-
-    const reordered = basePlan();
-    reordered.resourceLockEntries.reverse();
-    expect(() => buildTampered(reordered)).toThrow("hash-invalid");
+    expect(() => createRouteBuildInputFromPlanV2({
+      executionPlan: executionPlanForFixture(baseline),
+      capabilityEnvelope,
+      traversalLockReceipt,
+      constraintId: "hero-to-goal",
+    })).toThrow("ROUTE_TRAVERSAL_LOCK_MISMATCH");
   });
 
   it("fails closed with stable structural and semantic codes", () => {
@@ -935,14 +912,14 @@ describe("Heightfield Route R1 locked source assembly", () => {
     expect(() => build(outside)).toThrow("ROUTE_DESTINATION_SURFACE_NOT_FOUND");
 
     expect(() => createRouteBuildInputFromPlanV2({
-      executionPlan: basePlan() as unknown as ExecutionPlanV5,
+      executionPlan: executionPlanForFixture(basePlan()),
       capabilityEnvelope: createRecastTestEnvelopeV1(),
       constraintId: "hero-to-goal",
       providerConfig: {},
     } as never)).toThrow("input-invalid");
 
     expect(() => createRouteBuildInputFromPlanV2({
-      executionPlan: basePlan() as unknown as ExecutionPlanV5,
+      executionPlan: executionPlanForFixture(basePlan()),
       constraintId: "hero-to-goal",
     } as never)).toThrow("input-invalid");
   });
@@ -1040,12 +1017,12 @@ describe("Heightfield Route R1 locked source assembly", () => {
     });
     const buildFor = (constraintId: string) =>
       createRouteBuildInputFromPlanV2({
-        executionPlan: plan as unknown as ExecutionPlanV5,
+        executionPlan: executionPlanForFixture(plan),
         capabilityEnvelope: createRecastTestEnvelopeV1({
-          resourceLockHash: plan.resourceLockHash as `sha256:${string}`,
+          resourceLockHash: plan.routeResourceLockHash as `sha256:${string}`,
         }),
         traversalLockReceipt: createRecastTestLockReceiptV1({
-          resourceLockHash: plan.resourceLockHash as `sha256:${string}`,
+          resourceLockHash: plan.routeResourceLockHash as `sha256:${string}`,
         }),
         constraintId,
       });

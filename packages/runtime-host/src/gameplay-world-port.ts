@@ -225,7 +225,7 @@ export function parseGameplayWorldStateProjectionV1(
       worldPackageRef:
         `package://world-package/sha256/${VALIDATION_HASH.slice(7)}`,
       worldPackageRootHash: VALIDATION_HASH,
-      executionPlanHash: VALIDATION_HASH,
+      worldBuildIdentityHash: VALIDATION_HASH,
       entityStatesById: record.spatialEntityStatesById,
       capabilityStatesById: record.capabilityStatesById,
       relationshipStatesById: options.relationshipStatesById,

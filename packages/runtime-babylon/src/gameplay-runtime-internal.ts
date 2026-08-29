@@ -1,4 +1,3 @@
-import type { ExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
 import type { MountedOnRelationshipStateV1 } from "@whitebox-world/gameplay-contracts";
 import type {
   FixedInputOneTickV1,
@@ -44,7 +43,6 @@ export type PreparedBabylonGameplayFixedInputTickV1 =
  * Port. Public Browser/CLI contracts never expose Babylon or Havok values.
  */
 export interface BabylonGameplayRuntimeInternalV1 {
-  readExecutionPlan(): ExecutionPlanV5;
   readPossessionTarget(): BabylonGameplayPossessionTargetV1;
   readWorldProjection(): GameplayWorldStateProjectionV1;
   readViewProjection(): GameplayViewStateProjectionV1;

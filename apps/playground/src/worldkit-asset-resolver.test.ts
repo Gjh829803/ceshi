@@ -15,7 +15,7 @@ import {
   XIER120_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1,
   XIER120_SUBJECT_ASSET_URI_BY_REF_V1,
   createFetchSubjectAssetResolver,
-  resolveWorldPackageSubjectAssetArtifactsV1,
+  resolveWorldPackageSubjectAssetBytesV1,
 } from "./worldkit-asset-resolver";
 
 const ASSET_REF = "worldkit://subject-asset/humanoid.golden@2";
@@ -204,7 +204,7 @@ describe("createFetchSubjectAssetResolver", () => {
       expect(diskBytes.byteLength).toBe(manifest.artifact.byteLength);
       expect(sha256Bytes(diskBytes)).toBe(manifest.artifact.contentHash);
 
-      const artifacts = await resolveWorldPackageSubjectAssetArtifactsV1(
+      const artifacts = await resolveWorldPackageSubjectAssetBytesV1(
         [{
           subjectAssetRef: manifest.resourceRef,
           subjectAssetManifestHash: resolvedManifest!.contentHash,
@@ -238,7 +238,7 @@ describe("createFetchSubjectAssetResolver", () => {
   it("resolves locked WorldPackage artifacts with stable package paths", async () => {
     vi.stubGlobal("location", { origin: "https://playground.test" });
     const sourceBytes = new Uint8Array(ASSET_BYTES);
-    const artifacts = await resolveWorldPackageSubjectAssetArtifactsV1(
+    const artifacts = await resolveWorldPackageSubjectAssetBytesV1(
       [{
         ...REQUEST,
         subjectAssetManifestHash: `sha256:${"f".repeat(64)}`,
@@ -272,7 +272,7 @@ describe("createFetchSubjectAssetResolver", () => {
 
   it("fails closed when a locked WorldPackage artifact has no Host mapping", async () => {
     vi.stubGlobal("location", { origin: "https://playground.test" });
-    await expect(resolveWorldPackageSubjectAssetArtifactsV1(
+    await expect(resolveWorldPackageSubjectAssetBytesV1(
       [{
         ...REQUEST,
         subjectAssetRef: "worldkit://subject-asset/unknown@1",
@@ -316,7 +316,7 @@ describe("createFetchSubjectAssetResolver", () => {
       },
     };
 
-    await expect(resolveWorldPackageSubjectAssetArtifactsV1(
+    await expect(resolveWorldPackageSubjectAssetBytesV1(
       [descriptor, descriptor],
       PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1,
       PLAYGROUND_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1,
@@ -324,7 +324,7 @@ describe("createFetchSubjectAssetResolver", () => {
     )).rejects.toMatchObject({
       name: "WorldkitHostSubjectAssetResolveErrorV1",
     });
-    await expect(resolveWorldPackageSubjectAssetArtifactsV1(
+    await expect(resolveWorldPackageSubjectAssetBytesV1(
       [
         descriptor,
         { ...descriptor, subjectAssetRef: G_BOT_ASSET_REF },

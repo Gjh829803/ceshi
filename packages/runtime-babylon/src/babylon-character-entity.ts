@@ -4,7 +4,8 @@ import {
   RuntimeEntityV1,
   SceneComponentV1,
 } from "@whitebox-world/runtime-framework";
-import type { ExecutionSubjectV3, Vec3 } from "@whitebox-world/runtime-contracts";
+import type { RuntimeVec3V1 } from "@whitebox-world/runtime-contracts";
+import type { BabylonRuntimeSubjectV1 } from "./runtime-subject";
 
 import {
   CharacterMovementComponentV1,
@@ -33,8 +34,8 @@ export class BabylonCharacterEntityV1 {
   readonly springArm: SpringArmComponentV1;
 
   constructor(options: {
-    readonly subject: ExecutionSubjectV3;
-    readonly gravityMetersPerSecondSquaredXYZ: Vec3;
+    readonly subject: BabylonRuntimeSubjectV1;
+    readonly gravityMetersPerSecondSquaredXYZ: RuntimeVec3V1;
     readonly visualRoot: TransformNode;
     readonly scene: Scene;
     readonly waterSurfaceHeightAtSubjectOrigin: (subjectOrigin: import("@babylonjs/core/Maths/math.vector.js").Vector3) => number | undefined;

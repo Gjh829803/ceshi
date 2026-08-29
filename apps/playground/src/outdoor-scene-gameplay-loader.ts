@@ -6,9 +6,9 @@ import {
   type WorldNodeSpecV4,
 } from "@whitebox-world/authoring";
 import type {
-  CompileDiagnostic,
-  ExecutionPlanV5,
+  CanonicalSceneExecutionPlanV1,
 } from "@whitebox-world/runtime-contracts";
+import type { CompileDiagnostic } from "@whitebox-world/compiler";
 import type { RuntimeWorldConfigurationV1 } from "@whitebox-world/runtime-host";
 import type { WorldPackageStoreV1 } from "@whitebox-world/world-package";
 import type { GameplayActionRequestResolverV1 } from "@whitebox-world/gameplay";
@@ -60,7 +60,7 @@ export interface OutdoorSceneGameplayLoadOptionsV1 {
 
 export interface OutdoorSceneGameplayLoadResultV1 {
   readonly ok: boolean;
-  readonly executionPlan?: ExecutionPlanV5;
+  readonly executionPlan?: CanonicalSceneExecutionPlanV1;
   readonly normalizedWorldIrHash?: string;
   readonly executionPlanHash?: string;
   readonly diagnostics: readonly OutdoorSceneGameplayDiagnostic[];
@@ -939,7 +939,7 @@ export async function loadOutdoorGameplaySceneV1(
     );
     if (
       !loaded.ok ||
-      loaded.executionPlan?.schemaVersion !== 5 ||
+      loaded.executionPlan?.schemaVersion !== 1 ||
       isNil(loaded.executionPlanHash) ||
       isNil(loaded.normalizedWorldIrHash) ||
       isNil(loaded.runtimeWorldConfiguration)

@@ -13,13 +13,12 @@ import {
   type AuthoringSpecV4,
   type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
-import { compileWorldV5 } from "@whitebox-world/compiler";
+import { compileCanonicalWorldV1 } from "@whitebox-world/compiler";
 import {
   CONTROL_TRANSITION_CAPABILITY_REF,
   createCoreControlFeatureFactoryV1,
 } from "@whitebox-world/gameplay";
 import {
-  createGameplayBootstrapResourceLockEntryV1,
   createGameplayBootstrapV1,
 } from "@whitebox-world/gameplay-contracts";
 import type { BabylonRuntimeProjectionV1 } from "@whitebox-world/runtime-babylon";
@@ -113,15 +112,16 @@ function runtimeGameplayBootstrap(
       ...entityDescriptors.flatMap((descriptor) => descriptor.capabilityRefs),
       CONTROL_TRANSITION_CAPABILITY_REF,
     ]),
+    initialRelationshipStates: normalizedWorldIr.relationships.map(
+      (relationship) => ({ ...relationship, establishedSimulationTick: 0 }),
+    ),
   });
 }
 
-function gameplayBootstrapResourceLock(
+function gameplayBootstrap(
   normalizedWorldIr: NormalizedWorldIRV4,
 ) {
-  return createGameplayBootstrapResourceLockEntryV1(
-    runtimeGameplayBootstrap(normalizedWorldIr),
-  );
+  return runtimeGameplayBootstrap(normalizedWorldIr);
 }
 
 function routeAuthoringWorld(): AuthoringSpecV4 {
@@ -205,15 +205,16 @@ function matchingRouteEvidencePublication(
   ) {
     throw new Error("Route Authoring fixture did not normalize.");
   }
-  const compiled = compileWorldV5({
+  const compiled = compileCanonicalWorldV1({
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
-    gameplayBootstrapResourceLock:
-      gameplayBootstrapResourceLock(normalized.value),
+    gameplayBootstrap: gameplayBootstrap(normalized.value),
+    worldRuntimeBootstrapRef:
+      `worldkit://world-runtime-bootstrap/${normalized.value.id}@1`,
   });
   if (
     !compiled.ok ||
-    compiled.executionPlan === undefined ||
+    compiled.canonicalSceneExecutionPlan === undefined ||
     compiled.executionPlanHash === undefined
   ) {
     throw new Error("Route Authoring fixture did not compile.");
@@ -225,7 +226,7 @@ function matchingRouteEvidencePublication(
     authoringSpecHash: normalized.value.authoringSpecHash,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
     executionPlanHash: compiled.executionPlanHash,
-    resourceLockHash: compiled.executionPlan.resourceLockHash,
+    resourceLockHash: normalized.value.resources.resourceLockHash,
     layoutSolveReportHash: normalized.layoutSolveReportHash,
     validationReportHash: ROUTE_EVIDENCE_HASH,
     routeValidationSetReceiptHash: ROUTE_EVIDENCE_HASH,
@@ -521,7 +522,7 @@ describe("loadAuthoringScene", () => {
     expect(loaded.executionPlan).toBeUndefined();
   });
 
-  it("runs strict Authoring V4 JSON through NormalizedWorldIR V4 and ExecutionPlan V5", async () => {
+  it("runs strict Authoring V4 JSON through NormalizedWorldIR V4 and the Canonical Scene Plan", async () => {
     const source = routeAuthoringWorld();
     const normalized = normalizeAuthoringSpecV4(source);
     if (!normalized.ok || isNil(normalized.value)) {
@@ -539,7 +540,7 @@ describe("loadAuthoringScene", () => {
       ok: true,
       diagnostics: [],
       executionPlan: {
-        schemaVersion: 5,
+        schemaVersion: 1,
         authoringSpecHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
         traversal: {
           connectivityRequirements: [{
@@ -557,28 +558,25 @@ describe("loadAuthoringScene", () => {
         CONTROL_TRANSITION_CAPABILITY_REF,
       ],
     ));
-    if (loaded.executionPlan?.schemaVersion !== 5) {
-      throw new Error("Expected an ExecutionPlanV5.");
+    if (loaded.executionPlan?.schemaVersion !== 1) {
+      throw new Error("Expected an CanonicalSceneExecutionPlanV1.");
     }
-    expect(loaded.executionPlan.resourceLockEntries).toContainEqual(
-      createGameplayBootstrapResourceLockEntryV1(gameplayBootstrap),
-    );
     expect(loaded.runtimeWorldConfiguration).toMatchObject({
-      executionPlan: loaded.executionPlan,
-      executionPlanHash: loaded.executionPlanHash,
       gameplayBootstrap,
-      worldPackageRef: expect.stringMatching(
-        /^package:\/\/world-package\/sha256\/[a-f0-9]{64}$/,
-      ),
-      worldPackageBuildReceipt: {
-        kind: "worldkit-world-package-build-receipt",
-        schemaVersion: 2,
-        manifest: {
-          authoringSpecHash: normalized.value.authoringSpecHash,
-          normalizedWorldIrHash: loaded.normalizedWorldIrHash,
+      worldBuildIdentity: {
+        worldPackageRef: expect.stringMatching(
+          /^package:\/\/world-package\/sha256\/[a-f0-9]{64}$/,
+        ),
+        worldPackageRootHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+        sceneSourceIdentity: {
+          kind: "canonical-execution-plan",
           executionPlanHash: loaded.executionPlanHash,
         },
-        worldPackageRootHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+      },
+      sceneSource: {
+        kind: "canonical-execution-plan",
+        executionPlan: loaded.executionPlan,
+        executionPlanHash: loaded.executionPlanHash,
       },
     });
     expect(
@@ -591,15 +589,18 @@ describe("loadAuthoringScene", () => {
       loaded.runtimeWorldConfiguration?.gameplayBootstrap.availableCapabilityRefs,
     ).toContain(CONTROL_TRANSITION_CAPABILITY_REF);
     expect(
-      loaded.runtimeWorldConfiguration?.executionPlanHash,
-    ).toBe(loaded.runtimeWorldConfiguration?.worldPackageBuildReceipt.manifest.executionPlanHash);
-    expect(repeated.runtimeWorldConfiguration?.worldPackageRef).toBe(
-      loaded.runtimeWorldConfiguration?.worldPackageRef,
+      loaded.runtimeWorldConfiguration?.sceneSource.kind ===
+          "canonical-execution-plan"
+        ? loaded.runtimeWorldConfiguration.sceneSource.executionPlanHash
+        : undefined,
+    ).toBe(loaded.executionPlanHash);
+    expect(repeated.runtimeWorldConfiguration?.worldBuildIdentity.worldPackageRef).toBe(
+      loaded.runtimeWorldConfiguration?.worldBuildIdentity.worldPackageRef,
     );
     expect(
-      repeated.runtimeWorldConfiguration?.worldPackageBuildReceipt.worldPackageRootHash,
+      repeated.runtimeWorldConfiguration?.worldBuildIdentity.worldPackageRootHash,
     ).toBe(
-      loaded.runtimeWorldConfiguration?.worldPackageBuildReceipt.worldPackageRootHash,
+      loaded.runtimeWorldConfiguration?.worldBuildIdentity.worldPackageRootHash,
     );
     expect(loaded.routeEvidencePublication).toBeUndefined();
   });
@@ -619,10 +620,7 @@ describe("loadAuthoringScene", () => {
     expect(loaded.ok).toBe(true);
     expect(fetchCount).toBe(0);
     expect(
-      loaded.runtimeWorldConfiguration?.worldPackageBuildReceipt.manifest.resources
-        .filter(({ resourceRef }) =>
-          resourceRef.startsWith("worldkit://subject-asset/"),
-        ),
+      loaded.runtimeWorldConfiguration?.worldRuntimeBootstrap.subjectAssets,
     ).toEqual([]);
   });
 
@@ -657,13 +655,12 @@ describe("loadAuthoringScene", () => {
       ),
     ]);
     expect(
-      loaded.runtimeWorldConfiguration?.worldPackageBuildReceipt.manifest.resources,
+      loaded.runtimeWorldConfiguration?.worldRuntimeBootstrap.subjectAssets,
     ).toContainEqual(expect.objectContaining({
-      resourceRef: "worldkit://subject-asset/actor.humanoid.g-bot@2",
-      packagePath: "resources/subject-assets/actor.humanoid.g-bot.glb",
+      subjectAssetRef: "worldkit://subject-asset/actor.humanoid.g-bot@2",
       mediaType: "model/gltf-binary",
-      sizeBytes: gBotAssetBytes.byteLength,
-      contentHash:
+      byteLength: gBotAssetBytes.byteLength,
+      artifactContentHash:
         "sha256:4bcf3fabdba1e083ef54bf172fd962ca740e0f2fabdb9cddaae45d5ea208718f",
     }));
   }, 30_000);
@@ -753,7 +750,10 @@ describe("loadAuthoringScene", () => {
     expect(loaded).toMatchObject({
       ok: true,
       diagnostics: [],
-      executionPlan: { schemaVersion: 5 },
+      executionPlan: {
+        kind: "worldkit-canonical-scene-execution-plan",
+        schemaVersion: 1,
+      },
     });
     expect(loaded.routeEvidencePublication).toBeUndefined();
   });
@@ -780,8 +780,9 @@ describe("loadAuthoringScene", () => {
     expect(waterLoaded).toMatchObject({
       ok: true,
       diagnostics: [],
-      executionPlan: {
-        subjects: [expect.objectContaining({
+      runtimeWorldConfiguration: {
+        worldRuntimeBootstrap: {
+          subjectRuntimeDescriptors: [expect.objectContaining({
           subjectDefinitionRef:
             "worldkit://subject-definition/playground-preview.watercraft.kayak.surface@1",
           capabilityAssembly: expect.objectContaining({
@@ -790,7 +791,8 @@ describe("loadAuthoringScene", () => {
               resourceRef: "worldkit://motion-kernel/free-ground@1",
             })],
           }),
-        })],
+          })],
+        },
       },
       hostOverlay: {
         schemaVersion: 1,
@@ -823,8 +825,9 @@ describe("loadAuthoringScene", () => {
     expect(airLoaded).toMatchObject({
       ok: true,
       diagnostics: [],
-      executionPlan: {
-        subjects: [expect.objectContaining({
+      runtimeWorldConfiguration: {
+        worldRuntimeBootstrap: {
+          subjectRuntimeDescriptors: [expect.objectContaining({
           subjectDefinitionRef:
             "worldkit://subject-definition/playground-preview.glider.paraglider.unpowered@1",
           capabilityAssembly: expect.objectContaining({
@@ -833,7 +836,8 @@ describe("loadAuthoringScene", () => {
               resourceRef: "worldkit://motion-kernel/free-ground@1",
             })]),
           }),
-        })],
+          })],
+        },
       },
       hostOverlay: {
         schemaVersion: 1,
@@ -893,8 +897,9 @@ describe("loadAuthoringScene", () => {
     expect(loaded).toMatchObject({
       ok: true,
       diagnostics: [],
-      executionPlan: {
-        subjects: [expect.objectContaining({
+      runtimeWorldConfiguration: {
+        worldRuntimeBootstrap: {
+          subjectRuntimeDescriptors: [expect.objectContaining({
           subjectDefinitionRef:
             "worldkit://subject-definition/playground-preview.animal.quadruped.forward-steer@2",
           controlFeel: expect.objectContaining({
@@ -926,7 +931,8 @@ describe("loadAuthoringScene", () => {
               ]),
             }),
           }),
-        })],
+          })],
+        },
       },
       hostOverlay: expect.objectContaining({
         subjectDefinitionRef:
@@ -962,13 +968,15 @@ describe("loadAuthoringScene", () => {
     expect(loaded).toMatchObject({
       ok: true,
       diagnostics: [],
-      executionPlan: {
-        subjects: [
+      runtimeWorldConfiguration: {
+        worldRuntimeBootstrap: {
+          subjectRuntimeDescriptors: [
           expect.objectContaining({
             subjectDefinitionRef:
               "worldkit://subject-definition/humanoid.g-bot@2",
           }),
-        ],
+          ],
+        },
       },
       hostOverlay: {
         schemaVersion: 1,
@@ -1001,7 +1009,7 @@ describe("loadAuthoringScene", () => {
         ],
       },
     });
-    expect(loaded.executionPlan?.resourceUsage.triangles).toBeGreaterThan(30_000);
+    expect(loaded.executionPlan?.sceneResourceUsage.triangles).toBeGreaterThan(30_000);
     expect(Object.isFrozen(loaded.hostOverlay)).toBe(true);
     expect(Object.isFrozen(loaded.hostOverlay?.changes)).toBe(true);
     expect(
@@ -1086,12 +1094,20 @@ describe("loadAuthoringScene", () => {
     }
 
     expect(
-      featureInspections(loaded.executionPlan)
+      featureInspections(
+        loaded.executionPlan,
+        loaded.runtimeWorldConfiguration?.worldRuntimeBootstrap ??
+          (() => { throw new Error("Runtime Bootstrap missing."); })(),
+      )
         .filter((feature) => feature.type.startsWith("runtime.subject-"))
         .map((feature) => feature.id),
     ).toEqual(["pack-animal-a", "pack-animal-b", "player"]);
     expect(
-      featureInspections(loaded.executionPlan).find(
+      featureInspections(
+        loaded.executionPlan,
+        loaded.runtimeWorldConfiguration?.worldRuntimeBootstrap ??
+          (() => { throw new Error("Runtime Bootstrap missing."); })(),
+      ).find(
         (feature) => feature.id === "pack-animal-a",
       )?.parameters,
     ).toMatchObject({

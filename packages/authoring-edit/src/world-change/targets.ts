@@ -1,8 +1,9 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import type { AuthoringSpecV4 } from "@whitebox-world/authoring";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { isNil } from "lodash-es";
 
-import type { Sha256HashV1 } from "../parse-kernel.js";
 import type {
   ConstraintKindV1,
   SpatialFeatureKindV1,

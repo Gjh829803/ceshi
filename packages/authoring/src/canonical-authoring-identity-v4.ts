@@ -1,4 +1,4 @@
-import { canonicalExecutionResourceLockEntriesV1 } from "@whitebox-world/runtime-contracts";
+import { canonicalResourceLockEntriesV1 } from "@whitebox-world/runtime-contracts";
 
 import { sha256CanonicalJson } from "./canonical-json.js";
 import type { NormalizedWorldBase, NormalizedWorldResourcesV2 } from "./types.js";
@@ -105,7 +105,7 @@ export function projectNormalizedWorldResourcesToLayoutIdentityV4(
     } = structuredClone(prototype);
     return projectedPrototype;
   });
-  const resourceLock = canonicalExecutionResourceLockEntriesV1(
+  const resourceLock = canonicalResourceLockEntriesV1(
     resources.resourceLock.filter(
       (entry) => entry.resourceKind !== TRAVERSAL_SURFACE_PROFILE_RESOURCE_KIND,
     ),

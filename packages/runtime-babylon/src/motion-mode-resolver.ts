@@ -1,27 +1,27 @@
-import type { ExecutionMotionProfileV1 } from "@whitebox-world/runtime-contracts";
+import type { RuntimeMotionProfileV1 } from "@whitebox-world/runtime-contracts";
 
 export type MotionModeFailureCodeV1 =
   | "MOTION_PARAMETER_INVALID"
   | "MOTION_NON_FINITE_STATE";
 
 export interface MotionModeSnapshotV1 {
-  activeProfile: ExecutionMotionProfileV1;
+  activeProfile: RuntimeMotionProfileV1;
   fallbackActive: boolean;
   lastFailureCode?: MotionModeFailureCodeV1;
 }
 
 export class MotionModeResolverV1 {
-  private readonly profilesByRef: ReadonlyMap<string, ExecutionMotionProfileV1>;
-  private active: ExecutionMotionProfileV1;
+  private readonly profilesByRef: ReadonlyMap<string, RuntimeMotionProfileV1>;
+  private active: RuntimeMotionProfileV1;
   private pendingProfileRef: string | undefined;
   private fallbackActive = false;
   private lastFailureCode: MotionModeFailureCodeV1 | undefined;
 
   constructor(
-    private readonly defaultProfile: ExecutionMotionProfileV1,
-    private readonly fallbackProfile: ExecutionMotionProfileV1,
-    profiles: readonly ExecutionMotionProfileV1[],
-    private readonly isProfileValid: (profile: ExecutionMotionProfileV1) => boolean,
+    private readonly defaultProfile: RuntimeMotionProfileV1,
+    private readonly fallbackProfile: RuntimeMotionProfileV1,
+    profiles: readonly RuntimeMotionProfileV1[],
+    private readonly isProfileValid: (profile: RuntimeMotionProfileV1) => boolean,
   ) {
     this.profilesByRef = new Map(
       [defaultProfile, ...profiles, fallbackProfile].map((profile) => [
@@ -77,7 +77,7 @@ export class MotionModeResolverV1 {
     }
   }
 
-  get currentProfile(): ExecutionMotionProfileV1 {
+  get currentProfile(): RuntimeMotionProfileV1 {
     return this.active;
   }
 

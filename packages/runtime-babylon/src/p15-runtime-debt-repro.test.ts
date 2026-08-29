@@ -7,12 +7,18 @@ import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
 import { describe, expect, it } from "vitest";
 
 import { createValidPackageSubjectWorldV4 } from "../../authoring/src/test-fixture";
-import type { ExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
+import type { CanonicalSceneExecutionPlanV1 } from "@whitebox-world/runtime-contracts";
 
 import { BabylonWorldRuntime } from "./babylon-world-runtime";
 import { bindRuntimeTestPossession } from "./runtime-test-possession";
 import type { BabylonRuntimeProjectionV1 } from "./runtime-projection";
-import { compileRuntimeTestPlanV5 } from "./runtime-test-plan";
+import {
+  compileRuntimeTestScenePlanV1,
+  createRuntimeTestWorldVariantV1,
+  runtimeTestSubjectsForPlanV1,
+  runtimeTestWorldArtifactsForPlanV1,
+  runtimeTestWorldInputForPlanV1,
+} from "./runtime-test-plan";
 
 const kernelSource = readFileSync(
   new URL("./motion-kernel-runtime.ts", import.meta.url),
@@ -34,7 +40,7 @@ const havokWasmBinary = havokWasmBytes.buffer.slice(
   havokWasmBytes.byteOffset + havokWasmBytes.byteLength,
 ) as ArrayBuffer;
 
-function compileFlatPackagePlan(): ExecutionPlanV5 {
+function compileFlatPackagePlan(): CanonicalSceneExecutionPlanV1 {
   const spec = createValidPackageSubjectWorldV4();
   spec.nodes = spec.nodes.map((node) =>
     node.kind === "terrain" && node.components.terrain.source.kind === "procedural"
@@ -54,14 +60,14 @@ function compileFlatPackagePlan(): ExecutionPlanV5 {
         }
       : node,
   );
-  return compileRuntimeTestPlanV5(spec);
+  return compileRuntimeTestScenePlanV1(spec);
 }
 
 async function createDebtRuntime(
-  executionPlan: ExecutionPlanV5,
+  executionPlan: CanonicalSceneExecutionPlanV1,
 ): Promise<BabylonWorldRuntime> {
   const runtime = await BabylonWorldRuntime.create({
-    executionPlan,
+    ...runtimeTestWorldInputForPlanV1(executionPlan),
     havokWasmBinary,
     engineFactory: () =>
       new NullEngine({
@@ -74,7 +80,8 @@ async function createDebtRuntime(
   });
   await bindRuntimeTestPossession(
     runtime,
-    executionPlan.initialControlledEntityId,
+    runtimeTestWorldArtifactsForPlanV1(executionPlan).worldRuntimeBootstrap
+      .initialControlledEntityId,
   );
   return runtime;
 }
@@ -113,23 +120,25 @@ describe("P1.5 runtime debt", () => {
 
   it("publishes air from checkSupport after reset when spawned 0.4 m above terrain", async () => {
     const base = compileFlatPackagePlan();
-    const player = base.subjects.find((subject) => subject.entityId === "player")!;
-    const executionPlan: ExecutionPlanV5 = {
-      ...base,
-      terrain: {
+    const player = runtimeTestSubjectsForPlanV1(base)
+      .find((subject) => subject.entityId === "player")!;
+    const executionPlan = createRuntimeTestWorldVariantV1(base, {
+      scenePlanPatch: {
+        terrain: {
         ...base.terrain,
         heightSamplesMeters: base.terrain.heightSamplesMeters.map(() => 0),
+        },
+        waters: [],
+        objects: [],
+        layout: { ...base.layout, layoutAssertions: [] },
       },
-      waters: [],
-      objects: [],
-      subjects: [
+      runtimeSubjects: [
         {
           ...player,
           spawnSubjectOriginPositionMetersXYZ: [0, 0.4, 30],
         },
       ],
-      layout: { ...base.layout, layoutAssertions: [] },
-    };
+    });
     const runtime = await createDebtRuntime(executionPlan);
     try {
       const afterReset = runtime.reset();

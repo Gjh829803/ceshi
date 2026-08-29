@@ -44,7 +44,7 @@ flowchart TB
         VALIDATE["Schema Validation<br/>Registry Resolution"]
         COMPILE["Normalizer + Terrain Compiler<br/>Deterministic Layout Solver"]
         IR["NormalizedWorldIR V4<br/>Resource Lock"]
-        PACKAGE["ExecutionPlan V5<br/>WorldPackage Build Receipt"]
+        PACKAGE["Canonical Scene Plan V1<br/>WorldPackage Build Receipt"]
         TAKE["Simulation Take V1<br/>60 Hz Fixed Tick · Exact Schedule"]
         RUNTIME["Babylon.js Runtime + Havok Physics<br/>唯一白模世界真相"]
         CAPTURE["Control Capture Bundle<br/>Neutral Color · Linear Depth · Semantic · Instance · Normal"]
@@ -141,7 +141,7 @@ Linear Depth、Bundle Hash 和 Package/Take/Session 归属。人物是否掉入�
 之间提供一套**稳定、确定、可验证、可复现的世界编译系统**。
 
 当前所有 Canonical 世界统一使用 AuthoringSpec V4、NormalizedWorldIR V4 和
-ExecutionPlan V5；基础世界与 Route 世界不再分别暴露旧版本入口。已交付
+Canonical Scene Plan V1；基础世界与 Route 世界不再分别暴露旧版本入口。已交付
 Placement Solver S1、Babylon/Havok Runtime、Simulation Take / Control Capture V1，
 以及统一 Validation 的 Capture/Integrity V1 窄切片：精确 Tick/Frame Schedule、五
 Pass、Render Ready Receipt、原子 Bundle、版本化 Profile、Canonical Report、
@@ -149,7 +149,7 @@ Pass、Render Ready Receipt、原子 Bundle、版本化 Profile、Canonical Repo
 WorldPackage Root/Build Receipt、Validation Subject、Recast Graph/Path、真实
 Babylon/Havok `NullEngine` 固定 Tick Probe、Canonical Route Evidence/Report、
 `worldkit verify route` 和只读 Browser Protocol V5；Task 8 最终门禁已关闭。
-P1.4 已交付完整 WorldPackage V2 发布格式、`build/inspect/load`、持久 headless
+P1.4 已交付当前唯一 WorldPackage V1 发布格式、`build/inspect/load`、持久 headless
 Runtime Session、Request/Receipt WAL 与 fresh-process 恢复。Placement/Physics/
 Composition 等其余统一 Validation 扩展、Capture 恢复续拍、多人 Session 和视频模型
 Adapter 仍在后续 Backlog 中。
@@ -176,7 +176,7 @@ Adapter 仍在后续 Backlog 中。
 本地后端在 `.codex-tmp/local-codex` 创建一次性隔离工作区，只复制任务所需上下文，
 通过本机已有 Codex 登录完成认证但不会复制或提交凭证，并在 Host 验证非空产物后原子回传。
 可信 Host 负责校验、
-编译 ExecutionPlan V5、捕获真实白膜首帧和按完整视觉目标分组的三视图。随后 Gemini
+编译 Canonical Scene Plan V1、捕获真实白膜首帧和按完整视觉目标分组的三视图。随后 Gemini
 只合成共享视觉规范与结构锁定 Prompt，Direct ImageGen 并发生成样式化首帧和各组
 样式化三视图。规划图或生成图都不能替代 Runtime 世界真相。
 
@@ -232,7 +232,7 @@ Socket 和类型化关系表达。
 
 | 领域 | 当前已交付 | 尚未交付 |
 |---|---|---|
-| 世界输入 | Canonical Authoring V4 → Normalized IR V4 → ExecutionPlan V5；严格 Schema、当前 Registry/Package Definition、八种 Placement Constraint、确定性 Solver S1 与完整 WorldPackage V2 发布格式 | 通用 Terrain Mask、更多 Constraint |
+| 世界输入 | Canonical Authoring V4 → Normalized IR V4 → Canonical Scene Plan V1；严格 Schema、当前 Registry/Package Definition、八种 Placement Constraint、确定性 Solver S1 与唯一 WorldPackage V1 发布格式 | 通用 Terrain Mask、更多 Constraint |
 | 地形 | 室外 Heightfield、基础 Relief、静态障碍、水域和物理查询 | Canonical Raster/Mask/Region Pipeline；已设计但未实现的 Hybrid Terrain、洞穴、Overhang、多层可行走表面和完整室内 |
 | 主体 | Primitive 人形/四足代理；Golden 与首个产品 G Bot 的 GLB、Rig/Animation/Collider Profile、多实例与独立控制 | 更多产品资产、Compound Collider、LOD、更多拓扑和独立动画资产 |
 | 关系 | `possessedBy`；严格 Authoring/Compiler `mountedOn`；Mount/Dismount 原子事务、站位投影、Rider locomotion 暂停与安全下车 | seat/tether、Joint、装备、拖拽、完整坐骑/车辆动力学与 Hosted Builder admission |
@@ -261,10 +261,10 @@ pnpm worldkit load examples/evidence/package-subject-world/world.package \
   --headless --json
 ```
 
-`worldkit build` 公开发布完整 WorldPackage V2 目录。需要跨进程持续控制与崩溃恢复时，
+`worldkit build` 公开发布当前唯一 WorldPackage V1 目录。需要跨进程持续控制与崩溃恢复时，
 使用 `worldkit run <package-directory> --interactive --protocol ndjson --headless
 --session-directory <absolute-directory>`；恢复同一逻辑 Session 时追加 `--resume`。
-Browser Protocol V5 仍保持 exact 39 keys，NDJSON Runtime Session 不挂到
+Browser Protocol V5 仍保持 exact 38 keys，NDJSON Runtime Session 不挂到
 `window.__WORLDKIT__`。
 
 查看 Package Subject Definition 的确定性解析结果：
@@ -315,7 +315,7 @@ pnpm dev:g-bot
 `WORLDKIT_AUTHORING_SPEC_PATH`，该组合会被明确拒绝。Canonical Authoring 页由
 `worldkit run <world.json>` 或 `pnpm dev:g-bot` 注入 AuthoringSpec。
 
-结构修改不走 Browser Protocol V5。V5 仍是 exact 39-key Runtime 面，只处理
+结构修改不走 Browser Protocol V5。V5 仍是 exact 38-key Runtime 面，只处理
 Gameplay/Camera/Capture/Route。受信 Authoring 页另外安装
 `window.__WORLDKIT_AUTHORING_EDIT__`（10 个可枚举成员：`version` + 9 个方法）。
 Catalog `?scene=` 和普通 playable **不会**安装这个对象。不要把
@@ -539,14 +539,14 @@ Validation 词汇。它不构建 Traversal Graph，不跑 Character Controller�
 |---|---|---|---|
 | `packages/contracts/` | Alpha 层共享 ID、Transform、Frame、Action 与 Diagnostic 基础类型 | 仅底层共享类型 | 承载新 Canonical Schema 或引擎对象 |
 | `packages/protocol/` | Canonical JSON Bytes、稳定排序与 SHA-256 Hash | Canonical 序列化基础 | 依赖领域 Runtime 或 Provider |
-| `packages/runtime-contracts/` | ExecutionPlan V5、World Runtime Snapshot V4、Camera 参数和 Browser Protocol V5 | Runtime/Browser 当前公共合同 | 暴露 Babylon、Havok、Recast Handle |
+| `packages/runtime-contracts/` | Canonical Scene Plan V1、World Runtime Bootstrap V1、World Runtime Snapshot V4、Camera 参数和 Browser Protocol V5 | Runtime/Browser 当前公共合同 | 暴露 Babylon、Havok、Recast Handle |
 | `packages/gameplay-contracts/` | Gameplay Command、Receipt、Event、State 与 Bootstrap 的关闭合同 | Gameplay 当前公共合同 | 实现 Gameplay 规则或依赖引擎 |
 | `packages/world/` | `world.*` Authoring DSL、Feature、Terrain、Landmark、规划工件与场景规格 | AI/场景作者入口 | 直接创建 Provider 对象或修改 Runtime 内部 |
 | `packages/authoring/` | Authoring V4 Schema、Parser、Normalizer、Resource Lock、Preset Candidate 与 Normalized IR V4 | AI Schema 与 Authoring Pipeline | 执行 Babylon/Havok 或反向读取 Runtime State |
 | `packages/authoring-edit/` | AI Schema Projection、Registry Search、Override Policy、WorldChangeSet/Request/Receipt 纯合同 | Authoring/Edit DTO 与 parser | 持有 journal、文件系统、Browser 或 Runtime handle |
 | `packages/authoring-host/` | Trusted Candidate Build、可注入 WAL journal、publication recovery、Authoring/Edit Host API | Provider-neutral 受信 Host 编排；正式文件持久化 composition 在 `scripts/lib/` | 依赖 `runtime-host` 或直接改 Babylon Scene |
 | `packages/layout-solver/` | 候选生成、Constraint Evaluator、确定性搜索和 Layout Report | 引擎无关 Solver 合同 | 直接修改场景或依赖渲染结果 |
-| `packages/compiler/` | NormalizedWorldIR V4 到锁定 ExecutionPlan V5 的确定性编译 | Compiler API | 读取 Prompt、执行 Gameplay 或创建引擎对象 |
+| `packages/compiler/` | NormalizedWorldIR V4 到锁定 Canonical Scene Plan V1 的确定性编译，并独立发布 Gameplay/Runtime Bootstrap | Compiler API | 读取 Prompt、执行 Gameplay 或创建引擎对象 |
 | `packages/world-package/` | WorldPackage Manifest、Package Root、Build Closure 与 Receipt | 正式内容包合同 | 保存运行时 Handle 或未锁定草稿 |
 | `packages/validation/` | Validation Profile、Metric、Evidence、Gate、Report 与 Package 校验 | CLI/自动化验证合同 | 用渲染成功替代合同/身份校验 |
 | `packages/subject-registry/` | 精确版本的 Subject Definition、Capability Assembly、Profile 与 Asset Inventory | 当前 Registry 资源入口，不回退到旧 Definition | 保存会话状态或未版本化数字 overlay |

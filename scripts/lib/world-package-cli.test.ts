@@ -23,8 +23,8 @@ vi.mock("@whitebox-world/runtime-host", () => {
 });
 
 import {
-  buildWorldPackageDirectoryV2,
-  inspectWorldPackageDirectoryV2,
+  buildWorldPackageDirectoryV1,
+  inspectWorldPackageDirectoryV1,
   loadRuntimeWorldConfigurationFromPackageDirectoryV1,
 } from "./world-package-cli";
 
@@ -62,11 +62,11 @@ afterEach(async () => {
   ));
 });
 
-describe("WorldPackage V2 command core", () => {
+describe("WorldPackage command core", { timeout: 30_000 }, () => {
   it("builds and independently inspects one complete basic-world directory", async () => {
     const directory = await temporaryDirectory();
     const outputDirectoryPath = path.join(directory, "basic-world.package");
-    const built = await buildWorldPackageDirectoryV2({
+    const built = await buildWorldPackageDirectoryV1({
       inputPath: BASIC_WORLD_PATH,
       outputDirectoryPath,
     });
@@ -83,8 +83,8 @@ describe("WorldPackage V2 command core", () => {
       packageId: "basic-world.world-package",
       worldId: "basic-world",
       runtimeTarget: "babylon-web",
-      packageFormatVersion: 2,
-      manifestSchemaVersion: 2,
+      packageFormatVersion: 1,
+      manifestSchemaVersion: 1,
       distributionPolicy: "redistributable",
       signatureCount: 0,
     });
@@ -94,7 +94,7 @@ describe("WorldPackage V2 command core", () => {
     expect(built.worldPackageRootHash).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(built.fileCount).toBeGreaterThan(8);
 
-    const inspected = await inspectWorldPackageDirectoryV2({
+    const inspected = await inspectWorldPackageDirectoryV1({
       packageDirectoryPath: outputDirectoryPath,
     });
     expectSuccess(inspected);
@@ -105,11 +105,11 @@ describe("WorldPackage V2 command core", () => {
     const directory = await temporaryDirectory();
     const firstPath = path.join(directory, "first.package");
     const secondPath = path.join(directory, "second.package");
-    const first = await buildWorldPackageDirectoryV2({
+    const first = await buildWorldPackageDirectoryV1({
       inputPath: BASIC_WORLD_PATH,
       outputDirectoryPath: firstPath,
     });
-    const second = await buildWorldPackageDirectoryV2({
+    const second = await buildWorldPackageDirectoryV1({
       inputPath: BASIC_WORLD_PATH,
       outputDirectoryPath: secondPath,
     });
@@ -118,7 +118,7 @@ describe("WorldPackage V2 command core", () => {
     expect(second.worldPackageRootHash).toBe(first.worldPackageRootHash);
     expect(second.worldPackageRef).toBe(first.worldPackageRef);
 
-    const repeated = await buildWorldPackageDirectoryV2({
+    const repeated = await buildWorldPackageDirectoryV1({
       inputPath: BASIC_WORLD_PATH,
       outputDirectoryPath: firstPath,
     });
@@ -133,7 +133,7 @@ describe("WorldPackage V2 command core", () => {
   it("loads the exact G Bot Runtime configuration and package-owned resource bytes", async () => {
     const directory = await temporaryDirectory();
     const outputDirectoryPath = path.join(directory, "g-bot.package");
-    const built = await buildWorldPackageDirectoryV2({
+    const built = await buildWorldPackageDirectoryV1({
       inputPath: G_BOT_WORLD_PATH,
       outputDirectoryPath,
     });
@@ -149,14 +149,21 @@ describe("WorldPackage V2 command core", () => {
       throw new Error("expected loaded Runtime configuration");
     }
     expect(loaded.result.command).toBe("load");
-    expect(loaded.runtimeWorldConfiguration.worldPackageRef).toBe(
+    expect(loaded.runtimeWorldConfiguration.worldBuildIdentity.worldPackageRef).toBe(
       built.worldPackageRef,
     );
     expect(
-      loaded.runtimeWorldConfiguration.worldPackageBuildReceipt
-        .worldPackageRootHash,
+      loaded.runtimeWorldConfiguration.worldBuildIdentity.worldPackageRootHash,
     ).toBe(built.worldPackageRootHash);
-    expect(loaded.runtimeWorldConfiguration.executionPlanHash).toBe(
+    expect(loaded.result.worldBuildIdentityHash).toBe(
+      built.worldBuildIdentityHash,
+    );
+    expect(
+      loaded.runtimeWorldConfiguration.sceneSource.kind ===
+          "canonical-execution-plan"
+        ? loaded.runtimeWorldConfiguration.sceneSource.executionPlanHash
+        : undefined,
+    ).toBe(
       built.executionPlanHash,
     );
     expect(
@@ -169,7 +176,7 @@ describe("WorldPackage V2 command core", () => {
   it("fails closed on flipped Manifest and resource bytes", async () => {
     const directory = await temporaryDirectory();
     const basicPath = path.join(directory, "basic.package");
-    expectSuccess(await buildWorldPackageDirectoryV2({
+    expectSuccess(await buildWorldPackageDirectoryV1({
       inputPath: BASIC_WORLD_PATH,
       outputDirectoryPath: basicPath,
     }));
@@ -177,7 +184,7 @@ describe("WorldPackage V2 command core", () => {
     const manifestBytes = readFileSync(manifestPath);
     manifestBytes[0] = manifestBytes[0] === 0x7b ? 0x5b : 0x7b;
     writeFileSync(manifestPath, manifestBytes);
-    const corruptManifest = await inspectWorldPackageDirectoryV2({
+    const corruptManifest = await inspectWorldPackageDirectoryV1({
       packageDirectoryPath: basicPath,
     });
     expect(corruptManifest).toMatchObject({
@@ -187,7 +194,7 @@ describe("WorldPackage V2 command core", () => {
     });
 
     const gBotPath = path.join(directory, "g-bot.package");
-    expectSuccess(await buildWorldPackageDirectoryV2({
+    expectSuccess(await buildWorldPackageDirectoryV1({
       inputPath: G_BOT_WORLD_PATH,
       outputDirectoryPath: gBotPath,
     }));
@@ -213,16 +220,16 @@ describe("WorldPackage V2 command core", () => {
   it("fails closed when a Package closure file is missing", async () => {
     const directory = await temporaryDirectory();
     const packagePath = path.join(directory, "basic.package");
-    expectSuccess(await buildWorldPackageDirectoryV2({
+    expectSuccess(await buildWorldPackageDirectoryV1({
       inputPath: BASIC_WORLD_PATH,
       outputDirectoryPath: packagePath,
     }));
     unlinkSync(path.join(
       packagePath,
-      "targets/babylon-web/execution-plan.json",
+      "targets/babylon-web/canonical-scene-execution-plan.json",
     ));
 
-    const inspected = await inspectWorldPackageDirectoryV2({
+    const inspected = await inspectWorldPackageDirectoryV1({
       packageDirectoryPath: packagePath,
     });
     expect(inspected).toMatchObject({
@@ -236,7 +243,7 @@ describe("WorldPackage V2 command core", () => {
   it("rejects symlinked package files before returning an admitted result", async () => {
     const directory = await temporaryDirectory();
     const packagePath = path.join(directory, "basic.package");
-    expectSuccess(await buildWorldPackageDirectoryV2({
+    expectSuccess(await buildWorldPackageDirectoryV1({
       inputPath: BASIC_WORLD_PATH,
       outputDirectoryPath: packagePath,
     }));
@@ -247,7 +254,7 @@ describe("WorldPackage V2 command core", () => {
     unlinkSync(manifestPath);
     symlinkSync(externalPath, manifestPath);
 
-    const inspected = await inspectWorldPackageDirectoryV2({
+    const inspected = await inspectWorldPackageDirectoryV1({
       packageDirectoryPath: packagePath,
     });
     expect(inspected).toMatchObject({
@@ -260,7 +267,7 @@ describe("WorldPackage V2 command core", () => {
   it("rejects a Package that the selected Host policy cannot run", async () => {
     const directory = await temporaryDirectory();
     const packagePath = path.join(directory, "basic.package");
-    expectSuccess(await buildWorldPackageDirectoryV2({
+    expectSuccess(await buildWorldPackageDirectoryV1({
       inputPath: BASIC_WORLD_PATH,
       outputDirectoryPath: packagePath,
     }));
@@ -268,7 +275,7 @@ describe("WorldPackage V2 command core", () => {
       ...BABYLON_WEB_WORLD_PACKAGE_HOST_POLICY_V1,
       supportedFeatureIds: [],
     } as const satisfies WorldPackageHostPolicyV1;
-    const inspected = await inspectWorldPackageDirectoryV2({
+    const inspected = await inspectWorldPackageDirectoryV1({
       packageDirectoryPath: packagePath,
       hostPolicy: incompatiblePolicy,
     });

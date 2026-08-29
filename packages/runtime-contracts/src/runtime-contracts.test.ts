@@ -3,21 +3,22 @@ import { describe, expect, it } from "vitest";
 import {
   WORLDKIT_BROWSER_PROTOCOL_VERSION,
   WORLDKIT_WORLD_SESSION_EVENT_PAGE_MAXIMUM_COUNT,
-  EXECUTION_RESOURCE_KINDS_V1,
-  canonicalExecutionResourceLockEntriesV1,
+  CANONICAL_RESOURCE_KINDS_V1,
+  canonicalResourceLockEntriesV1,
   canonicalWorldkitBrowserRouteEvidencePublicationV2,
-  type ExecutionAnimationSetV1,
-  type ExecutionColliderProfileV1,
-  type ExecutionRigProfileV1,
-  type ExecutionSubjectAssetV1,
-  type ExecutionSubjectCapabilityAssemblyV1,
-  type ExecutionSubjectV3,
-  type ExecutionLayoutAssertionV1,
-  type ExecutionStaticColliderV1,
-  type ExecutionStaticColliderTraversalSurfaceV1,
-  type ExecutionTraversalAreaV1,
-  type ExecutionPlanV5,
-  type ExecutionTraversalSurfaceV1,
+  type RuntimeAnimationSetV1,
+  type RuntimeColliderProfileV1,
+  type RuntimeRigProfileV1,
+  type RuntimeSubjectAssetV1,
+  type RuntimeSubjectCapabilityAssemblyV1,
+  type CanonicalSceneLayoutAssertionV1,
+  type CanonicalSceneStaticColliderV1,
+  type CanonicalSceneStaticColliderTraversalSurfaceV1,
+  type CanonicalSceneTraversalAreaV1,
+  type CanonicalSceneTraversalV1,
+  type CanonicalSceneSubjectInstanceV1,
+  type RuntimeSubjectDescriptorV1,
+  type CanonicalSceneTraversalSurfaceV1,
   type FixedInputV1,
   type WorldSessionEventsQueryV1,
   type WorldSessionEventsQueryResultV1,
@@ -36,7 +37,7 @@ import type {
 
 const ROUTE_PUBLICATION_HASH = `sha256:${"a".repeat(64)}` as const;
 
-function capabilityAssemblyFixture(): ExecutionSubjectCapabilityAssemblyV1 {
+function capabilityAssemblyFixture(): RuntimeSubjectCapabilityAssemblyV1 {
   const motionProfile = {
     resourceRef: "worldkit://motion-profile/test@1",
     contentHash: ROUTE_PUBLICATION_HASH,
@@ -210,25 +211,22 @@ function createSnapshotFixtureV4(): WorldRuntimeSnapshotV4 {
   };
 }
 
-describe("runtime contracts V3", () => {
-  it("requires V5 Authoring provenance and explicit sorted Anchor identities", () => {
+describe("runtime contracts", () => {
+  it("requires Canonical Scene provenance and explicit sorted Anchor identities", () => {
     const traversal = {
       surfaces: [],
       traversalAreas: [],
       connectivityRequirements: [],
       anchorEntityIds: ["goal", "spawn-main"],
-    } satisfies ExecutionPlanV5["traversal"];
+    } satisfies CanonicalSceneTraversalV1;
     const provenance = {
-      schemaVersion: 5,
+      schemaVersion: 1,
       authoringSpecHash: `sha256:${"6".repeat(64)}`,
       traversal,
-    } satisfies Pick<
-      ExecutionPlanV5,
-      "schemaVersion" | "authoringSpecHash" | "traversal"
-    >;
+    };
 
     expect(provenance).toEqual({
-      schemaVersion: 5,
+      schemaVersion: 1,
       authoringSpecHash: `sha256:${"6".repeat(64)}`,
       traversal: {
         surfaces: [],
@@ -248,14 +246,14 @@ describe("runtime contracts V3", () => {
       resourceRef: "package://traversal-surface/terrain-main.heightfield@1",
       resolvedVersion: "1",
       resourceHash: `sha256:${"3".repeat(64)}`,
-    } satisfies ExecutionTraversalSurfaceV1;
+    } satisfies CanonicalSceneTraversalSurfaceV1;
     const traversalArea = {
       id: "dry-trench",
       kind: "polygon-xz",
       pointsMetersXZ: [[-1, -2], [1, -2], [1, 2], [-1, 2]],
       surfaceEntityId: "terrain-main",
       mode: "blocked",
-    } satisfies ExecutionTraversalAreaV1;
+    } satisfies CanonicalSceneTraversalAreaV1;
     const staticSurface = {
       kind: "static-collider",
       traversalSurfaceId: `traversal-surface:sha256:${"6".repeat(64)}`,
@@ -271,8 +269,8 @@ describe("runtime contracts V3", () => {
         "worldkit://traversal-surface-profile/ground.static@1",
       traversalSurfaceProfileResolvedVersion: "1",
       traversalSurfaceProfileHash: `sha256:${"a".repeat(64)}`,
-    } satisfies ExecutionStaticColliderTraversalSurfaceV1;
-    const surfaceUnion: readonly ExecutionTraversalSurfaceV1[] = [
+    } satisfies CanonicalSceneStaticColliderTraversalSurfaceV1;
+    const surfaceUnion: readonly CanonicalSceneTraversalSurfaceV1[] = [
       surface,
       staticSurface,
     ];
@@ -287,7 +285,7 @@ describe("runtime contracts V3", () => {
       },
       shape: { kind: "box", sizeMetersXYZ: [2, 4, 14] },
       colliderHash: `sha256:${"5".repeat(64)}`,
-    } satisfies ExecutionStaticColliderV1;
+    } satisfies CanonicalSceneStaticColliderV1;
 
     expect(Object.keys(surface).sort()).toEqual([
       "colliderSubshapeId",
@@ -342,27 +340,30 @@ describe("runtime contracts V3", () => {
       contentHash: `sha256:${"a".repeat(64)}`,
     } as const;
 
-    expect(EXECUTION_RESOURCE_KINDS_V1).toContain("traversal-surface-profile");
-    expect(canonicalExecutionResourceLockEntriesV1([profileRow])).toEqual([
+    expect(CANONICAL_RESOURCE_KINDS_V1).toContain("traversal-surface-profile");
+    expect(canonicalResourceLockEntriesV1([profileRow])).toEqual([
       profileRow,
     ]);
-    expect(() => canonicalExecutionResourceLockEntriesV1([{
+    expect(() => canonicalResourceLockEntriesV1([{
       ...profileRow,
       resourceKind: "provider-traversal-surface-profile",
-    }])).toThrowError("EXECUTION_RESOURCE_LOCK_INVALID");
+    }])).toThrowError("CANONICAL_RESOURCE_LOCK_INVALID");
   });
 
-  it("separates Subject Origin from Collider center in ExecutionSubjectV3", () => {
-    const subject = {
+  it("separates Scene placement from Runtime Subject collider center", () => {
+    const subjectInstance = {
+      entityId: "pack-animal-a",
+      spawnAnchorEntityId: "spawn-pack-animal-a",
+      subjectOriginPositionMetersXYZ: [4, 0, 2],
+      subjectFacingRadians: Math.PI / 2,
+    } satisfies CanonicalSceneSubjectInstanceV1;
+    const subjectDescriptor = {
       entityId: "pack-animal-a",
       subjectDefinitionRef:
         "package://subject-definition/coastal-pack-animal@1",
       subjectDefinitionHash: `sha256:${"a".repeat(64)}`,
       bodyTopology: "quadruped",
       semanticClassId: "subject.animal.pack",
-      spawnAnchorEntityId: "spawn-pack-animal-a",
-      spawnSubjectOriginPositionMetersXYZ: [4, 0, 2],
-      spawnSubjectFacingRadians: Math.PI / 2,
       forwardDirection: "-z",
       visualParts: [],
       visualBinding: { mode: "static" },
@@ -423,22 +424,26 @@ describe("runtime contracts V3", () => {
         },
       ],
       capabilityAssembly: capabilityAssemblyFixture(),
-    } satisfies ExecutionSubjectV3;
+    } satisfies RuntimeSubjectDescriptorV1;
 
-    expect(subject).toMatchObject({
+    expect(subjectInstance).toEqual({
+      entityId: "pack-animal-a",
+      spawnAnchorEntityId: "spawn-pack-animal-a",
+      subjectOriginPositionMetersXYZ: [4, 0, 2],
+      subjectFacingRadians: Math.PI / 2,
+    });
+    expect(subjectDescriptor).toMatchObject({
       subjectDefinitionRef:
         "package://subject-definition/coastal-pack-animal@1",
       subjectDefinitionHash: expect.stringMatching(/^sha256:/),
-      spawnSubjectOriginPositionMetersXYZ: [4, 0, 2],
-      spawnSubjectFacingRadians: Math.PI / 2,
       collider: {
         centerOffsetFromSubjectOriginMetersXYZ: [0, 0.7, 0],
       },
     });
-    expect(subject).not.toHaveProperty(["kit", "Ref"].join(""));
-    expect(subject).not.toHaveProperty("spawnPositionMeters");
-    expect(Object.keys(subject.availableControlFeels[0]!).sort()).toEqual(
-      Object.keys(subject.controlFeel).sort(),
+    expect(subjectDescriptor).not.toHaveProperty("spawnAnchorEntityId");
+    expect(subjectDescriptor).not.toHaveProperty("spawnPositionMeters");
+    expect(Object.keys(subjectDescriptor.availableControlFeels[0]!).sort()).toEqual(
+      Object.keys(subjectDescriptor.controlFeel).sort(),
     );
   });
 
@@ -457,7 +462,7 @@ describe("runtime contracts V3", () => {
         boneCount: 18,
         animationClipNames: ["idle", "jump", "run", "walk"],
       },
-    } satisfies ExecutionSubjectAssetV1;
+    } satisfies RuntimeSubjectAssetV1;
     const rigProfile = {
       rigProfileRef: "worldkit://rig-profile/biped.golden@2",
       bodyTopology: "biped",
@@ -482,7 +487,7 @@ describe("runtime contracts V3", () => {
         "lower-leg.right": "lower-leg.right",
         "foot.right": "foot.right",
       },
-    } satisfies ExecutionRigProfileV1;
+    } satisfies RuntimeRigProfileV1;
     const animationSet = {
       animationSetRef: "worldkit://animation-set/humanoid.ground.golden@2",
       subjectAssetRef: subjectAsset.subjectAssetRef,
@@ -501,7 +506,7 @@ describe("runtime contracts V3", () => {
           rootMotionMode: "in-place",
         },
       ],
-    } satisfies ExecutionAnimationSetV1;
+    } satisfies RuntimeAnimationSetV1;
     const colliderProfile = {
       colliderProfileRef: "worldkit://collider-profile/humanoid.medium-capsule@1",
       supportedBodyTopologies: ["biped"],
@@ -511,7 +516,7 @@ describe("runtime contracts V3", () => {
         heightMeters: 1.92,
         centerOffsetFromSubjectOriginMetersXYZ: [0, 0.96, 0],
       },
-    } satisfies ExecutionColliderProfileV1;
+    } satisfies RuntimeColliderProfileV1;
 
     expect(Object.keys(subjectAsset).sort()).toEqual([
       "artifactContentHash",
@@ -769,7 +774,7 @@ describe("runtime contracts V3", () => {
       evidenceEntityIds: ["spawn-main", "terrain-main"],
       measurements: { maximumSupportGapMeters: 0, supportRatio: 1 },
       tolerances: { supportGapMeters: 0.02 },
-    } satisfies ExecutionLayoutAssertionV1;
+    } satisfies CanonicalSceneLayoutAssertionV1;
 
     expect(assertion).toMatchObject({
       kind: "supported-by",

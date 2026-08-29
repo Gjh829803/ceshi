@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import type {
   LayeredMoveV1,
   LockedRootMotionSourceV1,
@@ -6,7 +8,6 @@ import type {
 import type {
   GameplayActionStateV1,
   LocomotionCapabilityStateV2,
-  Sha256HashV1,
 } from "@whitebox-world/gameplay-contracts";
 
 export type LocomotionPresentationKeyV1 =

@@ -23,6 +23,7 @@ import { canonicalJsonBytes, sha256CanonicalJson } from "@whitebox-world/protoco
 import { describe, expect, it } from "vitest";
 
 import { createFakeGameplayWorldPortHarnessV1 } from "./test/fake-gameplay-world-adapter";
+import { createTestWorldBuildIdentityV1 } from "./test/world-build-identity-fixture";
 import { WorldSession } from "./world-session";
 
 const HASH = `sha256:${"a".repeat(64)}` as const;
@@ -139,6 +140,7 @@ const gameplayBootstrap = createGameplayBootstrapV1({
     ACTION_PROJECTION_CAPABILITY_REF,
     CONTROL_TRANSITION_CAPABILITY_REF,
   ],
+  initialRelationshipStates: [],
 });
 
 const gameplayMode = Object.freeze({
@@ -176,9 +178,7 @@ function createMountedHarness() {
     options: {
       runtimeSessionId: RUNTIME_SESSION_ID,
       worldSessionId: WORLD_SESSION_ID,
-      worldPackageRef: "worldkit://world-package/mounted@1",
-      worldPackageRootHash: HASH,
-      executionPlanHash: HASH,
+      worldBuildIdentity: createTestWorldBuildIdentityV1(HASH),
       gameplayBootstrap,
       initialRelationships: [],
       participantStates: [participant],

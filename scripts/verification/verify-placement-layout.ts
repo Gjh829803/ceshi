@@ -24,7 +24,8 @@ import {
   type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
 import type {
-  ExecutionPlanV5,
+  CanonicalSceneExecutionPlanV1,
+  WorldRuntimeBootstrapV1,
   WorldRuntimeSnapshotV4,
   WorldkitBrowserDiagnosticV1,
 } from "@whitebox-world/runtime-contracts";
@@ -159,7 +160,8 @@ interface WorldBuildArtifactV4 {
   readonly normalizedWorldIrHash: string;
   readonly executionPlanHash: string;
   readonly normalizedWorldIr: NormalizedWorldIRV4;
-  readonly executionPlan: ExecutionPlanV5;
+  readonly executionPlan: CanonicalSceneExecutionPlanV1;
+  readonly worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
 }
 
 interface BrowserEvidenceV1 {
@@ -243,6 +245,7 @@ async function compileBuildArtifact(): Promise<WorldBuildArtifactV4> {
     executionPlanHash: compiled.executionPlanHash,
     normalizedWorldIr: compiled.normalizedWorldIr,
     executionPlan: compiled.executionPlan,
+    worldRuntimeBootstrap: compiled.worldRuntimeBootstrap,
   };
 }
 
@@ -297,7 +300,9 @@ function assertProjectionAgreement(
     );
   }
   const spawn = report.placementsByEntityId["spawn-main"]!;
-  const player = executionPlan.subjects.find((subject) => subject.entityId === "player");
+  const player = executionPlan.subjectInstances.find(
+    (subject) => subject.entityId === "player",
+  );
   assert.ok(player !== undefined);
   assert.notEqual(
     spawn.transform.positionMetersXYZ[1],
@@ -305,7 +310,7 @@ function assertProjectionAgreement(
     "Placement fixture did not exercise a non-zero solved spawn height.",
   );
   deepEqualCanonical(
-    player.spawnSubjectOriginPositionMetersXYZ,
+    player.subjectOriginPositionMetersXYZ,
     spawn.transform.positionMetersXYZ,
     "Player spawn did not follow solved Anchor.",
   );
@@ -315,7 +320,7 @@ function assertProjectionAgreement(
     "Placement fixture did not exercise a non-zero solved spawn facing.",
   );
   assert.equal(
-    player.spawnSubjectFacingRadians,
+    player.subjectFacingRadians,
     spawn.transform.rotationEulerRadiansXYZ[1],
     "Player facing did not follow solved Anchor Y rotation.",
   );
@@ -510,7 +515,7 @@ async function captureBrowserEvidence(): Promise<BrowserEvidenceV1> {
 
 function assertBrowserLayoutEvidence(
   diagnostics: readonly WorldkitBrowserDiagnosticV1[],
-  plan: ExecutionPlanV5,
+  plan: CanonicalSceneExecutionPlanV1,
 ): void {
   const layoutDiagnostics = diagnostics.filter(
     (diagnostic) => diagnostic.code === "WORLDKIT_LAYOUT_ASSERTION_SATISFIED",
@@ -710,8 +715,9 @@ export async function runPlacementLayoutVerification(
     deepEqualCanonical(
       browser.snapshot.world.subjectStatesByEntityId.player?.entityState
         .positionMetersXYZ,
-      build.executionPlan.subjects.find((subject) => subject.entityId === "player")
-        ?.spawnSubjectOriginPositionMetersXYZ,
+      build.executionPlan.subjectInstances.find(
+        (subject) => subject.entityId === "player",
+      )?.subjectOriginPositionMetersXYZ,
       "Browser Snapshot did not preserve the solved spawn.",
     );
     const dimensions = inspectPng(browser.screenshotBytes);

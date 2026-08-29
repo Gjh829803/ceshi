@@ -66,7 +66,7 @@ export interface WorldkitAuthoringCaptureApiV1 {
 export interface WhiteboxTriviewManifestV1 {
   readonly kind: "worldkit-whitebox-triview-manifest";
   readonly schemaVersion: 1;
-  readonly executionPlanHash: `sha256:${string}`;
+  readonly worldBuildIdentityHash: `sha256:${string}`;
   readonly whiteboxTriviews: readonly (VisualCaptureGroupV1 & {
     readonly views: readonly ["front", "right", "back"];
     readonly imageUri: string;
@@ -499,7 +499,7 @@ export function validateWhiteboxTriviewManifestV1(
   }
   const diagnostics = exactKeys(
     manifest,
-    ["kind", "schemaVersion", "executionPlanHash", "whiteboxTriviews"],
+    ["kind", "schemaVersion", "worldBuildIdentityHash", "whiteboxTriviews"],
     "",
   );
   if (manifest.kind !== "worldkit-whitebox-triview-manifest") {
@@ -516,11 +516,14 @@ export function validateWhiteboxTriviewManifestV1(
       "Whitebox tri-view manifest schemaVersion is invalid.",
     ));
   }
-  if (typeof manifest.executionPlanHash !== "string" || !HASH.test(manifest.executionPlanHash)) {
+  if (
+    typeof manifest.worldBuildIdentityHash !== "string" ||
+    !HASH.test(manifest.worldBuildIdentityHash)
+  ) {
     diagnostics.push(diagnostic(
-      "HOSTED_VISUAL_EXECUTION_PLAN_HASH_INVALID",
-      "/executionPlanHash",
-      "executionPlanHash is invalid.",
+      "HOSTED_VISUAL_WORLD_BUILD_IDENTITY_HASH_INVALID",
+      "/worldBuildIdentityHash",
+      "worldBuildIdentityHash is invalid.",
     ));
   }
   if (!Array.isArray(manifest.whiteboxTriviews)) {

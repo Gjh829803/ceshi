@@ -1,3 +1,5 @@
+import { worldPackageRefFromRootHashV1 } from "@whitebox-world/world-identity";
+
 import {
   hashAuthoringDocumentV4,
   normalizeAuthoringSpecV4,
@@ -9,7 +11,10 @@ import {
   type AuthoringSpecV4,
   type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
-import { compileWorldV5 } from "@whitebox-world/compiler";
+import {
+  compileCanonicalWorldV1,
+  type CompileDiagnostic,
+} from "@whitebox-world/compiler";
 import {
   createCoreGameplayBootstrapV1,
   type GameplayActionRequestResolverV1,
@@ -26,8 +31,7 @@ import {
   type SubjectResourceRegistryV3,
 } from "@whitebox-world/subject-registry";
 import type {
-  CompileDiagnostic,
-  ExecutionPlanV5,
+  CanonicalSceneExecutionPlanV1,
   SceneBriefImplementationMapV1,
   VisualCaptureGroupV1,
 } from "@whitebox-world/runtime-contracts";
@@ -39,12 +43,11 @@ import {
 import type { RuntimeWorldConfigurationV1 } from "@whitebox-world/runtime-host";
 import {
   BABYLON_WEB_WORLD_PACKAGE_HOST_POLICY_V1,
-  assertWorldPackageHostCompatibilityV2,
-  createWorldPackageV2,
-  verifyWorldPackageDirectoryV2,
-  worldPackageRefFromRootHashV1,
-  type ResolvedWorldPackageResourceArtifactV2,
-  type WorldPackageBuildContextV2,
+  assertWorldPackageHostCompatibilityV1,
+  createWorldPackageV1,
+  verifyWorldPackageDirectoryV1,
+  type ResolvedWorldPackageResourceArtifactV1,
+  type WorldPackageBuildContextV1,
   type WorldPackageStoreV1,
 } from "@whitebox-world/world-package";
 import { isNil, uniq } from "lodash-es";
@@ -52,9 +55,9 @@ import { isNil, uniq } from "lodash-es";
 import {
   PLAYGROUND_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1,
   PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1,
-  resolveWorldPackageSubjectAssetArtifactsV2,
+  resolveWorldPackageSubjectAssetArtifactsV1,
 } from "./worldkit-asset-resolver.js";
-import { createPlaygroundWorldPackageBuildContextV2 } from "./playground-world-package-v2.js";
+import { createPlaygroundWorldPackageBuildContextV1 } from "./playground-world-package.js";
 import {
   MOUNTED_SKATEBOARD_S1_SCENE_ID,
   augmentMountedSkateboardS1AuthoringSpecV1,
@@ -102,7 +105,7 @@ export interface CapabilityDemoHostOverlayV1 {
 
 export interface AuthoringSceneLoadResult {
   ok: boolean;
-  executionPlan?: ExecutionPlanV5;
+  executionPlan?: CanonicalSceneExecutionPlanV1;
   normalizedWorldIrHash?: string;
   executionPlanHash?: string;
   diagnostics: readonly (AuthoringDiagnostic | CompileDiagnostic)[];
@@ -116,9 +119,9 @@ export interface AuthoringSceneLoadResult {
   authoringSpec?: AuthoringSpecV4;
   authoringSpecHash?: `sha256:${string}`;
   /** Host-only V2 package context used by the Authoring/Edit publication owner. */
-  worldPackageBuildContext?: WorldPackageBuildContextV2;
+  worldPackageBuildContext?: WorldPackageBuildContextV1;
   /** Host-only exact resource closure used by the Authoring/Edit publication owner. */
-  worldPackageResourceArtifacts?: readonly ResolvedWorldPackageResourceArtifactV2[];
+  worldPackageResourceArtifacts?: readonly ResolvedWorldPackageResourceArtifactV1[];
 }
 
 export type AuthoringSourceFetcher = () => Promise<Response>;
@@ -265,6 +268,9 @@ function createRuntimeGameplayBootstrap(
     worldId: normalizedWorldIr.id,
     worldSeed: normalizedWorldIr.seed,
     entityDescriptors,
+    initialRelationshipStates: normalizedWorldIr.relationships.map(
+      (relationship) => ({ ...relationship, establishedSimulationTick: 0 }),
+    ),
   });
 }
 
@@ -771,13 +777,14 @@ export async function loadAuthoringScene(
     : undefined;
   const gameplayBootstrap = mountedSkateboardResources?.gameplayBootstrap ??
     createRuntimeGameplayBootstrap(normalized.value);
-  const compiled = compileWorldV5({
+  const compiled = compileCanonicalWorldV1({
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
-    gameplayBootstrapResourceLock:
-      createGameplayBootstrapResourceLockEntryV1(gameplayBootstrap),
+    gameplayBootstrap,
+    worldRuntimeBootstrapRef:
+      `worldkit://world-runtime-bootstrap/${normalized.value.id}@1`,
   });
-  if (!compiled.ok || compiled.executionPlan === undefined || compiled.executionPlanHash === undefined) {
+  if (!compiled.ok) {
     return {
       ok: false,
       diagnostics: compiled.diagnostics,
@@ -799,7 +806,7 @@ export async function loadAuthoringScene(
   if (routeEvidence.publication !== undefined) {
     if (
       normalized.value.schemaVersion !== 4 ||
-      compiled.executionPlan.schemaVersion !== 5 ||
+      compiled.canonicalSceneExecutionPlan.schemaVersion !== 1 ||
       normalized.layoutSolveReportHash === undefined
     ) {
       throw new Error("WORLDKIT_ROUTE_EVIDENCE_INTERNAL_VERSION_MISMATCH");
@@ -808,7 +815,7 @@ export async function loadAuthoringScene(
       authoringSpecHash: normalized.value.authoringSpecHash,
       normalizedWorldIrHash: normalized.normalizedWorldIrHash,
       executionPlanHash: compiled.executionPlanHash,
-      resourceLockHash: compiled.executionPlan.resourceLockHash,
+      resourceLockHash: normalized.value.resources.resourceLockHash,
       layoutSolveReportHash: normalized.layoutSolveReportHash,
     } as const;
     for (const field of [
@@ -829,7 +836,7 @@ export async function loadAuthoringScene(
   let runtimeWorldConfiguration: RuntimeWorldConfigurationV1;
   if (
     normalized.value.schemaVersion !== 4 ||
-    compiled.executionPlan.schemaVersion !== 5 ||
+    compiled.canonicalSceneExecutionPlan.schemaVersion !== 1 ||
     isNil(normalized.layoutSolveReport) ||
     isNil(normalized.layoutSolveReportHash)
   ) {
@@ -837,23 +844,23 @@ export async function loadAuthoringScene(
   }
   try {
     const resourceArtifacts = isNil(options.fetchSubjectAsset)
-      ? await resolveWorldPackageSubjectAssetArtifactsV2(
+      ? await resolveWorldPackageSubjectAssetArtifactsV1(
           normalized.value.resources.subjectAssets,
           PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1,
           PLAYGROUND_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1,
         )
-      : await resolveWorldPackageSubjectAssetArtifactsV2(
+      : await resolveWorldPackageSubjectAssetArtifactsV1(
           normalized.value.resources.subjectAssets,
           PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1,
           PLAYGROUND_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1,
           options.fetchSubjectAsset,
         );
-    const worldPackageBuildContext = createPlaygroundWorldPackageBuildContextV2({
+    const worldPackageBuildContext = createPlaygroundWorldPackageBuildContextV1({
       title: `${source.id} WorldPackage`,
       resourceArtifacts,
       includeAuthoringSpec: isNil(subjectResourceRegistry),
     });
-    const directory = createWorldPackageV2({
+    const directory = createWorldPackageV1({
       packageId: `${source.id}.${source.seed}`,
       ...worldPackageBuildContext,
       authoringSpec: source,
@@ -863,14 +870,15 @@ export async function loadAuthoringScene(
         report: normalized.layoutSolveReport,
         layoutSolveReportHash: normalized.layoutSolveReportHash,
       },
-      executionPlan: compiled.executionPlan,
+      executionPlan: compiled.canonicalSceneExecutionPlan,
       gameplayBootstrap,
+      worldRuntimeBootstrap: compiled.worldRuntimeBootstrap,
       resourceArtifacts,
     });
     const worldPackageStore = options.worldPackageStore;
     const stored = isNil(worldPackageStore)
       ? (() => {
-          const verifiedDirectory = verifyWorldPackageDirectoryV2(directory);
+          const verifiedDirectory = verifyWorldPackageDirectoryV1(directory);
           return Object.freeze({
             worldPackageRef: worldPackageRefFromRootHashV1(
               verifiedDirectory.receipt.worldPackageRootHash,
@@ -891,17 +899,20 @@ export async function loadAuthoringScene(
             verifiedDirectory,
           });
         })();
-    assertWorldPackageHostCompatibilityV2(
-      stored.verifiedDirectory.receipt.manifest,
+    assertWorldPackageHostCompatibilityV1(
+      stored.verifiedDirectory.receipt,
       BABYLON_WEB_WORLD_PACKAGE_HOST_POLICY_V1,
     );
     runtimeWorldConfiguration = Object.freeze({
-      executionPlan: stored.verifiedDirectory.executionPlan,
-      executionPlanHash:
-        stored.verifiedDirectory.receipt.manifest.executionPlanHash,
-      worldPackageRef: stored.worldPackageRef,
-      worldPackageBuildReceipt: stored.verifiedDirectory.receipt,
+      worldBuildIdentity: stored.verifiedDirectory.receipt.worldBuildIdentity,
       gameplayBootstrap: stored.verifiedDirectory.gameplayBootstrap,
+      worldRuntimeBootstrap: stored.verifiedDirectory.worldRuntimeBootstrap,
+      sceneSource: Object.freeze({
+        kind: "canonical-execution-plan",
+        executionPlan: stored.verifiedDirectory.executionPlan,
+        executionPlanHash:
+          stored.verifiedDirectory.receipt.manifest.executionPlanHash,
+      }),
     });
     return {
       ok: true,

@@ -1,9 +1,10 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import {
   parseWorldChangeReceiptV1,
   RUNTIME_STATE_KINDS_V1,
   type RuntimePublicationIdentityV1,
   type RuntimeStateEffectV1,
-  type Sha256HashV1,
   type WorldChangeAffectedIdsV1,
   type WorldChangeBuildIdentityV1,
   type WorldChangeDiagnosticV1,

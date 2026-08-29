@@ -2,6 +2,7 @@ import {
   createGameplayBootstrapV1,
   type GameplayBootstrapV1,
   type GameplayEntityDescriptorV1,
+  type GameplayRelationshipStateV1,
 } from "@whitebox-world/gameplay-contracts";
 import { uniq } from "lodash-es";
 
@@ -14,12 +15,13 @@ export interface CoreGameplayBootstrapInputV1 {
   readonly worldId: string;
   readonly worldSeed: number;
   readonly entityDescriptors: readonly GameplayEntityDescriptorV1[];
+  readonly initialRelationshipStates: readonly GameplayRelationshipStateV1[];
 }
 
 /**
  * Creates the canonical Gameplay bootstrap required by the built-in Runtime
  * Host. Authoring loaders and CLI pipelines must share this constructor so an
- * identical world always compiles to an identical ExecutionPlan V5 lock.
+ * identical world always compiles to an identical Canonical Scene Plan lock.
  */
 export function createCoreGameplayBootstrapV1(
   input: CoreGameplayBootstrapInputV1,
@@ -43,5 +45,6 @@ export function createCoreGameplayBootstrapV1(
       ),
       CONTROL_TRANSITION_CAPABILITY_REF,
     ]),
+    initialRelationshipStates: input.initialRelationshipStates,
   });
 }

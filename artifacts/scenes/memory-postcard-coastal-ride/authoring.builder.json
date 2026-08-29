@@ -1,0 +1,535 @@
+{
+  "kind": "worldkit-authoring-spec",
+  "schemaVersion": 4,
+  "id": "memory-postcard-coastal-ride-authoring",
+  "seed": 271828,
+  "provenance": {
+    "userPrompt": "Build a complete open coastal hillside village around a blocked bay, with a centered rider-and-bicycle ground-play approximation entering downhill beneath a stone arch bridge and continuous land reaching a remote peninsula estate."
+  },
+  "layout": {
+    "solverProfileRef": "worldkit://layout-solver-profile/outdoor.s1@1"
+  },
+  "spatial": {
+    "regions": [
+      {
+        "id": "spawn-support-zone",
+        "kind": "polygon-xz",
+        "pointsMetersXZ": [[-1.5, 36.5], [1.5, 36.5], [1.5, 39.5], [-1.5, 39.5]],
+        "minimumHeightMeters": 40,
+        "maximumHeightMeters": 70,
+        "semanticClassId": "region.spawn-support"
+      }
+    ],
+    "routes": [],
+    "traversalAreas": [],
+    "screenRegions": []
+  },
+  "world": {
+    "coordinateSystem": "right-handed-y-up-minus-z-forward",
+    "bounds": {
+      "centerMetersXZ": [0, -320],
+      "sizeMetersXZ": [760, 760],
+      "heightRangeMeters": [-40, 82]
+    },
+    "gravityMetersPerSecondSquaredXYZ": [0, -9.81, 0],
+    "environment": {
+      "preset": "clear-day"
+    },
+    "resourceBudget": {
+      "maxVertices": 110000,
+      "maxTriangles": 205000,
+      "maxColliders": 64
+    }
+  },
+  "resources": {
+    "prototypes": [
+      {
+        "id": "bridge-deck",
+        "version": 1,
+        "kind": "primitive",
+        "primitive": "box",
+        "sizeMetersXYZ": [36, 3, 8],
+        "collisionEnabled": true,
+        "semantic": {"classId": "bridge.stone.deck"}
+      },
+      {
+        "id": "bridge-abutment",
+        "version": 1,
+        "kind": "primitive",
+        "primitive": "box",
+        "sizeMetersXYZ": [8, 12, 8],
+        "collisionEnabled": true,
+        "semantic": {"classId": "bridge.stone.abutment"}
+      },
+      {
+        "id": "bridge-arch-shoulder",
+        "version": 1,
+        "kind": "primitive",
+        "primitive": "box",
+        "sizeMetersXYZ": [10, 3, 8],
+        "collisionEnabled": true,
+        "semantic": {"classId": "bridge.stone.arch-shoulder"}
+      },
+      {
+        "id": "estate-body",
+        "version": 1,
+        "kind": "primitive",
+        "primitive": "box",
+        "sizeMetersXYZ": [90, 16, 28],
+        "collisionEnabled": true,
+        "semantic": {"classId": "building.estate.main"}
+      },
+      {
+        "id": "estate-roof",
+        "version": 1,
+        "kind": "primitive",
+        "primitive": "box",
+        "sizeMetersXYZ": [94, 4, 32],
+        "collisionEnabled": false,
+        "semantic": {"classId": "building.estate.roof"}
+      },
+      {
+        "id": "estate-crown",
+        "version": 1,
+        "kind": "primitive",
+        "primitive": "box",
+        "sizeMetersXYZ": [18, 5, 12],
+        "collisionEnabled": false,
+        "semantic": {"classId": "building.estate.central-crown"}
+      },
+      {
+        "id": "village-house-body",
+        "version": 1,
+        "kind": "primitive",
+        "primitive": "box",
+        "sizeMetersXYZ": [12, 7, 10],
+        "collisionEnabled": true,
+        "semantic": {"classId": "building.village-house"}
+      },
+      {
+        "id": "village-house-roof",
+        "version": 1,
+        "kind": "primitive",
+        "primitive": "cone",
+        "radiusMeters": 7.4,
+        "heightMeters": 4,
+        "collisionEnabled": false,
+        "semantic": {"classId": "building.village-house.roof"}
+      },
+      {
+        "id": "stone-wall-segment",
+        "version": 1,
+        "kind": "primitive",
+        "primitive": "box",
+        "sizeMetersXYZ": [16, 1.6, 0.9],
+        "collisionEnabled": true,
+        "semantic": {"classId": "wall.stone.boundary"}
+      }
+    ],
+    "subjectDefinitions": [
+      {
+        "id": "coastal-rider-bicycle-ground",
+        "version": 1,
+        "kind": "subject-definition",
+        "authoringAvailability": "advanced",
+        "category": "custom",
+        "bodyTopology": "custom",
+        "semanticClassId": "subject.rider-bicycle.bound",
+        "coordinateConvention": {
+          "forwardAxis": "-Z",
+          "upAxis": "+Y",
+          "metersPerUnit": 1,
+          "pivot": "support-center"
+        },
+        "visualParts": [
+          {
+            "id": "rear-wheel",
+            "kind": "primitive",
+            "shape": {"kind": "cylinder", "radiusMeters": 0.39, "heightMeters": 0.08},
+            "localTransform": {"positionMetersXYZ": [0, 0.39, 0.58], "rotationEulerRadiansXYZ": [0, 0, 1.5707963267948966]},
+            "colliderContribution": "include",
+            "semanticTags": ["bicycle", "rear-wheel", "wheel"]
+          },
+          {
+            "id": "front-wheel",
+            "kind": "primitive",
+            "shape": {"kind": "cylinder", "radiusMeters": 0.39, "heightMeters": 0.08},
+            "localTransform": {"positionMetersXYZ": [0, 0.39, -0.72], "rotationEulerRadiansXYZ": [0, 0, 1.5707963267948966]},
+            "colliderContribution": "include",
+            "semanticTags": ["bicycle", "front-wheel", "wheel"]
+          },
+          {
+            "id": "frame-main",
+            "kind": "primitive",
+            "shape": {"kind": "cylinder", "radiusMeters": 0.045, "heightMeters": 1.12},
+            "localTransform": {"positionMetersXYZ": [0, 0.83, -0.08], "rotationEulerRadiansXYZ": [1.5707963267948966, 0, 0]},
+            "colliderContribution": "include",
+            "semanticTags": ["bicycle", "frame"]
+          },
+          {
+            "id": "frame-front-stay",
+            "kind": "primitive",
+            "shape": {"kind": "cylinder", "radiusMeters": 0.04, "heightMeters": 0.82},
+            "localTransform": {"positionMetersXYZ": [0, 0.72, -0.44], "rotationEulerRadiansXYZ": [0.56, 0, 0]},
+            "colliderContribution": "exclude",
+            "semanticTags": ["bicycle", "frame", "fork"]
+          },
+          {
+            "id": "frame-rear-stay",
+            "kind": "primitive",
+            "shape": {"kind": "cylinder", "radiusMeters": 0.04, "heightMeters": 0.78},
+            "localTransform": {"positionMetersXYZ": [0, 0.68, 0.31], "rotationEulerRadiansXYZ": [-0.62, 0, 0]},
+            "colliderContribution": "exclude",
+            "semanticTags": ["bicycle", "frame", "rear-stay"]
+          },
+          {
+            "id": "handlebar",
+            "kind": "primitive",
+            "shape": {"kind": "cylinder", "radiusMeters": 0.035, "heightMeters": 0.72},
+            "localTransform": {"positionMetersXYZ": [0, 1.23, -0.61], "rotationEulerRadiansXYZ": [0, 0, 1.5707963267948966]},
+            "colliderContribution": "exclude",
+            "semanticTags": ["bicycle", "handlebar"]
+          },
+          {
+            "id": "seat",
+            "kind": "primitive",
+            "shape": {"kind": "box", "sizeMetersXYZ": [0.32, 0.09, 0.26]},
+            "localTransform": {"positionMetersXYZ": [0, 1.08, 0.25], "rotationEulerRadiansXYZ": [0, 0, 0]},
+            "colliderContribution": "exclude",
+            "semanticTags": ["bicycle", "seat"]
+          },
+          {
+            "id": "rider-hips",
+            "kind": "primitive",
+            "shape": {"kind": "box", "sizeMetersXYZ": [0.43, 0.28, 0.34]},
+            "localTransform": {"positionMetersXYZ": [0, 1.16, 0.18], "rotationEulerRadiansXYZ": [0.12, 0, 0]},
+            "colliderContribution": "include",
+            "semanticTags": ["human", "hips", "rider"]
+          },
+          {
+            "id": "rider-torso",
+            "kind": "primitive",
+            "shape": {"kind": "capsule", "radiusMeters": 0.25, "heightMeters": 0.82},
+            "localTransform": {"positionMetersXYZ": [0, 1.58, 0.06], "rotationEulerRadiansXYZ": [0.18, 0, 0]},
+            "colliderContribution": "include",
+            "semanticTags": ["body", "human", "rider", "torso"]
+          },
+          {
+            "id": "rider-head",
+            "kind": "primitive",
+            "shape": {"kind": "sphere", "radiusMeters": 0.19},
+            "localTransform": {"positionMetersXYZ": [0, 2.07, -0.04], "rotationEulerRadiansXYZ": [0, 0, 0]},
+            "colliderContribution": "include",
+            "semanticTags": ["head", "human", "rider"]
+          },
+          {
+            "id": "arm-left",
+            "kind": "primitive",
+            "shape": {"kind": "capsule", "radiusMeters": 0.07, "heightMeters": 0.58},
+            "localTransform": {"positionMetersXYZ": [-0.25, 1.45, -0.20], "rotationEulerRadiansXYZ": [0.68, 0, -0.34]},
+            "colliderContribution": "exclude",
+            "semanticTags": ["arm", "human", "left", "rider"]
+          },
+          {
+            "id": "arm-right",
+            "kind": "primitive",
+            "shape": {"kind": "capsule", "radiusMeters": 0.07, "heightMeters": 0.58},
+            "localTransform": {"positionMetersXYZ": [0.25, 1.45, -0.20], "rotationEulerRadiansXYZ": [0.68, 0, 0.34]},
+            "colliderContribution": "exclude",
+            "semanticTags": ["arm", "human", "rider", "right"]
+          },
+          {
+            "id": "hand-left",
+            "kind": "primitive",
+            "shape": {"kind": "sphere", "radiusMeters": 0.075},
+            "localTransform": {"positionMetersXYZ": [-0.29, 1.24, -0.58], "rotationEulerRadiansXYZ": [0, 0, 0]},
+            "colliderContribution": "exclude",
+            "semanticTags": ["hand", "handlebar-contact", "human", "left"]
+          },
+          {
+            "id": "hand-right",
+            "kind": "primitive",
+            "shape": {"kind": "sphere", "radiusMeters": 0.075},
+            "localTransform": {"positionMetersXYZ": [0.29, 1.24, -0.58], "rotationEulerRadiansXYZ": [0, 0, 0]},
+            "colliderContribution": "exclude",
+            "semanticTags": ["hand", "handlebar-contact", "human", "right"]
+          },
+          {
+            "id": "thigh-left",
+            "kind": "primitive",
+            "shape": {"kind": "capsule", "radiusMeters": 0.09, "heightMeters": 0.53},
+            "localTransform": {"positionMetersXYZ": [-0.17, 0.96, 0.03], "rotationEulerRadiansXYZ": [0.66, 0, -0.10]},
+            "colliderContribution": "exclude",
+            "semanticTags": ["human", "left", "leg", "rider"]
+          },
+          {
+            "id": "thigh-right",
+            "kind": "primitive",
+            "shape": {"kind": "capsule", "radiusMeters": 0.09, "heightMeters": 0.53},
+            "localTransform": {"positionMetersXYZ": [0.17, 0.96, 0.03], "rotationEulerRadiansXYZ": [0.66, 0, 0.10]},
+            "colliderContribution": "exclude",
+            "semanticTags": ["human", "leg", "rider", "right"]
+          },
+          {
+            "id": "calf-left",
+            "kind": "primitive",
+            "shape": {"kind": "capsule", "radiusMeters": 0.08, "heightMeters": 0.49},
+            "localTransform": {"positionMetersXYZ": [-0.17, 0.67, -0.13], "rotationEulerRadiansXYZ": [-0.36, 0, 0.06]},
+            "colliderContribution": "exclude",
+            "semanticTags": ["human", "left", "leg", "rider"]
+          },
+          {
+            "id": "calf-right",
+            "kind": "primitive",
+            "shape": {"kind": "capsule", "radiusMeters": 0.08, "heightMeters": 0.49},
+            "localTransform": {"positionMetersXYZ": [0.17, 0.67, -0.13], "rotationEulerRadiansXYZ": [-0.36, 0, -0.06]},
+            "colliderContribution": "exclude",
+            "semanticTags": ["human", "leg", "rider", "right"]
+          },
+          {
+            "id": "foot-left",
+            "kind": "primitive",
+            "shape": {"kind": "box", "sizeMetersXYZ": [0.15, 0.09, 0.28]},
+            "localTransform": {"positionMetersXYZ": [-0.17, 0.43, -0.23], "rotationEulerRadiansXYZ": [0, 0, 0]},
+            "colliderContribution": "exclude",
+            "semanticTags": ["foot", "human", "left", "pedal-contact"]
+          },
+          {
+            "id": "foot-right",
+            "kind": "primitive",
+            "shape": {"kind": "box", "sizeMetersXYZ": [0.15, 0.09, 0.28]},
+            "localTransform": {"positionMetersXYZ": [0.17, 0.43, -0.23], "rotationEulerRadiansXYZ": [0, 0, 0]},
+            "colliderContribution": "exclude",
+            "semanticTags": ["foot", "human", "pedal-contact", "right"]
+          }
+        ],
+        "visualBinding": {"mode": "static"},
+        "sockets": [],
+        "mountSlots": [],
+        "colliderPolicy": {
+          "kind": "derive",
+          "colliderDerivationProfileRef": "worldkit://collider-derivation-profile/vertical-capability-capsule@1"
+        },
+        "capabilityRefs": ["worldkit://capability/locomotion.ground@1"],
+        "profiles": {
+          "physicsBodyProfileRef": "worldkit://physics-body-profile/character.capability-medium@1",
+          "locomotionProfileRef": "worldkit://locomotion-profile/ground.standard@1",
+          "controlFeelProfileRef": "worldkit://control-feel-profile/humanoid.medium-ground@1",
+          "allowedControlFeelProfileRefs": [
+            "worldkit://control-feel-profile/humanoid.medium-ground@1",
+            "worldkit://control-feel-profile/humanoid.heavy-ground@1"
+          ],
+          "motion": {
+            "defaultMotionProfileRef": "worldkit://motion-profile/free-ground.humanoid-medium@1",
+            "optionalMotionProfileRefs": ["worldkit://motion-profile/safe-ground@1"],
+            "fallbackMotionProfileRef": "worldkit://motion-profile/safe-ground@1"
+          },
+          "controlProfileRef": "worldkit://control-profile/planar.camera-relative@1",
+          "cameraContextProfileRef": "worldkit://camera-context/capability-driven.default@1",
+          "mediumProfileRef": "worldkit://medium-profile/ground-air.standard@1",
+          "harnessProfileRef": "worldkit://harness-profile/subject.standard@1"
+        },
+        "relationshipCapabilityRefs": [],
+        "actionOrPoseSetRef": "worldkit://pose-set/static.whitebox@1",
+        "renderBindingProfileRef": "worldkit://render-binding/subject.standard@1",
+        "allowedOverridePaths": [],
+        "aiMetadata": {
+          "displayName": "Coastal rider and bicycle ground approximation",
+          "description": "Requested behavior: one seated rider-and-bicycle silhouette moves by land driving with forward movement, steering, and deceleration, without claiming true bicycle or vehicle physics. Implemented behavior: the complete rigid rider, hands, frame, and two-wheel silhouette is one controlled Subject using the current camera-relative supported-ground humanoid-medium closure; wheels and limbs are static and no cycling dynamics are claimed.",
+          "semanticTags": ["bicycle", "composite", "ground", "ground-approximation", "rider"]
+        }
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "id": "terrain-main",
+      "kind": "terrain",
+      "components": {
+        "terrain": {
+          "source": {
+            "kind": "procedural",
+            "relief": "plain",
+            "baseHeightMeters": 18,
+            "amplitudeMeters": 55,
+            "frequencyPerMeter": 0.0015,
+            "octaves": 3,
+            "lacunarityRatio": 2,
+            "persistenceRatio": 0.5
+          },
+          "grid": {
+            "centerMetersXZ": [0, -320],
+            "sizeMetersXZ": [760, 760],
+            "resolutionCellsXZ": [305, 305]
+          },
+          "semantic": {"classId": "terrain.coastal-hillside-playable-base"}
+        }
+      }
+    },
+    {
+      "id": "water-bay",
+      "kind": "water",
+      "components": {
+        "water": {
+          "terrainEntityId": "terrain-main",
+          "boundary": {
+            "kind": "polygon",
+            "pointsMetersXZ": [[-380, -700], [42, -700], [25, -646], [-5, -590], [-18, -520], [12, -455], [44, -390], [34, -315], [-8, -252], [-72, -212], [-145, -205], [-220, -230], [-275, -280], [-330, -265], [-380, -250]]
+          },
+          "depthMeters": 30,
+          "shoreWidthMeters": 5,
+          "waterLevelMeters": 6,
+          "traversalMode": "blocked",
+          "semantic": {"classId": "water.coastal-bay"}
+        }
+      }
+    },
+    {
+      "id": "spawn-main",
+      "kind": "anchor",
+      "semantic": {"classId": "spawn.player.primary"},
+      "placement": {
+        "kind": "solved",
+        "initialTransform": {"positionMetersXYZ": [0, 0, 38], "rotationEulerRadiansXYZ": [0, 0, 0]},
+        "placementConstraintIds": ["spawn-inside", "spawn-supported", "spawn-slope"]
+      }
+    },
+    {
+      "id": "coastal-rider",
+      "kind": "subject",
+      "subjectDefinitionRef": "package://subject-definition/coastal-rider-bicycle-ground@1",
+      "spawnAnchorEntityId": "spawn-main"
+    },
+    {
+      "id": "camera-main",
+      "kind": "camera",
+      "components": {
+        "cameraRig": {
+          "defaultRigRef": "worldkit://camera/third-person.standard@1",
+          "allowedRigRefs": ["worldkit://camera/third-person.standard@1"],
+          "target": {"targetEntityId": "coastal-rider", "targetHeightMeters": 1.28},
+          "thirdPerson": {
+            "pitchRadians": 0.16,
+            "distanceMeters": 6.4,
+            "targetHeightMeters": 1.28,
+            "fovDegrees": 54,
+            "aspectRatio": 1.7777777777777777
+          },
+          "manualSwitchAllowed": false
+        }
+      }
+    },
+    {"id":"stone-arch-bridge-deck","kind":"object","prototypeRef":"package://prototype/bridge-deck@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[0,49.5,-45],"rotationEulerRadiansXYZ":[0,0,0],"scaleXYZ":[1,1,1]}}},
+    {"id":"stone-arch-bridge-left-abutment","kind":"object","prototypeRef":"package://prototype/bridge-abutment@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[-14,42.5,-45],"rotationEulerRadiansXYZ":[0,0,0],"scaleXYZ":[1,1,1]}}},
+    {"id":"stone-arch-bridge-right-abutment","kind":"object","prototypeRef":"package://prototype/bridge-abutment@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[14,42.5,-45],"rotationEulerRadiansXYZ":[0,0,0],"scaleXYZ":[1,1,1]}}},
+    {"id":"stone-arch-bridge-left-shoulder","kind":"object","prototypeRef":"package://prototype/bridge-arch-shoulder@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[-6.5,46,-45],"rotationEulerRadiansXYZ":[0,0,0.3],"scaleXYZ":[1,1,1]}}},
+    {"id":"stone-arch-bridge-right-shoulder","kind":"object","prototypeRef":"package://prototype/bridge-arch-shoulder@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[6.5,46,-45],"rotationEulerRadiansXYZ":[0,0,-0.3],"scaleXYZ":[1,1,1]}}},
+
+    {"id":"peninsula-estate-body","kind":"object","prototypeRef":"package://prototype/estate-body@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[160,59,-610],"rotationEulerRadiansXYZ":[0,0,0],"scaleXYZ":[1,1,1]}}},
+    {"id":"peninsula-estate-roof","kind":"object","prototypeRef":"package://prototype/estate-roof@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[160,69,-610],"rotationEulerRadiansXYZ":[0,0,0],"scaleXYZ":[1,1,1]}}},
+    {"id":"peninsula-estate-crown","kind":"object","prototypeRef":"package://prototype/estate-crown@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[160,73.5,-610],"rotationEulerRadiansXYZ":[0,0,0],"scaleXYZ":[1,1,1]}}},
+
+    {"id":"entry-wall-left-01","kind":"object","prototypeRef":"package://prototype/stone-wall-segment@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[-8.5,50.8,30],"rotationEulerRadiansXYZ":[0,1.5707963267948966,0],"scaleXYZ":[1,1,1]}}},
+    {"id":"entry-wall-right-01","kind":"object","prototypeRef":"package://prototype/stone-wall-segment@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[8.5,50.8,30],"rotationEulerRadiansXYZ":[0,1.5707963267948966,0],"scaleXYZ":[1,1,1]}}},
+    {"id":"entry-wall-left-02","kind":"object","prototypeRef":"package://prototype/stone-wall-segment@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[-8.5,47.8,14],"rotationEulerRadiansXYZ":[0,1.5707963267948966,0],"scaleXYZ":[1,1,1]}}},
+    {"id":"entry-wall-right-02","kind":"object","prototypeRef":"package://prototype/stone-wall-segment@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[8.5,47.8,14],"rotationEulerRadiansXYZ":[0,1.5707963267948966,0],"scaleXYZ":[1,1,1]}}},
+    {"id":"entry-wall-left-03","kind":"object","prototypeRef":"package://prototype/stone-wall-segment@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[-8.5,44.8,-2],"rotationEulerRadiansXYZ":[0,1.5707963267948966,0],"scaleXYZ":[1,1,1]}}},
+    {"id":"entry-wall-right-03","kind":"object","prototypeRef":"package://prototype/stone-wall-segment@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[8.5,44.8,-2],"rotationEulerRadiansXYZ":[0,1.5707963267948966,0],"scaleXYZ":[1,1,1]}}},
+    {"id":"entry-wall-left-04","kind":"object","prototypeRef":"package://prototype/stone-wall-segment@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[-8.5,41.8,-18],"rotationEulerRadiansXYZ":[0,1.5707963267948966,0],"scaleXYZ":[1,1,1]}}},
+    {"id":"entry-wall-right-04","kind":"object","prototypeRef":"package://prototype/stone-wall-segment@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[8.5,41.8,-18],"rotationEulerRadiansXYZ":[0,1.5707963267948966,0],"scaleXYZ":[1,1,1]}}},
+
+    {"id":"village-house-01-body","kind":"object","prototypeRef":"package://prototype/village-house-body@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[-42,49.5,8],"rotationEulerRadiansXYZ":[0,0.08,0],"scaleXYZ":[1.25,1.15,1.1]}}},
+    {"id":"village-house-01-roof","kind":"object","prototypeRef":"package://prototype/village-house-roof@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[-42,56,8],"rotationEulerRadiansXYZ":[0,0.08,0],"scaleXYZ":[1.1,1,1]}}},
+    {"id":"village-house-02-body","kind":"object","prototypeRef":"package://prototype/village-house-body@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[48,48.5,2],"rotationEulerRadiansXYZ":[0,-0.12,0],"scaleXYZ":[1.2,1.15,1.2]}}},
+    {"id":"village-house-02-roof","kind":"object","prototypeRef":"package://prototype/village-house-roof@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[48,55,2],"rotationEulerRadiansXYZ":[0,-0.12,0],"scaleXYZ":[1.1,1,1.05]}}},
+    {"id":"village-house-03-body","kind":"object","prototypeRef":"package://prototype/village-house-body@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[-65,38.5,-72],"rotationEulerRadiansXYZ":[0,0.22,0],"scaleXYZ":[1,1,1]}}},
+    {"id":"village-house-03-roof","kind":"object","prototypeRef":"package://prototype/village-house-roof@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[-65,44,-72],"rotationEulerRadiansXYZ":[0,0.22,0],"scaleXYZ":[1,1,1]}}},
+    {"id":"village-house-04-body","kind":"object","prototypeRef":"package://prototype/village-house-body@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[-31,37.5,-92],"rotationEulerRadiansXYZ":[0,-0.18,0],"scaleXYZ":[0.95,1,0.95]}}},
+    {"id":"village-house-04-roof","kind":"object","prototypeRef":"package://prototype/village-house-roof@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[-31,43,-92],"rotationEulerRadiansXYZ":[0,-0.18,0],"scaleXYZ":[0.95,1,0.95]}}},
+    {"id":"village-house-05-body","kind":"object","prototypeRef":"package://prototype/village-house-body@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[31,39.5,-76],"rotationEulerRadiansXYZ":[0,0.1,0],"scaleXYZ":[1.05,1,1]}}},
+    {"id":"village-house-05-roof","kind":"object","prototypeRef":"package://prototype/village-house-roof@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[31,45,-76],"rotationEulerRadiansXYZ":[0,0.1,0],"scaleXYZ":[1,1,1]}}},
+    {"id":"village-house-06-body","kind":"object","prototypeRef":"package://prototype/village-house-body@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[73,37.5,-94],"rotationEulerRadiansXYZ":[0,-0.28,0],"scaleXYZ":[1,1,0.95]}}},
+    {"id":"village-house-06-roof","kind":"object","prototypeRef":"package://prototype/village-house-roof@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[73,43,-94],"rotationEulerRadiansXYZ":[0,-0.28,0],"scaleXYZ":[1,1,0.95]}}},
+    {"id":"village-house-07-body","kind":"object","prototypeRef":"package://prototype/village-house-body@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[116,40.5,-77],"rotationEulerRadiansXYZ":[0,0.34,0],"scaleXYZ":[1.1,1,1]}}},
+    {"id":"village-house-07-roof","kind":"object","prototypeRef":"package://prototype/village-house-roof@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[116,46,-77],"rotationEulerRadiansXYZ":[0,0.34,0],"scaleXYZ":[1.05,1,1]}}},
+    {"id":"village-house-08-body","kind":"object","prototypeRef":"package://prototype/village-house-body@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[-93,33.5,-126],"rotationEulerRadiansXYZ":[0,0.15,0],"scaleXYZ":[1,1,1.1]}}},
+    {"id":"village-house-08-roof","kind":"object","prototypeRef":"package://prototype/village-house-roof@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[-93,39,-126],"rotationEulerRadiansXYZ":[0,0.15,0],"scaleXYZ":[1,1,1]}}},
+    {"id":"village-house-09-body","kind":"object","prototypeRef":"package://prototype/village-house-body@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[-47,32.5,-137],"rotationEulerRadiansXYZ":[0,-0.22,0],"scaleXYZ":[0.95,1,1]}}},
+    {"id":"village-house-09-roof","kind":"object","prototypeRef":"package://prototype/village-house-roof@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[-47,38,-137],"rotationEulerRadiansXYZ":[0,-0.22,0],"scaleXYZ":[0.95,1,1]}}},
+    {"id":"village-house-10-body","kind":"object","prototypeRef":"package://prototype/village-house-body@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[5,34.5,-122],"rotationEulerRadiansXYZ":[0,0.3,0],"scaleXYZ":[1,1,0.95]}}},
+    {"id":"village-house-10-roof","kind":"object","prototypeRef":"package://prototype/village-house-roof@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[5,40,-122],"rotationEulerRadiansXYZ":[0,0.3,0],"scaleXYZ":[1,1,0.95]}}},
+    {"id":"village-house-11-body","kind":"object","prototypeRef":"package://prototype/village-house-body@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[49,31.5,-147],"rotationEulerRadiansXYZ":[0,-0.1,0],"scaleXYZ":[1.05,1,1]}}},
+    {"id":"village-house-11-roof","kind":"object","prototypeRef":"package://prototype/village-house-roof@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[49,37,-147],"rotationEulerRadiansXYZ":[0,-0.1,0],"scaleXYZ":[1,1,1]}}},
+    {"id":"village-house-12-body","kind":"object","prototypeRef":"package://prototype/village-house-body@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[96,33.5,-132],"rotationEulerRadiansXYZ":[0,0.2,0],"scaleXYZ":[1,1,1]}}},
+    {"id":"village-house-12-roof","kind":"object","prototypeRef":"package://prototype/village-house-roof@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[96,39,-132],"rotationEulerRadiansXYZ":[0,0.2,0],"scaleXYZ":[1,1,1]}}},
+    {"id":"village-house-13-body","kind":"object","prototypeRef":"package://prototype/village-house-body@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[146,37.5,-120],"rotationEulerRadiansXYZ":[0,-0.31,0],"scaleXYZ":[1.1,1,1]}}},
+    {"id":"village-house-13-roof","kind":"object","prototypeRef":"package://prototype/village-house-roof@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[146,43,-120],"rotationEulerRadiansXYZ":[0,-0.31,0],"scaleXYZ":[1.05,1,1]}}},
+    {"id":"village-house-14-body","kind":"object","prototypeRef":"package://prototype/village-house-body@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[-82,28.5,-187],"rotationEulerRadiansXYZ":[0,0.12,0],"scaleXYZ":[1,1,1]}}},
+    {"id":"village-house-14-roof","kind":"object","prototypeRef":"package://prototype/village-house-roof@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[-82,34,-187],"rotationEulerRadiansXYZ":[0,0.12,0],"scaleXYZ":[1,1,1]}}},
+    {"id":"village-house-15-body","kind":"object","prototypeRef":"package://prototype/village-house-body@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[-30,25.5,-207],"rotationEulerRadiansXYZ":[0,-0.25,0],"scaleXYZ":[0.95,1,1]}}},
+    {"id":"village-house-15-roof","kind":"object","prototypeRef":"package://prototype/village-house-roof@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[-30,31,-207],"rotationEulerRadiansXYZ":[0,-0.25,0],"scaleXYZ":[0.95,1,1]}}},
+    {"id":"village-house-16-body","kind":"object","prototypeRef":"package://prototype/village-house-body@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[29,28.5,-187],"rotationEulerRadiansXYZ":[0,0.18,0],"scaleXYZ":[1,1,1]}}},
+    {"id":"village-house-16-roof","kind":"object","prototypeRef":"package://prototype/village-house-roof@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[29,34,-187],"rotationEulerRadiansXYZ":[0,0.18,0],"scaleXYZ":[1,1,1]}}},
+    {"id":"village-house-17-body","kind":"object","prototypeRef":"package://prototype/village-house-body@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[83,27.5,-212],"rotationEulerRadiansXYZ":[0,-0.2,0],"scaleXYZ":[1.05,1,1]}}},
+    {"id":"village-house-17-roof","kind":"object","prototypeRef":"package://prototype/village-house-roof@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[83,33,-212],"rotationEulerRadiansXYZ":[0,-0.2,0],"scaleXYZ":[1,1,1]}}},
+    {"id":"village-house-18-body","kind":"object","prototypeRef":"package://prototype/village-house-body@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[139,31.5,-197],"rotationEulerRadiansXYZ":[0,0.27,0],"scaleXYZ":[1,1,1.05]}}},
+    {"id":"village-house-18-roof","kind":"object","prototypeRef":"package://prototype/village-house-roof@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[139,37,-197],"rotationEulerRadiansXYZ":[0,0.27,0],"scaleXYZ":[1,1,1]}}},
+    {"id":"village-house-19-body","kind":"object","prototypeRef":"package://prototype/village-house-body@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[191,36.5,-177],"rotationEulerRadiansXYZ":[0,-0.14,0],"scaleXYZ":[1.1,1,1]}}},
+    {"id":"village-house-19-roof","kind":"object","prototypeRef":"package://prototype/village-house-roof@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[191,42,-177],"rotationEulerRadiansXYZ":[0,-0.14,0],"scaleXYZ":[1.05,1,1]}}},
+    {"id":"village-house-20-body","kind":"object","prototypeRef":"package://prototype/village-house-body@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[-241,36.5,-287],"rotationEulerRadiansXYZ":[0,0.24,0],"scaleXYZ":[1,1,1]}}},
+    {"id":"village-house-20-roof","kind":"object","prototypeRef":"package://prototype/village-house-roof@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[-241,42,-287],"rotationEulerRadiansXYZ":[0,0.24,0],"scaleXYZ":[1,1,1]}}},
+    {"id":"village-house-21-body","kind":"object","prototypeRef":"package://prototype/village-house-body@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[-271,42.5,-352],"rotationEulerRadiansXYZ":[0,-0.21,0],"scaleXYZ":[1.05,1,1]}}},
+    {"id":"village-house-21-roof","kind":"object","prototypeRef":"package://prototype/village-house-roof@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[-271,48,-352],"rotationEulerRadiansXYZ":[0,-0.21,0],"scaleXYZ":[1,1,1]}}},
+    {"id":"village-house-22-body","kind":"object","prototypeRef":"package://prototype/village-house-body@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[-231,45.5,-412],"rotationEulerRadiansXYZ":[0,0.16,0],"scaleXYZ":[1,1,1]}}},
+    {"id":"village-house-22-roof","kind":"object","prototypeRef":"package://prototype/village-house-roof@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[-231,51,-412],"rotationEulerRadiansXYZ":[0,0.16,0],"scaleXYZ":[1,1,1]}}},
+    {"id":"village-house-23-body","kind":"object","prototypeRef":"package://prototype/village-house-body@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[211,35.5,-282],"rotationEulerRadiansXYZ":[0,-0.26,0],"scaleXYZ":[1,1,1]}}},
+    {"id":"village-house-23-roof","kind":"object","prototypeRef":"package://prototype/village-house-roof@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[211,41,-282],"rotationEulerRadiansXYZ":[0,-0.26,0],"scaleXYZ":[1,1,1]}}},
+    {"id":"village-house-24-body","kind":"object","prototypeRef":"package://prototype/village-house-body@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[251,39.5,-342],"rotationEulerRadiansXYZ":[0,0.23,0],"scaleXYZ":[1.05,1,1]}}},
+    {"id":"village-house-24-roof","kind":"object","prototypeRef":"package://prototype/village-house-roof@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[251,45,-342],"rotationEulerRadiansXYZ":[0,0.23,0],"scaleXYZ":[1,1,1]}}},
+    {"id":"village-house-25-body","kind":"object","prototypeRef":"package://prototype/village-house-body@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[271,43.5,-412],"rotationEulerRadiansXYZ":[0,-0.18,0],"scaleXYZ":[1,1,1]}}},
+    {"id":"village-house-25-roof","kind":"object","prototypeRef":"package://prototype/village-house-roof@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[271,49,-412],"rotationEulerRadiansXYZ":[0,-0.18,0],"scaleXYZ":[1,1,1]}}},
+    {"id":"village-house-26-body","kind":"object","prototypeRef":"package://prototype/village-house-body@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[246,47.5,-477],"rotationEulerRadiansXYZ":[0,0.3,0],"scaleXYZ":[1.05,1,1]}}},
+    {"id":"village-house-26-roof","kind":"object","prototypeRef":"package://prototype/village-house-roof@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[246,53,-477],"rotationEulerRadiansXYZ":[0,0.3,0],"scaleXYZ":[1,1,1]}}},
+    {"id":"village-house-27-body","kind":"object","prototypeRef":"package://prototype/village-house-body@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[206,51.5,-527],"rotationEulerRadiansXYZ":[0,-0.22,0],"scaleXYZ":[1,1,1]}}},
+    {"id":"village-house-27-roof","kind":"object","prototypeRef":"package://prototype/village-house-roof@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[206,57,-527],"rotationEulerRadiansXYZ":[0,-0.22,0],"scaleXYZ":[1,1,1]}}},
+    {"id":"village-house-28-body","kind":"object","prototypeRef":"package://prototype/village-house-body@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[121,47.5,-507],"rotationEulerRadiansXYZ":[0,0.18,0],"scaleXYZ":[1.05,1,1]}}},
+    {"id":"village-house-28-roof","kind":"object","prototypeRef":"package://prototype/village-house-roof@1","placement":{"kind":"fixed","transform":{"positionMetersXYZ":[121,53,-507],"rotationEulerRadiansXYZ":[0,0.18,0],"scaleXYZ":[1,1,1]}}}
+  ],
+  "relationships": [],
+  "rules": [],
+  "startup": {
+    "spawnAnchorEntityId": "spawn-main",
+    "controlledEntityId": "coastal-rider",
+    "cameraEntityId": "camera-main"
+  },
+  "constraints": {
+    "placements": [
+      {
+        "id": "spawn-inside",
+        "kind": "inside-region",
+        "requirement": "required",
+        "entityId": "spawn-main",
+        "regionId": "spawn-support-zone",
+        "boundaryClearanceMeters": 0
+      },
+      {
+        "id": "spawn-supported",
+        "kind": "supported-by",
+        "requirement": "required",
+        "supportedEntityId": "spawn-main",
+        "supportingEntityId": "terrain-main",
+        "maximumSupportGapMeters": 0,
+        "minimumSupportRatio": 1
+      },
+      {
+        "id": "spawn-slope",
+        "kind": "within-slope-limit",
+        "requirement": "required",
+        "entityId": "spawn-main",
+        "terrainEntityId": "terrain-main",
+        "maximumSlopeDegrees": 35
+      }
+    ],
+    "connectivity": []
+  }
+}

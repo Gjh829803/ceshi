@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -8,7 +10,6 @@ import { stringifyCanonicalJson } from "@whitebox-world/protocol";
 import {
   hashValidationReportV1,
   validateValidationReportV1,
-  type Sha256HashV1,
 } from "@whitebox-world/validation";
 import { isPlainObject } from "lodash-es";
 

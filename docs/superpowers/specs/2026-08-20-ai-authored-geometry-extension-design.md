@@ -2,6 +2,7 @@
 
 - 状态：Exploratory options memo；非 Roadmap、非已批准设计、非实施计划
 - 日期：2026-08-20
+- 当前适用范围：仅保留为 Canonical 编译式 Geometry Asset/Recipe 候选，不裁决 ADR-0007 Native Lane
 - 目标仓库：`agent-whitebox-world-sdk`
 - 目标读者：SDK 团队、上游 Agent 团队、Runtime 团队、资产工具团队、评审 Agent
 - 上位规格：[`2026-08-17-ai-first-lego-game-sdk-design.md`](./2026-08-17-ai-first-lego-game-sdk-design.md)
@@ -9,17 +10,24 @@
 - Agent 接口边界：[`../../03-agent-facing-api.md`](../../03-agent-facing-api.md)
 - Subject 资源范式：[`2026-08-19-package-subject-definition-design.md`](./2026-08-19-package-subject-definition-design.md)
 - 跟踪位置：[`重构 Backlog 的“未来探索议题”说明`](../../18-refactor-progress-and-backlog.md)
+- 后续裁决：[AI 友好的 Babylon Native 世界创作长期设计](./2026-08-28-ai-friendly-babylon-native-world-authoring-design.md)
 
-> 本文只保存问题背景、可选方案和评审维度。项目尚未决定是否实现这项能力，也没有
-> 确定 Recipe、MeshDraft、GLB、Sandbox、Three Bridge 或文中任何具体技术路线。文中的
+> 本文仍是 2026-08-20 的候选方案备忘，不是当前实施权威。其中“任何方案都不应直接把 Babylon
+> Runtime 场景代码注入游戏”的全局研究假设，已被 ADR-0007 **仅在隔离 Native Scene Lane 内**
+> 修订；Schema/version/security/diagnostic 原则继续有效，Canonical Lane 也仍禁止直接场景代码。
+
+> 本文只保存截至 2026-08-20 的问题背景、可选方案和评审维度；当时项目尚未决定是否实现这项能力，
+> 也没有确定 Recipe、MeshDraft、GLB、Sandbox、Three Bridge 或文中任何具体技术路线。文中的
 > `MUST`、接口、阶段和验收条件只描述“如果未来选择该候选方案，它至少需要满足什么”，
-> 当前不产生 Backlog、排期、版本升级、依赖引入或实现授权，也不提高 SDK 总完成度。
+> 它们不产生 Backlog、排期、版本升级、依赖引入或实现授权，也不覆盖后续 ADR-0007。
 
 ## 1. 决策摘要
 
 本设计解决一个新的核心问题：当图像理解与代码生成模型已经能够根据参考图生成较好的 Three.js 几何时，SDK 是否仍应把 AI 限制在少量预设模型中。
 
-当前研究假设是：**如果未来确认 Preset 限制了产品效果，可以探索更开放的几何生成能力；但任何方案都不应直接把任意 Three.js、Babylon.js 或运行时代码注入游戏。**
+本文在 2026-08-20 采用的研究假设是：**如果未来确认 Preset 限制了产品效果，可以探索更开放的几何生成能力；但任何方案都不应直接把任意 Three.js、Babylon.js 或运行时代码注入游戏。**
+该假设仍约束本文候选 GeometryDraft/Canonical 路线和不受控任意代码；后续 ADR-0007 已为隔离、显式
+登记、SDK-owned Gameplay 的 Babylon Native Scene Lane 做出范围例外。
 
 本文供未来评审的候选方案采用三层几何能力，并把自由度逐层受控地编译为确定性数据：
 

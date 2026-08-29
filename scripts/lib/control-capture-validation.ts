@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -11,7 +13,6 @@ import {
   type BooleanAssertionMetricResultV1,
   type GateDefinitionV1,
   type GateResultV1,
-  type Sha256HashV1,
   type ValidationDiagnosticCodeV1,
   type ValidationDiagnosticV1,
   type ValidationMetricStatusV1,

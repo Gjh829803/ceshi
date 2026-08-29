@@ -2,9 +2,9 @@ import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
 import type {
-  ExecutionObjectV3,
-  ExecutionWaterBoundaryV3,
-  ExecutionWaterV3,
+  CanonicalSceneObjectV1,
+  CanonicalSceneWaterBoundaryV1,
+  CanonicalSceneWaterV1,
 } from "@whitebox-world/runtime-contracts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -22,8 +22,8 @@ const IDENTITY_TRANSFORM = {
 
 function water(
   entityId: string,
-  boundary: ExecutionWaterBoundaryV3,
-): ExecutionWaterV3 {
+  boundary: CanonicalSceneWaterBoundaryV1,
+): CanonicalSceneWaterV1 {
   return {
     entityId,
     terrainEntityId: "terrain",
@@ -88,7 +88,7 @@ describe("Babylon geometry generation conformance", () => {
     ["cylinder", { kind: "cylinder", radiusMeters: 2, heightMeters: 5 }, [4, 5, 4]],
     ["cone", { kind: "cone", radiusMeters: 2, heightMeters: 5 }, [4, 5, 4]],
   ] as const)("generates canonical %s bounds and metadata", (_label, primitive, size) => {
-    const object: ExecutionObjectV3 = {
+    const object: CanonicalSceneObjectV1 = {
       entityId: `object.${primitive.kind}`,
       prototypeId: `prototype.${primitive.kind}`,
       primitive,
@@ -146,7 +146,7 @@ describe("Babylon geometry generation conformance", () => {
   );
 
   it("keeps instances independent through disposal", () => {
-    const object = (entityId: string): ExecutionObjectV3 => ({
+    const object = (entityId: string): CanonicalSceneObjectV1 => ({
       entityId,
       prototypeId: "prototype.box",
       primitive: { kind: "box", sizeMetersXYZ: [1, 2, 3] },

@@ -11,7 +11,9 @@ Registry 解析、确定性 Placement 求解、归一化、Collider 推导、编
 AuthoringSpec V4
   -> LayoutSolveReport V1
   -> NormalizedWorldIR V4
-  -> ExecutionPlan V5
+  -> Canonical Scene Plan V1
+  + Gameplay Bootstrap V1 / World Runtime Bootstrap V1
+  -> World Build Identity V1 / WorldPackage V1
   -> Babylon/Havok Runtime
   -> Runtime Snapshot V4 / Browser Protocol V5
   -> optional trusted Route Validation evidence
@@ -42,7 +44,7 @@ pnpm worldkit subject explain examples/authoring/package-subject-world.json \
 pnpm worldkit run examples/authoring/package-subject-world.json
 ```
 
-`worldkit build` 的公开输出是完整 WorldPackage V2 目录，不再是单个
+`worldkit build` 的公开输出是当前唯一 WorldPackage V1 目录，不再是单个
 `worldkit-build-artifact` JSON。外部进程需要持续控制时，使用独立 Session 目录和
 NDJSON stdin/stdout；不要把该协议安装到 Browser Protocol：
 
@@ -335,7 +337,7 @@ Canonical JSON bytes
   -> normalized Part/Socket ordering + Collider derivation
   -> Definition Hash + Resource Lock
   -> NormalizedWorldIR V4 + SHA-256
-  -> ExecutionPlan V5 + SHA-256
+  -> Canonical Scene Plan V1 + SHA-256
   -> Babylon Runtime Adapter + Havok
 ```
 
@@ -384,7 +386,7 @@ pnpm worldkit verify route examples/traversal/r1-heightfield/success.json \
   --output /tmp/route-r1-success.validation-report.json --json
 ```
 
-命令依次完成 Authoring V4 → NormalizedWorldIR V4 → ExecutionPlan V5 Pipeline、
+命令依次完成 Authoring V4 → NormalizedWorldIR V4 → Canonical Scene Plan V1 Pipeline、
 WorldPackage Build Receipt、Validation Subject、
 Recast Graph/Path、真实 Babylon/Havok `NullEngine` 固定 Tick Probe 和统一 Route
 Report。Report 写到 `--output`，Canonical Evidence 写到兄弟目录
@@ -444,7 +446,7 @@ Discovery、Subject Harness 和 Camera Authoring 方法以
 `window.__WORLDKIT__` 增加方法。结构写入走独立的受信 Authoring/Edit API：
 
 ```text
-window.__WORLDKIT__                  # Browser Protocol V5，exact 39 keys，Runtime
+window.__WORLDKIT__                  # Browser Protocol V5，exact 38 keys，Runtime
 window.__WORLDKIT_AUTHORING_EDIT__   # 仅 Canonical Authoring 页；10 个可枚举成员
 ```
 
@@ -488,7 +490,7 @@ Agent 读 Receipt 时按关闭字段分支，不要发明同义字段：
 
 对于 Placement 世界，`getDiagnostics()` 还会发布只读、递归冻结的
 `WORLDKIT_LAYOUT_ASSERTION_SATISFIED` 证据。Browser 不暴露 Candidate、搜索、
-修改 Constraint 或重新布局接口；Runtime 只按 ExecutionPlan V5 复验 Required
+修改 Constraint 或重新布局接口；Runtime 只按 Canonical Scene Plan V1 复验 Required
 Assertion，失败即拒绝发布世界。
 
 对 Authoring V4 Route 世界，`worldkit run` 先在可信 Node 侧执行与 CLI 相同的

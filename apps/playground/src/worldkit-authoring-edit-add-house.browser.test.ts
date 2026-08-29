@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,7 +9,6 @@ import { isNil } from "lodash-es";
 
 import {
   parseWorldChangeSetV1,
-  type Sha256HashV1,
   type WorldChangeSetV1,
 } from "@whitebox-world/authoring-edit";
 

@@ -1,8 +1,9 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import type {
   ActionActivateGameplayCommandV1,
   GameplayActionDefinitionV1,
   GameplayRelationshipStateV1,
-  Sha256HashV1,
 } from "@whitebox-world/gameplay-contracts";
 import { canonicalJsonBytes, sha256CanonicalJson } from "@whitebox-world/protocol";
 import { isNil } from "lodash-es";

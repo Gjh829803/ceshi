@@ -4,8 +4,11 @@ import type {
   ResolvedResourceLockEntryV1,
 } from "@whitebox-world/authoring";
 import {
-  canonicalExecutionResourceLockEntriesV1,
-  type ExecutionPlanV5,
+  canonicalResourceLockEntriesV1,
+  parseCanonicalSceneExecutionPlanV1,
+  parseWorldRuntimeBootstrapV1,
+  type CanonicalSceneExecutionPlanV1,
+  type WorldRuntimeBootstrapV1,
 } from "@whitebox-world/runtime-contracts";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import {
@@ -20,7 +23,8 @@ const GROUND_LOCOMOTION_CAPABILITY_REF =
 
 export interface CompileResolvedTraversalLockInputV1 {
   readonly normalizedWorldIr: NormalizedWorldIRV4;
-  readonly executionPlan: ExecutionPlanV5;
+  readonly canonicalSceneExecutionPlan: CanonicalSceneExecutionPlanV1;
+  readonly worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
   readonly traversingEntityId: string;
   readonly runtimeImplementationIdentity: TraversalRuntimeImplementationIdentityV1;
 }
@@ -62,10 +66,31 @@ function requireLockedResource(
 export function compileResolvedTraversalLockV1(
   input: CompileResolvedTraversalLockInputV1,
 ): ResolvedTraversalLockReceiptV1 {
-  const subject = input.executionPlan.subjects.find(
+  let canonicalSceneExecutionPlan: CanonicalSceneExecutionPlanV1;
+  let worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
+  try {
+    canonicalSceneExecutionPlan = parseCanonicalSceneExecutionPlanV1(
+      input.canonicalSceneExecutionPlan,
+    );
+    worldRuntimeBootstrap = parseWorldRuntimeBootstrapV1(
+      input.worldRuntimeBootstrap,
+    );
+  } catch {
+    fail("Canonical Scene Plan or Runtime Bootstrap is invalid.");
+  }
+  if (
+    canonicalSceneExecutionPlan.worldRuntimeBootstrapHash !==
+      worldRuntimeBootstrap.contentHash
+  ) {
+    fail("Canonical Scene Plan does not link the supplied Runtime Bootstrap.");
+  }
+  const subjectInstance = canonicalSceneExecutionPlan.subjectInstances.find(
     (row) => row.entityId === input.traversingEntityId,
   );
-  if (isNil(subject)) {
+  const subject = worldRuntimeBootstrap.subjectRuntimeDescriptors.find(
+    (row) => row.entityId === input.traversingEntityId,
+  );
+  if (isNil(subjectInstance) || isNil(subject)) {
     fail(`traversing Subject '${input.traversingEntityId}' is not compiled.`);
   }
   const definition = input.normalizedWorldIr.resources.subjectDefinitions.find(
@@ -189,45 +214,67 @@ export function compileResolvedTraversalLockV1(
     fail(`Medium Profile '${assembly.mediumProfile.resourceRef}' does not match the plan.`);
   }
   let canonicalResourceLock: ReturnType<
-    typeof canonicalExecutionResourceLockEntriesV1
+    typeof canonicalResourceLockEntriesV1
   >;
-  let canonicalPlanResourceLock: ReturnType<
-    typeof canonicalExecutionResourceLockEntriesV1
+  let canonicalSceneResourceLock: ReturnType<
+    typeof canonicalResourceLockEntriesV1
+  >;
+  let canonicalRuntimeResourceLock: ReturnType<
+    typeof canonicalResourceLockEntriesV1
   >;
   try {
-    canonicalResourceLock = canonicalExecutionResourceLockEntriesV1(
+    canonicalResourceLock = canonicalResourceLockEntriesV1(
       input.normalizedWorldIr.resources.resourceLock,
     );
-    canonicalPlanResourceLock = canonicalExecutionResourceLockEntriesV1(
-      input.executionPlan.resourceLockEntries,
+    canonicalSceneResourceLock = canonicalResourceLockEntriesV1(
+      canonicalSceneExecutionPlan.sceneResourceLockEntries,
+    );
+    canonicalRuntimeResourceLock = canonicalResourceLockEntriesV1(
+      worldRuntimeBootstrap.runtimeResourceLockEntries,
     );
   } catch {
     fail("Resource Lock entries are invalid.");
   }
   const actualResourceLockHash = sha256CanonicalJson(canonicalResourceLock);
-  const gameplayBootstrapRows = canonicalPlanResourceLock.filter(
+  const expectedSceneResourceLock = canonicalResourceLock.filter(
+    (row) => row.resourceKind === "traversal-surface-profile",
+  );
+  const expectedRuntimeBaseResourceLock = canonicalResourceLock.filter(
+    (row) => row.resourceKind !== "traversal-surface-profile",
+  );
+  const gameplayBootstrapRows = canonicalRuntimeResourceLock.filter(
     (row) => row.resourceKind === "gameplay-bootstrap",
   );
-  const canonicalPlanBaseResourceLock = canonicalPlanResourceLock.filter(
+  const canonicalRuntimeBaseResourceLock = canonicalRuntimeResourceLock.filter(
     (row) => row.resourceKind !== "gameplay-bootstrap",
   );
-  const actualPlanResourceLockHash = sha256CanonicalJson(
-    canonicalPlanResourceLock,
+  const actualSceneResourceLockHash = sha256CanonicalJson(
+    canonicalSceneResourceLock,
   );
   if (input.normalizedWorldIr.resources.resourceLockHash !==
       actualResourceLockHash ||
-    input.executionPlan.resourceLockHash !== actualPlanResourceLockHash ||
-    !isEqual(input.executionPlan.resourceLockEntries, canonicalPlanResourceLock) ||
+    canonicalSceneExecutionPlan.sceneResourceLockHash !==
+      actualSceneResourceLockHash ||
+    !isEqual(
+      canonicalSceneExecutionPlan.sceneResourceLockEntries,
+      canonicalSceneResourceLock,
+    ) ||
+    !isEqual(canonicalSceneResourceLock, expectedSceneResourceLock) ||
     gameplayBootstrapRows.length !== 1 ||
-    !isEqual(canonicalPlanBaseResourceLock, canonicalResourceLock)) {
-    fail("Resource Lock hash does not match the Normalized World and Execution Plan.");
+    !isEqual(
+      canonicalRuntimeBaseResourceLock,
+      expectedRuntimeBaseResourceLock,
+    )) {
+    fail(
+      "Resource Lock hash does not match the Normalized World, Canonical Scene Plan, or Runtime Bootstrap.",
+    );
   }
 
   return resolveTraversalLockV1({
     kind: "resolved-traversal-lock",
     schemaVersion: 1,
     subjectEntityId: subject.entityId,
-    resourceLockHash: actualPlanResourceLockHash as `sha256:${string}`,
+    resourceLockHash: actualResourceLockHash as `sha256:${string}`,
     subjectDefinitionRef: subject.subjectDefinitionRef,
     subjectDefinitionHash: subject.subjectDefinitionHash,
     colliderProfileRef: colliderProfile.resourceRef,

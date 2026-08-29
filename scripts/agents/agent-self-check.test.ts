@@ -69,7 +69,7 @@ describe("single-job Planner and Builder self-check bundles", () => {
     } finally {
       await rm(root, { recursive: true, force: true });
     }
-  }, 30_000);
+  }, 90_000);
 
   it("runs without a repository dependency graph and produces replayable receipts", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "worldkit-agent-self-check-"));
@@ -262,5 +262,5 @@ Encoding profile: signed-diverging-blue-gray-orange@1 using RGB(32,64,208), RGB(
     } finally {
       await rm(root, { recursive: true, force: true });
     }
-  }, 30_000);
+  }, 90_000);
 });

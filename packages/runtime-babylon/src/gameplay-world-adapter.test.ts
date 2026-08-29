@@ -182,7 +182,6 @@ function runtimeHarness(
       semanticActionRef: string,
     ): boolean;
   }> = {
-    readExecutionPlan: () => undefined as never,
     readPossessionTarget: () => target,
     readWorldProjection: () => projection,
     readViewProjection: () => Object.freeze({ viewStateRevision }),

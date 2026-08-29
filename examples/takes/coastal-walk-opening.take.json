@@ -2,8 +2,9 @@
   "kind": "worldkit-simulation-take",
   "schemaVersion": 1,
   "id": "coastal-walk-opening",
-  "worldPackageRef": "package://world-package/sha256/8dd52f869efbbeac7eb1f7ccb901c68ba8634e4ffe666a8268de66757f711fc6",
-  "worldPackageRootHash": "sha256:8dd52f869efbbeac7eb1f7ccb901c68ba8634e4ffe666a8268de66757f711fc6",
+  "worldPackageRef": "package://world-package/sha256/74593c1fedf3c6cca006329bc6f995a0da6e6ee27689d2e6140ab8afe98de849",
+  "worldPackageRootHash": "sha256:74593c1fedf3c6cca006329bc6f995a0da6e6ee27689d2e6140ab8afe98de849",
+  "worldBuildIdentityHash": "sha256:f25576c1c46a6075b7f60387aa0aefc186b727e59c76fef52fede2ea864dff02",
   "seed": 731991,
   "simulationTickRate": {
     "numeratorTicks": 60,

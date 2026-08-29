@@ -1,10 +1,11 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import {
   applyCanonicalPathMappingsV1,
   hashWorldChangeSetV1,
   parseAiSchemaProjectionV1,
   parseWorldChangeSetV1,
   type AiSchemaProjectionV1,
-  type Sha256HashV1,
 } from "@whitebox-world/authoring-edit";
 import { stringifyCanonicalJson } from "@whitebox-world/protocol";
 import { isEmpty, isNil } from "lodash-es";

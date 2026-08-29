@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -5,7 +7,6 @@ import {
   CONTROL_CAPTURE_PASS_IDS_V1,
   compileSimulationTakeV1,
   type ControlCapturePassIdV1,
-  type Sha256HashV1,
 } from "@whitebox-world/control-capture";
 import {
   sha256Bytes,
@@ -107,6 +108,7 @@ function takeInput(): Record<string, unknown> {
     id: "validation-fixture-take",
     worldPackageRef: `package://validation-fixture@${WORLD_HASH}`,
     worldPackageRootHash: WORLD_HASH,
+    worldBuildIdentityHash: `sha256:${"c".repeat(64)}`,
     seed: 11,
     simulationTickRate: { numeratorTicks: 60, denominatorSeconds: 1 },
     startTick: 0,
@@ -216,7 +218,7 @@ export async function createControlCaptureValidationFixtureV1(
       worldPackageRef: `package://validation-fixture@${WORLD_HASH}`,
       worldPackageRootHash: WORLD_HASH,
       normalizedWorldIrHash: `sha256:${"b".repeat(64)}` as Sha256HashV1,
-      executionPlanHash: `sha256:${"c".repeat(64)}` as Sha256HashV1,
+      worldBuildIdentityHash: `sha256:${"c".repeat(64)}` as Sha256HashV1,
     },
     runtimeSessionId: "validation-fixture-session",
     worldSessionId: "validation-fixture-world-session",

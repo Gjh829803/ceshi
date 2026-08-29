@@ -5,7 +5,12 @@ import { FreeCamera } from "@babylonjs/core/Cameras/freeCamera.js";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import { Scene } from "@babylonjs/core/scene.js";
-import type { ViewTargetSampleV1 } from "@whitebox-world/runtime-contracts";
+import { parseCameraContextSampleV2 } from "@whitebox-world/camera";
+import {
+  createWorldRuntimeBootstrapV1,
+  type CanonicalSceneExecutionPlanV1,
+  type ViewTargetSampleV1,
+} from "@whitebox-world/runtime-contracts";
 import type { PhysicsWorldQueryPortV1 } from "@whitebox-world/runtime-framework";
 import { describe, expect, it, vi } from "vitest";
 
@@ -17,11 +22,18 @@ import { createValidAuthoringSpecV4 } from "../../authoring/src/test-fixture";
 import { BabylonWorldRuntime } from "./babylon-world-runtime";
 import {
   CameraDirectorV1,
+  committedCameraContextFromMotionKernelV1,
   legacyViewTargetToCommittedCameraContextV2ForTask6,
 } from "./camera-director";
 import { SpringArmComponentV1 } from "./spring-arm-component";
 import { bindRuntimeTestPossession } from "./runtime-test-possession";
-import { compileRuntimeTestPlanV5 } from "./runtime-test-plan";
+import {
+  compileRuntimeTestScenePlanV1,
+  registerRuntimeTestWorldArtifactsV1,
+  runtimeTestSubjectsForPlanV1,
+  runtimeTestWorldArtifactsForPlanV1,
+  runtimeTestWorldInputForPlanV1,
+} from "./runtime-test-plan";
 
 const havokWasmBytes = await readFile(
   createRequire(import.meta.url).resolve(
@@ -67,6 +79,19 @@ function createFlatTerrainCapabilitySpec() {
   return spec;
 }
 
+function runtimeSubject(executionPlan: CanonicalSceneExecutionPlanV1) {
+  const subject = runtimeTestSubjectsForPlanV1(executionPlan)[0];
+  if (subject === undefined) {
+    throw new Error("CameraDirector fixture Subject missing.");
+  }
+  return subject;
+}
+
+function initialCamera(executionPlan: CanonicalSceneExecutionPlanV1) {
+  return runtimeTestWorldArtifactsForPlanV1(executionPlan)
+    .worldRuntimeBootstrap.initialCamera;
+}
+
 async function createCameraPreviewChannelRuntime(options?: {
   readonly blockCameraArm?: boolean;
   readonly cameraBlockerZMeters?: number;
@@ -100,13 +125,23 @@ async function createCameraPreviewChannelRuntime(options?: {
     };
     wallPrototype.sizeMetersXYZ = [4, 4, 0.5];
   }
-  const executionPlan = structuredClone(compileRuntimeTestPlanV5(spec, {
+  const executionPlan = compileRuntimeTestScenePlanV1(spec, {
     subjectResourceRegistry: builtInSubjectResourceRegistry,
-  }));
+  });
+  const artifacts = runtimeTestWorldArtifactsForPlanV1(executionPlan);
+  const controlledEntityId = artifacts.worldRuntimeBootstrap.initialControlledEntityId;
+  const subjectRuntimeDescriptors = structuredClone(
+    artifacts.worldRuntimeBootstrap.subjectRuntimeDescriptors,
+  );
+  const controlledSubject = subjectRuntimeDescriptors.find(
+    (candidate) => candidate.entityId === controlledEntityId,
+  );
+  if (controlledSubject === undefined) {
+    throw new Error("Camera preview fixture controlled Subject is missing.");
+  }
   if (options?.omitFirstPersonSocket === true) {
-    const firstPersonProfile = executionPlan.subjects
-      .find((candidate) => candidate.entityId === executionPlan.initialControlledEntityId)
-      ?.capabilityAssembly.cameraContext.cameraRigProfiles
+    const firstPersonProfile = controlledSubject.capabilityAssembly.cameraContext
+      .cameraRigProfiles
       .find((profile) =>
         profile.resourceRef === "worldkit://camera-profile/first-person.standard@1"
       );
@@ -116,12 +151,7 @@ async function createCameraPreviewChannelRuntime(options?: {
     firstPersonProfile.preferredSocketIds = ["missing-first-person-socket"];
   }
   if (options?.waterOnlyCameraRule === true) {
-    const cameraContext = executionPlan.subjects
-      .find((candidate) => candidate.entityId === executionPlan.initialControlledEntityId)
-      ?.capabilityAssembly.cameraContext;
-    if (cameraContext === undefined) {
-      throw new Error("Camera preview fixture Camera Context is missing.");
-    }
+    const cameraContext = controlledSubject.capabilityAssembly.cameraContext;
     cameraContext.rules = [
       ...cameraContext.rules,
       {
@@ -133,11 +163,9 @@ async function createCameraPreviewChannelRuntime(options?: {
     ];
   }
   if (options?.invalidCombinedCameraModifiers === true) {
-    const cameraContext = executionPlan.subjects
-      .find((candidate) => candidate.entityId === executionPlan.initialControlledEntityId)
-      ?.capabilityAssembly.cameraContext;
-    const modifierTemplate = cameraContext?.cameraModifierProfiles[0];
-    if (cameraContext === undefined || modifierTemplate === undefined) {
+    const cameraContext = controlledSubject.capabilityAssembly.cameraContext;
+    const modifierTemplate = cameraContext.cameraModifierProfiles[0];
+    if (modifierTemplate === undefined) {
       throw new Error("Camera preview fixture Camera Modifier is missing.");
     }
     const distanceModifierRef =
@@ -174,11 +202,9 @@ async function createCameraPreviewChannelRuntime(options?: {
     ];
   }
   if (options?.previewCompositionModifier !== undefined) {
-    const cameraContext = executionPlan.subjects
-      .find((candidate) => candidate.entityId === executionPlan.initialControlledEntityId)
-      ?.capabilityAssembly.cameraContext;
-    const modifierTemplate = cameraContext?.cameraModifierProfiles[0];
-    if (cameraContext === undefined || modifierTemplate === undefined) {
+    const cameraContext = controlledSubject.capabilityAssembly.cameraContext;
+    const modifierTemplate = cameraContext.cameraModifierProfiles[0];
+    if (modifierTemplate === undefined) {
       throw new Error("Camera preview fixture Camera Modifier is missing.");
     }
     const modifierRef = "worldkit://camera-modifier/test-preview-maximum@1";
@@ -202,8 +228,23 @@ async function createCameraPreviewChannelRuntime(options?: {
       ];
     }
   }
+  const { contentHash: _contentHash, ...runtimeBootstrapBody } =
+    artifacts.worldRuntimeBootstrap;
+  const worldRuntimeBootstrap = createWorldRuntimeBootstrapV1({
+    ...runtimeBootstrapBody,
+    subjectRuntimeDescriptors,
+  });
+  const runtimeExecutionPlan: CanonicalSceneExecutionPlanV1 = {
+    ...executionPlan,
+    worldRuntimeBootstrapHash: worldRuntimeBootstrap.contentHash,
+  };
+  registerRuntimeTestWorldArtifactsV1({
+    ...artifacts,
+    executionPlan: runtimeExecutionPlan,
+    worldRuntimeBootstrap,
+  });
   const runtime = await BabylonWorldRuntime.create({
-    executionPlan,
+    ...runtimeTestWorldInputForPlanV1(runtimeExecutionPlan),
     havokWasmBinary,
     subjectAssetResolver: {
       async resolveSubjectAsset() {
@@ -219,7 +260,7 @@ async function createCameraPreviewChannelRuntime(options?: {
         lockstepMaxSteps: 4,
       }),
   });
-  await bindRuntimeTestPossession(runtime, executionPlan.initialControlledEntityId);
+  await bindRuntimeTestPossession(runtime, controlledEntityId);
   return runtime;
 }
 
@@ -1278,12 +1319,11 @@ describe("camera preview channel stays out of Gameplay truth", () => {
   });
 
   it("accepts only byte-identical committed Context on a repeated Director Tick", () => {
-    const executionPlan = compileRuntimeTestPlanV5(
+    const executionPlan = compileRuntimeTestScenePlanV1(
       createFlatTerrainCapabilitySpec(),
       { subjectResourceRegistry: builtInSubjectResourceRegistry },
     );
-    const subject = executionPlan.subjects[0];
-    if (subject === undefined) throw new Error("CameraDirector fixture Subject missing.");
+    const subject = runtimeSubject(executionPlan);
     const engine = new NullEngine();
     const scene = new Scene(engine);
     const camera = new FreeCamera("camera.test", Vector3.Zero(), scene);
@@ -1294,7 +1334,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
         return undefined;
       },
     };
-    const director = new CameraDirectorV1(executionPlan, camera, scene, queryPort);
+    const director = new CameraDirectorV1(initialCamera(executionPlan), camera, scene, queryPort);
     const springArm = new SpringArmComponentV1();
     const sample: ViewTargetSampleV1 = {
       controlledEntityId: subject.entityId,
@@ -1363,12 +1403,11 @@ describe("camera preview channel stays out of Gameplay truth", () => {
   });
 
   it("publishes the legacy seam as explicitly unavailable with neutral semantic environment", () => {
-    const executionPlan = compileRuntimeTestPlanV5(
+    const executionPlan = compileRuntimeTestScenePlanV1(
       createFlatTerrainCapabilitySpec(),
       { subjectResourceRegistry: builtInSubjectResourceRegistry },
     );
-    const subject = executionPlan.subjects[0];
-    if (subject === undefined) throw new Error("CameraDirector fixture Subject missing.");
+    const subject = runtimeSubject(executionPlan);
     const sample: ViewTargetSampleV1 = {
       controlledEntityId: subject.entityId,
       entityId: subject.entityId,
@@ -1426,13 +1465,215 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     });
   });
 
-  it("rolls a failed Tick back atomically and preserves the next Profile transition", () => {
-    const executionPlan = compileRuntimeTestPlanV5(
+  it("maps leftover free-ground motion tags to grounded mobility so auto view selects orbit.medium", () => {
+    const executionPlan = compileRuntimeTestScenePlanV1(
       createFlatTerrainCapabilitySpec(),
       { subjectResourceRegistry: builtInSubjectResourceRegistry },
     );
-    const subject = executionPlan.subjects[0];
-    if (subject === undefined) throw new Error("CameraDirector fixture Subject missing.");
+    const subject = runtimeSubject(executionPlan);
+    const sample: ViewTargetSampleV1 = {
+      controlledEntityId: subject.entityId,
+      entityId: subject.entityId,
+      targetPositionMetersXYZ: [0, 1, 0],
+      forwardXYZ: [0, 0, -1],
+      upXYZ: [0, 1, 0],
+      velocityMetersPerSecondXYZ: [0.4, 0, 0],
+      approximateRadiusMeters: 0.5,
+      socketPositionsMetersXYZById: {},
+      motionTags: ["free-ground"],
+      movementMedium: "ground",
+      relationshipContexts: [],
+      relationshipRole: "none",
+      cameraContextTags: [],
+    };
+    const groundedContext = parseCameraContextSampleV2({
+      schemaVersion: 2,
+      semanticAuthorityStatus: "available",
+      committedTick: 3,
+      controlledEntityId: subject.entityId,
+      targetEntityId: subject.entityId,
+      subjectPose: {
+        positionMetersXYZ: [0, 1, 0],
+        facingYawRadians: 0,
+      },
+      locomotion: {
+        schemaVersion: 2,
+        status: "active",
+        mobilityMode: "grounded",
+        gait: "walk",
+        verticalPhase: "none",
+        supportMode: "supported",
+        movementMedium: "ground",
+        facingYawRadians: 0,
+        linearVelocity: { x: 0.4, y: 0, z: 0 },
+        horizontalSpeedMetersPerSecond: 0.4,
+        committedTick: 3,
+        phaseEnteredTick: 0,
+        transitionSequence: 0,
+      },
+      actionSummary: {
+        status: "available",
+        activeActionRefs: [],
+        isInterruptible: true,
+      },
+      environment: {
+        relationshipRole: "none",
+        relationshipContexts: [],
+        socketPositionsMetersXYZById: {},
+        cameraContextTags: [],
+      },
+    });
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    const camera = new FreeCamera("camera.free-ground", Vector3.Zero(), scene);
+    const director = new CameraDirectorV1(initialCamera(executionPlan), camera, scene, {
+      sweepSphere: () => undefined,
+    });
+    const springArm = new SpringArmComponentV1();
+    try {
+      director.update(
+        subject.capabilityAssembly.cameraContext,
+        sample,
+        1 / 60,
+        groundedContext,
+        springArm,
+      );
+      expect(director.snapshot().activeCameraProfileRef).toBe(ORBIT_REF);
+      expect(director.snapshot().selectionDecision?.explain.fallbackActive)
+        .toBe(false);
+    } finally {
+      director.dispose();
+      engine.dispose();
+    }
+  });
+
+  it("publishes Motion Kernel locomotion as available Camera Context V2", () => {
+    const sample: ViewTargetSampleV1 = {
+      controlledEntityId: "player",
+      entityId: "player",
+      targetPositionMetersXYZ: [1, 0.56, 2],
+      forwardXYZ: [0, 0, -1],
+      upXYZ: [0, 1, 0],
+      velocityMetersPerSecondXYZ: [1.2, 0, 0],
+      approximateRadiusMeters: 0.35,
+      socketPositionsMetersXYZById: {},
+      motionTags: ["free-ground", "ground", "jump"],
+      movementMedium: "ground",
+      relationshipContexts: [],
+      relationshipRole: "none",
+      cameraContextTags: ["forward-intent"],
+    };
+
+    const grounded = committedCameraContextFromMotionKernelV1(
+      sample,
+      9,
+      "walk",
+      0,
+    );
+    expect(grounded.semanticAuthorityStatus).toBe("available");
+    expect(grounded.locomotion).toMatchObject({
+      status: "active",
+      mobilityMode: "grounded",
+      gait: "walk",
+      movementMedium: "ground",
+      committedTick: 9,
+    });
+    expect(grounded.environment.cameraContextTags).toEqual(["forward-intent"]);
+
+    const airborne = committedCameraContextFromMotionKernelV1(
+      {
+        ...sample,
+        movementMedium: "air",
+        velocityMetersPerSecondXYZ: [0.2, 3, 0],
+        cameraContextTags: [],
+      },
+      10,
+      "airborne",
+      0,
+    );
+    expect(airborne.locomotion).toMatchObject({
+      status: "active",
+      mobilityMode: "airborne",
+      gait: "none",
+      verticalPhase: "rising",
+      supportMode: "unsupported",
+      movementMedium: "air",
+      committedTick: 10,
+    });
+
+    const signedZero = committedCameraContextFromMotionKernelV1(
+      {
+        ...sample,
+        targetPositionMetersXYZ: [0, 0.56, -0],
+        velocityMetersPerSecondXYZ: [-0, -0, -0],
+        cameraContextTags: [],
+      },
+      11,
+      "idle",
+      -0,
+    );
+    expect(signedZero.subjectPose.positionMetersXYZ).toEqual([0, 0.56, 0]);
+    expect(signedZero.subjectPose.facingYawRadians).toBe(0);
+    expect(signedZero.locomotion).toMatchObject({
+      status: "active",
+      mobilityMode: "grounded",
+      gait: "idle",
+      linearVelocity: { x: 0, y: 0, z: 0 },
+      horizontalSpeedMetersPerSecond: 0,
+    });
+  });
+
+  it("publishes Motion Kernel mounted Gameplay relationship ids as Camera Context V2", () => {
+    const relationshipId = `mounted-on:sha256:${"ef".repeat(32)}`;
+    const sample: ViewTargetSampleV1 = {
+      controlledEntityId: "player",
+      entityId: "skateboard",
+      targetPositionMetersXYZ: [2, 0.2, -1],
+      forwardXYZ: [0, 0, -1],
+      upXYZ: [0, 1, 0],
+      velocityMetersPerSecondXYZ: [0, 0, -1.5],
+      approximateRadiusMeters: 0.4,
+      socketPositionsMetersXYZById: {},
+      motionTags: ["free-ground"],
+      movementMedium: "ground",
+      relationshipRole: "rider",
+      relationshipContexts: [{
+        id: relationshipId,
+        type: "mountedOn",
+        riderEntityId: "player",
+        mountEntityId: "skateboard",
+        mountSlotId: "stand",
+      }],
+      cameraContextTags: ["forward-intent"],
+    };
+
+    const context = committedCameraContextFromMotionKernelV1(
+      sample,
+      12,
+      "idle",
+      0,
+    );
+    expect(context.semanticAuthorityStatus).toBe("available");
+    expect(context.controlledEntityId).toBe("player");
+    expect(context.targetEntityId).toBe("skateboard");
+    expect(context.environment).toMatchObject({
+      relationshipRole: "rider",
+      relationshipContexts: [{
+        id: relationshipId,
+        type: "mountedOn",
+        riderEntityId: "player",
+        mountEntityId: "skateboard",
+        mountSlotId: "stand",
+      }],
+    });
+  });
+
+  it("rolls a failed Tick back atomically and preserves the next Profile transition", () => {
+    const executionPlan = compileRuntimeTestScenePlanV1(
+      createFlatTerrainCapabilitySpec(),
+      { subjectResourceRegistry: builtInSubjectResourceRegistry },
+    );
+    const subject = runtimeSubject(executionPlan);
     const cameraContext = subject.capabilityAssembly.cameraContext;
     const alternateProfileRef = cameraContext.rules
       .flatMap((rule) => rule.cameraRigProfileRef === undefined ? [] : [rule.cameraRigProfileRef])
@@ -1448,7 +1689,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
         return undefined;
       },
     };
-    const director = new CameraDirectorV1(executionPlan, camera, scene, queryPort);
+    const director = new CameraDirectorV1(initialCamera(executionPlan), camera, scene, queryPort);
     const springArm = new SpringArmComponentV1();
     const sample: ViewTargetSampleV1 = {
       controlledEntityId: subject.entityId,
@@ -1509,7 +1750,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
   });
 
   it("resets Director state without owning the injected physics port, then closes lifecycle", () => {
-    const executionPlan = compileRuntimeTestPlanV5(
+    const executionPlan = compileRuntimeTestScenePlanV1(
       createFlatTerrainCapabilitySpec(),
       { subjectResourceRegistry: builtInSubjectResourceRegistry },
     );
@@ -1519,7 +1760,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       sweepSphere: () => undefined,
     };
     const director = new CameraDirectorV1(
-      executionPlan,
+      initialCamera(executionPlan),
       new FreeCamera("camera.test", Vector3.Zero(), scene),
       scene,
       queryPort,
@@ -1537,7 +1778,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       expect(Object.isFrozen(director.previewState().tuningByProfileRef)).toBe(true);
       const postDisposeMutators = [
         () => director.setViewPreference(
-          executionPlan.subjects[0]!.capabilityAssembly.cameraContext,
+          runtimeSubject(executionPlan).capabilityAssembly.cameraContext,
           {
             mode: "camera-rig-profile",
             cameraRigProfileRef: "worldkit://camera-profile/hostile@1",
@@ -1549,7 +1790,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
         () => director.resetView(),
         () => director.applyPreview(
           {},
-          executionPlan.subjects[0]!.capabilityAssembly.cameraContext,
+          runtimeSubject(executionPlan).capabilityAssembly.cameraContext,
         ),
         () => director.reset(),
       ];

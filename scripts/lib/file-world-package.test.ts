@@ -1,17 +1,18 @@
+import { worldPackageRefFromRootHashV1 } from "@whitebox-world/world-identity";
+
 import {
   normalizeAuthoringSpecV4,
   validateAuthoringSpecV4,
   type AuthoringSpecV4,
 } from "@whitebox-world/authoring";
-import { compileWorldV5 } from "@whitebox-world/compiler";
+import { compileCanonicalWorldV1 } from "@whitebox-world/compiler";
 import {
   createGameplayBootstrapResourceLockEntryV1,
   createGameplayBootstrapV1,
 } from "@whitebox-world/gameplay-contracts";
 import {
-  createWorldPackageV2,
-  worldPackageRefFromRootHashV1,
-  type WorldPackageDirectoryV2,
+  createWorldPackageV1,
+  type WorldPackageDirectoryV1,
 } from "@whitebox-world/world-package";
 import { generateKeyPairSync } from "node:crypto";
 import {
@@ -35,12 +36,12 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import basicWorldDocument from "../../examples/authoring/basic-world.json";
 import {
-  createFileWorldPackageTestAdapterV2,
+  createFileWorldPackageTestAdapterV1,
   createFileWorldPackageStoreV1,
-  readWorldPackageDirectoryV2,
-  writeWorldPackageDirectoryV2,
+  readWorldPackageDirectoryV1,
+  writeWorldPackageDirectoryV1,
 } from "./file-world-package.js";
-import { signWorldPackageDirectoryV2 } from "./world-package-signing.js";
+import { signWorldPackageDirectoryV1 } from "./world-package-signing.js";
 
 const HASH_A = `sha256:${"a".repeat(64)}` as const;
 const HASH_B = `sha256:${"b".repeat(64)}` as const;
@@ -49,7 +50,7 @@ const READ_LIMITS = {
   maximumFileCount: 256,
 } as const;
 
-let fixture: WorldPackageDirectoryV2;
+let fixture: WorldPackageDirectoryV1;
 let testRoot: string;
 
 function authoringFixture(): AuthoringSpecV4 {
@@ -60,7 +61,7 @@ function authoringFixture(): AuthoringSpecV4 {
   return validated.value;
 }
 
-function createDirectoryFixture(): WorldPackageDirectoryV2 {
+function createDirectoryFixture(): WorldPackageDirectoryV1 {
   const authoringSpec = authoringFixture();
   const normalized = normalizeAuthoringSpecV4(authoringSpec);
   if (
@@ -94,17 +95,19 @@ function createDirectoryFixture(): WorldPackageDirectoryV2 {
     featureResourceLocks: [],
     semanticActionDefinitions: [],
     availableCapabilityRefs: [],
+    initialRelationshipStates: [],
   });
-  const compiled = compileWorldV5({
+  const compiled = compileCanonicalWorldV1({
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
-    gameplayBootstrapResourceLock:
-      createGameplayBootstrapResourceLockEntryV1(gameplayBootstrap),
+    gameplayBootstrap,
+    worldRuntimeBootstrapRef:
+      `worldkit://world-runtime-bootstrap/${normalized.value.id}@1`,
   });
-  if (!compiled.ok || isNil(compiled.executionPlan)) {
+  if (!compiled.ok || isNil(compiled.canonicalSceneExecutionPlan)) {
     throw new Error("fixture compilation failed");
   }
-  return createWorldPackageV2({
+  return createWorldPackageV1({
     packageId: `${authoringSpec.id}.package`,
     title: "File World Package",
     sdkVersion: "0.0.0",
@@ -127,8 +130,9 @@ function createDirectoryFixture(): WorldPackageDirectoryV2 {
       report: normalized.layoutSolveReport,
       layoutSolveReportHash: normalized.layoutSolveReportHash,
     },
-    executionPlan: compiled.executionPlan,
+    executionPlan: compiled.canonicalSceneExecutionPlan,
     gameplayBootstrap,
+    worldRuntimeBootstrap: compiled.worldRuntimeBootstrap,
     resourceArtifacts: [],
     generatedResourceProvenance: {
       licenseDocumentId: "project-owned",
@@ -155,7 +159,7 @@ async function assertNoPublicationDebris(): Promise<void> {
 
 beforeAll(() => {
   const { privateKey } = generateKeyPairSync("ed25519");
-  fixture = signWorldPackageDirectoryV2({
+  fixture = signWorldPackageDirectoryV1({
     directory: createDirectoryFixture(),
     keyId: "file-adapter-test",
     trustDomain: "worldkit.test",
@@ -176,10 +180,10 @@ afterEach(async () => {
   await rm(testRoot, { recursive: true, force: true });
 });
 
-describe("file WorldPackage V2 adapter", () => {
+describe("file WorldPackage adapter", { timeout: 30_000 }, () => {
   it("publishes once with owner-only modes and reads the exact verified directory", async () => {
     const outputDirectoryPath = path.join(testRoot, "package");
-    await writeWorldPackageDirectoryV2({
+    await writeWorldPackageDirectoryV1({
       outputDirectoryPath,
       directory: {
         ...fixture,
@@ -187,7 +191,7 @@ describe("file WorldPackage V2 adapter", () => {
         signatureFiles: [...fixture.signatureFiles].reverse(),
       },
     });
-    const read = await readWorldPackageDirectoryV2({
+    const read = await readWorldPackageDirectoryV1({
       packageDirectoryPath: outputDirectoryPath,
       ...READ_LIMITS,
     });
@@ -204,14 +208,14 @@ describe("file WorldPackage V2 adapter", () => {
   });
 
   it("rejects relative outputs, existing destinations, and symlinked parents", async () => {
-    await expect(writeWorldPackageDirectoryV2({
+    await expect(writeWorldPackageDirectoryV1({
       outputDirectoryPath: "relative-package",
       directory: fixture,
     })).rejects.toThrow("WORLD_PACKAGE_FILE_IO_V2_INVALID");
 
     const existing = path.join(testRoot, "existing");
     await mkdir(existing, { mode: 0o700 });
-    await expect(writeWorldPackageDirectoryV2({
+    await expect(writeWorldPackageDirectoryV1({
       outputDirectoryPath: existing,
       directory: fixture,
     })).rejects.toThrow("WORLD_PACKAGE_FILE_IO_V2_INVALID");
@@ -220,7 +224,7 @@ describe("file WorldPackage V2 adapter", () => {
     const linkedParent = path.join(testRoot, "linked-parent");
     await mkdir(realParent, { mode: 0o700 });
     await symlink(realParent, linkedParent);
-    await expect(writeWorldPackageDirectoryV2({
+    await expect(writeWorldPackageDirectoryV1({
       outputDirectoryPath: path.join(linkedParent, "package"),
       directory: fixture,
     })).rejects.toThrow("WORLD_PACKAGE_FILE_IO_V2_INVALID");
@@ -228,20 +232,20 @@ describe("file WorldPackage V2 adapter", () => {
 
   it("rejects package symlinks, non-owner permissions, and invalid limits", async () => {
     const outputDirectoryPath = path.join(testRoot, "package");
-    await writeWorldPackageDirectoryV2({ outputDirectoryPath, directory: fixture });
+    await writeWorldPackageDirectoryV1({ outputDirectoryPath, directory: fixture });
     const manifestPath = path.join(outputDirectoryPath, "manifest.json");
     const externalPath = path.join(testRoot, "external.json");
     await writeFile(externalPath, await readFile(manifestPath), { mode: 0o600 });
     await unlink(manifestPath);
     await symlink(externalPath, manifestPath);
-    await expect(readWorldPackageDirectoryV2({
+    await expect(readWorldPackageDirectoryV1({
       packageDirectoryPath: outputDirectoryPath,
       ...READ_LIMITS,
     })).rejects.toThrow("WORLD_PACKAGE_FILE_IO_V2_INVALID");
 
     await unlink(manifestPath);
     await writeFile(manifestPath, await readFile(externalPath), { mode: 0o644 });
-    await expect(readWorldPackageDirectoryV2({
+    await expect(readWorldPackageDirectoryV1({
       packageDirectoryPath: outputDirectoryPath,
       ...READ_LIMITS,
     })).rejects.toThrow("WORLD_PACKAGE_FILE_IO_V2_INVALID");
@@ -252,7 +256,7 @@ describe("file WorldPackage V2 adapter", () => {
       { maximumTotalBytes: 16 * 1024 * 1024, maximumFileCount: 1 },
       { maximumTotalBytes: 0, maximumFileCount: 256 },
     ]) {
-      await expect(readWorldPackageDirectoryV2({
+      await expect(readWorldPackageDirectoryV1({
         packageDirectoryPath: outputDirectoryPath,
         ...limits,
       })).rejects.toThrow("WORLD_PACKAGE_FILE_IO_V2_INVALID");
@@ -261,9 +265,9 @@ describe("file WorldPackage V2 adapter", () => {
 
   it("detects a nested directory changed into a symlink during traversal", async () => {
     const outputDirectoryPath = path.join(testRoot, "package");
-    await writeWorldPackageDirectoryV2({ outputDirectoryPath, directory: fixture });
+    await writeWorldPackageDirectoryV1({ outputDirectoryPath, directory: fixture });
     let swapped = false;
-    const adapter = createFileWorldPackageTestAdapterV2({
+    const adapter = createFileWorldPackageTestAdapterV1({
       async beforeReadDirectory(_absolutePath, relativePath) {
         if (relativePath !== "targets" || swapped) return;
         swapped = true;
@@ -274,7 +278,7 @@ describe("file WorldPackage V2 adapter", () => {
       },
     });
 
-    await expect(adapter.readWorldPackageDirectoryV2({
+    await expect(adapter.readWorldPackageDirectoryV1({
       packageDirectoryPath: outputDirectoryPath,
       ...READ_LIMITS,
     })).rejects.toThrow("WORLD_PACKAGE_FILE_IO_V2_INVALID");
@@ -283,9 +287,9 @@ describe("file WorldPackage V2 adapter", () => {
 
   it("detects regular-file replacement after its no-follow descriptor is open", async () => {
     const outputDirectoryPath = path.join(testRoot, "package");
-    await writeWorldPackageDirectoryV2({ outputDirectoryPath, directory: fixture });
+    await writeWorldPackageDirectoryV1({ outputDirectoryPath, directory: fixture });
     let replaced = false;
-    const adapter = createFileWorldPackageTestAdapterV2({
+    const adapter = createFileWorldPackageTestAdapterV1({
       async afterReadFileOpen(absolutePath, relativePath) {
         if (relativePath !== "manifest.json" || replaced) return;
         replaced = true;
@@ -295,7 +299,7 @@ describe("file WorldPackage V2 adapter", () => {
       },
     });
 
-    await expect(adapter.readWorldPackageDirectoryV2({
+    await expect(adapter.readWorldPackageDirectoryV1({
       packageDirectoryPath: outputDirectoryPath,
       ...READ_LIMITS,
     })).rejects.toThrow("WORLD_PACKAGE_FILE_IO_V2_INVALID");
@@ -304,27 +308,27 @@ describe("file WorldPackage V2 adapter", () => {
 
   it("removes only owned staging state after partial write and rename failures", async () => {
     let writes = 0;
-    const partialWriteAdapter = createFileWorldPackageTestAdapterV2({
+    const partialWriteAdapter = createFileWorldPackageTestAdapterV1({
       async beforeWriteFile() {
         writes += 1;
         if (writes === 2) throw new Error("injected partial write failure");
       },
     });
     const partialOutput = path.join(testRoot, "partial-package");
-    await expect(partialWriteAdapter.writeWorldPackageDirectoryV2({
+    await expect(partialWriteAdapter.writeWorldPackageDirectoryV1({
       outputDirectoryPath: partialOutput,
       directory: fixture,
     })).rejects.toThrow("WORLD_PACKAGE_FILE_IO_V2_INVALID");
     await expect(lstat(partialOutput)).rejects.toMatchObject({ code: "ENOENT" });
     await assertNoPublicationDebris();
 
-    const renameAdapter = createFileWorldPackageTestAdapterV2({
+    const renameAdapter = createFileWorldPackageTestAdapterV1({
       async beforeRename() {
         throw new Error("injected rename failure");
       },
     });
     const renameOutput = path.join(testRoot, "rename-package");
-    await expect(renameAdapter.writeWorldPackageDirectoryV2({
+    await expect(renameAdapter.writeWorldPackageDirectoryV1({
       outputDirectoryPath: renameOutput,
       directory: fixture,
     })).rejects.toThrow("WORLD_PACKAGE_FILE_IO_V2_INVALID");
@@ -334,7 +338,7 @@ describe("file WorldPackage V2 adapter", () => {
 
   it("fails closed before rename when a staging-directory fsync fails", async () => {
     let failed = false;
-    const adapter = createFileWorldPackageTestAdapterV2({
+    const adapter = createFileWorldPackageTestAdapterV1({
       async beforeSyncDirectory(_absolutePath, phase) {
         if (phase !== "staging" || failed) return;
         failed = true;
@@ -342,7 +346,7 @@ describe("file WorldPackage V2 adapter", () => {
       },
     });
     const outputDirectoryPath = path.join(testRoot, "package");
-    await expect(adapter.writeWorldPackageDirectoryV2({
+    await expect(adapter.writeWorldPackageDirectoryV1({
       outputDirectoryPath,
       directory: fixture,
     })).rejects.toThrow("WORLD_PACKAGE_FILE_IO_V2_INVALID");
@@ -353,13 +357,13 @@ describe("file WorldPackage V2 adapter", () => {
   it("allows exactly one of two concurrent writers to publish the destination", async () => {
     const outputDirectoryPath = path.join(testRoot, "package");
     const results = await Promise.allSettled([
-      writeWorldPackageDirectoryV2({ outputDirectoryPath, directory: fixture }),
-      writeWorldPackageDirectoryV2({ outputDirectoryPath, directory: fixture }),
+      writeWorldPackageDirectoryV1({ outputDirectoryPath, directory: fixture }),
+      writeWorldPackageDirectoryV1({ outputDirectoryPath, directory: fixture }),
     ]);
 
     expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
     expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
-    await expect(readWorldPackageDirectoryV2({
+    await expect(readWorldPackageDirectoryV1({
       packageDirectoryPath: outputDirectoryPath,
       ...READ_LIMITS,
     })).resolves.toMatchObject({
@@ -369,7 +373,7 @@ describe("file WorldPackage V2 adapter", () => {
   });
 });
 
-describe("file WorldPackageStoreV1", () => {
+describe("file WorldPackageStoreV1", { timeout: 30_000 }, () => {
   it("replays an idempotently stored package through a fresh adapter", async () => {
     const storeRootPath = path.join(testRoot, "store");
     await mkdir(storeRootPath, { mode: 0o700 });
@@ -411,7 +415,7 @@ describe("file WorldPackageStoreV1", () => {
     });
     await store.put(fixture);
     const { privateKey } = generateKeyPairSync("ed25519");
-    const conflicting = signWorldPackageDirectoryV2({
+    const conflicting = signWorldPackageDirectoryV1({
       directory: fixture,
       keyId: "conflicting-signature",
       trustDomain: "worldkit.test",

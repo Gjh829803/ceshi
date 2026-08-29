@@ -16,6 +16,8 @@ const TAKE_PATH = path.join(
 );
 const CURRENT_WORLD_PACKAGE_ROOT_HASH =
   `sha256:${"a".repeat(64)}` as const;
+const CURRENT_WORLD_BUILD_IDENTITY_HASH =
+  `sha256:${"b".repeat(64)}` as const;
 
 describe("bindSimulationTakeWorldIdentityV1", () => {
   it("rebuilds a validated immutable Take with the current WorldPackage identity", async () => {
@@ -27,14 +29,19 @@ describe("bindSimulationTakeWorldIdentityV1", () => {
     const rebound = bindSimulationTakeWorldIdentityV1(
       source,
       CURRENT_WORLD_PACKAGE_ROOT_HASH,
+      CURRENT_WORLD_BUILD_IDENTITY_HASH,
     );
 
     expect(rebound.worldPackageRootHash).toBe(
       CURRENT_WORLD_PACKAGE_ROOT_HASH,
     );
+    expect(rebound.worldBuildIdentityHash).toBe(
+      CURRENT_WORLD_BUILD_IDENTITY_HASH,
+    );
     expect({
       ...rebound,
       worldPackageRootHash: source.worldPackageRootHash,
+      worldBuildIdentityHash: source.worldBuildIdentityHash,
     }).toEqual(compileSimulationTakeV1(source).take);
     expect(source).toEqual(sourceSnapshot);
     expect(Object.isFrozen(rebound)).toBe(true);

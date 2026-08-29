@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,13 +12,12 @@ import {
   parseWorldChangeRequestV1,
   parseWorldChangeSetV1,
   WORLD_CHANGE_OPERATION_TYPES_V1,
-  type Sha256HashV1,
   type WorldChangeRequestV1,
   type WorldChangeSetV1,
 } from "@whitebox-world/authoring-edit";
 import {
   createInMemoryWorldPackageStoreV1,
-  createWorldPackageBuildContextFixtureV2,
+  createWorldPackageBuildContextFixtureV1,
 } from "@whitebox-world/world-package/testing";
 import type { WorldPackageStoreV1 } from "@whitebox-world/world-package";
 import { isNil } from "lodash-es";
@@ -48,7 +49,7 @@ const EXAMPLES_ROOT = join(
   dirname(fileURLToPath(import.meta.url)),
   "../../../../examples/authoring",
 );
-const WORLD_PACKAGE_BUILD_CONTEXT = createWorldPackageBuildContextFixtureV2();
+const WORLD_PACKAGE_BUILD_CONTEXT = createWorldPackageBuildContextFixtureV1();
 
 function session(): AuthoringEditSessionV1 {
   return {

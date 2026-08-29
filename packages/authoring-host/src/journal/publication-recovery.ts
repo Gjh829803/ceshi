@@ -1,14 +1,14 @@
+import { worldPackageRefFromRootHashV1, type WorldPackageRefV1 } from "@whitebox-world/world-identity";
+
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import {
   parseWorldChangeCleanupReportV1,
   parseWorldChangeReceiptV1,
-  type Sha256HashV1,
   type WorldChangeCleanupReportV1,
   type WorldChangeReceiptV1,
 } from "@whitebox-world/authoring-edit";
-import {
-  worldPackageRefFromRootHashV1,
-  type WorldPackageRefV1,
-} from "@whitebox-world/world-package";
+
 import { isEqual, isNil, orderBy } from "lodash-es";
 
 import {

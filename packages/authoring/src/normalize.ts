@@ -770,6 +770,6 @@ function normalizeValidatedAuthoringBase(
     ok: true,
     value: normalized,
     diagnostics: [],
-    normalizedWorldIrHash: sha256CanonicalJson(normalized),
+    normalizedWorldIrHash: sha256CanonicalJson(normalized) as `sha256:${string}`,
   };
 }

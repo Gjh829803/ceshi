@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./babylon-native-scene-bootstrap-schema": "./src/babylon-native-scene-bootstrap-v1.schema.json",
+    "./world-runtime-bootstrap-schema": "./src/world-runtime-bootstrap-v1.schema.json"
   },
   "dependencies": {
     "@whitebox-world/camera": "workspace:*",
@@ -15,6 +17,7 @@
     "@whitebox-world/subject-actions": "workspace:*",
     "@whitebox-world/subject-contracts": "workspace:*",
     "@whitebox-world/traversal": "workspace:*",
-    "lodash-es": "^4.18.1"
+    "lodash-es": "^4.18.1",
+    "ajv": "^8.17.1"
   }
 }

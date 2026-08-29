@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { isEmpty, isNil, omit } from "lodash-es";
 
@@ -11,7 +13,6 @@ import {
   hasRequiredAndOptionalKeys,
   invalid,
   snapshotDataRecord,
-  type Sha256HashV1,
 } from "../parse-kernel.js";
 import {
   REGISTRY_RESOURCE_KINDS_V1,

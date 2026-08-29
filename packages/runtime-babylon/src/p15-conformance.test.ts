@@ -11,16 +11,16 @@ import { describe, expect, it } from "vitest";
 import { normalizeAuthoringSpecV4 } from "@whitebox-world/authoring";
 import {
   assertPublishedMovementMediumSupported,
-  compileWorldV5,
+  compileCanonicalWorldV1,
 } from "@whitebox-world/compiler";
 import {
   createValidAuthoringSpecV4 as createValidAuthoringSpec,
   createValidPackageSubjectWorldV4,
 } from "../../authoring/src/test-fixture";
 import type {
-  ExecutionObjectV3,
-  ExecutionPlanV5,
-  ExecutionStaticColliderV1,
+  CanonicalSceneObjectV1,
+  CanonicalSceneExecutionPlanV1,
+  CanonicalSceneStaticColliderV1,
   FixedInputV1,
 } from "@whitebox-world/runtime-contracts";
 
@@ -29,8 +29,12 @@ import { bindRuntimeTestPossession } from "./runtime-test-possession";
 import { BABYLON_GAMEPLAY_RUNTIME_INTERNAL } from "./gameplay-runtime-internal";
 import type { BabylonRuntimeProjectionV1 } from "./runtime-projection";
 import {
-  compileRuntimeTestPlanV5,
-  createRuntimeTestGameplayBootstrapLockV1,
+  compileRuntimeTestScenePlanV1,
+  createRuntimeTestWorldVariantV1,
+  createRuntimeTestGameplayBootstrapV1,
+  runtimeTestSubjectsForPlanV1,
+  runtimeTestWorldArtifactsForPlanV1,
+  runtimeTestWorldInputForPlanV1,
 } from "./runtime-test-plan";
 import type { CharacterMovementComponentV1 } from "./character-movement-component";
 
@@ -50,7 +54,7 @@ const havokWasmBinary = havokWasmBytes.buffer.slice(
   havokWasmBytes.byteOffset + havokWasmBytes.byteLength,
 ) as ArrayBuffer;
 
-function compileFlatPackagePlan(): ExecutionPlanV5 {
+function compileFlatPackagePlan(): CanonicalSceneExecutionPlanV1 {
   const spec = createValidPackageSubjectWorldV4();
   spec.nodes = spec.nodes.map((node) =>
     node.kind === "terrain" && node.components.terrain.source.kind === "procedural"
@@ -70,17 +74,16 @@ function compileFlatPackagePlan(): ExecutionPlanV5 {
         }
       : node,
   );
-  const plan = compileRuntimeTestPlanV5(spec);
-  return {
-    ...plan,
+  const plan = compileRuntimeTestScenePlanV1(spec);
+  return createRuntimeTestWorldVariantV1(plan, {
     // P1.5 is the retained legacy conformance suite. A static visual binding
     // keeps this fixture on that path instead of accidentally admitting the
     // single-rigged-subject Golden Humanoid vNext vertical slice.
-    subjects: plan.subjects.map((subject) => ({
+    runtimeSubjects: runtimeTestSubjectsForPlanV1(plan).map((subject) => ({
       ...subject,
       visualBinding: { mode: "static" as const },
     })),
-  };
+  });
 }
 
 /**
@@ -89,21 +92,22 @@ function compileFlatPackagePlan(): ExecutionPlanV5 {
  */
 function playerOnlyPlan(options: {
   spawnMetersXYZ: readonly [number, number, number];
-  objects?: readonly ExecutionObjectV3[];
-}): ExecutionPlanV5 {
+  objects?: readonly CanonicalSceneObjectV1[];
+}): CanonicalSceneExecutionPlanV1 {
   const base = compileFlatPackagePlan();
-  const player = base.subjects.find((subject) => subject.entityId === "player")!;
-  return {
-    ...base,
-    terrain: {
+  const player = runtimeTestSubjectsForPlanV1(base)
+    .find((subject) => subject.entityId === "player")!;
+  return createRuntimeTestWorldVariantV1(base, {
+    scenePlanPatch: {
+      terrain: {
       ...base.terrain,
       heightSamplesMeters: base.terrain.heightSamplesMeters.map(() => 0),
       minimumHeightMeters: 0,
       maximumHeightMeters: 0,
-    },
-    waters: [],
-    objects: [...(options.objects ?? [])],
-    staticColliders: (options.objects ?? []).flatMap((object) =>
+      },
+      waters: [],
+      objects: [...(options.objects ?? [])],
+      staticColliders: (options.objects ?? []).flatMap((object) =>
       object.primitive.kind === "cone"
         ? []
         : [{
@@ -115,17 +119,18 @@ function playerOnlyPlan(options: {
               transform: object.transform,
             }) as `sha256:${string}`,
             transform: object.transform,
-            shape: object.primitive as ExecutionStaticColliderV1["shape"],
+            shape: object.primitive as CanonicalSceneStaticColliderV1["shape"],
           }],
-    ),
-    subjects: [
+      ),
+      layout: { ...base.layout, layoutAssertions: [] },
+    },
+    runtimeSubjects: [
       {
         ...player,
         spawnSubjectOriginPositionMetersXYZ: [...options.spawnMetersXYZ],
       },
     ],
-    layout: { ...base.layout, layoutAssertions: [] },
-  };
+  });
 }
 
 function staticBox(options: {
@@ -133,7 +138,7 @@ function staticBox(options: {
   sizeMetersXYZ: readonly [number, number, number];
   positionMetersXYZ: readonly [number, number, number];
   rotationEulerRadiansXYZ?: readonly [number, number, number];
-}): ExecutionObjectV3 {
+}): CanonicalSceneObjectV1 {
   return {
     entityId: options.entityId,
     prototypeId: `${options.entityId}-prototype`,
@@ -149,10 +154,10 @@ function staticBox(options: {
 }
 
 async function createConformanceRuntime(
-  executionPlan: ExecutionPlanV5,
+  executionPlan: CanonicalSceneExecutionPlanV1,
 ): Promise<BabylonWorldRuntime> {
   const runtime = await BabylonWorldRuntime.create({
-    executionPlan,
+    ...runtimeTestWorldInputForPlanV1(executionPlan),
     havokWasmBinary,
     engineFactory: () =>
       new NullEngine({
@@ -165,7 +170,8 @@ async function createConformanceRuntime(
   });
   await bindRuntimeTestPossession(
     runtime,
-    executionPlan.initialControlledEntityId,
+    runtimeTestWorldArtifactsForPlanV1(executionPlan).worldRuntimeBootstrap
+      .initialControlledEntityId,
   );
   return runtime;
 }
@@ -655,7 +661,7 @@ describe("P1.5 conformance: closed Ground/Air Feel slice", () => {
 
   it("5b. applies Feel hold/release gravity ratios to held versus released jumps", async () => {
     const executionPlan = playerOnlyPlan({ spawnMetersXYZ: [0, 0, 30] });
-    const playerFeel = executionPlan.subjects[0]!.controlFeel;
+    const playerFeel = runtimeTestSubjectsForPlanV1(executionPlan)[0]!.controlFeel;
     expect(playerFeel.jumpHoldGravityRatio).toBeLessThan(1);
     expect(playerFeel.jumpReleaseGravityRatio).toBeGreaterThanOrEqual(1);
 
@@ -783,11 +789,12 @@ describe("P1.5 conformance: closed Ground/Air Feel slice", () => {
     } as typeof definition.capabilityAssembly.mediumProfile;
 
     expect(
-      compileWorldV5({
+      compileCanonicalWorldV1({
         normalizedWorldIr: forged,
-        normalizedWorldIrHash: sha256CanonicalJson(forged),
-        gameplayBootstrapResourceLock:
-          createRuntimeTestGameplayBootstrapLockV1(forged),
+        normalizedWorldIrHash: sha256CanonicalJson(forged) as `sha256:${string}`,
+        gameplayBootstrap: createRuntimeTestGameplayBootstrapV1(forged),
+        worldRuntimeBootstrapRef:
+          `worldkit://world-runtime-bootstrap/${forged.id}@1`,
       }),
     ).toMatchObject({
       ok: false,

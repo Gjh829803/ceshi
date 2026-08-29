@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import {
   access,
   lstat,
@@ -17,7 +19,6 @@ import {
   compileSimulationTakeV1,
   type CompiledSimulationTakeV1,
   type ControlCapturePassIdV1,
-  type Sha256HashV1,
 } from "@whitebox-world/control-capture";
 import {
   sha256Bytes,
@@ -71,7 +72,7 @@ interface WorldPackageIdentityV1 {
   readonly worldPackageRef: string;
   readonly worldPackageRootHash: Sha256HashV1;
   readonly normalizedWorldIrHash: Sha256HashV1;
-  readonly executionPlanHash: Sha256HashV1;
+  readonly worldBuildIdentityHash: Sha256HashV1;
 }
 
 interface SemanticClassTableEntryV1 {
@@ -208,6 +209,7 @@ export interface ControlCaptureBundleInspectionV1 {
   readonly frameCount: number;
   readonly runtimeSessionId: string;
   readonly worldPackageRootHash: Sha256HashV1;
+  readonly worldBuildIdentityHash: Sha256HashV1;
   readonly takeHash: Sha256HashV1;
   readonly bundleRootHash: Sha256HashV1;
 }
@@ -588,7 +590,8 @@ export async function createControlCaptureBundleWriterV1(
           worldPackageRef: options.worldPackageIdentity.worldPackageRef,
           worldPackageRootHash: options.worldPackageIdentity.worldPackageRootHash,
           normalizedWorldIrHash: options.worldPackageIdentity.normalizedWorldIrHash,
-          executionPlanHash: options.worldPackageIdentity.executionPlanHash,
+          worldBuildIdentityHash:
+            options.worldPackageIdentity.worldBuildIdentityHash,
           takeId: options.compiledTake.take.id,
           takeHash: options.compiledTake.takeHash,
           runtimeSessionId: options.runtimeSessionId,
@@ -799,6 +802,48 @@ export async function validateControlCaptureBundleV1(
   if (integrity === undefined || manifest === undefined || take === undefined) {
     return { ok: false, diagnostics };
   }
+  const manifestKeys = Object.keys(manifest).sort();
+  const expectedManifestKeys = [
+    "bundleManifestHash",
+    "captureEncodingProfileRef",
+    "captureProfileRef",
+    "frameCount",
+    "frames",
+    "id",
+    "kind",
+    "normalizedWorldIrHash",
+    "runtimeSessionId",
+    "schemaVersion",
+    "takeHash",
+    "takeId",
+    "worldBuildIdentityHash",
+    "worldPackageRef",
+    "worldPackageRootHash",
+  ].sort();
+  if (!isEqual(manifestKeys, expectedManifestKeys)) {
+    addValidationDiagnostic(
+      diagnostics,
+      "CAPTURE_BUNDLE_JSON_INVALID",
+      "bundle.json",
+      "Bundle manifest must use the exact current identity fields.",
+    );
+  }
+  if (
+    worldPackageIdentity !== undefined &&
+    !isEqual(Object.keys(worldPackageIdentity).sort(), [
+      "normalizedWorldIrHash",
+      "worldBuildIdentityHash",
+      "worldPackageRef",
+      "worldPackageRootHash",
+    ].sort())
+  ) {
+    addValidationDiagnostic(
+      diagnostics,
+      "CAPTURE_BUNDLE_JSON_INVALID",
+      "world-package-ref.json",
+      "World Package identity must use the exact current identity fields.",
+    );
+  }
   let compiledTake: CompiledSimulationTakeV1 | undefined;
   try {
     compiledTake = compileSimulationTakeV1(take);
@@ -890,7 +935,8 @@ export async function validateControlCaptureBundleV1(
       worldPackageIdentity.worldPackageRef !== manifest.worldPackageRef ||
       worldPackageIdentity.worldPackageRootHash !== manifest.worldPackageRootHash ||
       worldPackageIdentity.normalizedWorldIrHash !== manifest.normalizedWorldIrHash ||
-      worldPackageIdentity.executionPlanHash !== manifest.executionPlanHash
+      worldPackageIdentity.worldBuildIdentityHash !==
+        manifest.worldBuildIdentityHash
     )
   ) {
     addValidationDiagnostic(
@@ -1264,6 +1310,7 @@ export async function inspectControlCaptureBundleV1(
     frameCount: manifest.frameCount as number,
     runtimeSessionId: manifest.runtimeSessionId as string,
     worldPackageRootHash: manifest.worldPackageRootHash as Sha256HashV1,
+    worldBuildIdentityHash: manifest.worldBuildIdentityHash as Sha256HashV1,
     takeHash: manifest.takeHash as Sha256HashV1,
     bundleRootHash: validation.bundleRootHash,
   };

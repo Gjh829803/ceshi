@@ -1,13 +1,25 @@
 # SDK 重构总进度与 Backlog
 
 - 状态：Active，重构执行进度与剩余工作的唯一跟踪入口。
-- 基准日期：2026-08-26。
+- 能力进度基准日期：2026-08-26（本次未重算百分比）。
+- 架构状态更新至：2026-08-29。
 - 长期目标总进度：约 **68%**，合理误差范围为 ±5%。
 - 第一条 Canonical 纵向切片：约 **94%**。
-- 当前唯一世界构建入口：Canonical Authoring V4 → NormalizedWorldIR V4 → ExecutionPlan V5 →
-  RuntimeWorldConfiguration V1 → RuntimeHost → Babylon.js/Havok；Route 在同一 V5 Plan 上生成
+- 当前唯一正式生产世界构建入口：Canonical Authoring V4 → NormalizedWorldIR V4 → Canonical Scene Plan V1
+  + Gameplay Bootstrap V1 + World Runtime Bootstrap V1 → RuntimeWorldConfiguration V1 → RuntimeHost →
+  Babylon.js/Havok；Route 在同一 Canonical Scene Plan 上生成
   WorldPackage Build Receipt → Validation Subject → Recast → Canonical Route Evidence/Report。
   Browser 只公开 Protocol V5 与 Snapshot V4；Babylon provider projection 保持 Adapter 内部合同。
+
+> ADR-0007 已接受长期的 Babylon Native Scene Lane 架构方向：Native JSON 管启动/资源/Gameplay，
+> Babylon TypeScript 管视觉，显式登记连接 SDK-owned Havok，且每个世界只选一个 Scene Source。
+> BNA-1 已冻结 Native Schema、Source Union 与 source-neutral identity，但正式 RuntimeHost 仍在任何
+> adapter/Candidate 分配前拒绝 Native。Native Package/Receipt、Surface Admission、Hosted 隔离和正式
+> Route 尚未生产化，因此不改变上一段的当前入口和进度口径。
+
+> Source-neutral Asset Production/Admission 已形成 Proposed 设计：只在两条 Scene Source 之前生产原始
+> Candidate，经资产类别 Build Record 与只读 Admission 后发布资源；不增加第三条 Scene Source。APA 尚未
+> 实施，不提高完成度；整房间/整关卡 `scene-shell` 在 V1 仅为 artifact-only 研究证据。
 
 > Golden Humanoid S1b 首个可视纵向切片已完成并进入回归；S1b 整体与 Semantic Actions 整体仍未完成.
 
@@ -39,7 +51,7 @@
 
 > Simulation Take / Control Capture V1 已完成 60 Hz → 24 fps 精确时间映射、五 Pass
 > Babylon 捕获、Render Ready Receipt、原子 Bundle、CLI/Browser/Playwright 和真实 Chromium
-> Gate；统一 Validation 的 Capture/Integrity V1 也已进入回归。P1.4 WorldPackage V2、
+> Gate；统一 Validation 的 Capture/Integrity V1 也已进入回归。P1.4 当前唯一 WorldPackage V1、
 > Package CLI 与持久 headless Runtime Session 已完成；Placement/Physics/Composition 等
 > 统一 Gate、Capture 恢复续拍与 Video Adapter 仍未完成。
 
@@ -108,6 +120,10 @@ Registry Lock、Browser preference 命令，以及 Babylon CameraDirector 消费
 - [`2026-08-26-p16-full-reload-b-review.md`](reviews/2026-08-26-p16-full-reload-b-review.md)：P1.6 Full Reload 首切片 Mode B 变更审查；recover 终态保护与 F1 断言已按规格复验；
 - [`2026-08-19-world-validation-report-and-quality-gates-design.md`](../docs/superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md)：量化 Gate、Metric、Evidence 和生产阻断协议；
 - [`2026-08-20-ai-authored-geometry-extension-design.md`](../docs/superpowers/specs/2026-08-20-ai-authored-geometry-extension-design.md)：未来可能需要的 AI 自定义几何能力及候选技术，仅供调研评审，不属于当前 Roadmap；
+- [`2026-08-28-ai-friendly-babylon-native-world-authoring-design.md`](../docs/superpowers/specs/2026-08-28-ai-friendly-babylon-native-world-authoring-design.md)：Canonical JSON 与 Babylon Native Scene 的长期分工、薄登记合同、统一 Gameplay Kernel、生产化依赖图和能力声明边界；
+- [`2026-08-28-babylon-native-block-whitebox-profile-design.md`](../docs/superpowers/specs/2026-08-28-babylon-native-block-whitebox-profile-design.md)：Native Lane 首个参考图白膜 Profile；继承方块分支的构造、检查和优化思想，但不迁移 Three Adapter、持久 Manifest 或 Block Compiler；
+- [`2026-08-28-source-neutral-asset-production-and-admission-design.md`](../docs/superpowers/specs/2026-08-28-source-neutral-asset-production-and-admission-design.md)：两条 Scene Source 之前的 Provider-neutral Candidate、资产类别 Build Record、只读 Admission、Registry 发布和回退边界；当前为 Proposed，尚未实施；
+- [`ADR-0007`](decisions/0007-canonical-and-babylon-native-authoring-lanes.md)：接受“一世界、两条互斥场景创作 Lane、一个 Babylon/Havok Kernel”的架构决策；不代表 Native 已生产可用；
 - [`21-open-source-design-reference-ledger.md`](21-open-source-design-reference-ledger.md)：开源实现/测试的持续借鉴台账；记录锁定来源、本地落点、拒绝原因和候选验证，但不单独改变能力完成度；
 - `docs/superpowers/plans/`：已经进入实施阶段的单个纵向切片计划与证据。
 
@@ -124,7 +140,7 @@ Normalizer/Compiler、Runtime、CLI/Browser 和对应 Conformance Gate 的纵向
 | 工作流 | 权重 | 当前完成度 | 加权贡献 | 判断依据 |
 |---|---:|---:|---:|---|
 | 架构、边界与命名 | 8% | 96% | 7.7% | 总规格、ADR、主体/地形/3C 和 Placement/Take/Validation 专项已成稿；Validation Capture/Integrity V1 的字段与 Policy 已冻结并实现 |
-| Canonical Schema、IR、Registry 与 Compiler | 15% | 88% | 13.2% | Authoring V4 → IR V4 → Plan V5 已自包含并直接编译；旧 V3/V4 顶层协议已从已提交路径删除，Subject capability assembly 成为必填锁；完整 P1.4 发布格式与 WorldChangeSet Full Reload 正式 Host 闭环已交付，Incremental 仍开放 |
+| Canonical Schema、IR、Registry 与 Compiler | 15% | 88% | 13.2% | Authoring V4 → IR V4 → Canonical Scene Plan V1 + Gameplay/World Runtime Bootstrap 已自包含并直接编译；旧顶层协议已从已提交路径删除，Subject capability assembly 成为必填锁；完整 P1.4 发布格式与 WorldChangeSet Full Reload 正式 Host 闭环已交付，Incremental 仍开放 |
 | Babylon/Havok Runtime、物理与相机 | 15% | 75% | 11.25% | Heightfield、障碍、水域、多主体、第三人称、碰撞、资产主体、Placement Assertion 与五 Pass Capture 已交付；多视角与完整生产预算尚未完成 |
 | Subject LEGO 组装体系 | 15% | 45% | 6.75% | S0、S1a、Golden 与首个产品 G Bot 可视切片已完成；S1b 后续、S2、S3、S4 尚未完成 |
 | Terrain、Region 与 Placement | 12% | 74% | 8.88% | Alpha 地形和 Placement Solver S1 已运行；Route R0、R1 Heightfield 与 R1b Static Platform 已审查/门禁关闭；通用 Terrain Mask、更多 Constraint 与完整 P0.1 未完成 |
@@ -146,7 +162,7 @@ Capture V1 是独立的新纵向切片，不改变该 90% 口径。
 
 - [x] Canonical Authoring V4 是唯一接受的 JSON 输入；已被替代的 V1–V3 顶层输入不再进入当前生产链路。
 - [x] 严格 JSON Schema、关闭未知字段、语义校验和结构化 Diagnostic。
-- [x] 自包含 NormalizedWorldIR V4 与 ExecutionPlan V5；Compiler 从 IR V4 直接生成 Plan V5，不再投影到旧顶层协议。
+- [x] 自包含 NormalizedWorldIR V4 与 Canonical Scene Plan V1；Compiler 从 IR V4 同时生成 Scene Plan、Gameplay Bootstrap 与独立 World Runtime Bootstrap，不再投影或重组旧顶层协议。
 - [x] Canonical JSON Bytes、稳定 SHA-256、Definition Hash 和 Resource Lock。
 - [x] 精确版本的 Registry Capability/Profile/Subject Definition 解析；进入 Runtime 的 Subject 必填完整锁定 capability assembly。
 - [x] Compiler 和 Runtime 不读取 Authoring 原始输入，也不在协议中暴露 Babylon/Havok Handle。
@@ -189,13 +205,13 @@ Capture V1 是独立的新纵向切片，不改变该 90% 口径。
   （水介质状态切换已随 P1.5 首切片收敛到 P2.5，不再由 Adapter 硬编码发布）。
 - [x] 第三人称跟随相机和受控主体切换。
 - [x] `worldkit validate / build / run / capture`。
-- [x] Browser Protocol V5 exact 39-key surface 保留加载、固定输入、Capture、Snapshot、Reset、
+- [x] Browser Protocol V5 exact 38-key surface 保留加载、固定输入、Capture、Snapshot、Reset、
   Camera Preview 与多 Surface Route Evidence V2，并增加 Gameplay Command/Event/World State/
   Runtime Activity；不公开 `bindControl`，不保留并行 V4 alias。
 - [x] G19-6 已把 Authoring、CLI/WorldKit pipeline、Control Capture、
   Simulation Take 与 Canonical/Placement/Rigged/G Bot verifier 迁移到 Snapshot V4 和
   `executeGameplayCommand(control.bind)`；Execution Subject 现必填锁定的 locomotion Capability Ref/Hash，
-  Runtime 发布 Canonical locomotion capability state。Placement 已使用 Authoring/IR V4 → Plan V5 →
+  Runtime 发布 Canonical locomotion capability state。Placement 已使用 Authoring/IR V4 → Canonical Scene Plan V1 →
   Snapshot V4/Browser V5，Rigged/G Bot 修复异步 `page.evaluate` 边界，fixed-input pause 在 `finally`
   恢复。WorldPackage Runtime 配置构建阶段的资产失败在公共 Authoring 边界稳定 fail closed。
   主 locomotion Capability 使用已选 locomotion Capability 子图的唯一 dependency leaf：排除被其他已选
@@ -247,7 +263,7 @@ P1.5、P1.6、P2.5 与 P2.6 是把既有总体设计和产品对接契约显式�
 
 - [x] 编写 [Placement Constraint / Layout Solver 专项设计](../docs/superpowers/specs/2026-08-19-placement-constraint-layout-solver-design.md)。
 - [x] 评审并冻结专项设计中的字段、版本、首批 Constraint 与 Fixture（方案 2 的原始冻结发生于
-  2026-08-20；当前实现已 clean break 迁移到 Authoring V4 / NormalizedWorldIR V4 / ExecutionPlan V5）。
+  2026-08-20；当前实现已 clean break 迁移到 Authoring V4 / NormalizedWorldIR V4 / Canonical Scene Plan V1）。
 - [x] 冻结 Placement Constraint 与 Gameplay Relationship 的协议边界。
 - [x] 定义关闭枚举的 Required/Preferred Constraint 判别 Union。
 - [x] S1 覆盖 Region 内外、距离、方向、支撑、净空、坡度和镜头可见性；Route 以坡度约束/证据进入，未伪装成延后的 `connected-by-route` Kind。
@@ -273,7 +289,7 @@ P1.5、P1.6、P2.5 与 P2.6 是把既有总体设计和产品对接契约显式�
   Metric 必须引用 `route-runtime-probe-receipt`；主体步高/坡度/净空/缝隙阈值来自 Lock，
   不写进 Validation Profile。
 - [x] 编写 [R1 Heightfield 实施计划](../docs/superpowers/plans/2026-08-22-route-graph-traversability-r1-heightfield-implementation-plan.md)，
-  将 Authoring V4 → IR V4 → ExecutionPlan V5、Recast Provider Adapter、确定性 Graph/Query、
+  将 Authoring V4 → IR V4 → Canonical Scene Plan V1、Recast Provider Adapter、确定性 Graph/Query、
   单一 `checkSupport()` Runtime Evidence、真实 Babylon/Havok Probe、双 Blocking Gate、CLI/Browser
   与对抗 Fixture 拆成可追踪任务。计划成稿本身不等于 Runtime 已实现；Heightfield Runtime 由下一勾选项关闭。
 - [x] R1 实现普通人形 Heightfield Route：坡度、静态阻挡、胶囊宽高净空、缝隙、确定性
@@ -425,15 +441,15 @@ WorldPackage、Resume 与完整 Replay Gate 为完成标准。
   Root。该窄合同已解除 Task 8 Validation-subject seam 的阻塞；包归属相对原计划从
   `@whitebox-world/protocol` 修正为独立装配边界，避免基础协议反向依赖 Authoring、Compiler、
   Layout 与 Runtime Contracts。该项完成不表示 P1.4 整体完成。
-- [x] 冻结并实现可独立校验、加载和运行的 WorldPackage V2 目录与 Manifest；完整目录绑定
-  Authoring/IR/Registry Lock/Layout/ExecutionPlan/Gameplay Bootstrap 与资源字节，可信 Host
+- [x] 冻结并实现可独立校验、加载和运行的当前唯一 WorldPackage V1 目录与 Manifest；完整目录绑定
+  Authoring/IR/Registry Lock/Layout/Canonical Scene Plan/Gameplay 与 World Runtime Bootstrap、World Build Identity 和资源字节，可信 Host
   通过内容寻址 `WorldPackageStoreV1` 读回验证后的 Runtime 配置。V1 仅保留为具名迁移、
   测试和历史合同，不再被 active trusted consumer 接受。
 - [x] 实现 V2 Package Root Hash、逐文件完整性、Ed25519 签名输入与可信策略、
   License/NOTICE legal closure 和 Host Compatibility Gate；文件 Adapter 支持绝对目录、
   symlink-safe 读取与跨进程原子发布。完成证据见
   [`P1.4 Complete WorldPackage V2 completion record`](reviews/2026-08-27-p14-complete-world-package-v2-completion.md)。
-- [x] CLI 支持完整 WorldPackage V2 `build`、`inspect`、`load` 和持久
+- [x] CLI 支持完整 WorldPackage V1 `build`、`inspect`、`load` 和持久
   `run-session`；旧单文件 Build Artifact 只保留为具名 trusted-host 内部入口，不形成
   第二套公共 CLI 方言。
 - [x] Runtime Session 支持 closed canonical NDJSON 生命周期协议、Request ID、Receipt、
@@ -563,7 +579,7 @@ G1 完成记录见
 | P16-R1 | [x] Full Reload closure | 可注入 file WAL 的幂等 journal、revision head、持久 publication recovery 与单调 cleanup retry；页内 demo 仍明确为 in-memory | P16-C1、P16-P1 / P16-H1、P16-B1、P16-CLI1 |
 | P16-H1 | [x] Full Reload closure | RuntimeHost publication V2 + durable Runtime owner：Commit-time authorization/CAS、startup exact-identity recovery、bounded cleanup quarantine | P16-P1、P16-R1 / P16-B1、P16-F1 |
 | P16-CLI1 | [x] 已完成 first-slice | Schema/Registry/Change CLI；文件模式 Apply 为 authoring-only | P16-S1、P16-C1、P16-P1、P16-R1 / P16-F1 |
-| P16-B1 | [x] 已完成 first-slice | Trusted Authoring/Edit API 装在 `__WORLDKIT_AUTHORING_EDIT__`，V5 仍 exact 39 keys | P16-S1、P16-O1、P16-R1、P16-H1 / P16-F1 |
+| P16-B1 | [x] 已完成 first-slice | Trusted Authoring/Edit API 装在 `__WORLDKIT_AUTHORING_EDIT__`，V5 仍 exact 38 keys | P16-S1、P16-O1、P16-R1、P16-H1 / P16-F1 |
 | P16-F1 | [x] Full Reload closure evidence | Add House / Terrain、双 Provider、file WAL crash/restart、pin rehydration、fence、cleanup、Browser rendered 与人工交互 | P16-O1、P16-P1、P16-R1、P16-H1、P16-CLI1、P16-B1 / P16-G1 |
 | P16-I1 | [ ] 后续切片 | Handler Registry、fixed-tick Hot Apply、Differential Runtime Conformance | P16-F1、独立批准的 Incremental plan / P16-G2 |
 | P16-G1 | [x] Full Reload production-closure GO | 正式 file-backed Host + fresh-process + Browser/manual 门禁；规格头仍保持 implementation not started；不含 Incremental | P16-F1 / 无 |
@@ -603,7 +619,7 @@ affectedIds，不进入 Normalize/Compile/Package。验证：focused world-chang
 `pnpm typecheck`、`pnpm test:census`。这不是 P1.6 生产可用声明。
 
 P16-P1 证据：`@whitebox-world/authoring-host` 调用现有 Normalize / `createCoreGameplayBootstrapV1`
-/ Compile / WorldPackage V2 做 Trusted Candidate Build，并提供 lease pin/expiry/GC 与 Policy
+/ Compile / 当前唯一 WorldPackage V1 做 Trusted Candidate Build，并提供 lease pin/expiry/GC 与 Policy
 Hash binding。正式 composition 将 Package 写入经过验证的不可变 file Store；fresh-process
 恢复只按 durable build identity 重建原 lease/pin，不延长到期时间或接受 caller path。声明的 Required Gate 必须经 Host 注入的
 现有 runner 执行，缺 runner 或失败都 fail-closed 且不写 lease。验证：focused authoring-host
@@ -914,12 +930,90 @@ Replay、Streaming/Dispose 和自动 Diagnostic；普通 Agent 只引用稳定 P
 它们只有在目标、Owner、依赖和验收 Fixture 被明确后才拆成正式实施计划，不能
 为了提高总进度数字提前计为已开始。
 
-> **仍属未来探索、但不阻塞 P2.6：** 是否需要让 AI 超越 Registry Prototype/产品资产，
-> 自定义任意静态场景几何。目前只有一份
-> [候选技术草案](../docs/superpowers/specs/2026-08-20-ai-authored-geometry-extension-design.md)，
-> 没有选定 Recipe、MeshDraft、Sandbox 或其他开放制作 Provider。P2.6 只要求稳定的静态
-> Structure Resource/Collider/Surface 消费边界，可以先使用审核过的 Prototype 和产品 GLB；
-> AI 自定义几何只有在出现明确产品需求、Owner 和实验依据后才建立独立实施计划。
+#### P3.4 AI-friendly Babylon Native Scene Lane
+
+架构方向已由 [ADR-0007](decisions/0007-canonical-and-babylon-native-authoring-lanes.md) 接受，唯一详细权威为
+[AI 友好的 Babylon Native 世界创作长期设计](../docs/superpowers/specs/2026-08-28-ai-friendly-babylon-native-world-authoring-design.md)。
+它不是把 Native 视觉并入 Canonical Compiler，而是让每个世界在 Canonical Source 与 Native Source
+之间二选一，并在同一个 RuntimeHost/Babylon/Havok Gameplay Kernel 汇合。
+
+- [x] BNA-0：长期架构、术语、单一权威、ADR 和生产化依赖图冻结；
+- [x] BNS 实验切片：受信本地 Native Module、一个 Spawn、显式静态 Collider、SDK-owned Havok/
+  Subject/Input/Camera 和云海山门视觉/通过性证据；这不是生产完成度；
+- [x] BNA-1：Runtime Scene Source Union、正式 Native Bootstrap、Plan-independent
+  `WorldRuntimeBootstrapV1`、source-neutral `WorldBuildIdentityV1`、`SceneAuthoringRouteDecisionV1` 与
+  `SceneAuthoringAttemptV1`/`SceneAuthoringAttemptResultV1`；完成受影响消费者的版本迁移，移除影子
+  ExecutionPlan 和伪造 Plan Hash。Canonical consumer 已 current-only 迁移；实验 Cloud Ridge 不再创建
+  shadow Plan；正式 Native RuntimeHost admission 仍以 `WORLDKIT_NATIVE_SCENE_PRODUCTION_NOT_ADMITTED`
+  在分配前关闭，等待 BNA-3/BNA-4；
+- [ ] BNA-2：独立 `@whitebox-world/native-babylon` 与 `defineBabylonNativeScene`；Block Profile 保持为
+  BWB-1 的可选独立包，不塞入 core API 形成默认 DSL；
+  - [x] BNA-2 Foundation 内部 checkpoint：AI-facing root / Host-only subpath、唯一 Deep ESM Import
+    Profile、Host uint32 随机源、锁定资产 Resolver 接口、闭合诊断、冻结无 Handle 的 Collider
+    Contribution/Hash、预算/登记 Admission 与 `cloud-ridge` current-only 迁移已通过本轮合同、Runtime、
+    Build、浏览器和人工保真门禁；这不是兼容承诺或生产支持；
+  - [ ] BNA-2 后续生产闭合仍需 Source Admission、Authority Audit、Runtime Replay、正式 CLI/exit
+    证据和 BNA-6 AI 生成/修复评测；不得用本 checkpoint 提前关闭 BNA-3+ 或 BNA-4 生产 Gate；
+- [ ] BNA-3：Bundle、依赖/资产锁、Package、Contribution Hash 与 Build Receipt；只消费已发布的
+  class-specific Resource Ref，并绑定 Route Decision Hash/completed Attempt Result，不执行资产生产或发布；
+- [ ] BNA-4：统一 Gameplay Kernel、Profile-based Surface Admission、稳定 Surface/Subshape identity、
+  原子生命周期和对抗测试；
+- [ ] BNA-5：Trusted Local/Hosted Isolated Trust Profile、确定性、预算和安全 Gate；
+- [ ] BNA-6：在 BNA-5 后冻结评测 Profile/预算/阈值、Route Decision、资产身份与同等生产预算，交付 AI
+  Checker/Explain、Golden Corpus、真实视觉与人工交互评估；Block 专属 Corpus 由 BWB-5 闭合；
+- [ ] BNA-7：正式 Capture；仅在需要时从同一冻结 Surface 派生 Route/Nav Evidence，不包含产品级
+  `goTo`、重规划或移动执行；
+- [ ] BNA-8：按 Trusted Local、Hosted、Route 三种范围分别做最终 Go/No-Go 与文档切换。
+
+在 BNA-2 至 BNA-6 完成并建立独立实施计划前，不提高总进度，不把实验 API 写入 Quickstart，也不修改
+Catalog/Hosted Builder 生产工作流。P2.6 仍可先使用审核过的 Structure Resource 和产品 GLB；Native
+Lane 不自动扩大 Cave、Overhang、双层 Route 或 NPC Navigation 的当前能力边界。
+
+#### P3.5 Source-neutral Asset Production / Admission
+
+详细权威为
+[Source-neutral 资产生产与准入长期设计](../docs/superpowers/specs/2026-08-28-source-neutral-asset-production-and-admission-design.md)。
+该工作流是 BNA/Canonical 之前的资源供应链，不是新的 Scene Source；当前全部为 Proposed/未实施，
+不追溯扩大已经完成的 BNA-0，也不提高总进度。
+
+- [ ] APA-0：完成书面规格、ADR/Native 指针、GameFactory 固定源码证据与 Mode A/B 审查；
+- [ ] APA-G0：在唯一 `packages/geometry-assets/**` Owner 冻结新的
+  `StaticGeometryAssetManifestV1`/`StaticGeometryBuildRecordV1`，不复用旧 Compiler/Collider 字段，不启用
+  Exploratory Canonical Geometry Compiler；
+- [ ] APA-1：冻结 Candidate Manifest、Production Request/Result/Receipt、Admission Result/Receipt/Profile、
+  Publication Result/Receipt 和关闭 Diagnostic；source-neutral 合同不复制 Static Geometry Manifest；
+- [ ] APA-2：实现不可变 Candidate Store、资产类别 Build 调度与只读 Admission；
+- [ ] APA-3：实现 exactly-once/可对账 Provider Router，再接一个真实 Provider；
+- [ ] APA-4：由 Static Geometry Owner 原子发布 Registry Ref/Publication Receipt；不修改 Canonical-only WorldPackage V1，也不先发明
+  Native Package 变体；
+- [ ] APA-5：完成单体 Landmark 纵向实验；`scene-shell` 只作 artifact-only 研究并验证 publish/package/load
+  Fail Closed；
+- [ ] APA-6：冻结 Golden、阈值与 scoped GO/NO-GO；真实 Native Package 集成仍由 BNA-3 独占。
+
+#### P3.6 Babylon Native Block Whitebox Profile
+
+详细权威为
+[Babylon Native Block Whitebox 创作 Profile 长期设计](../docs/superpowers/specs/2026-08-28-babylon-native-block-whitebox-profile-design.md)。
+该 Profile 采用 `JSON Control Plane + Babylon Native Block Whitebox + Frozen Contributions + SDK/Havok`
+组合；它不是第三条 Scene Source，也不恢复旧分支的 Three/Manifest/Compiler。当前全部为设计接受、实现
+未开始，不提高 Native 生产完成度。
+
+- [x] BWB-0：冻结 Profile、旧分支 `618d96b` 处置、外部证据、能力边界、依赖工作图和
+  [Mode A 审查](reviews/2026-08-28-babylon-native-block-whitebox-profile-design-review.md)；
+- [ ] BWB-1：在 BNA-2 后创建可选 `@whitebox-world/native-babylon-block-profile`，冻结 shape/grid/
+  palette、Build-epoch-local Layout 与 diagnostics；
+- [ ] BWB-2：重写 Occupancy、重叠、坡面输入、边界、Visual Group 和预算 Checker，不复制旧 DTO/
+  Preset/Compiler；
+- [ ] BWB-3：接入直接 Babylon Mesh、稳定视觉组和 Opening/top-down/侧视的 Build-Epoch-local authoring
+  screenshots；它们不是 BNA-7 formal WorldPackage/Browser Capture；
+- [ ] BWB-4：在 BNA-4 后从同一内存 Layout 产生 core Static Collider Contribution 及其关闭
+  `traversalBinding`，由 SDK 冻结并创建 Havok；不新增独立 Traversal/Visual Group Contribution，
+  Runtime 不查询 Layout 或第二 Height Sampler；
+- [ ] BWB-5：冻结山地、T 字空间、台阶、建筑、有限室内视觉及负向 Corpus，闭合结构、profile-local
+  screenshots、BNA-4 Collider overlay、Spawn Support、真实人物通过性和人工交互证据；
+- [ ] BWB-6：BWB-5 正确性成立后评估 Thin Instance、Chunk、Collider coalescing，交付 Profile-side
+  eligibility/grouping、等价 fixture、资源 benchmark 和 BNA-4 优化提案；不直接修改 Runtime/Havok，
+  不改变 AI-facing Schema 或 Contribution 语义。
 
 ## 5. 推荐实施顺序与依赖
 
@@ -953,11 +1047,23 @@ P1.1 Terrain / Region / Mask + P2.5 Surface Query + Static Structure Resource
 P1.4 WorldPackage + P1.6 AI Schema / WorldChangeSet + P2.4 Controller/Camera/Driver
   └── P3.1 Production Gates（复用 P0.3 协议并扩展生产 Profile）
         └── P3.2 默认切换
+
+Native Scene 独立候选链：
+
+BNA-0 -> BNA-1 + BNA-2
+BNA-1 + BNA-2 -> BNA-3 -> BNA-4 -> BNA-5 -> BNA-6
+BNA-2 -> BWB-1 -> BWB-2 -> BWB-3
+BNA-4 + BWB-2 -> BWB-4
+BNA-5 + BNA-6 + BWB-3 + BWB-4 -> BWB-5 -> BWB-6
+
+APA-0..APA-6 只提供 source-neutral 已发布资产；BNA-3 才把已发布 Resource Ref 纳入 Native Package。
 ```
 
 Placement S1、Simulation Take / Control Capture V1 与 Validation Capture/Integrity V1
 已形成回归纵向切片；后续 Validation 扩展仍应保持窄纵向切片；
 不要同时启动坐骑、装备、飞行、NPC 和室内，避免再次形成无法验收的大重构。
+这里的“室内”指正式多层 Surface/Camera/Navigation/Gameplay 能力；BWB-5 仅保留有限室内视觉 Case，
+用于证明白膜表达和局部碰撞，不改变该产品边界。
 
 ## 6. 下一里程碑
 
@@ -978,7 +1084,7 @@ Placement S1、Simulation Take / Control Capture V1 与 Validation Capture/Integ
 | G19-4D | 已完成 | 所有 Compiler/Babylon/Route/Playground 生产调用方原子迁移到 V5，并从 Normalized IR 生成真实 canonical Bootstrap/Capability set | G19-4A、G19-4B、G19-4C | 全仓 typecheck 通过；17 files / 374 tests 的集成矩阵通过；无生产固定假 hash |
 | G19-4E | **已完成** | 全量门禁、真实回归 disposition、生成物治理 | G19-4D | `pnpm typecheck`、165 files / 2,079 tests、`pnpm build` 与 9 项 verify Gate 全通过；Take 根哈希由 `generate:example-takes` 生成；Route 重型套件在全量并发下通过 |
 | G19-5 | **已完成，作为 G19-6 前置底座** | Babylon Gameplay Port；`possessedBy` 唯一控制权；输入目标与 Camera Target projection 事务 | G19-4 | optional Possession、fixed-input Controller 隔离、staged transaction、provider-neutral projection 与 fail-closed Action 已完成 |
-| G19-6 | **已完成并在 `main`** | exact 39-key Browser Protocol V5 Gameplay 唯一入口、Snapshot V4、Reset/Rebind、Runtime Activity、Authoring/CLI/Capture/Take consumer cutover；Execution Subject locomotion Capability lock 与 Canonical capability state | G19-5 | `eef75c6` 实现、`5ffd031` completion review；typecheck、build、168 files / 2,134 tests、Canonical/Placement/Rigged/G Bot/R0/R1/R1b 与两项 Capture verifier 全通过；无 open confirmed P0/P1/P2 |
+| G19-6 | **已完成并在 `main`** | Browser Protocol V5 Gameplay 唯一入口、Snapshot V4、Reset/Rebind、Runtime Activity、Authoring/CLI/Capture/Take consumer cutover；当前 surface 为 exact 38 keys；Execution Subject locomotion Capability lock 与 Canonical capability state | G19-5 | `eef75c6` 实现、`5ffd031` completion review；typecheck、build、168 files / 2,134 tests、Canonical/Placement/Rigged/G Bot/R0/R1/R1b 与两项 Capture verifier 全通过；无 open confirmed P0/P1/P2 |
 | G19-7 | **已完成** | Outdoor/catalog route、page/artifact lifecycle 与六场景接线，不增加第二套 Gameplay 真相 | G19-6 | `da90f16` + completion record `1594823`；6/6 Gameplay、6/6 artifact-only、unknown-scene fail-closed Browser Gate 通过 |
 | G19-8 | **已完成并合入 `main`，Final GO** | 未发布协议 clean break、历史命名/兼容路径专项清理、零消费者 census、G19 整体全量验证、主 Agent深审与最终 disposition | G19-7 | 候选 `99fb822`；178 files / 2,172 tests、全部专项 Gate、632/0/489 census；与 `main@134592e` Camera 边界文档语义融合；无 open confirmed P0/P1/适用 P2 |
 | HNC-F1 | Alpha 前强制执行 | 对当时全部公共命名、exports、parser、Browser/CLI、生成资产和隐式 fallback 再做一次全面兼容性清理；同时关闭 `SCENE-ORIGIN-1` | Scene spawn-origin 与 collider-derived placement 合同 | 最新 clean-break machine gate + 人工语义分类；Scene 固定 0.9m bridge 删除；场景/Outdoor/Plan gates 全绿 |

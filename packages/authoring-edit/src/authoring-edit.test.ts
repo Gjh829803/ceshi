@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { isNil } from "lodash-es";
 import { describe, expect, it } from "vitest";
@@ -13,7 +15,6 @@ import {
   parseWorldChangeSetV1,
   RUNTIME_STATE_KINDS_V1,
   type RuntimeStateEffectV1,
-  type Sha256HashV1,
   type WorldChangeReceiptV1,
   type WorldChangeSetV1,
 } from "./index.js";

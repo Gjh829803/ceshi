@@ -1,10 +1,11 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
-import { hashExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
+import { hashCanonicalSceneExecutionPlanV1 } from "@whitebox-world/runtime-contracts";
 import {
-  assertWorldPackageBuildReceiptV2,
-  assertWorldPackageGameplayBootstrapMembershipV2,
-  type VerifiedWorldPackageDirectoryV2,
-  type WorldPackageSha256HashV1,
+  assertWorldPackageBuildReceiptV1,
+  assertWorldPackageGameplayBootstrapMembershipV1,
+  type VerifiedWorldPackageDirectoryV1,
 } from "@whitebox-world/world-package";
 import { isEqual, isNil, isPlainObject } from "lodash-es";
 
@@ -14,8 +15,8 @@ function fail(message: string): never {
   throw new Error(`WORLD_PACKAGE_VALIDATION_SUBJECT_INPUT_INVALID: ${message}`);
 }
 
-function asHash(value: string): WorldPackageSha256HashV1 {
-  return value as WorldPackageSha256HashV1;
+function asHash(value: string): Sha256HashV1 {
+  return value as Sha256HashV1;
 }
 
 /**
@@ -23,36 +24,26 @@ function asHash(value: string): WorldPackageSha256HashV1 {
  * result. Validation never accepts a caller-assembled Receipt/hash/artifact bag.
  */
 export function createWorldPackageValidationSubjectV1(
-  verified: VerifiedWorldPackageDirectoryV2,
+  verified: VerifiedWorldPackageDirectoryV1,
 ): WorldPackageValidationSubjectV1 {
   if (isNil(verified) || !isPlainObject(verified)) {
-    fail("VerifiedWorldPackageDirectoryV2 is required");
-  }
-  const possibleLegacy = verified as unknown as Record<string, unknown>;
-  const legacyReceipt = possibleLegacy.worldPackageBuildReceipt;
-  if (
-    !isNil(legacyReceipt) &&
-    isPlainObject(legacyReceipt) &&
-    (legacyReceipt as Record<string, unknown>).schemaVersion === 1
-  ) {
-    throw new Error(
-      "WORLD_PACKAGE_VERSION_UNSUPPORTED: Validation requires WorldPackage V2",
-    );
+    fail("VerifiedWorldPackageDirectoryV1 is required");
   }
   let receipt;
   try {
-    receipt = assertWorldPackageBuildReceiptV2(verified.receipt);
-    assertWorldPackageGameplayBootstrapMembershipV2({
-      executionPlan: verified.executionPlan,
+    receipt = assertWorldPackageBuildReceiptV1(verified.receipt);
+    assertWorldPackageGameplayBootstrapMembershipV1({
+      canonicalSceneExecutionPlan: verified.executionPlan,
       gameplayBootstrap: verified.gameplayBootstrap,
+      worldRuntimeBootstrap: verified.worldRuntimeBootstrap,
       worldPackageBuildReceipt: receipt,
     });
   } catch {
-    return fail("verified Receipt, Plan, or Gameplay Bootstrap binding is invalid");
+    return fail("verified Receipt, Scene Plan, Runtime Bootstrap, or Gameplay Bootstrap binding is invalid");
   }
   const manifest = receipt.manifest;
   if (
-    hashExecutionPlanV5(verified.executionPlan) !== manifest.executionPlanHash ||
+    hashCanonicalSceneExecutionPlanV1(verified.executionPlan) !== manifest.executionPlanHash ||
     sha256CanonicalJson(verified.normalizedWorldIr) !==
       manifest.normalizedWorldIrHash ||
     sha256CanonicalJson(verified.registryLock) !== manifest.registryLockHash ||
@@ -70,7 +61,7 @@ export function createWorldPackageValidationSubjectV1(
     worldPackageRootHash: receipt.worldPackageRootHash,
     authoringSpecHash: asHash(manifest.authoringSpecHash),
     normalizedWorldIrHash: asHash(manifest.normalizedWorldIrHash),
-    executionPlanHash: asHash(manifest.executionPlanHash),
+    worldBuildIdentityHash: receipt.worldBuildIdentityHash,
     resourceLockHash: asHash(manifest.registryLockHash),
     layoutSolveReportHash: asHash(manifest.layoutSolveReportHash),
   });

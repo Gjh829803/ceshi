@@ -1,7 +1,7 @@
 import type {
   LocomotionModeV1,
   PublishedMovementMediumV1,
-  Vec3,
+  RuntimeVec3V1,
 } from "@whitebox-world/runtime-contracts";
 import type {
   CameraContextSampleV2,
@@ -58,11 +58,11 @@ export interface BabylonRuntimeSubjectProjectionV1 {
   readonly entityId: string;
   readonly subjectDefinitionRef: string;
   readonly subjectDefinitionHash: string;
-  readonly positionMetersXYZ: Vec3;
-  readonly velocityMetersPerSecondXYZ: Vec3;
+  readonly positionMetersXYZ: RuntimeVec3V1;
+  readonly velocityMetersPerSecondXYZ: RuntimeVec3V1;
   readonly movementMedium: PublishedMovementMediumV1;
   readonly activeActionId: string;
-  readonly forwardXYZ: Vec3;
+  readonly forwardXYZ: RuntimeVec3V1;
   readonly speedMetersPerSecond: number;
   readonly activeControlFeelProfileRef: string;
   readonly activePhysicsBodyProfileRef: string;
@@ -87,7 +87,7 @@ export interface BabylonRuntimeSubjectProjectionV1 {
 export interface BabylonRuntimeCameraProjectionV1 {
   readonly entityId: string;
   readonly targetEntityId?: string;
-  readonly positionMetersXYZ: Vec3;
+  readonly positionMetersXYZ: RuntimeVec3V1;
   readonly activeCameraProfileRef: string;
   readonly activeCameraRigRef: string;
   readonly activeCameraModifierRefs: readonly string[];
@@ -97,28 +97,28 @@ export interface BabylonRuntimeCameraProjectionV1 {
   readonly viewDistanceOffsetMeters: number;
   readonly selectionDecision?: CameraSelectionDecisionV2;
   readonly selectedTargetSocketId?: string;
-  readonly targetSocketPositionMetersXYZ?: Vec3;
+  readonly targetSocketPositionMetersXYZ?: RuntimeVec3V1;
   readonly isTargetSocketFallback?: boolean;
-  readonly desiredTargetPositionMetersXYZ?: Vec3;
-  readonly desiredPositionMetersXYZ?: Vec3;
-  readonly actualPositionMetersXYZ?: Vec3;
+  readonly desiredTargetPositionMetersXYZ?: RuntimeVec3V1;
+  readonly desiredPositionMetersXYZ?: RuntimeVec3V1;
+  readonly actualPositionMetersXYZ?: RuntimeVec3V1;
   readonly finalFovDegrees?: number;
   readonly requestedArmLengthMeters?: number;
   readonly safeArmLengthMeters?: number;
   readonly effectiveArmLengthMeters?: number;
   readonly isCollisionRetracted?: boolean;
   readonly collisionHitEntityId?: string;
-  readonly collisionHitPositionXYZ?: Vec3;
-  readonly positionLagXYZ?: Vec3;
-  readonly rotationLagRadiansXYZ?: Vec3;
+  readonly collisionHitPositionXYZ?: RuntimeVec3V1;
+  readonly positionLagXYZ?: RuntimeVec3V1;
+  readonly rotationLagRadiansXYZ?: RuntimeVec3V1;
   readonly recenterRemainingSeconds?: number;
   readonly fixedStepDeltaSeconds?: number;
   readonly resolvedParameters?: Readonly<CameraRigParametersV1>;
   readonly previewParameterOverrides?: Readonly<Partial<CameraRigParametersV1>>;
   readonly profileTransitionProgressRatio?: number;
-  readonly controlForwardXYZ?: Vec3;
-  readonly subjectForwardXYZ?: Vec3;
-  readonly subjectVelocityMetersPerSecondXYZ?: Vec3;
+  readonly controlForwardXYZ?: RuntimeVec3V1;
+  readonly subjectForwardXYZ?: RuntimeVec3V1;
+  readonly subjectVelocityMetersPerSecondXYZ?: RuntimeVec3V1;
 }
 
 export type BabylonRuntimePossessionProjectionV1 =

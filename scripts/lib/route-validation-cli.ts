@@ -1,10 +1,11 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import { lstat } from "node:fs/promises";
 import path from "node:path";
 
 import { canonicalJsonBytes } from "@whitebox-world/protocol";
 import {
   OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
-  type Sha256HashV1,
   type ValidationDiagnosticV2,
   type ValidationReportStatusV1,
 } from "@whitebox-world/validation";

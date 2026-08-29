@@ -6,8 +6,11 @@ import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
 
 import { createValidAuthoringSpec } from "../../../packages/authoring/src/test-fixture";
 import type {
+  FixedInputOneTickV1,
+  GameplayFixedTickActionProjectionV1,
   GameplayWorldPortV1,
   GameplayWorldStateProjectionV1,
+  GameplayWorldTransactionV1,
   RuntimeWorldConfigurationV1,
 } from "@whitebox-world/runtime-host";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
@@ -68,28 +71,44 @@ async function worldConfiguration() {
   return loaded.runtimeWorldConfiguration;
 }
 
+function canonicalScenePlan(configuration: RuntimeWorldConfigurationV1) {
+  if (configuration.sceneSource.kind !== "canonical-execution-plan") {
+    throw new Error("Expected a Canonical Scene Source fixture.");
+  }
+  return configuration.sceneSource.executionPlan;
+}
+
 function worldProjection(
   configuration: RuntimeWorldConfigurationV1,
 ): GameplayWorldStateProjectionV1 {
   return Object.freeze({
     simulationTick: 0,
     spatialEntityStatesById: Object.freeze(Object.fromEntries(
-      configuration.executionPlan.subjects.map((subject) => [
-        subject.entityId,
-        Object.freeze({
-          id: subject.entityId,
-          kind: "spatial-entity-state" as const,
-          entityDefinitionRef: subject.subjectDefinitionRef,
-          entityDefinitionHash:
-            subject.subjectDefinitionHash as `sha256:${string}`,
-          semanticClassId: subject.semanticClassId,
-          lifecycleMode: "active" as const,
-          positionMetersXYZ: subject.spawnSubjectOriginPositionMetersXYZ,
-          rotationQuaternionXYZW: [0, 0, 0, 1] as const,
-          scaleRatioXYZ: [1, 1, 1] as const,
-          linearVelocityMetersPerSecondXYZ: [0, 0, 0] as const,
-        }),
-      ]),
+      configuration.worldRuntimeBootstrap.subjectRuntimeDescriptors.map(
+        (subject) => {
+          const placement = canonicalScenePlan(configuration).subjectInstances
+            .find(({ entityId }) => entityId === subject.entityId);
+          if (placement === undefined) {
+            throw new Error(`Missing Subject placement '${subject.entityId}'.`);
+          }
+          return [
+            subject.entityId,
+            Object.freeze({
+              id: subject.entityId,
+              kind: "spatial-entity-state" as const,
+              entityDefinitionRef: subject.subjectDefinitionRef,
+              entityDefinitionHash:
+                subject.subjectDefinitionHash as `sha256:${string}`,
+              semanticClassId: subject.semanticClassId,
+              lifecycleMode: "active" as const,
+              positionMetersXYZ: placement.subjectOriginPositionMetersXYZ,
+              rotationQuaternionXYZW: [0, 0, 0, 1] as const,
+              scaleRatioXYZ: [1, 1, 1] as const,
+              linearVelocityMetersPerSecondXYZ: [0, 0, 0] as const,
+            }),
+          ];
+        },
+      ),
     )),
     capabilityStatesById: Object.freeze({}),
     semanticFactsById: Object.freeze({}),
@@ -106,18 +125,26 @@ interface FakeRuntimeV1 {
 
 function fakeRuntimeFactory(
   configuration: RuntimeWorldConfigurationV1,
-  options: Readonly<{ rejectCandidateRender?: boolean }> = {},
+  options: Readonly<{
+    rejectCandidateRender?: boolean;
+    usePreparedFixedInput?: boolean;
+  }> = {},
 ) {
   const runtimes: FakeRuntimeV1[] = [];
+  const prepareFixedInputTick = vi.fn();
+  const legacyFixedInputTick = vi.fn();
   const factory = vi.fn(async ({
     canvas,
   }: Readonly<{ canvas: HTMLCanvasElement }>): Promise<GameplayBabylonRuntimeBundleV1> => {
     const harness = createFakeGameplayWorldPortHarnessV1({
       initialWorldProjection: worldProjection(configuration),
-      controllableEntityIds: configuration.executionPlan.subjects.map(
+      controllableEntityIds: configuration.worldRuntimeBootstrap
+        .subjectRuntimeDescriptors.map(
         ({ entityId }) => entityId,
       ),
     });
+    let preparedProjection = worldProjection(configuration);
+    let runtimeTick = preparedProjection.simulationTick;
     let renderFrameIndex = 0;
     const dispose = vi.fn(async () => undefined);
     const renderFrame = vi.fn(() => {
@@ -142,17 +169,18 @@ function fakeRuntimeFactory(
       dispose,
       snapshot: (): BabylonRuntimeProjectionV1 => ({
         runtimeBackend: "babylon-havok",
-        tick: harness.publishedWorldProjection.simulationTick,
+        tick: runtimeTick,
         ready: true,
         possessionTarget: {
           mode: "possessed",
           controlledEntityId:
-            configuration.executionPlan.initialControlledEntityId,
+            configuration.worldRuntimeBootstrap.initialControlledEntityId,
         },
         subjectStatesByEntityId: {},
         camera: {
           entityId: "camera.main",
-          targetEntityId: configuration.executionPlan.initialControlledEntityId,
+          targetEntityId:
+            configuration.worldRuntimeBootstrap.initialControlledEntityId,
           positionMetersXYZ: [1, 2, 3],
           activeCameraProfileRef: "worldkit://camera-profile/third-person@1",
           activeCameraRigRef: "worldkit://camera-rig/third-person@1",
@@ -164,7 +192,8 @@ function fakeRuntimeFactory(
           selectionDecision: {
             schemaVersion: 2,
             committedTick: 0,
-            targetEntityId: configuration.executionPlan.initialControlledEntityId,
+            targetEntityId:
+              configuration.worldRuntimeBootstrap.initialControlledEntityId,
             activeCameraRigProfileRef: "worldkit://camera-rig/third-person@1",
             activeCameraModifierRefs: [],
             matchedCameraContextRuleIds: [],
@@ -210,8 +239,31 @@ function fakeRuntimeFactory(
       }),
     };
     runtimes.push(runtime);
-    const gameplayWorldPort: GameplayWorldPortV1 = Object.freeze({
-      initialize: () => harness.port.initialize(),
+    const preparedFixedInput = async (
+      input: FixedInputOneTickV1,
+      _actionProjection: GameplayFixedTickActionProjectionV1,
+    ): Promise<GameplayWorldTransactionV1> => {
+      prepareFixedInputTick(input);
+      const projectedWorldStateAfter = Object.freeze({
+        ...preparedProjection,
+        simulationTick: preparedProjection.simulationTick + 1,
+      });
+      return Object.freeze({
+        projectedWorldStateAfter,
+        projectedViewStateAfter: Object.freeze({ viewStateRevision: 0 }),
+        commitPrepared: () => {
+          preparedProjection = projectedWorldStateAfter;
+          runtimeTick = projectedWorldStateAfter.simulationTick;
+        },
+        abort: async () => undefined,
+      });
+    };
+    const gameplayWorldPort: GameplayWorldPortV1 & {
+      readonly prepareFixedInputTick?: typeof preparedFixedInput;
+    } = Object.freeze({
+      initialize: () => options.usePreparedFixedInput === true
+        ? Promise.resolve(preparedProjection)
+        : harness.port.initialize(),
       hasEntity: (entityId: string) => harness.port.hasEntity(entityId),
       isEntityControllable: (entityId: string) =>
         harness.port.isEntityControllable(entityId),
@@ -238,8 +290,19 @@ function fakeRuntimeFactory(
         actionProjection: Parameters<
           GameplayWorldPortV1["runFixedInputTick"]
         >[1],
-      ) => harness.port.runFixedInputTick(input, actionProjection),
-      snapshot: () => harness.port.snapshot(),
+      ) => {
+        legacyFixedInputTick(input);
+        if (options.usePreparedFixedInput === true) {
+          return Promise.reject(new Error("legacy fixed-input path must not run"));
+        }
+        return harness.port.runFixedInputTick(input, actionProjection);
+      },
+      ...(options.usePreparedFixedInput === true
+        ? { prepareFixedInputTick: preparedFixedInput }
+        : {}),
+      snapshot: () => options.usePreparedFixedInput === true
+        ? preparedProjection
+        : harness.port.snapshot(),
       dispose: async () => {
         await harness.port.dispose();
         await runtime.dispose();
@@ -250,7 +313,7 @@ function fakeRuntimeFactory(
       gameplayWorldPort,
     });
   });
-  return { factory, runtimes };
+  return { factory, runtimes, prepareFixedInputTick, legacyFixedInputTick };
 }
 
 function fakeDocument(): Pick<Document, "createElement"> {
@@ -278,6 +341,27 @@ async function createHarness(
 }
 
 describe("Gameplay Babylon Runtime coordinator", () => {
+  it("preserves the prepared fixed-input seam through the owned-port wrapper", async () => {
+    const configuration = await worldConfiguration();
+    const runtimeFactory = fakeRuntimeFactory(configuration, {
+      usePreparedFixedInput: true,
+    });
+    const coordinator = await createGameplayBabylonRuntimeCoordinatorV1({
+      runtimeSessionId: "runtime.prepared-fixed-input",
+      initialWorldConfiguration: configuration,
+      document: fakeDocument(),
+      runtimeBundleFactory: runtimeFactory.factory,
+      worldSessionIdFactory: () => "world-session.prepared-fixed-input",
+    });
+
+    const after = await coordinator.runFixedInput({ actions: [], ticks: 1 });
+
+    expect(after.world.simulationTick).toBe(1);
+    expect(runtimeFactory.prepareFixedInputTick).toHaveBeenCalledOnce();
+    expect(runtimeFactory.legacyFixedInputTick).not.toHaveBeenCalled();
+    await coordinator.dispose();
+  });
+
   it("runs Mount, board movement, Dismount, and Rider movement through real Havok", async () => {
     vi.stubGlobal("location", { origin: "https://playground.test" });
     const gBotBytes = new Uint8Array(await readFile(fileURLToPath(new URL(
@@ -315,7 +399,12 @@ describe("Gameplay Babylon Runtime coordinator", () => {
       >[0]["runtimeBundleFactory"]>>[0],
     ): Promise<GameplayBabylonRuntimeBundleV1> => {
       const runtime = await BabylonWorldRuntime.create({
-        executionPlan: input.descriptor.executionPlan,
+        sceneSource: {
+          kind: "canonical-execution-plan",
+          executionPlan: input.descriptor.sceneSource.executionPlan,
+        },
+        worldRuntimeBootstrap: input.descriptor.worldRuntimeBootstrap,
+        gameplayBootstrap: input.descriptor.gameplayBootstrap,
         runtimeSessionId: input.descriptor.runtimeSessionId,
         autoStartRenderLoop: false,
         engineFactory: () => new NullEngine({
@@ -433,7 +522,9 @@ describe("Gameplay Babylon Runtime coordinator", () => {
     expect(afterBoardMove.view.camera).toMatchObject({
       mode: "tracking",
       targetEntityId: "skateboard",
-      activeCameraModifierRefs: [],
+      activeCameraModifierRefs: [
+        "worldkit://camera-modifier/mounted-framing@1",
+      ],
     });
     expect(afterBoardMove.view.camera.mode).toBe("tracking");
     if (afterBoardMove.view.camera.mode === "tracking") {
@@ -447,8 +538,8 @@ describe("Gameplay Babylon Runtime coordinator", () => {
       ) {
         throw new Error("Expected mounted third-person Spring Arm telemetry.");
       }
-      expect(requestedArmLengthMeters).toBeCloseTo(6, 6);
-      expect(effectiveArmLengthMeters).toBeGreaterThan(0);
+      expect(requestedArmLengthMeters).toBeCloseTo(7, 6);
+      expect(effectiveArmLengthMeters).toBeGreaterThan(6);
       expect(effectiveArmLengthMeters).toBeLessThanOrEqual(
         requestedArmLengthMeters + 0.000001,
       );
@@ -580,7 +671,7 @@ describe("Gameplay Babylon Runtime coordinator", () => {
     )).toEqual([
       expect.objectContaining({
           controlledEntityId:
-            configuration.executionPlan.initialControlledEntityId,
+            configuration.worldRuntimeBootstrap.initialControlledEntityId,
           controllerEntityId: PLAYGROUND_CONTROLLER_ENTITY_ID_V1,
       }),
     ]);
@@ -639,7 +730,7 @@ describe("Gameplay Babylon Runtime coordinator", () => {
       expectedPossession: {
         mode: "possessed",
         controlledEntityId:
-          configuration.executionPlan.initialControlledEntityId,
+          configuration.worldRuntimeBootstrap.initialControlledEntityId,
       },
     })).resolves.toMatchObject({ status: "committed" });
 
@@ -653,12 +744,14 @@ describe("Gameplay Babylon Runtime coordinator", () => {
       runtimeSessionId: released.runtimeSessionId,
       worldSessionId: released.worldSessionId,
       controllerEntityId: PLAYGROUND_CONTROLLER_ENTITY_ID_V1,
-      controlledEntityId: configuration.executionPlan.initialControlledEntityId,
+      controlledEntityId:
+        configuration.worldRuntimeBootstrap.initialControlledEntityId,
       expectedPossession: { mode: "unbound" },
     })).resolves.toMatchObject({ status: "committed" });
     expect(coordinator.snapshot().view.camera).toMatchObject({
       mode: "tracking",
-      targetEntityId: configuration.executionPlan.initialControlledEntityId,
+      targetEntityId:
+        configuration.worldRuntimeBootstrap.initialControlledEntityId,
       selectedTargetSocketId: "ThirdPersonView",
       requestedArmLengthMeters: 6,
       safeArmLengthMeters: 3,
@@ -701,7 +794,7 @@ describe("Gameplay Babylon Runtime coordinator", () => {
     )).toEqual([
       expect.objectContaining({
         controlledEntityId:
-          configuration.executionPlan.initialControlledEntityId,
+          configuration.worldRuntimeBootstrap.initialControlledEntityId,
         controllerEntityId: PLAYGROUND_CONTROLLER_ENTITY_ID_V1,
       }),
     ]);

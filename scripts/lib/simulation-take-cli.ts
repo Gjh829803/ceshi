@@ -1,3 +1,7 @@
+import { worldPackageRefFromRootHashV1 } from "@whitebox-world/world-identity";
+
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import { access } from "node:fs/promises";
 import path from "node:path";
 
@@ -5,7 +9,6 @@ import {
   compileSimulationTakeV1,
   SimulationTakeValidationErrorV1,
   type CompiledSimulationTakeV1,
-  type Sha256HashV1,
 } from "@whitebox-world/control-capture";
 import type {
   GameplayCommandReceiptV1,
@@ -24,9 +27,7 @@ import type {
   WorldRuntimeSnapshotV4,
 } from "@whitebox-world/runtime-contracts";
 import {
-  createWorldPackageV2,
-  verifyWorldPackageDirectoryV2,
-  worldPackageRefFromRootHashV1,
+  verifyWorldPackageDirectoryV1,
 } from "@whitebox-world/world-package";
 import type { Browser, Page } from "playwright";
 
@@ -50,16 +51,15 @@ import {
   type WorldkitRoutePipelineSuccess,
 } from "./worldkit-pipeline";
 import {
-  createTrustedWorldPackageBuildContextV2,
-  resolveTrustedWorldPackageResourceArtifactsV2,
-} from "./trusted-world-package-v2";
+  createTrustedCanonicalWorldPackageV1,
+} from "./trusted-world-package";
 import { startWorldkitServer, type WorldkitServerHandle } from "./worldkit-server";
 
 interface SimulationTakeWorldPackageIdentityV1 {
   readonly worldPackageRef: string;
   readonly worldPackageRootHash: Sha256HashV1;
   readonly normalizedWorldIrHash: Sha256HashV1;
-  readonly executionPlanHash: Sha256HashV1;
+  readonly worldBuildIdentityHash: Sha256HashV1;
 }
 
 export interface RunSimulationTakeFileOptionsV1 {
@@ -111,35 +111,15 @@ async function loadCompiledTakeFile(
 export async function createSimulationTakeWorldPackageIdentityV1(
   pipeline: WorldkitRoutePipelineSuccess,
 ): Promise<SimulationTakeWorldPackageIdentityV1> {
-  const packageId = `${pipeline.authoringSpec.id}.${pipeline.authoringSpec.seed}`;
-  const resourceArtifacts = await resolveTrustedWorldPackageResourceArtifactsV2(
-    pipeline.normalizedWorldIr,
-  );
-  const directory = createWorldPackageV2({
-    packageId,
-    ...createTrustedWorldPackageBuildContextV2({
-      title: `${pipeline.authoringSpec.id} simulation take package`,
-      resourceArtifacts,
-    }),
-    authoringSpec: pipeline.authoringSpec,
-    normalizedWorldIr: pipeline.normalizedWorldIr,
-    layoutSolveResult: {
-      status: pipeline.layoutSolveReport.status,
-      report: pipeline.layoutSolveReport,
-      layoutSolveReportHash: pipeline.layoutSolveReportHash,
-    },
-    executionPlan: pipeline.executionPlan,
-    gameplayBootstrap: pipeline.gameplayBootstrap,
-    resourceArtifacts,
-  });
-  const verified = verifyWorldPackageDirectoryV2(directory);
+  const directory = await createTrustedCanonicalWorldPackageV1(pipeline);
+  const verified = verifyWorldPackageDirectoryV1(directory);
   return {
     worldPackageRef: worldPackageRefFromRootHashV1(
       verified.receipt.worldPackageRootHash,
     ),
     worldPackageRootHash: verified.receipt.worldPackageRootHash,
     normalizedWorldIrHash: verified.receipt.manifest.normalizedWorldIrHash,
-    executionPlanHash: verified.receipt.manifest.executionPlanHash,
+    worldBuildIdentityHash: verified.receipt.worldBuildIdentityHash,
   };
 }
 
@@ -176,6 +156,7 @@ export async function inspectSimulationTakeFileV1(inputPath: string) {
     takeHash,
     worldPackageRef: take.worldPackageRef,
     worldPackageRootHash: take.worldPackageRootHash,
+    worldBuildIdentityHash: take.worldBuildIdentityHash,
     simulationTickRate: take.simulationTickRate,
     tickRange: {
       startTick: take.startTick,

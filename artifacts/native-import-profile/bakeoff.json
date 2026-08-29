@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "measuredAt": "2026-08-28",
+  "environment": {
+    "architecture": "x86_64",
+    "babylonVersion": "9.23.0",
+    "cpuModel": "Intel(R) Core(TM) i9-9880H CPU @ 2.30GHz",
+    "macOSVersion": "15.7.3",
+    "nodeVersion": "22.21.0",
+    "viteVersion": "7.3.6"
+  },
+  "requiredSymbols": [
+    "Color3",
+    "MeshBuilder",
+    "StandardMaterial",
+    "TransformNode",
+    "Vector3"
+  ],
+  "buildConfiguration": {
+    "externalImportsAllowed": false,
+    "format": "es",
+    "minify": false,
+    "sourcemap": false,
+    "write": false
+  },
+  "candidates": [
+    {
+      "id": "deep-esm",
+      "outcome": "measured",
+      "moduleCount": 330,
+      "babylonModuleCount": 328,
+      "outputBytes": 2884740,
+      "observedElapsedSecondsRange": [
+        10.779035384,
+        22.09790091
+      ],
+      "externalImports": []
+    },
+    {
+      "id": "root-barrel",
+      "outcome": "rejected-observation-budget-exceeded",
+      "elapsedSecondsLowerBound": 150,
+      "moduleCount": null,
+      "babylonModuleCount": null,
+      "outputBytes": null,
+      "externalImports": null
+    }
+  ],
+  "decision": {
+    "selectedId": "deep-esm",
+    "rejectedIds": [
+      "root-barrel"
+    ],
+    "enforcementOwner": "@whitebox-world/native-babylon package boundary"
+  }
+}

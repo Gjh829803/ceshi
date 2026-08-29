@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import { readFileSync } from "node:fs";
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -8,14 +10,13 @@ import {
   parseWorldChangeRequestV1,
   parseWorldChangeSetV1,
   type RuntimePublicationIdentityV1,
-  type Sha256HashV1,
 } from "@whitebox-world/authoring-edit";
 import {
   getAuthoringRevisionHeadV1,
   type PublishRuntimeReplacementV1,
 } from "@whitebox-world/authoring-host";
 import { stringifyCanonicalJson } from "@whitebox-world/protocol";
-import { createWorldPackageBuildContextFixtureV2 } from "@whitebox-world/world-package/testing";
+import { createWorldPackageBuildContextFixtureV1 } from "@whitebox-world/world-package/testing";
 import { isNil } from "lodash-es";
 
 import {
@@ -53,7 +54,7 @@ function runtimeOwner(mode: ChildMode): DurableWorldChangeRuntimeOwnerV1 {
       runtimeSessionId: "runtime-session.durable-child",
       worldSessionId: "world-session.committed",
       worldPackageRootHash:
-        input.worldConfiguration.worldPackageBuildReceipt.worldPackageRootHash,
+        input.worldConfiguration.worldBuildIdentity.worldPackageRootHash,
       simulationTick: 0,
     });
     if (mode === "crash-before-commit") process.exit(85);
@@ -109,7 +110,7 @@ async function openHost(
   return createDurableAuthoringEditHostV1({
     stateDirectoryPath,
     authoringSpec,
-    worldPackageBuildContext: createWorldPackageBuildContextFixtureV2(),
+    worldPackageBuildContext: createWorldPackageBuildContextFixtureV1(),
     resourceArtifacts: [],
     session: createAuthoringEditHostSessionV1({
       worldId: authoringSpec.id,

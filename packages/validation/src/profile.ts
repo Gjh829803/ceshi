@@ -1,6 +1,8 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 
-import type { Sha256HashV1, ValidationProfileV1 } from "./types";
+import type { ValidationProfileV1 } from "./types";
 
 export const OUTDOOR_CONTROL_VIDEO_DEV_VALIDATION_PROFILE_V1 = {
   kind: "worldkit-validation-profile",

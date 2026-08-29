@@ -24,8 +24,8 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   DEFAULT_WORLD_PACKAGE_RESOURCE_MAPPING_BY_REF_V1,
+  resolveWorldPackageResourceBytesV1,
   resolveWorldPackageResourceArtifactsV1,
-  resolveWorldPackageResourceArtifactsV2,
   WorldPackageResourceResolveInfrastructureErrorV1,
   type WorldPackageResourceMappingV1,
 } from "./world-package-resource-resolver.js";
@@ -183,7 +183,7 @@ async function expectInfrastructureFailure(
   });
 }
 
-describe("resolveWorldPackageResourceArtifactsV1", () => {
+describe("resolveWorldPackageResourceBytesV1", () => {
   it("resolves built-in Subject Assets into deterministic WorldPackage artifacts", async () => {
     const publicRoot = await temporaryPublicRoot();
     const goldenBytes = new Uint8Array([0x67, 0x6c, 0x54, 0x46, 0x01]);
@@ -201,7 +201,7 @@ describe("resolveWorldPackageResourceArtifactsV1", () => {
       gBotBytes,
     );
 
-    const result = await resolveWorldPackageResourceArtifactsV1(
+    const result = await resolveWorldPackageResourceBytesV1(
       normalizedWorldIr([
         subjectAsset(goldenRef, goldenBytes),
         subjectAsset(gBotRef, gBotBytes),
@@ -238,7 +238,7 @@ describe("resolveWorldPackageResourceArtifactsV1", () => {
       ),
     );
 
-    const result = await resolveWorldPackageResourceArtifactsV1(
+    const result = await resolveWorldPackageResourceBytesV1(
       normalizedWorldIr([subjectAsset(manifest.resourceRef, diskBytes)]),
     );
 
@@ -256,7 +256,7 @@ describe("resolveWorldPackageResourceArtifactsV1", () => {
     const publicRoot = await temporaryPublicRoot();
 
     await expect(
-      resolveWorldPackageResourceArtifactsV1(normalizedWorldIr([]), {
+      resolveWorldPackageResourceBytesV1(normalizedWorldIr([]), {
         publicRoot,
       }),
     ).resolves.toEqual([]);
@@ -267,7 +267,7 @@ describe("resolveWorldPackageResourceArtifactsV1", () => {
     const bytes = new Uint8Array([1]);
 
     await expectInfrastructureFailure(
-      resolveWorldPackageResourceArtifactsV1(
+      resolveWorldPackageResourceBytesV1(
         normalizedWorldIr([
           subjectAsset("worldkit://subject-asset/unknown@1", bytes),
         ]),
@@ -284,7 +284,7 @@ describe("resolveWorldPackageResourceArtifactsV1", () => {
     const asset = subjectAsset(resourceRef, bytes);
 
     await expectInfrastructureFailure(
-      resolveWorldPackageResourceArtifactsV1(
+      resolveWorldPackageResourceBytesV1(
         normalizedWorldIr([asset, structuredClone(asset)]),
         {
           publicRoot,
@@ -305,7 +305,7 @@ describe("resolveWorldPackageResourceArtifactsV1", () => {
     const secondRef = "worldkit://subject-asset/second@1";
 
     await expectInfrastructureFailure(
-      resolveWorldPackageResourceArtifactsV1(
+      resolveWorldPackageResourceBytesV1(
         normalizedWorldIr([
           subjectAsset(firstRef, firstBytes),
           subjectAsset(secondRef, secondBytes),
@@ -334,7 +334,7 @@ describe("resolveWorldPackageResourceArtifactsV1", () => {
     const resourceRef = "worldkit://subject-asset/example@1";
 
     await expectInfrastructureFailure(
-      resolveWorldPackageResourceArtifactsV1(
+      resolveWorldPackageResourceBytesV1(
         normalizedWorldIr([subjectAsset(resourceRef, bytes)]),
         {
           publicRoot,
@@ -357,7 +357,7 @@ describe("resolveWorldPackageResourceArtifactsV1", () => {
     const publicUri = `/../${path.basename(outsideRoot)}/escaped.glb`;
 
     await expectInfrastructureFailure(
-      resolveWorldPackageResourceArtifactsV1(
+      resolveWorldPackageResourceBytesV1(
         normalizedWorldIr([subjectAsset(resourceRef, bytes)]),
         {
           publicRoot,
@@ -380,7 +380,7 @@ describe("resolveWorldPackageResourceArtifactsV1", () => {
     const resourceRef = "worldkit://subject-asset/example@1";
 
     await expectInfrastructureFailure(
-      resolveWorldPackageResourceArtifactsV1(
+      resolveWorldPackageResourceBytesV1(
         normalizedWorldIr([subjectAsset(resourceRef, bytes)]),
         {
           publicRoot,
@@ -405,7 +405,7 @@ describe("resolveWorldPackageResourceArtifactsV1", () => {
     const resourceRef = "worldkit://subject-asset/example@1";
 
     await expectInfrastructureFailure(
-      resolveWorldPackageResourceArtifactsV1(
+      resolveWorldPackageResourceBytesV1(
         normalizedWorldIr([subjectAsset(resourceRef, bytes)]),
         {
           publicRoot,
@@ -425,7 +425,7 @@ describe("resolveWorldPackageResourceArtifactsV1", () => {
     const resourceRef = "worldkit://subject-asset/example@1";
 
     await expectInfrastructureFailure(
-      resolveWorldPackageResourceArtifactsV1(
+      resolveWorldPackageResourceBytesV1(
         normalizedWorldIr([subjectAsset(resourceRef, bytes)]),
         {
           publicRoot,
@@ -445,7 +445,7 @@ describe("resolveWorldPackageResourceArtifactsV1", () => {
     await writePublicAsset(publicRoot, "/empty.glb", bytes);
 
     await expectInfrastructureFailure(
-      resolveWorldPackageResourceArtifactsV1(
+      resolveWorldPackageResourceBytesV1(
         normalizedWorldIr([subjectAsset(resourceRef, bytes)]),
         {
           publicRoot,
@@ -466,7 +466,7 @@ describe("resolveWorldPackageResourceArtifactsV1", () => {
     await writePublicAsset(publicRoot, "/example.glb", actualBytes);
 
     await expectInfrastructureFailure(
-      resolveWorldPackageResourceArtifactsV1(
+      resolveWorldPackageResourceBytesV1(
         normalizedWorldIr([subjectAsset(resourceRef, lockedBytes)]),
         {
           publicRoot,
@@ -486,7 +486,7 @@ describe("resolveWorldPackageResourceArtifactsV1", () => {
     await writePublicAsset(publicRoot, "/example.glb", bytes);
 
     await expectInfrastructureFailure(
-      resolveWorldPackageResourceArtifactsV1(
+      resolveWorldPackageResourceBytesV1(
         normalizedWorldIr([subjectAsset(resourceRef, bytes)]),
         {
           publicRoot,
@@ -504,7 +504,7 @@ describe("resolveWorldPackageResourceArtifactsV1", () => {
   });
 });
 
-describe("resolveWorldPackageResourceArtifactsV2", () => {
+describe("resolveWorldPackageResourceArtifactsV1", () => {
   it("joins exact admitted Registry provenance and a declared legal document", async () => {
     const publicRoot = await temporaryPublicRoot();
     const bytes = new Uint8Array([0x67, 0x6c, 0x54, 0x46, 0x02]);
@@ -513,7 +513,7 @@ describe("resolveWorldPackageResourceArtifactsV2", () => {
     const normalized = normalizedSubjectAssetFromManifest(manifest, bytes);
     await writePublicAsset(publicRoot, "/example.glb", bytes);
 
-    const result = await resolveWorldPackageResourceArtifactsV2(
+    const result = await resolveWorldPackageResourceArtifactsV1(
       normalizedWorldIr([normalized]),
       {
         publicRoot,
@@ -558,7 +558,7 @@ describe("resolveWorldPackageResourceArtifactsV2", () => {
       ? "project-owned"
       : "loopit-private";
 
-    const result = await resolveWorldPackageResourceArtifactsV2(
+    const result = await resolveWorldPackageResourceArtifactsV1(
       normalizedWorldIr([normalized]),
       {
         subjectAssetManifests: [manifest],
@@ -596,14 +596,14 @@ describe("resolveWorldPackageResourceArtifactsV2", () => {
     };
 
     await expectInfrastructureFailure(
-      resolveWorldPackageResourceArtifactsV2(normalizedWorldIr([normalized]), {
+      resolveWorldPackageResourceArtifactsV1(normalizedWorldIr([normalized]), {
         ...baseOptions,
         subjectAssetManifests: [],
       }),
       "asset-manifest-mismatch",
     );
     await expectInfrastructureFailure(
-      resolveWorldPackageResourceArtifactsV2(normalizedWorldIr([{
+      resolveWorldPackageResourceArtifactsV1(normalizedWorldIr([{
         ...normalized,
         subjectAssetManifestHash: HASH_A,
       }]), {
@@ -613,7 +613,7 @@ describe("resolveWorldPackageResourceArtifactsV2", () => {
       "asset-manifest-mismatch",
     );
     await expectInfrastructureFailure(
-      resolveWorldPackageResourceArtifactsV2(normalizedWorldIr([normalized]), {
+      resolveWorldPackageResourceArtifactsV1(normalizedWorldIr([normalized]), {
         ...baseOptions,
         subjectAssetManifests: [manifest],
         licenseDocuments: [],
@@ -630,7 +630,7 @@ describe("resolveWorldPackageResourceArtifactsV2", () => {
     const normalized = normalizedSubjectAssetFromManifest(manifest, bytes);
 
     await expectInfrastructureFailure(
-      resolveWorldPackageResourceArtifactsV2(normalizedWorldIr([normalized]), {
+      resolveWorldPackageResourceArtifactsV1(normalizedWorldIr([normalized]), {
         publicRoot,
         resourceMappingByRef: { [resourceRef]: mapping("/example.glb") },
         subjectAssetManifests: [manifest],
@@ -666,7 +666,7 @@ describe("resolveWorldPackageResourceArtifactsV2", () => {
     });
 
     await expectInfrastructureFailure(
-      resolveWorldPackageResourceArtifactsV2(
+      resolveWorldPackageResourceArtifactsV1(
         normalizedWorldIr([]),
         options as never,
       ),

@@ -10,7 +10,7 @@ import {
   type AuthoringSpecV4,
   type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
-import { compileWorldV5 } from "@whitebox-world/compiler";
+import { compileCanonicalWorldV1 } from "@whitebox-world/compiler";
 import { createCoreGameplayBootstrapV1 } from "@whitebox-world/gameplay";
 import { createGameplayBootstrapResourceLockEntryV1 } from "@whitebox-world/gameplay-contracts";
 import { sha256Bytes } from "@whitebox-world/protocol";
@@ -19,8 +19,9 @@ import {
   isSubjectAssetRuntimeErrorV1,
 } from "@whitebox-world/runtime-babylon";
 import type {
-  ExecutionPlanV5,
-  ExecutionSubjectAssetV1,
+  CanonicalSceneExecutionPlanV1,
+  RuntimeSubjectAssetV1,
+  WorldRuntimeBootstrapV1,
 } from "@whitebox-world/runtime-contracts";
 import {
   XIER120_SUBJECT_DEFINITIONS,
@@ -161,6 +162,9 @@ function createGameplayBootstrap(normalizedWorldIr: NormalizedWorldIRV4) {
     worldId: normalizedWorldIr.id,
     worldSeed: normalizedWorldIr.seed,
     entityDescriptors,
+    initialRelationshipStates: normalizedWorldIr.relationships.map(
+      (relationship) => ({ ...relationship, establishedSimulationTick: 0 }),
+    ),
   });
 }
 
@@ -170,7 +174,8 @@ function compileSelectedSubject(
   subjectAssetRef: string,
   colliderProfileRef: string,
 ): Readonly<{
-  executionPlan: ExecutionPlanV5;
+  executionPlan: CanonicalSceneExecutionPlanV1;
+  worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
   controlledEntityId: string;
 }> {
   const parsed = parseAuthoringSpecV4(authoringSourceText);
@@ -202,18 +207,20 @@ function compileSelectedSubject(
   );
   try {
     const gameplayBootstrap = createGameplayBootstrap(normalized.value);
-    const compiled = compileWorldV5({
+    const compiled = compileCanonicalWorldV1({
       normalizedWorldIr: normalized.value,
       normalizedWorldIrHash: normalized.normalizedWorldIrHash,
-      gameplayBootstrapResourceLock:
-        createGameplayBootstrapResourceLockEntryV1(gameplayBootstrap),
+      gameplayBootstrap,
+      worldRuntimeBootstrapRef:
+        `worldkit://world-runtime-bootstrap/${normalized.value.id}@1`,
     });
     requireInvariant(
-      compiled.ok && compiled.executionPlan !== undefined,
+      compiled.ok && compiled.canonicalSceneExecutionPlan !== undefined,
       compiled.diagnostics[0]?.code ?? "XIER120_COMPILE_FAILED",
     );
     return Object.freeze({
-      executionPlan: compiled.executionPlan,
+      executionPlan: compiled.canonicalSceneExecutionPlan,
+      worldRuntimeBootstrap: compiled.worldRuntimeBootstrap,
       controlledEntityId,
     });
   } catch (error) {
@@ -231,7 +238,7 @@ async function verifyCacheLifecycle(
   subjectDefinitionRef: string,
   subjectAssetRef: string,
   colliderProfileRef: string,
-  asset: ExecutionSubjectAssetV1,
+  asset: RuntimeSubjectAssetV1,
   assetBytes: Uint8Array,
 ): Promise<Pick<
   Xier120SubjectActualUseResultV1,
@@ -500,7 +507,8 @@ export async function verifyXier120SubjectActualUse(input: {
       );
     }
     stage = "compiler";
-    const subject = compiledSelection.executionPlan.subjects.find(
+    const subject = compiledSelection.worldRuntimeBootstrap
+      .subjectRuntimeDescriptors.find(
       (candidate) =>
         candidate.entityId === compiledSelection.controlledEntityId,
     );
@@ -515,7 +523,7 @@ export async function verifyXier120SubjectActualUse(input: {
       ),
       "XIER120_COMPILED_SUBJECT_ASSET_MISMATCH",
     );
-    const asset = compiledSelection.executionPlan.subjectAssets.find(
+    const asset = compiledSelection.worldRuntimeBootstrap.subjectAssets.find(
       (candidate) => candidate.subjectAssetRef === subjectAssetRef,
     );
     requireInvariant(asset !== undefined, "XIER120_COMPILED_ASSET_MISSING");

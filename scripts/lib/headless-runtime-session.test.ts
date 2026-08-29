@@ -22,7 +22,7 @@ import {
   type HeadlessRuntimeSessionV1,
 } from "./headless-runtime-session";
 import {
-  buildWorldPackageDirectoryV2,
+  buildWorldPackageDirectoryV1,
   loadRuntimeWorldConfigurationFromPackageDirectoryV1,
 } from "./world-package-cli";
 
@@ -41,7 +41,7 @@ let basicPackagePath: string;
 let gBotPackagePath: string;
 
 function expectPackageCommandSuccess(
-  result: Awaited<ReturnType<typeof buildWorldPackageDirectoryV2>>,
+  result: Awaited<ReturnType<typeof buildWorldPackageDirectoryV1>>,
 ): asserts result is Extract<typeof result, { ok: true }> {
   if (!result.ok) throw new Error(JSON.stringify(result));
 }
@@ -146,11 +146,11 @@ beforeAll(async () => {
   );
   basicPackagePath = path.join(temporaryRoot, "basic.package");
   gBotPackagePath = path.join(temporaryRoot, "g-bot.package");
-  const basic = await buildWorldPackageDirectoryV2({
+  const basic = await buildWorldPackageDirectoryV1({
     inputPath: BASIC_WORLD_PATH,
     outputDirectoryPath: basicPackagePath,
   });
-  const gBot = await buildWorldPackageDirectoryV2({
+  const gBot = await buildWorldPackageDirectoryV1({
     inputPath: G_BOT_WORLD_PATH,
     outputDirectoryPath: gBotPackagePath,
   });
@@ -271,7 +271,7 @@ describe("headless Babylon Runtime Session", () => {
           runtimeSessionId: session.runtimeSessionId,
           simulationTick: 0,
           worldPackageRootHash:
-            candidate.runtimeWorldConfiguration.worldPackageBuildReceipt
+            candidate.runtimeWorldConfiguration.worldBuildIdentity
               .worldPackageRootHash,
         },
         cleanup: { status: "released" },

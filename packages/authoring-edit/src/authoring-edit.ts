@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import {
   assertCanonicalJsonValue,
   sha256CanonicalJson,
@@ -34,7 +36,6 @@ import {
   parseStringArray,
   snapshotDataArray,
   snapshotDataRecord,
-  type Sha256HashV1,
 } from "./parse-kernel.js";
 import {
   AUTHORING_EDIT_BUDGET_IDS_V1,

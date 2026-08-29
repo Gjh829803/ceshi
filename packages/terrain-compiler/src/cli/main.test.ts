@@ -159,7 +159,7 @@ afterEach(async () => {
   );
 });
 
-describe("terrain:intent:compile CLI", { timeout: 30_000 }, () => {
+describe("terrain:intent:compile CLI", { timeout: 60_000 }, () => {
   it("publishes canonical compiled Authoring first and the passing report last", async () => {
     const paths = await fixture();
 

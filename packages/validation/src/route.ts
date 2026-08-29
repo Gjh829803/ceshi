@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import {
   ROUTE_CONNECTIVITY_FAILURE_CODES_V2,
   type RouteConnectivityFailureV2,
@@ -5,7 +7,6 @@ import {
 
 import { isNil } from "lodash-es";
 
-import type { Sha256HashV1 } from "./types";
 import type {
   RouteDiagnosticDetailsV1,
   RouteRowValidationDiagnosticV2,

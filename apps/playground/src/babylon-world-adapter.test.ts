@@ -4,7 +4,7 @@ import {
   normalizeAuthoringSpecV4,
   type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
-import { compileWorldV5 } from "@whitebox-world/compiler";
+import { compileCanonicalWorldV1 } from "@whitebox-world/compiler";
 import { createCoreGameplayBootstrapV1 } from "@whitebox-world/gameplay";
 import {
   createGameplayBootstrapResourceLockEntryV1,
@@ -13,7 +13,7 @@ import type { BabylonRuntimeProjectionV1 } from "@whitebox-world/runtime-babylon
 import type {
   CameraViewInputV1,
   ControlCaptureRequestV1,
-  ExecutionPlanV5,
+  CanonicalSceneExecutionPlanV1,
   FixedInputV1,
   RuntimeControlCaptureFrameV1,
   WorldRuntimeSnapshotV4,
@@ -33,7 +33,7 @@ import {
 } from "./babylon-world-adapter";
 
 expectTypeOf<Parameters<typeof featureInspections>[0]>()
-  .toEqualTypeOf<ExecutionPlanV5>();
+  .toEqualTypeOf<CanonicalSceneExecutionPlanV1>();
 expectTypeOf<Parameters<typeof activeActionForControlledSubject>[0]>()
   .toEqualTypeOf<BabylonRuntimeProjectionV1>();
 
@@ -60,7 +60,7 @@ function gameplayEntityDescriptors(
     });
 }
 
-function createLockedExecutionPlanV5(): ExecutionPlanV5 {
+function createLockedCanonicalWorldV1() {
   const normalized = normalizeAuthoringSpecV4(createValidAuthoringSpecV4());
   if (
     !normalized.ok ||
@@ -75,22 +75,33 @@ function createLockedExecutionPlanV5(): ExecutionPlanV5 {
     worldId: normalized.value.id,
     worldSeed: normalized.value.seed,
     entityDescriptors: gameplayEntityDescriptors(normalized.value),
+    initialRelationshipStates: normalized.value.relationships.map(
+      (relationship) => ({ ...relationship, establishedSimulationTick: 0 }),
+    ),
   });
-  const compiled = compileWorldV5({
+  const compiled = compileCanonicalWorldV1({
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
-    gameplayBootstrapResourceLock:
-      createGameplayBootstrapResourceLockEntryV1(gameplayBootstrap),
+    gameplayBootstrap,
+    worldRuntimeBootstrapRef:
+      `worldkit://world-runtime-bootstrap/${normalized.value.id}@1`,
   });
-  if (!compiled.ok || isNil(compiled.executionPlan)) {
+  if (!compiled.ok || isNil(compiled.canonicalSceneExecutionPlan)) {
     throw new Error(
       `Adapter fixture compilation failed: ${JSON.stringify(compiled.diagnostics)}`,
     );
   }
-  return compiled.executionPlan;
+  return {
+    executionPlan: compiled.canonicalSceneExecutionPlan,
+    worldRuntimeBootstrap: compiled.worldRuntimeBootstrap,
+    gameplayBootstrap,
+  };
 }
 
-const LOCKED_EXECUTION_PLAN_V5 = createLockedExecutionPlanV5();
+const LOCKED_CANONICAL_WORLD = createLockedCanonicalWorldV1();
+const LOCKED_EXECUTION_PLAN_V5 = LOCKED_CANONICAL_WORLD.executionPlan;
+const LOCKED_WORLD_RUNTIME_BOOTSTRAP =
+  LOCKED_CANONICAL_WORLD.worldRuntimeBootstrap;
 
 interface RuntimeProbe {
   runFixedInput: ReturnType<typeof vi.fn<(input: FixedInputV1) => Promise<BabylonRuntimeProjectionV1>>>;
@@ -392,6 +403,10 @@ function createAdapterProbe(): {
   };
   const adapter = Object.assign(Object.create(BabylonWorldAdapter.prototype), {
     executionPlan,
+    worldRuntimeBootstrap: LOCKED_WORLD_RUNTIME_BOOTSTRAP,
+    initialExecutionPlan: executionPlan,
+    initialWorldRuntimeBootstrap: LOCKED_WORLD_RUNTIME_BOOTSTRAP,
+    initialInspections: [],
     coordinator,
     keyboardInput: new PhysicalKeyboardActionTracker(),
     cameraInput: new Set<string>(),
@@ -586,15 +601,18 @@ describe("BabylonWorldAdapter frame loop", () => {
     });
   });
 
-  it("uses a locked ExecutionPlan V5 at the adapter boundary", () => {
+  it("uses a locked Canonical Scene Plan and Runtime Bootstrap at the adapter boundary", () => {
     expect(LOCKED_EXECUTION_PLAN_V5).toMatchObject({
-      kind: "worldkit-execution-plan",
-      schemaVersion: 5,
+      kind: "worldkit-canonical-scene-execution-plan",
+      schemaVersion: 1,
     });
-    expect(LOCKED_EXECUTION_PLAN_V5.resourceLockEntries).toContainEqual(
+    expect(LOCKED_WORLD_RUNTIME_BOOTSTRAP.runtimeResourceLockEntries).toContainEqual(
       expect.objectContaining({ resourceKind: "gameplay-bootstrap" }),
     );
-    expect(featureInspections(LOCKED_EXECUTION_PLAN_V5)).not.toHaveLength(0);
+    expect(featureInspections(
+      LOCKED_EXECUTION_PLAN_V5,
+      LOCKED_WORLD_RUNTIME_BOOTSTRAP,
+    )).not.toHaveLength(0);
   });
 
   it("accumulates fixed simulation ticks independently from display frames", async () => {
@@ -939,7 +957,7 @@ describe("BabylonWorldAdapter frame loop", () => {
   });
 });
 
-function houseNorthExecutionObject(): ExecutionPlanV5["objects"][number] {
+function houseNorthExecutionObject(): CanonicalSceneExecutionPlanV1["objects"][number] {
   return {
     entityId: "house-north",
     prototypeId: "house-blockout",
@@ -954,10 +972,10 @@ function houseNorthExecutionObject(): ExecutionPlanV5["objects"][number] {
   };
 }
 
-function withHouseNorth(plan: ExecutionPlanV5): ExecutionPlanV5 {
+function withHouseNorth(plan: CanonicalSceneExecutionPlanV1): CanonicalSceneExecutionPlanV1 {
   return {
     ...plan,
-    objects: [...plan.objects, houseNorthExecutionObject()],
+    objects: [houseNorthExecutionObject(), ...plan.objects],
   };
 }
 
@@ -978,7 +996,7 @@ function createFakeCanvas(id: string) {
 
 function createPublicationSurfaceProbe(options: {
   readonly result: PublishWorldReplacementResultV1;
-  readonly publishedPlan?: ExecutionPlanV5;
+  readonly publishedPlan?: CanonicalSceneExecutionPlanV1;
 }) {
   let tick = 0;
   const cameraView = { yawRadians: 0, pitchRadians: 0, distanceMeters: 0 };
@@ -1014,6 +1032,13 @@ function createPublicationSurfaceProbe(options: {
   };
   const adapter = Object.assign(Object.create(BabylonWorldAdapter.prototype), {
     executionPlan: LOCKED_EXECUTION_PLAN_V5,
+    worldRuntimeBootstrap: LOCKED_WORLD_RUNTIME_BOOTSTRAP,
+    initialExecutionPlan: LOCKED_EXECUTION_PLAN_V5,
+    initialWorldRuntimeBootstrap: LOCKED_WORLD_RUNTIME_BOOTSTRAP,
+    initialInspections: structuredClone(featureInspections(
+      LOCKED_EXECUTION_PLAN_V5,
+      LOCKED_WORLD_RUNTIME_BOOTSTRAP,
+    )),
     coordinator,
     keyboardInput: new PhysicalKeyboardActionTracker(),
     cameraInput: new Set<string>(),
@@ -1021,7 +1046,10 @@ function createPublicationSurfaceProbe(options: {
     keyboardCameraPitchRadiansPerTick: 0,
     lastArrowInputClearReason: "startup",
     lastPossessedControlledEntityId: "player",
-    inspections: structuredClone(featureInspections(LOCKED_EXECUTION_PLAN_V5)),
+    inspections: structuredClone(featureInspections(
+      LOCKED_EXECUTION_PLAN_V5,
+      LOCKED_WORLD_RUNTIME_BOOTSTRAP,
+    )),
     listeners: new Set(),
     disposed: false,
     paused: false,
@@ -1079,7 +1107,13 @@ describe("BabylonWorldAdapter Full Reload visible surface", () => {
       .toBe(false);
 
     const result = await adapter.publishWorldReplacementV1({
-      worldConfiguration: { executionPlan: publishedPlan },
+      worldConfiguration: {
+        sceneSource: {
+          kind: "canonical-execution-plan",
+          executionPlan: publishedPlan,
+        },
+        worldRuntimeBootstrap: LOCKED_WORLD_RUNTIME_BOOTSTRAP,
+      },
       publication: {},
       persistDurableCommit: () => undefined,
     });
@@ -1102,7 +1136,13 @@ describe("BabylonWorldAdapter Full Reload visible surface", () => {
     });
 
     const result = await adapter.publishWorldReplacementV1({
-      worldConfiguration: { executionPlan: publishedPlan },
+      worldConfiguration: {
+        sceneSource: {
+          kind: "canonical-execution-plan",
+          executionPlan: publishedPlan,
+        },
+        worldRuntimeBootstrap: LOCKED_WORLD_RUNTIME_BOOTSTRAP,
+      },
       publication: {},
     });
 
@@ -1118,7 +1158,13 @@ describe("BabylonWorldAdapter Full Reload visible surface", () => {
     });
 
     const result = await adapter.publishWorldReplacementV1({
-      worldConfiguration: { executionPlan: { kind: "not-an-execution-plan" } },
+      worldConfiguration: {
+        sceneSource: {
+          kind: "canonical-execution-plan",
+          executionPlan: { kind: "not-an-execution-plan" },
+        },
+        worldRuntimeBootstrap: LOCKED_WORLD_RUNTIME_BOOTSTRAP,
+      },
       publication: {},
     });
 

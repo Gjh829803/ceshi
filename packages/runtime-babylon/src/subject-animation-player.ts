@@ -1,7 +1,7 @@
 import type { AnimationGroup } from "@babylonjs/core/Animations/animationGroup.js";
 import type { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 
-import type { ExecutionAnimationSetV1 } from "@whitebox-world/runtime-contracts";
+import type { RuntimeAnimationSetV1 } from "@whitebox-world/runtime-contracts";
 import { stringifyCanonicalJson } from "@whitebox-world/protocol";
 import type { GameplayActionStateV1 } from "@whitebox-world/gameplay-contracts";
 import type { GroundHumanoidActionIdV1 } from "@whitebox-world/subject-contracts";
@@ -19,7 +19,7 @@ import { SubjectAssetRuntimeErrorV1 } from "./subject-asset-cache";
 
 interface SubjectAnimationPlayerOptionsV1 {
   animationGroups: readonly AnimationGroup[];
-  animationSet: ExecutionAnimationSetV1;
+  animationSet: RuntimeAnimationSetV1;
   actionPresentationRegistry: ActionPresentationRegistryV1;
   authorityTransformNode: TransformNode;
   ownedVisualAnimationTargets: ReadonlySet<object>;

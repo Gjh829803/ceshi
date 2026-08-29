@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import {
   canonicalJsonBytes,
   sha256CanonicalJson,
@@ -5,7 +7,11 @@ import {
 } from "@whitebox-world/protocol";
 import { isNil } from "lodash-es";
 
-import type { GameplayCommandV1, Sha256HashV1 } from "./gameplay-contracts";
+import {
+  parseGameplayRelationshipStateV1,
+  type GameplayCommandV1,
+  type GameplayRelationshipStateV1,
+} from "./gameplay-contracts";
 
 export interface GameplayEntityDescriptorV1 {
   readonly id: string;
@@ -86,6 +92,7 @@ export interface GameplayBootstrapV1 {
   readonly featureResourceLocks: readonly GameplayFeatureResourceLockV1[];
   readonly semanticActionDefinitions: readonly GameplayActionDefinitionV1[];
   readonly availableCapabilityRefs: readonly string[];
+  readonly initialRelationshipStates: readonly GameplayRelationshipStateV1[];
 }
 
 export type GameplayBootstrapBodyV1 = Omit<GameplayBootstrapV1, "contentHash">;
@@ -642,6 +649,7 @@ function parseGameplayBootstrapBody(
     "featureResourceLocks",
     "semanticActionDefinitions",
     "availableCapabilityRefs",
+    "initialRelationshipStates",
   ]) ||
     record.kind !== "gameplay-bootstrap" ||
     !isNonEmptyString(record.id) ||
@@ -686,6 +694,17 @@ function parseGameplayBootstrapBody(
       schemaName,
       mode,
     ),
+    initialRelationshipStates: canonicalObjectCollection(
+      record.initialRelationshipStates,
+      schemaName,
+      mode,
+      (value) => {
+        const relationship = parseGameplayRelationshipStateV1(value);
+        if (isNil(relationship)) invalid(schemaName);
+        return deepFreeze(relationship);
+      },
+      (value) => value.id,
+    ),
   });
 }
 
@@ -721,6 +740,7 @@ export function parseGameplayBootstrapV1(input: unknown): GameplayBootstrapV1 {
     "featureResourceLocks",
     "semanticActionDefinitions",
     "availableCapabilityRefs",
+    "initialRelationshipStates",
   ]) || !isSha256(record.contentHash)) invalid(schemaName);
   const { contentHash, ...bodyInput } = record;
   let body: GameplayBootstrapBodyV1;

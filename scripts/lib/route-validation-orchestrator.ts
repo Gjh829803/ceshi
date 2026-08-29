@@ -4,8 +4,13 @@ import {
   sha256CanonicalJson,
 } from "@whitebox-world/protocol";
 import type {
-  ExecutionConnectivityRequirementV1,
-  ExecutionPlanV5,
+  CanonicalSceneConnectivityRequirementV1,
+  CanonicalSceneExecutionPlanV1,
+  WorldRuntimeBootstrapV1,
+} from "@whitebox-world/runtime-contracts";
+import {
+  canonicalResourceLockEntriesV1,
+  parseWorldRuntimeBootstrapV1,
 } from "@whitebox-world/runtime-contracts";
 import type { SubjectAssetResolverV1 } from "@whitebox-world/runtime-babylon";
 import {
@@ -47,7 +52,8 @@ export interface RouteValidationRuntimeLeaseV1 {
 }
 
 export interface RouteValidationRuntimeCreationInputV1 {
-  readonly executionPlan: ExecutionPlanV5;
+  readonly executionPlan: CanonicalSceneExecutionPlanV1;
+  readonly worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
   readonly runtimeSessionId: string;
   readonly traversalLockReceipt: ResolvedTraversalLockReceiptV1;
   readonly routePathReceipt: RoutePathReceiptV2;
@@ -62,7 +68,7 @@ export interface RouteValidationRuntimeCreationInputV1 {
  */
 export interface RouteValidationOrchestratorOperationsV1 {
   readonly compileTraversalLock: (input: Readonly<{
-    executionPlan: ExecutionPlanV5;
+    executionPlan: CanonicalSceneExecutionPlanV1;
     traversingEntityId: string;
   }>) => ResolvedTraversalLockReceiptV1;
   readonly resolveGraphBuilderProfile: () =>
@@ -71,7 +77,7 @@ export interface RouteValidationOrchestratorOperationsV1 {
     input: CreateTraversalCapabilityEnvelopeInputV1,
   ) => TraversalCapabilityEnvelopeReceiptV1;
   readonly createBuildInput: (input: Readonly<{
-    executionPlan: ExecutionPlanV5;
+    executionPlan: CanonicalSceneExecutionPlanV1;
     capabilityEnvelope:
       TraversalCapabilityEnvelopeReceiptV1["envelope"];
     traversalLockReceipt: ResolvedTraversalLockReceiptV1;
@@ -93,7 +99,8 @@ export interface RouteValidationOrchestratorOperationsV1 {
 }
 
 export interface OrchestrateRouteValidationInputV1 {
-  readonly executionPlan: ExecutionPlanV5;
+  readonly executionPlan: CanonicalSceneExecutionPlanV1;
+  readonly worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
   readonly subject: WorldPackageValidationSubjectV1;
   readonly reportId: string;
   readonly dependencyReportRefs?: readonly string[];
@@ -115,7 +122,10 @@ export interface RouteValidationOrchestrationResultV1 {
 }
 
 interface CanonicalOrchestrationInputV1 {
-  readonly executionPlan: ExecutionPlanV5;
+  readonly executionPlan: CanonicalSceneExecutionPlanV1;
+  readonly executionPlanHash: `sha256:${string}`;
+  readonly routeResourceLockHash: `sha256:${string}`;
+  readonly worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
   readonly subject: WorldPackageValidationSubjectV1;
   readonly reportId: string;
   readonly dependencyReportRefs: readonly string[];
@@ -136,12 +146,13 @@ const SUBJECT_FIELDS = [
   "worldPackageRootHash",
   "authoringSpecHash",
   "normalizedWorldIrHash",
-  "executionPlanHash",
+  "worldBuildIdentityHash",
   "resourceLockHash",
   "layoutSolveReportHash",
 ] as const;
 const INPUT_FIELDS = [
   "executionPlan",
+  "worldRuntimeBootstrap",
   "subject",
   "reportId",
   "dependencyReportRefs",
@@ -150,6 +161,7 @@ const INPUT_FIELDS = [
 ] as const;
 const REQUIRED_INPUT_FIELDS = [
   "executionPlan",
+  "worldRuntimeBootstrap",
   "subject",
   "reportId",
 ] as const;
@@ -412,6 +424,10 @@ function canonicalInput(
     "ROUTE_VALIDATION_ORCHESTRATION_INPUT_INVALID",
   );
   assertPureEnumerableDataGraph(
+    input.worldRuntimeBootstrap,
+    "ROUTE_VALIDATION_ORCHESTRATION_INPUT_INVALID",
+  );
+  assertPureEnumerableDataGraph(
     input.subject,
     "ROUTE_VALIDATION_ORCHESTRATION_INPUT_INVALID",
   );
@@ -426,16 +442,30 @@ function canonicalInput(
     assertCanonicalDataArray(input.dependencyReportRefs);
   }
   const executionPlan = deepFreeze(structuredClone(input.executionPlan));
-  if (executionPlan.schemaVersion !== 5) {
-    fail("ROUTE_VALIDATION_ORCHESTRATION_PLAN_NOT_V5");
+  if (executionPlan.schemaVersion !== 1) {
+    fail("ROUTE_VALIDATION_ORCHESTRATION_PLAN_INVALID");
   }
+  const worldRuntimeBootstrap = parseWorldRuntimeBootstrapV1(
+    structuredClone(input.worldRuntimeBootstrap),
+  );
   const subject = canonicalSubject(input.subject);
-  const executionPlanHash = sha256CanonicalJson(executionPlan);
+  const executionPlanHash = sha256CanonicalJson(executionPlan) as `sha256:${string}`;
+  const combinedResourceLock = canonicalResourceLockEntriesV1([
+    ...executionPlan.sceneResourceLockEntries,
+    ...worldRuntimeBootstrap.runtimeResourceLockEntries,
+  ]);
+  const resourceLockHash = sha256CanonicalJson(combinedResourceLock);
+  const routeResourceLockHash = sha256CanonicalJson(
+    combinedResourceLock.filter(
+      (row) => row.resourceKind !== "gameplay-bootstrap",
+    ),
+  ) as `sha256:${string}`;
   if (
-    subject.executionPlanHash !== executionPlanHash ||
     subject.authoringSpecHash !== executionPlan.authoringSpecHash ||
     subject.normalizedWorldIrHash !== executionPlan.normalizedWorldIrHash ||
-    subject.resourceLockHash !== executionPlan.resourceLockHash ||
+    subject.resourceLockHash !== resourceLockHash ||
+    executionPlan.worldRuntimeBootstrapHash !==
+      worldRuntimeBootstrap.contentHash ||
     subject.layoutSolveReportHash !== executionPlan.layout.layoutSolveReportHash
   ) {
     fail("ROUTE_VALIDATION_ORCHESTRATION_WORLD_IDENTITY_MISMATCH");
@@ -457,6 +487,9 @@ function canonicalInput(
   const havokWasmBytes = snapshotBytes(input.havokWasmBytes);
   return Object.freeze({
     executionPlan,
+    executionPlanHash,
+    routeResourceLockHash,
+    worldRuntimeBootstrap,
     subject,
     reportId: input.reportId,
     dependencyReportRefs,
@@ -468,8 +501,8 @@ function canonicalInput(
 }
 
 function sortedRequirements(
-  executionPlan: ExecutionPlanV5,
-): readonly ExecutionConnectivityRequirementV1[] {
+  executionPlan: CanonicalSceneExecutionPlanV1,
+): readonly CanonicalSceneConnectivityRequirementV1[] {
   return Object.freeze(
     [...executionPlan.traversal.connectivityRequirements].sort((left, right) =>
       compareCanonicalString(left.constraintId, right.constraintId) ||
@@ -562,6 +595,7 @@ async function probeCompleteRoute(
 ): Promise<RouteRuntimeProbeReceiptV2> {
   const lease = await operations.createRuntimeLease({
     executionPlan: input.executionPlan,
+    worldRuntimeBootstrap: input.worldRuntimeBootstrap,
     runtimeSessionId: `worldkit-route-validation-${String(rowIndex).padStart(6, "0")}`,
     traversalLockReceipt,
     routePathReceipt: result.routePathReceipt,
@@ -594,8 +628,8 @@ async function probeCompleteRoute(
       lease.runtimePort.authoringSpecHash !== input.subject.authoringSpecHash ||
       lease.runtimePort.layoutSolveReportHash !==
         input.subject.layoutSolveReportHash ||
-      lease.runtimePort.resourceLockHash !== input.subject.resourceLockHash ||
-      lease.runtimePort.executionPlanHash !== input.subject.executionPlanHash
+      lease.runtimePort.resourceLockHash !== input.routeResourceLockHash ||
+      lease.runtimePort.executionPlanHash !== input.executionPlanHash
     ) {
       fail("ROUTE_VALIDATION_RUNTIME_WORLD_IDENTITY_MISMATCH");
     }
@@ -624,7 +658,8 @@ async function probeCompleteRoute(
         runtimePort: lease.runtimePort,
         validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
         resolvedControlFeelProfile: (() => {
-          const subject = input.executionPlan.subjects.find(
+          const subject = input.worldRuntimeBootstrap
+            .subjectRuntimeDescriptors.find(
             (candidate) => candidate.entityId === result.routePathReceipt.traversingEntityId,
           );
           if (isNil(subject)) {
@@ -686,8 +721,8 @@ function canonicalBoundReport(
       OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V2 ||
     receipt.authoringSpecHash !== input.subject.authoringSpecHash ||
     receipt.normalizedWorldIrHash !== input.subject.normalizedWorldIrHash ||
-    receipt.executionPlanHash !== input.subject.executionPlanHash ||
-    receipt.resourceLockHash !== input.subject.resourceLockHash ||
+    receipt.executionPlanHash !== input.executionPlanHash ||
+    receipt.resourceLockHash !== input.routeResourceLockHash ||
     receipt.layoutSolveReportHash !== input.subject.layoutSolveReportHash ||
     receipt.rows.length !== rows.length
   ) {
@@ -899,6 +934,8 @@ export async function orchestrateRouteValidationV1(
     operations.createReport({
       reportId: input.reportId,
       subject: input.subject,
+      executionPlanHash: input.executionPlanHash,
+      resourceLockHash: input.routeResourceLockHash,
       dependencyReportRefs: input.dependencyReportRefs,
       validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
       requiredRoutes: requirements.map((requirement) => ({

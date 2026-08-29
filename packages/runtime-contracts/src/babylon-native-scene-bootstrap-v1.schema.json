@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "worldkit://schema/babylon-native-scene-bootstrap@1",
+  "$comment": "JSON Schema numeric equality cannot distinguish -0 from 0. The exact TypeScript parser rejects signed zero before canonical hashing; serialized canonical JSON contains 0.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "schemaVersion",
+    "id",
+    "sceneModuleRef",
+    "nativeSceneApiRef",
+    "nativeSceneProfileRef",
+    "gameplayBootstrapRef",
+    "initialControlledEntityId",
+    "gravityMetersPerSecondSquaredXYZ",
+    "initialCamera",
+    "seed",
+    "spawnMarkerId"
+  ],
+  "properties": {
+    "kind": {
+      "const": "babylon-native-scene-bootstrap"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "id": {
+      "$ref": "#/$defs/id"
+    },
+    "sceneModuleRef": {
+      "type": "string",
+      "pattern": "^worldkit://native-scene/[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?@[1-9][0-9]*$"
+    },
+    "nativeSceneApiRef": {
+      "type": "string",
+      "pattern": "^worldkit://native-scene-api/[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?@[1-9][0-9]*$"
+    },
+    "nativeSceneProfileRef": {
+      "type": "string",
+      "pattern": "^worldkit://native-scene-profile/[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?@[1-9][0-9]*$"
+    },
+    "gameplayBootstrapRef": {
+      "type": "string",
+      "pattern": "^worldkit://gameplay-bootstrap/[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?@[1-9][0-9]*$"
+    },
+    "initialControlledEntityId": {
+      "$ref": "#/$defs/id"
+    },
+    "gravityMetersPerSecondSquaredXYZ": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "prefixItems": [
+        { "type": "number" },
+        { "type": "number" },
+        { "type": "number" }
+      ],
+      "items": false
+    },
+    "initialCamera": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "pitchRadians",
+        "distanceMeters",
+        "fovDegrees",
+        "targetHeightMeters"
+      ],
+      "properties": {
+        "mode": {
+          "const": "third-person"
+        },
+        "pitchRadians": {
+          "type": "number"
+        },
+        "distanceMeters": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "fovDegrees": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "exclusiveMaximum": 180
+        },
+        "targetHeightMeters": {
+          "type": "number"
+        }
+      }
+    },
+    "seed": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295
+    },
+    "spawnMarkerId": {
+      "$ref": "#/$defs/id"
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?:\\S|\\S[\\s\\S]*\\S)$"
+    }
+  }
+}

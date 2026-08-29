@@ -2,6 +2,7 @@
 
 - 状态：已接受
 - 日期：2026-08-15
+- 范围修订：[ADR-0007：Canonical 与 Babylon Native 场景创作双 Lane](./0007-canonical-and-babylon-native-authoring-lanes.md)。创作 Agent 仅在独立 Native Lane 获得 Babylon 视觉对象例外；Runtime Gameplay、Havok、主相机与状态权威不变。
 
 ## 背景
 

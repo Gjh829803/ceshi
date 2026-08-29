@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import { sha256CanonicalJson, stringifyCanonicalJson } from "@whitebox-world/protocol";
 import { describe, expect, it } from "vitest";
 
@@ -5,7 +7,6 @@ import {
   projectAiSchemaV1,
   type AiSchemaProjectionV1,
   type RegistrySearchResultV1,
-  type Sha256HashV1,
 } from "@whitebox-world/authoring-edit";
 
 import {

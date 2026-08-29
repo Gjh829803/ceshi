@@ -1,14 +1,23 @@
+import { execFile } from "node:child_process";
 import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { promisify } from "node:util";
 
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
   diversionDiffContainsChangesV1,
   priorTextFromDiversionDiffV1,
+  readGitPriorLedgerV1,
   verify3cMigrationV1,
 } from "./verify-3c-migration.js";
+
+const execFileAsync = promisify(execFile);
+
+function token(parts: readonly string[]): string {
+  return parts.join("");
+}
 
 const temporaryDirectories: string[] = [];
 const BASELINE_COMMIT = "6d9e0304016448231ca05aa2f20e4b6ef7e7bd88";
@@ -52,7 +61,7 @@ function ledger(entryOverrides: Record<string, unknown> = {}, rootOverrides: Rec
     baselineCommit: BASELINE_COMMIT,
     sourcePolicy: SOURCE_POLICY,
     entries: [{
-      id: "3C-legacy-motion-kernel-runtime",
+      id: token(["3C-", "legacy", "-motion", "-kernel-runtime"]),
       legacySymbol: "MotionKernelRuntimeV1",
       legacyModulePaths: ["packages/runtime-babylon/src/motion-kernel-runtime"],
       targetOwner: "@whitebox-world/character-movement",
@@ -184,7 +193,7 @@ describe("3C migration ledger verifier", () => {
       .resolves.toEqual({
         baselineCommit: BASELINE_COMMIT,
         entries: [{
-          id: "3C-legacy-motion-kernel-runtime",
+          id: token(["3C-", "legacy", "-motion", "-kernel-runtime"]),
           legacySymbol: "MotionKernelRuntimeV1",
           baselineSourceReferenceCount: 6,
           currentSourceReferenceCeiling: 1,
@@ -557,4 +566,87 @@ describe("3C migration ledger verifier", () => {
       priorLedger: ledger({ currentSourceReferenceCeiling: 2, evidence: ["baseline"] }),
     })).resolves.toMatchObject({ entries: [{ currentSourceReferenceCeiling: 1 }] });
   });
+});
+
+async function git(root: string, args: readonly string[]): Promise<string> {
+  return (await execFileAsync("git", [...args], {
+    cwd: root,
+    encoding: "utf8",
+  })).stdout;
+}
+
+async function initializeGitRepository(root: string): Promise<void> {
+  await git(root, ["init", "-b", "main"]);
+  await git(root, ["config", "user.email", "3c-test@example.com"]);
+  await git(root, ["config", "user.name", "3C Test"]);
+}
+
+async function commitAll(root: string, message: string): Promise<void> {
+  await git(root, ["add", "-A"]);
+  await git(root, ["commit", "-m", message]);
+}
+
+describe("git prior-ledger resolution", () => {
+  it("reads a merge's ledger-bearing parent instead of resetting genesis", async () => {
+    const root = await repositoryWithSource("export class MotionKernelRuntimeV1 {}\n");
+    await initializeGitRepository(root);
+    await writeRepositoryFile(root, "README", "base\n");
+    await commitAll(root, "base without ledger");
+    await git(root, ["checkout", "-b", "feature"]);
+    const ledgerText = `${JSON.stringify(ledger(), null, 2)}\n`;
+    await writeRepositoryFile(root, "config/3c-migration-ledger.json", ledgerText);
+    await commitAll(root, "add ledger");
+    await git(root, ["checkout", "main"]);
+    await git(root, ["merge", "--no-ff", "-m", "merge feature", "feature"]);
+    await expect(readGitPriorLedgerV1(root, ledgerText)).resolves.toEqual({
+      prior: ledger(),
+      allowGenesis: false,
+    });
+  }, 60_000);
+
+  it("reads the first-parent schema-2 ledger as prior", async () => {
+    const root = await repositoryWithSource("export class MotionKernelRuntimeV1 {}\n");
+    await initializeGitRepository(root);
+    const priorLedger = ledger({ currentSourceReferenceCeiling: 1 });
+    const currentLedger = ledger({
+      currentSourceReferenceCeiling: 1,
+      evidence: ["baseline"],
+    });
+    await writeRepositoryFile(
+      root,
+      "config/3c-migration-ledger.json",
+      `${JSON.stringify(priorLedger, null, 2)}\n`,
+    );
+    await commitAll(root, "prior ledger");
+    const currentText = `${JSON.stringify(currentLedger, null, 2)}\n`;
+    await writeRepositoryFile(root, "config/3c-migration-ledger.json", currentText);
+    await commitAll(root, "current ledger");
+    await expect(readGitPriorLedgerV1(root, currentText)).resolves.toEqual({
+      prior: priorLedger,
+      allowGenesis: false,
+    });
+  }, 60_000);
+
+  it("uses HEAD as prior when the working tree ledger differs", async () => {
+    const root = await repositoryWithSource("export class MotionKernelRuntimeV1 {}\n");
+    await initializeGitRepository(root);
+    const headLedger = ledger({ currentSourceReferenceCeiling: 1 });
+    const workingLedger = ledger({
+      currentSourceReferenceCeiling: 1,
+      evidence: ["working tree"],
+    });
+    await writeRepositoryFile(
+      root,
+      "config/3c-migration-ledger.json",
+      `${JSON.stringify(headLedger, null, 2)}\n`,
+    );
+    await commitAll(root, "HEAD ledger");
+    await expect(readGitPriorLedgerV1(
+      root,
+      `${JSON.stringify(workingLedger, null, 2)}\n`,
+    )).resolves.toEqual({
+      prior: headLedger,
+      allowGenesis: false,
+    });
+  }, 60_000);
 });

@@ -90,8 +90,11 @@ async function writeTrustedWhiteboxArtifacts(
   const normalizedWorldIr = {
     kind: "normalized-world-ir",
     schemaVersion: 4,
+    resources: { resourceLockHash },
   };
   const normalizedWorldIrHash = hash(canonicalJson(normalizedWorldIr));
+  const worldPackageRootHash = `sha256:${"a".repeat(64)}`;
+  const worldBuildIdentityHash = `sha256:${"d".repeat(64)}`;
   const visualTarget = {
     visualTargetId: "player-subject",
     runtimeEntityIds: ["player"],
@@ -119,11 +122,12 @@ async function writeTrustedWhiteboxArtifacts(
       }]
     : [];
   const executionPlan = {
-    kind: "worldkit-execution-plan",
-    schemaVersion: 5,
+    kind: "worldkit-canonical-scene-execution-plan",
+    schemaVersion: 1,
     authoringSpecHash,
     normalizedWorldIrHash,
-    resourceLockHash,
+    sceneResourceLockHash: resourceLockHash,
+    sceneResourceLockEntries: [],
     layout: { layoutSolveReportHash },
     traversal: {
       connectivityRequirements: requiredRoutes.map((route) => ({
@@ -136,7 +140,7 @@ async function writeTrustedWhiteboxArtifacts(
   const captureTargets = {
     kind: "worldkit-whitebox-triview-manifest",
     schemaVersion: 1,
-    executionPlanHash,
+    worldBuildIdentityHash,
     whiteboxTriviews: [{
       ...visualTarget,
       views: ["front", "right", "back"],
@@ -227,6 +231,7 @@ async function writeTrustedWhiteboxArtifacts(
       kind: "worldkit-build-artifact",
       schemaVersion: 4,
       normalizedWorldIrHash,
+      worldBuildIdentityHash,
       executionPlanHash,
       normalizedWorldIr,
       executionPlan,
@@ -235,6 +240,7 @@ async function writeTrustedWhiteboxArtifacts(
     writeFile(path.join(artifactRoot, "runtime-snapshot.json"), JSON.stringify({
       kind: "worldkit-runtime-snapshot",
       schemaVersion: 4,
+      worldBuildIdentityHash,
     })),
     writeFile(path.join(artifactRoot, "triviews/whitebox-triview-manifest.json"), JSON.stringify(captureTargets)),
     writeFile(path.join(triViewRoot, "whitebox-triview.png"), png),
@@ -256,9 +262,11 @@ async function writeTrustedWhiteboxArtifacts(
       status: routeReportMode === "failed" ? "failed" : "passed",
       subject: {
         kind: "world-package",
+        worldPackageRootHash,
         authoringSpecHash,
         normalizedWorldIrHash,
-        executionPlanHash: routeReportMode === "mismatched" ? resourceLockHash : executionPlanHash,
+        worldBuildIdentityHash:
+          routeReportMode === "mismatched" ? resourceLockHash : worldBuildIdentityHash,
         resourceLockHash,
         layoutSolveReportHash,
       },
@@ -360,7 +368,7 @@ test("keeps concurrent atomic writes isolated and serializes same-record mutatio
   assert.equal(maximumActiveAcrossRecords, 2);
 });
 
- test("assembles the new agent pipeline without executing prompt text", () => {
+test("assembles the new agent pipeline without executing prompt text", () => {
   const result = spawnSync(
     "bash",
     [path.join(repoRoot, "scripts/agents/run-spatial-world-agent.sh"), "--", "--scene-id", "prompt-smoke", "$(touch should-not-run)"],
@@ -368,6 +376,37 @@ test("keeps concurrent atomic writes isolated and serializes same-record mutatio
   );
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.match(result.stdout, /WORLDKIT_PROMPT_SMOKE_OK planner coding-agent terrain-compilation canonical-build runtime-capture visual-prompt-synthesis visual-imagegen/);
+});
+
+test("build-only accepts an empty reference-image list before validating frozen Planner outputs", async () => {
+  const sceneId = `build-only-empty-reference-${process.pid}`;
+  const artifactRoot = path.join(repoRoot, "artifacts/scenes", sceneId);
+  const publicPlanRoot = path.join(repoRoot, "apps/playground/public/scene-plans", sceneId);
+  try {
+    const result = spawnSync(
+      "bash",
+      [
+        path.join(repoRoot, "scripts/agents/run-spatial-world-agent.sh"),
+        "--build-only",
+        "--",
+        "--scene-id",
+        sceneId,
+      ],
+      { cwd: repoRoot, env: process.env, encoding: "utf8" },
+    );
+    const output = `${result.stdout}\n${result.stderr}`;
+    assert.equal(result.status, 2, output);
+    assert.match(
+      output,
+      /ENOENT:.*(?:scene-brief\.md|world-plan\.png|entry-whitebox-target\.png|terrain-height-intent-prompt\.md|terrain-height-intent\.png)/,
+    );
+    assert.doesNotMatch(output, /unbound variable/);
+  } finally {
+    await Promise.all([
+      rm(artifactRoot, { recursive: true, force: true }),
+      rm(publicPlanRoot, { recursive: true, force: true }),
+    ]);
+  }
 });
 
 test("routes Planner and Builder through the selected Codex backend while keeping post-whitebox visuals on Gemini", async () => {
@@ -1466,7 +1505,7 @@ test("does not import a three-file artifact fragment as a passed world", async (
     writeFile(path.join(artifactRoot, "triviews/whitebox-triview-manifest.json"), JSON.stringify({
       kind: "worldkit-whitebox-triview-manifest",
       schemaVersion: 1,
-      executionPlanHash: `sha256:${"a".repeat(64)}`,
+      worldBuildIdentityHash: `sha256:${"a".repeat(64)}`,
       whiteboxTriviews: [],
     })),
   ]);

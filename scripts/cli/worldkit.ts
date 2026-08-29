@@ -75,6 +75,7 @@ import {
   type CliDiagnostic,
   type WorldkitDiagnostic,
 } from "../lib/worldkit-pipeline";
+import { createTrustedCanonicalWorldPackageV1 } from "../lib/trusted-world-package";
 import {
   startWorldkitServer,
   type WorldkitServerHandle,
@@ -106,8 +107,8 @@ import {
   WORLDKIT_CLI_PROTOCOL_VERSION_V1,
   WORLDKIT_SDK_VERSION_V1,
   WORLDKIT_SPEC_VERSION_V1,
-  buildWorldPackageDirectoryV2,
-  inspectWorldPackageDirectoryV2,
+  buildWorldPackageDirectoryV1,
+  inspectWorldPackageDirectoryV1,
   loadRuntimeWorldConfigurationFromPackageDirectoryV1,
   type WorldPackageCommandResultV1,
 } from "../lib/world-package-cli";
@@ -346,6 +347,7 @@ export interface WorldkitCommandResult {
   exitCode: number;
   diagnostics: readonly WorldkitDiagnostic[];
   normalizedWorldIrHash?: string;
+  worldBuildIdentityHash?: string;
   executionPlanHash?: string;
   sceneBriefHash?: string;
   movementMode?: string;
@@ -1142,12 +1144,23 @@ export async function validateFile(
 ): Promise<WorldkitCommandResult> {
   const pipeline = await loadWorldkitRoutePipeline(inputPath);
   if (!pipeline.ok) return pipeline;
+  let worldBuildIdentityHash: `sha256:${string}`;
+  try {
+    const directory = await createTrustedCanonicalWorldPackageV1(pipeline);
+    worldBuildIdentityHash = directory.receipt.worldBuildIdentityHash;
+  } catch (error) {
+    return cliFailure(
+      "WORLD_BUILD_IDENTITY_UNAVAILABLE",
+      "The complete World Build identity could not be created.",
+      { cause: error instanceof Error ? error.message : String(error) },
+    );
+  }
   return {
     ok: true,
     exitCode: 0,
     diagnostics: [],
     normalizedWorldIrHash: pipeline.normalizedWorldIrHash,
-    executionPlanHash: pipeline.executionPlanHash,
+    worldBuildIdentityHash,
   };
 }
 
@@ -1260,7 +1273,7 @@ export async function buildFile(
       "The WorldPackage output parent directory is unavailable.",
     );
   }
-  return buildWorldPackageDirectoryV2({
+  return buildWorldPackageDirectoryV1({
     inputPath: path.resolve(inputPath),
     outputDirectoryPath: path.join(
       canonicalParentPath,
@@ -1627,13 +1640,14 @@ export async function captureFile(
           imageUri: relativeImagePath,
         });
       }
-      if (validation.executionPlanHash === undefined) {
-        throw new Error("WORLDKIT_CAPTURE_EXECUTION_PLAN_HASH_MISSING");
+      if (validation.worldBuildIdentityHash === undefined) {
+        throw new Error("WORLDKIT_CAPTURE_WORLD_BUILD_IDENTITY_HASH_MISSING");
       }
       const manifest: WhiteboxTriviewManifestV1 = {
         kind: "worldkit-whitebox-triview-manifest",
         schemaVersion: 1,
-        executionPlanHash: validation.executionPlanHash as `sha256:${string}`,
+        worldBuildIdentityHash:
+          validation.worldBuildIdentityHash as `sha256:${string}`,
         whiteboxTriviews,
       };
       await writeAtomic(
@@ -1648,9 +1662,9 @@ export async function captureFile(
       ...(validation.normalizedWorldIrHash === undefined
         ? {}
         : { normalizedWorldIrHash: validation.normalizedWorldIrHash }),
-      ...(validation.executionPlanHash === undefined
+      ...(validation.worldBuildIdentityHash === undefined
         ? {}
-        : { executionPlanHash: validation.executionPlanHash }),
+        : { worldBuildIdentityHash: validation.worldBuildIdentityHash }),
       outputPath: absoluteOutputPath,
       ...(absoluteSnapshotPath === undefined
         ? {}
@@ -1973,7 +1987,7 @@ export async function inspectPackageDirectory(
       "The WorldPackage directory is unavailable.",
     );
   }
-  return inspectWorldPackageDirectoryV2({
+  return inspectWorldPackageDirectoryV1({
     packageDirectoryPath: canonicalPackageDirectoryPath,
   });
 }

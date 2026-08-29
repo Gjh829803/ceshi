@@ -9,10 +9,17 @@
 - 空间求解专项：[Placement Constraint 与确定性 Layout Solver](./2026-08-19-placement-constraint-layout-solver-design.md)
 - 拍摄制品专项：[Simulation Take 与 Control Capture Bundle](./2026-08-19-simulation-take-control-capture-design.md)
 - 质量协议专项：[World Validation Report 与质量门禁](./2026-08-19-world-validation-report-and-quality-gates-design.md)
+- Native Lane 范围修订：[AI 友好的 Babylon Native 世界创作长期设计](./2026-08-28-ai-friendly-babylon-native-world-authoring-design.md)
+
+> 本文的“AI 不直接生成 Babylon/TypeScript 场景代码”继续完整约束 Canonical Lane。ADR-0007 新增的
+> 隔离 Babylon Native Scene Lane 是显式范围修订：AI 可创建 Babylon 视觉对象，但仍不能创建
+> Havok、人物、动作、主相机、Runtime 状态或独立 Tick；当前生产入口仍是 Canonical Lane。
 
 ## 1. 结论
 
-本项目要建设一个面向 AI 的、Schema-first、可组合、可验证的 Web 游戏 SDK。上游 Agent 根据图片和 Prompt 推断一个合理的可玩世界，输出声明式 JSON；SDK 不理解图片、不调用模型，而是负责校验、规范化、编译并运行这个世界。
+本项目的 Canonical Lane 要建设一个面向 AI 的、Schema-first、可组合、可验证的 Web 游戏 SDK。
+上游 Agent 根据图片和 Prompt 推断一个合理的可玩世界，输出声明式 JSON；SDK 不理解图片、不调用模型，
+而是负责校验、规范化、编译并运行这个世界。隔离 Babylon Native Scene Lane 的职责以 ADR-0007 为准。
 
 正式链路为：
 
@@ -42,7 +49,8 @@ Control Capture Bundle + Validation Report
 
 1. AI 默认使用“大积木”：WorldNodeSpec、Kit、Capability、Relationship 和 Semantic Action。
 2. SDK 内部使用“小积木”：Component、System、Port、Adapter 和确定性执行阶段。
-3. AI 永远不直接生成 Babylon RenderNode、物理句柄、动画 Mixer 或底层 TypeScript 场景代码。
+3. Canonical Lane 的 AI 永远不直接生成 Babylon RenderNode、物理句柄、动画 Mixer 或底层
+   TypeScript 场景代码；Babylon Native Scene Lane 的受控视觉例外以 ADR-0007 和专项规格为准。
 4. 配置负责组合已有能力；第一次增加新的能力类别时，由 SDK 插件实现。
 5. 逻辑图、渲染/Transform 图和物理图分离，各自拥有明确真相和同步规则。
 6. 同一份 Spec、同一份 Registry Lock 和同一个 Seed 必须产生 bit-for-bit 相同的规范化结果；模拟与视觉结果按照本文定义的 Determinism Profile 验收。
@@ -90,7 +98,7 @@ SDK 应保证结构与模拟正确；上游 Agent 对图片理解和隐藏区域
 - 物理、可玩性、构图、Capture、Replay、资源预算和性能的量化 Validation Report。
 - 能力发现、示例查询、结构化 Diagnostic 和安全修复建议。
 
-### 3.2 上游 Agent 负责
+### 3.2 Canonical Lane 上游 Agent 负责
 
 - 图片理解、Prompt 解析、语义分割、深度线索和空间关系推断。
 - 可见证据与隐藏区域的合理补全。
@@ -99,7 +107,7 @@ SDK 应保证结构与模拟正确；上游 Agent 对图片理解和隐藏区域
 - 根据 SDK Diagnostic、运行时状态和截图迭代修复配置。
 - 模型调用、Prompt 工程、重试、工作流、队列和生成服务。
 
-### 3.3 SDK 不负责
+### 3.3 Canonical Lane 的 SDK 不负责
 
 - 在 SDK 内部调用 LLM 或视觉模型。
 - 让 Agent 直接修改 Babylon、Havok 或 Runtime 内部对象。
@@ -280,7 +288,7 @@ Kit 内部展开为碰撞体、输入映射、运动控制、镜头、动作状�
 }
 ```
 
-高级模式仍然只能使用注册表中的能力，不能嵌入代码或底层引擎配置。
+Canonical 高级模式仍然只能使用注册表中的能力，不能嵌入代码或底层引擎配置。
 
 ### 6.3 设计原因
 
@@ -2429,12 +2437,13 @@ Pass、ID Table、Depth 单位、Camera Matrix、Tick/Frame 映射和 Hash 归�
 - 缺点：需要先建设 Schema、Compiler、Port 和注册表，短期改造量大。
 - 结论：采用。本项目不以开发成本最小为目标，优先长期正确性、AI 可用性和扩展边界。
 
-## 26. 生产验收标准
+## 26. Canonical Lane 生产验收标准
 
 设计落地后必须满足：
 
 1. 外部程序仅通过 JSON 和公开 SDK/CLI 即可生成、验证和运行世界。
-2. Agent 不生成 TypeScript 场景代码，不接触 Babylon/Havok 对象。
+2. Canonical Agent 不生成 TypeScript 场景代码，不接触 Babylon/Havok 对象；Native Lane 的视觉例外
+   使用自己的专项验收，且始终不得接触 Havok。
 3. `worldkit capabilities list` 能发现所有可用 WorldNodeSpec kind、Kit、Capability、Action 和 Relationship。
 4. `validate` 与 `normalize` 输出稳定、可定位、可修复的 Diagnostic。
 5. 同一输入和 Seed 的 NormalizedWorldIR 哈希稳定。

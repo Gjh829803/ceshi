@@ -36,11 +36,17 @@ Authoring Schema。
 | [Clipper2](https://github.com/AngusJohnson/Clipper2) / [polyclip-ts `bef480b`](https://github.com/luizbarboza/polyclip-ts/tree/bef480bf8b035777d64a4ea857df109b5931aa61) | BSL-1.0 / MIT | 候选验证 | polygon boolean、offset、整数缩放或高精度 overlay | 等 Terrain Mask / Opening 出现真实合同后 bake-off；Earcut 继续只负责 triangulation |
 | [glTF-Transform `4.4.2`](https://github.com/donmccurdy/glTF-Transform/tree/0677324a34cea46c3ef01866ef004b69d0347453) + [Khronos glTF Validator `2.0.0-dev.3.10`](https://github.com/KhronosGroup/glTF-Validator) | Apache-2.0 | 已吸收代码；已吸收测试 | NodeIO、prune、unpartition、确定性 GLB 处理；官方 glTF 2.0 结构/Accessor 校验边界 | `scripts/lib/glb-admission.ts` 是 Node-only Gate；原始/生成资产 promotion 前接线，xier120 19/19 语料通过；Babylon Runtime admission 不变 |
 | [Recast Navigation](https://github.com/recastnavigation/recastnavigation/tree/9f4ce64458dfae86e1239c525ddc219c4e9e06f1) / `recast-navigation@0.43.1` | Zlib | 现有实现一致 | NavMesh 构建/查询、Tile/Polygon/Portal/Detail Mesh 语义 | `packages/traversal-recast` Provider；WorldKit `hard-ribbon`、Surface 身份、预算与 Evidence 仍是上层权威 |
-| [Babylon.js `9.21.2`](https://github.com/BabylonJS/Babylon.js/tree/72a4c7a28caa4f18ae1f93513d1743e3f9060159) + Havok `1.3.14` | Apache-2.0 / vendor package | 现有实现一致 | 3D 数学、渲染、物理 Character、资源生命周期 | `packages/runtime-babylon`；`checkSupport()` 是唯一 Ground support Owner，不复制 Provider 状态 |
+| [Babylon.js `9.23.0`](https://github.com/BabylonJS/Babylon.js/tree/38ed028f40722504a215002fbc2fa89a2c89cf5d) + Havok `1.3.14` | Apache-2.0 / vendor package | 现有实现一致 | 3D 数学、渲染、物理 Character、资源生命周期 | `packages/runtime-babylon`；`checkSupport()` 是唯一 Ground support Owner，不复制 Provider 状态 |
 | [Godot `b56a918`](https://github.com/godotengine/godot/tree/b56a91878e7c94977e4af978968e41d0670c0a8b) | MIT | 已吸收测试 | Character step/snap 条件、SpringArm 多方向覆盖、reparent/global transform 生命周期 | 转化为真实 Babylon/Havok Traversal、Mounted、Camera adversarial fixtures；未引入 Godot 依赖 |
 | [Rapier.js `9f638c5`](https://github.com/dimforge/rapier.js/tree/9f638c5384c282a8abd22515973ac7c82ccfbc43) | Apache-2.0 | 已吸收测试；已吸收代码 | autostep 前置接地压力条件 | 不替换 Havok；`checkSupport()` 的既有结果现在显式约束 provider-local step-up；snap/slope/moving platform 仍为候选或延后 |
 | [Bevy `0de2663`](https://github.com/bevyengine/bevy/tree/0de26631b0603acdc945aeae5e05b07ce58bc4dc) | MIT OR Apache-2.0 | 现有实现一致；已吸收测试 | Relationship 单一 source-of-truth、派生投影、层级生命周期 | 旋转非对称 Mount 回归证明 `GameplayRelationshipStateV1` 仍是 Canonical 真相；Renderer parent 未替代 `mountedOn` |
 | [camera-controls `c516011`](https://github.com/yomotsu/camera-controls/tree/c51601107e266097edf6a9caa57bfa9eaa77427c) | MIT | 已吸收测试；已吸收代码 | 近裁剪面角向碰撞覆盖思路 | 不引入 Three.js；Babylon Follow Arm 从五条中心/轴向 ray 补成九条含对角 ray，原有过滤、telemetry 与恢复语义不变 |
+| [ImperativeScene `3d233bc`](https://github.com/mxgmn/ImperativeScene/tree/3d233bc47f0b0342958983d4e43c8d366d760c5a) | MIT | 候选验证 | 命令式可执行场景表达和程序空间修复 | 设计已吸收 Native Code 方向；不引入其 Scene DSL、Optimizer 或第二布局语言 |
+| [Code-as-Room `ffd266c`](https://github.com/YxuanAr/Code-as-Room/tree/ffd266c6a4de497fb182a03bb08af6ce319d4b97) | Apache-2.0 | 候选验证 | 临时语义/关系规划、可执行 Blender Code、确定性 harness 验证/修复/集成 | 设计已区分 ephemeral planning 与 durable Native source；不移植 Blender/13-stage Runtime |
+| [GameFactory-3A `d56fd17`](https://github.com/OpenDCAI/GameFactory-3A/tree/d56fd171ce18cac554478b769e05b7b1605ce9bd) | Apache-2.0 | 候选验证 | 单 Engine Context、Engine-native code、资产/场景/玩法分层与真实运行验收 | 设计保持 Babylon 单一出口；不引入多引擎统一 Adapter 或其完整资产流水线 |
+| [ProcTHOR `53d5bd4`](https://github.com/allenai/procthor/tree/53d5bd4c8c96a699e6a615dc390abb670cc9d353) | Apache-2.0 | 候选验证 | 生成后由真实 Runtime 执行 Spawn、Reachability 与逐区域准入 | 只借鉴验证 Gate；不移植房屋 JSON、Unity Loader 或资产数据库 |
+| [OpenUSD `23b83aa`](https://github.com/PixarAnimationStudios/OpenUSD/tree/23b83aa8c479ec0f8b8b11dada50e764af6f3645) | Tomorrow Open Source Technology License 1.0 | 现有实现一致 | visual Mesh 与不渲染 sibling collider Mesh 分离 | 支持当前视觉/Collider Contribution 分权；不增加 USD 中间协议 |
+| [O3DE `0a1e0da`](https://github.com/o3de/o3de/tree/0a1e0da79e3590980596ee94e5d5da5ba6a40b86) | Apache-2.0 OR MIT | 现有实现一致 | White Box proxy geometry 与独立 Collider/Physics Material 组件 | 支持当前 Block Whitebox + SDK Physics Owner；不引入 O3DE Runtime |
 
 ## 3. 本轮已经吸收的实现与测试
 
@@ -139,9 +145,33 @@ allowlist 只表达 WorldKit 愿意接纳的 Khronos 扩展，并不能把未知
 G Bot 6.7 MB 夹具所在独立 Vitest 进程一次方向性观测的 maximum resident set size 约 220 MB，
 因此首版串行化 Validator Promise，不开放无界 batch 并发。
 
-## 4. 核心能力的跨项目对照
+## 4. Babylon Native Block Whitebox 候选架构研究
 
-### 4.1 通过性、Character 与 Route
+[Block Whitebox Profile 设计](superpowers/specs/2026-08-28-babylon-native-block-whitebox-profile-design.md)
+采用的不是某个项目的整套 Runtime，而是以下交叉成立的原则：
+
+- [SceneCraft](https://proceedings.mlr.press/v235/hu24g.html)、ImperativeScene 和 Code-as-Room 支持“先有
+  规划结构，再产出可执行 Native Code，并由确定性 harness/视觉反馈修复”；规划结构可以是临时数据，
+  最终场景权威不必是持久 JSON Geometry。
+- [WorldGen](https://openaccess.thecvf.com/content/CVPR2026/html/Wang_WorldGen_From_Text_to_Traversable_and_Interactive_3D_Worlds_CVPR_2026_paper.html)
+  支持先建立有尺度、可导航的功能 Blockout，再增加视觉细节；因此方块白膜应承担地形、垂直关系和
+  通过性的结构表达，而不是装饰性占位。
+- [SAGE](https://openaccess.thecvf.com/content/CVPR2026/html/Xia_SAGE_Scalable_Agentic_3D_Scene_Generation_for_Embodied_AI_CVPR_2026_paper.html)
+  与 [PhyScene](https://openaccess.thecvf.com/content/CVPR2024/html/Yang_PhyScene_Physically_Interactable_3D_Scene_Synthesis_for_Embodied_AI_CVPR_2024_paper.html)
+  支持把 Visual、Collision、Stability 和 Agent Reachability 分层验证，不能用一张好看的截图代替物理
+  与人物通过性证据。
+- OpenUSD、O3DE 与 ProcTHOR 支持视觉对象、碰撞代理、Runtime Spawn/Reachability 的职责分离；这与
+  Native Module 只提交显式 Contribution、SDK 冻结后创建 Havok 的方向一致。
+
+因此当前裁决是：允许 `@whitebox-world/native-babylon-block-profile` 在单次 Build Epoch 内维护
+package-local 的内存 Block Layout，用于 Occupancy、坡面、边界、Chunk 与结构检查；不迁移
+`block-world-three`、`block-world-compiler`、持久 `BlockWorldManifest` 或旧 Motion Runtime。上述来源
+目前均不作为生产依赖；只有 BWB 工作图在本仓库完成并通过真实 Babylon/Havok Gate 后，状态才能从
+“候选验证”升级为“已吸收代码/测试”。
+
+## 5. 核心能力的跨项目对照
+
+### 5.1 通过性、Character 与 Route
 
 Recast/Detour 已经是 Route Provider，不需要再引入 Turf A* 或第二套 NavMesh。外部项目仍提供
 了值得保留的 adversarial 条件：
@@ -158,7 +188,7 @@ Recast/Detour 已经是 Route Provider，不需要再引入 Turf A* 或第二套
 Route Evidence 的现有权威，不能用高度采样、ray/AABB grounding 或第二 Character Provider
 制造“绿灯”。
 
-### 4.2 `mountedOn` 与变换/生命周期
+### 5.2 `mountedOn` 与变换/生命周期
 
 Bevy 的 Relationship 设计把 source component 作为真相，reverse target collection 只用于加速；
 这与 WorldKit 以 typed `mountedOn` World State 为真相、Runtime/Renderer 投影为派生状态的方向一致。
@@ -175,7 +205,7 @@ prepare/project/commit 比直接改场景树更稳，但还应补齐：
 | `MNT-LIFE-01` | partial construction、throwing cleanup、Reset/foreign WorldSession 无泄漏 | `MNT-PAIR-01` | RuntimeHost + Runtime，sequential | 资源计数、Journal、World State、Capture 一致 |
 | `MNT-DYNAMIC-01` | moving platform/vehicle 的继承速度与离开行为 | 动态 Surface 与车辆设计 | 未排期 | 当前明确不实现，不得用于 S1 完成声明 |
 
-### 4.3 第三人称视角与碰撞
+### 5.3 第三人称视角与碰撞
 
 WorldKit 当前 `SpringArmComponentV1` 通过 provider-neutral `PhysicsWorldQueryPortV1` 调用真正的
 Babylon/Havok sphere ShapeCast；`collisionRadiusMeters=0` 时才退化为 physics Raycast。组件已覆盖
@@ -189,13 +219,13 @@ Godot SpringArm 使用 camera near-plane shape 或用户指定 shape sweep；cam
 |---|---|---|---|---|
 | `CAM-COLL-01` | 已完成：真实 Havok sphere Sweep 命中薄对角 blocker | 无 | Physics World Query Provider，main-agent-only | RED/GREEN、blocker entity telemetry |
 | `CAM-COLL-02` | 已完成：L 型墙角、窄门、Spring Arm target 起点穿入三个真实 Havok Fixture | `CAM-COLL-01` | Physics World Query Provider，main-agent-only | ShapeCast + 起点 shapeProximity 全部通过 |
-| `CAM-SWEEP-01` | 已完成：Babylon/Havok ShapeCast 经 `PhysicsWorldQueryPortV1` 替换多射线近似 | `CAM-COLL-01` | Architecture main-agent-only | Provider 9.21.2 源码、Ray/Sweep 分流、过滤、确定性与 Shape dispose 证据 |
+| `CAM-SWEEP-01` | 已完成：Babylon/Havok ShapeCast 经 `PhysicsWorldQueryPortV1` 替换多射线近似 | `CAM-COLL-01` | Architecture main-agent-only | Provider 9.23.0 源码、Ray/Sweep 分流、过滤、确定性与 Shape dispose 证据 |
 | `CAM-MOUNT-01` | Mount 转移 possession 后 Rider 不被裁切，Context/Modifier 选择可解释 | M8-S1 状态与 P2.4 Camera Context | CameraDirector，sequential | 修复现有 `CAM-MOUNT-1`，不得写场景特判 |
 
 `CAM-COLL-01/02` 已证明多射线近似不足并完成 `CAM-SWEEP-01`。ShapeCast 只实现 Follow Arm 的
 碰撞查询 Provider，不接管 Orbit、Target、Profile、Context 或固定 Tick View publication。
 
-## 5. 几何与资产候选的推进顺序
+## 6. 几何与资产候选的推进顺序
 
 | ID | 目标与独立交付物 | depends_on / blocks | 独占 Owner | 集成点 | 证据 | 模式 |
 |---|---|---|---|---|---|---|
@@ -209,7 +239,7 @@ Godot SpringArm 使用 camera near-plane shape 或用户指定 shape sweep；cam
 后续只有在真实产品需求出现后再做 `GEO-BOOL-01` / `GEO-CSG-01`。这避免为了“可能有用”
 提前把重型几何内核带进 Runtime。
 
-## 6. 给 AI 开发流程的约束
+## 7. 给 AI 开发流程的约束
 
 本台账对 Coding Agent 的直接价值是把“先搜成熟实现”变成可审计步骤：
 
@@ -224,7 +254,7 @@ Godot SpringArm 使用 camera near-plane shape 或用户指定 shape sweep；cam
 动态平台、车辆和 Camera shape cast 继续保持真实需求或新复现
 门控，不会重复当前 Recast/Havok/CameraDirector 的状态权威。
 
-## 7. 本轮新鲜验证收据
+## 8. 本轮新鲜验证收据
 
 - 根 `pnpm test` 的 Contract lane：192 个文件、2,073 个测试全部通过；Resource-heavy lane 的
   22 个文件中 21 个、416 个测试中 415 个通过，唯一失败准确暴露了 robust orientation 变更后

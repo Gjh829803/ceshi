@@ -58,7 +58,8 @@ Apply these rules whenever adding or changing public Authoring Schema, Registry 
 - Put units and coordinate domains in numeric field names, including `Meters`, `Seconds`, `Radians`, `Degrees`, `Ticks`, `Ratio`, `Bytes`, `XYZ`, `XZ`, and `Uv`. Do not rely on surrounding prose to disambiguate units.
 - Prefer required discriminators, closed enums, and discriminated unions over combinations of overlapping optional flags. Collections use plural names, ID-indexed maps use `...ById`, and booleans use `is...`, `has...`, `allow...`, or an explicit `...Enabled` suffix.
 - Canonical Schema, AI Schema Profile, CLI, Browser Protocol, examples, and generated types use the same public field names. Babylon, Havok, renderer handles, and provider-specific terminology stay behind adapters.
-- A released or externally adopted public rename must update the authoritative Schema, examples, validation, migration, and conformance coverage together. Preserve that compatibility through explicit version migration, not permanent alias fields. For an unreleased private Schema, an explicitly approved clean break may delete the old version and rewrite all local fixtures/artifacts instead of creating migration code solely for development history.
+- A released or externally adopted public rename must update the authoritative Schema, examples, validation, migration, and conformance coverage together. Preserve that compatibility through explicit version migration, not permanent alias fields.
+- This repository is currently unreleased. For every contract touched by current work, a current-only clean break is the default rather than an exception: the final accepted tree has one public name, one parser, one public entry point, and one authoritative state owner for each concept. Update all consumers, fixtures, generated artifacts, receipts, and examples together, then delete the replaced fields, types, parsers, packages, re-exports, adapters, and fallbacks. A `schemaVersion` or `V1` suffix identifies the sole current contract; it does not authorize parallel V1/V2/V3 implementations. Intermediate feature commits may be incomplete, but no GO decision, final handoff, or merge candidate may contain legacy/new compatibility paths.
 
 ## Dependency reuse and utility code
 
@@ -159,7 +160,18 @@ Automatic Planner and Builder work runs through exactly one Codex task per stage
 
 When built-ins are insufficient, define a local `defineWorldFeature(...)` and use only its tracked
 `BuildContext`. Register custom terrain through `world.terrain.custom(...)`. Scene modules must not
-add opaque renderer or physics objects directly; provider objects stay behind Runtime adapters.
+add opaque renderer or physics objects directly; provider objects stay behind Runtime adapters. This
+rule applies to the Canonical Catalog and Hosted Builder workflows.
+
+ADR-0007 defines one strictly scoped authoring-time exception for the separate Babylon Native Scene
+Lane. A Native Module may create Babylon visual objects only inside the Host-provided Candidate Scene
+and may submit Spawn and static Collider intent only through the versioned registration boundary. It
+must not create Engine, Scene, Render Loop, Havok/physics objects, the SDK main camera, Gameplay
+entities, input, timers, or an independent tick. A world selects exactly one Scene Source, so a Native
+Module must not overlay or mutate Canonical geometry. The current Native API remains a trusted-local
+experiment until the BNA production gates in
+`docs/superpowers/specs/2026-08-28-ai-friendly-babylon-native-world-authoring-design.md` pass; this
+exception does not make it available to the current Catalog or Hosted Builder workflows.
 
 ## Required properties
 

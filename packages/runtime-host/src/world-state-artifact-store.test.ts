@@ -17,7 +17,7 @@ function snapshot(simulationTick: number, worldPackageRef = "worldkit://world-pa
     simulationTick,
     worldPackageRef,
     worldPackageRootHash: `sha256:${"1".repeat(64)}`,
-    executionPlanHash: `sha256:${"2".repeat(64)}`,
+    worldBuildIdentityHash: `sha256:${"2".repeat(64)}`,
     entityStatesById: {},
     capabilityStatesById: {},
     relationshipStatesById: {},

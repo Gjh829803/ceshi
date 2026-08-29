@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import { hashAuthoringDocumentV4 } from "@whitebox-world/authoring";
 import { appendFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -16,7 +18,6 @@ import {
   WORLD_CHANGE_OPERATION_TYPES_V1,
   type AuthoringEditPolicyProjectionV1,
   type AuthoringEditScopeV1,
-  type Sha256HashV1,
   type WorldChangeOperationV1,
   type WorldChangeRequestV1,
   type WorldChangeSetV1,
@@ -25,7 +26,7 @@ import {
 import { isNil } from "lodash-es";
 import {
   createInMemoryWorldPackageStoreV1,
-  createWorldPackageBuildContextFixtureV2,
+  createWorldPackageBuildContextFixtureV1,
 } from "@whitebox-world/world-package/testing";
 import { describe, expect, it } from "vitest";
 
@@ -67,7 +68,7 @@ const VALIDATION_REPORT = {
   status: "passed",
 } as const;
 const WORLD_PACKAGE_STORE = createInMemoryWorldPackageStoreV1();
-const WORLD_PACKAGE_BUILD_CONTEXT = createWorldPackageBuildContextFixtureV2();
+const WORLD_PACKAGE_BUILD_CONTEXT = createWorldPackageBuildContextFixtureV1();
 
 const HOUSE_PROTOTYPE = {
   id: "house-blockout",

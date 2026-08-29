@@ -1,19 +1,18 @@
 import { Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import {
   CharacterSupportedState,
-  PhysicsCharacterController,
   type CharacterSurfaceInfo,
 } from "@babylonjs/core/Physics/v2/characterController.js";
 import type { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
 
 import type {
-  ExecutionMotionProfileV1,
-  ExecutionSubjectV3,
+  RuntimeMotionProfileV1,
   LocomotionModeV1,
   PublishedMovementMediumV1,
-  Vec3,
+  RuntimeVec3V1,
 } from "@whitebox-world/runtime-contracts";
+import type { BabylonRuntimeSubjectV1 } from "./runtime-subject";
 import {
   resolveCharacterStateV1,
   type CharacterSupportStateV1,
@@ -33,7 +32,7 @@ export interface MotionKernelSnapshotV1 {
   activeMotionProfileRef: string;
   activeMotionKernelRef: string;
   motionTags: readonly string[];
-  forwardXYZ: Vec3;
+  forwardXYZ: RuntimeVec3V1;
   speedMetersPerSecond: number;
   fallbackActive: boolean;
   activeControlFeelProfileRef: string;
@@ -45,10 +44,16 @@ export interface MotionKernelSnapshotV1 {
 
 export interface RetainedCharacterSupportSampleV1 {
   readonly supportState: CharacterSupportStateV1;
-  readonly supportNormalWorldXYZ: Vec3;
-  readonly sampledControllerCenterMetersXYZ: Vec3;
-  readonly sampledFootPositionMetersXYZ: Vec3;
+  readonly supportNormalWorldXYZ: RuntimeVec3V1;
+  readonly sampledControllerCenterMetersXYZ: RuntimeVec3V1;
+  readonly sampledFootPositionMetersXYZ: RuntimeVec3V1;
+  readonly supportContacts: readonly RetainedCharacterSupportContactV1[];
   readonly isSupportSurfaceDynamic: boolean;
+}
+
+export interface RetainedCharacterSupportContactV1 {
+  readonly pointMetersXYZ: RuntimeVec3V1;
+  readonly normalXYZ: RuntimeVec3V1;
 }
 
 export interface MotionKernelLiveLockStateV1 {
@@ -59,7 +64,7 @@ export interface MotionKernelLiveLockStateV1 {
   readonly keepContactToleranceMeters: number;
   readonly maxSlopeCosine: number;
   readonly maxStepHeightMeters: number;
-  readonly colliderCenterOffsetMetersXYZ: Vec3;
+  readonly colliderCenterOffsetMetersXYZ: RuntimeVec3V1;
   readonly activeControlFeelProfileRef: string;
   readonly activeControlFeelProfileHash: string;
   readonly requestedControlFeelProfileRef: string;
@@ -74,9 +79,9 @@ export interface MotionKernelLiveLockStateV1 {
   readonly mediumProfileRef: string;
 }
 
-type ControlFeelSurfaceV1 = ExecutionSubjectV3["controlFeel"];
+type ControlFeelSurfaceV1 = BabylonRuntimeSubjectV1["controlFeel"];
 
-function requireControlFeel(subject: ExecutionSubjectV3): ControlFeelSurfaceV1 {
+function requireControlFeel(subject: BabylonRuntimeSubjectV1): ControlFeelSurfaceV1 {
   const feel = subject.controlFeel;
   if (feel === undefined || feel === null || feel.resourceRef === "") {
     throw new Error(
@@ -119,7 +124,7 @@ function kernelScalar(
   name: string,
   fallback: number,
 ): number {
-  const value = (feel as Record<string, number | string>)[name];
+  const value = (feel as unknown as Record<string, number | string>)[name];
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
@@ -219,7 +224,7 @@ function requestedFromCommand(command: MotionCommandV1): {
 }
 
 export class MotionKernelRuntimeV1 {
-  readonly physicsController: PhysicsCharacterController;
+  readonly physicsController: ReturnType<typeof createGroundAwareControllerInternal>;
   private readonly gravity: Vector3;
   /**
    * Unit-length gravity direction for Havok `checkSupport` queries. The
@@ -257,8 +262,8 @@ export class MotionKernelRuntimeV1 {
   private currentMovementMedium: PublishedMovementMediumV1 = "air";
 
   constructor(
-    private readonly subject: ExecutionSubjectV3,
-    gravityMetersPerSecondSquaredXYZ: Vec3,
+    private readonly subject: BabylonRuntimeSubjectV1,
+    gravityMetersPerSecondSquaredXYZ: RuntimeVec3V1,
     private readonly visualRoot: TransformNode,
     private readonly scene: Scene,
     private readonly waterSurfaceHeightAtSubjectOrigin: (
@@ -361,13 +366,21 @@ export class MotionKernelRuntimeV1 {
     if (isNil(sample)) return undefined;
     return Object.freeze({
       ...sample,
-      supportNormalWorldXYZ: Object.freeze([...sample.supportNormalWorldXYZ]) as Vec3,
+      supportNormalWorldXYZ: Object.freeze([...sample.supportNormalWorldXYZ]) as RuntimeVec3V1,
       sampledControllerCenterMetersXYZ: Object.freeze([
         ...sample.sampledControllerCenterMetersXYZ,
-      ]) as Vec3,
+      ]) as RuntimeVec3V1,
       sampledFootPositionMetersXYZ: Object.freeze([
         ...sample.sampledFootPositionMetersXYZ,
-      ]) as Vec3,
+      ]) as RuntimeVec3V1,
+      supportContacts: Object.freeze(sample.supportContacts.map((contact) =>
+        Object.freeze({
+          pointMetersXYZ: Object.freeze([
+            ...contact.pointMetersXYZ,
+          ]) as RuntimeVec3V1,
+          normalXYZ: Object.freeze([...contact.normalXYZ]) as RuntimeVec3V1,
+        })
+      )),
     });
   }
 
@@ -425,7 +438,7 @@ export class MotionKernelRuntimeV1 {
         this.colliderCenterOffset.x,
         this.colliderCenterOffset.y,
         this.colliderCenterOffset.z,
-      ]) as Vec3,
+      ]) as RuntimeVec3V1,
       activeControlFeelProfileRef: this.controlFeel.resourceRef,
       activeControlFeelProfileHash: this.controlFeel.contentHash,
       requestedControlFeelProfileRef:
@@ -658,23 +671,47 @@ export class MotionKernelRuntimeV1 {
     const sampledFoot = sampledControllerCenter.subtract(
       this.up.scale(this.physicsController.footOffset),
     );
+    const currentContacts = this.physicsController.readCurrentContacts();
+    const supportContactBandMeters =
+      this.physicsController.keepContactTolerance +
+      this.physicsController.keepDistance;
+    const supportContacts = supportState === "unsupported"
+      ? []
+      : currentContacts
+        .filter((contact) =>
+          contact.motionType === "static" &&
+          contact.distanceMeters <= supportContactBandMeters &&
+          Math.abs(Vector3.Dot(
+            new Vector3(...contact.pointMetersXYZ).subtract(sampledFoot),
+            this.up,
+          )) <= supportContactBandMeters &&
+          Vector3.Dot(new Vector3(...contact.normalXYZ), this.up) >=
+            this.physicsController.maxSlopeCosine
+        )
+        .map((contact) => Object.freeze({
+          pointMetersXYZ: Object.freeze([
+            ...contact.pointMetersXYZ,
+          ]) as RuntimeVec3V1,
+          normalXYZ: Object.freeze([...contact.normalXYZ]) as RuntimeVec3V1,
+        }));
     this.retainedSupportSample = Object.freeze({
       supportState,
       supportNormalWorldXYZ: Object.freeze([
         support.averageSurfaceNormal.x,
         support.averageSurfaceNormal.y,
         support.averageSurfaceNormal.z,
-      ]) as Vec3,
+      ]) as RuntimeVec3V1,
       sampledControllerCenterMetersXYZ: Object.freeze([
         sampledControllerCenter.x,
         sampledControllerCenter.y,
         sampledControllerCenter.z,
-      ]) as Vec3,
+      ]) as RuntimeVec3V1,
       sampledFootPositionMetersXYZ: Object.freeze([
         sampledFoot.x,
         sampledFoot.y,
         sampledFoot.z,
-      ]) as Vec3,
+      ]) as RuntimeVec3V1,
+      supportContacts: Object.freeze(supportContacts),
       isSupportSurfaceDynamic: support.isSurfaceDynamic,
     });
     if (supportState === "supported") {
@@ -1169,7 +1206,7 @@ export class MotionKernelRuntimeV1 {
     this.physicsController.integrate(FIXED_TIME_STEP_SECONDS, support, appliedGravity);
   }
 
-  private get activeProfile(): ExecutionMotionProfileV1 {
+  private get activeProfile(): RuntimeMotionProfileV1 {
     return this.motionModeResolver.currentProfile;
   }
 

@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import {
   canonicalJsonBytes,
   sha256CanonicalJson,
@@ -24,7 +26,6 @@ import {
   createGameplayActionDefinitionV1,
   createGameplayBootstrapV1,
   type GameplayBootstrapV1,
-  type Sha256HashV1,
 } from "@whitebox-world/gameplay-contracts";
 import { defineOutdoorScene } from "@whitebox-world/world";
 import { uniq } from "lodash-es";
@@ -417,6 +418,9 @@ export function createMountedSkateboardS1GameplayResourcesV1(
         ACTION_PROJECTION_CAPABILITY_REF,
         CONTROL_TRANSITION_CAPABILITY_REF,
       ]),
+      initialRelationshipStates: normalizedWorldIr.relationships.map(
+        (relationship) => ({ ...relationship, establishedSimulationTick: 0 }),
+      ),
     }),
     actionRequests,
     gameplayActionRequestResolver,

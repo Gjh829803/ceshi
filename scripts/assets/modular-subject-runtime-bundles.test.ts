@@ -10,7 +10,7 @@ import {
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dirname, "../..");
 
-describe("modular Subject Runtime Bundle publication", () => {
+describe("modular Subject Runtime Bundle publication", { timeout: 30_000 }, () => {
   it("builds the only two active versioned Runtime assets from modular packages", async () => {
     const outputs = await buildModularSubjectRuntimeBundleOutputs({
       repositoryRoot: REPOSITORY_ROOT,

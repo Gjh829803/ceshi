@@ -10,6 +10,7 @@ import { LoadAssetContainerAsync } from "@babylonjs/core/Loading/sceneLoader.js"
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
 import { Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
+import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 import {
   CharacterSupportedState,
@@ -30,13 +31,11 @@ vi.mock("@babylonjs/core/Loading/sceneLoader.js", async (importOriginal) => {
   };
 });
 
+import type { AuthoringSpecV4 } from "@whitebox-world/authoring";
 import {
-  normalizeAuthoringSpecV4,
-  type AuthoringSpecV4,
-} from "@whitebox-world/authoring";
-import { compileWorldV5 } from "@whitebox-world/compiler";
-import { createCoreGameplayBootstrapV1 } from "@whitebox-world/gameplay";
-import { createGameplayBootstrapResourceLockEntryV1 } from "@whitebox-world/gameplay-contracts";
+  createGameplayBootstrapResourceLockEntryV1,
+  createGameplayBootstrapV1,
+} from "@whitebox-world/gameplay-contracts";
 import {
   createValidAuthoringSpecV4,
   createValidMountedOnAuthoringSpec,
@@ -44,14 +43,21 @@ import {
   createValidRiggedPackageSubjectWorldV4,
 } from "../../authoring/src/test-fixture";
 import type {
-  ExecutionAnimationSetV1,
-  ExecutionObjectV3,
-  ExecutionPlanV5,
-  ExecutionStaticColliderV1,
-  ExecutionSubjectAssetV1,
+  RuntimeAnimationSetV1,
+  CanonicalSceneObjectV1,
+  CanonicalSceneExecutionPlanV1,
+  CanonicalSceneStaticColliderV1,
+  RuntimeSubjectAssetV1,
   FixedInputV1,
-  Vec3,
+  RuntimeVec3V1,
 } from "@whitebox-world/runtime-contracts";
+import {
+  createWorldRuntimeBootstrapV1,
+  parseBabylonNativeSceneBootstrapV1,
+} from
+  "@whitebox-world/runtime-contracts";
+import type { BabylonNativeLockedAssetResolverV1 } from
+  "@whitebox-world/native-babylon/host";
 import { emitTransformedStaticColliderTriangleMeshV1 } from "@whitebox-world/terrain-surface";
 import { parseGameplayWorldStateProjectionV1 } from "@whitebox-world/runtime-host";
 import {
@@ -83,7 +89,12 @@ import {
 import { BABYLON_GAMEPLAY_RUNTIME_INTERNAL } from "./gameplay-runtime-internal";
 import { CameraComponentV1 } from "./camera-component";
 import { bindRuntimeTestPossession } from "./runtime-test-possession";
-import { compileRuntimeTestPlanV5 } from "./runtime-test-plan";
+import {
+  compileRuntimeTestScenePlanV1,
+  registerRuntimeTestWorldArtifactsV1,
+  runtimeTestWorldArtifactsForPlanV1,
+} from "./runtime-test-plan";
+import { resolveBabylonRuntimeSubjectsV1 } from "./runtime-subject";
 import { SubjectAnimationPlayer } from "./subject-animation-player";
 import { createSubjectVisual } from "./subject-visual";
 import { sampleExecutionTerrainHeight } from "./terrain";
@@ -153,6 +164,16 @@ const gBotAuthoringSpec = JSON.parse(
   ),
 ) as AuthoringSpecV4;
 
+const publishedRiggedAuthoringSpec = JSON.parse(
+  await readFile(
+    new URL(
+      "../../../examples/authoring/rigged-subject-world.json",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+) as AuthoringSpecV4;
+
 describe("Babylon runtime fixture compilation", () => {
   it("keeps the product G Bot control fixture flat", () => {
     const executionPlan = compileRouteExecutionPlan(structuredClone(gBotAuthoringSpec));
@@ -178,7 +199,7 @@ const goldenSubjectAssetDescriptor = {
     boneCount: 18,
     animationClipNames: ["idle", "jump", "run", "walk"],
   },
-} as const satisfies ExecutionSubjectAssetV1;
+} as const satisfies RuntimeSubjectAssetV1;
 
 function buildStaticTriangleGlb(): Uint8Array {
   const positions = [
@@ -281,7 +302,7 @@ const staticSubjectAssetDescriptor = {
     boneCount: 0,
     animationClipNames: [],
   },
-} as const satisfies ExecutionSubjectAssetV1;
+} as const satisfies RuntimeSubjectAssetV1;
 
 interface MutableGlbJson {
   extras?: Record<string, unknown>;
@@ -341,8 +362,8 @@ function mutateGlbJson(
 
 function descriptorForBytes(
   bytes: Uint8Array,
-  overrides: Partial<ExecutionSubjectAssetV1> = {},
-): ExecutionSubjectAssetV1 {
+  overrides: Partial<RuntimeSubjectAssetV1> = {},
+): RuntimeSubjectAssetV1 {
   return {
     ...goldenSubjectAssetDescriptor,
     artifactContentHash: sha256Bytes(bytes),
@@ -352,7 +373,7 @@ function descriptorForBytes(
       ...overrides.inventory,
     },
     ...overrides,
-  } as ExecutionSubjectAssetV1;
+  } as RuntimeSubjectAssetV1;
 }
 
 function createAssetScene(): { engine: NullEngine; scene: Scene } {
@@ -410,8 +431,8 @@ function ownedAnimationTargets(
 }
 
 function createAnimationSet(
-  overrides: Partial<ExecutionAnimationSetV1> = {},
-): ExecutionAnimationSetV1 {
+  overrides: Partial<RuntimeAnimationSetV1> = {},
+): RuntimeAnimationSetV1 {
   return {
     animationSetRef: "worldkit://animation-set/test@1",
     subjectAssetRef: goldenSubjectAssetDescriptor.subjectAssetRef,
@@ -526,9 +547,9 @@ function deferred<T>(): {
 }
 
 interface RuntimeDebugProbe {
-  subjectVisualOrigin(subjectEntityId: string): Vec3;
-  controllerCenter(subjectEntityId: string): Vec3;
-  visualPartLocalPosition(subjectEntityId: string, partId: string): Vec3;
+  subjectVisualOrigin(subjectEntityId: string): RuntimeVec3V1;
+  controllerCenter(subjectEntityId: string): RuntimeVec3V1;
+  visualPartLocalPosition(subjectEntityId: string, partId: string): RuntimeVec3V1;
   visualRootYawRadians(subjectEntityId: string): number;
 }
 
@@ -560,7 +581,7 @@ interface ControllerProbe {
   };
 }
 
-function toVec3(value: CartesianVector): Vec3 {
+function toVec3(value: CartesianVector): RuntimeVec3V1 {
   return [value.x, value.y, value.z];
 }
 
@@ -609,7 +630,7 @@ function createSubjectVisualProbe(runtime: BabylonWorldRuntime): SubjectVisualPr
   };
 }
 
-function addVec3(left: Vec3, right: Vec3): Vec3 {
+function addVec3(left: RuntimeVec3V1, right: RuntimeVec3V1): RuntimeVec3V1 {
   return [left[0] + right[0], left[1] + right[1], left[2] + right[2]];
 }
 
@@ -617,52 +638,178 @@ function moveRightForTicks(tickCount: number): FixedInputV1 {
   return { actions: ["move-right"], ticks: tickCount };
 }
 
-function compileExecutionPlan(spec: AuthoringSpecV4): ExecutionPlanV5 {
-  return compileRuntimeTestPlanV5(spec);
+function compileExecutionPlan(spec: AuthoringSpecV4): CanonicalSceneExecutionPlanV1 {
+  return compileRuntimeTestScenePlanV1(spec);
 }
 
-function compileRouteExecutionPlan(spec: AuthoringSpecV4): ExecutionPlanV5 {
-  const normalized = normalizeAuthoringSpecV4(spec);
-  if (
-    !normalized.ok ||
-    normalized.value === undefined ||
-    normalized.normalizedWorldIrHash === undefined
-  ) {
-    throw new Error(`Fixture normalize failed: ${JSON.stringify(normalized.diagnostics)}`);
-  }
-  const entityDescriptors = normalized.value.nodes
-    .filter((node) => node.kind === "subject")
-    .map((node) => {
-      const definition = normalized.value?.resources.subjectDefinitions.find(
-        (candidate) => candidate.subjectDefinitionRef === node.subjectDefinitionRef,
-      );
-      if (isNil(definition)) {
-        throw new Error(`Fixture Subject Definition missing: ${node.subjectDefinitionRef}`);
-      }
-      return {
-        id: node.id,
-        entityDefinitionRef: node.subjectDefinitionRef,
-        capabilityRefs: definition.capabilityRefs,
-      };
-    });
-  const gameplayBootstrap = createCoreGameplayBootstrapV1({
-    worldId: normalized.value.id,
-    worldSeed: normalized.value.seed,
-    entityDescriptors,
-  });
-  const compiled = compileWorldV5({
-    normalizedWorldIr: normalized.value,
-    normalizedWorldIrHash: normalized.normalizedWorldIrHash,
-    gameplayBootstrapResourceLock:
-      createGameplayBootstrapResourceLockEntryV1(gameplayBootstrap),
-  });
-  if (!compiled.ok || compiled.executionPlan === undefined) {
-    throw new Error(`Fixture compile failed: ${JSON.stringify(compiled.diagnostics)}`);
-  }
-  return compiled.executionPlan;
+function runtimeBootstrap(
+  executionPlan: CanonicalSceneExecutionPlanV1,
+) {
+  return runtimeTestWorldArtifactsForPlanV1(executionPlan).worldRuntimeBootstrap;
 }
 
-function compileFlatTerrainExecutionPlan(spec: AuthoringSpecV4): ExecutionPlanV5 {
+function gameplayBootstrapForPlan(
+  executionPlan: CanonicalSceneExecutionPlanV1,
+) {
+  return runtimeTestWorldArtifactsForPlanV1(executionPlan).gameplayBootstrap;
+}
+
+function runtimeSubjects(
+  executionPlan: CanonicalSceneExecutionPlanV1,
+) {
+  return resolveBabylonRuntimeSubjectsV1(
+    executionPlan,
+    runtimeBootstrap(executionPlan),
+  );
+}
+
+function cloneRuntimeTestExecutionPlan(
+  executionPlan: CanonicalSceneExecutionPlanV1,
+): CanonicalSceneExecutionPlanV1 {
+  const artifacts = runtimeTestWorldArtifactsForPlanV1(executionPlan);
+  const clonedExecutionPlan = structuredClone(executionPlan);
+  registerRuntimeTestWorldArtifactsV1({
+    executionPlan: clonedExecutionPlan,
+    worldRuntimeBootstrap: structuredClone(artifacts.worldRuntimeBootstrap),
+    gameplayBootstrap: structuredClone(artifacts.gameplayBootstrap),
+  });
+  return clonedExecutionPlan;
+}
+
+function overrideRuntimeBootstrap(
+  executionPlan: CanonicalSceneExecutionPlanV1,
+  patch: Partial<ReturnType<typeof runtimeBootstrap>>,
+): CanonicalSceneExecutionPlanV1 {
+  const artifacts = runtimeTestWorldArtifactsForPlanV1(executionPlan);
+  const { contentHash: _contentHash, ...body } =
+    artifacts.worldRuntimeBootstrap;
+  const worldRuntimeBootstrap = createWorldRuntimeBootstrapV1({
+    ...body,
+    ...patch,
+  });
+  const nextPlan = Object.freeze({
+    ...executionPlan,
+    worldRuntimeBootstrapHash: worldRuntimeBootstrap.contentHash,
+  });
+  registerRuntimeTestWorldArtifactsV1({
+    ...artifacts,
+    executionPlan: nextPlan,
+    worldRuntimeBootstrap,
+  });
+  return nextPlan;
+}
+
+function overrideRuntimeSubjects(
+  executionPlan: CanonicalSceneExecutionPlanV1,
+  subjects: ReturnType<typeof runtimeSubjects>,
+): CanonicalSceneExecutionPlanV1 {
+  const descriptors = Object.freeze(subjects.map((subject) => {
+    const {
+      spawnAnchorEntityId: _spawnAnchorEntityId,
+      spawnSubjectOriginPositionMetersXYZ: _spawnSubjectOriginPositionMetersXYZ,
+      spawnSubjectFacingRadians: _spawnSubjectFacingRadians,
+      ...descriptor
+    } = subject;
+    return Object.freeze(descriptor);
+  }));
+  const artifacts = runtimeTestWorldArtifactsForPlanV1(executionPlan);
+  const { contentHash: _contentHash, ...body } =
+    artifacts.worldRuntimeBootstrap;
+  const worldRuntimeBootstrap = createWorldRuntimeBootstrapV1({
+    ...body,
+    subjectRuntimeDescriptors: descriptors,
+  });
+  const nextPlan: CanonicalSceneExecutionPlanV1 = Object.freeze({
+    ...executionPlan,
+    worldRuntimeBootstrapHash: worldRuntimeBootstrap.contentHash,
+    subjectInstances: Object.freeze(subjects.map((subject) => Object.freeze({
+      entityId: subject.entityId,
+      spawnAnchorEntityId: subject.spawnAnchorEntityId,
+      subjectOriginPositionMetersXYZ:
+        subject.spawnSubjectOriginPositionMetersXYZ,
+      subjectFacingRadians: subject.spawnSubjectFacingRadians,
+    }))),
+  });
+  registerRuntimeTestWorldArtifactsV1({
+    ...artifacts,
+    executionPlan: nextPlan,
+    worldRuntimeBootstrap,
+  });
+  return nextPlan;
+}
+
+function configureRuntimeTestPlan(
+  executionPlan: CanonicalSceneExecutionPlanV1,
+  input: Readonly<{
+    initialControlledEntityId: string;
+    initialCameraTargetEntityId: string;
+    initialRelationshipStates?: ReturnType<
+      typeof gameplayBootstrapForPlan
+    >["initialRelationshipStates"];
+    subjects?: ReturnType<typeof runtimeSubjects>;
+  }>,
+): CanonicalSceneExecutionPlanV1 {
+  const artifacts = runtimeTestWorldArtifactsForPlanV1(executionPlan);
+  const subjects = input.subjects ?? runtimeSubjects(executionPlan);
+  const subjectRuntimeDescriptors = subjects.map((subject) => {
+    const {
+      spawnAnchorEntityId: _spawnAnchorEntityId,
+      spawnSubjectOriginPositionMetersXYZ:
+        _spawnSubjectOriginPositionMetersXYZ,
+      spawnSubjectFacingRadians: _spawnSubjectFacingRadians,
+      ...descriptor
+    } = subject;
+    return descriptor;
+  });
+  const { contentHash: _gameplayContentHash, ...gameplayBody } =
+    artifacts.gameplayBootstrap;
+  const gameplayBootstrap = createGameplayBootstrapV1({
+    ...gameplayBody,
+    initialRelationshipStates: input.initialRelationshipStates ?? [],
+  });
+  const { contentHash: _runtimeContentHash, ...runtimeBody } =
+    artifacts.worldRuntimeBootstrap;
+  const worldRuntimeBootstrap = createWorldRuntimeBootstrapV1({
+    ...runtimeBody,
+    gameplayBootstrapRef: gameplayBootstrap.resourceRef,
+    gameplayBootstrapHash: gameplayBootstrap.contentHash,
+    runtimeResourceLockEntries:
+      runtimeBody.runtimeResourceLockEntries.map((entry) =>
+        entry.resourceKind === "gameplay-bootstrap"
+          ? createGameplayBootstrapResourceLockEntryV1(gameplayBootstrap)
+          : entry
+      ),
+    subjectRuntimeDescriptors,
+    initialControlledEntityId: input.initialControlledEntityId,
+    initialCamera: Object.freeze({
+      ...runtimeBody.initialCamera,
+      targetEntityId: input.initialCameraTargetEntityId,
+    }),
+  });
+  const nextPlan = Object.freeze({
+    ...executionPlan,
+    worldRuntimeBootstrapHash: worldRuntimeBootstrap.contentHash,
+    subjectInstances: Object.freeze(subjects.map((subject) => Object.freeze({
+      entityId: subject.entityId,
+      spawnAnchorEntityId: subject.spawnAnchorEntityId,
+      subjectOriginPositionMetersXYZ:
+        subject.spawnSubjectOriginPositionMetersXYZ,
+      subjectFacingRadians: subject.spawnSubjectFacingRadians,
+    }))),
+  });
+  registerRuntimeTestWorldArtifactsV1({
+    executionPlan: nextPlan,
+    worldRuntimeBootstrap,
+    gameplayBootstrap,
+  });
+  return nextPlan;
+}
+
+function compileRouteExecutionPlan(spec: AuthoringSpecV4): CanonicalSceneExecutionPlanV1 {
+  return compileRuntimeTestScenePlanV1(spec);
+}
+
+function compileFlatTerrainExecutionPlan(spec: AuthoringSpecV4): CanonicalSceneExecutionPlanV1 {
   const flatTerrainSpec = structuredClone(spec);
   flatTerrainSpec.nodes = flatTerrainSpec.nodes.map((node) =>
     node.kind === "terrain" &&
@@ -688,26 +835,85 @@ function compileFlatTerrainExecutionPlan(spec: AuthoringSpecV4): ExecutionPlanV5
 
 function createFlatPackageExecutionPlan(
   mutator?: (spec: AuthoringSpecV4) => void,
-): ExecutionPlanV5 {
+): CanonicalSceneExecutionPlanV1 {
   const spec = createValidPackageSubjectWorldV4();
   mutator?.(spec);
   return compileFlatTerrainExecutionPlan(spec);
 }
 
+const EMPTY_NATIVE_ASSET_RESOLVER: BabylonNativeLockedAssetResolverV1 =
+  Object.freeze({
+    async resolve() {
+      throw new Error("WORLDKIT_NATIVE_SCENE_TEST_ASSET_NOT_SELECTED");
+    },
+  });
+
+function createNativeRuntimeBootstrap(
+  executionPlan: CanonicalSceneExecutionPlanV1,
+  spawnMarkerId: string,
+) {
+  const runtimeBootstrap = runtimeTestWorldArtifactsForPlanV1(
+    executionPlan,
+  ).worldRuntimeBootstrap;
+  return parseBabylonNativeSceneBootstrapV1({
+    kind: "babylon-native-scene-bootstrap",
+    schemaVersion: 1,
+    id: "native-runtime-test",
+    sceneModuleRef: "worldkit://native-scene/runtime-test@1",
+    nativeSceneApiRef: "worldkit://native-scene-api/babylon@1",
+    nativeSceneProfileRef:
+      "worldkit://native-scene-profile/whitebox.standard@1",
+    gameplayBootstrapRef: runtimeBootstrap.gameplayBootstrapRef,
+    initialControlledEntityId: runtimeBootstrap.initialControlledEntityId,
+    gravityMetersPerSecondSquaredXYZ:
+      runtimeBootstrap.gravityMetersPerSecondSquaredXYZ,
+    initialCamera: {
+      mode: "third-person",
+      pitchRadians: runtimeBootstrap.initialCamera.pitchRadians,
+      distanceMeters: runtimeBootstrap.initialCamera.distanceMeters,
+      fovDegrees: runtimeBootstrap.initialCamera.fovDegrees,
+      targetHeightMeters: runtimeBootstrap.initialCamera.targetHeightMeters,
+    },
+    seed: 41,
+    spawnMarkerId,
+  });
+}
+
 async function createRuntime(
-  executionPlan: ExecutionPlanV5,
+  executionPlan: CanonicalSceneExecutionPlanV1,
   options: Pick<
     BabylonWorldRuntimeOptions,
     | "engineFactory"
     | "subjectAssetResolver"
     | "subjectAssetCacheOptions"
     | "onInitializationStage"
-  > = {},
+  > & Readonly<{
+    nativeScene?: Omit<
+      Extract<
+        BabylonWorldRuntimeOptions["sceneSource"],
+        { kind: "babylon-native-scene" }
+      >,
+      "kind"
+    >;
+  }> = {},
   bindInitialPossession = true,
 ): Promise<BabylonWorldRuntime> {
+  const artifacts = runtimeTestWorldArtifactsForPlanV1(executionPlan);
   const runtime = await BabylonWorldRuntime.create({
-    executionPlan,
-    ...options,
+    sceneSource: options.nativeScene === undefined
+      ? { kind: "canonical-execution-plan", executionPlan }
+      : { kind: "babylon-native-scene", ...options.nativeScene },
+    worldRuntimeBootstrap: artifacts.worldRuntimeBootstrap,
+    gameplayBootstrap: artifacts.gameplayBootstrap,
+    ...(options.subjectAssetResolver === undefined
+      ? {}
+      : { subjectAssetResolver: options.subjectAssetResolver }),
+    ...(options.subjectAssetCacheOptions === undefined
+      ? {}
+      : { subjectAssetCacheOptions: options.subjectAssetCacheOptions }),
+    ...(options.onInitializationStage === undefined
+      ? {}
+      : { onInitializationStage: options.onInitializationStage }),
     havokWasmBinary,
     engineFactory: options.engineFactory ?? (() =>
       new NullEngine({
@@ -721,7 +927,7 @@ async function createRuntime(
   if (bindInitialPossession) {
     await bindRuntimeTestPossession(
       runtime,
-      executionPlan.initialControlledEntityId,
+      artifacts.worldRuntimeBootstrap.initialControlledEntityId,
     );
   }
   return runtime;
@@ -732,10 +938,10 @@ async function createFlatPackageRuntime(): Promise<BabylonWorldRuntime> {
 }
 
 function createColliderSupportExecutionPlan(options: {
-  pedestalPrimitive: ExecutionObjectV3["primitive"];
+  pedestalPrimitive: CanonicalSceneObjectV1["primitive"];
   crateBottomMeters: number;
   maximumSupportGapMeters: number;
-}): ExecutionPlanV5 {
+}): CanonicalSceneExecutionPlanV1 {
   const base = createFlatPackageExecutionPlan();
   const placementProvenance =
     base.layout.placementsByEntityId["wall-east"]!.placementProvenance;
@@ -783,7 +989,7 @@ function createColliderSupportExecutionPlan(options: {
           transform: pedestalTransform,
         }) as `sha256:${string}`,
         transform: pedestalTransform,
-            shape: options.pedestalPrimitive as ExecutionStaticColliderV1["shape"],
+            shape: options.pedestalPrimitive as CanonicalSceneStaticColliderV1["shape"],
           },
         ],
     layout: {
@@ -811,7 +1017,7 @@ function createColliderSupportExecutionPlan(options: {
   };
 }
 
-function createV5StaticColliderSupportExecutionPlan(): ExecutionPlanV5 {
+function createV5StaticColliderSupportExecutionPlan(): CanonicalSceneExecutionPlanV1 {
   const base = createFlatPackageExecutionPlan();
   const placementProvenance =
     base.layout.placementsByEntityId["spawn-main"]!.placementProvenance;
@@ -892,22 +1098,16 @@ function createLowStepTraversalExecutionPlan(options: {
   spawnSubjectOriginYMeters: number;
   stepEnabled: boolean;
   stepBottomMeters?: number;
-}): ExecutionPlanV5 {
+}): CanonicalSceneExecutionPlanV1 {
   const base = createFlatPackageExecutionPlan();
-  const player = base.subjects.find((subject) => subject.entityId === "player")!;
+  const player = runtimeSubjects(base).find((subject) => subject.entityId === "player")!;
   const stepTransform = {
     positionMetersXYZ: [1.7, (options.stepBottomMeters ?? 0) + 0.1, 0] as const,
     rotationEulerRadiansXYZ: [0, 0, 0] as const,
     scaleXYZ: [1, 1, 1] as const,
   };
-  return {
+  const executionPlan: CanonicalSceneExecutionPlanV1 = {
     ...base,
-    gravityMetersPerSecondSquaredXYZ: [
-      0,
-      options.gravityYMetersPerSecondSquared ??
-        base.gravityMetersPerSecondSquaredXYZ[1],
-      0,
-    ],
     terrain: {
       ...base.terrain,
       heightSamplesMeters: base.terrain.heightSamplesMeters.map(() => 0),
@@ -926,15 +1126,27 @@ function createLowStepTraversalExecutionPlan(options: {
           shape: { kind: "box", sizeMetersXYZ: [2, 0.2, 4] },
         }]
       : [],
-    subjects: [{
-      ...player,
-      spawnSubjectOriginPositionMetersXYZ: [0, options.spawnSubjectOriginYMeters, 0],
-    }],
     layout: { ...base.layout, layoutAssertions: [] },
   };
+  const withSubject = overrideRuntimeSubjects(executionPlan, [Object.freeze({
+    ...player,
+    spawnSubjectOriginPositionMetersXYZ: [
+      0,
+      options.spawnSubjectOriginYMeters,
+      0,
+    ] as const,
+  })]);
+  return overrideRuntimeBootstrap(withSubject, {
+    gravityMetersPerSecondSquaredXYZ: [
+      0,
+      options.gravityYMetersPerSecondSquared ??
+        runtimeBootstrap(base).gravityMetersPerSecondSquaredXYZ[1],
+      0,
+    ],
+  });
 }
 
-function createV5StaticColliderGeometryConformancePlan(): ExecutionPlanV5 {
+function createV5StaticColliderGeometryConformancePlan(): CanonicalSceneExecutionPlanV1 {
   const plan = createV5StaticColliderSupportExecutionPlan();
   return {
     ...plan,
@@ -961,7 +1173,7 @@ function createV5StaticColliderGeometryConformancePlan(): ExecutionPlanV5 {
   };
 }
 
-function createFlatRiggedExecutionPlan(): ExecutionPlanV5 {
+function createFlatRiggedExecutionPlan(): CanonicalSceneExecutionPlanV1 {
   return compileFlatTerrainExecutionPlan(createValidRiggedPackageSubjectWorldV4());
 }
 
@@ -974,9 +1186,9 @@ const staticAssetPartLocalTransform = {
 function createStaticAssetSubjectExecutionPlan(options: {
   mixedParts?: boolean;
   twoSubjects?: boolean;
-} = {}): ExecutionPlanV5 {
+} = {}): CanonicalSceneExecutionPlanV1 {
   const base = createFlatRiggedExecutionPlan();
-  const baseSubject = base.subjects[0]!;
+  const baseSubject = runtimeSubjects(base)[0]!;
   const assetPart = baseSubject.visualParts.find((part) => part.kind === "asset");
   if (assetPart === undefined) throw new Error("Rigged fixture Asset Part missing.");
   const staticSubject = {
@@ -1012,10 +1224,10 @@ function createStaticAssetSubjectExecutionPlan(options: {
       semanticTags: ["focus"],
     }],
   };
-  return {
-    ...base,
-    subjects: options.twoSubjects
-      ? [
+  const executionPlan = overrideRuntimeSubjects(
+    base,
+    options.twoSubjects
+      ? Object.freeze([
           staticSubject,
           {
             ...staticSubject,
@@ -1023,20 +1235,20 @@ function createStaticAssetSubjectExecutionPlan(options: {
             spawnAnchorEntityId: "spawn-static-secondary",
             spawnSubjectOriginPositionMetersXYZ: [4, 0, 30],
           },
-        ]
-      : [staticSubject],
+        ])
+      : Object.freeze([staticSubject]),
+  );
+  return overrideRuntimeBootstrap(executionPlan, {
     subjectAssets: [structuredClone(staticSubjectAssetDescriptor)],
     rigProfiles: [],
     animationSets: [],
-  };
+  });
 }
 
-function createTwoRiggedSubjectExecutionPlan(): ExecutionPlanV5 {
+function createTwoRiggedSubjectExecutionPlan(): CanonicalSceneExecutionPlanV1 {
   const executionPlan = createFlatRiggedExecutionPlan();
-  const player = executionPlan.subjects[0]!;
-  return {
-    ...executionPlan,
-    subjects: [
+  const player = runtimeSubjects(executionPlan)[0]!;
+  return overrideRuntimeSubjects(executionPlan, [
       player,
       {
         ...player,
@@ -1044,12 +1256,15 @@ function createTwoRiggedSubjectExecutionPlan(): ExecutionPlanV5 {
         spawnAnchorEntityId: "spawn-hero-b",
         spawnSubjectOriginPositionMetersXYZ: [4, 0, 30],
       },
-    ],
-  };
+    ]);
+}
+
+function createPublishedRiggedExecutionPlan(): CanonicalSceneExecutionPlanV1 {
+  return compileExecutionPlan(structuredClone(publishedRiggedAuthoringSpec));
 }
 
 async function expectRiggedRuntimeFailure(
-  executionPlan: ExecutionPlanV5,
+  executionPlan: CanonicalSceneExecutionPlanV1,
   code: SubjectAssetRuntimeErrorV1["code"],
 ): Promise<void> {
   const error = await createRiggedRuntime(executionPlan).catch(
@@ -1069,7 +1284,7 @@ async function createRiggedRuntime(
 }
 
 async function movementResult(
-  executionPlan: ExecutionPlanV5,
+  executionPlan: CanonicalSceneExecutionPlanV1,
   actions: FixedInputV1["actions"],
 ): Promise<{ deltaXMeters: number; movementMedium: "ground" | "air" }> {
   const runtime = await createRuntime(executionPlan);
@@ -1088,7 +1303,7 @@ async function movementResult(
 
 async function createRuntimeWithPackageSubject(): Promise<{
   runtime: BabylonWorldRuntime;
-  executionPlan: ExecutionPlanV5;
+  executionPlan: CanonicalSceneExecutionPlanV1;
   debug: RuntimeDebugProbe;
 }> {
   const executionPlan = createFlatPackageExecutionPlan();
@@ -1097,6 +1312,141 @@ async function createRuntimeWithPackageSubject(): Promise<{
 }
 
 describe("BabylonWorldRuntime", () => {
+  it("runs native scene geometry without constructing ExecutionPlan world geometry", async () => {
+    const executionPlan = compileFlatTerrainExecutionPlan(
+      createValidAuthoringSpecV4(),
+    );
+    let buildCount = 0;
+    let moduleOwnedPlatform: Mesh | undefined;
+    const runtime = await createRuntime(executionPlan, {
+      nativeScene: {
+        bootstrap: createNativeRuntimeBootstrap(
+          executionPlan,
+          "player-spawn",
+        ),
+        assets: EMPTY_NATIVE_ASSET_RESOLVER,
+        module: {
+          kind: "babylon-native-scene-module",
+          id: "native-runtime-test",
+          build(context) {
+            buildCount += 1;
+            const platform = MeshBuilder.CreateBox(
+              "native-foreground-platform",
+              { width: 12, height: 1, depth: 16 },
+              context.scene,
+            );
+            platform.position.set(0, -0.5, 0);
+            moduleOwnedPlatform = platform;
+            const destination = MeshBuilder.CreateBox(
+              "native-raised-destination",
+              { width: 6, height: 1, depth: 6 },
+              context.scene,
+            );
+            destination.position.set(0, 0.5, -10);
+            context.registration.registerSpawnMarker({
+              id: "player-spawn",
+              positionMetersXYZ: [0, 2, 4],
+              facingRadians: 0,
+            });
+            context.registration.registerStaticCollider({
+              id: "foreground-platform",
+              mesh: platform,
+              traversalBinding: {
+                kind: "static-surface",
+                surfaceEntityId: "foreground-platform",
+                logicalSubshapeId: "primary",
+                traversalSurfaceProfileRef:
+                  "worldkit://traversal-surface-profile/ground.static@1",
+              },
+              frictionRatio: 0.9,
+            });
+            context.registration.registerStaticCollider({
+              id: "raised-destination",
+              mesh: destination,
+              traversalBinding: {
+                kind: "static-surface",
+                surfaceEntityId: "raised-destination",
+                logicalSubshapeId: "primary",
+                traversalSurfaceProfileRef:
+                  "worldkit://traversal-surface-profile/ground.static@1",
+              },
+            });
+          },
+        },
+        budget: {
+          maximumStaticColliderCount: 2,
+          maximumStaticColliderVertexCount: 64,
+          maximumStaticColliderTriangleCount: 24,
+        },
+      },
+    });
+    try {
+      const scene = (runtime as unknown as { scene: Scene }).scene;
+      expect(buildCount).toBe(1);
+      expect(scene.getMeshByName(executionPlan.terrain.entityId)).toBeNull();
+      for (const object of executionPlan.objects) {
+        expect(scene.getMeshByName(object.entityId)).toBeNull();
+      }
+      for (const water of executionPlan.waters) {
+        expect(scene.getMeshByName(water.entityId)).toBeNull();
+      }
+      expect(scene.getMeshByName("worldkit.native-collider.foreground-platform")?.metadata)
+        .toMatchObject({
+          worldkitEntityId: "foreground-platform",
+          worldkitNativeTraversalKind: "static-surface",
+        });
+      expect(scene.getMeshByName("worldkit.native-collider.raised-destination")?.metadata)
+        .toMatchObject({
+          worldkitEntityId: "raised-destination",
+          worldkitNativeTraversalKind: "static-surface",
+        });
+
+      expect(scene.getMeshByName("worldkit.native-collider.foreground-platform"))
+        .not.toBe(moduleOwnedPlatform);
+      moduleOwnedPlatform?.dispose();
+      const settled = await runtime.runFixedInput({ actions: [], ticks: 180 });
+      expect(settled.subjectStatesByEntityId.player).toMatchObject({
+        movementMedium: "ground",
+        activeActionId: "idle",
+      });
+      expect(settled.subjectStatesByEntityId.player!.positionMetersXYZ[2])
+        .toBeCloseTo(4, 1);
+      expect(runtimeSubjects(executionPlan).find(({ entityId }) => entityId === "player")!
+        .spawnSubjectOriginPositionMetersXYZ).not.toEqual([0, 2, 4]);
+    } finally {
+      await runtime.dispose();
+    }
+  }, 15_000);
+
+  it("rejects a Native spawn marker that does not match the bootstrap binding", async () => {
+    const executionPlan = createFlatPackageExecutionPlan();
+    await expect(createRuntime(executionPlan, {
+      nativeScene: {
+        bootstrap: createNativeRuntimeBootstrap(
+          executionPlan,
+          "expected-spawn",
+        ),
+        assets: EMPTY_NATIVE_ASSET_RESOLVER,
+        module: {
+          kind: "babylon-native-scene-module",
+          id: "native-spawn-mismatch-test",
+          build(context) {
+            context.registration.registerSpawnMarker({
+              id: "different-spawn",
+              positionMetersXYZ: [0, 2, 0],
+              facingRadians: 0,
+            });
+          },
+        },
+        budget: {
+          maximumStaticColliderCount: 0,
+          maximumStaticColliderVertexCount: 0,
+          maximumStaticColliderTriangleCount: 0,
+        },
+      },
+    })).rejects.toThrow("WORLDKIT_NATIVE_SCENE_SPAWN_MARKER_MISMATCH");
+  }, 15_000);
+
   it("keeps Simulation Tick and Render Frame authority separate with reset-safe receipts", async () => {
     const runtime = await createFlatPackageRuntime();
     try {
@@ -1165,7 +1515,7 @@ describe("BabylonWorldRuntime", () => {
     }
   });
 
-  it("initializes a right-handed Babylon scene with Havok from ExecutionPlanV5", async () => {
+  it("initializes a right-handed Babylon scene with Havok from CanonicalSceneExecutionPlanV1", async () => {
     const runtime = await createFlatPackageRuntime();
 
     expect(runtime.snapshot()).toMatchObject({
@@ -1266,7 +1616,7 @@ describe("BabylonWorldRuntime", () => {
   it("rejects a tampered frozen support assertion and cleans initialized resources", async () => {
     const executionPlan = createFlatPackageExecutionPlan();
     const wallPlacement = executionPlan.layout.placementsByEntityId["wall-east"]!;
-    const tamperedPlan: ExecutionPlanV5 = {
+    const tamperedPlan: CanonicalSceneExecutionPlanV1 = {
       ...executionPlan,
       layout: {
         ...executionPlan.layout,
@@ -1352,7 +1702,7 @@ describe("BabylonWorldRuntime", () => {
     }).catch((reason) => reason as unknown);
 
     expect(error).toBe(initializationFailure);
-    expect(disposeController).toHaveBeenCalledTimes(executionPlan.subjects.length);
+    expect(disposeController).toHaveBeenCalledTimes(runtimeSubjects(executionPlan).length);
   });
 
   it("preserves the controller construction failure when rollback also throws", async () => {
@@ -1381,7 +1731,7 @@ describe("BabylonWorldRuntime", () => {
     const executionPlan = createFlatPackageExecutionPlan();
     const wallPlacement = executionPlan.layout.placementsByEntityId["wall-east"]!;
     const spawnPlacement = executionPlan.layout.placementsByEntityId["spawn-main"]!;
-    const tamperedPlan: ExecutionPlanV5 = {
+    const tamperedPlan: CanonicalSceneExecutionPlanV1 = {
       ...executionPlan,
       layout: {
         ...executionPlan.layout,
@@ -1429,7 +1779,7 @@ describe("BabylonWorldRuntime", () => {
       rotationEulerRadiansXYZ: [0.4, 0.7, -0.3] as const,
       scaleXYZ: [1, 1, 1] as const,
     };
-    const executionPlan: ExecutionPlanV5 = {
+    const executionPlan: CanonicalSceneExecutionPlanV1 = {
       ...base,
       terrain: {
         ...base.terrain,
@@ -1612,7 +1962,7 @@ describe("BabylonWorldRuntime", () => {
   it("keeps Snapshot and Visual Root at Subject Origin", async () => {
     const { runtime, executionPlan, debug } = await createRuntimeWithPackageSubject();
     const snapshot = runtime.snapshot();
-    const subject = executionPlan.subjects.find(
+    const subject = runtimeSubjects(executionPlan).find(
       (value) => value.entityId === "pack-animal-a",
     )!;
     const state = snapshot.subjectStatesByEntityId[subject.entityId]!;
@@ -1632,14 +1982,14 @@ describe("BabylonWorldRuntime", () => {
 
   it("initializes and resets Subject yaw from the solved spawn facing", async () => {
     const base = createFlatPackageExecutionPlan();
-    const executionPlan: ExecutionPlanV5 = {
-      ...base,
-      subjects: base.subjects.map((subject) =>
+    const executionPlan = overrideRuntimeSubjects(
+      base,
+      runtimeSubjects(base).map((subject) =>
         subject.entityId === "player"
           ? { ...subject, spawnSubjectFacingRadians: Math.PI / 2 }
           : subject,
       ),
-    };
+    );
     const runtime = await createRuntime(executionPlan);
     const debug = createRuntimeDebugProbe(runtime);
 
@@ -1678,7 +2028,7 @@ describe("BabylonWorldRuntime", () => {
 
   it("renders resolved Primitive Parts at Definition-local transforms", async () => {
     const { runtime, executionPlan, debug } = await createRuntimeWithPackageSubject();
-    const subject = executionPlan.subjects.find(
+    const subject = runtimeSubjects(executionPlan).find(
       (candidate) => candidate.entityId === "pack-animal-a",
     )!;
 
@@ -1703,26 +2053,23 @@ describe("BabylonWorldRuntime", () => {
         createMemoryResolver(staticSubjectAssetBytes),
       );
       const baseExecutionPlan = createStaticAssetSubjectExecutionPlan();
-      const staticSubject = baseExecutionPlan.subjects[0]!;
+      const staticSubject = runtimeSubjects(baseExecutionPlan)[0]!;
       const assetPart = staticSubject.visualParts.find(
         (part) => part.kind === "asset",
       )!;
-      const executionPlan: ExecutionPlanV5 = {
-        ...baseExecutionPlan,
-        subjects: [{
-          ...staticSubject,
-          visualParts: [
-            assetPart,
-            { ...structuredClone(assetPart), id: "body.asset.duplicate" },
-          ],
-        }],
+      const invalidSubject = {
+        ...staticSubject,
+        visualParts: [
+          assetPart,
+          { ...structuredClone(assetPart), id: "body.asset.duplicate" },
+        ],
       };
       const acquire = vi.spyOn(cache, "acquire");
 
       try {
         await expect(createSubjectVisual({
-          subject: executionPlan.subjects[0]!,
-          executionPlan,
+          subject: invalidSubject,
+          worldRuntimeBootstrap: runtimeBootstrap(baseExecutionPlan),
           material,
           scene,
           subjectAssetCache: cache,
@@ -1891,8 +2238,8 @@ describe("BabylonWorldRuntime", () => {
 
       try {
         const error = await createSubjectVisual({
-          subject: executionPlan.subjects[0]!,
-          executionPlan,
+          subject: runtimeSubjects(executionPlan)[0]!,
+          worldRuntimeBootstrap: runtimeBootstrap(executionPlan),
           material,
           scene,
           subjectAssetCache: cache,
@@ -1932,8 +2279,8 @@ describe("BabylonWorldRuntime", () => {
 
       try {
         visual = await createSubjectVisual({
-          subject: executionPlan.subjects[0]!,
-          executionPlan,
+          subject: runtimeSubjects(executionPlan)[0]!,
+          worldRuntimeBootstrap: runtimeBootstrap(executionPlan),
           material,
           scene,
           subjectAssetCache: cache,
@@ -2004,15 +2351,13 @@ describe("BabylonWorldRuntime", () => {
         createMemoryResolver(staticSubjectAssetBytes),
       );
       const baseExecutionPlan = createStaticAssetSubjectExecutionPlan();
-      const riggedSocket = createFlatRiggedExecutionPlan().subjects[0]!.sockets[0]!;
-      const staticSubject = baseExecutionPlan.subjects[0]!;
-      const executionPlan: ExecutionPlanV5 = {
-        ...baseExecutionPlan,
-        subjects: [{
+      const riggedPlan = createFlatRiggedExecutionPlan();
+      const riggedSocket = runtimeSubjects(riggedPlan)[0]!.sockets[0]!;
+      const staticSubject = runtimeSubjects(baseExecutionPlan)[0]!;
+      const executionPlan = overrideRuntimeSubjects(baseExecutionPlan, [{
           ...staticSubject,
           sockets: [...staticSubject.sockets, riggedSocket],
-        }],
-      };
+        }]);
       const disposalOrder: string[] = [];
       const observedNodes = new Map<string, TransformNode>();
       const expectedNodeLabelByName = new Map([
@@ -2071,8 +2416,8 @@ describe("BabylonWorldRuntime", () => {
 
       try {
         const error = await createSubjectVisual({
-          subject: executionPlan.subjects[0]!,
-          executionPlan,
+          subject: runtimeSubjects(executionPlan)[0]!,
+          worldRuntimeBootstrap: runtimeBootstrap(executionPlan),
           material,
           scene,
           subjectAssetCache: cache,
@@ -2177,6 +2522,164 @@ describe("BabylonWorldRuntime", () => {
     });
 
     await runtime.dispose();
+  });
+
+  it("keeps orbit heading after rebinding a Golden Subject then strafing", async () => {
+    const runtime = await createRiggedRuntime(createTwoRiggedSubjectExecutionPlan());
+    try {
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      runtime.reset();
+      await bindRuntimeTestPossession(runtime, "player");
+      const idle = await internal.prepareFixedInputTick!({
+        actions: [],
+        ticks: 1,
+      }, emptyActionProjection(runtime.snapshot().tick + 1));
+      idle.commitPrepared();
+      await bindRuntimeTestPossession(runtime, "hero-b");
+      const start = runtime.snapshot();
+      expect(start.camera.activeCameraProfileRef).toBe(ORBIT_CAMERA_PROFILE_REF);
+      const startX = start.subjectStatesByEntityId["hero-b"]!.positionMetersXYZ[0];
+      const startForward = start.camera.controlForwardXYZ!;
+      for (let tick = 0; tick < 60; tick += 1) {
+        const prepared = await internal.prepareFixedInputTick!({
+          actions: ["move-right"],
+          ticks: 1,
+        }, emptyActionProjection(runtime.snapshot().tick + 1));
+        prepared.commitPrepared();
+      }
+      const moved = runtime.snapshot();
+      expect(moved.camera.activeCameraProfileRef).toBe(ORBIT_CAMERA_PROFILE_REF);
+      expect(moved.subjectStatesByEntityId["hero-b"]!.positionMetersXYZ[0])
+        .toBeGreaterThan(startX + 2);
+      expect(moved.camera.controlForwardXYZ![0]).toBeCloseTo(startForward[0], 2);
+      expect(moved.camera.controlForwardXYZ![2]).toBeCloseTo(startForward[2], 2);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("keeps a Golden Subject grounded and orbiting while strafing on the published heightfield", async () => {
+    const runtime = await createRiggedRuntime(createPublishedRiggedExecutionPlan());
+    try {
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      runtime.reset();
+      await bindRuntimeTestPossession(runtime, "rigged-primary");
+      const idle = await internal.prepareFixedInputTick!({
+        actions: [],
+        ticks: 1,
+      }, emptyActionProjection(runtime.snapshot().tick + 1));
+      idle.commitPrepared();
+      await bindRuntimeTestPossession(runtime, "rigged-secondary");
+      const start = runtime.snapshot();
+      const startX = start.subjectStatesByEntityId["rigged-secondary"]!.positionMetersXYZ[0];
+      const ticks: Array<{
+        tick: number;
+        profile: string | undefined;
+        mobilityMode: string | undefined;
+        supportMode: string | undefined;
+        positionMetersXYZ: readonly [number, number, number];
+      }> = [];
+      for (let tick = 0; tick < 60; tick += 1) {
+        const prepared = await internal.prepareFixedInputTick!({
+          actions: ["move-right"],
+          ticks: 1,
+        }, emptyActionProjection(runtime.snapshot().tick + 1));
+        prepared.commitPrepared();
+        const current = runtime.snapshot();
+        const secondary = current.subjectStatesByEntityId["rigged-secondary"] as {
+          positionMetersXYZ: readonly [number, number, number];
+          locomotion?: { mobilityMode?: string; supportMode?: string };
+        };
+        ticks.push({
+          tick: current.tick,
+          profile: current.camera.activeCameraProfileRef,
+          mobilityMode: secondary.locomotion?.mobilityMode,
+          supportMode: secondary.locomotion?.supportMode,
+          positionMetersXYZ: secondary.positionMetersXYZ,
+        });
+      }
+      const moved = runtime.snapshot();
+      const secondary = moved.subjectStatesByEntityId["rigged-secondary"] as {
+        positionMetersXYZ: readonly [number, number, number];
+        locomotion?: { mobilityMode?: string; gait?: string; supportMode?: string };
+      };
+      expect(moved.camera.activeCameraProfileRef).toBe(ORBIT_CAMERA_PROFILE_REF);
+      expect(secondary.locomotion).toMatchObject({
+        mobilityMode: "grounded",
+        gait: "walk",
+        supportMode: "supported",
+      });
+      expect(secondary.positionMetersXYZ[0]).toBeGreaterThan(startX);
+      expect(secondary.positionMetersXYZ[0]).toBeLessThan(6.2);
+      const firstAirborne = ticks.find((row) => row.mobilityMode === "airborne");
+      expect(firstAirborne, JSON.stringify(ticks.slice(0, 8), null, 2)).toBeUndefined();
+      for (let tick = 0; tick < 300; tick += 1) {
+        const prepared = await internal.prepareFixedInputTick!({
+          actions: ["move-right"],
+          ticks: 1,
+        }, emptyActionProjection(runtime.snapshot().tick + 1));
+        prepared.commitPrepared();
+      }
+      const wallStop = runtime.snapshot();
+      const wallSecondary = wallStop.subjectStatesByEntityId["rigged-secondary"] as {
+        positionMetersXYZ: readonly [number, number, number];
+        locomotion?: { mobilityMode?: string; supportMode?: string };
+      };
+      expect(wallStop.camera.activeCameraProfileRef).toBe(ORBIT_CAMERA_PROFILE_REF);
+      expect(wallSecondary.locomotion).toMatchObject({
+        mobilityMode: "grounded",
+        supportMode: "supported",
+      });
+      expect(wallSecondary.positionMetersXYZ[0]).toBeGreaterThan(startX + 2);
+      expect(wallSecondary.positionMetersXYZ[0]).toBeLessThan(6.2);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("prepares twelve idle Golden Host ticks for two rigged Subjects", async () => {
+    const runtime = await createRiggedRuntime(createTwoRiggedSubjectExecutionPlan());
+    try {
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      expect(internal.prepareFixedInputTick).toBeTypeOf("function");
+      runtime.reset();
+      await bindRuntimeTestPossession(runtime, "player");
+      for (let tick = 0; tick < 12; tick += 1) {
+        const prepared = await internal.prepareFixedInputTick!({
+          actions: [],
+          ticks: 1,
+        }, emptyActionProjection(runtime.snapshot().tick + 1));
+        prepared.commitPrepared();
+      }
+      expect(runtime.snapshot().tick).toBe(12);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("prepares 360 committed wall-contact ticks for the secondary rigged Subject", async () => {
+    const runtime = await createRiggedRuntime(
+      compileRouteExecutionPlan(structuredClone(publishedRiggedAuthoringSpec)),
+    );
+    try {
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      expect(internal.prepareFixedInputTick).toBeTypeOf("function");
+      runtime.reset();
+      await bindRuntimeTestPossession(runtime, "rigged-secondary");
+      for (let tick = 0; tick < 360; tick += 1) {
+        const prepared = await internal.prepareFixedInputTick!({
+          actions: ["move-right"],
+          ticks: 1,
+        }, emptyActionProjection(runtime.snapshot().tick + 1));
+        prepared.commitPrepared();
+      }
+      expect(
+        runtime.snapshot().subjectStatesByEntityId["rigged-secondary"]!
+          .positionMetersXYZ[0],
+      ).toBeLessThan(6.2);
+    } finally {
+      await runtime.dispose();
+    }
   });
 
   it("prepares, aborts, and commits one real Golden Gameplay Tick without early publication", async () => {
@@ -2349,15 +2852,17 @@ function emptyActionProjection(simulationTick: number) {
   });
 
   it("admits only plan-locked Action presentation refs for the Golden actor", async () => {
-    const executionPlan: ExecutionPlanV5 = {
-      ...createFlatRiggedExecutionPlan(),
+    const executionPlan = overrideRuntimeBootstrap(
+      createFlatRiggedExecutionPlan(),
+      {
       actionPresentationRegistry: RUNTIME_ACTION_PRESENTATION_REGISTRY_V1,
-    };
+      },
+    );
     const runtime = await createRiggedRuntime(executionPlan);
     try {
       const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
       expect(internal.hasLockedActionPresentation(
-        executionPlan.subjects[0]!.entityId,
+        runtimeSubjects(executionPlan)[0]!.entityId,
         runtimeActionBinding.semanticActionRef,
       )).toBe(true);
       expect(internal.hasLockedActionPresentation(
@@ -2365,7 +2870,7 @@ function emptyActionProjection(simulationTick: number) {
         runtimeActionBinding.semanticActionRef,
       )).toBe(false);
       expect(internal.hasLockedActionPresentation(
-        executionPlan.subjects[0]!.entityId,
+        runtimeSubjects(executionPlan)[0]!.entityId,
         "worldkit://semantic-action/not-locked@1",
       )).toBe(false);
     } finally {
@@ -2380,9 +2885,8 @@ function emptyActionProjection(simulationTick: number) {
       rotationEulerRadiansXYZ: [0, 0, 0] as const,
       scaleXYZ: [1, 1, 1] as const,
     };
-    const executionPlan: ExecutionPlanV5 = {
+    const executionPlanBase: CanonicalSceneExecutionPlanV1 = {
       ...base,
-      actionPresentationRegistry: RUNTIME_ACTION_PRESENTATION_REGISTRY_V1,
       staticColliders: [
         ...base.staticColliders,
         {
@@ -2398,6 +2902,9 @@ function emptyActionProjection(simulationTick: number) {
         },
       ],
     };
+    const executionPlan = overrideRuntimeBootstrap(executionPlanBase, {
+      actionPresentationRegistry: RUNTIME_ACTION_PRESENTATION_REGISTRY_V1,
+    });
     const animationStep = vi.spyOn(SubjectAnimationPlayer.prototype, "step");
     const cameraUpdate = vi.spyOn(CameraComponentV1.prototype, "update");
     const runtime = await createRiggedRuntime(executionPlan);
@@ -2509,10 +3016,12 @@ function emptyActionProjection(simulationTick: number) {
   });
 
   it("fails closed on Action Tick ambiguity and replays the committed Action projection", async () => {
-    const executionPlan: ExecutionPlanV5 = {
-      ...createFlatRiggedExecutionPlan(),
+    const executionPlan = overrideRuntimeBootstrap(
+      createFlatRiggedExecutionPlan(),
+      {
       actionPresentationRegistry: RUNTIME_ACTION_PRESENTATION_REGISTRY_V1,
-    };
+      },
+    );
     const runtime = await createRiggedRuntime(executionPlan);
     try {
       const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
@@ -2603,7 +3112,7 @@ function emptyActionProjection(simulationTick: number) {
         : node,
     );
     const executionPlan = compileFlatTerrainExecutionPlan(spec);
-    expect(executionPlan.rigProfiles).toEqual([
+    expect(runtimeBootstrap(executionPlan).rigProfiles).toEqual([
       expect.objectContaining({
         skeletonRootBoneName: "mixamorig:Hips",
         sourceNodeNameByBoneId: expect.objectContaining({
@@ -3030,7 +3539,7 @@ function emptyActionProjection(simulationTick: number) {
               renderInterpolatedSubjectOriginYMeters: number;
               visualRootYMeters: number;
               supportMode: string;
-              supportNormalXYZ?: Vec3;
+              supportNormalXYZ?: RuntimeVec3V1;
               supportDistanceMeters?: number;
               correction: {
                 kind: string;
@@ -3074,6 +3583,9 @@ function emptyActionProjection(simulationTick: number) {
       ] as const) {
         runtime.reset();
         await bindRuntimeTestPossession(runtime, "g-bot-primary");
+        const reverseActions = actions.length === 2
+          ? (["move-left", "run"] as const)
+          : (["move-left"] as const);
         const layers = {
           bodyOrigin: [] as number[],
           committedSubject: [] as number[],
@@ -3085,7 +3597,10 @@ function emptyActionProjection(simulationTick: number) {
           hipsWorld: [] as number[],
         };
         for (let tick = 0; tick < 7_200; tick += 1) {
-          const snapshot = await runtime.runFixedInput({ actions, ticks: 1 });
+          const snapshot = await runtime.runFixedInput({
+            actions: tick % 480 < 240 ? actions : reverseActions,
+            ticks: 1,
+          });
           runtime.renderFrame(1);
           visual.root.computeWorldMatrix(true);
           const pose = movement.renderPoseDiagnostic(1);
@@ -3137,13 +3652,13 @@ function emptyActionProjection(simulationTick: number) {
     } finally {
       await runtime.dispose();
     }
-  }, 60_000);
+  }, 120_000);
 
   it("keeps two rigged Subjects on isolated Skeleton, Clip, Socket, and Action state", async () => {
     const basePlan = createTwoRiggedSubjectExecutionPlan();
-    const executionPlan: ExecutionPlanV5 = {
-      ...basePlan,
-      subjects: basePlan.subjects.map((subject) => ({
+    const executionPlan = overrideRuntimeSubjects(
+      basePlan,
+      runtimeSubjects(basePlan).map((subject) => ({
         ...subject,
         visualParts:
           subject.entityId === "player"
@@ -3184,7 +3699,7 @@ function emptyActionProjection(simulationTick: number) {
           },
         ],
       })),
-    };
+    );
     const runtime = await createRiggedRuntime(executionPlan);
     const probe = createSubjectVisualProbe(runtime);
     const playerVisual = probe.visual("player");
@@ -3341,21 +3856,23 @@ function emptyActionProjection(simulationTick: number) {
 
   it("rejects missing, aliased, and incorrectly rooted Rig Bone mappings", async () => {
     for (const mutateRig of [
-      (plan: ExecutionPlanV5) => {
-        const rig = plan.rigProfiles[0]!;
+      (plan: CanonicalSceneExecutionPlanV1) => {
+        const rig = runtimeBootstrap(plan).rigProfiles[0]!;
         (rig.sourceNodeNameByBoneId as Record<string, string>).head = "missing-head";
       },
-      (plan: ExecutionPlanV5) => {
-        const rig = plan.rigProfiles[0]!;
+      (plan: CanonicalSceneExecutionPlanV1) => {
+        const rig = runtimeBootstrap(plan).rigProfiles[0]!;
         (rig.sourceNodeNameByBoneId as Record<string, string>)["hand.right"] =
           rig.sourceNodeNameByBoneId["hand.left"];
       },
-      (plan: ExecutionPlanV5) => {
-        (plan.rigProfiles[0] as { skeletonRootBoneName: string }).skeletonRootBoneName =
+      (plan: CanonicalSceneExecutionPlanV1) => {
+        (runtimeBootstrap(plan).rigProfiles[0] as { skeletonRootBoneName: string }).skeletonRootBoneName =
           "hips";
       },
     ]) {
-      const executionPlan = structuredClone(createFlatRiggedExecutionPlan());
+      const executionPlan = cloneRuntimeTestExecutionPlan(
+        createFlatRiggedExecutionPlan(),
+      );
       mutateRig(executionPlan);
       await expectRiggedRuntimeFailure(
         executionPlan,
@@ -3376,9 +3893,11 @@ function emptyActionProjection(simulationTick: number) {
         binding.blendDurationSeconds = -1;
       },
     ]) {
-      const executionPlan = structuredClone(createFlatRiggedExecutionPlan());
+      const executionPlan = cloneRuntimeTestExecutionPlan(
+        createFlatRiggedExecutionPlan(),
+      );
       mutateBinding(
-        executionPlan.animationSets[0]!.animationBindings[0] as unknown as Record<
+        runtimeBootstrap(executionPlan).animationSets[0]!.animationBindings[0] as unknown as Record<
           string,
           unknown
         >,
@@ -3464,13 +3983,13 @@ function emptyActionProjection(simulationTick: number) {
 
   it("rejects missing, multiple, duplicate-name, and multiple-root Skeleton structures", async () => {
     const cases: Array<{
-      mutatePlan?: (plan: ExecutionPlanV5) => void;
+      mutatePlan?: (plan: CanonicalSceneExecutionPlanV1) => void;
       mutateContainer: (container: AssetContainer) => void;
     }> = [
       {
         mutatePlan(plan) {
-          plan.subjectAssets[0]!.inventory.skeletonCount = 0;
-          plan.subjectAssets[0]!.inventory.boneCount = 0;
+          runtimeBootstrap(plan).subjectAssets[0]!.inventory.skeletonCount = 0;
+          runtimeBootstrap(plan).subjectAssets[0]!.inventory.boneCount = 0;
         },
         mutateContainer(container) {
           container.skeletons.splice(0);
@@ -3478,8 +3997,8 @@ function emptyActionProjection(simulationTick: number) {
       },
       {
         mutatePlan(plan) {
-          plan.subjectAssets[0]!.inventory.skeletonCount = 2;
-          plan.subjectAssets[0]!.inventory.boneCount = 36;
+          runtimeBootstrap(plan).subjectAssets[0]!.inventory.skeletonCount = 2;
+          runtimeBootstrap(plan).subjectAssets[0]!.inventory.boneCount = 36;
         },
         mutateContainer(container) {
           container.skeletons.push(
@@ -3503,7 +4022,9 @@ function emptyActionProjection(simulationTick: number) {
     ];
 
     for (const testCase of cases) {
-      const executionPlan = structuredClone(createFlatRiggedExecutionPlan());
+      const executionPlan = cloneRuntimeTestExecutionPlan(
+        createFlatRiggedExecutionPlan(),
+      );
       testCase.mutatePlan?.(executionPlan);
       mutateNextLoadedContainer(testCase.mutateContainer);
       await expectRiggedRuntimeFailure(
@@ -3525,8 +4046,10 @@ function emptyActionProjection(simulationTick: number) {
   });
 
   it("uses the closed Socket diagnostic when a Bone Socket cannot resolve its semantic Bone", async () => {
-    const executionPlan = structuredClone(createFlatRiggedExecutionPlan());
-    const subject = executionPlan.subjects[0]!;
+    const executionPlan = cloneRuntimeTestExecutionPlan(
+      createFlatRiggedExecutionPlan(),
+    );
+    const subject = runtimeSubjects(executionPlan)[0]!;
     const boneSocket = subject.sockets.find((socket) => socket.kind === "bone")!;
     (boneSocket as { boneId: string }).boneId = "unmapped.bone";
 
@@ -3552,13 +4075,17 @@ function emptyActionProjection(simulationTick: number) {
         return instance;
       });
     });
-    const executionPlan = structuredClone(createFlatRiggedExecutionPlan());
-    (executionPlan.rigProfiles[0] as { skeletonRootBoneName: string }).skeletonRootBoneName =
+    const executionPlan = cloneRuntimeTestExecutionPlan(
+      createFlatRiggedExecutionPlan(),
+    );
+    (runtimeBootstrap(executionPlan).rigProfiles[0] as { skeletonRootBoneName: string }).skeletonRootBoneName =
       "hips";
     const engine = new NullEngine();
 
     const error = await BabylonWorldRuntime.create({
-      executionPlan,
+      sceneSource: { kind: "canonical-execution-plan", executionPlan },
+      worldRuntimeBootstrap: runtimeBootstrap(executionPlan),
+      gameplayBootstrap: gameplayBootstrapForPlan(executionPlan),
       havokWasmBinary,
       engineFactory: () => engine,
       subjectAssetResolver: createMemoryResolver(goldenSubjectAssetBytes),
@@ -3594,10 +4121,8 @@ function emptyActionProjection(simulationTick: number) {
 
   it("sanitizes rigged Visual cleanup failures after attempting every sibling", async () => {
     const basePlan = createFlatRiggedExecutionPlan();
-    const baseSubject = basePlan.subjects[0]!;
-    const executionPlan: ExecutionPlanV5 = {
-      ...basePlan,
-      subjects: [
+    const baseSubject = runtimeSubjects(basePlan)[0]!;
+    const executionPlan = overrideRuntimeSubjects(basePlan, [
         {
           ...baseSubject,
           visualParts: [
@@ -3626,8 +4151,7 @@ function emptyActionProjection(simulationTick: number) {
             },
           ],
         },
-      ],
-    };
+      ]);
     const runtime = await createRiggedRuntime(executionPlan);
     const visual = createSubjectVisualProbe(runtime).visual("player");
     const boneSocket = visual.socketNodesById.get("hand.right")!;
@@ -3792,8 +4316,8 @@ function emptyActionProjection(simulationTick: number) {
 
   it("falls from an unsupported airborne spawn and lands on the terrain", async () => {
     const base = createFlatPackageExecutionPlan();
-    const player = base.subjects.find((subject) => subject.entityId === "player")!;
-    const executionPlan: ExecutionPlanV5 = {
+    const player = runtimeSubjects(base).find((subject) => subject.entityId === "player")!;
+    const scenePlan: CanonicalSceneExecutionPlanV1 = {
       ...base,
       terrain: {
         ...base.terrain,
@@ -3801,14 +4325,12 @@ function emptyActionProjection(simulationTick: number) {
       },
       waters: [],
       objects: [],
-      subjects: [
-        {
-          ...player,
-          spawnSubjectOriginPositionMetersXYZ: [0, 8, 0],
-        },
-      ],
       layout: { ...base.layout, layoutAssertions: [] },
     };
+    const executionPlan = overrideRuntimeSubjects(scenePlan, [{
+      ...player,
+      spawnSubjectOriginPositionMetersXYZ: [0, 8, 0],
+    }]);
     const runtime = await createRuntime(executionPlan);
     try {
       const landed = await runtime.runFixedInput({ actions: [], ticks: 240 });
@@ -3908,9 +4430,9 @@ function emptyActionProjection(simulationTick: number) {
 
   it("falls to lower terrain after walking off a raised collider", async () => {
     const base = createFlatPackageExecutionPlan();
-    const player = base.subjects.find((subject) => subject.entityId === "player")!;
+    const player = runtimeSubjects(base).find((subject) => subject.entityId === "player")!;
     const wall = base.objects.find((object) => object.entityId === "wall-east")!;
-    const executionPlan: ExecutionPlanV5 = {
+    const scenePlan: CanonicalSceneExecutionPlanV1 = {
       ...base,
       terrain: {
         ...base.terrain,
@@ -3927,14 +4449,12 @@ function emptyActionProjection(simulationTick: number) {
           },
         },
       ],
-      subjects: [
-        {
-          ...player,
-          spawnSubjectOriginPositionMetersXYZ: [0, 4.05, 0],
-        },
-      ],
       layout: { ...base.layout, layoutAssertions: [] },
     };
+    const executionPlan = overrideRuntimeSubjects(scenePlan, [{
+      ...player,
+      spawnSubjectOriginPositionMetersXYZ: [0, 4.05, 0],
+    }]);
     const runtime = await createRuntime(executionPlan);
     try {
       await runtime.runFixedInput({ actions: [], ticks: 5 });
@@ -3958,8 +4478,8 @@ function emptyActionProjection(simulationTick: number) {
 
   it("uses Havok support rather than bilinear terrain height for ground and jump state", async () => {
     const base = createFlatPackageExecutionPlan();
-    const player = base.subjects.find((subject) => subject.entityId === "player")!;
-    const executionPlan: ExecutionPlanV5 = {
+    const player = runtimeSubjects(base).find((subject) => subject.entityId === "player")!;
+    const scenePlan: CanonicalSceneExecutionPlanV1 = {
       ...base,
       terrain: {
         ...base.terrain,
@@ -3974,14 +4494,12 @@ function emptyActionProjection(simulationTick: number) {
       },
       waters: [],
       objects: [],
-      subjects: [
-        {
-          ...player,
-          spawnSubjectOriginPositionMetersXYZ: [-2.5, 0.75, -2.5],
-        },
-      ],
       layout: { ...base.layout, layoutAssertions: [] },
     };
+    const executionPlan = overrideRuntimeSubjects(scenePlan, [{
+      ...player,
+      spawnSubjectOriginPositionMetersXYZ: [-2.5, 0.75, -2.5],
+    }]);
     const runtime = await createRuntime(executionPlan);
     try {
       await runtime.runFixedInput({ actions: [], ticks: 5 });
@@ -4007,7 +4525,7 @@ function emptyActionProjection(simulationTick: number) {
 
   it("keeps asymmetric square heightfield physics aligned with rendered XZ samples", async () => {
     const base = createFlatPackageExecutionPlan();
-    const executionPlan: ExecutionPlanV5 = {
+    const scenePlan: CanonicalSceneExecutionPlanV1 = {
       ...base,
       terrain: {
         ...base.terrain,
@@ -4018,11 +4536,14 @@ function emptyActionProjection(simulationTick: number) {
         minimumHeightMeters: 0,
         maximumHeightMeters: 0.6,
       },
-      subjects: base.subjects.map((subject) => ({
-        ...subject,
-        spawnSubjectOriginPositionMetersXYZ: [4, 0.54, 4],
-      })),
     };
+    const executionPlan = overrideRuntimeSubjects(
+      scenePlan,
+      runtimeSubjects(base).map((subject) => ({
+        ...subject,
+        spawnSubjectOriginPositionMetersXYZ: [4, 0.54, 4] as const,
+      })),
+    );
     const runtime = await createRuntime(executionPlan);
     const scene = (runtime as unknown as { scene: Scene }).scene;
     const hit = scene.getPhysicsEngine()!.raycast(
@@ -4038,7 +4559,7 @@ function emptyActionProjection(simulationTick: number) {
 
   it("keeps rectangular terrain mesh physics aligned with rendered XZ samples", async () => {
     const base = createFlatPackageExecutionPlan();
-    const executionPlan: ExecutionPlanV5 = {
+    const scenePlan: CanonicalSceneExecutionPlanV1 = {
       ...base,
       terrain: {
         ...base.terrain,
@@ -4049,11 +4570,14 @@ function emptyActionProjection(simulationTick: number) {
         minimumHeightMeters: 0,
         maximumHeightMeters: 1,
       },
-      subjects: base.subjects.map((subject) => ({
-        ...subject,
-        spawnSubjectOriginPositionMetersXYZ: [4, 0.54, 4],
-      })),
     };
+    const executionPlan = overrideRuntimeSubjects(
+      scenePlan,
+      runtimeSubjects(base).map((subject) => ({
+        ...subject,
+        spawnSubjectOriginPositionMetersXYZ: [4, 0.54, 4] as const,
+      })),
+    );
     const runtime = await createRuntime(executionPlan);
     const scene = (runtime as unknown as { scene: Scene }).scene;
     const hit = scene.getPhysicsEngine()!.raycast(
@@ -4069,8 +4593,8 @@ function emptyActionProjection(simulationTick: number) {
 
   it("applies gravity to an uncontrolled airborne Subject while keeping it idle", async () => {
     const base = createFlatPackageExecutionPlan();
-    const player = base.subjects.find((subject) => subject.entityId === "player")!;
-    const executionPlan: ExecutionPlanV5 = {
+    const player = runtimeSubjects(base).find((subject) => subject.entityId === "player")!;
+    const scenePlan: CanonicalSceneExecutionPlanV1 = {
       ...base,
       terrain: {
         ...base.terrain,
@@ -4078,16 +4602,16 @@ function emptyActionProjection(simulationTick: number) {
         minimumHeightMeters: 0,
         maximumHeightMeters: 0,
       },
-      subjects: [
-        player,
-        {
-          ...player,
-          entityId: "observer",
-          spawnAnchorEntityId: "spawn-observer",
-          spawnSubjectOriginPositionMetersXYZ: [4, 8, 0],
-        },
-      ],
     };
+    const executionPlan = overrideRuntimeSubjects(scenePlan, [
+      player,
+      {
+        ...player,
+        entityId: "observer",
+        spawnAnchorEntityId: "spawn-observer",
+        spawnSubjectOriginPositionMetersXYZ: [4, 8, 0],
+      },
+    ]);
     const runtime = await createRuntime(executionPlan);
 
     const snapshot = await runtime.runFixedInput({ actions: [], ticks: 240 });
@@ -4105,8 +4629,8 @@ function emptyActionProjection(simulationTick: number) {
 
   it("settles an uncontrolled Subject spawned just above terrain", async () => {
     const base = createFlatPackageExecutionPlan();
-    const player = base.subjects.find((subject) => subject.entityId === "player")!;
-    const executionPlan: ExecutionPlanV5 = {
+    const player = runtimeSubjects(base).find((subject) => subject.entityId === "player")!;
+    const scenePlan: CanonicalSceneExecutionPlanV1 = {
       ...base,
       terrain: {
         ...base.terrain,
@@ -4116,17 +4640,17 @@ function emptyActionProjection(simulationTick: number) {
       },
       waters: [],
       objects: [],
-      subjects: [
-        player,
-        {
-          ...player,
-          entityId: "observer",
-          spawnAnchorEntityId: "spawn-observer",
-          spawnSubjectOriginPositionMetersXYZ: [4, 0.2, 0],
-        },
-      ],
       layout: { ...base.layout, layoutAssertions: [] },
     };
+    const executionPlan = overrideRuntimeSubjects(scenePlan, [
+      player,
+      {
+        ...player,
+        entityId: "observer",
+        spawnAnchorEntityId: "spawn-observer",
+        spawnSubjectOriginPositionMetersXYZ: [4, 0.2, 0],
+      },
+    ]);
     const runtime = await createRuntime(executionPlan);
 
     const settled = await runtime.runFixedInput({ actions: [], ticks: 120 });
@@ -4237,16 +4761,15 @@ function emptyActionProjection(simulationTick: number) {
       dismountCandidateOffsetsMetersXYZ: [[1.5, 0, 0], [-1.5, 0, 0]],
     };
     const compiled = compileExecutionPlan(spec);
-    const blockerSource = compiled.subjects.find(({ entityId }) =>
+    const blockerSource = runtimeSubjects(compiled).find(({ entityId }) =>
       entityId === "pack-animal-a"
     );
     if (isNil(blockerSource)) throw new Error("Mounted blocker source missing.");
-    const executionPlan: ExecutionPlanV5 = {
-      ...compiled,
+    const executionPlan = configureRuntimeTestPlan(compiled, {
       initialControlledEntityId: "pack-animal-a",
-      initialRelationships: [],
+      initialCameraTargetEntityId: "pack-animal-a",
       subjects: [
-        ...compiled.subjects,
+        ...runtimeSubjects(compiled),
         {
           ...blockerSource,
           entityId: "dismount-candidate-one-blocker",
@@ -4254,8 +4777,7 @@ function emptyActionProjection(simulationTick: number) {
           spawnSubjectOriginPositionMetersXYZ: [5.5, 0, 5],
         },
       ],
-      camera: { ...compiled.camera, targetEntityId: "pack-animal-a" },
-    };
+    });
     const runtime = await createRuntime(executionPlan, {}, false);
     try {
       const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
@@ -4413,12 +4935,10 @@ function emptyActionProjection(simulationTick: number) {
     };
 
     const compiled = compileExecutionPlan(spec);
-    const executionPlan: ExecutionPlanV5 = {
-      ...compiled,
+    const executionPlan = configureRuntimeTestPlan(compiled, {
       initialControlledEntityId: "pack-animal-a",
-      initialRelationships: [],
-      camera: { ...compiled.camera, targetEntityId: "pack-animal-a" },
-    };
+      initialCameraTargetEntityId: "pack-animal-a",
+    });
     const runtime = await createRuntime(executionPlan, {}, false);
     try {
       const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
@@ -4507,19 +5027,22 @@ function emptyActionProjection(simulationTick: number) {
 
   it("isolates two Rider and Mount pairs through prepare, abort, commit, tick, and reset", async () => {
     const compiled = compileExecutionPlan(createValidMountedOnAuthoringSpec());
-    const riderA = compiled.subjects.find(({ entityId }) =>
+    const riderA = runtimeSubjects(compiled).find(({ entityId }) =>
       entityId === "pack-animal-a"
     );
-    const mountA = compiled.subjects.find(({ entityId }) =>
+    const mountA = runtimeSubjects(compiled).find(({ entityId }) =>
       entityId === "pack-animal-b"
     );
     if (isNil(riderA) || isNil(mountA)) {
       throw new Error("Two-pair mounted fixture Subjects are missing.");
     }
-    const executionPlan: ExecutionPlanV5 = {
+    const scenePlan: CanonicalSceneExecutionPlanV1 = {
       ...compiled,
+      layout: { ...compiled.layout, layoutAssertions: [] },
+    };
+    const executionPlan = configureRuntimeTestPlan(scenePlan, {
       initialControlledEntityId: "rider-a",
-      initialRelationships: [],
+      initialCameraTargetEntityId: "rider-a",
       subjects: [
         {
           ...riderA,
@@ -4546,9 +5069,7 @@ function emptyActionProjection(simulationTick: number) {
           spawnSubjectOriginPositionMetersXYZ: [10.5, 0, 5],
         },
       ],
-      layout: { ...compiled.layout, layoutAssertions: [] },
-      camera: { ...compiled.camera, targetEntityId: "rider-a" },
-    };
+    });
     const runtime = await createRuntime(executionPlan, {}, false);
     try {
       const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
@@ -4738,12 +5259,10 @@ function emptyActionProjection(simulationTick: number) {
     }
     riderAnchor.placement.transform.positionMetersXYZ = [3.5, 0, 5];
     const compiled = compileExecutionPlan(spec);
-    const executionPlan: ExecutionPlanV5 = {
-      ...compiled,
+    const executionPlan = configureRuntimeTestPlan(compiled, {
       initialControlledEntityId: "pack-animal-a",
-      initialRelationships: [],
-      camera: { ...compiled.camera, targetEntityId: "pack-animal-a" },
-    };
+      initialCameraTargetEntityId: "pack-animal-a",
+    });
     const runtime = await createRuntime(executionPlan, {}, false);
     try {
       const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
@@ -4839,12 +5358,10 @@ function emptyActionProjection(simulationTick: number) {
       dismountCandidateOffsetsMetersXYZ: [[2, 0, 0], [-2, 0, 0]],
     };
     const compiled = compileExecutionPlan(spec);
-    const executionPlan: ExecutionPlanV5 = {
-      ...compiled,
+    const executionPlan = configureRuntimeTestPlan(compiled, {
       initialControlledEntityId: "pack-animal-a",
-      initialRelationships: [],
-      camera: { ...compiled.camera, targetEntityId: "pack-animal-a" },
-    };
+      initialCameraTargetEntityId: "pack-animal-a",
+    });
     const runtime = await createRuntime(executionPlan, {}, false);
     try {
       const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
@@ -4899,14 +5416,12 @@ function emptyActionProjection(simulationTick: number) {
       mountSlotId: "stand",
       establishedSimulationTick: 0,
     };
-    const dynamicPlan = (spec: AuthoringSpecV4): ExecutionPlanV5 => {
+    const dynamicPlan = (spec: AuthoringSpecV4): CanonicalSceneExecutionPlanV1 => {
       const compiled = compileExecutionPlan(spec);
-      return {
-        ...compiled,
+      return configureRuntimeTestPlan(compiled, {
         initialControlledEntityId: "pack-animal-a",
-        initialRelationships: [],
-        camera: { ...compiled.camera, targetEntityId: "pack-animal-a" },
-      };
+        initialCameraTargetEntityId: "pack-animal-a",
+      });
     };
 
     const farRuntime = await createRuntime(dynamicPlan(
@@ -5130,7 +5645,7 @@ function emptyActionProjection(simulationTick: number) {
         controlledEntityId: "pack-animal-a",
       });
       bind.commitPrepared();
-      const packAnimal = executionPlan.subjects.find(
+      const packAnimal = runtimeSubjects(executionPlan).find(
         (subject) => subject.entityId === "pack-animal-a",
       )!;
       expect(
@@ -5301,6 +5816,42 @@ function emptyActionProjection(simulationTick: number) {
     }
   });
 
+  it("keeps free-ground camera-relative strafe on a stable view heading", async () => {
+    const { runtime } = await createRuntimeWithPackageSubject();
+    try {
+      await bindRuntimeTestPossession(runtime, "player");
+      const start = await runtime.runFixedInput({ actions: [], ticks: 1 });
+      expect(start.camera.activeCameraProfileRef).toBe(ORBIT_CAMERA_PROFILE_REF);
+      const startX = start.subjectStatesByEntityId.player!.positionMetersXYZ[0];
+      const startForward = start.camera.controlForwardXYZ!;
+
+      const moved = await runtime.runFixedInput({
+        actions: ["move-right"],
+        ticks: 120,
+      });
+      const player = moved.subjectStatesByEntityId.player!;
+      const controlForward = moved.camera.controlForwardXYZ!;
+      expect(moved.camera.activeCameraProfileRef).toBe(ORBIT_CAMERA_PROFILE_REF);
+      expect(player.positionMetersXYZ[0]).toBeGreaterThan(startX + 2);
+      expect(player.positionMetersXYZ[0]).toBeLessThan(6.2);
+      expect(controlForward[0]).toBeCloseTo(startForward[0], 2);
+      expect(controlForward[2]).toBeCloseTo(startForward[2], 2);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("selects orbit.medium for grounded Golden auto view", async () => {
+    const runtime = await createRiggedRuntime();
+    try {
+      await bindRuntimeTestPossession(runtime, "player");
+      const snapshot = await runtime.runFixedInput({ actions: [], ticks: 1 });
+      expect(snapshot.camera.activeCameraProfileRef).toBe(ORBIT_CAMERA_PROFILE_REF);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
   it("aligns the Golden Subject front with off-axis camera-relative movement", async () => {
     const runtime = await createRiggedRuntime();
     try {
@@ -5415,10 +5966,10 @@ function emptyActionProjection(simulationTick: number) {
 
   it("keeps a Subject on a pier above swimmable water grounded and jumpable", async () => {
     const base = createFlatPackageExecutionPlan();
-    const player = base.subjects.find((subject) => subject.entityId === "player")!;
+    const player = runtimeSubjects(base).find((subject) => subject.entityId === "player")!;
     const wall = base.objects.find((object) => object.entityId === "wall-east")!;
     const water = base.waters[0]!;
-    const executionPlan: ExecutionPlanV5 = {
+    const scenePlan: CanonicalSceneExecutionPlanV1 = {
       ...base,
       terrain: {
         ...base.terrain,
@@ -5463,14 +6014,12 @@ function emptyActionProjection(simulationTick: number) {
         },
         shape: { kind: "box", sizeMetersXYZ: [6, 1, 6] },
       }],
-      subjects: [
-        {
-          ...player,
-          spawnSubjectOriginPositionMetersXYZ: [0, 1.05, 0],
-        },
-      ],
       layout: { ...base.layout, layoutAssertions: [] },
     };
+    const executionPlan = overrideRuntimeSubjects(scenePlan, [{
+      ...player,
+      spawnSubjectOriginPositionMetersXYZ: [0, 1.05, 0],
+    }]);
     const runtime = await createRuntime(executionPlan);
 
     await runtime.runFixedInput({ actions: [], ticks: 10 });
@@ -5522,8 +6071,8 @@ function emptyActionProjection(simulationTick: number) {
     const before = runtime.snapshot().camera;
     runtime.adjustCameraView({
       yawDeltaRadians: Math.PI / 2,
-      pitchDeltaRadians: -executionPlan.camera.pitchRadians,
-      zoomDeltaMeters: 3 - executionPlan.camera.distanceMeters,
+      pitchDeltaRadians: -runtimeBootstrap(executionPlan).initialCamera.pitchRadians,
+      zoomDeltaMeters: 3 - runtimeBootstrap(executionPlan).initialCamera.distanceMeters,
     });
     const adjusted = runtime.snapshot();
     expect(adjusted.camera.positionMetersXYZ).not.toEqual(before.positionMetersXYZ);
@@ -5549,7 +6098,7 @@ function emptyActionProjection(simulationTick: number) {
     expect(reset.possessionTarget).toEqual({ mode: "unbound" });
     expect(reset.camera).not.toHaveProperty("targetEntityId");
     expect(reset.camera.positionMetersXYZ.every(Number.isFinite)).toBe(true);
-    for (const subject of executionPlan.subjects) {
+    for (const subject of runtimeSubjects(executionPlan)) {
       const state = reset.subjectStatesByEntityId[subject.entityId]!;
       expect(state.positionMetersXYZ).toEqual(subject.spawnSubjectOriginPositionMetersXYZ);
       expect(state.velocityMetersPerSecondXYZ).toEqual([0, 0, 0]);
@@ -6090,7 +6639,7 @@ describe("SubjectAssetCacheV1", () => {
       mediaType: "model/gltf+json",
       format: "gltf",
       byteLength: defaultSubjectAssetRuntimeLimits.maxByteLengthBytes + 1,
-    } as unknown as ExecutionSubjectAssetV1;
+    } as unknown as RuntimeSubjectAssetV1;
     await expect(new SubjectAssetCacheV1(scene).acquire(unsupported)).rejects.toThrow(
       /SUBJECT_ASSET_FORMAT_UNSUPPORTED/,
     );
@@ -6492,7 +7041,7 @@ describe("SubjectAssetCacheV1", () => {
         return { bytes: goldenSubjectAssetBytes, sourceLabel: "memory" };
       },
     });
-    const mismatchedDescriptor: ExecutionSubjectAssetV1 = {
+    const mismatchedDescriptor: RuntimeSubjectAssetV1 = {
       ...goldenSubjectAssetDescriptor,
       inventory: {
         ...goldenSubjectAssetDescriptor.inventory,

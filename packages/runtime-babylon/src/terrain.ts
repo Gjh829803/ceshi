@@ -4,14 +4,14 @@ import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import type { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
 
-import type { ExecutionTerrainV3 } from "@whitebox-world/runtime-contracts";
+import type { CanonicalSceneTerrainV1 } from "@whitebox-world/runtime-contracts";
 import {
   emitTriangleHeightfieldSurfaceV1,
   sampleTriangleHeightfieldSurface,
 } from "@whitebox-world/terrain-surface";
 
 export function createTerrainMesh(
-  terrain: ExecutionTerrainV3,
+  terrain: CanonicalSceneTerrainV1,
   material: StandardMaterial,
   scene: Scene,
 ): Mesh {
@@ -55,7 +55,7 @@ export function createTerrainMesh(
  * rendered triangle mesh as their collider because Babylon 9.21 swaps the
  * heightfield sample axes when the dimensions differ.
  */
-export function toBabylonHeightfieldData(terrain: ExecutionTerrainV3): Float32Array {
+export function toBabylonHeightfieldData(terrain: CanonicalSceneTerrainV1): Float32Array {
   const [columns, rows] = terrain.resolutionCellsXZ;
   const result = new Float32Array(columns * rows);
   for (let worldX = 0; worldX < columns; worldX += 1) {
@@ -72,7 +72,7 @@ export function toBabylonHeightfieldData(terrain: ExecutionTerrainV3): Float32Ar
 }
 
 export function sampleExecutionTerrainHeight(
-  terrain: ExecutionTerrainV3,
+  terrain: CanonicalSceneTerrainV1,
   x: number,
   z: number,
 ): number {

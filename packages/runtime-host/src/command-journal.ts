@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import {
   canonicalizeGameplayCommandV1,
   deriveGameplayCommandHashV1,
@@ -7,7 +9,6 @@ import {
   type GameplayCommandReceiptV1,
   type GameplayCommandV1,
   type GameplayEventV1,
-  type Sha256HashV1,
 } from "@whitebox-world/gameplay-contracts";
 import { isNil } from "lodash-es";
 import {

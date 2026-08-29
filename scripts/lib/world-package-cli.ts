@@ -1,28 +1,26 @@
+import { worldPackageRefFromRootHashV1, type WorldPackageRefV1 } from "@whitebox-world/world-identity";
+
 import path from "node:path";
 
 import {
   BABYLON_WEB_WORLD_PACKAGE_HOST_POLICY_V1,
-  createWorldPackageV2,
-  worldPackageRefFromRootHashV1,
-  type VerifiedWorldPackageDirectoryV2,
-  type WorldPackageDirectoryV2,
+  type VerifiedWorldPackageDirectoryV1,
+  type WorldPackageDirectoryV1,
   type WorldPackageHostPolicyV1,
-  type WorldPackageRefV1,
 } from "@whitebox-world/world-package";
 import type { RuntimeWorldConfigurationV1 } from "@whitebox-world/runtime-host";
 
 import {
-  readWorldPackageDirectoryV2,
-  writeWorldPackageDirectoryV2,
+  readWorldPackageDirectoryV1,
+  writeWorldPackageDirectoryV1,
 } from "./file-world-package";
 import {
-  verifyWorldPackageForHostV2,
+  verifyWorldPackageForHostV1,
   type WorldPackageTrustedPublicKeyV1,
 } from "./world-package-signing";
 import {
-  createTrustedWorldPackageBuildContextV2,
-  resolveTrustedWorldPackageResourceArtifactsV2,
-} from "./trusted-world-package-v2";
+  createTrustedCanonicalWorldPackageV1,
+} from "./trusted-world-package";
 import {
   loadWorldkitRoutePipeline,
   type WorldkitDiagnostic,
@@ -47,13 +45,14 @@ export interface WorldPackageCommandSummaryV1 {
   readonly packageId: string;
   readonly worldId: string;
   readonly runtimeTarget: "babylon-web";
-  readonly packageFormatVersion: 2;
-  readonly manifestSchemaVersion: 2;
+  readonly packageFormatVersion: 1;
+  readonly manifestSchemaVersion: 1;
   readonly worldPackageRef: WorldPackageRefV1;
   readonly worldPackageRootHash: `sha256:${string}`;
   readonly manifestHash: `sha256:${string}`;
   readonly authoringSpecHash: `sha256:${string}`;
   readonly normalizedWorldIrHash: `sha256:${string}`;
+  readonly worldBuildIdentityHash: `sha256:${string}`;
   readonly executionPlanHash: `sha256:${string}`;
   readonly registryLockHash: `sha256:${string}`;
   readonly layoutSolveReportHash: `sha256:${string}`;
@@ -88,7 +87,7 @@ export type WorldPackageCommandResultV1 =
 export type LoadRuntimeWorldPackageResultV1 =
   | Readonly<{
       readonly result: WorldPackageCommandSuccessV1;
-      readonly verifiedDirectory: VerifiedWorldPackageDirectoryV2;
+      readonly verifiedDirectory: VerifiedWorldPackageDirectoryV1;
       readonly runtimeWorldConfiguration: RuntimeWorldConfigurationV1;
     }>
   | Readonly<{
@@ -145,7 +144,7 @@ function failure(
 
 function summary(
   command: WorldPackageCommandNameV1,
-  directory: WorldPackageDirectoryV2,
+  directory: WorldPackageDirectoryV1,
 ): WorldPackageCommandSuccessV1 {
   const receipt = directory.receipt;
   const manifest = receipt.manifest;
@@ -166,6 +165,7 @@ function summary(
     manifestHash: receipt.manifestHash,
     authoringSpecHash: manifest.authoringSpecHash,
     normalizedWorldIrHash: manifest.normalizedWorldIrHash,
+    worldBuildIdentityHash: receipt.worldBuildIdentityHash,
     executionPlanHash: manifest.executionPlanHash,
     registryLockHash: manifest.registryLockHash,
     layoutSolveReportHash: manifest.layoutSolveReportHash,
@@ -206,7 +206,7 @@ function admissionFailure(
   );
 }
 
-async function readAndAdmitWorldPackageDirectoryV2(
+async function readAndAdmitWorldPackageDirectoryV1(
   command: "inspect" | "load",
   input: Readonly<{
     packageDirectoryPath: string;
@@ -214,8 +214,8 @@ async function readAndAdmitWorldPackageDirectoryV2(
 ): Promise<
   | Readonly<{
       readonly ok: true;
-      readonly directory: WorldPackageDirectoryV2;
-      readonly verifiedDirectory: VerifiedWorldPackageDirectoryV2;
+      readonly directory: WorldPackageDirectoryV1;
+      readonly verifiedDirectory: VerifiedWorldPackageDirectoryV1;
     }>
   | Readonly<{
       readonly ok: false;
@@ -224,12 +224,12 @@ async function readAndAdmitWorldPackageDirectoryV2(
 > {
   const packageDirectoryPath = path.resolve(input.packageDirectoryPath);
   try {
-    const directory = await readWorldPackageDirectoryV2({
+    const directory = await readWorldPackageDirectoryV1({
       packageDirectoryPath,
       maximumTotalBytes: input.maximumTotalBytes ?? MAXIMUM_PACKAGE_TOTAL_BYTES,
       maximumFileCount: input.maximumFileCount ?? MAXIMUM_PACKAGE_FILE_COUNT,
     });
-    const verifiedDirectory = verifyWorldPackageForHostV2({
+    const verifiedDirectory = verifyWorldPackageForHostV1({
       directory,
       hostPolicy: input.hostPolicy ?? BABYLON_WEB_WORLD_PACKAGE_HOST_POLICY_V1,
       trustedPublicKeys: input.trustedPublicKeys ?? [],
@@ -243,7 +243,7 @@ async function readAndAdmitWorldPackageDirectoryV2(
   }
 }
 
-export async function buildWorldPackageDirectoryV2(input: {
+export async function buildWorldPackageDirectoryV1(input: {
   readonly inputPath: string;
   readonly outputDirectoryPath: string;
 }): Promise<WorldPackageCommandResultV1> {
@@ -266,29 +266,10 @@ export async function buildWorldPackageDirectoryV2(input: {
       "The AuthoringSpec failed trusted Normalize, Layout, or Compile admission.",
     );
   }
-  let directory: WorldPackageDirectoryV2;
+  let directory: WorldPackageDirectoryV1;
   try {
-    const resourceArtifacts = await resolveTrustedWorldPackageResourceArtifactsV2(
-      pipeline.normalizedWorldIr,
-    );
-    directory = createWorldPackageV2({
-      packageId: `${pipeline.authoringSpec.id}.world-package`,
-      ...createTrustedWorldPackageBuildContextV2({
-        title: `${pipeline.authoringSpec.id} WorldPackage`,
-        resourceArtifacts,
-      }),
-      authoringSpec: pipeline.authoringSpec,
-      normalizedWorldIr: pipeline.normalizedWorldIr,
-      layoutSolveResult: Object.freeze({
-        status: pipeline.layoutSolveReport.status,
-        report: pipeline.layoutSolveReport,
-        layoutSolveReportHash: pipeline.layoutSolveReportHash,
-      }),
-      executionPlan: pipeline.executionPlan,
-      gameplayBootstrap: pipeline.gameplayBootstrap,
-      resourceArtifacts,
-    });
-    verifyWorldPackageForHostV2({
+    directory = await createTrustedCanonicalWorldPackageV1(pipeline);
+    verifyWorldPackageForHostV1({
       directory,
       hostPolicy: BABYLON_WEB_WORLD_PACKAGE_HOST_POLICY_V1,
       trustedPublicKeys: [],
@@ -303,11 +284,11 @@ export async function buildWorldPackageDirectoryV2(input: {
         : "WORLD_PACKAGE_BUILD_FAILED",
       message.startsWith("WORLDKIT_WORLD_PACKAGE_RESOURCE_RESOLVE")
         ? "The locked Package resources could not be resolved."
-        : "The complete WorldPackage V2 closure could not be built.",
+        : "The complete WorldPackage closure could not be built.",
     );
   }
   try {
-    await writeWorldPackageDirectoryV2({
+    await writeWorldPackageDirectoryV1({
       outputDirectoryPath: path.resolve(input.outputDirectoryPath),
       directory,
     });
@@ -322,12 +303,12 @@ export async function buildWorldPackageDirectoryV2(input: {
   return summary("build", directory);
 }
 
-export async function inspectWorldPackageDirectoryV2(
+export async function inspectWorldPackageDirectoryV1(
   input: Readonly<{
     readonly packageDirectoryPath: string;
   }> & WorldPackageHostAdmissionOptionsV1,
 ): Promise<WorldPackageCommandResultV1> {
-  const admitted = await readAndAdmitWorldPackageDirectoryV2(
+  const admitted = await readAndAdmitWorldPackageDirectoryV1(
     "inspect",
     input,
   );
@@ -340,7 +321,7 @@ export async function loadRuntimeWorldConfigurationFromPackageDirectoryV1(
     readonly packageDirectoryPath: string;
   }> & WorldPackageHostAdmissionOptionsV1,
 ): Promise<LoadRuntimeWorldPackageResultV1> {
-  const admitted = await readAndAdmitWorldPackageDirectoryV2("load", input);
+  const admitted = await readAndAdmitWorldPackageDirectoryV1("load", input);
   if (!admitted.ok) {
     return Object.freeze({
       result: admitted.failure,
@@ -348,13 +329,14 @@ export async function loadRuntimeWorldConfigurationFromPackageDirectoryV1(
   }
   const receipt = admitted.verifiedDirectory.receipt;
   const runtimeWorldConfiguration = Object.freeze({
-    executionPlan: admitted.verifiedDirectory.executionPlan,
-    executionPlanHash: receipt.manifest.executionPlanHash,
-    worldPackageRef: worldPackageRefFromRootHashV1(
-      receipt.worldPackageRootHash,
-    ),
-    worldPackageBuildReceipt: receipt,
+    worldBuildIdentity: receipt.worldBuildIdentity,
     gameplayBootstrap: admitted.verifiedDirectory.gameplayBootstrap,
+    worldRuntimeBootstrap: admitted.verifiedDirectory.worldRuntimeBootstrap,
+    sceneSource: Object.freeze({
+      kind: "canonical-execution-plan" as const,
+      executionPlan: admitted.verifiedDirectory.executionPlan,
+      executionPlanHash: receipt.manifest.executionPlanHash,
+    }),
   }) satisfies RuntimeWorldConfigurationV1;
   return Object.freeze({
     result: summary("load", admitted.directory),

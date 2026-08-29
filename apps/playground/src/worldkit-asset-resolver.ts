@@ -4,9 +4,15 @@ import type { SubjectAssetResolverV1 } from "@whitebox-world/runtime-babylon";
 import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
 import type {
   ResolvedWorldPackageResourceArtifactV1,
-  ResolvedWorldPackageResourceArtifactV2,
 } from "@whitebox-world/world-package";
 import { isEqual, isNil } from "lodash-es";
+
+interface ResolvedWorldPackageResourceBytesV1 {
+  readonly resourceRef: string;
+  readonly packagePath: string;
+  readonly mediaType: string;
+  readonly bytes: Uint8Array;
+}
 
 export const XIER120_SUBJECT_ASSET_URI_BY_REF_V1: Readonly<Record<string, string>> =
   Object.freeze({
@@ -222,14 +228,14 @@ export function createFetchSubjectAssetResolver(
   };
 }
 
-export async function resolveWorldPackageSubjectAssetArtifactsV1(
+export async function resolveWorldPackageSubjectAssetBytesV1(
   subjectAssets: readonly NormalizedSubjectAssetV1[],
   assetUriByRef: Readonly<Record<string, string>> =
     PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1,
   packagePathByRef: Readonly<Record<string, string>> =
     PLAYGROUND_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1,
   fetchImplementation: typeof fetch = fetch,
-): Promise<readonly ResolvedWorldPackageResourceArtifactV1[]> {
+): Promise<readonly ResolvedWorldPackageResourceBytesV1[]> {
   const orderedAssets = [...subjectAssets].sort((left, right) =>
     left.subjectAssetRef.localeCompare(right.subjectAssetRef),
   );
@@ -256,7 +262,7 @@ export async function resolveWorldPackageSubjectAssetArtifactsV1(
     assetUriByRef,
     fetchImplementation,
   );
-  const artifacts: ResolvedWorldPackageResourceArtifactV1[] = [];
+  const artifacts: ResolvedWorldPackageResourceBytesV1[] = [];
   for (const asset of orderedAssets) {
     if (!Object.hasOwn(capturedPackagePathByRef, asset.subjectAssetRef)) {
       throw hostResolveFailure();
@@ -279,15 +285,15 @@ const LICENSE_DOCUMENT_ID_BY_SPDX_EXPRESSION = Object.freeze({
   "LicenseRef-Loopit-Company-Private": "loopit-private",
 } as const);
 
-export async function resolveWorldPackageSubjectAssetArtifactsV2(
+export async function resolveWorldPackageSubjectAssetArtifactsV1(
   subjectAssets: readonly NormalizedSubjectAssetV1[],
   assetUriByRef: Readonly<Record<string, string>> =
     PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1,
   packagePathByRef: Readonly<Record<string, string>> =
     PLAYGROUND_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1,
   fetchImplementation: typeof fetch = fetch,
-): Promise<readonly ResolvedWorldPackageResourceArtifactV2[]> {
-  const artifacts = await resolveWorldPackageSubjectAssetArtifactsV1(
+): Promise<readonly ResolvedWorldPackageResourceArtifactV1[]> {
+  const artifacts = await resolveWorldPackageSubjectAssetBytesV1(
     subjectAssets,
     assetUriByRef,
     packagePathByRef,

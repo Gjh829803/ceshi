@@ -1,7 +1,9 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 
 import { OUTDOOR_WORLD_PACKAGE_DEV_ROUTE_RUNTIME_GATE_THRESHOLDS_V1 } from "./route";
-import type { Sha256HashV1 } from "./types";
+
 import type { MetricDefinitionV2, ValidationProfileV2 } from "./types-v2";
 
 const THRESHOLDS = OUTDOOR_WORLD_PACKAGE_DEV_ROUTE_RUNTIME_GATE_THRESHOLDS_V1;

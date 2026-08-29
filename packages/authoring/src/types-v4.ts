@@ -3,6 +3,7 @@ import type {
   LayoutSolveReportV1,
   ResolvedPlacementConstraintV1,
 } from "@whitebox-world/layout-solver";
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
 
 import type {
   AnchorNodeSpecV2,
@@ -285,5 +286,5 @@ export type NormalizeAuthoringOptionsV4 = NormalizeAuthoringOptions;
 
 export interface NormalizeAuthoringBaseV4Result
   extends AuthoringResult<NormalizedWorldBase> {
-  normalizedWorldIrHash?: string;
+  normalizedWorldIrHash?: Sha256HashV1;
 }

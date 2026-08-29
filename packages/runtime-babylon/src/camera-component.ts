@@ -8,10 +8,11 @@ import type {
   CameraPreviewStateV1,
   CameraTuningV1,
   CameraViewInputV1,
-  ExecutionPlanV5,
   SemanticInputActionV1,
   ViewControlFrameV1,
+  RuntimeVec3V1,
   ViewTargetSampleV1,
+  WorldRuntimeInitialCameraV1,
 } from "@whitebox-world/runtime-contracts";
 import {
   SceneComponentV1,
@@ -46,13 +47,13 @@ export class CameraComponentV1 extends SceneComponentV1 {
   private activeSpringArm: SpringArmComponentV1 | undefined;
 
   constructor(
-    executionPlan: ExecutionPlanV5,
+    initialCamera: WorldRuntimeInitialCameraV1,
     camera: FreeCamera,
     scene: Scene,
     physicsWorldQuery: PhysicsWorldQueryPortV1,
   ) {
     super("camera");
-    this.director = new CameraDirectorV1(executionPlan, camera, scene, physicsWorldQuery);
+    this.director = new CameraDirectorV1(initialCamera, camera, scene, physicsWorldQuery);
   }
 
   setViewPreference(
@@ -64,6 +65,10 @@ export class CameraComponentV1 extends SceneComponentV1 {
 
   resetViewPreference(): void {
     this.director.resetViewPreference();
+  }
+
+  initializeControlHeading(forwardXYZ: RuntimeVec3V1): void {
+    this.director.initializeControlHeading(forwardXYZ);
   }
 
   captureTransactionState(): CameraComponentTransactionStateV1 {

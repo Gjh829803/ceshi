@@ -480,6 +480,7 @@ describe("Runtime Session V1 public DTOs", () => {
         "worldkit://runtime-session/runtime-session-primary",
       worldPackageRef: `package://world-package/sha256/${"a".repeat(64)}`,
       worldPackageRootHash: HASH_A,
+      worldBuildIdentityHash: HASH_B,
       fixedInputControllerEntityId: "controller-primary",
       supportedRequestTypes: WORLDKIT_RUNTIME_SESSION_REQUEST_TYPES_V1,
     } as const;
@@ -491,6 +492,12 @@ describe("Runtime Session V1 public DTOs", () => {
     expect(canonicalRuntimeSessionEventV1(ready)).toContain(
       '"type":"ready"',
     );
+    const removedPlanHashField = ["execution", "Plan", "Hash"].join("");
+    expect(() => parseRuntimeSessionEventV1({
+      ...ready,
+      worldBuildIdentityHash: undefined,
+      [removedPlanHashField]: HASH_B,
+    })).toThrow("closed RuntimeSessionEventV1 schema");
 
     const completedBody = {
       kind: "worldkit-runtime-session-event",

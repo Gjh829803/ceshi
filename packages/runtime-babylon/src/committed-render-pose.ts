@@ -1,8 +1,8 @@
-import type { Vec3 } from "@whitebox-world/runtime-contracts";
+import type { RuntimeVec3V1 } from "@whitebox-world/runtime-contracts";
 
 export interface CommittedRenderPoseV1 {
   readonly committedTick: number;
-  readonly positionMetersXYZ: Vec3;
+  readonly positionMetersXYZ: RuntimeVec3V1;
   readonly facingYawRadians: number;
 }
 
@@ -22,7 +22,7 @@ function copyPose(pose: CommittedRenderPoseV1): CommittedRenderPoseV1 {
   }
   return Object.freeze({
     committedTick: pose.committedTick,
-    positionMetersXYZ: Object.freeze([...pose.positionMetersXYZ]) as Vec3,
+    positionMetersXYZ: Object.freeze([...pose.positionMetersXYZ]) as RuntimeVec3V1,
     facingYawRadians: pose.facingYawRadians,
   });
 }
@@ -95,7 +95,7 @@ export class CommittedRenderPoseBufferV1 {
         previous.positionMetersXYZ[2] +
           (current.positionMetersXYZ[2] - previous.positionMetersXYZ[2]) *
             interpolationAlphaRatio,
-      ]) as Vec3,
+      ]) as RuntimeVec3V1,
       facingYawRadians: previous.facingYawRadians +
         shortestYawDeltaRadians(
           previous.facingYawRadians,

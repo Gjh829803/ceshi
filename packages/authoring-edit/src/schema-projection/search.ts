@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { isNil } from "lodash-es";
 
@@ -6,7 +8,7 @@ import {
   parseRegistrySearchRequestV1,
   parseWorldChangeDiagnosticV1,
 } from "../authoring-edit.js";
-import type { Sha256HashV1 } from "../parse-kernel.js";
+
 import type {
   RegistrySearchReceiptV1,
   RegistrySearchRequestV1,

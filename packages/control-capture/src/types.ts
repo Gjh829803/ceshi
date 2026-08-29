@@ -1,4 +1,4 @@
-export type Sha256HashV1 = `sha256:${string}`;
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
 
 export interface SimulationTickRateV1 {
   readonly numeratorTicks: number;
@@ -75,6 +75,7 @@ export interface SimulationTakeV1 {
   readonly id: string;
   readonly worldPackageRef: string;
   readonly worldPackageRootHash: Sha256HashV1;
+  readonly worldBuildIdentityHash: Sha256HashV1;
   readonly seed: number;
   readonly simulationTickRate: SimulationTickRateV1;
   readonly startTick: number;

@@ -4,7 +4,7 @@ import type { Ray } from "@babylonjs/core/Culling/ray.js";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
 import type { CameraCollisionQueryRequestV1 } from "@whitebox-world/camera";
-import type { ExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
+import type { WorldRuntimeInitialCameraV1 } from "@whitebox-world/runtime-contracts";
 import { describe, expect, it } from "vitest";
 
 import { BabylonCameraCollisionQueryPortV1 } from "./babylon-camera-collision-query-port";
@@ -84,7 +84,17 @@ describe("BabylonCameraCollisionQueryPortV1", () => {
       },
     };
     const director = new CameraDirectorV1(
-      { camera: { rigRef: "worldkit://camera-rig/test@1" } } as unknown as ExecutionPlanV5,
+      {
+        mode: "third-person",
+        cameraEntityId: "camera.test",
+        targetEntityId: "player",
+        cameraRigProfileRef: "worldkit://camera-rig/test@1",
+        pitchRadians: 0,
+        distanceMeters: 4,
+        targetHeightMeters: 1,
+        fovDegrees: 60,
+        manualSwitchAllowed: true,
+      } satisfies WorldRuntimeInitialCameraV1,
       {} as FreeCamera,
       {} as Scene,
       injectedPort,

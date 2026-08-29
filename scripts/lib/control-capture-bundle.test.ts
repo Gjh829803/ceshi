@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import { access, mkdtemp, readFile, readdir, rm, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -8,7 +10,6 @@ import {
   CONTROL_CAPTURE_PASS_IDS_V1,
   compileSimulationTakeV1,
   type ControlCapturePassIdV1,
-  type Sha256HashV1,
 } from "@whitebox-world/control-capture";
 
 import {
@@ -137,6 +138,7 @@ function takeInput(): Record<string, unknown> {
     id: "bundle-test-take",
     worldPackageRef: `package://bundle-test@${WORLD_HASH}`,
     worldPackageRootHash: WORLD_HASH,
+    worldBuildIdentityHash: `sha256:${"c".repeat(64)}`,
     seed: 7,
     simulationTickRate: { numeratorTicks: 60, denominatorSeconds: 1 },
     startTick: 0,
@@ -287,7 +289,7 @@ function mountedGameplayEvidence(): Readonly<{
     simulationTick: 5,
     worldPackageRef: `package://bundle-test@${WORLD_HASH}`,
     worldPackageRootHash: WORLD_HASH,
-    executionPlanHash: `sha256:${"c".repeat(64)}`,
+    worldBuildIdentityHash: `sha256:${"c".repeat(64)}`,
     entityStatesById: {
       player: spatial("player", "character.humanoid"),
       skateboard: spatial("skateboard", "vehicle.skateboard"),
@@ -458,7 +460,7 @@ async function createWriter(outputDirectory: string) {
       worldPackageRef: `package://bundle-test@${WORLD_HASH}`,
       worldPackageRootHash: WORLD_HASH,
       normalizedWorldIrHash: `sha256:${"b".repeat(64)}` as Sha256HashV1,
-      executionPlanHash: `sha256:${"c".repeat(64)}` as Sha256HashV1,
+      worldBuildIdentityHash: `sha256:${"c".repeat(64)}` as Sha256HashV1,
     },
     runtimeSessionId: "session-test",
     worldSessionId: "world-session-test",

@@ -1,11 +1,11 @@
+import { worldPackageRefFromRootHashV1 } from "@whitebox-world/world-identity";
+
 import {
   hashWorldChangeRequestV1,
   hashWorldChangeSetV1,
-  type Sha256HashV1,
 } from "@whitebox-world/authoring-edit";
 import { canonicalJsonBytes, sha256CanonicalJson } from "@whitebox-world/protocol";
 import {
-  worldPackageRefFromRootHashV1,
   type WorldPackageStoreV1,
 } from "@whitebox-world/world-package";
 import { isNil } from "lodash-es";

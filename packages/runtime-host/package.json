@@ -12,6 +12,7 @@
     "@whitebox-world/gameplay-contracts": "workspace:*",
     "@whitebox-world/protocol": "workspace:*",
     "@whitebox-world/runtime-contracts": "workspace:*",
+    "@whitebox-world/world-identity": "workspace:*",
     "@whitebox-world/world-package": "workspace:*",
     "lodash-es": "^4.18.1"
   }

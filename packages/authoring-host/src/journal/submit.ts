@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import {
   applyWorldChangeSetV1,
   assembleWorldChangeDiffV1,
@@ -6,7 +8,6 @@ import {
   hashWorldChangeSetV1,
   isAppliedWorldChangeSetResultV1,
   parseWorldChangeCleanupReportV1,
-  type Sha256HashV1,
   type WorldChangeAffectedIdsV1,
   type WorldChangeDiagnosticV1,
   type WorldChangeFailurePhaseV1,
@@ -304,12 +305,15 @@ async function finishRuntimePublication(
   try {
     published = await input.publishRuntimeReplacement({
       worldConfiguration: {
-        executionPlan: verifiedWorldPackage.executionPlan,
-        executionPlanHash:
-          verifiedWorldPackage.receipt.manifest.executionPlanHash,
-        worldPackageRef: found.lease.worldPackageRef,
-        worldPackageBuildReceipt: verifiedWorldPackage.receipt,
+        worldBuildIdentity: verifiedWorldPackage.receipt.worldBuildIdentity,
         gameplayBootstrap: verifiedWorldPackage.gameplayBootstrap,
+        worldRuntimeBootstrap: verifiedWorldPackage.worldRuntimeBootstrap,
+        sceneSource: {
+          kind: "canonical-execution-plan",
+          executionPlan: verifiedWorldPackage.executionPlan,
+          executionPlanHash:
+            verifiedWorldPackage.receipt.manifest.executionPlanHash,
+        },
       },
       publication: {
         requestId: current.request.id,

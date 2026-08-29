@@ -1,3 +1,10 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+import {
+  hashWorldBuildIdentityV1,
+  parseWorldBuildIdentityV1,
+  type WorldBuildIdentityV1,
+} from "@whitebox-world/world-identity";
+
 import {
   deriveGameplayCommandHashV1,
   deriveGameplayCommandReceiptIdV1,
@@ -21,7 +28,6 @@ import {
   type GameplayParticipantStateV1,
   type GameplayRelationshipStateV1,
   type GameplaySemanticFactV1,
-  type Sha256HashV1,
   type WorldStateSnapshotV1,
 } from "@whitebox-world/gameplay-contracts";
 import {
@@ -73,9 +79,7 @@ import { WorldStateArtifactStore } from "./world-state-artifact-store";
 export interface WorldSessionCreateOptionsV1 {
   readonly runtimeSessionId: string;
   readonly worldSessionId: string;
-  readonly worldPackageRef: string;
-  readonly worldPackageRootHash: Sha256HashV1;
-  readonly executionPlanHash: Sha256HashV1;
+  readonly worldBuildIdentity: WorldBuildIdentityV1;
   readonly gameplayBootstrap: GameplayBootstrapV1;
   readonly initialRelationships: readonly GameplayRelationshipStateV1[];
   readonly participantStates: readonly GameplayParticipantStateV1[];
@@ -293,9 +297,7 @@ function parseCreateOptions(input: unknown): ParsedWorldSessionCreateOptionsV1 {
   const baseKeys = [
     "runtimeSessionId",
     "worldSessionId",
-    "worldPackageRef",
-    "worldPackageRootHash",
-    "executionPlanHash",
+    "worldBuildIdentity",
     "gameplayBootstrap",
     "initialRelationships",
     "participantStates",
@@ -315,9 +317,6 @@ function parseCreateOptions(input: unknown): ParsedWorldSessionCreateOptionsV1 {
     (!hasExactKeys(record, baseKeys) && !hasResolver) ||
     !isNonEmptyString(record.runtimeSessionId) ||
     !isNonEmptyString(record.worldSessionId) ||
-    !isNonEmptyString(record.worldPackageRef) ||
-    !isSha256Hash(record.worldPackageRootHash) ||
-    !isSha256Hash(record.executionPlanHash) ||
     !isNonEmptyString(record.fixedInputControllerEntityId) ||
     typeof record.gameplayModeFactory !== "function" ||
     (hasResolver && typeof record.gameplayActionRequestResolver !== "function") ||
@@ -351,12 +350,13 @@ function parseCreateOptions(input: unknown): ParsedWorldSessionCreateOptionsV1 {
   const gameplayCapacityBudget = parseGameplayCapacityBudgetV1(
     record.gameplayCapacityBudget,
   );
+  const worldBuildIdentity = parseWorldBuildIdentityV1(
+    record.worldBuildIdentity,
+  );
   return Object.freeze({
     runtimeSessionId: record.runtimeSessionId,
     worldSessionId: record.worldSessionId,
-    worldPackageRef: record.worldPackageRef,
-    worldPackageRootHash: record.worldPackageRootHash,
-    executionPlanHash: record.executionPlanHash,
+    worldBuildIdentity,
     gameplayBootstrap,
     initialRelationships,
     participantStates,
@@ -782,9 +782,9 @@ export class WorldSession {
       );
       const worldState = gameplayState.projectWorldState({
         simulationTick: initialProjection.simulationTick,
-        worldPackageRef: options.worldPackageRef,
-        worldPackageRootHash: options.worldPackageRootHash,
-        executionPlanHash: options.executionPlanHash,
+        worldPackageRef: options.worldBuildIdentity.worldPackageRef,
+        worldPackageRootHash: options.worldBuildIdentity.worldPackageRootHash,
+        worldBuildIdentityHash: hashWorldBuildIdentityV1(options.worldBuildIdentity),
         spatialEntityStatesById: initialProjection.spatialEntityStatesById,
         capabilityStatesById: initialProjection.capabilityStatesById,
         semanticFactsById: initialProjection.semanticFactsById,
@@ -1142,9 +1142,9 @@ export class WorldSession {
         planned.transitionPlan,
         {
           simulationTick: transaction.projectedWorldStateAfter.simulationTick,
-          worldPackageRef: this.options.worldPackageRef,
-          worldPackageRootHash: this.options.worldPackageRootHash,
-          executionPlanHash: this.options.executionPlanHash,
+          worldPackageRef: this.options.worldBuildIdentity.worldPackageRef,
+          worldPackageRootHash: this.options.worldBuildIdentity.worldPackageRootHash,
+          worldBuildIdentityHash: hashWorldBuildIdentityV1(this.options.worldBuildIdentity),
           spatialEntityStatesById:
             transaction.projectedWorldStateAfter.spatialEntityStatesById,
           capabilityStatesById:
@@ -1823,9 +1823,9 @@ export class WorldSession {
         : events[events.length - 1]!.sequence;
       const context = {
         simulationTick: nextTick,
-        worldPackageRef: this.options.worldPackageRef,
-        worldPackageRootHash: this.options.worldPackageRootHash,
-        executionPlanHash: this.options.executionPlanHash,
+        worldPackageRef: this.options.worldBuildIdentity.worldPackageRef,
+        worldPackageRootHash: this.options.worldBuildIdentity.worldPackageRootHash,
+        worldBuildIdentityHash: hashWorldBuildIdentityV1(this.options.worldBuildIdentity),
         spatialEntityStatesById: projectionAfter.spatialEntityStatesById,
         capabilityStatesById: projectionAfter.capabilityStatesById,
         semanticFactsById: projectionAfter.semanticFactsById,
@@ -1940,9 +1940,9 @@ export class WorldSession {
     );
     const worldState = this.gameplayState.projectWorldState({
       simulationTick,
-      worldPackageRef: this.options.worldPackageRef,
-      worldPackageRootHash: this.options.worldPackageRootHash,
-      executionPlanHash: this.options.executionPlanHash,
+      worldPackageRef: this.options.worldBuildIdentity.worldPackageRef,
+      worldPackageRootHash: this.options.worldBuildIdentity.worldPackageRootHash,
+      worldBuildIdentityHash: hashWorldBuildIdentityV1(this.options.worldBuildIdentity),
       spatialEntityStatesById:
         this.publishedWorldProjection.spatialEntityStatesById,
       capabilityStatesById: this.publishedWorldProjection.capabilityStatesById,

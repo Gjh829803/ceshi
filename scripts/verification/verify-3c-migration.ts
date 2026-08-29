@@ -7,8 +7,8 @@ import { fileURLToPath } from "node:url";
 const execFileAsync = promisify(execFile);
 
 export const GOLDEN_3C_BASELINE_COMMIT = "6d9e0304016448231ca05aa2f20e4b6ef7e7bd88";
-export const GOLDEN_3C_LEDGER_GENESIS_COMMIT = "e3ce4126521c2c8564740a3a1a8939f6862e1131";
-export const GOLDEN_3C_LEDGER_GENESIS_PARENT = "32eb52f527b4d617a60a84a1677053907de942b9";
+export const GOLDEN_3C_LEDGER_GENESIS_COMMIT = "44be0f50a3cfc2cbe2c7c4e2a377690d00955280";
+export const GOLDEN_3C_LEDGER_GENESIS_PARENT = "387551a9f722d1ec2791654dac5bb4745103a01a";
 export const GOLDEN_3C_COMPLETION_EVIDENCE_ROOTS_V1 = Object.freeze(["docs/reviews/", "artifacts/"] as const);
 export const GOLDEN_3C_SOURCE_POLICY_V1 = Object.freeze({
   executableExtensions: Object.freeze([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]),
@@ -512,12 +512,45 @@ async function requiredDiversionText(
   }
 }
 
-interface PriorLedgerContextV1 {
+export interface PriorLedgerContextV1 {
   readonly prior?: unknown;
   readonly allowGenesis: boolean;
 }
 
-async function readGitPriorLedgerV1(
+async function optionalGitText(
+  repositoryRoot: string,
+  args: readonly string[],
+): Promise<string | undefined> {
+  try {
+    return (await execFileAsync("git", [...args], {
+      cwd: repositoryRoot,
+      encoding: "utf8",
+    })).stdout;
+  } catch {
+    return undefined;
+  }
+}
+
+function parseSchema2Ledger(text: string, source: string): unknown {
+  let candidate: unknown;
+  try {
+    candidate = JSON.parse(text);
+  } catch {
+    return fail(
+      "3C_MIGRATION_PRIOR_UNAVAILABLE",
+      `${source} ledger JSON could not be read`,
+    );
+  }
+  if (record(candidate)?.schemaVersion !== 2) {
+    return fail(
+      "3C_MIGRATION_PRIOR_UNAVAILABLE",
+      `${source} does not contain an accepted schema-2 ledger`,
+    );
+  }
+  return candidate;
+}
+
+export async function readGitPriorLedgerV1(
   repositoryRoot: string,
   currentText: string,
 ): Promise<PriorLedgerContextV1> {
@@ -550,19 +583,26 @@ async function readGitPriorLedgerV1(
     if (headCommit === GOLDEN_3C_LEDGER_GENESIS_COMMIT) {
       return { allowGenesis: true };
     }
-    const parentText = await requiredGitText(
+    const parentsText = (await optionalGitText(
       repositoryRoot,
-      ["show", "HEAD^:config/3c-migration-ledger.json"],
-      "3C_MIGRATION_PRIOR_UNAVAILABLE",
-    );
-    const candidate = JSON.parse(parentText) as unknown;
-    if (record(candidate)?.schemaVersion !== 2) {
-      return fail(
-        "3C_MIGRATION_PRIOR_UNAVAILABLE",
-        "HEAD^ does not contain an accepted schema-2 ledger",
+      ["rev-list", "--parents", "-n", "1", "HEAD"],
+    ))?.trim();
+    const parentCommits = parentsText?.split(/\s+/).slice(1) ?? [];
+    for (const [parentIndex, parentCommit] of parentCommits.entries()) {
+      const parentText = await optionalGitText(
+        repositoryRoot,
+        ["show", `${parentCommit}:config/3c-migration-ledger.json`],
       );
+      if (parentText === undefined) continue;
+      return {
+        prior: parseSchema2Ledger(parentText, `HEAD^${parentIndex + 1}`),
+        allowGenesis: false,
+      };
     }
-    return { prior: candidate, allowGenesis: false };
+    return fail(
+      "3C_MIGRATION_PRIOR_UNAVAILABLE",
+      "no parent contains an accepted schema-2 ledger",
+    );
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("3C_MIGRATION_")) {
       throw error;

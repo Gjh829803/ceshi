@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import {
   buildWorldStateSnapshotV1,
   deriveGameplayCommandHashV1,
@@ -23,7 +25,6 @@ import {
   type GameplaySemanticFactV1,
   type MountedOnRelationshipStateV1,
   type PossessedByRelationshipStateV1,
-  type Sha256HashV1,
   type SpatialEntityStateV1,
   type WorldStateSnapshotV1,
 } from "@whitebox-world/gameplay-contracts";
@@ -131,7 +132,7 @@ export interface GameplayWorldStateProjectionContextV1 {
   readonly simulationTick: number;
   readonly worldPackageRef: string;
   readonly worldPackageRootHash: Sha256HashV1;
-  readonly executionPlanHash: Sha256HashV1;
+  readonly worldBuildIdentityHash: Sha256HashV1;
   readonly spatialEntityStatesById: Readonly<Record<string, SpatialEntityStateV1>>;
   readonly capabilityStatesById: Readonly<
     Record<string, GameplayCapabilityStateV1>
@@ -1225,7 +1226,7 @@ export class GameplayState implements GameplayPlanningStateV1 {
       simulationTick: context.simulationTick,
       worldPackageRef: context.worldPackageRef,
       worldPackageRootHash: context.worldPackageRootHash,
-      executionPlanHash: context.executionPlanHash,
+      worldBuildIdentityHash: context.worldBuildIdentityHash,
       entityStatesById,
       capabilityStatesById: context.capabilityStatesById,
       relationshipStatesById,

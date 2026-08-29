@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import { randomBytes, randomUUID } from "node:crypto";
 import {
   mkdir,
@@ -54,7 +56,6 @@ import {
   type RegistryResourceKindV1,
   type RegistrySearchReceiptV1,
   type RegistrySearchResultV1,
-  type Sha256HashV1,
   type WorldChangeCleanupReportV1,
   type WorldChangeDiffV1,
   type WorldChangeExplainV1,
@@ -83,8 +84,8 @@ import {
 import { stringifyCanonicalJson } from "@whitebox-world/protocol";
 import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
 import type {
-  ResolvedWorldPackageResourceArtifactV2,
-  WorldPackageBuildContextV2,
+  ResolvedWorldPackageResourceArtifactV1,
+  WorldPackageBuildContextV1,
   WorldPackageStoreV1,
 } from "@whitebox-world/world-package";
 import { isEmpty, isNil, isPlainObject, sortBy } from "lodash-es";
@@ -93,9 +94,9 @@ import { promoteArtifactDirectory } from "./artifact-directory-promotion";
 import type { CliDiagnostic } from "./worldkit-pipeline";
 import { createFileWorldPackageStoreV1 } from "./file-world-package";
 import {
-  createTrustedWorldPackageBuildContextV2,
-  resolveTrustedWorldPackageResourceArtifactsV2,
-} from "./trusted-world-package-v2";
+  createTrustedWorldPackageBuildContextV1,
+  resolveTrustedWorldPackageResourceArtifactsV1,
+} from "./trusted-world-package";
 
 export const FILE_MODE_VALIDATE_WORLD_ID = "offline";
 export const CONSTRAINED_JSON_PROFILE_REF =
@@ -625,14 +626,14 @@ async function submitFileModeRequest(input: {
   if (!normalized.ok || isNil(normalized.value)) {
     return failure(
       "CLI_AUTHORING_EDIT_WORLD_PACKAGE_INPUT_INVALID",
-      "Unable to normalize the AuthoringSpec for WorldPackage V2 publication.",
+      "Unable to normalize the AuthoringSpec for WorldPackage publication.",
       { exitCode: 2 },
     );
   }
-  const resourceArtifacts = await resolveTrustedWorldPackageResourceArtifactsV2(
+  const resourceArtifacts = await resolveTrustedWorldPackageResourceArtifactsV1(
     normalized.value,
   );
-  const worldPackageBuildContext = createTrustedWorldPackageBuildContextV2({
+  const worldPackageBuildContext = createTrustedWorldPackageBuildContextV1({
     title: `${input.spec.id} Authoring/Edit package`,
     resourceArtifacts,
   });
@@ -677,8 +678,8 @@ export function createInProcessAuthoringEditLivePortV1(input: {
   readonly journal: WorldChangeJournalV1;
   readonly leaseStore: PreparedCandidateLeaseStoreV1;
   readonly worldPackageStore: WorldPackageStoreV1;
-  readonly worldPackageBuildContext: WorldPackageBuildContextV2;
-  readonly resourceArtifacts: readonly ResolvedWorldPackageResourceArtifactV2[];
+  readonly worldPackageBuildContext: WorldPackageBuildContextV1;
+  readonly resourceArtifacts: readonly ResolvedWorldPackageResourceArtifactV1[];
   readonly session: AuthoringEditSessionV1;
   readonly nowUnixMilliseconds: number;
 }): AuthoringEditLivePortV1 {

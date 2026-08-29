@@ -25,6 +25,7 @@ function takeFixture(): SimulationTakeV1 {
     id: "runner-test",
     worldPackageRef: "worldkit://world-package/runner-test@1",
     worldPackageRootHash: WORLD_HASH,
+    worldBuildIdentityHash: WORLD_HASH,
     seed: 1,
     simulationTickRate: { numeratorTicks: 60, denominatorSeconds: 1 },
     startTick: 0,

@@ -6,9 +6,8 @@ import {
   type AuthoringSpecV4,
   type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
-import { compileWorldV5 } from "@whitebox-world/compiler";
+import { compileCanonicalWorldV1 } from "@whitebox-world/compiler";
 import { createCoreGameplayBootstrapV1 } from "@whitebox-world/gameplay";
-import { createGameplayBootstrapResourceLockEntryV1 } from "@whitebox-world/gameplay-contracts";
 import { describe, expect, it } from "vitest";
 
 function controlledSubjectTemplate(
@@ -21,7 +20,7 @@ function controlledSubjectTemplate(
   return JSON.parse(json);
 }
 
-function gameplayBootstrapResourceLock(normalizedWorldIr: NormalizedWorldIRV4) {
+function gameplayBootstrap(normalizedWorldIr: NormalizedWorldIRV4) {
   const entityDescriptors = normalizedWorldIr.nodes
     .filter((node) => node.kind === "subject")
     .map((node) => {
@@ -38,13 +37,14 @@ function gameplayBootstrapResourceLock(normalizedWorldIr: NormalizedWorldIRV4) {
         capabilityRefs: definition.capabilityRefs,
       };
     });
-  return createGameplayBootstrapResourceLockEntryV1(
-    createCoreGameplayBootstrapV1({
+  return createCoreGameplayBootstrapV1({
       worldId: normalizedWorldIr.id,
       worldSeed: normalizedWorldIr.seed,
       entityDescriptors,
-    }),
-  );
+      initialRelationshipStates: normalizedWorldIr.relationships.map(
+        (relationship) => ({ ...relationship, establishedSimulationTick: 0 }),
+      ),
+    });
 }
 
 function compileCurrentWorld(world: AuthoringSpecV4) {
@@ -52,11 +52,12 @@ function compileCurrentWorld(world: AuthoringSpecV4) {
   expect(normalized.ok, JSON.stringify(normalized.diagnostics)).toBe(true);
   expect(normalized.value).toBeDefined();
   expect(normalized.normalizedWorldIrHash).toBeDefined();
-  return compileWorldV5({
+  return compileCanonicalWorldV1({
     normalizedWorldIr: normalized.value!,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash!,
-    gameplayBootstrapResourceLock:
-      gameplayBootstrapResourceLock(normalized.value!),
+    gameplayBootstrap: gameplayBootstrap(normalized.value!),
+    worldRuntimeBootstrapRef:
+      `worldkit://world-runtime-bootstrap/${normalized.value!.id}@1`,
   });
 }
 
@@ -85,8 +86,9 @@ describe("Canonical Builder skill", () => {
 
     const compiled = compileCurrentWorld(world);
     expect(compiled.ok).toBe(true);
-    expect(compiled.executionPlan?.subjects).toHaveLength(1);
-    expect(compiled.executionPlan?.subjects[0]).toMatchObject({
+    if (!compiled.ok) throw new Error(JSON.stringify(compiled.diagnostics));
+    expect(compiled.worldRuntimeBootstrap.subjectRuntimeDescriptors).toHaveLength(1);
+    expect(compiled.worldRuntimeBootstrap.subjectRuntimeDescriptors[0]).toMatchObject({
       entityId: subject.id,
       subjectDefinitionRef:
         "package://subject-definition/humanoid-board-ground@1",
@@ -95,8 +97,8 @@ describe("Canonical Builder skill", () => {
         expect.objectContaining({ id: "body.asset", kind: "asset" }),
       ],
     });
-    expect(compiled.executionPlan?.initialControlledEntityId).toBe(subject.id);
-    expect(compiled.executionPlan?.camera.targetEntityId).toBe(subject.id);
+    expect(compiled.worldRuntimeBootstrap.initialControlledEntityId).toBe(subject.id);
+    expect(compiled.worldRuntimeBootstrap.initialCamera.targetEntityId).toBe(subject.id);
   });
 
   it("consumes the lightweight movement brief and maps only complete visual targets", async () => {
@@ -144,12 +146,14 @@ describe("Canonical Builder skill", () => {
     expect(skill).toContain("validate-entry-third-person.py");
     expect(skill).toContain("Map exactly the 1-5 palette targets and nothing else");
     expect(skill).toContain("Emit AuthoringSpec V4");
-    expect(skill).toContain("ExecutionPlan V5");
+    expect(skill).toContain("CanonicalSceneExecutionPlanV1");
+    expect(skill).toContain("WorldRuntimeBootstrapV1");
     expect(skill).toContain("connected-by-route");
     expect(skill).toContain("Route R1/R1B");
     expect(skill).toContain("traversalSurfaceBindings");
     expect(skill).toContain("worldkit://traversal-surface-profile/ground.static@1");
-    expect(skill).toContain("Gameplay Bootstrap Resource Lock");
+    expect(skill).toContain("GameplayBootstrapV1");
+    expect(skill).not.toContain("Gameplay Bootstrap Resource Lock");
     expect(skill).toContain("repeated-landmark");
     expect(skill).toContain('world.environment.preset: "clear-day"');
     expect(skill).toContain("SPAWN_BELOW_GROUND");
@@ -189,6 +193,14 @@ describe("Canonical Builder skill", () => {
     expect(launcher).toContain("terrain-height-intent.png");
     expect(launcher).toContain("authoring.builder.json");
     expect(launcher).toContain("scripts/scenes/finalize-scene-terrain.ts");
+    expect(launcher).toContain("record-scene-authoring-attempt.ts begin");
+    expect(launcher).toContain("record-scene-authoring-attempt.ts complete");
+    expect(launcher).toContain("record-scene-authoring-attempt.ts reject");
+    expect(launcher).toContain("scene-authoring-attempts/$codex_run_nonce");
+    expect(launcher).toContain("terminal Canonical Scene Plan");
+    expect(launcher).toContain("independent World Runtime Bootstrap");
+    expect(launcher).not.toContain(["ExecutionPlan", " V5"].join(""));
+    expect(launcher).not.toContain("babylon-native-authoring-source");
     expect(launcher).not.toContain("humanoid.board.surface-slide@1");
     expect(launcher).not.toContain("humanoid.wingsuit.unpowered-glide@1");
     expect(terrainAndStructures).toContain(

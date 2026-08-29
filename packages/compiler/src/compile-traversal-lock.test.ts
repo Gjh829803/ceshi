@@ -5,16 +5,21 @@ import {
   type AuthoringSpecV4,
   type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
+import { createGameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
 import {
-  createGameplayBootstrapResourceLockEntryV1,
-  createGameplayBootstrapV1,
-} from "@whitebox-world/gameplay-contracts";
-import type { ExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
+  createCanonicalSceneExecutionPlanV1,
+  createWorldRuntimeBootstrapV1,
+  type CanonicalSceneExecutionPlanV1,
+  type WorldRuntimeBootstrapV1,
+} from "@whitebox-world/runtime-contracts";
 import type { TraversalRuntimeImplementationIdentityV1 } from "@whitebox-world/traversal";
-import { sha256CanonicalJson } from "@whitebox-world/protocol";
+import {
+  sha256CanonicalJson,
+  type Sha256HashV1,
+} from "@whitebox-world/protocol";
 import { createValidAuthoringSpec } from "../../authoring/src/test-fixture";
 
-import { compileResolvedTraversalLockV1, compileWorldV5 } from "./index";
+import { compileResolvedTraversalLockV1, compileCanonicalWorldV1 } from "./index";
 
 const RUNTIME_IDENTITY: TraversalRuntimeImplementationIdentityV1 = {
   runtimeBackendRef: "worldkit://runtime-backend/babylon-havok@1",
@@ -24,8 +29,7 @@ const RUNTIME_IDENTITY: TraversalRuntimeImplementationIdentityV1 = {
   runtimeAdapterResolvedVersion: "1",
   runtimeAdapterHash: `sha256:${"b".repeat(64)}`,
 };
-const GAMEPLAY_BOOTSTRAP_RESOURCE_LOCK =
-  createGameplayBootstrapResourceLockEntryV1(createGameplayBootstrapV1({
+const GAMEPLAY_BOOTSTRAP = createGameplayBootstrapV1({
     kind: "gameplay-bootstrap",
     id: "compile-traversal-lock-test.gameplay",
     version: 1,
@@ -34,7 +38,8 @@ const GAMEPLAY_BOOTSTRAP_RESOURCE_LOCK =
     featureResourceLocks: [],
     semanticActionDefinitions: [],
     availableCapabilityRefs: [],
-  }));
+    initialRelationshipStates: [],
+  });
 
 function routeWorld(): AuthoringSpecV4 {
   const source = createValidAuthoringSpec();
@@ -94,22 +99,46 @@ function routeWorld(): AuthoringSpecV4 {
 
 function compileFixture(): {
   normalizedWorldIr: NormalizedWorldIRV4;
-  executionPlan: ExecutionPlanV5;
+  canonicalSceneExecutionPlan: CanonicalSceneExecutionPlanV1;
+  worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
 } {
   const normalized = normalizeAuthoringSpecV4(routeWorld());
   if (!normalized.ok || normalized.value === undefined ||
     normalized.normalizedWorldIrHash === undefined) {
     throw new Error("Route fixture normalization failed.");
   }
-  const compiled = compileWorldV5({
+  const compiled = compileCanonicalWorldV1({
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
-    gameplayBootstrapResourceLock: GAMEPLAY_BOOTSTRAP_RESOURCE_LOCK,
+    gameplayBootstrap: GAMEPLAY_BOOTSTRAP,
+    worldRuntimeBootstrapRef:
+      `worldkit://world-runtime-bootstrap/${normalized.value.id}@1`,
   });
-  if (!compiled.ok || compiled.executionPlan === undefined) {
+  if (!compiled.ok) {
     throw new Error("Route fixture compilation failed.");
   }
-  return { normalizedWorldIr: normalized.value, executionPlan: compiled.executionPlan };
+  return {
+    normalizedWorldIr: normalized.value,
+    canonicalSceneExecutionPlan: compiled.canonicalSceneExecutionPlan,
+    worldRuntimeBootstrap: compiled.worldRuntimeBootstrap,
+  };
+}
+
+function recreateRuntimeBootstrap(
+  input: WorldRuntimeBootstrapV1,
+): WorldRuntimeBootstrapV1 {
+  const { contentHash: _contentHash, ...body } = input;
+  return createWorldRuntimeBootstrapV1(body);
+}
+
+function relinkScenePlan(
+  input: CanonicalSceneExecutionPlanV1,
+  worldRuntimeBootstrap: WorldRuntimeBootstrapV1,
+): CanonicalSceneExecutionPlanV1 {
+  return createCanonicalSceneExecutionPlanV1({
+    ...input,
+    worldRuntimeBootstrapHash: worldRuntimeBootstrap.contentHash,
+  });
 }
 
 describe("compileResolvedTraversalLockV1", () => {
@@ -118,7 +147,7 @@ describe("compileResolvedTraversalLockV1", () => {
     const normalizedRow = fixture.normalizedWorldIr.resources.resourceLock.find(
       (row) => row.resourceKind === "traversal-surface-profile",
     );
-    const executionRow = fixture.executionPlan.resourceLockEntries.find(
+    const executionRow = fixture.canonicalSceneExecutionPlan.sceneResourceLockEntries.find(
       (row) => row.resourceKind === "traversal-surface-profile",
     );
 
@@ -135,13 +164,16 @@ describe("compileResolvedTraversalLockV1", () => {
   it("fails closed when a bound Profile lock row is missing or changed consistently", () => {
     const fixture = compileFixture();
     const compileTampered = (normalizedWorldIr: NormalizedWorldIRV4) =>
-      compileWorldV5({
+      compileCanonicalWorldV1({
         normalizedWorldIr,
-        normalizedWorldIrHash: sha256CanonicalJson(normalizedWorldIr),
-        gameplayBootstrapResourceLock: GAMEPLAY_BOOTSTRAP_RESOURCE_LOCK,
+        normalizedWorldIrHash:
+          sha256CanonicalJson(normalizedWorldIr) as Sha256HashV1,
+        gameplayBootstrap: GAMEPLAY_BOOTSTRAP,
+        worldRuntimeBootstrapRef:
+          `worldkit://world-runtime-bootstrap/${normalizedWorldIr.id}@1`,
       });
 
-    const expectProfileLockFailure = (result: ReturnType<typeof compileWorldV5>) => {
+    const expectProfileLockFailure = (result: ReturnType<typeof compileCanonicalWorldV1>) => {
       expect(result).toMatchObject({
         ok: false,
         diagnostics: expect.arrayContaining([expect.objectContaining({
@@ -222,7 +254,8 @@ describe("compileResolvedTraversalLockV1", () => {
     ].reverse();
     const reordered = compileResolvedTraversalLockV1({
       normalizedWorldIr: reorderedWorld,
-      executionPlan: fixture.executionPlan,
+      canonicalSceneExecutionPlan: fixture.canonicalSceneExecutionPlan,
+      worldRuntimeBootstrap: fixture.worldRuntimeBootstrap,
       traversingEntityId: "player",
       runtimeImplementationIdentity: RUNTIME_IDENTITY,
     });
@@ -247,7 +280,8 @@ describe("compileResolvedTraversalLockV1", () => {
         "worldkit://motion-kernel/free-ground@1");
     expect(() => compileResolvedTraversalLockV1({
       normalizedWorldIr: missingResourceWorld,
-      executionPlan: fixture.executionPlan,
+      canonicalSceneExecutionPlan: fixture.canonicalSceneExecutionPlan,
+      worldRuntimeBootstrap: fixture.worldRuntimeBootstrap,
       traversingEntityId: "player",
       runtimeImplementationIdentity: RUNTIME_IDENTITY,
     })).toThrowError(/TRAVERSAL_LOCK_COMPILE_FAILED.*motion-kernel/);
@@ -263,32 +297,42 @@ describe("compileResolvedTraversalLockV1", () => {
     ];
     expect(() => compileResolvedTraversalLockV1({
       normalizedWorldIr: ambiguousWorld,
-      executionPlan: fixture.executionPlan,
+      canonicalSceneExecutionPlan: fixture.canonicalSceneExecutionPlan,
+      worldRuntimeBootstrap: fixture.worldRuntimeBootstrap,
       traversingEntityId: "player",
       runtimeImplementationIdentity: RUNTIME_IDENTITY,
     })).toThrowError(/TRAVERSAL_LOCK_COMPILE_FAILED.*ground-locomotion/);
 
-    const legacyPlan = structuredClone(fixture.executionPlan);
-    const legacySubject = legacyPlan.subjects[0] as {
+    const legacyRuntime = structuredClone(fixture.worldRuntimeBootstrap);
+    const legacySubject = legacyRuntime.subjectRuntimeDescriptors[0] as {
       capabilityAssembly?: unknown;
     };
     delete legacySubject.capabilityAssembly;
     expect(() => compileResolvedTraversalLockV1({
       normalizedWorldIr: fixture.normalizedWorldIr,
-      executionPlan: legacyPlan,
+      canonicalSceneExecutionPlan: fixture.canonicalSceneExecutionPlan,
+      worldRuntimeBootstrap: legacyRuntime,
       traversingEntityId: "player",
       runtimeImplementationIdentity: RUNTIME_IDENTITY,
-    })).toThrowError(/TRAVERSAL_LOCK_COMPILE_FAILED.*capability/);
+    })).toThrowError(
+      /TRAVERSAL_LOCK_COMPILE_FAILED.*Canonical Scene Plan or Runtime Bootstrap/,
+    );
   });
 
   it("rejects collider values that do not match the locked normalized Subject", () => {
     const fixture = compileFixture();
-    const tamperedPlan = structuredClone(fixture.executionPlan);
-    tamperedPlan.subjects[0]!.collider.maxSlopeDegrees = 10;
+    const mutableRuntime = structuredClone(fixture.worldRuntimeBootstrap);
+    mutableRuntime.subjectRuntimeDescriptors[0]!.collider.maxSlopeDegrees = 10;
+    const tamperedRuntime = recreateRuntimeBootstrap(mutableRuntime);
+    const relinkedScene = relinkScenePlan(
+      fixture.canonicalSceneExecutionPlan,
+      tamperedRuntime,
+    );
 
     expect(() => compileResolvedTraversalLockV1({
       normalizedWorldIr: fixture.normalizedWorldIr,
-      executionPlan: tamperedPlan,
+      canonicalSceneExecutionPlan: relinkedScene,
+      worldRuntimeBootstrap: tamperedRuntime,
       traversingEntityId: "player",
       runtimeImplementationIdentity: RUNTIME_IDENTITY,
     })).toThrowError(/TRAVERSAL_LOCK_COMPILE_FAILED.*collider/);
@@ -305,64 +349,92 @@ describe("compileResolvedTraversalLockV1", () => {
 
     expect(() => compileResolvedTraversalLockV1({
       normalizedWorldIr: tamperedWorld,
-      executionPlan: fixture.executionPlan,
+      canonicalSceneExecutionPlan: fixture.canonicalSceneExecutionPlan,
+      worldRuntimeBootstrap: fixture.worldRuntimeBootstrap,
       traversingEntityId: "player",
       runtimeImplementationIdentity: RUNTIME_IDENTITY,
     })).toThrowError(/TRAVERSAL_LOCK_COMPILE_FAILED.*Resource Lock hash/);
   });
 
-  it("rejects deleted, changed, or reordered Execution Resource Lock rows", () => {
+  it("rejects deleted, changed, or reordered owner Resource Lock rows", () => {
     const fixture = compileFixture();
-    const compileTampered = (executionPlan: ExecutionPlanV5) =>
+    const compileTampered = (input: {
+      canonicalSceneExecutionPlan?: CanonicalSceneExecutionPlanV1;
+      worldRuntimeBootstrap?: WorldRuntimeBootstrapV1;
+    }) =>
       compileResolvedTraversalLockV1({
         normalizedWorldIr: fixture.normalizedWorldIr,
-        executionPlan,
+        canonicalSceneExecutionPlan:
+          input.canonicalSceneExecutionPlan ?? fixture.canonicalSceneExecutionPlan,
+        worldRuntimeBootstrap:
+          input.worldRuntimeBootstrap ?? fixture.worldRuntimeBootstrap,
         traversingEntityId: "player",
         runtimeImplementationIdentity: RUNTIME_IDENTITY,
       });
 
-    const deletedEntries = fixture.executionPlan.resourceLockEntries.slice(1);
-    const deleted: ExecutionPlanV5 = {
-      ...structuredClone(fixture.executionPlan),
-      resourceLockEntries: deletedEntries,
-      resourceLockHash: sha256CanonicalJson(deletedEntries),
+    const deletedEntries = fixture.canonicalSceneExecutionPlan
+      .sceneResourceLockEntries.slice(1);
+    const deleted: CanonicalSceneExecutionPlanV1 = {
+      ...structuredClone(fixture.canonicalSceneExecutionPlan),
+      sceneResourceLockEntries: deletedEntries,
+      sceneResourceLockHash:
+        sha256CanonicalJson(deletedEntries) as Sha256HashV1,
     };
-    expect(() => compileTampered(deleted)).toThrowError(
+    expect(() => compileTampered({ canonicalSceneExecutionPlan: deleted }))
+      .toThrowError(
       /TRAVERSAL_LOCK_COMPILE_FAILED.*Resource Lock/,
     );
 
-    const changedEntries = fixture.executionPlan.resourceLockEntries.map(
+    const changedEntries = fixture.worldRuntimeBootstrap.runtimeResourceLockEntries.map(
       (entry, index) => index === 0
         ? { ...entry, resolvedVersion: "forged" }
         : entry,
     );
-    const changed: ExecutionPlanV5 = {
-      ...structuredClone(fixture.executionPlan),
-      resourceLockEntries: changedEntries,
-      resourceLockHash: sha256CanonicalJson(changedEntries),
+    const changed: WorldRuntimeBootstrapV1 = {
+      ...structuredClone(fixture.worldRuntimeBootstrap),
+      runtimeResourceLockEntries: changedEntries,
     };
-    expect(() => compileTampered(changed)).toThrowError(
-      /TRAVERSAL_LOCK_COMPILE_FAILED.*Resource Lock/,
+    expect(() => compileTampered({ worldRuntimeBootstrap: changed }))
+      .toThrowError(
+      /TRAVERSAL_LOCK_COMPILE_FAILED.*Canonical Scene Plan or Runtime Bootstrap/,
     );
 
-    const reordered: ExecutionPlanV5 = {
-      ...structuredClone(fixture.executionPlan),
-      resourceLockEntries: [...fixture.executionPlan.resourceLockEntries]
-        .reverse(),
+    const reordered: WorldRuntimeBootstrapV1 = {
+      ...structuredClone(fixture.worldRuntimeBootstrap),
+      runtimeResourceLockEntries: [
+        ...fixture.worldRuntimeBootstrap.runtimeResourceLockEntries,
+      ].reverse(),
     };
-    expect(() => compileTampered(reordered)).toThrowError(
-      /TRAVERSAL_LOCK_COMPILE_FAILED.*Resource Lock/,
+    expect(() => compileTampered({ worldRuntimeBootstrap: reordered }))
+      .toThrowError(
+      /TRAVERSAL_LOCK_COMPILE_FAILED.*Canonical Scene Plan or Runtime Bootstrap/,
     );
   });
 
   it("rejects either side of a Plan-to-normalized-Definition hash mismatch", () => {
     const fixture = compileFixture();
-    const tamperedPlan = structuredClone(fixture.executionPlan);
-    tamperedPlan.subjects[0]!.subjectDefinitionHash =
-      `sha256:${"d".repeat(64)}`;
+    const mutableRuntime = {
+      ...structuredClone(fixture.worldRuntimeBootstrap),
+      subjectRuntimeDescriptors:
+        fixture.worldRuntimeBootstrap.subjectRuntimeDescriptors.map(
+          (subject, index) => index === 0
+            ? {
+                ...structuredClone(subject),
+                subjectDefinitionHash:
+                  `sha256:${"d".repeat(64)}` as Sha256HashV1,
+              }
+            : structuredClone(subject),
+        ),
+    };
+    const tamperedRuntime = recreateRuntimeBootstrap(mutableRuntime);
+    const relinkedScene = relinkScenePlan(
+      fixture.canonicalSceneExecutionPlan,
+      tamperedRuntime,
+    );
     expect(() => compileResolvedTraversalLockV1({
       normalizedWorldIr: fixture.normalizedWorldIr,
-      executionPlan: tamperedPlan,
+      canonicalSceneExecutionPlan: relinkedScene,
+      worldRuntimeBootstrap: tamperedRuntime,
       traversingEntityId: "player",
       runtimeImplementationIdentity: RUNTIME_IDENTITY,
     })).toThrowError(/TRAVERSAL_LOCK_COMPILE_FAILED.*Subject Definition/);
@@ -372,7 +444,8 @@ describe("compileResolvedTraversalLockV1", () => {
       `sha256:${"e".repeat(64)}`;
     expect(() => compileResolvedTraversalLockV1({
       normalizedWorldIr: tamperedWorld,
-      executionPlan: fixture.executionPlan,
+      canonicalSceneExecutionPlan: fixture.canonicalSceneExecutionPlan,
+      worldRuntimeBootstrap: fixture.worldRuntimeBootstrap,
       traversingEntityId: "player",
       runtimeImplementationIdentity: RUNTIME_IDENTITY,
     })).toThrowError(/TRAVERSAL_LOCK_COMPILE_FAILED.*Subject Definition/);
@@ -380,12 +453,20 @@ describe("compileResolvedTraversalLockV1", () => {
 
   it("maps incomplete capability assemblies to the closed lock diagnostic", () => {
     const fixture = compileFixture();
-    const incompletePlan = structuredClone(fixture.executionPlan);
-    incompletePlan.subjects[0]!.capabilityAssembly = {} as never;
+    const incompleteRuntime = {
+      ...structuredClone(fixture.worldRuntimeBootstrap),
+      subjectRuntimeDescriptors:
+        fixture.worldRuntimeBootstrap.subjectRuntimeDescriptors.map(
+          (subject, index) => index === 0
+            ? { ...structuredClone(subject), capabilityAssembly: {} as never }
+            : structuredClone(subject),
+        ),
+    };
 
     expect(() => compileResolvedTraversalLockV1({
       normalizedWorldIr: fixture.normalizedWorldIr,
-      executionPlan: incompletePlan,
+      canonicalSceneExecutionPlan: fixture.canonicalSceneExecutionPlan,
+      worldRuntimeBootstrap: incompleteRuntime,
       traversingEntityId: "player",
       runtimeImplementationIdentity: RUNTIME_IDENTITY,
     })).toThrowError(/^TRAVERSAL_LOCK_COMPILE_FAILED:/);

@@ -5,13 +5,13 @@ import type { Scene } from "@babylonjs/core/scene.pure.js";
 import { EntityComponentV1 } from "@whitebox-world/runtime-framework";
 
 import type {
-  ExecutionSubjectV3,
   ControlInputAxesV2,
   PublishedMovementMediumV1,
   SemanticInputActionV1,
-  Vec3,
+  RuntimeVec3V1,
   ViewControlFrameV1,
 } from "@whitebox-world/runtime-contracts";
+import type { BabylonRuntimeSubjectV1 } from "./runtime-subject";
 import {
   createCharacterMovementRuntimeV1,
   hashCharacterMovementStateV1,
@@ -82,8 +82,8 @@ export class CharacterMovementComponentV1 extends EntityComponentV1 {
   readonly physicsController: MotionKernelRuntimeV1["physicsController"];
 
   constructor(
-    private readonly subject: ExecutionSubjectV3,
-    gravityMetersPerSecondSquaredXYZ: Vec3,
+    private readonly subject: BabylonRuntimeSubjectV1,
+    gravityMetersPerSecondSquaredXYZ: RuntimeVec3V1,
     readonly visualRoot: TransformNode,
     scene: Scene,
     waterSurfaceHeightAtSubjectOrigin: (
@@ -171,10 +171,10 @@ export class CharacterMovementComponentV1 extends EntityComponentV1 {
   }
 
   probeGroundPlacementAt(
-    desiredSubjectOriginMetersXYZ: Vec3,
+    desiredSubjectOriginMetersXYZ: RuntimeVec3V1,
     filterMembershipMask: number,
     filterCollideMask: number,
-  ): Vec3 | undefined {
+  ): RuntimeVec3V1 | undefined {
     const placement = this.motionKernel.probeGroundPlacementAt(
       new Vector3(...desiredSubjectOriginMetersXYZ),
       filterMembershipMask,
@@ -222,7 +222,7 @@ export class CharacterMovementComponentV1 extends EntityComponentV1 {
   }
 
   resetAt(
-    subjectOriginMetersXYZ: Vec3,
+    subjectOriginMetersXYZ: RuntimeVec3V1,
     facingYawRadians: number,
     _committedTick?: number,
   ): void {
@@ -233,7 +233,7 @@ export class CharacterMovementComponentV1 extends EntityComponentV1 {
   }
 
   projectSuspendedAt(
-    subjectOriginMetersXYZ: Vec3,
+    subjectOriginMetersXYZ: RuntimeVec3V1,
     facingYawRadians: number,
   ): void {
     this.motionKernel.projectSuspendedAt(
@@ -267,7 +267,7 @@ export class CharacterMovementComponentV1 extends EntityComponentV1 {
 }
 
 export interface GoldenHumanoidSubjectControllerOptionsV1 {
-  readonly subject: ExecutionSubjectV3;
+  readonly subject: BabylonRuntimeSubjectV1;
   readonly visualRoot: TransformNode;
   readonly transaction: GoldenHumanoid3CVNextTransactionV1;
   readonly physicsBody?: PhysicsBody;
@@ -284,7 +284,7 @@ export interface GoldenHumanoidRenderPoseDiagnosticV1 {
   readonly renderInterpolatedSubjectOriginYMeters: number;
   readonly visualRootYMeters: number;
   readonly supportMode: "supported" | "sliding" | "unsupported";
-  readonly supportNormalXYZ?: Vec3;
+  readonly supportNormalXYZ?: RuntimeVec3V1;
   readonly supportDistanceMeters?: number;
   readonly correction: Readonly<{
     kind: "none" | "snap-down" | "step-up" | "collision-limited";
@@ -293,7 +293,7 @@ export interface GoldenHumanoidRenderPoseDiagnosticV1 {
 }
 
 function assertGoldenHumanoidSubjectAdmissionV1(
-  subject: ExecutionSubjectV3,
+  subject: BabylonRuntimeSubjectV1,
 ): void {
   const control = subject.capabilityAssembly.controlProfile;
   if (
@@ -315,7 +315,7 @@ function assertGoldenHumanoidSubjectAdmissionV1(
  * one Babylon BodyPort/native controller for this Subject.
  */
 export class GoldenHumanoidSubjectControllerV1 extends EntityComponentV1 {
-  readonly #subject: ExecutionSubjectV3;
+  readonly #subject: BabylonRuntimeSubjectV1;
   readonly #visualRoot: TransformNode;
   readonly #transaction: GoldenHumanoid3CVNextTransactionV1;
   readonly #physicsBody: PhysicsBody | undefined;
@@ -498,7 +498,7 @@ export class GoldenHumanoidSubjectControllerV1 extends EntityComponentV1 {
       ...(support === undefined || support.mode === "unsupported"
         ? {}
         : {
-            supportNormalXYZ: Object.freeze([...support.normalXYZ]) as Vec3,
+            supportNormalXYZ: Object.freeze([...support.normalXYZ]) as RuntimeVec3V1,
             supportDistanceMeters: subjectOriginY - support.pointMetersXYZ[1],
           }),
       correction: Object.freeze({
@@ -517,7 +517,7 @@ export class GoldenHumanoidSubjectControllerV1 extends EntityComponentV1 {
         snapshot.positionMetersXYZ[0] - offset[0],
         snapshot.positionMetersXYZ[1] - offset[1],
         snapshot.positionMetersXYZ[2] - offset[2],
-      ]) as Vec3,
+      ]) as RuntimeVec3V1,
       facingYawRadians: snapshot.facingYawRadians,
     });
   }
@@ -589,10 +589,10 @@ export class GoldenHumanoidSubjectControllerV1 extends EntityComponentV1 {
   }
 
   probeGroundPlacementAt(
-    desiredSubjectOriginMetersXYZ: Vec3,
+    desiredSubjectOriginMetersXYZ: RuntimeVec3V1,
     filterMembershipMask: number,
     filterCollideMask: number,
-  ): Vec3 | undefined {
+  ): RuntimeVec3V1 | undefined {
     const offset = this.#subject.collider.centerOffsetFromSubjectOriginMetersXYZ;
     const placement = this.#requireBodyPort().probeGroundPlacementAt(
       [
@@ -613,7 +613,7 @@ export class GoldenHumanoidSubjectControllerV1 extends EntityComponentV1 {
   }
 
   projectSuspendedAt(
-    subjectOriginMetersXYZ: Vec3,
+    subjectOriginMetersXYZ: RuntimeVec3V1,
     facingYawRadians: number,
     suspendedByRelationshipId: string,
     committedTick = this.movementSnapshot().tick,
@@ -638,7 +638,7 @@ export class GoldenHumanoidSubjectControllerV1 extends EntityComponentV1 {
   }
 
   resetAt(
-    subjectOriginMetersXYZ: Vec3,
+    subjectOriginMetersXYZ: RuntimeVec3V1,
     facingYawRadians: number,
     committedTick = this.movementSnapshot().tick,
   ): void {
@@ -690,7 +690,7 @@ export class GoldenHumanoidSubjectControllerV1 extends EntityComponentV1 {
   }
 
   #resetAtSnapshot(input: Readonly<{
-    subjectOriginMetersXYZ: Vec3;
+    subjectOriginMetersXYZ: RuntimeVec3V1;
     facingYawRadians: number;
     committedTick: number;
     locomotion: LocomotionCapabilityStateV2;
@@ -750,8 +750,8 @@ export class GoldenHumanoidSubjectControllerV1 extends EntityComponentV1 {
 }
 
 export interface CreateGoldenHumanoidSubjectControllerOptionsV1 {
-  readonly subject: ExecutionSubjectV3;
-  readonly gravityMetersPerSecondSquaredXYZ: Vec3;
+  readonly subject: BabylonRuntimeSubjectV1;
+  readonly gravityMetersPerSecondSquaredXYZ: RuntimeVec3V1;
   readonly visualRoot: TransformNode;
   readonly scene: Scene;
   readonly actionPresentationRegistry: ActionPresentationRegistryV1;

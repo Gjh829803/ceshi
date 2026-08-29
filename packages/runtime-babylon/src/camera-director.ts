@@ -19,12 +19,13 @@ import type {
   CameraPreviewStateV1,
   CameraTuningV1,
   CameraViewInputV1,
-  ExecutionCameraModifierProfileV1,
-  ExecutionCameraRigProfileV1,
-  ExecutionPlanV5,
-  ExecutionSubjectCapabilityAssemblyV1,
+  RuntimeCameraModifierProfileV1,
+  RuntimeCameraRigProfileV1,
+  WorldRuntimeInitialCameraV1,
+  RuntimeSubjectCapabilityAssemblyV1,
+  LocomotionModeV1,
   SemanticInputActionV1,
-  Vec3,
+  RuntimeVec3V1,
   ViewControlFrameV1,
   ViewTargetSampleV1,
 } from "@whitebox-world/runtime-contracts";
@@ -32,7 +33,7 @@ import {
   applyCameraRigParameterOverridesV1,
   validateCameraTuningV1,
 } from "@whitebox-world/runtime-contracts";
-import { isNil } from "lodash-es";
+import { isEmpty, isNil } from "lodash-es";
 import type { PhysicsWorldQueryPortV1 } from "@whitebox-world/runtime-framework";
 
 import { CameraViewSolverV1 } from "./camera-view-solver";
@@ -48,28 +49,28 @@ export interface CameraDirectorSnapshotV1 {
   viewDistanceOffsetMeters: number;
   selectionDecision?: CameraSelectionDecisionV2;
   selectedTargetSocketId?: string;
-  targetSocketPositionMetersXYZ?: Vec3;
+  targetSocketPositionMetersXYZ?: RuntimeVec3V1;
   isTargetSocketFallback?: boolean;
-  desiredTargetPositionMetersXYZ?: Vec3;
-  desiredPositionMetersXYZ?: Vec3;
-  actualPositionMetersXYZ?: Vec3;
+  desiredTargetPositionMetersXYZ?: RuntimeVec3V1;
+  desiredPositionMetersXYZ?: RuntimeVec3V1;
+  actualPositionMetersXYZ?: RuntimeVec3V1;
   finalFovDegrees?: number;
   requestedArmLengthMeters?: number;
   safeArmLengthMeters?: number;
   effectiveArmLengthMeters?: number;
   isCollisionRetracted?: boolean;
   collisionHitEntityId?: string;
-  collisionHitPositionXYZ?: Vec3;
-  positionLagXYZ?: Vec3;
-  rotationLagRadiansXYZ?: Vec3;
+  collisionHitPositionXYZ?: RuntimeVec3V1;
+  positionLagXYZ?: RuntimeVec3V1;
+  rotationLagRadiansXYZ?: RuntimeVec3V1;
   recenterRemainingSeconds?: number;
   fixedStepDeltaSeconds?: number;
   resolvedParameters?: Readonly<CameraRigParametersV1>;
   previewParameterOverrides?: Readonly<Partial<CameraRigParametersV1>>;
   profileTransitionProgressRatio?: number;
-  controlForwardXYZ?: Vec3;
-  subjectForwardXYZ?: Vec3;
-  subjectVelocityMetersPerSecondXYZ?: Vec3;
+  controlForwardXYZ?: RuntimeVec3V1;
+  subjectForwardXYZ?: RuntimeVec3V1;
+  subjectVelocityMetersPerSecondXYZ?: RuntimeVec3V1;
 }
 
 export interface CameraDirectorTransactionStateV1 {
@@ -77,9 +78,9 @@ export interface CameraDirectorTransactionStateV1 {
     initialized: boolean;
     cameraViewPreference: CameraViewPreferenceV1;
     activeProfileRef: string;
-    activeHeadingSource: ExecutionCameraRigProfileV1["headingSource"] | undefined;
+    activeHeadingSource: RuntimeCameraRigProfileV1["headingSource"] | undefined;
     activeReverseHeadingPolicy:
-      | ExecutionCameraRigProfileV1["reverseHeadingPolicy"]
+      | RuntimeCameraRigProfileV1["reverseHeadingPolicy"]
       | undefined;
     activeRigRef: string;
     activeModifierRefs: readonly string[];
@@ -91,6 +92,7 @@ export interface CameraDirectorTransactionStateV1 {
     viewPitchOffsetRadians: number;
     viewDistanceOffsetMeters: number;
     controlInitialized: boolean;
+    controlHeadingLockedUntilProfileBind: boolean;
     controlTargetYawOffsetRadians: number;
     controlViewYawOffsetRadians: number;
     controlBaseHeadingYawRadians: number;
@@ -138,20 +140,20 @@ export interface CameraDirectorTransactionStateV1 {
   readonly cameraFovRadians: number;
 }
 
-type CameraContextV1 = ExecutionSubjectCapabilityAssemblyV1["cameraContext"];
-type CameraParametersV1 = ExecutionCameraRigProfileV1["parameters"];
+type CameraContextV1 = RuntimeSubjectCapabilityAssemblyV1["cameraContext"];
+type CameraParametersV1 = RuntimeCameraRigProfileV1["parameters"];
 
 interface SelectedCameraStateV1 {
-  profile: ExecutionCameraRigProfileV1;
-  modifiers: readonly ExecutionCameraModifierProfileV1[];
+  profile: RuntimeCameraRigProfileV1;
+  modifiers: readonly RuntimeCameraModifierProfileV1[];
   decision: CameraSelectionDecisionV2;
 }
 
-function freezeVec3(value: Vector3 | readonly number[]): Vec3 {
+function freezeVec3(value: Vector3 | readonly number[]): RuntimeVec3V1 {
   if (value instanceof Vector3) {
-    return Object.freeze([value.x, value.y, value.z]) as Vec3;
+    return Object.freeze([value.x, value.y, value.z]) as RuntimeVec3V1;
   }
-  return Object.freeze([value[0], value[1], value[2]]) as Vec3;
+  return Object.freeze([value[0], value[1], value[2]]) as RuntimeVec3V1;
 }
 
 function copySelectionDecision(
@@ -219,6 +221,20 @@ function cameraContextProfileFromExecution(
         rule.when.movementMediums !== undefined &&
         movementMediums?.length === 0
       ) return [];
+      const requiredMotionTags = rule.when.requiredMotionTags ?? [];
+      const leftoverMotionTags = requiredMotionTags.filter(
+        (tag) => tag !== "free-ground",
+      );
+      const requiredCameraContextTags = [
+        ...leftoverMotionTags,
+        ...(rule.when.requiredCameraContextTags ?? []),
+      ];
+      const mobilityModes = [
+        ...(rule.when.mobilityModes ?? []),
+        ...(requiredMotionTags.includes("free-ground")
+          ? (["grounded"] as const)
+          : []),
+      ].filter((mode, index, modes) => modes.indexOf(mode) === index);
       return {
         id: rule.id,
         priority: rule.priority,
@@ -229,9 +245,7 @@ function cameraContextProfileFromExecution(
         ...(rule.when.locomotionStatuses === undefined
           ? {}
           : { locomotionStatuses: rule.when.locomotionStatuses }),
-        ...(rule.when.mobilityModes === undefined
-          ? {}
-          : { mobilityModes: rule.when.mobilityModes }),
+        ...(isEmpty(mobilityModes) ? {} : { mobilityModes }),
         ...(rule.when.gaits === undefined
           ? {}
           : { gaits: rule.when.gaits }),
@@ -256,18 +270,9 @@ function cameraContextProfileFromExecution(
         ...(rule.when.requiredSocketIds === undefined
           ? {}
           : { requiredSocketIds: rule.when.requiredSocketIds }),
-        ...((rule.when.requiredMotionTags === undefined &&
-          rule.when.requiredCameraContextTags === undefined)
+        ...(isEmpty(requiredCameraContextTags)
           ? {}
-          : {
-              // Legacy Rule vocabulary is translated for locked Profile
-              // admission only. The Task-6 seam publishes semantic authority
-              // unavailable with no matching tags, so auto Rules are bypassed.
-              requiredCameraContextTags: [
-                ...(rule.when.requiredMotionTags ?? []),
-                ...(rule.when.requiredCameraContextTags ?? []),
-              ],
-            }),
+          : { requiredCameraContextTags }),
         },
         ...(rule.cameraRigProfileRef === undefined
           ? {}
@@ -362,6 +367,91 @@ export function legacyViewTargetToCommittedCameraContextV2ForTask6(
   };
 }
 
+/**
+ * Live Motion Kernel subjects still own support and locomotion. Publish those
+ * committed facts as Camera Context V2 so automatic Rules can select a view.
+ * Do not reuse the Task-6 unavailable seam: that seam must not invent gait or
+ * phase, and it bypasses every auto Rule including free-ground → orbit.
+ */
+export function committedCameraContextFromMotionKernelV1(
+  sample: ViewTargetSampleV1,
+  committedTick: number,
+  locomotionMode: LocomotionModeV1,
+  facingYawRadians: number,
+): CameraContextSampleV2 {
+  const canonicalFacingYawRadians = canonicalCameraNumber(facingYawRadians);
+  const linearVelocity = {
+    x: canonicalCameraNumber(sample.velocityMetersPerSecondXYZ[0]),
+    y: canonicalCameraNumber(sample.velocityMetersPerSecondXYZ[1]),
+    z: canonicalCameraNumber(sample.velocityMetersPerSecondXYZ[2]),
+  };
+  const horizontalSpeedMetersPerSecond = canonicalCameraNumber(
+    Math.hypot(linearVelocity.x, linearVelocity.z),
+  );
+  const positionMetersXYZ = [
+    canonicalCameraNumber(sample.targetPositionMetersXYZ[0]),
+    canonicalCameraNumber(sample.targetPositionMetersXYZ[1]),
+    canonicalCameraNumber(sample.targetPositionMetersXYZ[2]),
+  ] as const;
+  const airborne = locomotionMode === "airborne" ||
+    sample.movementMedium === "air";
+  return parseCameraContextSampleV2({
+    schemaVersion: 2,
+    semanticAuthorityStatus: "available",
+    committedTick,
+    controlledEntityId: sample.controlledEntityId,
+    targetEntityId: sample.entityId,
+    subjectPose: {
+      positionMetersXYZ,
+      facingYawRadians: canonicalFacingYawRadians,
+    },
+    locomotion: airborne
+      ? {
+          schemaVersion: 2,
+          status: "active",
+          mobilityMode: "airborne",
+          gait: "none",
+          verticalPhase: linearVelocity.y > 0 ? "rising" : "falling",
+          supportMode: "unsupported",
+          movementMedium: "air",
+          facingYawRadians: canonicalFacingYawRadians,
+          linearVelocity,
+          horizontalSpeedMetersPerSecond,
+          committedTick,
+          phaseEnteredTick: 0,
+          transitionSequence: 0,
+        }
+      : {
+          schemaVersion: 2,
+          status: "active",
+          mobilityMode: "grounded",
+          gait: locomotionMode === "walk" || locomotionMode === "run"
+            ? locomotionMode
+            : "idle",
+          verticalPhase: "none",
+          supportMode: "supported",
+          movementMedium: "ground",
+          facingYawRadians: canonicalFacingYawRadians,
+          linearVelocity,
+          horizontalSpeedMetersPerSecond,
+          committedTick,
+          phaseEnteredTick: 0,
+          transitionSequence: 0,
+        },
+    actionSummary: {
+      status: "available",
+      activeActionRefs: [],
+      isInterruptible: true,
+    },
+    environment: {
+      relationshipRole: sample.relationshipRole,
+      relationshipContexts: sample.relationshipContexts,
+      socketPositionsMetersXYZById: sample.socketPositionsMetersXYZById,
+      cameraContextTags: [...sample.cameraContextTags],
+    },
+  });
+}
+
 function viewTargetFromCommittedCameraContextV2(
   legacySample: ViewTargetSampleV1,
   context: CameraContextSampleV2,
@@ -449,9 +539,9 @@ export class CameraDirectorV1 {
   private initialized = false;
   private cameraViewPreference: CameraViewPreferenceV1 = Object.freeze({ mode: "auto" });
   private activeProfileRef: string;
-  private activeHeadingSource: ExecutionCameraRigProfileV1["headingSource"] | undefined;
+  private activeHeadingSource: RuntimeCameraRigProfileV1["headingSource"] | undefined;
   private activeReverseHeadingPolicy:
-    | ExecutionCameraRigProfileV1["reverseHeadingPolicy"]
+    | RuntimeCameraRigProfileV1["reverseHeadingPolicy"]
     | undefined;
   private activeRigRef = "worldkit://camera-rig/orbit-follow@1";
   private activeModifierRefs: readonly string[] = [];
@@ -465,6 +555,7 @@ export class CameraDirectorV1 {
   private viewDistanceOffsetMeters = 0;
   private readonly tuningByProfileRef = new Map<string, CameraTuningV1>();
   private controlInitialized = false;
+  private controlHeadingLockedUntilProfileBind = false;
   private controlTargetYawOffsetRadians = 0;
   private controlViewYawOffsetRadians = 0;
   private controlBaseHeadingYawRadians = Math.PI;
@@ -495,12 +586,12 @@ export class CameraDirectorV1 {
   private latestTelemetry: CameraDirectorTelemetryV1 = {};
 
   constructor(
-    private readonly executionPlan: ExecutionPlanV5,
+    private readonly initialCamera: WorldRuntimeInitialCameraV1,
     private readonly camera: FreeCamera,
     private readonly scene: Scene,
     private readonly physicsWorldQuery: PhysicsWorldQueryPortV1,
   ) {
-    this.activeProfileRef = executionPlan.camera.rigRef;
+    this.activeProfileRef = initialCamera.cameraRigProfileRef;
   }
 
   setViewPreference(
@@ -547,6 +638,8 @@ export class CameraDirectorV1 {
         viewPitchOffsetRadians: this.viewPitchOffsetRadians,
         viewDistanceOffsetMeters: this.viewDistanceOffsetMeters,
         controlInitialized: this.controlInitialized,
+        controlHeadingLockedUntilProfileBind:
+          this.controlHeadingLockedUntilProfileBind,
         controlTargetYawOffsetRadians: this.controlTargetYawOffsetRadians,
         controlViewYawOffsetRadians: this.controlViewYawOffsetRadians,
         controlBaseHeadingYawRadians: this.controlBaseHeadingYawRadians,
@@ -681,6 +774,19 @@ export class CameraDirectorV1 {
     return true;
   }
 
+  initializeControlHeading(forwardXYZ: RuntimeVec3V1): void {
+    this.assertUsable();
+    const forward = horizontalDirection(new Vector3(...forwardXYZ)) ??
+      new Vector3(0, 0, -1);
+    this.controlForward.copyFrom(forward);
+    this.controlBaseHeadingYawRadians = directionYaw(forward);
+    this.controlLastStableVelocityForward = forward.clone();
+    this.controlTargetYawOffsetRadians = 0;
+    this.controlViewYawOffsetRadians = 0;
+    this.controlInitialized = true;
+    this.controlHeadingLockedUntilProfileBind = true;
+  }
+
   resetView(): void {
     this.assertUsable();
     this.targetYawOffsetRadians = 0;
@@ -693,6 +799,7 @@ export class CameraDirectorV1 {
     this.controlViewYawOffsetRadians = 0;
     this.baseHeadingIdentity = undefined;
     this.controlBaseHeadingIdentity = undefined;
+    this.controlHeadingLockedUntilProfileBind = false;
   }
 
   applyPreview(
@@ -818,7 +925,7 @@ export class CameraDirectorV1 {
       );
     }
     const baseProfile = selected.profile;
-    const profile: ExecutionCameraRigProfileV1 = selected.modifiers.reduce(
+    const profile: RuntimeCameraRigProfileV1 = selected.modifiers.reduce(
       (current, modifier) => ({
         ...current,
         ...(modifier.headingSourceOverride === undefined
@@ -1032,7 +1139,7 @@ export class CameraDirectorV1 {
     let effectiveArmLengthMeters: number | undefined;
     let isCollisionRetracted: boolean | undefined;
     let collisionHitEntityId: string | undefined;
-    let collisionHitPositionXYZ: Vec3 | undefined;
+    let collisionHitPositionXYZ: RuntimeVec3V1 | undefined;
     if (!firstPerson) {
       let collision: ReturnType<SpringArmComponentV1["solve"]>;
       try {
@@ -1207,6 +1314,7 @@ export class CameraDirectorV1 {
     this.viewPitchOffsetRadians = 0;
     this.viewDistanceOffsetMeters = 0;
     this.controlInitialized = false;
+    this.controlHeadingLockedUntilProfileBind = false;
     this.controlTargetYawOffsetRadians = 0;
     this.controlViewYawOffsetRadians = 0;
     this.controlBaseHeadingYawRadians = Math.PI;
@@ -1285,7 +1393,7 @@ export class CameraDirectorV1 {
   }
 
   private resolveBaseForward(
-    profile: ExecutionCameraRigProfileV1,
+    profile: RuntimeCameraRigProfileV1,
     parameters: CameraParametersV1,
     sample: ViewTargetSampleV1,
     velocity: Vector3,
@@ -1329,7 +1437,7 @@ export class CameraDirectorV1 {
   }
 
   private resolveControlBaseForward(
-    profile: ExecutionCameraRigProfileV1,
+    profile: RuntimeCameraRigProfileV1,
     parameters: CameraParametersV1,
     sample: ViewTargetSampleV1,
     velocity: Vector3,
@@ -1340,8 +1448,11 @@ export class CameraDirectorV1 {
       new Vector3(0, 0, -1);
     if (this.controlBaseHeadingIdentity !== identity) {
       this.controlBaseHeadingIdentity = identity;
-      this.controlBaseHeadingYawRadians = directionYaw(targetForward);
-      this.controlLastStableVelocityForward = targetForward.clone();
+      if (!this.controlHeadingLockedUntilProfileBind) {
+        this.controlBaseHeadingYawRadians = directionYaw(targetForward);
+        this.controlLastStableVelocityForward = targetForward.clone();
+      }
+      this.controlHeadingLockedUntilProfileBind = false;
     }
     let desired = targetForward;
     if (profile.headingSource === "view") {
@@ -1373,7 +1484,7 @@ export class CameraDirectorV1 {
   }
 
   private applyAutomaticRecentering(
-    profile: ExecutionCameraRigProfileV1,
+    profile: RuntimeCameraRigProfileV1,
     parameters: CameraParametersV1,
     sample: ViewTargetSampleV1,
     velocity: Vector3,
@@ -1410,7 +1521,7 @@ export class CameraDirectorV1 {
   }
 
   private applyControlAutomaticRecentering(
-    profile: ExecutionCameraRigProfileV1,
+    profile: RuntimeCameraRigProfileV1,
     parameters: CameraParametersV1,
     sample: ViewTargetSampleV1,
     velocity: Vector3,

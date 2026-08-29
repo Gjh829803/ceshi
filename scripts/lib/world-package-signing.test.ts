@@ -3,15 +3,15 @@ import {
   validateAuthoringSpecV4,
   type AuthoringSpecV4,
 } from "@whitebox-world/authoring";
-import { compileWorldV5 } from "@whitebox-world/compiler";
+import { compileCanonicalWorldV1 } from "@whitebox-world/compiler";
 import {
   createGameplayBootstrapResourceLockEntryV1,
   createGameplayBootstrapV1,
 } from "@whitebox-world/gameplay-contracts";
 import { canonicalJsonBytes } from "@whitebox-world/protocol";
 import {
-  createWorldPackageV2,
-  type WorldPackageDirectoryV2,
+  createWorldPackageV1,
+  type WorldPackageDirectoryV1,
   type WorldPackageHostPolicyV1,
 } from "@whitebox-world/world-package";
 import { generateKeyPairSync } from "node:crypto";
@@ -20,8 +20,8 @@ import { describe, expect, it } from "vitest";
 
 import basicWorldDocument from "../../examples/authoring/basic-world.json";
 import {
-  signWorldPackageDirectoryV2,
-  verifyWorldPackageForHostV2,
+  signWorldPackageDirectoryV1,
+  verifyWorldPackageForHostV1,
 } from "./world-package-signing.js";
 
 const HASH_A = `sha256:${"a".repeat(64)}` as const;
@@ -37,7 +37,7 @@ function authoringFixture(): AuthoringSpecV4 {
   return validated.value;
 }
 
-function unsignedDirectory(): WorldPackageDirectoryV2 {
+function unsignedDirectory(): WorldPackageDirectoryV1 {
   const authoringSpec = authoringFixture();
   const normalized = normalizeAuthoringSpecV4(authoringSpec);
   if (
@@ -71,17 +71,19 @@ function unsignedDirectory(): WorldPackageDirectoryV2 {
     featureResourceLocks: [],
     semanticActionDefinitions: [],
     availableCapabilityRefs: [],
+    initialRelationshipStates: [],
   });
-  const compiled = compileWorldV5({
+  const compiled = compileCanonicalWorldV1({
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
-    gameplayBootstrapResourceLock:
-      createGameplayBootstrapResourceLockEntryV1(gameplayBootstrap),
+    gameplayBootstrap,
+    worldRuntimeBootstrapRef:
+      `worldkit://world-runtime-bootstrap/${normalized.value.id}@1`,
   });
-  if (!compiled.ok || isNil(compiled.executionPlan)) {
+  if (!compiled.ok || isNil(compiled.canonicalSceneExecutionPlan)) {
     throw new Error("fixture compilation failed");
   }
-  return createWorldPackageV2({
+  return createWorldPackageV1({
     packageId: `${authoringSpec.id}.package`,
     title: "Signed Basic World",
     sdkVersion: "0.0.0",
@@ -104,8 +106,9 @@ function unsignedDirectory(): WorldPackageDirectoryV2 {
       report: normalized.layoutSolveReport,
       layoutSolveReportHash: normalized.layoutSolveReportHash,
     },
-    executionPlan: compiled.executionPlan,
+    executionPlan: compiled.canonicalSceneExecutionPlan,
     gameplayBootstrap,
+    worldRuntimeBootstrap: compiled.worldRuntimeBootstrap,
     resourceArtifacts: [],
     generatedResourceProvenance: {
       licenseDocumentId: "project-owned",
@@ -132,8 +135,8 @@ function hostPolicy(
 ): WorldPackageHostPolicyV1 {
   return {
     acceptedRuntimeTargets: ["babylon-web"],
-    acceptedPackageFormatVersions: [2],
-    acceptedManifestSchemaVersions: [2],
+    acceptedPackageFormatVersions: [1],
+    acceptedManifestSchemaVersions: [1],
     runtimeContractVersion: 1,
     supportedFeatureIds: ["runtime.full-reload-v1"],
     trustedCompatibilityProfiles: [{
@@ -146,9 +149,9 @@ function hostPolicy(
 }
 
 function replaceSignatureJson(
-  directory: WorldPackageDirectoryV2,
+  directory: WorldPackageDirectoryV1,
   update: (value: Record<string, unknown>) => void,
-): WorldPackageDirectoryV2 {
+): WorldPackageDirectoryV1 {
   const signatureFile = directory.signatureFiles[0];
   if (isNil(signatureFile)) throw new Error("fixture signature is missing");
   const value = JSON.parse(new TextDecoder().decode(signatureFile.bytes)) as
@@ -162,7 +165,7 @@ function replaceSignatureJson(
 
 describe("WorldPackage Ed25519 trusted Host adapter", () => {
   it("rejects a compatible unsigned package when the Host requires a signature", () => {
-    expect(() => verifyWorldPackageForHostV2({
+    expect(() => verifyWorldPackageForHostV1({
       directory: unsignedDirectory(),
       hostPolicy: hostPolicy(),
       trustedPublicKeys: [],
@@ -180,14 +183,14 @@ describe("WorldPackage Ed25519 trusted Host adapter", () => {
       format: "pem",
     });
     const unsigned = unsignedDirectory();
-    const signed = signWorldPackageDirectoryV2({
+    const signed = signWorldPackageDirectoryV1({
       directory: unsigned,
       keyId: "release-key-2026-08",
       trustDomain: "worldkit.release",
       signedAt: SIGNED_AT,
       privateKey: privateKeyPem,
     });
-    const verified = verifyWorldPackageForHostV2({
+    const verified = verifyWorldPackageForHostV1({
       directory: signed,
       hostPolicy: hostPolicy(),
       trustedPublicKeys: [{
@@ -214,7 +217,7 @@ describe("WorldPackage Ed25519 trusted Host adapter", () => {
 
   it("rejects unknown key identities and signatures outside the required trust domain", () => {
     const { privateKey, publicKey } = generateKeyPairSync("ed25519");
-    const signed = signWorldPackageDirectoryV2({
+    const signed = signWorldPackageDirectoryV1({
       directory: unsignedDirectory(),
       keyId: "release-key",
       trustDomain: "worldkit.release",
@@ -226,7 +229,7 @@ describe("WorldPackage Ed25519 trusted Host adapter", () => {
       [{ keyId: "another-key", trustDomain: "worldkit.release", publicKey }],
       [{ keyId: "release-key", trustDomain: "worldkit.staging", publicKey }],
     ]) {
-      expect(() => verifyWorldPackageForHostV2({
+      expect(() => verifyWorldPackageForHostV1({
         directory: signed,
         hostPolicy: hostPolicy(),
         trustedPublicKeys,
@@ -236,7 +239,7 @@ describe("WorldPackage Ed25519 trusted Host adapter", () => {
 
   it("distinguishes malformed Root envelopes from cryptographic tampering", () => {
     const { privateKey, publicKey } = generateKeyPairSync("ed25519");
-    const signed = signWorldPackageDirectoryV2({
+    const signed = signWorldPackageDirectoryV1({
       directory: unsignedDirectory(),
       keyId: "release-key",
       trustDomain: "worldkit.release",
@@ -252,7 +255,7 @@ describe("WorldPackage Ed25519 trusted Host adapter", () => {
       const envelope = value.envelope as Record<string, unknown>;
       envelope.packageRootHash = HASH_C;
     });
-    expect(() => verifyWorldPackageForHostV2({
+    expect(() => verifyWorldPackageForHostV1({
       directory: wrongRoot,
       hostPolicy: hostPolicy(),
       trustedPublicKeys,
@@ -263,7 +266,7 @@ describe("WorldPackage Ed25519 trusted Host adapter", () => {
       bytes[0] = bytes[0]! ^ 0xff;
       value.signatureBase64 = bytes.toString("base64");
     });
-    expect(() => verifyWorldPackageForHostV2({
+    expect(() => verifyWorldPackageForHostV1({
       directory: alteredSignature,
       hostPolicy: hostPolicy(),
       trustedPublicKeys,
@@ -272,7 +275,7 @@ describe("WorldPackage Ed25519 trusted Host adapter", () => {
 
   it("rejects non-canonical base64 and non-Ed25519 key material", () => {
     const ed25519 = generateKeyPairSync("ed25519");
-    const signed = signWorldPackageDirectoryV2({
+    const signed = signWorldPackageDirectoryV1({
       directory: unsignedDirectory(),
       keyId: "release-key",
       trustDomain: "worldkit.release",
@@ -282,7 +285,7 @@ describe("WorldPackage Ed25519 trusted Host adapter", () => {
     const invalidBase64 = replaceSignatureJson(signed, (value) => {
       value.signatureBase64 = "***";
     });
-    expect(() => verifyWorldPackageForHostV2({
+    expect(() => verifyWorldPackageForHostV1({
       directory: invalidBase64,
       hostPolicy: hostPolicy(),
       trustedPublicKeys: [{
@@ -293,14 +296,14 @@ describe("WorldPackage Ed25519 trusted Host adapter", () => {
     })).toThrow("WORLD_PACKAGE_SIGNATURE_ENVELOPE_INVALID");
 
     const rsa = generateKeyPairSync("rsa", { modulusLength: 2048 });
-    expect(() => signWorldPackageDirectoryV2({
+    expect(() => signWorldPackageDirectoryV1({
       directory: unsignedDirectory(),
       keyId: "rsa-key",
       trustDomain: "worldkit.release",
       signedAt: SIGNED_AT,
       privateKey: rsa.privateKey,
     })).toThrow("WORLD_PACKAGE_SIGNATURE_UNTRUSTED");
-    expect(() => verifyWorldPackageForHostV2({
+    expect(() => verifyWorldPackageForHostV1({
       directory: signed,
       hostPolicy: hostPolicy(),
       trustedPublicKeys: [{

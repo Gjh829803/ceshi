@@ -8,6 +8,6 @@
     "start": "node src/server.mjs",
     "public": "node src/public-server.mjs",
     "public-proxy": "node src/public-proxy.mjs",
-    "test": "node --test src/server.test.mjs src/owned-process.test.mjs src/public-server.test.mjs src/public-proxy.test.mjs src/preview-bootstrap.test.mjs src/recording-workbench.test.mjs"
+    "test": "node --test --test-concurrency=1 src/server.test.mjs src/owned-process.test.mjs src/public-server.test.mjs src/public-proxy.test.mjs src/preview-bootstrap.test.mjs src/recording-workbench.test.mjs"
   }
 }

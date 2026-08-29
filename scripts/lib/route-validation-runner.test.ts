@@ -32,6 +32,10 @@ const ARTIFACTS: readonly ResolvedWorldPackageResourceArtifactV1[] = [
     packagePath: "resources/subject-assets/test.actor.glb",
     mediaType: "model/gltf-binary",
     bytes: ASSET_BYTES,
+    subjectAssetManifestHash: `sha256:${"a".repeat(64)}`,
+    licenseDocumentId: "project-owned",
+    licenseSpdxExpression: "LicenseRef-Project-Owned",
+    redistributionPolicy: "allowed",
   },
 ];
 

@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { isPlainObject } from "lodash-es";
 
@@ -7,7 +9,6 @@ import type {
   RouteValidationSetReceiptV1,
   RouteValidationSetRowV1,
 } from "./types-v2.js";
-import type { Sha256HashV1 } from "./types.js";
 
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const ZERO_HASH = `sha256:${"0".repeat(64)}`;

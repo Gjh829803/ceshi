@@ -8,7 +8,7 @@ import type {
   ActiveLocomotionCapabilityStateV2,
   GameplayActionStateV1,
 } from "@whitebox-world/gameplay-contracts";
-import type { ExecutionAnimationSetV1 } from "@whitebox-world/runtime-contracts";
+import type { RuntimeAnimationSetV1 } from "@whitebox-world/runtime-contracts";
 import {
   createActionPresentationRegistryV1,
   hashActionPresentationBindingV1,
@@ -70,7 +70,7 @@ function ownedTargets(groups: readonly AnimationGroup[]): ReadonlySet<object> {
   ));
 }
 
-const animationSet: ExecutionAnimationSetV1 = {
+const animationSet: RuntimeAnimationSetV1 = {
   animationSetRef: "worldkit://animation-set/test@1",
   subjectAssetRef: "worldkit://subject-asset/test@1",
   rigProfileRef: "worldkit://rig-profile/test@1",
@@ -105,7 +105,7 @@ const animationSet: ExecutionAnimationSetV1 = {
   ],
 };
 
-const gBotLikeAnimationSet: ExecutionAnimationSetV1 = {
+const gBotLikeAnimationSet: RuntimeAnimationSetV1 = {
   ...animationSet,
   requiredActionIds: [
     ...animationSet.requiredActionIds,
@@ -868,7 +868,7 @@ describe("SubjectAnimationPlayer committed presentation", () => {
       clipGroup(scene, "Run", undefined, "rotation.x", 480),
       clipGroup(scene, "Jump", undefined, "rotation.x", 480, 0, 60),
     ];
-    const maximumPlaybackAnimationSet: ExecutionAnimationSetV1 = {
+    const maximumPlaybackAnimationSet: RuntimeAnimationSetV1 = {
       ...animationSet,
       animationBindings: animationSet.animationBindings.map((binding) => ({
         ...binding,
@@ -971,7 +971,7 @@ describe("SubjectAnimationPlayer committed presentation", () => {
   });
 
   it("validates legacy contextual Clips without granting them presentation authority", () => {
-    const contextualSet: ExecutionAnimationSetV1 = {
+    const contextualSet: RuntimeAnimationSetV1 = {
       ...animationSet,
       requiredActionIds: [...animationSet.requiredActionIds, "emote.salute"],
       animationBindings: [
@@ -1044,7 +1044,7 @@ describe("SubjectAnimationPlayer committed presentation", () => {
               ? ["locomotion.run"]
               : ["locomotion.takeoff", "locomotion.rising", "locomotion.apex"],
       })),
-    } as unknown as ExecutionAnimationSetV1;
+    } as unknown as RuntimeAnimationSetV1;
     const { engine, scene, root } = sceneFixture();
     const groups = ["Idle", "Walk", "Run", "Jump"].map((name) =>
       clipGroup(scene, name)
@@ -1080,7 +1080,7 @@ describe("SubjectAnimationPlayer committed presentation", () => {
     const { engine, scene, root } = sceneFixture();
     const groups = ["Idle", "Walk", "Run", "Jump"].map((name) => clipGroup(scene, name));
     const walkStart = vi.spyOn(groups[1]!, "start");
-    const invalidSet: ExecutionAnimationSetV1 = {
+    const invalidSet: RuntimeAnimationSetV1 = {
       ...animationSet,
       animationBindings: animationSet.animationBindings.map((binding) =>
         binding.actionId === "walk" ? invalidBinding : binding

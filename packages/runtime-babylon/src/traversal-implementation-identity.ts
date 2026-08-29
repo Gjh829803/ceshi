@@ -5,8 +5,8 @@ export const BABYLON_TRAVERSAL_RUNTIME_BACKEND_MANIFEST_V1 = Object.freeze({
   kind: "traversal-runtime-backend-manifest",
   schemaVersion: 1,
   resourceRef: "worldkit://runtime-backend/babylon-havok@1",
-  resolvedVersion: "9.21.2+1.3.14",
-  babylonCoreVersion: "9.21.2",
+  resolvedVersion: "9.23.0+1.3.14",
+  babylonCoreVersion: "9.23.0",
   havokPluginVersion: "1.3.14",
 } as const);
 

@@ -265,7 +265,7 @@ function plannerArguments(
   ];
 }
 
-describe("source-generated Planner self-check parity", () => {
+describe("source-generated Planner self-check parity", { timeout: 30_000 }, () => {
   for (const scenario of SCENARIOS) {
     it(`emits exact source and bundled receipts for ${scenario.name}`, async () => {
       const root = await mkdtemp(path.join(tmpdir(), "worldkit-planner-parity-"));

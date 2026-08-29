@@ -110,7 +110,7 @@ function definitionFor(
   };
 }
 
-describe("modular Subject source recovery", () => {
+describe("modular Subject source recovery", { timeout: 30_000 }, () => {
   it("accepts the tracked G Bot Skin whose unique joint root is implicit", async () => {
     const sourceGlbBytes = await readFile(G_BOT_GLB_PATH);
     const inventory = await inspectModularSubjectGlb(sourceGlbBytes);

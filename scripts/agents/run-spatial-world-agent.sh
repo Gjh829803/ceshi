@@ -59,8 +59,23 @@ public_plan_root="$project_root/apps/playground/public/scene-plans/$scene_id"
 temporary_root="$project_root/.codex-tmp"
 mkdir -p "$artifact_root" "$public_plan_root" "$temporary_root"
 task_tmp="$(mktemp -d "$temporary_root/spatial-agent.XXXXXX")"
+authoring_attempt_started=false
+authoring_attempt_completed=false
+authoring_attempt_path=""
+authoring_attempt_result_path=""
 cleanup() {
+  exit_status=$?
+  if [[ "$authoring_attempt_started" == true && "$authoring_attempt_completed" == false && -s "$authoring_attempt_path" ]]; then
+    "$pnpm_bin" exec tsx scripts/scenes/record-scene-authoring-attempt.ts reject \
+      --scene-id "$scene_id" \
+      --run-id "$codex_run_nonce" \
+      --attempt "$authoring_attempt_path" \
+      --outcome rejected \
+      --diagnostic-ref "worldkit://diagnostic/hosted-canonical-authoring-rejected@1" \
+      --result-output "$authoring_attempt_result_path" >/dev/null 2>&1 || true
+  fi
   case "$task_tmp" in "$temporary_root"/spatial-agent.*) /bin/rm -rf -- "$task_tmp" ;; esac
+  return "$exit_status"
 }
 trap cleanup EXIT
 mkdir -p "$task_tmp/input" "$task_tmp/runtime"
@@ -73,28 +88,30 @@ cloud_s3_root="${WORLDKIT_LWDP_S3_ROOT:-s3://leap-world-us-east-2/world-model/pl
 codex_output_prefix="${cloud_s3_root%/}/$scene_id/$codex_run_nonce"
 reference_asset_args=()
 reference_index=0
-for source_path in "${image_sources[@]}"; do
-  if [[ ! -f "$source_path" || ! -r "$source_path" || -L "$source_path" ]]; then
-    echo "Reference must be a readable regular non-symlink file: $source_path" >&2
-    exit 2
-  fi
-  extension="${source_path##*.}"
-  case "$extension" in
-    png|PNG) extension="png" ;;
-    jpg|JPG|jpeg|JPEG) extension="jpg" ;;
-    webp|WEBP) extension="webp" ;;
-    *) echo "Unsupported reference image format: .$extension" >&2; exit 2 ;;
-  esac
-  staged_path="$task_tmp/input/reference-$reference_index.$extension"
-  public_path="$public_plan_root/reference-$reference_index.$extension"
-  /bin/cp -- "$source_path" "$staged_path"
-  /bin/chmod 0444 "$staged_path"
-  /bin/cp -- "$source_path" "$public_path"
-  media_type="image/$extension"
-  [[ "$extension" == "jpg" ]] && media_type="image/jpeg"
-  reference_asset_args+=(--asset "reference-$reference_index::$staged_path::image::$media_type")
-  reference_index=$((reference_index + 1))
-done
+if [[ ${#image_sources[@]} -gt 0 ]]; then
+  for source_path in "${image_sources[@]}"; do
+    if [[ ! -f "$source_path" || ! -r "$source_path" || -L "$source_path" ]]; then
+      echo "Reference must be a readable regular non-symlink file: $source_path" >&2
+      exit 2
+    fi
+    extension="${source_path##*.}"
+    case "$extension" in
+      png|PNG) extension="png" ;;
+      jpg|JPG|jpeg|JPEG) extension="jpg" ;;
+      webp|WEBP) extension="webp" ;;
+      *) echo "Unsupported reference image format: .$extension" >&2; exit 2 ;;
+    esac
+    staged_path="$task_tmp/input/reference-$reference_index.$extension"
+    public_path="$public_plan_root/reference-$reference_index.$extension"
+    /bin/cp -- "$source_path" "$staged_path"
+    /bin/chmod 0444 "$staged_path"
+    /bin/cp -- "$source_path" "$public_path"
+    media_type="image/$extension"
+    [[ "$extension" == "jpg" ]] && media_type="image/jpeg"
+    reference_asset_args+=(--asset "reference-$reference_index::$staged_path::image::$media_type")
+    reference_index=$((reference_index + 1))
+  done
+fi
 
 run_codex() {
   "$node_bin" scripts/agents/run-codex-task.mjs --backend "$codex_backend" --repo-root "$project_root" "$@" --execution-profile formal
@@ -120,7 +137,7 @@ The map draft shape is {kind:'worldkit-scene-brief-implementation-map-draft',sch
 
 Before finishing, run this standalone validator bundled inside the Skill:
 node .codex/skills/worldkit-canonical-builder/scripts/self-check.mjs --scene-id '$scene_id' --brief artifacts/scenes/$scene_id/scene-brief.md --world artifacts/scenes/$scene_id/authoring.builder.json --map-draft artifacts/scenes/$scene_id/implementation-map.draft.json --report artifacts/scenes/$scene_id/builder-self-check.json
-It is generated from the current repository source and contains Authoring V4 validation, IR V4 / ExecutionPlan V5 compilation, layout, Registry closure, resource-budget and implementation-map checks. If it exits nonzero, read its JSON diagnostics, repair authoring.builder.json and implementation-map.draft.json inside this same task, and run it again. Use at most three self-repair cycles. Finish only when builder-self-check.json has status 'passed'. The trusted Host replays the source-equivalent validator once after delivery; it does not start a separate Repair Agent."
+It is generated from the current repository source and contains Authoring V4 validation, IR V4 compilation into the terminal Canonical Scene Plan and independent World Runtime Bootstrap, layout, Registry closure, resource-budget and implementation-map checks. If it exits nonzero, read its JSON diagnostics, repair authoring.builder.json and implementation-map.draft.json inside this same task, and run it again. Use at most three self-repair cycles. Finish only when builder-self-check.json has status 'passed'. The trusted Host replays the source-equivalent validator once after delivery; it does not start a separate Repair Agent."
 
 if [[ "$mode" == "full" || "$mode" == "plan" ]]; then
   echo "WORLDKIT_STAGE planner"
@@ -137,7 +154,7 @@ if [[ "$mode" == "full" || "$mode" == "plan" ]]; then
     --instruction-file "$planner_prompt_file" \
     --context ".codex/skills/worldkit-spatial-planner" \
     --context "assets/terrain-height-intent" \
-    "${reference_asset_args[@]}" \
+    "${reference_asset_args[@]+"${reference_asset_args[@]}"}" \
     --output "artifacts/scenes/$scene_id/scene-brief.md::$artifact_root/scene-brief.md::text/markdown" \
     --output "artifacts/scenes/$scene_id/planner-self-check.json::$artifact_root/planner-self-check.json::application/json" \
     --output "artifacts/scenes/$scene_id/terrain-height-intent-prompt.md::$artifact_root/terrain-height-intent-prompt.md::text/markdown" \
@@ -214,7 +231,7 @@ run_codex \
   --context "apps/playground/public/scene-plans/$scene_id/world-plan.png" \
   --context "apps/playground/public/scene-plans/$scene_id/entry-whitebox-target.png" \
   --context "apps/playground/public/scene-plans/$scene_id/terrain-height-intent.png" \
-  "${reference_asset_args[@]}" \
+  "${reference_asset_args[@]+"${reference_asset_args[@]}"}" \
   --asset "world-plan::$public_plan_root/world-plan.png::image::image/png" \
   --asset "entry-whitebox-target::$public_plan_root/entry-whitebox-target.png::image::image/png" \
   --asset "terrain-height-intent::$public_plan_root/terrain-height-intent.png::image::image/png" \
@@ -235,6 +252,19 @@ builder_host_receipt="$task_tmp/builder-self-check.host.json"
   echo "Builder self-check receipt does not match trusted Host replay." >&2
   exit 2
 }
+
+authoring_attempt_root="$artifact_root/scene-authoring-attempts/$codex_run_nonce"
+authoring_route_decision_path="$authoring_attempt_root/route-decision.json"
+authoring_attempt_path="$authoring_attempt_root/attempt.json"
+authoring_attempt_result_path="$authoring_attempt_root/result.json"
+"$pnpm_bin" exec tsx scripts/scenes/record-scene-authoring-attempt.ts begin \
+  --scene-id "$scene_id" \
+  --run-id "$codex_run_nonce" \
+  --brief "$artifact_root/scene-brief.md" \
+  --authoring-input "$artifact_root/authoring.builder.json" \
+  --route-decision-output "$authoring_route_decision_path" \
+  --attempt-output "$authoring_attempt_path"
+authoring_attempt_started=true
 
 echo "WORLDKIT_STAGE terrain-compilation"
 "$pnpm_bin" exec tsx scripts/scenes/finalize-scene-terrain.ts \
@@ -300,6 +330,18 @@ run_builder_gates() {
     --output "$artifact_root/entry-third-person-validation.json"
 }
 run_builder_gates
+
+"$pnpm_bin" exec tsx scripts/scenes/record-scene-authoring-attempt.ts complete \
+  --scene-id "$scene_id" \
+  --run-id "$codex_run_nonce" \
+  --attempt "$authoring_attempt_path" \
+  --authored-source "$artifact_root/authoring.json" \
+  --evidence-ref "worldkit://evidence/canonical-world-build/$scene_id/$codex_run_nonce@1" \
+  --evidence-ref "worldkit://evidence/entry-third-person/$scene_id/$codex_run_nonce@1" \
+  --evidence-ref "worldkit://evidence/runtime-snapshot/$scene_id/$codex_run_nonce@1" \
+  --evidence-ref "worldkit://evidence/whitebox-triview/$scene_id/$codex_run_nonce@1" \
+  --result-output "$authoring_attempt_result_path"
+authoring_attempt_completed=true
 
 primary_user_frame=""
 for candidate in "$public_plan_root"/reference-0.png "$public_plan_root"/reference-0.jpg "$public_plan_root"/reference-0.webp; do

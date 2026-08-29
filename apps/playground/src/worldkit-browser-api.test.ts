@@ -651,6 +651,69 @@ function deferred<T>(): {
 }
 
 describe("installDeferredWorldkitBrowserApi", () => {
+  it("keeps Browser ready pending until the page setup barrier completes", async () => {
+    const pageSetup = deferred<void>();
+    const installation = installDeferredWorldkitBrowserApi({
+      target: {},
+      statusElement: { dataset: {} },
+      readyBarrier: pageSetup.promise,
+      initialize: async () => adapterFixture(),
+    });
+    let readySettled = false;
+    const ready = installation.api.ready().finally(() => {
+      readySettled = true;
+    });
+
+    await Promise.resolve();
+    expect(readySettled).toBe(false);
+    expect(installation.api.getDiagnostics()).toEqual([]);
+    expect(() => installation.api.getSnapshot()).toThrowError(
+      expect.objectContaining({ code: "WORLDKIT_RUNTIME_NOT_READY" }),
+    );
+
+    pageSetup.resolve();
+    await installation.initialization;
+    await expect(ready).resolves.toEqual(snapshotFixture());
+  });
+
+  it("fails closed and disposes the Runtime Adapter when the page setup barrier rejects", async () => {
+    const pageSetup = deferred<void>();
+    const adapter = adapterFixture();
+    const statusElement = { dataset: {} as Record<string, string> };
+    const installation = installDeferredWorldkitBrowserApi({
+      target: {},
+      statusElement,
+      readyBarrier: pageSetup.promise,
+      initialize: async () => adapter,
+    });
+    const command = installation.api.executeGameplayCommand({
+      schemaVersion: 1,
+      id: "command-before-page-ready",
+      type: "control.bind",
+      runtimeSessionId: "runtime-session-test",
+      worldSessionId: "world-session-test",
+      controllerEntityId: "controller-primary",
+      controlledEntityId: "rigged-primary",
+      expectedPossession: { mode: "unbound" },
+    } as const satisfies GameplayCommandV1);
+
+    pageSetup.reject(new Error("private page setup detail"));
+    await installation.initialization;
+    await expect(installation.api.ready()).rejects.toMatchObject({
+      name: "WorldkitBrowserStartupErrorV1",
+    });
+
+    await expect(command).rejects.toMatchObject({
+      name: "WorldkitBrowserStartupErrorV1",
+    });
+    expect(statusElement.dataset.worldkitStatus).toBe("error");
+    expect(adapter.disposeCount).toBe(1);
+    expect(installation.api.getDiagnostics()).toHaveLength(1);
+    expect(JSON.stringify(installation.api.getDiagnostics())).not.toContain(
+      "private page setup detail",
+    );
+  });
+
   it("publishes exactly the 38 mandatory V5 own enumerable keys", () => {
     const installation = installDeferredWorldkitBrowserApi({
       target: {},
@@ -2065,7 +2128,7 @@ describe("Authoring camera console", () => {
       expect(await page.locator("#camera-preference-select").inputValue()).toBe(orbitProfileRef);
       await expect.poll(() => page.locator("#reset-button").isEnabled()).toBe(true);
       expect(await page.locator("#tuning-save-status").textContent())
-        .toBe("重置后已恢复镜头；Gameplay 继续使用编译锁定的 Execution Plan");
+        .toBe("重置后已恢复镜头；Gameplay 继续使用编译锁定的 Canonical Scene Plan");
       expect(await page.evaluate(() => {
         const camera = window.__WORLDKIT__!.getCameraSnapshot?.();
         return camera?.mode === "tracking" ? camera.activeCameraProfileRef : undefined;

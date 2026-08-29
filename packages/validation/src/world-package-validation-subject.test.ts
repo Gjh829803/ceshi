@@ -3,17 +3,16 @@ import {
   validateAuthoringSpecV4,
   type AuthoringSpecV4,
 } from "@whitebox-world/authoring";
-import { compileWorldV5 } from "@whitebox-world/compiler";
+import { compileCanonicalWorldV1 } from "@whitebox-world/compiler";
 import {
   createGameplayBootstrapResourceLockEntryV1,
   createGameplayBootstrapV1,
 } from "@whitebox-world/gameplay-contracts";
 import {
-  createWorldPackageBuildReceiptV1,
-  createWorldPackageV2,
-  verifyWorldPackageDirectoryV2,
+  createWorldPackageV1,
+  verifyWorldPackageDirectoryV1,
 } from "@whitebox-world/world-package";
-import { createWorldPackageFixtureContextV2 } from "@whitebox-world/world-package/testing";
+import { createWorldPackageFixtureContextV1 } from "@whitebox-world/world-package/testing";
 import { isNil } from "lodash-es";
 import { describe, expect, it } from "vitest";
 
@@ -62,14 +61,16 @@ function buildClosure() {
     featureResourceLocks: [],
     semanticActionDefinitions: [],
     availableCapabilityRefs: [],
+    initialRelationshipStates: [],
   });
-  const compiled = compileWorldV5({
+  const compiled = compileCanonicalWorldV1({
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
-    gameplayBootstrapResourceLock:
-      createGameplayBootstrapResourceLockEntryV1(gameplayBootstrap),
+    gameplayBootstrap,
+    worldRuntimeBootstrapRef:
+      `worldkit://world-runtime-bootstrap/${normalized.value.id}@1`,
   });
-  if (!compiled.ok || isNil(compiled.executionPlan)) {
+  if (!compiled.ok || isNil(compiled.canonicalSceneExecutionPlan)) {
     throw new Error("fixture compilation failed");
   }
   const layoutSolveResult = {
@@ -81,25 +82,26 @@ function buildClosure() {
     authoringSpec,
     normalizedWorldIr: normalized.value,
     layoutSolveResult,
-    executionPlan: compiled.executionPlan,
+    executionPlan: compiled.canonicalSceneExecutionPlan,
     gameplayBootstrap,
+    worldRuntimeBootstrap: compiled.worldRuntimeBootstrap,
   };
 }
 
 function verifiedFixture() {
   const closure = buildClosure();
-  const directory = createWorldPackageV2({
-    ...createWorldPackageFixtureContextV2({
+  const directory = createWorldPackageV1({
+    ...createWorldPackageFixtureContextV1({
       packageId: `${closure.authoringSpec.id}.package`,
       title: "Validation Subject Fixture",
     }),
     ...closure,
     resourceArtifacts: [],
   });
-  return { closure, verified: verifyWorldPackageDirectoryV2(directory) };
+  return { closure, verified: verifyWorldPackageDirectoryV1(directory) };
 }
 
-describe("WorldPackageValidationSubjectV1 verified V2 boundary", () => {
+describe("WorldPackageValidationSubjectV1 verified boundary", () => {
   it("projects the exact Validation identity from one verified package", () => {
     const { verified } = verifiedFixture();
     const subject = createWorldPackageValidationSubjectV1(verified);
@@ -109,24 +111,12 @@ describe("WorldPackageValidationSubjectV1 verified V2 boundary", () => {
       worldPackageRootHash: verified.receipt.worldPackageRootHash,
       authoringSpecHash: verified.receipt.manifest.authoringSpecHash,
       normalizedWorldIrHash: verified.receipt.manifest.normalizedWorldIrHash,
-      executionPlanHash: verified.receipt.manifest.executionPlanHash,
+      worldBuildIdentityHash: verified.receipt.worldBuildIdentityHash,
       resourceLockHash: verified.receipt.manifest.registryLockHash,
       layoutSolveReportHash: verified.receipt.manifest.layoutSolveReportHash,
     });
     expect(createWorldPackageValidationSubjectV1(verified)).toEqual(subject);
-  });
-
-  it("rejects the legacy V1 independently assembled input", () => {
-    const closure = buildClosure();
-    const legacyReceipt = createWorldPackageBuildReceiptV1({
-      packageId: `${closure.authoringSpec.id}.legacy-package`,
-      ...closure,
-      resourceArtifacts: [],
-    });
-    expect(() => createWorldPackageValidationSubjectV1({
-      worldPackageBuildReceipt: legacyReceipt,
-      ...closure,
-    } as never)).toThrow("WORLD_PACKAGE_VERSION_UNSUPPORTED");
+    expect(subject).not.toHaveProperty(["execution", "Plan", "Hash"].join(""));
   });
 
   it("rejects caller-forged verified Plan and Registry closure fields", () => {

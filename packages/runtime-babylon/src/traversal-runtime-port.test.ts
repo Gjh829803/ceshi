@@ -10,10 +10,10 @@ import {
 } from "@whitebox-world/authoring";
 import {
   compileResolvedTraversalLockV1,
-  compileWorldV5,
+  compileCanonicalWorldV1,
 } from "@whitebox-world/compiler";
 import type {
-  ExecutionPlanV5,
+  CanonicalSceneExecutionPlanV1,
 } from "@whitebox-world/runtime-contracts";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
@@ -50,7 +50,13 @@ import { createBabylonTraversalRuntimePortV1 } from "./traversal-runtime-port";
 import {
   BABYLON_TRAVERSAL_RUNTIME_IMPLEMENTATION_IDENTITY_V1,
 } from "./traversal-implementation-identity";
-import { createRuntimeTestGameplayBootstrapLockV1 } from "./runtime-test-plan";
+import {
+  createRuntimeTestGameplayBootstrapV1,
+  registerRuntimeTestWorldArtifactsV1,
+  runtimeTestSubjectsForPlanV1,
+  runtimeTestWorldArtifactsForPlanV1,
+  runtimeTestWorldInputForPlanV1,
+} from "./runtime-test-plan";
 
 const havokWasmBytes = await readFile(
   createRequire(import.meta.url).resolve(
@@ -126,7 +132,7 @@ function routeWorld(
 
 function compileFixture(world = routeWorld()): {
   normalizedWorldIr: NormalizedWorldIRV4;
-  executionPlan: ExecutionPlanV5;
+  executionPlan: CanonicalSceneExecutionPlanV1;
   traversalLockReceipt: ResolvedTraversalLockReceiptV1;
 } {
   const normalized = normalizeAuthoringSpecV4(world);
@@ -137,34 +143,42 @@ function compileFixture(world = routeWorld()): {
   ) {
     throw new Error("Route fixture normalization failed.");
   }
-  const compiled = compileWorldV5({
+  const gameplayBootstrap = createRuntimeTestGameplayBootstrapV1(normalized.value);
+  const compiled = compileCanonicalWorldV1({
     normalizedWorldIr: normalized.value,
     normalizedWorldIrHash: normalized.normalizedWorldIrHash,
-    gameplayBootstrapResourceLock:
-      createRuntimeTestGameplayBootstrapLockV1(normalized.value),
+    gameplayBootstrap,
+    worldRuntimeBootstrapRef:
+      `worldkit://world-runtime-bootstrap/${normalized.value.id}@1`,
   });
-  if (!compiled.ok || compiled.executionPlan === undefined) {
+  if (!compiled.ok || compiled.canonicalSceneExecutionPlan === undefined) {
     throw new Error("Route fixture compilation failed.");
   }
+  registerRuntimeTestWorldArtifactsV1({
+    executionPlan: compiled.canonicalSceneExecutionPlan,
+    worldRuntimeBootstrap: compiled.worldRuntimeBootstrap,
+    gameplayBootstrap,
+  });
   const traversalLockReceipt = compileResolvedTraversalLockV1({
     normalizedWorldIr: normalized.value,
-    executionPlan: compiled.executionPlan,
+    canonicalSceneExecutionPlan: compiled.canonicalSceneExecutionPlan,
+    worldRuntimeBootstrap: compiled.worldRuntimeBootstrap,
     traversingEntityId: "player",
     runtimeImplementationIdentity:
       BABYLON_TRAVERSAL_RUNTIME_IMPLEMENTATION_IDENTITY_V1,
   });
   return {
     normalizedWorldIr: normalized.value,
-    executionPlan: compiled.executionPlan,
+    executionPlan: compiled.canonicalSceneExecutionPlan,
     traversalLockReceipt,
   };
 }
 
 async function createRuntime(
-  executionPlan: ExecutionPlanV5,
+  executionPlan: CanonicalSceneExecutionPlanV1,
 ): Promise<BabylonWorldRuntime> {
   const runtime = await BabylonWorldRuntime.create({
-    executionPlan,
+    ...runtimeTestWorldInputForPlanV1(executionPlan),
     havokWasmBinary,
     autoStartRenderLoop: false,
     engineFactory: () => new NullEngine({
@@ -177,7 +191,8 @@ async function createRuntime(
   });
   await bindRuntimeTestPossession(
     runtime,
-    executionPlan.initialControlledEntityId,
+    runtimeTestWorldArtifactsForPlanV1(executionPlan).worldRuntimeBootstrap
+      .initialControlledEntityId,
   );
   return runtime;
 }
@@ -222,7 +237,7 @@ function overrideControlledEntityReader(
 function withStaticBoxAtStart(
   fixture: ReturnType<typeof compileFixture>,
   heightMeters: number,
-): ExecutionPlanV5 {
+): CanonicalSceneExecutionPlanV1 {
   const plan = structuredClone(fixture.executionPlan);
   const placement = plan.layout.placementsByEntityId["spawn-main"]!;
   const startPlacement = {
@@ -273,7 +288,7 @@ function withStaticBoxAtStart(
 
 function withAsymmetricSaddleAtStart(
   fixture: ReturnType<typeof compileFixture>,
-): ExecutionPlanV5 {
+): CanonicalSceneExecutionPlanV1 {
   const plan = structuredClone(fixture.executionPlan);
   const placement = plan.layout.placementsByEntityId["spawn-main"]!;
   return {
@@ -305,7 +320,7 @@ function withAsymmetricSaddleAtStart(
 
 function withOutsideTerrainStaticSupport(
   fixture: ReturnType<typeof compileFixture>,
-): ExecutionPlanV5 {
+): CanonicalSceneExecutionPlanV1 {
   const plan = structuredClone(fixture.executionPlan);
   const placement = plan.layout.placementsByEntityId["spawn-main"]!;
   const outsidePosition = [1_000, 1, 1_000] as const;
@@ -345,7 +360,7 @@ function withOutsideTerrainStaticSupport(
 
 function withNearbyRotatedCurbOutsideFootColumn(
   fixture: ReturnType<typeof compileFixture>,
-): ExecutionPlanV5 {
+): CanonicalSceneExecutionPlanV1 {
   const plan = structuredClone(fixture.executionPlan);
   const [footX, , footZ] = plan.layout
     .placementsByEntityId["spawn-main"]!.transform.positionMetersXYZ;
@@ -373,7 +388,7 @@ function withNearbyRotatedCurbOutsideFootColumn(
 
 function withTieredStaticSupportAssertion(
   fixture: ReturnType<typeof compileFixture>,
-): ExecutionPlanV5 {
+): CanonicalSceneExecutionPlanV1 {
   const plan = structuredClone(fixture.executionPlan);
   const supportedEntityId = "wall-east";
   const supportingEntityId = "tiered-support";
@@ -506,9 +521,9 @@ function expectNoExpectedPathSurfaceState(evidence: {
 }
 
 function boundSurfaceForCollider(
-  collider: ExecutionPlanV5["staticColliders"][number],
+  collider: CanonicalSceneExecutionPlanV1["staticColliders"][number],
   logicalSurfaceId: string,
-): ExecutionPlanV5["traversal"]["surfaces"][number] {
+): CanonicalSceneExecutionPlanV1["traversal"]["surfaces"][number] {
   return {
     kind: "static-collider",
     traversalSurfaceId: `traversal-surface:${collider.entityId}:${logicalSurfaceId}`,
@@ -530,7 +545,7 @@ function boundSurfaceForCollider(
 function withBoundStaticBoxAtStart(
   fixture: ReturnType<typeof compileFixture>,
   heightMeters: number,
-): ExecutionPlanV5 {
+): CanonicalSceneExecutionPlanV1 {
   const plan = withStaticBoxAtStart(fixture, heightMeters);
   const collider = plan.staticColliders[plan.staticColliders.length - 1]!;
   return {
@@ -545,11 +560,42 @@ function withBoundStaticBoxAtStart(
   };
 }
 
+function withBoundStaticStepEdgeNearStart(
+  fixture: ReturnType<typeof compileFixture>,
+): CanonicalSceneExecutionPlanV1 {
+  const plan = structuredClone(fixture.executionPlan);
+  const [footX, , footZ] = plan.layout
+    .placementsByEntityId["spawn-main"]!.transform.positionMetersXYZ;
+  const collider: CanonicalSceneExecutionPlanV1["staticColliders"][number] = {
+    entityId: "step-edge-support",
+    logicalSubshapeId: "primary",
+    colliderSubshapeId: "collider:step-edge-support:primary",
+    colliderHash: `sha256:${"9".repeat(64)}`,
+    transform: {
+      positionMetersXYZ: [footX + 0.7, 0.125, footZ],
+      rotationEulerRadiansXYZ: [0, 0, 0],
+      scaleXYZ: [1, 1, 1],
+    },
+    shape: { kind: "box", sizeMetersXYZ: [1, 0.25, 2] },
+  };
+  return {
+    ...plan,
+    staticColliders: [...plan.staticColliders, collider],
+    traversal: {
+      ...plan.traversal,
+      surfaces: [
+        ...plan.traversal.surfaces,
+        boundSurfaceForCollider(collider, "primary"),
+      ],
+    },
+  };
+}
+
 function withBoundMissingStaticColliderSurface(
   fixture: ReturnType<typeof compileFixture>,
-): ExecutionPlanV5 {
+): CanonicalSceneExecutionPlanV1 {
   const plan = structuredClone(fixture.executionPlan);
-  const missingCollider: ExecutionPlanV5["staticColliders"][number] = {
+  const missingCollider: CanonicalSceneExecutionPlanV1["staticColliders"][number] = {
     entityId: "missing-platform",
     logicalSubshapeId: "primary",
     colliderSubshapeId: "collider:missing-platform:primary",
@@ -675,7 +721,7 @@ function withBoundOrientedPlatformAtStart(
     scaleXYZ: readonly [number, number, number];
     translationMetersXYZ?: readonly [number, number, number];
   }>,
-): ExecutionPlanV5 {
+): CanonicalSceneExecutionPlanV1 {
   const plan = structuredClone(fixture.executionPlan);
   const placement = plan.layout.placementsByEntityId["spawn-main"]!;
   const spawnXz: readonly [number, number] = [
@@ -745,7 +791,7 @@ function withBoundOrientedPlatformAtStart(
 
 function withBoundCeilingAboveStart(
   fixture: ReturnType<typeof compileFixture>,
-): ExecutionPlanV5 {
+): CanonicalSceneExecutionPlanV1 {
   const plan = structuredClone(fixture.executionPlan);
   const placement = plan.layout.placementsByEntityId["spawn-main"]!;
   const ceiling = {
@@ -782,7 +828,7 @@ function withBoundCeilingAboveStart(
 
 function withBoundVerticalWallAtStart(
   fixture: ReturnType<typeof compileFixture>,
-): ExecutionPlanV5 {
+): CanonicalSceneExecutionPlanV1 {
   const plan = structuredClone(fixture.executionPlan);
   const placement = plan.layout.placementsByEntityId["spawn-main"]!;
   const wall = {
@@ -819,7 +865,7 @@ function withBoundVerticalWallAtStart(
 
 function withCoplanarBoundPlatformsAtStart(
   fixture: ReturnType<typeof compileFixture>,
-): ExecutionPlanV5 {
+): CanonicalSceneExecutionPlanV1 {
   const plan = structuredClone(fixture.executionPlan);
   const placement = plan.layout.placementsByEntityId["spawn-main"]!;
   const spawn = placement.transform.positionMetersXYZ;
@@ -870,7 +916,7 @@ function withCoplanarBoundPlatformsAtStart(
 
 function withStackedBoundPlatformsAtStart(
   fixture: ReturnType<typeof compileFixture>,
-): ExecutionPlanV5 {
+): CanonicalSceneExecutionPlanV1 {
   const plan = structuredClone(fixture.executionPlan);
   const placement = plan.layout.placementsByEntityId["spawn-main"]!;
   const spawn = placement.transform.positionMetersXYZ;
@@ -928,7 +974,7 @@ function withStackedBoundPlatformsAtStart(
 
 function withQuarterMeterSeamAtStart(
   fixture: ReturnType<typeof compileFixture>,
-): ExecutionPlanV5 {
+): CanonicalSceneExecutionPlanV1 {
   const plan = structuredClone(fixture.executionPlan);
   const placement = plan.layout.placementsByEntityId["spawn-main"]!;
   return {
@@ -960,7 +1006,7 @@ function withQuarterMeterSeamAtStart(
 
 function withSteepRampAtStart(
   fixture: ReturnType<typeof compileFixture>,
-): ExecutionPlanV5 {
+): CanonicalSceneExecutionPlanV1 {
   const plan = structuredClone(fixture.executionPlan);
   const placement = plan.layout.placementsByEntityId["spawn-main"]!;
   return {
@@ -1007,7 +1053,7 @@ function withStartTransform(
     rotationEulerRadiansXYZ: readonly [number, number, number];
     scaleXYZ: readonly [number, number, number];
   }>,
-): ExecutionPlanV5 {
+): CanonicalSceneExecutionPlanV1 {
   const plan = structuredClone(fixture.executionPlan);
   const placement = plan.layout.placementsByEntityId["spawn-main"]!;
   return {
@@ -1049,7 +1095,10 @@ describe("createBabylonTraversalRuntimePortV1", () => {
       };
 
       controlledEntityId = undefined;
-      const planRead = vi.spyOn(host, "readExecutionPlan").mockImplementation(
+      const planRead = vi.spyOn(
+        host,
+        "readCanonicalSceneExecutionPlan",
+      ).mockImplementation(
         () => {
           throw new Error("released control must be rejected first");
         },
@@ -1159,7 +1208,7 @@ describe("createBabylonTraversalRuntimePortV1", () => {
           layoutSolveReportHash:
             worldA.executionPlan.layout.layoutSolveReportHash as `sha256:${string}`,
           resourceLockHash:
-            worldA.executionPlan.resourceLockHash as `sha256:${string}`,
+            worldA.executionPlan.sceneResourceLockHash,
         },
         runtimeWorldIdentity: port,
       })).toThrow("TRAVERSAL_RUNTIME_WORLD_IDENTITY_MISMATCH");
@@ -1260,7 +1309,7 @@ describe("createBabylonTraversalRuntimePortV1", () => {
     }
   }, 30_000);
 
-  it("rejects in-place V5 Plan drift even when its published world hashes stay unchanged", async () => {
+  it("rejects in-place Canonical Scene Plan drift even when its published world hashes stay unchanged", async () => {
     const fixture = compileFixture();
     const executionPlan = structuredClone(fixture.executionPlan);
     const runtime = await createRuntime(executionPlan);
@@ -1283,7 +1332,7 @@ describe("createBabylonTraversalRuntimePortV1", () => {
     }
   }, 30_000);
 
-  it("closes canonical hashing failures from adversarial in-place V5 Plan drift", async () => {
+  it("closes canonical hashing failures from adversarial in-place Canonical Scene Plan drift", async () => {
     const fixture = compileFixture();
     const executionPlan = structuredClone(fixture.executionPlan);
     const runtime = await createRuntime(executionPlan);
@@ -1365,15 +1414,19 @@ describe("createBabylonTraversalRuntimePortV1", () => {
     }
   }, 30_000);
 
-  it("rejects a self-consistent Plan Resource Lock from a different world lock", async () => {
+  it("rejects a self-consistent Scene Resource Lock from a different world lock", async () => {
     const fixture = compileFixture();
-    const plan = structuredClone(fixture.executionPlan);
-    const unrelatedEntry = plan.resourceLockEntries.find(
-      (entry) => entry.resourceKind === "subject-definition",
-    )!;
-    (unrelatedEntry as { resolvedVersion: string }).resolvedVersion = "forged";
-    (plan as { resourceLockHash: string }).resourceLockHash =
-      sha256CanonicalJson(plan.resourceLockEntries);
+    const plan = {
+      ...structuredClone(fixture.executionPlan),
+      sceneResourceLockEntries: [{
+      resourceRef: "worldkit://traversal-surface-profile/ground.static@1",
+      resourceKind: "traversal-surface-profile" as const,
+      resolvedVersion: "forged",
+      contentHash: `sha256:${"e".repeat(64)}` as const,
+      }],
+    };
+    (plan as { sceneResourceLockHash: `sha256:${string}` }).sceneResourceLockHash =
+      sha256CanonicalJson(plan.sceneResourceLockEntries) as `sha256:${string}`;
     const runtime = await createRuntime(plan);
     try {
       expectRuntimeCode(
@@ -1659,7 +1712,7 @@ describe("createBabylonTraversalRuntimePortV1", () => {
         runtime,
         traversalLockReceipt: fixture.traversalLockReceipt,
       });
-      const subject = fixture.executionPlan.subjects.find(
+      const subject = runtimeTestSubjectsForPlanV1(fixture.executionPlan).find(
         (candidate) => candidate.entityId === "player",
       )!;
       const fallbackMotionProfileRef =
@@ -1926,7 +1979,9 @@ describe("createBabylonTraversalRuntimePortV1", () => {
 
       port.resetToStartAnchor({ startAnchorEntityId: "spawn-main" });
 
-      expect(supportSpies).toHaveLength(fixture.executionPlan.subjects.length);
+      expect(supportSpies).toHaveLength(
+        runtimeTestSubjectsForPlanV1(fixture.executionPlan).length,
+      );
       for (const supportSpy of supportSpies) {
         expect(supportSpy).toHaveBeenCalledTimes(1);
       }
@@ -1935,7 +1990,7 @@ describe("createBabylonTraversalRuntimePortV1", () => {
     }
   }, 30_000);
 
-  it("uses V5 static collider rows as the only static-body authority", async () => {
+  it("uses Canonical Scene static collider rows as the only static-body authority", async () => {
     const fixture = compileFixture();
     const plan = withStaticBoxAtStart(fixture, 0.1);
     const runtime = await createRuntime(plan);
@@ -1943,7 +1998,7 @@ describe("createBabylonTraversalRuntimePortV1", () => {
       expect(runtime.snapshot().resources.bodies).toBe(
         1 +
           plan.staticColliders.length +
-          plan.subjects.length,
+          runtimeTestSubjectsForPlanV1(plan).length,
       );
       const internal = runtime[BABYLON_TRAVERSAL_RUNTIME_INTERNAL]();
       const collisionMeshes = internal.readStaticCollisionMeshes();
@@ -1997,7 +2052,198 @@ describe("createBabylonTraversalRuntimePortV1", () => {
         resolvedVersion: bound.resolvedVersion,
         resourceHash: bound.resourceHash,
       });
+      const retained = inspectCharacterMovement<{
+        retainedCharacterSupportSample(): {
+          supportContacts: readonly {
+            pointMetersXYZ: readonly [number, number, number];
+          }[];
+        } | undefined;
+      }>(runtime, "player").retainedCharacterSupportSample();
+      expect(retained?.supportContacts.length).toBeGreaterThan(0);
+      expect(retained?.supportContacts.some((contact) =>
+        Math.abs(contact.pointMetersXYZ[1] - 1) < 0.02
+      )).toBe(true);
       expectNoExpectedPathSurfaceState(evidence);
+    } finally {
+      await runtime.dispose();
+    }
+  }, 30_000);
+
+  it("resolves an admitted step edge at the capsule contact instead of the foot-center column", async () => {
+    const fixture = compileFixture();
+    const plan = withBoundStaticStepEdgeNearStart(fixture);
+    const runtime = await createRuntime(plan);
+    try {
+      const movement = inspectCharacterMovement<{
+        retainedCharacterSupportSample(): {
+          supportState: "supported";
+          supportNormalWorldXYZ: readonly [number, number, number];
+          sampledControllerCenterMetersXYZ: readonly [number, number, number];
+          sampledFootPositionMetersXYZ: readonly [number, number, number];
+          supportContacts: readonly {
+            pointMetersXYZ: readonly [number, number, number];
+            normalXYZ: readonly [number, number, number];
+          }[];
+          isSupportSurfaceDynamic: boolean;
+        } | undefined;
+      }>(runtime, "player");
+      const [footX, , footZ] = plan.layout
+        .placementsByEntityId["spawn-main"]!.transform.positionMetersXYZ;
+      vi.spyOn(movement, "retainedCharacterSupportSample").mockReturnValue({
+        supportState: "supported",
+        supportNormalWorldXYZ: [-0.6, 0.8, 0],
+        sampledControllerCenterMetersXYZ: [footX, 6, footZ],
+        sampledFootPositionMetersXYZ: [footX, 5, footZ],
+        supportContacts: [{
+          pointMetersXYZ: [footX + 0.21, 0.25, footZ],
+          normalXYZ: [0, 1, 0],
+        }],
+        isSupportSurfaceDynamic: false,
+      });
+      const port = createBabylonTraversalRuntimePortV1({
+        runtime,
+        traversalLockReceipt: fixture.traversalLockReceipt,
+      });
+      const evidence = port.resetToStartAnchor({
+        startAnchorEntityId: "spawn-main",
+      });
+      const bound = plan.traversal.surfaces.find(
+        (surface) => surface.surfaceEntityId === "step-edge-support",
+      )!;
+
+      expect(evidence.characterSupport.surfaceResolution).toMatchObject({
+        mode: "resolved",
+        traversalSurfaceId: bound.traversalSurfaceId,
+        colliderSubshapeId: bound.colliderSubshapeId,
+      });
+    } finally {
+      await runtime.dispose();
+    }
+  }, 30_000);
+
+  it("fails closed when supported state has no retained Havok contact", async () => {
+    const fixture = compileFixture();
+    const plan = withBoundStaticBoxAtStart(fixture, 1);
+    const runtime = await createRuntime(plan);
+    try {
+      const movement = inspectCharacterMovement<{
+        retainedCharacterSupportSample(): {
+          supportState: "supported";
+          supportNormalWorldXYZ: readonly [number, number, number];
+          sampledControllerCenterMetersXYZ: readonly [number, number, number];
+          sampledFootPositionMetersXYZ: readonly [number, number, number];
+          supportContacts: readonly [];
+          isSupportSurfaceDynamic: boolean;
+        } | undefined;
+      }>(runtime, "player");
+      const [footX, footY, footZ] = plan.layout
+        .placementsByEntityId["spawn-main"]!.transform.positionMetersXYZ;
+      vi.spyOn(movement, "retainedCharacterSupportSample").mockReturnValue({
+        supportState: "supported",
+        supportNormalWorldXYZ: [0, 1, 0],
+        sampledControllerCenterMetersXYZ: [footX, footY + 1, footZ],
+        sampledFootPositionMetersXYZ: [footX, footY, footZ],
+        supportContacts: [],
+        isSupportSurfaceDynamic: false,
+      });
+      const evidence = createBabylonTraversalRuntimePortV1({
+        runtime,
+        traversalLockReceipt: fixture.traversalLockReceipt,
+      }).resetToStartAnchor({ startAnchorEntityId: "spawn-main" });
+
+      expect(evidence.characterSupport.surfaceResolution).toEqual({ mode: "unmatched" });
+    } finally {
+      await runtime.dispose();
+    }
+  }, 30_000);
+
+  it("fails closed when one retained contact resolves and another is unmatched", async () => {
+    const fixture = compileFixture();
+    const plan = withBoundStaticStepEdgeNearStart(fixture);
+    const runtime = await createRuntime(plan);
+    try {
+      const movement = inspectCharacterMovement<{
+        retainedCharacterSupportSample(): {
+          supportState: "supported";
+          supportNormalWorldXYZ: readonly [number, number, number];
+          sampledControllerCenterMetersXYZ: readonly [number, number, number];
+          sampledFootPositionMetersXYZ: readonly [number, number, number];
+          supportContacts: readonly {
+            pointMetersXYZ: readonly [number, number, number];
+            normalXYZ: readonly [number, number, number];
+          }[];
+          isSupportSurfaceDynamic: boolean;
+        } | undefined;
+      }>(runtime, "player");
+      const [footX, , footZ] = plan.layout
+        .placementsByEntityId["spawn-main"]!.transform.positionMetersXYZ;
+      vi.spyOn(movement, "retainedCharacterSupportSample").mockReturnValue({
+        supportState: "supported",
+        supportNormalWorldXYZ: [0, 1, 0],
+        sampledControllerCenterMetersXYZ: [footX, 1.26, footZ],
+        sampledFootPositionMetersXYZ: [footX, 0.26, footZ],
+        supportContacts: [{
+          pointMetersXYZ: [footX + 0.21, 0.25, footZ],
+          normalXYZ: [0, 1, 0],
+        }, {
+          pointMetersXYZ: [10_000, 0.25, 10_000],
+          normalXYZ: [0, 1, 0],
+        }],
+        isSupportSurfaceDynamic: false,
+      });
+      const evidence = createBabylonTraversalRuntimePortV1({
+        runtime,
+        traversalLockReceipt: fixture.traversalLockReceipt,
+      }).resetToStartAnchor({ startAnchorEntityId: "spawn-main" });
+
+      expect(evidence.characterSupport.surfaceResolution).toEqual({ mode: "unmatched" });
+    } finally {
+      await runtime.dispose();
+    }
+  }, 30_000);
+
+  it("does not attribute an unmatched retained contact to a nearby surface inferred from the average normal", async () => {
+    const fixture = compileFixture();
+    const plan = withBoundStaticStepEdgeNearStart(fixture);
+    const runtime = await createRuntime(plan);
+    try {
+      const movement = inspectCharacterMovement<{
+        retainedCharacterSupportSample(): {
+          supportState: "supported";
+          supportNormalWorldXYZ: readonly [number, number, number];
+          sampledControllerCenterMetersXYZ: readonly [number, number, number];
+          sampledFootPositionMetersXYZ: readonly [number, number, number];
+          supportContacts: readonly {
+            pointMetersXYZ: readonly [number, number, number];
+            normalXYZ: readonly [number, number, number];
+          }[];
+          isSupportSurfaceDynamic: boolean;
+        } | undefined;
+      }>(runtime, "player");
+      const [footX, , footZ] = plan.layout
+        .placementsByEntityId["spawn-main"]!.transform.positionMetersXYZ;
+      vi.spyOn(movement, "retainedCharacterSupportSample").mockReturnValue({
+        supportState: "supported",
+        supportNormalWorldXYZ: [-0.6, 0.8, 0],
+        sampledControllerCenterMetersXYZ: [footX, 1.26, footZ],
+        sampledFootPositionMetersXYZ: [footX, 0.26, footZ],
+        supportContacts: [{
+          pointMetersXYZ: [footX, 0.26, footZ],
+          normalXYZ: [0, 1, 0],
+        }],
+        isSupportSurfaceDynamic: false,
+      });
+      const port = createBabylonTraversalRuntimePortV1({
+        runtime,
+        traversalLockReceipt: fixture.traversalLockReceipt,
+      });
+      const evidence = port.resetToStartAnchor({
+        startAnchorEntityId: "spawn-main",
+      });
+
+      expect(evidence.characterSupport.surfaceResolution).toEqual({
+        mode: "unmatched",
+      });
     } finally {
       await runtime.dispose();
     }

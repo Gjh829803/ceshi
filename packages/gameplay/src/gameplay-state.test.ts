@@ -123,7 +123,7 @@ function projectionContext(simulationTick = 2, includeSubjectC = false) {
     simulationTick,
     worldPackageRef: "worldkit://world/a@1",
     worldPackageRootHash: HASH_A,
-    executionPlanHash: HASH_B,
+    worldBuildIdentityHash: HASH_B,
     spatialEntityStatesById: {
       "subject-a": {
         id: "subject-a",
@@ -1183,7 +1183,7 @@ describe("GameplayState possession", () => {
       simulationTick: 4,
       worldPackageRef: "worldkit://world/a@1",
       worldPackageRootHash: HASH_A,
-      executionPlanHash: HASH_B,
+      worldBuildIdentityHash: HASH_B,
       spatialEntityStatesById: {
         "subject-a": {
           id: "subject-a",
@@ -1227,7 +1227,7 @@ describe("GameplayState possession", () => {
       simulationTick: 2,
       worldPackageRef: "worldkit://world/a@1",
       worldPackageRootHash: HASH_A,
-      executionPlanHash: HASH_B,
+      worldBuildIdentityHash: HASH_B,
       spatialEntityStatesById: {
         "subject-a": {
           id: "subject-a",
@@ -1262,7 +1262,7 @@ describe("GameplayState possession", () => {
       simulationTick: 0,
       worldPackageRef: "worldkit://world/a@1",
       worldPackageRootHash: HASH_A,
-      executionPlanHash: HASH_B,
+      worldBuildIdentityHash: HASH_B,
       spatialEntityStatesById: {
         "controller-a": controller("controller-a") as never,
       },
@@ -1546,7 +1546,7 @@ describe("GameplayState possession", () => {
       simulationTick: 1,
       worldPackageRef: "worldkit://world/a@1",
       worldPackageRootHash: HASH_A,
-      executionPlanHash: HASH_B,
+      worldBuildIdentityHash: HASH_B,
       spatialEntityStatesById: {
         "subject-a": {
           id: "subject-a",

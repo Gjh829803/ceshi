@@ -1,18 +1,20 @@
+import { type WorldPackageRefV1 } from "@whitebox-world/world-identity";
+
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import type { AuthoringSpecV4 } from "@whitebox-world/authoring";
 import type {
   AuthoringEditPolicyProjectionV1,
   PreparedCandidatePinV1,
-  Sha256HashV1,
   WorldChangeBuildIdentityV1,
   WorldChangeDiagnosticV1,
   WorldChangeFailurePhaseV1,
   WorldChangeValidationReportBindingV1,
 } from "@whitebox-world/authoring-edit";
 import type {
-  ResolvedWorldPackageResourceArtifactV2,
-  WorldPackageBuildContextV2,
-  WorldPackageBuildReceiptV2,
-  WorldPackageRefV1,
+  ResolvedWorldPackageResourceArtifactV1,
+  WorldPackageBuildContextV1,
+  WorldPackageBuildReceiptV1,
   WorldPackageStoreV1,
 } from "@whitebox-world/world-package";
 
@@ -28,7 +30,7 @@ export interface PreparedCandidateLeaseUsageV1 {
 export interface RequiredGateEvaluationInputV1 {
   readonly requiredGateProfileRefs: readonly string[];
   readonly authoringSpec: AuthoringSpecV4;
-  readonly worldPackageBuildReceipt: WorldPackageBuildReceiptV2;
+  readonly worldPackageBuildReceipt: WorldPackageBuildReceiptV1;
 }
 
 export type RequiredGateEvaluationResultV1 =
@@ -53,9 +55,9 @@ export interface PrepareTrustedCandidateInputV1 {
   readonly policy: AuthoringEditPolicyProjectionV1;
   readonly store: PreparedCandidateLeaseStoreV1;
   readonly worldPackageStore: WorldPackageStoreV1;
-  readonly worldPackageBuildContext: WorldPackageBuildContextV2;
+  readonly worldPackageBuildContext: WorldPackageBuildContextV1;
   readonly nowUnixMilliseconds: number;
-  readonly resourceArtifacts: readonly ResolvedWorldPackageResourceArtifactV2[];
+  readonly resourceArtifacts: readonly ResolvedWorldPackageResourceArtifactV1[];
   readonly evaluateRequiredGates?: EvaluateRequiredGatesV1;
 }
 
@@ -87,7 +89,7 @@ export interface PreparedCandidateLeaseV1 {
   readonly requiredGateProfileRefs: readonly string[];
   readonly buildIdentity: WorldChangeBuildIdentityV1;
   readonly worldPackageRef: WorldPackageRefV1;
-  readonly worldPackageBuildReceipt: WorldPackageBuildReceiptV2;
+  readonly worldPackageBuildReceipt: WorldPackageBuildReceiptV1;
   readonly validationReports: readonly WorldChangeValidationReportBindingV1[];
   readonly validationReportsHash: Sha256HashV1;
   readonly sizeBytes: number;

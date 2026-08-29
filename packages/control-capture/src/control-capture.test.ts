@@ -17,6 +17,7 @@ function validTake(): Record<string, unknown> {
     id: "coastal-walk-opening",
     worldPackageRef: `package://coastal-world@${WORLD_HASH}`,
     worldPackageRootHash: WORLD_HASH,
+    worldBuildIdentityHash: WORLD_HASH,
     seed: 731_991,
     simulationTickRate: {
       numeratorTicks: 60,
@@ -165,6 +166,20 @@ describe("Simulation Take V1", () => {
         "TAKE_TRACK_CHANNEL_CONFLICT",
       ]),
     );
+  });
+
+  it("requires World Build identity and rejects generic Plan identity", () => {
+    const removedPlanHashField = ["execution", "Plan", "Hash"].join("");
+    const take = validTake();
+    delete take.worldBuildIdentityHash;
+    take[removedPlanHashField] = WORLD_HASH;
+
+    const result = validateSimulationTakeV1(take);
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "TAKE_FIELD_UNKNOWN", path: `/${removedPlanHashField}` }),
+      expect.objectContaining({ code: "TAKE_HASH_INVALID", path: "/worldBuildIdentityHash" }),
+    ]));
   });
 
   it("rejects unsupported rates, invalid ranges, invalid axes, and non-increasing keyframes", () => {

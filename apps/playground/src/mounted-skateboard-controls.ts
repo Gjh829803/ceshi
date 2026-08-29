@@ -1,7 +1,8 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import type {
   GameplayCommandV1,
-  Sha256HashV1,
 } from "@whitebox-world/gameplay-contracts";
 import type {
   WorldRuntimeSnapshotV4,

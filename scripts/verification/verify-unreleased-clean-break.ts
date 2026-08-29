@@ -91,14 +91,14 @@ function textFamilyDefinitions(): readonly TextFamilyDefinition[] {
   const supersededTopLevel = [
     ...[1, 2, 3].map((version) => token(["Authoring", "Spec", "V", String(version)])),
     ...[1, 2, 3].map((version) => token(["Normalized", "World", "IR", "V", String(version)])),
-    ...[1, 2, 3, 4].map((version) => token(["Execution", "Plan", "V", String(version)])),
+    ...[1, 2, 3, 4, 5].map((version) => token(["Execution", "Plan", "V", String(version)])),
     token(["World", "Node", "Spec", "V3"]),
     token(["Normalized", "World", "Node", "V3"]),
   ];
   const currentTopLevel = [
     token(["Authoring", "Spec", "V4"]),
     token(["Normalized", "World", "IR", "V4"]),
-    token(["Execution", "Plan", "V5"]),
+    token(["Canonical", "Scene", "Execution", "Plan", "V1"]),
   ];
   const currentVersionedComponents = [
     token(["Traversal", "Area", "Spec", "V1"]),
@@ -141,7 +141,7 @@ function textFamilyDefinitions(): readonly TextFamilyDefinition[] {
       classification: "superseded-delete" as const,
       blocksCompletion: true,
       pathPattern: /^(?:README\.md|docs\/(?:00-project-overview|02-sdk-architecture|05-mvp-roadmap|17-canonical-json-quickstart|20-gameplay-integration-contract)\.md)$/,
-      pattern: /\b(?:AuthoringSpec\s+V[1-3]|NormalizedWorldIR\s+V[1-3]|ExecutionPlan\s+V[1-4]|Snapshot\s+V3|Browser Protocol\s+V4)\b/g,
+      pattern: /\b(?:AuthoringSpec\s+V[1-3]|NormalizedWorldIR\s+V[1-3]|ExecutionPlan\s+V[1-5]|Snapshot\s+V3|Browser Protocol\s+V4)\b/g,
     }),
     Object.freeze({
       familyId: "superseded-top-level-contracts",
@@ -247,9 +247,13 @@ function collectTextMatches(
 const CURRENT_SERIALIZED_SCHEMA_VERSION_BY_KIND = Object.freeze({
   "worldkit-authoring-spec": 4,
   "worldkit-normalized-world": 4,
-  "worldkit-execution-plan": 5,
+  "worldkit-canonical-scene-execution-plan": 1,
   "worldkit-runtime-snapshot": 4,
 } as const);
+
+const SUPERSEDED_SERIALIZED_KINDS = new Set([
+  "worldkit-execution-plan",
+]);
 
 function serializedContractMatches(
   source: string,
@@ -275,13 +279,27 @@ function serializedContractMatches(
     const schemaVersion = candidate.schemaVersion;
     if (
       typeof kind === "string"
+      && SUPERSEDED_SERIALIZED_KINDS.has(kind)
+      && typeof schemaVersion === "number"
+    ) {
+      const kindPattern = new RegExp(`"${escaped(kind)}"`, "g");
+      kindPattern.lastIndex = sourceCursor;
+      const kindMatch = kindPattern.exec(source);
+      sourceCursor = kindPattern.lastIndex;
+      matches.push({
+        path: relativePath,
+        line: lineAt(source, kindMatch?.index ?? 0),
+        value: `${kind}@${schemaVersion}`,
+      });
+    } else if (
+      typeof kind === "string"
       && Object.hasOwn(CURRENT_SERIALIZED_SCHEMA_VERSION_BY_KIND, kind)
       && typeof schemaVersion === "number"
     ) {
       const currentVersion = CURRENT_SERIALIZED_SCHEMA_VERSION_BY_KIND[
         kind as keyof typeof CURRENT_SERIALIZED_SCHEMA_VERSION_BY_KIND
       ];
-      if (schemaVersion >= 1 && schemaVersion < currentVersion) {
+      if (schemaVersion >= 1 && schemaVersion !== currentVersion) {
         const versionPattern = new RegExp(
           `"${token(["schema", "Version"])}"\\s*:\\s*${schemaVersion}`,
           "g",

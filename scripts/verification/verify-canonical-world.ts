@@ -15,8 +15,9 @@ import {
   type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
 import type {
-  ExecutionPlanV5,
-  Vec3,
+  CanonicalSceneExecutionPlanV1,
+  RuntimeVec3V1,
+  WorldRuntimeBootstrapV1,
   WorldRuntimeSnapshotV4,
 } from "@whitebox-world/runtime-contracts";
 
@@ -33,6 +34,7 @@ import { launchChromiumWithSystemFallback } from "../lib/playwright-browser-laun
 import { startWorldkitServer } from "../lib/worldkit-server";
 import { buildWorldArtifactFileV1 } from "../cli/build-world-artifact";
 import { main as worldkitMain } from "../cli/worldkit";
+import { requireActivePublishedLocomotionV1 } from "./locomotion-capability-state.js";
 
 const REPOSITORY_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const INPUT_PATH = path.join(
@@ -114,7 +116,8 @@ interface WorldBuildArtifactV4 {
   normalizedWorldIrHash: string;
   executionPlanHash: string;
   normalizedWorldIr: NormalizedWorldIRV4;
-  executionPlan: ExecutionPlanV5;
+  executionPlan: CanonicalSceneExecutionPlanV1;
+  worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
 }
 
 interface CanonicalArtifactPaths {
@@ -185,7 +188,7 @@ async function runCliGates(paths: CanonicalArtifactPaths): Promise<void> {
       "--json",
     ]),
     0,
-    "worldkit build must emit the complete WorldPackage V2 directory.",
+    "worldkit build must emit the complete WorldPackage directory.",
   );
   assert.equal(
     await worldkitMain(["inspect", packageDirectoryPath, "--json"]),
@@ -266,7 +269,7 @@ async function verifyArtifacts(paths: CanonicalArtifactPaths): Promise<{
   assert.match(artifact.normalizedWorldIrHash, /^sha256:[a-f0-9]{64}$/);
   assert.match(artifact.executionPlanHash, /^sha256:[a-f0-9]{64}$/);
   assert.equal(artifact.normalizedWorldIr.schemaVersion, 4);
-  assert.equal(artifact.executionPlan.schemaVersion, 5);
+  assert.equal(artifact.executionPlan.schemaVersion, 1);
   assert.equal(artifact.executionPlan.terrain.entityId, "terrain-main");
   assert.deepEqual(
     artifact.executionPlan.waters.map((water) => water.entityId),
@@ -276,18 +279,27 @@ async function verifyArtifacts(paths: CanonicalArtifactPaths): Promise<{
     artifact.executionPlan.objects.map((object) => object.entityId),
     ["tower", "wall-east", "wall-west"],
   );
-  assert.equal(artifact.executionPlan.initialControlledEntityId, PLAYER_ENTITY_ID);
+  assert.equal(
+    artifact.worldRuntimeBootstrap.initialControlledEntityId,
+    PLAYER_ENTITY_ID,
+  );
   assert.deepEqual(
-    artifact.executionPlan.subjects.map((subject) => subject.entityId),
+    artifact.worldRuntimeBootstrap.subjectRuntimeDescriptors.map(
+      (subject) => subject.entityId,
+    ),
     [
       FIRST_PACKAGE_SUBJECT_ENTITY_ID,
       SECOND_PACKAGE_SUBJECT_ENTITY_ID,
       PLAYER_ENTITY_ID,
     ],
   );
-  assert.equal(artifact.executionPlan.camera.cameraEntityId, "camera-main");
+  assert.equal(
+    artifact.worldRuntimeBootstrap.initialCamera.cameraEntityId,
+    "camera-main",
+  );
 
-  const packageSubjects = artifact.executionPlan.subjects.filter(
+  const packageSubjects = artifact.worldRuntimeBootstrap
+    .subjectRuntimeDescriptors.filter(
     (subject) => subject.subjectDefinitionRef === PACKAGE_SUBJECT_DEFINITION_REF,
   );
   assert.equal(packageSubjects.length, 2);
@@ -297,8 +309,12 @@ async function verifyArtifacts(paths: CanonicalArtifactPaths): Promise<{
     "Both instances must share one resolved Package Definition Hash.",
   );
   assert.notDeepEqual(
-    packageSubjects[0]?.spawnSubjectOriginPositionMetersXYZ,
-    packageSubjects[1]?.spawnSubjectOriginPositionMetersXYZ,
+    artifact.executionPlan.subjectInstances.find(
+      ({ entityId }) => entityId === packageSubjects[0]?.entityId,
+    )?.subjectOriginPositionMetersXYZ,
+    artifact.executionPlan.subjectInstances.find(
+      ({ entityId }) => entityId === packageSubjects[1]?.entityId,
+    )?.subjectOriginPositionMetersXYZ,
     "Package Definition instances must compile to independent spawn origins.",
   );
   const subjectDefinitionHash = packageSubjects[0]?.subjectDefinitionHash;
@@ -403,13 +419,13 @@ async function verifyArtifacts(paths: CanonicalArtifactPaths): Promise<{
 }
 
 interface MovementEvidence {
-  beforePositionMetersXYZ: Vec3;
-  afterPositionMetersXYZ: Vec3;
+  beforePositionMetersXYZ: RuntimeVec3V1;
+  afterPositionMetersXYZ: RuntimeVec3V1;
 }
 
 function assertPositionUnchanged(
-  actual: Vec3,
-  expected: Vec3,
+  actual: RuntimeVec3V1,
+  expected: RuntimeVec3V1,
   message: string,
 ): void {
   const maximumDriftMeters = Math.max(
@@ -436,14 +452,7 @@ function requireLocomotionCapability(
   snapshot: WorldRuntimeSnapshotV4,
   entityId: string,
 ) {
-  const capability = Object.values(
-    requireSubjectProjection(snapshot, entityId).capabilityStatesById,
-  ).find((candidate) => candidate.kind === "locomotion-capability-state");
-  assert.ok(
-    capability !== undefined,
-    `Missing locomotion capability state for '${entityId}'.`,
-  );
-  return capability;
+  return requireActivePublishedLocomotionV1(snapshot, entityId);
 }
 
 function assertPossessedBy(
@@ -465,8 +474,8 @@ function assertPossessedBy(
 }
 
 async function verifyBrowserProtocolAndPhysics(): Promise<{
-  wallStopPositionMetersXYZ: Vec3;
-  lakeEntryPositionMetersXYZ: Vec3;
+  wallStopPositionMetersXYZ: RuntimeVec3V1;
+  lakeEntryPositionMetersXYZ: RuntimeVec3V1;
   firstPackageSubjectMovement: MovementEvidence;
   secondPackageSubjectMovement: MovementEvidence;
 }> {
@@ -476,8 +485,8 @@ async function verifyBrowserProtocolAndPhysics(): Promise<{
   let page: Page | undefined;
   let result:
     | {
-        wallStopPositionMetersXYZ: Vec3;
-        lakeEntryPositionMetersXYZ: Vec3;
+        wallStopPositionMetersXYZ: RuntimeVec3V1;
+        lakeEntryPositionMetersXYZ: RuntimeVec3V1;
         firstPackageSubjectMovement: MovementEvidence;
         secondPackageSubjectMovement: MovementEvidence;
       }
@@ -578,7 +587,12 @@ async function verifyBrowserProtocolAndPhysics(): Promise<{
     ).entityState;
     assert.ok(
       wallStopPlayer.positionMetersXYZ[0] > 2,
-      "Fixed input did not move player toward the east wall.",
+      [
+        "Fixed input did not move player toward the east wall.",
+        `position=${JSON.stringify(wallStopPlayer.positionMetersXYZ)}`,
+        `controlForward=${JSON.stringify(wallStop.view.camera.mode === "tracking" ? wallStop.view.camera.controlForwardXYZ : undefined)}`,
+        `locomotion=${JSON.stringify(requireLocomotionCapability(wallStop, PLAYER_ENTITY_ID))}`,
+      ].join(" "),
     );
     assert.ok(
       wallStopPlayer.positionMetersXYZ[0] < 6.2,

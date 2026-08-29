@@ -1,11 +1,11 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import {
   canonicalJsonBytes,
   sha256CanonicalJson,
   stringifyCanonicalJson,
 } from "@whitebox-world/protocol";
 import { isNil } from "lodash-es";
-
-export type Sha256HashV1 = `sha256:${string}`;
 
 export type ExpectedPossessionV1 =
   | Readonly<{ mode: "unbound" }>
@@ -1287,7 +1287,7 @@ export interface WorldStateSnapshotV1 {
   readonly simulationTick: number;
   readonly worldPackageRef: string;
   readonly worldPackageRootHash: Sha256HashV1;
-  readonly executionPlanHash: Sha256HashV1;
+  readonly worldBuildIdentityHash: Sha256HashV1;
   readonly entityStatesById: Readonly<Record<string, GameplayEntityStateV1>>;
   readonly capabilityStatesById: Readonly<Record<string, GameplayCapabilityStateV1>>;
   readonly relationshipStatesById: Readonly<Record<string, GameplayRelationshipStateV1>>;
@@ -1945,7 +1945,7 @@ function parseWorldStateSnapshotBuildInputV1(
     "simulationTick",
     "worldPackageRef",
     "worldPackageRootHash",
-    "executionPlanHash",
+    "worldBuildIdentityHash",
     "entityStatesById",
     "capabilityStatesById",
     "relationshipStatesById",
@@ -1961,7 +1961,7 @@ function parseWorldStateSnapshotBuildInputV1(
     !isSafeNonNegativeInteger(record.simulationTick) ||
     !isNonEmptyString(record.worldPackageRef) ||
     !isSha256(record.worldPackageRootHash) ||
-    !isSha256(record.executionPlanHash) ||
+    !isSha256(record.worldBuildIdentityHash) ||
     !isSafeNonNegativeInteger(record.lastEventSequence)
   ) invalid(schemaName);
   const simulationTick = record.simulationTick as number;
@@ -2109,7 +2109,7 @@ function parseWorldStateSnapshotBuildInputV1(
     simulationTick,
     worldPackageRef: record.worldPackageRef as string,
     worldPackageRootHash: record.worldPackageRootHash as Sha256HashV1,
-    executionPlanHash: record.executionPlanHash as Sha256HashV1,
+    worldBuildIdentityHash: record.worldBuildIdentityHash as Sha256HashV1,
     entityStatesById,
     capabilityStatesById,
     relationshipStatesById,
@@ -2123,7 +2123,7 @@ function worldStateHashDomainV1(body: WorldStateSnapshotBuildInputV1): unknown {
   return {
     simulationTick: body.simulationTick,
     worldPackageRootHash: body.worldPackageRootHash,
-    executionPlanHash: body.executionPlanHash,
+    worldBuildIdentityHash: body.worldBuildIdentityHash,
     entityStatesById: body.entityStatesById,
     capabilityStatesById: body.capabilityStatesById,
     relationshipStatesById: body.relationshipStatesById,
@@ -2202,7 +2202,7 @@ export function parseWorldStateSnapshotV1(input: unknown): WorldStateSnapshotV1 
       "simulationTick",
       "worldPackageRef",
       "worldPackageRootHash",
-      "executionPlanHash",
+      "worldBuildIdentityHash",
       "entityStatesById",
       "capabilityStatesById",
       "relationshipStatesById",

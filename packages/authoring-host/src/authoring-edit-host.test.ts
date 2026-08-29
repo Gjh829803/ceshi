@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import { hashAuthoringDocumentV4 } from "@whitebox-world/authoring";
 import canonicalAuthoringSchema from "@whitebox-world/authoring/schema";
 import { createValidAuthoringSpec } from "@whitebox-world/authoring/testing";
@@ -18,7 +20,6 @@ import {
   type AuthoringEditPolicyProjectionV1,
   type AuthoringEditScopeV1,
   type RegistrySearchResultV1,
-  type Sha256HashV1,
   type WorldChangeOperationV1,
   type WorldChangeSetV1,
   type WorldPreconditionV1,
@@ -26,7 +27,7 @@ import {
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import {
   createInMemoryWorldPackageStoreV1,
-  createWorldPackageBuildContextFixtureV2,
+  createWorldPackageBuildContextFixtureV1,
 } from "@whitebox-world/world-package/testing";
 import { isNil } from "lodash-es";
 import { describe, expect, it } from "vitest";
@@ -229,7 +230,7 @@ function createHost(extras: {
     journal,
     leaseStore: createPreparedCandidateLeaseStoreV1(),
     worldPackageStore: createInMemoryWorldPackageStoreV1(),
-    worldPackageBuildContext: createWorldPackageBuildContextFixtureV2(),
+    worldPackageBuildContext: createWorldPackageBuildContextFixtureV1(),
     resourceArtifacts: [],
     session: sessionFor(entries, extras),
     nowUnixMilliseconds: () => now.value,

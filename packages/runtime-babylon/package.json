@@ -7,13 +7,14 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@babylonjs/core": "9.21.2",
+    "@babylonjs/core": "9.23.0",
     "@babylonjs/havok": "1.3.14",
-    "@babylonjs/loaders": "9.21.2",
+    "@babylonjs/loaders": "9.23.0",
     "@whitebox-world/camera": "workspace:*",
     "@whitebox-world/character-movement": "workspace:*",
     "@whitebox-world/control-capture": "workspace:*",
     "@whitebox-world/gameplay-contracts": "workspace:*",
+    "@whitebox-world/native-babylon": "workspace:*",
     "@whitebox-world/protocol": "workspace:*",
     "@whitebox-world/runtime-contracts": "workspace:*",
     "@whitebox-world/runtime-framework": "workspace:*",
@@ -22,6 +23,7 @@
     "@whitebox-world/subject-contracts": "workspace:*",
     "@whitebox-world/terrain-surface": "workspace:*",
     "@whitebox-world/traversal": "workspace:*",
+    "babylonjs-gltf2interface": "9.23.0",
     "earcut": "3.0.2",
     "lodash-es": "^4.18.1"
   },

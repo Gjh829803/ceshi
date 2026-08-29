@@ -1,19 +1,23 @@
 import {
-  assembleWorldPackageDirectoryV2,
-  assertWorldPackageStoreRefMatchesDirectoryV1,
-  assertWorldPackageBuildReceiptV2,
-  canonicalWorldPackageDirectoryForStoreV1,
-  equalWorldPackageDirectoryBytesV1,
-  verifyWorldPackageDirectoryV2,
   worldPackageRefFromRootHashV1,
   worldPackageRootHashFromRefV1,
-  type WorldPackageBuildReceiptV2,
-  type WorldPackageDirectoryFileV2,
-  type WorldPackageDirectoryV2,
   type WorldPackageRefV1,
+} from "@whitebox-world/world-identity";
+
+import {
+  assembleWorldPackageDirectoryV1,
+  assertWorldPackageStoreRefMatchesDirectoryV1,
+  assertWorldPackageBuildReceiptV1,
+  canonicalWorldPackageDirectoryForStoreV1,
+  equalWorldPackageDirectoryBytesV1,
+  verifyWorldPackageDirectoryV1,
+  type WorldPackageBuildReceiptV1,
+  type WorldPackageDirectoryFileV1,
+  type WorldPackageDirectoryV1,
   type WorldPackageStorePutResultV1,
   type WorldPackageStoreV1,
 } from "@whitebox-world/world-package";
+import { canonicalJsonBytes } from "@whitebox-world/protocol";
 import {
   chmod,
   constants,
@@ -35,16 +39,21 @@ const FILE_MODE = 0o600;
 const JSON_MEDIA_TYPE = "application/json";
 const INTEGRITY_PATH = "integrity.json";
 const RECEIPT_PATH = "world-package-build-receipt.json";
-const TRANSPORT_METADATA_PATHS = new Set([INTEGRITY_PATH, RECEIPT_PATH]);
+const IDENTITY_PATH = "world-build-identity.json";
+const TRANSPORT_METADATA_PATHS = new Set([
+  INTEGRITY_PATH,
+  RECEIPT_PATH,
+  IDENTITY_PATH,
+]);
 const STORE_PUBLICATION_WAIT_TIMEOUT_MILLISECONDS = 30_000;
 const STORE_PUBLICATION_WAIT_INTERVAL_MILLISECONDS = 20;
 
-export interface WriteWorldPackageDirectoryV2Input {
+export interface WriteWorldPackageDirectoryV1Input {
   readonly outputDirectoryPath: string;
-  readonly directory: WorldPackageDirectoryV2;
+  readonly directory: WorldPackageDirectoryV1;
 }
 
-export interface ReadWorldPackageDirectoryV2Input {
+export interface ReadWorldPackageDirectoryV1Input {
   readonly packageDirectoryPath: string;
   readonly maximumTotalBytes: number;
   readonly maximumFileCount: number;
@@ -56,7 +65,7 @@ export interface CreateFileWorldPackageStoreV1Input {
   readonly maximumFileCount: number;
 }
 
-export interface FileWorldPackageTestHooksV2 {
+export interface FileWorldPackageTestHooksV1 {
   readonly beforeWriteFile?: (
     absolutePath: string,
     relativePath: string,
@@ -79,13 +88,13 @@ export interface FileWorldPackageTestHooksV2 {
   ) => Promise<void>;
 }
 
-export interface FileWorldPackageAdapterV2 {
-  readonly writeWorldPackageDirectoryV2: (
-    input: WriteWorldPackageDirectoryV2Input,
+export interface FileWorldPackageAdapterV1 {
+  readonly writeWorldPackageDirectoryV1: (
+    input: WriteWorldPackageDirectoryV1Input,
   ) => Promise<void>;
-  readonly readWorldPackageDirectoryV2: (
-    input: ReadWorldPackageDirectoryV2Input,
-  ) => Promise<WorldPackageDirectoryV2>;
+  readonly readWorldPackageDirectoryV1: (
+    input: ReadWorldPackageDirectoryV1Input,
+  ) => Promise<WorldPackageDirectoryV1>;
 }
 
 interface BigIntFileSnapshot {
@@ -105,7 +114,7 @@ interface ReadFileRow {
   readonly bytes: Uint8Array;
 }
 
-const EMPTY_HOOKS: FileWorldPackageTestHooksV2 = Object.freeze({});
+const EMPTY_HOOKS: FileWorldPackageTestHooksV1 = Object.freeze({});
 
 function fileIoFail(message: string): never {
   throw new Error(`WORLD_PACKAGE_FILE_IO_V2_INVALID: ${message}`);
@@ -242,7 +251,7 @@ async function assertCanonicalDirectoryIdentity(
 async function syncDirectory(
   absolutePath: string,
   phase: "lock" | "staging" | "publication" | "lock-removal",
-  hooks: FileWorldPackageTestHooksV2,
+  hooks: FileWorldPackageTestHooksV1,
 ): Promise<void> {
   await hooks.beforeSyncDirectory?.(absolutePath, phase);
   const handle = await open(
@@ -257,7 +266,7 @@ async function syncDirectory(
 }
 
 function directoryPathsForFiles(
-  files: readonly WorldPackageDirectoryFileV2[],
+  files: readonly WorldPackageDirectoryFileV1[],
 ): readonly string[] {
   const directories = new Set<string>();
   for (const file of files) {
@@ -275,8 +284,8 @@ function directoryPathsForFiles(
 
 async function writeOneFile(
   stagingDirectoryPath: string,
-  file: WorldPackageDirectoryFileV2,
-  hooks: FileWorldPackageTestHooksV2,
+  file: WorldPackageDirectoryFileV1,
+  hooks: FileWorldPackageTestHooksV1,
 ): Promise<void> {
   const absolutePath = path.join(stagingDirectoryPath, ...file.path.split("/"));
   if (!isInside(stagingDirectoryPath, absolutePath)) {
@@ -315,16 +324,16 @@ async function removeOwnedStagingDirectory(
   await rm(stagingDirectoryPath, { recursive: true, force: true });
 }
 
-async function writeWorldPackageDirectoryV2Internal(
-  input: WriteWorldPackageDirectoryV2Input,
-  hooks: FileWorldPackageTestHooksV2,
+async function writeWorldPackageDirectoryV1Internal(
+  input: WriteWorldPackageDirectoryV1Input,
+  hooks: FileWorldPackageTestHooksV1,
 ): Promise<void> {
   const outputDirectoryPath = requireCanonicalAbsolutePath(
     input.outputDirectoryPath,
     "outputDirectoryPath",
   );
-  verifyWorldPackageDirectoryV2(input.directory);
-  const canonicalDirectory = assembleWorldPackageDirectoryV2({
+  verifyWorldPackageDirectoryV1(input.directory);
+  const canonicalDirectory = assembleWorldPackageDirectoryV1({
     receipt: input.directory.receipt,
     files: input.directory.files.filter((file) =>
       !TRANSPORT_METADATA_PATHS.has(file.path)
@@ -434,7 +443,7 @@ async function writeWorldPackageDirectoryV2Internal(
       (total, file) => total + file.bytes.byteLength,
       0,
     );
-    const replayed = await readWorldPackageDirectoryV2Internal({
+    const replayed = await readWorldPackageDirectoryV1Internal({
       packageDirectoryPath: stagingDirectoryPath,
       maximumTotalBytes: Math.max(1, totalBytes),
       maximumFileCount: Math.max(1, allFiles.length),
@@ -474,13 +483,13 @@ async function writeWorldPackageDirectoryV2Internal(
   }
 }
 
-function requireReceipt(bytesByPath: ReadonlyMap<string, Uint8Array>): WorldPackageBuildReceiptV2 {
+function requireReceipt(bytesByPath: ReadonlyMap<string, Uint8Array>): WorldPackageBuildReceiptV1 {
   const bytes = bytesByPath.get(RECEIPT_PATH);
   if (isNil(bytes)) fileIoFail(`${RECEIPT_PATH} is missing`);
   let candidate: unknown;
   try {
     candidate = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
-    return assertWorldPackageBuildReceiptV2(candidate);
+    return assertWorldPackageBuildReceiptV1(candidate);
   } catch {
     return fileIoFail(`${RECEIPT_PATH} is invalid`);
   }
@@ -498,10 +507,10 @@ function requiredDirectoryPaths(filePaths: readonly string[]): ReadonlySet<strin
   return result;
 }
 
-async function readWorldPackageDirectoryV2Internal(
-  input: ReadWorldPackageDirectoryV2Input,
-  hooks: FileWorldPackageTestHooksV2,
-): Promise<WorldPackageDirectoryV2> {
+async function readWorldPackageDirectoryV1Internal(
+  input: ReadWorldPackageDirectoryV1Input,
+  hooks: FileWorldPackageTestHooksV1,
+): Promise<WorldPackageDirectoryV1> {
   const packageDirectoryPath = requireCanonicalAbsolutePath(
     input.packageDirectoryPath,
     "packageDirectoryPath",
@@ -641,6 +650,16 @@ async function readWorldPackageDirectoryV2Internal(
   );
   const bytesByPath = new Map(sortedRows.map((row) => [row.path, row.bytes]));
   const receipt = requireReceipt(bytesByPath);
+  for (const [transportPath, expectedBytes] of [
+    [INTEGRITY_PATH, canonicalJsonBytes(receipt.fileIntegrityEntries)],
+    [RECEIPT_PATH, canonicalJsonBytes(receipt)],
+    [IDENTITY_PATH, canonicalJsonBytes(receipt.worldBuildIdentity)],
+  ] as const) {
+    const actualBytes = bytesByPath.get(transportPath);
+    if (isNil(actualBytes) || !isEqual(actualBytes, expectedBytes)) {
+      fileIoFail(`${transportPath} is missing or does not match the receipt`);
+    }
+  }
   const requiredDirectories = requiredDirectoryPaths(sortedRows.map((row) => row.path));
   if (
     requiredDirectories.size !== discoveredDirectories.size ||
@@ -654,8 +673,9 @@ async function readWorldPackageDirectoryV2Internal(
   );
   mediaTypeByPath.set(INTEGRITY_PATH, JSON_MEDIA_TYPE);
   mediaTypeByPath.set(RECEIPT_PATH, JSON_MEDIA_TYPE);
-  const rootFiles: WorldPackageDirectoryFileV2[] = [];
-  const signatureFiles: WorldPackageDirectoryFileV2[] = [];
+  mediaTypeByPath.set(IDENTITY_PATH, JSON_MEDIA_TYPE);
+  const rootFiles: WorldPackageDirectoryFileV1[] = [];
+  const signatureFiles: WorldPackageDirectoryFileV1[] = [];
   for (const row of sortedRows) {
     if (row.path.startsWith("signatures/")) {
       signatureFiles.push({
@@ -674,20 +694,20 @@ async function readWorldPackageDirectoryV2Internal(
       bytes: row.bytes,
     });
   }
-  return assembleWorldPackageDirectoryV2({
+  return assembleWorldPackageDirectoryV1({
     receipt,
     files: rootFiles,
     signatureFiles,
   });
 }
 
-function createAdapter(hooks: FileWorldPackageTestHooksV2): FileWorldPackageAdapterV2 {
+function createAdapter(hooks: FileWorldPackageTestHooksV1): FileWorldPackageAdapterV1 {
   return Object.freeze({
-    async writeWorldPackageDirectoryV2(
-      input: WriteWorldPackageDirectoryV2Input,
+    async writeWorldPackageDirectoryV1(
+      input: WriteWorldPackageDirectoryV1Input,
     ) {
       try {
-        await writeWorldPackageDirectoryV2Internal(input, hooks);
+        await writeWorldPackageDirectoryV1Internal(input, hooks);
       } catch (error) {
         if (
           error instanceof Error &&
@@ -698,11 +718,11 @@ function createAdapter(hooks: FileWorldPackageTestHooksV2): FileWorldPackageAdap
         fileIoFail("atomic package publication failed");
       }
     },
-    async readWorldPackageDirectoryV2(
-      input: ReadWorldPackageDirectoryV2Input,
+    async readWorldPackageDirectoryV1(
+      input: ReadWorldPackageDirectoryV1Input,
     ) {
       try {
-        return await readWorldPackageDirectoryV2Internal(input, hooks);
+        return await readWorldPackageDirectoryV1Internal(input, hooks);
       } catch (error) {
         if (
           error instanceof Error &&
@@ -718,14 +738,14 @@ function createAdapter(hooks: FileWorldPackageTestHooksV2): FileWorldPackageAdap
 
 const PRODUCTION_ADAPTER = createAdapter(EMPTY_HOOKS);
 
-export const writeWorldPackageDirectoryV2 =
-  PRODUCTION_ADAPTER.writeWorldPackageDirectoryV2;
-export const readWorldPackageDirectoryV2 =
-  PRODUCTION_ADAPTER.readWorldPackageDirectoryV2;
+export const writeWorldPackageDirectoryV1 =
+  PRODUCTION_ADAPTER.writeWorldPackageDirectoryV1;
+export const readWorldPackageDirectoryV1 =
+  PRODUCTION_ADAPTER.readWorldPackageDirectoryV1;
 
-export function createFileWorldPackageTestAdapterV2(
-  hooks: FileWorldPackageTestHooksV2,
-): FileWorldPackageAdapterV2 {
+export function createFileWorldPackageTestAdapterV1(
+  hooks: FileWorldPackageTestHooksV1,
+): FileWorldPackageAdapterV1 {
   return createAdapter(hooks);
 }
 
@@ -793,7 +813,7 @@ class FileWorldPackageStoreV1 implements WorldPackageStoreV1 {
 
   async #storedDirectory(
     worldPackageRef: WorldPackageRefV1,
-  ): Promise<WorldPackageDirectoryV2 | undefined> {
+  ): Promise<WorldPackageDirectoryV1 | undefined> {
     await requireStoreDirectory(this.#storeRootPath, "store root");
     const sha256Root = await lstatOrMissing(this.#sha256RootPath);
     if (isNil(sha256Root)) return undefined;
@@ -803,7 +823,7 @@ class FileWorldPackageStoreV1 implements WorldPackageStoreV1 {
     if (isNil(await lstatOrMissing(directoryPath))) return undefined;
     let directory;
     try {
-      directory = await readWorldPackageDirectoryV2({
+      directory = await readWorldPackageDirectoryV1({
         packageDirectoryPath: directoryPath,
         maximumTotalBytes: this.#maximumTotalBytes,
         maximumFileCount: this.#maximumFileCount,
@@ -816,7 +836,7 @@ class FileWorldPackageStoreV1 implements WorldPackageStoreV1 {
   }
 
   async #putOnce(
-    directoryValue: WorldPackageDirectoryV2,
+    directoryValue: WorldPackageDirectoryV1,
   ): Promise<WorldPackageStorePutResultV1> {
     const directory = canonicalWorldPackageDirectoryForStoreV1(directoryValue);
     const worldPackageRef = worldPackageRefFromRootHashV1(
@@ -841,7 +861,7 @@ class FileWorldPackageStoreV1 implements WorldPackageStoreV1 {
         return Object.freeze({ worldPackageRef, receipt: directory.receipt });
       }
       try {
-        await writeWorldPackageDirectoryV2({
+        await writeWorldPackageDirectoryV1({
           outputDirectoryPath: directoryPath,
           directory,
         });
@@ -878,7 +898,7 @@ class FileWorldPackageStoreV1 implements WorldPackageStoreV1 {
   }
 
   async put(
-    directory: WorldPackageDirectoryV2,
+    directory: WorldPackageDirectoryV1,
   ): Promise<WorldPackageStorePutResultV1> {
     return this.#putOnce(directory);
   }
@@ -886,7 +906,7 @@ class FileWorldPackageStoreV1 implements WorldPackageStoreV1 {
   async get(worldPackageRef: WorldPackageRefV1) {
     worldPackageRootHashFromRefV1(worldPackageRef);
     const directory = await this.#storedDirectory(worldPackageRef);
-    return isNil(directory) ? undefined : verifyWorldPackageDirectoryV2(directory);
+    return isNil(directory) ? undefined : verifyWorldPackageDirectoryV1(directory);
   }
 }
 

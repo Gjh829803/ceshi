@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import type {
   AuthoringSpecV4,
   DefinitionResourceRefOverrideV1,
@@ -15,10 +17,6 @@ import type {
 
 export { FIRST_BATCH_ALLOWED_OVERRIDE_PATHS_V1 } from "@whitebox-world/authoring";
 export type { DefinitionResourceRefOverrideV1 };
-
-import type { Sha256HashV1 } from "./parse-kernel.js";
-
-export type { Sha256HashV1 } from "./parse-kernel";
 
 export const REGISTRY_RESOURCE_KINDS_V1 = [
   "subject-definition",

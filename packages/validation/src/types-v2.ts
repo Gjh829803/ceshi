@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import type {
   BooleanAssertionMetricDefinitionV1,
   BooleanAssertionMetricResultV1,
@@ -7,7 +9,6 @@ import type {
   HashEqualityMetricResultV1,
   SetEqualityMetricDefinitionV1,
   SetEqualityMetricResultV1,
-  Sha256HashV1,
   ValidationDiagnosticCodeV1,
   ValidationGateRequirementV1,
   ValidationGateStatusV1,
@@ -136,7 +137,7 @@ export interface WorldPackageValidationSubjectV1 {
   readonly worldPackageRootHash: Sha256HashV1;
   readonly authoringSpecHash: Sha256HashV1;
   readonly normalizedWorldIrHash: Sha256HashV1;
-  readonly executionPlanHash: Sha256HashV1;
+  readonly worldBuildIdentityHash: Sha256HashV1;
   readonly resourceLockHash: Sha256HashV1;
   readonly layoutSolveReportHash: Sha256HashV1;
 }

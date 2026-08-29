@@ -13,8 +13,9 @@ import {
 } from "@whitebox-world/authoring";
 import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
 import type {
-  ExecutionPlanV5,
-  Vec3,
+  CanonicalSceneExecutionPlanV1,
+  RuntimeVec3V1,
+  WorldRuntimeBootstrapV1,
   WorldRuntimeSnapshotV4,
 } from "@whitebox-world/runtime-contracts";
 
@@ -47,6 +48,7 @@ import { startWorldkitServer, type WorldkitServerHandle } from "../lib/worldkit-
 import { launchChromiumWithSystemFallback } from "../lib/playwright-browser-launch";
 import { main as worldkitMain } from "../cli/worldkit";
 import { PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1 } from "../../apps/playground/src/worldkit-asset-resolver";
+import { requireActivePublishedLocomotionV1 } from "./locomotion-capability-state.js";
 
 const REPOSITORY_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const INTAKE_FIXTURE = parseProductAssetIntakeFixtureV1(
@@ -102,7 +104,8 @@ interface WorldBuildArtifactV4 {
   readonly normalizedWorldIrHash: string;
   readonly executionPlanHash: string;
   readonly normalizedWorldIr: NormalizedWorldIRV4;
-  readonly executionPlan: ExecutionPlanV5;
+  readonly executionPlan: CanonicalSceneExecutionPlanV1;
+  readonly worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
 }
 
 interface ArtifactPaths {
@@ -127,7 +130,7 @@ interface ActionCaptureEvidence extends PngInspection {
   readonly tick: number;
   readonly actionId: CaptureActionId;
   readonly subjectEntityId: typeof PRIMARY_ENTITY_ID;
-  readonly positionMetersXYZ: Vec3;
+  readonly positionMetersXYZ: RuntimeVec3V1;
   readonly movementMedium: "ground" | "air";
   readonly subjectSilhouette: SubjectPoseEvidenceV1;
 }
@@ -159,8 +162,8 @@ interface BrowserEvidence {
   };
   readonly wallStop: {
     readonly entityId: typeof PRIMARY_ENTITY_ID;
-    readonly startPositionMetersXYZ: Vec3;
-    readonly stopPositionMetersXYZ: Vec3;
+    readonly startPositionMetersXYZ: RuntimeVec3V1;
+    readonly stopPositionMetersXYZ: RuntimeVec3V1;
     readonly maximumAllowedXMeters: number;
   };
 }
@@ -230,32 +233,12 @@ function requireSubjectProjection(snapshot: WorldRuntimeSnapshotV4, entityId: st
 }
 
 function requireLocomotionCapability(snapshot: WorldRuntimeSnapshotV4, entityId: string) {
-  const capability = Object.values(
-    requireSubjectProjection(snapshot, entityId).capabilityStatesById,
-  ).find((candidate) =>
-    candidate.kind === "locomotion-capability-state" ||
-    candidate.kind === "locomotion-capability-state-v2"
-  );
-  assert.ok(capability !== undefined, `Missing locomotion capability state for '${entityId}'.`);
-  if (capability.kind === "locomotion-capability-state-v2") {
-    if (capability.locomotion.status === "suspended") {
-      throw new Error(`Unexpected suspended locomotion capability for '${entityId}'.`);
-    }
-    return capability.locomotion;
-  }
-  if (capability.mode === "suspended") {
-    throw new Error(`Unexpected suspended locomotion capability for '${entityId}'.`);
-  }
-  return capability;
+  return requireActivePublishedLocomotionV1(snapshot, entityId);
 }
 
 function locomotionActionId(snapshot: WorldRuntimeSnapshotV4, entityId: string): ActionId {
-  const capability = requireLocomotionCapability(snapshot, entityId);
-  if ("mobilityMode" in capability) {
-    if (capability.mobilityMode === "airborne") return "jump";
-    return capability.gait === "none" ? "idle" : capability.gait;
-  }
-  return capability.mode === "airborne" ? "jump" : capability.mode;
+  const mode = requireLocomotionCapability(snapshot, entityId).mode;
+  return mode === "airborne" ? "jump" : mode;
 }
 
 function assertPossessedBy(snapshot: WorldRuntimeSnapshotV4, controlledEntityId: string): void {
@@ -271,7 +254,7 @@ function assertPossessedBy(snapshot: WorldRuntimeSnapshotV4, controlledEntityId:
 }
 
 function normalizedHorizontalXZ(
-  vectorXYZ: Vec3,
+  vectorXYZ: RuntimeVec3V1,
   label: string,
 ): readonly [number, number] {
   const magnitude = Math.hypot(vectorXYZ[0], vectorXYZ[2]);
@@ -308,9 +291,18 @@ function assertMovementFacingSemanticAlignment(
     "Subject velocity",
   );
 
+  const alignment =
+    subjectForwardXZ[0] * velocityXZ[0] + subjectForwardXZ[1] * velocityXZ[1];
   assert.ok(
-    subjectForwardXZ[0] * velocityXZ[0] + subjectForwardXZ[1] * velocityXZ[1] > 0.99,
-    `Subject '${entityId}' facing is not aligned with its movement.`,
+    alignment > 0.99,
+    [
+      `Subject '${entityId}' facing is not aligned with its movement.`,
+      `alignment=${alignment}`,
+      `forwardXZ=${JSON.stringify(subjectForwardXZ)}`,
+      `velocityXZ=${JSON.stringify(velocityXZ)}`,
+      `subjectForwardXYZ=${JSON.stringify(camera.subjectForwardXYZ)}`,
+      `subjectVelocity=${JSON.stringify(camera.subjectVelocityMetersPerSecondXYZ)}`,
+    ].join(" "),
   );
 }
 
@@ -380,16 +372,24 @@ async function runCliGates(paths: ArtifactPaths): Promise<WorldBuildArtifactV4> 
   assert.equal(artifact.kind, "worldkit-build-artifact");
   assert.equal(artifact.schemaVersion, 4);
   assert.equal(artifact.normalizedWorldIr.schemaVersion, 4);
-  assert.equal(artifact.executionPlan.schemaVersion, 5);
-  assert.equal(artifact.executionPlan.initialControlledEntityId, PRIMARY_ENTITY_ID);
+  assert.equal(artifact.executionPlan.schemaVersion, 1);
+  assert.equal(
+    artifact.worldRuntimeBootstrap.initialControlledEntityId,
+    PRIMARY_ENTITY_ID,
+  );
   assert.deepEqual(
-    artifact.executionPlan.subjects.map((subject) => subject.entityId),
+    artifact.worldRuntimeBootstrap.subjectRuntimeDescriptors.map(
+      (subject) => subject.entityId,
+    ),
     [PRIMARY_ENTITY_ID],
   );
-  assert.equal(artifact.executionPlan.subjectAssets.length, 1);
-  assert.equal(artifact.executionPlan.subjectAssets[0]?.subjectAssetRef, SUBJECT_ASSET_REF);
+  assert.equal(artifact.worldRuntimeBootstrap.subjectAssets.length, 1);
+  assert.equal(
+    artifact.worldRuntimeBootstrap.subjectAssets[0]?.subjectAssetRef,
+    SUBJECT_ASSET_REF,
+  );
   assert.ok(
-    artifact.executionPlan.subjects.every(
+    artifact.worldRuntimeBootstrap.subjectRuntimeDescriptors.every(
       (subject) => subject.subjectDefinitionRef === SUBJECT_DEFINITION_REF,
     ),
   );
@@ -511,7 +511,7 @@ async function verifyBrowser(
   artifact: WorldBuildArtifactV4,
   productAsset: ProductAssetEvidenceV1,
 ): Promise<BrowserEvidence> {
-  const animationSet = artifact.executionPlan.animationSets.find(
+  const animationSet = artifact.worldRuntimeBootstrap.animationSets.find(
     (candidate) => candidate.subjectAssetRef === SUBJECT_ASSET_REF,
   );
   assert.ok(animationSet !== undefined);
@@ -690,7 +690,7 @@ async function writeVerification(
     await readFile(paths.snapshot, "utf8"),
     "G Bot CLI snapshot",
   );
-  const compiledAsset = artifact.executionPlan.subjectAssets[0];
+  const compiledAsset = artifact.worldRuntimeBootstrap.subjectAssets[0];
   assert.ok(compiledAsset !== undefined);
   assert.equal(compiledAsset.artifactContentHash, productAsset.artifactContentHash);
   const verification = {

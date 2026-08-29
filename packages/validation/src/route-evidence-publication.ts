@@ -1,3 +1,5 @@
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
 import { canonicalJsonBytes, sha256Bytes, sha256CanonicalJson } from "@whitebox-world/protocol";
 import {
   canonicalWorldkitBrowserRouteEvidencePublicationV2,
@@ -36,7 +38,6 @@ import type {
   ValidationReportV2,
   WorldPackageValidationSubjectV1,
 } from "./types-v2.js";
-import type { Sha256HashV1 } from "./types.js";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -61,7 +62,7 @@ const SUBJECT_FIELDS = [
   "worldPackageRootHash",
   "authoringSpecHash",
   "normalizedWorldIrHash",
-  "executionPlanHash",
+  "worldBuildIdentityHash",
   "resourceLockHash",
   "layoutSolveReportHash",
 ] as const;
@@ -341,8 +342,6 @@ function hashValidationReportV2(report: ValidationReportV2): Sha256HashV1 {
   return sha256CanonicalJson(report) as Sha256HashV1;
 }
 
-
-
 function expectedOverlayV2(
   row: RouteValidationRowInputV2,
   overlay: RouteOverlayV2,
@@ -518,6 +517,10 @@ export function createWorldkitBrowserRouteEvidencePublicationV2(
     const rebuiltReport = createRouteValidationReportV2({
       reportId: snapshot.validationReport.id,
       subject: snapshot.subject,
+      executionPlanHash:
+        snapshot.validationReport.routeValidationSetReceipt.executionPlanHash,
+      resourceLockHash:
+        snapshot.validationReport.routeValidationSetReceipt.resourceLockHash,
       dependencyReportRefs: snapshot.validationReport.dependencyReportRefs,
       validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
       requiredRoutes:
@@ -550,8 +553,8 @@ export function createWorldkitBrowserRouteEvidencePublicationV2(
       worldPackageRootHash: snapshot.subject.worldPackageRootHash,
       authoringSpecHash: snapshot.subject.authoringSpecHash,
       normalizedWorldIrHash: snapshot.subject.normalizedWorldIrHash,
-      executionPlanHash: snapshot.subject.executionPlanHash,
-      resourceLockHash: snapshot.subject.resourceLockHash,
+      executionPlanHash: receipt.executionPlanHash,
+      resourceLockHash: receipt.resourceLockHash,
       layoutSolveReportHash: snapshot.subject.layoutSolveReportHash,
       validationReportHash: rebuiltReportHash,
       routeValidationSetReceiptHash: hashRouteValidationSetReceiptV1(receipt),

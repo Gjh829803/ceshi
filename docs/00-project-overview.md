@@ -61,7 +61,7 @@ Director LLM → Render Directive SDK ────────────┘
 第一期 Alpha 已证明以下链路可以运行：
 
 - 所有 Canonical 世界统一使用 AuthoringSpec V4 → NormalizedWorldIR V4 →
-  ExecutionPlan V5；这条唯一当前链路保持严格 JSON、精确版本 Registry、Package
+  Canonical Scene Plan V1；这条唯一当前链路保持严格 JSON、精确版本 Registry、Package
   局部 Primitive Subject Definition、Socket、自动 Capsule、Definition Hash 和
   Resource Lock。未发布的旧版本已删除，不提供兼容解析或字段别名。
 - Placement Solver S1 已交付 Fixed/Solved Placement、Polygon Region、Polyline Route、
@@ -75,7 +75,7 @@ Director LLM → Render Directive SDK ────────────┘
   `verify capture|route|explain`；真实 Chromium 门禁覆盖碰撞、入水、两个自定义实例和五
   Pass 控制捕获。P1.6 另增 `schema project`、`registry search` 与 `change *`：文件模式
   只改 Authoring JSON，不把 Full Reload 伪装成已随 `pnpm worldkit change apply` 发布。
-- Browser Protocol V5 仍是 exact 39-key Runtime 面。结构修改走独立的
+- Browser Protocol V5 仍是 exact 38-key Runtime 面。结构修改走独立的
   `window.__WORLDKIT_AUTHORING_EDIT__`，只出现在注入了 AuthoringSpec 的 Canonical
   Authoring 页；catalog `?scene=` 没有这个对象。Full Reload 的正式 Host composition
   已使用 owner-private 文件 WAL、不可变 Package Store、启动恢复与有界 cleanup retry
@@ -83,7 +83,7 @@ Director LLM → Render Directive SDK ────────────┘
   已交付。完整 P1.4 WorldPackage、Package CLI 与持久 headless Runtime Session 由独立
   P1.4 工作流拥有。
 - Route Task 8 可信 Node 链路把 Authoring V4 → NormalizedWorldIR V4 →
-  ExecutionPlan V5 世界依次物化为最小正式
+  Canonical Scene Plan V1 世界依次物化为唯一正式
   WorldPackage Build Receipt、Validation Subject、Recast Graph/Path、真实
   Babylon/Havok `NullEngine` 固定 Tick Probe 和 Canonical Evidence/Report；Browser
   Protocol V5 通过 Route Summary、Path Receipt、Probe Receipt、Overlay 四个只读
@@ -173,7 +173,7 @@ Validation Report 以及完整 P0.1。S1 证明的是一个受控纵向切片，
 
 ### Route R1 Heightfield：可信验证与 Golden Gate
 
-已实施：`worldkit verify route` 从 Canonical Authoring V4/ExecutionPlan V5 出发，
+已实施：`worldkit verify route` 从 Canonical Authoring V4/Canonical Scene Plan V1 出发，
 通过 `@whitebox-world/world-package` 建立最小正式 Package Root/Build Receipt，由
 Validation Subject 绑定五个权威 Hash，再用 Recast Graph/Path 与真实 Babylon/Havok
 `NullEngine` Character Controller Probe 生成 Canonical Route Evidence 和统一 Report。

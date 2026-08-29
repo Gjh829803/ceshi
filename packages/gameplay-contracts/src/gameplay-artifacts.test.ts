@@ -103,6 +103,25 @@ function bootstrapBody(
     ],
     semanticActionDefinitions: [actionZ, actionA],
     availableCapabilityRefs: ["capability:z", "capability:a"],
+    initialRelationshipStates: [
+      {
+        id: "relationship:z",
+        type: "mountedOn",
+        schemaVersion: 1,
+        riderEntityId: "subject-z",
+        mountEntityId: "subject-a",
+        mountSlotId: "standing",
+        establishedSimulationTick: 0,
+      },
+      {
+        id: "relationship:a",
+        type: "possessedBy",
+        schemaVersion: 1,
+        controlledEntityId: "subject-a",
+        controllerEntityId: "controller-a",
+        establishedSimulationTick: 0,
+      },
+    ],
     ...overrides,
   };
 }
@@ -294,7 +313,7 @@ describe("GameplayBootstrapV1", () => {
     );
   });
 
-  it("canonicalizes all four collections independent of input permutation", () => {
+  it("canonicalizes every collection independent of input permutation", () => {
     const body = bootstrapBody();
     const first = createGameplayBootstrapV1(body);
     const second = createGameplayBootstrapV1({
@@ -303,6 +322,7 @@ describe("GameplayBootstrapV1", () => {
       featureResourceLocks: [...body.featureResourceLocks].reverse(),
       semanticActionDefinitions: [...body.semanticActionDefinitions].reverse(),
       availableCapabilityRefs: [...body.availableCapabilityRefs].reverse(),
+      initialRelationshipStates: [...body.initialRelationshipStates].reverse(),
     });
 
     expect(first).toEqual(second);
@@ -319,6 +339,10 @@ describe("GameplayBootstrapV1", () => {
       "worldkit://semantic-action/wave@1",
     ]);
     expect(first.availableCapabilityRefs).toEqual(["capability:a", "capability:z"]);
+    expect(first.initialRelationshipStates.map(({ id }) => id)).toEqual([
+      "relationship:a",
+      "relationship:z",
+    ]);
     expect(first.contentHash).toBe(deriveGameplayBootstrapContentHashV1(body));
     expect(new TextDecoder().decode(gameplayBootstrapCanonicalBytesV1(first)))
       .toBe(canonicalizeGameplayBootstrapV1(first));
@@ -338,6 +362,7 @@ describe("GameplayBootstrapV1", () => {
         featureResourceLocks: [...body.featureResourceLocks].reverse(),
         semanticActionDefinitions: [...body.semanticActionDefinitions].reverse(),
         availableCapabilityRefs: [...body.availableCapabilityRefs].reverse(),
+        initialRelationshipStates: [...body.initialRelationshipStates].reverse(),
       }),
     );
 
@@ -391,6 +416,10 @@ describe("GameplayBootstrapV1", () => {
       ...body,
       availableCapabilityRefs: [...body.availableCapabilityRefs].reverse(),
     })],
+    ["initialRelationshipStates", (body: GameplayBootstrapBodyV1) => ({
+      ...body,
+      initialRelationshipStates: [...body.initialRelationshipStates].reverse(),
+    })],
   ] as const)("rejects noncanonical serialized %s", (_field, mutate) => {
     const canonical = createGameplayBootstrapV1(bootstrapBody());
     expect(() => parseGameplayBootstrapV1(mutate(canonical))).toThrow(
@@ -422,6 +451,13 @@ describe("GameplayBootstrapV1", () => {
       ...body,
       availableCapabilityRefs: ["capability:a", "capability:a"],
     })).toThrow(/GameplayBootstrapBodyV1/);
+    expect(() => createGameplayBootstrapV1({
+      ...body,
+      initialRelationshipStates: [
+        body.initialRelationshipStates[0]!,
+        body.initialRelationshipStates[0]!,
+      ],
+    })).toThrow(/GameplayBootstrapBodyV1/);
 
     const bootstrap = createGameplayBootstrapV1(body);
     expect(() => parseGameplayBootstrapV1({
@@ -450,6 +486,50 @@ describe("GameplayBootstrapV1", () => {
       ...createGameplayBootstrapV1(body),
       mystery: true,
     })).toThrow(/GameplayBootstrapV1/);
+
+    const relationshipGetter = vi.fn(() => "subject-a");
+    const relationship = {
+      ...body.initialRelationshipStates[0]!,
+    } as Record<string, unknown>;
+    Object.defineProperty(relationship, "riderEntityId", {
+      configurable: true,
+      enumerable: true,
+      get: relationshipGetter,
+    });
+    expect(() => createGameplayBootstrapV1({
+      ...body,
+      initialRelationshipStates: [relationship],
+    } as unknown as GameplayBootstrapBodyV1)).toThrow(
+      /GameplayBootstrapBodyV1/,
+    );
+    expect(relationshipGetter).not.toHaveBeenCalled();
+  });
+
+  it("requires the closed initialRelationshipStates field and binds it into the body hash", () => {
+    const body = bootstrapBody();
+    const { initialRelationshipStates: _missing, ...missing } = body;
+    expect(() => createGameplayBootstrapV1(
+      missing as GameplayBootstrapBodyV1,
+    )).toThrow(/GameplayBootstrapBodyV1/);
+    expect(() => createGameplayBootstrapV1({
+      ...body,
+      initialRelationshipStates: [{
+        ...body.initialRelationshipStates[0]!,
+        unknownField: true,
+      }],
+    } as unknown as GameplayBootstrapBodyV1)).toThrow(
+      /GameplayBootstrapBodyV1/,
+    );
+
+    const canonical = createGameplayBootstrapV1(body);
+    expect(() => parseGameplayBootstrapV1({
+      ...canonical,
+      initialRelationshipStates: [],
+    })).toThrow(/GameplayBootstrapV1/);
+    expect(createGameplayBootstrapV1({
+      ...body,
+      initialRelationshipStates: [],
+    }).contentHash).not.toBe(canonical.contentHash);
   });
 
   it("uses code-unit lexical ordering rather than locale-sensitive ordering", () => {

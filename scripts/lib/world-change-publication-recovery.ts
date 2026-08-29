@@ -13,7 +13,6 @@ import {
   type WorldChangeJournalV1,
 } from "@whitebox-world/authoring-host";
 import {
-  worldPackageRefFromRootHashV1,
   type WorldPackageStoreV1,
 } from "@whitebox-world/world-package";
 import { isEmpty, isEqual, isNil } from "lodash-es";
@@ -56,13 +55,14 @@ function runtimeConfiguration(
   directory: NonNullable<Awaited<ReturnType<WorldPackageStoreV1["get"]>>>,
 ): TrustedRuntimeWorldConfigurationV1 {
   return Object.freeze({
-    executionPlan: directory.executionPlan,
-    executionPlanHash: directory.receipt.manifest.executionPlanHash,
-    worldPackageRef: worldPackageRefFromRootHashV1(
-      directory.receipt.worldPackageRootHash,
-    ),
-    worldPackageBuildReceipt: directory.receipt,
+    worldBuildIdentity: directory.receipt.worldBuildIdentity,
     gameplayBootstrap: directory.gameplayBootstrap,
+    worldRuntimeBootstrap: directory.worldRuntimeBootstrap,
+    sceneSource: Object.freeze({
+      kind: "canonical-execution-plan" as const,
+      executionPlan: directory.executionPlan,
+      executionPlanHash: directory.receipt.manifest.executionPlanHash,
+    }),
   });
 }
 
@@ -118,7 +118,10 @@ export async function recoverCommittedWorldPublicationsV1(input: {
         continue;
       }
       const worldConfiguration = runtimeConfiguration(directory);
-      if (worldConfiguration.worldPackageRef !== record.worldPackageRef) {
+      if (
+        worldConfiguration.worldBuildIdentity.worldPackageRef !==
+          record.worldPackageRef
+      ) {
         failures.push(Object.freeze({
           worldId: record.worldId,
           requestId: record.requestId,

@@ -22,12 +22,12 @@ import { describe, expect, it } from "vitest";
 import {
   createFakeGameplayWorldPortHarnessV1,
 } from "./test/fake-gameplay-world-adapter";
+import { createTestWorldBuildIdentityV1 } from "./test/world-build-identity-fixture";
 import { WorldSession } from "./world-session";
 
 const HASH = `sha256:${"a".repeat(64)}` as const;
 const RUNTIME_SESSION_ID = "runtime.fixed-actions";
 const WORLD_SESSION_ID = "world.fixed-actions";
-const WORLD_PACKAGE_REF = "worldkit://world-package/fixed-actions@1";
 const HERO_DEFINITION_REF = "worldkit://entity-definition/humanoid@1";
 const ACTION_REF = "worldkit://semantic-action/blocking-pose@1";
 
@@ -166,6 +166,7 @@ function createHarnessAndOptions(input: Readonly<{
       ACTION_PROJECTION_CAPABILITY_REF,
       CONTROL_TRANSITION_CAPABILITY_REF,
     ],
+    initialRelationshipStates: [],
   });
   const harness = createFakeGameplayWorldPortHarnessV1({
     initialWorldProjection: projection(
@@ -184,9 +185,7 @@ function createHarnessAndOptions(input: Readonly<{
     options: {
       runtimeSessionId: RUNTIME_SESSION_ID,
       worldSessionId: WORLD_SESSION_ID,
-      worldPackageRef: WORLD_PACKAGE_REF,
-      worldPackageRootHash: HASH,
-      executionPlanHash: HASH,
+      worldBuildIdentity: createTestWorldBuildIdentityV1(HASH),
       gameplayBootstrap,
       initialRelationships: [],
       participantStates: [participantState],

@@ -15,6 +15,7 @@
     "@whitebox-world/protocol": "workspace:*",
     "@whitebox-world/runtime-contracts": "workspace:*",
     "@whitebox-world/subject-registry": "workspace:*",
+    "@whitebox-world/world-identity": "workspace:*",
     "jsonc-parser": "^3.3.1",
     "lodash-es": "^4.18.1"
   }

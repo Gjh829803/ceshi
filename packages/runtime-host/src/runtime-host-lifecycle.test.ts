@@ -1,7 +1,5 @@
 import { DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1 } from "@whitebox-world/gameplay-contracts";
-import { sha256CanonicalJson } from "@whitebox-world/protocol";
-import type { ExecutionPlanV5 } from "@whitebox-world/runtime-contracts";
-import type { WorldPackageSha256HashV1 } from "@whitebox-world/world-package";
+
 import { describe, expect, it, vi } from "vitest";
 
 import type { WorldSessionPublicationV1 } from "./world-session";
@@ -9,12 +7,12 @@ import type { WorldSessionPublicationV1 } from "./world-session";
 import {
   HASH_A,
   HASH_B,
+  HASH_C,
   INITIAL_WORLD_PACKAGE_REF,
   REPLACEMENT_WORLD_PACKAGE_REF,
   RUNTIME_SESSION_ID,
   controllerState,
   createAdapterFactoryHarness,
-  createBuildReceipt,
   createHost,
   createPortHarness,
   heroState,
@@ -26,37 +24,104 @@ import {
   runtimeHostConstructor,
 } from "./test/runtime-host-lifecycle-harness";
 
+function nativeWorldConfiguration(
+  worldPackageRef = INITIAL_WORLD_PACKAGE_REF,
+) {
+  const baseline = mutableWorldConfiguration(worldPackageRef);
+  return {
+    ...baseline,
+    worldBuildIdentity: {
+      ...baseline.worldBuildIdentity,
+      sceneSourceIdentity: {
+        kind: "babylon-native-scene" as const,
+        nativeSceneBootstrapHash: HASH_A,
+        sceneModuleBundleHash: HASH_B,
+        nativeSceneContributionHash: HASH_C,
+      },
+    },
+    sceneSource: {
+      kind: "babylon-native-scene" as const,
+      bootstrap: {
+        kind: "babylon-native-scene-bootstrap" as const,
+        schemaVersion: 1 as const,
+        id: "native.lifecycle",
+        sceneModuleRef: "worldkit://native-scene/lifecycle@1",
+        nativeSceneApiRef: "worldkit://native-scene-api/babylon@1",
+        nativeSceneProfileRef: "worldkit://native-scene-profile/local@1",
+        gameplayBootstrapRef: baseline.gameplayBootstrap.resourceRef,
+        initialControlledEntityId:
+          baseline.worldRuntimeBootstrap.initialControlledEntityId,
+        gravityMetersPerSecondSquaredXYZ: [0, -9.81, 0] as const,
+        initialCamera: {
+          mode: "third-person" as const,
+          pitchRadians: 0.2,
+          distanceMeters: 4,
+          fovDegrees: 60,
+          targetHeightMeters: 1.2,
+        },
+        seed: 24,
+        spawnMarkerId: "spawn.main",
+      },
+      sceneModuleBundleRef:
+        `package://native-scene-module/sha256/${"d".repeat(64)}` as const,
+    },
+  };
+}
 
 describe("RuntimeHost lifecycle isolation and admission", () => {
-  it("rejects WorldPackage V1 explicitly before adapter creation", async () => {
+  it("rejects formal Native admission before adapter or Candidate allocation", async () => {
     const port = createPortHarness();
     const adapter = createAdapterFactoryHarness([port]);
-    const baseline = mutableWorldConfiguration(INITIAL_WORLD_PACKAGE_REF);
-    const initialWorld = {
-      ...baseline,
-      worldPackageBuildReceipt: {
-        ...baseline.worldPackageBuildReceipt,
-        schemaVersion: 1,
-      },
-    };
+    const initialWorld = nativeWorldConfiguration();
 
     await expect(runtimeHostConstructor().create(hostOptions(
       adapter.factory,
-      ["world-session.v1-forbidden"],
+      ["world-session.native-forbidden"],
       { initialWorld },
-    ))).rejects.toThrow("WORLD_PACKAGE_VERSION_UNSUPPORTED");
+    ))).rejects.toThrow("WORLDKIT_NATIVE_SCENE_PRODUCTION_NOT_ADMITTED");
     expect(adapter.factory.create).not.toHaveBeenCalled();
     expect(port.calls).toEqual([]);
   });
 
-  it("rejects a content Ref that does not match the verified V2 Package Root", async () => {
+  it("rejects formal Native replacement and publication before preflight or Candidate allocation", async () => {
+    const current = createPortHarness();
+    const candidate = createPortHarness();
+    const { adapter, host } = await createHost(
+      [current, candidate],
+      ["world-session.initial", "world-session.candidate"],
+    );
+    const worldConfiguration = nativeWorldConfiguration(
+      REPLACEMENT_WORLD_PACKAGE_REF,
+    );
+
+    expect(() => host.replaceWorld({ worldConfiguration })).toThrow(
+      "WORLDKIT_NATIVE_SCENE_PRODUCTION_NOT_ADMITTED",
+    );
+    await expect(host.publishWorldReplacementV1({
+      worldConfiguration,
+      publication: {},
+    })).resolves.toMatchObject({
+      status: "rejected",
+      failureKind: "prepare-failed",
+    });
+    expect(adapter.factory.preflightConcurrentResidency).not.toHaveBeenCalled();
+    expect(adapter.factory.create).toHaveBeenCalledTimes(1);
+    expect(candidate.calls).toEqual([]);
+    expect(host.snapshot().worldState.worldSessionId).toBe(
+      "world-session.initial",
+    );
+  });
+
+  it("rejects a Package Ref that does not match World Build Identity Root", async () => {
     const port = createPortHarness();
     const adapter = createAdapterFactoryHarness([port]);
     const baseline = mutableWorldConfiguration(INITIAL_WORLD_PACKAGE_REF);
     const initialWorld = {
       ...baseline,
-      worldPackageRef:
-        `package://world-package/sha256/${"f".repeat(64)}`,
+      worldBuildIdentity: {
+        ...baseline.worldBuildIdentity,
+        worldPackageRef: `package://world-package/sha256/${"f".repeat(64)}`,
+      },
     };
 
     await expect(runtimeHostConstructor().create(hostOptions(
@@ -188,28 +253,23 @@ describe("RuntimeHost lifecycle isolation and admission", () => {
     expect(port.calls).toEqual([]);
   });
 
-  it("rejects a consistently rehashed nested ExecutionPlan dialect before adapter creation", async () => {
+  it("rejects an unknown Canonical Scene Plan field before adapter creation", async () => {
     const port = createPortHarness();
     const adapter = createAdapterFactoryHarness([port]);
     const baseline = mutableWorldConfiguration(INITIAL_WORLD_PACKAGE_REF);
     const executionPlan = {
-      ...baseline.executionPlan,
+      ...baseline.sceneSource.executionPlan,
       terrain: {
-        ...baseline.executionPlan.terrain,
+        ...baseline.sceneSource.executionPlan.terrain,
         providerName: "private-heightfield-provider",
       },
-    } as unknown as ExecutionPlanV5;
-    const executionPlanHash = sha256CanonicalJson(
-      executionPlan,
-    ) as WorldPackageSha256HashV1;
+    };
     const initialWorld = {
       ...baseline,
-      executionPlan,
-      executionPlanHash,
-      worldPackageBuildReceipt: createBuildReceipt(
+      sceneSource: {
+        ...baseline.sceneSource,
         executionPlan,
-        executionPlanHash,
-      ),
+      },
     };
 
     await expect(runtimeHostConstructor().create(hostOptions(
@@ -222,50 +282,24 @@ describe("RuntimeHost lifecycle isolation and admission", () => {
     expect(port.calls).toEqual([]);
   });
 
-  it("rejects a consistently rehashed static Subject with two Asset Parts before adapter creation", async () => {
+  it("rejects a duplicate Runtime Subject before adapter creation", async () => {
     const port = createPortHarness();
     const adapter = createAdapterFactoryHarness([port]);
     const baseline = mutableWorldConfiguration(INITIAL_WORLD_PACKAGE_REF);
-    const subject = baseline.executionPlan.subjects[0]!;
-    const assetPart = {
-      id: "body.asset",
-      kind: "asset" as const,
-      subjectAssetRef: "worldkit://subject-asset/hostile@1",
-      localTransform: {
-        positionMetersXYZ: [0, 0, 0] as [number, number, number],
-        rotationEulerRadiansXYZ: [0, 0, 0] as [number, number, number],
-        scaleXYZ: [1, 1, 1] as [number, number, number],
-      },
-      appearance: { mode: "whitebox-neutral" as const },
-      semanticTags: ["hostile"],
-    };
-    const executionPlan = {
-      ...baseline.executionPlan,
-      subjects: [{
-        ...subject,
-        visualBinding: { mode: "static" as const },
-        visualParts: [
-          assetPart,
-          { ...structuredClone(assetPart), id: "body.asset.duplicate" },
-        ],
-      }],
-    } as ExecutionPlanV5;
-    const executionPlanHash = sha256CanonicalJson(
-      executionPlan,
-    ) as WorldPackageSha256HashV1;
     const initialWorld = {
       ...baseline,
-      executionPlan,
-      executionPlanHash,
-      worldPackageBuildReceipt: createBuildReceipt(
-        executionPlan,
-        executionPlanHash,
-      ),
+      worldRuntimeBootstrap: {
+        ...baseline.worldRuntimeBootstrap,
+        subjectRuntimeDescriptors: [
+          ...baseline.worldRuntimeBootstrap.subjectRuntimeDescriptors,
+          ...baseline.worldRuntimeBootstrap.subjectRuntimeDescriptors,
+        ],
+      },
     };
 
     await expect(runtimeHostConstructor().create(hostOptions(
       adapter.factory,
-      ["world-session.invalid-static-assets"],
+      ["world-session.duplicate-runtime-subject"],
       { initialWorld },
     ))).rejects.toThrow(/RuntimeWorldConfigurationV1/);
     expect(adapter.factory.preflightConcurrentResidency).not.toHaveBeenCalled();
@@ -273,7 +307,7 @@ describe("RuntimeHost lifecycle isolation and admission", () => {
     expect(port.calls).toEqual([]);
   });
 
-  it("applies the same closed Plan admission before replacement preflight", async () => {
+  it("applies the same closed Scene Plan admission before replacement preflight", async () => {
     const current = createPortHarness();
     const candidate = createPortHarness();
     const { adapter, host } = await createHost(
@@ -282,25 +316,20 @@ describe("RuntimeHost lifecycle isolation and admission", () => {
     );
     const baseline = mutableWorldConfiguration(REPLACEMENT_WORLD_PACKAGE_REF);
     const executionPlan = {
-      ...baseline.executionPlan,
+      ...baseline.sceneSource.executionPlan,
       traversal: {
-        ...baseline.executionPlan.traversal,
+        ...baseline.sceneSource.executionPlan.traversal,
         providerHandle: 7,
       },
-    } as unknown as ExecutionPlanV5;
-    const executionPlanHash = sha256CanonicalJson(
-      executionPlan,
-    ) as WorldPackageSha256HashV1;
+    };
 
     expect(() => host.replaceWorld({
       worldConfiguration: {
         ...baseline,
-        executionPlan,
-        executionPlanHash,
-        worldPackageBuildReceipt: createBuildReceipt(
+        sceneSource: {
+          ...baseline.sceneSource,
           executionPlan,
-          executionPlanHash,
-        ),
+        },
       },
     })).toThrow(/RuntimeWorldConfigurationV1/);
     expect(adapter.factory.preflightConcurrentResidency).not.toHaveBeenCalled();
@@ -802,10 +831,13 @@ describe("RuntimeHost two-phase replacement", () => {
       [initialPort, replacementPort, resetPort],
       ["world-session.initial", "world-session.replacement", "world-session.reset"],
     );
-    const callerOwnedInitial = (
-      created.options as { initialWorld: { worldPackageRef: string } }
-    ).initialWorld;
-    callerOwnedInitial.worldPackageRef = "worldkit://world-package/mutated-after-create@1";
+    const callerOwnedIdentity = (
+      created.options as {
+        initialWorld: { worldBuildIdentity: { worldPackageRef: string } };
+      }
+    ).initialWorld.worldBuildIdentity;
+    callerOwnedIdentity.worldPackageRef =
+      `package://world-package/sha256/${"f".repeat(64)}`;
 
     await created.host.replaceWorld(
       replacementRequest(REPLACEMENT_WORLD_PACKAGE_REF),

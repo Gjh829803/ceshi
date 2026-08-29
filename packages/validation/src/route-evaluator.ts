@@ -74,6 +74,8 @@ export interface RouteValidationRowInputV2 {
 export interface CreateRouteValidationReportInputV2 {
   readonly reportId: string;
   readonly subject: WorldPackageValidationSubjectV1;
+  readonly executionPlanHash: Sha256Hash;
+  readonly resourceLockHash: Sha256Hash;
   readonly dependencyReportRefs?: readonly string[];
   readonly validationProfile: ValidationProfileV2;
   readonly requiredRoutes: readonly RouteValidationRequiredRouteV1[];
@@ -83,6 +85,8 @@ export interface CreateRouteValidationReportInputV2 {
 interface EvaluateRouteValidationRowInternalInputV2 extends RouteValidationRowInputV2 {
   readonly reportId: string;
   readonly subject: WorldPackageValidationSubjectV1;
+  readonly executionPlanHash: Sha256Hash;
+  readonly resourceLockHash: Sha256Hash;
   readonly dependencyReportRefs: readonly string[];
   readonly validationProfile: ValidationProfileV2;
 }
@@ -221,13 +225,15 @@ function snapshotEvaluatorInput(
     worldPackageRootHash: input.subject.worldPackageRootHash,
     authoringSpecHash: input.subject.authoringSpecHash,
     normalizedWorldIrHash: input.subject.normalizedWorldIrHash,
-    executionPlanHash: input.subject.executionPlanHash,
+    worldBuildIdentityHash: input.subject.worldBuildIdentityHash,
     resourceLockHash: input.subject.resourceLockHash,
     layoutSolveReportHash: input.subject.layoutSolveReportHash,
   }) satisfies WorldPackageValidationSubjectV1;
   return Object.freeze({
     reportId: input.reportId,
     subject,
+    executionPlanHash: input.executionPlanHash,
+    resourceLockHash: input.resourceLockHash,
     dependencyReportRefs: Object.freeze([...(input.dependencyReportRefs ?? [])]),
     routeBuildInputReceipt,
     routeConnectivityResult: assertRouteConnectivityResultForBuildInputV2(
@@ -273,6 +279,7 @@ function snapshotEvaluatorInput(
 
 function assertBuildInputWorldBindings(
   subject: WorldPackageValidationSubjectV1,
+  resourceLockHash: Sha256Hash,
   buildInputReceipt: RouteBuildInputReceiptV2,
   lockReceipt: ResolvedTraversalLockReceiptV1,
 ): void {
@@ -280,8 +287,8 @@ function assertBuildInputWorldBindings(
   if (
     buildInput.authoringSpecHash !== subject.authoringSpecHash ||
     buildInput.layoutSolveReportHash !== subject.layoutSolveReportHash ||
-    buildInput.resourceLockHash !== subject.resourceLockHash ||
-    buildInput.capabilityEnvelope.resourceLockHash !== subject.resourceLockHash ||
+    buildInput.resourceLockHash !== resourceLockHash ||
+    buildInput.capabilityEnvelope.resourceLockHash !== resourceLockHash ||
     buildInput.capabilityEnvelope.subjectEntityId !== lockReceipt.lock.subjectEntityId ||
     buildInput.capabilityEnvelope.resolvedTraversalLockHash !==
       lockReceipt.resolvedTraversalLockHash
@@ -292,6 +299,7 @@ function assertBuildInputWorldBindings(
 
 function assertWorldBindings(
   subject: WorldPackageValidationSubjectV1,
+  resourceLockHash: Sha256Hash,
   graph: TraversalGraphV2,
   path: RoutePathReceiptV2,
   lockReceipt: ResolvedTraversalLockReceiptV1,
@@ -299,11 +307,11 @@ function assertWorldBindings(
   if (
     graph.authoringSpecHash !== subject.authoringSpecHash ||
     graph.layoutSolveReportHash !== subject.layoutSolveReportHash ||
-    graph.resourceLockHash !== subject.resourceLockHash ||
+    graph.resourceLockHash !== resourceLockHash ||
     path.authoringSpecHash !== subject.authoringSpecHash ||
     path.layoutSolveReportHash !== subject.layoutSolveReportHash ||
-    path.resourceLockHash !== subject.resourceLockHash ||
-    lockReceipt.lock.resourceLockHash !== subject.resourceLockHash ||
+    path.resourceLockHash !== resourceLockHash ||
+    lockReceipt.lock.resourceLockHash !== resourceLockHash ||
     lockReceipt.lock.subjectEntityId !== path.traversingEntityId
   ) {
     fail("ROUTE_VALIDATION_WORLD_IDENTITY_MISMATCH");
@@ -1133,7 +1141,7 @@ function createFailedConnectivityReport(
     lockReceipt.resolvedTraversalLockHash,
   );
   if (
-    lockReceipt.lock.resourceLockHash !== input.subject.resourceLockHash ||
+    lockReceipt.lock.resourceLockHash !== input.resourceLockHash ||
     lockReceipt.lock.subjectEntityId !== failure.traversingEntityId
   ) {
     fail("ROUTE_VALIDATION_WORLD_IDENTITY_MISMATCH");
@@ -1196,7 +1204,7 @@ function createFailedConnectivityReport(
     if (
       traversalGraph.authoringSpecHash !== input.subject.authoringSpecHash ||
       traversalGraph.layoutSolveReportHash !== input.subject.layoutSolveReportHash ||
-      traversalGraph.resourceLockHash !== input.subject.resourceLockHash
+      traversalGraph.resourceLockHash !== input.resourceLockHash
     ) {
       fail("ROUTE_VALIDATION_WORLD_IDENTITY_MISMATCH");
     }
@@ -1268,6 +1276,7 @@ function evaluateRouteValidationRowAsReportV2(
   const lockReceipt = input.resolvedTraversalLockReceipt;
   assertBuildInputWorldBindings(
     input.subject,
+    input.resourceLockHash,
     input.routeBuildInputReceipt,
     lockReceipt,
   );
@@ -1295,7 +1304,13 @@ function evaluateRouteValidationRowAsReportV2(
     traversalGraph.resolvedTraversalLockHash,
     lockReceipt.resolvedTraversalLockHash,
   );
-  assertWorldBindings(input.subject, traversalGraph, routePathReceipt, lockReceipt);
+  assertWorldBindings(
+    input.subject,
+    input.resourceLockHash,
+    traversalGraph,
+    routePathReceipt,
+    lockReceipt,
+  );
   if (
     isNil(input.evidenceBytes.traversalGraph) ||
     isNil(input.evidenceBytes.routePathReceipt)
@@ -1441,7 +1456,7 @@ function evaluateRouteValidationRowAsReportV2(
     });
     if (
       routeRuntimeProbeReceipt.request.executionPlanHash !==
-        input.subject.executionPlanHash ||
+        input.executionPlanHash ||
       routeRuntimeProbeReceipt.request.runtimeImplementationIdentity.runtimeBackendRef !==
         lockReceipt.lock.runtimeBackendRef ||
       routeRuntimeProbeReceipt.request.runtimeImplementationIdentity.runtimeBackendResolvedVersion !==
@@ -1551,6 +1566,8 @@ function evaluateRouteValidationRowAsReportV2(
 
 export interface EvaluateRouteValidationRowInputV2 {
   readonly subject: WorldPackageValidationSubjectV1;
+  readonly executionPlanHash: Sha256Hash;
+  readonly resourceLockHash: Sha256Hash;
   readonly validationProfile: ValidationProfileV2;
   readonly row: RouteValidationRowInputV2;
 }
@@ -1568,6 +1585,8 @@ export function evaluateRouteValidationRowV2(
   return deepFreezeDataGraph(evaluateRouteValidationRowAsReportV2({
     reportId: `route:${constraintId}:row-evaluation`,
     subject: input.subject,
+    executionPlanHash: input.executionPlanHash,
+    resourceLockHash: input.resourceLockHash,
     dependencyReportRefs: [],
     validationProfile: input.validationProfile,
     ...input.row,
@@ -1845,6 +1864,8 @@ export function createRouteValidationReportV2(
     row,
     evaluation: evaluateRouteValidationRowV2({
       subject: input.subject,
+      executionPlanHash: input.executionPlanHash,
+      resourceLockHash: input.resourceLockHash,
       validationProfile: profile,
       row,
     }),
@@ -1878,7 +1899,7 @@ export function createRouteValidationReportV2(
     fail("ROUTE_VALIDATION_REQUIRED_ROUTE_SET_MISMATCH");
   }
   const requiredRouteSetHash = hashRouteValidationRequiredRouteSetV1(
-    input.subject.executionPlanHash,
+    input.executionPlanHash,
     requiredRoutes,
   );
   const receipt = canonicalRouteValidationSetReceiptV1({
@@ -1886,8 +1907,8 @@ export function createRouteValidationReportV2(
     schemaVersion: 1,
     authoringSpecHash: input.subject.authoringSpecHash,
     normalizedWorldIrHash: input.subject.normalizedWorldIrHash,
-    executionPlanHash: input.subject.executionPlanHash,
-    resourceLockHash: input.subject.resourceLockHash,
+    executionPlanHash: input.executionPlanHash,
+    resourceLockHash: input.resourceLockHash,
     layoutSolveReportHash: input.subject.layoutSolveReportHash,
     requiredRouteCount: requiredRoutes.length,
     requiredRouteSetHash,
