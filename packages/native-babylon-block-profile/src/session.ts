@@ -4,6 +4,11 @@ import { Scene } from "@babylonjs/core/scene.js";
 import type { BabylonNativeSceneBuildContextV1 } from "@whitebox-world/native-babylon";
 
 import {
+  createBabylonNativeBlockProfileCheckResultV1,
+  type BabylonNativeBlockProfileCheckResultV1,
+} from "./check.js";
+import { deriveBabylonNativeBlockLayoutV1 } from "./layout.js";
+import {
   BABYLON_NATIVE_BLOCK_PALETTE_ROLES_V1,
   BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
   type BabylonNativeBlockPaletteRoleV1,
@@ -26,7 +31,7 @@ export interface BabylonNativeBlockDefinitionV1 {
 
 export interface BabylonNativeBlockProfileSessionV1 {
   createBlock(definition: Readonly<BabylonNativeBlockDefinitionV1>): Mesh;
-  finalize(): void;
+  finalize(): BabylonNativeBlockProfileCheckResultV1;
 }
 
 export interface BabylonNativeBlockSessionRecordV1 {
@@ -167,6 +172,7 @@ export function createBabylonNativeBlockProfileSessionV1(
   }
 
   let isFinalized = false;
+  let finalizedResult: BabylonNativeBlockProfileCheckResultV1 | undefined;
   const recordsById = new Map<string, BabylonNativeBlockSessionRecordV1>();
 
   return Object.freeze({
@@ -201,8 +207,18 @@ export function createBabylonNativeBlockProfileSessionV1(
       recordsById.set(definition.id, Object.freeze({ definition, mesh }));
       return mesh;
     },
-    finalize(): void {
+    finalize(): BabylonNativeBlockProfileCheckResultV1 {
+      if (finalizedResult !== undefined) return finalizedResult;
       isFinalized = true;
+      const records = Object.freeze([...recordsById.values()]);
+      const layout = deriveBabylonNativeBlockLayoutV1(context.scene, records);
+      finalizedResult = createBabylonNativeBlockProfileCheckResultV1(
+        context.bootstrap.id,
+        records,
+        layout,
+      );
+      recordsById.clear();
+      return finalizedResult;
     },
   });
 }

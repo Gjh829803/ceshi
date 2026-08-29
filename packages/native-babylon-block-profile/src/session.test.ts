@@ -26,7 +26,7 @@ interface SessionModule {
         | "background-mass";
       visualGroupId?: string;
     }>): Mesh;
-    finalize(): void;
+    finalize(): unknown;
   };
 }
 
@@ -234,8 +234,13 @@ describe("Babylon Native block profile session", () => {
         paletteRole: "ground",
       });
 
-      expect(session.finalize()).toBeUndefined();
-      expect(session.finalize()).toBeUndefined();
+      const firstResult = session.finalize() as Record<string, unknown>;
+      expect(firstResult).toMatchObject({
+        kind: "babylon-native-block-profile-check-result",
+        schemaVersion: 1,
+        outcome: "passed",
+      });
+      expect(session.finalize()).toBe(firstResult);
       expect(() => session.createBlock({
         id: "late-block",
         shape: "full",

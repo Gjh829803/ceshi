@@ -261,11 +261,11 @@ Run all package tests plus `pnpm typecheck`. Commit `feat(native): derive block 
 - Metrics include block count/by shape/by palette role, occupied cell count, exposed top-cell count, boundary-segment count, structural half-meter transition count, unsupported-block count, structural route-component count, and visual-group count.
 - Visual-group inventory contains stable group ID, sorted block IDs, palette roles, and metric world bounds; it contains no Babylon handles.
 
-- [ ] **Step 1: Write closed report RED tests**
+- [x] **Step 1: Write closed report RED tests**
 
 Assert deep freezing, deterministic diagnostic/group ordering under reversed creation order, `passed` with warnings, `rejected` with errors, overlap locations, missing group, disconnected route candidates, group bounds, exact metrics, and absence of `Mesh`, `Scene`, Registration, Collider, `traversalSurfaceId`, `BlockWorldManifest`, or serialized layout fields.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```bash
 pnpm vitest run packages/native-babylon-block-profile/src/check.test.ts
@@ -273,11 +273,11 @@ pnpm vitest run packages/native-babylon-block-profile/src/check.test.ts
 
 Expected: FAIL because report publication does not exist.
 
-- [ ] **Step 3: Implement minimal finalization**
+- [x] **Step 3: Implement minimal finalization**
 
 Finalization derives layout once, creates the closed report, releases internal occupancy/topology maps, and returns the same frozen report on repeated calls. It must not call core Registration or infer collision from palette/material/name.
 
-- [ ] **Step 4: Verify GREEN and commit**
+- [x] **Step 4: Verify GREEN and commit**
 
 Run all package tests, `pnpm test:census`, `pnpm typecheck`, and `git diff --check`. Commit `feat(native): add block profile structural checker`.
 

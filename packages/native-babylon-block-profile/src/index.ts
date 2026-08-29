@@ -3,6 +3,13 @@ export {
   BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
 } from "./profile.js";
 export type { BabylonNativeBlockPaletteRoleV1 } from "./profile.js";
+export type {
+  BabylonNativeBlockProfileCheckResultV1,
+  BabylonNativeBlockProfileDiagnosticLocationV1,
+  BabylonNativeBlockProfileDiagnosticV1,
+  BabylonNativeBlockProfileMetricsV1,
+  BabylonNativeBlockVisualGroupInventoryV1,
+} from "./check.js";
 export { createBabylonNativeBlockProfileSessionV1 } from "./session.js";
 export type {
   BabylonNativeBlockDefinitionV1,
