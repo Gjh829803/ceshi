@@ -209,15 +209,15 @@ Run the session, shape, package-boundary tests, `pnpm test:census`, and `pnpm ty
 - Package-private output: a canonical, frozen, ID-sorted Build-Epoch layout containing final world center, effective dimensions, occupied micro cells, exposed top cells, boundary segments, structural half-meter height transitions, and support observations.
 - No layout type or query is exported from the package root.
 
-- [ ] **Step 1: Write final-world-transform RED tests**
+- [x] **Step 1: Write final-world-transform RED tests**
 
 Cover asymmetric `quarter` rotation, valid nested `TransformNode` parent transforms, negative coordinates, signed zero, stable output under creation-order changes, disposed/foreign Mesh, non-unit world scale, X/Z tilt, non-quarter Y rotation, off-lattice center/bounds, and parent-induced invalid transforms.
 
-- [ ] **Step 2: Write occupancy/boundary/slope RED tests**
+- [x] **Step 2: Write occupancy/boundary/slope RED tests**
 
 Cover exact face-touching without overlap, partial and full overlap, stacked blocks, an unsupported block, exposed top cells, a closed four-sided plateau, a one-half-meter structural transition, and a one-meter discontinuity that is not silently called a traversable slope.
 
-- [ ] **Step 3: Run RED, then port only proven pure mechanics**
+- [x] **Step 3: Run RED, then port only proven pure mechanics**
 
 ```bash
 pnpm vitest run packages/native-babylon-block-profile/src/layout.test.ts
@@ -225,7 +225,7 @@ pnpm vitest run packages/native-babylon-block-profile/src/layout.test.ts
 
 Use the fixed old branch only to cross-check shape/bounds/occupancy behavior. Implement Babylon world-transform extraction with Babylon math APIs and keep all topology algorithms deterministic and package-local.
 
-- [ ] **Step 4: Verify GREEN and commit**
+- [x] **Step 4: Verify GREEN and commit**
 
 Run all package tests plus `pnpm typecheck`. Commit `feat(native): derive block profile structural layout`.
 
