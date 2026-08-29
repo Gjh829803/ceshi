@@ -99,6 +99,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "packages/native-babylon-block-profile/src/check.test.ts", lane: "contract" },
   { path: "packages/native-babylon-block-profile/src/layout.test.ts", lane: "contract" },
   { path: "packages/native-babylon-block-profile/src/package-boundary.test.ts", lane: "contract" },
+  { path: "packages/native-babylon-block-profile/src/profile.test.ts", lane: "contract" },
   { path: "packages/native-babylon-block-profile/src/session.test.ts", lane: "contract" },
   { path: "packages/native-babylon-block-profile/src/shapes.test.ts", lane: "contract" },
   { path: "packages/native-babylon/src/contribution.test.ts", lane: "contract" },
