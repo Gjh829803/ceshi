@@ -135,6 +135,7 @@ Later only:
 | workspace path、Source Graph、临时文件 | Node checker | 只在一次 check 期间存在，绝对路径不进入公共诊断 |
 | Bootstrap 结构 | `@whitebox-world/runtime-contracts` exact parser | checker 先解析，后续全部使用冻结值 |
 | Import Profile 与 Native Module API | `@whitebox-world/native-babylon` | Source Admission 只接受该唯一方言 |
+| Native Scene Profile Registry、local hard cap 与 check-policy | BNA-2 checker | CLI/Admission 的唯一 Profile/诊断语义；BNA-5 只叠加 Host/tenant cap 与隔离 |
 | Candidate Engine/Scene 创建与销毁 | Host-provided Candidate factory | 每次 replay 产生一份独立 lease，始终在 `finally` 销毁 |
 | Module visual objects | 当前 Candidate Scene | 只在该 Candidate 生命周期内存在，不跨 Build 返回 Handle |
 | Spawn/Collider 意图 | core Registration | 只在 Build Promise settlement 前开放 |
@@ -235,7 +236,8 @@ Source Admission 至少拒绝：
 - Camera 创建、`activeCamera`/`activeCameras` 写入；
 - ActionManager、Action、输入 attach、pointer/keyboard handler；
 - 对 Babylon-owned property 写入 function/class/callable object、向 Babylon API 传入 callable argument、
-  替换 Scene/Engine Observable、访问其 `constructor`、调用 Observable mutation/control API，或调用唯一
+  替换任意 Babylon Observable、写 `notifyIfTriggered`、修改其 live `observers` 数组、访问其
+  `constructor`、调用 Observable mutation/control API，或调用唯一
   forbidden retained-callback method census 中任一成员；当前 whitebox Profile 不需要 callback-valued
   Babylon API，因此不保留匿名 callback 例外；
 - user-defined class/subclass。V1 用函数和 Babylon 原生实例组合，避免隐藏 lifecycle hook；
@@ -362,15 +364,46 @@ customRenderFunction
 Audit 对每个 key 比较 Build 前后的 function identity，不接受匿名例外。另一个 Host-private
 `BABYLON_NATIVE_FORBIDDEN_SCENE_CALLBACK_METHOD_KEYS_V1` 锁定会保留 callback/Module object 或接管后续
 渲染的 public method：`registerBeforeRender`、`registerAfterRender`、`executeOnceBeforeRender`、
-`executeWhenReady`、`addIsReadyCheck`、`freezeActiveMeshes`、`setRenderingOrder`、`addExternalData`、
-`getOrAddExternalDataWithFactory`。Authority Probe 对这些 method 安装 instance wrapper，记录首次调用并
+`executeWhenReady`、`whenReadyAsync`、`addIsReadyCheck`、`freezeActiveMeshes`、`setRenderingOrder`、
+`addExternalData`、`getOrAddExternalDataWithFactory`。Authority Probe 对这十个 method 安装 instance wrapper，记录首次调用并
 fail-closed；Source Admission 同时按 TypeChecker symbol 拒绝。该清单来自安装的
 `scene.pure.d.ts`/`.js` retained semantics，而不是只按方法名包含 `callback` 猜测。
 
+Scene/Engine 不是完整的 Module callback 面。`/host` 还拥有唯一版本锁定的
+`BABYLON_NATIVE_AUDITED_CREATED_OBJECT_CALLBACK_SURFACES_V1`，覆盖当前 Deep ESM Import Profile 中所有
+Module 可创建并能留在 Candidate Scene 的 Babylon 类型、继承面和静态全局面。Babylon 9.23.0 至少必须
+exact 包含：
+
+- `Node`：`onAccessibilityTagChangedObservable`、`onDisposeObservable`、
+  `onEnabledStateChangedObservable`、`onEffectiveEnabledStateChangedObservable`、`onClonedObservable`，
+  callback setter `onDispose`，并要求 `behaviors` 为空；
+- `TransformNode`：继承 `Node`，另含 `onAfterWorldMatrixUpdateObservable`；
+- `AbstractMesh`：继承 `TransformNode`，另含 `onCollideObservable`、
+  `onCollisionPositionChangeObservable`、`onMaterialChangedObservable`、`onRebuildObservable`，以及
+  `onCollide` / `onCollisionPositionChange` setter；
+- `Mesh`：继承 `AbstractMesh`，另含 `onMeshReadyObservable`、`onBeforeRenderObservable`、
+  `onBeforeBindObservable`、`onAfterRenderObservable`、`onBetweenPassObservable`、
+  `onBeforeDrawObservable`，以及 `onBeforeDraw` setter；
+- `Material`/`StandardMaterial`：`onDisposeObservable`、`onBindObservable`、`onUnBindObservable`、
+  `onEffectCreatedObservable`，`onDispose` / `onBind` setter，以及必须在 Build 前后保持 identity 与 observer
+  顺序不变的 static `Material.OnEventObservable`；
+- `Light` 继承 `Node` 的完整面；当前 Geometry/Buffer 与三个允许的 Light concrete types 若有效 Program
+  没有额外 callback surface，exact census 必须明确记录空增量，不能默认忽略。
+
+Build 前，Host 对 Scene、Engine 和 provider static/global surface 做 baseline；Build 后，对 Candidate Scene
+公开 collections 中每个新建 Node/Mesh/TransformNode/Material/Light/Geometry，以及登记所引用的对象，按其
+有效继承类型逐项验证：所有 callback Observable 的 `observers.slice()` 为空、setter-backed Observable
+没有 Module observer、Behavior/retained-object collection 为空。新对象没有 pre-Build identity 可比较，
+因此要求“无 Module closure”的零基线；预存在的 Scene/Engine/static surface 才做前后 identity/order
+byte-exact 比较。Source Admission 仍负责拒绝 Build 内瞬时 add/remove/retention，运行时 Audit 负责拒绝任何
+残留；两者不能互相替代。
+
 声明/源码清单之外还必须有一条冻结导入图复验：测试按唯一 Deep ESM Import Profile 创建同一个
-TypeScript Program，并从该 Program 的有效 `Scene`/`AbstractEngine` symbols 提取 module augmentation
-后的 public surface；随后在相同 12-specifier 运行时导入图上创建 Host-private NullEngine/Scene，比较
-实际 Observable identity、callback property keys 和被 wrapper 的 method descriptors。`scene.js` 当前只
+TypeScript Program，并从该 Program 的有效 `Scene`、`AbstractEngine`、`Node`、`TransformNode`、
+`AbstractMesh`、`Mesh`、`Material`、`StandardMaterial`、`Geometry`、`Buffer` 和允许 Light symbols 提取
+继承/module augmentation 后的 instance/static public surface；随后在相同 12-specifier 运行时导入图上
+创建 Host-private NullEngine/Scene 和每类最小对象，比较实际 Observable、callback setter、Behavior/
+retained-object collection、static global 与被 wrapper 的 method descriptors。`scene.js` 当前只
 重导出 `scene.pure.js` 并调用 `RegisterScene()`，因此 Babylon 9.23.0 没有额外 callback key；未来任一
 允许导入引入新的 augmentation、function-valued property 或 retained method 时，census 必须先失败，
 并与唯一常量、Source Admission 和 Authority Probe 在一次 current-only 变更中共同更新。不得扫描整个
@@ -384,8 +417,10 @@ Observable baseline 对每个 key 同时冻结 Observable 对象 identity 与
 `observable.observers.slice()` 的有序副本；禁止保存 live `observers` 数组引用。Build 后 identity 和有序
 Observer 引用必须同时相等。Babylon `remove()` 的延迟注销在同一个 Build settlement 仍视为 mutation 并
 fail-closed，不等待 `setTimeout(0)`、不读取 `_willBeUnregistered` 等私有字段。Source Admission 禁止对
-Scene/Engine Observable 属性赋值、通过其 `constructor` 替换实例，以及调用 Observable 的
-`add/addOnce/remove/removeCallback/clear/notifyObserver/notifyObservers` mutation/control API。
+任意 audited Observable 属性赋值、`notifyIfTriggered` 写入、live `observers` 数组修改、通过其
+`constructor` 替换实例，以及调用 Observable 的 `add/addOnce/remove/removeCallback/clear/notifyObserver/
+notifyObservers/makeObserverTopPriority/makeObserverBottomPriority/cleanLastNotifiedState/clone`
+mutation/control API。
 
 Audit 至少验证：
 
@@ -393,12 +428,15 @@ Audit 至少验证：
 - `activeCamera`/`activeCameras` 为空，camera collection 没有新增；
 - Physics Engine 仍为空、physics 未启用、所有 Candidate Mesh 没有 provider-created physics body；
 - Scene `actionManager`/`actionManagers` 和 Mesh action manager 没有新增；
-- `registerBeforeRender`、`registerAfterRender`、Engine render-loop 控制 API 没有被调用；
+- `registerBeforeRender`、`registerAfterRender`、Engine render-loop 控制 API 没有被调用，Engine
+  `customAnimationFrameRequester` identity/descriptor 与 baseline 相同；
 - 两个唯一 Observable census 常量中每个 public Observable 的对象 identity 与
   `observers.slice()` 有序副本都与 baseline byte-exact 相同；五个 Scene callback setter 以及任意
   Observable mutation/control 同样被拒绝；
-- 17 个 Scene callback function property identity 与 baseline 相同，九个 retained callback/object method
+- 17 个 Scene callback function property identity 与 baseline 相同，十个 retained callback/object method
   没有被调用；
+- created-object callback surface census 全部为零 Module observer/callback/Behavior，provider static/global
+  Observable 与 baseline identity/order 相同；
 - Host instrumentation 在成功、rejection、throwing Build 和 cleanup 后全部恢复；
 - V1 Profile 允许的 Mesh、TransformNode、Geometry、Material、Light 和 Scene visual scalar state 仍属于
   Candidate Scene；未来新增的 Babylon-owned 纯视觉系统必须先进入唯一 Import Profile，并证明不含 Module
@@ -628,7 +666,7 @@ BNA-2 不用 NullEngine/contract test 冒充真实 Havok、人物通过性、视
 |---|---|---|---|---|---|---|---|
 | BNA2-PC-00 | 冻结本规格与上位文档关系 | BNA-0、BNA-1、BNA-2 Foundation | 全部后续 | 本规格、长期规格的 BNA-2 指针、Backlog 真相 | current tree + reviews -> approved production-closure contract | link/diff/placeholder/contradiction review | `main-agent-only` |
 | BNA2-PC-05 | 清理 BNA 新源码判空规范并声明直接依赖 | PC-00 | PC-20、PC-30、PC-40 | Native package manifest 与 module/contribution/diagnostics/host、Runtime Contracts Native Bootstrap parser、lockfile | review P2 -> one `isNil`/`isEmpty` convention | focused parsers、dependency/export census、typecheck | `sequential` |
-| BNA2-PC-10 | 实现 Node workspace、Source Graph、typecheck 与临时 Bundle Admission | PC-00 | PC-40、PC-50、BNA-3 | `scripts/native-scene/authoring-workspace*`、`source-admission*`、`ephemeral-bundle*`、test support；不改 Host/CLI | world-directory -> loaded exact Module 或 structured diagnostics | AST/Program adversarial fixtures、symlink/temp cleanup | `sequential` |
+| BNA2-PC-10 | 实现 Node workspace、Source Graph、typecheck 与临时 Bundle Admission | PC-05 | PC-40、PC-50、BNA-3 | `scripts/native-scene/authoring-workspace*`、`source-admission*`、`ephemeral-bundle*`、test support；不改 Host/CLI | world-directory -> loaded exact Module 或 structured diagnostics | AST/Program adversarial fixtures、symlink/temp cleanup | `sequential` |
 | BNA2-PC-20 | 用不可旁路的 Authority Audit 替换 raw build export | PC-00、PC-05 | PC-30、PC-40、PC-50、BNA-3/4 | `packages/native-babylon/src/host*`、authority/candidate internals | parsed Module + one Candidate -> admitted Contribution/result | installed Babylon source-backed audit tests、throw cleanup | `main-agent-only` |
 | BNA2-PC-30 | 实现双 Candidate Runtime Replay 与 byte-exact 判等 | PC-20 | PC-40、PC-50、BNA-3/4 | Native replay internals、Candidate lease contract | candidate factory + locked inputs -> replayed Contribution/result | drift、two-instance、factory/dispose adversarial tests | `sequential` |
 | BNA2-PC-40 | 接通 `worldkit native check/explain` 和 exit/stdout contract | PC-05、PC-10、PC-30 | PC-50、PC-90、BNA-3 | `scripts/native-scene/check-policy*`、`native-scene-check*`、`explain*`，`scripts/cli/worldkit.ts` Native branch、CLI tests；不建第二 CLI | world-directory -> exact DTO + 0/1/2 | real child-process CLI matrix、path/stack leakage census | `main-agent-only` |
@@ -639,13 +677,13 @@ BNA-2 不用 NullEngine/contract test 冒充真实 Havok、人物通过性、视
 
 ```text
 PC-00 -> PC-05 -> PC-20 -> PC-30 -> PC-40 -> PC-50 -> PC-90
-   \-> PC-10 ----------------------/
+             \-> PC-10 ------------/
 
 PC-90 -> BNA-3 -> BNA-4 -> BNA-5 -> BNA-6
 ```
 
-PC-10 与 PC-05/PC-20 的文件 Owner 不重叠，但在合同尚未实现前仍按计划顺序集成；不得为了并行而复制
-Diagnostic、Import Profile 或 Candidate types。
+PC-10 与 PC-20 的文件 Owner 不重叠，但两者都先消费 PC-05 的唯一 Import Profile；在合同尚未实现前仍按
+计划顺序集成，不得为了并行而复制 Diagnostic、Import Profile 或 Candidate types。
 
 ## 15. 终态验收
 

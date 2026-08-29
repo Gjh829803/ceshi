@@ -941,8 +941,9 @@ interface NativeSceneCheckResultV1 {
 `count`、`bytes` 或 `duration-seconds`，并使用
 `actualCount/maximumCount`、`actualBytes/maximumBytes`、`actualSeconds/maximumSeconds` 等带单位字段；
 不得把 provider 异常或任意 `details/params` 对象作为公共机器合同。
-`location.kind === "source"` 时，`sourcePath` 必须是 Module Bundle 内使用 `/` 分隔的 canonical
-relative path；不得输出绝对 Host 路径、Workspace 路径或临时目录。
+`location.kind === "source"` 时，`sourcePath` 必须是相对 Native `world-directory`、使用 `/` 分隔的
+canonical relative path；不得输出绝对 Host 路径、Workspace 路径或临时目录。BNA-3 Bundle 必须原样
+保留同一相对路径，不得把同一个字段重新解释为另一套 bundle-internal 路径方言。
 Bootstrap 尚未解析或工具在解析前失败时，Check Result 使用
 `checkedInput: { kind: "unresolved-world" }`，不能伪造 `sceneModuleRef`；解析成功后必须使用
 `native-scene-module` 成员。Module 身份只由 Result-level `checkedInput` 拥有，Diagnostic 不重复
@@ -1260,13 +1261,17 @@ RuntimeWorldConfiguration V1 -> Babylon/Havok。
   geometry/binding drift 和 tampered Receipt mismatch 的 fail-before-publish 负向证明。
 - 执行模式：`main-agent-only`。
 
-### BNA-5：确定性、预算与 Trust Profile
+### BNA-5：Hosted 隔离、Tenant Hard Cap 与 Trust Profile
 
-- 目标与独立交付物：落实 PRNG、依赖 allowlist、无网络/时间/动态代码规则、资源预算、Trusted Local
-  Profile、Host/tenant hard cap、effective budget 计算和 Hosted threat model/gates。
+- 目标与独立交付物：消费 BNA-2 已冻结的 PRNG、依赖 allowlist、Source/Authority Admission、Profile
+  Registry、CLI Diagnostics 与本地结构 cap；增加 Hosted Worker/Origin 强制隔离、timeout/kill、凭据与
+  环境隔离、Host/tenant hard cap、`min(BNA-2 profile cap, host/tenant cap)` effective budget 计算和 Hosted
+  threat model/gates，不重建 BNA-2 静态/动态检查合同。
 - `depends_on`：BNA-2、BNA-3、BNA-4。
 - `blocks`：Hosted Native、BNA-6、BNA-8。
-- 独占所有权：Native Scene Profile Registry、构建执行隔离、静态/动态 Admission 和安全诊断。
+- 独占所有权：Hosted Worker/Origin lifecycle、timeout/kill、凭据/环境隔离、Host/tenant entitlement 与
+  effective-budget policy、Hosted threat model 和隔离诊断；Native Scene Profile Registry、Source/
+  Authority Admission、CLI/安全诊断继续由 BNA-2 独占。
 - 输入/输出合同：requested profile + Host/tenant allowlist/hard cap + bundle + transitive asset/resource lock
   -> allowed/rejected build、effective/actual budget 与 diagnostics。
 - 集成点：Module build runner 与 RuntimeHost preflight。

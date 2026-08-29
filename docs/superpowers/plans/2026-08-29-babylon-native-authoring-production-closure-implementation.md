@@ -449,9 +449,11 @@ Use TypeChecker symbol/scope analysis to reject:
 - assignment of a function/class/callable object into any Babylon-owned property and calls
   that pass a function/callable object to a Babylon API unless the exact synchronous API is
   positively allowlisted; the current whitebox profile needs no callback-valued Babylon API;
-- assignment to any Scene/Engine Observable property, access through its `constructor`, or
-  calls to `add/addOnce/remove/removeCallback/clear/notifyObserver/notifyObservers` on any
-  TypeChecker-resolved Babylon `Observable`, regardless of property spelling;
+- assignment to any Babylon Observable property, writes to `notifyIfTriggered`, mutation of
+  its live `observers` array, access through its `constructor`, or calls to
+  `add/addOnce/remove/removeCallback/clear/notifyObserver/notifyObservers/
+  makeObserverTopPriority/makeObserverBottomPriority/cleanLastNotifiedState/clone` on any
+  TypeChecker-resolved Babylon `Observable`, regardless of property spelling or owning type;
 - every method in `BABYLON_NATIVE_FORBIDDEN_SCENE_CALLBACK_METHOD_KEYS_V1`, including
   ready/once/freeze/render-order/external-data retention in addition to before/after render;
 - every user class/subclass;
@@ -700,6 +702,14 @@ Programmatic Modules must attempt and be rejected for:
 - adding/addOnce to every key in the single Host-owned Scene/Engine public Observable
   census, including Scene/Engine disposal and camera/draw/render-group/ready/resource/input
   callbacks;
+- replacing an audited Observable, writing `notifyIfTriggered`, mutating the live
+  `observers` array, and invoking every forbidden mutation/control API including priority
+  reorder, last-state clean, notification, removal, clear, and clone;
+- adding callbacks through every inherited surface in
+  `BABYLON_NATIVE_AUDITED_CREATED_OBJECT_CALLBACK_SURFACES_V1`: Node/TransformNode/
+  AbstractMesh/Mesh/Material/StandardMaterial/Light Observables and setters, Mesh
+  register-before/after-render helpers, Node Behavior retention, and static
+  `Material.OnEventObservable`;
 - assigning each Scene callback setter: `onDispose`, `beforeRender`, `afterRender`,
   `beforeCameraRender`, and `afterCameraRender`;
 - replacing every function-valued key in
@@ -707,9 +717,10 @@ Programmatic Modules must attempt and be rejected for:
   `onPointer*`, candidate selectors, deterministic-frame-time, and `customRenderFunction`;
 - invoking every retained callback/object method in
   `BABYLON_NATIVE_FORBIDDEN_SCENE_CALLBACK_METHOD_KEYS_V1`, including `executeWhenReady`,
-  `executeOnceBeforeRender`, `addIsReadyCheck`, `freezeActiveMeshes`, `setRenderingOrder`, and
-  external-data retention;
+  `whenReadyAsync`, `executeOnceBeforeRender`, `addIsReadyCheck`, `freezeActiveMeshes`,
+  `setRenderingOrder`, and external-data retention;
 - calling Engine `runRenderLoop`/`stopRenderLoop`;
+- replacing Engine `customAnimationFrameRequester`;
 - disposing Scene or Engine;
 - catching the instrumentation error and otherwise completing a valid Build.
 
@@ -728,6 +739,7 @@ Expected RED: current admission accepts at least several mutations.
 Capture only public values/identities:
 
 - Candidate Scene/Engine identity and disposed state;
+- Engine `customAnimationFrameRequester` identity and own/prototype descriptor;
 - cameras, active camera(s), Scene action manager(s), per-Mesh action manager/physics body;
 - optional public physics getter/state when the installed component exposes it;
 - ordered copies of `.observers` for
@@ -737,7 +749,18 @@ Capture only public values/identities:
   `observers` array returned by Babylon;
 - function identity for every
   `BABYLON_NATIVE_AUDITED_SCENE_CALLBACK_PROPERTY_KEYS_V1` member;
+- identity/order baselines for provider static/global Observables such as
+  `Material.OnEventObservable`;
 - original own-property descriptors for instrumented methods.
+
+After Build, enumerate every Candidate-owned object through public Scene collections and
+registration references. Apply the single inherited surface map in
+`BABYLON_NATIVE_AUDITED_CREATED_OBJECT_CALLBACK_SURFACES_V1`; every Observable observer
+snapshot, callback setter backing Observable, and Behavior/retained-object collection on a
+new object must contain zero Module closures. The exact Babylon 9.23.0 map includes the
+Node, TransformNode, AbstractMesh, Mesh, Material/StandardMaterial, and Light surfaces in
+the approved design; Geometry/Buffer and concrete Light types must have an explicit empty
+increment rather than being silently omitted.
 
 Install instance wrappers for all
 `BABYLON_NATIVE_FORBIDDEN_SCENE_CALLBACK_METHOD_KEYS_V1` members plus
@@ -751,17 +774,20 @@ Add one declaration-census test that extracts all public `Observable` properties
 installed Babylon 9.23.0 `scene.pure.d.ts` and `abstractEngine.pure.d.ts`, then compares
 them exactly with the two Host constants. At this SHA the expected census is 65 Scene keys
 and 15 Engine keys. The same test freezes the exact 17 Scene function-valued callback
-properties above. A source-backed test verifies the nine forbidden methods really retain a
+properties above. A source-backed test verifies the ten forbidden methods really retain a
 callback/object or control later rendering in `scene.pure.js`. The constants are the only
 machine lists; tests iterate them instead of hand-writing smaller callback subsets.
 
 The census fixture must import the exact 12-specifier Module Profile into one TypeScript
-Program and extract the effective, module-augmented `Scene`/`AbstractEngine` public surface.
-It must also instantiate the Host-private NullEngine/Scene after loading that same import
-graph and compare runtime Observable identities, callback-property keys, and instrumented
-method descriptors with the constants. This guards future import side effects and module
-augmentations; scanning the entire unimported Babylon package or only `scene.pure.d.ts` is
-not accepted as the sole evidence.
+Program and extract the effective, inherited/module-augmented instance and static public
+surface for Scene, AbstractEngine, Node, TransformNode, AbstractMesh, Mesh, Material,
+StandardMaterial, Geometry, Buffer, and all three allowed Light types. It must also
+instantiate the Host-private NullEngine/Scene and one minimal object of every constructible
+type after loading that same import graph, then compare runtime Observable identities,
+callback setters, Behavior/retained-object collections, static globals, callback-property
+keys, and instrumented method descriptors with the constants. This guards future import
+side effects and module augmentations; scanning the entire unimported Babylon package or
+only `scene.pure.d.ts` is not accepted as the sole evidence.
 
 - [ ] **Step 5: Integrate audit around the entire Build Epoch**
 
