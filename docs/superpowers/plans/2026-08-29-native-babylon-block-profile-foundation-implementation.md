@@ -329,6 +329,6 @@ Apply `docs/reviews/full-dimension-review-protocol.md` in change-review mode. Ve
 
 Mark BWB-1 and BWB-2 complete only if all stated evidence passes. Keep BNA-2 production closure, BNA-3+, BWB-3+, visual reconstruction quality, Collider/Havok, passability, formal Capture, indoor capability, Route/Nav, and `goTo` open.
 
-- [ ] **Step 5: Commit and push the checkpoint**
+- [x] **Step 5: Commit and push the checkpoint**
 
 Run `git status --short`, `git diff --check`, commit the review/backlog truth, push `codex/native-babylon-block-profile`, and report exact commits and gates. Do not merge to `main` until this checkpoint and its dependency boundary are reviewed.
