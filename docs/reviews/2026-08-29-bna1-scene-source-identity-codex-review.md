@@ -10,9 +10,9 @@
 - 原审查来源：`origin/cursor/bna1-identity-review-954e` 中的
   `docs/reviews/2026-08-29-bna1-scene-source-identity-review.md`。它只作为线索；下文每条结论均已回到
   当前源码复验。
-- PR #43：关键提交 `818482543bdc3106d36a7ce99f4de011569fd7ff`；复核时远端分支
-  `origin/cursor/canonical-ready-reset-origin-954e` 的 HEAD 是
-  `8ba65ca845faf1874a392deadbab9ac302244fcc`，包含后续 reset pause-state 修补。
+- PR #43：关键提交 `818482543bdc3106d36a7ce99f4de011569fd7ff`。首次复核时远端 HEAD 是
+  `8ba65ca845faf1874a392deadbab9ac302244fcc`，由本报告发现 ready snapshot 双状态；最小修复和回归随后以
+  `260d7e0c02c0c352cdcfa2191d656fd5a3e01d01` 推送到同一 PR。第 3 节保留发现时证据，第 4 节按最终 HEAD 裁决。
 - 权威来源读取顺序：`AGENTS.md`、`docs/18-refactor-progress-and-backlog.md`、
   `docs/reviews/full-dimension-review-protocol.md`、`docs/reviews/runtime-deep-review-checklist.md`、
   `docs/decisions/0007-canonical-and-babylon-native-authoring-lanes.md`、Native 长期规格和 BNA-1 实施计划，
@@ -34,10 +34,17 @@
 | 从主 checkout 的安装树读取 Babylon/Havok package version 与源码 | 0 | 得到 `9.23.0` / `1.3.14` 并核对 `checkSupportToRef`、`PhysicsAggregate` shape ownership |
 | `git diff --check` | 0 | 报告无 whitespace 错误 |
 | `git status --short` | 0 | 只有本报告一个预期新增文件；产品代码与冻结制品未改 |
+| `pnpm exec vitest run apps/playground/src/worldkit-browser-api.test.ts -t "publishes the resumed ready state"`（`8ba65ca` + RED） | 1 | ready 返回 `runtime.isPaused: true`，复现第 3 节 P1 |
+| 同一 focused test（`260d7e0`） | 0 | 1 passed / 39 skipped，ready 返回值与即时 Runtime 均为未暂停 |
+| `pnpm exec vitest run apps/playground/src/worldkit-browser-api.test.ts`（`260d7e0`） | 0 | 40 passed |
+| `pnpm exec vitest run apps/playground/src/babylon-world-adapter.test.ts apps/playground/src/worldkit-ready-reset.browser.test.ts`（`260d7e0`） | 0 | 2 files / 32 passed |
+| `pnpm typecheck`（`260d7e0`） | 0 | `tsc --noEmit` 通过 |
+| `pnpm verify:canonical`（`260d7e0`） | 0 | `ok: true`；含 Browser V5、物理、control switch 与 `deterministic-reset` |
 
-没有执行 `pnpm test`、`pnpm build` 或 capability verifier。原审查记录的 `7d1e4f41` 全量门禁输入未变，
-本复核没有重跑，也没有否定那些记录；旧报告中的命令结果不是本报告新产生的自动化证据。PR #43 的代码尚有
-下述新 P1，因此也没有重复其已记录的受影响门禁。
+审计树 `7d1e4f41` 没有执行 `pnpm test`、`pnpm build` 或 capability verifier。原审查记录的全量门禁输入未变，
+本复核没有重跑，也没有否定那些记录；旧报告中的命令结果不是本报告新产生的自动化证据。发现 PR #43 的
+窄 P1 并修复后，只在最终修复树 `260d7e0` 重跑上表直接受影响的 focused tests、typecheck 与
+`verify:canonical`，没有重跑整仓 `pnpm test` 或 build。
 
 ## 2. 对原 findings 逐条复核
 
@@ -142,7 +149,7 @@
 
 无新增 P0。
 
-### [P1] [D4/D6] PR #43 的 ready() 返回暂停态快照，但公开完成时 Runtime 已解除暂停
+### [P1] [D4/D6] PR #43 在 `8ba65ca` 返回暂停态 ready 快照（已于 `260d7e0` 修复）
 
 - 证据（static-read，PR #43 HEAD `8ba65ca845`）：`1239:1247:apps/playground/src/worldkit-browser-api.ts`
   在 ready barrier 后先执行 `const snapshot = adapter.runtimeSnapshot()`，再同步调用
@@ -160,7 +167,8 @@
   Runtime 仍暂停，而紧接着的 `snapshot()` 已显示未暂停；同一个 ready 边界出现两份状态真相。
 - 建议：把解除暂停放到 ready snapshot 之前，并把测试 adapter 的 snapshot 绑定到可变 pause state；同时断言
   ready 返回值、立即 `snapshot()` 与 adapter/coordinator pause owner 三者一致。只重跑 Browser ready/reset
-  的 focused tests、`typecheck` 和 `verify:canonical`。
+  的 focused tests、`typecheck` 和 `verify:canonical`。该建议已在 `260d7e0` 按 RED→GREEN 实施：同一同步
+  task 内先 `setPaused(false)` 再 snapshot，rAF 不可能插入固定 Tick；上表受影响门禁全部通过。
 - 复核：已被 Codex 复核确认
 
 ### [P2] [D5] BNA-1 新增的 Native parser/host 没有遵守统一判空约定
@@ -180,7 +188,8 @@
 
 ## 4. 对 PR #43 修复的裁决
 
-**裁决：未关上，并引入一个新的 ready 状态双真相。**
+**裁决：关上 P1，但不是由关键提交 `8184825` 或首次复核 HEAD `8ba65ca` 单独关上；最终需要
+`260d7e0`。**
 
 - `8184825` 正确增加了 mount 前 pause，关掉 `7d1e4f41` 的 pre-ready Havok fixed-tick 窗口。
 - `8184825` 初版 reset 在恢复 pause 前取得返回快照；PR 当前 HEAD `8ba65ca845` 已把 snapshot 移到
@@ -190,8 +199,12 @@
 - reset 与已入队 fixed input 的关系由 RuntimeHost `mutationTail` 串行化：
   `1497:1504:packages/runtime-host/src/runtime-host.ts` 把 fixed input 入队，replacement 在 `1730:1797`
   先取得同一 mutation fence；adapter 又在 reset 期间阻止新 frame，因此未发现新的 reset publication 竞态。
-- 但 ready 路径仍按“取暂停快照 → 解除暂停 → resolve”执行，形成第 3 节 P1。原 P1 的“ready Origin 不得
-  被 pre-ready tick 推进”只关闭了一半；Browser ready 的完整状态合同尚未关闭。
+- `8ba65ca` 的 ready 路径仍按“取暂停快照 → 解除暂停 → resolve”执行，形成第 3 节新 P1；其新增测试没有
+  让 mock snapshot 随 pause 改变，未覆盖即时状态。
+- `260d7e0` 把顺序改为“解除暂停 → 取得快照 → resolve”，并让测试 snapshot 绑定可变 pause owner，同时
+  断言 ready 返回值与即时查询都是 `runtime.isPaused === false`。这些操作在同一同步 task 内完成，不会让
+  rAF 在 snapshot 前推进 Tick。40 + 32 focused tests、typecheck 和 `verify:canonical` 均通过；没有发现新的
+  ready/reset 竞态或第二个 fixed-time/pause owner。
 
 ## 5. D1–D6 覆盖表
 
@@ -200,9 +213,9 @@
 | D1 定位与需求边界 | 已查 | `8:18:docs/18-refactor-progress-and-backlog.md` 与 ADR-0007 一致：Canonical 仍是唯一正式生产入口，Native 是互斥实验 Lane。Native hash admission 是 BNA-4 gap，不是 BNA-1 bug |
 | D2 Schema 与 AI-friendly | 已查 | Canonical Plan/WorldRuntimeBootstrap 字段及 identity link 单一；Native union 关闭。确认 parser 诊断被吞与旧 V5 receipt 命名；撤回尚未开放的 Native hash finding |
 | D3 承诺与事实对拍 | 已查 | BNA-1 计划、`docs/18`、RuntimeHost guard 相符；未发现 Native 被文档宣称为正式生产能力。旧 V5 名残留与 current-only 声明不符 |
-| D4 单一权威状态 | 已查 | Compiler 在 `2121:2188:packages/compiler/src/compile.ts` 把 spawn/geometry 留在 Canonical Plan，gravity/camera/runtime closure 留在 WorldRuntimeBootstrap；无 Native shadow Plan/compiler。PR #43 ready 返回值仍产生 pause 双真相 |
+| D4 单一权威状态 | 已查 | Compiler 在 `2121:2188:packages/compiler/src/compile.ts` 把 spawn/geometry 留在 Canonical Plan，gravity/camera/runtime closure 留在 WorldRuntimeBootstrap；无 Native shadow Plan/compiler。PR #43 在 `260d7e0` 后由同一 pause owner 发布一致 ready 快照 |
 | D5 工程质量与可维护性 | 已查 | 确认 swallowed diagnostic 与 BNA 新文件判空违规；撤回 provider-private raw snapshot finding。未发现 legacy parser、alias 或第二套 Scene compiler |
-| D6 门禁与证据分层 | 已查 | 只使用当前源码 static-read 和安装引擎源码；未重跑输入未变的全量门禁，不把旧审查记录冒充本次执行。PR #43 只建议后续重跑受影响 ready/reset 门禁 |
+| D6 门禁与证据分层 | 已查 | 审计树只使用 static-read 和安装引擎源码；未重跑输入未变的全量门禁。修复树只执行 RED、受影响 72 个 focused tests、typecheck 与 `verify:canonical`，不把旧审查记录冒充本次执行 |
 
 ### 5.1 Runtime authority 与安装引擎语义补充
 
@@ -214,4 +227,4 @@
 | Step traversal | `595:608:packages/runtime-babylon/src/babylon-character-body-port.ts` 只在 `SUPPORTED` 开启 step-up，不把 `SLIDING` 墙面当台阶 |
 | Static collision | `947:986:packages/runtime-babylon/src/babylon-world-runtime.ts` 对 Canonical/Native collider 均创建 `PhysicsShapeMesh` + `PhysicsAggregate`；Babylon 9.23.0 安装源码 `physicsAggregate.js:57:60` 说明外部 shape 不由 aggregate dispose，现有 owner stack 分别持有 shape/aggregate |
 | 生命周期 | `617:631` 的 reverse disposer stack 保留首个失败并继续清理；`3020:3035` 停 render loop 后清理全部 owned resources。未发现 Native 自建 Engine/Scene/Havok/main camera/tick |
-| Browser readiness | adapter fixed-step accumulator 是时间 owner；`7d1e4f41` 缺 startup pause，PR #43 已阻止 pre-ready tick，但其 ready snapshot pause publication 仍不一致 |
+| Browser readiness | adapter fixed-step accumulator 是时间 owner；`7d1e4f41` 缺 startup pause，`8184825` 阻止 pre-ready tick，`260d7e0` 使 ready snapshot 与解除暂停后的真实状态一致 |
