@@ -804,20 +804,21 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     this.resetAnimationClock();
     try {
       const previousCanvas = this.canvas;
-      const snapshot = await this.coordinator.resetWithInitialControlBinding();
+      await this.coordinator.resetWithInitialControlBinding();
       await this.adoptActiveWorldSurface({
         previousCanvas,
         executionPlan: this.initialExecutionPlan,
         worldRuntimeBootstrap: this.initialWorldRuntimeBootstrap,
         inspections: this.initialInspections,
       });
-      this.emit();
-      return snapshot;
     } finally {
       this.paused = wasPaused;
       this.coordinator.setPaused(wasPaused);
       this.resetAnimationClock();
     }
+    const snapshot = this.coordinator.snapshot();
+    this.emit();
+    return snapshot;
   }
 
   captureScreenshot(): string {

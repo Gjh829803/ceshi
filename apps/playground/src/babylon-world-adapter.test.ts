@@ -127,6 +127,9 @@ interface AdapterProbe {
   fixedStepAccumulatorSeconds: number;
   displayFramesPerSecond: number;
   snapshot(): ReturnType<BabylonWorldAdapter["snapshot"]>;
+  subscribe(
+    listener: (snapshot: ReturnType<BabylonWorldAdapter["snapshot"]>) => void,
+  ): () => void;
   setPaused(paused: boolean): void;
   isPaused(): boolean;
   runtimeDiagnostics(): ReturnType<BabylonWorldAdapter["runtimeDiagnostics"]>;
@@ -815,20 +818,39 @@ describe("BabylonWorldAdapter frame loop", () => {
     await expect(yawAfterOneSecondAt(120)).resolves.toBeCloseTo(1.3625, 10);
   });
 
-  it("pauses simulation while replacing the World Session on reset", async () => {
-    const { adapter, runtime, setCoordinatorPaused } = createAdapterProbe();
-    let pausedWhileReplacing = false;
-    runtime.reset.mockImplementation(() => {
-      pausedWhileReplacing = adapter.isPaused();
-      return runtimeSnapshot(0);
-    });
+  it.each([
+    { initiallyPaused: false },
+    { initiallyPaused: true },
+  ])(
+    "pauses reset and publishes the restored pause state (initiallyPaused=$initiallyPaused)",
+    async ({ initiallyPaused }) => {
+      const { adapter, runtime, setCoordinatorPaused } = createAdapterProbe();
+      let pausedWhileReplacing = false;
+      runtime.reset.mockImplementation(() => {
+        pausedWhileReplacing = adapter.isPaused();
+        return runtimeSnapshot(0);
+      });
+      adapter.setPaused(initiallyPaused);
+      setCoordinatorPaused.mockClear();
+      const publishedPauseStates: boolean[] = [];
+      const unsubscribe = adapter.subscribe((snapshot) => {
+        publishedPauseStates.push(snapshot.paused);
+      });
+      publishedPauseStates.length = 0;
 
-    await adapter.resetRuntime();
+      const reset = await adapter.resetRuntime();
 
-    expect(pausedWhileReplacing).toBe(true);
-    expect(adapter.isPaused()).toBe(false);
-    expect(setCoordinatorPaused.mock.calls).toEqual([[true], [false]]);
-  });
+      expect(pausedWhileReplacing).toBe(true);
+      expect(adapter.isPaused()).toBe(initiallyPaused);
+      expect(reset.runtime.isPaused).toBe(initiallyPaused);
+      expect(publishedPauseStates).toEqual([initiallyPaused]);
+      expect(setCoordinatorPaused.mock.calls).toEqual([
+        [true],
+        [initiallyPaused],
+      ]);
+      unsubscribe();
+    },
+  );
 
   it("clears held movement and keyboard camera inertia across a protocol reset", async () => {
     const { adapter, runtime } = createAdapterProbe();
