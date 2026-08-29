@@ -104,7 +104,7 @@ export type BabylonNativeSceneCandidateAdmissionResultV1 =
   | Readonly<{
       outcome: "passed";
       contribution: BabylonNativeSceneContributionV1;
-      contributionHash: string;
+      contributionHash: `sha256:${string}`;
     }>
   | Readonly<{
       outcome: "rejected";
@@ -115,7 +115,7 @@ export type ReplayBabylonNativeSceneModuleResultV1 =
   | Readonly<{
       checkResult: NativeSceneCheckResultV1 & Readonly<{ outcome: "passed" }>;
       contribution: BabylonNativeSceneContributionV1;
-      contributionHash: string;
+      contributionHash: `sha256:${string}`;
     }>
   | Readonly<{
       checkResult: NativeSceneCheckResultV1 &
@@ -446,9 +446,14 @@ Use TypeChecker symbol/scope analysis to reject:
 
 - global random/time/network/DOM/process/timer/scheduling/eval/Function capabilities;
 - `scene.getEngine`, Scene/Engine create/dispose/control, camera/physics/action/input APIs;
-- `registerBeforeRender`, `registerAfterRender`, and `.add/.addOnce` on any value whose
-  TypeChecker-resolved Babylon type is `Observable`, regardless of whether the property name
-  ends in `Observable`;
+- assignment of a function/class/callable object into any Babylon-owned property and calls
+  that pass a function/callable object to a Babylon API unless the exact synchronous API is
+  positively allowlisted; the current whitebox profile needs no callback-valued Babylon API;
+- assignment to any Scene/Engine Observable property, access through its `constructor`, or
+  calls to `add/addOnce/remove/removeCallback/clear/notifyObserver/notifyObservers` on any
+  TypeChecker-resolved Babylon `Observable`, regardless of property spelling;
+- every method in `BABYLON_NATIVE_FORBIDDEN_SCENE_CALLBACK_METHOD_KEYS_V1`, including
+  ready/once/freeze/render-order/external-data retention in addition to before/after render;
 - every user class/subclass;
 - module-scope `let`/`var`, mutable container construction, writes/calls mutating a module-scope binding, and Build assignments that retain Context/Scene/Engine/Mesh/Registration outside Build scope;
 - any `return` with an expression inside `build` and any extra Runtime export.
@@ -697,6 +702,13 @@ Programmatic Modules must attempt and be rejected for:
   callbacks;
 - assigning each Scene callback setter: `onDispose`, `beforeRender`, `afterRender`,
   `beforeCameraRender`, and `afterCameraRender`;
+- replacing every function-valued key in
+  `BABYLON_NATIVE_AUDITED_SCENE_CALLBACK_PROPERTY_KEYS_V1`, including pointer predicates,
+  `onPointer*`, candidate selectors, deterministic-frame-time, and `customRenderFunction`;
+- invoking every retained callback/object method in
+  `BABYLON_NATIVE_FORBIDDEN_SCENE_CALLBACK_METHOD_KEYS_V1`, including `executeWhenReady`,
+  `executeOnceBeforeRender`, `addIsReadyCheck`, `freezeActiveMeshes`, `setRenderingOrder`, and
+  external-data retention;
 - calling Engine `runRenderLoop`/`stopRenderLoop`;
 - disposing Scene or Engine;
 - catching the instrumentation error and otherwise completing a valid Build.
@@ -721,15 +733,35 @@ Capture only public values/identities:
 - ordered copies of `.observers` for
   `BABYLON_NATIVE_AUDITED_SCENE_OBSERVABLE_KEYS_V1` and
   `BABYLON_NATIVE_AUDITED_ENGINE_OBSERVABLE_KEYS_V1`;
+- each Observable object identity plus an `observers.slice()` snapshot; never retain the live
+  `observers` array returned by Babylon;
+- function identity for every
+  `BABYLON_NATIVE_AUDITED_SCENE_CALLBACK_PROPERTY_KEYS_V1` member;
 - original own-property descriptors for instrumented methods.
 
-Install instance wrappers for `scene.registerBeforeRender`, `scene.registerAfterRender`, `engine.runRenderLoop`, and `engine.stopRenderLoop`. A wrapper records the first authority violation and throws without scheduling work. In `finally`, restore the prior own descriptor or delete the temporary own property, then verify restoration. Never read `_activeRenderLoops` or any private field.
+Install instance wrappers for all
+`BABYLON_NATIVE_FORBIDDEN_SCENE_CALLBACK_METHOD_KEYS_V1` members plus
+`engine.runRenderLoop` and `engine.stopRenderLoop`. A wrapper records the first authority
+violation and throws without scheduling or retaining work. In `finally`, restore the prior
+own descriptor or delete the temporary own property, then verify restoration. Delayed
+Babylon Observable removal remains a rejection at Build settlement; do not wait a tick or
+read `_activeRenderLoops`, `_willBeUnregistered`, or any private field.
 
 Add one declaration-census test that extracts all public `Observable` properties from the
 installed Babylon 9.23.0 `scene.pure.d.ts` and `abstractEngine.pure.d.ts`, then compares
 them exactly with the two Host constants. At this SHA the expected census is 65 Scene keys
-and 15 Engine keys. The constants are the only machine list; tests iterate them instead of
-hand-writing a smaller callback subset.
+and 15 Engine keys. The same test freezes the exact 17 Scene function-valued callback
+properties above. A source-backed test verifies the nine forbidden methods really retain a
+callback/object or control later rendering in `scene.pure.js`. The constants are the only
+machine lists; tests iterate them instead of hand-writing smaller callback subsets.
+
+The census fixture must import the exact 12-specifier Module Profile into one TypeScript
+Program and extract the effective, module-augmented `Scene`/`AbstractEngine` public surface.
+It must also instantiate the Host-private NullEngine/Scene after loading that same import
+graph and compare runtime Observable identities, callback-property keys, and instrumented
+method descriptors with the constants. This guards future import side effects and module
+augmentations; scanning the entire unimported Babylon package or only `scene.pure.d.ts` is
+not accepted as the sole evidence.
 
 - [ ] **Step 5: Integrate audit around the entire Build Epoch**
 

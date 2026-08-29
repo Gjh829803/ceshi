@@ -234,7 +234,10 @@ Source Admission 至少拒绝：
 - Physics Body/Aggregate/Plugin/CharacterController/query；
 - Camera 创建、`activeCamera`/`activeCameras` 写入；
 - ActionManager、Action、输入 attach、pointer/keyboard handler；
-- `registerBeforeRender`、`registerAfterRender`、任意 `...Observable.add/addOnce` 或 Module-owned callback；
+- 对 Babylon-owned property 写入 function/class/callable object、向 Babylon API 传入 callable argument、
+  替换 Scene/Engine Observable、访问其 `constructor`、调用 Observable mutation/control API，或调用唯一
+  forbidden retained-callback method census 中任一成员；当前 whitebox Profile 不需要 callback-valued
+  Babylon API，因此不保留匿名 callback 例外；
 - user-defined class/subclass。V1 用函数和 Babylon 原生实例组合，避免隐藏 lifecycle hook；
 - module-scope `let`/`var`、对 module-scope container 的 Build 期写入、把 Scene/Engine/Mesh/Context/
   Registration 保存到 module/global binding；
@@ -332,9 +335,57 @@ resource/input Observables。测试从锁定声明文件独立提取 public cens
 设计、实现和测试不得各维护一份手抄子集或数字为 13/2 的旧列表。Babylon 版本变化时，版本、两个常量和
 声明 census test 作为一次 current-only 变更共同替换。
 
+Observable 不是完整 callback 面。`/host` 还拥有唯一版本锁定的
+`BABYLON_NATIVE_AUDITED_SCENE_CALLBACK_PROPERTY_KEYS_V1`，当前 Babylon 9.23.0 精确包含 17 个会被
+后续 pointer/render/LOD/candidate selection 调用的 public function-valued Scene 属性：
+
+```text
+customLODSelector
+pointerDownPredicate
+pointerUpPredicate
+pointerMovePredicate
+onPointerMove
+onPointerDown
+onPointerUp
+onPointerPick
+pointerMoveTrianglePredicate
+pointerDownTrianglePredicate
+pointerUpTrianglePredicate
+getActiveMeshCandidates
+getActiveSubMeshCandidates
+getIntersectingSubMeshCandidates
+getCollidingSubMeshCandidates
+getDeterministicFrameTime
+customRenderFunction
+```
+
+Audit 对每个 key 比较 Build 前后的 function identity，不接受匿名例外。另一个 Host-private
+`BABYLON_NATIVE_FORBIDDEN_SCENE_CALLBACK_METHOD_KEYS_V1` 锁定会保留 callback/Module object 或接管后续
+渲染的 public method：`registerBeforeRender`、`registerAfterRender`、`executeOnceBeforeRender`、
+`executeWhenReady`、`addIsReadyCheck`、`freezeActiveMeshes`、`setRenderingOrder`、`addExternalData`、
+`getOrAddExternalDataWithFactory`。Authority Probe 对这些 method 安装 instance wrapper，记录首次调用并
+fail-closed；Source Admission 同时按 TypeChecker symbol 拒绝。该清单来自安装的
+`scene.pure.d.ts`/`.js` retained semantics，而不是只按方法名包含 `callback` 猜测。
+
+声明/源码清单之外还必须有一条冻结导入图复验：测试按唯一 Deep ESM Import Profile 创建同一个
+TypeScript Program，并从该 Program 的有效 `Scene`/`AbstractEngine` symbols 提取 module augmentation
+后的 public surface；随后在相同 12-specifier 运行时导入图上创建 Host-private NullEngine/Scene，比较
+实际 Observable identity、callback property keys 和被 wrapper 的 method descriptors。`scene.js` 当前只
+重导出 `scene.pure.js` 并调用 `RegisterScene()`，因此 Babylon 9.23.0 没有额外 callback key；未来任一
+允许导入引入新的 augmentation、function-valued property 或 retained method 时，census 必须先失败，
+并与唯一常量、Source Admission 和 Authority Probe 在一次 current-only 变更中共同更新。不得扫描整个
+未导入的 Babylon 包后把无关可选组件混入 Module Profile，也不得只扫 `scene.pure.d.ts` 后忽略实际导入图。
+
 Scene 的五个公开 callback setter `onDispose`、`beforeRender`、`afterRender`、
 `beforeCameraRender`、`afterCameraRender` 必须单独进入 setter regression；它们最终改变 Observable
 subscription，Audit 比较有序 observer identity，而不只比较数量。
+
+Observable baseline 对每个 key 同时冻结 Observable 对象 identity 与
+`observable.observers.slice()` 的有序副本；禁止保存 live `observers` 数组引用。Build 后 identity 和有序
+Observer 引用必须同时相等。Babylon `remove()` 的延迟注销在同一个 Build settlement 仍视为 mutation 并
+fail-closed，不等待 `setTimeout(0)`、不读取 `_willBeUnregistered` 等私有字段。Source Admission 禁止对
+Scene/Engine Observable 属性赋值、通过其 `constructor` 替换实例，以及调用 Observable 的
+`add/addOnce/remove/removeCallback/clear/notifyObserver/notifyObservers` mutation/control API。
 
 Audit 至少验证：
 
@@ -343,8 +394,11 @@ Audit 至少验证：
 - Physics Engine 仍为空、physics 未启用、所有 Candidate Mesh 没有 provider-created physics body；
 - Scene `actionManager`/`actionManagers` 和 Mesh action manager 没有新增；
 - `registerBeforeRender`、`registerAfterRender`、Engine render-loop 控制 API 没有被调用；
-- 两个唯一 Observable census 常量中每个 public Observable 的有序 observer identity 与 baseline
-  byte-exact 相同；五个 Scene callback setter 以及 `.add()` / `.addOnce()` 的变更同样被拒绝；
+- 两个唯一 Observable census 常量中每个 public Observable 的对象 identity 与
+  `observers.slice()` 有序副本都与 baseline byte-exact 相同；五个 Scene callback setter 以及任意
+  Observable mutation/control 同样被拒绝；
+- 17 个 Scene callback function property identity 与 baseline 相同，九个 retained callback/object method
+  没有被调用；
 - Host instrumentation 在成功、rejection、throwing Build 和 cleanup 后全部恢复；
 - V1 Profile 允许的 Mesh、TransformNode、Geometry、Material、Light 和 Scene visual scalar state 仍属于
   Candidate Scene；未来新增的 Babylon-owned 纯视觉系统必须先进入唯一 Import Profile，并证明不含 Module

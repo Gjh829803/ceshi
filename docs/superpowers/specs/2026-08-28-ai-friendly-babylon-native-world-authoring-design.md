@@ -1209,8 +1209,9 @@ RuntimeWorldConfiguration V1 -> Babylon/Havok。
 - `depends_on`：BNA-0；与 BNA-1 只在已冻结的 Bootstrap 类型处集成。
 - `blocks`：BNA-3、BNA-4、BNA-5、BNA-6。
 - 独占所有权：Native Author API、Provider-specific 登记类型、示例 import 风格；不修改 RuntimeHost。
-- 输入/输出合同：Module definition -> typed build callback、pending registrations 和闭合
-  `NativeSceneCheckResultV1`。
+- 输入/输出合同：单 Candidate Module definition -> typed build callback、pending registrations 和闭合
+  `BabylonNativeSceneCandidateAdmissionResultV1`；双 Candidate Replay -> 无 Handle Contribution/hash 与
+  `NativeSceneCheckResultV1`；`worldkit native check/explain` 发布同一个 Check DTO。
 - 集成点：Native Scene Builder 的 Module Resolver。
 - 验证证据：public export census、API type tests、diagnostic/CLI exit tests、旧实验 App 编译迁移，以及
   bundle/module graph、Authority Audit、双 Candidate Runtime Replay 和启动成本。Import Profile 的工程
@@ -1274,16 +1275,18 @@ RuntimeWorldConfiguration V1 -> Babylon/Havok。
   尝试；Hosted 进程/Worker/Origin 的强制终止和主 Runtime 无污染证明。
 - 执行模式：`sequential`。
 
-### BNA-6：AI 工具、Golden Corpus 与场景复原评估
+### BNA-6：AI 文档、Golden Corpus 与场景复原评估
 
-- 目标与独立交付物：提供 `check/explain`、最小 API 文档、Golden/negative Corpus、自修复 Checker 和
-  多类参考图白膜评估；正式跑数前冻结 `NativeSceneEvaluationProfile`、lane-specific contract context、
+- 目标与独立交付物：消费 BNA-2 已冻结的 `worldkit native check/explain`，提供最小 API 文档、
+  Golden/negative Corpus、bounded self-repair 流程和多类参考图白膜评估；正式跑数前冻结
+  `NativeSceneEvaluationProfile`、lane-specific contract context、
   Route Decision、资产生产/准入方式、预算和 Blocking Threshold，结果产生后不得修改；用非产品离线
   Three visual baseline 单独量化模型熟悉度，不创建 Three Runtime Endpoint，并覆盖拒绝后的显式回退
   与禁止静默换路。
 - `depends_on`：BNA-2、BNA-3、BNA-4、BNA-5。
 - `blocks`：BNA-8。
-- 独占所有权：Native examples、fixtures、CLI diagnostics、AI authoring guide/可选 Skill、视觉评估制品。
+- 独占所有权：Native 评测 examples/fixtures、evaluation profile、Corpus/阈值、AI authoring guide/可选
+  Skill 与视觉评估制品；CLI 与 Diagnostics 继续由 BNA-2 独占。
 - 输入/输出合同：reference + route decision + bootstrap/module + admitted asset refs -> checked package +
   layered evidence。
 - 集成点：CLI、Studio/Playground 和真实 Chromium Capture。
