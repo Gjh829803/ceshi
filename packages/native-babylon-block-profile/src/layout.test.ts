@@ -1,4 +1,5 @@
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
+import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 import { Scene } from "@babylonjs/core/scene.js";
@@ -62,8 +63,10 @@ function record(
     height: size[1],
     depth: size[2],
   }, scene);
+  const positions = mesh.getVerticesData(VertexBuffer.PositionKind)!;
+  const indices = mesh.getIndices()!;
   return Object.freeze({
-    definition: Object.freeze({
+    input: Object.freeze({
       id: input.id,
       shape,
       paletteRole: input.paletteRole ?? "ground",
@@ -72,6 +75,10 @@ function record(
         : { visualGroupId: input.visualGroupId }),
     }),
     mesh,
+    localGeometrySnapshot: Object.freeze({
+      positions: Object.freeze(Array.from(positions)),
+      indices: Object.freeze(Array.from(indices)),
+    }),
   });
 }
 

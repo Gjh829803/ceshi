@@ -17,6 +17,7 @@ export type BabylonNativeBlockProfileDiagnosticLocationV1 =
 export const BABYLON_NATIVE_BLOCK_PROFILE_DIAGNOSTIC_CODES_V1 = Object.freeze([
   "WORLDKIT_NATIVE_BLOCK_GRID_ALIGNMENT_INVALID",
   "WORLDKIT_NATIVE_BLOCK_MESH_DISPOSED",
+  "WORLDKIT_NATIVE_BLOCK_MESH_GEOMETRY_INVALID",
   "WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP",
   "WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED",
   "WORLDKIT_NATIVE_BLOCK_SCENE_MISMATCH",
@@ -119,6 +120,11 @@ function issueMessage(issue: BabylonNativeBlockLayoutIssueV1): Readonly<{
       return Object.freeze({
         message: `Block '${issue.blockId}' was disposed before Profile finalization.`,
         repairHint: "Keep every Profile-created Mesh alive until build finalization.",
+      });
+    case "WORLDKIT_NATIVE_BLOCK_MESH_GEOMETRY_INVALID":
+      return Object.freeze({
+        message: `Block '${issue.blockId}' no longer has its fixed Profile geometry.`,
+        repairHint: "Keep Profile block vertices, indices, and thin-instance state unchanged.",
       });
     case "WORLDKIT_NATIVE_BLOCK_SCENE_MISMATCH":
       return Object.freeze({
@@ -260,7 +266,7 @@ function structuralRouteComponentCount(
   return componentCount;
 }
 
-function countDefinitions(
+function countInputs(
   records: readonly BabylonNativeBlockSessionRecordV1[],
 ): Readonly<{
   blockCountByShape: Readonly<Record<BabylonNativeBlockShapeKindV1, number>>;
@@ -275,9 +281,9 @@ function countDefinitions(
   const blockCountByPaletteRole = Object.fromEntries(
     BABYLON_NATIVE_BLOCK_PALETTE_ROLES_V1.map((role) => [role, 0]),
   ) as Record<BabylonNativeBlockPaletteRoleV1, number>;
-  for (const { definition } of records) {
-    blockCountByShape[definition.shape] += 1;
-    blockCountByPaletteRole[definition.paletteRole] += 1;
+  for (const { input } of records) {
+    blockCountByShape[input.shape] += 1;
+    blockCountByPaletteRole[input.paletteRole] += 1;
   }
   return Object.freeze({
     blockCountByShape: Object.freeze(blockCountByShape),
@@ -368,7 +374,7 @@ export function createBabylonNativeBlockProfileCheckResultV1(
       repairHint: entry.repairHint,
     })));
   const inventory = visualGroups(layout);
-  const counts = countDefinitions(records);
+  const counts = countInputs(records);
   const metrics = Object.freeze({
     blockCount: records.length,
     blockCountByShape: counts.blockCountByShape,

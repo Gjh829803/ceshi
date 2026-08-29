@@ -57,7 +57,7 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
       expect(specifiers, path).not.toContain("@babylonjs/core");
       expect(source, path).not.toMatch(/import\s+\*\s+as/);
       expect(source, path).not.toMatch(
-        /BlockWorldManifest|BabylonNativeBlockDefinitionV1|\bCompiler\b|\bPreset\b|\bserialize\b|createMountain|createBuilding|createLevel/,
+        /BlockWorldManifest|BabylonNativeBlockDefinitionV1|WORLDKIT_NATIVE_BLOCK_DEFINITION|\bCompiler\b|\bPreset\b|\bserialize\b|createMountain|createBuilding|createLevel/,
       );
       for (const specifier of specifiers) {
         expect(specifier, path).not.toMatch(

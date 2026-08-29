@@ -1,3 +1,4 @@
+import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import type { Scene } from "@babylonjs/core/scene.js";
 
@@ -17,6 +18,7 @@ import type { BabylonNativeBlockPaletteRoleV1 } from "./profile.js";
 
 export type BabylonNativeBlockLayoutIssueCodeV1 =
   | "WORLDKIT_NATIVE_BLOCK_MESH_DISPOSED"
+  | "WORLDKIT_NATIVE_BLOCK_MESH_GEOMETRY_INVALID"
   | "WORLDKIT_NATIVE_BLOCK_SCENE_MISMATCH"
   | "WORLDKIT_NATIVE_BLOCK_WORLD_TRANSFORM_INVALID"
   | "WORLDKIT_NATIVE_BLOCK_GRID_ALIGNMENT_INVALID"
@@ -112,6 +114,26 @@ function canonicalCenter(
   ]);
 }
 
+function hasFixedLocalGeometry(
+  record: BabylonNativeBlockSessionRecordV1,
+): boolean {
+  try {
+    const positions = record.mesh.getVerticesData(VertexBuffer.PositionKind);
+    const indices = record.mesh.getIndices();
+    return !record.mesh.hasThinInstances &&
+      positions !== null &&
+      indices !== null &&
+      positions.length === record.localGeometrySnapshot.positions.length &&
+      indices.length === record.localGeometrySnapshot.indices.length &&
+      positions.every((value, index) =>
+        Object.is(value, record.localGeometrySnapshot.positions[index])) &&
+      Array.from(indices).every((value, index) =>
+        value === record.localGeometrySnapshot.indices[index]);
+  } catch {
+    return false;
+  }
+}
+
 function deriveEntry(
   scene: Scene,
   record: BabylonNativeBlockSessionRecordV1,
@@ -123,7 +145,7 @@ function deriveEntry(
     return Object.freeze({
       issue: Object.freeze({
         code: "WORLDKIT_NATIVE_BLOCK_MESH_DISPOSED",
-        blockId: record.definition.id,
+        blockId: record.input.id,
       }),
     });
   }
@@ -131,7 +153,15 @@ function deriveEntry(
     return Object.freeze({
       issue: Object.freeze({
         code: "WORLDKIT_NATIVE_BLOCK_SCENE_MISMATCH",
-        blockId: record.definition.id,
+        blockId: record.input.id,
+      }),
+    });
+  }
+  if (!hasFixedLocalGeometry(record)) {
+    return Object.freeze({
+      issue: Object.freeze({
+        code: "WORLDKIT_NATIVE_BLOCK_MESH_GEOMETRY_INVALID",
+        blockId: record.input.id,
       }),
     });
   }
@@ -152,7 +182,7 @@ function deriveEntry(
       return Object.freeze({
         issue: Object.freeze({
           code: "WORLDKIT_NATIVE_BLOCK_WORLD_TRANSFORM_INVALID",
-          blockId: record.definition.id,
+          blockId: record.input.id,
         }),
       });
     }
@@ -167,12 +197,12 @@ function deriveEntry(
       return Object.freeze({
         issue: Object.freeze({
           code: "WORLDKIT_NATIVE_BLOCK_GRID_ALIGNMENT_INVALID",
-          blockId: record.definition.id,
+          blockId: record.input.id,
         }),
       });
     }
     const placement = Object.freeze({
-      shape: record.definition.shape,
+      shape: record.input.shape,
       centerMetersXYZ,
       rotationQuarterTurnsY,
     });
@@ -180,23 +210,23 @@ function deriveEntry(
       return Object.freeze({
         issue: Object.freeze({
           code: "WORLDKIT_NATIVE_BLOCK_GRID_ALIGNMENT_INVALID",
-          blockId: record.definition.id,
+          blockId: record.input.id,
         }),
       });
     }
     const bounds = babylonNativeBlockBoundsFromCenterV1(placement);
     return Object.freeze({
       entry: Object.freeze({
-        id: record.definition.id,
-        shape: record.definition.shape,
-        paletteRole: record.definition.paletteRole,
-        ...(record.definition.visualGroupId === undefined
+        id: record.input.id,
+        shape: record.input.shape,
+        paletteRole: record.input.paletteRole,
+        ...(record.input.visualGroupId === undefined
           ? {}
-          : { visualGroupId: record.definition.visualGroupId }),
+          : { visualGroupId: record.input.visualGroupId }),
         centerMetersXYZ,
         rotationQuarterTurnsY,
         sizeMetersXYZ: effectiveBabylonNativeBlockSizeMetersXYZV1(
-          record.definition.shape,
+          record.input.shape,
           rotationQuarterTurnsY,
         ),
         minimumMetersXYZ: bounds.minimumMetersXYZ,
@@ -209,7 +239,7 @@ function deriveEntry(
     return Object.freeze({
       issue: Object.freeze({
         code: "WORLDKIT_NATIVE_BLOCK_WORLD_TRANSFORM_INVALID",
-        blockId: record.definition.id,
+        blockId: record.input.id,
       }),
     });
   }
@@ -380,7 +410,7 @@ export function deriveBabylonNativeBlockLayoutV1(
   const entries: BabylonNativeBlockLayoutEntryV1[] = [];
   const issues: BabylonNativeBlockLayoutIssueV1[] = [];
   for (const record of [...records].sort((left, right) =>
-    stableCompare(left.definition.id, right.definition.id))) {
+    stableCompare(left.input.id, right.input.id))) {
     const derived = deriveEntry(scene, record);
     if (derived.entry !== undefined) entries.push(derived.entry);
     if (derived.issue !== undefined) issues.push(derived.issue);

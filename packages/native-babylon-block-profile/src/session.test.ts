@@ -181,7 +181,7 @@ describe("Babylon Native block profile session", () => {
     });
   });
 
-  it("rejects invalid definitions and duplicate session IDs", async () => {
+  it("rejects invalid create inputs and duplicate session IDs", async () => {
     const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
 
     withScene((scene) => {
@@ -201,9 +201,9 @@ describe("Babylon Native block profile session", () => {
           visualGroupId: "Bad Group",
         },
       ];
-      for (const definition of invalid) {
-        expect(() => session.createBlock(definition as never)).toThrow(
-          /WORLDKIT_NATIVE_BLOCK_DEFINITION_INVALID/,
+      for (const input of invalid) {
+        expect(() => session.createBlock(input as never)).toThrow(
+          /WORLDKIT_NATIVE_BLOCK_CREATE_INPUT_INVALID/,
         );
       }
 

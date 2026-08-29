@@ -1,3 +1,4 @@
+import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { Scene } from "@babylonjs/core/scene.js";
@@ -35,8 +36,12 @@ export interface BabylonNativeBlockProfileSessionV1 {
 }
 
 export interface BabylonNativeBlockSessionRecordV1 {
-  readonly definition: Readonly<BabylonNativeBlockCreateInputV1>;
+  readonly input: Readonly<BabylonNativeBlockCreateInputV1>;
   readonly mesh: Mesh;
+  readonly localGeometrySnapshot: Readonly<{
+    readonly positions: readonly number[];
+    readonly indices: readonly number[];
+  }>;
 }
 
 const STABLE_ID = /^[a-z0-9][a-z0-9-]{2,79}$/;
@@ -117,10 +122,10 @@ function parseBudget(
   return Object.freeze({ maximumBlockCount: record.maximumBlockCount });
 }
 
-function parseDefinition(
+function parseCreateInput(
   input: Readonly<BabylonNativeBlockCreateInputV1>,
 ): Readonly<BabylonNativeBlockCreateInputV1> {
-  const code = "WORLDKIT_NATIVE_BLOCK_DEFINITION_INVALID";
+  const code = "WORLDKIT_NATIVE_BLOCK_CREATE_INPUT_INVALID";
   const record = exactPlainRecord(
     input,
     ["id", "shape", "paletteRole"],
@@ -183,11 +188,11 @@ export function createBabylonNativeBlockProfileSessionV1(
           "createBlock is unavailable after finalize",
         );
       }
-      const definition = parseDefinition(input);
-      if (recordsById.has(definition.id)) {
+      const parsedInput = parseCreateInput(input);
+      if (recordsById.has(parsedInput.id)) {
         return fail(
           "WORLDKIT_NATIVE_BLOCK_ID_DUPLICATE",
-          `block id '${definition.id}' is already used in this session`,
+          `block id '${parsedInput.id}' is already used in this session`,
         );
       }
       if (recordsById.size >= budget.maximumBlockCount) {
@@ -197,14 +202,30 @@ export function createBabylonNativeBlockProfileSessionV1(
         );
       }
       const size = BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1[
-        definition.shape
+        parsedInput.shape
       ];
       const mesh = MeshBuilder.CreateBox(
-        definition.id,
+        parsedInput.id,
         { width: size[0], height: size[1], depth: size[2] },
         context.scene,
       );
-      recordsById.set(definition.id, Object.freeze({ definition, mesh }));
+      const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
+      const indices = mesh.getIndices();
+      if (positions === null || indices === null) {
+        mesh.dispose();
+        return fail(
+          "WORLDKIT_NATIVE_BLOCK_MESH_GEOMETRY_INVALID",
+          "the fixed block helper did not produce indexed position geometry",
+        );
+      }
+      recordsById.set(parsedInput.id, Object.freeze({
+        input: parsedInput,
+        mesh,
+        localGeometrySnapshot: Object.freeze({
+          positions: Object.freeze(Array.from(positions)),
+          indices: Object.freeze(Array.from(indices)),
+        }),
+      }));
       return mesh;
     },
     finalize(): BabylonNativeBlockProfileCheckResultV1 {

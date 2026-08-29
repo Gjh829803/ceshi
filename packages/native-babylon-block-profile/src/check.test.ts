@@ -1,4 +1,5 @@
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
+import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { Scene } from "@babylonjs/core/scene.js";
 import {
@@ -16,7 +17,7 @@ type PaletteRole =
   | "water-like-visual"
   | "background-mass";
 
-interface BlockDefinition {
+interface BlockCreateInput {
   readonly id: string;
   readonly shape: Shape;
   readonly paletteRole: PaletteRole;
@@ -29,7 +30,7 @@ interface BlockProfileModule {
     context: BabylonNativeSceneBuildContextV1,
     budget: Readonly<{ maximumBlockCount: number }>,
   ): {
-    createBlock(definition: Readonly<BlockDefinition>): Mesh;
+    createBlock(input: Readonly<BlockCreateInput>): Mesh;
     finalize(): Readonly<{
       kind: "babylon-native-block-profile-check-result";
       schemaVersion: 1;
@@ -135,6 +136,7 @@ describe("Babylon Native block profile structural check", () => {
     expect(profile.BABYLON_NATIVE_BLOCK_PROFILE_DIAGNOSTIC_CODES_V1).toEqual([
       "WORLDKIT_NATIVE_BLOCK_GRID_ALIGNMENT_INVALID",
       "WORLDKIT_NATIVE_BLOCK_MESH_DISPOSED",
+      "WORLDKIT_NATIVE_BLOCK_MESH_GEOMETRY_INVALID",
       "WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP",
       "WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED",
       "WORLDKIT_NATIVE_BLOCK_SCENE_MISMATCH",
@@ -412,6 +414,104 @@ describe("Babylon Native block profile structural check", () => {
       });
       expect(result.metrics.blockCount).toBe(1);
       expect(result.metrics.occupiedMicroCellCount).toBe(0);
+    });
+  });
+
+  it("rejects local geometry mutation instead of trusting the declared shape", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadProfile();
+
+    withScene((scene) => {
+      const session = createBabylonNativeBlockProfileSessionV1(
+        createContext(scene),
+        { maximumBlockCount: 1 },
+      );
+      const mesh = session.createBlock({
+        id: "mutated-block",
+        shape: "full",
+        paletteRole: "ground",
+      });
+      mesh.position.set(0, 0.5, 0);
+      const positions = mesh.getVerticesData(VertexBuffer.PositionKind)!;
+      positions[0] = positions[0]! + 0.25;
+      mesh.setVerticesData(VertexBuffer.PositionKind, positions, true);
+
+      const result = session.finalize();
+
+      expect(result.outcome).toBe("rejected");
+      expect(result.diagnostics).toHaveLength(1);
+      expect(result.diagnostics[0]).toMatchObject({
+        severity: "error",
+        code: "WORLDKIT_NATIVE_BLOCK_MESH_GEOMETRY_INVALID",
+        location: { kind: "block", blockId: "mutated-block" },
+      });
+      expect(result.metrics.occupiedMicroCellCount).toBe(0);
+    });
+  });
+
+  it("rejects a Mesh that reports thin instances absent from the session inventory", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadProfile();
+
+    withScene((scene) => {
+      const session = createBabylonNativeBlockProfileSessionV1(
+        createContext(scene),
+        { maximumBlockCount: 1 },
+      );
+      const mesh = session.createBlock({
+        id: "thin-instance-source",
+        shape: "full",
+        paletteRole: "ground",
+      });
+      mesh.position.set(0, 0.5, 0);
+      // NullEngine intentionally lacks instanced-array support, so Babylon cannot
+      // create a real thin instance here. Shadow only its public observation point
+      // while retaining a real Mesh and the production checker path.
+      Object.defineProperty(mesh, "hasThinInstances", {
+        configurable: true,
+        value: true,
+      });
+
+      const result = session.finalize();
+
+      expect(result.outcome).toBe("rejected");
+      expect(result.diagnostics).toHaveLength(1);
+      expect(result.diagnostics[0]).toMatchObject({
+        severity: "error",
+        code: "WORLDKIT_NATIVE_BLOCK_MESH_GEOMETRY_INVALID",
+        location: { kind: "block", blockId: "thin-instance-source" },
+      });
+    });
+  });
+
+  it("closes a throwing Mesh geometry observation into one diagnostic", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadProfile();
+
+    withScene((scene) => {
+      const session = createBabylonNativeBlockProfileSessionV1(
+        createContext(scene),
+        { maximumBlockCount: 1 },
+      );
+      const mesh = session.createBlock({
+        id: "throwing-block",
+        shape: "full",
+        paletteRole: "ground",
+      });
+      mesh.position.set(0, 0.5, 0);
+      Object.defineProperty(mesh, "hasThinInstances", {
+        configurable: true,
+        get(): never {
+          throw new Error("untrusted Mesh observation");
+        },
+      });
+
+      const result = session.finalize();
+
+      expect(result.outcome).toBe("rejected");
+      expect(result.diagnostics).toHaveLength(1);
+      expect(result.diagnostics[0]).toMatchObject({
+        severity: "error",
+        code: "WORLDKIT_NATIVE_BLOCK_MESH_GEOMETRY_INVALID",
+        location: { kind: "block", blockId: "throwing-block" },
+      });
     });
   });
 });
