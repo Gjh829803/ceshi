@@ -24,6 +24,37 @@
 - Do not write persistent bundles, Package/Receipt/Registry identities, generated scene assets, or screenshots in BNA-2. Temporary bundle directories live under ignored `.codex-tmp/native-scene-check/` and are removed on every outcome.
 - `NullEngine` evidence proves structural admission/audit/replay only. It does not prove Havok collision, ground support, step traversal, visual fidelity, browser rendering, or hosted isolation.
 
+## Implementation-Baseline Evidence
+
+The user supplied an independent full-gate run for exact `main@9794f0cb05ec2ce54ec3367fa25e1274ea3605a6` after the 22 commits since the earlier `7d1e4f41` audit. This evidence was not executed by the author of this plan and must be labelled user-supplied when cited.
+
+| Gate | Baseline result |
+|---|---|
+| `pnpm install --frozen-lockfile` | exit 0; lock unchanged |
+| `pnpm check:agent-self-check` | exit 0; Planner/Builder bundles current |
+| `pnpm typecheck` | exit 0 |
+| `pnpm test:studio` | exit 0; 75 passed |
+| `pnpm test:independent` | exit 0; 6 Node + 1 Site census, 23 Node passed, Site build + 1 passed |
+| `pnpm test` | exit 0; census 313 = 281 contract + 32 resource-heavy; 3027 contract passed / 3 skipped; 513 resource-heavy passed; boundary debt 49 |
+| `pnpm build` | exit 0; chunk-size advisory only |
+| `pnpm build:native-scene` | exit 0; chunk-size advisory only |
+| `pnpm verify:bna1-clean-break` | exit 0; `ok: true`, 1002 files scanned |
+| `pnpm verify:unreleased-clean-break` | exit 0 |
+| `pnpm verify:route-r0-contract` | exit 0; 8 checks passed |
+| `pnpm verify:route-r1-heightfield` | exit 0; expected positive/negative fixtures and 30/60/120 cadence hash agreement |
+| `pnpm verify:route-r1b-static-platform` | exit 0; steps/platform/ramp success and legacy census zero |
+| `pnpm verify:canonical` | exit 0; deterministic reset passed; SwiftShader warning only |
+| `pnpm verify:native-scene-playground` | exit 0; path, jump/landing, camera reset, and pre-BNA2 collider overlay passed |
+| `git diff --check` | exit 0; tracked tree clean; pre-existing untracked `.tmp/` and `__pycache__/` excluded |
+
+Evidence rules for implementation:
+
+- do not rerun this full matrix merely as a preflight on unchanged `9794f0c`; it already establishes that BNA2 does not begin from a known red baseline;
+- do not carry these results forward as proof for an implementation commit: PC-05 through PC-50 change Native source, Runtime consumer, CLI, dependencies, tests, and builds, so the affected focused and final gates in PC-90 must run on the final exact SHA;
+- `pnpm test:scenes` is already covered by `pnpm test`; do not duplicate it;
+- `test:contract:coverage`, `verify:3c-migration`, `verify:placement-layout`, `verify:rigged-subject`, `verify:g-bot-subject`, `verify:control-capture`, and `verify:outdoor-gameplay` were not part of the supplied run. They are not added to BNA2 completion unless a BNA2 edit changes their inputs or an independent finding supplies a concrete reason;
+- preserve the user's pre-existing untracked `.tmp/` and `__pycache__/` content and exclude it from commits.
+
 ## Frozen Interfaces and Diagnostic Vocabulary
 
 The implementation must converge on these exact Host roles. Internal helpers may be split further, but these are the only `/host` Candidate entry points:
