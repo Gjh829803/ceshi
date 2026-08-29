@@ -1,6 +1,6 @@
 # Babylon Native Authoring BNA-2 生产闭环设计
 
-- 状态：Pending Human Review
+- 状态：Approved for implementation
 - 日期：2026-08-29
 - 设计基线：`main@9794f0cb05ec2ce54ec3367fa25e1274ea3605a6`
 - 上位架构：
@@ -411,6 +411,24 @@ CLI 不复用现有 WorldPackage 的多段 exit code。Native V1 只使用 `0/1/
 - 不增加 `details`、`params`、provider error 或 arbitrary metadata；
 - Source/Audit/Replay 错误给出 AI 可执行 repair hint，但不建议绕过 Gate、改用旧 API 或回退旧 Collider。
 
+### 9.4 BNA-2 本地检查策略
+
+CLI 只有 `<world-directory>` 输入，不能从用户 `package.json`、`tsconfig.json`、环境变量或未锁定文件暗中
+取得预算与资产。因此 BNA-2 固定以下 trusted-local check policy：
+
+- `worldkit://native-scene-profile/whitebox.standard@1` 是 CLI 唯一接受的 Profile；未知 Profile 以
+  `capability` rejection 结束；
+- 该 Profile 的本地结构预算固定为 `256` 个 Static Collider、`65_536` 个 Collider vertex 和
+  `131_072` 个 Collider triangle；它只是 BNA-2 checker hard cap，不是 Tenant entitlement、Package
+  identity 或正式 Runtime budget；
+- BNA-2 CLI 不接收资产目录或 lock 参数。Module 调用 `context.assets.resolve()` 时，asset-free checker
+  以稳定 `WORLDKIT_NATIVE_SCENE_ASSET_LOCK_UNAVAILABLE` capability diagnostic fail-closed；
+- `/host` Admission/Replay 仍接受调用方提供的 locked asset resolver 与授权 budget。BNA-3 使用同一入口
+  注入正式 Dependency/Asset Lock 与 `min(profile, host/tenant hard cap)` 的有效预算，不复制 Source、Audit
+  或 Replay；
+- NullEngine Candidate 只证明结构准入、Authority 和确定性 replay，不冒充 BNA-4 的 Havok、Surface、
+  人物通过性或真实浏览器渲染证据。
+
 ## 10. Cloud Ridge 与 Block Profile 关系
 
 ### 10.1 Cloud Ridge current-only 迁移
@@ -534,10 +552,10 @@ BNA-2 不用 NullEngine/contract test 冒充真实 Havok、人物通过性、视
 |---|---|---|---|---|---|---|---|
 | BNA2-PC-00 | 冻结本规格与上位文档关系 | BNA-0、BNA-1、BNA-2 Foundation | 全部后续 | 本规格、长期规格的 BNA-2 指针、Backlog 真相 | current tree + reviews -> approved production-closure contract | link/diff/placeholder/contradiction review | `main-agent-only` |
 | BNA2-PC-05 | 清理 BNA 新源码判空规范并声明直接依赖 | PC-00 | PC-20、PC-30、PC-40 | Native package manifest 与 module/contribution/diagnostics/host、Runtime Contracts Native Bootstrap parser、lockfile | review P2 -> one `isNil`/`isEmpty` convention | focused parsers、dependency/export census、typecheck | `sequential` |
-| BNA2-PC-10 | 实现 Node workspace、Source Graph、typecheck 与临时 Bundle Admission | PC-00 | PC-40、PC-50、BNA-3 | `scripts/native-scene/**`、root test manifest；不改 Host | world-directory -> loaded exact Module 或 structured diagnostics | AST/Program adversarial fixtures、symlink/temp cleanup | `sequential` |
+| BNA2-PC-10 | 实现 Node workspace、Source Graph、typecheck 与临时 Bundle Admission | PC-00 | PC-40、PC-50、BNA-3 | `scripts/native-scene/authoring-workspace*`、`source-admission*`、`ephemeral-bundle*`、test support；不改 Host/CLI | world-directory -> loaded exact Module 或 structured diagnostics | AST/Program adversarial fixtures、symlink/temp cleanup | `sequential` |
 | BNA2-PC-20 | 用不可旁路的 Authority Audit 替换 raw build export | PC-00、PC-05 | PC-30、PC-40、PC-50、BNA-3/4 | `packages/native-babylon/src/host*`、authority/candidate internals | parsed Module + one Candidate -> admitted Contribution/result | installed Babylon source-backed audit tests、throw cleanup | `main-agent-only` |
 | BNA2-PC-30 | 实现双 Candidate Runtime Replay 与 byte-exact 判等 | PC-20 | PC-40、PC-50、BNA-3/4 | Native replay internals、Candidate lease contract | candidate factory + locked inputs -> replayed Contribution/result | drift、two-instance、factory/dispose adversarial tests | `sequential` |
-| BNA2-PC-40 | 接通 `worldkit native check/explain` 和 exit/stdout contract | PC-05、PC-10、PC-30 | PC-50、PC-90、BNA-3 | `scripts/cli/worldkit.ts` Native branch、CLI tests；不建第二 CLI | world-directory -> exact DTO + 0/1/2 | real child-process CLI matrix、path/stack leakage census | `main-agent-only` |
+| BNA2-PC-40 | 接通 `worldkit native check/explain` 和 exit/stdout contract | PC-05、PC-10、PC-30 | PC-50、PC-90、BNA-3 | `scripts/native-scene/check-policy*`、`native-scene-check*`、`explain*`，`scripts/cli/worldkit.ts` Native branch、CLI tests；不建第二 CLI | world-directory -> exact DTO + 0/1/2 | real child-process CLI matrix、path/stack leakage census | `main-agent-only` |
 | BNA2-PC-50 | current-only 迁移 Cloud Ridge 与所有 Host consumers | PC-10、PC-20、PC-30、PC-40 | PC-90 | Native experiment app、Runtime Babylon experimental consumer、fixtures | old controller/raw build -> default pure Module + audited Host APIs | compile/build/browser smoke、old API/controller census | `sequential` |
 | BNA2-PC-90 | 完整门禁、独立 Mode B/runtime deep review 与 Backlog closure | PC-05..PC-50 | BNA-3、BNA-4、BNA-5、BNA-6 | review、Backlog 状态、evidence only；不改冻结 plan/lock | exact candidate tree -> scoped BNA-2 GO/NO-GO | §13 全部证据、D2-D6、无 P0/P1/P2 | `main-agent-only` |
 
