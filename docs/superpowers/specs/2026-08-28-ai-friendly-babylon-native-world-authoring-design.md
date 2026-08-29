@@ -1198,6 +1198,8 @@ RuntimeWorldConfiguration V1 -> Babylon/Havok。
 
 ### BNA-2：独立 Babylon Native Authoring 包
 
+- 后续生产闭环的专项实施权威为
+  [`2026-08-29-babylon-native-authoring-production-closure-design.md`](./2026-08-29-babylon-native-authoring-production-closure-design.md)。
 - 目标与独立交付物：创建 `@whitebox-world/native-babylon`、`defineBabylonNativeScene`、BuildContext、
   单一 Import Profile 和结构化诊断；拆分 Source/Contribution Admission、Authority Audit 与 Runtime
   Replay stage，并只引用独立 Asset Check/Admission Result。
@@ -1208,7 +1210,8 @@ RuntimeWorldConfiguration V1 -> Babylon/Havok。
   `NativeSceneCheckResultV1`。
 - 集成点：Native Scene Builder 的 Module Resolver。
 - 验证证据：public export census、API type tests、diagnostic/CLI exit tests、旧实验 App 编译迁移，以及
-  同图同提示 Import Profile bake-off 的生成成功率、bundle/module graph 和启动成本。
+  bundle/module graph、Authority Audit、双 Candidate Runtime Replay 和启动成本。Import Profile 的工程
+  方言由一次性 bake-off 冻结；同图同提示的模型生成/修复成功率由 BNA-6 独占，不反向成为 BNA-2 依赖。
 - 执行模式：`main-agent-only`。
 
 本任务只建立 core Native API。可选 `@whitebox-world/native-babylon-block-profile` 由 BWB-1 独占，
