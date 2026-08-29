@@ -376,34 +376,51 @@ exact 包含：
 
 - `Node`：`onAccessibilityTagChangedObservable`、`onDisposeObservable`、
   `onEnabledStateChangedObservable`、`onEffectiveEnabledStateChangedObservable`、`onClonedObservable`，
-  callback setter `onDispose`，并要求 `behaviors` 为空；
-- `TransformNode`：继承 `Node`，另含 `onAfterWorldMatrixUpdateObservable`；
+  callback setter `onDispose`，direct callback property `onReady` 必须为 nullish，并要求 `behaviors` 为空；
+- `TransformNode`：继承 `Node`，另含 `onAfterWorldMatrixUpdateObservable`；direct callback property
+  `customMarkAsDirty` 必须为 nullish；
 - `AbstractMesh`：继承 `TransformNode`，另含 `onCollideObservable`、
   `onCollisionPositionChangeObservable`、`onMaterialChangedObservable`、`onRebuildObservable`，以及
   `onCollide` / `onCollisionPositionChange` setter；
 - `Mesh`：继承 `AbstractMesh`，另含 `onMeshReadyObservable`、`onBeforeRenderObservable`、
   `onBeforeBindObservable`、`onAfterRenderObservable`、`onBetweenPassObservable`、
-  `onBeforeDrawObservable`，以及 `onBeforeDraw` setter；
+  `onBeforeDrawObservable`，`onBeforeDraw` setter，以及 direct callback property
+  `onLODLevelSelection` 必须为 nullish；
 - `Material`/`StandardMaterial`：`onDisposeObservable`、`onBindObservable`、`onUnBindObservable`、
   `onEffectCreatedObservable`，`onDispose` / `onBind` setter，以及必须在 Build 前后保持 identity 与 observer
-  顺序不变的 static `Material.OnEventObservable`；
-- `Light` 继承 `Node` 的完整面；当前 Geometry/Buffer 与三个允许的 Light concrete types 若有效 Program
-  没有额外 callback surface，exact census 必须明确记录空增量，不能默认忽略。
+  顺序不变的 static `Material.OnEventObservable`；direct callback properties `customShaderNameResolve`、
+  `onCompiled`、`onError`、`getRenderTargetTextures` 必须为 nullish；
+- `Light` 继承 `Node` 的完整面，三个允许的 Light concrete types 当前没有额外 callback surface，exact
+  census 必须明确记录空增量；Geometry 的 direct callback property `onGeometryUpdated` 必须为 nullish，
+  Buffer 当前仍是空增量。
 
 Build 前，Host 对 Scene、Engine 和 provider static/global surface 做 baseline；Build 后，对 Candidate Scene
 公开 collections 中每个新建 Node/Mesh/TransformNode/Material/Light/Geometry，以及登记所引用的对象，按其
 有效继承类型逐项验证：所有 callback Observable 的 `observers.slice()` 为空、setter-backed Observable
-没有 Module observer、Behavior/retained-object collection 为空。新对象没有 pre-Build identity 可比较，
+没有 Module observer、上述 direct callback properties 全部由 `isNil` 判空、Behavior/retained-object
+collection 为空。新对象没有 pre-Build identity 可比较，
 因此要求“无 Module closure”的零基线；预存在的 Scene/Engine/static surface 才做前后 identity/order
 byte-exact 比较。Source Admission 仍负责拒绝 Build 内瞬时 add/remove/retention，运行时 Audit 负责拒绝任何
 残留；两者不能互相替代。
 
+Host-owned nested object 另有一个唯一机器清单
+`BABYLON_NATIVE_AUDITED_NESTED_AUTHORITY_SURFACES_V1`。在 Babylon 9.23.0 的冻结 Candidate factory 与
+12-specifier 图上，它 exact 包含
+`scene.imageProcessingConfiguration.onUpdateParameters`：Scene 构造时已创建该
+`ImageProcessingConfiguration` 与 Observable，后续图像处理参数变化会通知它。Build 前后必须同时比较
+`imageProcessingConfiguration` object identity、`onUpdateParameters` Observable identity 与
+`observers.slice()` 有序副本。它不伪装成 Scene 自身 65 个 Observable 之一。有效 TypeScript Program
+声明扫描与 cycle-safe、Host-boundary runtime discovery test 必须证明没有第二个未登记的预建 nested
+Observable/function callback surface；未来新增时先使 census 失败，再 current-only 更新唯一清单与 Audit。
+
 声明/源码清单之外还必须有一条冻结导入图复验：测试按唯一 Deep ESM Import Profile 创建同一个
 TypeScript Program，并从该 Program 的有效 `Scene`、`AbstractEngine`、`Node`、`TransformNode`、
 `AbstractMesh`、`Mesh`、`Material`、`StandardMaterial`、`Geometry`、`Buffer` 和允许 Light symbols 提取
-继承/module augmentation 后的 instance/static public surface；随后在相同 12-specifier 运行时导入图上
-创建 Host-private NullEngine/Scene 和每类最小对象，比较实际 Observable、callback setter、Behavior/
-retained-object collection、static global 与被 wrapper 的 method descriptors。`scene.js` 当前只
+`ImageProcessingConfiguration` 以及继承/module augmentation 后的 instance/static/nested public surface；
+随后在相同 12-specifier 运行时导入图上
+创建 Host-private NullEngine/Scene 和每类最小对象，比较实际 Observable、callback setter、direct
+function-valued property、Behavior/retained-object collection、static global 与被 wrapper 的 method
+descriptors。`scene.js` 当前只
 重导出 `scene.pure.js` 并调用 `RegisterScene()`，因此 Babylon 9.23.0 没有额外 callback key；未来任一
 允许导入引入新的 augmentation、function-valued property 或 retained method 时，census 必须先失败，
 并与唯一常量、Source Admission 和 Authority Probe 在一次 current-only 变更中共同更新。不得扫描整个
@@ -435,8 +452,9 @@ Audit 至少验证：
   Observable mutation/control 同样被拒绝；
 - 17 个 Scene callback function property identity 与 baseline 相同，十个 retained callback/object method
   没有被调用；
-- created-object callback surface census 全部为零 Module observer/callback/Behavior，provider static/global
+- created-object callback surface census 全部为零 Module observer/non-nullish direct callback/Behavior，provider static/global
   Observable 与 baseline identity/order 相同；
+- nested authority surface 清单中 object/Observable identity 与 observer order 全部保持 baseline；
 - Host instrumentation 在成功、rejection、throwing Build 和 cleanup 后全部恢复；
 - V1 Profile 允许的 Mesh、TransformNode、Geometry、Material、Light 和 Scene visual scalar state 仍属于
   Candidate Scene；未来新增的 Babylon-owned 纯视觉系统必须先进入唯一 Import Profile，并证明不含 Module

@@ -710,6 +710,10 @@ Programmatic Modules must attempt and be rejected for:
   AbstractMesh/Mesh/Material/StandardMaterial/Light Observables and setters, Mesh
   register-before/after-render helpers, Node Behavior retention, and static
   `Material.OnEventObservable`;
+- assigning any direct callback property in the created-object census: `Node.onReady`,
+  `TransformNode.customMarkAsDirty`, `Mesh.onLODLevelSelection`, Material
+  `customShaderNameResolve/onCompiled/onError/getRenderTargetTextures`, and
+  `Geometry.onGeometryUpdated`;
 - assigning each Scene callback setter: `onDispose`, `beforeRender`, `afterRender`,
   `beforeCameraRender`, and `afterCameraRender`;
 - replacing every function-valued key in
@@ -721,6 +725,9 @@ Programmatic Modules must attempt and be rejected for:
   `setRenderingOrder`, and external-data retention;
 - calling Engine `runRenderLoop`/`stopRenderLoop`;
 - replacing Engine `customAnimationFrameRequester`;
+- adding/removing/replacing
+  `scene.imageProcessingConfiguration.onUpdateParameters` or replacing the containing
+  `ImageProcessingConfiguration` identity;
 - disposing Scene or Engine;
 - catching the instrumentation error and otherwise completing a valid Build.
 
@@ -751,16 +758,20 @@ Capture only public values/identities:
   `BABYLON_NATIVE_AUDITED_SCENE_CALLBACK_PROPERTY_KEYS_V1` member;
 - identity/order baselines for provider static/global Observables such as
   `Material.OnEventObservable`;
+- object/Observable identity and `observers.slice()` for every path in
+  `BABYLON_NATIVE_AUDITED_NESTED_AUTHORITY_SURFACES_V1`, currently exactly
+  `scene.imageProcessingConfiguration.onUpdateParameters`;
 - original own-property descriptors for instrumented methods.
 
 After Build, enumerate every Candidate-owned object through public Scene collections and
 registration references. Apply the single inherited surface map in
 `BABYLON_NATIVE_AUDITED_CREATED_OBJECT_CALLBACK_SURFACES_V1`; every Observable observer
 snapshot, callback setter backing Observable, and Behavior/retained-object collection on a
-new object must contain zero Module closures. The exact Babylon 9.23.0 map includes the
+new object must contain zero Module closures; every direct callback property must satisfy
+`isNil`. The exact Babylon 9.23.0 map includes the
 Node, TransformNode, AbstractMesh, Mesh, Material/StandardMaterial, and Light surfaces in
-the approved design; Geometry/Buffer and concrete Light types must have an explicit empty
-increment rather than being silently omitted.
+the approved design; Geometry has the direct `onGeometryUpdated` callback while Buffer and
+concrete Light types must have an explicit empty increment rather than being silently omitted.
 
 Install instance wrappers for all
 `BABYLON_NATIVE_FORBIDDEN_SCENE_CALLBACK_METHOD_KEYS_V1` members plus
@@ -781,13 +792,21 @@ machine lists; tests iterate them instead of hand-writing smaller callback subse
 The census fixture must import the exact 12-specifier Module Profile into one TypeScript
 Program and extract the effective, inherited/module-augmented instance and static public
 surface for Scene, AbstractEngine, Node, TransformNode, AbstractMesh, Mesh, Material,
-StandardMaterial, Geometry, Buffer, and all three allowed Light types. It must also
+StandardMaterial, Geometry, Buffer, all three allowed Light types, and the nested
+ImageProcessingConfiguration surface. It must also
 instantiate the Host-private NullEngine/Scene and one minimal object of every constructible
 type after loading that same import graph, then compare runtime Observable identities,
-callback setters, Behavior/retained-object collections, static globals, callback-property
-keys, and instrumented method descriptors with the constants. This guards future import
+callback setters, direct function-valued properties, Behavior/retained-object collections,
+static globals, callback-property keys, and instrumented method descriptors with the constants. This guards future import
 side effects and module augmentations; scanning the entire unimported Babylon package or
 only `scene.pure.d.ts` is not accepted as the sole evidence.
+
+Add a cycle-safe Host-boundary runtime discovery test over the pre-Build Candidate's public
+Babylon-owned object graph. It must compare every discovered nested Observable or direct
+function-valued callback path with
+`BABYLON_NATIVE_AUDITED_NESTED_AUTHORITY_SURFACES_V1`; the current exact extra path is
+`scene.imageProcessingConfiguration.onUpdateParameters`. Do not merge this nested path
+into the 65 direct Scene keys or silently stop traversal at `imageProcessingConfiguration`.
 
 - [ ] **Step 5: Integrate audit around the entire Build Epoch**
 
