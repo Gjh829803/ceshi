@@ -44,6 +44,7 @@ function event(
           worldPackageRef:
             `package://world-package/sha256/${"a".repeat(64)}`,
           worldPackageRootHash: ROOT_HASH,
+          worldBuildIdentityHash: ROOT_HASH,
           fixedInputControllerEntityId: "controller-runtime-session",
           supportedRequestTypes: WORLDKIT_RUNTIME_SESSION_REQUEST_TYPES_V1,
         }

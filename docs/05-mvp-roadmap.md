@@ -109,7 +109,7 @@ M5 的目标不是让 AI 编写 NavMesh，而是让 AI 继续使用 Route、Anch
 `connected-by-route` 表达意图；SDK 根据锁定主体能力和世界物理真相证明路线是否真的
 可走。当前 R1 Heightfield 与 R1b Static Platform 已完成：
 
-1. Canonical Authoring V4 → NormalizedWorldIR V4 → ExecutionPlan V5；
+1. Canonical Authoring V4 → NormalizedWorldIR V4 → Canonical Scene Plan V1；
 2. `@whitebox-world/world-package` 生成最小正式 Package Root/Build Receipt；
 3. Validation Subject 绑定同一组五个权威 Hash；
 4. Recast 只作为 Provider Adapter 构建 Graph/Path；

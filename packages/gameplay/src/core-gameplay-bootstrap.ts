@@ -21,7 +21,7 @@ export interface CoreGameplayBootstrapInputV1 {
 /**
  * Creates the canonical Gameplay bootstrap required by the built-in Runtime
  * Host. Authoring loaders and CLI pipelines must share this constructor so an
- * identical world always compiles to an identical ExecutionPlan V5 lock.
+ * identical world always compiles to an identical Canonical Scene Plan lock.
  */
 export function createCoreGameplayBootstrapV1(
   input: CoreGameplayBootstrapInputV1,

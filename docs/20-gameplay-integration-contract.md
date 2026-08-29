@@ -13,7 +13,7 @@
 ```text
 AuthoringSpec V4
   -> NormalizedWorldIR V4
-  -> ExecutionPlan V5
+  -> Canonical Scene Plan V1
   -> Babylon/Havok Runtime
   -> Runtime Snapshot V4 / Browser Protocol V5
 ```
@@ -290,7 +290,7 @@ Clip 名推断动作。
 
 ## 9. 可直接交给对接 AI 的指令
 
-> 使用当前 `main` 的唯一生产协议链路 AuthoringSpec V4 → NormalizedWorldIR V4 → ExecutionPlan V5
+> 使用当前 `main` 的唯一生产协议链路 AuthoringSpec V4 → NormalizedWorldIR V4 → Canonical Scene Plan V1
 > → Runtime Snapshot V4 / Browser Protocol V5。直接从
 > `@whitebox-world/gameplay-contracts` 和 `@whitebox-world/runtime-contracts` 导入 exact 类型，
 > 不复制 DTO、不写兼容 alias、不做 feature detection。真实 transport 只通过

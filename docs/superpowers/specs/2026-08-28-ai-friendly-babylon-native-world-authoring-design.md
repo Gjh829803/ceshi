@@ -204,14 +204,14 @@ Reset 继续由 SDK 拥有。需要与相机绑定的后处理必须通过未来
 
 ## 5. 每个世界只选一个 Scene Source
 
-长期 Runtime 输入应从当前“必然包含 ExecutionPlan”的形态升级为闭合 Source Union。以下是规范化
-语义，不表示当前 `RuntimeWorldConfigurationV1` 已经实现：
+BNA-1 已将 Runtime 输入从“必然包含 ExecutionPlan”的形态升级为闭合 Source Union。当前正式合同
+使用以下精确 V1 类型；Native member 可被严格解析，但在 BNA-3/BNA-4 前仍由 RuntimeHost 分配前拒绝：
 
 ```ts
-type RuntimeSceneSource =
+type RuntimeSceneSourceV1 =
   | {
       readonly kind: "canonical-execution-plan";
-      readonly executionPlan: CanonicalSceneExecutionPlan;
+      readonly executionPlan: CanonicalSceneExecutionPlanV1;
       readonly executionPlanHash: Sha256HashV1;
     }
   | {
@@ -221,9 +221,8 @@ type RuntimeSceneSource =
 };
 ```
 
-`CanonicalSceneExecutionPlan` 表示 BNA-1 的终态 Source 合同，不是当前已有类型；当前
-`ExecutionPlanV5` 通过本节 6.3 定义的 receipt-bound 过渡投影接入，不能被长期同时当作 Scene Source
-和 Runtime Kernel Bootstrap 两份权威。
+`CanonicalSceneExecutionPlanV1` 已是唯一当前 Canonical Scene Source 合同。BNA-1 的
+receipt-bound V5 过渡投影已经删除；Scene Plan 与 Runtime Kernel Bootstrap 不再是两份重叠权威。
 
 规则：
 
@@ -250,11 +249,9 @@ Scene Builder 知道 Source 类型，但没有第二套 Subject、Camera 或 Phy
 
 ### 5.1 Source-neutral World Build Identity
 
-仅增加 `sceneSource` Union 还不够。当前 `WorldSessionCreateOptionsV1`、`WorldStateSnapshotV1`、
-`RuntimeWorldAdapterDescriptorV1`、Whitebox Tri-view 与多项 Capture/Validation 合同都把
-`executionPlanHash` 当作通用世界身份。Native Source 若继续填这个字段，只能伪造一个 Plan Hash。
-
-BNA-1 必须同时冻结 source-neutral `WorldBuildIdentity`，语义至少覆盖：
+仅增加 `sceneSource` Union 还不够。BNA-1 已将 `WorldSessionCreateOptionsV1`、
+`WorldStateSnapshotV1`、`RuntimeWorldAdapterDescriptorV1`、Whitebox Tri-view 与通用
+Capture/Validation 合同迁移到 `worldBuildIdentityHash`，并冻结以下 source-neutral 身份：
 
 ```ts
 interface WorldBuildIdentityV1 {
@@ -362,12 +359,10 @@ role-qualified 的 `subjectSpawnBindings`（每项包含 `subjectEntityId` 与 `
 ### 6.3 Plan-independent `WorldRuntimeBootstrap`
 
 `GameplayBootstrapV1` 只拥有 Entity Definition/Capability 引用、Feature Locks、Semantic Actions 和
-Gameplay 状态启动语义；它**不包含** Babylon Runtime 当前从 `ExecutionPlanV5.subjects`、`camera` 和
-重力字段读取的完整 Subject/Physics/Control/Camera 闭包。因此“删除影子 Plan”不能只写成“直接复用
-GameplayBootstrap”。
+Gameplay 状态启动语义；它**不包含**完整 Subject/Physics/Control/Camera 闭包。该闭包现在由
+`WorldRuntimeBootstrapV1` 唯一拥有，因此“删除影子 Plan”不是“只复用 GameplayBootstrap”。
 
-BNA-1 必须新增或抽取一份 source-neutral、可哈希的 `WorldRuntimeBootstrap`。其精确 Schema 在该任务
-冻结，但职责现在固定为：
+BNA-1 已抽取 source-neutral、可哈希的 `WorldRuntimeBootstrap`；职责固定为：
 
 ```ts
 interface WorldRuntimeBootstrapV1 {
@@ -392,18 +387,11 @@ Parser 重新计算并要求完全相等；完整 artifact bytes Hash 由 Packag
 - 持有相应 Registry Resource Lock 与 `contentHash`；
 - 不包含 Terrain、Water、Structure、Static Scene Mesh 或 Provider Handle。
 
-Native Host Assembler 从 Bootstrap JSON、`GameplayBootstrapV1` 和 Registry Lock 产生该合同。实现过程
-可以分为两个有明确权威的内部状态，但只有终态可以成为接受的集成结果：
-
-1. **迁移中的内部状态**：`ExecutionPlanV5` 仍是 Canonical Subject/Camera/Gravity 唯一来源；Host 从它产生
-   receipt-bound `WorldRuntimeBootstrap` 派生投影，并用 exact-equality/hash Gate 证明字段一致。Runtime
-   只能在 Gate 通过后消费投影，不能让 Plan 与 Bootstrap 分别可编辑。该状态只服务 Feature branch 的
-   迁移验证，不是可发布协议，也不得留下兼容开关。
-2. **终态**：下一版 Canonical Execution Plan 移除内联的 Runtime Subject closure、Camera 与 Gravity
-   权威，改为引用 `worldRuntimeBootstrapRef`/Hash；它只保留 Terrain、Water、Structure、Static
-   Surface、Subject Scene Instance/Placement 与 Traversal 等 Scene Source 数据。该迁移使用
-   current-only clean break：若升级协议版本，旧类型、Parser、字段、Fixture 和生成制品必须在同一集成
-   切片删除并重建，终态不保留两份字段。
+Native Host Assembler 从 Bootstrap JSON、`GameplayBootstrapV1` 和 Registry Lock 产生该合同。BNA-1
+曾在 Feature branch 以 exact-equality/hash Gate 验证旧合体 Plan 到 Bootstrap 的派生等价性；该迁移态
+已经删除，不是当前协议。当前唯一终态的 `CanonicalSceneExecutionPlanV1` 只保留 Terrain、Water、
+Structure、Static Surface、Subject Scene Instance/Placement 与 Traversal 等 Scene Source 数据，并引用
+`worldRuntimeBootstrapRef`/Hash；旧类型、Parser、字段、Fixture 和生成制品不留兼容开关。
 
 终态下，两条 Lane 的 Runtime Kernel 只消费 `WorldRuntimeBootstrap`，不再直接依赖 Scene Source 中
 偶然存在的 Subject/Camera 字段。Canonical Subject 的空间 Placement 仍由 Canonical Scene Source
@@ -746,9 +734,8 @@ RuntimeSceneSource --|                                    |
                               Snapshot / Receipt / Capture
 ```
 
-目标实现必须把当前依赖 `ExecutionPlanV5.subjects`、`camera` 和重力字段的 Babylon Gameplay Kernel
-输入抽取为 `WorldRuntimeBootstrap`，再把 Kernel 从 Canonical Scene Builder 中抽离，而不是复制一份
-Native Runtime。具体不变量：
+当前实现已把 Babylon Gameplay Kernel 输入抽取为 `WorldRuntimeBootstrap`，并把 Kernel 从 Canonical
+Scene Builder 中分离；Native 实验复用该 Kernel，不复制 Native Runtime。具体不变量：
 
 - 一个 Session 只有一个 Scene、一个 Physics Plugin、一个固定 Tick 和一个主 Camera Owner；
 - Spawn 只有一个来源；Native Source 不再保留 Plan Spawn 作为影子值；
@@ -1123,10 +1110,10 @@ AI 用 Three 生成原始 GLB，经资产类别 Build Record 和只读 Asset Adm
 | 能力 | 2026-08-28 当前事实 | 本设计目标 |
 |---|---|---|
 | Native Module API | Foundation 已迁移到独立 `@whitebox-world/native-babylon` root；Host 能力只从 `/host` 消费 | 完成 BNA-2 后续闭合、BNA-3 至 BNA-6，并通过 BNA-8 disposition 后，才可成为 receipt-bound、经 Authority/Runtime Replay Gate 的生产入口 |
-| Bootstrap | 已有闭合、版本化、可哈希的 `BabylonNativeSceneBootstrapV1` Parser；仍由实验 Runtime option 消费 | 进入 BNA-1 闭合 `sceneSource`、Plan-independent Runtime Bootstrap 与 Build Identity |
-| Gameplay 复用 | 克隆 G Bot `ExecutionPlanV5`，Native 忽略其场景几何 | 复用 `GameplayBootstrapV1` + Plan-independent `WorldRuntimeBootstrap`，无影子 Plan |
-| 通用世界身份 | 多个 Runtime/State/Capture 合同硬编码 `executionPlanHash` | `WorldBuildIdentity` 区分 Source；Plan-specific 合同仍显式用 Plan Hash |
-| Runtime Source | `BabylonWorldRuntime.create({ nativeScene })` 实验选项 | BNA-1 冻结 RuntimeHost 闭合 `sceneSource` Union，但 Native member 在 BNA-3/BNA-4 前 fail-closed；BNA-4 才接通正式 Native admission |
+| Bootstrap | `BabylonNativeSceneBootstrapV1`、`RuntimeSceneSourceV1` 与 `WorldRuntimeBootstrapV1` 已闭合并通过 exact parser/schema gate | BNA-3/BNA-4 将已冻结合同绑定 Native Package/Contribution 并接通正式 admission |
+| Gameplay 复用 | 实验 Native 已复用 `GameplayBootstrapV1` + Plan-independent `WorldRuntimeBootstrapV1`，无影子 Plan | BNA-4 经正式 Package/Surface Admission 接入同一 Kernel |
+| 通用世界身份 | Runtime/State/Capture 已统一使用 `WorldBuildIdentityV1` / `worldBuildIdentityHash`；Plan-specific Route/Edit 仍显式使用 Plan Hash | BNA-3 增加 Native Package/Contribution identity，不恢复 generic Plan Hash |
+| Runtime Source | RuntimeHost 已冻结闭合 `sceneSource` Union；Canonical 正式运行，Native member 在 adapter/Candidate 分配前 fail-closed | BNA-4 才可在 BNA-3 Receipt 后移除正式 Native rejection |
 | 登记 | 一个 Spawn + 必填闭合 `traversalBinding` 的静态 Mesh Collider；已有 Host 预算、结构化诊断、稳定 Subshape/Surface ID 与无 Handle Contribution Hash | BNA-3/BNA-4 增加 Package/Receipt 绑定、Source/Authority/Runtime Replay 与生产 Surface Admission |
 | Physics/Subject/Camera | 已由 SDK/Havok 接管并通过实验移动 | 继续使用同一生产 Kernel，不复制 Runtime |
 | 场景效果 | `cloud-ridge` 已显示核心构图并有通过性 Probe | Golden Corpus、正式 Visual/Interaction Gate |
@@ -1138,7 +1125,8 @@ AI 用 Three 生成原始 GLB，经资产类别 Build Record 和只读 Asset Adm
 | Hosted Builder | 未支持 | 只有 BNA-5 安全闭合后才可开放 |
 
 因此，本设计通过不表示 Native Lane 当前生产可用。当前唯一正式生产世界构建入口仍是 Canonical
-Authoring V4 -> IR V4 -> ExecutionPlan V5 -> RuntimeWorldConfiguration V1 -> Babylon/Havok。
+Authoring V4 -> IR V4 -> Canonical Scene Plan V1 + Gameplay/World Runtime Bootstrap V1 ->
+RuntimeWorldConfiguration V1 -> Babylon/Havok。
 
 ## 16. 风险与缓解
 
@@ -1175,6 +1163,9 @@ Authoring V4 -> IR V4 -> ExecutionPlan V5 -> RuntimeWorldConfiguration V1 -> Bab
 - 执行模式：`main-agent-only`。
 
 ### BNA-1：Runtime Scene Source 与 Bootstrap 合同
+
+- 状态：**已完成（2026-08-29）**。完成仅指合同、Canonical identity migration、实验 shadow Plan
+  删除和分配前 Native rejection；不表示 Native 生产准入。
 
 - 目标与独立交付物：冻结闭合 `sceneSource` Union、Native Bootstrap Schema、Plan-independent
   `WorldRuntimeBootstrap` 与 source-neutral `WorldBuildIdentity`；移除 Native 对影子 ExecutionPlan 的

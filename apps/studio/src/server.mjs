@@ -102,7 +102,7 @@ const workflowStageDefinitions = [
     id: "canonical-build",
     title: "Canonical 构建",
     owner: "Trusted Host",
-    description: "可信宿主复验 Authoring V4，编译 IR V4 / ExecutionPlan V5，并固化视觉目标到 runtime entity 的一对多映射。",
+    description: "可信宿主复验 Authoring V4，编译 IR V4 / Canonical Scene Plan V1，并固化视觉目标到 runtime entity 的一对多映射。",
     required: ["implementation-map", "execution-plan"],
   },
   {
@@ -1596,7 +1596,7 @@ export function createStudio(options = {}) {
         owner: "Trusted Host", format: "JSON",
       },
       {
-        id: "execution-plan", phase: "canonical-build", title: "ExecutionPlan V5",
+        id: "execution-plan", phase: "canonical-build", title: "Canonical Scene Plan V1",
         description: "由当前 Canonical compiler 从 Authoring V4 / IR V4 生成的执行计划。",
         owner: "Trusted Host", format: "JSON",
       },
@@ -2016,7 +2016,7 @@ export function createStudio(options = {}) {
 
     await appendJobLog(
       id,
-      `Launching ${codexBackend === "cloud" ? "LWDP cloud" : "local"} Codex: hosted Planner (Brief + built-in imagegen) → Canonical Builder; trusted Host validates Authoring V4 / IR V4 / Plan V5 and performs Babylon capture; configured visual adapters may generate optional styled outputs.\n`,
+      `Launching ${codexBackend === "cloud" ? "LWDP cloud" : "local"} Codex: hosted Planner (Brief + built-in imagegen) → Canonical Builder; trusted Host validates Authoring V4 / IR V4 / Canonical Scene Plan V1 and performs Babylon capture; configured visual adapters may generate optional styled outputs.\n`,
     );
     await beforeWorldSpawn(id);
     if (shuttingDown || stoppingJobs.has(id)) return;

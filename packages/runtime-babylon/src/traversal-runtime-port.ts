@@ -2,6 +2,7 @@ import {
   canonicalResourceLockEntriesV1,
   type CanonicalSceneExecutionPlanV1,
   type CanonicalResourceKindV1,
+  type RuntimeVec3V1,
   type WorldRuntimeBootstrapV1,
 } from "@whitebox-world/runtime-contracts";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
@@ -326,29 +327,52 @@ function classifySurface(
   if (isEmpty(sources)) {
     return { mode: "unmatched" };
   }
-  const foot = sample.sampledFootPositionMetersXYZ;
-  const query = queryCanonicalTraversalSurfaceHitsV1({
-    sources,
-    pointMetersXZ: [foot[0], foot[2]],
-    referenceHeightMeters: foot[1],
-    maximumReferenceHeightDifferenceMeters:
-      live.keepDistanceMeters + live.keepContactToleranceMeters,
-    normalAdmission: {
-      mode: "retained-support",
-      minimumUpwardNormalYRatio: live.maxSlopeCosine,
-      referenceNormalXYZ: sample.supportNormalWorldXYZ,
-      minimumReferenceNormalDotRatio: live.maxSlopeCosine,
-    },
-  });
-  if (query.mode === "missing") {
+  const queryAtPoint = (
+    pointMetersXYZ: RuntimeVec3V1,
+    referenceNormalXYZ: RuntimeVec3V1,
+  ) =>
+    queryCanonicalTraversalSurfaceHitsV1({
+      sources,
+      pointMetersXZ: [pointMetersXYZ[0], pointMetersXYZ[2]],
+      referenceHeightMeters: pointMetersXYZ[1],
+      maximumReferenceHeightDifferenceMeters:
+        live.keepDistanceMeters + live.keepContactToleranceMeters,
+      normalAdmission: {
+        mode: "retained-support",
+        minimumUpwardNormalYRatio: live.maxSlopeCosine,
+        referenceNormalXYZ,
+        minimumReferenceNormalDotRatio: live.maxSlopeCosine,
+      },
+    });
+  if (sample.supportContacts.length === 0) {
     return { mode: "unmatched" };
   }
-  if (query.mode === "ambiguous") {
+  const queries = sample.supportContacts.map((contact) => queryAtPoint(
+    contact.pointMetersXYZ,
+    contact.normalXYZ,
+  ));
+  if (queries.some((query) => query.mode !== "resolved")) {
+    if (queries.some((query) => query.mode === "ambiguous")) {
+      return { mode: "ambiguous" };
+    }
+    return { mode: "unmatched" };
+  }
+  const resolvedHits = queries.flatMap((query) =>
+    query.mode === "resolved" ? [query.hit] : []
+  );
+  if (resolvedHits.length === 0) {
+    return { mode: "unmatched" };
+  }
+  const traversalSurfaceIds = new Set(
+    resolvedHits.map((hit) => hit.traversalSurfaceId),
+  );
+  if (traversalSurfaceIds.size !== 1) {
     return { mode: "ambiguous" };
   }
+  const hit = resolvedHits[0]!;
   const surface = plan.traversal.surfaces.find(
     (candidate) =>
-      candidate.traversalSurfaceId === query.hit.traversalSurfaceId,
+      candidate.traversalSurfaceId === hit.traversalSurfaceId,
   );
   if (isNil(surface)) {
     return { mode: "unmatched" };

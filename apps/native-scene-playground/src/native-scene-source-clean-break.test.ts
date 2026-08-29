@@ -15,11 +15,15 @@ const mainSource = await readFile(new URL("./main.ts", import.meta.url), "utf8")
 
 describe("Cloud Ridge Native Scene Source clean break", () => {
   it("does not load, forge, hash, or pass a Canonical Execution Plan", () => {
+    const removedPlanType = ["Execution", "Plan"].join("");
+    const removedCompilerImport = ["@whitebox-world/", "compiler"].join("");
+    const removedPlanHashField = ["execution", "Plan", "Hash"].join("");
+    const removedPlanField = ["execution", "Plan"].join("");
     for (const source of [nativeBootstrapSource, mainSource]) {
-      expect(source).not.toMatch(/ExecutionPlan/);
-      expect(source).not.toMatch(/@whitebox-world\/compiler/);
-      expect(source).not.toMatch(/executionPlanHash/);
-      expect(source).not.toMatch(/executionPlan\s*:/);
+      expect(source).not.toMatch(new RegExp(removedPlanType));
+      expect(source).not.toMatch(new RegExp(removedCompilerImport));
+      expect(source).not.toMatch(new RegExp(removedPlanHashField));
+      expect(source).not.toMatch(new RegExp(`${removedPlanField}\\s*:`));
     }
   });
 

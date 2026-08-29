@@ -155,9 +155,12 @@ describe("WorldKit authoring edit browser installation", () => {
       await authoringPage.close();
 
       const catalogPage = await browser.newPage();
-      await catalogPage.goto(`http://127.0.0.1:${port}/?scene=grassland`, {
-        waitUntil: "domcontentloaded",
-      });
+      await catalogPage.goto(
+        `http://127.0.0.1:${port}/?scene=mounted-skateboard-s1`,
+        {
+          waitUntil: "domcontentloaded",
+        },
+      );
       await catalogPage.waitForFunction(
         () => window.__WORLDKIT__?.version === 5,
         undefined,

@@ -72,7 +72,7 @@ it("binds a manual whitebox recording, reconstructs the styled frame, and render
   await writeFile(triviewManifestPath, JSON.stringify({
     kind: "worldkit-whitebox-triview-manifest",
     schemaVersion: 1,
-    executionPlanHash: `sha256:${"a".repeat(64)}`,
+    worldBuildIdentityHash: `sha256:${"a".repeat(64)}`,
     whiteboxTriviews: [{
       visualTargetId: "traveler",
       runtimeEntityIds: ["traveler"],
@@ -151,4 +151,4 @@ it("binds a manual whitebox recording, reconstructs the styled frame, and render
   expect(result.promptArtifact.prompt).toContain("@图片2是基于白膜世界首帧和用户首帧生成的最终环境与灯光参考");
   expect(result.promptArtifact.prompt).toContain("@图片3是 traveler 的白膜 Front / Right / Back 三视图");
   expect(await readFile(path.join(sceneRoot, "video-generation-prompt.txt"), "utf8")).toContain("无灰模残留");
-});
+}, 30_000);

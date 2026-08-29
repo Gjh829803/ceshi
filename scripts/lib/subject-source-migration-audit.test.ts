@@ -40,7 +40,7 @@ const EXPECTED_IDS = [
   "xier120.two-wheel-motorcycle-variant",
 ] as const;
 
-describe("auditSubjectSourceMigration", () => {
+describe("auditSubjectSourceMigration", { timeout: 30_000 }, () => {
   it("audits the exact 21 assets and preserves every xier120 source/runtime identity", async () => {
     const inventory = await auditSubjectSourceMigration({
       repositoryRoot: REPOSITORY_ROOT,

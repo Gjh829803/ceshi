@@ -24,41 +24,55 @@ import {
   runtimeHostConstructor,
 } from "./test/runtime-host-lifecycle-harness";
 
+function nativeWorldConfiguration(
+  worldPackageRef = INITIAL_WORLD_PACKAGE_REF,
+) {
+  const baseline = mutableWorldConfiguration(worldPackageRef);
+  return {
+    ...baseline,
+    worldBuildIdentity: {
+      ...baseline.worldBuildIdentity,
+      sceneSourceIdentity: {
+        kind: "babylon-native-scene" as const,
+        nativeSceneBootstrapHash: HASH_A,
+        sceneModuleBundleHash: HASH_B,
+        nativeSceneContributionHash: HASH_C,
+      },
+    },
+    sceneSource: {
+      kind: "babylon-native-scene" as const,
+      bootstrap: {
+        kind: "babylon-native-scene-bootstrap" as const,
+        schemaVersion: 1 as const,
+        id: "native.lifecycle",
+        sceneModuleRef: "worldkit://native-scene/lifecycle@1",
+        nativeSceneApiRef: "worldkit://native-scene-api/babylon@1",
+        nativeSceneProfileRef: "worldkit://native-scene-profile/local@1",
+        gameplayBootstrapRef: baseline.gameplayBootstrap.resourceRef,
+        initialControlledEntityId:
+          baseline.worldRuntimeBootstrap.initialControlledEntityId,
+        gravityMetersPerSecondSquaredXYZ: [0, -9.81, 0] as const,
+        initialCamera: {
+          mode: "third-person" as const,
+          pitchRadians: 0.2,
+          distanceMeters: 4,
+          fovDegrees: 60,
+          targetHeightMeters: 1.2,
+        },
+        seed: 24,
+        spawnMarkerId: "spawn.main",
+      },
+      sceneModuleBundleRef:
+        `package://native-scene-module/sha256/${"d".repeat(64)}` as const,
+    },
+  };
+}
+
 describe("RuntimeHost lifecycle isolation and admission", () => {
   it("rejects formal Native admission before adapter or Candidate allocation", async () => {
     const port = createPortHarness();
     const adapter = createAdapterFactoryHarness([port]);
-    const baseline = mutableWorldConfiguration(INITIAL_WORLD_PACKAGE_REF);
-    const initialWorld = {
-      ...baseline,
-      worldBuildIdentity: {
-        ...baseline.worldBuildIdentity,
-        sceneSourceIdentity: {
-          kind: "babylon-native-scene",
-          nativeSceneBootstrapHash: HASH_A,
-          sceneModuleBundleHash: HASH_B,
-          nativeSceneContributionHash: HASH_C,
-        },
-      },
-      sceneSource: {
-        kind: "babylon-native-scene",
-        bootstrap: {
-          kind: "babylon-native-scene-bootstrap",
-          schemaVersion: 1,
-          id: "native.lifecycle",
-          sceneModuleRef: "worldkit://native-scene/lifecycle@1",
-          nativeSceneApiRef: "worldkit://native-scene-api/babylon@1",
-          nativeSceneProfileRef: "worldkit://native-scene-profile/local@1",
-          gameplayBootstrapRef: baseline.gameplayBootstrap.resourceRef,
-          initialControlledEntityId: baseline.worldRuntimeBootstrap.initialControlledEntityId,
-          gravityMetersPerSecondSquaredXYZ: [0, -9.81, 0],
-          initialCamera: { mode: "third-person", pitchRadians: 0.2, distanceMeters: 4, fovDegrees: 60, targetHeightMeters: 1.2 },
-          seed: 24,
-          spawnMarkerId: "spawn.main",
-        },
-        sceneModuleBundleRef: `package://native-scene-module/sha256/${"d".repeat(64)}`,
-      },
-    };
+    const initialWorld = nativeWorldConfiguration();
 
     await expect(runtimeHostConstructor().create(hostOptions(
       adapter.factory,
@@ -67,6 +81,35 @@ describe("RuntimeHost lifecycle isolation and admission", () => {
     ))).rejects.toThrow("WORLDKIT_NATIVE_SCENE_PRODUCTION_NOT_ADMITTED");
     expect(adapter.factory.create).not.toHaveBeenCalled();
     expect(port.calls).toEqual([]);
+  });
+
+  it("rejects formal Native replacement and publication before preflight or Candidate allocation", async () => {
+    const current = createPortHarness();
+    const candidate = createPortHarness();
+    const { adapter, host } = await createHost(
+      [current, candidate],
+      ["world-session.initial", "world-session.candidate"],
+    );
+    const worldConfiguration = nativeWorldConfiguration(
+      REPLACEMENT_WORLD_PACKAGE_REF,
+    );
+
+    expect(() => host.replaceWorld({ worldConfiguration })).toThrow(
+      "WORLDKIT_NATIVE_SCENE_PRODUCTION_NOT_ADMITTED",
+    );
+    await expect(host.publishWorldReplacementV1({
+      worldConfiguration,
+      publication: {},
+    })).resolves.toMatchObject({
+      status: "rejected",
+      failureKind: "prepare-failed",
+    });
+    expect(adapter.factory.preflightConcurrentResidency).not.toHaveBeenCalled();
+    expect(adapter.factory.create).toHaveBeenCalledTimes(1);
+    expect(candidate.calls).toEqual([]);
+    expect(host.snapshot().worldState.worldSessionId).toBe(
+      "world-session.initial",
+    );
   });
 
   it("rejects a Package Ref that does not match World Build Identity Root", async () => {

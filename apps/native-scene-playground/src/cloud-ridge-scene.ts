@@ -764,6 +764,10 @@ function createAtmosphere(
 export interface CloudRidgeNativeSceneControllerV1 {
   readonly module: BabylonNativeSceneModuleV1;
   setCollisionDebugVisible(visible: boolean): void;
+  collisionDebugSnapshot(): Readonly<{
+    visible: boolean;
+    visibleMeshCount: number;
+  }>;
 }
 
 export function createCloudRidgeNativeSceneControllerV1():
@@ -806,6 +810,14 @@ export function createCloudRidgeNativeSceneControllerV1():
     setCollisionDebugVisible(visible: boolean): void {
       collisionDebugVisible = visible;
       applyCollisionDebugVisibility();
+    },
+    collisionDebugSnapshot() {
+      return Object.freeze({
+        visible: collisionDebugVisible,
+        visibleMeshCount: collisionMeshes.filter((mesh) =>
+          !mesh.isDisposed() && mesh.isVisible && mesh.visibility > 0
+        ).length,
+      });
     },
   });
 }

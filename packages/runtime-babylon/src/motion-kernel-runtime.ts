@@ -1,7 +1,6 @@
 import { Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import {
   CharacterSupportedState,
-  PhysicsCharacterController,
   type CharacterSurfaceInfo,
 } from "@babylonjs/core/Physics/v2/characterController.js";
 import type { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
@@ -48,7 +47,13 @@ export interface RetainedCharacterSupportSampleV1 {
   readonly supportNormalWorldXYZ: RuntimeVec3V1;
   readonly sampledControllerCenterMetersXYZ: RuntimeVec3V1;
   readonly sampledFootPositionMetersXYZ: RuntimeVec3V1;
+  readonly supportContacts: readonly RetainedCharacterSupportContactV1[];
   readonly isSupportSurfaceDynamic: boolean;
+}
+
+export interface RetainedCharacterSupportContactV1 {
+  readonly pointMetersXYZ: RuntimeVec3V1;
+  readonly normalXYZ: RuntimeVec3V1;
 }
 
 export interface MotionKernelLiveLockStateV1 {
@@ -219,7 +224,7 @@ function requestedFromCommand(command: MotionCommandV1): {
 }
 
 export class MotionKernelRuntimeV1 {
-  readonly physicsController: PhysicsCharacterController;
+  readonly physicsController: ReturnType<typeof createGroundAwareControllerInternal>;
   private readonly gravity: Vector3;
   /**
    * Unit-length gravity direction for Havok `checkSupport` queries. The
@@ -368,6 +373,14 @@ export class MotionKernelRuntimeV1 {
       sampledFootPositionMetersXYZ: Object.freeze([
         ...sample.sampledFootPositionMetersXYZ,
       ]) as RuntimeVec3V1,
+      supportContacts: Object.freeze(sample.supportContacts.map((contact) =>
+        Object.freeze({
+          pointMetersXYZ: Object.freeze([
+            ...contact.pointMetersXYZ,
+          ]) as RuntimeVec3V1,
+          normalXYZ: Object.freeze([...contact.normalXYZ]) as RuntimeVec3V1,
+        })
+      )),
     });
   }
 
@@ -658,6 +671,29 @@ export class MotionKernelRuntimeV1 {
     const sampledFoot = sampledControllerCenter.subtract(
       this.up.scale(this.physicsController.footOffset),
     );
+    const currentContacts = this.physicsController.readCurrentContacts();
+    const supportContactBandMeters =
+      this.physicsController.keepContactTolerance +
+      this.physicsController.keepDistance;
+    const supportContacts = supportState === "unsupported"
+      ? []
+      : currentContacts
+        .filter((contact) =>
+          contact.motionType === "static" &&
+          contact.distanceMeters <= supportContactBandMeters &&
+          Math.abs(Vector3.Dot(
+            new Vector3(...contact.pointMetersXYZ).subtract(sampledFoot),
+            this.up,
+          )) <= supportContactBandMeters &&
+          Vector3.Dot(new Vector3(...contact.normalXYZ), this.up) >=
+            this.physicsController.maxSlopeCosine
+        )
+        .map((contact) => Object.freeze({
+          pointMetersXYZ: Object.freeze([
+            ...contact.pointMetersXYZ,
+          ]) as RuntimeVec3V1,
+          normalXYZ: Object.freeze([...contact.normalXYZ]) as RuntimeVec3V1,
+        }));
     this.retainedSupportSample = Object.freeze({
       supportState,
       supportNormalWorldXYZ: Object.freeze([
@@ -675,6 +711,7 @@ export class MotionKernelRuntimeV1 {
         sampledFoot.y,
         sampledFoot.z,
       ]) as RuntimeVec3V1,
+      supportContacts: Object.freeze(supportContacts),
       isSupportSurfaceDynamic: support.isSurfaceDynamic,
     });
     if (supportState === "supported") {

@@ -86,7 +86,7 @@ describe("verify:unreleased-clean-break", () => {
       [
         `export type Input = ${token(["Authoring", "Spec", "V4"])};`,
         `export type Ir = ${token(["Normalized", "World", "IR", "V4"])};`,
-        `export type Plan = ${token(["Execution", "Plan", "V5"])};`,
+        `export type Plan = ${token(["Canonical", "Scene", "Execution", "Plan", "V1"])};`,
         `export type Surface = ${token(["Execution", "Traversal", "Surface", "V1"])};`,
       ].join("\n"),
       "utf8",
@@ -162,7 +162,7 @@ describe("verify:unreleased-clean-break", () => {
       path.join(fixtureRoot, "packages", "runtime", "current-version.ts"),
       [
         "if (authoring.schemaVersion === 4) useCurrentAuthoring(authoring);",
-        "if (plan.schemaVersion !== 5) throw new Error('CanonicalSceneExecutionPlanV1 required');",
+        "if (plan.schemaVersion !== 1) throw new Error('CanonicalSceneExecutionPlanV1 required');",
       ].join("\n"),
       "utf8",
     );
@@ -340,7 +340,7 @@ describe("verify:unreleased-clean-break", () => {
       JSON.stringify({
         records: [
           { kind: "worldkit-normalized-world", schemaVersion: 3 },
-          { kind: "worldkit-execution-plan", schemaVersion: 4 },
+          { kind: "worldkit-execution-plan", schemaVersion: 5 },
           { kind: "worldkit-runtime-snapshot", schemaVersion: 3 },
         ],
       }, null, 2),

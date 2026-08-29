@@ -73,7 +73,9 @@
     "verify:route-r1-heightfield": "tsx scripts/verification/verify-route-r1-heightfield.ts",
     "verify:route-r1b-static-platform": "tsx scripts/verification/verify-route-r1b-static-platform.ts",
     "verify:outdoor-gameplay": "tsx scripts/verification/verify-outdoor-gameplay-worlds.ts",
+    "verify:native-scene-playground": "tsx scripts/verification/verify-native-scene-playground.ts",
     "verify:unreleased-clean-break": "tsx scripts/verification/verify-unreleased-clean-break.ts",
+    "verify:bna1-clean-break": "tsx scripts/verification/verify-bna1-clean-break.ts",
     "verify:3c-migration": "tsx scripts/verification/verify-3c-migration.ts",
     "verify:workspace-boundaries": "tsx scripts/testing/verify-workspace-boundaries.ts",
     "benchmark:route-r1b-surface-preflight": "tsx scripts/verification/benchmark-route-r1b-surface-preflight.ts"

@@ -2,10 +2,13 @@
 
 > 状态：Active。本文是当前重构后 SDK 的分层架构入口。
 >
-> 当前唯一 Canonical 世界主链路为：`AuthoringSpec V4 → Placement Solver S1 →
-> NormalizedWorldIR V4 → ExecutionPlan V5 → Babylon.js/Havok Runtime →
+> 当前唯一正式生产世界主链路为：`AuthoringSpec V4 → Placement Solver S1 →
+> NormalizedWorldIR V4 → Canonical Scene Plan V1 + Gameplay/World Runtime Bootstrap →
+> World Build Identity → Babylon.js/Havok Runtime →
 > Runtime Snapshot V4 / Browser Protocol V5`。Authoring、编译、Runtime 和 Route
-> 验证都只接受这套当前合同；未发布旧版本不提供兼容入口或字段别名。
+> 验证都只接受这套当前合同；未发布旧版本不提供兼容入口或字段别名。Babylon Native
+> Scene Lane 目前仅是 trusted-local 实验：它使用互斥 Scene Source 和同一 Bootstrap/Kernel，
+> 但正式 RuntimeHost 仍在任何 Adapter/Candidate 分配前拒绝它。
 >
 > 图中状态说明：**已实现**表示已有代码和回归门禁；**部分实现**表示只有窄纵向
 > 切片；**设计**表示已有专项方案但尚未形成完整生产实现。
@@ -44,8 +47,9 @@ flowchart LR
 
 边界含义：
 
-- 外部 Agent 只提交 Canonical JSON，不接触 Babylon、Havok、DOM、Mesh 或物理
-  Handle。
+- Hosted/Canonical Agent 只提交 Canonical JSON，不接触 Babylon、Havok、DOM、Mesh 或物理
+  Handle。单独的 trusted-local Native 实验允许 Module 创建受限 Babylon 视觉对象并登记
+  Spawn/静态 Collider 意图；它不能创建物理、相机、输入、Tick 或第二个 Scene。
 - 产品资产由 Host 保存；Runtime 只通过受控 Asset Resolver 获取经过长度、Hash、
   GLB 结构和 Inventory 校验的字节。
 - 视频 Adapter 只能消费白模和结构证据，不能重新决定主体数量、位置、碰撞和动作
@@ -86,7 +90,7 @@ flowchart TB
         IR["NormalizedWorldIR V4"]
         LOCK["Resource Lock + Canonical Hash"]
         LSR["LayoutSolveReport S1"]
-        EP["ExecutionPlan V5"]
+        EP["Canonical Scene Plan V1"]
         WP["WorldPackage Root + Build Receipt<br/>Task 8 最小正式合同已实现"]
         TAKE["Simulation Take V1<br/>已实现窄切片"]
     end
@@ -180,7 +184,7 @@ flowchart TB
 
 1. 接入层只能通过公共协议进入 SDK。
 2. Authoring/Compiler 可以依赖引擎无关领域契约，不能依赖 Babylon/Havok。
-3. Runtime 只消费 ExecutionPlan，不重新读取原始 Prompt 或 AuthoringSpec。
+3. Canonical Runtime 只消费 Canonical Scene Plan，不重新读取原始 Prompt 或 AuthoringSpec。
 4. Babylon/Havok 类型只能留在引擎适配层和 Runtime 实现内部。
 5. Snapshot/Capture/Validation 读取运行结果，但不能反向偷偷修改世界真相。
 
@@ -191,16 +195,16 @@ flowchart TB
 | L1 接入层 | 给人、Agent、Host 和自动化程序提供稳定入口，并把 Provider 能力投影回唯一 Canonical 方言 | 不包含第二套 Provider 私有世界语义 | `scripts/cli/worldkit.ts`、`apps/playground`；AI Schema 与双 Provider conformance 已实现 |
 | L2 公共协议层 | 定义 AI 可以写什么、Host 可以调用什么、Runtime 返回什么 | 不执行地形、物理或渲染 | `packages/protocol`、`packages/authoring` 的公开 Schema、`packages/runtime-contracts` |
 | L3 解析与编译层 | 校验、资源/地形/Region 解析、Constraint 求解、最终 IR 投影和确定性编译 | 不创建 Babylon Scene、Mesh 或 Havok Body | `packages/authoring`、`packages/layout-solver`、`packages/compiler` |
-| L4 数据边界 | 保存版本化、可哈希、可验证的世界与操作计划 | 不包含可变运行时 Handle | IR、Resource Lock、ExecutionPlan、Simulation Take V1；完整 WorldPackage V2 目录、Manifest、Root、Build Receipt、Legal/Host/签名合同、内容寻址 Store、Package CLI 与持久 Runtime Session WAL 已实现 |
+| L4 数据边界 | 保存版本化、可哈希、可验证的世界与操作计划 | 不包含可变运行时 Handle | IR、Resource Lock、Canonical Scene Plan、Simulation Take V1；当前唯一 WorldPackage V1 目录、Manifest、Root、Build Receipt、Legal/Host/签名合同、内容寻址 Store、Package CLI 与持久 Runtime Session WAL 已实现 |
 | L5 领域层 | 定义世界、主体、Capability、Relationship、动作、控制、相机、物理和 Runtime Port 的引擎无关语义 | 不决定 Babylon API 的调用方式 | 当前分布在 `packages/authoring`、`subject-composition`、`subject-actions`、`subject-registry` 与 `runtime-contracts`；通用 Capability/Relationship/Port 仍未完成 |
-| L6 引擎适配层 | 把 ExecutionPlan 和资产字节翻译为 Babylon/Havok 对象，并把锁定 Traversal 输入交给 Recast Provider | 不补写 AI 意图、不修改 Schema、不把 Provider Handle 写入协议 | `packages/runtime-babylon` 与 `packages/traversal-recast` |
+| L6 引擎适配层 | 按互斥 `sceneSource.kind` 把 Canonical Scene Plan 或已通过实验 Admission 的 Native Contribution 翻译为同一个 Babylon/Havok 世界，并把锁定 Traversal 输入交给 Recast Provider | 不补写 AI 意图、不修改 Schema、不把 Provider Handle 写入协议；Native 正式准入仍关闭 | `packages/runtime-babylon`、`packages/native-babylon` 与 `packages/traversal-recast` |
 | L7 运行时层 | Session、固定 Tick、控制绑定、物理移动、动画状态、相机跟随和 Snapshot | 不重新求解 Placement，不读取 Registry URI | `packages/runtime-host`、`packages/runtime-babylon`；可信 Node 组合已实现持久 headless Runtime Session、fresh-process replay 与精确 ownership cleanup |
 | L8 证据层 | 输出截图、状态、Hash、指标和下游模型输入 | 不用视觉结果掩盖结构错误，页面不生产可信 Route 证据 | snapshot/screenshot、五 Pass Control Capture Bundle V1；Capture/Integrity 与 Route 双 Blocking Gate、Canonical Evidence/Report 已完成 Task 8 |
 
 `Registry` 是横跨 L2、L3 和 L5 的“乐高零件目录”：公共面提供可发现的 Ref 和
 Manifest，Authoring 负责解析并锁定版本，领域定义则描述 Subject、Rig、Animation、
 Collider、Capability 和 Profile 的含义。Runtime 不直接查询 Registry，而是消费已经
-投影进 ExecutionPlan 的最小描述。
+投影进 Canonical Scene Plan 的最小描述。
 
 Capability 与 Relationship 是长期扩展性的核心：主体类别不直接决定行为；移动、
 骑乘、拖拽、装备和飞行由版本化 Capability/Profile 与类型化 Relationship 表达。
@@ -213,7 +217,7 @@ Runtime 内部不是一棵万能节点树，而是三套通过明确 Binding 同
 
 ```mermaid
 flowchart LR
-    EP["ExecutionPlan V5"] --> ENTITY
+    EP["Canonical Scene Plan V1"] --> ENTITY
 
     subgraph LOGIC["逻辑图 · Gameplay Truth"]
         ENTITY["RuntimeEntity"]
@@ -273,39 +277,41 @@ Provenance、冻结断言和 `layoutSolveReportHash` 已经确定并进入 Canon
 `LayoutSolveReport` 是独立求解证据，不会整体内联到 IR。IR 不包含 Babylon/Havok
 类型，也不包含 Host 的资产 URI。
 
-### 5.3 ExecutionPlan V5：Runtime 的施工任务单
+### 5.3 Canonical Scene Plan V1：Canonical Runtime 的施工任务单
 
-由 Compiler 从 IR 生成，只保留 Runtime 创建地形、主体、碰撞体、动画、控制和相机
-所需的信息，并绑定 Connectivity Requirement、Traversal Lock 与完整 Execution
-Resource Lock。Runtime 只接受 V5、在启动时复验冻结断言；它不需要理解 AI 为什么
-这样设计，也不提供旧 Plan 的兼容执行分支。
+由 Compiler 从 IR 生成，只保留 Terrain、Water、Structure、Static Surface、Subject Scene
+Instance/Placement 与 Traversal 等 Canonical Scene Source 数据，并绑定 Connectivity
+Requirement、Traversal Lock 与完整 Scene Resource Lock。人物资产、物理/控制/动作闭包、重力和
+初始相机由独立 `WorldRuntimeBootstrapV1` 拥有；Gameplay Entity/关系/能力启动状态由
+`GameplayBootstrapV1` 拥有；`WorldBuildIdentityV1` 交叉绑定 Scene Source、两个 Bootstrap 和
+Package Root。正式 RuntimeHost 只接受这四段闭合且相互匹配的 Canonical 配置，不提供旧 Plan
+兼容执行分支。
 
 ```text
 AI 可编辑                    SDK 拥有                         Runtime 只读
-AuthoringSpec V4 ─────────→  NormalizedWorldIR V4 ─────────→ ExecutionPlan V5
+AuthoringSpec V4 ─────────→  NormalizedWorldIR V4 ─────────→ Canonical Scene Plan V1
 空间意图 / Ref / Constraint   最终 Transform / Lock / Hash    运行描述 / Assertion
 ```
 
 这三个对象不能合并：如果 Runtime 直接消费 AI 原始 JSON，就会被迫在运行时补默认值、
-查 Registry 和猜布局，结果无法稳定复现；如果 AI 直接写 ExecutionPlan，又会重新承担
+查 Registry 和猜布局，结果无法稳定复现；如果 AI 直接写 Canonical Scene Plan，又会重新承担
 大量底层 3D 坐标和引擎细节。
 
 ### 5.4 WorldPackage Build Receipt：可信验证主体的根
 
-Task 8 最初在独立的 `@whitebox-world/world-package` 包中实现最小正式
-`WorldPackageManifestV1`、Package Root 与 `WorldPackageBuildReceiptV1`；当前 active
-trusted publication 已迁移到完整 `WorldPackageManifestV2` / `WorldPackageBuildReceiptV2`
-目录。该包是
+Task 8 最初在独立的 `@whitebox-world/world-package` 包中实现最小正式合同；当前未发布
+项目已清理为唯一 `WorldPackageManifestV1` / `WorldPackageBuildReceiptV1`、Package Root
+与目录验证实现，不保留 V1/V2 双实现或迁移入口。该包是
 Authoring、Compiler、Runtime Contracts 和 Layout Solver 多个领域制品的装配边界，
 不属于 `@whitebox-world/protocol` 的通用字节/Hash 基础层；这是实施审查后的依赖方向
 修正，不是公共语义变更。
 
-V2 Build Receipt 交叉绑定 `authoringSpecHash`、`normalizedWorldIrHash`、
-`executionPlanHash`、`registryLockHash`、`layoutSolveReportHash`、Gameplay Bootstrap、
-完整文件清单、资源与 legal closure。Provider-neutral verifier 在 Runtime adapter 创建前
+当前 Build Receipt 通过 `WorldBuildIdentityV1` 交叉绑定 Package Root、Authoring、IR、
+Canonical Scene Plan、Gameplay Bootstrap 和 World Runtime Bootstrap；Manifest 同时绑定
+Registry/Layout、完整文件清单、资源与 legal closure。Provider-neutral verifier 在 Runtime adapter 创建前
 重放 owner parser、逐文件 Hash、Package Root 和 Host Compatibility；Node Adapter 另负责
-symlink-safe 原子目录发布与可选 Ed25519 信任策略。V1 继续以明确 V1 名称服务迁移和历史
-验证，不是 V2 alias。Validation Subject、CLI 和可信 Host 只能消费 verified V2 Root，
+symlink-safe 原子目录发布与可选 Ed25519 信任策略。当前只有 V1 合同，不存在 V2 alias。
+Validation Subject、CLI 和可信 Host 只能消费 verified V1 Root，
 不能把 Take/Capture identity 或 `WorldBuildArtifactV3` 重新命名为 Package Root。
 公共 `worldkit build/inspect/load` 与 headless NDJSON `run-session` 已在可信 Node Host
 完成，包含 Request/Receipt、hash-chain WAL、fresh-process 恢复、损坏拒绝、signal/close
@@ -335,8 +341,8 @@ sequenceDiagram
     L-->>AU: LayoutSolveReport + final transforms
     AU-->>I: NormalizedWorldIR V4 + IR hash + Resource Lock
     I->>C: compile(IR)
-    C-->>I: ExecutionPlan V5 + Plan hash
-    I->>RT: create(ExecutionPlan)
+    C-->>I: Scene Plan + Gameplay/Runtime Bootstrap + World Build Identity
+    I->>RT: create(mutually exclusive Scene Source + locked Bootstraps)
     RT->>X: resolve required GLB bytes
     X-->>RT: hash-verifiable bytes
     RT->>H: create terrain, colliders, controllers
@@ -358,7 +364,7 @@ sequenceDiagram
 精确 Tick Schedule，并由 `Control Capture Bundle V1` 把同一 Render Ready 状态的
 Neutral Color、Linear Depth、Semantic、Instance、Normal 绑定到原子证据包。
 Capture/Integrity V1 再通过 Node Adapter 复用 Bundle Validator，输出独立 Canonical
-Validation Report；它不反向修改 Bundle，也不接触 Babylon。WorldPackage V2 目录、
+Validation Report；它不反向修改 Bundle，也不接触 Babylon。当前唯一 WorldPackage V1 目录、
 trusted consumer migration、Package CLI、持久 headless Runtime Session、Receipt WAL 与
 fresh-process Resume 已完成；Placement/Physics/Composition 等统一报告扩展、Capture
 恢复续拍与多人 Session 仍是后续能力。
@@ -366,7 +372,7 @@ fresh-process Resume 已完成；Placement/Physics/Composition 等统一报告�
 Route 世界另有一条只在可信 Node/Host 中执行的验证链路：
 
 ```text
-Authoring V4 / ExecutionPlan V5
+Authoring V4 / Canonical Scene Plan V1
   → WorldPackage Build Receipt
   → WorldPackage Validation Subject
   → locked Capability Envelope
@@ -436,8 +442,8 @@ Protocol V5，也不等于生产编辑器或 Incremental。详细事务、状态
 | `@whitebox-world/subject-registry` | L2/L3/L5 | 版本化 Subject、Asset、Rig、Animation、Collider 和 Profile Registry |
 | `@whitebox-world/layout-solver` | L3 | 纯函数、确定性的 Placement Constraint 求解 |
 | `@whitebox-world/authoring` | L2/L3/L4 | Schema、校验、资源锁定、Normalizer 和 IR |
-| `@whitebox-world/runtime-contracts` | L2/L4/L5 | ExecutionPlan、Snapshot 和 Runtime 公共契约 |
-| `@whitebox-world/compiler` | L3/L4 | IR → ExecutionPlan 的确定性编译 |
+| `@whitebox-world/runtime-contracts` | L2/L4/L5 | Canonical Scene Plan、Gameplay/World Runtime Bootstrap、Snapshot 和 Runtime 公共契约 |
+| `@whitebox-world/compiler` | L3/L4 | IR → Canonical Scene Plan + locked Bootstrap 的确定性编译 |
 | `@whitebox-world/camera` | L5 | Provider-neutral 命名 Camera Rig/Modifier/Context Profile、View Preference、纯 Selection/Explain；Gameplay 投影、Browser 命令和 Runtime Pose 接线尚未完成 |
 | `@whitebox-world/traversal` | L4/L5/L8 | Traversal Lock/Envelope、Graph/Path/Probe Receipt、Route Overlay 与 Provider-neutral Evidence |
 | `@whitebox-world/traversal-recast` | L6 | Recast/Detour Graph Builder 与 Query Provider Adapter；Provider 身份和 Handle 不进入 Canonical Bytes |
@@ -455,7 +461,7 @@ Babylon-backed catalog gameplay 和 artifact-only 捕获，但三者共享同一
 
 下列能力不属于单独的一层，而是所有层共同遵守的基础规则：
 
-- **Canonical Hash**：IR、Resource Lock、ExecutionPlan 和证据必须可以稳定哈希。
+- **Canonical Hash**：IR、Resource Lock、Canonical Scene Plan、Bootstrap、World Build Identity 和证据必须可以稳定哈希。
 - **Stable Diagnostic**：错误使用稳定 Code、精确 Path 和安全详情，不能泄露 Provider
   私有信息。
 - **Security Boundary**：资产字节、外部工具输出和生成结果默认不可信，必须校验后
@@ -470,7 +476,7 @@ Babylon-backed catalog gameplay 和 artifact-only 捕获，但三者共享同一
 
 截至 2026-08-25，以下窄纵向切片已经运行并进入回归：
 
-- Canonical AuthoringSpec V4 → NormalizedWorldIR V4 → ExecutionPlan V5；
+- Canonical AuthoringSpec V4 → NormalizedWorldIR V4 → Canonical Scene Plan V1；
 - Placement Solver S1 的八种 Constraint 和海湾 Golden 场景；
 - Babylon/Havok Heightfield、障碍、水域、第三人称和多主体控制；
 - Golden Humanoid GLB、17 根解剖语义骨骼、独立 Skeleton Root、Bone Socket 与 `idle/walk/run/jump`；

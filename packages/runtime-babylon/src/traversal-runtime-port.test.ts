@@ -560,6 +560,37 @@ function withBoundStaticBoxAtStart(
   };
 }
 
+function withBoundStaticStepEdgeNearStart(
+  fixture: ReturnType<typeof compileFixture>,
+): CanonicalSceneExecutionPlanV1 {
+  const plan = structuredClone(fixture.executionPlan);
+  const [footX, , footZ] = plan.layout
+    .placementsByEntityId["spawn-main"]!.transform.positionMetersXYZ;
+  const collider: CanonicalSceneExecutionPlanV1["staticColliders"][number] = {
+    entityId: "step-edge-support",
+    logicalSubshapeId: "primary",
+    colliderSubshapeId: "collider:step-edge-support:primary",
+    colliderHash: `sha256:${"9".repeat(64)}`,
+    transform: {
+      positionMetersXYZ: [footX + 0.7, 0.125, footZ],
+      rotationEulerRadiansXYZ: [0, 0, 0],
+      scaleXYZ: [1, 1, 1],
+    },
+    shape: { kind: "box", sizeMetersXYZ: [1, 0.25, 2] },
+  };
+  return {
+    ...plan,
+    staticColliders: [...plan.staticColliders, collider],
+    traversal: {
+      ...plan.traversal,
+      surfaces: [
+        ...plan.traversal.surfaces,
+        boundSurfaceForCollider(collider, "primary"),
+      ],
+    },
+  };
+}
+
 function withBoundMissingStaticColliderSurface(
   fixture: ReturnType<typeof compileFixture>,
 ): CanonicalSceneExecutionPlanV1 {
@@ -1278,7 +1309,7 @@ describe("createBabylonTraversalRuntimePortV1", () => {
     }
   }, 30_000);
 
-  it("rejects in-place V5 Plan drift even when its published world hashes stay unchanged", async () => {
+  it("rejects in-place Canonical Scene Plan drift even when its published world hashes stay unchanged", async () => {
     const fixture = compileFixture();
     const executionPlan = structuredClone(fixture.executionPlan);
     const runtime = await createRuntime(executionPlan);
@@ -1301,7 +1332,7 @@ describe("createBabylonTraversalRuntimePortV1", () => {
     }
   }, 30_000);
 
-  it("closes canonical hashing failures from adversarial in-place V5 Plan drift", async () => {
+  it("closes canonical hashing failures from adversarial in-place Canonical Scene Plan drift", async () => {
     const fixture = compileFixture();
     const executionPlan = structuredClone(fixture.executionPlan);
     const runtime = await createRuntime(executionPlan);
@@ -2021,7 +2052,198 @@ describe("createBabylonTraversalRuntimePortV1", () => {
         resolvedVersion: bound.resolvedVersion,
         resourceHash: bound.resourceHash,
       });
+      const retained = inspectCharacterMovement<{
+        retainedCharacterSupportSample(): {
+          supportContacts: readonly {
+            pointMetersXYZ: readonly [number, number, number];
+          }[];
+        } | undefined;
+      }>(runtime, "player").retainedCharacterSupportSample();
+      expect(retained?.supportContacts.length).toBeGreaterThan(0);
+      expect(retained?.supportContacts.some((contact) =>
+        Math.abs(contact.pointMetersXYZ[1] - 1) < 0.02
+      )).toBe(true);
       expectNoExpectedPathSurfaceState(evidence);
+    } finally {
+      await runtime.dispose();
+    }
+  }, 30_000);
+
+  it("resolves an admitted step edge at the capsule contact instead of the foot-center column", async () => {
+    const fixture = compileFixture();
+    const plan = withBoundStaticStepEdgeNearStart(fixture);
+    const runtime = await createRuntime(plan);
+    try {
+      const movement = inspectCharacterMovement<{
+        retainedCharacterSupportSample(): {
+          supportState: "supported";
+          supportNormalWorldXYZ: readonly [number, number, number];
+          sampledControllerCenterMetersXYZ: readonly [number, number, number];
+          sampledFootPositionMetersXYZ: readonly [number, number, number];
+          supportContacts: readonly {
+            pointMetersXYZ: readonly [number, number, number];
+            normalXYZ: readonly [number, number, number];
+          }[];
+          isSupportSurfaceDynamic: boolean;
+        } | undefined;
+      }>(runtime, "player");
+      const [footX, , footZ] = plan.layout
+        .placementsByEntityId["spawn-main"]!.transform.positionMetersXYZ;
+      vi.spyOn(movement, "retainedCharacterSupportSample").mockReturnValue({
+        supportState: "supported",
+        supportNormalWorldXYZ: [-0.6, 0.8, 0],
+        sampledControllerCenterMetersXYZ: [footX, 6, footZ],
+        sampledFootPositionMetersXYZ: [footX, 5, footZ],
+        supportContacts: [{
+          pointMetersXYZ: [footX + 0.21, 0.25, footZ],
+          normalXYZ: [0, 1, 0],
+        }],
+        isSupportSurfaceDynamic: false,
+      });
+      const port = createBabylonTraversalRuntimePortV1({
+        runtime,
+        traversalLockReceipt: fixture.traversalLockReceipt,
+      });
+      const evidence = port.resetToStartAnchor({
+        startAnchorEntityId: "spawn-main",
+      });
+      const bound = plan.traversal.surfaces.find(
+        (surface) => surface.surfaceEntityId === "step-edge-support",
+      )!;
+
+      expect(evidence.characterSupport.surfaceResolution).toMatchObject({
+        mode: "resolved",
+        traversalSurfaceId: bound.traversalSurfaceId,
+        colliderSubshapeId: bound.colliderSubshapeId,
+      });
+    } finally {
+      await runtime.dispose();
+    }
+  }, 30_000);
+
+  it("fails closed when supported state has no retained Havok contact", async () => {
+    const fixture = compileFixture();
+    const plan = withBoundStaticBoxAtStart(fixture, 1);
+    const runtime = await createRuntime(plan);
+    try {
+      const movement = inspectCharacterMovement<{
+        retainedCharacterSupportSample(): {
+          supportState: "supported";
+          supportNormalWorldXYZ: readonly [number, number, number];
+          sampledControllerCenterMetersXYZ: readonly [number, number, number];
+          sampledFootPositionMetersXYZ: readonly [number, number, number];
+          supportContacts: readonly [];
+          isSupportSurfaceDynamic: boolean;
+        } | undefined;
+      }>(runtime, "player");
+      const [footX, footY, footZ] = plan.layout
+        .placementsByEntityId["spawn-main"]!.transform.positionMetersXYZ;
+      vi.spyOn(movement, "retainedCharacterSupportSample").mockReturnValue({
+        supportState: "supported",
+        supportNormalWorldXYZ: [0, 1, 0],
+        sampledControllerCenterMetersXYZ: [footX, footY + 1, footZ],
+        sampledFootPositionMetersXYZ: [footX, footY, footZ],
+        supportContacts: [],
+        isSupportSurfaceDynamic: false,
+      });
+      const evidence = createBabylonTraversalRuntimePortV1({
+        runtime,
+        traversalLockReceipt: fixture.traversalLockReceipt,
+      }).resetToStartAnchor({ startAnchorEntityId: "spawn-main" });
+
+      expect(evidence.characterSupport.surfaceResolution).toEqual({ mode: "unmatched" });
+    } finally {
+      await runtime.dispose();
+    }
+  }, 30_000);
+
+  it("fails closed when one retained contact resolves and another is unmatched", async () => {
+    const fixture = compileFixture();
+    const plan = withBoundStaticStepEdgeNearStart(fixture);
+    const runtime = await createRuntime(plan);
+    try {
+      const movement = inspectCharacterMovement<{
+        retainedCharacterSupportSample(): {
+          supportState: "supported";
+          supportNormalWorldXYZ: readonly [number, number, number];
+          sampledControllerCenterMetersXYZ: readonly [number, number, number];
+          sampledFootPositionMetersXYZ: readonly [number, number, number];
+          supportContacts: readonly {
+            pointMetersXYZ: readonly [number, number, number];
+            normalXYZ: readonly [number, number, number];
+          }[];
+          isSupportSurfaceDynamic: boolean;
+        } | undefined;
+      }>(runtime, "player");
+      const [footX, , footZ] = plan.layout
+        .placementsByEntityId["spawn-main"]!.transform.positionMetersXYZ;
+      vi.spyOn(movement, "retainedCharacterSupportSample").mockReturnValue({
+        supportState: "supported",
+        supportNormalWorldXYZ: [0, 1, 0],
+        sampledControllerCenterMetersXYZ: [footX, 1.26, footZ],
+        sampledFootPositionMetersXYZ: [footX, 0.26, footZ],
+        supportContacts: [{
+          pointMetersXYZ: [footX + 0.21, 0.25, footZ],
+          normalXYZ: [0, 1, 0],
+        }, {
+          pointMetersXYZ: [10_000, 0.25, 10_000],
+          normalXYZ: [0, 1, 0],
+        }],
+        isSupportSurfaceDynamic: false,
+      });
+      const evidence = createBabylonTraversalRuntimePortV1({
+        runtime,
+        traversalLockReceipt: fixture.traversalLockReceipt,
+      }).resetToStartAnchor({ startAnchorEntityId: "spawn-main" });
+
+      expect(evidence.characterSupport.surfaceResolution).toEqual({ mode: "unmatched" });
+    } finally {
+      await runtime.dispose();
+    }
+  }, 30_000);
+
+  it("does not attribute an unmatched retained contact to a nearby surface inferred from the average normal", async () => {
+    const fixture = compileFixture();
+    const plan = withBoundStaticStepEdgeNearStart(fixture);
+    const runtime = await createRuntime(plan);
+    try {
+      const movement = inspectCharacterMovement<{
+        retainedCharacterSupportSample(): {
+          supportState: "supported";
+          supportNormalWorldXYZ: readonly [number, number, number];
+          sampledControllerCenterMetersXYZ: readonly [number, number, number];
+          sampledFootPositionMetersXYZ: readonly [number, number, number];
+          supportContacts: readonly {
+            pointMetersXYZ: readonly [number, number, number];
+            normalXYZ: readonly [number, number, number];
+          }[];
+          isSupportSurfaceDynamic: boolean;
+        } | undefined;
+      }>(runtime, "player");
+      const [footX, , footZ] = plan.layout
+        .placementsByEntityId["spawn-main"]!.transform.positionMetersXYZ;
+      vi.spyOn(movement, "retainedCharacterSupportSample").mockReturnValue({
+        supportState: "supported",
+        supportNormalWorldXYZ: [-0.6, 0.8, 0],
+        sampledControllerCenterMetersXYZ: [footX, 1.26, footZ],
+        sampledFootPositionMetersXYZ: [footX, 0.26, footZ],
+        supportContacts: [{
+          pointMetersXYZ: [footX, 0.26, footZ],
+          normalXYZ: [0, 1, 0],
+        }],
+        isSupportSurfaceDynamic: false,
+      });
+      const port = createBabylonTraversalRuntimePortV1({
+        runtime,
+        traversalLockReceipt: fixture.traversalLockReceipt,
+      });
+      const evidence = port.resetToStartAnchor({
+        startAnchorEntityId: "spawn-main",
+      });
+
+      expect(evidence.characterSupport.surfaceResolution).toEqual({
+        mode: "unmatched",
+      });
     } finally {
       await runtime.dispose();
     }

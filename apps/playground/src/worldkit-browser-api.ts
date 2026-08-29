@@ -725,6 +725,7 @@ function runtimeProfileDiscoverySummaryV1(
 export function installDeferredWorldkitBrowserApi(options: {
   target: WorldkitBrowserApiTargetV1;
   statusElement: WorldkitBrowserStatusTargetV1;
+  readyBarrier?: Promise<void>;
   routeEvidencePublication?: WorldkitBrowserRouteEvidencePublicationV2;
   startupFailureDiagnostics?: readonly WorldkitBrowserDiagnosticV1[];
   initialize(
@@ -757,7 +758,6 @@ export function installDeferredWorldkitBrowserApi(options: {
     rejectReady = reject;
   });
   void startupPromise.catch(() => undefined);
-
   const requireReadyAdapter = (): DeferredWorldkitBrowserRuntimeAdapterV1 => {
     if (state === "loading") throw notReadyError();
     if (state === "error") throw startupError;
@@ -1213,7 +1213,7 @@ export function installDeferredWorldkitBrowserApi(options: {
     await trackedAdapter.disposeRuntime();
   };
 
-  const initialization = Promise.resolve()
+  const adapterInitialization = Promise.resolve()
     .then(() =>
       options.initialize({
         trackAdapter(adapter) {
@@ -1224,7 +1224,7 @@ export function installDeferredWorldkitBrowserApi(options: {
         },
       }),
     )
-    .then(async (adapter) => {
+    .then((adapter) => {
       if (trackedAdapter !== undefined && trackedAdapter !== adapter) {
         throw new Error("Browser Runtime Adapter ownership changed during startup.");
       }
@@ -1234,6 +1234,11 @@ export function installDeferredWorldkitBrowserApi(options: {
           deepFreeze(structuredClone(diagnostic)),
         ),
       );
+      return adapter;
+    });
+  const finalization = adapterInitialization
+    .then(async (adapter) => {
+      await options.readyBarrier;
       const snapshot = adapter.runtimeSnapshot();
       state = "ready";
       options.statusElement.dataset.worldkitStatus = "ready";
@@ -1265,12 +1270,17 @@ export function installDeferredWorldkitBrowserApi(options: {
       rejectReady(startupError);
       return undefined;
     });
+  const initialization = adapterInitialization.catch(async () => {
+    await finalization;
+    return undefined;
+  });
 
   return {
     api,
     initialization,
     dispose: async () => {
       await initialization;
+      await finalization;
       await disposeTrackedAdapter();
     },
   };

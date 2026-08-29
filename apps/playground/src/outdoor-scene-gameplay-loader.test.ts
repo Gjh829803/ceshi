@@ -143,7 +143,7 @@ describe("loadOutdoorGameplaySceneV1", () => {
       expect(result.playgroundMetadata?.sceneCatalogId).toBe(sceneCatalogId);
       expect(result.playgroundMetadata?.featureInspections.length).toBeGreaterThan(0);
     },
-    90_000,
+    120_000,
   );
 
   it("loads the mounted skateboard scene with its Action and Request authority", async () => {

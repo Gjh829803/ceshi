@@ -34,8 +34,9 @@ async function main(): Promise<void> {
       {
         ...compiledSource.take,
         worldPackageRef: worldIdentity.worldPackageRef,
-      },
+      } as typeof compiledSource.take,
       worldIdentity.worldPackageRootHash,
+      worldIdentity.worldBuildIdentityHash,
     );
     const temporaryPath = `${takePath}.tmp-${process.pid}`;
     try {

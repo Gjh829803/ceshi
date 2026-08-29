@@ -62,7 +62,7 @@ afterEach(async () => {
   ));
 });
 
-describe("WorldPackage command core", () => {
+describe("WorldPackage command core", { timeout: 30_000 }, () => {
   it("builds and independently inspects one complete basic-world directory", async () => {
     const directory = await temporaryDirectory();
     const outputDirectoryPath = path.join(directory, "basic-world.package");

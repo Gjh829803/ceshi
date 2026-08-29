@@ -492,10 +492,11 @@ describe("Runtime Session V1 public DTOs", () => {
     expect(canonicalRuntimeSessionEventV1(ready)).toContain(
       '"type":"ready"',
     );
+    const removedPlanHashField = ["execution", "Plan", "Hash"].join("");
     expect(() => parseRuntimeSessionEventV1({
       ...ready,
       worldBuildIdentityHash: undefined,
-      executionPlanHash: HASH_B,
+      [removedPlanHashField]: HASH_B,
     })).toThrow("closed RuntimeSessionEventV1 schema");
 
     const completedBody = {

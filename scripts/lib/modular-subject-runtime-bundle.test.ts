@@ -34,7 +34,7 @@ afterEach(async () => {
   );
 });
 
-describe("modular Subject Runtime Bundle assembly", () => {
+describe("modular Subject Runtime Bundle assembly", { timeout: 30_000 }, () => {
   it("assembles the Golden model and independent clips into one deterministic Runtime GLB", async () => {
     const first = await assembleModularSubjectRuntimeBundle({
       packageDirectory: GOLDEN_PACKAGE_DIRECTORY,

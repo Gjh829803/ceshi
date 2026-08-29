@@ -188,4 +188,19 @@ Ruling: generated examples and scene evidence are regenerated only through their
   passed (305 total / 273 contract / 32 resource-heavy); `pnpm typecheck`,
   `pnpm build`, `pnpm build:native-scene`, bundle parity, shell syntax, and
   `git diff --check` passed.
-- BNA1-10: not started.
+- BNA1-10: in progress. The permanent verifier first failed at module import,
+  then reached a 39-diagnostic real-tree RED spanning active V5/Package docs,
+  stale generic tri-view identity, one generic visual fixture, and its own
+  adversarial literals. GREEN now scans 987 files, enforces the exact
+  Plan-specific hash allowlist, rejects Native Plan/compiler dependencies,
+  requires the sole Protocol hash owner, and proves formal Native rejection
+  precedes adapter allocation. The older unreleased clean-break verifier was
+  independently migrated by RED/GREEN from Plan V5 to
+  `CanonicalSceneExecutionPlanV1` and now rejects the retired wire kind even
+  when it declares schema version 5. Canonical/Placement/Rigged/G Bot evidence,
+  three scene Build artifacts, and two generic tri-view manifests were rebuilt
+  through their owners. Green Sahara also required one current-schema
+  `allowedOverridePaths: []` repair; Builder self-check, Terrain finalization,
+  implementation-map promotion, and a byte-identical replayed World Build all
+  passed. Full matrix, manual browser evidence, completion review, and final
+  commit remain pending.

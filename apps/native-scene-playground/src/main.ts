@@ -11,6 +11,8 @@ import type {
   FixedInputV1,
   SemanticInputActionV1,
 } from "@whitebox-world/runtime-contracts";
+import type { BabylonNativeSceneContributionV1 } from
+  "@whitebox-world/native-babylon/host";
 
 import { createCloudRidgeNativeSceneControllerV1 } from
   "./cloud-ridge-scene.js";
@@ -25,6 +27,7 @@ import {
 import "./style.css";
 
 const FIXED_INPUT_CONTROLLER_ENTITY_ID = "native-scene-controller";
+const CLOUD_RIDGE_MAIN_PATH_RUN_TICKS = 1_700;
 const CONTROLLED_ENTITY_ID =
   CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1.initialControlledEntityId;
 const NATIVE_SCENE_FACTORIES_BY_REF: Readonly<
@@ -46,6 +49,14 @@ interface NativeSceneSpikeProbeV1 {
   snapshot(): BabylonRuntimeProjectionV1;
   runFixedInput(input: FixedInputV1): Promise<BabylonRuntimeProjectionV1>;
   setColliderDebugVisible(visible: boolean): void;
+  audit(): Readonly<{
+    contributionHash: `sha256:${string}`;
+    spawnMarkerId: string;
+    colliderIds: readonly string[];
+    colliderSubshapeIds: readonly string[];
+    collisionDebugVisible: boolean;
+    visibleCollisionDebugMeshCount: number;
+  }>;
   reset(): Promise<BabylonRuntimeProjectionV1>;
 }
 
@@ -152,6 +163,10 @@ async function start(): Promise<void> {
   canvas.tabIndex = 0;
   viewport.prepend(canvas);
 
+  let nativeAdmission: Readonly<{
+    contribution: BabylonNativeSceneContributionV1;
+    contributionHash: `sha256:${string}`;
+  }> | undefined;
   const runtime = await BabylonWorldRuntime.create({
     worldRuntimeBootstrap: CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1,
     gameplayBootstrap: CLOUD_RIDGE_GAMEPLAY_BOOTSTRAP_V1,
@@ -168,6 +183,9 @@ async function start(): Promise<void> {
     subjectAssetResolver: cloudRidgeSubjectAssetResolver,
     onInitializationStage(stage) {
       loadingStage.textContent = initializationLabel(stage);
+    },
+    onNativeSceneAdmission(admission) {
+      nativeAdmission = admission;
     },
   });
   try {
@@ -188,6 +206,7 @@ async function start(): Promise<void> {
 
   let inputTail: Promise<BabylonRuntimeProjectionV1> =
     Promise.resolve(runtime.snapshot());
+  let collisionDebugVisible = false;
   const runFixedInput = (
     input: FixedInputV1,
   ): Promise<BabylonRuntimeProjectionV1> => {
@@ -221,7 +240,29 @@ async function start(): Promise<void> {
   };
 
   const setColliderDebugVisible = (visible: boolean): void => {
+    collisionDebugVisible = visible;
     nativeScene.setCollisionDebugVisible(visible);
+  };
+
+  const audit = () => {
+    if (nativeAdmission === undefined) {
+      throw new Error("WORLDKIT_NATIVE_SCENE_ADMISSION_AUDIT_UNAVAILABLE");
+    }
+    const debug = nativeScene.collisionDebugSnapshot();
+    return Object.freeze({
+      contributionHash: nativeAdmission.contributionHash,
+      spawnMarkerId: nativeAdmission.contribution.spawnMarker.id,
+      colliderIds: Object.freeze(
+        nativeAdmission.contribution.staticColliders.map(({ id }) => id),
+      ),
+      colliderSubshapeIds: Object.freeze(
+        nativeAdmission.contribution.staticColliders.map(
+          ({ colliderSubshapeId }) => colliderSubshapeId,
+        ),
+      ),
+      collisionDebugVisible: debug.visible,
+      visibleCollisionDebugMeshCount: debug.visibleMeshCount,
+    });
   };
 
   const reset = async (): Promise<BabylonRuntimeProjectionV1> => {
@@ -249,6 +290,7 @@ async function start(): Promise<void> {
     snapshot: () => runtime.snapshot(),
     runFixedInput,
     setColliderDebugVisible,
+    audit,
     reset,
   });
 
@@ -258,7 +300,6 @@ async function start(): Promise<void> {
 
   const pressedCodes = new Set<string>();
   let paused = false;
-  let collisionDebugVisible = false;
   let frameRequest = 0;
   let previousTimestamp = performance.now();
   let accumulatedSeconds = 0;
@@ -400,7 +441,7 @@ async function start(): Promise<void> {
     void reset()
       .then(() => runFixedInput({
         actions: ["move-forward", "run"],
-        ticks: 3_150,
+        ticks: CLOUD_RIDGE_MAIN_PATH_RUN_TICKS,
       }))
       .then(() => runFixedInput({ actions: [], ticks: 2 }))
       .then((snapshot) => {

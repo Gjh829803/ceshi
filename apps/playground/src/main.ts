@@ -37,6 +37,7 @@ import { createFetchSubjectAssetResolver, PLAYGROUND_CAPABILITY_SUBJECT_ASSET_UR
 import {
   installDeferredWorldkitBrowserApi,
   listSubjectPresetAuthoringProfilesV1,
+  type DeferredWorldkitBrowserRuntimeAdapterV1,
 } from "./worldkit-browser-api.js";
 import {
   createSubjectPresetLocalRepository,
@@ -91,6 +92,30 @@ async function executeCameraPreference(
     ...(preference === undefined ? {} : { cameraViewPreference: preference }),
   } as import("@whitebox-world/runtime-contracts").CameraViewCommandV1);
   if (receipt.status !== "committed") throw new Error(receipt.diagnostic.code);
+}
+
+function createAuthoringPanelRuntimeApi(
+  publicApi: WorldkitBrowserApiV5,
+  adapter: DeferredWorldkitBrowserRuntimeAdapterV1,
+): WorldkitBrowserApiV5 {
+  const setupApi: WorldkitBrowserApiV5 = {
+    ...publicApi,
+    getSnapshot: () => adapter.runtimeSnapshot(),
+    executeCameraViewCommand: (command) =>
+      adapter.executeCameraViewCommandRuntime(command),
+    resetCameraView: () => adapter.resetCameraViewRuntime(),
+    getCameraPreviewState: () => adapter.getCameraPreviewStateRuntime(),
+    applyCameraPreview: (request) => adapter.applyCameraPreviewRuntime(request),
+    applySubjectPresetTuning: (request) =>
+      adapter.applySubjectPresetTuningRuntime(request),
+    setMotionProfile: (subjectEntityId, motionProfileRef) =>
+      adapter.setMotionProfileRuntime(subjectEntityId, motionProfileRef),
+    runHarness: (subjectEntityId) => adapter.runSubjectHarness(subjectEntityId),
+    getSubjectSnapshot: (subjectEntityId) =>
+      adapter.runtimeSnapshot().world.subjectStatesByEntityId[subjectEntityId],
+    getCameraSnapshot: () => adapter.runtimeSnapshot().view.camera,
+  };
+  return Object.freeze(setupApi);
 }
 
 interface AuthoringStartupDebugV1 {
@@ -1810,13 +1835,13 @@ function installTuningWorkbench(
           return;
         }
         if (receipt.diagnostic?.code === "SUBJECT_PRESET_GOLDEN_RECOMPILE_REQUIRED") {
-          saveStatus.textContent = "重置后已恢复镜头；Gameplay 继续使用编译锁定的 Execution Plan";
+          saveStatus.textContent = "重置后已恢复镜头；Gameplay 继续使用编译锁定的 Canonical Scene Plan";
           return;
         }
         saveStatus.textContent = `重置后已恢复镜头；Gameplay 未恢复：${receipt.diagnostic?.message ?? "配置与当前主体不匹配"}`;
         return;
       } catch {
-        saveStatus.textContent = "重置后已恢复镜头；Gameplay 恢复失败并保留重置后的 Execution Plan";
+        saveStatus.textContent = "重置后已恢复镜头；Gameplay 恢复失败并保留重置后的 Canonical Scene Plan";
       }
     },
     exportPublicationCandidate(): Promise<boolean> {
@@ -1877,11 +1902,11 @@ function installAuthoringRecoveryPanel(api: WorldkitBrowserApiV5): void {
   exportButton.disabled = true;
 }
 
-function installCapabilityAuthoringPanel(
+async function installCapabilityAuthoringPanel(
   api: WorldkitBrowserApiV5,
   initialSnapshot: WorldRuntimeSnapshotV4,
   hostOverlay?: CapabilityDemoHostOverlayV1,
-): TuningWorkbenchControllerV1 | undefined {
+): Promise<TuningWorkbenchControllerV1 | undefined> {
   const definitions = api.listSubjectDefinitions?.({ includeExperimental: true }) ?? [];
   if (definitions.length === 0) return;
   const panel = requiredElement<HTMLDivElement>("#capability-card");
@@ -2001,10 +2026,12 @@ function installCapabilityAuthoringPanel(
     : defaultCameraPreference;
   if (!isNil(selectedCameraPreference)) {
     cameraSelect.value = selectedCameraPreference;
-    void executeCameraPreference(api, {
+    try {
+      await executeCameraPreference(api, {
         mode: "camera-rig-profile",
         cameraRigProfileRef: selectedCameraPreference,
-      }).catch(async () => {
+      });
+    } catch {
       if (
         !isNil(defaultCameraPreference) &&
         defaultCameraPreference !== selectedCameraPreference
@@ -2019,7 +2046,7 @@ function installCapabilityAuthoringPanel(
           // The Runtime retains its current profile when both explicit requests fail.
         }
       }
-    });
+    }
   }
   const camera = snapshot.view.camera;
   context.innerHTML = `
@@ -2408,9 +2435,17 @@ if (runtimeRoute.mode === "unknown") {
   } catch (error) {
     preparationError = error;
   }
+  let resolvePageSetupReady!: () => void;
+  let rejectPageSetupReady!: (error: Error) => void;
+  const pageSetupReady = new Promise<void>((resolve, reject) => {
+    resolvePageSetupReady = resolve;
+    rejectPageSetupReady = reject;
+  });
+  void pageSetupReady.catch(() => undefined);
   const browserInstallation = installDeferredWorldkitBrowserApi({
     target: window,
     statusElement: document.documentElement,
+    readyBarrier: pageSetupReady,
     ...(prepared?.loaded.ok === true &&
         prepared.loaded.routeEvidencePublication !== undefined
       ? { routeEvidencePublication: prepared.loaded.routeEvidencePublication }
@@ -2519,8 +2554,8 @@ if (runtimeRoute.mode === "unknown") {
         }
       }
       const workbench = runtimeRoute.mode === "authoring"
-        ? installCapabilityAuthoringPanel(
-            browserInstallation.api,
+        ? await installCapabilityAuthoringPanel(
+            createAuthoringPanelRuntimeApi(browserInstallation.api, adapter),
             adapter.runtimeSnapshot(),
             createdHostOverlay,
           )
@@ -2563,7 +2598,10 @@ if (runtimeRoute.mode === "unknown") {
   let pageSetupSucceeded = false;
   try {
     pageSetupSucceeded = await pageLifecycle.completeSetup();
+    if (pageSetupSucceeded) resolvePageSetupReady();
+    else rejectPageSetupReady(new Error("WORLDKIT_PAGE_SETUP_FAILED"));
   } catch (error) {
+    rejectPageSetupReady(new Error("WORLDKIT_PAGE_SETUP_FAILED"));
     captureAuthoringStartupFailure("page-setup", error);
     document.documentElement.dataset.worldkitStatus = "error";
   }

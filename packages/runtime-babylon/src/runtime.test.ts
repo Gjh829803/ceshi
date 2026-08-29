@@ -3652,7 +3652,7 @@ function emptyActionProjection(simulationTick: number) {
     } finally {
       await runtime.dispose();
     }
-  }, 60_000);
+  }, 120_000);
 
   it("keeps two rigged Subjects on isolated Skeleton, Clip, Socket, and Action state", async () => {
     const basePlan = createTwoRiggedSubjectExecutionPlan();

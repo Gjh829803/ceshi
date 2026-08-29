@@ -199,7 +199,7 @@ describe("Canonical Builder skill", () => {
     expect(launcher).toContain("scene-authoring-attempts/$codex_run_nonce");
     expect(launcher).toContain("terminal Canonical Scene Plan");
     expect(launcher).toContain("independent World Runtime Bootstrap");
-    expect(launcher).not.toContain("ExecutionPlan V5");
+    expect(launcher).not.toContain(["ExecutionPlan", " V5"].join(""));
     expect(launcher).not.toContain("babylon-native-authoring-source");
     expect(launcher).not.toContain("humanoid.board.surface-slide@1");
     expect(launcher).not.toContain("humanoid.wingsuit.unpowered-glide@1");

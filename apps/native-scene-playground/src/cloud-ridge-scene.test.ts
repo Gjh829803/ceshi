@@ -112,6 +112,16 @@ describe("cloud ridge Babylon Native scene", () => {
     expect(scene.getMeshByName("cloud-bank-left")).not.toBeNull();
     expect(scene.getMeshByName("waterfall-right-primary")).not.toBeNull();
     expect(scene.lights.length).toBeGreaterThanOrEqual(2);
+    expect(nativeScene.collisionDebugSnapshot()).toEqual({
+      visible: false,
+      visibleMeshCount: 0,
+    });
+    nativeScene.setCollisionDebugVisible(true);
+    expect(nativeScene.collisionDebugSnapshot()).toEqual({
+      visible: true,
+      visibleMeshCount: 3,
+    });
+    nativeScene.setCollisionDebugVisible(false);
 
     // These baselines are the c312871 LCG output for seed 0x5eed_c10d.
     // They protect visual continuity while the sole random authority moves to Host.

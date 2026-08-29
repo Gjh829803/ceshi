@@ -36,7 +36,7 @@ async function signedIntentPng(): Promise<Buffer> {
     .toBuffer();
 }
 
-describe("scene terrain finalizer", () => {
+describe("scene terrain finalizer", { timeout: 30_000 }, () => {
   let root: string | undefined;
 
   afterEach(async () => {

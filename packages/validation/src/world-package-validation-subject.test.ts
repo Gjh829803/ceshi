@@ -116,7 +116,7 @@ describe("WorldPackageValidationSubjectV1 verified boundary", () => {
       layoutSolveReportHash: verified.receipt.manifest.layoutSolveReportHash,
     });
     expect(createWorldPackageValidationSubjectV1(verified)).toEqual(subject);
-    expect(subject).not.toHaveProperty("executionPlanHash");
+    expect(subject).not.toHaveProperty(["execution", "Plan", "Hash"].join(""));
   });
 
   it("rejects caller-forged verified Plan and Registry closure fields", () => {

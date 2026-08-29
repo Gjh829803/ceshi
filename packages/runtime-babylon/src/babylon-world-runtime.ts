@@ -189,6 +189,10 @@ interface BabylonWorldRuntimeCommonOptionsV1 {
   subjectAssetResolver?: SubjectAssetResolverV1;
   subjectAssetCacheOptions?: SubjectAssetCacheOptionsV1;
   onInitializationStage?(stage: BabylonWorldRuntimeInitializationStageV1): void;
+  onNativeSceneAdmission?(admission: Readonly<{
+    contribution: BabylonNativeSceneContributionV1;
+    contributionHash: `sha256:${string}`;
+  }>): void;
 }
 
 export type BabylonWorldRuntimeOptions = BabylonWorldRuntimeCommonOptionsV1 &
@@ -836,6 +840,10 @@ export class BabylonWorldRuntime {
           );
         }
         nativeContribution = nativeResult.contribution;
+        options.onNativeSceneAdmission?.(Object.freeze({
+          contribution: nativeResult.contribution,
+          contributionHash: nativeResult.contributionHash,
+        }));
         if (
           options.worldRuntimeBootstrap.initialControlledEntityId !==
             nativeScene.bootstrap.initialControlledEntityId ||

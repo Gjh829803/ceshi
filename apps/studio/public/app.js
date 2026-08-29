@@ -992,7 +992,7 @@ function renderValidation(media) {
   const metrics = [
     ["整体状态", captured ? "Runtime Captured" : "等待真实捕获"],
     ["权威来源", captured ? "Babylon Runtime" : "—"],
-    ["协议", captured ? "Authoring V4 / IR V4 / Plan V5" : "—"],
+    ["协议", captured ? "Authoring V4 / IR V4 / Canonical Scene Plan V1" : "—"],
   ];
   return `<div class="validation-summary ${captured ? "pass" : ""}">
       <div><small>RUNTIME CAPTURE</small><h3>${captured ? "Canonical 运行捕获已完成" : "等待 CLI 运行捕获"}</h3><p>进入首帧、确定性快照和实体 Front / Right / Back 三视图均由实际 Babylon runtime 导出，并作为评测硬门禁。</p></div>

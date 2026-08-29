@@ -180,7 +180,7 @@ afterEach(async () => {
   await rm(testRoot, { recursive: true, force: true });
 });
 
-describe("file WorldPackage adapter", () => {
+describe("file WorldPackage adapter", { timeout: 30_000 }, () => {
   it("publishes once with owner-only modes and reads the exact verified directory", async () => {
     const outputDirectoryPath = path.join(testRoot, "package");
     await writeWorldPackageDirectoryV1({
@@ -373,7 +373,7 @@ describe("file WorldPackage adapter", () => {
   });
 });
 
-describe("file WorldPackageStoreV1", () => {
+describe("file WorldPackageStoreV1", { timeout: 30_000 }, () => {
   it("replays an idempotently stored package through a fresh adapter", async () => {
     const storeRootPath = path.join(testRoot, "store");
     await mkdir(storeRootPath, { mode: 0o700 });

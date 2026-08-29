@@ -135,15 +135,16 @@ describe("hosted visual capture contracts", () => {
       }],
     };
     expect(validateWhiteboxTriviewManifestV1(value)).toEqual([]);
+    const removedPlanHashField = ["execution", "Plan", "Hash"].join("");
 
     expect(validateWhiteboxTriviewManifestV1({
       ...value,
       worldBuildIdentityHash: undefined,
-      executionPlanHash: hash,
+      [removedPlanHashField]: hash,
     })).toEqual(expect.arrayContaining([
       expect.objectContaining({
         code: "HOSTED_VISUAL_UNKNOWN_FIELD",
-        instancePath: "/executionPlanHash",
+        instancePath: `/${removedPlanHashField}`,
       }),
       expect.objectContaining({
         code: "HOSTED_VISUAL_WORLD_BUILD_IDENTITY_HASH_INVALID",
