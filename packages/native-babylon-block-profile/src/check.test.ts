@@ -24,6 +24,7 @@ interface BlockDefinition {
 }
 
 interface BlockProfileModule {
+  readonly BABYLON_NATIVE_BLOCK_PROFILE_DIAGNOSTIC_CODES_V1: readonly string[];
   createBabylonNativeBlockProfileSessionV1(
     context: BabylonNativeSceneBuildContextV1,
     budget: Readonly<{ maximumBlockCount: number }>,
@@ -128,6 +129,24 @@ function withScene(run: (scene: Scene) => void): void {
 }
 
 describe("Babylon Native block profile structural check", () => {
+  it("publishes one closed diagnostic-code vocabulary", async () => {
+    const profile = await loadProfile();
+
+    expect(profile.BABYLON_NATIVE_BLOCK_PROFILE_DIAGNOSTIC_CODES_V1).toEqual([
+      "WORLDKIT_NATIVE_BLOCK_GRID_ALIGNMENT_INVALID",
+      "WORLDKIT_NATIVE_BLOCK_MESH_DISPOSED",
+      "WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP",
+      "WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED",
+      "WORLDKIT_NATIVE_BLOCK_SCENE_MISMATCH",
+      "WORLDKIT_NATIVE_BLOCK_STRUCTURAL_SUPPORT_MISSING",
+      "WORLDKIT_NATIVE_BLOCK_VISUAL_GROUP_REQUIRED",
+      "WORLDKIT_NATIVE_BLOCK_WORLD_TRANSFORM_INVALID",
+    ]);
+    expect(Object.isFrozen(
+      profile.BABYLON_NATIVE_BLOCK_PROFILE_DIAGNOSTIC_CODES_V1,
+    )).toBe(true);
+  });
+
   it("publishes exact metrics for one valid full block", async () => {
     const { createBabylonNativeBlockProfileSessionV1 } = await loadProfile();
 

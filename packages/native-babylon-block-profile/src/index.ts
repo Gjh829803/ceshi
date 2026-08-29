@@ -11,9 +11,11 @@ export type {
   BabylonNativeBlockProfileMetricsV1,
   BabylonNativeBlockVisualGroupInventoryV1,
 } from "./check.js";
+export { BABYLON_NATIVE_BLOCK_PROFILE_DIAGNOSTIC_CODES_V1 } from "./check.js";
+export type { BabylonNativeBlockProfileDiagnosticCodeV1 } from "./check.js";
 export { createBabylonNativeBlockProfileSessionV1 } from "./session.js";
 export type {
-  BabylonNativeBlockDefinitionV1,
+  BabylonNativeBlockCreateInputV1,
   BabylonNativeBlockProfileBudgetV1,
   BabylonNativeBlockProfileSessionV1,
 } from "./session.js";

@@ -22,7 +22,7 @@ export interface BabylonNativeBlockProfileBudgetV1 {
   readonly maximumBlockCount: number;
 }
 
-export interface BabylonNativeBlockDefinitionV1 {
+export interface BabylonNativeBlockCreateInputV1 {
   readonly id: string;
   readonly shape: BabylonNativeBlockShapeKindV1;
   readonly paletteRole: BabylonNativeBlockPaletteRoleV1;
@@ -30,12 +30,12 @@ export interface BabylonNativeBlockDefinitionV1 {
 }
 
 export interface BabylonNativeBlockProfileSessionV1 {
-  createBlock(definition: Readonly<BabylonNativeBlockDefinitionV1>): Mesh;
+  createBlock(input: Readonly<BabylonNativeBlockCreateInputV1>): Mesh;
   finalize(): BabylonNativeBlockProfileCheckResultV1;
 }
 
 export interface BabylonNativeBlockSessionRecordV1 {
-  readonly definition: Readonly<BabylonNativeBlockDefinitionV1>;
+  readonly definition: Readonly<BabylonNativeBlockCreateInputV1>;
   readonly mesh: Mesh;
 }
 
@@ -118,8 +118,8 @@ function parseBudget(
 }
 
 function parseDefinition(
-  input: Readonly<BabylonNativeBlockDefinitionV1>,
-): Readonly<BabylonNativeBlockDefinitionV1> {
+  input: Readonly<BabylonNativeBlockCreateInputV1>,
+): Readonly<BabylonNativeBlockCreateInputV1> {
   const code = "WORLDKIT_NATIVE_BLOCK_DEFINITION_INVALID";
   const record = exactPlainRecord(
     input,
@@ -176,7 +176,7 @@ export function createBabylonNativeBlockProfileSessionV1(
   const recordsById = new Map<string, BabylonNativeBlockSessionRecordV1>();
 
   return Object.freeze({
-    createBlock(input: Readonly<BabylonNativeBlockDefinitionV1>): Mesh {
+    createBlock(input: Readonly<BabylonNativeBlockCreateInputV1>): Mesh {
       if (isFinalized) {
         return fail(
           "WORLDKIT_NATIVE_BLOCK_SESSION_CLOSED",

@@ -14,12 +14,26 @@ export type BabylonNativeBlockProfileDiagnosticLocationV1 =
   | Readonly<{ kind: "block"; blockId: string }>
   | Readonly<{ kind: "visual-group"; visualGroupId: string }>;
 
+export const BABYLON_NATIVE_BLOCK_PROFILE_DIAGNOSTIC_CODES_V1 = Object.freeze([
+  "WORLDKIT_NATIVE_BLOCK_GRID_ALIGNMENT_INVALID",
+  "WORLDKIT_NATIVE_BLOCK_MESH_DISPOSED",
+  "WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP",
+  "WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED",
+  "WORLDKIT_NATIVE_BLOCK_SCENE_MISMATCH",
+  "WORLDKIT_NATIVE_BLOCK_STRUCTURAL_SUPPORT_MISSING",
+  "WORLDKIT_NATIVE_BLOCK_VISUAL_GROUP_REQUIRED",
+  "WORLDKIT_NATIVE_BLOCK_WORLD_TRANSFORM_INVALID",
+] as const);
+
+export type BabylonNativeBlockProfileDiagnosticCodeV1 =
+  (typeof BABYLON_NATIVE_BLOCK_PROFILE_DIAGNOSTIC_CODES_V1)[number];
+
 export interface BabylonNativeBlockProfileDiagnosticV1 {
   readonly kind: "babylon-native-block-profile-diagnostic";
   readonly schemaVersion: 1;
   readonly id: string;
   readonly severity: "warning" | "error";
-  readonly code: string;
+  readonly code: BabylonNativeBlockProfileDiagnosticCodeV1;
   readonly location: BabylonNativeBlockProfileDiagnosticLocationV1;
   readonly message: string;
   readonly repairHint: string;
@@ -79,7 +93,7 @@ function blockLocation(blockId: string): BabylonNativeBlockProfileDiagnosticLoca
 function diagnostic(input: Readonly<{
   sequence: number;
   severity: "warning" | "error";
-  code: string;
+  code: BabylonNativeBlockProfileDiagnosticCodeV1;
   location: BabylonNativeBlockProfileDiagnosticLocationV1;
   message: string;
   repairHint: string;
