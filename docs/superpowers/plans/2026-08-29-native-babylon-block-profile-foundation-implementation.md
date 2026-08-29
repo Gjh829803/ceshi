@@ -160,11 +160,11 @@ Commit `feat(native): add Babylon block profile contract`.
 - `createBlock({ id, shape, paletteRole, visualGroupId? })` returns a Babylon `Mesh`. The caller sets Babylon transforms/material/parent directly.
 - `finalize()` closes the session and returns the report frozen in BWB2-20. Repeated finalization returns the same object; creation after finalization fails with a stable error code.
 
-- [ ] **Step 1: Write lifecycle and Babylon-object RED tests**
+- [x] **Step 1: Write lifecycle and Babylon-object RED tests**
 
 Use `NullEngine` and `Scene`. Prove the helper returns `Mesh`, creates exact geometry in `context.scene`, permits native position/Y-rotation/material/parent changes, rejects wrong Profile ref, duplicate/non-canonical IDs, unknown keys, unknown shape/palette, over-budget creation before Mesh allocation, disposed Scene, and creation after finalization. Prove two sessions do not share IDs or mutable layout.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```bash
 pnpm vitest run packages/native-babylon-block-profile/src/session.test.ts
@@ -172,11 +172,11 @@ pnpm vitest run packages/native-babylon-block-profile/src/session.test.ts
 
 Expected: FAIL because the session API does not exist.
 
-- [ ] **Step 3: Implement the minimal session**
+- [x] **Step 3: Implement the minimal session**
 
 Use `MeshBuilder.CreateBox` from the frozen Deep ESM path. Track only meshes created through this session. Do not scan `scene.meshes`, mutate BNA Registration, create a material/camera/light/physics object, or retain finalized layout queries.
 
-- [ ] **Step 4: Verify GREEN and commit**
+- [x] **Step 4: Verify GREEN and commit**
 
 Run the session, shape, package-boundary tests, `pnpm test:census`, and `pnpm typecheck`. Commit `feat(native): add block profile build session`.
 

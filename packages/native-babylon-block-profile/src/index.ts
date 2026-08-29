@@ -3,6 +3,12 @@ export {
   BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
 } from "./profile.js";
 export type { BabylonNativeBlockPaletteRoleV1 } from "./profile.js";
+export { createBabylonNativeBlockProfileSessionV1 } from "./session.js";
+export type {
+  BabylonNativeBlockDefinitionV1,
+  BabylonNativeBlockProfileBudgetV1,
+  BabylonNativeBlockProfileSessionV1,
+} from "./session.js";
 export {
   BABYLON_NATIVE_BLOCK_CENTER_LATTICE_METERS_V1,
   BABYLON_NATIVE_BLOCK_FULL_SIZE_METERS_V1,
