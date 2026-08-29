@@ -188,7 +188,7 @@ Ruling: generated examples and scene evidence are regenerated only through their
   passed (305 total / 273 contract / 32 resource-heavy); `pnpm typecheck`,
   `pnpm build`, `pnpm build:native-scene`, bundle parity, shell syntax, and
   `git diff --check` passed.
-- BNA1-10: in progress. The permanent verifier first failed at module import,
+- BNA1-10: complete with an explicit remote-verification handoff. The permanent verifier first failed at module import,
   then reached a 39-diagnostic real-tree RED spanning active V5/Package docs,
   stale generic tri-view identity, one generic visual fixture, and its own
   adversarial literals. GREEN now scans 987 files, enforces the exact
@@ -202,5 +202,13 @@ Ruling: generated examples and scene evidence are regenerated only through their
   through their owners. Green Sahara also required one current-schema
   `allowedOverridePaths: []` repair; Builder self-check, Terrain finalization,
   implementation-map promotion, and a byte-identical replayed World Build all
-  passed. Full matrix, manual browser evidence, completion review, and final
-  commit remain pending.
+  passed. The final local contract lane passed 274/274 files and 2,990 tests
+  with 3 skipped. Focused Runtime (131), Browser API (39), Planner self-check
+  (9), Planner/Builder bundle replay (2), trusted Route runner (12), and Route
+  Host transport (1) also passed. The second resource-heavy aggregate was
+  stopped at the user's request after exposing only a catalog compile timeout:
+  `grassland` took about 95 seconds against a 90-second test budget; the exact
+  budget is now 120 seconds and was not rerun locally. The completion review is
+  `docs/reviews/2026-08-29-babylon-native-runtime-identity-clean-break-review.md`.
+  Integration is authorized with the final exact-commit aggregate delegated to
+  Cursor Cloud; no local full-aggregate pass is claimed.
