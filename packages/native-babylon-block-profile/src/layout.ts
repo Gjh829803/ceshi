@@ -120,7 +120,8 @@ function hasFixedLocalGeometry(
   try {
     const positions = record.mesh.getVerticesData(VertexBuffer.PositionKind);
     const indices = record.mesh.getIndices();
-    return !record.mesh.hasThinInstances &&
+    return !record.mesh.hasInstances &&
+      !record.mesh.hasThinInstances &&
       positions !== null &&
       indices !== null &&
       positions.length === record.localGeometrySnapshot.positions.length &&

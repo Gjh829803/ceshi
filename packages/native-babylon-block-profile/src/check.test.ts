@@ -1,5 +1,6 @@
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
+import "@babylonjs/core/Meshes/instancedMesh.js";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { Scene } from "@babylonjs/core/scene.js";
 import {
@@ -478,6 +479,34 @@ describe("Babylon Native block profile structural check", () => {
         severity: "error",
         code: "WORLDKIT_NATIVE_BLOCK_MESH_GEOMETRY_INVALID",
         location: { kind: "block", blockId: "thin-instance-source" },
+      });
+    });
+  });
+
+  it("rejects ordinary instances that are absent from the session inventory", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadProfile();
+
+    withScene((scene) => {
+      const session = createBabylonNativeBlockProfileSessionV1(
+        createContext(scene),
+        { maximumBlockCount: 1 },
+      );
+      const mesh = session.createBlock({
+        id: "instance-source",
+        shape: "full",
+        paletteRole: "ground",
+      });
+      mesh.position.set(0, 0.5, 0);
+      mesh.createInstance("untracked-instance").position.set(2, 0, 0);
+
+      const result = session.finalize();
+
+      expect(result.outcome).toBe("rejected");
+      expect(result.diagnostics).toHaveLength(1);
+      expect(result.diagnostics[0]).toMatchObject({
+        severity: "error",
+        code: "WORLDKIT_NATIVE_BLOCK_MESH_GEOMETRY_INVALID",
+        location: { kind: "block", blockId: "instance-source" },
       });
     });
   });

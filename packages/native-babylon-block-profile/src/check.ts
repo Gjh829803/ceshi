@@ -124,7 +124,7 @@ function issueMessage(issue: BabylonNativeBlockLayoutIssueV1): Readonly<{
     case "WORLDKIT_NATIVE_BLOCK_MESH_GEOMETRY_INVALID":
       return Object.freeze({
         message: `Block '${issue.blockId}' no longer has its fixed Profile geometry.`,
-        repairHint: "Keep Profile block vertices, indices, and thin-instance state unchanged.",
+        repairHint: "Keep Profile block vertices, indices, and instance state unchanged.",
       });
     case "WORLDKIT_NATIVE_BLOCK_SCENE_MISMATCH":
       return Object.freeze({
