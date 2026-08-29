@@ -995,14 +995,15 @@ Lane 不自动扩大 Cave、Overhang、双层 Route 或 NPC Navigation 的当前
 详细权威为
 [Babylon Native Block Whitebox 创作 Profile 长期设计](../docs/superpowers/specs/2026-08-28-babylon-native-block-whitebox-profile-design.md)。
 该 Profile 采用 `JSON Control Plane + Babylon Native Block Whitebox + Frozen Contributions + SDK/Havok`
-组合；它不是第三条 Scene Source，也不恢复旧分支的 Three/Manifest/Compiler。当前全部为设计接受、实现
-未开始，不提高 Native 生产完成度。
+组合；它不是第三条 Scene Source，也不恢复旧分支的 Three/Manifest/Compiler。BWB-1/BWB-2 的可选
+Package、Build-Epoch Session 和结构 Checker 已完成合同级 checkpoint；视觉、多视角、Collider/Havok、
+人物通过性和参考场景 Corpus 仍未完成，因此不提高 Native 生产完成度。
 
 - [x] BWB-0：冻结 Profile、旧分支 `618d96b` 处置、外部证据、能力边界、依赖工作图和
   [Mode A 审查](reviews/2026-08-28-babylon-native-block-whitebox-profile-design-review.md)；
-- [ ] BWB-1：在 BNA-2 后创建可选 `@whitebox-world/native-babylon-block-profile`，冻结 shape/grid/
+- [x] BWB-1：在 BNA-2 后创建可选 `@whitebox-world/native-babylon-block-profile`，冻结 shape/grid/
   palette、Build-epoch-local Layout 与 diagnostics；
-- [ ] BWB-2：重写 Occupancy、重叠、坡面输入、边界、Visual Group 和预算 Checker，不复制旧 DTO/
+- [x] BWB-2：重写 Occupancy、重叠、坡面输入、边界、Visual Group 和预算 Checker，不复制旧 DTO/
   Preset/Compiler；
 - [ ] BWB-3：接入直接 Babylon Mesh、稳定视觉组和 Opening/top-down/侧视的 Build-Epoch-local authoring
   screenshots；它们不是 BNA-7 formal WorldPackage/Browser Capture；

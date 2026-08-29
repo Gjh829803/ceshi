@@ -140,7 +140,7 @@ Commit `feat(native): add Babylon block profile contract`.
 
 **blocks:** BWB2-10 and BWB2-20.
 
-**Exclusive ownership:** Session lifecycle, block-definition validation, block-count budget, and session-owned Mesh tracking. It does not own BNA Registration, materials, capture, or persistent layout.
+**Exclusive ownership:** Session lifecycle, create-input validation, block-count budget, and session-owned Mesh tracking. It does not own BNA Registration, materials, capture, or persistent layout.
 
 **Integration point:** `defineBabylonNativeScene(...).build(context)` creates the session and finalizes it before the Build Promise settles.
 
@@ -155,7 +155,7 @@ Commit `feat(native): add Babylon block profile contract`.
 - Modify: `scripts/lib/test-gate-manifest.ts`
 
 **Interfaces:**
-- Produces `createBabylonNativeBlockProfileSessionV1(context, budget)`, `BabylonNativeBlockProfileSessionV1`, `BabylonNativeBlockDefinitionV1`, and `BabylonNativeBlockProfileBudgetV1`.
+- Produces `createBabylonNativeBlockProfileSessionV1(context, budget)`, `BabylonNativeBlockProfileSessionV1`, `BabylonNativeBlockCreateInputV1`, and `BabylonNativeBlockProfileBudgetV1`.
 - `budget` has exactly `maximumBlockCount` as a non-negative safe integer.
 - `createBlock({ id, shape, paletteRole, visualGroupId? })` returns a Babylon `Mesh`. The caller sets Babylon transforms/material/parent directly.
 - `finalize()` closes the session and returns the report frozen in BWB2-20. Repeated finalization returns the same object; creation after finalization fails with a stable error code.
@@ -308,7 +308,7 @@ Run all package tests, `pnpm test:census`, `pnpm typecheck`, and `git diff --che
 - Consumes: BWB1-10 through BWB2-20 on one exact tree.
 - Produces: accepted/rejected BWB-1/BWB-2 checkpoint evidence and exact dependency handoff to BNA-3/BWB-3 and BNA-4/BWB-4.
 
-- [ ] **Step 1: Run focused gates once on the final tree**
+- [x] **Step 1: Run focused gates once on the final tree**
 
 ```bash
 pnpm vitest run packages/native-babylon-block-profile/src
@@ -317,15 +317,15 @@ pnpm typecheck
 pnpm verify:workspace-boundaries
 ```
 
-- [ ] **Step 2: Run the affected contract gate**
+- [x] **Step 2: Run the affected contract gate**
 
 Run `pnpm test:contract`. Do not run resource-heavy Havok/browser gates: this phase does not modify Runtime or claim visual/collider/passability evidence.
 
-- [ ] **Step 3: Perform a change review**
+- [x] **Step 3: Perform a change review**
 
 Apply `docs/reviews/full-dimension-review-protocol.md` in change-review mode. Verify public export census, package boundaries, deterministic evidence, two-session isolation, disposed/throwing cleanup, old-branch rejection census, and no Runtime/physics/camera diff.
 
-- [ ] **Step 4: Update implementation truth only**
+- [x] **Step 4: Update implementation truth only**
 
 Mark BWB-1 and BWB-2 complete only if all stated evidence passes. Keep BNA-2 production closure, BNA-3+, BWB-3+, visual reconstruction quality, Collider/Havok, passability, formal Capture, indoor capability, Route/Nav, and `goTo` open.
 
