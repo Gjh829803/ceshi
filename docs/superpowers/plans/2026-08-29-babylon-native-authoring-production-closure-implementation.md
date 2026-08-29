@@ -6,7 +6,7 @@
 
 **Architecture:** Trusted Node tooling owns filesystem, source graph, typecheck, temporary bundle, and CLI orchestration. `@whitebox-world/native-babylon/host` owns Candidate preconditions, Build Epoch, authority instrumentation/audit, Contribution freeze, and deterministic replay. Canonical JSON and Babylon Native remain mutually exclusive Scene Sources; Native does not compile through Canonical IR and BNA-2 does not attach Havok, Subject, Camera, input, or fixed Tick.
 
-**Tech Stack:** TypeScript 5.9.2 compiler API, Vite 7.1.2/Rollup, Babylon.js Core 9.23.0 Deep ESM, `lodash-es` 4.18.1, Vitest 3.2.4, Node child-process CLI tests, pnpm workspace.
+**Tech Stack:** The implementation uses the exact current lockfile toolchain, not versions copied into this plan. At this design SHA the resolved versions are TypeScript 5.9.3, Vite 7.3.6/Rollup, Babylon.js Core 9.23.0 Deep ESM, `lodash-es` 4.18.1, and Vitest 3.2.7, plus Node child-process CLI tests and the pnpm workspace. Babylon 9.23.0 remains the engine-semantics freeze; any lockfile change requires rechecking the installed source assumptions before implementation.
 
 **Spec:** [`docs/superpowers/specs/2026-08-29-babylon-native-authoring-production-closure-design.md`](../specs/2026-08-29-babylon-native-authoring-production-closure-design.md)
 
@@ -86,7 +86,7 @@ export interface AdmitBabylonNativeSceneCandidateInputV1 {
 
 export function admitBabylonNativeSceneCandidateV1(
   input: AdmitBabylonNativeSceneCandidateInputV1,
-): Promise<AdmitBabylonNativeSceneCandidateResultV1>;
+): Promise<BabylonNativeSceneCandidateAdmissionResultV1>;
 
 export interface ReplayBabylonNativeSceneModuleInputV1 {
   readonly candidateFactory: BabylonNativeSceneCandidateFactoryV1;
@@ -99,9 +99,40 @@ export interface ReplayBabylonNativeSceneModuleInputV1 {
 export function replayBabylonNativeSceneModuleV1(
   input: ReplayBabylonNativeSceneModuleInputV1,
 ): Promise<ReplayBabylonNativeSceneModuleResultV1>;
+
+export type BabylonNativeSceneCandidateAdmissionResultV1 =
+  | Readonly<{
+      outcome: "passed";
+      contribution: BabylonNativeSceneContributionV1;
+      contributionHash: string;
+    }>
+  | Readonly<{
+      outcome: "rejected";
+      diagnostics: readonly NativeSceneDiagnosticV1[];
+    }>;
+
+export type ReplayBabylonNativeSceneModuleResultV1 =
+  | Readonly<{
+      checkResult: NativeSceneCheckResultV1 & Readonly<{ outcome: "passed" }>;
+      contribution: BabylonNativeSceneContributionV1;
+      contributionHash: string;
+    }>
+  | Readonly<{
+      checkResult: NativeSceneCheckResultV1 &
+        Readonly<{ outcome: "rejected" | "tool-error" }>;
+    }>;
 ```
 
-Both result unions use the existing `outcome: "passed" | "rejected" | "tool-error"` and closed `NativeSceneCheckResultV1`. A passed member additionally contains the frozen `contribution` and `contributionHash`; it never contains Scene, Engine, Mesh, Candidate, Context, Registration, resolver, or disposer handles.
+`BabylonNativeSceneCandidateAdmissionResultV1` is a distinct `/host`-role
+`passed | rejected` union. Its passed member contains frozen `contribution` and
+`contributionHash`; its rejected member contains stable diagnostics. It has no
+`checkedInput`, `tool-error`, or `kind: "native-scene-check-result"`, and never contains
+Scene, Engine, Mesh, Candidate, Context, Registration, resolver, or disposer handles.
+`ReplayBabylonNativeSceneModuleResultV1` is the only Host wrapper that contains a
+`checkResult: NativeSceneCheckResultV1`. Its passed member also contains the frozen
+Contribution/hash; rejected/tool-error members do not. The full Source/Bundle/CLI checker
+publishes that same `checkResult` directly. Candidate creation/cleanup/tool failures are
+folded there; single-Candidate Admission never creates a Check DTO.
 
 The Source/CLI implementation must use stable codes, not provider/compiler raw messages:
 
@@ -267,7 +298,13 @@ export type BabylonNativeDeepEsmImportSpecifierV1 =
   typeof BABYLON_NATIVE_DEEP_ESM_IMPORT_SPECIFIERS_V1[number];
 ```
 
-`package-boundary.test.ts` imports this constant rather than maintaining a second allowed-import set. The test still freezes the exact 12-string content so an accidental wildcard/version drift fails.
+`package-boundary.test.ts` imports this constant rather than maintaining a second Module
+allowed-import set. The test freezes its exact 12-string content so an accidental
+wildcard/version drift fails. This is the **Module** Source Admission list only. Host code
+has a separate, Host-private exact census for required provider imports such as NullEngine;
+its boundary test asserts every Host import is either a member of the Module list or an
+explicit Host-only specifier. Never merge the Host census into the AI-facing Module list or
+require both roles to have identical imports.
 
 - [ ] **Step 3: Apply `isNil` without widening contracts**
 
@@ -409,7 +446,9 @@ Use TypeChecker symbol/scope analysis to reject:
 
 - global random/time/network/DOM/process/timer/scheduling/eval/Function capabilities;
 - `scene.getEngine`, Scene/Engine create/dispose/control, camera/physics/action/input APIs;
-- `registerBeforeRender`, `registerAfterRender`, and any `...Observable.add/addOnce` callback;
+- `registerBeforeRender`, `registerAfterRender`, and `.add/.addOnce` on any value whose
+  TypeChecker-resolved Babylon type is `Observable`, regardless of whether the property name
+  ends in `Observable`;
 - every user class/subclass;
 - module-scope `let`/`var`, mutable container construction, writes/calls mutating a module-scope binding, and Build assignments that retain Context/Scene/Engine/Mesh/Registration outside Build scope;
 - any `return` with an expression inside `build` and any extra Runtime export.
@@ -616,12 +655,13 @@ git commit -m "refactor: close native candidate admission API"
 
 - [ ] **Step 1: Record the installed Babylon public surface**
 
-Before implementation, inspect and record in the commit/review notes:
+Before implementation, inspect the complete installed public declarations and record their
+exact paths/version in the commit/review notes:
 
 ```bash
-rg -n "registerBeforeRender|registerAfterRender|onBeforeRenderObservable|onBeforeAnimationsObservable|onBeforeStepObservable|onPrePointerObservable|onPreKeyboardObservable|actionManagers|activeCameras" \
+rg -n "Observable<|set (onDispose|beforeRender|afterRender|beforeCameraRender|afterCameraRender)|registerBeforeRender|registerAfterRender|actionManagers|activeCameras" \
   node_modules/.pnpm/@babylonjs+core@9.23.0/node_modules/@babylonjs/core/scene.pure.d.ts
-rg -n "runRenderLoop|stopRenderLoop|onBeginFrameObservable|onEndFrameObservable" \
+rg -n "Observable<|runRenderLoop|stopRenderLoop" \
   node_modules/.pnpm/@babylonjs+core@9.23.0/node_modules/@babylonjs/core/Engines/abstractEngine.pure.d.ts
 rg -n "get observers|hasObservers" \
   node_modules/.pnpm/@babylonjs+core@9.23.0/node_modules/@babylonjs/core/Misc/observable.pure.d.ts
@@ -652,7 +692,11 @@ Programmatic Modules must attempt and be rejected for:
 - enabling physics or attaching a physics body;
 - assigning Scene/Mesh ActionManager;
 - registering before/after-render callbacks;
-- adding/addOnce to each of the 13 Scene Observables and two Engine Observables;
+- adding/addOnce to every key in the single Host-owned Scene/Engine public Observable
+  census, including Scene/Engine disposal and camera/draw/render-group/ready/resource/input
+  callbacks;
+- assigning each Scene callback setter: `onDispose`, `beforeRender`, `afterRender`,
+  `beforeCameraRender`, and `afterCameraRender`;
 - calling Engine `runRenderLoop`/`stopRenderLoop`;
 - disposing Scene or Engine;
 - catching the instrumentation error and otherwise completing a valid Build.
@@ -674,10 +718,18 @@ Capture only public values/identities:
 - Candidate Scene/Engine identity and disposed state;
 - cameras, active camera(s), Scene action manager(s), per-Mesh action manager/physics body;
 - optional public physics getter/state when the installed component exposes it;
-- ordered copies of `.observers` for the exact Scene/Engine Observable list;
+- ordered copies of `.observers` for
+  `BABYLON_NATIVE_AUDITED_SCENE_OBSERVABLE_KEYS_V1` and
+  `BABYLON_NATIVE_AUDITED_ENGINE_OBSERVABLE_KEYS_V1`;
 - original own-property descriptors for instrumented methods.
 
 Install instance wrappers for `scene.registerBeforeRender`, `scene.registerAfterRender`, `engine.runRenderLoop`, and `engine.stopRenderLoop`. A wrapper records the first authority violation and throws without scheduling work. In `finally`, restore the prior own descriptor or delete the temporary own property, then verify restoration. Never read `_activeRenderLoops` or any private field.
+
+Add one declaration-census test that extracts all public `Observable` properties from the
+installed Babylon 9.23.0 `scene.pure.d.ts` and `abstractEngine.pure.d.ts`, then compares
+them exactly with the two Host constants. At this SHA the expected census is 65 Scene keys
+and 15 Engine keys. The constants are the only machine list; tests iterate them instead of
+hand-writing a smaller callback subset.
 
 - [ ] **Step 5: Integrate audit around the entire Build Epoch**
 
@@ -809,14 +861,18 @@ git commit -m "feat: replay native modules deterministically"
 Freeze exactly:
 
 ```ts
-export const BNA2_WHITEBOX_STANDARD_ADMISSION_BUDGET_V1 = Object.freeze({
+export const BNA2_WHITEBOX_ADMISSION_BUDGET_V1 = Object.freeze({
   maximumStaticColliderCount: 256,
   maximumStaticColliderVertexCount: 65_536,
   maximumStaticColliderTriangleCount: 131_072,
 });
 ```
 
-Tests prove only `worldkit://native-scene-profile/whitebox.standard@1` resolves; another profile rejects with `WORLDKIT_NATIVE_SCENE_PROFILE_UNSUPPORTED`. The asset-free resolver records `WORLDKIT_NATIVE_SCENE_ASSET_LOCK_UNAVAILABLE`, even if Module catches its exception.
+Tests prove both `worldkit://native-scene-profile/whitebox.standard@1` and
+`worldkit://native-scene-profile/whitebox.blocks@1` resolve through one closed policy map
+and receive the same hard cap; any other profile rejects with
+`WORLDKIT_NATIVE_SCENE_PROFILE_UNSUPPORTED`. The asset-free resolver records
+`WORLDKIT_NATIVE_SCENE_ASSET_LOCK_UNAVAILABLE`, even if Module catches its exception.
 
 - [ ] **Step 2: Implement the NullEngine Candidate factory**
 

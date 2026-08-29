@@ -1,6 +1,6 @@
 # Babylon Native Authoring BNA-2 生产闭环设计
 
-- 状态：Approved for implementation
+- 状态：Ready for independent re-review
 - 日期：2026-08-29
 - 设计基线：`main@9794f0cb05ec2ce54ec3367fa25e1274ea3605a6`
 - 上位架构：
@@ -120,7 +120,7 @@ scripts/native-scene (Node-only trusted tooling)
   -> dispose Candidate B
           |
           v
-NativeSceneCheckResultV1
+NativeSceneCheckResultV1 (replay/full checker only)
   worldkit native check/explain + exit 0/1/2
 
 Later only:
@@ -140,6 +140,7 @@ Later only:
 | Spawn/Collider 意图 | core Registration | 只在 Build Promise settlement 前开放 |
 | Collider 几何与 Contribution | `/host` admission | 从登记 Mesh 冻结世界坐标，Module 调用顺序不影响 bytes |
 | Authority baseline 与 instrumentation | `/host` | 含 Provider Handle，仅存在于一次 Build，不序列化、不导出 root |
+| 单 Candidate Admission 结果 | `/host` 的 `BabylonNativeSceneCandidateAdmissionResultV1` | 只表达 passed/rejected 与无 Handle Contribution；不是 CLI Check DTO |
 | Replay 判等 | `/host` | 比较两次 canonical Contribution bytes；Hash 只是 bytes 的派生值 |
 | CLI 结果 | `NativeSceneCheckResultV1` | stdout 的唯一机器合同 |
 | Physics、Subject、Camera、fixed Tick | BNA-4 后的 Runtime/SDK Owner | BNA-2 Candidate 中不存在，不能被 Module 创建 |
@@ -267,7 +268,7 @@ checker 需要用 symbol/scope 分析区分局部 Build 变量和 module binding
 ```ts
 export function admitBabylonNativeSceneCandidateV1(
   input: AdmitBabylonNativeSceneCandidateInputV1,
-): Promise<AdmitBabylonNativeSceneCandidateResultV1>;
+): Promise<BabylonNativeSceneCandidateAdmissionResultV1>;
 
 export function replayBabylonNativeSceneModuleV1(
   input: ReplayBabylonNativeSceneModuleInputV1,
@@ -278,6 +279,15 @@ export function replayBabylonNativeSceneModuleV1(
 Admission 和 Authority Audit。`replay...` 通过 Host factory 创建两个 Candidate，分别调用同一个
 `admit...`，比较 canonical Contribution bytes，并负责两次销毁。旧类型、旧导出和旧消费者在同一切片删除，
 不保留 alias。
+
+`BabylonNativeSceneCandidateAdmissionResultV1` 是 `/host` 私有角色的闭合
+`passed | rejected` Union：passed 持有冻结 Contribution/hash，rejected 持有稳定 Diagnostics；它没有
+`checkedInput`、`tool-error` 或 `kind: "native-scene-check-result"`。Candidate 创建、cleanup、Source、Bundle
+与 CLI tooling 才可能产生 `tool-error`。`ReplayBabylonNativeSceneModuleResultV1` 是闭合包装：所有成员只含
+一个 `checkResult: NativeSceneCheckResultV1`；仅 `checkResult.outcome === "passed"` 的成员额外携带冻结
+Contribution/hash，失败成员不携带 Contribution。完整 Checker 直接发布其中的 `checkResult`。这样单
+Candidate Admission 不会冒充已经完成 Source + 双 Replay 的正式 Check，同时 BNA-3 仍能消费 Replay 的
+无 Handle Contribution。
 
 Host 从已解析 Bootstrap `seed` 自己创建 deterministic random；调用方不再传入可与 Bootstrap 漂移的随机源。
 Locked Asset Resolver 的每次返回仍被 Host 复制/冻结；BNA-3 再把它绑定到正式 Asset Lock。
@@ -312,6 +322,20 @@ catch/rethrow 覆盖。
 Probe 只使用 Babylon `9.23.0` 已安装源码证明存在的公开 API，或 Build 期间 Host 自己安装并恢复的函数
 instrumentation；禁止读取 `_activeRenderLoops` 等私有字段推断引擎状态。
 
+Observable 审计只有一个机器 Owner：`/host` 中版本锁定的
+`BABYLON_NATIVE_AUDITED_SCENE_OBSERVABLE_KEYS_V1` 与
+`BABYLON_NATIVE_AUDITED_ENGINE_OBSERVABLE_KEYS_V1`。它们必须与安装的
+`scene.pure.d.ts` 全部 65 个 public `Observable` 属性、`abstractEngine.pure.d.ts` 全部 15 个 public
+`Observable` 属性 byte-exact 对齐，包括没有 `Observable` 后缀的 `onActiveCameraChanged` /
+`onActiveCamerasChanged`、Scene/Engine 两个 `onDisposeObservable`、camera/draw/render-group/ready/
+resource/input Observables。测试从锁定声明文件独立提取 public census，与这两个常量做 exact equality；
+设计、实现和测试不得各维护一份手抄子集或数字为 13/2 的旧列表。Babylon 版本变化时，版本、两个常量和
+声明 census test 作为一次 current-only 变更共同替换。
+
+Scene 的五个公开 callback setter `onDispose`、`beforeRender`、`afterRender`、
+`beforeCameraRender`、`afterCameraRender` 必须单独进入 setter regression；它们最终改变 Observable
+subscription，Audit 比较有序 observer identity，而不只比较数量。
+
 Audit 至少验证：
 
 - Scene/Engine identity 未变，Scene 未 disposed；
@@ -319,12 +343,8 @@ Audit 至少验证：
 - Physics Engine 仍为空、physics 未启用、所有 Candidate Mesh 没有 provider-created physics body；
 - Scene `actionManager`/`actionManagers` 和 Mesh action manager 没有新增；
 - `registerBeforeRender`、`registerAfterRender`、Engine render-loop 控制 API 没有被调用；
-- 以下 Scene public Observable 的 observer identity/census 与 baseline 相同：
-  `onBeforeRenderObservable`、`onAfterRenderObservable`、`onBeforeAnimationsObservable`、
-  `onAfterAnimationsObservable`、`onBeforeStepObservable`、`onAfterStepObservable`、
-  `onPrePointerObservable`、`onPointerObservable`、`onPreKeyboardObservable`、
-  `onKeyboardObservable`、`onDisposeObservable`；Engine 的 `onBeginFrameObservable` 与
-  `onEndFrameObservable` 同样纳入；
+- 两个唯一 Observable census 常量中每个 public Observable 的有序 observer identity 与 baseline
+  byte-exact 相同；五个 Scene callback setter 以及 `.add()` / `.addOnce()` 的变更同样被拒绝；
 - Host instrumentation 在成功、rejection、throwing Build 和 cleanup 后全部恢复；
 - V1 Profile 允许的 Mesh、TransformNode、Geometry、Material、Light 和 Scene visual scalar state 仍属于
   Candidate Scene；未来新增的 Babylon-owned 纯视觉系统必须先进入唯一 Import Profile，并证明不含 Module
@@ -416,9 +436,10 @@ CLI 不复用现有 WorldPackage 的多段 exit code。Native V1 只使用 `0/1/
 CLI 只有 `<world-directory>` 输入，不能从用户 `package.json`、`tsconfig.json`、环境变量或未锁定文件暗中
 取得预算与资产。因此 BNA-2 固定以下 trusted-local check policy：
 
-- `worldkit://native-scene-profile/whitebox.standard@1` 是 CLI 唯一接受的 Profile；未知 Profile 以
-  `capability` rejection 结束；
-- 该 Profile 的本地结构预算固定为 `256` 个 Static Collider、`65_536` 个 Collider vertex 和
+- CLI 接受 `worldkit://native-scene-profile/whitebox.standard@1` 与已合入的
+  `worldkit://native-scene-profile/whitebox.blocks@1`；两者由同一个闭合 check-policy map 解析，未知
+  Profile 以 `capability` rejection 结束；
+- 两个 Profile 的本地结构 hard cap 都固定为 `256` 个 Static Collider、`65_536` 个 Collider vertex 和
   `131_072` 个 Collider triangle；它只是 BNA-2 checker hard cap，不是 Tenant entitlement、Package
   identity 或正式 Runtime budget；
 - BNA-2 CLI 不接收资产目录或 lock 参数。Module 调用 `context.assets.resolve()` 时，asset-free checker
@@ -493,8 +514,8 @@ BNA-5 的进程/Worker/Origin、资源限额、timeout/kill、网络/credential 
 
 ### 13.1 Source Admission
 
-正向：多文件静态 ESM、type-only import、`.js` -> `.ts` ESM resolution、Deep ESM Babylon、可选 Block
-Profile、default Module、async Build。
+正向：多文件静态 ESM、type-only import、`.js` -> `.ts` ESM resolution、Deep ESM Babylon、standard 与
+Block 两个已登记 Profile、default Module、async Build。
 
 负向：symlink/越界/case collision、动态 import、bare Babylon、namespace import、Host/Runtime/Havok、
 Node/DOM/network/timer/random/time、user config、class/subclass、module mutable binding、retained assignment、
@@ -502,9 +523,10 @@ observable/render-loop/action/camera/physics API、额外 runtime export、Contr
 
 ### 13.2 Authority Audit
 
-至少覆盖：active camera 替换、camera 创建、physics enable/body、ActionManager、before/after render callback、
-Scene/Engine Observable、mesh action manager、Scene dispose、Engine control、Build 返回 Handle、登记关闭后调用、
-instrumentation restoration、Audit failure 后完整 Candidate dispose。
+至少覆盖：active camera 替换、camera 创建、physics enable/body、ActionManager、五个 Scene callback setter、
+两个唯一 census 中全部 65 个 Scene / 15 个 Engine public Observable、mesh action manager、Scene dispose、
+Engine control、Build 返回 Handle、登记关闭后调用、instrumentation restoration、Audit failure 后完整
+Candidate dispose。
 
 ### 13.3 Replay 与生命周期
 

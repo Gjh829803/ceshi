@@ -98,8 +98,8 @@ Babylon Native Code 的价值是直接使用成熟引擎的完整场景表达力
 - 独特山峰、峡谷、断崖、阶梯、平台和建筑剪影；
 - 任意 Mesh 层级、程序化几何、CSG、实例、GLB 和视觉代理；
 - 材质、灯光、雾、天空、云海、粒子、动画与后处理；
-- 可直接利用 Babylon 的公开文档、示例和类型系统；具体模型生成成功率由 BNA-2/BNA-6 基准验证，
-  不以训练数据印象代替证据；
+- 可直接利用 Babylon 的公开文档、示例和类型系统；BNA-2 bake-off 只冻结工程 Import 方言，具体模型
+  生成与修复成功率由 BNA-6 独占验证，不以训练数据印象代替证据；
 - 新视觉效果无需先扩充 Schema、Compiler、IR、Adapter 和迁移器。
 
 这两种能力解决的问题不同。删除 JSON 会失去确定性、自动化与安全边界；强迫所有视觉都进入 JSON
@@ -952,8 +952,11 @@ Bootstrap 尚未解析或工具在解析前失败时，Check Result 使用
 负向用例拒绝 `passed + error`、`rejected + warnings-only` 和 `tool-error` 无 tooling Error 的组合。
 
 Asset Candidate 使用 source-neutral 资产设计中独立的 Asset Production/Admission/Publication Result，不扩张
-`NativeSceneCheckResultV1.checkedInput` 来同时承担 Asset 和 Module 身份。Native Check 只校验 Package
-中已发布、已锁定的 Asset Resource/Admission/Publication Receipt 与 Module 消费关系；缺失资源使用
+`NativeSceneCheckResultV1.checkedInput` 来同时承担 Asset 和 Module 身份。BNA-2 的
+`worldkit native check <world-directory>` 是 workspace/module 检查且明确 asset-free；任何
+`context.assets.resolve()` 都 fail-closed，它不校验尚不存在的 Package/Receipt。BNA-3 才定义独立的
+Package/Asset admission 入口，校验 Package 中已发布、已锁定的 Asset Resource/Admission/Publication
+Receipt 与 Module 消费关系；该入口不得复用 BNA-2 CLI 名称来形成同名双语义。缺失资源使用
 `location.kind: "asset-resource"`，三者 identity 不一致使用 `location.kind: "asset-lock"`。Rejected 或
 tool-error 的 Asset Result 发生在 Package 之前，必须原样由 APA 工具返回，不能为了塞进 Native Diagnostic
 伪造不存在的 Resource Ref，也不能复制其 stage、code、measurement 或 Provider details 为另一套字段。
