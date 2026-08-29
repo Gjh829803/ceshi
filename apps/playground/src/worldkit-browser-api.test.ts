@@ -1915,6 +1915,52 @@ describe("installDeferredWorldkitBrowserApi", () => {
     expect(adapter.disposeCount).toBe(1);
   });
 
+  it("pauses simulation before mount and resumes only after the ready snapshot", async () => {
+    const pageSetup = deferred<void>();
+    const events: string[] = [];
+    const snapshot = snapshotFixture();
+    const adapter = Object.assign(adapterFixture(), {
+      configureVisualCaptureGroups() {
+        events.push("configure");
+        return [];
+      },
+      setPaused(paused: boolean) {
+        events.push(paused ? "pause" : "unpause");
+      },
+      mount() {
+        events.push("mount");
+      },
+      render() {
+        events.push("render");
+      },
+      runtimeSnapshot() {
+        events.push("snapshot");
+        return snapshot;
+      },
+    });
+    const installation = installDeferredWorldkitBrowserApi({
+      target: {},
+      statusElement: { dataset: {} },
+      readyBarrier: pageSetup.promise,
+      initialize: async ({ trackAdapter }) => initializePlaygroundAdapterV1<
+        typeof adapter
+      >({
+        adapter,
+        visualCaptureGroups: [],
+        viewport: {} as HTMLElement,
+        trackAdapter,
+        setStartupStage: () => undefined,
+      }),
+    });
+
+    await Promise.resolve();
+    expect(events).toEqual(["pause", "mount", "render"]);
+
+    pageSetup.resolve();
+    await expect(installation.api.ready()).resolves.toEqual(snapshot);
+    expect(events).toEqual(["pause", "mount", "render", "snapshot", "unpause"]);
+  });
+
   it("owns the playground Adapter before visual target configuration can fail", async () => {
     const adapter = Object.assign(adapterFixture(), {
       configureVisualCaptureGroups: () => {

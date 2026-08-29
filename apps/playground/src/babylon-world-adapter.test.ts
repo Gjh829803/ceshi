@@ -815,6 +815,21 @@ describe("BabylonWorldAdapter frame loop", () => {
     await expect(yawAfterOneSecondAt(120)).resolves.toBeCloseTo(1.3625, 10);
   });
 
+  it("pauses simulation while replacing the World Session on reset", async () => {
+    const { adapter, runtime, setCoordinatorPaused } = createAdapterProbe();
+    let pausedWhileReplacing = false;
+    runtime.reset.mockImplementation(() => {
+      pausedWhileReplacing = adapter.isPaused();
+      return runtimeSnapshot(0);
+    });
+
+    await adapter.resetRuntime();
+
+    expect(pausedWhileReplacing).toBe(true);
+    expect(adapter.isPaused()).toBe(false);
+    expect(setCoordinatorPaused.mock.calls).toEqual([[true], [false]]);
+  });
+
   it("clears held movement and keyboard camera inertia across a protocol reset", async () => {
     const { adapter, runtime } = createAdapterProbe();
     await adapter.runFixedInput([{

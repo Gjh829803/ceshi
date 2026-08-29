@@ -1240,6 +1240,7 @@ export function installDeferredWorldkitBrowserApi(options: {
     .then(async (adapter) => {
       await options.readyBarrier;
       const snapshot = adapter.runtimeSnapshot();
+      adapter.setPaused(false);
       state = "ready";
       options.statusElement.dataset.worldkitStatus = "ready";
       resolveReady(snapshot);
