@@ -1915,6 +1915,69 @@ describe("installDeferredWorldkitBrowserApi", () => {
     expect(adapter.disposeCount).toBe(1);
   });
 
+  it("pauses simulation before mount and publishes the resumed ready state", async () => {
+    const pageSetup = deferred<void>();
+    const events: string[] = [];
+    const initialSnapshot = snapshotFixture();
+    let paused = false;
+    const adapter = Object.assign(adapterFixture(), {
+      configureVisualCaptureGroups() {
+        events.push("configure");
+        return [];
+      },
+      setPaused(nextPaused: boolean) {
+        paused = nextPaused;
+        events.push(nextPaused ? "pause" : "unpause");
+      },
+      mount() {
+        events.push("mount");
+      },
+      render() {
+        events.push("render");
+      },
+      runtimeSnapshot() {
+        events.push("snapshot");
+        return {
+          ...initialSnapshot,
+          runtime: {
+            ...initialSnapshot.runtime,
+            isPaused: paused,
+          },
+        };
+      },
+    });
+    const installation = installDeferredWorldkitBrowserApi({
+      target: {},
+      statusElement: { dataset: {} },
+      readyBarrier: pageSetup.promise,
+      initialize: async ({ trackAdapter }) => initializePlaygroundAdapterV1<
+        typeof adapter
+      >({
+        adapter,
+        visualCaptureGroups: [],
+        viewport: {} as HTMLElement,
+        trackAdapter,
+        setStartupStage: () => undefined,
+      }),
+    });
+
+    await Promise.resolve();
+    expect(events).toEqual(["pause", "mount", "render"]);
+
+    pageSetup.resolve();
+    const readySnapshot = await installation.api.ready();
+    expect(readySnapshot.runtime.isPaused).toBe(false);
+    expect(adapter.runtimeSnapshot().runtime.isPaused).toBe(false);
+    expect(events).toEqual([
+      "pause",
+      "mount",
+      "render",
+      "unpause",
+      "snapshot",
+      "snapshot",
+    ]);
+  });
+
   it("owns the playground Adapter before visual target configuration can fail", async () => {
     const adapter = Object.assign(adapterFixture(), {
       configureVisualCaptureGroups: () => {
