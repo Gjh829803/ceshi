@@ -428,6 +428,8 @@ Use the TypeScript compiler API and assert exact diagnostic codes for:
 - bare `@babylonjs/core`, namespace import, `/host`, Runtime, Havok, Compiler, Authoring, Camera, Character Movement, Three.js, Node built-ins, URL imports, CommonJS, and dynamic import;
 - unresolved local dependency and re-export;
 - aliased dangerous dependency through re-export;
+- `doNotAdd`/等价跳过 Scene 登记的构造路径，以及手工 Scene add/remove Mesh、TransformNode、Material、Light、
+  Geometry collection 调用；
 - local Build variables accepted while top-level mutable state is rejected.
 
 Run:
@@ -456,6 +458,8 @@ Use TypeChecker symbol/scope analysis to reject:
   TypeChecker-resolved Babylon `Observable`, regardless of property spelling or owning type;
 - every method in `BABYLON_NATIVE_FORBIDDEN_SCENE_CALLBACK_METHOD_KEYS_V1`, including
   ready/once/freeze/render-order/external-data retention in addition to before/after render;
+- every constructor option/overload that skips Candidate Scene registration, and every manual Scene
+  add/remove Mesh, TransformNode, Material, Light, or Geometry collection method;
 - every user class/subclass;
 - module-scope `let`/`var`, mutable container construction, writes/calls mutating a module-scope binding, and Build assignments that retain Context/Scene/Engine/Mesh/Registration outside Build scope;
 - any `return` with an expression inside `build` and any extra Runtime export.
@@ -728,10 +732,16 @@ Programmatic Modules must attempt and be rejected for:
 - adding/removing/replacing
   `scene.imageProcessingConfiguration.onUpdateParameters` or replacing the containing
   `ImageProcessingConfiguration` identity;
+- adding/removing/replacing `scene.postProcessManager.onBeforeRenderObservable` or replacing the
+  containing `PostProcessManager` identity;
 - disposing Scene or Engine;
 - catching the instrumentation error and otherwise completing a valid Build.
 
 Also assert allowed Mesh, TransformNode, Geometry, Material, Light, fog/clearColor visual state passes.
+An exact `StandardMaterial` construction must be a positive regression: its one Babylon-owned
+`ImageProcessingConfiguration` observer and non-null provider `getRenderTargetTextures` function
+must pass. A second observer, a replacement direct function, a missing/reordered provider observer,
+or a PostProcessManager mutation must fail.
 
 Run:
 
@@ -760,18 +770,40 @@ Capture only public values/identities:
   `Material.OnEventObservable`;
 - object/Observable identity and `observers.slice()` for every path in
   `BABYLON_NATIVE_AUDITED_NESTED_AUTHORITY_SURFACES_V1`, currently exactly
-  `scene.imageProcessingConfiguration.onUpdateParameters`;
+  `scene.imageProcessingConfiguration.onUpdateParameters` and
+  `scene.postProcessManager.onBeforeRenderObservable`;
 - original own-property descriptors for instrumented methods.
 
-After Build, enumerate every Candidate-owned object through public Scene collections and
-registration references. Apply the single inherited surface map in
+Before Build, subscribe temporary Host observers to Scene's public new-Mesh, new-TransformNode,
+new-Material, new-Light, and new-Geometry Observables. When an object is exposed, apply the single
+inherited surface map in
 `BABYLON_NATIVE_AUDITED_CREATED_OBJECT_CALLBACK_SURFACES_V1`; every Observable observer
-snapshot, callback setter backing Observable, and Behavior/retained-object collection on a
-new object must contain zero Module closures; every direct callback property must satisfy
-`isNil`. The exact Babylon 9.23.0 map includes the
+snapshot, callback setter backing Observable, direct callback identity, and Behavior/retained-object
+collection is captured as its provider baseline, and restorable per-instance direct-callback accessors
+are installed before Module code regains control. The exact Babylon 9.23.0 map includes the
 Node, TransformNode, AbstractMesh, Mesh, Material/StandardMaterial, and Light surfaces in
 the approved design; Geometry has the direct `onGeometryUpdated` callback while Buffer and
 concrete Light types must have an explicit empty increment rather than being silently omitted.
+
+Instrument the public `scene.imageProcessingConfiguration.onUpdateParameters.add` during Build.
+Babylon exposes a `StandardMaterial` from its base constructor before the subclass finishes; allow
+exactly one synchronous provider add for each just-exposed exact `StandardMaterial`, record the
+returned public `Observer` identity, then require exactly one provider assignment of
+`getRenderTargetTextures` to close that construction window. At Build settlement, the nested observer
+list must equal baseline plus the recorded live provider observers in encounter order, and the direct
+function must equal the recorded provider identity. Reject any extra, missing, reordered, late, or
+Module-owned transition. `scene.postProcessManager.onBeforeRenderObservable` remains byte-exact to
+baseline. Do not read `_imageProcessingConfiguration`, `_imageProcessingObserver`, or any other
+private field. Encode this as the single Host-owned
+`BABYLON_NATIVE_ALLOWED_PROVIDER_CALLBACK_TRANSITIONS_V1` machine list; Babylon 9.23.0 has exactly
+this one entry and no anonymous provider exception. If public instrumentation cannot classify the
+exact sequence, reject fail-closed.
+
+After Build, enumerate every Candidate-owned object through public Scene collections and registration
+references. Require its callback surfaces to equal the captured provider identities/order and contain
+no Module closure; Behavior/retained-object collections remain empty. In `finally`, remove all Host
+new-object observers and restore every accessor/method descriptor before comparing the original
+Scene/Engine/static baselines.
 
 Install instance wrappers for all
 `BABYLON_NATIVE_FORBIDDEN_SCENE_CALLBACK_METHOD_KEYS_V1` members plus
@@ -793,7 +825,7 @@ The census fixture must import the exact 12-specifier Module Profile into one Ty
 Program and extract the effective, inherited/module-augmented instance and static public
 surface for Scene, AbstractEngine, Node, TransformNode, AbstractMesh, Mesh, Material,
 StandardMaterial, Geometry, Buffer, all three allowed Light types, and the nested
-ImageProcessingConfiguration surface. It must also
+ImageProcessingConfiguration and PostProcessManager surfaces. It must also
 instantiate the Host-private NullEngine/Scene and one minimal object of every constructible
 type after loading that same import graph, then compare runtime Observable identities,
 callback setters, direct function-valued properties, Behavior/retained-object collections,
@@ -801,12 +833,17 @@ static globals, callback-property keys, and instrumented method descriptors with
 side effects and module augmentations; scanning the entire unimported Babylon package or
 only `scene.pure.d.ts` is not accepted as the sole evidence.
 
+Add a source-backed provider-order test that freezes the legal Babylon 9.23.0 `StandardMaterial`
+constructor sequence described above. It must fail when an upgrade changes exposure/add/assignment
+order so the Host cannot silently relabel an unknown callback as provider-owned.
+
 Add a cycle-safe Host-boundary runtime discovery test over the pre-Build Candidate's public
 Babylon-owned object graph. It must compare every discovered nested Observable or direct
 function-valued callback path with
 `BABYLON_NATIVE_AUDITED_NESTED_AUTHORITY_SURFACES_V1`; the current exact extra path is
-`scene.imageProcessingConfiguration.onUpdateParameters`. Do not merge this nested path
-into the 65 direct Scene keys or silently stop traversal at `imageProcessingConfiguration`.
+`scene.imageProcessingConfiguration.onUpdateParameters` plus
+`scene.postProcessManager.onBeforeRenderObservable`. Do not merge these nested paths
+into the 65 direct Scene keys or silently stop traversal at either containing object.
 
 - [ ] **Step 5: Integrate audit around the entire Build Epoch**
 

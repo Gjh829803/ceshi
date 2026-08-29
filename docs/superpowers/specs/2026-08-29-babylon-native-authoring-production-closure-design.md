@@ -389,34 +389,54 @@ exact 包含：
 - `Material`/`StandardMaterial`：`onDisposeObservable`、`onBindObservable`、`onUnBindObservable`、
   `onEffectCreatedObservable`，`onDispose` / `onBind` setter，以及必须在 Build 前后保持 identity 与 observer
   顺序不变的 static `Material.OnEventObservable`；direct callback properties `customShaderNameResolve`、
-  `onCompiled`、`onError`、`getRenderTargetTextures` 必须为 nullish；
+  `onCompiled`、`onError`、`getRenderTargetTextures` 必须等于 Host 在 provider 构造期记录的 exact identity；
 - `Light` 继承 `Node` 的完整面，三个允许的 Light concrete types 当前没有额外 callback surface，exact
   census 必须明确记录空增量；Geometry 的 direct callback property `onGeometryUpdated` 必须为 nullish，
   Buffer 当前仍是空增量。
 
-Build 前，Host 对 Scene、Engine 和 provider static/global surface 做 baseline；Build 后，对 Candidate Scene
-公开 collections 中每个新建 Node/Mesh/TransformNode/Material/Light/Geometry，以及登记所引用的对象，按其
-有效继承类型逐项验证：所有 callback Observable 的 `observers.slice()` 为空、setter-backed Observable
-没有 Module observer、上述 direct callback properties 全部由 `isNil` 判空、Behavior/retained-object
-collection 为空。新对象没有 pre-Build identity 可比较，
-因此要求“无 Module closure”的零基线；预存在的 Scene/Engine/static surface 才做前后 identity/order
-byte-exact 比较。Source Admission 仍负责拒绝 Build 内瞬时 add/remove/retention，运行时 Audit 负责拒绝任何
-残留；两者不能互相替代。
+Build 前，Host 对 Scene、Engine 和 provider static/global surface 做 baseline，并在 Scene 的公开
+`onNewMeshAddedObservable`、`onNewTransformNodeAddedObservable`、`onNewMaterialAddedObservable`、
+`onNewLightAddedObservable`、`onNewGeometryAddedObservable` 上安装临时 Host observer。对象一暴露给 Scene，
+Host 就按有效继承类型记录其公开 callback Observable、setter-backed Observable、direct callback property、
+Behavior/retained-object collection 的 provider-owned 初始 identity/order，并在实例上安装可恢复的 direct
+callback accessor probe；不等到 Build 返回后才猜测初值。Host instrumentation observer 不属于 Module，
+且必须在 `finally` 移除并恢复原 descriptor，恢复后 Scene/Engine/static surface 仍须与原 baseline exact 相等。
+
+普通新对象的 Build-end callback 面必须与记录的 provider baseline exact 相等且没有 Module closure。
+Host-owned `BABYLON_NATIVE_ALLOWED_PROVIDER_CALLBACK_TRANSITIONS_V1` 是唯一允许的构造期变化机器清单；
+Babylon 9.23.0 当前 exact 只有 `StandardMaterial` 这一条：`Material` 基类先把实例暴露给 Scene，
+随后 `StandardMaterial` 构造器会通过 `_attachImageProcessingConfiguration(null)` 在共享的
+`scene.imageProcessingConfiguration.onUpdateParameters` 上增加一个 provider observer，并把
+`getRenderTargetTextures` 从 nullish 赋为 provider function。因此 Audit 只允许每个刚暴露的 exact
+`StandardMaterial` 出现一次、按该安装顺序发生的 provider observer add 和一次
+`getRenderTargetTextures` identity transition；记录 `Observable.add()` 返回的公开 `Observer` identity 和
+最终公开 function identity。任何额外、缺失、重排、后续替换或无法归属到该同步构造窗口的变化都拒绝。
+不得读取 `_imageProcessingConfiguration`、`_imageProcessingObserver` 或其他私有字段。
+
+Source Admission 按 TypeChecker symbol 拒绝 Module 对上述 direct callback/Observable 的赋值和调用，并拒绝
+使用 `doNotAdd`/等价跳过 Scene 登记的构造路径，以及手工调用 Scene 的 add/remove Mesh、TransformNode、
+Material、Light、Geometry collection API；这样 Module 不能先在 Host 观察不到的对象上安装 callback 再手工
+加入 Candidate。运行时 probe 负责核实 provider identity 与残留状态；两者不能互相替代。
 
 Host-owned nested object 另有一个唯一机器清单
 `BABYLON_NATIVE_AUDITED_NESTED_AUTHORITY_SURFACES_V1`。在 Babylon 9.23.0 的冻结 Candidate factory 与
-12-specifier 图上，它 exact 包含
-`scene.imageProcessingConfiguration.onUpdateParameters`：Scene 构造时已创建该
-`ImageProcessingConfiguration` 与 Observable，后续图像处理参数变化会通知它。Build 前后必须同时比较
-`imageProcessingConfiguration` object identity、`onUpdateParameters` Observable identity 与
-`observers.slice()` 有序副本。它不伪装成 Scene 自身 65 个 Observable 之一。有效 TypeScript Program
-声明扫描与 cycle-safe、Host-boundary runtime discovery test 必须证明没有第二个未登记的预建 nested
-Observable/function callback surface；未来新增时先使 census 失败，再 current-only 更新唯一清单与 Audit。
+12-specifier 图上 exact 包含两个路径：
+
+- `scene.imageProcessingConfiguration.onUpdateParameters`：object/Observable identity 必须不变，最终 observer
+  list 必须等于原 baseline 加上前述按构造顺序记录的 live `StandardMaterial` provider observers；
+- `scene.postProcessManager.onBeforeRenderObservable`：`PostProcessManager` object、Observable identity 与
+  `observers.slice()` 有序副本必须和 Build 前 baseline exact 相等，不允许 provider delta。
+
+二者都不伪装成 Scene 自身 65 个 Observable 之一。有效 TypeScript Program 声明扫描与 cycle-safe、
+Host-boundary runtime discovery test 必须证明没有第三个未登记的预建 nested Observable/function callback
+surface；未来新增时先使 census 失败，再 current-only 更新 nested 清单、
+`BABYLON_NATIVE_ALLOWED_PROVIDER_CALLBACK_TRANSITIONS_V1` 与 Audit，不接受匿名 provider 例外。
 
 声明/源码清单之外还必须有一条冻结导入图复验：测试按唯一 Deep ESM Import Profile 创建同一个
 TypeScript Program，并从该 Program 的有效 `Scene`、`AbstractEngine`、`Node`、`TransformNode`、
 `AbstractMesh`、`Mesh`、`Material`、`StandardMaterial`、`Geometry`、`Buffer` 和允许 Light symbols 提取
-`ImageProcessingConfiguration` 以及继承/module augmentation 后的 instance/static/nested public surface；
+`ImageProcessingConfiguration`、`PostProcessManager` 以及继承/module augmentation 后的
+instance/static/nested public surface；
 随后在相同 12-specifier 运行时导入图上
 创建 Host-private NullEngine/Scene 和每类最小对象，比较实际 Observable、callback setter、direct
 function-valued property、Behavior/retained-object collection、static global 与被 wrapper 的 method
@@ -452,9 +472,11 @@ Audit 至少验证：
   Observable mutation/control 同样被拒绝；
 - 17 个 Scene callback function property identity 与 baseline 相同，十个 retained callback/object method
   没有被调用；
-- created-object callback surface census 全部为零 Module observer/non-nullish direct callback/Behavior，provider static/global
-  Observable 与 baseline identity/order 相同；
-- nested authority surface 清单中 object/Observable identity 与 observer order 全部保持 baseline；
+- created-object callback surface census 没有 Module observer、Module direct callback 或 Behavior；direct callback
+  identity 与 Host 记录的 provider baseline/允许 transition 相同，provider static/global Observable 与 baseline
+  identity/order 相同；
+- nested authority surface 清单中 object/Observable identity 均不变；PostProcessManager observer order 与 baseline
+  exact 相同，ImageProcessingConfiguration observer order 只包含 baseline 加已记录 StandardMaterial provider delta；
 - Host instrumentation 在成功、rejection、throwing Build 和 cleanup 后全部恢复；
 - V1 Profile 允许的 Mesh、TransformNode、Geometry、Material、Light 和 Scene visual scalar state 仍属于
   Candidate Scene；未来新增的 Babylon-owned 纯视觉系统必须先进入唯一 Import Profile，并证明不含 Module
