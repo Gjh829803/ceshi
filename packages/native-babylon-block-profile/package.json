@@ -1,0 +1,13 @@
+{
+  "name": "@whitebox-world/native-babylon-block-profile",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@babylonjs/core": "9.23.0",
+    "@whitebox-world/native-babylon": "workspace:*"
+  }
+}

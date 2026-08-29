@@ -103,11 +103,11 @@ git commit -m "docs: plan native Babylon block profile foundation"
 - Produces `BABYLON_NATIVE_BLOCK_PROFILE_REF_V1`, `BABYLON_NATIVE_BLOCK_FULL_SIZE_METERS_V1`, `BABYLON_NATIVE_BLOCK_MICRO_GRID_METERS_V1`, `BABYLON_NATIVE_BLOCK_CENTER_LATTICE_METERS_V1`, `BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1`, `BabylonNativeBlockShapeKindV1`, `BabylonNativeBlockPaletteRoleV1`, and pure package-local shape/lattice mechanics.
 - The public palette-role union is exactly `ground | route | structure | hazard | water-like-visual | background-mass`.
 
-- [ ] **Step 1: Write package-boundary and shape RED tests**
+- [x] **Step 1: Write package-boundary and shape RED tests**
 
 Assert the exact package name, exact direct dependencies, one `.` export, Deep ESM imports only, no Host/Runtime/Havok/Compiler/Three/DOM/Node/network dependency, and no production identifier containing `Manifest`, `Compiler`, `Preset`, `serialize`, `createMountain`, `createBuilding`, or `createLevel`. Assert all four dimensions, rotated `quarter` dimensions, valid/invalid center-lattice placements, occupied micro-cell keys, and signed-zero canonicalization at evidence publication.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```bash
 pnpm vitest run packages/native-babylon-block-profile/src/package-boundary.test.ts packages/native-babylon-block-profile/src/shapes.test.ts
@@ -115,11 +115,11 @@ pnpm vitest run packages/native-babylon-block-profile/src/package-boundary.test.
 
 Expected: FAIL because the package does not exist.
 
-- [ ] **Step 3: Implement the minimal package and pure mechanics**
+- [x] **Step 3: Implement the minimal package and pure mechanics**
 
 Keep occupancy and bounds types package-local. Public exports contain only the fixed Profile facts and the session/report API introduced by later tasks; do not export a block array or a generic scene document.
 
-- [ ] **Step 4: Update lock/test census, verify GREEN, and commit**
+- [x] **Step 4: Update lock/test census, verify GREEN, and commit**
 
 ```bash
 pnpm install --lockfile-only

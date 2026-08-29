@@ -412,6 +412,15 @@ importers:
         specifier: workspace:*
         version: link:../runtime-contracts
 
+  packages/native-babylon-block-profile:
+    dependencies:
+      '@babylonjs/core':
+        specifier: 9.23.0
+        version: 9.23.0
+      '@whitebox-world/native-babylon':
+        specifier: workspace:*
+        version: link:../native-babylon
+
   packages/protocol:
     dependencies:
       '@noble/hashes':
