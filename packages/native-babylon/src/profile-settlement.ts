@@ -212,6 +212,7 @@ function fingerprintTarget(
 ): TargetFingerprintV1 {
   try {
     if (
+      Reflect.getPrototypeOf(mesh) !== Mesh.prototype ||
       mesh.isDisposed() ||
       mesh.getScene() !== context.scene ||
       !isNil(mesh.parent) ||

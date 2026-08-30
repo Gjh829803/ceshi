@@ -1,5 +1,6 @@
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
+import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
 import { Scene } from "@babylonjs/core/scene.js";
 import { describe, expect, it } from "vitest";
@@ -211,6 +212,17 @@ describe("Host-private Babylon Native Profile settlement", () => {
   });
 
   it.each([
+    ["subclassed", (scene: Scene) => {
+      const mesh = new (class extends Mesh {})("subclassed", scene);
+      const source = MeshBuilder.CreateBox("subclass-source", { size: 1 }, scene);
+      mesh.setVerticesData(
+        VertexBuffer.PositionKind,
+        source.getVerticesData(VertexBuffer.PositionKind)!,
+      );
+      mesh.setIndices(source.getIndices()!);
+      source.dispose();
+      return mesh;
+    }],
     ["foreign", (scene: Scene) => {
       const foreignEngine = new NullEngine();
       const foreignScene = new Scene(foreignEngine);
