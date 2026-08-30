@@ -266,6 +266,10 @@ export function createBabylonNativeWorldPackageTestInputV1(
     schemaVersion: 1 as const,
     sceneModuleRef,
     sceneModuleId: "package-fixture-module",
+    profileSettlement: Object.freeze({
+      kind: "none" as const,
+      profileRef: nativeSceneProfile.resourceRef,
+    }),
     spawnMarker: Object.freeze({
       id: nativeSceneBootstrap.spawnMarkerId,
       positionMetersXYZ: [0, 0, 0] as const,
