@@ -1,11 +1,12 @@
 # BNA-3 Native Package / Receipt 实现审查
 
 - 日期：2026-08-30
-- 模式：实现候选自审；等待 exact-SHA Cursor Cloud Mode B + runtime-deep 独立复核
+- 模式：实现候选自审 + exact-SHA Cursor Cloud 全量门禁 + Mode B/runtime-deep 独立复核
 - 实现基线：`origin/main@620cabf6b81ecf60b3fc1bf0ac86501f79421b04`
-- 当前实现 tip：`36df06b`（候选文档提交之前）
+- 最终产品 SHA：`9fe9e6e3b78b894fdb9089e6e8e718537f7675f2`
+- 主干合入 SHA：`2fd8c1c2694a861e213ad2c72e9cb3aefec087ce`（PR #56）
 - 范围：BNA3-00、10、20、30、40、50、60；不包含 BNA-4 Runtime/Havok admission
-- 当前裁决：**LOCAL GO / CLOUD PENDING**
+- 当前裁决：**GO；BNA-3 完成，BNA-4 继续保持 fail-closed**
 
 ## 1. 当前结论
 
@@ -76,11 +77,30 @@ RuntimeHost 目前只接受 verified Native Package 投影出的 Bootstrap/Bundl
 门禁过程中曾发现两项并已在候选中修复：BNA-1 allowlist 漏登记已经存在的 Alpha split-jump evidence；
 Native 测试 fixture 曾直接跨包引用私有源码，现已统一经 `@whitebox-world/world-package/testing`。
 
-## 3. 开放风险与下一 Gate
+## 3. Exact-SHA Cloud 证据与最终裁决
 
-当前没有已知未解决的本地 P0/P1/P2，但 **BNA-3 尚未完成**。必须把包含本文的精确候选 SHA 推送，
-分别交给 Cursor Cloud 执行全量门禁和独立 Mode B + runtime-deep 审查。任何产品代码修复都使旧 GO
-失效并需要新 SHA；仅审查结果、链接和 Backlog 真相更新可按文档门禁处理。
+最终候选 `9fe9e6e3b78b894fdb9089e6e8e718537f7675f2` 在推送后交给两个相互独立的 Cursor Cloud Agent，
+没有复用较早 SHA 的 GO：
 
-Cloud GO 后才可创建 PR、合入 `main`，并把 BNA-3 标记完成。下一项产品开发只能是 BNA-4 或依赖
-BNA-3 的 BWB-3，不能在本候选中提前删除 RuntimeHost capability rejection。
+| 责任 | Agent / Run | 结果 |
+| --- | --- | --- |
+| 全量门禁 | `bc-40e063a1-0a5c-4d76-93dd-72e39d69425d` / `run-93155bef-681e-423f-a1de-f557c613474f` | GO；安装、自检 bundle、TypeScript、Studio、Independent、整仓测试、两套 Build、BNA clean-break、workspace boundary 和 clean tree 全部通过 |
+| Mode B + runtime-deep 独立审查 | `bc-ea3897a1-c50f-43a7-9b32-94844dcb3751` / `run-9bcb5d9c-11ec-46fb-aafd-10bb03f46325` | GO；无 P0/P1/P2；正式 Native Runtime/Havok 仍按 BNA-4 边界 fail-closed |
+
+全量门禁的整仓测试 census 为 333 个文件：297 个 contract、36 个 resource-heavy；contract 为
+3609 pass / 3 skip，resource-heavy 为 559 pass。Cloud 独立审查复验了 Package Directory 8/8 和
+Simulation Take identity golden 1/1。
+
+候选期间独立复核发现一个 P2：Canonical Package 在省略 `authoring-spec.json` 时，verifier 没有把
+`sceneSource.authoringSpecHash` 与解析后的 `executionPlan.authoringSpecHash` 绑定。最终 SHA 已加入
+自洽伪造 Root 的 RED 回归，并在唯一 verifier 边界修复；修复后的 Package Directory、Simulation Take、
+TypeScript、自检 bundle parity 与 clean-tree 证据重新通过。该 P2 已关闭，没有遗留兼容路径。
+
+PR #56 已合入 `main`，`9fe9e6e3b78b894fdb9089e6e8e718537f7675f2` 是
+`origin/main@2fd8c1c2694a861e213ad2c72e9cb3aefec087ce` 的祖先。BNA-3 因此完成。下一项允许移除
+正式 Native capability rejection 的工作只有 BNA-4；BNA-3 不声称 Native 已可玩、拥有 Havok admission
+或已通过 Hosted/Route 生产 Gate。
+
+独立审查仅记录非阻断 P3 线索：transport metadata 常量与目录拒绝规则可进一步合并、Bundle chunk
+能力与单文件 builder policy 可收紧、RuntimeHost bundle-ref 格式检查可复用唯一 parser、Host 错误保真和
+候选审查文档指针可改善。BNA-4 只处理与其单一 Runtime/生命周期边界直接相关的项，不借机扩张范围。
