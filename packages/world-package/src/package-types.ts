@@ -1,10 +1,21 @@
 import type { GameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
 import type { Sha256HashV1 } from "@whitebox-world/protocol";
 import type {
+  BabylonNativeAssetLockV1,
+  BabylonNativeDependencyLockV1,
+  BabylonNativeSceneBootstrapV1,
+  BabylonNativeSceneContributionV1,
+  BabylonNativeSceneModuleBundleManifestV1,
+  NativeSceneCheckResultV1,
   WorldResourceLockEntryV1,
   CanonicalSceneExecutionPlanV1,
   WorldRuntimeBootstrapV1,
 } from "@whitebox-world/runtime-contracts";
+import type {
+  SceneAuthoringAttemptResultV1,
+  SceneAuthoringAttemptV1,
+  SceneAuthoringRouteDecisionV1,
+} from "@whitebox-world/scene-authoring-contracts";
 import type {
   WorldBuildIdentityV1,
   WorldPackageRefV1,
@@ -206,8 +217,38 @@ export type CanonicalWorldPackageBuildReceiptV1 = Omit<
   readonly manifest: CanonicalWorldPackageManifestV1;
 }>;
 
+export type BabylonNativeWorldPackageManifestV1 = Omit<
+  WorldPackageManifestV1,
+  "sceneSource"
+> & Readonly<{
+  readonly sceneSource: BabylonNativeWorldPackageSceneSourceV1;
+}>;
+
+export type BabylonNativeWorldPackageBuildReceiptV1 = Omit<
+  WorldPackageBuildReceiptV1,
+  "manifest"
+> & Readonly<{
+  readonly manifest: BabylonNativeWorldPackageManifestV1;
+}>;
+
 export interface CanonicalWorldPackageGameplayBootstrapMembershipInputV1 {
   readonly canonicalSceneExecutionPlan: CanonicalSceneExecutionPlanV1;
+  readonly gameplayBootstrap: GameplayBootstrapV1;
+  readonly worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
+  readonly worldPackageBuildReceipt: WorldPackageBuildReceiptV1;
+}
+
+export interface BabylonNativeWorldPackageMembershipInputV1 {
+  readonly nativeSceneBootstrap: BabylonNativeSceneBootstrapV1;
+  readonly sceneModuleBundleManifest:
+    BabylonNativeSceneModuleBundleManifestV1;
+  readonly dependencyLock: BabylonNativeDependencyLockV1;
+  readonly assetLock: BabylonNativeAssetLockV1;
+  readonly sceneAuthoringRouteDecision: SceneAuthoringRouteDecisionV1;
+  readonly sceneAuthoringAttempt: SceneAuthoringAttemptV1;
+  readonly sceneAuthoringAttemptResult: SceneAuthoringAttemptResultV1;
+  readonly nativeSceneCheckResult: NativeSceneCheckResultV1;
+  readonly nativeSceneContribution: BabylonNativeSceneContributionV1;
   readonly gameplayBootstrap: GameplayBootstrapV1;
   readonly worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
   readonly worldPackageBuildReceipt: WorldPackageBuildReceiptV1;

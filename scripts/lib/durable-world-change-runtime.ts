@@ -13,7 +13,7 @@ import type {
 import type { WorldRuntimeSnapshotV4 } from "@whitebox-world/runtime-contracts";
 import type { PublishWorldReplacementResultV1 } from "@whitebox-world/runtime-host";
 import {
-  type VerifiedWorldPackageDirectoryV1,
+  type VerifiedCanonicalWorldPackageDirectoryV1,
   type WorldPackageStoreV1,
 } from "@whitebox-world/world-package";
 import { isEqual, isNil } from "lodash-es";
@@ -58,7 +58,7 @@ function identityFor(
 
 function verifiedConfigurationMatches(
   configuration: TrustedRuntimeWorldConfigurationV1,
-  directory: VerifiedWorldPackageDirectoryV1,
+  directory: VerifiedCanonicalWorldPackageDirectoryV1,
 ): boolean {
   const rootHash = directory.receipt.worldPackageRootHash;
   return configuration.worldBuildIdentity.worldPackageRef ===
@@ -124,6 +124,7 @@ class DurableWorldChangeRuntimeOwner implements DurableWorldChangeRuntimeOwnerV1
     );
     if (
       isNil(directory) ||
+      directory.kind !== "canonical-execution-plan" ||
       !verifiedConfigurationMatches(input.worldConfiguration, directory)
     ) {
       return Object.freeze({
@@ -181,6 +182,7 @@ class DurableWorldChangeRuntimeOwner implements DurableWorldChangeRuntimeOwnerV1
           );
           if (
             isNil(directory) ||
+            directory.kind !== "canonical-execution-plan" ||
             !verifiedConfigurationMatches(input.worldConfiguration, directory)
           ) {
             return Object.freeze({
@@ -270,7 +272,7 @@ export async function createDurableWorldChangeRuntimeOwnerV1(input: {
   readonly runtimeSessionId: string;
   readonly initialWorldSessionId: string;
   readonly initialWorldConfiguration: TrustedRuntimeWorldConfigurationV1;
-  readonly initialVerifiedDirectory: VerifiedWorldPackageDirectoryV1;
+  readonly initialVerifiedDirectory: VerifiedCanonicalWorldPackageDirectoryV1;
   readonly worldPackageStore: WorldPackageStoreV1;
 }): Promise<DurableWorldChangeRuntimeOwnerV1> {
   if (

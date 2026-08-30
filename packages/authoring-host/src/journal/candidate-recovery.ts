@@ -131,6 +131,9 @@ export async function rehydratePreparedCandidateForRecoveryV1(input: {
   if (isNil(verifiedDirectory)) {
     invalidRecovery("The immutable Package is missing.");
   }
+  if (verifiedDirectory.kind !== "canonical-execution-plan") {
+    invalidRecovery("WorldChange recovery requires a Canonical WorldPackage.");
+  }
   const receipt = verifiedDirectory.receipt;
   if (
     receipt.manifest.worldId !== record.request.worldId ||

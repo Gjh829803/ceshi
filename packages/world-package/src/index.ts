@@ -1,6 +1,7 @@
 export {
   assertWorldPackageAccessorFreeDataGraphV1,
   assertWorldPackageBuildReceiptV1,
+  assertBabylonNativeWorldPackageMembershipV1,
   assertCanonicalWorldPackageGameplayBootstrapMembershipV1,
   assertWorldPackageHostCompatibilityV1,
   canonicalizeWorldPackageFileIntegrityEntriesV1,
@@ -12,7 +13,10 @@ export {
   worldPackageSignatureEnvelopeBytesV1,
 } from "./package-contract.js";
 export { assembleWorldPackageDirectoryV1, verifyWorldPackageDirectoryV1 } from "./package-directory.js";
-export { createCanonicalWorldPackageV1 } from "./package-build.js";
+export {
+  createBabylonNativeWorldPackageV1,
+  createCanonicalWorldPackageV1,
+} from "./package-build.js";
 export {
   BABYLON_WEB_HOST_COMPATIBILITY_PROFILE_HASH_V1,
   BABYLON_WEB_HOST_COMPATIBILITY_PROFILE_REF_V1,
@@ -27,6 +31,9 @@ export {
 } from "./store.js";
 export type {
   BabylonNativeWorldPackageSceneSourceV1,
+  BabylonNativeWorldPackageBuildReceiptV1,
+  BabylonNativeWorldPackageManifestV1,
+  BabylonNativeWorldPackageMembershipInputV1,
   CanonicalWorldPackageBuildReceiptV1,
   CanonicalWorldPackageManifestV1,
   CanonicalWorldPackageSceneSourceV1,
@@ -49,6 +56,8 @@ export type {
 } from "./package-types.js";
 export type {
   AssembleWorldPackageDirectoryV1Input,
+  VerifiedBabylonNativeWorldPackageDirectoryV1,
+  VerifiedCanonicalWorldPackageDirectoryV1,
   VerifiedWorldPackageDirectoryV1,
   WorldPackageDirectoryFileV1,
   WorldPackageDirectoryV1,

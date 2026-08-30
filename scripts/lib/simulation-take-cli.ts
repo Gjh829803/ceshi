@@ -113,6 +113,9 @@ export async function createSimulationTakeWorldPackageIdentityV1(
 ): Promise<SimulationTakeWorldPackageIdentityV1> {
   const directory = await createTrustedCanonicalWorldPackageV1(pipeline);
   const verified = verifyWorldPackageDirectoryV1(directory);
+  if (verified.kind !== "canonical-execution-plan") {
+    throw new Error("SIMULATION_TAKE_CANONICAL_WORLD_PACKAGE_REQUIRED");
+  }
   return {
     worldPackageRef: worldPackageRefFromRootHashV1(
       verified.receipt.worldPackageRootHash,

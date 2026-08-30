@@ -16,6 +16,8 @@ function fixture(): WorldPackageDirectoryV1 {
 describe("WorldPackageDirectoryV1", () => {
   it("recomputes and exposes every member of the exact runtime closure", () => {
     const verified = verifyWorldPackageDirectoryV1(fixture());
+    expect(verified.kind).toBe("canonical-execution-plan");
+    if (verified.kind !== "canonical-execution-plan") throw new Error("unreachable");
     expect(verified.executionPlan.worldRuntimeBootstrapHash).toBe(verified.worldRuntimeBootstrap.contentHash);
     expect(verified.worldRuntimeBootstrap.gameplayBootstrapHash).toBe(verified.gameplayBootstrap.contentHash);
     expect(verified.receipt.worldBuildIdentityHash).toMatch(/^sha256:[a-f0-9]{64}$/);

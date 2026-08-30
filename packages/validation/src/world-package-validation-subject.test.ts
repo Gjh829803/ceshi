@@ -98,7 +98,9 @@ function verifiedFixture() {
     ...closure,
     resourceArtifacts: [],
   });
-  return { closure, verified: verifyWorldPackageDirectoryV1(directory) };
+  const verified = verifyWorldPackageDirectoryV1(directory);
+  if (verified.kind !== "canonical-execution-plan") throw new Error("unreachable");
+  return { closure, verified };
 }
 
 describe("WorldPackageValidationSubjectV1 verified boundary", () => {

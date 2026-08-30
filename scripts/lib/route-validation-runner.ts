@@ -509,6 +509,9 @@ export async function runTrustedRouteValidationV1(
     resourceArtifacts,
   });
   const verifiedDirectory = verifyWorldPackageDirectoryV1(directory);
+  if (verifiedDirectory.kind !== "canonical-execution-plan") {
+    throw new Error("ROUTE_VALIDATION_CANONICAL_WORLD_PACKAGE_REQUIRED");
+  }
   const worldPackageBuildReceipt = verifiedDirectory.receipt;
   const subject = createWorldPackageValidationSubjectV1(verifiedDirectory);
   const runtimeAssetResolver = createWorldPackageSubjectAssetResolverV1(

@@ -1,11 +1,37 @@
 import { normalizeAuthoringSpecV4, validateAuthoringSpecV4, type AuthoringSpecV4 } from "@whitebox-world/authoring";
 import { compileCanonicalWorldV1 } from "@whitebox-world/compiler";
 import { createGameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
+import {
+  sha256Bytes,
+  sha256CanonicalJson,
+  type Sha256HashV1,
+} from "@whitebox-world/protocol";
+import {
+  createBabylonNativeStaticColliderContributionV1,
+  hashBabylonNativeAssetLockV1,
+  hashBabylonNativeDependencyLockV1,
+  hashBabylonNativeSceneBootstrapV1,
+  nativeSceneModuleBundleRefFromHashV1,
+  worldResourceLockEntriesV1,
+  type BabylonNativeAssetLockV1,
+  type BabylonNativeDependencyLockV1,
+  type BabylonNativeSceneModuleBundleManifestV1,
+} from "@whitebox-world/runtime-contracts";
+import {
+  hashSceneAuthoringAttemptV1,
+  hashSceneAuthoringRouteDecisionV1,
+  type SceneAuthoringAttemptResultV1,
+  type SceneAuthoringAttemptV1,
+  type SceneAuthoringRouteDecisionV1,
+} from "@whitebox-world/scene-authoring-contracts";
 import { isNil } from "lodash-es";
 
 import basicWorldDocument from "../../../examples/authoring/basic-world.json";
 import { BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V1 } from "./babylon-web-host-profile.js";
-import type { CreateCanonicalWorldPackageV1Input } from "./package-build.js";
+import type {
+  CreateCanonicalWorldPackageV1Input,
+  FrozenBabylonNativeWorldPackageBuildInputV1,
+} from "./package-build.js";
 
 export function createWorldPackageTestInputV1(
   overrides: Partial<CreateCanonicalWorldPackageV1Input> = {},
@@ -77,6 +103,245 @@ export function createWorldPackageTestInputV1(
     }],
     noticeText: "Basic World\nSee LICENSES/project-owned.txt.\n",
     includeAuthoringSpec: true,
+  };
+  return { ...base, ...overrides };
+}
+
+export function createBabylonNativeWorldPackageTestInputV1(
+  overrides: Partial<FrozenBabylonNativeWorldPackageBuildInputV1> = {},
+): FrozenBabylonNativeWorldPackageBuildInputV1 {
+  const canonical = createWorldPackageTestInputV1();
+  const sceneModuleRef = "worldkit://native-scene/package-fixture@1";
+  const authoringProfileRef =
+    "worldkit://authoring-profile/native-local@1";
+  const nativeSceneApi = Object.freeze({
+    resourceRef: "worldkit://native-scene-api/babylon-native@1",
+    resolvedVersion: "1",
+    contentHash: `sha256:${"a".repeat(64)}` as Sha256HashV1,
+  });
+  const nativeSceneProfile = Object.freeze({
+    resourceRef: "worldkit://native-scene-profile/trusted-local@1",
+    resolvedVersion: "1",
+    contentHash: `sha256:${"b".repeat(64)}` as Sha256HashV1,
+  });
+  const nativeSceneBootstrap = Object.freeze({
+    kind: "babylon-native-scene-bootstrap" as const,
+    schemaVersion: 1 as const,
+    id: "package-fixture-bootstrap",
+    sceneModuleRef,
+    nativeSceneApiRef: nativeSceneApi.resourceRef,
+    nativeSceneProfileRef: nativeSceneProfile.resourceRef,
+    gameplayBootstrapRef: canonical.gameplayBootstrap.resourceRef,
+    initialControlledEntityId:
+      canonical.worldRuntimeBootstrap.initialControlledEntityId,
+    gravityMetersPerSecondSquaredXYZ: [0, -9.81, 0] as const,
+    initialCamera: Object.freeze({
+      mode: "third-person" as const,
+      pitchRadians: 0.1,
+      distanceMeters: 5,
+      fovDegrees: 55,
+      targetHeightMeters: 1.2,
+    }),
+    seed: 20260830,
+    spawnMarkerId: "player-spawn",
+  });
+  const sourceInventory = Object.freeze([Object.freeze({
+    path: "scene.ts",
+    contentHash: sha256Bytes(
+      new TextEncoder().encode("export default packageFixture;\n"),
+    ) as Sha256HashV1,
+  })]);
+  const sourceGraphHash = sha256CanonicalJson(
+    sourceInventory,
+  ) as Sha256HashV1;
+  const bundleBytes = new TextEncoder().encode(
+    "export default Object.freeze({kind:'fixture'});\n",
+  );
+  const bundleContentHash = sha256Bytes(bundleBytes) as Sha256HashV1;
+  const dependencyLock: BabylonNativeDependencyLockV1 = Object.freeze({
+    kind: "babylon-native-dependency-lock",
+    schemaVersion: 1,
+    lockfileHash: `sha256:${"c".repeat(64)}`,
+    entries: Object.freeze([Object.freeze({
+      packageName: "@babylonjs/core",
+      resolvedVersion: "9.23.0",
+      packageManifestHash: `sha256:${"d".repeat(64)}`,
+      packageIntegrityHash: `sha256:${"e".repeat(64)}`,
+      usage: "runtime-external" as const,
+    })]),
+  });
+  const assetLock: BabylonNativeAssetLockV1 = Object.freeze({
+    kind: "babylon-native-asset-lock",
+    schemaVersion: 1,
+    entries: Object.freeze([]),
+  });
+  const sceneModuleBundleManifest:
+    BabylonNativeSceneModuleBundleManifestV1 = Object.freeze({
+      kind: "babylon-native-scene-module-bundle",
+      schemaVersion: 1,
+      id: "package-fixture-bundle",
+      sceneModuleRef,
+      sceneModuleBundleRef:
+        nativeSceneModuleBundleRefFromHashV1(bundleContentHash),
+      entryPath: "native/scene.mjs",
+      sourceInventory,
+      fileInventory: Object.freeze([Object.freeze({
+        path: "native/scene.mjs",
+        mediaType: "text/javascript",
+        sizeBytes: bundleBytes.byteLength,
+        contentHash: bundleContentHash,
+      })]),
+      sourceGraphHash,
+      bundleSizeBytes: bundleBytes.byteLength,
+      bundleMediaType: "text/javascript",
+      bundleContentHash,
+      nativeSceneApi,
+      nativeSceneProfile,
+      importProfileHash: `sha256:${"f".repeat(64)}`,
+      typescriptCompilerOptionsHash: `sha256:${"1".repeat(64)}`,
+      bundlerProfileHash: `sha256:${"2".repeat(64)}`,
+      seed: nativeSceneBootstrap.seed,
+      dependencyLockHash: hashBabylonNativeDependencyLockV1(dependencyLock),
+      assetLockHash: hashBabylonNativeAssetLockV1(assetLock),
+    });
+  const route: SceneAuthoringRouteDecisionV1 = Object.freeze({
+    kind: "scene-authoring-route-decision",
+    schemaVersion: 1,
+    id: "package-fixture-route",
+    sceneBriefRef: "worldkit://scene-brief/package-fixture@1",
+    sceneBriefHash: `sha256:${"3".repeat(64)}`,
+    trustProfileRef: "worldkit://trust-profile/trusted-local@1",
+    trustProfileHash: `sha256:${"4".repeat(64)}`,
+    requiredCapabilityRefs: Object.freeze([]),
+    decision: Object.freeze({
+      kind: "babylon-native" as const,
+      authoringProfileRef,
+      compositionStrategy: "ground-first" as const,
+      reasonCodes: Object.freeze(["user-selected-supported-lane" as const]),
+    }),
+  });
+  const attempt: SceneAuthoringAttemptV1 = Object.freeze({
+    kind: "scene-authoring-attempt",
+    schemaVersion: 1,
+    id: "package-fixture-attempt",
+    sceneAuthoringRouteDecisionRef:
+      "worldkit://scene-authoring-route-decision/package-fixture@1",
+    sceneAuthoringRouteDecisionHash: hashSceneAuthoringRouteDecisionV1(route),
+    sceneBriefRef: route.sceneBriefRef,
+    sceneBriefHash: route.sceneBriefHash,
+    sourceInput: Object.freeze({
+      kind: "babylon-native" as const,
+      bootstrapInputRef:
+        "worldkit://native-bootstrap-input/package-fixture@1",
+      bootstrapInputHash:
+        hashBabylonNativeSceneBootstrapV1(nativeSceneBootstrap),
+      moduleGenerationInputRef:
+        "worldkit://native-module-generation-input/package-fixture@1",
+      moduleGenerationInputHash: sourceGraphHash,
+    }),
+    selectedAssetResources: Object.freeze([]),
+    seed: nativeSceneBootstrap.seed,
+    authoringProfileRef,
+    acceptanceTargetRefs: Object.freeze([]),
+    requiredEvidenceProfileRefs: Object.freeze([]),
+  });
+  const attemptResult: SceneAuthoringAttemptResultV1 = Object.freeze({
+    kind: "scene-authoring-attempt-result",
+    schemaVersion: 1,
+    id: "package-fixture-result",
+    sceneAuthoringAttemptRef:
+      "worldkit://scene-authoring-attempt/package-fixture@1",
+    sceneAuthoringAttemptHash: hashSceneAuthoringAttemptV1(attempt),
+    outcome: "completed",
+    authoredSourceRef: sceneModuleRef,
+    authoredSourceHash: sourceGraphHash,
+    evidenceRefs: Object.freeze([]),
+  });
+  const nativeSceneContribution = Object.freeze({
+    kind: "babylon-native-scene-contribution" as const,
+    schemaVersion: 1 as const,
+    sceneModuleRef,
+    sceneModuleId: "package-fixture-module",
+    spawnMarker: Object.freeze({
+      id: nativeSceneBootstrap.spawnMarkerId,
+      positionMetersXYZ: [0, 1, 0] as const,
+      facingRadians: 0,
+    }),
+    staticColliders: Object.freeze([
+      createBabylonNativeStaticColliderContributionV1({
+        id: "ground",
+        worldPositionsMetersXYZ: [-5, 0, -5, 5, 0, -5, 0, 0, 5],
+        triangleIndices: [0, 1, 2],
+        frictionRatio: 0.8,
+        restitutionRatio: 0,
+        traversalBinding: { kind: "not-traversable" },
+      }),
+    ]),
+  });
+  const worldRuntimeBootstrapRef =
+    "worldkit://world-runtime-bootstrap/package-fixture@1";
+  const registryLock = worldResourceLockEntriesV1([
+    ...canonical.worldRuntimeBootstrap.runtimeResourceLockEntries,
+    {
+      resourceKind: "world-runtime-bootstrap",
+      resourceRef: worldRuntimeBootstrapRef,
+      resolvedVersion: "1",
+      contentHash: canonical.worldRuntimeBootstrap.contentHash,
+    },
+    {
+      resourceKind: "native-scene",
+      resourceRef: sceneModuleRef,
+      resolvedVersion: "1",
+      contentHash: sourceGraphHash,
+    },
+    { resourceKind: "native-scene-api", ...nativeSceneApi },
+    { resourceKind: "native-scene-profile", ...nativeSceneProfile },
+  ]);
+  const base: FrozenBabylonNativeWorldPackageBuildInputV1 = {
+    shared: {
+      title: "Babylon Native Package Fixture",
+      sdkVersion: canonical.sdkVersion,
+      distributionPolicy: canonical.distributionPolicy,
+      hostCompatibility: canonical.hostCompatibility,
+      generatedResourceProvenance: canonical.generatedResourceProvenance,
+      licenseDocuments: canonical.licenseDocuments,
+      noticeText: canonical.noticeText,
+    },
+    packageId: "package-fixture.package",
+    worldId: "package-fixture-world",
+    worldBounds: {
+      centerMetersXZ: [0, 0],
+      sizeMetersXZ: [20, 20],
+      heightRangeMeters: [-5, 20],
+    },
+    resourceBudget: {
+      maximumVertices: 100,
+      maximumTriangles: 100,
+      maximumColliders: 10,
+    },
+    nativeSceneBootstrap,
+    sceneModuleBundleManifest,
+    sceneModuleBundleBytes: bundleBytes,
+    dependencyLock,
+    assetLock,
+    sceneAuthoringRouteDecision: route,
+    sceneAuthoringAttempt: attempt,
+    sceneAuthoringAttemptResultRef:
+      "worldkit://scene-authoring-attempt-result/package-fixture@1",
+    sceneAuthoringAttemptResult: attemptResult,
+    nativeSceneCheckResult: {
+      kind: "native-scene-check-result",
+      schemaVersion: 1,
+      id: "package-fixture-check",
+      checkedInput: { kind: "native-scene-module", sceneModuleRef },
+      outcome: "passed",
+      diagnostics: [],
+    },
+    nativeSceneContribution,
+    gameplayBootstrap: canonical.gameplayBootstrap,
+    worldRuntimeBootstrap: canonical.worldRuntimeBootstrap,
+    registryLock,
+    resourceArtifacts: [],
   };
   return { ...base, ...overrides };
 }

@@ -903,6 +903,9 @@ export async function loadAuthoringScene(
       stored.verifiedDirectory.receipt,
       BABYLON_WEB_WORLD_PACKAGE_HOST_POLICY_V1,
     );
+    if (stored.verifiedDirectory.kind !== "canonical-execution-plan") {
+      throw new Error("PLAYGROUND_CANONICAL_WORLD_PACKAGE_REQUIRED");
+    }
     runtimeWorldConfiguration = Object.freeze({
       worldBuildIdentity: stored.verifiedDirectory.receipt.worldBuildIdentity,
       gameplayBootstrap: stored.verifiedDirectory.gameplayBootstrap,

@@ -168,7 +168,9 @@ describe("WorldPackage command core", { timeout: 30_000 }, () => {
         ? loaded.runtimeWorldConfiguration.sceneSource.executionPlanHash
         : undefined,
     ).toBe(
-      built.executionPlanHash,
+      built.sceneSource.kind === "canonical-execution-plan"
+        ? built.sceneSource.executionPlanHash
+        : undefined,
     );
     expect(
       loaded.verifiedDirectory.resourceBytesByRef.get(

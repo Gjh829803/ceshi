@@ -14,11 +14,17 @@ import {
   type SceneAuthoringRouteDecisionV1,
 } from "@whitebox-world/scene-authoring-contracts";
 import { afterEach, describe, expect, it } from "vitest";
+import {
+  createBabylonNativeWorldPackageV1,
+  verifyWorldPackageDirectoryV1,
+} from "@whitebox-world/world-package";
 
 import { createWorldPackageTestInputV1 } from
   "../../packages/world-package/src/test-fixture.js";
 import type { PublishedBabylonNativeStaticGeometryAssetV1 } from
   "./asset-lock.js";
+import { buildTrustedBabylonNativeWorldPackageV1 } from
+  "./build-trusted-world-package.js";
 import { prepareFrozenBabylonNativeWorldPackageBuildInputV1 } from
   "./native-package-input.js";
 import {
@@ -270,8 +276,16 @@ async function makeInput() {
       distributionPolicy: canonical.distributionPolicy,
       hostCompatibility: canonical.hostCompatibility,
       generatedResourceProvenance: canonical.generatedResourceProvenance,
-      licenseDocuments: canonical.licenseDocuments,
-      noticeText: canonical.noticeText,
+      licenseDocuments: [
+        ...canonical.licenseDocuments,
+        {
+          id: "cc-by-4.0",
+          spdxLicenseExpression: "CC-BY-4.0",
+          path: "LICENSES/CC-BY-4.0.txt",
+          text: "Creative Commons Attribution 4.0 International.\n",
+        },
+      ],
+      noticeText: `${canonical.noticeText}See LICENSES/CC-BY-4.0.txt.\n`,
     },
     packageId: "package-input.package",
     worldId: "package-input-world",
@@ -325,6 +339,82 @@ describe("prepareFrozenBabylonNativeWorldPackageBuildInputV1", () => {
     expect(prepared.frozenInput.resourceArtifacts).toHaveLength(1);
     expect(prepared.frozenInput.registryLock).toEqual(input.registryLock);
     expect(Object.isFrozen(prepared.frozenInput)).toBe(true);
+
+    const first = createBabylonNativeWorldPackageV1(prepared.frozenInput);
+    const repeated = createBabylonNativeWorldPackageV1(prepared.frozenInput);
+    const verified = verifyWorldPackageDirectoryV1(first);
+    expect(verified.kind).toBe("babylon-native-scene");
+    if (verified.kind !== "babylon-native-scene") throw new Error("unreachable");
+    expect(repeated.receipt.worldPackageRootHash).toBe(
+      first.receipt.worldPackageRootHash,
+    );
+    expect(verified.receipt.worldBuildIdentity.sceneSourceIdentity).toEqual({
+      kind: "babylon-native-scene",
+      nativeSceneBootstrapHash:
+        first.receipt.manifest.sceneSource.kind === "babylon-native-scene"
+          ? first.receipt.manifest.sceneSource.nativeSceneBootstrapHash
+          : undefined,
+      sceneModuleBundleHash:
+        prepared.frozenInput.sceneModuleBundleManifest.bundleContentHash,
+      nativeSceneContributionHash:
+        first.receipt.manifest.sceneSource.kind === "babylon-native-scene"
+          ? first.receipt.manifest.sceneSource.nativeSceneContributionHash
+          : undefined,
+    });
+    expect(first.receipt.fileIntegrityEntries.map(({ path }) => path)).toEqual(
+      expect.arrayContaining([
+        "native/bootstrap.json",
+        "native/module-bundle.json",
+        "native/scene.mjs",
+        "native/dependency-lock.json",
+        "native/asset-lock.json",
+        "native/contribution.json",
+        "native/check-result.json",
+        "authoring/scene-authoring-route-decision.json",
+        "authoring/scene-authoring-attempt.json",
+        "authoring/scene-authoring-attempt-result.json",
+      ]),
+    );
+    expect(first.receipt.fileIntegrityEntries.map(({ path }) => path)).not.toEqual(
+      expect.arrayContaining([
+        "integrity.json",
+        "world-package-build-receipt.json",
+        "world-build-identity.json",
+        "world.normalized.json",
+      ]),
+    );
+    expect(() => createBabylonNativeWorldPackageV1({
+      ...prepared.frozenInput,
+      sceneModuleBundleBytes: Uint8Array.from([1, 2, 3]),
+    })).toThrow("WORLD_PACKAGE_BUILD_INVALID");
+    expect(() => createBabylonNativeWorldPackageV1({
+      ...prepared.frozenInput,
+      nativeSceneCheckResult: {
+        ...prepared.frozenInput.nativeSceneCheckResult,
+        checkedInput: {
+          kind: "native-scene-module",
+          sceneModuleRef: "worldkit://native-scene/other@1",
+        },
+      },
+    })).toThrow("WORLD_PACKAGE_BUILD_INVALID");
+    expect(() => createBabylonNativeWorldPackageV1({
+      ...prepared.frozenInput,
+      resourceBudget: {
+        maximumVertices: 1,
+        maximumTriangles: 1,
+        maximumColliders: 1,
+      },
+    })).toThrow("WORLD_PACKAGE_BUILD_INVALID");
+  }, 45_000);
+
+  it("owns the only trusted workspace-to-verified-Package Host pipeline", async () => {
+    const input = await makeInput();
+    const directory = await buildTrustedBabylonNativeWorldPackageV1(input);
+    expect(input.createCount).toBe(2);
+    expect(input.disposeCount).toBe(2);
+    expect(directory.receipt.manifest.sceneSource.kind).toBe(
+      "babylon-native-scene",
+    );
   }, 45_000);
 
   it("rejects route, result, and controlled-entity closure drift before replay", async () => {

@@ -4,6 +4,7 @@ import path from "node:path";
 
 import {
   BABYLON_WEB_WORLD_PACKAGE_HOST_POLICY_V1,
+  type VerifiedCanonicalWorldPackageDirectoryV1,
   type VerifiedWorldPackageDirectoryV1,
   type WorldPackageDirectoryV1,
   type WorldPackageHostPolicyV1,
@@ -50,12 +51,26 @@ export interface WorldPackageCommandSummaryV1 {
   readonly worldPackageRef: WorldPackageRefV1;
   readonly worldPackageRootHash: `sha256:${string}`;
   readonly manifestHash: `sha256:${string}`;
-  readonly authoringSpecHash: `sha256:${string}`;
-  readonly normalizedWorldIrHash: `sha256:${string}`;
   readonly worldBuildIdentityHash: `sha256:${string}`;
-  readonly executionPlanHash: `sha256:${string}`;
   readonly registryLockHash: `sha256:${string}`;
-  readonly layoutSolveReportHash: `sha256:${string}`;
+  readonly sceneSource:
+    | Readonly<{
+        readonly kind: "canonical-execution-plan";
+        readonly authoringSpecHash: `sha256:${string}`;
+        readonly normalizedWorldIrHash: `sha256:${string}`;
+        readonly executionPlanHash: `sha256:${string}`;
+        readonly layoutSolveReportHash: `sha256:${string}`;
+      }>
+    | Readonly<{
+        readonly kind: "babylon-native-scene";
+        readonly nativeSceneBootstrapHash: `sha256:${string}`;
+        readonly sceneModuleBundleHash: `sha256:${string}`;
+        readonly nativeSceneContributionHash: `sha256:${string}`;
+        readonly dependencyLockHash: `sha256:${string}`;
+        readonly assetLockHash: `sha256:${string}`;
+        readonly nativeSceneCheckResultHash: `sha256:${string}`;
+        readonly sceneAuthoringAttemptResultHash: `sha256:${string}`;
+      }>;
   readonly distributionPolicy: "internal-only" | "redistributable";
   readonly lockedResourceCount: number;
   readonly resourceCount: number;
@@ -87,7 +102,7 @@ export type WorldPackageCommandResultV1 =
 export type LoadRuntimeWorldPackageResultV1 =
   | Readonly<{
       readonly result: WorldPackageCommandSuccessV1;
-      readonly verifiedDirectory: VerifiedWorldPackageDirectoryV1;
+      readonly verifiedDirectory: VerifiedCanonicalWorldPackageDirectoryV1;
       readonly runtimeWorldConfiguration: RuntimeWorldConfigurationV1;
     }>
   | Readonly<{
@@ -148,11 +163,6 @@ function summary(
 ): WorldPackageCommandSuccessV1 {
   const receipt = directory.receipt;
   const manifest = receipt.manifest;
-  if (manifest.sceneSource.kind !== "canonical-execution-plan") {
-    throw new Error(
-      "WORLD_PACKAGE_CLI_SOURCE_UNSUPPORTED: current build summary requires a Canonical Scene Source",
-    );
-  }
   const sceneSource = manifest.sceneSource;
   return Object.freeze({
     ...envelope(command),
@@ -169,12 +179,28 @@ function summary(
     ),
     worldPackageRootHash: receipt.worldPackageRootHash,
     manifestHash: receipt.manifestHash,
-    authoringSpecHash: sceneSource.authoringSpecHash,
-    normalizedWorldIrHash: sceneSource.normalizedWorldIrHash,
     worldBuildIdentityHash: receipt.worldBuildIdentityHash,
-    executionPlanHash: sceneSource.executionPlanHash,
     registryLockHash: manifest.registryLockHash,
-    layoutSolveReportHash: sceneSource.layoutSolveReportHash,
+    sceneSource: sceneSource.kind === "canonical-execution-plan"
+      ? Object.freeze({
+          kind: sceneSource.kind,
+          authoringSpecHash: sceneSource.authoringSpecHash,
+          normalizedWorldIrHash: sceneSource.normalizedWorldIrHash,
+          executionPlanHash: sceneSource.executionPlanHash,
+          layoutSolveReportHash: sceneSource.layoutSolveReportHash,
+        })
+      : Object.freeze({
+          kind: sceneSource.kind,
+          nativeSceneBootstrapHash: sceneSource.nativeSceneBootstrapHash,
+          sceneModuleBundleHash: sceneSource.sceneModuleBundleHash,
+          nativeSceneContributionHash:
+            sceneSource.nativeSceneContributionHash,
+          dependencyLockHash: sceneSource.dependencyLockHash,
+          assetLockHash: sceneSource.assetLockHash,
+          nativeSceneCheckResultHash: sceneSource.nativeSceneCheckResultHash,
+          sceneAuthoringAttemptResultHash:
+            sceneSource.sceneAuthoringAttemptResultHash,
+        }),
     distributionPolicy: manifest.legal.distributionPolicy,
     lockedResourceCount: manifest.lockedResources.length,
     resourceCount: manifest.resources.length,
@@ -331,6 +357,16 @@ export async function loadRuntimeWorldConfigurationFromPackageDirectoryV1(
   if (!admitted.ok) {
     return Object.freeze({
       result: admitted.failure,
+    });
+  }
+  if (admitted.verifiedDirectory.kind !== "canonical-execution-plan") {
+    return Object.freeze({
+      result: failure(
+        "load",
+        6,
+        "WORLDKIT_NATIVE_SCENE_PRODUCTION_NOT_ADMITTED",
+        "The Native WorldPackage is valid, but Runtime activation is not admitted until BNA-4.",
+      ),
     });
   }
   const receipt = admitted.verifiedDirectory.receipt;

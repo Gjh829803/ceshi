@@ -5,9 +5,20 @@ import {
   type Sha256HashV1,
 } from "@whitebox-world/protocol";
 import {
+  hashBabylonNativeAssetLockV1,
+  hashBabylonNativeDependencyLockV1,
+  hashBabylonNativeSceneBootstrapV1,
+  hashBabylonNativeSceneContributionV1,
+  hashNativeSceneCheckResultV1,
+  nativeSceneModuleBundleRefFromHashV1,
   worldResourceLockEntriesV1,
   hashCanonicalSceneExecutionPlanV1,
 } from "@whitebox-world/runtime-contracts";
+import {
+  hashSceneAuthoringAttemptResultV1,
+  hashSceneAuthoringAttemptV1,
+  hashSceneAuthoringRouteDecisionV1,
+} from "@whitebox-world/scene-authoring-contracts";
 import {
   hashWorldBuildIdentityV1,
   parseWorldBuildIdentityV1,
@@ -17,6 +28,7 @@ import { isEqual, isNil, sortBy } from "lodash-es";
 
 import type {
   WorldPackageBuildReceiptV1,
+  BabylonNativeWorldPackageMembershipInputV1,
   CanonicalWorldPackageGameplayBootstrapMembershipInputV1,
   WorldPackageFileIntegrityEntryV1,
   WorldPackageHostCompatibilityV1,
@@ -606,6 +618,86 @@ export function assertCanonicalWorldPackageGameplayBootstrapMembershipV1(
     runtime.gameplayBootstrapHash !== gameplay.contentHash ||
     runtime.initialControlledEntityId !== receipt.manifest.initialControlledEntityId
   ) fail("WORLD_PACKAGE_GAMEPLAY_BOOTSTRAP_MEMBERSHIP_INVALID", "component closure mismatch");
+}
+
+export function assertBabylonNativeWorldPackageMembershipV1(
+  input: BabylonNativeWorldPackageMembershipInputV1,
+): void {
+  const receipt = assertWorldPackageBuildReceiptV1(
+    input.worldPackageBuildReceipt,
+  );
+  if (receipt.manifest.sceneSource.kind !== "babylon-native-scene") {
+    fail("WORLD_PACKAGE_NATIVE_MEMBERSHIP_INVALID", "Package is not Babylon Native");
+  }
+  const source = receipt.manifest.sceneSource;
+  const bootstrap = input.nativeSceneBootstrap;
+  const bundle = input.sceneModuleBundleManifest;
+  const route = input.sceneAuthoringRouteDecision;
+  const attempt = input.sceneAuthoringAttempt;
+  const result = input.sceneAuthoringAttemptResult;
+  const check = input.nativeSceneCheckResult;
+  const contribution = input.nativeSceneContribution;
+  const gameplay = input.gameplayBootstrap;
+  const runtime = input.worldRuntimeBootstrap;
+  const selectedAssetRefs = attempt.selectedAssetResources.map((entry) =>
+    entry.assetResourceRef).sort();
+  const lockedAssetRefs = input.assetLock.entries.map((entry) =>
+    entry.assetResourceRef).sort();
+  if (
+    hashBabylonNativeSceneBootstrapV1(bootstrap) !==
+      source.nativeSceneBootstrapHash ||
+    bundle.bundleContentHash !== source.sceneModuleBundleHash ||
+    bundle.sceneModuleBundleRef !== nativeSceneModuleBundleRefFromHashV1(
+      source.sceneModuleBundleHash,
+    ) ||
+    hashBabylonNativeSceneContributionV1(contribution) !==
+      source.nativeSceneContributionHash ||
+    hashBabylonNativeDependencyLockV1(input.dependencyLock) !==
+      source.dependencyLockHash ||
+    hashBabylonNativeAssetLockV1(input.assetLock) !== source.assetLockHash ||
+    hashNativeSceneCheckResultV1(check) !== source.nativeSceneCheckResultHash ||
+    hashSceneAuthoringRouteDecisionV1(route) !==
+      source.sceneAuthoringRouteDecisionHash ||
+    hashSceneAuthoringAttemptV1(attempt) !==
+      source.sceneAuthoringAttemptHash ||
+    hashSceneAuthoringAttemptResultV1(result) !==
+      source.sceneAuthoringAttemptResultHash ||
+    route.decision.kind !== "babylon-native" ||
+    attempt.sceneAuthoringRouteDecisionHash !==
+      source.sceneAuthoringRouteDecisionHash ||
+    attempt.sceneBriefRef !== route.sceneBriefRef ||
+    attempt.sceneBriefHash !== route.sceneBriefHash ||
+    attempt.authoringProfileRef !== route.decision.authoringProfileRef ||
+    attempt.sourceInput.kind !== "babylon-native" ||
+    attempt.sourceInput.bootstrapInputHash !==
+      source.nativeSceneBootstrapHash ||
+    attempt.sourceInput.moduleGenerationInputHash !== bundle.sourceGraphHash ||
+    attempt.seed !== bootstrap.seed ||
+    result.outcome !== "completed" ||
+    result.sceneAuthoringAttemptHash !== source.sceneAuthoringAttemptHash ||
+    result.authoredSourceRef !== bootstrap.sceneModuleRef ||
+    result.authoredSourceHash !== bundle.sourceGraphHash ||
+    check.outcome !== "passed" ||
+    check.checkedInput.kind !== "native-scene-module" ||
+    check.checkedInput.sceneModuleRef !== bootstrap.sceneModuleRef ||
+    contribution.sceneModuleRef !== bootstrap.sceneModuleRef ||
+    bundle.sceneModuleRef !== bootstrap.sceneModuleRef ||
+    bundle.nativeSceneApi.resourceRef !== bootstrap.nativeSceneApiRef ||
+    bundle.nativeSceneProfile.resourceRef !== bootstrap.nativeSceneProfileRef ||
+    bundle.seed !== bootstrap.seed ||
+    bundle.dependencyLockHash !== source.dependencyLockHash ||
+    bundle.assetLockHash !== source.assetLockHash ||
+    bootstrap.gameplayBootstrapRef !== gameplay.resourceRef ||
+    runtime.gameplayBootstrapRef !== gameplay.resourceRef ||
+    runtime.gameplayBootstrapHash !== gameplay.contentHash ||
+    runtime.initialControlledEntityId !== bootstrap.initialControlledEntityId ||
+    receipt.manifest.initialControlledEntityId !==
+      bootstrap.initialControlledEntityId ||
+    receipt.manifest.seed !== bootstrap.seed ||
+    receipt.manifest.gameplayBootstrapHash !== gameplay.contentHash ||
+    receipt.manifest.worldRuntimeBootstrapHash !== runtime.contentHash ||
+    !isEqual(selectedAssetRefs, lockedAssetRefs)
+  ) fail("WORLD_PACKAGE_NATIVE_MEMBERSHIP_INVALID", "component closure mismatch");
 }
 
 export function assertWorldPackageHostCompatibilityV1(

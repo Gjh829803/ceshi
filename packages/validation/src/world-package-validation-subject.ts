@@ -29,6 +29,9 @@ export function createWorldPackageValidationSubjectV1(
   if (isNil(verified) || !isPlainObject(verified)) {
     fail("VerifiedWorldPackageDirectoryV1 is required");
   }
+  if (verified.kind !== "canonical-execution-plan") {
+    fail("Canonical verified WorldPackage is required");
+  }
   let receipt;
   try {
     receipt = assertWorldPackageBuildReceiptV1(verified.receipt);
