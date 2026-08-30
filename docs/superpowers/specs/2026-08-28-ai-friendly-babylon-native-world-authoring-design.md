@@ -1276,6 +1276,10 @@ RuntimeWorldConfiguration V1 -> Babylon/Havok。
 
 ### BNA-5：Hosted 隔离、Tenant Hard Cap 与 Trust Profile
 
+- 状态：**实现与 scoped security/runtime review 已完成**。产品 SHA `2f46b3c9` 通过 capable-runner
+  11-case hostile/matching-deadline evidence、exact-SHA Cloud full gates 和独立 Mode B + security +
+  runtime-deep 审查，开放 P0/P1/P2 = 0；这不等于 BNA-8 production vendor deployment GO。
+
 - 目标与独立交付物：消费 BNA-2 已冻结的 PRNG、依赖 allowlist、Source/Authority Admission、Profile
   Registry、CLI Diagnostics 与本地结构 cap；增加 Hosted Worker/Origin 强制隔离、timeout/kill、凭据与
   环境隔离、Host/tenant hard cap、`min(BNA-2 profile cap, host/tenant cap)` effective budget 计算和 Hosted

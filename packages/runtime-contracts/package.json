@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./babylon-native-scene-bootstrap-schema": "./src/babylon-native-scene-bootstrap-v1.schema.json",
+    "./native-execution-isolation-schema": "./src/native-execution-isolation-v1.schema.json",
     "./world-runtime-bootstrap-schema": "./src/world-runtime-bootstrap-v1.schema.json"
   },
   "dependencies": {

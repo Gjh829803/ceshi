@@ -3,23 +3,36 @@ import type {
   BabylonWorldRuntimeInitializationStageV1,
 } from "@whitebox-world/runtime-babylon";
 import { FIXED_TIME_STEP_SECONDS } from "@whitebox-world/runtime-babylon";
+import {
+  createBabylonNativeIsolatedRuntimeEntryV1,
+} from "@whitebox-world/runtime-babylon";
 import type {
   BabylonNativeSceneBootstrapV1,
   FixedInputV1,
   SemanticInputActionV1,
 } from "@whitebox-world/runtime-contracts";
-
-import cloudRidgeNativeScene, {
-  moduleBundleContentHash as cloudRidgeModuleBundleContentHash,
-} from "virtual:worldkit-cloud-ridge-native-scene";
+import {
+  deriveRuntimeSessionEventIdV1,
+  WORLDKIT_RUNTIME_SESSION_REQUEST_TYPES_V1,
+  type NativeEffectiveExecutionBudgetV1,
+} from "@whitebox-world/runtime-contracts";
+import { admitHostedNativeExecutionRequestV1 } from
+  "@whitebox-world/runtime-host";
+import { Engine } from "@babylonjs/core/Engines/engine.js";
 import { cloudRidgeSubjectAssetResolver } from
   "./subject-asset-resolver.js";
+import { createHostedRuntimeBridgeV1 } from "./hosted-runtime-bridge.js";
+import { startHostedRuntimeFrameV1 } from "./hosted-runtime-frame.js";
 import { NativeRuntimeHostV1 } from "./native-runtime-host.js";
 import { loadVerifiedNativeWorldPackageV1 } from
   "./world-package-loader.js";
 import "./style.css";
 
 const CLOUD_RIDGE_MAIN_PATH_RUN_TICKS = 1_700;
+declare const __WORLDKIT_HOSTED_BROWSER_RUNNER_DIGEST__: `sha256:${string}`;
+declare const __WORLDKIT_HOSTED_BROWSER_POLICY_HASH__: `sha256:${string}`;
+declare const __WORLDKIT_HOSTED_RUNTIME_ORIGIN__: string;
+declare const __WORLDKIT_HOSTED_SHELL_ORIGIN__: string;
 interface NativeSceneSpikeProbeV1 {
   readonly ready: true;
   readonly bootstrap: BabylonNativeSceneBootstrapV1;
@@ -39,6 +52,11 @@ interface NativeSceneSpikeProbeV1 {
 declare global {
   interface Window {
     __WORLDKIT_NATIVE_SPIKE__?: NativeSceneSpikeProbeV1;
+    __WORLDKIT_HOSTED_RUNTIME__?: Readonly<{
+      phase(): string;
+      submit(request: import("@whitebox-world/runtime-contracts").RuntimeSessionRequestV1): Promise<unknown>;
+      frame: HTMLIFrameElement;
+    }>;
   }
 }
 
@@ -100,6 +118,11 @@ async function start(): Promise<void> {
   const positionElement = requiredElement<HTMLElement>("[data-position]");
   const pauseButton = requiredElement<HTMLButtonElement>("[data-pause]");
   const pathCheckButton = requiredElement<HTMLButtonElement>("[data-path-check]");
+
+  const {
+    default: cloudRidgeNativeScene,
+    moduleBundleContentHash: cloudRidgeModuleBundleContentHash,
+  } = await import("virtual:worldkit-cloud-ridge-native-scene");
 
   const verifiedWorldPackage = await loadVerifiedNativeWorldPackageV1(
     new URL("/world-packages/cloud-ridge/", globalThis.location.origin),
@@ -357,4 +380,214 @@ async function start(): Promise<void> {
   }
 }
 
-void start().catch(showFailure);
+function browserProtocolBudget(
+  scene: NativeEffectiveExecutionBudgetV1["scene"] = {
+    maximumVertices: 0,
+    maximumTriangles: 0,
+    maximumColliders: 0,
+  },
+): NativeEffectiveExecutionBudgetV1 {
+  return {
+    scene,
+    assets: { maximumAssetCount: 64, maximumAssetBytes: 64_000_000, maximumTextureCount: 32, maximumTextureBytes: 64_000_000 },
+    runtime: { maximumSceneNodeCount: 2_000, maximumMaterialCount: 256, maximumShaderCount: 256, maximumPhysicsBodyCount: 256 },
+    process: { maximumWallTimeMilliseconds: 120_000, maximumCpuTimeMilliseconds: 120_000, maximumMemoryBytes: 1_000_000_000, maximumProcessCount: 1 },
+    protocol: { maximumInboundMessageBytes: 2_000_000, maximumOutboundMessageBytes: 2_000_000, maximumReceiptBytes: 2_000_000, maximumDiagnosticCount: 64, maximumLogBytes: 100_000 },
+  };
+}
+
+async function startHostedShell(): Promise<void> {
+  const runtimeOrigin = __WORLDKIT_HOSTED_RUNTIME_ORIGIN__;
+  if (location.origin !== __WORLDKIT_HOSTED_SHELL_ORIGIN__) {
+    throw new Error("WORLDKIT_HOSTED_SHELL_ORIGIN_MISMATCH");
+  }
+  const runtimeSessionId = `runtime.hosted.browser.${crypto.randomUUID()}`;
+  const sessionNonce = `nonce.${crypto.randomUUID()}`;
+  const viewport = requiredElement<HTMLElement>("[data-viewport]");
+  viewport.replaceChildren();
+  const frame = document.createElement("iframe");
+  frame.className = "hosted-runtime-frame";
+  const frameUrl = new URL("/", runtimeOrigin);
+  frameUrl.searchParams.set("hosted-runtime-frame", "1");
+  frameUrl.searchParams.set("runtimeSessionId", runtimeSessionId);
+  frameUrl.searchParams.set("sessionNonce", sessionNonce);
+  frame.src = frameUrl.href;
+  const bridge = createHostedRuntimeBridgeV1({
+    frame,
+    runtimeOrigin,
+    runtimeSessionId,
+    sessionNonce,
+    protocolBudget: browserProtocolBudget().protocol,
+  });
+  // Sandbox and credentialless policy must be installed before first navigation.
+  viewport.append(frame);
+  window.__WORLDKIT_HOSTED_RUNTIME__ = Object.freeze({
+    phase: () => bridge.phase(),
+    submit: (request) => bridge.submit(request),
+    frame,
+  });
+  await bridge.waitUntilReady();
+  requiredElement<HTMLElement>("[data-state]").textContent = "READY";
+  window.addEventListener("beforeunload", () => bridge.dispose(), { once: true });
+}
+
+async function startHostedFrame(): Promise<void> {
+  const query = new URLSearchParams(location.search);
+  const shellOrigin = __WORLDKIT_HOSTED_SHELL_ORIGIN__;
+  const runtimeSessionId = query.get("runtimeSessionId");
+  const sessionNonce = query.get("sessionNonce");
+  if (location.origin !== __WORLDKIT_HOSTED_RUNTIME_ORIGIN__) {
+    throw new Error("WORLDKIT_HOSTED_RUNTIME_ORIGIN_MISMATCH");
+  }
+  if (runtimeSessionId === null || sessionNonce === null) {
+    throw new Error("WORLDKIT_HOSTED_RUNTIME_FRAME_PARAMETERS_MISSING");
+  }
+  const viewport = requiredElement<HTMLElement>("[data-viewport]");
+  const canvas = document.createElement("canvas");
+  canvas.tabIndex = 0;
+  viewport.replaceChildren(canvas);
+  const verified = await loadVerifiedNativeWorldPackageV1(
+    new URL("/world-packages/cloud-ridge/", location.origin),
+  );
+  const moduleImport = await import("virtual:worldkit-cloud-ridge-native-scene");
+  const executionBudgetCap = browserProtocolBudget(
+    verified.manifest.resourceBudget,
+  );
+  const requestBody = admitHostedNativeExecutionRequestV1({
+    id: `native-isolated-execution-request.${runtimeSessionId}`,
+    runtimeSessionId,
+    verifiedWorldPackage: verified,
+    sceneProfileBudget: verified.manifest.resourceBudget,
+    hostHardCap: executionBudgetCap,
+    tenantCap: executionBudgetCap,
+    runnerIdentityRef: "worldkit://native-isolation-runner/browser-origin@1",
+    runnerImageDigest: __WORLDKIT_HOSTED_BROWSER_RUNNER_DIGEST__,
+    sandboxPolicyHash: __WORLDKIT_HOSTED_BROWSER_POLICY_HASH__,
+    requestedOperation: { mode: "interactive-session" },
+    sessionNonce,
+  });
+  const entry = await createBabylonNativeIsolatedRuntimeEntryV1({
+    request: requestBody,
+    verifiedWorldPackage: verified,
+    moduleLoader: { load: async () => moduleImport.default },
+    engineFactory: () => {
+      return new Engine(canvas, true, {
+        preserveDrawingBuffer: true,
+        stencil: true,
+      });
+    },
+    subjectAssetResolver: cloudRidgeSubjectAssetResolver,
+  });
+  const snapshot = entry.initialSnapshot();
+  const readyBody = {
+    kind: "worldkit-runtime-session-event" as const,
+    schemaVersion: 1 as const,
+    protocolVersion: 1 as const,
+    sequence: 1,
+    runtimeSessionId,
+    worldSessionId: snapshot.worldSessionId,
+    type: "ready" as const,
+    runtimeSessionUri: `worldkit://runtime-session/${runtimeSessionId}` as const,
+    worldPackageRef: verified.receipt.worldPackageRef,
+    worldPackageRootHash: verified.receipt.worldPackageRootHash,
+    worldBuildIdentityHash: verified.receipt.worldBuildIdentityHash,
+    fixedInputControllerEntityId: "native-isolation-controller",
+    supportedRequestTypes: WORLDKIT_RUNTIME_SESSION_REQUEST_TYPES_V1,
+  };
+  const hostedFrame = startHostedRuntimeFrameV1({
+    entry,
+    readyEvent: { ...readyBody, id: deriveRuntimeSessionEventIdV1(readyBody) },
+    shellOrigin,
+    runtimeSessionId,
+    sessionNonce,
+    protocolBudget: requestBody.effectiveBudget.protocol,
+  });
+  const pressedCodes = new Set<string>();
+  const contextualCodes = new Set([
+    "KeyW", "KeyA", "KeyS", "KeyD",
+    "ShiftLeft", "ShiftRight", "Space",
+  ]);
+  let localRequestSequence = 0;
+  let localInputTail = Promise.resolve();
+  let previousTimestamp = performance.now();
+  let accumulatedSeconds = 0;
+  let frameRequest = 0;
+  const runLocalInput = (ticks: number): void => {
+    const requestSequence = ++localRequestSequence;
+    localInputTail = localInputTail.then(async () => {
+      const receipt = await entry.submit({
+        kind: "worldkit-runtime-session-request",
+        schemaVersion: 1,
+        id: `request.browser-local-input.${requestSequence}`,
+        runtimeSessionId,
+        type: "fixed-input.run",
+        input: {
+          actions: semanticActionsForCodes(pressedCodes),
+          ticks,
+        },
+      });
+      if (receipt.status !== "succeeded") {
+        throw new Error("WORLDKIT_HOSTED_RUNTIME_LOCAL_INPUT_REJECTED");
+      }
+    }).catch(showFailure);
+  };
+  const renderLoop = (timestamp: number): void => {
+    if (hostedFrame.isDisposed()) return;
+    const elapsedSeconds = Math.min(
+      0.1,
+      Math.max(0, (timestamp - previousTimestamp) / 1_000),
+    );
+    previousTimestamp = timestamp;
+    accumulatedSeconds += elapsedSeconds;
+    if (pressedCodes.size > 0) {
+      const ticks = Math.min(
+        5,
+        Math.floor(accumulatedSeconds / FIXED_TIME_STEP_SECONDS),
+      );
+      if (ticks > 0) {
+        accumulatedSeconds -= ticks * FIXED_TIME_STEP_SECONDS;
+        runLocalInput(ticks);
+      }
+    } else {
+      accumulatedSeconds = 0;
+    }
+    entry.renderFrame();
+    if (!hostedFrame.isDisposed()) {
+      frameRequest = requestAnimationFrame(renderLoop);
+    }
+  };
+  window.addEventListener("keydown", (event) => {
+    if (!contextualCodes.has(event.code)) return;
+    event.preventDefault();
+    pressedCodes.add(event.code);
+  });
+  window.addEventListener("keyup", (event) => pressedCodes.delete(event.code));
+  window.addEventListener("blur", () => pressedCodes.clear());
+  canvas.addEventListener("pointerdown", (event) => {
+    canvas.focus();
+    canvas.setPointerCapture(event.pointerId);
+  });
+  const releasePointer = (event: PointerEvent): void => {
+    if (canvas.hasPointerCapture(event.pointerId)) {
+      canvas.releasePointerCapture(event.pointerId);
+    }
+  };
+  canvas.addEventListener("pointerup", releasePointer);
+  canvas.addEventListener("pointercancel", releasePointer);
+  canvas.addEventListener("contextmenu", (event) => event.preventDefault());
+  window.addEventListener("resize", () => entry.resize());
+  window.addEventListener("beforeunload", () => {
+    cancelAnimationFrame(frameRequest);
+    pressedCodes.clear();
+    void hostedFrame.dispose();
+  }, { once: true });
+  frameRequest = requestAnimationFrame(renderLoop);
+  canvas.focus();
+}
+
+const mode = new URLSearchParams(location.search);
+void (mode.has("hosted-runtime-frame")
+  ? startHostedFrame()
+  : mode.has("hosted")
+    ? startHostedShell()
+    : start()).catch(showFailure);

@@ -7,7 +7,9 @@ import type {
   WorldResourceLockEntryV1,
 } from "@whitebox-world/runtime-contracts";
 import { resolveTraversalSurfaceProfileV1 } from "@whitebox-world/traversal";
-import type { WorldPackageWorldBoundsV1 } from "@whitebox-world/world-package";
+import type {
+  WorldPackageWorldBoundsV1,
+} from "@whitebox-world/world-package/runtime-contract";
 import { isNil } from "lodash-es";
 
 export const BABYLON_NATIVE_SPAWN_SUPPORT_TOLERANCE_METERS_V1 = 0.0001;

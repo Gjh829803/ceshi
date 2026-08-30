@@ -8,6 +8,13 @@ export {
   type PreparedBabylonNativeRuntimePackageV1,
   type PrepareBabylonNativeRuntimePackageInputV1,
 } from "./babylon-native-package-runtime";
+export {
+  BabylonNativeIsolatedRuntimeEntryErrorV1,
+  createBabylonNativeIsolatedRuntimeEntryV1,
+  type BabylonNativeIsolatedRuntimeEntryErrorCodeV1,
+  type BabylonNativeIsolatedRuntimeEntryV1,
+  type CreateBabylonNativeIsolatedRuntimeEntryInputV1,
+} from "./babylon-native-isolated-runtime-entry";
 export * from "./runtime-projection";
 export * from "./artifact-capture";
 export {

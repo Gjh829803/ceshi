@@ -1,4 +1,3 @@
-import Ajv2020 from "ajv/dist/2020.js";
 import {
   canonicalJsonBytes,
   sha256CanonicalJson,
@@ -39,7 +38,8 @@ import {
   type CameraRigParametersV1,
 } from "./camera-parameter-contract";
 import type { ControlFeelParametersV1 } from "./control-feel-parameter-contract";
-import worldRuntimeBootstrapSchema from "./world-runtime-bootstrap-v1.schema.json";
+import validateWorldRuntimeBootstrap from
+  "./world-runtime-bootstrap-validator.generated.mjs";
 
 export type RuntimeVec3V1 = readonly [x: number, y: number, z: number];
 
@@ -419,11 +419,6 @@ export interface WorldRuntimeBootstrapBodyV1 {
 export interface WorldRuntimeBootstrapV1 extends WorldRuntimeBootstrapBodyV1 {
   readonly contentHash: Sha256HashV1;
 }
-
-const validateWorldRuntimeBootstrap = new Ajv2020({
-  allErrors: true,
-  strict: true,
-}).compile(worldRuntimeBootstrapSchema);
 
 function invalid(detail?: string): never {
   throw new RangeError(

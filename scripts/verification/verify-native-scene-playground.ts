@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { createServer as createHttpServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import path from "node:path";
 
 import type { Browser, Page } from "playwright";
@@ -70,18 +72,40 @@ async function closeBestEffort(
   ]);
 }
 
+async function findFreeLoopbackPort(): Promise<number> {
+  const server = createHttpServer();
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address() as AddressInfo;
+  await new Promise<void>((resolve, reject) => {
+    server.close((error) => {
+      if (error === undefined) resolve();
+      else reject(error);
+    });
+  });
+  return address.port;
+}
+
 async function main(): Promise<void> {
   let server: ViteDevServer | undefined;
   let browser: Browser | undefined;
   let page: Page | undefined;
   try {
+    const shellPort = await findFreeLoopbackPort();
+    const runtimePort = shellPort === 65_535 ? shellPort - 1 : shellPort + 1;
+    process.env.WORLDKIT_HOSTED_SHELL_ORIGIN =
+      `http://127.0.0.1:${shellPort}`;
+    process.env.WORLDKIT_HOSTED_RUNTIME_ORIGIN =
+      `http://127.0.0.1:${runtimePort}`;
     server = await createServer({
       root: path.resolve("apps/native-scene-playground"),
       logLevel: "silent",
       server: {
         host: "127.0.0.1",
-        port: 0,
-        strictPort: false,
+        port: shellPort,
+        strictPort: true,
       },
     });
     await server.listen();
