@@ -121,7 +121,7 @@ export function createBabylonNativeWorldPackageTestInputV1(
     contentHash: `sha256:${"a".repeat(64)}` as Sha256HashV1,
   });
   const nativeSceneProfile = Object.freeze({
-    resourceRef: "worldkit://native-scene-profile/trusted-local@1",
+    resourceRef: "worldkit://native-scene-profile/whitebox.standard@1",
     resolvedVersion: "1",
     contentHash: `sha256:${"b".repeat(64)}` as Sha256HashV1,
   });

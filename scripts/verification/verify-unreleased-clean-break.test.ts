@@ -331,6 +331,31 @@ describe("verify:unreleased-clean-break", () => {
     expect(report.ok).toBe(false);
   });
 
+  it("blocks the legacy trust-labelled Native Scene Profile identity", async () => {
+    const fixtureRoot = await createFixtureRoot("clean-break-native-profile-");
+    const fixturePath = path.join(fixtureRoot, "packages", "native-profile.ts");
+    const legacyProfileRef = token([
+      "worldkit://native-scene-profile/",
+      "trusted-local@1",
+    ]);
+    await writeFile(
+      fixturePath,
+      `export const profileRef = "${legacyProfileRef}";\n`,
+      "utf8",
+    );
+
+    const report = await scanUnreleasedCleanBreak(fixtureRoot);
+
+    expect(family(
+      report,
+      "WORLDKIT_UNRELEASED_LEGACY_NATIVE_SCENE_PROFILE_REF",
+    ).matchesByPath).toEqual([{
+      path: "packages/native-profile.ts",
+      matches: [{ line: 1, value: legacyProfileRef }],
+    }]);
+    expect(report.ok).toBe(false);
+  });
+
   it("discovers nested superseded serialized contracts under generated artifacts", async () => {
     const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "clean-break-artifacts-"));
     cleanupPaths.push(fixtureRoot);

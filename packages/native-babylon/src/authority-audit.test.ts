@@ -54,7 +54,7 @@ const BOOTSTRAP = parseBabylonNativeSceneBootstrapV1({
   id: "authority-audit-native",
   sceneModuleRef: "worldkit://native-scene/authority-audit@1",
   nativeSceneApiRef: "worldkit://native-scene-api/babylon@1",
-  nativeSceneProfileRef: "worldkit://native-scene-profile/trusted-local@1",
+  nativeSceneProfileRef: "worldkit://native-scene-profile/whitebox.standard@1",
   gameplayBootstrapRef: "worldkit://gameplay-bootstrap/g-bot@1",
   initialControlledEntityId: "player",
   gravityMetersPerSecondSquaredXYZ: [0, -9.81, 0],

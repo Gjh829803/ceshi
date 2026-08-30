@@ -122,7 +122,7 @@ async function makeInput() {
     id: "package-input-bootstrap",
     sceneModuleRef: "worldkit://native-scene/package-input@1",
     nativeSceneApiRef: "worldkit://native-scene-api/babylon-native@1",
-    nativeSceneProfileRef: "worldkit://native-scene-profile/trusted-local@1",
+    nativeSceneProfileRef: "worldkit://native-scene-profile/whitebox.standard@1",
     gameplayBootstrapRef: canonical.gameplayBootstrap.resourceRef,
     initialControlledEntityId:
       canonical.worldRuntimeBootstrap.initialControlledEntityId,
