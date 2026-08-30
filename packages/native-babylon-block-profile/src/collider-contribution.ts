@@ -1,4 +1,6 @@
-import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
+import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
+import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
+import type { Scene } from "@babylonjs/core/scene.js";
 import type {
   BabylonNativeSceneBuildContextV1,
   BabylonNativeTraversalBindingV1,
@@ -83,13 +85,46 @@ function fail(code: string, message: string): never {
   throw new TypeError(`${code}: ${message}`);
 }
 
+function createExactBoxProxy(
+  name: string,
+  sizeMetersXYZ: readonly [number, number, number],
+  scene: Scene,
+): Mesh {
+  const halfX = sizeMetersXYZ[0] / 2;
+  const halfY = sizeMetersXYZ[1] / 2;
+  const halfZ = sizeMetersXYZ[2] / 2;
+  const mesh = new Mesh(name, scene);
+  mesh.setVerticesData(VertexBuffer.PositionKind, [
+    -halfX, -halfY, -halfZ,
+    halfX, -halfY, -halfZ,
+    halfX, halfY, -halfZ,
+    -halfX, halfY, -halfZ,
+    -halfX, -halfY, halfZ,
+    halfX, -halfY, halfZ,
+    halfX, halfY, halfZ,
+    -halfX, halfY, halfZ,
+  ]);
+  // Babylon 9.23 ComputeNormals and Runtime Surface admission both use
+  // (p3 - p2) x (p1 - p2), equivalent to edgeB x edgeA. Keep every face
+  // outward under that installed-engine convention.
+  mesh.setIndices([
+    0, 1, 2, 0, 2, 3,
+    4, 6, 5, 4, 7, 6,
+    0, 7, 4, 0, 3, 7,
+    1, 6, 2, 1, 5, 6,
+    0, 5, 1, 0, 4, 5,
+    3, 6, 7, 3, 2, 6,
+  ]);
+  return mesh;
+}
+
 /**
  * Package-private Build-Epoch adapter. `selections` must already be canonical
  * frozen values from the Session-owned canonical snapshot boundary; this layer never
  * reparses traversal bindings or derives core Contribution identity.
  */
 function disposeProxies(
-  proxies: readonly ReturnType<typeof MeshBuilder.CreateBox>[],
+  proxies: readonly Mesh[],
 ): Readonly<{ didFail: boolean; error: unknown }> {
   let didFail = false;
   let firstFailure: unknown;
@@ -194,19 +229,15 @@ export function materializeBabylonNativeBlockColliderCandidatesV1(
       );
     }
   }
-  const proxies: ReturnType<typeof MeshBuilder.CreateBox>[] = [];
+  const proxies: Mesh[] = [];
   const inventory: BabylonNativeBlockColliderCandidateInventoryEntryV1[] = [];
   try {
     for (const selection of selections) {
       const block = layoutById.get(selection.blockId)!;
       const record = recordsById.get(selection.blockId)!;
-      const proxy = MeshBuilder.CreateBox(
+      const proxy = createExactBoxProxy(
         `worldkit-block-collider-${input.context.bootstrap.id}-${selection.id}`,
-        {
-          width: block.sizeMetersXYZ[0],
-          height: block.sizeMetersXYZ[1],
-          depth: block.sizeMetersXYZ[2],
-        },
+        block.sizeMetersXYZ,
         scene,
       );
       proxies.push(proxy);

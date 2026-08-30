@@ -308,6 +308,9 @@ describe("Babylon Native block Collider contribution", () => {
       expect(candidate.id).toBe("route-ground-a");
       expect(candidate.traversalBinding).toBe(traversalBinding);
       expect(candidate.mesh).not.toBe(records[0]!.mesh);
+      expect(candidate.mesh.getVerticesData(VertexBuffer.PositionKind))
+        .toHaveLength(8 * 3);
+      expect(candidate.mesh.getIndices()).toHaveLength(12 * 3);
       candidate.mesh.computeWorldMatrix(true);
       expect(candidate.mesh.getBoundingInfo().boundingBox.minimumWorld.asArray())
         .toEqual([-0.5, -0.5, -0.5]);
