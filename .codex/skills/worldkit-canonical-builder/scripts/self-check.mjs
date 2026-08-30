@@ -1678,6 +1678,51 @@ function baseUniq(array2, iteratee, comparator) {
 function uniq(array2) {
   return array2 && array2.length ? baseUniq(array2) : [];
 }
+function invalidContractDataV1(code2) {
+  throw new TypeError(code2);
+}
+function snapshotContractDataV1(input, code2) {
+  if (isNil(input) || typeof input === "boolean" || typeof input === "string") {
+    return input;
+  }
+  if (typeof input === "number") {
+    if (!Number.isFinite(input) || Object.is(input, -0)) {
+      return invalidContractDataV1(code2);
+    }
+    return input;
+  }
+  if (Array.isArray(input)) {
+    try {
+      if (Reflect.getPrototypeOf(input) !== Array.prototype || Reflect.ownKeys(input).some((key) => typeof key === "symbol") || Object.getOwnPropertyNames(input).length !== input.length + 1) return invalidContractDataV1(code2);
+      const snapshot = [];
+      for (let index = 0; index < input.length; index += 1) {
+        const descriptor = Reflect.getOwnPropertyDescriptor(input, String(index));
+        if (isNil(descriptor) || !descriptor.enumerable || !("value" in descriptor)) return invalidContractDataV1(code2);
+        snapshot.push(snapshotContractDataV1(descriptor.value, code2));
+      }
+      return snapshot;
+    } catch {
+      return invalidContractDataV1(code2);
+    }
+  }
+  if (typeof input !== "object" || isNil(input)) {
+    return invalidContractDataV1(code2);
+  }
+  try {
+    if (Reflect.getPrototypeOf(input) !== Object.prototype) {
+      return invalidContractDataV1(code2);
+    }
+    const snapshot = {};
+    for (const key of Reflect.ownKeys(input)) {
+      const descriptor = Reflect.getOwnPropertyDescriptor(input, key);
+      if (typeof key !== "string" || isNil(descriptor) || !descriptor.enumerable || !("value" in descriptor)) return invalidContractDataV1(code2);
+      snapshot[key] = snapshotContractDataV1(descriptor.value, code2);
+    }
+    return snapshot;
+  } catch {
+    return invalidContractDataV1(code2);
+  }
+}
 function invalid$5(schemaName) {
   throw new RangeError(`Value must match the closed ${schemaName} schema.`);
 }
@@ -2645,10 +2690,15 @@ function isBipedBoneIdV1(value) {
 function isSubjectBodyTopologyV2(value) {
   return includesSerializedTerm(SUBJECT_BODY_TOPOLOGIES_V2, value);
 }
-const CANONICAL_RESOURCE_KINDS_V1 = Object.freeze([
+const WORLD_RESOURCE_KINDS_V1 = Object.freeze([
   ...SUBJECT_RESOURCE_KINDS_V1,
   "traversal-surface-profile",
-  "gameplay-bootstrap"
+  "gameplay-bootstrap",
+  "world-runtime-bootstrap",
+  "native-scene",
+  "native-scene-api",
+  "native-scene-profile",
+  "static-geometry-asset"
 ]);
 const RESOURCE_LOCK_ENTRY_FIELDS_V1 = [
   "resourceRef",
@@ -2657,26 +2707,30 @@ const RESOURCE_LOCK_ENTRY_FIELDS_V1 = [
   "contentHash"
 ];
 const RESOURCE_HASH_PATTERN_V1 = /^sha256:[a-f0-9]{64}$/;
-function canonicalResourceLockEntriesV1(value) {
-  if (!Array.isArray(value)) {
-    throw new TypeError("CANONICAL_RESOURCE_LOCK_INVALID");
+function worldResourceLockEntriesV1(value) {
+  const snapshot = snapshotContractDataV1(
+    value,
+    "WORLD_RESOURCE_LOCK_INVALID"
+  );
+  if (!Array.isArray(snapshot)) {
+    throw new TypeError("WORLD_RESOURCE_LOCK_INVALID");
   }
   const seenResourceKeys = /* @__PURE__ */ new Set();
-  const rows = value.map((candidate) => {
+  const rows = snapshot.map((candidate) => {
     if (isNil(candidate) || typeof candidate !== "object" || Array.isArray(candidate)) {
-      throw new TypeError("CANONICAL_RESOURCE_LOCK_INVALID");
+      throw new TypeError("WORLD_RESOURCE_LOCK_INVALID");
     }
     const record2 = candidate;
     const fields = Object.keys(record2).sort();
     const expectedFields = [...RESOURCE_LOCK_ENTRY_FIELDS_V1].sort();
-    if (fields.length !== expectedFields.length || fields.some((field, index) => field !== expectedFields[index]) || typeof record2.resourceRef !== "string" || record2.resourceRef.length === 0 || typeof record2.resolvedVersion !== "string" || record2.resolvedVersion.length === 0 || typeof record2.contentHash !== "string" || !RESOURCE_HASH_PATTERN_V1.test(record2.contentHash) || !CANONICAL_RESOURCE_KINDS_V1.includes(
+    if (fields.length !== expectedFields.length || fields.some((field, index) => field !== expectedFields[index]) || typeof record2.resourceRef !== "string" || record2.resourceRef.length === 0 || typeof record2.resolvedVersion !== "string" || record2.resolvedVersion.length === 0 || typeof record2.contentHash !== "string" || !RESOURCE_HASH_PATTERN_V1.test(record2.contentHash) || record2.contentHash === `sha256:${"0".repeat(64)}` || !WORLD_RESOURCE_KINDS_V1.includes(
       record2.resourceKind
     )) {
-      throw new TypeError("CANONICAL_RESOURCE_LOCK_INVALID");
+      throw new TypeError("WORLD_RESOURCE_LOCK_INVALID");
     }
     const resourceKey = `${record2.resourceKind}\0${record2.resourceRef}`;
     if (seenResourceKeys.has(resourceKey)) {
-      throw new TypeError("CANONICAL_RESOURCE_LOCK_INVALID");
+      throw new TypeError("WORLD_RESOURCE_LOCK_INVALID");
     }
     seenResourceKeys.add(resourceKey);
     return Object.freeze({
@@ -12504,7 +12558,7 @@ function projectNormalizedWorldResourcesToLayoutIdentityV4(resources) {
     } = structuredClone(prototype);
     return projectedPrototype;
   });
-  const resourceLock = canonicalResourceLockEntriesV1(
+  const resourceLock = worldResourceLockEntriesV1(
     resources.resourceLock.filter(
       (entry) => entry.resourceKind !== TRAVERSAL_SURFACE_PROFILE_RESOURCE_KIND
     )
@@ -17970,7 +18024,7 @@ class ResourceLockBuilderV1 {
     this.#addEntry(structuredClone(entry), instancePath, diagnostics);
   }
   finish() {
-    const resourceLock = canonicalResourceLockEntriesV1(
+    const resourceLock = worldResourceLockEntriesV1(
       [...this.#entriesByRef.values()]
     );
     return {
@@ -23957,7 +24011,7 @@ function compileCanonicalWorldV1(input) {
     };
   }
   try {
-    const normalizedResourceLockEntries = canonicalResourceLockEntriesV1(
+    const normalizedResourceLockEntries = worldResourceLockEntriesV1(
       snapshot.normalizedWorldIr.resources.resourceLock
     );
     const normalizedResourceLockHash = sha256CanonicalJson(
@@ -23970,7 +24024,7 @@ function compileCanonicalWorldV1(input) {
     let gameplayBootstrapResourceLock;
     try {
       gameplayBootstrap2 = parseGameplayBootstrapV1(snapshot.gameplayBootstrap);
-      const [canonicalBootstrap] = canonicalResourceLockEntriesV1([
+      const [canonicalBootstrap] = worldResourceLockEntriesV1([
         createGameplayBootstrapResourceLockEntryV1(gameplayBootstrap2)
       ]);
       if (isNil(canonicalBootstrap) || canonicalBootstrap.resourceKind !== "gameplay-bootstrap" || normalizedResourceLockEntries.some(
@@ -23996,7 +24050,7 @@ function compileCanonicalWorldV1(input) {
       resolvedVersion: entry.resolvedVersion,
       contentHash: entry.contentHash
     }));
-    const runtimeResourceLockEntries = canonicalResourceLockEntriesV1([
+    const runtimeResourceLockEntries = worldResourceLockEntriesV1([
       ...normalizedResourceLockEntries.filter(
         (entry) => entry.resourceKind !== "traversal-surface-profile"
       ),
