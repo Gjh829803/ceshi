@@ -1,7 +1,9 @@
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 
+import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
+import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import { Scene } from "@babylonjs/core/scene.js";
 import {
   type BabylonNativeSceneModuleV1,
@@ -13,6 +15,7 @@ import { admitBabylonNativeSceneCandidateV1 } from
 import { BabylonWorldRuntime } from "@whitebox-world/runtime-babylon";
 import { bindRuntimeTestPossession } from
   "@whitebox-world/runtime-babylon/testing";
+import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { runtimeWorldConfigurationFromVerifiedWorldPackageV1 } from
   "@whitebox-world/runtime-host";
 import {
@@ -141,6 +144,40 @@ async function createRuntime(input: Readonly<{
 }
 
 describe("BWB-4 Block Profile Collider Runtime", () => {
+  it("replays byte-identical Contributions and Package roots from two isolated Candidates", async () => {
+    const first = await auditedContribution(
+      createBabylonNativeBlockColliderRuntimeFixtureModuleV1(),
+    );
+    const second = await auditedContribution(
+      createBabylonNativeBlockColliderRuntimeFixtureModuleV1(),
+    );
+    expect(second).toEqual(first);
+    expect(first.profileSettlement).toMatchObject({
+      kind: "host-snapshot",
+      profileRef: "worldkit://native-scene-profile/whitebox.blocks@1",
+      targetCount: 6,
+    });
+    expect(first.staticColliders).toHaveLength(6);
+    for (const collider of first.staticColliders) {
+      expect(collider).toMatchObject({ vertexCount: 8, triangleCount: 12 });
+    }
+    const firstPackage = createBabylonNativeWorldPackageV1(
+      createBabylonNativeBlockWorldPackageTestInputV1({
+        resourceBudget: RESOURCE_BUDGET,
+        nativeSceneContribution: first,
+      }),
+    );
+    const secondPackage = createBabylonNativeWorldPackageV1(
+      createBabylonNativeBlockWorldPackageTestInputV1({
+        resourceBudget: RESOURCE_BUDGET,
+        nativeSceneContribution: second,
+      }),
+    );
+    expect(secondPackage.receipt.worldPackageRootHash).toBe(
+      firstPackage.receipt.worldPackageRootHash,
+    );
+  });
+
   it("rejects settled visual drift before Havok, camera, or subjects", async () => {
     const initializationStages: string[] = [];
     let candidateEngine: NullEngine | undefined;
@@ -169,13 +206,30 @@ describe("BWB-4 Block Profile Collider Runtime", () => {
     expect(candidateEngine?.isDisposed).toBe(true);
   });
 
-  it("preserves core Surface identity, blocks a 0.5m step, and loses support at the ledge", async () => {
+  it("passes 0.25m, blocks 0.5m, resets exactly, and loses support at the ledge", async () => {
     const runtime = await createRuntime();
-    const internals = runtime as unknown as { scene: Scene; engine: NullEngine };
+    const internals = runtime as unknown as {
+      scene: Scene;
+      engine: NullEngine;
+      runtimeSubjects: readonly Readonly<{
+        entityId: string;
+        collider: Readonly<{ maxStepHeightMeters: number }>;
+      }>[];
+    };
     const spawnCollisionMesh = internals.scene.getMeshByName(
       "worldkit.native-collider.collider-ground-zero",
     );
+    const collisionMeshes = internals.scene.meshes.filter(({ name }) =>
+      name.startsWith("worldkit.native-collider."));
     try {
+      expect(internals.runtimeSubjects.find(({ entityId }) =>
+        entityId === "player")?.collider.maxStepHeightMeters).toBe(0.3);
+      expect(collisionMeshes).toHaveLength(6);
+      for (const mesh of collisionMeshes) {
+        expect(mesh.getVerticesData(VertexBuffer.PositionKind))
+          .toHaveLength(8 * 3);
+        expect(mesh.getIndices()).toHaveLength(12 * 3);
+      }
       expect(spawnCollisionMesh?.metadata).toMatchObject({
         worldkitEntityId: "collider-ground-zero",
         colliderSubshapeId: expect.stringMatching(/^collider-subshape:[a-f0-9]{64}$/),
@@ -185,6 +239,17 @@ describe("BWB-4 Block Profile Collider Runtime", () => {
         worldkitTraversalSurfaceId: expect.stringMatching(/^traversal-surface:/),
         worldkitTraversalSurfaceProfileRef:
           "worldkit://traversal-surface-profile/ground.static@1",
+      });
+      const elevatedSupport = internals.scene.getPhysicsEngine()!.raycast(
+        new Vector3(0, 2, -3),
+        new Vector3(0, -1, -3),
+      );
+      expect(elevatedSupport.hasHit).toBe(true);
+      expect(elevatedSupport.hitPointWorld.y).toBeCloseTo(0.25, 5);
+      expect(elevatedSupport.hitNormalWorld.y).toBeGreaterThan(0.99);
+      expect(elevatedSupport.body?.transformNode.metadata).toMatchObject({
+        worldkitEntityId: "collider-elevated-tread",
+        worldkitSurfaceEntityId: "surface-elevated-tread",
       });
       const supported = await runtime.runFixedInput({ actions: [], ticks: 5 });
       expect(supported.subjectStatesByEntityId.player).toMatchObject({
@@ -197,12 +262,27 @@ describe("BWB-4 Block Profile Collider Runtime", () => {
         ticks: 180,
       });
       expect(blocked.subjectStatesByEntityId.player!.positionMetersXYZ[2])
-        .toBeGreaterThan(-2.7);
+        .toBeLessThan(-2.5);
+      expect(blocked.subjectStatesByEntityId.player!.positionMetersXYZ[2])
+        .toBeGreaterThan(-3.5);
       expect(blocked.subjectStatesByEntityId.player!.positionMetersXYZ[1])
-        .toBeLessThan(0.1);
+        .toBeGreaterThan(0.24);
+      expect(blocked.subjectStatesByEntityId.player!.positionMetersXYZ[1])
+        .toBeLessThan(0.35);
       expect(blocked.subjectStatesByEntityId.player!.movementMedium).toBe(
         "ground",
       );
+      const committedHash = sha256CanonicalJson(blocked);
+
+      runtime.reset();
+      await bindRuntimeTestPossession(runtime, "player");
+      await runtime.runFixedInput({ actions: [], ticks: 5 });
+      const replayed = await runtime.runFixedInput({
+        actions: ["move-forward"],
+        ticks: 180,
+      });
+      expect(replayed).toEqual(blocked);
+      expect(sha256CanonicalJson(replayed)).toBe(committedHash);
 
       runtime.reset();
       await bindRuntimeTestPossession(runtime, "player");
@@ -221,6 +301,8 @@ describe("BWB-4 Block Profile Collider Runtime", () => {
       await runtime.dispose();
     }
     expect(spawnCollisionMesh?.isDisposed()).toBe(true);
+    expect(collisionMeshes.every((mesh) => mesh.isDisposed())).toBe(true);
+    expect(internals.scene.isDisposed).toBe(true);
     expect(internals.engine.isDisposed).toBe(true);
   }, 30_000);
 });

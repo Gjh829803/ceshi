@@ -10,8 +10,9 @@ const RUNTIME_FIXTURE_BLOCKS = Object.freeze([
   Object.freeze({ id: "ground-positive-one", shape: "full" as const, center: [0, -0.5, 1] as const }),
   Object.freeze({ id: "ground-zero", shape: "full" as const, center: [0, -0.5, 0] as const }),
   Object.freeze({ id: "ground-negative-one", shape: "full" as const, center: [0, -0.5, -1] as const }),
-  Object.freeze({ id: "ground-negative-two", shape: "full" as const, center: [0, -0.5, -2] as const }),
-  Object.freeze({ id: "over-limit-step", shape: "half" as const, center: [0, 0.25, -3] as const }),
+  Object.freeze({ id: "quarter-meter-rise", shape: "step" as const, center: [0, 0.125, -2] as const }),
+  Object.freeze({ id: "elevated-tread", shape: "step" as const, center: [0, 0.125, -3] as const }),
+  Object.freeze({ id: "half-meter-blocker", shape: "half" as const, center: [0, 0.5, -4] as const }),
 ]);
 
 /** Test-only exact Module for real BWB-4 Package/Havok evidence. */
