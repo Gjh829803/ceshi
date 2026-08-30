@@ -1,3 +1,5 @@
+import { CreateBoxVertexData } from
+  "@babylonjs/core/Meshes/Builders/boxBuilder.pure.js";
 import {
   createBabylonNativeStaticColliderContributionV1,
   parseBabylonNativeSceneContributionV1,
@@ -133,21 +135,39 @@ describe("admitBabylonNativeSurfacesV1", () => {
     expect(Object.isFrozen(source.faces)).toBe(true);
   });
 
-  it("treats both triangle winding orders identically", () => {
+  it("admits Babylon outward winding and rejects the same downward face", () => {
     const positions = [-4, 0, -4, 4, 0, -4, 0, 0, 4] as const;
-    const forward = admit(contribution([0, 0, 0], [
-      collider("forward", positions, [0, 1, 2]),
+    const upward = admit(contribution([0, 0, 0], [
+      collider("upward", positions, [0, 1, 2]),
     ]));
-    const reverse = admit(contribution([0, 0, 0], [
-      collider("reverse", positions, [2, 1, 0]),
+    const downward = admit(contribution([0, 0, 0], [
+      collider("downward", positions, [0, 2, 1]),
     ]));
-    expect(forward.outcome).toBe("passed");
-    expect(reverse.outcome).toBe("passed");
-    if (forward.outcome !== "passed" || reverse.outcome !== "passed") {
-      throw new Error("unreachable");
-    }
-    expect(forward.surfaces[0]?.faces[0]?.normalXYZ).toEqual([0, 1, 0]);
-    expect(reverse.surfaces[0]?.faces[0]?.normalXYZ).toEqual([0, 1, 0]);
+    expect(upward.outcome).toBe("passed");
+    if (upward.outcome !== "passed") throw new Error("unreachable");
+    expect(upward.surfaces[0]?.faces[0]?.normalXYZ).toEqual([0, 1, 0]);
+    expect(code(downward)).toBe(
+      "WORLDKIT_NATIVE_SCENE_RUNTIME_SPAWN_SUPPORT_MISSING",
+    );
+  });
+
+  it("admits only the upward top faces from Babylon standard Box geometry", () => {
+    const box = CreateBoxVertexData({ size: 2 });
+    const positions: number[] = Array.from(box.positions ?? []);
+    const indices: number[] = Array.from(box.indices ?? []);
+    const result = admit(contribution([0, 1, 0], [
+      collider("standard-box", positions, indices),
+    ]));
+    expect(result.outcome).toBe("passed");
+    if (result.outcome !== "passed") throw new Error("unreachable");
+    expect(result.surfaces[0]?.faces).toEqual([
+      expect.objectContaining({ triangleIndex: 8, normalXYZ: [0, 1, 0] }),
+      expect.objectContaining({ triangleIndex: 9, normalXYZ: [0, 1, 0] }),
+    ]);
+    expect(result.spawnSupport).toMatchObject({
+      colliderId: "standard-box",
+      supportHeightMeters: 1,
+    });
   });
 
   it("interpolates asymmetric sloped support and selects the topmost eligible face", () => {

@@ -117,6 +117,12 @@ describe("RuntimeHost lifecycle isolation and admission", () => {
     ));
 
     expect(adapter.factory.create).toHaveBeenCalledTimes(1);
+    expect(adapter.factory.awaitCandidatePublicationReady).toHaveBeenCalledTimes(1);
+    expect(adapter.factory.awaitCandidatePublicationReady).toHaveBeenCalledWith({
+      runtimeSessionId: RUNTIME_SESSION_ID,
+      worldSessionId: "world-session.native",
+      publication: host.snapshot(),
+    });
     expect(adapter.factory.create).toHaveBeenCalledWith(expect.objectContaining({
       runtimeSessionId: RUNTIME_SESSION_ID,
       worldSessionId: "world-session.native",
@@ -260,6 +266,27 @@ describe("RuntimeHost lifecycle isolation and admission", () => {
       "private initial adapter initialization failure",
     );
     expect(adapter.factory.create).toHaveBeenCalledTimes(1);
+    expect(port.disposeCount).toBe(1);
+  });
+
+  it("disposes the initial WorldSession when its publication readiness gate fails", async () => {
+    const port = createPortHarness();
+    const adapter = createAdapterFactoryHarness([port]);
+    adapter.factory.awaitCandidatePublicationReady.mockRejectedValueOnce(
+      new Error("private initial readiness failure"),
+    );
+
+    const error = await runtimeHostConstructor().create(hostOptions(
+      adapter.factory,
+      ["world-session.initial-readiness-failure"],
+      { initialWorld: nativeWorldConfiguration() },
+    )).catch((reason: unknown) => reason);
+
+    expect(error).toMatchObject({
+      diagnostic: { code: "WORLD_SESSION_FAILED" },
+    });
+    expect(String(error)).not.toContain("private initial readiness failure");
+    expect(adapter.factory.awaitCandidatePublicationReady).toHaveBeenCalledTimes(1);
     expect(port.disposeCount).toBe(1);
   });
 

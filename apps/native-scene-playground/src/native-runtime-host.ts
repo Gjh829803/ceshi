@@ -8,7 +8,11 @@ import {
   DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
   type GameplayDiagnosticV1,
 } from "@whitebox-world/gameplay-contracts";
-import { sha256Bytes, sha256CanonicalJson } from "@whitebox-world/protocol";
+import {
+  sha256Bytes,
+  sha256CanonicalJson,
+  type Sha256HashV1,
+} from "@whitebox-world/protocol";
 import {
   BabylonWorldRuntime,
   createBabylonGameplayWorldPortV1,
@@ -39,7 +43,7 @@ import type {
 import type {
   VerifiedBabylonNativeWorldPackageDirectoryV1,
 } from "@whitebox-world/world-package";
-import { isNil } from "lodash-es";
+import { isEqual, isNil } from "lodash-es";
 
 const PARTICIPANT_ID = "native-scene-participant";
 const CONTROLLER_ENTITY_ID = "native-scene-controller";
@@ -75,6 +79,7 @@ export interface CreateNativeRuntimeHostOptionsV1 {
   readonly verifiedWorldPackage:
     VerifiedBabylonNativeWorldPackageDirectoryV1;
   readonly loadedSceneModule: BabylonNativeSceneModuleV1;
+  readonly loadedSceneModuleBundleContentHash: Sha256HashV1;
   readonly subjectAssetResolver: SubjectAssetResolverV1;
   readonly onInitializationStage?: (
     stage: BabylonWorldRuntimeInitializationStageV1,
@@ -144,6 +149,7 @@ function wrapOwnedPort(
 function exactModuleLoader(
   verified: VerifiedBabylonNativeWorldPackageDirectoryV1,
   module: BabylonNativeSceneModuleV1,
+  loadedModuleBundleContentHash: Sha256HashV1,
 ): BabylonNativeSceneModuleLoaderV1 {
   return Object.freeze({
     async load(
@@ -154,8 +160,10 @@ function exactModuleLoader(
       if (
         request.sceneModuleBundleRef !== verified.sceneModuleBundleRef ||
         manifest.sceneModuleBundleRef !== verified.sceneModuleBundleRef ||
+        !isEqual(manifest, verified.sceneModuleBundleManifest) ||
+        manifest.bundleContentHash !== loadedModuleBundleContentHash ||
         sha256Bytes(request.sceneModuleBundleBytes) !==
-          manifest.bundleContentHash
+          loadedModuleBundleContentHash
       ) {
         throw new Error("WORLDKIT_NATIVE_SCENE_MODULE_BUNDLE_MISMATCH");
       }
@@ -176,6 +184,12 @@ export class NativeRuntimeHostV1 {
     options: CreateNativeRuntimeHostOptionsV1,
   ): Promise<NativeRuntimeHostV1> {
     const verified = options.verifiedWorldPackage;
+    if (
+      options.loadedSceneModuleBundleContentHash !==
+        verified.sceneModuleBundleManifest.bundleContentHash
+    ) {
+      throw new Error("WORLDKIT_NATIVE_SCENE_MODULE_BUNDLE_MISMATCH");
+    }
     const initialWorld =
       runtimeWorldConfigurationFromVerifiedWorldPackageV1(verified);
     const packageByRef = new Map([
@@ -188,6 +202,7 @@ export class NativeRuntimeHostV1 {
     const moduleLoader = exactModuleLoader(
       verified,
       options.loadedSceneModule,
+      options.loadedSceneModuleBundleContentHash,
     );
     const adapterFactory: GameplayWorldAdapterFactoryV1 = Object.freeze({
       preflightConcurrentResidency(
@@ -278,6 +293,7 @@ export class NativeRuntimeHostV1 {
           return ownedPort;
         } catch (error) {
           await runtime.dispose().catch(() => undefined);
+          canvas.remove();
           throw error;
         }
       },

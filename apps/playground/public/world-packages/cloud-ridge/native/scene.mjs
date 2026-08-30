@@ -121,11 +121,11 @@ function createRampPrism(name, scene2, material) {
     const farRight = nearLeft + 3;
     indices.push(
       nearLeft,
+      farRight,
       nearRight,
-      farRight,
       nearLeft,
-      farRight,
-      farLeft
+      farLeft,
+      farRight
     );
   }
   const normals = [];

@@ -53,7 +53,13 @@ async function loadedBasicPackage() {
   if (!("runtimeWorldConfiguration" in loaded)) {
     throw new Error(JSON.stringify(loaded.result));
   }
-  return loaded;
+  if (loaded.verifiedDirectory.kind !== "canonical-execution-plan") {
+    throw new Error("Expected a Canonical Scene Source package.");
+  }
+  return Object.freeze({
+    ...loaded,
+    verifiedDirectory: loaded.verifiedDirectory,
+  });
 }
 
 function inputFor(
@@ -114,6 +120,14 @@ function throwingCleanupPort(
       return disposePromise;
     },
   });
+}
+
+function failSecondReadyGate(): () => Promise<void> {
+  let callCount = 0;
+  return async () => {
+    callCount += 1;
+    if (callCount === 2) throw new Error("post-bind ready sentinel");
+  };
 }
 
 async function expectCreationFailure(
@@ -234,6 +248,9 @@ describe("headless Babylon Runtime Session", () => {
     });
     if (!("runtimeWorldConfiguration" in candidate)) {
       throw new Error(JSON.stringify(candidate.result));
+    }
+    if (candidate.verifiedDirectory.kind !== "canonical-execution-plan") {
+      throw new Error("Expected a Canonical replacement WorldPackage.");
     }
     const session = await createHeadlessRuntimeSessionForTestV1(
       inputFor(initial, "full-reload"),
@@ -382,10 +399,13 @@ describe("headless Babylon Runtime Session", () => {
         },
       }),
     });
-    await expectCreationFailure("fail-ready", "HEADLESS_RUNTIME_READY_GATE_FAILED", {
+    await expectCreationFailure("fail-initial-ready", "HEADLESS_RUNTIME_WORLD_SESSION_CREATE_FAILED", {
       awaitReady: async () => {
-        throw new Error("ready sentinel");
+        throw new Error("initial ready sentinel");
       },
+    });
+    await expectCreationFailure("fail-ready", "HEADLESS_RUNTIME_READY_GATE_FAILED", {
+      awaitReady: failSecondReadyGate(),
     });
   }, 30_000);
 
@@ -396,9 +416,7 @@ describe("headless Babylon Runtime Session", () => {
       inputFor(loaded, "ready-and-cleanup-fail"),
       {
         createGameplayWorldPort: throwingCleanupPort,
-        awaitReady: async () => {
-          throw new Error("ready primary sentinel");
-        },
+        awaitReady: failSecondReadyGate(),
         onOwnershipSnapshot: (snapshot) => ownershipSnapshots.push(snapshot),
       },
     ).catch((error) => error as Error & {

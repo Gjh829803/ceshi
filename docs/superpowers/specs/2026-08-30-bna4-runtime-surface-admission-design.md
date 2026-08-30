@@ -249,8 +249,8 @@ Babylon Subject adapter. Admission projects the spawn XZ point onto eligible upw
 requires:
 
 - at least one eligible static Surface under the point;
-- the selected topmost support Y to equal spawn Y within the existing Babylon character-controller
-  collision tolerance (`0.0001 m`);
+- the selected topmost support Y to equal spawn Y within the SDK-owned BNA-4 numerical-coherence
+  tolerance (`0.0001 m`);
 - no higher admitted blocking triangle intersects the initial capsule volume; and
 - the initial capsule is inside Package world bounds.
 

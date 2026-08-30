@@ -2039,6 +2039,15 @@ export async function loadPackageHeadless(
     packageDirectoryPath: canonicalPackageDirectoryPath,
   });
   if (!("runtimeWorldConfiguration" in loaded)) return loaded.result;
+  if (loaded.verifiedDirectory.kind !== "canonical-execution-plan") {
+    return packageCommandFailure(
+      "load",
+      6,
+      "WORLD_PACKAGE_RUNTIME_ADAPTER_UNAVAILABLE",
+      "The selected headless Runtime adapter cannot run this admitted Scene Source.",
+    );
+  }
+  const verifiedDirectory = loaded.verifiedDirectory;
   try {
     await withBabylonProtocolSilence(async () => {
       const { createHeadlessRuntimeSessionV1 } = await import(
@@ -2048,7 +2057,7 @@ export async function loadPackageHeadless(
         runtimeSessionId: `runtime-session.load.${randomUUID()}`,
         initialWorldSessionId: `world-session.load.${randomUUID()}`,
         runtimeWorldConfiguration: loaded.runtimeWorldConfiguration,
-        verifiedDirectory: loaded.verifiedDirectory,
+        verifiedDirectory,
       });
       await session.dispose();
     });

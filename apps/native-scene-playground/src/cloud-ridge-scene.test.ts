@@ -1,5 +1,6 @@
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
+import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
 import { afterEach, describe, expect, it } from "vitest";
@@ -43,6 +44,21 @@ function localAxisExtent(mesh: AbstractMesh, axis: 0 | 1 | 2): number {
   const positions = mesh.getVerticesData(VertexBuffer.PositionKind)!;
   const values = positions.filter((_value, index) => index % 3 === axis);
   return Math.max(...values) - Math.min(...values);
+}
+
+function babylonFaceNormalY(
+  positions: ArrayLike<number>,
+  indices: ArrayLike<number>,
+  triangleOffset: number,
+): number {
+  const point = (index: number) => Vector3.FromArray(
+    positions,
+    indices[triangleOffset + index]! * 3,
+  );
+  const first = point(0);
+  const edgeA = point(1).subtract(first);
+  const edgeB = point(2).subtract(first);
+  return Vector3.Cross(edgeB, edgeA).normalize().y;
 }
 
 afterEach(() => {
@@ -222,6 +238,12 @@ describe("cloud ridge Babylon Native scene", () => {
     const path = scene.getMeshByName("collision-primary-path")!;
     const gatePlatform = scene.getMeshByName("collision-gate-platform")!;
     const pathPositions = path.getVerticesData(VertexBuffer.PositionKind)!;
+    const pathIndices = path.getIndices()!;
+    expect(Array.from(
+      { length: pathIndices.length / 3 },
+      (_value, triangleIndex) =>
+        babylonFaceNormalY(pathPositions, pathIndices, triangleIndex * 3),
+    ).every((normalY) => normalY > 0)).toBe(true);
     const pathSummitZMeters = pathPositions
       .filter((_value, index) => index % 3 === 2 && pathPositions[index - 1] === 14);
     gatePlatform.computeWorldMatrix(true);

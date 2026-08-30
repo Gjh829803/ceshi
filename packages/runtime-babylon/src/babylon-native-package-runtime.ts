@@ -12,6 +12,8 @@ import type {
   BabylonNativeSceneModuleBundleManifestV1,
   NativeSceneModuleBundleRefV1,
 } from "@whitebox-world/runtime-contracts";
+import { hashBabylonNativeSceneContributionV1 } from
+  "@whitebox-world/runtime-contracts";
 import {
   runtimeWorldConfigurationFromVerifiedWorldPackageV1,
   type RuntimeWorldAdapterDescriptorV1,
@@ -92,6 +94,29 @@ function assertExactDescriptor(
   }
 }
 
+function assertExactContributionIdentity(
+  verifiedWorldPackage: VerifiedBabylonNativeWorldPackageDirectoryV1,
+): void {
+  const contributionHash = hashBabylonNativeSceneContributionV1(
+    verifiedWorldPackage.nativeSceneContribution,
+  );
+  const manifestSource = verifiedWorldPackage.manifest.sceneSource;
+  const receiptManifestSource =
+    verifiedWorldPackage.receipt.manifest.sceneSource;
+  const identitySource =
+    verifiedWorldPackage.receipt.worldBuildIdentity.sceneSourceIdentity;
+  if (
+    manifestSource.kind !== "babylon-native-scene" ||
+    receiptManifestSource.kind !== "babylon-native-scene" ||
+    identitySource.kind !== "babylon-native-scene" ||
+    contributionHash !== manifestSource.nativeSceneContributionHash ||
+    contributionHash !== receiptManifestSource.nativeSceneContributionHash ||
+    contributionHash !== identitySource.nativeSceneContributionHash
+  ) {
+    throw packageError("WORLDKIT_NATIVE_SCENE_RUNTIME_PACKAGE_MISMATCH");
+  }
+}
+
 function createPackageAssetResolver(
   verifiedWorldPackage: VerifiedBabylonNativeWorldPackageDirectoryV1,
 ): BabylonNativeLockedAssetResolverV1 {
@@ -147,6 +172,7 @@ export async function prepareBabylonNativeRuntimePackageV1(
   input: PrepareBabylonNativeRuntimePackageInputV1,
 ): Promise<PreparedBabylonNativeRuntimePackageV1> {
   assertExactDescriptor(input.descriptor, input.verifiedWorldPackage);
+  assertExactContributionIdentity(input.verifiedWorldPackage);
   let loadedModule: BabylonNativeSceneModuleV1;
   try {
     loadedModule = await input.moduleLoader.load(Object.freeze({

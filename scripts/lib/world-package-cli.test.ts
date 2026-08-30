@@ -19,10 +19,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("@whitebox-world/runtime-babylon", () => {
   throw new Error("Package admission must not construct a Babylon adapter");
 });
-vi.mock("@whitebox-world/runtime-host", () => {
-  throw new Error("Package admission must not construct a RuntimeHost");
-});
-
 import {
   buildWorldPackageDirectoryV1,
   inspectWorldPackageDirectoryV1,
@@ -138,7 +134,7 @@ describe("WorldPackage command core", { timeout: 30_000 }, () => {
     });
   }, 15_000);
 
-  it("inspects Native identity but keeps Runtime load fail-closed until BNA-4", async () => {
+  it("loads an admitted Native Package into the source-neutral Runtime configuration", async () => {
     const directory = await temporaryDirectory();
     const outputDirectoryPath = path.join(directory, "native.package");
     const native = createBabylonNativeWorldPackageV1(
@@ -159,11 +155,22 @@ describe("WorldPackage command core", { timeout: 30_000 }, () => {
     const loaded = await loadRuntimeWorldConfigurationFromPackageDirectoryV1({
       packageDirectoryPath: outputDirectoryPath,
     });
-    expect(loaded).toMatchObject({
-      result: {
-        ok: false,
-        exitCode: 6,
-        diagnostics: [{ code: "WORLDKIT_NATIVE_SCENE_PRODUCTION_NOT_ADMITTED" }],
+    expectSuccess(loaded.result);
+    if (!("runtimeWorldConfiguration" in loaded)) {
+      throw new Error("expected loaded Native Runtime configuration");
+    }
+    if (loaded.verifiedDirectory.kind !== "babylon-native-scene") {
+      throw new Error("expected verified Native Package");
+    }
+    const verified = loaded.verifiedDirectory;
+    expect(loaded.runtimeWorldConfiguration).toMatchObject({
+      worldBuildIdentity: verified.receipt.worldBuildIdentity,
+      gameplayBootstrap: verified.gameplayBootstrap,
+      worldRuntimeBootstrap: verified.worldRuntimeBootstrap,
+      sceneSource: {
+        kind: "babylon-native-scene",
+        bootstrap: verified.bootstrap,
+        sceneModuleBundleRef: verified.sceneModuleBundleRef,
       },
     });
   });
@@ -185,6 +192,9 @@ describe("WorldPackage command core", { timeout: 30_000 }, () => {
     expectSuccess(loaded.result);
     if (!("runtimeWorldConfiguration" in loaded)) {
       throw new Error("expected loaded Runtime configuration");
+    }
+    if (loaded.verifiedDirectory.kind !== "canonical-execution-plan") {
+      throw new Error("expected loaded Canonical WorldPackage");
     }
     expect(loaded.result.command).toBe("load");
     expect(loaded.runtimeWorldConfiguration.worldBuildIdentity.worldPackageRef).toBe(
@@ -239,6 +249,9 @@ describe("WorldPackage command core", { timeout: 30_000 }, () => {
     expectSuccess(loaded.result);
     if (!("runtimeWorldConfiguration" in loaded)) {
       throw new Error("expected loaded Runtime configuration");
+    }
+    if (loaded.verifiedDirectory.kind !== "canonical-execution-plan") {
+      throw new Error("expected loaded Canonical WorldPackage");
     }
     expect(
       loaded.verifiedDirectory.resourceBytesByRef.get(

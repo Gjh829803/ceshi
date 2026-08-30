@@ -9,7 +9,9 @@ import type {
   SemanticInputActionV1,
 } from "@whitebox-world/runtime-contracts";
 
-import cloudRidgeNativeScene from "./scene.js";
+import cloudRidgeNativeScene, {
+  moduleBundleContentHash as cloudRidgeModuleBundleContentHash,
+} from "virtual:worldkit-cloud-ridge-native-scene";
 import { cloudRidgeSubjectAssetResolver } from
   "./subject-asset-resolver.js";
 import { NativeRuntimeHostV1 } from "./native-runtime-host.js";
@@ -109,6 +111,8 @@ async function start(): Promise<void> {
     canvasHost: viewport,
     verifiedWorldPackage,
     loadedSceneModule: cloudRidgeNativeScene,
+    loadedSceneModuleBundleContentHash:
+      cloudRidgeModuleBundleContentHash,
     subjectAssetResolver: cloudRidgeSubjectAssetResolver,
     onInitializationStage(stage) {
       loadingStage.textContent = initializationLabel(stage);

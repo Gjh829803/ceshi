@@ -166,11 +166,11 @@ function createRampPrism(
     const farRight = nearLeft + 3;
     indices.push(
       nearLeft,
+      farRight,
       nearRight,
-      farRight,
       nearLeft,
-      farRight,
       farLeft,
+      farRight,
     );
   }
   const normals: number[] = [];

@@ -9,11 +9,11 @@ import { launchChromiumWithSystemFallback } from
 
 const CONTROLLED_ENTITY_ID = "g-bot-primary";
 const EXPECTED_NATIVE_CONTRIBUTION_HASH =
-  "sha256:0ee59e5c1cf057dcc38b415a461b23a94af110635797377fd57123d234beaa6e";
+  "sha256:bb339a494526ee6bb51a40ec351777bfcb77dcc0bc08a9fa2886a63c9215d984";
 const EXPECTED_COLLIDER_SUBSHAPE_IDS = Object.freeze([
   "collider-subshape:5af935abea0d5d3da0e32a9e5c1121f3d88f5174c3c0cd32414ea4740b13dc89",
   "collider-subshape:0069b3ff456288eb8ea99f6a7ff396f9886725df6dd89e8626cd14150b71dbcc",
-  "collider-subshape:a4deee1a95a3602e16293405e549435f0cf58f48291fb8b1c4a18c558fc4714e",
+  "collider-subshape:c31d374e9b1f86c1eec231de6db07cf966100a57700ab344f41e64a1c53429bc",
 ]);
 
 interface NativeSubjectProjectionV1 {

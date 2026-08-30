@@ -126,6 +126,32 @@ describe("Babylon verified Native runtime Package preparation", () => {
     expect(load).not.toHaveBeenCalled();
   });
 
+  it("fails a structurally forged verified Package before invoking the Module loader", async () => {
+    const { verified, descriptor } = fixture();
+    const load = vi.fn<BabylonNativeSceneModuleLoaderV1["load"]>(
+      async () => module(),
+    );
+    const forged = {
+      ...verified,
+      nativeSceneContribution: {
+        ...verified.nativeSceneContribution,
+        spawnMarker: {
+          ...verified.nativeSceneContribution.spawnMarker,
+          positionMetersXYZ: [1, 0, 0] as const,
+        },
+      },
+    };
+
+    await expect(prepareBabylonNativeRuntimePackageV1({
+      descriptor,
+      verifiedWorldPackage: forged,
+      moduleLoader: Object.freeze({ load }),
+    })).rejects.toMatchObject({
+      code: "WORLDKIT_NATIVE_SCENE_RUNTIME_PACKAGE_MISMATCH",
+    });
+    expect(load).not.toHaveBeenCalled();
+  });
+
   it("rejects an invalid loaded Module with a stable closed error", async () => {
     const { verified, descriptor } = fixture();
     const privateMessage = "private loader implementation detail";

@@ -337,5 +337,6 @@ export async function createHost(
   const adapter = createAdapterFactoryHarness(ports);
   const options = hostOptions(adapter.factory, ids, overrides);
   const host = await runtimeHostConstructor().create(options);
+  adapter.factory.awaitCandidatePublicationReady.mockClear();
   return { adapter, host, options };
 }

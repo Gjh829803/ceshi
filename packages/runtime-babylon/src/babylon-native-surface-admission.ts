@@ -383,10 +383,11 @@ function triangleProjections(
     ] as const);
     const edgeA = vertices[1].subtract(vertices[0]);
     const edgeB = vertices[2].subtract(vertices[0]);
-    const rawNormal = Vector3.Cross(edgeA, edgeB);
+    // Babylon 9.23 ComputeNormals uses (p1 - p2) x (p3 - p2), which is
+    // equivalent to edgeB x edgeA for this vertex order.
+    const rawNormal = Vector3.Cross(edgeB, edgeA);
     if (rawNormal.lengthSquared() <= Number.EPSILON) continue;
     const normal = rawNormal.normalize();
-    if (normal.y < 0) normal.scaleInPlace(-1);
     const slopeDegrees = Math.acos(Math.min(1, Math.max(0, normal.y))) *
       180 / Math.PI;
     projections.push(Object.freeze({
@@ -512,10 +513,17 @@ export function admitBabylonNativeSurfacesV1(
   const candidates: SupportCandidateV1[] = [];
   for (const collider of input.contribution.staticColliders) {
     if (collider.traversalBinding.kind !== "static-surface") continue;
-    const faces = triangleProjections(collider).filter((triangle) =>
-      triangle.normal.y > POINT_IN_TRIANGLE_TOLERANCE &&
-      triangle.slopeDegrees <= input.controlledSubject.collider.maxSlopeDegrees,
-    );
+    const surfaceProfile = resolveTraversalSurfaceProfileV1(
+      collider.traversalBinding.traversalSurfaceProfileRef,
+    ).profile;
+    const faces = surfaceProfile.faceSelectionMode ===
+        "subject-slope-compatible"
+      ? triangleProjections(collider).filter((triangle) =>
+        triangle.normal.y > POINT_IN_TRIANGLE_TOLERANCE &&
+        triangle.slopeDegrees <=
+          input.controlledSubject.collider.maxSlopeDegrees
+      )
+      : [];
     if (faces.length === 0) continue;
     surfaces.push(Object.freeze({
       colliderId: collider.id,

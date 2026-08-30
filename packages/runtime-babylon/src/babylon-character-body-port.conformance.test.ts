@@ -86,9 +86,11 @@ function addStaticBox(
   name: string,
   position: Vector3,
   extents: Vector3,
+  metadata?: Record<string, unknown>,
 ): void {
   const node = new TransformNode(name, scene);
   node.position.copyFrom(position);
+  node.metadata = metadata;
   const shape = new PhysicsShapeBox(
     Vector3.ZeroReadOnly as Vector3,
     Quaternion.Identity(),
@@ -210,6 +212,49 @@ describe("Babylon 9.23.0 / Havok 1.3.14 Character Body conformance", () => {
     ]) {
       expect(typeof (controller as unknown as Record<string, unknown>)[method]).toBe("function");
     }
+  }, 30_000);
+
+  it("projects Native Surface identity from the real Havok support body metadata", async () => {
+    const { scene } = await realScene();
+    addStaticBox(
+      scene,
+      "native-support",
+      new Vector3(0, -0.1, 0),
+      new Vector3(10, 0.2, 10),
+      {
+        worldkitEntityId: "native-ground",
+        colliderSubshapeId: "collider-subshape:native-ground-top",
+        worldkitNativeTraversalKind: "static-surface",
+        worldkitTraversalSurfaceId: "traversal-surface:native-ground-top",
+        worldkitSurfaceEntityId: "native-ground-surface",
+        worldkitLogicalSubshapeId: "top",
+        worldkitTraversalSurfaceProfileRef:
+          "worldkit://traversal-surface-profile/ground.static@1",
+      },
+    );
+    const controller = new GroundAwarePhysicsCharacterController(
+      new Vector3(0, 0.95, 0),
+      { capsuleHeight: 1.8, capsuleRadius: 0.35 },
+      scene,
+    );
+    controller.keepDistance = 0.05;
+    controller.keepContactTolerance = 0.1;
+    controller.maxSlopeCosine = Math.cos(45 * Math.PI / 180);
+    disposals.push(() => controller.dispose());
+
+    controller.refreshCurrentManifold();
+    const support = controller.checkSupport(1 / 60, new Vector3(0, -1, 0));
+    expect(support.supportedState).toBe(CharacterSupportedState.SUPPORTED);
+    const supportContact = controller.readCurrentContacts().find((contact) =>
+      contact.motionType === "static" && contact.normalXYZ[1] > 0.9
+    );
+    expect(supportContact).toMatchObject({
+      traversalSurfaceId: "traversal-surface:native-ground-top",
+      surfaceEntityId: "native-ground-surface",
+      colliderSubshapeId: "collider-subshape:native-ground-top",
+      traversalSurfaceProfileRef:
+        "worldkit://traversal-surface-profile/ground.static@1",
+    });
   }, 30_000);
 
   it.each([1, 2])(

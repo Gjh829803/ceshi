@@ -1223,10 +1223,14 @@ export async function loadHeadlessWorldPackageV1(
   if (!("runtimeWorldConfiguration" in loaded)) {
     throw cleanupCreationError("HEADLESS_WORLD_PACKAGE_LOAD_FAILED", []);
   }
+  if (loaded.verifiedDirectory.kind !== "canonical-execution-plan") {
+    throw cleanupCreationError("HEADLESS_WORLD_PACKAGE_LOAD_FAILED", []);
+  }
+  const verifiedDirectory = loaded.verifiedDirectory;
   return createHeadlessRuntimeSessionV1({
     runtimeSessionId: input.runtimeSessionId,
     initialWorldSessionId: input.initialWorldSessionId,
     runtimeWorldConfiguration: loaded.runtimeWorldConfiguration,
-    verifiedDirectory: loaded.verifiedDirectory,
+    verifiedDirectory,
   });
 }

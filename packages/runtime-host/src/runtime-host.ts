@@ -1451,6 +1451,21 @@ export class RuntimeHost {
         "The initial WorldSession could not be constructed.",
       );
     }
+    try {
+      await options.adapterFactory.awaitCandidatePublicationReady(
+        Object.freeze({
+          runtimeSessionId: options.runtimeSessionId,
+          worldSessionId,
+          publication: worldSession.snapshot(),
+        }),
+      );
+    } catch {
+      await worldSession.dispose().catch(() => undefined);
+      throw hostFailure(
+        "WORLD_SESSION_FAILED",
+        "The initial WorldSession did not reach publication readiness.",
+      );
+    }
     return new RuntimeHost(options, worldSessionId, worldSession);
   }
 

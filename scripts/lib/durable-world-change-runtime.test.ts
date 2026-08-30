@@ -39,8 +39,12 @@ async function loadPackage(packageDirectoryPath: string) {
       "canonical-execution-plan") {
     throw new Error("Expected a Canonical Scene Source package.");
   }
+  if (loaded.verifiedDirectory.kind !== "canonical-execution-plan") {
+    throw new Error("Expected a Canonical WorldPackage directory.");
+  }
   return Object.freeze({
     ...loaded,
+    verifiedDirectory: loaded.verifiedDirectory,
     runtimeWorldConfiguration: Object.freeze({
       worldBuildIdentity: loaded.runtimeWorldConfiguration.worldBuildIdentity,
       gameplayBootstrap: loaded.runtimeWorldConfiguration.gameplayBootstrap,
