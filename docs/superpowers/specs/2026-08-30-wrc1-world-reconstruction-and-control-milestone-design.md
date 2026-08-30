@@ -267,17 +267,19 @@ The scorecard reports independent dimensions rather than one opaque quality numb
 
 WRC-1 optimizes for implementation throughput without weakening evidence:
 
-1. Write one behavior-level failing test before each production change and confirm the expected RED.
-2. Run only that focused test until GREEN; refactor while keeping it GREEN.
-3. At the end of a work package, run each affected typecheck/test/build/browser gate once. Do not run a
+1. Initialize every worktree with `pnpm install --frozen-lockfile`. pnpm store reuse keeps this cheap;
+   do not manually share `node_modules` or trade away a complete AI development environment.
+2. Write one behavior-level failing test before each production change and confirm the expected RED.
+3. Run only that focused test until GREEN; refactor while keeping it GREEN.
+4. At the end of a work package, run each affected typecheck/test/build/browser gate once. Do not run a
    narrow alias after a broader same-tree gate already covered it.
-4. Documentation-only commits use self-review, link/status inspection, and `git diff --check`; they do
+5. Documentation-only commits use self-review, link/status inspection, and `git diff --check`; they do
    not replay Runtime tests.
-5. Full repository gates and independent deep review run in Cursor Cloud against the exact merge
+6. Full repository gates and independent deep review run in Cursor Cloud against the exact merge
    candidate SHA at wave boundaries, not after every local edit.
-6. A later change invalidates only evidence whose inputs or claims it can affect. Narrow fixes rerun
+7. A later change invalidates only evidence whose inputs or claims it can affect. Narrow fixes rerun
    the reproducer and invalidated gates, not the entire historical matrix.
-7. Browser/rendered/manual evidence is collected only when the claim requires that layer. Unit tests
+8. Browser/rendered/manual evidence is collected only when the claim requires that layer. Unit tests
    do not masquerade as visual or feel evidence.
 
 Before production code begins for a work package, its implementation plan must name exact files,
