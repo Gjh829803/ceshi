@@ -1062,7 +1062,7 @@ Package、Build-Epoch Session 和结构 Checker 已完成合同级 checkpoint；
 
 WRC-1 共包含 33 个工作包：已有 JUMP-0..3、BNA-3..8、BWB-3..6、PHO-0A/0B/1..8，另增：
 
-- [ ] WRC-GOV-1：把 PR #41 单一权威、Snapshot/Hash/Reset/Replay/Rollback 和禁止 Provider 私有
+- [x] WRC-GOV-1：把 PR #41 单一权威、Snapshot/Hash/Reset/Replay/Rollback 和禁止 Provider 私有
   Gameplay 状态的规则写入 AGENTS、Runtime checklist 与机械化边界回归；
 - [ ] WRC-ACT-1：冻结 Action Context、Channel Lock、`ActionVariantSet` 与 `PoseSetProfile`；
 - [ ] WRC-ACT-2：完成固定 Tick Action/Posture Reducer、Cancel/Interrupt、fall/land、声明式 fallback、
@@ -1085,6 +1085,17 @@ Wave A 的详细权威设计与施工计划已经固定在：
 
 - [PR #41-Compliant Split Jump Correction Design](superpowers/specs/2026-08-30-wrc1-pr41-split-jump-correction-design.md)
 - [WRC-1 Wave A Jump Authority Implementation Plan](superpowers/plans/2026-08-30-wrc1-wave-a-jump-authority-implementation.md)
+
+Wave A 已由 PR #53 合入 `main@d537f4e9a0a05a448afc9d68681eb42ce31dc04a`：
+
+- [x] JUMP-0：冻结符合 PR #41 的小跳/大跳设计并处置旧 PR #51；
+- [x] JUMP-1：提交 Jump Variant/Episode 合同、Snapshot、Hash、Reset、Replay 与 Rollback；
+- [x] JUMP-2：由 CharacterMovement 固定 Tick 权威实现小跳/大跳，动画只消费 committed presentation；
+- [x] JUMP-3：完成 Alpha 资产准入、双 Subject 隔离、脚底视觉锚定和 Browser 跳跃全周期证据；
+- [x] WRC-GOV-1：机械化禁止 Provider 私有 Jump owner 和输入反向改写。
+
+该完成记录只关闭上述五个工作包；通用 Action/Posture、Camera Feel、BNA-3+、BWB-3+、PHO 与
+WRC-1 总验收仍按各自任务保持开放。
 
 ## 5. 推荐实施顺序与依赖
 
