@@ -52,7 +52,8 @@ WorldPackage，且不新增 Native 专用 Package 包或第二套 parser。
   但公共 Package 不再暴露带 Lane 含义的旧名称；
 - `CANONICAL_RESOURCE_KINDS_V1` 同步改为 `WORLD_RESOURCE_KINDS_V1`；JCS helper
   `canonicalWorldPackageManifestV1` 改为不会与 Canonical Scene Source 混淆的
-  `canonicalizeWorldPackageManifestV1`；
+  `canonicalizeWorldPackageManifestV1`，`canonicalWorldPackageFileIntegrityEntriesV1` 同步改为
+  `canonicalizeWorldPackageFileIntegrityEntriesV1`；
 - `VerifiedWorldPackageDirectoryV1` 同样变为判别联合，调用方必须按
   `manifest.sceneSource.kind` 缩窄；
 - 一个 `verifyWorldPackageDirectoryV1`、一个 Build Receipt parser、一个 Store、一个签名与 Host
@@ -199,7 +200,8 @@ nativeSceneModuleBundleRefFromHashV1(sceneModuleBundleHash) =
 该纯函数与 `NativeSceneModuleBundleRefV1` 归 `@whitebox-world/runtime-contracts` 所有。Native verified
 member 必须直接暴露已解析的 `bootstrap`、`sceneModuleBundleHash` 与由该函数得到的
 `sceneModuleBundleRef`；Runtime adapter 不得从 WorldPackage Root Ref、文件路径或其他 scheme 猜测 Bundle
-身份。
+身份。函数必须像 `worldPackageRefFromRootHashV1` 一样先拒绝零 Hash、非法前缀、非小写或非 64 位
+SHA-256，再移除 `sha256:` 前缀；不得把任意 string 直接 `slice()` 成 Ref。
 
 ### 4.3 Babylon-free 持久合同归属
 
@@ -246,8 +248,9 @@ Dependency Lock 使用闭合、排序的 entries，每项包含：
 - `packageIntegrityHash`；
 - `usage: "runtime-external" | "bundle-toolchain"`。
 
-至少锁定安装树中的 `@babylonjs/core`、`@whitebox-world/native-babylon`、选中的 Profile package、
-TypeScript 和 Vite/Rollup。`@babylonjs/core`、`@whitebox-world/native-babylon` 与 Profile package 的
+至少锁定安装树中的 `@babylonjs/core`、`@whitebox-world/native-babylon`、Module 实际 import 的已安装
+Block/Profile package、TypeScript 和 Vite/Rollup。`nativeSceneProfileRef` 是 Registry resource，不因名字
+含 Profile 就虚构同名 npm package。`@babylonjs/core`、`@whitebox-world/native-babylon` 与实际安装的 Profile package 的
 `usage` 是 `runtime-external`；TypeScript 和 Vite/Rollup 是 `bundle-toolchain`。`@babylonjs/havok`
 不属于 Native Module 的 import/bundle 闭包，不进入本 Lock；它由 BNA-4 的 SDK Runtime 独占并锁定。版本与 Hash 必须
 从项目 lockfile 和实际安装 manifest 得出；不接受 Module 自报版本。Runtime external 与 build-only
@@ -269,9 +272,11 @@ Asset Lock 的每个 entry 以 `assetResourceRef` 排序。BNA-3 只冻结当前
 artifact-only `scene-shell`。完整 Production Request/Result/Receipt、Provider/模型版本、Admission
 Profile 和更丰富的 Bounds/Inventory 由 APA-1 冻结后 current-only 扩充，不在 BNA-3 伪造一套临时合同。
 
-Attempt `selectedAssetResources`、两次 Candidate replay 记录的 resolved asset refs、Asset Lock entries
+Attempt `selectedAssetResources`、两次 Candidate replay 期间由 Host 包装 asset resolver 分别记录的
+resolved asset refs、Asset Lock entries
 和 Package `resources` 中对应的 `static-geometry-asset` refs 必须 exact set equality。Bootstrap 当前不
-声明 selected assets，因此不参与该等式。
+声明 selected assets，因此不参与该等式。该 Host 记账不修改或复制 BNA-2 已冻结的 replay result；两次
+记录还必须彼此 byte-exact 相同。
 
 ## 6. Authoring Attempt 与 Check 闭包
 
@@ -295,6 +300,9 @@ Native Package build 输入必须包含：
 interface FrozenBabylonNativeWorldPackageBuildInputV1 {
   readonly shared: WorldPackageSharedBuildContextV1;
   readonly packageId: string;
+  readonly worldId: string;
+  readonly worldBounds: WorldPackageWorldBoundsV1;
+  readonly resourceBudget: WorldPackageResourceBudgetV1;
   readonly nativeSceneBootstrap: BabylonNativeSceneBootstrapV1;
   readonly sceneModuleBundleManifest:
     BabylonNativeSceneModuleBundleManifestV1;
@@ -318,6 +326,12 @@ interface FrozenBabylonNativeWorldPackageBuildInputV1 {
 notice 与通用 generated-resource provenance；不得含 AuthoringSpec、ExecutionPlan、Native handles 或
 `includeAuthoringSpec`。Native Host 入口先完成 filesystem/typecheck/bundle/replay，再原子冻结上述输入；
 纯 builder 不接收 source paths、callbacks、Provider 或 resolver。
+
+`worldId`、`worldBounds` 与 `resourceBudget` 是 Trusted Host 在 Authoring Attempt 前冻结并在本输入中原样
+携带的世界级事实；不得从 `bootstrap.id`、Gameplay Bootstrap id、Contribution AABB 或 BNA-2
+`BabylonNativeSceneAdmissionBudgetV1` 改名/反推。Manifest `seed` 唯一取
+`nativeSceneBootstrap.seed`，并要求它与 `sceneAuthoringAttempt.seed` 全等。Host 必须在 Package build 前
+验证 Spawn/Collider/资源清单满足这些世界事实；字段缺失或不一致时 fail-closed。
 
 ## 7. Root 文件布局与 Hash 顺序
 
@@ -387,6 +401,12 @@ Typecheck、Bundle、安装依赖核对和双 Candidate replay 由 `scripts/nati
 `createBabylonNativeWorldPackageV1(...)`，不得复制 WorldPackage Hash 算法或绕开 BNA-2 admission。
 这样 `@whitebox-world/world-package` 不依赖 Node、Vite、TypeScript 或 Babylon。
 
+Host 入口的输入由 world directory、上述 Trusted Host 冻结的 world/package/shared 字段、Route/Attempt/
+Result、Gameplay/Runtime Bootstrap、Registry Lock、已发布 asset resources 与 Host policy 组成；输出只有
+`Promise<WorldPackageDirectoryV1>` 或稳定 tool error。它内部唯一地执行 workspace read -> source
+admission -> persistent bundle/dependency/asset lock -> 双 replay -> frozen input -> pure builder -> verifier；
+不得接受已加载 Module callback、预制 Contribution 或调用方提供的 Package Root。
+
 现有 Canonical-only `WorldPackageGameplayBootstrapMembershipInputV1` 和 assertion 同步 clean break 为
 显式的 Canonical/Native membership 函数；公共 verifier 只负责分派，不能用 optional Plan 参数构成双
 语义。
@@ -426,6 +446,7 @@ interface VerifiedBabylonNativeWorldPackageDirectoryV1 {
   readonly sceneModuleBundleManifest:
     BabylonNativeSceneModuleBundleManifestV1;
   readonly sceneModuleBundleBytes: Uint8Array;
+  readonly sceneModuleBundleHash: Sha256HashV1;
   readonly sceneModuleBundleRef: NativeSceneModuleBundleRefV1;
   readonly dependencyLock: BabylonNativeDependencyLockV1;
   readonly assetLock: BabylonNativeAssetLockV1;
@@ -520,7 +541,10 @@ Canonical parser。cleanup failure 是明确 tool error，不能吞掉。
 
 Clean-break census 还必须证明以下旧 public symbol/field 全仓为零：`createWorldPackageV1`、
 `CreateWorldPackageV1Input`、`WorldPackageBuildContextV1`、`CanonicalResourceLockEntryV1`、
-`canonicalResourceLockEntriesV1`、`CANONICAL_RESOURCE_KINDS_V1`、`canonicalWorldPackageManifestV1`，
+`CanonicalResourceKindV1`、`canonicalResourceLockEntriesV1`、`CANONICAL_RESOURCE_KINDS_V1`、
+`ResolvedWorldPackageResourceArtifactV1`、`WorldPackageGameplayBootstrapMembershipInputV1`、
+`assertWorldPackageGameplayBootstrapMembershipV1`、`canonicalWorldPackageManifestV1`、
+`canonicalWorldPackageFileIntegrityEntriesV1`，
 以及公共 Manifest 顶层的 `authoringSpecHash` / `executionPlanHash`。Canonical 的
 `includeAuthoringSpec` 作为 Lane 专属审计选择保留，但不得出现在 shared 或 Native input。
 
