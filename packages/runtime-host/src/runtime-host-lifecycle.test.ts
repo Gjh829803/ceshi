@@ -105,6 +105,46 @@ function nativeWorldConfiguration(worldPackageRef = INITIAL_WORLD_PACKAGE_REF) {
 }
 
 describe("RuntimeHost lifecycle isolation and admission", () => {
+  it("commits the initial control binding before the sole initial publication gate", async () => {
+    const port = createPortHarness();
+    const adapter = createAdapterFactoryHarness([port]);
+    adapter.factory.awaitCandidatePublicationReady.mockImplementation(
+      async ({ publication }) => {
+        expect(Object.values(
+          publication.gameplayInspection.relationshipStatesById,
+        )).toEqual([
+          expect.objectContaining({
+            controllerEntityId: controllerState.id,
+            controlledEntityId: heroState.id,
+          }),
+        ]);
+      },
+    );
+
+    const host = await runtimeHostConstructor().create(hostOptions(
+      adapter.factory,
+      ["world-session.bound-initial"],
+      {
+        initialControlBinding: {
+          controllerEntityId: controllerState.id,
+          controlledEntityId: heroState.id,
+        },
+      },
+    ));
+
+    expect(adapter.factory.awaitCandidatePublicationReady).toHaveBeenCalledTimes(1);
+    expect(Object.values(
+      host.snapshot().gameplayInspection.relationshipStatesById,
+    )).toEqual([
+      expect.objectContaining({
+        controllerEntityId: controllerState.id,
+        controlledEntityId: heroState.id,
+      }),
+    ]);
+    await host.dispose();
+    expect(port.disposeCount).toBe(1);
+  });
+
   it("passes an exact Native Scene Source to the shared initial Adapter path", async () => {
     const initialWorld = nativeWorldConfiguration();
     const port = createPortHarness();

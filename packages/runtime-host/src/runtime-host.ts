@@ -487,6 +487,7 @@ export interface RuntimeCandidatePublicationGateInputV1 {
 export interface RuntimeHostCreateOptionsV1 {
   readonly runtimeSessionId: string;
   readonly initialWorld: RuntimeWorldConfigurationV1;
+  readonly initialControlBinding?: RuntimeHostInitialControlBindingV1;
   readonly participantStates: readonly GameplayParticipantStateV1[];
   readonly controllerStates: readonly ControllerEntityStateV1[];
   readonly fixedInputControllerEntityId: string;
@@ -1175,13 +1176,18 @@ function parseRuntimeHostCreateOptions(
     "adapterFactory",
     "worldSessionIdFactory",
   ] as const;
-  const hasResolver = !isNil(record) && hasExactKeys(record, [
+  const hasResolver = !isNil(record) &&
+    Object.hasOwn(record, "gameplayActionRequestResolver");
+  const hasInitialControlBinding = !isNil(record) &&
+    Object.hasOwn(record, "initialControlBinding");
+  const expectedKeys = [
     ...baseKeys,
-    "gameplayActionRequestResolver",
-  ]);
+    ...(hasResolver ? ["gameplayActionRequestResolver"] : []),
+    ...(hasInitialControlBinding ? ["initialControlBinding"] : []),
+  ];
   if (
     isNil(record) ||
-    (!hasExactKeys(record, baseKeys) && !hasResolver) ||
+    !hasExactKeys(record, expectedKeys) ||
     !isNonEmptyString(record.runtimeSessionId) ||
     !isNonEmptyString(record.fixedInputControllerEntityId) ||
     typeof record.gameplayModeFactory !== "function" ||
@@ -1250,6 +1256,13 @@ function parseRuntimeHostCreateOptions(
   return Object.freeze({
     runtimeSessionId: record.runtimeSessionId,
     initialWorld,
+    ...(hasInitialControlBinding
+      ? {
+          initialControlBinding: parseInitialControlBinding(
+            record.initialControlBinding,
+          ),
+        }
+      : {}),
     participantStates,
     controllerStates,
     fixedInputControllerEntityId: record.fixedInputControllerEntityId,
@@ -1452,6 +1465,24 @@ export class RuntimeHost {
       );
     }
     try {
+      if (!isNil(options.initialControlBinding)) {
+        const bindReceipt = await worldSession.executeGameplayCommand({
+          schemaVersion: 1,
+          id: `command.runtime-host.initial-bind.${worldSessionId}`,
+          type: "control.bind",
+          runtimeSessionId: options.runtimeSessionId,
+          worldSessionId,
+          controllerEntityId: options.initialControlBinding.controllerEntityId,
+          controlledEntityId: options.initialControlBinding.controlledEntityId,
+          expectedPossession: { mode: "unbound" },
+        });
+        if (bindReceipt.status !== "committed") {
+          throw hostFailure(
+            bindReceipt.diagnostic.code,
+            "The initial control binding was not committed.",
+          );
+        }
+      }
       await options.adapterFactory.awaitCandidatePublicationReady(
         Object.freeze({
           runtimeSessionId: options.runtimeSessionId,

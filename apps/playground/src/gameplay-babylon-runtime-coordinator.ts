@@ -659,6 +659,12 @@ export class GameplayBabylonRuntimeCoordinatorV1 {
         maximumRuntimeActivityRecordCount:
           MAXIMUM_RUNTIME_ACTIVITY_RECORD_COUNT_V1,
       },
+      initialControlBinding: {
+        controllerEntityId: PLAYGROUND_CONTROLLER_ENTITY_ID_V1,
+        controlledEntityId:
+          options.initialWorldConfiguration.worldRuntimeBootstrap
+            .initialControlledEntityId,
+      },
       adapterFactory,
       worldSessionIdFactory,
     });
@@ -668,14 +674,7 @@ export class GameplayBabylonRuntimeCoordinatorV1 {
         .initialControlledEntityId,
       handles,
     );
-    try {
-      await coordinator.bindInitialControl(host.currentWorldSessionId);
-      await coordinator.activeRuntime().renderFrameWhenReady();
-      return coordinator;
-    } catch (error) {
-      await host.dispose().catch(() => undefined);
-      throw error;
-    }
+    return coordinator;
   }
 
   activeRuntime(): GameplayBabylonRuntimeV1 {
