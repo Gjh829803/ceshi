@@ -289,15 +289,7 @@ describe("admitBabylonNativeSceneCandidateV1", () => {
             },
           }],
         });
-        const readIndices = proxy.getIndices.bind(proxy);
-        let instanceCreated = false;
-        proxy.getIndices = () => {
-          if (!instanceCreated) {
-            instanceCreated = true;
-            proxy.createInstance("extra-proxy-instance");
-          }
-          return readIndices();
-        };
+        proxy.createInstance("extra-proxy-instance");
       }),
       DEFAULT_BUDGET,
       BLOCK_BOOTSTRAP,

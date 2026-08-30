@@ -12,6 +12,7 @@ import { Color3, Color4 } from "@babylonjs/core/Maths/math.color.js";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
 import { Geometry } from "@babylonjs/core/Meshes/geometry.js";
+import "@babylonjs/core/Meshes/instancedMesh.js";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
@@ -125,6 +126,23 @@ function registerSpawn(
     facingRadians: 0,
   });
 }
+
+describe("installed Babylon runtime-kind authority audit", () => {
+  it("uses the AbstractMesh callback surface for an InstancedMesh added by Babylon", async () => {
+    const candidate = createCandidate();
+    const result = await admit(candidate, (context) => {
+      const source = MeshBuilder.CreateBox(
+        "instance-source",
+        { size: 1 },
+        candidate.scene,
+      );
+      source.createInstance("installed-instance");
+      registerSpawn(context);
+    });
+
+    expect(result.outcome).toBe("passed");
+  });
+});
 
 function invokeObservableControl(
   observable: Record<string, unknown>,

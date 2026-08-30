@@ -1,4 +1,5 @@
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
+import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import type { Scene } from "@babylonjs/core/scene.js";
 import {
   parseNativeSceneDiagnosticV1,
@@ -1091,7 +1092,9 @@ function createdObjectKind(
   insertionKey: string,
   object: Record<string, unknown>,
 ): CreatedObjectSurfaceV1["kind"] {
-  if (insertionKey === "addMesh") return "mesh";
+  if (insertionKey === "addMesh") {
+    return object instanceof Mesh ? "mesh" : "abstract-mesh";
+  }
   if (insertionKey === "addTransformNode") return "transform-node";
   if (insertionKey === "addMaterial") {
     return object instanceof StandardMaterial ? "standard-material" : "material";
