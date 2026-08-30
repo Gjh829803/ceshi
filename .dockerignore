@@ -2,6 +2,7 @@
 !package.json
 !pnpm-lock.yaml
 !pnpm-workspace.yaml
+!tsconfig.json
 !patches/
 !patches/**
 !packages/
@@ -10,6 +11,8 @@
 !scripts/native-scene/
 !scripts/native-scene/hosted/
 !scripts/native-scene/hosted/runner-entry.ts
+!scripts/native-scene/hosted/runner/
+!scripts/native-scene/hosted/runner/build.mjs
 !scripts/native-scene/hosted/hostile-fixtures/
 !scripts/native-scene/hosted/hostile-fixtures/**
 !assets/

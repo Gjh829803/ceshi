@@ -24,11 +24,11 @@ import {
   type NativeIsolationTransportEnvelopeV1,
 } from "@whitebox-world/runtime-contracts";
 import {
-  assembleWorldPackageDirectoryV1,
+  assembleBabylonNativeWorldPackageDirectoryV1,
   assertWorldPackageBuildReceiptV1,
-  verifyWorldPackageDirectoryV1,
+  verifyBabylonNativeWorldPackageDirectoryV1,
   type VerifiedBabylonNativeWorldPackageDirectoryV1,
-} from "@whitebox-world/world-package";
+} from "@whitebox-world/world-package/native-runtime";
 import { isNil } from "lodash-es";
 
 const PACKAGE_ROOT = "/world-package";
@@ -68,12 +68,9 @@ Promise<VerifiedBabylonNativeWorldPackageDirectoryV1> {
       });
     },
   ));
-  const verified = verifyWorldPackageDirectoryV1(
-    assembleWorldPackageDirectoryV1({ receipt, files }),
+  const verified = verifyBabylonNativeWorldPackageDirectoryV1(
+    assembleBabylonNativeWorldPackageDirectoryV1({ receipt, files }),
   );
-  if (verified.kind !== "babylon-native-scene") {
-    throw new Error("WORLDKIT_NATIVE_RUNNER_SCENE_SOURCE_INVALID");
-  }
   return verified;
 }
 
