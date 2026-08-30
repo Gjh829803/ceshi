@@ -6,17 +6,17 @@ import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import { FreeCamera } from "@babylonjs/core/Cameras/freeCamera.js";
 import { Scene } from "@babylonjs/core/scene.js";
 import {
-  createBabylonNativeHostRandomV1,
-  type BabylonNativeSceneBuildContextV1,
+  defineBabylonNativeScene,
 } from "@whitebox-world/native-babylon";
+import { admitBabylonNativeSceneCandidateV1 } from
+  "@whitebox-world/native-babylon/host";
 import {
   createBabylonNativeBlockAuthoringCaptureV1,
   createBabylonNativeBlockProfileSessionV1,
-  createBabylonNativeBlockVisualsV1,
   type BabylonNativeBlockAuthoringCaptureV1,
   type BabylonNativeBlockAuthoringViewIdV1,
+  type BabylonNativeBlockFinalizedEpochV1,
   type BabylonNativeBlockProfileSessionV1,
-  type BabylonNativeBlockVisualsV1,
 } from "@whitebox-world/native-babylon-block-profile";
 
 interface Bwb3CaptureProbeV1 {
@@ -32,10 +32,7 @@ declare global {
   }
 }
 
-function context(scene: Scene): BabylonNativeSceneBuildContextV1 {
-  return Object.freeze({
-    scene,
-    bootstrap: Object.freeze({
+const BOOTSTRAP = Object.freeze({
       kind: "babylon-native-scene-bootstrap",
       schemaVersion: 1,
       id: "bwb3-block-capture",
@@ -56,19 +53,7 @@ function context(scene: Scene): BabylonNativeSceneBuildContextV1 {
       }),
       seed: 303,
       spawnMarkerId: "capture-spawn",
-    }),
-    random: createBabylonNativeHostRandomV1(303),
-    assets: Object.freeze({
-      async resolve(): Promise<never> {
-        throw new Error("BWB-3 capture fixture has no external assets");
-      },
-    }),
-    registration: Object.freeze({
-      registerSpawnMarker(): void {},
-      registerStaticCollider(): void {},
-    }),
-  });
-}
+    });
 
 function block(
   session: BabylonNativeBlockProfileSessionV1,
@@ -135,7 +120,7 @@ function buildFixture(session: BabylonNativeBlockProfileSessionV1): void {
   }
 }
 
-function start(): void {
+async function start(): Promise<void> {
   const canvas = document.querySelector("canvas");
   if (!(canvas instanceof HTMLCanvasElement)) {
     throw new TypeError("BWB-3 fixture requires one canvas");
@@ -156,26 +141,54 @@ function start(): void {
   );
   sun.intensity = 1.35;
 
-  const session = createBabylonNativeBlockProfileSessionV1(
-    context(scene),
-    { maximumBlockCount: 32 },
-  );
-  buildFixture(session);
-  const checkedLayout = session.finalize();
-  if (checkedLayout.checkResult.outcome !== "passed") {
-    throw new Error(JSON.stringify(checkedLayout.checkResult.diagnostics));
+  let session: BabylonNativeBlockProfileSessionV1 | undefined;
+  let finalizedEpoch: BabylonNativeBlockFinalizedEpochV1 | undefined;
+  const admission = await admitBabylonNativeSceneCandidateV1({
+    candidate: Object.freeze({ engine, scene }),
+    bootstrap: BOOTSTRAP,
+    module: defineBabylonNativeScene({
+      kind: "babylon-native-scene-module",
+      id: "bwb3-block-capture-module",
+      build(context): void {
+        session = createBabylonNativeBlockProfileSessionV1(
+          context,
+          { maximumBlockCount: 32 },
+        );
+        buildFixture(session);
+        finalizedEpoch = session.finalize(Object.freeze({
+          displayGapMeters: 0.035,
+          staticColliders: Object.freeze([]),
+        }));
+        context.registration.registerSpawnMarker(Object.freeze({
+          id: context.bootstrap.spawnMarkerId,
+          positionMetersXYZ: Object.freeze([0, 1, 4] as const),
+          facingRadians: 0,
+        }));
+      },
+    }),
+    assets: Object.freeze({
+      async resolve(): Promise<never> {
+        throw new Error("BWB-3 capture fixture has no external assets");
+      },
+    }),
+    budget: Object.freeze({
+      maximumStaticColliderCount: 0,
+      maximumStaticColliderVertexCount: 0,
+      maximumStaticColliderTriangleCount: 0,
+    }),
+  });
+  if (
+    admission.outcome !== "passed" ||
+    finalizedEpoch === undefined ||
+    finalizedEpoch.checkedLayout.checkResult.outcome !== "passed"
+  ) {
+    throw new Error(JSON.stringify(
+      admission.outcome === "rejected" ? admission.diagnostics : admission,
+    ));
   }
-  const visuals: BabylonNativeBlockVisualsV1 =
-    createBabylonNativeBlockVisualsV1({
-      scene,
-      buildEpochId: "bwb3-capture-epoch",
-      checkedLayout,
-      displayGapMeters: 0.035,
-    });
   const capture = createBabylonNativeBlockAuthoringCaptureV1({
     scene,
-    buildEpochId: "bwb3-capture-epoch",
-    checkedLayout,
+    finalizedEpoch,
     widthPixels: 800,
     heightPixels: 600,
     opening: Object.freeze({
@@ -204,16 +217,19 @@ function start(): void {
   window.__WORLDKIT_BWB3_CAPTURE__ = Object.freeze({
     ready: true as const,
     capture,
-    checkOutcome: "passed" as const,
+    checkOutcome: finalizedEpoch.checkedLayout.checkResult.outcome,
     showView,
   });
   window.addEventListener("pagehide", () => {
     camera?.dispose();
-    visuals.dispose();
-    session.dispose();
+    session?.dispose();
     scene.dispose();
     engine.dispose();
   }, { once: true });
 }
 
-start();
+void start().catch((error: unknown) => {
+  queueMicrotask(() => {
+    throw error;
+  });
+});

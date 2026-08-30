@@ -17,15 +17,15 @@ export { createBabylonNativeBlockProfileSessionV1 } from "./session.js";
 export type {
   BabylonNativeBlockCheckedLayoutV1,
   BabylonNativeBlockCreateInputV1,
+  BabylonNativeBlockFinalizedEpochV1,
   BabylonNativeBlockProfileBudgetV1,
+  BabylonNativeBlockProfileFinalizeInputV1,
   BabylonNativeBlockProfileSessionV1,
 } from "./session.js";
-export { createBabylonNativeBlockVisualsV1 } from "./babylon-visual-adapter.js";
 export type {
-  BabylonNativeBlockVisualNodeV1,
-  BabylonNativeBlockVisualsV1,
-  CreateBabylonNativeBlockVisualsInputV1,
-} from "./babylon-visual-adapter.js";
+  BabylonNativeBlockColliderCandidateInventoryEntryV1,
+  BabylonNativeBlockStaticColliderSelectionV1,
+} from "./collider-contribution.js";
 export { createBabylonNativeBlockAuthoringCaptureV1 } from "./authoring-capture.js";
 export type {
   BabylonNativeBlockAuthoringCaptureV1,

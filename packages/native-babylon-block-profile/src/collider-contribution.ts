@@ -1,13 +1,11 @@
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
-import type { Scene } from "@babylonjs/core/scene.js";
 import type {
-  BabylonNativeSceneRegistrationV1,
+  BabylonNativeSceneBuildContextV1,
   BabylonNativeTraversalBindingV1,
 } from "@whitebox-world/native-babylon";
+import { isNil } from "lodash-es";
 
-import type { BabylonNativeBlockProfileCheckResultV1 } from "./check.js";
-import type { BabylonNativeBlockLayoutV1 } from "./layout.js";
-import type { BabylonNativeBlockSessionRecordV1 } from "./session.js";
+import type { BabylonNativeBlockCheckedLayoutV1 } from "./session.js";
 
 export interface BabylonNativeBlockStaticColliderSelectionV1 {
   readonly id: string;
@@ -23,6 +21,12 @@ export interface BabylonNativeBlockColliderCandidateInventoryEntryV1 {
   readonly visualGroupIds: readonly string[];
   readonly proxyKind: "layout-block-volume";
   readonly traversalBinding: BabylonNativeTraversalBindingV1;
+}
+
+export interface MaterializedBabylonNativeBlockColliderCandidatesV1 {
+  readonly inventory:
+    readonly BabylonNativeBlockColliderCandidateInventoryEntryV1[];
+  dispose(): void;
 }
 
 const STABLE_ID = /^[a-z0-9][a-z0-9-]{2,79}$/;
@@ -81,51 +85,69 @@ function fail(code: string, message: string): never {
 
 /**
  * Package-private Build-Epoch adapter. `selections` must already be canonical
- * frozen values from the future BNA-owned snapshot boundary; this layer never
+ * frozen values from the Session-owned canonical snapshot boundary; this layer never
  * reparses traversal bindings or derives core Contribution identity.
  */
-export function createBabylonNativeBlockColliderCandidatesV1(
+function disposeProxies(
+  proxies: readonly ReturnType<typeof MeshBuilder.CreateBox>[],
+): Readonly<{ didFail: boolean; error: unknown }> {
+  let didFail = false;
+  let firstFailure: unknown;
+  for (let index = proxies.length - 1; index >= 0; index -= 1) {
+    try {
+      proxies[index]!.dispose();
+    } catch (error) {
+      if (!didFail) {
+        didFail = true;
+        firstFailure = error;
+      }
+    }
+  }
+  return Object.freeze({ didFail, error: firstFailure });
+}
+
+export function materializeBabylonNativeBlockColliderCandidatesV1(
   input: Readonly<{
-    scene: Scene;
-    buildEpochId: string;
-    layout: BabylonNativeBlockLayoutV1;
-    checkResult: BabylonNativeBlockProfileCheckResultV1;
-    records: readonly BabylonNativeBlockSessionRecordV1[];
+    context: BabylonNativeSceneBuildContextV1;
+    checkedLayout: BabylonNativeBlockCheckedLayoutV1;
     selections: readonly BabylonNativeBlockStaticColliderSelectionV1[];
-    registration: BabylonNativeSceneRegistrationV1;
   }>,
-): readonly BabylonNativeBlockColliderCandidateInventoryEntryV1[] {
+): MaterializedBabylonNativeBlockColliderCandidatesV1 {
+  const { checkedLayout } = input;
+  const { scene } = input.context;
   if (
-    !isCanonicalStableId(input.buildEpochId) ||
-    input.scene.isDisposed
+    !isCanonicalStableId(input.context.bootstrap.id) ||
+    scene.isDisposed
   ) {
     return fail(
       "WORLDKIT_NATIVE_BLOCK_COLLIDER_SELECTION_INVALID",
       "Collider candidates require one live Scene and stable Build Epoch ID.",
     );
   }
-  if (input.checkResult.outcome !== "passed") {
+  if (checkedLayout.checkResult.outcome !== "passed") {
     return fail(
       "WORLDKIT_NATIVE_BLOCK_COLLIDER_CHECK_REJECTED",
       "Collider candidates require one passed Block Profile check.",
     );
   }
-  const layoutById = new Map(input.layout.blocks.map((block) => [block.id, block]));
-  const recordsById = new Map(input.records.map((record) => [record.input.id, record]));
-  if (input.records.some((record) => record.mesh.getScene() !== input.scene)) {
+  const layoutById = new Map(checkedLayout.layout.blocks.map((block) =>
+    [block.id, block] as const));
+  const recordsById = new Map(checkedLayout.records.map((record) =>
+    [record.input.id, record] as const));
+  if (checkedLayout.records.some((record) => record.mesh.getScene() !== scene)) {
     return fail(
       "WORLDKIT_NATIVE_BLOCK_SCENE_MISMATCH",
       "One checked Block belongs to another Candidate Scene.",
     );
   }
   if (
-    input.layout.issues.length !== 0 ||
-    layoutById.size !== input.layout.blocks.length ||
-    recordsById.size !== input.records.length ||
-    input.layout.blocks.length !== input.records.length ||
-    input.records.some((record) => {
+    checkedLayout.layout.issues.length !== 0 ||
+    layoutById.size !== checkedLayout.layout.blocks.length ||
+    recordsById.size !== checkedLayout.records.length ||
+    checkedLayout.layout.blocks.length !== checkedLayout.records.length ||
+    checkedLayout.records.some((record) => {
       const block = layoutById.get(record.input.id);
-      return block === undefined ||
+      return isNil(block) ||
         record.mesh.isDisposed() ||
         record.input.shape !== block.shape ||
         record.input.paletteRole !== block.paletteRole ||
@@ -145,7 +167,7 @@ export function createBabylonNativeBlockColliderCandidatesV1(
     if (!isClosedFrozenSelection(selection)) {
       return fail(
         "WORLDKIT_NATIVE_BLOCK_COLLIDER_SELECTION_INVALID",
-        "Selections must be canonical frozen values from the BNA-owned snapshot boundary.",
+        "Selections must be canonical frozen values from the Session-owned snapshot boundary.",
       );
     }
     if (colliderIds.has(selection.id)) {
@@ -172,19 +194,22 @@ export function createBabylonNativeBlockColliderCandidatesV1(
       );
     }
   }
-  const inventory = selections
-    .map((selection) => {
+  const proxies: ReturnType<typeof MeshBuilder.CreateBox>[] = [];
+  const inventory: BabylonNativeBlockColliderCandidateInventoryEntryV1[] = [];
+  try {
+    for (const selection of selections) {
       const block = layoutById.get(selection.blockId)!;
       const record = recordsById.get(selection.blockId)!;
       const proxy = MeshBuilder.CreateBox(
-        `worldkit-block-collider-${input.buildEpochId}-${selection.id}`,
+        `worldkit-block-collider-${input.context.bootstrap.id}-${selection.id}`,
         {
           width: block.sizeMetersXYZ[0],
           height: block.sizeMetersXYZ[1],
           depth: block.sizeMetersXYZ[2],
         },
-        input.scene,
+        scene,
       );
+      proxies.push(proxy);
       proxy.position.set(
         block.centerMetersXYZ[0],
         block.centerMetersXYZ[1],
@@ -193,30 +218,43 @@ export function createBabylonNativeBlockColliderCandidatesV1(
       proxy.isVisible = false;
       proxy.isPickable = false;
       proxy.computeWorldMatrix(true);
-      input.registration.registerStaticCollider(Object.freeze({
+      input.context.registration.registerStaticCollider(Object.freeze({
         id: selection.id,
         mesh: proxy,
         traversalBinding: selection.traversalBinding,
-        ...(selection.frictionRatio === undefined
+        ...(!Object.hasOwn(selection, "frictionRatio")
           ? {}
           : { frictionRatio: selection.frictionRatio }),
-        ...(selection.restitutionRatio === undefined
+        ...(!Object.hasOwn(selection, "restitutionRatio")
           ? {}
           : { restitutionRatio: selection.restitutionRatio }),
       }));
-      return Object.freeze({
+      inventory.push(Object.freeze({
         colliderId: selection.id,
         sourceBlockIds: Object.freeze([selection.blockId] as [string]),
         visualGroupIds: Object.freeze(
-          record.input.visualGroupId === undefined
+          isNil(record.input.visualGroupId)
             ? []
             : [record.input.visualGroupId],
         ),
         proxyKind: "layout-block-volume" as const,
         traversalBinding: selection.traversalBinding,
-      });
-    });
+      }));
+    }
+  } catch (error) {
+    disposeProxies(proxies);
+    throw error;
+  }
   layoutById.clear();
   recordsById.clear();
-  return Object.freeze(inventory);
+  let isDisposed = false;
+  return Object.freeze({
+    inventory: Object.freeze(inventory),
+    dispose(): void {
+      if (isDisposed) return;
+      isDisposed = true;
+      const cleanup = disposeProxies(proxies);
+      if (cleanup.didFail) throw cleanup.error;
+    },
+  });
 }

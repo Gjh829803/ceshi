@@ -13,10 +13,40 @@ import { describe, expect, it } from "vitest";
 
 import { createBabylonNativeBlockProfileCheckResultV1 } from "./check.js";
 import {
-  createBabylonNativeBlockColliderCandidatesV1,
+  materializeBabylonNativeBlockColliderCandidatesV1,
 } from "./collider-contribution.js";
 import { deriveBabylonNativeBlockLayoutV1 } from "./layout.js";
 import type { BabylonNativeBlockSessionRecordV1 } from "./session.js";
+
+function createBabylonNativeBlockColliderCandidatesV1(input: Readonly<{
+  scene: Scene;
+  buildEpochId: string;
+  layout: ReturnType<typeof deriveBabylonNativeBlockLayoutV1>;
+  checkResult: ReturnType<typeof createBabylonNativeBlockProfileCheckResultV1>;
+  records: readonly BabylonNativeBlockSessionRecordV1[];
+  selections: Parameters<
+    typeof materializeBabylonNativeBlockColliderCandidatesV1
+  >[0]["selections"];
+  registration: BabylonNativeSceneRegistrationV1;
+}>): ReturnType<
+  typeof materializeBabylonNativeBlockColliderCandidatesV1
+>["inventory"] {
+  return materializeBabylonNativeBlockColliderCandidatesV1({
+    context: Object.freeze({
+      scene: input.scene,
+      bootstrap: Object.freeze({ id: input.buildEpochId }),
+      registration: input.registration,
+    }) as never,
+    checkedLayout: Object.freeze({
+      kind: "babylon-native-block-checked-layout",
+      schemaVersion: 1,
+      layout: input.layout,
+      checkResult: input.checkResult,
+      records: input.records,
+    }),
+    selections: input.selections,
+  }).inventory;
+}
 
 function blockRecord(
   scene: Scene,

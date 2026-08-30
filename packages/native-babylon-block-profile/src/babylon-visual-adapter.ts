@@ -2,6 +2,7 @@ import { Color3 } from "@babylonjs/core/Maths/math.color.js";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { Scene } from "@babylonjs/core/scene.js";
+import { isNil } from "lodash-es";
 
 import type {
   BabylonNativeBlockVisualGroupInventoryV1,
@@ -67,13 +68,43 @@ function sameStrings(
     left.every((value, index) => value === right[index]);
 }
 
+function disposeVisualResources(
+  nodes: readonly BabylonNativeBlockVisualNodeV1[],
+  materials: readonly StandardMaterial[],
+): Readonly<{ didFail: boolean; error: unknown }> {
+  let didFail = false;
+  let firstFailure: unknown;
+  for (let index = nodes.length - 1; index >= 0; index -= 1) {
+    try {
+      nodes[index]!.mesh.material = null;
+    } catch (error) {
+      if (!didFail) {
+        didFail = true;
+        firstFailure = error;
+      }
+    }
+  }
+  for (let index = materials.length - 1; index >= 0; index -= 1) {
+    try {
+      materials[index]!.dispose();
+    } catch (error) {
+      if (!didFail) {
+        didFail = true;
+        firstFailure = error;
+      }
+    }
+  }
+  return Object.freeze({ didFail, error: firstFailure });
+}
+
 export function deriveBabylonNativeBlockVisualGroupsV1(
   layout: BabylonNativeBlockLayoutV1,
 ): readonly BabylonNativeBlockVisualGroupInventoryV1[] {
   const blocksByGroup = new Map<string, typeof layout.blocks[number][]>();
   for (const block of layout.blocks) {
-    if (block.visualGroupId === undefined) continue;
-    const blocks = blocksByGroup.get(block.visualGroupId) ?? [];
+    if (isNil(block.visualGroupId)) continue;
+    const priorBlocks = blocksByGroup.get(block.visualGroupId);
+    const blocks = isNil(priorBlocks) ? [] : priorBlocks;
     blocks.push(block);
     blocksByGroup.set(block.visualGroupId, blocks);
   }
@@ -106,7 +137,7 @@ export function babylonNativeBlockVisualGroupsMatchV1(
 ): boolean {
   return left.length === right.length && left.every((group, index) => {
     const candidate = right[index];
-    return candidate !== undefined &&
+    return !isNil(candidate) &&
       group.id === candidate.id &&
       sameStrings(group.blockIds, candidate.blockIds) &&
       sameStrings(group.paletteRoles, candidate.paletteRoles) &&
@@ -157,9 +188,11 @@ function validateInput(
       "checkResult.visualGroups does not describe the supplied layout",
     );
   }
-  const displayGapMeters = input.displayGapMeters ??
-    DEFAULT_DISPLAY_GAP_METERS;
+  const displayGapMeters = Object.hasOwn(input, "displayGapMeters")
+    ? input.displayGapMeters
+    : DEFAULT_DISPLAY_GAP_METERS;
   if (
+    typeof displayGapMeters !== "number" ||
     !Number.isFinite(displayGapMeters) ||
     displayGapMeters < 0 ||
     displayGapMeters >= 0.5
@@ -187,9 +220,17 @@ function validateInput(
     const block = blocksById.get(record.input.id);
     if (
       seen.has(record.input.id) ||
-      block === undefined ||
+      isNil(block) ||
       record.mesh.isDisposed() ||
       record.mesh.getScene() !== input.scene ||
+      !isNil(record.mesh.parent) ||
+      record.mesh.instances.length !== 0 ||
+      record.mesh.hasThinInstances ||
+      !isNil(record.mesh.physicsBody) ||
+      record.mesh.isVisible !== true ||
+      !Number.isFinite(record.mesh.visibility) ||
+      record.mesh.visibility <= 0 ||
+      record.mesh.isEnabled() !== true ||
       record.input.shape !== block.shape ||
       record.input.paletteRole !== block.paletteRole ||
       record.input.visualGroupId !== block.visualGroupId
@@ -221,7 +262,7 @@ export function createBabylonNativeBlockVisualsV1(
     for (const record of validated.sortedRecords) {
       const role = record.input.paletteRole;
       let material = materialsByRole.get(role);
-      if (material === undefined) {
+      if (isNil(material)) {
         material = new StandardMaterial(
           `${input.buildEpochId}.palette.${role}`,
           input.scene,
@@ -245,19 +286,14 @@ export function createBabylonNativeBlockVisualsV1(
       nodes.push(Object.freeze({
         blockId: record.input.id,
         paletteRole: role,
-        ...(record.input.visualGroupId === undefined
+        ...(isNil(record.input.visualGroupId)
           ? {}
           : { visualGroupId: record.input.visualGroupId }),
         mesh: record.mesh,
       }));
     }
   } catch (error) {
-    for (let index = nodes.length - 1; index >= 0; index -= 1) {
-      nodes[index]!.mesh.material = null;
-    }
-    for (let index = materials.length - 1; index >= 0; index -= 1) {
-      materials[index]!.dispose();
-    }
+    disposeVisualResources(nodes, materials);
     throw error;
   }
 
@@ -271,13 +307,9 @@ export function createBabylonNativeBlockVisualsV1(
     dispose(): void {
       if (isDisposed) return;
       isDisposed = true;
-      for (let index = nodes.length - 1; index >= 0; index -= 1) {
-        nodes[index]!.mesh.material = null;
-      }
-      for (let index = materials.length - 1; index >= 0; index -= 1) {
-        materials[index]!.dispose();
-      }
+      const cleanup = disposeVisualResources(nodes, materials);
       materialsByRole.clear();
+      if (cleanup.didFail) throw cleanup.error;
     },
   });
 }

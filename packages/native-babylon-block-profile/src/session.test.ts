@@ -6,8 +6,19 @@ import { Scene } from "@babylonjs/core/scene.js";
 import {
   createBabylonNativeHostRandomV1,
   type BabylonNativeSceneBuildContextV1,
+  type BabylonNativeStaticColliderV1,
 } from "@whitebox-world/native-babylon";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const commitProfileSettlement = vi.hoisted(() => vi.fn());
+vi.mock("@whitebox-world/native-babylon/host", () => ({
+  commitBabylonNativeProfileSettlementV1: commitProfileSettlement,
+}));
+
+beforeEach(() => {
+  commitProfileSettlement.mockReset();
+  commitProfileSettlement.mockImplementation(() => {});
+});
 
 interface SessionModule {
   createBabylonNativeBlockProfileSessionV1(
@@ -26,14 +37,22 @@ interface SessionModule {
         | "background-mass";
       visualGroupId?: string;
     }>): Mesh;
-    finalize(): Readonly<{
-      kind: "babylon-native-block-checked-layout";
+    finalize(input: Readonly<{
+      staticColliders: readonly Readonly<{
+        id: string;
+        blockId: string;
+        traversalBinding: Readonly<{ kind: "not-traversable" }>;
+      }>[];
+    }>): Readonly<{
+      kind: "babylon-native-block-finalized-epoch";
       schemaVersion: 1;
-      layout: Readonly<{ blocks: readonly unknown[] }>;
-      checkResult: Readonly<{
-        kind: "babylon-native-block-profile-check-result";
-        schemaVersion: 1;
-        outcome: "passed" | "rejected";
+      checkedLayout: Readonly<{
+        layout: Readonly<{ blocks: readonly unknown[] }>;
+        checkResult: Readonly<{
+          kind: "babylon-native-block-profile-check-result";
+          schemaVersion: 1;
+          outcome: "passed" | "rejected";
+        }>;
       }>;
     }>;
     dispose(): void;
@@ -45,7 +64,10 @@ async function loadSession(): Promise<SessionModule> {
   return import(modulePath) as Promise<SessionModule>;
 }
 
-function createContext(scene: Scene): BabylonNativeSceneBuildContextV1 {
+function createContext(
+  scene: Scene,
+  registration?: BabylonNativeSceneBuildContextV1["registration"],
+): BabylonNativeSceneBuildContextV1 {
   return Object.freeze({
     scene,
     bootstrap: Object.freeze({
@@ -76,7 +98,7 @@ function createContext(scene: Scene): BabylonNativeSceneBuildContextV1 {
         throw new Error("asset resolution is outside this test");
       },
     }),
-    registration: Object.freeze({
+    registration: registration ?? Object.freeze({
       registerSpawnMarker(): void {},
       registerStaticCollider(): void {},
     }),
@@ -120,7 +142,7 @@ describe("Babylon Native block profile session", () => {
     });
   });
 
-  it("leaves transforms, materials, and hierarchy Babylon-native", async () => {
+  it("allows Babylon-native composition before requiring an ordinary unparented final Mesh", async () => {
     const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
 
     withScene((scene) => {
@@ -147,6 +169,10 @@ describe("Babylon Native block profile session", () => {
       expect(mesh.position.asArray()).toEqual([0, 0.5, 1]);
       expect(mesh.rotation.y).toBe(Math.PI / 2);
       expect(mesh.material).toBe(material);
+
+      expect(() => session.finalize({ staticColliders: [] })).toThrow(
+        /WORLDKIT_NATIVE_BLOCK_VISUAL_RECORD_MISMATCH/,
+      );
     });
   });
 
@@ -244,18 +270,20 @@ describe("Babylon Native block profile session", () => {
         paletteRole: "ground",
       });
 
-      const firstResult = session.finalize();
+      const firstResult = session.finalize({ staticColliders: [] });
       expect(firstResult).toMatchObject({
-        kind: "babylon-native-block-checked-layout",
+        kind: "babylon-native-block-finalized-epoch",
         schemaVersion: 1,
-        checkResult: {
-          kind: "babylon-native-block-profile-check-result",
-          schemaVersion: 1,
-          outcome: "passed",
+        checkedLayout: {
+          checkResult: {
+            kind: "babylon-native-block-profile-check-result",
+            schemaVersion: 1,
+            outcome: "passed",
+          },
         },
       });
-      expect(firstResult.layout.blocks).toHaveLength(1);
-      expect(session.finalize()).toBe(firstResult);
+      expect(firstResult.checkedLayout.layout.blocks).toHaveLength(1);
+      expect(session.finalize({ staticColliders: [] })).toBe(firstResult);
       expect(() => session.createBlock({
         id: "late-block",
         shape: "full",
@@ -273,12 +301,17 @@ describe("Babylon Native block profile session", () => {
         { maximumBlockCount: 3 },
       );
       const disposalOrder: string[] = [];
-      for (const id of ["first-block", "second-block", "third-block"]) {
+      for (const [index, id] of [
+        "first-block",
+        "second-block",
+        "third-block",
+      ].entries()) {
         const mesh = session.createBlock({
           id,
           shape: "small",
           paletteRole: "ground",
         });
+        mesh.position.set(index / 2 + 0.25, 0.25, 0.25);
         const dispose = mesh.dispose.bind(mesh);
         mesh.dispose = (...arguments_) => {
           disposalOrder.push(id);
@@ -286,7 +319,7 @@ describe("Babylon Native block profile session", () => {
         };
       }
 
-      session.finalize();
+      session.finalize({ staticColliders: [] });
       session.dispose();
       session.dispose();
 
@@ -317,18 +350,20 @@ describe("Babylon Native block profile session", () => {
         { maximumBlockCount: 1 },
       );
 
-      expect(() => first.createBlock({
+      const firstMesh = first.createBlock({
         id: "shared-id",
         shape: "small",
         paletteRole: "ground",
-      })).not.toThrow();
-      expect(() => second.createBlock({
+      });
+      firstMesh.position.set(0.25, 0.25, 0.25);
+      const secondMesh = second.createBlock({
         id: "shared-id",
         shape: "small",
         paletteRole: "ground",
-      })).not.toThrow();
-      first.finalize();
-      expect(() => second.finalize()).not.toThrow();
+      });
+      secondMesh.position.set(0.25, 0.25, 0.25);
+      first.finalize({ staticColliders: [] });
+      expect(() => second.finalize({ staticColliders: [] })).not.toThrow();
     });
   });
 
@@ -346,5 +381,107 @@ describe("Babylon Native block profile session", () => {
     } finally {
       engine.dispose();
     }
+  });
+
+  it("rejects finalize on a disposed Session before reading untrusted input", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
+
+    withScene((scene) => {
+      const session = createBabylonNativeBlockProfileSessionV1(
+        createContext(scene),
+        { maximumBlockCount: 1 },
+      );
+      session.dispose();
+      let wasRead = false;
+      const input = Object.defineProperty({}, "staticColliders", {
+        get(): never {
+          wasRead = true;
+          throw new Error("untrusted finalize accessor was read");
+        },
+      });
+
+      expect(() => session.finalize(input as never)).toThrow(
+        /WORLDKIT_NATIVE_BLOCK_SESSION_CLOSED/,
+      );
+      expect(wasRead).toBe(false);
+    });
+  });
+
+  it("preserves a late commit error while visual, proxy, and source cleanup continues in reverse order", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
+
+    withScene((scene) => {
+      const cleanupOrder: string[] = [];
+      const context = createContext(scene, Object.freeze({
+        registerSpawnMarker(): void {},
+        registerStaticCollider(
+          collider: Readonly<BabylonNativeStaticColliderV1>,
+        ): void {
+          const dispose = collider.mesh.dispose.bind(collider.mesh);
+          collider.mesh.dispose = (
+            ...arguments_: Parameters<Mesh["dispose"]>
+          ) => {
+            cleanupOrder.push(`proxy:${collider.id}`);
+            dispose(...arguments_);
+            if (collider.id === "second-collider") {
+              throw new Error("proxy cleanup failed");
+            }
+          };
+        },
+      }));
+      const session = createBabylonNativeBlockProfileSessionV1(
+        context,
+        { maximumBlockCount: 2 },
+      );
+      for (const [index, id] of ["first-block", "second-block"].entries()) {
+        const mesh = session.createBlock({
+          id,
+          shape: "full",
+          paletteRole: "route",
+        });
+        mesh.position.set(index, 0.5, 0);
+        let assignedMaterial = mesh.material;
+        Object.defineProperty(mesh, "material", {
+          configurable: true,
+          get: () => assignedMaterial,
+          set: (value) => {
+            assignedMaterial = value;
+            if (value === null) cleanupOrder.push(`visual:${id}`);
+          },
+        });
+        const dispose = mesh.dispose.bind(mesh);
+        mesh.dispose = (...arguments_) => {
+          cleanupOrder.push(`source:${id}`);
+          dispose(...arguments_);
+          if (id === "second-block") throw new Error("source cleanup failed");
+        };
+      }
+      commitProfileSettlement.mockImplementationOnce(() => {
+        throw new Error("late Host commit failed");
+      });
+
+      expect(() => session.finalize(Object.freeze({
+        staticColliders: Object.freeze([
+          Object.freeze({
+            id: "first-collider",
+            blockId: "first-block",
+            traversalBinding: Object.freeze({ kind: "not-traversable" }),
+          }),
+          Object.freeze({
+            id: "second-collider",
+            blockId: "second-block",
+            traversalBinding: Object.freeze({ kind: "not-traversable" }),
+          }),
+        ]),
+      }))).toThrow(/late Host commit failed/);
+      expect(cleanupOrder).toEqual([
+        "visual:second-block",
+        "visual:first-block",
+        "proxy:second-collider",
+        "proxy:first-collider",
+        "source:second-block",
+        "source:first-block",
+      ]);
+    });
   });
 });

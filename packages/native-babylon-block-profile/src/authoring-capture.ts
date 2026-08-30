@@ -5,7 +5,7 @@ import { Scene } from "@babylonjs/core/scene.js";
 import type { BabylonNativeBlockVisualGroupInventoryV1 } from "./check.js";
 import type { BabylonNativeBlockLayoutV1 } from "./layout.js";
 import type { BabylonNativeBlockPositionMetersXYZV1 } from "./shapes.js";
-import type { BabylonNativeBlockCheckedLayoutV1 } from "./session.js";
+import type { BabylonNativeBlockFinalizedEpochV1 } from "./session.js";
 import {
   babylonNativeBlockVisualGroupsMatchV1,
   deriveBabylonNativeBlockVisualGroupsV1,
@@ -45,8 +45,7 @@ export interface BabylonNativeBlockAuthoringCaptureV1 {
 
 export interface CreateBabylonNativeBlockAuthoringCaptureInputV1 {
   readonly scene: Scene;
-  readonly buildEpochId: string;
-  readonly checkedLayout: BabylonNativeBlockCheckedLayoutV1;
+  readonly finalizedEpoch: BabylonNativeBlockFinalizedEpochV1;
   readonly widthPixels: number;
   readonly heightPixels: number;
   readonly opening: Readonly<{
@@ -204,11 +203,18 @@ function createView(input: Readonly<{
 export function createBabylonNativeBlockAuthoringCaptureV1(
   input: CreateBabylonNativeBlockAuthoringCaptureInputV1,
 ): BabylonNativeBlockAuthoringCaptureV1 {
-  const { checkedLayout } = input;
+  const { finalizedEpoch } = input;
+  const { checkedLayout } = finalizedEpoch;
+  const checkIdSuffix = ".whitebox-blocks-check";
+  const buildEpochId = checkedLayout.checkResult.id.endsWith(checkIdSuffix)
+    ? checkedLayout.checkResult.id.slice(0, -checkIdSuffix.length)
+    : "";
   if (
     !(input.scene instanceof Scene) ||
     input.scene.isDisposed ||
-    !BUILD_EPOCH_ID.test(input.buildEpochId) ||
+    finalizedEpoch.kind !== "babylon-native-block-finalized-epoch" ||
+    finalizedEpoch.schemaVersion !== 1 ||
+    !BUILD_EPOCH_ID.test(buildEpochId) ||
     !Number.isSafeInteger(input.widthPixels) ||
     input.widthPixels <= 0 ||
     input.widthPixels > MAXIMUM_CAPTURE_DIMENSION_PIXELS ||
@@ -243,7 +249,7 @@ export function createBabylonNativeBlockAuthoringCaptureV1(
     checkedLayout.layout,
   );
   const sortedGroups = Object.freeze([
-    ...checkedLayout.checkResult.visualGroups,
+    ...finalizedEpoch.visualGroups,
   ].sort((left, right) => stableCompare(left.id, right.id)));
   if (!babylonNativeBlockVisualGroupsMatchV1(expectedGroups, sortedGroups)) {
     return fail(
@@ -297,7 +303,7 @@ export function createBabylonNativeBlockAuthoringCaptureV1(
     kind: "babylon-native-block-authoring-capture",
     schemaVersion: 1,
     scope: "build-epoch-local",
-    buildEpochId: input.buildEpochId,
+    buildEpochId,
     views: Object.freeze([
       createView({
         id: "opening",

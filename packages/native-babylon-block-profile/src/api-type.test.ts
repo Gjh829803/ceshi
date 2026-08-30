@@ -1,8 +1,9 @@
 import { describe, expectTypeOf, it } from "vitest";
 
 import type {
-  BabylonNativeBlockCheckedLayoutV1,
   BabylonNativeBlockCreateInputV1,
+  BabylonNativeBlockFinalizedEpochV1,
+  BabylonNativeBlockProfileFinalizeInputV1,
   BabylonNativeBlockProfileSessionV1,
 } from "./index.js";
 
@@ -24,8 +25,11 @@ describe("Babylon Native block profile public types", () => {
       .parameter(0)
       .toEqualTypeOf<Readonly<BabylonNativeBlockCreateInputV1>>();
     expectTypeOf<BabylonNativeBlockProfileSessionV1["finalize"]>()
+      .parameter(0)
+      .toEqualTypeOf<Readonly<BabylonNativeBlockProfileFinalizeInputV1>>();
+    expectTypeOf<BabylonNativeBlockProfileSessionV1["finalize"]>()
       .returns
-      .toEqualTypeOf<BabylonNativeBlockCheckedLayoutV1>();
+      .toEqualTypeOf<BabylonNativeBlockFinalizedEpochV1>();
     expectTypeOf<BabylonNativeBlockProfileSessionV1["dispose"]>()
       .returns
       .toEqualTypeOf<void>();

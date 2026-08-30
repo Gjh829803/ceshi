@@ -1,0 +1,303 @@
+import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
+import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
+import { Scene } from "@babylonjs/core/scene.js";
+import {
+  defineBabylonNativeScene,
+  type BabylonNativeSceneBuildContextV1,
+} from "@whitebox-world/native-babylon";
+import { admitBabylonNativeSceneCandidateV1 } from
+  "@whitebox-world/native-babylon/host";
+import { describe, expect, it } from "vitest";
+
+type Shape = "full" | "half" | "quarter" | "small";
+type PaletteRole = "ground" | "route" | "structure";
+interface FinalizeSelection {
+  readonly id: string;
+  readonly blockId: string;
+  readonly traversalBinding: Readonly<
+    | { kind: "not-traversable" }
+    | { kind: "static-surface"; surfaceEntityId: string;
+        logicalSubshapeId: string; traversalSurfaceProfileRef: string }
+  >;
+  readonly frictionRatio?: number;
+  readonly restitutionRatio?: number;
+}
+interface FinalizedEpoch {
+  readonly kind: "babylon-native-block-finalized-epoch";
+  readonly schemaVersion: 1;
+  readonly colliderInventory: readonly Readonly<{
+    colliderId: string; sourceBlockIds: readonly [string]
+  }>[];
+  readonly profileInventoryHash: `sha256:${string}`;
+}
+interface Session {
+  createBlock(input: Readonly<{ id: string; shape: Shape;
+    paletteRole: PaletteRole; visualGroupId?: string }>): Mesh;
+  finalize(input: Readonly<{ displayGapMeters?: number;
+    staticColliders: readonly FinalizeSelection[] }>): FinalizedEpoch;
+  dispose(): void;
+}
+interface SessionModule {
+  createBabylonNativeBlockProfileSessionV1(
+    context: BabylonNativeSceneBuildContextV1,
+    budget: Readonly<{ maximumBlockCount: number }>,
+  ): Session;
+}
+async function loadSession(): Promise<SessionModule> {
+  return import(["./", "session.js"].join("")) as Promise<SessionModule>;
+}
+
+const STATIC_SURFACE = Object.freeze({
+  kind: "static-surface" as const,
+  surfaceEntityId: "route-surface",
+  logicalSubshapeId: "top",
+  traversalSurfaceProfileRef:
+    "worldkit://traversal-surface-profile/ground.static@1",
+});
+function frozenSelection(
+  id = "route-collider",
+  blockId = "route-block",
+): FinalizeSelection {
+  return Object.freeze({ id, blockId, traversalBinding: STATIC_SURFACE,
+    frictionRatio: 0.8, restitutionRatio: 0 });
+}
+function bootstrap(id: string) {
+  return Object.freeze({
+    kind: "babylon-native-scene-bootstrap" as const,
+    schemaVersion: 1 as const,
+    id,
+    sceneModuleRef: `worldkit://native-scene/${id}@1`,
+    nativeSceneApiRef: "worldkit://native-scene-api/babylon@1",
+    nativeSceneProfileRef:
+      "worldkit://native-scene-profile/whitebox.blocks@1",
+    gameplayBootstrapRef: `worldkit://gameplay-bootstrap/${id}@1`,
+    initialControlledEntityId: "player",
+    gravityMetersPerSecondSquaredXYZ: Object.freeze([0, -9.81, 0] as const),
+    initialCamera: Object.freeze({ mode: "third-person" as const,
+      pitchRadians: 0.2, distanceMeters: 5, fovDegrees: 60,
+      targetHeightMeters: 1.2 }),
+    seed: 401,
+    spawnMarkerId: "player-spawn",
+  });
+}
+async function admit(
+  engine: NullEngine,
+  scene: Scene,
+  id: string,
+  maximumColliderCount: number,
+  build: (context: BabylonNativeSceneBuildContextV1) => void,
+) {
+  return admitBabylonNativeSceneCandidateV1({
+    candidate: Object.freeze({ engine, scene }),
+    bootstrap: bootstrap(id),
+    module: defineBabylonNativeScene({
+      kind: "babylon-native-scene-module",
+      id: `${id}-module`,
+      build(context): void {
+        build(context);
+        context.registration.registerSpawnMarker(Object.freeze({
+          id: context.bootstrap.spawnMarkerId,
+          positionMetersXYZ: Object.freeze([0, 1, 3] as const),
+          facingRadians: 0,
+        }));
+      },
+    }),
+    assets: Object.freeze({
+      async resolve(): Promise<never> {
+        throw new Error("settlement test has no external assets");
+      },
+    }),
+    budget: Object.freeze({
+      maximumStaticColliderCount: maximumColliderCount,
+      maximumStaticColliderVertexCount: maximumColliderCount * 24,
+      maximumStaticColliderTriangleCount: maximumColliderCount * 12,
+    }),
+  });
+}
+
+interface HashVariant {
+  readonly reverseCreation?: boolean;
+  readonly shape?: Shape;
+  readonly paletteRole?: PaletteRole;
+  readonly visualGroupId?: string;
+  readonly xMeters?: number;
+  readonly displayGapMeters?: number;
+  readonly colliderId?: string;
+}
+async function buildProfileInventoryHash(
+  variant: Readonly<HashVariant> = {},
+): Promise<`sha256:${string}`> {
+  const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
+  const engine = new NullEngine();
+  const scene = new Scene(engine);
+  let session: Session | undefined;
+  let epoch: FinalizedEpoch | undefined;
+  try {
+    const result = await admit(engine, scene, "hash-test", 1, (context) => {
+      session = createBabylonNativeBlockProfileSessionV1(
+        context, { maximumBlockCount: 2 });
+      const shape = variant.shape ?? "small";
+      const definitions = [
+        { id: "base-block", shape: "full" as const,
+          paletteRole: "ground" as const, visualGroupId: undefined,
+          center: [0, 0.5, 0] as const },
+        { id: "feature-block", shape,
+          paletteRole: variant.paletteRole ?? "route",
+          visualGroupId: variant.visualGroupId ?? "feature-group",
+          center: [variant.xMeters ?? 1.25, 0.25,
+            shape === "quarter" ? 0 : 0.25] as const },
+      ];
+      for (const definition of variant.reverseCreation
+        ? [...definitions].reverse()
+        : definitions) {
+        const mesh = session.createBlock({
+          id: definition.id,
+          shape: definition.shape,
+          paletteRole: definition.paletteRole,
+          ...(definition.visualGroupId === undefined
+            ? {} : { visualGroupId: definition.visualGroupId }),
+        });
+        mesh.position.set(definition.center[0], definition.center[1],
+          definition.center[2]);
+      }
+      epoch = session.finalize(Object.freeze({
+        displayGapMeters: variant.displayGapMeters ?? 0.04,
+        staticColliders: Object.freeze([frozenSelection(
+          variant.colliderId ?? "feature-collider", "feature-block")]),
+      }));
+    });
+    if (result.outcome === "rejected") {
+      throw new Error(JSON.stringify(result.diagnostics));
+    }
+    if (epoch === undefined) throw new Error("hash build did not finalize");
+    return epoch.profileInventoryHash;
+  } finally {
+    session?.dispose();
+    scene.dispose();
+    engine.dispose();
+  }
+}
+
+describe("Babylon Native block Profile settlement", () => {
+  it("finalizes one Host-settled epoch with styled visuals and independent no-gap proxies", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    let session: Session | undefined;
+    let epoch: FinalizedEpoch | undefined;
+    let repeated: FinalizedEpoch | undefined;
+    let mismatch: unknown;
+    try {
+      const admission = await admit(engine, scene, "block-finalize-test", 1,
+        (context) => {
+          session = createBabylonNativeBlockProfileSessionV1(
+            context, { maximumBlockCount: 2 });
+          const route = session.createBlock({ id: "route-block", shape: "full",
+            paletteRole: "route", visualGroupId: "route-group" });
+          route.position.set(0, 0.5, 0);
+          session.createBlock({ id: "structure-block", shape: "small",
+            paletteRole: "structure", visualGroupId: "structure-group" })
+            .position.set(1.25, 0.25, 0.25);
+          epoch = session.finalize(Object.freeze({ displayGapMeters: 0.04,
+            staticColliders: Object.freeze([frozenSelection()]) }));
+          repeated = session.finalize(Object.freeze({ displayGapMeters: 0.04,
+            staticColliders: Object.freeze([frozenSelection()]) }));
+          try {
+            session.finalize(Object.freeze({ displayGapMeters: 0.03,
+              staticColliders: Object.freeze([frozenSelection()]) }));
+          } catch (error) { mismatch = error; }
+        });
+      if (admission.outcome === "rejected") {
+        throw new Error(JSON.stringify(admission.diagnostics));
+      }
+      if (admission.outcome !== "passed" || epoch === undefined) {
+        throw new Error("settlement admission did not pass");
+      }
+      expect(repeated).toBe(epoch);
+      expect(mismatch).toMatchObject({ message: expect.stringMatching(
+        /WORLDKIT_NATIVE_BLOCK_FINALIZE_INPUT_MISMATCH/) });
+      expect(Object.isFrozen(epoch)).toBe(true);
+      expect(Object.isFrozen(epoch.colliderInventory)).toBe(true);
+      expect(epoch.profileInventoryHash).toMatch(/^sha256:[0-9a-f]{64}$/);
+      expect(admission.contribution.profileSettlement).toMatchObject({
+        kind: "host-snapshot", targetCount: 2,
+        profileInventoryHash: epoch.profileInventoryHash,
+      });
+      expect(admission.contribution.staticColliders[0]!.id)
+        .toBe("route-collider");
+      const route = scene.getMeshById("route-block")!;
+      const structure = scene.getMeshById("structure-block")!;
+      const proxy = scene.getMeshByName(
+        "worldkit-block-collider-block-finalize-test-route-collider")!;
+      expect(proxy).not.toBe(route);
+      expect(proxy.isVisible).toBe(false);
+      proxy.computeWorldMatrix(true);
+      expect(proxy.getBoundingInfo().boundingBox.minimumWorld.asArray())
+        .toEqual([-0.5, 0, -0.5]);
+      expect(proxy.getBoundingInfo().boundingBox.maximumWorld.asArray())
+        .toEqual([0.5, 1, 0.5]);
+      expect(route.scaling.asArray()).toEqual([0.96, 0.96, 0.96]);
+      expect(structure.scaling.asArray()).toEqual([0.92, 0.92, 0.92]);
+    } finally {
+      session?.dispose();
+      scene.dispose();
+      engine.dispose();
+    }
+  });
+
+  it("rejects explicit null/undefined, extras, duplicates, and missing joins before proxy allocation", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
+    const invalidInputs = [
+      {},
+      { displayGapMeters: null, staticColliders: [] },
+      { displayGapMeters: undefined, staticColliders: [] },
+      { staticColliders: [{ ...frozenSelection(), frictionRatio: null }] },
+      { staticColliders: [{ ...frozenSelection(), restitutionRatio: undefined }] },
+      { staticColliders: [{ ...frozenSelection(), legacy: true }] },
+      { staticColliders: [frozenSelection(), frozenSelection("other-collider")] },
+      { staticColliders: [frozenSelection("same-id"),
+        frozenSelection("same-id", "other-block")] },
+      { staticColliders: [frozenSelection("missing-collider", "missing-block")] },
+    ];
+    for (const [index, invalidInput] of invalidInputs.entries()) {
+      const engine = new NullEngine();
+      const scene = new Scene(engine);
+      let session: Session | undefined;
+      let finalizeError: unknown;
+      try {
+        await admit(engine, scene, `invalid-input-${index}`, 1, (context) => {
+          session = createBabylonNativeBlockProfileSessionV1(
+            context, { maximumBlockCount: 1 });
+          session.createBlock({ id: "route-block", shape: "full",
+            paletteRole: "route" }).position.set(0, 0.5, 0);
+          try { session.finalize(invalidInput as never); }
+          catch (error) { finalizeError = error; }
+        });
+        expect(finalizeError).toMatchObject({ message: expect.stringMatching(
+          /WORLDKIT_NATIVE_BLOCK_(?:FINALIZE_INPUT|COLLIDER)/) });
+        expect(scene.meshes.some(({ name }) =>
+          name.startsWith("worldkit-block-collider-"))).toBe(false);
+      } finally {
+        session?.dispose();
+        scene.dispose();
+        engine.dispose();
+      }
+    }
+  });
+
+  it("hashes canonical shape, palette, group, transform, gap, and Collider joins", async () => {
+    const baseline = await buildProfileInventoryHash();
+    expect(await buildProfileInventoryHash({ reverseCreation: true }))
+      .toBe(baseline);
+    for (const variant of [
+      { shape: "quarter" as const },
+      { paletteRole: "structure" as const },
+      { visualGroupId: "changed-group" },
+      { xMeters: 1.75 },
+      { displayGapMeters: 0.03 },
+      { colliderId: "changed-collider" },
+    ]) {
+      expect(await buildProfileInventoryHash(variant)).not.toBe(baseline);
+    }
+  });
+});

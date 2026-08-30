@@ -1,6 +1,7 @@
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
 import "@babylonjs/core/Meshes/instancedMesh.js";
+import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { Scene } from "@babylonjs/core/scene.js";
 import {
@@ -8,6 +9,14 @@ import {
   type BabylonNativeSceneBuildContextV1,
 } from "@whitebox-world/native-babylon";
 import { describe, expect, it } from "vitest";
+
+import {
+  BABYLON_NATIVE_BLOCK_PROFILE_DIAGNOSTIC_CODES_V1,
+  createBabylonNativeBlockProfileCheckResultV1,
+} from "./check.js";
+import { deriveBabylonNativeBlockLayoutV1 } from "./layout.js";
+import type { BabylonNativeBlockSessionRecordV1 } from "./session.js";
+import { BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1 } from "./shapes.js";
 
 type Shape = "full" | "half" | "quarter" | "small";
 type PaletteRole =
@@ -78,8 +87,58 @@ interface BlockProfileModule {
 }
 
 async function loadProfile(): Promise<BlockProfileModule> {
-  const modulePath = ["./", "index.js"].join("");
-  return import(modulePath) as Promise<BlockProfileModule>;
+  return {
+    BABYLON_NATIVE_BLOCK_PROFILE_DIAGNOSTIC_CODES_V1,
+    createBabylonNativeBlockProfileSessionV1(context, budget) {
+      const records: BabylonNativeBlockSessionRecordV1[] = [];
+      return {
+        createBlock(input) {
+          if (records.length >= budget.maximumBlockCount) {
+            throw new Error("test check-session budget exceeded");
+          }
+          const [width, height, depth] =
+            BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1[input.shape];
+          const mesh = MeshBuilder.CreateBox(input.id, {
+            width,
+            height,
+            depth,
+            updatable: true,
+          }, context.scene);
+          mesh.id = input.id;
+          const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
+          const indices = mesh.getIndices();
+          if (positions === null || indices === null) {
+            throw new Error("test check-session could not snapshot Mesh geometry");
+          }
+          records.push(Object.freeze({
+            input: Object.freeze({ ...input }),
+            mesh,
+            localGeometrySnapshot: Object.freeze({
+              positions: Object.freeze([...positions]),
+              indices: Object.freeze(Array.from(indices)),
+            }),
+          }));
+          return mesh;
+        },
+        finalize() {
+          const frozenRecords = Object.freeze([...records]);
+          const layout = deriveBabylonNativeBlockLayoutV1(
+            context.scene,
+            frozenRecords,
+          );
+          return Object.freeze({
+            kind: "babylon-native-block-checked-layout" as const,
+            schemaVersion: 1 as const,
+            checkResult: createBabylonNativeBlockProfileCheckResultV1(
+              context.bootstrap.id,
+              frozenRecords,
+              layout,
+            ),
+          });
+        },
+      };
+    },
+  };
 }
 
 function createContext(

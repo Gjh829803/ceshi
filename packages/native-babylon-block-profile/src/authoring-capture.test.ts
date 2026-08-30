@@ -7,13 +7,15 @@ import type {
   BabylonNativeBlockVisualGroupInventoryV1,
 } from "./check.js";
 import type { BabylonNativeBlockLayoutV1 } from "./layout.js";
-import type { BabylonNativeBlockCheckedLayoutV1 } from "./session.js";
+import type {
+  BabylonNativeBlockCheckedLayoutV1,
+  BabylonNativeBlockFinalizedEpochV1,
+} from "./session.js";
 
 interface AuthoringCaptureModule {
   createBabylonNativeBlockAuthoringCaptureV1(input: Readonly<{
     scene: Scene;
-    buildEpochId: string;
-    checkedLayout: BabylonNativeBlockCheckedLayoutV1;
+    finalizedEpoch: BabylonNativeBlockFinalizedEpochV1;
     widthPixels: number;
     heightPixels: number;
     opening: Readonly<{
@@ -175,6 +177,20 @@ function checkedLayoutFixture(
   });
 }
 
+function finalizedEpochFixture(
+  reverse = false,
+): BabylonNativeBlockFinalizedEpochV1 {
+  const checkedLayout = checkedLayoutFixture(reverse);
+  return Object.freeze({
+    kind: "babylon-native-block-finalized-epoch",
+    schemaVersion: 1,
+    checkedLayout,
+    visualGroups: checkedLayout.checkResult.visualGroups,
+    colliderInventory: Object.freeze([]),
+    profileInventoryHash: `sha256:${"1".repeat(64)}`,
+  });
+}
+
 function withScene(run: (scene: Scene) => void): void {
   const engine = new NullEngine();
   const scene = new Scene(engine);
@@ -195,8 +211,7 @@ describe("Babylon Native block Build-Epoch authoring capture", () => {
       const activeCameraBefore = scene.activeCamera;
       const input = {
         scene,
-        buildEpochId: "candidate-epoch-capture",
-        checkedLayout: checkedLayoutFixture(),
+        finalizedEpoch: finalizedEpochFixture(),
         widthPixels: 800,
         heightPixels: 600,
         opening: Object.freeze({
@@ -209,7 +224,7 @@ describe("Babylon Native block Build-Epoch authoring capture", () => {
       const first = createBabylonNativeBlockAuthoringCaptureV1(input);
       const reversed = createBabylonNativeBlockAuthoringCaptureV1({
         ...input,
-        checkedLayout: checkedLayoutFixture(true),
+        finalizedEpoch: finalizedEpochFixture(true),
       });
 
       expect(first).toEqual(reversed);
@@ -217,7 +232,7 @@ describe("Babylon Native block Build-Epoch authoring capture", () => {
         kind: "babylon-native-block-authoring-capture",
         schemaVersion: 1,
         scope: "build-epoch-local",
-        buildEpochId: "candidate-epoch-capture",
+        buildEpochId: "capture-fixture",
       });
       expect(first.views.map(({ id, projection }) => [id, projection]))
         .toEqual([
@@ -262,8 +277,7 @@ describe("Babylon Native block Build-Epoch authoring capture", () => {
     withScene((scene) => {
       const capture = createBabylonNativeBlockAuthoringCaptureV1({
         scene,
-        buildEpochId: "candidate-epoch-regions",
-        checkedLayout: checkedLayoutFixture(),
+        finalizedEpoch: finalizedEpochFixture(),
         widthPixels: 1024,
         heightPixels: 768,
         opening: Object.freeze({
@@ -308,8 +322,7 @@ describe("Babylon Native block Build-Epoch authoring capture", () => {
     withScene((scene) => {
       expect(() => createBabylonNativeBlockAuthoringCaptureV1({
         scene,
-        buildEpochId: "candidate-epoch-invalid",
-        checkedLayout: checkedLayoutFixture(),
+        finalizedEpoch: finalizedEpochFixture(),
         widthPixels: 0,
         heightPixels: 600,
         opening: Object.freeze({
@@ -321,13 +334,9 @@ describe("Babylon Native block Build-Epoch authoring capture", () => {
 
       expect(() => createBabylonNativeBlockAuthoringCaptureV1({
         scene,
-        buildEpochId: "candidate-epoch-missing-group",
-        checkedLayout: Object.freeze({
-          ...checkedLayoutFixture(),
-          checkResult: Object.freeze({
-            ...checkResult(),
-            visualGroups: Object.freeze([gateGroup]),
-          }),
+        finalizedEpoch: Object.freeze({
+          ...finalizedEpochFixture(),
+          visualGroups: Object.freeze([gateGroup]),
         }),
         widthPixels: 800,
         heightPixels: 600,
@@ -340,10 +349,12 @@ describe("Babylon Native block Build-Epoch authoring capture", () => {
 
       expect(() => createBabylonNativeBlockAuthoringCaptureV1({
         scene,
-        buildEpochId: "candidate-epoch-rejected-check",
-        checkedLayout: Object.freeze({
-          ...checkedLayoutFixture(),
-          checkResult: checkResult("rejected"),
+        finalizedEpoch: Object.freeze({
+          ...finalizedEpochFixture(),
+          checkedLayout: Object.freeze({
+            ...checkedLayoutFixture(),
+            checkResult: checkResult("rejected"),
+          }),
         }),
         widthPixels: 800,
         heightPixels: 600,
