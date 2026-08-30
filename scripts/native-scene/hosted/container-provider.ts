@@ -157,6 +157,8 @@ function invocationFor(
       "ALL",
       "--security-opt",
       "no-new-privileges",
+      "--security-opt",
+      "seccomp=builtin",
       "--pids-limit",
       String(budget.process.maximumProcessCount),
       "--cpu-period",

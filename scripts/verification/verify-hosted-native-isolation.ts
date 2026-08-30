@@ -60,6 +60,7 @@ const SANDBOX_POLICY = Object.freeze({
   rootFilesystem: "read-only",
   capabilities: "none",
   noNewPrivileges: true,
+  seccompProfile: "builtin",
   user: "10001:10001",
   packageMount: "read-only-rprivate",
   temporaryFilesystem: "bounded-tmpfs",
