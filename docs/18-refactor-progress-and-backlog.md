@@ -123,6 +123,7 @@ Registry Lock、Browser preference 命令，以及 Babylon CameraDirector 消费
 - [`2026-08-28-ai-friendly-babylon-native-world-authoring-design.md`](../docs/superpowers/specs/2026-08-28-ai-friendly-babylon-native-world-authoring-design.md)：Canonical JSON 与 Babylon Native Scene 的长期分工、薄登记合同、统一 Gameplay Kernel、生产化依赖图和能力声明边界；
 - [`2026-08-28-babylon-native-block-whitebox-profile-design.md`](../docs/superpowers/specs/2026-08-28-babylon-native-block-whitebox-profile-design.md)：Native Lane 首个参考图白膜 Profile；继承方块分支的构造、检查和优化思想，但不迁移 Three Adapter、持久 Manifest 或 Block Compiler；
 - [`2026-08-28-source-neutral-asset-production-and-admission-design.md`](../docs/superpowers/specs/2026-08-28-source-neutral-asset-production-and-admission-design.md)：两条 Scene Source 之前的 Provider-neutral Candidate、资产类别 Build Record、只读 Admission、Registry 发布和回退边界；当前为 Proposed，尚未实施；
+- [`2026-08-30-project-health-observatory-design.md`](../docs/superpowers/specs/2026-08-30-project-health-observatory-design.md)：整仓工程健康观测层；统一感知架构权威、契约/生成物、测试拓扑、生命周期、确定性、性能、视觉、文档和独立审查问题，但不复制现有事实 Owner；执行见[同名实施计划](../docs/superpowers/plans/2026-08-30-project-health-observatory-implementation.md)；
 - [`ADR-0007`](decisions/0007-canonical-and-babylon-native-authoring-lanes.md)：接受“一世界、两条互斥场景创作 Lane、一个 Babylon/Havok Kernel”的架构决策；不代表 Native 已生产可用；
 - [`21-open-source-design-reference-ledger.md`](21-open-source-design-reference-ledger.md)：开源实现/测试的持续借鉴台账；记录锁定来源、本地落点、拒绝原因和候选验证，但不单独改变能力完成度；
 - `docs/superpowers/plans/`：已经进入实施阶段的单个纵向切片计划与证据。
@@ -1021,6 +1022,36 @@ Package、Build-Epoch Session 和结构 Checker 已完成合同级 checkpoint；
   eligibility/grouping、等价 fixture、资源 benchmark 和 BNA-4 优化提案；不直接修改 Runtime/Havok，
   不改变 AI-facing Schema 或 Contribution 语义。
 
+#### P3.7 Project Health Observatory
+
+详细权威为
+[Project Health Observatory 设计](../docs/superpowers/specs/2026-08-30-project-health-observatory-design.md)，
+执行任务见
+[Project Health Observatory Implementation Plan](../docs/superpowers/plans/2026-08-30-project-health-observatory-implementation.md)。
+它是仓库工程健康层，不是新的 World Validation、Scene Source、Runtime authority 或通用“健康总分”。
+现有测试、Build、Browser verifier、视觉 Capture 和人工审查继续产生事实；Observatory 只做精确树绑定、
+受影响门禁规划、跨证据关联、趋势和稳定诊断。当前仅完成设计与任务登记，不提高总进度。
+
+- [ ] PHO-0A：冻结 current-only Profile、Metric、Observation/Finding、Gate Plan/Receipt、Review Receipt、
+  Report、中立 Workspace Evidence、补充 Authority/Supply Chain Policy、Accepted Debt 和 canonical fingerprint；
+- [ ] PHO-0B：实现唯一 bounded/redacted execution envelope，关闭 `in-place-checkout` / `isolated-temp-worktree`
+  scope，统一 timeout、process-tree cleanup、临时目录和证据 Hash；
+- [ ] PHO-1：扩展现有 `workspace-boundary.ts` 唯一 scan Owner 以投影稳定 full graph/evidence，
+  由唯一 `health:record` 写 Receipt，再以两个同名 Sensor 分别消费原边界事实与补充重复 Owner、compat alias、Canonical/Native 边界规则；
+- [ ] PHO-2：复用现有 Owner 命令实现 Contract/Generated parity，并增加独立 Supply Chain Sensor 观察
+  `contract-parity` lock/install/patch Receipt、唯一 `dependency-inventory`、provenance/license 与绑定 provider snapshot
+  的漏洞/弃用信号；不重复 workspace undeclared-import 或 lock parser；
+- [ ] PHO-3：以现有 test census 和 PHO-1 graph evidence 为唯一归属/依赖输入，通过 PHO-0B 执行 Git diff，
+  实现 Change Impact → mode-specific Required/Advisory Gate Plan 与证据失效判断；PR 不因非 PR Gate 缺 Receipt 而阻断；
+- [ ] PHO-4：实现隔离的 Runtime 生命周期、资源 Owner、30/60/120 cadence 和多实例确定性 Sensor；首个 Required
+  Profile 只登记已生产 RuntimeHost/Browser/fixed-cadence Owner，BNA 双 Candidate 在生产 GO 前仅为 Advisory；
+- [ ] PHO-5：实现 bundle/性能、视觉、文档真相和独立 Review Receipt Sensor；未冻结的趋势/AI 判断保持 Advisory；
+- [ ] PHO-6：实现唯一 `health:record` Receipt producer、稳定聚合 Policy、
+  `health:pr/nightly/release/explain/update-baseline` 和 0/1/2/3 exit contract；
+- [ ] PHO-7：接入 PR/main-push/Nightly/Release CI；fast mode 只消费前序 exact-head Receipt 且不重复重型
+  Owner Gate，普通 check 不更新 tracked baseline；
+- [ ] PHO-8：完成对抗 Corpus、全维度审查、Cursor Cloud 独立复核、文档切换和最终 GO/NO-GO。
+
 ## 5. 推荐实施顺序与依赖
 
 ```text
@@ -1064,6 +1095,16 @@ BNA-4 + BWB-2 -> BWB-4
 BNA-5 + BNA-6 + BWB-3 + BWB-4 -> BWB-5 -> BWB-6
 
 APA-0..APA-6 只提供 source-neutral 已发布资产；BNA-3 才把已发布 Resource Ref 纳入 Native Package。
+
+横切工程健康链：
+
+PHO-0A -> PHO-0B + PHO-1
+PHO-0B -> PHO-2 + PHO-4 + PHO-5
+PHO-0B + PHO-1 -> PHO-3
+PHO-1..PHO-5 -> PHO-6 -> PHO-7 -> PHO-8
+
+PHO 不阻塞已冻结的 BNA/BWB 功能依赖图；在后续大改动中按成熟度逐步启用其 PR/Nightly Sensor，
+最终 BNA-8/生产验收消费 PHO exact-tree Report 作为工程健康证据之一，但不能用它替代 BNA 自身门禁。
 ```
 
 Placement S1、Simulation Take / Control Capture V1 与 Validation Capture/Integrity V1
