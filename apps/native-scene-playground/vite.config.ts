@@ -50,7 +50,7 @@ export default defineConfig({
     port: 5174,
     headers: {
       "Content-Security-Policy": `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'none'; media-src 'none'; connect-src 'self'; frame-src ${hostedRuntimeOrigin}; object-src 'none'; base-uri 'none'; form-action 'none'`,
-      "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=()",
+      "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=()",
       "Referrer-Policy": "no-referrer",
     },
   },
