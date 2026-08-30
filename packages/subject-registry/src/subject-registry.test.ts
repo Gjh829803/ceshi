@@ -33,7 +33,9 @@ const G_BOT_COLLIDER_PROFILE_REF =
   "worldkit://collider-profile/humanoid.g-bot-capsule@1";
 const G_BOT_SUBJECT_DEFINITION_REF =
   "worldkit://subject-definition/humanoid.g-bot@2";
-const G_BOT_ACTION_IDS = [...GROUND_HUMANOID_ACTION_IDS_V1].sort();
+const G_BOT_ACTION_IDS = GROUND_HUMANOID_ACTION_IDS_V1.filter(
+  (actionId) => actionId !== "jump.small.takeoff" && actionId !== "jump.small.airborne",
+).sort();
 const BIPED_BONE_IDS = [...BIPED_BONE_IDS_V1].sort();
 
 function goldenAnimationSetInput(): AnimationSetManifestInputV1 {
@@ -210,6 +212,7 @@ describe("subject resource registry", () => {
       "worldkit://subject-definition/animal.quadruped.forward-steer@1",
       "worldkit://subject-definition/animal.quadruped.forward-steer@2",
       "worldkit://subject-definition/glider.paraglider.unpowered@1",
+      "worldkit://subject-definition/humanoid.alpha-local-actions@1",
       G_BOT_SUBJECT_DEFINITION_REF,
       "worldkit://subject-definition/humanoid.rigged-golden@2",
       "worldkit://subject-definition/humanoid.third-person@1",
@@ -222,6 +225,41 @@ describe("subject resource registry", () => {
         .sort((left, right) => left.localeCompare(right)),
     ]);
   });
+
+  it.each([
+    "locomotion.small-jump.takeoff",
+    "locomotion.small-jump.airborne",
+  ] as const)(
+    "rejects split policy when the '%s' binding is missing",
+    (missingPresentationKey) => {
+      const resources = builtInSubjectResourceRegistry
+        .listDiscoverableResources()
+        .map((resource) => {
+          const { contentHash: _contentHash, ...input } = structuredClone(resource);
+          return input;
+        });
+      const animationSetIndex = resources.findIndex((resource) =>
+        resource.resourceRef ===
+          "worldkit://animation-set/humanoid.ground.alpha-local-actions@1"
+      );
+      const animationSet = resources[animationSetIndex];
+      if (animationSet?.kind !== "animation-set") {
+        throw new Error("TEST_ALPHA_SPLIT_ANIMATION_SET_MISSING");
+      }
+      resources[animationSetIndex] = {
+        ...animationSet,
+        animationBindings: animationSet.animationBindings.filter((binding) =>
+          !binding.automaticPresentationKeys.includes(missingPresentationKey)
+        ),
+      };
+
+      expect(() => createSubjectResourceRegistry(
+        resources as Parameters<typeof createSubjectResourceRegistry>[0],
+      )).toThrowError(
+        /SUBJECT_REGISTRY_SPLIT_JUMP_BINDING_REQUIRED/,
+      );
+    },
+  );
 
   it("shares the exact closed Subject unions across built-in definitions", () => {
     const definitions = builtInSubjectResourceRegistry.listDiscoverableResources({

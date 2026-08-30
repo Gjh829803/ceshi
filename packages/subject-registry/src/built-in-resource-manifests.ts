@@ -371,6 +371,153 @@ const G_BOT_CAPSULE_PROFILE: ColliderProfileManifestInputV1 = {
   },
 };
 
+const ALPHA_LOCAL_ACTIONS_SUBJECT_ASSET: SubjectAssetManifestInputV1 = {
+  kind: "subject-asset",
+  id: "actor.humanoid.alpha-local-actions",
+  version: 1,
+  resourceRef: "worldkit://subject-asset/actor.humanoid.alpha-local-actions@1",
+  format: "glb",
+  artifact: {
+    mediaType: "model/gltf-binary",
+    byteLength: 6_841_456,
+    contentHash:
+      "sha256:580113b6d9a80c0d40a93a77f1e09a564585b0d6665d8814b9d9401f1d51260e",
+  },
+  coordinateConvention: {
+    forwardAxis: "-Z",
+    upAxis: "+Y",
+    metersPerUnit: 1,
+    pivot: "support-center",
+  },
+  bounds: {
+    minimumMetersXYZ: [
+      -0.9025661945343018,
+      -0.0003511549439281225,
+      -0.14895710349082947,
+    ],
+    maximumMetersXYZ: [
+      0.9025658369064331,
+      1.8088831901550293,
+      0.17174167931079865,
+    ],
+  },
+  inventory: {
+    meshCount: 2,
+    vertexCount: 28_374,
+    triangleCount: 49_112,
+    skeletonCount: 1,
+    boneCount: 65,
+    animationClipCount: 27,
+    animationClipNames: [
+      ...G_BOT_SUBJECT_ASSET.inventory.animationClipNames,
+      "small-jump.takeoff",
+      "small-jump.airborne",
+    ],
+  },
+  provenance: {
+    licenseSpdxId: "LicenseRef-User-Provided-Local",
+    redistributionPolicy: "internal-only",
+    author: "Loopit asset team and local user-provided small-jump sources",
+  },
+  runtimeReadiness: {
+    productionReady: false,
+    runtimeStateBinding: "implemented",
+  },
+  aiMetadata: {
+    displayName: "G Bot Local Split Jump",
+    description:
+      "Canonical G Bot clips plus committed small and large jump presentation bindings.",
+    semanticTags: ["alpha-local-actions", "biped", "g-bot", "humanoid", "rigged"],
+  },
+};
+
+const ALPHA_LOCAL_ACTIONS_MIXAMO_RIG_PROFILE: RigProfileManifestInputV1 = {
+  ...G_BOT_MIXAMO_RIG_PROFILE,
+  id: "biped.mixamo-alpha-local-actions",
+  version: 1,
+  resourceRef: "worldkit://rig-profile/biped.mixamo-alpha-local-actions@1",
+  compatibleSubjectAssetRefs: [ALPHA_LOCAL_ACTIONS_SUBJECT_ASSET.resourceRef],
+  aiMetadata: {
+    displayName: "Alpha local-actions Mixamo Humanoid Rig",
+    description: "Semantic biped mapping for the local split-jump G Bot skeleton.",
+    semanticTags: ["alpha-local-actions", "biped", "g-bot", "mixamo", "rig"],
+  },
+};
+
+const ALPHA_LOCAL_ACTIONS_GROUND_ANIMATION_SET: AnimationSetManifestInputV1 = {
+  kind: "animation-set",
+  id: "humanoid.ground.alpha-local-actions",
+  version: 1,
+  resourceRef: "worldkit://animation-set/humanoid.ground.alpha-local-actions@1",
+  subjectAssetRef: ALPHA_LOCAL_ACTIONS_SUBJECT_ASSET.resourceRef,
+  rigProfileRef: ALPHA_LOCAL_ACTIONS_MIXAMO_RIG_PROFILE.resourceRef,
+  defaultActionId: "idle",
+  requiredActionIds: [
+    ...G_BOT_ACTION_BINDINGS.map(([actionId]) => actionId),
+    "jump.small.takeoff",
+    "jump.small.airborne",
+  ],
+  animationBindings: [
+    ...G_BOT_ACTION_BINDINGS.map(
+      ([actionId, loopMode, blendDurationSeconds, semanticFamily, automaticPresentationKeys]) => ({
+        actionId,
+        sourceClipName: actionId,
+        semanticFamily,
+        automaticPresentationKeys,
+        loopMode,
+        playbackSpeedRatio: actionId === "jump" ? 20 / 17 : 1,
+        blendDurationSeconds,
+        rootMotionMode: "in-place" as const,
+      }),
+    ),
+    {
+      actionId: "jump.small.takeoff",
+      sourceClipName: "small-jump.takeoff",
+      semanticFamily: "airborne",
+      automaticPresentationKeys: ["locomotion.small-jump.takeoff"],
+      loopMode: "once",
+      playbackSpeedRatio: 1,
+      blendDurationSeconds: 0.08,
+      rootMotionMode: "in-place",
+    },
+    {
+      actionId: "jump.small.airborne",
+      sourceClipName: "small-jump.airborne",
+      semanticFamily: "airborne",
+      automaticPresentationKeys: ["locomotion.small-jump.airborne"],
+      loopMode: "once",
+      playbackSpeedRatio: 1,
+      blendDurationSeconds: 0.06666666666666667,
+      rootMotionMode: "in-place",
+    },
+  ],
+  aiMetadata: {
+    displayName: "Alpha local-actions ground and split-jump animations",
+    description:
+      "Ordinary committed presentation bindings for G Bot locomotion and both small-jump phases.",
+    semanticTags: ["alpha-local-actions", "animation", "g-bot", "ground", "humanoid"],
+  },
+};
+
+const ALPHA_LOCAL_ACTIONS_CAPSULE_PROFILE: ColliderProfileManifestInputV1 = {
+  kind: "collider-profile",
+  id: "humanoid.alpha-local-actions-capsule",
+  version: 1,
+  resourceRef: "worldkit://collider-profile/humanoid.alpha-local-actions-capsule@1",
+  supportedBodyTopologies: ["biped"],
+  collider: {
+    kind: "capsule",
+    radiusMeters: 0.35,
+    heightMeters: 1.8,
+    centerOffsetFromSubjectOriginMetersXYZ: [0, 0.9, 0],
+  },
+  aiMetadata: {
+    displayName: "Alpha local-actions capsule",
+    description: "Support-centered Capsule matching the local split-jump G Bot.",
+    semanticTags: ["alpha-local-actions", "biped", "capsule", "character"],
+  },
+};
+
 const GROUND_LOCOMOTION_CAPABILITY: CapabilityManifestInputV1 = {
   kind: "capability",
   id: "locomotion.ground",
@@ -505,8 +652,12 @@ export const BUILT_IN_SUBJECT_RESOURCE_MANIFESTS = [
   G_BOT_SUBJECT_ASSET,
   G_BOT_MIXAMO_RIG_PROFILE,
   G_BOT_GROUND_ANIMATION_SET,
+  ALPHA_LOCAL_ACTIONS_SUBJECT_ASSET,
+  ALPHA_LOCAL_ACTIONS_MIXAMO_RIG_PROFILE,
+  ALPHA_LOCAL_ACTIONS_GROUND_ANIMATION_SET,
   MEDIUM_HUMANOID_CAPSULE_PROFILE,
   G_BOT_CAPSULE_PROFILE,
+  ALPHA_LOCAL_ACTIONS_CAPSULE_PROFILE,
   GROUND_LOCOMOTION_CAPABILITY,
   MEDIUM_CHARACTER_PHYSICS_BODY_PROFILE,
   CAPABILITY_CHARACTER_PHYSICS_BODY_PROFILE,

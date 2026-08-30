@@ -17,6 +17,7 @@ const SUBJECT_DEFINITION_REFS = [
   "worldkit://subject-definition/animal.quadruped.forward-steer@1",
   "worldkit://subject-definition/animal.quadruped.forward-steer@2",
   "worldkit://subject-definition/glider.paraglider.unpowered@1",
+  "worldkit://subject-definition/humanoid.alpha-local-actions@1",
   "worldkit://subject-definition/humanoid.g-bot@2",
   "worldkit://subject-definition/humanoid.rigged-golden@2",
   "worldkit://subject-definition/humanoid.third-person@1",
@@ -215,7 +216,48 @@ describe("capability-driven subject registry", () => {
     expect(builtInSubjectResourceRegistry.listDiscoverableResources({
       kind: "subject-definition",
     })).toHaveLength(
-      10 + XIER120_SUBJECT_DEFINITIONS.length,
+      11 + XIER120_SUBJECT_DEFINITIONS.length,
+    );
+  });
+
+  it("admits one experimental split-jump closure without changing public defaults", () => {
+    const definition = builtInSubjectResourceRegistry.resolveSubjectDefinition(
+      "worldkit://subject-definition/humanoid.alpha-local-actions@1",
+    );
+    const controlFeel = builtInSubjectResourceRegistry.resolveControlFeelProfile(
+      "worldkit://control-feel-profile/humanoid.alpha-local-actions@1",
+    );
+    const animationSet = builtInSubjectResourceRegistry.resolveAnimationSet(
+      "worldkit://animation-set/humanoid.ground.alpha-local-actions@1",
+    );
+
+    expect(definition).toMatchObject({
+      authoringAvailability: "experimental",
+      profiles: {
+        controlFeelProfileRef:
+          "worldkit://control-feel-profile/humanoid.alpha-local-actions@1",
+      },
+    });
+    expect(controlFeel?.jumpVariantPolicy).toEqual({
+      mode: "run-selects-variant",
+      smallAnticipationSeconds: 0.8333333333333334,
+      largeAnticipationSeconds: 0.9,
+    });
+    expect(animationSet?.animationBindings).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        actionId: "jump.small.takeoff",
+        automaticPresentationKeys: ["locomotion.small-jump.takeoff"],
+      }),
+      expect.objectContaining({
+        actionId: "jump.small.airborne",
+        automaticPresentationKeys: ["locomotion.small-jump.airborne"],
+      }),
+    ]));
+    expect(
+      builtInSubjectDefaultRegistry.listPublicDefaults()
+        .map((entry) => entry.subjectDefinitionRef),
+    ).not.toContain(
+      "worldkit://subject-definition/humanoid.alpha-local-actions@1",
     );
   });
 

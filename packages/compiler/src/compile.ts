@@ -1157,6 +1157,7 @@ function compileSubjectsV3(
         controlFeel: {
           resourceRef: definition.controlFeel.resourceRef,
           contentHash: definition.controlFeel.contentHash,
+          jumpVariantPolicy: structuredClone(definition.controlFeel.jumpVariantPolicy),
           walkSpeedMetersPerSecond: definition.controlFeel.walkSpeedMetersPerSecond,
           runSpeedMetersPerSecond: definition.controlFeel.runSpeedMetersPerSecond,
           jumpSpeedMetersPerSecond: definition.controlFeel.jumpSpeedMetersPerSecond,
@@ -1176,6 +1177,7 @@ function compileSubjectsV3(
         availableControlFeels: definition.availableControlFeels.map((feel) => ({
           resourceRef: feel.resourceRef,
           contentHash: feel.contentHash,
+          jumpVariantPolicy: structuredClone(feel.jumpVariantPolicy),
           walkSpeedMetersPerSecond: feel.walkSpeedMetersPerSecond,
           runSpeedMetersPerSecond: feel.runSpeedMetersPerSecond,
           jumpSpeedMetersPerSecond: feel.jumpSpeedMetersPerSecond,

@@ -4,6 +4,7 @@ import {
   applyCameraRigParameterOverridesV1,
   CAMERA_RIG_PARAMETER_NAMES_V1,
   isCameraRigParameterNameV1,
+  parseJumpVariantPolicyV1,
 } from "@whitebox-world/runtime-contracts";
 
 import type {
@@ -277,6 +278,59 @@ function validateAnimationSet(source: AnimationSetManifestInputV1): void {
   }
 }
 
+const SPLIT_JUMP_BINDINGS_V1 = Object.freeze([
+  Object.freeze({
+    actionId: "jump.small.takeoff" as const,
+    presentationKey: "locomotion.small-jump.takeoff" as const,
+  }),
+  Object.freeze({
+    actionId: "jump.small.airborne" as const,
+    presentationKey: "locomotion.small-jump.airborne" as const,
+  }),
+]);
+
+function validateSplitJumpPresentationClosure(
+  subject: RegistrySubjectDefinitionV3,
+  resourcesByRef: ReadonlyMap<string, SubjectRegistryResourceV3>,
+): void {
+  const controlFeel = resourcesByRef.get(
+    subject.profiles.controlFeelProfileRef,
+  );
+  if (controlFeel?.kind !== "control-feel-profile" ||
+    controlFeel.jumpVariantPolicy.mode !== "run-selects-variant") return;
+  if (subject.visualBinding.mode !== "rigged") {
+    throw new Error(
+      `SUBJECT_REGISTRY_SPLIT_JUMP_BINDING_REQUIRED: '${subject.resourceRef}' requires a rigged Animation Set.`,
+    );
+  }
+  const animationSet = resourcesByRef.get(subject.visualBinding.animationSetRef);
+  const subjectAsset = animationSet?.kind === "animation-set"
+    ? resourcesByRef.get(animationSet.subjectAssetRef)
+    : undefined;
+  if (animationSet?.kind !== "animation-set" ||
+    subjectAsset?.kind !== "subject-asset") {
+    throw new Error(
+      `SUBJECT_REGISTRY_SPLIT_JUMP_BINDING_REQUIRED: '${subject.resourceRef}' has no admitted split-jump Animation Set.`,
+    );
+  }
+  for (const requirement of SPLIT_JUMP_BINDINGS_V1) {
+    const matches = animationSet.animationBindings.filter((binding) =>
+      binding.actionId === requirement.actionId &&
+      binding.automaticPresentationKeys.length === 1 &&
+      binding.automaticPresentationKeys[0] === requirement.presentationKey
+    );
+    if (matches.length !== 1 ||
+      !animationSet.requiredActionIds.includes(requirement.actionId) ||
+      !subjectAsset.inventory.animationClipNames.includes(
+        matches[0]?.sourceClipName ?? "",
+      )) {
+      throw new Error(
+        `SUBJECT_REGISTRY_SPLIT_JUMP_BINDING_REQUIRED: '${subject.resourceRef}' requires '${requirement.presentationKey}'.`,
+      );
+    }
+  }
+}
+
 function validateSubjectAsset(source: SubjectAssetManifestInputV1): void {
   const duplicateClipName = duplicateValue(source.inventory.animationClipNames);
   if (duplicateClipName !== undefined) {
@@ -476,6 +530,13 @@ function isFiniteInRange(value: number, minimum: number, maximum: number): boole
 }
 
 function validateControlFeelProfile(source: ControlFeelProfileInputV1): void {
+  try {
+    parseJumpVariantPolicyV1(source.jumpVariantPolicy);
+  } catch {
+    throw new Error(
+      `CONTROL_FEEL_PROFILE_INVALID: 'jumpVariantPolicy' in '${source.resourceRef}'.`,
+    );
+  }
   for (const [fieldName, [minimum, maximum]] of Object.entries(CONTROL_FEEL_BOUNDS)) {
     const value = source[fieldName as keyof ControlFeelProfileInputV1];
     if (typeof value !== "number" || !isFiniteInRange(value, minimum, maximum)) {
@@ -851,6 +912,7 @@ function validateReferences(resourcesByRef: ReadonlyMap<string, SubjectRegistryR
     }
     if (resource.kind === "subject-definition" && "schemaVersion" in resource) {
       const subject = resource as RegistrySubjectDefinitionV3;
+      validateSplitJumpPresentationClosure(subject, resourcesByRef);
       const defaultMotion = resourcesByRef.get(
         subject.profiles.motion.defaultMotionProfileRef,
       );

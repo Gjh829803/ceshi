@@ -9,6 +9,7 @@
   "dependencies": {
     "@whitebox-world/character-movement": "workspace:*",
     "@whitebox-world/gameplay-contracts": "workspace:*",
-    "@whitebox-world/protocol": "workspace:*"
+    "@whitebox-world/protocol": "workspace:*",
+    "@whitebox-world/subject-contracts": "workspace:*"
   }
 }

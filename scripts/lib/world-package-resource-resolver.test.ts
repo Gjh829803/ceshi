@@ -188,8 +188,11 @@ describe("resolveWorldPackageResourceBytesV1", () => {
     const publicRoot = await temporaryPublicRoot();
     const goldenBytes = new Uint8Array([0x67, 0x6c, 0x54, 0x46, 0x01]);
     const gBotBytes = new Uint8Array([0x67, 0x6c, 0x54, 0x46, 0x02]);
+    const alphaBytes = new Uint8Array([0x67, 0x6c, 0x54, 0x46, 0x03]);
     const goldenRef = "worldkit://subject-asset/humanoid.golden@2";
     const gBotRef = "worldkit://subject-asset/actor.humanoid.g-bot@2";
+    const alphaRef =
+      "worldkit://subject-asset/actor.humanoid.alpha-local-actions@1";
     await writePublicAsset(
       publicRoot,
       DEFAULT_WORLD_PACKAGE_RESOURCE_MAPPING_BY_REF_V1[goldenRef]!.publicUri,
@@ -200,16 +203,29 @@ describe("resolveWorldPackageResourceBytesV1", () => {
       DEFAULT_WORLD_PACKAGE_RESOURCE_MAPPING_BY_REF_V1[gBotRef]!.publicUri,
       gBotBytes,
     );
+    await writePublicAsset(
+      publicRoot,
+      DEFAULT_WORLD_PACKAGE_RESOURCE_MAPPING_BY_REF_V1[alphaRef]!.publicUri,
+      alphaBytes,
+    );
 
     const result = await resolveWorldPackageResourceBytesV1(
       normalizedWorldIr([
         subjectAsset(goldenRef, goldenBytes),
         subjectAsset(gBotRef, gBotBytes),
+        subjectAsset(alphaRef, alphaBytes),
       ]),
       { publicRoot },
     );
 
     expect(result).toEqual([
+      {
+        resourceRef: alphaRef,
+        packagePath:
+          "resources/subject-assets/actor.humanoid.alpha-local-actions.glb",
+        mediaType: "model/gltf-binary",
+        bytes: alphaBytes,
+      },
       {
         resourceRef: gBotRef,
         packagePath: "resources/subject-assets/actor.humanoid.g-bot.glb",
@@ -543,9 +559,13 @@ describe("resolveWorldPackageResourceArtifactsV1", () => {
   });
 
   it.each([
-    "actor.humanoid.g-bot@2",
-    "xier120.biped-animal@1",
-  ])("preserves real built-in provenance for %s", async (resourceSlug) => {
+    ["actor.humanoid.alpha-local-actions@1", "user-provided-local"],
+    ["actor.humanoid.g-bot@2", "loopit-private"],
+    ["xier120.biped-animal@1", "project-owned"],
+  ])("preserves real built-in provenance for %s", async (
+    resourceSlug,
+    licenseDocumentId,
+  ) => {
     const resourceRef = `worldkit://subject-asset/${resourceSlug}`;
     const manifest = builtInSubjectResourceRegistry.resolveSubjectAsset(resourceRef)!;
     const mappingRow = DEFAULT_WORLD_PACKAGE_RESOURCE_MAPPING_BY_REF_V1[resourceRef]!;
@@ -554,10 +574,6 @@ describe("resolveWorldPackageResourceArtifactsV1", () => {
       import.meta.url,
     )));
     const normalized = normalizedSubjectAssetFromManifest(manifest, bytes);
-    const licenseDocumentId = manifest.provenance.redistributionPolicy === "allowed"
-      ? "project-owned"
-      : "loopit-private";
-
     const result = await resolveWorldPackageResourceArtifactsV1(
       normalizedWorldIr([normalized]),
       {

@@ -405,9 +405,7 @@ describe("compileWorld", () => {
       gameplayBootstrapHash: string;
     };
 
-    expect(compiled.executionPlanHash).toBe(
-      receipt.projectedExecutionPlanHash,
-    );
+    expect(compiled.executionPlanHash).toBe(receipt.projectedExecutionPlanHash);
     expect(compiled.worldRuntimeBootstrap.contentHash).toBe(
       receipt.worldRuntimeBootstrapHash,
     );
@@ -804,12 +802,15 @@ describe("compileWorld", () => {
     });
     if (!compiled.ok) throw new Error("Rigged fixture did not compile.");
 
-    expect(compiled.executionPlanHash).toBe(
-      "sha256:6c56847c46354b566d5f4b4bd3400b03b3d84caa41dd20ec3a647c2c5f85a87a",
-    );
-    expect(compiled.worldRuntimeBootstrap.contentHash).toBe(
-      "sha256:ca1b017433a307249f651e500032d106a92d9b2c1ff3ca1ab92c06235634a759",
-    );
+    expect({
+      executionPlanHash: compiled.executionPlanHash,
+      worldRuntimeBootstrapHash: compiled.worldRuntimeBootstrap.contentHash,
+    }).toEqual({
+      executionPlanHash:
+        "sha256:64438fe580673eec72a141e1a9035b70ec3e133f4c83eb7c851f975399f138a4",
+      worldRuntimeBootstrapHash:
+        "sha256:37221f3063ac420945e37ace24a246fdfb4a20aa09bf24e2bc17290199952d61",
+    });
   });
 
   it.each([
@@ -1029,6 +1030,7 @@ describe("compileWorld", () => {
       "jumpBufferSeconds",
       "jumpHoldGravityRatio",
       "jumpReleaseGravityRatio",
+      "jumpVariantPolicy",
       "jumpSpeedMetersPerSecond",
       "moveResponseExponent",
       "resourceRef",

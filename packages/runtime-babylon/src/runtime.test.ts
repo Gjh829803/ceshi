@@ -559,6 +559,8 @@ interface SubjectVisualInternals extends SubjectVisual {
   primitiveMeshes?: readonly Mesh[];
   assetPartRoots?: readonly TransformNode[];
   animationPlayer?: SubjectAnimationPlayer;
+  visualAdjustmentRoot?: TransformNode;
+  verticalFootSupportAnchor?: unknown;
 }
 
 interface SubjectVisualProbe {
@@ -1280,6 +1282,91 @@ async function createRiggedRuntime(
 ): Promise<BabylonWorldRuntime> {
   return createRuntime(executionPlan, {
     subjectAssetResolver: createMemoryResolver(goldenSubjectAssetBytes),
+  });
+}
+
+function withSplitJumpClips(
+  phaseClips: readonly [{ name: string }, { name: string }],
+): CanonicalSceneExecutionPlanV1 {
+  const base = createFlatRiggedExecutionPlan();
+  const bootstrap = runtimeBootstrap(base);
+  const animationSet = bootstrap.animationSets[0]!;
+  const subjectAsset = bootstrap.subjectAssets[0]!;
+  return overrideRuntimeBootstrap(base, {
+    animationSets: [{
+      ...animationSet,
+      requiredActionIds: [
+        ...animationSet.requiredActionIds,
+        "jump.small.takeoff",
+        "jump.small.airborne",
+      ],
+      animationBindings: [
+        ...animationSet.animationBindings,
+        {
+          actionId: "jump.small.takeoff",
+          sourceClipName: phaseClips[0].name,
+          semanticFamily: "airborne",
+          automaticPresentationKeys: ["locomotion.small-jump.takeoff"],
+          loopMode: "once",
+          playbackSpeedRatio: 1,
+          blendDurationSeconds: 0,
+          rootMotionMode: "in-place",
+        },
+        {
+          actionId: "jump.small.airborne",
+          sourceClipName: phaseClips[1].name,
+          semanticFamily: "airborne",
+          automaticPresentationKeys: ["locomotion.small-jump.airborne"],
+          loopMode: "once",
+          playbackSpeedRatio: 1,
+          blendDurationSeconds: 0,
+          rootMotionMode: "in-place",
+        },
+      ],
+    }],
+    subjectAssets: [{
+      ...subjectAsset,
+      inventory: {
+        ...subjectAsset.inventory,
+        animationClipNames: [
+          ...subjectAsset.inventory.animationClipNames,
+          ...phaseClips.map((phase) => phase.name),
+        ],
+      },
+    }],
+  });
+}
+
+function attachScaledSplitJumpClips(
+  phaseClips: readonly { name: string; startY: number; endY: number }[],
+): void {
+  mutateNextLoadedContainer((container) => {
+    const idle = container.animationGroups.find((group) => group.name === "idle")!;
+    const hips = container.skeletons[0]!.bones.find(
+      (candidate) => candidate.name === "hips",
+    )!;
+    const hipsNode = hips.getTransformNode()!;
+    const scaledParent = hipsNode.parent;
+    if (!(scaledParent instanceof TransformNode)) {
+      throw new Error("Golden Hips linked node parent missing.");
+    }
+    scaledParent.scaling.setAll(0.01);
+    for (const phase of phaseClips) {
+      const group = idle.clone(phase.name, undefined, true, true);
+      const translation = new Animation(
+        `${phase.name}.hips-y`,
+        "position.y",
+        60,
+        Animation.ANIMATIONTYPE_FLOAT,
+        Animation.ANIMATIONLOOPMODE_CONSTANT,
+      );
+      translation.setKeys([
+        { frame: 0, value: phase.startY },
+        { frame: 1, value: phase.endY },
+      ]);
+      group.addTargetedAnimation(translation, hipsNode);
+      container.animationGroups.push(group);
+    }
   });
 }
 
@@ -3843,6 +3930,94 @@ function emptyActionProjection(simulationTick: number) {
     await runtime.dispose();
   });
 
+  it("keeps split-jump foot adjustment below committed roots and isolated per Subject", async () => {
+    const runtime = await createRiggedRuntime(createTwoRiggedSubjectExecutionPlan());
+    const probe = createSubjectVisualProbe(runtime);
+    const playerVisual = probe.visual("player");
+    const heroBVisual = probe.visual("hero-b");
+    const playerAdjustment = playerVisual.visualAdjustmentRoot!;
+    const heroBAdjustment = heroBVisual.visualAdjustmentRoot!;
+    const playerRootBefore = playerVisual.root.position.clone();
+    const heroBRootBefore = heroBVisual.root.position.clone();
+    const playerAdjustmentBefore = playerAdjustment.position.y;
+
+    expect(playerAdjustment.parent).toBe(playerVisual.root);
+    expect(heroBAdjustment.parent).toBe(heroBVisual.root);
+    expect(playerVisual.assetPartRoots![0]!.parent).toBe(playerAdjustment);
+    expect(playerAdjustment).not.toBe(heroBAdjustment);
+
+    const anticipating = (tick: number) => Object.freeze({
+      schemaVersion: 1 as const,
+      variant: "large" as const,
+      phase: "anticipating" as const,
+      startedTick: 1,
+      anticipationStartedTick: 1,
+      committedTick: tick,
+      anticipationTicksRemaining: 1,
+    });
+    const takeoffPresentation = (tick: number): ResolvedActionPresentationV1 =>
+      Object.freeze({
+        schemaVersion: 1,
+        committedTick: tick,
+        source: "locomotion",
+        presentationKey: "locomotion.takeoff",
+        layeredMoves: Object.freeze([]),
+      });
+
+    playerVisual.stepAnimation(
+      takeoffPresentation(1),
+      undefined,
+      anticipating(1),
+    );
+    playerVisual.applyAnimationPose();
+    playerVisual.stepAnimation(
+      takeoffPresentation(2),
+      undefined,
+      anticipating(2),
+    );
+    playerVisual.applyAnimationPose();
+
+    expect(Number.isFinite(playerAdjustment.position.y)).toBe(true);
+    const appliedAdjustmentMeters = Math.abs(
+      playerAdjustment.position.y - playerAdjustmentBefore,
+    );
+    expect(appliedAdjustmentMeters).toBeGreaterThan(0);
+    expect(appliedAdjustmentMeters).toBeLessThanOrEqual(0.030000001);
+    expect(playerVisual.root.position.asArray()).toEqual(playerRootBefore.asArray());
+    expect(heroBVisual.root.position.asArray()).toEqual(heroBRootBefore.asArray());
+    expect(heroBAdjustment.position.y).toBe(0);
+
+    playerVisual.resetAnimation();
+    expect(playerAdjustment.position.y).toBe(playerAdjustmentBefore);
+    await runtime.dispose();
+    expect(playerAdjustment.isDisposed()).toBe(true);
+    expect(heroBAdjustment.isDisposed()).toBe(true);
+  });
+
+  it("keeps rigged animation usable when the admitted Rig has no foot semantics", async () => {
+    const basePlan = createFlatRiggedExecutionPlan();
+    const bootstrap = runtimeBootstrap(basePlan);
+    const rigProfile = bootstrap.rigProfiles[0]!;
+    const executionPlan = overrideRuntimeBootstrap(basePlan, {
+      rigProfiles: [{
+        ...rigProfile,
+        requiredBoneIds: rigProfile.requiredBoneIds.filter(
+          (boneId) => boneId !== "foot.left" && boneId !== "foot.right",
+        ),
+      }],
+    });
+    const runtime = await createRiggedRuntime(executionPlan);
+    const visual = createSubjectVisualProbe(runtime).visual("player");
+
+    expect(visual.visualAdjustmentRoot).toBeDefined();
+    expect(visual.verticalFootSupportAnchor).toBeUndefined();
+    visual.stepAnimation(resolvedAutomaticPresentation(1, "run"));
+    visual.applyAnimationPose();
+    expect(visual.activeActionId).toBe("run");
+
+    await runtime.dispose();
+  });
+
   it("transitions jump back to idle and reset restores Tick zero and idle frame", async () => {
     const runtime = await createRiggedRuntime();
     const probe = createSubjectVisualProbe(runtime);
@@ -3962,7 +4137,7 @@ function emptyActionProjection(simulationTick: number) {
     }
   });
 
-  it("rejects Root and Hips position channels by Bone and linked-node identity", async () => {
+  it("rejects accumulated Root and Hips travel by Bone and linked-node identity", async () => {
     for (const targetKind of ["bone", "linked-transform"] as const) {
       mutateNextLoadedContainer((container) => {
         const nativeInstantiate = container.instantiateModelsToScene.bind(container);
@@ -3983,10 +4158,12 @@ function emptyActionProjection(simulationTick: number) {
               : Animation.ANIMATIONTYPE_VECTOR3,
             Animation.ANIMATIONLOOPMODE_CONSTANT,
           );
-          const value = targetKind === "bone" ? 0 : Vector3.Zero();
           animation.setKeys([
-            { frame: 0, value },
-            { frame: 1, value },
+            { frame: 0, value: targetKind === "bone" ? 0 : Vector3.Zero() },
+            {
+              frame: 1,
+              value: targetKind === "bone" ? 1 : new Vector3(0, 0, 1),
+            },
           ]);
           instance.animationGroups
             .find((group) => group.name.endsWith("idle"))!
@@ -4000,6 +4177,127 @@ function emptyActionProjection(simulationTick: number) {
         "SUBJECT_ASSET_ROOT_MOTION_UNSUPPORTED",
       );
     }
+  });
+
+  it("allows bounded loop-closed Hips translation for an in-place animation", async () => {
+    mutateNextLoadedContainer((container) => {
+      const nativeInstantiate = container.instantiateModelsToScene.bind(container);
+      vi.spyOn(container, "instantiateModelsToScene").mockImplementation((...args) => {
+        const instance = nativeInstantiate(...args);
+        const hips = instance.skeletons[0]!.bones.find(
+          (candidate) => candidate.name === "hips",
+        )!;
+        const animation = new Animation(
+          "allowed.cyclic-hips-motion",
+          "position",
+          60,
+          Animation.ANIMATIONTYPE_VECTOR3,
+          Animation.ANIMATIONLOOPMODE_CYCLE,
+        );
+        animation.setKeys([
+          { frame: 0, value: Vector3.Zero() },
+          { frame: 1, value: new Vector3(0.02, 0.08, 0.04) },
+          { frame: 2, value: Vector3.Zero() },
+        ]);
+        instance.animationGroups
+          .find((group) => group.name.endsWith("idle"))!
+          .addTargetedAnimation(animation, hips.getTransformNode()!);
+        return instance;
+      });
+    });
+
+    const runtime = await createRiggedRuntime();
+    expect(runtime.snapshot().subjectStatesByEntityId.player?.activeActionId).toBe(
+      "idle",
+    );
+    await runtime.dispose();
+  });
+
+  it("rejects diagonal Hips translation beyond 0.5 world meters", async () => {
+    mutateNextLoadedContainer((container) => {
+      const nativeInstantiate = container.instantiateModelsToScene.bind(container);
+      vi.spyOn(container, "instantiateModelsToScene").mockImplementation((...args) => {
+        const instance = nativeInstantiate(...args);
+        const hips = instance.skeletons[0]!.bones.find(
+          (candidate) => candidate.name === "hips",
+        )!;
+        const animation = new Animation(
+          "rejected.diagonal-hips-motion",
+          "position",
+          60,
+          Animation.ANIMATIONTYPE_VECTOR3,
+          Animation.ANIMATIONLOOPMODE_CYCLE,
+        );
+        animation.setKeys([
+          { frame: 0, value: Vector3.Zero() },
+          { frame: 1, value: new Vector3(0.4, 0.4, 0) },
+          { frame: 2, value: Vector3.Zero() },
+        ]);
+        instance.animationGroups
+          .find((group) => group.name.endsWith("idle"))!
+          .addTargetedAnimation(animation, hips.getTransformNode()!);
+        return instance;
+      });
+    });
+
+    await expectRiggedRuntimeFailure(
+      createFlatRiggedExecutionPlan(),
+      "SUBJECT_ASSET_ROOT_MOTION_UNSUPPORTED",
+    );
+  });
+
+  it.each([
+    {
+      label: "allows a bounded phase-continuous split jump",
+      airborneStartY: 12,
+      shouldPass: true,
+    },
+    {
+      label: "rejects a discontinuous split jump",
+      airborneStartY: 13,
+      shouldPass: false,
+    },
+  ])("validates committed split-jump visual root translation: $label", async ({
+    airborneStartY,
+    shouldPass,
+  }) => {
+    const phaseClips = [
+      { name: `split-jump.takeoff.${airborneStartY}`, startY: 0, endY: 12 },
+      {
+        name: `split-jump.airborne.${airborneStartY}`,
+        startY: airborneStartY,
+        endY: 44,
+      },
+    ] as const;
+    const executionPlan = withSplitJumpClips(phaseClips);
+    attachScaledSplitJumpClips(phaseClips);
+
+    if (!shouldPass) {
+      await expectRiggedRuntimeFailure(
+        executionPlan,
+        "SUBJECT_ASSET_ROOT_MOTION_UNSUPPORTED",
+      );
+      return;
+    }
+    const runtime = await createRiggedRuntime(executionPlan);
+    expect(runtime.snapshot().subjectStatesByEntityId.player?.activeActionId).toBe(
+      "idle",
+    );
+    await runtime.dispose();
+  });
+
+  it("rejects split-jump visual root translation beyond 0.5 world meters", async () => {
+    const phaseClips = [
+      { name: "oversized-jump.takeoff", startY: 0, endY: 20 },
+      { name: "oversized-jump.airborne", startY: 20, endY: 60 },
+    ] as const;
+    const executionPlan = withSplitJumpClips(phaseClips);
+    attachScaledSplitJumpClips(phaseClips);
+
+    await expectRiggedRuntimeFailure(
+      executionPlan,
+      "SUBJECT_ASSET_ROOT_MOTION_UNSUPPORTED",
+    );
   });
 
   it("does not infer forbidden Root Motion from a target display name", async () => {

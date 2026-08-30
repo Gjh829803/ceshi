@@ -20,6 +20,8 @@ import {
 
 const ASSET_REF = "worldkit://subject-asset/humanoid.golden@2";
 const G_BOT_ASSET_REF = "worldkit://subject-asset/actor.humanoid.g-bot@2";
+const ALPHA_LOCAL_ACTIONS_ASSET_REF =
+  "worldkit://subject-asset/actor.humanoid.alpha-local-actions@1";
 const ASSET_BYTES = new Uint8Array([1, 2, 3, 4]);
 const REQUEST = {
   subjectAssetRef: ASSET_REF,
@@ -157,10 +159,14 @@ describe("createFetchSubjectAssetResolver", () => {
     expect(PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1).toMatchObject({
       [ASSET_REF]: "/subject-assets/humanoid/golden/v2/golden-humanoid.glb",
       [G_BOT_ASSET_REF]: "/subject-assets/humanoid/g-bot/v2/g-bot.glb",
+      [ALPHA_LOCAL_ACTIONS_ASSET_REF]:
+        "/subject-assets/humanoid/alpha-local-actions/v1/alpha-local-actions.glb",
     });
     expect(PLAYGROUND_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1).toMatchObject({
       [ASSET_REF]: "resources/subject-assets/humanoid.golden.glb",
       [G_BOT_ASSET_REF]: "resources/subject-assets/actor.humanoid.g-bot.glb",
+      [ALPHA_LOCAL_ACTIONS_ASSET_REF]:
+        "resources/subject-assets/actor.humanoid.alpha-local-actions.glb",
     });
   });
 

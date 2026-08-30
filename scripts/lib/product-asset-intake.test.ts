@@ -15,6 +15,12 @@ import {
 const G_BOT_FIXTURE_PATH = fileURLToPath(
   new URL("../../examples/product-asset-intakes/humanoid.g-bot@2.json", import.meta.url),
 );
+const ALPHA_LOCAL_ACTIONS_FIXTURE_PATH = fileURLToPath(
+  new URL(
+    "../../examples/product-asset-intakes/humanoid.alpha-local-actions@1.json",
+    import.meta.url,
+  ),
+);
 
 function validFixture(): ProductAssetIntakeFixtureV1 {
   return {
@@ -46,6 +52,26 @@ describe("product asset intake fixture", () => {
       JSON.parse(await readFile(G_BOT_FIXTURE_PATH, "utf8")) as unknown,
     );
     expect(fixture).toEqual(validFixture());
+  });
+
+  it("accepts the committed Alpha local-actions fixture and its Host bindings", async () => {
+    const fixture = parseProductAssetIntakeFixtureV1(
+      JSON.parse(await readFile(ALPHA_LOCAL_ACTIONS_FIXTURE_PATH, "utf8")) as unknown,
+    );
+
+    expect(fixture).toMatchObject({
+      subjectDefinitionRef:
+        "worldkit://subject-definition/humanoid.alpha-local-actions@1",
+      subjectAssetRef:
+        "worldkit://subject-asset/actor.humanoid.alpha-local-actions@1",
+      hostPublicUri:
+        "/subject-assets/humanoid/alpha-local-actions/v1/alpha-local-actions.glb",
+      requiredRuntimeActionIds: ["idle", "walk", "run", "jump"],
+    });
+    expect(() => assertProductAssetIntakeBindingsV1(fixture, {
+      registry: builtInSubjectResourceRegistry,
+      hostPublicUriBySubjectAssetRef: PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1,
+    })).not.toThrow();
   });
 
   it("rejects a fixture that invents extra runtime actions", () => {

@@ -177,6 +177,106 @@ const emptyRegistry = createActionPresentationRegistryV1({
 });
 
 describe("SubjectAnimationPlayer committed presentation", () => {
+  it("selects ordinary split-jump bindings from committed presentation keys", () => {
+    const { engine, scene, root } = sceneFixture();
+    const groups = [
+      clipGroup(scene, "Idle"),
+      clipGroup(scene, "Walk"),
+      clipGroup(scene, "Run"),
+      clipGroup(scene, "Jump"),
+      clipGroup(scene, "SmallJumpTakeoff"),
+      clipGroup(scene, "SmallJumpAirborne"),
+    ];
+    const splitAnimationSet: RuntimeAnimationSetV1 = {
+      ...animationSet,
+      requiredActionIds: [
+        ...animationSet.requiredActionIds,
+        "jump.small.takeoff",
+        "jump.small.airborne",
+      ],
+      animationBindings: [
+        ...animationSet.animationBindings,
+        {
+          actionId: "jump.small.takeoff",
+          sourceClipName: "SmallJumpTakeoff",
+          loopMode: "once",
+          semanticFamily: "airborne",
+          automaticPresentationKeys: ["locomotion.small-jump.takeoff"],
+          playbackSpeedRatio: 1,
+          blendDurationSeconds: 0,
+          rootMotionMode: "in-place",
+        },
+        {
+          actionId: "jump.small.airborne",
+          sourceClipName: "SmallJumpAirborne",
+          loopMode: "once",
+          semanticFamily: "airborne",
+          automaticPresentationKeys: ["locomotion.small-jump.airborne"],
+          playbackSpeedRatio: 1,
+          blendDurationSeconds: 0,
+          rootMotionMode: "in-place",
+        },
+      ],
+    };
+    const player = new SubjectAnimationPlayer({
+      animationGroups: groups,
+      animationSet: splitAnimationSet,
+      actionPresentationRegistry: emptyRegistry,
+      authorityTransformNode: root,
+      ownedVisualAnimationTargets: ownedTargets(groups),
+      subjectAssetRef: splitAnimationSet.subjectAssetRef,
+      artifactContentHash: `sha256:${"a".repeat(64)}`,
+    });
+
+    player.step(resolveActionPresentationV1({
+      ...committed(1),
+      jumpEpisode: {
+        schemaVersion: 1,
+        variant: "small",
+        phase: "anticipating",
+        startedTick: 1,
+        anticipationStartedTick: 1,
+        committedTick: 1,
+        anticipationTicksRemaining: 1,
+      },
+    }, emptyRegistry));
+    player.applyPose();
+    expect(player.debugTelemetry()).toMatchObject({
+      presentationKey: "locomotion.small-jump.takeoff",
+      sourceClipName: "SmallJumpTakeoff",
+    });
+    expect(player.activeActionId).toBe("jump.small.takeoff");
+
+    player.step(resolveActionPresentationV1({
+      ...committed(2, locomotion(2, {
+        mobilityMode: "airborne",
+        gait: "none",
+        verticalPhase: "rising",
+        supportMode: "unsupported",
+        movementMedium: "air",
+      })),
+      jumpEpisode: {
+        schemaVersion: 1,
+        variant: "small",
+        phase: "airborne",
+        startedTick: 1,
+        anticipationStartedTick: 1,
+        takeoffTick: 2,
+        committedTick: 2,
+      },
+    }, emptyRegistry));
+    player.applyPose();
+    expect(player.debugTelemetry()).toMatchObject({
+      presentationKey: "locomotion.small-jump.airborne",
+      sourceClipName: "SmallJumpAirborne",
+    });
+    expect(player.activeActionId).toBe("jump.small.airborne");
+
+    player.dispose();
+    scene.dispose();
+    engine.dispose();
+  });
+
   it("selects a Clip only from committed gait/verticalPhase, not contradictory velocity", () => {
     const { engine, scene, root } = sceneFixture();
     const groups = ["Idle", "Walk", "Run", "Jump"].map((name) => clipGroup(scene, name));

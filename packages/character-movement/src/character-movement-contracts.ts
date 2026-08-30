@@ -25,6 +25,45 @@ export type CharacterMovementDiagnosticCodeV1 =
 
 export type MovementVec3V1 = readonly [number, number, number];
 
+export type JumpVariantPolicyV1 =
+  | Readonly<{
+      mode: "hold-height";
+    }>
+  | Readonly<{
+      mode: "run-selects-variant";
+      smallAnticipationSeconds: number;
+      largeAnticipationSeconds: number;
+    }>;
+
+export type JumpVariantV1 = "small" | "large";
+
+export type JumpEpisodeStateV1 =
+  | Readonly<{
+      schemaVersion: 1;
+      variant: JumpVariantV1;
+      phase: "buffered";
+      startedTick: number;
+      committedTick: number;
+    }>
+  | Readonly<{
+      schemaVersion: 1;
+      variant: JumpVariantV1;
+      phase: "anticipating";
+      startedTick: number;
+      anticipationStartedTick: number;
+      committedTick: number;
+      anticipationTicksRemaining: number;
+    }>
+  | Readonly<{
+      schemaVersion: 1;
+      variant: JumpVariantV1;
+      phase: "airborne";
+      startedTick: number;
+      anticipationStartedTick: number;
+      takeoffTick: number;
+      committedTick: number;
+    }>;
+
 export const BODY_SUPPORT_NORMAL_LENGTH_TOLERANCE_V1 = 1e-6;
 export type RootMotionResourceRefV1 = `worldkit://root-motion/${string}@${number}`;
 const ROOT_MOTION_RESOURCE_REF_PATTERN_V1 =
@@ -139,6 +178,7 @@ export interface MovementCommitV1 {
   readonly linearVelocityMetersPerSecondXYZ: MovementVec3V1;
   readonly locomotion: LocomotionCapabilityStateV2;
   readonly transitionEvents: readonly LocomotionTransitionEventV1[];
+  readonly jumpEpisode?: JumpEpisodeStateV1;
 }
 
 export interface CharacterMovementCommandV1 {
@@ -222,12 +262,100 @@ function exact(value: Record<string, unknown>, keys: readonly string[]): boolean
   );
 }
 
+function exactWithOptional(
+  value: Record<string, unknown>,
+  requiredKeys: readonly string[],
+  optionalKeys: readonly string[],
+): boolean {
+  const ownKeys = Reflect.ownKeys(value);
+  return ownKeys.every((key) =>
+    typeof key === "string" && (requiredKeys.includes(key) || optionalKeys.includes(key))
+  ) && requiredKeys.every((key) => Object.hasOwn(value, key)) &&
+    ownKeys.length >= requiredKeys.length &&
+    ownKeys.length <= requiredKeys.length + optionalKeys.length;
+}
+
 function finite(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && !Object.is(value, -0);
 }
 
 function tick(value: unknown): value is number {
   return finite(value) && Number.isSafeInteger(value) && value >= 0;
+}
+
+export function parseJumpVariantPolicyV1(input: unknown): JumpVariantPolicyV1 {
+  const schemaName = "JumpVariantPolicyV1";
+  const value = record(input) ?? invalid(schemaName);
+  if (value.mode === "hold-height") {
+    if (!exact(value, ["mode"])) invalid(schemaName);
+    return Object.freeze({ mode: "hold-height" });
+  }
+  if (value.mode !== "run-selects-variant" || !exact(value, [
+    "mode", "smallAnticipationSeconds", "largeAnticipationSeconds",
+  ]) || !finite(value.smallAnticipationSeconds) ||
+    !finite(value.largeAnticipationSeconds) ||
+    value.smallAnticipationSeconds < 0 || value.smallAnticipationSeconds > 1.5 ||
+    value.largeAnticipationSeconds < 0 || value.largeAnticipationSeconds > 1.5) {
+    invalid(schemaName);
+  }
+  return Object.freeze({
+    mode: "run-selects-variant",
+    smallAnticipationSeconds: value.smallAnticipationSeconds,
+    largeAnticipationSeconds: value.largeAnticipationSeconds,
+  });
+}
+
+export function parseJumpEpisodeStateV1(input: unknown): JumpEpisodeStateV1 {
+  const schemaName = "JumpEpisodeStateV1";
+  const value = record(input) ?? invalid(schemaName);
+  if (value.schemaVersion !== 1 || (value.variant !== "small" && value.variant !== "large") ||
+    !tick(value.startedTick) || !tick(value.committedTick) || value.startedTick > value.committedTick) {
+    invalid(schemaName);
+  }
+  if (value.phase === "buffered") {
+    if (!exact(value, ["schemaVersion", "variant", "phase", "startedTick", "committedTick"])) {
+      invalid(schemaName);
+    }
+    return Object.freeze({
+      schemaVersion: 1,
+      variant: value.variant,
+      phase: "buffered",
+      startedTick: value.startedTick,
+      committedTick: value.committedTick,
+    });
+  }
+  if (value.phase === "anticipating") {
+    if (!exact(value, [
+      "schemaVersion", "variant", "phase", "startedTick", "anticipationStartedTick",
+      "committedTick", "anticipationTicksRemaining",
+    ]) || !tick(value.anticipationStartedTick) || !tick(value.anticipationTicksRemaining) ||
+      value.anticipationStartedTick < value.startedTick ||
+      value.anticipationStartedTick > value.committedTick) invalid(schemaName);
+    return Object.freeze({
+      schemaVersion: 1,
+      variant: value.variant,
+      phase: "anticipating",
+      startedTick: value.startedTick,
+      anticipationStartedTick: value.anticipationStartedTick,
+      committedTick: value.committedTick,
+      anticipationTicksRemaining: value.anticipationTicksRemaining,
+    });
+  }
+  if (value.phase !== "airborne" || !exact(value, [
+    "schemaVersion", "variant", "phase", "startedTick", "anticipationStartedTick",
+    "takeoffTick", "committedTick",
+  ]) || !tick(value.anticipationStartedTick) || !tick(value.takeoffTick) ||
+    value.anticipationStartedTick < value.startedTick || value.takeoffTick < value.anticipationStartedTick ||
+    value.takeoffTick > value.committedTick) invalid(schemaName);
+  return Object.freeze({
+    schemaVersion: 1,
+    variant: value.variant,
+    phase: "airborne",
+    startedTick: value.startedTick,
+    anticipationStartedTick: value.anticipationStartedTick,
+    takeoffTick: value.takeoffTick,
+    committedTick: value.committedTick,
+  });
 }
 
 function signedInteger(value: unknown): value is number {
@@ -415,10 +543,11 @@ export function parseBodyResolutionV1(input: unknown): BodyResolutionV1 {
 export function parseMovementCommitV1(input: unknown): MovementCommitV1 {
   const schemaName = "MovementCommitV1";
   const value = record(input) ?? invalid(schemaName);
-  if (!exact(value, [
+  if (!exactWithOptional(value, [
     "schemaVersion", "tick", "positionMetersXYZ", "facingYawRadians",
     "linearVelocityMetersPerSecondXYZ", "locomotion", "transitionEvents",
-  ]) || value.schemaVersion !== 1 || !tick(value.tick) || !finite(value.facingYawRadians)) invalid(schemaName);
+  ], ["jumpEpisode"]) || value.schemaVersion !== 1 || !tick(value.tick) ||
+    !finite(value.facingYawRadians)) invalid(schemaName);
   const locomotion = parseLocomotionCapabilityStateV2(value.locomotion);
   const velocity = vec3(value.linearVelocityMetersPerSecondXYZ, schemaName);
   const transitionEvents = arraySnapshot(value.transitionEvents, schemaName)
@@ -468,6 +597,10 @@ export function parseMovementCommitV1(input: unknown): MovementCommitV1 {
     }
     if (terminalTarget === undefined || terminalTarget !== locomotion.verticalPhase) invalid(schemaName);
   }
+  const jumpEpisode = Object.hasOwn(value, "jumpEpisode")
+    ? parseJumpEpisodeStateV1(value.jumpEpisode)
+    : undefined;
+  if (jumpEpisode !== undefined && jumpEpisode.committedTick !== value.tick) invalid(schemaName);
   return Object.freeze({
     schemaVersion: 1,
     tick: value.tick,
@@ -476,6 +609,7 @@ export function parseMovementCommitV1(input: unknown): MovementCommitV1 {
     linearVelocityMetersPerSecondXYZ: velocity,
     locomotion,
     transitionEvents: Object.freeze(transitionEvents),
+    ...(jumpEpisode === undefined ? {} : { jumpEpisode }),
   });
 }
 
@@ -534,10 +668,10 @@ export function parseCharacterMovementRuntimeStateV1(
 export function parseCharacterMovementStateV1(input: unknown): CharacterMovementStateV1 {
   const schemaName = "CharacterMovementStateV1";
   const value = record(input) ?? invalid(schemaName);
-  if (!exact(value, [
+  if (!exactWithOptional(value, [
     "schemaVersion", "tick", "positionMetersXYZ", "facingYawRadians",
     "linearVelocityMetersPerSecondXYZ", "locomotion", "transitionEvents", "runtimeState",
-  ])) invalid(schemaName);
+  ], ["jumpEpisode"])) invalid(schemaName);
   const commit = parseMovementCommitV1({
     schemaVersion: value.schemaVersion,
     tick: value.tick,
@@ -546,6 +680,7 @@ export function parseCharacterMovementStateV1(input: unknown): CharacterMovement
     linearVelocityMetersPerSecondXYZ: value.linearVelocityMetersPerSecondXYZ,
     locomotion: value.locomotion,
     transitionEvents: value.transitionEvents,
+    ...(Object.hasOwn(value, "jumpEpisode") ? { jumpEpisode: value.jumpEpisode } : {}),
   });
   const state = Object.freeze({
     ...commit,
@@ -568,10 +703,18 @@ export function assertCharacterMovementStateReachableV1(
   if (locomotion.status === "suspended") {
     if (runtime.coyoteTicksRemaining !== 0 || runtime.jumpBufferTicksRemaining !== 0 ||
       runtime.variableJumpHoldTicksRemaining !== 0 || runtime.landingTicksRemaining !== 0 ||
-      runtime.apexCrossedInAirborneEpisode) unreachable();
+      runtime.apexCrossedInAirborneEpisode || state.jumpEpisode !== undefined) unreachable();
     return;
   }
   const phase = locomotion.verticalPhase;
+  if (state.jumpEpisode?.phase === "buffered") {
+    const isAlreadyJumpEligible =
+      (locomotion.mobilityMode === "grounded" && locomotion.supportMode === "supported") ||
+      runtime.coyoteTicksRemaining > 0;
+    if (runtime.jumpBufferTicksRemaining <= 0 || isAlreadyJumpEligible) unreachable();
+  }
+  if (state.jumpEpisode?.phase === "airborne" &&
+    (phase === "none" || phase === "landing")) unreachable();
   if ((phase === "takeoff" || phase === "rising") && locomotion.linearVelocity.y <= 0) {
     unreachable();
   }
@@ -597,11 +740,12 @@ export function assertCharacterMovementStateReachableV1(
 export function parseCharacterMovementSnapshotV1(input: unknown): CharacterMovementSnapshotV1 {
   const schemaName = "CharacterMovementSnapshotV1";
   const value = record(input) ?? invalid(schemaName);
-  if (!exact(value, [
+  if (!exactWithOptional(value, [
     "schemaVersion", "tick", "positionMetersXYZ", "facingYawRadians",
     "linearVelocityMetersPerSecondXYZ", "locomotion", "transitionEvents", "runtimeState",
     "stateHash",
-  ]) || typeof value.stateHash !== "string" || !/^sha256:[a-f0-9]{64}$/.test(value.stateHash)) {
+  ], ["jumpEpisode"]) || typeof value.stateHash !== "string" ||
+    !/^sha256:[a-f0-9]{64}$/.test(value.stateHash)) {
     invalid(schemaName);
   }
   const state = parseCharacterMovementStateV1({
@@ -613,6 +757,7 @@ export function parseCharacterMovementSnapshotV1(input: unknown): CharacterMovem
     locomotion: value.locomotion,
     transitionEvents: value.transitionEvents,
     runtimeState: value.runtimeState,
+    ...(Object.hasOwn(value, "jumpEpisode") ? { jumpEpisode: value.jumpEpisode } : {}),
   });
   return Object.freeze({ ...state, stateHash: value.stateHash as `sha256:${string}` });
 }

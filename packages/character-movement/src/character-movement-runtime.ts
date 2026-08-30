@@ -14,6 +14,7 @@ import {
   parseCharacterMovementRuntimeStateV1,
   parseCharacterMovementSnapshotV1,
   parseCharacterMovementStateV1,
+  parseJumpVariantPolicyV1,
   parseMovementCommitV1,
   parseMovementProposalV1,
   type BodyResolutionV1,
@@ -23,6 +24,9 @@ import {
   type CharacterMovementRuntimeV1,
   type CharacterMovementSnapshotV1,
   type CharacterMovementStateV1,
+  type JumpEpisodeStateV1,
+  type JumpVariantV1,
+  type JumpVariantPolicyV1,
   type MovementCommitV1,
   type MovementProposalV1,
   type MovementTickTokenV1,
@@ -37,6 +41,7 @@ import { resolveVerticalTransitionV1 } from "./transition-resolver.js";
 export interface CharacterMovementRuntimeOptionsV1 {
   readonly schemaVersion: 1;
   readonly fixedDeltaSeconds: number;
+  readonly jumpVariantPolicy: JumpVariantPolicyV1;
   readonly initialState: CharacterMovementStateV1;
   readonly walkSpeedMetersPerSecond: number;
   readonly runSpeedMetersPerSecond: number;
@@ -69,6 +74,7 @@ interface MovementTransactionV1 {
   sample?: BodySampleV1;
   proposal?: MovementProposalV1;
   takeoffProposed?: boolean;
+  stagedJumpEpisode?: JumpEpisodeStateV1;
   reconciled: boolean;
 }
 
@@ -132,6 +138,36 @@ function configuredWindows(options: CharacterMovementRuntimeOptionsV1): Configur
   });
 }
 
+function splitAnticipationTicks(
+  options: CharacterMovementRuntimeOptionsV1,
+  variant: JumpVariantV1,
+): number {
+  if (options.jumpVariantPolicy.mode !== "run-selects-variant") return 0;
+  return ticksForSeconds(
+    variant === "small"
+      ? options.jumpVariantPolicy.smallAnticipationSeconds
+      : options.jumpVariantPolicy.largeAnticipationSeconds,
+    options.fixedDeltaSeconds,
+  );
+}
+
+function anticipatingEpisode(
+  episode: Extract<JumpEpisodeStateV1, { phase: "buffered" }> | undefined,
+  variant: JumpVariantV1,
+  tick: number,
+  anticipationTicksRemaining: number,
+): Extract<JumpEpisodeStateV1, { phase: "anticipating" }> {
+  return Object.freeze({
+    schemaVersion: 1,
+    variant,
+    phase: "anticipating",
+    startedTick: episode?.startedTick ?? tick,
+    anticipationStartedTick: tick,
+    committedTick: tick,
+    anticipationTicksRemaining,
+  });
+}
+
 function validateRuntimeStateCounters(
   state: CharacterMovementRuntimeStateV1,
   windows: ConfiguredTickWindowsV1,
@@ -147,8 +183,34 @@ function validateRuntimeStateCounters(
 
 function validateStateAgainstRuntimeOptions(
   state: CharacterMovementStateV1,
-  options: Pick<CharacterMovementRuntimeOptionsV1, "apexEnterSpeedMetersPerSecond">,
+  options: Pick<
+    CharacterMovementRuntimeOptionsV1,
+    "apexEnterSpeedMetersPerSecond" | "fixedDeltaSeconds" | "jumpVariantPolicy"
+  >,
 ): void {
+  if (options.jumpVariantPolicy.mode === "hold-height" && state.jumpEpisode !== undefined) {
+    inputInvalid("hold-height policy cannot restore a split jump Episode.");
+  }
+  if (options.jumpVariantPolicy.mode === "run-selects-variant" &&
+    state.jumpEpisode?.phase === "anticipating") {
+    const durationSeconds = state.jumpEpisode.variant === "small"
+      ? options.jumpVariantPolicy.smallAnticipationSeconds
+      : options.jumpVariantPolicy.largeAnticipationSeconds;
+    if (state.jumpEpisode.anticipationTicksRemaining >
+      ticksForSeconds(durationSeconds, options.fixedDeltaSeconds)) {
+      inputInvalid("jump Episode anticipation exceeds its locked fixed-Tick window.");
+    }
+  }
+  if (options.jumpVariantPolicy.mode === "run-selects-variant") {
+    const isBuffered = state.jumpEpisode?.phase === "buffered";
+    if ((state.runtimeState.jumpBufferTicksRemaining > 0) !== isBuffered) {
+      inputInvalid("split jump buffer state must carry exactly one buffered Episode.");
+    }
+    if (state.jumpEpisode?.phase === "airborne" && state.jumpEpisode.variant === "small" &&
+      state.runtimeState.variableJumpHoldTicksRemaining > 0) {
+      inputInvalid("small jump Episode cannot restore a held-jump gravity window.");
+    }
+  }
   if (state.locomotion.status !== "active") return;
   const phase = state.locomotion.verticalPhase;
   if ((phase === "takeoff" || phase === "rising") &&
@@ -162,7 +224,7 @@ export function parseCharacterMovementRuntimeOptionsV1(
 ): CharacterMovementRuntimeOptionsV1 {
   const value = dataRecord(input);
   const keys = [
-    "schemaVersion", "fixedDeltaSeconds", "initialState", "walkSpeedMetersPerSecond",
+    "schemaVersion", "fixedDeltaSeconds", "jumpVariantPolicy", "initialState", "walkSpeedMetersPerSecond",
     "runSpeedMetersPerSecond", "accelerationMetersPerSecondSquared",
     "decelerationMetersPerSecondSquared", "airControlRatio", "gravityMetersPerSecondSquared",
     "jumpSpeedMetersPerSecond", "coyoteTimeSeconds", "jumpBufferSeconds",
@@ -191,6 +253,12 @@ export function parseCharacterMovementRuntimeOptionsV1(
     value.apexEnterSpeedMetersPerSecond >= value.apexExitSpeedMetersPerSecond) {
     inputInvalid("runtime options do not match the closed Golden movement ranges.");
   }
+  let jumpVariantPolicy: JumpVariantPolicyV1;
+  try {
+    jumpVariantPolicy = parseJumpVariantPolicyV1(value.jumpVariantPolicy);
+  } catch {
+    return inputInvalid("jumpVariantPolicy is invalid.");
+  }
   let initialState: CharacterMovementStateV1;
   try {
     initialState = parseCharacterMovementStateV1(value.initialState);
@@ -203,6 +271,7 @@ export function parseCharacterMovementRuntimeOptionsV1(
   const parsed = Object.freeze({
     schemaVersion: 1,
     fixedDeltaSeconds: value.fixedDeltaSeconds,
+    jumpVariantPolicy,
     initialState,
     walkSpeedMetersPerSecond: value.walkSpeedMetersPerSecond,
     runSpeedMetersPerSecond: value.runSpeedMetersPerSecond,
@@ -250,6 +319,7 @@ function stateFromSnapshot(snapshot: CharacterMovementSnapshotV1): CharacterMove
     locomotion: snapshot.locomotion,
     transitionEvents: snapshot.transitionEvents,
     runtimeState: snapshot.runtimeState,
+    ...(snapshot.jumpEpisode === undefined ? {} : { jumpEpisode: snapshot.jumpEpisode }),
   });
 }
 
@@ -388,7 +458,6 @@ class DeterministicCharacterMovementRuntimeV1 implements CharacterMovementRuntim
 
     const command = transaction.command;
     const priorRuntime = this.#currentSnapshot.runtimeState;
-    const jumpIntentAvailable = command.jumpPressed || priorRuntime.jumpBufferTicksRemaining > 0;
     const previousLocomotion = this.#currentSnapshot.locomotion;
     if (previousLocomotion.status !== "active") {
       throw diagnostic("3C_LOCOMOTION_TRANSITION_INVALID", "suspended Locomotion cannot propose movement.");
@@ -402,7 +471,65 @@ class DeterministicCharacterMovementRuntimeV1 implements CharacterMovementRuntim
       priorRuntime.coyoteTicksRemaining > 0;
     const jumpAllowed = sample.support.mode === "supported" ||
       isFirstUnsupportedLedgeTick || isLiveFallingCoyote;
-    const takeoffProposed = jumpIntentAvailable && jumpAllowed;
+    let takeoffProposed: boolean;
+    let stagedJumpEpisode: JumpEpisodeStateV1 | undefined;
+    if (this.#options.jumpVariantPolicy.mode === "hold-height") {
+      const jumpIntentAvailable = command.jumpPressed || priorRuntime.jumpBufferTicksRemaining > 0;
+      takeoffProposed = jumpIntentAvailable && jumpAllowed;
+    } else {
+      const previousEpisode = this.#currentSnapshot.jumpEpisode;
+      if (previousEpisode?.phase === "airborne") {
+        stagedJumpEpisode = Object.freeze({
+          ...previousEpisode,
+          committedTick: command.tick,
+        });
+        takeoffProposed = false;
+      } else if (previousEpisode?.phase === "anticipating") {
+        const anticipationTicksRemaining = Math.max(
+          0,
+          previousEpisode.anticipationTicksRemaining - 1,
+        );
+        stagedJumpEpisode = Object.freeze({
+          ...previousEpisode,
+          committedTick: command.tick,
+          anticipationTicksRemaining,
+        });
+        takeoffProposed = anticipationTicksRemaining === 0;
+      } else {
+        const bufferedEpisode = previousEpisode?.phase === "buffered"
+          ? previousEpisode
+          : command.jumpPressed
+            ? Object.freeze({
+                schemaVersion: 1 as const,
+                variant: command.runRequested ? "large" as const : "small" as const,
+                phase: "buffered" as const,
+                startedTick: command.tick,
+                committedTick: command.tick,
+              })
+            : undefined;
+        if (bufferedEpisode === undefined) {
+          takeoffProposed = false;
+        } else if (jumpAllowed) {
+          const anticipationTicksRemaining = splitAnticipationTicks(
+            this.#options,
+            bufferedEpisode.variant,
+          );
+          stagedJumpEpisode = anticipatingEpisode(
+            bufferedEpisode,
+            bufferedEpisode.variant,
+            command.tick,
+            anticipationTicksRemaining,
+          );
+          takeoffProposed = anticipationTicksRemaining === 0;
+        } else {
+          stagedJumpEpisode = Object.freeze({
+            ...bufferedEpisode,
+            committedTick: command.tick,
+          });
+          takeoffProposed = false;
+        }
+      }
+    }
     const inputMagnitude = Math.hypot(command.movementInputXZ[0], command.movementInputXZ[1]);
     const rightX = Math.cos(command.viewYawRadians);
     const rightZ = -Math.sin(command.viewYawRadians);
@@ -442,8 +569,11 @@ class DeterministicCharacterMovementRuntimeV1 implements CharacterMovementRuntim
       const locomotion = this.#currentSnapshot.locomotion;
       const isAscendingJump = locomotion.status === "active" &&
         (locomotion.verticalPhase === "takeoff" || locomotion.verticalPhase === "rising");
+      const isSmallSplitJump = this.#options.jumpVariantPolicy.mode === "run-selects-variant" &&
+        this.#currentSnapshot.jumpEpisode?.phase === "airborne" &&
+        this.#currentSnapshot.jumpEpisode.variant === "small";
       const gravityRatio = isAscendingJump
-        ? command.jumpHeld && priorRuntime.variableJumpHoldTicksRemaining > 0
+        ? !isSmallSplitJump && command.jumpHeld && priorRuntime.variableJumpHoldTicksRemaining > 0
           ? this.#options.jumpHoldGravityRatio
           : this.#options.jumpReleaseGravityRatio
         : 1;
@@ -499,6 +629,9 @@ class DeterministicCharacterMovementRuntimeV1 implements CharacterMovementRuntim
     transaction.sample = sample;
     transaction.proposal = proposal;
     transaction.takeoffProposed = takeoffProposed;
+    if (stagedJumpEpisode !== undefined) {
+      transaction.stagedJumpEpisode = stagedJumpEpisode;
+    }
     return proposal;
   }
 
@@ -594,6 +727,33 @@ class DeterministicCharacterMovementRuntimeV1 implements CharacterMovementRuntim
     const takeoffCommitted = transition.events.some((event) =>
       event.type === "phase-changed" && event.toVerticalPhase === "takeoff"
     );
+    let jumpEpisode = transaction.stagedJumpEpisode;
+    if (this.#options.jumpVariantPolicy.mode === "run-selects-variant") {
+      if (jumpEpisode?.phase === "buffered" && result.support.mode === "supported") {
+        jumpEpisode = anticipatingEpisode(
+          jumpEpisode,
+          jumpEpisode.variant,
+          transaction.command.tick,
+          splitAnticipationTicks(this.#options, jumpEpisode.variant),
+        );
+      }
+      if (takeoffCommitted && jumpEpisode?.phase === "anticipating") {
+        jumpEpisode = Object.freeze({
+          schemaVersion: 1,
+          variant: jumpEpisode.variant,
+          phase: "airborne",
+          startedTick: jumpEpisode.startedTick,
+          anticipationStartedTick: jumpEpisode.anticipationStartedTick,
+          takeoffTick: transaction.command.tick,
+          committedTick: transaction.command.tick,
+        });
+      }
+      if (jumpEpisode?.phase === "airborne" &&
+        (result.hasCeilingContact || result.support.mode !== "unsupported" ||
+          transition.verticalPhase === "landing")) {
+        jumpEpisode = undefined;
+      }
+    }
     const departedStableSupport = previousLocomotion.supportMode === "supported" &&
       result.support.mode === "unsupported" && !takeoffCommitted;
     const coyoteTicksRemaining = takeoffCommitted || result.support.mode === "sliding"
@@ -604,18 +764,30 @@ class DeterministicCharacterMovementRuntimeV1 implements CharacterMovementRuntim
           ? Math.max(0, this.#windows.coyoteTicks - 1)
           : Math.max(0, priorRuntime.coyoteTicksRemaining - 1);
     let jumpBufferTicksRemaining: number;
-    if (takeoffCommitted) jumpBufferTicksRemaining = 0;
+    if (this.#options.jumpVariantPolicy.mode === "run-selects-variant") {
+      if (jumpEpisode?.phase === "buffered") {
+        jumpBufferTicksRemaining = this.#currentSnapshot.jumpEpisode?.phase === "buffered"
+          ? Math.max(0, priorRuntime.jumpBufferTicksRemaining - 1)
+          : Math.max(0, this.#windows.jumpBufferTicks - 1);
+        if (jumpBufferTicksRemaining === 0) jumpEpisode = undefined;
+      } else {
+        jumpBufferTicksRemaining = 0;
+      }
+    } else if (takeoffCommitted) jumpBufferTicksRemaining = 0;
     else if (transaction.command.jumpPressed) {
       jumpBufferTicksRemaining = Math.max(0, this.#windows.jumpBufferTicks - 1);
     } else jumpBufferTicksRemaining = Math.max(0, priorRuntime.jumpBufferTicksRemaining - 1);
+    const isSmallSplitJump = this.#options.jumpVariantPolicy.mode === "run-selects-variant" &&
+      jumpEpisode?.phase === "airborne" && jumpEpisode.variant === "small";
     let variableJumpHoldTicksRemaining = 0;
     if (takeoffCommitted &&
-      (transition.verticalPhase === "takeoff" || transition.verticalPhase === "rising")) {
+      (transition.verticalPhase === "takeoff" || transition.verticalPhase === "rising") &&
+      !isSmallSplitJump) {
       variableJumpHoldTicksRemaining = this.#windows.variableJumpHoldTicks;
     }
     else if ((previousLocomotion.verticalPhase === "takeoff" || previousLocomotion.verticalPhase === "rising") &&
       (transition.verticalPhase === "takeoff" || transition.verticalPhase === "rising") &&
-      transaction.command.jumpHeld) {
+      transaction.command.jumpHeld && !isSmallSplitJump) {
       variableJumpHoldTicksRemaining = Math.max(0, priorRuntime.variableJumpHoldTicksRemaining - 1);
     }
     const runtimeState = parseCharacterMovementRuntimeStateV1({
@@ -637,6 +809,7 @@ class DeterministicCharacterMovementRuntimeV1 implements CharacterMovementRuntim
         linearVelocityMetersPerSecondXYZ: velocity,
         locomotion,
         transitionEvents: transition.events,
+        ...(jumpEpisode === undefined ? {} : { jumpEpisode }),
       });
       state = parseCharacterMovementStateV1({ ...commit, runtimeState });
     } catch {

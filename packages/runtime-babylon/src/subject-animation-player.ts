@@ -4,7 +4,10 @@ import type { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 import type { RuntimeAnimationSetV1 } from "@whitebox-world/runtime-contracts";
 import { stringifyCanonicalJson } from "@whitebox-world/protocol";
 import type { GameplayActionStateV1 } from "@whitebox-world/gameplay-contracts";
-import type { GroundHumanoidActionIdV1 } from "@whitebox-world/subject-contracts";
+import {
+  AUTOMATIC_LOCOMOTION_PRESENTATION_KEYS_V1,
+  type GroundHumanoidActionIdV1,
+} from "@whitebox-world/subject-contracts";
 import {
   ACTION_PRESENTATION_BLEND_DURATION_TICKS_MAX_V1,
   ACTION_PRESENTATION_PLAYBACK_SPEED_RATIO_MAX_V1,
@@ -93,14 +96,9 @@ const GROUND_AUTOMATIC_PRESENTATION_KEYS = new Set<SemanticPresentationKeyV1>([
   "locomotion.run",
 ]);
 
-const AUTOMATIC_PRESENTATION_KEYS = new Set<SemanticPresentationKeyV1>([
-  ...GROUND_AUTOMATIC_PRESENTATION_KEYS,
-  "locomotion.takeoff",
-  "locomotion.rising",
-  "locomotion.apex",
-  "locomotion.falling",
-  "locomotion.landing",
-]);
+const AUTOMATIC_PRESENTATION_KEYS = new Set<SemanticPresentationKeyV1>(
+  AUTOMATIC_LOCOMOTION_PRESENTATION_KEYS_V1,
+);
 
 const ANIMATION_SEMANTIC_FAMILIES = new Set([
   "ground",
@@ -157,6 +155,8 @@ export class SubjectAnimationPlayer {
     const key = this.current.animation.presentationKey;
     if (key === "locomotion.walk") return "walk";
     if (key === "locomotion.run") return "run";
+    if (key === "locomotion.small-jump.takeoff") return "jump.small.takeoff";
+    if (key === "locomotion.small-jump.airborne") return "jump.small.airborne";
     if ([
       "locomotion.takeoff", "locomotion.rising", "locomotion.apex",
       "locomotion.falling", "locomotion.landing",

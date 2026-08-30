@@ -42,6 +42,7 @@ function movementOptions(): CharacterMovementRuntimeOptionsV1 {
   return {
     schemaVersion: 1,
     fixedDeltaSeconds: 1 / 60,
+    jumpVariantPolicy: { mode: "hold-height" },
     initialState: {
       schemaVersion: 1,
       tick: 0,
@@ -258,8 +259,9 @@ function createHarness(input: Readonly<{
   projections?: readonly GoldenHumanoidProjectionPortV1[];
   stages?: GoldenHumanoidTickStageV1[];
   initialPositionMetersXYZ?: readonly [number, number, number];
+  movementOptions?: CharacterMovementRuntimeOptionsV1;
 }> = {}) {
-  const options = movementOptions();
+  const options = input.movementOptions ?? movementOptions();
   const initialPositionMetersXYZ = input.initialPositionMetersXYZ ??
     options.initialState.positionMetersXYZ;
   const movement = createCharacterMovementRuntimeV1({
@@ -411,6 +413,66 @@ describe("Golden Humanoid 3C vNext transaction", () => {
     expect(animation.lastInput?.presentation.committedTick).toBe(
       animation.lastInput?.commit.tick,
     );
+  });
+
+  it("passes the committed split jump Episode to projections without a provider side channel", () => {
+    const projection = new ProjectionPort();
+    const base = movementOptions();
+    const { movement, transaction } = createHarness({
+      projections: [projection],
+      movementOptions: {
+        ...base,
+        jumpVariantPolicy: {
+          mode: "run-selects-variant",
+          smallAnticipationSeconds: 1 / 60,
+          largeAnticipationSeconds: 2 / 60,
+        },
+      },
+    });
+
+    const result = transaction.runTick({
+      command: command(1, { jumpPressed: true, runRequested: true }),
+    });
+
+    expect(result.commit.jumpEpisode).toMatchObject({
+      variant: "large",
+      phase: "anticipating",
+      committedTick: 1,
+    });
+    expect(projection.lastInput?.commit.jumpEpisode).toBe(result.commit.jumpEpisode);
+    expect(result.presentation.presentationKey).toBe("locomotion.takeoff");
+    expect(projection.lastInput?.presentation).toBe(result.presentation);
+    expect(movement.snapshot().jumpEpisode).toEqual(result.commit.jumpEpisode);
+  });
+
+  it("derives small-jump presentation only from the committed Movement Episode", () => {
+    const projection = new ProjectionPort();
+    const base = movementOptions();
+    const { transaction } = createHarness({
+      projections: [projection],
+      movementOptions: {
+        ...base,
+        jumpVariantPolicy: {
+          mode: "run-selects-variant",
+          smallAnticipationSeconds: 1 / 60,
+          largeAnticipationSeconds: 2 / 60,
+        },
+      },
+    });
+
+    const result = transaction.runTick({
+      command: command(1, { jumpPressed: true, runRequested: false }),
+    });
+
+    expect(result.commit.jumpEpisode).toMatchObject({
+      variant: "small",
+      phase: "anticipating",
+      committedTick: 1,
+    });
+    expect(result.presentation.presentationKey).toBe(
+      "locomotion.small-jump.takeoff",
+    );
+    expect(projection.lastInput?.presentation).toBe(result.presentation);
   });
 
   it.each(["begin", "resolve"] as const)(

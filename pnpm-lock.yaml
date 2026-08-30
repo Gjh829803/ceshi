@@ -595,6 +595,9 @@ importers:
       '@whitebox-world/protocol':
         specifier: workspace:*
         version: link:../protocol
+      '@whitebox-world/subject-contracts':
+        specifier: workspace:*
+        version: link:../subject-contracts
 
   packages/subject-composition: {}
 

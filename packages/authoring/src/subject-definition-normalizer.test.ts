@@ -477,15 +477,18 @@ describe("Package Subject Definition normalization", () => {
     const result = normalizeAuthoringSpecV4(createValidRiggedPackageSubjectWorld());
 
     expect(result.ok).toBe(true);
-    expect(packageDefinitionHash(result)).toBe(
-      "sha256:f3cd49aaa47748ff1ff938663ac9ee1df98faea222ef93782340aedf7fa0f635",
-    );
-    expect(result.value?.resources.resourceLockHash).toBe(
-      "sha256:1b75df2d354eba57136dbe6cae7f1bc081584bdef099d6d494514de74234c334",
-    );
-    expect(result.normalizedWorldIrHash).toBe(
-      "sha256:3966f7d366f4f537c1ee4f93cb00c106fce56d29746c66fa914b557386b796ab",
-    );
+    expect({
+      packageDefinitionHash: packageDefinitionHash(result),
+      resourceLockHash: result.value?.resources.resourceLockHash,
+      normalizedWorldIrHash: result.normalizedWorldIrHash,
+    }).toEqual({
+      packageDefinitionHash:
+        "sha256:1d3e8a9f64de515cb2be8df7fbc81d5f415940631b613e89650fb8564ea48b60",
+      resourceLockHash:
+        "sha256:53c69dc50912b151af71fd1ef3003dcef8cae877d61ddad8393548690727d84e",
+      normalizedWorldIrHash:
+        "sha256:40d626010ab4313e1262e627468c52b736c9a4d9a1fd22c7bb62afd388c9ef20",
+    });
   });
 
   it("deduplicates transitive tables and locks across definitions", () => {
@@ -769,6 +772,7 @@ describe("Package Subject Definition normalization", () => {
       "jumpBufferSeconds",
       "jumpHoldGravityRatio",
       "jumpReleaseGravityRatio",
+      "jumpVariantPolicy",
       "jumpSpeedMetersPerSecond",
       "moveResponseExponent",
       "resourceRef",
@@ -938,7 +942,7 @@ describe("Package Subject Definition normalization", () => {
     {
       label: "Animation Set targets another Asset",
       transform: (resource: SubjectRegistryResourceInputV3) =>
-        resource.kind === "animation-set"
+        resource.kind === "animation-set" && resource.resourceRef === ANIMATION_SET_REF
           ? {
               ...resource,
               subjectAssetRef: G_BOT_SUBJECT_ASSET_REF,
@@ -970,7 +974,7 @@ describe("Package Subject Definition normalization", () => {
     {
       label: "required Action IDs are incomplete",
       transform: (resource: SubjectRegistryResourceInputV3) =>
-        resource.kind === "animation-set"
+        resource.kind === "animation-set" && resource.resourceRef === ANIMATION_SET_REF
           ? { ...resource, requiredActionIds: ["idle", "walk", "run"] as const }
           : resource,
       instancePath: "/resources/subjectDefinitions/0/visualBinding/animationSetRef",
@@ -979,7 +983,7 @@ describe("Package Subject Definition normalization", () => {
     {
       label: "mapped Clip is absent from Asset inventory",
       transform: (resource: SubjectRegistryResourceInputV3) =>
-        resource.kind === "subject-asset"
+        resource.kind === "subject-asset" && resource.resourceRef === SUBJECT_ASSET_REF
           ? {
               ...resource,
               inventory: {

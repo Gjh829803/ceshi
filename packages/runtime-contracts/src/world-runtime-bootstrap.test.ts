@@ -346,6 +346,7 @@ function bodyFixture(): WorldRuntimeBootstrapBodyV1 {
       controlFeel: {
         resourceRef: "worldkit://control-feel-profile/runtime-test@1",
         contentHash: HASH_A,
+        jumpVariantPolicy: { mode: "hold-height" },
         walkSpeedMetersPerSecond: 2,
         runSpeedMetersPerSecond: 4,
         jumpSpeedMetersPerSecond: 5,
@@ -387,6 +388,22 @@ function expectInvalid(input: unknown): void {
 }
 
 describe("WorldRuntimeBootstrapV1", () => {
+  it("requires one canonical jump variant policy in every runtime control feel", () => {
+    const valid = createWorldRuntimeBootstrapV1(bodyFixture());
+    expect(valid.subjectRuntimeDescriptors[0]?.controlFeel.jumpVariantPolicy).toEqual({
+      mode: "hold-height",
+    });
+    const descriptor = valid.subjectRuntimeDescriptors[0]!;
+    const { jumpVariantPolicy: _removed, ...legacyControlFeel } = descriptor.controlFeel;
+    expectInvalid({
+      ...valid,
+      subjectRuntimeDescriptors: [{
+        ...descriptor,
+        controlFeel: legacyControlFeel,
+      }],
+    });
+  });
+
   it("keeps the Draft 2020-12 Schema and exact Parser aligned for serialized shape cases", () => {
     const validate = new Ajv2020({ allErrors: true, strict: true }).compile(
       worldRuntimeBootstrapSchema,

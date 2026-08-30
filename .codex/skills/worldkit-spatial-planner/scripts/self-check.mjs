@@ -905,7 +905,7 @@ function baseUniq(array, iteratee, comparator) {
 function uniq(array) {
   return array && array.length ? baseUniq(array) : [];
 }
-function invalid(schemaName) {
+function invalid$1(schemaName) {
   throw new RangeError(`Value must match the closed ${schemaName} schema.`);
 }
 function snapshotDataRecord(value) {
@@ -960,12 +960,12 @@ const GAMEPLAY_CAPACITY_BUDGET_KEYS = [
 ];
 function parseGameplayCapacityBudgetV1(input) {
   const schemaName = "GameplayCapacityBudgetV1";
-  const record = snapshotDataRecord(input) ?? invalid(schemaName);
-  if (!hasExactKeys(record, GAMEPLAY_CAPACITY_BUDGET_KEYS) || !GAMEPLAY_CAPACITY_BUDGET_KEYS.every(
-    (key) => isSafeNonNegativeInteger(record[key])
-  )) invalid(schemaName);
+  const record2 = snapshotDataRecord(input) ?? invalid$1(schemaName);
+  if (!hasExactKeys(record2, GAMEPLAY_CAPACITY_BUDGET_KEYS) || !GAMEPLAY_CAPACITY_BUDGET_KEYS.every(
+    (key) => isSafeNonNegativeInteger(record2[key])
+  )) invalid$1(schemaName);
   return deepFreeze$1(Object.fromEntries(
-    GAMEPLAY_CAPACITY_BUDGET_KEYS.map((key) => [key, record[key]])
+    GAMEPLAY_CAPACITY_BUDGET_KEYS.map((key) => [key, record2[key]])
   ));
 }
 parseGameplayCapacityBudgetV1({
@@ -1103,6 +1103,52 @@ function applyCameraRigParameterOverridesV1(algorithmRef, parameters, overrides)
   }
   return applied;
 }
+function invalid(schemaName) {
+  throw new RangeError(`Value must match the closed ${schemaName} schema.`);
+}
+function record(input) {
+  if (typeof input !== "object" || input === null) return void 0;
+  const prototype = Reflect.getPrototypeOf(input);
+  if (prototype !== Object.prototype && prototype !== null) return void 0;
+  const output = /* @__PURE__ */ Object.create(null);
+  for (const key of Reflect.ownKeys(input)) {
+    const descriptor = Reflect.getOwnPropertyDescriptor(input, key);
+    if (typeof key !== "string" || descriptor === void 0 || !descriptor.enumerable || !("value" in descriptor)) {
+      return void 0;
+    }
+    output[key] = descriptor.value;
+  }
+  return output;
+}
+function exact(value, keys) {
+  const ownKeys = Reflect.ownKeys(value);
+  return ownKeys.length === keys.length && ownKeys.every(
+    (key) => typeof key === "string" && keys.includes(key)
+  );
+}
+function finite(value) {
+  return typeof value === "number" && Number.isFinite(value) && !Object.is(value, -0);
+}
+function parseJumpVariantPolicyV1(input) {
+  const schemaName = "JumpVariantPolicyV1";
+  const value = record(input) ?? invalid(schemaName);
+  if (value.mode === "hold-height") {
+    if (!exact(value, ["mode"])) invalid(schemaName);
+    return Object.freeze({ mode: "hold-height" });
+  }
+  if (value.mode !== "run-selects-variant" || !exact(value, [
+    "mode",
+    "smallAnticipationSeconds",
+    "largeAnticipationSeconds"
+  ]) || !finite(value.smallAnticipationSeconds) || !finite(value.largeAnticipationSeconds) || value.smallAnticipationSeconds < 0 || value.smallAnticipationSeconds > 1.5 || value.largeAnticipationSeconds < 0 || value.largeAnticipationSeconds > 1.5) {
+    invalid(schemaName);
+  }
+  return Object.freeze({
+    mode: "run-selects-variant",
+    smallAnticipationSeconds: value.smallAnticipationSeconds,
+    largeAnticipationSeconds: value.largeAnticipationSeconds
+  });
+}
 new TextEncoder();
 const SUBJECT_RESOURCE_KINDS_V1 = Object.freeze([
   "subject-definition",
@@ -1128,6 +1174,19 @@ const SUBJECT_RESOURCE_KINDS_V1 = Object.freeze([
   "pose-set-profile",
   "render-binding-profile",
   "ai-schema-projection-profile"
+]);
+const AUTOMATIC_LOCOMOTION_PRESENTATION_KEYS_V1 = Object.freeze([
+  "locomotion.suspended",
+  "locomotion.idle",
+  "locomotion.walk",
+  "locomotion.run",
+  "locomotion.takeoff",
+  "locomotion.rising",
+  "locomotion.apex",
+  "locomotion.falling",
+  "locomotion.landing",
+  "locomotion.small-jump.takeoff",
+  "locomotion.small-jump.airborne"
 ]);
 const BIPED_BONE_IDS_V1 = Object.freeze([
   "hips",
@@ -8147,6 +8206,9 @@ function require_2020() {
 }
 var _2020Exports = /* @__PURE__ */ require_2020();
 const Ajv2020 = /* @__PURE__ */ getDefaultExportFromCjs(_2020Exports);
+new Set(
+  AUTOMATIC_LOCOMOTION_PRESENTATION_KEYS_V1
+);
 const $schema$3 = "https://json-schema.org/draft/2020-12/schema";
 const $id$3 = "https://worldkit.dev/schemas/world-runtime-bootstrap-v1.schema.json";
 const title$1 = "WorldRuntimeBootstrapV1";
@@ -8154,7 +8216,7 @@ const type$3 = "object";
 const additionalProperties$2 = false;
 const required$2 = ["kind", "schemaVersion", "id", "gameplayBootstrapRef", "gameplayBootstrapHash", "initialControlledEntityId", "gravityMetersPerSecondSquaredXYZ", "initialCamera", "subjectAssets", "rigProfiles", "animationSets", "colliderProfiles", "actionPresentationRegistry", "subjectRuntimeDescriptors", "runtimeResourceLockEntries", "contentHash"];
 const properties$3 = { "kind": { "const": "world-runtime-bootstrap" }, "schemaVersion": { "const": 1 }, "id": { "$ref": "#/$defs/nonEmptyString" }, "gameplayBootstrapRef": { "$ref": "#/$defs/nonEmptyString" }, "gameplayBootstrapHash": { "$ref": "#/$defs/hash" }, "initialControlledEntityId": { "$ref": "#/$defs/nonEmptyString" }, "gravityMetersPerSecondSquaredXYZ": { "$ref": "#/$defs/vec3" }, "initialCamera": { "$ref": "#/$defs/initialCamera" }, "subjectAssets": { "type": "array", "items": { "$ref": "#/$defs/subjectAsset" } }, "rigProfiles": { "type": "array", "items": { "$ref": "#/$defs/rigProfile" } }, "animationSets": { "type": "array", "items": { "$ref": "#/$defs/animationSet" } }, "colliderProfiles": { "type": "array", "items": { "$ref": "#/$defs/colliderProfile" } }, "actionPresentationRegistry": { "$ref": "#/$defs/actionPresentationRegistry" }, "subjectRuntimeDescriptors": { "type": "array", "items": { "$ref": "#/$defs/subjectDescriptor" } }, "runtimeResourceLockEntries": { "type": "array", "items": { "$ref": "#/$defs/resourceLockEntry" } }, "contentHash": { "$ref": "#/$defs/hash" } };
-const $defs$2 = /* @__PURE__ */ JSON.parse('{"nonEmptyString":{"type":"string","minLength":1},"hash":{"type":"string","pattern":"^sha256:[a-f0-9]{64}$"},"vec3":{"type":"array","prefixItems":[{"type":"number"},{"type":"number"},{"type":"number"}],"items":false,"minItems":3,"maxItems":3},"stringArray":{"type":"array","items":{"$ref":"#/$defs/nonEmptyString"}},"initialCamera":{"type":"object","additionalProperties":false,"required":["mode","cameraEntityId","targetEntityId","cameraRigProfileRef","pitchRadians","distanceMeters","targetHeightMeters","fovDegrees","manualSwitchAllowed"],"properties":{"mode":{"const":"third-person"},"cameraEntityId":{"$ref":"#/$defs/nonEmptyString"},"targetEntityId":{"$ref":"#/$defs/nonEmptyString"},"cameraRigProfileRef":{"$ref":"#/$defs/nonEmptyString"},"pitchRadians":{"type":"number"},"distanceMeters":{"type":"number","exclusiveMinimum":0},"targetHeightMeters":{"type":"number"},"fovDegrees":{"type":"number","exclusiveMinimum":0,"exclusiveMaximum":180},"manualSwitchAllowed":{"type":"boolean"}}},"subjectAssetInventory":{"type":"object","additionalProperties":false,"required":["meshCount","vertexCount","triangleCount","skeletonCount","boneCount","animationClipNames"],"properties":{"meshCount":{"type":"integer","minimum":0},"vertexCount":{"type":"integer","minimum":0},"triangleCount":{"type":"integer","minimum":0},"skeletonCount":{"type":"integer","minimum":0},"boneCount":{"type":"integer","minimum":0},"animationClipNames":{"$ref":"#/$defs/stringArray"}}},"subjectAsset":{"type":"object","additionalProperties":false,"required":["subjectAssetRef","artifactContentHash","byteLength","mediaType","format","inventory"],"properties":{"subjectAssetRef":{"$ref":"#/$defs/nonEmptyString"},"artifactContentHash":{"$ref":"#/$defs/hash"},"byteLength":{"type":"integer","minimum":0},"mediaType":{"const":"model/gltf-binary"},"format":{"const":"glb"},"inventory":{"$ref":"#/$defs/subjectAssetInventory"}}},"rigProfile":{"type":"object","additionalProperties":false,"required":["rigProfileRef","bodyTopology","skeletonRootBoneName","requiredBoneIds","sourceNodeNameByBoneId"],"properties":{"rigProfileRef":{"$ref":"#/$defs/nonEmptyString"},"bodyTopology":{"const":"biped"},"skeletonRootBoneName":{"$ref":"#/$defs/nonEmptyString"},"requiredBoneIds":{"$ref":"#/$defs/stringArray"},"sourceNodeNameByBoneId":{"type":"object","propertyNames":{"$ref":"#/$defs/nonEmptyString"},"additionalProperties":{"$ref":"#/$defs/nonEmptyString"}}}},"animationBinding":{"type":"object","additionalProperties":false,"required":["actionId","sourceClipName","semanticFamily","automaticPresentationKeys","loopMode","playbackSpeedRatio","blendDurationSeconds","rootMotionMode"],"properties":{"actionId":{"$ref":"#/$defs/nonEmptyString"},"sourceClipName":{"$ref":"#/$defs/nonEmptyString"},"semanticFamily":{"enum":["ground","airborne","flight","water","posture","combat","emote","dance"]},"automaticPresentationKeys":{"$ref":"#/$defs/stringArray"},"loopMode":{"enum":["repeat","once"]},"playbackSpeedRatio":{"type":"number"},"blendDurationSeconds":{"type":"number"},"rootMotionMode":{"const":"in-place"}}},"animationSet":{"type":"object","additionalProperties":false,"required":["animationSetRef","subjectAssetRef","rigProfileRef","defaultActionId","requiredActionIds","animationBindings"],"properties":{"animationSetRef":{"$ref":"#/$defs/nonEmptyString"},"subjectAssetRef":{"$ref":"#/$defs/nonEmptyString"},"rigProfileRef":{"$ref":"#/$defs/nonEmptyString"},"defaultActionId":{"$ref":"#/$defs/nonEmptyString"},"requiredActionIds":{"$ref":"#/$defs/stringArray"},"animationBindings":{"type":"array","items":{"$ref":"#/$defs/animationBinding"}}}},"subjectCapsule":{"type":"object","additionalProperties":false,"required":["kind","radiusMeters","heightMeters","centerOffsetFromSubjectOriginMetersXYZ"],"properties":{"kind":{"const":"capsule"},"radiusMeters":{"type":"number","exclusiveMinimum":0},"heightMeters":{"type":"number","exclusiveMinimum":0},"centerOffsetFromSubjectOriginMetersXYZ":{"$ref":"#/$defs/vec3"}}},"colliderProfile":{"type":"object","additionalProperties":false,"required":["colliderProfileRef","supportedBodyTopologies","collider"],"properties":{"colliderProfileRef":{"$ref":"#/$defs/nonEmptyString"},"supportedBodyTopologies":{"$ref":"#/$defs/stringArray"},"collider":{"$ref":"#/$defs/subjectCapsule"}}},"primitiveShape":{"oneOf":[{"type":"object","additionalProperties":false,"required":["kind","sizeMetersXYZ"],"properties":{"kind":{"const":"box"},"sizeMetersXYZ":{"$ref":"#/$defs/vec3"}}},{"type":"object","additionalProperties":false,"required":["kind","radiusMeters"],"properties":{"kind":{"const":"sphere"},"radiusMeters":{"type":"number","exclusiveMinimum":0}}},{"type":"object","additionalProperties":false,"required":["kind","radiusMeters","heightMeters"],"properties":{"kind":{"enum":["cylinder","capsule"]},"radiusMeters":{"type":"number","exclusiveMinimum":0},"heightMeters":{"type":"number","exclusiveMinimum":0}}}]},"localTransform":{"type":"object","additionalProperties":false,"required":["positionMetersXYZ","rotationEulerRadiansXYZ"],"properties":{"positionMetersXYZ":{"$ref":"#/$defs/vec3"},"rotationEulerRadiansXYZ":{"$ref":"#/$defs/vec3"}}},"subjectVisualPart":{"oneOf":[{"type":"object","additionalProperties":false,"required":["id","kind","shape","localTransform","semanticTags"],"properties":{"id":{"$ref":"#/$defs/nonEmptyString"},"kind":{"const":"primitive"},"shape":{"$ref":"#/$defs/primitiveShape"},"localTransform":{"$ref":"#/$defs/localTransform"},"semanticTags":{"$ref":"#/$defs/stringArray"}}},{"type":"object","additionalProperties":false,"required":["id","kind","subjectAssetRef","localTransform","appearance","semanticTags"],"properties":{"id":{"$ref":"#/$defs/nonEmptyString"},"kind":{"const":"asset"},"subjectAssetRef":{"$ref":"#/$defs/nonEmptyString"},"localTransform":{"type":"object","additionalProperties":false,"required":["positionMetersXYZ","rotationEulerRadiansXYZ","scaleXYZ"],"properties":{"positionMetersXYZ":{"$ref":"#/$defs/vec3"},"rotationEulerRadiansXYZ":{"$ref":"#/$defs/vec3"},"scaleXYZ":{"$ref":"#/$defs/vec3"}}},"appearance":{"type":"object","additionalProperties":false,"required":["mode"],"properties":{"mode":{"const":"whitebox-neutral"}}},"semanticTags":{"$ref":"#/$defs/stringArray"}}}]},"subjectSocket":{"oneOf":[{"type":"object","additionalProperties":false,"required":["id","kind","localTransform","semanticTags"],"properties":{"id":{"$ref":"#/$defs/nonEmptyString"},"kind":{"const":"local"},"localTransform":{"$ref":"#/$defs/localTransform"},"semanticTags":{"$ref":"#/$defs/stringArray"}}},{"type":"object","additionalProperties":false,"required":["id","kind","boneId","offsetTransform","semanticTags"],"properties":{"id":{"$ref":"#/$defs/nonEmptyString"},"kind":{"const":"bone"},"boneId":{"$ref":"#/$defs/nonEmptyString"},"offsetTransform":{"$ref":"#/$defs/localTransform"},"semanticTags":{"$ref":"#/$defs/stringArray"}}}]},"mountSlot":{"type":"object","additionalProperties":false,"required":["id","kind","mode","mountSocketId","riderSubjectOriginOffsetMetersXYZ","dismountCandidateOffsetsMetersXYZ"],"properties":{"id":{"$ref":"#/$defs/nonEmptyString"},"kind":{"const":"mount-slot"},"mode":{"const":"stand"},"mountSocketId":{"$ref":"#/$defs/nonEmptyString"},"riderSubjectOriginOffsetMetersXYZ":{"$ref":"#/$defs/vec3"},"dismountCandidateOffsetsMetersXYZ":{"type":"array","items":{"$ref":"#/$defs/vec3"}}}},"subjectCollider":{"type":"object","additionalProperties":false,"required":["kind","radiusMeters","heightMeters","centerOffsetFromSubjectOriginMetersXYZ","massKilograms","maxSlopeDegrees","maxStepHeightMeters"],"properties":{"kind":{"const":"capsule"},"radiusMeters":{"type":"number","exclusiveMinimum":0},"heightMeters":{"type":"number","exclusiveMinimum":0},"centerOffsetFromSubjectOriginMetersXYZ":{"$ref":"#/$defs/vec3"},"massKilograms":{"type":"number","exclusiveMinimum":0},"maxSlopeDegrees":{"type":"number","minimum":0},"maxStepHeightMeters":{"type":"number","minimum":0}}},"controlFeel":{"type":"object","additionalProperties":false,"required":["resourceRef","contentHash","walkSpeedMetersPerSecond","runSpeedMetersPerSecond","jumpSpeedMetersPerSecond","accelerationMetersPerSecondSquared","decelerationMetersPerSecondSquared","turnRateRadiansPerSecond","moveResponseExponent","airControlRatio","coyoteTimeSeconds","jumpBufferSeconds","variableJumpHoldSeconds","jumpHoldGravityRatio","jumpReleaseGravityRatio"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"contentHash":{"$ref":"#/$defs/hash"},"walkSpeedMetersPerSecond":{"type":"number"},"runSpeedMetersPerSecond":{"type":"number"},"jumpSpeedMetersPerSecond":{"type":"number"},"accelerationMetersPerSecondSquared":{"type":"number"},"decelerationMetersPerSecondSquared":{"type":"number"},"turnRateRadiansPerSecond":{"type":"number"},"moveResponseExponent":{"type":"number"},"airControlRatio":{"type":"number"},"coyoteTimeSeconds":{"type":"number"},"jumpBufferSeconds":{"type":"number"},"variableJumpHoldSeconds":{"type":"number"},"jumpHoldGravityRatio":{"type":"number"},"jumpReleaseGravityRatio":{"type":"number"}}},"motionProfile":{"type":"object","additionalProperties":false,"required":["resourceRef","contentHash","motionKernelRef","motionTags"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"contentHash":{"$ref":"#/$defs/hash"},"motionKernelRef":{"$ref":"#/$defs/nonEmptyString"},"motionTags":{"$ref":"#/$defs/stringArray"}}},"motionKernel":{"type":"object","additionalProperties":false,"required":["resourceRef","implementationId","commandKind","supportedMediums","fallbackMotionProfileRef","deterministic"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"implementationId":{"enum":["free-ground","forward-steer","wheeled-arcade","surface-slide","water-surface","unpowered-glide"]},"commandKind":{"$ref":"#/$defs/motionCommandKind"},"supportedMediums":{"type":"array","items":{"enum":["ground","water","air"]}},"fallbackMotionProfileRef":{"$ref":"#/$defs/nonEmptyString"},"deterministic":{"const":true}}},"motionCommandKind":{"enum":["planar-vector","throttle-steer","flight-attitude","none"]},"controlProfile":{"type":"object","additionalProperties":false,"required":["resourceRef","contentHash","commandKind","inputSpace","facingPolicy","lateralMovementPolicy","moveDeadzoneRatio"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"contentHash":{"$ref":"#/$defs/hash"},"commandKind":{"$ref":"#/$defs/motionCommandKind"},"inputSpace":{"enum":["camera-relative","subject-local","flight-frame","none"]},"facingPolicy":{"enum":["align-to-move","align-to-view","steering-derived","flight-derived","fixed"]},"lateralMovementPolicy":{"enum":["allowed","forbidden"]},"moveDeadzoneRatio":{"type":"number"}}},"cameraParameters":{"type":"object","additionalProperties":false,"required":["distanceMeters","minimumDistanceMeters","maximumDistanceMeters","targetHeightMeters","shoulderOffsetMeters","pitchRadians","minimumPitchRadians","maximumPitchRadians","positionDampingPerSecond","horizontalPositionDampingPerSecond","verticalPositionDampingPerSecond","maximumPositionLagMeters","rotationDampingPerSecond","yawDampingPerSecond","pitchDampingPerSecond","collisionRadiusMeters","collisionRetractionMetersPerSecond","collisionRecoveryMetersPerSecond","baseFovDegrees","speedFovDegreesPerMeterPerSecond","maximumSpeedFovDegrees","lookAheadSeconds","accelerationLookAheadSecondsSquared","transitionSeconds","minimumHeadingSpeedMetersPerSecond","velocityHeadingDampingPerSecond","fovDampingPerSecond","horizontalDeadZoneRatio","verticalDeadZoneRatio","recenterDelaySeconds","recenterDurationSeconds","recenterMinimumSpeedMetersPerSecond","teleportSnapDistanceMeters","lookSensitivityXRatio","lookSensitivityYRatio"],"properties":{"distanceMeters":{"type":"number"},"minimumDistanceMeters":{"type":"number"},"maximumDistanceMeters":{"type":"number"},"targetHeightMeters":{"type":"number"},"shoulderOffsetMeters":{"type":"number"},"pitchRadians":{"type":"number"},"minimumPitchRadians":{"type":"number"},"maximumPitchRadians":{"type":"number"},"positionDampingPerSecond":{"type":"number"},"horizontalPositionDampingPerSecond":{"type":"number"},"verticalPositionDampingPerSecond":{"type":"number"},"maximumPositionLagMeters":{"type":"number"},"rotationDampingPerSecond":{"type":"number"},"yawDampingPerSecond":{"type":"number"},"pitchDampingPerSecond":{"type":"number"},"collisionRadiusMeters":{"type":"number"},"collisionRetractionMetersPerSecond":{"type":"number"},"collisionRecoveryMetersPerSecond":{"type":"number"},"baseFovDegrees":{"type":"number"},"speedFovDegreesPerMeterPerSecond":{"type":"number"},"maximumSpeedFovDegrees":{"type":"number"},"lookAheadSeconds":{"type":"number"},"accelerationLookAheadSecondsSquared":{"type":"number"},"transitionSeconds":{"type":"number"},"minimumHeadingSpeedMetersPerSecond":{"type":"number"},"velocityHeadingDampingPerSecond":{"type":"number"},"fovDampingPerSecond":{"type":"number"},"horizontalDeadZoneRatio":{"type":"number"},"verticalDeadZoneRatio":{"type":"number"},"recenterDelaySeconds":{"type":"number"},"recenterDurationSeconds":{"type":"number"},"recenterMinimumSpeedMetersPerSecond":{"type":"number"},"teleportSnapDistanceMeters":{"type":"number"},"lookSensitivityXRatio":{"type":"number"},"lookSensitivityYRatio":{"type":"number"}}},"cameraRigProfile":{"type":"object","additionalProperties":false,"required":["resourceRef","contentHash","baseMode","algorithmRef","headingSource","reverseHeadingPolicy","recenterMode","preferredSocketIds","parameters"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"contentHash":{"$ref":"#/$defs/hash"},"baseMode":{"enum":["first-person","free-orbit","stable-follow","speed-chase","flight-horizon"]},"algorithmRef":{"$ref":"#/$defs/nonEmptyString"},"headingSource":{"enum":["view","target-forward","target-velocity"]},"reverseHeadingPolicy":{"enum":["follow-velocity","preserve-target-forward"]},"recenterMode":{"enum":["off","forward-motion","always"]},"preferredSocketIds":{"$ref":"#/$defs/stringArray"},"parameters":{"$ref":"#/$defs/cameraParameters"},"authoringRanges":{"type":"object","propertyNames":{"enum":["distanceMeters","minimumDistanceMeters","maximumDistanceMeters","targetHeightMeters","shoulderOffsetMeters","pitchRadians","minimumPitchRadians","maximumPitchRadians","positionDampingPerSecond","horizontalPositionDampingPerSecond","verticalPositionDampingPerSecond","maximumPositionLagMeters","rotationDampingPerSecond","yawDampingPerSecond","pitchDampingPerSecond","collisionRadiusMeters","collisionRetractionMetersPerSecond","collisionRecoveryMetersPerSecond","baseFovDegrees","speedFovDegreesPerMeterPerSecond","maximumSpeedFovDegrees","lookAheadSeconds","accelerationLookAheadSecondsSquared","transitionSeconds","minimumHeadingSpeedMetersPerSecond","velocityHeadingDampingPerSecond","fovDampingPerSecond","horizontalDeadZoneRatio","verticalDeadZoneRatio","recenterDelaySeconds","recenterDurationSeconds","recenterMinimumSpeedMetersPerSecond","teleportSnapDistanceMeters","lookSensitivityXRatio","lookSensitivityYRatio"]},"additionalProperties":{"type":"object","additionalProperties":false,"required":["minimum","maximum","step"],"properties":{"minimum":{"type":"number"},"maximum":{"type":"number"},"step":{"type":"number"}}}}}},"cameraModifierProfile":{"type":"object","additionalProperties":false,"required":["resourceRef","parameterOverrides"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"parameterOverrides":{"type":"object","propertyNames":{"$ref":"#/$defs/nonEmptyString"},"additionalProperties":{"type":"number"}},"headingSourceOverride":{"enum":["view","target-forward","target-velocity"]},"reverseHeadingPolicyOverride":{"enum":["follow-velocity","preserve-target-forward"]},"recenterModeOverride":{"enum":["off","forward-motion","always"]}}},"cameraContextRule":{"type":"object","additionalProperties":false,"required":["id","priority","when"],"properties":{"id":{"$ref":"#/$defs/nonEmptyString"},"priority":{"type":"number"},"when":{"type":"object","additionalProperties":false,"properties":{"relationshipRoles":{"$ref":"#/$defs/stringArray"},"locomotionStatuses":{"$ref":"#/$defs/stringArray"},"mobilityModes":{"$ref":"#/$defs/stringArray"},"gaits":{"$ref":"#/$defs/stringArray"},"verticalPhases":{"$ref":"#/$defs/stringArray"},"requiredActiveActionRefs":{"$ref":"#/$defs/stringArray"},"actionInterruptibility":{"enum":["interruptible","non-interruptible"]},"motionKernelRefs":{"$ref":"#/$defs/stringArray"},"requiredMotionTags":{"$ref":"#/$defs/stringArray"},"movementMediums":{"$ref":"#/$defs/stringArray"},"minimumSpeedMetersPerSecond":{"type":"number"},"maximumSpeedMetersPerSecond":{"type":"number"},"requiredSocketIds":{"$ref":"#/$defs/stringArray"},"requiredCameraContextTags":{"$ref":"#/$defs/stringArray"}}},"cameraRigProfileRef":{"$ref":"#/$defs/nonEmptyString"},"cameraModifierRefs":{"$ref":"#/$defs/stringArray"}}},"relationshipProfile":{"oneOf":[{"type":"object","additionalProperties":false,"required":["resourceRef","relationshipType","requiredRiderSocketIds","requiredMountSocketIds","controlTransferMode","cameraTargetRole"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"relationshipType":{"const":"mountedOn"},"requiredRiderSocketIds":{"$ref":"#/$defs/stringArray"},"requiredMountSocketIds":{"$ref":"#/$defs/stringArray"},"controlTransferMode":{"enum":["keep-rider","to-mount","none"]},"cameraTargetRole":{"enum":["controlled-entity","rider","mount"]},"maximumMountDistanceMeters":{"type":"number"}}},{"type":"object","additionalProperties":false,"required":["resourceRef","relationshipType","requiredOccupantSocketIds","requiredSeatSocketIds"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"relationshipType":{"const":"seat"},"requiredOccupantSocketIds":{"$ref":"#/$defs/stringArray"},"requiredSeatSocketIds":{"$ref":"#/$defs/stringArray"}}},{"type":"object","additionalProperties":false,"required":["resourceRef","relationshipType","requiredTetheredSocketIds","requiredTetherAnchorSocketIds"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"relationshipType":{"const":"tether"},"requiredTetheredSocketIds":{"$ref":"#/$defs/stringArray"},"requiredTetherAnchorSocketIds":{"$ref":"#/$defs/stringArray"}}}]},"capabilityAssembly":{"type":"object","additionalProperties":false,"required":["authoringAvailability","physicsBodyProfileRef","locomotionProfileRef","defaultMotionProfile","optionalMotionProfiles","fallbackMotionProfile","motionKernels","controlProfile","cameraContext","mediumProfile","relationshipProfiles","harnessProfileRef","requiredHarnessCheckIds","actionOrPoseSetRef","renderBindingProfileRef"],"properties":{"authoringAvailability":{"enum":["recommended","advanced","experimental"]},"physicsBodyProfileRef":{"$ref":"#/$defs/nonEmptyString"},"locomotionProfileRef":{"$ref":"#/$defs/nonEmptyString"},"defaultMotionProfile":{"$ref":"#/$defs/motionProfile"},"optionalMotionProfiles":{"type":"array","items":{"$ref":"#/$defs/motionProfile"}},"fallbackMotionProfile":{"$ref":"#/$defs/motionProfile"},"motionKernels":{"type":"array","items":{"$ref":"#/$defs/motionKernel"}},"controlProfile":{"$ref":"#/$defs/controlProfile"},"cameraContext":{"type":"object","additionalProperties":false,"required":["resourceRef","defaultCameraRigProfileRef","rules","cameraRigProfiles","cameraModifierProfiles"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"defaultCameraRigProfileRef":{"$ref":"#/$defs/nonEmptyString"},"firstPersonCameraRigProfileRef":{"$ref":"#/$defs/nonEmptyString"},"rules":{"type":"array","items":{"$ref":"#/$defs/cameraContextRule"}},"cameraRigProfiles":{"type":"array","items":{"$ref":"#/$defs/cameraRigProfile"}},"cameraModifierProfiles":{"type":"array","items":{"$ref":"#/$defs/cameraModifierProfile"}}}},"mediumProfile":{"type":"object","additionalProperties":false,"required":["resourceRef","air"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"air":{"type":"object","additionalProperties":false,"required":["gravityRatio","linearDragPerSecond"],"properties":{"gravityRatio":{"type":"number"},"linearDragPerSecond":{"type":"number"}}}}},"relationshipProfiles":{"type":"array","items":{"$ref":"#/$defs/relationshipProfile"}},"harnessProfileRef":{"$ref":"#/$defs/nonEmptyString"},"requiredHarnessCheckIds":{"$ref":"#/$defs/stringArray"},"actionOrPoseSetRef":{"$ref":"#/$defs/nonEmptyString"},"renderBindingProfileRef":{"$ref":"#/$defs/nonEmptyString"}}},"subjectDescriptor":{"type":"object","additionalProperties":false,"required":["entityId","subjectDefinitionRef","subjectDefinitionHash","bodyTopology","semanticClassId","forwardDirection","visualParts","visualBinding","sockets","mountSlots","collider","locomotion","locomotionCapabilityRef","locomotionCapabilityHash","physicsBodyProfileRef","locomotionProfileRef","controlFeel","availableControlFeels","capabilityAssembly"],"properties":{"entityId":{"$ref":"#/$defs/nonEmptyString"},"subjectDefinitionRef":{"$ref":"#/$defs/nonEmptyString"},"subjectDefinitionHash":{"$ref":"#/$defs/hash"},"bodyTopology":{"enum":["biped","quadruped","four-wheel","surface-craft","watercraft","glider","composite","custom"]},"semanticClassId":{"$ref":"#/$defs/nonEmptyString"},"forwardDirection":{"const":"-z"},"visualParts":{"type":"array","items":{"$ref":"#/$defs/subjectVisualPart"}},"visualBinding":{"oneOf":[{"type":"object","additionalProperties":false,"required":["mode"],"properties":{"mode":{"const":"static"}}},{"type":"object","additionalProperties":false,"required":["mode","rigProfileRef","animationSetRef"],"properties":{"mode":{"const":"rigged"},"rigProfileRef":{"$ref":"#/$defs/nonEmptyString"},"animationSetRef":{"$ref":"#/$defs/nonEmptyString"}}}]},"sockets":{"type":"array","items":{"$ref":"#/$defs/subjectSocket"}},"mountSlots":{"type":"array","items":{"$ref":"#/$defs/mountSlot"}},"collider":{"$ref":"#/$defs/subjectCollider"},"locomotion":{"type":"object","additionalProperties":false,"required":["allowWalk","allowRun","allowJump"],"properties":{"allowWalk":{"type":"boolean"},"allowRun":{"type":"boolean"},"allowJump":{"type":"boolean"}}},"locomotionCapabilityRef":{"$ref":"#/$defs/nonEmptyString"},"locomotionCapabilityHash":{"$ref":"#/$defs/hash"},"physicsBodyProfileRef":{"$ref":"#/$defs/nonEmptyString"},"locomotionProfileRef":{"$ref":"#/$defs/nonEmptyString"},"controlFeel":{"$ref":"#/$defs/controlFeel"},"availableControlFeels":{"type":"array","items":{"$ref":"#/$defs/controlFeel"}},"capabilityAssembly":{"$ref":"#/$defs/capabilityAssembly"}}},"actionPresentationRegistry":{"type":"object","additionalProperties":false,"required":["schemaVersion","bindings","rootMotionSources"],"properties":{"schemaVersion":{"const":1},"bindings":{"type":"array","items":{"$ref":"#/$defs/actionPresentationBinding"}},"rootMotionSources":{"type":"array","items":{"$ref":"#/$defs/rootMotionSource"}}}},"actionPresentationBinding":{"type":"object","additionalProperties":false,"required":["kind","schemaVersion","resourceRef","presentationKey","semanticActionRef","semanticActionHash","isInterruptible","clip","rootMotion","contentHash"],"properties":{"kind":{"const":"action-presentation-binding"},"schemaVersion":{"const":1},"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"presentationKey":{"type":"string","pattern":"^action\\\\..+$"},"semanticActionRef":{"$ref":"#/$defs/nonEmptyString"},"semanticActionHash":{"$ref":"#/$defs/hash"},"isInterruptible":{"type":"boolean"},"clip":{"type":"object","additionalProperties":false,"required":["sourceClipName","loopMode","playbackSpeedRatio","blendDurationTicks"],"properties":{"sourceClipName":{"$ref":"#/$defs/nonEmptyString"},"loopMode":{"enum":["repeat","once"]},"playbackSpeedRatio":{"type":"number"},"blendDurationTicks":{"type":"integer","minimum":0}}},"rootMotion":{"oneOf":[{"type":"object","additionalProperties":false,"required":["mode"],"properties":{"mode":{"const":"none"}}},{"type":"object","additionalProperties":false,"required":["mode","rootMotionSourceRef","rootMotionSourceHash","priority"],"properties":{"mode":{"const":"locked"},"rootMotionSourceRef":{"$ref":"#/$defs/nonEmptyString"},"rootMotionSourceHash":{"$ref":"#/$defs/hash"},"priority":{"type":"number"}}}]},"contentHash":{"$ref":"#/$defs/hash"}}},"rootMotionSource":{"type":"object","additionalProperties":false,"required":["schemaVersion","resourceRef","fixedDeltaSeconds","samples","contentHash"],"properties":{"schemaVersion":{"const":1},"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"fixedDeltaSeconds":{"type":"number","exclusiveMinimum":0},"samples":{"type":"array","minItems":1,"items":{"type":"object","additionalProperties":false,"required":["translationDeltaMetersXYZ","facingYawDeltaRadians"],"properties":{"translationDeltaMetersXYZ":{"$ref":"#/$defs/vec3"},"facingYawDeltaRadians":{"type":"number"}}}},"contentHash":{"$ref":"#/$defs/hash"}}},"resourceLockEntry":{"type":"object","additionalProperties":false,"required":["resourceRef","resourceKind","resolvedVersion","contentHash"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"resourceKind":{"enum":["subject-definition","subject-asset","rig-profile","animation-set","collider-profile","capability","physics-body-profile","locomotion-profile","control-feel-profile","collider-derivation-profile","motion-kernel","motion-profile","control-profile","camera-rig-algorithm","camera-rig-profile","camera-modifier-profile","camera-context-profile","medium-profile","relationship-profile","harness-profile","pose-set-profile","render-binding-profile","ai-schema-projection-profile","gameplay-bootstrap"]},"resolvedVersion":{"$ref":"#/$defs/nonEmptyString"},"contentHash":{"$ref":"#/$defs/hash"}}}}');
+const $defs$2 = /* @__PURE__ */ JSON.parse('{"nonEmptyString":{"type":"string","minLength":1},"hash":{"type":"string","pattern":"^sha256:[a-f0-9]{64}$"},"vec3":{"type":"array","prefixItems":[{"type":"number"},{"type":"number"},{"type":"number"}],"items":false,"minItems":3,"maxItems":3},"stringArray":{"type":"array","items":{"$ref":"#/$defs/nonEmptyString"}},"initialCamera":{"type":"object","additionalProperties":false,"required":["mode","cameraEntityId","targetEntityId","cameraRigProfileRef","pitchRadians","distanceMeters","targetHeightMeters","fovDegrees","manualSwitchAllowed"],"properties":{"mode":{"const":"third-person"},"cameraEntityId":{"$ref":"#/$defs/nonEmptyString"},"targetEntityId":{"$ref":"#/$defs/nonEmptyString"},"cameraRigProfileRef":{"$ref":"#/$defs/nonEmptyString"},"pitchRadians":{"type":"number"},"distanceMeters":{"type":"number","exclusiveMinimum":0},"targetHeightMeters":{"type":"number"},"fovDegrees":{"type":"number","exclusiveMinimum":0,"exclusiveMaximum":180},"manualSwitchAllowed":{"type":"boolean"}}},"subjectAssetInventory":{"type":"object","additionalProperties":false,"required":["meshCount","vertexCount","triangleCount","skeletonCount","boneCount","animationClipNames"],"properties":{"meshCount":{"type":"integer","minimum":0},"vertexCount":{"type":"integer","minimum":0},"triangleCount":{"type":"integer","minimum":0},"skeletonCount":{"type":"integer","minimum":0},"boneCount":{"type":"integer","minimum":0},"animationClipNames":{"$ref":"#/$defs/stringArray"}}},"subjectAsset":{"type":"object","additionalProperties":false,"required":["subjectAssetRef","artifactContentHash","byteLength","mediaType","format","inventory"],"properties":{"subjectAssetRef":{"$ref":"#/$defs/nonEmptyString"},"artifactContentHash":{"$ref":"#/$defs/hash"},"byteLength":{"type":"integer","minimum":0},"mediaType":{"const":"model/gltf-binary"},"format":{"const":"glb"},"inventory":{"$ref":"#/$defs/subjectAssetInventory"}}},"rigProfile":{"type":"object","additionalProperties":false,"required":["rigProfileRef","bodyTopology","skeletonRootBoneName","requiredBoneIds","sourceNodeNameByBoneId"],"properties":{"rigProfileRef":{"$ref":"#/$defs/nonEmptyString"},"bodyTopology":{"const":"biped"},"skeletonRootBoneName":{"$ref":"#/$defs/nonEmptyString"},"requiredBoneIds":{"$ref":"#/$defs/stringArray"},"sourceNodeNameByBoneId":{"type":"object","propertyNames":{"$ref":"#/$defs/nonEmptyString"},"additionalProperties":{"$ref":"#/$defs/nonEmptyString"}}}},"animationBinding":{"type":"object","additionalProperties":false,"required":["actionId","sourceClipName","semanticFamily","automaticPresentationKeys","loopMode","playbackSpeedRatio","blendDurationSeconds","rootMotionMode"],"properties":{"actionId":{"$ref":"#/$defs/nonEmptyString"},"sourceClipName":{"$ref":"#/$defs/nonEmptyString"},"semanticFamily":{"enum":["ground","airborne","flight","water","posture","combat","emote","dance"]},"automaticPresentationKeys":{"$ref":"#/$defs/stringArray"},"loopMode":{"enum":["repeat","once"]},"playbackSpeedRatio":{"type":"number"},"blendDurationSeconds":{"type":"number"},"rootMotionMode":{"const":"in-place"}}},"animationSet":{"type":"object","additionalProperties":false,"required":["animationSetRef","subjectAssetRef","rigProfileRef","defaultActionId","requiredActionIds","animationBindings"],"properties":{"animationSetRef":{"$ref":"#/$defs/nonEmptyString"},"subjectAssetRef":{"$ref":"#/$defs/nonEmptyString"},"rigProfileRef":{"$ref":"#/$defs/nonEmptyString"},"defaultActionId":{"$ref":"#/$defs/nonEmptyString"},"requiredActionIds":{"$ref":"#/$defs/stringArray"},"animationBindings":{"type":"array","items":{"$ref":"#/$defs/animationBinding"}}}},"subjectCapsule":{"type":"object","additionalProperties":false,"required":["kind","radiusMeters","heightMeters","centerOffsetFromSubjectOriginMetersXYZ"],"properties":{"kind":{"const":"capsule"},"radiusMeters":{"type":"number","exclusiveMinimum":0},"heightMeters":{"type":"number","exclusiveMinimum":0},"centerOffsetFromSubjectOriginMetersXYZ":{"$ref":"#/$defs/vec3"}}},"colliderProfile":{"type":"object","additionalProperties":false,"required":["colliderProfileRef","supportedBodyTopologies","collider"],"properties":{"colliderProfileRef":{"$ref":"#/$defs/nonEmptyString"},"supportedBodyTopologies":{"$ref":"#/$defs/stringArray"},"collider":{"$ref":"#/$defs/subjectCapsule"}}},"primitiveShape":{"oneOf":[{"type":"object","additionalProperties":false,"required":["kind","sizeMetersXYZ"],"properties":{"kind":{"const":"box"},"sizeMetersXYZ":{"$ref":"#/$defs/vec3"}}},{"type":"object","additionalProperties":false,"required":["kind","radiusMeters"],"properties":{"kind":{"const":"sphere"},"radiusMeters":{"type":"number","exclusiveMinimum":0}}},{"type":"object","additionalProperties":false,"required":["kind","radiusMeters","heightMeters"],"properties":{"kind":{"enum":["cylinder","capsule"]},"radiusMeters":{"type":"number","exclusiveMinimum":0},"heightMeters":{"type":"number","exclusiveMinimum":0}}}]},"localTransform":{"type":"object","additionalProperties":false,"required":["positionMetersXYZ","rotationEulerRadiansXYZ"],"properties":{"positionMetersXYZ":{"$ref":"#/$defs/vec3"},"rotationEulerRadiansXYZ":{"$ref":"#/$defs/vec3"}}},"subjectVisualPart":{"oneOf":[{"type":"object","additionalProperties":false,"required":["id","kind","shape","localTransform","semanticTags"],"properties":{"id":{"$ref":"#/$defs/nonEmptyString"},"kind":{"const":"primitive"},"shape":{"$ref":"#/$defs/primitiveShape"},"localTransform":{"$ref":"#/$defs/localTransform"},"semanticTags":{"$ref":"#/$defs/stringArray"}}},{"type":"object","additionalProperties":false,"required":["id","kind","subjectAssetRef","localTransform","appearance","semanticTags"],"properties":{"id":{"$ref":"#/$defs/nonEmptyString"},"kind":{"const":"asset"},"subjectAssetRef":{"$ref":"#/$defs/nonEmptyString"},"localTransform":{"type":"object","additionalProperties":false,"required":["positionMetersXYZ","rotationEulerRadiansXYZ","scaleXYZ"],"properties":{"positionMetersXYZ":{"$ref":"#/$defs/vec3"},"rotationEulerRadiansXYZ":{"$ref":"#/$defs/vec3"},"scaleXYZ":{"$ref":"#/$defs/vec3"}}},"appearance":{"type":"object","additionalProperties":false,"required":["mode"],"properties":{"mode":{"const":"whitebox-neutral"}}},"semanticTags":{"$ref":"#/$defs/stringArray"}}}]},"subjectSocket":{"oneOf":[{"type":"object","additionalProperties":false,"required":["id","kind","localTransform","semanticTags"],"properties":{"id":{"$ref":"#/$defs/nonEmptyString"},"kind":{"const":"local"},"localTransform":{"$ref":"#/$defs/localTransform"},"semanticTags":{"$ref":"#/$defs/stringArray"}}},{"type":"object","additionalProperties":false,"required":["id","kind","boneId","offsetTransform","semanticTags"],"properties":{"id":{"$ref":"#/$defs/nonEmptyString"},"kind":{"const":"bone"},"boneId":{"$ref":"#/$defs/nonEmptyString"},"offsetTransform":{"$ref":"#/$defs/localTransform"},"semanticTags":{"$ref":"#/$defs/stringArray"}}}]},"mountSlot":{"type":"object","additionalProperties":false,"required":["id","kind","mode","mountSocketId","riderSubjectOriginOffsetMetersXYZ","dismountCandidateOffsetsMetersXYZ"],"properties":{"id":{"$ref":"#/$defs/nonEmptyString"},"kind":{"const":"mount-slot"},"mode":{"const":"stand"},"mountSocketId":{"$ref":"#/$defs/nonEmptyString"},"riderSubjectOriginOffsetMetersXYZ":{"$ref":"#/$defs/vec3"},"dismountCandidateOffsetsMetersXYZ":{"type":"array","items":{"$ref":"#/$defs/vec3"}}}},"subjectCollider":{"type":"object","additionalProperties":false,"required":["kind","radiusMeters","heightMeters","centerOffsetFromSubjectOriginMetersXYZ","massKilograms","maxSlopeDegrees","maxStepHeightMeters"],"properties":{"kind":{"const":"capsule"},"radiusMeters":{"type":"number","exclusiveMinimum":0},"heightMeters":{"type":"number","exclusiveMinimum":0},"centerOffsetFromSubjectOriginMetersXYZ":{"$ref":"#/$defs/vec3"},"massKilograms":{"type":"number","exclusiveMinimum":0},"maxSlopeDegrees":{"type":"number","minimum":0},"maxStepHeightMeters":{"type":"number","minimum":0}}},"controlFeel":{"type":"object","additionalProperties":false,"required":["resourceRef","contentHash","jumpVariantPolicy","walkSpeedMetersPerSecond","runSpeedMetersPerSecond","jumpSpeedMetersPerSecond","accelerationMetersPerSecondSquared","decelerationMetersPerSecondSquared","turnRateRadiansPerSecond","moveResponseExponent","airControlRatio","coyoteTimeSeconds","jumpBufferSeconds","variableJumpHoldSeconds","jumpHoldGravityRatio","jumpReleaseGravityRatio"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"contentHash":{"$ref":"#/$defs/hash"},"jumpVariantPolicy":{"$ref":"#/$defs/jumpVariantPolicy"},"walkSpeedMetersPerSecond":{"type":"number"},"runSpeedMetersPerSecond":{"type":"number"},"jumpSpeedMetersPerSecond":{"type":"number"},"accelerationMetersPerSecondSquared":{"type":"number"},"decelerationMetersPerSecondSquared":{"type":"number"},"turnRateRadiansPerSecond":{"type":"number"},"moveResponseExponent":{"type":"number"},"airControlRatio":{"type":"number"},"coyoteTimeSeconds":{"type":"number"},"jumpBufferSeconds":{"type":"number"},"variableJumpHoldSeconds":{"type":"number"},"jumpHoldGravityRatio":{"type":"number"},"jumpReleaseGravityRatio":{"type":"number"}}},"jumpVariantPolicy":{"oneOf":[{"type":"object","additionalProperties":false,"required":["mode"],"properties":{"mode":{"const":"hold-height"}}},{"type":"object","additionalProperties":false,"required":["mode","smallAnticipationSeconds","largeAnticipationSeconds"],"properties":{"mode":{"const":"run-selects-variant"},"smallAnticipationSeconds":{"type":"number","minimum":0,"maximum":1.5},"largeAnticipationSeconds":{"type":"number","minimum":0,"maximum":1.5}}}]},"motionProfile":{"type":"object","additionalProperties":false,"required":["resourceRef","contentHash","motionKernelRef","motionTags"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"contentHash":{"$ref":"#/$defs/hash"},"motionKernelRef":{"$ref":"#/$defs/nonEmptyString"},"motionTags":{"$ref":"#/$defs/stringArray"}}},"motionKernel":{"type":"object","additionalProperties":false,"required":["resourceRef","implementationId","commandKind","supportedMediums","fallbackMotionProfileRef","deterministic"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"implementationId":{"enum":["free-ground","forward-steer","wheeled-arcade","surface-slide","water-surface","unpowered-glide"]},"commandKind":{"$ref":"#/$defs/motionCommandKind"},"supportedMediums":{"type":"array","items":{"enum":["ground","water","air"]}},"fallbackMotionProfileRef":{"$ref":"#/$defs/nonEmptyString"},"deterministic":{"const":true}}},"motionCommandKind":{"enum":["planar-vector","throttle-steer","flight-attitude","none"]},"controlProfile":{"type":"object","additionalProperties":false,"required":["resourceRef","contentHash","commandKind","inputSpace","facingPolicy","lateralMovementPolicy","moveDeadzoneRatio"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"contentHash":{"$ref":"#/$defs/hash"},"commandKind":{"$ref":"#/$defs/motionCommandKind"},"inputSpace":{"enum":["camera-relative","subject-local","flight-frame","none"]},"facingPolicy":{"enum":["align-to-move","align-to-view","steering-derived","flight-derived","fixed"]},"lateralMovementPolicy":{"enum":["allowed","forbidden"]},"moveDeadzoneRatio":{"type":"number"}}},"cameraParameters":{"type":"object","additionalProperties":false,"required":["distanceMeters","minimumDistanceMeters","maximumDistanceMeters","targetHeightMeters","shoulderOffsetMeters","pitchRadians","minimumPitchRadians","maximumPitchRadians","positionDampingPerSecond","horizontalPositionDampingPerSecond","verticalPositionDampingPerSecond","maximumPositionLagMeters","rotationDampingPerSecond","yawDampingPerSecond","pitchDampingPerSecond","collisionRadiusMeters","collisionRetractionMetersPerSecond","collisionRecoveryMetersPerSecond","baseFovDegrees","speedFovDegreesPerMeterPerSecond","maximumSpeedFovDegrees","lookAheadSeconds","accelerationLookAheadSecondsSquared","transitionSeconds","minimumHeadingSpeedMetersPerSecond","velocityHeadingDampingPerSecond","fovDampingPerSecond","horizontalDeadZoneRatio","verticalDeadZoneRatio","recenterDelaySeconds","recenterDurationSeconds","recenterMinimumSpeedMetersPerSecond","teleportSnapDistanceMeters","lookSensitivityXRatio","lookSensitivityYRatio"],"properties":{"distanceMeters":{"type":"number"},"minimumDistanceMeters":{"type":"number"},"maximumDistanceMeters":{"type":"number"},"targetHeightMeters":{"type":"number"},"shoulderOffsetMeters":{"type":"number"},"pitchRadians":{"type":"number"},"minimumPitchRadians":{"type":"number"},"maximumPitchRadians":{"type":"number"},"positionDampingPerSecond":{"type":"number"},"horizontalPositionDampingPerSecond":{"type":"number"},"verticalPositionDampingPerSecond":{"type":"number"},"maximumPositionLagMeters":{"type":"number"},"rotationDampingPerSecond":{"type":"number"},"yawDampingPerSecond":{"type":"number"},"pitchDampingPerSecond":{"type":"number"},"collisionRadiusMeters":{"type":"number"},"collisionRetractionMetersPerSecond":{"type":"number"},"collisionRecoveryMetersPerSecond":{"type":"number"},"baseFovDegrees":{"type":"number"},"speedFovDegreesPerMeterPerSecond":{"type":"number"},"maximumSpeedFovDegrees":{"type":"number"},"lookAheadSeconds":{"type":"number"},"accelerationLookAheadSecondsSquared":{"type":"number"},"transitionSeconds":{"type":"number"},"minimumHeadingSpeedMetersPerSecond":{"type":"number"},"velocityHeadingDampingPerSecond":{"type":"number"},"fovDampingPerSecond":{"type":"number"},"horizontalDeadZoneRatio":{"type":"number"},"verticalDeadZoneRatio":{"type":"number"},"recenterDelaySeconds":{"type":"number"},"recenterDurationSeconds":{"type":"number"},"recenterMinimumSpeedMetersPerSecond":{"type":"number"},"teleportSnapDistanceMeters":{"type":"number"},"lookSensitivityXRatio":{"type":"number"},"lookSensitivityYRatio":{"type":"number"}}},"cameraRigProfile":{"type":"object","additionalProperties":false,"required":["resourceRef","contentHash","baseMode","algorithmRef","headingSource","reverseHeadingPolicy","recenterMode","preferredSocketIds","parameters"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"contentHash":{"$ref":"#/$defs/hash"},"baseMode":{"enum":["first-person","free-orbit","stable-follow","speed-chase","flight-horizon"]},"algorithmRef":{"$ref":"#/$defs/nonEmptyString"},"headingSource":{"enum":["view","target-forward","target-velocity"]},"reverseHeadingPolicy":{"enum":["follow-velocity","preserve-target-forward"]},"recenterMode":{"enum":["off","forward-motion","always"]},"preferredSocketIds":{"$ref":"#/$defs/stringArray"},"parameters":{"$ref":"#/$defs/cameraParameters"},"authoringRanges":{"type":"object","propertyNames":{"enum":["distanceMeters","minimumDistanceMeters","maximumDistanceMeters","targetHeightMeters","shoulderOffsetMeters","pitchRadians","minimumPitchRadians","maximumPitchRadians","positionDampingPerSecond","horizontalPositionDampingPerSecond","verticalPositionDampingPerSecond","maximumPositionLagMeters","rotationDampingPerSecond","yawDampingPerSecond","pitchDampingPerSecond","collisionRadiusMeters","collisionRetractionMetersPerSecond","collisionRecoveryMetersPerSecond","baseFovDegrees","speedFovDegreesPerMeterPerSecond","maximumSpeedFovDegrees","lookAheadSeconds","accelerationLookAheadSecondsSquared","transitionSeconds","minimumHeadingSpeedMetersPerSecond","velocityHeadingDampingPerSecond","fovDampingPerSecond","horizontalDeadZoneRatio","verticalDeadZoneRatio","recenterDelaySeconds","recenterDurationSeconds","recenterMinimumSpeedMetersPerSecond","teleportSnapDistanceMeters","lookSensitivityXRatio","lookSensitivityYRatio"]},"additionalProperties":{"type":"object","additionalProperties":false,"required":["minimum","maximum","step"],"properties":{"minimum":{"type":"number"},"maximum":{"type":"number"},"step":{"type":"number"}}}}}},"cameraModifierProfile":{"type":"object","additionalProperties":false,"required":["resourceRef","parameterOverrides"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"parameterOverrides":{"type":"object","propertyNames":{"$ref":"#/$defs/nonEmptyString"},"additionalProperties":{"type":"number"}},"headingSourceOverride":{"enum":["view","target-forward","target-velocity"]},"reverseHeadingPolicyOverride":{"enum":["follow-velocity","preserve-target-forward"]},"recenterModeOverride":{"enum":["off","forward-motion","always"]}}},"cameraContextRule":{"type":"object","additionalProperties":false,"required":["id","priority","when"],"properties":{"id":{"$ref":"#/$defs/nonEmptyString"},"priority":{"type":"number"},"when":{"type":"object","additionalProperties":false,"properties":{"relationshipRoles":{"$ref":"#/$defs/stringArray"},"locomotionStatuses":{"$ref":"#/$defs/stringArray"},"mobilityModes":{"$ref":"#/$defs/stringArray"},"gaits":{"$ref":"#/$defs/stringArray"},"verticalPhases":{"$ref":"#/$defs/stringArray"},"requiredActiveActionRefs":{"$ref":"#/$defs/stringArray"},"actionInterruptibility":{"enum":["interruptible","non-interruptible"]},"motionKernelRefs":{"$ref":"#/$defs/stringArray"},"requiredMotionTags":{"$ref":"#/$defs/stringArray"},"movementMediums":{"$ref":"#/$defs/stringArray"},"minimumSpeedMetersPerSecond":{"type":"number"},"maximumSpeedMetersPerSecond":{"type":"number"},"requiredSocketIds":{"$ref":"#/$defs/stringArray"},"requiredCameraContextTags":{"$ref":"#/$defs/stringArray"}}},"cameraRigProfileRef":{"$ref":"#/$defs/nonEmptyString"},"cameraModifierRefs":{"$ref":"#/$defs/stringArray"}}},"relationshipProfile":{"oneOf":[{"type":"object","additionalProperties":false,"required":["resourceRef","relationshipType","requiredRiderSocketIds","requiredMountSocketIds","controlTransferMode","cameraTargetRole"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"relationshipType":{"const":"mountedOn"},"requiredRiderSocketIds":{"$ref":"#/$defs/stringArray"},"requiredMountSocketIds":{"$ref":"#/$defs/stringArray"},"controlTransferMode":{"enum":["keep-rider","to-mount","none"]},"cameraTargetRole":{"enum":["controlled-entity","rider","mount"]},"maximumMountDistanceMeters":{"type":"number"}}},{"type":"object","additionalProperties":false,"required":["resourceRef","relationshipType","requiredOccupantSocketIds","requiredSeatSocketIds"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"relationshipType":{"const":"seat"},"requiredOccupantSocketIds":{"$ref":"#/$defs/stringArray"},"requiredSeatSocketIds":{"$ref":"#/$defs/stringArray"}}},{"type":"object","additionalProperties":false,"required":["resourceRef","relationshipType","requiredTetheredSocketIds","requiredTetherAnchorSocketIds"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"relationshipType":{"const":"tether"},"requiredTetheredSocketIds":{"$ref":"#/$defs/stringArray"},"requiredTetherAnchorSocketIds":{"$ref":"#/$defs/stringArray"}}}]},"capabilityAssembly":{"type":"object","additionalProperties":false,"required":["authoringAvailability","physicsBodyProfileRef","locomotionProfileRef","defaultMotionProfile","optionalMotionProfiles","fallbackMotionProfile","motionKernels","controlProfile","cameraContext","mediumProfile","relationshipProfiles","harnessProfileRef","requiredHarnessCheckIds","actionOrPoseSetRef","renderBindingProfileRef"],"properties":{"authoringAvailability":{"enum":["recommended","advanced","experimental"]},"physicsBodyProfileRef":{"$ref":"#/$defs/nonEmptyString"},"locomotionProfileRef":{"$ref":"#/$defs/nonEmptyString"},"defaultMotionProfile":{"$ref":"#/$defs/motionProfile"},"optionalMotionProfiles":{"type":"array","items":{"$ref":"#/$defs/motionProfile"}},"fallbackMotionProfile":{"$ref":"#/$defs/motionProfile"},"motionKernels":{"type":"array","items":{"$ref":"#/$defs/motionKernel"}},"controlProfile":{"$ref":"#/$defs/controlProfile"},"cameraContext":{"type":"object","additionalProperties":false,"required":["resourceRef","defaultCameraRigProfileRef","rules","cameraRigProfiles","cameraModifierProfiles"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"defaultCameraRigProfileRef":{"$ref":"#/$defs/nonEmptyString"},"firstPersonCameraRigProfileRef":{"$ref":"#/$defs/nonEmptyString"},"rules":{"type":"array","items":{"$ref":"#/$defs/cameraContextRule"}},"cameraRigProfiles":{"type":"array","items":{"$ref":"#/$defs/cameraRigProfile"}},"cameraModifierProfiles":{"type":"array","items":{"$ref":"#/$defs/cameraModifierProfile"}}}},"mediumProfile":{"type":"object","additionalProperties":false,"required":["resourceRef","air"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"air":{"type":"object","additionalProperties":false,"required":["gravityRatio","linearDragPerSecond"],"properties":{"gravityRatio":{"type":"number"},"linearDragPerSecond":{"type":"number"}}}}},"relationshipProfiles":{"type":"array","items":{"$ref":"#/$defs/relationshipProfile"}},"harnessProfileRef":{"$ref":"#/$defs/nonEmptyString"},"requiredHarnessCheckIds":{"$ref":"#/$defs/stringArray"},"actionOrPoseSetRef":{"$ref":"#/$defs/nonEmptyString"},"renderBindingProfileRef":{"$ref":"#/$defs/nonEmptyString"}}},"subjectDescriptor":{"type":"object","additionalProperties":false,"required":["entityId","subjectDefinitionRef","subjectDefinitionHash","bodyTopology","semanticClassId","forwardDirection","visualParts","visualBinding","sockets","mountSlots","collider","locomotion","locomotionCapabilityRef","locomotionCapabilityHash","physicsBodyProfileRef","locomotionProfileRef","controlFeel","availableControlFeels","capabilityAssembly"],"properties":{"entityId":{"$ref":"#/$defs/nonEmptyString"},"subjectDefinitionRef":{"$ref":"#/$defs/nonEmptyString"},"subjectDefinitionHash":{"$ref":"#/$defs/hash"},"bodyTopology":{"enum":["biped","quadruped","four-wheel","surface-craft","watercraft","glider","composite","custom"]},"semanticClassId":{"$ref":"#/$defs/nonEmptyString"},"forwardDirection":{"const":"-z"},"visualParts":{"type":"array","items":{"$ref":"#/$defs/subjectVisualPart"}},"visualBinding":{"oneOf":[{"type":"object","additionalProperties":false,"required":["mode"],"properties":{"mode":{"const":"static"}}},{"type":"object","additionalProperties":false,"required":["mode","rigProfileRef","animationSetRef"],"properties":{"mode":{"const":"rigged"},"rigProfileRef":{"$ref":"#/$defs/nonEmptyString"},"animationSetRef":{"$ref":"#/$defs/nonEmptyString"}}}]},"sockets":{"type":"array","items":{"$ref":"#/$defs/subjectSocket"}},"mountSlots":{"type":"array","items":{"$ref":"#/$defs/mountSlot"}},"collider":{"$ref":"#/$defs/subjectCollider"},"locomotion":{"type":"object","additionalProperties":false,"required":["allowWalk","allowRun","allowJump"],"properties":{"allowWalk":{"type":"boolean"},"allowRun":{"type":"boolean"},"allowJump":{"type":"boolean"}}},"locomotionCapabilityRef":{"$ref":"#/$defs/nonEmptyString"},"locomotionCapabilityHash":{"$ref":"#/$defs/hash"},"physicsBodyProfileRef":{"$ref":"#/$defs/nonEmptyString"},"locomotionProfileRef":{"$ref":"#/$defs/nonEmptyString"},"controlFeel":{"$ref":"#/$defs/controlFeel"},"availableControlFeels":{"type":"array","items":{"$ref":"#/$defs/controlFeel"}},"capabilityAssembly":{"$ref":"#/$defs/capabilityAssembly"}}},"actionPresentationRegistry":{"type":"object","additionalProperties":false,"required":["schemaVersion","bindings","rootMotionSources"],"properties":{"schemaVersion":{"const":1},"bindings":{"type":"array","items":{"$ref":"#/$defs/actionPresentationBinding"}},"rootMotionSources":{"type":"array","items":{"$ref":"#/$defs/rootMotionSource"}}}},"actionPresentationBinding":{"type":"object","additionalProperties":false,"required":["kind","schemaVersion","resourceRef","presentationKey","semanticActionRef","semanticActionHash","isInterruptible","clip","rootMotion","contentHash"],"properties":{"kind":{"const":"action-presentation-binding"},"schemaVersion":{"const":1},"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"presentationKey":{"type":"string","pattern":"^action\\\\..+$"},"semanticActionRef":{"$ref":"#/$defs/nonEmptyString"},"semanticActionHash":{"$ref":"#/$defs/hash"},"isInterruptible":{"type":"boolean"},"clip":{"type":"object","additionalProperties":false,"required":["sourceClipName","loopMode","playbackSpeedRatio","blendDurationTicks"],"properties":{"sourceClipName":{"$ref":"#/$defs/nonEmptyString"},"loopMode":{"enum":["repeat","once"]},"playbackSpeedRatio":{"type":"number"},"blendDurationTicks":{"type":"integer","minimum":0}}},"rootMotion":{"oneOf":[{"type":"object","additionalProperties":false,"required":["mode"],"properties":{"mode":{"const":"none"}}},{"type":"object","additionalProperties":false,"required":["mode","rootMotionSourceRef","rootMotionSourceHash","priority"],"properties":{"mode":{"const":"locked"},"rootMotionSourceRef":{"$ref":"#/$defs/nonEmptyString"},"rootMotionSourceHash":{"$ref":"#/$defs/hash"},"priority":{"type":"number"}}}]},"contentHash":{"$ref":"#/$defs/hash"}}},"rootMotionSource":{"type":"object","additionalProperties":false,"required":["schemaVersion","resourceRef","fixedDeltaSeconds","samples","contentHash"],"properties":{"schemaVersion":{"const":1},"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"fixedDeltaSeconds":{"type":"number","exclusiveMinimum":0},"samples":{"type":"array","minItems":1,"items":{"type":"object","additionalProperties":false,"required":["translationDeltaMetersXYZ","facingYawDeltaRadians"],"properties":{"translationDeltaMetersXYZ":{"$ref":"#/$defs/vec3"},"facingYawDeltaRadians":{"type":"number"}}}},"contentHash":{"$ref":"#/$defs/hash"}}},"resourceLockEntry":{"type":"object","additionalProperties":false,"required":["resourceRef","resourceKind","resolvedVersion","contentHash"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"resourceKind":{"enum":["subject-definition","subject-asset","rig-profile","animation-set","collider-profile","capability","physics-body-profile","locomotion-profile","control-feel-profile","collider-derivation-profile","motion-kernel","motion-profile","control-profile","camera-rig-algorithm","camera-rig-profile","camera-modifier-profile","camera-context-profile","medium-profile","relationship-profile","harness-profile","pose-set-profile","render-binding-profile","ai-schema-projection-profile","gameplay-bootstrap"]},"resolvedVersion":{"$ref":"#/$defs/nonEmptyString"},"contentHash":{"$ref":"#/$defs/hash"}}}}');
 const worldRuntimeBootstrapSchema = {
   $schema: $schema$3,
   $id: $id$3,
@@ -8511,6 +8573,146 @@ const G_BOT_CAPSULE_PROFILE = {
     semanticTags: ["biped", "capsule", "character", "g-bot"]
   }
 };
+const ALPHA_LOCAL_ACTIONS_SUBJECT_ASSET = {
+  kind: "subject-asset",
+  id: "actor.humanoid.alpha-local-actions",
+  version: 1,
+  resourceRef: "worldkit://subject-asset/actor.humanoid.alpha-local-actions@1",
+  format: "glb",
+  artifact: {
+    mediaType: "model/gltf-binary",
+    byteLength: 6841456,
+    contentHash: "sha256:580113b6d9a80c0d40a93a77f1e09a564585b0d6665d8814b9d9401f1d51260e"
+  },
+  coordinateConvention: {
+    forwardAxis: "-Z",
+    upAxis: "+Y",
+    metersPerUnit: 1,
+    pivot: "support-center"
+  },
+  bounds: {
+    minimumMetersXYZ: [
+      -0.9025661945343018,
+      -3511549439281225e-19,
+      -0.14895710349082947
+    ],
+    maximumMetersXYZ: [
+      0.9025658369064331,
+      1.8088831901550293,
+      0.17174167931079865
+    ]
+  },
+  inventory: {
+    meshCount: 2,
+    vertexCount: 28374,
+    triangleCount: 49112,
+    skeletonCount: 1,
+    boneCount: 65,
+    animationClipCount: 27,
+    animationClipNames: [
+      ...G_BOT_SUBJECT_ASSET.inventory.animationClipNames,
+      "small-jump.takeoff",
+      "small-jump.airborne"
+    ]
+  },
+  provenance: {
+    licenseSpdxId: "LicenseRef-User-Provided-Local",
+    redistributionPolicy: "internal-only",
+    author: "Loopit asset team and local user-provided small-jump sources"
+  },
+  runtimeReadiness: {
+    productionReady: false,
+    runtimeStateBinding: "implemented"
+  },
+  aiMetadata: {
+    displayName: "G Bot Local Split Jump",
+    description: "Canonical G Bot clips plus committed small and large jump presentation bindings.",
+    semanticTags: ["alpha-local-actions", "biped", "g-bot", "humanoid", "rigged"]
+  }
+};
+const ALPHA_LOCAL_ACTIONS_MIXAMO_RIG_PROFILE = {
+  ...G_BOT_MIXAMO_RIG_PROFILE,
+  id: "biped.mixamo-alpha-local-actions",
+  version: 1,
+  resourceRef: "worldkit://rig-profile/biped.mixamo-alpha-local-actions@1",
+  compatibleSubjectAssetRefs: [ALPHA_LOCAL_ACTIONS_SUBJECT_ASSET.resourceRef],
+  aiMetadata: {
+    displayName: "Alpha local-actions Mixamo Humanoid Rig",
+    description: "Semantic biped mapping for the local split-jump G Bot skeleton.",
+    semanticTags: ["alpha-local-actions", "biped", "g-bot", "mixamo", "rig"]
+  }
+};
+const ALPHA_LOCAL_ACTIONS_GROUND_ANIMATION_SET = {
+  kind: "animation-set",
+  id: "humanoid.ground.alpha-local-actions",
+  version: 1,
+  resourceRef: "worldkit://animation-set/humanoid.ground.alpha-local-actions@1",
+  subjectAssetRef: ALPHA_LOCAL_ACTIONS_SUBJECT_ASSET.resourceRef,
+  rigProfileRef: ALPHA_LOCAL_ACTIONS_MIXAMO_RIG_PROFILE.resourceRef,
+  defaultActionId: "idle",
+  requiredActionIds: [
+    ...G_BOT_ACTION_BINDINGS.map(([actionId]) => actionId),
+    "jump.small.takeoff",
+    "jump.small.airborne"
+  ],
+  animationBindings: [
+    ...G_BOT_ACTION_BINDINGS.map(
+      ([actionId, loopMode, blendDurationSeconds, semanticFamily, automaticPresentationKeys]) => ({
+        actionId,
+        sourceClipName: actionId,
+        semanticFamily,
+        automaticPresentationKeys,
+        loopMode,
+        playbackSpeedRatio: actionId === "jump" ? 20 / 17 : 1,
+        blendDurationSeconds,
+        rootMotionMode: "in-place"
+      })
+    ),
+    {
+      actionId: "jump.small.takeoff",
+      sourceClipName: "small-jump.takeoff",
+      semanticFamily: "airborne",
+      automaticPresentationKeys: ["locomotion.small-jump.takeoff"],
+      loopMode: "once",
+      playbackSpeedRatio: 1,
+      blendDurationSeconds: 0.08,
+      rootMotionMode: "in-place"
+    },
+    {
+      actionId: "jump.small.airborne",
+      sourceClipName: "small-jump.airborne",
+      semanticFamily: "airborne",
+      automaticPresentationKeys: ["locomotion.small-jump.airborne"],
+      loopMode: "once",
+      playbackSpeedRatio: 1,
+      blendDurationSeconds: 0.06666666666666667,
+      rootMotionMode: "in-place"
+    }
+  ],
+  aiMetadata: {
+    displayName: "Alpha local-actions ground and split-jump animations",
+    description: "Ordinary committed presentation bindings for G Bot locomotion and both small-jump phases.",
+    semanticTags: ["alpha-local-actions", "animation", "g-bot", "ground", "humanoid"]
+  }
+};
+const ALPHA_LOCAL_ACTIONS_CAPSULE_PROFILE = {
+  kind: "collider-profile",
+  id: "humanoid.alpha-local-actions-capsule",
+  version: 1,
+  resourceRef: "worldkit://collider-profile/humanoid.alpha-local-actions-capsule@1",
+  supportedBodyTopologies: ["biped"],
+  collider: {
+    kind: "capsule",
+    radiusMeters: 0.35,
+    heightMeters: 1.8,
+    centerOffsetFromSubjectOriginMetersXYZ: [0, 0.9, 0]
+  },
+  aiMetadata: {
+    displayName: "Alpha local-actions capsule",
+    description: "Support-centered Capsule matching the local split-jump G Bot.",
+    semanticTags: ["alpha-local-actions", "biped", "capsule", "character"]
+  }
+};
 const GROUND_LOCOMOTION_CAPABILITY = {
   kind: "capability",
   id: "locomotion.ground",
@@ -8637,8 +8839,12 @@ const BUILT_IN_SUBJECT_RESOURCE_MANIFESTS = [
   G_BOT_SUBJECT_ASSET,
   G_BOT_MIXAMO_RIG_PROFILE,
   G_BOT_GROUND_ANIMATION_SET,
+  ALPHA_LOCAL_ACTIONS_SUBJECT_ASSET,
+  ALPHA_LOCAL_ACTIONS_MIXAMO_RIG_PROFILE,
+  ALPHA_LOCAL_ACTIONS_GROUND_ANIMATION_SET,
   MEDIUM_HUMANOID_CAPSULE_PROFILE,
   G_BOT_CAPSULE_PROFILE,
+  ALPHA_LOCAL_ACTIONS_CAPSULE_PROFILE,
   GROUND_LOCOMOTION_CAPABILITY,
   MEDIUM_CHARACTER_PHYSICS_BODY_PROFILE,
   CAPABILITY_CHARACTER_PHYSICS_BODY_PROFILE,
@@ -9171,6 +9377,46 @@ function validateAnimationSet(source) {
     }
   }
 }
+const SPLIT_JUMP_BINDINGS_V1 = Object.freeze([
+  Object.freeze({
+    actionId: "jump.small.takeoff",
+    presentationKey: "locomotion.small-jump.takeoff"
+  }),
+  Object.freeze({
+    actionId: "jump.small.airborne",
+    presentationKey: "locomotion.small-jump.airborne"
+  })
+]);
+function validateSplitJumpPresentationClosure(subject, resourcesByRef) {
+  const controlFeel = resourcesByRef.get(
+    subject.profiles.controlFeelProfileRef
+  );
+  if (controlFeel?.kind !== "control-feel-profile" || controlFeel.jumpVariantPolicy.mode !== "run-selects-variant") return;
+  if (subject.visualBinding.mode !== "rigged") {
+    throw new Error(
+      `SUBJECT_REGISTRY_SPLIT_JUMP_BINDING_REQUIRED: '${subject.resourceRef}' requires a rigged Animation Set.`
+    );
+  }
+  const animationSet = resourcesByRef.get(subject.visualBinding.animationSetRef);
+  const subjectAsset = animationSet?.kind === "animation-set" ? resourcesByRef.get(animationSet.subjectAssetRef) : void 0;
+  if (animationSet?.kind !== "animation-set" || subjectAsset?.kind !== "subject-asset") {
+    throw new Error(
+      `SUBJECT_REGISTRY_SPLIT_JUMP_BINDING_REQUIRED: '${subject.resourceRef}' has no admitted split-jump Animation Set.`
+    );
+  }
+  for (const requirement of SPLIT_JUMP_BINDINGS_V1) {
+    const matches = animationSet.animationBindings.filter(
+      (binding) => binding.actionId === requirement.actionId && binding.automaticPresentationKeys.length === 1 && binding.automaticPresentationKeys[0] === requirement.presentationKey
+    );
+    if (matches.length !== 1 || !animationSet.requiredActionIds.includes(requirement.actionId) || !subjectAsset.inventory.animationClipNames.includes(
+      matches[0]?.sourceClipName ?? ""
+    )) {
+      throw new Error(
+        `SUBJECT_REGISTRY_SPLIT_JUMP_BINDING_REQUIRED: '${subject.resourceRef}' requires '${requirement.presentationKey}'.`
+      );
+    }
+  }
+}
 function validateSubjectAsset(source) {
   const duplicateClipName = duplicateValue(source.inventory.animationClipNames);
   if (duplicateClipName !== void 0) {
@@ -9342,6 +9588,13 @@ function isFiniteInRange(value, minimum, maximum) {
   return Number.isFinite(value) && value >= minimum && value <= maximum;
 }
 function validateControlFeelProfile(source) {
+  try {
+    parseJumpVariantPolicyV1(source.jumpVariantPolicy);
+  } catch {
+    throw new Error(
+      `CONTROL_FEEL_PROFILE_INVALID: 'jumpVariantPolicy' in '${source.resourceRef}'.`
+    );
+  }
   for (const [fieldName, [minimum, maximum]] of Object.entries(CONTROL_FEEL_BOUNDS)) {
     const value = source[fieldName];
     if (typeof value !== "number" || !isFiniteInRange(value, minimum, maximum)) {
@@ -9630,6 +9883,7 @@ function validateReferences(resourcesByRef) {
     }
     if (resource.kind === "subject-definition" && "schemaVersion" in resource) {
       const subject = resource;
+      validateSplitJumpPresentationClosure(subject, resourcesByRef);
       const defaultMotion = resourcesByRef.get(
         subject.profiles.motion.defaultMotionProfileRef
       );
@@ -10215,7 +10469,66 @@ const G_BOT_HUMANOID_DEFINITION = {
     semanticTags: ["biped", "g-bot", "human", "product", "rigged", "robot"]
   }
 };
+const ALPHA_LOCAL_ACTIONS_HUMANOID_DEFINITION = {
+  ...G_BOT_HUMANOID_DEFINITION,
+  id: "humanoid.alpha-local-actions",
+  version: 1,
+  resourceRef: "worldkit://subject-definition/humanoid.alpha-local-actions@1",
+  authoringAvailability: "experimental",
+  semanticClassId: "subject.humanoid.alpha-local-actions",
+  visualParts: [
+    {
+      id: "body.asset",
+      kind: "asset",
+      subjectAssetRef: "worldkit://subject-asset/actor.humanoid.alpha-local-actions@1",
+      localTransform: {
+        positionMetersXYZ: [0, 0, 0],
+        rotationEulerRadiansXYZ: [0, Math.PI, 0],
+        scaleXYZ: [1, 1, 1]
+      },
+      appearance: { mode: "whitebox-neutral" },
+      semanticTags: [
+        "alpha-local-actions",
+        "body",
+        "g-bot",
+        "rigged",
+        "robot"
+      ]
+    }
+  ],
+  visualBinding: {
+    mode: "rigged",
+    rigProfileRef: "worldkit://rig-profile/biped.mixamo-alpha-local-actions@1",
+    animationSetRef: "worldkit://animation-set/humanoid.ground.alpha-local-actions@1"
+  },
+  colliderPolicy: {
+    kind: "profile",
+    colliderProfileRef: "worldkit://collider-profile/humanoid.alpha-local-actions-capsule@1"
+  },
+  profiles: {
+    ...G_BOT_HUMANOID_DEFINITION.profiles,
+    controlFeelProfileRef: "worldkit://control-feel-profile/humanoid.alpha-local-actions@1",
+    allowedControlFeelProfileRefs: [
+      "worldkit://control-feel-profile/humanoid.alpha-local-actions@1"
+    ]
+  },
+  actionOrPoseSetRef: "worldkit://animation-set/humanoid.ground.alpha-local-actions@1",
+  aiMetadata: {
+    displayName: "G Bot local split-jump humanoid",
+    description: "Experimental G Bot whose committed Movement Episode selects small or large jump presentation.",
+    semanticTags: [
+      "alpha-local-actions",
+      "biped",
+      "g-bot",
+      "human",
+      "product",
+      "rigged",
+      "robot"
+    ]
+  }
+};
 const BUILT_IN_SUBJECT_DEFINITIONS = [
+  ALPHA_LOCAL_ACTIONS_HUMANOID_DEFINITION,
   G_BOT_HUMANOID_DEFINITION,
   RIGGED_GOLDEN_HUMANOID_DEFINITION,
   HUMANOID_THIRD_PERSON_DEFINITION,
@@ -10234,10 +10547,49 @@ const cameraCatalog = {
 const controlFeelProfiles = [
   {
     kind: "control-feel-profile",
+    id: "humanoid.alpha-local-actions",
+    version: 1,
+    resourceRef: "worldkit://control-feel-profile/humanoid.alpha-local-actions@1",
+    authoringAvailability: "experimental",
+    jumpVariantPolicy: {
+      mode: "run-selects-variant",
+      smallAnticipationSeconds: 0.8333333333333334,
+      largeAnticipationSeconds: 0.9
+    },
+    walkSpeedMetersPerSecond: 2.4,
+    runSpeedMetersPerSecond: 4,
+    jumpSpeedMetersPerSecond: 5.5,
+    accelerationMetersPerSecondSquared: 16,
+    decelerationMetersPerSecondSquared: 22,
+    turnRateRadiansPerSecond: 9,
+    moveResponseExponent: 1.4,
+    airControlRatio: 0.3,
+    coyoteTimeSeconds: 0.1,
+    jumpBufferSeconds: 0.12,
+    variableJumpHoldSeconds: 0.18,
+    jumpHoldGravityRatio: 0.45,
+    jumpReleaseGravityRatio: 2,
+    aiMetadata: {
+      displayName: "Alpha Local Actions Humanoid Feel",
+      description: "Experimental committed small and large jump selection for the private alpha local-actions asset.",
+      semanticTags: [
+        "alpha-local-actions",
+        "feel",
+        "ground",
+        "humanoid",
+        "split-jump"
+      ]
+    }
+  },
+  {
+    kind: "control-feel-profile",
     id: "humanoid.heavy-ground",
     version: 1,
     resourceRef: "worldkit://control-feel-profile/humanoid.heavy-ground@1",
     authoringAvailability: "advanced",
+    jumpVariantPolicy: {
+      mode: "hold-height"
+    },
     walkSpeedMetersPerSecond: 1.6,
     runSpeedMetersPerSecond: 2.6,
     jumpSpeedMetersPerSecond: 4.5,
@@ -10268,6 +10620,9 @@ const controlFeelProfiles = [
     version: 1,
     resourceRef: "worldkit://control-feel-profile/humanoid.medium-ground@1",
     authoringAvailability: "recommended",
+    jumpVariantPolicy: {
+      mode: "hold-height"
+    },
     walkSpeedMetersPerSecond: 2.4,
     runSpeedMetersPerSecond: 4,
     jumpSpeedMetersPerSecond: 5.5,
@@ -10298,6 +10653,9 @@ const controlFeelProfiles = [
     version: 1,
     resourceRef: "worldkit://control-feel-profile/subject.animal.quadruped.forward-steer.default@1",
     authoringAvailability: "advanced",
+    jumpVariantPolicy: {
+      mode: "hold-height"
+    },
     walkSpeedMetersPerSecond: 2.4,
     runSpeedMetersPerSecond: 4,
     jumpSpeedMetersPerSecond: 3.1,

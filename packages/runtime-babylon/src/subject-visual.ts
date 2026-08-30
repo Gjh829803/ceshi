@@ -1,7 +1,11 @@
 import type { AnimationGroup } from "@babylonjs/core/Animations/animationGroup.js";
 import type { Bone } from "@babylonjs/core/Bones/bone.js";
 import type { Material } from "@babylonjs/core/Materials/material.js";
-import { Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
+import {
+  type Matrix,
+  Quaternion,
+  Vector3,
+} from "@babylonjs/core/Maths/math.vector.js";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh.js";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
@@ -9,9 +13,13 @@ import { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
 
 import type {
+  JumpEpisodeStateV1,
+} from "@whitebox-world/character-movement";
+import type {
   GameplayActionStateV1,
 } from "@whitebox-world/gameplay-contracts";
 import type {
+  RuntimeAnimationSetV1,
   RuntimeRigProfileV1,
   RuntimeSubjectAssetV1,
   RuntimeSubjectVisualPrimitivePartV1,
@@ -32,6 +40,7 @@ import {
   type SubjectAssetLeaseV1,
   type SubjectAssetRuntimeErrorCodeV1,
 } from "./subject-asset-cache";
+import { VerticalFootSupportAnchorV1 } from "./vertical-foot-support-anchor";
 
 export interface SubjectVisual {
   root: TransformNode;
@@ -41,6 +50,7 @@ export interface SubjectVisual {
   stepAnimation(
     presentation: ResolvedActionPresentationV1,
     committedActionState?: GameplayActionStateV1,
+    jumpEpisode?: JumpEpisodeStateV1,
   ): void;
   applyAnimationPose(): void;
   resetAnimation(): void;
@@ -53,6 +63,8 @@ function debugActionIdForPresentation(
   const key = presentation.presentationKey;
   if (key === "locomotion.walk") return "walk";
   if (key === "locomotion.run") return "run";
+  if (key === "locomotion.small-jump.takeoff") return "jump.small.takeoff";
+  if (key === "locomotion.small-jump.airborne") return "jump.small.airborne";
   if ([
     "locomotion.takeoff", "locomotion.rising", "locomotion.apex",
     "locomotion.falling", "locomotion.landing",
@@ -197,27 +209,208 @@ function validateRig(
   return { mappedBones, skeletonRootBone: rootBones[0]! };
 }
 
+const IN_PLACE_ROOT_TRANSLATION_LOOP_TOLERANCE_METERS = 0.0001;
+const MAX_IN_PLACE_ROOT_TRANSLATION_SPAN_METERS = 0.5;
+type RootTranslationTargetV1 = Bone | TransformNode;
+
+function rootTranslationParentWorldMatrix(
+  target: RootTranslationTargetV1,
+): Matrix | undefined {
+  if (target instanceof TransformNode) {
+    return target.parent?.computeWorldMatrix(true);
+  }
+  const linkedNode = target.getTransformNode();
+  if (linkedNode !== null) return rootTranslationParentWorldMatrix(linkedNode);
+  const parentBone = target.getParent();
+  if (parentBone === null) return undefined;
+  parentBone.computeAbsoluteMatrices();
+  return parentBone.getAbsoluteMatrix();
+}
+
+function positionKeyWorldVector(
+  targetProperty: string,
+  value: unknown,
+  parentWorldMatrix: Matrix | undefined,
+): Vector3 | undefined {
+  let localValue: Vector3;
+  if (/^position\.[xyz]$/.test(targetProperty)) {
+    if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+    localValue = targetProperty === "position.x"
+      ? new Vector3(value, 0, 0)
+      : targetProperty === "position.y"
+        ? new Vector3(0, value, 0)
+        : new Vector3(0, 0, value);
+  } else {
+    if (targetProperty !== "position" || typeof value !== "object" || value === null) {
+      return undefined;
+    }
+    const candidate = value as { x?: unknown; y?: unknown; z?: unknown };
+    if (
+      typeof candidate.x !== "number" ||
+      !Number.isFinite(candidate.x) ||
+      typeof candidate.y !== "number" ||
+      !Number.isFinite(candidate.y) ||
+      typeof candidate.z !== "number" ||
+      !Number.isFinite(candidate.z)
+    ) {
+      return undefined;
+    }
+    localValue = new Vector3(candidate.x, candidate.y, candidate.z);
+  }
+  const worldValue = parentWorldMatrix === undefined
+    ? localValue
+    : Vector3.TransformNormal(localValue, parentWorldMatrix);
+  return worldValue.asArray().every((component) => Number.isFinite(component))
+    ? worldValue
+    : undefined;
+}
+
+function isBoundedRootTranslationSequence(
+  target: RootTranslationTargetV1,
+  targetProperty: string,
+  phaseKeys: readonly (readonly { value: unknown }[])[],
+  sequenceMustClose: boolean,
+): boolean {
+  if (phaseKeys.length === 0 || phaseKeys.some((keys) => keys.length === 0)) {
+    return false;
+  }
+  const parentWorldMatrix = rootTranslationParentWorldMatrix(target);
+  const phaseValues = phaseKeys.map((keys) => keys.map((key) =>
+    positionKeyWorldVector(targetProperty, key.value, parentWorldMatrix)
+  ));
+  if (phaseValues.some((values) => values.some((value) => value === undefined))) {
+    return false;
+  }
+  const definedPhaseValues = phaseValues as readonly (readonly Vector3[])[];
+  const values = definedPhaseValues.flat();
+  const first = values[0]!;
+  const last = values.at(-1)!;
+  if (
+    sequenceMustClose &&
+    Vector3.Distance(last, first) > IN_PLACE_ROOT_TRANSLATION_LOOP_TOLERANCE_METERS
+  ) {
+    return false;
+  }
+  const minimum = values.reduce(
+    (result, value) => Vector3.Minimize(result, value),
+    first.clone(),
+  );
+  const maximum = values.reduce(
+    (result, value) => Vector3.Maximize(result, value),
+    first.clone(),
+  );
+  if (Vector3.Distance(minimum, maximum) > MAX_IN_PLACE_ROOT_TRANSLATION_SPAN_METERS) {
+    return false;
+  }
+  for (let phaseIndex = 1; phaseIndex < definedPhaseValues.length; phaseIndex += 1) {
+    const previous = definedPhaseValues[phaseIndex - 1]!.at(-1)!;
+    const current = definedPhaseValues[phaseIndex]![0]!;
+    if (Vector3.Distance(previous, current) >
+      IN_PLACE_ROOT_TRANSLATION_LOOP_TOLERANCE_METERS) {
+      return false;
+    }
+  }
+  return true;
+}
+
+interface RootTranslationTrackV1 {
+  readonly target: RootTranslationTargetV1;
+  readonly targetProperty: string;
+  readonly keys: readonly { value: unknown }[];
+}
+
+function rootTranslationTracks(
+  group: AnimationGroup,
+  rootTargets: ReadonlySet<unknown>,
+): readonly RootTranslationTrackV1[] {
+  return group.targetedAnimations.flatMap((targeted) =>
+    rootTargets.has(targeted.target) &&
+      targeted.animation.targetProperty.startsWith("position")
+      ? [{
+          target: targeted.target as RootTranslationTargetV1,
+          targetProperty: targeted.animation.targetProperty,
+          keys: targeted.animation.getKeys(),
+        }]
+      : []
+  );
+}
+
 function validateRootMotion(
   animationGroups: readonly AnimationGroup[],
   skeletonRootBone: Bone,
   mappedBones: ReadonlyMap<string, Bone>,
+  animationSet: RuntimeAnimationSetV1,
   asset: RuntimeSubjectAssetV1,
 ): void {
-  const forbiddenTargets = new Set<unknown>();
+  const rootTargets = new Set<unknown>();
   for (const bone of [skeletonRootBone, mappedBones.get("hips")]) {
     if (bone === undefined) continue;
-    forbiddenTargets.add(bone);
+    rootTargets.add(bone);
     const transformNode = bone.getTransformNode();
-    if (transformNode !== null) forbiddenTargets.add(transformNode);
+    if (transformNode !== null) rootTargets.add(transformNode);
   }
+  const tracksByGroup = new Map<AnimationGroup, readonly RootTranslationTrackV1[]>();
   for (const group of animationGroups) {
-    for (const targeted of group.targetedAnimations) {
-      if (
-        forbiddenTargets.has(targeted.target) &&
-        targeted.animation.targetProperty.startsWith("position")
-      ) {
+    const tracks = rootTranslationTracks(group, rootTargets);
+    tracksByGroup.set(group, tracks);
+    if (tracks.length === 0) continue;
+    const bindings = animationSet.animationBindings.filter(
+      (binding) => binding.sourceClipName === group.name,
+    );
+    if (bindings.length !== 1 || bindings[0]!.rootMotionMode !== "in-place") {
+      throw assetError("SUBJECT_ASSET_ROOT_MOTION_UNSUPPORTED", asset);
+    }
+    for (const track of tracks) {
+      if (!isBoundedRootTranslationSequence(
+        track.target,
+        track.targetProperty,
+        [track.keys],
+        bindings[0]!.loopMode === "repeat",
+      )) {
         throw assetError("SUBJECT_ASSET_ROOT_MOTION_UNSUPPORTED", asset);
       }
+    }
+  }
+
+  const splitJumpBindings = ["jump.small.takeoff", "jump.small.airborne"].map(
+    (actionId) => animationSet.animationBindings.filter(
+      (binding) => binding.actionId === actionId,
+    ),
+  );
+  if (splitJumpBindings.every((bindings) => bindings.length === 0)) return;
+  if (splitJumpBindings.some((bindings) => bindings.length !== 1)) {
+    throw assetError("SUBJECT_ASSET_ROOT_MOTION_UNSUPPORTED", asset);
+  }
+  const splitJumpGroups = splitJumpBindings.map((bindings) => {
+    const matches = animationGroups.filter(
+      (group) => group.name === bindings[0]!.sourceClipName,
+    );
+    if (matches.length !== 1) {
+      throw assetError("SUBJECT_ASSET_ROOT_MOTION_UNSUPPORTED", asset);
+    }
+    return matches[0]!;
+  });
+  const splitJumpTracks = splitJumpGroups.map((group) => tracksByGroup.get(group) ?? []);
+  const referenceTracks = splitJumpTracks[0]!;
+  if (splitJumpTracks.some((tracks) => tracks.length !== referenceTracks.length)) {
+    throw assetError("SUBJECT_ASSET_ROOT_MOTION_UNSUPPORTED", asset);
+  }
+  for (const reference of referenceTracks) {
+    const matches = splitJumpTracks.map((tracks) => tracks.filter(
+      (candidate) =>
+        candidate.target === reference.target &&
+        candidate.targetProperty === reference.targetProperty,
+    ));
+    if (matches.some((matching) => matching.length !== 1)) {
+      throw assetError("SUBJECT_ASSET_ROOT_MOTION_UNSUPPORTED", asset);
+    }
+    if (!isBoundedRootTranslationSequence(
+      reference.target,
+      reference.targetProperty,
+      matches.map((matching) => matching[0]!.keys),
+      false,
+    )) {
+      throw assetError("SUBJECT_ASSET_ROOT_MOTION_UNSUPPORTED", asset);
     }
   }
 }
@@ -287,6 +480,7 @@ function disposeSubjectSocketsAndPrimitives(
 function disposeSubjectAssetNodesAndMaterial(
   assetPartRoots: readonly TransformNode[],
   staticOwnedMaterial: Material | undefined,
+  visualAdjustmentRoot: TransformNode | undefined,
   root: TransformNode,
   attempt: CleanupAttemptV1,
 ): void {
@@ -294,6 +488,7 @@ function disposeSubjectAssetNodesAndMaterial(
     attempt(() => partRoot.dispose(false, false));
   }
   attempt(() => staticOwnedMaterial?.dispose(false, false));
+  attempt(() => visualAdjustmentRoot?.dispose(false, false));
   attempt(() => root.dispose(false, false));
 }
 
@@ -311,6 +506,9 @@ class OwnedSubjectVisual implements SubjectVisual {
       readonly StaticAssetPartResetStateV1[],
     private readonly staticOwnedMaterial: Material | undefined,
     private readonly animationPlayer: SubjectAnimationPlayer | undefined,
+    readonly visualAdjustmentRoot: TransformNode | undefined,
+    private readonly verticalFootSupportAnchor:
+      VerticalFootSupportAnchorV1 | undefined,
     private readonly assetDescriptor: RuntimeSubjectAssetV1 | undefined,
     private readonly assetInstance: SubjectAssetInstanceV1 | undefined,
     private readonly assetLease: SubjectAssetLeaseV1 | undefined,
@@ -323,17 +521,25 @@ class OwnedSubjectVisual implements SubjectVisual {
   stepAnimation(
     presentation: ResolvedActionPresentationV1,
     committedActionState?: GameplayActionStateV1,
+    jumpEpisode?: JumpEpisodeStateV1,
   ): void {
     this.fallbackActionId = debugActionIdForPresentation(presentation);
     this.animationPlayer?.step(presentation, committedActionState);
+    this.verticalFootSupportAnchor?.updateCommittedProjection({
+      committedTick: presentation.committedTick,
+      presentationKey: presentation.presentationKey,
+      ...(jumpEpisode === undefined ? {} : { jumpEpisode }),
+    });
   }
 
   applyAnimationPose(): void {
     this.animationPlayer?.applyPose();
+    this.verticalFootSupportAnchor?.applyAfterPose();
   }
 
   resetAnimation(): void {
     this.fallbackActionId = "idle";
+    this.verticalFootSupportAnchor?.reset();
     for (const state of this.staticAssetPartResetStates) {
       state.node.position.copyFrom(state.position);
       state.node.rotation.setAll(0);
@@ -365,10 +571,12 @@ class OwnedSubjectVisual implements SubjectVisual {
       disposeSubjectAssetNodesAndMaterial(
         this.assetPartRoots,
         this.staticOwnedMaterial,
+        this.visualAdjustmentRoot,
         this.root,
         attempt,
       );
     } else {
+      attempt(() => this.verticalFootSupportAnchor?.dispose());
       attempt(() => this.animationPlayer?.dispose());
       disposeSubjectSocketsAndPrimitives(
         this.socketNodesById,
@@ -381,6 +589,7 @@ class OwnedSubjectVisual implements SubjectVisual {
       disposeSubjectAssetNodesAndMaterial(
         this.assetPartRoots,
         undefined,
+        this.visualAdjustmentRoot,
         this.root,
         attempt,
       );
@@ -408,6 +617,10 @@ export async function createSubjectVisual(
     worldkitEntityId: subject.entityId,
     semanticClassId: subject.semanticClassId,
   };
+  const visualAdjustmentRoot = subject.visualBinding.mode === "rigged"
+    ? new TransformNode(`${subject.entityId}.visual-adjustment-root`, scene)
+    : undefined;
+  if (visualAdjustmentRoot !== undefined) visualAdjustmentRoot.parent = root;
   const primitiveMeshes: Mesh[] = [];
   const allMeshes: AbstractMesh[] = [];
   const assetPartRoots: TransformNode[] = [];
@@ -416,6 +629,7 @@ export async function createSubjectVisual(
   let assetLease: SubjectAssetLeaseV1 | undefined;
   let assetInstance: SubjectAssetInstanceV1 | undefined;
   let animationPlayer: SubjectAnimationPlayer | undefined;
+  let verticalFootSupportAnchor: VerticalFootSupportAnchorV1 | undefined;
   let assetDescriptor: RuntimeSubjectAssetV1 | undefined;
   let staticOwnedMaterial: Material | undefined;
 
@@ -445,7 +659,7 @@ export async function createSubjectVisual(
     for (const part of subject.visualParts) {
       if (part.kind === "primitive") {
         const mesh = createPartMesh(subject.entityId, part, scene);
-        mesh.parent = root;
+        mesh.parent = visualAdjustmentRoot ?? root;
         applyLocalTransform(mesh, part.localTransform);
         mesh.material = staticOwnedMaterial ?? material;
         mesh.metadata = {
@@ -469,7 +683,7 @@ export async function createSubjectVisual(
       assetLease = await subjectAssetCache.acquire(asset);
       assetInstance = assetLease.instantiate(subject.entityId);
       const partRoot = new TransformNode(`${subject.entityId}.${part.id}`, scene);
-      partRoot.parent = root;
+      partRoot.parent = visualAdjustmentRoot ?? root;
       applyLocalTransform(partRoot, part.localTransform);
       partRoot.scaling = new Vector3(...part.localTransform.scaleXYZ);
       assetPartRoots.push(partRoot);
@@ -523,6 +737,7 @@ export async function createSubjectVisual(
         assetInstance.animationGroups,
         skeletonRootBone,
         mappedBones,
+        animationSet,
         asset,
       );
       const affectedMeshes = assetInstance.meshes
@@ -534,6 +749,35 @@ export async function createSubjectVisual(
         .sort((left, right) =>
           left.name.localeCompare(right.name) || left.uniqueId - right.uniqueId,
         );
+      const leftFoot = mappedBones.get("foot.left");
+      const rightFoot = mappedBones.get("foot.right");
+      const anchorMesh = affectedMeshes[0];
+      const anchorSkeleton = assetInstance.skeletons[0];
+      if (visualAdjustmentRoot !== undefined && leftFoot !== undefined &&
+        rightFoot !== undefined && anchorMesh !== undefined &&
+        anchorSkeleton !== undefined) {
+        verticalFootSupportAnchor = new VerticalFootSupportAnchorV1({
+          readAdjustmentOffsetY: () => visualAdjustmentRoot.position.y,
+          writeAdjustmentOffsetY: (value) => {
+            visualAdjustmentRoot.position.y = value;
+          },
+          sampleMinimumFootHeightFromVisualRoot: () => {
+            root.computeWorldMatrix(true);
+            anchorMesh.computeWorldMatrix(true);
+            anchorSkeleton.prepare(true);
+            const inverseRoot = root.getWorldMatrix().clone().invert();
+            const leftPosition = Vector3.TransformCoordinates(
+              leftFoot.getAbsolutePosition(anchorMesh),
+              inverseRoot,
+            );
+            const rightPosition = Vector3.TransformCoordinates(
+              rightFoot.getAbsolutePosition(anchorMesh),
+              inverseRoot,
+            );
+            return Math.min(leftPosition.y, rightPosition.y);
+          },
+        });
+      }
 
       for (const socket of subject.sockets) {
         let socketNode: TransformNode;
@@ -607,6 +851,8 @@ export async function createSubjectVisual(
       staticAssetPartResetStates,
       staticOwnedMaterial,
       animationPlayer,
+      visualAdjustmentRoot,
+      verticalFootSupportAnchor,
       assetDescriptor,
       assetInstance,
       assetLease,
@@ -630,10 +876,12 @@ export async function createSubjectVisual(
       disposeSubjectAssetNodesAndMaterial(
         assetPartRoots,
         staticOwnedMaterial,
+        visualAdjustmentRoot,
         root,
         attempt,
       );
     } else {
+      attempt(() => verticalFootSupportAnchor?.dispose());
       attempt(() => animationPlayer?.dispose());
       disposeSubjectSocketsAndPrimitives(
         socketNodesById,
@@ -644,6 +892,7 @@ export async function createSubjectVisual(
       disposeSubjectAssetNodesAndMaterial(
         assetPartRoots,
         undefined,
+        visualAdjustmentRoot,
         root,
         attempt,
       );

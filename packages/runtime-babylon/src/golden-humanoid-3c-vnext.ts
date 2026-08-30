@@ -7,6 +7,7 @@ import {
   type CharacterMovementCommandV1,
   type CharacterMovementRuntimeV1,
   type CharacterMovementSnapshotV1,
+  type JumpEpisodeStateV1,
   type MovementCommitV1,
   type MovementProposalV1,
   type MovementTickTokenV1,
@@ -178,6 +179,7 @@ function prepareActionPresentation(
   tick: number,
   fixedDeltaSeconds: number,
   locomotion: CharacterMovementSnapshotV1["locomotion"],
+  jumpEpisode: JumpEpisodeStateV1 | undefined,
   activeActionState: GameplayActionStateV1 | undefined,
   registry: ActionPresentationRegistryV1,
 ): ResolvedActionPresentationV1 {
@@ -186,6 +188,7 @@ function prepareActionPresentation(
     committedTick: tick,
     fixedDeltaSeconds,
     locomotion,
+    ...(jumpEpisode === undefined ? {} : { jumpEpisode }),
     ...(activeActionState === undefined ? {} : { activeActionState }),
   }, registry);
 }
@@ -257,6 +260,7 @@ export class GoldenHumanoid3CVNextTransactionV1 {
         admittedCommand.tick,
         this.options.fixedDeltaSeconds,
         currentTickLocomotion(before, admittedCommand.tick),
+        undefined,
         committedActionState,
         this.options.actionPresentationRegistry,
       );
@@ -309,6 +313,7 @@ export class GoldenHumanoid3CVNextTransactionV1 {
         commit.tick,
         this.options.fixedDeltaSeconds,
         commit.locomotion,
+        commit.jumpEpisode,
         committedActionState,
         this.options.actionPresentationRegistry,
       );

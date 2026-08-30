@@ -268,6 +268,9 @@ implements GoldenHumanoidProjectionPortV1 {
         schemaVersion: 1,
         committedTick: admitted.tick,
         presentation: admitted.presentation,
+        ...(admitted.commit.jumpEpisode === undefined
+          ? {}
+          : { jumpEpisode: admitted.commit.jumpEpisode }),
         ...(admitted.committedActionState === undefined
           ? {}
           : { committedActionState: admitted.committedActionState }),

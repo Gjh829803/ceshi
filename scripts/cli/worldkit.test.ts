@@ -123,7 +123,10 @@ const RIGGED_SUBJECT_WORLD_PATH = path.resolve(
 const G_BOT_SUBJECT_WORLD_PATH = path.resolve(
   fileURLToPath(new URL("../../examples/authoring/g-bot-subject-world.json", import.meta.url)),
 );
-const G_BOT_ACTION_IDS = [...GROUND_HUMANOID_ACTION_IDS_V1].sort();
+const G_BOT_ACTION_IDS = GROUND_HUMANOID_ACTION_IDS_V1.filter(
+  (actionId) =>
+    actionId !== "jump.small.takeoff" && actionId !== "jump.small.airborne",
+).sort();
 
 afterEach(async () => {
   await Promise.all(
@@ -1148,6 +1151,7 @@ describe("worldkit CLI", () => {
       "worldkit://subject-definition/animal.quadruped.forward-steer@1",
       "worldkit://subject-definition/animal.quadruped.forward-steer@2",
       "worldkit://subject-definition/glider.paraglider.unpowered@1",
+      "worldkit://subject-definition/humanoid.alpha-local-actions@1",
       "worldkit://subject-definition/humanoid.g-bot@2",
       "worldkit://subject-definition/humanoid.rigged-golden@2",
       "worldkit://subject-definition/humanoid.third-person@1",

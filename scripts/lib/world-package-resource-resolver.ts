@@ -116,6 +116,13 @@ export const DEFAULT_WORLD_PACKAGE_RESOURCE_MAPPING_BY_REF_V1: Readonly<
   Record<string, WorldPackageResourceMappingV1>
 > = Object.freeze({
   ...XIER120_WORLD_PACKAGE_RESOURCE_MAPPING_BY_REF_V1,
+  "worldkit://subject-asset/actor.humanoid.alpha-local-actions@1": Object.freeze({
+    publicUri:
+      "/subject-assets/humanoid/alpha-local-actions/v1/alpha-local-actions.glb",
+    packagePath:
+      "resources/subject-assets/actor.humanoid.alpha-local-actions.glb",
+    mediaType: "model/gltf-binary",
+  }),
   "worldkit://subject-asset/actor.humanoid.g-bot@2": Object.freeze({
     publicUri: "/subject-assets/humanoid/g-bot/v2/g-bot.glb",
     packagePath: "resources/subject-assets/actor.humanoid.g-bot.glb",

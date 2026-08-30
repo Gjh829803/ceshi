@@ -1,4 +1,5 @@
 import type { Sha256HashV1 } from "@whitebox-world/protocol";
+import type { JumpVariantPolicyV1 } from "@whitebox-world/runtime-contracts";
 import type {
   AutomaticLocomotionPresentationKeyV1,
   BipedBoneIdV1,
@@ -554,6 +555,7 @@ export interface NormalizedSubjectDefinitionV2 {
   controlFeel: {
     resourceRef: string;
     contentHash: string;
+    jumpVariantPolicy: JumpVariantPolicyV1;
     walkSpeedMetersPerSecond: number;
     runSpeedMetersPerSecond: number;
     jumpSpeedMetersPerSecond: number;

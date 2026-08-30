@@ -1,6 +1,7 @@
 import type { Sha256HashV1 } from "@whitebox-world/protocol";
 
 import type {
+  JumpEpisodeStateV1,
   LayeredMoveV1,
   LockedRootMotionSourceV1,
   RootMotionResourceRefV1,
@@ -9,17 +10,11 @@ import type {
   GameplayActionStateV1,
   LocomotionCapabilityStateV2,
 } from "@whitebox-world/gameplay-contracts";
+import type {
+  AutomaticLocomotionPresentationKeyV1,
+} from "@whitebox-world/subject-contracts";
 
-export type LocomotionPresentationKeyV1 =
-  | "locomotion.suspended"
-  | "locomotion.idle"
-  | "locomotion.walk"
-  | "locomotion.run"
-  | "locomotion.takeoff"
-  | "locomotion.rising"
-  | "locomotion.apex"
-  | "locomotion.falling"
-  | "locomotion.landing";
+export type LocomotionPresentationKeyV1 = AutomaticLocomotionPresentationKeyV1;
 
 export type ActionPresentationKeyV1 = `action.${string}`;
 export type SemanticPresentationKeyV1 =
@@ -88,6 +83,7 @@ export interface ActionPresentationResolveInputV1 {
   readonly committedTick: number;
   readonly fixedDeltaSeconds: number;
   readonly locomotion: LocomotionCapabilityStateV2;
+  readonly jumpEpisode?: JumpEpisodeStateV1;
   readonly activeActionState?: GameplayActionStateV1;
 }
 

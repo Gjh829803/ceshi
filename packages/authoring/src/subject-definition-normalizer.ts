@@ -74,6 +74,7 @@ function projectControlFeelProfile(
   return {
     resourceRef: profile.resourceRef,
     contentHash: profile.contentHash,
+    jumpVariantPolicy: structuredClone(profile.jumpVariantPolicy),
     walkSpeedMetersPerSecond: profile.walkSpeedMetersPerSecond,
     runSpeedMetersPerSecond: profile.runSpeedMetersPerSecond,
     jumpSpeedMetersPerSecond: profile.jumpSpeedMetersPerSecond,

@@ -35,12 +35,21 @@ const LOOPIT_PRIVATE_LICENSE = Object.freeze({
   text: "Loopit company-private asset license. No external redistribution.\n",
 }) satisfies WorldPackageLicenseDocumentInputV1;
 
+const USER_PROVIDED_LOCAL_LICENSE = Object.freeze({
+  id: "user-provided-local",
+  spdxLicenseExpression: "LicenseRef-User-Provided-Local",
+  path: "LICENSES/user-provided-local.txt",
+  text:
+    "User-provided local asset authorized for private repository internal validation only. External redistribution is not granted.\n",
+}) satisfies WorldPackageLicenseDocumentInputV1;
+
 const LICENSE_BY_SPDX_EXPRESSION = new Map<
   string,
   WorldPackageLicenseDocumentInputV1
 >([
   [PROJECT_OWNED_LICENSE.spdxLicenseExpression, PROJECT_OWNED_LICENSE],
   [LOOPIT_PRIVATE_LICENSE.spdxLicenseExpression, LOOPIT_PRIVATE_LICENSE],
+  [USER_PROVIDED_LOCAL_LICENSE.spdxLicenseExpression, USER_PROVIDED_LOCAL_LICENSE],
 ]);
 
 export async function resolveTrustedWorldPackageResourceArtifactsV1(
