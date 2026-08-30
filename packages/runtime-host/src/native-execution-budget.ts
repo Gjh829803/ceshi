@@ -4,7 +4,9 @@ import {
   type NativeEffectiveExecutionBudgetV1,
   type NativeExecutionTrustProfileV1,
 } from "@whitebox-world/runtime-contracts";
-import type { WorldPackageResourceBudgetV1 } from "@whitebox-world/world-package";
+import type {
+  WorldPackageResourceBudgetV1,
+} from "@whitebox-world/world-package/runtime-contract";
 import { isNil } from "lodash-es";
 
 export const REQUIRED_NATIVE_EXECUTION_BUDGET_CAPABILITY_IDS_V1 =

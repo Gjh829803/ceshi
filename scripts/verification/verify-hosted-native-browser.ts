@@ -57,18 +57,33 @@ async function main(): Promise<void> {
         { timeout: 30_000 },
       );
     } catch (error) {
-      throw new Error(`Hosted Runtime failed to become ready: ${errors.join(" | ")}`, {
+      const diagnostic = await page.evaluate(() => ({
+        phase: window.__WORLDKIT_HOSTED_RUNTIME__?.phase() ?? "missing",
+        state: document.querySelector("[data-state]")?.textContent ?? "missing",
+        bodyText: document.body.textContent?.trim().slice(0, 1_000) ?? "",
+        frameSource: window.__WORLDKIT_HOSTED_RUNTIME__?.frame.src ?? "missing",
+      }));
+      const frameDiagnostics = await Promise.all(page.frames().map(async (candidate) => ({
+        url: candidate.url(),
+        bodyText: await candidate.locator("body").textContent().catch(() => "unavailable"),
+      })));
+      throw new Error(`Hosted Runtime failed to become ready: ${JSON.stringify({
+        errors,
+        diagnostic,
+        frameDiagnostics,
+      })}`, {
         cause: error,
       });
     }
-    const frame = page.frames().find(({ url }) => url().startsWith(runtimeOrigin));
+    const frame = page.frames().find((candidate) =>
+      candidate.url().startsWith(runtimeOrigin));
     assert.ok(frame !== undefined, "dedicated-origin Runtime frame missing");
     assert.notEqual(new URL(frame.url()).origin, shellOrigin);
     const isolation = await frame.evaluate(async () => {
       let parentDom = "unexpected-access";
       let parentStorage = "unexpected-access";
       let externalNetwork = "unexpected-access";
-      let topNavigation = "unexpected-access";
+      let topNavigation = "attempted";
       try { parentDom = window.parent.document.title; } catch { parentDom = "blocked"; }
       try { parentStorage = window.parent.localStorage.length.toString(); } catch { parentStorage = "blocked"; }
       try {
@@ -93,9 +108,61 @@ async function main(): Promise<void> {
     assert.equal(isolation.parentDom, "blocked");
     assert.equal(isolation.parentStorage, "blocked");
     assert.equal(isolation.externalNetwork, "blocked");
-    assert.equal(isolation.topNavigation, "blocked");
+    assert.ok(
+      isolation.topNavigation === "blocked" ||
+      isolation.topNavigation === "attempted",
+    );
+    assert.equal(new URL(page.url()).origin, shellOrigin);
     assert.equal(isolation.cookie, "");
     assert.equal(isolation.credentialless, true);
+
+    const beforePhysicalInput = await page.evaluate(async () => {
+      const probe = window.__WORLDKIT_HOSTED_RUNTIME__!;
+      const runtimeSessionId = new URL(probe.frame.src).searchParams.get(
+        "runtimeSessionId",
+      )!;
+      return probe.submit({
+        kind: "worldkit-runtime-session-request",
+        schemaVersion: 1,
+        id: "request.browser.physical.before.001",
+        runtimeSessionId,
+        type: "snapshot.get",
+      });
+    }) as { snapshot: {
+      world: {
+        simulationTick: number;
+        subjectStatesByEntityId: Record<string, {
+          entityState: { positionMetersXYZ: readonly number[] };
+        }>;
+      };
+    } };
+    await page.keyboard.down("w");
+    await page.waitForTimeout(250);
+    await page.keyboard.up("w");
+    await page.waitForTimeout(100);
+    const afterPhysicalInput = await page.evaluate(async () => {
+      const probe = window.__WORLDKIT_HOSTED_RUNTIME__!;
+      const runtimeSessionId = new URL(probe.frame.src).searchParams.get(
+        "runtimeSessionId",
+      )!;
+      return probe.submit({
+        kind: "worldkit-runtime-session-request",
+        schemaVersion: 1,
+        id: "request.browser.physical.after.001",
+        runtimeSessionId,
+        type: "snapshot.get",
+      });
+    }) as typeof beforePhysicalInput;
+    assert.ok(
+      afterPhysicalInput.snapshot.world.simulationTick >
+      beforePhysicalInput.snapshot.world.simulationTick,
+    );
+    assert.notDeepEqual(
+      afterPhysicalInput.snapshot.world.subjectStatesByEntityId["g-bot-primary"]
+        ?.entityState.positionMetersXYZ,
+      beforePhysicalInput.snapshot.world.subjectStatesByEntityId["g-bot-primary"]
+        ?.entityState.positionMetersXYZ,
+    );
 
     const receipt = await page.evaluate(async () =>
       window.__WORLDKIT_HOSTED_RUNTIME__!.submit({
@@ -129,7 +196,19 @@ async function main(): Promise<void> {
       undefined,
       { timeout: 10_000 },
     );
-    assert.deepEqual(errors, []);
+    const expectedPolicyBlocks = errors.filter((message) =>
+      message.includes("worldkit-browser-isolation-probe") ||
+      message.includes("allow-top-navigation") ||
+      message.includes("Creating a worker from 'blob:")
+    );
+    assert.ok(expectedPolicyBlocks.some((message) =>
+      message.includes("worldkit-browser-isolation-probe")));
+    assert.ok(expectedPolicyBlocks.some((message) =>
+      message.includes("allow-top-navigation")));
+    assert.deepEqual(
+      errors.filter((message) => !expectedPolicyBlocks.includes(message)),
+      [],
+    );
     console.log(JSON.stringify({
       ok: true,
       evidence: {

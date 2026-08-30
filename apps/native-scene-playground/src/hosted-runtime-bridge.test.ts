@@ -163,12 +163,15 @@ describe("Hosted Runtime browser bridge", () => {
         payload: readyEvent(),
       });
     }
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(first.bridge.phase()).toBe("terminated");
+    await vi.waitFor(() => {
+      expect(first.bridge.phase()).toBe("terminated");
+    });
     expect(first.remove).toHaveBeenCalledOnce();
 
     const second = harness();
     second.bootstrap();
+    second.frame.dispatchEvent(new Event("load"));
+    expect(second.bridge.phase()).toBe("bootstrapping");
     second.frame.dispatchEvent(new Event("load"));
     expect(second.bridge.phase()).toBe("terminated");
     expect(second.remove).toHaveBeenCalledOnce();

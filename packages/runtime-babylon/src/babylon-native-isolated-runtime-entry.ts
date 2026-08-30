@@ -33,7 +33,7 @@ import {
 } from "@whitebox-world/runtime-host";
 import type {
   VerifiedBabylonNativeWorldPackageDirectoryV1,
-} from "@whitebox-world/world-package";
+} from "@whitebox-world/world-package/runtime-contract";
 import { isNil } from "lodash-es";
 
 import {
@@ -82,7 +82,8 @@ export interface CreateBabylonNativeIsolatedRuntimeEntryInputV1 {
   readonly verifiedWorldPackage:
     VerifiedBabylonNativeWorldPackageDirectoryV1;
   readonly moduleLoader: BabylonNativeSceneModuleLoaderV1;
-  readonly havokWasmBinary: ArrayBuffer;
+  /** Required by headless Node hosts; browser hosts use Babylon's same-origin loader. */
+  readonly havokWasmBinary?: ArrayBuffer;
   readonly engineFactory: () => AbstractEngine;
   readonly subjectAssetResolver?: SubjectAssetResolverV1;
   readonly onInitializationStage?: (
@@ -448,7 +449,9 @@ export async function createBabylonNativeIsolatedRuntimeEntryV1(
             runtimeEngine = engine;
             return engine;
           },
-          havokWasmBinary: input.havokWasmBinary,
+          ...(isNil(input.havokWasmBinary)
+            ? {}
+            : { havokWasmBinary: input.havokWasmBinary }),
           autoStartRenderLoop: false,
           ...(isNil(input.subjectAssetResolver)
             ? {}

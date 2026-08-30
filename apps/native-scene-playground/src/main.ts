@@ -376,9 +376,15 @@ async function start(): Promise<void> {
   }
 }
 
-function browserProtocolBudget(): NativeEffectiveExecutionBudgetV1 {
+function browserProtocolBudget(
+  scene: NativeEffectiveExecutionBudgetV1["scene"] = {
+    maximumVertices: 0,
+    maximumTriangles: 0,
+    maximumColliders: 0,
+  },
+): NativeEffectiveExecutionBudgetV1 {
   return {
-    scene: { maximumVertices: 200_000, maximumTriangles: 200_000, maximumColliders: 256 },
+    scene,
     assets: { maximumAssetCount: 64, maximumAssetBytes: 64_000_000, maximumTextureCount: 32, maximumTextureBytes: 64_000_000 },
     runtime: { maximumSceneNodeCount: 2_000, maximumMaterialCount: 256, maximumShaderCount: 256, maximumPhysicsBodyCount: 256 },
     process: { maximumWallTimeMilliseconds: 120_000, maximumCpuTimeMilliseconds: 120_000, maximumMemoryBytes: 1_000_000_000, maximumProcessCount: 1 },
@@ -396,7 +402,6 @@ async function startHostedShell(): Promise<void> {
   const frame = document.createElement("iframe");
   frame.className = "hosted-runtime-frame";
   frame.src = `${runtimeOrigin}/?hosted-runtime-frame=1&shellOrigin=${encodeURIComponent(location.origin)}&runtimeSessionId=${encodeURIComponent(runtimeSessionId)}&sessionNonce=${encodeURIComponent(sessionNonce)}`;
-  viewport.append(frame);
   const bridge = createHostedRuntimeBridgeV1({
     frame,
     runtimeOrigin,
@@ -404,6 +409,8 @@ async function startHostedShell(): Promise<void> {
     sessionNonce,
     protocolBudget: browserProtocolBudget().protocol,
   });
+  // Sandbox and credentialless policy must be installed before first navigation.
+  viewport.append(frame);
   window.__WORLDKIT_HOSTED_RUNTIME__ = Object.freeze({
     phase: () => bridge.phase(),
     submit: (request) => bridge.submit(request),
@@ -430,7 +437,10 @@ async function startHostedFrame(): Promise<void> {
     new URL("/world-packages/cloud-ridge/", location.origin),
   );
   const moduleImport = await import("virtual:worldkit-cloud-ridge-native-scene");
-  const effectiveBudget = browserProtocolBudget();
+  const effectiveBudget = browserProtocolBudget(
+    verified.manifest.resourceBudget,
+  );
+  let hostedEngine: Engine | undefined;
   const requestBody = {
     kind: "native-isolated-execution-request" as const,
     schemaVersion: 1 as const,
@@ -455,9 +465,14 @@ async function startHostedFrame(): Promise<void> {
     request: requestBody,
     verifiedWorldPackage: verified,
     moduleLoader: { load: async () => moduleImport.default },
-    // The browser Runtime owns Babylon's same-origin Havok loader.
-    havokWasmBinary: undefined as unknown as ArrayBuffer,
-    engineFactory: () => new Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true }),
+    engineFactory: () => {
+      const engine = new Engine(canvas, true, {
+        preserveDrawingBuffer: true,
+        stencil: true,
+      });
+      hostedEngine = engine;
+      return engine;
+    },
     subjectAssetResolver: cloudRidgeSubjectAssetResolver,
   });
   const snapshot = entry.initialSnapshot();
@@ -476,7 +491,11 @@ async function startHostedFrame(): Promise<void> {
     fixedInputControllerEntityId: "native-isolation-controller",
     supportedRequestTypes: WORLDKIT_RUNTIME_SESSION_REQUEST_TYPES_V1,
   };
-  startHostedRuntimeFrameV1({
+  if (hostedEngine === undefined) {
+    throw new Error("WORLDKIT_HOSTED_RUNTIME_ENGINE_MISSING");
+  }
+  const runtimeEngine = hostedEngine;
+  const hostedFrame = startHostedRuntimeFrameV1({
     entry,
     readyEvent: { ...readyBody, id: deriveRuntimeSessionEventIdV1(readyBody) },
     shellOrigin,
@@ -484,6 +503,83 @@ async function startHostedFrame(): Promise<void> {
     sessionNonce,
     protocolBudget: effectiveBudget.protocol,
   });
+  const pressedCodes = new Set<string>();
+  const contextualCodes = new Set([
+    "KeyW", "KeyA", "KeyS", "KeyD",
+    "ShiftLeft", "ShiftRight", "Space",
+  ]);
+  let localRequestSequence = 0;
+  let localInputTail = Promise.resolve();
+  let previousTimestamp = performance.now();
+  let accumulatedSeconds = 0;
+  let frameRequest = 0;
+  const runLocalInput = (ticks: number): void => {
+    const requestSequence = ++localRequestSequence;
+    localInputTail = localInputTail.then(async () => {
+      const receipt = await entry.submit({
+        kind: "worldkit-runtime-session-request",
+        schemaVersion: 1,
+        id: `request.browser-local-input.${requestSequence}`,
+        runtimeSessionId,
+        type: "fixed-input.run",
+        input: {
+          actions: semanticActionsForCodes(pressedCodes),
+          ticks,
+        },
+      });
+      if (receipt.status !== "succeeded") {
+        throw new Error("WORLDKIT_HOSTED_RUNTIME_LOCAL_INPUT_REJECTED");
+      }
+    }).catch(showFailure);
+  };
+  const renderLoop = (timestamp: number): void => {
+    const elapsedSeconds = Math.min(
+      0.1,
+      Math.max(0, (timestamp - previousTimestamp) / 1_000),
+    );
+    previousTimestamp = timestamp;
+    accumulatedSeconds += elapsedSeconds;
+    if (pressedCodes.size > 0) {
+      const ticks = Math.min(
+        5,
+        Math.floor(accumulatedSeconds / FIXED_TIME_STEP_SECONDS),
+      );
+      if (ticks > 0) {
+        accumulatedSeconds -= ticks * FIXED_TIME_STEP_SECONDS;
+        runLocalInput(ticks);
+      }
+    } else {
+      accumulatedSeconds = 0;
+    }
+    runtimeEngine.scenes[0]?.render();
+    frameRequest = requestAnimationFrame(renderLoop);
+  };
+  window.addEventListener("keydown", (event) => {
+    if (!contextualCodes.has(event.code)) return;
+    event.preventDefault();
+    pressedCodes.add(event.code);
+  });
+  window.addEventListener("keyup", (event) => pressedCodes.delete(event.code));
+  window.addEventListener("blur", () => pressedCodes.clear());
+  canvas.addEventListener("pointerdown", (event) => {
+    canvas.focus();
+    canvas.setPointerCapture(event.pointerId);
+  });
+  const releasePointer = (event: PointerEvent): void => {
+    if (canvas.hasPointerCapture(event.pointerId)) {
+      canvas.releasePointerCapture(event.pointerId);
+    }
+  };
+  canvas.addEventListener("pointerup", releasePointer);
+  canvas.addEventListener("pointercancel", releasePointer);
+  canvas.addEventListener("contextmenu", (event) => event.preventDefault());
+  window.addEventListener("resize", () => runtimeEngine.resize());
+  window.addEventListener("beforeunload", () => {
+    cancelAnimationFrame(frameRequest);
+    pressedCodes.clear();
+    void hostedFrame.dispose();
+  }, { once: true });
+  frameRequest = requestAnimationFrame(renderLoop);
   canvas.focus();
 }
 

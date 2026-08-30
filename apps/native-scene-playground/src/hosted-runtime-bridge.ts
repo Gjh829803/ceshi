@@ -78,6 +78,7 @@ class HostedRuntimeBridge implements HostedRuntimeBridgeV1 {
   #port: MessagePort | undefined;
   #nextOutboundSequence = 1;
   #nextInboundSequence = 2;
+  #hasObservedInitialLoad = false;
   #readyEvent: RuntimeSessionEventV1 | undefined;
   readonly #readyWaiters: Array<Readonly<{
     resolve: (event: RuntimeSessionEventV1) => void;
@@ -92,6 +93,7 @@ class HostedRuntimeBridge implements HostedRuntimeBridgeV1 {
     input.frame.setAttribute("sandbox", "allow-scripts allow-same-origin");
     Reflect.set(input.frame, "credentialless", true);
     window.addEventListener("message", this.onBootstrapMessage);
+    input.frame.addEventListener("load", this.onFrameNavigation);
   }
 
   phase(): BridgePhaseV1 {
@@ -178,7 +180,6 @@ class HostedRuntimeBridge implements HostedRuntimeBridgeV1 {
     channel.port1.addEventListener("message", this.onPortMessage);
     channel.port1.start();
     window.removeEventListener("message", this.onBootstrapMessage);
-    this.input.frame.addEventListener("load", this.onFrameNavigation);
     this.input.frame.contentWindow?.postMessage(Object.freeze({
       kind: "worldkit-hosted-runtime-port-transfer" as const,
       schemaVersion: 1 as const,
@@ -189,6 +190,10 @@ class HostedRuntimeBridge implements HostedRuntimeBridgeV1 {
   };
 
   private readonly onFrameNavigation = (): void => {
+    if (!this.#hasObservedInitialLoad) {
+      this.#hasObservedInitialLoad = true;
+      return;
+    }
     this.terminate("FRAME_NAVIGATED");
   };
 

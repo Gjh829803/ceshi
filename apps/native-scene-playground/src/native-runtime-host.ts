@@ -42,7 +42,7 @@ import type {
 } from "@whitebox-world/native-babylon";
 import type {
   VerifiedBabylonNativeWorldPackageDirectoryV1,
-} from "@whitebox-world/world-package";
+} from "@whitebox-world/world-package/runtime-contract";
 import { isEqual, isNil } from "lodash-es";
 
 const PARTICIPANT_ID = "native-scene-participant";

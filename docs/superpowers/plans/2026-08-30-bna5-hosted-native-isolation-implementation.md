@@ -593,6 +593,35 @@ git add scripts/native-scene/hosted scripts/verification/verify-hosted-native-is
 git commit -m "feat(bna5): verify hosted native container isolation"
 ```
 
+### Task 5.5: BNA5-55 — Precompiled Browser-safe Runtime validator
+
+**Files:**
+- Create: `scripts/contracts/build-runtime-contract-validators.ts`
+- Create: `packages/runtime-contracts/src/world-runtime-bootstrap-validator.generated.mjs`
+- Create: `packages/runtime-contracts/src/world-runtime-bootstrap-validator.generated.d.mts`
+- Modify: `packages/runtime-contracts/src/world-runtime-bootstrap.ts`
+- Create: `packages/world-package/src/native-runtime-directory.ts`
+- Create: `packages/world-package/src/runtime-contract.ts`
+- Modify: `packages/world-package/package.json`
+- Modify: Runtime-only consumers of the mixed WorldPackage root entry
+- Modify: root `package.json`
+
+**Reason:** The first strict-CSP Browser RED proved that the current runtime path calls AJV's
+dynamic compiler and therefore requires forbidden `unsafe-eval`. The security boundary stays
+authoritative; the validator must move to a deterministic build-time artifact rather than weakening
+the dedicated runtime origin.
+
+- [x] Generate the AJV standalone ESM validator from the one authoritative JSON Schema.
+- [x] Add `--write` and default check modes with byte-exact stale-artifact failure.
+- [x] Keep parser behavior and error details byte-equivalent under the existing contract tests.
+- [x] Split the Native Runtime WorldPackage verifier from the Canonical compiler/Authoring entry so
+  the Native production bundle cannot load the compiler as a shadow dependency.
+- [x] Prove the production Browser bundle runs without AJV compiler/new-Function code under the
+  strict CSP verifier.
+
+This task is `main-agent-only` because it changes a shared Runtime contract publication boundary.
+It blocks Task 6 Browser acceptance but does not change Schema or accept a compatibility path.
+
 ### Task 6: BNA5-60 — Dedicated-origin browser bridge
 
 **Files:**
@@ -619,7 +648,7 @@ function createHostedRuntimeBridgeV1(input: {
 }): HostedRuntimeBridgeV1;
 ```
 
-- [ ] **Step 1: Write origin/source/nonce/sequence RED tests**
+- [x] **Step 1: Write origin/source/nonce/sequence RED tests**
 
 ```ts
 it.each(["wrong-origin", "wrong-source", "wrong-nonce", "reused-sequence"])(
@@ -636,12 +665,12 @@ it.each(["wrong-origin", "wrong-source", "wrong-nonce", "reused-sequence"])(
 Cover exact target origin, MessagePort transfer, additional keys, oversized messages, wrong phase,
 navigation/removal, duplicate ready and submit after dispose.
 
-- [ ] **Step 2: Run bridge RED**
+- [x] **Step 2: Run bridge RED**
 
 Run: `pnpm exec vitest run apps/native-scene-playground/src/hosted-runtime-bridge.test.ts`  
 Expected: FAIL because the bridge does not exist.
 
-- [ ] **Step 3: Implement the shell and frame bridge**
+- [x] **Step 3: Implement the shell and frame bridge**
 
 The shell creates a cross-origin frame, uses exact `targetOrigin`, validates `event.origin` and
 `event.source`, transfers one MessagePort, then removes the window message listener. The guest uses
@@ -649,7 +678,7 @@ the Task 4 entry and exact Runtime Session Protocol V1 parsers. Physical keyboar
 inside the frame and enters the existing SDK input layer. Do not use `srcdoc`, `*`, parent DOM access, local storage,
 fetch fallback or a Hosted-specific command payload.
 
-- [ ] **Step 4: Add strict headers and browser verifier**
+- [x] **Step 4: Add strict headers and browser verifier**
 
 The shell uses exactly `sandbox="allow-scripts allow-same-origin"` on a cross-origin frame; it never
 uses those tokens for a same-origin parent. The evidence server serves the runtime frame from a
@@ -659,7 +688,7 @@ network destinations. Playwright attempts parent DOM/storage/external-network/to
 wrong message identities and a normal movement/session-close flow. It must inspect Browser console/page errors and
 verify frame removal/disposal after termination.
 
-- [ ] **Step 5: Run focused GREEN and Browser evidence**
+- [x] **Step 5: Run focused GREEN and Browser evidence**
 
 Run:
 
