@@ -1251,8 +1251,13 @@ RuntimeWorldConfiguration V1 -> Babylon/Havok。
 
 ### BNA-4：统一 Kernel 与 Gameplay Surface Admission
 
-- 目标与独立交付物：把 Gameplay Kernel 从 Plan Scene Builder 抽离；用 V2 登记 Profile、冻结 Collider
-  Contribution 及稳定 `surfaceEntityId`/`colliderSubshapeId`/`traversalSurfaceId`，并用
+- 详细实现权威：
+  [BNA-4 Verified Native Runtime and Surface Admission Design](2026-08-30-bna4-runtime-surface-admission-design.md)
+  与
+  [BNA-4 Implementation Plan](../plans/2026-08-30-bna4-runtime-surface-admission-implementation.md)。
+- 目标与独立交付物：把 Gameplay Kernel 从 Plan Scene Builder 抽离；消费当前唯一、已进入 Package
+  Registry Lock 的 `TraversalSurfaceProfileV1`，冻结 Collider Contribution 及稳定
+  `surfaceEntityId`/`colliderSubshapeId`/`traversalSurfaceId`，并用
   `WorldRuntimeBootstrap`、SDK Havok 和单一 Spawn/Camera/Subject 接通 Native Source；在 BNA-3 Package/
   Receipt identity 验证通过后移除 BNA-1 的 formal Native capability rejection。
 - `depends_on`：BNA-1、BNA-2、BNA-3。
