@@ -969,14 +969,17 @@ Replay、Streaming/Dispose 和自动 Diagnostic；普通 Agent 只引用稳定 P
   原子生命周期和对抗测试；最终产品 SHA `dfa6fbc` 的 Cursor Cloud full gates 与独立
   Mode B/runtime-deep 均 GO，正式 Native Package 已接入同一 RuntimeHost/Gameplay/Havok/Camera Kernel；
   证据见 [BNA-4 实现审查](reviews/2026-08-30-bna4-runtime-surface-admission-review.md)；
-- [ ] BNA-5：Trusted Local/Hosted Isolated Trust Profile、确定性、预算和安全 Gate；
+- [x] BNA-5：Trusted Local/Hosted Isolated Trust Profile、effective-minimum budget、Host-minted admission、
+  provider-neutral Supervisor、Linux disposable isolation、Dedicated Origin/CSP/asset allowlist 与安全 Gate；
+  产品 SHA `2f46b3c9` 的 capable-runner 11-case hostile/matching-deadline evidence、exact-SHA Cloud full gates
+  与独立 security/runtime-deep 均 GO，开放 P0/P1/P2 = 0；
 - [ ] BNA-6：在 BNA-5 后冻结评测 Profile/预算/阈值、Route Decision、资产身份与同等生产预算，交付 AI
   Checker/Explain、Golden Corpus、真实视觉与人工交互评估；Block 专属 Corpus 由 BWB-5 闭合；
 - [ ] BNA-7：正式 Capture；仅在需要时从同一冻结 Surface 派生 Route/Nav Evidence，不包含产品级
   `goTo`、重规划或移动执行；
 - [ ] BNA-8：按 Trusted Local、Hosted、Route 三种范围分别做最终 Go/No-Go 与文档切换。
 
-在 BNA-5 至 BNA-6 完成并建立独立实施计划前，不提高总进度，不把 Native API 写入 Quickstart，也不修改
+在 BNA-6 完成并建立独立实施计划前，不提高总进度，不把 Native API 写入 Quickstart，也不修改
 Catalog/Hosted Builder 生产工作流。P2.6 仍可先使用审核过的 Structure Resource 和产品 GLB；Native
 Lane 不自动扩大 Cave、Overhang、双层 Route 或 NPC Navigation 的当前能力边界。
 

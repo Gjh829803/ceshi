@@ -23,6 +23,41 @@
 - Each task produces one independently reviewable commit; generated artifacts required by that task are committed with their source.
 - Final Cloud gate/review applies only to the exact pushed candidate SHA and does not replace the container/browser security evidence.
 
+## Current execution truth (2026-08-31)
+
+- The pushed product candidate is
+  `2f46b3c92c175d49b2bf684052be27b6d044658f`. BNA5-10 through BNA5-70 product
+  implementation is present in that candidate; the checkboxes below record completed construction
+  steps, not a final security or merge disposition.
+- Focused contract, Host admission/supervisor, enclave Runtime, Browser bridge, Browser verifier,
+  Native Playground, Package, clean-break, workspace-boundary and TypeScript evidence is green on
+  the candidate. The focused Vitest set is 101/101, and the Native Browser verifier covers real
+  Havok traversal, jump/landing, Camera reset and collider identity. The exact-SHA Cursor Cloud full
+  gate and independent security/runtime review both returned GO with zero open P0/P1/P2.
+  Earlier exact-SHA rounds correctly exposed the missing CPU census row, equal-deadline
+  Receipt interpretation, over-broad `publicDir`, unstable direct workspace-source config import and
+  repository-wide Vite `/@fs` access. The current candidate closes each issue with behavior-level
+  RED/GREEN evidence and keeps `pnpm test:census` at 348 = 311 contract + 37 resource-heavy.
+- The real Docker verifier passed on an isolated Colima Linux runner exposing cgroup v2, seccomp,
+  AppArmor, cgroup namespaces and Docker user-namespace remapping. All eleven hostile cases passed,
+  including a CPU fixture that first completes the authenticated runtime-usage challenge and is then
+  terminated by the provider/Supervisor deadline with stable reason `timeout`. Concurrent and
+  sequential tenant canaries, cleanup census and Host canary checks passed with zero retained
+  containers. Its recorded identities are image digest
+  `sha256:fe411b64b021d114d8e798d84cc70f5e773ed709c4ef820dbc9f684a99f8d25a`, policy hash
+  `sha256:70df8b8e054ce4240f070a72553f52a60f46f54b8ac5f1fea2abe3a00209228a` and
+  Cloud Ridge Package root
+  `sha256:0d2079db1526abd29587a744b90cb937947004e709d79d9200a404574b843214`.
+- The capable-runner matching-deadline case uses equal 5000ms provider/Supervisor limits, records
+  5250ms honestly observed wall time and accepts only its timeout Receipt. The dedicated Runtime
+  Origin also closes both static public-tree and repository `/@fs` access, while the stable
+  `pnpm dev:native-scene` entry reaches Vite ready without a verifier-only loader path.
+- The exact-SHA Cloud agents are `bc-0fc9afa4-5133-44fa-bec8-0049ad7183a7` for full gates and
+  `bc-66d50f28-4ee9-464e-ad9d-8f9035293c91` for independent deep review. The latter returned GO with
+  zero open P0/P1/P2; it truthfully recorded Docker as unavailable rather than treating Browser
+  evidence as container isolation. BNA-5 is accepted for its scoped isolation contract; only the
+  docs/PR/main ancestry recording remains in this plan.
+
 ## File map
 
 ### Contract authority
@@ -149,7 +184,7 @@ function verifyNativeIsolatedExecutionReceiptV1(input: {
 }): NativeIsolatedExecutionReceiptV1;
 ```
 
-- [ ] **Step 1: Write exact-key and hash RED tests**
+- [x] **Step 1: Write exact-key and hash RED tests**
 
 Add tests whose fixtures use deliberately asymmetric values so field swaps cannot pass:
 
@@ -183,12 +218,12 @@ it("rejects a receipt whose request identity or effective budget hash drifts", (
 });
 ```
 
-- [ ] **Step 2: Run the contract test and observe RED**
+- [x] **Step 2: Run the contract test and observe RED**
 
 Run: `pnpm exec vitest run packages/runtime-contracts/src/native-execution-isolation.test.ts`
 Expected: FAIL because the module and exported parsers do not exist.
 
-- [ ] **Step 3: Implement exact types, parsers, unions and hashes**
+- [x] **Step 3: Implement exact types, parsers, unions and hashes**
 
 Use `snapshotDataRecord`, `hasExactKeys`, explicit closed status/mode checks, positive-safe-integer
 validation and `Object.freeze`. The receipt parser validates its closed shape; the receipt verifier
@@ -196,13 +231,13 @@ recomputes request, effective-budget and terminal-result hashes from the paired 
 every shared identity. Do not accept a caller assertion without rehashing. Model result/outcome as
 discriminated unions, reject `ready` as a Receipt outcome, and do not preserve rejected field aliases.
 
-- [ ] **Step 4: Add and validate the JSON Schema export**
+- [x] **Step 4: Add and validate the JSON Schema export**
 
 The Schema must set `additionalProperties: false` at every object, use `oneOf` for operation/result
 unions, use the exact public field names above, and carry integer minimum `1` for all caps. Export it
 only as `./native-execution-isolation-schema`.
 
-- [ ] **Step 5: Run focused GREEN and workspace-boundary checks**
+- [x] **Step 5: Run focused GREEN and workspace-boundary checks**
 
 Run:
 
@@ -247,7 +282,7 @@ function resolveNativeEffectiveExecutionBudgetV1(
 ): NativeEffectiveExecutionBudgetV1;
 ```
 
-- [ ] **Step 1: Write asymmetric minimum and cutoff RED tests**
+- [x] **Step 1: Write asymmetric minimum and cutoff RED tests**
 
 ```ts
 it("takes the field-by-field minimum and projects exact Package scene fields", () => {
@@ -269,12 +304,12 @@ it("never allows tenant policy to raise a Host or Package limit", () => {
 
 Also cover missing groups, zero, negative, unsafe integer, extra keys and unknown Trust Profile.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `pnpm exec vitest run packages/runtime-host/src/native-execution-budget.test.ts`
 Expected: FAIL because the resolver does not exist.
 
-- [ ] **Step 3: Implement one explicit resolver**
+- [x] **Step 3: Implement one explicit resolver**
 
 Use a fixed field table local to this domain; do not accept dynamic field iteration from caller data.
 Project `maximumVertices`, `maximumTriangles`, `maximumColliders` from the Scene Profile and Package
@@ -283,7 +318,7 @@ take the Host/tenant minimum and require the Trust Profile's capability IDs to c
 group. Return a newly frozen budget and its canonical hash. Throw a stable Host policy error before
 any provider API is called.
 
-- [ ] **Step 4: Run GREEN and affected Host tests**
+- [x] **Step 4: Run GREEN and affected Host tests**
 
 Run:
 
@@ -295,7 +330,7 @@ git diff --check
 
 Expected: all exit 0.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/runtime-host
@@ -355,7 +390,7 @@ class NativeIsolationSupervisorV1 {
 }
 ```
 
-- [ ] **Step 1: Write lifecycle and no-allocation RED tests**
+- [x] **Step 1: Write lifecycle and no-allocation RED tests**
 
 Cover exact phases and order with a deterministic fake provider:
 
@@ -386,12 +421,12 @@ Also cover cancellation before ready, provider loss after ready, attestation mis
 hash mismatch, cleanup quarantine, duplicate `start`, idempotent `terminate`/`dispose`, wrong
 nonce/sequence, oversize inbound/outbound messages and submit after termination.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `pnpm exec vitest run packages/runtime-host/src/native-isolation-supervisor.test.ts`
 Expected: FAIL because the supervisor does not exist.
 
-- [ ] **Step 3: Implement the explicit state machine**
+- [x] **Step 3: Implement the explicit state machine**
 
 Keep supervisor state private and provider-neutral. Use one injected monotonic clock/deadline source
 for tests. Every `start` path must enter one `finally` cleanup path. Preserve the first stable failure,
@@ -402,7 +437,7 @@ The supervisor may retain only lifecycle phase, exact request/hash, sequence cou
 provider lease and terminal receipt. It must not retain Gameplay state, rewrite protocol payloads or
 infer Camera/ground support.
 
-- [ ] **Step 4: Run GREEN and RuntimeHost regressions**
+- [x] **Step 4: Run GREEN and RuntimeHost regressions**
 
 Run:
 
@@ -414,7 +449,7 @@ git diff --check
 
 Expected: all exit 0.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/runtime-host
@@ -446,7 +481,7 @@ function createBabylonNativeIsolatedRuntimeEntryV1(
 ): Promise<BabylonNativeIsolatedRuntimeEntryV1>;
 ```
 
-- [ ] **Step 1: Write exact-package Runtime RED tests**
+- [x] **Step 1: Write exact-package Runtime RED tests**
 
 Use the existing Cloud Ridge verified Package fixture and real Havok WASM:
 
@@ -475,19 +510,19 @@ it("rejects a package or effective-budget drift before Havok/Subject/Camera", as
 Also exercise one fixed-input request, real support contact, session close, wrong session/Protocol V1 payload,
 two-instance isolation, partial create and throwing dispose.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `pnpm exec vitest run packages/runtime-babylon/src/babylon-native-isolated-runtime-entry.test.ts`
 Expected: FAIL because the entry does not exist.
 
-- [ ] **Step 3: Compose, do not duplicate, the existing path**
+- [x] **Step 3: Compose, do not duplicate, the existing path**
 
 Call `prepareBabylonNativeRuntimePackageV1`, the existing BNA-4 Adapter factory and `RuntimeHost.create`
 with initial control binding. Route parsed Runtime Session Protocol V1 requests into the same RuntimeHost methods already used
 by the Browser/CLI runtime. Do not invoke `module.build()` directly, inspect visual Meshes for physics,
 or add enclave-specific reset/Camera/action methods.
 
-- [ ] **Step 4: Run GREEN and Native Runtime regressions**
+- [x] **Step 4: Run GREEN and Native Runtime regressions**
 
 Run:
 
@@ -499,7 +534,7 @@ git diff --check
 
 Expected: all exit 0.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/runtime-babylon
@@ -528,7 +563,7 @@ git commit -m "feat(bna5): run verified native worlds inside an enclave"
 - Consumes: `NativeIsolationProviderV1`, exact request/package mount, injected bounded command runner.
 - Produces: `createDockerNativeIsolationProviderV1(options)` and root command `pnpm verify:hosted-native-isolation`.
 
-- [ ] **Step 1: Write Docker command-policy RED tests**
+- [x] **Step 1: Write Docker command-policy RED tests**
 
 Assert the command is built from trusted options, never guest strings, and includes all controls:
 
@@ -546,12 +581,12 @@ expect(invocation.args.join(" ")).not.toContain(packageHostPath);
 Also assert a digest-only image ref, exact read-only Package mount, request-owned tmpfs, no daemon
 socket/host path/device/privileged flag, bounded stdout/stderr, timeout kill and redacted diagnostics.
 
-- [ ] **Step 2: Run provider RED**
+- [x] **Step 2: Run provider RED**
 
 Run: `pnpm exec vitest run scripts/native-scene/hosted/container-provider.test.ts`
 Expected: FAIL because the provider does not exist.
 
-- [ ] **Step 3: Implement the provider and guest entry**
+- [x] **Step 3: Implement the provider and guest entry**
 
 Use `spawn` with argument arrays and an injected runner; never use shell interpolation. Resolve and
 validate explicit absolute package/temp paths before constructing mounts. The guest reads one exact
@@ -559,20 +594,20 @@ request from stdin, independently re-verifies mounted Package bytes, creates the
 emits only bounded JSON-lines envelopes. The control plane, not the guest, adds actual usage,
 cleanup and attestation fields.
 
-- [ ] **Step 4: Build the digest-pinned non-root runner image**
+- [x] **Step 4: Build the digest-pinned non-root runner image**
 
 The Dockerfile must use a pinned base digest, create a fixed non-root UID/GID, copy only the bundled
 runner/runtime dependencies, set a read-only-compatible working directory and declare no network or
 secret. The verifier records the built image digest and refuses a tag-only image.
 
-- [ ] **Step 5: Implement hostile fixtures and real verifier**
+- [x] **Step 5: Implement hostile fixtures and real verifier**
 
 Each fixture attempts exactly one threat and reports only a fixed marker if unexpectedly successful.
 The verifier runs the fixture under the same provider policy, confirms the expected stable result,
 then checks `docker ps`/inspect evidence for no retained container/mount and a clean Host canary. It
 also runs two simultaneous tenant canaries and one sequential reuse canary.
 
-- [ ] **Step 6: Run focused GREEN and real container evidence**
+- [x] **Step 6: Run focused GREEN and real container evidence**
 
 Run:
 
@@ -586,7 +621,12 @@ git diff --check
 Expected: all exit 0. The verifier summary records image digest, rootless/user namespace state,
 policy hash, every hostile case, cleanup census and exact Package root without secrets or paths.
 
-- [ ] **Step 7: Commit**
+Current result: focused tests, TypeScript and diff checks are green. The real verifier exits `0` on
+the isolated capable runner and reports `hostedProductionDisposition: "eligible"`, user namespace,
+seccomp, cgroup v2, all hostile cases, concurrent/sequential canaries, unchanged Host canary and zero
+retained containers. The fixed CPU timeout has its own authenticated-handshake regression.
+
+- [x] **Step 7: Commit**
 
 ```bash
 git add scripts/native-scene/hosted scripts/verification/verify-hosted-native-isolation.ts package.json
@@ -702,7 +742,7 @@ git diff --check
 
 Expected: all exit 0; Browser report distinguishes origin policy from container security.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/native-scene-playground scripts/verification/verify-hosted-native-browser.ts package.json
@@ -752,7 +792,7 @@ Use a stable explicit file census with allowlisted documentation mentions. Delet
 or alias, any actual experimental conflicting path. Do not flag the official design discussion or
 the isolated reference provider's required implementation strings.
 
-- [ ] **Step 4: Run the affected integration set once**
+- [x] **Step 4: Run the affected integration set once**
 
 Run:
 
@@ -772,7 +812,12 @@ git diff --check
 
 Expected: all exit 0. Do not run root `pnpm test` locally here; exact-SHA Cloud runs it in Task 8.
 
-- [ ] **Step 5: Commit and push the product candidate**
+Current result: the full affected integration set is green, including the capable-runner container
+gate and strict dedicated-Origin Browser gate. A post-origin-change RED exposed the standalone Native
+verifier's random Host mismatch; the accepted fix binds that verifier to its own Host-configured
+exact origin, and the real Browser/Havok regression is green.
+
+- [x] **Step 5: Commit and push the product candidate**
 
 ```bash
 git add scripts/verification package.json
@@ -797,7 +842,7 @@ Expected: exact local/upstream SHA equality and empty status.
 - Consumes: exact pushed product SHA, Task 7 evidence, container runner capabilities and Browser report.
 - Produces: scoped BNA-5 GO/NO-GO, PR, accepted `main` ancestry and truthful BNA-6/BWB-5 unblock.
 
-- [ ] **Step 1: Freeze exact candidate identity**
+- [x] **Step 1: Freeze exact candidate identity**
 
 Run:
 
@@ -810,7 +855,13 @@ git status --porcelain
 Expected: equal full 40-character SHAs and empty status. Record image digest, Package root, policy
 hash and evidence output hashes without credentials or local paths.
 
-- [ ] **Step 2: Dispatch separate Cursor Cloud agents**
+Recorded product identity: local and upstream both resolved to
+`2f46b3c92c175d49b2bf684052be27b6d044658f` before this documentation
+truth update. The Docker/Package identities and current acceptance boundary are recorded in the current
+execution truth section above. Documentation changes will receive their own later docs SHA and do
+not mutate the frozen product candidate.
+
+- [x] **Step 2: Dispatch separate Cursor Cloud agents**
 
 Use `reviewing-with-cursor` with model `grok-4.6`, `effort=xhigh`, `fast=true`:
 
@@ -824,13 +875,21 @@ Use `reviewing-with-cursor` with model `grok-4.6`, `effort=xhigh`, `fast=true`:
 
 Any product edit invalidates both conclusions and requires new exact-SHA runs.
 
-- [ ] **Step 3: Adjudicate every finding**
+Exact-SHA agents: full gates `bc-0fc9afa4-5133-44fa-bec8-0049ad7183a7` /
+`run-b5e40964-2f93-4415-96f9-e9cec6a5c3df` returned GO after 3719 contract pass / 3 skip,
+584 resource-heavy pass, Studio 75 pass, both production builds and all available specialized gates;
+independent review
+`bc-66d50f28-4ee9-464e-ad9d-8f9035293c91` /
+`run-22583448-19f3-4bc0-9049-0f88f66c7ce7` returned GO with zero open P0/P1/P2. Earlier candidates and agents are historical evidence
+only after the Receipt, exact Runtime asset, stable Vite startup and filesystem-boundary fixes.
+
+- [x] **Step 3: Adjudicate every finding**
 
 For each P0/P1/P2, reproduce with a behavior RED before editing. Fix only confirmed defects, rerun
 the focused test and affected gate, commit/push, then dispatch fresh exact-SHA agents. Do not accept a
 GO with an open P2 because BNA-5 is a security boundary.
 
-- [ ] **Step 4: Write the final review and update status truth**
+- [x] **Step 4: Write the final review and update status truth**
 
 The review records:
 

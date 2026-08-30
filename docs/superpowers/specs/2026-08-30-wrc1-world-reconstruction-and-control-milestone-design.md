@@ -29,6 +29,10 @@ specifications remain the detailed technical authorities for their domains. This
 the combined milestone boundary, dependency order, incremental-integration policy, cross-domain
 acceptance cases, and overall completion definition.
 
+Current checkpoint: BNA-5 product SHA `2f46b3c9` has scoped GO from capable-runner isolation evidence,
+exact-SHA Cloud full gates, and independent security/runtime-deep review. This unblocks BNA-6 and the
+BWB-5 dependency edge; it does not complete those tasks or BNA-8 production disposition.
+
 ## 2. Why this is a major milestone
 
 WRC-1 is complete only when the SDK can turn reference intent into a reproducible playable whitebox
