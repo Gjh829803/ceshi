@@ -18,6 +18,7 @@ import {
 } from "./index.js";
 import {
   admitBabylonNativeSceneCandidateV1,
+  commitBabylonNativeProfileSettlementV1,
   createBabylonNativeLockedAssetResolutionFailureV1,
   type BabylonNativeSceneAdmissionBudgetV1,
   type BabylonNativeSceneCandidateAdmissionResultV1,
@@ -44,6 +45,11 @@ const BOOTSTRAP = parseBabylonNativeSceneBootstrapV1({
   },
   seed: 7301,
   spawnMarkerId: "player-spawn",
+});
+const BLOCK_BOOTSTRAP = parseBabylonNativeSceneBootstrapV1({
+  ...BOOTSTRAP,
+  id: "cloud-ridge-native-blocks",
+  nativeSceneProfileRef: "worldkit://native-scene-profile/whitebox.blocks@1",
 });
 
 const ASSETS: BabylonNativeLockedAssetResolverV1 = Object.freeze({
@@ -84,10 +90,11 @@ function buildCandidate(
   scene: Scene,
   module: BabylonNativeSceneModuleV1,
   budget: BabylonNativeSceneAdmissionBudgetV1 = DEFAULT_BUDGET,
+  bootstrap = BOOTSTRAP,
 ) {
   return admitBabylonNativeSceneCandidateV1({
     candidate: { scene, engine: scene.getEngine() },
-    bootstrap: BOOTSTRAP,
+    bootstrap,
     module,
     assets: ASSETS,
     budget,
@@ -123,6 +130,143 @@ afterEach(() => {
 });
 
 describe("admitBabylonNativeSceneCandidateV1", () => {
+  it("publishes the exact none settlement for the standard Profile", async () => {
+    const scene = createScene();
+    const result = await buildCandidate(scene, moduleWithBuild(registerSpawn));
+
+    expect(result.outcome).toBe("passed");
+    if (result.outcome === "passed") {
+      expect(result.contribution.profileSettlement).toEqual({
+        kind: "none",
+        profileRef: "worldkit://native-scene-profile/whitebox.standard@1",
+      });
+    }
+  });
+
+  it("requires one blocks settlement batch", async () => {
+    const scene = createScene();
+    const result = await buildCandidate(
+      scene,
+      moduleWithBuild(registerSpawn),
+      DEFAULT_BUDGET,
+      BLOCK_BOOTSTRAP,
+    );
+
+    expect(rejectedCode(result)).toBe(
+      "WORLDKIT_NATIVE_SCENE_PROFILE_SETTLEMENT_REQUIRED",
+    );
+  });
+
+  it("publishes one blocks snapshot for exact visual and Collider inventory", async () => {
+    const scene = createScene();
+    const result = await buildCandidate(
+      scene,
+      moduleWithBuild((context) => {
+        registerSpawn(context);
+        const visual = MeshBuilder.CreateBox("block-visual", { size: 1 }, scene);
+        const proxy = MeshBuilder.CreateBox("block-proxy", { size: 1 }, scene);
+        proxy.isVisible = false;
+        context.registration.registerStaticCollider({
+          id: "block-proxy",
+          mesh: proxy,
+          traversalBinding: { kind: "not-traversable" },
+        });
+        commitBabylonNativeProfileSettlementV1(context, {
+          kind: "babylon-native-profile-settlement-batch",
+          schemaVersion: 1,
+          profileRef: "worldkit://native-scene-profile/whitebox.blocks@1",
+          profileInventoryHash: `sha256:${"1".repeat(64)}`,
+          targets: [{
+            elementId: "block-visual",
+            mesh: visual,
+            collisionBinding: {
+              kind: "static-collider",
+              colliderId: "block-proxy",
+            },
+          }],
+        });
+      }),
+      DEFAULT_BUDGET,
+      BLOCK_BOOTSTRAP,
+    );
+
+    expect(result.outcome).toBe("passed");
+    if (result.outcome === "passed") {
+      expect(result.contribution.profileSettlement).toMatchObject({
+        kind: "host-snapshot",
+        profileRef: "worldkit://native-scene-profile/whitebox.blocks@1",
+        targetCount: 1,
+      });
+    }
+  });
+
+  it.each([
+    ["target drift", (scene: Scene, context: BabylonNativeSceneBuildContextV1) => {
+      const visual = MeshBuilder.CreateBox("visual", { size: 1 }, scene);
+      commitBabylonNativeProfileSettlementV1(context, {
+        kind: "babylon-native-profile-settlement-batch",
+        schemaVersion: 1,
+        profileRef: "worldkit://native-scene-profile/whitebox.blocks@1",
+        profileInventoryHash: `sha256:${"1".repeat(64)}`,
+        targets: [{
+          elementId: "visual",
+          mesh: visual,
+          collisionBinding: { kind: "none" },
+        }],
+      });
+      visual.position.x = 2;
+    }, "WORLDKIT_NATIVE_SCENE_PROFILE_TARGET_DRIFT"],
+    ["extra geometry", (scene: Scene, context: BabylonNativeSceneBuildContextV1) => {
+      const visual = MeshBuilder.CreateBox("visual", { size: 1 }, scene);
+      MeshBuilder.CreateBox("extra", { size: 1 }, scene);
+      commitBabylonNativeProfileSettlementV1(context, {
+        kind: "babylon-native-profile-settlement-batch",
+        schemaVersion: 1,
+        profileRef: "worldkit://native-scene-profile/whitebox.blocks@1",
+        profileInventoryHash: `sha256:${"1".repeat(64)}`,
+        targets: [{
+          elementId: "visual",
+          mesh: visual,
+          collisionBinding: { kind: "none" },
+        }],
+      });
+    }, "WORLDKIT_NATIVE_SCENE_PROFILE_INVENTORY_MISMATCH"],
+    ["caught settlement failure", (scene: Scene, context: BabylonNativeSceneBuildContextV1) => {
+      const visual = MeshBuilder.CreateBox("visual", { size: 1 }, scene);
+      try {
+        commitBabylonNativeProfileSettlementV1(context, {
+          ...{
+            kind: "babylon-native-profile-settlement-batch" as const,
+            schemaVersion: 1 as const,
+            profileRef: "worldkit://native-scene-profile/whitebox.blocks@1",
+            profileInventoryHash: `sha256:${"1".repeat(64)}` as const,
+            targets: [{
+              elementId: "visual",
+              mesh: visual,
+              collisionBinding: { kind: "none" as const },
+            }],
+          },
+          extra: true,
+        } as never);
+      } catch {
+        // Candidate must retain the Host failure even when Module code catches it.
+      }
+    }, "WORLDKIT_NATIVE_SCENE_PROFILE_SETTLEMENT_INVALID"],
+  ] as const)("rejects blocks %s", async (_label, build, code) => {
+    const scene = createScene();
+    const result = await buildCandidate(
+      scene,
+      moduleWithBuild((context) => {
+        registerSpawn(context);
+        build(scene, context);
+      }),
+      DEFAULT_BUDGET,
+      BLOCK_BOOTSTRAP,
+    );
+
+    expect(rejectedCode(result)).toBe(code);
+  });
+
   it("reports an invalid Bootstrap against unresolved-world", async () => {
     const scene = createScene();
     const result = await admitBabylonNativeSceneCandidateV1({

@@ -1,3 +1,4 @@
+import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
 import { Scene } from "@babylonjs/core/scene.js";
@@ -15,7 +16,10 @@ import {
 
 const HASH_A = `sha256:${"1".repeat(64)}` as const;
 
-function createContext(scene: Scene): BabylonNativeSceneBuildContextV1 {
+function createContext(
+  scene: Scene,
+  profileRef = "worldkit://native-scene-profile/whitebox.blocks@1",
+): BabylonNativeSceneBuildContextV1 {
   return Object.freeze({
     scene,
     bootstrap: Object.freeze({
@@ -24,8 +28,7 @@ function createContext(scene: Scene): BabylonNativeSceneBuildContextV1 {
       id: "block-settlement-test",
       sceneModuleRef: "worldkit://native-scene/block-settlement-test@1",
       nativeSceneApiRef: "worldkit://native-scene-api/babylon-native@1",
-      nativeSceneProfileRef:
-        "worldkit://native-scene-profile/whitebox.blocks@1",
+      nativeSceneProfileRef: profileRef,
       gameplayBootstrapRef: "worldkit://gameplay-bootstrap/test@1",
       initialControlledEntityId: "g-bot-primary",
       gravityMetersPerSecondSquaredXYZ: [0, -9.81, 0] as const,
@@ -66,7 +69,7 @@ function batch(meshes: readonly ReturnType<typeof MeshBuilder.CreateBox>[]) {
     profileRef: "worldkit://native-scene-profile/whitebox.blocks@1",
     profileInventoryHash: HASH_A,
     targets: meshes.map((mesh, index) => ({
-      elementId: `block-${String(index + 1).padStart(2, "0")}`,
+      elementId: mesh.name,
       mesh,
       collisionBinding: { kind: "none" as const },
     })),
@@ -117,7 +120,7 @@ describe("Host-private Babylon Native Profile settlement", () => {
     };
 
     const first = run(false);
-    const second = run(false);
+    const second = run(true);
     expect(first).toEqual(second);
     expect(first).toMatchObject({
       kind: "host-snapshot",
@@ -130,6 +133,50 @@ describe("Host-private Babylon Native Profile settlement", () => {
       expect(first.settledVisualHash).toMatch(/^sha256:[0-9a-f]{64}$/);
     }
     expect(Object.isFrozen(first)).toBe(true);
+  });
+
+  it("creates the exact none receipt for the standard Profile without a batch", () => {
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    const context = createContext(
+      scene,
+      "worldkit://native-scene-profile/whitebox.standard@1",
+    );
+    beginBabylonNativeProfileSettlementRecorderV1(context);
+    closeBabylonNativeProfileSettlementRecorderV1(context);
+
+    expect(finalizeBabylonNativeProfileSettlementV1(context).receipt).toEqual({
+      kind: "none",
+      profileRef: "worldkit://native-scene-profile/whitebox.standard@1",
+    });
+
+    unbindBabylonNativeProfileSettlementRecorderV1(context);
+    scene.dispose();
+    engine.dispose();
+  });
+
+  it("does not invoke batch or collision-binding accessors", () => {
+    const { context, engine, scene } = createHarness();
+    const mesh = MeshBuilder.CreateBox("block", { size: 1 }, scene);
+    const getter = () => {
+      throw new Error("getter invoked");
+    };
+    const binding = Object.defineProperty({}, "kind", {
+      enumerable: true,
+      get: getter,
+    });
+    const input = batch([mesh]);
+    const target = { ...input.targets[0], collisionBinding: binding };
+    beginBabylonNativeProfileSettlementRecorderV1(context);
+
+    expect(errorCode(() => commitBabylonNativeProfileSettlementV1(
+      context,
+      { ...input, targets: [target] } as never,
+    ))).toBe("WORLDKIT_NATIVE_SCENE_PROFILE_SETTLEMENT_INVALID");
+
+    unbindBabylonNativeProfileSettlementRecorderV1(context);
+    scene.dispose();
+    engine.dispose();
   });
 
   it.each([
@@ -235,6 +282,42 @@ describe("Host-private Babylon Native Profile settlement", () => {
       context,
       batch([mesh]),
     ))).toBe("WORLDKIT_NATIVE_SCENE_PROFILE_SETTLEMENT_CLOSED");
+
+    unbindBabylonNativeProfileSettlementRecorderV1(context);
+    scene.dispose();
+    engine.dispose();
+  });
+
+  it.each([
+    ["position", (mesh: ReturnType<typeof MeshBuilder.CreateBox>) => { mesh.position.x += 1; }],
+    ["rotation", (mesh: ReturnType<typeof MeshBuilder.CreateBox>) => { mesh.rotation.y += 0.5; }],
+    ["scaling", (mesh: ReturnType<typeof MeshBuilder.CreateBox>) => { mesh.scaling.x += 0.5; }],
+    ["parent", (mesh: ReturnType<typeof MeshBuilder.CreateBox>, scene: Scene) => {
+      mesh.parent = MeshBuilder.CreateBox("parent", { size: 1 }, scene);
+    }],
+    ["vertices", (mesh: ReturnType<typeof MeshBuilder.CreateBox>) => {
+      const positions = mesh.getVerticesData(VertexBuffer.PositionKind)!;
+      mesh.setVerticesData(VertexBuffer.PositionKind, [positions[0]! + 1, ...positions.slice(1)]);
+    }],
+    ["indices", (mesh: ReturnType<typeof MeshBuilder.CreateBox>) => {
+      const indices = [...mesh.getIndices()!];
+      [indices[0], indices[1]] = [indices[1]!, indices[0]!];
+      mesh.setIndices(indices);
+    }],
+    ["visibility", (mesh: ReturnType<typeof MeshBuilder.CreateBox>) => { mesh.visibility = 0.5; }],
+    ["isVisible", (mesh: ReturnType<typeof MeshBuilder.CreateBox>) => { mesh.isVisible = false; }],
+    ["enabled", (mesh: ReturnType<typeof MeshBuilder.CreateBox>) => { mesh.setEnabled(false); }],
+    ["dispose", (mesh: ReturnType<typeof MeshBuilder.CreateBox>) => { mesh.dispose(); }],
+  ])("maps post-commit %s drift to one stable code", (_label, mutate) => {
+    const { context, engine, scene } = createHarness();
+    const mesh = MeshBuilder.CreateBox("block", { size: 1, updatable: true }, scene);
+    beginBabylonNativeProfileSettlementRecorderV1(context);
+    commitBabylonNativeProfileSettlementV1(context, batch([mesh]));
+    mutate(mesh, scene);
+    closeBabylonNativeProfileSettlementRecorderV1(context);
+
+    expect(errorCode(() => finalizeBabylonNativeProfileSettlementV1(context)))
+      .toBe("WORLDKIT_NATIVE_SCENE_PROFILE_TARGET_DRIFT");
 
     unbindBabylonNativeProfileSettlementRecorderV1(context);
     scene.dispose();

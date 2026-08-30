@@ -4,7 +4,7 @@ import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import type { BabylonNativeProfileSettlementReceiptV1 } from
   "@whitebox-world/runtime-contracts";
-import { isNil } from "lodash-es";
+import { isEqual, isNil } from "lodash-es";
 
 import type { BabylonNativeSceneBuildContextV1 } from "./module.js";
 
@@ -45,7 +45,14 @@ interface TargetFingerprintV1 {
   readonly collisionBinding: BabylonNativeProfileSettlementCollisionBindingV1;
   readonly worldPositionsMetersXYZ: readonly number[];
   readonly triangleIndices: readonly number[];
+  readonly localPositionMetersXYZ: readonly [number, number, number];
+  readonly localRotationRadiansXYZ: readonly [number, number, number];
+  readonly localRotationQuaternionXYZW:
+    | readonly [number, number, number, number]
+    | null;
+  readonly localScalingXYZ: readonly [number, number, number];
   readonly isVisible: true;
+  readonly visibilityRatio: number;
   readonly isEnabled: true;
 }
 
@@ -80,11 +87,11 @@ function failure(
   message: string,
   repairHint: string,
 ): BabylonNativeProfileSettlementFailureV1 {
-  return new BabylonNativeProfileSettlementFailureV1(
+  return Object.freeze(new BabylonNativeProfileSettlementFailureV1(
     code,
     message,
     repairHint,
-  );
+  ));
 }
 
 function invalidBatch(): BabylonNativeProfileSettlementFailureV1 {
@@ -163,12 +170,23 @@ function canonicalNumber(value: number): number {
 function collisionBinding(
   input: unknown,
 ): BabylonNativeProfileSettlementCollisionBindingV1 {
-  const source = input as Record<string, unknown>;
-  if (source?.kind === "none") {
+  if (
+    typeof input !== "object" ||
+    isNil(input) ||
+    Array.isArray(input) ||
+    Reflect.getPrototypeOf(input) !== Object.prototype
+  ) throw invalidBatch();
+  const kindDescriptor = Reflect.getOwnPropertyDescriptor(input, "kind");
+  if (
+    isNil(kindDescriptor) ||
+    !kindDescriptor.enumerable ||
+    !("value" in kindDescriptor)
+  ) throw invalidBatch();
+  if (kindDescriptor.value === "none") {
     exactRecord(input, ["kind"]);
     return Object.freeze({ kind: "none" });
   }
-  if (source?.kind === "static-collider") {
+  if (kindDescriptor.value === "static-collider") {
     const record = exactRecord(input, ["kind", "colliderId"]);
     return Object.freeze({
       kind: "static-collider",
@@ -201,6 +219,8 @@ function fingerprintTarget(
       mesh.hasThinInstances ||
       !isNil(mesh.physicsBody) ||
       mesh.isVisible !== true ||
+      !Number.isFinite(mesh.visibility) ||
+      mesh.visibility <= 0 ||
       mesh.isEnabled() !== true
     ) throw targetInvalid(elementId);
     const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
@@ -232,12 +252,40 @@ function fingerprintTarget(
         canonicalNumber(world.z),
       );
     }
+    const localPositionMetersXYZ = Object.freeze([
+      canonicalNumber(mesh.position.x),
+      canonicalNumber(mesh.position.y),
+      canonicalNumber(mesh.position.z),
+    ] as const);
+    const localRotationRadiansXYZ = Object.freeze([
+      canonicalNumber(mesh.rotation.x),
+      canonicalNumber(mesh.rotation.y),
+      canonicalNumber(mesh.rotation.z),
+    ] as const);
+    const localRotationQuaternionXYZW = isNil(mesh.rotationQuaternion)
+      ? null
+      : Object.freeze([
+          canonicalNumber(mesh.rotationQuaternion.x),
+          canonicalNumber(mesh.rotationQuaternion.y),
+          canonicalNumber(mesh.rotationQuaternion.z),
+          canonicalNumber(mesh.rotationQuaternion.w),
+        ] as const);
+    const localScalingXYZ = Object.freeze([
+      canonicalNumber(mesh.scaling.x),
+      canonicalNumber(mesh.scaling.y),
+      canonicalNumber(mesh.scaling.z),
+    ] as const);
     return Object.freeze({
       elementId,
       collisionBinding: binding,
       worldPositionsMetersXYZ: Object.freeze(worldPositionsMetersXYZ),
       triangleIndices: Object.freeze([...indices]),
+      localPositionMetersXYZ,
+      localRotationRadiansXYZ,
+      localRotationQuaternionXYZW,
+      localScalingXYZ,
       isVisible: true,
+      visibilityRatio: canonicalNumber(mesh.visibility),
       isEnabled: true,
     });
   } catch (error) {
@@ -342,7 +390,13 @@ export function commitBabylonNativeProfileSettlementV1(
         collisionBinding: binding,
         fingerprint: fingerprintTarget(context, elementId, mesh, binding),
       });
-    }).sort((left, right) => left.elementId.localeCompare(right.elementId, "en-US"));
+    }).sort((left, right) =>
+      left.elementId < right.elementId
+        ? -1
+        : left.elementId > right.elementId
+          ? 1
+          : 0,
+    );
     state.batch = Object.freeze({
       profileInventoryHash:
         record.profileInventoryHash as `sha256:${string}`,
@@ -384,6 +438,32 @@ export function finalizeBabylonNativeProfileSettlementV1(
     );
   }
   if (!isNil(state.firstFailure)) throw state.firstFailure;
+  if (
+    context.bootstrap.nativeSceneProfileRef ===
+      "worldkit://native-scene-profile/whitebox.standard@1"
+  ) {
+    if (!isNil(state.batch)) {
+      throw failure(
+        "WORLDKIT_NATIVE_SCENE_PROFILE_SETTLEMENT_PROFILE_MISMATCH",
+        "The standard Native Scene Profile must not publish a settlement batch.",
+        "Remove the Profile settlement commit from standard Native Modules.",
+      );
+    }
+    return Object.freeze({
+      receipt: Object.freeze({
+        kind: "none",
+        profileRef: "worldkit://native-scene-profile/whitebox.standard@1",
+      }),
+      targets: Object.freeze([]),
+    });
+  }
+  if (context.bootstrap.nativeSceneProfileRef !== BLOCK_PROFILE_REF) {
+    throw failure(
+      "WORLDKIT_NATIVE_SCENE_PROFILE_SETTLEMENT_PROFILE_MISMATCH",
+      "Native Scene Profile is outside the closed settlement map.",
+      "Select whitebox.standard@1 or whitebox.blocks@1 before Candidate allocation.",
+    );
+  }
   if (isNil(state.batch)) {
     throw failure(
       "WORLDKIT_NATIVE_SCENE_PROFILE_SETTLEMENT_REQUIRED",
@@ -392,13 +472,22 @@ export function finalizeBabylonNativeProfileSettlementV1(
     );
   }
   const targets = state.batch.targets.map((target) => {
-    const actual = fingerprintTarget(
-      context,
-      target.elementId,
-      target.mesh,
-      target.collisionBinding,
-    );
-    if (sha256CanonicalJson(actual) !== sha256CanonicalJson(target.fingerprint)) {
+    let actual: TargetFingerprintV1;
+    try {
+      actual = fingerprintTarget(
+        context,
+        target.elementId,
+        target.mesh,
+        target.collisionBinding,
+      );
+    } catch {
+      throw failure(
+        "WORLDKIT_NATIVE_SCENE_PROFILE_TARGET_DRIFT",
+        `Profile target '${target.elementId}' changed after settlement commit.`,
+        "Complete geometry, transforms, visibility and collision joins before finalize().",
+      );
+    }
+    if (!isEqual(actual, target.fingerprint)) {
       throw failure(
         "WORLDKIT_NATIVE_SCENE_PROFILE_TARGET_DRIFT",
         `Profile target '${target.elementId}' changed after settlement commit.`,
@@ -411,7 +500,15 @@ export function finalizeBabylonNativeProfileSettlementV1(
     kind: "babylon-native-profile-settled-visuals",
     schemaVersion: 1,
     profileRef: BLOCK_PROFILE_REF,
-    targets: targets.map(({ fingerprint }) => fingerprint),
+    targets: targets.map(({ fingerprint }) => ({
+      elementId: fingerprint.elementId,
+      collisionBinding: fingerprint.collisionBinding,
+      worldPositionsMetersXYZ: fingerprint.worldPositionsMetersXYZ,
+      triangleIndices: fingerprint.triangleIndices,
+      isVisible: fingerprint.isVisible,
+      visibilityRatio: fingerprint.visibilityRatio,
+      isEnabled: fingerprint.isEnabled,
+    })),
   }) as `sha256:${string}`;
   return Object.freeze({
     receipt: Object.freeze({
