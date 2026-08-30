@@ -342,3 +342,60 @@ consume already published and admitted Resource Refs, but it does not make APA a
 provider routing and asset publication into Native scene work. General NPC navigation, vehicles,
 mount breadth, equipment/combat breadth, networking, streaming, and full multi-floor interiors remain
 outside WRC-1 unless accepted through a later dedicated milestone design.
+
+### 14.1 Generative presentation after formal Capture
+
+The August 2026 Magpie technical report demonstrates a useful downstream pattern: the Game Engine
+first resolves input, traversal, collision, events, state, and Camera, then an independent generative
+renderer converts synchronized whitebox observations into styled video. The renderer does not receive
+raw player actions, hidden Gameplay state, object properties, or event records as rule-level control;
+it sees the already-resolved visible consequence. This precedent reinforces WRC-1's existing owner map
+rather than adding another owner. Reference:
+[`Magpie: Real-Time World Renderer for Interactive Games`](https://arxiv.org/abs/2608.27168).
+
+Any future generative presentation work follows this boundary:
+
+```text
+verified WorldPackage + one RuntimeHost/Babylon/Havok session
+  -> BNA-7 identity-bound synchronized Capture
+  -> read-only generative-presentation condition bundle
+  -> untrusted replaceable renderer
+  -> styled image/video artifact + provenance/evaluation receipt only
+```
+
+- It is not a third Scene Source, Runtime renderer authority, WorldPackage mutation path, asset
+  admission bypass, or Gameplay feedback loop. It cannot create or modify geometry, Physics, Subject,
+  Action, Camera, Event, State, Tick, Route, or lifecycle objects.
+- The condition bundle is derived only after Runtime commit and is bound to the exact
+  `worldBuildIdentityHash`, Runtime session/epoch, fixed Tick range, Capture profile, Camera matrices,
+  and source frame hashes. Whitebox color and Camera are mandatory. Depth, normals, semantic IDs, and
+  motion vectors may be added as engine-derived structural channels because they reduce image-only
+  depth and boundary ambiguity without exposing a second Gameplay dialect.
+- Style text and an approved first-frame appearance reference are initialization-only presentation
+  inputs. Raw input commands, collision records, hidden state, and event payloads remain outside the
+  renderer. A Gameplay change reaches it only through the next committed visible observation.
+- Generated frames are untrusted presentation artifacts. They may receive structural-adherence,
+  temporal/revisit-consistency, appearance-quality, latency, and cost measurements, but they never
+  prove collision, traversal, event, or Action correctness. Those claims continue to use the source
+  Runtime receipts and whitebox evidence.
+- Ordinary Babylon rendering remains the playable fallback and inspection truth. Renderer failure,
+  timeout, drift, or policy rejection cannot pause, roll back, or alter the authoritative simulation.
+- The first supported experiment is offline or asynchronous post-Capture rendering, compatible with
+  the existing explicitly requested recording/Seedance workflow. Interactive frame-wise streaming is
+  a later feasibility gate and cannot be called production from chunk-wise demonstrations.
+- Cloud rendering receives only the curated immutable condition bundle and presentation inputs. It
+  receives no repository source, credentials, provider handles, mutable Runtime connection, or hidden
+  WorldSession state.
+
+This deferred program starts only after BNA-7 can produce formal identity-bound Capture. It is split
+into three future packages so implementation cannot smuggle model concerns into Runtime owners:
+
+| ID | Goal | depends_on | Output and gate |
+|---|---|---|---|
+| GPR-0 | Freeze the source-neutral condition bundle, provenance receipt, redaction, and no-writeback threat boundary | BNA-7 | Dedicated design plus closed Schema, parser, tamper/identity/redaction tests |
+| GPR-1 | Evaluate one replaceable offline renderer on the frozen reconstruction corpus | GPR-0, WRC-SR-1 | Styled artifacts plus structural/temporal/quality/cost receipts; no Runtime claim |
+| GPR-2 | Decide whether frame-wise interactive streaming is viable without weakening simulation authority or fallback | GPR-1 | Pre-registered latency/consistency thresholds and scoped GO/NO-GO; no automatic product adoption |
+
+`GPR-0` through `GPR-2` are not part of the 33 WRC-1 implementation packages or the WRC-1 acceptance
+critical path. A later milestone must approve their detailed design, dependencies, privacy model,
+budgets, model/provider locks, and exact verification thresholds before code is added.
