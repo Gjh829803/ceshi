@@ -128,6 +128,7 @@ interface NativeIsolatedExecutionResultBaseV1 {
 }
 
 export type NativeIsolationTerminationReasonV1 =
+  | "host-cancelled"
   | "timeout"
   | "cpu-limit"
   | "memory-limit"
@@ -344,6 +345,7 @@ const DIAGNOSTIC_STAGES = new Set<NativeIsolationDiagnosticStageV1>([
 ]);
 
 const TERMINATION_REASONS = new Set<NativeIsolationTerminationReasonV1>([
+  "host-cancelled",
   "timeout",
   "cpu-limit",
   "memory-limit",

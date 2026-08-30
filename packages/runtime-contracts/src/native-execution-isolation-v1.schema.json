@@ -313,7 +313,7 @@
         "requestId": { "$ref": "#/$defs/Identity" },
         "runtimeSessionId": { "$ref": "#/$defs/Identity" },
         "status": { "const": "terminated" },
-        "reason": { "enum": ["timeout", "cpu-limit", "memory-limit", "process-limit", "output-limit", "protocol-violation", "provider-lost"] }
+            "reason": { "enum": ["host-cancelled", "timeout", "cpu-limit", "memory-limit", "process-limit", "output-limit", "protocol-violation", "provider-lost"] }
       }
     },
     "NativeIsolatedExecutionCleanupFailedResultV1": {

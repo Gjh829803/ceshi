@@ -335,7 +335,7 @@ describe("Native execution isolation contracts", () => {
           message: "Runtime replay was rejected.",
         }],
       },
-      { ...base, status: "terminated", reason: "timeout" },
+      { ...base, status: "terminated", reason: "host-cancelled" },
       {
         ...base,
         status: "cleanup-failed",

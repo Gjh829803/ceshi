@@ -233,7 +233,7 @@ fields.
 - `ready`: one verified initial Snapshot and protocol endpoint/lease;
 - `completed`: operation output hashes plus final Snapshot hash;
 - `rejected`: stable stage and diagnostics;
-- `terminated`: stable termination reason (`timeout`, `cpu-limit`, `memory-limit`, `process-limit`,
+- `terminated`: stable termination reason (`host-cancelled`, `timeout`, `cpu-limit`, `memory-limit`, `process-limit`,
   `output-limit`, `protocol-violation`, `provider-lost`); or
 - `cleanup-failed`: no reusable session and a stable quarantine identity.
 
@@ -268,20 +268,27 @@ The provider interface is Host capability, not public Authoring Schema:
 ```ts
 interface NativeIsolationProviderV1 {
   readonly runnerIdentityRef: string;
-  prepare(request: NativeIsolatedExecutionRequestV1):
+  prepare(request: NativeIsolatedExecutionRequestV1, cancellationSignal: AbortSignal):
     Promise<PreparedNativeIsolationV1>;
 }
 
 interface PreparedNativeIsolationV1 {
   start(): Promise<NativeIsolatedExecutionResultV1>;
-  terminate(reason: NativeIsolationTerminationReasonV1): Promise<void>;
-  collectReceipt(): Promise<NativeIsolatedExecutionReceiptV1>;
+  submit(envelope: NativeIsolationTransportEnvelopeV1):
+    Promise<NativeIsolationTransportEnvelopeV1>;
+  terminate(reason: NativeIsolationTerminationReasonV1):
+    Promise<NativeIsolatedExecutionResultV1>;
+  collectReceipt(): Promise<{
+    readonly result: NativeIsolatedExecutionResultV1;
+    readonly receipt: NativeIsolatedExecutionReceiptV1;
+    readonly attestationBytes: Uint8Array;
+  }>;
   dispose(): Promise<void>;
 }
 ```
 
 The concrete interface may use opaque private handles internally, but they never cross package or
-protocol boundaries. `prepare`, `start`, `terminate`, `collectReceipt` and `dispose` are each
+protocol boundaries. `prepare`, `start`, `submit`, `terminate`, `collectReceipt` and `dispose` are each
 single-owner, bounded and idempotent at the Host boundary.
 
 The Host supervisor owns a strict lifecycle:

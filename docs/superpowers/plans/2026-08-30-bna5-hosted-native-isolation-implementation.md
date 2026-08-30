@@ -326,7 +326,24 @@ interface NativeIsolationAttestationVerifierV1 {
 
 interface NativeIsolationProviderV1 {
   readonly runnerIdentityRef: string;
-  prepare(request: NativeIsolatedExecutionRequestV1): Promise<PreparedNativeIsolationV1>;
+  prepare(
+    request: NativeIsolatedExecutionRequestV1,
+    cancellationSignal: AbortSignal,
+  ): Promise<PreparedNativeIsolationV1>;
+}
+
+interface PreparedNativeIsolationV1 {
+  start(): Promise<NativeIsolatedExecutionResultV1>;
+  submit(envelope: NativeIsolationTransportEnvelopeV1):
+    Promise<NativeIsolationTransportEnvelopeV1>;
+  terminate(reason: NativeIsolationTerminationReasonV1):
+    Promise<NativeIsolatedExecutionResultV1>;
+  collectReceipt(): Promise<{
+    readonly result: NativeIsolatedExecutionResultV1;
+    readonly receipt: NativeIsolatedExecutionReceiptV1;
+    readonly attestationBytes: Uint8Array;
+  }>;
+  dispose(): Promise<void>;
 }
 
 class NativeIsolationSupervisorV1 {
