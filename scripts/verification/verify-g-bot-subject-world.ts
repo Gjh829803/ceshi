@@ -200,7 +200,6 @@ interface ActionCaptureEvidence extends PngInspection {
   readonly subjectEntityId: typeof PRIMARY_ENTITY_ID;
   readonly positionMetersXYZ: RuntimeVec3V1;
   readonly movementMedium: "ground" | "air";
-  readonly jumpVariant?: "small" | "large";
   readonly subjectSilhouette: SubjectPoseEvidenceV1;
 }
 
@@ -209,8 +208,26 @@ interface ActionCaptureResult {
   readonly poseAnalysis: SubjectPoseAnalysisV1;
 }
 
+interface JumpCycleSampleEvidence {
+  readonly tick: number;
+  readonly positionMetersXYZ: RuntimeVec3V1;
+  readonly movementMedium: "ground" | "air";
+}
+
+interface JumpCycleEvidence {
+  readonly source: "browser-fixed-tick";
+  readonly subjectEntityId: typeof PRIMARY_ENTITY_ID;
+  readonly spawn: JumpCycleSampleEvidence;
+  readonly takeoff: JumpCycleSampleEvidence;
+  readonly apex: JumpCycleSampleEvidence;
+  readonly fall: JumpCycleSampleEvidence;
+  readonly land: JumpCycleSampleEvidence;
+  readonly reset: JumpCycleSampleEvidence;
+}
+
 interface BrowserEvidence {
   readonly actions: Readonly<Record<ActionId, ActionCaptureEvidence>>;
+  readonly jumpCycle: JumpCycleEvidence;
   readonly poseGate: {
     readonly minimumDifferenceRatio: number;
     readonly walkCaptureTiming: {
@@ -526,7 +543,6 @@ async function captureAction(
   output: {
     readonly path: string;
     readonly filename: ActionCaptureEvidence["filename"];
-    readonly jumpVariant?: "small" | "large";
   },
 ): Promise<ActionCaptureResult> {
   const reset = await page.evaluate(async () => window.__WORLDKIT__!.reset());
@@ -602,13 +618,102 @@ async function captureAction(
       subjectEntityId: PRIMARY_ENTITY_ID,
       positionMetersXYZ: state.positionMetersXYZ,
       movementMedium: locomotion.movementMedium,
-      ...(output.jumpVariant === undefined
-        ? {}
-        : { jumpVariant: output.jumpVariant }),
       subjectSilhouette: poseAnalysis.evidence,
       ...inspectPng(bytes),
     },
     poseAnalysis,
+  };
+}
+
+function jumpCycleSample(snapshot: WorldRuntimeSnapshotV4): JumpCycleSampleEvidence {
+  const state = requireSubjectProjection(snapshot, PRIMARY_ENTITY_ID).entityState;
+  const locomotion = requireLocomotionCapability(snapshot, PRIMARY_ENTITY_ID);
+  return {
+    tick: snapshot.world.simulationTick,
+    positionMetersXYZ: state.positionMetersXYZ,
+    movementMedium: locomotion.movementMedium,
+  };
+}
+
+async function captureJumpCycle(page: Page): Promise<JumpCycleEvidence> {
+  const spawnSnapshot = await page.evaluate(async () => window.__WORLDKIT__!.reset());
+  assertPossessedBy(spawnSnapshot, PRIMARY_ENTITY_ID);
+  const spawn = jumpCycleSample(spawnSnapshot);
+  assert.equal(spawn.tick, 0);
+  assert.equal(spawn.movementMedium, "ground");
+
+  const samples = await page.evaluate(async ({ maximumTicks, subjectEntityId }) => {
+    const output: JumpCycleSampleEvidence[] = [];
+    let hasTakenOff = false;
+    for (let step = 0; step < maximumTicks; step += 1) {
+      const actions = step === 0 ? ["jump" as const] : [];
+      const snapshot = await window.__WORLDKIT__!.runFixedInput([
+        { actions, ticks: 1 },
+      ]);
+      const subject = snapshot.world.subjectStatesByEntityId[subjectEntityId];
+      if (subject === undefined) throw new Error("PRODUCT_ASSET_SUBJECT_STATE_MISSING");
+      const locomotionCapability = Object.values(subject.capabilityStatesById).find(
+        (capability) => capability.kind === "locomotion-capability-state-v2",
+      );
+      if (locomotionCapability?.kind !== "locomotion-capability-state-v2") {
+        throw new Error("PRODUCT_ASSET_LOCOMOTION_STATE_MISSING");
+      }
+      if (locomotionCapability.locomotion.status !== "active") {
+        throw new Error("PRODUCT_ASSET_LOCOMOTION_STATE_INACTIVE");
+      }
+      const sample: JumpCycleSampleEvidence = {
+        tick: snapshot.world.simulationTick,
+        positionMetersXYZ: subject.entityState.positionMetersXYZ,
+        movementMedium: locomotionCapability.locomotion.movementMedium,
+      };
+      output.push(sample);
+      if (sample.movementMedium === "air") hasTakenOff = true;
+      if (hasTakenOff && sample.movementMedium === "ground") break;
+    }
+    return output;
+  }, { maximumTicks: 240, subjectEntityId: PRIMARY_ENTITY_ID });
+
+  const takeoffIndex = samples.findIndex((sample) => sample.movementMedium === "air");
+  assert.ok(takeoffIndex >= 0, "Browser jump cycle never reached takeoff.");
+  const landIndex = samples.findIndex((sample, index) =>
+    index > takeoffIndex && sample.movementMedium === "ground"
+  );
+  assert.ok(landIndex > takeoffIndex, "Browser jump cycle never landed.");
+  const airborne = samples.slice(takeoffIndex, landIndex);
+  assert.ok(airborne.length >= 3, "Browser jump cycle did not expose enough airborne samples.");
+  let apexIndex = 0;
+  for (let index = 1; index < airborne.length; index += 1) {
+    if (airborne[index]!.positionMetersXYZ[1] >
+      airborne[apexIndex]!.positionMetersXYZ[1]) apexIndex = index;
+  }
+  assert.ok(apexIndex > 0 && apexIndex < airborne.length - 1);
+  const apex = airborne[apexIndex]!;
+  const fall = airborne.slice(apexIndex + 1).find((sample) =>
+    sample.positionMetersXYZ[1] < apex.positionMetersXYZ[1]
+  );
+  assert.ok(!isNil(fall), "Browser jump cycle never exposed a falling sample.");
+  const takeoff = airborne[0]!;
+  const land = samples[landIndex]!;
+  assert.ok(apex.positionMetersXYZ[1] > takeoff.positionMetersXYZ[1]);
+  assert.ok(fall.positionMetersXYZ[1] < apex.positionMetersXYZ[1]);
+  assert.equal(land.movementMedium, "ground");
+
+  const resetSnapshot = await page.evaluate(async () => window.__WORLDKIT__!.reset());
+  assertPossessedBy(resetSnapshot, PRIMARY_ENTITY_ID);
+  const reset = jumpCycleSample(resetSnapshot);
+  assert.equal(reset.tick, 0);
+  assert.equal(reset.movementMedium, "ground");
+  assert.deepEqual(reset.positionMetersXYZ, spawn.positionMetersXYZ);
+
+  return {
+    source: "browser-fixed-tick",
+    subjectEntityId: PRIMARY_ENTITY_ID,
+    spawn,
+    takeoff,
+    apex,
+    fall,
+    land,
+    reset,
   };
 }
 
@@ -748,7 +853,6 @@ async function verifyBrowser(
       jump: await captureAction(page, "jump", ["jump"], jumpCaptureTick, {
         path: paths.action.jump,
         filename: "jump.png",
-        ...(SPLIT_JUMP_POLICY === undefined ? {} : { jumpVariant: "small" as const }),
       }),
     } satisfies Record<CaptureActionId, ActionCaptureResult>;
     const largeJump = largeJumpCaptureTick === undefined
@@ -761,7 +865,6 @@ async function verifyBrowser(
           {
             path: paths.jumpLarge,
             filename: "jump-large.png",
-            jumpVariant: "large",
           },
         );
     const actions = {
@@ -792,6 +895,7 @@ async function verifyBrowser(
             poseDifference,
           };
         })();
+    const jumpCycle = await captureJumpCycle(page);
     const actionIds = ["idle", "walk", "run", "jump"] as const;
     const comparisons: BrowserEvidence["poseGate"]["comparisons"][number][] = [];
     for (let firstIndex = 0; firstIndex < actionIds.length; firstIndex += 1) {
@@ -825,6 +929,7 @@ async function verifyBrowser(
 
     result = {
       actions,
+      jumpCycle,
       poseGate: {
         minimumDifferenceRatio: MINIMUM_SUBJECT_POSE_DIFFERENCE_RATIO,
         walkCaptureTiming,
@@ -900,6 +1005,7 @@ async function writeVerification(
       ...(browser.splitJump === undefined ? [] : [browser.splitJump.large]),
     ],
     poseGate: browser.poseGate,
+    jumpCycle: browser.jumpCycle,
     wallStop: browser.wallStop,
     ...(browser.splitJump === undefined ? {} : { splitJump: browser.splitJump }),
   } as const;

@@ -3978,6 +3978,11 @@ function emptyActionProjection(simulationTick: number) {
     playerVisual.applyAnimationPose();
 
     expect(Number.isFinite(playerAdjustment.position.y)).toBe(true);
+    const appliedAdjustmentMeters = Math.abs(
+      playerAdjustment.position.y - playerAdjustmentBefore,
+    );
+    expect(appliedAdjustmentMeters).toBeGreaterThan(0);
+    expect(appliedAdjustmentMeters).toBeLessThanOrEqual(0.030000001);
     expect(playerVisual.root.position.asArray()).toEqual(playerRootBefore.asArray());
     expect(heroBVisual.root.position.asArray()).toEqual(heroBRootBefore.asArray());
     expect(heroBAdjustment.position.y).toBe(0);

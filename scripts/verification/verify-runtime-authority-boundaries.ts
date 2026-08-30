@@ -194,6 +194,15 @@ function inspectSource(
   const visit = (node: ts.Node): void => {
     const declared = declarationName(node);
     for (const fact of policy.protectedFacts) {
+      if (relativePath.startsWith(packageRoot(fact.providerPackage)) &&
+        (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+        node.moduleSpecifier !== undefined && ts.isStringLiteral(node.moduleSpecifier) &&
+        node.moduleSpecifier.text.startsWith(`${fact.ownerPackage}/`)) {
+        fail(
+          "RUNTIME_AUTHORITY_PRIVATE_OWNER_IMPORT",
+          `${fact.id}: ${relativePath} imports ${node.moduleSpecifier.text}.`,
+        );
+      }
       if (!isNil(declared) && fact.forbiddenDeclaredIdentifiers.includes(declared)) {
         fail("RUNTIME_AUTHORITY_SHADOW_OWNER", `${fact.id}: ${relativePath} declares ${declared}.`);
       }

@@ -123,6 +123,32 @@ describe("runtime authority boundary verifier", () => {
     });
   });
 
+  it("rejects a provider import of an owner private module", async () => {
+    const repositoryRoot = await repositoryWithFiles({
+      "packages/character-movement/src/contracts.ts": [
+        "export type JumpEpisodeStateV1 = Readonly<{ phase: 'airborne' }>;",
+        "export interface CharacterMovementSnapshotV1 {",
+        "  readonly jumpEpisode?: JumpEpisodeStateV1;",
+        "}",
+        "",
+      ].join("\n"),
+      "packages/runtime-babylon/src/provider.ts": [
+        "import type { JumpEpisodeStateV1 } from '@whitebox-world/character-movement/src/contracts.js';",
+        "export const projectJump = (episode: JumpEpisodeStateV1): string => episode.phase;",
+        "",
+      ].join("\n"),
+    });
+
+    await expect(verifyRuntimeAuthorityBoundariesV1({
+      repositoryRoot,
+      policy: POLICY,
+      sourceFilePaths: [
+        "packages/runtime-babylon/src/provider.ts",
+        "packages/character-movement/src/contracts.ts",
+      ],
+    })).rejects.toThrow("RUNTIME_AUTHORITY_PRIVATE_OWNER_IMPORT");
+  });
+
   it("rejects malformed duplicate fact and field policy before scanning source", async () => {
     const repositoryRoot = await repositoryWithFiles({
       "packages/runtime-babylon/src/provider.ts": "export const value = 1;\n",

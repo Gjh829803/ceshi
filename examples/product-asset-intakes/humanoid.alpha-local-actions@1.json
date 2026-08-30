@@ -12,7 +12,7 @@
   "productAssetManifestPath": "assets/subjects/humanoid/alpha-local-actions/asset.manifest.json",
   "productActionManifestPath": "assets/subjects/humanoid/alpha-local-actions/action-manifest.json",
   "authoringWorldPath": "examples/authoring/alpha-local-actions-world.json",
-  "artifactDirectoryPath": "artifacts/examples/alpha-local-actions-world",
+  "artifactDirectoryPath": "examples/evidence/alpha-local-actions-world",
   "primaryEntityId": "alpha-primary",
   "secondaryEntityId": "alpha-secondary",
   "controllerId": "controller-primary",

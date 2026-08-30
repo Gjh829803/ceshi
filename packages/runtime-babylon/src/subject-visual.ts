@@ -752,8 +752,10 @@ export async function createSubjectVisual(
       const leftFoot = mappedBones.get("foot.left");
       const rightFoot = mappedBones.get("foot.right");
       const anchorMesh = affectedMeshes[0];
+      const anchorSkeleton = assetInstance.skeletons[0];
       if (visualAdjustmentRoot !== undefined && leftFoot !== undefined &&
-        rightFoot !== undefined && anchorMesh !== undefined) {
+        rightFoot !== undefined && anchorMesh !== undefined &&
+        anchorSkeleton !== undefined) {
         verticalFootSupportAnchor = new VerticalFootSupportAnchorV1({
           readAdjustmentOffsetY: () => visualAdjustmentRoot.position.y,
           writeAdjustmentOffsetY: (value) => {
@@ -762,6 +764,7 @@ export async function createSubjectVisual(
           sampleMinimumFootHeightFromVisualRoot: () => {
             root.computeWorldMatrix(true);
             anchorMesh.computeWorldMatrix(true);
+            anchorSkeleton.prepare(true);
             const inverseRoot = root.getWorldMatrix().clone().invert();
             const leftPosition = Vector3.TransformCoordinates(
               leftFoot.getAbsolutePosition(anchorMesh),
