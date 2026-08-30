@@ -12,6 +12,7 @@ import {
   type BabylonNativeSceneBuildContextV1,
 } from "./index.js";
 import {
+  commitBabylonNativeProfileSettlementV1,
   replayBabylonNativeSceneModuleV1,
   type BabylonNativeSceneCandidateFactoryV1,
   type BabylonNativeSceneCandidateLeaseV1,
@@ -37,6 +38,12 @@ const BOOTSTRAP = parseBabylonNativeSceneBootstrapV1({
   },
   seed: 20260829,
   spawnMarkerId: "player-spawn",
+});
+const BLOCK_BOOTSTRAP = parseBabylonNativeSceneBootstrapV1({
+  ...BOOTSTRAP,
+  id: "runtime-replay-native-blocks",
+  nativeSceneProfileRef:
+    "worldkit://native-scene-profile/whitebox.blocks@1",
 });
 
 const ASSETS: BabylonNativeLockedAssetResolverV1 = Object.freeze({
@@ -158,10 +165,11 @@ function registerCollider(
 function input(
   factory: BabylonNativeSceneCandidateFactoryV1,
   module: ReturnType<typeof defineBabylonNativeScene>,
+  bootstrap = BOOTSTRAP,
 ) {
   return {
     candidateFactory: factory,
-    bootstrap: BOOTSTRAP,
+    bootstrap,
     module,
     assets: ASSETS,
     budget: BUDGET,
@@ -280,6 +288,43 @@ describe("replayBabylonNativeSceneModuleV1", () => {
 
     const result = await replayBabylonNativeSceneModuleV1(
       input(tracked.factory, module),
+    );
+
+    expect(result.checkResult.outcome).toBe("rejected");
+    expect(diagnosticCodes(result)).toContain(
+      "WORLDKIT_NATIVE_SCENE_RUNTIME_REPLAY_MISMATCH",
+    );
+    expect(tracked.disposedIndices).toEqual([1, 2]);
+    expect("contribution" in result).toBe(false);
+  });
+
+  it("rejects settled Block visual drift across isolated Candidates", async () => {
+    const tracked = trackedFactory();
+    let buildCount = 0;
+    const module = defineBabylonNativeScene({
+      kind: "babylon-native-scene-module",
+      id: "block-visual-drift",
+      build(context) {
+        buildCount += 1;
+        registerSpawn(context);
+        const visual = MeshBuilder.CreateBox("route-block", { size: 1 }, context.scene);
+        visual.position.x = buildCount === 1 ? 0 : 1;
+        commitBabylonNativeProfileSettlementV1(context, {
+          kind: "babylon-native-profile-settlement-batch",
+          schemaVersion: 1,
+          profileRef: "worldkit://native-scene-profile/whitebox.blocks@1",
+          profileInventoryHash: `sha256:${"1".repeat(64)}`,
+          targets: [{
+            elementId: "route-block",
+            mesh: visual,
+            collisionBinding: { kind: "none" },
+          }],
+        });
+      },
+    });
+
+    const result = await replayBabylonNativeSceneModuleV1(
+      input(tracked.factory, module, BLOCK_BOOTSTRAP),
     );
 
     expect(result.checkResult.outcome).toBe("rejected");
