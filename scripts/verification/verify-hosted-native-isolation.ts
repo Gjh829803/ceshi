@@ -50,6 +50,8 @@ import {
   type NativeContainerProcessUsageSampleV1,
   type NativeContainerRuntimeUsageObservationV1,
 } from "./hosted-native-isolation-evidence";
+import { parseHostedNativeRuntimeUsageFrameV1 } from
+  "../native-scene/hosted/runtime-usage-frame";
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dirname, "../..");
 const PACKAGE_ROOT = path.join(
@@ -338,7 +340,8 @@ class DockerJsonLineProcess implements NativeContainerCommandProcessV1 {
 
   async exchangeLine(inputLine: string, maximumOutputBytes: number): Promise<string> {
     this.#inboundBytes += Buffer.byteLength(inputLine);
-    if (isNil(this.#request)) {
+    const isInitialRequest = isNil(this.#request);
+    if (isInitialRequest) {
       this.#request = parseNativeIsolatedExecutionRequestV1(JSON.parse(inputLine));
     }
     const linePromise = this.nextLine();
@@ -348,6 +351,32 @@ class DockerJsonLineProcess implements NativeContainerCommandProcessV1 {
       this.#terminationReason = "output-limit";
       await this.killContainerDomain();
       throw new NativeIsolationProviderTerminationErrorV1("output-limit");
+    }
+    if (isInitialRequest) {
+      try {
+        const usageLine = await this.nextLine();
+        if (Buffer.byteLength(usageLine) > maximumOutputBytes) {
+          throw new Error("HOSTED_NATIVE_RUNTIME_USAGE_FRAME_OVERSIZED");
+        }
+        const usageFrame = parseHostedNativeRuntimeUsageFrameV1(
+          JSON.parse(usageLine),
+        );
+        const request = this.#request;
+        if (
+          isNil(request) ||
+          usageFrame.requestHash !==
+            hashNativeIsolatedExecutionRequestV1(request) ||
+          usageFrame.runtimeSessionId !== request.runtimeSessionId ||
+          usageFrame.sessionNonce !== request.sessionNonce
+        ) throw new Error("HOSTED_NATIVE_RUNTIME_USAGE_IDENTITY_MISMATCH");
+        this.#runtimeUsage = usageFrame.runtime;
+      } catch {
+        this.#terminationReason = "protocol-violation";
+        await this.killContainerDomain();
+        throw new NativeIsolationProviderTerminationErrorV1(
+          "protocol-violation",
+        );
+      }
     }
     try {
       const envelope = parseNativeIsolationTransportEnvelopeV1(JSON.parse(line));

@@ -5,6 +5,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
 COPY patches ./patches
 COPY packages ./packages
 COPY scripts/native-scene/hosted/runner-entry.ts ./scripts/native-scene/hosted/runner-entry.ts
+COPY scripts/native-scene/hosted/runtime-usage-frame.ts ./scripts/native-scene/hosted/runtime-usage-frame.ts
 COPY scripts/native-scene/hosted/runner/build.mjs ./scripts/native-scene/hosted/runner/build.mjs
 COPY scripts/native-scene/hosted/hostile-fixtures ./scripts/native-scene/hosted/hostile-fixtures
 COPY assets/registry ./assets/registry

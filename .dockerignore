@@ -11,6 +11,7 @@
 !scripts/native-scene/
 !scripts/native-scene/hosted/
 !scripts/native-scene/hosted/runner-entry.ts
+!scripts/native-scene/hosted/runtime-usage-frame.ts
 !scripts/native-scene/hosted/runner/
 !scripts/native-scene/hosted/runner/build.mjs
 !scripts/native-scene/hosted/hostile-fixtures/

@@ -16,6 +16,7 @@ import {
   type SubjectAssetResolverV1,
 } from "@whitebox-world/runtime-babylon";
 import {
+  hashNativeIsolatedExecutionRequestV1,
   parseNativeIsolatedExecutionRequestV1,
   parseNativeIsolationTransportEnvelopeV1,
   parseRuntimeSessionRequestV1,
@@ -30,6 +31,9 @@ import {
   type VerifiedBabylonNativeWorldPackageDirectoryV1,
 } from "@whitebox-world/world-package/native-runtime";
 import { isNil } from "lodash-es";
+
+import { createHostedNativeRuntimeUsageFrameV1 } from
+  "./runtime-usage-frame";
 
 const PACKAGE_ROOT = "/world-package";
 const RUNNER_ROOT = "/runner";
@@ -220,6 +224,15 @@ async function main(): Promise<void> {
     });
     writeBoundedLine(
       readyResult(request, entry),
+      request.effectiveBudget.protocol.maximumOutboundMessageBytes,
+    );
+    writeBoundedLine(
+      createHostedNativeRuntimeUsageFrameV1({
+        requestHash: hashNativeIsolatedExecutionRequestV1(request),
+        runtimeSessionId: request.runtimeSessionId,
+        sessionNonce: request.sessionNonce,
+        runtime: entry.runtimeUsage(),
+      }),
       request.effectiveBudget.protocol.maximumOutboundMessageBytes,
     );
     let expectedSequence = 1;
