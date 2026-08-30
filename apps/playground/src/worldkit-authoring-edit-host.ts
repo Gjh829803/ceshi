@@ -31,8 +31,8 @@ import type { PublishWorldReplacementResultV1 } from "@whitebox-world/runtime-ho
 import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
 import {
   BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V1,
-  type ResolvedWorldPackageResourceArtifactV1,
-  type WorldPackageBuildContextV1,
+  type ResolvedCanonicalWorldPackageResourceArtifactV1,
+  type CanonicalWorldPackageBuildContextV1,
   type WorldPackageStoreV1,
 } from "@whitebox-world/world-package";
 import { isEqual, isNil } from "lodash-es";
@@ -181,8 +181,8 @@ export function createPlaygroundAuthoringEditSessionV1(input: {
 export function createPlaygroundAuthoringEditHostV1(input: {
   readonly authoringSpec: AuthoringSpecV4;
   readonly worldPackageStore: WorldPackageStoreV1;
-  readonly worldPackageBuildContext: WorldPackageBuildContextV1;
-  readonly resourceArtifacts: readonly ResolvedWorldPackageResourceArtifactV1[];
+  readonly worldPackageBuildContext: CanonicalWorldPackageBuildContextV1;
+  readonly resourceArtifacts: readonly ResolvedCanonicalWorldPackageResourceArtifactV1[];
   readonly nowUnixMilliseconds?: () => number;
   readonly publishWorldReplacement?: (
     value: unknown,

@@ -765,6 +765,9 @@ importers:
       '@whitebox-world/runtime-contracts':
         specifier: workspace:*
         version: link:../runtime-contracts
+      '@whitebox-world/scene-authoring-contracts':
+        specifier: workspace:*
+        version: link:../scene-authoring-contracts
       '@whitebox-world/subject-registry':
         specifier: workspace:*
         version: link:../subject-registry

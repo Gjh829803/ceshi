@@ -2,12 +2,12 @@ import { canonicalJsonBytes } from "@whitebox-world/protocol";
 import { worldPackageRefFromRootHashV1 } from "@whitebox-world/world-identity";
 import { describe, expect, it } from "vitest";
 
-import { assembleWorldPackageDirectoryV1, createWorldPackageV1, type WorldPackageDirectoryV1 } from "./index.js";
+import { assembleWorldPackageDirectoryV1, createCanonicalWorldPackageV1, type WorldPackageDirectoryV1 } from "./index.js";
 import { createInMemoryWorldPackageStoreV1 } from "./testing.js";
 import { createWorldPackageTestInputV1 } from "./test-fixture.js";
 
 function fixture(): WorldPackageDirectoryV1 {
-  return createWorldPackageV1(createWorldPackageTestInputV1());
+  return createCanonicalWorldPackageV1(createWorldPackageTestInputV1());
 }
 
 function withSignature(directory: WorldPackageDirectoryV1, signatureBase64: string): WorldPackageDirectoryV1 {

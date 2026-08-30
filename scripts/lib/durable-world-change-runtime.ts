@@ -66,7 +66,7 @@ function verifiedConfigurationMatches(
     configuration.worldBuildIdentity.worldPackageRootHash === rootHash &&
     isEqual(configuration.worldBuildIdentity, directory.receipt.worldBuildIdentity) &&
     configuration.sceneSource.executionPlanHash ===
-      directory.receipt.manifest.executionPlanHash &&
+      directory.receipt.manifest.sceneSource.executionPlanHash &&
     isEqual(configuration.sceneSource.executionPlan, directory.executionPlan) &&
     isEqual(configuration.gameplayBootstrap, directory.gameplayBootstrap) &&
     isEqual(configuration.worldRuntimeBootstrap, directory.worldRuntimeBootstrap);

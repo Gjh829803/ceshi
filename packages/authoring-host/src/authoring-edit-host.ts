@@ -31,8 +31,8 @@ import {
 } from "@whitebox-world/authoring-edit";
 import { isNil } from "lodash-es";
 import type {
-  ResolvedWorldPackageResourceArtifactV1,
-  WorldPackageBuildContextV1,
+  ResolvedCanonicalWorldPackageResourceArtifactV1,
+  CanonicalWorldPackageBuildContextV1,
   WorldPackageStoreV1,
 } from "@whitebox-world/world-package";
 
@@ -86,8 +86,8 @@ export interface CreateAuthoringEditHostInputV1 {
   readonly journal: WorldChangeJournalV1;
   readonly leaseStore: PreparedCandidateLeaseStoreV1;
   readonly worldPackageStore: WorldPackageStoreV1;
-  readonly worldPackageBuildContext: WorldPackageBuildContextV1;
-  readonly resourceArtifacts: readonly ResolvedWorldPackageResourceArtifactV1[];
+  readonly worldPackageBuildContext: CanonicalWorldPackageBuildContextV1;
+  readonly resourceArtifacts: readonly ResolvedCanonicalWorldPackageResourceArtifactV1[];
   readonly session: AuthoringEditSessionV1;
   readonly nowUnixMilliseconds: () => number;
   readonly projectionProfile: unknown;

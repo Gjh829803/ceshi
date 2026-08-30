@@ -1,7 +1,7 @@
 import { createValidAuthoringSpec } from "@whitebox-world/authoring/testing";
 import {
   createInMemoryWorldPackageStoreV1,
-  createWorldPackageBuildContextFixtureV1,
+  createCanonicalWorldPackageBuildContextFixtureV1,
 } from "@whitebox-world/world-package/testing";
 import { describe, expect, it } from "vitest";
 
@@ -14,7 +14,7 @@ import {
 describe("Playground Authoring/Edit Host", () => {
   it("rejects a WorldPackage context for a different Host profile", () => {
     const spec = createValidAuthoringSpec();
-    const context = createWorldPackageBuildContextFixtureV1();
+    const context = createCanonicalWorldPackageBuildContextFixtureV1();
     expect(() => createPlaygroundAuthoringEditHostV1({
       authoringSpec: spec,
       worldPackageStore: createInMemoryWorldPackageStoreV1(),
@@ -34,7 +34,7 @@ describe("Playground Authoring/Edit Host", () => {
     const host = createPlaygroundAuthoringEditHostV1({
       authoringSpec: spec,
       worldPackageStore: createInMemoryWorldPackageStoreV1(),
-      worldPackageBuildContext: createWorldPackageBuildContextFixtureV1(),
+      worldPackageBuildContext: createCanonicalWorldPackageBuildContextFixtureV1(),
       resourceArtifacts: [],
       nowUnixMilliseconds: () => 1_700_000_000_000,
     });

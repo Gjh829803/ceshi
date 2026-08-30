@@ -122,6 +122,16 @@ describe("@whitebox-world/native-babylon package boundary", () => {
       ["canonical", "ResourceLockEntriesV1"].join(""),
       ["CANONICAL", "_RESOURCE_KINDS_V1"].join(""),
       ["canonical", "-resource-lock"].join(""),
+      ["create", "WorldPackageV1"].join(""),
+      ["Create", "WorldPackageV1Input"].join(""),
+      ["WorldPackage", "BuildContextV1"].join(""),
+      ["ResolvedWorldPackage", "ResourceArtifactV1"].join(""),
+      ["WorldPackageGameplayBootstrap", "MembershipInputV1"].join(""),
+      ["assertWorldPackageGameplayBootstrap", "MembershipV1"].join(""),
+      ["canonicalWorldPackage", "ManifestV1"].join(""),
+      ["canonicalWorldPackageFileIntegrity", "EntriesV1"].join(""),
+      ["canonicalWorldPackageSignature", "EnvelopeV1"].join(""),
+      ["canonicalWorldPackageDirectoryFor", "StoreV1"].join(""),
     ];
     const sources: string[] = [];
     for (const rootName of ["apps", "packages", "scripts"] as const) {
@@ -131,7 +141,7 @@ describe("@whitebox-world/native-babylon package boundary", () => {
     }
     const joined = sources.join("\n");
     for (const symbol of retiredSymbols) {
-      expect(joined).not.toContain(symbol);
+      expect(joined).not.toMatch(new RegExp(`\\b${symbol}\\b`));
     }
   });
 

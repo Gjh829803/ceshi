@@ -3,14 +3,14 @@ import { describe, expect, it } from "vitest";
 
 import {
   assembleWorldPackageDirectoryV1,
-  createWorldPackageV1,
+  createCanonicalWorldPackageV1,
   verifyWorldPackageDirectoryV1,
   type WorldPackageDirectoryV1,
 } from "./index.js";
 import { createWorldPackageTestInputV1 } from "./test-fixture.js";
 
 function fixture(): WorldPackageDirectoryV1 {
-  return createWorldPackageV1(createWorldPackageTestInputV1());
+  return createCanonicalWorldPackageV1(createWorldPackageTestInputV1());
 }
 
 describe("WorldPackageDirectoryV1", () => {

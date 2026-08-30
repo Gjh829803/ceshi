@@ -3,8 +3,8 @@ import { hashCanonicalAuthoringSchemaV1 } from "@whitebox-world/authoring-edit";
 import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
 import {
   BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V1,
-  type ResolvedWorldPackageResourceArtifactV1,
-  type WorldPackageBuildContextV1,
+  type ResolvedCanonicalWorldPackageResourceArtifactV1,
+  type CanonicalWorldPackageBuildContextV1,
   type WorldPackageLicenseDocumentInputV1,
 } from "@whitebox-world/world-package";
 import { isNil } from "lodash-es";
@@ -34,11 +34,11 @@ const LICENSE_BY_SPDX_EXPRESSION = new Map<string, WorldPackageLicenseDocumentIn
   })],
 ]);
 
-export function createPlaygroundWorldPackageBuildContextV1(input: {
+export function createPlaygroundCanonicalWorldPackageBuildContextV1(input: {
   readonly title: string;
-  readonly resourceArtifacts: readonly ResolvedWorldPackageResourceArtifactV1[];
+  readonly resourceArtifacts: readonly ResolvedCanonicalWorldPackageResourceArtifactV1[];
   readonly includeAuthoringSpec: boolean;
-}): WorldPackageBuildContextV1 {
+}): CanonicalWorldPackageBuildContextV1 {
   const projectionProfile =
     builtInSubjectResourceRegistry.resolveAiSchemaProjectionProfile(
       CONSTRAINED_JSON_PROFILE_REF,

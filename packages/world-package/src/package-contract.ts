@@ -17,8 +17,8 @@ import { isEqual, isNil, sortBy } from "lodash-es";
 
 import type {
   WorldPackageBuildReceiptV1,
+  CanonicalWorldPackageGameplayBootstrapMembershipInputV1,
   WorldPackageFileIntegrityEntryV1,
-  WorldPackageGameplayBootstrapMembershipInputV1,
   WorldPackageHostCompatibilityV1,
   WorldPackageHostPolicyV1,
   WorldPackageManifestV1,
@@ -30,6 +30,50 @@ const TRANSPORT_METADATA_PATHS = new Set([
   "integrity.json",
   "world-package-build-receipt.json",
   "world-build-identity.json",
+]);
+const MANIFEST_FIELDS = Object.freeze([
+  "kind", "schemaVersion", "id", "title", "packageFormatVersion", "sdkVersion",
+  "worldId", "seed", "runtimeTarget", "canonicalizationProfile", "hashAlgorithm",
+  "sceneSource", "worldRuntimeBootstrapSchemaVersion", "gameplayBootstrapHash",
+  "worldRuntimeBootstrapHash", "registryLockHash", "initialControlledEntityId",
+  "worldBounds", "resourceBudget", "lockedResources", "entryPoint", "legal",
+  "hostCompatibility", "resources",
+] as const);
+const CANONICAL_SCENE_SOURCE_FIELDS = Object.freeze([
+  "kind", "authoringSchema", "aiSchemaProjectionProfile",
+  "normalizedWorldIrSchemaVersion", "canonicalSceneExecutionPlanSchemaVersion",
+  "authoringSpecHash", "normalizedWorldIrHash", "executionPlanHash",
+  "layoutSolveReportHash", "canonicalSceneExecutionPlanPath",
+] as const);
+const NATIVE_SCENE_SOURCE_FIELDS = Object.freeze([
+  "kind", "nativeSceneBootstrapHash", "sceneModuleBundleHash",
+  "nativeSceneContributionHash", "dependencyLockHash", "assetLockHash",
+  "nativeSceneCheckResultHash", "sceneAuthoringRouteDecisionHash",
+  "sceneAuthoringAttemptHash", "sceneAuthoringAttemptResultRef",
+  "sceneAuthoringAttemptResultHash", "nativeSceneBootstrapPath",
+  "sceneModuleBundleManifestPath", "sceneModuleBundlePath", "dependencyLockPath",
+  "assetLockPath", "nativeSceneContributionPath", "nativeSceneCheckResultPath",
+  "sceneAuthoringRouteDecisionPath", "sceneAuthoringAttemptPath",
+  "sceneAuthoringAttemptResultPath",
+] as const);
+const PACKAGE_OWNED_RESOURCE_PATHS = new Set([
+  "manifest.json",
+  "registry-lock.json",
+  "gameplay/bootstrap.json",
+  "runtime/world-runtime-bootstrap.json",
+  "world.normalized.json",
+  "layout-solve-report.json",
+  "targets/babylon-web/canonical-scene-execution-plan.json",
+  "native/bootstrap.json",
+  "native/module-bundle.json",
+  "native/scene.mjs",
+  "native/dependency-lock.json",
+  "native/asset-lock.json",
+  "native/contribution.json",
+  "native/check-result.json",
+  "authoring/scene-authoring-route-decision.json",
+  "authoring/scene-authoring-attempt.json",
+  "authoring/scene-authoring-attempt-result.json",
 ]);
 
 function fail(code: string, message: string): never {
@@ -47,7 +91,10 @@ function snapshot(value: unknown, code: string, seen = new WeakSet<object>()): u
   if (typeof value !== "object" || seen.has(value)) fail(code, "data graph invalid");
   seen.add(value);
   if (Array.isArray(value)) {
-    if (Reflect.getPrototypeOf(value) !== Array.prototype) fail(code, "array prototype invalid");
+    if (
+      Reflect.getPrototypeOf(value) !== Array.prototype ||
+      Object.getOwnPropertyNames(value).length !== value.length + 1
+    ) fail(code, "array prototype or density invalid");
     const result = value.map((row) => snapshot(row, code, seen));
     seen.delete(value);
     return result;
@@ -64,6 +111,97 @@ function snapshot(value: unknown, code: string, seen = new WeakSet<object>()): u
   }
   seen.delete(value);
   return result;
+}
+
+function exactRecord(
+  input: unknown,
+  fields: readonly string[],
+  code: string,
+): Record<string, unknown> {
+  if (typeof input !== "object" || isNil(input) || Array.isArray(input)) {
+    return fail(code, "required record missing");
+  }
+  const record = input as Record<string, unknown>;
+  const keys = Object.keys(record);
+  if (
+    keys.length !== fields.length ||
+    fields.some((field) => !Object.hasOwn(record, field)) ||
+    keys.some((field) => !fields.includes(field))
+  ) return fail(code, "record fields are not exact");
+  return record;
+}
+
+function requireCanonicalString(value: unknown, label: string, code: string): string {
+  if (
+    typeof value !== "string" || value.length === 0 || value.trim() !== value ||
+    value.normalize("NFC") !== value
+  ) return fail(code, `${label} must be a canonical non-empty string`);
+  return value;
+}
+
+function requireSafePath(value: unknown, label: string, code: string): string {
+  const path = requireCanonicalString(value, label, code);
+  const segments = path.split("/");
+  if (
+    path.startsWith("/") || path.includes("\\") ||
+    /[\u0000-\u001f\u007f]/.test(path) ||
+    segments.some((segment) =>
+      segment.length === 0 || segment === "." || segment === ".." ||
+      segment.includes(":"))
+  ) return fail(code, `${label} must be a safe Package path`);
+  return path;
+}
+
+function requireFiniteNumber(value: unknown, label: string, code: string): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || Object.is(value, -0)) {
+    return fail(code, `${label} must be a finite canonical number`);
+  }
+  return value;
+}
+
+function requireSafeInteger(
+  value: unknown,
+  label: string,
+  code: string,
+  minimum = 0,
+): number {
+  if (!Number.isSafeInteger(value) || (value as number) < minimum) {
+    return fail(code, `${label} must be a safe integer`);
+  }
+  return value as number;
+}
+
+function requireStringArray(
+  value: unknown,
+  label: string,
+  code: string,
+): readonly string[] {
+  if (!Array.isArray(value)) return fail(code, `${label} must be an array`);
+  const strings = value.map((entry, index) =>
+    requireCanonicalString(entry, `${label}/${index}`, code));
+  if (new Set(strings).size !== strings.length) {
+    return fail(code, `${label} must be unique`);
+  }
+  return strings;
+}
+
+function exactRecordWithOptionalFields(
+  input: unknown,
+  requiredFields: readonly string[],
+  optionalFields: readonly string[],
+  code: string,
+): Record<string, unknown> {
+  if (typeof input !== "object" || isNil(input) || Array.isArray(input)) {
+    return fail(code, "required record missing");
+  }
+  const record = input as Record<string, unknown>;
+  const keys = Object.keys(record);
+  if (
+    requiredFields.some((field) => !Object.hasOwn(record, field)) ||
+    keys.some((field) =>
+      !requiredFields.includes(field) && !optionalFields.includes(field))
+  ) return fail(code, "record fields are not exact");
+  return record;
 }
 
 function deepFreeze<Value>(value: Value): Value {
@@ -86,7 +224,7 @@ export function assertWorldPackageAccessorFreeDataGraphV1(
   snapshot(value, code);
 }
 
-export function canonicalWorldPackageFileIntegrityEntriesV1(
+export function canonicalizeWorldPackageFileIntegrityEntriesV1(
   input: readonly WorldPackageFileIntegrityEntryV1[],
 ): readonly WorldPackageFileIntegrityEntryV1[] {
   const source = snapshot(input, "WORLD_PACKAGE_INTEGRITY_INVALID") as
@@ -105,16 +243,17 @@ export function canonicalWorldPackageFileIntegrityEntriesV1(
   return deepFreeze(rows);
 }
 
-export function canonicalWorldPackageManifestV1(
+export function canonicalizeWorldPackageManifestV1(
   input: WorldPackageManifestV1,
 ): WorldPackageManifestV1 {
-  const value = snapshot(input, "WORLD_PACKAGE_MANIFEST_INVALID") as
-    WorldPackageManifestV1;
+  const value = exactRecord(
+    snapshot(input, "WORLD_PACKAGE_MANIFEST_INVALID"),
+    MANIFEST_FIELDS,
+    "WORLD_PACKAGE_MANIFEST_INVALID",
+  ) as unknown as WorldPackageManifestV1;
   if (
     isNil(value.entryPoint) || typeof value.entryPoint !== "object" ||
-    isNil(value.authoringSchema) || typeof value.authoringSchema !== "object" ||
-    isNil(value.aiSchemaProjectionProfile) ||
-      typeof value.aiSchemaProjectionProfile !== "object" ||
+    isNil(value.sceneSource) || typeof value.sceneSource !== "object" ||
     isNil(value.legal) || typeof value.legal !== "object" ||
     isNil(value.hostCompatibility) ||
       typeof value.hostCompatibility !== "object"
@@ -125,24 +264,256 @@ export function canonicalWorldPackageManifestV1(
     value.runtimeTarget !== "babylon-web" ||
     value.canonicalizationProfile !== "canonical-json-jcs@1" ||
     value.hashAlgorithm !== "sha256" ||
-    value.normalizedWorldIrSchemaVersion !== 4 ||
-    value.canonicalSceneExecutionPlanSchemaVersion !== 1 ||
     value.worldRuntimeBootstrapSchemaVersion !== 1 ||
-    value.entryPoint.canonicalSceneExecutionPlanPath !==
-      "targets/babylon-web/canonical-scene-execution-plan.json" ||
     value.entryPoint.gameplayBootstrapPath !== "gameplay/bootstrap.json" ||
     value.entryPoint.worldRuntimeBootstrapPath !==
       "runtime/world-runtime-bootstrap.json"
   ) fail("WORLD_PACKAGE_MANIFEST_INVALID", "discriminator or entry point invalid");
+  exactRecord(
+    value.entryPoint,
+    ["gameplayBootstrapPath", "worldRuntimeBootstrapPath"],
+    "WORLD_PACKAGE_MANIFEST_INVALID",
+  );
+  requireCanonicalString(value.id, "id", "WORLD_PACKAGE_MANIFEST_INVALID");
+  requireCanonicalString(value.title, "title", "WORLD_PACKAGE_MANIFEST_INVALID");
+  requireCanonicalString(value.sdkVersion, "sdkVersion", "WORLD_PACKAGE_MANIFEST_INVALID");
+  requireCanonicalString(value.worldId, "worldId", "WORLD_PACKAGE_MANIFEST_INVALID");
+  requireCanonicalString(
+    value.initialControlledEntityId,
+    "initialControlledEntityId",
+    "WORLD_PACKAGE_MANIFEST_INVALID",
+  );
+  if (!Number.isSafeInteger(value.seed) || value.seed < 0 || value.seed > 0xffff_ffff) {
+    fail("WORLD_PACKAGE_MANIFEST_INVALID", "seed invalid");
+  }
+  const worldBounds = exactRecord(
+    value.worldBounds,
+    ["centerMetersXZ", "sizeMetersXZ", "heightRangeMeters"],
+    "WORLD_PACKAGE_MANIFEST_INVALID",
+  );
+  for (const [label, tuple] of Object.entries({
+    centerMetersXZ: worldBounds.centerMetersXZ,
+    sizeMetersXZ: worldBounds.sizeMetersXZ,
+    heightRangeMeters: worldBounds.heightRangeMeters,
+  })) {
+    if (!Array.isArray(tuple) || tuple.length !== 2) {
+      fail("WORLD_PACKAGE_MANIFEST_INVALID", `${label} must have two numbers`);
+    }
+    tuple.forEach((entry, index) =>
+      requireFiniteNumber(
+        entry,
+        `${label}/${index}`,
+        "WORLD_PACKAGE_MANIFEST_INVALID",
+      ));
+  }
+  if (
+    (worldBounds.sizeMetersXZ as readonly number[]).some((size) => size <= 0) ||
+    (worldBounds.heightRangeMeters as readonly number[])[0]! >
+      (worldBounds.heightRangeMeters as readonly number[])[1]!
+  ) fail("WORLD_PACKAGE_MANIFEST_INVALID", "world bounds invalid");
+  const budget = exactRecord(
+    value.resourceBudget,
+    ["maximumVertices", "maximumTriangles", "maximumColliders"],
+    "WORLD_PACKAGE_MANIFEST_INVALID",
+  );
+  for (const [label, amount] of Object.entries(budget)) {
+    requireSafeInteger(amount, label, "WORLD_PACKAGE_MANIFEST_INVALID", 1);
+  }
   for (const [label, hash] of Object.entries({
-    authoringSpecHash: value.authoringSpecHash,
-    normalizedWorldIrHash: value.normalizedWorldIrHash,
-    executionPlanHash: value.executionPlanHash,
     gameplayBootstrapHash: value.gameplayBootstrapHash,
     worldRuntimeBootstrapHash: value.worldRuntimeBootstrapHash,
     registryLockHash: value.registryLockHash,
-    layoutSolveReportHash: value.layoutSolveReportHash,
   })) requireHash(hash, label, "WORLD_PACKAGE_MANIFEST_INVALID");
+  if (value.sceneSource.kind === "canonical-execution-plan") {
+    exactRecord(
+      value.sceneSource,
+      CANONICAL_SCENE_SOURCE_FIELDS,
+      "WORLD_PACKAGE_MANIFEST_INVALID",
+    );
+    const authoringSchema = exactRecord(
+      value.sceneSource.authoringSchema,
+      ["schemaVersion", "contentHash"],
+      "WORLD_PACKAGE_MANIFEST_INVALID",
+    );
+    const projectionProfile = exactRecord(
+      value.sceneSource.aiSchemaProjectionProfile,
+      ["resourceRef", "contentHash"],
+      "WORLD_PACKAGE_MANIFEST_INVALID",
+    );
+    if (
+      authoringSchema.schemaVersion !== 4 ||
+      value.sceneSource.normalizedWorldIrSchemaVersion !== 4 ||
+      value.sceneSource.canonicalSceneExecutionPlanSchemaVersion !== 1 ||
+      value.sceneSource.canonicalSceneExecutionPlanPath !==
+        "targets/babylon-web/canonical-scene-execution-plan.json"
+    ) fail("WORLD_PACKAGE_MANIFEST_INVALID", "Canonical scene source invalid");
+    requireCanonicalString(
+      projectionProfile.resourceRef,
+      "aiSchemaProjectionProfile.resourceRef",
+      "WORLD_PACKAGE_MANIFEST_INVALID",
+    );
+    for (const [label, hash] of Object.entries({
+      authoringSchemaHash: authoringSchema.contentHash,
+      aiSchemaProjectionProfileHash: projectionProfile.contentHash,
+      authoringSpecHash: value.sceneSource.authoringSpecHash,
+      normalizedWorldIrHash: value.sceneSource.normalizedWorldIrHash,
+      executionPlanHash: value.sceneSource.executionPlanHash,
+      layoutSolveReportHash: value.sceneSource.layoutSolveReportHash,
+    })) requireHash(hash, label, "WORLD_PACKAGE_MANIFEST_INVALID");
+  } else if (value.sceneSource.kind === "babylon-native-scene") {
+    exactRecord(
+      value.sceneSource,
+      NATIVE_SCENE_SOURCE_FIELDS,
+      "WORLD_PACKAGE_MANIFEST_INVALID",
+    );
+    if (
+      value.sceneSource.nativeSceneBootstrapPath !== "native/bootstrap.json" ||
+      value.sceneSource.sceneModuleBundleManifestPath !== "native/module-bundle.json" ||
+      value.sceneSource.sceneModuleBundlePath !== "native/scene.mjs" ||
+      value.sceneSource.dependencyLockPath !== "native/dependency-lock.json" ||
+      value.sceneSource.assetLockPath !== "native/asset-lock.json" ||
+      value.sceneSource.nativeSceneContributionPath !== "native/contribution.json" ||
+      value.sceneSource.nativeSceneCheckResultPath !== "native/check-result.json" ||
+      value.sceneSource.sceneAuthoringRouteDecisionPath !==
+        "authoring/scene-authoring-route-decision.json" ||
+      value.sceneSource.sceneAuthoringAttemptPath !==
+        "authoring/scene-authoring-attempt.json" ||
+      value.sceneSource.sceneAuthoringAttemptResultPath !==
+        "authoring/scene-authoring-attempt-result.json"
+    ) fail("WORLD_PACKAGE_MANIFEST_INVALID", "Native scene source path invalid");
+    requireCanonicalString(
+      value.sceneSource.sceneAuthoringAttemptResultRef,
+      "sceneAuthoringAttemptResultRef",
+      "WORLD_PACKAGE_MANIFEST_INVALID",
+    );
+    for (const [label, hash] of Object.entries({
+      nativeSceneBootstrapHash: value.sceneSource.nativeSceneBootstrapHash,
+      sceneModuleBundleHash: value.sceneSource.sceneModuleBundleHash,
+      nativeSceneContributionHash: value.sceneSource.nativeSceneContributionHash,
+      dependencyLockHash: value.sceneSource.dependencyLockHash,
+      assetLockHash: value.sceneSource.assetLockHash,
+      nativeSceneCheckResultHash: value.sceneSource.nativeSceneCheckResultHash,
+      sceneAuthoringRouteDecisionHash:
+        value.sceneSource.sceneAuthoringRouteDecisionHash,
+      sceneAuthoringAttemptHash: value.sceneSource.sceneAuthoringAttemptHash,
+      sceneAuthoringAttemptResultHash:
+        value.sceneSource.sceneAuthoringAttemptResultHash,
+    })) requireHash(hash, label, "WORLD_PACKAGE_MANIFEST_INVALID");
+  } else {
+    fail("WORLD_PACKAGE_MANIFEST_INVALID", "scene source discriminator invalid");
+  }
+  const legal = exactRecord(
+    value.legal,
+    ["distributionPolicy", "noticePath", "licenseDocuments"],
+    "WORLD_PACKAGE_MANIFEST_INVALID",
+  );
+  if (
+    (legal.distributionPolicy !== "internal-only" &&
+      legal.distributionPolicy !== "redistributable") ||
+    legal.noticePath !== "NOTICE" || !Array.isArray(legal.licenseDocuments)
+  ) fail("WORLD_PACKAGE_MANIFEST_INVALID", "legal record invalid");
+  const legalDocumentIds = new Set<string>();
+  const legalDocumentPaths = new Set<string>();
+  for (const candidate of legal.licenseDocuments) {
+    const document = exactRecord(
+      candidate,
+      ["id", "spdxLicenseExpression", "path", "mediaType", "sizeBytes", "contentHash"],
+      "WORLD_PACKAGE_MANIFEST_INVALID",
+    );
+    const id = requireCanonicalString(document.id, "legal.id", "WORLD_PACKAGE_MANIFEST_INVALID");
+    const path = requireSafePath(document.path, "legal.path", "WORLD_PACKAGE_MANIFEST_INVALID");
+    if (
+      legalDocumentIds.has(id) || legalDocumentPaths.has(path) ||
+      !path.startsWith("LICENSES/") ||
+      document.mediaType !== "text/plain; charset=utf-8"
+    ) fail("WORLD_PACKAGE_MANIFEST_INVALID", "legal document invalid");
+    legalDocumentIds.add(id);
+    legalDocumentPaths.add(path);
+    requireCanonicalString(
+      document.spdxLicenseExpression,
+      "legal.spdxLicenseExpression",
+      "WORLD_PACKAGE_MANIFEST_INVALID",
+    );
+    requireSafeInteger(document.sizeBytes, "legal.sizeBytes", "WORLD_PACKAGE_MANIFEST_INVALID");
+    requireHash(document.contentHash, "legal.contentHash", "WORLD_PACKAGE_MANIFEST_INVALID");
+  }
+  const compatibility = exactRecord(
+    value.hostCompatibility,
+    ["profileRef", "profileHash", "runtimeContractVersion", "requiredFeatureIds"],
+    "WORLD_PACKAGE_MANIFEST_INVALID",
+  );
+  requireCanonicalString(
+    compatibility.profileRef,
+    "hostCompatibility.profileRef",
+    "WORLD_PACKAGE_MANIFEST_INVALID",
+  );
+  requireHash(
+    compatibility.profileHash,
+    "hostCompatibility.profileHash",
+    "WORLD_PACKAGE_MANIFEST_INVALID",
+  );
+  if (compatibility.runtimeContractVersion !== 1) {
+    fail("WORLD_PACKAGE_MANIFEST_INVALID", "runtime contract version invalid");
+  }
+  requireStringArray(
+    compatibility.requiredFeatureIds,
+    "hostCompatibility.requiredFeatureIds",
+    "WORLD_PACKAGE_MANIFEST_INVALID",
+  );
+  if (!Array.isArray(value.resources)) {
+    fail("WORLD_PACKAGE_MANIFEST_INVALID", "resources must be an array");
+  }
+  const resourceRefs = new Set<string>();
+  const resourcePaths = new Set<string>();
+  for (const candidate of value.resources) {
+    const resource = exactRecordWithOptionalFields(
+      candidate,
+      [
+        "resourceRef", "packagePath", "mediaType", "sizeBytes", "contentHash",
+        "licenseDocumentId", "redistributionPolicy",
+      ],
+      ["sourceUri", "author"],
+      "WORLD_PACKAGE_MANIFEST_INVALID",
+    );
+    const resourceRef = requireCanonicalString(
+      resource.resourceRef,
+      "resourceRef",
+      "WORLD_PACKAGE_MANIFEST_INVALID",
+    );
+    const packagePath = requireSafePath(
+      resource.packagePath,
+      "packagePath",
+      "WORLD_PACKAGE_MANIFEST_INVALID",
+    );
+    if (
+      resourceRefs.has(resourceRef) || resourcePaths.has(packagePath) ||
+      PACKAGE_OWNED_RESOURCE_PATHS.has(packagePath) ||
+      !packagePath.startsWith("resources/")
+    ) {
+      fail("WORLD_PACKAGE_MANIFEST_INVALID", "Package-owned files cannot be resources");
+    }
+    resourceRefs.add(resourceRef);
+    resourcePaths.add(packagePath);
+    requireCanonicalString(resource.mediaType, "mediaType", "WORLD_PACKAGE_MANIFEST_INVALID");
+    requireSafeInteger(resource.sizeBytes, "sizeBytes", "WORLD_PACKAGE_MANIFEST_INVALID", 1);
+    requireHash(resource.contentHash, "contentHash", "WORLD_PACKAGE_MANIFEST_INVALID");
+    requireCanonicalString(
+      resource.licenseDocumentId,
+      "licenseDocumentId",
+      "WORLD_PACKAGE_MANIFEST_INVALID",
+    );
+    if (
+      resource.redistributionPolicy !== "allowed" &&
+      resource.redistributionPolicy !== "internal-only" &&
+      resource.redistributionPolicy !== "prohibited"
+    ) fail("WORLD_PACKAGE_MANIFEST_INVALID", "resource policy invalid");
+    if (!isNil(resource.sourceUri)) {
+      requireCanonicalString(resource.sourceUri, "sourceUri", "WORLD_PACKAGE_MANIFEST_INVALID");
+    }
+    if (!isNil(resource.author)) {
+      requireCanonicalString(resource.author, "author", "WORLD_PACKAGE_MANIFEST_INVALID");
+    }
+  }
   const lockedResources = worldResourceLockEntriesV1(value.lockedResources);
   const canonical = deepFreeze({ ...value, lockedResources });
   if (stringifyCanonicalJson(value) !== stringifyCanonicalJson(canonical)) {
@@ -152,7 +523,7 @@ export function canonicalWorldPackageManifestV1(
 }
 
 export function hashWorldPackageManifestV1(input: unknown): Sha256HashV1 {
-  return sha256CanonicalJson(canonicalWorldPackageManifestV1(
+  return sha256CanonicalJson(canonicalizeWorldPackageManifestV1(
     input as WorldPackageManifestV1,
   )) as Sha256HashV1;
 }
@@ -161,7 +532,7 @@ export function hashWorldPackageRootV1(
   entries: readonly WorldPackageFileIntegrityEntryV1[],
 ): Sha256HashV1 {
   return sha256CanonicalJson(
-    canonicalWorldPackageFileIntegrityEntriesV1(entries),
+    canonicalizeWorldPackageFileIntegrityEntriesV1(entries),
   ) as Sha256HashV1;
 }
 
@@ -174,8 +545,8 @@ export function assertWorldPackageBuildReceiptV1(
     value.kind !== "worldkit-world-package-build-receipt" ||
     value.schemaVersion !== 1
   ) fail("WORLD_PACKAGE_BUILD_RECEIPT_INVALID", "discriminator invalid");
-  const manifest = canonicalWorldPackageManifestV1(value.manifest);
-  const entries = canonicalWorldPackageFileIntegrityEntriesV1(
+  const manifest = canonicalizeWorldPackageManifestV1(value.manifest);
+  const entries = canonicalizeWorldPackageFileIntegrityEntriesV1(
     value.fileIntegrityEntries,
   );
   const manifestHash = hashWorldPackageManifestV1(manifest);
@@ -191,8 +562,19 @@ export function assertWorldPackageBuildReceiptV1(
     value.worldBuildIdentityHash !== identityHash ||
     identity.gameplayBootstrapHash !== manifest.gameplayBootstrapHash ||
     identity.worldRuntimeBootstrapHash !== manifest.worldRuntimeBootstrapHash ||
-    identity.sceneSourceIdentity.kind !== "canonical-execution-plan" ||
-    identity.sceneSourceIdentity.executionPlanHash !== manifest.executionPlanHash
+    (
+      manifest.sceneSource.kind === "canonical-execution-plan"
+        ? identity.sceneSourceIdentity.kind !== "canonical-execution-plan" ||
+          identity.sceneSourceIdentity.executionPlanHash !==
+            manifest.sceneSource.executionPlanHash
+        : identity.sceneSourceIdentity.kind !== "babylon-native-scene" ||
+          identity.sceneSourceIdentity.nativeSceneBootstrapHash !==
+            manifest.sceneSource.nativeSceneBootstrapHash ||
+          identity.sceneSourceIdentity.sceneModuleBundleHash !==
+            manifest.sceneSource.sceneModuleBundleHash ||
+          identity.sceneSourceIdentity.nativeSceneContributionHash !==
+            manifest.sceneSource.nativeSceneContributionHash
+    )
   ) fail("WORLD_PACKAGE_BUILD_RECEIPT_INVALID", "receipt identity mismatch");
   return deepFreeze({
     ...value,
@@ -202,8 +584,8 @@ export function assertWorldPackageBuildReceiptV1(
   });
 }
 
-export function assertWorldPackageGameplayBootstrapMembershipV1(
-  input: WorldPackageGameplayBootstrapMembershipInputV1,
+export function assertCanonicalWorldPackageGameplayBootstrapMembershipV1(
+  input: CanonicalWorldPackageGameplayBootstrapMembershipInputV1,
 ): void {
   const receipt = assertWorldPackageBuildReceiptV1(
     input.worldPackageBuildReceipt,
@@ -211,8 +593,12 @@ export function assertWorldPackageGameplayBootstrapMembershipV1(
   const plan = input.canonicalSceneExecutionPlan;
   const runtime = input.worldRuntimeBootstrap;
   const gameplay = input.gameplayBootstrap;
+  if (receipt.manifest.sceneSource.kind !== "canonical-execution-plan") {
+    fail("WORLD_PACKAGE_GAMEPLAY_BOOTSTRAP_MEMBERSHIP_INVALID", "Package is not Canonical");
+  }
+  const sceneSource = receipt.manifest.sceneSource;
   if (
-    hashCanonicalSceneExecutionPlanV1(plan) !== receipt.manifest.executionPlanHash ||
+    hashCanonicalSceneExecutionPlanV1(plan) !== sceneSource.executionPlanHash ||
     gameplay.contentHash !== receipt.manifest.gameplayBootstrapHash ||
     runtime.contentHash !== receipt.manifest.worldRuntimeBootstrapHash ||
     plan.worldRuntimeBootstrapHash !== runtime.contentHash ||
@@ -247,7 +633,7 @@ export function assertWorldPackageHostCompatibilityV1(
   return receipt;
 }
 
-export function canonicalWorldPackageSignatureEnvelopeV1(
+export function canonicalizeWorldPackageSignatureEnvelopeV1(
   input: unknown,
 ): WorldPackageSignatureEnvelopeV1 {
   const value = snapshot(input, "WORLD_PACKAGE_SIGNATURE_ENVELOPE_INVALID") as
@@ -267,7 +653,7 @@ export function canonicalWorldPackageSignatureEnvelopeV1(
 export function worldPackageSignatureEnvelopeBytesV1(
   input: unknown,
 ): Uint8Array {
-  return canonicalJsonBytes(canonicalWorldPackageSignatureEnvelopeV1(input));
+  return canonicalJsonBytes(canonicalizeWorldPackageSignatureEnvelopeV1(input));
 }
 
 export function equalWorldPackageHostCompatibilityV1(

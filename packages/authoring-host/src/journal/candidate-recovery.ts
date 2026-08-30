@@ -134,12 +134,12 @@ export async function rehydratePreparedCandidateForRecoveryV1(input: {
   const receipt = verifiedDirectory.receipt;
   if (
     receipt.manifest.worldId !== record.request.worldId ||
-    receipt.manifest.authoringSpecHash !==
+    verifiedDirectory.receipt.manifest.sceneSource.authoringSpecHash !==
       record.buildIdentity.resultAuthoringSpecHash ||
     receipt.manifest.registryLockHash !== record.buildIdentity.registryLockHash ||
-    receipt.manifest.normalizedWorldIrHash !==
+    verifiedDirectory.receipt.manifest.sceneSource.normalizedWorldIrHash !==
       record.buildIdentity.normalizedWorldIrHash ||
-    receipt.manifest.executionPlanHash !== record.buildIdentity.executionPlanHash ||
+    verifiedDirectory.receipt.manifest.sceneSource.executionPlanHash !== record.buildIdentity.executionPlanHash ||
     receipt.worldPackageRootHash !== record.buildIdentity.worldPackageRootHash ||
     isNil(record.applied) ||
     record.applied.resultAuthoringSpecHash !==

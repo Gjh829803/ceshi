@@ -7,7 +7,7 @@ import {
 } from "@whitebox-world/authoring-edit";
 import {
   createInMemoryWorldPackageStoreV1,
-  createWorldPackageBuildContextFixtureV1,
+  createCanonicalWorldPackageBuildContextFixtureV1,
 } from "@whitebox-world/world-package/testing";
 import { describe, expect, it } from "vitest";
 
@@ -48,7 +48,7 @@ async function createCompleteLease() {
     }),
     store: sourceStore,
     worldPackageStore: createInMemoryWorldPackageStoreV1(),
-    worldPackageBuildContext: createWorldPackageBuildContextFixtureV1(),
+    worldPackageBuildContext: createCanonicalWorldPackageBuildContextFixtureV1(),
     resourceArtifacts: [],
     nowUnixMilliseconds: NOW,
   });

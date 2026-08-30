@@ -148,6 +148,12 @@ function summary(
 ): WorldPackageCommandSuccessV1 {
   const receipt = directory.receipt;
   const manifest = receipt.manifest;
+  if (manifest.sceneSource.kind !== "canonical-execution-plan") {
+    throw new Error(
+      "WORLD_PACKAGE_CLI_SOURCE_UNSUPPORTED: current build summary requires a Canonical Scene Source",
+    );
+  }
+  const sceneSource = manifest.sceneSource;
   return Object.freeze({
     ...envelope(command),
     ok: true,
@@ -163,12 +169,12 @@ function summary(
     ),
     worldPackageRootHash: receipt.worldPackageRootHash,
     manifestHash: receipt.manifestHash,
-    authoringSpecHash: manifest.authoringSpecHash,
-    normalizedWorldIrHash: manifest.normalizedWorldIrHash,
+    authoringSpecHash: sceneSource.authoringSpecHash,
+    normalizedWorldIrHash: sceneSource.normalizedWorldIrHash,
     worldBuildIdentityHash: receipt.worldBuildIdentityHash,
-    executionPlanHash: manifest.executionPlanHash,
+    executionPlanHash: sceneSource.executionPlanHash,
     registryLockHash: manifest.registryLockHash,
-    layoutSolveReportHash: manifest.layoutSolveReportHash,
+    layoutSolveReportHash: sceneSource.layoutSolveReportHash,
     distributionPolicy: manifest.legal.distributionPolicy,
     lockedResourceCount: manifest.lockedResources.length,
     resourceCount: manifest.resources.length,
@@ -335,7 +341,7 @@ export async function loadRuntimeWorldConfigurationFromPackageDirectoryV1(
     sceneSource: Object.freeze({
       kind: "canonical-execution-plan" as const,
       executionPlan: admitted.verifiedDirectory.executionPlan,
-      executionPlanHash: receipt.manifest.executionPlanHash,
+      executionPlanHash: receipt.manifest.sceneSource.executionPlanHash,
     }),
   }) satisfies RuntimeWorldConfigurationV1;
   return Object.freeze({

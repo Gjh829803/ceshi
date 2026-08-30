@@ -10,8 +10,20 @@ import {
   parseWorldRuntimeBootstrapV1,
   worldRuntimeBootstrapCanonicalBytesV1,
   type CanonicalSceneExecutionPlanV1,
+  type BabylonNativeAssetLockEntryV1,
+  type BabylonNativeAssetLockV1,
+  type BabylonNativeDependencyLockV1,
+  type BabylonNativeSceneBootstrapV1,
+  type BabylonNativeSceneContributionV1,
+  type BabylonNativeSceneModuleBundleManifestV1,
+  type NativeSceneCheckResultV1,
   type WorldRuntimeBootstrapV1,
 } from "@whitebox-world/runtime-contracts";
+import type {
+  SceneAuthoringAttemptResultV1,
+  SceneAuthoringAttemptV1,
+  SceneAuthoringRouteDecisionV1,
+} from "@whitebox-world/scene-authoring-contracts";
 import {
   hashWorldBuildIdentityV1,
   worldPackageRefFromRootHashV1,
@@ -20,17 +32,23 @@ import {
 import { isNil } from "lodash-es";
 
 import {
-  canonicalWorldPackageFileIntegrityEntriesV1,
-  canonicalWorldPackageManifestV1,
+  canonicalizeWorldPackageFileIntegrityEntriesV1,
+  canonicalizeWorldPackageManifestV1,
   hashWorldPackageManifestV1,
   hashWorldPackageRootV1,
 } from "./package-contract.js";
 import { assembleWorldPackageDirectoryV1, type WorldPackageDirectoryFileV1, type WorldPackageDirectoryV1 } from "./package-directory.js";
-import type { WorldPackageDistributionPolicyV1, WorldPackageHostCompatibilityV1, WorldPackageManifestV1 } from "./package-types.js";
+import type {
+  WorldPackageDistributionPolicyV1,
+  WorldPackageHostCompatibilityV1,
+  WorldPackageManifestV1,
+  WorldPackageResourceBudgetV1,
+  WorldPackageWorldBoundsV1,
+} from "./package-types.js";
 
 const HASH_PATTERN = /^sha256:[a-f0-9]{64}$/;
 
-export interface ResolvedWorldPackageResourceArtifactV1 {
+export interface ResolvedCanonicalWorldPackageResourceArtifactV1 {
   readonly resourceRef: string;
   readonly packagePath: string;
   readonly mediaType: string;
@@ -41,6 +59,11 @@ export interface ResolvedWorldPackageResourceArtifactV1 {
   readonly redistributionPolicy: "allowed" | "internal-only" | "prohibited";
   readonly sourceUri?: string;
   readonly author?: string;
+}
+
+export interface ResolvedBabylonNativeWorldPackageAssetV1 {
+  readonly assetLockEntry: BabylonNativeAssetLockEntryV1;
+  readonly bytes: Uint8Array;
 }
 
 export interface WorldPackageGeneratedResourceProvenanceV1 {
@@ -58,31 +81,62 @@ export interface WorldPackageLicenseDocumentInputV1 {
   readonly text: string;
 }
 
-export interface CreateWorldPackageV1Input {
-  readonly packageId: string;
+export interface WorldPackageSharedBuildContextV1 {
   readonly title: string;
   readonly sdkVersion: string;
   readonly distributionPolicy: WorldPackageDistributionPolicyV1;
-  readonly canonicalAuthoringSchemaHash: Sha256HashV1;
-  readonly aiSchemaProjectionProfile: WorldPackageManifestV1["aiSchemaProjectionProfile"];
   readonly hostCompatibility: WorldPackageHostCompatibilityV1;
+  readonly generatedResourceProvenance: WorldPackageGeneratedResourceProvenanceV1;
+  readonly licenseDocuments: readonly WorldPackageLicenseDocumentInputV1[];
+  readonly noticeText: string;
+}
+
+export interface CanonicalWorldPackageBuildContextV1
+  extends WorldPackageSharedBuildContextV1 {
+  readonly canonicalAuthoringSchemaHash: Sha256HashV1;
+  readonly aiSchemaProjectionProfile: Extract<
+    WorldPackageManifestV1["sceneSource"],
+    { readonly kind: "canonical-execution-plan" }
+  >["aiSchemaProjectionProfile"];
+  readonly includeAuthoringSpec: boolean;
+}
+
+export interface CreateCanonicalWorldPackageV1Input
+  extends CanonicalWorldPackageBuildContextV1 {
+  readonly packageId: string;
   readonly authoringSpec: AuthoringSpecV4;
   readonly normalizedWorldIr: NormalizedWorldIRV4;
   readonly layoutSolveResult: LayoutSolveResultV1;
   readonly executionPlan: CanonicalSceneExecutionPlanV1;
   readonly gameplayBootstrap: GameplayBootstrapV1;
   readonly worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
-  readonly resourceArtifacts: readonly ResolvedWorldPackageResourceArtifactV1[];
-  readonly generatedResourceProvenance: WorldPackageGeneratedResourceProvenanceV1;
-  readonly licenseDocuments: readonly WorldPackageLicenseDocumentInputV1[];
-  readonly noticeText: string;
-  readonly includeAuthoringSpec: boolean;
+  readonly resourceArtifacts:
+    readonly ResolvedCanonicalWorldPackageResourceArtifactV1[];
 }
 
-export type WorldPackageBuildContextV1 = Pick<CreateWorldPackageV1Input,
-  "title" | "sdkVersion" | "distributionPolicy" | "canonicalAuthoringSchemaHash" |
-  "aiSchemaProjectionProfile" | "hostCompatibility" | "generatedResourceProvenance" |
-  "licenseDocuments" | "noticeText" | "includeAuthoringSpec">;
+export interface FrozenBabylonNativeWorldPackageBuildInputV1 {
+  readonly shared: WorldPackageSharedBuildContextV1;
+  readonly packageId: string;
+  readonly worldId: string;
+  readonly worldBounds: WorldPackageWorldBoundsV1;
+  readonly resourceBudget: WorldPackageResourceBudgetV1;
+  readonly nativeSceneBootstrap: BabylonNativeSceneBootstrapV1;
+  readonly sceneModuleBundleManifest:
+    BabylonNativeSceneModuleBundleManifestV1;
+  readonly sceneModuleBundleBytes: Uint8Array;
+  readonly dependencyLock: BabylonNativeDependencyLockV1;
+  readonly assetLock: BabylonNativeAssetLockV1;
+  readonly sceneAuthoringRouteDecision: SceneAuthoringRouteDecisionV1;
+  readonly sceneAuthoringAttempt: SceneAuthoringAttemptV1;
+  readonly sceneAuthoringAttemptResult: SceneAuthoringAttemptResultV1;
+  readonly nativeSceneCheckResult: NativeSceneCheckResultV1;
+  readonly nativeSceneContribution: BabylonNativeSceneContributionV1;
+  readonly gameplayBootstrap: GameplayBootstrapV1;
+  readonly worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
+  readonly registryLock: readonly import("@whitebox-world/runtime-contracts").WorldResourceLockEntryV1[];
+  readonly resourceArtifacts:
+    readonly ResolvedBabylonNativeWorldPackageAssetV1[];
+}
 
 interface LegalDocument {
   readonly id: string;
@@ -141,7 +195,9 @@ function jsonFile(path: string, value: unknown): WorldPackageDirectoryFileV1 {
   return { path, mediaType: "application/json", bytes: canonicalJsonBytes(value) };
 }
 
-function canonicalResources(input: readonly ResolvedWorldPackageResourceArtifactV1[]): readonly ResolvedWorldPackageResourceArtifactV1[] {
+function canonicalResources(
+  input: readonly ResolvedCanonicalWorldPackageResourceArtifactV1[],
+): readonly ResolvedCanonicalWorldPackageResourceArtifactV1[] {
   if (!Array.isArray(input)) invalid("resourceArtifacts", "must be an array");
   const rows = input.map((candidate, index) => {
     const path = `resourceArtifacts/${index}`;
@@ -188,7 +244,11 @@ function canonicalLegalDocuments(input: readonly WorldPackageLicenseDocumentInpu
   return Object.freeze(rows);
 }
 
-function assertLegalClosure(input: CreateWorldPackageV1Input, resources: readonly ResolvedWorldPackageResourceArtifactV1[], documents: readonly LegalDocument[]): void {
+function assertLegalClosure(
+  input: CreateCanonicalWorldPackageV1Input,
+  resources: readonly ResolvedCanonicalWorldPackageResourceArtifactV1[],
+  documents: readonly LegalDocument[],
+): void {
   const provenance = [...resources, input.generatedResourceProvenance];
   if (provenance.some((row) => row.redistributionPolicy === "prohibited") ||
     (input.distributionPolicy === "redistributable" && provenance.some((row) => row.redistributionPolicy !== "allowed"))) {
@@ -200,7 +260,9 @@ function assertLegalClosure(input: CreateWorldPackageV1Input, resources: readonl
   }
 }
 
-function createWorldPackageV1Internal(input: CreateWorldPackageV1Input): WorldPackageDirectoryV1 {
+function createCanonicalWorldPackageV1Internal(
+  input: CreateCanonicalWorldPackageV1Input,
+): WorldPackageDirectoryV1 {
   const plan = parseCanonicalSceneExecutionPlanV1(input.executionPlan);
   const runtime = parseWorldRuntimeBootstrapV1(input.worldRuntimeBootstrap);
   const gameplay = input.gameplayBootstrap;
@@ -224,41 +286,49 @@ function createWorldPackageV1Internal(input: CreateWorldPackageV1Input): WorldPa
   const legalDocuments = canonicalLegalDocuments(input.licenseDocuments, noticeText);
   assertLegalClosure(input, resources, legalDocuments);
 
-  const lockedResources = worldResourceLockEntriesV1([...plan.sceneResourceLockEntries, ...runtime.runtimeResourceLockEntries]);
+  const lockedResources = worldResourceLockEntriesV1([
+    ...plan.sceneResourceLockEntries,
+    ...runtime.runtimeResourceLockEntries,
+    {
+      resourceKind: "world-runtime-bootstrap",
+      resourceRef: plan.worldRuntimeBootstrapRef,
+      resolvedVersion: "1",
+      contentHash: runtime.contentHash,
+    },
+  ]);
   const runtimeBytes = worldRuntimeBootstrapCanonicalBytesV1(runtime);
   const gameplayBytes = gameplayBootstrapCanonicalBytesV1(gameplay);
-  const generated = input.generatedResourceProvenance;
-  const manifestResources = [
-    ...resources.map((resource) => ({ resourceRef: resource.resourceRef, packagePath: resource.packagePath, mediaType: resource.mediaType,
+  const manifestResources = resources.map((resource) => ({ resourceRef: resource.resourceRef, packagePath: resource.packagePath, mediaType: resource.mediaType,
       sizeBytes: resource.bytes.byteLength, contentHash: sha256Bytes(resource.bytes) as Sha256HashV1,
       licenseDocumentId: resource.licenseDocumentId, redistributionPolicy: resource.redistributionPolicy,
-      ...(isNil(resource.sourceUri) ? {} : { sourceUri: resource.sourceUri }), ...(isNil(resource.author) ? {} : { author: resource.author }) })),
-    { resourceRef: gameplay.resourceRef, packagePath: "gameplay/bootstrap.json", mediaType: "application/vnd.worldkit.gameplay-bootstrap+json",
-      sizeBytes: gameplayBytes.byteLength, contentHash: sha256Bytes(gameplayBytes) as Sha256HashV1,
-      licenseDocumentId: generated.licenseDocumentId, redistributionPolicy: generated.redistributionPolicy,
-      ...(isNil(generated.sourceUri) ? {} : { sourceUri: generated.sourceUri }), ...(isNil(generated.author) ? {} : { author: generated.author }) },
-    { resourceRef: plan.worldRuntimeBootstrapRef, packagePath: "runtime/world-runtime-bootstrap.json", mediaType: "application/vnd.worldkit.world-runtime-bootstrap+json",
-      sizeBytes: runtimeBytes.byteLength, contentHash: sha256Bytes(runtimeBytes) as Sha256HashV1,
-      licenseDocumentId: generated.licenseDocumentId, redistributionPolicy: generated.redistributionPolicy,
-      ...(isNil(generated.sourceUri) ? {} : { sourceUri: generated.sourceUri }), ...(isNil(generated.author) ? {} : { author: generated.author }) },
-  ].sort((left, right) => left.resourceRef.localeCompare(right.resourceRef));
+      ...(isNil(resource.sourceUri) ? {} : { sourceUri: resource.sourceUri }), ...(isNil(resource.author) ? {} : { author: resource.author }) }))
+    .sort((left, right) => left.resourceRef.localeCompare(right.resourceRef));
 
   const budget = input.authoringSpec.world.resourceBudget;
-  const manifest = canonicalWorldPackageManifestV1({
+  const manifest = canonicalizeWorldPackageManifestV1({
     kind: "worldkit-world-package-manifest", schemaVersion: 1, id: requireString(input.packageId, "packageId"),
     title: requireString(input.title, "title"), packageFormatVersion: 1, sdkVersion: requireString(input.sdkVersion, "sdkVersion"),
     worldId: plan.id, seed: plan.seed, runtimeTarget: "babylon-web", canonicalizationProfile: "canonical-json-jcs@1", hashAlgorithm: "sha256",
-    authoringSchema: { schemaVersion: 4, contentHash: requireHash(input.canonicalAuthoringSchemaHash, "canonicalAuthoringSchemaHash") },
-    aiSchemaProjectionProfile: input.aiSchemaProjectionProfile, normalizedWorldIrSchemaVersion: 4,
-    canonicalSceneExecutionPlanSchemaVersion: 1, worldRuntimeBootstrapSchemaVersion: 1,
-    authoringSpecHash: plan.authoringSpecHash, normalizedWorldIrHash: plan.normalizedWorldIrHash, executionPlanHash,
+    sceneSource: {
+      kind: "canonical-execution-plan",
+      authoringSchema: { schemaVersion: 4, contentHash: requireHash(input.canonicalAuthoringSchemaHash, "canonicalAuthoringSchemaHash") },
+      aiSchemaProjectionProfile: input.aiSchemaProjectionProfile,
+      normalizedWorldIrSchemaVersion: 4,
+      canonicalSceneExecutionPlanSchemaVersion: 1,
+      authoringSpecHash: plan.authoringSpecHash,
+      normalizedWorldIrHash: plan.normalizedWorldIrHash,
+      executionPlanHash,
+      layoutSolveReportHash: plan.layout.layoutSolveReportHash,
+      canonicalSceneExecutionPlanPath: "targets/babylon-web/canonical-scene-execution-plan.json",
+    },
+    worldRuntimeBootstrapSchemaVersion: 1,
     gameplayBootstrapHash: gameplay.contentHash, worldRuntimeBootstrapHash: runtime.contentHash,
     registryLockHash: sha256CanonicalJson(lockedResources) as Sha256HashV1,
-    layoutSolveReportHash: plan.layout.layoutSolveReportHash, initialControlledEntityId: runtime.initialControlledEntityId,
+    initialControlledEntityId: runtime.initialControlledEntityId,
     worldBounds: input.authoringSpec.world.bounds,
     resourceBudget: { maximumVertices: budget.maxVertices, maximumTriangles: budget.maxTriangles, maximumColliders: budget.maxColliders },
     lockedResources,
-    entryPoint: { canonicalSceneExecutionPlanPath: "targets/babylon-web/canonical-scene-execution-plan.json", gameplayBootstrapPath: "gameplay/bootstrap.json", worldRuntimeBootstrapPath: "runtime/world-runtime-bootstrap.json" },
+    entryPoint: { gameplayBootstrapPath: "gameplay/bootstrap.json", worldRuntimeBootstrapPath: "runtime/world-runtime-bootstrap.json" },
     legal: { distributionPolicy: input.distributionPolicy, noticePath: "NOTICE", licenseDocuments: legalDocuments.map((document) => ({ id: document.id, spdxLicenseExpression: document.spdxLicenseExpression, path: document.path, mediaType: "text/plain; charset=utf-8", sizeBytes: document.bytes.byteLength, contentHash: document.contentHash })) },
     hostCompatibility: input.hostCompatibility, resources: manifestResources,
   });
@@ -274,21 +344,49 @@ function createWorldPackageV1Internal(input: CreateWorldPackageV1Input): WorldPa
     { path: "NOTICE", mediaType: "text/plain; charset=utf-8", bytes: noticeBytes },
     ...legalDocuments.map((document) => ({ path: document.path, mediaType: "text/plain; charset=utf-8", bytes: document.bytes })),
   ];
-  const entries = canonicalWorldPackageFileIntegrityEntriesV1(rootFiles.map((file) => ({ path: file.path, mediaType: file.mediaType, sizeBytes: file.bytes.byteLength, contentHash: sha256Bytes(file.bytes) as Sha256HashV1 })));
+  return finalizeWorldPackageRootV1(manifest, rootFiles);
+}
+
+function finalizeWorldPackageRootV1(
+  manifest: WorldPackageManifestV1,
+  rootFiles: readonly WorldPackageDirectoryFileV1[],
+): WorldPackageDirectoryV1 {
+  const entries = canonicalizeWorldPackageFileIntegrityEntriesV1(rootFiles.map((file) => ({
+    path: file.path,
+    mediaType: file.mediaType,
+    sizeBytes: file.bytes.byteLength,
+    contentHash: sha256Bytes(file.bytes) as Sha256HashV1,
+  })));
   const worldPackageRootHash = hashWorldPackageRootV1(entries);
   const worldPackageRef = worldPackageRefFromRootHashV1(worldPackageRootHash);
+  const sceneSourceIdentity: WorldBuildIdentityV1["sceneSourceIdentity"] =
+    manifest.sceneSource.kind === "canonical-execution-plan"
+      ? Object.freeze({
+          kind: "canonical-execution-plan",
+          executionPlanHash: manifest.sceneSource.executionPlanHash,
+        })
+      : Object.freeze({
+          kind: "babylon-native-scene",
+          nativeSceneBootstrapHash:
+            manifest.sceneSource.nativeSceneBootstrapHash,
+          sceneModuleBundleHash: manifest.sceneSource.sceneModuleBundleHash,
+          nativeSceneContributionHash:
+            manifest.sceneSource.nativeSceneContributionHash,
+        });
   const worldBuildIdentity: WorldBuildIdentityV1 = Object.freeze({ kind: "world-build-identity", schemaVersion: 1,
-    id: `${manifest.id}.world-build`, worldPackageRef, worldPackageRootHash, gameplayBootstrapHash: gameplay.contentHash,
-    worldRuntimeBootstrapHash: runtime.contentHash, sceneSourceIdentity: Object.freeze({ kind: "canonical-execution-plan", executionPlanHash }) });
+    id: `${manifest.id}.world-build`, worldPackageRef, worldPackageRootHash, gameplayBootstrapHash: manifest.gameplayBootstrapHash,
+    worldRuntimeBootstrapHash: manifest.worldRuntimeBootstrapHash, sceneSourceIdentity });
   const receipt = Object.freeze({ kind: "worldkit-world-package-build-receipt" as const, schemaVersion: 1 as const, manifest,
     manifestHash: hashWorldPackageManifestV1(manifest), fileIntegrityEntries: entries, worldPackageRootHash, worldPackageRef,
     worldBuildIdentity, worldBuildIdentityHash: hashWorldBuildIdentityV1(worldBuildIdentity) });
   return assembleWorldPackageDirectoryV1({ receipt, files: rootFiles });
 }
 
-export function createWorldPackageV1(input: CreateWorldPackageV1Input): WorldPackageDirectoryV1 {
+export function createCanonicalWorldPackageV1(
+  input: CreateCanonicalWorldPackageV1Input,
+): WorldPackageDirectoryV1 {
   try {
-    return createWorldPackageV1Internal(input);
+    return createCanonicalWorldPackageV1Internal(input);
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("WORLD_PACKAGE_BUILD_INVALID")) throw error;
     invalid("", `trusted build closure validation failed: ${error instanceof Error ? error.message : "unknown owner failure"}`);

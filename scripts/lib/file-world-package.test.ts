@@ -11,7 +11,7 @@ import {
   createGameplayBootstrapV1,
 } from "@whitebox-world/gameplay-contracts";
 import {
-  createWorldPackageV1,
+  createCanonicalWorldPackageV1,
   type WorldPackageDirectoryV1,
 } from "@whitebox-world/world-package";
 import { generateKeyPairSync } from "node:crypto";
@@ -107,7 +107,7 @@ function createDirectoryFixture(): WorldPackageDirectoryV1 {
   if (!compiled.ok || isNil(compiled.canonicalSceneExecutionPlan)) {
     throw new Error("fixture compilation failed");
   }
-  return createWorldPackageV1({
+  return createCanonicalWorldPackageV1({
     packageId: `${authoringSpec.id}.package`,
     title: "File World Package",
     sdkVersion: "0.0.0",

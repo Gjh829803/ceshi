@@ -44,10 +44,10 @@ import type { RuntimeWorldConfigurationV1 } from "@whitebox-world/runtime-host";
 import {
   BABYLON_WEB_WORLD_PACKAGE_HOST_POLICY_V1,
   assertWorldPackageHostCompatibilityV1,
-  createWorldPackageV1,
+  createCanonicalWorldPackageV1,
   verifyWorldPackageDirectoryV1,
-  type ResolvedWorldPackageResourceArtifactV1,
-  type WorldPackageBuildContextV1,
+  type ResolvedCanonicalWorldPackageResourceArtifactV1,
+  type CanonicalWorldPackageBuildContextV1,
   type WorldPackageStoreV1,
 } from "@whitebox-world/world-package";
 import { isNil, uniq } from "lodash-es";
@@ -57,7 +57,7 @@ import {
   PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1,
   resolveWorldPackageSubjectAssetArtifactsV1,
 } from "./worldkit-asset-resolver.js";
-import { createPlaygroundWorldPackageBuildContextV1 } from "./playground-world-package.js";
+import { createPlaygroundCanonicalWorldPackageBuildContextV1 } from "./playground-world-package.js";
 import {
   MOUNTED_SKATEBOARD_S1_SCENE_ID,
   augmentMountedSkateboardS1AuthoringSpecV1,
@@ -119,9 +119,9 @@ export interface AuthoringSceneLoadResult {
   authoringSpec?: AuthoringSpecV4;
   authoringSpecHash?: `sha256:${string}`;
   /** Host-only V2 package context used by the Authoring/Edit publication owner. */
-  worldPackageBuildContext?: WorldPackageBuildContextV1;
+  worldPackageBuildContext?: CanonicalWorldPackageBuildContextV1;
   /** Host-only exact resource closure used by the Authoring/Edit publication owner. */
-  worldPackageResourceArtifacts?: readonly ResolvedWorldPackageResourceArtifactV1[];
+  worldPackageResourceArtifacts?: readonly ResolvedCanonicalWorldPackageResourceArtifactV1[];
 }
 
 export type AuthoringSourceFetcher = () => Promise<Response>;
@@ -855,12 +855,12 @@ export async function loadAuthoringScene(
           PLAYGROUND_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1,
           options.fetchSubjectAsset,
         );
-    const worldPackageBuildContext = createPlaygroundWorldPackageBuildContextV1({
+    const worldPackageBuildContext = createPlaygroundCanonicalWorldPackageBuildContextV1({
       title: `${source.id} WorldPackage`,
       resourceArtifacts,
       includeAuthoringSpec: isNil(subjectResourceRegistry),
     });
-    const directory = createWorldPackageV1({
+    const directory = createCanonicalWorldPackageV1({
       packageId: `${source.id}.${source.seed}`,
       ...worldPackageBuildContext,
       authoringSpec: source,
@@ -911,7 +911,7 @@ export async function loadAuthoringScene(
         kind: "canonical-execution-plan",
         executionPlan: stored.verifiedDirectory.executionPlan,
         executionPlanHash:
-          stored.verifiedDirectory.receipt.manifest.executionPlanHash,
+          stored.verifiedDirectory.receipt.manifest.sceneSource.executionPlanHash,
       }),
     });
     return {
@@ -919,7 +919,7 @@ export async function loadAuthoringScene(
       executionPlan: stored.verifiedDirectory.executionPlan,
       normalizedWorldIrHash: normalized.normalizedWorldIrHash,
       executionPlanHash:
-        stored.verifiedDirectory.receipt.manifest.executionPlanHash,
+        stored.verifiedDirectory.receipt.manifest.sceneSource.executionPlanHash,
       authoringSpec: source,
       authoringSpecHash: hashAuthoringDocumentV4(source),
       diagnostics: [],

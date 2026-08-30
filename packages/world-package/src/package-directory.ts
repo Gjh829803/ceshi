@@ -22,12 +22,15 @@ import { isEqual, isNil } from "lodash-es";
 
 import {
   assertWorldPackageBuildReceiptV1,
-  assertWorldPackageGameplayBootstrapMembershipV1,
-  canonicalWorldPackageFileIntegrityEntriesV1,
+  assertCanonicalWorldPackageGameplayBootstrapMembershipV1,
+  canonicalizeWorldPackageFileIntegrityEntriesV1,
   hashWorldPackageManifestV1,
   hashWorldPackageRootV1,
 } from "./package-contract.js";
-import type { WorldPackageBuildReceiptV1 } from "./package-types.js";
+import type {
+  CanonicalWorldPackageBuildReceiptV1,
+  WorldPackageBuildReceiptV1,
+} from "./package-types.js";
 
 const INTEGRITY_PATH = "integrity.json";
 const RECEIPT_PATH = "world-package-build-receipt.json";
@@ -48,7 +51,8 @@ export interface WorldPackageDirectoryV1 {
 }
 
 export interface VerifiedWorldPackageDirectoryV1 {
-  readonly receipt: WorldPackageBuildReceiptV1;
+  readonly kind: "canonical-execution-plan";
+  readonly receipt: CanonicalWorldPackageBuildReceiptV1;
   readonly authoringSpec?: AuthoringSpecV4;
   readonly normalizedWorldIr: NormalizedWorldIRV4;
   readonly registryLock: readonly WorldResourceLockEntryV1[];
@@ -191,20 +195,34 @@ function verifyInternal(input: unknown): VerifiedWorldPackageDirectoryV1 {
 
   const manifest = receipt.manifest;
   if (!isEqual(parseCanonicalJson(requireFile(filesByPath, "manifest.json")), manifest) || hashWorldPackageManifestV1(manifest) !== receipt.manifestHash) invalid("manifest.json", "manifest mismatch");
+  if (manifest.sceneSource.kind !== "canonical-execution-plan") {
+    invalid("manifest.json", "Native WorldPackage verification is not implemented until BNA-3 verifier admission");
+  }
+  const sceneSource = manifest.sceneSource;
+  const canonicalReceipt = receipt as CanonicalWorldPackageBuildReceiptV1;
   const normalizedWorldIr = parseCanonicalJson(requireFile(filesByPath, "world.normalized.json")) as NormalizedWorldIRV4;
   const registryLock = worldResourceLockEntriesV1(parseCanonicalJson(requireFile(filesByPath, "registry-lock.json")));
   const layoutSolveReport = parseCanonicalJson(requireFile(filesByPath, "layout-solve-report.json")) as LayoutSolveReportV1;
-  const executionPlan = parseCanonicalSceneExecutionPlanV1(parseCanonicalJson(requireFile(filesByPath, manifest.entryPoint.canonicalSceneExecutionPlanPath)));
+  const executionPlan = parseCanonicalSceneExecutionPlanV1(parseCanonicalJson(requireFile(filesByPath, sceneSource.canonicalSceneExecutionPlanPath)));
   const gameplayBootstrap = parseGameplayBootstrapV1(parseCanonicalJson(requireFile(filesByPath, manifest.entryPoint.gameplayBootstrapPath)));
   const worldRuntimeBootstrap = parseWorldRuntimeBootstrapV1(parseCanonicalJson(requireFile(filesByPath, manifest.entryPoint.worldRuntimeBootstrapPath)));
-  assertWorldPackageGameplayBootstrapMembershipV1({ canonicalSceneExecutionPlan: executionPlan, gameplayBootstrap, worldRuntimeBootstrap, worldPackageBuildReceipt: receipt });
-  if (sha256CanonicalJson(normalizedWorldIr) !== manifest.normalizedWorldIrHash || hashCanonicalSceneExecutionPlanV1(executionPlan) !== manifest.executionPlanHash ||
+  assertCanonicalWorldPackageGameplayBootstrapMembershipV1({ canonicalSceneExecutionPlan: executionPlan, gameplayBootstrap, worldRuntimeBootstrap, worldPackageBuildReceipt: receipt });
+  if (sha256CanonicalJson(normalizedWorldIr) !== sceneSource.normalizedWorldIrHash || hashCanonicalSceneExecutionPlanV1(executionPlan) !== sceneSource.executionPlanHash ||
     gameplayBootstrap.contentHash !== manifest.gameplayBootstrapHash || worldRuntimeBootstrap.contentHash !== manifest.worldRuntimeBootstrapHash ||
-    sha256CanonicalJson(registryLock) !== manifest.registryLockHash || hashLayoutSolveReportV1(layoutSolveReport) !== manifest.layoutSolveReportHash ||
-    !isEqual(registryLock, worldResourceLockEntriesV1([...executionPlan.sceneResourceLockEntries, ...worldRuntimeBootstrap.runtimeResourceLockEntries]))) {
+    sha256CanonicalJson(registryLock) !== manifest.registryLockHash || hashLayoutSolveReportV1(layoutSolveReport) !== sceneSource.layoutSolveReportHash ||
+    !isEqual(registryLock, worldResourceLockEntriesV1([
+      ...executionPlan.sceneResourceLockEntries,
+      ...worldRuntimeBootstrap.runtimeResourceLockEntries,
+      {
+        resourceKind: "world-runtime-bootstrap",
+        resourceRef: executionPlan.worldRuntimeBootstrapRef,
+        resolvedVersion: "1",
+        contentHash: worldRuntimeBootstrap.contentHash,
+      },
+    ]))) {
     invalid("manifest.json", "component hashes or locks do not match parsed files");
   }
-  const compiled = compileCanonicalWorldV1({ normalizedWorldIr, normalizedWorldIrHash: manifest.normalizedWorldIrHash, gameplayBootstrap, worldRuntimeBootstrapRef: executionPlan.worldRuntimeBootstrapRef });
+  const compiled = compileCanonicalWorldV1({ normalizedWorldIr, normalizedWorldIrHash: sceneSource.normalizedWorldIrHash, gameplayBootstrap, worldRuntimeBootstrapRef: executionPlan.worldRuntimeBootstrapRef });
   if (!compiled.ok || !isEqual(compiled.canonicalSceneExecutionPlan, executionPlan) || !isEqual(compiled.worldRuntimeBootstrap, worldRuntimeBootstrap)) invalid("world.normalized.json", "compiler replay drifted");
 
   let authoringSpec: AuthoringSpecV4 | undefined;
@@ -212,7 +230,7 @@ function verifyInternal(input: unknown): VerifiedWorldPackageDirectoryV1 {
   if (!isNil(authoringFile)) {
     authoringSpec = parseCanonicalJson(authoringFile) as AuthoringSpecV4;
     const normalized = normalizeAuthoringSpecV4(authoringSpec);
-    if (!normalized.ok || !isEqual(normalized.value, normalizedWorldIr) || hashAuthoringDocumentV4(authoringSpec) !== manifest.authoringSpecHash) invalid("authoring-spec.json", "cannot replay Normalized IR");
+    if (!normalized.ok || !isEqual(normalized.value, normalizedWorldIr) || hashAuthoringDocumentV4(authoringSpec) !== sceneSource.authoringSpecHash) invalid("authoring-spec.json", "cannot replay Normalized IR");
   }
   const resourceBytes = new Map<string, Uint8Array>();
   for (const resource of manifest.resources) {
@@ -220,7 +238,7 @@ function verifyInternal(input: unknown): VerifiedWorldPackageDirectoryV1 {
     if (file.mediaType !== resource.mediaType || file.bytes.byteLength !== resource.sizeBytes || sha256Bytes(file.bytes) !== resource.contentHash) invalid(resource.packagePath, "resource bytes mismatch");
     resourceBytes.set(resource.resourceRef, file.bytes);
   }
-  return Object.freeze({ receipt, ...(isNil(authoringSpec) ? {} : { authoringSpec }), normalizedWorldIr: Object.freeze(normalizedWorldIr), registryLock,
+  return Object.freeze({ kind: "canonical-execution-plan" as const, receipt: canonicalReceipt, ...(isNil(authoringSpec) ? {} : { authoringSpec }), normalizedWorldIr: Object.freeze(normalizedWorldIr), registryLock,
     layoutSolveReport: Object.freeze(layoutSolveReport), executionPlan, gameplayBootstrap, worldRuntimeBootstrap,
     resourceBytesByRef: new ImmutableByteMap(resourceBytes), signatureFiles });
 }
@@ -235,7 +253,7 @@ export function verifyWorldPackageDirectoryV1(input: unknown): VerifiedWorldPack
 export function assembleWorldPackageDirectoryV1(input: AssembleWorldPackageDirectoryV1Input): WorldPackageDirectoryV1 {
   const receipt = assertWorldPackageBuildReceiptV1(input.receipt);
   const rootFiles = canonicalFiles(input.files, "root", "files");
-  const entries = canonicalWorldPackageFileIntegrityEntriesV1(rootFiles.map((file) => ({ path: file.path, mediaType: file.mediaType, sizeBytes: file.bytes.byteLength, contentHash: sha256Bytes(file.bytes) as `sha256:${string}` })));
+  const entries = canonicalizeWorldPackageFileIntegrityEntriesV1(rootFiles.map((file) => ({ path: file.path, mediaType: file.mediaType, sizeBytes: file.bytes.byteLength, contentHash: sha256Bytes(file.bytes) as `sha256:${string}` })));
   if (!isEqual(entries, receipt.fileIntegrityEntries)) invalid("files", "Root files do not match receipt inventory");
   const files = canonicalFiles([
     ...rootFiles,

@@ -737,7 +737,7 @@ class HeadlessRuntimeSession implements HeadlessRuntimePublicationSessionV1 {
       worldConfiguration.worldBuildIdentity.worldPackageRef !==
         worldPackageRefFromRootHashV1(expectedRootHash) ||
       worldConfiguration.sceneSource.executionPlanHash !==
-        input.verifiedDirectory.receipt.manifest.executionPlanHash ||
+        input.verifiedDirectory.receipt.manifest.sceneSource.executionPlanHash ||
       !isEqual(
         worldConfiguration.sceneSource.executionPlan,
         input.verifiedDirectory.executionPlan,

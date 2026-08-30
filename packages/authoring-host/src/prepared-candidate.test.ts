@@ -24,11 +24,11 @@ import {
 } from "@whitebox-world/gameplay-contracts";
 import { canonicalJsonBytes } from "@whitebox-world/protocol";
 import {
-  createWorldPackageV1,
+  createCanonicalWorldPackageV1,
 } from "@whitebox-world/world-package";
 import {
   createInMemoryWorldPackageStoreV1,
-  createWorldPackageBuildContextFixtureV1,
+  createCanonicalWorldPackageBuildContextFixtureV1,
 } from "@whitebox-world/world-package/testing";
 import { isNil } from "lodash-es";
 import { describe, expect, it } from "vitest";
@@ -151,9 +151,9 @@ function expectedHashes(spec: AuthoringSpecV4) {
   if (!compiled.ok || isNil(compiled.canonicalSceneExecutionPlan) || isNil(compiled.executionPlanHash)) {
     throw new Error(`expected fixture compile: ${JSON.stringify(compiled.diagnostics)}`);
   }
-  const directory = createWorldPackageV1({
+  const directory = createCanonicalWorldPackageV1({
     packageId: `${spec.id}.package`,
-    ...createWorldPackageBuildContextFixtureV1(),
+    ...createCanonicalWorldPackageBuildContextFixtureV1(),
     authoringSpec: spec,
     normalizedWorldIr,
     layoutSolveResult: {
@@ -203,7 +203,7 @@ async function prepare(
       policy: selectedPolicy,
       store,
       worldPackageStore,
-      worldPackageBuildContext: createWorldPackageBuildContextFixtureV1(),
+      worldPackageBuildContext: createCanonicalWorldPackageBuildContextFixtureV1(),
       resourceArtifacts: [],
       nowUnixMilliseconds: extras.nowUnixMilliseconds ?? NOW,
       ...(isNil(extras.evaluateRequiredGates)

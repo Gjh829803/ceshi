@@ -453,11 +453,19 @@ function canonicalInput(
   const combinedResourceLock = worldResourceLockEntriesV1([
     ...executionPlan.sceneResourceLockEntries,
     ...worldRuntimeBootstrap.runtimeResourceLockEntries,
+    {
+      resourceKind: "world-runtime-bootstrap",
+      resourceRef: executionPlan.worldRuntimeBootstrapRef,
+      resolvedVersion: "1",
+      contentHash: worldRuntimeBootstrap.contentHash,
+    },
   ]);
   const resourceLockHash = sha256CanonicalJson(combinedResourceLock);
   const routeResourceLockHash = sha256CanonicalJson(
     combinedResourceLock.filter(
-      (row) => row.resourceKind !== "gameplay-bootstrap",
+      (row) =>
+        row.resourceKind !== "gameplay-bootstrap" &&
+        row.resourceKind !== "world-runtime-bootstrap",
     ),
   ) as `sha256:${string}`;
   if (

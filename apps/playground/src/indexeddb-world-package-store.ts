@@ -6,7 +6,7 @@ import {
 
 import {
   assertWorldPackageStoreRefMatchesDirectoryV1,
-  canonicalWorldPackageDirectoryForStoreV1,
+  canonicalizeWorldPackageDirectoryForStoreV1,
   equalWorldPackageDirectoryBytesV1,
   verifyWorldPackageDirectoryV1,
   type WorldPackageDirectoryV1,
@@ -73,7 +73,7 @@ export function createIndexedDbWorldPackageStoreV1(
     brand: "WorldPackageStoreV1",
 
     async put(directoryValue) {
-      const directory = canonicalWorldPackageDirectoryForStoreV1(directoryValue);
+      const directory = canonicalizeWorldPackageDirectoryForStoreV1(directoryValue);
       const worldPackageRef = worldPackageRefFromRootHashV1(
         directory.receipt.worldPackageRootHash,
       );
@@ -86,7 +86,7 @@ export function createIndexedDbWorldPackageStoreV1(
         if (isNil(existingValue)) {
           await requestResult(store.add(directory, worldPackageRef));
         } else {
-          const existing = canonicalWorldPackageDirectoryForStoreV1(
+          const existing = canonicalizeWorldPackageDirectoryForStoreV1(
             existingValue as WorldPackageDirectoryV1,
           );
           assertWorldPackageStoreRefMatchesDirectoryV1(worldPackageRef, existing);

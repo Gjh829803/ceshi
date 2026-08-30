@@ -5,11 +5,11 @@ import { isNil } from "lodash-es";
 
 import basicWorldDocument from "../../../examples/authoring/basic-world.json";
 import { BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V1 } from "./babylon-web-host-profile.js";
-import type { CreateWorldPackageV1Input } from "./package-build.js";
+import type { CreateCanonicalWorldPackageV1Input } from "./package-build.js";
 
 export function createWorldPackageTestInputV1(
-  overrides: Partial<CreateWorldPackageV1Input> = {},
-): CreateWorldPackageV1Input {
+  overrides: Partial<CreateCanonicalWorldPackageV1Input> = {},
+): CreateCanonicalWorldPackageV1Input {
   const validated = validateAuthoringSpecV4(basicWorldDocument);
   if (!validated.ok || isNil(validated.value)) throw new Error("test AuthoringSpec invalid");
   const authoringSpec: AuthoringSpecV4 = validated.value;
@@ -41,7 +41,7 @@ export function createWorldPackageTestInputV1(
   if (!compiled.ok || isNil(compiled.canonicalSceneExecutionPlan) || isNil(compiled.worldRuntimeBootstrap)) {
     throw new Error("test compilation failed");
   }
-  const base: CreateWorldPackageV1Input = {
+  const base: CreateCanonicalWorldPackageV1Input = {
     packageId: `${authoringSpec.id}.package`,
     title: "Basic World",
     sdkVersion: "0.0.0",

@@ -2,7 +2,7 @@ import { canonicalJsonBytes } from "@whitebox-world/protocol";
 import {
   assembleWorldPackageDirectoryV1,
   assertWorldPackageHostCompatibilityV1,
-  canonicalWorldPackageSignatureEnvelopeV1,
+  canonicalizeWorldPackageSignatureEnvelopeV1,
   verifyWorldPackageDirectoryV1,
   worldPackageSignatureEnvelopeBytesV1,
   type VerifiedWorldPackageDirectoryV1,
@@ -190,7 +190,7 @@ function parseSignatureFile(
   }
   let envelope;
   try {
-    envelope = canonicalWorldPackageSignatureEnvelopeV1(record.envelope);
+    envelope = canonicalizeWorldPackageSignatureEnvelopeV1(record.envelope);
   } catch {
     return signatureEnvelopeInvalid(`${file.path} has an invalid envelope`);
   }
@@ -364,7 +364,7 @@ export function signWorldPackageDirectoryV1(
 ): WorldPackageDirectoryV1 {
   verifyDirectoryWithSignatureErrorMapping(input.directory);
   const keyId = requireSafeKeyId(input.keyId);
-  const envelope = canonicalWorldPackageSignatureEnvelopeV1({
+  const envelope = canonicalizeWorldPackageSignatureEnvelopeV1({
     kind: "worldkit-package-signature-envelope",
     schemaVersion: 1,
     packageRootHash: input.directory.receipt.worldPackageRootHash,

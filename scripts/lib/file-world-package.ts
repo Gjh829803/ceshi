@@ -8,7 +8,7 @@ import {
   assembleWorldPackageDirectoryV1,
   assertWorldPackageStoreRefMatchesDirectoryV1,
   assertWorldPackageBuildReceiptV1,
-  canonicalWorldPackageDirectoryForStoreV1,
+  canonicalizeWorldPackageDirectoryForStoreV1,
   equalWorldPackageDirectoryBytesV1,
   verifyWorldPackageDirectoryV1,
   type WorldPackageBuildReceiptV1,
@@ -838,7 +838,7 @@ class FileWorldPackageStoreV1 implements WorldPackageStoreV1 {
   async #putOnce(
     directoryValue: WorldPackageDirectoryV1,
   ): Promise<WorldPackageStorePutResultV1> {
-    const directory = canonicalWorldPackageDirectoryForStoreV1(directoryValue);
+    const directory = canonicalizeWorldPackageDirectoryForStoreV1(directoryValue);
     const worldPackageRef = worldPackageRefFromRootHashV1(
       directory.receipt.worldPackageRootHash,
     );

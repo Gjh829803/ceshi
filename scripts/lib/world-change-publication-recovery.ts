@@ -61,7 +61,7 @@ function runtimeConfiguration(
     sceneSource: Object.freeze({
       kind: "canonical-execution-plan" as const,
       executionPlan: directory.executionPlan,
-      executionPlanHash: directory.receipt.manifest.executionPlanHash,
+      executionPlanHash: directory.receipt.manifest.sceneSource.executionPlanHash,
     }),
   });
 }

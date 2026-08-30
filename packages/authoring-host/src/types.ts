@@ -12,8 +12,8 @@ import type {
   WorldChangeValidationReportBindingV1,
 } from "@whitebox-world/authoring-edit";
 import type {
-  ResolvedWorldPackageResourceArtifactV1,
-  WorldPackageBuildContextV1,
+  ResolvedCanonicalWorldPackageResourceArtifactV1,
+  CanonicalWorldPackageBuildContextV1,
   WorldPackageBuildReceiptV1,
   WorldPackageStoreV1,
 } from "@whitebox-world/world-package";
@@ -55,9 +55,9 @@ export interface PrepareTrustedCandidateInputV1 {
   readonly policy: AuthoringEditPolicyProjectionV1;
   readonly store: PreparedCandidateLeaseStoreV1;
   readonly worldPackageStore: WorldPackageStoreV1;
-  readonly worldPackageBuildContext: WorldPackageBuildContextV1;
+  readonly worldPackageBuildContext: CanonicalWorldPackageBuildContextV1;
   readonly nowUnixMilliseconds: number;
-  readonly resourceArtifacts: readonly ResolvedWorldPackageResourceArtifactV1[];
+  readonly resourceArtifacts: readonly ResolvedCanonicalWorldPackageResourceArtifactV1[];
   readonly evaluateRequiredGates?: EvaluateRequiredGatesV1;
 }
 

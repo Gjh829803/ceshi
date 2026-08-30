@@ -118,7 +118,7 @@ export async function createSimulationTakeWorldPackageIdentityV1(
       verified.receipt.worldPackageRootHash,
     ),
     worldPackageRootHash: verified.receipt.worldPackageRootHash,
-    normalizedWorldIrHash: verified.receipt.manifest.normalizedWorldIrHash,
+    normalizedWorldIrHash: verified.receipt.manifest.sceneSource.normalizedWorldIrHash,
     worldBuildIdentityHash: verified.receipt.worldBuildIdentityHash,
   };
 }

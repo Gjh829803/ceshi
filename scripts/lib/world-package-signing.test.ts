@@ -10,7 +10,7 @@ import {
 } from "@whitebox-world/gameplay-contracts";
 import { canonicalJsonBytes } from "@whitebox-world/protocol";
 import {
-  createWorldPackageV1,
+  createCanonicalWorldPackageV1,
   type WorldPackageDirectoryV1,
   type WorldPackageHostPolicyV1,
 } from "@whitebox-world/world-package";
@@ -83,7 +83,7 @@ function unsignedDirectory(): WorldPackageDirectoryV1 {
   if (!compiled.ok || isNil(compiled.canonicalSceneExecutionPlan)) {
     throw new Error("fixture compilation failed");
   }
-  return createWorldPackageV1({
+  return createCanonicalWorldPackageV1({
     packageId: `${authoringSpec.id}.package`,
     title: "Signed Basic World",
     sdkVersion: "0.0.0",

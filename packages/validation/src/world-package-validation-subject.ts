@@ -4,7 +4,7 @@ import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { hashCanonicalSceneExecutionPlanV1 } from "@whitebox-world/runtime-contracts";
 import {
   assertWorldPackageBuildReceiptV1,
-  assertWorldPackageGameplayBootstrapMembershipV1,
+  assertCanonicalWorldPackageGameplayBootstrapMembershipV1,
   type VerifiedWorldPackageDirectoryV1,
 } from "@whitebox-world/world-package";
 import { isEqual, isNil, isPlainObject } from "lodash-es";
@@ -32,7 +32,7 @@ export function createWorldPackageValidationSubjectV1(
   let receipt;
   try {
     receipt = assertWorldPackageBuildReceiptV1(verified.receipt);
-    assertWorldPackageGameplayBootstrapMembershipV1({
+    assertCanonicalWorldPackageGameplayBootstrapMembershipV1({
       canonicalSceneExecutionPlan: verified.executionPlan,
       gameplayBootstrap: verified.gameplayBootstrap,
       worldRuntimeBootstrap: verified.worldRuntimeBootstrap,
@@ -41,28 +41,29 @@ export function createWorldPackageValidationSubjectV1(
   } catch {
     return fail("verified Receipt, Scene Plan, Runtime Bootstrap, or Gameplay Bootstrap binding is invalid");
   }
-  const manifest = receipt.manifest;
+  const manifest = verified.receipt.manifest;
+  const sceneSource = manifest.sceneSource;
   if (
-    hashCanonicalSceneExecutionPlanV1(verified.executionPlan) !== manifest.executionPlanHash ||
+    hashCanonicalSceneExecutionPlanV1(verified.executionPlan) !== sceneSource.executionPlanHash ||
     sha256CanonicalJson(verified.normalizedWorldIr) !==
-      manifest.normalizedWorldIrHash ||
+      sceneSource.normalizedWorldIrHash ||
     sha256CanonicalJson(verified.registryLock) !== manifest.registryLockHash ||
     !isEqual(verified.registryLock, manifest.lockedResources) ||
-    verified.normalizedWorldIr.authoringSpecHash !== manifest.authoringSpecHash ||
+    verified.normalizedWorldIr.authoringSpecHash !== sceneSource.authoringSpecHash ||
     verified.executionPlan.normalizedWorldIrHash !==
-      manifest.normalizedWorldIrHash ||
+      sceneSource.normalizedWorldIrHash ||
     verified.executionPlan.layout.layoutSolveReportHash !==
-      manifest.layoutSolveReportHash
+      sceneSource.layoutSolveReportHash
   ) {
     fail("verified package identity closure drifted");
   }
   return Object.freeze({
     kind: "world-package",
     worldPackageRootHash: receipt.worldPackageRootHash,
-    authoringSpecHash: asHash(manifest.authoringSpecHash),
-    normalizedWorldIrHash: asHash(manifest.normalizedWorldIrHash),
+    authoringSpecHash: asHash(sceneSource.authoringSpecHash),
+    normalizedWorldIrHash: asHash(sceneSource.normalizedWorldIrHash),
     worldBuildIdentityHash: receipt.worldBuildIdentityHash,
     resourceLockHash: asHash(manifest.registryLockHash),
-    layoutSolveReportHash: asHash(manifest.layoutSolveReportHash),
+    layoutSolveReportHash: asHash(sceneSource.layoutSolveReportHash),
   });
 }

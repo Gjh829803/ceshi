@@ -312,7 +312,7 @@ async function finishRuntimePublication(
           kind: "canonical-execution-plan",
           executionPlan: verifiedWorldPackage.executionPlan,
           executionPlanHash:
-            verifiedWorldPackage.receipt.manifest.executionPlanHash,
+            verifiedWorldPackage.receipt.manifest.sceneSource.executionPlanHash,
         },
       },
       publication: {
