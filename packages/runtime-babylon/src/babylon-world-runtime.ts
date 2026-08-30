@@ -32,6 +32,8 @@ import type {
   MountedOnRelationshipStateV1,
   SpatialEntityStateV1,
 } from "@whitebox-world/gameplay-contracts";
+import type { RuntimeWorldAdapterDescriptorV1 } from
+  "@whitebox-world/runtime-host";
 import type {
   ApplyCameraPreviewRequestV1,
   ApplySubjectPresetTuningRequestV1,
@@ -61,12 +63,11 @@ import type {
   ViewTargetSampleV1,
   WorldRuntimeBootstrapV1,
 } from "@whitebox-world/runtime-contracts";
+import { hashBabylonNativeSceneContributionV1 } from
+  "@whitebox-world/runtime-contracts";
 import type { GameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
 import {
   admitBabylonNativeSceneCandidateV1,
-  type BabylonNativeLockedAssetResolverV1,
-  type BabylonNativeSceneAdmissionBudgetV1,
-  type BabylonNativeSceneModuleV1,
 } from "@whitebox-world/native-babylon/host";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import type {
@@ -80,9 +81,15 @@ import {
   emitTransformedStaticColliderTriangleMeshV1,
   queryStaticColliderTriangleMeshSupportHeightMetersV1,
 } from "@whitebox-world/terrain-surface";
-import { isNil } from "lodash-es";
+import type { VerifiedBabylonNativeWorldPackageDirectoryV1 } from
+  "@whitebox-world/world-package";
+import { isEqual, isNil } from "lodash-es";
 
 import "./babylon-shader-bootstrap";
+import {
+  prepareBabylonNativeRuntimePackageV1,
+  type BabylonNativeSceneModuleLoaderV1,
+} from "./babylon-native-package-runtime";
 import { BabylonCharacterEntityV1 } from "./babylon-character-entity";
 import { BabylonHavokPhysicsWorldQueryV1 } from "./babylon-physics-world-query";
 import { CameraComponentV1 } from "./camera-component";
@@ -203,10 +210,10 @@ export type BabylonWorldRuntimeOptions = BabylonWorldRuntimeCommonOptionsV1 &
         }>
       | Readonly<{
           kind: "babylon-native-scene";
-          bootstrap: BabylonNativeSceneBootstrapV1;
-          module: BabylonNativeSceneModuleV1;
-          assets: BabylonNativeLockedAssetResolverV1;
-          budget: BabylonNativeSceneAdmissionBudgetV1;
+          descriptor: RuntimeWorldAdapterDescriptorV1;
+          verifiedWorldPackage:
+            VerifiedBabylonNativeWorldPackageDirectoryV1;
+          moduleLoader: BabylonNativeSceneModuleLoaderV1;
         }>;
   }>;
 
@@ -763,6 +770,13 @@ export class BabylonWorldRuntime {
     const nativeScene = options.sceneSource.kind === "babylon-native-scene"
       ? options.sceneSource
       : undefined;
+    const preparedNativeScene = isNil(nativeScene)
+      ? undefined
+      : await prepareBabylonNativeRuntimePackageV1({
+          descriptor: nativeScene.descriptor,
+          verifiedWorldPackage: nativeScene.verifiedWorldPackage,
+          moduleLoader: nativeScene.moduleLoader,
+        });
     if (
       !isNil(canonicalScenePlan) &&
       (canonicalScenePlan.kind !==
@@ -816,14 +830,14 @@ export class BabylonWorldRuntime {
         options.worldRuntimeBootstrap.gravityMetersPerSecondSquaredXYZ;
       let effectiveCamera = options.worldRuntimeBootstrap.initialCamera;
       let nativeContribution: BabylonNativeSceneContributionV1 | undefined;
-      if (!isNil(nativeScene)) {
+      if (!isNil(nativeScene) && !isNil(preparedNativeScene)) {
         options.onInitializationStage?.("native-scene");
         const nativeResult = await admitBabylonNativeSceneCandidateV1({
           candidate: { engine, scene },
-          bootstrap: nativeScene.bootstrap,
-          module: nativeScene.module,
-          assets: nativeScene.assets,
-          budget: nativeScene.budget,
+          bootstrap: preparedNativeScene.verifiedWorldPackage.bootstrap,
+          module: preparedNativeScene.module,
+          assets: preparedNativeScene.assets,
+          budget: preparedNativeScene.budget,
         });
         if (nativeResult.outcome !== "passed") {
           const problem = nativeResult.diagnostics.find(
@@ -835,6 +849,17 @@ export class BabylonWorldRuntime {
               : `${problem.code}: ${problem.message}`,
           );
         }
+        const packagedContribution =
+          preparedNativeScene.verifiedWorldPackage.nativeSceneContribution;
+        if (
+          nativeResult.contributionHash !==
+            hashBabylonNativeSceneContributionV1(packagedContribution) ||
+          !isEqual(nativeResult.contribution, packagedContribution)
+        ) {
+          throw new Error(
+            "WORLDKIT_NATIVE_SCENE_RUNTIME_CONTRIBUTION_MISMATCH: Actual Native Contribution differs from the verified WorldPackage.",
+          );
+        }
         nativeContribution = nativeResult.contribution;
         options.onNativeSceneAdmission?.(Object.freeze({
           contribution: nativeResult.contribution,
@@ -842,30 +867,30 @@ export class BabylonWorldRuntime {
         }));
         if (
           options.worldRuntimeBootstrap.initialControlledEntityId !==
-            nativeScene.bootstrap.initialControlledEntityId ||
+            preparedNativeScene.verifiedWorldPackage.bootstrap.initialControlledEntityId ||
           options.worldRuntimeBootstrap.gameplayBootstrapRef !==
-            nativeScene.bootstrap.gameplayBootstrapRef ||
+            preparedNativeScene.verifiedWorldPackage.bootstrap.gameplayBootstrapRef ||
           !options.worldRuntimeBootstrap.gravityMetersPerSecondSquaredXYZ.every(
             (value, index) => Object.is(
               value,
-              nativeScene.bootstrap.gravityMetersPerSecondSquaredXYZ[index],
+              preparedNativeScene.verifiedWorldPackage.bootstrap.gravityMetersPerSecondSquaredXYZ[index],
             ),
           ) ||
           !Object.is(
             options.worldRuntimeBootstrap.initialCamera.pitchRadians,
-            nativeScene.bootstrap.initialCamera.pitchRadians,
+            preparedNativeScene.verifiedWorldPackage.bootstrap.initialCamera.pitchRadians,
           ) ||
           !Object.is(
             options.worldRuntimeBootstrap.initialCamera.distanceMeters,
-            nativeScene.bootstrap.initialCamera.distanceMeters,
+            preparedNativeScene.verifiedWorldPackage.bootstrap.initialCamera.distanceMeters,
           ) ||
           !Object.is(
             options.worldRuntimeBootstrap.initialCamera.fovDegrees,
-            nativeScene.bootstrap.initialCamera.fovDegrees,
+            preparedNativeScene.verifiedWorldPackage.bootstrap.initialCamera.fovDegrees,
           ) ||
           !Object.is(
             options.worldRuntimeBootstrap.initialCamera.targetHeightMeters,
-            nativeScene.bootstrap.initialCamera.targetHeightMeters,
+            preparedNativeScene.verifiedWorldPackage.bootstrap.initialCamera.targetHeightMeters,
           )
         ) {
           throw new Error(

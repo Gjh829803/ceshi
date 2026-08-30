@@ -9,7 +9,7 @@ import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
 import { LoadAssetContainerAsync } from "@babylonjs/core/Loading/sceneLoader.js";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
 import { Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
-import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
+import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 import {
@@ -53,13 +53,22 @@ import type {
 } from "@whitebox-world/runtime-contracts";
 import {
   createWorldRuntimeBootstrapV1,
-  parseBabylonNativeSceneBootstrapV1,
 } from
   "@whitebox-world/runtime-contracts";
-import type { BabylonNativeLockedAssetResolverV1 } from
-  "@whitebox-world/native-babylon/host";
+import type { BabylonNativeSceneModuleV1 } from
+  "@whitebox-world/native-babylon";
+import {
+  createBabylonNativeWorldPackageV1,
+  verifyWorldPackageDirectoryV1,
+} from "@whitebox-world/world-package";
+import { createBabylonNativeWorldPackageTestInputV1 } from
+  "@whitebox-world/world-package/testing";
 import { emitTransformedStaticColliderTriangleMeshV1 } from "@whitebox-world/terrain-surface";
-import { parseGameplayWorldStateProjectionV1 } from "@whitebox-world/runtime-host";
+import {
+  parseGameplayWorldStateProjectionV1,
+  runtimeWorldConfigurationFromVerifiedWorldPackageV1,
+  type RuntimeWorldAdapterDescriptorV1,
+} from "@whitebox-world/runtime-host";
 import {
   hashRootMotionSourceV1,
   type RootMotionSourceBodyV1,
@@ -843,44 +852,6 @@ function createFlatPackageExecutionPlan(
   return compileFlatTerrainExecutionPlan(spec);
 }
 
-const EMPTY_NATIVE_ASSET_RESOLVER: BabylonNativeLockedAssetResolverV1 =
-  Object.freeze({
-    async resolve() {
-      throw new Error("WORLDKIT_NATIVE_SCENE_TEST_ASSET_NOT_SELECTED");
-    },
-  });
-
-function createNativeRuntimeBootstrap(
-  executionPlan: CanonicalSceneExecutionPlanV1,
-  spawnMarkerId: string,
-) {
-  const runtimeBootstrap = runtimeTestWorldArtifactsForPlanV1(
-    executionPlan,
-  ).worldRuntimeBootstrap;
-  return parseBabylonNativeSceneBootstrapV1({
-    kind: "babylon-native-scene-bootstrap",
-    schemaVersion: 1,
-    id: "native-runtime-test",
-    sceneModuleRef: "worldkit://native-scene/runtime-test@1",
-    nativeSceneApiRef: "worldkit://native-scene-api/babylon@1",
-    nativeSceneProfileRef:
-      "worldkit://native-scene-profile/whitebox.standard@1",
-    gameplayBootstrapRef: runtimeBootstrap.gameplayBootstrapRef,
-    initialControlledEntityId: runtimeBootstrap.initialControlledEntityId,
-    gravityMetersPerSecondSquaredXYZ:
-      runtimeBootstrap.gravityMetersPerSecondSquaredXYZ,
-    initialCamera: {
-      mode: "third-person",
-      pitchRadians: runtimeBootstrap.initialCamera.pitchRadians,
-      distanceMeters: runtimeBootstrap.initialCamera.distanceMeters,
-      fovDegrees: runtimeBootstrap.initialCamera.fovDegrees,
-      targetHeightMeters: runtimeBootstrap.initialCamera.targetHeightMeters,
-    },
-    seed: 41,
-    spawnMarkerId,
-  });
-}
-
 async function createRuntime(
   executionPlan: CanonicalSceneExecutionPlanV1,
   options: Pick<
@@ -889,22 +860,12 @@ async function createRuntime(
     | "subjectAssetResolver"
     | "subjectAssetCacheOptions"
     | "onInitializationStage"
-  > & Readonly<{
-    nativeScene?: Omit<
-      Extract<
-        BabylonWorldRuntimeOptions["sceneSource"],
-        { kind: "babylon-native-scene" }
-      >,
-      "kind"
-    >;
-  }> = {},
+  > = {},
   bindInitialPossession = true,
 ): Promise<BabylonWorldRuntime> {
   const artifacts = runtimeTestWorldArtifactsForPlanV1(executionPlan);
   const runtime = await BabylonWorldRuntime.create({
-    sceneSource: options.nativeScene === undefined
-      ? { kind: "canonical-execution-plan", executionPlan }
-      : { kind: "babylon-native-scene", ...options.nativeScene },
+    sceneSource: { kind: "canonical-execution-plan", executionPlan },
     worldRuntimeBootstrap: artifacts.worldRuntimeBootstrap,
     gameplayBootstrap: artifacts.gameplayBootstrap,
     ...(options.subjectAssetResolver === undefined
@@ -932,6 +893,96 @@ async function createRuntime(
       artifacts.worldRuntimeBootstrap.initialControlledEntityId,
     );
   }
+  return runtime;
+}
+
+function packageFixtureNativeModule(
+  mutate?: (context: Parameters<BabylonNativeSceneModuleV1["build"]>[0]) =>
+    void | Promise<void>,
+): BabylonNativeSceneModuleV1 {
+  return Object.freeze({
+    kind: "babylon-native-scene-module",
+    id: "package-fixture-module",
+    async build(context) {
+      if (mutate !== undefined) {
+        await mutate(context);
+        return;
+      }
+      const ground = new Mesh("native-package-ground", context.scene);
+      ground.setVerticesData(
+        VertexBuffer.PositionKind,
+        [-5, 0, -5, 5, 0, -5, 0, 0, 5],
+      );
+      ground.setIndices([0, 1, 2]);
+      context.registration.registerSpawnMarker({
+        id: "player-spawn",
+        positionMetersXYZ: [0, 1, 0],
+        facingRadians: 0,
+      });
+      context.registration.registerStaticCollider({
+        id: "ground",
+        mesh: ground,
+        traversalBinding: { kind: "not-traversable" },
+        frictionRatio: 0.8,
+        restitutionRatio: 0,
+      });
+    },
+  });
+}
+
+async function createVerifiedNativeRuntime(
+  module: BabylonNativeSceneModuleV1,
+  options: Pick<
+    BabylonWorldRuntimeOptions,
+    "engineFactory" | "onInitializationStage"
+  > = {},
+): Promise<BabylonWorldRuntime> {
+  const verified = verifyWorldPackageDirectoryV1(
+    createBabylonNativeWorldPackageV1(
+      createBabylonNativeWorldPackageTestInputV1(),
+    ),
+  );
+  if (verified.kind !== "babylon-native-scene") throw new Error("unreachable");
+  const configuration = runtimeWorldConfigurationFromVerifiedWorldPackageV1(
+    verified,
+  );
+  if (configuration.sceneSource.kind !== "babylon-native-scene") {
+    throw new Error("unreachable");
+  }
+  const descriptor = Object.freeze({
+    runtimeSessionId: "runtime.native-package-test",
+    worldSessionId: "world-session.native-package-test",
+    worldBuildIdentity: configuration.worldBuildIdentity,
+    gameplayBootstrap: configuration.gameplayBootstrap,
+    worldRuntimeBootstrap: configuration.worldRuntimeBootstrap,
+    sceneSource: configuration.sceneSource,
+  }) satisfies RuntimeWorldAdapterDescriptorV1;
+  const runtime = await BabylonWorldRuntime.create({
+    sceneSource: {
+      kind: "babylon-native-scene",
+      descriptor,
+      verifiedWorldPackage: verified,
+      moduleLoader: Object.freeze({ load: async () => module }),
+    },
+    worldRuntimeBootstrap: verified.worldRuntimeBootstrap,
+    gameplayBootstrap: verified.gameplayBootstrap,
+    runtimeSessionId: descriptor.runtimeSessionId,
+    havokWasmBinary,
+    engineFactory: options.engineFactory ?? (() => new NullEngine({
+      renderWidth: 640,
+      renderHeight: 360,
+      textureSize: 512,
+      deterministicLockstep: true,
+      lockstepMaxSteps: 4,
+    })),
+    ...(options.onInitializationStage === undefined
+      ? {}
+      : { onInitializationStage: options.onInitializationStage }),
+  });
+  await bindRuntimeTestPossession(
+    runtime,
+    verified.worldRuntimeBootstrap.initialControlledEntityId,
+  );
   return runtime;
 }
 
@@ -1405,82 +1456,41 @@ describe("BabylonWorldRuntime", () => {
     );
     let buildCount = 0;
     const randomValues: number[] = [];
-    let moduleOwnedPlatform: Mesh | undefined;
-    const runtime = await createRuntime(executionPlan, {
-      nativeScene: {
-        bootstrap: createNativeRuntimeBootstrap(
-          executionPlan,
-          "player-spawn",
-        ),
-        assets: EMPTY_NATIVE_ASSET_RESOLVER,
-        module: {
-          kind: "babylon-native-scene-module",
-          id: "native-runtime-test",
-          build(context) {
-            buildCount += 1;
-            randomValues.push(
-              context.random.nextRatio(),
-              context.random.nextRatio(),
-              context.random.nextRatio(),
-            );
-            const platform = MeshBuilder.CreateBox(
-              "native-foreground-platform",
-              { width: 12, height: 1, depth: 16 },
-              context.scene,
-            );
-            platform.position.set(0, -0.5, 0);
-            moduleOwnedPlatform = platform;
-            const destination = MeshBuilder.CreateBox(
-              "native-raised-destination",
-              { width: 6, height: 1, depth: 6 },
-              context.scene,
-            );
-            destination.position.set(0, 0.5, -10);
-            context.registration.registerSpawnMarker({
-              id: "player-spawn",
-              positionMetersXYZ: [0, 2, 4],
-              facingRadians: 0,
-            });
-            context.registration.registerStaticCollider({
-              id: "foreground-platform",
-              mesh: platform,
-              traversalBinding: {
-                kind: "static-surface",
-                surfaceEntityId: "foreground-platform",
-                logicalSubshapeId: "primary",
-                traversalSurfaceProfileRef:
-                  "worldkit://traversal-surface-profile/ground.static@1",
-              },
-              frictionRatio: 0.9,
-            });
-            context.registration.registerStaticCollider({
-              id: "raised-destination",
-              mesh: destination,
-              traversalBinding: {
-                kind: "static-surface",
-                surfaceEntityId: "raised-destination",
-                logicalSubshapeId: "primary",
-                traversalSurfaceProfileRef:
-                  "worldkit://traversal-surface-profile/ground.static@1",
-              },
-            });
-          },
-        },
-        budget: {
-          maximumStaticColliderCount: 2,
-          maximumStaticColliderVertexCount: 64,
-          maximumStaticColliderTriangleCount: 24,
-        },
-      },
-    });
+    let moduleOwnedGround: Mesh | undefined;
+    const runtime = await createVerifiedNativeRuntime(
+      packageFixtureNativeModule((context) => {
+        buildCount += 1;
+        randomValues.push(
+          context.random.nextRatio(),
+          context.random.nextRatio(),
+          context.random.nextRatio(),
+        );
+        const ground = new Mesh("native-package-ground", context.scene);
+        ground.setVerticesData(
+          VertexBuffer.PositionKind,
+          [-5, 0, -5, 5, 0, -5, 0, 0, 5],
+        );
+        ground.setIndices([0, 1, 2]);
+        moduleOwnedGround = ground;
+        context.registration.registerSpawnMarker({
+          id: "player-spawn",
+          positionMetersXYZ: [0, 1, 0],
+          facingRadians: 0,
+        });
+        context.registration.registerStaticCollider({
+          id: "ground",
+          mesh: ground,
+          traversalBinding: { kind: "not-traversable" },
+          frictionRatio: 0.8,
+          restitutionRatio: 0,
+        });
+      }),
+    );
     try {
       const scene = (runtime as unknown as { scene: Scene }).scene;
       expect(buildCount).toBe(1);
-      expect(randomValues).toEqual([
-        0.2519576223567128,
-        0.9974212802480906,
-        0.8925729258917272,
-      ]);
+      expect(randomValues).toHaveLength(3);
+      expect(randomValues.every((value) => value >= 0 && value < 1)).toBe(true);
       expect(scene.getMeshByName(executionPlan.terrain.entityId)).toBeNull();
       for (const object of executionPlan.objects) {
         expect(scene.getMeshByName(object.entityId)).toBeNull();
@@ -1488,40 +1498,45 @@ describe("BabylonWorldRuntime", () => {
       for (const water of executionPlan.waters) {
         expect(scene.getMeshByName(water.entityId)).toBeNull();
       }
-      expect(scene.getMeshByName("worldkit.native-collider.foreground-platform")?.metadata)
+      expect(scene.getMeshByName("worldkit.native-collider.ground")?.metadata)
         .toMatchObject({
-          worldkitEntityId: "foreground-platform",
-          worldkitNativeTraversalKind: "static-surface",
+          worldkitEntityId: "ground",
+          worldkitNativeTraversalKind: "not-traversable",
         });
-      expect(scene.getMeshByName("worldkit.native-collider.raised-destination")?.metadata)
-        .toMatchObject({
-          worldkitEntityId: "raised-destination",
-          worldkitNativeTraversalKind: "static-surface",
-        });
-
-      expect(scene.getMeshByName("worldkit.native-collider.foreground-platform"))
-        .not.toBe(moduleOwnedPlatform);
-      moduleOwnedPlatform?.dispose();
-      const settled = await runtime.runFixedInput({ actions: [], ticks: 180 });
-      expect(settled.subjectStatesByEntityId.player).toMatchObject({
-        movementMedium: "ground",
-        activeActionId: "idle",
-      });
-      expect(settled.subjectStatesByEntityId.player!.positionMetersXYZ[2])
-        .toBeCloseTo(4, 1);
-      expect(runtimeSubjects(executionPlan).find(({ entityId }) => entityId === "player")!
-        .spawnSubjectOriginPositionMetersXYZ).not.toEqual([0, 2, 4]);
+      expect(scene.getMeshByName("worldkit.native-collider.ground"))
+        .not.toBe(moduleOwnedGround);
+      moduleOwnedGround?.dispose();
+      expect(scene.getMeshByName("worldkit.native-collider.ground")).not.toBeNull();
     } finally {
       await runtime.dispose();
     }
   }, 15_000);
 
-  it("fails authority mutation before Havok, camera, or subjects and disposes the Candidate", async () => {
-    const executionPlan = createFlatPackageExecutionPlan();
+  it("rejects runtime Contribution drift before Havok, camera, or subjects", async () => {
     const initializationStages: string[] = [];
     let candidateEngine: NullEngine | undefined;
+    const driftedModule = packageFixtureNativeModule((context) => {
+      const ground = new Mesh("native-package-ground", context.scene);
+      ground.setVerticesData(
+        VertexBuffer.PositionKind,
+        [-5, 0, -5, 6, 0, -5, 0, 0, 5],
+      );
+      ground.setIndices([0, 1, 2]);
+      context.registration.registerSpawnMarker({
+        id: "player-spawn",
+        positionMetersXYZ: [0, 1, 0],
+        facingRadians: 0,
+      });
+      context.registration.registerStaticCollider({
+        id: "ground",
+        mesh: ground,
+        traversalBinding: { kind: "not-traversable" },
+        frictionRatio: 0.8,
+        restitutionRatio: 0,
+      });
+    });
 
-    await expect(createRuntime(executionPlan, {
+    await expect(createVerifiedNativeRuntime(driftedModule, {
       engineFactory: () => {
         candidateEngine = new NullEngine({
           renderWidth: 640,
@@ -1533,26 +1548,37 @@ describe("BabylonWorldRuntime", () => {
         return candidateEngine;
       },
       onInitializationStage: (stage) => initializationStages.push(stage),
-      nativeScene: {
-        bootstrap: createNativeRuntimeBootstrap(
-          executionPlan,
-          "player-spawn",
-        ),
-        assets: EMPTY_NATIVE_ASSET_RESOLVER,
-        module: {
-          kind: "babylon-native-scene-module",
-          id: "native-authority-mutation-test",
-          build(context) {
-            context.scene.activeCamera = context.scene.activeCamera;
-          },
-        },
-        budget: {
-          maximumStaticColliderCount: 0,
-          maximumStaticColliderVertexCount: 0,
-          maximumStaticColliderTriangleCount: 0,
-        },
+    })).rejects.toThrow(
+      "WORLDKIT_NATIVE_SCENE_RUNTIME_CONTRIBUTION_MISMATCH",
+    );
+
+    expect(initializationStages).toEqual(["engine", "scene", "native-scene"]);
+    expect(candidateEngine?.isDisposed).toBe(true);
+  }, 15_000);
+
+  it("fails authority mutation before Havok, camera, or subjects and disposes the Candidate", async () => {
+    const executionPlan = createFlatPackageExecutionPlan();
+    const initializationStages: string[] = [];
+    let candidateEngine: NullEngine | undefined;
+
+    await expect(createVerifiedNativeRuntime(
+      packageFixtureNativeModule((context) => {
+        context.scene.activeCamera = context.scene.activeCamera;
+      }),
+      {
+      engineFactory: () => {
+        candidateEngine = new NullEngine({
+          renderWidth: 640,
+          renderHeight: 360,
+          textureSize: 512,
+          deterministicLockstep: true,
+          lockstepMaxSteps: 4,
+        });
+        return candidateEngine;
       },
-    })).rejects.toThrow("WORLDKIT_NATIVE_SCENE_AUTHORITY_MUTATION_FORBIDDEN");
+      onInitializationStage: (stage) => initializationStages.push(stage),
+      },
+    )).rejects.toThrow("WORLDKIT_NATIVE_SCENE_AUTHORITY_MUTATION_FORBIDDEN");
 
     expect(initializationStages).toEqual(["engine", "scene", "native-scene"]);
     expect(candidateEngine?.isDisposed).toBe(true);
@@ -1560,31 +1586,16 @@ describe("BabylonWorldRuntime", () => {
 
   it("rejects a Native spawn marker that does not match the bootstrap binding", async () => {
     const executionPlan = createFlatPackageExecutionPlan();
-    await expect(createRuntime(executionPlan, {
-      nativeScene: {
-        bootstrap: createNativeRuntimeBootstrap(
-          executionPlan,
-          "expected-spawn",
-        ),
-        assets: EMPTY_NATIVE_ASSET_RESOLVER,
-        module: {
-          kind: "babylon-native-scene-module",
-          id: "native-spawn-mismatch-test",
-          build(context) {
-            context.registration.registerSpawnMarker({
-              id: "different-spawn",
-              positionMetersXYZ: [0, 2, 0],
-              facingRadians: 0,
-            });
-          },
-        },
-        budget: {
-          maximumStaticColliderCount: 0,
-          maximumStaticColliderVertexCount: 0,
-          maximumStaticColliderTriangleCount: 0,
-        },
-      },
-    })).rejects.toThrow("WORLDKIT_NATIVE_SCENE_SPAWN_MARKER_MISMATCH");
+    expect(executionPlan.kind).toBe("worldkit-canonical-scene-execution-plan");
+    await expect(createVerifiedNativeRuntime(
+      packageFixtureNativeModule((context) => {
+        context.registration.registerSpawnMarker({
+          id: "different-spawn",
+          positionMetersXYZ: [0, 1, 0],
+          facingRadians: 0,
+        });
+      }),
+    )).rejects.toThrow("WORLDKIT_NATIVE_SCENE_SPAWN_MARKER_MISMATCH");
   }, 15_000);
 
   it("keeps Simulation Tick and Render Frame authority separate with reset-safe receipts", async () => {

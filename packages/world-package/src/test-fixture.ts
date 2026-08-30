@@ -137,10 +137,13 @@ export function createBabylonNativeWorldPackageTestInputV1(
     gravityMetersPerSecondSquaredXYZ: [0, -9.81, 0] as const,
     initialCamera: Object.freeze({
       mode: "third-person" as const,
-      pitchRadians: 0.1,
-      distanceMeters: 5,
-      fovDegrees: 55,
-      targetHeightMeters: 1.2,
+      pitchRadians:
+        canonical.worldRuntimeBootstrap.initialCamera.pitchRadians,
+      distanceMeters:
+        canonical.worldRuntimeBootstrap.initialCamera.distanceMeters,
+      fovDegrees: canonical.worldRuntimeBootstrap.initialCamera.fovDegrees,
+      targetHeightMeters:
+        canonical.worldRuntimeBootstrap.initialCamera.targetHeightMeters,
     }),
     seed: 20260830,
     spawnMarkerId: "player-spawn",
