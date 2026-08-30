@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "protectedFacts": [
+    {
+      "id": "jump-episode",
+      "ownerPackage": "@whitebox-world/character-movement",
+      "providerPackage": "@whitebox-world/runtime-babylon",
+      "forbiddenDeclaredIdentifiers": [
+        "SplitJumpIntentV1"
+      ],
+      "forbiddenPublicFieldNames": [
+        "jumpPresentation",
+        "smallJumpSequence",
+        "jumpTakeoffDelaySeconds"
+      ],
+      "requiredSnapshotTypeName": "CharacterMovementSnapshotV1"
+    }
+  ]
+}

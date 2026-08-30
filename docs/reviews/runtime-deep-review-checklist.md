@@ -18,6 +18,11 @@ Before reading individual functions, write down the single owner and downstream 
 
 Search for a second derivation of the same state. Height sampling must not also decide whether physics says the subject is supported; camera code must not also rotate the subject; render frames must not directly define simulation speed.
 
+Before accepting a new state that can affect movement, collision, Action, Camera, event outcome, or
+deterministic evidence, locate its exact representation in Snapshot, Hash, Reset, Replay, and
+Rollback. A Babylon/Havok provider may project a committed fact and retain provider-only telemetry;
+it must not retain a private pending/active Gameplay state machine or rewrite normalized input.
+
 ## 2. Check installed engine semantics
 
 When correctness depends on Babylon or Havok behavior:
