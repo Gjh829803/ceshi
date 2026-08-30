@@ -35,13 +35,47 @@ async function main(): Promise<void> {
     for (const port of [shellPort, runtimePort]) {
       const server = await createServer({
         root,
-        server: { host: "127.0.0.1", port, strictPort: true, hmr: false },
+        cacheDir: path.join(
+          root,
+          "node_modules",
+          `.vite-hosted-browser-verifier-${port}`,
+        ),
+        optimizeDeps: {
+          include: ["@babylonjs/core/Lights/pointLight.js"],
+        },
+        server: {
+          host: "127.0.0.1",
+          port,
+          strictPort: true,
+          hmr: false,
+        },
       });
       await server.listen();
       servers.push(server);
     }
     browser = await launchChromiumWithSystemFallback();
-    page = await browser.newPage();
+    const context = await browser.newContext({
+      storageState: {
+        cookies: [{
+          name: "worldkit-hosted-cookie-probe",
+          value: "must-not-cross",
+          domain: "127.0.0.1",
+          path: "/",
+          expires: -1,
+          httpOnly: false,
+          secure: false,
+          sameSite: "Lax",
+        }],
+        origins: [{
+          origin: runtimeOrigin,
+          localStorage: [{
+            name: "worldkit-hosted-storage-probe",
+            value: "must-not-cross",
+          }],
+        }],
+      },
+    });
+    page = await context.newPage();
     page.on("pageerror", (error) => errors.push(error.message));
     page.on("console", (message) => {
       if (message.type() === "error") errors.push(message.text());
@@ -79,6 +113,18 @@ async function main(): Promise<void> {
       candidate.url().startsWith(runtimeOrigin));
     assert.ok(frame !== undefined, "dedicated-origin Runtime frame missing");
     assert.notEqual(new URL(frame.url()).origin, shellOrigin);
+    const framePolicy = await page.evaluate(() => {
+      const frame = window.__WORLDKIT_HOSTED_RUNTIME__?.frame;
+      return {
+        credentialless: frame !== undefined && "credentialless" in frame
+          ? (frame as HTMLIFrameElement & { credentialless: boolean })
+            .credentialless
+          : false,
+        sandbox: frame?.getAttribute("sandbox") ?? null,
+      };
+    });
+    assert.equal(framePolicy.credentialless, true);
+    assert.equal(framePolicy.sandbox, "allow-scripts allow-same-origin");
     const isolation = await frame.evaluate(async () => {
       let parentDom = "unexpected-access";
       let parentStorage = "unexpected-access";
@@ -102,7 +148,9 @@ async function main(): Promise<void> {
         externalNetwork,
         topNavigation,
         cookie: document.cookie,
-        credentialless: window.frameElement === null,
+        localStorageProbe: localStorage.getItem(
+          "worldkit-hosted-storage-probe",
+        ),
       };
     });
     assert.equal(isolation.parentDom, "blocked");
@@ -114,7 +162,7 @@ async function main(): Promise<void> {
     );
     assert.equal(new URL(page.url()).origin, shellOrigin);
     assert.equal(isolation.cookie, "");
-    assert.equal(isolation.credentialless, true);
+    assert.equal(isolation.localStorageProbe, null);
 
     const beforePhysicalInput = await page.evaluate(async () => {
       const probe = window.__WORLDKIT_HOSTED_RUNTIME__!;

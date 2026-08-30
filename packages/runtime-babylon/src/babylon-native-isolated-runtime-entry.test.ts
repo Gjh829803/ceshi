@@ -211,6 +211,32 @@ describe("Babylon Native isolated Runtime entry", () => {
     await entry.dispose();
   });
 
+  it("keeps display rendering and resize inside BabylonWorldRuntime authority", async () => {
+    const input = await entryInput();
+    const engine = input.engineFactory();
+    const entry = await createBabylonNativeIsolatedRuntimeEntryV1({
+      ...input,
+      engineFactory: () => engine,
+    });
+    const scene = engine.scenes[0];
+    if (scene === undefined) throw new Error("Runtime Scene missing");
+    const sceneRender = vi.spyOn(scene, "render");
+    const engineResize = vi.spyOn(engine, "resize");
+
+    const first = entry.renderFrame();
+    const second = entry.renderFrame();
+    entry.resize();
+
+    expect(first).toMatchObject({
+      runtimeSessionId: input.request.runtimeSessionId,
+      simulationTick: 0,
+    });
+    expect(second.renderFrameIndex).toBe(first.renderFrameIndex + 1);
+    expect(sceneRender).toHaveBeenCalledTimes(2);
+    expect(engineResize).toHaveBeenCalledOnce();
+    await entry.dispose();
+  });
+
   it("routes fixed input, snapshot and close through Runtime Session Protocol V1", async () => {
     const input = await entryInput();
     const entry = await createBabylonNativeIsolatedRuntimeEntryV1(input);

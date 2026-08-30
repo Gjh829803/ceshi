@@ -440,7 +440,6 @@ async function startHostedFrame(): Promise<void> {
   const effectiveBudget = browserProtocolBudget(
     verified.manifest.resourceBudget,
   );
-  let hostedEngine: Engine | undefined;
   const requestBody = {
     kind: "native-isolated-execution-request" as const,
     schemaVersion: 1 as const,
@@ -466,12 +465,10 @@ async function startHostedFrame(): Promise<void> {
     verifiedWorldPackage: verified,
     moduleLoader: { load: async () => moduleImport.default },
     engineFactory: () => {
-      const engine = new Engine(canvas, true, {
+      return new Engine(canvas, true, {
         preserveDrawingBuffer: true,
         stencil: true,
       });
-      hostedEngine = engine;
-      return engine;
     },
     subjectAssetResolver: cloudRidgeSubjectAssetResolver,
   });
@@ -491,10 +488,6 @@ async function startHostedFrame(): Promise<void> {
     fixedInputControllerEntityId: "native-isolation-controller",
     supportedRequestTypes: WORLDKIT_RUNTIME_SESSION_REQUEST_TYPES_V1,
   };
-  if (hostedEngine === undefined) {
-    throw new Error("WORLDKIT_HOSTED_RUNTIME_ENGINE_MISSING");
-  }
-  const runtimeEngine = hostedEngine;
   const hostedFrame = startHostedRuntimeFrameV1({
     entry,
     readyEvent: { ...readyBody, id: deriveRuntimeSessionEventIdV1(readyBody) },
@@ -533,6 +526,7 @@ async function startHostedFrame(): Promise<void> {
     }).catch(showFailure);
   };
   const renderLoop = (timestamp: number): void => {
+    if (hostedFrame.isDisposed()) return;
     const elapsedSeconds = Math.min(
       0.1,
       Math.max(0, (timestamp - previousTimestamp) / 1_000),
@@ -551,8 +545,10 @@ async function startHostedFrame(): Promise<void> {
     } else {
       accumulatedSeconds = 0;
     }
-    runtimeEngine.scenes[0]?.render();
-    frameRequest = requestAnimationFrame(renderLoop);
+    entry.renderFrame();
+    if (!hostedFrame.isDisposed()) {
+      frameRequest = requestAnimationFrame(renderLoop);
+    }
   };
   window.addEventListener("keydown", (event) => {
     if (!contextualCodes.has(event.code)) return;
@@ -573,7 +569,7 @@ async function startHostedFrame(): Promise<void> {
   canvas.addEventListener("pointerup", releasePointer);
   canvas.addEventListener("pointercancel", releasePointer);
   canvas.addEventListener("contextmenu", (event) => event.preventDefault());
-  window.addEventListener("resize", () => runtimeEngine.resize());
+  window.addEventListener("resize", () => entry.resize());
   window.addEventListener("beforeunload", () => {
     cancelAnimationFrame(frameRequest);
     pressedCodes.clear();

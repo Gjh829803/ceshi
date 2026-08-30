@@ -21,6 +21,7 @@ import {
   type RuntimeSessionDiagnosticV1,
   type RuntimeSessionReceiptV1,
   type RuntimeSessionRequestV1,
+  type RenderReadyReceiptV1,
   type WorldRuntimeSnapshotV4,
 } from "@whitebox-world/runtime-contracts";
 import {
@@ -94,6 +95,8 @@ export interface CreateBabylonNativeIsolatedRuntimeEntryInputV1 {
 export interface BabylonNativeIsolatedRuntimeEntryV1 {
   readonly runtimeSessionId: string;
   initialSnapshot(): WorldRuntimeSnapshotV4;
+  renderFrame(): RenderReadyReceiptV1;
+  resize(): void;
   submit(payload: RuntimeSessionRequestV1):
     Promise<RuntimeSessionReceiptV1>;
   dispose(): Promise<void>;
@@ -283,6 +286,14 @@ implements BabylonNativeIsolatedRuntimeEntryV1 {
       hostPhase: this.host.phase,
       isPaused: false,
     });
+  }
+
+  renderFrame(): RenderReadyReceiptV1 {
+    return this.runtime.renderFrame();
+  }
+
+  resize(): void {
+    this.runtime.resize();
   }
 
   submit(payload: RuntimeSessionRequestV1):

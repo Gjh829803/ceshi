@@ -28,6 +28,10 @@ interface HostedRuntimeFrameReadyV1 {
   readonly messageSequence: 1;
 }
 
+type CredentiallessIframeV1 = HTMLIFrameElement & {
+  credentialless: boolean;
+};
+
 export interface CreateHostedRuntimeBridgeInputV1 {
   readonly frame: HTMLIFrameElement;
   readonly runtimeOrigin: string;
@@ -90,8 +94,19 @@ class HostedRuntimeBridge implements HostedRuntimeBridgeV1 {
   }>>();
 
   constructor(readonly input: CreateHostedRuntimeBridgeInputV1) {
+    if (!("credentialless" in input.frame)) {
+      throw new Error(
+        "WORLDKIT_HOSTED_RUNTIME_CREDENTIALLESS_UNSUPPORTED",
+      );
+    }
+    const credentiallessFrame = input.frame as CredentiallessIframeV1;
+    credentiallessFrame.credentialless = true;
+    if (credentiallessFrame.credentialless !== true) {
+      throw new Error(
+        "WORLDKIT_HOSTED_RUNTIME_CREDENTIALLESS_UNSUPPORTED",
+      );
+    }
     input.frame.setAttribute("sandbox", "allow-scripts allow-same-origin");
-    Reflect.set(input.frame, "credentialless", true);
     window.addEventListener("message", this.onBootstrapMessage);
     input.frame.addEventListener("load", this.onFrameNavigation);
   }
@@ -135,9 +150,9 @@ class HostedRuntimeBridge implements HostedRuntimeBridgeV1 {
       payload: request,
     });
     const parsed = parseNativeIsolationTransportEnvelopeV1(envelope);
-    if (byteLength(parsed) > this.input.protocolBudget.maximumOutboundMessageBytes) {
-      this.terminate("OUTBOUND_BUDGET_EXCEEDED");
-      throw this.error("OUTBOUND_BUDGET_EXCEEDED");
+    if (byteLength(parsed) > this.input.protocolBudget.maximumInboundMessageBytes) {
+      this.terminate("INBOUND_BUDGET_EXCEEDED");
+      throw this.error("INBOUND_BUDGET_EXCEEDED");
     }
     this.#nextOutboundSequence += 1;
     const response = new Promise<RuntimeSessionReceiptV1>((resolve, reject) => {
@@ -199,8 +214,8 @@ class HostedRuntimeBridge implements HostedRuntimeBridgeV1 {
 
   private readonly onPortMessage = (event: MessageEvent): void => {
     if (this.#phase === "terminated" || this.#phase === "disposed") return;
-    if (byteLength(event.data) > this.input.protocolBudget.maximumInboundMessageBytes) {
-      this.terminate("INBOUND_BUDGET_EXCEEDED");
+    if (byteLength(event.data) > this.input.protocolBudget.maximumOutboundMessageBytes) {
+      this.terminate("OUTBOUND_BUDGET_EXCEEDED");
       return;
     }
     let envelope: NativeIsolationTransportEnvelopeV1;

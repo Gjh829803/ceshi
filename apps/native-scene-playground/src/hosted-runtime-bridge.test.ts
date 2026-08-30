@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   deriveRuntimeSessionEventIdV1,
+  type NativeEffectiveExecutionBudgetV1,
   type RuntimeSessionEventV1,
 } from "@whitebox-world/runtime-contracts";
 
@@ -43,7 +44,10 @@ function readyEvent(): RuntimeSessionEventV1 {
   return { ...body, id: deriveRuntimeSessionEventIdV1(body) };
 }
 
-function harness() {
+function harness(options: Readonly<{
+  credentiallessSupported?: boolean;
+  protocolBudget?: NativeEffectiveExecutionBudgetV1["protocol"];
+}> = {}) {
   const shellWindow = new EventTarget();
   vi.stubGlobal("window", shellWindow);
   const postMessage = vi.fn();
@@ -51,23 +55,31 @@ function harness() {
   const remove = vi.fn();
   const attributes = new Map<string, string>();
   const frameEvents = new EventTarget();
-  const frame = {
+  const frameRecord: Record<string, unknown> = {
     contentWindow,
     isConnected: true,
-    credentialless: false,
     remove,
     setAttribute: (name: string, value: string) => attributes.set(name, value),
     getAttribute: (name: string) => attributes.get(name) ?? null,
     addEventListener: frameEvents.addEventListener.bind(frameEvents),
     removeEventListener: frameEvents.removeEventListener.bind(frameEvents),
     dispatchEvent: frameEvents.dispatchEvent.bind(frameEvents),
-  } as unknown as HTMLIFrameElement;
+  };
+  if (options.credentiallessSupported !== false) {
+    Object.defineProperty(frameRecord, "credentialless", {
+      configurable: true,
+      enumerable: true,
+      value: false,
+      writable: true,
+    });
+  }
+  const frame = frameRecord as unknown as HTMLIFrameElement;
   const bridge = createHostedRuntimeBridgeV1({
     frame,
     runtimeOrigin,
     runtimeSessionId,
     sessionNonce,
-    protocolBudget,
+    protocolBudget: options.protocolBudget ?? protocolBudget,
   });
   const messageEvent = (
     origin: string,
@@ -108,6 +120,12 @@ function harness() {
 }
 
 describe("Hosted Runtime browser bridge", () => {
+  it("rejects a browser without native credentialless iframe support", () => {
+    expect(() => harness({ credentiallessSupported: false })).toThrow(
+      "WORLDKIT_HOSTED_RUNTIME_CREDENTIALLESS_UNSUPPORTED",
+    );
+  });
+
   it("uses an exact cross-origin sandbox and transfers one MessagePort to an exact targetOrigin", () => {
     const { bridge, bootstrap, postMessage, frame } = harness();
     expect(frame.getAttribute("sandbox")).toBe("allow-scripts allow-same-origin");
@@ -208,6 +226,64 @@ describe("Hosted Runtime browser bridge", () => {
     expect(remove).toHaveBeenCalledOnce();
   });
 
+  it("applies outbound budget to a Runtime response rather than the Host request budget", async () => {
+    const directionalBudget = {
+      ...protocolBudget,
+      maximumInboundMessageBytes: 600,
+      maximumOutboundMessageBytes: 100_000,
+    } as const;
+    const { bridge, bootstrap, postMessage } = harness({
+      protocolBudget: directionalBudget,
+    });
+    bootstrap();
+    const transferred = postMessage.mock.calls[0]?.[2]?.[0] as MessagePort;
+    transferred.postMessage({
+      kind: "native-isolation-transport-envelope",
+      schemaVersion: 1,
+      runtimeSessionId,
+      sessionNonce,
+      messageSequence: 2,
+      payload: readyEvent(),
+    });
+    await expect(bridge.waitUntilReady()).resolves.toMatchObject({
+      type: "ready",
+    });
+    bridge.dispose();
+  });
+
+  it("applies inbound budget to a Host request before posting it to the Runtime", async () => {
+    const directionalBudget = {
+      ...protocolBudget,
+      maximumInboundMessageBytes: 1_500,
+      maximumOutboundMessageBytes: 100_000,
+    } as const;
+    const { bridge, bootstrap, postMessage } = harness({
+      protocolBudget: directionalBudget,
+    });
+    bootstrap();
+    const transferred = postMessage.mock.calls[0]?.[2]?.[0] as MessagePort;
+    transferred.postMessage({
+      kind: "native-isolation-transport-envelope",
+      schemaVersion: 1,
+      runtimeSessionId,
+      sessionNonce,
+      messageSequence: 2,
+      payload: readyEvent(),
+    });
+    await bridge.waitUntilReady();
+    const response = bridge.submit({
+      kind: "worldkit-runtime-session-request",
+      schemaVersion: 1,
+      id: `request.oversized.${"x".repeat(2_000)}`,
+      runtimeSessionId,
+      type: "snapshot.get",
+    });
+    const phaseAfterSubmit = bridge.phase();
+    bridge.dispose();
+    await expect(response).rejects.toThrow();
+    expect(phaseAfterSubmit).toBe("terminated");
+  });
+
   it.each([
     ["oversized", { oversized: "x".repeat(200_000) }],
     ["wrong payload direction", {
@@ -229,8 +305,7 @@ describe("Hosted Runtime browser bridge", () => {
     bootstrap();
     const transferred = postMessage.mock.calls[0]?.[2]?.[0] as MessagePort;
     transferred.postMessage(message);
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(bridge.phase()).toBe("terminated");
+    await vi.waitFor(() => expect(bridge.phase()).toBe("terminated"));
     expect(remove).toHaveBeenCalledOnce();
   });
 });

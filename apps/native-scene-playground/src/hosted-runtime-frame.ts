@@ -27,6 +27,7 @@ export interface StartHostedRuntimeFrameInputV1 {
 }
 
 export interface HostedRuntimeFrameV1 {
+  isDisposed(): boolean;
   dispose(): Promise<void>;
 }
 
@@ -176,5 +177,8 @@ export function startHostedRuntimeFrameV1(
     messageSequence: 1 as const,
   }), input.shellOrigin);
 
-  return Object.freeze({ dispose: terminate });
+  return Object.freeze({
+    isDisposed: () => disposed,
+    dispose: terminate,
+  });
 }
