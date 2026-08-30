@@ -1,6 +1,7 @@
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import type { Scene } from "@babylonjs/core/scene.js";
+import { isNil } from "lodash-es";
 
 import type { BabylonNativeBlockSessionRecordV1 } from "./session.js";
 import {
@@ -124,8 +125,8 @@ function hasFixedLocalGeometry(
     const indices = record.mesh.getIndices();
     return !record.mesh.hasInstances &&
       !record.mesh.hasThinInstances &&
-      positions !== null &&
-      indices !== null &&
+      !isNil(positions) &&
+      !isNil(indices) &&
       positions.length === record.localGeometrySnapshot.positions.length &&
       indices.length === record.localGeometrySnapshot.indices.length &&
       positions.every((value, index) =>
@@ -192,7 +193,7 @@ function deriveEntry(
     const rawCenter = Vector3.TransformCoordinates(Vector3.Zero(), matrix);
     const centerMetersXYZ = canonicalCenter(rawCenter);
     if (
-      centerMetersXYZ === undefined ||
+      isNil(centerMetersXYZ) ||
       !close(rawCenter.x, centerMetersXYZ[0]) ||
       !close(rawCenter.y, centerMetersXYZ[1]) ||
       !close(rawCenter.z, centerMetersXYZ[2])
@@ -223,7 +224,7 @@ function deriveEntry(
         id: record.input.id,
         shape: record.input.shape,
         paletteRole: record.input.paletteRole,
-        ...(record.input.visualGroupId === undefined
+        ...(isNil(record.input.visualGroupId)
           ? {}
           : { visualGroupId: record.input.visualGroupId }),
         centerMetersXYZ,
@@ -390,7 +391,7 @@ function unsupportedBlockIds(
         .filter(([, y]) => y === bottomMicroY);
       return !bottomCells.some(([x, y, z]) => {
         const supportingIds = allOccupied.get(cellKey(x, y - 1, z));
-        return supportingIds !== undefined &&
+        return !isNil(supportingIds) &&
           [...supportingIds].some((id) => id !== block.id);
       });
     })
@@ -417,8 +418,8 @@ export function deriveBabylonNativeBlockLayoutV1(
   for (const record of [...records].sort((left, right) =>
     stableCompare(left.input.id, right.input.id))) {
     const derived = deriveEntry(scene, record);
-    if (derived.entry !== undefined) entries.push(derived.entry);
-    if (derived.issue !== undefined) issues.push(derived.issue);
+    if (!isNil(derived.entry)) entries.push(derived.entry);
+    if (!isNil(derived.issue)) issues.push(derived.issue);
   }
   const blocks = Object.freeze(entries);
   issues.push(...overlapIssues(blocks));

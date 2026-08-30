@@ -987,17 +987,17 @@ async function admitBabylonNativeSceneCandidateWithExclusiveProbeV1(
         ...targetMeshes,
         ...retainedColliders.map(({ mesh }) => mesh),
       ]);
-      const liveGeometryMeshes = input.candidate.scene.meshes.filter((mesh) =>
-        !mesh.isDisposed() && mesh.getTotalVertices() > 0
+      const liveMeshes = input.candidate.scene.meshes.filter((mesh): mesh is Mesh =>
+        mesh instanceof Mesh && !mesh.isDisposed()
       );
       if (
-        liveGeometryMeshes.length !== allowedMeshes.size ||
-        liveGeometryMeshes.some((mesh) => !allowedMeshes.has(mesh as Mesh))
+        liveMeshes.length !== allowedMeshes.size ||
+        liveMeshes.some((mesh) => !allowedMeshes.has(mesh))
       ) {
         throw failure(
           "WORLDKIT_NATIVE_SCENE_PROFILE_INVENTORY_MISMATCH",
-          "Candidate Scene geometry does not match the settled Profile targets and Collider proxies.",
-          "Remove direct extra geometry and finalize every Block Profile target exactly once.",
+          "Candidate Scene Mesh inventory does not match the settled Profile targets and Collider proxies.",
+          "Remove direct extra Meshes and finalize every Block Profile target exactly once.",
         );
       }
     }

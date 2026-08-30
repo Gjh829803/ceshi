@@ -201,6 +201,65 @@ describe("admitBabylonNativeSceneCandidateV1", () => {
     }
   });
 
+  it("rejects an extra live empty direct Mesh from the blocks inventory", async () => {
+    const scene = createScene();
+    const result = await buildCandidate(
+      scene,
+      moduleWithBuild((context) => {
+        registerSpawn(context);
+        const visual = MeshBuilder.CreateBox("block-visual", { size: 1 }, scene);
+        new Mesh("unsettled-empty-mesh", scene);
+        commitBabylonNativeProfileSettlementV1(context, {
+          kind: "babylon-native-profile-settlement-batch",
+          schemaVersion: 1,
+          profileRef: "worldkit://native-scene-profile/whitebox.blocks@1",
+          profileInventoryHash: `sha256:${"1".repeat(64)}`,
+          targets: [{
+            elementId: "block-visual",
+            mesh: visual,
+            collisionBinding: { kind: "none" },
+          }],
+        });
+      }),
+      DEFAULT_BUDGET,
+      BLOCK_BOOTSTRAP,
+    );
+
+    expect(rejectedCode(result)).toBe(
+      "WORLDKIT_NATIVE_SCENE_PROFILE_INVENTORY_MISMATCH",
+    );
+  });
+
+  it("rejects an extra live Mesh whose installed Babylon geometry was released", async () => {
+    const scene = createScene();
+    const result = await buildCandidate(
+      scene,
+      moduleWithBuild((context) => {
+        registerSpawn(context);
+        const visual = MeshBuilder.CreateBox("block-visual", { size: 1 }, scene);
+        const extra = MeshBuilder.CreateBox("released-geometry-mesh", { size: 1 }, scene);
+        extra.geometry!.releaseForMesh(extra, false);
+        commitBabylonNativeProfileSettlementV1(context, {
+          kind: "babylon-native-profile-settlement-batch",
+          schemaVersion: 1,
+          profileRef: "worldkit://native-scene-profile/whitebox.blocks@1",
+          profileInventoryHash: `sha256:${"1".repeat(64)}`,
+          targets: [{
+            elementId: "block-visual",
+            mesh: visual,
+            collisionBinding: { kind: "none" },
+          }],
+        });
+      }),
+      DEFAULT_BUDGET,
+      BLOCK_BOOTSTRAP,
+    );
+
+    expect(rejectedCode(result)).toBe(
+      "WORLDKIT_NATIVE_SCENE_PROFILE_INVENTORY_MISMATCH",
+    );
+  });
+
   it("rejects using one Mesh as both the settled target and Collider proxy", async () => {
     const scene = createScene();
     const result = await buildCandidate(

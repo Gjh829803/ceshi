@@ -365,7 +365,7 @@ export function createBabylonNativeBlockProfileCheckResultV1(
       code: "WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED",
       location: Object.freeze({ kind: "none" }),
       message: `Route-colored structural blocks form ${routeComponentCount} disconnected candidates.`,
-      repairHint: "Connect the visual route topology; Runtime passability remains a later BWB-4 gate.",
+      repairHint: "Connect the visual route topology and validate Runtime passability separately through the SDK/Havok gate.",
     }));
   }
   const sortedPending = [...pendingDiagnostics].sort((left, right) =>

@@ -397,6 +397,10 @@ describe("Babylon Native block profile structural check", () => {
       code: "WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED",
       severity: "error",
     }));
+    expect(twoSteps.diagnostics.find(({ code }) =>
+      code === "WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED")?.repairHint).toBe(
+      "Connect the visual route topology and validate Runtime passability separately through the SDK/Havok gate.",
+    );
   });
 
   it("rejects overlap, missing groups, and disconnected structural routes", async () => {
