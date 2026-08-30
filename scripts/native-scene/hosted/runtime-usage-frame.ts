@@ -133,7 +133,7 @@ function observationProofHash(
     sessionNonce: challenge.sessionNonce,
     challengeNonce: challenge.challengeNonce,
     runtime,
-  });
+  }) as `sha256:${string}`;
 }
 
 export function parseHostedNativeRuntimeUsageFrameV1(

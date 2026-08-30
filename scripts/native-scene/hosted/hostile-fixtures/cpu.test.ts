@@ -44,7 +44,7 @@ describe("Hosted Native CPU hostile fixture", () => {
     });
 
     const challenge = createHostedNativeRuntimeUsageChallengeV1({
-      requestHash: sha256CanonicalJson(request),
+      requestHash: sha256CanonicalJson(request) as `sha256:${string}`,
       runtimeSessionId: request.runtimeSessionId,
       sessionNonce: request.sessionNonce,
       challengeNonce: "challenge-nonce.cpu-fixture",
