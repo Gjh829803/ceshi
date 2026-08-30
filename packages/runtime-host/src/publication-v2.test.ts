@@ -5,8 +5,10 @@ import {
   INITIAL_WORLD_PACKAGE_REF,
   REPLACEMENT_WORLD_PACKAGE_REF,
   RUNTIME_SESSION_ID,
+  controllerState,
   createHost,
   createPortHarness,
+  heroState,
   mutableWorldConfiguration,
   replacementRequest,
 } from "./test/runtime-host-lifecycle-harness";
@@ -242,7 +244,7 @@ describe("P16-H1 RuntimeHost publication V2", () => {
     expect(published.status).toBe("published");
   });
 
-  it("leaves possession unbound at the publication ready gate", async () => {
+  it("commits the requested initial possession before the publication ready gate", async () => {
     const oldPort = createPortHarness();
     const candidatePort = createPortHarness();
     const { host, adapter } = await createHost([oldPort, candidatePort]);
@@ -260,9 +262,12 @@ describe("P16-H1 RuntimeHost publication V2", () => {
     const result = await host.publishWorldReplacementV1({
       worldConfiguration: mutableWorldConfiguration(REPLACEMENT_WORLD_PACKAGE_REF),
       publication: publicationEnvelope(host),
+    }, {
+      controllerEntityId: controllerState.id,
+      controlledEntityId: heroState.id,
     });
     expect(result.status).toBe("published");
-    expect(controlledAtReady).toBeUndefined();
+    expect(controlledAtReady).toBe(heroState.id);
   });
 
   it("keeps ordinary replaceWorld on the exact worldConfiguration envelope", async () => {

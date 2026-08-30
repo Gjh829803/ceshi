@@ -145,6 +145,28 @@ describe("RuntimeHost lifecycle isolation and admission", () => {
     expect(port.disposeCount).toBe(1);
   });
 
+  it("rejects a failed initial create binding before readiness and releases its WorldSession", async () => {
+    const port = createPortHarness();
+    const adapter = createAdapterFactoryHarness([port]);
+
+    const error = await runtimeHostConstructor().create(hostOptions(
+      adapter.factory,
+      ["world-session.failed-initial-bind"],
+      {
+        initialControlBinding: {
+          controllerEntityId: controllerState.id,
+          controlledEntityId: "entity.not-controllable",
+        },
+      },
+    )).catch((reason: unknown) => reason);
+
+    expect(error).toMatchObject({
+      diagnostic: { code: "WORLD_SESSION_FAILED" },
+    });
+    expect(adapter.factory.awaitCandidatePublicationReady).not.toHaveBeenCalled();
+    expect(port.disposeCount).toBe(1);
+  });
+
   it("passes an exact Native Scene Source to the shared initial Adapter path", async () => {
     const initialWorld = nativeWorldConfiguration();
     const port = createPortHarness();

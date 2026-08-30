@@ -759,33 +759,10 @@ export class GameplayBabylonRuntimeCoordinatorV1 {
   async publishWorldReplacementV1(
     input: unknown,
   ): Promise<PublishWorldReplacementResultV1> {
-    const result = await this.host.publishWorldReplacementV1(input);
-    if (result.status === "published") {
-      try {
-        await this.bindInitialControl(result.current.worldSessionId);
-      } catch {
-        // Publication already committed. Control bind must not unwind it.
-      }
-    }
-    return result;
-  }
-
-  private async bindInitialControl(worldSessionId: string): Promise<void> {
-    const receipt = await this.host.executeGameplayCommand({
-      schemaVersion: 1,
-      id: `command.playground.initial-bind.${worldSessionId}`,
-      type: "control.bind",
-      runtimeSessionId: this.host.runtimeSessionId,
-      worldSessionId,
+    return await this.host.publishWorldReplacementV1(input, {
       controllerEntityId: PLAYGROUND_CONTROLLER_ENTITY_ID_V1,
       controlledEntityId: this.initialControlledEntityId,
-      expectedPossession: { mode: "unbound" },
     });
-    if (receipt.status !== "committed") {
-      throw new Error(
-        `${receipt.diagnostic.code}: Initial control binding was rejected.`,
-      );
-    }
   }
 
   async runFixedInput(input: FixedInputV1): Promise<WorldRuntimeSnapshotV4> {
