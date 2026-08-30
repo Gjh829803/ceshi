@@ -27,6 +27,8 @@ import type {
   GameplayModeV1,
 } from "@whitebox-world/gameplay";
 import {
+  hashBabylonNativeSceneBootstrapV1,
+  nativeSceneModuleBundleHashFromRefV1,
   parseBabylonNativeSceneBootstrapV1,
   hashCanonicalSceneExecutionPlanV1,
   parseCanonicalSceneExecutionPlanV1,
@@ -35,7 +37,10 @@ import {
   type CanonicalSceneExecutionPlanV1,
   type WorldRuntimeBootstrapV1,
 } from "@whitebox-world/runtime-contracts";
-import { assertWorldPackageAccessorFreeDataGraphV1 } from "@whitebox-world/world-package";
+import {
+  assertWorldPackageAccessorFreeDataGraphV1,
+  type VerifiedWorldPackageDirectoryV1,
+} from "@whitebox-world/world-package";
 import { isNil } from "lodash-es";
 
 import type { GameplayWorldPortV1 } from "./gameplay-world-port";
@@ -989,12 +994,47 @@ function parseRuntimeWorldConfiguration(
     throw new RangeError(
       "Value must match the closed RuntimeWorldConfigurationV1 schema.",
     );
+  } else if (
+    hashBabylonNativeSceneBootstrapV1(sceneSource.bootstrap) !==
+      worldBuildIdentity.sceneSourceIdentity.nativeSceneBootstrapHash ||
+    nativeSceneModuleBundleHashFromRefV1(sceneSource.sceneModuleBundleRef) !==
+      worldBuildIdentity.sceneSourceIdentity.sceneModuleBundleHash ||
+    sceneSource.bootstrap.gameplayBootstrapRef !== gameplayBootstrap.resourceRef ||
+    sceneSource.bootstrap.initialControlledEntityId !==
+      worldRuntimeBootstrap.initialControlledEntityId
+  ) {
+    throw new RangeError(
+      "Value must match the closed RuntimeWorldConfigurationV1 schema.",
+    );
   }
   return Object.freeze({
     worldBuildIdentity,
     gameplayBootstrap,
     worldRuntimeBootstrap,
     sceneSource,
+  });
+}
+
+export function runtimeWorldConfigurationFromVerifiedWorldPackageV1(
+  verified: VerifiedWorldPackageDirectoryV1,
+): RuntimeWorldConfigurationV1 {
+  const source = verified.kind === "canonical-execution-plan"
+    ? Object.freeze({
+        kind: "canonical-execution-plan" as const,
+        executionPlan: verified.executionPlan,
+        executionPlanHash:
+          verified.receipt.manifest.sceneSource.executionPlanHash,
+      })
+    : Object.freeze({
+        kind: "babylon-native-scene" as const,
+        bootstrap: verified.bootstrap,
+        sceneModuleBundleRef: verified.sceneModuleBundleRef,
+      });
+  return parseRuntimeWorldConfiguration({
+    worldBuildIdentity: verified.receipt.worldBuildIdentity,
+    gameplayBootstrap: verified.gameplayBootstrap,
+    worldRuntimeBootstrap: verified.worldRuntimeBootstrap,
+    sceneSource: source,
   });
 }
 
@@ -1259,7 +1299,7 @@ function requireCanonicalRuntimeConfiguration(
 }> {
   if (configuration.sceneSource.kind !== "canonical-execution-plan") {
     throw new Error(
-      "WORLDKIT_NATIVE_SCENE_PRODUCTION_NOT_ADMITTED: formal Native Runtime admission requires BNA-3 and BNA-4.",
+      "WORLDKIT_NATIVE_SCENE_PRODUCTION_NOT_ADMITTED: BNA-3 Package identity is admitted; formal Native Runtime activation requires BNA-4.",
     );
   }
 }
