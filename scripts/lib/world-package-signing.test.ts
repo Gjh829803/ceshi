@@ -10,6 +10,7 @@ import {
 } from "@whitebox-world/gameplay-contracts";
 import { canonicalJsonBytes } from "@whitebox-world/protocol";
 import {
+  createBabylonNativeWorldPackageV1,
   createCanonicalWorldPackageV1,
   type WorldPackageDirectoryV1,
   type WorldPackageHostPolicyV1,
@@ -19,6 +20,8 @@ import { isNil } from "lodash-es";
 import { describe, expect, it } from "vitest";
 
 import basicWorldDocument from "../../examples/authoring/basic-world.json";
+import { createBabylonNativeWorldPackageTestInputV1 } from
+  "../../packages/world-package/src/test-fixture.js";
 import {
   signWorldPackageDirectoryV1,
   verifyWorldPackageForHostV1,
@@ -212,6 +215,48 @@ describe("WorldPackage Ed25519 trusted Host adapter", () => {
     );
     expect(verified.receipt.worldPackageRootHash).toBe(
       unsigned.receipt.worldPackageRootHash,
+    );
+  });
+
+  it("signs and verifies the identical Native Root identity without source branching", () => {
+    const { privateKey, publicKey } = generateKeyPairSync("ed25519");
+    const input = createBabylonNativeWorldPackageTestInputV1();
+    const unsigned = createBabylonNativeWorldPackageV1(input);
+    const signed = signWorldPackageDirectoryV1({
+      directory: unsigned,
+      keyId: "native-release-key",
+      trustDomain: "worldkit.release",
+      signedAt: SIGNED_AT,
+      privateKey,
+    });
+    const compatibility = input.shared.hostCompatibility;
+    const verified = verifyWorldPackageForHostV1({
+      directory: signed,
+      hostPolicy: {
+        acceptedRuntimeTargets: ["babylon-web"],
+        acceptedPackageFormatVersions: [1],
+        acceptedManifestSchemaVersions: [1],
+        runtimeContractVersion: 1,
+        supportedFeatureIds: [...compatibility.requiredFeatureIds],
+        trustedCompatibilityProfiles: [{
+          profileRef: compatibility.profileRef,
+          profileHash: compatibility.profileHash,
+        }],
+        allowedDistributionPolicies: [input.shared.distributionPolicy],
+        signaturePolicy: { mode: "required", trustDomain: "worldkit.release" },
+      },
+      trustedPublicKeys: [{
+        keyId: "native-release-key",
+        trustDomain: "worldkit.release",
+        publicKey,
+      }],
+    });
+    expect(verified.kind).toBe("babylon-native-scene");
+    expect(signed.receipt.worldPackageRootHash).toBe(
+      unsigned.receipt.worldPackageRootHash,
+    );
+    expect(signed.receipt.fileIntegrityEntries).toEqual(
+      unsigned.receipt.fileIntegrityEntries,
     );
   });
 

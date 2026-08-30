@@ -11,6 +11,7 @@ import path from "node:path";
 
 import {
   BABYLON_WEB_WORLD_PACKAGE_HOST_POLICY_V1,
+  createBabylonNativeWorldPackageV1,
   type WorldPackageHostPolicyV1,
 } from "@whitebox-world/world-package";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -27,6 +28,9 @@ import {
   inspectWorldPackageDirectoryV1,
   loadRuntimeWorldConfigurationFromPackageDirectoryV1,
 } from "./world-package-cli";
+import { writeWorldPackageDirectoryV1 } from "./file-world-package";
+import { createBabylonNativeWorldPackageTestInputV1 } from
+  "../../packages/world-package/src/test-fixture.js";
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dirname, "../..");
 const BASIC_WORLD_PATH = path.join(
@@ -133,6 +137,36 @@ describe("WorldPackage command core", { timeout: 30_000 }, () => {
       diagnostics: [{ code: "WORLD_PACKAGE_OUTPUT_UNAVAILABLE" }],
     });
   }, 15_000);
+
+  it("inspects Native identity but keeps Runtime load fail-closed until BNA-4", async () => {
+    const directory = await temporaryDirectory();
+    const outputDirectoryPath = path.join(directory, "native.package");
+    const native = createBabylonNativeWorldPackageV1(
+      createBabylonNativeWorldPackageTestInputV1(),
+    );
+    await writeWorldPackageDirectoryV1({ outputDirectoryPath, directory: native });
+    const inspected = await inspectWorldPackageDirectoryV1({
+      packageDirectoryPath: outputDirectoryPath,
+    });
+    expectSuccess(inspected);
+    expect(inspected.sceneSource).toMatchObject({
+      kind: "babylon-native-scene",
+      sceneModuleBundleHash:
+        native.receipt.manifest.sceneSource.kind === "babylon-native-scene"
+          ? native.receipt.manifest.sceneSource.sceneModuleBundleHash
+          : undefined,
+    });
+    const loaded = await loadRuntimeWorldConfigurationFromPackageDirectoryV1({
+      packageDirectoryPath: outputDirectoryPath,
+    });
+    expect(loaded).toMatchObject({
+      result: {
+        ok: false,
+        exitCode: 6,
+        diagnostics: [{ code: "WORLDKIT_NATIVE_SCENE_PRODUCTION_NOT_ADMITTED" }],
+      },
+    });
+  });
 
   it("loads the exact G Bot Runtime configuration and package-owned resource bytes", async () => {
     const directory = await temporaryDirectory();
