@@ -140,9 +140,11 @@ function parseNativeIsolatedExecutionReceiptV1(input: unknown): NativeIsolatedEx
 function parseNativeIsolationTransportEnvelopeV1(input: unknown): NativeIsolationTransportEnvelopeV1;
 function hashNativeEffectiveExecutionBudgetV1(input: NativeEffectiveExecutionBudgetV1): Sha256HashV1;
 function hashNativeIsolatedExecutionRequestV1(input: NativeIsolatedExecutionRequestV1): Sha256HashV1;
+function hashNativeIsolatedExecutionResultV1(input: NativeIsolatedExecutionResultV1): Sha256HashV1;
 function hashNativeIsolatedExecutionReceiptV1(input: NativeIsolatedExecutionReceiptV1): Sha256HashV1;
 function verifyNativeIsolatedExecutionReceiptV1(input: {
   readonly request: NativeIsolatedExecutionRequestV1;
+  readonly result: NativeIsolatedExecutionResultV1;
   readonly receipt: NativeIsolatedExecutionReceiptV1;
 }): NativeIsolatedExecutionReceiptV1;
 ```
@@ -172,6 +174,7 @@ it.each(["sandboxProfileRef", "trustProfileRef", "isTrusted"])(
 it("rejects a receipt whose request identity or effective budget hash drifts", () => {
   expect(() => verifyNativeIsolatedExecutionReceiptV1({
     request: hostedRequestFixture(),
+    result: completedResultFixture(),
     receipt: {
       ...receiptFixture(),
       effectiveBudgetHash: `sha256:${"0".repeat(64)}`,
@@ -189,9 +192,9 @@ Expected: FAIL because the module and exported parsers do not exist.
 
 Use `snapshotDataRecord`, `hasExactKeys`, explicit closed status/mode checks, positive-safe-integer
 validation and `Object.freeze`. The receipt parser validates its closed shape; the receipt verifier
-recomputes the request and effective-budget hashes from the paired request and compares every shared
-identity. Do not accept a caller assertion without rehashing. Model result/outcome as discriminated
-unions and do not preserve rejected field aliases.
+recomputes request, effective-budget and terminal-result hashes from the paired values and compares
+every shared identity. Do not accept a caller assertion without rehashing. Model result/outcome as
+discriminated unions, reject `ready` as a Receipt outcome, and do not preserve rejected field aliases.
 
 - [ ] **Step 4: Add and validate the JSON Schema export**
 

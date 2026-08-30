@@ -4,6 +4,7 @@ export * from "./native-scene-contribution";
 export * from "./native-scene-dependency-lock";
 export * from "./native-scene-diagnostics";
 export * from "./native-scene-module-bundle";
+export * from "./native-execution-isolation";
 export * from "./camera-parameter-contract";
 export * from "@whitebox-world/character-movement";
 export * from "./camera-view-contract";
