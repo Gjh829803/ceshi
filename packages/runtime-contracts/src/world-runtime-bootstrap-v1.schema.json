@@ -378,7 +378,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "resourceRef", "contentHash", "walkSpeedMetersPerSecond", "runSpeedMetersPerSecond",
+        "resourceRef", "contentHash", "jumpVariantPolicy", "walkSpeedMetersPerSecond", "runSpeedMetersPerSecond",
         "jumpSpeedMetersPerSecond", "accelerationMetersPerSecondSquared",
         "decelerationMetersPerSecondSquared", "turnRateRadiansPerSecond",
         "moveResponseExponent", "airControlRatio", "coyoteTimeSeconds",
@@ -388,6 +388,7 @@
       "properties": {
         "resourceRef": { "$ref": "#/$defs/nonEmptyString" },
         "contentHash": { "$ref": "#/$defs/hash" },
+        "jumpVariantPolicy": { "$ref": "#/$defs/jumpVariantPolicy" },
         "walkSpeedMetersPerSecond": { "type": "number" },
         "runSpeedMetersPerSecond": { "type": "number" },
         "jumpSpeedMetersPerSecond": { "type": "number" },
@@ -402,6 +403,26 @@
         "jumpHoldGravityRatio": { "type": "number" },
         "jumpReleaseGravityRatio": { "type": "number" }
       }
+    },
+    "jumpVariantPolicy": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode"],
+          "properties": { "mode": { "const": "hold-height" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "smallAnticipationSeconds", "largeAnticipationSeconds"],
+          "properties": {
+            "mode": { "const": "run-selects-variant" },
+            "smallAnticipationSeconds": { "type": "number", "minimum": 0, "maximum": 1.5 },
+            "largeAnticipationSeconds": { "type": "number", "minimum": 0, "maximum": 1.5 }
+          }
+        }
+      ]
     },
     "motionProfile": {
       "type": "object",

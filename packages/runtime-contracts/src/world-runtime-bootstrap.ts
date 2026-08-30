@@ -27,7 +27,10 @@ import {
   createActionPresentationRegistryV1,
   type ActionPresentationBindingV1,
 } from "@whitebox-world/subject-actions";
-import type { LockedRootMotionSourceV1 } from "@whitebox-world/character-movement";
+import {
+  parseJumpVariantPolicyV1,
+  type LockedRootMotionSourceV1,
+} from "@whitebox-world/character-movement";
 import { isNil } from "lodash-es";
 
 import {
@@ -35,6 +38,7 @@ import {
   type CameraRigParameterNameV1,
   type CameraRigParametersV1,
 } from "./camera-parameter-contract";
+import type { ControlFeelParametersV1 } from "./control-feel-parameter-contract";
 import worldRuntimeBootstrapSchema from "./world-runtime-bootstrap-v1.schema.json";
 
 export type RuntimeVec3V1 = readonly [x: number, y: number, z: number];
@@ -335,22 +339,9 @@ export interface RuntimeSubjectLocomotionV1 {
   readonly allowJump: boolean;
 }
 
-export interface RuntimeControlFeelV1 {
+export interface RuntimeControlFeelV1 extends ControlFeelParametersV1 {
   resourceRef: string;
   contentHash: string;
-  walkSpeedMetersPerSecond: number;
-  runSpeedMetersPerSecond: number;
-  jumpSpeedMetersPerSecond: number;
-  accelerationMetersPerSecondSquared: number;
-  decelerationMetersPerSecondSquared: number;
-  turnRateRadiansPerSecond: number;
-  moveResponseExponent: number;
-  airControlRatio: number;
-  coyoteTimeSeconds: number;
-  jumpBufferSeconds: number;
-  variableJumpHoldSeconds: number;
-  jumpHoldGravityRatio: number;
-  jumpReleaseGravityRatio: number;
 }
 
 export interface RuntimeSubjectDescriptorV1 {
@@ -577,6 +568,10 @@ function validateRuntimeVocabularies(
       (subject.visualBinding.mode === "static" && assetPartCount > 1) ||
       (subject.visualBinding.mode === "rigged" && assetPartCount !== 1)
     ) invalid();
+    parseJumpVariantPolicyV1(subject.controlFeel.jumpVariantPolicy);
+    for (const controlFeel of subject.availableControlFeels) {
+      parseJumpVariantPolicyV1(controlFeel.jumpVariantPolicy);
+    }
     for (const modifier of subject.capabilityAssembly.cameraContext
       .cameraModifierProfiles) {
       if (

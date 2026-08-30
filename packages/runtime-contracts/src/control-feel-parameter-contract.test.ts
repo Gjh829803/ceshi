@@ -6,6 +6,7 @@ import {
 } from "./index";
 
 const BASE_FEEL: ControlFeelParametersV1 = {
+  jumpVariantPolicy: { mode: "hold-height" },
   walkSpeedMetersPerSecond: 2.4,
   runSpeedMetersPerSecond: 4,
   jumpSpeedMetersPerSecond: 5.5,
@@ -49,5 +50,29 @@ describe("resolveControlFeelParametersV1", () => {
     expect(resolveControlFeelParametersV1(BASE_FEEL, {
       walkSpeedMetersPerSecond: 5,
     })).toBeUndefined();
+  });
+
+  it("does not allow numeric tuning to replace the locked jump variant policy", () => {
+    expect(resolveControlFeelParametersV1(BASE_FEEL, {
+      jumpVariantPolicy: {
+        mode: "run-selects-variant",
+        smallAnticipationSeconds: 0.08,
+        largeAnticipationSeconds: 0.16,
+      },
+    } as never)).toBeUndefined();
+    expect(resolveControlFeelParametersV1(BASE_FEEL, {})).toMatchObject({
+      jumpVariantPolicy: { mode: "hold-height" },
+    });
+    expect(resolveControlFeelParametersV1({
+      ...BASE_FEEL,
+      jumpVariantPolicy: {
+        mode: "run-selects-variant",
+        smallAnticipationSeconds: -0,
+        largeAnticipationSeconds: 0.16,
+      },
+    }, {})).toBeUndefined();
+    expect(Object.isFrozen(
+      resolveControlFeelParametersV1(BASE_FEEL, {})?.jumpVariantPolicy,
+    )).toBe(true);
   });
 });

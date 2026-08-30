@@ -163,6 +163,7 @@ function createArtifacts(worldKind: "initial" | "replacement") {
   const controlFeel = {
     resourceRef: "worldkit://control-feel-profile/humanoid.medium-ground@1",
     contentHash: HASH_A,
+    jumpVariantPolicy: { mode: "hold-height" },
     walkSpeedMetersPerSecond: 2,
     runSpeedMetersPerSecond: 4,
     jumpSpeedMetersPerSecond: 5,

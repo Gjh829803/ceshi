@@ -1,4 +1,10 @@
+import {
+  parseJumpVariantPolicyV1,
+  type JumpVariantPolicyV1,
+} from "@whitebox-world/character-movement";
+
 export interface ControlFeelParametersV1 {
+  jumpVariantPolicy: JumpVariantPolicyV1;
   walkSpeedMetersPerSecond: number;
   runSpeedMetersPerSecond: number;
   jumpSpeedMetersPerSecond: number;
@@ -70,7 +76,17 @@ export function resolveControlFeelParametersV1(
     return undefined;
   }
 
-  const resolved: ControlFeelParametersV1 = { ...base, ...tuning };
+  let jumpVariantPolicy: JumpVariantPolicyV1;
+  try {
+    jumpVariantPolicy = parseJumpVariantPolicyV1(base.jumpVariantPolicy);
+  } catch {
+    return undefined;
+  }
+  const resolved: ControlFeelParametersV1 = {
+    ...base,
+    ...tuning,
+    jumpVariantPolicy,
+  };
   for (const name of CONTROL_FEEL_PARAMETER_NAMES_V1) {
     const value = resolved[name];
     const bounds = CONTROL_FEEL_PARAMETER_BOUNDS_V1[name];

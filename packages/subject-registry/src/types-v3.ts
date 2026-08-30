@@ -1,6 +1,7 @@
 import type {
   CameraRigParameterNameV1,
   CameraRigParametersV1,
+  JumpVariantPolicyV1,
   RuntimeCameraContextRuleV1,
 } from "@whitebox-world/runtime-contracts";
 import type { SubjectBodyTopologyV2 } from "@whitebox-world/subject-contracts";
@@ -88,6 +89,7 @@ export type ControlProfileFacingPolicyV1 =
 
 export interface ControlFeelProfileInputV1 extends CapabilityResourceBaseInputV1 {
   kind: "control-feel-profile";
+  jumpVariantPolicy: JumpVariantPolicyV1;
   walkSpeedMetersPerSecond: number;
   runSpeedMetersPerSecond: number;
   jumpSpeedMetersPerSecond: number;

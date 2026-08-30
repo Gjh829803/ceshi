@@ -436,7 +436,7 @@
     {
       "entityId": "g-bot-primary",
       "subjectDefinitionRef": "worldkit://subject-definition/humanoid.g-bot@2",
-      "subjectDefinitionHash": "sha256:bbdd79175faa92295a496556c16509ecab68c8a246628326d0b26495193c5cdb",
+      "subjectDefinitionHash": "sha256:7a780ad026b3492bf9ce71aec3b116717cbe8e76cd6e844889ab15d647aad55d",
       "bodyTopology": "biped",
       "semanticClassId": "subject.humanoid.robot",
       "forwardDirection": "-z",
@@ -648,7 +648,10 @@
       "locomotionProfileRef": "worldkit://locomotion-profile/ground.standard@1",
       "controlFeel": {
         "resourceRef": "worldkit://control-feel-profile/humanoid.medium-ground@1",
-        "contentHash": "sha256:44e38b8078a99e0567fe2a181d363868378aa0503f56a656712e134383900bc5",
+        "contentHash": "sha256:4eed8da6dce84242feccf38283ee376c903e68f858a1018db9e30f81e52c734b",
+        "jumpVariantPolicy": {
+          "mode": "hold-height"
+        },
         "walkSpeedMetersPerSecond": 2.4,
         "runSpeedMetersPerSecond": 4,
         "jumpSpeedMetersPerSecond": 5.5,
@@ -666,7 +669,10 @@
       "availableControlFeels": [
         {
           "resourceRef": "worldkit://control-feel-profile/humanoid.medium-ground@1",
-          "contentHash": "sha256:44e38b8078a99e0567fe2a181d363868378aa0503f56a656712e134383900bc5",
+          "contentHash": "sha256:4eed8da6dce84242feccf38283ee376c903e68f858a1018db9e30f81e52c734b",
+          "jumpVariantPolicy": {
+            "mode": "hold-height"
+          },
           "walkSpeedMetersPerSecond": 2.4,
           "runSpeedMetersPerSecond": 4,
           "jumpSpeedMetersPerSecond": 5.5,
@@ -683,7 +689,10 @@
         },
         {
           "resourceRef": "worldkit://control-feel-profile/humanoid.heavy-ground@1",
-          "contentHash": "sha256:c0af2cbac40bbbe3484ea7bbb99a1f34f60049ad29fae30322c6576487e6aa05",
+          "contentHash": "sha256:9c47e554b7e6165f37fe1826ee0c26b980cc48ca47936b4d1b2c1dc788c7d904",
+          "jumpVariantPolicy": {
+            "mode": "hold-height"
+          },
           "walkSpeedMetersPerSecond": 1.6,
           "runSpeedMetersPerSecond": 2.6,
           "jumpSpeedMetersPerSecond": 4.5,
@@ -2001,13 +2010,13 @@
       "resourceRef": "worldkit://control-feel-profile/humanoid.heavy-ground@1",
       "resourceKind": "control-feel-profile",
       "resolvedVersion": "1",
-      "contentHash": "sha256:c0af2cbac40bbbe3484ea7bbb99a1f34f60049ad29fae30322c6576487e6aa05"
+      "contentHash": "sha256:9c47e554b7e6165f37fe1826ee0c26b980cc48ca47936b4d1b2c1dc788c7d904"
     },
     {
       "resourceRef": "worldkit://control-feel-profile/humanoid.medium-ground@1",
       "resourceKind": "control-feel-profile",
       "resolvedVersion": "1",
-      "contentHash": "sha256:44e38b8078a99e0567fe2a181d363868378aa0503f56a656712e134383900bc5"
+      "contentHash": "sha256:4eed8da6dce84242feccf38283ee376c903e68f858a1018db9e30f81e52c734b"
     },
     {
       "resourceRef": "worldkit://control-profile/planar.camera-relative@1",
@@ -2088,5 +2097,5 @@
       "contentHash": "sha256:0428f0bf18495ff665715e4c4007e86192735bcfeb9d38d4c6d765f5501335fd"
     }
   ],
-  "contentHash": "sha256:d73e097937bbf5ad06dda311164afc4204fe2fa31abae6afe055efedafe79fad"
+  "contentHash": "sha256:40ba5cdb0259b2b869d025d8eb55763ba6b1843aca08beb06897d8290aa1b925"
 }

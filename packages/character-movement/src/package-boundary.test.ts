@@ -12,6 +12,8 @@ import {
   parseBodySampleV1,
   parseCharacterMovementCommandV1,
   parseCharacterMovementSnapshotV1,
+  parseJumpEpisodeStateV1,
+  parseJumpVariantPolicyV1,
   parseLayeredMoveV1,
   parseMovementCommitV1,
   parseMovementProposalV1,
@@ -59,6 +61,71 @@ afterEach(() => {
 });
 
 describe("@whitebox-world/character-movement package boundary", () => {
+  it("strictly parses the canonical jump variant policy", () => {
+    expect(parseJumpVariantPolicyV1({ mode: "hold-height" })).toEqual({
+      mode: "hold-height",
+    });
+    expect(parseJumpVariantPolicyV1({
+      mode: "run-selects-variant",
+      smallAnticipationSeconds: 0.08,
+      largeAnticipationSeconds: 0.16,
+    })).toEqual({
+      mode: "run-selects-variant",
+      smallAnticipationSeconds: 0.08,
+      largeAnticipationSeconds: 0.16,
+    });
+    expect(() => parseJumpVariantPolicyV1({ mode: "hold-height", legacy: true }))
+      .toThrow("closed JumpVariantPolicyV1 schema");
+    for (const invalidDuration of [-0, Number.NaN, -0.01, 1.500_001]) {
+      expect(() => parseJumpVariantPolicyV1({
+        mode: "run-selects-variant",
+        smallAnticipationSeconds: invalidDuration,
+        largeAnticipationSeconds: 0.1,
+      })).toThrow("closed JumpVariantPolicyV1 schema");
+    }
+  });
+
+  it("strictly parses reachable committed jump episode states", () => {
+    const buffered = {
+      schemaVersion: 1,
+      variant: "small",
+      phase: "buffered",
+      startedTick: 7,
+      committedTick: 7,
+    } as const;
+    const anticipating = {
+      schemaVersion: 1,
+      variant: "small",
+      phase: "anticipating",
+      startedTick: 7,
+      anticipationStartedTick: 7,
+      committedTick: 8,
+      anticipationTicksRemaining: 4,
+    } as const;
+    const airborne = {
+      schemaVersion: 1,
+      variant: "large",
+      phase: "airborne",
+      startedTick: 7,
+      anticipationStartedTick: 8,
+      takeoffTick: 10,
+      committedTick: 10,
+    } as const;
+    expect(parseJumpEpisodeStateV1(buffered)).toEqual(buffered);
+    expect(parseJumpEpisodeStateV1(anticipating)).toEqual(anticipating);
+    expect(parseJumpEpisodeStateV1(airborne)).toEqual(airborne);
+    expect(() => parseJumpEpisodeStateV1({ ...buffered, extra: true }))
+      .toThrow("closed JumpEpisodeStateV1 schema");
+    expect(() => parseJumpEpisodeStateV1({
+      ...anticipating,
+      anticipationStartedTick: 6,
+    })).toThrow("closed JumpEpisodeStateV1 schema");
+    expect(() => parseJumpEpisodeStateV1({
+      ...airborne,
+      takeoffTick: 7,
+    })).toThrow("closed JumpEpisodeStateV1 schema");
+  });
+
   it("has a gameplay/protocol-only transitive production dependency closure", () => {
     const manifest = JSON.parse(
       readFileSync(join(PACKAGE_DIRECTORY, "package.json"), "utf8"),

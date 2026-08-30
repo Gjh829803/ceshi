@@ -95,6 +95,7 @@ function copyControlFeelSurface(feel: ControlFeelSurfaceV1): ControlFeelSurfaceV
   return {
     resourceRef: feel.resourceRef,
     contentHash: feel.contentHash,
+    jumpVariantPolicy: structuredClone(feel.jumpVariantPolicy),
     walkSpeedMetersPerSecond: feel.walkSpeedMetersPerSecond,
     runSpeedMetersPerSecond: feel.runSpeedMetersPerSecond,
     jumpSpeedMetersPerSecond: feel.jumpSpeedMetersPerSecond,

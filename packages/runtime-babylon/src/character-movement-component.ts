@@ -778,6 +778,7 @@ export function createGoldenHumanoidSubjectControllerV1(
   const movementRuntime = createCharacterMovementRuntimeV1({
     schemaVersion: 1,
     fixedDeltaSeconds: FIXED_TIME_STEP_SECONDS,
+    jumpVariantPolicy: feel.jumpVariantPolicy,
     initialState: {
       schemaVersion: 1,
       tick: 0,

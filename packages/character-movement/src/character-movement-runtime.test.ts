@@ -58,6 +58,24 @@ function initialCommit(overrides: Partial<MovementCommitV1> = {}): MovementCommi
   };
 }
 
+function unsupportedFallingCommit(overrides: Partial<MovementCommitV1> = {}): MovementCommitV1 {
+  const grounded = initialCommit();
+  if (grounded.locomotion.status !== "active") throw new Error("test fixture must be active");
+  return initialCommit({
+    linearVelocityMetersPerSecondXYZ: [0, -1, 0],
+    locomotion: {
+      ...grounded.locomotion,
+      mobilityMode: "airborne",
+      gait: "none",
+      verticalPhase: "falling",
+      supportMode: "unsupported",
+      movementMedium: "air",
+      linearVelocity: { x: 0, y: -1, z: 0 },
+    },
+    ...overrides,
+  });
+}
+
 function options(
   commit = initialCommit(),
   state: CharacterMovementRuntimeStateV1 = runtimeState(),
@@ -65,6 +83,7 @@ function options(
   return {
     schemaVersion: 1,
     fixedDeltaSeconds: FIXED_DELTA,
+    jumpVariantPolicy: { mode: "hold-height" },
     initialState: { ...commit, runtimeState: state },
     walkSpeedMetersPerSecond: 2.4,
     runSpeedMetersPerSecond: 4,
@@ -191,6 +210,33 @@ describe("CharacterMovementRuntime options", () => {
     const runtime = createCharacterMovementRuntimeV1(options());
     expect(() => runtime.beginTick(command(1, { fixedDeltaSeconds: 1 / 30 })))
       .toThrow("3C_INPUT_INVALID");
+  });
+
+  it("admits a split Episode only under the canonical split policy", () => {
+    const jumpEpisode = {
+      schemaVersion: 1,
+      variant: "small",
+      phase: "buffered",
+      startedTick: 0,
+      committedTick: 0,
+    } as const;
+    const initialState = {
+      ...unsupportedFallingCommit({ jumpEpisode }),
+      runtimeState: runtimeState({ jumpBufferTicksRemaining: 1 }),
+    };
+    expect(() => parseCharacterMovementRuntimeOptionsV1({
+      ...options(),
+      initialState,
+    })).toThrow("3C_INPUT_INVALID");
+    expect(parseCharacterMovementRuntimeOptionsV1({
+      ...options(),
+      jumpVariantPolicy: {
+        mode: "run-selects-variant",
+        smallAnticipationSeconds: 0.08,
+        largeAnticipationSeconds: 0.16,
+      },
+      initialState,
+    }).initialState.jumpEpisode).toEqual(jumpEpisode);
   });
 
   it.each([
@@ -817,6 +863,28 @@ describe("CharacterMovementRuntime lifecycle and replay", () => {
     expect(a).not.toBe(b);
   });
 
+  it("includes the committed jump Episode in the canonical state hash", () => {
+    const commit = initialCommit();
+    const withoutEpisode = hashCharacterMovementStateV1({
+      ...commit,
+      runtimeState: runtimeState(),
+    });
+    const withEpisode = hashCharacterMovementStateV1({
+      ...commit,
+      jumpEpisode: {
+        schemaVersion: 1,
+        variant: "large",
+        phase: "anticipating",
+        startedTick: 0,
+        anticipationStartedTick: 0,
+        committedTick: 0,
+        anticipationTicksRemaining: 1,
+      },
+      runtimeState: runtimeState(),
+    });
+    expect(withEpisode).not.toBe(withoutEpisode);
+  });
+
   it("rejects correctly hashed but unreachable phase/counter/latch combinations", () => {
     const active = initialCommit().locomotion;
     if (active.status !== "active") throw new Error("test fixture must be active");
@@ -837,6 +905,18 @@ describe("CharacterMovementRuntime lifecycle and replay", () => {
       runtimeState: runtimeState(),
     });
     for (const state of [
+      {
+        ...initialCommit({
+          jumpEpisode: {
+            schemaVersion: 1,
+            variant: "small",
+            phase: "buffered",
+            startedTick: 0,
+            committedTick: 0,
+          },
+        }),
+        runtimeState: runtimeState({ jumpBufferTicksRemaining: 1 }),
+      },
       { ...airborne("rising", 1), runtimeState: runtimeState({ apexCrossedInAirborneEpisode: true }) },
       { ...airborne("falling", -1), runtimeState: runtimeState({ variableJumpHoldTicksRemaining: 1 }) },
       { ...initialCommit(), runtimeState: runtimeState({ landingTicksRemaining: 1 }) },

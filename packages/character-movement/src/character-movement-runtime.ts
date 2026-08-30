@@ -14,6 +14,7 @@ import {
   parseCharacterMovementRuntimeStateV1,
   parseCharacterMovementSnapshotV1,
   parseCharacterMovementStateV1,
+  parseJumpVariantPolicyV1,
   parseMovementCommitV1,
   parseMovementProposalV1,
   type BodyResolutionV1,
@@ -23,6 +24,7 @@ import {
   type CharacterMovementRuntimeV1,
   type CharacterMovementSnapshotV1,
   type CharacterMovementStateV1,
+  type JumpVariantPolicyV1,
   type MovementCommitV1,
   type MovementProposalV1,
   type MovementTickTokenV1,
@@ -37,6 +39,7 @@ import { resolveVerticalTransitionV1 } from "./transition-resolver.js";
 export interface CharacterMovementRuntimeOptionsV1 {
   readonly schemaVersion: 1;
   readonly fixedDeltaSeconds: number;
+  readonly jumpVariantPolicy: JumpVariantPolicyV1;
   readonly initialState: CharacterMovementStateV1;
   readonly walkSpeedMetersPerSecond: number;
   readonly runSpeedMetersPerSecond: number;
@@ -147,8 +150,24 @@ function validateRuntimeStateCounters(
 
 function validateStateAgainstRuntimeOptions(
   state: CharacterMovementStateV1,
-  options: Pick<CharacterMovementRuntimeOptionsV1, "apexEnterSpeedMetersPerSecond">,
+  options: Pick<
+    CharacterMovementRuntimeOptionsV1,
+    "apexEnterSpeedMetersPerSecond" | "fixedDeltaSeconds" | "jumpVariantPolicy"
+  >,
 ): void {
+  if (options.jumpVariantPolicy.mode === "hold-height" && state.jumpEpisode !== undefined) {
+    inputInvalid("hold-height policy cannot restore a split jump Episode.");
+  }
+  if (options.jumpVariantPolicy.mode === "run-selects-variant" &&
+    state.jumpEpisode?.phase === "anticipating") {
+    const durationSeconds = state.jumpEpisode.variant === "small"
+      ? options.jumpVariantPolicy.smallAnticipationSeconds
+      : options.jumpVariantPolicy.largeAnticipationSeconds;
+    if (state.jumpEpisode.anticipationTicksRemaining >
+      ticksForSeconds(durationSeconds, options.fixedDeltaSeconds)) {
+      inputInvalid("jump Episode anticipation exceeds its locked fixed-Tick window.");
+    }
+  }
   if (state.locomotion.status !== "active") return;
   const phase = state.locomotion.verticalPhase;
   if ((phase === "takeoff" || phase === "rising") &&
@@ -162,7 +181,7 @@ export function parseCharacterMovementRuntimeOptionsV1(
 ): CharacterMovementRuntimeOptionsV1 {
   const value = dataRecord(input);
   const keys = [
-    "schemaVersion", "fixedDeltaSeconds", "initialState", "walkSpeedMetersPerSecond",
+    "schemaVersion", "fixedDeltaSeconds", "jumpVariantPolicy", "initialState", "walkSpeedMetersPerSecond",
     "runSpeedMetersPerSecond", "accelerationMetersPerSecondSquared",
     "decelerationMetersPerSecondSquared", "airControlRatio", "gravityMetersPerSecondSquared",
     "jumpSpeedMetersPerSecond", "coyoteTimeSeconds", "jumpBufferSeconds",
@@ -191,6 +210,12 @@ export function parseCharacterMovementRuntimeOptionsV1(
     value.apexEnterSpeedMetersPerSecond >= value.apexExitSpeedMetersPerSecond) {
     inputInvalid("runtime options do not match the closed Golden movement ranges.");
   }
+  let jumpVariantPolicy: JumpVariantPolicyV1;
+  try {
+    jumpVariantPolicy = parseJumpVariantPolicyV1(value.jumpVariantPolicy);
+  } catch {
+    return inputInvalid("jumpVariantPolicy is invalid.");
+  }
   let initialState: CharacterMovementStateV1;
   try {
     initialState = parseCharacterMovementStateV1(value.initialState);
@@ -203,6 +228,7 @@ export function parseCharacterMovementRuntimeOptionsV1(
   const parsed = Object.freeze({
     schemaVersion: 1,
     fixedDeltaSeconds: value.fixedDeltaSeconds,
+    jumpVariantPolicy,
     initialState,
     walkSpeedMetersPerSecond: value.walkSpeedMetersPerSecond,
     runSpeedMetersPerSecond: value.runSpeedMetersPerSecond,
@@ -250,6 +276,7 @@ function stateFromSnapshot(snapshot: CharacterMovementSnapshotV1): CharacterMove
     locomotion: snapshot.locomotion,
     transitionEvents: snapshot.transitionEvents,
     runtimeState: snapshot.runtimeState,
+    ...(snapshot.jumpEpisode === undefined ? {} : { jumpEpisode: snapshot.jumpEpisode }),
   });
 }
 

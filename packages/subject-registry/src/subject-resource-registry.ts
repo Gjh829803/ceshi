@@ -4,6 +4,7 @@ import {
   applyCameraRigParameterOverridesV1,
   CAMERA_RIG_PARAMETER_NAMES_V1,
   isCameraRigParameterNameV1,
+  parseJumpVariantPolicyV1,
 } from "@whitebox-world/runtime-contracts";
 
 import type {
@@ -476,6 +477,13 @@ function isFiniteInRange(value: number, minimum: number, maximum: number): boole
 }
 
 function validateControlFeelProfile(source: ControlFeelProfileInputV1): void {
+  try {
+    parseJumpVariantPolicyV1(source.jumpVariantPolicy);
+  } catch {
+    throw new Error(
+      `CONTROL_FEEL_PROFILE_INVALID: 'jumpVariantPolicy' in '${source.resourceRef}'.`,
+    );
+  }
   for (const [fieldName, [minimum, maximum]] of Object.entries(CONTROL_FEEL_BOUNDS)) {
     const value = source[fieldName as keyof ControlFeelProfileInputV1];
     if (typeof value !== "number" || !isFiniteInRange(value, minimum, maximum)) {

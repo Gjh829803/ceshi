@@ -257,6 +257,7 @@ function movementOptions(): CharacterMovementRuntimeOptionsV1 {
   return {
     schemaVersion: 1,
     fixedDeltaSeconds: 1 / 60,
+    jumpVariantPolicy: { mode: "hold-height" },
     initialState: {
       schemaVersion: 1,
       tick: 0,
