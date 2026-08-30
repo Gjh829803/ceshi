@@ -1,4 +1,9 @@
-import type { NativeExecutionUsageV1 } from
+import { performance } from "node:perf_hooks";
+
+import type {
+  NativeExecutionUsageV1,
+  NativeIsolatedExecutionResultV1,
+} from
   "@whitebox-world/runtime-contracts";
 import { isNil } from "lodash-es";
 
@@ -12,6 +17,60 @@ export type NativeContainerRuntimeUsageObservationV1 = Readonly<{
   [Key in keyof NativeExecutionUsageV1["runtime"]]:
     NativeExecutionUsageV1["runtime"][Key] | undefined;
 }>;
+
+export interface MonotonicMillisecondsClockV1 {
+  readonly nowMilliseconds: () => number;
+}
+
+export function createMonotonicElapsedTimerV1(
+  clock: MonotonicMillisecondsClockV1 = {
+    nowMilliseconds: () => performance.now(),
+  },
+): () => number {
+  const startedAtMilliseconds = clock.nowMilliseconds();
+  return () => Math.max(
+    0,
+    Math.ceil(clock.nowMilliseconds() - startedAtMilliseconds),
+  );
+}
+
+export function verifyHostedNativeCpuDeadlineEvidenceV1(
+  input: Readonly<{
+    providerDeadlineMilliseconds: number;
+    supervisorDeadlineMilliseconds: number;
+    harnessTimeoutMilliseconds: number;
+    harnessTimedOut: boolean;
+    result: NativeIsolatedExecutionResultV1;
+  }>,
+): Readonly<{
+  providerDeadlineMilliseconds: number;
+  supervisorDeadlineMilliseconds: number;
+  harnessTimeoutMilliseconds: number;
+  terminationReason: "timeout";
+}> {
+  if (
+    !Number.isSafeInteger(input.providerDeadlineMilliseconds) ||
+    input.providerDeadlineMilliseconds <= 0 ||
+    !Number.isSafeInteger(input.supervisorDeadlineMilliseconds) ||
+    input.supervisorDeadlineMilliseconds <=
+      input.providerDeadlineMilliseconds ||
+    !Number.isSafeInteger(input.harnessTimeoutMilliseconds) ||
+    input.harnessTimeoutMilliseconds <= input.supervisorDeadlineMilliseconds
+  ) throw new Error("HOSTED_NATIVE_CPU_HARNESS_DEADLINE_INVALID");
+  if (input.harnessTimedOut) {
+    throw new Error("HOSTED_NATIVE_CPU_HARNESS_TIMEOUT");
+  }
+  if (
+    input.result.status !== "terminated" ||
+    input.result.reason !== "timeout"
+  ) throw new Error("HOSTED_NATIVE_CPU_TERMINATION_REASON_INVALID");
+  return Object.freeze({
+    providerDeadlineMilliseconds: input.providerDeadlineMilliseconds,
+    supervisorDeadlineMilliseconds: input.supervisorDeadlineMilliseconds,
+    harnessTimeoutMilliseconds: input.harnessTimeoutMilliseconds,
+    terminationReason: "timeout" as const,
+  });
+}
 
 export interface NativeContainerControlPlaneUsageInputV1 {
   readonly elapsedMilliseconds: number;

@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   buildNativeContainerControlPlaneUsageV1,
   buildNativeContainerRuntimeUsageV1,
+  createMonotonicElapsedTimerV1,
   evaluateHostedNativeSecurityEvidenceV1,
   hostedNativeIsolationExitCodeV1,
+  verifyHostedNativeCpuDeadlineEvidenceV1,
 } from "./hosted-native-isolation-evidence";
 
 describe("Hosted Native isolation control-plane evidence", () => {
@@ -69,6 +71,71 @@ describe("Hosted Native isolation control-plane evidence", () => {
       actualOutboundMessageBytes: 2,
       actualLogBytes: 3,
     })).toThrowError("HOSTED_NATIVE_KERNEL_USAGE_UNAVAILABLE");
+  });
+
+  it("measures receipt elapsed time from one monotonic clock origin", () => {
+    const readings = [42_000.25, 43_501.75];
+    const elapsedMilliseconds = createMonotonicElapsedTimerV1({
+      nowMilliseconds: () => readings.shift()!,
+    });
+
+    expect(elapsedMilliseconds()).toBe(1_502);
+  });
+
+  it("accepts CPU hostile evidence only when the tested deadline wins before its harness", () => {
+    expect(verifyHostedNativeCpuDeadlineEvidenceV1({
+      providerDeadlineMilliseconds: 3_000,
+      supervisorDeadlineMilliseconds: 30_000,
+      harnessTimeoutMilliseconds: 45_000,
+      harnessTimedOut: false,
+      result: {
+        kind: "native-isolated-execution-result",
+        schemaVersion: 1,
+        id: "native-isolated-execution-result.cpu.timeout",
+        requestId: "native-isolated-execution-request.cpu",
+        runtimeSessionId: "runtime.cpu",
+        status: "terminated",
+        reason: "timeout",
+      },
+    })).toEqual({
+      providerDeadlineMilliseconds: 3_000,
+      supervisorDeadlineMilliseconds: 30_000,
+      harnessTimeoutMilliseconds: 45_000,
+      terminationReason: "timeout",
+    });
+  });
+
+  it("rejects CPU hostile evidence produced by the outer harness or an unstable reason", () => {
+    const timeoutResult = {
+      kind: "native-isolated-execution-result" as const,
+      schemaVersion: 1 as const,
+      id: "native-isolated-execution-result.cpu.timeout",
+      requestId: "native-isolated-execution-request.cpu",
+      runtimeSessionId: "runtime.cpu",
+      status: "terminated" as const,
+      reason: "timeout" as const,
+    };
+    expect(() => verifyHostedNativeCpuDeadlineEvidenceV1({
+      providerDeadlineMilliseconds: 3_000,
+      supervisorDeadlineMilliseconds: 30_000,
+      harnessTimeoutMilliseconds: 3_000,
+      harnessTimedOut: false,
+      result: timeoutResult,
+    })).toThrowError("HOSTED_NATIVE_CPU_HARNESS_DEADLINE_INVALID");
+    expect(() => verifyHostedNativeCpuDeadlineEvidenceV1({
+      providerDeadlineMilliseconds: 3_000,
+      supervisorDeadlineMilliseconds: 30_000,
+      harnessTimeoutMilliseconds: 45_000,
+      harnessTimedOut: true,
+      result: timeoutResult,
+    })).toThrowError("HOSTED_NATIVE_CPU_HARNESS_TIMEOUT");
+    expect(() => verifyHostedNativeCpuDeadlineEvidenceV1({
+      providerDeadlineMilliseconds: 3_000,
+      supervisorDeadlineMilliseconds: 30_000,
+      harnessTimeoutMilliseconds: 45_000,
+      harnessTimedOut: false,
+      result: { ...timeoutResult, reason: "provider-lost" },
+    })).toThrowError("HOSTED_NATIVE_CPU_TERMINATION_REASON_INVALID");
   });
 
   it("returns a nonzero gate when rootless/userns or an explicit seccomp profile is absent", () => {

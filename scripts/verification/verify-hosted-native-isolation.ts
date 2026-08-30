@@ -46,8 +46,10 @@ import {
 import {
   buildNativeContainerControlPlaneUsageV1,
   buildNativeContainerRuntimeUsageV1,
+  createMonotonicElapsedTimerV1,
   evaluateHostedNativeSecurityEvidenceV1,
   hostedNativeIsolationExitCodeV1,
+  verifyHostedNativeCpuDeadlineEvidenceV1,
   type NativeContainerProcessUsageSampleV1,
   type NativeContainerRuntimeUsageObservationV1,
 } from "./hosted-native-isolation-evidence";
@@ -82,6 +84,9 @@ const SANDBOX_POLICY = Object.freeze({
 });
 const SANDBOX_POLICY_HASH = sha256CanonicalJson(SANDBOX_POLICY) as
   `sha256:${string}`;
+const CPU_HOSTILE_PROVIDER_DEADLINE_MILLISECONDS = 3_000;
+const CPU_HOSTILE_SUPERVISOR_DEADLINE_MILLISECONDS = 30_000;
+const CPU_HOSTILE_HARNESS_TIMEOUT_MILLISECONDS = 45_000;
 
 interface CommandResult {
   readonly exitCode: number;
@@ -185,6 +190,12 @@ Promise<VerifiedBabylonNativeWorldPackageDirectoryV1> {
 
 function effectiveBudget(
   verified: VerifiedBabylonNativeWorldPackageDirectoryV1,
+  processBudget: NativeEffectiveExecutionBudgetV1["process"] = {
+    maximumWallTimeMilliseconds: 90_000,
+    maximumCpuTimeMilliseconds: 60_000,
+    maximumMemoryBytes: 1_073_741_824,
+    maximumProcessCount: 32,
+  },
 ): NativeEffectiveExecutionBudgetV1 {
   return {
     scene: verified.manifest.resourceBudget,
@@ -200,12 +211,7 @@ function effectiveBudget(
       maximumShaderCount: 512,
       maximumPhysicsBodyCount: 256,
     },
-    process: {
-      maximumWallTimeMilliseconds: 90_000,
-      maximumCpuTimeMilliseconds: 60_000,
-      maximumMemoryBytes: 1_073_741_824,
-      maximumProcessCount: 32,
-    },
+    process: processBudget,
     protocol: {
       maximumInboundMessageBytes: 2_000_000,
       maximumOutboundMessageBytes: 2_000_000,
@@ -220,8 +226,9 @@ function isolatedRequest(
   verified: VerifiedBabylonNativeWorldPackageDirectoryV1,
   runnerImageDigest: `sha256:${string}`,
   suffix: string,
+  processBudget?: NativeEffectiveExecutionBudgetV1["process"],
 ): NativeIsolatedExecutionRequestV1 {
-  const budget = effectiveBudget(verified);
+  const budget = effectiveBudget(verified, processBudget);
   return admitHostedNativeExecutionRequestV1({
     id: `native-isolated-execution-request.hosted-verifier.${suffix}`,
     runtimeSessionId: `runtime.hosted-verifier.${suffix}`,
@@ -254,7 +261,7 @@ function terminationResult(
 
 class DockerJsonLineProcess implements NativeContainerCommandProcessV1 {
   readonly #child;
-  readonly #startedAt = Date.now();
+  readonly #elapsedMilliseconds = createMonotonicElapsedTimerV1();
   readonly #lines: string[] = [];
   readonly #lineWaiters: Array<{
     resolve: (line: string) => void;
@@ -335,6 +342,9 @@ class DockerJsonLineProcess implements NativeContainerCommandProcessV1 {
     }, invocation.timeoutMilliseconds);
     this.#exitPromise.finally(() => clearTimeout(timer));
     cancellationSignal.addEventListener("abort", () => {
+      if (cancellationSignal.reason === "timeout") {
+        this.#terminationReason ??= "timeout";
+      }
       void this.killContainerDomain();
     }, { once: true });
   }
@@ -546,8 +556,9 @@ class DockerJsonLineProcess implements NativeContainerCommandProcessV1 {
         !value.startsWith("worldkit/native") && !value.startsWith("sha256:")
       ),
     }));
+    const elapsedMilliseconds = this.#elapsedMilliseconds();
     const controlPlaneUsage = buildNativeContainerControlPlaneUsageV1({
-      elapsedMilliseconds: Date.now() - this.#startedAt,
+      elapsedMilliseconds,
       processUsage: this.#processUsage,
       actualInboundMessageBytes: this.#inboundBytes,
       actualOutboundMessageBytes: this.#stdoutBytes,
@@ -610,7 +621,7 @@ class DockerJsonLineProcess implements NativeContainerCommandProcessV1 {
       requestedOperation: request.requestedOperation,
       outcome: result.status,
       resultHash: hashNativeIsolatedExecutionResultV1(result),
-      durationMilliseconds: Date.now() - this.#startedAt,
+      durationMilliseconds: elapsedMilliseconds,
       cleanup: cleanupComplete
         ? { status: "complete" as const }
         : {
@@ -641,18 +652,47 @@ class DockerCommandRunner implements NativeContainerCommandRunnerV1 {
   constructor(
     private readonly dockerCommand: string,
     private readonly verified: VerifiedBabylonNativeWorldPackageDirectoryV1,
+    private readonly hostileFixturePath?: string,
+    private readonly hostileProviderDeadlineMilliseconds?: number,
   ) {}
 
   async start(invocation: NativeContainerInvocationV1, signal: AbortSignal) {
-    this.invocations.push(invocation);
+    const executedInvocation = isNil(this.hostileFixturePath)
+      ? invocation
+      : this.withHostileEntrypoint(
+          invocation,
+          this.hostileFixturePath,
+          this.hostileProviderDeadlineMilliseconds,
+        );
+    this.invocations.push(executedInvocation);
     const process = new DockerJsonLineProcess(
       this.dockerCommand,
-      invocation,
+      executedInvocation,
       this.verified,
       signal,
     );
     this.processes.push(process);
     return process;
+  }
+
+  private withHostileEntrypoint(
+    invocation: NativeContainerInvocationV1,
+    fixturePath: string,
+    providerDeadlineMilliseconds: number | undefined,
+  ): NativeContainerInvocationV1 {
+    const args = [...invocation.args];
+    const imageIndex = args.lastIndexOf(
+      args.findLast((value) => /^sha256:[0-9a-f]{64}$/.test(value)) ?? "",
+    );
+    assert.ok(imageIndex > 0);
+    args.splice(imageIndex, 0, "--entrypoint", "node");
+    args.push(fixturePath);
+    return Object.freeze({
+      ...invocation,
+      args: Object.freeze(args),
+      timeoutMilliseconds: providerDeadlineMilliseconds ??
+        invocation.timeoutMilliseconds,
+    });
   }
 }
 
@@ -796,10 +836,136 @@ async function runCanary(
   });
 }
 
+async function withHarnessTimeout<T>(
+  operation: Promise<T>,
+  timeoutMilliseconds: number,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error("HOSTED_NATIVE_CPU_HARNESS_TIMEOUT"));
+        }, timeoutMilliseconds);
+      }),
+    ]);
+  } finally {
+    if (!isNil(timer)) clearTimeout(timer);
+  }
+}
+
+async function runCpuDeadlineHostileCase(
+  dockerCommand: string,
+  verified: VerifiedBabylonNativeWorldPackageDirectoryV1,
+  imageDigest: `sha256:${string}`,
+) {
+  const request = isolatedRequest(
+    verified,
+    imageDigest,
+    "hostile-cpu",
+    {
+      maximumWallTimeMilliseconds:
+        CPU_HOSTILE_SUPERVISOR_DEADLINE_MILLISECONDS,
+      maximumCpuTimeMilliseconds: 20_000,
+      maximumMemoryBytes: 1_073_741_824,
+      maximumProcessCount: 32,
+    },
+  );
+  const runner = new DockerCommandRunner(
+    dockerCommand,
+    verified,
+    "/runner/hostile-fixtures/cpu.mjs",
+    CPU_HOSTILE_PROVIDER_DEADLINE_MILLISECONDS,
+  );
+  const provider = createDockerNativeIsolationProviderV1({
+    runnerIdentityRef: RUNNER_IDENTITY_REF,
+    runnerImageRef: imageDigest,
+    runnerImageDigest: imageDigest,
+    sandboxPolicyHash: SANDBOX_POLICY_HASH,
+    packageHostPath: PACKAGE_ROOT,
+    commandRunner: runner,
+  });
+  const supervisor = NativeIsolationSupervisorV1.create({
+    request,
+    provider,
+    attestationVerifier: createAttestationVerifier(request),
+  });
+  let harnessTimedOut = false;
+  try {
+    const ready = await withHarnessTimeout(
+      supervisor.start(),
+      CPU_HOSTILE_HARNESS_TIMEOUT_MILLISECONDS,
+    );
+    assert.equal(ready.status, "ready");
+    const requestEnvelope: NativeIsolationTransportEnvelopeV1 = {
+      kind: "native-isolation-transport-envelope",
+      schemaVersion: 1,
+      runtimeSessionId: request.runtimeSessionId,
+      sessionNonce: request.sessionNonce,
+      messageSequence: 1,
+      payload: {
+        kind: "worldkit-runtime-session-request",
+        schemaVersion: 1,
+        id: "request.hostile-cpu.snapshot",
+        runtimeSessionId: request.runtimeSessionId,
+        type: "snapshot.get",
+      },
+    };
+    let submitError: unknown;
+    try {
+      await withHarnessTimeout(
+        supervisor.submit(requestEnvelope),
+        CPU_HOSTILE_HARNESS_TIMEOUT_MILLISECONDS,
+      );
+    } catch (error) {
+      submitError = error;
+      harnessTimedOut = error instanceof Error &&
+        error.message === "HOSTED_NATIVE_CPU_HARNESS_TIMEOUT";
+    }
+    assert.ok(!isNil(submitError));
+    if (!harnessTimedOut) {
+      assert.equal(
+        typeof submitError === "object" && !isNil(submitError) &&
+          "code" in submitError
+          ? submitError.code
+          : undefined,
+        "NATIVE_ISOLATION_PROVIDER_FAILED",
+      );
+    } else {
+      await supervisor.terminate("host-cancelled");
+    }
+    const process = runner.processes[0];
+    assert.ok(!isNil(process));
+    const evidence = await process.collectControlPlaneReceipt();
+    const deadlineEvidence = verifyHostedNativeCpuDeadlineEvidenceV1({
+      providerDeadlineMilliseconds:
+        CPU_HOSTILE_PROVIDER_DEADLINE_MILLISECONDS,
+      supervisorDeadlineMilliseconds:
+        CPU_HOSTILE_SUPERVISOR_DEADLINE_MILLISECONDS,
+      harnessTimeoutMilliseconds:
+        CPU_HOSTILE_HARNESS_TIMEOUT_MILLISECONDS,
+      harnessTimedOut,
+      result: evidence.result,
+    });
+    return Object.freeze({
+      id: "cpu",
+      expectedExitMode: "terminated",
+      executionAuthority: "native-isolation-supervisor",
+      outputWasBounded: true,
+      unexpectedSuccessMarker: false,
+      ...deadlineEvidence,
+    });
+  } finally {
+    await supervisor.dispose();
+  }
+}
+
 async function runHostileCases(
   dockerCommand: string,
   baseline: NativeContainerInvocationV1,
   imageDigest: `sha256:${string}`,
+  verified: VerifiedBabylonNativeWorldPackageDirectoryV1,
 ) {
   const cases = [
     { id: "network", timeoutMilliseconds: 10_000, expectedExitMode: "clean" },
@@ -808,11 +974,15 @@ async function runHostileCases(
     { id: "process", timeoutMilliseconds: 10_000, expectedExitMode: "clean" },
     { id: "cross-run-write", timeoutMilliseconds: 10_000, expectedExitMode: "clean" },
     { id: "cross-run-read", timeoutMilliseconds: 10_000, expectedExitMode: "clean" },
-    { id: "cpu", timeoutMilliseconds: 1_500, expectedExitMode: "terminated" },
     { id: "memory", timeoutMilliseconds: 20_000, expectedExitMode: "terminated" },
     { id: "output", timeoutMilliseconds: 10_000, expectedExitMode: "bounded" },
     { id: "protocol", timeoutMilliseconds: 10_000, expectedExitMode: "protocol" },
   ] as const;
+  const cpuResult = await runCpuDeadlineHostileCase(
+    dockerCommand,
+    verified,
+    imageDigest,
+  );
   const imageIndex = baseline.args.lastIndexOf(imageDigest);
   assert.ok(imageIndex > 0);
   const baselineNameIndex = baseline.args.indexOf("--name") + 1;
@@ -869,7 +1039,7 @@ async function runHostileCases(
       unexpectedSuccessMarker: false,
     }));
   }
-  return Object.freeze(results);
+  return Object.freeze([...results, cpuResult]);
 }
 
 async function main(): Promise<void> {
@@ -921,6 +1091,7 @@ async function main(): Promise<void> {
       dockerCommand,
       simultaneousRuns[0]!.invocation,
       imageDigest,
+      verified,
     );
     const sequentialRuns = [
       await runCanary(dockerCommand, verified, imageDigest, "reuse-a"),
