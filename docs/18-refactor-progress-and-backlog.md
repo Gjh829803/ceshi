@@ -962,6 +962,11 @@ Replay、Streaming/Dispose 和自动 Diagnostic；普通 Agent 只引用稳定 P
     BNA-3+ 或 BNA-4 正式 Runtime Gate；
 - [ ] BNA-3：Bundle、依赖/资产锁、Package、Contribution Hash 与 Build Receipt；只消费已发布的
   class-specific Resource Ref，并绑定 Route Decision Hash/completed Attempt Result，不执行资产生产或发布；
+  - [x] 本地实现候选已完成 deterministic Bundle、安装树/资产锁、双 Candidate replay、统一
+    Package/Receipt/verifier/Store/File/signing/inspect，以及 Runtime pre-allocation rejection；聚焦证据见
+    [BNA-3 实现审查](reviews/2026-08-30-bna3-native-package-receipt-review.md)。
+  - [ ] 等待同一精确 SHA 的 Cursor Cloud 全量门禁与独立 Mode B + runtime-deep GO；GO、PR 合入和
+    `origin/main` 祖先证明完成前不得关闭 BNA-3，也不得声称 Native 已可玩或拥有 Havok admission；
 - [ ] BNA-4：统一 Gameplay Kernel、Profile-based Surface Admission、稳定 Surface/Subshape identity、
   原子生命周期和对抗测试；
 - [ ] BNA-5：Trusted Local/Hosted Isolated Trust Profile、确定性、预算和安全 Gate；
