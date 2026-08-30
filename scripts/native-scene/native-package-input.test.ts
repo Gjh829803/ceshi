@@ -20,7 +20,7 @@ import {
 } from "@whitebox-world/world-package";
 
 import { createWorldPackageTestInputV1 } from
-  "../../packages/world-package/src/test-fixture.js";
+  "@whitebox-world/world-package/testing";
 import type { PublishedBabylonNativeStaticGeometryAssetV1 } from
   "./asset-lock.js";
 import { buildTrustedBabylonNativeWorldPackageV1 } from

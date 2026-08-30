@@ -30,7 +30,7 @@ import {
 } from "./world-package-cli";
 import { writeWorldPackageDirectoryV1 } from "./file-world-package";
 import { createBabylonNativeWorldPackageTestInputV1 } from
-  "../../packages/world-package/src/test-fixture.js";
+  "@whitebox-world/world-package/testing";
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dirname, "../..");
 const BASIC_WORLD_PATH = path.join(

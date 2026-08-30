@@ -10,7 +10,7 @@ import type { WorldSessionPublicationV1 } from "./world-session";
 import { runtimeWorldConfigurationFromVerifiedWorldPackageV1 } from
   "./runtime-host";
 import { createBabylonNativeWorldPackageTestInputV1 } from
-  "../../world-package/src/test-fixture.js";
+  "@whitebox-world/world-package/testing";
 
 import {
   HASH_A,

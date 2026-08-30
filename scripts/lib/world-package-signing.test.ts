@@ -21,7 +21,7 @@ import { describe, expect, it } from "vitest";
 
 import basicWorldDocument from "../../examples/authoring/basic-world.json";
 import { createBabylonNativeWorldPackageTestInputV1 } from
-  "../../packages/world-package/src/test-fixture.js";
+  "@whitebox-world/world-package/testing";
 import {
   signWorldPackageDirectoryV1,
   verifyWorldPackageForHostV1,
