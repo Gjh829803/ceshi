@@ -14,6 +14,8 @@ const BRIDGE_PATH =
   "apps/native-scene-playground/src/hosted-runtime-bridge.ts";
 const FRAME_PATH =
   "apps/native-scene-playground/src/hosted-runtime-frame.ts";
+const NATIVE_PLAYGROUND_MAIN_PATH =
+  "apps/native-scene-playground/src/main.ts";
 const TEXT_EXTENSIONS = new Set([
   ".cjs", ".js", ".json", ".jsx", ".mjs", ".mts", ".ts", ".tsx",
 ]);
@@ -50,7 +52,8 @@ export interface Bna5CleanBreakDiagnostic {
     | "BNA5_EXACT_ORIGIN_BRIDGE_MISSING"
     | "BNA5_PUBLIC_SCHEMA_INFRASTRUCTURE_FIELD"
     | "BNA5_HOSTED_COMMAND_DIALECT"
-    | "BNA5_DIRECT_EXECUTION_REQUEST_BYPASS";
+    | "BNA5_DIRECT_EXECUTION_REQUEST_BYPASS"
+    | "BNA5_BROWSER_ORIGIN_QUERY_DIALECT";
   readonly path: string;
   readonly line: number;
   readonly value: string;
@@ -68,6 +71,7 @@ export interface Bna5CleanBreakReport {
     publicSchemasInfrastructureFree: boolean;
     hostedCommandDialectAbsent: boolean;
     directExecutionRequestBypassAbsent: boolean;
+    browserOriginQueryDialectAbsent: boolean;
   }>;
   readonly diagnostics: readonly Bna5CleanBreakDiagnostic[];
 }
@@ -272,6 +276,18 @@ export async function scanBna5CleanBreak(
         value: "Native execution request constructed outside Host admission",
       });
     }
+    if (relativePath === NATIVE_PLAYGROUND_MAIN_PATH) {
+      for (const match of source.matchAll(
+        /\.get\(\s*["'](?:runtimeOrigin|shellOrigin)["']\s*\)/gu,
+      )) {
+        diagnostics.push({
+          code: "BNA5_BROWSER_ORIGIN_QUERY_DIALECT",
+          path: relativePath,
+          line: lineAt(source, match.index),
+          value: "Browser origin supplied through URL query",
+        });
+      }
+    }
   }
 
   if (!hasExactBridgeIdentityChecks(
@@ -303,6 +319,8 @@ export async function scanBna5CleanBreak(
     hostedCommandDialectAbsent: !codes.has("BNA5_HOSTED_COMMAND_DIALECT"),
     directExecutionRequestBypassAbsent:
       !codes.has("BNA5_DIRECT_EXECUTION_REQUEST_BYPASS"),
+    browserOriginQueryDialectAbsent:
+      !codes.has("BNA5_BROWSER_ORIGIN_QUERY_DIALECT"),
   });
   return Object.freeze({
     kind: "worldkit-bna5-clean-break-report" as const,

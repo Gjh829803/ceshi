@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { createServer as createHttpServer, type Server as HttpServer } from
+  "node:http";
 import path from "node:path";
 
 import type { Browser, Page } from "playwright";
@@ -9,25 +11,38 @@ import { launchChromiumWithSystemFallback } from
 
 const shellPort = 5274;
 const runtimePort = 5275;
+const attackerPort = 5276;
 const shellOrigin = `http://127.0.0.1:${shellPort}`;
 const runtimeOrigin = `http://127.0.0.1:${runtimePort}`;
+const attackerOrigin = `http://127.0.0.1:${attackerPort}`;
 
 async function closeAll(
   page: Page | undefined,
   browser: Browser | undefined,
   servers: readonly ViteDevServer[],
+  attackerServer: HttpServer | undefined,
 ): Promise<void> {
   await Promise.allSettled([
     ...(page === undefined ? [] : [page.close()]),
     ...(browser === undefined ? [] : [browser.close()]),
     ...servers.map((server) => server.close()),
+    ...(attackerServer === undefined
+      ? []
+      : [new Promise<void>((resolve, reject) => {
+          attackerServer.close((error) => {
+            if (error === undefined) resolve();
+            else reject(error);
+          });
+        })]),
   ]);
 }
 
 async function main(): Promise<void> {
   process.env.WORLDKIT_HOSTED_RUNTIME_ORIGIN = runtimeOrigin;
+  process.env.WORLDKIT_HOSTED_SHELL_ORIGIN = shellOrigin;
   const root = path.resolve("apps/native-scene-playground");
   const servers: ViteDevServer[] = [];
+  let attackerServer: HttpServer | undefined;
   let browser: Browser | undefined;
   let page: Page | undefined;
   const errors: string[] = [];
@@ -53,6 +68,34 @@ async function main(): Promise<void> {
       await server.listen();
       servers.push(server);
     }
+    attackerServer = createHttpServer((request, response) => {
+      response.statusCode = 200;
+      response.setHeader("Content-Type", "text/html; charset=utf-8");
+      if (request.url?.startsWith("/embed-runtime") === true) {
+        response.end(`<!doctype html><title>attacker embed</title><iframe id="attacker-frame" src="${runtimeOrigin}/?hosted-runtime-frame=1&runtimeSessionId=runtime.attacker.001&sessionNonce=nonce.attacker.001"></iframe>`);
+        return;
+      }
+      response.end("<!doctype html><title>attacker runtime</title>");
+    });
+    await new Promise<void>((resolve, reject) => {
+      attackerServer?.once("error", reject);
+      attackerServer?.listen(attackerPort, "127.0.0.1", () => resolve());
+    });
+
+    const runtimeResponse = await fetch(runtimeOrigin);
+    const runtimeContentSecurityPolicy = runtimeResponse.headers.get(
+      "content-security-policy",
+    );
+    const runtimeFrameAncestors = runtimeContentSecurityPolicy
+      ?.split(";")
+      .map((directive) => directive.trim())
+      .filter((directive) => directive.startsWith("frame-ancestors "));
+    assert.deepEqual(
+      runtimeFrameAncestors,
+      [`frame-ancestors ${shellOrigin}`],
+      "Runtime response must admit only the Host-configured shell origin",
+    );
+
     browser = await launchChromiumWithSystemFallback();
     const context = await browser.newContext({
       storageState: {
@@ -80,8 +123,22 @@ async function main(): Promise<void> {
     page.on("console", (message) => {
       if (message.type() === "error") errors.push(message.text());
     });
+
+    const attackerEmbedPage = await context.newPage();
+    await attackerEmbedPage.goto(`${attackerOrigin}/embed-runtime`, {
+      waitUntil: "domcontentloaded",
+    });
+    await attackerEmbedPage.waitForTimeout(250);
+    const attackerFrame = attackerEmbedPage.frames().find((candidate) =>
+      candidate !== attackerEmbedPage.mainFrame());
+    assert.ok(
+      attackerFrame === undefined || attackerFrame.url() === "chrome-error://chromewebdata/",
+      "third-party origin must not embed the dedicated Runtime",
+    );
+    await attackerEmbedPage.close();
+
     await page.goto(
-      `${shellOrigin}/?hosted=1&runtimeOrigin=${encodeURIComponent(runtimeOrigin)}`,
+      `${shellOrigin}/?hosted=1&runtimeOrigin=${encodeURIComponent(attackerOrigin)}`,
       { waitUntil: "domcontentloaded" },
     );
     try {
@@ -112,6 +169,16 @@ async function main(): Promise<void> {
     const frame = page.frames().find((candidate) =>
       candidate.url().startsWith(runtimeOrigin));
     assert.ok(frame !== undefined, "dedicated-origin Runtime frame missing");
+    assert.equal(
+      new URL(frame.url()).origin,
+      runtimeOrigin,
+      "attacker runtimeOrigin query must not override deployment configuration",
+    );
+    assert.equal(
+      new URL(frame.url()).searchParams.has("shellOrigin"),
+      false,
+      "shell origin must not be serialized as a Runtime URL query dialect",
+    );
     assert.notEqual(new URL(frame.url()).origin, shellOrigin);
     const framePolicy = await page.evaluate(() => {
       const frame = window.__WORLDKIT_HOSTED_RUNTIME__?.frame;
@@ -263,11 +330,14 @@ async function main(): Promise<void> {
         kind: "dedicated-origin-browser-policy",
         shellOrigin,
         runtimeOrigin,
+        attackerRuntimeOriginRejected: true,
+        thirdPartyEmbedBlocked: true,
+        runtimeFrameAncestors: runtimeContentSecurityPolicy,
         containerSecurityClaimed: false,
       },
     }, null, 2));
   } finally {
-    await closeAll(page, browser, servers);
+    await closeAll(page, browser, servers, attackerServer);
   }
 }
 

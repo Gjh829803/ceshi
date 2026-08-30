@@ -31,6 +31,8 @@ import "./style.css";
 const CLOUD_RIDGE_MAIN_PATH_RUN_TICKS = 1_700;
 declare const __WORLDKIT_HOSTED_BROWSER_RUNNER_DIGEST__: `sha256:${string}`;
 declare const __WORLDKIT_HOSTED_BROWSER_POLICY_HASH__: `sha256:${string}`;
+declare const __WORLDKIT_HOSTED_RUNTIME_ORIGIN__: string;
+declare const __WORLDKIT_HOSTED_SHELL_ORIGIN__: string;
 interface NativeSceneSpikeProbeV1 {
   readonly ready: true;
   readonly bootstrap: BabylonNativeSceneBootstrapV1;
@@ -395,15 +397,21 @@ function browserProtocolBudget(
 }
 
 async function startHostedShell(): Promise<void> {
-  const query = new URLSearchParams(location.search);
-  const runtimeOrigin = query.get("runtimeOrigin") ?? "http://127.0.0.1:5175";
+  const runtimeOrigin = __WORLDKIT_HOSTED_RUNTIME_ORIGIN__;
+  if (location.origin !== __WORLDKIT_HOSTED_SHELL_ORIGIN__) {
+    throw new Error("WORLDKIT_HOSTED_SHELL_ORIGIN_MISMATCH");
+  }
   const runtimeSessionId = `runtime.hosted.browser.${crypto.randomUUID()}`;
   const sessionNonce = `nonce.${crypto.randomUUID()}`;
   const viewport = requiredElement<HTMLElement>("[data-viewport]");
   viewport.replaceChildren();
   const frame = document.createElement("iframe");
   frame.className = "hosted-runtime-frame";
-  frame.src = `${runtimeOrigin}/?hosted-runtime-frame=1&shellOrigin=${encodeURIComponent(location.origin)}&runtimeSessionId=${encodeURIComponent(runtimeSessionId)}&sessionNonce=${encodeURIComponent(sessionNonce)}`;
+  const frameUrl = new URL("/", runtimeOrigin);
+  frameUrl.searchParams.set("hosted-runtime-frame", "1");
+  frameUrl.searchParams.set("runtimeSessionId", runtimeSessionId);
+  frameUrl.searchParams.set("sessionNonce", sessionNonce);
+  frame.src = frameUrl.href;
   const bridge = createHostedRuntimeBridgeV1({
     frame,
     runtimeOrigin,
@@ -425,10 +433,13 @@ async function startHostedShell(): Promise<void> {
 
 async function startHostedFrame(): Promise<void> {
   const query = new URLSearchParams(location.search);
-  const shellOrigin = query.get("shellOrigin");
+  const shellOrigin = __WORLDKIT_HOSTED_SHELL_ORIGIN__;
   const runtimeSessionId = query.get("runtimeSessionId");
   const sessionNonce = query.get("sessionNonce");
-  if (shellOrigin === null || runtimeSessionId === null || sessionNonce === null) {
+  if (location.origin !== __WORLDKIT_HOSTED_RUNTIME_ORIGIN__) {
+    throw new Error("WORLDKIT_HOSTED_RUNTIME_ORIGIN_MISMATCH");
+  }
+  if (runtimeSessionId === null || sessionNonce === null) {
     throw new Error("WORLDKIT_HOSTED_RUNTIME_FRAME_PARAMETERS_MISSING");
   }
   const viewport = requiredElement<HTMLElement>("[data-viewport]");

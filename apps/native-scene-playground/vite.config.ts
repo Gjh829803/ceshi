@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { defineConfig } from "vite";
 
@@ -16,8 +17,57 @@ const cloudRidgeModuleBytes = readFileSync(new URL(
 const cloudRidgeModuleSource = cloudRidgeModuleBytes.toString("utf8");
 const cloudRidgeModuleBundleContentHash =
   `sha256:${createHash("sha256").update(cloudRidgeModuleBytes).digest("hex")}`;
-const hostedRuntimeOrigin = process.env.WORLDKIT_HOSTED_RUNTIME_ORIGIN ??
-  "http://127.0.0.1:5175";
+function configuredOrigin(name: string, fallback: string): string {
+  const value = process.env[name] ?? fallback;
+  const url = new URL(value);
+  if (
+    url.origin !== value ||
+    (url.protocol !== "http:" && url.protocol !== "https:")
+  ) throw new Error(`${name}_MUST_BE_EXACT_HTTP_ORIGIN`);
+  return value;
+}
+
+const hostedRuntimeOrigin = configuredOrigin(
+  "WORLDKIT_HOSTED_RUNTIME_ORIGIN",
+  "http://127.0.0.1:5175",
+);
+const hostedShellOrigin = configuredOrigin(
+  "WORLDKIT_HOSTED_SHELL_ORIGIN",
+  "http://127.0.0.1:5174",
+);
+if (hostedRuntimeOrigin === hostedShellOrigin) {
+  throw new Error("WORLDKIT_HOSTED_BROWSER_ORIGINS_MUST_DIFFER");
+}
+const hostedContentSecurityPolicy =
+  "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'none'; media-src 'none'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'";
+const hostedShellContentSecurityPolicy =
+  `${hostedContentSecurityPolicy}; frame-src ${hostedRuntimeOrigin}; frame-ancestors 'none'`;
+const hostedRuntimeContentSecurityPolicy =
+  `${hostedContentSecurityPolicy}; frame-src 'none'; frame-ancestors ${hostedShellOrigin}`;
+const lockedContentSecurityPolicy =
+  "default-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+
+function installHostedBrowserHeaders(
+  request: IncomingMessage,
+  response: ServerResponse,
+  next: () => void,
+): void {
+  const requestHost = request.headers.host;
+  const contentSecurityPolicy =
+    requestHost === new URL(hostedRuntimeOrigin).host
+      ? hostedRuntimeContentSecurityPolicy
+      : requestHost === new URL(hostedShellOrigin).host
+        ? hostedShellContentSecurityPolicy
+        : lockedContentSecurityPolicy;
+  response.setHeader("Content-Security-Policy", contentSecurityPolicy);
+  response.setHeader(
+    "Permissions-Policy",
+    "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=()",
+  );
+  response.setHeader("Referrer-Policy", "no-referrer");
+  response.setHeader("X-Content-Type-Options", "nosniff");
+  next();
+}
 const hostedBrowserRunnerSourcePaths = Object.freeze([
   "src/main.ts",
   "src/hosted-runtime-bridge.ts",
@@ -42,10 +92,9 @@ const hostedBrowserPolicyHash = `sha256:${createHash("sha256").update(
     schemaVersion: 1,
     credentialless: true,
     sandbox: "allow-scripts allow-same-origin",
-    shellOrigin: "cross-origin-exact",
+    shellOrigin: hostedShellOrigin,
     runtimeOrigin: hostedRuntimeOrigin,
-    contentSecurityPolicy:
-      "default-src self; script-src self wasm-unsafe-eval; style-src self unsafe-inline; img-src self data; font-src none; media-src none; connect-src self; object-src none; base-uri none; form-action none",
+    contentSecurityPolicy: hostedRuntimeContentSecurityPolicy,
   }),
 ).digest("hex")}`;
 
@@ -58,6 +107,8 @@ export default defineConfig({
     __WORLDKIT_HOSTED_BROWSER_POLICY_HASH__: JSON.stringify(
       hostedBrowserPolicyHash,
     ),
+    __WORLDKIT_HOSTED_RUNTIME_ORIGIN__: JSON.stringify(hostedRuntimeOrigin),
+    __WORLDKIT_HOSTED_SHELL_ORIGIN__: JSON.stringify(hostedShellOrigin),
   },
   plugins: [{
     name: "worldkit-cloud-ridge-exact-package-module",
@@ -82,15 +133,16 @@ export default defineConfig({
       }
       return null;
     },
+    configureServer(server) {
+      server.middlewares.use(installHostedBrowserHeaders);
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use(installHostedBrowserHeaders);
+    },
   }],
   server: {
     host: "127.0.0.1",
     port: 5174,
-    headers: {
-      "Content-Security-Policy": `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'none'; media-src 'none'; connect-src 'self'; frame-src ${hostedRuntimeOrigin}; object-src 'none'; base-uri 'none'; form-action 'none'`,
-      "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=()",
-      "Referrer-Policy": "no-referrer",
-    },
   },
   build: {
     target: "es2022",

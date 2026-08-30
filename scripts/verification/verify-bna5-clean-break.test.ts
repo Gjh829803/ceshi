@@ -63,6 +63,7 @@ describe("BNA-5 clean-break verifier", () => {
         publicSchemasInfrastructureFree: true,
         hostedCommandDialectAbsent: true,
         directExecutionRequestBypassAbsent: true,
+        browserOriginQueryDialectAbsent: true,
       },
       diagnostics: [],
     });
@@ -173,6 +174,20 @@ describe("BNA-5 clean-break verifier", () => {
     }));
     expect(report.diagnostics).toContainEqual(expect.objectContaining({
       code: "BNA5_DIRECT_EXECUTION_REQUEST_BYPASS",
+      path: "apps/native-scene-playground/src/main.ts",
+    }));
+  });
+
+  it("rejects Browser origin authority supplied through URL query parameters", async () => {
+    const report = await scanBna5CleanBreak(await fixture({
+      "apps/native-scene-playground/src/main.ts": [
+        'query.get("runtimeOrigin");',
+        'query.get("shellOrigin");',
+      ].join("\n"),
+    }));
+
+    expect(report.diagnostics).toContainEqual(expect.objectContaining({
+      code: "BNA5_BROWSER_ORIGIN_QUERY_DIALECT",
       path: "apps/native-scene-playground/src/main.ts",
     }));
   });
