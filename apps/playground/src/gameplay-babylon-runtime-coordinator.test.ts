@@ -398,6 +398,9 @@ describe("Gameplay Babylon Runtime coordinator", () => {
         typeof createGameplayBabylonRuntimeCoordinatorV1
       >[0]["runtimeBundleFactory"]>>[0],
     ): Promise<GameplayBabylonRuntimeBundleV1> => {
+      if (input.descriptor.sceneSource.kind !== "canonical-execution-plan") {
+        throw new Error("unexpected Native Scene Source");
+      }
       const runtime = await BabylonWorldRuntime.create({
         sceneSource: {
           kind: "canonical-execution-plan",

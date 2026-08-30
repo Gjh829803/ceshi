@@ -969,6 +969,18 @@ async function createHeadlessRuntimeSessionInternalV1(
         current: RuntimeWorldAdapterDescriptorV1,
         candidate: RuntimeWorldAdapterDescriptorV1,
       ) => {
+        if (
+          current.sceneSource.kind !== "canonical-execution-plan" ||
+          candidate.sceneSource.kind !== "canonical-execution-plan"
+        ) {
+          return Object.freeze({
+            status: "rejected" as const,
+            diagnostic: Object.freeze({
+              code: "WORLD_REPLACEMENT_CAPACITY_EXCEEDED" as const,
+              message: "The headless Canonical Adapter cannot admit this Scene Source.",
+            }),
+          });
+        }
         const staged = stagedPackagesByExecutionPlanHash.get(
           candidate.sceneSource.executionPlanHash,
         );
@@ -993,6 +1005,9 @@ async function createHeadlessRuntimeSessionInternalV1(
         return Object.freeze({ status: "accepted" as const });
       },
       create: async (descriptor: RuntimeWorldAdapterDescriptorV1) => {
+        if (descriptor.sceneSource.kind !== "canonical-execution-plan") {
+          throw new Error("HEADLESS_RUNTIME_ADAPTER_SCENE_SOURCE_UNSUPPORTED");
+        }
         const handle = handles.get(descriptor.worldSessionId);
         if (!isNil(handle)) {
           if (

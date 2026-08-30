@@ -457,10 +457,7 @@ export interface RuntimeWorldAdapterDescriptorV1 {
   readonly worldBuildIdentity: WorldBuildIdentityV1;
   readonly gameplayBootstrap: GameplayBootstrapV1;
   readonly worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
-  readonly sceneSource: Extract<
-    RuntimeSceneSourceV1,
-    { readonly kind: "canonical-execution-plan" }
-  >;
+  readonly sceneSource: RuntimeSceneSourceV1;
 }
 
 export type ConcurrentResidencyPreflightResultV1 =
@@ -768,7 +765,6 @@ function parsePublishWorldReplacementInput(
   const worldConfiguration = parseRuntimeWorldConfiguration(
     record.worldConfiguration,
   );
-  requireCanonicalRuntimeConfiguration(worldConfiguration);
   return Object.freeze({
     worldConfiguration,
     publication: parseRuntimeWorldPublicationEnvelope(record.publication),
@@ -1211,7 +1207,6 @@ function parseRuntimeHostCreateOptions(
     "Value must match the closed RuntimeHostCreateOptionsV1 schema.",
   );
   const initialWorld = parseRuntimeWorldConfiguration(record.initialWorld);
-  requireCanonicalRuntimeConfiguration(initialWorld);
   const gameplayCapacityBudget = parseGameplayCapacityBudgetV1(
     record.gameplayCapacityBudget,
   );
@@ -1285,23 +1280,7 @@ function parseReplacementRequest(input: unknown): RuntimeWorldConfigurationV1 {
     );
   }
   const configuration = parseRuntimeWorldConfiguration(record.worldConfiguration);
-  requireCanonicalRuntimeConfiguration(configuration);
   return configuration;
-}
-
-function requireCanonicalRuntimeConfiguration(
-  configuration: RuntimeWorldConfigurationV1,
-): asserts configuration is RuntimeWorldConfigurationV1 & Readonly<{
-  sceneSource: Extract<
-    RuntimeSceneSourceV1,
-    { readonly kind: "canonical-execution-plan" }
-  >;
-}> {
-  if (configuration.sceneSource.kind !== "canonical-execution-plan") {
-    throw new Error(
-      "WORLDKIT_NATIVE_SCENE_PRODUCTION_NOT_ADMITTED: BNA-3 Package identity is admitted; formal Native Runtime activation requires BNA-4.",
-    );
-  }
 }
 
 function parseInitialControlBinding(
@@ -1362,7 +1341,6 @@ function descriptor(
   worldSessionId: string,
   configuration: RuntimeWorldConfigurationV1,
 ): RuntimeWorldAdapterDescriptorV1 {
-  requireCanonicalRuntimeConfiguration(configuration);
   return Object.freeze({
     runtimeSessionId,
     worldSessionId,

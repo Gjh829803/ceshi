@@ -164,6 +164,11 @@ function diagnostic(
 async function createProductionRuntimeBundle(
   input: GameplayBabylonRuntimeBundleFactoryInputV1,
 ): Promise<GameplayBabylonRuntimeBundleV1> {
+  if (input.descriptor.sceneSource.kind !== "canonical-execution-plan") {
+    throw new Error(
+      "PLAYGROUND_NATIVE_WORLD_PACKAGE_RESOLVER_REQUIRED",
+    );
+  }
   const runtime = await BabylonWorldRuntime.create({
     sceneSource: {
       kind: "canonical-execution-plan",
