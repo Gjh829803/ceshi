@@ -1,5 +1,6 @@
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
+import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
 import {
@@ -225,6 +226,51 @@ describe("admitBabylonNativeSceneCandidateV1", () => {
             collisionBinding: {
               kind: "static-collider",
               colliderId: "shared-proxy",
+            },
+          }],
+        });
+      }),
+      DEFAULT_BUDGET,
+      BLOCK_BOOTSTRAP,
+    );
+
+    expect(rejectedCode(result)).toBe(
+      "WORLDKIT_NATIVE_SCENE_PROFILE_INVENTORY_MISMATCH",
+    );
+  });
+
+  it("rejects a subclassed Collider proxy from the blocks inventory", async () => {
+    const scene = createScene();
+    const result = await buildCandidate(
+      scene,
+      moduleWithBuild((context) => {
+        registerSpawn(context);
+        const visual = MeshBuilder.CreateBox("ordinary-visual", { size: 1 }, scene);
+        const source = MeshBuilder.CreateBox("proxy-source", { size: 1 }, scene);
+        const proxy = new (class extends Mesh {})("subclass-proxy", scene);
+        proxy.setVerticesData(
+          VertexBuffer.PositionKind,
+          source.getVerticesData(VertexBuffer.PositionKind)!,
+        );
+        proxy.setIndices(source.getIndices()!);
+        source.dispose();
+        proxy.isVisible = false;
+        context.registration.registerStaticCollider({
+          id: "subclass-proxy",
+          mesh: proxy,
+          traversalBinding: { kind: "not-traversable" },
+        });
+        commitBabylonNativeProfileSettlementV1(context, {
+          kind: "babylon-native-profile-settlement-batch",
+          schemaVersion: 1,
+          profileRef: "worldkit://native-scene-profile/whitebox.blocks@1",
+          profileInventoryHash: `sha256:${"1".repeat(64)}`,
+          targets: [{
+            elementId: "ordinary-visual",
+            mesh: visual,
+            collisionBinding: {
+              kind: "static-collider",
+              colliderId: "subclass-proxy",
             },
           }],
         });

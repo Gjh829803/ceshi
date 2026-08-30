@@ -971,6 +971,7 @@ async function admitBabylonNativeSceneCandidateWithExclusiveProbeV1(
         retainedColliders.some(({ frozen, mesh }) =>
           !joinedColliderIds.has(frozen.id) ||
           targetMeshes.has(mesh) ||
+          Reflect.getPrototypeOf(mesh) !== Mesh.prototype ||
           mesh.isDisposed() ||
           mesh.getScene() !== input.candidate.scene ||
           mesh.isVisible !== false
