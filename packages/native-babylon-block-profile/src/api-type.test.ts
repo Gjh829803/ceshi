@@ -1,6 +1,7 @@
 import { describe, expectTypeOf, it } from "vitest";
 
 import type {
+  BabylonNativeBlockCheckedLayoutV1,
   BabylonNativeBlockCreateInputV1,
   BabylonNativeBlockProfileSessionV1,
 } from "./index.js";
@@ -22,5 +23,11 @@ describe("Babylon Native block profile public types", () => {
     expectTypeOf<BabylonNativeBlockProfileSessionV1["createBlock"]>()
       .parameter(0)
       .toEqualTypeOf<Readonly<BabylonNativeBlockCreateInputV1>>();
+    expectTypeOf<BabylonNativeBlockProfileSessionV1["finalize"]>()
+      .returns
+      .toEqualTypeOf<BabylonNativeBlockCheckedLayoutV1>();
+    expectTypeOf<BabylonNativeBlockProfileSessionV1["dispose"]>()
+      .returns
+      .toEqualTypeOf<void>();
   });
 });

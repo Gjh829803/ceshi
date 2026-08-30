@@ -2,12 +2,10 @@ import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import { Viewport } from "@babylonjs/core/Maths/math.viewport.js";
 import { Scene } from "@babylonjs/core/scene.js";
 
-import type {
-  BabylonNativeBlockProfileCheckResultV1,
-  BabylonNativeBlockVisualGroupInventoryV1,
-} from "./check.js";
+import type { BabylonNativeBlockVisualGroupInventoryV1 } from "./check.js";
 import type { BabylonNativeBlockLayoutV1 } from "./layout.js";
 import type { BabylonNativeBlockPositionMetersXYZV1 } from "./shapes.js";
+import type { BabylonNativeBlockCheckedLayoutV1 } from "./session.js";
 import {
   babylonNativeBlockVisualGroupsMatchV1,
   deriveBabylonNativeBlockVisualGroupsV1,
@@ -48,8 +46,7 @@ export interface BabylonNativeBlockAuthoringCaptureV1 {
 export interface CreateBabylonNativeBlockAuthoringCaptureInputV1 {
   readonly scene: Scene;
   readonly buildEpochId: string;
-  readonly layout: BabylonNativeBlockLayoutV1;
-  readonly checkResult: BabylonNativeBlockProfileCheckResultV1;
+  readonly checkedLayout: BabylonNativeBlockCheckedLayoutV1;
   readonly widthPixels: number;
   readonly heightPixels: number;
   readonly opening: Readonly<{
@@ -207,6 +204,7 @@ function createView(input: Readonly<{
 export function createBabylonNativeBlockAuthoringCaptureV1(
   input: CreateBabylonNativeBlockAuthoringCaptureInputV1,
 ): BabylonNativeBlockAuthoringCaptureV1 {
+  const { checkedLayout } = input;
   if (
     !(input.scene instanceof Scene) ||
     input.scene.isDisposed ||
@@ -222,9 +220,11 @@ export function createBabylonNativeBlockAuthoringCaptureV1(
     !Number.isFinite(input.opening.fovDegrees) ||
     input.opening.fovDegrees <= 1 ||
     input.opening.fovDegrees >= 179 ||
-    input.layout.blocks.length === 0 ||
-    input.layout.issues.length > 0 ||
-    input.checkResult.outcome !== "passed"
+    checkedLayout.kind !== "babylon-native-block-checked-layout" ||
+    checkedLayout.schemaVersion !== 1 ||
+    checkedLayout.layout.blocks.length === 0 ||
+    checkedLayout.layout.issues.length > 0 ||
+    checkedLayout.checkResult.outcome !== "passed"
   ) {
     return fail(
       "WORLDKIT_NATIVE_BLOCK_AUTHORING_CAPTURE_INVALID",
@@ -239,9 +239,11 @@ export function createBabylonNativeBlockAuthoringCaptureV1(
       "opening position and target must differ",
     );
   }
-  const expectedGroups = deriveBabylonNativeBlockVisualGroupsV1(input.layout);
+  const expectedGroups = deriveBabylonNativeBlockVisualGroupsV1(
+    checkedLayout.layout,
+  );
   const sortedGroups = Object.freeze([
-    ...input.checkResult.visualGroups,
+    ...checkedLayout.checkResult.visualGroups,
   ].sort((left, right) => stableCompare(left.id, right.id)));
   if (!babylonNativeBlockVisualGroupsMatchV1(expectedGroups, sortedGroups)) {
     return fail(
@@ -250,7 +252,7 @@ export function createBabylonNativeBlockAuthoringCaptureV1(
     );
   }
 
-  const bounds = layoutBounds(input.layout);
+  const bounds = layoutBounds(checkedLayout.layout);
   const aspect = input.widthPixels / input.heightPixels;
   const spanX = bounds.maximum.x - bounds.minimum.x;
   const spanY = bounds.maximum.y - bounds.minimum.y;

@@ -12,15 +12,16 @@ import type {
   BabylonNativeBlockVisualGroupInventoryV1,
 } from "./check.js";
 import type { BabylonNativeBlockLayoutV1 } from "./layout.js";
-import type { BabylonNativeBlockSessionRecordV1 } from "./session.js";
+import type {
+  BabylonNativeBlockCheckedLayoutV1,
+  BabylonNativeBlockSessionRecordV1,
+} from "./session.js";
 
 interface VisualAdapterModule {
   createBabylonNativeBlockVisualsV1(input: Readonly<{
     scene: Scene;
     buildEpochId: string;
-    layout: BabylonNativeBlockLayoutV1;
-    checkResult: BabylonNativeBlockProfileCheckResultV1;
-    records: readonly BabylonNativeBlockSessionRecordV1[];
+    checkedLayout: BabylonNativeBlockCheckedLayoutV1;
     displayGapMeters?: number;
   }>): Readonly<{
     kind: "babylon-native-block-visuals";
@@ -183,6 +184,19 @@ function recordsFixture(
   return Object.freeze(reverse ? [...records].reverse() : records);
 }
 
+function checkedLayoutFixture(
+  scene: Scene,
+  reverse = false,
+): BabylonNativeBlockCheckedLayoutV1 {
+  return Object.freeze({
+    kind: "babylon-native-block-checked-layout",
+    schemaVersion: 1,
+    layout: layoutFixture(reverse),
+    checkResult: passedCheckResult(),
+    records: recordsFixture(scene, reverse),
+  });
+}
+
 function withScene(run: (scene: Scene) => void): void {
   const engine = new NullEngine();
   const scene = new Scene(engine);
@@ -201,13 +215,11 @@ describe("Babylon Native block visual adapter", () => {
     withScene((scene) => {
       const activeCameraBefore = scene.activeCamera;
       const physicsEngineBefore = scene.getPhysicsEngine();
-      const records = recordsFixture(scene, true);
+      const checkedLayout = checkedLayoutFixture(scene, true);
       const visuals = createBabylonNativeBlockVisualsV1({
         scene,
         buildEpochId: "candidate-epoch-001",
-        layout: layoutFixture(true),
-        checkResult: passedCheckResult(),
-        records,
+        checkedLayout,
         displayGapMeters: 0.04,
       });
 
@@ -222,7 +234,7 @@ describe("Babylon Native block visual adapter", () => {
         "route-block",
       ]);
       expect(visuals.visualGroups).toEqual(visualGroups);
-      const meshByBlockId = new Map(records.map(({ input, mesh }) =>
+      const meshByBlockId = new Map(checkedLayout.records.map(({ input, mesh }) =>
         [input.id, mesh] as const));
       expect(visuals.nodes.every(({ blockId, mesh }) =>
         meshByBlockId.get(blockId) === mesh,
@@ -261,7 +273,7 @@ describe("Babylon Native block visual adapter", () => {
     });
   });
 
-  it("keeps two Candidate instances isolated and disposes only one Build Epoch", async () => {
+  it("keeps Candidate instances isolated and leaves Profile Mesh disposal to the session", async () => {
     const { createBabylonNativeBlockVisualsV1 } = await loadVisualAdapter();
     const firstEngine = new NullEngine();
     const secondEngine = new NullEngine();
@@ -271,16 +283,12 @@ describe("Babylon Native block visual adapter", () => {
       const first = createBabylonNativeBlockVisualsV1({
         scene: firstScene,
         buildEpochId: "candidate-epoch-first",
-        layout: layoutFixture(),
-        checkResult: passedCheckResult(),
-        records: recordsFixture(firstScene),
+        checkedLayout: checkedLayoutFixture(firstScene),
       });
       const second = createBabylonNativeBlockVisualsV1({
         scene: secondScene,
         buildEpochId: "candidate-epoch-second",
-        layout: layoutFixture(),
-        checkResult: passedCheckResult(),
-        records: recordsFixture(secondScene),
+        checkedLayout: checkedLayoutFixture(secondScene),
       });
 
       expect(first.nodes[0]?.mesh).not.toBe(second.nodes[0]?.mesh);
@@ -288,10 +296,13 @@ describe("Babylon Native block visual adapter", () => {
         second.nodes[0]?.mesh.material,
       );
 
+      const firstMaterial = first.nodes[0]?.mesh.material;
       first.dispose();
       first.dispose();
 
-      expect(first.nodes.every(({ mesh }) => mesh.isDisposed())).toBe(true);
+      expect(first.nodes.every(({ mesh }) => !mesh.isDisposed())).toBe(true);
+      expect(first.nodes.every(({ mesh }) => mesh.material === null)).toBe(true);
+      expect(firstScene.materials).not.toContain(firstMaterial);
       expect(second.nodes.every(({ mesh }) => !mesh.isDisposed())).toBe(true);
       expect(firstScene.isDisposed).toBe(false);
       expect(secondScene.isDisposed).toBe(false);
@@ -310,28 +321,30 @@ describe("Babylon Native block visual adapter", () => {
       expect(() => createBabylonNativeBlockVisualsV1({
         scene,
         buildEpochId: "candidate-epoch-rejected",
-        layout: Object.freeze({
-          ...layoutFixture(),
-          issues: Object.freeze([Object.freeze({
-            code: "WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP" as const,
-            blockId: "gate-cap",
-            relatedBlockId: "gate-quarter",
-          })]),
+        checkedLayout: Object.freeze({
+          ...checkedLayoutFixture(scene),
+          layout: Object.freeze({
+            ...layoutFixture(),
+            issues: Object.freeze([Object.freeze({
+              code: "WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP" as const,
+              blockId: "gate-cap",
+              relatedBlockId: "gate-quarter",
+            })]),
+          }),
         }),
-        checkResult: passedCheckResult(),
-        records: recordsFixture(scene),
       })).toThrow(/WORLDKIT_NATIVE_BLOCK_VISUAL_INPUT_REJECTED/);
       expect(scene.materials).toEqual([]);
 
       expect(() => createBabylonNativeBlockVisualsV1({
         scene,
         buildEpochId: "candidate-epoch-mismatch",
-        layout: layoutFixture(),
-        checkResult: Object.freeze({
-          ...passedCheckResult(),
-          visualGroups: Object.freeze([]),
+        checkedLayout: Object.freeze({
+          ...checkedLayoutFixture(scene),
+          checkResult: Object.freeze({
+            ...passedCheckResult(),
+            visualGroups: Object.freeze([]),
+          }),
         }),
-        records: recordsFixture(scene),
       })).toThrow(/WORLDKIT_NATIVE_BLOCK_VISUAL_GROUP_MISMATCH/);
       expect(scene.materials).toEqual([]);
     });

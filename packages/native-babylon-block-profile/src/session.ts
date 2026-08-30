@@ -8,7 +8,10 @@ import {
   createBabylonNativeBlockProfileCheckResultV1,
   type BabylonNativeBlockProfileCheckResultV1,
 } from "./check.js";
-import { deriveBabylonNativeBlockLayoutV1 } from "./layout.js";
+import {
+  deriveBabylonNativeBlockLayoutV1,
+  type BabylonNativeBlockLayoutV1,
+} from "./layout.js";
 import {
   BABYLON_NATIVE_BLOCK_PALETTE_ROLES_V1,
   BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
@@ -32,7 +35,8 @@ export interface BabylonNativeBlockCreateInputV1 {
 
 export interface BabylonNativeBlockProfileSessionV1 {
   createBlock(input: Readonly<BabylonNativeBlockCreateInputV1>): Mesh;
-  finalize(): BabylonNativeBlockProfileCheckResultV1;
+  finalize(): BabylonNativeBlockCheckedLayoutV1;
+  dispose(): void;
 }
 
 export interface BabylonNativeBlockSessionRecordV1 {
@@ -42,6 +46,14 @@ export interface BabylonNativeBlockSessionRecordV1 {
     readonly positions: readonly number[];
     readonly indices: readonly number[];
   }>;
+}
+
+export interface BabylonNativeBlockCheckedLayoutV1 {
+  readonly kind: "babylon-native-block-checked-layout";
+  readonly schemaVersion: 1;
+  readonly layout: BabylonNativeBlockLayoutV1;
+  readonly checkResult: BabylonNativeBlockProfileCheckResultV1;
+  readonly records: readonly BabylonNativeBlockSessionRecordV1[];
 }
 
 const STABLE_ID = /^[a-z0-9][a-z0-9-]{2,79}$/;
@@ -177,7 +189,8 @@ export function createBabylonNativeBlockProfileSessionV1(
   }
 
   let isFinalized = false;
-  let finalizedResult: BabylonNativeBlockProfileCheckResultV1 | undefined;
+  let isDisposed = false;
+  let finalizedResult: BabylonNativeBlockCheckedLayoutV1 | undefined;
   const recordsById = new Map<string, BabylonNativeBlockSessionRecordV1>();
 
   return Object.freeze({
@@ -228,18 +241,40 @@ export function createBabylonNativeBlockProfileSessionV1(
       }));
       return mesh;
     },
-    finalize(): BabylonNativeBlockProfileCheckResultV1 {
+    finalize(): BabylonNativeBlockCheckedLayoutV1 {
       if (finalizedResult !== undefined) return finalizedResult;
+      if (isDisposed) {
+        return fail(
+          "WORLDKIT_NATIVE_BLOCK_SESSION_CLOSED",
+          "finalize is unavailable after dispose",
+        );
+      }
       isFinalized = true;
       const records = Object.freeze([...recordsById.values()]);
       const layout = deriveBabylonNativeBlockLayoutV1(context.scene, records);
-      finalizedResult = createBabylonNativeBlockProfileCheckResultV1(
-        context.bootstrap.id,
-        records,
+      finalizedResult = Object.freeze({
+        kind: "babylon-native-block-checked-layout",
+        schemaVersion: 1,
         layout,
-      );
-      recordsById.clear();
+        checkResult: createBabylonNativeBlockProfileCheckResultV1(
+          context.bootstrap.id,
+          records,
+          layout,
+        ),
+        records,
+      });
       return finalizedResult;
+    },
+    dispose(): void {
+      if (isDisposed) return;
+      isDisposed = true;
+      isFinalized = true;
+      const records = finalizedResult?.records ??
+        Object.freeze([...recordsById.values()]);
+      for (let index = records.length - 1; index >= 0; index -= 1) {
+        records[index]!.mesh.dispose();
+      }
+      recordsById.clear();
     },
   });
 }

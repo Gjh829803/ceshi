@@ -33,6 +33,9 @@ interface BlockProfileModule {
   ): {
     createBlock(input: Readonly<BlockCreateInput>): Mesh;
     finalize(): Readonly<{
+      kind: "babylon-native-block-checked-layout";
+      schemaVersion: 1;
+      checkResult: Readonly<{
       kind: "babylon-native-block-profile-check-result";
       schemaVersion: 1;
       id: string;
@@ -69,6 +72,7 @@ interface BlockProfileModule {
         minimumMetersXYZ: readonly [number, number, number];
         maximumMetersXYZ: readonly [number, number, number];
       }>[];
+      }>;
     }>;
   };
 }
@@ -165,7 +169,7 @@ describe("Babylon Native block profile structural check", () => {
       });
       ground.position.set(0, 0.5, 0);
 
-      const result = session.finalize();
+      const result = session.finalize().checkResult;
 
       expect(result).toEqual({
         kind: "babylon-native-block-profile-check-result",
@@ -226,7 +230,7 @@ describe("Babylon Native block profile structural check", () => {
       });
       lower.position.set(0.25, 0.25, 0.25);
 
-      const result = session.finalize();
+      const result = session.finalize().checkResult;
 
       expect(result.outcome).toBe("passed");
       expect(result.visualGroups).toEqual([{
@@ -270,7 +274,7 @@ describe("Babylon Native block profile structural check", () => {
           });
           mesh.position.set(definition.x, 0.5, 0);
         }
-        return session.finalize();
+        return session.finalize().checkResult;
       } finally {
         scene.dispose();
         engine.dispose();
@@ -325,7 +329,7 @@ describe("Babylon Native block profile structural check", () => {
       });
       eastRoute.position.set(8, 0.5, 0);
 
-      const result = session.finalize();
+      const result = session.finalize().checkResult;
 
       expect(result.outcome).toBe("rejected");
       expect(result.diagnostics.map(({ severity, code, location }) => ({
@@ -375,7 +379,7 @@ describe("Babylon Native block profile structural check", () => {
       });
       floating.position.set(2.25, 2.25, 0.25);
 
-      const result = session.finalize();
+      const result = session.finalize().checkResult;
 
       expect(result.outcome).toBe("passed");
       expect(result.metrics.unsupportedBlockCount).toBe(1);
@@ -404,7 +408,7 @@ describe("Babylon Native block profile structural check", () => {
       });
       mesh.dispose();
 
-      const result = session.finalize();
+      const result = session.finalize().checkResult;
 
       expect(result.outcome).toBe("rejected");
       expect(result.diagnostics).toHaveLength(1);
@@ -436,7 +440,7 @@ describe("Babylon Native block profile structural check", () => {
       positions[0] = positions[0]! + 0.25;
       mesh.setVerticesData(VertexBuffer.PositionKind, positions, true);
 
-      const result = session.finalize();
+      const result = session.finalize().checkResult;
 
       expect(result.outcome).toBe("rejected");
       expect(result.diagnostics).toHaveLength(1);
@@ -471,7 +475,7 @@ describe("Babylon Native block profile structural check", () => {
         value: true,
       });
 
-      const result = session.finalize();
+      const result = session.finalize().checkResult;
 
       expect(result.outcome).toBe("rejected");
       expect(result.diagnostics).toHaveLength(1);
@@ -499,7 +503,7 @@ describe("Babylon Native block profile structural check", () => {
       mesh.position.set(0, 0.5, 0);
       mesh.createInstance("untracked-instance").position.set(2, 0, 0);
 
-      const result = session.finalize();
+      const result = session.finalize().checkResult;
 
       expect(result.outcome).toBe("rejected");
       expect(result.diagnostics).toHaveLength(1);
@@ -532,7 +536,7 @@ describe("Babylon Native block profile structural check", () => {
         },
       });
 
-      const result = session.finalize();
+      const result = session.finalize().checkResult;
 
       expect(result.outcome).toBe("rejected");
       expect(result.diagnostics).toHaveLength(1);

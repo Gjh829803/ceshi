@@ -26,7 +26,17 @@ interface SessionModule {
         | "background-mass";
       visualGroupId?: string;
     }>): Mesh;
-    finalize(): unknown;
+    finalize(): Readonly<{
+      kind: "babylon-native-block-checked-layout";
+      schemaVersion: 1;
+      layout: Readonly<{ blocks: readonly unknown[] }>;
+      checkResult: Readonly<{
+        kind: "babylon-native-block-profile-check-result";
+        schemaVersion: 1;
+        outcome: "passed" | "rejected";
+      }>;
+    }>;
+    dispose(): void;
   };
 }
 
@@ -234,13 +244,57 @@ describe("Babylon Native block profile session", () => {
         paletteRole: "ground",
       });
 
-      const firstResult = session.finalize() as Record<string, unknown>;
+      const firstResult = session.finalize();
       expect(firstResult).toMatchObject({
-        kind: "babylon-native-block-profile-check-result",
+        kind: "babylon-native-block-checked-layout",
         schemaVersion: 1,
-        outcome: "passed",
+        checkResult: {
+          kind: "babylon-native-block-profile-check-result",
+          schemaVersion: 1,
+          outcome: "passed",
+        },
       });
+      expect(firstResult.layout.blocks).toHaveLength(1);
       expect(session.finalize()).toBe(firstResult);
+      expect(() => session.createBlock({
+        id: "late-block",
+        shape: "full",
+        paletteRole: "ground",
+      })).toThrow(/WORLDKIT_NATIVE_BLOCK_SESSION_CLOSED/);
+    });
+  });
+
+  it("disposes Profile-owned Meshes in reverse creation order after finalization", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
+
+    withScene((scene) => {
+      const session = createBabylonNativeBlockProfileSessionV1(
+        createContext(scene),
+        { maximumBlockCount: 3 },
+      );
+      const disposalOrder: string[] = [];
+      for (const id of ["first-block", "second-block", "third-block"]) {
+        const mesh = session.createBlock({
+          id,
+          shape: "small",
+          paletteRole: "ground",
+        });
+        const dispose = mesh.dispose.bind(mesh);
+        mesh.dispose = (...arguments_) => {
+          disposalOrder.push(id);
+          return dispose(...arguments_);
+        };
+      }
+
+      session.finalize();
+      session.dispose();
+      session.dispose();
+
+      expect(disposalOrder).toEqual([
+        "third-block",
+        "second-block",
+        "first-block",
+      ]);
       expect(() => session.createBlock({
         id: "late-block",
         shape: "full",

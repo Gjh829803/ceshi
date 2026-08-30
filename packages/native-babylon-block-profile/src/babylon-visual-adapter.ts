@@ -4,7 +4,6 @@ import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { Scene } from "@babylonjs/core/scene.js";
 
 import type {
-  BabylonNativeBlockProfileCheckResultV1,
   BabylonNativeBlockVisualGroupInventoryV1,
 } from "./check.js";
 import type { BabylonNativeBlockLayoutV1 } from "./layout.js";
@@ -12,7 +11,10 @@ import {
   BABYLON_NATIVE_BLOCK_PALETTE_COLOR_HEX_BY_ROLE_V1,
   type BabylonNativeBlockPaletteRoleV1,
 } from "./profile.js";
-import type { BabylonNativeBlockSessionRecordV1 } from "./session.js";
+import type {
+  BabylonNativeBlockCheckedLayoutV1,
+  BabylonNativeBlockSessionRecordV1,
+} from "./session.js";
 import { BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1 } from "./shapes.js";
 
 export interface BabylonNativeBlockVisualNodeV1 {
@@ -34,9 +36,7 @@ export interface BabylonNativeBlockVisualsV1 {
 export interface CreateBabylonNativeBlockVisualsInputV1 {
   readonly scene: Scene;
   readonly buildEpochId: string;
-  readonly layout: BabylonNativeBlockLayoutV1;
-  readonly checkResult: BabylonNativeBlockProfileCheckResultV1;
-  readonly records: readonly BabylonNativeBlockSessionRecordV1[];
+  readonly checkedLayout: BabylonNativeBlockCheckedLayoutV1;
   readonly displayGapMeters?: number;
 }
 
@@ -133,16 +133,24 @@ function validateInput(
       "buildEpochId must be one stable lowercase id",
     );
   }
-  if (input.checkResult.outcome !== "passed" || input.layout.issues.length > 0) {
+  const { checkedLayout } = input;
+  if (
+    checkedLayout.kind !== "babylon-native-block-checked-layout" ||
+    checkedLayout.schemaVersion !== 1 ||
+    checkedLayout.checkResult.outcome !== "passed" ||
+    checkedLayout.layout.issues.length > 0
+  ) {
     return fail(
       "WORLDKIT_NATIVE_BLOCK_VISUAL_INPUT_REJECTED",
       "only a passed check over an issue-free in-memory layout may materialize",
     );
   }
-  const expectedGroups = deriveBabylonNativeBlockVisualGroupsV1(input.layout);
+  const expectedGroups = deriveBabylonNativeBlockVisualGroupsV1(
+    checkedLayout.layout,
+  );
   if (!babylonNativeBlockVisualGroupsMatchV1(
     expectedGroups,
-    input.checkResult.visualGroups,
+    checkedLayout.checkResult.visualGroups,
   )) {
     return fail(
       "WORLDKIT_NATIVE_BLOCK_VISUAL_GROUP_MISMATCH",
@@ -161,18 +169,18 @@ function validateInput(
       "displayGapMeters must be finite and within 0..<0.5m",
     );
   }
-  const blocksById = new Map(input.layout.blocks.map((block) =>
+  const blocksById = new Map(checkedLayout.layout.blocks.map((block) =>
     [block.id, block] as const));
   if (
-    blocksById.size !== input.layout.blocks.length ||
-    input.records.length !== input.layout.blocks.length
+    blocksById.size !== checkedLayout.layout.blocks.length ||
+    checkedLayout.records.length !== checkedLayout.layout.blocks.length
   ) {
     return fail(
       "WORLDKIT_NATIVE_BLOCK_VISUAL_RECORD_MISMATCH",
       "records and layout must have one unique entry per block",
     );
   }
-  const sortedRecords = [...input.records].sort((left, right) =>
+  const sortedRecords = [...checkedLayout.records].sort((left, right) =>
     stableCompare(left.input.id, right.input.id));
   const seen = new Set<string>();
   for (const record of sortedRecords) {
@@ -244,8 +252,12 @@ export function createBabylonNativeBlockVisualsV1(
       }));
     }
   } catch (error) {
-    for (const record of validated.sortedRecords) record.mesh.dispose();
-    for (const material of materials) material.dispose();
+    for (let index = nodes.length - 1; index >= 0; index -= 1) {
+      nodes[index]!.mesh.material = null;
+    }
+    for (let index = materials.length - 1; index >= 0; index -= 1) {
+      materials[index]!.dispose();
+    }
     throw error;
   }
 
@@ -255,12 +267,16 @@ export function createBabylonNativeBlockVisualsV1(
     schemaVersion: 1,
     buildEpochId: input.buildEpochId,
     nodes: Object.freeze(nodes),
-    visualGroups: input.checkResult.visualGroups,
+    visualGroups: input.checkedLayout.checkResult.visualGroups,
     dispose(): void {
       if (isDisposed) return;
       isDisposed = true;
-      for (const { mesh } of nodes) mesh.dispose();
-      for (const material of materials) material.dispose();
+      for (let index = nodes.length - 1; index >= 0; index -= 1) {
+        nodes[index]!.mesh.material = null;
+      }
+      for (let index = materials.length - 1; index >= 0; index -= 1) {
+        materials[index]!.dispose();
+      }
       materialsByRole.clear();
     },
   });

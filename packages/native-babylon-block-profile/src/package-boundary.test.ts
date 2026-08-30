@@ -104,7 +104,9 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
       "BABYLON_NATIVE_BLOCK_PROFILE_DIAGNOSTIC_CODES_V1",
       "BABYLON_NATIVE_BLOCK_PROFILE_REF_V1",
       "BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1",
+      "createBabylonNativeBlockAuthoringCaptureV1",
       "createBabylonNativeBlockProfileSessionV1",
+      "createBabylonNativeBlockVisualsV1",
     ]);
     expect(Object.keys(profile).some((name) =>
       /host|runtime|collider|traversal|manifest|compiler/i.test(name))).toBe(false);
