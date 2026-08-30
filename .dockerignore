@@ -2,6 +2,8 @@
 !package.json
 !pnpm-lock.yaml
 !pnpm-workspace.yaml
+!patches/
+!patches/**
 !packages/
 !packages/**
 !scripts/
@@ -10,6 +12,16 @@
 !scripts/native-scene/hosted/runner-entry.ts
 !scripts/native-scene/hosted/hostile-fixtures/
 !scripts/native-scene/hosted/hostile-fixtures/**
+!assets/
+!assets/registry/
+!assets/registry/**
+!assets/subjects/
+!assets/subjects/source-fbx/
+!assets/subjects/source-fbx/vehicles/
+!assets/subjects/source-fbx/vehicles/catalog.json
+!assets/subjects/source-fbx/contributors/
+!assets/subjects/source-fbx/contributors/xier120/
+!assets/subjects/source-fbx/contributors/xier120/catalog.json
 !apps/
 !apps/playground/
 !apps/playground/public/

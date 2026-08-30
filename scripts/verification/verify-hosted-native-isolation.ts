@@ -254,6 +254,7 @@ class DockerJsonLineProcess implements NativeContainerCommandProcessV1 {
     reject: (error: Error) => void;
   }> = [];
   #stdoutRemainder = "";
+  #stderrText = "";
   #stdoutBytes = 0;
   #stderrBytes = 0;
   #inboundBytes = 0;
@@ -317,6 +318,9 @@ class DockerJsonLineProcess implements NativeContainerCommandProcessV1 {
     });
     this.#child.stderr.on("data", (chunk: Buffer) => {
       this.#stderrBytes += chunk.byteLength;
+      this.#stderrText = (this.#stderrText + chunk.toString("utf8")).slice(
+        -this.invocation.maximumStderrBytes,
+      );
       if (this.#stderrBytes > invocation.maximumStderrBytes) {
         this.#terminationReason = "output-limit";
         void this.killContainerDomain();
@@ -330,6 +334,10 @@ class DockerJsonLineProcess implements NativeContainerCommandProcessV1 {
     cancellationSignal.addEventListener("abort", () => {
       void this.killContainerDomain();
     }, { once: true });
+  }
+
+  stderrText(): string {
+    return this.#stderrText;
   }
 
   async exchangeLine(inputLine: string, maximumOutputBytes: number): Promise<string> {
@@ -456,16 +464,21 @@ class DockerJsonLineProcess implements NativeContainerCommandProcessV1 {
       throw new Error("HOSTED_NATIVE_CONTAINER_RECEIPT_NOT_TERMINAL");
     }
     const containerName = this.containerName();
-    const cleanupCensus = await runCommand(this.dockerCommand, [
-      "ps",
-      "-a",
-      "--filter",
-      `name=^/${containerName}$`,
-      "--format",
-      "{{.ID}}",
-    ], { maximumOutputBytes: 8_192, timeoutMilliseconds: 10_000 });
-    assert.equal(cleanupCensus.exitCode, 0);
-    const cleanupComplete = cleanupCensus.stdout.trim().length === 0;
+    let cleanupComplete = false;
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      const cleanupCensus = await runCommand(this.dockerCommand, [
+        "ps",
+        "-a",
+        "--filter",
+        `name=^/${containerName}$`,
+        "--format",
+        "{{.ID}}",
+      ], { maximumOutputBytes: 8_192, timeoutMilliseconds: 10_000 });
+      assert.equal(cleanupCensus.exitCode, 0);
+      cleanupComplete = cleanupCensus.stdout.trim().length === 0;
+      if (cleanupComplete) break;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
     const result = cleanupComplete
       ? terminationResult(request, this.#terminationReason)
       : {
@@ -666,15 +679,45 @@ function createAttestationVerifier(
           "sandboxPolicyHash",
           "schemaVersion",
         ];
+        if (JSON.stringify(Object.keys(parsed).sort()) !== JSON.stringify(exactKeys)) {
+          return Object.freeze({
+            status: "rejected" as const,
+            diagnosticCode: "HOSTED_NATIVE_ATTESTATION_KEYS_INVALID",
+          });
+        }
         if (
-          JSON.stringify(Object.keys(parsed).sort()) !== JSON.stringify(exactKeys) ||
           parsed.kind !== "worldkit-native-isolation-attestation" ||
-          parsed.schemaVersion !== 1 ||
-          parsed.requestHash !== hashNativeIsolatedExecutionRequestV1(request) ||
-          parsed.runnerImageDigest !== request.runnerImageDigest ||
-          parsed.sandboxPolicyHash !== request.sandboxPolicyHash ||
-          parsed.cleanupComplete !== true
-        ) throw new Error("invalid attestation");
+          parsed.schemaVersion !== 1
+        ) {
+          return Object.freeze({
+            status: "rejected" as const,
+            diagnosticCode: "HOSTED_NATIVE_ATTESTATION_SCHEMA_INVALID",
+          });
+        }
+        if (parsed.requestHash !== hashNativeIsolatedExecutionRequestV1(request)) {
+          return Object.freeze({
+            status: "rejected" as const,
+            diagnosticCode: "HOSTED_NATIVE_ATTESTATION_REQUEST_MISMATCH",
+          });
+        }
+        if (parsed.runnerImageDigest !== request.runnerImageDigest) {
+          return Object.freeze({
+            status: "rejected" as const,
+            diagnosticCode: "HOSTED_NATIVE_ATTESTATION_RUNNER_MISMATCH",
+          });
+        }
+        if (parsed.sandboxPolicyHash !== request.sandboxPolicyHash) {
+          return Object.freeze({
+            status: "rejected" as const,
+            diagnosticCode: "HOSTED_NATIVE_ATTESTATION_POLICY_MISMATCH",
+          });
+        }
+        if (parsed.cleanupComplete !== true) {
+          return Object.freeze({
+            status: "rejected" as const,
+            diagnosticCode: "HOSTED_NATIVE_ATTESTATION_CLEANUP_INCOMPLETE",
+          });
+        }
         return Object.freeze({ status: "verified" as const });
       } catch {
         return Object.freeze({
@@ -708,7 +751,11 @@ async function runCanary(
     attestationVerifier: createAttestationVerifier(request),
   });
   const ready = await supervisor.start();
-  assert.equal(ready.status, "ready");
+  assert.equal(
+    ready.status,
+    "ready",
+    `Hosted canary failed to become ready: ${JSON.stringify(ready)}; stderr=${JSON.stringify(runner.processes.at(-1)?.stderrText() ?? "")}`,
+  );
   const snapshotRequest = {
     kind: "worldkit-runtime-session-request" as const,
     schemaVersion: 1 as const,
@@ -771,7 +818,7 @@ async function runHostileCases(
     const args = [...baseline.args];
     const containerName = `worldkit-native-hostile-${hostile.id}`;
     args[baselineNameIndex] = containerName;
-    if (hostile.id === "process") args[pidsLimitIndex] = "2";
+    if (hostile.id === "process") args[pidsLimitIndex] = "16";
     if (hostile.id === "memory") args[memoryLimitIndex] = "67108864";
     args.splice(imageIndex, 0, "--entrypoint", "node");
     args.push(`/runner/hostile-fixtures/${hostile.id}.mjs`);
@@ -787,13 +834,22 @@ async function runHostileCases(
       undefined,
       `Hostile ${hostile.id} escaped: ${unexpectedMarker}`,
     );
-    if (hostile.expectedExitMode === "clean") assert.equal(result.exitCode, 0);
+    if (hostile.expectedExitMode === "clean") {
+      assert.equal(
+        result.exitCode,
+        0,
+        `Hostile ${hostile.id} did not complete cleanly: stdout=${JSON.stringify(result.stdout)} stderr=${JSON.stringify(result.stderr)}`,
+      );
+    }
     if (
       hostile.expectedExitMode === "terminated" ||
       hostile.expectedExitMode === "bounded"
     ) assert.notEqual(result.exitCode, 0);
     if (hostile.expectedExitMode === "protocol") {
       assert.match(result.stdout, /not-a-runtime-envelope/);
+    }
+    if (hostile.id === "process") {
+      assert.match(result.stdout, /PROCESS_LIMIT_ENFORCED spawned=\d+ rejected=[1-9]\d*/);
     }
     await runCommand(dockerCommand, ["rm", "--force", containerName], {
       maximumOutputBytes: 8_192,

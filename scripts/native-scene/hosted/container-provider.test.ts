@@ -153,6 +153,7 @@ describe("Docker Native isolation provider", () => {
     expect(invocation.env).toEqual({ LC_ALL: "C", LANG: "C" });
     expect(invocation.args).toEqual(expect.arrayContaining([
       "run",
+      "--interactive",
       "--rm",
       "--network",
       "none",

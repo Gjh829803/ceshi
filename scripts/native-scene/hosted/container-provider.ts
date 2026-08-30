@@ -144,6 +144,7 @@ function invocationFor(
     command: "docker" as const,
     args: Object.freeze([
       "run",
+      "--interactive",
       "--rm",
       "--pull",
       "never",
@@ -180,7 +181,7 @@ function invocationFor(
       "--ipc",
       "none",
       "--ulimit",
-      "nofile=64:64",
+      "nofile=1024:1024",
       "--tmpfs",
       `${CONTAINER_TEMPORARY_PATH}:rw,noexec,nosuid,nodev,size=${tmpfsBytes}`,
       "--mount",
