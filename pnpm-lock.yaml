@@ -777,6 +777,9 @@ importers:
       '@whitebox-world/subject-registry':
         specifier: workspace:*
         version: link:../subject-registry
+      '@whitebox-world/traversal':
+        specifier: workspace:*
+        version: link:../traversal
       '@whitebox-world/world-identity':
         specifier: workspace:*
         version: link:../world-identity

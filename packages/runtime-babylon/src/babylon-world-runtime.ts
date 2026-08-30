@@ -90,6 +90,8 @@ import {
   prepareBabylonNativeRuntimePackageV1,
   type BabylonNativeSceneModuleLoaderV1,
 } from "./babylon-native-package-runtime";
+import { admitBabylonNativeSurfacesV1 } from
+  "./babylon-native-surface-admission";
 import { BabylonCharacterEntityV1 } from "./babylon-character-entity";
 import { BabylonHavokPhysicsWorldQueryV1 } from "./babylon-physics-world-query";
 import { CameraComponentV1 } from "./camera-component";
@@ -577,7 +579,7 @@ function configureAtmosphere(
 
 function nativeColliderMetadata(
   mesh: Mesh,
-  entityId: string,
+  collider: BabylonNativeStaticColliderContributionV1,
   traversalBinding: BabylonNativeStaticColliderContributionV1["traversalBinding"],
 ): void {
   const retained = typeof mesh.metadata === "object" && !isNil(mesh.metadata)
@@ -585,11 +587,14 @@ function nativeColliderMetadata(
     : {};
   mesh.metadata = {
     ...retained,
-    worldkitEntityId: entityId,
+    worldkitEntityId: collider.id,
+    colliderSubshapeId: collider.colliderSubshapeId,
     worldkitNativeTraversalKind: traversalBinding.kind,
     ...(traversalBinding.kind === "static-surface"
       ? {
           worldkitTraversalSurfaceId: traversalBinding.traversalSurfaceId,
+          worldkitSurfaceEntityId: traversalBinding.surfaceEntityId,
+          worldkitLogicalSubshapeId: traversalBinding.logicalSubshapeId,
           worldkitTraversalSurfaceProfileRef:
             traversalBinding.traversalSurfaceProfileRef,
         }
@@ -613,7 +618,7 @@ function createOwnedNativeCollisionMesh(
   vertexData.indices = [...collider.triangleIndices];
   vertexData.normals = normals;
   vertexData.applyToMesh(mesh, false);
-  nativeColliderMetadata(mesh, collider.id, collider.traversalBinding);
+  nativeColliderMetadata(mesh, collider, collider.traversalBinding);
   mesh.isVisible = false;
   mesh.isPickable = false;
   mesh.computeWorldMatrix(true);
@@ -861,10 +866,6 @@ export class BabylonWorldRuntime {
           );
         }
         nativeContribution = nativeResult.contribution;
-        options.onNativeSceneAdmission?.(Object.freeze({
-          contribution: nativeResult.contribution,
-          contributionHash: nativeResult.contributionHash,
-        }));
         if (
           options.worldRuntimeBootstrap.initialControlledEntityId !==
             preparedNativeScene.verifiedWorldPackage.bootstrap.initialControlledEntityId ||
@@ -904,6 +905,30 @@ export class BabylonWorldRuntime {
         );
         assertRuntimeSubjectSetV1(runtimeSubjects, initialControlledEntityId);
         effectiveRuntimeSubjects = runtimeSubjects;
+        const controlledSubject = runtimeSubjects.find(({ entityId }) =>
+          entityId === initialControlledEntityId,
+        );
+        if (isNil(controlledSubject)) {
+          throw new Error(
+            "WORLDKIT_NATIVE_SCENE_RUNTIME_CONTROLLED_SUBJECT_MISSING: Native Runtime Bootstrap has no controlled Subject descriptor.",
+          );
+        }
+        const surfaceAdmission = admitBabylonNativeSurfacesV1({
+          contribution: admittedNativeContribution,
+          registryLock: preparedNativeScene.verifiedWorldPackage.registryLock,
+          controlledSubject,
+          worldBounds:
+            preparedNativeScene.verifiedWorldPackage.manifest.worldBounds,
+        });
+        if (surfaceAdmission.outcome !== "passed") {
+          throw new Error(
+            `${surfaceAdmission.diagnostic.code}: ${surfaceAdmission.diagnostic.message}`,
+          );
+        }
+        options.onNativeSceneAdmission?.(Object.freeze({
+          contribution: nativeResult.contribution,
+          contributionHash: nativeResult.contributionHash,
+        }));
       }
       options.onInitializationStage?.("havok");
       const havokPlugin = await enableHavokPhysics(
