@@ -1,5 +1,6 @@
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
+import "@babylonjs/core/Meshes/instancedMesh.js";
 import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
@@ -250,6 +251,53 @@ describe("admitBabylonNativeSceneCandidateV1", () => {
             collisionBinding: { kind: "none" },
           }],
         });
+      }),
+      DEFAULT_BUDGET,
+      BLOCK_BOOTSTRAP,
+    );
+
+    expect(rejectedCode(result)).toBe(
+      "WORLDKIT_NATIVE_SCENE_PROFILE_INVENTORY_MISMATCH",
+    );
+  });
+
+  it("rejects an extra live instance created from a settled Collider proxy", async () => {
+    const scene = createScene();
+    const result = await buildCandidate(
+      scene,
+      moduleWithBuild((context) => {
+        registerSpawn(context);
+        const visual = MeshBuilder.CreateBox("block-visual", { size: 1 }, scene);
+        const proxy = MeshBuilder.CreateBox("block-proxy", { size: 1 }, scene);
+        proxy.isVisible = false;
+        context.registration.registerStaticCollider({
+          id: "block-proxy",
+          mesh: proxy,
+          traversalBinding: { kind: "not-traversable" },
+        });
+        commitBabylonNativeProfileSettlementV1(context, {
+          kind: "babylon-native-profile-settlement-batch",
+          schemaVersion: 1,
+          profileRef: "worldkit://native-scene-profile/whitebox.blocks@1",
+          profileInventoryHash: `sha256:${"1".repeat(64)}`,
+          targets: [{
+            elementId: "block-visual",
+            mesh: visual,
+            collisionBinding: {
+              kind: "static-collider",
+              colliderId: "block-proxy",
+            },
+          }],
+        });
+        const readIndices = proxy.getIndices.bind(proxy);
+        let instanceCreated = false;
+        proxy.getIndices = () => {
+          if (!instanceCreated) {
+            instanceCreated = true;
+            proxy.createInstance("extra-proxy-instance");
+          }
+          return readIndices();
+        };
       }),
       DEFAULT_BUDGET,
       BLOCK_BOOTSTRAP,
