@@ -6,6 +6,10 @@ export interface BuildHostedNativeRunnerDistributionInputV1 {
 export interface HostedNativeRunnerDistributionReportV1 {
   readonly runnerSourceModulePaths: readonly string[];
   readonly runnerExternalImportSpecifiers: readonly string[];
+  readonly runnerExternalImportSpecifiersExact: readonly string[];
+  readonly nativeRootSourceModulePaths: readonly string[];
+  readonly nativeHostSourceModulePaths: readonly string[];
+  readonly blockProfileSourceModulePaths: readonly string[];
 }
 
 export function buildHostedNativeRunnerDistributionV1(
