@@ -143,18 +143,30 @@ importers:
       '@babylonjs/core':
         specifier: 9.23.0
         version: 9.23.0
+      '@whitebox-world/gameplay':
+        specifier: workspace:*
+        version: link:../../packages/gameplay
       '@whitebox-world/gameplay-contracts':
         specifier: workspace:*
         version: link:../../packages/gameplay-contracts
       '@whitebox-world/native-babylon':
         specifier: workspace:*
         version: link:../../packages/native-babylon
+      '@whitebox-world/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
       '@whitebox-world/runtime-babylon':
         specifier: workspace:*
         version: link:../../packages/runtime-babylon
       '@whitebox-world/runtime-contracts':
         specifier: workspace:*
         version: link:../../packages/runtime-contracts
+      '@whitebox-world/runtime-host':
+        specifier: workspace:*
+        version: link:../../packages/runtime-host
+      '@whitebox-world/world-package':
+        specifier: workspace:*
+        version: link:../../packages/world-package
       lodash-es:
         specifier: ^4.18.1
         version: 4.18.1

@@ -7,15 +7,12 @@ import {
 } from "@whitebox-world/runtime-contracts";
 import { parseGameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
 import type {
-  BabylonNativeLockedAssetResolverV1,
-  BabylonNativeSceneAdmissionBudgetV1,
-} from "@whitebox-world/native-babylon/host";
-import type {
   SubjectAssetResolverV1,
 } from "@whitebox-world/runtime-babylon";
 
 import cloudRidgeGameplayBootstrap from
   "./cloud-ridge-gameplay-bootstrap.json";
+import cloudRidgeNativeBootstrap from "./native-scene.bootstrap.json";
 import cloudRidgeWorldRuntimeBootstrap from
   "./cloud-ridge-world-runtime-bootstrap.json";
 
@@ -43,48 +40,9 @@ if (
 }
 
 export const CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1:
-  BabylonNativeSceneBootstrapV1 = parseBabylonNativeSceneBootstrapV1({
-    kind: "babylon-native-scene-bootstrap",
-    schemaVersion: 1,
-    id: "cloud-ridge-native",
-    sceneModuleRef: "worldkit://native-scene/cloud-ridge@1",
-    nativeSceneApiRef: "worldkit://native-scene-api/babylon@1",
-    nativeSceneProfileRef:
-      "worldkit://native-scene-profile/whitebox.standard@1",
-    gameplayBootstrapRef: CLOUD_RIDGE_GAMEPLAY_BOOTSTRAP_V1.resourceRef,
-    initialControlledEntityId:
-      CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1.initialControlledEntityId,
-    gravityMetersPerSecondSquaredXYZ:
-      CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1
-        .gravityMetersPerSecondSquaredXYZ,
-    initialCamera: {
-      mode: "third-person",
-      pitchRadians:
-        CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1.initialCamera.pitchRadians,
-      distanceMeters:
-        CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1.initialCamera.distanceMeters,
-      fovDegrees:
-        CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1.initialCamera.fovDegrees,
-      targetHeightMeters:
-        CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1.initialCamera.targetHeightMeters,
-    },
-    seed: 0x5eed_c10d,
-    spawnMarkerId: "player-spawn",
-  });
-
-export const CLOUD_RIDGE_NATIVE_ADMISSION_BUDGET_V1:
-  BabylonNativeSceneAdmissionBudgetV1 = Object.freeze({
-    maximumStaticColliderCount: 3,
-    maximumStaticColliderVertexCount: 256,
-    maximumStaticColliderTriangleCount: 1_000,
-  });
-
-export const cloudRidgeLockedAssetResolver:
-  BabylonNativeLockedAssetResolverV1 = Object.freeze({
-    async resolve() {
-      throw new Error("WORLDKIT_NATIVE_SCENE_ASSET_NOT_SELECTED");
-    },
-  });
+  BabylonNativeSceneBootstrapV1 = parseBabylonNativeSceneBootstrapV1(
+    cloudRidgeNativeBootstrap,
+  );
 
 const SUBJECT_ASSET_URI_BY_REF: Readonly<Record<string, string>> = Object.freeze({
   "worldkit://subject-asset/actor.humanoid.g-bot@2":

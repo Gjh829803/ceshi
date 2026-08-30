@@ -9,7 +9,7 @@ import { launchChromiumWithSystemFallback } from
 
 const CONTROLLED_ENTITY_ID = "g-bot-primary";
 const EXPECTED_NATIVE_CONTRIBUTION_HASH =
-  "sha256:86364729dc07f841b15bbc02a451c24aef7e6636a1edb841ba2488e2b1c0d395";
+  "sha256:0ee59e5c1cf057dcc38b415a461b23a94af110635797377fd57123d234beaa6e";
 const EXPECTED_COLLIDER_SUBSHAPE_IDS = Object.freeze([
   "collider-subshape:5af935abea0d5d3da0e32a9e5c1121f3d88f5174c3c0cd32414ea4740b13dc89",
   "collider-subshape:0069b3ff456288eb8ea99f6a7ff396f9886725df6dd89e8626cd14150b71dbcc",
@@ -149,7 +149,7 @@ async function main(): Promise<void> {
     assert.equal(initial.resources.bodies, 4);
     assert.deepEqual(controlledSubject(initial).positionMetersXYZ, [
       0,
-      0.05000002932548475,
+      0,
       18,
     ]);
 

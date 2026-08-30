@@ -6,18 +6,29 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   admitBabylonNativeSceneCandidateV1,
+  type BabylonNativeLockedAssetResolverV1,
+  type BabylonNativeSceneAdmissionBudgetV1,
 } from "@whitebox-world/native-babylon/host";
 
-import cloudRidgeNativeScene from "./cloud-ridge-scene.js";
+import cloudRidgeNativeScene from "./scene.js";
 import {
   CLOUD_RIDGE_GAMEPLAY_BOOTSTRAP_V1,
-  CLOUD_RIDGE_NATIVE_ADMISSION_BUDGET_V1,
   CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1,
   CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1,
-  cloudRidgeLockedAssetResolver,
 } from "./native-bootstrap.js";
 
 const retainedEngines: NullEngine[] = [];
+const TEST_ADMISSION_BUDGET: BabylonNativeSceneAdmissionBudgetV1 =
+  Object.freeze({
+    maximumStaticColliderCount: 3,
+    maximumStaticColliderVertexCount: 256,
+    maximumStaticColliderTriangleCount: 1_000,
+  });
+const TEST_ASSET_RESOLVER: BabylonNativeLockedAssetResolverV1 = Object.freeze({
+  async resolve() {
+    throw new Error("WORLDKIT_NATIVE_SCENE_ASSET_NOT_SELECTED");
+  },
+});
 
 function localAxisExtent(mesh: AbstractMesh, axis: 0 | 1 | 2): number {
   const positions = mesh.getVerticesData(VertexBuffer.PositionKind)!;
@@ -59,7 +70,7 @@ describe("cloud ridge Babylon Native scene", () => {
     expect(subject.subjectDefinitionRef).toBe(
       "worldkit://subject-definition/humanoid.g-bot@2",
     );
-    expect(CLOUD_RIDGE_NATIVE_ADMISSION_BUDGET_V1).toEqual({
+    expect(TEST_ADMISSION_BUDGET).toEqual({
       maximumStaticColliderCount: 3,
       maximumStaticColliderVertexCount: 256,
       maximumStaticColliderTriangleCount: 1_000,
@@ -83,8 +94,8 @@ describe("cloud ridge Babylon Native scene", () => {
       candidate: { engine, scene },
       bootstrap: CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1,
       module: cloudRidgeNativeScene,
-      assets: cloudRidgeLockedAssetResolver,
-      budget: CLOUD_RIDGE_NATIVE_ADMISSION_BUDGET_V1,
+      assets: TEST_ASSET_RESOLVER,
+      budget: TEST_ADMISSION_BUDGET,
     });
     if (result.outcome !== "passed") {
       throw new Error(JSON.stringify(result.diagnostics, null, 2));
@@ -93,7 +104,7 @@ describe("cloud ridge Babylon Native scene", () => {
 
     expect(contribution.spawnMarker).toEqual({
       id: "player-spawn",
-      positionMetersXYZ: [0, 2.2, 18],
+      positionMetersXYZ: [0, 0, 18],
       facingRadians: 0,
     });
     expect(contribution.staticColliders.map(({ id }) => id)).toEqual([

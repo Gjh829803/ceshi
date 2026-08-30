@@ -14,7 +14,7 @@ const nativeBootstrapSource = await readFile(
 );
 const mainSource = await readFile(new URL("./main.ts", import.meta.url), "utf8");
 const cloudRidgeSource = await readFile(
-  new URL("./cloud-ridge-scene.ts", import.meta.url),
+  new URL("./scene.ts", import.meta.url),
   "utf8",
 );
 
@@ -48,7 +48,7 @@ describe("Cloud Ridge Native Scene Source clean break", () => {
   });
 
   it("keeps one default pure Module and deletes Controller/debug ownership", async () => {
-    const namespace = await import("./cloud-ridge-scene.js");
+    const namespace = await import("./scene.js");
     expect(Reflect.ownKeys(namespace)).toEqual([
       "default",
       Symbol.toStringTag,
