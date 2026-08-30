@@ -1609,10 +1609,17 @@ export class RuntimeHost {
     return this.startReplacement(configuration);
   }
 
-  publishWorldReplacementV1(input: unknown): Promise<PublishWorldReplacementResultV1> {
+  publishWorldReplacementV1(
+    input: unknown,
+    initialControlBindingInput?: unknown,
+  ): Promise<PublishWorldReplacementResultV1> {
     let parsed: ParsedPublishWorldReplacementV1;
+    let initialControlBinding: RuntimeHostInitialControlBindingV1 | undefined;
     try {
       parsed = parsePublishWorldReplacementInput(input);
+      initialControlBinding = isNil(initialControlBindingInput)
+        ? undefined
+        : parseInitialControlBinding(initialControlBindingInput);
     } catch {
       return Promise.resolve({
         status: "rejected",
@@ -1641,7 +1648,10 @@ export class RuntimeHost {
         message: "A World replacement is already in progress.",
       });
     }
-    const published = this.performPublicationReplacement(parsed);
+    const published = this.performPublicationReplacement(
+      parsed,
+      initialControlBinding,
+    );
     const tracked = published.then((result) => {
       if (result.status === "published") return result.publication;
       throw hostFailure(
@@ -1757,11 +1767,12 @@ export class RuntimeHost {
 
   private async performPublicationReplacement(
     parsed: ParsedPublishWorldReplacementV1,
+    initialControlBinding?: RuntimeHostInitialControlBindingV1,
   ): Promise<PublishWorldReplacementResultV1> {
     try {
       const outcome = await this.performReplacement(
         parsed.worldConfiguration,
-        undefined,
+        initialControlBinding,
         {
           expectation: parsed.publication.runtimeExpectation,
           ...(isNil(parsed.persistDurableCommit)
