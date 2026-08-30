@@ -16,6 +16,7 @@ import {
   parseNativeIsolatedExecutionReceiptV1,
   parseNativeIsolatedExecutionRequestV1,
   parseNativeIsolationTransportEnvelopeV1,
+  verifyNativeIsolatedExecutionReceiptV1,
   type NativeEffectiveExecutionBudgetV1,
   type NativeExecutionUsageV1,
   type NativeIsolatedExecutionRequestV1,
@@ -87,6 +88,8 @@ const SANDBOX_POLICY_HASH = sha256CanonicalJson(SANDBOX_POLICY) as
 const CPU_HOSTILE_PROVIDER_DEADLINE_MILLISECONDS = 10_000;
 const CPU_HOSTILE_SUPERVISOR_DEADLINE_MILLISECONDS = 30_000;
 const CPU_HOSTILE_HARNESS_TIMEOUT_MILLISECONDS = 45_000;
+const MATCHING_DEADLINE_MILLISECONDS = 5_000;
+const MATCHING_DEADLINE_HARNESS_TIMEOUT_MILLISECONDS = 15_000;
 
 interface CommandResult {
   readonly exitCode: number;
@@ -965,6 +968,108 @@ async function runCpuDeadlineHostileCase(
   }
 }
 
+async function runMatchingDeadlineReceiptCase(
+  dockerCommand: string,
+  verified: VerifiedBabylonNativeWorldPackageDirectoryV1,
+  imageDigest: `sha256:${string}`,
+) {
+  const request = isolatedRequest(
+    verified,
+    imageDigest,
+    "matching-deadline",
+    {
+      maximumWallTimeMilliseconds: MATCHING_DEADLINE_MILLISECONDS,
+      maximumCpuTimeMilliseconds: 10_000,
+      maximumMemoryBytes: 1_073_741_824,
+      maximumProcessCount: 32,
+    },
+  );
+  const runner = new DockerCommandRunner(
+    dockerCommand,
+    verified,
+    "/runner/hostile-fixtures/cpu.mjs",
+  );
+  const provider = createDockerNativeIsolationProviderV1({
+    runnerIdentityRef: RUNNER_IDENTITY_REF,
+    runnerImageRef: imageDigest,
+    runnerImageDigest: imageDigest,
+    sandboxPolicyHash: SANDBOX_POLICY_HASH,
+    packageHostPath: PACKAGE_ROOT,
+    commandRunner: runner,
+  });
+  const supervisor = NativeIsolationSupervisorV1.create({
+    request,
+    provider,
+    attestationVerifier: createAttestationVerifier(request),
+  });
+  try {
+    const ready = await supervisor.start();
+    assert.equal(ready.status, "ready");
+    let submitError: unknown;
+    try {
+      await withHarnessTimeout(supervisor.submit({
+        kind: "native-isolation-transport-envelope",
+        schemaVersion: 1,
+        runtimeSessionId: request.runtimeSessionId,
+        sessionNonce: request.sessionNonce,
+        messageSequence: 1,
+        payload: {
+          kind: "worldkit-runtime-session-request",
+          schemaVersion: 1,
+          id: "request.matching-deadline.snapshot",
+          runtimeSessionId: request.runtimeSessionId,
+          type: "snapshot.get",
+        },
+      }), MATCHING_DEADLINE_HARNESS_TIMEOUT_MILLISECONDS);
+    } catch (error) {
+      submitError = error;
+    }
+    assert.equal(
+      typeof submitError === "object" && !isNil(submitError) &&
+          "code" in submitError
+        ? submitError.code
+        : undefined,
+      "NATIVE_ISOLATION_PROVIDER_FAILED",
+    );
+    const process = runner.processes[0];
+    assert.ok(!isNil(process));
+    const evidence = await process.collectControlPlaneReceipt();
+    assert.deepEqual(evidence.result, {
+      kind: "native-isolated-execution-result",
+      schemaVersion: 1,
+      id: `native-isolated-execution-result.${request.id}.timeout`,
+      requestId: request.id,
+      runtimeSessionId: request.runtimeSessionId,
+      status: "terminated",
+      reason: "timeout",
+    });
+    assert.ok(
+      evidence.receipt.usage.process.actualWallTimeMilliseconds >
+        request.effectiveBudget.process.maximumWallTimeMilliseconds,
+      "matching deadline must retain observed cleanup latency above the admitted wall cap",
+    );
+    verifyNativeIsolatedExecutionReceiptV1({
+      request,
+      result: evidence.result,
+      receipt: evidence.receipt,
+    });
+    return Object.freeze({
+      id: "matching-deadline-receipt",
+      expectedExitMode: "terminated",
+      providerDeadlineMilliseconds: MATCHING_DEADLINE_MILLISECONDS,
+      supervisorDeadlineMilliseconds: MATCHING_DEADLINE_MILLISECONDS,
+      observedWallTimeMilliseconds:
+        evidence.receipt.usage.process.actualWallTimeMilliseconds,
+      terminationReason: "timeout",
+      receiptAccepted: true,
+      outputWasBounded: true,
+      unexpectedSuccessMarker: false,
+    });
+  } finally {
+    await supervisor.dispose();
+  }
+}
+
 async function runHostileCases(
   dockerCommand: string,
   baseline: NativeContainerInvocationV1,
@@ -983,6 +1088,11 @@ async function runHostileCases(
     { id: "protocol", timeoutMilliseconds: 10_000, expectedExitMode: "protocol" },
   ] as const;
   const cpuResult = await runCpuDeadlineHostileCase(
+    dockerCommand,
+    verified,
+    imageDigest,
+  );
+  const matchingDeadlineResult = await runMatchingDeadlineReceiptCase(
     dockerCommand,
     verified,
     imageDigest,
@@ -1043,7 +1153,7 @@ async function runHostileCases(
       unexpectedSuccessMarker: false,
     }));
   }
-  return Object.freeze([...results, cpuResult]);
+  return Object.freeze([...results, cpuResult, matchingDeadlineResult]);
 }
 
 async function main(): Promise<void> {
