@@ -10,8 +10,12 @@ import {
   type NativeIsolationTransportEnvelopeV1,
 } from "@whitebox-world/runtime-contracts";
 
+import { resolveNativeExecutionTrustProfileV1 } from
+  "./native-execution-trust-profile-registry.js";
+
 export type NativeIsolationSupervisorErrorCodeV1 =
   | "NATIVE_ISOLATION_PROVIDER_IDENTITY_MISMATCH"
+  | "NATIVE_ISOLATION_TRUST_PROFILE_INVALID"
   | "NATIVE_ISOLATION_LIFECYCLE_INVALID"
   | "NATIVE_ISOLATION_PROTOCOL_INVALID"
   | "NATIVE_ISOLATION_PROVIDER_FAILED"
@@ -144,6 +148,26 @@ export class NativeIsolationSupervisorV1 {
   static create(input: CreateNativeIsolationSupervisorInputV1):
     NativeIsolationSupervisorV1 {
     const request = parseNativeIsolatedExecutionRequestV1(input.request);
+    let trustProfile;
+    try {
+      trustProfile = resolveNativeExecutionTrustProfileV1(
+        request.nativeExecutionTrustProfileRef,
+      );
+    } catch {
+      throw new NativeIsolationSupervisorErrorV1(
+        "NATIVE_ISOLATION_TRUST_PROFILE_INVALID",
+        "Native isolation Trust Profile is not a Host-registered resource.",
+      );
+    }
+    if (
+      trustProfile.trustMode !== "hosted-isolated" ||
+      trustProfile.contentHash !== request.nativeExecutionTrustProfileHash
+    ) {
+      throw new NativeIsolationSupervisorErrorV1(
+        "NATIVE_ISOLATION_TRUST_PROFILE_INVALID",
+        "Native isolation Trust Profile does not match the admitted Host policy.",
+      );
+    }
     if (input.provider.runnerIdentityRef !== request.runnerIdentityRef) {
       throw new NativeIsolationSupervisorErrorV1(
         "NATIVE_ISOLATION_PROVIDER_IDENTITY_MISMATCH",

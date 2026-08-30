@@ -164,6 +164,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "packages/runtime-host/src/character-movement-transaction.test.ts", lane: "contract" },
   { path: "packages/runtime-host/src/command-journal.test.ts", lane: "contract" },
   { path: "packages/runtime-host/src/gameplay-world-port.test.ts", lane: "contract" },
+  { path: "packages/runtime-host/src/native-execution-admission.test.ts", lane: "contract" },
   { path: "packages/runtime-host/src/native-execution-budget.test.ts", lane: "contract" },
   { path: "packages/runtime-host/src/native-isolation-supervisor.test.ts", lane: "contract" },
   { path: "packages/runtime-host/src/publication-v2.test.ts", lane: "contract" },

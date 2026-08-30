@@ -98,7 +98,11 @@ function isBna5OwnedPath(relativePath: string): boolean {
   return relativePath.startsWith("scripts/native-scene/hosted/") ||
     relativePath.startsWith("apps/native-scene-playground/src/hosted-runtime-") ||
     relativePath.startsWith("packages/runtime-contracts/src/native-execution-isolation") ||
+    relativePath.startsWith("packages/runtime-host/src/native-execution-admission") ||
     relativePath.startsWith("packages/runtime-host/src/native-execution-budget") ||
+    relativePath.startsWith(
+      "packages/runtime-host/src/native-execution-trust-profile-registry",
+    ) ||
     relativePath.startsWith("packages/runtime-host/src/native-isolation-supervisor") ||
     relativePath.startsWith(
       "packages/runtime-babylon/src/babylon-native-isolated-runtime-entry",

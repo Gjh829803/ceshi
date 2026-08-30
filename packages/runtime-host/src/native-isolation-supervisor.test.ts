@@ -22,6 +22,10 @@ import {
   type NativeIsolationReceiptEvidenceV1,
   type PreparedNativeIsolationV1,
 } from "./native-isolation-supervisor";
+import {
+  HOSTED_ISOLATED_NATIVE_EXECUTION_TRUST_PROFILE_REF_V1,
+  resolveNativeExecutionTrustProfileV1,
+} from "./native-execution-trust-profile-registry";
 
 const HASH_A = `sha256:${"a".repeat(64)}` as const;
 const HASH_B = `sha256:${"b".repeat(64)}` as const;
@@ -70,6 +74,9 @@ function budget(
 function request(
   effectiveBudget = budget(),
 ): NativeIsolatedExecutionRequestV1 {
+  const trustProfile = resolveNativeExecutionTrustProfileV1(
+    HOSTED_ISOLATED_NATIVE_EXECUTION_TRUST_PROFILE_REF_V1,
+  );
   return {
     kind: "native-isolated-execution-request",
     schemaVersion: 1,
@@ -80,9 +87,8 @@ function request(
     worldBuildIdentityHash: HASH_B,
     sceneModuleBundleHash: HASH_C,
     nativeSceneContributionHash: HASH_D,
-    nativeExecutionTrustProfileRef:
-      "worldkit://native-execution-trust-profile/hosted-isolated@1",
-    nativeExecutionTrustProfileHash: HASH_E,
+    nativeExecutionTrustProfileRef: trustProfile.resourceRef,
+    nativeExecutionTrustProfileHash: trustProfile.contentHash,
     runnerIdentityRef: "worldkit://native-isolation-runner/test@1",
     runnerImageDigest: HASH_F,
     sandboxPolicyHash: HASH_B,
@@ -294,6 +300,26 @@ describe("NativeIsolationSupervisorV1", () => {
       ...supervisorInput(provider),
       request: { ...request(), trustProfileRef: "legacy" },
     })).toThrow(/NativeIsolatedExecutionRequestV1/);
+    expect(provider.prepare).not.toHaveBeenCalled();
+  });
+
+  it("rejects an unknown or hash-drifted Trust Profile before provider allocation", () => {
+    const { provider } = fakeProvider();
+    for (const executionRequest of [
+      {
+        ...request(),
+        nativeExecutionTrustProfileRef:
+          "worldkit://native-execution-trust-profile/unknown@1",
+      },
+      { ...request(), nativeExecutionTrustProfileHash: HASH_E },
+    ]) {
+      expect(() => NativeIsolationSupervisorV1.create({
+        ...supervisorInput(provider),
+        request: executionRequest,
+      })).toThrow(expect.objectContaining({
+        code: "NATIVE_ISOLATION_TRUST_PROFILE_INVALID",
+      }));
+    }
     expect(provider.prepare).not.toHaveBeenCalled();
   });
 
