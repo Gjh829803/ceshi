@@ -18,7 +18,7 @@ import { deriveBabylonNativeBlockLayoutV1 } from "./layout.js";
 import type { BabylonNativeBlockSessionRecordV1 } from "./session.js";
 import { BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1 } from "./shapes.js";
 
-type Shape = "full" | "half" | "quarter" | "small";
+type Shape = "full" | "half" | "quarter" | "small" | "step";
 type PaletteRole =
   | "ground"
   | "route"
@@ -69,7 +69,7 @@ interface BlockProfileModule {
         occupiedMicroCellCount: number;
         exposedTopSurfaceCellCount: number;
         boundarySegmentCount: number;
-        structuralHalfMeterTransitionCount: number;
+        structuralStepTransitionCount: number;
         unsupportedBlockCount: number;
         structuralRouteComponentCount: number;
         visualGroupCount: number;
@@ -238,7 +238,13 @@ describe("Babylon Native block profile structural check", () => {
         diagnostics: [],
         metrics: {
           blockCount: 1,
-          blockCountByShape: { full: 1, half: 0, quarter: 0, small: 0 },
+          blockCountByShape: {
+            full: 1,
+            half: 0,
+            quarter: 0,
+            small: 0,
+            step: 0,
+          },
           blockCountByPaletteRole: {
             ground: 1,
             route: 0,
@@ -247,10 +253,10 @@ describe("Babylon Native block profile structural check", () => {
             "water-like-visual": 0,
             "background-mass": 0,
           },
-          occupiedMicroCellCount: 8,
+          occupiedMicroCellCount: 16,
           exposedTopSurfaceCellCount: 4,
           boundarySegmentCount: 8,
-          structuralHalfMeterTransitionCount: 0,
+          structuralStepTransitionCount: 0,
           unsupportedBlockCount: 0,
           structuralRouteComponentCount: 0,
           visualGroupCount: 0,
@@ -347,6 +353,50 @@ describe("Babylon Native block profile structural check", () => {
       outcome: "passed",
     });
     expect(forward).toEqual(reversed);
+  });
+
+  it("connects only route blocks within one quarter-meter structural step", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadProfile();
+
+    const build = (upperY: number) => {
+      const engine = new NullEngine();
+      const scene = new Scene(engine);
+      try {
+        const session = createBabylonNativeBlockProfileSessionV1(
+          createContext(scene, `step-route-${upperY}`),
+          { maximumBlockCount: 2 },
+        );
+        const low = session.createBlock({
+          id: "low-step",
+          shape: "step",
+          paletteRole: "route",
+        });
+        low.position.set(0, 0.125, 0);
+        const high = session.createBlock({
+          id: "high-step",
+          shape: "step",
+          paletteRole: "route",
+        });
+        high.position.set(1, upperY, 0);
+        return session.finalize().checkResult;
+      } finally {
+        scene.dispose();
+        engine.dispose();
+      }
+    };
+
+    const oneStep = build(0.375);
+    const twoSteps = build(0.625);
+
+    expect(oneStep.outcome).toBe("passed");
+    expect(oneStep.metrics.structuralRouteComponentCount).toBe(1);
+    expect(oneStep.metrics.structuralStepTransitionCount).toBe(2);
+    expect(twoSteps.outcome).toBe("rejected");
+    expect(twoSteps.metrics.structuralRouteComponentCount).toBe(2);
+    expect(twoSteps.diagnostics).toContainEqual(expect.objectContaining({
+      code: "WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED",
+      severity: "error",
+    }));
   });
 
   it("rejects overlap, missing groups, and disconnected structural routes", async () => {

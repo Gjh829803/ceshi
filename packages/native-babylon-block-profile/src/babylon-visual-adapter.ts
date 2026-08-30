@@ -48,6 +48,25 @@ function fail(code: string, message: string): never {
   throw new TypeError(`${code}: ${message}`);
 }
 
+export function validateBabylonNativeBlockDisplayGapV1(
+  layout: BabylonNativeBlockLayoutV1,
+  displayGapMeters: unknown,
+  code = "WORLDKIT_NATIVE_BLOCK_VISUAL_INPUT_INVALID",
+): asserts displayGapMeters is number {
+  if (
+    typeof displayGapMeters !== "number" ||
+    !Number.isFinite(displayGapMeters) ||
+    displayGapMeters < 0 ||
+    layout.blocks.some((block) =>
+      displayGapMeters >= Math.min(...block.sizeMetersXYZ))
+  ) {
+    return fail(
+      code,
+      "displayGapMeters must be finite, non-negative, and smaller than every checked block dimension",
+    );
+  }
+}
+
 function stableCompare(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
@@ -191,17 +210,10 @@ function validateInput(
   const displayGapMeters = Object.hasOwn(input, "displayGapMeters")
     ? input.displayGapMeters
     : DEFAULT_DISPLAY_GAP_METERS;
-  if (
-    typeof displayGapMeters !== "number" ||
-    !Number.isFinite(displayGapMeters) ||
-    displayGapMeters < 0 ||
-    displayGapMeters >= 0.5
-  ) {
-    return fail(
-      "WORLDKIT_NATIVE_BLOCK_VISUAL_INPUT_INVALID",
-      "displayGapMeters must be finite and within 0..<0.5m",
-    );
-  }
+  validateBabylonNativeBlockDisplayGapV1(
+    checkedLayout.layout,
+    displayGapMeters,
+  );
   const blocksById = new Map(checkedLayout.layout.blocks.map((block) =>
     [block.id, block] as const));
   if (

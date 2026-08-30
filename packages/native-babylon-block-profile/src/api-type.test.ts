@@ -11,7 +11,7 @@ describe("Babylon Native block profile public types", () => {
   it("names the ephemeral helper argument as a create input", () => {
     expectTypeOf<BabylonNativeBlockCreateInputV1>().toEqualTypeOf<Readonly<{
       id: string;
-      shape: "full" | "half" | "quarter" | "small";
+      shape: "full" | "half" | "quarter" | "small" | "step";
       paletteRole:
         | "ground"
         | "route"

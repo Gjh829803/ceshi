@@ -8,7 +8,10 @@ import type {
 } from "@whitebox-world/native-babylon";
 import { isEqual, isNil } from "lodash-es";
 
-import { createBabylonNativeBlockVisualsV1 } from "./babylon-visual-adapter.js";
+import {
+  createBabylonNativeBlockVisualsV1,
+  validateBabylonNativeBlockDisplayGapV1,
+} from "./babylon-visual-adapter.js";
 import {
   createBabylonNativeBlockProfileCheckResultV1,
   type BabylonNativeBlockProfileCheckResultV1,
@@ -89,7 +92,7 @@ export interface BabylonNativeBlockFinalizedEpochV1 {
 
 const STABLE_ID = /^[a-z0-9][a-z0-9-]{2,79}$/;
 const SHAPES = new Set<BabylonNativeBlockShapeKindV1>([
-  "full", "half", "quarter", "small",
+  "full", "half", "quarter", "small", "step",
 ]);
 const PALETTE_ROLES = new Set<BabylonNativeBlockPaletteRoleV1>(
   BABYLON_NATIVE_BLOCK_PALETTE_ROLES_V1,
@@ -302,9 +305,8 @@ function parseFinalizeInput(
     ? record.displayGapMeters
     : DEFAULT_DISPLAY_GAP_METERS;
   if (typeof displayGapMeters !== "number" ||
-      !Number.isFinite(displayGapMeters) || displayGapMeters < 0 ||
-      displayGapMeters >= 0.5) {
-    return fail(code, "displayGapMeters must be finite and within 0..<0.5m");
+      !Number.isFinite(displayGapMeters) || displayGapMeters < 0) {
+    return fail(code, "displayGapMeters must be finite and non-negative");
   }
   const staticColliders = exactArray(record.staticColliders, code)
     .map(parseSelection)
@@ -439,6 +441,11 @@ export function createBabylonNativeBlockProfileSessionV1(
             checkedLayout.checkResult.diagnostics.map(({ code }) => code)
               .join(", ") || "the checked Layout was rejected");
         }
+        validateBabylonNativeBlockDisplayGapV1(
+          checkedLayout.layout,
+          parsedInput.displayGapMeters,
+          "WORLDKIT_NATIVE_BLOCK_FINALIZE_INPUT_INVALID",
+        );
         const colliders = materializeBabylonNativeBlockColliderCandidatesV1({
           context,
           checkedLayout,

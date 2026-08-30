@@ -27,7 +27,7 @@ interface SessionModule {
   ): {
     createBlock(input: Readonly<{
       id: string;
-      shape: "full" | "half" | "quarter" | "small";
+      shape: "full" | "half" | "quarter" | "small" | "step";
       paletteRole:
         | "ground"
         | "route"
@@ -38,6 +38,7 @@ interface SessionModule {
       visualGroupId?: string;
     }>): Mesh;
     finalize(input: Readonly<{
+      displayGapMeters?: number;
       staticColliders: readonly Readonly<{
         id: string;
         blockId: string;
@@ -139,6 +140,26 @@ describe("Babylon Native block profile session", () => {
       const extendSize = mesh.getBoundingInfo().boundingBox.extendSize;
       expect([extendSize.x * 2, extendSize.y * 2, extendSize.z * 2])
         .toEqual([0.5, 0.5, 1]);
+    });
+  });
+
+  it("creates the quarter-meter step as one exact fixed Babylon Mesh", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
+
+    withScene((scene) => {
+      const session = createBabylonNativeBlockProfileSessionV1(
+        createContext(scene),
+        { maximumBlockCount: 1 },
+      );
+      const mesh = session.createBlock({
+        id: "route-step",
+        shape: "step",
+        paletteRole: "route",
+      });
+
+      const extendSize = mesh.getBoundingInfo().boundingBox.extendSize;
+      expect([extendSize.x * 2, extendSize.y * 2, extendSize.z * 2])
+        .toEqual([1, 0.25, 1]);
     });
   });
 
@@ -404,6 +425,67 @@ describe("Babylon Native block profile session", () => {
         /WORLDKIT_NATIVE_BLOCK_SESSION_CLOSED/,
       );
       expect(wasRead).toBe(false);
+    });
+  });
+
+  it("validates display gap against the actual Layout before any side effect", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
+
+    withScene((scene) => {
+      const registeredColliders: BabylonNativeStaticColliderV1[] = [];
+      const session = createBabylonNativeBlockProfileSessionV1(
+        createContext(scene, Object.freeze({
+          registerSpawnMarker(): void {},
+          registerStaticCollider(
+            collider: Readonly<BabylonNativeStaticColliderV1>,
+          ): void {
+            registeredColliders.push(collider);
+          },
+        })),
+        { maximumBlockCount: 1 },
+      );
+      const step = session.createBlock({
+        id: "route-step",
+        shape: "step",
+        paletteRole: "route",
+      });
+      step.position.set(0, 0.125, 0);
+
+      expect(() => session.finalize(Object.freeze({
+        displayGapMeters: 0.25,
+        staticColliders: Object.freeze([Object.freeze({
+          id: "route-step-collider",
+          blockId: "route-step",
+          traversalBinding: Object.freeze({ kind: "not-traversable" }),
+        })]),
+      }))).toThrow(/WORLDKIT_NATIVE_BLOCK_FINALIZE_INPUT_INVALID/);
+      expect(registeredColliders).toEqual([]);
+      expect(scene.materials).toEqual([]);
+      expect(commitProfileSettlement).not.toHaveBeenCalled();
+    });
+  });
+
+  it("allows a display gap larger than the step height when the Layout uses only full blocks", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
+
+    withScene((scene) => {
+      const session = createBabylonNativeBlockProfileSessionV1(
+        createContext(scene),
+        { maximumBlockCount: 1 },
+      );
+      const full = session.createBlock({
+        id: "full-block",
+        shape: "full",
+        paletteRole: "ground",
+      });
+      full.position.set(0, 0.5, 0);
+
+      expect(() => session.finalize(Object.freeze({
+        displayGapMeters: 0.6,
+        staticColliders: Object.freeze([]),
+      }))).not.toThrow();
+      expect(full.scaling.asArray()).toEqual([0.4, 0.4, 0.4]);
+      expect(commitProfileSettlement).toHaveBeenCalledTimes(1);
     });
   });
 

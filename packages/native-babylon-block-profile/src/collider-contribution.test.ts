@@ -52,7 +52,7 @@ function blockRecord(
   scene: Scene,
   input: Readonly<{
     id: string;
-    shape: "full" | "half" | "quarter" | "small";
+    shape: "full" | "half" | "quarter" | "small" | "step";
     paletteRole: "ground" | "route" | "structure";
     visualGroupId?: string;
     positionMetersXYZ?: readonly [number, number, number];
@@ -64,6 +64,7 @@ function blockRecord(
     half: [1, 0.5, 1],
     quarter: [0.5, 0.5, 1],
     small: [0.5, 0.5, 0.5],
+    step: [1, 0.25, 1],
   } satisfies Record<
     typeof input.shape,
     readonly [number, number, number]

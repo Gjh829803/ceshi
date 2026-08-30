@@ -102,7 +102,7 @@ function layoutFixture(reverse = false): BabylonNativeBlockLayoutV1 {
     issues: Object.freeze([]),
     exposedTopSurfaceCellKeys: Object.freeze([]),
     boundarySegmentKeys: Object.freeze([]),
-    structuralHalfMeterTransitionKeys: Object.freeze([]),
+    structuralStepTransitionKeys: Object.freeze([]),
     unsupportedBlockIds: Object.freeze([]),
   });
 }
@@ -121,6 +121,7 @@ function passedCheckResult(): BabylonNativeBlockProfileCheckResultV1 {
         half: 0,
         quarter: 1,
         small: 1,
+        step: 0,
       }),
       blockCountByPaletteRole: Object.freeze({
         ground: 0,
@@ -133,7 +134,7 @@ function passedCheckResult(): BabylonNativeBlockProfileCheckResultV1 {
       occupiedMicroCellCount: 0,
       exposedTopSurfaceCellCount: 0,
       boundarySegmentCount: 0,
-      structuralHalfMeterTransitionCount: 0,
+      structuralStepTransitionCount: 0,
       unsupportedBlockCount: 0,
       structuralRouteComponentCount: 1,
       visualGroupCount: 1,
@@ -153,6 +154,7 @@ function recordsFixture(
       half: [1, 0.5, 1],
       quarter: [0.5, 0.5, 1],
       small: [0.5, 0.5, 0.5],
+      step: [1, 0.25, 1],
     } satisfies Record<typeof block.shape, readonly [number, number, number]>)[
       block.shape
     ];

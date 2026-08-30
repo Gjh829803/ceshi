@@ -4,7 +4,8 @@ import type { Scene } from "@babylonjs/core/scene.js";
 
 import type { BabylonNativeBlockSessionRecordV1 } from "./session.js";
 import {
-  BABYLON_NATIVE_BLOCK_MICRO_GRID_METERS_V1,
+  BABYLON_NATIVE_BLOCK_CENTER_LATTICE_METERS_XYZ_V1,
+  BABYLON_NATIVE_BLOCK_OCCUPANCY_GRID_METERS_XYZ_V1,
   babylonNativeBlockBoundsFromCenterV1,
   babylonNativeBlockCenterAlignsToGridV1,
   babylonNativeBlockOccupiedMicroCellKeysV1,
@@ -48,7 +49,7 @@ export interface BabylonNativeBlockLayoutV1 {
   readonly issues: readonly BabylonNativeBlockLayoutIssueV1[];
   readonly exposedTopSurfaceCellKeys: readonly string[];
   readonly boundarySegmentKeys: readonly string[];
-  readonly structuralHalfMeterTransitionKeys: readonly string[];
+  readonly structuralStepTransitionKeys: readonly string[];
   readonly unsupportedBlockIds: readonly string[];
 }
 
@@ -107,11 +108,12 @@ function canonicalCenter(
   center: Vector3,
 ): BabylonNativeBlockPositionMetersXYZV1 | undefined {
   if (![center.x, center.y, center.z].every(Number.isFinite)) return undefined;
-  return Object.freeze([
-    canonicalizeBabylonNativeBlockEvidenceNumberV1(Math.round(center.x * 4) / 4),
-    canonicalizeBabylonNativeBlockEvidenceNumberV1(Math.round(center.y * 4) / 4),
-    canonicalizeBabylonNativeBlockEvidenceNumberV1(Math.round(center.z * 4) / 4),
-  ]);
+  return Object.freeze([center.x, center.y, center.z].map((value, axis) => {
+    const lattice = BABYLON_NATIVE_BLOCK_CENTER_LATTICE_METERS_XYZ_V1[axis]!;
+    return canonicalizeBabylonNativeBlockEvidenceNumberV1(
+      Math.round(value / lattice) * lattice,
+    );
+  }) as [number, number, number]);
 }
 
 function hasFixedLocalGeometry(
@@ -323,7 +325,7 @@ function boundarySegmentKeys(
   return Object.freeze(segments.sort(stableCompare));
 }
 
-function structuralHalfMeterTransitionKeys(
+function structuralStepTransitionKeys(
   exposedTopCells: readonly string[],
 ): readonly string[] {
   const topCellsByColumn = new Map<string, number[]>();
@@ -373,12 +375,14 @@ function unsupportedBlockIds(
   }
   const minimumBottomMicroY = Math.min(...blocks.map((block) =>
     Math.round(
-      block.minimumMetersXYZ[1] / BABYLON_NATIVE_BLOCK_MICRO_GRID_METERS_V1,
+      block.minimumMetersXYZ[1] /
+        BABYLON_NATIVE_BLOCK_OCCUPANCY_GRID_METERS_XYZ_V1[1],
     )));
   return Object.freeze(blocks
     .filter((block) => {
       const bottomMicroY = Math.round(
-        block.minimumMetersXYZ[1] / BABYLON_NATIVE_BLOCK_MICRO_GRID_METERS_V1,
+        block.minimumMetersXYZ[1] /
+          BABYLON_NATIVE_BLOCK_OCCUPANCY_GRID_METERS_XYZ_V1[1],
       );
       if (bottomMicroY === minimumBottomMicroY) return false;
       const bottomCells = block.occupiedMicroCellKeys
@@ -424,8 +428,7 @@ export function deriveBabylonNativeBlockLayoutV1(
     issues: sortedIssues(issues),
     exposedTopSurfaceCellKeys: topCells,
     boundarySegmentKeys: boundarySegmentKeys(topCells),
-    structuralHalfMeterTransitionKeys:
-      structuralHalfMeterTransitionKeys(topCells),
+    structuralStepTransitionKeys: structuralStepTransitionKeys(topCells),
     unsupportedBlockIds: unsupportedBlockIds(blocks),
   });
 }

@@ -9,7 +9,7 @@ import { admitBabylonNativeSceneCandidateV1 } from
   "@whitebox-world/native-babylon/host";
 import { describe, expect, it } from "vitest";
 
-type Shape = "full" | "half" | "quarter" | "small";
+type Shape = "full" | "half" | "quarter" | "small" | "step";
 type PaletteRole = "ground" | "route" | "structure";
 interface FinalizeSelection {
   readonly id: string;
@@ -144,8 +144,10 @@ async function buildProfileInventoryHash(
         { id: "feature-block", shape,
           paletteRole: variant.paletteRole ?? "route",
           visualGroupId: variant.visualGroupId ?? "feature-group",
-          center: [variant.xMeters ?? 1.25, 0.25,
-            shape === "quarter" ? 0 : 0.25] as const },
+          center: shape === "step"
+            ? [variant.xMeters ?? 1, 0.125, 0] as const
+            : [variant.xMeters ?? 1.25, 0.25,
+              shape === "quarter" ? 0 : 0.25] as const },
       ];
       for (const definition of variant.reverseCreation
         ? [...definitions].reverse()
@@ -291,6 +293,7 @@ describe("Babylon Native block Profile settlement", () => {
       .toBe(baseline);
     for (const variant of [
       { shape: "quarter" as const },
+      { shape: "step" as const },
       { paletteRole: "structure" as const },
       { visualGroupId: "changed-group" },
       { xMeters: 1.75 },

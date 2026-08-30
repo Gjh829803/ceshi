@@ -123,7 +123,7 @@ function layoutFixture(reverse = false): BabylonNativeBlockLayoutV1 {
     issues: Object.freeze([]),
     exposedTopSurfaceCellKeys: Object.freeze([]),
     boundarySegmentKeys: Object.freeze([]),
-    structuralHalfMeterTransitionKeys: Object.freeze([]),
+    structuralStepTransitionKeys: Object.freeze([]),
     unsupportedBlockIds: Object.freeze([]),
   });
 }
@@ -144,6 +144,7 @@ function checkResult(
         half: 0,
         quarter: 0,
         small: 0,
+        step: 0,
       }),
       blockCountByPaletteRole: Object.freeze({
         ground: 0,
@@ -156,7 +157,7 @@ function checkResult(
       occupiedMicroCellCount: 0,
       exposedTopSurfaceCellCount: 0,
       boundarySegmentCount: 0,
-      structuralHalfMeterTransitionCount: 0,
+      structuralStepTransitionCount: 0,
       unsupportedBlockCount: 0,
       structuralRouteComponentCount: 1,
       visualGroupCount: 2,
