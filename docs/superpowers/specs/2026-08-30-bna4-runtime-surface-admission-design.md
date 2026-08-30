@@ -289,8 +289,17 @@ session and disposes only the candidate.
 
 ## 11. Reset, replacement and concurrency
 
-- Reset uses the existing WorldSession/Gameplay reset path; it does not rerun the Native module or
-  create a second Scene. Static Surface identity is unchanged.
+- Provider-local `BabylonWorldRuntime.reset()` uses the existing Runtime/Gameplay reset path; it
+  does not rerun the Native Module or create a second Scene. The controlled Subject must be rebound
+  before comparing the restored Camera, and Static Surface identity remains unchanged.
+- Public `RuntimeHost.reset()` keeps the repository-wide Full Reload contract: it creates a fresh
+  `WorldSession` and Candidate Scene, executes the verified Module exactly once for that Candidate,
+  publishes only after readiness, then disposes the old Session. Native must not add a second
+  in-place Host reset dialect merely to avoid this replay.
+- Authority probes currently instrument Babylon process-global callback surfaces. Admission is
+  therefore serialized within one JavaScript realm; completed Runtime instances remain fully
+  concurrent and isolated. BNA-5 process/Worker isolation may provide parallel admission without
+  weakening this audit boundary.
 - World replacement creates a separate Candidate Scene and may temporarily require two complete
   Runtime instances. Existing Adapter residency preflight remains authoritative.
 - Candidate readiness must prove physics, controlled Subject and Camera readiness before publication.
@@ -377,4 +386,3 @@ BNA-4 is complete only when the accepted `main` tree proves all of the following
 6. the raw Native runtime input and production guard are deleted;
 7. Canonical behavior is not regressed; and
 8. exact-SHA affected gates and independent review contain no open P0/P1/P2 finding.
-

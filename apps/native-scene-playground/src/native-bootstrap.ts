@@ -1,8 +1,4 @@
-import type {
-  BabylonNativeSceneBootstrapV1,
-} from "@whitebox-world/runtime-contracts";
 import {
-  parseBabylonNativeSceneBootstrapV1,
   parseWorldRuntimeBootstrapV1,
 } from "@whitebox-world/runtime-contracts";
 import { parseGameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
@@ -12,7 +8,6 @@ import type {
 
 import cloudRidgeGameplayBootstrap from
   "./cloud-ridge-gameplay-bootstrap.json";
-import cloudRidgeNativeBootstrap from "./native-scene.bootstrap.json";
 import cloudRidgeWorldRuntimeBootstrap from
   "./cloud-ridge-world-runtime-bootstrap.json";
 
@@ -38,11 +33,6 @@ if (
 ) {
   throw new Error("WORLDKIT_NATIVE_SCENE_GAMEPLAY_BOOTSTRAP_MISMATCH");
 }
-
-export const CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1:
-  BabylonNativeSceneBootstrapV1 = parseBabylonNativeSceneBootstrapV1(
-    cloudRidgeNativeBootstrap,
-  );
 
 const SUBJECT_ASSET_URI_BY_REF: Readonly<Record<string, string>> = Object.freeze({
   "worldkit://subject-asset/actor.humanoid.g-bot@2":

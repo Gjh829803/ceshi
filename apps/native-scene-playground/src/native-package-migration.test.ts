@@ -145,7 +145,10 @@ describe("Babylon Native package migration", () => {
     expect(runtimeIndex).not.toMatch(
       /BabylonNativeSceneModule(?:V1)?\b|buildBabylonNativeSceneContribution/,
     );
-    expect(bootstrap).toContain("parseBabylonNativeSceneBootstrapV1");
+    expect(bootstrap).not.toContain("parseBabylonNativeSceneBootstrapV1");
+    expect(bootstrap).not.toContain(
+      ["native-scene", ".bootstrap.json"].join(""),
+    );
     expect(bootstrap).not.toContain("BabylonNativeWorldBootstrapV1");
     expect(JSON.parse(runtimeManifest).dependencies).toHaveProperty(
       "@whitebox-world/native-babylon",

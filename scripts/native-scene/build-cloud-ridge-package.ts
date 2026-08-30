@@ -30,7 +30,6 @@ import { fileURLToPath } from "node:url";
 
 import {
   CLOUD_RIDGE_GAMEPLAY_BOOTSTRAP_V1,
-  CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1,
   CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1,
 } from "../../apps/native-scene-playground/src/native-bootstrap.js";
 import { buildTrustedBabylonNativeWorldPackageV1 } from
@@ -65,7 +64,7 @@ const TRUST_PROFILE_HASH = sha256CanonicalJson({
 const AUTHORING_PROFILE_REF =
   "worldkit://authoring-profile/native-local@1";
 
-async function sourceGraphHash(): Promise<Sha256HashV1> {
+async function readSourceGraphInput() {
   const admitted = await admitBabylonNativeSourceGraphV1(
     WORLD_DIRECTORY_PATH,
   );
@@ -80,11 +79,16 @@ async function sourceGraphHash(): Promise<Sha256HashV1> {
       )) as Sha256HashV1,
     })),
   );
-  return sha256CanonicalJson(sourceInventory) as Sha256HashV1;
+  return Object.freeze({
+    authoredSourceHash:
+      sha256CanonicalJson(sourceInventory) as Sha256HashV1,
+    nativeSceneBootstrap: admitted.sourceGraph.workspace.bootstrap,
+  });
 }
 
 async function buildCloudRidgePackage(): Promise<WorldPackageDirectoryV1> {
-  const authoredSourceHash = await sourceGraphHash();
+  const { authoredSourceHash, nativeSceneBootstrap } =
+    await readSourceGraphInput();
   const routeDecision: SceneAuthoringRouteDecisionV1 = {
     kind: "scene-authoring-route-decision",
     schemaVersion: 1,
@@ -121,12 +125,12 @@ async function buildCloudRidgePackage(): Promise<WorldPackageDirectoryV1> {
       kind: "babylon-native",
       bootstrapInputRef: nativeSceneBootstrapInputRef,
       bootstrapInputHash:
-        hashBabylonNativeSceneBootstrapV1(CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1),
+        hashBabylonNativeSceneBootstrapV1(nativeSceneBootstrap),
       moduleGenerationInputRef,
       moduleGenerationInputHash: authoredSourceHash,
     },
     selectedAssetResources: [],
-    seed: CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1.seed,
+    seed: nativeSceneBootstrap.seed,
     authoringProfileRef: AUTHORING_PROFILE_REF,
     acceptanceTargetRefs: [],
     requiredEvidenceProfileRefs: [],
@@ -138,17 +142,17 @@ async function buildCloudRidgePackage(): Promise<WorldPackageDirectoryV1> {
     sceneAuthoringAttemptRef,
     sceneAuthoringAttemptHash: hashSceneAuthoringAttemptV1(attempt),
     outcome: "completed",
-    authoredSourceRef: CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1.sceneModuleRef,
+    authoredSourceRef: nativeSceneBootstrap.sceneModuleRef,
     authoredSourceHash,
     evidenceRefs: [],
   };
   const nativeSceneApi = {
-    resourceRef: CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1.nativeSceneApiRef,
+    resourceRef: nativeSceneBootstrap.nativeSceneApiRef,
     resolvedVersion: "1",
     contentHash: HASH_A,
   } as const;
   const nativeSceneProfile = {
-    resourceRef: CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1.nativeSceneProfileRef,
+    resourceRef: nativeSceneBootstrap.nativeSceneProfileRef,
     resolvedVersion: "1",
     contentHash: HASH_B,
   } as const;
@@ -167,7 +171,7 @@ async function buildCloudRidgePackage(): Promise<WorldPackageDirectoryV1> {
     },
     {
       resourceKind: "native-scene",
-      resourceRef: CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1.sceneModuleRef,
+      resourceRef: nativeSceneBootstrap.sceneModuleRef,
       resolvedVersion: "1",
       contentHash: authoredSourceHash,
     },
@@ -244,7 +248,7 @@ async function buildCloudRidgePackage(): Promise<WorldPackageDirectoryV1> {
       maximumTriangles: 1_000,
       maximumColliders: 3,
     },
-    nativeSceneBootstrap: CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1,
+    nativeSceneBootstrap,
     nativeSceneBootstrapInputRef,
     moduleGenerationInputRef,
     nativeSceneApi,

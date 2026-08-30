@@ -158,6 +158,86 @@ describe("RuntimeHost lifecycle isolation and admission", () => {
     await host.dispose();
   });
 
+  it.each([
+    {
+      name: "Native to Canonical",
+      initialWorld: nativeWorldConfiguration(),
+      candidateWorld: mutableWorldConfiguration(REPLACEMENT_WORLD_PACKAGE_REF),
+      initialKind: "babylon-native-scene",
+      candidateKind: "canonical-execution-plan",
+    },
+    {
+      name: "Native to Native",
+      initialWorld: nativeWorldConfiguration(),
+      candidateWorld: nativeWorldConfiguration(REPLACEMENT_WORLD_PACKAGE_REF),
+      initialKind: "babylon-native-scene",
+      candidateKind: "babylon-native-scene",
+    },
+  ])("publishes $name through the same replacement transaction", async ({
+    initialWorld,
+    candidateWorld,
+    initialKind,
+    candidateKind,
+  }) => {
+    const current = createPortHarness();
+    const candidate = createPortHarness();
+    const adapter = createAdapterFactoryHarness([current, candidate]);
+    const host = await runtimeHostConstructor().create(hostOptions(
+      adapter.factory,
+      ["world-session.native-current", "world-session.candidate"],
+      { initialWorld },
+    ));
+
+    await expect(host.replaceWorld({ worldConfiguration: candidateWorld }))
+      .resolves.toMatchObject({
+        worldState: {
+          worldSessionId: "world-session.candidate",
+          worldPackageRef: candidateWorld.worldBuildIdentity.worldPackageRef,
+        },
+      });
+    expect(adapter.factory.preflightConcurrentResidency).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sceneSource: expect.objectContaining({ kind: initialKind }),
+      }),
+      expect.objectContaining({
+        sceneSource: expect.objectContaining({ kind: candidateKind }),
+      }),
+    );
+    expect(current.disposeCount).toBe(1);
+    expect(candidate.disposeCount).toBe(0);
+    await host.dispose();
+  });
+
+  it("preserves the exact old publication when a Native replacement fails", async () => {
+    const current = createPortHarness();
+    const candidate = createPortHarness();
+    candidate.failNextOperation(
+      "initialize",
+      "reject",
+      new Error("private Native candidate failure"),
+    );
+    const { host } = await createHost(
+      [current, candidate],
+      ["world-session.current", "world-session.native-candidate"],
+    );
+    const before = host.snapshot();
+
+    await expect(host.replaceWorld({
+      worldConfiguration: nativeWorldConfiguration(
+        REPLACEMENT_WORLD_PACKAGE_REF,
+      ),
+    })).rejects.toMatchObject({
+      diagnostic: { code: "WORLD_SESSION_FAILED" },
+    });
+
+    expect(host.snapshot()).toBe(before);
+    expect(current.disposeCount).toBe(0);
+    expect(candidate.disposeCount).toBe(1);
+    await expect(host.runFixedInput({ actions: [], ticks: 1 })).resolves
+      .toMatchObject({ worldState: { simulationTick: 1 } });
+    await host.dispose();
+  });
+
   it("disposes an Adapter-created initial port when WorldSession initialization fails", async () => {
     const port = createPortHarness();
     port.failNextOperation(

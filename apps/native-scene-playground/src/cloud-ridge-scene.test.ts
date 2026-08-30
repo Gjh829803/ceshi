@@ -13,9 +13,18 @@ import {
 import cloudRidgeNativeScene from "./scene.js";
 import {
   CLOUD_RIDGE_GAMEPLAY_BOOTSTRAP_V1,
-  CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1,
   CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1,
 } from "./native-bootstrap.js";
+import { readBabylonNativeAuthoringWorkspaceRootV1 } from
+  "../../../scripts/native-scene/authoring-workspace.js";
+
+const workspace = await readBabylonNativeAuthoringWorkspaceRootV1(
+  new URL("./", import.meta.url).pathname,
+);
+if (workspace.outcome !== "passed") {
+  throw new Error(workspace.diagnostics.map(({ code }) => code).join(","));
+}
+const CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1 = workspace.workspaceRoot.bootstrap;
 
 const retainedEngines: NullEngine[] = [];
 const TEST_ADMISSION_BUDGET: BabylonNativeSceneAdmissionBudgetV1 =

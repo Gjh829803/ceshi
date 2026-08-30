@@ -320,9 +320,12 @@ Add or extend focused RuntimeHost/Babylon integration tests for:
 - initial partial failure at loader/Scene/admission/Havok/Subject/Camera/readiness;
 - Canonical -> Native, Native -> Canonical and Native -> Native replacement;
 - failed replacement preserving exact old publication and active handles;
-- reset restoring the same spawn/support/Camera without rerunning the Module;
+- provider-local reset restoring the same spawn/support/Camera without rerunning the Module, plus
+  public RuntimeHost Full Reload reset executing the Module once in a fresh Candidate;
 - 30/60/120-like render cadence producing identical authoritative hashes;
 - two hosts sharing one Package but no mutable Runtime state; and
+- overlapping admissions serialized around Babylon process-global authority probes while their
+  completed Runtime instances remain concurrent; and
 - disposal where one owned disposer throws while later resources are still attempted.
 
 ### Step 2: repair ownership at the closest boundary
@@ -415,4 +418,3 @@ Stop implementation and return to design only if:
 
 Ordinary test failures, engine edge cases, fixture migrations and cleanup defects are implementation
 work, not reasons to weaken the design or postpone the current-only clean break.
-

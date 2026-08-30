@@ -1,4 +1,5 @@
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
+import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
 import { parseBabylonNativeSceneBootstrapV1 } from
@@ -489,6 +490,7 @@ describe("replayBabylonNativeSceneModuleV1", () => {
       id: "concurrent-replay",
       async build(context) {
         seenScenes.add(context.scene);
+        new StandardMaterial("concurrent-material", context.scene);
         registerSpawn(context);
         await Promise.resolve();
       },

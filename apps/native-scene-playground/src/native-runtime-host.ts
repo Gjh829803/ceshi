@@ -65,6 +65,10 @@ interface RuntimeHandleV1 {
   }>;
 }
 
+interface NativeRuntimeLifecycleEvidenceV1 {
+  successfulRuntimeCreateCount: number;
+}
+
 export interface CreateNativeRuntimeHostOptionsV1 {
   readonly runtimeSessionId: string;
   readonly canvasHost: HTMLElement;
@@ -164,6 +168,7 @@ export class NativeRuntimeHostV1 {
   private constructor(
     private readonly host: RuntimeHost,
     private readonly handles: Map<string, RuntimeHandleV1>,
+    private readonly lifecycleEvidence: NativeRuntimeLifecycleEvidenceV1,
     readonly controlledEntityId: string,
   ) {}
 
@@ -177,6 +182,9 @@ export class NativeRuntimeHostV1 {
       [initialWorld.worldBuildIdentity.worldPackageRef, verified] as const,
     ]);
     const handles = new Map<string, RuntimeHandleV1>();
+    const lifecycleEvidence: NativeRuntimeLifecycleEvidenceV1 = {
+      successfulRuntimeCreateCount: 0,
+    };
     const moduleLoader = exactModuleLoader(
       verified,
       options.loadedSceneModule,
@@ -266,6 +274,7 @@ export class NativeRuntimeHostV1 {
             port: ownedPort,
             nativeAdmission,
           }));
+          lifecycleEvidence.successfulRuntimeCreateCount += 1;
           return ownedPort;
         } catch (error) {
           await runtime.dispose().catch(() => undefined);
@@ -325,6 +334,7 @@ export class NativeRuntimeHostV1 {
     const coordinator = new NativeRuntimeHostV1(
       host,
       handles,
+      lifecycleEvidence,
       initialWorld.worldRuntimeBootstrap.initialControlledEntityId,
     );
     try {
@@ -377,6 +387,8 @@ export class NativeRuntimeHostV1 {
 
   audit(): Readonly<{
     contributionHash: `sha256:${string}`;
+    worldSessionId: string;
+    successfulRuntimeCreateCount: number;
     spawnMarkerId: string;
     colliderIds: readonly string[];
     colliderSubshapeIds: readonly string[];
@@ -384,6 +396,9 @@ export class NativeRuntimeHostV1 {
     const admission = this.activeHandle().nativeAdmission;
     return Object.freeze({
       contributionHash: admission.contributionHash,
+      worldSessionId: this.host.currentWorldSessionId,
+      successfulRuntimeCreateCount:
+        this.lifecycleEvidence.successfulRuntimeCreateCount,
       spawnMarkerId: admission.contribution.spawnMarker.id,
       colliderIds: Object.freeze(
         admission.contribution.staticColliders.map(({ id }) => id),

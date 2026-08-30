@@ -94,6 +94,8 @@ import {
   type SubjectAssetLeaseV1,
   type SubjectAssetRuntimeLimitsV1,
   type SubjectVisual,
+  type BabylonNativeSceneModuleLoaderV1,
+  type BabylonWorldRuntimeInitializationStageV1,
   type BabylonWorldRuntimeOptions,
 } from "./index";
 import { BABYLON_GAMEPLAY_RUNTIME_INTERNAL } from "./gameplay-runtime-internal";
@@ -1069,6 +1071,7 @@ async function createVerifiedNativeRuntime(
     BabylonWorldRuntimeOptions,
     "engineFactory" | "onInitializationStage"
   > & Readonly<{
+    moduleLoader?: BabylonNativeSceneModuleLoaderV1;
     worldPackageInput?: ReturnType<
       typeof createBabylonNativeWorldPackageTestInputV1
     >;
@@ -1100,7 +1103,8 @@ async function createVerifiedNativeRuntime(
       kind: "babylon-native-scene",
       descriptor,
       verifiedWorldPackage: verified,
-      moduleLoader: Object.freeze({ load: async () => module }),
+      moduleLoader: options.moduleLoader ??
+        Object.freeze({ load: async () => module }),
     },
     worldRuntimeBootstrap: verified.worldRuntimeBootstrap,
     gameplayBootstrap: verified.gameplayBootstrap,
@@ -1668,6 +1672,238 @@ describe("BabylonWorldRuntime", () => {
       await runtime.dispose();
     }
   }, 15_000);
+
+  it("fails a Native Module loader before Engine allocation", async () => {
+    const engineFactory = vi.fn(() => new NullEngine());
+    const privateFailure = "/private/native/scene-bundle.mjs";
+    const error = await createVerifiedNativeRuntime(
+      packageFixtureNativeModule(),
+      {
+        engineFactory,
+        moduleLoader: Object.freeze({
+          async load() {
+            throw new Error(privateFailure);
+          },
+        }),
+      },
+    ).catch((reason: unknown) => reason);
+
+    expect(error).toMatchObject({
+      code: "WORLDKIT_NATIVE_SCENE_RUNTIME_MODULE_LOAD_FAILED",
+    });
+    expect(String(error)).not.toContain(privateFailure);
+    expect(engineFactory).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    "scene",
+    "havok",
+    "camera",
+    "subjects",
+    "ready",
+  ] satisfies readonly BabylonWorldRuntimeInitializationStageV1[])(
+    "cleans a partial Native Candidate when the %s stage fails",
+    async (failingStage) => {
+      const reachedStages: BabylonWorldRuntimeInitializationStageV1[] = [];
+      let candidateEngine: NullEngine | undefined;
+      const privateFailure = `private ${failingStage} initialization failure`;
+
+      const error = await createVerifiedNativeRuntime(
+        packageFixtureNativeModule(),
+        {
+          engineFactory: () => {
+            candidateEngine = new NullEngine({
+              renderWidth: 640,
+              renderHeight: 360,
+              textureSize: 512,
+              deterministicLockstep: true,
+              lockstepMaxSteps: 4,
+            });
+            return candidateEngine;
+          },
+          onInitializationStage: (stage) => {
+            reachedStages.push(stage);
+            if (stage === failingStage) throw new Error(privateFailure);
+          },
+        },
+      ).catch((reason: unknown) => reason);
+
+      expect(error).toBeInstanceOf(Error);
+      expect(String(error)).toContain(privateFailure);
+      expect(reachedStages.at(-1)).toBe(failingStage);
+      expect(candidateEngine?.isDisposed).toBe(true);
+    },
+    20_000,
+  );
+
+  it("resets Native authority without rebuilding the admitted Module", async () => {
+    let buildCount = 0;
+    const runtime = await createVerifiedNativeRuntime(
+      packageFixtureNativeModule((context) => {
+        buildCount += 1;
+        const ground = new Mesh("native-reset-ground", context.scene);
+        ground.setVerticesData(
+          VertexBuffer.PositionKind,
+          [-5, 0, -5, 5, 0, -5, 0, 0, 5],
+        );
+        ground.setIndices([0, 1, 2]);
+        context.registration.registerSpawnMarker({
+          id: "player-spawn",
+          positionMetersXYZ: [0, 0, 0],
+          facingRadians: 0,
+        });
+        context.registration.registerStaticCollider({
+          id: "ground",
+          mesh: ground,
+          traversalBinding: {
+            kind: "static-surface",
+            surfaceEntityId: "ground-surface",
+            logicalSubshapeId: "top",
+            traversalSurfaceProfileRef:
+              "worldkit://traversal-surface-profile/ground.static@1",
+          },
+          frictionRatio: 0.8,
+          restitutionRatio: 0,
+        });
+      }),
+    );
+    try {
+      await bindRuntimeTestPossession(runtime, "player");
+      runtime.renderFrame();
+      const initial = runtime.snapshot();
+      runtime.adjustCameraView({
+        yawDeltaRadians: 0.4,
+        pitchDeltaRadians: 0.1,
+      });
+      await runtime.runFixedInput({ actions: ["move-forward"], ticks: 30 });
+
+      runtime.reset();
+      await bindRuntimeTestPossession(runtime, "player");
+      runtime.renderFrame();
+      const reset = runtime.snapshot();
+
+      expect(buildCount).toBe(1);
+      expect(reset.tick).toBe(0);
+      expect(reset.subjectStatesByEntityId).toEqual(
+        initial.subjectStatesByEntityId,
+      );
+      expect(reset.camera).toMatchObject({
+        entityId: initial.camera.entityId,
+        targetEntityId: initial.camera.targetEntityId,
+        activeCameraProfileRef: initial.camera.activeCameraProfileRef,
+        activeCameraRigRef: initial.camera.activeCameraRigRef,
+        activeCameraModifierRefs: initial.camera.activeCameraModifierRefs,
+        viewYawOffsetRadians: 0,
+        viewPitchOffsetRadians: 0,
+        viewDistanceOffsetMeters: 0,
+      });
+      reset.camera.positionMetersXYZ.forEach((value, index) => {
+        expect(value).toBeCloseTo(
+          initial.camera.positionMetersXYZ[index]!,
+          12,
+        );
+      });
+      expect(reset.resources).toEqual(initial.resources);
+    } finally {
+      await runtime.dispose();
+    }
+  }, 20_000);
+
+  it("keeps Native fixed-Tick authority identical across 30/60/120-like render cadence", async () => {
+    const runCadence = async (
+      ticksPerRender: number,
+      rendersPerTick: number,
+    ): Promise<string> => {
+      const runtime = await createVerifiedNativeRuntime(
+        packageFixtureNativeModule(),
+      );
+      try {
+        await bindRuntimeTestPossession(runtime, "player");
+        let snapshot = runtime.snapshot();
+        for (let tick = 0; tick < 90; tick += 1) {
+          snapshot = await runtime.runFixedInput({
+            actions: tick < 45 ? ["move-forward"] : [],
+            ticks: 1,
+          });
+          if ((tick + 1) % ticksPerRender === 0) {
+            for (let render = 0; render < rendersPerTick; render += 1) {
+              runtime.renderFrame();
+            }
+          }
+        }
+        return sha256CanonicalJson({
+          tick: snapshot.tick,
+          subject: snapshot.subjectStatesByEntityId.player,
+        });
+      } finally {
+        await runtime.dispose();
+      }
+    };
+
+    const hashes = await Promise.all([
+      runCadence(2, 1),
+      runCadence(1, 1),
+      runCadence(1, 2),
+    ]);
+    expect(new Set(hashes).size).toBe(1);
+  }, 60_000);
+
+  it("isolates two Native Runtimes that share one Package and Module object", async () => {
+    let buildCount = 0;
+    const sharedModule = packageFixtureNativeModule((context) => {
+      buildCount += 1;
+      const ground = new Mesh("native-shared-ground", context.scene);
+      ground.setVerticesData(
+        VertexBuffer.PositionKind,
+        [-5, 0, -5, 5, 0, -5, 0, 0, 5],
+      );
+      ground.setIndices([0, 1, 2]);
+      context.registration.registerSpawnMarker({
+        id: "player-spawn",
+        positionMetersXYZ: [0, 0, 0],
+        facingRadians: 0,
+      });
+      context.registration.registerStaticCollider({
+        id: "ground",
+        mesh: ground,
+        traversalBinding: {
+          kind: "static-surface",
+          surfaceEntityId: "ground-surface",
+          logicalSubshapeId: "top",
+          traversalSurfaceProfileRef:
+            "worldkit://traversal-surface-profile/ground.static@1",
+        },
+        frictionRatio: 0.8,
+        restitutionRatio: 0,
+      });
+    });
+    const first = await createVerifiedNativeRuntime(sharedModule);
+    const second = await createVerifiedNativeRuntime(sharedModule);
+    try {
+      const firstScene = (first as unknown as { scene: Scene }).scene;
+      const secondScene = (second as unknown as { scene: Scene }).scene;
+      expect(buildCount).toBe(2);
+      expect(firstScene).not.toBe(secondScene);
+      expect(firstScene.getPhysicsEngine()).not.toBe(
+        secondScene.getPhysicsEngine(),
+      );
+
+      await bindRuntimeTestPossession(first, "player");
+      await first.runFixedInput({ actions: ["move-forward"], ticks: 20 });
+      expect(first.snapshot().tick).toBe(20);
+      expect(second.snapshot().tick).toBe(0);
+      expect(second.snapshot().subjectStatesByEntityId.player)
+        .toMatchObject({ positionMetersXYZ: [0, 0, 0] });
+
+      await first.dispose();
+      await bindRuntimeTestPossession(second, "player");
+      await expect(second.runFixedInput({ actions: [], ticks: 1 }))
+        .resolves.toMatchObject({ tick: 1 });
+    } finally {
+      await first.dispose();
+      await second.dispose();
+    }
+  }, 30_000);
 
   it("rejects runtime Contribution drift before Havok, camera, or subjects", async () => {
     const initializationStages: string[] = [];
@@ -4923,6 +5159,70 @@ function emptyActionProjection(simulationTick: number) {
     sceneDisposal.mockRestore();
     engineDisposal.mockRestore();
   });
+
+  it("continues Native proxy cleanup after an aggregate disposal failure", async () => {
+    const runtime = await createVerifiedNativeRuntime(
+      packageFixtureNativeModule(),
+    );
+    const internals = runtime as unknown as {
+      aggregates: Array<{
+        dispose(): void;
+        shape: { dispose(): void };
+      }>;
+      scene: Scene;
+      engine: NullEngine;
+    };
+    expect(internals.aggregates).toHaveLength(1);
+    const aggregate = internals.aggregates[0]!;
+    const collisionMesh = internals.scene.getMeshByName(
+      "worldkit.native-collider.ground",
+    );
+    if (isNil(collisionMesh)) {
+      throw new Error("Native collision proxy fixture is missing.");
+    }
+    const secret = "HAVOK_NATIVE_PROXY_PRIVATE_DISPOSE_FAILURE";
+    const nativeAggregateDispose = aggregate.dispose.bind(aggregate);
+    const aggregateDisposal = vi
+      .spyOn(aggregate, "dispose")
+      .mockImplementation(() => {
+        nativeAggregateDispose();
+        throw new Error(secret);
+      });
+    const nativeShapeDispose = aggregate.shape.dispose.bind(aggregate.shape);
+    const shapeDisposal = vi
+      .spyOn(aggregate.shape, "dispose")
+      .mockImplementation(() => nativeShapeDispose());
+    const nativeMeshDispose = collisionMesh.dispose.bind(collisionMesh);
+    const meshDisposal = vi
+      .spyOn(collisionMesh, "dispose")
+      .mockImplementation((...args) => nativeMeshDispose(...args));
+    const nativeSceneDispose = internals.scene.dispose.bind(internals.scene);
+    const sceneDisposal = vi
+      .spyOn(internals.scene, "dispose")
+      .mockImplementation(() => nativeSceneDispose());
+    const nativeEngineDispose = internals.engine.dispose.bind(internals.engine);
+    const engineDisposal = vi
+      .spyOn(internals.engine, "dispose")
+      .mockImplementation(() => nativeEngineDispose());
+
+    const error = await runtime.dispose().catch((reason) => reason as unknown);
+    await runtime.dispose();
+
+    expect(error).toMatchObject({ code: "WORLDKIT_RUNTIME_DISPOSE_FAILED" });
+    expect(error).not.toHaveProperty("cause");
+    expect(String(error)).not.toContain(secret);
+    expect(String(error)).not.toMatch(/havok|provider/i);
+    expect(aggregateDisposal).toHaveBeenCalledTimes(1);
+    expect(shapeDisposal).toHaveBeenCalledTimes(1);
+    expect(meshDisposal).toHaveBeenCalledTimes(1);
+    expect(sceneDisposal).toHaveBeenCalledTimes(1);
+    expect(engineDisposal).toHaveBeenCalledTimes(1);
+    aggregateDisposal.mockRestore();
+    shapeDisposal.mockRestore();
+    meshDisposal.mockRestore();
+    sceneDisposal.mockRestore();
+    engineDisposal.mockRestore();
+  }, 15_000);
 
   it("uses run speed for horizontal movement even when a water volume exists", async () => {
     const groundPlan = createFlatPackageExecutionPlan();

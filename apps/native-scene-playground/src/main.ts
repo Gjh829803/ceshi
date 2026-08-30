@@ -4,14 +4,13 @@ import type {
 } from "@whitebox-world/runtime-babylon";
 import { FIXED_TIME_STEP_SECONDS } from "@whitebox-world/runtime-babylon";
 import type {
+  BabylonNativeSceneBootstrapV1,
   FixedInputV1,
   SemanticInputActionV1,
 } from "@whitebox-world/runtime-contracts";
 
 import cloudRidgeNativeScene from "./scene.js";
 import {
-  CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1,
-  CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1,
   cloudRidgeSubjectAssetResolver,
 } from "./native-bootstrap.js";
 import { NativeRuntimeHostV1 } from "./native-runtime-host.js";
@@ -20,16 +19,15 @@ import { loadVerifiedNativeWorldPackageV1 } from
 import "./style.css";
 
 const CLOUD_RIDGE_MAIN_PATH_RUN_TICKS = 1_700;
-const CONTROLLED_ENTITY_ID =
-  CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1.initialControlledEntityId;
-
 interface NativeSceneSpikeProbeV1 {
   readonly ready: true;
-  readonly bootstrap: typeof CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1;
+  readonly bootstrap: BabylonNativeSceneBootstrapV1;
   snapshot(): BabylonRuntimeProjectionV1;
   runFixedInput(input: FixedInputV1): Promise<BabylonRuntimeProjectionV1>;
   audit(): Readonly<{
     contributionHash: `sha256:${string}`;
+    worldSessionId: string;
+    successfulRuntimeCreateCount: number;
     spawnMarkerId: string;
     colliderIds: readonly string[];
     colliderSubshapeIds: readonly string[];
@@ -105,6 +103,8 @@ async function start(): Promise<void> {
   const verifiedWorldPackage = await loadVerifiedNativeWorldPackageV1(
     new URL("/world-packages/cloud-ridge/", globalThis.location.origin),
   );
+  const controlledEntityId =
+    verifiedWorldPackage.worldRuntimeBootstrap.initialControlledEntityId;
   const coordinator = await NativeRuntimeHostV1.create({
     runtimeSessionId: `native-scene-${crypto.randomUUID()}`,
     canvasHost: viewport,
@@ -156,7 +156,7 @@ async function start(): Promise<void> {
 
   window.__WORLDKIT_NATIVE_SPIKE__ = Object.freeze({
     ready: true as const,
-    bootstrap: CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1,
+    bootstrap: verifiedWorldPackage.bootstrap,
     snapshot: () => coordinator.snapshot(),
     runFixedInput,
     audit: () => coordinator.audit(),
@@ -190,7 +190,7 @@ async function start(): Promise<void> {
   };
 
   const updateHud = (snapshot: BabylonRuntimeProjectionV1): void => {
-    const subject = snapshot.subjectStatesByEntityId[CONTROLLED_ENTITY_ID];
+    const subject = snapshot.subjectStatesByEntityId[controlledEntityId];
     if (subject === undefined) return;
     stateElement.textContent = paused
       ? "PAUSED"
@@ -312,7 +312,7 @@ async function start(): Promise<void> {
       .then((snapshot) => {
         activeRuntime().renderFrame();
         updateHud(snapshot);
-        const subject = snapshot.subjectStatesByEntityId[CONTROLLED_ENTITY_ID];
+        const subject = snapshot.subjectStatesByEntityId[controlledEntityId];
         const reached = subject !== undefined &&
           subject.movementMedium === "ground" &&
           subject.positionMetersXYZ[1] > 12 &&

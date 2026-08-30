@@ -1,7 +1,6 @@
 import { readdir, readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import ts from "typescript";
 
 export const BNA1_CLEAN_BREAK_SCAN_ROOTS = Object.freeze([
   "packages",
@@ -119,7 +118,6 @@ export interface Bna1CleanBreakScanOptions {
   readonly scanRoots?: readonly string[];
   readonly planSpecificExecutionPlanHashFiles?: readonly string[];
   readonly negativeExecutionPlanHashFixtureFiles?: readonly string[];
-  readonly runtimeHostPath?: string;
   readonly sha256HashOwnerPath?: string;
   readonly nativeSceneRoots?: readonly string[];
 }
@@ -133,8 +131,7 @@ export interface Bna1CleanBreakDiagnostic {
     | "BNA1_GENERIC_EXECUTION_PLAN_HASH"
     | "BNA1_NATIVE_PLAN_DEPENDENCY"
     | "BNA1_EXECUTION_PLAN_HASH_ALLOWLIST_DRIFT"
-    | "BNA1_SHA256_HASH_OWNER_INVALID"
-    | "BNA1_FORMAL_NATIVE_PREALLOCATION_GUARD_INVALID";
+    | "BNA1_SHA256_HASH_OWNER_INVALID";
   readonly path: string;
   readonly line: number;
   readonly value: string;
@@ -228,82 +225,6 @@ function literalPattern(values: readonly string[]): RegExp {
   ).join("|"), "g");
 }
 
-function formalNativeAllocationStructureIsValid(source: string): boolean {
-  const sourceFile = ts.createSourceFile(
-    "runtime-host.ts",
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  );
-  const guardedFunctions = new Set([
-    "parseRuntimeHostCreateOptions",
-    "parseReplacementRequest",
-    "parsePublishWorldReplacementInput",
-    "descriptor",
-  ]);
-  const observedGuardedFunctions = new Set<string>();
-  let candidateDescriptorUsesGuardedFactory = false;
-  let adapterAllocationCount = 0;
-  let allocationsUseGuardedDescriptor = true;
-  const containsCanonicalGuard = (node: ts.Node): boolean => {
-    let found = false;
-    const visit = (child: ts.Node): void => {
-      if (
-        ts.isCallExpression(child) &&
-        ts.isIdentifier(child.expression) &&
-        child.expression.text === "requireCanonicalRuntimeConfiguration"
-      ) found = true;
-      ts.forEachChild(child, visit);
-    };
-    visit(node);
-    return found;
-  };
-  const visit = (node: ts.Node): void => {
-    if (
-      ts.isFunctionDeclaration(node) &&
-      node.name !== undefined &&
-      guardedFunctions.has(node.name.text) &&
-      node.body !== undefined &&
-      containsCanonicalGuard(node.body)
-    ) observedGuardedFunctions.add(node.name.text);
-    if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.name.text === "candidateDescriptor" &&
-      node.initializer !== undefined &&
-      ts.isCallExpression(node.initializer) &&
-      ts.isIdentifier(node.initializer.expression) &&
-      node.initializer.expression.text === "descriptor"
-    ) candidateDescriptorUsesGuardedFactory = true;
-    if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
-      node.expression.name.text === "create" &&
-      ts.isPropertyAccessExpression(node.expression.expression) &&
-      node.expression.expression.name.text === "adapterFactory"
-    ) {
-      adapterAllocationCount += 1;
-      const argument = node.arguments[0];
-      const guardedDirectCall = argument !== undefined &&
-        ts.isCallExpression(argument) &&
-        ts.isIdentifier(argument.expression) &&
-        argument.expression.text === "descriptor";
-      const guardedCandidate = argument !== undefined &&
-        ts.isIdentifier(argument) && argument.text === "candidateDescriptor";
-      if (!guardedDirectCall && !guardedCandidate) {
-        allocationsUseGuardedDescriptor = false;
-      }
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
-  return observedGuardedFunctions.size === guardedFunctions.size &&
-    candidateDescriptorUsesGuardedFactory &&
-    adapterAllocationCount === 2 &&
-    allocationsUseGuardedDescriptor;
-}
-
 export async function scanBna1CleanBreak(
   repositoryRoot: string,
   options: Bna1CleanBreakScanOptions = {},
@@ -316,8 +237,6 @@ export async function scanBna1CleanBreak(
   const negativeFiles = new Set(
     options.negativeExecutionPlanHashFixtureFiles ?? [],
   );
-  const runtimeHostPath = options.runtimeHostPath ??
-    "packages/runtime-host/src/runtime-host.ts";
   const sha256HashOwnerPath = options.sha256HashOwnerPath ??
     "packages/protocol/src/hash.ts";
   const nativeSceneRoots = options.nativeSceneRoots ?? [
@@ -418,18 +337,6 @@ export async function scanBna1CleanBreak(
         value: "Sha256HashV1 must have exactly one declaration owner",
       });
     }
-  }
-  const runtimeHost = sourceByPath.get(runtimeHostPath) ?? "";
-  if (
-    !runtimeHost.includes("WORLDKIT_NATIVE_SCENE_PRODUCTION_NOT_ADMITTED") ||
-    !formalNativeAllocationStructureIsValid(runtimeHost)
-  ) {
-    diagnostics.push({
-      code: "BNA1_FORMAL_NATIVE_PREALLOCATION_GUARD_INVALID",
-      path: runtimeHostPath,
-      line: 1,
-      value: "formal Native must reject before adapter allocation",
-    });
   }
   diagnostics.sort((left, right) =>
     left.path.localeCompare(right.path) ||
