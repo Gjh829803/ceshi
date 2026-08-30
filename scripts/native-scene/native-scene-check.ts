@@ -3,7 +3,7 @@ import {
   type NativeSceneCheckedInputV1,
   type NativeSceneCheckResultV1,
   type NativeSceneDiagnosticV1,
-} from "@whitebox-world/native-babylon";
+} from "@whitebox-world/runtime-contracts";
 import { replayBabylonNativeSceneModuleV1 } from
   "@whitebox-world/native-babylon/host";
 import { orderBy } from "lodash-es";

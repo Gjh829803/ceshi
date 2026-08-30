@@ -5,7 +5,7 @@ import type {
   SubjectAssetManifestV1,
   SubjectRegistryResourceV3,
 } from "@whitebox-world/subject-registry";
-import { canonicalResourceLockEntriesV1 } from "@whitebox-world/runtime-contracts";
+import { worldResourceLockEntriesV1 } from "@whitebox-world/runtime-contracts";
 
 import { sha256CanonicalJson } from "./canonical-json";
 import type {
@@ -221,7 +221,7 @@ export class ResourceLockBuilderV1 {
     resourceLock: readonly ResolvedResourceLockEntryV1[];
     resourceLockHash: string;
   } {
-    const resourceLock = canonicalResourceLockEntriesV1(
+    const resourceLock = worldResourceLockEntriesV1(
       [...this.#entriesByRef.values()],
     );
     return {

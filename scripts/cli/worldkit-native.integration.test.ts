@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 
 import { parseNativeSceneCheckResultV1 } from
-  "@whitebox-world/native-babylon";
+  "@whitebox-world/runtime-contracts";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {

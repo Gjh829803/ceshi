@@ -35,9 +35,12 @@ import type {
 import type {
   ApplyCameraPreviewRequestV1,
   ApplySubjectPresetTuningRequestV1,
+  BabylonNativeSceneContributionV1,
   CameraPreviewStateV1,
   CameraViewInputV1,
   BabylonNativeSceneBootstrapV1,
+  BabylonNativeSpawnMarkerContributionV1,
+  BabylonNativeStaticColliderContributionV1,
   ControlCaptureCapabilitiesV1,
   ControlCaptureRequestV1,
   ControlInputAxesV2,
@@ -63,10 +66,7 @@ import {
   admitBabylonNativeSceneCandidateV1,
   type BabylonNativeLockedAssetResolverV1,
   type BabylonNativeSceneAdmissionBudgetV1,
-  type BabylonNativeSceneContributionV1,
   type BabylonNativeSceneModuleV1,
-  type BabylonNativeSpawnMarkerContributionV1,
-  type BabylonNativeStaticColliderContributionV1,
 } from "@whitebox-world/native-babylon/host";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import type {

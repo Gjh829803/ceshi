@@ -4,11 +4,12 @@ import { fileURLToPath } from "node:url";
 
 import {
   BABYLON_NATIVE_DEEP_ESM_IMPORT_SPECIFIERS_V1,
-  type NativeSceneDiagnosticV1,
 } from "@whitebox-world/native-babylon";
 import {
   BABYLON_NATIVE_FORBIDDEN_SCENE_INPUT_CAMERA_METHOD_KEYS_V1,
 } from "@whitebox-world/native-babylon/host";
+import type { NativeSceneDiagnosticV1 } from
+  "@whitebox-world/runtime-contracts";
 import { isEmpty, isNil } from "lodash-es";
 import ts from "typescript";
 

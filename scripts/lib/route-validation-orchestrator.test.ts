@@ -13,7 +13,7 @@ import {
   sha256CanonicalJson,
 } from "@whitebox-world/protocol";
 import {
-  canonicalResourceLockEntriesV1,
+  worldResourceLockEntriesV1,
   type CanonicalSceneExecutionPlanV1,
   type WorldRuntimeBootstrapV1,
 } from "@whitebox-world/runtime-contracts";
@@ -266,7 +266,7 @@ function subjectForPlan(
       worldPackageRootHash: `sha256:${"f".repeat(64)}`,
       executionPlanHash: sha256CanonicalJson(executionPlan),
     }) as Hash,
-    resourceLockHash: sha256CanonicalJson(canonicalResourceLockEntriesV1([
+    resourceLockHash: sha256CanonicalJson(worldResourceLockEntriesV1([
       ...executionPlan.sceneResourceLockEntries,
       ...worldRuntimeBootstrap.runtimeResourceLockEntries,
     ])) as Hash,

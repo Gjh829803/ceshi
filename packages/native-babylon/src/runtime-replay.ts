@@ -1,5 +1,14 @@
-import type { BabylonNativeSceneBootstrapV1 } from
-  "@whitebox-world/runtime-contracts";
+import {
+  canonicalBabylonNativeSceneContributionBytesV1,
+  hashBabylonNativeSceneContributionV1,
+  parseBabylonNativeSceneContributionV1,
+  parseNativeSceneCheckResultV1,
+  parseNativeSceneDiagnosticV1,
+  type BabylonNativeSceneBootstrapV1,
+  type BabylonNativeSceneContributionV1,
+  type NativeSceneCheckResultV1,
+  type NativeSceneDiagnosticV1,
+} from "@whitebox-world/runtime-contracts";
 import { isEmpty, isNil } from "lodash-es";
 
 import type { BabylonNativeLockedAssetResolverV1 } from "./assets.js";
@@ -9,18 +18,6 @@ import {
   type BabylonNativeSceneCandidateAdmissionResultV1,
   type BabylonNativeSceneCandidateV1,
 } from "./candidate-admission.js";
-import {
-  canonicalBabylonNativeSceneContributionBytesV1,
-  hashBabylonNativeSceneContributionV1,
-  parseBabylonNativeSceneContributionV1,
-  type BabylonNativeSceneContributionV1,
-} from "./contribution.js";
-import {
-  parseNativeSceneCheckResultV1,
-  parseNativeSceneDiagnosticV1,
-  type NativeSceneCheckResultV1,
-  type NativeSceneDiagnosticV1,
-} from "./diagnostics.js";
 import type { BabylonNativeSceneModuleV1 } from "./module.js";
 
 export interface BabylonNativeSceneCandidateLeaseV1

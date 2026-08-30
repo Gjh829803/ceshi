@@ -2,13 +2,15 @@ import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
-import { parseBabylonNativeSceneBootstrapV1 } from
-  "@whitebox-world/runtime-contracts";
+import {
+  hashBabylonNativeSceneContributionV1,
+  parseBabylonNativeSceneBootstrapV1,
+  parseNativeSceneDiagnosticV1,
+} from "@whitebox-world/runtime-contracts";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
   defineBabylonNativeScene,
-  parseNativeSceneDiagnosticV1,
   type BabylonNativeLockedAssetV1,
   type BabylonNativeLockedAssetResolverV1,
   type BabylonNativeSceneBuildContextV1,
@@ -17,7 +19,6 @@ import {
 import {
   admitBabylonNativeSceneCandidateV1,
   createBabylonNativeLockedAssetResolutionFailureV1,
-  hashBabylonNativeSceneContributionV1,
   type BabylonNativeSceneAdmissionBudgetV1,
   type BabylonNativeSceneCandidateAdmissionResultV1,
 } from "./host.js";

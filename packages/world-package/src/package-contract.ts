@@ -5,7 +5,7 @@ import {
   type Sha256HashV1,
 } from "@whitebox-world/protocol";
 import {
-  canonicalResourceLockEntriesV1,
+  worldResourceLockEntriesV1,
   hashCanonicalSceneExecutionPlanV1,
 } from "@whitebox-world/runtime-contracts";
 import {
@@ -143,7 +143,7 @@ export function canonicalWorldPackageManifestV1(
     registryLockHash: value.registryLockHash,
     layoutSolveReportHash: value.layoutSolveReportHash,
   })) requireHash(hash, label, "WORLD_PACKAGE_MANIFEST_INVALID");
-  const lockedResources = canonicalResourceLockEntriesV1(value.lockedResources);
+  const lockedResources = worldResourceLockEntriesV1(value.lockedResources);
   const canonical = deepFreeze({ ...value, lockedResources });
   if (stringifyCanonicalJson(value) !== stringifyCanonicalJson(canonical)) {
     fail("WORLD_PACKAGE_MANIFEST_INVALID", "manifest is not canonical");

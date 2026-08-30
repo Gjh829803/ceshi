@@ -46,7 +46,7 @@ import {
   parseNativeSceneCheckResultV1,
   parseNativeSceneDiagnosticV1,
   type NativeSceneCheckResultV1,
-} from "@whitebox-world/native-babylon";
+} from "@whitebox-world/runtime-contracts";
 
 import {
   runChangeApplyV1,

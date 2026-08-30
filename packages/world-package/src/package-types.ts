@@ -1,7 +1,7 @@
 import type { GameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
 import type { Sha256HashV1 } from "@whitebox-world/protocol";
 import type {
-  CanonicalResourceLockEntryV1,
+  WorldResourceLockEntryV1,
   CanonicalSceneExecutionPlanV1,
   WorldRuntimeBootstrapV1,
 } from "@whitebox-world/runtime-contracts";
@@ -115,7 +115,7 @@ export interface WorldPackageManifestV1 {
     readonly maximumTriangles: number;
     readonly maximumColliders: number;
   }>;
-  readonly lockedResources: readonly CanonicalResourceLockEntryV1[];
+  readonly lockedResources: readonly WorldResourceLockEntryV1[];
   readonly entryPoint: Readonly<{
     readonly canonicalSceneExecutionPlanPath:
       "targets/babylon-web/canonical-scene-execution-plan.json";

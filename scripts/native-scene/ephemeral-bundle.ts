@@ -7,9 +7,11 @@ import {
   BABYLON_NATIVE_DEEP_ESM_IMPORT_SPECIFIERS_V1,
   defineBabylonNativeScene,
   type BabylonNativeSceneModuleV1,
-  type NativeSceneDiagnosticLocationV1,
-  type NativeSceneDiagnosticV1,
 } from "@whitebox-world/native-babylon";
+import type {
+  NativeSceneDiagnosticLocationV1,
+  NativeSceneDiagnosticV1,
+} from "@whitebox-world/runtime-contracts";
 import { isEqual, isNil, orderBy } from "lodash-es";
 import ts from "typescript";
 import { build as viteBuild } from "vite";

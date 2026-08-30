@@ -1,11 +1,10 @@
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
 import type { Scene } from "@babylonjs/core/scene.js";
-import { isEmpty, isNil } from "lodash-es";
-
 import {
   parseNativeSceneDiagnosticV1,
   type NativeSceneDiagnosticV1,
-} from "./diagnostics.js";
+} from "@whitebox-world/runtime-contracts";
+import { isEmpty, isNil } from "lodash-es";
 
 export const BABYLON_NATIVE_AUDITED_SCENE_OBSERVABLE_KEYS_V1 = Object.freeze([
   "onClearColorChangedObservable",

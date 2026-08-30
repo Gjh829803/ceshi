@@ -4,7 +4,7 @@ import { gameplayBootstrapCanonicalBytesV1 } from "@whitebox-world/gameplay-cont
 import type { LayoutSolveResultV1 } from "@whitebox-world/layout-solver";
 import { canonicalJsonBytes, sha256Bytes, sha256CanonicalJson, type Sha256HashV1 } from "@whitebox-world/protocol";
 import {
-  canonicalResourceLockEntriesV1,
+  worldResourceLockEntriesV1,
   hashCanonicalSceneExecutionPlanV1,
   parseCanonicalSceneExecutionPlanV1,
   parseWorldRuntimeBootstrapV1,
@@ -224,7 +224,7 @@ function createWorldPackageV1Internal(input: CreateWorldPackageV1Input): WorldPa
   const legalDocuments = canonicalLegalDocuments(input.licenseDocuments, noticeText);
   assertLegalClosure(input, resources, legalDocuments);
 
-  const lockedResources = canonicalResourceLockEntriesV1([...plan.sceneResourceLockEntries, ...runtime.runtimeResourceLockEntries]);
+  const lockedResources = worldResourceLockEntriesV1([...plan.sceneResourceLockEntries, ...runtime.runtimeResourceLockEntries]);
   const runtimeBytes = worldRuntimeBootstrapCanonicalBytesV1(runtime);
   const gameplayBytes = gameplayBootstrapCanonicalBytesV1(gameplay);
   const generated = input.generatedResourceProvenance;

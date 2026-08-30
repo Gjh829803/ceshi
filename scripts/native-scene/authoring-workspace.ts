@@ -6,7 +6,7 @@ import {
   type NativeSceneDiagnosticLocationV1,
   type NativeSceneDiagnosticStageV1,
   type NativeSceneDiagnosticV1,
-} from "@whitebox-world/native-babylon";
+} from "@whitebox-world/runtime-contracts";
 import {
   parseBabylonNativeSceneBootstrapV1,
   type BabylonNativeSceneBootstrapV1,

@@ -1,4 +1,11 @@
+import {
+  canonicalJsonBytes,
+  sha256CanonicalJson,
+  type Sha256HashV1,
+} from "@whitebox-world/protocol";
 import { isNil } from "lodash-es";
+
+// Persistent, Babylon-free diagnostics are owned by Runtime Contracts.
 
 export type NativeSceneDiagnosticMeasurementV1 =
   | Readonly<{ kind: "none" }>
@@ -482,4 +489,24 @@ export function parseNativeSceneCheckResultV1(
     outcome,
     diagnostics,
   });
+}
+
+export function canonicalNativeSceneDiagnosticBytesV1(
+  input: unknown,
+): Uint8Array {
+  return canonicalJsonBytes(parseNativeSceneDiagnosticV1(input));
+}
+
+export function hashNativeSceneDiagnosticV1(input: unknown): Sha256HashV1 {
+  return sha256CanonicalJson(parseNativeSceneDiagnosticV1(input)) as Sha256HashV1;
+}
+
+export function canonicalNativeSceneCheckResultBytesV1(
+  input: unknown,
+): Uint8Array {
+  return canonicalJsonBytes(parseNativeSceneCheckResultV1(input));
+}
+
+export function hashNativeSceneCheckResultV1(input: unknown): Sha256HashV1 {
+  return sha256CanonicalJson(parseNativeSceneCheckResultV1(input)) as Sha256HashV1;
 }

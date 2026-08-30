@@ -1,7 +1,7 @@
 import {
   parseNativeSceneCheckResultV1,
   parseNativeSceneDiagnosticV1,
-} from "@whitebox-world/native-babylon";
+} from "@whitebox-world/runtime-contracts";
 import { describe, expect, it } from "vitest";
 
 import { explainNativeSceneCheckResultV1 } from "./explain.js";

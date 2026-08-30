@@ -16,16 +16,6 @@ export { admitBabylonNativeSceneCandidateV1 } from "./candidate-admission.js";
 export {
   BABYLON_NATIVE_FORBIDDEN_SCENE_INPUT_CAMERA_METHOD_KEYS_V1,
 } from "./authority-audit.js";
-export type {
-  BabylonNativeContributionTraversalBindingV1,
-  BabylonNativeSceneContributionV1,
-  BabylonNativeSpawnMarkerContributionV1,
-  BabylonNativeStaticColliderContributionV1,
-} from "./contribution.js";
-export {
-  hashBabylonNativeSceneContributionV1,
-  parseBabylonNativeSceneContributionV1,
-} from "./contribution.js";
 export type { BabylonNativeSceneModuleV1 } from "./module.js";
 export type { BabylonNativeHostRandomV1 } from "./random.js";
 export { createBabylonNativeHostRandomV1 } from "./random.js";
