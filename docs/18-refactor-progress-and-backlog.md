@@ -1052,6 +1052,35 @@ Package、Build-Epoch Session 和结构 Checker 已完成合同级 checkpoint；
   Owner Gate，普通 check 不更新 tracked baseline；
 - [ ] PHO-8：完成对抗 Corpus、全维度审查、Cursor Cloud 独立复核、文档切换和最终 GO/NO-GO。
 
+#### P3.8 WRC-1 世界还原与可玩控制闭环
+
+当前 BNA、BWB、PR #41 后续动作/相机、空间事件、场景还原评测和 PHO 工作统一由
+[WRC-1 World Reconstruction & Control Milestone](superpowers/specs/2026-08-30-wrc1-world-reconstruction-and-control-milestone-design.md)
+编排。`WRC-1` 是便于检索和分批集成的总项目，不是新 Runtime、Scene Source、Package、Compiler、
+状态权威或长期大分支；BNA/BWB/PHO 与 3C/Camera 规格继续拥有各自详细技术合同，本页仍是唯一实时
+完成状态入口。
+
+WRC-1 共包含 33 个工作包：已有 JUMP-0..3、BNA-3..8、BWB-3..6、PHO-0A/0B/1..8，另增：
+
+- [ ] WRC-GOV-1：把 PR #41 单一权威、Snapshot/Hash/Reset/Replay/Rollback 和禁止 Provider 私有
+  Gameplay 状态的规则写入 AGENTS、Runtime checklist 与机械化边界回归；
+- [ ] WRC-ACT-1：冻结 Action Context、Channel Lock、`ActionVariantSet` 与 `PoseSetProfile`；
+- [ ] WRC-ACT-2：完成固定 Tick Action/Posture Reducer、Cancel/Interrupt、fall/land、声明式 fallback、
+  安全 Capsule 切换和重放；
+- [ ] WRC-CAM-1：完成 Action、跳跃/落地、狭窄/室内和事件焦点的 committed Context → CameraDirector；
+- [ ] WRC-CAM-2：完成第一/第三人称、碰撞、暂停/Reset/cadence/隔离 Golden Fixture 与两轮真实
+  `FeelReviewReceipt`；
+- [ ] WRC-SR-1：冻结拓扑、语义轮廓、路线、Opening Composition、碰撞和通过性分维度场景还原评分；
+- [ ] WRC-SR-2：实现稳定诊断驱动、轮数受限、只修改 Authoring/Resource 的场景修复循环；
+- [ ] WRC-EVT-1：实现位置进入/退出 → committed Event/Receipt → 世界/人物变化 → Camera Context 的
+  可重放纵向切片；
+- [ ] WRC-ACC-1：用山地/T 字、台阶/建筑/有限室内、动作/相机/空间事件三个旗舰 Case 完成 WRC-1
+  exact-SHA 总验收与文档切换。
+
+每个工作包独立成可审核的小 PR，依赖满足且门禁闭合后立即合入 `main`，不等待 WRC-1 全部完成。
+开发期只跑聚焦 RED→GREEN 和一次受影响门禁；整仓重型门禁与独立深审只在合入候选/阶段收口时由
+Cursor Cloud 针对精确 SHA 执行，禁止无输入变化时反复重跑。
+
 ## 5. 推荐实施顺序与依赖
 
 ```text
