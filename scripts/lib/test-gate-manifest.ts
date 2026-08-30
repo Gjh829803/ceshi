@@ -318,6 +318,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "scripts/lib/worldkit-source-commit.test.ts", lane: "contract" },
   { path: "scripts/native-scene/authoring-workspace.test.ts", lane: "contract" },
   { path: "scripts/native-scene/check-policy.test.ts", lane: "contract" },
+  { path: "scripts/native-scene/dependency-lock.test.ts", lane: "contract" },
   { path: "scripts/native-scene/explain.test.ts", lane: "contract" },
   { path: "scripts/native-scene/module-bundle.test.ts", lane: "resource-heavy", reasonCodes: ["measured-duration"] },
   { path: "scripts/native-scene/native-scene-check.test.ts", lane: "resource-heavy", reasonCodes: ["measured-duration"] },
