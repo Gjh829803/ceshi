@@ -103,6 +103,22 @@ function options(
   };
 }
 
+function splitOptions(
+  commit = initialCommit(),
+  state: CharacterMovementRuntimeStateV1 = runtimeState(),
+  overrides: Partial<CharacterMovementRuntimeOptionsV1> = {},
+): CharacterMovementRuntimeOptionsV1 {
+  return {
+    ...options(commit, state),
+    jumpVariantPolicy: {
+      mode: "run-selects-variant",
+      smallAnticipationSeconds: FIXED_DELTA * 2,
+      largeAnticipationSeconds: FIXED_DELTA * 3,
+    },
+    ...overrides,
+  };
+}
+
 function command(tick: number, overrides: Partial<CharacterMovementCommandV1> = {}): CharacterMovementCommandV1 {
   return {
     schemaVersion: 1,
@@ -630,6 +646,339 @@ describe("CharacterMovementRuntime transaction and locomotion", () => {
     expect(commit.locomotion).toMatchObject({ verticalPhase: "falling" });
     expect(commit.transitionEvents.map((event) => event.type))
       .toEqual(["phase-changed", "apex-crossed", "phase-changed"]);
+  });
+});
+
+describe("CharacterMovementRuntime split jump Episode reducer", () => {
+  it("selects small or large exactly on the admitted press edge", () => {
+    for (const [runRequested, variant, anticipationTicksRemaining] of [
+      [false, "small", 2],
+      [true, "large", 3],
+    ] as const) {
+      const runtime = createCharacterMovementRuntimeV1(splitOptions());
+      const { commit } = transact(runtime, command(1, {
+        jumpPressed: true,
+        jumpHeld: true,
+        runRequested,
+      }));
+      expect(commit.jumpEpisode).toEqual({
+        schemaVersion: 1,
+        variant,
+        phase: "anticipating",
+        startedTick: 1,
+        anticipationStartedTick: 1,
+        committedTick: 1,
+        anticipationTicksRemaining,
+      });
+      expect(runtime.snapshot().jumpEpisode).toEqual(commit.jumpEpisode);
+    }
+  });
+
+  it("freezes a buffered variant until support admits anticipation", () => {
+    const runtime = createCharacterMovementRuntimeV1(splitOptions(unsupportedFallingCommit()));
+    const buffered = transact(runtime, command(1, {
+      jumpPressed: true,
+      runRequested: true,
+    }), {
+      support: { mode: "unsupported" },
+      linearVelocityMetersPerSecondXYZ: [0, -1, 0],
+    }, {
+      support: { mode: "unsupported" },
+      linearVelocityMetersPerSecondXYZ: [0, -1, 0],
+    });
+    expect(buffered.commit.jumpEpisode).toMatchObject({ variant: "large", phase: "buffered" });
+    expect(runtime.snapshot().runtimeState.jumpBufferTicksRemaining).toBeGreaterThan(0);
+
+    const stillBuffered = transact(runtime, command(2, {
+      jumpPressed: true,
+      runRequested: false,
+    }), {
+      support: { mode: "unsupported" },
+      linearVelocityMetersPerSecondXYZ: [0, -1, 0],
+    }, {
+      support: { mode: "unsupported" },
+      linearVelocityMetersPerSecondXYZ: [0, -1, 0],
+    });
+    expect(stillBuffered.commit.jumpEpisode).toMatchObject({ variant: "large", phase: "buffered" });
+
+    const admitted = transact(runtime, command(3), {}, {});
+    expect(admitted.commit.jumpEpisode).toMatchObject({
+      variant: "large",
+      phase: "anticipating",
+      anticipationStartedTick: 3,
+      anticipationTicksRemaining: 3,
+    });
+  });
+
+  it("counts down on fixed Ticks and commits exactly one takeoff with the frozen variant", () => {
+    const runtime = createCharacterMovementRuntimeV1(splitOptions());
+    const first = transact(runtime, command(1, { jumpPressed: true }));
+    expect(first.proposal.proposedLinearVelocityMetersPerSecondXYZ[1]).toBe(0);
+    expect(first.commit.jumpEpisode).toMatchObject({
+      variant: "small",
+      phase: "anticipating",
+      anticipationTicksRemaining: 2,
+    });
+
+    const second = transact(runtime, command(2, {
+      jumpPressed: true,
+      runRequested: true,
+    }));
+    expect(second.proposal.proposedLinearVelocityMetersPerSecondXYZ[1]).toBe(0);
+    expect(second.commit.jumpEpisode).toMatchObject({
+      variant: "small",
+      phase: "anticipating",
+      anticipationTicksRemaining: 1,
+    });
+
+    const takeoff = transact(runtime, command(3, { jumpHeld: true }), {}, {
+      support: { mode: "unsupported" },
+      linearVelocityMetersPerSecondXYZ: [0, 5.5, 0],
+    });
+    expect(takeoff.proposal.proposedLinearVelocityMetersPerSecondXYZ[1]).toBe(5.5);
+    expect(takeoff.commit.jumpEpisode).toMatchObject({
+      variant: "small",
+      phase: "airborne",
+      takeoffTick: 3,
+    });
+    expect(takeoff.commit.transitionEvents.filter((event) =>
+      event.type === "phase-changed" && event.toVerticalPhase === "takeoff"
+    )).toHaveLength(1);
+
+    const rising = transact(runtime, command(4, {
+      jumpPressed: true,
+      jumpHeld: true,
+      runRequested: true,
+    }), {
+      support: { mode: "unsupported" },
+      linearVelocityMetersPerSecondXYZ: [0, 5, 0],
+    }, {
+      support: { mode: "unsupported" },
+      linearVelocityMetersPerSecondXYZ: [0, 4.8, 0],
+    });
+    expect(rising.commit.jumpEpisode).toMatchObject({ variant: "small", phase: "airborne" });
+    expect(rising.commit.transitionEvents.some((event) =>
+      event.type === "phase-changed" && event.toVerticalPhase === "takeoff"
+    )).toBe(false);
+  });
+
+  it("expires an unsupported buffered Episode without reselecting its variant", () => {
+    const runtime = createCharacterMovementRuntimeV1(splitOptions(unsupportedFallingCommit()));
+    const history = [];
+    for (let tick = 1; tick <= 8; tick += 1) {
+      history.push(transact(runtime, command(tick, {
+        jumpPressed: tick === 1 || tick === 4,
+        runRequested: tick === 1,
+      }), {
+        support: { mode: "unsupported" },
+        linearVelocityMetersPerSecondXYZ: [0, -1, 0],
+      }, {
+        support: { mode: "unsupported" },
+        linearVelocityMetersPerSecondXYZ: [0, -1, 0],
+      }).commit.jumpEpisode);
+    }
+    expect(history.slice(0, -1).every((episode) => episode?.variant === "large")).toBe(true);
+    expect(history.at(-1)).toBeUndefined();
+    expect(runtime.snapshot().runtimeState.jumpBufferTicksRemaining).toBe(0);
+  });
+
+  it("uses released gravity for small and held gravity for large", () => {
+    const immediateOptions = () => splitOptions(
+      initialCommit(),
+      runtimeState(),
+      {
+        jumpVariantPolicy: {
+          mode: "run-selects-variant",
+          smallAnticipationSeconds: 0,
+          largeAnticipationSeconds: 0,
+        },
+      },
+    );
+    const createAirborne = (runRequested: boolean) => {
+      const runtime = createCharacterMovementRuntimeV1(immediateOptions());
+      transact(runtime, command(1, {
+        jumpPressed: true,
+        jumpHeld: true,
+        runRequested,
+      }), {}, {
+        support: { mode: "unsupported" },
+        linearVelocityMetersPerSecondXYZ: [0, 5.5, 0],
+      });
+      return runtime;
+    };
+    const smallHeld = createAirborne(false);
+    const smallReleased = createAirborne(false);
+    const largeHeld = createAirborne(true);
+    const risingProposal = (
+      runtime: ReturnType<typeof createCharacterMovementRuntimeV1>,
+      jumpHeld: boolean,
+    ) => {
+      const token = runtime.beginTick(command(2, { jumpHeld }));
+      return runtime.proposeMovement(token, sample(token, 2, {
+        positionMetersXYZ: runtime.snapshot().positionMetersXYZ,
+        support: { mode: "unsupported" },
+        linearVelocityMetersPerSecondXYZ: [0, 5, 0],
+      }));
+    };
+    const smallHeldVelocity = risingProposal(smallHeld, true)
+      .proposedLinearVelocityMetersPerSecondXYZ[1];
+    const smallReleasedVelocity = risingProposal(smallReleased, false)
+      .proposedLinearVelocityMetersPerSecondXYZ[1];
+    const largeHeldVelocity = risingProposal(largeHeld, true)
+      .proposedLinearVelocityMetersPerSecondXYZ[1];
+    expect(smallHeldVelocity).toBe(smallReleasedVelocity);
+    expect(largeHeldVelocity).toBeGreaterThan(smallHeldVelocity);
+    expect(smallHeld.snapshot().runtimeState.variableJumpHoldTicksRemaining).toBe(0);
+    expect(largeHeld.snapshot().runtimeState.variableJumpHoldTicksRemaining).toBeGreaterThan(0);
+  });
+
+  it("admits coyote anticipation and clears the Episode on ceiling or landing", () => {
+    const coyote = createCharacterMovementRuntimeV1(splitOptions());
+    transact(coyote, command(1), {}, {
+      support: { mode: "unsupported" },
+      linearVelocityMetersPerSecondXYZ: [0, -1, 0],
+    });
+    const admitted = transact(coyote, command(2, {
+      jumpPressed: true,
+      runRequested: true,
+    }), {
+      support: { mode: "unsupported" },
+      linearVelocityMetersPerSecondXYZ: [0, -1, 0],
+    }, {
+      support: { mode: "unsupported" },
+      linearVelocityMetersPerSecondXYZ: [0, -1, 0],
+    });
+    expect(admitted.commit.jumpEpisode).toMatchObject({
+      variant: "large",
+      phase: "anticipating",
+    });
+
+    const immediate = {
+      jumpVariantPolicy: {
+        mode: "run-selects-variant" as const,
+        smallAnticipationSeconds: 0,
+        largeAnticipationSeconds: 0,
+      },
+    };
+    const ceiling = createCharacterMovementRuntimeV1(splitOptions(
+      initialCommit(),
+      runtimeState(),
+      immediate,
+    ));
+    const ceilingCommit = transact(ceiling, command(1, { jumpPressed: true }), {}, {
+      support: { mode: "unsupported" },
+      linearVelocityMetersPerSecondXYZ: [0, 3, 0],
+      hasCeilingContact: true,
+      isTranslationLimited: true,
+    }).commit;
+    expect(ceilingCommit.locomotion).toMatchObject({ verticalPhase: "falling" });
+    expect(ceilingCommit.jumpEpisode).toBeUndefined();
+
+    const landing = createCharacterMovementRuntimeV1(splitOptions(
+      initialCommit(),
+      runtimeState(),
+      immediate,
+    ));
+    transact(landing, command(1, { jumpPressed: true }), {}, {
+      support: { mode: "unsupported" },
+      linearVelocityMetersPerSecondXYZ: [0, 5.5, 0],
+    });
+    const landingCommit = transact(landing, command(2), {
+      support: { mode: "unsupported" },
+      linearVelocityMetersPerSecondXYZ: [0, -1, 0],
+    }, {
+      support: {
+        mode: "supported",
+        pointMetersXYZ: [0, 0, 0],
+        normalXYZ: [0, 1, 0],
+        isDynamic: false,
+      },
+      linearVelocityMetersPerSecondXYZ: [0, 0, 0],
+    }).commit;
+    expect(landingCommit.locomotion).toMatchObject({ verticalPhase: "landing" });
+    expect(landingCommit.jumpEpisode).toBeUndefined();
+  });
+
+  it("restores mid-buffer and mid-anticipation and keeps failed reconciliation atomic", () => {
+    const compareNext = (
+      runtime: ReturnType<typeof createCharacterMovementRuntimeV1>,
+      nextCommand: CharacterMovementCommandV1,
+      sampleOverrides: Partial<BodySampleV1>,
+      resolutionOverrides: Partial<BodyResolutionV1>,
+    ) => {
+      const restored = createCharacterMovementRuntimeV1(splitOptions());
+      restored.reset(runtime.snapshot());
+      const direct = transact(runtime, nextCommand, sampleOverrides, resolutionOverrides);
+      const replayed = transact(restored, nextCommand, sampleOverrides, resolutionOverrides);
+      expect(replayed.proposal).toEqual(direct.proposal);
+      expect(replayed.commit).toEqual(direct.commit);
+      expect(restored.snapshot()).toEqual(runtime.snapshot());
+    };
+
+    const buffered = createCharacterMovementRuntimeV1(splitOptions(unsupportedFallingCommit()));
+    transact(buffered, command(1, { jumpPressed: true, runRequested: true }), {
+      support: { mode: "unsupported" },
+      linearVelocityMetersPerSecondXYZ: [0, -1, 0],
+    }, {
+      support: { mode: "unsupported" },
+      linearVelocityMetersPerSecondXYZ: [0, -1, 0],
+    });
+    compareNext(buffered, command(2), {}, {});
+
+    const anticipating = createCharacterMovementRuntimeV1(splitOptions());
+    transact(anticipating, command(1, { jumpPressed: true }));
+    compareNext(anticipating, command(2), {}, {});
+
+    const atomic = createCharacterMovementRuntimeV1(splitOptions());
+    const before = JSON.stringify(atomic.snapshot());
+    const token = atomic.beginTick(command(1, { jumpPressed: true }));
+    atomic.proposeMovement(token, sample(token, 1));
+    expect(() => atomic.reconcile(token, { ...resolution(token, 1), tick: 2 }))
+      .toThrow("3C_TICK_TOKEN_STALE");
+    expect(JSON.stringify(atomic.snapshot())).toBe(before);
+    expect(atomic.reconcile(token, resolution(token, 1)).jumpEpisode)
+      .toMatchObject({ phase: "anticipating" });
+
+    const aborted = createCharacterMovementRuntimeV1(splitOptions());
+    const abortedToken = aborted.beginTick(command(1, { jumpPressed: true }));
+    aborted.proposeMovement(abortedToken, sample(abortedToken, 1));
+    aborted.reset();
+    expect(aborted.snapshot().jumpEpisode).toBeUndefined();
+    expect(() => aborted.reconcile(abortedToken, resolution(abortedToken, 1)))
+      .toThrow("3C_TICK_TOKEN_STALE");
+  });
+
+  it("is cadence-independent and isolates opposite variants across instances", () => {
+    const run = (renderSamplesPerTick: number) => {
+      const runtime = createCharacterMovementRuntimeV1(splitOptions());
+      const hashes = [];
+      for (let tick = 1; tick <= 5; tick += 1) {
+        const isTakeoffTick = tick === 3;
+        const isRisingTick = tick === 4;
+        transact(runtime, command(tick, {
+          jumpPressed: tick === 1,
+          jumpHeld: tick >= 3,
+        }), isRisingTick ? {
+          support: { mode: "unsupported" },
+          linearVelocityMetersPerSecondXYZ: [0, 5, 0],
+        } : {}, isTakeoffTick || isRisingTick ? {
+          support: { mode: "unsupported" },
+          linearVelocityMetersPerSecondXYZ: [0, isTakeoffTick ? 5.5 : 4.8, 0],
+        } : {});
+        for (let index = 0; index < renderSamplesPerTick; index += 1) runtime.snapshot();
+        hashes.push(runtime.snapshot().stateHash);
+      }
+      return hashes;
+    };
+    expect(run(1)).toEqual(run(2));
+    expect(run(2)).toEqual(run(4));
+
+    const small = createCharacterMovementRuntimeV1(splitOptions());
+    const large = createCharacterMovementRuntimeV1(splitOptions());
+    transact(small, command(1, { jumpPressed: true }));
+    transact(large, command(1, { jumpPressed: true, runRequested: true }));
+    expect(small.snapshot().jumpEpisode?.variant).toBe("small");
+    expect(large.snapshot().jumpEpisode?.variant).toBe("large");
   });
 });
 
