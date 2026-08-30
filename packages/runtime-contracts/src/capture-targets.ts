@@ -1,6 +1,9 @@
 export type WhiteboxCaptureViewV1 = "front" | "right" | "back";
 
 export const MAXIMUM_VISUAL_CAPTURE_GROUPS_V1 = 5 as const;
+export const WHITEBOX_TRIVIEW_BACKGROUND_COLOR_V1 = "#F1F1ED" as const;
+export const WHITEBOX_TRIVIEW_BACKGROUND_RGB_V1 = [241, 241, 237] as const;
+export const WHITEBOX_TRIVIEW_BACKGROUND_TOLERANCE_V1 = 12 as const;
 
 export type VisualCaptureGroupRoleV1 =
   | "primary-subject"
@@ -46,6 +49,132 @@ export interface WhiteboxTriviewCaptureV1 {
   readonly runtimeEntityIds: readonly string[];
   readonly views: readonly ["front", "right", "back"];
   readonly imageDataUri: string;
+  readonly inspection: WhiteboxTriviewInspectionV1;
+}
+
+export interface WhiteboxTriviewInspectionV1 {
+  readonly widthPixels: number;
+  readonly heightPixels: number;
+  readonly foregroundPixelCount: number;
+  readonly minimumForegroundPixelCount: number;
+  readonly foregroundBoundsPixels: Readonly<{
+    minimumPixelsXY: readonly [number, number];
+    maximumPixelsXY: readonly [number, number];
+  }> | null;
+  readonly viewInspections: readonly [
+    WhiteboxTriviewViewInspectionV1,
+    WhiteboxTriviewViewInspectionV1,
+    WhiteboxTriviewViewInspectionV1,
+  ];
+  readonly isRenderable: boolean;
+}
+
+export interface WhiteboxTriviewViewInspectionV1 {
+  readonly view: WhiteboxCaptureViewV1;
+  readonly foregroundPixelCount: number;
+  readonly minimumForegroundPixelCount: number;
+  readonly foregroundBoundsPixels: Readonly<{
+    minimumPixelsXY: readonly [number, number];
+    maximumPixelsXY: readonly [number, number];
+  }> | null;
+  readonly isRenderable: boolean;
+}
+
+/**
+ * Measures actual semantic-mask coverage instead of sampling a few RGB values.
+ * The fixed tolerance excludes antialiasing noise and the effectively invisible
+ * dependency meshes retained by the Babylon tri-view renderer.
+ */
+export function inspectWhiteboxTriviewPixelsV1(
+  pixelsRgba: Uint8ClampedArray,
+  widthPixels: number,
+  heightPixels: number,
+): WhiteboxTriviewInspectionV1 {
+  if (!Number.isSafeInteger(widthPixels) || widthPixels < 1 ||
+      !Number.isSafeInteger(heightPixels) || heightPixels < 1) {
+    throw new RangeError("Whitebox tri-view dimensions must be positive safe integers.");
+  }
+  const totalPixelCount = widthPixels * heightPixels;
+  if (pixelsRgba.length !== totalPixelCount * 4) {
+    throw new RangeError("Whitebox tri-view RGBA byte length does not match its dimensions.");
+  }
+  if (widthPixels % 3 !== 0) {
+    throw new RangeError("Whitebox tri-view width must contain three equal panels.");
+  }
+  const panelWidthPixels = widthPixels / 3;
+  const panelPixelCount = panelWidthPixels * heightPixels;
+  const minimumPanelForegroundPixelCount = Math.min(
+    panelPixelCount,
+    Math.max(64, Math.ceil(panelPixelCount * 0.0001)),
+  );
+  const panelForegroundPixelCounts = [0, 0, 0];
+  const panelMinimumX = [panelWidthPixels, panelWidthPixels, panelWidthPixels];
+  const panelMinimumY = [heightPixels, heightPixels, heightPixels];
+  const panelMaximumX = [-1, -1, -1];
+  const panelMaximumY = [-1, -1, -1];
+  let foregroundPixelCount = 0;
+  let minimumX = widthPixels;
+  let minimumY = heightPixels;
+  let maximumX = -1;
+  let maximumY = -1;
+  for (let pixel = 0; pixel < totalPixelCount; pixel += 1) {
+    const offset = pixel * 4;
+    if (pixelsRgba[offset + 3]! < 128) continue;
+    const differsFromBackground = Math.max(
+      Math.abs(pixelsRgba[offset]! - WHITEBOX_TRIVIEW_BACKGROUND_RGB_V1[0]),
+      Math.abs(pixelsRgba[offset + 1]! - WHITEBOX_TRIVIEW_BACKGROUND_RGB_V1[1]),
+      Math.abs(pixelsRgba[offset + 2]! - WHITEBOX_TRIVIEW_BACKGROUND_RGB_V1[2]),
+    ) >= WHITEBOX_TRIVIEW_BACKGROUND_TOLERANCE_V1;
+    if (!differsFromBackground) continue;
+    foregroundPixelCount += 1;
+    const x = pixel % widthPixels;
+    const y = Math.floor(pixel / widthPixels);
+    const panelIndex = Math.min(2, Math.floor(x / panelWidthPixels));
+    const panelX = x - panelIndex * panelWidthPixels;
+    panelForegroundPixelCounts[panelIndex]! += 1;
+    panelMinimumX[panelIndex] = Math.min(panelMinimumX[panelIndex]!, panelX);
+    panelMinimumY[panelIndex] = Math.min(panelMinimumY[panelIndex]!, y);
+    panelMaximumX[panelIndex] = Math.max(panelMaximumX[panelIndex]!, panelX);
+    panelMaximumY[panelIndex] = Math.max(panelMaximumY[panelIndex]!, y);
+    minimumX = Math.min(minimumX, x);
+    minimumY = Math.min(minimumY, y);
+    maximumX = Math.max(maximumX, x);
+    maximumY = Math.max(maximumY, y);
+  }
+  const inspectPanel = (
+    view: WhiteboxCaptureViewV1,
+    panelIndex: number,
+  ): WhiteboxTriviewViewInspectionV1 => ({
+    view,
+    foregroundPixelCount: panelForegroundPixelCounts[panelIndex]!,
+    minimumForegroundPixelCount: minimumPanelForegroundPixelCount,
+    foregroundBoundsPixels: panelForegroundPixelCounts[panelIndex] === 0
+      ? null
+      : {
+          minimumPixelsXY: [panelMinimumX[panelIndex]!, panelMinimumY[panelIndex]!],
+          maximumPixelsXY: [panelMaximumX[panelIndex]!, panelMaximumY[panelIndex]!],
+        },
+    isRenderable: panelForegroundPixelCounts[panelIndex]! >= minimumPanelForegroundPixelCount,
+  });
+  const viewInspections = [
+    inspectPanel("front", 0),
+    inspectPanel("right", 1),
+    inspectPanel("back", 2),
+  ] as const;
+  return {
+    widthPixels,
+    heightPixels,
+    foregroundPixelCount,
+    minimumForegroundPixelCount: minimumPanelForegroundPixelCount * 3,
+    foregroundBoundsPixels: foregroundPixelCount === 0
+      ? null
+      : {
+          minimumPixelsXY: [minimumX, minimumY],
+          maximumPixelsXY: [maximumX, maximumY],
+        },
+    viewInspections,
+    isRenderable: viewInspections.every(({ isRenderable }) => isRenderable),
+  };
 }
 
 export const WORLDKIT_AUTHORING_CAPTURE_PROTOCOL_VERSION = 1 as const;
@@ -72,6 +201,41 @@ export interface WhiteboxTriviewManifestV1 {
     readonly imageUri: string;
   })[];
 }
+
+interface WhiteboxCaptureReceiptContentBaseV1 {
+  readonly kind: "worldkit-whitebox-capture-receipt";
+  readonly schemaVersion: 1;
+  readonly sceneId: string;
+  readonly worldBuildIdentityHash: `sha256:${string}`;
+  readonly authoringSpecHash: `sha256:${string}`;
+  readonly openingFrameContentHash: `sha256:${string}`;
+  readonly runtimeSnapshotContentHash: `sha256:${string}`;
+}
+
+/**
+ * Host-owned binding between one trusted World Build and the bytes captured
+ * from its Runtime session. The runtime-ready variant is deliberately valid
+ * before optional tri-view post-processing completes, so a failed tri-view
+ * never revokes an otherwise playable whitebox world.
+ */
+export type UnsignedWhiteboxCaptureReceiptV1 =
+  | (WhiteboxCaptureReceiptContentBaseV1 & Readonly<{
+      phase: "runtime-ready";
+    }>)
+  | (WhiteboxCaptureReceiptContentBaseV1 & Readonly<{
+      phase: "triview-ready";
+      whiteboxTriviewManifestContentHash: `sha256:${string}`;
+      whiteboxTriviewImageContentHashesByVisualTargetId: Readonly<
+        Record<string, `sha256:${string}`>
+      >;
+    }>);
+
+export type WhiteboxCaptureReceiptV1 = UnsignedWhiteboxCaptureReceiptV1 &
+  Readonly<{
+    signatureAlgorithm: "ed25519";
+    signerKeyId: string;
+    signatureBase64: string;
+  }>;
 
 export interface HostedVisualContractDiagnosticV1 {
   readonly code: string;
@@ -569,5 +733,151 @@ export function validateWhiteboxTriviewManifestV1(
       ));
     }
   });
+  return diagnostics;
+}
+
+export function validateWhiteboxCaptureReceiptV1(
+  value: unknown,
+): readonly HostedVisualContractDiagnosticV1[] {
+  const receipt = record(value);
+  if (receipt === undefined) {
+    return [diagnostic(
+      "HOSTED_WHITEBOX_CAPTURE_RECEIPT_OBJECT_REQUIRED",
+      "",
+      "Whitebox capture receipt must be an object.",
+    )];
+  }
+  const phase = receipt.phase;
+  const diagnostics = exactKeys(
+    receipt,
+    phase === "triview-ready"
+      ? [
+          "kind",
+          "schemaVersion",
+          "sceneId",
+          "worldBuildIdentityHash",
+          "authoringSpecHash",
+          "openingFrameContentHash",
+          "runtimeSnapshotContentHash",
+          "phase",
+          "whiteboxTriviewManifestContentHash",
+          "whiteboxTriviewImageContentHashesByVisualTargetId",
+          "signatureAlgorithm",
+          "signerKeyId",
+          "signatureBase64",
+        ]
+      : [
+          "kind",
+          "schemaVersion",
+          "sceneId",
+          "worldBuildIdentityHash",
+          "authoringSpecHash",
+          "openingFrameContentHash",
+          "runtimeSnapshotContentHash",
+          "phase",
+          "signatureAlgorithm",
+          "signerKeyId",
+          "signatureBase64",
+        ],
+    "",
+  );
+  if (receipt.kind !== "worldkit-whitebox-capture-receipt") {
+    diagnostics.push(diagnostic(
+      "HOSTED_WHITEBOX_CAPTURE_RECEIPT_KIND_INVALID",
+      "/kind",
+      "Whitebox capture receipt kind is invalid.",
+    ));
+  }
+  if (receipt.schemaVersion !== 1) {
+    diagnostics.push(diagnostic(
+      "HOSTED_VISUAL_SCHEMA_VERSION_INVALID",
+      "/schemaVersion",
+      "Whitebox capture receipt schemaVersion is invalid.",
+    ));
+  }
+  if (typeof receipt.sceneId !== "string" || !ID.test(receipt.sceneId)) {
+    diagnostics.push(diagnostic(
+      "HOSTED_WHITEBOX_CAPTURE_SCENE_ID_INVALID",
+      "/sceneId",
+      "sceneId is invalid.",
+    ));
+  }
+  for (const key of [
+    "worldBuildIdentityHash",
+    "authoringSpecHash",
+    "openingFrameContentHash",
+    "runtimeSnapshotContentHash",
+  ] as const) {
+    if (typeof receipt[key] !== "string" || !HASH.test(receipt[key])) {
+      diagnostics.push(diagnostic(
+        "HOSTED_WHITEBOX_CAPTURE_HASH_INVALID",
+        `/${key}`,
+        `${key} is invalid.`,
+      ));
+    }
+  }
+  if (phase !== "runtime-ready" && phase !== "triview-ready") {
+    diagnostics.push(diagnostic(
+      "HOSTED_WHITEBOX_CAPTURE_PHASE_INVALID",
+      "/phase",
+      "phase must be runtime-ready or triview-ready.",
+    ));
+  }
+  if (receipt.signatureAlgorithm !== "ed25519") {
+    diagnostics.push(diagnostic(
+      "HOSTED_WHITEBOX_CAPTURE_SIGNATURE_ALGORITHM_INVALID",
+      "/signatureAlgorithm",
+      "signatureAlgorithm must be ed25519.",
+    ));
+  }
+  if (typeof receipt.signerKeyId !== "string" || !ID.test(receipt.signerKeyId)) {
+    diagnostics.push(diagnostic(
+      "HOSTED_WHITEBOX_CAPTURE_SIGNER_KEY_ID_INVALID",
+      "/signerKeyId",
+      "signerKeyId is invalid.",
+    ));
+  }
+  if (
+    typeof receipt.signatureBase64 !== "string" ||
+    !/^[A-Za-z0-9+/]{86}==$/.test(receipt.signatureBase64)
+  ) {
+    diagnostics.push(diagnostic(
+      "HOSTED_WHITEBOX_CAPTURE_SIGNATURE_INVALID",
+      "/signatureBase64",
+      "signatureBase64 must encode one Ed25519 signature.",
+    ));
+  }
+  if (phase === "triview-ready") {
+    if (
+      typeof receipt.whiteboxTriviewManifestContentHash !== "string" ||
+      !HASH.test(receipt.whiteboxTriviewManifestContentHash)
+    ) {
+      diagnostics.push(diagnostic(
+        "HOSTED_WHITEBOX_CAPTURE_HASH_INVALID",
+        "/whiteboxTriviewManifestContentHash",
+        "whiteboxTriviewManifestContentHash is invalid.",
+      ));
+    }
+    const imageHashes = record(
+      receipt.whiteboxTriviewImageContentHashesByVisualTargetId,
+    );
+    if (imageHashes === undefined || Object.keys(imageHashes).length < 1) {
+      diagnostics.push(diagnostic(
+        "HOSTED_WHITEBOX_CAPTURE_TRIVIEW_HASHES_REQUIRED",
+        "/whiteboxTriviewImageContentHashesByVisualTargetId",
+        "At least one tri-view image content hash is required.",
+      ));
+    } else {
+      for (const [visualTargetId, contentHash] of Object.entries(imageHashes)) {
+        if (!ID.test(visualTargetId) || typeof contentHash !== "string" || !HASH.test(contentHash)) {
+          diagnostics.push(diagnostic(
+            "HOSTED_WHITEBOX_CAPTURE_TRIVIEW_HASH_INVALID",
+            `/whiteboxTriviewImageContentHashesByVisualTargetId/${visualTargetId}`,
+            "Tri-view image identity or content hash is invalid.",
+          ));
+        }
+      }
+    }
+  }
   return diagnostics;
 }

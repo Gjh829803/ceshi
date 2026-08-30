@@ -5,24 +5,19 @@ import { inflateSync } from "node:zlib";
 import path from "node:path";
 
 import { parseSceneBriefV1 } from "@whitebox-world/authoring";
+import {
+  BLOCK_PRESET_COLORS_V1,
+  BLOCK_VISUAL_TARGET_COLORS_V1,
+  BLOCK_WHITEBOX_SUBJECT_COLOR_V1,
+} from "@whitebox-world/block-world";
 
-export const PLANNER_SELF_CHECK_VERSION = "worldkit-planner-self-check-v3";
+export const PLANNER_SELF_CHECK_VERSION = "worldkit-planner-self-check-v4";
 
 const MAXIMUM_CENTER_ERROR_RATIO = 0.015;
-const MAXIMUM_TERRAIN_IMAGE_DIMENSION_PIXELS = 4096;
-// Image2 commonly preserves the requested scalar topology while adding a mild
-// scientific-palette cast. The trusted compiler projects every pixel back onto
-// the exact signed ramp, so this gate rejects semantic/material color misuse
-// rather than requiring already-canonical transport bytes.
-const MAXIMUM_MEAN_RAMP_RESIDUAL_RGB_UNITS = 60;
-const MAXIMUM_P95_RAMP_RESIDUAL_RGB_UNITS = 90;
-const MINIMUM_NON_FLAT_HEIGHT_RATIO_RANGE = 0.05;
-const TERRAIN_HEIGHT_INTENT_PROFILE_ID = "signed-diverging-blue-gray-orange@1";
-const TERRAIN_RAMP = {
-  depression: [32, 64, 208] as const,
-  datum: [128, 128, 128] as const,
-  elevation: [224, 96, 32] as const,
-};
+const MAXIMUM_ENTRY_ASPECT_ERROR_RATIO = 0.02;
+const MINIMUM_WORLD_PLAN_PALETTE_COVERAGE_RATIO = 0.03;
+const MINIMUM_ENTRY_PALETTE_COVERAGE_RATIO = 0.02;
+const MAXIMUM_PALETTE_RGB_DISTANCE = 56;
 
 interface PlannerSelfCheckDiagnostic {
   readonly code: string;
@@ -36,7 +31,7 @@ interface DecodedPng {
   readonly pixels: Buffer;
 }
 
-interface PlannerImageMeasurement {
+interface PlannerEntryCompositionMeasurement {
   readonly widthPixels: number;
   readonly heightPixels: number;
   readonly subjectMaskPixelCount: number;
@@ -45,16 +40,87 @@ interface PlannerImageMeasurement {
   readonly maximumCenterErrorRatio: number;
 }
 
-interface TerrainIntentMeasurement {
+interface PlannerBlockPaletteMeasurement {
   readonly widthPixels: number;
   readonly heightPixels: number;
-  readonly profileId: typeof TERRAIN_HEIGHT_INTENT_PROFILE_ID;
-  readonly minimumHeightRatio: number;
-  readonly medianHeightRatio: number;
-  readonly maximumHeightRatio: number;
-  readonly meanRampResidualRgbUnits: number;
-  readonly p95RampResidualRgbUnits: number;
+  readonly aspectRatio: number;
+  readonly matchedBlockPixelCount: number;
+  readonly blockPaletteCoverageRatio: number;
+  readonly traversablePixelCount: number;
+  readonly interactivePixelCount: number;
+  readonly blockPixelCountsBySemantic: Readonly<Record<string, number>>;
+  readonly visualTargetPixelCounts: readonly number[];
 }
+
+interface PlannerImageMeasurements {
+  readonly worldPlan: PlannerBlockPaletteMeasurement | null;
+  readonly entryWhiteboxTarget: (PlannerBlockPaletteMeasurement & {
+    readonly composition: PlannerEntryCompositionMeasurement;
+  }) | null;
+}
+
+interface PaletteEntry {
+  readonly semantic: string;
+  readonly red: number;
+  readonly green: number;
+  readonly blue: number;
+  readonly isBlock: boolean;
+  readonly isTraversable: boolean;
+  readonly isInteractive: boolean;
+  readonly maximumRgbDistance: number;
+  readonly visualTargetIndex?: number;
+}
+
+function rgbFromHex(value: string): readonly [number, number, number] {
+  return [
+    Number.parseInt(value.slice(1, 3), 16),
+    Number.parseInt(value.slice(3, 5), 16),
+    Number.parseInt(value.slice(5, 7), 16),
+  ];
+}
+
+function paletteEntry(input: {
+  readonly semantic: string;
+  readonly color: string;
+  readonly isBlock: boolean;
+  readonly isTraversable?: boolean;
+  readonly isInteractive?: boolean;
+  readonly maximumRgbDistance?: number;
+  readonly visualTargetIndex?: number;
+}): PaletteEntry {
+  const [red, green, blue] = rgbFromHex(input.color);
+  return {
+    semantic: input.semantic,
+    red,
+    green,
+    blue,
+    isBlock: input.isBlock,
+    isTraversable: input.isTraversable ?? false,
+    isInteractive: input.isInteractive ?? false,
+    maximumRgbDistance: input.maximumRgbDistance ?? MAXIMUM_PALETTE_RGB_DISTANCE,
+    ...(input.visualTargetIndex === undefined
+      ? {}
+      : { visualTargetIndex: input.visualTargetIndex }),
+  };
+}
+
+const BLOCK_WHITEBOX_PALETTE = Object.freeze([
+  paletteEntry({ semantic: "walkable", color: BLOCK_PRESET_COLORS_V1.walkable, isBlock: true, isTraversable: true }),
+  paletteEntry({ semantic: "obstacle", color: BLOCK_PRESET_COLORS_V1.obstacle, isBlock: true }),
+  paletteEntry({ semantic: "interactive-solid", color: BLOCK_PRESET_COLORS_V1.interactiveSolid, isBlock: true, isInteractive: true }),
+  paletteEntry({ semantic: "interactive-trigger", color: BLOCK_PRESET_COLORS_V1.interactiveTrigger, isBlock: true, isInteractive: true }),
+  paletteEntry({ semantic: "water", color: BLOCK_PRESET_COLORS_V1.water, isBlock: true }),
+  paletteEntry({ semantic: "cloud-walkable", color: BLOCK_PRESET_COLORS_V1.cloudWalkable, isBlock: true, isTraversable: true }),
+  paletteEntry({ semantic: "cloud-passable", color: BLOCK_PRESET_COLORS_V1.cloudPassable, isBlock: true, maximumRgbDistance: 16 }),
+  paletteEntry({ semantic: "visual-only", color: BLOCK_PRESET_COLORS_V1.visualOnly, isBlock: true }),
+  paletteEntry({ semantic: "landmark-red", color: BLOCK_PRESET_COLORS_V1.landmarkRed, isBlock: true }),
+  paletteEntry({ semantic: "visual-target-2", color: BLOCK_VISUAL_TARGET_COLORS_V1[1], isBlock: true, visualTargetIndex: 1 }),
+  paletteEntry({ semantic: "visual-target-3", color: BLOCK_VISUAL_TARGET_COLORS_V1[2], isBlock: true, visualTargetIndex: 2 }),
+  paletteEntry({ semantic: "visual-target-4", color: BLOCK_VISUAL_TARGET_COLORS_V1[3], isBlock: true, visualTargetIndex: 3 }),
+  paletteEntry({ semantic: "visual-target-5", color: BLOCK_VISUAL_TARGET_COLORS_V1[4], isBlock: true, visualTargetIndex: 4 }),
+  paletteEntry({ semantic: "landmark-pink", color: BLOCK_PRESET_COLORS_V1.landmarkPink, isBlock: true }),
+  paletteEntry({ semantic: "visual-target-1-subject", color: BLOCK_WHITEBOX_SUBJECT_COLOR_V1, isBlock: false, visualTargetIndex: 0 }),
+] as const);
 
 function option(arguments_: readonly string[], name: string): string {
   const index = arguments_.indexOf(name);
@@ -171,8 +237,7 @@ function rgbHueSaturation(red: number, green: number, blue: number) {
   };
 }
 
-function centerMeasurement(bytes: Buffer): PlannerImageMeasurement {
-  const image = decodePng(bytes);
+function centerMeasurement(image: DecodedPng): PlannerEntryCompositionMeasurement {
   let xTotal = 0;
   let count = 0;
   for (let index = 0; index < image.width * image.height; index += 1) {
@@ -198,7 +263,7 @@ function centerMeasurement(bytes: Buffer): PlannerImageMeasurement {
   );
   if (count < minimumPixels) {
     throw new Error(
-      `Primary-subject red mask is missing or too small (${count} pixels).`,
+      `Primary-subject red silhouette is missing or too small (${count} pixels).`,
     );
   }
   const centerXRatio = (xTotal / count + 0.5) / image.width;
@@ -212,100 +277,99 @@ function centerMeasurement(bytes: Buffer): PlannerImageMeasurement {
   };
 }
 
-function segmentProjection(
-  rgb: readonly [number, number, number],
-  start: readonly [number, number, number],
-  end: readonly [number, number, number],
-  startHeightRatio: number,
-) {
-  const delta = [end[0] - start[0], end[1] - start[1], end[2] - start[2]];
-  const lengthSquared = delta.reduce((sum, value) => sum + value * value, 0);
-  const unclamped = (
-    (rgb[0] - start[0]) * delta[0]! +
-    (rgb[1] - start[1]) * delta[1]! +
-    (rgb[2] - start[2]) * delta[2]!
-  ) / lengthSquared;
-  const ratio = Math.max(0, Math.min(1, unclamped));
-  return {
-    heightRatio: startHeightRatio + ratio,
-    residual: Math.hypot(
-      rgb[0] - (start[0] + ratio * delta[0]!),
-      rgb[1] - (start[1] + ratio * delta[1]!),
-      rgb[2] - (start[2] + ratio * delta[2]!),
-    ),
-  };
-}
-
-function nearestRank(sorted: readonly number[], ratio: number): number {
-  return sorted[Math.max(0, Math.ceil(ratio * sorted.length) - 1)]!;
-}
-
-function terrainIntentMeasurement(bytes: Buffer): TerrainIntentMeasurement {
-  const image = decodePng(bytes);
-  if (image.width !== image.height) {
-    throw new Error("Height Intent PNG must be square.");
-  }
-  if (image.width > MAXIMUM_TERRAIN_IMAGE_DIMENSION_PIXELS) {
-    throw new Error(
-      `Height Intent PNG dimensions must not exceed ${MAXIMUM_TERRAIN_IMAGE_DIMENSION_PIXELS}px.`,
-    );
-  }
-  const ratios: number[] = [];
-  const residuals: number[] = [];
+function blockPaletteMeasurement(image: DecodedPng): PlannerBlockPaletteMeasurement {
+  const counts = Object.fromEntries(
+    BLOCK_WHITEBOX_PALETTE.map(({ semantic }) => [semantic, 0]),
+  ) as Record<string, number>;
+  const visualTargetPixelCounts = BLOCK_VISUAL_TARGET_COLORS_V1.map(() => 0);
+  let matchedBlockPixelCount = 0;
+  let traversablePixelCount = 0;
+  let interactivePixelCount = 0;
   for (let index = 0; index < image.width * image.height; index += 1) {
     const offset = index * image.channels;
-    if (image.channels === 4 && image.pixels[offset + 3] !== 255) {
-      throw new Error("Height Intent PNG must be fully opaque.");
+    const red = image.pixels[offset]!;
+    const green = image.pixels[offset + 1]!;
+    const blue = image.pixels[offset + 2]!;
+    let best: PaletteEntry | undefined;
+    let bestDistanceSquared = Number.POSITIVE_INFINITY;
+    for (const candidate of BLOCK_WHITEBOX_PALETTE) {
+      const distanceSquared =
+        (red - candidate.red) ** 2 +
+        (green - candidate.green) ** 2 +
+        (blue - candidate.blue) ** 2;
+      if (distanceSquared < bestDistanceSquared) {
+        best = candidate;
+        bestDistanceSquared = distanceSquared;
+      }
     }
-    const rgb = [
-      image.pixels[offset]!,
-      image.pixels[offset + 1]!,
-      image.pixels[offset + 2]!,
-    ] as const;
-    const low = segmentProjection(
-      rgb,
-      TERRAIN_RAMP.depression,
-      TERRAIN_RAMP.datum,
-      -1,
-    );
-    const high = segmentProjection(
-      rgb,
-      TERRAIN_RAMP.datum,
-      TERRAIN_RAMP.elevation,
-      0,
-    );
-    const projected = high.residual < low.residual ? high : low;
-    ratios.push(projected.heightRatio);
-    residuals.push(projected.residual);
+    if (best === undefined || bestDistanceSquared > best.maximumRgbDistance ** 2) continue;
+    counts[best.semantic] = (counts[best.semantic] ?? 0) + 1;
+    if (best.isBlock) matchedBlockPixelCount += 1;
+    if (best.isTraversable) traversablePixelCount += 1;
+    if (best.isInteractive) interactivePixelCount += 1;
+    if (best.visualTargetIndex !== undefined) {
+      visualTargetPixelCounts[best.visualTargetIndex] =
+        (visualTargetPixelCounts[best.visualTargetIndex] ?? 0) + 1;
+    }
   }
-  ratios.sort((left, right) => left - right);
-  residuals.sort((left, right) => left - right);
+  const totalPixels = image.width * image.height;
   return {
     widthPixels: image.width,
     heightPixels: image.height,
-    profileId: TERRAIN_HEIGHT_INTENT_PROFILE_ID,
-    minimumHeightRatio: ratios[0]!,
-    medianHeightRatio: nearestRank(ratios, 0.5),
-    maximumHeightRatio: ratios[ratios.length - 1]!,
-    meanRampResidualRgbUnits:
-      residuals.reduce((sum, value) => sum + value, 0) / residuals.length,
-    p95RampResidualRgbUnits: nearestRank(residuals, 0.95),
+    aspectRatio: image.width / image.height,
+    matchedBlockPixelCount,
+    blockPaletteCoverageRatio: matchedBlockPixelCount / totalPixels,
+    traversablePixelCount,
+    interactivePixelCount,
+    blockPixelCountsBySemantic: counts,
+    visualTargetPixelCounts,
   };
 }
 
-function terrainPromptDiagnostics(source: string): PlannerSelfCheckDiagnostic[] {
-  const requirements = [
-    ["TERRAIN_PROMPT_REFERENCE_ROLES", /reference roles/i],
-    ["TERRAIN_PROMPT_BASE_TERRAIN", /base terrain/i],
-    ["TERRAIN_PROMPT_DEPRESSIONS", /depressions/i],
-    ["TERRAIN_PROMPT_STATIC_EXCLUSIONS", /static landmark and structure exclusions/i],
-    ["TERRAIN_PROMPT_ENTRY_CONNECTIVITY", /entry and connectivity/i],
-    ["TERRAIN_PROMPT_ORIENTATION", /orientation/i],
-    ["TERRAIN_PROMPT_ENCODING_PROFILE", /signed-diverging-blue-gray-orange@1/i],
-  ] as const;
-  return requirements.flatMap(([code, pattern]) => pattern.test(source)
-    ? []
-    : [{ code, message: `Height Intent prompt is missing ${pattern.source}.` }]);
+function validateBlockPalette(options: {
+  readonly label: "WORLD_PLAN" | "ENTRY_WHITEBOX_TARGET";
+  readonly measurement: PlannerBlockPaletteMeasurement;
+  readonly minimumCoverageRatio: number;
+  readonly movementModes: readonly string[] | undefined;
+  readonly requiredVisualTargetCount: number;
+  readonly requireAllVisualTargets: boolean;
+}): PlannerSelfCheckDiagnostic[] {
+  const diagnostics: PlannerSelfCheckDiagnostic[] = [];
+  if (options.measurement.blockPaletteCoverageRatio < options.minimumCoverageRatio) {
+    diagnostics.push({
+      code: `${options.label}_BLOCK_PALETTE_COVERAGE_LOW`,
+      message: `${options.label} matches Block World colors on only ${options.measurement.blockPaletteCoverageRatio.toFixed(4)} of pixels; required at least ${options.minimumCoverageRatio.toFixed(4)}. Regenerate it as a discrete-cube block-whitebox render using the fixed palette.`,
+    });
+  }
+  const hasGroundMovement = options.movementModes?.some((mode) =>
+    mode.startsWith("ground-")) === true;
+  const supportPixelCount = hasGroundMovement
+    ? (options.measurement.blockPixelCountsBySemantic.walkable ?? 0) +
+      (options.measurement.blockPixelCountsBySemantic["cloud-walkable"] ?? 0)
+    : undefined;
+  if (supportPixelCount !== undefined && supportPixelCount === 0) {
+    diagnostics.push({
+      code: `${options.label}_TRAVERSABLE_COLOR_MISSING`,
+      message: `${options.label} does not contain a ground-traversable or cloud-support color even though the Scene Brief declares ground movement. Flight, swimming, and water-surface domains are never represented as route overlays.`,
+    });
+  }
+  const requiredTargetIndexes = options.requireAllVisualTargets
+    ? Array.from({ length: options.requiredVisualTargetCount }, (_, index) => index)
+    : [0];
+  const minimumTargetPixels = Math.max(
+    32,
+    Math.round(options.measurement.widthPixels * options.measurement.heightPixels * 0.00005),
+  );
+  for (const targetIndex of requiredTargetIndexes) {
+    const pixelCount = options.measurement.visualTargetPixelCounts[targetIndex] ?? 0;
+    if (pixelCount < minimumTargetPixels) {
+      diagnostics.push({
+        code: `${options.label}_VISUAL_TARGET_COLOR_MISSING`,
+        message: `${options.label} is missing visual-target-${targetIndex + 1} in its fixed color ${BLOCK_VISUAL_TARGET_COLORS_V1[targetIndex]} (${pixelCount}/${minimumTargetPixels} pixels).`,
+      });
+    }
+  }
+  return diagnostics;
 }
 
 function sceneBriefDiagnostics(source: string): PlannerSelfCheckDiagnostic[] {
@@ -322,80 +386,80 @@ export async function runPlannerSelfCheck(options: {
   readonly briefPath: string;
   readonly worldPlanPath: string;
   readonly entryPath: string;
-  readonly terrainPromptPath: string;
-  readonly terrainIntentPath: string;
   readonly reportPath: string;
 }): Promise<{
   readonly status: "passed" | "failed";
   readonly diagnostics: readonly PlannerSelfCheckDiagnostic[];
 }> {
-  const [
-    briefBytes,
-    worldPlanBytes,
-    entryBytes,
-    terrainPromptBytes,
-    terrainIntentBytes,
-  ] = await Promise.all([
+  const [briefBytes, worldPlanBytes, entryBytes] = await Promise.all([
     readFile(options.briefPath),
     readFile(options.worldPlanPath),
     readFile(options.entryPath),
-    readFile(options.terrainPromptPath),
-    readFile(options.terrainIntentPath),
   ]);
   const briefSource = briefBytes.toString("utf8");
-  const diagnostics = [
-    ...sceneBriefDiagnostics(briefSource),
-    ...terrainPromptDiagnostics(terrainPromptBytes.toString("utf8")),
-  ];
-  let imageMeasurements: PlannerImageMeasurement | null = null;
-  let terrainIntentMeasurements: TerrainIntentMeasurement | null = null;
+  const brief = parseSceneBriefV1(briefSource);
+  const diagnostics = sceneBriefDiagnostics(briefSource);
+  let worldPlanMeasurement: PlannerBlockPaletteMeasurement | null = null;
+  let entryMeasurement: PlannerImageMeasurements["entryWhiteboxTarget"] = null;
   try {
-    decodePng(worldPlanBytes);
-    imageMeasurements = centerMeasurement(entryBytes);
+    const image = decodePng(worldPlanBytes);
+    worldPlanMeasurement = blockPaletteMeasurement(image);
+    diagnostics.push(...validateBlockPalette({
+      label: "WORLD_PLAN",
+      measurement: worldPlanMeasurement,
+      minimumCoverageRatio: MINIMUM_WORLD_PLAN_PALETTE_COVERAGE_RATIO,
+      movementModes: brief.ok
+        ? brief.value.movementModes.map(({ mode }) => mode)
+        : undefined,
+      requiredVisualTargetCount: brief.ok ? brief.value.visualTargets.length : 1,
+      requireAllVisualTargets: true,
+    }));
+  } catch (error) {
+    diagnostics.push({
+      code: "WORLD_PLAN_IMAGE_INVALID",
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+  try {
+    const image = decodePng(entryBytes);
+    const palette = blockPaletteMeasurement(image);
+    const composition = centerMeasurement(image);
+    entryMeasurement = { ...palette, composition };
+    diagnostics.push(...validateBlockPalette({
+      label: "ENTRY_WHITEBOX_TARGET",
+      measurement: palette,
+      minimumCoverageRatio: MINIMUM_ENTRY_PALETTE_COVERAGE_RATIO,
+      movementModes: brief.ok
+        ? brief.value.movementModes.map(({ mode }) => mode)
+        : undefined,
+      requiredVisualTargetCount: brief.ok ? brief.value.visualTargets.length : 1,
+      requireAllVisualTargets: false,
+    }));
+    const aspectErrorRatio = Math.abs(palette.aspectRatio - 16 / 9) / (16 / 9);
+    if (aspectErrorRatio > MAXIMUM_ENTRY_ASPECT_ERROR_RATIO) {
+      diagnostics.push({
+        code: "ENTRY_WHITEBOX_TARGET_ASPECT_RATIO_INVALID",
+        message: `Entry target aspect ratio is ${palette.aspectRatio.toFixed(4)}; required 16:9 within ${(MAXIMUM_ENTRY_ASPECT_ERROR_RATIO * 100).toFixed(1)}%.`,
+      });
+    }
     if (
-      imageMeasurements.subjectCenterErrorRatio > MAXIMUM_CENTER_ERROR_RATIO
+      composition.subjectCenterErrorRatio > MAXIMUM_CENTER_ERROR_RATIO
     ) {
       diagnostics.push({
         code: "ENTRY_SUBJECT_NOT_CENTERED",
-        message: `Primary Subject center is x=${imageMeasurements.subjectCenterXRatio.toFixed(4)}; required 0.5000±${MAXIMUM_CENTER_ERROR_RATIO.toFixed(4)}.`,
+        message: `Primary Subject center is x=${composition.subjectCenterXRatio.toFixed(4)}; required 0.5000±${MAXIMUM_CENTER_ERROR_RATIO.toFixed(4)}.`,
       });
     }
   } catch (error) {
     diagnostics.push({
-      code: "PLANNER_IMAGE_INVALID",
+      code: "ENTRY_WHITEBOX_TARGET_IMAGE_INVALID",
       message: error instanceof Error ? error.message : String(error),
     });
   }
-  try {
-    terrainIntentMeasurements = terrainIntentMeasurement(terrainIntentBytes);
-    const ratioRange = terrainIntentMeasurements.maximumHeightRatio -
-      terrainIntentMeasurements.minimumHeightRatio;
-    if (
-      ratioRange < MINIMUM_NON_FLAT_HEIGHT_RATIO_RANGE &&
-      !/(?:flat terrain|flat ground|平地)/i.test(briefSource)
-    ) {
-      diagnostics.push({
-        code: "TERRAIN_INTENT_NEAR_CONSTANT",
-        message: `Height Intent signed ratio range ${ratioRange.toFixed(4)} is below ${MINIMUM_NON_FLAT_HEIGHT_RATIO_RANGE.toFixed(4)}.`,
-      });
-    }
-    if (
-      terrainIntentMeasurements.meanRampResidualRgbUnits >
-        MAXIMUM_MEAN_RAMP_RESIDUAL_RGB_UNITS ||
-      terrainIntentMeasurements.p95RampResidualRgbUnits >
-        MAXIMUM_P95_RAMP_RESIDUAL_RGB_UNITS
-    ) {
-      diagnostics.push({
-        code: "TERRAIN_INTENT_COLOR_RESIDUAL_EXCEEDED",
-        message: "Height Intent colors exceed the signed transport ramp residual limits.",
-      });
-    }
-  } catch (error) {
-    diagnostics.push({
-      code: "TERRAIN_INTENT_IMAGE_INVALID",
-      message: error instanceof Error ? error.message : String(error),
-    });
-  }
+  const imageMeasurements: PlannerImageMeasurements = {
+    worldPlan: worldPlanMeasurement,
+    entryWhiteboxTarget: entryMeasurement,
+  };
   const report = {
     kind: "worldkit-planner-self-check",
     schemaVersion: 1,
@@ -406,11 +470,8 @@ export async function runPlannerSelfCheck(options: {
       sceneBriefHash: contentHash(briefBytes),
       worldPlanHash: contentHash(worldPlanBytes),
       entryWhiteboxTargetHash: contentHash(entryBytes),
-      terrainHeightIntentPromptHash: contentHash(terrainPromptBytes),
-      terrainHeightIntentPngHash: contentHash(terrainIntentBytes),
     },
     imageMeasurements,
-    terrainIntentMeasurements,
     diagnostics,
   } as const;
   await writeFile(options.reportPath, `${JSON.stringify(report)}\n`, "utf8");
@@ -425,8 +486,6 @@ export async function main(
     briefPath: path.resolve(option(arguments_, "--brief")),
     worldPlanPath: path.resolve(option(arguments_, "--world-plan")),
     entryPath: path.resolve(option(arguments_, "--entry")),
-    terrainPromptPath: path.resolve(option(arguments_, "--terrain-prompt")),
-    terrainIntentPath: path.resolve(option(arguments_, "--terrain-intent")),
     reportPath: path.resolve(option(arguments_, "--report")),
   });
   process.stdout.write(`${JSON.stringify(result)}\n`);

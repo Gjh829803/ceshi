@@ -585,9 +585,12 @@ function validateRuntimeCameraStateV4(
     "targetSocketPositionMetersXYZ",
     "isTargetSocketFallback",
     "desiredTargetPositionMetersXYZ",
+    "actualTargetPositionMetersXYZ",
     "desiredPositionMetersXYZ",
     "actualPositionMetersXYZ",
     "finalFovDegrees",
+    "nearClipMeters",
+    "farClipMeters",
     "requestedArmLengthMeters",
     "safeArmLengthMeters",
     "effectiveArmLengthMeters",
@@ -625,6 +628,7 @@ function validateRuntimeCameraStateV4(
   const optionalTuples = [
     "targetSocketPositionMetersXYZ",
     "desiredTargetPositionMetersXYZ",
+    "actualTargetPositionMetersXYZ",
     "desiredPositionMetersXYZ",
     "actualPositionMetersXYZ",
     "collisionHitPositionXYZ",
@@ -657,6 +661,13 @@ function validateRuntimeCameraStateV4(
     (Object.hasOwn(record, "finalFovDegrees") &&
       (!isFiniteNumber(record.finalFovDegrees) ||
         record.finalFovDegrees <= 0 || record.finalFovDegrees >= 180)) ||
+    (Object.hasOwn(record, "nearClipMeters") &&
+      (!isFiniteNumber(record.nearClipMeters) || record.nearClipMeters <= 0)) ||
+    (Object.hasOwn(record, "farClipMeters") &&
+      (!isFiniteNumber(record.farClipMeters) || record.farClipMeters <= 0)) ||
+    (Object.hasOwn(record, "nearClipMeters") &&
+      Object.hasOwn(record, "farClipMeters") &&
+      (record.farClipMeters as number) <= (record.nearClipMeters as number)) ||
     (Object.hasOwn(record, "profileTransitionProgressRatio") &&
       !isFiniteNumberInRange(record.profileTransitionProgressRatio, 0, 1))
   ) return invalid(schemaName);

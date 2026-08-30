@@ -136,9 +136,28 @@ import {
   type BabylonArtifactCaptureResultV1,
 } from "./artifact-capture";
 import {
-  createBabylonObjectMeshV1,
+  createBabylonObjectMeshesV1,
   createBabylonWaterMeshV1,
 } from "./scene-geometry";
+import {
+  buildBlockWalkableSurfaceTopologiesV1,
+  createBlockWalkableSurfaceHeightSamplerV1,
+  createBlockWalkableSurfaceMeshesV1,
+  isSmoothableBlockObjectV1,
+} from "./block-walkable-surface";
+import {
+  BlockWorldCollisionResidencyV1,
+  partitionBlockWorldStaticCollidersV1,
+} from "./block-chunk-collision";
+import {
+  blockWorldGroundBoundaryCollideMaskV1,
+  type BlockWorldMotionKernelImplementationIdV1,
+} from "./block-ground-boundary";
+import {
+  deriveBlockWorldRuntimeSpaceTransitionsV1,
+  selectBlockWorldSpaceTransitionV1,
+  type BlockWorldRuntimeSpaceTransitionV1,
+} from "./block-space-transition";
 import {
   canonicalizeSignedZero,
   canonicalizeVec3,
@@ -562,11 +581,30 @@ function configureAtmosphere(
     night: new Color4(0.035, 0.055, 0.11, 1),
   } as const;
   scene.clearColor = colors[preset];
-  scene.ambientColor = preset === "night" ? new Color3(0.08, 0.1, 0.18) : new Color3(0.32, 0.32, 0.32);
+  scene.ambientColor = preset === "night"
+    ? new Color3(0.08, 0.1, 0.18)
+    : new Color3(0.3, 0.32, 0.34);
+  if (preset === "clear-day") {
+    scene.fogMode = Scene.FOGMODE_LINEAR;
+    scene.fogColor = new Color3(0.55, 0.78, 0.92);
+    scene.fogStart = 360;
+    scene.fogEnd = 1_600;
+    scene.imageProcessingConfiguration.exposure = 1.04;
+    scene.imageProcessingConfiguration.contrast = 1.02;
+  }
   const ambient = new HemisphericLight("worldkit.light.ambient", new Vector3(0, 1, 0), scene);
-  ambient.intensity = preset === "night" ? 0.3 : 0.72;
+  ambient.intensity = preset === "night" ? 0.3 : 0.68;
+  ambient.diffuse = preset === "clear-day"
+    ? new Color3(0.92, 0.97, 1)
+    : Color3.White();
+  ambient.groundColor = preset === "clear-day"
+    ? new Color3(0.72, 0.78, 0.84)
+    : new Color3(0.3, 0.3, 0.3);
   const sun = new DirectionalLight("worldkit.light.sun", new Vector3(-0.45, -1, 0.35), scene);
-  sun.intensity = preset === "night" ? 0.22 : 1.1;
+  sun.intensity = preset === "night" ? 0.22 : 0.58;
+  sun.diffuse = preset === "clear-day"
+    ? new Color3(1, 0.94, 0.86)
+    : Color3.White();
 }
 
 function nativeColliderMetadata(
@@ -653,6 +691,8 @@ export class BabylonWorldRuntime {
   private readonly aggregates: PhysicsAggregate[] = [];
   private readonly ownedTerrainShape: PhysicsShape | undefined;
   private readonly staticCollisionMeshes: readonly StaticCollisionMeshEntryV1[];
+  private readonly blockWorldCollisionResidency: BlockWorldCollisionResidencyV1 | undefined;
+  private readonly blockWorldSpaceTransitions: readonly BlockWorldRuntimeSpaceTransitionV1[];
   private readonly entityRegistry: EntityRegistryV1;
   private readonly characterEntitiesByEntityId: ReadonlyMap<string, BabylonCharacterEntityV1>;
   private readonly goldenProjectionsByEntityId: ReadonlyMap<
@@ -676,8 +716,10 @@ export class BabylonWorldRuntime {
   private readonly autoStartRenderLoop: boolean;
   private readonly ownedDisposers: readonly OwnedDisposer[];
   private readonly terrainSampleCount: number;
+  private readonly expectedPhysicsBodyCountWithoutBlockResidency: number;
   private activeInputActions: readonly SemanticInputActionV1[] = [];
   private activeInputAxes: Readonly<ControlInputAxesV2> = {};
+  private primaryActionWasActive = false;
   private gameplayPublishedState: BabylonGameplayPublishedStateV1;
   private goldenFixedInputHistory: GoldenFixedInputHistoryEntryV1[] = [];
   private goldenReplayBaselineState: BabylonGameplayPublishedStateV1 | undefined;
@@ -717,11 +759,12 @@ export class BabylonWorldRuntime {
     ownedTerrainShape: PhysicsShape | undefined,
     aggregates: PhysicsAggregate[],
     staticCollisionMeshes: readonly StaticCollisionMeshEntryV1[],
+    blockWorldCollisionResidency: BlockWorldCollisionResidencyV1 | undefined,
     ownedDisposers: readonly OwnedDisposer[],
     autoStartRenderLoop: boolean,
     creationExecutionPlanHash: `sha256:${string}` | undefined,
     terrainSampleCount: number,
-    private readonly expectedPhysicsBodyCount: number,
+    expectedPhysicsBodyCount: number,
   ) {
     this.gameplayPublishedState = Object.freeze({
       possessionTarget: Object.freeze({ mode: "unbound" }),
@@ -746,6 +789,14 @@ export class BabylonWorldRuntime {
     this.ownedTerrainShape = ownedTerrainShape;
     this.aggregates.push(...aggregates);
     this.staticCollisionMeshes = staticCollisionMeshes;
+    this.blockWorldCollisionResidency = blockWorldCollisionResidency;
+    this.blockWorldSpaceTransitions = isNil(executionPlan)
+      ? Object.freeze([])
+      : deriveBlockWorldRuntimeSpaceTransitionsV1(executionPlan);
+    this.expectedPhysicsBodyCountWithoutBlockResidency =
+      expectedPhysicsBodyCount -
+      (blockWorldCollisionResidency?.activeChunkCount ?? 0) -
+      (blockWorldCollisionResidency?.activeGroundBoundaryChunkCount ?? 0);
     this.ownedDisposers = ownedDisposers;
     this.renderLoop = () => this.renderFrame();
     this.autoStartRenderLoop = autoStartRenderLoop;
@@ -897,6 +948,9 @@ export class BabylonWorldRuntime {
       const aggregates: PhysicsAggregate[] = [];
       let terrainShape: PhysicsShape | undefined;
       const staticCollisionMeshes: StaticCollisionMeshEntryV1[] = [];
+      let blockWorldCollisionResidency: BlockWorldCollisionResidencyV1 | undefined;
+      let blockWalkableSurfaceHeightAtMetersXZ:
+        ReturnType<typeof createBlockWalkableSurfaceHeightSamplerV1> = () => undefined;
       let terrainSampleCount = executionPlan?.terrain.heightSamplesMeters.length ?? 0;
       if (!isNil(executionPlan)) {
         options.onInitializationStage?.("terrain");
@@ -941,10 +995,27 @@ export class BabylonWorldRuntime {
         for (const water of executionPlan.waters) {
           createBabylonWaterMeshV1(water, materials, scene);
         }
-        for (const object of executionPlan.objects) {
-          createBabylonObjectMeshV1(object, materials, scene);
-        }
-        for (const collider of executionPlan.staticColliders) {
+        const blockWalkableSurfaceTopologies =
+          buildBlockWalkableSurfaceTopologiesV1(executionPlan.objects);
+        blockWalkableSurfaceHeightAtMetersXZ =
+          createBlockWalkableSurfaceHeightSamplerV1(
+            blockWalkableSurfaceTopologies,
+          );
+        createBabylonObjectMeshesV1(
+          executionPlan.objects.filter((object) =>
+            !isSmoothableBlockObjectV1(object)),
+          materials,
+          scene,
+        );
+        createBlockWalkableSurfaceMeshesV1(
+          blockWalkableSurfaceTopologies,
+          materials,
+          scene,
+        );
+        const partitionedColliders = partitionBlockWorldStaticCollidersV1(
+          executionPlan.staticColliders,
+        );
+        for (const collider of partitionedColliders.genericColliders) {
           const mesh = createStaticCollisionMesh(collider, scene);
           const shape = new PhysicsShapeMesh(mesh, scene);
           ownedDisposers.push(() => shape.dispose());
@@ -957,6 +1028,20 @@ export class BabylonWorldRuntime {
           aggregates.push(aggregate);
           staticCollisionMeshes.push({ collider, mesh });
           ownedDisposers.push(() => aggregate.dispose());
+        }
+        if (partitionedColliders.blockWorldColliders.length > 0) {
+          blockWorldCollisionResidency = new BlockWorldCollisionResidencyV1({
+            colliders: partitionedColliders.blockWorldColliders,
+            scene,
+            staticCollisionMeshes,
+            initialSubjectPositionsMetersXYZ: effectiveRuntimeSubjects.map(
+              ({ spawnSubjectOriginPositionMetersXYZ }) =>
+                spawnSubjectOriginPositionMetersXYZ,
+            ),
+            walkableSurfaceTopologies: blockWalkableSurfaceTopologies,
+          });
+          const collisionResidency = blockWorldCollisionResidency;
+          ownedDisposers.push(() => collisionResidency.dispose());
         }
         revalidateRuntimeLayoutAssertions(executionPlan);
       } else {
@@ -1195,6 +1280,10 @@ export class BabylonWorldRuntime {
               !isNil(executionPlan)
                 ? waterSurfaceHeightAtSubjectOrigin(executionPlan, subjectOrigin)
                 : undefined,
+            (subjectOrigin) => blockWalkableSurfaceHeightAtMetersXZ([
+              subjectOrigin.x,
+              subjectOrigin.z,
+            ]),
           );
         }
         const character = new BabylonCharacterEntityV1({
@@ -1207,6 +1296,11 @@ export class BabylonWorldRuntime {
             !isNil(executionPlan)
               ? waterSurfaceHeightAtSubjectOrigin(executionPlan, subjectOrigin)
               : undefined,
+          blockWorldWalkableSurfaceHeightAtSubjectOrigin: (subjectOrigin) =>
+            blockWalkableSurfaceHeightAtMetersXZ([
+              subjectOrigin.x,
+              subjectOrigin.z,
+            ]),
           movement: controller,
         });
         entityRegistry.register(character.entity);
@@ -1243,11 +1337,12 @@ export class BabylonWorldRuntime {
         terrainShape,
         aggregates,
         staticCollisionMeshes,
+        blockWorldCollisionResidency,
         ownedDisposers,
         options.engineFactory === undefined && options.autoStartRenderLoop !== false,
         creationExecutionPlanHash,
         terrainSampleCount,
-        executionPlan?.sceneResourceUsage.colliders ??
+        (scene.getPhysicsEngine() as PhysicsEngine | null)?.getBodies().length ??
           runtimeSubjects.length + (nativeContribution?.staticColliders.length ?? 0),
       );
       return runtime;
@@ -1276,6 +1371,7 @@ export class BabylonWorldRuntime {
         ? { ...input.axes }
         : {};
       this.cameraComponent.setInputActions(this.activeInputActions);
+      this.applyBlockWorldSpaceTransitionIfRequested();
       const viewControlFrame = this.cameraComponent.controlFrame(this.tick);
       for (const subject of this.runtimeSubjects) {
         const controller = this.controllerFor(subject.entityId);
@@ -1558,6 +1654,7 @@ export class BabylonWorldRuntime {
         this.traversalConfigurationEpoch = traversalConfigurationEpochAfter;
         this.activeInputActions = EMPTY_INPUT_ACTIONS;
         this.activeInputAxes = EMPTY_INPUT_AXES;
+        this.primaryActionWasActive = false;
         this.latestRenderReadyReceipt = undefined;
       },
       abort: (): Promise<void> => {
@@ -1845,6 +1942,7 @@ export class BabylonWorldRuntime {
           this.traversalConfigurationEpoch = traversalConfigurationEpochAfter;
           this.activeInputActions = EMPTY_INPUT_ACTIONS;
           this.activeInputAxes = EMPTY_INPUT_AXES;
+          this.primaryActionWasActive = false;
           this.latestRenderReadyReceipt = undefined;
           lifecycle = "committed";
         } catch (error) {
@@ -2108,6 +2206,7 @@ export class BabylonWorldRuntime {
           this.traversalConfigurationEpoch = traversalConfigurationEpochAfter;
           this.activeInputActions = EMPTY_INPUT_ACTIONS;
           this.activeInputAxes = EMPTY_INPUT_AXES;
+          this.primaryActionWasActive = false;
           this.latestRenderReadyReceipt = undefined;
           lifecycle = "committed";
         } catch (error) {
@@ -2268,6 +2367,7 @@ export class BabylonWorldRuntime {
       this.pendingPublishedCameraViewSyncBeforeNextTick = false;
       this.activeInputActions = EMPTY_INPUT_ACTIONS;
       this.activeInputAxes = EMPTY_INPUT_AXES;
+      this.primaryActionWasActive = false;
       this.cameraComponent.restoreTransactionState(
         prepared.beforeCameraTransactionState,
       );
@@ -2325,6 +2425,7 @@ export class BabylonWorldRuntime {
       ? { ...input.axes }
       : {};
     this.cameraComponent.setInputActions(this.activeInputActions);
+    this.applyBlockWorldSpaceTransitionIfRequested();
     this.lockPublishedCameraHeadingBeforeTick();
     const viewControlFrame = this.cameraComponent.controlFrame(this.tick);
     for (const subject of this.runtimeSubjects) {
@@ -2410,6 +2511,7 @@ export class BabylonWorldRuntime {
   private commitGameplayFixedTick(
     targetEntityId: string | undefined,
   ): void {
+    this.updateBlockWorldCollisionResidency();
     const physicsEngine = this.scene.getPhysicsEngine();
     if (physicsEngine === null) throw new Error("WORLDKIT_HAVOK_ENGINE_MISSING");
     physicsEngine._step(FIXED_TIME_STEP_SECONDS);
@@ -2448,6 +2550,7 @@ export class BabylonWorldRuntime {
   }
 
   private commitFixedTick(): void {
+    this.updateBlockWorldCollisionResidency();
     const physicsEngine = this.scene.getPhysicsEngine();
     if (physicsEngine === null) throw new Error("WORLDKIT_HAVOK_ENGINE_MISSING");
     physicsEngine._step(FIXED_TIME_STEP_SECONDS);
@@ -2497,6 +2600,70 @@ export class BabylonWorldRuntime {
     }
   }
 
+  private updateBlockWorldCollisionResidency(): void {
+    if (this.blockWorldCollisionResidency === undefined) return;
+    const subjectPositions = this.runtimeSubjects.map(({ entityId }) => {
+      const controller = this.controllerFor(entityId);
+      this.synchronizeBlockWorldGroundBoundaryFilter(entityId, controller);
+      const origin = controller.subjectOrigin;
+      return Object.freeze([origin.x, origin.y, origin.z]) as RuntimeVec3V1;
+    });
+    this.blockWorldCollisionResidency.update(subjectPositions);
+  }
+
+  private synchronizeBlockWorldGroundBoundaryFilter(
+    subjectEntityId: string,
+    controller: LiveSubjectControllerV1,
+  ): void {
+    const subject = this.runtimeSubjects.find(
+      ({ entityId }) => entityId === subjectEntityId,
+    );
+    if (subject === undefined) return;
+    const activeMotionKernelRef = isGoldenHumanoidControllerV1(controller)
+      ? subject.capabilityAssembly.defaultMotionProfile.motionKernelRef
+      : controller.motionSnapshot().activeMotionKernelRef;
+    const implementationId = subject.capabilityAssembly.motionKernels.find(
+      ({ resourceRef }) => resourceRef === activeMotionKernelRef,
+    )?.implementationId;
+    if (implementationId === undefined) return;
+    const filters = controller.collisionFilterMasks();
+    if (filters.membershipMask === 0 && filters.collideMask === 0) return;
+    const nextCollideMask = blockWorldGroundBoundaryCollideMaskV1(
+      filters.collideMask,
+      implementationId as BlockWorldMotionKernelImplementationIdV1,
+    );
+    if (nextCollideMask !== filters.collideMask) {
+      controller.setCollisionFilterMasks(
+        filters.membershipMask,
+        nextCollideMask,
+      );
+    }
+  }
+
+  private applyBlockWorldSpaceTransitionIfRequested(): void {
+    const primaryActionActive = this.activeInputActions.includes("primary-action");
+    const pressed = primaryActionActive && !this.primaryActionWasActive;
+    this.primaryActionWasActive = primaryActionActive;
+    if (!pressed || this.blockWorldSpaceTransitions.length === 0) return;
+    const controlledEntityId = this.controlledEntityId();
+    if (controlledEntityId === undefined) return;
+    const controller = this.controllerFor(controlledEntityId);
+    const origin = controller.subjectOrigin;
+    const transition = selectBlockWorldSpaceTransitionV1(
+      this.blockWorldSpaceTransitions,
+      [origin.x, origin.y, origin.z],
+    );
+    if (transition === undefined) return;
+    controller.resetAt(
+      transition.destinationStandPositionMetersXYZ,
+      transition.destinationYawRadians,
+      this.tick,
+    );
+    this.updateBlockWorldCollisionResidency();
+    this.latestRenderReadyReceipt = undefined;
+    this.updateCameraForEntity(controlledEntityId);
+  }
+
   private resetToTraversalAnchor(input: Readonly<{
     traversingEntityId: string;
     subjectOriginPositionMetersXYZ: RuntimeVec3V1;
@@ -2523,6 +2690,7 @@ export class BabylonWorldRuntime {
     this.tick = 0;
     this.activeInputActions = [];
     this.activeInputAxes = {};
+    this.primaryActionWasActive = false;
     this.cameraComponent.reset();
     this.latestLegacyCameraContextsByEntityId.clear();
     this.latestRenderReadyReceipt = undefined;
@@ -2541,6 +2709,7 @@ export class BabylonWorldRuntime {
     this.latestRenderReadyReceipt = undefined;
     this.activeInputActions = [];
     this.activeInputAxes = {};
+    this.primaryActionWasActive = false;
     this.cameraComponent.setInputActions([]);
     for (const subject of this.runtimeSubjects) {
       const controller = this.controllerFor(subject.entityId);
@@ -2700,6 +2869,13 @@ export class BabylonWorldRuntime {
                 cameraDirectorSnapshot.desiredTargetPositionMetersXYZ,
               ),
             }),
+        ...(cameraDirectorSnapshot.actualTargetPositionMetersXYZ === undefined
+          ? {}
+          : {
+              actualTargetPositionMetersXYZ: canonicalizeVec3(
+                cameraDirectorSnapshot.actualTargetPositionMetersXYZ,
+              ),
+            }),
         ...(cameraDirectorSnapshot.desiredPositionMetersXYZ === undefined
           ? {}
           : {
@@ -2717,6 +2893,8 @@ export class BabylonWorldRuntime {
         ...(cameraDirectorSnapshot.finalFovDegrees === undefined
           ? {}
           : { finalFovDegrees: cameraDirectorSnapshot.finalFovDegrees }),
+        nearClipMeters: this.camera.minZ,
+        farClipMeters: this.camera.maxZ,
         ...(cameraDirectorSnapshot.requestedArmLengthMeters === undefined
           ? {}
           : { requestedArmLengthMeters: cameraDirectorSnapshot.requestedArmLengthMeters }),
@@ -2852,6 +3030,7 @@ export class BabylonWorldRuntime {
     this.goldenReplayBaselineState = undefined;
     this.activeInputActions = [];
     this.activeInputAxes = {};
+    this.primaryActionWasActive = false;
     this.cameraComponent.reset();
     this.latestRenderReadyReceipt = undefined;
     this.updateCamera();
@@ -3634,7 +3813,10 @@ export class BabylonWorldRuntime {
       },
       {
         checkId: "H06",
-          status: (this.scene.getPhysicsEngine() as PhysicsEngine | null)?.getBodies().length === this.expectedPhysicsBodyCount
+          status: (this.scene.getPhysicsEngine() as PhysicsEngine | null)?.getBodies().length ===
+            this.expectedPhysicsBodyCountWithoutBlockResidency +
+              (this.blockWorldCollisionResidency?.activeChunkCount ?? 0) +
+              (this.blockWorldCollisionResidency?.activeGroundBoundaryChunkCount ?? 0)
           ? "passed"
           : "not-exercised",
         message: "Runtime resource ownership is tracked for disposal.",

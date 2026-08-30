@@ -16,7 +16,7 @@ Planner Agent
 Builder Agent
     ↓ 编写 TypeScript 世界代码
 Babylon/Havok 白膜游戏运行时
-    ↘ SDK 白膜三视图 → Visual Bible Agent → 样式三视图 / 渲染首帧
+    ↘ SDK 白膜三视图 → 单个 LWDP Codex Visual Reconstructor → 渲染首帧 / 样式三视图
     ↓ 白膜 + 深度 + 法线 + ID + 动作 + 语义
 实时世界模型
     ↓

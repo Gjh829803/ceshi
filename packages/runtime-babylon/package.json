@@ -11,6 +11,7 @@
     "@babylonjs/havok": "1.3.14",
     "@babylonjs/loaders": "9.23.0",
     "@whitebox-world/camera": "workspace:*",
+    "@whitebox-world/block-world": "workspace:*",
     "@whitebox-world/character-movement": "workspace:*",
     "@whitebox-world/control-capture": "workspace:*",
     "@whitebox-world/gameplay-contracts": "workspace:*",
@@ -30,6 +31,7 @@
   "devDependencies": {
     "@types/earcut": "3.0.0",
     "@whitebox-world/authoring": "workspace:*",
+    "@whitebox-world/block-world-compiler": "workspace:*",
     "@whitebox-world/compiler": "workspace:*",
     "@whitebox-world/gameplay": "workspace:*"
   }

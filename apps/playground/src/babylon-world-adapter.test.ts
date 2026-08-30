@@ -354,6 +354,14 @@ function createAdapterProbe(): {
       kind: "worldkit-runtime-artifact-capture",
       schemaVersion: 1,
       dataUrl: "data:image/png;base64,test",
+      widthPixels: 3,
+      heightPixels: 1,
+      pixelsRgba: new Uint8ClampedArray([
+        232, 93, 93, 255,
+        232, 93, 93, 255,
+        232, 93, 93, 255,
+      ]),
+      projectedBoundsByEntityId: {},
     })),
     snapshot: () => runtimeSnapshot(tick, cameraView),
   };

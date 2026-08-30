@@ -18,6 +18,7 @@ export function initializePlaygroundAdapterV1<T extends PlaygroundStartupAdapter
     setStartupStage(
       stage: "visual-targets-configure" | "adapter-mount" | "first-render",
     ): void;
+    onFirstRenderReady?(): void;
   }>,
 ): T {
   input.trackAdapter(input.adapter);
@@ -30,5 +31,6 @@ export function initializePlaygroundAdapterV1<T extends PlaygroundStartupAdapter
   input.adapter.mount(input.viewport);
   input.setStartupStage("first-render");
   input.adapter.render();
+  input.onFirstRenderReady?.();
   return input.adapter;
 }

@@ -17,6 +17,7 @@
         <nav aria-label="页面导航">
           <a href="#create">创建世界</a>
           <a href="#test-sets">测试集</a>
+          <a href="#seedance-review">Seedance 对比</a>
           <a href="#history">任务历史</a>
         </nav>
         <div class="codex-backend-switch" role="group" aria-label="Codex 执行端" aria-describedby="codex-backend-note">
@@ -39,6 +40,7 @@
         <div class="hero-actions" aria-label="主要功能">
           <button class="hero-action active" data-workspace-mode="create" type="button"><span>01</span><b>新建世界</b><small>单张图片或文字描述</small></button>
           <button class="hero-action" data-workspace-mode="test-sets" type="button"><span>02</span><b>测试集</b><small>批量图片与运行结果</small></button>
+          <button class="hero-action" data-workspace-mode="seedance-review" type="button"><span>03</span><b>Seedance 对比</b><small>已生成视频的 case</small></button>
         </div>
       </section>
 
@@ -80,11 +82,11 @@
           <details>
             <summary>查看生成流程</summary>
             <div class="generation-contract">
-              <div><span>01</span><p><b>WorldKit Planner</b>区分用户事实、可见证据、工程推断与视觉设想，生成托管式意图摘要和规划图</p></div>
-              <div><span>02</span><p><b>Canonical Builder</b>在同一 Codex Job 内运行 main Schema、布局、编译与探索容量自检，Host 只复验一次后捕获白膜</p></div>
-              <div><span>03</span><p><b>Visual Provider Adapter</b>可选地合成共享视觉约束、新首帧 prompt 和全部三视图 prompt</p></div>
-              <div><span>04</span><p><b>Direct ImageGen</b>同时生成标准第三人称背影新首帧与全部渲染后三视图</p></div>
-              <div><span>05</span><p><b>Ready</b>新首帧和渲染后三视图完成即可查看详情并进入白膜世界，无需试玩</p></div>
+              <div><span>01</span><p><b>WorldKit Planner</b>区分用户事实、可见证据、工程推断与视觉设想，生成简报及两张带统一语义颜色的方块白膜图</p></div>
+              <div><span>02</span><p><b>Block Builder</b>在同一 Codex Job 内直接搭建单位方块并完成连通性、主体、相机和编译自检，Host 只复验一次后捕获白膜</p></div>
+              <div><span>03</span><p><b>LWDP Codex Visual Reconstructor</b>一个正式任务内编写 Prompt 并生成最终样式首帧</p></div>
+              <div><span>04</span><p><b>Same Codex Job</b>基于已生成首帧继续生成全部完整视觉目标三视图</p></div>
+              <div><span>05</span><p><b>Playable</b>真实白膜首帧和 Runtime Snapshot 成功即可进入世界；三视图与样式化结果独立继续</p></div>
             </div>
           </details>
           <details>
@@ -127,6 +129,23 @@
             </div>
             <div class="test-set-grid" id="test-set-grid"></div>
             <div class="empty-state compact" id="test-set-empty"><span>T–00</span><h3>还没有测试集</h3><p>在左侧选择多张图片或整个文件夹，保存后即可批量运行。</p></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="seedance-review-surface" id="seedance-review" data-workspace-panel="seedance-review" hidden>
+        <header class="surface-heading">
+          <div><p class="kicker">REVIEW / SEEDANCE OUTPUTS</p><h2>Seedance 视频对比</h2></div>
+          <p>这里只展示已经生成 Seedance 最终视频的 case。左侧切换场景，右侧按 00–30s、30–60s、60–90s 对比白膜动作真值与最终成片。</p>
+        </header>
+        <div class="seedance-review-layout">
+          <aside class="seedance-case-sidebar">
+            <header><div><small>VIDEO CASES</small><b>已完成视频</b></div><span id="seedance-case-count">0</span></header>
+            <div class="seedance-case-list" id="seedance-case-list" role="tablist" aria-label="Seedance 视频 case"></div>
+            <p class="seedance-case-empty" id="seedance-case-empty">还没有生成过 Seedance 最终视频。</p>
+          </aside>
+          <section class="seedance-review-detail" id="seedance-review-detail" aria-live="polite">
+            <div class="seedance-review-placeholder"><span>S–00</span><h3>选择一个 case</h3><p>右侧会展示三段白膜与最终视频的同步对比。</p></div>
           </section>
         </div>
       </section>
@@ -205,7 +224,7 @@
           <div class="card-actions">
             <button class="details-button" type="button">查看详情</button>
             <button class="stop-button" type="button" hidden>停止</button>
-            <a class="play-button" target="_blank" rel="noreferrer">进入世界 ↗</a>
+            <a class="play-button" target="worldkit-playground" rel="noreferrer">进入世界 ↗</a>
           </div>
         </div>
       </article>

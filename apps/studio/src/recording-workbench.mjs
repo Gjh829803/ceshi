@@ -457,10 +457,12 @@ export function createRecordingWorkbenchService(options = {}) {
     const unresolvedVisualTargetIds = [];
     const seenVisualTargetIds = new Set();
     for (const [index, target] of declaredTargets.entries()) {
-      const visualTargetId = ID_PATTERN.test(target?.visualTargetId)
+      const hasValidVisualTargetId = typeof target?.visualTargetId === "string" &&
+        ID_PATTERN.test(target.visualTargetId);
+      const visualTargetId = hasValidVisualTargetId
         ? target.visualTargetId
         : `manifest-target-${index + 1}`;
-      if (!ID_PATTERN.test(target?.visualTargetId) || seenVisualTargetIds.has(target.visualTargetId)) {
+      if (!hasValidVisualTargetId || seenVisualTargetIds.has(target.visualTargetId)) {
         unresolvedVisualTargetIds.push(visualTargetId);
         continue;
       }
@@ -482,7 +484,7 @@ export function createRecordingWorkbenchService(options = {}) {
         "whitebox-triview.png",
       );
       triViews.push({
-        visualTargetId: target.visualTargetId,
+        id: target.visualTargetId,
         role: target.role ?? "landmark",
         semanticClassId: target.semanticClassId ?? null,
         styledPath,
@@ -491,7 +493,7 @@ export function createRecordingWorkbenchService(options = {}) {
     }
     triViews.sort((left, right) => {
       const rank = (value) => value === "primary-subject" ? 0 : value === "primary-landmark" ? 1 : 2;
-      return rank(left.role) - rank(right.role) || left.visualTargetId.localeCompare(right.visualTargetId);
+      return rank(left.role) - rank(right.role) || left.id.localeCompare(right.id);
     });
     const openingFrameReady = await fileExists(openingFramePath);
     const worldPlanReady = await fileExists(worldPlanPath);
@@ -796,7 +798,7 @@ export function createRecordingWorkbenchService(options = {}) {
       }
       const missingWhiteboxTargets = assets.triViews
         .filter(({ whiteboxPath }) => whiteboxPath === null)
-        .map(({ visualTargetId }) => visualTargetId);
+        .map(({ id }) => id);
       if (missingWhiteboxTargets.length > 0) {
         throw new Error(`下载包缺少白膜三视图：${missingWhiteboxTargets.join(", ")}`);
       }
@@ -804,7 +806,7 @@ export function createRecordingWorkbenchService(options = {}) {
         const number = String(index + 1).padStart(2, "0");
         return {
           index: index + 1,
-          visualTargetId: target.visualTargetId,
+          visualTargetId: target.id,
           role: target.role,
           semanticClassId: target.semanticClassId,
           layout: "whitebox-left-styled-right",
@@ -844,7 +846,7 @@ export function createRecordingWorkbenchService(options = {}) {
             destinationPath,
             sceneId,
             recordingId,
-            visualTargetId: target.visualTargetId,
+            visualTargetId: target.id,
           });
         } else {
           const result = await runTrackedChild(
@@ -864,7 +866,7 @@ export function createRecordingWorkbenchService(options = {}) {
           }
         }
         if (!await fileExists(destinationPath) || (await stat(destinationPath)).size === 0) {
-          throw new Error(`三视图对照图没有生成：${target.visualTargetId}`);
+          throw new Error(`三视图对照图没有生成：${target.id}`);
         }
       }
       await writeJsonAtomic(path.join(folder, "recording-manifest.json"), {

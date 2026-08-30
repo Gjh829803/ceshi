@@ -4,10 +4,13 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { createStudioPublicProxy } from "./public-proxy.mjs";
+import {
+  createStudioPublicProxy,
+  isAllowedSeedancePublicRequest,
+} from "./public-proxy.mjs";
 
-const studioSourceRoot = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(studioSourceRoot, "../../..");
+const studioRoot = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(studioRoot, "../../..");
 
 function viteFsUrl(absolutePath) {
   return `/@fs${encodeURI(absolutePath)}`;
@@ -85,6 +88,63 @@ test("protects one internal Studio without forwarding its access key", async () 
   }
 });
 
+test("exposes an anonymous read-only Seedance and playable-world surface only", async () => {
+  const forwarded = [];
+  const upstream = createServer((request, response) => {
+    forwarded.push(`${request.method} ${request.url}`);
+    response.writeHead(200);
+    response.end("ok");
+  });
+  const upstreamOrigin = await listen(upstream);
+  const proxy = createStudioPublicProxy({
+    anonymous: true,
+    targetOrigin: upstreamOrigin,
+    isAllowedRequest: isAllowedSeedancePublicRequest,
+    rootRedirect: "/?public=seedance#seedance-review",
+  });
+  const proxyOrigin = await listen(proxy);
+  try {
+    const root = await fetch(`${proxyOrigin}/`, { redirect: "manual" });
+    assert.equal(root.status, 302);
+    assert.equal(root.headers.get("location"), "/?public=seedance#seedance-review");
+    for (const [method, pathname] of [
+      ["GET", "/?public=seedance"],
+      ["GET", "/play?authoring=1&world=demo-world"],
+      ["GET", "/api/episode-workflows?review=seedance"],
+      ["GET", "/api/episode-workflows/episode-demo-world-abc/bundle"],
+      ["GET", "/api/worlds/demo-world/preview-bootstrap"],
+      ["HEAD", "/subject-assets/demo.glb"],
+    ]) {
+      const response = await fetch(`${proxyOrigin}${pathname}`, { method });
+      assert.equal(response.status, 200, `${method} ${pathname}`);
+    }
+    for (const [method, pathname] of [
+      ["GET", "/api/worlds"],
+      ["POST", "/api/worlds"],
+      ["GET", "/api/test-sets"],
+      ["POST", "/api/episode-workflows"],
+      ["POST", "/api/worlds/demo-world/retry"],
+      ["GET", "/api/recording-worlds/demo-world/recordings"],
+    ]) {
+      const response = await fetch(`${proxyOrigin}${pathname}`, { method });
+      assert.equal(response.status, 403, `${method} ${pathname}`);
+    }
+    assert.deepEqual(forwarded, [
+      "GET /?public=seedance",
+      "GET /play?authoring=1&world=demo-world",
+      "GET /api/episode-workflows?review=seedance",
+      "GET /api/episode-workflows/episode-demo-world-abc/bundle",
+      "GET /api/worlds/demo-world/preview-bootstrap",
+      "HEAD /subject-assets/demo.glb",
+    ]);
+  } finally {
+    await Promise.all([
+      new Promise((resolve) => proxy.close(resolve)),
+      new Promise((resolve) => upstream.close(resolve)),
+    ]);
+  }
+});
+
 test("does not expose Vite internals or unlisted paths through the public boundary", async () => {
   const forwarded = [];
   const upstream = createServer((request, response) => {
@@ -152,6 +212,10 @@ test("forwards only the public Studio pages, assets, and declared API methods", 
     ["HEAD", "/node_modules/.vite/deps/lodash-es.js"],
     ["GET", viteFsUrl(path.join(repoRoot, "apps/playground/src/main.ts"))],
     ["HEAD", viteFsUrl(path.join(repoRoot, "packages/authoring/src/index.ts"))],
+    ["HEAD", viteFsUrl(path.join(repoRoot, "node_modules/.pnpm/vite@7/node_modules/vite/dist/client/env.mjs"))],
+    ["GET", viteFsUrl(path.join(repoRoot, "node_modules/.pnpm/@babylonjs+havok@1/node_modules/@babylonjs/havok/lib/esm/HavokPhysics.wasm"))],
+    ["GET", viteFsUrl(path.join(repoRoot, "assets/registry/subject-definitions/catalog.json"))],
+    ["GET", viteFsUrl(path.join(repoRoot, "assets/subjects/source-fbx/contributors/xier120/catalog.json"))],
     ["GET", "/scene-assets/demo-world/world-plan.png"],
     ["GET", "/worldkit-assets/character.glb"],
     ["POST", "/api/worlds"],
@@ -159,6 +223,12 @@ test("forwards only the public Studio pages, assets, and declared API methods", 
     ["GET", "/api/worlds/demo-world/deliverables/opening-frame"],
     ["POST", "/api/recording-worlds/demo-world/recordings/recording-abc/generate"],
     ["HEAD", "/api/recording-worlds/demo-world/recordings/recording-abc/source"],
+    ["GET", "/api/episode-workflows?review=seedance"],
+    ["GET", "/api/episode-workflows/episode-demo-world-abc123"],
+    ["HEAD", "/api/episode-workflows/episode-demo-world-abc123/artifacts/whitebox/segment-00.mp4"],
+    ["GET", "/api/episode-workflows/episode-demo-world-abc123/interaction-timeline"],
+    ["GET", "/api/episode-workflows/episode-demo-world-abc123/bundle"],
+    ["GET", "/api/episode-workflows/episode-demo-world-abc123/scene-assets/user-reference"],
   ];
   try {
     for (const [method, pathname] of requests) {

@@ -22,10 +22,17 @@ const targets = [
   {
     sourceFileName: "agent-planner-self-check.ts",
     skillName: "worldkit-spatial-planner",
+    outputFileName: "self-check.mjs",
   },
   {
-    sourceFileName: "agent-builder-self-check.ts",
-    skillName: "worldkit-canonical-builder",
+    sourceFileName: "agent-block-builder-self-check-entry.ts",
+    skillName: "worldkit-block-builder",
+    outputFileName: "self-check.mjs",
+  },
+  {
+    sourceFileName: "agent-block-builder-visual-review.ts",
+    skillName: "worldkit-block-builder",
+    outputFileName: "render-visual-review.mjs",
   },
 ];
 
@@ -43,7 +50,7 @@ for (const target of targets) {
       outDir: path.join(outputRoot, target.skillName, "scripts"),
       rollupOptions: {
         output: {
-          entryFileNames: "self-check.mjs",
+          entryFileNames: target.outputFileName,
           inlineDynamicImports: true,
         },
       },

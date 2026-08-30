@@ -68,6 +68,7 @@ function validInput() {
   };
   return {
     worldId: WORLD_ID,
+    whiteboxRuntimeAvailable: true,
     recordBefore: structuredClone(record),
     recordAfter: structuredClone(record),
     authoringSource: JSON.stringify(authoringSpec),
@@ -128,6 +129,15 @@ test("fails closed when evaluation identity belongs to another attempt", () => {
 
 test("fails closed for cross-scene and wrong-hash artifacts", () => {
   expectCode("STUDIO_PREVIEW_AUTHORITY_MISMATCH", (input) => {
+    const authoringSpec = JSON.parse(input.authoringSource);
+    authoringSpec.id = "other-scene";
+    input.authoringSource = JSON.stringify(authoringSpec);
+    const implementationMap = JSON.parse(input.implementationMapSource);
+    implementationMap.authoringSpecId = authoringSpec.id;
+    implementationMap.authoringSpecHash = hashCanonical(authoringSpec);
+    input.implementationMapSource = JSON.stringify(implementationMap);
+  });
+  expectCode("STUDIO_PREVIEW_AUTHORITY_MISMATCH", (input) => {
     const implementationMap = JSON.parse(input.implementationMapSource);
     implementationMap.sceneId = "another-scene";
     input.implementationMapSource = JSON.stringify(implementationMap);
@@ -171,11 +181,23 @@ test("rejects the retired mappings field and competing capture-group id", () => 
   });
 });
 
-test("rejects an attempt that has not published trusted capture", () => {
+test("rejects an attempt that has not published a playable whitebox runtime", () => {
   expectCode("STUDIO_PREVIEW_NOT_READY", (input) => {
-    input.recordBefore.captureStatus = "pending";
-    input.recordAfter.captureStatus = "pending";
+    input.whiteboxRuntimeAvailable = false;
   });
+});
+
+test("accepts a playable whitebox runtime independently from tri-view status", () => {
+  const input = validInput();
+  input.recordBefore.captureStatus = "failed";
+  input.recordAfter.captureStatus = "failed";
+  input.recordBefore.triviewStatus = "failed";
+  input.recordAfter.triviewStatus = "failed";
+
+  assert.equal(
+    assembleStudioPreviewBootstrapV1(input).worldId,
+    WORLD_ID,
+  );
 });
 
 test("uses createdAt as the stable identity for an imported trusted world", () => {
@@ -190,5 +212,23 @@ test("uses createdAt as the stable identity for an imported trusted world", () =
 
   const result = assembleStudioPreviewBootstrapV1(input);
   assert.equal(result.attempt, 1);
+  assert.equal(result.attemptStartedAt, input.recordBefore.createdAt);
+});
+
+test("does not bind an imported trusted world to its source evaluation attempt", () => {
+  const input = validInput();
+  input.recordBefore.origin = "existing-scene-brief-world";
+  input.recordAfter.origin = "existing-scene-brief-world";
+  input.recordBefore.attempt = 1;
+  input.recordAfter.attempt = 1;
+  input.recordBefore.startedAt = null;
+  input.recordAfter.startedAt = null;
+  const sourceEvaluation = JSON.parse(input.evaluationRunSource);
+  sourceEvaluation.workflowPolicyVersion = "source-policy-v1";
+  sourceEvaluation.attempt = 7;
+  sourceEvaluation.startedAt = "2025-01-01T00:00:00.000Z";
+  input.evaluationRunSource = JSON.stringify(sourceEvaluation);
+
+  const result = assembleStudioPreviewBootstrapV1(input);
   assert.equal(result.attemptStartedAt, input.recordBefore.createdAt);
 });

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { parseSceneBriefV1 } from "./scene-brief-v1";
+import {
+  parseSceneBriefV1,
+  sceneBriefHasGroundMovementV1,
+  sceneBriefRequiresConnectedGroundV1,
+} from "./scene-brief-v1";
 
 const validBrief = `# WorldKit Scene Brief
 
@@ -23,7 +27,8 @@ const validBrief = `# WorldKit Scene Brief
 月光、衣物纹理和屋顶材质只属于后续渲染层，不进入碰撞几何。
 
 ## 运动模式
-陆地滑行：主体依靠滑板连续滑行，具有惯性和较大的转弯空间。
+- 陆地滑行：主体依靠滑板连续滑行，具有惯性和较大的转弯空间。
+- 空中飞行：主体可以离开地面自由升降和转向。
 
 ## 空间
 前景桥梁，中景山谷与瀑布，远景月宫和群山。
@@ -45,8 +50,12 @@ describe("Scene Brief V1", () => {
     const result = parseSceneBriefV1(validBrief);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.movement.mode).toBe("ground-slide");
-    expect(result.value.movement.label).toBe("陆地滑行");
+    expect(result.value.movementModes).toEqual([
+      expect.objectContaining({ mode: "ground-slide", label: "陆地滑行" }),
+      expect.objectContaining({ mode: "flight", label: "空中飞行" }),
+    ]);
+    expect(sceneBriefHasGroundMovementV1(result.value)).toBe(true);
+    expect(sceneBriefRequiresConnectedGroundV1(result.value)).toBe(false);
     expect(result.value.visibleReferenceEvidence).toContain("瀑布");
     expect(result.value.visualTargets).toEqual([
       expect.objectContaining({ id: "visual-target-1", kind: "subject", role: "primary-subject" }),
@@ -69,13 +78,29 @@ describe("Scene Brief V1", () => {
     const custom = parseSceneBriefV1(validBrief.replace("陆地滑行", "磁力墙面行走"));
     expect(custom).toMatchObject({
       ok: true,
-      value: { movement: { mode: "custom", label: "磁力墙面行走" } },
+      value: {
+        movementModes: [
+          { mode: "custom", label: "磁力墙面行走" },
+          { mode: "flight", label: "空中飞行" },
+        ],
+      },
     });
     const six = `${validBrief}- 标志物｜山门：完整山门\n- 标志物｜神树：完整神树\n- 标志物｜祭坛：完整祭坛\n`;
     expect(parseSceneBriefV1(six)).toMatchObject({
       ok: false,
       diagnostics: [expect.stringContaining("SCENE_BRIEF_VISUAL_TARGET_COUNT")],
     });
+  });
+
+  it("requires connected ground only when every declared movement mode is ground-based", () => {
+    const groundOnly = parseSceneBriefV1(validBrief.replace(
+      "- 空中飞行：主体可以离开地面自由升降和转向。\n",
+      "- 陆地步行：主体也可以离开滑板步行。\n",
+    ));
+    expect(groundOnly.ok).toBe(true);
+    if (groundOnly.ok) {
+      expect(sceneBriefRequiresConnectedGroundV1(groundOnly.value)).toBe(true);
+    }
   });
 
   it("requires exactly one subject first and collapses repeated identities explicitly", () => {

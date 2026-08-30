@@ -10,51 +10,92 @@ import {
 } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { deflateSync } from "node:zlib";
 import path from "node:path";
 
 import { parseSceneBriefV1 } from "@whitebox-world/authoring";
-import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 
-const PLANNER_VERSION = "worldkit-planner-self-check-v3";
-const FIXED_PNG = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAFElEQVR4nGN8ERvLgA0wYRUdtBIASu4BsuOW+LcAAAAASUVORK5CYII=",
-  "base64",
-);
-const FIXED_PNG_HASH =
-  "sha256:49e9b3d8739f929f5b65af04566247a348615ac982541c1e85cd9f1a672efe08";
+import { runPlannerSelfCheck } from "./agent-planner-self-check.js";
 
-const VALID_TERRAIN_PROMPT = `# Terrain Height Intent
+const PLANNER_VERSION = "worldkit-planner-self-check-v4";
 
-Reference roles: Image 1 is the primary-coordinate reference.
-Base terrain: broad continuous valley and hills.
-Depressions: one shallow basin.
-Static Landmark and Structure exclusions: omit the tower and buildings.
-Entry and connectivity: preserve stable connected ground at the entry.
-Orientation: bottom is entry and top is world-forward.
-Encoding profile: signed-diverging-blue-gray-orange@1 using RGB(32,64,208), RGB(128,128,128), and RGB(224,96,32).
-`;
-
-async function terrainIntentPng(
-  kind: "valid" | "moderate-residual" | "constant" | "off-ramp",
-) {
-  const pixels = new Uint8Array(8 * 8 * 3);
-  for (let index = 0; index < 64; index += 1) {
-    const color = kind === "constant"
-      ? [128, 128, 128]
-      : kind === "off-ramp"
-      ? [0, 255, 0]
-      : kind === "moderate-residual"
-      ? index < 32 ? [120, 96, 216] : [216, 112, 120]
-      : index < 32 ? [80, 96, 168] : [176, 112, 80];
-    pixels[index * 3] = color[0]!;
-    pixels[index * 3 + 1] = color[1]!;
-    pixels[index * 3 + 2] = color[2]!;
+function crc32(bytes: Buffer): number {
+  let value = 0xffffffff;
+  for (const byte of bytes) {
+    value ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) {
+      value = (value >>> 1) ^ ((value & 1) === 0 ? 0 : 0xedb88320);
+    }
   }
-  return sharp(pixels, { raw: { width: 8, height: 8, channels: 3 } })
-    .png()
-    .toBuffer();
+  return (value ^ 0xffffffff) >>> 0;
 }
+
+function pngChunk(type: string, data: Buffer): Buffer {
+  const typeBytes = Buffer.from(type, "ascii");
+  const length = Buffer.alloc(4);
+  length.writeUInt32BE(data.length);
+  const checksum = Buffer.alloc(4);
+  checksum.writeUInt32BE(crc32(Buffer.concat([typeBytes, data])));
+  return Buffer.concat([length, typeBytes, data, checksum]);
+}
+
+function plannerPng(
+  width = 160,
+  height = 90,
+  palette = true,
+  includeGroundSupport = true,
+): Buffer {
+  const pixels = Buffer.alloc(width * height * 3, 255);
+  const fill = (
+    left: number,
+    top: number,
+    right: number,
+    bottom: number,
+    color: string,
+  ) => {
+    const rgb = [0, 2, 4].map((index) => Number.parseInt(color.slice(index + 1, index + 3), 16));
+    for (let y = top; y <= bottom; y += 1) {
+      for (let x = left; x <= right; x += 1) {
+        const offset = (y * width + x) * 3;
+        pixels[offset] = rgb[0]!;
+        pixels[offset + 1] = rgb[1]!;
+        pixels[offset + 2] = rgb[2]!;
+      }
+    }
+  };
+  if (palette) {
+    if (includeGroundSupport) {
+      fill(0, Math.round(height * 2 / 3), width - 1, height - 1, "#B7E4C7");
+    }
+    fill(0, 40, 19, 59, "#5F6368");
+    fill(40, 40, 49, 59, "#00B8A9");
+    fill(20, 40, 29, 59, "#F28E2B");
+    fill(120, 40, 129, 59, "#D9A514");
+  }
+  const subjectLeft = Math.floor(width / 2) - 5;
+  fill(subjectLeft, 30, subjectLeft + 9, Math.min(height - 1, 69), "#E85D5D");
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 2;
+  const scanlines = Buffer.alloc((width * 3 + 1) * height);
+  for (let y = 0; y < height; y += 1) {
+    const outputOffset = y * (width * 3 + 1);
+    scanlines[outputOffset] = 0;
+    pixels.copy(scanlines, outputOffset + 1, y * width * 3, (y + 1) * width * 3);
+  }
+  return Buffer.concat([
+    Buffer.from("89504e470d0a1a0a", "hex"),
+    pngChunk("IHDR", ihdr),
+    pngChunk("IDAT", deflateSync(scanlines)),
+    pngChunk("IEND", Buffer.alloc(0)),
+  ]);
+}
+
+const FIXED_PNG = plannerPng();
+const FIXED_PNG_HASH = hash(FIXED_PNG);
 
 const VALID_BRIEF = `# WorldKit Scene Brief
 
@@ -77,7 +118,7 @@ const VALID_BRIEF = `# WorldKit Scene Brief
 月光、衣物纹理和屋顶材质只属于后续渲染层，不进入碰撞几何。
 
 ## 运动模式
-陆地滑行：主体依靠滑板连续滑行，具有惯性和较大的转弯空间。
+- 陆地滑行：主体依靠滑板连续滑行，具有惯性和较大的转弯空间。
 
 ## 空间
 前景桥梁，中景山谷与瀑布，远景月宫和群山。
@@ -187,10 +228,7 @@ function hash(bytes: string | Buffer): `sha256:${string}` {
   return `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
 }
 
-function expectedReceipt(
-  scenario: PlannerScenario,
-  terrainIntentBytes: Buffer,
-): string {
+function expectedReceipt(scenario: PlannerScenario): string {
   return `${JSON.stringify({
     kind: "worldkit-planner-self-check",
     schemaVersion: 1,
@@ -201,26 +239,70 @@ function expectedReceipt(
       sceneBriefHash: hash(scenario.brief),
       worldPlanHash: FIXED_PNG_HASH,
       entryWhiteboxTargetHash: FIXED_PNG_HASH,
-      terrainHeightIntentPromptHash: hash(VALID_TERRAIN_PROMPT),
-      terrainHeightIntentPngHash: hash(terrainIntentBytes),
     },
     imageMeasurements: {
-      widthPixels: 8,
-      heightPixels: 8,
-      subjectMaskPixelCount: 64,
-      subjectCenterXRatio: 0.5,
-      subjectCenterErrorRatio: 0,
-      maximumCenterErrorRatio: 0.015,
-    },
-    terrainIntentMeasurements: {
-      widthPixels: 8,
-      heightPixels: 8,
-      profileId: "signed-diverging-blue-gray-orange@1",
-      minimumHeightRatio: -0.5,
-      medianHeightRatio: -0.5,
-      maximumHeightRatio: 0.5,
-      meanRampResidualRgbUnits: 0,
-      p95RampResidualRgbUnits: 0,
+      worldPlan: {
+        widthPixels: 160,
+        heightPixels: 90,
+        aspectRatio: 16 / 9,
+        matchedBlockPixelCount: 5700,
+        blockPaletteCoverageRatio: 5700 / 14400,
+        traversablePixelCount: 4700,
+        interactivePixelCount: 200,
+        blockPixelCountsBySemantic: {
+          walkable: 4700,
+          obstacle: 400,
+          "interactive-solid": 200,
+          "interactive-trigger": 0,
+          water: 0,
+          "cloud-walkable": 0,
+          "cloud-passable": 0,
+          "visual-only": 0,
+          "landmark-red": 0,
+          "visual-target-2": 200,
+          "visual-target-3": 200,
+          "visual-target-4": 0,
+          "visual-target-5": 0,
+          "landmark-pink": 0,
+          "visual-target-1-subject": 400,
+        },
+        visualTargetPixelCounts: [400, 200, 200, 0, 0],
+      },
+      entryWhiteboxTarget: {
+        widthPixels: 160,
+        heightPixels: 90,
+        aspectRatio: 16 / 9,
+        matchedBlockPixelCount: 5700,
+        blockPaletteCoverageRatio: 5700 / 14400,
+        traversablePixelCount: 4700,
+        interactivePixelCount: 200,
+        blockPixelCountsBySemantic: {
+          walkable: 4700,
+          obstacle: 400,
+          "interactive-solid": 200,
+          "interactive-trigger": 0,
+          water: 0,
+          "cloud-walkable": 0,
+          "cloud-passable": 0,
+          "visual-only": 0,
+          "landmark-red": 0,
+          "visual-target-2": 200,
+          "visual-target-3": 200,
+          "visual-target-4": 0,
+          "visual-target-5": 0,
+          "landmark-pink": 0,
+          "visual-target-1-subject": 400,
+        },
+        visualTargetPixelCounts: [400, 200, 200, 0, 0],
+        composition: {
+          widthPixels: 160,
+          heightPixels: 90,
+          subjectMaskPixelCount: 400,
+          subjectCenterXRatio: 0.5,
+          subjectCenterErrorRatio: 0,
+          maximumCenterErrorRatio: 0.015,
+        },
+      },
     },
     diagnostics: scenario.expectedDiagnostics,
   })}\n`;
@@ -230,24 +312,12 @@ async function writePlannerInputs(root: string, brief: string) {
   const briefPath = path.join(root, "scene-brief.md");
   const worldPlanPath = path.join(root, "world-plan.png");
   const entryPath = path.join(root, "entry-whitebox-target.png");
-  const terrainPromptPath = path.join(root, "terrain-height-intent-prompt.md");
-  const terrainIntentPath = path.join(root, "terrain-height-intent.png");
-  const terrainIntentBytes = await terrainIntentPng("valid");
   await Promise.all([
     writeFile(briefPath, brief),
     writeFile(worldPlanPath, FIXED_PNG),
     writeFile(entryPath, FIXED_PNG),
-    writeFile(terrainPromptPath, VALID_TERRAIN_PROMPT),
-    writeFile(terrainIntentPath, terrainIntentBytes),
   ]);
-  return {
-    briefPath,
-    worldPlanPath,
-    entryPath,
-    terrainPromptPath,
-    terrainIntentPath,
-    terrainIntentBytes,
-  };
+  return { briefPath, worldPlanPath, entryPath };
 }
 
 function plannerArguments(
@@ -259,13 +329,11 @@ function plannerArguments(
     "--brief", inputs.briefPath,
     "--world-plan", inputs.worldPlanPath,
     "--entry", inputs.entryPath,
-    "--terrain-prompt", inputs.terrainPromptPath,
-    "--terrain-intent", inputs.terrainIntentPath,
     "--report", reportPath,
   ];
 }
 
-describe("source-generated Planner self-check parity", { timeout: 30_000 }, () => {
+describe("source-generated Planner self-check parity", () => {
   for (const scenario of SCENARIOS) {
     it(`emits exact source and bundled receipts for ${scenario.name}`, async () => {
       const root = await mkdtemp(path.join(tmpdir(), "worldkit-planner-parity-"));
@@ -296,7 +364,7 @@ describe("source-generated Planner self-check parity", { timeout: 30_000 }, () =
         })}\n`;
         expect(source.stdout).toBe(exactResult);
         expect(bundled.stdout).toBe(exactResult);
-        const exactReceipt = expectedReceipt(scenario, inputs.terrainIntentBytes);
+        const exactReceipt = expectedReceipt(scenario);
         expect(await readFile(sourceReportPath, "utf8")).toBe(exactReceipt);
         expect(await readFile(bundledReportPath, "utf8")).toBe(exactReceipt);
 
@@ -313,79 +381,12 @@ describe("source-generated Planner self-check parity", { timeout: 30_000 }, () =
     });
   }
 
-  it("accepts moderate Image2 ramp residual while retaining signed variation", async () => {
-    const root = await mkdtemp(path.join(tmpdir(), "worldkit-planner-terrain-"));
-    try {
-      const inputs = await writePlannerInputs(root, VALID_BRIEF);
-      await writeFile(
-        inputs.terrainIntentPath,
-        await terrainIntentPng("moderate-residual"),
-      );
-      const sourceReportPath = path.join(root, "source-report.json");
-      const bundledReportPath = path.join(root, "bundled-report.json");
-      const source = run("pnpm", [
-        "exec", "tsx", "scripts/agents/agent-planner-self-check.ts",
-        ...plannerArguments(inputs, sourceReportPath),
-      ]);
-      const bundled = run(process.execPath, [
-        ".codex/skills/worldkit-spatial-planner/scripts/self-check.mjs",
-        ...plannerArguments(inputs, bundledReportPath),
-      ]);
-
-      expect(source.status, source.stderr || source.stdout).toBe(0);
-      expect(bundled.status, bundled.stderr || bundled.stdout).toBe(0);
-      expect(await readFile(sourceReportPath)).toEqual(
-        await readFile(bundledReportPath),
-      );
-    } finally {
-      await rm(root, { recursive: true, force: true });
-    }
-  });
-
-  for (const invalid of [
-    { kind: "constant" as const, code: "TERRAIN_INTENT_NEAR_CONSTANT" },
-    { kind: "off-ramp" as const, code: "TERRAIN_INTENT_COLOR_RESIDUAL_EXCEEDED" },
-  ]) {
-    it(`rejects ${invalid.kind} Height Intent identically in source and bundle`, async () => {
-      const root = await mkdtemp(path.join(tmpdir(), "worldkit-planner-terrain-"));
-      try {
-        const inputs = await writePlannerInputs(root, VALID_BRIEF);
-        await writeFile(inputs.terrainIntentPath, await terrainIntentPng(invalid.kind));
-        const sourceReportPath = path.join(root, "source-report.json");
-        const bundledReportPath = path.join(root, "bundled-report.json");
-        const source = run("pnpm", [
-          "exec", "tsx", "scripts/agents/agent-planner-self-check.ts",
-          ...plannerArguments(inputs, sourceReportPath),
-        ]);
-        const bundled = run(process.execPath, [
-          ".codex/skills/worldkit-spatial-planner/scripts/self-check.mjs",
-          ...plannerArguments(inputs, bundledReportPath),
-        ]);
-
-        expect(source.status).toBe(2);
-        expect(bundled.status).toBe(2);
-        for (const reportPath of [sourceReportPath, bundledReportPath]) {
-          const report = JSON.parse(await readFile(reportPath, "utf8"));
-          expect(report.diagnostics).toEqual(expect.arrayContaining([
-            expect.objectContaining({ code: invalid.code }),
-          ]));
-        }
-        expect(await readFile(sourceReportPath)).toEqual(
-          await readFile(bundledReportPath),
-        );
-      } finally {
-        await rm(root, { recursive: true, force: true });
-      }
-    });
-  }
-
-  for (const mutatedBundle of ["planner", "builder"] as const) {
+  for (const mutatedBundle of ["planner"] as const) {
     it(`fails read-only check for a mutated ${mutatedBundle} tracked copy`, async () => {
       const root = await mkdtemp(path.join(tmpdir(), "worldkit-self-check-copy-"));
       const trackedSkillsRoot = path.join(root, "skills");
       const relativePaths = {
         planner: "worldkit-spatial-planner/scripts/self-check.mjs",
-        builder: "worldkit-canonical-builder/scripts/self-check.mjs",
       } as const;
       try {
         for (const relativePath of Object.values(relativePaths)) {
@@ -419,4 +420,62 @@ describe("source-generated Planner self-check parity", { timeout: 30_000 }, () =
       }
     }, 30_000);
   }
+
+  it("rejects a palette-free world plan and a non-16:9 entry target", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "worldkit-planner-image-contract-"));
+    try {
+      const briefPath = path.join(root, "scene-brief.md");
+      const worldPlanPath = path.join(root, "world-plan.png");
+      const entryPath = path.join(root, "entry.png");
+      await Promise.all([
+        writeFile(briefPath, VALID_BRIEF),
+        writeFile(worldPlanPath, plannerPng(160, 90, false)),
+        writeFile(entryPath, plannerPng(100, 100, true)),
+      ]);
+      const result = await runPlannerSelfCheck({
+        sceneId: "planner-image-contract",
+        briefPath,
+        worldPlanPath,
+        entryPath,
+        reportPath: path.join(root, "report.json"),
+      });
+      expect(result.status).toBe("failed");
+      expect(result.diagnostics.map(({ code }) => code)).toEqual(expect.arrayContaining([
+        "WORLD_PLAN_BLOCK_PALETTE_COVERAGE_LOW",
+        "WORLD_PLAN_TRAVERSABLE_COLOR_MISSING",
+        "WORLD_PLAN_VISUAL_TARGET_COLOR_MISSING",
+        "ENTRY_WHITEBOX_TARGET_ASPECT_RATIO_INVALID",
+      ]));
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("does not require a ground-traversable region for a flight-only Brief", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "worldkit-planner-flight-colors-"));
+    const brief = VALID_BRIEF.replace(
+      "- 陆地滑行：主体依靠滑板连续滑行，具有惯性和较大的转弯空间。",
+      "- 空中飞行：主体在空中自由升降和转向。",
+    );
+    const image = plannerPng(160, 90, true, false);
+    const briefPath = path.join(root, "scene-brief.md");
+    const worldPlanPath = path.join(root, "world-plan.png");
+    const entryPath = path.join(root, "entry.png");
+    await Promise.all([
+      writeFile(briefPath, brief),
+      writeFile(worldPlanPath, image),
+      writeFile(entryPath, image),
+    ]);
+    const result = await runPlannerSelfCheck({
+      sceneId: "planner-flight-colors",
+      briefPath,
+      worldPlanPath,
+      entryPath,
+      reportPath: path.join(root, "report.json"),
+    });
+    expect(result.status).toBe("passed");
+    expect(result.diagnostics.map(({ code }) => code)).not.toContain(
+      "WORLD_PLAN_TRAVERSABLE_COLOR_MISSING",
+    );
+  });
 });

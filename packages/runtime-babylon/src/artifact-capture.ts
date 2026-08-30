@@ -8,6 +8,35 @@ import type { Material } from "@babylonjs/core/Materials/material.js";
 import type { BaseTexture } from "@babylonjs/core/Materials/Textures/baseTexture.js";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
+import {
+  inspectWhiteboxTriviewPixelsV1,
+  WHITEBOX_TRIVIEW_BACKGROUND_COLOR_V1,
+} from "@whitebox-world/runtime-contracts";
+
+import {
+  type BlockWorldGroundStripeBufferV1,
+  restoreBlockWorldGroundStripeColorsV1,
+  suspendBlockWorldGroundStripeColorsV1,
+} from "./block-ground-stripe.js";
+
+// Hard-disabling unrelated meshes makes Babylon drop skinned targets from the
+// active render/animation dependency graph. Retaining a sub-byte contribution
+// keeps that graph alive without producing visible pixels in the PNG artifact.
+const TRIVIEW_NON_TARGET_VISIBILITY = 1e-6;
+const TRIVIEW_MAXIMUM_RENDER_ATTEMPTS_PER_VIEW = 8;
+
+function panelHasRenderableForeground(
+  context: CanvasRenderingContext2D,
+  outputWidthPixels: number,
+  heightPixels: number,
+  panelIndex: number,
+): boolean {
+  return inspectWhiteboxTriviewPixelsV1(
+    context.getImageData(0, 0, outputWidthPixels, heightPixels).data,
+    outputWidthPixels,
+    heightPixels,
+  ).viewInspections[panelIndex]!.isRenderable;
+}
 
 export interface BabylonArtifactProjectedBoundsV1 {
   readonly centerRatioXY: readonly [number, number];
@@ -94,7 +123,11 @@ function readCanvas(canvas: HTMLCanvasElement): Omit<
 
 function meshesForEntity(scene: Scene, entityId: string): readonly AbstractMesh[] {
   return scene.meshes.filter(
-    (mesh) => mesh.isVisible && String(mesh.metadata?.worldkitEntityId) === entityId,
+    (mesh) => mesh.isVisible && (
+      String(mesh.metadata?.worldkitEntityId) === entityId ||
+      (Array.isArray(mesh.metadata?.worldkitEntityIds) &&
+        mesh.metadata.worldkitEntityIds.includes(entityId))
+    ),
   );
 }
 
@@ -214,14 +247,21 @@ function renderTriview(
     );
   }
   const targetSet = new Set(targets);
-  const visibility = new Map(scene.meshes.map((mesh) => [mesh, mesh.isVisible] as const));
+  const visibility = new Map(scene.meshes.map((mesh) => [mesh, mesh.visibility] as const));
+  const activeMeshSelection = new Map(
+    targets.map((mesh) => [mesh, mesh.alwaysSelectAsActiveMesh] as const),
+  );
   const materialColors = new Map<Material, MaterialColorSnapshotV1>();
   const identityColor = Color3.FromHexString(request.identityColor);
   for (const mesh of scene.meshes) {
-    mesh.isVisible = targetSet.has(mesh);
+    mesh.visibility = targetSet.has(mesh) ? 1 : TRIVIEW_NON_TARGET_VISIBILITY;
     if (targetSet.has(mesh) && mesh.material !== null) {
       tintMaterial(mesh.material, identityColor, materialColors);
     }
+  }
+  for (const mesh of targets) {
+    mesh.alwaysSelectAsActiveMesh = true;
+    mesh.computeWorldMatrix(true);
   }
   const minimum = new Vector3(
     Math.min(...targets.map((mesh) => mesh.getHierarchyBoundingVectors(true).min.x)),
@@ -253,7 +293,7 @@ function renderTriview(
   ];
   engine.setSize(panelWidth, request.heightPixels, true);
   const canvas = renderingCanvas(engine);
-  scene.clearColor = Color4.FromHexString("#F1F1EDFF");
+  scene.clearColor = Color4.FromHexString(`${WHITEBOX_TRIVIEW_BACKGROUND_COLOR_V1}FF`);
   scene.activeCamera = camera;
   try {
     for (let index = 0; index < views.length; index += 1) {
@@ -270,9 +310,25 @@ function renderTriview(
       camera.position.copyFrom(center.add(view.direction.scale(distance)));
       camera.upVector.copyFromFloats(0, 1, 0);
       camera.setTarget(center);
-      scene.render();
-      scene.render();
-      context.drawImage(canvas, index * panelWidth, 0, panelWidth, request.heightPixels);
+      // Rigged assets can require multiple renders to refresh skinning and
+      // active-mesh state after the capture camera replaces the gameplay camera.
+      // Retry the actual panel, not just the scene call, so a blank first frame
+      // can never silently become a successful three-view artifact.
+      for (
+        let attempt = 0;
+        attempt < TRIVIEW_MAXIMUM_RENDER_ATTEMPTS_PER_VIEW;
+        attempt += 1
+      ) {
+        scene.render();
+        engine.flushFramebuffer();
+        context.drawImage(canvas, index * panelWidth, 0, panelWidth, request.heightPixels);
+        if (panelHasRenderableForeground(
+          context,
+          output.width,
+          request.heightPixels,
+          index,
+        )) break;
+      }
     }
     return {
       dataUrl: output.toDataURL("image/png"),
@@ -284,7 +340,10 @@ function renderTriview(
   } finally {
     camera.dispose();
     restoreMaterialColors(materialColors);
-    for (const [mesh, isVisible] of visibility) mesh.isVisible = isVisible;
+    for (const [mesh, alwaysSelectAsActiveMesh] of activeMeshSelection) {
+      mesh.alwaysSelectAsActiveMesh = alwaysSelectAsActiveMesh;
+    }
+    for (const [mesh, value] of visibility) mesh.visibility = value;
   }
 }
 
@@ -301,6 +360,10 @@ export function captureBabylonArtifactViewV1(options: Readonly<{
   const previousHeight = engine.getRenderHeight(true);
   const materialColors = new Map<Material, MaterialColorSnapshotV1>();
   const originalMaterialByMesh = new Map<AbstractMesh, Material>();
+  const suspendedGroundStripeColorsByMesh = new Map<
+    AbstractMesh,
+    BlockWorldGroundStripeBufferV1
+  >();
   const temporaryMaterials = new Set<Material>();
   const temporaryTextures = new Set<BaseTexture>();
   let temporaryCamera: FreeCamera | undefined;
@@ -367,6 +430,10 @@ export function captureBabylonArtifactViewV1(options: Readonly<{
       scene.clearColor = Color4.FromHexString(`${request.backgroundColor}FF`);
       for (const mesh of scene.meshes) {
         if (!mesh.isVisible || mesh.material === null) continue;
+        const stripeColors = suspendBlockWorldGroundStripeColorsV1(mesh);
+        if (stripeColors !== undefined) {
+          suspendedGroundStripeColorsByMesh.set(mesh, stripeColors);
+        }
         const entityId = String(mesh.metadata?.worldkitEntityId ?? "");
         const originalMaterial = mesh.material;
         const texturesBeforeClone = new Set(scene.textures);
@@ -415,6 +482,9 @@ export function captureBabylonArtifactViewV1(options: Readonly<{
     };
   } finally {
     temporaryCamera?.dispose();
+    for (const [mesh, colors] of suspendedGroundStripeColorsByMesh) {
+      restoreBlockWorldGroundStripeColorsV1(mesh, colors);
+    }
     for (const [mesh, material] of originalMaterialByMesh) mesh.material = material;
     restoreMaterialColors(materialColors);
     for (const material of temporaryMaterials) material.dispose();

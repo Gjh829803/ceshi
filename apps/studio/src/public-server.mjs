@@ -200,8 +200,13 @@ async function startMain() {
     Number(process.env.WORLDKIT_PUBLIC_PROXY_PORT ?? 4175),
     "WORLDKIT_PUBLIC_PROXY_PORT",
   );
+  const studioPort = validatedPort(
+    Number(process.env.WORLDKIT_STUDIO_PORT ?? 4197),
+    "WORLDKIT_STUDIO_PORT",
+  );
   const topology = await startStudioPublicServer({
     accessKey: process.env.WORLDKIT_ACCESS_KEY,
+    studioPort,
     publicPort,
     env: process.env,
   });

@@ -12,3 +12,10 @@ agent-tmp/
 .playwright-cli/
 /output/playwright/
 .worktrees/
+scripts/__pycache__/
+*.py[cod]
+
+# Local/generated WorldKit runtime output. Tracked fixtures remain tracked.
+artifacts/episodes/
+artifacts/scenes/*/
+apps/playground/public/scene-plans/*/

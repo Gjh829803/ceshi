@@ -138,6 +138,13 @@ function cameraProjection(
     desiredTargetPositionMetersXYZ: Object.freeze([
       ...camera.desiredTargetPositionMetersXYZ,
     ]) as readonly [number, number, number],
+    ...(camera.actualTargetPositionMetersXYZ === undefined
+      ? {}
+      : {
+          actualTargetPositionMetersXYZ: Object.freeze([
+            ...camera.actualTargetPositionMetersXYZ,
+          ]) as readonly [number, number, number],
+        }),
     desiredPositionMetersXYZ: Object.freeze([
       ...camera.desiredPositionMetersXYZ,
     ]) as readonly [number, number, number],
@@ -145,6 +152,12 @@ function cameraProjection(
       ...camera.actualPositionMetersXYZ,
     ]) as readonly [number, number, number],
     finalFovDegrees: camera.finalFovDegrees,
+    ...(camera.nearClipMeters === undefined
+      ? {}
+      : { nearClipMeters: camera.nearClipMeters }),
+    ...(camera.farClipMeters === undefined
+      ? {}
+      : { farClipMeters: camera.farClipMeters }),
     ...(isNil(camera.requestedArmLengthMeters)
       ? {}
       : { requestedArmLengthMeters: camera.requestedArmLengthMeters }),

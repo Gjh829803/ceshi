@@ -1,0 +1,4 @@
+interface:
+  display_name: "WorldKit Visual Reconstructor"
+  short_description: "Render verified whitebox visuals with one Codex job"
+  default_prompt: "Use $worldkit-visual-reconstructor to generate the declared styled opening and complete-target tri-views."

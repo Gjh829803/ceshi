@@ -54,15 +54,6 @@ async function availablePorts(count) {
   }
 }
 
-async function assertPortAvailable(port) {
-  const server = createServer();
-  await new Promise((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(port, "127.0.0.1", resolve);
-  });
-  await new Promise((resolve) => server.close(resolve));
-}
-
 function waitForOutput(stream, child, pattern, timeoutMs) {
   return new Promise((resolve, reject) => {
     let output = "";
@@ -392,9 +383,8 @@ test("closes the public listener and child process group when Studio crashes", a
 });
 
 test("real public-server CLI handles parent SIGTERM and closes both listeners", async () => {
-  await assertPortAvailable(4197);
   const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "worldkit-public-cli-"));
-  const [publicPort] = await availablePorts(1);
+  const [studioPort, publicPort] = await availablePorts(2);
   const accessKey = "test-public-access-key-1234";
   const wrapper = spawn(process.execPath, [path.join(studioSourceRoot, "public-server.mjs")], {
     cwd: repoRoot,
@@ -404,6 +394,7 @@ test("real public-server CLI handles parent SIGTERM and closes both listeners", 
       WORLDKIT_DISABLE_PLAYGROUND_SPAWN: "1",
       WORLDKIT_PUBLIC_ENV_FILE: path.join(temporaryRoot, "absent.env"),
       WORLDKIT_PUBLIC_PROXY_PORT: String(publicPort),
+      WORLDKIT_STUDIO_PORT: String(studioPort),
       WORLDKIT_STUDIO_DATA_ROOT: path.join(temporaryRoot, "studio-data"),
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -428,7 +419,7 @@ test("real public-server CLI handles parent SIGTERM and closes both listeners", 
     assert.equal(signal, null);
     assert.equal(isProcessAlive(internalPid), false);
     await assert.rejects(fetch(`http://127.0.0.1:${publicPort}`, { signal: AbortSignal.timeout(100) }));
-    await assert.rejects(fetch("http://127.0.0.1:4197", { signal: AbortSignal.timeout(100) }));
+    await assert.rejects(fetch(`http://127.0.0.1:${studioPort}`, { signal: AbortSignal.timeout(100) }));
   } finally {
     if (wrapper.exitCode === null && wrapper.signalCode === null) {
       wrapper.kill("SIGTERM");

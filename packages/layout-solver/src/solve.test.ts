@@ -343,4 +343,21 @@ describe("deterministic layout solver", () => {
     );
     expect(hashes).toEqual(Array(8).fill(expectedHash));
   });
+
+  it("solves ten thousand fixed entities without consuming the JavaScript call stack", () => {
+    const fixedOnly: ResolvedLayoutInputV1 = {
+      ...input([]),
+      worldBounds: {
+        minimumMetersXYZ: [-20_000, -20, -100],
+        maximumMetersXYZ: [20_000, 100, 100],
+      },
+      entities: Array.from({ length: 10_000 }, (_, index) =>
+        fixedEntity(`fixed-${String(index).padStart(5, "0")}`, index)),
+    };
+
+    const solved = solveLayoutV1(fixedOnly, profile());
+    expect(solved.status).toBe("solved");
+    expect(Object.keys(solved.report.placementsByEntityId)).toHaveLength(10_000);
+    expect(solved.report.searchNodeCount).toBe(10_000);
+  }, 30_000);
 });

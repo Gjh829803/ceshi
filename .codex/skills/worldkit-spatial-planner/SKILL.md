@@ -1,42 +1,67 @@
 ---
 name: worldkit-spatial-planner
-description: Use when a hosted WorldKit outdoor scene needs a Scene Brief, top-down world plan, entry composition target, and signed Height Intent raster from a user request and reference images. Use only for planning; do not author Canonical JSON, implementation resources, or runtime details.
+description: In one WorldKit Planner job, turn a user request and reference images into a short Scene Brief plus two semantic block-whitebox planning images using Codex's built-in image generation tool. Use only for planning; do not author geometry, implementation resources, or runtime details.
 ---
 
 # WorldKit Unified Planner
 
-Create exactly five semantic output files:
+Create exactly three files:
 
 - `artifacts/scenes/<scene-id>/scene-brief.md`
-- `artifacts/scenes/<scene-id>/terrain-height-intent-prompt.md`
-- `apps/playground/public/scene-plans/<scene-id>/world-plan.png`
 - `apps/playground/public/scene-plans/<scene-id>/entry-whitebox-target.png`
-- `apps/playground/public/scene-plans/<scene-id>/terrain-height-intent.png`
+- `apps/playground/public/scene-plans/<scene-id>/world-plan.png`
 
-Use this skill for the optional hosted preview-planning stage. It does not replace the formal World Planner's WorldSpec, World Plan, Opening Shot or trusted plan-lock boundary. Write the Scene Brief first, then call Codex's built-in image generation tool inside the same task to create both PNG files from the same decisions and reference evidence. Do not delegate the PNGs to another Image Planner or create a separate T2I job.
+Use this skill for the current Agent-facing hosted planning stage. It owns the
+Scene Brief and both non-runtime intent images; Block Builder owns geometry and
+the trusted Host owns runtime artifacts. In this one task, write the Scene Brief,
+generate and inspect `entry-whitebox-target.png`, and only then generate
+`world-plan.png` using the exact saved entry PNG together with the uploaded
+reference and Brief. Do not delegate the PNGs to another Image Planner, create a
+separate T2I job, or generate the two views independently.
 
 Use the reference images as primary visual evidence and the user request as primary intent. Write concise natural language using [references/scene-brief-template.md](references/scene-brief-template.md). Do not create a Spatial Plan, JSON spec, dimensions, coordinates, route nodes, support-surface tables, camera numbers, Registry refs, primitive decomposition, colliders, or implementation mappings.
 
-For Height Intent, read
-[references/terrain-height-intent-prompt.md](references/terrain-height-intent-prompt.md), write the
-fully expanded scene prompt to the declared Markdown path, then generate exactly one raster from
-that prompt in this same task. `world-plan.png owns orientation and complete-world extent`; the
-Height Intent image encodes only continuous base-ground relief in that same frame. It is an
-untrusted proposal and must never be presented as compiled terrain or Runtime evidence.
+Before generating either PNG, read
+[references/block-whitebox-images.md](references/block-whitebox-images.md).
+It is the single image-palette contract shared with Block Builder and Studio.
+Both PNGs must be visibly built from discrete cubes and must use the exact
+functional colors for traversable, obstacle, interactive, water, cloud, and
+visual-only blocks actually present. Never force a semantic color for a block
+type the scene does not contain.
 
-If `assets/terrain-height-intent/golden-exemplars.json` is available, select an accepted exemplar
-only when its `terrainFamily` matches the planned world. It is `encoding-style-only`: never copy
-its topology, relief amplitude, structures, landmarks, routes, water placement, or composition.
-When no compatible accepted family exists, generate without a golden exemplar rather than using
-the nearest-looking one.
+## Required generation sequence
+
+1. Analyze the uploaded reference and write the complete short Scene Brief.
+2. Generate `entry-whitebox-target.png` first. Inspect that exact file for the
+   strict centered rear Subject, visible geographic order, block semantics, and
+   clear-day readability. Also inspect whether visible terrain, stairs, bridges,
+   platforms, cliffs, and buildings have the reference's real three-dimensional
+   rise, depth, thickness, and occlusion rather than a matching flat silhouette.
+   Repair it before continuing when it is wrong.
+3. Generate `world-plan.png` second. Attach the uploaded reference and the exact
+   saved entry PNG to this image-generation call. Instruct image generation to
+   project the entry space into top-down geography, preserve every visible
+   left/right/front/depth relationship, and add only the Brief's inferred
+   continuation.
+4. Inspect the pair together. If the entry image changes, the existing
+   `world-plan.png` is stale and must be regenerated from the new entry image.
+
+The reference owns directly visible geography, the entry image owns opening
+composition and visible block silhouettes, and the top-down image owns hidden
+continuation and connections. Resolve a conflict inside this Planner task; do
+not pass mutually inconsistent images to Builder.
 
 Keep the four provenance sections required by current main strictly separate: `用户事实` contains only explicit user requirements, `可见参考证据` only directly visible image evidence, `推断的世界延伸` only conservative playable continuation beyond that evidence, and `仅视觉层设想` only styling/material/lighting ideas for later rendering. Never present an inferred continuation as observed geography. Planner does not select Subject Definitions, registered Subject Assets, Runtime Bundles, rigs, clips, colliders, or motion resources; it describes the complete controlled shape and movement behavior in plain language for Builder.
 
 ## Required decisions
 
-### Movement mode
+### Movement modes
 
-Name exactly one movement mode and explain it in one sentence. These common modes are references, not a closed list:
+Name one or more movement modes. Write each mode as its own bullet with one
+sentence explaining support, steering, inertia, and free-space behavior. The
+first row is the startup/default mode; later rows are real alternate modes of
+the same controlled Subject, not hypothetical variants. These common modes are
+references, not a closed list:
 
 - `陆地步行` — walking/running humanoids or animals whose support changes through ordinary steps;
 - `陆地滑行` — skateboards, snowboards, skis, sleds, hoverboards, or another inertia-led ground glide;
@@ -46,18 +71,56 @@ Name exactly one movement mode and explain it in one sentence. These common mode
 - `水下游动` — free motion through an underwater volume;
 - `空中飞行` — free motion through an air volume.
 
-When none fits, write a concise custom movement label followed by its real support, inertia, steering, and free-space behavior in plain language. Preserve a user-specified custom mode instead of coercing it to the nearest reference mode. The Builder owns implementation: it may assemble a package-local controlled Subject and bind the closest honest current motion closure independently of shape. A missing named Subject preset is not a reason to revise or reject the plan; the Agent does not add SDK motion bases.
+When none fits, write a concise custom movement label followed by its real support, inertia, steering, and free-space behavior in plain language. Preserve a user-specified custom mode instead of coercing it to the nearest reference mode. Do not collapse `陆地步行 + 空中飞行`, `陆地步行 + 水下游动`, or another genuine hybrid into one vague custom label. The Builder owns implementation: it may assemble a package-local controlled Subject and bind the closest honest current motion closure independently of shape. A missing named Subject preset is not a reason to revise or reject the plan; the Agent does not add SDK motion bases.
 
 Movement-changing equipment belongs to the complete subject description. Clothing, weapons, armor, and backpacks that do not change locomotion remain appearance details and do not create another subject.
+
+### Three-dimensional spatial form
+
+Plan a volume, not a camera-facing picture. For every major terrain mass,
+constructed platform, bridge, stair, and landmark, reason about its footprint,
+longitudinal elevation profile, cross-section, thickness, and position in depth.
+Use perspective scale, overlap, vanishing lines, visible top/side faces, horizon
+placement, and occlusion as evidence. The opening image's two-dimensional
+silhouette is only one consequence of that volume and is never sufficient by
+itself.
+
+Record the visible vertical relationships in concise Brief prose without
+coordinates or engineering tables: which area is lower or higher, where an
+ascent begins and ends, what it passes above or below, and which upper/lower
+spaces it connects. Preserve the number and order of clearly visible elevation
+levels. Where the single view leaves depth ambiguous, choose the simplest
+volume that satisfies all visible evidence; do not collapse it to a thin
+backdrop wall or invent dramatic unseen relief.
+
+For a visible staircase, identify its lower start, upper destination, travel and
+rise direction, approximate width relative to the Subject, straight/curved/
+switchback form, major landings, side enclosure or drop, and the supporting
+terrain/structure. The planned stair must physically arrive at the visibly
+higher or lower destination. Horizontal strips painted across a flat path are
+not a staircase.
 
 ### Navigation intent
 
 Describe navigation in prose, not a graph.
 
-The opening composition is only the world's entry slice, never the map boundary. Extend the reference-consistent world through an entry area, at least one middle area, and meaningful off-camera exploration areas or remote destinations appropriate to the request. Do not infer quality from a fixed duration or perimeter and do not satisfy completeness with empty padding.
+The opening composition is only the world's entry slice, never the map boundary.
+Plan exactly one continuous geographic world. Do not split it into panels,
+separate scenes, portals, teleports, or hidden destination spaces in this
+workflow. The complete top-down explorable footprint must cover at least four
+times the geographic area visible in the uploaded reference—normally about
+twice its visible width and twice its visible depth—so the reference-visible
+slice occupies at most roughly one quarter of `world-plan.png`. Extend through
+an entry area, a middle area, meaningful side and rear areas outside the uploaded
+camera view, and a remote area or destination. Continue coastlines, valleys,
+plateaus, structures, cloud fields, or open volumes conservatively without
+rotating or contradicting visible ordering. Every added quadrant needs real
+reference-consistent geography or exploration value; empty padding does not
+count toward the four-times area.
 
 - Ordinary land scenes are open by default: the whole collision-free playable ground is traversable. Do not invent a road or preferred route.
-- Flying and underwater scenes use the whole bounded free volume outside solid collisions. Do not invent rails or waypoint tunnels.
+- Mark only ground-motion support as the pale-green traversable region (and real standable cloud support in its fixed cloud-support color). Flight, underwater swimming, and water-surface motion use collision-free volume or medium and receive no route, corridor, waypoint, or traversable-area overlay. Water remains blue because it is water, not because it is a marked path.
+- Require the ground support to form one connected reachable component only when every declared movement mode is ground-based. When the same Subject also has flight, swimming, water-surface, or a custom free-space mode, disconnected ground islands are allowed because the ground graph is no longer the Subject's complete reachability authority.
 - Describe a constrained route only when the request or reference visibly contains a bridge, corridor, stair, tunnel, narrow trail, channel, doorway sequence, or another real restriction. Name its start, destination, ordered connection, and whether the restriction lies on natural ground or on a constructed/elevated structure. Keep this distinction in prose; the Builder decides whether trusted Route validation applies.
 - The brief describes the complete explorable world, including meaningful side, rear, upper, and destination areas beyond the opening frame.
 
@@ -92,65 +155,92 @@ Describe foreground, middle ground, background, scale, left/right relationships,
 
 ## Deterministic visual identity order
 
-The trusted Host derives the palette JSON after delivery, but both Planner images must already follow the same fixed target order. The Brief parser assigns `visual-target-1` through `visual-target-5` in listed order, using these exact identity colors:
+The trusted Host derives the palette JSON after delivery, but both Planner images must already follow the same fixed target order. The Brief parser assigns `visual-target-1` through `visual-target-5` in listed order, using these exact colors:
 
 1. `visual-target-1` → `#E85D5D`
 2. `visual-target-2` → `#F28E2B`
-3. `visual-target-3` → `#8E6CCF`
-4. `visual-target-4` → `#D45087`
-5. `visual-target-5` → `#D6B84C`
+3. `visual-target-3` → `#D9A514`
+4. `visual-target-4` → `#4E79A7`
+5. `visual-target-5` → `#9C6ADE`
 
-Do not write `visual-identity-palette.json`; the Host owns it. Use these colors only in `entry-whitebox-target.png`. `world-plan.png` remains palette-free.
+Do not write `visual-identity-palette.json`; the Host owns it. Use the same
+ordered target colors in both PNGs, but apply the primary red differently: the
+top-down plan contains only one small spawn-position token, while the entry
+image contains the complete controlled Subject silhouette. Functional surfaces inside a landmark
+keep their functional block color while the remaining complete silhouette keeps
+its ordered landmark color.
 
-## Top-down world plan
+## Top-down world plan — generate second
 
-Generate one clean orthographic top-down navigation image. The uploaded reference is absolute authority for world geography: preserve visible relative direction, adjacency, containment, ordering, separation, connection, shoreline, cliff, building, terrain mass, and route relationships. Infer unseen space conservatively.
+Generate one clean orthographic top-down block-whitebox navigation image only
+after the entry target has been generated and inspected. Use the uploaded
+reference and the exact entry target as image references. Preserve visible
+relative direction, adjacency, containment, ordering, separation, connection,
+shoreline, cliff, building, terrain mass, and route relationships. Infer unseen
+space conservatively; do not rotate, mirror, reorder, or redesign the entry
+space for a prettier map.
 
-The image contains only three information layers:
+Top-down does not mean heightless. Use stacked block relief, visible top/side
+faces, and shallow inspection shadows to keep major elevation levels, raised
+bridges, stair runs, cliff rims, valleys, and platform thickness legible without
+adding elevation labels or contour overlays. Its footprint must agree with the
+entry image, while its block stacking must agree with the Brief's vertical
+relationships.
 
-1. a simple neutral rendering of the reference-consistent world layout;
-2. one unmistakable initial-subject marker at the described spawn position;
-3. the traversable domain appropriate to the movement mode.
+The image contains only four information layers:
 
-Show the complete intended playable footprint, not a crop matching the entry frame. The spawn marker may occupy a small entry portion of the plan, while middle, side/rear, and remote off-camera areas remain visibly available for exploration.
+1. a discrete-cube rendering of the reference-consistent complete world layout;
+2. one small red spawn-position token at the described initial position;
+3. exact functional block colors showing ground-motion support, collision,
+   interaction, water/cloud, and visual-only semantics that actually exist;
+4. the ordered colors of every selected complete visual landmark.
 
-For open ground, shade the entire collision-free walkable area instead of inventing a preferred lane. For a real constrained connection, show only the actual continuous path. For flight, underwater, or a custom mode, show the top-down projection of its genuinely traversable domain without rails or ground paths.
+Show the complete intended playable footprint at no less than four times the
+reference-visible geographic area, not a crop matching the entry frame. The
+spawn token occupies only one small entry location, while the middle, side/rear,
+and remote off-camera areas visibly dominate the plan. The red token is a simple
+top-down point made from a few red cube tops. It is not a humanoid, animal,
+rider, vehicle, board, glider, weapon, equipment silhouette, facing arrow, or
+camera cone. Do not depict any Subject anatomy or pose in `world-plan.png`.
 
-Remove every other overlay or annotation: no identity colors, target highlighting, labels, title, legend, scale, elevation values, dimensions, coordinates, grid, camera cone, route nodes, arrows, callouts, UI, logo, or watermark.
+For open ground movement, shade the entire collision-free walkable ground area
+instead of inventing a preferred lane. For a real constrained ground
+connection, show only the actual continuous support. For flight, underwater,
+water-surface, or a custom free-space mode, do not shade or outline a navigable
+domain. Show only actual blocks, collision masses, water/cloud semantics,
+landmarks, and the spawn token. If a hybrid Subject also has a ground mode, mark
+its real ground support without implying that those regions define full
+free-space reachability.
 
-## Terrain Height Intent
+Keep one continuous map and remove every other overlay
+or annotation: no labels, title, in-image legend, scale, elevation values,
+dimensions, coordinates, grid, camera cone, route nodes, arrows, callouts, UI,
+logo, or watermark. Studio displays the color legend next to the image.
 
-After the Brief and World Plan exist, expand every required input in the maintained Height Intent
-prompt reference. Preserve the World Plan's orientation, extent, adjacency, containment, open
-connections, and major continuous terrain masses. A user image remains visible evidence; the
-World Plan is the canonical top-down coordinate frame for this output.
+## Entry composition intent target — generate first
 
-Save the exact rendered prompt before image generation. Generate one square, strict orthographic,
-fully opaque PNG using `signed-diverging-blue-gray-orange@1`:
+Generate one geometry-readable 16:9 block-whitebox entry composition intent target using the reference images and the completed Brief. Despite the historical file name `entry-whitebox-target.png`, this image is not runtime evidence and must never be presented as the actual whitebox. Preserve complete-subject silhouette, landmark scale, navigation openness or real constrained connection, depth order, occlusion, and the strict centered third-person rear composition. The actual whitebox is captured only from the verified Babylon Runtime.
 
-- depressions interpolate from `RGB(32,64,208)` to datum `RGB(128,128,128)`;
-- elevations interpolate from datum to `RGB(224,96,32)`;
-- use continuous low-frequency gradients without discrete bands, lighting, materials, labels, or
-  objects;
-- omit every separately modeled Landmark or Structure while preserving blended support ground;
-- encode water beds as depressed terrain but never encode the water surface or material;
-- preserve stable entry support and connected ground without drawing routes or markers.
-
-The deterministic Host owns median-datum normalization, metric mapping, Water, Spawn, Landmark
-support, Route, slope, and quantization constraints. Do not preprocess or numerically repair the
-PNG inside the Planner task.
-
-## Entry composition intent target
-
-Generate one geometry-readable entry composition intent target using the reference images and the completed Brief. Despite the historical file name `entry-whitebox-target.png`, this image is not runtime evidence and must never be presented as the actual whitebox. Preserve complete-subject silhouette, landmark scale, navigation openness or real constrained connection, depth order, occlusion, and the strict centered third-person rear composition. The actual whitebox is captured only from the verified Babylon Runtime.
+Reconstruct visible geometry as real block volume. Terrain must have foreground-
+to-background depth and side mass; buildings need footprint and thickness;
+raised routes need real support and clearance; stairs must visibly rise or fall
+between their actual endpoint levels. Never use a flat road with decorative
+cross-bands, camera-facing mountain slabs, or shallow facade cutouts to imitate
+the reference from this one view.
 
 Use the same neutral clear daytime inspection lighting for every entry whitebox target, regardless of whether the uploaded reference depicts night, sunset, backlight, fog, space, an interior, or another dark condition. Use a bright neutral sky/fill, a consistent daylight key, readable midtones, and soft shallow shadows so every terrain and structure silhouette is visible. Never copy the reference image's time of day, exposure, darkness, colored illumination, or dramatic contrast into the whitebox target. This rule applies only to the whitebox planning/capture stage; the later styled first frame may restore the user's reference lighting and style.
 
-All terrain, support surfaces, structures, and unselected components are neutral white or light gray. Color only the 1–5 complete Brief targets using the fixed target-order colors above. One multi-part target uses one color across the whole object; one repeated target uses the same color for every identical complete instance. Do not color generic terrain, ordinary decoration, helper geometry, or unselected objects. Include no labels, UI, logo, watermark, or alternate view.
+All terrain, support surfaces, structures, and unselected components are discrete
+cubes colored by the exact functional palette in the image-contract reference.
+Color selected complete targets with the fixed target-order colors above. One
+multi-part target uses one color across the whole non-functional silhouette; one
+repeated target uses the same color for every identical complete instance. Do
+not convert walkable, interaction, water, or cloud blocks to a landmark color.
+Include no labels, UI, logo, watermark, or alternate view.
 
 ## Completion
 
-Before finishing, confirm all five semantic output files exist and run the bundled portable checker:
+Before finishing, confirm all three declared files exist and run the bundled portable checker:
 
 ```bash
 node .codex/skills/worldkit-spatial-planner/scripts/self-check.mjs \
@@ -158,11 +248,21 @@ node .codex/skills/worldkit-spatial-planner/scripts/self-check.mjs \
   --brief artifacts/scenes/<scene-id>/scene-brief.md \
   --world-plan apps/playground/public/scene-plans/<scene-id>/world-plan.png \
   --entry apps/playground/public/scene-plans/<scene-id>/entry-whitebox-target.png \
-  --terrain-prompt artifacts/scenes/<scene-id>/terrain-height-intent-prompt.md \
-  --terrain-intent apps/playground/public/scene-plans/<scene-id>/terrain-height-intent.png \
   --report artifacts/scenes/<scene-id>/planner-self-check.json
 ```
 
-If it fails, read the JSON diagnostics, repair the Brief or scene prompt, and regenerate the affected PNGs inside this same task, then rerun the checker. Use at most three self-repair cycles and never finish with a failed or stale receipt. The receipt hashes all five semantic outputs, so any edit after a passing check requires another check. Inspect the entry target as well: the primary Subject must be exactly centered and seen straight from behind; “approximately centered” is a failure.
+If it fails, read the JSON diagnostics and repair inside this same task. When the
+entry image changes, regenerate the top-down image from that new entry before
+rerunning the checker. Use at most three self-repair cycles and never finish
+with a failed or stale receipt. The receipt hashes all three outputs and records
+per-image block-palette coverage, traversable/interactive counts, ordered target
+colors, aspect ratio, and entry Subject center; any edit after a passing check
+requires another check. Inspect both images as well: semantic colors cannot
+prove correct geography or continuous-world coherence by themselves. Human review
+owns top-down geography, inferred continuation, four-times-area coverage,
+spawn-token meaning, and visual quality; do not invent pixel-area,
+marker-shape, or image-recognition rules. In the entry image, the complete
+primary Subject must be exactly centered and seen straight from behind;
+“approximately centered” is a failure.
 
 The trusted Host replays this same checker and the canonical Brief parser once after delivery. It never starts a separate Planner Repair Agent. The Builder owns all subsequent technical spatialization.

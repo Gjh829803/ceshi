@@ -87,20 +87,30 @@ export class CanvasRecorder {
         ? MediaRecorder.isTypeSupported(candidate)
         : false,
     );
-    this.captureCanvas = this.canvas.ownerDocument.createElement("canvas");
-    this.captureCanvas.width = this.width;
-    this.captureCanvas.height = this.height;
-    this.captureContext = this.captureCanvas.getContext("2d", { alpha: false });
-    if (this.captureContext === null) {
-      this.finish();
-      throw new Error("无法建立 1280×720 白膜录制画布。");
+    if (this.canvas.width === this.width && this.canvas.height === this.height) {
+      // The Runtime canvas is already the delivery raster. Capturing it directly
+      // lets the compositor provide frames at its render cadence and avoids a
+      // second 1280×720 drawImage timer starving dense block worlds.
+      this.captureCanvas = null;
+      this.captureContext = null;
+      this.drawTimer = null;
+      this.stream = this.canvas.captureStream(this.frameRate);
+    } else {
+      this.captureCanvas = this.canvas.ownerDocument.createElement("canvas");
+      this.captureCanvas.width = this.width;
+      this.captureCanvas.height = this.height;
+      this.captureContext = this.captureCanvas.getContext("2d", { alpha: false });
+      if (this.captureContext === null) {
+        this.finish();
+        throw new Error("无法建立 1280×720 白膜录制画布。");
+      }
+      this.drawCaptureFrame();
+      this.drawTimer = window.setInterval(
+        () => this.drawCaptureFrame(),
+        1_000 / this.frameRate,
+      );
+      this.stream = this.captureCanvas.captureStream(this.frameRate);
     }
-    this.drawCaptureFrame();
-    this.drawTimer = window.setInterval(
-      () => this.drawCaptureFrame(),
-      1_000 / this.frameRate,
-    );
-    this.stream = this.captureCanvas.captureStream(this.frameRate);
     this.chunks = [];
     this.stopPromise = null;
     try {

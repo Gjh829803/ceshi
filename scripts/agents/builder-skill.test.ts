@@ -1,227 +1,498 @@
-import { readFile } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { copyFile, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
-import {
-  normalizeAuthoringSpecV4,
-  type AuthoringSpecV4,
-  type NormalizedWorldIRV4,
-} from "@whitebox-world/authoring";
-import { compileCanonicalWorldV1 } from "@whitebox-world/compiler";
-import { createCoreGameplayBootstrapV1 } from "@whitebox-world/gameplay";
 import { describe, expect, it } from "vitest";
 
-function controlledSubjectTemplate(
-  markdown: string,
-  heading = "## Valid bound ground proxy",
-): AuthoringSpecV4["resources"]["subjectDefinitions"][number] {
-  const section = markdown.split(heading)[1];
-  const json = section?.match(/```json\r?\n([\s\S]*?)\r?\n```/)?.[1];
-  if (json === undefined) throw new Error(`Controlled Subject template is missing: ${heading}.`);
-  return JSON.parse(json);
+import { runBlockBuilderSelfCheck } from "./agent-block-builder-self-check.js";
+import { verifyBlockBuilderHostResume } from "./verify-block-builder-host-resume.js";
+import { createAgentAuthoringCatalogV1 } from "../lib/agent-authoring-catalog.js";
+
+const BRIEF = `# WorldKit Scene Brief
+
+## 场景
+明亮白天的东方山谷，远处有完整宫殿。
+
+## 主体
+普通人形旅人。
+
+## 用户事实
+用户要求一个可操作的方块白模世界。
+
+## 可见参考证据
+画面可见开阔地面、岩石和远处宫殿。
+
+## 推断的世界延伸
+画外区域延伸为连通山谷。
+
+## 仅视觉层设想
+材质和细节属于后续渲染。
+
+## 运动模式
+- 陆地步行：主体在连续地面上行走。
+
+## 空间
+入口、中段花园与远端宫殿形成完整探索空间。
+
+## 通行
+开阔地面整体连通，不额外制造路线。
+
+## 首帧
+严格居中的第三人称背后视角。
+
+## 视觉目标
+- 主体｜旅人：完整受控人形主体
+- 标志物｜宫殿：完整宫殿作为一个目标
+`;
+
+function paths(root: string, suffix: string) {
+  return {
+    sceneId: "basic-block-world",
+    briefPath: path.join(root, "scene-brief.md"),
+    worldModulePath: path.resolve("examples/block-world/basic-world.mjs"),
+    authoringOutputPath: path.join(root, `authoring-${suffix}.json`),
+    mapDraftOutputPath: path.join(root, `map-${suffix}.json`),
+    reportPath: path.join(root, `report-${suffix}.json`),
+  };
 }
 
-function gameplayBootstrap(normalizedWorldIr: NormalizedWorldIRV4) {
-  const entityDescriptors = normalizedWorldIr.nodes
-    .filter((node) => node.kind === "subject")
-    .map((node) => {
-      const definition = normalizedWorldIr.resources.subjectDefinitions.find(
-        (candidate) =>
-          candidate.subjectDefinitionRef === node.subjectDefinitionRef,
-      );
-      if (definition === undefined) {
-        throw new Error(`Missing Subject Definition '${node.subjectDefinitionRef}'.`);
-      }
-      return {
-        id: node.id,
-        entityDefinitionRef: node.subjectDefinitionRef,
-        capabilityRefs: definition.capabilityRefs,
-      };
+describe("Block Builder skill", () => {
+  it("uses the Host-owned Canonical build artifact producer", async () => {
+    const launcher = await readFile(
+      "scripts/agents/run-spatial-world-agent.sh",
+      "utf8",
+    );
+    expect(launcher).toContain("scripts/cli/build-world-artifact.ts");
+    expect(launcher).not.toMatch(/worldkit build .*world\.build\.json/s);
+    expect(launcher.match(
+      /env -u WORLDKIT_CAPTURE_SIGNING_PRIVATE_KEY_PATH/g,
+    )).toHaveLength(2);
+  });
+
+  it("constructs the real Planner and Builder prompts without shell command substitution", async () => {
+    const launcherPath = path.resolve("scripts/agents/run-spatial-world-agent.sh");
+    const launcher = await readFile(launcherPath, "utf8");
+    const builderPromptSource = launcher.split('builder_prompt="')[1]
+      ?.split('if [[ "${WORLDKIT_PROMPT_INIT_SMOKE:-0}"')[0] ?? "";
+    expect(builderPromptSource).not.toMatch(/`|\$\(/);
+
+    const result = spawnSync("bash", [
+      launcherPath,
+      "--",
+      "--scene-id",
+      "prompt-init-smoke",
+      "Construct prompts without starting an external task.",
+    ], {
+      cwd: path.resolve("."),
+      encoding: "utf8",
+      env: { ...process.env, WORLDKIT_PROMPT_INIT_SMOKE: "1" },
     });
-  return createCoreGameplayBootstrapV1({
-      worldId: normalizedWorldIr.id,
-      worldSeed: normalizedWorldIr.seed,
-      entityDescriptors,
-      initialRelationshipStates: normalizedWorldIr.relationships.map(
-        (relationship) => ({ ...relationship, establishedSimulationTick: 0 }),
+    expect(result.status, result.stderr || result.stdout).toBe(0);
+    expect(result.stdout).toMatch(
+      /WORLDKIT_PROMPT_INIT_SMOKE_OK planner_chars=[1-9][0-9]+ builder_chars=[1-9][0-9]+/,
+    );
+  });
+
+  it("makes registered Subject reuse the default and limits composition to locomotion", async () => {
+    const [skill, subjectGuide, launcher] = await Promise.all([
+      readFile(".codex/skills/worldkit-block-builder/SKILL.md", "utf8"),
+      readFile(
+        ".codex/skills/worldkit-block-builder/references/subject-camera.md",
+        "utf8",
+      ),
+      readFile("scripts/agents/run-spatial-world-agent.sh", "utf8"),
+    ]);
+
+    for (const source of [skill, subjectGuide, launcher]) {
+      expect(source).toMatch(/movement(?:-| )mode/);
+      expect(source).toContain("body topology");
+      expect(source).toContain("registered Subject");
+      expect(source).toContain("weapons");
+      expect(source).toContain("backpacks");
+    }
+    expect(skill).toContain("A coarse registered proxy is correct");
+    expect(skill).toContain("movement-changing controlled whole");
+    expect(subjectGuide).toContain("Select for behavior, not likeness");
+    expect(subjectGuide).toContain("Do not compose merely because");
+    expect(launcher).toContain(
+      "Correct movement and strict centered rear Camera framing are more important",
+    );
+  });
+
+  it("gives Studio, Prompt, and Skill one compiler-admitted Agent Authoring Catalog", async () => {
+    const catalogPath = ".codex/skills/worldkit-block-builder/references/agent-authoring-catalog.json";
+    const catalog = JSON.parse(await readFile(catalogPath, "utf8"));
+    expect(catalog).toEqual(createAgentAuthoringCatalogV1());
+    const refs = catalog.subjects.map(({ subjectDefinitionRef }: {
+      subjectDefinitionRef: string;
+    }) => subjectDefinitionRef);
+    expect(refs).toContain("worldkit://subject-definition/humanoid.g-bot@2");
+    expect(refs).toContain("worldkit://subject-definition/xier120.quadruped-animal@1");
+    expect(refs).not.toContain(
+      "worldkit://subject-definition/animal.quadruped.forward-steer@1",
+    );
+    expect(catalog.subjects.every(({ executableMovementModes, camera }: {
+      executableMovementModes: readonly string[];
+      camera: {
+        selectionAuthority: string;
+        builderOpeningCameraRigRef: string;
+        openingTuningAuthority: string;
+      };
+    }) =>
+      executableMovementModes.length > 0 &&
+      camera.selectionAuthority === "runtime-camera-context" &&
+      camera.builderOpeningCameraRigRef ===
+        "worldkit://camera/third-person.standard@1" &&
+      camera.openingTuningAuthority ===
+        "builder-camera-projected-onto-runtime-selected-profile"
+    )).toBe(true);
+    expect(catalog.subjects.find(({ subjectDefinitionRef }: {
+      subjectDefinitionRef: string;
+    }) => subjectDefinitionRef ===
+      "worldkit://subject-definition/xier120.aerial-seated@1"
+    )?.traversalEnvelope).toMatchObject({
+      clearanceHeightMeters: 3.6,
+      footprintRadiusMetersXZ: 1,
+    });
+  });
+
+  it("requires volumetric terrain and real elevation-changing stairs", async () => {
+    const [skill, blockApi, launcher] = await Promise.all([
+      readFile(".codex/skills/worldkit-block-builder/SKILL.md", "utf8"),
+      readFile(
+        ".codex/skills/worldkit-block-builder/references/block-api.md",
+        "utf8",
+      ),
+      readFile("scripts/agents/run-spatial-world-agent.sh", "utf8"),
+    ]);
+
+    expect(skill).toContain("Three-dimensional fidelity is a required outcome");
+    expect(skill).toContain("plan footprint, longitudinal profile,\n  cross-section");
+    expect(skill).toContain("A matching opening-frame silhouette is insufficient");
+    expect(skill).toContain("A visible staircase is real connected elevation geometry");
+    expect(skill).toContain("camera-facing mountain walls");
+    expect(blockApi).toContain("## Volumetric reconstruction");
+    expect(blockApi).toContain("footprint: occupied area");
+    expect(blockApi).toContain("longitudinal profile: how height changes");
+    expect(blockApi).toContain("cross-section: width");
+    expect(blockApi).toContain("Do not paint bands\nonto level support to suggest steps");
+    expect(launcher).toContain("Three-dimensional fidelity is a required outcome");
+    expect(launcher).toContain("Every visible staircase must connect its real lower and upper levels");
+  });
+
+  it("requires Builder to inspect Skill-rendered Planner comparisons", async () => {
+    const [skill, launcher, visualReviewBundle] = await Promise.all([
+      readFile(".codex/skills/worldkit-block-builder/SKILL.md", "utf8"),
+      readFile("scripts/agents/run-spatial-world-agent.sh", "utf8"),
+      readFile(
+        ".codex/skills/worldkit-block-builder/scripts/render-visual-review.mjs",
+      ),
+    ]);
+    expect(visualReviewBundle.byteLength).toBeGreaterThan(1_000);
+    expect(skill).toContain("render-visual-review.mjs");
+    expect(skill).toContain("Planner intent is on the left");
+    expect(skill).toContain("Actually open and inspect both PNGs");
+    expect(skill).toContain("not an automatic visual-similarity Gate");
+    expect(launcher).toContain("builder-top-down-comparison.png");
+    expect(launcher).toContain("builder-entry-comparison.png");
+    expect(launcher).toContain("agent-block-builder-visual-review.ts");
+    expect(launcher).toContain("compares exact decoded RGBA pixels");
+    expect(launcher).toContain("verify-png-raster-equality.ts");
+  });
+
+  it("derives connected-ground policy from the complete movement-mode set", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "block-builder-hybrid-movement-"));
+    const hybridBrief = BRIEF.replace(
+      "- 陆地步行：主体在连续地面上行走。",
+      "- 陆地步行：主体在地面上行走。\n- 空中飞行：主体可以离开地面自由飞行。",
+    );
+    const worldPath = path.join(root, "world.mjs");
+    const worldSource = await readFile("examples/block-world/basic-world.mjs", "utf8");
+    await Promise.all([
+      writeFile(path.join(root, "scene-brief.md"), hybridBrief, "utf8"),
+      writeFile(worldPath, worldSource, "utf8"),
+    ]);
+    const mismatched = await runBlockBuilderSelfCheck({
+      ...paths(root, "mismatched"),
+      worldModulePath: worldPath,
+    });
+    expect(mismatched.diagnostics.map(({ code }) => code)).toContain(
+      "BLOCK_WORLD_GROUND_CONNECTIVITY_POLICY_MISMATCH",
+    );
+
+    await writeFile(
+      worldPath,
+      worldSource.replace(
+        "requireSingleReachableComponent: true",
+        "requireSingleReachableComponent: false",
+      ),
+      "utf8",
+    );
+    const capabilityMismatch = await runBlockBuilderSelfCheck({
+      ...paths(root, "matched"),
+      worldModulePath: worldPath,
+    });
+    expect(capabilityMismatch.status).toBe("failed");
+    expect(capabilityMismatch.diagnostics.map(({ code }) => code)).toContain(
+      "BLOCK_WORLD_SUBJECT_MOVEMENT_UNSATISFIED",
+    );
+  });
+
+  it("rejects an Agent-authored traversal envelope smaller than the Runtime Subject collider", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "block-builder-subject-envelope-"));
+    const source = await readFile("examples/block-world/basic-world.mjs", "utf8");
+    const worldPath = path.join(root, "world.mjs");
+    await Promise.all([
+      writeFile(path.join(root, "scene-brief.md"), BRIEF, "utf8"),
+      writeFile(
+        worldPath,
+        source.replace(
+          "worldkit://subject-definition/humanoid.g-bot@2",
+          "worldkit://subject-definition/xier120.aerial-seated@1",
+        ),
+        "utf8",
+      ),
+    ]);
+    const result = await runBlockBuilderSelfCheck({
+      ...paths(root, "envelope"),
+      worldModulePath: worldPath,
+    });
+    expect(result.status).toBe("failed");
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: "BLOCK_WORLD_SUBJECT_TRAVERSAL_ENVELOPE_MISMATCH",
+      details: expect.objectContaining({
+        expected: expect.objectContaining({
+          clearanceHeightMeters: 3.6,
+          footprintRadiusMetersXZ: 1,
+        }),
+      }),
+    }));
+  });
+
+  it("requires semantic middle/remote anchors and an entry traversal band for ground-only worlds", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "block-builder-navigation-contract-"));
+    const source = await readFile("examples/block-world/basic-world.mjs", "utf8");
+    const missingMiddlePath = path.join(root, "missing-middle.mjs");
+    const missingBandPath = path.join(root, "missing-band.mjs");
+    await Promise.all([
+      writeFile(path.join(root, "scene-brief.md"), BRIEF, "utf8"),
+      writeFile(
+        missingMiddlePath,
+        source.replace('navigationRole: "middle"', 'navigationRole: "remote"'),
+        "utf8",
+      ),
+      writeFile(
+        missingBandPath,
+        source.replace(
+          "requiredGroundTraversalBands: [{",
+          "ignoredGroundTraversalBands: [{",
+        ),
+        "utf8",
+      ),
+    ]);
+
+    const missingMiddle = await runBlockBuilderSelfCheck({
+      ...paths(root, "missing-middle"),
+      worldModulePath: missingMiddlePath,
+    });
+    expect(missingMiddle.diagnostics.map(({ code }) => code)).toContain(
+      "BLOCK_WORLD_NAVIGATION_TARGET_ROLE_MISSING",
+    );
+
+    const missingBand = await runBlockBuilderSelfCheck({
+      ...paths(root, "missing-band"),
+      worldModulePath: missingBandPath,
+    });
+    expect(missingBand.diagnostics.map(({ code }) => code)).toContain(
+      "BLOCK_WORLD_ENTRY_TRAVERSAL_BAND_MISSING",
+    );
+  });
+
+  it("ships a replayable checker for one direct Three.js module", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "block-builder-skill-"));
+    await writeFile(path.join(root, "scene-brief.md"), BRIEF, "utf8");
+    const host = paths(root, "host");
+    const portableBundle = path.join(root, "self-check.mjs");
+    const portableWorld = path.join(root, "world.mjs");
+    await Promise.all([
+      copyFile(
+        ".codex/skills/worldkit-block-builder/scripts/self-check.mjs",
+        portableBundle,
+      ),
+      copyFile("examples/block-world/basic-world.mjs", portableWorld),
+    ]);
+    const agent = { ...paths(root, "agent"), worldModulePath: portableWorld };
+    expect((await runBlockBuilderSelfCheck(host)).status).toBe("passed");
+    const run = spawnSync(process.execPath, [
+      portableBundle,
+      "--scene-id", agent.sceneId,
+      "--brief", agent.briefPath,
+      "--world", agent.worldModulePath,
+      "--authoring-output", agent.authoringOutputPath,
+      "--map-draft-output", agent.mapDraftOutputPath,
+      "--report", agent.reportPath,
+    ], { cwd: root, encoding: "utf8" });
+    expect(run.status, run.stderr || run.stdout).toBe(0);
+    expect(await readFile(agent.reportPath, "utf8")).toBe(
+      await readFile(host.reportPath, "utf8"),
+    );
+    expect(await readFile(agent.authoringOutputPath, "utf8")).toBe(
+      await readFile(host.authoringOutputPath, "utf8"),
+    );
+    expect(await readFile(agent.mapDraftOutputPath, "utf8")).toBe(
+      await readFile(host.mapDraftOutputPath, "utf8"),
+    );
+  }, 30_000);
+
+  it("fails when the Brief declares a complete target absent from world.mjs", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "block-builder-target-"));
+    await writeFile(
+      path.join(root, "scene-brief.md"),
+      BRIEF.replace(
+        "- 标志物｜宫殿：完整宫殿作为一个目标",
+        "- 标志物｜宫殿：完整宫殿作为一个目标\n- 标志物｜高塔：完整高塔作为一个目标",
+      ),
+      "utf8",
+    );
+    const result = await runBlockBuilderSelfCheck(paths(root, "failed"));
+    expect(result.status).toBe("failed");
+    expect(result.diagnostics.map(({ code }) => code)).toContain(
+      "BLOCK_WORLD_VISUAL_TARGET_MISSING",
+    );
+  });
+
+  it("rejects a complete target whose landmark blocks drift from the Planner color", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "block-builder-color-"));
+    const worldPath = path.join(root, "world.mjs");
+    await Promise.all([
+      writeFile(path.join(root, "scene-brief.md"), BRIEF, "utf8"),
+      readFile("examples/block-world/basic-world.mjs", "utf8").then((source) =>
+        writeFile(
+          worldPath,
+          source.replaceAll("landmarkOrange", "landmarkPink"),
+          "utf8",
+        )),
+    ]);
+    const result = await runBlockBuilderSelfCheck({
+      ...paths(root, "wrong-color"),
+      worldModulePath: worldPath,
+    });
+    expect(result.status).toBe("failed");
+    expect(result.diagnostics.map(({ code }) => code)).toContain(
+      "BLOCK_WORLD_VISUAL_TARGET_COLOR_MISMATCH",
+    );
+  });
+
+  it("reports a compact reference-faithful world without enforcing a numeric extent", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "block-builder-small-world-"));
+    const worldPath = path.join(root, "world.mjs");
+    const source = (await readFile("examples/block-world/basic-world.mjs", "utf8"))
+      .replace("for (let z = -96; z < 96; z += 1)", "for (let z = -4; z <= 4; z += 1)")
+      .replace("for (let x = -96; x < 96; x += 1)", "for (let x = -4; x <= 4; x += 1)")
+      .replaceAll("[64, 1, -64]", "[3, 1, -3]")
+      .replaceAll("[64, 2, -64]", "[3, 2, -3]")
+      .replaceAll("[16, 0.5, -16]", "[1, 0.5, -1]")
+      .replaceAll("[32, 0.5, -32]", "[2, 0.5, -2]")
+      .replace("[80, 0.5, -80]", "[4, 0.5, -4]");
+    await Promise.all([
+      writeFile(path.join(root, "scene-brief.md"), BRIEF, "utf8"),
+      writeFile(worldPath, source, "utf8"),
+    ]);
+    const result = await runBlockBuilderSelfCheck({
+      ...paths(root, "small"),
+      worldModulePath: worldPath,
+    });
+    expect(result.status).toBe("passed");
+    const report = JSON.parse(await readFile(path.join(root, "report-small.json"), "utf8"));
+    expect(report.observations).toMatchObject({
+      blockWorldMetrics: {
+        maximumReachableDistanceMeters: expect.any(Number),
+        reachableChunkCount: expect.any(Number),
+      },
+      authoredSpatialMetrics: {
+        maximumHorizontalSpanMeters: expect.any(Number),
+        chunkCount: expect.any(Number),
+      },
+    });
+  });
+
+  it("admits separately built spaces connected by real bidirectional triggers", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "block-builder-linked-spaces-"));
+    await writeFile(path.join(root, "scene-brief.md"), BRIEF, "utf8");
+    const result = await runBlockBuilderSelfCheck({
+      ...paths(root, "linked"),
+      sceneId: "linked-block-world",
+      worldModulePath: path.resolve(
+        "examples/block-world/linked-spaces-world.mjs",
       ),
     });
-}
-
-function compileCurrentWorld(world: AuthoringSpecV4) {
-  const normalized = normalizeAuthoringSpecV4(world);
-  expect(normalized.ok, JSON.stringify(normalized.diagnostics)).toBe(true);
-  expect(normalized.value).toBeDefined();
-  expect(normalized.normalizedWorldIrHash).toBeDefined();
-  return compileCanonicalWorldV1({
-    normalizedWorldIr: normalized.value!,
-    normalizedWorldIrHash: normalized.normalizedWorldIrHash!,
-    gameplayBootstrap: gameplayBootstrap(normalized.value!),
-    worldRuntimeBootstrapRef:
-      `worldkit://world-runtime-bootstrap/${normalized.value!.id}@1`,
-  });
-}
-
-describe("Canonical Builder skill", () => {
-  it("provides a compilable one-Subject human plus equipment binding", async () => {
-    const [worldSource, reference] = await Promise.all([
-      readFile(path.resolve("examples/authoring/basic-world.json"), "utf8"),
-      readFile(path.resolve(
-        ".codex/skills/worldkit-canonical-builder/references/controlled-subjects.md",
-      ), "utf8"),
-    ]);
-    const world = JSON.parse(worldSource) as AuthoringSpecV4;
-    world.world.resourceBudget = {
-      maxVertices: 120_000,
-      maxTriangles: 180_000,
-      maxColliders: 128,
-    };
-    world.resources.subjectDefinitions = [controlledSubjectTemplate(reference)];
-    expect(world.resources.subjectDefinitions[0]?.profiles.controlFeelProfileRef).toBe(
-      "worldkit://control-feel-profile/humanoid.medium-ground@1",
-    );
-    const subject = world.nodes.find((node) => node.kind === "subject");
-    if (subject?.kind !== "subject") throw new Error("Fixture Subject is missing.");
-    subject.subjectDefinitionRef =
-      "package://subject-definition/humanoid-board-ground@1";
-
-    const compiled = compileCurrentWorld(world);
-    expect(compiled.ok).toBe(true);
-    if (!compiled.ok) throw new Error(JSON.stringify(compiled.diagnostics));
-    expect(compiled.worldRuntimeBootstrap.subjectRuntimeDescriptors).toHaveLength(1);
-    expect(compiled.worldRuntimeBootstrap.subjectRuntimeDescriptors[0]).toMatchObject({
-      entityId: subject.id,
-      subjectDefinitionRef:
-        "package://subject-definition/humanoid-board-ground@1",
-      visualParts: [
-        expect.objectContaining({ id: "board", kind: "primitive" }),
-        expect.objectContaining({ id: "body.asset", kind: "asset" }),
-      ],
+    expect(result.status, JSON.stringify(result.diagnostics)).toBe("passed");
+    const report = JSON.parse(await readFile(
+      path.join(root, "report-linked.json"),
+      "utf8",
+    ));
+    expect(report.observations.blockWorldMetrics).toMatchObject({
+      spaceTransitionCount: 2,
+      reachableSpaceTransitionCount: 2,
+      disconnectedStandablePositionCount: 0,
     });
-    expect(compiled.worldRuntimeBootstrap.initialControlledEntityId).toBe(subject.id);
-    expect(compiled.worldRuntimeBootstrap.initialCamera.targetEntityId).toBe(subject.id);
   });
 
-  it("consumes the lightweight movement brief and maps only complete visual targets", async () => {
-    const [skill, template, terrainAndStructures, controlledSubjects, modularSubjects, launcher] = await Promise.all([
-      readFile(path.resolve(".codex/skills/worldkit-canonical-builder/SKILL.md"), "utf8"),
-      readFile(path.resolve(
-        ".codex/skills/worldkit-canonical-builder/references/canonical-template.md",
-      ), "utf8"),
-      readFile(path.resolve(
-        ".codex/skills/worldkit-canonical-builder/references/terrain-and-structures.md",
-      ), "utf8"),
-      readFile(path.resolve(
-        ".codex/skills/worldkit-canonical-builder/references/controlled-subjects.md",
-      ), "utf8"),
-      readFile(path.resolve(
-        ".codex/skills/worldkit-canonical-builder/references/modular-subjects.md",
-      ), "utf8"),
-      readFile(path.resolve("scripts/agents/run-spatial-world-agent.sh"), "utf8"),
+  it("admits a hash-bound legacy receipt and migrates its target map to current mixed-shape chunk entities", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "block-builder-host-resume-"));
+    await writeFile(path.join(root, "scene-brief.md"), BRIEF, "utf8");
+    const replay = paths(root, "replay");
+    expect((await runBlockBuilderSelfCheck(replay)).status).toBe("passed");
+    const originalAuthoringPath = path.join(root, "authoring-original.json");
+    const originalMapPath = path.join(root, "map-original.json");
+    const originalReportPath = path.join(root, "report-original.json");
+    const originalAuthoring = (await readFile(replay.authoringOutputPath, "utf8"))
+      .replace('"fovDegrees":56', '"fovDegrees":56.00000000000001');
+    const originalMap = JSON.parse(await readFile(replay.mapDraftOutputPath, "utf8"));
+    const landmarkMapping = originalMap.visualTargetMappings.find(
+      ({ visualTargetId }: { visualTargetId: string }) =>
+        visualTargetId === "visual-target-2",
+    );
+    landmarkMapping.runtimeEntityIds = ["palace-base", "palace-tower"];
+    const originalMapSource = `${JSON.stringify(originalMap)}\n`;
+    const originalReport = JSON.parse(await readFile(replay.reportPath, "utf8"));
+    originalReport.validatorVersion = "worldkit-block-builder-self-check-v2";
+    originalReport.inputs.authoringSpecHash =
+      `sha256:${createHash("sha256").update(originalAuthoring).digest("hex")}`;
+    originalReport.inputs.implementationMapDraftHash =
+      `sha256:${createHash("sha256").update(originalMapSource).digest("hex")}`;
+    await Promise.all([
+      writeFile(originalAuthoringPath, originalAuthoring),
+      writeFile(originalMapPath, originalMapSource),
+      writeFile(originalReportPath, `${JSON.stringify(originalReport)}\n`),
     ]);
-    expect(skill).toContain("brief's explicit movement mode");
-    expect(skill).toContain("A named Registry Subject is a shortcut, not a whitelist");
-    expect(skill).toContain("Absence of a named preset is never a reason");
-    expect(skill).toContain("package-local Subject Definition");
-    expect(skill).toContain("explicitly disclosed playable approximation");
-    expect(skill).toContain("must not add or modify SDK motion bases");
-    expect(skill).toContain("Never emit `worldkit://capability/relationship.mount@1`");
-    expect(skill).toContain("Never emit `worldkit://capability/relationship.mounted-on@1`");
-    expect(skill).toContain("`maxVertices`, `maxTriangles`, and `maxColliders` are required hard budgets");
-    expect(skill).toContain("current compiler rejects every overrun");
-    expect(skill).toContain("`1–2km`");
-    expect(skill).toContain("`1024` vertices per axis");
-    expect(skill).toContain("ROUTE_BUILD_WINDOW_BUDGET_EXCEEDED");
-    expect(skill).toContain("exact same explicit seam Anchor");
-    expect(skill).not.toContain(
-      "Keep `world.resourceBudget.maxVertices` at or below `120000`",
+    const outputPath = path.join(root, "host-resume.json");
+    const receipt = await verifyBlockBuilderHostResume({
+      sceneId: replay.sceneId,
+      briefPath: replay.briefPath,
+      worldModulePath: replay.worldModulePath,
+      originalAuthoringPath,
+      originalMapPath,
+      originalReportPath,
+      replayAuthoringPath: replay.authoringOutputPath,
+      replayMapPath: replay.mapDraftOutputPath,
+      replayReportPath: replay.reportPath,
+      outputPath,
+    });
+    expect(receipt).toMatchObject({
+      status: "passed",
+      originalValidatorVersion: "worldkit-block-builder-self-check-v2",
+      replayValidatorVersion: "worldkit-block-builder-self-check-v10",
+      implementationMapMigrated: true,
+    });
+    expect(receipt.inputs.originalAuthoringSpecHash).not.toBe(
+      receipt.inputs.replayAuthoringSpecHash,
     );
-    expect(skill).not.toContain("actual compiled use at or below `150000` triangles");
-    expect(skill).toContain("Do not infer quality from perimeter length or a fixed play-time estimate");
-    expect(skill).toContain("standalone validator bundled with this Skill");
-    expect(skill).toContain("worldkit-canonical-builder/scripts/self-check.mjs");
-    expect(skill).toContain("at most three self-repair cycles");
-    expect(skill).toContain("does not start a separate Builder Repair Agent");
-    expect(skill).toContain("strict centered rear view");
-    expect(skill).toContain("spawn at yaw `0`");
-    expect(skill).toContain("validate-entry-third-person.py");
-    expect(skill).toContain("Map exactly the 1-5 palette targets and nothing else");
-    expect(skill).toContain("Emit AuthoringSpec V4");
-    expect(skill).toContain("CanonicalSceneExecutionPlanV1");
-    expect(skill).toContain("WorldRuntimeBootstrapV1");
-    expect(skill).toContain("connected-by-route");
-    expect(skill).toContain("Route R1/R1B");
-    expect(skill).toContain("traversalSurfaceBindings");
-    expect(skill).toContain("worldkit://traversal-surface-profile/ground.static@1");
-    expect(skill).toContain("GameplayBootstrapV1");
-    expect(skill).not.toContain("Gameplay Bootstrap Resource Lock");
-    expect(skill).toContain("repeated-landmark");
-    expect(skill).toContain('world.environment.preset: "clear-day"');
-    expect(skill).toContain("SPAWN_BELOW_GROUND");
-    expect(skill).toContain("SPAWN_ABOVE_GROUND");
-    expect(skill).toContain("requiredSubjectOriginYMeters");
-    expect(skill).toContain("terrain-height-intent.png");
-    expect(skill).toContain("terrain-height-intent-prompt.md");
-    expect(skill).toContain("must not decode, resample, normalize, or edit its pixels");
-    expect(skill).toContain("authoring.builder.json");
-    expect(template).toContain('"schemaVersion": 4');
-    expect(template).toContain('"preset": "clear-day"');
-    expect(template).toContain('"kind": "supported-by"');
-    expect(template).toContain('"kind": "within-slope-limit"');
-    expect(template).toContain('"kind": "solved"');
-    expect(template).toContain('"traversalAreas": []');
-    expect(template).toContain('"connectivity": []');
-    expect(template).toContain('"kind": "worldkit-scene-brief-implementation-map-draft"');
-    expect(template).toContain('"visualTargetMappings"');
-    expect(template).not.toContain('"mappings"');
-    expect(template).toContain('"visualTargetId": "visual-target-1"');
-    expect(template).not.toContain('"planId"');
-    expect(template).toContain("humanoid.g-bot@2");
-    expect(controlledSubjects).toContain("one complete package-local Subject silhouette");
-    expect(controlledSubjects).toContain("documented ground closure");
-    expect(controlledSubjects).toContain('"allowedOverridePaths": []');
-    expect(controlledSubjects).toContain("Every package-local Subject Definition must include `allowedOverridePaths`");
-    expect(controlledSubjects).not.toContain("humanoid.board.surface-slide@1");
-    expect(controlledSubjects).not.toContain("humanoid.wingsuit.unpowered-glide@1");
-    expect(modularSubjects).toContain("humanoid.g-bot@2");
-    expect(modularSubjects).toContain("humanoid.golden@2");
-    expect(modularSubjects).toContain("xier120");
-    expect(modularSubjects).toContain("Never put any of these lower-level refs in AuthoringSpec");
-    expect(launcher).toContain("absence of a same-named preset is never a reason");
-    expect(launcher).toContain("never add or modify SDK motion bases");
-    expect(launcher).toContain("maximumTiles is a per-route build-window budget");
-    expect(launcher).toContain("ROUTE_BUILD_WINDOW_BUDGET_EXCEEDED");
-    expect(launcher).toContain("terrain-height-intent.png");
-    expect(launcher).toContain("authoring.builder.json");
-    expect(launcher).toContain("scripts/scenes/finalize-scene-terrain.ts");
-    expect(launcher).toContain("record-scene-authoring-attempt.ts begin");
-    expect(launcher).toContain("record-scene-authoring-attempt.ts complete");
-    expect(launcher).toContain("record-scene-authoring-attempt.ts reject");
-    expect(launcher).toContain("scene-authoring-attempts/$codex_run_nonce");
-    expect(launcher).toContain("terminal Canonical Scene Plan");
-    expect(launcher).toContain("independent World Runtime Bootstrap");
-    expect(launcher).not.toContain(["ExecutionPlan", " V5"].join(""));
-    expect(launcher).not.toContain("babylon-native-authoring-source");
-    expect(launcher).not.toContain("humanoid.board.surface-slide@1");
-    expect(launcher).not.toContain("humanoid.wingsuit.unpowered-glide@1");
-    expect(terrainAndStructures).toContain(
-      "`maxVertices`, `maxTriangles`, and `maxColliders` are required hard budgets",
-    );
-    expect(terrainAndStructures).toContain(
-      "the current compiler rejects every overrun",
-    );
-    expect(terrainAndStructures).toContain("`801 x 801` over `2000m x 2000m`");
-    expect(terrainAndStructures).toContain("previous destination and next start");
-    expect(terrainAndStructures).not.toContain(
-      "Keep `maxVertices` at or below `120000`",
-    );
-    expect(terrainAndStructures).not.toContain(
-      "`maxTriangles` is a required resource-budget field but no longer blocks validation or compilation",
-    );
-    expect(terrainAndStructures).not.toContain(
-      "Flight also needs at least 120 m of usable vertical range",
-    );
-    expect(terrainAndStructures).not.toContain(
-      "Flight or underwater: world bounds are the free movement domain",
-    );
+    expect(JSON.parse(await readFile(outputPath, "utf8"))).toMatchObject({
+      kind: "worldkit-block-builder-host-resume-receipt",
+      status: "passed",
+    });
   });
 });

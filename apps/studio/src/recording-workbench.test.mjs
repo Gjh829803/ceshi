@@ -498,6 +498,17 @@ test("persists browser recordings, lists them, generates independently, and serv
     assert.equal(created.recording.assets.styledTriviews.length, 2);
     assert.ok(created.recording.assets.styledTriviews.every(({ whiteboxUrl }) =>
       typeof whiteboxUrl === "string"));
+    assert.deepEqual(
+      created.recording.assets.styledTriviews.map(({ id }) => id),
+      ["hero", "tower"],
+    );
+    assert.deepEqual(
+      created.recording.assets.styledTriviews.map(({ url }) => url),
+      [
+        `/api/worlds/${fixture.sceneId}/styled-triviews/hero`,
+        `/api/worlds/${fixture.sceneId}/styled-triviews/tower`,
+      ],
+    );
 
     const sourceResponse = await fetch(`${http.origin}${created.recording.sourceUrl}`, {
       headers: { range: "bytes=0-3" },
@@ -600,6 +611,24 @@ test("persists browser recordings, lists them, generates independently, and serv
     const incompleteBundle = await fetch(`${http.origin}${ready.bundleUrl}`);
     assert.equal(incompleteBundle.status, 409);
     assert.match(await incompleteBundle.text(), /完整首帧和成对白膜\/渲染三视图尚未准备完成/);
+
+    await writeFile(
+      path.join(
+        fixture.repoRoot,
+        "artifacts",
+        "scenes",
+        fixture.sceneId,
+        "styled-triviews-manifest.json",
+      ),
+      JSON.stringify({ targets: [{ id: "legacy-target-without-canonical-id" }] }),
+    );
+    const legacyListResponse = await fetch(
+      `${http.origin}/api/recording-worlds/${fixture.sceneId}/recordings`,
+    );
+    assert.equal(legacyListResponse.status, 200);
+    const legacyList = await legacyListResponse.json();
+    assert.equal(legacyList.recordings[0].assets.bundleReady, false);
+    assert.equal(legacyList.recordings[0].bundleUrl, null);
 
     const persisted = JSON.parse(await readFile(
       path.join(fixture.dataRoot, "recordings", fixture.sceneId, ready.id, "record.json"),

@@ -23,6 +23,56 @@ export interface InternalWorldBuildArtifactResultV1 {
   readonly outputPath?: string;
 }
 
+export interface WorldBuildArtifactV4 {
+  readonly kind: "worldkit-build-artifact";
+  readonly schemaVersion: 4;
+  readonly normalizedWorldIrHash: string;
+  readonly worldBuildIdentityHash: `sha256:${string}`;
+  readonly executionPlanHash: string;
+  readonly normalizedWorldIr: unknown;
+  readonly executionPlan: unknown;
+  readonly gameplayBootstrap: unknown;
+  readonly worldRuntimeBootstrap: unknown;
+}
+
+export async function createWorldBuildArtifactV4(
+  inputPath: string,
+): Promise<
+  | Readonly<{ ok: true; artifact: WorldBuildArtifactV4 }>
+  | Readonly<{ ok: false; result: InternalWorldBuildArtifactResultV1 }>
+> {
+  const pipeline = await loadWorldkitRoutePipeline(path.resolve(inputPath));
+  if (!pipeline.ok) return { ok: false, result: pipeline };
+  let worldBuildIdentityHash: `sha256:${string}`;
+  try {
+    const directory = await createTrustedCanonicalWorldPackageV1(pipeline);
+    worldBuildIdentityHash = directory.receipt.worldBuildIdentityHash;
+  } catch (error) {
+    return {
+      ok: false,
+      result: cliFailure(
+        "WORLD_BUILD_IDENTITY_UNAVAILABLE",
+        "The complete World Build identity could not be created.",
+        { cause: error instanceof Error ? error.message : String(error) },
+      ),
+    };
+  }
+  return {
+    ok: true,
+    artifact: {
+      kind: "worldkit-build-artifact",
+      schemaVersion: 4,
+      normalizedWorldIrHash: pipeline.normalizedWorldIrHash,
+      worldBuildIdentityHash,
+      executionPlanHash: pipeline.executionPlanHash,
+      normalizedWorldIr: pipeline.normalizedWorldIr,
+      executionPlan: pipeline.executionPlan,
+      gameplayBootstrap: pipeline.gameplayBootstrap,
+      worldRuntimeBootstrap: pipeline.worldRuntimeBootstrap,
+    },
+  };
+}
+
 async function writeAtomic(
   outputPath: string,
   bytes: string | Uint8Array,
@@ -54,30 +104,9 @@ export async function buildWorldArtifactFileV1(
       "Build output must not overwrite the AuthoringSpec input.",
     );
   }
-  const pipeline = await loadWorldkitRoutePipeline(absoluteInputPath);
-  if (!pipeline.ok) return pipeline;
-  let worldBuildIdentityHash: `sha256:${string}`;
-  try {
-    const directory = await createTrustedCanonicalWorldPackageV1(pipeline);
-    worldBuildIdentityHash = directory.receipt.worldBuildIdentityHash;
-  } catch (error) {
-    return cliFailure(
-      "WORLD_BUILD_IDENTITY_UNAVAILABLE",
-      "The complete World Build identity could not be created.",
-      { cause: error instanceof Error ? error.message : String(error) },
-    );
-  }
-  const artifact = {
-    kind: "worldkit-build-artifact",
-    schemaVersion: 4,
-    normalizedWorldIrHash: pipeline.normalizedWorldIrHash,
-    worldBuildIdentityHash,
-    executionPlanHash: pipeline.executionPlanHash,
-    normalizedWorldIr: pipeline.normalizedWorldIr,
-    executionPlan: pipeline.executionPlan,
-    gameplayBootstrap: pipeline.gameplayBootstrap,
-    worldRuntimeBootstrap: pipeline.worldRuntimeBootstrap,
-  } as const;
+  const created = await createWorldBuildArtifactV4(absoluteInputPath);
+  if (!created.ok) return created.result;
+  const { artifact } = created;
   try {
     await writeAtomic(
       absoluteOutputPath,
@@ -94,9 +123,9 @@ export async function buildWorldArtifactFileV1(
     ok: true,
     exitCode: 0,
     diagnostics: [],
-    normalizedWorldIrHash: pipeline.normalizedWorldIrHash,
-    worldBuildIdentityHash,
-    executionPlanHash: pipeline.executionPlanHash,
+    normalizedWorldIrHash: artifact.normalizedWorldIrHash,
+    worldBuildIdentityHash: artifact.worldBuildIdentityHash,
+    executionPlanHash: artifact.executionPlanHash,
     outputPath: absoluteOutputPath,
   };
 }

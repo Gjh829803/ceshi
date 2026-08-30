@@ -6,11 +6,14 @@ import { mkdir, readFile, rm, stat } from "node:fs/promises";
 
 import {
   assertSuccessfulJob,
+  classifyCodexTaskFailureForRetry,
   downloadS3FileAtomic,
   fetchGenerationItems,
   joinS3Uri,
+  LwdpJobPendingError,
   loadLwdpGenerationConfig,
   pollGenerationJob,
+  resolveLwdpJobTimeoutMs,
   submitCodexGenerationJob,
   submittedJobId,
   uploadS3File,
@@ -128,10 +131,28 @@ try {
   const workspaceProtocol = args.contexts.length > 0
     ? `\n\nCloud workspace protocol:\n- Locate the input asset named workspace-context.tar.gz in the host-provided Input assets list and extract it into the current task working directory before reading project paths.\n- Treat extracted files and other attached inputs as read-only context.\n- Write only the host-declared output files at their exact Declared outputs paths.\n- Do not access credentials, unrelated directories, or external services. Host-provided built-in tools explicitly required by the caller instruction, such as image generation, are allowed.\n- The trusted local host performs contract validation after delivery; do not claim validation you did not run.`
     : "";
-  const payload = {
+  const stage = args.stage || taskId;
+  const timeoutMs = resolveLwdpJobTimeoutMs(stage);
+  const configuredTaskAttempts = Number(
+    args.taskAttempts ||
+    (stage === "visual-reconstruction"
+      ? process.env.WORLDKIT_VISUAL_RECONSTRUCTION_MAX_ATTEMPTS || 3
+      : 1),
+  );
+  if (
+    !Number.isSafeInteger(configuredTaskAttempts) ||
+    configuredTaskAttempts < 1 ||
+    configuredTaskAttempts > 3
+  ) {
+    throw new Error("--task-attempts must be an integer in [1, 3].");
+  }
+  if (stage !== "visual-reconstruction" && configuredTaskAttempts !== 1) {
+    throw new Error("Only final visual reconstruction supports a new terminal-failure task attempt.");
+  }
+  const baseRequestId = args.requestId || `${taskId}-${runToken}`;
+  const baseOutputS3Prefix = args.outputS3Prefix.replace(/\/$/, "");
+  const payloadBase = {
     job_name: args.jobName || `worldkit ${taskId}`,
-    request_id: args.requestId || `${taskId}-${runToken}`,
-    output_s3_prefix: args.outputS3Prefix,
     defaults: {
       model: executionProfile.model,
       reasoning_effort: executionProfile.reasoningEffort,
@@ -162,39 +183,98 @@ try {
 
   if (smokeMode) {
     process.stdout.write(
-      `WORLDKIT_LWDP_CODEX_SMOKE ${taskId} dispatch=single-task-fast-path tasks=1 profile=${executionProfile.name} model=${executionProfile.model} reasoning=${executionProfile.reasoningEffort} submitAttempts=${submitAttempts} assets=${taskAssets.length} outputs=${outputSpecs.length}\n`,
+      `WORLDKIT_LWDP_CODEX_SMOKE ${taskId} dispatch=single-task-fast-path tasks=1 profile=${executionProfile.name} model=${executionProfile.model} reasoning=${executionProfile.reasoningEffort} submitAttempts=${submitAttempts} taskAttempts=${configuredTaskAttempts} timeoutMs=${timeoutMs} assets=${taskAssets.length} outputs=${outputSpecs.length}\n`,
     );
     process.exit(0);
   }
 
   const config = await loadLwdpGenerationConfig();
-  const submitted = await submitCodexGenerationJob(payload, { config });
-  const jobId = submittedJobId(submitted);
-  if (submitted.recovered_by_request_id === true) {
-    process.stdout.write(`WORLDKIT_LWDP_RECOVERED_BY_REQUEST_ID ${taskId} ${jobId}\n`);
+  let successfulOutputPrefix = null;
+  let remotePending = false;
+  for (let taskAttempt = 1; taskAttempt <= configuredTaskAttempts; taskAttempt += 1) {
+    const attemptOutputPrefix = taskAttempt === 1
+      ? baseOutputS3Prefix
+      : `${baseOutputS3Prefix}/attempt-${taskAttempt}`;
+    const requestId = taskAttempt === 1
+      ? baseRequestId
+      : `${baseRequestId}-attempt-${taskAttempt}`;
+    const payload = {
+      ...payloadBase,
+      job_name: taskAttempt === 1
+        ? payloadBase.job_name
+        : `${payloadBase.job_name} · retry ${taskAttempt}`,
+      request_id: requestId,
+      output_s3_prefix: attemptOutputPrefix,
+    };
+    let jobId = null;
+    try {
+      const submitted = await submitCodexGenerationJob(payload, { config });
+      jobId = submittedJobId(submitted);
+      if (submitted.recovered_by_request_id === true) {
+        process.stdout.write(`WORLDKIT_LWDP_RECOVERED_BY_REQUEST_ID ${taskId} ${jobId}\n`);
+      }
+      process.stdout.write(
+        `WORLDKIT_LWDP_JOB ${stage} ${taskId} ${jobId} dispatch=single-task-fast-path profile=${executionProfile.name} model=${executionProfile.model} reasoning=${executionProfile.reasoningEffort} taskAttempt=${taskAttempt}/${configuredTaskAttempts}\n`,
+      );
+      if (args.dryRun) {
+        process.stdout.write(`WORLDKIT_LWDP_DRY_RUN ${taskId} ${jobId}\n`);
+        process.exit(0);
+      }
+      const job = await pollGenerationJob(jobId, {
+        config,
+        timeoutMs,
+        onProgress: (current) => process.stdout.write(
+          `WORLDKIT_LWDP_PROGRESS ${taskId} ${current.status} ${JSON.stringify(current.counters || {})}\n`,
+        ),
+      });
+      const items = await fetchGenerationItems(jobId, { config });
+      assertSuccessfulJob(job, items, [taskId]);
+      successfulOutputPrefix = attemptOutputPrefix;
+      break;
+    } catch (error) {
+      if (error instanceof LwdpJobPendingError || error?.code === "LWDP_JOB_PENDING") {
+        const lastJob = error.lastJob ?? {};
+        process.stdout.write(
+          `WORLDKIT_LWDP_REMOTE_PENDING ${stage} ${taskId} ${error.jobId} ${requestId} ${attemptOutputPrefix} ${timeoutMs} ${String(lastJob.status ?? "unknown")} ${JSON.stringify(lastJob.counters ?? {})}\n`,
+        );
+        remotePending = true;
+        process.exitCode = 4;
+        break;
+      }
+      const retryClass = classifyCodexTaskFailureForRetry(error);
+      const maximumAttemptsForFailure = retryClass === "task-timeout"
+        ? Math.min(configuredTaskAttempts, 2)
+        : configuredTaskAttempts;
+      if (
+        stage === "visual-reconstruction" &&
+        retryClass !== null &&
+        taskAttempt < maximumAttemptsForFailure
+      ) {
+        process.stdout.write(
+          `WORLDKIT_LWDP_STAGE_RETRY ${stage} ${taskAttempt + 1} ${maximumAttemptsForFailure} reason=${retryClass} previousJob=${jobId ?? "unsubmitted"}\n`,
+        );
+        const retryDelayMs = Number(process.env.WORLDKIT_VISUAL_RECONSTRUCTION_RETRY_DELAY_MS || 2_000);
+        if (!Number.isSafeInteger(retryDelayMs) || retryDelayMs < 0 || retryDelayMs > 60_000) {
+          throw new Error("WORLDKIT_VISUAL_RECONSTRUCTION_RETRY_DELAY_MS must be an integer in [0, 60000].");
+        }
+        await new Promise((resolvePromise) => setTimeout(resolvePromise, retryDelayMs));
+        continue;
+      }
+      throw error;
+    }
   }
-  process.stdout.write(
-    `WORLDKIT_LWDP_JOB ${args.stage || taskId} ${taskId} ${jobId} dispatch=single-task-fast-path profile=${executionProfile.name} model=${executionProfile.model} reasoning=${executionProfile.reasoningEffort}\n`,
-  );
-  if (args.dryRun) {
-    process.stdout.write(`WORLDKIT_LWDP_DRY_RUN ${taskId} ${jobId}\n`);
-    process.exit(0);
+  if (!remotePending) {
+    if (successfulOutputPrefix === null) {
+      throw new Error(`LWDP Codex task ${taskId} ended without a successful output prefix.`);
+    }
+    for (const output of outputSpecs) {
+      await downloadS3FileAtomic(
+        joinS3Uri(successfulOutputPrefix, "tasks", taskId, output.remotePath),
+        output.localPath,
+      );
+    }
+    process.stdout.write(`WORLDKIT_LWDP_TASK_READY ${taskId}\n`);
   }
-  const job = await pollGenerationJob(jobId, {
-    config,
-    onProgress: (current) => process.stdout.write(
-      `WORLDKIT_LWDP_PROGRESS ${taskId} ${current.status} ${JSON.stringify(current.counters || {})}\n`,
-    ),
-  });
-  const items = await fetchGenerationItems(jobId, { config });
-  assertSuccessfulJob(job, items, [taskId]);
-  for (const output of outputSpecs) {
-    await downloadS3FileAtomic(
-      joinS3Uri(args.outputS3Prefix, "tasks", taskId, output.remotePath),
-      output.localPath,
-    );
-  }
-  process.stdout.write(`WORLDKIT_LWDP_TASK_READY ${taskId}\n`);
 } finally {
   await rm(stagingRoot, { recursive: true, force: true });
 }

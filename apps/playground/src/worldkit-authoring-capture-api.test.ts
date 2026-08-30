@@ -23,6 +23,49 @@ describe("WorldKit authoring capture API", () => {
         runtimeEntityIds: TARGET.runtimeEntityIds,
         views: ["front", "right", "back"] as const,
         imageDataUri: "data:image/png;base64,AA==",
+        inspection: {
+          widthPixels: 3,
+          heightPixels: 1,
+          foregroundPixelCount: 3,
+          minimumForegroundPixelCount: 3,
+          foregroundBoundsPixels: {
+            minimumPixelsXY: [0, 0] as const,
+            maximumPixelsXY: [2, 0] as const,
+          },
+          viewInspections: [
+            {
+              view: "front" as const,
+              foregroundPixelCount: 1,
+              minimumForegroundPixelCount: 1,
+              foregroundBoundsPixels: {
+                minimumPixelsXY: [0, 0] as const,
+                maximumPixelsXY: [0, 0] as const,
+              },
+              isRenderable: true,
+            },
+            {
+              view: "right" as const,
+              foregroundPixelCount: 1,
+              minimumForegroundPixelCount: 1,
+              foregroundBoundsPixels: {
+                minimumPixelsXY: [0, 0] as const,
+                maximumPixelsXY: [0, 0] as const,
+              },
+              isRenderable: true,
+            },
+            {
+              view: "back" as const,
+              foregroundPixelCount: 1,
+              minimumForegroundPixelCount: 1,
+              foregroundBoundsPixels: {
+                minimumPixelsXY: [0, 0] as const,
+                maximumPixelsXY: [0, 0] as const,
+              },
+              isRenderable: true,
+            },
+          ] as const,
+          isRenderable: true,
+        },
       })),
     };
     const installation = installWorldkitAuthoringCaptureApi(target, adapter);

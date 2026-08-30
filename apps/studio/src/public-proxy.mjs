@@ -4,8 +4,8 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-const studioSourceRoot = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(studioSourceRoot, "../../..");
+const studioRoot = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(studioRoot, "../../..");
 
 function constantTimeEqual(left, right) {
   const leftBytes = Buffer.from(left);
@@ -90,6 +90,20 @@ const publicApiRoutes = [
     methods: ["GET", "HEAD"],
     pattern: /^\/api\/recording-worlds\/[a-z0-9-]+\/recordings\/recording-[a-z0-9-]+\/(?:source|generated|prompt|prompt-template|bundle)$/,
   },
+  { methods: ["GET"], pattern: /^\/api\/episode-workflows$/ },
+  { methods: ["GET"], pattern: /^\/api\/episode-workflows\/[a-z0-9-]+$/ },
+  {
+    methods: ["GET", "HEAD"],
+    pattern: /^\/api\/episode-workflows\/[a-z0-9-]+\/artifacts\/.+$/,
+  },
+  {
+    methods: ["GET"],
+    pattern: /^\/api\/episode-workflows\/[a-z0-9-]+\/(?:bundle|interaction-timeline)$/,
+  },
+  {
+    methods: ["GET", "HEAD"],
+    pattern: /^\/api\/episode-workflows\/[a-z0-9-]+\/scene-assets\/[a-z0-9-]+$/,
+  },
 ];
 
 const publicStaticPaths = new Set(["/", "/index.html", "/app.js", "/styles.css", "/play", "/play/"]);
@@ -114,7 +128,47 @@ function isAllowedViteFsSource(pathname) {
   }
   if (requestedPath.includes("\0")) return false;
   const resolvedPath = path.resolve(requestedPath);
+  const nodeModulesRoot = path.join(repoRoot, "node_modules");
+  const nodeModulesRelativePath = path.relative(nodeModulesRoot, resolvedPath);
+  const normalizedNodeModulesPath = nodeModulesRelativePath.split(path.sep).join("/");
+  if (
+    nodeModulesRelativePath !== "" &&
+    !nodeModulesRelativePath.startsWith(`..${path.sep}`) &&
+    nodeModulesRelativePath !== ".." &&
+    !path.isAbsolute(nodeModulesRelativePath) &&
+    /(?:^|\/)node_modules\/@babylonjs\/havok\/lib\/esm\/HavokPhysics\.wasm$/.test(
+      normalizedNodeModulesPath,
+    )
+  ) {
+    return true;
+  }
   if (!viteSourceExtensions.has(path.extname(resolvedPath).toLowerCase())) return false;
+
+  if (
+    nodeModulesRelativePath !== "" &&
+    !nodeModulesRelativePath.startsWith(`..${path.sep}`) &&
+    nodeModulesRelativePath !== ".." &&
+    !path.isAbsolute(nodeModulesRelativePath) &&
+    /(?:^|\/)node_modules\/vite\/dist\/client\/env\.mjs$/.test(
+      normalizedNodeModulesPath,
+    )
+  ) {
+    return true;
+  }
+
+  const assetsRoot = path.join(repoRoot, "assets");
+  const assetsRelativePath = path.relative(assetsRoot, resolvedPath).split(path.sep).join("/");
+  if (
+    !assetsRelativePath.startsWith("../") &&
+    assetsRelativePath !== ".." &&
+    (
+      /^registry\/[a-z0-9-]+\/catalog\.json$/.test(assetsRelativePath) ||
+      /^subjects\/source-fbx\/vehicles\/catalog\.json$/.test(assetsRelativePath) ||
+      /^subjects\/source-fbx\/contributors\/[a-z0-9-]+\/catalog\.json$/.test(assetsRelativePath)
+    )
+  ) {
+    return true;
+  }
 
   const playgroundSourceRoot = path.join(repoRoot, "apps/playground/src");
   const playgroundRelativePath = path.relative(playgroundSourceRoot, resolvedPath);
@@ -161,6 +215,34 @@ export function isAllowedStudioPublicRequest(method, rawUrl) {
     methods.includes(method) && pattern.test(pathname));
 }
 
+export function isAllowedSeedancePublicRequest(method, rawUrl) {
+  if (typeof method !== "string" || typeof rawUrl !== "string") return false;
+  let pathname;
+  try {
+    pathname = new URL(rawUrl, "http://127.0.0.1").pathname;
+  } catch {
+    return false;
+  }
+  if (["GET", "HEAD"].includes(method)) {
+    if (publicStaticPaths.has(pathname)) return true;
+    if (publicAssetPrefixes.some((prefix) => pathname.startsWith(prefix))) return true;
+    if (isAllowedViteFsSource(pathname)) return true;
+    if (/^\/scene-assets\/[a-z0-9-]+\/.+$/.test(pathname)) return true;
+  }
+  if (method !== "GET" && method !== "HEAD") return false;
+  return [
+    /^\/api\/(?:health|subject-catalog)$/,
+    /^\/api\/worlds\/[a-z0-9-]+\/(?:preview-bootstrap|reference)$/,
+    /^\/api\/worlds\/[a-z0-9-]+\/(?:triviews|styled-triviews)\/[a-z0-9-]+$/,
+    /^\/api\/worlds\/[a-z0-9-]+\/deliverables\/[a-z0-9-]+$/,
+    /^\/api\/episode-workflows$/,
+    /^\/api\/episode-workflows\/[a-z0-9-]+$/,
+    /^\/api\/episode-workflows\/[a-z0-9-]+\/artifacts\/.+$/,
+    /^\/api\/episode-workflows\/[a-z0-9-]+\/(?:bundle|interaction-timeline)$/,
+    /^\/api\/episode-workflows\/[a-z0-9-]+\/scene-assets\/[a-z0-9-]+$/,
+  ].some((pattern) => pattern.test(pathname));
+}
+
 function upstreamHeaders(headers, target) {
   const forwarded = { ...headers, host: target.host };
   delete forwarded.authorization;
@@ -170,20 +252,32 @@ function upstreamHeaders(headers, target) {
 }
 
 export function createStudioPublicProxy(options) {
+  const anonymous = options.anonymous === true;
   const accessKey = options.accessKey ?? "";
-  if (typeof accessKey !== "string" || accessKey.length < 16) {
+  if (!anonymous && (typeof accessKey !== "string" || accessKey.length < 16)) {
     throw new Error("WORLDKIT_ACCESS_KEY must contain at least 16 characters.");
   }
+  const isAllowedRequest = options.isAllowedRequest ?? isAllowedStudioPublicRequest;
+  const rootRedirect = typeof options.rootRedirect === "string" ? options.rootRedirect : null;
   const target = validatedTargetOrigin(
     options.targetOrigin ?? "http://127.0.0.1:4197",
   );
 
   const server = createServer((request, response) => {
-    if (!isAuthorizedPublicRequest(request.headers.authorization, accessKey)) {
+    if (!anonymous && !isAuthorizedPublicRequest(request.headers.authorization, accessKey)) {
       unauthorizedResponse(response);
       return;
     }
-    if (!isAllowedStudioPublicRequest(request.method, request.url)) {
+    if (rootRedirect && request.method === "GET") {
+      const incoming = new URL(request.url, "http://127.0.0.1");
+      if (["/", "/index.html"].includes(incoming.pathname) &&
+          incoming.searchParams.get("public") !== "seedance") {
+        response.writeHead(302, { location: rootRedirect, "cache-control": "no-store" });
+        response.end();
+        return;
+      }
+    }
+    if (!isAllowedRequest(request.method, request.url)) {
       forbiddenResponse(response);
       return;
     }
@@ -216,7 +310,7 @@ export function createStudioPublicProxy(options) {
   });
 
   server.on("upgrade", (request, socket) => {
-    if (!isAuthorizedPublicRequest(request.headers.authorization, accessKey)) {
+    if (!anonymous && !isAuthorizedPublicRequest(request.headers.authorization, accessKey)) {
       socket.end(
         "HTTP/1.1 401 Unauthorized\r\n" +
         'WWW-Authenticate: Basic realm="WorldKit Creator Studio"\r\n' +

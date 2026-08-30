@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { spawn, spawnSync } from "node:child_process";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -8,16 +9,70 @@ import test from "node:test";
 import {
   assertSuccessfulJob,
   cancelGenerationJob,
+  classifyCodexTaskFailureForRetry,
   downloadS3FileAtomic,
   findGenerationJobByRequestId,
   joinS3Uri,
+  LwdpJobPendingError,
   lwdpRequest,
   loadLwdpGenerationConfig,
   pollGenerationJob,
+  resolveLwdpJobTimeoutMs,
   salvageableGenerationItemIds,
   submitCodexGenerationJob,
   submittedJobId,
 } from "../lib/lwdp-generation-client.mjs";
+
+test("uses stage-specific LWDP wait windows with explicit override precedence", () => {
+  assert.equal(resolveLwdpJobTimeoutMs("planner", {}), 45 * 60_000);
+  assert.equal(resolveLwdpJobTimeoutMs("coding-agent", {}), 120 * 60_000);
+  assert.equal(resolveLwdpJobTimeoutMs("visual-reconstruction", {}), 120 * 60_000);
+  assert.equal(resolveLwdpJobTimeoutMs("other", {}), 120 * 60_000);
+  assert.equal(resolveLwdpJobTimeoutMs("planner", {
+    WORLDKIT_LWDP_JOB_TIMEOUT_MS: "5000",
+    WORLDKIT_LWDP_PLANNER_TIMEOUT_MS: "7000",
+  }), 7000);
+  assert.equal(resolveLwdpJobTimeoutMs("coding-agent", {
+    WORLDKIT_LWDP_JOB_TIMEOUT_MS: "5000",
+    WORLDKIT_LWDP_BUILDER_TIMEOUT_MS: "8000",
+  }), 8000);
+  assert.equal(resolveLwdpJobTimeoutMs("visual-reconstruction", {
+    WORLDKIT_LWDP_JOB_TIMEOUT_MS: "5000",
+    WORLDKIT_LWDP_VISUAL_TIMEOUT_MS: "9000",
+  }), 9000);
+  assert.equal(resolveLwdpJobTimeoutMs("other", {
+    WORLDKIT_LWDP_JOB_TIMEOUT_MS: "6000",
+  }), 6000);
+  assert.throws(() => resolveLwdpJobTimeoutMs("planner", {
+    WORLDKIT_LWDP_PLANNER_TIMEOUT_MS: "not-a-number",
+  }), /positive safe integer/);
+});
+
+test("classifies only terminal transient Codex task failures for bounded retries", () => {
+  assert.equal(classifyCodexTaskFailureForRetry(
+    new Error("401 Unauthorized; refresh token was revoked"),
+  ), "auth");
+  assert.equal(classifyCodexTaskFailureForRetry(
+    new Error("The 'gpt-5.6-sol' model is not supported when using Codex with a ChatGPT account."),
+  ), "account-model-compatibility");
+  assert.equal(classifyCodexTaskFailureForRetry(
+    new Error("Selected model is at capacity"),
+  ), "capacity");
+  assert.equal(classifyCodexTaskFailureForRetry(
+    new Error("codex timeout after 1800s"),
+  ), "task-timeout");
+  assert.equal(classifyCodexTaskFailureForRetry(
+    new Error("websocket connection reset by peer"),
+  ), "transport");
+  assert.equal(classifyCodexTaskFailureForRetry(
+    new Error("missing required outputs: result.json"),
+  ), null);
+  const pending = new LwdpJobPendingError("gen_pending", 120_000, {
+    status: "running",
+    counters: { queued: 1, running: 0 },
+  });
+  assert.equal(classifyCodexTaskFailureForRetry(pending), null);
+});
 
 test("loads explicit LWDP configuration without exposing the token", async () => {
   const config = await loadLwdpGenerationConfig({
@@ -155,6 +210,30 @@ test("polls until a terminal LWDP status and rejects item failures", async () =>
   ), /builder: bad output/);
 });
 
+test("returns a typed pending outcome instead of disguising a non-terminal timeout as failure", async () => {
+  const lastJob = {
+    job_id: "gen_pending",
+    status: "running",
+    counters: { total: 1, queued: 1, running: 0, succeeded: 0, failed: 0 },
+  };
+  await assert.rejects(
+    pollGenerationJob("gen_pending", {
+      config: { baseUrl: "https://lwdp.example.test", token: "secret", userId: "worldkit" },
+      intervalMs: 1,
+      timeoutMs: 0,
+      fetchImplementation: async () => new Response(JSON.stringify(lastJob), { status: 200 }),
+    }),
+    (error) => {
+      assert.equal(error instanceof LwdpJobPendingError, true);
+      assert.equal(error.code, "LWDP_JOB_PENDING");
+      assert.equal(error.jobId, "gen_pending");
+      assert.equal(error.timeoutMs, 0);
+      assert.deepEqual(error.lastJob, lastJob);
+      return true;
+    },
+  );
+});
+
 test("treats cancelled and stopped LWDP jobs and items as unsuccessful terminal results", () => {
   for (const status of ["cancelled", "stopped"]) {
     assert.throws(
@@ -244,7 +323,21 @@ test("assembles cloud Codex and T2I tasks without local credentials in smoke mod
     assert.equal(codex.status, 0, codex.stderr);
     assert.match(
       codex.stdout,
-      /WORLDKIT_LWDP_CODEX_SMOKE codex-smoke dispatch=single-task-fast-path tasks=1 profile=formal model=gpt-5\.6-sol reasoning=xhigh submitAttempts=1 assets=1 outputs=1/,
+      /WORLDKIT_LWDP_CODEX_SMOKE codex-smoke dispatch=single-task-fast-path tasks=1 profile=formal model=gpt-5\.6-sol reasoning=xhigh submitAttempts=1 taskAttempts=1 timeoutMs=2700000 assets=1 outputs=1/,
+    );
+    const visual = spawnSync(process.execPath, [
+      "scripts/agents/run-lwdp-codex-task.mjs",
+      "--repo-root", repoRoot,
+      "--task-id", "visual-smoke",
+      "--stage", "visual-reconstruction",
+      "--output-s3-prefix", "s3://bucket/worldkit/visual-smoke",
+      "--instruction-file", instruction,
+      "--output", `result.json::${path.join(root, "visual-result.json")}::application/json`,
+    ], { cwd: repoRoot, env: environment, encoding: "utf8" });
+    assert.equal(visual.status, 0, visual.stderr);
+    assert.match(
+      visual.stdout,
+      /taskAttempts=3 timeoutMs=7200000/,
     );
     const cloudRunner = await readFile(path.join(repoRoot, "scripts/agents/run-lwdp-codex-task.mjs"), "utf8");
     assert.doesNotMatch(cloudRunner, /distributed|max_pods|pod_concurrency|account_concurrency/);
@@ -287,6 +380,19 @@ test("rejects repeated creation attempts for formal Codex and WorldKit T2I stage
     assert.notEqual(codex.status, 0);
     assert.match(codex.stderr, /submits every LWDP Codex creation request exactly once/);
 
+    const nonVisualTaskRetry = spawnSync(process.execPath, [
+      "scripts/agents/run-lwdp-codex-task.mjs",
+      "--repo-root", repoRoot,
+      "--task-id", "builder-smoke",
+      "--stage", "coding-agent",
+      "--output-s3-prefix", "s3://bucket/worldkit/builder-smoke",
+      "--instruction-file", instruction,
+      "--output", `result.json::${path.join(root, "builder-result.json")}::application/json`,
+      "--task-attempts", "2",
+    ], { cwd: repoRoot, env: environment, encoding: "utf8" });
+    assert.notEqual(nonVisualTaskRetry.status, 0);
+    assert.match(nonVisualTaskRetry.stderr, /Only final visual reconstruction supports/);
+
     const t2i = spawnSync(process.execPath, [
       "scripts/agents/run-lwdp-t2i-job.mjs",
       "--stage", "styled-opening-frame",
@@ -298,6 +404,113 @@ test("rejects repeated creation attempts for formal Codex and WorldKit T2I stage
     assert.notEqual(t2i.status, 0);
     assert.match(t2i.stderr, /submit each LWDP creation request exactly once/);
   } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("retries a terminal visual account-model incompatibility with a new request id and isolated S3 prefix", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "lwdp-visual-retry-"));
+  const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
+  const requests = [];
+  const server = createServer(async (request, response) => {
+    let body = "";
+    for await (const chunk of request) body += chunk;
+    const parsedBody = body ? JSON.parse(body) : null;
+    requests.push({ method: request.method, url: request.url, body: parsedBody });
+    const send = (payload) => {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify(payload));
+    };
+    if (request.method === "POST") {
+      const attempt = requests.filter(({ method }) => method === "POST").length;
+      send({ job: { job_id: attempt === 1 ? "gen_model_incompatible" : "gen_visualok" } });
+      return;
+    }
+    if (request.url === "/api/v1/generation/jobs/gen_model_incompatible") {
+      send({ status: "completed", counters: { total: 1, failed: 1 } });
+      return;
+    }
+    if (request.url === "/api/v1/generation/jobs/gen_model_incompatible/items?size=1000") {
+      send({ items: [{
+        item_id: "visual-retry-test",
+        status: "failed",
+        error: "The 'gpt-5.6-sol' model is not supported when using Codex with a ChatGPT account.",
+      }] });
+      return;
+    }
+    if (request.url === "/api/v1/generation/jobs/gen_visualok") {
+      send({ status: "succeeded", counters: { total: 1, succeeded: 1 } });
+      return;
+    }
+    if (request.url === "/api/v1/generation/jobs/gen_visualok/items?size=1000") {
+      send({ items: [{ item_id: "visual-retry-test", status: "succeeded", error: "" }] });
+      return;
+    }
+    response.writeHead(404).end();
+  });
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  assert.ok(address && typeof address === "object");
+  try {
+    const instruction = path.join(root, "instruction.txt");
+    const output = path.join(root, "result.json");
+    const binRoot = path.join(root, "bin");
+    const aws = path.join(binRoot, "aws");
+    await mkdir(binRoot, { recursive: true });
+    await Promise.all([
+      writeFile(instruction, "Write result.json."),
+      writeFile(aws, `#!/usr/bin/env node
+const fs = require("node:fs");
+const path = require("node:path");
+const destination = process.argv.at(-1);
+fs.mkdirSync(path.dirname(destination), { recursive: true });
+fs.writeFileSync(destination, "{\\\"ok\\\":true}");
+`),
+    ]);
+    await chmod(aws, 0o755);
+    const childResult = await new Promise((resolveResult) => {
+      const child = spawn(process.execPath, [
+        "scripts/agents/run-lwdp-codex-task.mjs",
+        "--repo-root", repoRoot,
+        "--task-id", "visual-retry-test",
+        "--stage", "visual-reconstruction",
+        "--request-id", "visual-retry-request",
+        "--output-s3-prefix", "s3://bucket/worldkit/visual-retry",
+        "--instruction-file", instruction,
+        "--output", `result.json::${output}::application/json`,
+      ], {
+        cwd: repoRoot,
+        env: {
+          ...process.env,
+          PATH: `${binRoot}${path.delimiter}${process.env.PATH}`,
+          LWDP_API_BASE: `http://127.0.0.1:${address.port}`,
+          LWDP_GENERATION_API_TOKEN: "test-token",
+          LWDP_USER_ID: "worldkit-test",
+          WORLDKIT_VISUAL_RECONSTRUCTION_RETRY_DELAY_MS: "0",
+          WORLDKIT_LWDP_POLL_INTERVAL_MS: "1",
+        },
+        encoding: "utf8",
+      });
+      let stdout = "";
+      let stderr = "";
+      child.stdout.on("data", (chunk) => { stdout += chunk; });
+      child.stderr.on("data", (chunk) => { stderr += chunk; });
+      child.once("close", (code) => resolveResult({ code, stdout, stderr }));
+    });
+    assert.equal(childResult.code, 0, childResult.stderr);
+    assert.match(childResult.stdout, /WORLDKIT_LWDP_STAGE_RETRY visual-reconstruction 2 3 reason=account-model-compatibility/);
+    assert.equal(await readFile(output, "utf8"), '{"ok":true}');
+    const posts = requests.filter(({ method }) => method === "POST");
+    assert.equal(posts.length, 2);
+    assert.equal(posts[0].body.request_id, "visual-retry-request");
+    assert.equal(posts[0].body.output_s3_prefix, "s3://bucket/worldkit/visual-retry");
+    assert.equal(posts[1].body.request_id, "visual-retry-request-attempt-2");
+    assert.equal(posts[1].body.output_s3_prefix, "s3://bucket/worldkit/visual-retry/attempt-2");
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
     await rm(root, { recursive: true, force: true });
   }
 });

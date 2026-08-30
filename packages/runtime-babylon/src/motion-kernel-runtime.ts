@@ -27,6 +27,10 @@ import {
 } from "./motion-mode-resolver";
 import { createGroundAwareControllerInternal } from "./babylon-character-body-port";
 import { FIXED_TIME_STEP_SECONDS } from "./physics";
+import {
+  blockWorldGroundBoundaryCollideMaskV1,
+  type BlockWorldMotionKernelImplementationIdV1,
+} from "./block-ground-boundary";
 
 export interface MotionKernelSnapshotV1 {
   activeMotionProfileRef: string;
@@ -148,6 +152,22 @@ function moveVectorTowards(
   return current.add(delta.scale(maximumDelta / distance));
 }
 
+function liftPlanarVelocityToWalkableSurface(
+  planarVelocity: Vector3,
+  surfaceNormal: Vector3,
+): Vector3 {
+  const normal = surfaceNormal.normalizeToNew();
+  if (Math.abs(normal.y) <= 0.000001) return planarVelocity.clone();
+  return new Vector3(
+    planarVelocity.x,
+    -(normal.x * planarVelocity.x + normal.z * planarVelocity.z) / normal.y,
+    planarVelocity.z,
+  );
+}
+
+const GROUND_ACTION_SUPPORT_GAP_GRACE_TICKS = 2;
+const GROUND_ACTION_DESCENT_TOLERANCE_METERS_PER_SECOND = 0.35;
+
 function moveAngleTowards(current: number, target: number, maximumDelta: number): number {
   const delta = Math.atan2(Math.sin(target - current), Math.cos(target - current));
   return current + Math.max(-maximumDelta, Math.min(maximumDelta, delta));
@@ -260,6 +280,10 @@ export class MotionKernelRuntimeV1 {
   private jumpHoldActive = false;
   private jumpReleasedThisApex = false;
   private currentMovementMedium: PublishedMovementMediumV1 = "air";
+  private groundActionSupportGapGraceTicksRemaining = 0;
+  private lastWalkableSupportNormal = Vector3.Up();
+  private previousWalkableSupportNormal = Vector3.Up();
+  private lastInclinedSupportNormal = Vector3.Up();
 
   constructor(
     private readonly subject: BabylonRuntimeSubjectV1,
@@ -269,6 +293,9 @@ export class MotionKernelRuntimeV1 {
     private readonly waterSurfaceHeightAtSubjectOrigin: (
       subjectOrigin: Vector3,
     ) => number | undefined,
+    private readonly blockWorldWalkableSurfaceHeightAtSubjectOrigin: (
+      subjectOrigin: Vector3,
+    ) => number | undefined = () => undefined,
   ) {
     this.controlFeel = requireControlFeel(subject);
     if (subject.capabilityAssembly.mediumProfile.air === undefined) {
@@ -312,6 +339,7 @@ export class MotionKernelRuntimeV1 {
       );
       this.physicsController.maxStepHeight = subject.collider.maxStepHeightMeters;
       this.physicsController.characterMass = subject.collider.massKilograms;
+      this.synchronizeBlockWorldGroundBoundaryFilter();
       this.syncVisual(spawnSubjectOrigin);
       this.physicsController.setVelocity(Vector3.Zero());
       this.bootstrapContactManifold();
@@ -462,6 +490,7 @@ export class MotionKernelRuntimeV1 {
   publishSupport(): void {
     this.commitPendingProfile();
     this.commitPendingFeel();
+    this.synchronizeBlockWorldGroundBoundaryFilter();
     this.publishResolvedState(
       this.physicsController.checkSupport(FIXED_TIME_STEP_SECONDS, this.gravityDirection),
       { moveRequested: false, runRequested: false },
@@ -471,6 +500,7 @@ export class MotionKernelRuntimeV1 {
   step(command: MotionCommandV1): void {
     this.commitPendingProfile();
     this.commitPendingFeel();
+    this.synchronizeBlockWorldGroundBoundaryFilter();
     const effectiveCommand = this.shouldEmitZeroIntent()
       ? zeroIntentCommand(command)
       : command;
@@ -541,6 +571,46 @@ export class MotionKernelRuntimeV1 {
     return this.currentMovementMedium;
   }
 
+  private isNearReconstructedBlockWorldSurface(): boolean {
+    const subjectOrigin = this.subjectOrigin;
+    const surfaceHeightMeters =
+      this.blockWorldWalkableSurfaceHeightAtSubjectOrigin(subjectOrigin);
+    if (surfaceHeightMeters === undefined) return false;
+    const gapMeters = subjectOrigin.y - surfaceHeightMeters;
+    return gapMeters >= -this.physicsController.keepContactTolerance &&
+      gapMeters <= this.physicsController.maxStepHeight +
+        this.physicsController.keepContactTolerance;
+  }
+
+  get movementMediumForGroundHumanoidAction(): PublishedMovementMediumV1 {
+    const velocity = this.physicsController.getVelocity();
+    const horizontalSpeedMetersPerSecond = Math.hypot(velocity.x, velocity.z);
+    const supportVerticalRatio = Math.max(
+      0.000001,
+      Math.abs(this.lastWalkableSupportNormal.y),
+    );
+    const expectedWalkableDescentMetersPerSecond =
+      horizontalSpeedMetersPerSecond *
+      Math.hypot(
+        this.lastWalkableSupportNormal.x,
+        this.lastWalkableSupportNormal.z,
+      ) /
+      supportVerticalRatio;
+    if (
+      this.currentMovementMedium === "air" &&
+      !this.jumpInProgress &&
+      (
+        this.groundActionSupportGapGraceTicksRemaining > 0 ||
+        this.isNearReconstructedBlockWorldSurface() ||
+        velocity.y >= -(
+          expectedWalkableDescentMetersPerSecond +
+          GROUND_ACTION_DESCENT_TOLERANCE_METERS_PER_SECOND
+        )
+      )
+    ) return "ground";
+    return this.currentMovementMedium;
+  }
+
   get locomotionMode(): LocomotionModeV1 {
     return this.requireResolvedState().locomotionMode;
   }
@@ -559,6 +629,7 @@ export class MotionKernelRuntimeV1 {
     this.motionModeResolver.reset();
     this.motionModeResolver.request(this.lastRequestedMotionProfileRef);
     this.motionModeResolver.commitTickBoundary();
+    this.synchronizeBlockWorldGroundBoundaryFilter();
     this.pendingControlFeel = undefined;
     const restoredFeel = this.lockedFeelSurface(this.lastRequestedControlFeelRef);
     this.controlFeel = restoredFeel ?? requireControlFeel(this.subject);
@@ -579,6 +650,10 @@ export class MotionKernelRuntimeV1 {
     this.jumpActionWasActive = false;
     this.jumpHoldActive = false;
     this.jumpReleasedThisApex = false;
+    this.groundActionSupportGapGraceTicksRemaining = 0;
+    this.lastWalkableSupportNormal.copyFrom(this.up);
+    this.previousWalkableSupportNormal.copyFrom(this.up);
+    this.lastInclinedSupportNormal.copyFrom(this.up);
     this.resolvedState = undefined;
     this.retainedSupportSample = undefined;
     this.syncVisual(subjectOrigin);
@@ -723,6 +798,35 @@ export class MotionKernelRuntimeV1 {
         0,
         this.coyoteRemainingSeconds - FIXED_TIME_STEP_SECONDS,
       );
+    }
+    if (supportState === "unsupported") {
+      this.groundActionSupportGapGraceTicksRemaining = Math.max(
+        0,
+        this.groundActionSupportGapGraceTicksRemaining - 1,
+      );
+    } else {
+      this.groundActionSupportGapGraceTicksRemaining =
+        GROUND_ACTION_SUPPORT_GAP_GRACE_TICKS;
+      if (supportState === "supported") {
+        this.previousWalkableSupportNormal.copyFrom(
+          this.lastWalkableSupportNormal,
+        );
+        this.lastWalkableSupportNormal.copyFrom(support.averageSurfaceNormal);
+        if (this.lastWalkableSupportNormal.lengthSquared() > 0.000001) {
+          this.lastWalkableSupportNormal.normalize();
+        } else {
+          this.lastWalkableSupportNormal.copyFrom(this.up);
+        }
+      }
+    }
+    if (
+      supportState === "supported" &&
+      Math.abs(support.averageSurfaceNormal.y) < 0.9999
+    ) {
+      this.lastInclinedSupportNormal.copyFrom(support.averageSurfaceNormal);
+      if (this.lastInclinedSupportNormal.lengthSquared() > 0.000001) {
+        this.lastInclinedSupportNormal.normalize();
+      }
     }
     const result = resolveCharacterStateV1({
       previousState: this.resolvedState,
@@ -1137,7 +1241,35 @@ export class MotionKernelRuntimeV1 {
     const surfaceNormal = unsupported ? this.up : support.averageSurfaceNormal;
     const current = this.physicsController.getVelocity();
     const nextVelocity = desired.clone();
-    if (!unsupported) {
+    let supportedGroundVelocityYMetersPerSecond: number | undefined;
+    const continueAlongInclinedSurface =
+      implementationId === "free-ground" &&
+      unsupported &&
+      !this.jumpInProgress &&
+      this.isNearReconstructedBlockWorldSurface() &&
+      Math.abs(this.lastInclinedSupportNormal.y) < 0.9999 &&
+      nextVelocity.lengthSquared() > 0.000001;
+    if (
+      implementationId === "free-ground" &&
+      support.supportedState === CharacterSupportedState.SUPPORTED &&
+      nextVelocity.lengthSquared() > 0.000001 &&
+      Vector3.Dot(
+        surfaceNormal.normalizeToNew(),
+        this.previousWalkableSupportNormal,
+      ) > 0.999
+    ) {
+      nextVelocity.copyFrom(liftPlanarVelocityToWalkableSurface(
+        nextVelocity,
+        surfaceNormal,
+      ));
+      supportedGroundVelocityYMetersPerSecond = nextVelocity.y;
+    } else if (continueAlongInclinedSurface) {
+      nextVelocity.copyFrom(liftPlanarVelocityToWalkableSurface(
+        nextVelocity,
+        this.lastInclinedSupportNormal,
+      ));
+      supportedGroundVelocityYMetersPerSecond = nextVelocity.y;
+    } else if (!unsupported) {
       const normal = surfaceNormal.normalizeToNew();
       const intoSurface = Vector3.Dot(nextVelocity, normal);
       if (intoSurface < 0) {
@@ -1149,6 +1281,14 @@ export class MotionKernelRuntimeV1 {
       this.jumpInProgress = true;
       nextVelocity.y = feel.jumpSpeedMetersPerSecond;
       this.jumpHoldActive = jumpHeldThisTick;
+      this.jumpReleasedThisApex = false;
+    } else if (
+      continueAlongInclinedSurface &&
+      supportedGroundVelocityYMetersPerSecond !== undefined
+    ) {
+      nextVelocity.y = supportedGroundVelocityYMetersPerSecond;
+      this.jumpInProgress = false;
+      this.jumpHoldActive = false;
       this.jumpReleasedThisApex = false;
     } else if (!isPhysicallySupported || (this.jumpInProgress && current.y > 0)) {
       if (
@@ -1169,7 +1309,8 @@ export class MotionKernelRuntimeV1 {
         this.effectiveGravityVector().scale(FIXED_TIME_STEP_SECONDS),
       );
     } else {
-      nextVelocity.y = support.averageSurfaceVelocity.y;
+      nextVelocity.y = supportedGroundVelocityYMetersPerSecond ??
+        support.averageSurfaceVelocity.y;
       this.jumpInProgress = false;
       this.jumpHoldActive = false;
       this.jumpReleasedThisApex = false;
@@ -1232,6 +1373,18 @@ export class MotionKernelRuntimeV1 {
       throw new Error("MOTION_KERNEL_NOT_LOCKED");
     }
     return motionKernel.implementationId;
+  }
+
+  private synchronizeBlockWorldGroundBoundaryFilter(): void {
+    const shape = this.physicsController.shape;
+    const membershipMask = shape.filterMembershipMask >>> 0;
+    const collideMask = shape.filterCollideMask >>> 0;
+    if (membershipMask === 0 && collideMask === 0) return;
+    const next = blockWorldGroundBoundaryCollideMaskV1(
+      collideMask,
+      this.activeKernelImplementationId() as BlockWorldMotionKernelImplementationIdV1,
+    );
+    if (next !== collideMask) shape.filterCollideMask = next;
   }
 
   private stepGlide(

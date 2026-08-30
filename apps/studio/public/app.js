@@ -1,3 +1,11 @@
+const publicSeedanceMode = new URLSearchParams(location.search).get("public") === "seedance";
+if (publicSeedanceMode) {
+  document.body.dataset.publicSeedance = "true";
+  document.title = "WorldKit Seedance Review";
+  const brand = document.querySelector(".brand");
+  if (brand) brand.href = "/?public=seedance#seedance-review";
+}
+
 const state = {
   worlds: [],
   filter: "all",
@@ -23,30 +31,53 @@ const state = {
   backendMessage: "",
   submittingWorld: false,
   runningTestSets: false,
+  episodeReviews: [],
+  episodeReviewRevision: null,
+  selectedEpisodeId: null,
+  loadingEpisodeReviews: false,
+  loadingWorlds: false,
+  loadingTestSets: false,
+  workspaceMode: publicSeedanceMode ? "seedance-review" : "create",
 };
 
 const stageLabels = {
   queued: "等待 Codex 执行",
   preparing: "准备任务工作区",
-  planner: "生成托管式意图摘要、规划图与自检收据",
+  planner: "生成意图摘要、两张方块白膜图与自检收据",
   "coding-agent": "Coding Agent 搭建可碰撞白膜世界",
-  "canonical-build": "校验并编译 Canonical JSON",
+  "block-build": "校验并编译方块世界",
   ready: "评测通过，运行产物已就绪",
   failed: "生成失败，可查看日志",
   interrupted: "任务中断，可以重试",
   "change-requested": "Agent 请求修改冻结计划",
   "runtime-capture": "捕获真实白膜运行结果",
   "entry-alignment-validation": "校验第三人称进入构图",
-  "visual-prompt-synthesis": "可配置视觉提供方合成首帧与三视图提示词",
-  "visual-imagegen": "可配置图片提供方生成可选视觉结果",
+  "visual-reconstruction": "单个 LWDP Codex 生成首帧与全部三视图",
 };
 const statusLabels = {
   queued: "QUEUED",
   running: "GENERATING",
+  "remote-pending": "REMOTE PENDING",
   ready: "READY",
   failed: "FAILED",
   interrupted: "INTERRUPTED",
 };
+
+const blockWhiteboxLegend = [
+  ["#B7E4C7", "地面行进"],
+  ["#5F6368", "障碍/碰撞"],
+  ["#00B8A9", "可交互实体"],
+  ["#B8DE6F", "交互触发区"],
+  ["#8ECDF4", "水"],
+  ["#D8D4F2", "可站立云"],
+  ["#EEF6FF", "可穿过云"],
+  ["#D6D3D1", "纯视觉"],
+  ["#E85D5D", "出生位置 / 入口主体"],
+  ["#F28E2B", "视觉目标 2"],
+  ["#D9A514", "视觉目标 3"],
+  ["#4E79A7", "视觉目标 4"],
+  ["#9C6ADE", "视觉目标 5"],
+];
 
 function worldStatusLabel(world) {
   if (world.status === "ready") return "PASSED";
@@ -57,12 +88,11 @@ const progressByStage = {
   preparing: 10,
   planner: 42,
   "coding-agent": 64,
-  "canonical-build": 82,
+  "block-build": 82,
   validation: 82,
   "runtime-capture": 94,
   "entry-alignment-validation": 96,
-  "visual-prompt-synthesis": 97,
-  "visual-imagegen": 99,
+  "visual-reconstruction": 99,
   ready: 100,
   failed: 100,
   interrupted: 100,
@@ -110,6 +140,11 @@ const caseDialogDescription = document.querySelector("#case-dialog-description")
 const caseDialogCount = document.querySelector("#case-dialog-count");
 const casePickerGrid = document.querySelector("#case-picker-grid");
 const caseFilterHumanoidWalking = document.querySelector("#case-filter-humanoid-walking");
+const historyPanel = document.querySelector("#history");
+const seedanceCaseList = document.querySelector("#seedance-case-list");
+const seedanceCaseCount = document.querySelector("#seedance-case-count");
+const seedanceCaseEmpty = document.querySelector("#seedance-case-empty");
+const seedanceReviewDetail = document.querySelector("#seedance-review-detail");
 
 function escapeHtml(value) {
   return String(value)
@@ -239,12 +274,29 @@ function detailRevision(world, media) {
     ] : null,
     eventCount: media?.trajectory?.events?.length ?? 0,
     planning: (media?.planning ?? []).map((item) => [item.kind, item.available, item.url, item.prompt]),
+    plannerReview: media?.plannerReview ?? null,
     prototypes: (media?.prototypes ?? []).map((item) => [item.id, item.whiteboxUrl, item.styledUrl]),
     helpers: (media?.helpers ?? []).map((item) => [item.id, item.featureId, item.position]),
     verification: media?.entryVerification?.stage ?? null,
     composition: media?.composition
       ? [media.composition.score, media.composition.pass, media.composition.advisoryOnly]
       : null,
+    episodes: (media?.episodes ?? []).map((episode) => [
+      episode.episodeId,
+      episode.status,
+      episode.currentStage,
+      episode.updatedAt,
+      episode.artifacts?.length ?? 0,
+      episode.stages?.map((stage) => [stage.id, stage.status]),
+      episode.playbackComparisons?.map((comparison) => [
+        comparison.segmentId,
+        comparison.whiteboxVideo?.sizeBytes ?? 0,
+        comparison.finalVideo?.sizeBytes ?? 0,
+        comparison.inputActivations?.length ?? 0,
+        comparison.promptEvent?.id ?? null,
+        comparison.promptEvent?.globalSeconds ?? null,
+      ]),
+    ]),
   });
 }
 
@@ -473,6 +525,8 @@ function openCasePicker(testSetId) {
 }
 
 async function loadTestSets() {
+  if (state.loadingTestSets) return;
+  state.loadingTestSets = true;
   try {
     const response = await fetch("/api/test-sets", { cache: "no-store" });
     if (!response.ok) throw new Error("无法读取测试集");
@@ -499,23 +553,35 @@ async function loadTestSets() {
     }
   } catch (error) {
     testSetGrid.innerHTML = `<p class="capability-error">${escapeHtml(error.message)}</p>`;
+  } finally {
+    state.loadingTestSets = false;
   }
 }
 
 function setWorkspaceMode(mode, scroll = true) {
-  const normalized = mode === "test-sets" ? "test-sets" : "create";
+  const normalized = publicSeedanceMode
+    ? "seedance-review"
+    : ["create", "test-sets", "seedance-review"].includes(mode) ? mode : "create";
+  if (normalized !== "seedance-review") disposeEpisodeComparisonMedia(seedanceReviewDetail);
+  state.workspaceMode = normalized;
   for (const button of document.querySelectorAll("[data-workspace-mode]")) {
     button.classList.toggle("active", button.dataset.workspaceMode === normalized);
   }
   for (const panel of document.querySelectorAll("[data-workspace-panel]")) {
     panel.hidden = panel.dataset.workspacePanel !== normalized;
   }
+  historyPanel.hidden = normalized === "seedance-review";
+  if (normalized === "create") void loadWorlds();
+  if (normalized === "test-sets") {
+    void loadWorlds();
+    void loadTestSets();
+  }
   if (scroll) document.querySelector(`[data-workspace-panel="${normalized}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function matchesFilter(world) {
   if (state.filter === "all") return true;
-  if (state.filter === "running") return ["queued", "running"].includes(world.status);
+  if (state.filter === "running") return ["queued", "running", "remote-pending"].includes(world.status);
   if (state.filter === "failed") return ["failed", "interrupted"].includes(world.status);
   return world.status === state.filter;
 }
@@ -578,7 +644,7 @@ function renderHistory() {
   emptyState.hidden = filtered.length > 0;
   worldGrid.hidden = filtered.length === 0;
   const ready = state.worlds.filter((world) => Boolean(world.previewUrl)).length;
-  const active = state.worlds.filter((world) => ["queued", "running"].includes(world.status)).length;
+  const active = state.worlds.filter((world) => ["queued", "running", "remote-pending"].includes(world.status)).length;
   historyStats.innerHTML = `<span><b>${state.worlds.length}</b>全部世界</span><span><b>${ready}</b>可游玩</span><span><b>${active}</b>生成中</span>`;
 
   for (const world of filtered) {
@@ -603,7 +669,9 @@ function renderHistory() {
       card.dataset.codexBackend = backend;
     }
     const queue = world.queuePosition ? ` · 队列第 ${world.queuePosition} 位` : "";
-    fragment.querySelector(".stage-copy").textContent = `${stageLabel(world.stage, backend)}${queue}`;
+    fragment.querySelector(".stage-copy").textContent = world.status === "remote-pending"
+      ? `等待远端 Job 对账 · ${stageLabel(world.stage, backend)}`
+      : `${stageLabel(world.stage, backend)}${queue}`;
     const play = fragment.querySelector(".play-button");
     if (world.previewUrl) {
       play.href = world.previewUrl;
@@ -613,7 +681,7 @@ function renderHistory() {
       play.setAttribute("aria-disabled", "true");
     }
     const stop = fragment.querySelector(".stop-button");
-    if (["queued", "running", "visual-queued", "visual-running"].includes(world.status)) {
+    if (["queued", "running", "remote-pending", "visual-queued", "visual-running"].includes(world.status)) {
       stop.hidden = false;
       stop.addEventListener("click", () => void requestWorldStop(world.id, stop));
     }
@@ -625,6 +693,8 @@ function renderHistory() {
 }
 
 async function loadWorlds() {
+  if (state.loadingWorlds) return;
+  state.loadingWorlds = true;
   try {
     const response = await fetch("/api/worlds", { cache: "no-store" });
     if (!response.ok) throw new Error("无法读取历史世界");
@@ -634,10 +704,13 @@ async function loadWorlds() {
     if (revision !== state.historyRevision) {
       state.historyRevision = revision;
       renderHistory();
+      if (state.episodeReviews.length) renderSeedanceReview();
     }
   } catch (error) {
     runtimeState.className = "runtime-state offline";
     runtimeState.querySelector("span").textContent = error.message;
+  } finally {
+    state.loadingWorlds = false;
   }
 }
 
@@ -796,7 +869,26 @@ function renderPlanningMedia(media) {
   return `<div class="planning-gallery">${items.map(renderPlanningItem).join("")}</div>`;
 }
 
+function renderPlannerReview(media) {
+  const review = media?.plannerReview ?? { status: "unavailable" };
+  const labels = {
+    unavailable: "等待 Planner 工件",
+    pending: "待人工审核",
+    approved: "人工已通过",
+    rejected: "人工已退回",
+  };
+  const available = review.status !== "unavailable";
+  return `<section class="planner-human-review ${escapeHtml(review.status)}" data-live-planner-review>
+    <div><small>HUMAN PLANNER REVIEW</small><h4>${escapeHtml(labels[review.status] ?? review.status)}</h4><p>人工确认俯视图只用小型红色出生点、保持一个连续世界、覆盖至少四倍参考可见地理面积，且只把地面运动支持标为可行区域；飞行和游泳不绘制可行域。同时确认入口图的第三人称构图。这里不使用面积、包围盒或图像识别启发式 Gate。</p>${review.reviewedAt ? `<span>审核时间：${escapeHtml(formatDateTime(review.reviewedAt))}</span>` : ""}</div>
+    <div class="planner-review-actions">
+      <button type="button" data-planner-review="approved" ${available ? "" : "disabled"}>通过规划</button>
+      <button type="button" data-planner-review="rejected" ${available ? "" : "disabled"}>退回规划</button>
+    </div>
+  </section>`;
+}
+
 function renderPlanningItem(item) {
+  const showsBlockLegend = ["world-plan", "entry-whitebox-target"].includes(item.kind);
   return `<article class="media-card ${item.available ? "" : "is-pending"}" data-planning-kind="${escapeHtml(item.kind)}" data-planning-url="${escapeHtml(item.url ?? "")}">
       <div class="media-frame">
         ${item.url
@@ -807,6 +899,7 @@ function renderPlanningItem(item) {
         <span>${escapeHtml(item.kind)}</span>
         <h4>${escapeHtml(item.title)}</h4>
         <p>${escapeHtml(item.description ?? "")}</p>
+        ${showsBlockLegend ? `<div class="block-whitebox-legend" aria-label="方块语义颜色图例">${blockWhiteboxLegend.map(([color, label]) => `<span><i style="background:${safeCssColor(color)}"></i>${escapeHtml(label)}</span>`).join("")}</div>` : ""}
         ${item.prompt ? `<details><summary>查看对应 Prompt</summary><pre>${escapeHtml(item.prompt)}</pre></details>` : ""}
       </div>
     </article>`;
@@ -814,7 +907,7 @@ function renderPlanningItem(item) {
 
 function renderPrototypeMedia(media) {
   const prototypes = media?.prototypes ?? [];
-  if (!prototypes.length) return `<p class="media-empty">Canonical Builder 完成后，Babylon 会为最多 5 个完整视觉组（包含主体）生成 Front / Right / Back 白膜三视图。</p>`;
+  if (!prototypes.length) return `<p class="media-empty">Block Builder 完成后，Babylon 会为最多 5 个完整视觉组（包含主体）生成 Front / Right / Back 白膜三视图。</p>`;
   return `<div class="prototype-gallery">${prototypes.map(renderPrototypeItem).join("")}</div>`;
 }
 
@@ -859,11 +952,10 @@ const phaseTitles = {
   input: "需求输入",
   planner: "统一世界规划",
   "coding-agent": "白膜实现",
-  "canonical-build": "Canonical 构建",
+  "block-build": "方块编译",
   "runtime-capture": "真实运行捕获",
   "entry-alignment-validation": "进入构图校验",
-  "visual-prompt-synthesis": "视觉提示词合成",
-  "visual-imagegen": "并发视觉生成",
+  "visual-reconstruction": "LWDP Codex 视觉重建",
 };
 
 const trajectoryStatusLabels = {
@@ -987,16 +1079,24 @@ function wireArtifactPreviews(root = dialogContent) {
 
 function renderValidation(media) {
   const composition = media?.composition;
+  const planner = media?.plannerValidation;
+  const plannerPassed = planner?.status === "passed";
   const captured = (media?.planning ?? []).some((item) => item.kind === "opening-frame" && item.available) ||
     (composition !== null && composition !== undefined);
+  const percentage = (value) => Number.isFinite(value) ? `${(value * 100).toFixed(1)}%` : "—";
   const metrics = [
-    ["整体状态", captured ? "Runtime Captured" : "等待真实捕获"],
+    ["规划图颜色覆盖", percentage(planner?.worldPlan?.blockPaletteCoverageRatio)],
+    ["入口图颜色覆盖", percentage(planner?.entryWhiteboxTarget?.blockPaletteCoverageRatio)],
+    ["规划图地面支持像素", Number.isFinite(planner?.worldPlan?.traversablePixelCount) ? String(planner.worldPlan.traversablePixelCount) : "—"],
+    ["规划图交互像素", Number.isFinite(planner?.worldPlan?.interactivePixelCount) ? String(planner.worldPlan.interactivePixelCount) : "—"],
+    ["主体中心误差", percentage(planner?.entryWhiteboxTarget?.subjectCenterErrorRatio)],
+    ["运行状态", captured ? "Runtime Captured" : "等待真实捕获"],
     ["权威来源", captured ? "Babylon Runtime" : "—"],
-    ["协议", captured ? "Authoring V4 / IR V4 / Canonical Scene Plan V1" : "—"],
+    ["协议", captured ? "Block World V2 / Snapshot V4" : "—"],
   ];
-  return `<div class="validation-summary ${captured ? "pass" : ""}">
-      <div><small>RUNTIME CAPTURE</small><h3>${captured ? "Canonical 运行捕获已完成" : "等待 CLI 运行捕获"}</h3><p>进入首帧、确定性快照和实体 Front / Right / Back 三视图均由实际 Babylon runtime 导出，并作为评测硬门禁。</p></div>
-      <span>${captured ? "CAPTURED" : "PENDING"}</span>
+  return `<div class="validation-summary ${plannerPassed && captured ? "pass" : ""}">
+      <div><small>BLOCK PLAN & RUNTIME</small><h3>${plannerPassed ? "方块规划已自检" : "等待方块规划自检"} · ${captured ? "运行捕获已完成" : "等待运行捕获"}</h3><p>Planner 收据核对两张方块白膜图的语义颜色、目标色、16:9 和主体居中；实际几何、碰撞与可玩结果仍由 Builder 方块检查和 Babylon Runtime 证明。</p></div>
+      <span>${plannerPassed && captured ? "VERIFIED" : "PENDING"}</span>
     </div>
     <div class="metric-grid">${metrics.map(([label, value]) => `<article><small>${escapeHtml(label)}</small><b>${escapeHtml(value)}</b></article>`).join("")}</div>`;
 }
@@ -1007,6 +1107,514 @@ function renderCompositionStatus(media) {
   if (composition.advisoryOnly) return `<span class="composition-status" data-live-composition>真实首帧已捕获</span>`;
   const score = `${Math.round(composition.score * 100)}%`;
   return `<span class="composition-status" data-live-composition>构图诊断 · ${score}</span>`;
+}
+
+const episodeStageLabels = {
+  reconnaissance: "Runtime 侦察",
+  "playthrough-plan": "90 秒玩家剧本",
+  "whitebox-capture": "白膜录制与切分",
+  "visual-reconstruction": "样式首帧与三视图",
+  "seedance-prompts": "Seedance 渲染 Prompt",
+  "seedance-generation": "MG Seedance 2.5 480p",
+  "mg-seedance": "MG Seedance 2.5 480p",
+  "cf-upscale": "CF 超分 720p",
+  conformance: "视频规格对齐",
+};
+function formatEpisodeSeconds(value) {
+  return Number.isFinite(Number(value)) ? `${Number(value).toFixed(2)}s` : "—";
+}
+const episodeInputKeyLabels = Object.freeze({
+  W: "W", A: "A", S: "S", D: "D", Shift: "Shift", Space: "空格",
+  ArrowUp: "↑", ArrowDown: "↓", ArrowLeft: "←", ArrowRight: "→",
+});
+
+function renderComparisonVideo(video, role, title, description, { preload = "none", showPoster = true } = {}) {
+  const poster = showPoster && video?.poster?.url ? ` poster="${escapeHtml(video.poster.url)}"` : "";
+  return `<figure class="episode-compare-video" data-video-role="${role}">
+    <figcaption><b>${escapeHtml(title)}</b><span>${escapeHtml(description)}</span></figcaption>
+    ${video?.url
+      ? `<video controls playsinline preload="${preload}"${poster} ${role === "whitebox" ? "muted" : ""} src="${escapeHtml(video.url)}" data-compare-video="${role}"></video>`
+      : `<div class="episode-video-pending">该视频尚未生成</div>`}
+  </figure>`;
+}
+
+function renderEpisodeComparison(comparison, { productionOnly = false } = {}) {
+  const durationSeconds = Number(comparison?.durationSeconds) || 30;
+  const globalStartSeconds = Number(comparison?.globalStartSeconds) || 0;
+  const activations = Array.isArray(comparison?.inputActivations) ? comparison.inputActivations : [];
+  const event = comparison?.promptEvent;
+  const eventRelativeSeconds = Number.isFinite(Number(event?.relativeSeconds))
+    ? Number(event.relativeSeconds)
+    : null;
+  const eventEndSeconds = Number.isFinite(Number(event?.activeEndSeconds))
+    ? Number(event.activeEndSeconds)
+    : eventRelativeSeconds;
+  const displayedFinalVideo = productionOnly && publicSeedanceMode
+    ? comparison?.publicPreviewVideo ?? comparison?.finalVideo
+    : comparison?.finalVideo;
+  const hasComparison = Boolean(comparison?.whiteboxVideo?.url && displayedFinalVideo?.url &&
+    (productionOnly || comparison?.legacyPromptVideo?.url && comparison?.relaxedActionVideo?.url));
+  const activationData = escapeHtml(JSON.stringify(activations));
+  const keyChip = (key, label, position = "") =>
+    `<span class="episode-key ${position}" data-input-key="${key}" data-active="false">${escapeHtml(label)}</span>`;
+  const movementKeys = [
+    keyChip("W", "W", "key-up"),
+    keyChip("A", "A", "key-left"),
+    keyChip("S", "S", "key-down"),
+    keyChip("D", "D", "key-right"),
+  ].join("");
+  const cameraKeys = [
+    keyChip("ArrowUp", "↑", "key-up"),
+    keyChip("ArrowLeft", "←", "key-left"),
+    keyChip("ArrowDown", "↓", "key-down"),
+    keyChip("ArrowRight", "→", "key-right"),
+  ].join("");
+  const actionKeys = [keyChip("Space", "空格"), keyChip("Shift", "Shift")].join("");
+  const activationBars = activations.map((activation) => {
+    const start = Math.max(0, Math.min(durationSeconds, Number(activation.startSeconds) || 0));
+    const end = Math.max(start, Math.min(durationSeconds, Number(activation.endSeconds) || start));
+    return `<i class="episode-input-span" data-kind="${escapeHtml(activation.kind)}" style="left:${(start / durationSeconds) * 100}%;width:${Math.max(.25, ((end - start) / durationSeconds) * 100)}%"></i>`;
+  }).join("");
+  const promptMarker = eventRelativeSeconds === null
+    ? ""
+    : `<i class="episode-prompt-marker" style="left:${Math.max(0, Math.min(100, eventRelativeSeconds / durationSeconds * 100))}%" title="Prompt Event · ${formatEpisodeSeconds(eventRelativeSeconds)}"></i>`;
+  const eventPrompt = event?.eventPrompt || "该段 Prompt Event 尚未生成。";
+  const providerPrompt = event?.providerPrompt || "完整 Seedance Provider Prompt 尚未生成。";
+  const legacyProviderPrompt = event?.legacyProviderPrompt || "旧版重 Prompt 尚未生成。";
+  const relaxedProviderPrompt = event?.relaxedProviderPrompt || "放开动作 Prompt 尚未生成。";
+  const commandText = event?.commandText || "等待 Planner 生成本段大幅世界变化指令";
+  const productionMediaOptions = productionOnly
+    ? { preload: comparison.index === 0 ? "metadata" : "none", showPoster: comparison.index === 0 }
+    : {};
+  const openingReview = comparison.reviewStyledOpeningFrame?.url
+    ? `<section class="episode-opening-review">
+        <header><small>VISUAL RECONSTRUCTOR V5 · HUMAN REVIEW</small><b>白膜空间 → 原视觉基准 → 新分段首帧</b></header>
+        <div class="episode-opening-review-grid">
+          <figure><img src="${escapeHtml(comparison.whiteboxVideo?.poster?.url ?? "")}" alt="${escapeHtml(comparison.title)} 白膜首帧" loading="lazy" /><figcaption>当前分段白膜 · 空间权威</figcaption></figure>
+          <figure><img src="${escapeHtml(comparison.baseStyledOpeningFrame?.url ?? "")}" alt="原 Visual Reconstructor 样式基准" loading="lazy" /><figcaption>原 Visual Reconstructor · 样式基准</figcaption></figure>
+          <figure><img src="${escapeHtml(comparison.reviewStyledOpeningFrame.url)}" alt="${escapeHtml(comparison.title)} 新首帧" loading="lazy" /><figcaption>V5 新首帧 · 待人工审阅</figcaption></figure>
+        </div>
+      </section>`
+    : "";
+  return `<section class="episode-segment-comparison" data-episode-comparison
+      data-segment-id="${escapeHtml(comparison.segmentId)}"
+      data-duration-seconds="${durationSeconds}"
+      data-global-start-seconds="${globalStartSeconds}"
+      data-input-activations="${activationData}"
+      data-command-text="${escapeHtml(commandText)}"
+      data-prompt-start-seconds="${eventRelativeSeconds ?? ""}"
+      data-prompt-end-seconds="${eventEndSeconds ?? ""}">
+    <header class="episode-comparison-heading">
+      <div><small>${escapeHtml(comparison.title)} · ${String(globalStartSeconds).padStart(2, "0")}–${globalStartSeconds + durationSeconds}s</small><h5>${productionOnly ? "白膜动作真值 ↔ Seedance 最终视频" : "白膜动作真值 ↔ A 固定模板 ↔ B 旧版重 Prompt ↔ C 放开动作"}</h5></div>
+      <div class="episode-comparison-actions">
+        <button type="button" data-compare-toggle ${hasComparison ? "" : "disabled"}>一键同步对比</button>
+        <button type="button" data-compare-reset ${hasComparison ? "" : "disabled"}>回到本段开头</button>
+      </div>
+    </header>
+    ${openingReview}
+    <div class="episode-video-pair">
+      ${renderComparisonVideo(comparison.whiteboxVideo, "whitebox", "白膜视频", "运动、镜头、空间与时序权威", productionMediaOptions)}
+      ${renderComparisonVideo(displayedFinalVideo, "final", productionOnly ? "Seedance 最终视频" : "A · 生产链路", productionOnly && publicSeedanceMode && comparison?.publicPreviewVideo?.url ? "公网流畅预览 · MG 480p（ZIP 含最终 720p）" : "MG 480p → CF 超分 720p", productionMediaOptions)}
+      ${productionOnly ? "" : renderComparisonVideo(comparison.legacyPromptVideo, "legacy", "B · 旧版重 Prompt", "完整 Brief + 逐项事件 · MG 480p")}
+      ${productionOnly ? "" : renderComparisonVideo(comparison.relaxedActionVideo, "relaxed", "C · 放开动作", "新版动作条款 · MG 480p")}
+    </div>
+    <div class="episode-comparison-telemetry">
+      <div class="episode-control-deck">
+        <div class="episode-key-group"><small>移动</small><div class="episode-key-cluster" aria-label="当前 WASD 移动输入">${movementKeys}</div></div>
+        <div class="episode-key-group"><small>视角</small><div class="episode-key-cluster" aria-label="当前方向键视角输入">${cameraKeys}</div></div>
+        <div class="episode-key-group episode-action-group"><small>动作</small><div class="episode-action-keys">${actionKeys}</div></div>
+        <div class="episode-world-command"><small>世界指令</small><div class="episode-command-field"><span data-prompt-command>${escapeHtml(commandText)}</span><button type="button" tabindex="-1" aria-label="Prompt Event 指令">→</button></div></div>
+      </div>
+      <div class="episode-input-readout"><b data-input-summary>等待播放</b><span><output data-local-time>00.00s</output> · 全局 <output data-global-time>${formatEpisodeSeconds(globalStartSeconds)}</output></span></div>
+      <div class="episode-input-timeline" aria-label="本段输入时间线">
+        ${activationBars}${promptMarker}<i class="episode-input-cursor" data-input-cursor></i>
+      </div>
+      <div class="episode-timeline-legend"><span>移动输入</span><span>相机方向键</span><span>Prompt Event</span><output data-compare-status>${hasComparison ? "READY" : "WAITING"}</output></div>
+    </div>
+    <div class="episode-prompt-panel" data-prompt-state="pending">
+      <header><div><small>SEEDANCE PROMPT EVENT</small><h6>${event?.targetNames?.length ? escapeHtml(event.targetNames.join(" · ")) : "本段输入 Prompt"}</h6></div><span data-prompt-status>${eventRelativeSeconds === null ? "尚未生成" : `等待 ${formatEpisodeSeconds(eventRelativeSeconds)}`}</span></header>
+      <pre>${escapeHtml(eventPrompt)}</pre>
+      <details><summary>查看送入模型的完整 Prompt</summary><pre>${escapeHtml(providerPrompt)}</pre></details>
+      ${productionOnly ? "" : `<details><summary>查看 B 版旧 Prompt</summary><pre>${escapeHtml(legacyProviderPrompt)}</pre></details>`}
+      ${productionOnly ? "" : `<details><summary>查看 C 版放开动作 Prompt</summary><pre>${escapeHtml(relaxedProviderPrompt)}</pre></details>`}
+    </div>
+  </section>`;
+}
+
+function renderEpisodeComparisons(episode, options = {}) {
+  const comparisons = Array.isArray(episode?.playbackComparisons) ? episode.playbackComparisons : [];
+  if (!comparisons.length) return "";
+  return `<div class="episode-comparison-stack"><div class="episode-comparison-intro"><div><small>THREE 30S REVIEW STAGES</small><h5>逐段同步对比</h5></div><p>播放任意一侧或点击“一键同步对比”，两条视频会锁定同一时间；键盘状态、相机方向键和 Prompt Event 随时间更新。</p></div>${comparisons.map((comparison) => renderEpisodeComparison(comparison, options)).join("")}</div>`;
+}
+
+function renderSeedanceReviewDownloads(episode) {
+  const downloads = episode?.reviewDownloads;
+  if (!downloads) return "";
+  const images = Array.isArray(downloads.images) ? downloads.images : [];
+  const documents = Array.isArray(downloads.documents) ? downloads.documents : [];
+  const bundle = downloads.bundle ?? {};
+  const imageGrid = images.length
+    ? `<div class="seedance-review-assets-grid">${images.map((image) => `<a href="${escapeHtml(image.url)}" download>
+        <img src="${escapeHtml(image.url)}" alt="${escapeHtml(image.title)}" loading="lazy" />
+        <span>${escapeHtml(image.title)}</span>
+      </a>`).join("")}</div>`
+    : `<p class="media-empty">相关首帧、规划图和三视图尚未准备完成。</p>`;
+  const fileList = documents.length
+    ? `<div class="seedance-review-file-list">${documents.map((document) => `<a href="${escapeHtml(document.url)}" download>
+        <span><small>${escapeHtml(String(document.kind ?? "FILE").toUpperCase())}</small><b>${escapeHtml(document.title)}</b></span><em>下载</em>
+      </a>`).join("")}</div>`
+    : `<p class="media-empty">相关 JSON 文件尚未准备完成。</p>`;
+  const bundleAction = bundle.ready && bundle.url
+    ? `<a class="seedance-review-download-all" href="${escapeHtml(bundle.url)}" download>一键下载全部 ZIP</a>`
+    : `<button class="seedance-review-download-all" type="button" disabled>完整三段就绪后可下载</button>`;
+  return `<section class="seedance-review-downloads">
+    <header><div><small>CASE ASSETS & PORTABLE BUNDLE</small><h4>相关图片、输入记录与完整下载包</h4><p>ZIP 包含全部白膜、MG、CF 与最终视频，以及首帧、规划图、三视图、Prompt、Provider 记录和交互时间线。</p></div>${bundleAction}</header>
+    <section><div class="seedance-review-assets-heading"><small>RELATED IMAGES</small><h5>参考图与生成图片</h5></div>${imageGrid}</section>
+    <section><div class="seedance-review-assets-heading"><small>JSON & METADATA</small><h5>输入、Prompt 与运行记录</h5></div>${fileList}</section>
+  </section>`;
+}
+
+function seedanceEpisodeFinalCount(episode) {
+  return (episode?.playbackComparisons ?? []).filter((comparison) =>
+    comparison?.whiteboxVideo?.url && comparison?.finalVideo?.url).length;
+}
+
+function seedanceReviewRevision(episodes) {
+  return episodes.map((episode) => [
+    episode.episodeId,
+    episode.sceneId,
+    episode.status,
+    episode.updatedAt,
+    seedanceEpisodeFinalCount(episode),
+    episode.reviewDownloads?.bundle?.ready ?? false,
+    ...(episode.reviewDownloads?.images ?? []).map((image) => image.sizeBytes ?? 0),
+    ...(episode.playbackComparisons ?? []).map((comparison) => comparison?.reviewStyledOpeningFrame?.sizeBytes ?? 0),
+  ].join(":" )).join("|");
+}
+
+function worldForEpisode(episode) {
+  return state.worlds.find((world) => world.sceneId === episode?.sceneId) ?? null;
+}
+
+function selectLatestSeedanceEpisodes(episodes) {
+  const selected = [];
+  const seenScenes = new Set();
+  for (const episode of [...episodes].sort((left, right) =>
+    String(right.updatedAt ?? right.createdAt).localeCompare(String(left.updatedAt ?? left.createdAt)))) {
+    if (!episode?.sceneId || seedanceEpisodeFinalCount(episode) === 0 || seenScenes.has(episode.sceneId)) continue;
+    seenScenes.add(episode.sceneId);
+    selected.push(episode);
+  }
+  return selected;
+}
+
+function disposeEpisodeComparisonMedia(root) {
+  if (!root) return;
+  for (const video of root.querySelectorAll("video")) {
+    try { video.pause(); } catch {}
+    video.removeAttribute("src");
+    video.removeAttribute("poster");
+    try { video.load(); } catch {}
+  }
+}
+
+function renderSeedanceReviewDetail(episode) {
+  disposeEpisodeComparisonMedia(seedanceReviewDetail);
+  if (!episode) {
+    seedanceReviewDetail.innerHTML = `<div class="seedance-review-placeholder"><span>S–00</span><h3>选择一个 case</h3><p>右侧会展示三段白膜与最终视频的同步对比。</p></div>`;
+    return;
+  }
+  const world = worldForEpisode(episode);
+  const title = world?.title || episode.sceneId;
+  const finalCount = seedanceEpisodeFinalCount(episode);
+  const previewUrl = world?.previewUrl ?? `/play?authoring=1&world=${encodeURIComponent(episode.sceneId)}`;
+  const playAction = `<a class="seedance-world-button" href="${escapeHtml(previewUrl)}" target="worldkit-playground" rel="noreferrer">进入世界试玩 ↗</a>`;
+  seedanceReviewDetail.innerHTML = `<header class="seedance-review-case-heading">
+    <div><small>${escapeHtml(episode.episodeId)}</small><h3>${escapeHtml(title)}</h3><p>${escapeHtml(episode.sceneId)} · ${finalCount}/3 段最终视频 · ${formatDateTime(episode.updatedAt)}</p></div>
+    ${playAction}
+  </header>${renderEpisodeComparisons(episode, { productionOnly: true })}${renderSeedanceReviewDownloads(episode)}`;
+  wireEpisodeComparisonPlayers(seedanceReviewDetail);
+}
+
+function renderSeedanceReview() {
+  const episodes = state.episodeReviews;
+  const selectedExists = episodes.some((episode) => episode.episodeId === state.selectedEpisodeId);
+  if (!selectedExists) state.selectedEpisodeId = episodes[0]?.episodeId ?? null;
+  seedanceCaseCount.textContent = String(episodes.length);
+  seedanceCaseEmpty.hidden = episodes.length > 0;
+  seedanceCaseList.hidden = episodes.length === 0;
+  seedanceCaseList.innerHTML = episodes.map((episode, index) => {
+    const world = worldForEpisode(episode);
+    const title = world?.title || episode.sceneId;
+    const poster = episode.playbackComparisons?.find((comparison) => comparison?.finalVideo?.poster?.url)
+      ?.finalVideo?.poster?.url;
+    const active = episode.episodeId === state.selectedEpisodeId;
+    return `<button type="button" role="tab" aria-selected="${active}" class="seedance-case-item ${active ? "active" : ""}" data-seedance-episode="${escapeHtml(episode.episodeId)}">
+      ${poster ? `<img src="${escapeHtml(poster)}" alt="" loading="lazy" />` : `<span class="seedance-case-index">${String(index + 1).padStart(2, "0")}</span>`}
+      <span class="seedance-case-copy"><b>${escapeHtml(title)}</b><small>${escapeHtml(episode.sceneId)}</small><em>${seedanceEpisodeFinalCount(episode)}/3 段 · ${formatDate(episode.updatedAt)}</em></span>
+    </button>`;
+  }).join("");
+  for (const button of seedanceCaseList.querySelectorAll("[data-seedance-episode]")) {
+    button.addEventListener("click", () => {
+      state.selectedEpisodeId = button.dataset.seedanceEpisode;
+      renderSeedanceReview();
+    });
+  }
+  renderSeedanceReviewDetail(episodes.find((episode) => episode.episodeId === state.selectedEpisodeId));
+}
+
+async function loadSeedanceReviews() {
+  if (state.loadingEpisodeReviews) return;
+  state.loadingEpisodeReviews = true;
+  try {
+    const response = await fetch("/api/episode-workflows?review=seedance", { cache: "no-store" });
+    if (!response.ok) throw new Error("无法读取 Seedance 视频 case");
+    const payload = await response.json();
+    const episodes = selectLatestSeedanceEpisodes(payload.episodes ?? []);
+    const revision = seedanceReviewRevision(episodes);
+    state.episodeReviews = episodes;
+    if (revision !== state.episodeReviewRevision) {
+      state.episodeReviewRevision = revision;
+      renderSeedanceReview();
+    }
+  } catch (error) {
+    seedanceReviewDetail.innerHTML = `<p class="capability-error">${escapeHtml(error.message)}</p>`;
+  } finally {
+    state.loadingEpisodeReviews = false;
+  }
+}
+
+function isComparisonVideoArtifact(artifact) {
+  return /^whitebox\/segment-0[0-2]\.mp4$/.test(artifact?.relativePath ?? "") ||
+    /^video\/segment-0[0-2]\/final-(?:854x480|1280x720)-24fps-720f\.mp4$/.test(artifact?.relativePath ?? "");
+}
+
+function renderEpisodeArtifact(artifact) {
+  let preview = "";
+  if (artifact.kind === "image") {
+    preview = `<img src="${escapeHtml(artifact.url)}" alt="${escapeHtml(artifact.title)}" loading="lazy" />`;
+  } else if (artifact.kind === "video") {
+    preview = `<video controls playsinline preload="none" src="${escapeHtml(artifact.url)}"></video>`;
+  } else {
+    preview = `<details class="deliverable-inline" data-artifact-url="${escapeHtml(artifact.url)}" data-artifact-format="${artifact.kind === "json" ? "JSON" : "TEXT"}"><summary>展开查看内容</summary><pre class="artifact-text" data-artifact-text>展开后加载内容…</pre></details>`;
+  }
+  return `<article class="episode-artifact" data-stage="${escapeHtml(artifact.stage)}">
+    <header><div><small>${escapeHtml(episodeStageLabels[artifact.stage] ?? artifact.stage)}</small><h5>${escapeHtml(artifact.title)}</h5></div><a href="${escapeHtml(artifact.url)}" download>下载</a></header>
+    ${preview}
+  </article>`;
+}
+
+function renderEpisodeWorkflows(media, world) {
+  const episodes = media?.episodes ?? [];
+  const canStart = Boolean(world.previewUrl);
+  const controls = `<div class="episode-controls"><div><small>90S PLAYTHROUGH DATASET</small><h3>真实玩家操作 → 三段最终视频</h3><p>三条 Prompt Event 由 Seedance 在 10–20s、40–50s、70–80s 的对应段落中渲染；白膜 Runtime 只负责玩家动作、镜头和空间真值。</p></div><button type="button" data-start-episode ${canStart ? "" : "disabled"}>${canStart ? "运行一条 90 秒完整链路" : "白膜世界就绪后可运行"}</button></div>`;
+  if (!episodes.length) return `${controls}<p class="media-empty">还没有 90 秒数据任务。点击上方按钮后，各阶段图片、JSON、白膜视频、MG Seedance 480p 视频和最终对齐视频会依次出现在这里。</p>`;
+  return `${controls}<div class="episode-runs">${episodes.map((episode) => {
+    const artifacts = episode.artifacts ?? [];
+    const supplementalArtifacts = episode.playbackComparisons?.length
+      ? artifacts.filter((artifact) => !isComparisonVideoArtifact(artifact))
+      : artifacts;
+    return `<section class="episode-run" data-episode-id="${escapeHtml(episode.episodeId)}">
+      <header class="episode-run-heading"><div><small>${escapeHtml(episode.episodeId)}</small><h4>${episode.status === "succeeded" ? "完整链路已交付" : episode.status === "failed" ? "链路需要处理" : "链路正在运行"}</h4></div><span data-status="${escapeHtml(episode.status)}">${escapeHtml(episode.currentStage ? episodeStageLabels[episode.currentStage] ?? episode.currentStage : episode.status)}</span></header>
+      <ol class="episode-stages">${(episode.stages ?? []).map((stage, index) => `<li data-status="${escapeHtml(stage.status)}"><b>${String(index + 1).padStart(2, "0")}</b><span>${escapeHtml(stage.title ?? episodeStageLabels[stage.id] ?? stage.id)}</span><small>${escapeHtml(stage.status)}</small></li>`).join("")}</ol>
+      ${episode.error ? `<p class="episode-error">${escapeHtml(episode.error)}</p>` : ""}
+      ${episode.running ? `<button type="button" class="text-button" data-stop-episode="${escapeHtml(episode.episodeId)}">停止这条数据任务</button>` : ""}
+      ${renderEpisodeComparisons(episode)}
+      <div class="episode-artifacts">${supplementalArtifacts.map(renderEpisodeArtifact).join("") || `<p class="media-empty">本阶段尚未落下其他可展示工件。</p>`}</div>
+    </section>`;
+  }).join("")}</div>`;
+}
+
+function wireEpisodeComparisonPlayers(root = dialogContent) {
+  for (const panel of root.querySelectorAll("[data-episode-comparison]")) {
+    if (panel.dataset.wired === "true") continue;
+    panel.dataset.wired = "true";
+    const videos = [...panel.querySelectorAll("[data-compare-video]")];
+    const whitebox = panel.querySelector('[data-compare-video="whitebox"]');
+    const finalVideo = panel.querySelector('[data-compare-video="final"]');
+    const toggle = panel.querySelector("[data-compare-toggle]");
+    const reset = panel.querySelector("[data-compare-reset]");
+    const durationSeconds = Number(panel.dataset.durationSeconds) || 30;
+    const globalStartSeconds = Number(panel.dataset.globalStartSeconds) || 0;
+    const optionalSeconds = (value) => String(value ?? "").trim() === "" ? Number.NaN : Number(value);
+    const promptStartSeconds = optionalSeconds(panel.dataset.promptStartSeconds);
+    const promptEndSeconds = optionalSeconds(panel.dataset.promptEndSeconds);
+    const commandText = panel.dataset.commandText || "等待本段世界指令";
+    let activations = [];
+    try { activations = JSON.parse(panel.dataset.inputActivations || "[]"); } catch {}
+    let internalSync = false;
+    let animationFrame = null;
+    let lastDriftCorrectionAt = 0;
+
+    if (whitebox) whitebox.muted = true;
+
+    const currentTime = () => {
+      const playing = videos.find((video) => !video.paused && !video.ended);
+      return Math.max(0, Math.min(durationSeconds, Number(playing?.currentTime ?? finalVideo?.currentTime ?? whitebox?.currentTime ?? 0)));
+    };
+    const setPlayingState = () => {
+      const playing = videos.some((video) => !video.paused && !video.ended);
+      panel.dataset.playing = String(playing);
+      if (toggle) toggle.textContent = playing ? "暂停同步对比" : "一键同步对比";
+      const status = panel.querySelector("[data-compare-status]");
+      if (status) status.textContent = videos.length < 2 ? "WAITING" : playing ? "PLAYING · SYNCED" : "PAUSED · SYNCED";
+      return playing;
+    };
+    const renderState = () => {
+      if (!panel.isConnected) {
+        return false;
+      }
+      const seconds = currentTime();
+      const active = activations.filter((activation) =>
+        seconds >= Number(activation.startSeconds) && seconds < Number(activation.endSeconds));
+      const activeKeys = new Set(active.flatMap((activation) => activation.keys ?? []));
+      for (const key of panel.querySelectorAll("[data-input-key]")) {
+        key.dataset.active = String(activeKeys.has(key.dataset.inputKey));
+      }
+      const summary = panel.querySelector("[data-input-summary]");
+      if (summary) summary.textContent = activeKeys.size
+        ? `激活：${[...activeKeys].map((key) => episodeInputKeyLabels[key] ?? key).join(" + ")}`
+        : "当前无输入";
+      const localTime = panel.querySelector("[data-local-time]");
+      const globalTime = panel.querySelector("[data-global-time]");
+      if (localTime) localTime.textContent = formatEpisodeSeconds(seconds);
+      if (globalTime) globalTime.textContent = formatEpisodeSeconds(globalStartSeconds + seconds);
+      const cursor = panel.querySelector("[data-input-cursor]");
+      if (cursor) cursor.style.left = `${Math.max(0, Math.min(100, seconds / durationSeconds * 100))}%`;
+      const promptPanel = panel.querySelector(".episode-prompt-panel");
+      const promptStatus = panel.querySelector("[data-prompt-status]");
+      if (promptPanel && promptStatus && Number.isFinite(promptStartSeconds)) {
+        const state = seconds < promptStartSeconds
+          ? "pending"
+          : Number.isFinite(promptEndSeconds) && seconds <= promptEndSeconds ? "active" : "complete";
+        promptPanel.dataset.promptState = state;
+        promptStatus.textContent = state === "pending"
+          ? `等待 ${formatEpisodeSeconds(promptStartSeconds)}`
+          : state === "active" ? "Prompt 正在生效" : "Prompt 已执行";
+        const promptCommand = panel.querySelector("[data-prompt-command]");
+        const worldCommand = panel.querySelector(".episode-world-command");
+        if (worldCommand) worldCommand.dataset.promptState = state;
+        if (promptCommand) promptCommand.textContent = state === "pending"
+          ? `即将在 ${formatEpisodeSeconds(promptStartSeconds)} 执行：${commandText}`
+          : state === "active" ? `正在执行：${commandText}` : `已执行：${commandText}`;
+      }
+      const now = performance.now();
+      if (finalVideo && whitebox && finalVideo.readyState >= 2 && whitebox.readyState >= 2 &&
+          !finalVideo.paused && !whitebox.paused && now - lastDriftCorrectionAt >= 500 &&
+          Math.abs(finalVideo.currentTime - whitebox.currentTime) > .25) {
+        internalSync = true;
+        whitebox.currentTime = finalVideo.currentTime;
+        internalSync = false;
+        lastDriftCorrectionAt = now;
+      }
+      return setPlayingState();
+    };
+    const frameLoop = () => {
+      animationFrame = null;
+      if (renderState() && panel.isConnected) animationFrame = requestAnimationFrame(frameLoop);
+    };
+    const scheduleUpdate = () => {
+      if (animationFrame === null) animationFrame = requestAnimationFrame(frameLoop);
+    };
+    const playTogether = async (anchor = finalVideo ?? whitebox) => {
+      if (videos.length < 2) return;
+      internalSync = true;
+      for (const video of videos) {
+        if (video.readyState === 0) {
+          video.preload = "auto";
+          video.load();
+        }
+      }
+      const seconds = anchor?.ended ? 0 : Math.min(durationSeconds - .01, Number(anchor?.currentTime) || 0);
+      for (const video of videos) if (Math.abs(video.currentTime - seconds) > .04) video.currentTime = seconds;
+      const results = await Promise.allSettled(videos.map((video) => video.play()));
+      internalSync = false;
+      if (results.some((result) => result.status === "rejected")) {
+        videos.forEach((video) => video.pause());
+      }
+      scheduleUpdate();
+    };
+    const pauseTogether = () => {
+      internalSync = true;
+      videos.forEach((video) => video.pause());
+      internalSync = false;
+      if (animationFrame !== null) cancelAnimationFrame(animationFrame);
+      animationFrame = null;
+      renderState();
+    };
+    toggle?.addEventListener("click", () => {
+      if (videos.some((video) => !video.paused && !video.ended)) pauseTogether();
+      else void playTogether(finalVideo ?? whitebox);
+    });
+    reset?.addEventListener("click", () => {
+      pauseTogether();
+      internalSync = true;
+      videos.forEach((video) => { video.currentTime = 0; });
+      internalSync = false;
+      renderState();
+    });
+    for (const video of videos) {
+      video.addEventListener("play", () => {
+        if (!internalSync) void playTogether(video);
+        else scheduleUpdate();
+      });
+      video.addEventListener("pause", () => {
+        if (!internalSync && videos.some((item) => !item.paused && !item.ended)) pauseTogether();
+        else scheduleUpdate();
+      });
+      video.addEventListener("seeking", () => {
+        if (internalSync) return;
+        internalSync = true;
+        for (const peer of videos) if (peer !== video) peer.currentTime = video.currentTime;
+        internalSync = false;
+        scheduleUpdate();
+      });
+      video.addEventListener("timeupdate", scheduleUpdate);
+      video.addEventListener("loadedmetadata", scheduleUpdate, { once: true });
+    }
+    renderState();
+  }
+}
+
+function wireEpisodeActions(world) {
+  const start = dialogContent.querySelector("[data-start-episode]");
+  if (start && start.dataset.wired !== "true") {
+    start.dataset.wired = "true";
+    start.addEventListener("click", async () => {
+      start.disabled = true;
+      start.textContent = "正在建立任务…";
+      const response = await fetch("/api/episode-workflows", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sceneId: world.sceneId, backend: worldCodexBackend(world) ?? "cloud" }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        start.textContent = payload.error ?? "建立任务失败";
+        start.disabled = false;
+        return;
+      }
+      await refreshDialog(world.id);
+    });
+  }
+  for (const stop of dialogContent.querySelectorAll("[data-stop-episode]")) {
+    if (stop.dataset.wired === "true") continue;
+    stop.dataset.wired = "true";
+    stop.addEventListener("click", async () => {
+      stop.disabled = true;
+      await fetch(`/api/episode-workflows/${encodeURIComponent(stop.dataset.stopEpisode)}/stop`, { method: "POST" });
+      await refreshDialog(world.id);
+    });
+  }
+  wireEpisodeComparisonPlayers();
+}
+
+function patchEpisodeWorkflows(media, world) {
+  const container = dialogContent.querySelector("[data-live-episodes]");
+  if (!container) return;
+  replaceContentsPreservingDetails(container, renderEpisodeWorkflows(media, world));
+  wireArtifactPreviews(container);
+  wireEpisodeActions(world);
 }
 
 function applyLiveDetailUpdate(world, media) {
@@ -1255,10 +1863,13 @@ function patchRuntimeLog(media, log) {
 
 function renderDialogActions(world) {
   const canRetry = ["failed", "interrupted"].includes(world.status);
-  const canStop = ["queued", "running", "visual-queued", "visual-running"].includes(world.status);
-  return `${world.previewUrl ? `<a href="${escapeHtml(world.previewUrl)}" target="_blank" rel="noreferrer">进入白膜世界 ↗</a>` : ""}
+  const canStop = ["queued", "running", "remote-pending", "visual-queued", "visual-running"].includes(world.status);
+  const retryLabel = world.failedStage === "block-build"
+    ? "从方块编译继续"
+    : "重新生成";
+  return `${world.previewUrl ? `<a href="${escapeHtml(world.previewUrl)}" target="worldkit-playground" rel="noreferrer">进入白膜世界 ↗</a>` : ""}
     ${canStop ? `<button type="button" class="stop-world">停止任务</button>` : ""}
-    ${canRetry ? `<button type="button" id="retry-world">重新生成</button>` : ""}`;
+    ${canRetry ? `<button type="button" id="retry-world">${retryLabel}</button>` : ""}`;
 }
 
 async function requestWorldStop(id, button) {
@@ -1278,6 +1889,33 @@ async function requestWorldStop(id, button) {
     setTimeout(() => {
       if (button.isConnected && !button.disabled) button.textContent = previousLabel;
     }, 2_000);
+  }
+}
+
+function wirePlannerReviewAction(id) {
+  for (const button of dialogContent.querySelectorAll("[data-planner-review]")) {
+    if (button.dataset.wired === "true") continue;
+    button.dataset.wired = "true";
+    button.addEventListener("click", async () => {
+      const status = button.dataset.plannerReview;
+      if (!status || button.disabled) return;
+      for (const candidate of dialogContent.querySelectorAll("[data-planner-review]")) {
+        candidate.disabled = true;
+      }
+      const response = await fetch(`/api/worlds/${id}/planner-review`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (!response.ok) {
+        const payload = await response.json();
+        button.textContent = payload.error ?? "审核保存失败";
+        button.disabled = false;
+        return;
+      }
+      await loadWorlds();
+      await refreshDialog(id);
+    });
   }
 }
 
@@ -1349,6 +1987,7 @@ function applyIncrementalDetailUpdate(payload) {
   patchPrototypeMedia(media);
   patchHelperMedia(media);
   patchValidation(media);
+  patchEpisodeWorkflows(media, world);
   patchRuntimeLog(media, log);
   patchWorldActions(world);
   patchDetailCounts(world, media);
@@ -1421,22 +2060,23 @@ async function refreshDialog(id, suppliedPayload = null) {
             ["deliverables", "过程交付"],
             ["entities", "实体资产"],
             ["validation", "验收"],
+            ["episodes", "90 秒数据"],
           ].map(([tab, label]) => `<button type="button" data-detail-tab="${tab}" class="${activeTab === tab ? "active" : ""}">${label}</button>`).join("")}
         </nav>
         ${panel("overview", `
           <div class="panel-heading-large"><div><small>WORLD GENERATION OVERVIEW</small><h3>从需求到可玩白膜</h3></div>${renderCompositionStatus(media)}</div>
           <div class="overview-grid"><section><div class="section-title"><span>CORE PIPELINE</span><h4>当前生成进度</h4></div>${renderTrajectory(media)}</section><section><div class="section-title"><span>VERIFICATION</span><h4>运行验收</h4></div><div data-live-validation>${renderValidation(media)}</div></section></div>
-          <section class="output-section"><div class="output-heading"><div><small>KEY VISUAL OUTPUTS</small><h3>参考、规划与真实白膜</h3></div><span data-live-image-count>${media?.availableImageCount ?? 0} 张已生成</span></div><div data-live-planning>${renderPlanningMedia(media)}</div></section>
+          <section class="output-section"><div class="output-heading"><div><small>KEY VISUAL OUTPUTS</small><h3>参考、规划与真实白膜</h3></div><span data-live-image-count>${media?.availableImageCount ?? 0} 张已生成</span></div>${renderPlannerReview(media)}<div data-live-planning>${renderPlanningMedia(media)}</div></section>
         `)}
         ${panel("trajectory", `
           <div class="panel-heading-large"><div><small>AUDITABLE EXECUTION TRAJECTORY</small><h3>Agent 执行轨迹</h3></div><span>展示可观察动作与工具输出，不展示隐藏思维链</span></div>
           <div class="trajectory-layout"><section>${renderTrajectory(media)}</section><section><div data-live-events>${renderEventStream(media)}</div></section></div>
-          <details class="runtime-log" ${world.status === "running" ? "open" : ""}><summary>查看${escapeHtml(codexBackendLabel(worldCodexBackend(world)))} Agent / Host 日志预览</summary>${fullLogUrl ? `<a class="full-log-link" href="${escapeHtml(fullLogUrl)}" download>下载完整原始日志</a>` : ""}<pre>${escapeHtml(log || "任务尚未开始输出日志。")}</pre></details>
+          <details class="runtime-log" ${["running", "remote-pending"].includes(world.status) ? "open" : ""}><summary>查看${escapeHtml(codexBackendLabel(worldCodexBackend(world)))} Agent / Host 日志预览</summary>${fullLogUrl ? `<a class="full-log-link" href="${escapeHtml(fullLogUrl)}" download>下载完整原始日志</a>` : ""}<pre>${escapeHtml(log || "任务尚未开始输出日志。")}</pre></details>
         `)}
         ${panel("deliverables", `
           <div class="panel-heading-large"><div><small>PROCESS DELIVERABLE INVENTORY</small><h3>全过程交付物</h3></div><span data-live-deliverable-summary>${availableDeliverables} / ${deliverables.length} 可查看</span></div>
           <div data-live-deliverable-inventory>${renderDeliverables(media)}</div>
-          <section class="output-section"><div class="output-heading"><div><small>PLANNING IMAGE DETAILS</small><h3>规划图片与对应 Prompt</h3></div>${renderCompositionStatus(media)}</div><div data-live-planning>${renderPlanningMedia(media)}</div></section>
+          <section class="output-section"><div class="output-heading"><div><small>PLANNING IMAGE DETAILS</small><h3>规划图片与对应 Prompt</h3></div>${renderCompositionStatus(media)}</div>${renderPlannerReview(media)}<div data-live-planning>${renderPlanningMedia(media)}</div></section>
         `)}
         ${panel("entities", `
           <div class="panel-heading-large"><div><small>VISUAL GROUPS & COMPARISON SHEETS</small><h3>完整视觉组与结构辅助</h3></div><span data-live-entity-summary>${media?.prototypes?.length ?? 0} 视觉组 · ${media?.helpers?.length ?? 0} Helper</span></div>
@@ -1448,9 +2088,13 @@ async function refreshDialog(id, suppliedPayload = null) {
           <div data-live-validation>${renderValidation(media)}</div>
           ${world.error ? `<section class="validation-error"><small>失败原因</small><p>${escapeHtml(world.error)}</p></section>` : ""}
         `)}
+        ${panel("episodes", `
+          <div data-live-episodes>${renderEpisodeWorkflows(media, world)}</div>
+        `)}
       </main>
     </div>`;
   wireArtifactPreviews();
+  wireEpisodeActions(world);
   for (const tab of dialogContent.querySelectorAll("[data-detail-tab]")) {
     tab.addEventListener("click", () => {
       state.detailTab = tab.dataset.detailTab;
@@ -1465,6 +2109,7 @@ async function refreshDialog(id, suppliedPayload = null) {
   });
   wireRetryAction(id);
   wireStopAction(id);
+  wirePlannerReviewAction(id);
   const pre = dialogContent.querySelector(".runtime-log pre");
   if (pre) pre.scrollTop = pre.scrollHeight;
   if (previousScrollTop > 0) {
@@ -1485,10 +2130,10 @@ async function openWorld(id) {
 for (const button of document.querySelectorAll("[data-workspace-mode]")) {
   button.addEventListener("click", () => setWorkspaceMode(button.dataset.workspaceMode));
 }
-for (const link of document.querySelectorAll('a[href="#create"], a[href="#test-sets"]')) {
+for (const link of document.querySelectorAll('a[href="#create"], a[href="#test-sets"], a[href="#seedance-review"]')) {
   link.addEventListener("click", (event) => {
     event.preventDefault();
-    setWorkspaceMode(link.getAttribute("href") === "#test-sets" ? "test-sets" : "create");
+    setWorkspaceMode(link.getAttribute("href").slice(1));
   });
 }
 
@@ -1693,10 +2338,27 @@ dialog.addEventListener("close", () => {
   state.detailRevision = null;
 });
 
-setWorkspaceMode(location.hash === "#test-sets" ? "test-sets" : "create", false);
+const initialWorkspaceMode = publicSeedanceMode
+  ? "seedance-review"
+  : location.hash === "#test-sets"
+  ? "test-sets"
+  : location.hash === "#seedance-review" ? "seedance-review" : "create";
+setWorkspaceMode(initialWorkspaceMode, false);
 syncCodexBackendUi();
-await Promise.all([loadHealth(), loadWorlds(), loadSubjectCatalog(), loadTestSets()]);
+await Promise.all([
+  loadHealth(),
+  loadSeedanceReviews(),
+  initialWorkspaceMode === "seedance-review" ? Promise.resolve() : loadWorlds(),
+  initialWorkspaceMode === "test-sets" ? loadTestSets() : Promise.resolve(),
+  initialWorkspaceMode === "create" ? loadSubjectCatalog() : Promise.resolve(),
+]);
 setInterval(() => void loadHealth(), 5_000);
-setInterval(() => void loadWorlds(), 2_500);
+setInterval(() => {
+  if (state.workspaceMode !== "seedance-review") void loadWorlds();
+}, 5_000);
 setInterval(() => void pollSelectedWorld(), 2_500);
-setInterval(() => void loadTestSets(), 4_000);
+setInterval(() => {
+  if (state.workspaceMode === "test-sets") void loadTestSets();
+}, 8_000);
+setInterval(() => void loadSeedanceReviews(), 15_000);
+window.addEventListener("pagehide", () => disposeEpisodeComparisonMedia(seedanceReviewDetail));

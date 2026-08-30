@@ -32,6 +32,9 @@ export const INDEPENDENT_TEST_MANIFEST_V1: readonly IndependentTestManifestEntry
     { path: "scripts/agents/lwdp-codex-profile.test.mjs", lane: "node" },
     { path: "scripts/agents/lwdp-generation-client.test.mjs", lane: "node" },
     { path: "scripts/agents/write-lwdp-t2i-manifest.test.mjs", lane: "node" },
+    { path: "scripts/lib/episode-seedance-prompt.test.mjs", lane: "node" },
+    { path: "scripts/lib/episode-visual-normalization.test.mjs", lane: "node" },
+    { path: "scripts/lib/playthrough-dataset.test.mjs", lane: "node" },
     { path: "scripts/visual/image-delivery.test.mjs", lane: "node" },
     { path: "scripts/visual/seedance25-media-conformance.test.mjs", lane: "node" },
     {

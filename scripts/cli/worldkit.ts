@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { execFile as execFileCallback } from "node:child_process";
 import {
   mkdir,
@@ -29,6 +29,7 @@ import {
   type SceneBriefImplementationMapV1,
   type VisualCaptureGroupV1,
   type WhiteboxTriviewManifestV1,
+  type UnsignedWhiteboxCaptureReceiptV1,
   type WhiteboxTriviewCaptureV1,
   type WorldRuntimeSnapshotV4,
 } from "@whitebox-world/runtime-contracts";
@@ -76,6 +77,7 @@ import {
   type WorldkitDiagnostic,
 } from "../lib/worldkit-pipeline";
 import { createTrustedCanonicalWorldPackageV1 } from "../lib/trusted-world-package";
+import { signWhiteboxCaptureReceiptV1 } from "../lib/whitebox-capture-signing";
 import {
   startWorldkitServer,
   type WorldkitServerHandle,
@@ -134,7 +136,7 @@ Usage:
   worldkit run <world.json> [--port <port>] [--refresh-dependencies] [--json]
   worldkit run <package-directory> --interactive --protocol ndjson --headless
     --session-directory <absolute-directory> [--resume]
-  worldkit capture <file> --output <png> [--snapshot <json>] [--triview-output <directory> --implementation-map <json>] [--port <port>] [--json]
+  worldkit capture <file> --output <png> [--snapshot <json> --receipt <json>] [--triview-output <directory> --implementation-map <json>] [--port <port>] [--json]
   worldkit registry list --kind <resource-kind> [--json]
   worldkit registry describe --resource-ref <ref> [--json]
   worldkit registry search --lock <registry-lock.json> --kind <resource-kind>
@@ -201,6 +203,7 @@ export type WorldkitArgs =
       inputPath: string;
       outputPath: string;
       snapshotPath?: string;
+      receiptPath?: string;
       triviewOutputPath?: string;
       implementationMapPath?: string;
       port?: number;
@@ -350,14 +353,15 @@ export interface WorldkitCommandResult {
   worldBuildIdentityHash?: string;
   executionPlanHash?: string;
   sceneBriefHash?: string;
-  movementMode?: string;
-  movementModeLabel?: string;
+  movementModes?: readonly string[];
+  movementModeLabels?: readonly string[];
   visualTargetCount?: number;
   validationReportHash?: string;
   validationStatus?: string;
   outputPath?: string;
   evidenceDirectory?: string;
   snapshotPath?: string;
+  receiptPath?: string;
   triviewOutputPath?: string;
   url?: string;
   renderEnvironment?: RenderEnvironmentReceiptV1;
@@ -992,6 +996,7 @@ export function parseWorldkitArgs(arguments_: readonly string[]): WorldkitArgs {
   if (command === "capture") {
     const outputPath = takeOption(tokens, "--output");
     const snapshotPath = takeOption(tokens, "--snapshot");
+    const receiptPath = takeOption(tokens, "--receipt");
     const triviewOutputPath = takeOption(tokens, "--triview-output");
     const implementationMapPath = takeOption(tokens, "--implementation-map");
     const portValue = takeOption(tokens, "--port");
@@ -1003,12 +1008,18 @@ export function parseWorldkitArgs(arguments_: readonly string[]): WorldkitArgs {
         "capture requires --triview-output and --implementation-map together.",
       );
     }
+    if (receiptPath !== undefined && snapshotPath === undefined) {
+      throw new WorldkitUsageError(
+        "capture requires --snapshot when --receipt is provided.",
+      );
+    }
     rejectRemaining(tokens, "capture");
     return {
       command,
       inputPath,
       outputPath,
       ...(snapshotPath === undefined ? {} : { snapshotPath }),
+      ...(receiptPath === undefined ? {} : { receiptPath }),
       ...(triviewOutputPath === undefined ? {} : { triviewOutputPath }),
       ...(implementationMapPath === undefined ? {} : { implementationMapPath }),
       ...(portValue === undefined ? {} : { port: parsePort(portValue) }),
@@ -1190,8 +1201,8 @@ export async function validateSceneBriefFile(
     exitCode: 0,
     diagnostics: [],
     sceneBriefHash: validated.sceneBriefHash,
-    movementMode: validated.value.movement.mode,
-    movementModeLabel: validated.value.movement.label,
+    movementModes: validated.value.movementModes.map(({ mode }) => mode),
+    movementModeLabels: validated.value.movementModes.map(({ label }) => label),
     visualTargetCount: validated.value.visualTargets.length,
   };
 }
@@ -1303,8 +1314,10 @@ export async function captureFile(
   outputPath: string,
   options: {
     snapshotPath?: string;
+    receiptPath?: string;
     triviewOutputPath?: string;
     implementationMapPath?: string;
+    receiptSigningPrivateKeyPath?: string;
     port?: number;
   } = {},
 ): Promise<WorldkitCommandResult> {
@@ -1315,6 +1328,13 @@ export async function captureFile(
     options.snapshotPath === undefined
       ? undefined
       : path.resolve(options.snapshotPath);
+  const absoluteReceiptPath = options.receiptPath === undefined
+    ? undefined
+    : path.resolve(options.receiptPath);
+  const absoluteReceiptSigningPrivateKeyPath =
+    options.receiptSigningPrivateKeyPath === undefined
+      ? undefined
+      : path.resolve(options.receiptSigningPrivateKeyPath);
   const absoluteTriviewOutputPath = options.triviewOutputPath === undefined
     ? undefined
     : path.resolve(options.triviewOutputPath);
@@ -1327,15 +1347,69 @@ export async function captureFile(
       "Tri-view capture requires the trusted visual implementation map.",
     );
   }
+  if (absoluteReceiptPath !== undefined && absoluteSnapshotPath === undefined) {
+    return cliFailure(
+      "CLI_CAPTURE_RECEIPT_SNAPSHOT_REQUIRED",
+      "A trusted capture receipt requires a Runtime Snapshot output.",
+    );
+  }
+  if (
+    absoluteReceiptPath !== undefined &&
+    absoluteReceiptSigningPrivateKeyPath === undefined
+  ) {
+    return cliFailure(
+      "CLI_CAPTURE_SIGNING_KEY_REQUIRED",
+      "A trusted capture receipt requires a Host-owned Ed25519 signing key.",
+    );
+  }
+  if (absoluteReceiptPath !== undefined && validation.worldBuildIdentityHash === undefined) {
+    return cliFailure(
+      "CLI_CAPTURE_WORLD_BUILD_IDENTITY_REQUIRED",
+      "A trusted capture receipt requires a complete World Build identity.",
+    );
+  }
   if (
     absoluteOutputPath === path.resolve(inputPath) ||
     absoluteSnapshotPath === path.resolve(inputPath) ||
+    absoluteReceiptPath === path.resolve(inputPath) ||
     absoluteTriviewOutputPath === path.resolve(inputPath)
   ) {
     return cliFailure(
       "CLI_OUTPUT_OVERWRITES_INPUT",
       "Capture outputs must not overwrite the AuthoringSpec input.",
     );
+  }
+
+  let receiptSigningPrivateKey: Buffer | undefined;
+  if (absoluteReceiptSigningPrivateKeyPath !== undefined) {
+    try {
+      receiptSigningPrivateKey = await readFile(
+        absoluteReceiptSigningPrivateKeyPath,
+      );
+    } catch (error) {
+      return cliFailure(
+        "CLI_CAPTURE_SIGNING_KEY_READ_FAILED",
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  }
+
+  let captureAuthoring: unknown;
+  if (absoluteReceiptPath !== undefined) {
+    try {
+      const source = await readFile(path.resolve(inputPath), "utf8");
+      const parsed = parseCanonicalJson(source);
+      if (!parsed.ok || parsed.value === undefined) {
+        throw new Error("AuthoringSpec is not canonical JSON.");
+      }
+      captureAuthoring = parsed.value;
+    } catch (error) {
+      return cliFailure(
+        "CLI_CAPTURE_RECEIPT_AUTHORING_INVALID",
+        "Unable to bind the capture receipt to AuthoringSpec.",
+        { cause: error instanceof Error ? error.message : String(error) },
+      );
+    }
   }
 
   let configuredCaptureGroups: readonly VisualCaptureGroupV1[] = [];
@@ -1484,7 +1558,6 @@ export async function captureFile(
         triviews: readonly {
           target: VisualCaptureGroupV1;
           capture: WhiteboxTriviewCaptureV1;
-          sampledRgbColorCount: number;
         }[];
       }> => {
         const api = window.__WORLDKIT__;
@@ -1546,37 +1619,33 @@ export async function captureFile(
         const triviews: {
           target: VisualCaptureGroupV1;
           capture: WhiteboxTriviewCaptureV1;
-          sampledRgbColorCount: number;
         }[] = [];
         if (authoringCaptureApi !== undefined) {
           for (const target of configuredGroups) {
-            const triviewCapture = authoringCaptureApi.captureWhiteboxTriview(target.visualTargetId);
-            const triviewImage = new Image();
-            triviewImage.src = triviewCapture.imageDataUri;
-            await triviewImage.decode();
-            inspectionCanvas.width = triviewImage.naturalWidth;
-            inspectionCanvas.height = triviewImage.naturalHeight;
-            inspectionContext.drawImage(triviewImage, 0, 0);
-            const triviewPixels = inspectionContext.getImageData(
-              0,
-              0,
-              inspectionCanvas.width,
-              inspectionCanvas.height,
-            ).data;
-            const triviewRgbColors = new Set<number>();
-            for (let pixel = 0; pixel < triviewPixels.length / 4; pixel += 16) {
-              const offset = pixel * 4;
-              triviewRgbColors.add(
-                (triviewPixels[offset]! << 16) |
-                  (triviewPixels[offset + 1]! << 8) |
-                  triviewPixels[offset + 2]!,
+            let triviewCapture = authoringCaptureApi.captureWhiteboxTriview(
+              target.visualTargetId,
+            );
+            // Switching the real Babylon scene to the orthographic artifact
+            // camera can compile a new material variant asynchronously. A
+            // tight synchronous redraw loop never yields to the browser's
+            // parallel shader compiler, so package-local primitive Subjects
+            // incorrectly produced three blank panels on their first capture.
+            // Keep the public Authoring Capture API synchronous, but let the
+            // trusted Host yield between bounded retries and retain the strict
+            // pixel gate if the target is genuinely empty.
+            for (
+              let attempt = 1;
+              !triviewCapture.inspection.isRenderable && attempt < 4;
+              attempt += 1
+            ) {
+              await new Promise<void>((resolve) => setTimeout(resolve, 50));
+              triviewCapture = authoringCaptureApi.captureWhiteboxTriview(
+                target.visualTargetId,
               );
-              if (triviewRgbColors.size >= 4) break;
             }
             triviews.push({
               target,
               capture: triviewCapture,
-              sampledRgbColorCount: triviewRgbColors.size,
             });
           }
         }
@@ -1593,15 +1662,48 @@ export async function captureFile(
       throw new Error("WORLDKIT_CAPTURE_PNG_DATA_URL_INVALID");
     }
     await mkdir(path.dirname(absoluteOutputPath), { recursive: true });
-    await writeFile(
-      temporaryScreenshotPath,
-      Buffer.from(capture.screenshotDataUrl.slice(pngDataUrlPrefix.length), "base64"),
+    const openingFrameBytes = Buffer.from(
+      capture.screenshotDataUrl.slice(pngDataUrlPrefix.length),
+      "base64",
     );
+    await writeFile(temporaryScreenshotPath, openingFrameBytes);
     await rename(temporaryScreenshotPath, absoluteOutputPath);
+    const snapshotBytes = Buffer.from(
+      `${stringifyCanonicalJson(capture.snapshot)}\n`,
+      "utf8",
+    );
     if (absoluteSnapshotPath !== undefined) {
+      await writeAtomic(absoluteSnapshotPath, snapshotBytes);
+    }
+    const contentHash = (bytes: Uint8Array): `sha256:${string}` =>
+      `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
+    const authoringRecord = captureAuthoring as Record<string, unknown> | undefined;
+    const receiptBase = absoluteReceiptPath === undefined
+      ? undefined
+      : {
+          kind: "worldkit-whitebox-capture-receipt" as const,
+          schemaVersion: 1 as const,
+          sceneId: String(authoringRecord?.id ?? ""),
+          worldBuildIdentityHash:
+            validation.worldBuildIdentityHash as `sha256:${string}`,
+          authoringSpecHash: sha256CanonicalJson(
+            captureAuthoring,
+          ) as `sha256:${string}`,
+          openingFrameContentHash: contentHash(openingFrameBytes),
+          runtimeSnapshotContentHash: contentHash(snapshotBytes),
+        };
+    if (absoluteReceiptPath !== undefined && receiptBase !== undefined) {
+      const runtimeReceiptContent: UnsignedWhiteboxCaptureReceiptV1 = {
+        ...receiptBase,
+        phase: "runtime-ready",
+      };
+      const runtimeReceipt = signWhiteboxCaptureReceiptV1(
+        runtimeReceiptContent,
+        receiptSigningPrivateKey!,
+      );
       await writeAtomic(
-        absoluteSnapshotPath,
-        `${stringifyCanonicalJson(capture.snapshot)}\n`,
+        absoluteReceiptPath,
+        `${stringifyCanonicalJson(runtimeReceipt)}\n`,
       );
     }
     if (absoluteTriviewOutputPath !== undefined) {
@@ -1614,6 +1716,11 @@ export async function captureFile(
         views: readonly ["front", "right", "back"];
         imageUri: string;
       }[];
+      const preparedTriviews = [] as Array<{
+        target: VisualCaptureGroupV1;
+        capture: WhiteboxTriviewCaptureV1;
+        pngBytes: Buffer;
+      }>;
       for (const triview of capture.triviews) {
         if (!/^[a-z0-9][a-z0-9-]{2,79}$/.test(triview.target.visualTargetId)) {
           throw new Error(`WORLDKIT_CAPTURE_TARGET_ID_INVALID: ${triview.target.visualTargetId}`);
@@ -1621,18 +1728,59 @@ export async function captureFile(
         if (!triview.capture.imageDataUri.startsWith(pngDataUrlPrefix)) {
           throw new Error(`WORLDKIT_CAPTURE_TRIVIEW_DATA_URL_INVALID: ${triview.target.visualTargetId}`);
         }
-        if (triview.sampledRgbColorCount < 2) {
-          throw new Error(`WORLDKIT_CAPTURE_TRIVIEW_EMPTY: ${triview.target.visualTargetId}`);
+        const triviewPngBytes = Buffer.from(
+          triview.capture.imageDataUri.slice(pngDataUrlPrefix.length),
+          "base64",
+        );
+        if (!triview.capture.inspection.isRenderable) {
+          const failedCaptureDirectory = path.join(
+            absoluteTriviewOutputPath,
+            ".failed",
+            triview.target.visualTargetId,
+          );
+          await Promise.all([
+            writeAtomic(
+              path.join(failedCaptureDirectory, "whitebox-triview.png"),
+              triviewPngBytes,
+            ),
+            writeAtomic(
+              path.join(failedCaptureDirectory, "capture-failure.json"),
+              `${stringifyCanonicalJson({
+                kind: "worldkit-whitebox-triview-capture-failure",
+                schemaVersion: 1,
+                visualTargetId: triview.target.visualTargetId,
+                runtimeEntityIds: triview.target.runtimeEntityIds,
+                inspection: triview.capture.inspection,
+                diagnostic: {
+                  code: "WORLDKIT_CAPTURE_TRIVIEW_EMPTY",
+                  message: "Tri-view capture does not contain enough visible target pixels.",
+                },
+              })}\n`,
+            ),
+          ]);
+          throw new Error(
+            `WORLDKIT_CAPTURE_TRIVIEW_EMPTY: ${triview.target.visualTargetId} ` +
+            `(foreground ${triview.capture.inspection.foregroundPixelCount}/` +
+            `${triview.capture.inspection.minimumForegroundPixelCount}; empty views: ` +
+            `${triview.capture.inspection.viewInspections
+              .filter(({ isRenderable }) => !isRenderable)
+              .map(({ view }) => view)
+              .join(",")})`,
+          );
         }
+        preparedTriviews.push({
+          target: triview.target,
+          capture: triview.capture,
+          pngBytes: triviewPngBytes,
+        });
+      }
+      for (const triview of preparedTriviews) {
         const relativeImagePath = `${triview.target.visualTargetId}/whitebox-triview.png`;
         const imagePath = path.join(absoluteTriviewOutputPath, relativeImagePath);
         await mkdir(path.dirname(imagePath), { recursive: true });
         await writeFile(
           imagePath,
-          Buffer.from(
-            triview.capture.imageDataUri.slice(pngDataUrlPrefix.length),
-            "base64",
-          ),
+          triview.pngBytes,
         );
         whiteboxTriviews.push({
           ...triview.target,
@@ -1650,10 +1798,37 @@ export async function captureFile(
           validation.worldBuildIdentityHash as `sha256:${string}`,
         whiteboxTriviews,
       };
-      await writeAtomic(
-        path.join(absoluteTriviewOutputPath, "whitebox-triview-manifest.json"),
-        `${stringifyCanonicalJson(manifest)}\n`,
+      const manifestPath = path.join(
+        absoluteTriviewOutputPath,
+        "whitebox-triview-manifest.json",
       );
+      const manifestBytes = Buffer.from(
+        `${stringifyCanonicalJson(manifest)}\n`,
+        "utf8",
+      );
+      await writeAtomic(manifestPath, manifestBytes);
+      if (absoluteReceiptPath !== undefined && receiptBase !== undefined) {
+        const imageHashes = Object.fromEntries(
+          preparedTriviews.map(({ target, pngBytes }) => [
+            target.visualTargetId,
+            contentHash(pngBytes),
+          ]),
+        );
+        const triviewReceiptContent: UnsignedWhiteboxCaptureReceiptV1 = {
+          ...receiptBase,
+          phase: "triview-ready",
+          whiteboxTriviewManifestContentHash: contentHash(manifestBytes),
+          whiteboxTriviewImageContentHashesByVisualTargetId: imageHashes,
+        };
+        const triviewReceipt = signWhiteboxCaptureReceiptV1(
+          triviewReceiptContent,
+          receiptSigningPrivateKey!,
+        );
+        await writeAtomic(
+          absoluteReceiptPath,
+          `${stringifyCanonicalJson(triviewReceipt)}\n`,
+        );
+      }
     }
     return {
       ok: true,
@@ -1669,6 +1844,9 @@ export async function captureFile(
       ...(absoluteSnapshotPath === undefined
         ? {}
         : { snapshotPath: absoluteSnapshotPath }),
+      ...(absoluteReceiptPath === undefined
+        ? {}
+        : { receiptPath: absoluteReceiptPath }),
       ...(absoluteTriviewOutputPath === undefined
         ? {}
         : { triviewOutputPath: absoluteTriviewOutputPath }),
@@ -2338,6 +2516,15 @@ export async function main(
               ...(parsed.snapshotPath === undefined
                 ? {}
                 : { snapshotPath: parsed.snapshotPath }),
+              ...(parsed.receiptPath === undefined
+                ? {}
+                : { receiptPath: parsed.receiptPath }),
+              ...(process.env.WORLDKIT_CAPTURE_SIGNING_PRIVATE_KEY_PATH === undefined
+                ? {}
+                : {
+                    receiptSigningPrivateKeyPath:
+                      process.env.WORLDKIT_CAPTURE_SIGNING_PRIVATE_KEY_PATH,
+                  }),
               ...(parsed.triviewOutputPath === undefined
                 ? {}
                 : { triviewOutputPath: parsed.triviewOutputPath }),

@@ -300,9 +300,12 @@ export type WorldRuntimeCameraStateV4 =
       targetSocketPositionMetersXYZ?: RuntimeVec3V1;
       isTargetSocketFallback?: boolean;
       desiredTargetPositionMetersXYZ?: RuntimeVec3V1;
+      actualTargetPositionMetersXYZ?: RuntimeVec3V1;
       desiredPositionMetersXYZ?: RuntimeVec3V1;
       actualPositionMetersXYZ?: RuntimeVec3V1;
       finalFovDegrees?: number;
+      nearClipMeters?: number;
+      farClipMeters?: number;
       requestedArmLengthMeters?: number;
       safeArmLengthMeters?: number;
       effectiveArmLengthMeters?: number;

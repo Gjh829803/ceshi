@@ -100,9 +100,12 @@ export interface BabylonRuntimeCameraProjectionV1 {
   readonly targetSocketPositionMetersXYZ?: RuntimeVec3V1;
   readonly isTargetSocketFallback?: boolean;
   readonly desiredTargetPositionMetersXYZ?: RuntimeVec3V1;
+  readonly actualTargetPositionMetersXYZ?: RuntimeVec3V1;
   readonly desiredPositionMetersXYZ?: RuntimeVec3V1;
   readonly actualPositionMetersXYZ?: RuntimeVec3V1;
   readonly finalFovDegrees?: number;
+  readonly nearClipMeters?: number;
+  readonly farClipMeters?: number;
   readonly requestedArmLengthMeters?: number;
   readonly safeArmLengthMeters?: number;
   readonly effectiveArmLengthMeters?: number;

@@ -1,9 +1,17 @@
 import { spawn, spawnSync } from "node:child_process";
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import {
+  createHash,
+  createPrivateKey,
+  createPublicKey,
+  generateKeyPairSync,
+  randomBytes,
+  timingSafeEqual,
+} from "node:crypto";
 import { createReadStream } from "node:fs";
 import {
   access,
   appendFile,
+  chmod,
   copyFile,
   mkdir,
   readFile,
@@ -14,11 +22,11 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { createServer, request as createHttpRequest } from "node:http";
-import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { createRecordingWorkbenchService } from "./recording-workbench.mjs";
+import { createEpisodeWorkflowService } from "./episode-workflows.mjs";
 import {
   StudioPreviewBootstrapError,
   assembleStudioPreviewBootstrapV1,
@@ -26,8 +34,10 @@ import {
 import { FORMAL_CODEX_EXECUTION_PROFILE } from "../../../scripts/lib/lwdp-codex-profile.mjs";
 import {
   cancelGenerationJob,
+  LwdpJobPendingError,
   loadLwdpGenerationConfig,
 } from "../../../scripts/lib/lwdp-generation-client.mjs";
+import { recoverSucceededCodexJobOutputs } from "../../../scripts/lib/lwdp-codex-output-recovery.mjs";
 
 const studioSourceRoot = path.dirname(fileURLToPath(import.meta.url));
 const studioRoot = path.resolve(studioSourceRoot, "..");
@@ -38,17 +48,12 @@ const idPattern = /^[a-z0-9][a-z0-9-]{2,79}$/;
 // The Studio workflow is unreleased and intentionally has one current contract.
 // Bump this only when the persisted Studio record shape changes; do not keep
 // parallel historical workflow implementations in the runtime.
-export const workflowPolicyVersion = 4;
+export const workflowPolicyVersion = 6;
 const codexBackendValues = new Set(["cloud", "local"]);
-const trustedTerrainCompilerVersions = new Set([
-  "terrain-height-intent-compiler@1",
-  "terrain-height-intent-compiler@2",
-]);
 const allowedRootSceneAssets = new Set([
   "world-plan.png",
   "opening-shot.png",
   "entry-whitebox-target.png",
-  "terrain-height-intent.png",
   "entry-styled-target.png",
   "whitebox-opening-frame.png",
   "opening-frame-rendered.png",
@@ -60,14 +65,51 @@ const contentTypes = new Map([
   [".json", "application/json; charset=utf-8"],
   [".jsonl", "application/x-ndjson; charset=utf-8"],
   [".md", "text/markdown; charset=utf-8"],
+  [".mjs", "text/javascript; charset=utf-8"],
   [".jpg", "image/jpeg"],
   [".jpeg", "image/jpeg"],
   [".png", "image/png"],
+  [".mp4", "video/mp4"],
   [".log", "text/plain; charset=utf-8"],
   [".ts", "text/plain; charset=utf-8"],
   [".txt", "text/plain; charset=utf-8"],
   [".webp", "image/webp"],
+  [".webm", "video/webm"],
 ]);
+
+export async function finalizeRecoveredVisualOutputs({
+  repoRoot,
+  sceneId,
+  userFrame,
+  spawnSyncImplementation = spawnSync,
+}) {
+  const sceneRoot = path.join(repoRoot, "artifacts", "scenes", sceneId);
+  const commands = [
+    [
+      "scripts/visual/finalize-styled-opening-frame.ts",
+      "--scene-id", sceneId,
+      "--scene-root", sceneRoot,
+      "--user-frame", userFrame,
+    ],
+    [
+      "scripts/visual/finalize-styled-triviews.ts",
+      "--scene-id", sceneId,
+      "--scene-root", sceneRoot,
+    ],
+  ];
+  for (const args of commands) {
+    const result = spawnSyncImplementation(
+      "pnpm",
+      ["exec", "tsx", ...args],
+      { cwd: repoRoot, encoding: "utf8", env: process.env },
+    );
+    if (result?.status !== 0) {
+      throw new Error(
+        `Recovered visual output finalization failed: ${String(result?.stderr || result?.error?.message || "unknown error").trim()}`,
+      );
+    }
+  }
+}
 
 const workflowStageDefinitions = [
   {
@@ -81,36 +123,41 @@ const workflowStageDefinitions = [
     id: "planner",
     title: "托管式意图规划",
     owner: "WorldKit Planner",
-    description: "生成非权威 Scene Brief、世界规划图、进入构图目标与连续地表 Height Intent，并在同一任务内完成输入自检。正式世界权威仍由 WorldSpec/plan-lock 与 Authoring V4 建立。",
-    required: ["scene-brief", "visual-identity-palette", "world-plan", "entry-whitebox-target", "terrain-height-intent-prompt", "terrain-height-intent", "planner-self-check"],
+    description: "生成非权威 Scene Brief、单一连续且至少四倍参考可见面积的方块俯视图和进入图，并在同一任务内检查语义颜色、视觉目标与第三人称构图。真实世界权威由 Builder 的 world.mjs 建立。",
+    required: ["scene-brief", "visual-identity-palette", "world-plan", "entry-whitebox-target", "planner-self-check"],
   },
   {
     id: "coding-agent",
-    title: "白膜实现",
-    owner: "Coding Agent",
-    description: "把已校验意图空间化为预地形 AuthoringSpec V4，并通过与当前源码同源的便携校验器。",
-    required: ["builder-authoring-spec", "implementation-map-draft", "builder-self-check"],
+    title: "方块白膜实现",
+    owner: "Block Builder",
+    description: "直接编写 Three.js 单位方块世界并自检，再查看 Planner/Builder 俯视与进入构图对比图迭代；运行传输与视觉映射由检查器自动派生。",
+    required: [
+      "world-module",
+      "authoring-spec",
+      "implementation-map-draft",
+      "builder-self-check",
+      "builder-top-down-comparison",
+      "builder-entry-comparison",
+    ],
   },
   {
-    id: "terrain-compilation",
-    title: "地形编译",
+    id: "block-build",
+    title: "方块编译",
     owner: "Trusted Host",
-    description: "可信宿主校验 Planner/Builder 收据，将冻结的 Height Intent 归一化、约束化并原子发布最终 AuthoringSpec。",
-    required: ["authoring-spec", "terrain-height-intent-report", "terrain-compilation-manifest", "final-authoring-self-check"],
-  },
-  {
-    id: "canonical-build",
-    title: "Canonical 构建",
-    owner: "Trusted Host",
-    description: "可信宿主复验 Authoring V4，编译 IR V4 / Canonical Scene Plan V1，并固化视觉目标到 runtime entity 的一对多映射。",
+    description: "可信宿主复验方块模块与 Manifest，进入 Canonical Scene Plan V1 / World Build Identity 链路，并固化视觉目标到 runtime entity 的一对多映射。",
     required: ["implementation-map", "execution-plan"],
   },
   {
     id: "runtime-capture",
     title: "真实白膜捕获",
     owner: "Playground",
-    description: "无头 Babylon 真实运行，输出进入首帧、快照、实体清单及 Front/Right/Back 白膜三视图。",
-    required: ["opening-frame", "runtime-snapshot", "whitebox-triview-manifest"],
+    description: "无头 Babylon 真实运行。进入首帧与 Runtime Snapshot 成功后白膜世界即可进入；Front/Right/Back 三视图是独立后处理结果。",
+    required: [
+      "opening-frame",
+      "runtime-snapshot",
+      "whitebox-capture-receipt",
+      "whitebox-triview-manifest",
+    ],
   },
   {
     id: "entry-alignment-validation",
@@ -120,30 +167,26 @@ const workflowStageDefinitions = [
     required: ["entry-third-person-validation"],
   },
   {
-    id: "visual-prompt-synthesis",
-    title: "视觉提示词合成",
-    owner: "Configured Visual Prompt Provider",
-    description: "可选：读取用户参考、真实 Babylon 白模捕获和三视图，生成共享视觉约束与逐目标提示词。",
-    required: ["visual-generation-prompts"],
-  },
-  {
-    id: "visual-imagegen",
-    title: "可选视觉生成",
-    owner: "Configured Image Provider",
-    description: "可选：根据提示词和真实白模结构生成新首帧与样式三视图。该结果不改变几何、碰撞或 Canonical World State。",
-    required: ["styled-opening-frame", "styled-triviews-manifest"],
+    id: "visual-reconstruction",
+    title: "LWDP Codex 视觉重建",
+    owner: "Visual Reconstructor",
+    description: "可选：一个正式 LWDP Codex Job 在同一隔离 workspace 内编写视觉提示词，生成最终样式首帧及全部完整目标三视图。",
+    required: ["visual-generation-prompts", "styled-opening-frame", "styled-triviews-manifest"],
   },
 ];
 
 const runtimeStageAliases = new Map([
   ["plan-ready", "planner"],
-  ["route-validation", "canonical-build"],
+  ["route-validation", "block-build"],
   ["change-requested", "coding-agent"],
-  ["visual-imagegen-ready", "visual-imagegen"],
+  ["visual-prompt-synthesis", "visual-reconstruction"],
+  ["visual-imagegen", "visual-reconstruction"],
+  ["visual-imagegen-ready", "visual-reconstruction"],
+  ["visual-reconstruction-ready", "visual-reconstruction"],
 ]);
 
 const agentTokenStageIds = new Set([
-  "planner", "coding-agent",
+  "planner", "coding-agent", "visual-reconstruction",
 ]);
 const workflowStageIds = new Set(
   workflowStageDefinitions.map(({ id }) => id),
@@ -155,7 +198,7 @@ function canonicalWorkflowStage(stage, record = {}) {
   }
   if (stage === "preparing" || stage === "queued") return "input";
   if (stage === "ready") return record.styledTriviewsRequired === true
-    ? "visual-imagegen"
+    ? "visual-reconstruction"
     : "entry-alignment-validation";
   return runtimeStageAliases.get(stage) ?? stage;
 }
@@ -167,6 +210,122 @@ function timestamp(value) {
 
 function normalizedLogLine(line) {
   return line.replace(/^\[(?:stdout|stderr)\]\s*/, "").trim();
+}
+
+function lastMatch(source, pattern) {
+  let matched = null;
+  for (const candidate of String(source).matchAll(pattern)) matched = candidate;
+  return matched;
+}
+
+export function parseRemotePendingLwdpMarker(rawLog = "") {
+  const match = lastMatch(
+    rawLog,
+    /^(?:\[stdout\]\s*)?WORLDKIT_LWDP_REMOTE_PENDING (planner|coding-agent|visual-reconstruction) ([a-z0-9-]+) (gen_[a-zA-Z0-9]+) ([^\s]+) (s3:\/\/[^\s]+) ([0-9]+) ([a-z_]+) (\{[^\n]*\})$/gm,
+  );
+  if (!match) return null;
+  let counters = {};
+  try {
+    counters = JSON.parse(match[8]);
+  } catch {
+    return null;
+  }
+  const timeoutMs = Number(match[6]);
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) return null;
+  return {
+    stage: match[1],
+    taskId: match[2],
+    jobId: match[3],
+    requestId: match[4],
+    outputS3Prefix: match[5],
+    timeoutMs,
+    remoteStatus: match[7],
+    counters,
+  };
+}
+
+/** Convert a child-process exit into the most specific safe failure shown by Studio. */
+export function deriveWorldGenerationFailureReason(
+  rawLog = "",
+  { code = -1, signal = null } = {},
+) {
+  const completeLog = String(rawLog);
+  const attemptMarkers = [...completeLog.matchAll(/^WorldKit Creator Studio\nscene=[^\n]+\nattempt=[0-9]+\n/gm)];
+  const log = attemptMarkers.length === 0
+    ? completeLog
+    : completeLog.slice(attemptMarkers.at(-1).index);
+  const pending = parseRemotePendingLwdpMarker(log);
+  if (pending) {
+    const minutes = Math.round(pending.timeoutMs / 60_000);
+    return `LWDP 云端 Job ${pending.jobId} 在 ${minutes} 分钟后仍为 ${pending.remoteStatus}；已转入远端对账状态，本地不会重复提交 Job。`;
+  }
+  const timeout = lastMatch(
+    log,
+    /LWDP job (gen_[a-zA-Z0-9]+) timed out after ([0-9]+)ms\./g,
+  );
+  if (timeout) {
+    const progress = lastMatch(
+      log,
+      /WORLDKIT_LWDP_PROGRESS [^\s]+ ([a-z_]+) (\{[^\n]*\})/g,
+    );
+    let progressSummary = "远端未返回可确认的最终状态";
+    if (progress) {
+      try {
+        const counters = JSON.parse(progress[2]);
+        progressSummary = `远端最后状态=${progress[1]}，queued=${Number(counters.queued ?? 0)}，running=${Number(counters.running ?? 0)}，succeeded=${Number(counters.succeeded ?? 0)}，failed=${Number(counters.failed ?? 0)}`;
+      } catch {
+        progressSummary = `远端最后状态=${progress[1]}`;
+      }
+    }
+    const minutes = Math.round(Number(timeout[2]) / 60_000);
+    return `LWDP 云端 Job ${timeout[1]} 在 ${minutes} 分钟内未进入终态；${progressSummary}。本地已停止轮询且没有重复提交 Job，需要按该 Job ID 与服务端对账。`;
+  }
+
+  if (/Selected model is at capacity/i.test(log)) {
+    const cloudJob = lastMatch(
+      log,
+      /WORLDKIT_LWDP_JOB [^\s]+ [^\s]+ (gen_[a-zA-Z0-9]+)/g,
+    );
+    return `LWDP Codex${cloudJob ? ` Job ${cloudJob[1]}` : ""} 失败：gpt-5.6-sol 当前容量不足，远端任务已终止且没有生成完整产物；可在容量恢复后重试。`;
+  }
+
+  const missingOutputs = lastMatch(log, /missing required outputs:\s*([^\n]+)/gi);
+  if (missingOutputs) {
+    return `云端 Codex 已结束，但缺少声明的必需产物：${missingOutputs[1].trim()}`;
+  }
+  if (/Builder top-down visual review does not match trusted Host replay\./.test(log)) {
+    return "Builder 俯视复核图的解码像素与可信 Host 重放不一致。";
+  }
+  if (/Builder entry visual review does not match trusted Host replay\./.test(log)) {
+    return "Builder 进入构图复核图的解码像素与可信 Host 重放不一致。";
+  }
+  if (/WORLDKIT_CAPTURE_VISIBLE_WORLD_MISSING/.test(log)) {
+    return "真实白膜 Runtime 已启动，但连续捕获只得到背景或近乎单色画面；通常表示相机位于主体/碰撞体内部，或入口相机没有看到场景，必须修正 Builder 主体与相机后再捕获。";
+  }
+
+  const shellSyntaxFailure = lastMatch(
+    log,
+    /^(?:\[stderr\]\s*)?([^\n]*unexpected EOF while looking for matching[^\n]*)$/gim,
+  );
+  if (shellSyntaxFailure) {
+    return `工作流收尾脚本存在语法错误：${shellSyntaxFailure[1].trim()}`;
+  }
+
+  const explicitError = lastMatch(log, /^Error:\s*([^\n]+)$/gm);
+  if (explicitError) return explicitError[1].trim();
+  return `World generation exited with code ${code}${signal ? ` (${signal})` : ""}.`;
+}
+
+export function isRecoverableVisualFinalizationFailure(record, rawLog = "") {
+  return record?.status === "failed" &&
+    record?.failedStage === "visual-reconstruction" &&
+    record?.captureStatus === "passed" &&
+    record?.triviewStatus === "passed" &&
+    record?.whiteboxOutcome === "passed" &&
+    !/alignment.{0,24}(?:fail|error)|(?:fail|error).{0,24}alignment/i.test(rawLog) &&
+    /收尾脚本存在语法错误/.test(
+      deriveWorldGenerationFailureReason(rawLog),
+    );
 }
 
 /** Parse Codex CLI totals, preferring explicit WorldKit usage markers when present. */
@@ -240,7 +399,7 @@ export function deriveReliabilityMetrics(records = [], options = {}) {
       failureClasses.visual += 1;
     } else if (
       record?.status === "interrupted" ||
-      /timeout|timed out|connection|http2|rate.?limit|502|503|504|stopped|restart/.test(failureText)
+      /timeout|timed out|capacity|queued|connection|http2|rate.?limit|502|503|504|stopped|restart|lwdp 云端/.test(failureText)
     ) {
       failureClasses.infrastructure += 1;
     } else {
@@ -384,7 +543,7 @@ export function deriveWorkflowMetrics({
       durationStatus: terminal ? "recorded" : "live",
       tokenCount: totalTokenCount,
       tokenStatus: relevantAgentStages.length === recordedAgentStages.length ? "recorded" :
-        record.status === "running" ? "live" : "partial",
+        ["running", "remote-pending"].includes(record.status) ? "live" : "partial",
     },
   };
 }
@@ -402,11 +561,11 @@ export function deriveWorkflowTrajectory({ record, availableIds = [] }) {
     const failed = ["failed", "change-requested", "interrupted"].includes(record.stage) && index === activeIndex;
     const active = !complete && !failed && index === activeIndex;
     let status = complete ? "complete" : active ? "active" : "pending";
-    if (definition.id === "runtime-capture" && record.captureStatus === "failed") status = "failed";
-    if (definition.id === "visual-prompt-synthesis" && record.styledOpeningFrameRequired !== true) {
-      status = "optional";
-    }
-    if (definition.id === "visual-imagegen" && record.styledTriviewsRequired !== true) {
+    if (
+      definition.id === "runtime-capture" &&
+      (record.captureStatus === "failed" || record.triviewStatus === "failed")
+    ) status = "failed";
+    if (definition.id === "visual-reconstruction" && record.styledTriviewsRequired !== true) {
       status = "optional";
     }
     if (definition.optional && !complete) status = "optional";
@@ -603,6 +762,87 @@ export function createStudio(options = {}) {
   const dataRoot = path.resolve(options.dataRoot ?? defaultDataRoot);
   const worldsRoot = path.join(dataRoot, "worlds");
   const testSetsRoot = path.join(dataRoot, "test-sets");
+  const hostTrustRoot = path.join(dataRoot, "host-trust");
+  const captureSigningPrivateKeyPath = path.resolve(
+    options.captureSigningPrivateKeyPath ??
+      path.join(hostTrustRoot, "whitebox-capture-private.pem"),
+  );
+  const trustedCapturePublicKeyPath = path.resolve(
+    options.trustedCapturePublicKeyPath ??
+      path.join(hostTrustRoot, "whitebox-capture-public.pem"),
+  );
+  if (
+    (options.captureSigningPrivateKeyPath === undefined) !==
+    (options.trustedCapturePublicKeyPath === undefined)
+  ) {
+    throw new Error(
+      "Studio capture trust configuration requires both private and public key paths.",
+    );
+  }
+
+  async function ensureWhiteboxCaptureHostKeyPair() {
+    const [privatePem, publicPem] = await Promise.all([
+      readFile(captureSigningPrivateKeyPath).catch(() => null),
+      readFile(trustedCapturePublicKeyPath).catch(() => null),
+    ]);
+    if (privatePem === null && publicPem !== null) {
+      throw new Error(
+        "Studio capture Host trust is missing its private signing key.",
+      );
+    }
+    if (privatePem !== null && publicPem === null) {
+      const recoveredPublicPem = createPublicKey(createPrivateKey(privatePem)).export({
+        type: "spki",
+        format: "pem",
+      });
+      await mkdir(path.dirname(trustedCapturePublicKeyPath), {
+        recursive: true,
+        mode: 0o700,
+      });
+      await writeFile(trustedCapturePublicKeyPath, recoveredPublicPem, {
+        mode: 0o644,
+        flag: "wx",
+      });
+      await chmod(captureSigningPrivateKeyPath, 0o600);
+      return;
+    }
+    if (privatePem !== null && publicPem !== null) {
+      const derivedPublicPem = createPublicKey(createPrivateKey(privatePem)).export({
+        type: "spki",
+        format: "pem",
+      });
+      const configuredPublicPem = createPublicKey(publicPem).export({
+        type: "spki",
+        format: "pem",
+      });
+      if (!Buffer.from(derivedPublicPem).equals(Buffer.from(configuredPublicPem))) {
+        throw new Error("Studio capture Host trust key pair does not match.");
+      }
+      await Promise.all([
+        chmod(captureSigningPrivateKeyPath, 0o600),
+        chmod(trustedCapturePublicKeyPath, 0o644),
+      ]);
+      return;
+    }
+    await Promise.all([
+      mkdir(path.dirname(captureSigningPrivateKeyPath), {
+        recursive: true,
+        mode: 0o700,
+      }),
+      mkdir(path.dirname(trustedCapturePublicKeyPath), {
+        recursive: true,
+        mode: 0o700,
+      }),
+    ]);
+    const { privateKey, publicKey } = generateKeyPairSync("ed25519", {
+      privateKeyEncoding: { type: "pkcs8", format: "pem" },
+      publicKeyEncoding: { type: "spki", format: "pem" },
+    });
+    await Promise.all([
+      writeFile(captureSigningPrivateKeyPath, privateKey, { mode: 0o600, flag: "wx" }),
+      writeFile(trustedCapturePublicKeyPath, publicKey, { mode: 0o644, flag: "wx" }),
+    ]);
+  }
   const builtinTestSetsRoot = path.join(repoRoot, "apps/studio/builtin-test-sets");
   const builtinResultsRoot = path.join(repoRoot, "apps/studio/builtin-results");
   const playgroundOrigin = options.playgroundOrigin ?? "http://127.0.0.1:5173";
@@ -614,15 +854,15 @@ export function createStudio(options = {}) {
   }
   const autoRunJobs = options.autoRunJobs ?? true;
   const configuredConcurrency = Number(
-    options.maxConcurrentJobs ?? process.env.WORLDKIT_STUDIO_MAX_CONCURRENT_JOBS ?? 4,
+    options.maxConcurrentJobs ?? process.env.WORLDKIT_STUDIO_MAX_CONCURRENT_JOBS ?? 20,
   );
   const maxConcurrentJobs = Number.isSafeInteger(configuredConcurrency) &&
-    configuredConcurrency >= 1 && configuredConcurrency <= 16
+    configuredConcurrency >= 1 && configuredConcurrency <= 20
     ? configuredConcurrency
-    : 4;
+    : 20;
   const configuredBackendConcurrency = (value, fallback) => {
     const parsed = Number(value);
-    return Number.isSafeInteger(parsed) && parsed >= 1 && parsed <= 16
+    return Number.isSafeInteger(parsed) && parsed >= 1 && parsed <= 20
       ? parsed
       : fallback;
   };
@@ -640,6 +880,11 @@ export function createStudio(options = {}) {
   const importBuiltinTestSets = options.importBuiltinTestSets ?? dataRoot === defaultDataRoot;
   const importBuiltinResults = options.importBuiltinResults ?? dataRoot === defaultDataRoot;
   const runtimeSettingsPath = path.join(dataRoot, "runtime-settings.json");
+  const configuredLwdpEnvFile = process.env.WORLDKIT_LWDP_ENV_FILE ||
+    path.join(repoRoot, ".codex-tmp", "runtime-config", "lwdp.env");
+  const projectLwdpEnvFile = path.isAbsolute(configuredLwdpEnvFile)
+    ? configuredLwdpEnvFile
+    : path.resolve(repoRoot, configuredLwdpEnvFile);
   const initialCodexBackend = normalizedCodexBackend(
     options.initialCodexBackend ?? options.codexBackend ?? process.env.WORLDKIT_CODEX_BACKEND,
     "cloud",
@@ -647,7 +892,57 @@ export function createStudio(options = {}) {
   const codexSpawnSync = options.codexSpawnSync ?? spawnSync;
   const codexBinary = options.codexBinary ?? process.env.WORLDKIT_LOCAL_CODEX_BIN ?? "codex";
   const worldSpawnImplementation = options.worldSpawnImplementation ?? spawn;
+  const verifyHostedWhiteboxArtifactsImplementation =
+    options.verifyHostedWhiteboxArtifactsImplementation ?? (async (input) => {
+      const arguments_ = [
+        "exec",
+        "tsx",
+        "scripts/cli/verify-hosted-whitebox-artifacts.ts",
+        "--scene-id", input.sceneId,
+        "--authoring", input.authoringPath,
+        "--build", input.buildPath,
+        "--opening-frame", input.openingFramePath,
+        "--runtime-snapshot", input.runtimeSnapshotPath,
+        "--capture-receipt", input.captureReceiptPath,
+        "--trusted-public-key", trustedCapturePublicKeyPath,
+        ...(input.requireTriview
+          ? [
+              "--require-triview",
+              "--triview-manifest", input.whiteboxTriviewManifestPath,
+              "--triview-root", input.whiteboxTriviewRoot,
+            ]
+          : []),
+      ];
+      const result = spawnSync("pnpm", arguments_, {
+        cwd: repoRoot,
+        encoding: "utf8",
+        env: process.env,
+      });
+      return result?.status === 0;
+    });
   const beforeWorldSpawn = options.beforeWorldSpawn ?? (() => undefined);
+  const autoRecoverLateLwdpJobs = options.autoRecoverLateLwdpJobs ?? autoRunJobs;
+  const lateLwdpRecoveryImplementation = options.lateLwdpRecoveryImplementation ??
+    recoverSucceededCodexJobOutputs;
+  const loadLwdpConfigImplementation = options.loadLwdpConfigImplementation ??
+    loadLwdpGenerationConfig;
+  const visualRecoveryFinalizeImplementation = options.visualRecoveryFinalizeImplementation ??
+    finalizeRecoveredVisualOutputs;
+  const configuredRemotePendingGraceMs = Number(
+    options.remotePendingGraceMs ?? process.env.WORLDKIT_LWDP_REMOTE_PENDING_GRACE_MS ?? 60 * 60_000,
+  );
+  const remotePendingGraceMs = Number.isSafeInteger(configuredRemotePendingGraceMs) &&
+    configuredRemotePendingGraceMs >= 1_000
+    ? configuredRemotePendingGraceMs
+    : 60 * 60_000;
+  const configuredRemoteRecoveryIntervalMs = Number(
+    options.remoteRecoveryIntervalMs ??
+    process.env.WORLDKIT_LWDP_REMOTE_RECOVERY_INTERVAL_MS ?? 60_000,
+  );
+  const remoteRecoveryIntervalMs = Number.isSafeInteger(configuredRemoteRecoveryIntervalMs) &&
+    configuredRemoteRecoveryIntervalMs >= 1_000
+    ? configuredRemoteRecoveryIntervalMs
+    : 60_000;
   const queue = [];
   const activeJobs = new Set();
   const activeJobBackends = new Map();
@@ -657,39 +952,88 @@ export function createStudio(options = {}) {
   const runRuntimeSettingsMutation = createKeyedSerialExecutor();
   let selectedCodexBackend = initialCodexBackend;
   let shuttingDown = false;
+  let remoteRecoveryTimer = null;
+  let remoteRecoveryInFlight = false;
+  const pnpmAvailable = options.pnpmAvailable ?? commandAvailable("pnpm");
+  const codexAvailabilityTtlMs = Math.max(1_000, Number(options.codexAvailabilityTtlMs ?? 30_000));
+  let cachedCodexAvailability = null;
+  let cachedCodexAvailabilityAt = 0;
+  let codexAvailabilityInFlight = null;
+  let enrichedWorldListCache = null;
+  let enrichedWorldListInFlight = null;
+  let worldListRevision = 0;
+  const playableWhiteboxVerificationCache = new Map();
+
+  async function verifyPlayableWhiteboxArtifacts(input) {
+    const boundPaths = [
+      input.authoringPath,
+      input.buildPath,
+      input.openingFramePath,
+      input.runtimeSnapshotPath,
+      input.captureReceiptPath,
+      trustedCapturePublicKeyPath,
+    ];
+    const hashes = await Promise.all(boundPaths.map(sourceHash));
+    if (hashes.some((value) => value === null)) return false;
+    const cacheKey = `${input.sceneId}\u0000${hashes.join("\u0000")}`;
+    if (playableWhiteboxVerificationCache.has(cacheKey)) {
+      return playableWhiteboxVerificationCache.get(cacheKey);
+    }
+    const passed = Boolean(await verifyHostedWhiteboxArtifactsImplementation({
+      ...input,
+      trustedCapturePublicKeyPath,
+    }));
+    if (playableWhiteboxVerificationCache.size >= 256) {
+      playableWhiteboxVerificationCache.clear();
+    }
+    playableWhiteboxVerificationCache.set(cacheKey, passed);
+    return passed;
+  }
 
   function effectiveCodexBackend(record) {
     return normalizedCodexBackend(record?.codexBackend, "cloud");
   }
 
-  async function codexBackendAvailability() {
-    const lwdpEnvFile = process.env.WORLDKIT_LWDP_ENV_FILE ||
-      path.join(homedir(), ".codex", "secrets", "lwdp_generation.env");
-    const cloud = Boolean(options.lwdpConfigured ??
-      (Boolean(process.env.LWDP_GENERATION_API_TOKEN) || await fileExists(lwdpEnvFile)));
-    let local = false;
-    try {
-      const codexEnvironment = {
-        ...process.env,
-        ...(process.env.WORLDKIT_LOCAL_CODEX_HOME
-          ? { CODEX_HOME: process.env.WORLDKIT_LOCAL_CODEX_HOME }
-          : {}),
-      };
-      const version = codexSpawnSync(codexBinary, ["--version"], {
-        stdio: "ignore",
-        env: codexEnvironment,
-      });
-      const login = version?.status === 0
-        ? codexSpawnSync(codexBinary, ["login", "status"], {
-            stdio: "ignore",
-            env: codexEnvironment,
-          })
-        : null;
-      local = version?.status === 0 && login?.status === 0;
-    } catch {
-      local = false;
+  async function codexBackendAvailability({ force = false } = {}) {
+    const now = Date.now();
+    if (!force && cachedCodexAvailability && now - cachedCodexAvailabilityAt < codexAvailabilityTtlMs) {
+      return cachedCodexAvailability;
     }
-    return { cloud, local };
+    if (codexAvailabilityInFlight) return codexAvailabilityInFlight;
+    codexAvailabilityInFlight = (async () => {
+      const cloud = Boolean(options.lwdpConfigured ??
+        (Boolean(process.env.LWDP_GENERATION_API_TOKEN) || await fileExists(projectLwdpEnvFile)));
+      let local = false;
+      try {
+        const codexEnvironment = {
+          ...process.env,
+          ...(process.env.WORLDKIT_LOCAL_CODEX_HOME
+            ? { CODEX_HOME: process.env.WORLDKIT_LOCAL_CODEX_HOME }
+            : {}),
+        };
+        const version = codexSpawnSync(codexBinary, ["--version"], {
+          stdio: "ignore",
+          env: codexEnvironment,
+        });
+        const login = version?.status === 0
+          ? codexSpawnSync(codexBinary, ["login", "status"], {
+              stdio: "ignore",
+              env: codexEnvironment,
+            })
+          : null;
+        local = version?.status === 0 && login?.status === 0;
+      } catch {
+        local = false;
+      }
+      cachedCodexAvailability = Object.freeze({ cloud, local });
+      cachedCodexAvailabilityAt = Date.now();
+      return cachedCodexAvailability;
+    })();
+    try {
+      return await codexAvailabilityInFlight;
+    } finally {
+      codexAvailabilityInFlight = null;
+    }
   }
 
   async function persistCodexBackend(backend) {
@@ -725,6 +1069,12 @@ export function createStudio(options = {}) {
     spawnImplementation: options.recordingSpawnImplementation,
     codexBackendProvider: () => selectedCodexBackend,
   });
+  const episodeWorkflows = createEpisodeWorkflowService({
+    repoRoot,
+    studioOrigin: () => options.studioOrigin ??
+      `http://127.0.0.1:${Number(process.env.WORLDKIT_STUDIO_PORT ?? 4174)}`,
+    spawnImplementation: options.episodeSpawnImplementation,
+  });
 
   const recordPath = (id) => path.join(worldsRoot, id, "record.json");
   const logPath = (id) => path.join(worldsRoot, id, "agent.log");
@@ -732,7 +1082,7 @@ export function createStudio(options = {}) {
   const testSetRecordPath = (id) => path.join(testSetsRoot, id, "record.json");
   const subjectCatalogPath = path.join(
     repoRoot,
-    "assets/registry/subject-definitions/catalog.json",
+    ".codex/skills/worldkit-block-builder/references/agent-authoring-catalog.json",
   );
 
   function testSetImagePath(record, image) {
@@ -790,20 +1140,23 @@ export function createStudio(options = {}) {
       "visual-identity-palette": [path.join(artifactRoot, "visual-identity-palette.json")],
       "world-plan": [path.join(planRoot, "world-plan.png")],
       "entry-whitebox-target": [path.join(planRoot, "entry-whitebox-target.png")],
-      "terrain-height-intent-prompt": [path.join(artifactRoot, "terrain-height-intent-prompt.md")],
-      "terrain-height-intent": [path.join(planRoot, "terrain-height-intent.png")],
-      "builder-authoring-spec": [path.join(artifactRoot, "authoring.builder.json")],
+      "world-module": [path.join(artifactRoot, "world.mjs")],
       "authoring-spec": [path.join(artifactRoot, "authoring.json")],
-      "terrain-height-intent-report": [path.join(artifactRoot, "terrain-height-intent-report.json")],
-      "terrain-compilation-manifest": [path.join(artifactRoot, "terrain-compilation-manifest.json")],
-      "final-authoring-self-check": [path.join(artifactRoot, "final-authoring-self-check.json")],
       "implementation-map-draft": [path.join(artifactRoot, "implementation-map.draft.json")],
       "builder-self-check": [path.join(artifactRoot, "builder-self-check.json")],
+      "builder-top-down-comparison": [
+        path.join(artifactRoot, "builder-top-down-comparison.png"),
+      ],
+      "builder-entry-comparison": [
+        path.join(artifactRoot, "builder-entry-comparison.png"),
+      ],
+      "builder-host-resume": [path.join(artifactRoot, "builder-host-resume.json")],
       "implementation-map": [path.join(artifactRoot, "scene-implementation-map.json")],
       "execution-plan": [path.join(artifactRoot, "world.build.json")],
       "route-validation-manifest": [path.join(artifactRoot, "route-validation-manifest.json")],
       "opening-frame": [path.join(artifactRoot, "opening-frame.png")],
       "runtime-snapshot": [path.join(artifactRoot, "runtime-snapshot.json")],
+      "whitebox-capture-receipt": [path.join(artifactRoot, "whitebox-capture-receipt.json")],
       "whitebox-triview-manifest": [path.join(artifactRoot, "triviews", "whitebox-triview-manifest.json")],
       "entry-third-person-validation": [path.join(artifactRoot, "entry-third-person-validation.json")],
       "visual-generation-prompts": [path.join(artifactRoot, "visual-generation-prompts.json")],
@@ -868,6 +1221,9 @@ export function createStudio(options = {}) {
   async function writeRecordUnlocked(record) {
     record.updatedAt = new Date().toISOString();
     await writeJsonAtomic(recordPath(record.id), record);
+    worldListRevision += 1;
+    enrichedWorldListCache = null;
+    enrichedWorldListInFlight = null;
   }
 
   async function writeRecord(record) {
@@ -1069,6 +1425,156 @@ export function createStudio(options = {}) {
     }
   }
 
+  async function hasTrustedBuilderResumeInputs(record) {
+    if (!record?.sceneId) return false;
+    const artifactRoot = path.join(repoRoot, "artifacts/scenes", record.sceneId);
+    const planRoot = path.join(repoRoot, "apps/playground/public/scene-plans", record.sceneId);
+    const paths = {
+      brief: path.join(artifactRoot, "scene-brief.md"),
+      plannerCheck: path.join(artifactRoot, "planner-self-check.json"),
+      palette: path.join(artifactRoot, "visual-identity-palette.json"),
+      worldPlan: path.join(planRoot, "world-plan.png"),
+      entryWhiteboxTarget: path.join(planRoot, "entry-whitebox-target.png"),
+      worldModule: path.join(artifactRoot, "world.mjs"),
+      authoring: path.join(artifactRoot, "authoring.json"),
+      mapDraft: path.join(artifactRoot, "implementation-map.draft.json"),
+      builderCheck: path.join(artifactRoot, "builder-self-check.json"),
+      builderTopDownComparison: path.join(
+        artifactRoot,
+        "builder-top-down-comparison.png",
+      ),
+      builderEntryComparison: path.join(
+        artifactRoot,
+        "builder-entry-comparison.png",
+      ),
+    };
+    if (!(await Promise.all(Object.values(paths).map((filePath) =>
+      nonemptyArtifact(filePath)))).every(Boolean)) return false;
+    if (!(await Promise.all([
+      paths.worldPlan,
+      paths.entryWhiteboxTarget,
+      paths.builderTopDownComparison,
+      paths.builderEntryComparison,
+    ].map((filePath) => pngArtifact(filePath)))).every(Boolean)) return false;
+    const [
+      plannerCheck,
+      palette,
+      builderCheck,
+      briefHash,
+      worldPlanHash,
+      entryWhiteboxTargetHash,
+      worldModuleHash,
+      authoringHash,
+      mapDraftHash,
+    ] = await Promise.all([
+      readJsonIfPresent(paths.plannerCheck),
+      readJsonIfPresent(paths.palette),
+      readJsonIfPresent(paths.builderCheck),
+      sourceHash(paths.brief),
+      sourceHash(paths.worldPlan),
+      sourceHash(paths.entryWhiteboxTarget),
+      sourceHash(paths.worldModule),
+      sourceHash(paths.authoring),
+      sourceHash(paths.mapDraft),
+    ]);
+    return plannerCheck?.kind === "worldkit-planner-self-check" &&
+      plannerCheck.schemaVersion === 1 &&
+      plannerCheck.validatorVersion === "worldkit-planner-self-check-v4" &&
+      plannerCheck.sceneId === record.sceneId && plannerCheck.status === "passed" &&
+      plannerCheck.inputs?.sceneBriefHash === briefHash &&
+      plannerCheck.inputs?.worldPlanHash === worldPlanHash &&
+      plannerCheck.inputs?.entryWhiteboxTargetHash === entryWhiteboxTargetHash &&
+      palette?.kind === "worldkit-visual-identity-palette" &&
+      palette.schemaVersion === 1 && palette.sceneId === record.sceneId &&
+      builderCheck?.kind === "worldkit-block-builder-self-check" &&
+      builderCheck.schemaVersion === 1 &&
+      [
+        "worldkit-block-builder-self-check-v2",
+        "worldkit-block-builder-self-check-v3",
+        "worldkit-block-builder-self-check-v4",
+        "worldkit-block-builder-self-check-v5",
+        "worldkit-block-builder-self-check-v6",
+        "worldkit-block-builder-self-check-v7",
+        "worldkit-block-builder-self-check-v8",
+        "worldkit-block-builder-self-check-v9",
+        "worldkit-block-builder-self-check-v10",
+      ].includes(builderCheck.validatorVersion) &&
+      builderCheck.sceneId === record.sceneId && builderCheck.status === "passed" &&
+      builderCheck.inputs?.sceneBriefHash === briefHash &&
+      builderCheck.inputs?.worldModuleHash === worldModuleHash &&
+      builderCheck.inputs?.authoringSpecHash === authoringHash &&
+      builderCheck.inputs?.implementationMapDraftHash === mapDraftHash;
+  }
+
+  async function hasTrustedPlannerResumeInputs(record, { requirePalette = true } = {}) {
+    if (!["planner", "coding-agent"].includes(record?.failedStage)) return false;
+    const artifactRoot = path.join(repoRoot, "artifacts/scenes", record.sceneId);
+    const planRoot = path.join(repoRoot, "apps/playground/public/scene-plans", record.sceneId);
+    const paths = {
+      brief: path.join(artifactRoot, "scene-brief.md"),
+      plannerCheck: path.join(artifactRoot, "planner-self-check.json"),
+      palette: path.join(artifactRoot, "visual-identity-palette.json"),
+      worldPlan: path.join(planRoot, "world-plan.png"),
+      entryWhiteboxTarget: path.join(planRoot, "entry-whitebox-target.png"),
+    };
+    const requiredPaths = Object.entries(paths)
+      .filter(([name]) => requirePalette || name !== "palette")
+      .map(([, filePath]) => filePath);
+    if (!(await Promise.all(requiredPaths.map((filePath) =>
+      nonemptyArtifact(filePath)))).every(Boolean)) return false;
+    if (!(await Promise.all([
+      paths.worldPlan,
+      paths.entryWhiteboxTarget,
+    ].map((filePath) => pngArtifact(filePath)))).every(Boolean)) return false;
+    const [brief, plannerCheck, palette, briefHash, worldPlanHash, entryWhiteboxTargetHash] =
+      await Promise.all([
+        readFile(paths.brief, "utf8").catch(() => null),
+        readJsonIfPresent(paths.plannerCheck),
+        readJsonIfPresent(paths.palette),
+        sourceHash(paths.brief),
+        sourceHash(paths.worldPlan),
+        sourceHash(paths.entryWhiteboxTarget),
+      ]);
+    const plannerInputsAreTrusted = typeof brief === "string" && brief.startsWith("# WorldKit Scene Brief") &&
+      plannerCheck?.kind === "worldkit-planner-self-check" &&
+      plannerCheck.schemaVersion === 1 &&
+      plannerCheck.validatorVersion === "worldkit-planner-self-check-v4" &&
+      plannerCheck.sceneId === record.sceneId && plannerCheck.status === "passed" &&
+      plannerCheck.inputs?.sceneBriefHash === briefHash &&
+      plannerCheck.inputs?.worldPlanHash === worldPlanHash &&
+      plannerCheck.inputs?.entryWhiteboxTargetHash === entryWhiteboxTargetHash;
+    if (!plannerInputsAreTrusted || !requirePalette) return plannerInputsAreTrusted;
+    return palette?.kind === "worldkit-visual-identity-palette" &&
+      palette.schemaVersion === 1 && palette.sceneId === record.sceneId &&
+      /^sha256:[a-f0-9]{64}$/.test(palette.sceneBriefHash ?? "") &&
+      Array.isArray(palette.targets) && palette.targets.length > 0 && palette.targets.length <= 5;
+  }
+
+  async function prepareTrustedPlannerResume(record) {
+    if (await hasTrustedPlannerResumeInputs(record)) return true;
+    if (!await hasTrustedPlannerResumeInputs(record, { requirePalette: false })) return false;
+    const artifactRoot = path.join(repoRoot, "artifacts/scenes", record.sceneId);
+    const result = spawnSync("pnpm", [
+      "exec",
+      "tsx",
+      "scripts/visual/write-visual-identity-palette.ts",
+      "--scene-id",
+      record.sceneId,
+      "--brief",
+      path.join(artifactRoot, "scene-brief.md"),
+      "--output",
+      path.join(artifactRoot, "visual-identity-palette.json"),
+    ], { cwd: repoRoot, encoding: "utf8" });
+    if (result.status !== 0) {
+      await appendJobLog(
+        record.id,
+        `\nLate Planner recovery could not derive the visual identity palette: ${result.stderr || result.stdout}\n`,
+      );
+      return false;
+    }
+    return hasTrustedPlannerResumeInputs(record);
+  }
+
   function canonicalJson(value) {
     if (value === null || typeof value !== "object") return JSON.stringify(value);
     if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
@@ -1107,7 +1613,7 @@ export function createStudio(options = {}) {
     sceneId,
     builderCheck,
     build,
-    authoringHash,
+    authoringSpecHash,
     freshnessFloor,
   ) {
     if (builderCheck.requiresTrustedRouteValidation !== true) return true;
@@ -1145,7 +1651,7 @@ export function createStudio(options = {}) {
       requiredRoutes.length === 0 ||
       hashCanonicalJson(executionPlan) !== build.executionPlanHash ||
       hashCanonicalJson(build.normalizedWorldIr) !== build.normalizedWorldIrHash ||
-      executionPlan.authoringSpecHash !== authoringHash
+      executionPlan.authoringSpecHash !== authoringSpecHash
     ) return false;
     const subject = report.subject;
     const receipt = report.routeValidationSetReceipt;
@@ -1196,130 +1702,145 @@ export function createStudio(options = {}) {
       report.gateResultsById?.["route-runtime-conformance"]?.status === "passed";
   }
 
-  async function hasTrustedWhiteboxArtifacts(artifactRoot, sceneId, freshnessFloor = Number.NEGATIVE_INFINITY) {
+  async function hasPlayableWhiteboxArtifacts(
+    artifactRoot,
+    sceneId,
+    freshnessFloor = Number.NEGATIVE_INFINITY,
+  ) {
     const paths = {
-      brief: path.join(artifactRoot, "scene-brief.md"),
-      plannerCheck: path.join(artifactRoot, "planner-self-check.json"),
-      palette: path.join(artifactRoot, "visual-identity-palette.json"),
-      terrainPrompt: path.join(artifactRoot, "terrain-height-intent-prompt.md"),
-      terrainIntent: path.join(
-        repoRoot,
-        "apps/playground/public/scene-plans",
-        sceneId,
-        "terrain-height-intent.png",
-      ),
-      builderAuthoring: path.join(artifactRoot, "authoring.builder.json"),
-      builderCheck: path.join(artifactRoot, "builder-self-check.json"),
       authoring: path.join(artifactRoot, "authoring.json"),
-      terrainReport: path.join(artifactRoot, "terrain-height-intent-report.json"),
-      terrainManifest: path.join(artifactRoot, "terrain-compilation-manifest.json"),
-      finalCheck: path.join(artifactRoot, "final-authoring-self-check.json"),
-      mapDraft: path.join(artifactRoot, "implementation-map.draft.json"),
       implementationMap: path.join(artifactRoot, "scene-implementation-map.json"),
       build: path.join(artifactRoot, "world.build.json"),
       openingFrame: path.join(artifactRoot, "opening-frame.png"),
       snapshot: path.join(artifactRoot, "runtime-snapshot.json"),
+      captureReceipt: path.join(artifactRoot, "whitebox-capture-receipt.json"),
+    };
+    if (!(await Promise.all(Object.values(paths).map((filePath) =>
+      nonemptyArtifact(filePath, freshnessFloor)))).every(Boolean)) return false;
+    if (!await pngArtifact(paths.openingFrame, freshnessFloor)) return false;
+    const [authoring, implementationMap, build, snapshot] = await Promise.all([
+      readJsonIfPresent(paths.authoring),
+      readJsonIfPresent(paths.implementationMap),
+      readJsonIfPresent(paths.build),
+      readJsonIfPresent(paths.snapshot),
+    ]);
+    const authoringSpecHash = authoring === null ? null : hashCanonicalJson(authoring);
+    const passed = authoring?.kind === "worldkit-authoring-spec" && authoring.schemaVersion === 4 &&
+      authoring.id === sceneId &&
+      implementationMap?.kind === "worldkit-scene-brief-implementation-map" &&
+      implementationMap.schemaVersion === 1 && implementationMap.sceneId === sceneId &&
+      implementationMap.authoringSpecId === authoring.id &&
+      implementationMap.authoringSpecHash === authoringSpecHash &&
+      build?.kind === "worldkit-build-artifact" && build.schemaVersion === 4 &&
+      /^sha256:[a-f0-9]{64}$/.test(build.worldBuildIdentityHash ?? "") &&
+      /^sha256:[a-f0-9]{64}$/.test(build.executionPlanHash ?? "") &&
+      build.executionPlan?.kind === "worldkit-canonical-scene-execution-plan" &&
+      build.executionPlan.schemaVersion === 1 &&
+      hashCanonicalJson(build.executionPlan) === build.executionPlanHash &&
+      build.executionPlan.authoringSpecHash === authoringSpecHash &&
+      hashCanonicalJson(build.normalizedWorldIr) === build.normalizedWorldIrHash &&
+      snapshot?.kind === "worldkit-runtime-snapshot" && snapshot.schemaVersion === 4 &&
+      snapshot.runtime?.phase === "ready" && snapshot.resources?.phase === "ready";
+    return passed && await verifyPlayableWhiteboxArtifacts({
+      sceneId,
+      authoringPath: paths.authoring,
+      buildPath: paths.build,
+      openingFramePath: paths.openingFrame,
+      runtimeSnapshotPath: paths.snapshot,
+      captureReceiptPath: paths.captureReceipt,
+      requireTriview: false,
+    });
+  }
+
+  async function hasTrustedWhiteboxArtifacts(artifactRoot, sceneId, freshnessFloor = Number.NEGATIVE_INFINITY) {
+    const planRoot = path.join(repoRoot, "apps/playground/public/scene-plans", sceneId);
+    const paths = {
+      brief: path.join(artifactRoot, "scene-brief.md"),
+      plannerCheck: path.join(artifactRoot, "planner-self-check.json"),
+      palette: path.join(artifactRoot, "visual-identity-palette.json"),
+      worldPlan: path.join(planRoot, "world-plan.png"),
+      entryWhiteboxTarget: path.join(planRoot, "entry-whitebox-target.png"),
+      worldModule: path.join(artifactRoot, "world.mjs"),
+      authoring: path.join(artifactRoot, "authoring.json"),
+      mapDraft: path.join(artifactRoot, "implementation-map.draft.json"),
+      builderCheck: path.join(artifactRoot, "builder-self-check.json"),
+      implementationMap: path.join(artifactRoot, "scene-implementation-map.json"),
+      build: path.join(artifactRoot, "world.build.json"),
+      openingFrame: path.join(artifactRoot, "opening-frame.png"),
+      snapshot: path.join(artifactRoot, "runtime-snapshot.json"),
+      captureReceipt: path.join(artifactRoot, "whitebox-capture-receipt.json"),
       captureTargets: path.join(artifactRoot, "triviews", "whitebox-triview-manifest.json"),
     };
     if (!(await Promise.all(Object.values(paths).map((filePath) =>
       nonemptyArtifact(filePath, freshnessFloor)))).every(Boolean)) return false;
-    if (!await pngArtifact(paths.openingFrame, freshnessFloor) ||
-      !await pngArtifact(paths.terrainIntent, freshnessFloor)) return false;
+    if (!(await Promise.all([
+      paths.openingFrame,
+      paths.worldPlan,
+      paths.entryWhiteboxTarget,
+    ].map((filePath) => pngArtifact(filePath, freshnessFloor)))).every(Boolean)) return false;
 
     const [
       brief,
       plannerCheck,
       palette,
-      builderAuthoring,
       authoring,
       builderCheck,
-      terrainReport,
-      terrainManifest,
-      finalCheck,
       implementationMap,
       build,
       snapshot,
       captureTargets,
       briefHash,
-      terrainPromptHash,
-      terrainIntentHash,
-      plannerReceiptHash,
-      builderAuthoringHash,
-      builderReceiptHash,
+      worldPlanHash,
+      entryWhiteboxTargetHash,
+      worldModuleHash,
       authoringHash,
       mapDraftHash,
-      terrainReportHash,
-      finalCheckHash,
     ] = await Promise.all([
       readFile(paths.brief, "utf8").catch(() => null),
       readJsonIfPresent(paths.plannerCheck),
       readJsonIfPresent(paths.palette),
-      readJsonIfPresent(paths.builderAuthoring),
       readJsonIfPresent(paths.authoring),
       readJsonIfPresent(paths.builderCheck),
-      readJsonIfPresent(paths.terrainReport),
-      readJsonIfPresent(paths.terrainManifest),
-      readJsonIfPresent(paths.finalCheck),
       readJsonIfPresent(paths.implementationMap),
       readJsonIfPresent(paths.build),
       readJsonIfPresent(paths.snapshot),
       readJsonIfPresent(paths.captureTargets),
       sourceHash(paths.brief),
-      sourceHash(paths.terrainPrompt),
-      sourceHash(paths.terrainIntent),
-      sourceHash(paths.plannerCheck),
-      sourceHash(paths.builderAuthoring),
-      sourceHash(paths.builderCheck),
+      sourceHash(paths.worldPlan),
+      sourceHash(paths.entryWhiteboxTarget),
+      sourceHash(paths.worldModule),
       sourceHash(paths.authoring),
       sourceHash(paths.mapDraft),
-      sourceHash(paths.terrainReport),
-      sourceHash(paths.finalCheck),
     ]);
     if (
       typeof brief !== "string" || !brief.startsWith("# WorldKit Scene Brief") ||
       plannerCheck?.kind !== "worldkit-planner-self-check" || plannerCheck.schemaVersion !== 1 ||
-      plannerCheck.validatorVersion !== "worldkit-planner-self-check-v3" ||
+      ![
+        "worldkit-planner-self-check-v3",
+        "worldkit-planner-self-check-v4",
+      ].includes(plannerCheck.validatorVersion) ||
       plannerCheck.sceneId !== sceneId || plannerCheck.status !== "passed" ||
       plannerCheck.inputs?.sceneBriefHash !== briefHash ||
-      plannerCheck.inputs?.terrainHeightIntentPromptHash !== terrainPromptHash ||
-      plannerCheck.inputs?.terrainHeightIntentPngHash !== terrainIntentHash ||
+      plannerCheck.inputs?.worldPlanHash !== worldPlanHash ||
+      plannerCheck.inputs?.entryWhiteboxTargetHash !== entryWhiteboxTargetHash ||
+      typeof plannerCheck.imageMeasurements?.worldPlan?.blockPaletteCoverageRatio !== "number" ||
+      plannerCheck.imageMeasurements.worldPlan.blockPaletteCoverageRatio < 0.03 ||
+      typeof plannerCheck.imageMeasurements?.entryWhiteboxTarget?.blockPaletteCoverageRatio !== "number" ||
+      plannerCheck.imageMeasurements.entryWhiteboxTarget.blockPaletteCoverageRatio < 0.02 ||
+      typeof plannerCheck.imageMeasurements.entryWhiteboxTarget.composition?.subjectCenterErrorRatio !== "number" ||
+      plannerCheck.imageMeasurements.entryWhiteboxTarget.composition.subjectCenterErrorRatio > 0.015 ||
       palette?.kind !== "worldkit-visual-identity-palette" || palette.schemaVersion !== 1 ||
       palette.sceneId !== sceneId || !/^sha256:[a-f0-9]{64}$/.test(palette.sceneBriefHash ?? "") ||
       !Array.isArray(palette.targets) || palette.targets.length === 0 || palette.targets.length > 5 ||
-      builderAuthoring?.kind !== "worldkit-authoring-spec" || builderAuthoring.schemaVersion !== 4 ||
       authoring?.kind !== "worldkit-authoring-spec" || authoring.schemaVersion !== 4 ||
-      typeof authoring.id !== "string" || !idPattern.test(authoring.id) ||
-      builderCheck?.kind !== "worldkit-builder-self-check" || builderCheck.schemaVersion !== 1 ||
-      builderCheck.validatorVersion !== "worldkit-builder-self-check-v6" ||
+      authoring.id !== sceneId ||
+      builderCheck?.kind !== "worldkit-block-builder-self-check" || builderCheck.schemaVersion !== 1 ||
+      builderCheck.validatorVersion !== "worldkit-block-builder-self-check-v10" ||
       builderCheck.sceneId !== sceneId || builderCheck.status !== "passed" ||
-      builderCheck.terrainScaleEvidence === null ||
-      typeof builderCheck.terrainScaleEvidence !== "object" ||
-      !Array.isArray(builderCheck.routeBuildWindowEvidence) ||
       builderCheck.inputs?.sceneBriefHash !== briefHash ||
-      builderCheck.inputs?.authoringSpecHash !== builderAuthoringHash ||
+      builderCheck.inputs?.worldModuleHash !== worldModuleHash ||
+      builderCheck.inputs?.authoringSpecHash !== authoringHash ||
       builderCheck.inputs?.implementationMapDraftHash !== mapDraftHash ||
-      terrainReport?.kind !== "worldkit-terrain-height-intent-compile-report" ||
-      terrainReport.schemaVersion !== 1 || terrainReport.status !== "passed" ||
-      terrainReport.sourcePngHash !== terrainIntentHash ||
-      terrainManifest?.kind !== "worldkit-terrain-compilation-manifest" ||
-      terrainManifest.schemaVersion !== 1 || terrainManifest.sceneId !== sceneId ||
-      !trustedTerrainCompilerVersions.has(terrainManifest.compiler?.compilerVersion) ||
-      terrainManifest.compiler?.normalizationProfileId !== "signed-diverging-blue-gray-orange-median-datum@1" ||
-      terrainManifest.inputs?.plannerReceiptHash !== plannerReceiptHash ||
-      terrainManifest.inputs?.terrainHeightIntentPromptHash !== terrainPromptHash ||
-      terrainManifest.inputs?.terrainHeightIntentPngHash !== terrainIntentHash ||
-      terrainManifest.inputs?.builderReceiptHash !== builderReceiptHash ||
-      terrainManifest.inputs?.builderAuthoringSpecHash !== builderAuthoringHash ||
-      terrainManifest.inputs?.implementationMapDraftHash !== mapDraftHash ||
-      terrainManifest.outputs?.authoringSpecHash !== authoringHash ||
-      terrainManifest.outputs?.terrainCompileReportHash !== terrainReportHash ||
-      terrainManifest.outputs?.finalAuthoringSelfCheckHash !== finalCheckHash ||
-      finalCheck?.kind !== "worldkit-builder-self-check" || finalCheck.schemaVersion !== 1 ||
-      finalCheck.validatorVersion !== "worldkit-builder-self-check-v6" ||
-      finalCheck.sceneId !== sceneId || finalCheck.status !== "passed" ||
-      finalCheck.inputs?.sceneBriefHash !== briefHash ||
-      finalCheck.inputs?.authoringSpecHash !== authoringHash ||
-      finalCheck.inputs?.implementationMapDraftHash !== mapDraftHash ||
       implementationMap?.kind !== "worldkit-scene-brief-implementation-map" ||
       implementationMap.schemaVersion !== 1 || implementationMap.sceneId !== sceneId ||
       implementationMap.sceneBriefHash !== palette.sceneBriefHash ||
@@ -1333,7 +1854,6 @@ export function createStudio(options = {}) {
       !/^sha256:[a-f0-9]{64}$/.test(build.worldBuildIdentityHash ?? "") ||
       !/^sha256:[a-f0-9]{64}$/.test(build.executionPlanHash ?? "") ||
       snapshot?.kind !== "worldkit-runtime-snapshot" || snapshot.schemaVersion !== 4 ||
-      snapshot.worldBuildIdentityHash !== build.worldBuildIdentityHash ||
       captureTargets?.kind !== "worldkit-whitebox-triview-manifest" || captureTargets.schemaVersion !== 1 ||
       captureTargets.worldBuildIdentityHash !== build.worldBuildIdentityHash ||
       Object.hasOwn(captureTargets, "executionPlanHash") ||
@@ -1343,12 +1863,11 @@ export function createStudio(options = {}) {
     if (!await hasTrustedRouteValidationArtifacts(
       artifactRoot,
       sceneId,
-      finalCheck,
+      builderCheck,
       build,
-      authoringHash,
+      implementationMap.authoringSpecHash,
       freshnessFloor,
     )) return false;
-
     const paletteTargetIds = palette.targets.map(({ id }) => id);
     const mappingTargetIds = implementationMap.visualTargetMappings.map(({ visualTargetId }) => visualTargetId);
     const captureGroupTargetIds = implementationMap.visualCaptureGroups.map(({ visualTargetId }) => visualTargetId);
@@ -1375,7 +1894,19 @@ export function createStudio(options = {}) {
       ) return false;
       visualTargetIds.add(target.visualTargetId);
     }
-    return visualTargetIds.size === captureGroupByVisualTargetId.size;
+    return visualTargetIds.size === captureGroupByVisualTargetId.size &&
+      await verifyHostedWhiteboxArtifactsImplementation({
+        sceneId,
+        authoringPath: paths.authoring,
+        buildPath: paths.build,
+        openingFramePath: paths.openingFrame,
+        runtimeSnapshotPath: paths.snapshot,
+        captureReceiptPath: paths.captureReceipt,
+        trustedCapturePublicKeyPath,
+        requireTriview: true,
+        whiteboxTriviewManifestPath: paths.captureTargets,
+        whiteboxTriviewRoot: path.join(artifactRoot, "triviews"),
+      });
   }
 
   async function importExistingWorlds() {
@@ -1409,7 +1940,9 @@ export function createStudio(options = {}) {
           workflowPolicyVersion,
           captureRequired: false,
           captureStatus: "passed",
+          triviewStatus: "passed",
           outcome: "passed",
+          whiteboxOutcome: "passed",
           createdAt: timestamp,
           updatedAt: timestamp,
           startedAt: null,
@@ -1423,6 +1956,7 @@ export function createStudio(options = {}) {
 
   async function enrichRecord(record) {
     const scenePlanRoot = path.join(repoRoot, "apps/playground/public/scene-plans", record.sceneId);
+    const artifactRoot = path.join(repoRoot, "artifacts/scenes", record.sceneId);
     const whiteboxOpeningFrameAvailable = await fileExists(
       path.join(scenePlanRoot, "whitebox-opening-frame.png"),
     );
@@ -1434,11 +1968,28 @@ export function createStudio(options = {}) {
       "world-plan.png",
     ];
     const canonicalOpeningFrameAvailable = await fileExists(
-      path.join(repoRoot, "artifacts/scenes", record.sceneId, "opening-frame.png"),
+      path.join(artifactRoot, "opening-frame.png"),
     );
-    const canonicalAuthoringAvailable = await fileExists(
-      path.join(repoRoot, "artifacts/scenes", record.sceneId, "authoring.json"),
+    const attemptStartedAt = record.origin === "existing-scene-brief-world"
+      ? record.createdAt
+      : record.startedAt;
+    const attemptStartedAtMs = Date.parse(attemptStartedAt ?? "");
+    const whiteboxRuntimeAvailable = await hasPlayableWhiteboxArtifacts(
+      artifactRoot,
+      record.sceneId,
+      record.origin === "existing-scene-brief-world"
+        ? Number.NEGATIVE_INFINITY
+        : Number.isFinite(attemptStartedAtMs)
+          ? attemptStartedAtMs - 1_000
+          : Number.POSITIVE_INFINITY,
     );
+    const persistedError = typeof record.error === "string" ? record.error : null;
+    const diagnosticError = record.status === "failed" &&
+        /^World generation exited with code /.test(persistedError ?? "")
+      ? deriveWorldGenerationFailureReason(
+          await readFile(logPath(record.id), "utf8").catch(() => ""),
+        )
+      : persistedError;
     let coverUrl = canonicalOpeningFrameAvailable
       ? `/api/worlds/${record.id}/deliverables/opening-frame`
       : record.referenceImage ? `/api/worlds/${record.id}/reference` : null;
@@ -1453,18 +2004,94 @@ export function createStudio(options = {}) {
     return {
       ...record,
       codexBackend: effectiveCodexBackend(record),
+      error: diagnosticError,
+      captureError: record.captureError === persistedError
+        ? diagnosticError
+        : record.captureError,
       coverUrl,
       referenceUrl: record.referenceImage ? `/api/worlds/${record.id}/reference` : null,
       whiteboxOpeningFrameUrl: whiteboxOpeningFrameAvailable
         ? `/scene-assets/${record.sceneId}/whitebox-opening-frame.png`
         : null,
-      previewUrl: canonicalAuthoringAvailable && (record.captureStatus === "passed" || record.status === "ready")
+      whiteboxRuntimeAvailable,
+      previewUrl: whiteboxRuntimeAvailable
         ? `/play?authoring=1&world=${encodeURIComponent(record.id)}`
         : null,
       queuePosition: record.status === "queued"
         ? queue.findIndex((item) => item.endsWith(`:${record.id}`)) + 1
         : null,
     };
+  }
+
+  async function listEnrichedWorlds() {
+    if (enrichedWorldListCache?.expiresAt > Date.now()) return enrichedWorldListCache.worlds;
+    if (enrichedWorldListInFlight) return enrichedWorldListInFlight;
+    const revision = worldListRevision;
+    const promise = (async () => {
+      const records = await listRecords();
+      const worlds = await Promise.all(records.map(enrichRecord));
+      if (revision === worldListRevision) {
+        enrichedWorldListCache = { worlds, expiresAt: Date.now() + 5_000 };
+      }
+      return worlds;
+    })();
+    enrichedWorldListInFlight = promise;
+    try {
+      return await promise;
+    } finally {
+      if (enrichedWorldListInFlight === promise) enrichedWorldListInFlight = null;
+    }
+  }
+
+  function currentPlannerArtifactIdentity(plannerCheck) {
+    const inputs = plannerCheck?.inputs;
+    if (
+      plannerCheck?.kind !== "worldkit-planner-self-check" ||
+      plannerCheck.status !== "passed" ||
+      typeof inputs?.sceneBriefHash !== "string" ||
+      typeof inputs?.worldPlanHash !== "string" ||
+      typeof inputs?.entryWhiteboxTargetHash !== "string"
+    ) return null;
+    return {
+      sceneBriefHash: inputs.sceneBriefHash,
+      worldPlanHash: inputs.worldPlanHash,
+      entryWhiteboxTargetHash: inputs.entryWhiteboxTargetHash,
+    };
+  }
+
+  async function trustedPlannerArtifactIdentity(record, plannerCheck) {
+    const artifactIdentity = currentPlannerArtifactIdentity(plannerCheck);
+    if (artifactIdentity === null) return null;
+    const artifactRoot = path.join(repoRoot, "artifacts/scenes", record.sceneId);
+    const planRoot = path.join(repoRoot, "apps/playground/public/scene-plans", record.sceneId);
+    const [sceneBriefHash, worldPlanHash, entryWhiteboxTargetHash] = await Promise.all([
+      sourceHash(path.join(artifactRoot, "scene-brief.md")),
+      sourceHash(path.join(planRoot, "world-plan.png")),
+      sourceHash(path.join(planRoot, "entry-whitebox-target.png")),
+    ]);
+    return sceneBriefHash === artifactIdentity.sceneBriefHash &&
+      worldPlanHash === artifactIdentity.worldPlanHash &&
+      entryWhiteboxTargetHash === artifactIdentity.entryWhiteboxTargetHash
+      ? artifactIdentity
+      : null;
+  }
+
+  function effectivePlannerReview(record, artifactIdentity) {
+    if (artifactIdentity === null) {
+      return { status: "unavailable", artifactIdentity: null, reviewedAt: null };
+    }
+    const stored = record.plannerReview;
+    const current = stored?.artifactIdentity;
+    const matches = current?.sceneBriefHash === artifactIdentity.sceneBriefHash &&
+      current?.worldPlanHash === artifactIdentity.worldPlanHash &&
+      current?.entryWhiteboxTargetHash === artifactIdentity.entryWhiteboxTargetHash;
+    return matches && ["approved", "rejected"].includes(stored?.status)
+      ? {
+          status: stored.status,
+          artifactIdentity,
+          reviewedAt: stored.reviewedAt ?? null,
+        }
+      : { status: "pending", artifactIdentity, reviewedAt: null };
   }
 
   async function enrichTestSet(record, worldRecords = []) {
@@ -1500,7 +2127,8 @@ export function createStudio(options = {}) {
         latestBatchId,
         latestTotal: latestBatch.length,
         latestReady: latestBatch.filter(({ status }) => status === "ready").length,
-        latestActive: latestBatch.filter(({ status }) => ["queued", "running"].includes(status)).length,
+        latestActive: latestBatch.filter(({ status }) =>
+          ["queued", "running", "remote-pending"].includes(status)).length,
         latestFailed: latestBatch.filter(({ status }) => ["failed", "interrupted"].includes(status)).length,
         reliability: deriveReliabilityMetrics(
           latestBatch.filter((world) => world.workflowPolicyVersion === workflowPolicyVersion),
@@ -1522,12 +2150,12 @@ export function createStudio(options = {}) {
     const definitions = [
       {
         id: "scene-brief", phase: "planner", title: "Scene Brief（非权威意图摘要）",
-        description: "参考图驱动的意图摘要；它不替代 WorldSpec、plan-lock 或 Canonical AuthoringSpec。",
+        description: "参考图驱动的简短意图摘要；它描述运动、空间、通行、构图和完整视觉目标，不定义几何或运行时。",
         owner: "WorldKit Planner", format: "Markdown",
       },
       {
         id: "planner-self-check", phase: "planner", title: "Planner 自检收据",
-        description: "Planner 在同一 Codex Job 内完成 Brief、PNG 和主体居中检查后生成的输入 Hash 与通过状态。",
+        description: "Planner 在同一 Codex Job 内完成 Brief、两张方块白膜图、固定颜色、16:9 与入口主体居中检查后生成的输入 Hash 与通过状态；俯视地理、镜头外延伸和出生点含义由人工审核。",
         owner: "WorldKit Planner", format: "JSON",
       },
       {
@@ -1536,68 +2164,58 @@ export function createStudio(options = {}) {
         owner: "Trusted Host", format: "JSON",
       },
       {
-        id: "world-plan", phase: "planner", title: "极简导航俯视图",
-        description: "只保留参考图一致的世界布局、初始人物位置和可通行区域/路径。",
+        id: "world-plan", phase: "planner", title: "方块白膜俯视规划图",
+        description: "以统一方块颜色表示至少四倍参考可见面积的连续布局、镜头外延伸、一个小型出生点、地面行进区域、碰撞、交互、水/云与完整标志物。飞行和游泳不绘制可行域。",
         owner: "WorldKit Planner", format: "PNG",
       },
       {
-        id: "entry-whitebox-target", phase: "planner", title: "进入构图意图图",
-        description: "非权威的进入构图目标。真实白模必须由 Babylon Runtime 捕获，不能由图片生成冒充。",
+        id: "entry-whitebox-target", phase: "planner", title: "方块白膜进入构图图",
+        description: "与俯视图使用同一方块语义颜色的 16:9 第三人称进入意图。真实白模仍由 Babylon Runtime 捕获。",
         owner: "WorldKit Planner", format: "PNG",
       },
       {
-        id: "terrain-height-intent-prompt", phase: "planner", title: "Height Intent 提示词",
-        description: "冻结地形语义、坐标朝向、signed 色标与静态建筑排除规则。",
-        owner: "WorldKit Planner", format: "Markdown",
+        id: "world-module", phase: "coding-agent", title: "方块世界模块",
+        description: "Builder 直接创建单位方块、受控主体与第三人称相机的唯一权威 ESM 模块。",
+        owner: "Block Builder", format: "JavaScript",
       },
       {
-        id: "terrain-height-intent", phase: "planner", title: "Height Intent 位图",
-        description: "只表达连续基础地貌高低，不承载建筑、独立山峰或渲染纹理。",
-        owner: "WorldKit Planner", format: "PNG",
-      },
-      {
-        id: "builder-authoring-spec", phase: "coding-agent", title: "Builder AuthoringSpec V4",
-        description: "Builder 输出的预地形场景 JSON；定义尺寸、datum、约束与静态几何。",
-        owner: "Coding Agent", format: "JSON",
+        id: "authoring-spec", phase: "coding-agent", title: "Canonical AuthoringSpec V4",
+        description: "由方块自检器确定性派生的 Host 运行传输；不是 Agent 世界输入。",
+        owner: "Trusted Host", format: "JSON",
       },
       {
         id: "implementation-map-draft", phase: "coding-agent", title: "视觉目标实现映射草稿",
-        description: "简报视觉目标到实际 runtime entity 的一对多归因。",
-        owner: "Coding Agent", format: "JSON",
-      },
-      {
-        id: "authoring-spec", phase: "terrain-compilation", title: "最终 Canonical AuthoringSpec V4",
-        description: "可信宿主将 Height Intent 编译并复验后原子发布的运行权威。",
-        owner: "Trusted Host", format: "JSON",
-      },
-      {
-        id: "terrain-height-intent-report", phase: "terrain-compilation", title: "Height Intent 编译报告",
-        description: "记录投影、median datum 归一化、约束调整与编译诊断。",
-        owner: "Trusted Host", format: "JSON",
-      },
-      {
-        id: "terrain-compilation-manifest", phase: "terrain-compilation", title: "地形编译绑定清单",
-        description: "绑定 Planner/Builder 收据、原始位图、编译器版本与最终产物哈希。",
-        owner: "Trusted Host", format: "JSON",
-      },
-      {
-        id: "final-authoring-self-check", phase: "terrain-compilation", title: "最终 Authoring 自检收据",
-        description: "对注入地形后的最终 AuthoringSpec 重跑源码同源校验所得收据。",
+        description: "由方块 visualGroupId 自动派生的视觉目标到 runtime entity 归因。",
         owner: "Trusted Host", format: "JSON",
       },
       {
         id: "builder-self-check", phase: "coding-agent", title: "Builder 自检收据",
-        description: "Builder 在同一任务内完成当前 Schema、布局、编译和映射检查后生成的输入哈希与通过状态。",
-        owner: "Coding Agent", format: "JSON",
+        description: "Builder 在同一任务内完成方块、连通性、主体、相机、编译和映射检查后的输入哈希与状态。",
+        owner: "Block Builder", format: "JSON",
       },
       {
-        id: "implementation-map", phase: "canonical-build", title: "已校验 Scene Brief 实现映射",
+        id: "builder-top-down-comparison", phase: "coding-agent", title: "Builder 俯视复核图",
+        description: "左侧是 Planner 俯视意图，右侧是当前 world.mjs 的确定性俯视软件渲染；供 Builder 在同一任务内看图修改。",
+        owner: "Block Builder", format: "PNG",
+      },
+      {
+        id: "builder-entry-comparison", phase: "coding-agent", title: "Builder 进入构图复核图",
+        description: "左侧是 Planner 进入图，右侧是当前 world.mjs 的确定性第三人称软件渲染；供 Builder 检查居中、层次、尺度和遮挡。",
+        owner: "Block Builder", format: "PNG",
+      },
+      {
+        id: "builder-host-resume", phase: "block-build", title: "Host-only 恢复收据",
+        description: "证明恢复过程复用了同一 Scene Brief、world.mjs 与视觉映射，并由当前可信 Host 重新派生内部运行传输。",
+        owner: "Trusted Host", format: "JSON", optional: record.resumeFromStage !== "block-build",
+      },
+      {
+        id: "implementation-map", phase: "block-build", title: "已校验 Scene Brief 实现映射",
         description: "包含 Scene Brief 与 AuthoringSpec 哈希的可信映射。",
         owner: "Trusted Host", format: "JSON",
       },
       {
-        id: "execution-plan", phase: "canonical-build", title: "Canonical Scene Plan V1",
-        description: "由当前 Canonical compiler 从 Authoring V4 / IR V4 生成的执行计划。",
+        id: "execution-plan", phase: "block-build", title: "Canonical Scene Plan V1",
+        description: "由当前 Canonical compiler 从 Authoring V4 / IR V4 生成并绑定 World Build Identity 的执行计划。",
         owner: "Trusted Host", format: "JSON",
       },
       {
@@ -1611,6 +2229,11 @@ export function createStudio(options = {}) {
         owner: "Babylon Runtime", format: "JSON",
       },
       {
+        id: "whitebox-capture-receipt", phase: "runtime-capture", title: "可信白膜捕获回执",
+        description: "将正式 World Build Identity 与首帧、完整 Runtime Snapshot 及可选三视图字节绑定。",
+        owner: "Trusted Host", format: "JSON",
+      },
+      {
         id: "whitebox-triview-manifest", phase: "runtime-capture", title: "白膜三视图清单",
         description: "每个 subject/object 的 Front / Right / Back 捕获索引。",
         owner: "Babylon Runtime", format: "JSON",
@@ -1621,32 +2244,32 @@ export function createStudio(options = {}) {
         owner: "Trusted Host", format: "JSON",
       },
       {
-        id: "visual-generation-prompts", phase: "visual-prompt-synthesis", title: "视觉生成提示词包",
-        description: "可配置视觉提供方生成的共享视觉约束、新首帧提示词和逐目标三视图提示词。",
-        owner: "Configured Visual Prompt Provider", format: "JSON", optional: record.styledOpeningFrameRequired !== true,
+        id: "visual-generation-prompts", phase: "visual-reconstruction", title: "视觉生成提示词包",
+        description: "同一个 LWDP Codex Job 固化首帧和全部完整目标三视图的参考职责与提示词。",
+        owner: "Visual Reconstructor", format: "JSON", optional: record.styledOpeningFrameRequired !== true,
       },
       {
-        id: "styled-opening-frame", phase: "visual-imagegen", title: "样式化首帧",
-        description: "严格保持白膜地形、空间和相机投影；主体细节、材质、风格与灯光来自用户首帧。",
-        owner: "Configured Image Provider", format: "PNG", optional: record.styledOpeningFrameRequired !== true,
+        id: "styled-opening-frame", phase: "visual-reconstruction", title: "样式化首帧",
+        description: "真实白膜首帧是唯一底图并锁定全部空间投影；用户首帧只提供主体身份、材质、配色、风格和光照语言。",
+        owner: "Visual Reconstructor", format: "PNG", optional: record.styledOpeningFrameRequired !== true,
       },
       {
-        id: "styled-opening-frame-manifest", phase: "visual-imagegen", title: "新首帧素材清单",
+        id: "styled-opening-frame-manifest", phase: "visual-reconstruction", title: "新首帧素材清单",
         description: "绑定真实白膜首帧、用户首帧、白膜三视图和新首帧，并记录内容哈希。",
         owner: "Trusted Host", format: "JSON", optional: true,
       },
       {
-        id: "styled-opening-frame-report", phase: "visual-imagegen", title: "新首帧完成报告",
+        id: "styled-opening-frame-report", phase: "visual-reconstruction", title: "新首帧完成报告",
         description: "记录新首帧流程的完成状态和素材清单哈希。",
         owner: "Trusted Host", format: "JSON", optional: true,
       },
       {
-        id: "styled-triviews-manifest", phase: "visual-imagegen", title: "渲染后三视图清单",
+        id: "styled-triviews-manifest", phase: "visual-reconstruction", title: "渲染后三视图清单",
         description: "绑定新首帧、每个完整视觉组的白膜三视图与渲染后三视图，并记录内容哈希。",
         owner: "Trusted Host", format: "JSON", optional: record.styledTriviewsRequired !== true,
       },
       {
-        id: "styled-triviews-report", phase: "visual-imagegen", title: "渲染后三视图完成报告",
+        id: "styled-triviews-report", phase: "visual-reconstruction", title: "渲染后三视图完成报告",
         description: "记录自动生成的视觉组数量和三视图清单哈希。",
         owner: "Trusted Host", format: "JSON", optional: record.styledTriviewsRequired !== true,
       },
@@ -1657,7 +2280,7 @@ export function createStudio(options = {}) {
       },
       {
         id: "evaluation-report", phase: record.styledTriviewsRequired === true
-          ? "visual-imagegen"
+          ? "visual-reconstruction"
           : "runtime-capture", title: "评测报告",
         description: "基于结构化 gate 和 capture 结果的最终 passed/failed 判定。",
         owner: "Creator Studio", format: "JSON",
@@ -1705,10 +2328,39 @@ export function createStudio(options = {}) {
   async function collectWorldMedia(record) {
     const artifactRoot = path.join(repoRoot, "artifacts/scenes", record.sceneId);
     const planRoot = path.join(repoRoot, "apps/playground/public/scene-plans", record.sceneId);
-    const [sceneBrief, captureManifest] = await Promise.all([
+    const [sceneBrief, plannerCheck, captureManifest, episodes] = await Promise.all([
       readFile(path.join(artifactRoot, "scene-brief.md"), "utf8").catch(() => null),
+      readJsonIfPresent(path.join(artifactRoot, "planner-self-check.json")),
       readJsonIfPresent(path.join(artifactRoot, "triviews", "whitebox-triview-manifest.json")),
+      episodeWorkflows.listForScene(record.sceneId),
     ]);
+    const plannerValidation = plannerCheck?.kind === "worldkit-planner-self-check" && [
+        "worldkit-planner-self-check-v3",
+        "worldkit-planner-self-check-v4",
+      ].includes(plannerCheck.validatorVersion)
+      ? {
+          status: plannerCheck.status,
+          validatorVersion: plannerCheck.validatorVersion,
+          worldPlan: {
+            blockPaletteCoverageRatio:
+              plannerCheck.imageMeasurements?.worldPlan?.blockPaletteCoverageRatio ?? null,
+            traversablePixelCount:
+              plannerCheck.imageMeasurements?.worldPlan?.traversablePixelCount ?? null,
+            interactivePixelCount:
+              plannerCheck.imageMeasurements?.worldPlan?.interactivePixelCount ?? null,
+          },
+          entryWhiteboxTarget: {
+            blockPaletteCoverageRatio:
+              plannerCheck.imageMeasurements?.entryWhiteboxTarget?.blockPaletteCoverageRatio ?? null,
+            aspectRatio:
+              plannerCheck.imageMeasurements?.entryWhiteboxTarget?.aspectRatio ?? null,
+            subjectCenterErrorRatio:
+              plannerCheck.imageMeasurements?.entryWhiteboxTarget?.composition?.subjectCenterErrorRatio ?? null,
+          },
+        }
+      : null;
+    const plannerArtifactIdentity = await trustedPlannerArtifactIdentity(record, plannerCheck);
+    const plannerReview = effectivePlannerReview(record, plannerArtifactIdentity);
     const planning = [];
     if (record.referenceImage) {
       planning.push({
@@ -1719,19 +2371,25 @@ export function createStudio(options = {}) {
     if (sceneBrief) {
       planning.push({
         kind: "scene-brief", title: "轻量场景简报",
-        description: "运动模式、完整世界、通行意图、首帧与完整视觉目标。",
+        description: "一个或多个运动模式、四倍连续世界、地面通行意图、首帧与完整视觉目标。",
         prompt: sceneBrief, url: `/api/worlds/${record.id}/deliverables/scene-brief`, available: true,
       });
     }
     for (const item of [
-      ["world-plan", "极简导航俯视图", "只显示参考图一致的世界布局、初始人物位置和可通行区域/路径。", "world-plan.png", `/scene-assets/${record.sceneId}/world-plan.png`],
-      ["entry-whitebox-target", "标准进入白膜目标", "Planner 规定的可玩进入构图。", "entry-whitebox-target.png", `/scene-assets/${record.sceneId}/entry-whitebox-target.png`],
-      ["terrain-height-intent", "连续地表 Height Intent", "signed 色标表达基础地貌的下陷、datum 与凸起；静态建筑另行建模。", "terrain-height-intent.png", `/scene-assets/${record.sceneId}/terrain-height-intent.png`],
-      ["opening-frame", "实际运行进入首帧", "Canonical JSON 经 Babylon 真实渲染后的结果。", "opening-frame.png", `/api/worlds/${record.id}/deliverables/opening-frame`],
-      ["styled-opening-frame", "最终样式化首帧", "白膜投影锁空间，用户首帧锁身份、材质、风格和灯光。", "styled-opening-frame.png", `/api/worlds/${record.id}/deliverables/styled-opening-frame`],
+      ["world-plan", "方块白膜俯视规划图", "统一颜色标记至少四倍参考可见面积的连续布局、镜头外延伸、小型出生点、地面行进区域、障碍、交互、水/云与完整标志物；飞行和游泳不绘制可行域。", "world-plan.png", `/scene-assets/${record.sceneId}/world-plan.png`],
+      ["entry-whitebox-target", "方块白膜进入构图图", "与俯视图使用同一方块语义颜色的 16:9 标准第三人称进入构图。", "entry-whitebox-target.png", `/scene-assets/${record.sceneId}/entry-whitebox-target.png`],
+      ["builder-top-down-comparison", "Builder 俯视复核图", "左 Planner 规划、右 Builder 当前方块世界；用于同任务内看图优化。", "builder-top-down-comparison.png", `/api/worlds/${record.id}/deliverables/builder-top-down-comparison`],
+      ["builder-entry-comparison", "Builder 进入构图复核图", "左 Planner 规划、右 Builder 当前第三人称软件渲染；用于同任务内看图优化。", "builder-entry-comparison.png", `/api/worlds/${record.id}/deliverables/builder-entry-comparison`],
+      ["opening-frame", "实际运行进入首帧", "Builder 方块世界经可信 Host 编译并由 Babylon 真实渲染的结果。", "opening-frame.png", `/api/worlds/${record.id}/deliverables/opening-frame`],
+      ["styled-opening-frame", "最终样式化首帧", "白膜首帧是唯一空间底图；用户首帧只提供身份、材质、风格与光照语言。", "styled-opening-frame.png", `/api/worlds/${record.id}/deliverables/styled-opening-frame`],
     ]) {
       const [kind, title, description, fileName, url] = item;
-      const filePath = ["opening-frame", "styled-opening-frame"].includes(kind)
+      const filePath = [
+        "opening-frame",
+        "styled-opening-frame",
+        "builder-top-down-comparison",
+        "builder-entry-comparison",
+      ].includes(kind)
         ? path.join(artifactRoot, fileName)
         : path.join(planRoot, fileName);
       const available = await fileExists(filePath);
@@ -1770,12 +2428,12 @@ export function createStudio(options = {}) {
         const optional = styled && record.styledTriviewsRequired !== true;
         deliverables.push({
           id: `${prototype.id}-${kind}`,
-          phase: styled ? "visual-imagegen" : "runtime-capture",
+          phase: styled ? "visual-reconstruction" : "runtime-capture",
           title: `${prototype.id} · ${title}`,
           description: styled
             ? "以可配置视觉约束锁定外观、以真实 Babylon 白模三视图锁定结构的 Front / Right / Back 对照图。"
             : `SDK 从完整视觉组的 ${prototype.memberCount ?? 1} 个运行实体联合捕获的 Front / Right / Back 结构对照图。`,
-          owner: styled ? "Configured Image Provider" : "Babylon Runtime",
+          owner: styled ? "Visual Reconstructor" : "Babylon Runtime",
           format: "PNG",
           status: url ? "available" : optional ? "not-needed" : "pending",
           url,
@@ -1796,7 +2454,10 @@ export function createStudio(options = {}) {
       record, stages, events: storedEvents, deliverables, rawLog: rawAgentLog,
     });
     return {
+      episodes,
       planning,
+      plannerValidation,
+      plannerReview,
       prototypes,
       helpers,
       deliverables,
@@ -1820,6 +2481,7 @@ export function createStudio(options = {}) {
   function consumeOutput(id, source, chunk, state) {
     const text = chunk.toString("utf8");
     runBackgroundTask(id, "append-job-log", () => appendJobLog(id, `[${source}] ${text}`));
+    state.raw += text;
     state.buffer += text;
     const lines = state.buffer.split(/\r?\n/);
     state.buffer = lines.pop() ?? "";
@@ -1831,40 +2493,10 @@ export function createStudio(options = {}) {
         });
         runBackgroundTask(id, "persist-stage", () => updateRecord(id, { stage: persistedStage }));
         if (match[1] === "ready") {
-          runBackgroundTask(id, "append-stage-completed", () => appendTrajectoryEvent(id, persistedStage, "Canonical 构建与 Babylon 运行捕获已完成。", { kind: "completed" }));
+          runBackgroundTask(id, "append-stage-completed", () => appendTrajectoryEvent(id, persistedStage, "方块编译与 Babylon 运行捕获已完成。", { kind: "completed" }));
         } else {
           runBackgroundTask(id, "append-stage-started", () => appendTrajectoryEvent(id, persistedStage, `流水线进入 ${persistedStage} 阶段。`, { kind: "started" }));
         }
-        continue;
-      }
-      const promptBundle = /^WORLDKIT_GEMINI_PROMPTS_READY ([a-z0-9.-]+)$/.exec(line.trim());
-      if (promptBundle) {
-        runBackgroundTask(id, "append-prompt-ready", () => appendTrajectoryEvent(
-          id,
-          "visual-prompt-synthesis",
-          `视觉提示词提供方已生成共享视觉约束、新首帧提示词和全部三视图提示词：${promptBundle[1]}。`,
-          { kind: "completed" },
-        ));
-        continue;
-      }
-      const directImage = /^WORLDKIT_DIRECT_IMAGEGEN_IMAGE (.+)$/.exec(line.trim());
-      if (directImage) {
-        runBackgroundTask(id, "append-image-progress", () => appendTrajectoryEvent(
-          id,
-          "visual-imagegen",
-          `图片提供方已完成 ${directImage[1]}。`,
-          { kind: "progress" },
-        ));
-        continue;
-      }
-      const directImageReady = /^WORLDKIT_DIRECT_IMAGEGEN_READY count=([0-9]+)$/.exec(line.trim());
-      if (directImageReady) {
-        runBackgroundTask(id, "append-image-ready", () => appendTrajectoryEvent(
-          id,
-          "visual-imagegen",
-          `图片生成任务已完成，共 ${directImageReady[1]} 张图片。`,
-          { kind: "completed", itemCount: Number(directImageReady[1]) },
-        ));
         continue;
       }
       const usage = /^WORLDKIT_STAGE_USAGE ([a-z-]+) ([0-9]+)$/.exec(line.trim());
@@ -1878,7 +2510,7 @@ export function createStudio(options = {}) {
         ));
         continue;
       }
-      const cloudCodexJob = /^WORLDKIT_LWDP_JOB ([a-z-]+) ([a-z0-9-]+) (gen_[a-zA-Z0-9]+)$/.exec(line.trim());
+      const cloudCodexJob = /^WORLDKIT_LWDP_JOB ([a-z-]+) ([a-z0-9-]+) (gen_[a-zA-Z0-9]+)(?:\s+.*)?$/.exec(line.trim());
       if (cloudCodexJob) {
         runBackgroundTask(id, "append-codex-job", () => appendTrajectoryEvent(
           id,
@@ -1913,7 +2545,7 @@ export function createStudio(options = {}) {
         const retryStage = agentRetry[1].includes("builder") || agentRetry[1] === "coding-agent"
           ? "coding-agent"
           : agentRetry[1].includes("visual") || agentRetry[1].includes("triview")
-            ? "visual-imagegen"
+            ? "visual-reconstruction"
             : "planner";
         runBackgroundTask(id, "append-agent-retry", () => appendTrajectoryEvent(
           id,
@@ -1949,11 +2581,18 @@ export function createStudio(options = {}) {
   async function runJob(id) {
     const record = await readRecord(id);
     if (!record || shuttingDown || stoppingJobs.has(id)) return;
+    const resumeHostOnly = record.resumeFromStage === "block-build";
+    const resumeBuilderOnly = record.resumeFromStage === "planner";
+    const executionMode = resumeHostOnly
+      ? "host-resume"
+      : resumeBuilderOnly ? "builder-resume" : "full";
     const codexBackend = effectiveCodexBackend(record);
     const attempt = (record.attempt ?? 0) + 1;
     const styledOpeningFrameRequired = record.referenceImage !== null;
     const styledTriviewsRequired = record.referenceImage !== null;
-    await writeFile(logPath(id), `WorldKit Creator Studio\nscene=${record.sceneId}\nattempt=${attempt}\n\n`, "utf8");
+    const attemptHeader = `WorldKit Creator Studio\nscene=${record.sceneId}\nattempt=${attempt}\nmode=${executionMode}\n\n`;
+    if (resumeHostOnly || resumeBuilderOnly) await appendFile(logPath(id), `\n${attemptHeader}`, "utf8");
+    else await writeFile(logPath(id), attemptHeader, "utf8");
     if (shuttingDown || stoppingJobs.has(id)) return;
     const startedAt = new Date().toISOString();
     await updateRecord(id, {
@@ -1969,17 +2608,29 @@ export function createStudio(options = {}) {
       runtimeCaptureAttempts: 0,
       captureError: null,
       captureStatus: "pending",
+      triviewStatus: "pending",
       outcome: null,
       styledOpeningFrameRequired,
       styledOpeningFrameStatus: styledOpeningFrameRequired ? "pending" : "not-required",
       styledTriviewsRequired,
       styledTriviewsStatus: styledTriviewsRequired ? "pending" : "not-required",
+      resumeFromStage: resumeHostOnly ? "block-build" : resumeBuilderOnly ? "planner" : null,
+      remoteJobId: null,
+      remoteTaskId: null,
+      remoteRequestId: null,
+      remoteOutputS3Prefix: null,
+      remotePendingSince: null,
+      remotePendingDeadlineAt: null,
     });
     await appendTrajectoryEvent(
       id,
       "preparing",
-      `第 ${attempt} 次生成开始，使用${codexBackend === "cloud" ? "云端 LWDP" : "本地"} Codex，准备隔离任务环境。`,
-      { kind: "started", codexBackend },
+      resumeHostOnly
+        ? `第 ${attempt} 次从可信 Host 方块编译继续，复用既有 Planner 与 Builder 产物。`
+        : resumeBuilderOnly
+          ? `第 ${attempt} 次从 Builder 继续，复用服务端迟到交付且经校验的 Planner 产物。`
+        : `第 ${attempt} 次生成开始，使用${codexBackend === "cloud" ? "云端 LWDP" : "本地"} Codex，准备隔离任务环境。`,
+      { kind: "started", codexBackend, executionMode },
     );
 
     const artifactRoot = path.join(repoRoot, "artifacts/scenes", record.sceneId);
@@ -2007,16 +2658,26 @@ export function createStudio(options = {}) {
       testSetImageId: record.testSetImageId ?? null,
       batchId: record.batchId ?? null,
       codexBackend,
+      executionMode,
       startedAt,
     });
 
-    const args = ["agent:world", "--", "--scene-id", record.sceneId];
-    if (record.referenceImage) args.push("--image", path.join(worldsRoot, id, record.referenceImage.fileName));
-    args.push(record.prompt);
+    const agentCommand = resumeHostOnly
+      ? "agent:world:resume-host"
+      : resumeBuilderOnly ? "agent:world:build" : "agent:world";
+    const args = [agentCommand, "--", "--scene-id", record.sceneId];
+    if (!resumeHostOnly && !resumeBuilderOnly && record.referenceImage) {
+      args.push("--image", path.join(worldsRoot, id, record.referenceImage.fileName));
+    }
+    if (!resumeHostOnly && !resumeBuilderOnly) args.push(record.prompt);
 
     await appendJobLog(
       id,
-      `Launching ${codexBackend === "cloud" ? "LWDP cloud" : "local"} Codex: hosted Planner (Brief + built-in imagegen) → Canonical Builder; trusted Host validates Authoring V4 / IR V4 / Canonical Scene Plan V1 and performs Babylon capture; configured visual adapters may generate optional styled outputs.\n`,
+      resumeHostOnly
+        ? "Resuming from trusted Host block-build with existing Planner and Builder artifacts; no Codex task will be submitted.\n"
+        : resumeBuilderOnly
+          ? "Resuming from a trusted recovered Planner delivery; only Builder and downstream Host stages will run.\n"
+        : `Launching ${codexBackend === "cloud" ? "LWDP cloud" : "local"} Codex: hosted Planner → direct Block Builder; trusted Host compiles and captures the whitebox, then one formal LWDP Codex Visual Reconstructor task may generate all styled outputs.\n`,
     );
     await beforeWorldSpawn(id);
     if (shuttingDown || stoppingJobs.has(id)) return;
@@ -2027,14 +2688,15 @@ export function createStudio(options = {}) {
         FORCE_COLOR: "0",
         NO_COLOR: "1",
         WORLDKIT_CODEX_BACKEND: codexBackend,
+        WORLDKIT_CAPTURE_SIGNING_PRIVATE_KEY_PATH: captureSigningPrivateKeyPath,
       },
       shell: false,
       detached: process.platform !== "win32",
       stdio: ["ignore", "pipe", "pipe"],
     });
     activeChildren.set(id, child);
-    const stdout = { buffer: "" };
-    const stderr = { buffer: "" };
+    const stdout = { buffer: "", raw: "" };
+    const stderr = { buffer: "", raw: "" };
     child.stdout.on("data", (chunk) => consumeOutput(id, "stdout", chunk, stdout));
     child.stderr.on("data", (chunk) => consumeOutput(id, "stderr", chunk, stderr));
 
@@ -2057,9 +2719,63 @@ export function createStudio(options = {}) {
         finishedAt: new Date().toISOString(),
         error: "Creator Studio stopped while this world was being generated.",
         captureStatus: "not-run",
+        triviewStatus: "not-run",
         outcome: "failed",
       });
       await appendTrajectoryEvent(id, "interrupted", "Creator Studio 停止，运行中的任务被标记为中断。", { kind: "failed" });
+      return;
+    }
+
+    const remotePending = parseRemotePendingLwdpMarker(`${stdout.raw}\n${stderr.raw}`);
+    if (exit.code === 4 && remotePending !== null) {
+      const freshnessFloor = Date.parse(startedAt) - 1_000;
+      const whiteboxRuntimePassed = await hasPlayableWhiteboxArtifacts(
+        artifactRoot,
+        record.sceneId,
+        freshnessFloor,
+      );
+      const whiteboxTriviewPassed = whiteboxRuntimePassed && await nonemptyArtifact(
+        path.join(artifactRoot, "triviews", "whitebox-triview-manifest.json"),
+        freshnessFloor,
+      );
+      const remotePendingSince = new Date().toISOString();
+      const remotePendingDeadlineAt = new Date(Date.now() + remotePendingGraceMs).toISOString();
+      const error = deriveWorldGenerationFailureReason(`${stdout.raw}\n${stderr.raw}`, exit);
+      await updateRecord(id, {
+        status: "remote-pending",
+        stage: canonicalWorkflowStage(remotePending.stage, record),
+        failedStage: null,
+        finishedAt: null,
+        error,
+        remoteJobId: remotePending.jobId,
+        remoteTaskId: remotePending.taskId,
+        remoteRequestId: remotePending.requestId,
+        remoteOutputS3Prefix: remotePending.outputS3Prefix,
+        remotePendingSince,
+        remotePendingDeadlineAt,
+        captureRequired: !whiteboxRuntimePassed,
+        captureError: null,
+        captureStatus: whiteboxRuntimePassed ? "passed" : "pending",
+        triviewStatus: whiteboxTriviewPassed
+          ? "passed"
+          : whiteboxRuntimePassed ? "failed" : "pending",
+        whiteboxOutcome: whiteboxRuntimePassed ? "passed" : null,
+        styledOpeningFrameStatus: styledOpeningFrameRequired ? "pending" : "not-required",
+        styledTriviewsStatus: styledTriviewsRequired ? "pending" : "not-required",
+        outcome: null,
+      });
+      await appendTrajectoryEvent(
+        id,
+        canonicalWorkflowStage(remotePending.stage, record),
+        `LWDP Job ${remotePending.jobId} 超过常规等待窗口但仍在远端执行；已转入后台对账，不会重复提交。`,
+        {
+          kind: "remote-pending",
+          jobId: remotePending.jobId,
+          taskId: remotePending.taskId,
+          remoteStatus: remotePending.remoteStatus,
+          deadlineAt: remotePendingDeadlineAt,
+        },
+      );
       return;
     }
 
@@ -2067,21 +2783,21 @@ export function createStudio(options = {}) {
       "scene-brief.md",
       "planner-self-check.json",
       "visual-identity-palette.json",
-      "terrain-height-intent-prompt.md",
-      "authoring.builder.json",
-      "implementation-map.draft.json",
+      "world.mjs",
       "authoring.json",
+      "implementation-map.draft.json",
       "builder-self-check.json",
-      "terrain-height-intent-report.json",
-      "terrain-compilation-manifest.json",
-      "final-authoring-self-check.json",
+      "builder-top-down-comparison.png",
+      "builder-entry-comparison.png",
       "scene-implementation-map.json",
       "world.build.json",
       "opening-frame.png",
       "runtime-snapshot.json",
+      "whitebox-capture-receipt.json",
       path.join("triviews", "whitebox-triview-manifest.json"),
       "entry-third-person-validation.json",
     ];
+    if (resumeHostOnly) requiredArtifacts.push("builder-host-resume.json");
     if (styledOpeningFrameRequired) {
       requiredArtifacts.push("visual-generation-prompts.json", "styled-opening-frame.png");
     }
@@ -2097,26 +2813,46 @@ export function createStudio(options = {}) {
       }
     }
     const freshnessFloor = Date.parse(startedAt) - 1_000;
+    const reusableUpstreamArtifacts = new Set([
+      "scene-brief.md",
+      "planner-self-check.json",
+      "visual-identity-palette.json",
+      "world.mjs",
+      "authoring.json",
+      "implementation-map.draft.json",
+      "builder-self-check.json",
+      "builder-top-down-comparison.png",
+      "builder-entry-comparison.png",
+    ]);
+    const reusablePlannerArtifacts = new Set([
+      "scene-brief.md",
+      "planner-self-check.json",
+      "visual-identity-palette.json",
+    ]);
     const artifactGates = Object.fromEntries(await Promise.all(requiredArtifacts.map(async (relativePath) => {
       try {
         const metadata = await stat(path.join(artifactRoot, relativePath));
-        return [relativePath, metadata.isFile() && metadata.size > 0 && metadata.mtimeMs >= freshnessFloor];
+        const minimumMtime = (
+          (resumeHostOnly && reusableUpstreamArtifacts.has(relativePath)) ||
+          (resumeBuilderOnly && reusablePlannerArtifacts.has(relativePath))
+        )
+          ? Number.NEGATIVE_INFINITY
+          : freshnessFloor;
+        return [relativePath, metadata.isFile() && metadata.size > 0 && metadata.mtimeMs >= minimumMtime];
       } catch {
         return [relativePath, false];
       }
     })));
-    artifactGates["terrain-height-intent.png"] = await nonemptyArtifact(
-      path.join(
-        repoRoot,
-        "apps/playground/public/scene-plans",
-        record.sceneId,
-        "terrain-height-intent.png",
-      ),
+    const artifactsComplete = Object.values(artifactGates).every(Boolean);
+    const whiteboxRuntimePassed = await hasPlayableWhiteboxArtifacts(
+      artifactRoot,
+      record.sceneId,
       freshnessFloor,
     );
-    const artifactsComplete = Object.values(artifactGates).every(Boolean);
+    const whiteboxTriviewPassed = whiteboxRuntimePassed &&
+      artifactGates[path.join("triviews", "whitebox-triview-manifest.json")] === true;
     const finishedAt = new Date().toISOString();
-    if (exit.code === 0 && artifactsComplete) {
+    if (exit.code === 0 && artifactsComplete && whiteboxRuntimePassed) {
       await updateRecord(id, {
         status: "ready",
         stage: "ready",
@@ -2124,6 +2860,7 @@ export function createStudio(options = {}) {
         runtimeCaptureAttempts: 0,
         captureError: null,
         captureStatus: "passed",
+        triviewStatus: "passed",
         outcome: "passed",
         whiteboxOutcome: "passed",
         styledOpeningFrameStatus: styledOpeningFrameRequired ? "passed" : "not-required",
@@ -2139,19 +2876,18 @@ export function createStudio(options = {}) {
         workflowPolicyVersion,
         attempt,
         codexBackend,
+        executionMode,
         outcome: "passed",
         whiteboxOutcome: "passed",
+        triviewStatus: "passed",
         gates: artifactGates,
         finishedAt,
       });
       await appendJobLog(id, "\nWorld generation completed after trusted Babylon capture and optional visual-provider outputs.\n");
-      await appendTrajectoryEvent(id, "runtime-capture", "进入首帧、运行快照与实体白膜三视图均已生成。", { kind: "completed" });
+      await appendTrajectoryEvent(id, "runtime-capture", "白膜首帧与 Runtime Snapshot 已生成，世界可进入；实体白膜三视图后处理也已完成。", { kind: "completed" });
       await appendTrajectoryEvent(id, "entry-alignment-validation", "真实首帧与 Runtime Snapshot V4 的第三人称进入构图校验已通过。", { kind: "completed" });
-      if (styledOpeningFrameRequired) {
-        await appendTrajectoryEvent(id, "visual-prompt-synthesis", "视觉提示词提供方已依据用户首帧、真实白模首帧和白模三视图固化共享视觉约束。", { kind: "completed" });
-      }
       if (styledTriviewsRequired) {
-        await appendTrajectoryEvent(id, "visual-imagegen", "图片提供方已生成新首帧和全部视觉组的渲染后三视图。", { kind: "completed" });
+        await appendTrajectoryEvent(id, "visual-reconstruction", "单个 LWDP Codex Job 已生成视觉提示词、最终样式首帧和全部完整视觉目标三视图。", { kind: "completed" });
       }
       return;
     }
@@ -2164,23 +2900,37 @@ export function createStudio(options = {}) {
         .map((diagnostic) => `${diagnostic.code}: ${diagnostic.message}`)
         .join("; ")
       : "";
+    const triviewFailure = whiteboxRuntimePassed && !whiteboxTriviewPassed;
+    const processFailureReason = deriveWorldGenerationFailureReason(
+      await readFile(logPath(id), "utf8").catch(() => ""),
+      { code: exit.code, signal: exit.signal ?? null },
+    );
     const reason = entryFailure
       ? `Entry third-person validation failed: ${entryFailure}`
+      : triviewFailure
+      ? "白膜世界已成功生成并可进入，但白膜三视图后处理失败；可以直接进入世界，并按需重试三视图。"
       : exit.error instanceof Error
       ? exit.error.message
       : exit.code === 0
         ? `World generation omitted required artifacts: ${Object.entries(artifactGates).filter(([, passed]) => !passed).map(([name]) => name).join(", ")}.`
-        : `World generation exited with code ${exit.code}${exit.signal ? ` (${exit.signal})` : ""}.`;
+        : processFailureReason;
     const latestRecord = await readRecord(id);
     await updateRecord(id, {
       status: "failed",
       stage: exit.code === 3 ? "change-requested" : "failed",
-      failedStage: latestRecord?.stage ?? "preparing",
+      failedStage: triviewFailure ? "runtime-capture" : latestRecord?.stage ?? "preparing",
       finishedAt,
       error: reason,
-      captureStatus: artifactGates["opening-frame.png"] && artifactGates[path.join("triviews", "whitebox-triview-manifest.json")]
-        ? "passed"
-        : "failed",
+      captureError: whiteboxRuntimePassed ? null : reason,
+      captureStatus: whiteboxRuntimePassed ? "passed" : "failed",
+      triviewStatus: whiteboxTriviewPassed ? "passed" : whiteboxRuntimePassed ? "failed" : "not-run",
+      whiteboxOutcome: whiteboxRuntimePassed ? "passed" : "failed",
+      styledOpeningFrameStatus: styledOpeningFrameRequired
+        ? artifactGates["styled-opening-frame.png"] ? "passed" : "failed"
+        : "not-required",
+      styledTriviewsStatus: styledTriviewsRequired
+        ? artifactGates["styled-triviews-manifest.json"] ? "passed" : "failed"
+        : "not-required",
       outcome: "failed",
     });
     await writeJsonAtomic(path.join(artifactRoot, "evaluation-report.json"), {
@@ -2191,12 +2941,25 @@ export function createStudio(options = {}) {
       workflowPolicyVersion,
       attempt,
       codexBackend,
+      executionMode,
       outcome: "failed",
+      whiteboxOutcome: whiteboxRuntimePassed ? "passed" : "failed",
+      triviewStatus: whiteboxTriviewPassed ? "passed" : whiteboxRuntimePassed ? "failed" : "not-run",
       gates: artifactGates,
       error: reason,
       finishedAt,
     });
     await appendJobLog(id, `\n${reason}\n`);
+    if (whiteboxRuntimePassed) {
+      await appendTrajectoryEvent(
+        id,
+        "runtime-capture",
+        whiteboxTriviewPassed
+          ? "白膜首帧、Runtime Snapshot 和白膜三视图已生成；白膜世界保持可进入。"
+          : "白膜首帧与 Runtime Snapshot 已生成，世界可进入；白膜三视图后处理失败。",
+        { kind: "completed", whiteboxRuntimeAvailable: true, triviewStatus: whiteboxTriviewPassed ? "passed" : "failed" },
+      );
+    }
     await appendTrajectoryEvent(
       id,
       exit.code === 3 ? "change-requested" : "failed",
@@ -2258,13 +3021,33 @@ export function createStudio(options = {}) {
           if (!stoppingJobs.has(id)) {
             const latest = await readRecord(id);
             const finishedAt = new Date().toISOString();
+            const artifactRoot = path.join(repoRoot, "artifacts/scenes", latest?.sceneId ?? id);
+            const startedAtMs = Date.parse(latest?.startedAt ?? "");
+            const freshnessFloor = Number.isFinite(startedAtMs)
+              ? startedAtMs - 1_000
+              : Number.POSITIVE_INFINITY;
+            const whiteboxRuntimePassed = latest !== null && await hasPlayableWhiteboxArtifacts(
+              artifactRoot,
+              latest.sceneId,
+              freshnessFloor,
+            );
+            const whiteboxTriviewPassed = whiteboxRuntimePassed && await nonemptyArtifact(
+              path.join(artifactRoot, "triviews", "whitebox-triview-manifest.json"),
+              freshnessFloor,
+            );
             await updateRecord(id, {
               status: "failed",
               stage: "failed",
-              failedStage: latest?.stage ?? "preparing",
+              failedStage: whiteboxRuntimePassed && !whiteboxTriviewPassed
+                ? "runtime-capture"
+                : latest?.stage ?? "preparing",
               finishedAt,
               error: error instanceof Error ? error.message : String(error),
-              captureStatus: "failed",
+              captureStatus: whiteboxRuntimePassed ? "passed" : "failed",
+              triviewStatus: whiteboxTriviewPassed
+                ? "passed"
+                : whiteboxRuntimePassed ? "failed" : "not-run",
+              whiteboxOutcome: whiteboxRuntimePassed ? "passed" : "failed",
               outcome: "failed",
             });
           }
@@ -2292,7 +3075,10 @@ export function createStudio(options = {}) {
     const jobId = matches.at(-1)?.[1] ?? null;
     if (jobId === null) return { requested: false, jobId: null };
     try {
-      const config = await loadLwdpGenerationConfig();
+      const config = await loadLwdpConfigImplementation({
+        ...process.env,
+        WORLDKIT_LWDP_ENV_FILE: projectLwdpEnvFile,
+      });
       const response = await cancelGenerationJob(jobId, { config, maxAttempts: 1 });
       const job = response?.job ?? response;
       return { requested: true, jobId, status: String(job?.status ?? "cancel-requested") };
@@ -2355,12 +3141,14 @@ export function createStudio(options = {}) {
       error: null,
       captureRequired: true,
       captureStatus: "pending",
+      triviewStatus: "pending",
       outcome: null,
       styledOpeningFrameRequired: referenceImage !== null,
       styledOpeningFrameStatus: referenceImage === null ? "not-required" : "pending",
       styledTriviewsRequired: referenceImage !== null,
       styledTriviewsStatus: referenceImage === null ? "not-required" : "pending",
       workflowPolicyVersion,
+      plannerReview: null,
     };
     await writeRecord(record);
     const codexQueueLabel = codexBackend === "cloud" ? "LWDP 云端" : "本地";
@@ -2373,18 +3161,58 @@ export function createStudio(options = {}) {
   }
 
   async function recoverGeneratedStyledOutputs(record) {
+    const rawLog = await readFile(logPath(record.id), "utf8").catch(() => "");
+    const recoverableInFlightVisualStage =
+      ["interrupted", "running", "remote-pending"].includes(record.status) &&
+      [record.failedStage, record.stage].some((stage) => stage === "visual-reconstruction");
+    const recoverableTriviewOnlyFailure =
+      record.status === "failed" &&
+      record.failedStage === "runtime-capture" &&
+      record.captureStatus === "passed" &&
+      record.triviewStatus === "failed" &&
+      record.whiteboxOutcome === "passed" &&
+      /白膜三视图后处理失败/.test(record.error ?? "");
+    const recoverableFinalizationFailure = isRecoverableVisualFinalizationFailure(
+      record,
+      rawLog,
+    );
+    const recoverableLateVisualDelivery =
+      ["failed", "remote-pending"].includes(record.status) &&
+      [record.failedStage, record.stage].includes("visual-reconstruction") &&
+      record.captureStatus === "passed" &&
+      record.triviewStatus === "passed" &&
+      record.whiteboxOutcome === "passed" &&
+      /(?:World generation exited with code (?:-1|1)|LWDP.*(?:分钟|远端对账|timed out))/i.test(
+        record.error ?? "",
+      );
     if (
       record.workflowPolicyVersion !== workflowPolicyVersion ||
-      !["interrupted", "running"].includes(record.status) ||
-      /alignment.{0,24}(?:fail|error)|(?:fail|error).{0,24}alignment|视觉.{0,12}(?:失败|未通过)/i.test(record.error ?? "") ||
-      ![record.failedStage, record.stage].some((stage) =>
-        ["visual-prompt-synthesis", "visual-imagegen"].includes(stage))
+      !(recoverableInFlightVisualStage || recoverableTriviewOnlyFailure ||
+        recoverableFinalizationFailure || recoverableLateVisualDelivery) ||
+      /alignment.{0,24}(?:fail|error)|(?:fail|error).{0,24}alignment|视觉.{0,12}(?:失败|未通过)/i.test(
+        `${record.error ?? ""}\n${rawLog}`,
+      )
     ) return false;
     const artifactRoot = path.join(repoRoot, "artifacts/scenes", record.sceneId);
     const startedAtMs = Date.parse(record.startedAt ?? "");
     if (!Number.isFinite(startedAtMs)) return false;
     const freshnessFloor = startedAtMs - 1_000;
-    if (!await hasTrustedWhiteboxArtifacts(artifactRoot, record.sceneId, freshnessFloor)) return false;
+    const evaluationRun = await readJsonIfPresent(
+      path.join(artifactRoot, "evaluation-run.json"),
+    );
+    const isUpstreamResume = ["host-resume", "builder-resume"].includes(
+      evaluationRun?.executionMode,
+    );
+    if (!await hasTrustedWhiteboxArtifacts(
+      artifactRoot,
+      record.sceneId,
+      isUpstreamResume ? Number.NEGATIVE_INFINITY : freshnessFloor,
+    )) return false;
+    if (isUpstreamResume && !await hasPlayableWhiteboxArtifacts(
+      artifactRoot,
+      record.sceneId,
+      freshnessFloor,
+    )) return false;
     const required = [
       "visual-generation-prompts.json",
       "styled-opening-frame.png",
@@ -2411,8 +3239,8 @@ export function createStudio(options = {}) {
     ])));
     if (!Object.values(gates).every(Boolean)) return false;
     if (!await pngArtifact(path.join(artifactRoot, "styled-opening-frame.png"), freshnessFloor)) return false;
-    const [evaluationRun, openingReport, triViewReport, captureManifest] = await Promise.all([
-      readJsonIfPresent(path.join(artifactRoot, "evaluation-run.json")),
+    const [promptBundle, openingReport, triViewReport, captureManifest] = await Promise.all([
+      readJsonIfPresent(path.join(artifactRoot, "visual-generation-prompts.json")),
       readJsonIfPresent(path.join(artifactRoot, "styled-opening-frame-report.json")),
       readJsonIfPresent(path.join(artifactRoot, "styled-triviews-report.json")),
       readJsonIfPresent(path.join(artifactRoot, "triviews", "whitebox-triview-manifest.json")),
@@ -2424,7 +3252,24 @@ export function createStudio(options = {}) {
       evaluationRun.attempt !== record.attempt || evaluationRun.startedAt !== record.startedAt
     ) return false;
     if (record.referenceImage !== null) {
+      const expectedTargetIds = (captureManifest?.whiteboxTriviews ?? [])
+        .map(({ visualTargetId }) => visualTargetId);
+      const promptTargetIds = (promptBundle?.styledTriviews ?? [])
+        .map(({ visualTargetId }) => visualTargetId);
       if (
+        promptBundle?.kind !== "worldkit-visual-generation-prompts" ||
+        promptBundle.schemaVersion !== 2 || promptBundle.provider !== "lwdp-codex" ||
+        promptBundle.sceneId !== record.sceneId ||
+        JSON.stringify(promptBundle.openingFrame?.referenceRoles) !==
+          JSON.stringify(["actual-whitebox-opening", "user-first-frame"]) ||
+        typeof promptBundle.openingFrame?.prompt !== "string" ||
+        promptBundle.openingFrame.prompt.trim().length < 200 ||
+        JSON.stringify(promptTargetIds) !== JSON.stringify(expectedTargetIds) ||
+        !Array.isArray(promptBundle.styledTriviews) ||
+        promptBundle.styledTriviews.some((target) =>
+          JSON.stringify(target.referenceRoles) !== JSON.stringify([
+            "target-whitebox-triview", "styled-opening-frame", "user-first-frame",
+          ]) || typeof target.prompt !== "string" || target.prompt.trim().length < 150) ||
         openingReport?.kind !== "worldkit-styled-opening-frame-report" || openingReport.schemaVersion !== 1 ||
         openingReport.sceneId !== record.sceneId || openingReport.status !== "passed" ||
         triViewReport?.kind !== "worldkit-styled-triview-report" || triViewReport.schemaVersion !== 1 ||
@@ -2444,12 +3289,19 @@ export function createStudio(options = {}) {
       failedStage: null,
       captureRequired: false,
       captureStatus: "passed",
+      triviewStatus: "passed",
       outcome: "passed",
       whiteboxOutcome: "passed",
       styledOpeningFrameStatus: record.referenceImage === null ? "not-required" : "passed",
       styledTriviewsStatus: record.referenceImage === null ? "not-required" : "passed",
       finishedAt,
       error: null,
+      remoteJobId: null,
+      remoteTaskId: null,
+      remoteRequestId: null,
+      remoteOutputS3Prefix: null,
+      remotePendingSince: null,
+      remotePendingDeadlineAt: null,
     });
     await writeJsonAtomic(path.join(artifactRoot, "evaluation-report.json"), {
       kind: "worldkit-evaluation-report",
@@ -2467,7 +3319,7 @@ export function createStudio(options = {}) {
     });
     await appendTrajectoryEvent(
       record.id,
-      record.referenceImage === null ? "runtime-capture" : "visual-imagegen",
+      record.referenceImage === null ? "runtime-capture" : "visual-reconstruction",
       record.referenceImage === null
         ? "已恢复新首帧完成状态。"
         : "已恢复：视觉提示词、新首帧及全部并发渲染后三视图均已生成。",
@@ -2476,7 +3328,218 @@ export function createStudio(options = {}) {
     return true;
   }
 
+  async function recoverLateLwdpCodexDelivery(record) {
+    if (
+      !autoRecoverLateLwdpJobs || !["failed", "remote-pending"].includes(record.status) ||
+      effectiveCodexBackend(record) !== "cloud"
+    ) return false;
+    const rawLog = await readFile(logPath(record.id), "utf8").catch(() => "");
+    const failureReason = deriveWorldGenerationFailureReason(rawLog);
+    if (!/LWDP.*(?:[0-9]+ 分钟|timed out|远端对账)/i.test(`${record.error ?? ""}\n${failureReason}`)) {
+      return false;
+    }
+    const matches = [...rawLog.matchAll(
+      /^(?:\[stdout\]\s*)?WORLDKIT_LWDP_JOB (planner|coding-agent|visual-reconstruction) ([a-z0-9-]+) (gen_[a-z0-9]+)\b/gm,
+    )];
+    const latest = matches.at(-1);
+    if (!latest) return false;
+    const stage = latest[1] === "planner"
+      ? "planner"
+      : latest[1] === "coding-agent" ? "builder" : "visual";
+    try {
+      const config = await loadLwdpConfigImplementation({
+        ...process.env,
+        WORLDKIT_LWDP_ENV_FILE: projectLwdpEnvFile,
+      });
+      const recovery = await lateLwdpRecoveryImplementation({
+        jobId: latest[3],
+        repoRoot,
+        sceneId: record.sceneId,
+        stage,
+        config,
+      });
+      if (stage === "visual") {
+        if (record.referenceImage === null) return false;
+        await visualRecoveryFinalizeImplementation({
+          repoRoot,
+          sceneId: record.sceneId,
+          userFrame: path.join(worldsRoot, record.id, record.referenceImage.fileName),
+        });
+        const recovered = await recoverGeneratedStyledOutputs(
+          await readRecord(record.id),
+        );
+        if (!recovered) {
+          throw new Error("Recovered visual outputs failed trusted Host finalization checks.");
+        }
+        await appendJobLog(
+          record.id,
+          `\nRecovered late LWDP visual delivery ${recovery.jobId}; finalized without resubmitting visual generation.\n`,
+        );
+        return true;
+      }
+      const trusted = stage === "builder"
+        ? await hasTrustedBuilderResumeInputs(record)
+        : await prepareTrustedPlannerResume(record);
+      if (!trusted) {
+        await appendJobLog(
+          record.id,
+          `\nLate LWDP ${stage} delivery ${latest[3]} downloaded but failed trusted local replay checks.\n`,
+        );
+        return false;
+      }
+      const resumeFromStage = stage === "builder" ? "block-build" : "planner";
+      const executionMode = stage === "builder" ? "host-resume" : "builder-resume";
+      await updateRecord(record.id, {
+        status: "queued",
+        stage: "queued",
+        failedStage: null,
+        error: null,
+        captureRequired: true,
+        captureError: null,
+        captureStatus: "pending",
+        triviewStatus: "pending",
+        whiteboxOutcome: null,
+        outcome: null,
+        styledOpeningFrameStatus: record.referenceImage ? "pending" : "not-required",
+        styledTriviewsRequired: Boolean(record.referenceImage),
+        styledTriviewsStatus: record.referenceImage ? "pending" : "not-required",
+        resumeFromStage,
+        remoteJobId: null,
+        remoteTaskId: null,
+        remoteRequestId: null,
+        remoteOutputS3Prefix: null,
+        remotePendingSince: null,
+        remotePendingDeadlineAt: null,
+      });
+      await appendJobLog(
+        record.id,
+        `\nRecovered late LWDP ${stage} delivery ${recovery.jobId}; queued ${executionMode} without resubmitting the successful stage.\n`,
+      );
+      await appendTrajectoryEvent(
+        record.id,
+        "queued",
+        stage === "builder"
+          ? "服务端迟到交付的 Builder 产物已接管并通过可信检查，从 Host 方块编译继续。"
+          : "服务端迟到交付的 Planner 产物已接管并通过可信检查，从 Builder 继续。",
+        { kind: "late-lwdp-recovery", jobId: recovery.jobId, executionMode, resumeFromStage },
+      );
+      queue.push(queueItem(record.id, effectiveCodexBackend(record)));
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (error instanceof LwdpJobPendingError || error?.code === "LWDP_JOB_PENDING") {
+        if (record.status === "failed") {
+          const remotePendingSince = new Date().toISOString();
+          const remotePendingDeadlineAt = new Date(Date.now() + remotePendingGraceMs).toISOString();
+          const pendingStage = stage === "builder"
+            ? "coding-agent"
+            : stage === "visual" ? "visual-reconstruction" : "planner";
+          await updateRecord(record.id, {
+            status: "remote-pending",
+            stage: pendingStage,
+            failedStage: null,
+            finishedAt: null,
+            error: `LWDP 云端 Job ${latest[3]} 仍在远端执行；已从旧的超时失败状态转入后台对账，不会重复提交。`,
+            remoteJobId: latest[3],
+            remoteTaskId: latest[2],
+            remotePendingSince,
+            remotePendingDeadlineAt,
+            captureRequired: record.whiteboxOutcome !== "passed",
+            captureError: null,
+            captureStatus: record.whiteboxOutcome === "passed" ? "passed" : "pending",
+            triviewStatus: record.whiteboxOutcome === "passed"
+              ? record.triviewStatus
+              : "pending",
+            whiteboxOutcome: record.whiteboxOutcome === "passed" ? "passed" : null,
+            outcome: null,
+            styledOpeningFrameStatus: record.referenceImage ? "pending" : "not-required",
+            styledTriviewsStatus: record.referenceImage ? "pending" : "not-required",
+          });
+          await appendTrajectoryEvent(
+            record.id,
+            pendingStage,
+            `旧超时记录对应的 LWDP Job ${latest[3]} 仍未终止；已恢复后台对账状态。`,
+            {
+              kind: "remote-pending",
+              jobId: latest[3],
+              taskId: latest[2],
+              deadlineAt: remotePendingDeadlineAt,
+            },
+          );
+          return true;
+        }
+        const deadlineAt = Date.parse(record.remotePendingDeadlineAt ?? "");
+        if (
+          record.status === "remote-pending" &&
+          Number.isFinite(deadlineAt) &&
+          Date.now() >= deadlineAt
+        ) {
+          const finishedAt = new Date().toISOString();
+          await updateRecord(record.id, {
+            status: "failed",
+            stage: "failed",
+            failedStage: record.stage,
+            finishedAt,
+            error: `LWDP 云端 Job ${latest[3]} 在延长对账窗口结束后仍未进入终态。`,
+            outcome: "failed",
+            styledOpeningFrameStatus: record.referenceImage ? "failed" : "not-required",
+            styledTriviewsStatus: record.referenceImage ? "failed" : "not-required",
+          });
+          await appendTrajectoryEvent(
+            record.id,
+            "failed",
+            `LWDP Job ${latest[3]} 超过绝对等待上限，已按云端基础设施卡死处理。`,
+            { kind: "failed", jobId: latest[3], failureClass: "infrastructure-stalled" },
+          );
+          return true;
+        }
+        return false;
+      }
+      if (record.status === "remote-pending") {
+        const finishedAt = new Date().toISOString();
+        await updateRecord(record.id, {
+          status: "failed",
+          stage: "failed",
+          failedStage: record.stage,
+          finishedAt,
+          error: `LWDP 云端 Job ${latest[3]} 已进入失败终态：${message}`,
+          outcome: "failed",
+          styledOpeningFrameStatus: record.referenceImage ? "failed" : "not-required",
+          styledTriviewsStatus: record.referenceImage ? "failed" : "not-required",
+        });
+        await appendTrajectoryEvent(
+          record.id,
+          "failed",
+          `LWDP Job ${latest[3]} 已确认失败：${message}`,
+          { kind: "failed", jobId: latest[3], failureClass: "remote-terminal" },
+        );
+        return true;
+      }
+      if (!/has 0 successful|did not succeed|status|not succeed/i.test(message)) {
+        await appendJobLog(record.id, `\nLate LWDP delivery reconciliation failed: ${message}\n`);
+      }
+      return false;
+    }
+  }
+
+  async function reconcileRemoteLwdpDeliveries() {
+    if (!autoRecoverLateLwdpJobs || shuttingDown || remoteRecoveryInFlight) return;
+    remoteRecoveryInFlight = true;
+    try {
+      const records = await listRecords();
+      for (const record of records) {
+        if (shuttingDown) break;
+        if (!["failed", "remote-pending"].includes(record.status)) continue;
+        await recoverLateLwdpCodexDelivery(record);
+      }
+      pumpQueue();
+    } finally {
+      remoteRecoveryInFlight = false;
+    }
+  }
+
   async function initialize() {
+    await ensureWhiteboxCaptureHostKeyPair();
     await Promise.all([
       mkdir(worldsRoot, { recursive: true }),
       mkdir(testSetsRoot, { recursive: true }),
@@ -2510,10 +3573,20 @@ export function createStudio(options = {}) {
       }
     }
     pumpQueue();
+    if (autoRecoverLateLwdpJobs && remoteRecoveryTimer === null) {
+      remoteRecoveryTimer = setInterval(() => {
+        runBackgroundTask("remote-lwdp", "reconcile-late-deliveries", () =>
+          reconcileRemoteLwdpDeliveries());
+      }, remoteRecoveryIntervalMs);
+      remoteRecoveryTimer.unref?.();
+      runBackgroundTask("remote-lwdp", "initial-reconcile-late-deliveries", () =>
+        reconcileRemoteLwdpDeliveries());
+    }
   }
 
   async function handleApi(request, response, url) {
     if (await recordingWorkbench.handleApi(request, response, url)) return true;
+    if (await episodeWorkflows.handleApi(request, response, url)) return true;
 
     if (request.method === "PUT" && url.pathname === "/api/settings/codex-backend") {
       const body = await readJsonBody(request);
@@ -2522,7 +3595,7 @@ export function createStudio(options = {}) {
         throw new InputError("Codex 运行端只能是 cloud 或 local。");
       }
       const result = await runRuntimeSettingsMutation("codex-backend", async () => {
-        const availability = await codexBackendAvailability();
+        const availability = await codexBackendAvailability({ force: true });
         if (!availability[requestedBackend]) return { changed: false, availability };
         selectedCodexBackend = requestedBackend;
         await persistCodexBackend(selectedCodexBackend);
@@ -2554,9 +3627,6 @@ export function createStudio(options = {}) {
     if (request.method === "GET" && url.pathname === "/api/health") {
       const availability = await codexBackendAvailability();
       const lwdpConfigured = availability.cloud;
-      const geminiRuntimeRoot = path.join(repoRoot, ".codex-tmp", "runtime-config");
-      const geminiConfigured = await fileExists(path.join(geminiRuntimeRoot, "gemini.env")) &&
-        await fileExists(path.join(geminiRuntimeRoot, "google-service-account.json"));
       const reliability = deriveReliabilityMetrics(
         (await listRecords()).filter((record) =>
           record.origin === "test-set" && record.workflowPolicyVersion === workflowPolicyVersion),
@@ -2574,24 +3644,24 @@ export function createStudio(options = {}) {
           local: { available: availability.local },
         },
         lwdpConfigured,
-        geminiConfigured,
-        geminiPromptModel: "gemini-3-flash-preview",
-        geminiImageModel: "gemini-3.1-flash-image",
+        visualReconstructionBackend: "lwdp-codex",
+        visualReconstructionExecutionProfile: FORMAL_CODEX_EXECUTION_PROFILE,
         codexExecutionProfile: FORMAL_CODEX_EXECUTION_PROFILE,
-        pnpmAvailable: commandAvailable("pnpm"),
+        pnpmAvailable,
         activeJob: activeJobs.values().next().value ?? null,
         activeJobs: activeJobSummaries,
         maxConcurrentJobs,
         maxConcurrentJobsByBackend,
         recordingActiveJobs: recordingWorkbench.activeJobs,
         recordingMaxConcurrentJobs: recordingWorkbench.maxConcurrentJobs,
+        episodeActiveJobs: episodeWorkflows.activeJobs,
         queued: queue.length,
         queuedByBackend: {
           cloud: queuedCountForBackend("cloud"),
           local: queuedCountForBackend("local"),
         },
         playgroundOrigin,
-        workflow: "switchable-codex-current-canonical-whitebox-hosted-evaluation",
+        workflow: "switchable-codex-current-block-whitebox-hosted-evaluation",
         reliability,
         workflowPolicyVersion,
       });
@@ -2611,23 +3681,35 @@ export function createStudio(options = {}) {
     }
 
     if (request.method === "GET" && url.pathname === "/api/subject-catalog") {
-      const definitions = await readJsonIfPresent(subjectCatalogPath);
-      if (!Array.isArray(definitions)) {
+      const catalog = await readJsonIfPresent(subjectCatalogPath);
+      const definitions = catalog?.kind === "worldkit-agent-authoring-catalog" &&
+          catalog.schemaVersion === 1 && Array.isArray(catalog.subjects)
+        ? catalog.subjects
+        : null;
+      if (definitions === null) {
         sendError(response, 503, "主体目录暂不可用。");
         return true;
       }
       const presets = definitions.map((definition) => ({
-        label: definition.aiMetadata?.displayName ?? definition.id,
-        maturity: definition.authoringAvailability === "advanced" ? "alpha" : "experimental",
-        ref: definition.resourceRef,
-        description: definition.aiMetadata?.description ?? definition.semanticClassId,
-        planningBounds: null,
-        capabilities: definition.capabilityRefs ?? [],
+        label: definition.displayName ?? definition.subjectDefinitionRef,
+        maturity: definition.authoringAvailability,
+        ref: definition.subjectDefinitionRef,
+        description: definition.description ?? definition.bodyTopology,
+        planningBounds: definition.visualReviewProxy === undefined
+          ? null
+          : definition.visualReviewProxy.boundsMaximumMetersXYZ.map((value, axis) =>
+              value - definition.visualReviewProxy.boundsMinimumMetersXYZ[axis]),
+        capabilities: definition.executableMovementModes ?? [],
+        bodyTopology: definition.bodyTopology,
+        cameraContextProfileRef: definition.camera?.cameraContextProfileRef ?? null,
       }));
       sendJson(response, 200, {
         presets,
         productionRefs: presets
-          .filter((preset) => preset?.maturity === "alpha")
+          .filter((preset) => preset?.maturity === "recommended")
+          .map((preset) => preset.ref),
+        advancedRefs: presets
+          .filter((preset) => preset?.maturity === "advanced")
           .map((preset) => preset.ref),
         experimentalRefs: presets
           .filter((preset) => preset?.maturity === "experimental")
@@ -2802,8 +3884,7 @@ export function createStudio(options = {}) {
     }
 
     if (request.method === "GET" && url.pathname === "/api/worlds") {
-      const records = await listRecords();
-      sendJson(response, 200, { worlds: await Promise.all(records.map(enrichRecord)) });
+      sendJson(response, 200, { worlds: await listEnrichedWorlds() });
       return true;
     }
 
@@ -2833,6 +3914,52 @@ export function createStudio(options = {}) {
         world: await enrichRecord(record),
         media: await collectWorldMedia(record),
         log,
+      });
+      return true;
+    }
+
+    const plannerReviewMatch =
+      /^\/api\/worlds\/([a-z0-9-]+)\/planner-review$/.exec(url.pathname);
+    if (request.method === "POST" && plannerReviewMatch) {
+      const record = await readRecord(plannerReviewMatch[1]);
+      if (!record) {
+        sendError(response, 404, "没有找到这个世界。");
+        return true;
+      }
+      const body = await readJsonBody(request);
+      if (!body || !["approved", "rejected"].includes(body.status)) {
+        throw new InputError("Planner 人工审核只能提交 approved 或 rejected。");
+      }
+      const plannerCheck = await readJsonIfPresent(path.join(
+        repoRoot,
+        "artifacts/scenes",
+        record.sceneId,
+        "planner-self-check.json",
+      ));
+      const artifactIdentity = await trustedPlannerArtifactIdentity(record, plannerCheck);
+      if (artifactIdentity === null) {
+        sendError(response, 409, "Planner 三项工件尚未形成可审核的通过收据。");
+        return true;
+      }
+      const reviewedAt = new Date().toISOString();
+      const updated = await updateRecord(record.id, {
+        plannerReview: {
+          status: body.status,
+          artifactIdentity,
+          reviewedAt,
+        },
+      });
+      await appendTrajectoryEvent(
+        record.id,
+        "planner",
+        body.status === "approved"
+          ? "人工已确认俯视规划、镜头外延伸、出生点标记和进入构图。"
+          : "人工已退回 Planner 视觉规划；当前决定绑定现有三项工件 Hash。",
+        { kind: "human-review", reviewStatus: body.status, artifactIdentity },
+      );
+      sendJson(response, 200, {
+        ok: true,
+        plannerReview: effectivePlannerReview(updated, artifactIdentity),
       });
       return true;
     }
@@ -2902,11 +4029,29 @@ export function createStudio(options = {}) {
           return null;
         }
       };
-      const [authoringSource, implementationMapSource, evaluationRunSource] =
+      const attemptStartedAt = recordBefore.origin === "existing-scene-brief-world"
+        ? recordBefore.createdAt
+        : recordBefore.startedAt;
+      const attemptStartedAtMs = Date.parse(attemptStartedAt ?? "");
+      const [
+        authoringSource,
+        implementationMapSource,
+        evaluationRunSource,
+        whiteboxRuntimeAvailable,
+      ] =
         await Promise.all([
           readSourceIfPresent("authoring.json"),
           readSourceIfPresent("scene-implementation-map.json"),
           readSourceIfPresent("evaluation-run.json"),
+          hasPlayableWhiteboxArtifacts(
+            artifactRoot,
+            recordBefore.sceneId,
+            recordBefore.origin === "existing-scene-brief-world"
+              ? Number.NEGATIVE_INFINITY
+              : Number.isFinite(attemptStartedAtMs)
+                ? attemptStartedAtMs - 1_000
+                : Number.POSITIVE_INFINITY,
+          ),
         ]);
       const recordAfter = await readRecord(worldId);
       if (authoringSource === null || implementationMapSource === null) {
@@ -2919,6 +4064,7 @@ export function createStudio(options = {}) {
       try {
         const bootstrap = assembleStudioPreviewBootstrapV1({
           worldId,
+          whiteboxRuntimeAvailable,
           recordBefore,
           recordAfter,
           authoringSource,
@@ -2957,7 +4103,7 @@ export function createStudio(options = {}) {
         sendError(response, 404, "没有找到这个世界。");
         return true;
       }
-      if (!["queued", "running", "visual-queued", "visual-running"].includes(record.status)) {
+      if (!["queued", "running", "remote-pending", "visual-queued", "visual-running"].includes(record.status)) {
         sendError(response, 409, "只有排队或运行中的任务可以停止。");
         return true;
       }
@@ -2968,32 +4114,49 @@ export function createStudio(options = {}) {
         if (parseQueueItem(queue[index])?.id === record.id) queue.splice(index, 1);
       }
 
-      const remoteCancellation = wasActive
+      const remoteCancellation = wasActive || record.status === "remote-pending"
         ? await cancelRemoteLwdpJob(record)
         : { requested: false, jobId: null };
       if (wasActive) terminateChild(activeChildren.get(record.id));
 
       const artifactRoot = path.join(repoRoot, "artifacts/scenes", record.sceneId);
-      const capturePassed = await fileExists(path.join(artifactRoot, "opening-frame.png")) &&
-        await fileExists(path.join(artifactRoot, "triviews", "whitebox-triview-manifest.json"));
+      const startedAtMs = Date.parse(record.startedAt ?? "");
+      const freshnessFloor = Number.isFinite(startedAtMs)
+        ? startedAtMs - 1_000
+        : Number.POSITIVE_INFINITY;
+      const capturePassed = await hasPlayableWhiteboxArtifacts(
+        artifactRoot,
+        record.sceneId,
+        freshnessFloor,
+      );
+      const triviewPassed = capturePassed && await nonemptyArtifact(
+        path.join(artifactRoot, "triviews", "whitebox-triview-manifest.json"),
+        freshnessFloor,
+      );
       const stopped = await updateRecord(record.id, {
         status: "interrupted",
         stage: "interrupted",
         failedStage: record.stage,
         finishedAt: new Date().toISOString(),
-        error: wasActive ? "用户已停止正在运行的任务。" : "用户已取消排队任务。",
+        error: record.status === "remote-pending"
+          ? "用户已停止等待远端对账的任务。"
+          : wasActive ? "用户已停止正在运行的任务。" : "用户已取消排队任务。",
         captureRequired: false,
         captureStatus: capturePassed ? "passed" : "not-run",
+        triviewStatus: triviewPassed ? "passed" : capturePassed ? "failed" : "not-run",
+        whiteboxOutcome: capturePassed ? "passed" : null,
         outcome: "cancelled",
       });
       await appendJobLog(
         record.id,
-        `\nWorld generation ${wasActive ? "stopped" : "removed from queue"} by user.\n`,
+        `\nWorld generation ${record.status === "remote-pending" ? "remote reconciliation stopped" : wasActive ? "stopped" : "removed from queue"} by user.\n`,
       );
       await appendTrajectoryEvent(
         record.id,
         "interrupted",
-        wasActive ? "用户停止了正在运行的任务。" : "用户取消了排队任务。",
+        record.status === "remote-pending"
+          ? "用户停止了等待远端对账的任务。"
+          : wasActive ? "用户停止了正在运行的任务。" : "用户取消了排队任务。",
         { kind: "cancelled", remoteCancellation },
       );
       pumpQueue();
@@ -3016,21 +4179,46 @@ export function createStudio(options = {}) {
         sendError(response, 409, "只有失败或中断的任务可以重试。");
         return true;
       }
+      const resumeHostOnly = await hasTrustedBuilderResumeInputs(record);
+      const resumeBuilderOnly = !resumeHostOnly && await prepareTrustedPlannerResume(record);
+      const resumeFromStage = resumeHostOnly
+        ? "block-build"
+        : resumeBuilderOnly ? "planner" : null;
+      const executionMode = resumeHostOnly
+        ? "host-resume"
+        : resumeBuilderOnly ? "builder-resume" : "full";
       await updateRecord(record.id, {
         status: "queued",
         stage: "queued",
         failedStage: null,
         error: null,
         captureRequired: true,
+        captureError: null,
         captureStatus: "pending",
+        triviewStatus: "pending",
+        whiteboxOutcome: null,
         outcome: null,
         styledOpeningFrameStatus: record.referenceImage ? "pending" : "not-required",
         styledTriviewsRequired: Boolean(record.referenceImage),
         styledTriviewsStatus: record.referenceImage ? "pending" : "not-required",
+        resumeFromStage,
       });
-      await appendTrajectoryEvent(record.id, "queued", "用户发起重试，任务重新进入队列。", { kind: "queued" });
+      await appendTrajectoryEvent(
+        record.id,
+        "queued",
+        resumeHostOnly
+          ? "用户发起 Host-only 恢复：复用 Planner 与 Builder 产物，从方块编译继续。"
+          : resumeBuilderOnly
+            ? "用户发起 Builder 恢复：复用迟到交付且经可信校验的 Planner 产物。"
+          : "用户发起完整重试，任务重新进入队列。",
+        { kind: "queued", executionMode },
+      );
       enqueue(record.id, effectiveCodexBackend(record));
-      sendJson(response, 202, { ok: true });
+      sendJson(response, 202, {
+        ok: true,
+        executionMode,
+        resumeFromStage,
+      });
       return true;
     }
 
@@ -3161,11 +4349,23 @@ export function createStudio(options = {}) {
 
   async function shutdown() {
     shuttingDown = true;
+    if (remoteRecoveryTimer !== null) {
+      clearInterval(remoteRecoveryTimer);
+      remoteRecoveryTimer = null;
+    }
     for (const child of activeChildren.values()) {
       terminateChild(child);
     }
+    // Child close handlers finalize records and trusted reports asynchronously.
+    // Do not return while one of those handlers can still write into repoRoot;
+    // callers (including tests and worktree cleanup) may remove it immediately.
+    const closeDeadline = Date.now() + 5_000;
+    while (activeJobs.size > 0 && Date.now() < closeDeadline) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
     await Promise.all([
       recordingWorkbench.shutdown(),
+      episodeWorkflows.shutdown(),
       ...[...activeJobs].map((id) => updateRecord(id, {
           status: "interrupted",
           stage: "interrupted",

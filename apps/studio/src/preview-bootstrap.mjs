@@ -76,7 +76,7 @@ function attemptStartedAt(record) {
     : record.startedAt;
 }
 
-function requireReadyRecord(worldId, record) {
+function requireReadyRecord(worldId, record, whiteboxRuntimeAvailable) {
   if (record === null || typeof record !== "object" || Array.isArray(record)) {
     fail("STUDIO_PREVIEW_NOT_FOUND", "Studio world record is missing.");
   }
@@ -86,8 +86,8 @@ function requireReadyRecord(worldId, record) {
   if (!Number.isInteger(record.attempt) || record.attempt < 1) {
     fail("STUDIO_PREVIEW_NOT_READY", "Studio world has no published attempt.");
   }
-  if (record.captureStatus !== "passed") {
-    fail("STUDIO_PREVIEW_NOT_READY", "Studio world has not published trusted capture.");
+  if (whiteboxRuntimeAvailable !== true) {
+    fail("STUDIO_PREVIEW_NOT_READY", "Studio world has not published a playable whitebox runtime.");
   }
   if (
     !(
@@ -223,7 +223,9 @@ function validateImplementationMap(value) {
 }
 
 function validateEvaluationRun(record, source) {
-  if (source === null && record.origin === "existing-scene-brief-world") return;
+  // Imported artifacts receive a synthetic local attempt identity. A source
+  // evaluation-run describes its original environment, not that local import.
+  if (record.origin === "existing-scene-brief-world") return;
   const evaluationRun = parseJsonRecord(source, "evaluation-run.json");
   if (
     evaluationRun.kind !== "worldkit-evaluation-run" ||
@@ -240,14 +242,15 @@ function validateEvaluationRun(record, source) {
 
 export function assembleStudioPreviewBootstrapV1({
   worldId,
+  whiteboxRuntimeAvailable,
   recordBefore,
   recordAfter,
   authoringSource,
   implementationMapSource,
   evaluationRunSource,
 }) {
-  const startedAt = requireReadyRecord(worldId, recordBefore);
-  requireReadyRecord(worldId, recordAfter);
+  const startedAt = requireReadyRecord(worldId, recordBefore, whiteboxRuntimeAvailable);
+  requireReadyRecord(worldId, recordAfter, whiteboxRuntimeAvailable);
   requireStableRecord(recordBefore, recordAfter);
   validateEvaluationRun(recordBefore, evaluationRunSource);
 

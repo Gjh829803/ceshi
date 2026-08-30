@@ -2,9 +2,7 @@
 
 ## Purpose
 
-Creator Studio is a local or protected-hosted workbench for running the optional Scene Brief evaluation workflow, inspecting stage evidence, and opening verified worlds. It orchestrates Agents and trusted SDK commands; it is not another game engine, compiler or Canonical Schema owner.
-
-The formal repository Planner/Builder workflow remains documented in `docs/12-plan-first-world-authoring.md` and `docs/13-multi-agent-world-authoring.md`. Studio's compact Scene Brief path is documented in `docs/22-hosted-scene-brief-and-evaluation.md`.
+Creator Studio is a local or protected-hosted workbench for running the Scene Brief → Block Builder evaluation workflow, inspecting stage evidence, and opening verified worlds. It orchestrates Agents and trusted SDK commands; it is not another game engine or world-authoring authority.
 
 ## Start
 
@@ -22,8 +20,8 @@ Studio may start or proxy the required local runtime. Do not open `?authoring=1`
 ```text
 Prompt + optional reference
   -> hosted Scene Brief Planner + self-check
-  -> Authoring V4 Builder + self-check
-  -> trusted normalization / IR V4 / ExecutionPlan V5
+  -> direct Three.js Block Builder world.mjs + self-check
+  -> trusted extraction / Block check / internal ExecutionPlan V5 transport
   -> Babylon/Havok runtime capture
   -> optional visual prompt/image providers
 ```

@@ -11,6 +11,12 @@
   WorldPackage Build Receipt → Validation Subject → Recast → Canonical Route Evidence/Report。
   Browser 只公开 Protocol V5 与 Snapshot V4；Babylon provider projection 保持 Adapter 内部合同。
 
+> Hosted Builder 的 Agent 创作面使用 Block World V2。可信 Host 只从通过检查的方块 Manifest
+> 确定性派生 Authoring V4，随后进入上一段唯一的 Canonical Scene Plan / World Build Identity
+> 生产链；Studio 以同次可信 Host Attempt 的 Authoring/Build 哈希和 Snapshot V4 新鲜度发布可玩边界，
+> 完整 Capture Manifest 再以同一个 World Build Identity 闭合三视图。Block World 不是第二条
+> Runtime、WorldPackage 或身份入口，也不扩大下述 Babylon Native Lane 的生产范围。
+
 > ADR-0007 已接受长期的 Babylon Native Scene Lane 架构方向：Native JSON 管启动/资源/Gameplay，
 > Babylon TypeScript 管视觉，显式登记连接 SDK-owned Havok，且每个世界只选一个 Scene Source。
 > BNA-1 已冻结 Native Schema、Source Union 与 source-neutral identity，但正式 RuntimeHost 仍在任何

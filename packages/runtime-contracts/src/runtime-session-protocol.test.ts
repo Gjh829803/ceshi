@@ -341,6 +341,9 @@ describe("Runtime Session V1 public DTOs", () => {
           viewPitchOffsetRadians: 0,
           viewDistanceOffsetMeters: 0,
           fixedStepDeltaSeconds: 1 / 60,
+          actualTargetPositionMetersXYZ: [0, 1.5, 0],
+          nearClipMeters: 0.05,
+          farClipMeters: 1_000,
           selectionDecision: {
             schemaVersion: 2,
             committedTick: 0,
@@ -366,6 +369,20 @@ describe("Runtime Session V1 public DTOs", () => {
     expect(parseWorldRuntimeSnapshotV4(trackingSnapshot)).toEqual(
       trackingSnapshot,
     );
+
+    for (const cameraPatch of [
+      { actualTargetPositionMetersXYZ: [0, Number.NaN, 0] },
+      { nearClipMeters: 0 },
+      { nearClipMeters: 10, farClipMeters: 10 },
+    ]) {
+      expect(() => parseWorldRuntimeSnapshotV4({
+        ...trackingSnapshot,
+        view: {
+          ...trackingSnapshot.view,
+          camera: { ...trackingSnapshot.view.camera, ...cameraPatch },
+        },
+      })).toThrow("closed WorldRuntimeSnapshotV4 schema");
+    }
   });
 
   it("parses succeeded and rejected Receipts and verifies the derived id", () => {

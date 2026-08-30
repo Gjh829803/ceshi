@@ -247,13 +247,14 @@ function jsonResponse(value: unknown, status = 200): Response {
 
 describe("loadAuthoringScene", () => {
   it("loads one Studio authoring Preview bootstrap with its closed implementation map", async () => {
-    const authoringSpec = createValidAuthoringSpecV4();
     const worldId = "studio-preview-world";
+    const sceneId = "studio-preview-scene";
+    const authoringSpec = { ...createValidAuthoringSpecV4(), id: sceneId };
     const authoringSpecHash = sha256CanonicalJson(authoringSpec);
     const implementationMap = {
       kind: "worldkit-scene-brief-implementation-map" as const,
       schemaVersion: 1 as const,
-      sceneId: authoringSpec.id,
+      sceneId,
       sceneBriefHash: `sha256:${"b".repeat(64)}` as const,
       authoringSpecId: authoringSpec.id,
       authoringSpecHash: authoringSpecHash as `sha256:${string}`,
@@ -270,7 +271,7 @@ describe("loadAuthoringScene", () => {
       kind: "worldkit-studio-preview-bootstrap",
       schemaVersion: 1,
       worldId,
-      sceneId: authoringSpec.id,
+      sceneId,
       attempt: 2,
       attemptStartedAt: "2026-08-25T09:00:00.000Z",
       authoringSpecHash,
@@ -294,14 +295,15 @@ describe("loadAuthoringScene", () => {
   });
 
   it("rejects malformed or cross-authority Studio Preview bootstraps", async () => {
-    const authoringSpec = createValidAuthoringSpecV4();
     const worldId = "studio-preview-world";
+    const sceneId = "studio-preview-scene";
+    const authoringSpec = { ...createValidAuthoringSpecV4(), id: sceneId };
     const authoringSpecHash = sha256CanonicalJson(authoringSpec);
     const validPayload = {
       kind: "worldkit-studio-preview-bootstrap",
       schemaVersion: 1,
       worldId,
-      sceneId: authoringSpec.id,
+      sceneId,
       attempt: 1,
       attemptStartedAt: "2026-08-25T09:00:00.000Z",
       authoringSpecHash,
@@ -309,7 +311,7 @@ describe("loadAuthoringScene", () => {
       implementationMap: {
         kind: "worldkit-scene-brief-implementation-map",
         schemaVersion: 1,
-        sceneId: authoringSpec.id,
+        sceneId,
         sceneBriefHash: `sha256:${"b".repeat(64)}`,
         authoringSpecId: authoringSpec.id,
         authoringSpecHash,
@@ -323,11 +325,31 @@ describe("loadAuthoringScene", () => {
         }],
       },
     };
+    const splitAuthoringSpec = { ...authoringSpec, id: "other-scene" };
+    const splitAuthoringSpecHash = sha256CanonicalJson(splitAuthoringSpec);
     const invalidPayloads = [
       { ...validPayload, kind: "wrong-kind" },
       { ...validPayload, attempt: 0 },
       { ...validPayload, worldId: "another-world" },
+      { ...validPayload, sceneId: "another-scene" },
       { ...validPayload, authoringSpecHash: `sha256:${"0".repeat(64)}` },
+      {
+        ...validPayload,
+        authoringSpec: splitAuthoringSpec,
+        authoringSpecHash: splitAuthoringSpecHash,
+        implementationMap: {
+          ...validPayload.implementationMap,
+          authoringSpecId: splitAuthoringSpec.id,
+          authoringSpecHash: splitAuthoringSpecHash,
+        },
+      },
+      {
+        ...validPayload,
+        implementationMap: {
+          ...validPayload.implementationMap,
+          authoringSpecId: "another-authoring-spec",
+        },
+      },
       {
         ...validPayload,
         implementationMap: {

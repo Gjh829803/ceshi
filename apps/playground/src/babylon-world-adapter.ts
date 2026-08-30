@@ -1,4 +1,5 @@
 import {
+  inspectWhiteboxTriviewPixelsV1,
   parseCanonicalSceneExecutionPlanV1,
   parseWorldRuntimeBootstrapV1,
   validateVisualCaptureGroupsV1,
@@ -862,19 +863,25 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     if (target === undefined) {
       throw new Error(`WORLDKIT_CAPTURE_TARGET_NOT_FOUND: ${visualTargetId}`);
     }
+    const capture = this.activeRuntime().captureArtifactView({
+      kind: "entity-triview",
+      widthPixels: Math.max(3, this.canvas.width),
+      heightPixels: Math.max(1, this.canvas.height),
+      entityIds: target.runtimeEntityIds,
+      identityColor: target.identityColor,
+    });
     return {
       kind: "worldkit-whitebox-triview-capture",
       schemaVersion: 1,
       visualTargetId,
       runtimeEntityIds: [...target.runtimeEntityIds],
       views: ["front", "right", "back"],
-      imageDataUri: this.activeRuntime().captureArtifactView({
-        kind: "entity-triview",
-        widthPixels: Math.max(3, this.canvas.width),
-        heightPixels: Math.max(1, this.canvas.height),
-        entityIds: target.runtimeEntityIds,
-        identityColor: target.identityColor,
-      }).dataUrl,
+      imageDataUri: capture.dataUrl,
+      inspection: inspectWhiteboxTriviewPixelsV1(
+        capture.pixelsRgba,
+        capture.widthPixels,
+        capture.heightPixels,
+      ),
     };
   }
 

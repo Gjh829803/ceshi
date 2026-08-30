@@ -35,7 +35,7 @@ const brief = `# WorldKit Scene Brief
 草地纹理、塔楼材质和天空颜色只属于渲染层。
 
 ## 运动模式
-陆地步行：主体自然行走和奔跑。
+- 陆地步行：主体自然行走和奔跑。
 
 ## 空间
 前景草地向远景塔楼展开，侧后方保持完整可探索空间。
@@ -170,8 +170,8 @@ it("writes movement mode and complete target descriptions into the trusted palet
   const palette = JSON.parse(await readFile(outputPath, "utf8"));
   expect(palette).toMatchObject({
     sceneId: files.sceneId,
-    movementMode: "ground-walk",
-    movementModeLabel: "陆地步行",
+    movementModes: ["ground-walk"],
+    movementModeLabels: ["陆地步行"],
     targets: [
       { id: "visual-target-1", targetKind: "subject", name: "旅人" },
       { id: "visual-target-2", targetKind: "landmark", name: "塔楼" },

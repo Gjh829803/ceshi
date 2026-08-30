@@ -12605,20 +12605,35 @@ function splitSections(source) {
   }
   return new Map([...sections].map(([key, value]) => [key, value[0]]));
 }
-function parseMovement(value) {
-  const match = /^([^：:\n]+)[：:]\s*([^\n]+)$/.exec(value.trim());
-  if (match === null) {
-    return fail("SCENE_BRIEF_MOVEMENT_INVALID: use '<运动模式>：<一句自然语言说明>'.");
+function parseMovementModes(value) {
+  const lines = value.split("\n").map((line) => line.trim()).filter(Boolean);
+  if (lines.length < 1 || lines.length > 8) {
+    return fail("SCENE_BRIEF_MOVEMENT_COUNT: movement modes must contain 1-8 entries.");
   }
-  const label = match[1].trim();
-  if (label.length > 48) {
-    return fail("SCENE_BRIEF_MOVEMENT_LABEL_TOO_LONG: movement label must be at most 48 characters.");
+  const labels = /* @__PURE__ */ new Set();
+  const movementModes = [];
+  for (const [index, line] of lines.entries()) {
+    const match = /^-\s*([^：:\n]+)[：:]\s*([^\n]+)$/.exec(line);
+    if (match === null) {
+      return fail(
+        `SCENE_BRIEF_MOVEMENT_INVALID: entry ${index + 1} must use '- <运动模式>：<一句自然语言说明>'.`
+      );
+    }
+    const label = match[1].trim();
+    if (label.length > 48) {
+      return fail("SCENE_BRIEF_MOVEMENT_LABEL_TOO_LONG: movement label must be at most 48 characters.");
+    }
+    if (labels.has(label)) {
+      return fail(`SCENE_BRIEF_MOVEMENT_DUPLICATE: '${label}'.`);
+    }
+    labels.add(label);
+    movementModes.push({
+      mode: MOVEMENT_LABELS.get(label) ?? "custom",
+      label,
+      description: match[2].trim()
+    });
   }
-  return {
-    mode: MOVEMENT_LABELS.get(label) ?? "custom",
-    label,
-    description: match[2].trim()
-  };
+  return Object.freeze(movementModes);
 }
 function parseVisualTargets(value) {
   const lines = value.split("\n").map((line) => line.trim()).filter(Boolean);
@@ -12658,8 +12673,8 @@ function parseVisualTargets(value) {
 function parseSceneBriefV1(source) {
   const sections = splitSections(source);
   if ("ok" in sections) return sections;
-  const movement = parseMovement(sections.get("运动模式"));
-  if ("ok" in movement) return movement;
+  const movementModes = parseMovementModes(sections.get("运动模式"));
+  if ("ok" in movementModes) return movementModes;
   const visualTargets = parseVisualTargets(sections.get("视觉目标"));
   if ("ok" in visualTargets) return visualTargets;
   const value = {
@@ -12671,7 +12686,7 @@ function parseSceneBriefV1(source) {
     visibleReferenceEvidence: sections.get("可见参考证据"),
     inferredContinuation: sections.get("推断的世界延伸"),
     renderLayerIdeas: sections.get("仅视觉层设想"),
-    movement,
+    movementModes,
     space: sections.get("空间"),
     navigation: sections.get("通行"),
     openingShot: sections.get("首帧"),
@@ -12734,18 +12749,220 @@ ajv.addSchema(subjectDefinitionV1Schema);
   }
   return registeredValidator;
 })();
-const PLANNER_SELF_CHECK_VERSION = "worldkit-planner-self-check-v3";
+const BLOCK_PRESET_REFS_V1 = Object.freeze({
+  walkable: "worldkit://block-preset/walkable@1",
+  obstacle: "worldkit://block-preset/obstacle@1",
+  interactiveSolid: "worldkit://block-preset/interactive-solid@1",
+  interactiveTrigger: "worldkit://block-preset/interactive-trigger@1",
+  water: "worldkit://block-preset/water@1",
+  cloudWalkable: "worldkit://block-preset/cloud-walkable@1",
+  cloudPassable: "worldkit://block-preset/cloud-passable@1",
+  visualOnly: "worldkit://block-preset/visual-only@1",
+  landmarkRed: "worldkit://block-preset/landmark-red@1",
+  landmarkOrange: "worldkit://block-preset/landmark-orange@1",
+  landmarkYellow: "worldkit://block-preset/landmark-yellow@1",
+  landmarkBlue: "worldkit://block-preset/landmark-blue@1",
+  landmarkPurple: "worldkit://block-preset/landmark-purple@1",
+  landmarkPink: "worldkit://block-preset/landmark-pink@1"
+});
+const BLOCK_PRESET_COLORS_V1 = Object.freeze({
+  walkable: "#B7E4C7",
+  obstacle: "#5F6368",
+  interactiveSolid: "#00B8A9",
+  interactiveTrigger: "#B8DE6F",
+  water: "#8ECDF4",
+  cloudWalkable: "#D8D4F2",
+  cloudPassable: "#EEF6FF",
+  visualOnly: "#D6D3D1",
+  landmarkRed: "#E15759",
+  landmarkOrange: "#F28E2B",
+  landmarkYellow: "#D9A514",
+  landmarkBlue: "#4E79A7",
+  landmarkPurple: "#9C6ADE",
+  landmarkPink: "#E66AA5"
+});
+const BLOCK_WHITEBOX_SUBJECT_COLOR_V1 = "#E85D5D";
+const BLOCK_VISUAL_TARGET_COLORS_V1 = Object.freeze([
+  BLOCK_WHITEBOX_SUBJECT_COLOR_V1,
+  BLOCK_PRESET_COLORS_V1.landmarkOrange,
+  BLOCK_PRESET_COLORS_V1.landmarkYellow,
+  BLOCK_PRESET_COLORS_V1.landmarkBlue,
+  BLOCK_PRESET_COLORS_V1.landmarkPurple
+]);
+Object.freeze([
+  null,
+  BLOCK_PRESET_REFS_V1.landmarkOrange,
+  BLOCK_PRESET_REFS_V1.landmarkYellow,
+  BLOCK_PRESET_REFS_V1.landmarkBlue,
+  BLOCK_PRESET_REFS_V1.landmarkPurple
+]);
+function freezePreset(input) {
+  return Object.freeze({
+    ...input,
+    render: Object.freeze({ ...input.render }),
+    physics: Object.freeze({ ...input.physics }),
+    traversal: Object.freeze({ ...input.traversal })
+  });
+}
+const STATIC_SOLID_PHYSICS = Object.freeze({
+  bodyMode: "static",
+  collisionMode: "solid",
+  frictionRatio: 0.8,
+  restitutionRatio: 0
+});
+const BLOCK_PRESETS_V1 = Object.freeze([
+  freezePreset({
+    resourceRef: BLOCK_PRESET_REFS_V1.walkable,
+    family: "functional",
+    render: { colorHex: BLOCK_PRESET_COLORS_V1.walkable, opacityRatio: 1 },
+    physics: STATIC_SOLID_PHYSICS,
+    traversal: { supportSurfaceMode: "ground", mediumMode: "solid" },
+    interactionMode: "none"
+  }),
+  freezePreset({
+    resourceRef: BLOCK_PRESET_REFS_V1.obstacle,
+    family: "functional",
+    render: { colorHex: BLOCK_PRESET_COLORS_V1.obstacle, opacityRatio: 1 },
+    physics: STATIC_SOLID_PHYSICS,
+    traversal: { supportSurfaceMode: "none", mediumMode: "solid" },
+    interactionMode: "none"
+  }),
+  freezePreset({
+    resourceRef: BLOCK_PRESET_REFS_V1.interactiveSolid,
+    family: "functional",
+    render: { colorHex: BLOCK_PRESET_COLORS_V1.interactiveSolid, opacityRatio: 1 },
+    physics: {
+      bodyMode: "kinematic",
+      collisionMode: "solid",
+      frictionRatio: 0.8,
+      restitutionRatio: 0
+    },
+    traversal: { supportSurfaceMode: "none", mediumMode: "solid" },
+    interactionMode: "solid"
+  }),
+  freezePreset({
+    resourceRef: BLOCK_PRESET_REFS_V1.interactiveTrigger,
+    family: "functional",
+    render: { colorHex: BLOCK_PRESET_COLORS_V1.interactiveTrigger, opacityRatio: 0.45 },
+    physics: {
+      bodyMode: "kinematic",
+      collisionMode: "trigger",
+      frictionRatio: 0,
+      restitutionRatio: 0
+    },
+    traversal: { supportSurfaceMode: "none", mediumMode: "none" },
+    interactionMode: "trigger"
+  }),
+  freezePreset({
+    resourceRef: BLOCK_PRESET_REFS_V1.water,
+    family: "functional",
+    render: { colorHex: BLOCK_PRESET_COLORS_V1.water, opacityRatio: 0.55 },
+    physics: {
+      bodyMode: "none",
+      collisionMode: "trigger",
+      frictionRatio: 0,
+      restitutionRatio: 0
+    },
+    traversal: { supportSurfaceMode: "none", mediumMode: "water" },
+    interactionMode: "none"
+  }),
+  freezePreset({
+    resourceRef: BLOCK_PRESET_REFS_V1.cloudWalkable,
+    family: "functional",
+    render: { colorHex: BLOCK_PRESET_COLORS_V1.cloudWalkable, opacityRatio: 0.8 },
+    physics: STATIC_SOLID_PHYSICS,
+    traversal: { supportSurfaceMode: "cloud", mediumMode: "cloud" },
+    interactionMode: "none"
+  }),
+  freezePreset({
+    resourceRef: BLOCK_PRESET_REFS_V1.cloudPassable,
+    family: "functional",
+    render: { colorHex: BLOCK_PRESET_COLORS_V1.cloudPassable, opacityRatio: 0.45 },
+    physics: {
+      bodyMode: "none",
+      collisionMode: "none",
+      frictionRatio: 0,
+      restitutionRatio: 0
+    },
+    traversal: { supportSurfaceMode: "none", mediumMode: "cloud" },
+    interactionMode: "none"
+  }),
+  freezePreset({
+    resourceRef: BLOCK_PRESET_REFS_V1.visualOnly,
+    family: "functional",
+    render: { colorHex: BLOCK_PRESET_COLORS_V1.visualOnly, opacityRatio: 0.7 },
+    physics: {
+      bodyMode: "none",
+      collisionMode: "none",
+      frictionRatio: 0,
+      restitutionRatio: 0
+    },
+    traversal: { supportSurfaceMode: "none", mediumMode: "none" },
+    interactionMode: "none"
+  }),
+  ...[
+    [BLOCK_PRESET_REFS_V1.landmarkRed, BLOCK_PRESET_COLORS_V1.landmarkRed],
+    [BLOCK_PRESET_REFS_V1.landmarkOrange, BLOCK_PRESET_COLORS_V1.landmarkOrange],
+    [BLOCK_PRESET_REFS_V1.landmarkYellow, BLOCK_PRESET_COLORS_V1.landmarkYellow],
+    [BLOCK_PRESET_REFS_V1.landmarkBlue, BLOCK_PRESET_COLORS_V1.landmarkBlue],
+    [BLOCK_PRESET_REFS_V1.landmarkPurple, BLOCK_PRESET_COLORS_V1.landmarkPurple],
+    [BLOCK_PRESET_REFS_V1.landmarkPink, BLOCK_PRESET_COLORS_V1.landmarkPink]
+  ].map(([resourceRef, colorHex]) => freezePreset({
+    resourceRef,
+    family: "landmark",
+    render: { colorHex, opacityRatio: 1 },
+    physics: STATIC_SOLID_PHYSICS,
+    traversal: { supportSurfaceMode: "none", mediumMode: "solid" },
+    interactionMode: "none"
+  }))
+]);
+new Map(
+  BLOCK_PRESETS_V1.map((preset) => [preset.resourceRef, preset])
+);
+const PLANNER_SELF_CHECK_VERSION = "worldkit-planner-self-check-v4";
 const MAXIMUM_CENTER_ERROR_RATIO = 0.015;
-const MAXIMUM_TERRAIN_IMAGE_DIMENSION_PIXELS = 4096;
-const MAXIMUM_MEAN_RAMP_RESIDUAL_RGB_UNITS = 60;
-const MAXIMUM_P95_RAMP_RESIDUAL_RGB_UNITS = 90;
-const MINIMUM_NON_FLAT_HEIGHT_RATIO_RANGE = 0.05;
-const TERRAIN_HEIGHT_INTENT_PROFILE_ID = "signed-diverging-blue-gray-orange@1";
-const TERRAIN_RAMP = {
-  depression: [32, 64, 208],
-  datum: [128, 128, 128],
-  elevation: [224, 96, 32]
-};
+const MAXIMUM_ENTRY_ASPECT_ERROR_RATIO = 0.02;
+const MINIMUM_WORLD_PLAN_PALETTE_COVERAGE_RATIO = 0.03;
+const MINIMUM_ENTRY_PALETTE_COVERAGE_RATIO = 0.02;
+const MAXIMUM_PALETTE_RGB_DISTANCE = 56;
+function rgbFromHex(value) {
+  return [
+    Number.parseInt(value.slice(1, 3), 16),
+    Number.parseInt(value.slice(3, 5), 16),
+    Number.parseInt(value.slice(5, 7), 16)
+  ];
+}
+function paletteEntry(input) {
+  const [red, green, blue] = rgbFromHex(input.color);
+  return {
+    semantic: input.semantic,
+    red,
+    green,
+    blue,
+    isBlock: input.isBlock,
+    isTraversable: input.isTraversable ?? false,
+    isInteractive: input.isInteractive ?? false,
+    maximumRgbDistance: input.maximumRgbDistance ?? MAXIMUM_PALETTE_RGB_DISTANCE,
+    ...input.visualTargetIndex === void 0 ? {} : { visualTargetIndex: input.visualTargetIndex }
+  };
+}
+const BLOCK_WHITEBOX_PALETTE = Object.freeze([
+  paletteEntry({ semantic: "walkable", color: BLOCK_PRESET_COLORS_V1.walkable, isBlock: true, isTraversable: true }),
+  paletteEntry({ semantic: "obstacle", color: BLOCK_PRESET_COLORS_V1.obstacle, isBlock: true }),
+  paletteEntry({ semantic: "interactive-solid", color: BLOCK_PRESET_COLORS_V1.interactiveSolid, isBlock: true, isInteractive: true }),
+  paletteEntry({ semantic: "interactive-trigger", color: BLOCK_PRESET_COLORS_V1.interactiveTrigger, isBlock: true, isInteractive: true }),
+  paletteEntry({ semantic: "water", color: BLOCK_PRESET_COLORS_V1.water, isBlock: true }),
+  paletteEntry({ semantic: "cloud-walkable", color: BLOCK_PRESET_COLORS_V1.cloudWalkable, isBlock: true, isTraversable: true }),
+  paletteEntry({ semantic: "cloud-passable", color: BLOCK_PRESET_COLORS_V1.cloudPassable, isBlock: true, maximumRgbDistance: 16 }),
+  paletteEntry({ semantic: "visual-only", color: BLOCK_PRESET_COLORS_V1.visualOnly, isBlock: true }),
+  paletteEntry({ semantic: "landmark-red", color: BLOCK_PRESET_COLORS_V1.landmarkRed, isBlock: true }),
+  paletteEntry({ semantic: "visual-target-2", color: BLOCK_VISUAL_TARGET_COLORS_V1[1], isBlock: true, visualTargetIndex: 1 }),
+  paletteEntry({ semantic: "visual-target-3", color: BLOCK_VISUAL_TARGET_COLORS_V1[2], isBlock: true, visualTargetIndex: 2 }),
+  paletteEntry({ semantic: "visual-target-4", color: BLOCK_VISUAL_TARGET_COLORS_V1[3], isBlock: true, visualTargetIndex: 3 }),
+  paletteEntry({ semantic: "visual-target-5", color: BLOCK_VISUAL_TARGET_COLORS_V1[4], isBlock: true, visualTargetIndex: 4 }),
+  paletteEntry({ semantic: "landmark-pink", color: BLOCK_PRESET_COLORS_V1.landmarkPink, isBlock: true }),
+  paletteEntry({ semantic: "visual-target-1-subject", color: BLOCK_WHITEBOX_SUBJECT_COLOR_V1, isBlock: false, visualTargetIndex: 0 })
+]);
 function option(arguments_, name) {
   const index = arguments_.indexOf(name);
   const value = index < 0 ? void 0 : arguments_[index + 1];
@@ -12840,8 +13057,7 @@ function rgbHueSaturation(red, green, blue) {
     brightness: maximum
   };
 }
-function centerMeasurement(bytes) {
-  const image = decodePng(bytes);
+function centerMeasurement(image) {
   let xTotal = 0;
   let count = 0;
   for (let index = 0; index < image.width * image.height; index += 1) {
@@ -12863,7 +13079,7 @@ function centerMeasurement(bytes) {
   );
   if (count < minimumPixels) {
     throw new Error(
-      `Primary-subject red mask is missing or too small (${count} pixels).`
+      `Primary-subject red silhouette is missing or too small (${count} pixels).`
     );
   }
   const centerXRatio = (xTotal / count + 0.5) / image.width;
@@ -12876,85 +13092,81 @@ function centerMeasurement(bytes) {
     maximumCenterErrorRatio: MAXIMUM_CENTER_ERROR_RATIO
   };
 }
-function segmentProjection(rgb, start, end, startHeightRatio) {
-  const delta = [end[0] - start[0], end[1] - start[1], end[2] - start[2]];
-  const lengthSquared = delta.reduce((sum, value) => sum + value * value, 0);
-  const unclamped = ((rgb[0] - start[0]) * delta[0] + (rgb[1] - start[1]) * delta[1] + (rgb[2] - start[2]) * delta[2]) / lengthSquared;
-  const ratio = Math.max(0, Math.min(1, unclamped));
-  return {
-    heightRatio: startHeightRatio + ratio,
-    residual: Math.hypot(
-      rgb[0] - (start[0] + ratio * delta[0]),
-      rgb[1] - (start[1] + ratio * delta[1]),
-      rgb[2] - (start[2] + ratio * delta[2])
-    )
-  };
-}
-function nearestRank(sorted, ratio) {
-  return sorted[Math.max(0, Math.ceil(ratio * sorted.length) - 1)];
-}
-function terrainIntentMeasurement(bytes) {
-  const image = decodePng(bytes);
-  if (image.width !== image.height) {
-    throw new Error("Height Intent PNG must be square.");
-  }
-  if (image.width > MAXIMUM_TERRAIN_IMAGE_DIMENSION_PIXELS) {
-    throw new Error(
-      `Height Intent PNG dimensions must not exceed ${MAXIMUM_TERRAIN_IMAGE_DIMENSION_PIXELS}px.`
-    );
-  }
-  const ratios = [];
-  const residuals = [];
+function blockPaletteMeasurement(image) {
+  const counts = Object.fromEntries(
+    BLOCK_WHITEBOX_PALETTE.map(({ semantic }) => [semantic, 0])
+  );
+  const visualTargetPixelCounts = BLOCK_VISUAL_TARGET_COLORS_V1.map(() => 0);
+  let matchedBlockPixelCount = 0;
+  let traversablePixelCount = 0;
+  let interactivePixelCount = 0;
   for (let index = 0; index < image.width * image.height; index += 1) {
     const offset = index * image.channels;
-    if (image.channels === 4 && image.pixels[offset + 3] !== 255) {
-      throw new Error("Height Intent PNG must be fully opaque.");
+    const red = image.pixels[offset];
+    const green = image.pixels[offset + 1];
+    const blue = image.pixels[offset + 2];
+    let best;
+    let bestDistanceSquared = Number.POSITIVE_INFINITY;
+    for (const candidate of BLOCK_WHITEBOX_PALETTE) {
+      const distanceSquared = (red - candidate.red) ** 2 + (green - candidate.green) ** 2 + (blue - candidate.blue) ** 2;
+      if (distanceSquared < bestDistanceSquared) {
+        best = candidate;
+        bestDistanceSquared = distanceSquared;
+      }
     }
-    const rgb = [
-      image.pixels[offset],
-      image.pixels[offset + 1],
-      image.pixels[offset + 2]
-    ];
-    const low = segmentProjection(
-      rgb,
-      TERRAIN_RAMP.depression,
-      TERRAIN_RAMP.datum,
-      -1
-    );
-    const high = segmentProjection(
-      rgb,
-      TERRAIN_RAMP.datum,
-      TERRAIN_RAMP.elevation,
-      0
-    );
-    const projected = high.residual < low.residual ? high : low;
-    ratios.push(projected.heightRatio);
-    residuals.push(projected.residual);
+    if (best === void 0 || bestDistanceSquared > best.maximumRgbDistance ** 2) continue;
+    counts[best.semantic] = (counts[best.semantic] ?? 0) + 1;
+    if (best.isBlock) matchedBlockPixelCount += 1;
+    if (best.isTraversable) traversablePixelCount += 1;
+    if (best.isInteractive) interactivePixelCount += 1;
+    if (best.visualTargetIndex !== void 0) {
+      visualTargetPixelCounts[best.visualTargetIndex] = (visualTargetPixelCounts[best.visualTargetIndex] ?? 0) + 1;
+    }
   }
-  ratios.sort((left, right) => left - right);
-  residuals.sort((left, right) => left - right);
+  const totalPixels = image.width * image.height;
   return {
     widthPixels: image.width,
     heightPixels: image.height,
-    profileId: TERRAIN_HEIGHT_INTENT_PROFILE_ID,
-    minimumHeightRatio: ratios[0],
-    medianHeightRatio: nearestRank(ratios, 0.5),
-    maximumHeightRatio: ratios[ratios.length - 1],
-    meanRampResidualRgbUnits: residuals.reduce((sum, value) => sum + value, 0) / residuals.length,
-    p95RampResidualRgbUnits: nearestRank(residuals, 0.95)
+    aspectRatio: image.width / image.height,
+    matchedBlockPixelCount,
+    blockPaletteCoverageRatio: matchedBlockPixelCount / totalPixels,
+    traversablePixelCount,
+    interactivePixelCount,
+    blockPixelCountsBySemantic: counts,
+    visualTargetPixelCounts
   };
 }
-function terrainPromptDiagnostics(source) {
-  const requirements = [
-    ["TERRAIN_PROMPT_REFERENCE_ROLES", /reference roles/i],
-    ["TERRAIN_PROMPT_BASE_TERRAIN", /base terrain/i],
-    ["TERRAIN_PROMPT_DEPRESSIONS", /depressions/i],
-    ["TERRAIN_PROMPT_STATIC_EXCLUSIONS", /static landmark and structure exclusions/i],
-    ["TERRAIN_PROMPT_ENTRY_CONNECTIVITY", /entry and connectivity/i],
-    ["TERRAIN_PROMPT_ORIENTATION", /orientation/i],
-    ["TERRAIN_PROMPT_ENCODING_PROFILE", /signed-diverging-blue-gray-orange@1/i]
-  ];
-  return requirements.flatMap(([code2, pattern2]) => pattern2.test(source) ? [] : [{ code: code2, message: `Height Intent prompt is missing ${pattern2.source}.` }]);
+function validateBlockPalette(options) {
+  const diagnostics = [];
+  if (options.measurement.blockPaletteCoverageRatio < options.minimumCoverageRatio) {
+    diagnostics.push({
+      code: `${options.label}_BLOCK_PALETTE_COVERAGE_LOW`,
+      message: `${options.label} matches Block World colors on only ${options.measurement.blockPaletteCoverageRatio.toFixed(4)} of pixels; required at least ${options.minimumCoverageRatio.toFixed(4)}. Regenerate it as a discrete-cube block-whitebox render using the fixed palette.`
+    });
+  }
+  const hasGroundMovement = options.movementModes?.some((mode) => mode.startsWith("ground-")) === true;
+  const supportPixelCount = hasGroundMovement ? (options.measurement.blockPixelCountsBySemantic.walkable ?? 0) + (options.measurement.blockPixelCountsBySemantic["cloud-walkable"] ?? 0) : void 0;
+  if (supportPixelCount !== void 0 && supportPixelCount === 0) {
+    diagnostics.push({
+      code: `${options.label}_TRAVERSABLE_COLOR_MISSING`,
+      message: `${options.label} does not contain a ground-traversable or cloud-support color even though the Scene Brief declares ground movement. Flight, swimming, and water-surface domains are never represented as route overlays.`
+    });
+  }
+  const requiredTargetIndexes = options.requireAllVisualTargets ? Array.from({ length: options.requiredVisualTargetCount }, (_, index) => index) : [0];
+  const minimumTargetPixels = Math.max(
+    32,
+    Math.round(options.measurement.widthPixels * options.measurement.heightPixels * 5e-5)
+  );
+  for (const targetIndex of requiredTargetIndexes) {
+    const pixelCount = options.measurement.visualTargetPixelCounts[targetIndex] ?? 0;
+    if (pixelCount < minimumTargetPixels) {
+      diagnostics.push({
+        code: `${options.label}_VISUAL_TARGET_COLOR_MISSING`,
+        message: `${options.label} is missing visual-target-${targetIndex + 1} in its fixed color ${BLOCK_VISUAL_TARGET_COLORS_V1[targetIndex]} (${pixelCount}/${minimumTargetPixels} pixels).`
+      });
+    }
+  }
+  return diagnostics;
 }
 function sceneBriefDiagnostics(source) {
   const result = parseSceneBriefV1(source);
@@ -12965,62 +13177,69 @@ function sceneBriefDiagnostics(source) {
   }));
 }
 async function runPlannerSelfCheck(options) {
-  const [
-    briefBytes,
-    worldPlanBytes,
-    entryBytes,
-    terrainPromptBytes,
-    terrainIntentBytes
-  ] = await Promise.all([
+  const [briefBytes, worldPlanBytes, entryBytes] = await Promise.all([
     readFile(options.briefPath),
     readFile(options.worldPlanPath),
-    readFile(options.entryPath),
-    readFile(options.terrainPromptPath),
-    readFile(options.terrainIntentPath)
+    readFile(options.entryPath)
   ]);
   const briefSource = briefBytes.toString("utf8");
-  const diagnostics = [
-    ...sceneBriefDiagnostics(briefSource),
-    ...terrainPromptDiagnostics(terrainPromptBytes.toString("utf8"))
-  ];
-  let imageMeasurements = null;
-  let terrainIntentMeasurements = null;
+  const brief = parseSceneBriefV1(briefSource);
+  const diagnostics = sceneBriefDiagnostics(briefSource);
+  let worldPlanMeasurement = null;
+  let entryMeasurement = null;
   try {
-    decodePng(worldPlanBytes);
-    imageMeasurements = centerMeasurement(entryBytes);
-    if (imageMeasurements.subjectCenterErrorRatio > MAXIMUM_CENTER_ERROR_RATIO) {
+    const image = decodePng(worldPlanBytes);
+    worldPlanMeasurement = blockPaletteMeasurement(image);
+    diagnostics.push(...validateBlockPalette({
+      label: "WORLD_PLAN",
+      measurement: worldPlanMeasurement,
+      minimumCoverageRatio: MINIMUM_WORLD_PLAN_PALETTE_COVERAGE_RATIO,
+      movementModes: brief.ok ? brief.value.movementModes.map(({ mode }) => mode) : void 0,
+      requiredVisualTargetCount: brief.ok ? brief.value.visualTargets.length : 1,
+      requireAllVisualTargets: true
+    }));
+  } catch (error) {
+    diagnostics.push({
+      code: "WORLD_PLAN_IMAGE_INVALID",
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+  try {
+    const image = decodePng(entryBytes);
+    const palette = blockPaletteMeasurement(image);
+    const composition = centerMeasurement(image);
+    entryMeasurement = { ...palette, composition };
+    diagnostics.push(...validateBlockPalette({
+      label: "ENTRY_WHITEBOX_TARGET",
+      measurement: palette,
+      minimumCoverageRatio: MINIMUM_ENTRY_PALETTE_COVERAGE_RATIO,
+      movementModes: brief.ok ? brief.value.movementModes.map(({ mode }) => mode) : void 0,
+      requiredVisualTargetCount: brief.ok ? brief.value.visualTargets.length : 1,
+      requireAllVisualTargets: false
+    }));
+    const aspectErrorRatio = Math.abs(palette.aspectRatio - 16 / 9) / (16 / 9);
+    if (aspectErrorRatio > MAXIMUM_ENTRY_ASPECT_ERROR_RATIO) {
+      diagnostics.push({
+        code: "ENTRY_WHITEBOX_TARGET_ASPECT_RATIO_INVALID",
+        message: `Entry target aspect ratio is ${palette.aspectRatio.toFixed(4)}; required 16:9 within ${(MAXIMUM_ENTRY_ASPECT_ERROR_RATIO * 100).toFixed(1)}%.`
+      });
+    }
+    if (composition.subjectCenterErrorRatio > MAXIMUM_CENTER_ERROR_RATIO) {
       diagnostics.push({
         code: "ENTRY_SUBJECT_NOT_CENTERED",
-        message: `Primary Subject center is x=${imageMeasurements.subjectCenterXRatio.toFixed(4)}; required 0.5000±${MAXIMUM_CENTER_ERROR_RATIO.toFixed(4)}.`
+        message: `Primary Subject center is x=${composition.subjectCenterXRatio.toFixed(4)}; required 0.5000±${MAXIMUM_CENTER_ERROR_RATIO.toFixed(4)}.`
       });
     }
   } catch (error) {
     diagnostics.push({
-      code: "PLANNER_IMAGE_INVALID",
+      code: "ENTRY_WHITEBOX_TARGET_IMAGE_INVALID",
       message: error instanceof Error ? error.message : String(error)
     });
   }
-  try {
-    terrainIntentMeasurements = terrainIntentMeasurement(terrainIntentBytes);
-    const ratioRange = terrainIntentMeasurements.maximumHeightRatio - terrainIntentMeasurements.minimumHeightRatio;
-    if (ratioRange < MINIMUM_NON_FLAT_HEIGHT_RATIO_RANGE && !/(?:flat terrain|flat ground|平地)/i.test(briefSource)) {
-      diagnostics.push({
-        code: "TERRAIN_INTENT_NEAR_CONSTANT",
-        message: `Height Intent signed ratio range ${ratioRange.toFixed(4)} is below ${MINIMUM_NON_FLAT_HEIGHT_RATIO_RANGE.toFixed(4)}.`
-      });
-    }
-    if (terrainIntentMeasurements.meanRampResidualRgbUnits > MAXIMUM_MEAN_RAMP_RESIDUAL_RGB_UNITS || terrainIntentMeasurements.p95RampResidualRgbUnits > MAXIMUM_P95_RAMP_RESIDUAL_RGB_UNITS) {
-      diagnostics.push({
-        code: "TERRAIN_INTENT_COLOR_RESIDUAL_EXCEEDED",
-        message: "Height Intent colors exceed the signed transport ramp residual limits."
-      });
-    }
-  } catch (error) {
-    diagnostics.push({
-      code: "TERRAIN_INTENT_IMAGE_INVALID",
-      message: error instanceof Error ? error.message : String(error)
-    });
-  }
+  const imageMeasurements = {
+    worldPlan: worldPlanMeasurement,
+    entryWhiteboxTarget: entryMeasurement
+  };
   const report = {
     kind: "worldkit-planner-self-check",
     schemaVersion: 1,
@@ -13030,12 +13249,9 @@ async function runPlannerSelfCheck(options) {
     inputs: {
       sceneBriefHash: contentHash(briefBytes),
       worldPlanHash: contentHash(worldPlanBytes),
-      entryWhiteboxTargetHash: contentHash(entryBytes),
-      terrainHeightIntentPromptHash: contentHash(terrainPromptBytes),
-      terrainHeightIntentPngHash: contentHash(terrainIntentBytes)
+      entryWhiteboxTargetHash: contentHash(entryBytes)
     },
     imageMeasurements,
-    terrainIntentMeasurements,
     diagnostics
   };
   await writeFile(options.reportPath, `${JSON.stringify(report)}
@@ -13048,8 +13264,6 @@ async function main(arguments_ = process.argv.slice(2)) {
     briefPath: path.resolve(option(arguments_, "--brief")),
     worldPlanPath: path.resolve(option(arguments_, "--world-plan")),
     entryPath: path.resolve(option(arguments_, "--entry")),
-    terrainPromptPath: path.resolve(option(arguments_, "--terrain-prompt")),
-    terrainIntentPath: path.resolve(option(arguments_, "--terrain-intent")),
     reportPath: path.resolve(option(arguments_, "--report"))
   });
   process.stdout.write(`${JSON.stringify(result)}

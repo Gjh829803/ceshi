@@ -9,7 +9,6 @@ export const BNA1_CLEAN_BREAK_SCAN_ROOTS = Object.freeze([
   "scripts",
   "examples",
   "artifacts/scenes",
-  ".codex/skills/worldkit-canonical-builder",
   ".codex/skills/worldkit-spatial-planner",
   "README.md",
   "docs/00-project-overview.md",
@@ -22,12 +21,12 @@ export const BNA1_CLEAN_BREAK_SCAN_ROOTS = Object.freeze([
 const PLAN_HASH = ["execution", "Plan", "Hash"].join("");
 
 export const BNA1_PLAN_SPECIFIC_EXECUTION_PLAN_HASH_FILES = Object.freeze([
-  ".codex/skills/worldkit-canonical-builder/scripts/self-check.mjs",
   "apps/playground/src/authoring-loader.test.ts",
   "apps/playground/src/authoring-loader.ts",
   "apps/playground/src/outdoor-scene-gameplay-loader.test.ts",
   "apps/playground/src/outdoor-scene-gameplay-loader.ts",
   "apps/playground/src/worldkit-browser-api.test.ts",
+  "apps/studio/src/hosted-block-world.integration.test.ts",
   "apps/studio/src/server.mjs",
   "apps/studio/src/server.test.mjs",
   "artifacts/scenes/cloud-ridge-celestial-gate/route-validation.manual-20260827-cloud-ridge-r23.json",

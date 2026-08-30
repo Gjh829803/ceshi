@@ -1,31 +1,268 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { EventEmitter } from "node:events";
+import { mkdir, mkdtemp, readFile, readdir, rm, utimes, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import path from "node:path";
+import { PassThrough } from "node:stream";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { LwdpJobPendingError } from "../../../scripts/lib/lwdp-generation-client.mjs";
 
 import {
   createSceneId,
   createKeyedSerialExecutor,
-  createStudio,
+  createStudio as createStudioProduction,
   decodeImagePayload,
   deriveReliabilityMetrics,
+  deriveWorldGenerationFailureReason,
   deriveWorkflowMetrics,
   deriveWorkflowTrajectory,
   isAllowedSceneAsset,
   isAuthorizedHeader,
+  isRecoverableVisualFinalizationFailure,
   normalizePrompt,
   normalizeTestSetName,
+  parseRemotePendingLwdpMarker,
   parseStageTokenUsage,
   workflowPolicyVersion,
   writeJsonAtomic,
 } from "./server.mjs";
 
+// Unit tests below intentionally use compact artifact fixtures. The real
+// closed-schema/build-identity verifier is covered by the Hosted Block World
+// production-chain test and its dedicated adversarial contract tests.
+const createStudio = (options = {}) => createStudioProduction({
+  verifyHostedWhiteboxArtifactsImplementation: async () => true,
+  ...options,
+});
+
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const temporaryRoots = [];
+
+test("surfaces actionable World generation failures instead of only child exit codes", () => {
+  assert.match(deriveWorldGenerationFailureReason(`
+WORLDKIT_LWDP_PROGRESS planner-1 running {"total":1,"queued":1,"running":0,"succeeded":0,"failed":0}
+Error: LWDP job gen_stalled timed out after 3600000ms.
+`, { code: 1 }), /gen_stalled.*60 分钟.*queued=1.*没有重复提交 Job/);
+
+  const pendingLog = `WORLDKIT_LWDP_REMOTE_PENDING visual-reconstruction visual-1 gen_pending request-1 s3://bucket/visual 7200000 running {"total":1,"queued":1,"running":0}`;
+  assert.deepEqual(parseRemotePendingLwdpMarker(pendingLog), {
+    stage: "visual-reconstruction",
+    taskId: "visual-1",
+    jobId: "gen_pending",
+    requestId: "request-1",
+    outputS3Prefix: "s3://bucket/visual",
+    timeoutMs: 7_200_000,
+    remoteStatus: "running",
+    counters: { total: 1, queued: 1, running: 0 },
+  });
+  assert.match(
+    deriveWorldGenerationFailureReason(pendingLog, { code: 4 }),
+    /gen_pending.*120 分钟.*远端对账状态.*不会重复提交/,
+  );
+
+  assert.match(deriveWorldGenerationFailureReason(`
+WORLDKIT_LWDP_JOB coding-agent builder-1 gen_capacity dispatch=single-task-fast-path
+ERROR: Selected model is at capacity. Please try a different model.
+`, { code: 1 }), /gen_capacity.*gpt-5\.6-sol 当前容量不足/);
+
+  assert.equal(deriveWorldGenerationFailureReason(`
+Error: LWDP task failures: builder-1: missing required outputs: artifacts/scenes/demo/authoring.json, artifacts/scenes/demo/map.json
+`, { code: 1 }), "云端 Codex 已结束，但缺少声明的必需产物：artifacts/scenes/demo/authoring.json, artifacts/scenes/demo/map.json");
+
+  assert.match(deriveWorldGenerationFailureReason(
+    "WORLDKIT_CAPTURE_VISIBLE_WORLD_MISSING",
+    { code: 2 },
+  ), /只得到背景或近乎单色画面/);
+
+  assert.match(deriveWorldGenerationFailureReason(`
+WorldKit Creator Studio
+scene=demo
+attempt=1
+mode=full
+Builder top-down visual review does not match trusted Host replay.
+
+WorldKit Creator Studio
+scene=demo
+attempt=2
+mode=host-resume
+[stderr] scripts/finalize.sh: line 171: unexpected EOF while looking for matching '"'
+`, { code: 2 }), /收尾脚本存在语法错误.*line 171/);
+});
+
+test("keeps a non-terminal LWDP timeout in remote-pending instead of failed", async () => {
+  const dataRoot = await temporaryRoot(".test-data-remote-pending-");
+  const fakeRepoRoot = await temporaryRoot(".test-repo-remote-pending-");
+  const studio = createStudio({
+    repoRoot: fakeRepoRoot,
+    dataRoot,
+    autoRunJobs: true,
+    autoRecoverLateLwdpJobs: false,
+    importExistingArtifacts: false,
+    importBuiltinTestSets: false,
+    importBuiltinResults: false,
+    lwdpConfigured: true,
+    remotePendingGraceMs: 60_000,
+    worldSpawnImplementation: () => {
+      const child = new EventEmitter();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.killed = false;
+      child.kill = () => true;
+      process.nextTick(() => {
+        child.stdout.write("WORLDKIT_STAGE planner\n");
+        child.stdout.write("WORLDKIT_LWDP_JOB planner planner-test gen_pending dispatch=single-task-fast-path taskAttempt=1/1\n");
+        child.stdout.write("WORLDKIT_LWDP_REMOTE_PENDING planner planner-test gen_pending request-test s3://bucket/worldkit/planner 2700000 running {\"total\":1,\"queued\":1,\"running\":0}\n");
+        child.stdout.end();
+        child.stderr.end();
+        child.emit("close", 4, null);
+      });
+      return child;
+    },
+  });
+  const origin = await listen(studio);
+  try {
+    const created = (await (await fetch(`${origin}/api/worlds`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "Remote Pending", prompt: "Create a pending test world." }),
+    })).json()).world;
+    let detail = null;
+    const deadline = Date.now() + 2_000;
+    while (Date.now() < deadline) {
+      detail = await (await fetch(`${origin}/api/worlds/${created.id}`)).json();
+      if (detail.world.status === "remote-pending") break;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.equal(detail?.world.status, "remote-pending");
+    assert.equal(detail?.world.stage, "planner");
+    assert.equal(detail?.world.failedStage, null);
+    assert.equal(detail?.world.outcome, null);
+    assert.equal(detail?.world.captureStatus, "pending");
+    const persisted = JSON.parse(await readFile(
+      path.join(dataRoot, "worlds", created.id, "record.json"),
+      "utf8",
+    ));
+    assert.equal(persisted.remoteJobId, "gen_pending");
+    assert.equal(persisted.remoteTaskId, "planner-test");
+    assert.ok(Date.parse(persisted.remotePendingDeadlineAt) > Date.parse(persisted.remotePendingSince));
+  } finally {
+    await studio.shutdown();
+  }
+});
+
+test("migrates a legacy timeout failure back to remote-pending while its Job is active", async () => {
+  const dataRoot = await temporaryRoot(".test-data-legacy-remote-pending-");
+  const fakeRepoRoot = await temporaryRoot(".test-repo-legacy-remote-pending-");
+  const id = "legacy-remote-pending-world";
+  const recordRoot = path.join(dataRoot, "worlds", id);
+  await mkdir(recordRoot, { recursive: true });
+  const timestamp = new Date().toISOString();
+  await Promise.all([
+    writeFile(path.join(recordRoot, "record.json"), JSON.stringify({
+      id,
+      sceneId: id,
+      title: "Legacy remote pending",
+      prompt: "Recover the old timeout state.",
+      referenceImage: null,
+      status: "failed",
+      stage: "failed",
+      failedStage: "coding-agent",
+      codexBackend: "cloud",
+      attempt: 1,
+      origin: "test-set",
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      startedAt: timestamp,
+      finishedAt: timestamp,
+      error: "LWDP 云端 Job gen_legacyactive 在 60 分钟内未进入终态。",
+      captureRequired: true,
+      captureStatus: "failed",
+      triviewStatus: "not-run",
+      whiteboxOutcome: "failed",
+      outcome: "failed",
+      styledOpeningFrameRequired: false,
+      styledOpeningFrameStatus: "not-required",
+      styledTriviewsRequired: false,
+      styledTriviewsStatus: "not-required",
+      workflowPolicyVersion,
+    })),
+    writeFile(path.join(recordRoot, "agent.log"), [
+      "WorldKit Creator Studio",
+      `scene=${id}`,
+      "attempt=1",
+      "mode=full",
+      "",
+      "WORLDKIT_LWDP_JOB coding-agent builder-legacy gen_legacyactive dispatch=single-task-fast-path",
+      "Error: LWDP job gen_legacyactive timed out after 3600000ms.",
+      "",
+    ].join("\n")),
+  ]);
+  const studio = createStudio({
+    repoRoot: fakeRepoRoot,
+    dataRoot,
+    autoRunJobs: true,
+    importExistingArtifacts: false,
+    importBuiltinTestSets: false,
+    importBuiltinResults: false,
+    lwdpConfigured: true,
+    remotePendingGraceMs: 60_000,
+    loadLwdpConfigImplementation: async () => ({
+      baseUrl: "https://lwdp.test", token: "test", userId: "worldkit-test",
+    }),
+    lateLwdpRecoveryImplementation: async () => {
+      throw new LwdpJobPendingError("gen_legacyactive", 0, {
+        status: "running", counters: { total: 1, queued: 1, running: 0 },
+      });
+    },
+  });
+  const origin = await listen(studio);
+  try {
+    let detail = null;
+    const deadline = Date.now() + 2_000;
+    while (Date.now() < deadline) {
+      detail = await (await fetch(`${origin}/api/worlds/${id}`)).json();
+      if (detail.world.status === "remote-pending") break;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.equal(detail?.world.status, "remote-pending");
+    assert.equal(detail?.world.stage, "coding-agent");
+    assert.equal(detail?.world.failedStage, null);
+    assert.equal(detail?.world.outcome, null);
+    assert.equal(detail?.world.captureStatus, "pending");
+  } finally {
+    await studio.shutdown();
+  }
+});
+
+test("recovers only a post-success visual finalization syntax failure", () => {
+  const record = {
+    status: "failed",
+    failedStage: "visual-reconstruction",
+    captureStatus: "passed",
+    triviewStatus: "passed",
+    whiteboxOutcome: "passed",
+  };
+  const finalizationLog = `
+WorldKit Creator Studio
+scene=demo
+attempt=2
+mode=host-resume
+WORLDKIT_LWDP_TASK_READY visual-demo
+[stderr] scripts/finalize.sh: line 171: unexpected EOF while looking for matching '"'
+`;
+  assert.equal(isRecoverableVisualFinalizationFailure(record, finalizationLog), true);
+  assert.equal(isRecoverableVisualFinalizationFailure(
+    record,
+    `${finalizationLog}\nError: Styled opening alignment failed.`,
+  ), false);
+  assert.equal(isRecoverableVisualFinalizationFailure(
+    { ...record, captureStatus: "failed" },
+    finalizationLog,
+  ), false);
+});
 
 async function temporaryRoot(prefix) {
   const root = await mkdtemp(path.join(repoRoot, "apps/studio", prefix));
@@ -54,11 +291,7 @@ function canonicalJson(value) {
 async function writeTrustedWhiteboxArtifacts(
   fakeRepoRoot,
   sceneId,
-  {
-    compilerVersion = "terrain-height-intent-compiler@1",
-    requiresRouteValidation = false,
-    routeReportMode = "exact",
-  } = {},
+  { requiresRouteValidation = false, routeReportMode = "exact" } = {},
 ) {
   const artifactRoot = path.join(fakeRepoRoot, "artifacts/scenes", sceneId);
   const planRoot = path.join(fakeRepoRoot, "apps/playground/public/scene-plans", sceneId);
@@ -69,32 +302,33 @@ async function writeTrustedWhiteboxArtifacts(
   ]);
   const png = Buffer.from("89504e470d0a1a0a00000000", "hex");
   const brief = "# WorldKit Scene Brief\n\n## 场景\n可信导入场景\n";
+  const worldModule = `export const blockWorldSceneId = ${JSON.stringify(sceneId)};\n`;
+  const authoringSpecId = sceneId;
   const authoring = `${JSON.stringify({
     kind: "worldkit-authoring-spec",
     schemaVersion: 4,
-    id: sceneId,
+    id: authoringSpecId,
   })}\n`;
   const mapDraft = `${JSON.stringify({
     kind: "worldkit-scene-brief-implementation-map-draft",
     schemaVersion: 1,
     sceneId,
-    authoringSpecId: sceneId,
+    authoringSpecId,
     visualTargetMappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"] }],
   })}\n`;
   const hash = (source) => `sha256:${createHash("sha256").update(source).digest("hex")}`;
-  const terrainPrompt = "# Terrain Height Intent\n\nEncoding profile: signed-diverging-blue-gray-orange@1.\n";
   const resourceLockHash = `sha256:${"e".repeat(64)}`;
   const layoutSolveReportHash = `sha256:${"f".repeat(64)}`;
   const sceneBriefHash = `sha256:${"b".repeat(64)}`;
-  const authoringSpecHash = hash(authoring);
+  const authoringSourceHash = hash(authoring);
+  const authoringSpecHash = hash(canonicalJson(JSON.parse(authoring)));
+  const executionPlanAuthoringSpecHash = authoringSpecHash;
   const normalizedWorldIr = {
     kind: "normalized-world-ir",
     schemaVersion: 4,
     resources: { resourceLockHash },
   };
   const normalizedWorldIrHash = hash(canonicalJson(normalizedWorldIr));
-  const worldPackageRootHash = `sha256:${"a".repeat(64)}`;
-  const worldBuildIdentityHash = `sha256:${"d".repeat(64)}`;
   const visualTarget = {
     visualTargetId: "player-subject",
     runtimeEntityIds: ["player"],
@@ -107,7 +341,7 @@ async function writeTrustedWhiteboxArtifacts(
     schemaVersion: 1,
     sceneId,
     sceneBriefHash,
-    authoringSpecId: sceneId,
+    authoringSpecId,
     authoringSpecHash,
     visualTargetMappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"] }],
     visualCaptureGroups: [visualTarget],
@@ -124,10 +358,9 @@ async function writeTrustedWhiteboxArtifacts(
   const executionPlan = {
     kind: "worldkit-canonical-scene-execution-plan",
     schemaVersion: 1,
-    authoringSpecHash,
+    authoringSpecHash: executionPlanAuthoringSpecHash,
     normalizedWorldIrHash,
-    sceneResourceLockHash: resourceLockHash,
-    sceneResourceLockEntries: [],
+    resourceLockHash,
     layout: { layoutSolveReportHash },
     traversal: {
       connectivityRequirements: requiredRoutes.map((route) => ({
@@ -137,6 +370,7 @@ async function writeTrustedWhiteboxArtifacts(
     },
   };
   const executionPlanHash = hash(canonicalJson(executionPlan));
+  const worldBuildIdentityHash = `sha256:${"d".repeat(64)}`;
   const captureTargets = {
     kind: "worldkit-whitebox-triview-manifest",
     schemaVersion: 1,
@@ -147,71 +381,27 @@ async function writeTrustedWhiteboxArtifacts(
       imageUri: "player-subject/whitebox-triview.png",
     }],
   };
-  const plannerReceipt = `${JSON.stringify({
-    kind: "worldkit-planner-self-check",
-    schemaVersion: 1,
-    validatorVersion: "worldkit-planner-self-check-v3",
-    sceneId,
-    status: "passed",
-    inputs: {
-      sceneBriefHash: hash(brief),
-      terrainHeightIntentPromptHash: hash(terrainPrompt),
-      terrainHeightIntentPngHash: hash(png),
-    },
-  })}\n`;
-  const builderReceipt = `${JSON.stringify({
-    kind: "worldkit-builder-self-check",
-    schemaVersion: 1,
-    validatorVersion: "worldkit-builder-self-check-v6",
-    sceneId,
-    status: "passed",
-    requiresTrustedRouteValidation: requiresRouteValidation,
-    terrainScaleEvidence: {
-      terrainEntityId: "terrain-main",
-      operationalProfile: "ordinary-single-heightfield-v1",
-    },
-    routeBuildWindowEvidence: [],
-    inputs: {
-      sceneBriefHash: hash(brief),
-      authoringSpecHash: hash(authoring),
-      implementationMapDraftHash: hash(mapDraft),
-    },
-  })}\n`;
-  const terrainReport = `${JSON.stringify({
-    kind: "worldkit-terrain-height-intent-compile-report",
-    schemaVersion: 1,
-    status: "passed",
-    sourcePngHash: hash(png),
-  })}\n`;
-  const finalReceipt = builderReceipt;
-  const terrainManifest = `${JSON.stringify({
-    kind: "worldkit-terrain-compilation-manifest",
-    schemaVersion: 1,
-    sceneId,
-    runId: "fixture-run",
-    compiler: {
-      compilerVersion,
-      normalizationProfileId: "signed-diverging-blue-gray-orange-median-datum@1",
-    },
-    inputs: {
-      plannerReceiptHash: hash(plannerReceipt),
-      terrainHeightIntentPromptHash: hash(terrainPrompt),
-      terrainHeightIntentPngHash: hash(png),
-      builderReceiptHash: hash(builderReceipt),
-      builderAuthoringSpecHash: hash(authoring),
-      implementationMapDraftHash: hash(mapDraft),
-    },
-    outputs: {
-      authoringSpecHash: hash(authoring),
-      terrainCompileReportHash: hash(terrainReport),
-      finalAuthoringSelfCheckHash: hash(finalReceipt),
-    },
-  })}\n`;
   await Promise.all([
     writeFile(path.join(artifactRoot, "scene-brief.md"), brief),
-    writeFile(path.join(artifactRoot, "terrain-height-intent-prompt.md"), terrainPrompt),
-    writeFile(path.join(planRoot, "terrain-height-intent.png"), png),
-    writeFile(path.join(artifactRoot, "planner-self-check.json"), plannerReceipt),
+    writeFile(path.join(artifactRoot, "planner-self-check.json"), JSON.stringify({
+      kind: "worldkit-planner-self-check",
+      schemaVersion: 1,
+      validatorVersion: "worldkit-planner-self-check-v4",
+      sceneId,
+      status: "passed",
+      inputs: {
+        sceneBriefHash: hash(brief),
+        worldPlanHash: hash(png),
+        entryWhiteboxTargetHash: hash(png),
+      },
+      imageMeasurements: {
+        worldPlan: { blockPaletteCoverageRatio: 0.5 },
+        entryWhiteboxTarget: {
+          blockPaletteCoverageRatio: 0.5,
+          composition: { subjectCenterErrorRatio: 0 },
+        },
+      },
+    })),
     writeFile(path.join(artifactRoot, "visual-identity-palette.json"), JSON.stringify({
       kind: "worldkit-visual-identity-palette",
       schemaVersion: 1,
@@ -219,13 +409,25 @@ async function writeTrustedWhiteboxArtifacts(
       sceneBriefHash,
       targets: [{ id: "player-subject" }],
     })),
-    writeFile(path.join(artifactRoot, "authoring.builder.json"), authoring),
-    writeFile(path.join(artifactRoot, "implementation-map.draft.json"), mapDraft),
-    writeFile(path.join(artifactRoot, "builder-self-check.json"), builderReceipt),
+    writeFile(path.join(artifactRoot, "world.mjs"), worldModule),
     writeFile(path.join(artifactRoot, "authoring.json"), authoring),
-    writeFile(path.join(artifactRoot, "terrain-height-intent-report.json"), terrainReport),
-    writeFile(path.join(artifactRoot, "terrain-compilation-manifest.json"), terrainManifest),
-    writeFile(path.join(artifactRoot, "final-authoring-self-check.json"), finalReceipt),
+    writeFile(path.join(artifactRoot, "implementation-map.draft.json"), mapDraft),
+    writeFile(path.join(artifactRoot, "builder-self-check.json"), JSON.stringify({
+      kind: "worldkit-block-builder-self-check",
+      schemaVersion: 1,
+      validatorVersion: "worldkit-block-builder-self-check-v10",
+      sceneId,
+      status: "passed",
+      requiresTrustedRouteValidation: requiresRouteValidation,
+      inputs: {
+        sceneBriefHash: hash(brief),
+        worldModuleHash: hash(worldModule),
+        authoringSpecHash: authoringSourceHash,
+        implementationMapDraftHash: hash(mapDraft),
+      },
+    })),
+    writeFile(path.join(artifactRoot, "builder-top-down-comparison.png"), png),
+    writeFile(path.join(artifactRoot, "builder-entry-comparison.png"), png),
     writeFile(path.join(artifactRoot, "scene-implementation-map.json"), JSON.stringify(implementationMap)),
     writeFile(path.join(artifactRoot, "world.build.json"), JSON.stringify({
       kind: "worldkit-build-artifact",
@@ -240,12 +442,16 @@ async function writeTrustedWhiteboxArtifacts(
     writeFile(path.join(artifactRoot, "runtime-snapshot.json"), JSON.stringify({
       kind: "worldkit-runtime-snapshot",
       schemaVersion: 4,
-      worldBuildIdentityHash,
+      runtime: { phase: "ready" },
+      resources: { phase: "ready" },
     })),
+    writeFile(path.join(artifactRoot, "whitebox-capture-receipt.json"), "{}"),
     writeFile(path.join(artifactRoot, "triviews/whitebox-triview-manifest.json"), JSON.stringify(captureTargets)),
     writeFile(path.join(triViewRoot, "whitebox-triview.png"), png),
+    writeFile(path.join(planRoot, "world-plan.png"), png),
+    writeFile(path.join(planRoot, "entry-whitebox-target.png"), png),
   ]);
-  if (requiresRouteValidation && routeReportMode !== "missing") {
+  if (routeReportMode !== "missing") {
     const reportFileName = "route-validation.20260825-120000-123.json";
     const requiredRouteSetHash = `sha256:${createHash("sha256").update(
       canonicalJson({
@@ -262,18 +468,19 @@ async function writeTrustedWhiteboxArtifacts(
       status: routeReportMode === "failed" ? "failed" : "passed",
       subject: {
         kind: "world-package",
-        worldPackageRootHash,
-        authoringSpecHash,
+        authoringSpecHash: executionPlanAuthoringSpecHash,
         normalizedWorldIrHash,
-        worldBuildIdentityHash:
-          routeReportMode === "mismatched" ? resourceLockHash : worldBuildIdentityHash,
+        worldBuildIdentityHash: routeReportMode === "mismatched"
+          ? resourceLockHash
+          : worldBuildIdentityHash,
+        worldPackageRootHash: `sha256:${"a".repeat(64)}`,
         resourceLockHash,
         layoutSolveReportHash,
       },
       routeValidationSetReceipt: {
         kind: "route-validation-set-receipt",
         schemaVersion: 1,
-        authoringSpecHash,
+        authoringSpecHash: executionPlanAuthoringSpecHash,
         normalizedWorldIrHash,
         executionPlanHash,
         resourceLockHash,
@@ -317,7 +524,7 @@ test.afterEach(async () => {
 });
 
 test("uses one current switchable Codex backend workflow contract", () => {
-  assert.equal(workflowPolicyVersion, 4);
+  assert.equal(workflowPolicyVersion, 6);
 });
 
 test("passes the frozen backend to world jobs and records local Codex markers without provider details", async () => {
@@ -368,55 +575,24 @@ test("keeps concurrent atomic writes isolated and serializes same-record mutatio
   assert.equal(maximumActiveAcrossRecords, 2);
 });
 
-test("assembles the new agent pipeline without executing prompt text", () => {
+ test("assembles the new agent pipeline without executing prompt text", () => {
   const result = spawnSync(
     "bash",
     [path.join(repoRoot, "scripts/agents/run-spatial-world-agent.sh"), "--", "--scene-id", "prompt-smoke", "$(touch should-not-run)"],
     { cwd: repoRoot, env: { ...process.env, WORLDKIT_PROMPT_SMOKE: "1" }, encoding: "utf8" },
   );
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.match(result.stdout, /WORLDKIT_PROMPT_SMOKE_OK planner coding-agent terrain-compilation canonical-build runtime-capture visual-prompt-synthesis visual-imagegen/);
+  assert.match(result.stdout, /WORLDKIT_PROMPT_SMOKE_OK planner coding-agent block-build runtime-capture visual-reconstruction/);
 });
 
-test("build-only accepts an empty reference-image list before validating frozen Planner outputs", async () => {
-  const sceneId = `build-only-empty-reference-${process.pid}`;
-  const artifactRoot = path.join(repoRoot, "artifacts/scenes", sceneId);
-  const publicPlanRoot = path.join(repoRoot, "apps/playground/public/scene-plans", sceneId);
-  try {
-    const result = spawnSync(
-      "bash",
-      [
-        path.join(repoRoot, "scripts/agents/run-spatial-world-agent.sh"),
-        "--build-only",
-        "--",
-        "--scene-id",
-        sceneId,
-      ],
-      { cwd: repoRoot, env: process.env, encoding: "utf8" },
-    );
-    const output = `${result.stdout}\n${result.stderr}`;
-    assert.equal(result.status, 2, output);
-    assert.match(
-      output,
-      /ENOENT:.*(?:scene-brief\.md|world-plan\.png|entry-whitebox-target\.png|terrain-height-intent-prompt\.md|terrain-height-intent\.png)/,
-    );
-    assert.doesNotMatch(output, /unbound variable/);
-  } finally {
-    await Promise.all([
-      rm(artifactRoot, { recursive: true, force: true }),
-      rm(publicPlanRoot, { recursive: true, force: true }),
-    ]);
-  }
-});
-
-test("routes Planner and Builder through the selected Codex backend while keeping post-whitebox visuals on Gemini", async () => {
-  const [scripts, codexRouter] = await Promise.all([Promise.all([
-    "scripts/agents/run-spatial-world-agent.sh",
-    "scripts/visual/run-styled-opening-frame-agent.sh",
-    "scripts/visual/run-styled-triviews-agent.sh",
-    "scripts/visual/run-visual-reconstruction-agent.sh",
-  ].map((relativePath) => readFile(path.join(repoRoot, relativePath), "utf8"))),
-  readFile(path.join(repoRoot, "scripts/agents/run-codex-task.mjs"), "utf8")]);
+test("routes Planner and Builder through the selected backend and visual reconstruction through one cloud Codex task", async () => {
+  const [scripts, codexRouter, visualSkill] = await Promise.all([Promise.all([
+    ["agents", "run-spatial-world-agent.sh"],
+    ["agents", "run-lwdp-visual-reconstruction-agent.sh"],
+    ["visual", "run-visual-reconstruction-agent.sh"],
+  ].map((segments) => readFile(path.join(repoRoot, "scripts", ...segments), "utf8"))),
+  readFile(path.join(repoRoot, "scripts/agents/run-codex-task.mjs"), "utf8"),
+  readFile(path.join(repoRoot, ".codex/skills/worldkit-visual-reconstructor/SKILL.md"), "utf8")]);
   for (const source of scripts) {
     assert.doesNotMatch(source, /command -v codex|CODEX_HOME=|codex exec/);
   }
@@ -425,54 +601,61 @@ test("routes Planner and Builder through the selected Codex backend while keepin
   assert.match(codexRouter, /backend === "cloud"/);
   assert.match(codexRouter, /run-lwdp-codex-task\.mjs/);
   assert.match(codexRouter, /run-local-codex-task\.mjs/);
-  assert.match(scripts[1], /run-gemini-visual-pipeline\.py/);
-  assert.match(scripts[2], /run-gemini-visual-pipeline\.py/);
-  assert.doesNotMatch(scripts[1], /run-lwdp-(?:codex-task|t2i-job)\.mjs/);
-  assert.doesNotMatch(scripts[2], /run-lwdp-(?:codex-task|t2i-job)\.mjs/);
-  assert.match(scripts[3], /run-codex-task\.mjs --backend "\$codex_backend"/);
-  assert.equal((scripts[3].match(/--execution-profile formal/g) ?? []).length, 2);
+  assert.match(scripts[1], /run-codex-task\.mjs[\s\S]*--backend cloud/);
+  assert.equal((scripts[1].match(/run-codex-task\.mjs/g) ?? []).length, 1);
+  assert.equal((scripts[1].match(/--execution-profile formal/g) ?? []).length, 1);
+  assert.doesNotMatch(scripts[1], /run-gemini-visual-pipeline|run-lwdp-t2i-job/);
+  assert.match(scripts[2], /run-codex-task\.mjs --backend "\$codex_backend"/);
+  assert.equal((scripts[2].match(/--execution-profile formal/g) ?? []).length, 2);
+  assert.match(visualSkill, /actual-whitebox-opening.*edit target and sole spatial authority/s);
+  assert.match(visualSkill, /Generate the styled opening first/);
 });
 
-test("keeps lightweight Planner prose and Builder implementation authority separate", async () => {
-  const [launcher, plannerSkill, plannerTemplate, builderSkill, resourceCatalog, controlledSubjects, terrainStructures] = await Promise.all([
+test("keeps Planner prose and direct Block Builder authority separate", async () => {
+  const [launcher, plannerSkill, plannerTemplate, plannerImageContract, builderSkill, blockApi, subjectCamera, studioApp, studioStyles, serverSource] = await Promise.all([
     readFile(path.join(repoRoot, "scripts/agents/run-spatial-world-agent.sh"), "utf8"),
     readFile(path.join(repoRoot, ".codex/skills/worldkit-spatial-planner/SKILL.md"), "utf8"),
     readFile(path.join(repoRoot, ".codex/skills/worldkit-spatial-planner/references/scene-brief-template.md"), "utf8"),
-    readFile(path.join(repoRoot, ".codex/skills/worldkit-canonical-builder/SKILL.md"), "utf8"),
-    readFile(path.join(repoRoot, ".codex/skills/worldkit-canonical-builder/references/resource-catalog.md"), "utf8"),
-    readFile(path.join(repoRoot, ".codex/skills/worldkit-canonical-builder/references/controlled-subjects.md"), "utf8"),
-    readFile(path.join(repoRoot, ".codex/skills/worldkit-canonical-builder/references/terrain-and-structures.md"), "utf8"),
+    readFile(path.join(repoRoot, ".codex/skills/worldkit-spatial-planner/references/block-whitebox-images.md"), "utf8"),
+    readFile(path.join(repoRoot, ".codex/skills/worldkit-block-builder/SKILL.md"), "utf8"),
+    readFile(path.join(repoRoot, ".codex/skills/worldkit-block-builder/references/block-api.md"), "utf8"),
+    readFile(path.join(repoRoot, ".codex/skills/worldkit-block-builder/references/subject-camera.md"), "utf8"),
+    readFile(path.join(repoRoot, "apps/studio/public/app.js"), "utf8"),
+    readFile(path.join(repoRoot, "apps/studio/public/styles.css"), "utf8"),
+    readFile(path.join(repoRoot, "apps/studio/src/server.mjs"), "utf8"),
   ]);
   assert.match(launcher, /worldkit brief validate/);
   assert.match(launcher, /worldkit-spatial-planner\/scripts\/self-check\.mjs/);
-  assert.match(launcher, /worldkit-canonical-builder\/scripts\/self-check\.mjs/);
+  assert.match(launcher, /worldkit-block-builder\/scripts\/self-check\.mjs/);
   assert.match(launcher, /non-authoritative composition intent/);
   assert.match(launcher, /\.codex\/skills\/worldkit-spatial-planner\/SKILL\.md/);
-  assert.match(plannerSkill, /optional hosted preview-planning stage/);
-  assert.match(plannerSkill, /does not replace the formal World Planner's WorldSpec/);
-  assert.match(plannerSkill, /Name exactly one movement mode/);
+  assert.match(plannerSkill, /current Agent-facing hosted planning stage/);
+  assert.doesNotMatch(plannerSkill, /WorldSpec|plan-lock/);
+  assert.match(plannerSkill, /Name one or more movement modes/);
   assert.match(plannerSkill, /not a closed list/);
   assert.match(plannerSkill, /custom movement label/);
   assert.match(plannerSkill, /Write 1-5 entries total/);
   assert.match(plannerSkill, /no landmark merely to fill the list/);
   assert.match(plannerSkill, /several complete instances intentionally share the same appearance/);
+  assert.match(plannerSkill, /both Planner images must already follow the same fixed target order/);
+  assert.match(plannerImageContract, /ground-motion support/);
+  assert.match(plannerImageContract, /interactive solid/);
+  assert.match(plannerImageContract, /Air is empty space, not a block/);
   assert.match(plannerTemplate, /## 运动模式/);
   assert.match(plannerTemplate, /重复标志物/);
   assert.doesNotMatch(launcher, /Use packages\/authoring\/src\/spatial-world-plan-v1\.ts as the contract/);
-  assert.match(launcher, /Canonical AuthoringSpec V4/);
-  assert.match(launcher, /worldkit verify route/);
-  assert.match(launcher, /Implement the complete world rather than only the opening view/);
+  assert.doesNotMatch(launcher, /worldkit verify route/);
+  assert.match(launcher, /Build the full explorable world/);
   assert.match(launcher, /Define 1-5 visual targets as whole targets/);
-  assert.match(launcher, /absence of a same-named preset is never a reason to omit the world/);
-  assert.match(launcher, /documented current ground closure as an explicitly disclosed playable approximation/);
-  assert.match(launcher, /never add or modify SDK motion bases/);
-  assert.match(launcher, /maxVertices, maxTriangles, and maxColliders are all blocking compiler budgets/);
-  assert.doesNotMatch(launcher, /humanoid\.board\.surface-slide|humanoid\.wingsuit\.unpowered-glide/);
-  assert.doesNotMatch(launcher, /triangle-count overruns do not block/);
+  assert.match(launcher, /four admitted undeformed BoxGeometry shapes/);
+  assert.match(launcher, /quarter-volume \[0\.5,0\.5,1\]/);
+  assert.match(launcher, /Reproduce terrain at macro silhouette/);
+  assert.match(launcher, /ordinary composed human must be 1\.6-2\.1 meters tall/);
+  assert.match(launcher, /no second semantic construction surface is available/);
+  assert.match(launcher, /repair only world\.mjs/);
+  assert.match(launcher, /Never edit the derived JSON outputs/);
+  assert.match(launcher, /artifacts\/scenes\/\$scene_id\/world\.mjs/);
   assert.match(launcher, /implementation-map\.draft\.json/);
-  assert.match(launcher, /authoring\.builder\.json/);
-  assert.match(launcher, /terrain-height-intent\.png/);
-  assert.match(launcher, /finalize-scene-terrain\.ts/);
   assert.match(launcher, /finalize-spatial-build\.ts/);
   assert.match(launcher, /--triview-output/);
   assert.doesNotMatch(launcher, /WORLDKIT_PLANNER_REPAIR_LIMIT/);
@@ -481,66 +664,139 @@ test("keeps lightweight Planner prose and Builder implementation authority separ
   assert.doesNotMatch(launcher, /WORLDKIT_BUILDER_REPAIR/);
   assert.match(launcher, /planner-self-check\.json/);
   assert.match(launcher, /builder-self-check\.json/);
-  assert.match(launcher, /\.codex\/skills\/worldkit-canonical-builder\/SKILL\.md/);
+  assert.match(launcher, /--resume-host-only/);
+  assert.match(launcher, /WORLDKIT_HOST_RESUME reuse=planner,builder/);
+  assert.match(launcher, /WORLDKIT_HOST_RESUME_REPLAY_OK/);
+  assert.match(launcher, /\.codex\/skills\/worldkit-block-builder\/SKILL\.md/);
   assert.doesNotMatch(launcher, /Read packages\/authoring\/src\/authoring-spec-v3\.schema\.json/);
-  assert.match(builderSkill, /sole authoring guide/);
-  assert.match(resourceCatalog, /humanoid\.g-bot@2/);
-  assert.match(resourceCatalog, /red static capsule proxy|red column/);
-  assert.match(builderSkill, /complete described world/);
-  assert.match(builderSkill, /strict centered rear view/);
-  assert.match(builderSkill, /connected exploration/);
-  assert.match(controlledSubjects, /one controlled Subject/);
-  assert.match(controlledSubjects, /Appearance-only items never become Prototypes/);
-  assert.match(terrainStructures, /minimum few major masses/);
+  assert.match(builderSkill, /only world-geometry authority/);
+  assert.match(builderSkill, /complete explorable world/);
+  assert.match(builderSkill, /requireSingleReachableComponent/);
+  assert.match(builderSkill, /requiredGroundTraversalBand/);
+  assert.match(serverSource, /worldkit-block-builder-self-check-v10/);
+  assert.match(blockApi, /BoxGeometry\(1, 1, 1\)/);
+  assert.match(blockApi, /landmarkOrange/);
+  assert.match(blockApi, /visual-target-3.*landmarkYellow/);
+  assert.match(subjectCamera, /humanoid\.g-bot@2/);
+  assert.match(subjectCamera, /exact image centerline/);
+  assert.match(studioApp, /blockWhiteboxLegend/);
+  assert.match(studioApp, /#00B8A9/);
+  assert.match(studioApp, /规划图颜色覆盖/);
+  assert.match(studioApp, /Block World V2 \/ Snapshot V4/);
+  assert.match(studioApp, /从方块编译继续/);
+  assert.match(studioStyles, /\.block-whitebox-legend/);
   assert.doesNotMatch(launcher, /plan:freeze/);
 });
 
-test("synthesizes prompts then directly generates the opening and tri-views concurrently", async () => {
+test("uses one formal LWDP Codex job for the styled opening and every tri-view", async () => {
   const result = spawnSync(
     "bash",
-    [path.join(repoRoot, "scripts/visual/run-styled-opening-frame-agent.sh"), "--", "--scene-id", "prompt-smoke"],
+    [path.join(repoRoot, "scripts/agents/run-lwdp-visual-reconstruction-agent.sh"), "--", "--scene-id", "prompt-smoke"],
     { cwd: repoRoot, env: { ...process.env, WORLDKIT_PROMPT_SMOKE: "1" }, encoding: "utf8" },
   );
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.match(result.stdout, /WORLDKIT_FIRST_FRAME_SMOKE_OK gemini-prompt-synthesis direct-parallel-imagegen whitebox-opening user-first-frame runtime-triviews/);
-  const triViewSmoke = spawnSync(
-    "bash",
-    [path.join(repoRoot, "scripts/visual/run-styled-triviews-agent.sh"), "--", "--scene-id", "prompt-smoke"],
-    { cwd: repoRoot, env: { ...process.env, WORLDKIT_PROMPT_SMOKE: "1" }, encoding: "utf8" },
-  );
-  assert.equal(triViewSmoke.status, 0, triViewSmoke.stderr || triViewSmoke.stdout);
-  assert.match(triViewSmoke.stdout, /WORLDKIT_STYLED_TRIVIEWS_SMOKE_OK styled-opening-frame whitebox-triviews no-playtest/);
-  const [worldRunner, firstFrameRunner, styledTriviewRunner, visualPipeline, server] = await Promise.all([
+  assert.match(result.stdout, /WORLDKIT_VISUAL_RECONSTRUCTION_SMOKE_OK lwdp-codex single-job gpt-5\.6-sol xhigh opening-and-all-triviews/);
+  const [worldRunner, visualRunner, visualSkill, server] = await Promise.all([
     readFile(path.join(repoRoot, "scripts/agents/run-spatial-world-agent.sh"), "utf8"),
-    readFile(path.join(repoRoot, "scripts/visual/run-styled-opening-frame-agent.sh"), "utf8"),
-    readFile(path.join(repoRoot, "scripts/visual/run-styled-triviews-agent.sh"), "utf8"),
-    readFile(path.join(repoRoot, "scripts/visual/run-gemini-visual-pipeline.py"), "utf8"),
+    readFile(path.join(repoRoot, "scripts/agents/run-lwdp-visual-reconstruction-agent.sh"), "utf8"),
+    readFile(path.join(repoRoot, ".codex/skills/worldkit-visual-reconstructor/SKILL.md"), "utf8"),
     readFile(path.join(repoRoot, "apps/studio/src/server.mjs"), "utf8"),
   ]);
-  assert.match(worldRunner, /run-styled-opening-frame-agent\.sh/);
-  assert.match(firstFrameRunner, /WORLDKIT_STAGE visual-prompt-synthesis/);
-  assert.match(firstFrameRunner, /--prompt-only/);
-  assert.match(firstFrameRunner, /--generate-only/);
-  assert.match(firstFrameRunner, /--only all/);
-  assert.doesNotMatch(firstFrameRunner, /run-styled-triviews-agent\.sh/);
-  assert.match(styledTriviewRunner, /--only triviews/);
-  assert.match(visualPipeline, /The actual Babylon opening whitebox image fixes the complete visible projection/);
-  assert.match(visualPipeline, /full back faces the camera/);
-  assert.match(visualPipeline, /50% image-width vertical centerline/);
-  assert.match(visualPipeline, /ThreadPoolExecutor/);
-  assert.match(visualPipeline, /visual-generation-prompts\.json/);
-  assert.match(visualPipeline, /gemini-3-flash-preview/);
-  assert.match(visualPipeline, /gemini-3\.1-flash-image/);
-  assert.doesNotMatch(visualPipeline, /leap_flow/);
-  assert.doesNotMatch(styledTriviewRunner, /whitebox-video|contact-sheet|video-prompt/);
-  assert.doesNotMatch(firstFrameRunner, /validate-visual-alignment-report|WORLDKIT_STAGE visual-alignment/);
+  assert.match(worldRunner, /run-lwdp-visual-reconstruction-agent\.sh/);
+  assert.equal((visualRunner.match(/run-codex-task\.mjs/g) ?? []).length, 1);
+  assert.match(visualRunner, /--backend cloud/);
+  assert.match(visualRunner, /--execution-profile formal/);
+  assert.match(visualRunner, /visual-generation-prompts\.json/);
+  assert.match(visualRunner, /styled-opening-frame\.png/);
+  assert.match(visualRunner, /styled-triview\.png/);
+  assert.doesNotMatch(visualRunner, /Gemini|run-gemini|run-lwdp-t2i/);
+  assert.match(visualSkill, /schemaVersion": 2/);
+  assert.match(visualSkill, /provider": "lwdp-codex"/);
+  assert.match(visualSkill, /Do not create a second Codex task/);
   assert.doesNotMatch(server, /whiteboxVideoMatch|enqueueVisual|runVisualJob/);
+});
+
+test("packages one visual Codex task with all named inputs and declared outputs", async () => {
+  const sceneId = `visual-dispatch-smoke-${process.pid}`;
+  const artifactRoot = path.join(repoRoot, "artifacts/scenes", sceneId);
+  const targetRoot = path.join(artifactRoot, "triviews", "player-subject");
+  const planRoot = path.join(repoRoot, "apps/playground/public/scene-plans", sceneId);
+  const png = Buffer.from("89504e470d0a1a0a00000000", "hex");
+  await Promise.all([
+    mkdir(targetRoot, { recursive: true }),
+    mkdir(planRoot, { recursive: true }),
+  ]);
+  try {
+    await Promise.all([
+      writeFile(path.join(artifactRoot, "scene-brief.md"), "# WorldKit Scene Brief\n"),
+      writeFile(path.join(artifactRoot, "visual-identity-palette.json"), JSON.stringify({
+        targets: [{ visualTargetId: "player-subject", targetKind: "subject", name: "Player" }],
+      })),
+      writeFile(path.join(artifactRoot, "scene-implementation-map.json"), "{}"),
+      writeFile(path.join(artifactRoot, "opening-frame.png"), png),
+      writeFile(path.join(artifactRoot, "runtime-snapshot.json"), "{}"),
+      writeFile(path.join(artifactRoot, "triviews/whitebox-triview-manifest.json"), JSON.stringify({
+        whiteboxTriviews: [{
+          visualTargetId: "player-subject",
+          imageUri: "player-subject/whitebox-triview.png",
+        }],
+      })),
+      writeFile(path.join(targetRoot, "whitebox-triview.png"), png),
+      writeFile(path.join(planRoot, "reference-0.png"), png),
+    ]);
+    const result = spawnSync(
+      "bash",
+      [path.join(repoRoot, "scripts/agents/run-lwdp-visual-reconstruction-agent.sh"), "--", "--scene-id", sceneId],
+      {
+        cwd: repoRoot,
+        env: { ...process.env, WORLDKIT_LWDP_CLIENT_SMOKE: "1" },
+        encoding: "utf8",
+      },
+    );
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.match(result.stdout, /WORLDKIT_LWDP_CODEX_SMOKE visual-[^\s]+ dispatch=single-task-fast-path tasks=1 profile=formal model=gpt-5\.6-sol reasoning=xhigh submitAttempts=1 taskAttempts=3 timeoutMs=7200000 assets=4 outputs=3/);
+    assert.match(result.stdout, /WORLDKIT_VISUAL_RECONSTRUCTION_DISPATCH_SMOKE targets=1 outputs=3/);
+  } finally {
+    await Promise.all([
+      rm(artifactRoot, { recursive: true, force: true }),
+      rm(planRoot, { recursive: true, force: true }),
+    ]);
+  }
 });
 
 test("renders current Babylon capture state without a legacy composition path", async () => {
   const app = await readFile(path.join(repoRoot, "apps/studio/public/app.js"), "utf8");
   assert.match(app, /Babylon Runtime/);
   assert.doesNotMatch(app, /hasLegacyGuide|capture-start|verify-entry/);
+});
+
+test("reuses one owned Playground window for every enter-world link", async () => {
+  const [html, app] = await Promise.all([
+    readFile(path.join(repoRoot, "apps/studio/public/index.html"), "utf8"),
+    readFile(path.join(repoRoot, "apps/studio/public/app.js"), "utf8"),
+  ]);
+  assert.match(html, /class="play-button" target="worldkit-playground"/);
+  assert.match(app, /target="worldkit-playground"[^>]*>进入白膜世界/);
+  assert.doesNotMatch(html, /class="play-button" target="_blank"/);
+  assert.doesNotMatch(app, /target="_blank"[^>]*>进入白膜世界/);
+});
+
+test("exposes a dedicated Seedance review tab with the reusable Playground target", async () => {
+  const [html, app] = await Promise.all([
+    readFile(path.join(repoRoot, "apps/studio/public/index.html"), "utf8"),
+    readFile(path.join(repoRoot, "apps/studio/public/app.js"), "utf8"),
+  ]);
+  assert.match(html, /data-workspace-mode="seedance-review"/);
+  assert.match(html, /id="seedance-review"[^>]*data-workspace-panel="seedance-review"/);
+  assert.match(app, /\/api\/episode-workflows\?review=seedance/);
+  assert.match(app, /productionOnly: true/);
+  assert.match(app, /disposeEpisodeComparisonMedia/);
+  assert.match(app, /window\.addEventListener\("pagehide", \(\) => disposeEpisodeComparisonMedia/);
+  assert.match(app, /preload: comparison\.index === 0 \? "metadata" : "none"/);
+  assert.match(app, /video\.preload = "auto"/);
+  assert.match(app, /VISUAL RECONSTRUCTOR V5 · HUMAN REVIEW/);
+  assert.match(app, /reviewStyledOpeningFrame/);
+  assert.match(app, /target="worldkit-playground"[^>]*>进入世界试玩/);
 });
 
 test("normalizes input and validates image payloads", () => {
@@ -560,7 +816,6 @@ test("normalizes input and validates image payloads", () => {
 test("allows only declared planning assets", () => {
   assert.equal(isAllowedSceneAsset("world-plan.png"), true);
   assert.equal(isAllowedSceneAsset("entry-whitebox-target.png"), true);
-  assert.equal(isAllowedSceneAsset("terrain-height-intent.png"), true);
   assert.equal(isAllowedSceneAsset("reference-0.webp"), true);
   assert.equal(isAllowedSceneAsset("prototypes/tower/whitebox-triview.png"), true);
   assert.equal(isAllowedSceneAsset("../../package.json"), false);
@@ -673,15 +928,83 @@ test("publishes bounded concurrent cloud-case capacity without starting queued w
     assert.equal(health.codexAvailable, true);
     assert.equal(health.codexBackends.cloud.available, true);
     assert.equal(typeof health.codexBackends.local.available, "boolean");
-    assert.equal(typeof health.geminiConfigured, "boolean");
-    assert.equal(health.geminiPromptModel, "gemini-3-flash-preview");
-    assert.equal(health.geminiImageModel, "gemini-3.1-flash-image");
+    assert.equal(health.visualReconstructionBackend, "lwdp-codex");
+    assert.deepEqual(health.visualReconstructionExecutionProfile, {
+      name: "formal",
+      model: "gpt-5.6-sol",
+      reasoningEffort: "xhigh",
+    });
     assert.deepEqual(health.codexExecutionProfile, {
       name: "formal",
       model: "gpt-5.6-sol",
       reasoningEffort: "xhigh",
     });
     assert.equal(health.queued, 0);
+  } finally {
+    await studio.shutdown();
+  }
+});
+
+test("caches health capability probes and force-refreshes them only for an explicit backend switch", async () => {
+  const dataRoot = await temporaryRoot(".health-capability-cache-");
+  let codexProbeCount = 0;
+  const studio = createStudio({
+    repoRoot,
+    dataRoot,
+    autoRunJobs: false,
+    importExistingArtifacts: false,
+    importBuiltinTestSets: false,
+    importBuiltinResults: false,
+    lwdpConfigured: true,
+    pnpmAvailable: true,
+    codexAvailabilityTtlMs: 60_000,
+    codexSpawnSync: () => {
+      codexProbeCount += 1;
+      return { status: 0 };
+    },
+  });
+  const origin = await listen(studio);
+  try {
+    const first = await fetch(`${origin}/api/health`).then((response) => response.json());
+    const second = await fetch(`${origin}/api/health`).then((response) => response.json());
+    assert.equal(first.pnpmAvailable, true);
+    assert.deepEqual(second.codexBackends, first.codexBackends);
+    assert.equal(codexProbeCount, 2);
+
+    const switched = await fetch(`${origin}/api/settings/codex-backend`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ backend: "local" }),
+    });
+    assert.equal(switched.status, 200);
+    assert.equal(codexProbeCount, 4);
+    await fetch(`${origin}/api/health`);
+    assert.equal(codexProbeCount, 4);
+  } finally {
+    await studio.shutdown();
+  }
+});
+
+test("uses the project-local LWDP runtime configuration for cloud availability", async () => {
+  const dataRoot = await temporaryRoot(".project-local-lwdp-data-");
+  const fakeRepoRoot = await temporaryRoot(".project-local-lwdp-repo-");
+  const runtimeRoot = path.join(fakeRepoRoot, ".codex-tmp/runtime-config");
+  await mkdir(runtimeRoot, { recursive: true });
+  await writeFile(path.join(runtimeRoot, "lwdp.env"), "LWDP_GENERATION_API_TOKEN=test-only\n");
+  const studio = createStudio({
+    repoRoot: fakeRepoRoot,
+    dataRoot,
+    autoRunJobs: false,
+    importExistingArtifacts: false,
+    importBuiltinTestSets: false,
+    importBuiltinResults: false,
+    codexSpawnSync: () => ({ status: 1 }),
+  });
+  const origin = await listen(studio);
+  try {
+    const health = await fetch(`${origin}/api/health`).then((response) => response.json());
+    assert.equal(health.codexBackends.cloud.available, true);
+    assert.equal(health.lwdpConfigured, true);
   } finally {
     await studio.shutdown();
   }
@@ -706,6 +1029,8 @@ test("defaults to cloud and atomically persists an available one-click Codex bac
   try {
     const initialHealth = await fetch(`${origin}/api/health`).then((response) => response.json());
     assert.equal(initialHealth.codexBackend, "cloud");
+    assert.equal(initialHealth.maxConcurrentJobs, 20);
+    assert.deepEqual(initialHealth.maxConcurrentJobsByBackend, { cloud: 20, local: 1 });
     assert.deepEqual(initialHealth.codexBackends, {
       cloud: { available: true },
       local: { available: true },
@@ -1020,6 +1345,283 @@ test("stops an active world before child registration without spawning the pipel
   }
 });
 
+test("publishes a playable whitebox when tri-view post-processing fails", async () => {
+  const dataRoot = await temporaryRoot(".playable-whitebox-triview-failure-data-");
+  const fakeRepoRoot = await temporaryRoot(".playable-whitebox-triview-failure-repo-");
+  const studio = createStudio({
+    repoRoot: fakeRepoRoot,
+    dataRoot,
+    autoRunJobs: true,
+    importExistingArtifacts: false,
+    importBuiltinTestSets: false,
+    importBuiltinResults: false,
+    lwdpConfigured: true,
+    beforeWorldSpawn: async (id) => {
+      const { artifactRoot } = await writeTrustedWhiteboxArtifacts(fakeRepoRoot, id);
+      await rm(path.join(artifactRoot, "triviews"), { recursive: true, force: true });
+    },
+    worldSpawnImplementation: () => {
+      const child = new EventEmitter();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.killed = false;
+      child.kill = () => {
+        child.killed = true;
+        return true;
+      };
+      setImmediate(() => {
+        child.stderr.end("WORLDKIT_CAPTURE_TRIVIEW_EMPTY: player-subject\n");
+        child.stdout.end();
+        child.emit("close", 1, null);
+      });
+      return child;
+    },
+  });
+  const origin = await listen(studio);
+  try {
+    const created = (await (await fetch(`${origin}/api/worlds`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        title: "Playable whitebox",
+        prompt: "Build a playable whitebox whose tri-view capture will fail.",
+      }),
+    })).json()).world;
+    let detail;
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      detail = await fetch(`${origin}/api/worlds/${created.id}`).then((response) => response.json());
+      if (detail.world.status === "failed") break;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+
+    assert.equal(detail.world.status, "failed");
+    assert.equal(detail.world.captureStatus, "passed");
+    assert.equal(detail.world.triviewStatus, "failed");
+    assert.equal(detail.world.whiteboxOutcome, "passed");
+    assert.equal(detail.world.whiteboxRuntimeAvailable, true);
+    assert.equal(detail.world.previewUrl, `/play?authoring=1&world=${created.id}`);
+    assert.match(detail.world.error, /白膜世界已成功生成并可进入.*三视图后处理失败/);
+    assert.equal(
+      detail.media.trajectory.stages.find(({ id }) => id === "runtime-capture")?.status,
+      "failed",
+    );
+    assert.equal(
+      (await fetch(`${origin}/api/worlds/${created.id}/preview-bootstrap`)).status,
+      200,
+    );
+    const report = JSON.parse(await readFile(
+      path.join(fakeRepoRoot, "artifacts/scenes", created.sceneId, "evaluation-report.json"),
+      "utf8",
+    ));
+    assert.equal(report.outcome, "failed");
+    assert.equal(report.whiteboxOutcome, "passed");
+    assert.equal(report.triviewStatus, "failed");
+  } finally {
+    await studio.shutdown();
+  }
+});
+
+test("retries a trusted block-build failure from Host without launching Planner or Builder", async () => {
+  const dataRoot = await temporaryRoot(".host-resume-data-");
+  const fakeRepoRoot = await temporaryRoot(".host-resume-repo-");
+  const sceneId = "host-resume-world";
+  await writeTrustedWhiteboxArtifacts(fakeRepoRoot, sceneId);
+  const legacyBuilderReportPath = path.join(
+    fakeRepoRoot,
+    "artifacts/scenes",
+    sceneId,
+    "builder-self-check.json",
+  );
+  const legacyBuilderReport = JSON.parse(await readFile(legacyBuilderReportPath, "utf8"));
+  legacyBuilderReport.validatorVersion = "worldkit-block-builder-self-check-v2";
+  await writeFile(legacyBuilderReportPath, JSON.stringify(legacyBuilderReport));
+  const recordRoot = path.join(dataRoot, "worlds", sceneId);
+  await mkdir(recordRoot, { recursive: true });
+  const timestamp = new Date().toISOString();
+  await writeFile(path.join(recordRoot, "record.json"), JSON.stringify({
+    id: sceneId,
+    sceneId,
+    title: "Host resume world",
+    prompt: "Do not submit this prompt again.",
+    referenceImage: null,
+    status: "failed",
+    stage: "failed",
+    failedStage: "block-build",
+    codexBackend: "cloud",
+    attempt: 1,
+    origin: "test-set",
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    startedAt: timestamp,
+    finishedAt: timestamp,
+    error: "Maximum call stack size exceeded",
+    captureRequired: true,
+    captureStatus: "failed",
+    triviewStatus: "not-run",
+    outcome: "failed",
+    styledOpeningFrameRequired: false,
+    styledOpeningFrameStatus: "not-required",
+    styledTriviewsRequired: false,
+    styledTriviewsStatus: "not-required",
+    workflowPolicyVersion,
+  }));
+  let spawnedArgs;
+  let markSpawned;
+  const spawned = new Promise((resolve) => { markSpawned = resolve; });
+  const studio = createStudio({
+    repoRoot: fakeRepoRoot,
+    dataRoot,
+    autoRunJobs: true,
+    importExistingArtifacts: false,
+    importBuiltinTestSets: false,
+    importBuiltinResults: false,
+    lwdpConfigured: true,
+    worldSpawnImplementation: (_command, args) => {
+      spawnedArgs = args;
+      const child = new EventEmitter();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.killed = false;
+      child.kill = () => true;
+      markSpawned();
+      setImmediate(() => {
+        child.stdout.end();
+        child.stderr.end();
+        child.emit("close", 2, null);
+      });
+      return child;
+    },
+  });
+  const origin = await listen(studio);
+  try {
+    const response = await fetch(`${origin}/api/worlds/${sceneId}/retry`, { method: "POST" });
+    const payload = await response.json();
+    assert.equal(response.status, 202);
+    assert.deepEqual(payload, {
+      ok: true,
+      executionMode: "host-resume",
+      resumeFromStage: "block-build",
+    });
+    await spawned;
+    assert.deepEqual(spawnedArgs, [
+      "agent:world:resume-host",
+      "--",
+      "--scene-id",
+      sceneId,
+    ]);
+    assert.equal(spawnedArgs.includes("agent:world"), false);
+    const log = await readFile(path.join(recordRoot, "agent.log"), "utf8");
+    assert.match(log, /no Codex task will be submitted/);
+    for (let attempt = 0; attempt < 100 && studio.activeJobs.length > 0; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.deepEqual(studio.activeJobs, []);
+  } finally {
+    await studio.shutdown();
+  }
+});
+
+test("retries a trusted late Planner delivery from Builder without launching Planner", async () => {
+  const dataRoot = await temporaryRoot(".builder-resume-data-");
+  const fakeRepoRoot = await temporaryRoot(".builder-resume-repo-");
+  const sceneId = "builder-resume-world";
+  const { artifactRoot } = await writeTrustedWhiteboxArtifacts(fakeRepoRoot, sceneId);
+  const brief = await readFile(path.join(artifactRoot, "scene-brief.md"));
+  const palettePath = path.join(artifactRoot, "visual-identity-palette.json");
+  const palette = JSON.parse(await readFile(palettePath, "utf8"));
+  palette.sceneBriefHash = `sha256:${createHash("sha256").update(brief).digest("hex")}`;
+  await writeFile(palettePath, JSON.stringify(palette));
+  await Promise.all([
+    "world.mjs",
+    "authoring.json",
+    "implementation-map.draft.json",
+    "builder-self-check.json",
+    "builder-top-down-comparison.png",
+    "builder-entry-comparison.png",
+  ].map((name) => rm(path.join(artifactRoot, name), { force: true })));
+  const recordRoot = path.join(dataRoot, "worlds", sceneId);
+  await mkdir(recordRoot, { recursive: true });
+  const timestamp = new Date().toISOString();
+  await writeFile(path.join(recordRoot, "record.json"), JSON.stringify({
+    id: sceneId,
+    sceneId,
+    title: "Builder resume world",
+    prompt: "Do not submit Planner again.",
+    referenceImage: null,
+    status: "failed",
+    stage: "failed",
+    failedStage: "planner",
+    codexBackend: "cloud",
+    attempt: 1,
+    origin: "test-set",
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    startedAt: timestamp,
+    finishedAt: timestamp,
+    error: "LWDP Planner timed out after 60 分钟.",
+    captureRequired: true,
+    captureStatus: "failed",
+    triviewStatus: "not-run",
+    outcome: "failed",
+    styledOpeningFrameRequired: false,
+    styledOpeningFrameStatus: "not-required",
+    styledTriviewsRequired: false,
+    styledTriviewsStatus: "not-required",
+    workflowPolicyVersion,
+  }));
+  let spawnedArgs;
+  let markSpawned;
+  const spawned = new Promise((resolve) => { markSpawned = resolve; });
+  const studio = createStudio({
+    repoRoot: fakeRepoRoot,
+    dataRoot,
+    autoRunJobs: true,
+    autoRecoverLateLwdpJobs: false,
+    importExistingArtifacts: false,
+    importBuiltinTestSets: false,
+    importBuiltinResults: false,
+    lwdpConfigured: true,
+    worldSpawnImplementation: (_command, args) => {
+      spawnedArgs = args;
+      const child = new EventEmitter();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.killed = false;
+      child.kill = () => true;
+      markSpawned();
+      setImmediate(() => {
+        child.stdout.end();
+        child.stderr.end();
+        child.emit("close", 2, null);
+      });
+      return child;
+    },
+  });
+  const origin = await listen(studio);
+  try {
+    const response = await fetch(`${origin}/api/worlds/${sceneId}/retry`, { method: "POST" });
+    const payload = await response.json();
+    assert.equal(response.status, 202);
+    assert.deepEqual(payload, {
+      ok: true,
+      executionMode: "builder-resume",
+      resumeFromStage: "planner",
+    });
+    await spawned;
+    assert.deepEqual(spawnedArgs, [
+      "agent:world:build",
+      "--",
+      "--scene-id",
+      sceneId,
+    ]);
+    assert.equal(spawnedArgs.includes("agent:world"), false);
+    const log = await readFile(path.join(recordRoot, "agent.log"), "utf8");
+    assert.match(log, /only Builder and downstream Host stages will run/);
+  } finally {
+    await studio.shutdown();
+  }
+});
+
 test("snapshots one selected Codex backend across every world in a test-set batch", async () => {
   const dataRoot = await temporaryRoot(".codex-backend-batch-");
   const studio = createStudio({
@@ -1132,7 +1734,10 @@ test("adapts the main Registry subject catalog for the Studio UI", async () => {
     const payload = await response.json();
     assert.ok(payload.presets.length >= 5);
     assert.ok(payload.presets.every(({ ref }) => ref.startsWith("worldkit://subject-definition/")));
-    assert.ok(payload.productionRefs.includes("worldkit://subject-definition/animal.quadruped.forward-steer@1"));
+    assert.ok(payload.productionRefs.includes("worldkit://subject-definition/humanoid.g-bot@2"));
+    assert.ok(payload.advancedRefs.includes("worldkit://subject-definition/xier120.quadruped-animal@1"));
+    assert.ok(!payload.presets.some(({ ref }) =>
+      ref === "worldkit://subject-definition/animal.quadruped.forward-steer@1"));
   } finally {
     await studio.shutdown();
   }
@@ -1141,19 +1746,18 @@ test("adapts the main Registry subject catalog for the Studio UI", async () => {
 test("derives the single current Scene Brief workflow", () => {
   const stages = deriveWorkflowTrajectory({
     record: {
-      stage: "terrain-compilation", status: "running", captureStatus: "pending",
+      stage: "block-build", status: "running", captureStatus: "pending",
       styledOpeningFrameRequired: true, styledTriviewsRequired: true,
     },
     availableIds: [
       "scene-brief", "planner-self-check", "visual-identity-palette", "world-plan",
-      "entry-whitebox-target", "terrain-height-intent-prompt", "terrain-height-intent",
-      "builder-authoring-spec", "implementation-map-draft", "builder-self-check",
+      "entry-whitebox-target", "world-module", "authoring-spec", "implementation-map-draft",
+      "builder-self-check", "builder-top-down-comparison", "builder-entry-comparison",
     ],
   });
   assert.equal(stages.find(({ id }) => id === "planner")?.status, "complete");
   assert.equal(stages.find(({ id }) => id === "coding-agent")?.status, "complete");
-  assert.equal(stages.find(({ id }) => id === "terrain-compilation")?.status, "active");
-  assert.equal(stages.find(({ id }) => id === "canonical-build")?.status, "pending");
+  assert.equal(stages.find(({ id }) => id === "block-build")?.status, "active");
   assert.equal(stages.find(({ id }) => id === "runtime-capture")?.status, "pending");
   assert.equal(stages.find(({ id }) => id === "entry-alignment-validation")?.status, "pending");
   assert.equal(stages.some(({ id }) => ["spatial-planner", "image-planner", "styled-triviews"].includes(id)), false);
@@ -1162,8 +1766,10 @@ test("derives the single current Scene Brief workflow", () => {
 test("separates whitebox capture from Snapshot V4 entry-alignment validation", () => {
   const availableIds = [
     "scene-brief", "planner-self-check", "visual-identity-palette", "world-plan", "entry-whitebox-target",
-    "authoring-spec", "implementation-map-draft", "builder-self-check", "implementation-map", "execution-plan",
-    "opening-frame", "runtime-snapshot", "whitebox-triview-manifest",
+    "world-module", "authoring-spec", "implementation-map-draft", "builder-self-check",
+    "builder-top-down-comparison", "builder-entry-comparison", "implementation-map", "execution-plan",
+    "opening-frame", "runtime-snapshot", "whitebox-capture-receipt",
+    "whitebox-triview-manifest",
   ];
   const failedStages = deriveWorkflowTrajectory({
     record: {
@@ -1182,7 +1788,7 @@ test("separates whitebox capture from Snapshot V4 entry-alignment validation", (
 
   const passedStages = deriveWorkflowTrajectory({
     record: {
-      stage: "visual-prompt-synthesis",
+      stage: "visual-reconstruction",
       status: "running",
       captureStatus: "passed",
       workflowPolicyVersion,
@@ -1192,7 +1798,33 @@ test("separates whitebox capture from Snapshot V4 entry-alignment validation", (
     availableIds: [...availableIds, "entry-third-person-validation"],
   });
   assert.equal(passedStages.find(({ id }) => id === "entry-alignment-validation")?.status, "complete");
-  assert.equal(passedStages.find(({ id }) => id === "visual-prompt-synthesis")?.status, "active");
+  assert.equal(passedStages.find(({ id }) => id === "visual-reconstruction")?.status, "active");
+});
+
+test("keeps a tri-view post-processing failure separate from playable whitebox capture", () => {
+  const stages = deriveWorkflowTrajectory({
+    record: {
+      stage: "failed",
+      failedStage: "runtime-capture",
+      status: "failed",
+      captureStatus: "passed",
+      triviewStatus: "failed",
+      workflowPolicyVersion,
+      styledOpeningFrameRequired: true,
+      styledTriviewsRequired: true,
+    },
+    availableIds: [
+      "scene-brief", "planner-self-check", "visual-identity-palette", "world-plan",
+      "entry-whitebox-target", "world-module", "authoring-spec", "implementation-map-draft",
+      "builder-self-check", "builder-top-down-comparison", "builder-entry-comparison",
+      "implementation-map", "execution-plan", "opening-frame",
+      "runtime-snapshot", "whitebox-capture-receipt",
+    ],
+  });
+
+  assert.equal(stages.find(({ id }) => id === "block-build")?.status, "complete");
+  assert.equal(stages.find(({ id }) => id === "runtime-capture")?.status, "failed");
+  assert.equal(stages.find(({ id }) => id === "entry-alignment-validation")?.status, "pending");
 });
 
 test("records tokens per new agent stage and elapsed time", () => {
@@ -1217,9 +1849,10 @@ test("records tokens per new agent stage and elapsed time", () => {
   const stages = deriveWorkflowTrajectory({
     record,
     availableIds: [
-      "scene-brief", "visual-identity-palette", "world-plan", "entry-whitebox-target", "authoring-spec",
+      "scene-brief", "visual-identity-palette", "world-plan", "entry-whitebox-target", "world-module", "authoring-spec",
       "implementation-map-draft", "implementation-map", "execution-plan",
-      "opening-frame", "runtime-snapshot", "whitebox-triview-manifest",
+      "opening-frame", "runtime-snapshot", "whitebox-capture-receipt",
+      "whitebox-triview-manifest",
     ],
   });
   const metrics = deriveWorkflowMetrics({ record, stages, rawLog, events: [] });
@@ -1384,32 +2017,38 @@ test("does not recover an explicitly failed visual run from leftover output file
   })).json()).world;
   await firstStudio.shutdown();
 
-  const artifactRoot = path.join(fakeRepoRoot, "artifacts/scenes", created.sceneId);
-  await mkdir(path.join(artifactRoot, "triviews", "player-subject"), { recursive: true });
+  const { artifactRoot } = await writeTrustedWhiteboxArtifacts(fakeRepoRoot, created.sceneId);
+  const recordPath = path.join(dataRoot, "worlds", created.id, "record.json");
+  const record = JSON.parse(await readFile(recordPath, "utf8"));
+  const startedAt = record.createdAt;
   await Promise.all([
-    ...[
-      "scene-brief.md", "visual-identity-palette.json", "authoring.json", "scene-implementation-map.json", "world.build.json",
-      "runtime-snapshot.json", "evaluation-run.json", "planner-self-check.json", "builder-self-check.json",
-    ].map((fileName) => writeFile(path.join(artifactRoot, fileName), "{}")),
-    writeFile(path.join(artifactRoot, "triviews/whitebox-triview-manifest.json"), JSON.stringify({
-      whiteboxTriviews: [{ visualTargetId: "player-subject" }],
+    writeFile(path.join(artifactRoot, "evaluation-run.json"), JSON.stringify({
+      kind: "worldkit-evaluation-run",
+      schemaVersion: 1,
+      caseId: created.id,
+      sceneId: created.sceneId,
+      workflowPolicyVersion,
+      attempt: 1,
+      startedAt,
     })),
-    writeFile(path.join(artifactRoot, "opening-frame.png"), png),
     writeFile(path.join(artifactRoot, "visual-generation-prompts.json"), "{}"),
     writeFile(path.join(artifactRoot, "styled-opening-frame.png"), png),
     writeFile(path.join(artifactRoot, "triviews/player-subject/styled-triview.png"), png),
     writeFile(path.join(artifactRoot, "styled-triviews-manifest.json"), "{}"),
     writeFile(path.join(artifactRoot, "styled-triviews-report.json"), "{}"),
   ]);
-  const recordPath = path.join(dataRoot, "worlds", created.id, "record.json");
-  const record = JSON.parse(await readFile(recordPath, "utf8"));
   await writeFile(recordPath, JSON.stringify({
     ...record,
     status: "failed",
     stage: "failed",
-    failedStage: "visual-imagegen",
+    failedStage: "visual-reconstruction",
     captureStatus: "passed",
+    triviewStatus: "passed",
+    whiteboxOutcome: "passed",
     outcome: "failed",
+    attempt: 1,
+    startedAt,
+    workflowPolicyVersion,
     error: "Legacy image alignment failed.",
   }));
 
@@ -1421,6 +2060,11 @@ test("does not recover an explicitly failed visual run from leftover output file
     assert.equal(detail.world.outcome, "failed");
     assert.equal(detail.world.error, "Legacy image alignment failed.");
     assert.equal(detail.world.previewUrl, `/play?authoring=1&world=${created.id}`);
+    assert.equal(detail.world.whiteboxRuntimeAvailable, true);
+    assert.equal(
+      (await fetch(`${recoveredOrigin}/api/worlds/${created.id}/preview-bootstrap`)).status,
+      200,
+    );
     await assert.rejects(
       readFile(path.join(artifactRoot, "evaluation-report.json"), "utf8"),
       { code: "ENOENT" },
@@ -1469,7 +2113,7 @@ test("does not recover stale placeholder outputs left before the current visual 
   await writeFile(recordPath, JSON.stringify({
     ...record,
     status: "running",
-    stage: "visual-imagegen",
+    stage: "visual-reconstruction",
     failedStage: null,
     attempt: 1,
     startedAt: new Date(Date.now() + 60_000).toISOString(),
@@ -1505,7 +2149,7 @@ test("does not import a three-file artifact fragment as a passed world", async (
     writeFile(path.join(artifactRoot, "triviews/whitebox-triview-manifest.json"), JSON.stringify({
       kind: "worldkit-whitebox-triview-manifest",
       schemaVersion: 1,
-      worldBuildIdentityHash: `sha256:${"a".repeat(64)}`,
+      executionPlanHash: `sha256:${"a".repeat(64)}`,
       whiteboxTriviews: [],
     })),
   ]);
@@ -1534,42 +2178,114 @@ test("imports a complete current whitebox chain with passed trusted receipts", a
     assert.equal(payload.worlds[0].sceneId, sceneId);
     assert.equal(payload.worlds[0].status, "ready");
     assert.equal(payload.worlds[0].outcome, "passed");
+    const detail = await (await fetch(`${origin}/api/worlds/${payload.worlds[0].id}`)).json();
+    assert.equal(detail.media.plannerValidation.status, "passed");
+    assert.equal(detail.media.plannerValidation.worldPlan.blockPaletteCoverageRatio, 0.5);
+    assert.equal(detail.media.plannerValidation.entryWhiteboxTarget.subjectCenterErrorRatio, 0);
   } finally {
     await studio.shutdown();
   }
 });
 
-test("imports a trusted whitebox chain compiled with terrain compiler v2", async () => {
+test("persists Planner human review against exact artifact hashes and invalidates it after regeneration", async () => {
+  const dataRoot = await temporaryRoot(".planner-human-review-data-");
+  const fakeRepoRoot = await temporaryRoot(".planner-human-review-repo-");
+  const sceneId = "planner-human-review-world";
+  await writeTrustedWhiteboxArtifacts(fakeRepoRoot, sceneId);
+  const studio = createStudio({ repoRoot: fakeRepoRoot, dataRoot, autoRunJobs: false });
+  const origin = await listen(studio);
+  try {
+    const world = (await fetch(`${origin}/api/worlds`).then((response) =>
+      response.json())).worlds[0];
+    let detail = await fetch(`${origin}/api/worlds/${world.id}`).then((response) =>
+      response.json());
+    assert.equal(detail.media.plannerReview.status, "pending");
+
+    const approved = await fetch(`${origin}/api/worlds/${world.id}/planner-review`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ status: "approved" }),
+    });
+    assert.equal(approved.status, 200, await approved.text());
+    detail = await fetch(`${origin}/api/worlds/${world.id}`).then((response) =>
+      response.json());
+    assert.equal(detail.media.plannerReview.status, "approved");
+    assert.match(detail.media.plannerReview.reviewedAt, /^\d{4}-/);
+
+    const newWorldPlan = Buffer.from("89504e470d0a1a0a0000000002", "hex");
+    const worldPlanPath = path.join(
+      fakeRepoRoot,
+      "apps/playground/public/scene-plans",
+      sceneId,
+      "world-plan.png",
+    );
+    const plannerCheckPath = path.join(
+      fakeRepoRoot,
+      "artifacts/scenes",
+      sceneId,
+      "planner-self-check.json",
+    );
+    const plannerCheck = JSON.parse(await readFile(plannerCheckPath, "utf8"));
+    plannerCheck.inputs.worldPlanHash =
+      `sha256:${createHash("sha256").update(newWorldPlan).digest("hex")}`;
+    await Promise.all([
+      writeFile(worldPlanPath, newWorldPlan),
+      writeFile(plannerCheckPath, JSON.stringify(plannerCheck)),
+    ]);
+    detail = await fetch(`${origin}/api/worlds/${world.id}`).then((response) =>
+      response.json());
+    assert.equal(detail.media.plannerReview.status, "pending");
+  } finally {
+    await studio.shutdown();
+  }
+});
+
+test("rejects a trusted-chain import when a Planner block-whitebox PNG changed after self-check", async () => {
   const dataRoot = await temporaryRoot(".test-data-");
   const fakeRepoRoot = await temporaryRoot(".test-repo-");
-  const sceneId = "trusted-compiler-v2-world";
-  await writeTrustedWhiteboxArtifacts(fakeRepoRoot, sceneId, {
-    compilerVersion: "terrain-height-intent-compiler@2",
-  });
+  const sceneId = "mutated-planner-image-world";
+  await writeTrustedWhiteboxArtifacts(fakeRepoRoot, sceneId);
+  await writeFile(
+    path.join(fakeRepoRoot, "apps/playground/public/scene-plans", sceneId, "world-plan.png"),
+    Buffer.from("89504e470d0a1a0a0000000001", "hex"),
+  );
 
   const studio = createStudio({ repoRoot: fakeRepoRoot, dataRoot, autoRunJobs: false });
   const origin = await listen(studio);
   try {
     const payload = await (await fetch(`${origin}/api/worlds`)).json();
-    assert.equal(payload.worlds.length, 1);
-    assert.equal(payload.worlds[0].sceneId, sceneId);
-    assert.equal(payload.worlds[0].status, "ready");
-    assert.equal(payload.worlds[0].outcome, "passed");
+    assert.equal(payload.worlds.some((world) => world.sceneId === sceneId), false);
   } finally {
     await studio.shutdown();
   }
 });
 
-test("requires an exact same-world passed Route report when Builder declares Required Routes", async () => {
-  for (const [routeReportMode, shouldImport] of [
-    ["missing", false],
-    ["mismatched", false],
-    ["failed", false],
-    ["exact", true],
-  ]) {
+test("does not let optional Route reports block an otherwise complete Block whitebox import", async () => {
+  for (const routeReportMode of ["missing", "mismatched", "failed", "exact"]) {
     const dataRoot = await temporaryRoot(`.test-data-route-${routeReportMode}-`);
     const fakeRepoRoot = await temporaryRoot(`.test-repo-route-${routeReportMode}-`);
     const sceneId = `route-${routeReportMode}-world`;
+    await writeTrustedWhiteboxArtifacts(fakeRepoRoot, sceneId, {
+      requiresRouteValidation: false,
+      routeReportMode,
+    });
+
+    const studio = createStudio({ repoRoot: fakeRepoRoot, dataRoot, autoRunJobs: false });
+    const origin = await listen(studio);
+    try {
+      const payload = await (await fetch(`${origin}/api/worlds`)).json();
+      assert.equal(payload.worlds.some((world) => world.sceneId === sceneId), true);
+    } finally {
+      await studio.shutdown();
+    }
+  }
+});
+
+test("requires exact World Build-bound Route evidence when a workflow requests it", async () => {
+  for (const routeReportMode of ["missing", "mismatched", "failed", "exact"]) {
+    const dataRoot = await temporaryRoot(`.test-data-required-route-${routeReportMode}-`);
+    const fakeRepoRoot = await temporaryRoot(`.test-repo-required-route-${routeReportMode}-`);
+    const sceneId = `required-route-${routeReportMode}-world`;
     await writeTrustedWhiteboxArtifacts(fakeRepoRoot, sceneId, {
       requiresRouteValidation: true,
       routeReportMode,
@@ -1579,14 +2295,18 @@ test("requires an exact same-world passed Route report when Builder declares Req
     const origin = await listen(studio);
     try {
       const payload = await (await fetch(`${origin}/api/worlds`)).json();
-      assert.equal(payload.worlds.some((world) => world.sceneId === sceneId), shouldImport);
+      assert.equal(
+        payload.worlds.some((world) => world.sceneId === sceneId),
+        routeReportMode === "exact",
+      );
     } finally {
       await studio.shutdown();
     }
   }
 });
 
-test("recovers fresh visual outputs only when current trusted receipts are passed", async () => {
+test("recovers fresh visual outputs from active stages, Host resumes, and repaired tri-view-only failures", async () => {
+  for (const recoveryMode of ["running-visual", "failed-triview", "failed-finalization-host-resume"]) {
   const dataRoot = await temporaryRoot(".test-data-");
   const fakeRepoRoot = await temporaryRoot(".test-repo-");
   const firstStudio = createStudio({ repoRoot: fakeRepoRoot, dataRoot, autoRunJobs: false });
@@ -1596,7 +2316,7 @@ test("recovers fresh visual outputs only when current trusted receipts are passe
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      title: "Recover Fresh Visuals",
+      title: `Recover Fresh Visuals ${recoveryMode}`,
       prompt: "Create a playable third-person world.",
       image: { name: "reference.png", dataUrl: `data:image/png;base64,${png.toString("base64")}` },
     }),
@@ -1606,18 +2326,58 @@ test("recovers fresh visual outputs only when current trusted receipts are passe
   const recordPath = path.join(dataRoot, "worlds", created.id, "record.json");
   const record = JSON.parse(await readFile(recordPath, "utf8"));
   const startedAt = new Date().toISOString();
-  const currentRecord = {
-    ...record,
-    status: "running",
-    stage: "visual-imagegen",
-    failedStage: null,
-    attempt: 1,
-    startedAt,
-    captureStatus: "passed",
-    outcome: null,
-    error: null,
-  };
+  const currentRecord = recoveryMode === "running-visual"
+    ? {
+        ...record,
+        status: "running",
+        stage: "visual-reconstruction",
+        failedStage: null,
+        attempt: 1,
+        startedAt,
+        captureStatus: "passed",
+        outcome: null,
+        error: null,
+      }
+    : recoveryMode === "failed-triview"
+      ? {
+        ...record,
+        status: "failed",
+        stage: "failed",
+        failedStage: "runtime-capture",
+        attempt: 1,
+        startedAt,
+        captureStatus: "passed",
+        triviewStatus: "failed",
+        whiteboxOutcome: "passed",
+        outcome: "failed",
+        error: "白膜世界已成功生成并可进入，但白膜三视图后处理失败；可以直接进入世界，并按需重试三视图。",
+      }
+      : {
+          ...record,
+          status: "failed",
+          stage: "failed",
+          failedStage: "visual-reconstruction",
+          attempt: 1,
+          startedAt,
+          captureStatus: "passed",
+          triviewStatus: "passed",
+          whiteboxOutcome: "passed",
+          styledOpeningFrameStatus: "failed",
+          styledTriviewsStatus: "failed",
+          outcome: "failed",
+          error: "工作流收尾脚本存在语法错误。",
+        };
   await writeFile(recordPath, JSON.stringify(currentRecord));
+  if (recoveryMode === "failed-finalization-host-resume") {
+    await writeFile(path.join(dataRoot, "worlds", created.id, "agent.log"), `
+WorldKit Creator Studio
+scene=${created.sceneId}
+attempt=1
+mode=host-resume
+WORLDKIT_LWDP_TASK_READY visual-demo
+[stderr] scripts/finalize.sh: line 171: unexpected EOF while looking for matching '"'
+`);
+  }
   const { artifactRoot, captureTargets } = await writeTrustedWhiteboxArtifacts(fakeRepoRoot, created.sceneId);
   await Promise.all([
     writeFile(path.join(artifactRoot, "evaluation-run.json"), JSON.stringify({
@@ -1628,8 +2388,25 @@ test("recovers fresh visual outputs only when current trusted receipts are passe
       workflowPolicyVersion,
       attempt: 1,
       startedAt,
+      ...(recoveryMode === "failed-finalization-host-resume"
+        ? { executionMode: "host-resume" }
+        : {}),
     })),
-    writeFile(path.join(artifactRoot, "visual-generation-prompts.json"), "{}"),
+    writeFile(path.join(artifactRoot, "visual-generation-prompts.json"), JSON.stringify({
+      kind: "worldkit-visual-generation-prompts",
+      schemaVersion: 2,
+      provider: "lwdp-codex",
+      sceneId: created.sceneId,
+      openingFrame: {
+        referenceRoles: ["actual-whitebox-opening", "user-first-frame"],
+        prompt: "Preserve the exact whitebox camera, layout, pose, scale, depth, and occlusion while applying only the complete identity, materials, palette, lighting, and visual style from the user appearance reference. ".repeat(2),
+      },
+      styledTriviews: captureTargets.whiteboxTriviews.map(({ visualTargetId }) => ({
+        visualTargetId,
+        referenceRoles: ["target-whitebox-triview", "styled-opening-frame", "user-first-frame"],
+        prompt: "Render this complete target as exactly Front, Right, and Back orthographic panels with the accepted opening-frame identity and appearance, no environment, text, or extra views. ".repeat(2),
+      })),
+    })),
     writeFile(path.join(artifactRoot, "styled-opening-frame.png"), png),
     writeFile(path.join(artifactRoot, "styled-opening-frame-manifest.json"), JSON.stringify({
       kind: "worldkit-styled-opening-frame-manifest",
@@ -1658,6 +2435,22 @@ test("recovers fresh visual outputs only when current trusted receipts are passe
     ...captureTargets.whiteboxTriviews.map((target) =>
       writeFile(path.join(artifactRoot, "triviews", target.visualTargetId, "styled-triview.png"), png)),
   ]);
+  if (recoveryMode === "failed-finalization-host-resume") {
+    const staleTime = new Date(Date.parse(startedAt) - 60_000);
+    const planRoot = path.join(fakeRepoRoot, "apps/playground/public/scene-plans", created.sceneId);
+    await Promise.all([
+      "scene-brief.md",
+      "planner-self-check.json",
+      "visual-identity-palette.json",
+      "world.mjs",
+      "implementation-map.draft.json",
+      "builder-self-check.json",
+    ].map((name) => utimes(path.join(artifactRoot, name), staleTime, staleTime)));
+    await Promise.all([
+      "world-plan.png",
+      "entry-whitebox-target.png",
+    ].map((name) => utimes(path.join(planRoot, name), staleTime, staleTime)));
+  }
 
   const recoveredStudio = createStudio({ repoRoot: fakeRepoRoot, dataRoot, autoRunJobs: false });
   const recoveredOrigin = await listen(recoveredStudio);
@@ -1666,6 +2459,158 @@ test("recovers fresh visual outputs only when current trusted receipts are passe
     assert.equal(detail.world.status, "ready");
     assert.equal(detail.world.outcome, "passed");
     assert.equal(detail.world.error, null);
+  } finally {
+    await recoveredStudio.shutdown();
+  }
+  }
+});
+
+test("downloads and finalizes a late successful visual Job without resubmitting it", async () => {
+  const dataRoot = await temporaryRoot(".test-data-late-visual-");
+  const fakeRepoRoot = await temporaryRoot(".test-repo-late-visual-");
+  const firstStudio = createStudio({
+    repoRoot: fakeRepoRoot,
+    dataRoot,
+    autoRunJobs: false,
+    importExistingArtifacts: false,
+    importBuiltinTestSets: false,
+    importBuiltinResults: false,
+  });
+  const firstOrigin = await listen(firstStudio);
+  const png = Buffer.from("89504e470d0a1a0a00000000", "hex");
+  const created = (await (await fetch(`${firstOrigin}/api/worlds`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      title: "Late Visual Delivery",
+      prompt: "Create a world whose final visual arrives late.",
+      image: { name: "reference.png", dataUrl: `data:image/png;base64,${png.toString("base64")}` },
+    }),
+  })).json()).world;
+  await firstStudio.shutdown();
+
+  const startedAt = new Date().toISOString();
+  const { artifactRoot, captureTargets } = await writeTrustedWhiteboxArtifacts(
+    fakeRepoRoot,
+    created.sceneId,
+  );
+  await writeFile(path.join(artifactRoot, "evaluation-run.json"), JSON.stringify({
+    kind: "worldkit-evaluation-run",
+    schemaVersion: 1,
+    caseId: created.id,
+    caseHash: `sha256:${"a".repeat(64)}`,
+    sceneId: created.sceneId,
+    workflowPolicyVersion,
+    attempt: 1,
+    startedAt,
+  }));
+  const recordPath = path.join(dataRoot, "worlds", created.id, "record.json");
+  const record = JSON.parse(await readFile(recordPath, "utf8"));
+  await writeFile(recordPath, JSON.stringify({
+    ...record,
+    status: "remote-pending",
+    stage: "visual-reconstruction",
+    failedStage: null,
+    attempt: 1,
+    startedAt,
+    finishedAt: null,
+    error: "LWDP 云端 Job gen_visuallate 在 120 分钟后仍为 running；已转入远端对账状态。",
+    captureRequired: false,
+    captureStatus: "passed",
+    triviewStatus: "passed",
+    whiteboxOutcome: "passed",
+    outcome: null,
+    styledOpeningFrameStatus: "pending",
+    styledTriviewsStatus: "pending",
+    workflowPolicyVersion,
+    remoteJobId: "gen_visuallate",
+  }));
+  await writeFile(path.join(dataRoot, "worlds", created.id, "agent.log"), [
+    "WorldKit Creator Studio",
+    `scene=${created.sceneId}`,
+    "attempt=1",
+    "mode=full",
+    "",
+    "WORLDKIT_LWDP_JOB visual-reconstruction visual-late gen_visuallate dispatch=single-task-fast-path taskAttempt=1/3",
+    "WORLDKIT_LWDP_REMOTE_PENDING visual-reconstruction visual-late gen_visuallate request-late s3://bucket/visual 7200000 running {\"total\":1,\"queued\":1,\"running\":0}",
+    "",
+  ].join("\n"));
+
+  let recoveredStage = null;
+  let finalized = false;
+  const recoveredStudio = createStudio({
+    repoRoot: fakeRepoRoot,
+    dataRoot,
+    autoRunJobs: true,
+    importExistingArtifacts: false,
+    importBuiltinTestSets: false,
+    importBuiltinResults: false,
+    lwdpConfigured: true,
+    loadLwdpConfigImplementation: async () => ({
+      baseUrl: "https://lwdp.test", token: "test", userId: "worldkit-test",
+    }),
+    lateLwdpRecoveryImplementation: async ({ stage }) => {
+      recoveredStage = stage;
+      await Promise.all([
+        writeFile(path.join(artifactRoot, "visual-generation-prompts.json"), JSON.stringify({
+          kind: "worldkit-visual-generation-prompts",
+          schemaVersion: 2,
+          provider: "lwdp-codex",
+          sceneId: created.sceneId,
+          openingFrame: {
+            referenceRoles: ["actual-whitebox-opening", "user-first-frame"],
+            prompt: "Preserve the exact whitebox camera, layout, pose, scale, depth, and occlusion while applying only the complete identity, materials, palette, lighting, and visual style from the user appearance reference. ".repeat(2),
+          },
+          styledTriviews: captureTargets.whiteboxTriviews.map(({ visualTargetId }) => ({
+            visualTargetId,
+            referenceRoles: ["target-whitebox-triview", "styled-opening-frame", "user-first-frame"],
+            prompt: "Render this complete target as exactly Front, Right, and Back orthographic panels with the accepted opening-frame identity and appearance, no environment, text, or extra views. ".repeat(2),
+          })),
+        })),
+        writeFile(path.join(artifactRoot, "styled-opening-frame.png"), png),
+        ...captureTargets.whiteboxTriviews.map(({ visualTargetId }) =>
+          writeFile(path.join(artifactRoot, "triviews", visualTargetId, "styled-triview.png"), png)),
+      ]);
+      return { jobId: "gen_visuallate", stage: "visual" };
+    },
+    visualRecoveryFinalizeImplementation: async () => {
+      finalized = true;
+      await Promise.all([
+        writeFile(path.join(artifactRoot, "styled-opening-frame-manifest.json"), JSON.stringify({
+          kind: "worldkit-styled-opening-frame-manifest", schemaVersion: 1,
+          sceneId: created.sceneId, status: "passed",
+        })),
+        writeFile(path.join(artifactRoot, "styled-opening-frame-report.json"), JSON.stringify({
+          kind: "worldkit-styled-opening-frame-report", schemaVersion: 1,
+          sceneId: created.sceneId, status: "passed",
+        })),
+        writeFile(path.join(artifactRoot, "styled-triviews-manifest.json"), JSON.stringify({
+          kind: "worldkit-styled-triview-manifest", schemaVersion: 1,
+          sceneId: created.sceneId, status: "passed",
+        })),
+        writeFile(path.join(artifactRoot, "styled-triviews-report.json"), JSON.stringify({
+          kind: "worldkit-styled-triview-report", schemaVersion: 1,
+          sceneId: created.sceneId, status: "passed",
+        })),
+      ]);
+    },
+  });
+  const recoveredOrigin = await listen(recoveredStudio);
+  try {
+    let detail = null;
+    const deadline = Date.now() + 2_000;
+    while (Date.now() < deadline) {
+      detail = await (await fetch(`${recoveredOrigin}/api/worlds/${created.id}`)).json();
+      if (detail.world.status === "ready") break;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.equal(recoveredStage, "visual", JSON.stringify(detail.world));
+    assert.equal(finalized, true);
+    assert.equal(detail.world.status, "ready");
+    assert.equal(detail.world.outcome, "passed");
+    assert.equal(detail.world.whiteboxOutcome, "passed");
+    assert.equal(detail.world.styledOpeningFrameStatus, "passed");
+    assert.equal(detail.world.styledTriviewsStatus, "passed");
   } finally {
     await recoveredStudio.shutdown();
   }
@@ -1703,6 +2648,7 @@ test("serves Scene Brief deliverables and runtime tri-views", async () => {
       writeFile(path.join(artifactRoot, "world.build.json"), "{}"),
       writeFile(path.join(artifactRoot, "opening-frame.png"), Buffer.from("89504e470d0a1a0a", "hex")),
       writeFile(path.join(artifactRoot, "runtime-snapshot.json"), "{}"),
+      writeFile(path.join(artifactRoot, "whitebox-capture-receipt.json"), "{}"),
       writeFile(path.join(artifactRoot, "triviews", "whitebox-triview-manifest.json"), JSON.stringify({
         whiteboxTriviews: [{
           visualTargetId: "player-subject",
@@ -1727,7 +2673,8 @@ test("serves Scene Brief deliverables and runtime tri-views", async () => {
     }));
 
     const detail = await (await fetch(`${origin}/api/worlds/${created.id}`)).json();
-    assert.equal(detail.world.previewUrl, `/play?authoring=1&world=${created.id}`);
+    assert.equal(detail.world.previewUrl, null);
+    assert.equal(detail.world.whiteboxRuntimeAvailable, false);
     assert.equal(detail.media.prototypes[0].id, "player-subject");
     assert.equal(detail.media.prototypes[0].memberCount, 2);
     assert.equal(detail.media.prototypes[0].role, "primary-subject");
@@ -1782,6 +2729,23 @@ test("serves one atomic Preview bootstrap and removes split Preview authority ro
         identityColor: "#E85D5D",
       }],
     };
+    const executionPlan = {
+      kind: "worldkit-canonical-scene-execution-plan",
+      schemaVersion: 1,
+      authoringSpecHash,
+    };
+    const executionPlanHash = `sha256:${createHash("sha256")
+      .update(canonicalJson(executionPlan))
+      .digest("hex")}`;
+    const normalizedWorldIr = {
+      kind: "normalized-world-ir",
+      schemaVersion: 4,
+    };
+    const normalizedWorldIrHash = `sha256:${createHash("sha256")
+      .update(canonicalJson(normalizedWorldIr))
+      .digest("hex")}`;
+    const worldBuildIdentityHash = `sha256:${"d".repeat(64)}`;
+    const png = Buffer.from("89504e470d0a1a0a00000000", "hex");
     const artifactRoot = path.join(fakeRepoRoot, "artifacts/scenes", created.sceneId);
     const recordPath = path.join(dataRoot, "worlds", created.id, "record.json");
     const record = JSON.parse(await readFile(recordPath, "utf8"));
@@ -1792,6 +2756,23 @@ test("serves one atomic Preview bootstrap and removes split Preview authority ro
         path.join(artifactRoot, "scene-implementation-map.json"),
         JSON.stringify(implementationMap),
       ),
+      writeFile(path.join(artifactRoot, "world.build.json"), JSON.stringify({
+        kind: "worldkit-build-artifact",
+        schemaVersion: 4,
+        normalizedWorldIr,
+        normalizedWorldIrHash,
+        worldBuildIdentityHash,
+        executionPlanHash,
+        executionPlan,
+      })),
+      writeFile(path.join(artifactRoot, "opening-frame.png"), png),
+      writeFile(path.join(artifactRoot, "runtime-snapshot.json"), JSON.stringify({
+        kind: "worldkit-runtime-snapshot",
+        schemaVersion: 4,
+        runtime: { phase: "ready" },
+        resources: { phase: "ready" },
+      })),
+      writeFile(path.join(artifactRoot, "whitebox-capture-receipt.json"), "{}"),
       writeFile(path.join(artifactRoot, "evaluation-run.json"), JSON.stringify({
         kind: "worldkit-evaluation-run",
         schemaVersion: 1,

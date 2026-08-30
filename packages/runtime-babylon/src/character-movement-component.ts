@@ -89,6 +89,9 @@ export class CharacterMovementComponentV1 extends EntityComponentV1 {
     waterSurfaceHeightAtSubjectOrigin: (
       subjectOrigin: Vector3,
     ) => number | undefined,
+    blockWorldWalkableSurfaceHeightAtSubjectOrigin: (
+      subjectOrigin: Vector3,
+    ) => number | undefined = () => undefined,
   ) {
     super("character-movement");
     this.motionKernel = new MotionKernelRuntimeV1(
@@ -97,6 +100,7 @@ export class CharacterMovementComponentV1 extends EntityComponentV1 {
       visualRoot,
       scene,
       waterSurfaceHeightAtSubjectOrigin,
+      blockWorldWalkableSurfaceHeightAtSubjectOrigin,
     );
     this.physicsController = this.motionKernel.physicsController;
   }
@@ -154,7 +158,7 @@ export class CharacterMovementComponentV1 extends EntityComponentV1 {
     return {
       horizontalSpeedMetersPerSecond: Math.hypot(velocity.x, velocity.z),
       runRequested,
-      movementMedium: this.motionKernel.movementMedium,
+      movementMedium: this.motionKernel.movementMediumForGroundHumanoidAction,
     };
   }
 

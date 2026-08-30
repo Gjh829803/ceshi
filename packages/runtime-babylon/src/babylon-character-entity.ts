@@ -39,6 +39,7 @@ export class BabylonCharacterEntityV1 {
     readonly visualRoot: TransformNode;
     readonly scene: Scene;
     readonly waterSurfaceHeightAtSubjectOrigin: (subjectOrigin: import("@babylonjs/core/Maths/math.vector.js").Vector3) => number | undefined;
+    readonly blockWorldWalkableSurfaceHeightAtSubjectOrigin?: (subjectOrigin: import("@babylonjs/core/Maths/math.vector.js").Vector3) => number | undefined;
     readonly movement?:
       | CharacterMovementComponentV1
       | GoldenHumanoidSubjectControllerV1;
@@ -54,6 +55,7 @@ export class BabylonCharacterEntityV1 {
         options.visualRoot,
         options.scene,
         options.waterSurfaceHeightAtSubjectOrigin,
+        options.blockWorldWalkableSurfaceHeightAtSubjectOrigin,
       ),
     );
     this.springArm = this.entity.registerComponent(new SpringArmComponentV1());

@@ -1,11 +1,81 @@
 import { execFile } from "node:child_process";
-import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { mkdir, readFile, rename, rm, stat } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+
+const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
 const terminalStatuses = new Set([
   "succeeded", "completed", "failed", "submit_failed", "cancelled", "stopped",
 ]);
+
+const defaultJobTimeoutMsByStage = Object.freeze({
+  planner: 45 * 60_000,
+  builder: 120 * 60_000,
+  "coding-agent": 120 * 60_000,
+  "visual-reconstruction": 120 * 60_000,
+});
+
+const timeoutEnvironmentKeyByStage = Object.freeze({
+  planner: "WORLDKIT_LWDP_PLANNER_TIMEOUT_MS",
+  builder: "WORLDKIT_LWDP_BUILDER_TIMEOUT_MS",
+  "coding-agent": "WORLDKIT_LWDP_BUILDER_TIMEOUT_MS",
+  "visual-reconstruction": "WORLDKIT_LWDP_VISUAL_TIMEOUT_MS",
+});
+
+function positiveSafeInteger(value, label) {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    throw new Error(`${label} must be a positive safe integer.`);
+  }
+  return parsed;
+}
+
+export function resolveLwdpJobTimeoutMs(stage, environment = process.env) {
+  const normalizedStage = String(stage ?? "");
+  const stageKey = timeoutEnvironmentKeyByStage[normalizedStage];
+  const configured = stageKey === undefined ? undefined : environment[stageKey];
+  if (configured !== undefined && configured !== "") {
+    return positiveSafeInteger(configured, stageKey);
+  }
+  const globalConfigured = environment.WORLDKIT_LWDP_JOB_TIMEOUT_MS;
+  if (globalConfigured !== undefined && globalConfigured !== "") {
+    return positiveSafeInteger(globalConfigured, "WORLDKIT_LWDP_JOB_TIMEOUT_MS");
+  }
+  return defaultJobTimeoutMsByStage[normalizedStage] ?? 120 * 60_000;
+}
+
+export class LwdpJobPendingError extends Error {
+  constructor(jobId, timeoutMs, lastJob) {
+    super(`LWDP job ${jobId} remained non-terminal after ${timeoutMs}ms.`);
+    this.name = "LwdpJobPendingError";
+    this.code = "LWDP_JOB_PENDING";
+    this.jobId = jobId;
+    this.timeoutMs = timeoutMs;
+    this.lastJob = lastJob;
+  }
+}
+
+export function classifyCodexTaskFailureForRetry(error) {
+  if (error instanceof LwdpJobPendingError || error?.code === "LWDP_JOB_PENDING") return null;
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  if (
+    /(?:401\s+Unauthorized|token_expired|access token|refresh token|auth_failed)/i.test(message)
+  ) return "auth";
+  if (
+    /(?:model.{0,160}not supported when using Codex with a ChatGPT account|ChatGPT account.{0,160}(?:does not support|is not eligible for).{0,80}model)/i.test(
+      message,
+    )
+  ) return "account-model-compatibility";
+  if (/Selected model is at capacity|model capacity/i.test(message)) return "capacity";
+  if (/codex timeout after\s+[0-9]+s/i.test(message)) return "task-timeout";
+  if (
+    /(?:websocket|connection).{0,80}(?:reset|closed|failed|refused)|(?:reset|closed) by peer|HTTP\s+(?:429|502|503|504)/i.test(
+      message,
+    )
+  ) return "transport";
+  return null;
+}
 
 function parseEnv(contents) {
   const values = {};
@@ -27,7 +97,7 @@ function parseEnv(contents) {
 
 export async function loadLwdpGenerationConfig(environment = process.env) {
   const envFile = environment.WORLDKIT_LWDP_ENV_FILE ||
-    join(homedir(), ".codex", "secrets", "lwdp_generation.env");
+    join(projectRoot, ".codex-tmp", "runtime-config", "lwdp.env");
   let fromFile = {};
   try {
     fromFile = parseEnv(await readFile(envFile, "utf8"));
@@ -37,7 +107,7 @@ export async function loadLwdpGenerationConfig(environment = process.env) {
   const token = environment.LWDP_GENERATION_API_TOKEN || fromFile.LWDP_GENERATION_API_TOKEN || "";
   if (!token) {
     throw new Error(
-      "LWDP_GENERATION_API_TOKEN is unavailable. Set it in the environment or WORLDKIT_LWDP_ENV_FILE.",
+      "LWDP_GENERATION_API_TOKEN is unavailable. Configure the project-local .codex-tmp/runtime-config/lwdp.env file or WORLDKIT_LWDP_ENV_FILE.",
     );
   }
   return {
@@ -192,17 +262,19 @@ export async function pollGenerationJob(jobId, {
   config,
   fetchImplementation = fetch,
   intervalMs = Number(process.env.WORLDKIT_LWDP_POLL_INTERVAL_MS || 10_000),
-  timeoutMs = Number(process.env.WORLDKIT_LWDP_JOB_TIMEOUT_MS || 3_600_000),
+  timeoutMs = resolveLwdpJobTimeoutMs("other"),
   onProgress = () => undefined,
 } = {}) {
   const startedAt = Date.now();
   let lastSignature = "";
+  let lastJob = null;
   for (;;) {
     const payload = await lwdpRequest(`/api/v1/generation/jobs/${encodeURIComponent(jobId)}`, {
       config,
       fetchImplementation,
     });
     const job = payload?.job ?? payload;
+    lastJob = job;
     const signature = JSON.stringify({ status: job?.status, counters: job?.counters, error: job?.error });
     if (signature !== lastSignature) {
       lastSignature = signature;
@@ -210,7 +282,7 @@ export async function pollGenerationJob(jobId, {
     }
     if (terminalStatuses.has(String(job?.status))) return job;
     if (Date.now() - startedAt >= timeoutMs) {
-      throw new Error(`LWDP job ${jobId} timed out after ${timeoutMs}ms.`);
+      throw new LwdpJobPendingError(jobId, timeoutMs, lastJob);
     }
     await new Promise((resolvePromise) => setTimeout(resolvePromise, Math.max(100, intervalMs)));
   }

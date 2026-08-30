@@ -30,8 +30,8 @@ export async function writeVisualIdentityPalette(options: {
     schemaVersion: 1,
     sceneId: options.sceneId,
     sceneBriefHash: briefResult.sceneBriefHash,
-    movementMode: briefResult.value.movement.mode,
-    movementModeLabel: briefResult.value.movement.label,
+    movementModes: briefResult.value.movementModes.map(({ mode }) => mode),
+    movementModeLabels: briefResult.value.movementModes.map(({ label }) => label),
     targets: deriveVisualIdentityPalette(briefResult.value),
   } as const;
   const outputPath = path.resolve(options.outputPath);

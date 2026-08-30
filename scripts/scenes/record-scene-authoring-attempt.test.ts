@@ -44,10 +44,10 @@ async function fixture(): Promise<{
   const routeDecisionPath = path.join(directory, "scene-authoring-route-decision.json");
   const attemptPath = path.join(directory, "scene-authoring-attempt.json");
   const resultPath = path.join(directory, "scene-authoring-attempt-result.json");
-  const brief = await readFile(
+  const brief = (await readFile(
     path.resolve("artifacts/scenes/cloud-ridge-celestial-gate/scene-brief.md"),
     "utf8",
-  );
+  )).replace("## 运动模式\n陆地步行：", "## 运动模式\n- 陆地步行：");
   const source = JSON.parse(
     await readFile(path.resolve("examples/authoring/basic-world.json"), "utf8"),
   );

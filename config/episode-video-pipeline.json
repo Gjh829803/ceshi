@@ -1,0 +1,47 @@
+{
+  "kind": "worldkit-episode-video-pipeline",
+  "schemaVersion": 1,
+  "promptTemplateVersion": "worldkit-reference-video-relaxed-action@1",
+  "provider": {
+    "baseUrl": "https://clmm-mall.top/v1",
+    "credentialFile": ".codex-tmp/runtime-config/mg.key",
+    "submitPath": "/videos",
+    "pollPathTemplate": "/videos/{taskId}",
+    "pollIntervalSeconds": 15,
+    "timeoutSeconds": 7200
+  },
+  "referenceUpload": {
+    "bucket": "leap-server-dev",
+    "region": "us-east-1",
+    "prefix": "codex-temp/worldkit-episode-video",
+    "presignSeconds": 86400
+  },
+  "seedance": {
+    "model": "mg-seedance-2.5-480p",
+    "aspectRatio": "16:9",
+    "resolution": "480p",
+    "size": "854x480",
+    "seconds": "30",
+    "generateAudio": true
+  },
+  "upscale": {
+    "model": "cf-超分-720p-30s",
+    "aspectRatio": "16:9",
+    "resolution": "720p",
+    "size": "1280x720",
+    "seconds": "1"
+  },
+  "reference": {
+    "width": 1280,
+    "height": 720,
+    "fps": 24,
+    "frameCount": 720
+  },
+  "delivery": {
+    "width": 1280,
+    "height": 720,
+    "fps": 24,
+    "frameCount": 720,
+    "requireAudio": true
+  }
+}

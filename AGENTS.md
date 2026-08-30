@@ -1,36 +1,8 @@
 # Agent Whitebox World authoring rules
 
-## Project documentation ownership
-
-- Keep durable Superpowers specifications, implementation plans, and reusable project
-  guidance under `docs/superpowers/specs/`, `docs/superpowers/plans/`, and
-  `docs/superpowers/skills/`. Reserve `.superpowers/` for workflow state such as SDD
-  ledgers or brainstorming sessions; it is not the durable documentation authority.
-  Project-wide ADRs and reviews remain under `docs/decisions/` and `docs/reviews/`.
-- Repository scripts belong in a named responsibility directory under `scripts/`.
-  Keep stable developer entry names in the root `package.json`; do not add executable
-  or test files directly under `scripts/`.
-
 ## Goal
 
 Create playable outdoor whitebox scenes through a gated multi-agent workflow. Planning, whitebox implementation, and visual styling are separate responsibilities; never collapse their authority by improvising geometry or editing SDK internals.
-
-## Terrain generation canonical entry points
-
-- Deterministic Height Intent compilation is owned by `packages/terrain-compiler/` and
-  imported as `@whitebox-world/terrain-compiler`.
-- The stable developer command is `pnpm terrain:intent:compile`; package-private
-  projection, filtering, constraint, and CLI files are not public subpath APIs.
-- Planner image semantics are owned by
-  `.codex/skills/worldkit-spatial-planner/references/terrain-height-intent-prompt.md`.
-- Accepted family-specific prompt references are indexed by
-  `assets/terrain-height-intent/golden-exemplars.json`; never select an exemplar from an
-  incompatible terrain family or treat it as a spatial authority.
-- Development evidence belongs under `artifacts/terrain-experiments/<case-id>/` and is
-  not accepted merely because it exists. Formal receipt-bound scene outputs belong under
-  `artifacts/scenes/<scene-id>/` and `apps/playground/public/scene-plans/<scene-id>/`.
-- A generated PNG is an untrusted macro-shape proposal. Runtime consumes only metric
-  Authoring samples published by the trusted Host compiler path.
 
 ## Design-stage responsibility decomposition
 
@@ -58,8 +30,7 @@ Apply these rules whenever adding or changing public Authoring Schema, Registry 
 - Put units and coordinate domains in numeric field names, including `Meters`, `Seconds`, `Radians`, `Degrees`, `Ticks`, `Ratio`, `Bytes`, `XYZ`, `XZ`, and `Uv`. Do not rely on surrounding prose to disambiguate units.
 - Prefer required discriminators, closed enums, and discriminated unions over combinations of overlapping optional flags. Collections use plural names, ID-indexed maps use `...ById`, and booleans use `is...`, `has...`, `allow...`, or an explicit `...Enabled` suffix.
 - Canonical Schema, AI Schema Profile, CLI, Browser Protocol, examples, and generated types use the same public field names. Babylon, Havok, renderer handles, and provider-specific terminology stay behind adapters.
-- A released or externally adopted public rename must update the authoritative Schema, examples, validation, migration, and conformance coverage together. Preserve that compatibility through explicit version migration, not permanent alias fields.
-- This repository is currently unreleased. For every contract touched by current work, a current-only clean break is the default rather than an exception: the final accepted tree has one public name, one parser, one public entry point, and one authoritative state owner for each concept. Update all consumers, fixtures, generated artifacts, receipts, and examples together, then delete the replaced fields, types, parsers, packages, re-exports, adapters, and fallbacks. A `schemaVersion` or `V1` suffix identifies the sole current contract; it does not authorize parallel V1/V2/V3 implementations. Intermediate feature commits may be incomplete, but no GO decision, final handoff, or merge candidate may contain legacy/new compatibility paths.
+- A released or externally adopted public rename must update the authoritative Schema, examples, validation, migration, and conformance coverage together. Preserve that compatibility through explicit version migration, not permanent alias fields. For an unreleased private Schema, an explicitly approved clean break may delete the old version and rewrite all local fixtures/artifacts instead of creating migration code solely for development history.
 
 ## Dependency reuse and utility code
 
@@ -70,6 +41,19 @@ Apply these rules whenever adding or changing public Authoring Schema, Registry 
 - Prefer a clear native JavaScript or TypeScript expression when it is simpler than a library call. Avoid dependencies or abstractions that do not materially improve correctness, readability, or maintenance.
 - Every workspace package must declare the libraries it imports as direct dependencies. Do not rely on undeclared dependencies being available from the workspace root.
 - Keep domain-specific algorithms local, deterministic, and covered by focused tests. Reuse libraries for generic mechanics; keep SDK semantics in SDK-owned code.
+
+## Experimental Three.js Block World authoring
+
+The experimental Block World slice is a narrow authoring exception to the Babylon-only Runtime rule. Its authority is frozen in
+`docs/superpowers/specs/2026-08-26-threejs-block-world-authoring-design.md` and its dependency graph in
+`docs/superpowers/plans/2026-08-26-threejs-block-world-authoring-implementation-plan.md`.
+
+- Three.js may be imported only by `@whitebox-world/block-world-three` and direct Agent-authored Block World modules or examples that target that adapter. It must not enter Canonical Authoring, Compiler, Runtime Contracts, Camera, Runtime Host, Runtime Babylon, Browser Protocol, capture, or Studio.
+- The Agent creates ordinary metric `THREE.Mesh` boxes directly and may write its own TypeScript loops and helpers. Keep geometry authority in those direct mesh placements; do not add a second semantic construction surface.
+- The Agent selects one immutable preset ref and placement per block. It must not choose or override collision values, traversal traits, opacity, or preset colors. Bind blocks with `bindWorldkitBlockV1(...)`; provider metadata, not `userData`, is authoritative.
+- Admit only undeformed full `[1,1,1]`, half `[1,0.5,1]`, quarter-volume `[0.5,0.5,1]`, and small `[0.5,0.5,0.5]` BoxGeometry blocks with faces on the 0.5-meter micro-grid, centers on the 0.25-meter lattice, unit world scale, and Y-only quarter turns. Extract with `extractThreeBlockWorldV2(...)`, then run `checkBlockWorldV2(...)` or `pnpm block-world:check` before claiming the authored Block World passes.
+- Use `visualGroupId` for a complete landmark identity. Landmark-colored blocks are obstacle-physical and one group uses one reserved landmark color; functional walkable blocks may share the group without changing their functional preset.
+- The Hosted Builder uses this Block World contract exclusively. The Host-owned Block Compiler may translate a passing Manifest into the existing Runtime transport; Agent code must not bypass extraction/checking or write that transport directly.
 
 ## Deep runtime review discipline
 
@@ -86,130 +70,68 @@ Apply `docs/reviews/runtime-deep-review-checklist.md` whenever changing or revie
 
 ## Agent roles and frozen boundary
 
-- **World Planner Agent** may create only `apps/playground/src/scenes/plans/<catalog-id>.ts` and its `world-plan.png` / `opening-shot.png`. It must define the complete WorldPrompt and Entity Catalog before geometry.
-- The trusted host freezes those three inputs into `artifacts/scenes/<catalog-id>/plan-lock.json`. Do not create or edit the lock manually.
-- **World Builder Agent** may implement and register the planned scene, but must not modify the frozen plan source, the two planning images, or the lock.
-- **Visual Bible Agent** may create declared styled tri-views and `opening-frame-rendered.png` only after the whitebox implementation and SDK-derived tri-views are verified. It must not change geometry or the frozen plan.
-- If a downstream stage cannot satisfy the contract, write `artifacts/scenes/<catalog-id>/change-request.json` using `defineWorldPlanChangeRequest` semantics. Do not repair the conflict by silently changing upstream artifacts.
-
-## Scene workflow
-
-1. Planner creates `apps/playground/src/scenes/plans/<catalog-id>.ts`, exporting one named `worldSpec = defineOutdoorWorldSpec(...)`.
-2. Planner defines the whole playable world before geometry: bounds, relief, regions, water, landmarks, routes, assumptions, WorldPrompt, Entity Catalog and Opening Shot.
-3. Planner uses Codex's built-in image generation tool to generate the World Plan and Opening Shot from the exact stored prompts. Save the real assets at `apps/playground/public/scene-plans/<world-spec-id>/world-plan.png` and `opening-shot.png`; never fabricate placeholders.
-4. The host runs `pnpm plan:freeze -- --scene <catalog-id>` and `pnpm plan:check -- --scene <catalog-id>`.
-5. Builder adds `apps/playground/src/scenes/<catalog-id>.ts`, exports `definePlannedOutdoorScene(...)`, implements stable matching Feature/Entity bindings, and registers it in `apps/playground/src/scenes/index.ts`.
-6. Run `pnpm test:scenes`, `pnpm typecheck`, `pnpm build`, `pnpm plan:scene -- --scene <catalog-id>`, and `pnpm plan:scene:check -- --scene <catalog-id>`.
-7. Open `http://127.0.0.1:5173/?scene=<catalog-id>`. Compare the three planning captures with intent, test playability, then export every Prototype's SDK-derived whitebox tri-view.
-8. Visual Bible uses those tri-views and the verified manifest to create styled tri-views and the final rendered opening frame. Finish with `pnpm visual:finalize -- --scene <catalog-id>` and `pnpm visual:check -- --scene <catalog-id>`.
-
-Do not modify Runtime, physics, camera, or rendering internals merely to create a scene.
+- **World Planner Agent** writes the Scene Brief and two intent images. It never writes geometry, block coordinates, Subject refs, camera numbers, or runtime data.
+- **Block Builder Agent** writes only `artifacts/scenes/<scene-id>/world.mjs` through `.codex/skills/worldkit-block-builder/SKILL.md`. It does not edit Planner inputs or Host-derived JSON.
+- **Trusted Host** extracts and checks the Three.js Scene, derives the internal runtime transport and visual mappings, compiles, captures, validates entry alignment, and promotes artifacts.
+- **Visual generation** consumes only verified whitebox evidence. It never changes block placement, Subject identity, camera path, collision, or connectivity.
 
 ### Hosted Scene Brief workflow
 
-1. Invoke the Unified Planner once with `.codex/skills/worldkit-spatial-planner/SKILL.md`. In that same Codex job it writes the Scene Brief first, then uses built-in image generation to produce the minimal navigation world plan and palette-marked entry whitebox target.
-2. In the same Planner Job, run the Skill-bundled `scripts/self-check.mjs`, repair the Brief and regenerate both images until it passes, and deliver `planner-self-check.json`. The red Subject mask center may deviate by at most 1.5% of image width. The host replays the same check once, compares the receipt, derives stable target IDs/colors, and never launches a separate Planner Repair Agent.
-3. Invoke the Canonical Builder with `.codex/skills/worldkit-canonical-builder/SKILL.md`.
-4. In the same Builder Job, run the Skill-bundled standalone `scripts/self-check.mjs`. It contains the current main V3/V4 Schemas, Normalizers, Layout Solver, V4/V5 Compilers, modular Subject Registry closure and implementation-map checks. Repair and rerun inside that Job until `builder-self-check.json` passes. The host replays the source-equivalent checker once and compares the receipt; it never launches a separate Builder Repair Agent.
-5. The host finalizes `scene-implementation-map.json`, derives the declared visual groups, and builds `world.build.json`. If the receipt declares required trusted Route validation, it runs `worldkit verify route` with the frozen profile before capture. It then runs `worldkit capture` with `--triview-output` and the trusted implementation map, followed by `scripts/visual/validate-entry-third-person.py` with the opening PNG and Runtime Snapshot. Runtime-only or Route failure ends the case with diagnostics and is corrected in a new user/queue-triggered Builder run, not an automatic repair task.
-6. If a user reference exists, use Gemini Flash to synthesize `visual-generation-prompts.json`, then directly and concurrently generate `styled-opening-frame.png` plus every grouped `styled-triview.png`; finalize both manifests after the batch completes. No playtest or recording is required.
+1. Invoke the Unified Planner once with `.codex/skills/worldkit-spatial-planner/SKILL.md`. In that same Codex job it writes the Scene Brief, generates and inspects the 16:9 entry target first, then supplies that exact PNG with the uploaded reference and Brief to image generation for the complete top-down world plan. Both use the immutable Block World functional colors; ordered complete visual targets use the shared target palette. Planner must preserve volumetric evidence as well as screen layout: terrain, stairs, bridges, platforms, and buildings carry consistent footprints, elevation profiles, cross-sections, thickness, and over/under relationships. The current workflow always plans one continuous geographic world whose top-down explorable footprint is at least four times the reference-visible area; it does not use multi-panel spaces, portals, or teleports.
+2. In the same Planner Job, run the Skill-bundled `scripts/self-check.mjs`, repair the Brief and regenerate both images until it passes, and deliver `planner-self-check.json`. The top-down plan uses only a small red spawn-position token; the complete red Subject exists only in the 16:9 entry image, whose center may deviate by at most 1.5% of image width. The checker measures palette coverage, movement-appropriate support colors, ordered landmark colors, file integrity, entry ratio, and the centered entry Subject silhouette. Do not add top-down token area/shape/recognition heuristics: geography, inferred continuation, spawn-token meaning, and visual quality are surfaced for human Studio review. The host replays the same check once, compares all three input hashes, and never launches a separate Planner Repair Agent.
+3. Invoke the Block Builder once with `.codex/skills/worldkit-block-builder/SKILL.md`. It creates `world.mjs` by directly placing bound metric Three.js boxes and declares one controlled Subject plus one strict 16:9 third-person Camera. The world must remain faithful from side/top/rear exploration, not merely reproduce one projected silhouette; visible stairs connect real endpoint elevations and terrain/structures have reference-consistent depth and mass. Subject selection is behavior-first and uses the Host-generated `agent-authoring-catalog.json` shared by Studio, Prompt, Skill, and self-check: every Brief movement mode must be present in the exact Subject's executable closure, and Registry presence or visual topology alone never implies support. The selected Catalog row also owns the exact Host-derived Runtime-collider traversal envelope; Agent-authored estimates are rejected. Reuse the closest admitted complete Subject even when likeness is coarse; the current composed Hosted Subject supplies only ground walking and cannot invent another Runtime kernel. Appearance-only weapons, clothing, armor, backpacks, headwear, colors, faces, and hair never justify custom Subject parts. Builder Camera numbers own both opening review framing and the real Babylon opening capture: the Subject Camera Context selects the opening Runtime Camera Profile, then Runtime validates and applies those four values as opening tuning.
+4. In the same Builder Job, run the Skill checker. Repair only `world.mjs` until block admission, movement-aware ground connectivity, spawn, camera, visual grouping, and internal compilation pass. Then run the Skill-owned `render-visual-review.mjs`, open both left-Planner/right-Builder comparison PNGs, and repair `world.mjs` until the continuous top-down layout and entry composition are visually faithful. The checker derives `authoring.json` and `implementation-map.draft.json`; the Agent must never edit those outputs. The Host replays both portable scripts, byte-compares canonical JSON, and compares exact decoded RGBA pixels for the PNG reviews so cross-environment compression differences are ignored. It does not create an image-similarity Gate.
+5. The host finalizes `scene-implementation-map.json` and builds `world.build.json`. Block connectivity is the Builder admission authority; the hosted path does not require a second Route graph. The host runs `worldkit capture` with `--snapshot`, `--receipt`, and `--triview-output`, followed by `scripts/visual/validate-entry-third-person.py`. The capture receipt first binds the recomputed World Build Identity to the opening PNG and formally parsed Runtime Snapshot V4, then advances to bind the manifest and every tri-view image only after those captures succeed. Studio signs each receipt with its project-local Host Ed25519 key; the private key never enters the artifact bundle, and admission verifies against the separately trusted public key. Studio also recomputes the Build from AuthoringSpec rather than trusting artifact self-reports. A fresh valid opening PNG plus Runtime Snapshot and runtime-ready receipt publishes the playable whitebox boundary immediately: later tri-view, entry-validation, or styled-output failure blocks only its own downstream result.
+6. If a user reference exists, invoke one active formal LWDP Codex visual task attempt with `.codex/skills/worldkit-visual-reconstructor/SKILL.md`. In that one isolated workspace, Codex writes `visual-generation-prompts.json`, uses its built-in image generation tool to create `styled-opening-frame.png`, inspects it, then uses the accepted opening as the shared appearance anchor while generating every grouped `styled-triview.png`. The actual Babylon whitebox opening is the sole opening-frame spatial canvas; the uploaded user image is a direct high-fidelity appearance reference only. Target whitebox tri-views constrain complete-target geometry, proportions, and Front / Right / Back order. The Host declares every output up front and finalizes both manifests after the task returns. A terminal transient auth, account/model incompatibility, capacity, transport, or Codex-task-timeout failure may create a bounded whole-task retry with a new request ID and isolated attempt prefix; a non-terminal/unknown outcome must only be reconciled and never resubmitted. Do not create separate prompt, opening-frame, per-target, or repair Jobs. No playtest or recording is required.
 
 The Playground Recording Workbench is a separate manual post-workflow tool. A user may record multiple runtime clips only after opening a playable world, then explicitly request Prompt synthesis and Seedance 2.5 reference-video generation for one clip. Never insert recording or final video generation into the automatic Planner/Builder/whitebox/first-frame/styled-triview workflow.
 
 ## Local Runtime startup
 
 - When a user asks to view the product G Bot locally, run `pnpm dev:g-bot` and open the URL printed by the command.
-- `?authoring=1` requires an AuthoringSpec injected by `worldkit run <world.json>`. Never combine plain `pnpm dev` with `?authoring=1` or present that combination to a user.
+- Block Builder modules are checked with `pnpm block-world:check` and compiled by the trusted Host before the existing Runtime starts.
 - If the browser reports `504 Outdated Optimize Dep` after a branch or dependency change, stop the old server and run `pnpm dev:g-bot:refresh` once. Do not change Babylon, physics, camera, or runtime code to repair a stale Vite dependency cache.
 - Use `pnpm dev` for the Babylon-backed catalog Playground. It is a scene workflow and artifact
   surface, not the Canonical Authoring Runtime entry supplied by `worldkit run`.
 
-## Preferred APIs
-
-- `world.terrain.landscape({ relief: ... })` for large terrain. Choose the relief from the user's scene: `flat` for cities and constructed ground, `plain` for gently rolling open land, `hills` for broad hill country, and `mountains` for intentionally steep regions.
-- `world.terrain.rolling(...)` for small test terrain.
-- `world.water.lake(...)` for elliptical lakes.
-- `world.water.body(...)` for circle, ellipse, or polygon water boundaries.
-- `world.landmark.compound(...)` for whitebox landmarks.
-- `world.player.spawn(...)` exactly once.
-- `world.atmosphere.set(...)` for sky/fog/sun semantics.
-
-In the catalog scene workflow, `world.player.spawn(...)` uses the serialized authoring convention:
-`facingRadians: 0` faces `-Z`, while `Math.PI` faces `+Z`. For a composition-critical opening view,
-set `camera: { pitchRadians, distance, fovDegrees, targetHeight }`; a larger positive pitch looks
-farther downward. Supported pitch is `-0.95..0.65`, distance is `1.8..8m`, and target height is
-`0.5..4.5m`. Keep these as initial framing choices only—the SDK still owns runtime camera controls.
-
 ## Codex execution backend rule
 
-Automatic Planner and Builder work runs through exactly one Codex task per stage, selected through `scripts/agents/run-codex-task.mjs`. `cloud` is the default and uses LWDP; `local` is allowed only after an explicit Studio or `WORLDKIT_CODEX_BACKEND=local` selection and uses the installed, authenticated local Codex CLI. The Studio freezes the selected backend into each new world or Seedance Prompt-rewrite job, so changing the switch never migrates queued or running work. Re-generating Seedance after changing the selected backend must invalidate a successful Prompt from the other backend and rewrite it through the newly selected backend; a same-backend Seedance retry may reuse that Prompt. Self-repair happens inside that same task through the bundled Skill checker; the host never creates Planner Repair or Builder Repair Jobs. Planner calls its own built-in image generation tool, so there is no separate planning-image T2I job. Post-whitebox visual prompt synthesis and image rendering call Google GenAI directly from the project-local runtime configuration. Never invoke either backend directly from workflow code; always use the router.
+Automatic Planner and Builder work runs through exactly one Codex task per stage, selected through `scripts/agents/run-codex-task.mjs`. `cloud` is the default and uses LWDP; `local` is allowed only after an explicit Studio or `WORLDKIT_CODEX_BACKEND=local` selection and uses the installed, authenticated local Codex CLI. The Studio freezes the selected backend into each new world or Seedance Prompt-rewrite job, so changing the switch never migrates queued or running work. Re-generating Seedance after changing the selected backend must invalidate a successful Prompt from the other backend and rewrite it through the newly selected backend; a same-backend Seedance retry may reuse that Prompt. Self-repair happens inside that same task through the bundled Skill checker; the host never creates Planner Repair or Builder Repair Jobs. Planner calls its own built-in image generation tool, so there is no separate planning-image T2I job. Post-whitebox visual reconstruction always routes one task through the same router with `--backend cloud`; it does not follow the Planner/Builder local switch and never invokes Gemini or an LWDP T2I batch. Never invoke a Codex backend directly from workflow code; always use the router.
 
 - Every formal generic Codex stage, including Planner and Builder self-repair cycles, must use model `gpt-5.6-sol` with reasoning effort `xhigh`. Formal execution rejects any other model or effort instead of silently downgrading. Lower-cost settings are allowed only through an explicitly selected `smoke` execution profile and must never be used by a real case.
 - Local formal tasks run `codex exec` non-interactively with `workspace-write`, `approval_policy="never"`, `--ephemeral`, and `--ignore-user-config`. Authentication alone comes from `WORLDKIT_LOCAL_CODEX_HOME`, `CODEX_HOME`, or the local Codex default; credentials are never copied into the project, task workspace, prompt, logs, or artifacts.
 - Local tasks receive only Host-selected contexts and assets copied into `.codex-tmp/local-codex/<task-run>`, reject symlink inputs, write only declared output paths, and atomically promote non-empty outputs before the temporary workspace is removed. Do not expose LWDP, Gemini, or unrelated process credentials to the local Codex child.
-- Treat every LWDP job-creation `POST` as non-idempotent until the service guarantees `request_id` idempotency. Formal Codex and T2I stages submit a creation request exactly once; only read-only polling/download requests may retry automatically. A timeout after submission is an unknown outcome and must be reconciled by `request_id`, never by immediately creating another job.
+- Treat every LWDP job-creation `POST` as non-idempotent until the service guarantees `request_id` idempotency. Each formal Codex/T2I attempt submits its creation request exactly once; only read-only polling/download requests may retry automatically. A timeout after submission is an unknown outcome and must be reconciled by `request_id`, never by immediately creating another job. Planner waits 45 minutes; Builder and final visual reconstruction wait 120 minutes. A still-non-terminal Job then becomes `remote-pending` for up to 60 additional minutes without occupying a Studio execution slot or counting as a failure. Studio periodically reconciles that exact Job and atomically resumes trusted downstream work when it succeeds.
 - If reconciliation discovers multiple active jobs for one `request_id`, keep the earliest job and cancel later duplicates when the service exposes a supported cancellation operation. Never delete completed history merely to hide a duplicate.
 - Every case/run/stage owns a unique S3 prefix under `WORLDKIT_LWDP_S3_ROOT/<scene-id>/<run-id>/<stage>`.
 - Every generic Codex task receives a curated `workspace-context.tar.gz`, immutable input assets, a stable task ID, and an explicit closed list of output paths. It never receives the whole mutable checkout, credentials, or another case's artifacts.
 - LWDP creates isolated task input/output directories and a temporary account home. Cloud tasks write only declared outputs. The local host downloads into a sibling temporary file and atomically promotes it into the scene directory.
 - Planner and Builder use at most three self-repair cycles inside their original isolated cloud workspace. Every edit invalidates the previous receipt and requires rerunning the bundled checker. The Host replays the checker once and rejects a missing, failed, stale, or byte-different receipt without creating another Job.
-- Final visual images use project-local Google GenAI configuration. Gemini Flash first creates one shared prompt bundle, then Direct ImageGen renders the opening frame and all complete visual groups concurrently into scene-owned paths without shared filenames.
-- The Studio freezes the selected backend into each case and runs bounded backend-specific queues. Local scene paths, temporary roots, process handles, logs, and cloud S3 prefixes remain keyed by scene/run.
+- Final visual images are produced by one active formal `gpt-5.6-sol` / `xhigh` LWDP Codex task attempt using the project-local LWDP configuration and the built-in image generation tool. The task receives only Host-selected context plus named, immutable images; it writes only the declared prompt bundle, styled opening, and complete-target styled tri-views. It generates and accepts the opening before deriving tri-views, so all target views share one final appearance anchor. Terminal auth, account/model incompatibility, capacity, or transport failures may retry on at most two new isolated attempts; a Codex task timeout may retry once. Retries keep the formal model and effort unchanged, reuse the same immutable inputs and output contract, and use a new `request_id` plus S3 attempt prefix so LWDP can select another eligible account. The Host validates prompt-bundle identity, target closure, PNG integrity, and content hashes after delivery. Final visual failure never revokes an already playable whitebox boundary.
+- The Studio freezes the selected backend into each case and runs bounded backend-specific queues. Cloud Codex defaults to `20` concurrent cases through `WORLDKIT_STUDIO_MAX_CONCURRENT_CLOUD_JOBS` (with legacy `WORLDKIT_STUDIO_MAX_CONCURRENT_JOBS` as fallback), while local Codex remains independently limited to `1` by default. Local scene paths, temporary roots, process handles, logs, and cloud S3 prefixes remain keyed by scene/run.
 - Local CLI validation, Canonical compilation, implementation-map promotion, Babylon capture, artifact freshness checks, and evaluation outcome remain trusted-host responsibilities. A cloud success status never bypasses these gates.
 - `LWDP_GENERATION_API_TOKEN` is loaded from the environment or the private configured env file. Never serialize it into payloads, S3 assets, runtime env, logs, or artifacts.
 
-When built-ins are insufficient, define a local `defineWorldFeature(...)` and use only its tracked
-`BuildContext`. Register custom terrain through `world.terrain.custom(...)`. Scene modules must not
-add opaque renderer or physics objects directly; provider objects stay behind Runtime adapters. This
-rule applies to the Canonical Catalog and Hosted Builder workflows.
-
-ADR-0007 defines one strictly scoped authoring-time exception for the separate Babylon Native Scene
-Lane. A Native Module may create Babylon visual objects only inside the Host-provided Candidate Scene
-and may submit Spawn and static Collider intent only through the versioned registration boundary. It
-must not create Engine, Scene, Render Loop, Havok/physics objects, the SDK main camera, Gameplay
-entities, input, timers, or an independent tick. A world selects exactly one Scene Source, so a Native
-Module must not overlay or mutate Canonical geometry. The current Native API remains a trusted-local
-experiment until the BNA production gates in
-`docs/superpowers/specs/2026-08-28-ai-friendly-babylon-native-world-authoring-design.md` pass; this
-exception does not make it available to the current Catalog or Hosted Builder workflows.
-
 ## Required properties
 
-- A valid `OutdoorWorldSpec` with exactly three artifact channels: Codex-imagegen World Plan, Codex-imagegen Opening Shot, and SDK-derived Height/Slope Plan.
-- A complete `WorldPromptBundle` covering identity, spatial composition, environment, lighting, style, opening frame, invariants, and negative constraints.
-- An Entity Catalog containing every meaningful subject, NPC, landmark, and object as a stable Prototype/Instance binding.
-- Every Prototype must have a unique six-digit instance color, positive approximate size, `-Z` forward, a declared pivot, and canonical `front/right/back` whitebox and styled PNG paths.
-- Explicit separation of user facts, visible reference evidence, inferred continuation, and optional render-layer ideas.
-- A strict orthographic World Plan that communicates topology, not a decorative aerial perspective.
-- An Opening Shot that records spawn, facing, pitch, distance, FOV, target height, and foreground/middleground/background composition. Reference-image scenes also require normalized semantic regions and runtime anchor targets in `composition.guide`.
-- Primary routes declared in WorldSpec and kept at or below their slope limits.
-- Stable, descriptive, unique IDs for every feature.
-- A deterministic scene seed.
-- A resource budget appropriate to terrain resolution.
-- Semantic strings and appearance prompts for important terrain, water, and landmarks.
-- A spawn point inside terrain and outside obvious water/landmark blockers.
-- Large maps should use tiled terrain; preserve approximately 1.25–2.5 meters per heightfield cell unless the scene requires finer collision.
-- Global noise is only the base surface. For reference-driven topology, prefer a tracked world-space `context.terrain.raster(...)` field plus `context.semantic.terrainLayer(...)` masks; shaped operations remain appropriate for simple local edits. Do not approximate a whole reference with a few broad circles.
-- Shaped-operation `falloffWidth` fades across the inside of the shape toward its boundary; it does not spread outside the boundary. To author a long descent, include the whole descent inside the shape and place its boundary at the low end.
-- Humanoids climb slopes up to 42°. Keep primary routes below 35° for margin, flatten the spawn area, and provide a continuous walkable corridor through hill or mountain scenes.
-- For image references, reproduce the visible spatial composition and semantic silhouettes in whitebox form. Do not encode clouds, flowers, textures, painterly style, or other render-layer detail as collision geometry. A single view does not define hidden geometry, so create a coherent playable continuation and report important inferred areas.
-- Treat the reference viewpoint as part of image matching: align spawn position, `facingRadians`, pitch, distance, FOV and target height before judging geometry. Browser-run the opening composition gate; feature presence and a passing overall score cannot override a failed required region or anchor.
-- Do not ask image generation to invent the whitebox tri-view. It must be captured from the verified SDK runtime. The styled tri-view may be generated only from that structural reference.
+- One `world.mjs` module is the only Agent-authored geometry source.
+- Every world Mesh uses one of the four undeformed metric BoxGeometry shapes, is bound to one immutable preset, and aligns to the 0.5-meter micro-grid.
+- The module declares a stable world ID/seed, one registered or Agent-composed controlled Subject, one meter-valued spawn stand position, and one exact 16:9 third-person Camera.
+- The complete ground support domain is connected only when every declared movement mode is ground-based. If the Subject also supports flight, swimming, water-surface, or custom free-space motion, disconnected ground islands are allowed and remain metrics rather than failures.
+- Every all-ground Block World declares real middle/remote navigation targets and an invisible honest-width traversal band from spawn through the intended entry movement area to the middle target. The checker validates both the global component and the local band; these declarations create no path geometry or Runtime entities. Builder must repair support geometry instead of relabeling unreachable intended ground as obstacle or empty space.
+- `visualGroupId` identifies complete visual targets, never parts. The primary target belongs only to the controlled Subject.
+- Planner and Builder share one target order: target 2/3/4/5 uses landmark orange/yellow/blue/purple respectively. Builder self-check rejects color drift.
+- The Builder self-check must pass and derive byte-identical Host transport on replay. Hand-edited derived JSON is invalid.
+- Whitebox tri-views come from the verified Runtime; image generation never invents structural views.
 
 ### Hosted Scene Brief rules
 
-The Planner Skill is the complete decision layer for the short Scene Brief. It must keep user facts, visible reference evidence, inferred world continuation, and visual-only ideas in four separate provenance sections, then name exactly one movement mode; the common land, water, and flight modes are references, and concise custom modes are valid. It describes a meaningful complete-world continuation and navigation intent in prose, with the opening frame treated only as an entry slice, and selects only 1–5 distinctive complete visual targets. Do not infer quality from a fixed duration or perimeter and do not satisfy completeness with empty padding. The first target is the whole controlled subject. Every entry whitebox target uses the same neutral clear daytime inspection lighting regardless of reference time, weather, exposure, or darkness; reference lighting belongs only to later styled outputs. Planner never chooses Subject Definition, Subject Asset, Runtime Bundle, Rig, animation, collider, or motion refs. Do not pad the target list, split a landmark into parts, or create separate targets for identical instances. The CLI validators remain the authority for malformed briefs.
+The Planner Skill is the complete decision layer for the short Scene Brief. It must keep user facts, visible reference evidence, inferred world continuation, and visual-only ideas separate, name one or more ordered standard/custom movement modes, describe one continuous world whose top-down area is at least four times the reference-visible geography, and select only 1–5 distinctive complete visual targets. The first target is the whole controlled Subject. Planner marks ground-motion support only; flight, swimming, and water-surface domains receive no navigable-area overlay. Planner uses frozen block colors only to annotate its two block-whitebox images; it never chooses block coordinates, preset refs, Subject refs, camera numbers, or runtime data.
 
 ## Current phase boundary
 
-The formal catalog authoring workflow currently targets outdoor heightfield worlds. In that workflow, do not simulate interiors, vehicles, NPC behavior, caves, overhangs, or networking as if they were supported production features; report those requirements as capability gaps. The hosted Scene Brief workflow follows the separate Builder approximation policy below without claiming exact support.
-
-The Builder Skill and its maintained references are the complete decision layer for subject composition, current motion-closure selection, camera framing, terrain, structures, placement, and JSON templates. A Registry Subject is a shortcut rather than a whitelist: use `humanoid.g-bot@2` for the ordinary modular rigged human, or compose a package-local controlled Subject from exact registered Subject Assets and primitive visual parts, then bind its shape-independent implemented motion/control/camera closure. Agent-authored complete Subject silhouettes remain supported. A missing named preset never justifies omitting outputs. Generated whitebox AuthoringSpec always uses `clear-day`. Ground-supported Subjects must spawn with capsule feet on an actual support surface: Terrain starts use a small-region S1 solved Anchor or exact fixed Y, while constructed starts require an exact support height plus a satisfied `supported-by` assertion. The Builder self-check rejects both below-ground and above-ground Terrain starts before capture. The CLI validator remains the authority for malformed output diagnostics.
-
-Relationship mount, seat, and tether capabilities remain reserved and never enter production AuthoringSpec; rider/body/equipment that move as one are assembled as one Subject instead. A requested unsupported movement mode still receives its complete Subject silhouette and world topology, but uses the documented ground closure as an explicit approximation and never claims exact production support. Vertex, triangle and collider budgets remain hard compiler gates.
-
-Per-scene Builder output remains data-only and must not add or modify SDK motion bases, Registry catalogs, Runtime, Compiler, protocols, Source Packages, Models, Clips, Material Sets, or Runtime Bundles. AuthoringSpec may use a public Subject Definition ref, or an exact registered Subject Asset ref inside one package-local Subject; it never contains lower-level modular refs, GLB paths, or asset-pipeline commands. When no named preset or exact current closure exists, the Builder still emits a playable world using the closest honest current behavior, preserves the planned complete shape and topology, and records the implementation choice in Subject metadata.
+The Block Builder may directly author arbitrary block arrangements, including open ground, multi-level structures, bridges, obstacles, water/cloud volumes, and complete landmark silhouettes. It may select a registered Subject or compose one controlled silhouette from registered assets and primitive parts. It may not change SDK preset semantics, Registry resources, motion implementations, Runtime, Compiler, protocols, or capture code during a scene task. The current hosted workflow keeps one continuous world and leaves `spaceTransitions` empty. Flight-volume navigation, water movement, and interactive state search remain explicit subsequent slices rather than silent approximations.
 
 ## Current capability boundary
 
-Canonical AuthoringSpec V4 supports a procedural Heightfield base, circle/ellipse/polygon water, package-local box/sphere/cylinder/cone whitebox Prototypes, package-local Subjects assembled from asset/box/sphere/cylinder/capsule visual parts, Registry Subjects, configurable third-person entry framing, fixed or S1-solved placements, blocked traversal areas, and required `connected-by-route` constraints compiled into ExecutionPlan V5 with a Host-derived Gameplay Bootstrap. Trusted Route R1 covers a ribbon on one Heightfield. Route R1B additionally covers an unambiguous single-layer chain of ordinary static steps, decks, platforms, or ramps whose collision-enabled Prototypes declare exact `traversalSurfaceBindings` to `worldkit://traversal-surface-profile/ground.static@1`. Dynamic or overlapping/stacked walkable surfaces, bridge-underpass dual layers, caves, flight volumes, and underwater volumes remain outside trusted Route publication; keep their connectivity empty rather than claiming unsupported proof. Runtime/Route/Camera/Control stay on exact Browser Protocol V5; grouped whitebox tri-view configuration and capture use a separate Authoring Capture API and never add keys to Browser V5.
+The Agent-facing world contract is Block World V2. Its Host adapter translates a passing block Manifest into internal Authoring V4, then the current Canonical pipeline produces Canonical Scene Plan V1, Gameplay Bootstrap V1, World Runtime Bootstrap V1, and the closed World Build identity consumed by Babylon/Havok Runtime, Camera, Browser Protocol V5, Snapshot V4, capture, and evaluation. Block World is the Hosted Builder's exclusive Agent authoring surface, not a second production Runtime or identity lane. The scalable Block World slice partitions blocks into 32-meter XZ chunks and deterministically coalesces same-semantics, same-shape blocks before internal compilation; Runtime render batching, reconstructed walkable surfaces, automatic ground-only cliff boundaries, and static collision residency are derived from those Host-owned chunk clusters. Far render batches stay visible while a bounded Subject-centered physics ring is resident. Block World supports checked primary-action transitions between authored spaces; general interactive state search, full door animation, infinite procedural generation, and movement capabilities absent from a selected Subject remain separate capabilities rather than silent approximations.

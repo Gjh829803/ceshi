@@ -31,6 +31,15 @@ importers:
       '@whitebox-world/authoring-host':
         specifier: workspace:*
         version: link:packages/authoring-host
+      '@whitebox-world/block-world':
+        specifier: workspace:*
+        version: link:packages/block-world
+      '@whitebox-world/block-world-compiler':
+        specifier: workspace:*
+        version: link:packages/block-world-compiler
+      '@whitebox-world/block-world-three':
+        specifier: workspace:*
+        version: link:packages/block-world-three
       '@whitebox-world/compiler':
         specifier: workspace:*
         version: link:packages/compiler
@@ -94,6 +103,9 @@ importers:
       sharp:
         specifier: 0.35.4
         version: 0.35.4(@types/node@24.13.3)
+      three:
+        specifier: 0.185.1
+        version: 0.185.1
     devDependencies:
       '@gltf-transform/core':
         specifier: 4.4.2
@@ -227,7 +239,11 @@ importers:
         specifier: ^7.1.2
         version: 7.3.6(@types/node@24.13.3)(tsx@4.23.12)(yaml@2.9.0)
 
-  apps/studio: {}
+  apps/studio:
+    devDependencies:
+      '@whitebox-world/authoring':
+        specifier: workspace:*
+        version: link:../../packages/authoring
 
   packages/authoring:
     dependencies:
@@ -312,6 +328,45 @@ importers:
       lodash-es:
         specifier: ^4.18.1
         version: 4.18.1
+
+  packages/block-world: {}
+
+  packages/block-world-compiler:
+    dependencies:
+      '@whitebox-world/authoring':
+        specifier: workspace:*
+        version: link:../authoring
+      '@whitebox-world/block-world':
+        specifier: workspace:*
+        version: link:../block-world
+      '@whitebox-world/compiler':
+        specifier: workspace:*
+        version: link:../compiler
+      '@whitebox-world/gameplay':
+        specifier: workspace:*
+        version: link:../gameplay
+      '@whitebox-world/gameplay-contracts':
+        specifier: workspace:*
+        version: link:../gameplay-contracts
+      '@whitebox-world/runtime-contracts':
+        specifier: workspace:*
+        version: link:../runtime-contracts
+      lodash-es:
+        specifier: ^4.18.1
+        version: 4.18.1
+    devDependencies:
+      '@types/lodash-es':
+        specifier: 4.17.12
+        version: 4.17.12
+
+  packages/block-world-three:
+    dependencies:
+      '@whitebox-world/block-world':
+        specifier: workspace:*
+        version: link:../block-world
+      three:
+        specifier: 0.185.1
+        version: 0.185.1
 
   packages/camera:
     dependencies:
@@ -438,6 +493,9 @@ importers:
       '@babylonjs/loaders':
         specifier: 9.23.0
         version: 9.23.0(@babylonjs/core@9.23.0)(babylonjs-gltf2interface@9.23.0)
+      '@whitebox-world/block-world':
+        specifier: workspace:*
+        version: link:../block-world
       '@whitebox-world/camera':
         specifier: workspace:*
         version: link:../camera
@@ -493,6 +551,9 @@ importers:
       '@whitebox-world/authoring':
         specifier: workspace:*
         version: link:../authoring
+      '@whitebox-world/block-world-compiler':
+        specifier: workspace:*
+        version: link:../block-world-compiler
       '@whitebox-world/compiler':
         specifier: workspace:*
         version: link:../compiler
@@ -1745,6 +1806,9 @@ packages:
     resolution: {integrity: sha512-u9E6A+ZDYdp7a4WnarkXPZOx8Ilz46+kby6p1yZ8zsGTz9gYa6FIS7lj2oezzNKmtdyyJNNmmXDppga5GB7kSw==}
     engines: {node: '>=18'}
 
+  three@0.185.1:
+    resolution: {integrity: sha512-5aojFCXKwnjBRZvUnt3WFfEcvUJgkN5LlijRFN95hMy8WVkG4I0QNcJE+OuWvuJ0bOdStrbfXn0pkd6/QyiAlg==}
+
   tinybench@2.9.0:
     resolution: {integrity: sha512-0+DUvqWMValLmha6lr4kD8iAMK1HzV0/aKnCtWb9v9641TnP/MFb7Pc2bxoxQjTXAErryXVgUOfv2YqNllqGeg==}
 
@@ -2753,6 +2817,8 @@ snapshots:
       '@istanbuljs/schema': 0.1.6
       glob: 10.5.0
       minimatch: 10.2.6
+
+  three@0.185.1: {}
 
   tinybench@2.9.0: {}
 

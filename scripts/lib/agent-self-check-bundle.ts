@@ -1,7 +1,11 @@
 import { readFile } from "node:fs/promises";
 
 export async function assertAgentSelfCheckBundleParity(input: {
-  readonly bundleId: "planner" | "builder";
+  readonly bundleId:
+    | "planner"
+    | "builder"
+    | "block-builder"
+    | "block-builder-visual-review";
   readonly generatedBundlePath: string;
   readonly trackedBundlePath: string;
 }): Promise<void> {

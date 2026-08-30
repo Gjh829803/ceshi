@@ -18,6 +18,7 @@ import {
   type SceneBriefImplementationMapV1,
   type VisualCaptureGroupV1,
 } from "@whitebox-world/runtime-contracts";
+import { BLOCK_VISUAL_TARGET_COLORS_V1 } from "@whitebox-world/block-world";
 
 import { loadWorldkitRoutePipeline } from "../lib/worldkit-pipeline";
 
@@ -26,13 +27,7 @@ function formatHostedDiagnostic(diagnostic: HostedVisualContractDiagnosticV1): s
   return `${diagnostic.code}${location}: ${diagnostic.message}`;
 }
 
-export const VISUAL_IDENTITY_COLORS = [
-  "#E85D5D",
-  "#F28E2B",
-  "#8E6CCF",
-  "#D45087",
-  "#D6B84C",
-] as const;
+export const VISUAL_IDENTITY_COLORS = BLOCK_VISUAL_TARGET_COLORS_V1;
 
 export interface VisualIdentityPaletteTargetV1 {
   id: string;

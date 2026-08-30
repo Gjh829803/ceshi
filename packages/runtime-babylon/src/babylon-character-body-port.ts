@@ -203,10 +203,34 @@ const DYNAMIC_PHYSICS_MOTION_TYPE = 2;
 const SNAP_DOWN_UPWARD_SPEED_LIMIT_METERS_PER_SECOND = 0.5;
 const SNAP_DOWN_MINIMUM_DROP_METERS = 1e-4;
 const SNAP_DOWN_SURFACE_NORMAL_ALIGNMENT_EPSILON = 1e-3;
+const BLOCK_WORLD_MAXIMUM_CONTINUOUS_SNAP_METERS = 0.002;
 // Babylon's Character Controller simplex solver uses a 1e-4 collision epsilon.
 // Keep provider resolution tolerance local to this adapter; protocol and
 // published-state coherence continue to use the stricter SDK tolerance.
 const BABYLON_CHARACTER_CONTROLLER_COLLISION_TOLERANCE_METERS_V1 = 1e-4;
+
+type CharacterCastHit = NonNullable<
+  ReturnType<PhysicsCharacterController["_getClosestCastHit"]>
+>;
+
+type HavokShapeCastWorldHit = readonly [
+  readonly [number],
+  unknown,
+  unknown,
+  unknown,
+  readonly [number, number, number],
+];
+
+type HavokShapeCastQueryHost = {
+  readonly _hknp: {
+    HP_QueryCollector_GetNumHits(collector: unknown): readonly [unknown, number];
+    HP_QueryCollector_GetShapeCastResult(
+      collector: unknown,
+      index: number,
+    ): readonly [unknown, readonly [number, unknown, HavokShapeCastWorldHit]];
+  };
+  readonly _bodies: ReadonlyMap<number, CharacterCastHit["body"]>;
+};
 
 function cloneManifoldContact(
   contact: BabylonManifoldContactV1,
@@ -241,6 +265,26 @@ export class GroundAwarePhysicsCharacterController extends PhysicsCharacterContr
 
   private privateHost(): PhysicsCharacterControllerPrivateHostV1 {
     return this as unknown as PhysicsCharacterControllerPrivateHostV1;
+  }
+
+  private closestWalkableCastHit(): CharacterCastHit | null {
+    const plugin = this.privateHost()._scene.getPhysicsEngine()!
+      .getPhysicsPlugin() as unknown as HavokShapeCastQueryHost;
+    const collector = this.privateHost()._castCollector;
+    const hitCount = plugin._hknp.HP_QueryCollector_GetNumHits(collector)[1];
+    let closest: CharacterCastHit | null = null;
+    for (let index = 0; index < hitCount; index += 1) {
+      const [fraction, , hitWorld] =
+        plugin._hknp.HP_QueryCollector_GetShapeCastResult(collector, index)[1];
+      const normal = Vector3.FromArray(hitWorld[4]);
+      if (Vector3.Dot(normal, this.up) < this.maxSlopeCosine) continue;
+      const body = plugin._bodies.get(hitWorld[0][0]) ?? null;
+      if (body === null || (closest !== null && closest.fraction <= fraction)) {
+        continue;
+      }
+      closest = { fraction, normal, body };
+    }
+    return closest;
   }
 
   refreshCurrentManifold(): void {
@@ -641,17 +685,22 @@ export class GroundAwarePhysicsCharacterController extends PhysicsCharacterContr
       downEnd,
       this.privateHost()._castCollector,
     );
-    const hit = this._getClosestCastHit();
+    const hit = this.closestWalkableCastHit();
     if (hit === null || hit.body === null) return;
     if (hit.body.body.getMotionType(hit.body.index) === DYNAMIC_PHYSICS_MOTION_TYPE) {
       return;
     }
+    const collisionTransformNode = hit.body.body.transformNode;
+    const isReconstructedBlockWorldSurface =
+      typeof collisionTransformNode.metadata?.blockWorldCollisionChunkKey === "string" ||
+      collisionTransformNode.name.startsWith("worldkit.block-collision-chunk.");
     if (
       Vector3.Dot(hit.normal, this.up) < Math.max(this.maxSlopeCosine, 0.1)
     ) return;
     if (
       Vector3.Dot(hit.normal, supportBeforeIntegrate.averageSurfaceNormal) <
-        1 - SNAP_DOWN_SURFACE_NORMAL_ALIGNMENT_EPSILON
+        1 - SNAP_DOWN_SURFACE_NORMAL_ALIGNMENT_EPSILON &&
+      !isReconstructedBlockWorldSurface
     ) return;
     const probeDrop = hit.fraction * downDistance - keepDistance;
     const landingDrop = probeDrop + Vector3.Dot(
@@ -662,9 +711,37 @@ export class GroundAwarePhysicsCharacterController extends PhysicsCharacterContr
       landingDrop <= SNAP_DOWN_MINIMUM_DROP_METERS ||
       landingDrop > maxStepHeight
     ) return;
-    const landingPosition = position.subtract(this.up.scale(landingDrop));
+    const continuousLandingDrop = isReconstructedBlockWorldSurface
+      ? Math.min(landingDrop, BLOCK_WORLD_MAXIMUM_CONTINUOUS_SNAP_METERS)
+      : landingDrop;
+    const landingPosition = position.subtract(
+      this.up.scale(continuousLandingDrop),
+    );
     this.setPosition(landingPosition);
     this._refreshManifoldAtPosition(landingPosition);
+    if (
+      isReconstructedBlockWorldSurface &&
+      Vector3.Dot(hit.normal, this.up) < 0.9999
+    ) {
+      const stabilizedVelocity = this.getVelocity();
+      const stabilizedVerticalSpeed = Vector3.Dot(stabilizedVelocity, this.up);
+      const stabilizedHorizontalVelocity = stabilizedVelocity.subtract(
+        this.up.scale(stabilizedVerticalSpeed),
+      );
+      const normalizedHitNormal = hit.normal.normalizeToNew();
+      const expectedTangentDescentMetersPerSecond =
+        stabilizedHorizontalVelocity.length() *
+        Math.hypot(normalizedHitNormal.x, normalizedHitNormal.z) /
+        Math.max(0.000001, Math.abs(normalizedHitNormal.y));
+      if (stabilizedVerticalSpeed < -expectedTangentDescentMetersPerSecond) {
+        stabilizedVelocity.addInPlace(
+          this.up.scale(
+            -expectedTangentDescentMetersPerSecond - stabilizedVerticalSpeed,
+          ),
+        );
+        this.setVelocity(stabilizedVelocity);
+      }
+    }
   }
 }
 

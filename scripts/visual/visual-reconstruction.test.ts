@@ -83,6 +83,21 @@ it("binds a manual whitebox recording, reconstructs the styled frame, and render
       imageUri: "traveler/whitebox-triview.png",
     }],
   }));
+  await writeFile(path.join(sceneRoot, "visual-generation-prompts.json"), JSON.stringify({
+    kind: "worldkit-visual-generation-prompts",
+    schemaVersion: 2,
+    provider: "lwdp-codex",
+    sceneId: "paper-moon-palace",
+    openingFrame: {
+      referenceRoles: ["actual-whitebox-opening", "user-first-frame"],
+      prompt: "Preserve the exact whitebox camera, layout, pose, scale, depth, and occlusion while applying only the complete appearance identity, materials, palette, lighting, and style from the uploaded user frame. ".repeat(2),
+    },
+    styledTriviews: [{
+      visualTargetId: "traveler",
+      referenceRoles: ["target-whitebox-triview", "styled-opening-frame", "user-first-frame"],
+      prompt: "Render the complete traveler as exactly Front, Right, and Back orthographic panels with the locked final appearance and no environment, text, or extra views. ".repeat(2),
+    }],
+  }));
   const preparation = spawnSync(process.execPath, [
     "scripts/visual/prepare-visual-reconstruction.mjs",
     "--scene-id", "paper-moon-palace",

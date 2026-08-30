@@ -259,21 +259,39 @@ function search(
     }
   };
 
-  const visit = (index: number, assignment: Record<string, LayoutCandidateV1>): void => {
-    if (budgetExceeded || (stopAtFirst && bestAssignment !== undefined)) return;
-    if (index === variables.length) {
-      const evaluations = constraints.map((constraint) =>
-        evaluatePlacementConstraintV1(context, constraint, assignment)
-      );
-      compareAndStore(assignment, evaluations);
-      return;
-    }
-    const variable = variables[index]!;
-    for (const candidate of domains.get(variable.id) ?? []) {
+  if ([...domains.values()].some((candidates) => candidates.length === 0)) {
+    return { budgetExceeded: false, searchNodeCount: 0 };
+  }
+  const assignment: Record<string, LayoutCandidateV1> = {};
+  if (variables.length === 0) {
+    const evaluations = constraints.map((constraint) =>
+      evaluatePlacementConstraintV1(context, constraint, assignment)
+    );
+    compareAndStore(assignment, evaluations);
+  } else {
+    const stack: Array<{ index: number; nextCandidateIndex: number }> = [{
+      index: 0,
+      nextCandidateIndex: 0,
+    }];
+    while (
+      stack.length > 0 &&
+      !budgetExceeded &&
+      !(stopAtFirst && bestAssignment !== undefined)
+    ) {
+      const frame = stack[stack.length - 1]!;
+      const variable = variables[frame.index]!;
+      const candidates = domains.get(variable.id) ?? [];
+      if (frame.nextCandidateIndex >= candidates.length) {
+        delete assignment[variable.id];
+        stack.pop();
+        continue;
+      }
+      const candidate = candidates[frame.nextCandidateIndex]!;
+      frame.nextCandidateIndex += 1;
       searchNodeCount += 1;
       if (searchNodeCount > profile.budgets.maximumSearchNodes) {
         budgetExceeded = true;
-        return;
+        break;
       }
       assignment[variable.id] = candidate;
       const readyRequired = constraints.filter((constraint) =>
@@ -283,16 +301,17 @@ function search(
       const hasViolation = readyRequired.some((constraint) =>
         !evaluatePlacementConstraintV1(context, constraint, assignment).satisfied
       );
-      if (!hasViolation) visit(index + 1, assignment);
-      delete assignment[variable.id];
-      if (budgetExceeded || (stopAtFirst && bestAssignment !== undefined)) return;
+      if (hasViolation) continue;
+      if (frame.index + 1 === variables.length) {
+        const evaluations = constraints.map((constraint) =>
+          evaluatePlacementConstraintV1(context, constraint, assignment)
+        );
+        compareAndStore(assignment, evaluations);
+        continue;
+      }
+      stack.push({ index: frame.index + 1, nextCandidateIndex: 0 });
     }
-  };
-
-  if ([...domains.values()].some((candidates) => candidates.length === 0)) {
-    return { budgetExceeded: false, searchNodeCount: 0 };
   }
-  visit(0, {});
   return {
     ...(bestAssignment === undefined ? {} : { bestAssignment }),
     ...(bestEvaluations === undefined ? {} : { bestEvaluations }),

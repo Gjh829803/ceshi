@@ -52,6 +52,7 @@ export interface CameraDirectorSnapshotV1 {
   targetSocketPositionMetersXYZ?: RuntimeVec3V1;
   isTargetSocketFallback?: boolean;
   desiredTargetPositionMetersXYZ?: RuntimeVec3V1;
+  actualTargetPositionMetersXYZ?: RuntimeVec3V1;
   desiredPositionMetersXYZ?: RuntimeVec3V1;
   actualPositionMetersXYZ?: RuntimeVec3V1;
   finalFovDegrees?: number;
@@ -113,6 +114,7 @@ export interface CameraDirectorTransactionStateV1 {
     latestCommittedTick: number | undefined;
     latestCommittedContextIdentity: string | undefined;
     latestUpdateFailed: boolean;
+    authoredOpeningProfileRef: string | undefined;
   }>;
   readonly vectors: Readonly<{
     smoothedTarget: Vector3;
@@ -554,6 +556,7 @@ export class CameraDirectorV1 {
   private viewPitchOffsetRadians = 0;
   private viewDistanceOffsetMeters = 0;
   private readonly tuningByProfileRef = new Map<string, CameraTuningV1>();
+  private authoredOpeningProfileRef: string | undefined;
   private controlInitialized = false;
   private controlHeadingLockedUntilProfileBind = false;
   private controlTargetYawOffsetRadians = 0;
@@ -660,6 +663,7 @@ export class CameraDirectorV1 {
         latestCommittedTick: this.latestCommittedTick,
         latestCommittedContextIdentity: this.latestCommittedContextIdentity,
         latestUpdateFailed: this.latestUpdateFailed,
+        authoredOpeningProfileRef: this.authoredOpeningProfileRef,
       },
       vectors: {
         smoothedTarget: this.smoothedTarget.clone(),
@@ -946,11 +950,51 @@ export class CameraDirectorV1 {
       baseProfile,
     );
     const lockedParameters = profile.parameters;
-    const tuning = this.tuningByProfileRef.get(profile.resourceRef) ?? {};
+    const firstPersonProfile = profile.algorithmRef.endsWith(
+      "/socket-first-person@1",
+    );
+    if (this.authoredOpeningProfileRef === undefined && !firstPersonProfile) {
+      this.authoredOpeningProfileRef = profile.resourceRef;
+    }
+    const authoredOpeningTuning: CameraTuningV1 =
+      this.authoredOpeningProfileRef === profile.resourceRef
+        ? {
+            distanceMeters: this.initialCamera.distanceMeters,
+            targetHeightMeters: this.initialCamera.targetHeightMeters,
+            pitchRadians: this.initialCamera.pitchRadians,
+            baseFovDegrees: this.initialCamera.fovDegrees,
+          }
+        : {};
+    const authoredOpeningValidation = validateCameraTuningV1(
+      { algorithmRef: baseProfile.algorithmRef, parameters: baseProfile.parameters },
+      authoredOpeningTuning,
+    );
+    if (!authoredOpeningValidation.ok) {
+      throw new Error(
+        "WORLDKIT_RUNTIME_CAMERA_OPENING_TUNING_INVALID: " +
+          authoredOpeningValidation.message,
+      );
+    }
+    const previewTuning = this.tuningByProfileRef.get(profile.resourceRef) ?? {};
+    const authoredBaseParameters = applyCameraRigParameterOverridesV1(
+      baseProfile.algorithmRef,
+      baseProfile.parameters,
+      authoredOpeningValidation.tuning,
+    );
+    // Context Modifiers remain authoritative over opening composition. This
+    // preserves mounted/aim/sprint framing after the initial authored baseline.
+    const authoredParameters = selected.modifiers.reduce(
+      (current, modifier) => applyCameraRigParameterOverridesV1(
+        baseProfile.algorithmRef,
+        current,
+        modifier.parameterOverrides,
+      ),
+      authoredBaseParameters,
+    );
     const parameters = applyCameraRigParameterOverridesV1(
       profile.algorithmRef,
-      lockedParameters,
-      tuning,
+      authoredParameters,
+      previewTuning,
     );
     if (
       cameraRigParametersViolateInvariantsV1(lockedParameters) ||
@@ -1253,6 +1297,7 @@ export class CameraDirectorV1 {
         : { targetSocketPositionMetersXYZ: freezeVec3(socketPosition) }),
       isTargetSocketFallback,
       desiredTargetPositionMetersXYZ: freezeVec3(target),
+      actualTargetPositionMetersXYZ: freezeVec3(this.smoothedTarget),
       desiredPositionMetersXYZ: freezeVec3(desiredPosition),
       actualPositionMetersXYZ: freezeVec3(this.camera.position),
       finalFovDegrees: (this.camera.fov * 180) / Math.PI,
@@ -1282,7 +1327,7 @@ export class CameraDirectorV1 {
           }),
       fixedStepDeltaSeconds: deltaSeconds,
       resolvedParameters: Object.freeze({ ...parameters }),
-      previewParameterOverrides: Object.freeze({ ...tuning }),
+      previewParameterOverrides: Object.freeze({ ...previewTuning }),
       profileTransitionProgressRatio,
       controlForwardXYZ: freezeVec3(this.controlForward),
       subjectForwardXYZ: freezeVec3(sample.forwardXYZ),
@@ -1305,6 +1350,7 @@ export class CameraDirectorV1 {
     this.activeHeadingSource = undefined;
     this.activeReverseHeadingPolicy = undefined;
     this.tuningByProfileRef.clear();
+    this.authoredOpeningProfileRef = undefined;
     this.fallbackActive = false;
     this.smoothedTarget.setAll(0);
     this.targetYawOffsetRadians = 0;

@@ -1,8 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import { formatWorkbenchDuration, recordingStatusLabel } from "./recording-workbench.js";
+import { styledOpeningFrameUrlV1 } from "./styled-opening-frame-panel.js";
 
 describe("recording workbench presentation", () => {
+  it("binds the final-look panel to the current Studio world", () => {
+    expect(styledOpeningFrameUrlV1("world/demo 01")).toBe(
+      "/api/worlds/world%2Fdemo%2001/deliverables/styled-opening-frame",
+    );
+  });
+
   it("formats recording duration without losing minute boundaries", () => {
     expect(formatWorkbenchDuration(0)).toBe("00:00");
     expect(formatWorkbenchDuration(61_900)).toBe("01:01");
