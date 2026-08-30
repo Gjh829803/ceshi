@@ -142,6 +142,55 @@ describe("installed Babylon runtime-kind authority audit", () => {
 
     expect(result.outcome).toBe("passed");
   });
+
+  it("retains an InstancedMesh ActionManager set/reset attempt", async () => {
+    const provider = createCandidate();
+    const actionManager = new ActionManager(provider.scene);
+    const candidate = createCandidate();
+    const result = await admit(candidate, (context) => {
+      const source = MeshBuilder.CreateBox(
+        "instance-action-source",
+        { size: 1 },
+        candidate.scene,
+      );
+      const instance = source.createInstance("instance-action-reset");
+      try {
+        instance.actionManager = actionManager;
+        instance.actionManager = null;
+      } catch {
+        // A caught Host probe still rejects the Candidate.
+      }
+      registerSpawn(context);
+    });
+
+    expect(errorCode(result)).toBe(
+      "WORLDKIT_NATIVE_SCENE_AUTHORITY_MUTATION_FORBIDDEN",
+    );
+  });
+
+  it("retains an InstancedMesh PhysicsBody set/reset attempt", async () => {
+    const candidate = createCandidate();
+    const result = await admit(candidate, (context) => {
+      const source = MeshBuilder.CreateBox(
+        "instance-physics-source",
+        { size: 1 },
+        candidate.scene,
+      );
+      const instance = source.createInstance("instance-physics-reset");
+      const instanceRecord = instance as unknown as Record<string, unknown>;
+      try {
+        instanceRecord.physicsBody = {};
+        instanceRecord.physicsBody = undefined;
+      } catch {
+        // A caught Host probe still rejects the Candidate.
+      }
+      registerSpawn(context);
+    });
+
+    expect(errorCode(result)).toBe(
+      "WORLDKIT_NATIVE_SCENE_AUTHORITY_MUTATION_FORBIDDEN",
+    );
+  });
 });
 
 function invokeObservableControl(

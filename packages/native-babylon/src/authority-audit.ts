@@ -428,7 +428,7 @@ const MAXIMUM_PROVIDER_ENGINE_OBSERVER_COUNT_BY_KEY_V1: Readonly<
   onDisposeObservable: 1,
 });
 
-const MESH_RUNTIME_AUTHORITY_KEYS_V1 = Object.freeze([
+const ABSTRACT_MESH_RUNTIME_AUTHORITY_KEYS_V1 = Object.freeze([
   "actionManager",
   "physicsBody",
 ] as const);
@@ -1346,8 +1346,8 @@ export function beginBabylonNativeSceneAuthorityProbeV1(
         ),
       );
     }
-    if (kind === "mesh") {
-      for (const key of MESH_RUNTIME_AUTHORITY_KEYS_V1) {
+    if (kind === "abstract-mesh" || kind === "mesh") {
+      for (const key of ABSTRACT_MESH_RUNTIME_AUTHORITY_KEYS_V1) {
         record.directValuesByKey.set(
           key,
           installCreatedDirectValueGuard(
