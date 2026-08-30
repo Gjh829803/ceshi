@@ -36,7 +36,10 @@ input.once("line", (line) => {
     runtimeSessionId: request.runtimeSessionId,
     status: "ready",
     runtimeSessionUri: `worldkit://runtime-session/${request.runtimeSessionId}`,
-    initialSnapshotHash: `sha256:${"0".repeat(64)}`,
+    initialSnapshotHash: canonicalHash({
+      kind: "worldkit-hosted-native-cpu-hostile-initial-snapshot",
+      schemaVersion: 1,
+    }),
   };
   writeSync(1, `${JSON.stringify(ready)}\n`);
 

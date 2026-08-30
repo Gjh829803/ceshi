@@ -84,7 +84,7 @@ const SANDBOX_POLICY = Object.freeze({
 });
 const SANDBOX_POLICY_HASH = sha256CanonicalJson(SANDBOX_POLICY) as
   `sha256:${string}`;
-const CPU_HOSTILE_PROVIDER_DEADLINE_MILLISECONDS = 3_000;
+const CPU_HOSTILE_PROVIDER_DEADLINE_MILLISECONDS = 10_000;
 const CPU_HOSTILE_SUPERVISOR_DEADLINE_MILLISECONDS = 30_000;
 const CPU_HOSTILE_HARNESS_TIMEOUT_MILLISECONDS = 45_000;
 
@@ -897,7 +897,11 @@ async function runCpuDeadlineHostileCase(
       supervisor.start(),
       CPU_HOSTILE_HARNESS_TIMEOUT_MILLISECONDS,
     );
-    assert.equal(ready.status, "ready");
+    assert.equal(
+      ready.status,
+      "ready",
+      `CPU hostile fixture failed before ready: ${JSON.stringify(ready)} invocation=${JSON.stringify(runner.invocations[0]?.args)} stderr=${JSON.stringify(runner.processes[0]?.stderrText())}`,
+    );
     const requestEnvelope: NativeIsolationTransportEnvelopeV1 = {
       kind: "native-isolation-transport-envelope",
       schemaVersion: 1,

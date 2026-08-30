@@ -2,6 +2,8 @@ import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
+import { parseNativeIsolatedExecutionResultV1 } from
+  "@whitebox-world/runtime-contracts";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
@@ -33,7 +35,9 @@ describe("Hosted Native CPU hostile fixture", () => {
       sessionNonce: "session-nonce.cpu-fixture",
     };
     child.stdin.write(`${JSON.stringify(request)}\n`);
-    expect(JSON.parse(await nextLine(lines))).toMatchObject({
+    expect(parseNativeIsolatedExecutionResultV1(
+      JSON.parse(await nextLine(lines)),
+    )).toMatchObject({
       requestId: request.id,
       runtimeSessionId: request.runtimeSessionId,
       status: "ready",
