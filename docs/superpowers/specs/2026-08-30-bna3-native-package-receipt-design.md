@@ -30,8 +30,10 @@ BNA-3 把 BNA-2 已通过 Source Admission、Authority Audit 和双 Candidate Re
 核心裁决是：**只有一个 `WorldPackageManifestV1`，其 `sceneSource` 是闭合判别联合。** 不新建
 平行的 `@whitebox-world/native-world-package` 实现包，不把 Native 伪装成 Canonical ExecutionPlan，
 也不让 Package consumer 自己猜来源。这不删除现有 `@whitebox-world/native-babylon`：后者继续独占
-Native Author API、Bundle/Contribution 合同和 Host 审计；`@whitebox-world/world-package` 只独占两种
-Scene Source 共用的 Root、Receipt、Store、签名和目录验证。Native 输出仍是正式 WorldPackage。
+Native Author API、构造、Authority Audit 与 Candidate Replay；Babylon-free 的持久 Bundle、Lock、Check
+和 Contribution 合同由现有 `@whitebox-world/runtime-contracts` 独占。`@whitebox-world/world-package`
+只独占两种 Scene Source 共用的 Root、Receipt、Store、签名和目录验证。Native 输出仍是正式
+WorldPackage，且不新增 Native 专用 Package 包或第二套 parser。
 
 ## 2. Current-only clean break
 
@@ -39,12 +41,18 @@ Scene Source 共用的 Root、Receipt、Store、签名和目录验证。Native �
 
 - 删除公开 `createWorldPackageV1`；只保留语义明确的
   `createCanonicalWorldPackageV1` 和 `createBabylonNativeWorldPackageV1`；
+- `CreateWorldPackageV1Input` current-only 更名为 `CreateCanonicalWorldPackageV1Input`；公共构建上下文
+  收为不含 Lane 字段的 `WorldPackageSharedBuildContextV1`，Canonical 独有的可选审计开关留在
+  `CanonicalWorldPackageBuildContextV1`，不让 Native 输入继承 `includeAuthoringSpec`；
 - 把 Canonical-only `WorldPackageManifestV1` 改为一个公共壳 + `sceneSource` 判别联合；旧的顶层
   `authoringSpecHash`、`executionPlanHash` 等 Canonical 专属字段迁入 Canonical member；
 - 把公共 Package/Runtime 闭包使用的 `CanonicalResourceLockEntryV1` /
   `canonicalResourceLockEntriesV1` current-only 更名为 `WorldResourceLockEntryV1` /
   `worldResourceLockEntriesV1` 并扩充闭合 resource-kind enum；Compiler 仍可生成同一 source-neutral lock，
   但公共 Package 不再暴露带 Lane 含义的旧名称；
+- `CANONICAL_RESOURCE_KINDS_V1` 同步改为 `WORLD_RESOURCE_KINDS_V1`；JCS helper
+  `canonicalWorldPackageManifestV1` 改为不会与 Canonical Scene Source 混淆的
+  `canonicalizeWorldPackageManifestV1`；
 - `VerifiedWorldPackageDirectoryV1` 同样变为判别联合，调用方必须按
   `manifest.sceneSource.kind` 缩窄；
 - 一个 `verifyWorldPackageDirectoryV1`、一个 Build Receipt parser、一个 Store、一个签名与 Host
@@ -61,7 +69,8 @@ Scene Source 共用的 Root、Receipt、Store、签名和目录验证。Native �
 | 状态/制品 | 唯一 Owner | BNA-3 行为 |
 | --- | --- | --- |
 | Native Source Graph、Typecheck、Bundle 方言 | BNA-2 Source Admission | 复用同一 admitted graph 与 bundler 配置，不另建入口或 import 规则 |
-| Native Module API、Authority、Contribution | `@whitebox-world/native-babylon` | 双 Candidate replay 后消费冻结 Contribution，不复制 Babylon Handle |
+| Native 持久 Bundle/Lock/Check/Contribution 合同 | `@whitebox-world/runtime-contracts` | 独占 exact parser、canonical bytes 与 Hash；保持 Babylon-free |
+| Native Module API、Authority、构造与 Replay | `@whitebox-world/native-babylon` | 生产上述持久合同；不再定义或 re-export 第二份 parser/type，不复制 Babylon Handle |
 | Scene Authoring Route/Attempt | `@whitebox-world/scene-authoring-contracts` | 只接受匹配 Route 的 completed Result，拒绝 rejected/tool-error |
 | Asset Production/Admission/Publication | APA packages | 只消费已发布不可变资源及其 receipts，不调用 Provider、不 promotion Candidate |
 | Package manifest/root/receipt/store | `@whitebox-world/world-package` | Canonical 与 Native 共用唯一实现 |
@@ -110,12 +119,14 @@ interface WorldPackageManifestV1 {
 }
 ```
 
-公共 `resources` 记录所有 Root 内资源字节和法律身份。`lockedResources` 是 Gameplay、Runtime、Scene
+公共 `resources` 只记录从 Registry/Asset 供应链带入 Root 的不可变外部资源字节及法律身份；Manifest、
+Bootstrap、Plan、Bundle、Lock、Contribution 等 Package 自有文件只进入 Root integrity inventory，不能
+再次作为 `resources` 形成自引用。`lockedResources` 是 Gameplay、Runtime、Scene
 Source 和 traversal profile 的传递闭包；不得只记录 Module 直接调用 `context.assets.resolve()` 的子集。
 `WorldResourceLockEntryV1` 的 `resourceKind` 是闭合 enum：现有
 `SUBJECT_RESOURCE_KINDS_V1` 全集，加上 `traversal-surface-profile`、`gameplay-bootstrap`、
 `world-runtime-bootstrap`、`native-scene`、`native-scene-api`、`native-scene-profile` 和
-`asset-resource`。不得为未知字符串放宽 parser。Bundle/Dependency/Asset Lock 自身是 Package Root
+`static-geometry-asset`。不得为未知字符串放宽 parser。Bundle/Dependency/Asset Lock 自身是 Package Root
 文件，不伪装成 Registry resource。
 
 现有 build input 中带 `subjectAssetManifestHash` 的 `ResolvedWorldPackageResourceArtifactV1` 同步拆成
@@ -178,6 +189,31 @@ type WorldPackageSceneSourceV1 =
 不得把 Canonical 专属字段复制到 Native member，也不得在公共壳上增加双方都只能填一半的 optional
 字段。`sceneSource.kind` 是唯一分派依据。
 
+`sceneModuleBundleHash` 的 Runtime 身份只有一种推导：
+
+```ts
+nativeSceneModuleBundleRefFromHashV1(sceneModuleBundleHash) =
+  `package://native-scene-module/sha256/${sceneModuleBundleHash.slice("sha256:".length)}`;
+```
+
+该纯函数与 `NativeSceneModuleBundleRefV1` 归 `@whitebox-world/runtime-contracts` 所有。Native verified
+member 必须直接暴露已解析的 `bootstrap`、`sceneModuleBundleHash` 与由该函数得到的
+`sceneModuleBundleRef`；Runtime adapter 不得从 WorldPackage Root Ref、文件路径或其他 scheme 猜测 Bundle
+身份。
+
+### 4.3 Babylon-free 持久合同归属
+
+`BabylonNativeSceneModuleBundleManifestV1`、`BabylonNativeDependencyLockV1`、
+`BabylonNativeAssetLockV1`、`NativeSceneCheckResultV1`、`BabylonNativeSceneContributionV1` 及其 exact
+parser、canonical bytes、Hash 全部迁入现有 `@whitebox-world/runtime-contracts`。Route/Attempt/Result
+继续归 `@whitebox-world/scene-authoring-contracts`。`@whitebox-world/world-package` 可以直接依赖这两个
+纯数据合同包，但禁止依赖 `@whitebox-world/native-babylon`、Babylon、Node、TypeScript、Vite 或
+Rollup。
+
+`@whitebox-world/native-babylon` 直接消费这些合同，并只拥有 Author API、asset resolver API、审计、
+构造与 replay；不得保留旧合同的兼容 re-export。该迁移不会创建新的 Native 专用 package，而是把
+可持久化协议放回已经存在的 source-neutral Runtime 合同层。
+
 ## 5. Native Bundle 与锁
 
 ### 5.1 `BabylonNativeSceneModuleBundleManifestV1`
@@ -210,26 +246,32 @@ Dependency Lock 使用闭合、排序的 entries，每项包含：
 - `packageIntegrityHash`；
 - `usage: "runtime-external" | "bundle-toolchain"`。
 
-至少锁定安装树中的 `@babylonjs/core`、`@babylonjs/havok`、
-`@whitebox-world/native-babylon`、选中的 Profile package、TypeScript 和 Vite/Rollup。版本与 Hash 必须
+至少锁定安装树中的 `@babylonjs/core`、`@whitebox-world/native-babylon`、选中的 Profile package、
+TypeScript 和 Vite/Rollup。`@babylonjs/core`、`@whitebox-world/native-babylon` 与 Profile package 的
+`usage` 是 `runtime-external`；TypeScript 和 Vite/Rollup 是 `bundle-toolchain`。`@babylonjs/havok`
+不属于 Native Module 的 import/bundle 闭包，不进入本 Lock；它由 BNA-4 的 SDK Runtime 独占并锁定。版本与 Hash 必须
 从项目 lockfile 和实际安装 manifest 得出；不接受 Module 自报版本。Runtime external 与 build-only
 依赖显式区分，Runtime 不加载 build-only 依赖。
 
 ### 5.3 `BabylonNativeAssetLockV1`
 
-Asset Lock 的每个 entry 以 `assetResourceRef` 排序，并冻结：
+Asset Lock 的每个 entry 以 `assetResourceRef` 排序。BNA-3 只冻结当前已由 BNA-2 asset resolver 实际
+消费且已经存在的证据，不提前发明尚未实施的 APA-1 envelope：
 
-- Asset Resource Manifest Ref/Hash、实际字节路径/大小/Hash、media type；
+- `assetResourceRef`、Resource Manifest Hash；
+- Package 内实际字节路径、大小、content Hash 与 media type；
 - class-specific Build Record Ref/Hash；
-- Asset Admission Profile Ref/Hash 与 Admission Receipt Ref/Hash；
-- Asset Publication Receipt Ref/Hash；
-- Production Request/Result/Receipt Hash、Provider/模型 `resolvedVersion`、输入 Hash 与 Seed；
-- 米制尺度、Forward、Up、Pivot、Bounds、Inventory；
-- license、author/source provenance 与 redistribution policy。
+- Asset Admission Receipt Ref/Hash 与 Publication Receipt Ref/Hash；
+- `BabylonNativeStaticGeometryImportMetadataV1` 的米制尺度、Forward、Up 与 Pivot；
+- Package resource 中的 license、author/source provenance 与 redistribution policy。
 
-允许仓库手工 Golden 使用由 Host 登记的等价 Admission/Publication 闭包，但不允许省略证据字段或使用
-artifact-only `scene-shell`。Bootstrap/Attempt 选中资源、Module 实际 resolve 资源、Asset Lock 和
-Package `resources` 必须是 exact set equality。
+仓库手工 Golden 也必须由 Host 登记并提供同一组 Admission/Publication/Build Record 证据；禁止
+artifact-only `scene-shell`。完整 Production Request/Result/Receipt、Provider/模型版本、Admission
+Profile 和更丰富的 Bounds/Inventory 由 APA-1 冻结后 current-only 扩充，不在 BNA-3 伪造一套临时合同。
+
+Attempt `selectedAssetResources`、两次 Candidate replay 记录的 resolved asset refs、Asset Lock entries
+和 Package `resources` 中对应的 `static-geometry-asset` refs 必须 exact set equality。Bootstrap 当前不
+声明 selected assets，因此不参与该等式。
 
 ## 6. Authoring Attempt 与 Check 闭包
 
@@ -244,6 +286,38 @@ Native Package build 输入必须包含：
 
 任一 Result 为 `rejected`/`tool-error`、Attempt 链断裂、Route 选择 Canonical、source/hash 不一致或 Check
 不通过时，build 必须在创建 Root/Receipt/Ref 之前失败。不得为失败 Attempt 发布“诊断 Package”。
+
+### 6.1 冻结 Builder 输入
+
+`FrozenBabylonNativeWorldPackageBuildInputV1` 是 BNA3-00 冻结的 exact plain-data graph：
+
+```ts
+interface FrozenBabylonNativeWorldPackageBuildInputV1 {
+  readonly shared: WorldPackageSharedBuildContextV1;
+  readonly packageId: string;
+  readonly nativeSceneBootstrap: BabylonNativeSceneBootstrapV1;
+  readonly sceneModuleBundleManifest:
+    BabylonNativeSceneModuleBundleManifestV1;
+  readonly sceneModuleBundleBytes: Uint8Array;
+  readonly dependencyLock: BabylonNativeDependencyLockV1;
+  readonly assetLock: BabylonNativeAssetLockV1;
+  readonly sceneAuthoringRouteDecision: SceneAuthoringRouteDecisionV1;
+  readonly sceneAuthoringAttempt: SceneAuthoringAttemptV1;
+  readonly sceneAuthoringAttemptResult: SceneAuthoringAttemptResultV1;
+  readonly nativeSceneCheckResult: NativeSceneCheckResultV1;
+  readonly nativeSceneContribution: BabylonNativeSceneContributionV1;
+  readonly gameplayBootstrap: GameplayBootstrapV1;
+  readonly worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
+  readonly registryLock: readonly WorldResourceLockEntryV1[];
+  readonly resourceArtifacts:
+    readonly ResolvedBabylonNativeWorldPackageAssetV1[];
+}
+```
+
+`shared` 只含双方真正共用的 title、SDK version、distribution/host compatibility、legal documents、
+notice 与通用 generated-resource provenance；不得含 AuthoringSpec、ExecutionPlan、Native handles 或
+`includeAuthoringSpec`。Native Host 入口先完成 filesystem/typecheck/bundle/replay，再原子冻结上述输入；
+纯 builder 不接收 source paths、callbacks、Provider 或 resolver。
 
 ## 7. Root 文件布局与 Hash 顺序
 
@@ -337,6 +411,38 @@ type VerifiedWorldPackageDirectoryV1 =
 Native verified member 暴露解析后的纯数据和 immutable asset bytes map，不暴露 Babylon Engine、Scene、
 Module build callback 或 Provider handle。
 
+```ts
+interface VerifiedBabylonNativeWorldPackageDirectoryV1 {
+  readonly kind: "babylon-native-scene";
+  readonly directory: WorldPackageDirectoryV1;
+  readonly manifest: WorldPackageManifestV1 & {
+    readonly sceneSource: Extract<
+      WorldPackageSceneSourceV1,
+      { readonly kind: "babylon-native-scene" }
+    >;
+  };
+  readonly receipt: WorldPackageBuildReceiptV1;
+  readonly bootstrap: BabylonNativeSceneBootstrapV1;
+  readonly sceneModuleBundleManifest:
+    BabylonNativeSceneModuleBundleManifestV1;
+  readonly sceneModuleBundleBytes: Uint8Array;
+  readonly sceneModuleBundleRef: NativeSceneModuleBundleRefV1;
+  readonly dependencyLock: BabylonNativeDependencyLockV1;
+  readonly assetLock: BabylonNativeAssetLockV1;
+  readonly sceneAuthoringRouteDecision: SceneAuthoringRouteDecisionV1;
+  readonly sceneAuthoringAttempt: SceneAuthoringAttemptV1;
+  readonly sceneAuthoringAttemptResult: SceneAuthoringAttemptResultV1 & {
+    readonly outcome: "completed";
+  };
+  readonly nativeSceneCheckResult: NativeSceneCheckResultV1 & {
+    readonly outcome: "passed";
+  };
+  readonly nativeSceneContribution: BabylonNativeSceneContributionV1;
+  readonly immutableAssetBytesByResourceRef:
+    Readonly<Record<string, Uint8Array>>;
+}
+```
+
 ### 8.3 Store、File Adapter、签名与 CLI
 
 现有 Store/File Adapter/签名只依赖公共 Root/Receipt 合同，应同时支持两种 member，不复制 source
@@ -350,7 +456,8 @@ BNA-3 只让 RuntimeHost/loader 能验证并识别一个 receipt-bound Native Wo
 
 - Package/Host policy/signature/identity 必须在 Runtime adapter factory、Candidate、Scene 或 Engine 分配前
   通过；
-- Native Package 的 `RuntimeSceneSourceV1` 可从 verified member 唯一重建，但 BNA-1 的 formal
+- Native Package 的 `RuntimeSceneSourceV1` 只能由 verified member 的 `bootstrap` 与
+  `sceneModuleBundleRef` 直接构造，但 BNA-1 的 formal
   `babylon-native-scene` capability rejection 继续存在；
 - rejection 发生在 adapter preflight、Candidate allocation 和 Module evaluation 之前；
 - BNA-4 才删除该 rejection，并从同一 verified Bundle/Contribution 进入正式 Runtime replay、Havok 与
@@ -384,6 +491,8 @@ Canonical parser。cleanup failure 是明确 tool error，不能吞掉。
 - Canonical 与 Native parser 的 hostile-object corpus；
 - 同输入重复 build、两个隔离 build root、不同文件枚举顺序得到相同 bytes/hash；
 - 逐文件 tamper、missing/extra file、transport metadata 进入 Root 的负向测试；
+- Canonical Root 出现 `native/`、Native Root 出现 Canonical Plan/IR 文件的负向测试；
+- `sceneModuleBundleHash` 与 `package://native-scene-module/sha256/...` 不一致的负向测试；
 - WorldBuildIdentity Root 后派生与 byte-exact Receipt replay；
 - Canonical 现有 fixture 迁移后行为、Root 与 compiler replay 仍正确。
 
@@ -392,6 +501,7 @@ Canonical parser。cleanup failure 是明确 tool error，不能吞掉。
 - Source snapshot、Bundle 与 Manifest exact closure；
 - lockfile/installed package version 和 integrity mismatch；
 - 未锁定 import、动态 URL、absolute/source-map path rejection；
+- `world-package` import `native-babylon`、Native Module import Havok 的包边界负向测试；
 - Asset selected/resolved/locked/packaged exact equality；
 - APA published asset 与 admitted manual Golden 正向；`scene-shell`、rejected/tool-error receipt 负向。
 
@@ -408,17 +518,23 @@ Canonical parser。cleanup failure 是明确 tool error，不能吞掉。
 精确 SHA Cloud 全量门禁和一个独立 Cloud 深审；任何 P0/P1/P2 或必需门禁失败均为 NO-GO。GitHub
 重复重型 CI 不作为本地等待前提。
 
+Clean-break census 还必须证明以下旧 public symbol/field 全仓为零：`createWorldPackageV1`、
+`CreateWorldPackageV1Input`、`WorldPackageBuildContextV1`、`CanonicalResourceLockEntryV1`、
+`canonicalResourceLockEntriesV1`、`CANONICAL_RESOURCE_KINDS_V1`、`canonicalWorldPackageManifestV1`，
+以及公共 Manifest 顶层的 `authoringSpecHash` / `executionPlanHash`。Canonical 的
+`includeAuthoringSpec` 作为 Lane 专属审计选择保留，但不得出现在 shared 或 Native input。
+
 ## 12. 任务依赖图
 
 | ID | 目标与独立交付物 | depends_on | blocks | 独占所有权 | 输入 -> 输出 | 验证 | 模式 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| BNA3-00 | 冻结 source-neutral Manifest/Receipt/verified union、World Resource Lock 与 clean break census | BNA-1、BNA-2 | BNA3-10..90 | `packages/world-package/src/package-types*`、`packages/runtime-contracts/src/*resource-lock*`、contract tests | 旧 Canonical contract -> 唯一 discriminated contract | exact parser、hostile data、旧字段/旧 lock name census | main-agent-only |
-| BNA3-10 | 冻结 Native Bundle Manifest 与 deterministic persistent bundler | BNA3-00 | BNA3-30、40 | Native bundle contract、`scripts/native-scene` bundle owner | admitted graph -> immutable Bundle artifacts | two-root replay、path/import/tamper、cleanup | sequential |
-| BNA3-20 | 冻结 Dependency Lock 与 installed-tree resolver | BNA3-00 | BNA3-30、40 | dependency lock contract/resolver | lockfile + installed manifests -> closed lock | version/integrity/missing/ordering | parallel-safe with BNA3-10 after interface freeze |
-| BNA3-30 | 冻结 Asset Lock、Publication/Attempt/Check closure | BNA3-10、20 | BNA3-40 | asset lock/Host resolver，不改 APA producer | published assets + attempts -> closed locks | exact-set、receipt/license/hash negative matrix | sequential |
+| BNA3-00 | 冻结 source-neutral Manifest/Receipt/verified union、全部 Babylon-free Native persistent types、Frozen input、World Resource Lock 与 clean break census | BNA-1、BNA-2 | BNA3-10..90 | `packages/world-package/src/package-contract.ts`、`package-types.ts`、`package-build.ts`、`package-directory.ts`、`index.ts`，`packages/runtime-contracts/src/*native*`/`*resource-lock*`，`packages/native-babylon` 旧合同删除，compiler/authoring/validation/Host consumer 与 contract tests | 旧 Canonical contract -> 唯一 discriminated contract 与 frozen task I/O | exact parser、hostile data、包依赖、旧 symbol/field census | main-agent-only |
+| BNA3-10 | 实现 deterministic persistent bundler | BNA3-00 | BNA3-30、40 | `scripts/native-scene` bundle owner；不再定义合同 | admitted graph + frozen Bundle contract -> immutable Bundle artifacts | two-root replay、path/import/tamper、cleanup | sequential |
+| BNA3-20 | 实现 installed-tree Dependency Lock resolver | BNA3-00 | BNA3-30、40 | Host dependency resolver；不再定义合同 | lockfile + installed manifests + frozen lock contract -> closed lock | version/integrity/missing/ordering/Havok exclusion | parallel-safe with BNA3-10 after BNA3-00 merged |
+| BNA3-30 | 实现 Asset Lock 与 Publication/Attempt/Check closure resolver | BNA3-10、20 | BNA3-40 | asset lock/Host resolver，不改 APA producer 或 frozen contract | published assets + attempts -> closed locks | exact-set、receipt/license/hash negative matrix | sequential |
 | BNA3-40 | 实现 Native WorldPackage builder、Root 后 Identity 与 Receipt | BNA3-10、20、30 | BNA3-50、60 | package build/root/receipt Native member | frozen artifacts -> directory/identity/receipt | reproducible bytes、self-reference negative | main-agent-only |
 | BNA3-50 | 实现统一 verifier、Store/File/signing/CLI consumer clean break | BNA3-40 | BNA3-60、90 | package-directory/store consumers | directory -> verified union | tamper、atomic publication、Canonical parity | sequential |
-| BNA3-60 | 接入 Runtime preflight 识别并保持 formal Native rejection | BNA3-50 | BNA3-90、BNA-4 | loader/preflight tests；不改 Physics/adapter Candidate | verified Native package -> pre-allocation rejection | no factory/Candidate/Module call | main-agent-only |
+| BNA3-60 | 接入 Runtime preflight 识别并保持 formal Native rejection | BNA3-50 | BNA3-90、BNA-4 | loader/preflight tests；不改 Physics/adapter Candidate | verified Native package -> pre-allocation rejection；错误文案只声明尚需 BNA-4 | no factory/Candidate/Module call | main-agent-only |
 | BNA3-90 | 最终门禁、独立深审、文档/backlog 真相 | BNA3-00..60 | BNA-4..8 | review/docs/evidence only | exact SHA -> GO/NO-GO | Cloud full gates、D1-D6、clean tree | main-agent-only |
 
 ## 13. 验收标准
