@@ -10,9 +10,8 @@ import type {
 } from "@whitebox-world/runtime-contracts";
 
 import cloudRidgeNativeScene from "./scene.js";
-import {
-  cloudRidgeSubjectAssetResolver,
-} from "./native-bootstrap.js";
+import { cloudRidgeSubjectAssetResolver } from
+  "./subject-asset-resolver.js";
 import { NativeRuntimeHostV1 } from "./native-runtime-host.js";
 import { loadVerifiedNativeWorldPackageV1 } from
   "./world-package-loader.js";

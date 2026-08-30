@@ -204,6 +204,9 @@ importers:
       '@whitebox-world/gameplay-contracts':
         specifier: workspace:*
         version: link:../../packages/gameplay-contracts
+      '@whitebox-world/native-babylon':
+        specifier: workspace:*
+        version: link:../../packages/native-babylon
       '@whitebox-world/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol

@@ -7,8 +7,11 @@ import {
 } from "@whitebox-world/protocol";
 import {
   hashBabylonNativeSceneBootstrapV1,
+  parseWorldRuntimeBootstrapV1,
   worldResourceLockEntriesV1,
 } from "@whitebox-world/runtime-contracts";
+import { parseGameplayBootstrapV1 } from
+  "@whitebox-world/gameplay-contracts";
 import {
   hashSceneAuthoringAttemptV1,
   hashSceneAuthoringRouteDecisionV1,
@@ -28,10 +31,6 @@ import { mkdir, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import {
-  CLOUD_RIDGE_GAMEPLAY_BOOTSTRAP_V1,
-  CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1,
-} from "../../apps/native-scene-playground/src/native-bootstrap.js";
 import { buildTrustedBabylonNativeWorldPackageV1 } from
   "./build-trusted-world-package.js";
 import { admitBabylonNativeSourceGraphV1 } from "./source-admission.js";
@@ -64,6 +63,27 @@ const TRUST_PROFILE_HASH = sha256CanonicalJson({
 const AUTHORING_PROFILE_REF =
   "worldkit://authoring-profile/native-local@1";
 
+async function readRuntimeBootstrapInput() {
+  const [gameplayInput, runtimeInput] = await Promise.all([
+    readFile(
+      path.join(WORLD_DIRECTORY_PATH, "cloud-ridge-gameplay-bootstrap.json"),
+      "utf8",
+    ),
+    readFile(
+      path.join(
+        WORLD_DIRECTORY_PATH,
+        "cloud-ridge-world-runtime-bootstrap.json",
+      ),
+      "utf8",
+    ),
+  ]);
+  return Object.freeze({
+    gameplayBootstrap: parseGameplayBootstrapV1(JSON.parse(gameplayInput)),
+    worldRuntimeBootstrap:
+      parseWorldRuntimeBootstrapV1(JSON.parse(runtimeInput)),
+  });
+}
+
 async function readSourceGraphInput() {
   const admitted = await admitBabylonNativeSourceGraphV1(
     WORLD_DIRECTORY_PATH,
@@ -87,8 +107,12 @@ async function readSourceGraphInput() {
 }
 
 async function buildCloudRidgePackage(): Promise<WorldPackageDirectoryV1> {
-  const { authoredSourceHash, nativeSceneBootstrap } =
-    await readSourceGraphInput();
+  const [sourceGraphInput, runtimeBootstrapInput] = await Promise.all([
+    readSourceGraphInput(),
+    readRuntimeBootstrapInput(),
+  ]);
+  const { authoredSourceHash, nativeSceneBootstrap } = sourceGraphInput;
+  const { gameplayBootstrap, worldRuntimeBootstrap } = runtimeBootstrapInput;
   const routeDecision: SceneAuthoringRouteDecisionV1 = {
     kind: "scene-authoring-route-decision",
     schemaVersion: 1,
@@ -162,12 +186,12 @@ async function buildCloudRidgePackage(): Promise<WorldPackageDirectoryV1> {
     "worldkit://traversal-surface-profile/ground.static@1",
   );
   const registryLock = worldResourceLockEntriesV1([
-    ...CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1.runtimeResourceLockEntries,
+    ...worldRuntimeBootstrap.runtimeResourceLockEntries,
     {
       resourceKind: "world-runtime-bootstrap",
       resourceRef: worldRuntimeBootstrapRef,
       resolvedVersion: "1",
-      contentHash: CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1.contentHash,
+      contentHash: worldRuntimeBootstrap.contentHash,
     },
     {
       resourceKind: "native-scene",
@@ -262,9 +286,9 @@ async function buildCloudRidgePackage(): Promise<WorldPackageDirectoryV1> {
     sceneAuthoringAttemptResultRef:
       "worldkit://scene-authoring-attempt-result/cloud-ridge@1",
     sceneAuthoringAttemptResult: attemptResult,
-    gameplayBootstrap: CLOUD_RIDGE_GAMEPLAY_BOOTSTRAP_V1,
+    gameplayBootstrap,
     worldRuntimeBootstrapRef,
-    worldRuntimeBootstrap: CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1,
+    worldRuntimeBootstrap,
     registryLock,
   });
 }
