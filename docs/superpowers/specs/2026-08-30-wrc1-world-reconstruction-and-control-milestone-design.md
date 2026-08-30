@@ -6,6 +6,7 @@
 **Date:** 2026-08-30
 **Source baseline:** `origin/main@b19f9e4be0cb56fc132cff656ade994df4e88a31`
 **Live status authority:** `docs/18-refactor-progress-and-backlog.md`
+**BWB-3/4 settlement authority:** `docs/superpowers/specs/2026-08-31-babylon-block-settlement-and-step-closure-design.md`
 
 ## 1. Decision
 

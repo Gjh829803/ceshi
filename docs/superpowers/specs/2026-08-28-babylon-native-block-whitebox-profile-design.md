@@ -8,6 +8,8 @@
 - 借鉴基线：[`codex/block-world-sdk-v2@618d96b`](https://github.com/seedleap/agent-whitebox-world-sdk/tree/618d96b4e297d90d13ee6d1bf9be1e0b83423dbe)
 - 当前实施真相：[SDK 重构总进度与 Backlog](../../18-refactor-progress-and-backlog.md)
 - Mode A 审查：[Block Whitebox Profile 设计审查](../../reviews/2026-08-28-babylon-native-block-whitebox-profile-design-review.md)
+- BWB-3/4 集成施工：
+  [Block Settlement 与真实台阶闭环](./2026-08-31-babylon-block-settlement-and-step-closure-design.md)
 
 > 本文定义 Babylon Native Lane 的首个参考图白膜创作 Profile。它继承 Block World 实验中有效的
 > 场景构造方法、度量体系和验收思想，但明确替换其 Three.js、持久 Block Manifest、Compiler 和旧
@@ -412,6 +414,10 @@ Navigation 和室内 Gameplay Gate 完成前，不得宣称正式室内支持。
 - 验证证据：Transform/材质/组 identity、双实例、dispose、Opening/top-down/侧视 golden、参考语义区域。
 - 执行模式：`sequential`。
 
+BWB-3 的独立 authoring screenshot 证据不能与 BWB-4 独立 Collider 证据直接相加。二者必须按
+[Block Settlement 与真实台阶闭环](./2026-08-31-babylon-block-settlement-and-step-closure-design.md)
+通过一个 Checked Layout、一个 Finalize、一个 Host settlement 和一个 Contribution/Package 后才可标记完成。
+
 ### BWB-4：Collider 与关闭 Traversal Binding 同源派生、SDK Admission
 
 - 目标与独立交付物：从同一内存 Layout 构造显式 Collider proxy；只在 BNA-4 Profile-based Registration
@@ -428,6 +434,9 @@ Navigation 和室内 Gameplay Gate 完成前，不得宣称正式室内支持。
 - 验证证据：Spawn Support、真实 Havok 台阶/坡度/ledge、异形 Collider、drift/tamper、30/60/120 Hz-like、
   Reset、双实例、throwing cleanup。
 - 执行模式：`main-agent-only`。
+
+BWB-4 的真实 Havok narrow fixture 只有迁移到同一 Block Session/Finalize，且 source visual、独立 no-gap
+proxy、Scene membership 与 Contribution Hash 全部 settlement 后，才构成正式 Profile passability 证据。
 
 ### BWB-5：参考图 Corpus 与分层验收
 

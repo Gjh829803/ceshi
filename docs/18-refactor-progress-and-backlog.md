@@ -1005,6 +1005,9 @@ Lane 不自动扩大 Cave、Overhang、双层 Route 或 NPC Navigation 的当前
 
 详细权威为
 [Babylon Native Block Whitebox 创作 Profile 长期设计](../docs/superpowers/specs/2026-08-28-babylon-native-block-whitebox-profile-design.md)。
+BWB-3/4 的集成施工与真实台阶前置由
+[Block Settlement 与真实台阶闭环设计](../docs/superpowers/specs/2026-08-31-babylon-block-settlement-and-step-closure-design.md)
+及其[实施计划](../docs/superpowers/plans/2026-08-31-babylon-block-settlement-and-step-closure-implementation.md)独占。
 该 Profile 采用 `JSON Control Plane + Babylon Native Block Whitebox + Frozen Contributions + SDK/Havok`
 组合；它不是第三条 Scene Source，也不恢复旧分支的 Three/Manifest/Compiler。BWB-1/BWB-2 的可选
 Package、Build-Epoch Session 和结构 Checker 已完成合同级 checkpoint；视觉、多视角、Collider/Havok、
@@ -1017,10 +1020,12 @@ Package、Build-Epoch Session 和结构 Checker 已完成合同级 checkpoint；
 - [x] BWB-2：重写 Occupancy、重叠、坡面输入、边界、Visual Group 和预算 Checker，不复制旧 DTO/
   Preset/Compiler；
 - [ ] BWB-3：接入直接 Babylon Mesh、稳定视觉组和 Opening/top-down/侧视的 Build-Epoch-local authoring
-  screenshots；它们不是 BNA-7 formal WorldPackage/Browser Capture；
+  screenshots；独立分支已有 narrow evidence，但必须与 BWB-4 通过同一 Layout/Finalize/Host settlement
+  集成后才完成；它们不是 BNA-7 formal WorldPackage/Browser Capture；
 - [ ] BWB-4：在 BNA-4 后从同一内存 Layout 产生 core Static Collider Contribution 及其关闭
   `traversalBinding`，由 SDK 冻结并创建 Havok；不新增独立 Traversal/Visual Group Contribution，
-  Runtime 不查询 Layout 或第二 Height Sampler；
+  Runtime 不查询 Layout 或第二 Height Sampler；独立 Havok fixture 只是 narrow evidence，不能与 BWB-3
+  证据直接相加冒充同一 Package 链；
 - [ ] BWB-5：冻结山地、T 字空间、台阶、建筑、有限室内视觉及负向 Corpus，闭合结构、profile-local
   screenshots、BNA-4 Collider overlay、Spawn Support、真实人物通过性和人工交互证据；
 - [ ] BWB-6：BWB-5 正确性成立后评估 Thin Instance、Chunk、Collider coalescing，交付 Profile-side
