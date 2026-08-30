@@ -85,6 +85,44 @@ describe("BNA-5 clean-break verifier", () => {
       code === "BNA5_LEGACY_HOSTED_ALIAS")).toBe(true);
   });
 
+  it("rejects a legacy Hosted fallback outside BNA5-owned paths", async () => {
+    const report = await scanBna5CleanBreak(await fixture({
+      "packages/visual-style/src/runtime-options.ts":
+        "export const hostedNativeFallback = true;\n",
+    }));
+
+    expect(report.diagnostics).toContainEqual(expect.objectContaining({
+      code: "BNA5_LEGACY_HOSTED_ALIAS",
+      path: "packages/visual-style/src/runtime-options.ts",
+      value: "hostedNativeFallback",
+    }));
+  });
+
+  it("allows only the authoring route trustProfileRef and does not confuse the Native execution field", async () => {
+    const report = await scanBna5CleanBreak(await fixture({
+      "packages/scene-authoring-contracts/src/scene-authoring-contracts.ts":
+        "export interface Route { readonly trustProfileRef: string }\n",
+      "apps/example/src/native-request.ts":
+        "export const nativeExecutionTrustProfileRef = 'locked';\n",
+    }));
+
+    expect(report.diagnostics.filter(({ code }) =>
+      code === "BNA5_LEGACY_HOSTED_ALIAS")).toEqual([]);
+  });
+
+  it("rejects trustProfileRef outside the exact authoring allowlist", async () => {
+    const report = await scanBna5CleanBreak(await fixture({
+      "packages/visual-style/src/runtime-options.ts":
+        "export const trustProfileRef = 'legacy';\n",
+    }));
+
+    expect(report.diagnostics).toContainEqual(expect.objectContaining({
+      code: "BNA5_LEGACY_HOSTED_ALIAS",
+      path: "packages/visual-style/src/runtime-options.ts",
+      value: "trustProfileRef",
+    }));
+  });
+
   it.each(["node:vm", "vm.runInContext"])(
     "rejects unsafe in-process execution API %s",
     async (token) => {

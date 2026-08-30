@@ -27,6 +27,13 @@ const LEGACY_HOSTED_ALIASES = Object.freeze([
   "hostedNativeFallback",
   "allowHostedInProcess",
 ]);
+const AUTHORING_TRUST_PROFILE_REF_PATHS = new Set([
+  "apps/playground/public/world-packages/cloud-ridge/authoring/scene-authoring-route-decision.json",
+  "packages/scene-authoring-contracts/src/scene-authoring-contracts.ts",
+  "packages/world-package/src/test-fixture.ts",
+  "scripts/native-scene/build-cloud-ridge-package.ts",
+  "scripts/scenes/record-scene-authoring-attempt.ts",
+]);
 const UNSAFE_EXECUTION_APIS = Object.freeze([
   "node:vm",
   "vm.runInContext",
@@ -149,6 +156,28 @@ function addTokenDiagnostics(
   }
 }
 
+function addLegacyHostedAliasDiagnostics(
+  diagnostics: Bna5CleanBreakDiagnostic[],
+  relativePath: string,
+  source: string,
+): void {
+  for (const token of LEGACY_HOSTED_ALIASES) {
+    if (
+      token === "trustProfileRef" &&
+      AUTHORING_TRUST_PROFILE_REF_PATHS.has(relativePath)
+    ) continue;
+    const pattern = new RegExp(`\\b${escaped(token)}\\b`, "gu");
+    for (const match of source.matchAll(pattern)) {
+      diagnostics.push({
+        code: "BNA5_LEGACY_HOSTED_ALIAS",
+        path: relativePath,
+        line: lineAt(source, match.index),
+        value: token,
+      });
+    }
+  }
+}
+
 function hasExactBridgeIdentityChecks(
   bridge: string | undefined,
   frame: string | undefined,
@@ -177,15 +206,7 @@ export async function scanBna5CleanBreak(
 
   const diagnostics: Bna5CleanBreakDiagnostic[] = [];
   for (const [relativePath, source] of sourceByPath) {
-    if (isBna5OwnedPath(relativePath)) {
-      addTokenDiagnostics(
-        diagnostics,
-        "BNA5_LEGACY_HOSTED_ALIAS",
-        relativePath,
-        source,
-        LEGACY_HOSTED_ALIASES,
-      );
-    }
+    addLegacyHostedAliasDiagnostics(diagnostics, relativePath, source);
     addTokenDiagnostics(
       diagnostics,
       "BNA5_UNSAFE_EXECUTION_API",
