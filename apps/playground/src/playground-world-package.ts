@@ -25,6 +25,13 @@ const LICENSE_BY_SPDX_EXPRESSION = new Map<string, WorldPackageLicenseDocumentIn
     path: "LICENSES/loopit-private.txt",
     text: "Loopit company-private asset license. No external redistribution.\n",
   })],
+  ["LicenseRef-User-Provided-Local", Object.freeze({
+    id: "user-provided-local",
+    spdxLicenseExpression: "LicenseRef-User-Provided-Local",
+    path: "LICENSES/user-provided-local.txt",
+    text:
+      "User-provided local asset authorized for private repository internal validation only. External redistribution is not granted.\n",
+  })],
 ]);
 
 export function createPlaygroundWorldPackageBuildContextV1(input: {

@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 import type { Browser, BrowserContext, Page } from "playwright";
+import { isNil } from "lodash-es";
 
 import {
   stringifyCanonicalJson,
@@ -51,10 +52,52 @@ import { PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1 } from "../../apps/playground/sr
 import { requireActivePublishedLocomotionV1 } from "./locomotion-capability-state.js";
 
 const REPOSITORY_ROOT = fileURLToPath(new URL("../../", import.meta.url));
+const DEFAULT_INTAKE_FIXTURE_REPOSITORY_PATH =
+  "examples/product-asset-intakes/humanoid.g-bot@2.json";
+
+function parseVerifierArguments(arguments_: readonly string[]): {
+  readonly intakeFixtureRepositoryPath: string;
+  readonly publicationMode: ArtifactPublicationMode;
+} {
+  let intakeFixtureRepositoryPath = DEFAULT_INTAKE_FIXTURE_REPOSITORY_PATH;
+  const publicationArguments: string[] = [];
+  for (let index = 0; index < arguments_.length; index += 1) {
+    const argument = arguments_[index];
+    if (argument !== "--fixture") {
+      publicationArguments.push(argument!);
+      continue;
+    }
+    const fixturePath = arguments_[index + 1];
+    if (fixturePath === undefined || fixturePath.startsWith("-")) {
+      throw new Error("PRODUCT_ASSET_VERIFIER_FIXTURE_REQUIRED");
+    }
+    intakeFixtureRepositoryPath = fixturePath;
+    index += 1;
+  }
+  const absoluteFixturePath = path.resolve(
+    REPOSITORY_ROOT,
+    intakeFixtureRepositoryPath,
+  );
+  const relativeFixturePath = path.relative(REPOSITORY_ROOT, absoluteFixturePath);
+  if (
+    path.isAbsolute(intakeFixtureRepositoryPath) ||
+    relativeFixturePath.startsWith("..") ||
+    path.isAbsolute(relativeFixturePath) ||
+    !relativeFixturePath.startsWith("examples/product-asset-intakes/")
+  ) {
+    throw new Error("PRODUCT_ASSET_VERIFIER_FIXTURE_PATH_INVALID");
+  }
+  return {
+    intakeFixtureRepositoryPath: relativeFixturePath,
+    publicationMode: parseArtifactPublicationMode(publicationArguments),
+  };
+}
+
+const VERIFIER_ARGUMENTS = parseVerifierArguments(process.argv.slice(2));
 const INTAKE_FIXTURE = parseProductAssetIntakeFixtureV1(
   JSON.parse(
     readFileSync(
-      path.join(REPOSITORY_ROOT, "examples/product-asset-intakes/humanoid.g-bot@2.json"),
+      path.join(REPOSITORY_ROOT, VERIFIER_ARGUMENTS.intakeFixtureRepositoryPath),
       "utf8",
     ),
   ) as unknown,
@@ -83,10 +126,29 @@ const SUBJECT_ASSET_REF = INTAKE_FIXTURE.subjectAssetRef;
 const SUBJECT_DEFINITION_REF = INTAKE_FIXTURE.subjectDefinitionRef;
 const MINIMUM_SUBJECT_POSE_DIFFERENCE_RATIO =
   INTAKE_FIXTURE.minimumSubjectPoseDifferenceRatio;
+const SUBJECT_DEFINITION = (() => {
+  const definition = builtInSubjectResourceRegistry.resolveSubjectDefinition(
+    SUBJECT_DEFINITION_REF,
+  );
+  if (isNil(definition)) throw new Error("PRODUCT_ASSET_SUBJECT_DEFINITION_MISSING");
+  return definition;
+})();
+const CONTROL_FEEL_PROFILE = (() => {
+  const profile = builtInSubjectResourceRegistry.resolveControlFeelProfile(
+    SUBJECT_DEFINITION.profiles.controlFeelProfileRef,
+  );
+  if (isNil(profile)) throw new Error("PRODUCT_ASSET_CONTROL_FEEL_PROFILE_MISSING");
+  return profile;
+})();
+const SPLIT_JUMP_POLICY = CONTROL_FEEL_PROFILE.jumpVariantPolicy.mode ===
+    "run-selects-variant"
+  ? CONTROL_FEEL_PROFILE.jumpVariantPolicy
+  : undefined;
 const ARTIFACT_FILES = [
   "explain.json",
   "idle.png",
   "jump.png",
+  ...(SPLIT_JUMP_POLICY === undefined ? [] : ["jump-large.png"] as const),
   "run.png",
   "snapshot.json",
   "verification.json",
@@ -116,6 +178,7 @@ interface ArtifactPaths {
   readonly explain: string;
   readonly verification: string;
   readonly action: Readonly<Record<CaptureActionId, string>>;
+  readonly jumpLarge: string;
 }
 
 interface PngInspection {
@@ -125,13 +188,19 @@ interface PngInspection {
 }
 
 interface ActionCaptureEvidence extends PngInspection {
-  readonly filename: "idle.png" | "walk.png" | "run.png" | "jump.png";
+  readonly filename:
+    | "idle.png"
+    | "walk.png"
+    | "run.png"
+    | "jump.png"
+    | "jump-large.png";
   readonly source: "browser-fixed-tick";
   readonly tick: number;
   readonly actionId: CaptureActionId;
   readonly subjectEntityId: typeof PRIMARY_ENTITY_ID;
   readonly positionMetersXYZ: RuntimeVec3V1;
   readonly movementMedium: "ground" | "air";
+  readonly jumpVariant?: "small" | "large";
   readonly subjectSilhouette: SubjectPoseEvidenceV1;
 }
 
@@ -166,6 +235,18 @@ interface BrowserEvidence {
     readonly stopPositionMetersXYZ: RuntimeVec3V1;
     readonly maximumAllowedXMeters: number;
   };
+  readonly splitJump?: {
+    readonly controlFeelProfileRef: string;
+    readonly controlFeelProfileHash: string;
+    readonly policy: NonNullable<typeof SPLIT_JUMP_POLICY>;
+    readonly small: ActionCaptureEvidence;
+    readonly large: ActionCaptureEvidence;
+    readonly poseDifference: {
+      readonly differingPixelCount: number;
+      readonly unionForegroundPixelCount: number;
+      readonly differenceRatio: number;
+    };
+  };
 }
 
 class PlaywrightBrowserUnavailableError extends Error {
@@ -191,6 +272,7 @@ function pathsFor(directory: string): ArtifactPaths {
       run: path.join(directory, "run.png"),
       jump: path.join(directory, "jump.png"),
     },
+    jumpLarge: path.join(directory, "jump-large.png"),
   };
 }
 
@@ -316,8 +398,8 @@ async function inspectProductAsset(): Promise<ProductAssetEvidenceV1> {
     requiredRuntimeActionIds: INTAKE_FIXTURE.requiredRuntimeActionIds,
     expectedSubjectAssetRef: INTAKE_FIXTURE.subjectAssetRef,
     glbBytes,
-    assetManifest: parseJson<unknown>(assetManifestText, "G Bot asset manifest"),
-    actionManifest: parseJson<unknown>(actionManifestText, "G Bot action manifest"),
+    assetManifest: parseJson<unknown>(assetManifestText, "Product asset manifest"),
+    actionManifest: parseJson<unknown>(actionManifestText, "Product action manifest"),
   });
 }
 
@@ -367,7 +449,7 @@ async function runCliGates(paths: ArtifactPaths): Promise<WorldBuildArtifactV4> 
 
   const artifact = parseJson<WorldBuildArtifactV4>(
     await readFile(paths.build, "utf8"),
-    "G Bot build artifact",
+    "Product Subject build artifact",
   );
   assert.equal(artifact.kind, "worldkit-build-artifact");
   assert.equal(artifact.schemaVersion, 4);
@@ -377,11 +459,14 @@ async function runCliGates(paths: ArtifactPaths): Promise<WorldBuildArtifactV4> 
     artifact.worldRuntimeBootstrap.initialControlledEntityId,
     PRIMARY_ENTITY_ID,
   );
+  const expectedSubjectEntityIds = artifact.normalizedWorldIr.nodes
+    .filter((node) => node.kind === "subject")
+    .map((node) => node.id);
   assert.deepEqual(
     artifact.worldRuntimeBootstrap.subjectRuntimeDescriptors.map(
       (subject) => subject.entityId,
     ),
-    [PRIMARY_ENTITY_ID],
+    expectedSubjectEntityIds,
   );
   assert.equal(artifact.worldRuntimeBootstrap.subjectAssets.length, 1);
   assert.equal(
@@ -398,9 +483,13 @@ async function runCliGates(paths: ArtifactPaths): Promise<WorldBuildArtifactV4> 
   assert.equal(explanationArtifact.subject.subjectDefinitionRef, SUBJECT_DEFINITION_REF);
   const snapshot = parseJson<WorldRuntimeSnapshotV4>(
     await readFile(paths.snapshot, "utf8"),
-    "G Bot CLI snapshot",
+    "Product Subject CLI snapshot",
   );
-  assert.equal(locomotionActionId(snapshot, PRIMARY_ENTITY_ID), "idle");
+  assert.equal(
+    locomotionActionId(snapshot, PRIMARY_ENTITY_ID),
+    "idle",
+    "CLI capture must start with the controlled Subject idle.",
+  );
   inspectPng(await readFile(paths.world));
   return artifact;
 }
@@ -424,15 +513,21 @@ async function closeBrowserHandles(handles: {
       errors.push(error);
     }
   }
-  if (errors.length > 0) throw new AggregateError(errors, "G Bot verifier cleanup failed.");
+  if (errors.length > 0) {
+    throw new AggregateError(errors, "Product Subject verifier cleanup failed.");
+  }
 }
 
 async function captureAction(
   page: Page,
-  paths: ArtifactPaths,
   actionId: CaptureActionId,
   actions: readonly ("move-forward" | "move-right" | "run" | "jump")[],
   ticks: number,
+  output: {
+    readonly path: string;
+    readonly filename: ActionCaptureEvidence["filename"];
+    readonly jumpVariant?: "small" | "large";
+  },
 ): Promise<ActionCaptureResult> {
   const reset = await page.evaluate(async () => window.__WORLDKIT__!.reset());
   assert.equal(reset.world.simulationTick, 0);
@@ -444,7 +539,15 @@ async function captureAction(
   );
   const state = requireSubjectProjection(snapshot, PRIMARY_ENTITY_ID).entityState;
   const locomotion = requireLocomotionCapability(snapshot, PRIMARY_ENTITY_ID);
-  assert.equal(locomotionActionId(snapshot, PRIMARY_ENTITY_ID), actionId);
+  assert.equal(
+    locomotionActionId(snapshot, PRIMARY_ENTITY_ID),
+    actionId,
+    [
+      `Fixed-input capture '${actionId}' resolved another locomotion action.`,
+      `locomotion=${JSON.stringify(locomotion)}`,
+      `entityState=${JSON.stringify(state)}`,
+    ].join(" "),
+  );
   if (actionId === "jump") assert.equal(locomotion.movementMedium, "air");
   assertMovementFacingSemanticAlignment(snapshot, PRIMARY_ENTITY_ID, actions);
 
@@ -485,20 +588,23 @@ async function captureAction(
     };
   });
   const bytes = pngBytesFromDataUrl(capture.dataUrl);
-  await writeFile(paths.action[actionId], bytes);
+  await writeFile(output.path, bytes);
   const poseAnalysis = analyzeSubjectPoseCrop({
     boundsPixelsXYWH: capture.boundsPixelsXYWH,
     rgbaBytes: Uint8Array.from(capture.rgbaBytes),
   });
   return {
     evidence: {
-      filename: `${actionId}.png` as ActionCaptureEvidence["filename"],
+      filename: output.filename,
       source: "browser-fixed-tick",
       tick: snapshot.world.simulationTick,
       actionId,
       subjectEntityId: PRIMARY_ENTITY_ID,
       positionMetersXYZ: state.positionMetersXYZ,
       movementMedium: locomotion.movementMedium,
+      ...(output.jumpVariant === undefined
+        ? {}
+        : { jumpVariant: output.jumpVariant }),
       subjectSilhouette: poseAnalysis.evidence,
       ...inspectPng(bytes),
     },
@@ -523,6 +629,16 @@ async function verifyBrowser(
     (timing) => timing.sourceClip === walkBinding.sourceClipName,
   );
   assert.ok(walkClipTiming !== undefined);
+  const runtimeSubject = artifact.worldRuntimeBootstrap.subjectRuntimeDescriptors.find(
+    (candidate) => candidate.entityId === PRIMARY_ENTITY_ID,
+  );
+  assert.ok(runtimeSubject !== undefined);
+  assert.equal(runtimeSubject.controlFeel.resourceRef, CONTROL_FEEL_PROFILE.resourceRef);
+  assert.equal(runtimeSubject.controlFeel.contentHash, CONTROL_FEEL_PROFILE.contentHash);
+  assert.deepEqual(runtimeSubject.controlFeel.jumpVariantPolicy, CONTROL_FEEL_PROFILE.jumpVariantPolicy);
+  const expectedSubjectEntityIds = artifact.normalizedWorldIr.nodes
+    .filter((node) => node.kind === "subject")
+    .map((node) => node.id);
 
   let server: WorldkitServerHandle | undefined;
   let browser: Browser | undefined;
@@ -545,9 +661,10 @@ async function verifyBrowser(
     });
     const ready = await page.evaluate(async () => window.__WORLDKIT__!.ready());
     assertPossessedBy(ready, PRIMARY_ENTITY_ID);
-    assert.deepEqual(Object.keys(ready.world.subjectStatesByEntityId), [
-      PRIMARY_ENTITY_ID,
-    ]);
+    assert.deepEqual(
+      Object.keys(ready.world.subjectStatesByEntityId),
+      expectedSubjectEntityIds,
+    );
     const fixedTicksPerSecond = 1 / ready.runtime.fixedTimeStepSeconds;
     assert.ok(Number.isSafeInteger(fixedTicksPerSecond));
     const walkCaptureTiming = {
@@ -564,6 +681,16 @@ async function verifyBrowser(
       fixedTicksPerSecond,
       playbackSpeedRatio: walkBinding.playbackSpeedRatio,
     };
+    const jumpCaptureTick = SPLIT_JUMP_POLICY === undefined
+      ? 30
+      : Math.ceil(
+          SPLIT_JUMP_POLICY.smallAnticipationSeconds * fixedTicksPerSecond,
+        ) + 10;
+    const largeJumpCaptureTick = SPLIT_JUMP_POLICY === undefined
+      ? undefined
+      : Math.ceil(
+          SPLIT_JUMP_POLICY.largeAnticipationSeconds * fixedTicksPerSecond,
+        ) + 10;
 
     await page.evaluate(async () =>
       new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
@@ -586,31 +713,57 @@ async function verifyBrowser(
       sha256(await readFile(paths.world)),
       "CLI and Browser must capture the same paused reset world.",
     );
-    const poseTarget = await page.evaluate((runtimeEntityId) => {
+    const poseTarget = await page.evaluate(({ runtimeEntityId, semanticClassId }) => {
       const api = window.__WORLDKIT_AUTHORING_CAPTURE__;
       if (api === undefined) throw new Error("WORLDKIT_AUTHORING_CAPTURE_PROTOCOL_MISSING");
       return api.configureVisualCaptureGroups([{
         visualTargetId: "pose-primary-subject",
         runtimeEntityIds: [runtimeEntityId],
         role: "primary-subject",
-        semanticClassId: "subject.humanoid.g-bot",
+        semanticClassId,
         identityColor: "#E85D5D",
       }])[0];
-    }, PRIMARY_ENTITY_ID);
+    }, {
+      runtimeEntityId: PRIMARY_ENTITY_ID,
+      semanticClassId: SUBJECT_DEFINITION.semanticClassId,
+    });
     assert.equal(poseTarget?.runtimeEntityIds[0], PRIMARY_ENTITY_ID);
 
     const captures = {
-      idle: await captureAction(page, paths, "idle", [], 12),
+      idle: await captureAction(page, "idle", [], 12, {
+        path: paths.action.idle,
+        filename: "idle.png",
+      }),
       walk: await captureAction(
         page,
-        paths,
         "walk",
         ["move-right"],
         walkCaptureTiming.captureTick,
+        { path: paths.action.walk, filename: "walk.png" },
       ),
-      run: await captureAction(page, paths, "run", ["move-right", "run"], 24),
-      jump: await captureAction(page, paths, "jump", ["jump"], 30),
+      run: await captureAction(page, "run", ["move-right", "run"], 24, {
+        path: paths.action.run,
+        filename: "run.png",
+      }),
+      jump: await captureAction(page, "jump", ["jump"], jumpCaptureTick, {
+        path: paths.action.jump,
+        filename: "jump.png",
+        ...(SPLIT_JUMP_POLICY === undefined ? {} : { jumpVariant: "small" as const }),
+      }),
     } satisfies Record<CaptureActionId, ActionCaptureResult>;
+    const largeJump = largeJumpCaptureTick === undefined
+      ? undefined
+      : await captureAction(
+          page,
+          "jump",
+          ["jump", "run"],
+          largeJumpCaptureTick,
+          {
+            path: paths.jumpLarge,
+            filename: "jump-large.png",
+            jumpVariant: "large",
+          },
+        );
     const actions = {
       idle: captures.idle.evidence,
       walk: captures.walk.evidence,
@@ -618,6 +771,27 @@ async function verifyBrowser(
       jump: captures.jump.evidence,
     } satisfies Record<CaptureActionId, ActionCaptureEvidence>;
     assert.equal(new Set(Object.values(actions).map((capture) => capture.sha256)).size, 4);
+    const splitJump = SPLIT_JUMP_POLICY === undefined
+      ? undefined
+      : (() => {
+          assert.ok(largeJump !== undefined);
+          const poseDifference = compareSubjectPoseSilhouettes(
+            captures.jump.poseAnalysis,
+            largeJump.poseAnalysis,
+          );
+          assert.ok(
+            poseDifference.differenceRatio >= MINIMUM_SUBJECT_POSE_DIFFERENCE_RATIO,
+            `small/large jump pose difference ${poseDifference.differenceRatio}`,
+          );
+          return {
+            controlFeelProfileRef: CONTROL_FEEL_PROFILE.resourceRef,
+            controlFeelProfileHash: CONTROL_FEEL_PROFILE.contentHash,
+            policy: SPLIT_JUMP_POLICY,
+            small: captures.jump.evidence,
+            large: largeJump.evidence,
+            poseDifference,
+          };
+        })();
     const actionIds = ["idle", "walk", "run", "jump"] as const;
     const comparisons: BrowserEvidence["poseGate"]["comparisons"][number][] = [];
     for (let firstIndex = 0; firstIndex < actionIds.length; firstIndex += 1) {
@@ -646,7 +820,7 @@ async function verifyBrowser(
     assert.ok(wallEndState.positionMetersXYZ[0] > wallStartState.positionMetersXYZ[0] + 2);
     assert.ok(
       wallEndState.positionMetersXYZ[0] < 6.8,
-      `G Bot crossed the wall at x=${wallEndState.positionMetersXYZ[0]}.`,
+      `Product Subject crossed the wall at x=${wallEndState.positionMetersXYZ[0]}.`,
     );
 
     result = {
@@ -662,6 +836,7 @@ async function verifyBrowser(
         stopPositionMetersXYZ: wallEndState.positionMetersXYZ,
         maximumAllowedXMeters: 6.8,
       },
+      ...(splitJump === undefined ? {} : { splitJump }),
     };
   } catch (error) {
     primaryError = error;
@@ -672,7 +847,10 @@ async function verifyBrowser(
       primaryError =
         primaryError === undefined
           ? cleanupError
-          : new AggregateError([primaryError, cleanupError], "G Bot verification cleanup failed.");
+          : new AggregateError(
+              [primaryError, cleanupError],
+              "Product Subject verification cleanup failed.",
+            );
     }
   }
   if (primaryError !== undefined) throw primaryError;
@@ -688,13 +866,13 @@ async function writeVerification(
 ): Promise<void> {
   const cliSnapshot = parseJson<WorldRuntimeSnapshotV4>(
     await readFile(paths.snapshot, "utf8"),
-    "G Bot CLI snapshot",
+    "Product Subject CLI snapshot",
   );
   const compiledAsset = artifact.worldRuntimeBootstrap.subjectAssets[0];
   assert.ok(compiledAsset !== undefined);
   assert.equal(compiledAsset.artifactContentHash, productAsset.artifactContentHash);
   const verification = {
-    kind: "worldkit-g-bot-subject-verification",
+    kind: "worldkit-product-subject-verification",
     schemaVersion: 1,
     inputs: {
       authoringSpecSha256: sha256(await readFile(INPUT_PATH)),
@@ -719,16 +897,22 @@ async function writeVerification(
       browser.actions.walk,
       browser.actions.run,
       browser.actions.jump,
+      ...(browser.splitJump === undefined ? [] : [browser.splitJump.large]),
     ],
     poseGate: browser.poseGate,
     wallStop: browser.wallStop,
+    ...(browser.splitJump === undefined ? {} : { splitJump: browser.splitJump }),
   } as const;
   await writeFile(paths.verification, `${stringifyCanonicalJson(verification)}\n`);
 }
 
 async function run(publicationMode: ArtifactPublicationMode): Promise<void> {
+  await mkdir(path.dirname(TARGET_ARTIFACT_DIRECTORY), { recursive: true });
   const temporaryDirectory = await mkdtemp(
-    path.join(path.dirname(TARGET_ARTIFACT_DIRECTORY), ".g-bot-subject-world.tmp-"),
+    path.join(
+      path.dirname(TARGET_ARTIFACT_DIRECTORY),
+      `.${INTAKE_FIXTURE.id}.tmp-`,
+    ),
   );
   const paths = pathsFor(temporaryDirectory);
   try {
@@ -747,7 +931,7 @@ async function run(publicationMode: ArtifactPublicationMode): Promise<void> {
       publication.backupGarbageCollection === "deferred"
     ) {
       process.stderr.write(
-        `G Bot artifact backup GC deferred at '${publication.deferredBackupDirectory}'.\n`,
+        `Product Subject artifact backup GC deferred at '${publication.deferredBackupDirectory}'.\n`,
       );
     }
     process.stdout.write(
@@ -764,6 +948,9 @@ async function run(publicationMode: ArtifactPublicationMode): Promise<void> {
             subjectAsset: productAsset.artifactContentHash,
           },
           actions: browser.actions,
+          ...(browser.splitJump === undefined
+            ? {}
+            : { splitJump: browser.splitJump }),
           poseGate: browser.poseGate,
           wallStop: browser.wallStop,
         },
@@ -777,7 +964,7 @@ async function run(publicationMode: ArtifactPublicationMode): Promise<void> {
 }
 
 try {
-  await run(parseArtifactPublicationMode(process.argv.slice(2)));
+  await run(VERIFIER_ARGUMENTS.publicationMode);
 } catch (error) {
   const code = error instanceof PlaywrightBrowserUnavailableError ? error.code : undefined;
   process.stderr.write(

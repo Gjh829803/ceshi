@@ -35,7 +35,7 @@
       "kind": "terrain",
       "components": {
         "terrain": {
-          "source": { "kind": "procedural", "relief": "plain", "amplitudeMeters": 0.5 },
+          "source": { "kind": "procedural", "relief": "plain", "amplitudeMeters": 0 },
           "grid": { "centerMetersXZ": [0, 0], "sizeMetersXZ": [80, 80], "resolutionCellsXZ": [65, 65] },
           "semantic": { "classId": "terrain.test-ground" }
         }
@@ -51,13 +51,13 @@
       "id": "spawn-alpha-primary",
       "kind": "anchor",
       "semantic": { "classId": "spawn.player.primary" },
-      "placement": { "kind": "fixed", "transform": { "positionMetersXYZ": [-2, 0.4327890520288841, 18] } }
+      "placement": { "kind": "fixed", "transform": { "positionMetersXYZ": [-2, 0, 18] } }
     },
     {
       "id": "spawn-alpha-secondary",
       "kind": "anchor",
       "semantic": { "classId": "spawn.player.secondary" },
-      "placement": { "kind": "fixed", "transform": { "positionMetersXYZ": [2, 0.4328405709186983, 18] } }
+      "placement": { "kind": "fixed", "transform": { "positionMetersXYZ": [2, 0, 18] } }
     },
     {
       "id": "alpha-primary",

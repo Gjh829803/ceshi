@@ -193,6 +193,7 @@ export function mapPlaygroundInputActions(
 export class PhysicalKeyboardActionTracker {
   readonly #pressedCodes = new Set<string>();
   #spacePressPending = false;
+  #spaceReleasePending = false;
   #spacePressShiftPending = false;
 
   press(code: string): boolean {
@@ -208,6 +209,10 @@ export class PhysicalKeyboardActionTracker {
 
   release(code: string): boolean {
     if (KEY_ACTION_MAP[code] === undefined && !CONTEXTUAL_KEY_CODES.has(code)) return false;
+    if (code === "Space" && this.#spacePressPending) {
+      this.#spaceReleasePending = true;
+      return true;
+    }
     this.#pressedCodes.delete(code);
     return true;
   }
@@ -215,6 +220,7 @@ export class PhysicalKeyboardActionTracker {
   clear(): void {
     this.#pressedCodes.clear();
     this.#spacePressPending = false;
+    this.#spaceReleasePending = false;
     this.#spacePressShiftPending = false;
   }
 
@@ -242,18 +248,10 @@ export class PhysicalKeyboardActionTracker {
       }
     }
     if (this.#spacePressPending) {
-      if (
-        activeMotionKernelRef.endsWith("/free-ground@1") ||
-        activeMotionKernelRef.endsWith("/forward-steer@1")
-      ) {
-        active.add("jump");
-        if (this.#spacePressShiftPending) active.add("run");
-      } else if (activeMotionKernelRef.endsWith("/unpowered-glide@1")) {
-        active.add("primary-action");
-      } else {
-        active.add("brake");
-      }
+      if (this.#spacePressShiftPending && active.has("jump")) active.add("run");
+      if (this.#spaceReleasePending) this.#pressedCodes.delete("Space");
       this.#spacePressPending = false;
+      this.#spaceReleasePending = false;
       this.#spacePressShiftPending = false;
     }
     return SEMANTIC_INPUT_ACTION_ORDER.filter((action) => active.has(action));
