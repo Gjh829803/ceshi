@@ -3,7 +3,6 @@ import path from "node:path";
 
 import {
   hashNativeIsolatedExecutionRequestV1,
-  parseNativeIsolatedExecutionRequestV1,
   parseNativeIsolatedExecutionResultV1,
   parseNativeIsolationTransportEnvelopeV1,
   type NativeIsolatedExecutionRequestV1,
@@ -12,6 +11,7 @@ import {
   type NativeIsolationTransportEnvelopeV1,
 } from "@whitebox-world/runtime-contracts";
 import {
+  assertHostAdmittedNativeExecutionRequestV1,
   NativeIsolationProviderTerminationErrorV1,
   type NativeIsolationProviderV1,
   type NativeIsolationReceiptEvidenceV1,
@@ -328,7 +328,7 @@ export function createDockerNativeIsolationProviderV1(
       requestInput: NativeIsolatedExecutionRequestV1,
       cancellationSignal: AbortSignal,
     ) {
-      const request = parseNativeIsolatedExecutionRequestV1(requestInput);
+      const request = assertHostAdmittedNativeExecutionRequestV1(requestInput);
       if (
         request.runnerIdentityRef !== input.runnerIdentityRef ||
         request.runnerImageDigest !== input.runnerImageDigest ||

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import {
   mkdtemp,
   readFile,
@@ -50,7 +51,11 @@ import {
   type NativeContainerProcessUsageSampleV1,
   type NativeContainerRuntimeUsageObservationV1,
 } from "./hosted-native-isolation-evidence";
-import { parseHostedNativeRuntimeUsageFrameV1 } from
+import {
+  createHostedNativeRuntimeUsageChallengeV1,
+  parseHostedNativeRuntimeUsageFrameV1,
+  verifyHostedNativeRuntimeUsageFrameV1,
+} from
   "../native-scene/hosted/runtime-usage-frame";
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dirname, "../..");
@@ -354,22 +359,31 @@ class DockerJsonLineProcess implements NativeContainerCommandProcessV1 {
     }
     if (isInitialRequest) {
       try {
-        const usageLine = await this.nextLine();
+        const request = this.#request;
+        if (isNil(request)) {
+          throw new Error("HOSTED_NATIVE_RUNTIME_USAGE_REQUEST_MISSING");
+        }
+        const challenge = createHostedNativeRuntimeUsageChallengeV1({
+          requestHash: hashNativeIsolatedExecutionRequestV1(request),
+          runtimeSessionId: request.runtimeSessionId,
+          sessionNonce: request.sessionNonce,
+          challengeNonce: randomBytes(32).toString("hex"),
+        });
+        const challengeLine = JSON.stringify(challenge);
+        const usageLinePromise = this.nextLine();
+        this.#inboundBytes += Buffer.byteLength(challengeLine);
+        this.#child.stdin.write(`${challengeLine}\n`);
+        const usageLine = await usageLinePromise;
         if (Buffer.byteLength(usageLine) > maximumOutputBytes) {
           throw new Error("HOSTED_NATIVE_RUNTIME_USAGE_FRAME_OVERSIZED");
         }
         const usageFrame = parseHostedNativeRuntimeUsageFrameV1(
           JSON.parse(usageLine),
         );
-        const request = this.#request;
-        if (
-          isNil(request) ||
-          usageFrame.requestHash !==
-            hashNativeIsolatedExecutionRequestV1(request) ||
-          usageFrame.runtimeSessionId !== request.runtimeSessionId ||
-          usageFrame.sessionNonce !== request.sessionNonce
-        ) throw new Error("HOSTED_NATIVE_RUNTIME_USAGE_IDENTITY_MISMATCH");
-        this.#runtimeUsage = usageFrame.runtime;
+        this.#runtimeUsage = verifyHostedNativeRuntimeUsageFrameV1({
+          challenge,
+          frame: usageFrame,
+        });
       } catch {
         this.#terminationReason = "protocol-violation";
         await this.killContainerDomain();

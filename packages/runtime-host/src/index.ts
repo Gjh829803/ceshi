@@ -2,6 +2,7 @@ export * from "./gameplay-world-port";
 export * from "./native-execution-budget";
 export {
   admitHostedNativeExecutionRequestV1,
+  assertHostAdmittedNativeExecutionRequestV1,
   type AdmitHostedNativeExecutionRequestInputV1,
 } from "./native-execution-admission";
 export * from "./native-execution-trust-profile-registry";

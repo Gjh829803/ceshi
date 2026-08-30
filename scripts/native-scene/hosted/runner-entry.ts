@@ -32,7 +32,10 @@ import {
 } from "@whitebox-world/world-package/native-runtime";
 import { isNil } from "lodash-es";
 
-import { createHostedNativeRuntimeUsageFrameV1 } from
+import {
+  createHostedNativeRuntimeUsageFrameV1,
+  parseHostedNativeRuntimeUsageChallengeV1,
+} from
   "./runtime-usage-frame";
 
 const PACKAGE_ROOT = "/world-package";
@@ -226,11 +229,26 @@ async function main(): Promise<void> {
       readyResult(request, entry),
       request.effectiveBudget.protocol.maximumOutboundMessageBytes,
     );
+    const challengeLine = await lines.next();
+    if (challengeLine.done) {
+      throw new Error("WORLDKIT_NATIVE_RUNNER_USAGE_CHALLENGE_MISSING");
+    }
+    if (
+      lineBytes(challengeLine.value) >
+        request.effectiveBudget.protocol.maximumInboundMessageBytes
+    ) throw new Error("WORLDKIT_NATIVE_RUNNER_INPUT_LIMIT_EXCEEDED");
+    const usageChallenge = parseHostedNativeRuntimeUsageChallengeV1(
+      JSON.parse(challengeLine.value),
+    );
+    if (
+      usageChallenge.requestHash !==
+        hashNativeIsolatedExecutionRequestV1(request) ||
+      usageChallenge.runtimeSessionId !== request.runtimeSessionId ||
+      usageChallenge.sessionNonce !== request.sessionNonce
+    ) throw new Error("WORLDKIT_NATIVE_RUNNER_USAGE_CHALLENGE_INVALID");
     writeBoundedLine(
       createHostedNativeRuntimeUsageFrameV1({
-        requestHash: hashNativeIsolatedExecutionRequestV1(request),
-        runtimeSessionId: request.runtimeSessionId,
-        sessionNonce: request.sessionNonce,
+        challenge: usageChallenge,
         runtime: entry.runtimeUsage(),
       }),
       request.effectiveBudget.protocol.maximumOutboundMessageBytes,

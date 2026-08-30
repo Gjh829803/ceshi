@@ -3,12 +3,21 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
-  hashNativeEffectiveExecutionBudgetV1,
   type NativeEffectiveExecutionBudgetV1,
   type NativeIsolatedExecutionRequestV1,
 } from "@whitebox-world/runtime-contracts";
-import { NativeIsolationProviderTerminationErrorV1 } from
+import {
+  admitHostedNativeExecutionRequestV1,
+  NativeIsolationProviderTerminationErrorV1,
+} from
   "@whitebox-world/runtime-host";
+import {
+  createBabylonNativeWorldPackageV1,
+  verifyWorldPackageDirectoryV1,
+} from "@whitebox-world/world-package";
+import {
+  createBabylonNativeWorldPackageTestInputV1,
+} from "@whitebox-world/world-package/testing";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -63,30 +72,35 @@ function budget(): NativeEffectiveExecutionBudgetV1 {
   };
 }
 
-function request(): NativeIsolatedExecutionRequestV1 {
-  const effectiveBudget = budget();
-  return {
-    kind: "native-isolated-execution-request",
-    schemaVersion: 1,
+function request(
+  overrides: Readonly<{
+    runnerImageDigest?: `sha256:${string}`;
+  }> = {},
+): NativeIsolatedExecutionRequestV1 {
+  const verifiedWorldPackage = verifyWorldPackageDirectoryV1(
+    createBabylonNativeWorldPackageV1(
+      createBabylonNativeWorldPackageTestInputV1({
+        resourceBudget: budget().scene,
+      }),
+    ),
+  );
+  if (verifiedWorldPackage.kind !== "babylon-native-scene") {
+    throw new Error("Expected a verified Native Package fixture.");
+  }
+  return admitHostedNativeExecutionRequestV1({
     id: "native-isolated-execution-request.container.001",
     runtimeSessionId: "runtime.container.001",
-    worldPackageRef: `package://world-package/sha256/${"a".repeat(64)}`,
-    worldPackageRootHash: `sha256:${"a".repeat(64)}`,
-    worldBuildIdentityHash: `sha256:${"b".repeat(64)}`,
-    sceneModuleBundleHash: `sha256:${"c".repeat(64)}`,
-    nativeSceneContributionHash: `sha256:${"d".repeat(64)}`,
-    nativeExecutionTrustProfileRef:
-      "worldkit://native-execution-trust-profile/hosted-isolated@1",
-    nativeExecutionTrustProfileHash: `sha256:${"e".repeat(64)}`,
+    verifiedWorldPackage,
+    sceneProfileBudget: budget().scene,
+    hostHardCap: budget(),
+    tenantCap: budget(),
     runnerIdentityRef: "worldkit://native-isolation-runner/docker-linux@1",
-    runnerImageDigest: `sha256:${"f".repeat(64)}`,
+    runnerImageDigest: overrides.runnerImageDigest ??
+      `sha256:${"f".repeat(64)}`,
     sandboxPolicyHash: `sha256:${"1".repeat(64)}`,
-    effectiveBudget,
-    effectiveBudgetHash:
-      hashNativeEffectiveExecutionBudgetV1(effectiveBudget),
     requestedOperation: { mode: "interactive-session" },
     sessionNonce: "nonce.container.001;--privileged;/var/run/docker.sock",
-  };
+  });
 }
 
 async function packageDirectory(): Promise<string> {
@@ -131,6 +145,27 @@ function runnerHarness(): Readonly<{
 }
 
 describe("Docker Native isolation provider", () => {
+  it("rejects a structurally valid raw request before command-runner allocation", async () => {
+    const packageHostPath = await packageDirectory();
+    const harness = runnerHarness();
+    const admitted = request();
+    const provider = createDockerNativeIsolationProviderV1({
+      runnerIdentityRef: admitted.runnerIdentityRef,
+      runnerImageRef:
+        `worldkit/native-isolation-runner@${admitted.runnerImageDigest}`,
+      runnerImageDigest: admitted.runnerImageDigest,
+      sandboxPolicyHash: admitted.sandboxPolicyHash,
+      packageHostPath,
+      commandRunner: harness.runner,
+    });
+
+    await expect(provider.prepare(
+      { ...admitted },
+      new AbortController().signal,
+    )).rejects.toThrow(/NATIVE_ISOLATION_ADMISSION_REQUIRED/);
+    expect(harness.invocations).toEqual([]);
+  });
+
   it("builds a digest-only, networkless, read-only and non-root invocation from trusted options", async () => {
     const packageHostPath = await packageDirectory();
     const harness = runnerHarness();
@@ -239,10 +274,10 @@ describe("Docker Native isolation provider", () => {
       commandRunner: harness.runner,
     } as const;
     const provider = createDockerNativeIsolationProviderV1(exactOptions);
-    await expect(provider.prepare({
-      ...request(),
-      runnerImageDigest: `sha256:${"9".repeat(64)}`,
-    }, new AbortController().signal)).rejects.toMatchObject({
+    await expect(provider.prepare(
+      request({ runnerImageDigest: `sha256:${"9".repeat(64)}` }),
+      new AbortController().signal,
+    )).rejects.toMatchObject({
       code: "DOCKER_NATIVE_ISOLATION_IDENTITY_MISMATCH",
     });
     const symlinkProvider = createDockerNativeIsolationProviderV1({
