@@ -1,6 +1,6 @@
 # BNA-4 Verified Native Runtime and Surface Admission Design
 
-**Status:** implementation authority; code not yet accepted  
+**Status:** accepted on `main` through PR #57; exact product SHA `dfa6fbcdc18d3b6fa9fedce741efc1ec0dcb53d7`
 **Date:** 2026-08-30  
 **Program:** WRC-1 / BNA-4  
 **Baseline:** `origin/main@2fd8c1c2694a861e213ad2c72e9cb3aefec087ce`  

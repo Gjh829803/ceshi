@@ -1114,12 +1114,12 @@ AI 用 Three 生成原始 GLB，经资产类别 Build Record 和只读 Asset Adm
 
 | 能力 | 2026-08-30 当前实现事实 | 本设计目标 |
 |---|---|---|
-| Native Module API | BNA-2 已工程闭合；BNA-3 已从唯一 Host 入口消费同一 Source Admission/双 replay，并经 exact-SHA Cloud GO 合入 main | 完成 BNA-4 至 BNA-6，并通过 BNA-8 disposition 后，才可成为 receipt-bound、经 Authority/Runtime Replay Gate 的生产入口 |
-| Bootstrap | BNA-3 已把 Bootstrap、Bundle、Contribution 与 WorldPackage/Receipt identity 闭合；正式 Runtime 仍拒绝 | BNA-4 从同一 verified member 接通正式 admission |
-| Gameplay 复用 | 实验 Native 已复用 `GameplayBootstrapV1` + Plan-independent `WorldRuntimeBootstrapV1`，无影子 Plan | BNA-4 经正式 Package/Surface Admission 接入同一 Kernel |
+| Native Module API | BNA-2/BNA-3/BNA-4 已工程闭合；verified Package 经唯一 Host 入口进入 Source/Authority/Runtime/Surface Admission | 完成 BNA-5/BNA-6，并通过 BNA-8 disposition 后，才可开放 Hosted 与最终生产入口 |
+| Bootstrap | Bootstrap、Bundle、Contribution 与 WorldPackage/Receipt identity 已闭合并进入正式 Runtime | BNA-5 增加 Hosted Trust/Isolation，不改变 Bootstrap 权威 |
+| Gameplay 复用 | Native 已通过正式 Package/Surface Admission 复用 `GameplayBootstrapV1` + Plan-independent `WorldRuntimeBootstrapV1` 与同一 Kernel，无影子 Plan | 后续只扩展隔离、评测与 Capture，不复制 Kernel |
 | 通用世界身份 | BNA-3 已由同一 Root 后派生 Native Package Ref、Build Identity 和 Receipt；Plan-specific Route/Edit 仍显式使用 Plan Hash | BNA-4 只消费该已冻结身份，不恢复 generic Plan Hash |
-| Runtime Source | verified union 可投影 receipt-bound Native Bootstrap/Bundle identity；RuntimeHost 在 adapter/Candidate/Module 分配前明确拒绝 | BNA-4 才可移除正式 Native rejection |
-| 登记 | Spawn、静态 Collider Contribution、Route/Attempt/Check 及预算已进入 Native Root 并可重放；未创建 Havok | BNA-4 完成生产 Surface Admission |
+| Runtime Source | verified union 已把 receipt-bound Native Bootstrap/Bundle identity 接入同一 RuntimeHost；旧 formal rejection 已 current-only 删除 | BNA-5 为 Hosted 增加隔离 admission，不恢复第二 Runtime Source |
+| 登记 | Spawn、静态 Collider Contribution、Route/Attempt/Check 及预算进入 Native Root；BNA-4 从冻结 Contribution 创建 SDK-owned Havok | BNA-5/6/7 补隔离、评测与 Capture 证据 |
 | Physics/Subject/Camera | 已由 SDK/Havok 接管并通过实验移动 | 继续使用同一生产 Kernel，不复制 Runtime |
 | 场景效果 | `cloud-ridge` 已显示核心构图并有通过性 Probe | Golden Corpus、正式 Visual/Interaction Gate |
 | Package/Receipt | BNA-3 已实现 deterministic Bundle、Dependency/Asset Lock、统一 Package/Receipt/verifier/Store/File/signing/inspect，并通过 exact-SHA Cloud GO 合入 main | 作为 BNA-4 唯一 Package 输入 |
