@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  AUTOMATIC_LOCOMOTION_PRESENTATION_KEYS_V1,
   BIPED_BONE_IDS_V1,
   GROUND_HUMANOID_ACTION_IDS_V1,
   SUBJECT_BODY_TOPOLOGIES_V2,
@@ -44,6 +45,8 @@ const EXPECTED_GROUND_HUMANOID_ACTION_IDS = [
   "walk.step",
   "run",
   "jump",
+  "jump.small.takeoff",
+  "jump.small.airborne",
   "fall",
   "land.hard",
   "land.hard.alt",
@@ -63,6 +66,20 @@ const EXPECTED_GROUND_HUMANOID_ACTION_IDS = [
   "emote.salute",
   "emote.angry",
   "dance.rumba",
+] as const;
+
+const EXPECTED_AUTOMATIC_LOCOMOTION_PRESENTATION_KEYS = [
+  "locomotion.suspended",
+  "locomotion.idle",
+  "locomotion.walk",
+  "locomotion.run",
+  "locomotion.takeoff",
+  "locomotion.rising",
+  "locomotion.apex",
+  "locomotion.falling",
+  "locomotion.landing",
+  "locomotion.small-jump.takeoff",
+  "locomotion.small-jump.airborne",
 ] as const;
 
 const EXPECTED_BIPED_BONE_IDS = [
@@ -114,6 +131,10 @@ describe("canonical Subject serialized vocabularies", () => {
     expectFrozenUniqueExact(
       GROUND_HUMANOID_ACTION_IDS_V1,
       EXPECTED_GROUND_HUMANOID_ACTION_IDS,
+    );
+    expectFrozenUniqueExact(
+      AUTOMATIC_LOCOMOTION_PRESENTATION_KEYS_V1,
+      EXPECTED_AUTOMATIC_LOCOMOTION_PRESENTATION_KEYS,
     );
     expectFrozenUniqueExact(BIPED_BONE_IDS_V1, EXPECTED_BIPED_BONE_IDS);
     expectFrozenUniqueExact(

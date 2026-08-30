@@ -147,6 +147,74 @@ describe("resolveActionPresentationV1", () => {
     expect(resolved.layeredMoves).toEqual([]);
   });
 
+  it.each([
+    ["small anticipation", locomotion(8), {
+      schemaVersion: 1, variant: "small", phase: "anticipating",
+      startedTick: 8, anticipationStartedTick: 8, committedTick: 8,
+      anticipationTicksRemaining: 4,
+    }, "locomotion.small-jump.takeoff"],
+    ["small airborne", locomotion(8, {
+      mobilityMode: "airborne", gait: "none", verticalPhase: "falling",
+      supportMode: "unsupported", movementMedium: "air",
+      linearVelocity: { x: 0, y: -2, z: 0 },
+    }), {
+      schemaVersion: 1, variant: "small", phase: "airborne",
+      startedTick: 6, anticipationStartedTick: 6, takeoffTick: 7, committedTick: 8,
+    }, "locomotion.small-jump.airborne"],
+    ["large anticipation", locomotion(8), {
+      schemaVersion: 1, variant: "large", phase: "anticipating",
+      startedTick: 8, anticipationStartedTick: 8, committedTick: 8,
+      anticipationTicksRemaining: 6,
+    }, "locomotion.takeoff"],
+    ["large airborne", locomotion(8, {
+      mobilityMode: "airborne", gait: "none", verticalPhase: "falling",
+      supportMode: "unsupported", movementMedium: "air",
+      linearVelocity: { x: 0, y: -2, z: 0 },
+    }), {
+      schemaVersion: 1, variant: "large", phase: "airborne",
+      startedTick: 6, anticipationStartedTick: 6, takeoffTick: 7, committedTick: 8,
+    }, "locomotion.falling"],
+    ["buffered", locomotion(8, {
+      mobilityMode: "airborne", gait: "none", verticalPhase: "falling",
+      supportMode: "unsupported", movementMedium: "air",
+      linearVelocity: { x: 0, y: -2, z: 0 },
+    }), {
+      schemaVersion: 1, variant: "small", phase: "buffered",
+      startedTick: 8, committedTick: 8,
+    }, "locomotion.falling"],
+  ] as const)("maps committed %s without provider inference", (
+    _label,
+    committedLocomotion,
+    jumpEpisode,
+    expected,
+  ) => {
+    const resolved = resolveActionPresentationV1({
+      ...input(8, { locomotion: committedLocomotion }),
+      jumpEpisode,
+    }, registry);
+    expect(resolved.presentationKey).toBe(expected);
+  });
+
+  it("rejects forged or incoherent split jump presentation input", () => {
+    const airborneEpisode = {
+      schemaVersion: 1,
+      variant: "small",
+      phase: "airborne",
+      startedTick: 6,
+      anticipationStartedTick: 6,
+      takeoffTick: 7,
+      committedTick: 8,
+    } as const;
+    for (const malformed of [
+      { ...input(8), jumpEpisode: { ...airborneEpisode, committedTick: 7 } },
+      { ...input(8), jumpEpisode: airborneEpisode },
+      { ...input(8), jumpPresentation: { variant: "small" } },
+    ]) {
+      expect(() => resolveActionPresentationV1(malformed, registry))
+        .toThrow("3C_INPUT_INVALID");
+    }
+  });
+
   it("samples locked Root Motion into a deterministic LayeredMove without using the Clip name", () => {
     const first = resolveActionPresentationV1(input(21, {
       locomotion: locomotion(21),

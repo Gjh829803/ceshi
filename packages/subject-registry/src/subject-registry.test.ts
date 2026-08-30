@@ -33,7 +33,9 @@ const G_BOT_COLLIDER_PROFILE_REF =
   "worldkit://collider-profile/humanoid.g-bot-capsule@1";
 const G_BOT_SUBJECT_DEFINITION_REF =
   "worldkit://subject-definition/humanoid.g-bot@2";
-const G_BOT_ACTION_IDS = [...GROUND_HUMANOID_ACTION_IDS_V1].sort();
+const G_BOT_ACTION_IDS = GROUND_HUMANOID_ACTION_IDS_V1.filter(
+  (actionId) => actionId !== "jump.small.takeoff" && actionId !== "jump.small.airborne",
+).sort();
 const BIPED_BONE_IDS = [...BIPED_BONE_IDS_V1].sort();
 
 function goldenAnimationSetInput(): AnimationSetManifestInputV1 {

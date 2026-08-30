@@ -33,6 +33,8 @@ export const GROUND_HUMANOID_ACTION_IDS_V1 = Object.freeze([
   "walk.step",
   "run",
   "jump",
+  "jump.small.takeoff",
+  "jump.small.airborne",
   "fall",
   "land.hard",
   "land.hard.alt",
@@ -81,6 +83,8 @@ export const AUTOMATIC_LOCOMOTION_PRESENTATION_KEYS_V1 = Object.freeze([
   "locomotion.apex",
   "locomotion.falling",
   "locomotion.landing",
+  "locomotion.small-jump.takeoff",
+  "locomotion.small-jump.airborne",
 ] as const);
 
 export type AutomaticLocomotionPresentationKeyV1 =

@@ -1,6 +1,8 @@
 import {
   parseLayeredMoveV1,
+  parseJumpEpisodeStateV1,
   sampleLockedRootMotionSourceV1,
+  type JumpEpisodeStateV1,
   type LayeredMoveV1,
 } from "@whitebox-world/character-movement";
 import {
@@ -8,6 +10,9 @@ import {
   type GameplayActionStateV1,
   type LocomotionCapabilityStateV2,
 } from "@whitebox-world/gameplay-contracts";
+import {
+  AUTOMATIC_LOCOMOTION_PRESENTATION_KEYS_V1,
+} from "@whitebox-world/subject-contracts";
 
 import type {
   ActionPresentationBindingV1,
@@ -25,17 +30,9 @@ const ACTION_PRESENTATION_REF =
   /^worldkit:\/\/action-presentation\/([a-z0-9]+(?:[.-][a-z0-9]+)*)@([1-9][0-9]*)$/;
 const ACTION_PRESENTATION_KEY =
   /^action\.([a-z0-9]+(?:[.-][a-z0-9]+)*)$/;
-const LOCOMOTION_PRESENTATION_KEYS = new Set<LocomotionPresentationKeyV1>([
-  "locomotion.suspended",
-  "locomotion.idle",
-  "locomotion.walk",
-  "locomotion.run",
-  "locomotion.takeoff",
-  "locomotion.rising",
-  "locomotion.apex",
-  "locomotion.falling",
-  "locomotion.landing",
-]);
+const LOCOMOTION_PRESENTATION_KEYS = new Set<LocomotionPresentationKeyV1>(
+  AUTOMATIC_LOCOMOTION_PRESENTATION_KEYS_V1,
+);
 
 function invalid(detail: string): never {
   throw new RangeError(`3C_INPUT_INVALID: ${detail}`);
@@ -181,8 +178,14 @@ function parseInput(input: unknown): ActionPresentationResolveInputV1 {
   const base = [
     "schemaVersion", "committedTick", "fixedDeltaSeconds", "locomotion",
   ] as const;
-  const hasAction = exact(value, [...base, "activeActionState"]);
-  if ((!exact(value, base) && !hasAction) || value.schemaVersion !== 1) {
+  const hasAction = Object.hasOwn(value, "activeActionState");
+  const hasJumpEpisode = Object.hasOwn(value, "jumpEpisode");
+  const keys = [
+    ...base,
+    ...(hasJumpEpisode ? ["jumpEpisode"] : []),
+    ...(hasAction ? ["activeActionState"] : []),
+  ];
+  if (!exact(value, keys) || value.schemaVersion !== 1) {
     return invalid("ActionPresentationResolveInputV1 has an invalid closed shape.");
   }
   const committedTick = safeTick(value.committedTick, "committedTick");
@@ -195,18 +198,46 @@ function parseInput(input: unknown): ActionPresentationResolveInputV1 {
   if (locomotion.committedTick !== committedTick) {
     return invalid("locomotion and presentation committed Ticks differ.");
   }
+  let jumpEpisode: JumpEpisodeStateV1 | undefined;
+  if (hasJumpEpisode) {
+    try {
+      jumpEpisode = parseJumpEpisodeStateV1(value.jumpEpisode);
+    } catch {
+      return invalid("jumpEpisode is not canonical committed Movement data.");
+    }
+    if (jumpEpisode.committedTick !== committedTick) {
+      return invalid("jump Episode and presentation committed Ticks differ.");
+    }
+    if (jumpEpisode.phase === "airborne" &&
+      (locomotion.status !== "active" || locomotion.mobilityMode !== "airborne" ||
+        locomotion.verticalPhase === "none" || locomotion.verticalPhase === "landing")) {
+      return invalid("airborne jump Episode contradicts committed Locomotion.");
+    }
+  }
   return Object.freeze({
     schemaVersion: 1,
     committedTick,
     fixedDeltaSeconds: finitePositive(value.fixedDeltaSeconds, "fixedDeltaSeconds"),
     locomotion,
+    ...(jumpEpisode === undefined ? {} : { jumpEpisode }),
     ...(hasAction
       ? { activeActionState: actionState(value.activeActionState, committedTick) }
       : {}),
   });
 }
 
-function locomotionKey(state: LocomotionCapabilityStateV2): LocomotionPresentationKeyV1 {
+function locomotionKey(
+  state: LocomotionCapabilityStateV2,
+  jumpEpisode?: JumpEpisodeStateV1,
+): LocomotionPresentationKeyV1 {
+  if (jumpEpisode?.phase === "anticipating") {
+    return jumpEpisode.variant === "small"
+      ? "locomotion.small-jump.takeoff"
+      : "locomotion.takeoff";
+  }
+  if (jumpEpisode?.phase === "airborne" && jumpEpisode.variant === "small") {
+    return "locomotion.small-jump.airborne";
+  }
   if (state.status === "suspended") return "locomotion.suspended";
   if (state.verticalPhase !== "none") return `locomotion.${state.verticalPhase}`;
   return `locomotion.${state.gait}` as LocomotionPresentationKeyV1;
@@ -256,7 +287,7 @@ export function resolveActionPresentationV1(
       schemaVersion: 1,
       committedTick: input.committedTick,
       source: "locomotion",
-      presentationKey: locomotionKey(input.locomotion),
+      presentationKey: locomotionKey(input.locomotion, input.jumpEpisode),
       layeredMoves: Object.freeze([]),
     });
   }
