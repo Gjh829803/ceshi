@@ -1036,6 +1036,7 @@ export class BabylonWorldRuntime {
           let latestAnimation: Readonly<{
             presentation: ResolvedActionPresentationV1;
             committedActionState?: Parameters<SubjectVisual["stepAnimation"]>[1];
+            jumpEpisode?: Parameters<SubjectVisual["stepAnimation"]>[2];
           }> | undefined;
           const projection = new GoldenHumanoidPresentationContextProjectionV1({
             actionPresentationRegistry,
@@ -1050,6 +1051,7 @@ export class BabylonWorldRuntime {
                     visual.stepAnimation(
                       previous.presentation,
                       previous.committedActionState,
+                      previous.jumpEpisode,
                     );
                   }
                   latestAnimation = previous;
@@ -1061,12 +1063,16 @@ export class BabylonWorldRuntime {
                       visual.stepAnimation(
                         request.presentation,
                         request.committedActionState,
+                        request.jumpEpisode,
                       );
                       latestAnimation = Object.freeze({
                         presentation: request.presentation,
                         ...(request.committedActionState === undefined
                           ? {}
                           : { committedActionState: request.committedActionState }),
+                        ...(request.jumpEpisode === undefined
+                          ? {}
+                          : { jumpEpisode: request.jumpEpisode }),
                       });
                       state = "committed";
                     } catch (error) {

@@ -559,6 +559,8 @@ interface SubjectVisualInternals extends SubjectVisual {
   primitiveMeshes?: readonly Mesh[];
   assetPartRoots?: readonly TransformNode[];
   animationPlayer?: SubjectAnimationPlayer;
+  visualAdjustmentRoot?: TransformNode;
+  verticalFootSupportAnchor?: unknown;
 }
 
 interface SubjectVisualProbe {
@@ -3839,6 +3841,89 @@ function emptyActionProjection(simulationTick: number) {
     expect(heroBHandSocket.isDisposed()).toBe(false);
     expect(heroBLocalSocket.isDisposed()).toBe(false);
     expect(heroBInstance.rootNodes[0]!.isDisposed()).toBe(false);
+
+    await runtime.dispose();
+  });
+
+  it("keeps split-jump foot adjustment below committed roots and isolated per Subject", async () => {
+    const runtime = await createRiggedRuntime(createTwoRiggedSubjectExecutionPlan());
+    const probe = createSubjectVisualProbe(runtime);
+    const playerVisual = probe.visual("player");
+    const heroBVisual = probe.visual("hero-b");
+    const playerAdjustment = playerVisual.visualAdjustmentRoot!;
+    const heroBAdjustment = heroBVisual.visualAdjustmentRoot!;
+    const playerRootBefore = playerVisual.root.position.clone();
+    const heroBRootBefore = heroBVisual.root.position.clone();
+    const playerAdjustmentBefore = playerAdjustment.position.y;
+
+    expect(playerAdjustment.parent).toBe(playerVisual.root);
+    expect(heroBAdjustment.parent).toBe(heroBVisual.root);
+    expect(playerVisual.assetPartRoots![0]!.parent).toBe(playerAdjustment);
+    expect(playerAdjustment).not.toBe(heroBAdjustment);
+
+    const anticipating = (tick: number) => Object.freeze({
+      schemaVersion: 1 as const,
+      variant: "large" as const,
+      phase: "anticipating" as const,
+      startedTick: 1,
+      anticipationStartedTick: 1,
+      committedTick: tick,
+      anticipationTicksRemaining: 1,
+    });
+    const takeoffPresentation = (tick: number): ResolvedActionPresentationV1 =>
+      Object.freeze({
+        schemaVersion: 1,
+        committedTick: tick,
+        source: "locomotion",
+        presentationKey: "locomotion.takeoff",
+        layeredMoves: Object.freeze([]),
+      });
+
+    playerVisual.stepAnimation(
+      takeoffPresentation(1),
+      undefined,
+      anticipating(1),
+    );
+    playerVisual.applyAnimationPose();
+    playerVisual.stepAnimation(
+      takeoffPresentation(2),
+      undefined,
+      anticipating(2),
+    );
+    playerVisual.applyAnimationPose();
+
+    expect(Number.isFinite(playerAdjustment.position.y)).toBe(true);
+    expect(playerVisual.root.position.asArray()).toEqual(playerRootBefore.asArray());
+    expect(heroBVisual.root.position.asArray()).toEqual(heroBRootBefore.asArray());
+    expect(heroBAdjustment.position.y).toBe(0);
+
+    playerVisual.resetAnimation();
+    expect(playerAdjustment.position.y).toBe(playerAdjustmentBefore);
+    await runtime.dispose();
+    expect(playerAdjustment.isDisposed()).toBe(true);
+    expect(heroBAdjustment.isDisposed()).toBe(true);
+  });
+
+  it("keeps rigged animation usable when the admitted Rig has no foot semantics", async () => {
+    const basePlan = createFlatRiggedExecutionPlan();
+    const bootstrap = runtimeBootstrap(basePlan);
+    const rigProfile = bootstrap.rigProfiles[0]!;
+    const executionPlan = overrideRuntimeBootstrap(basePlan, {
+      rigProfiles: [{
+        ...rigProfile,
+        requiredBoneIds: rigProfile.requiredBoneIds.filter(
+          (boneId) => boneId !== "foot.left" && boneId !== "foot.right",
+        ),
+      }],
+    });
+    const runtime = await createRiggedRuntime(executionPlan);
+    const visual = createSubjectVisualProbe(runtime).visual("player");
+
+    expect(visual.visualAdjustmentRoot).toBeDefined();
+    expect(visual.verticalFootSupportAnchor).toBeUndefined();
+    visual.stepAnimation(resolvedAutomaticPresentation(1, "run"));
+    visual.applyAnimationPose();
+    expect(visual.activeActionId).toBe("run");
 
     await runtime.dispose();
   });

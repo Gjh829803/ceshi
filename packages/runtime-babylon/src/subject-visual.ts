@@ -9,6 +9,9 @@ import { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
 
 import type {
+  JumpEpisodeStateV1,
+} from "@whitebox-world/character-movement";
+import type {
   GameplayActionStateV1,
 } from "@whitebox-world/gameplay-contracts";
 import type {
@@ -32,6 +35,7 @@ import {
   type SubjectAssetLeaseV1,
   type SubjectAssetRuntimeErrorCodeV1,
 } from "./subject-asset-cache";
+import { VerticalFootSupportAnchorV1 } from "./vertical-foot-support-anchor";
 
 export interface SubjectVisual {
   root: TransformNode;
@@ -41,6 +45,7 @@ export interface SubjectVisual {
   stepAnimation(
     presentation: ResolvedActionPresentationV1,
     committedActionState?: GameplayActionStateV1,
+    jumpEpisode?: JumpEpisodeStateV1,
   ): void;
   applyAnimationPose(): void;
   resetAnimation(): void;
@@ -53,6 +58,8 @@ function debugActionIdForPresentation(
   const key = presentation.presentationKey;
   if (key === "locomotion.walk") return "walk";
   if (key === "locomotion.run") return "run";
+  if (key === "locomotion.small-jump.takeoff") return "jump.small.takeoff";
+  if (key === "locomotion.small-jump.airborne") return "jump.small.airborne";
   if ([
     "locomotion.takeoff", "locomotion.rising", "locomotion.apex",
     "locomotion.falling", "locomotion.landing",
@@ -287,6 +294,7 @@ function disposeSubjectSocketsAndPrimitives(
 function disposeSubjectAssetNodesAndMaterial(
   assetPartRoots: readonly TransformNode[],
   staticOwnedMaterial: Material | undefined,
+  visualAdjustmentRoot: TransformNode | undefined,
   root: TransformNode,
   attempt: CleanupAttemptV1,
 ): void {
@@ -294,6 +302,7 @@ function disposeSubjectAssetNodesAndMaterial(
     attempt(() => partRoot.dispose(false, false));
   }
   attempt(() => staticOwnedMaterial?.dispose(false, false));
+  attempt(() => visualAdjustmentRoot?.dispose(false, false));
   attempt(() => root.dispose(false, false));
 }
 
@@ -311,6 +320,9 @@ class OwnedSubjectVisual implements SubjectVisual {
       readonly StaticAssetPartResetStateV1[],
     private readonly staticOwnedMaterial: Material | undefined,
     private readonly animationPlayer: SubjectAnimationPlayer | undefined,
+    readonly visualAdjustmentRoot: TransformNode | undefined,
+    private readonly verticalFootSupportAnchor:
+      VerticalFootSupportAnchorV1 | undefined,
     private readonly assetDescriptor: RuntimeSubjectAssetV1 | undefined,
     private readonly assetInstance: SubjectAssetInstanceV1 | undefined,
     private readonly assetLease: SubjectAssetLeaseV1 | undefined,
@@ -323,17 +335,25 @@ class OwnedSubjectVisual implements SubjectVisual {
   stepAnimation(
     presentation: ResolvedActionPresentationV1,
     committedActionState?: GameplayActionStateV1,
+    jumpEpisode?: JumpEpisodeStateV1,
   ): void {
     this.fallbackActionId = debugActionIdForPresentation(presentation);
     this.animationPlayer?.step(presentation, committedActionState);
+    this.verticalFootSupportAnchor?.updateCommittedProjection({
+      committedTick: presentation.committedTick,
+      presentationKey: presentation.presentationKey,
+      ...(jumpEpisode === undefined ? {} : { jumpEpisode }),
+    });
   }
 
   applyAnimationPose(): void {
     this.animationPlayer?.applyPose();
+    this.verticalFootSupportAnchor?.applyAfterPose();
   }
 
   resetAnimation(): void {
     this.fallbackActionId = "idle";
+    this.verticalFootSupportAnchor?.reset();
     for (const state of this.staticAssetPartResetStates) {
       state.node.position.copyFrom(state.position);
       state.node.rotation.setAll(0);
@@ -365,10 +385,12 @@ class OwnedSubjectVisual implements SubjectVisual {
       disposeSubjectAssetNodesAndMaterial(
         this.assetPartRoots,
         this.staticOwnedMaterial,
+        this.visualAdjustmentRoot,
         this.root,
         attempt,
       );
     } else {
+      attempt(() => this.verticalFootSupportAnchor?.dispose());
       attempt(() => this.animationPlayer?.dispose());
       disposeSubjectSocketsAndPrimitives(
         this.socketNodesById,
@@ -381,6 +403,7 @@ class OwnedSubjectVisual implements SubjectVisual {
       disposeSubjectAssetNodesAndMaterial(
         this.assetPartRoots,
         undefined,
+        this.visualAdjustmentRoot,
         this.root,
         attempt,
       );
@@ -408,6 +431,10 @@ export async function createSubjectVisual(
     worldkitEntityId: subject.entityId,
     semanticClassId: subject.semanticClassId,
   };
+  const visualAdjustmentRoot = subject.visualBinding.mode === "rigged"
+    ? new TransformNode(`${subject.entityId}.visual-adjustment-root`, scene)
+    : undefined;
+  if (visualAdjustmentRoot !== undefined) visualAdjustmentRoot.parent = root;
   const primitiveMeshes: Mesh[] = [];
   const allMeshes: AbstractMesh[] = [];
   const assetPartRoots: TransformNode[] = [];
@@ -416,6 +443,7 @@ export async function createSubjectVisual(
   let assetLease: SubjectAssetLeaseV1 | undefined;
   let assetInstance: SubjectAssetInstanceV1 | undefined;
   let animationPlayer: SubjectAnimationPlayer | undefined;
+  let verticalFootSupportAnchor: VerticalFootSupportAnchorV1 | undefined;
   let assetDescriptor: RuntimeSubjectAssetV1 | undefined;
   let staticOwnedMaterial: Material | undefined;
 
@@ -445,7 +473,7 @@ export async function createSubjectVisual(
     for (const part of subject.visualParts) {
       if (part.kind === "primitive") {
         const mesh = createPartMesh(subject.entityId, part, scene);
-        mesh.parent = root;
+        mesh.parent = visualAdjustmentRoot ?? root;
         applyLocalTransform(mesh, part.localTransform);
         mesh.material = staticOwnedMaterial ?? material;
         mesh.metadata = {
@@ -469,7 +497,7 @@ export async function createSubjectVisual(
       assetLease = await subjectAssetCache.acquire(asset);
       assetInstance = assetLease.instantiate(subject.entityId);
       const partRoot = new TransformNode(`${subject.entityId}.${part.id}`, scene);
-      partRoot.parent = root;
+      partRoot.parent = visualAdjustmentRoot ?? root;
       applyLocalTransform(partRoot, part.localTransform);
       partRoot.scaling = new Vector3(...part.localTransform.scaleXYZ);
       assetPartRoots.push(partRoot);
@@ -534,6 +562,32 @@ export async function createSubjectVisual(
         .sort((left, right) =>
           left.name.localeCompare(right.name) || left.uniqueId - right.uniqueId,
         );
+      const leftFoot = mappedBones.get("foot.left");
+      const rightFoot = mappedBones.get("foot.right");
+      const anchorMesh = affectedMeshes[0];
+      if (visualAdjustmentRoot !== undefined && leftFoot !== undefined &&
+        rightFoot !== undefined && anchorMesh !== undefined) {
+        verticalFootSupportAnchor = new VerticalFootSupportAnchorV1({
+          readAdjustmentOffsetY: () => visualAdjustmentRoot.position.y,
+          writeAdjustmentOffsetY: (value) => {
+            visualAdjustmentRoot.position.y = value;
+          },
+          sampleMinimumFootHeightFromVisualRoot: () => {
+            root.computeWorldMatrix(true);
+            anchorMesh.computeWorldMatrix(true);
+            const inverseRoot = root.getWorldMatrix().clone().invert();
+            const leftPosition = Vector3.TransformCoordinates(
+              leftFoot.getAbsolutePosition(anchorMesh),
+              inverseRoot,
+            );
+            const rightPosition = Vector3.TransformCoordinates(
+              rightFoot.getAbsolutePosition(anchorMesh),
+              inverseRoot,
+            );
+            return Math.min(leftPosition.y, rightPosition.y);
+          },
+        });
+      }
 
       for (const socket of subject.sockets) {
         let socketNode: TransformNode;
@@ -607,6 +661,8 @@ export async function createSubjectVisual(
       staticAssetPartResetStates,
       staticOwnedMaterial,
       animationPlayer,
+      visualAdjustmentRoot,
+      verticalFootSupportAnchor,
       assetDescriptor,
       assetInstance,
       assetLease,
@@ -630,10 +686,12 @@ export async function createSubjectVisual(
       disposeSubjectAssetNodesAndMaterial(
         assetPartRoots,
         staticOwnedMaterial,
+        visualAdjustmentRoot,
         root,
         attempt,
       );
     } else {
+      attempt(() => verticalFootSupportAnchor?.dispose());
       attempt(() => animationPlayer?.dispose());
       disposeSubjectSocketsAndPrimitives(
         socketNodesById,
@@ -644,6 +702,7 @@ export async function createSubjectVisual(
       disposeSubjectAssetNodesAndMaterial(
         assetPartRoots,
         undefined,
+        visualAdjustmentRoot,
         root,
         attempt,
       );

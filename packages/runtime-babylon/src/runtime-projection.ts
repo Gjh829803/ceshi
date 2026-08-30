@@ -11,6 +11,7 @@ import type {
 import type { GameplayActionStateV1 } from "@whitebox-world/gameplay-contracts";
 import type { LocomotionCapabilityStateV2 } from "@whitebox-world/gameplay-contracts";
 import type { ResolvedActionPresentationV1 } from "@whitebox-world/subject-actions";
+import type { JumpEpisodeStateV1 } from "@whitebox-world/character-movement";
 
 /**
  * A prepared Babylon presentation transaction. `abort()` remains valid after
@@ -27,6 +28,7 @@ export interface BabylonCommittedAnimationProjectionRequestV1 {
   readonly schemaVersion: 1;
   readonly committedTick: number;
   readonly presentation: ResolvedActionPresentationV1;
+  readonly jumpEpisode?: JumpEpisodeStateV1;
   readonly committedActionState?: GameplayActionStateV1;
 }
 

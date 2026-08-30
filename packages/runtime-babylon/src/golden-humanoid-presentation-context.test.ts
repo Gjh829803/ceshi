@@ -281,6 +281,49 @@ describe("GoldenHumanoidPresentationContextProjectionV1", () => {
     });
   });
 
+  it("forwards the exact committed Jump Episode to Babylon presentation", () => {
+    const { animation, port } = harness();
+    const base = projectionInput(21);
+    const commit = parseMovementCommitV1({
+      ...base.commit,
+      jumpEpisode: {
+        schemaVersion: 1,
+        variant: "small",
+        phase: "anticipating",
+        startedTick: 21,
+        anticipationStartedTick: 21,
+        committedTick: 21,
+        anticipationTicksRemaining: 1,
+      },
+    });
+    const presentation = resolveActionPresentationV1({
+      schemaVersion: 1,
+      committedTick: 21,
+      fixedDeltaSeconds: 1 / 60,
+      locomotion: commit.locomotion,
+      jumpEpisode: commit.jumpEpisode,
+    }, registry);
+    const cameraContext = parseCameraContextSampleV2({
+      ...base.cameraContext,
+      actionSummary: {
+        status: "available",
+        activeActionRefs: [],
+        isInterruptible: true,
+      },
+    });
+
+    port.prepare(Object.freeze({ commit, presentation, cameraContext })).commit();
+
+    expect(animation.target.prepareCalls[0]).toMatchObject({
+      committedTick: 21,
+      presentation: { presentationKey: "locomotion.small-jump.takeoff" },
+    });
+    expect(animation.target.prepareCalls[0]).toHaveProperty(
+      "jumpEpisode",
+      commit.jumpEpisode,
+    );
+  });
+
   it("projects a trusted interruptible Action and collision-limited Root Motion without movement writes", () => {
     const { animation, camera, port } = harness();
     const input = projectionInput(21);
