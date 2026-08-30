@@ -67,4 +67,3 @@ export function resolveNativeExecutionTrustProfileV1(
   }
   return profile;
 }
-

@@ -1,9 +1,9 @@
 # BNA-5 Hosted Native Isolation and Trust Profile Design
 
-**Status:** implementation authority after BNA-4 acceptance  
-**Date:** 2026-08-30  
-**Program:** WRC-1 / BNA-5  
-**Baseline:** BNA-4 candidate `dfa6fbcdc18d3b6fa9fedce741efc1ec0dcb53d7`  
+**Status:** implementation authority after BNA-4 acceptance
+**Date:** 2026-08-30
+**Program:** WRC-1 / BNA-5
+**Baseline:** BNA-4 candidate `dfa6fbcdc18d3b6fa9fedce741efc1ec0dcb53d7`
 **Upstream authority:**
 
 - `docs/superpowers/specs/2026-08-28-ai-friendly-babylon-native-world-authoring-design.md`

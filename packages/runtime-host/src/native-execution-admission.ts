@@ -32,7 +32,6 @@ export interface AdmitHostedNativeExecutionRequestInputV1 {
   readonly requestedOperation: NativeIsolatedExecutionOperationV1;
   readonly sessionNonce: string;
 }
-
 export function admitHostedNativeExecutionRequestV1(
   input: AdmitHostedNativeExecutionRequestInputV1,
 ): NativeIsolatedExecutionRequestV1 {
@@ -75,4 +74,3 @@ export function admitHostedNativeExecutionRequestV1(
     sessionNonce: input.sessionNonce,
   });
 }
-

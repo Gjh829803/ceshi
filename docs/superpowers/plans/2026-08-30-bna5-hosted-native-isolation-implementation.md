@@ -185,7 +185,7 @@ it("rejects a receipt whose request identity or effective budget hash drifts", (
 
 - [ ] **Step 2: Run the contract test and observe RED**
 
-Run: `pnpm exec vitest run packages/runtime-contracts/src/native-execution-isolation.test.ts`  
+Run: `pnpm exec vitest run packages/runtime-contracts/src/native-execution-isolation.test.ts`
 Expected: FAIL because the module and exported parsers do not exist.
 
 - [ ] **Step 3: Implement exact types, parsers, unions and hashes**
@@ -271,7 +271,7 @@ Also cover missing groups, zero, negative, unsafe integer, extra keys and unknow
 
 - [ ] **Step 2: Run RED**
 
-Run: `pnpm exec vitest run packages/runtime-host/src/native-execution-budget.test.ts`  
+Run: `pnpm exec vitest run packages/runtime-host/src/native-execution-budget.test.ts`
 Expected: FAIL because the resolver does not exist.
 
 - [ ] **Step 3: Implement one explicit resolver**
@@ -388,7 +388,7 @@ nonce/sequence, oversize inbound/outbound messages and submit after termination.
 
 - [ ] **Step 2: Run RED**
 
-Run: `pnpm exec vitest run packages/runtime-host/src/native-isolation-supervisor.test.ts`  
+Run: `pnpm exec vitest run packages/runtime-host/src/native-isolation-supervisor.test.ts`
 Expected: FAIL because the supervisor does not exist.
 
 - [ ] **Step 3: Implement the explicit state machine**
@@ -477,7 +477,7 @@ two-instance isolation, partial create and throwing dispose.
 
 - [ ] **Step 2: Run RED**
 
-Run: `pnpm exec vitest run packages/runtime-babylon/src/babylon-native-isolated-runtime-entry.test.ts`  
+Run: `pnpm exec vitest run packages/runtime-babylon/src/babylon-native-isolated-runtime-entry.test.ts`
 Expected: FAIL because the entry does not exist.
 
 - [ ] **Step 3: Compose, do not duplicate, the existing path**
@@ -548,7 +548,7 @@ socket/host path/device/privileged flag, bounded stdout/stderr, timeout kill and
 
 - [ ] **Step 2: Run provider RED**
 
-Run: `pnpm exec vitest run scripts/native-scene/hosted/container-provider.test.ts`  
+Run: `pnpm exec vitest run scripts/native-scene/hosted/container-provider.test.ts`
 Expected: FAIL because the provider does not exist.
 
 - [ ] **Step 3: Implement the provider and guest entry**
@@ -667,7 +667,7 @@ navigation/removal, duplicate ready and submit after dispose.
 
 - [x] **Step 2: Run bridge RED**
 
-Run: `pnpm exec vitest run apps/native-scene-playground/src/hosted-runtime-bridge.test.ts`  
+Run: `pnpm exec vitest run apps/native-scene-playground/src/hosted-runtime-bridge.test.ts`
 Expected: FAIL because the bridge does not exist.
 
 - [x] **Step 3: Implement the shell and frame bridge**
@@ -743,7 +743,7 @@ names.
 
 - [x] **Step 2: Run RED**
 
-Run: `pnpm exec vitest run scripts/verification/verify-bna5-clean-break.test.ts`  
+Run: `pnpm exec vitest run scripts/verification/verify-bna5-clean-break.test.ts`
 Expected: FAIL until the verifier exists and injected forbidden fixtures are detected.
 
 - [x] **Step 3: Implement the verifier and delete actual conflicts**
