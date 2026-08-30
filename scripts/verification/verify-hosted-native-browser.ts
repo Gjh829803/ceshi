@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { createServer as createHttpServer, type Server as HttpServer } from
   "node:http";
 import path from "node:path";
@@ -94,6 +95,40 @@ async function main(): Promise<void> {
       runtimeFrameAncestors,
       [`frame-ancestors ${shellOrigin}`],
       "Runtime response must admit only the Host-configured shell origin",
+    );
+    for (const unexpectedPublicPath of [
+      "/scene-plans/green-sahara-caravan/world-plan.png",
+      "/subject-assets/xier120/aerial-cockpit/v1/aerial-cockpit.glb",
+      "/subject-assets/humanoid/g-bot/v2/g-bot.glb",
+    ]) {
+      const unexpectedResponse = await fetch(
+        new URL(unexpectedPublicPath, runtimeOrigin),
+        { redirect: "manual" },
+      );
+      assert.equal(
+        unexpectedResponse.status,
+        404,
+        `Runtime origin must not expose unrelated public asset ${unexpectedPublicPath}`,
+      );
+    }
+    const gBotContentHash =
+      "sha256:4bcf3fabdba1e083ef54bf172fd962ca740e0f2fabdb9cddaae45d5ea208718f";
+    const admittedSubjectAssetUrl = new URL(
+      "/subject-assets/humanoid/g-bot/v2/g-bot.glb",
+      runtimeOrigin,
+    );
+    admittedSubjectAssetUrl.searchParams.set(
+      "worldkit-content-hash",
+      gBotContentHash,
+    );
+    const admittedSubjectAssetResponse = await fetch(admittedSubjectAssetUrl);
+    assert.equal(admittedSubjectAssetResponse.status, 200);
+    assert.equal(
+      `sha256:${createHash("sha256").update(Buffer.from(
+        await admittedSubjectAssetResponse.arrayBuffer(),
+      )).digest("hex")}`,
+      gBotContentHash,
+      "Runtime origin must serve the exact content-addressed Subject asset",
     );
 
     browser = await launchChromiumWithSystemFallback();
@@ -332,6 +367,8 @@ async function main(): Promise<void> {
         runtimeOrigin,
         attackerRuntimeOriginRejected: true,
         thirdPartyEmbedBlocked: true,
+        unrelatedPublicAssetsBlocked: true,
+        subjectAssetContentHashRequired: true,
         runtimeFrameAncestors: runtimeContentSecurityPolicy,
         containerSecurityClaimed: false,
       },

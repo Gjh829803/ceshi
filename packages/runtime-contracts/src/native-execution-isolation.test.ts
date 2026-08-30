@@ -138,6 +138,18 @@ function completedResult() {
   } as const;
 }
 
+function timeoutResult() {
+  return {
+    kind: "native-isolated-execution-result",
+    schemaVersion: 1,
+    id: "native-isolated-execution-result.cloud-ridge.timeout.001",
+    requestId: hostedRequest().id,
+    runtimeSessionId: hostedRequest().runtimeSessionId,
+    status: "terminated",
+    reason: "timeout",
+  } as const;
+}
+
 function usage() {
   return {
     scene: {
@@ -408,6 +420,59 @@ describe("Native execution isolation contracts", () => {
             ...receipt.usage.runtime,
             actualShaderCount:
               hostedRequest().effectiveBudget.runtime.maximumShaderCount + 1,
+          },
+        },
+      },
+    })).toThrow(/NativeIsolatedExecutionReceiptV1/);
+  });
+
+  it("accepts honest timeout cleanup latency without admitting wall-time drift elsewhere", () => {
+    const request = hostedRequest();
+    const result = timeoutResult();
+    const receipt = completedReceipt();
+    const timeoutReceipt = {
+      ...receipt,
+      outcome: "terminated",
+      resultHash: hashNativeIsolatedExecutionResultV1(result),
+      durationMilliseconds:
+        request.effectiveBudget.process.maximumWallTimeMilliseconds + 1,
+      usage: {
+        ...receipt.usage,
+        process: {
+          ...receipt.usage.process,
+          actualWallTimeMilliseconds:
+            request.effectiveBudget.process.maximumWallTimeMilliseconds + 1,
+        },
+      },
+    } as const;
+
+    expect(verifyNativeIsolatedExecutionReceiptV1({
+      request,
+      result,
+      receipt: timeoutReceipt,
+    }).usage.process.actualWallTimeMilliseconds).toBe(
+      request.effectiveBudget.process.maximumWallTimeMilliseconds + 1,
+    );
+    expect(() => verifyNativeIsolatedExecutionReceiptV1({
+      request,
+      result: completedResult(),
+      receipt: {
+        ...timeoutReceipt,
+        outcome: "completed",
+        resultHash: hashNativeIsolatedExecutionResultV1(completedResult()),
+      },
+    })).toThrow(/NativeIsolatedExecutionReceiptV1/);
+    expect(() => verifyNativeIsolatedExecutionReceiptV1({
+      request,
+      result,
+      receipt: {
+        ...timeoutReceipt,
+        usage: {
+          ...timeoutReceipt.usage,
+          runtime: {
+            ...timeoutReceipt.usage.runtime,
+            actualShaderCount:
+              request.effectiveBudget.runtime.maximumShaderCount + 1,
           },
         },
       },

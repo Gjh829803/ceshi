@@ -958,10 +958,13 @@ export function hashNativeIsolatedExecutionReceiptV1(
   ) as Sha256HashV1;
 }
 
-function isUsageWithinBudget(
+function isUsageConsistentWithTerminalResult(
   usage: NativeExecutionUsageV1,
   budget: NativeEffectiveExecutionBudgetV1,
+  result: NativeIsolatedExecutionResultV1,
 ): boolean {
+  const isTimeout = result.status === "terminated" &&
+    result.reason === "timeout";
   return (
     usage.scene.actualVertices <= budget.scene.maximumVertices &&
     usage.scene.actualTriangles <= budget.scene.maximumTriangles &&
@@ -976,8 +979,8 @@ function isUsageWithinBudget(
     usage.runtime.actualShaderCount <= budget.runtime.maximumShaderCount &&
     usage.runtime.actualPhysicsBodyCount <=
       budget.runtime.maximumPhysicsBodyCount &&
-    usage.process.actualWallTimeMilliseconds <=
-      budget.process.maximumWallTimeMilliseconds &&
+    (usage.process.actualWallTimeMilliseconds <=
+      budget.process.maximumWallTimeMilliseconds || isTimeout) &&
     usage.process.actualCpuTimeMilliseconds <=
       budget.process.maximumCpuTimeMilliseconds &&
     usage.process.peakMemoryBytes <= budget.process.maximumMemoryBytes &&
@@ -1020,7 +1023,11 @@ export function verifyNativeIsolatedExecutionReceiptV1(input: Readonly<{
     receipt.sandboxPolicyHash !== request.sandboxPolicyHash ||
     receipt.effectiveBudgetHash !==
       hashNativeEffectiveExecutionBudgetV1(request.effectiveBudget) ||
-    !isUsageWithinBudget(receipt.usage, request.effectiveBudget) ||
+    !isUsageConsistentWithTerminalResult(
+      receipt.usage,
+      request.effectiveBudget,
+      result,
+    ) ||
     sha256CanonicalJson(receipt.requestedOperation) !==
       sha256CanonicalJson(request.requestedOperation) ||
     receipt.outcome !== result.status ||

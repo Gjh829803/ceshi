@@ -6,6 +6,7 @@ import {
   hashNativeIsolatedExecutionRequestV1,
   hashNativeIsolatedExecutionResultV1,
   type NativeEffectiveExecutionBudgetV1,
+  type NativeExecutionUsageV1,
   type NativeIsolatedExecutionRequestV1,
   type NativeIsolatedExecutionResultV1,
   type NativeIsolationCleanupV1,
@@ -178,6 +179,7 @@ const ATTESTATION_HASH = `sha256:${createHash("sha256")
 function terminalEvidence(
   executionRequest: NativeIsolatedExecutionRequestV1,
   result: NativeIsolatedExecutionResultV1,
+  observedUsage: NativeExecutionUsageV1 = usage(),
 ): NativeIsolationReceiptEvidenceV1 {
   if (result.status === "ready") throw new Error("terminal result required");
   const cleanup: NativeIsolationCleanupV1 = result.status === "cleanup-failed"
@@ -201,7 +203,7 @@ function terminalEvidence(
       runnerImageDigest: executionRequest.runnerImageDigest,
       sandboxPolicyHash: executionRequest.sandboxPolicyHash,
       effectiveBudgetHash: executionRequest.effectiveBudgetHash,
-      usage: usage(),
+      usage: observedUsage,
       requestedOperation: executionRequest.requestedOperation,
       outcome: result.status,
       resultHash: hashNativeIsolatedExecutionResultV1(result),
@@ -342,6 +344,27 @@ describe("NativeIsolationSupervisorV1", () => {
     const startedDeferred = deferred<NativeIsolatedExecutionResultV1>();
     const { provider, prepared } = fakeProvider();
     vi.mocked(prepared.start).mockReturnValue(startedDeferred.promise);
+    const timeoutResult = {
+      kind: "native-isolated-execution-result",
+      schemaVersion: 1,
+      id: "native-isolated-execution-result.timeout.001",
+      requestId: request().id,
+      runtimeSessionId: request().runtimeSessionId,
+      status: "terminated",
+      reason: "timeout",
+    } as const;
+    vi.mocked(prepared.collectReceipt).mockResolvedValue(terminalEvidence(
+      request(),
+      timeoutResult,
+      {
+        ...usage(),
+        process: {
+          ...usage().process,
+          actualWallTimeMilliseconds:
+            request().effectiveBudget.process.maximumWallTimeMilliseconds + 1,
+        },
+      },
+    ));
     const input = supervisorInput(provider, clock);
     const supervisor = NativeIsolationSupervisorV1.create(input);
 
