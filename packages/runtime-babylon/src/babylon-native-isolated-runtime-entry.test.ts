@@ -316,6 +316,40 @@ describe("Babylon Native isolated Runtime entry", () => {
     expect(engineFactory).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ["material", 1, 100],
+    ["shader", 100, 1],
+  ] as const)("rejects a %s upper-bound overage before publication", async (
+    _resource,
+    maximumMaterialCount,
+    maximumShaderCount,
+  ) => {
+    const input = await entryInput();
+    const constrainedBudget = {
+      ...input.request.effectiveBudget,
+      runtime: {
+        ...input.request.effectiveBudget.runtime,
+        maximumMaterialCount,
+        maximumShaderCount,
+      },
+    };
+    const engine = input.engineFactory();
+    const dispose = vi.spyOn(engine, "dispose");
+    await expect(createBabylonNativeIsolatedRuntimeEntryV1({
+      ...input,
+      request: {
+        ...input.request,
+        effectiveBudget: constrainedBudget,
+        effectiveBudgetHash:
+          hashNativeEffectiveExecutionBudgetV1(constrainedBudget),
+      },
+      engineFactory: () => engine,
+    })).rejects.toMatchObject({
+      diagnostic: { code: "WORLD_SESSION_FAILED" },
+    });
+    expect(dispose).toHaveBeenCalledOnce();
+  });
+
   it("rejects another Runtime Session and conflicting request replay", async () => {
     const input = await entryInput();
     const entry = await createBabylonNativeIsolatedRuntimeEntryV1(input);

@@ -152,7 +152,7 @@ function usage() {
       actualTextureBytes: 24,
     },
     runtime: {
-      actualSceneNodeCount: 25,
+      actualSceneNodeCount: 7,
       actualMaterialCount: 3,
       actualShaderCount: 4,
       actualPhysicsBodyCount: 5,
@@ -393,6 +393,25 @@ describe("Native execution isolation contracts", () => {
         receipt: drifted,
       })).toThrow(/NativeIsolatedExecutionReceiptV1/);
     }
+  });
+
+  it("rejects control-plane usage above any admitted budget field", () => {
+    const receipt = completedReceipt();
+    expect(() => verifyNativeIsolatedExecutionReceiptV1({
+      request: hostedRequest(),
+      result: completedResult(),
+      receipt: {
+        ...receipt,
+        usage: {
+          ...receipt.usage,
+          runtime: {
+            ...receipt.usage.runtime,
+            actualShaderCount:
+              hostedRequest().effectiveBudget.runtime.maximumShaderCount + 1,
+          },
+        },
+      },
+    })).toThrow(/NativeIsolatedExecutionReceiptV1/);
   });
 
   it("wraps only an exact Runtime Session Protocol value", () => {

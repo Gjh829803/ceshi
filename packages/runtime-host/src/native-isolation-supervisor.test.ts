@@ -14,6 +14,7 @@ import {
 } from "@whitebox-world/runtime-contracts";
 
 import {
+  NativeIsolationProviderTerminationErrorV1,
   NativeIsolationSupervisorV1,
   type NativeIsolationAttestationVerifierV1,
   type NativeIsolationDeadlineSchedulerV1,
@@ -495,6 +496,34 @@ describe("NativeIsolationSupervisorV1", () => {
       },
     })).rejects.toMatchObject({ code: "NATIVE_ISOLATION_PROVIDER_FAILED" });
     expect(prepared.terminate).toHaveBeenCalledWith("provider-lost");
+  });
+
+  it("preserves a provider-observed resource termination reason", async () => {
+    const { provider, prepared } = fakeProvider();
+    vi.mocked(prepared.submit).mockRejectedValue(
+      new NativeIsolationProviderTerminationErrorV1("output-limit"),
+    );
+    const supervisor = NativeIsolationSupervisorV1.create(
+      supervisorInput(provider),
+    );
+    await supervisor.start();
+    const executionRequest = request();
+
+    await expect(supervisor.submit({
+      kind: "native-isolation-transport-envelope",
+      schemaVersion: 1,
+      runtimeSessionId: executionRequest.runtimeSessionId,
+      sessionNonce: executionRequest.sessionNonce,
+      messageSequence: 1,
+      payload: {
+        kind: "worldkit-runtime-session-request",
+        schemaVersion: 1,
+        id: "runtime-session-request.snapshot.output-limit.001",
+        runtimeSessionId: executionRequest.runtimeSessionId,
+        type: "snapshot.get",
+      },
+    })).rejects.toMatchObject({ code: "NATIVE_ISOLATION_PROVIDER_FAILED" });
+    expect(prepared.terminate).toHaveBeenCalledWith("output-limit");
   });
 
   it.each([

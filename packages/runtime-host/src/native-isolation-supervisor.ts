@@ -51,6 +51,16 @@ export interface NativeIsolationReceiptEvidenceV1 {
   readonly attestationBytes: Uint8Array;
 }
 
+export class NativeIsolationProviderTerminationErrorV1 extends Error {
+  readonly name = "NativeIsolationProviderTerminationErrorV1";
+
+  constructor(
+    readonly reason: NativeIsolationTerminationReasonV1,
+  ) {
+    super("Native isolation provider terminated the execution domain.");
+  }
+}
+
 export interface PreparedNativeIsolationV1 {
   start(): Promise<NativeIsolatedExecutionResultV1>;
   submit(
@@ -383,8 +393,8 @@ export class NativeIsolationSupervisorV1 {
     let responseInput: unknown;
     try {
       responseInput = await this.prepared.submit(envelope);
-    } catch {
-      return this.rejectProviderLost();
+    } catch (error) {
+      return this.rejectProviderFailure(error);
     }
     let response: NativeIsolationTransportEnvelopeV1;
     try {
@@ -414,11 +424,14 @@ export class NativeIsolationSupervisorV1 {
     );
   }
 
-  private async rejectProviderLost(): Promise<never> {
-    this.signalTermination("provider-lost");
+  private async rejectProviderFailure(error: unknown): Promise<never> {
+    const reason = error instanceof NativeIsolationProviderTerminationErrorV1
+      ? error.reason
+      : "provider-lost";
+    this.signalTermination(reason);
     await this.finalizeTerminal(terminationResult(
       this.request,
-      "provider-lost",
+      reason,
     ));
     throw new NativeIsolationSupervisorErrorV1(
       "NATIVE_ISOLATION_PROVIDER_FAILED",

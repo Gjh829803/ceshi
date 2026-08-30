@@ -958,6 +958,42 @@ export function hashNativeIsolatedExecutionReceiptV1(
   ) as Sha256HashV1;
 }
 
+function isUsageWithinBudget(
+  usage: NativeExecutionUsageV1,
+  budget: NativeEffectiveExecutionBudgetV1,
+): boolean {
+  return (
+    usage.scene.actualVertices <= budget.scene.maximumVertices &&
+    usage.scene.actualTriangles <= budget.scene.maximumTriangles &&
+    usage.scene.actualColliders <= budget.scene.maximumColliders &&
+    usage.assets.actualAssetCount <= budget.assets.maximumAssetCount &&
+    usage.assets.actualAssetBytes <= budget.assets.maximumAssetBytes &&
+    usage.assets.actualTextureCount <= budget.assets.maximumTextureCount &&
+    usage.assets.actualTextureBytes <= budget.assets.maximumTextureBytes &&
+    usage.runtime.actualSceneNodeCount <=
+      budget.runtime.maximumSceneNodeCount &&
+    usage.runtime.actualMaterialCount <= budget.runtime.maximumMaterialCount &&
+    usage.runtime.actualShaderCount <= budget.runtime.maximumShaderCount &&
+    usage.runtime.actualPhysicsBodyCount <=
+      budget.runtime.maximumPhysicsBodyCount &&
+    usage.process.actualWallTimeMilliseconds <=
+      budget.process.maximumWallTimeMilliseconds &&
+    usage.process.actualCpuTimeMilliseconds <=
+      budget.process.maximumCpuTimeMilliseconds &&
+    usage.process.peakMemoryBytes <= budget.process.maximumMemoryBytes &&
+    usage.process.peakProcessCount <= budget.process.maximumProcessCount &&
+    usage.protocol.actualInboundMessageBytes <=
+      budget.protocol.maximumInboundMessageBytes &&
+    usage.protocol.actualOutboundMessageBytes <=
+      budget.protocol.maximumOutboundMessageBytes &&
+    usage.protocol.actualReceiptBytes <=
+      budget.protocol.maximumReceiptBytes &&
+    usage.protocol.actualDiagnosticCount <=
+      budget.protocol.maximumDiagnosticCount &&
+    usage.protocol.actualLogBytes <= budget.protocol.maximumLogBytes
+  );
+}
+
 export function verifyNativeIsolatedExecutionReceiptV1(input: Readonly<{
   request: unknown;
   result: unknown;
@@ -984,6 +1020,7 @@ export function verifyNativeIsolatedExecutionReceiptV1(input: Readonly<{
     receipt.sandboxPolicyHash !== request.sandboxPolicyHash ||
     receipt.effectiveBudgetHash !==
       hashNativeEffectiveExecutionBudgetV1(request.effectiveBudget) ||
+    !isUsageWithinBudget(receipt.usage, request.effectiveBudget) ||
     sha256CanonicalJson(receipt.requestedOperation) !==
       sha256CanonicalJson(request.requestedOperation) ||
     receipt.outcome !== result.status ||

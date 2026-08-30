@@ -181,11 +181,22 @@ function assertRequestIdentity(
 
 function assertRuntimeBudget(
   snapshot: ReturnType<BabylonWorldRuntime["snapshot"]>,
+  engine: AbstractEngine,
   budget: NativeEffectiveExecutionBudgetV1,
 ): void {
+  const actualMaterialCount = engine.scenes.reduce(
+    (total, scene) => total + scene.materials.length,
+    0,
+  );
+  // Native V1 admits Material/StandardMaterial creation but no ShaderMaterial
+  // authority. Counting each material as one possible shader variant is a
+  // conservative public-API upper bound that cannot under-report shader use.
+  const actualShaderCountUpperBound = actualMaterialCount;
   if (
     snapshot.resources.meshes > budget.runtime.maximumSceneNodeCount ||
-    snapshot.resources.bodies > budget.runtime.maximumPhysicsBodyCount
+    snapshot.resources.bodies > budget.runtime.maximumPhysicsBodyCount ||
+    actualMaterialCount > budget.runtime.maximumMaterialCount ||
+    actualShaderCountUpperBound > budget.runtime.maximumShaderCount
   ) {
     throw entryError(
       "WORLDKIT_NATIVE_ISOLATION_EFFECTIVE_BUDGET_EXCEEDED",
@@ -408,6 +419,7 @@ export async function createBabylonNativeIsolatedRuntimeEntryV1(
   const preparedModuleLoader: BabylonNativeSceneModuleLoaderV1 =
     Object.freeze({ load: async () => prepared.module });
   let runtime: BabylonWorldRuntime | undefined;
+  let runtimeEngine: AbstractEngine | undefined;
   const adapterFactory: GameplayWorldAdapterFactoryV1 = Object.freeze({
     preflightConcurrentResidency() {
       return Object.freeze({
@@ -431,7 +443,11 @@ export async function createBabylonNativeIsolatedRuntimeEntryV1(
             moduleLoader: preparedModuleLoader,
           },
           runtimeSessionId: request.runtimeSessionId,
-          engineFactory: input.engineFactory,
+          engineFactory: () => {
+            const engine = input.engineFactory();
+            runtimeEngine = engine;
+            return engine;
+          },
           havokWasmBinary: input.havokWasmBinary,
           autoStartRenderLoop: false,
           ...(isNil(input.subjectAssetResolver)
@@ -441,7 +457,14 @@ export async function createBabylonNativeIsolatedRuntimeEntryV1(
             ? {}
             : { onInitializationStage: input.onInitializationStage }),
         });
-        assertRuntimeBudget(created.snapshot(), request.effectiveBudget);
+        if (isNil(runtimeEngine)) {
+          throw new Error("WORLDKIT_NATIVE_ISOLATION_ENGINE_HANDLE_MISSING");
+        }
+        assertRuntimeBudget(
+          created.snapshot(),
+          runtimeEngine,
+          request.effectiveBudget,
+        );
         const port = createBabylonGameplayWorldPortV1(
           created,
           CONTROLLER_ENTITY_ID,
