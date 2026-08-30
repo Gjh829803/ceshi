@@ -3,7 +3,6 @@ import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 
 import {
-  hashNativeEffectiveExecutionBudgetV1,
   hashNativeIsolatedExecutionRequestV1,
   hashNativeIsolatedExecutionResultV1,
   type NativeEffectiveExecutionBudgetV1,
@@ -12,7 +11,15 @@ import {
   type NativeIsolationCleanupV1,
   type NativeIsolationTerminationReasonV1,
 } from "@whitebox-world/runtime-contracts";
+import {
+  createBabylonNativeWorldPackageV1,
+  verifyWorldPackageDirectoryV1,
+} from "@whitebox-world/world-package";
+import { createBabylonNativeWorldPackageTestInputV1 } from
+  "@whitebox-world/world-package/testing";
 
+import { admitHostedNativeExecutionRequestV1 } from
+  "./native-execution-admission";
 import {
   NativeIsolationProviderTerminationErrorV1,
   NativeIsolationSupervisorV1,
@@ -22,12 +29,6 @@ import {
   type NativeIsolationReceiptEvidenceV1,
   type PreparedNativeIsolationV1,
 } from "./native-isolation-supervisor";
-import {
-  HOSTED_ISOLATED_NATIVE_EXECUTION_TRUST_PROFILE_REF_V1,
-  resolveNativeExecutionTrustProfileV1,
-} from "./native-execution-trust-profile-registry";
-
-const HASH_A = `sha256:${"a".repeat(64)}` as const;
 const HASH_B = `sha256:${"b".repeat(64)}` as const;
 const HASH_C = `sha256:${"c".repeat(64)}` as const;
 const HASH_D = `sha256:${"d".repeat(64)}` as const;
@@ -74,29 +75,29 @@ function budget(
 function request(
   effectiveBudget = budget(),
 ): NativeIsolatedExecutionRequestV1 {
-  const trustProfile = resolveNativeExecutionTrustProfileV1(
-    HOSTED_ISOLATED_NATIVE_EXECUTION_TRUST_PROFILE_REF_V1,
+  const verifiedWorldPackage = verifyWorldPackageDirectoryV1(
+    createBabylonNativeWorldPackageV1(
+      createBabylonNativeWorldPackageTestInputV1({
+        resourceBudget: effectiveBudget.scene,
+      }),
+    ),
   );
-  return {
-    kind: "native-isolated-execution-request",
-    schemaVersion: 1,
+  if (verifiedWorldPackage.kind !== "babylon-native-scene") {
+    throw new Error("Expected a verified Native Package fixture.");
+  }
+  return admitHostedNativeExecutionRequestV1({
     id: "native-isolated-execution-request.supervisor.001",
     runtimeSessionId: "runtime.supervisor.001",
-    worldPackageRef: `package://world-package/sha256/${"a".repeat(64)}`,
-    worldPackageRootHash: HASH_A,
-    worldBuildIdentityHash: HASH_B,
-    sceneModuleBundleHash: HASH_C,
-    nativeSceneContributionHash: HASH_D,
-    nativeExecutionTrustProfileRef: trustProfile.resourceRef,
-    nativeExecutionTrustProfileHash: trustProfile.contentHash,
+    verifiedWorldPackage,
+    sceneProfileBudget: effectiveBudget.scene,
+    hostHardCap: effectiveBudget,
+    tenantCap: effectiveBudget,
     runnerIdentityRef: "worldkit://native-isolation-runner/test@1",
     runnerImageDigest: HASH_F,
     sandboxPolicyHash: HASH_B,
-    effectiveBudget,
-    effectiveBudgetHash: hashNativeEffectiveExecutionBudgetV1(effectiveBudget),
     requestedOperation: { mode: "interactive-session" },
     sessionNonce: "nonce.supervisor.001",
-  };
+  });
 }
 
 function readyResult(): NativeIsolatedExecutionResultV1 {
@@ -294,16 +295,29 @@ function supervisorInput(
 }
 
 describe("NativeIsolationSupervisorV1", () => {
-  it("does not allocate a provider for a malformed request or cap", () => {
+  it("rejects a structurally valid request not minted by Host admission before provider allocation", () => {
+    const { provider } = fakeProvider();
+    expect(() => NativeIsolationSupervisorV1.create({
+      ...supervisorInput(provider),
+      request: { ...request() },
+    })).toThrow(expect.objectContaining({
+      code: "NATIVE_ISOLATION_ADMISSION_REQUIRED",
+    }));
+    expect(provider.prepare).not.toHaveBeenCalled();
+  });
+
+  it("does not allocate a provider for a forged malformed request or cap", () => {
     const { provider } = fakeProvider();
     expect(() => NativeIsolationSupervisorV1.create({
       ...supervisorInput(provider),
       request: { ...request(), trustProfileRef: "legacy" },
-    })).toThrow(/NativeIsolatedExecutionRequestV1/);
+    })).toThrow(expect.objectContaining({
+      code: "NATIVE_ISOLATION_ADMISSION_REQUIRED",
+    }));
     expect(provider.prepare).not.toHaveBeenCalled();
   });
 
-  it("rejects an unknown or hash-drifted Trust Profile before provider allocation", () => {
+  it("rejects forged Trust Profile identity before provider allocation", () => {
     const { provider } = fakeProvider();
     for (const executionRequest of [
       {
@@ -317,7 +331,7 @@ describe("NativeIsolationSupervisorV1", () => {
         ...supervisorInput(provider),
         request: executionRequest,
       })).toThrow(expect.objectContaining({
-        code: "NATIVE_ISOLATION_TRUST_PROFILE_INVALID",
+        code: "NATIVE_ISOLATION_ADMISSION_REQUIRED",
       }));
     }
     expect(provider.prepare).not.toHaveBeenCalled();

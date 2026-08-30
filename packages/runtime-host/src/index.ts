@@ -1,6 +1,9 @@
 export * from "./gameplay-world-port";
 export * from "./native-execution-budget";
-export * from "./native-execution-admission";
+export {
+  admitHostedNativeExecutionRequestV1,
+  type AdmitHostedNativeExecutionRequestInputV1,
+} from "./native-execution-admission";
 export * from "./native-execution-trust-profile-registry";
 export * from "./native-isolation-supervisor";
 export * from "./runtime-host";

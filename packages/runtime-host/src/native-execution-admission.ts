@@ -11,6 +11,7 @@ import type {
 import type {
   WorldPackageResourceBudgetV1,
 } from "@whitebox-world/world-package/runtime-contract";
+import { isNil } from "lodash-es";
 
 import { resolveNativeEffectiveExecutionBudgetV1 } from
   "./native-execution-budget.js";
@@ -18,6 +19,8 @@ import {
   HOSTED_ISOLATED_NATIVE_EXECUTION_TRUST_PROFILE_REF_V1,
   resolveNativeExecutionTrustProfileV1,
 } from "./native-execution-trust-profile-registry.js";
+
+const HOST_ADMITTED_EXECUTION_REQUESTS_V1 = new WeakSet<object>();
 
 export interface AdmitHostedNativeExecutionRequestInputV1 {
   readonly id: string;
@@ -51,7 +54,7 @@ export function admitHostedNativeExecutionRequestV1(
     hostHardCap: input.hostHardCap,
     tenantCap: input.tenantCap,
   });
-  return parseNativeIsolatedExecutionRequestV1({
+  const request = parseNativeIsolatedExecutionRequestV1({
     kind: "native-isolated-execution-request",
     schemaVersion: 1,
     id: input.id,
@@ -73,4 +76,20 @@ export function admitHostedNativeExecutionRequestV1(
     requestedOperation: input.requestedOperation,
     sessionNonce: input.sessionNonce,
   });
+  HOST_ADMITTED_EXECUTION_REQUESTS_V1.add(request);
+  return request;
+}
+
+/** Package-internal proof that the request passed the sole Host admission factory. */
+export function assertHostAdmittedNativeExecutionRequestV1(
+  input: unknown,
+): NativeIsolatedExecutionRequestV1 {
+  if (
+    typeof input !== "object" ||
+    isNil(input) ||
+    !HOST_ADMITTED_EXECUTION_REQUESTS_V1.has(input)
+  ) {
+    throw new TypeError("NATIVE_ISOLATION_ADMISSION_REQUIRED");
+  }
+  return input as NativeIsolatedExecutionRequestV1;
 }

@@ -1,5 +1,4 @@
 import {
-  parseNativeIsolatedExecutionRequestV1,
   parseNativeIsolatedExecutionResultV1,
   parseNativeIsolationTransportEnvelopeV1,
   verifyNativeIsolatedExecutionReceiptV1,
@@ -10,10 +9,13 @@ import {
   type NativeIsolationTransportEnvelopeV1,
 } from "@whitebox-world/runtime-contracts";
 
+import { assertHostAdmittedNativeExecutionRequestV1 } from
+  "./native-execution-admission.js";
 import { resolveNativeExecutionTrustProfileV1 } from
   "./native-execution-trust-profile-registry.js";
 
 export type NativeIsolationSupervisorErrorCodeV1 =
+  | "NATIVE_ISOLATION_ADMISSION_REQUIRED"
   | "NATIVE_ISOLATION_PROVIDER_IDENTITY_MISMATCH"
   | "NATIVE_ISOLATION_TRUST_PROFILE_INVALID"
   | "NATIVE_ISOLATION_LIFECYCLE_INVALID"
@@ -147,7 +149,15 @@ function lifecycleError(): NativeIsolationSupervisorErrorV1 {
 export class NativeIsolationSupervisorV1 {
   static create(input: CreateNativeIsolationSupervisorInputV1):
     NativeIsolationSupervisorV1 {
-    const request = parseNativeIsolatedExecutionRequestV1(input.request);
+    let request: NativeIsolatedExecutionRequestV1;
+    try {
+      request = assertHostAdmittedNativeExecutionRequestV1(input.request);
+    } catch {
+      throw new NativeIsolationSupervisorErrorV1(
+        "NATIVE_ISOLATION_ADMISSION_REQUIRED",
+        "Native isolation requires a request minted by the sole Host admission factory.",
+      );
+    }
     let trustProfile;
     try {
       trustProfile = resolveNativeExecutionTrustProfileV1(
