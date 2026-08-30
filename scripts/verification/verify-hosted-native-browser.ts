@@ -111,6 +111,15 @@ async function main(): Promise<void> {
         `Runtime origin must not expose unrelated public asset ${unexpectedPublicPath}`,
       );
     }
+    const repositoryFileSystemResponse = await fetch(new URL(
+      `/@fs/${path.resolve("package.json")}?raw`,
+      runtimeOrigin,
+    ));
+    assert.equal(
+      repositoryFileSystemResponse.status,
+      403,
+      "Runtime origin must not expose the repository root through Vite /@fs",
+    );
     const gBotContentHash =
       "sha256:4bcf3fabdba1e083ef54bf172fd962ca740e0f2fabdb9cddaae45d5ea208718f";
     const admittedSubjectAssetUrl = new URL(
@@ -368,6 +377,7 @@ async function main(): Promise<void> {
         attackerRuntimeOriginRejected: true,
         thirdPartyEmbedBlocked: true,
         unrelatedPublicAssetsBlocked: true,
+        repositoryRootFileSystemBlocked: true,
         subjectAssetContentHashRequired: true,
         runtimeFrameAncestors: runtimeContentSecurityPolicy,
         containerSecurityClaimed: false,

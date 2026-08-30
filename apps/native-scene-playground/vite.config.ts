@@ -1,12 +1,9 @@
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-import {
-  assembleBabylonNativeWorldPackageDirectoryV1,
-  assertWorldPackageBuildReceiptV1,
-  verifyBabylonNativeWorldPackageDirectoryV1,
-} from "@whitebox-world/world-package/native-runtime";
 import { defineConfig } from "vite";
 
 const CLOUD_RIDGE_MODULE_ID =
@@ -30,6 +27,67 @@ interface ExactRuntimeAssetV1 {
   readonly requiredContentHashQuery?: `sha256:${string}`;
 }
 
+interface WorkspacePackageManifestV1 {
+  readonly name?: string;
+  readonly dependencies?: Readonly<Record<string, string>>;
+}
+
+const repositoryRootPath = fileURLToPath(new URL("../../", import.meta.url));
+const nativeSceneAppRootPath = fileURLToPath(new URL("./", import.meta.url));
+const workspacePackageRootPath = path.join(repositoryRootPath, "packages");
+const workspacePackageByName = new Map<string, Readonly<{
+  directoryPath: string;
+  manifest: WorkspacePackageManifestV1;
+}>>();
+for (const entry of readdirSync(workspacePackageRootPath, {
+  withFileTypes: true,
+})) {
+  if (!entry.isDirectory()) continue;
+  const directoryPath = path.join(workspacePackageRootPath, entry.name);
+  const manifest = JSON.parse(readFileSync(
+    path.join(directoryPath, "package.json"),
+    "utf8",
+  )) as WorkspacePackageManifestV1;
+  if (typeof manifest.name === "string") {
+    workspacePackageByName.set(manifest.name, Object.freeze({
+      directoryPath,
+      manifest,
+    }));
+  }
+}
+const nativeSceneAppManifest = JSON.parse(readFileSync(
+  new URL("package.json", import.meta.url),
+  "utf8",
+)) as WorkspacePackageManifestV1;
+const runtimePackageNames = new Set<string>();
+const pendingRuntimePackageNames = Object.keys(
+  nativeSceneAppManifest.dependencies ?? {},
+).filter((name) => workspacePackageByName.has(name));
+while (pendingRuntimePackageNames.length > 0) {
+  const packageName = pendingRuntimePackageNames.pop()!;
+  if (runtimePackageNames.has(packageName)) continue;
+  runtimePackageNames.add(packageName);
+  const workspacePackage = workspacePackageByName.get(packageName);
+  if (workspacePackage === undefined) {
+    throw new Error("WORLDKIT_HOSTED_RUNTIME_PACKAGE_GRAPH_INVALID");
+  }
+  for (const dependencyName of Object.keys(
+    workspacePackage.manifest.dependencies ?? {},
+  )) {
+    if (
+      workspacePackageByName.has(dependencyName) &&
+      !runtimePackageNames.has(dependencyName)
+    ) pendingRuntimePackageNames.push(dependencyName);
+  }
+}
+const hostedRuntimeFileSystemAllow = [
+  nativeSceneAppRootPath,
+  path.join(repositoryRootPath, "node_modules"),
+  ...[...runtimePackageNames]
+    .sort()
+    .map((name) => workspacePackageByName.get(name)!.directoryPath),
+];
+
 const playgroundPublicRoot = new URL("../playground/public/", import.meta.url);
 const cloudRidgePackageRoot = new URL(
   "world-packages/cloud-ridge/",
@@ -39,22 +97,22 @@ const cloudRidgeReceiptBytes = readFileSync(new URL(
   "world-package-build-receipt.json",
   cloudRidgePackageRoot,
 ));
-const cloudRidgeReceipt = assertWorldPackageBuildReceiptV1(
-  JSON.parse(cloudRidgeReceiptBytes.toString("utf8")),
-);
-const cloudRidgeRootFiles = cloudRidgeReceipt.fileIntegrityEntries.map(
-  ({ path, mediaType }) => Object.freeze({
-    path,
-    mediaType,
-    bytes: new Uint8Array(readFileSync(new URL(path, cloudRidgePackageRoot))),
-  }),
-);
-verifyBabylonNativeWorldPackageDirectoryV1(
-  assembleBabylonNativeWorldPackageDirectoryV1({
-    receipt: cloudRidgeReceipt,
-    files: cloudRidgeRootFiles,
-  }),
-);
+const cloudRidgeReceipt = JSON.parse(cloudRidgeReceiptBytes.toString("utf8")) as {
+  readonly fileIntegrityEntries?: readonly {
+    readonly contentHash?: string;
+    readonly mediaType?: string;
+    readonly path?: string;
+    readonly sizeBytes?: number;
+  }[];
+  readonly worldPackageRootHash?: string;
+};
+if (
+  !Array.isArray(cloudRidgeReceipt.fileIntegrityEntries) ||
+  !/^sha256:[0-9a-f]{64}$/.test(cloudRidgeReceipt.worldPackageRootHash ?? "") ||
+  `sha256:${createHash("sha256").update(JSON.stringify(
+    cloudRidgeReceipt.fileIntegrityEntries,
+  )).digest("hex")}` !== cloudRidgeReceipt.worldPackageRootHash
+) throw new Error("WORLDKIT_HOSTED_RUNTIME_PACKAGE_RECEIPT_INVALID");
 
 const exactRuntimeAssetByPath = new Map<string, ExactRuntimeAssetV1>();
 function registerExactRuntimeAsset(
@@ -77,14 +135,35 @@ registerExactRuntimeAsset(
     mediaType: "application/json",
   },
 );
-for (const [index, entry] of cloudRidgeReceipt.fileIntegrityEntries.entries()) {
-  const bytes = cloudRidgeRootFiles[index]!.bytes;
+let previousPackagePath = "";
+for (const entry of cloudRidgeReceipt.fileIntegrityEntries) {
+  if (
+    typeof entry.path !== "string" ||
+    entry.path.length === 0 ||
+    entry.path <= previousPackagePath ||
+    entry.path.startsWith("/") ||
+    entry.path.includes("\\") ||
+    entry.path.split("/").some((segment: string) =>
+      segment.length === 0 || segment === "." || segment === ".."
+    ) ||
+    typeof entry.mediaType !== "string" ||
+    !/^sha256:[0-9a-f]{64}$/.test(entry.contentHash ?? "") ||
+    !Number.isSafeInteger(entry.sizeBytes) ||
+    (entry.sizeBytes ?? -1) < 0
+  ) throw new Error("WORLDKIT_HOSTED_RUNTIME_PACKAGE_RECEIPT_INVALID");
+  previousPackagePath = entry.path;
+  const bytes = readFileSync(new URL(entry.path, cloudRidgePackageRoot));
+  const contentHash =
+    `sha256:${createHash("sha256").update(bytes).digest("hex")}` as const;
+  if (bytes.byteLength !== entry.sizeBytes || contentHash !== entry.contentHash) {
+    throw new Error("WORLDKIT_HOSTED_RUNTIME_PACKAGE_ASSET_INTEGRITY_FAILED");
+  }
   registerExactRuntimeAsset(
     new URL(entry.path, "https://worldkit.invalid/world-packages/cloud-ridge/")
       .pathname,
     {
       bytes,
-      contentHash: entry.contentHash,
+      contentHash,
       mediaType: entry.mediaType,
     },
   );
@@ -259,6 +338,7 @@ const hostedBrowserPolicyHash = `sha256:${createHash("sha256").update(
     runtimeOrigin: hostedRuntimeOrigin,
     contentSecurityPolicy: hostedRuntimeContentSecurityPolicy,
     exactRuntimeAssetIdentity,
+    runtimePackageNames: [...runtimePackageNames].sort(),
   }),
 ).digest("hex")}`;
 
@@ -309,6 +389,10 @@ export default defineConfig({
   server: {
     host: "127.0.0.1",
     port: 5174,
+    fs: {
+      strict: true,
+      allow: hostedRuntimeFileSystemAllow,
+    },
   },
   build: {
     target: "es2022",
