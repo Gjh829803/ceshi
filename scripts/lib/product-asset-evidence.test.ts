@@ -10,6 +10,12 @@ import { parseProductAssetIntakeFixtureV1 } from "./product-asset-intake";
 const G_BOT_FIXTURE_PATH = fileURLToPath(
   new URL("../../examples/product-asset-intakes/humanoid.g-bot@2.json", import.meta.url),
 );
+const ALPHA_LOCAL_ACTIONS_FIXTURE_PATH = fileURLToPath(
+  new URL(
+    "../../examples/product-asset-intakes/humanoid.alpha-local-actions@1.json",
+    import.meta.url,
+  ),
+);
 const REPOSITORY_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 
 describe("product asset evidence", () => {
@@ -54,6 +60,40 @@ describe("product asset evidence", () => {
     expect(evidence.sourceClipNames).toHaveLength(25);
     expect(evidence.sourceClipTimings).toHaveLength(25);
     expect(evidence.uniqueBoneNameCount).toBe(65);
+  });
+
+  it("locks Alpha local-actions bytes and all ordinary source clips", async () => {
+    const fixture = parseProductAssetIntakeFixtureV1(
+      JSON.parse(await readFile(ALPHA_LOCAL_ACTIONS_FIXTURE_PATH, "utf8")) as unknown,
+    );
+    const [glbBytes, assetManifestText, actionManifestText] = await Promise.all([
+      readFile(path.join(REPOSITORY_ROOT, fixture.glbRepositoryPath)),
+      readFile(path.join(REPOSITORY_ROOT, fixture.productAssetManifestPath), "utf8"),
+      readFile(path.join(REPOSITORY_ROOT, fixture.productActionManifestPath), "utf8"),
+    ]);
+
+    const evidence = inspectProductAssetEvidence({
+      glbBytes,
+      assetManifest: JSON.parse(assetManifestText) as unknown,
+      actionManifest: JSON.parse(actionManifestText) as unknown,
+      requiredRuntimeActionIds: fixture.requiredRuntimeActionIds,
+      expectedSubjectAssetRef: fixture.subjectAssetRef,
+    });
+
+    expect(evidence).toMatchObject({
+      artifactContentHash:
+        "sha256:580113b6d9a80c0d40a93a77f1e09a564585b0d6665d8814b9d9401f1d51260e",
+      byteLength: 6_841_456,
+      meshCount: 2,
+      jointCount: 65,
+    });
+    expect(evidence.sourceClipNames).toHaveLength(27);
+    expect(evidence.sourceClipNames).toEqual(expect.arrayContaining([
+      "jump",
+      "small-jump.takeoff",
+      "small-jump.airborne",
+    ]));
+    expect(evidence.sourceClipNames).not.toContain("small-jump.landing");
   });
 
   it("rejects a product manifest that drifts from the immutable GLB bytes", async () => {

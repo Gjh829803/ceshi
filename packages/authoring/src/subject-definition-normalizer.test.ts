@@ -942,7 +942,7 @@ describe("Package Subject Definition normalization", () => {
     {
       label: "Animation Set targets another Asset",
       transform: (resource: SubjectRegistryResourceInputV3) =>
-        resource.kind === "animation-set"
+        resource.kind === "animation-set" && resource.resourceRef === ANIMATION_SET_REF
           ? {
               ...resource,
               subjectAssetRef: G_BOT_SUBJECT_ASSET_REF,
@@ -974,7 +974,7 @@ describe("Package Subject Definition normalization", () => {
     {
       label: "required Action IDs are incomplete",
       transform: (resource: SubjectRegistryResourceInputV3) =>
-        resource.kind === "animation-set"
+        resource.kind === "animation-set" && resource.resourceRef === ANIMATION_SET_REF
           ? { ...resource, requiredActionIds: ["idle", "walk", "run"] as const }
           : resource,
       instancePath: "/resources/subjectDefinitions/0/visualBinding/animationSetRef",
@@ -983,7 +983,7 @@ describe("Package Subject Definition normalization", () => {
     {
       label: "mapped Clip is absent from Asset inventory",
       transform: (resource: SubjectRegistryResourceInputV3) =>
-        resource.kind === "subject-asset"
+        resource.kind === "subject-asset" && resource.resourceRef === SUBJECT_ASSET_REF
           ? {
               ...resource,
               inventory: {

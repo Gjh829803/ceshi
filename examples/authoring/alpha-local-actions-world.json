@@ -1,0 +1,102 @@
+{
+  "kind": "worldkit-authoring-spec",
+  "schemaVersion": 4,
+  "id": "alpha-local-actions-world",
+  "seed": 8201,
+  "provenance": {
+    "userPrompt": "Locally validate two independent G Bot Subjects: Space uses the supplied takeoff-and-airborne small jump with a direct smooth ground transition, while Shift+Space keeps the original G Bot jump."
+  },
+  "layout": { "solverProfileRef": "worldkit://layout-solver-profile/outdoor.s1@1" },
+  "spatial": { "regions": [], "routes": [], "screenRegions": [], "traversalAreas": [] },
+  "world": {
+    "coordinateSystem": "right-handed-y-up-minus-z-forward",
+    "bounds": { "centerMetersXZ": [0, 0], "sizeMetersXZ": [80, 80], "heightRangeMeters": [-4, 12] },
+    "gravityMetersPerSecondSquaredXYZ": [0, -9.81, 0],
+    "environment": { "preset": "clear-day" },
+    "resourceBudget": { "maxVertices": 100000, "maxTriangles": 180000, "maxColliders": 16 }
+  },
+  "resources": {
+    "prototypes": [
+      {
+        "id": "alpha-test-wall",
+        "version": 1,
+        "kind": "primitive",
+        "primitive": "box",
+        "sizeMetersXYZ": [2, 3, 16],
+        "collisionEnabled": true,
+        "semantic": { "classId": "obstacle.wall" }
+      }
+    ],
+    "subjectDefinitions": []
+  },
+  "nodes": [
+    {
+      "id": "terrain-main",
+      "kind": "terrain",
+      "components": {
+        "terrain": {
+          "source": { "kind": "procedural", "relief": "plain", "amplitudeMeters": 0.5 },
+          "grid": { "centerMetersXZ": [0, 0], "sizeMetersXZ": [80, 80], "resolutionCellsXZ": [65, 65] },
+          "semantic": { "classId": "terrain.test-ground" }
+        }
+      }
+    },
+    {
+      "id": "wall-east",
+      "kind": "object",
+      "prototypeRef": "package://prototype/alpha-test-wall@1",
+      "placement": { "kind": "fixed", "transform": { "positionMetersXYZ": [8, 1.5, 18] } }
+    },
+    {
+      "id": "spawn-alpha-primary",
+      "kind": "anchor",
+      "semantic": { "classId": "spawn.player.primary" },
+      "placement": { "kind": "fixed", "transform": { "positionMetersXYZ": [-2, 0.4327890520288841, 18] } }
+    },
+    {
+      "id": "spawn-alpha-secondary",
+      "kind": "anchor",
+      "semantic": { "classId": "spawn.player.secondary" },
+      "placement": { "kind": "fixed", "transform": { "positionMetersXYZ": [2, 0.4328405709186983, 18] } }
+    },
+    {
+      "id": "alpha-primary",
+      "kind": "subject",
+      "subjectDefinitionRef": "worldkit://subject-definition/humanoid.alpha-local-actions@1",
+      "spawnAnchorEntityId": "spawn-alpha-primary"
+    },
+    {
+      "id": "alpha-secondary",
+      "kind": "subject",
+      "subjectDefinitionRef": "worldkit://subject-definition/humanoid.alpha-local-actions@1",
+      "spawnAnchorEntityId": "spawn-alpha-secondary"
+    },
+    {
+      "id": "camera-main",
+      "kind": "camera",
+      "components": {
+        "cameraRig": {
+          "defaultRigRef": "worldkit://camera/third-person.standard@1",
+          "allowedRigRefs": ["worldkit://camera/third-person.standard@1"],
+          "target": { "targetEntityId": "alpha-primary", "targetHeightMeters": 1.2 },
+          "thirdPerson": {
+            "pitchRadians": 0.18,
+            "distanceMeters": 5,
+            "targetHeightMeters": 1.2,
+            "fovDegrees": 56,
+            "aspectRatio": 1.7777777777777777
+          },
+          "manualSwitchAllowed": false
+        }
+      }
+    }
+  ],
+  "relationships": [],
+  "rules": [],
+  "startup": {
+    "spawnAnchorEntityId": "spawn-alpha-primary",
+    "controlledEntityId": "alpha-primary",
+    "cameraEntityId": "camera-main"
+  },
+  "constraints": { "placements": [], "connectivity": [] }
+}

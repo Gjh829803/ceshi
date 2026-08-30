@@ -37,6 +37,10 @@ const G_BOT_WORLD_PATH = path.join(
   REPOSITORY_ROOT,
   "examples/authoring/g-bot-subject-world.json",
 );
+const ALPHA_LOCAL_ACTIONS_WORLD_PATH = path.join(
+  REPOSITORY_ROOT,
+  "examples/authoring/alpha-local-actions-world.json",
+);
 const temporaryDirectories: string[] = [];
 
 async function temporaryDirectory(): Promise<string> {
@@ -171,6 +175,47 @@ describe("WorldPackage command core", { timeout: 30_000 }, () => {
         "worldkit://subject-asset/actor.humanoid.g-bot@2",
       )?.byteLength,
     ).toBeGreaterThan(0);
+  }, 30_000);
+
+  it("builds and loads the admitted Alpha split-jump WorldPackage", async () => {
+    const directory = await temporaryDirectory();
+    const outputDirectoryPath = path.join(directory, "alpha-local-actions.package");
+    const built = await buildWorldPackageDirectoryV1({
+      inputPath: ALPHA_LOCAL_ACTIONS_WORLD_PATH,
+      outputDirectoryPath,
+    });
+    expectSuccess(built);
+    expect(built).toMatchObject({
+      worldId: "alpha-local-actions-world",
+      distributionPolicy: "internal-only",
+    });
+    expect(built.resourceCount).toBeGreaterThan(0);
+    expect(
+      readFileSync(
+        path.join(outputDirectoryPath, "LICENSES/user-provided-local.txt"),
+        "utf8",
+      ),
+    ).toContain("External redistribution is not granted");
+
+    const loaded = await loadRuntimeWorldConfigurationFromPackageDirectoryV1({
+      packageDirectoryPath: outputDirectoryPath,
+    });
+    expectSuccess(loaded.result);
+    if (!("runtimeWorldConfiguration" in loaded)) {
+      throw new Error("expected loaded Runtime configuration");
+    }
+    expect(
+      loaded.verifiedDirectory.resourceBytesByRef.get(
+        "worldkit://subject-asset/actor.humanoid.alpha-local-actions@1",
+      )?.byteLength,
+    ).toBe(6_841_456);
+    expect(
+      loaded.runtimeWorldConfiguration.worldRuntimeBootstrap.animationSets[0]
+        ?.animationBindings.map((binding) => binding.actionId),
+    ).toEqual(expect.arrayContaining([
+      "jump.small.takeoff",
+      "jump.small.airborne",
+    ]));
   }, 30_000);
 
   it("fails closed on flipped Manifest and resource bytes", async () => {

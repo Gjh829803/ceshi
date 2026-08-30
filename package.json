@@ -10,6 +10,8 @@
     "dev:native-scene": "pnpm --filter @whitebox-world/native-scene-playground dev",
     "dev:g-bot": "pnpm worldkit run examples/authoring/g-bot-subject-world.json",
     "dev:g-bot:refresh": "pnpm worldkit run examples/authoring/g-bot-subject-world.json --refresh-dependencies",
+    "dev:alpha-local-actions": "pnpm worldkit run examples/authoring/alpha-local-actions-world.json",
+    "dev:alpha-local-actions:refresh": "pnpm worldkit run examples/authoring/alpha-local-actions-world.json --refresh-dependencies",
     "generate:golden-humanoid": "tsx scripts/fixtures/generate-golden-humanoid-glb.ts --write",
     "assets:subjects:modularize": "tsx scripts/assets/modular-subject-source-packages.ts --write",
     "assets:subjects:modularize:check": "tsx scripts/assets/modular-subject-source-packages.ts --check",

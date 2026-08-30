@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "id": "actor.humanoid.alpha-local-actions",
+  "version": "1.0.0",
+  "resourceRef": "worldkit://subject-asset/actor.humanoid.alpha-local-actions@1",
+  "label": "G Bot Local Split Jump",
+  "kind": "actor",
+  "topology": "humanoid",
+  "runtime": {
+    "type": "glb",
+    "url": "/subject-assets/humanoid/alpha-local-actions/v1/alpha-local-actions.glb",
+    "formatVersion": "2.0",
+    "byteLength": 6841456,
+    "contentHash": "sha256:580113b6d9a80c0d40a93a77f1e09a564585b0d6665d8814b9d9401f1d51260e"
+  },
+  "coordinates": {
+    "unit": "meter",
+    "upAxis": "+Y",
+    "forwardAxis": "-Z",
+    "supportSurfaceY": 0
+  },
+  "geometry": {
+    "meshCount": 2,
+    "vertexCount": 28374,
+    "triangleCount": 49112,
+    "skinnedMesh": true,
+    "requiredVertexAttributes": [
+      "POSITION",
+      "NORMAL",
+      "TEXCOORD_0",
+      "JOINTS_0",
+      "WEIGHTS_0"
+    ]
+  },
+  "collider": {
+    "type": "capsule",
+    "radius": 0.35,
+    "height": 1.8,
+    "center": [0, 0.9, 0],
+    "derivation": "profile"
+  },
+  "anchors": [
+    { "id": "FirstPersonView", "position": [0, 1.68, 0] },
+    { "id": "ThirdPersonTarget", "position": [0, 1.28, 0] },
+    { "id": "SeatAlignment", "position": [0, 0.92, 0] }
+  ],
+  "rig": {
+    "id": "mixamo-g-bot-local-split-jump-v1",
+    "rootBone": "mixamorig:Hips",
+    "jointCount": 65,
+    "requiredActions": [
+      "idle",
+      "walk",
+      "run",
+      "jump",
+      "jump.small.takeoff",
+      "jump.small.airborne"
+    ],
+    "strippedTranslationNodes": [],
+    "boundedVisualTranslationActions": [
+      "jump",
+      "small-jump.takeoff",
+      "small-jump.airborne"
+    ]
+  },
+  "provenance": {
+    "sourceAsset": "Canonical project-owned G Bot with its original twenty-five actions preserved and the user-provided two-phase small jump retargeted onto its skeleton",
+    "sourceFiles": [
+      "G-idle.glb",
+      "G-walk.glb",
+      "G-slow run.glb",
+      "G-jumping.glb",
+      "B-Jumpping起.fbx",
+      "B-Jumpping起.glb",
+      "B-Jumpping空中.fbx",
+      "B-Jumpping空中.glb"
+    ],
+    "license": {
+      "status": "user-provided",
+      "scope": "private repository internal validation",
+      "note": "The base G Bot is project-owned. User-provided split-jump source files remain outside the repository; the baked integration is stored in the private project repository with the user's explicit authorization for internal validation. Public redistribution is not granted."
+    }
+  },
+  "qa": {
+    "status": "validated",
+    "productionReady": false,
+    "packageValidation": {
+      "babylonJsVersion": "9.23.0",
+      "animationClipCount": 27,
+      "skeletonCompatibility": "passed"
+    },
+    "runtimeVerifiedActions": [
+      "idle",
+      "walk",
+      "run",
+      "jump",
+      "jump.small.takeoff",
+      "jump.small.airborne"
+    ],
+    "limitations": [
+      "Private-repository internal validation asset; public redistribution permission was not evaluated.",
+      "All twenty-five canonical G Bot clips are byte-signature preserved; only the two small-jump phases were retargeted onto the 65-bone G Bot skeleton.",
+      "The two user-provided small-jump source clips are authorized for this private repository's internal validation only."
+    ]
+  }
+}

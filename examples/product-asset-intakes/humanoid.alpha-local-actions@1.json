@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "kind": "product-asset-intake-fixture",
+  "id": "humanoid.alpha-local-actions",
+  "subjectDefinitionRef": "worldkit://subject-definition/humanoid.alpha-local-actions@1",
+  "subjectAssetRef": "worldkit://subject-asset/actor.humanoid.alpha-local-actions@1",
+  "rigProfileRef": "worldkit://rig-profile/biped.mixamo-alpha-local-actions@1",
+  "animationSetRef": "worldkit://animation-set/humanoid.ground.alpha-local-actions@1",
+  "colliderProfileRef": "worldkit://collider-profile/humanoid.alpha-local-actions-capsule@1",
+  "hostPublicUri": "/subject-assets/humanoid/alpha-local-actions/v1/alpha-local-actions.glb",
+  "glbRepositoryPath": "apps/playground/public/subject-assets/humanoid/alpha-local-actions/v1/alpha-local-actions.glb",
+  "productAssetManifestPath": "assets/subjects/humanoid/alpha-local-actions/asset.manifest.json",
+  "productActionManifestPath": "assets/subjects/humanoid/alpha-local-actions/action-manifest.json",
+  "authoringWorldPath": "examples/authoring/alpha-local-actions-world.json",
+  "artifactDirectoryPath": "artifacts/examples/alpha-local-actions-world",
+  "primaryEntityId": "alpha-primary",
+  "secondaryEntityId": "alpha-secondary",
+  "controllerId": "controller-primary",
+  "requiredRuntimeActionIds": ["idle", "walk", "run", "jump"],
+  "minimumSubjectPoseDifferenceRatio": 0.12
+}

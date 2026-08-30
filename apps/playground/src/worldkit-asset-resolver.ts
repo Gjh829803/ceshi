@@ -101,6 +101,8 @@ export const XIER120_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1: Readonly<
 
 export const PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1 = Object.freeze({
   ...XIER120_SUBJECT_ASSET_URI_BY_REF_V1,
+  "worldkit://subject-asset/actor.humanoid.alpha-local-actions@1":
+    "/subject-assets/humanoid/alpha-local-actions/v1/alpha-local-actions.glb",
   "worldkit://subject-asset/actor.humanoid.g-bot@2":
     "/subject-assets/humanoid/g-bot/v2/g-bot.glb",
   "worldkit://subject-asset/humanoid.golden@2":
@@ -115,6 +117,8 @@ export const PLAYGROUND_CAPABILITY_SUBJECT_ASSET_URI_BY_REF_V1 = Object.freeze({
 
 export const PLAYGROUND_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1 = Object.freeze({
   ...XIER120_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1,
+  "worldkit://subject-asset/actor.humanoid.alpha-local-actions@1":
+    "resources/subject-assets/actor.humanoid.alpha-local-actions.glb",
   "worldkit://subject-asset/actor.humanoid.g-bot@2":
     "resources/subject-assets/actor.humanoid.g-bot.glb",
   "worldkit://subject-asset/humanoid.golden@2":
@@ -283,6 +287,7 @@ export async function resolveWorldPackageSubjectAssetBytesV1(
 const LICENSE_DOCUMENT_ID_BY_SPDX_EXPRESSION = Object.freeze({
   "LicenseRef-Project-Owned": "project-owned",
   "LicenseRef-Loopit-Company-Private": "loopit-private",
+  "LicenseRef-User-Provided-Local": "user-provided-local",
 } as const);
 
 export async function resolveWorldPackageSubjectAssetArtifactsV1(

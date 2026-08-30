@@ -446,7 +446,75 @@ export const G_BOT_HUMANOID_DEFINITION: RegistrySubjectDefinitionInputV3 = {
   },
 };
 
+export const ALPHA_LOCAL_ACTIONS_HUMANOID_DEFINITION:
+  RegistrySubjectDefinitionInputV3 = {
+    ...G_BOT_HUMANOID_DEFINITION,
+    id: "humanoid.alpha-local-actions",
+    version: 1,
+    resourceRef: "worldkit://subject-definition/humanoid.alpha-local-actions@1",
+    authoringAvailability: "experimental",
+    semanticClassId: "subject.humanoid.alpha-local-actions",
+    visualParts: [
+      {
+        id: "body.asset",
+        kind: "asset",
+        subjectAssetRef:
+          "worldkit://subject-asset/actor.humanoid.alpha-local-actions@1",
+        localTransform: {
+          positionMetersXYZ: [0, 0, 0],
+          rotationEulerRadiansXYZ: [0, Math.PI, 0],
+          scaleXYZ: [1, 1, 1],
+        },
+        appearance: { mode: "whitebox-neutral" },
+        semanticTags: [
+          "alpha-local-actions",
+          "body",
+          "g-bot",
+          "rigged",
+          "robot",
+        ],
+      },
+    ],
+    visualBinding: {
+      mode: "rigged",
+      rigProfileRef:
+        "worldkit://rig-profile/biped.mixamo-alpha-local-actions@1",
+      animationSetRef:
+        "worldkit://animation-set/humanoid.ground.alpha-local-actions@1",
+    },
+    colliderPolicy: {
+      kind: "profile",
+      colliderProfileRef:
+        "worldkit://collider-profile/humanoid.alpha-local-actions-capsule@1",
+    },
+    profiles: {
+      ...G_BOT_HUMANOID_DEFINITION.profiles,
+      controlFeelProfileRef:
+        "worldkit://control-feel-profile/humanoid.alpha-local-actions@1",
+      allowedControlFeelProfileRefs: [
+        "worldkit://control-feel-profile/humanoid.alpha-local-actions@1",
+      ],
+    },
+    actionOrPoseSetRef:
+      "worldkit://animation-set/humanoid.ground.alpha-local-actions@1",
+    aiMetadata: {
+      displayName: "G Bot local split-jump humanoid",
+      description:
+        "Experimental G Bot whose committed Movement Episode selects small or large jump presentation.",
+      semanticTags: [
+        "alpha-local-actions",
+        "biped",
+        "g-bot",
+        "human",
+        "product",
+        "rigged",
+        "robot",
+      ],
+    },
+  };
+
 export const BUILT_IN_SUBJECT_DEFINITIONS = [
+  ALPHA_LOCAL_ACTIONS_HUMANOID_DEFINITION,
   G_BOT_HUMANOID_DEFINITION,
   RIGGED_GOLDEN_HUMANOID_DEFINITION,
   HUMANOID_THIRD_PERSON_DEFINITION,

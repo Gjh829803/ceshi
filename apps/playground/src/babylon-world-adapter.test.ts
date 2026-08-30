@@ -1212,3 +1212,29 @@ describe("BabylonWorldAdapter Full Reload visible surface", () => {
       .toBe(false);
   });
 });
+
+describe("PhysicalKeyboardActionTracker split-jump latch", () => {
+  it("preserves the Shift state from a Space press until the next fixed sample", () => {
+    const tracker = new PhysicalKeyboardActionTracker();
+
+    tracker.press("ShiftLeft");
+    tracker.press("Space");
+    tracker.release("Space");
+    tracker.release("ShiftLeft");
+    expect(tracker.actions()).toEqual(["jump", "run"]);
+    expect(tracker.actions()).toEqual([]);
+
+    tracker.press("Space");
+    tracker.release("Space");
+    expect(tracker.actions()).toEqual(["jump"]);
+    expect(tracker.actions()).toEqual([]);
+
+    tracker.press("KeyW");
+    tracker.press("ShiftRight");
+    tracker.press("Space");
+    tracker.release("Space");
+    tracker.release("ShiftRight");
+    expect(tracker.actions()).toEqual(["move-forward", "jump", "run"]);
+    expect(tracker.actions()).toEqual(["move-forward"]);
+  });
+});

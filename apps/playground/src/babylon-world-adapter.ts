@@ -192,9 +192,16 @@ export function mapPlaygroundInputActions(
 
 export class PhysicalKeyboardActionTracker {
   readonly #pressedCodes = new Set<string>();
+  #spacePressPending = false;
+  #spacePressShiftPending = false;
 
   press(code: string): boolean {
     if (KEY_ACTION_MAP[code] === undefined && !CONTEXTUAL_KEY_CODES.has(code)) return false;
+    if (code === "Space" && !this.#pressedCodes.has(code)) {
+      this.#spacePressPending = true;
+      this.#spacePressShiftPending =
+        this.#pressedCodes.has("ShiftLeft") || this.#pressedCodes.has("ShiftRight");
+    }
     this.#pressedCodes.add(code);
     return true;
   }
@@ -207,6 +214,8 @@ export class PhysicalKeyboardActionTracker {
 
   clear(): void {
     this.#pressedCodes.clear();
+    this.#spacePressPending = false;
+    this.#spacePressShiftPending = false;
   }
 
   actions(activeMotionKernelRef = "worldkit://motion-kernel/free-ground@1"):
@@ -231,6 +240,21 @@ export class PhysicalKeyboardActionTracker {
           active.add("primary-action");
         } else active.add("brake");
       }
+    }
+    if (this.#spacePressPending) {
+      if (
+        activeMotionKernelRef.endsWith("/free-ground@1") ||
+        activeMotionKernelRef.endsWith("/forward-steer@1")
+      ) {
+        active.add("jump");
+        if (this.#spacePressShiftPending) active.add("run");
+      } else if (activeMotionKernelRef.endsWith("/unpowered-glide@1")) {
+        active.add("primary-action");
+      } else {
+        active.add("brake");
+      }
+      this.#spacePressPending = false;
+      this.#spacePressShiftPending = false;
     }
     return SEMANTIC_INPUT_ACTION_ORDER.filter((action) => active.has(action));
   }
