@@ -5,7 +5,9 @@
 - 实现基线：`origin/main@14ba724b5660be9d47d90b374cc6ffeae8909e55`
 - 产品候选 SHA：`2f46b3c92c175d49b2bf684052be27b6d044658f`
 - 范围：BNA5-10、20、30、40、50、55、60、70、90
-- 当前裁决：**GO；开放 P0/P1/P2 = 0；等待 PR/main ancestry 记录**
+- 当前裁决：**GO；开放 P0/P1/P2 = 0；PR #58 已合入 `main`**
+- 文档提交 SHA：`31a5f728d2844938c3fe3a8e6142a45c69edd48d`
+- `main` 合入 SHA：`d6859f2277e352de106ff44ac4317dbc6b28658c`
 
 ## 1. 候选结论
 
@@ -236,6 +238,11 @@ environment-unavailable；它没有覆盖或否定上文 capable-runner 的 11-c
 最终裁决：产品 SHA `2f46b3c92c175d49b2bf684052be27b6d044658f` 在 capable-runner、本地 Browser/
 Havok、exact-SHA Cloud full gates 和独立 security/runtime-deep 四层证据下 **GO**。BNA-5 范围完成；
 BNA-6、BNA-7、BWB-5 与 BNA-8 仅解除相应依赖，不因此完成。
+
+集成裁决：PR #58 以 merge commit `d6859f2277e352de106ff44ac4317dbc6b28658c` 合入
+`main`；产品 SHA `2f46b3c92c175d49b2bf684052be27b6d044658f` 与文档 SHA
+`31a5f728d2844938c3fe3a8e6142a45c69edd48d` 均已通过 `git merge-base --is-ancestor`
+验证为 `origin/main` 祖先。
 
 ## 6. D1-D6 覆盖表
 

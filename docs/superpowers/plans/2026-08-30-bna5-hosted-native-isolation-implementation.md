@@ -56,7 +56,8 @@
   `bc-66d50f28-4ee9-464e-ad9d-8f9035293c91` for independent deep review. The latter returned GO with
   zero open P0/P1/P2; it truthfully recorded Docker as unavailable rather than treating Browser
   evidence as container isolation. BNA-5 is accepted for its scoped isolation contract; only the
-  docs/PR/main ancestry recording remains in this plan.
+  docs/PR/main ancestry is recorded by PR #58 and merge commit
+  `d6859f2277e352de106ff44ac4317dbc6b28658c`.
 
 ## File map
 
@@ -906,7 +907,7 @@ The review records:
 Mark BNA-5 complete only after the exact product candidate is GO. BNA-6 and BWB-5 become unblocked,
 not completed.
 
-- [ ] **Step 5: Commit docs, open/merge PR and verify ancestry**
+- [x] **Step 5: Commit docs, open/merge PR and verify ancestry**
 
 ```bash
 git add docs
@@ -922,6 +923,9 @@ git merge-base --is-ancestor <docs-sha> origin/main
 Expected: both ancestry commands exit 0. If required GitHub checks are queued but the exact candidate
 already has valid Cloud gates, follow repository branch protection rather than waiting indefinitely;
 never bypass a required failing check.
+
+Recorded result: docs SHA `31a5f728d2844938c3fe3a8e6142a45c69edd48d` was merged by PR #58 as
+`d6859f2277e352de106ff44ac4317dbc6b28658c`; both product and docs ancestry checks exited 0.
 
 ## Plan self-review matrix
 
