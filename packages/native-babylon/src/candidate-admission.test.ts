@@ -200,6 +200,76 @@ describe("admitBabylonNativeSceneCandidateV1", () => {
     }
   });
 
+  it("rejects using one Mesh as both the settled target and Collider proxy", async () => {
+    const scene = createScene();
+    const result = await buildCandidate(
+      scene,
+      moduleWithBuild((context) => {
+        registerSpawn(context);
+        const shared = MeshBuilder.CreateBox("shared-block", { size: 1 }, scene);
+        shared.isVisible = false;
+        context.registration.registerStaticCollider({
+          id: "shared-proxy",
+          mesh: shared,
+          traversalBinding: { kind: "not-traversable" },
+        });
+        shared.isVisible = true;
+        commitBabylonNativeProfileSettlementV1(context, {
+          kind: "babylon-native-profile-settlement-batch",
+          schemaVersion: 1,
+          profileRef: "worldkit://native-scene-profile/whitebox.blocks@1",
+          profileInventoryHash: `sha256:${"1".repeat(64)}`,
+          targets: [{
+            elementId: "shared-block",
+            mesh: shared,
+            collisionBinding: {
+              kind: "static-collider",
+              colliderId: "shared-proxy",
+            },
+          }],
+        });
+      }),
+      DEFAULT_BUDGET,
+      BLOCK_BOOTSTRAP,
+    );
+
+    expect(rejectedCode(result)).toBe(
+      "WORLDKIT_NATIVE_SCENE_PROFILE_INVENTORY_MISMATCH",
+    );
+  });
+
+  it("keeps the settled Contribution deterministic across creation order", async () => {
+    async function contributionHash(reverse: boolean): Promise<string> {
+      const scene = createScene();
+      const result = await buildCandidate(
+        scene,
+        moduleWithBuild((context) => {
+          registerSpawn(context);
+          const ids = reverse ? ["block-b", "block-a"] : ["block-a", "block-b"];
+          const targets = ids.map((id) => ({
+            elementId: id,
+            mesh: MeshBuilder.CreateBox(id, { size: 1 }, scene),
+            collisionBinding: { kind: "none" as const },
+          }));
+          commitBabylonNativeProfileSettlementV1(context, {
+            kind: "babylon-native-profile-settlement-batch",
+            schemaVersion: 1,
+            profileRef: "worldkit://native-scene-profile/whitebox.blocks@1",
+            profileInventoryHash: `sha256:${"1".repeat(64)}`,
+            targets,
+          });
+        }),
+        DEFAULT_BUDGET,
+        BLOCK_BOOTSTRAP,
+      );
+      expect(result.outcome).toBe("passed");
+      if (result.outcome !== "passed") throw new Error("expected admission pass");
+      return hashBabylonNativeSceneContributionV1(result.contribution);
+    }
+
+    expect(await contributionHash(true)).toBe(await contributionHash(false));
+  });
+
   it.each([
     ["target drift", (scene: Scene, context: BabylonNativeSceneBuildContextV1) => {
       const visual = MeshBuilder.CreateBox("visual", { size: 1 }, scene);
