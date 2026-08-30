@@ -472,7 +472,6 @@ maintain an ephemeral and persistent bundler configuration.
 
 ```bash
 pnpm vitest run scripts/native-scene/module-bundle.test.ts \
-  scripts/native-scene/ephemeral-bundle.test.ts \
   scripts/native-scene/native-scene-check.test.ts
 pnpm typecheck
 git diff --check

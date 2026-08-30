@@ -25,13 +25,22 @@ async function fixture(
 async function admittedCode(
   source: string,
   extraFiles: Readonly<Record<string, string | Uint8Array>> = {},
-): Promise<Readonly<{ outcome: string; code?: string; sourcePaths?: readonly string[] }>> {
+): Promise<Readonly<{
+  outcome: string;
+  code?: string;
+  sourcePaths?: readonly string[];
+  externalImportSpecifiers?: readonly string[];
+}>> {
   const result = await admitBabylonNativeSourceGraphV1(await fixture({
     "scene.ts": source,
     ...extraFiles,
   }));
   return result.outcome === "passed"
-    ? { outcome: result.outcome, sourcePaths: result.sourceGraph.workspace.sourcePaths }
+    ? {
+        outcome: result.outcome,
+        sourcePaths: result.sourceGraph.workspace.sourcePaths,
+        externalImportSpecifiers: result.sourceGraph.externalImportSpecifiers,
+      }
     : { outcome: result.outcome, code: result.diagnostics[0]!.code };
 }
 
@@ -57,6 +66,7 @@ describe("Babylon Native Source Admission", () => {
     expect(result).toEqual({
       outcome: "passed",
       sourcePaths: ["scene.ts", "src/geometry.ts"],
+      externalImportSpecifiers: ["@whitebox-world/native-babylon"],
     });
   }, 15_000);
 
@@ -86,7 +96,25 @@ describe("Babylon Native Source Admission", () => {
         build() { const local: Allowed | undefined = undefined; void local; },
       });
     `);
-    expect(result.outcome).toBe("passed");
+    expect(result).toMatchObject({
+      outcome: "passed",
+      externalImportSpecifiers: [
+        "@babylonjs/core/Buffers/buffer.js",
+        "@babylonjs/core/Lights/directionalLight.js",
+        "@babylonjs/core/Lights/hemisphericLight.js",
+        "@babylonjs/core/Lights/pointLight.js",
+        "@babylonjs/core/Materials/standardMaterial.js",
+        "@babylonjs/core/Maths/math.color.js",
+        "@babylonjs/core/Maths/math.vector.js",
+        "@babylonjs/core/Meshes/mesh.js",
+        "@babylonjs/core/Meshes/mesh.vertexData.js",
+        "@babylonjs/core/Meshes/meshBuilder.js",
+        "@babylonjs/core/Meshes/transformNode.js",
+        "@babylonjs/core/scene.js",
+        "@whitebox-world/native-babylon",
+        "@whitebox-world/native-babylon-block-profile",
+      ],
+    });
   }, 15_000);
 
   it("admits local object and assignment destructuring inside build", async () => {

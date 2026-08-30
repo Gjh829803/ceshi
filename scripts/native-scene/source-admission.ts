@@ -261,6 +261,7 @@ export interface AdmittedBabylonNativeAuthoringWorkspaceV1
 
 export interface AdmittedBabylonNativeSourceGraphV1 {
   readonly workspace: AdmittedBabylonNativeAuthoringWorkspaceV1;
+  readonly externalImportSpecifiers: readonly string[];
   readonly program: ts.Program;
 }
 
@@ -3392,6 +3393,12 @@ export async function admitBabylonNativeSourceGraphV1(
     validateSourceSyntaxPolicy(localSources);
     const program = createSourceProgram(localSources);
     validateSourcePolicy(localSources, program);
+    const externalImportSpecifiers = Object.freeze([
+      ...new Set(localSources.flatMap((source) =>
+        staticDependencies(source.sourceFile)
+          .map((dependency) => dependency.specifier)
+          .filter((specifier) => !specifier.startsWith(".")))),
+    ].sort((left, right) => left.localeCompare(right, "en-US")));
     return Object.freeze({
       outcome: "passed",
       sourceGraph: Object.freeze({
@@ -3400,6 +3407,7 @@ export async function admitBabylonNativeSourceGraphV1(
           sourcePaths: Object.freeze(localSources.map((source) =>
             source.canonicalPath)),
         }),
+        externalImportSpecifiers,
         program,
       }),
     });

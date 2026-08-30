@@ -1,13 +1,22 @@
-import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import {
+  appendFile,
+  mkdir,
+  mkdtemp,
+  readdir,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import path from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 import ts from "typescript";
 
 import {
+  buildBabylonNativeSceneModuleBundleV1,
   loadExactBabylonNativeSceneModuleFileV1,
-  typecheckBundleAndLoadBabylonNativeSceneModuleV1,
-} from "./ephemeral-bundle.js";
+  buildAndLoadBabylonNativeSceneModuleV1,
+  finalizeBabylonNativeSceneModuleBundleManifestV1,
+} from "./module-bundle.js";
 import { admitBabylonNativeSourceGraphV1 } from "./source-admission.js";
 import {
   createNativeSceneWorkspaceFixtureV1,
@@ -20,6 +29,9 @@ const BUNDLE_PARENT = path.join(
   ".codex-tmp/native-scene-check",
 );
 const roots: string[] = [];
+const HASH_A = `sha256:${"a".repeat(64)}` as const;
+const HASH_B = `sha256:${"b".repeat(64)}` as const;
+const HASH_C = `sha256:${"c".repeat(64)}` as const;
 
 async function fixture(
   files: Readonly<Record<string, string | Uint8Array>>,
@@ -35,7 +47,7 @@ async function runFixture(
   const admitted = await admitBabylonNativeSourceGraphV1(await fixture(files));
   expect(admitted.outcome).toBe("passed");
   if (admitted.outcome !== "passed") throw new Error("fixture admission failed");
-  return typecheckBundleAndLoadBabylonNativeSceneModuleV1(admitted.sourceGraph);
+  return buildAndLoadBabylonNativeSceneModuleV1(admitted.sourceGraph);
 }
 
 async function bundleEntries(): Promise<readonly string[]> {
@@ -46,7 +58,188 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map(removeNativeSceneWorkspaceFixtureV1));
 });
 
-describe("Babylon Native ephemeral Module bundle", () => {
+describe("Babylon Native deterministic Module bundle", () => {
+  it("emits root-independent bytes and finalizes only lock-bound manifest identity", async () => {
+    const files = {
+      "scene.ts": `
+        import { defineBabylonNativeScene } from "@whitebox-world/native-babylon";
+        import { moduleId } from "./src/module-id.js";
+        export default defineBabylonNativeScene({
+          kind: "babylon-native-scene-module", id: moduleId, build() {}
+        });
+      `,
+      "src/module-id.ts": `export const moduleId = "deterministic-module";`,
+    } as const;
+    const fixtureRoots = await Promise.all([fixture(files), fixture(files)]);
+    const graphs = await Promise.all(fixtureRoots.map(
+      async (worldDirectoryPath) => {
+        const admitted = await admitBabylonNativeSourceGraphV1(worldDirectoryPath);
+        if (admitted.outcome !== "passed") throw new Error("fixture admission failed");
+        return admitted.sourceGraph;
+      },
+    ));
+    const results = await Promise.all(graphs.map((graph) =>
+      buildBabylonNativeSceneModuleBundleV1(graph)));
+    expect(results.map((result) => result.outcome)).toEqual(["passed", "passed"]);
+    if (results[0]?.outcome !== "passed" || results[1]?.outcome !== "passed") return;
+
+    expect(results[0].bundleArtifact).toEqual(results[1].bundleArtifact);
+    expect(results[0].bundleArtifact.entryPath).toBe("native/scene.mjs");
+    expect(results[0].bundleArtifact.externalImportSpecifiers).toEqual([
+      "@whitebox-world/native-babylon",
+    ]);
+    expect(results[0].bundleArtifact.files[0]?.bytes).toEqual(
+      results[1].bundleArtifact.files[0]?.bytes,
+    );
+
+    const facts = {
+      id: "deterministic-module-bundle",
+      sceneModuleRef: "worldkit://native-scene/deterministic-module@1",
+      nativeSceneApi: {
+        resourceRef: "worldkit://native-scene-api/babylon-native@1",
+        resolvedVersion: "1",
+        contentHash: HASH_A,
+      },
+      nativeSceneProfile: {
+        resourceRef: "worldkit://native-scene-profile/trusted-local@1",
+        resolvedVersion: "1",
+        contentHash: HASH_B,
+      },
+      seed: 42,
+      dependencyLockHash: HASH_A,
+      assetLockHash: HASH_B,
+    } as const;
+    const finalized = [
+      finalizeBabylonNativeSceneModuleBundleManifestV1({
+        ...facts,
+        bundleArtifact: results[0].bundleArtifact,
+      }),
+      finalizeBabylonNativeSceneModuleBundleManifestV1({
+        ...facts,
+        bundleArtifact: results[1].bundleArtifact,
+      }),
+    ];
+    expect(finalized[0]?.manifestBytes).toEqual(finalized[1]?.manifestBytes);
+    expect(finalized[0]?.manifestHash).toBe(finalized[1]?.manifestHash);
+
+    const changedLock = finalizeBabylonNativeSceneModuleBundleManifestV1({
+      ...facts,
+      bundleArtifact: results[0].bundleArtifact,
+      dependencyLockHash: HASH_C,
+    });
+    expect(changedLock.manifestHash).not.toBe(finalized[0]?.manifestHash);
+    expect(results[0].bundleArtifact.files).toEqual(results[1].bundleArtifact.files);
+    expect(results[0].bundleArtifact.sourceGraphHash).toBe(
+      results[1].bundleArtifact.sourceGraphHash,
+    );
+  }, 45_000);
+
+  it("rejects reordered or escaping admitted source paths before bundling", async () => {
+    const admitted = await admitBabylonNativeSourceGraphV1(await fixture({
+      "scene.ts": `
+        import { defineBabylonNativeScene } from "@whitebox-world/native-babylon";
+        import { id } from "./src/id.js";
+        export default defineBabylonNativeScene({
+          kind: "babylon-native-scene-module", id, build() {}
+        });
+      `,
+      "src/id.ts": `export const id = "invalid-graph";`,
+    }));
+    if (admitted.outcome !== "passed") throw new Error("fixture admission failed");
+    for (const sourcePaths of [
+      [...admitted.sourceGraph.workspace.sourcePaths].reverse(),
+      ["../scene.ts"],
+    ]) {
+      const result = await buildBabylonNativeSceneModuleBundleV1(Object.freeze({
+        ...admitted.sourceGraph,
+        workspace: Object.freeze({
+          ...admitted.sourceGraph.workspace,
+          sourcePaths: Object.freeze(sourcePaths),
+        }),
+      }));
+      expect(result.outcome).toBe("rejected");
+      if (result.outcome !== "passed") {
+        expect(result.diagnostics[0]?.code).toBe(
+          "WORLDKIT_NATIVE_SCENE_BUNDLE_ARTIFACT_INVALID",
+        );
+      }
+    }
+  }, 20_000);
+
+  it("rejects source maps, Host path leakage, and non-JavaScript output", async () => {
+    const admitted = await admitBabylonNativeSourceGraphV1(await fixture({
+      "scene.ts": `
+        import { defineBabylonNativeScene } from "@whitebox-world/native-babylon";
+        export default defineBabylonNativeScene({
+          kind: "babylon-native-scene-module", id: "closed-output", build() {}
+        });
+      `,
+    }));
+    if (admitted.outcome !== "passed") throw new Error("fixture admission failed");
+    const mutators = [
+      async (outputRoot: string) => appendFile(
+        path.join(outputRoot, "scene.mjs"),
+        "\n//# sourceMappingURL=scene.mjs.map\n",
+      ),
+      async (outputRoot: string) => appendFile(
+        path.join(outputRoot, "scene.mjs"),
+        `\n/* ${outputRoot} */\n`,
+      ),
+      async (outputRoot: string) => writeFile(
+        path.join(outputRoot, "unlisted.txt"),
+        "not admitted",
+      ),
+    ];
+    for (const afterBundleOutput of mutators) {
+      const result = await buildBabylonNativeSceneModuleBundleV1(
+        admitted.sourceGraph,
+        { afterBundleOutput },
+      );
+      expect(result.outcome).toBe("rejected");
+      if (result.outcome !== "passed") {
+        expect(result.diagnostics[0]?.code).toBe(
+          "WORLDKIT_NATIVE_SCENE_BUNDLE_ARTIFACT_INVALID",
+        );
+      }
+    }
+  }, 45_000);
+
+  it("rejects Bundle byte tampering before manifest finalization", async () => {
+    const admitted = await admitBabylonNativeSourceGraphV1(await fixture({
+      "scene.ts": `
+        import { defineBabylonNativeScene } from "@whitebox-world/native-babylon";
+        export default defineBabylonNativeScene({
+          kind: "babylon-native-scene-module", id: "tamper", build() {}
+        });
+      `,
+    }));
+    if (admitted.outcome !== "passed") throw new Error("fixture admission failed");
+    const result = await buildBabylonNativeSceneModuleBundleV1(admitted.sourceGraph);
+    if (result.outcome !== "passed") throw new Error("fixture bundle failed");
+    const entry = result.bundleArtifact.files[0]!;
+    const tampered = {
+      ...result.bundleArtifact,
+      files: [{ ...entry, bytes: [...entry.bytes, 0] }],
+    };
+    expect(() => finalizeBabylonNativeSceneModuleBundleManifestV1({
+      bundleArtifact: tampered,
+      id: "tampered-bundle",
+      sceneModuleRef: "worldkit://native-scene/tamper@1",
+      nativeSceneApi: {
+        resourceRef: "worldkit://native-scene-api/babylon-native@1",
+        resolvedVersion: "1",
+        contentHash: HASH_A,
+      },
+      nativeSceneProfile: {
+        resourceRef: "worldkit://native-scene-profile/trusted-local@1",
+        resolvedVersion: "1",
+        contentHash: HASH_B,
+      },
+      seed: 42,
+      dependencyLockHash: HASH_A,
+      assetLockHash: HASH_B,
+    })).toThrow();
+  }, 20_000);
   it("typechecks and loads sync, async, multi-file, and type-only Modules", async () => {
     const sync = await runFixture({
       "scene.ts": `
@@ -140,7 +333,7 @@ describe("Babylon Native ephemeral Module bundle", () => {
     expect(admitted.outcome).toBe("passed");
     if (admitted.outcome !== "passed") return;
 
-    const result = await typecheckBundleAndLoadBabylonNativeSceneModuleV1(
+    const result = await buildAndLoadBabylonNativeSceneModuleV1(
       admitted.sourceGraph,
     );
     expect(result.outcome).toBe("rejected");
@@ -192,7 +385,7 @@ describe("Babylon Native ephemeral Module bundle", () => {
     expect(admitted.outcome).toBe("passed");
     if (admitted.outcome !== "passed") return;
 
-    const result = await typecheckBundleAndLoadBabylonNativeSceneModuleV1(
+    const result = await buildAndLoadBabylonNativeSceneModuleV1(
       admitted.sourceGraph,
       {
         async removeTemporaryRoot(runRoot) {
@@ -272,7 +465,7 @@ describe("Babylon Native ephemeral Module bundle", () => {
       program: ts.createProgram({ rootNames: [entryPath], options, host }),
     });
 
-    const result = await typecheckBundleAndLoadBabylonNativeSceneModuleV1(
+    const result = await buildAndLoadBabylonNativeSceneModuleV1(
       brokenGraph,
     );
     expect(result.outcome).toBe("rejected");
@@ -304,7 +497,7 @@ describe("Babylon Native ephemeral Module bundle", () => {
       }),
     });
 
-    const result = await typecheckBundleAndLoadBabylonNativeSceneModuleV1(
+    const result = await buildAndLoadBabylonNativeSceneModuleV1(
       brokenGraph,
     );
     expect(result.outcome).toBe("tool-error");
@@ -336,7 +529,7 @@ describe("Babylon Native ephemeral Module bundle", () => {
     ));
 
     const runs = admittedGraphs.map((graph) =>
-      typecheckBundleAndLoadBabylonNativeSceneModuleV1(graph));
+      buildAndLoadBabylonNativeSceneModuleV1(graph));
     const observedNames = new Set<string>();
     while (true) {
       for (const name of await bundleEntries()) observedNames.add(name);
