@@ -7,7 +7,7 @@ import {
 } from "@whitebox-world/authoring-host";
 import {
   createInMemoryWorldPackageStoreV1,
-  createWorldPackageBuildContextFixtureV1,
+  createCanonicalWorldPackageBuildContextFixtureV1,
 } from "@whitebox-world/world-package/testing";
 import { describe, expect, it, vi } from "vitest";
 
@@ -23,7 +23,7 @@ const PACKAGE_REF = `package://world-package/sha256/${"d".repeat(64)}` as const;
 function worldPackageInputs() {
   return {
     worldPackageStore: createInMemoryWorldPackageStoreV1(),
-    worldPackageBuildContext: createWorldPackageBuildContextFixtureV1(),
+    worldPackageBuildContext: createCanonicalWorldPackageBuildContextFixtureV1(),
     resourceArtifacts: [],
   } as const;
 }

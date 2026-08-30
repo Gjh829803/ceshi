@@ -9,10 +9,10 @@ import {
   createGameplayBootstrapV1,
 } from "@whitebox-world/gameplay-contracts";
 import {
-  createWorldPackageV1,
+  createCanonicalWorldPackageV1,
   verifyWorldPackageDirectoryV1,
 } from "@whitebox-world/world-package";
-import { createWorldPackageFixtureContextV1 } from "@whitebox-world/world-package/testing";
+import { createCanonicalWorldPackageFixtureContextV1 } from "@whitebox-world/world-package/testing";
 import { isNil } from "lodash-es";
 import { describe, expect, it } from "vitest";
 
@@ -90,15 +90,17 @@ function buildClosure() {
 
 function verifiedFixture() {
   const closure = buildClosure();
-  const directory = createWorldPackageV1({
-    ...createWorldPackageFixtureContextV1({
+  const directory = createCanonicalWorldPackageV1({
+    ...createCanonicalWorldPackageFixtureContextV1({
       packageId: `${closure.authoringSpec.id}.package`,
       title: "Validation Subject Fixture",
     }),
     ...closure,
     resourceArtifacts: [],
   });
-  return { closure, verified: verifyWorldPackageDirectoryV1(directory) };
+  const verified = verifyWorldPackageDirectoryV1(directory);
+  if (verified.kind !== "canonical-execution-plan") throw new Error("unreachable");
+  return { closure, verified };
 }
 
 describe("WorldPackageValidationSubjectV1 verified boundary", () => {
@@ -109,11 +111,11 @@ describe("WorldPackageValidationSubjectV1 verified boundary", () => {
     expect(subject).toEqual({
       kind: "world-package",
       worldPackageRootHash: verified.receipt.worldPackageRootHash,
-      authoringSpecHash: verified.receipt.manifest.authoringSpecHash,
-      normalizedWorldIrHash: verified.receipt.manifest.normalizedWorldIrHash,
+      authoringSpecHash: verified.receipt.manifest.sceneSource.authoringSpecHash,
+      normalizedWorldIrHash: verified.receipt.manifest.sceneSource.normalizedWorldIrHash,
       worldBuildIdentityHash: verified.receipt.worldBuildIdentityHash,
       resourceLockHash: verified.receipt.manifest.registryLockHash,
-      layoutSolveReportHash: verified.receipt.manifest.layoutSolveReportHash,
+      layoutSolveReportHash: verified.receipt.manifest.sceneSource.layoutSolveReportHash,
     });
     expect(createWorldPackageValidationSubjectV1(verified)).toEqual(subject);
     expect(subject).not.toHaveProperty(["execution", "Plan", "Hash"].join(""));

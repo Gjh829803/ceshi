@@ -23,7 +23,7 @@ import {
 import { isNil } from "lodash-es";
 import {
   createInMemoryWorldPackageStoreV1,
-  createWorldPackageBuildContextFixtureV1,
+  createCanonicalWorldPackageBuildContextFixtureV1,
 } from "@whitebox-world/world-package/testing";
 import { describe, expect, it } from "vitest";
 
@@ -60,7 +60,7 @@ const EXAMPLES_ROOT = join(
 );
 const GATE_REF = "worldkit://validation-profile/outdoor-world-package-dev@1";
 const WORLD_PACKAGE_STORE = createInMemoryWorldPackageStoreV1();
-const WORLD_PACKAGE_BUILD_CONTEXT = createWorldPackageBuildContextFixtureV1();
+const WORLD_PACKAGE_BUILD_CONTEXT = createCanonicalWorldPackageBuildContextFixtureV1();
 
 function generousBudget(overrides: {
   readonly maximumPreparedCandidateRetentionMilliseconds?: number;

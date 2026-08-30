@@ -4,11 +4,12 @@ import { fileURLToPath } from "node:url";
 
 import {
   BABYLON_NATIVE_DEEP_ESM_IMPORT_SPECIFIERS_V1,
-  type NativeSceneDiagnosticV1,
 } from "@whitebox-world/native-babylon";
 import {
   BABYLON_NATIVE_FORBIDDEN_SCENE_INPUT_CAMERA_METHOD_KEYS_V1,
 } from "@whitebox-world/native-babylon/host";
+import type { NativeSceneDiagnosticV1 } from
+  "@whitebox-world/runtime-contracts";
 import { isEmpty, isNil } from "lodash-es";
 import ts from "typescript";
 
@@ -260,6 +261,7 @@ export interface AdmittedBabylonNativeAuthoringWorkspaceV1
 
 export interface AdmittedBabylonNativeSourceGraphV1 {
   readonly workspace: AdmittedBabylonNativeAuthoringWorkspaceV1;
+  readonly externalImportSpecifiers: readonly string[];
   readonly program: ts.Program;
 }
 
@@ -3391,6 +3393,12 @@ export async function admitBabylonNativeSourceGraphV1(
     validateSourceSyntaxPolicy(localSources);
     const program = createSourceProgram(localSources);
     validateSourcePolicy(localSources, program);
+    const externalImportSpecifiers = Object.freeze([
+      ...new Set(localSources.flatMap((source) =>
+        staticDependencies(source.sourceFile)
+          .map((dependency) => dependency.specifier)
+          .filter((specifier) => !specifier.startsWith(".")))),
+    ].sort((left, right) => left.localeCompare(right, "en-US")));
     return Object.freeze({
       outcome: "passed",
       sourceGraph: Object.freeze({
@@ -3399,6 +3407,7 @@ export async function admitBabylonNativeSourceGraphV1(
           sourcePaths: Object.freeze(localSources.map((source) =>
             source.canonicalPath)),
         }),
+        externalImportSpecifiers,
         program,
       }),
     });

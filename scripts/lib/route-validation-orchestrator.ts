@@ -9,7 +9,7 @@ import type {
   WorldRuntimeBootstrapV1,
 } from "@whitebox-world/runtime-contracts";
 import {
-  canonicalResourceLockEntriesV1,
+  worldResourceLockEntriesV1,
   parseWorldRuntimeBootstrapV1,
 } from "@whitebox-world/runtime-contracts";
 import type { SubjectAssetResolverV1 } from "@whitebox-world/runtime-babylon";
@@ -450,14 +450,22 @@ function canonicalInput(
   );
   const subject = canonicalSubject(input.subject);
   const executionPlanHash = sha256CanonicalJson(executionPlan) as `sha256:${string}`;
-  const combinedResourceLock = canonicalResourceLockEntriesV1([
+  const combinedResourceLock = worldResourceLockEntriesV1([
     ...executionPlan.sceneResourceLockEntries,
     ...worldRuntimeBootstrap.runtimeResourceLockEntries,
+    {
+      resourceKind: "world-runtime-bootstrap",
+      resourceRef: executionPlan.worldRuntimeBootstrapRef,
+      resolvedVersion: "1",
+      contentHash: worldRuntimeBootstrap.contentHash,
+    },
   ]);
   const resourceLockHash = sha256CanonicalJson(combinedResourceLock);
   const routeResourceLockHash = sha256CanonicalJson(
     combinedResourceLock.filter(
-      (row) => row.resourceKind !== "gameplay-bootstrap",
+      (row) =>
+        row.resourceKind !== "gameplay-bootstrap" &&
+        row.resourceKind !== "world-runtime-bootstrap",
     ),
   ) as `sha256:${string}`;
   if (

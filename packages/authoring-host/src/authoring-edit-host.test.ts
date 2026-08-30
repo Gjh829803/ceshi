@@ -27,7 +27,7 @@ import {
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import {
   createInMemoryWorldPackageStoreV1,
-  createWorldPackageBuildContextFixtureV1,
+  createCanonicalWorldPackageBuildContextFixtureV1,
 } from "@whitebox-world/world-package/testing";
 import { isNil } from "lodash-es";
 import { describe, expect, it } from "vitest";
@@ -230,7 +230,7 @@ function createHost(extras: {
     journal,
     leaseStore: createPreparedCandidateLeaseStoreV1(),
     worldPackageStore: createInMemoryWorldPackageStoreV1(),
-    worldPackageBuildContext: createWorldPackageBuildContextFixtureV1(),
+    worldPackageBuildContext: createCanonicalWorldPackageBuildContextFixtureV1(),
     resourceArtifacts: [],
     session: sessionFor(entries, extras),
     nowUnixMilliseconds: () => now.value,

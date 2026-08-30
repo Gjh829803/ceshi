@@ -16,7 +16,7 @@ import {
   type PublishRuntimeReplacementV1,
 } from "@whitebox-world/authoring-host";
 import { stringifyCanonicalJson } from "@whitebox-world/protocol";
-import { createWorldPackageBuildContextFixtureV1 } from "@whitebox-world/world-package/testing";
+import { createCanonicalWorldPackageBuildContextFixtureV1 } from "@whitebox-world/world-package/testing";
 import { isNil } from "lodash-es";
 
 import {
@@ -110,7 +110,7 @@ async function openHost(
   return createDurableAuthoringEditHostV1({
     stateDirectoryPath,
     authoringSpec,
-    worldPackageBuildContext: createWorldPackageBuildContextFixtureV1(),
+    worldPackageBuildContext: createCanonicalWorldPackageBuildContextFixtureV1(),
     resourceArtifacts: [],
     session: createAuthoringEditHostSessionV1({
       worldId: authoringSpec.id,

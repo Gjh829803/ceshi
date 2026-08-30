@@ -7,12 +7,12 @@ import {
 import { isNil } from "lodash-es";
 
 import type {
-  CreateWorldPackageV1Input,
-  WorldPackageBuildContextV1,
+  CreateCanonicalWorldPackageV1Input,
+  CanonicalWorldPackageBuildContextV1,
 } from "./package-build.js";
 import {
   assertWorldPackageStoreRefMatchesDirectoryV1,
-  canonicalWorldPackageDirectoryForStoreV1,
+  canonicalizeWorldPackageDirectoryForStoreV1,
   equalWorldPackageDirectoryBytesV1,
   type WorldPackageStorePutResultV1,
   type WorldPackageStoreV1,
@@ -21,8 +21,13 @@ import { verifyWorldPackageDirectoryV1 } from "./package-directory.js";
 import type { WorldPackageDistributionPolicyV1 } from "./package-types.js";
 import { BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V1 } from "./babylon-web-host-profile.js";
 
-export type WorldPackageFixtureContextV1 = Pick<
-  CreateWorldPackageV1Input,
+export {
+  createBabylonNativeWorldPackageTestInputV1,
+  createWorldPackageTestInputV1,
+} from "./test-fixture.js";
+
+export type CanonicalWorldPackageFixtureContextV1 = Pick<
+  CreateCanonicalWorldPackageV1Input,
   | "packageId"
   | "title"
   | "sdkVersion"
@@ -36,11 +41,11 @@ export type WorldPackageFixtureContextV1 = Pick<
   | "includeAuthoringSpec"
 >;
 
-export function createWorldPackageFixtureContextV1(input: {
+export function createCanonicalWorldPackageFixtureContextV1(input: {
   readonly packageId: string;
   readonly title?: string;
   readonly distributionPolicy?: WorldPackageDistributionPolicyV1;
-}): WorldPackageFixtureContextV1 {
+}): CanonicalWorldPackageFixtureContextV1 {
   const title = isNil(input.title) ? "WorldPackage Test Fixture" : input.title;
   const distributionPolicy = isNil(input.distributionPolicy)
     ? "redistributable"
@@ -78,11 +83,11 @@ export function createWorldPackageFixtureContextV1(input: {
   };
 }
 
-export function createWorldPackageBuildContextFixtureV1(input: {
+export function createCanonicalWorldPackageBuildContextFixtureV1(input: {
   readonly title?: string;
   readonly distributionPolicy?: WorldPackageDistributionPolicyV1;
-} = {}): WorldPackageBuildContextV1 {
-  const { packageId: _packageId, ...context } = createWorldPackageFixtureContextV1({
+} = {}): CanonicalWorldPackageBuildContextV1 {
+  const { packageId: _packageId, ...context } = createCanonicalWorldPackageFixtureContextV1({
     packageId: "test-fixture.package",
     ...input,
   });
@@ -92,13 +97,13 @@ export function createWorldPackageBuildContextFixtureV1(input: {
 class InMemoryWorldPackageStoreV1 implements WorldPackageStoreV1 {
   public readonly brand = "WorldPackageStoreV1" as const;
   readonly #directoriesByRef = new Map<WorldPackageRefV1, ReturnType<
-    typeof canonicalWorldPackageDirectoryForStoreV1
+    typeof canonicalizeWorldPackageDirectoryForStoreV1
   >>();
 
   async put(
     directoryValue: Parameters<WorldPackageStoreV1["put"]>[0],
   ): Promise<WorldPackageStorePutResultV1> {
-    const directory = canonicalWorldPackageDirectoryForStoreV1(directoryValue);
+    const directory = canonicalizeWorldPackageDirectoryForStoreV1(directoryValue);
     const worldPackageRef = worldPackageRefFromRootHashV1(
       directory.receipt.worldPackageRootHash,
     );

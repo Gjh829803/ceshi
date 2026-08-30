@@ -42,7 +42,7 @@ import {
   type RuntimeWorldConfigurationV1,
 } from "@whitebox-world/runtime-host";
 import {
-  type VerifiedWorldPackageDirectoryV1,
+  type VerifiedCanonicalWorldPackageDirectoryV1,
 } from "@whitebox-world/world-package";
 import { isEmpty, isEqual, isNil, sortBy } from "lodash-es";
 
@@ -142,7 +142,7 @@ export interface CreateHeadlessRuntimeSessionInputV1 {
   readonly runtimeSessionId: string;
   readonly initialWorldSessionId: string;
   readonly runtimeWorldConfiguration: RuntimeWorldConfigurationV1;
-  readonly verifiedDirectory: VerifiedWorldPackageDirectoryV1;
+  readonly verifiedDirectory: VerifiedCanonicalWorldPackageDirectoryV1;
 }
 
 export interface LoadHeadlessWorldPackageInputV1 {
@@ -199,7 +199,7 @@ export interface HeadlessRuntimePublicationSessionV1
   extends HeadlessRuntimeSessionV1 {
   stageVerifiedWorldPackageV1(input: {
     readonly worldConfiguration: RuntimeWorldConfigurationV1;
-    readonly verifiedDirectory: VerifiedWorldPackageDirectoryV1;
+    readonly verifiedDirectory: VerifiedCanonicalWorldPackageDirectoryV1;
   }): () => void;
   publishWorldReplacementV1(
     input: unknown,
@@ -240,7 +240,7 @@ interface HeadlessRuntimeHandleV1 {
 
 interface StagedVerifiedWorldPackageV1 {
   readonly worldConfiguration: CanonicalRuntimeWorldConfigurationV1;
-  readonly verifiedDirectory: VerifiedWorldPackageDirectoryV1;
+  readonly verifiedDirectory: VerifiedCanonicalWorldPackageDirectoryV1;
 }
 
 function cleanupDiagnostic(
@@ -312,7 +312,7 @@ class PackageSubjectAssetResolverV1 implements SubjectAssetResolverV1 {
   #disposed = false;
 
   constructor(
-    private readonly verifiedDirectory: VerifiedWorldPackageDirectoryV1,
+    private readonly verifiedDirectory: VerifiedCanonicalWorldPackageDirectoryV1,
     private readonly worldPackageRef: string,
   ) {}
 
@@ -724,7 +724,7 @@ class HeadlessRuntimeSession implements HeadlessRuntimePublicationSessionV1 {
   stageVerifiedWorldPackageV1(
     input: {
       readonly worldConfiguration: RuntimeWorldConfigurationV1;
-      readonly verifiedDirectory: VerifiedWorldPackageDirectoryV1;
+      readonly verifiedDirectory: VerifiedCanonicalWorldPackageDirectoryV1;
     },
   ): () => void {
     const worldConfiguration = requireCanonicalRuntimeWorldConfigurationV1(
@@ -737,7 +737,7 @@ class HeadlessRuntimeSession implements HeadlessRuntimePublicationSessionV1 {
       worldConfiguration.worldBuildIdentity.worldPackageRef !==
         worldPackageRefFromRootHashV1(expectedRootHash) ||
       worldConfiguration.sceneSource.executionPlanHash !==
-        input.verifiedDirectory.receipt.manifest.executionPlanHash ||
+        input.verifiedDirectory.receipt.manifest.sceneSource.executionPlanHash ||
       !isEqual(
         worldConfiguration.sceneSource.executionPlan,
         input.verifiedDirectory.executionPlan,

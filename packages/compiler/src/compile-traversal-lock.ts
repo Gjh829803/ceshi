@@ -4,7 +4,7 @@ import type {
   ResolvedResourceLockEntryV1,
 } from "@whitebox-world/authoring";
 import {
-  canonicalResourceLockEntriesV1,
+  worldResourceLockEntriesV1,
   parseCanonicalSceneExecutionPlanV1,
   parseWorldRuntimeBootstrapV1,
   type CanonicalSceneExecutionPlanV1,
@@ -214,22 +214,22 @@ export function compileResolvedTraversalLockV1(
     fail(`Medium Profile '${assembly.mediumProfile.resourceRef}' does not match the plan.`);
   }
   let canonicalResourceLock: ReturnType<
-    typeof canonicalResourceLockEntriesV1
+    typeof worldResourceLockEntriesV1
   >;
   let canonicalSceneResourceLock: ReturnType<
-    typeof canonicalResourceLockEntriesV1
+    typeof worldResourceLockEntriesV1
   >;
   let canonicalRuntimeResourceLock: ReturnType<
-    typeof canonicalResourceLockEntriesV1
+    typeof worldResourceLockEntriesV1
   >;
   try {
-    canonicalResourceLock = canonicalResourceLockEntriesV1(
+    canonicalResourceLock = worldResourceLockEntriesV1(
       input.normalizedWorldIr.resources.resourceLock,
     );
-    canonicalSceneResourceLock = canonicalResourceLockEntriesV1(
+    canonicalSceneResourceLock = worldResourceLockEntriesV1(
       canonicalSceneExecutionPlan.sceneResourceLockEntries,
     );
-    canonicalRuntimeResourceLock = canonicalResourceLockEntriesV1(
+    canonicalRuntimeResourceLock = worldResourceLockEntriesV1(
       worldRuntimeBootstrap.runtimeResourceLockEntries,
     );
   } catch {

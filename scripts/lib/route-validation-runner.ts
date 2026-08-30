@@ -36,9 +36,9 @@ import {
   type WorldPackageValidationSubjectV1,
 } from "@whitebox-world/validation";
 import {
-  createWorldPackageV1,
+  createCanonicalWorldPackageV1,
   verifyWorldPackageDirectoryV1,
-  type ResolvedWorldPackageResourceArtifactV1,
+  type ResolvedCanonicalWorldPackageResourceArtifactV1,
   type WorldPackageBuildReceiptV1,
 } from "@whitebox-world/world-package";
 import { isNil } from "lodash-es";
@@ -55,7 +55,7 @@ import {
 } from "./route-r1b-fixture-proofs.js";
 import { loadWorldkitRoutePipeline } from "./worldkit-pipeline";
 import {
-  createTrustedWorldPackageBuildContextV1,
+  createTrustedCanonicalWorldPackageBuildContextV1,
   resolveTrustedWorldPackageResourceArtifactsV1,
 } from "./trusted-world-package";
 
@@ -372,7 +372,7 @@ function requireRuntimePhysicsAggregatesV1(runtime: unknown):
  */
 export function createWorldPackageSubjectAssetResolverV1(
   artifacts: readonly Pick<
-    ResolvedWorldPackageResourceArtifactV1,
+    ResolvedCanonicalWorldPackageResourceArtifactV1,
     "resourceRef" | "packagePath" | "mediaType" | "bytes"
   >[],
 ): SubjectAssetResolverV1 {
@@ -477,7 +477,7 @@ export async function runTrustedRouteValidationV1(
       { diagnostics: pipeline.diagnostics },
     );
   }
-  let resourceArtifacts: readonly ResolvedWorldPackageResourceArtifactV1[];
+  let resourceArtifacts: readonly ResolvedCanonicalWorldPackageResourceArtifactV1[];
   try {
     resourceArtifacts = await resolveTrustedWorldPackageResourceArtifactsV1(
       pipeline.normalizedWorldIr,
@@ -494,9 +494,9 @@ export async function runTrustedRouteValidationV1(
     report: pipeline.layoutSolveReport,
     layoutSolveReportHash: pipeline.layoutSolveReportHash,
   });
-  const directory = createWorldPackageV1({
+  const directory = createCanonicalWorldPackageV1({
     packageId: `${pipeline.authoringSpec.id}.world-package`,
-    ...createTrustedWorldPackageBuildContextV1({
+    ...createTrustedCanonicalWorldPackageBuildContextV1({
       title: `${pipeline.authoringSpec.id} trusted route validation package`,
       resourceArtifacts,
     }),
@@ -509,6 +509,9 @@ export async function runTrustedRouteValidationV1(
     resourceArtifacts,
   });
   const verifiedDirectory = verifyWorldPackageDirectoryV1(directory);
+  if (verifiedDirectory.kind !== "canonical-execution-plan") {
+    throw new Error("ROUTE_VALIDATION_CANONICAL_WORLD_PACKAGE_REQUIRED");
+  }
   const worldPackageBuildReceipt = verifiedDirectory.receipt;
   const subject = createWorldPackageValidationSubjectV1(verifiedDirectory);
   const runtimeAssetResolver = createWorldPackageSubjectAssetResolverV1(

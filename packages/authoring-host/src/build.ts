@@ -21,7 +21,7 @@ import {
 } from "@whitebox-world/gameplay-contracts";
 import { canonicalJsonBytes, sha256CanonicalJson } from "@whitebox-world/protocol";
 import {
-  createWorldPackageV1,
+  createCanonicalWorldPackageV1,
   type WorldPackageBuildReceiptV1,
   type WorldPackageDirectoryV1,
 } from "@whitebox-world/world-package";
@@ -177,7 +177,7 @@ async function prepareTrustedCandidateV1Async(
   let worldPackageDirectory: WorldPackageDirectoryV1;
   let worldPackageBuildReceipt: WorldPackageBuildReceiptV1;
   try {
-    worldPackageDirectory = createWorldPackageV1({
+    worldPackageDirectory = createCanonicalWorldPackageV1({
       packageId: `${validated.value.id}.package`,
       ...input.worldPackageBuildContext,
       authoringSpec: validated.value,

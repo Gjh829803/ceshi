@@ -1,7 +1,7 @@
 import type {
   NativeSceneCheckResultV1,
   NativeSceneDiagnosticLocationV1,
-} from "@whitebox-world/native-babylon";
+} from "@whitebox-world/runtime-contracts";
 
 function explainLocation(location: NativeSceneDiagnosticLocationV1): string {
   if (location.kind === "none") return "none";

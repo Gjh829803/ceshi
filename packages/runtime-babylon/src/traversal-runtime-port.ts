@@ -1,7 +1,7 @@
 import {
-  canonicalResourceLockEntriesV1,
+  worldResourceLockEntriesV1,
   type CanonicalSceneExecutionPlanV1,
-  type CanonicalResourceKindV1,
+  type WorldResourceKindV1,
   type RuntimeVec3V1,
   type WorldRuntimeBootstrapV1,
 } from "@whitebox-world/runtime-contracts";
@@ -95,7 +95,7 @@ function exactPlanAndReceiptLock(
   );
   const resourceLockEntryMatches = (
     resourceRef: string,
-    resourceKind: CanonicalResourceKindV1,
+    resourceKind: WorldResourceKindV1,
     contentHash: string,
   ): boolean => canonicalResourceLock.filter(
     (entry) =>
@@ -104,10 +104,10 @@ function exactPlanAndReceiptLock(
       entry.contentHash === contentHash,
   ).length === 1;
   let canonicalResourceLock: ReturnType<
-    typeof canonicalResourceLockEntriesV1
+    typeof worldResourceLockEntriesV1
   >;
   try {
-    canonicalResourceLock = canonicalResourceLockEntriesV1(
+    canonicalResourceLock = worldResourceLockEntriesV1(
       [
         ...plan.sceneResourceLockEntries,
         ...runtimeBootstrap.runtimeResourceLockEntries.filter(

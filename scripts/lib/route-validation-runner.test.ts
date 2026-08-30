@@ -13,7 +13,7 @@ import {
 import {
   OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
 } from "@whitebox-world/validation";
-import type { ResolvedWorldPackageResourceArtifactV1 } from "@whitebox-world/world-package";
+import type { ResolvedCanonicalWorldPackageResourceArtifactV1 } from "@whitebox-world/world-package";
 import { isNil } from "lodash-es";
 
 import {
@@ -26,7 +26,7 @@ import {
 
 const ASSET_BYTES = new Uint8Array([1, 2, 3, 4]);
 const ASSET_HASH = sha256Bytes(ASSET_BYTES);
-const ARTIFACTS: readonly ResolvedWorldPackageResourceArtifactV1[] = [
+const ARTIFACTS: readonly ResolvedCanonicalWorldPackageResourceArtifactV1[] = [
   {
     resourceRef: "worldkit://subject-asset/test.actor@1",
     packagePath: "resources/subject-assets/test.actor.glb",
@@ -124,11 +124,14 @@ describe("Route validation trusted runner", () => {
       "inject-surface-correlation-miss",
     );
     expect(JSON.stringify(result)).not.toContain("fixtureFaultInjection");
-    expect(result.worldPackageBuildReceipt.manifest.resources).toContainEqual(
-      expect.objectContaining({
-        packagePath: "gameplay/bootstrap.json",
-        mediaType: "application/vnd.worldkit.gameplay-bootstrap+json",
-      }),
+    expect(result.worldPackageBuildReceipt.manifest.resources).not.toContainEqual(
+      expect.objectContaining({ packagePath: "gameplay/bootstrap.json" }),
+    );
+    expect(result.worldPackageBuildReceipt.manifest.lockedResources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ resourceKind: "gameplay-bootstrap" }),
+        expect.objectContaining({ resourceKind: "world-runtime-bootstrap" }),
+      ]),
     );
   }, 30_000);
 

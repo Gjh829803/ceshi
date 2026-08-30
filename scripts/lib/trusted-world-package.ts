@@ -4,9 +4,9 @@ import { hashCanonicalAuthoringSchemaV1 } from "@whitebox-world/authoring-edit";
 import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
 import {
   BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V1,
-  createWorldPackageV1,
-  type ResolvedWorldPackageResourceArtifactV1,
-  type WorldPackageBuildContextV1,
+  createCanonicalWorldPackageV1,
+  type ResolvedCanonicalWorldPackageResourceArtifactV1,
+  type CanonicalWorldPackageBuildContextV1,
   type WorldPackageDirectoryV1,
   type WorldPackageLicenseDocumentInputV1,
 } from "@whitebox-world/world-package";
@@ -55,7 +55,7 @@ const LICENSE_BY_SPDX_EXPRESSION = new Map<
 export async function resolveTrustedWorldPackageResourceArtifactsV1(
   normalizedWorldIr: NormalizedWorldIRV4,
   options: ResolveWorldPackageResourceBytesOptionsV1 = {},
-): Promise<readonly ResolvedWorldPackageResourceArtifactV1[]> {
+): Promise<readonly ResolvedCanonicalWorldPackageResourceArtifactV1[]> {
   const subjectAssetManifests = normalizedWorldIr.resources.subjectAssets.map(
     (asset) => {
       const manifest = builtInSubjectResourceRegistry.resolveSubjectAsset(
@@ -90,10 +90,10 @@ export async function resolveTrustedWorldPackageResourceArtifactsV1(
   });
 }
 
-export function createTrustedWorldPackageBuildContextV1(input: {
+export function createTrustedCanonicalWorldPackageBuildContextV1(input: {
   readonly title: string;
-  readonly resourceArtifacts: readonly ResolvedWorldPackageResourceArtifactV1[];
-}): WorldPackageBuildContextV1 {
+  readonly resourceArtifacts: readonly ResolvedCanonicalWorldPackageResourceArtifactV1[];
+}): CanonicalWorldPackageBuildContextV1 {
   const projectionProfile =
     builtInSubjectResourceRegistry.resolveAiSchemaProjectionProfile(
       CONSTRAINED_JSON_PROFILE_REF,
@@ -155,9 +155,9 @@ export async function createTrustedCanonicalWorldPackageV1(
   const resourceArtifacts = await resolveTrustedWorldPackageResourceArtifactsV1(
     pipeline.normalizedWorldIr,
   );
-  return createWorldPackageV1({
+  return createCanonicalWorldPackageV1({
     packageId: `${pipeline.authoringSpec.id}.world-package`,
-    ...createTrustedWorldPackageBuildContextV1({
+    ...createTrustedCanonicalWorldPackageBuildContextV1({
       title: `${pipeline.authoringSpec.id} WorldPackage`,
       resourceArtifacts,
     }),

@@ -1,4 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
+import {
+  parseNativeSceneCheckResultV1,
+  parseNativeSceneDiagnosticV1,
+} from "@whitebox-world/runtime-contracts";
 
 import type {
   BabylonNativeLockedAssetRequestV1,
@@ -8,8 +12,6 @@ import type {
 import {
   createBabylonNativeHostRandomV1,
   defineBabylonNativeScene,
-  parseNativeSceneCheckResultV1,
-  parseNativeSceneDiagnosticV1,
 } from "./index.js";
 
 const VALID_DIAGNOSTIC = {

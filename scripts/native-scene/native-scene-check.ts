@@ -3,7 +3,7 @@ import {
   type NativeSceneCheckedInputV1,
   type NativeSceneCheckResultV1,
   type NativeSceneDiagnosticV1,
-} from "@whitebox-world/native-babylon";
+} from "@whitebox-world/runtime-contracts";
 import { replayBabylonNativeSceneModuleV1 } from
   "@whitebox-world/native-babylon/host";
 import { orderBy } from "lodash-es";
@@ -17,8 +17,8 @@ import {
   resolveBabylonNativeCheckPolicyV1,
 } from "./check-policy.js";
 import {
-  typecheckBundleAndLoadBabylonNativeSceneModuleV1,
-} from "./ephemeral-bundle.js";
+  buildAndLoadBabylonNativeSceneModuleV1,
+} from "./module-bundle.js";
 import { admitBabylonNativeSourceGraphV1 } from "./source-admission.js";
 
 function diagnosticLocationSortKey(
@@ -115,7 +115,7 @@ export async function checkBabylonNativeSceneWorldDirectoryV1(
     return resultFromFailure(checkId, checkedInput, policy);
   }
 
-  const loaded = await typecheckBundleAndLoadBabylonNativeSceneModuleV1(
+  const loaded = await buildAndLoadBabylonNativeSceneModuleV1(
     source.sourceGraph,
   );
   if (loaded.outcome !== "passed") {

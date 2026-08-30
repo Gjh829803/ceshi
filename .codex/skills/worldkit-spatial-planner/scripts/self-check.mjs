@@ -1210,7 +1210,12 @@ const BIPED_BONE_IDS_V1 = Object.freeze([
 Object.freeze([
   ...SUBJECT_RESOURCE_KINDS_V1,
   "traversal-surface-profile",
-  "gameplay-bootstrap"
+  "gameplay-bootstrap",
+  "world-runtime-bootstrap",
+  "native-scene",
+  "native-scene-api",
+  "native-scene-profile",
+  "static-geometry-asset"
 ]);
 const TRAVERSAL_DRIVER_PROFILE_REQUIRED_KEYS = [
   "kind",

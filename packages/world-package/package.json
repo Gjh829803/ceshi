@@ -14,6 +14,7 @@
     "@whitebox-world/layout-solver": "workspace:*",
     "@whitebox-world/protocol": "workspace:*",
     "@whitebox-world/runtime-contracts": "workspace:*",
+    "@whitebox-world/scene-authoring-contracts": "workspace:*",
     "@whitebox-world/subject-registry": "workspace:*",
     "@whitebox-world/world-identity": "workspace:*",
     "jsonc-parser": "^3.3.1",

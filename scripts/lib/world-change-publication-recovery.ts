@@ -54,6 +54,9 @@ function diagnostic(
 function runtimeConfiguration(
   directory: NonNullable<Awaited<ReturnType<WorldPackageStoreV1["get"]>>>,
 ): TrustedRuntimeWorldConfigurationV1 {
+  if (directory.kind !== "canonical-execution-plan") {
+    throw new Error("WORLD_CHANGE_RECOVERY_CANONICAL_WORLD_PACKAGE_REQUIRED");
+  }
   return Object.freeze({
     worldBuildIdentity: directory.receipt.worldBuildIdentity,
     gameplayBootstrap: directory.gameplayBootstrap,
@@ -61,7 +64,7 @@ function runtimeConfiguration(
     sceneSource: Object.freeze({
       kind: "canonical-execution-plan" as const,
       executionPlan: directory.executionPlan,
-      executionPlanHash: directory.receipt.manifest.executionPlanHash,
+      executionPlanHash: directory.receipt.manifest.sceneSource.executionPlanHash,
     }),
   });
 }

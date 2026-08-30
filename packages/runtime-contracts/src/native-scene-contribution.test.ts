@@ -5,7 +5,7 @@ import {
   createBabylonNativeStaticColliderContributionV1,
   hashBabylonNativeSceneContributionV1,
   parseBabylonNativeSceneContributionV1,
-} from "./contribution.js";
+} from "./native-scene-contribution.js";
 
 const TRIANGLE_GEOMETRY = Object.freeze({
   worldPositionsMetersXYZ: Object.freeze([0, 0, 0, 2, 0, 0, 0, 0, 2]),

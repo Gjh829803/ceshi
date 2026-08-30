@@ -11,7 +11,9 @@ import {
   createGameplayBootstrapV1,
 } from "@whitebox-world/gameplay-contracts";
 import {
-  createWorldPackageV1,
+  createBabylonNativeWorldPackageV1,
+  createCanonicalWorldPackageV1,
+  verifyWorldPackageDirectoryV1,
   type WorldPackageDirectoryV1,
 } from "@whitebox-world/world-package";
 import { generateKeyPairSync } from "node:crypto";
@@ -35,6 +37,8 @@ import { isNil } from "lodash-es";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import basicWorldDocument from "../../examples/authoring/basic-world.json";
+import { createBabylonNativeWorldPackageTestInputV1 } from
+  "@whitebox-world/world-package/testing";
 import {
   createFileWorldPackageTestAdapterV1,
   createFileWorldPackageStoreV1,
@@ -107,7 +111,7 @@ function createDirectoryFixture(): WorldPackageDirectoryV1 {
   if (!compiled.ok || isNil(compiled.canonicalSceneExecutionPlan)) {
     throw new Error("fixture compilation failed");
   }
-  return createWorldPackageV1({
+  return createCanonicalWorldPackageV1({
     packageId: `${authoringSpec.id}.package`,
     title: "File World Package",
     sdkVersion: "0.0.0",
@@ -204,6 +208,24 @@ describe("file WorldPackage adapter", { timeout: 30_000 }, () => {
     expect((await lstat(outputDirectoryPath)).mode & 0o777).toBe(0o700);
     expect((await lstat(path.join(outputDirectoryPath, "manifest.json"))).mode & 0o777)
       .toBe(0o600);
+    await assertNoPublicationDebris();
+  });
+
+  it("atomically writes and reads the same Native Root", async () => {
+    const native = createBabylonNativeWorldPackageV1(
+      createBabylonNativeWorldPackageTestInputV1(),
+    );
+    const outputDirectoryPath = path.join(testRoot, "native-package");
+    await writeWorldPackageDirectoryV1({ outputDirectoryPath, directory: native });
+    const read = await readWorldPackageDirectoryV1({
+      packageDirectoryPath: outputDirectoryPath,
+      ...READ_LIMITS,
+    });
+    const verified = verifyWorldPackageDirectoryV1(read);
+    expect(verified.kind).toBe("babylon-native-scene");
+    expect(read.receipt.worldPackageRootHash).toBe(
+      native.receipt.worldPackageRootHash,
+    );
     await assertNoPublicationDebris();
   });
 

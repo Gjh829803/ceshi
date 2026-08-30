@@ -2,20 +2,7 @@ export type {
   BabylonNativeLockedAssetRequestV1,
   BabylonNativeLockedAssetResolverV1,
   BabylonNativeLockedAssetV1,
-  BabylonNativeStaticGeometryImportMetadataV1,
 } from "./assets.js";
-export type {
-  NativeSceneCheckedInputV1,
-  NativeSceneCheckResultV1,
-  NativeSceneDiagnosticLocationV1,
-  NativeSceneDiagnosticMeasurementV1,
-  NativeSceneDiagnosticStageV1,
-  NativeSceneDiagnosticV1,
-} from "./diagnostics.js";
-export {
-  parseNativeSceneCheckResultV1,
-  parseNativeSceneDiagnosticV1,
-} from "./diagnostics.js";
 export type {
   BabylonNativeSceneBuildContextV1,
   BabylonNativeSceneModuleV1,

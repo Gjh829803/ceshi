@@ -32,7 +32,7 @@ import {
   type SpawnStaticBlockingObject,
 } from "@whitebox-world/terrain-surface";
 import {
-  canonicalResourceLockEntriesV1,
+  worldResourceLockEntriesV1,
   createCanonicalSceneExecutionPlanV1,
   createWorldRuntimeBootstrapV1,
   hashCanonicalSceneExecutionPlanV1,
@@ -1981,7 +1981,7 @@ export function compileCanonicalWorldV1(
   }
 
   try {
-    const normalizedResourceLockEntries = canonicalResourceLockEntriesV1(
+    const normalizedResourceLockEntries = worldResourceLockEntriesV1(
       snapshot.normalizedWorldIr.resources.resourceLock,
     ) as NormalizedWorldIRV4["resources"]["resourceLock"];
     const normalizedResourceLockHash = sha256CanonicalJson(
@@ -1997,7 +1997,7 @@ export function compileCanonicalWorldV1(
     let gameplayBootstrapResourceLock: GameplayBootstrapResourceLockEntryV1;
     try {
       gameplayBootstrap = parseGameplayBootstrapV1(snapshot.gameplayBootstrap);
-      const [canonicalBootstrap] = canonicalResourceLockEntriesV1([
+      const [canonicalBootstrap] = worldResourceLockEntriesV1([
         createGameplayBootstrapResourceLockEntryV1(gameplayBootstrap),
       ]);
       if (
@@ -2033,7 +2033,7 @@ export function compileCanonicalWorldV1(
           contentHash: entry.contentHash as Sha256HashV1,
         }));
     const runtimeResourceLockEntries: readonly RuntimeResourceLockEntryV1[] =
-      canonicalResourceLockEntriesV1([
+      worldResourceLockEntriesV1([
       ...normalizedResourceLockEntries.filter(
         (entry) => entry.resourceKind !== "traversal-surface-profile",
       ),

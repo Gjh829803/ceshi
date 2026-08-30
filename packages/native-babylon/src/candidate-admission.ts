@@ -3,8 +3,19 @@ import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import type { Scene } from "@babylonjs/core/scene.js";
 import {
+  createBabylonNativeStaticColliderContributionV1,
+  hashBabylonNativeSceneContributionV1,
   parseBabylonNativeSceneBootstrapV1,
+  parseBabylonNativeSceneContributionV1,
+  parseBabylonNativeTraversalBindingInputV1,
+  parseNativeSceneDiagnosticV1,
   type BabylonNativeSceneBootstrapV1,
+  type BabylonNativeSceneContributionV1,
+  type BabylonNativeStaticColliderContributionV1,
+  type NativeSceneDiagnosticV1,
+  type NativeSceneDiagnosticLocationV1,
+  type NativeSceneDiagnosticMeasurementV1,
+  type NativeSceneDiagnosticStageV1,
 } from "@whitebox-world/runtime-contracts";
 import { isEmpty, isNil } from "lodash-es";
 
@@ -24,21 +35,6 @@ import {
   validateBabylonNativeSceneCandidatePreconditionV1,
 } from "./authority-audit.js";
 import {
-  createBabylonNativeStaticColliderContributionV1,
-  hashBabylonNativeSceneContributionV1,
-  parseBabylonNativeSceneContributionV1,
-  parseBabylonNativeTraversalBindingV1,
-  type BabylonNativeSceneContributionV1,
-  type BabylonNativeStaticColliderContributionV1,
-} from "./contribution.js";
-import {
-  parseNativeSceneDiagnosticV1,
-  type NativeSceneDiagnosticV1,
-  type NativeSceneDiagnosticLocationV1,
-  type NativeSceneDiagnosticMeasurementV1,
-  type NativeSceneDiagnosticStageV1,
-} from "./diagnostics.js";
-import {
   defineBabylonNativeScene,
   type BabylonNativeSceneBuildContextV1,
   type BabylonNativeSceneModuleV1,
@@ -56,17 +52,6 @@ export type {
 } from "./module.js";
 export type { BabylonNativeHostRandomV1 } from "./random.js";
 export { createBabylonNativeHostRandomV1 } from "./random.js";
-
-export type {
-  BabylonNativeContributionTraversalBindingV1,
-  BabylonNativeSceneContributionV1,
-  BabylonNativeSpawnMarkerContributionV1,
-  BabylonNativeStaticColliderContributionV1,
-} from "./contribution.js";
-export {
-  hashBabylonNativeSceneContributionV1,
-  parseBabylonNativeSceneContributionV1,
-} from "./contribution.js";
 
 export interface BabylonNativeSceneAdmissionBudgetV1 {
   readonly maximumStaticColliderCount: number;
@@ -684,7 +669,7 @@ export async function admitBabylonNativeSceneCandidateV1(
             }
             let binding: BabylonNativeTraversalBindingV1;
             try {
-              binding = parseBabylonNativeTraversalBindingV1(
+              binding = parseBabylonNativeTraversalBindingInputV1(
                 record.traversalBinding,
               );
             } catch {
@@ -868,7 +853,7 @@ export async function admitBabylonNativeSceneCandidateV1(
       }
       let finalBinding: BabylonNativeTraversalBindingV1;
       try {
-        finalBinding = parseBabylonNativeTraversalBindingV1(retained.bindingSource);
+        finalBinding = parseBabylonNativeTraversalBindingInputV1(retained.bindingSource);
       } catch {
         throw failure(
           "WORLDKIT_NATIVE_SCENE_COLLIDER_DRIFT",

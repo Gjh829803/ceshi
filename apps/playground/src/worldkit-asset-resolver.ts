@@ -3,7 +3,7 @@ import { sha256Bytes } from "@whitebox-world/protocol";
 import type { SubjectAssetResolverV1 } from "@whitebox-world/runtime-babylon";
 import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
 import type {
-  ResolvedWorldPackageResourceArtifactV1,
+  ResolvedCanonicalWorldPackageResourceArtifactV1,
 } from "@whitebox-world/world-package";
 import { isEqual, isNil } from "lodash-es";
 
@@ -297,7 +297,7 @@ export async function resolveWorldPackageSubjectAssetArtifactsV1(
   packagePathByRef: Readonly<Record<string, string>> =
     PLAYGROUND_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1,
   fetchImplementation: typeof fetch = fetch,
-): Promise<readonly ResolvedWorldPackageResourceArtifactV1[]> {
+): Promise<readonly ResolvedCanonicalWorldPackageResourceArtifactV1[]> {
   const artifacts = await resolveWorldPackageSubjectAssetBytesV1(
     subjectAssets,
     assetUriByRef,

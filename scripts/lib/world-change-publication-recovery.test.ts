@@ -19,7 +19,7 @@ import {
 } from "@whitebox-world/authoring-host";
 import {
   createInMemoryWorldPackageStoreV1,
-  createWorldPackageBuildContextFixtureV1,
+  createCanonicalWorldPackageBuildContextFixtureV1,
 } from "@whitebox-world/world-package/testing";
 import { isNil } from "lodash-es";
 import { describe, expect, it, vi } from "vitest";
@@ -83,7 +83,7 @@ async function committedFixture() {
   const bridge = createAuthoringEditHostBridgeV1({
     authoringSpec: spec,
     worldPackageStore,
-    worldPackageBuildContext: createWorldPackageBuildContextFixtureV1(),
+    worldPackageBuildContext: createCanonicalWorldPackageBuildContextFixtureV1(),
     resourceArtifacts: [],
     runtimeHost: { publishWorldReplacementV1 } as never,
     nowUnixMilliseconds: () => 1_700_000_000_000,

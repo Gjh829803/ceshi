@@ -134,6 +134,9 @@ importers:
       vitest:
         specifier: ^3.2.4
         version: 3.2.7(@types/node@24.13.3)(tsx@4.23.12)(yaml@2.9.0)
+      yaml:
+        specifier: 2.9.0
+        version: 2.9.0
 
   apps/native-scene-playground:
     dependencies:
@@ -414,9 +417,6 @@ importers:
       '@babylonjs/core':
         specifier: 9.23.0
         version: 9.23.0
-      '@whitebox-world/protocol':
-        specifier: workspace:*
-        version: link:../protocol
       '@whitebox-world/runtime-contracts':
         specifier: workspace:*
         version: link:../runtime-contracts
@@ -768,6 +768,9 @@ importers:
       '@whitebox-world/runtime-contracts':
         specifier: workspace:*
         version: link:../runtime-contracts
+      '@whitebox-world/scene-authoring-contracts':
+        specifier: workspace:*
+        version: link:../scene-authoring-contracts
       '@whitebox-world/subject-registry':
         specifier: workspace:*
         version: link:../subject-registry

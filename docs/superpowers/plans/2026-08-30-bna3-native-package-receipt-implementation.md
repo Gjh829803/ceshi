@@ -472,7 +472,6 @@ maintain an ephemeral and persistent bundler configuration.
 
 ```bash
 pnpm vitest run scripts/native-scene/module-bundle.test.ts \
-  scripts/native-scene/ephemeral-bundle.test.ts \
   scripts/native-scene/native-scene-check.test.ts
 pnpm typecheck
 git diff --check
@@ -577,6 +576,8 @@ Before any Root exists, reject unless:
 - Attempt ref/hash/route ref/hash/Brief/source input/seed/profile match;
 - completed Result's Attempt hash matches and its `authoredSourceRef` is the selected
   `sceneModuleRef` while `authoredSourceHash` equals Bundle `sourceGraphHash`;
+- the frozen input retains the Host-validated `sceneAuthoringAttemptResultRef`; the
+  pure builder never derives a Registry Ref from Result `id`;
 - Native Check is passed and binds the same module ref;
 - replay Contribution hash matches the frozen Contribution;
 - Bootstrap and World Runtime Bootstrap have exactly equal
@@ -959,3 +960,20 @@ The next permitted product step after an accepted BNA-3 merge is BNA-4: consume 
 verified Native member through the shared RuntimeHost/Babylon/Havok Gameplay Kernel,
 replay actual Contribution against the Receipt and atomically publish one SDK-owned
 session.
+
+## 15. Candidate evidence ledger
+
+Implementation commits from `origin/main@620cabf6b81ecf60b3fc1bf0ac86501f79421b04`:
+
+| Slice | Commit | Local evidence |
+| --- | --- | --- |
+| BNA3-00 | `a474c00`, `e5c3daf` | contract/parser/type focused tests, census, typecheck |
+| BNA3-10 | `b628a8e` | deterministic two-root Bundle and tamper/cleanup tests |
+| BNA3-20 | `dc2ceed` | installed dependency/lockfile closure, Havok exclusion tests |
+| BNA3-30 | `747efc7` | Asset Lock, Attempt/Result closure, dual replay tests |
+| BNA3-40/50 | `cc7bf64`, `fff9016` | pure builder, unified verifier, Store/File/signing/CLI dual-source tests |
+| BNA3-60 | `b0f3325`, `36df06b` | package-derived Native preflight and zero-adapter allocation tests |
+
+The focused candidate evidence is recorded in
+`docs/reviews/2026-08-30-bna3-native-package-receipt-review.md`. Exact-SHA Cursor Cloud
+full gates and independent review remain pending; this ledger does not mark BNA-3 complete.

@@ -31,7 +31,7 @@ export interface WorldPackageStoreV1 {
   ): Promise<VerifiedWorldPackageDirectoryV1 | undefined>;
 }
 
-export function canonicalWorldPackageDirectoryForStoreV1(
+export function canonicalizeWorldPackageDirectoryForStoreV1(
   directory: WorldPackageDirectoryV1,
 ): WorldPackageDirectoryV1 {
   try {

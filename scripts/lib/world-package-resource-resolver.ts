@@ -6,7 +6,7 @@ import type {
   NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
 import type {
-  ResolvedWorldPackageResourceArtifactV1,
+  ResolvedCanonicalWorldPackageResourceArtifactV1,
 } from "@whitebox-world/world-package";
 import { assertWorldPackageAccessorFreeDataGraphV1 } from "@whitebox-world/world-package";
 import {
@@ -665,7 +665,7 @@ function snapshotSubjectAssetManifestsV1(
 export async function resolveWorldPackageResourceArtifactsV1(
   normalizedWorldIr: NormalizedWorldIRV4,
   options: ResolveWorldPackageResourceArtifactsOptionsV1,
-): Promise<readonly ResolvedWorldPackageResourceArtifactV1[]> {
+): Promise<readonly ResolvedCanonicalWorldPackageResourceArtifactV1[]> {
   const snapshotOptions = snapshotResolveOptionsV1(options);
   const subjectAssets = snapshotSubjectAssets(normalizedWorldIr);
   const manifestsByRef = snapshotSubjectAssetManifestsV1(

@@ -737,7 +737,7 @@ describe("compileWorld", () => {
     },
     {
       label: "duplicate Subject Asset Resource Lock row",
-      expectedMessage: "CANONICAL_RESOURCE_LOCK_INVALID",
+      expectedMessage: "WORLD_RESOURCE_LOCK_INVALID",
       mutate: (world: NormalizedWorldIRV4) => {
         const subjectAssetLock = world.resources.resourceLock.find(
           (row) => row.resourceRef === SUBJECT_ASSET_REF,
@@ -770,7 +770,7 @@ describe("compileWorld", () => {
       mutate: (world: NormalizedWorldIRV4) => {
         world.resources.resourceLock = world.resources.resourceLock.map((row) =>
           row.resourceRef === SUBJECT_ASSET_REF
-            ? { ...row, contentHash: `sha256:${"0".repeat(64)}` }
+            ? { ...row, contentHash: `sha256:${"f".repeat(64)}` }
             : row,
         );
       },

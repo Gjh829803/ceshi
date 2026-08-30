@@ -1112,17 +1112,17 @@ AI 用 Three 生成原始 GLB，经资产类别 Build Record 和只读 Asset Adm
 
 ## 15. 当前实现事实与目标差距
 
-| 能力 | 2026-08-28 当前事实 | 本设计目标 |
+| 能力 | 2026-08-30 当前实现候选事实 | 本设计目标 |
 |---|---|---|
-| Native Module API | Foundation 已迁移到独立 `@whitebox-world/native-babylon` root；Host 能力只从 `/host` 消费 | 完成 BNA-2 后续闭合、BNA-3 至 BNA-6，并通过 BNA-8 disposition 后，才可成为 receipt-bound、经 Authority/Runtime Replay Gate 的生产入口 |
-| Bootstrap | `BabylonNativeSceneBootstrapV1`、`RuntimeSceneSourceV1` 与 `WorldRuntimeBootstrapV1` 已闭合并通过 exact parser/schema gate | BNA-3/BNA-4 将已冻结合同绑定 Native Package/Contribution 并接通正式 admission |
+| Native Module API | BNA-2 已工程闭合；BNA-3 本地候选已从唯一 Host 入口消费同一 Source Admission/双 replay，并等待 exact-SHA Cloud GO | 完成 BNA-3 至 BNA-6，并通过 BNA-8 disposition 后，才可成为 receipt-bound、经 Authority/Runtime Replay Gate 的生产入口 |
+| Bootstrap | BNA-3 候选已把 Bootstrap、Bundle、Contribution 与 WorldPackage/Receipt identity 闭合；正式 Runtime 仍拒绝 | BNA-4 从同一 verified member 接通正式 admission |
 | Gameplay 复用 | 实验 Native 已复用 `GameplayBootstrapV1` + Plan-independent `WorldRuntimeBootstrapV1`，无影子 Plan | BNA-4 经正式 Package/Surface Admission 接入同一 Kernel |
-| 通用世界身份 | Runtime/State/Capture 已统一使用 `WorldBuildIdentityV1` / `worldBuildIdentityHash`；Plan-specific Route/Edit 仍显式使用 Plan Hash | BNA-3 增加 Native Package/Contribution identity，不恢复 generic Plan Hash |
-| Runtime Source | RuntimeHost 已冻结闭合 `sceneSource` Union；Canonical 正式运行，Native member 在 adapter/Candidate 分配前 fail-closed | BNA-4 才可在 BNA-3 Receipt 后移除正式 Native rejection |
-| 登记 | 一个 Spawn + 必填闭合 `traversalBinding` 的静态 Mesh Collider；已有 Host 预算、结构化诊断、稳定 Subshape/Surface ID 与无 Handle Contribution Hash | BNA-3/BNA-4 增加 Package/Receipt 绑定、Source/Authority/Runtime Replay 与生产 Surface Admission |
+| 通用世界身份 | BNA-3 候选已由同一 Root 后派生 Native Package Ref、Build Identity 和 Receipt；Plan-specific Route/Edit 仍显式使用 Plan Hash | Cloud GO 后冻结 BNA-3，BNA-4 只消费该身份，不恢复 generic Plan Hash |
+| Runtime Source | verified union 可投影 receipt-bound Native Bootstrap/Bundle identity；RuntimeHost 在 adapter/Candidate/Module 分配前明确拒绝 | BNA-4 才可移除正式 Native rejection |
+| 登记 | Spawn、静态 Collider Contribution、Route/Attempt/Check 及预算已进入 Native Root 并可重放；未创建 Havok | BNA-4 完成生产 Surface Admission |
 | Physics/Subject/Camera | 已由 SDK/Havok 接管并通过实验移动 | 继续使用同一生产 Kernel，不复制 Runtime |
 | 场景效果 | `cloud-ridge` 已显示核心构图并有通过性 Probe | Golden Corpus、正式 Visual/Interaction Gate |
-| Package/Receipt | 无 Native WorldPackage/Build Receipt | Bundle/依赖/资产/贡献完整身份 |
+| Package/Receipt | BNA-3 本地候选已实现 deterministic Bundle、Dependency/Asset Lock、统一 Package/Receipt/verifier/Store/File/signing/inspect；等待 exact-SHA Cloud GO | BNA-3 GO 后成为 BNA-4 唯一 Package 输入 |
 | Asset Production/Admission | 无已实现的 source-neutral Request/Candidate/Build/Admission/Publication 合同；实验只消费本地 GLB | 由独立 APA 设计经 class-specific Build、只读 Admission 与原子 Publication 产生 locked assetRef，Native 只消费，不调用 Provider |
 | 安全 | 受信本地实验，完整 Scene 访问 | Trusted Local 生产 Profile；Hosted 需隔离 Gate |
 | Route/寻路 | 无正式 Route/Nav Evidence | 可选地从同一冻结 Surface 派生并独立验收 |
@@ -1228,6 +1228,9 @@ RuntimeWorldConfiguration V1 -> Babylon/Havok。
 不得塞入 core 包形成隐式默认 DSL；BWB-1 只有在本任务 BuildContext/Import Profile 冻结后才能接入。
 
 ### BNA-3：Native Bundle、资源锁、Package 与 Receipt
+
+- 当前状态（2026-08-30）：本地实现候选已闭合 BNA3-00..60，等待同一精确 SHA 的 Cloud 全量门禁、
+  独立深审、PR 合入和 `origin/main` 祖先证明；在此之前仍视为开放。
 
 - 目标与独立交付物：建立 Module Bundle、依赖/资产锁、Bootstrap/Contribution Hash 和正式 Package/
   Build Receipt 变体，并按第 10 节顺序在 Package Root 计算后派生、绑定 BNA-1 `WorldBuildIdentity`；

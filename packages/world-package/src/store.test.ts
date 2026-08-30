@@ -2,12 +2,20 @@ import { canonicalJsonBytes } from "@whitebox-world/protocol";
 import { worldPackageRefFromRootHashV1 } from "@whitebox-world/world-identity";
 import { describe, expect, it } from "vitest";
 
-import { assembleWorldPackageDirectoryV1, createWorldPackageV1, type WorldPackageDirectoryV1 } from "./index.js";
+import {
+  assembleWorldPackageDirectoryV1,
+  createBabylonNativeWorldPackageV1,
+  createCanonicalWorldPackageV1,
+  type WorldPackageDirectoryV1,
+} from "./index.js";
 import { createInMemoryWorldPackageStoreV1 } from "./testing.js";
-import { createWorldPackageTestInputV1 } from "./test-fixture.js";
+import {
+  createBabylonNativeWorldPackageTestInputV1,
+  createWorldPackageTestInputV1,
+} from "./test-fixture.js";
 
 function fixture(): WorldPackageDirectoryV1 {
-  return createWorldPackageV1(createWorldPackageTestInputV1());
+  return createCanonicalWorldPackageV1(createWorldPackageTestInputV1());
 }
 
 function withSignature(directory: WorldPackageDirectoryV1, signatureBase64: string): WorldPackageDirectoryV1 {
@@ -38,6 +46,21 @@ describe("WorldPackageStoreV1", () => {
   it("returns undefined for an absent valid Ref", async () => {
     const store = createInMemoryWorldPackageStoreV1();
     await expect(store.get(worldPackageRefFromRootHashV1(`sha256:${"a".repeat(64)}`))).resolves.toBeUndefined();
+  });
+
+  it("stores and defensively replays the same Native package member", async () => {
+    const directory = createBabylonNativeWorldPackageV1(
+      createBabylonNativeWorldPackageTestInputV1(),
+    );
+    const store = createInMemoryWorldPackageStoreV1();
+    const put = await store.put(directory);
+    directory.files[0]!.bytes[0] = directory.files[0]!.bytes[0]! ^ 0xff;
+    const loaded = await store.get(put.worldPackageRef);
+    expect(loaded?.kind).toBe("babylon-native-scene");
+    if (loaded?.kind !== "babylon-native-scene") throw new Error("unreachable");
+    expect(loaded.sceneModuleBundleHash).toBe(
+      loaded.receipt.manifest.sceneSource.sceneModuleBundleHash,
+    );
   });
 
   it("rejects different signature bytes under the same Package Root", async () => {

@@ -1,7 +1,8 @@
 import {
   parseNativeSceneDiagnosticV1,
+  type BabylonNativeStaticGeometryImportMetadataV1,
   type NativeSceneDiagnosticV1,
-} from "./diagnostics.js";
+} from "@whitebox-world/runtime-contracts";
 
 const LOCKED_ASSET_RESOLUTION_FAILURE_V1 = Symbol(
   "BabylonNativeLockedAssetResolutionFailureV1",
@@ -10,18 +11,6 @@ const LOCKED_ASSET_RESOLUTION_FAILURE_V1 = Symbol(
 /** Exact resource identity used to request one Package-locked asset. */
 export interface BabylonNativeLockedAssetRequestV1 {
   readonly assetResourceRef: string;
-}
-
-/** Import semantics admitted for the first static-geometry profile. */
-export interface BabylonNativeStaticGeometryImportMetadataV1 {
-  readonly kind: "static-geometry-glb";
-  readonly mediaType: "model/gltf-binary";
-  readonly format: "glb";
-  readonly gltfVersion: "2.0";
-  readonly localForwardAxis: "-Z" | "+Z" | "-X" | "+X";
-  readonly localUpAxis: "+Y";
-  readonly metersPerUnit: 1;
-  readonly pivot: "support-center" | "centroid";
 }
 
 /**
@@ -43,7 +32,7 @@ export interface BabylonNativeLockedAssetV1 {
   readonly resourceManifestHash: string;
   readonly artifactContentHash: string;
   readonly bytes: Uint8Array;
-  readonly importMetadata: Readonly<BabylonNativeStaticGeometryImportMetadataV1>;
+  readonly importMetadata: BabylonNativeStaticGeometryImportMetadataV1;
 }
 
 /** Resolver for assets already admitted and locked into the current Package. */

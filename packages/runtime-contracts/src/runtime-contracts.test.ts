@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   WORLDKIT_BROWSER_PROTOCOL_VERSION,
   WORLDKIT_WORLD_SESSION_EVENT_PAGE_MAXIMUM_COUNT,
-  CANONICAL_RESOURCE_KINDS_V1,
-  canonicalResourceLockEntriesV1,
+  WORLD_RESOURCE_KINDS_V1,
+  worldResourceLockEntriesV1,
   canonicalWorldkitBrowserRouteEvidencePublicationV2,
   type RuntimeAnimationSetV1,
   type RuntimeColliderProfileV1,
@@ -332,7 +332,7 @@ describe("runtime contracts", () => {
     );
   });
 
-  it("admits the locked Traversal Surface Profile resource kind and rejects unknown kinds", () => {
+  it("canonicalizes source-neutral world resource lock rows", () => {
     const profileRow = {
       resourceRef: "worldkit://traversal-surface-profile/ground.static@1",
       resourceKind: "traversal-surface-profile",
@@ -340,14 +340,32 @@ describe("runtime contracts", () => {
       contentHash: `sha256:${"a".repeat(64)}`,
     } as const;
 
-    expect(CANONICAL_RESOURCE_KINDS_V1).toContain("traversal-surface-profile");
-    expect(canonicalResourceLockEntriesV1([profileRow])).toEqual([
+    expect(WORLD_RESOURCE_KINDS_V1).toEqual(expect.arrayContaining([
+      "traversal-surface-profile",
+      "gameplay-bootstrap",
+      "world-runtime-bootstrap",
+      "native-scene",
+      "native-scene-api",
+      "native-scene-profile",
+      "static-geometry-asset",
+    ]));
+    expect(worldResourceLockEntriesV1([profileRow])).toEqual([
       profileRow,
     ]);
-    expect(() => canonicalResourceLockEntriesV1([{
+    expect(() => worldResourceLockEntriesV1([{
       ...profileRow,
       resourceKind: "provider-traversal-surface-profile",
-    }])).toThrowError("CANONICAL_RESOURCE_LOCK_INVALID");
+    }])).toThrowError("WORLD_RESOURCE_LOCK_INVALID");
+    expect(() => worldResourceLockEntriesV1([{
+      ...profileRow,
+      contentHash: `sha256:${"0".repeat(64)}`,
+    }])).toThrowError("WORLD_RESOURCE_LOCK_INVALID");
+
+    const hostile = Object.create(null) as Record<string, unknown>;
+    Object.assign(hostile, profileRow);
+    expect(() => worldResourceLockEntriesV1([hostile])).toThrowError(
+      "WORLD_RESOURCE_LOCK_INVALID",
+    );
   });
 
   it("separates Scene placement from Runtime Subject collider center", () => {

@@ -8,11 +8,10 @@ import {
   FIXED_TIME_STEP_SECONDS,
 } from "@whitebox-world/runtime-babylon";
 import type {
+  BabylonNativeSceneContributionV1,
   FixedInputV1,
   SemanticInputActionV1,
 } from "@whitebox-world/runtime-contracts";
-import type { BabylonNativeSceneContributionV1 } from
-  "@whitebox-world/native-babylon/host";
 import type { BabylonNativeSceneModuleV1 } from
   "@whitebox-world/native-babylon";
 import { isNil } from "lodash-es";

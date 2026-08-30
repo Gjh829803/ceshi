@@ -5,7 +5,16 @@ import {
 } from "@whitebox-world/protocol";
 import { isNil } from "lodash-es";
 
-import type { BabylonNativeTraversalBindingV1 } from "./module.js";
+// Persistent, Babylon-free contributions are owned by Runtime Contracts.
+
+export type BabylonNativeTraversalBindingInputV1 =
+  | Readonly<{ kind: "not-traversable" }>
+  | Readonly<{
+      kind: "static-surface";
+      surfaceEntityId: string;
+      logicalSubshapeId: string;
+      traversalSurfaceProfileRef: string;
+    }>;
 
 export type BabylonNativeContributionTraversalBindingV1 =
   | Readonly<{ kind: "not-traversable" }>
@@ -51,7 +60,7 @@ export interface CreateBabylonNativeStaticColliderContributionInputV1 {
   readonly triangleIndices: readonly number[];
   readonly frictionRatio: number;
   readonly restitutionRatio: number;
-  readonly traversalBinding: BabylonNativeTraversalBindingV1;
+  readonly traversalBinding: BabylonNativeTraversalBindingInputV1;
 }
 
 const CONTRIBUTION_FIELDS = Object.freeze([
@@ -220,9 +229,9 @@ function ratio(input: unknown, parsed: boolean): number {
   return value;
 }
 
-export function parseBabylonNativeTraversalBindingV1(
+export function parseBabylonNativeTraversalBindingInputV1(
   input: unknown,
-): BabylonNativeTraversalBindingV1 {
+): BabylonNativeTraversalBindingInputV1 {
   const snapshot = snapshotCanonicalData(input);
   const source = snapshot as Record<string, unknown>;
   if (source?.kind === "not-traversable") {
@@ -266,7 +275,7 @@ function geometryHash(
 function deriveColliderSubshapeId(
   id: string,
   frozenGeometryHash: `sha256:${string}`,
-  traversalBinding: BabylonNativeTraversalBindingV1,
+  traversalBinding: BabylonNativeTraversalBindingInputV1,
 ): string {
   const hash = sha256CanonicalJson({
     kind: "babylon-native-collider-subshape-identity",
@@ -278,7 +287,7 @@ function deriveColliderSubshapeId(
 }
 
 function contributionBinding(
-  binding: BabylonNativeTraversalBindingV1,
+  binding: BabylonNativeTraversalBindingInputV1,
   colliderSubshapeId: string,
 ): BabylonNativeContributionTraversalBindingV1 {
   if (binding.kind === "not-traversable") {
@@ -317,7 +326,7 @@ export function createBabylonNativeStaticColliderContributionV1(
     worldPositionsMetersXYZ,
     frozenTriangleIndices,
   );
-  const binding = parseBabylonNativeTraversalBindingV1(input.traversalBinding);
+  const binding = parseBabylonNativeTraversalBindingInputV1(input.traversalBinding);
   const colliderSubshapeId = deriveColliderSubshapeId(
     id,
     frozenGeometryHash,
@@ -356,7 +365,7 @@ function parsedSpawnMarker(
 
 function baseBindingFromContribution(
   input: unknown,
-): BabylonNativeTraversalBindingV1 {
+): BabylonNativeTraversalBindingInputV1 {
   const source = input as Record<string, unknown>;
   if (source?.kind === "not-traversable") {
     exactRecord(input, ["kind"]);
@@ -370,7 +379,7 @@ function baseBindingFromContribution(
       "traversalSurfaceProfileRef",
       "traversalSurfaceId",
     ]);
-    return parseBabylonNativeTraversalBindingV1({
+    return parseBabylonNativeTraversalBindingInputV1({
       kind: "static-surface",
       surfaceEntityId: record.surfaceEntityId,
       logicalSubshapeId: record.logicalSubshapeId,

@@ -295,6 +295,15 @@ async function finishRuntimePublication(
       ),
     ]);
   }
+  if (verifiedWorldPackage.kind !== "canonical-execution-plan") {
+    return rejectRecord(input, record, "runtime-prepare", [
+      worldChangeDiagnostic(
+        "WORLD_CHANGE_RUNTIME_PREPARE_FAILED",
+        "/preparedCandidateRef",
+        "WorldChange publication requires a Canonical WorldPackage.",
+      ),
+    ]);
+  }
   let current = record;
   const cleanupOperationId = journalArtifactIdV1("cleanup", current.request.id);
   let commitDenial: WorldChangeDiagnosticV1 | undefined;
@@ -312,7 +321,7 @@ async function finishRuntimePublication(
           kind: "canonical-execution-plan",
           executionPlan: verifiedWorldPackage.executionPlan,
           executionPlanHash:
-            verifiedWorldPackage.receipt.manifest.executionPlanHash,
+            verifiedWorldPackage.receipt.manifest.sceneSource.executionPlanHash,
         },
       },
       publication: {
