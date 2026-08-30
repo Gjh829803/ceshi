@@ -93,9 +93,14 @@ describe("independent test repository census", () => {
     ).toEqual({
       nodeTestFiles: [
         "scripts/agents/local-codex-task.test.mjs",
+        "scripts/agents/lwdp-cloud-execution-client.test.mjs",
         "scripts/agents/lwdp-codex-profile.test.mjs",
         "scripts/agents/lwdp-generation-client.test.mjs",
         "scripts/agents/write-lwdp-t2i-manifest.test.mjs",
+        "scripts/cloud/launch-worldkit-cloud-worker-job.test.mjs",
+        "scripts/cloud/run-worldkit-cloud-scene-batch.test.mjs",
+        "scripts/cloud/run-worldkit-cloud-scene-worker.test.mjs",
+        "scripts/cloud/submit-worldkit-cloud-scene.test.mjs",
         "scripts/lib/episode-seedance-prompt.test.mjs",
         "scripts/lib/episode-visual-normalization.test.mjs",
         "scripts/lib/playthrough-dataset.test.mjs",

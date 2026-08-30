@@ -77,6 +77,22 @@ const contentTypes = new Map([
   [".webm", "video/webm"],
 ]);
 
+export function normalizeTrustedCapturePublicKeyPaths(primaryPath, additionalPaths = []) {
+  if (typeof primaryPath !== "string" || primaryPath.length === 0) {
+    throw new Error("Primary capture trust public key path is required.");
+  }
+  if (!Array.isArray(additionalPaths)) {
+    throw new Error("Additional capture trust public key paths must be an array.");
+  }
+  const normalized = [primaryPath, ...additionalPaths].map((value) => {
+    if (typeof value !== "string" || value.length === 0) {
+      throw new Error("Capture trust public key paths must be non-empty strings.");
+    }
+    return path.resolve(value);
+  });
+  return [...new Set(normalized)];
+}
+
 export async function finalizeRecoveredVisualOutputs({
   repoRoot,
   sceneId,
@@ -771,6 +787,10 @@ export function createStudio(options = {}) {
     options.trustedCapturePublicKeyPath ??
       path.join(hostTrustRoot, "whitebox-capture-public.pem"),
   );
+  const trustedCapturePublicKeyPaths = normalizeTrustedCapturePublicKeyPaths(
+    trustedCapturePublicKeyPath,
+    options.additionalTrustedCapturePublicKeyPaths ?? [],
+  );
   if (
     (options.captureSigningPrivateKeyPath === undefined) !==
     (options.trustedCapturePublicKeyPath === undefined)
@@ -894,31 +914,34 @@ export function createStudio(options = {}) {
   const worldSpawnImplementation = options.worldSpawnImplementation ?? spawn;
   const verifyHostedWhiteboxArtifactsImplementation =
     options.verifyHostedWhiteboxArtifactsImplementation ?? (async (input) => {
-      const arguments_ = [
-        "exec",
-        "tsx",
-        "scripts/cli/verify-hosted-whitebox-artifacts.ts",
-        "--scene-id", input.sceneId,
-        "--authoring", input.authoringPath,
-        "--build", input.buildPath,
-        "--opening-frame", input.openingFramePath,
-        "--runtime-snapshot", input.runtimeSnapshotPath,
-        "--capture-receipt", input.captureReceiptPath,
-        "--trusted-public-key", trustedCapturePublicKeyPath,
-        ...(input.requireTriview
-          ? [
-              "--require-triview",
-              "--triview-manifest", input.whiteboxTriviewManifestPath,
-              "--triview-root", input.whiteboxTriviewRoot,
-            ]
-          : []),
-      ];
-      const result = spawnSync("pnpm", arguments_, {
-        cwd: repoRoot,
-        encoding: "utf8",
-        env: process.env,
-      });
-      return result?.status === 0;
+      for (const trustedPublicKeyPath of trustedCapturePublicKeyPaths) {
+        const arguments_ = [
+          "exec",
+          "tsx",
+          "scripts/cli/verify-hosted-whitebox-artifacts.ts",
+          "--scene-id", input.sceneId,
+          "--authoring", input.authoringPath,
+          "--build", input.buildPath,
+          "--opening-frame", input.openingFramePath,
+          "--runtime-snapshot", input.runtimeSnapshotPath,
+          "--capture-receipt", input.captureReceiptPath,
+          "--trusted-public-key", trustedPublicKeyPath,
+          ...(input.requireTriview
+            ? [
+                "--require-triview",
+                "--triview-manifest", input.whiteboxTriviewManifestPath,
+                "--triview-root", input.whiteboxTriviewRoot,
+              ]
+            : []),
+        ];
+        const result = spawnSync("pnpm", arguments_, {
+          cwd: repoRoot,
+          encoding: "utf8",
+          env: process.env,
+        });
+        if (result?.status === 0) return true;
+      }
+      return false;
     });
   const beforeWorldSpawn = options.beforeWorldSpawn ?? (() => undefined);
   const autoRecoverLateLwdpJobs = options.autoRecoverLateLwdpJobs ?? autoRunJobs;
@@ -971,7 +994,7 @@ export function createStudio(options = {}) {
       input.openingFramePath,
       input.runtimeSnapshotPath,
       input.captureReceiptPath,
-      trustedCapturePublicKeyPath,
+      ...trustedCapturePublicKeyPaths,
     ];
     const hashes = await Promise.all(boundPaths.map(sourceHash));
     if (hashes.some((value) => value === null)) return false;
@@ -4402,6 +4425,9 @@ async function startMain() {
   delete process.env.WORLDKIT_STUDIO_READINESS_NONCE;
   const playgroundInternalOrigin = process.env.WORLDKIT_PLAYGROUND_INTERNAL_ORIGIN ?? "http://127.0.0.1:5173";
   const playgroundOrigin = process.env.WORLDKIT_PLAYGROUND_ORIGIN ?? playgroundInternalOrigin;
+  const additionalTrustedCapturePublicKeyPaths = String(
+    process.env.WORLDKIT_CAPTURE_ADDITIONAL_TRUSTED_PUBLIC_KEY_PATHS ?? "",
+  ).split(path.delimiter).filter(Boolean);
   const accessKey = process.env.WORLDKIT_ACCESS_KEY ?? "";
   if (process.env.WORLDKIT_PUBLIC_MODE === "1" && accessKey.length < 16) {
     throw new Error("WORLDKIT_PUBLIC_MODE requires a WORLDKIT_ACCESS_KEY of at least 16 characters.");
@@ -4410,6 +4436,7 @@ async function startMain() {
     dataRoot,
     playgroundOrigin,
     playgroundInternalOrigin,
+    additionalTrustedCapturePublicKeyPaths,
     accessKey,
     readinessNonce,
   });

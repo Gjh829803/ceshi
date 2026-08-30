@@ -24,6 +24,7 @@ import {
   isRecoverableVisualFinalizationFailure,
   normalizePrompt,
   normalizeTestSetName,
+  normalizeTrustedCapturePublicKeyPaths,
   parseRemotePendingLwdpMarker,
   parseStageTokenUsage,
   workflowPolicyVersion,
@@ -40,6 +41,19 @@ const createStudio = (options = {}) => createStudioProduction({
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const temporaryRoots = [];
+
+test("normalizes and deduplicates additional capture trust public keys", () => {
+  const primary = path.resolve("/tmp/worldkit-primary-trust.pem");
+  const additional = path.resolve("/tmp/worldkit-cloud-trust.pem");
+  assert.deepEqual(
+    normalizeTrustedCapturePublicKeyPaths(primary, [additional, primary, additional]),
+    [primary, additional],
+  );
+  assert.throws(
+    () => normalizeTrustedCapturePublicKeyPaths(primary, [""]),
+    /non-empty strings/,
+  );
+});
 
 test("surfaces actionable World generation failures instead of only child exit codes", () => {
   assert.match(deriveWorldGenerationFailureReason(`

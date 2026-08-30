@@ -16,6 +16,11 @@ import type {
 } from "./types";
 
 const MAX_AUTHORING_JSON_BYTES = 8 * 1024 * 1024;
+const MAX_CONFIGURABLE_CANONICAL_JSON_BYTES = 64 * 1024 * 1024;
+
+export interface ParseCanonicalJsonOptions {
+  readonly maximumBytes?: number;
+}
 
 function pointerSegment(value: string): string {
   return value.replaceAll("~", "~0").replaceAll("/", "~1");
@@ -55,15 +60,28 @@ function findDuplicateKeys(
   }
 }
 
-export function parseCanonicalJson(sourceText: string): AuthoringResult<unknown> {
-  if (new TextEncoder().encode(sourceText).byteLength > MAX_AUTHORING_JSON_BYTES) {
+export function parseCanonicalJson(
+  sourceText: string,
+  options: ParseCanonicalJsonOptions = {},
+): AuthoringResult<unknown> {
+  const maximumBytes = options.maximumBytes ?? MAX_AUTHORING_JSON_BYTES;
+  if (
+    !Number.isSafeInteger(maximumBytes) ||
+    maximumBytes < 1 ||
+    maximumBytes > MAX_CONFIGURABLE_CANONICAL_JSON_BYTES
+  ) {
+    throw new RangeError(
+      `maximumBytes must be an integer from 1 to ${MAX_CONFIGURABLE_CANONICAL_JSON_BYTES}.`,
+    );
+  }
+  if (new TextEncoder().encode(sourceText).byteLength > maximumBytes) {
     return {
       ok: false,
       diagnostics: [{
         severity: "error",
         code: "AUTHORING_JSON_TOO_LARGE",
         instancePath: "",
-        message: `Authoring JSON exceeds the ${MAX_AUTHORING_JSON_BYTES} byte limit.`,
+        message: `Authoring JSON exceeds the ${maximumBytes} byte limit.`,
       }],
     };
   }

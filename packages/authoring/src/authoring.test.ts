@@ -68,6 +68,17 @@ describe("current AuthoringSpec", () => {
     ).toBe(Object.prototype);
   });
 
+  it("keeps the Authoring size floor while allowing an explicit bounded artifact limit", () => {
+    const source = JSON.stringify({ value: "x".repeat(9 * 1024 * 1024) });
+    expect(parseCanonicalJson(source)).toMatchObject({
+      ok: false,
+      diagnostics: [{ code: "AUTHORING_JSON_TOO_LARGE" }],
+    });
+    expect(parseCanonicalJson(source, { maximumBytes: 16 * 1024 * 1024 }).ok).toBe(true);
+    expect(() => parseCanonicalJson(source, { maximumBytes: 65 * 1024 * 1024 }))
+      .toThrow(/maximumBytes/);
+  });
+
   it("rejects unknown Subject fields instead of silently ignoring them", () => {
     const subject = validSpec.nodes.find((node) => node.kind === "subject");
     expect(subject).toBeDefined();

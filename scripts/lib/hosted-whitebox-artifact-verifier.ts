@@ -48,6 +48,7 @@ export interface HostedWhiteboxArtifactVerificationResultV1 {
 }
 
 const PNG_SIGNATURE = Buffer.from("89504e470d0a1a0a", "hex");
+const MAX_HOSTED_WORLD_BUILD_JSON_BYTES = 64 * 1024 * 1024;
 
 function diagnostic(
   code: string,
@@ -61,9 +62,14 @@ function sha256Bytes(bytes: Uint8Array): `sha256:${string}` {
   return `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
 }
 
-async function readCanonicalJson(filePath: string): Promise<unknown> {
+async function readCanonicalJson(
+  filePath: string,
+  maximumBytes?: number,
+): Promise<unknown> {
   const source = await readFile(filePath, "utf8");
-  const parsed = parseCanonicalJson(source);
+  const parsed = parseCanonicalJson(source, maximumBytes === undefined
+    ? {}
+    : { maximumBytes });
   if (!parsed.ok || parsed.value === undefined) {
     throw new Error(`Artifact is not valid canonical JSON: ${filePath}`);
   }
@@ -94,7 +100,7 @@ export async function verifyHostedWhiteboxArtifactsV1(
       trustedCapturePublicKeyBytes,
     ] = await Promise.all([
       readCanonicalJson(options.authoringPath),
-      readCanonicalJson(options.buildPath),
+      readCanonicalJson(options.buildPath, MAX_HOSTED_WORLD_BUILD_JSON_BYTES),
       readCanonicalJson(options.runtimeSnapshotPath),
       readCanonicalJson(options.captureReceiptPath),
       readFile(options.openingFramePath),
