@@ -512,6 +512,116 @@ describe("Babylon Native block Collider contribution", () => {
     });
   });
 
+  it("preflights the Build Epoch, stable IDs, and material ratios before allocation", () => {
+    withPassedOneBlockEpoch(({ scene, layout, checkResult, records }) => {
+      const meshCountBefore = scene.meshes.length;
+      const notTraversable = Object.freeze({ kind: "not-traversable" as const });
+      const cases = [
+        Object.freeze({
+          buildEpochId: "Bad Epoch",
+          selection: Object.freeze({
+            id: "valid-collider",
+            blockId: "route-block-a",
+            traversalBinding: notTraversable,
+          }),
+        }),
+        Object.freeze({
+          buildEpochId: "valid-epoch",
+          selection: Object.freeze({
+            id: "x",
+            blockId: "route-block-a",
+            traversalBinding: notTraversable,
+          }),
+        }),
+        Object.freeze({
+          buildEpochId: "valid-epoch",
+          selection: Object.freeze({
+            id: "valid-collider",
+            blockId: "Route Block A",
+            traversalBinding: notTraversable,
+          }),
+        }),
+        Object.freeze({
+          buildEpochId: "valid-epoch",
+          selection: Object.freeze({
+            id: "valid-collider",
+            blockId: "route-block-a",
+            traversalBinding: notTraversable,
+            frictionRatio: 1.01,
+          }),
+        }),
+        Object.freeze({
+          buildEpochId: "valid-epoch",
+          selection: Object.freeze({
+            id: "valid-collider",
+            blockId: "route-block-a",
+            traversalBinding: notTraversable,
+            restitutionRatio: Number.NaN,
+          }),
+        }),
+      ] as const;
+
+      for (const testCase of cases) {
+        const registered: BabylonNativeStaticColliderV1[] = [];
+        expect(() => createBabylonNativeBlockColliderCandidatesV1({
+          scene,
+          buildEpochId: testCase.buildEpochId,
+          layout,
+          checkResult,
+          records,
+          selections: Object.freeze([testCase.selection]),
+          registration: Object.freeze({
+            registerSpawnMarker(): void {},
+            registerStaticCollider(
+              collider: Readonly<BabylonNativeStaticColliderV1>,
+            ): void {
+              registered.push(collider);
+            },
+          }),
+        })).toThrow(/WORLDKIT_NATIVE_BLOCK_COLLIDER_SELECTION_INVALID/);
+        expect(scene.meshes).toHaveLength(meshCountBefore);
+        expect(registered).toEqual([]);
+      }
+    });
+  });
+
+  it("rejects a record identity that no longer matches the checked Layout", () => {
+    withPassedOneBlockEpoch(({ scene, layout, checkResult, records }) => {
+      const staleRecord = Object.freeze({
+        ...records[0]!,
+        input: Object.freeze({
+          ...records[0]!.input,
+          paletteRole: "ground" as const,
+        }),
+      });
+      const meshCountBefore = scene.meshes.length;
+      const registered: BabylonNativeStaticColliderV1[] = [];
+
+      expect(() => createBabylonNativeBlockColliderCandidatesV1({
+        scene,
+        buildEpochId: "stale-record-epoch",
+        layout,
+        checkResult,
+        records: Object.freeze([staleRecord]),
+        selections: Object.freeze([Object.freeze({
+          id: "stale-record-collider",
+          blockId: "route-block-a",
+          traversalBinding: Object.freeze({ kind: "not-traversable" as const }),
+        })]),
+        registration: Object.freeze({
+          registerSpawnMarker(): void {},
+          registerStaticCollider(
+            collider: Readonly<BabylonNativeStaticColliderV1>,
+          ): void {
+            registered.push(collider);
+          },
+        }),
+      })).toThrow(/WORLDKIT_NATIVE_BLOCK_COLLIDER_RECORD_MISMATCH/);
+      expect(scene.meshes).toHaveLength(meshCountBefore);
+      expect(registered).toEqual([]);
+    });
+  });
+
   it("keeps identity, geometry hashes, and asymmetric bounds stable across order", () => {
     const first = deterministicTwoBlockEvidence(false);
     const reversed = deterministicTwoBlockEvidence(true);

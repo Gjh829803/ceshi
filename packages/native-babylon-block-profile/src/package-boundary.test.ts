@@ -36,7 +36,10 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
       version: "0.0.0",
       private: true,
       type: "module",
-      exports: { ".": "./src/index.ts" },
+      exports: {
+        ".": "./src/index.ts",
+        "./testing": "./src/testing.ts",
+      },
       dependencies: {
         "@babylonjs/core": "9.23.0",
         "@whitebox-world/native-babylon": "workspace:*",
@@ -46,7 +49,7 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
       "@babylonjs/core",
       "@whitebox-world/native-babylon",
     ]);
-    expect(Object.keys(manifest.exports as object)).toEqual(["."]);
+    expect(Object.keys(manifest.exports as object)).toEqual([".", "./testing"]);
   });
 
   it("uses the frozen Babylon dialect and contains no second world protocol", async () => {
@@ -110,5 +113,14 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
     ]);
     expect(Object.keys(profile).some((name) =>
       /host|runtime|collider|traversal|manifest|compiler/i.test(name))).toBe(false);
+  });
+
+  it("keeps the real-runtime fixture behind one exact testing-only export", async () => {
+    const modulePath = ["./", "testing.js"].join("");
+    const testing = await import(modulePath) as Record<string, unknown>;
+
+    expect(Object.keys(testing)).toEqual([
+      "createBabylonNativeBlockColliderRuntimeFixtureModuleV1",
+    ]);
   });
 });

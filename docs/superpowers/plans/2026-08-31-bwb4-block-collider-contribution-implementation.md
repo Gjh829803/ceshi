@@ -106,7 +106,91 @@ These are real gaps in the inspected source. BWB4-05 must close them in this pla
 5. **One traversal-binding parser.** `parseBabylonNativeTraversalBindingInputV1()` currently lives in `packages/runtime-contracts/src/native-scene-contribution.ts` and is called by BNA Candidate admission, but `@whitebox-world/native-babylon` exports only the binding type. Profile selection cannot safely snapshot a mutable binding at selection time without either duplicating that parser or gaining one BNA-owned parse/snapshot entry. The main Agent must freeze a reuse path in the BNA owner and update its API/boundary tests in a separate prerequisite commit. Do not copy the closed binding parser into the Profile and do not add a permanent Profile -> runtime-contracts dependency merely to bypass the Native API boundary.
 6. **One inventory publication path.** The proposed adapter can return visual/proxy provenance, but current public `finalize()` returns only `BabylonNativeBlockProfileCheckResultV1`; discarding the adapter result would make overlay/debug consumers impossible. The main Agent must freeze exactly one Build-Epoch-local publication path, its owner, consumer, Reset/dispose lifetime, and export shape. It may clean-break extend the sole Profile finalization result after reviewing every consumer, or keep a package-internal sink owned by the accepted capture/debug coordinator; it must not add a persistent Block Manifest, a second `finalizeCollider*()` API, a global registry, or an unread DTO. This plan does not select or add that Schema/API on behalf of the main Agent.
 
-The frozen BWB-4 V1 baseline is one no-gap `layout-block-volume` proxy per explicit block selection. Smoothing/coalescing remains BWB-6. BWB4-05 cannot close until the main Agent freezes the BNA-owned settlement validator, one-parser traversal snapshot path, one inventory publication path, and separately states whether BWB-4 needs a Profile-derived continuous slope or only verifies the already-existing BNA-4 generic slope contract. It may not imply the former from the latter.
+The frozen BWB-4 V1 baseline is one no-gap `layout-block-volume` proxy per explicit block selection. Smoothing/coalescing remains BWB-6. BWB4-05 cannot close until the main Agent freezes the BNA-owned settlement validator, one-parser traversal snapshot path, and one inventory publication path. This worker's accepted disposition is that BWB-4 does not claim a Profile-derived continuous slope or walkable step; it may cite the already-existing BNA-4 generic evidence only as upstream engine evidence.
+
+### 1.4 2026-08-31 isolated worker handoff — accepted narrow evidence and remaining main-Agent prerequisite
+
+The BWB-4 worker rechecked `main@14ba724b5660be9d47d90b374cc6ffeae8909e55`,
+the installed Babylon.js `9.23.0` / Havok `1.3.14` paths, BWB-3 commit
+`7fa5aed37faa32e1dd5ca246a424df1212a5ff2e`, and the current Candidate admission
+implementation. The following disposition is frozen for integration; it is not a claim that
+BWB4-05 or BWB-4 is complete:
+
+1. The isolated adapter may prove deterministic no-gap proxy construction, strict local preflight,
+   exact BNA Contribution/Surface metadata, flat support, an over-limit `0.5m` Block face, ledge
+   departure, and Runtime-owned cleanup. It does not export the adapter or create a second Runtime
+   support path.
+2. `whitebox.blocks@1` places every Block boundary on the `0.5m` micro grid. Its current `full`,
+   `half`, `quarter`, and `small` shapes therefore cannot express a Profile-derived `0.25m` step.
+   The existing BNA-4 generic `0.2m`/`0.25m` step evidence remains valid upstream evidence but is
+   not Block Profile evidence. A walkable Profile step or slope requires a separately reviewed
+   continuous/ramp proxy contract or a current-only clean-break grid/shape change before BWB-5;
+   BWB-4 must not fabricate that claim.
+3. BWB-3 and BWB-4 integration remains one main-Agent commit after both isolated commits are
+   available. `session.finalize()` must derive `layout` and `checkResult` once, pass the same object
+   identities and record snapshot first to the Collider adapter and then to the visual adapter,
+   retain the first failure, clear all maps in `finally`, and unwind any Profile-owned resources in
+   reverse acquisition order while continuing after a throwing disposer. Candidate Scene cleanup
+   remains Host-owned.
+4. The Traversal Binding still needs one BNA-owned canonical snapshot/parser entry. Until it lands,
+   the Profile adapter may require an already frozen binding and let current Candidate admission
+   parse it, but it must not copy `parseBabylonNativeTraversalBindingInputV1()` or advertise complete
+   preflight of malformed binding objects.
+5. Visual/proxy drift after `session.finalize()` remains open because current
+   `BabylonNativeSceneRegistrationV1` has only Spawn and Collider registration. The main-Agent-only
+   BNA prerequisite must use a closed Host-snapshot target rather than a Module-supplied validation
+   callback. An arbitrary `validate()` callback would let untrusted Native code self-attest. The
+   minimum semantic direction is:
+
+   ```ts
+   interface BabylonNativeBuildSettlementTargetV1 {
+     readonly id: string;
+     readonly kind: "collider-source-visual";
+     readonly colliderId: string;
+     readonly mesh: Mesh;
+   }
+
+   interface BabylonNativeBlockProfileSettlementCapabilityV1 {
+     registerSpawnMarker(...): void;
+     registerStaticCollider(...): void;
+     registerBuildSettlementTarget(
+       target: Readonly<BabylonNativeBuildSettlementTargetV1>,
+     ): void;
+   }
+   ```
+
+   This is semantic pseudocode, not approval to expose a third raw method on the scene Module's
+   general-purpose Registration object. BNA owns the exact public naming and must provide the target
+   operation only through the Profile session/adapter capability selected for
+   `whitebox.blocks@1`; scene Module code must not hand-write settlement targets. The Host snapshots
+   geometry and world transform when the trusted Profile adapter registers the target; Native code
+   supplies no verdict. The required call order is: derive and freeze one Layout identity -> register
+   no-gap Collider -> apply BWB-3 visuals from that same Layout -> Profile adapter registers the
+   complete source-visual target inventory bound to the frozen Layout identity -> Module build
+   settles -> close all registration -> Host independently recomputes every retained visual target
+   and Collider geometry/binding -> freeze Contribution -> publish. Targets are Build-Epoch-only and
+   receive no Engine, Runtime, Havok, Camera, Gameplay, Input, Tick, or callback handle. When the
+   Package/Profile selects `whitebox.blocks@1`, BNA Host must require the target inventory to match
+   the Profile finalize Layout identity completely; a missing, extra, duplicated, or mismatched Block
+   target fails closed rather than letting Module code skip the check.
+6. The BNA prerequisite tests must cover duplicate/late/malformed targets, wrong-Scene/disposed/
+   instanced target Meshes, missing target for a selected Block Collider, a source Block transform or
+   geometry mutation after Profile finalization, stable target ordering, Module failure, and Candidate
+   cleanup after target drift. The integrated Profile tests must additionally prove that the target
+   Mesh belongs to the same `layout`/`checkResult`/records used by both adapters and that BWB-3's exact
+   display-gap transform is applied before the Host snapshot. Palette-material settlement remains a
+   separately named claim unless the BNA contract snapshots its exact evidence too.
+7. The BWB-3 adapter at `7fa5aed37faa32e1dd5ca246a424df1212a5ff2e` scales each record Mesh
+   by `(localSize - displayGapMeters) / localSize`. BWB-4 therefore must register an independent
+   no-gap proxy before that visual scaling and freeze the proxy through BNA Contribution admission.
+   Registering the record Mesh itself and then applying BWB-3 styling is forbidden and must fail the
+   future settlement drift check. The isolated real-Havok verifier uses only exact `./testing`
+   fixture/harness subpaths; those subpaths export no production-private DTO and the workspace
+   boundary census must continue to prove zero production consumers.
+
+The public `selectStaticCollider()` and inventory root exports remain deliberately deferred until the
+single-finalize integration consumes them. Exporting unused DTOs from this isolated adapter commit
+would create the exact split API that the project forbids.
 
 ---
 
@@ -119,7 +203,7 @@ The frozen BWB-4 V1 baseline is one no-gap `layout-block-volume` proxy per expli
 | BWB4-10 | Build deterministic explicit block-volume Collider candidates | BWB4-05 | BWB4-20/30/40 | new Profile collider adapter; checked Layout + records + selections -> calls to core Registration + build-only provenance inventory | unit RED/GREEN, reversed order, asymmetric transforms, rejected check | `sequential` |
 | BWB4-20 | Integrate one-derive finalization without exporting Layout | BWB4-10, merged BWB-3 | BWB4-30/40 | `session.ts`/root API; one session epoch -> visual + collider adapters -> one check result | exact call order, failure cutoff, release, two-session, type/export tests | `main-agent-only` |
 | BWB4-30 | Close visual/proxy identity, drift, tamper, and BNA Candidate admission | BWB4-20 | BWB4-40/50 | Profile/BNA tests only; Profile module -> actual frozen Contribution | candidate IDs, post-registration drift, binding tamper, budget, Package exact-match cutoff | `main-agent-only` |
-| BWB4-40 | Prove Spawn support and real Havok step/slope/ledge behavior | BWB4-30 | BWB4-50/90, BWB-5 | new root verification fixture/test only; verified Package -> existing RuntimeHost/Babylon/Havok session | support identity, 0.25m step, scoped slope verdict, ledge departure, collider overlay identity | `main-agent-only` |
+| BWB4-40 | Prove Spawn support and real Havok block/ledge behavior within the frozen Profile geometry | BWB4-30 | BWB4-50/90, BWB-5 | new root verification fixture/test only; verified Package -> existing RuntimeHost/Babylon/Havok session | support identity, 0.5m over-limit face, ledge departure, collider overlay identity; no Profile-derived step/slope claim | `main-agent-only` |
 | BWB4-50 | Close cadence, Reset, dual-instance, and throwing cleanup evidence | BWB4-40 | BWB4-90 | integration tests only; exact Package -> deterministic lifecycle evidence | 30/60/120 hashes, provider reset, Host full reload, two hosts, partial/throwing dispose | `main-agent-only` |
 | BWB4-90 | Affected gates, independent review, status, PR, and merge | BWB4-10..50 | BWB-5, BWB-6, WRC-EVT-1 | review/status only; exact SHA -> scoped GO/NO-GO | affected gates once, Cursor Cloud exact-SHA gates/review, ancestry | `main-agent-only` |
 
@@ -144,6 +228,10 @@ BWB-2 + BNA-4 + BWB4-00
 - Create: `packages/native-babylon-block-profile/src/collider-contribution.ts`
 - Create: `packages/native-babylon-block-profile/src/collider-contribution.test.ts`
 - Create: `scripts/verification/bwb4-block-collider-runtime.test.ts`
+- Create: `packages/native-babylon-block-profile/src/testing.ts` with one exact test fixture factory
+- Create: `packages/runtime-babylon/src/testing.ts` with the existing possession test harness only
+- Modify: both owning package manifests to expose exact `./testing` subpaths and the Block Profile
+  package-boundary test to freeze that testing surface
 - Modify after BWB-3 contract merge, main Agent only:
   - `packages/native-babylon-block-profile/src/session.ts`
   - `packages/native-babylon-block-profile/src/session.test.ts`
@@ -175,7 +263,9 @@ The existing session factory continues to accept only `BabylonNativeSceneBuildCo
 - `packages/runtime-babylon/src/babylon-native-surface-admission.ts`
 - `packages/runtime-babylon/src/babylon-character-body-port.ts`
 - all `packages/runtime-host/**`, `packages/gameplay/**`, `packages/character-movement/**`, Camera/Action/Input/Compiler/Authoring Schema files
-- `pnpm-lock.yaml` and package manifests, unless the main Agent first proves an unavoidable direct dependency gap; the current source inspection found none
+- `pnpm-lock.yaml` and production dependency declarations. The approved exact `./testing` export
+  map additions above are test-boundary changes only and must not re-export production-private DTOs
+  or gain a production consumer.
 
 If a RED test requires changing a forbidden production file, stop and reopen the owner design. Do not patch around it in the Profile.
 
@@ -254,7 +344,7 @@ Profile-local failures use one current vocabulary and throw before any new Regis
 
 Do not alias these to BNA core diagnostics. Once the first Registration succeeds, a later core Registration failure is rethrown unchanged; the Candidate Scene owner performs complete cleanup.
 
-If BWB4-05 requires a Profile-derived smooth slope, do not overload the contract above. Amend this plan with a second discriminated selection kind and its exact deterministic geometry/drift rules after the BNA settlement validator is approved. A generic optional `proxyMode`, callback, arbitrary geometry bag, or alias is forbidden.
+If BWB-5 later requires a Profile-derived smooth slope or walkable step, do not overload the contract above. Freeze a continuous/ramp proxy or make a current-only grid/shape clean break, with exact deterministic geometry/drift rules, after the BNA settlement validator is approved. A generic optional `proxyMode`, callback, arbitrary geometry bag, or alias is forbidden.
 
 ---
 
@@ -517,7 +607,7 @@ git commit -m "test(bwb4): bind block colliders to core identity"
 
 ---
 
-## 9. Task BWB4-40 — real Spawn support and Havok traversal
+## 9. Task BWB4-40 — real Spawn support and scoped Havok traversal
 
 **Files:** create only `scripts/verification/bwb4-block-collider-runtime.test.ts`; register it as `resource-heavy` with `reasonCodes: ["native-havok-or-recast"]` in `scripts/lib/test-gate-manifest.ts`.
 
@@ -533,13 +623,16 @@ Cover exact supported spawn, 0.01m airborne spawn, underground spawn, `not-trave
 
 - [ ] **Step 3: Add real traversal probes**
 
-Use fixed input and real Havok to prove:
+Use fixed input and real Havok to prove only what the frozen Profile can represent:
 
-- a `0.25m` modeled step is climbed while grounded;
-- a higher-than-`maxStepHeightMeters` face blocks forward progress;
+- a `0.5m` Block face higher than `maxStepHeightMeters` blocks forward progress;
 - leaving the selected platform produces `movementMedium: "air"` and falling Y;
 - the support contact carries the Contribution's exact `colliderSubshapeId`, `traversalSurfaceId`, `surfaceEntityId`, and Profile ref; and
-- the slope assertion matches the explicit BWB4-05 disposition. A BNA-4 generic ramp test may be referenced as upstream evidence but cannot be labeled Profile-derived unless the approved slope proxy exists.
+- no Profile-derived walkable step or slope is claimed. The BNA-4 generic ramp and `0.2m`/`0.25m`
+  step tests remain upstream engine evidence only.
+
+A walkable Profile step/slope test is a BWB-5 prerequisite, not a BWB4-40 acceptance item. It must
+first freeze either a continuous/ramp proxy contract or a current-only grid/shape clean break.
 
 - [ ] **Step 4: Verify and commit**
 
@@ -599,8 +692,8 @@ git commit -m "test(bwb4): close block collider lifecycle"
 | proxy/binding drift fail closed | mutate registered proxy Mesh or binding after Registration | `WORLDKIT_NATIVE_SCENE_COLLIDER_DRIFT` | re-derive from changed visual state |
 | Package tamper fail closed | replay Contribution differing from the verified Package | `WORLDKIT_NATIVE_SCENE_RUNTIME_CONTRIBUTION_MISMATCH` before Havok | trust Profile inventory over Package identity |
 | Spawn support | feet at/above/below/blocked/outside candidate | BNA-4 `admitBabylonNativeSurfacesV1` diagnostics | fall-to-ground repair or hidden plane |
-| real step | 0.25m and over-limit step fixtures | fixed-input Havok snapshots | height sampler or teleport |
-| slope | BWB4-05 scoped generic/Profile-derived fixture | explicit verdict plus real Havok/BNA evidence | calling generic BNA slope “Profile-derived” |
+| over-limit Block face | 0.5m Profile-derived obstacle | fixed-input Havok snapshot remains on the entry side | height sampler or teleport |
+| walkable step/slope capability gap | current 0.5m boundary lattice cannot represent a 0.25m step or continuous ramp | explicit BWB-5 prerequisite for continuous/ramp proxy or grid/shape clean break | calling generic BNA step/slope evidence “Profile-derived” |
 | ledge | move beyond finite selected platform | support loss + committed air/fall | infinite foundation |
 | 30/60/120 | render grouping changes | equal authoritative hashes | render-time physics |
 | Reset | moved Camera/Subject then reset | provider reset + Host Full Reload semantics | scene-local second reset dialect |

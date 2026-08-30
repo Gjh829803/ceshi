@@ -25,6 +25,52 @@ export interface BabylonNativeBlockColliderCandidateInventoryEntryV1 {
   readonly traversalBinding: BabylonNativeTraversalBindingV1;
 }
 
+const STABLE_ID = /^[a-z0-9][a-z0-9-]{2,79}$/;
+
+function isCanonicalStableId(value: unknown): value is string {
+  return typeof value === "string" &&
+    STABLE_ID.test(value) &&
+    value.normalize("NFC") === value;
+}
+
+function isClosedFrozenSelection(
+  selection: BabylonNativeBlockStaticColliderSelectionV1,
+): boolean {
+  if (
+    !Object.isFrozen(selection) ||
+    !Object.isFrozen(selection.traversalBinding) ||
+    Reflect.getPrototypeOf(selection) !== Object.prototype
+  ) return false;
+  const descriptors = Object.getOwnPropertyDescriptors(selection);
+  const keys = Object.keys(descriptors);
+  if (
+    !["id", "blockId", "traversalBinding"].every((key) =>
+      Object.hasOwn(descriptors, key)) ||
+    keys.some((key) => ![
+      "id",
+      "blockId",
+      "traversalBinding",
+      "frictionRatio",
+      "restitutionRatio",
+    ].includes(key)) ||
+    Object.values(descriptors).some((descriptor) =>
+      !descriptor.enumerable || !("value" in descriptor))
+  ) return false;
+  const validRatio = (key: "frictionRatio" | "restitutionRatio"): boolean => {
+    if (!Object.hasOwn(descriptors, key)) return true;
+    const value = descriptors[key]!.value as unknown;
+    return typeof value === "number" &&
+      Number.isFinite(value) &&
+      value >= 0 &&
+      value <= 1 &&
+      !Object.is(value, -0);
+  };
+  return isCanonicalStableId(selection.id) &&
+    isCanonicalStableId(selection.blockId) &&
+    validRatio("frictionRatio") &&
+    validRatio("restitutionRatio");
+}
+
 function stableCompare(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
@@ -49,6 +95,15 @@ export function createBabylonNativeBlockColliderCandidatesV1(
     registration: BabylonNativeSceneRegistrationV1;
   }>,
 ): readonly BabylonNativeBlockColliderCandidateInventoryEntryV1[] {
+  if (
+    !isCanonicalStableId(input.buildEpochId) ||
+    input.scene.isDisposed
+  ) {
+    return fail(
+      "WORLDKIT_NATIVE_BLOCK_COLLIDER_SELECTION_INVALID",
+      "Collider candidates require one live Scene and stable Build Epoch ID.",
+    );
+  }
   if (input.checkResult.outcome !== "passed") {
     return fail(
       "WORLDKIT_NATIVE_BLOCK_COLLIDER_CHECK_REJECTED",
@@ -57,15 +112,37 @@ export function createBabylonNativeBlockColliderCandidatesV1(
   }
   const layoutById = new Map(input.layout.blocks.map((block) => [block.id, block]));
   const recordsById = new Map(input.records.map((record) => [record.input.id, record]));
+  if (input.records.some((record) => record.mesh.getScene() !== input.scene)) {
+    return fail(
+      "WORLDKIT_NATIVE_BLOCK_SCENE_MISMATCH",
+      "One checked Block belongs to another Candidate Scene.",
+    );
+  }
+  if (
+    input.layout.issues.length !== 0 ||
+    layoutById.size !== input.layout.blocks.length ||
+    recordsById.size !== input.records.length ||
+    input.layout.blocks.length !== input.records.length ||
+    input.records.some((record) => {
+      const block = layoutById.get(record.input.id);
+      return block === undefined ||
+        record.mesh.isDisposed() ||
+        record.input.shape !== block.shape ||
+        record.input.paletteRole !== block.paletteRole ||
+        record.input.visualGroupId !== block.visualGroupId;
+    })
+  ) {
+    return fail(
+      "WORLDKIT_NATIVE_BLOCK_COLLIDER_RECORD_MISMATCH",
+      "Records must exactly match the live blocks in the checked Layout.",
+    );
+  }
   const selections = [...input.selections]
     .sort((left, right) => stableCompare(left.id, right.id));
   const colliderIds = new Set<string>();
   const blockIds = new Set<string>();
   for (const selection of selections) {
-    if (
-      !Object.isFrozen(selection) ||
-      !Object.isFrozen(selection.traversalBinding)
-    ) {
+    if (!isClosedFrozenSelection(selection)) {
       return fail(
         "WORLDKIT_NATIVE_BLOCK_COLLIDER_SELECTION_INVALID",
         "Selections must be canonical frozen values from the BNA-owned snapshot boundary.",
@@ -92,12 +169,6 @@ export function createBabylonNativeBlockColliderCandidatesV1(
       return fail(
         "WORLDKIT_NATIVE_BLOCK_COLLIDER_BLOCK_MISSING",
         `Block '${selection.blockId}' is absent from this checked Build Epoch.`,
-      );
-    }
-    if (recordsById.get(selection.blockId)!.mesh.getScene() !== input.scene) {
-      return fail(
-        "WORLDKIT_NATIVE_BLOCK_SCENE_MISMATCH",
-        `Block '${selection.blockId}' belongs to another Candidate Scene.`,
       );
     }
   }
