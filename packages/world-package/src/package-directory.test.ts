@@ -10,6 +10,7 @@ import {
   canonicalizeWorldPackageFileIntegrityEntriesV1,
   createBabylonNativeWorldPackageV1,
   createCanonicalWorldPackageV1,
+  hashWorldPackageManifestV1,
   hashWorldPackageRootV1,
   verifyWorldPackageDirectoryV1,
   type WorldPackageDirectoryV1,
@@ -57,6 +58,53 @@ function withRootShadow(
     files,
     receipt: {
       ...directory.receipt,
+      fileIntegrityEntries,
+      worldPackageRootHash,
+      worldPackageRef,
+      worldBuildIdentity,
+      worldBuildIdentityHash: hashWorldBuildIdentityV1(worldBuildIdentity),
+    },
+  };
+}
+
+function withCanonicalAuthoringSpecHashDrift(
+  directory: WorldPackageDirectoryV1,
+) {
+  if (directory.receipt.manifest.sceneSource.kind !== "canonical-execution-plan") {
+    throw new Error("Canonical fixture required.");
+  }
+  const manifest = {
+    ...directory.receipt.manifest,
+    sceneSource: {
+      ...directory.receipt.manifest.sceneSource,
+      authoringSpecHash: `sha256:${"f".repeat(64)}` as const,
+    },
+  };
+  const files = rootFiles(directory).map((file) =>
+    file.path === "manifest.json"
+      ? { ...file, bytes: canonicalJsonBytes(manifest) }
+      : file
+  );
+  const fileIntegrityEntries =
+    canonicalizeWorldPackageFileIntegrityEntriesV1(files.map((file) => ({
+      path: file.path,
+      mediaType: file.mediaType,
+      sizeBytes: file.bytes.byteLength,
+      contentHash: sha256Bytes(file.bytes) as `sha256:${string}`,
+    })));
+  const worldPackageRootHash = hashWorldPackageRootV1(fileIntegrityEntries);
+  const worldPackageRef = worldPackageRefFromRootHashV1(worldPackageRootHash);
+  const worldBuildIdentity = {
+    ...directory.receipt.worldBuildIdentity,
+    worldPackageRef,
+    worldPackageRootHash,
+  };
+  return {
+    files,
+    receipt: {
+      ...directory.receipt,
+      manifest,
+      manifestHash: hashWorldPackageManifestV1(manifest),
       fileIntegrityEntries,
       worldPackageRootHash,
       worldPackageRef,
@@ -123,5 +171,15 @@ describe("WorldPackageDirectoryV1", () => {
     );
     expect(() => assembleWorldPackageDirectoryV1(canonicalShadow))
       .toThrow("scene source Root path closure failed");
+  });
+
+  it("rejects self-consistent Canonical authoring identity drift when the audit file is omitted", () => {
+    const directory = createCanonicalWorldPackageV1(
+      createWorldPackageTestInputV1({ includeAuthoringSpec: false }),
+    );
+    const tampered = withCanonicalAuthoringSpecHashDrift(directory);
+
+    expect(() => assembleWorldPackageDirectoryV1(tampered))
+      .toThrow("WORLD_PACKAGE_DIRECTORY_INVALID");
   });
 });

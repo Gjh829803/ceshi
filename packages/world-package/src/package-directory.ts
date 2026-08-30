@@ -622,6 +622,7 @@ function verifyInternal(input: unknown): VerifiedWorldPackageDirectoryV1 {
   const worldRuntimeBootstrap = parseWorldRuntimeBootstrapV1(parseCanonicalJson(requireFile(filesByPath, manifest.entryPoint.worldRuntimeBootstrapPath)));
   assertCanonicalWorldPackageGameplayBootstrapMembershipV1({ canonicalSceneExecutionPlan: executionPlan, gameplayBootstrap, worldRuntimeBootstrap, worldPackageBuildReceipt: receipt });
   if (sha256CanonicalJson(normalizedWorldIr) !== sceneSource.normalizedWorldIrHash || hashCanonicalSceneExecutionPlanV1(executionPlan) !== sceneSource.executionPlanHash ||
+    executionPlan.authoringSpecHash !== sceneSource.authoringSpecHash ||
     gameplayBootstrap.contentHash !== manifest.gameplayBootstrapHash || worldRuntimeBootstrap.contentHash !== manifest.worldRuntimeBootstrapHash ||
     sha256CanonicalJson(registryLock) !== manifest.registryLockHash || hashLayoutSolveReportV1(layoutSolveReport) !== sceneSource.layoutSolveReportHash ||
     !isEqual(registryLock, worldResourceLockEntriesV1([
