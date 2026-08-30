@@ -53,6 +53,28 @@ function importsLegacyRuntimeNativeSceneModule(source: string): boolean {
 }
 
 describe("Babylon Native package migration", () => {
+  it("routes the Playground through a verified Package and RuntimeHost", async () => {
+    const [main, adapter, loader, runtime] = await Promise.all([
+      source("apps/native-scene-playground/src/main.ts"),
+      source("apps/native-scene-playground/src/native-runtime-host.ts"),
+      source("apps/native-scene-playground/src/world-package-loader.ts"),
+      source("packages/runtime-babylon/src/babylon-world-runtime.ts"),
+    ]);
+
+    expect(main).not.toMatch(/BabylonWorldRuntime\.create\s*\(/);
+    expect(main).not.toMatch(/\b(?:module|assets|budget)\s*:/);
+    expect(main).not.toContain("createBabylonGameplayWorldPortV1");
+    expect(main).toContain("loadVerifiedNativeWorldPackageV1");
+    expect(adapter).toContain("RuntimeHost");
+    expect(adapter).toContain(
+      "runtimeWorldConfigurationFromVerifiedWorldPackageV1",
+    );
+    expect(loader).toContain("verifyWorldPackageDirectoryV1");
+    expect(runtime).not.toContain(
+      "WORLDKIT_NATIVE_SCENE_PRODUCTION_NOT_ADMITTED",
+    );
+  });
+
   it("recognizes optional-extension, parent-relative, and package-subpath legacy imports", () => {
     for (const [declaration, specifier] of [
       ["import { module } from", "./native-scene-module"],
@@ -85,7 +107,7 @@ describe("Babylon Native package migration", () => {
 
   it("keeps authoring at the root and Host ownership on the host subpath", async () => {
     const [cloudRidge, runtime] = await Promise.all([
-      source("apps/native-scene-playground/src/cloud-ridge-scene.ts"),
+      source("apps/native-scene-playground/src/scene.ts"),
       source("packages/runtime-babylon/src/babylon-world-runtime.ts"),
     ]);
 
@@ -121,9 +143,12 @@ describe("Babylon Native package migration", () => {
       REPOSITORY_ROOT,
     ))).rejects.toThrow();
     expect(runtimeIndex).not.toMatch(
-      /BabylonNativeSceneModule|buildBabylonNativeSceneContribution/,
+      /BabylonNativeSceneModule(?:V1)?\b|buildBabylonNativeSceneContribution/,
     );
-    expect(bootstrap).toContain("parseBabylonNativeSceneBootstrapV1");
+    expect(bootstrap).not.toContain("parseBabylonNativeSceneBootstrapV1");
+    expect(bootstrap).not.toContain(
+      ["native-scene", ".bootstrap.json"].join(""),
+    );
     expect(bootstrap).not.toContain("BabylonNativeWorldBootstrapV1");
     expect(JSON.parse(runtimeManifest).dependencies).toHaveProperty(
       "@whitebox-world/native-babylon",

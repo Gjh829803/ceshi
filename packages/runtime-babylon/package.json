@@ -23,6 +23,7 @@
     "@whitebox-world/subject-contracts": "workspace:*",
     "@whitebox-world/terrain-surface": "workspace:*",
     "@whitebox-world/traversal": "workspace:*",
+    "@whitebox-world/world-package": "workspace:*",
     "babylonjs-gltf2interface": "9.23.0",
     "earcut": "3.0.2",
     "lodash-es": "^4.18.1"

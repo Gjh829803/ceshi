@@ -16,6 +16,7 @@ export interface TestGateManifestEntryV1 {
 export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.freeze([
   { path: "apps/native-scene-playground/src/cloud-ridge-scene.test.ts", lane: "contract" },
   { path: "apps/native-scene-playground/src/native-package-migration.test.ts", lane: "contract" },
+  { path: "apps/native-scene-playground/src/native-runtime-host-module-loader.test.ts", lane: "contract" },
   { path: "apps/native-scene-playground/src/native-scene-source-clean-break.test.ts", lane: "contract" },
   { path: "apps/playground/src/artifact-renderer-lifecycle.test.ts", lane: "contract" },
   { path: "apps/playground/src/artifact-write-capability.test.ts", lane: "contract" },
@@ -114,6 +115,8 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "packages/runtime-babylon/src/babylon-camera-collision-query-port.test.ts", lane: "contract" },
   { path: "packages/runtime-babylon/src/babylon-character-body-port.conformance.test.ts", lane: "resource-heavy", reasonCodes: ["native-havok-or-recast"] },
   { path: "packages/runtime-babylon/src/babylon-character-body-port.test.ts", lane: "contract" },
+  { path: "packages/runtime-babylon/src/babylon-native-package-runtime.test.ts", lane: "contract" },
+  { path: "packages/runtime-babylon/src/babylon-native-surface-admission.test.ts", lane: "contract" },
   { path: "packages/runtime-babylon/src/babylon-physics-world-query.test.ts", lane: "resource-heavy", reasonCodes: ["native-havok-or-recast"] },
   { path: "packages/runtime-babylon/src/babylon-shader-bootstrap.test.ts", lane: "contract" },
   { path: "packages/runtime-babylon/src/camera-preview-channel.test.ts", lane: "resource-heavy", reasonCodes: ["native-havok-or-recast"] },

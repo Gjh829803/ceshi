@@ -131,6 +131,7 @@ function fakeRuntimeFactory(
   }> = {},
 ) {
   const runtimes: FakeRuntimeV1[] = [];
+  const commitCountsAtReady: number[] = [];
   const prepareFixedInputTick = vi.fn();
   const legacyFixedInputTick = vi.fn();
   const factory = vi.fn(async ({
@@ -165,7 +166,10 @@ function fakeRuntimeFactory(
     const runtime: FakeRuntimeV1 = {
       canvas,
       renderFrame,
-      renderFrameWhenReady: vi.fn(async () => renderFrame()),
+      renderFrameWhenReady: vi.fn(async () => {
+        commitCountsAtReady.push(harness.commitCount);
+        return renderFrame();
+      }),
       dispose,
       snapshot: (): BabylonRuntimeProjectionV1 => ({
         runtimeBackend: "babylon-havok",
@@ -313,7 +317,13 @@ function fakeRuntimeFactory(
       gameplayWorldPort,
     });
   });
-  return { factory, runtimes, prepareFixedInputTick, legacyFixedInputTick };
+  return {
+    factory,
+    runtimes,
+    commitCountsAtReady,
+    prepareFixedInputTick,
+    legacyFixedInputTick,
+  };
 }
 
 function fakeDocument(): Pick<Document, "createElement"> {
@@ -398,6 +408,9 @@ describe("Gameplay Babylon Runtime coordinator", () => {
         typeof createGameplayBabylonRuntimeCoordinatorV1
       >[0]["runtimeBundleFactory"]>>[0],
     ): Promise<GameplayBabylonRuntimeBundleV1> => {
+      if (input.descriptor.sceneSource.kind !== "canonical-execution-plan") {
+        throw new Error("unexpected Native Scene Source");
+      }
       const runtime = await BabylonWorldRuntime.create({
         sceneSource: {
           kind: "canonical-execution-plan",
@@ -663,7 +676,12 @@ describe("Gameplay Babylon Runtime coordinator", () => {
   }, 30_000);
 
   it("commits the canonical initial possession and renders before create resolves", async () => {
-    const { configuration, coordinator, runtimes } = await createHarness();
+    const {
+      configuration,
+      coordinator,
+      runtimes,
+      commitCountsAtReady,
+    } = await createHarness();
     const publication = coordinator.hostPublication();
 
     expect(Object.values(
@@ -677,8 +695,51 @@ describe("Gameplay Babylon Runtime coordinator", () => {
     ]);
     expect(runtimes).toHaveLength(1);
     expect(runtimes[0]?.renderFrame).toHaveBeenCalledOnce();
+    expect(commitCountsAtReady).toEqual([1]);
     expect(coordinator.activeRuntime()).toBe(runtimes[0]);
     expect(coordinator.activeCanvas()).toBe(runtimes[0]?.canvas);
+
+    await coordinator.dispose();
+  });
+
+  it("commits replacement possession before the candidate readiness render", async () => {
+    const {
+      configuration,
+      coordinator,
+      commitCountsAtReady,
+      runtimes,
+    } = await createHarness();
+    const current = coordinator.currentRuntimePublicationIdentity();
+
+    const result = await coordinator.publishWorldReplacementV1({
+      worldConfiguration: configuration,
+      publication: {
+        requestId: "request.playground.bound-replacement",
+        requestHash: `sha256:${"9".repeat(64)}`,
+        fencingToken: "fence.playground.bound-replacement",
+        runtimeExpectation: {
+          runtimeSessionId: current.runtimeSessionId,
+          expectedWorldSessionId: current.worldSessionId,
+          expectedWorldPackageRootHash: current.worldPackageRootHash,
+          targetPhaseBarrier: {
+            mode: "next-world-replacement-barrier",
+          },
+        },
+      },
+    });
+
+    expect(result.status).toBe("published");
+    expect(commitCountsAtReady).toEqual([1, 1]);
+    expect(runtimes[1]?.renderFrame).toHaveBeenCalledOnce();
+    expect(Object.values(
+      coordinator.hostPublication().gameplayInspection.relationshipStatesById,
+    )).toEqual([
+      expect.objectContaining({
+        controllerEntityId: PLAYGROUND_CONTROLLER_ENTITY_ID_V1,
+        controlledEntityId:
+          configuration.worldRuntimeBootstrap.initialControlledEntityId,
+      }),
+    ]);
 
     await coordinator.dispose();
   });

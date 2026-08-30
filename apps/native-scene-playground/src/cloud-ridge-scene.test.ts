@@ -1,28 +1,64 @@
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
+import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
   admitBabylonNativeSceneCandidateV1,
+  type BabylonNativeLockedAssetResolverV1,
+  type BabylonNativeSceneAdmissionBudgetV1,
 } from "@whitebox-world/native-babylon/host";
 
-import cloudRidgeNativeScene from "./cloud-ridge-scene.js";
+import cloudRidgeNativeScene from "./scene.js";
 import {
   CLOUD_RIDGE_GAMEPLAY_BOOTSTRAP_V1,
-  CLOUD_RIDGE_NATIVE_ADMISSION_BUDGET_V1,
-  CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1,
   CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1,
-  cloudRidgeLockedAssetResolver,
 } from "./native-bootstrap.js";
+import { readBabylonNativeAuthoringWorkspaceRootV1 } from
+  "../../../scripts/native-scene/authoring-workspace.js";
+
+const workspace = await readBabylonNativeAuthoringWorkspaceRootV1(
+  new URL("./", import.meta.url).pathname,
+);
+if (workspace.outcome !== "passed") {
+  throw new Error(workspace.diagnostics.map(({ code }) => code).join(","));
+}
+const CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1 = workspace.workspaceRoot.bootstrap;
 
 const retainedEngines: NullEngine[] = [];
+const TEST_ADMISSION_BUDGET: BabylonNativeSceneAdmissionBudgetV1 =
+  Object.freeze({
+    maximumStaticColliderCount: 3,
+    maximumStaticColliderVertexCount: 256,
+    maximumStaticColliderTriangleCount: 1_000,
+  });
+const TEST_ASSET_RESOLVER: BabylonNativeLockedAssetResolverV1 = Object.freeze({
+  async resolve() {
+    throw new Error("WORLDKIT_NATIVE_SCENE_ASSET_NOT_SELECTED");
+  },
+});
 
 function localAxisExtent(mesh: AbstractMesh, axis: 0 | 1 | 2): number {
   const positions = mesh.getVerticesData(VertexBuffer.PositionKind)!;
   const values = positions.filter((_value, index) => index % 3 === axis);
   return Math.max(...values) - Math.min(...values);
+}
+
+function babylonFaceNormalY(
+  positions: ArrayLike<number>,
+  indices: ArrayLike<number>,
+  triangleOffset: number,
+): number {
+  const point = (index: number) => Vector3.FromArray(
+    positions,
+    indices[triangleOffset + index]! * 3,
+  );
+  const first = point(0);
+  const edgeA = point(1).subtract(first);
+  const edgeB = point(2).subtract(first);
+  return Vector3.Cross(edgeB, edgeA).normalize().y;
 }
 
 afterEach(() => {
@@ -59,7 +95,7 @@ describe("cloud ridge Babylon Native scene", () => {
     expect(subject.subjectDefinitionRef).toBe(
       "worldkit://subject-definition/humanoid.g-bot@2",
     );
-    expect(CLOUD_RIDGE_NATIVE_ADMISSION_BUDGET_V1).toEqual({
+    expect(TEST_ADMISSION_BUDGET).toEqual({
       maximumStaticColliderCount: 3,
       maximumStaticColliderVertexCount: 256,
       maximumStaticColliderTriangleCount: 1_000,
@@ -83,8 +119,8 @@ describe("cloud ridge Babylon Native scene", () => {
       candidate: { engine, scene },
       bootstrap: CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1,
       module: cloudRidgeNativeScene,
-      assets: cloudRidgeLockedAssetResolver,
-      budget: CLOUD_RIDGE_NATIVE_ADMISSION_BUDGET_V1,
+      assets: TEST_ASSET_RESOLVER,
+      budget: TEST_ADMISSION_BUDGET,
     });
     if (result.outcome !== "passed") {
       throw new Error(JSON.stringify(result.diagnostics, null, 2));
@@ -93,7 +129,7 @@ describe("cloud ridge Babylon Native scene", () => {
 
     expect(contribution.spawnMarker).toEqual({
       id: "player-spawn",
-      positionMetersXYZ: [0, 2.2, 18],
+      positionMetersXYZ: [0, 0, 18],
       facingRadians: 0,
     });
     expect(contribution.staticColliders.map(({ id }) => id)).toEqual([
@@ -202,6 +238,12 @@ describe("cloud ridge Babylon Native scene", () => {
     const path = scene.getMeshByName("collision-primary-path")!;
     const gatePlatform = scene.getMeshByName("collision-gate-platform")!;
     const pathPositions = path.getVerticesData(VertexBuffer.PositionKind)!;
+    const pathIndices = path.getIndices()!;
+    expect(Array.from(
+      { length: pathIndices.length / 3 },
+      (_value, triangleIndex) =>
+        babylonFaceNormalY(pathPositions, pathIndices, triangleIndex * 3),
+    ).every((normalY) => normalY > 0)).toBe(true);
     const pathSummitZMeters = pathPositions
       .filter((_value, index) => index % 3 === 2 && pathPositions[index - 1] === 14);
     gatePlatform.computeWorldMatrix(true);

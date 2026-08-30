@@ -11,6 +11,7 @@ import type { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 import type { PhysicsBody } from "@babylonjs/core/Physics/v2/physicsBody.js";
 import type { PhysicsShape } from "@babylonjs/core/Physics/v2/physicsShape.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
+import { isNil } from "lodash-es";
 import {
   assertMovementTickTokenIdentityV1,
   BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1,
@@ -98,6 +99,10 @@ export interface BabylonCharacterBodyNativeContactV1 {
   readonly normalXYZ: MovementVec3V1;
   readonly distanceMeters: number;
   readonly motionType: BabylonCharacterBodyNativeMotionTypeV1;
+  readonly colliderSubshapeId?: string;
+  readonly traversalSurfaceId?: string;
+  readonly surfaceEntityId?: string;
+  readonly traversalSurfaceProfileRef?: string;
 }
 
 export interface BabylonCharacterBodyNativeSupportV1 {
@@ -158,6 +163,7 @@ interface BabylonManifoldContactV1 {
   readonly bodyB: {
     readonly body: {
       readonly isDisposed?: boolean;
+      readonly transformNode: TransformNode;
       getMotionType(index: number): number;
     };
     readonly index: number;
@@ -203,10 +209,53 @@ const DYNAMIC_PHYSICS_MOTION_TYPE = 2;
 const SNAP_DOWN_UPWARD_SPEED_LIMIT_METERS_PER_SECOND = 0.5;
 const SNAP_DOWN_MINIMUM_DROP_METERS = 1e-4;
 const SNAP_DOWN_SURFACE_NORMAL_ALIGNMENT_EPSILON = 1e-3;
-// Babylon's Character Controller simplex solver uses a 1e-4 collision epsilon.
-// Keep provider resolution tolerance local to this adapter; protocol and
-// published-state coherence continue to use the stricter SDK tolerance.
+// Keep the SDK-owned Body resolution coherence allowance local to this
+// provider adapter; protocol and published-state coherence continue to use
+// the stricter shared SDK tolerance.
 const BABYLON_CHARACTER_CONTROLLER_COLLISION_TOLERANCE_METERS_V1 = 1e-4;
+
+type BabylonCharacterBodyNativeSurfaceIdentityV1 = Readonly<Required<Pick<
+  BabylonCharacterBodyNativeContactV1,
+  | "colliderSubshapeId"
+  | "traversalSurfaceId"
+  | "surfaceEntityId"
+  | "traversalSurfaceProfileRef"
+>>>;
+
+function nonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0;
+}
+
+function nativeSurfaceIdentity(
+  transformNode: TransformNode,
+): BabylonCharacterBodyNativeSurfaceIdentityV1 | undefined {
+  const metadata = record(transformNode.metadata);
+  if (
+    isNil(metadata) ||
+    metadata.worldkitNativeTraversalKind !== "static-surface"
+  ) {
+    return undefined;
+  }
+  const colliderSubshapeId = metadata.colliderSubshapeId;
+  const traversalSurfaceId = metadata.worldkitTraversalSurfaceId;
+  const surfaceEntityId = metadata.worldkitSurfaceEntityId;
+  const traversalSurfaceProfileRef =
+    metadata.worldkitTraversalSurfaceProfileRef;
+  if (
+    !nonEmptyString(colliderSubshapeId) ||
+    !nonEmptyString(traversalSurfaceId) ||
+    !nonEmptyString(surfaceEntityId) ||
+    !nonEmptyString(traversalSurfaceProfileRef)
+  ) {
+    return undefined;
+  }
+  return Object.freeze({
+    colliderSubshapeId,
+    traversalSurfaceId,
+    surfaceEntityId,
+    traversalSurfaceProfileRef,
+  });
+}
 
 function cloneManifoldContact(
   contact: BabylonManifoldContactV1,
@@ -373,6 +422,9 @@ export class GroundAwarePhysicsCharacterController extends PhysicsCharacterContr
   readCurrentContacts(): readonly BabylonCharacterBodyNativeContactV1[] {
     return Object.freeze(this.privateHost()._manifold.map((contact) => {
       const motionType = contact.bodyB.body.getMotionType(contact.bodyB.index);
+      const surfaceIdentity = motionType === STATIC_PHYSICS_MOTION_TYPE
+        ? nativeSurfaceIdentity(contact.bodyB.body.transformNode)
+        : undefined;
       return Object.freeze({
         pointMetersXYZ: freezeVec3([
           contact.position.x,
@@ -390,6 +442,7 @@ export class GroundAwarePhysicsCharacterController extends PhysicsCharacterContr
           : motionType === STATIC_PHYSICS_MOTION_TYPE
           ? "static"
           : "animated",
+        ...surfaceIdentity,
       });
     }));
   }
@@ -932,7 +985,24 @@ function compareContacts(
   return compareNumber(left.distanceMeters, right.distanceMeters) ||
     compareVec3(left.normalXYZ, right.normalXYZ) ||
     compareVec3(left.pointMetersXYZ, right.pointMetersXYZ) ||
-    (left.motionType < right.motionType ? -1 : left.motionType > right.motionType ? 1 : 0);
+    (left.motionType < right.motionType ? -1 : left.motionType > right.motionType ? 1 : 0) ||
+    compareOptionalString(left.colliderSubshapeId, right.colliderSubshapeId) ||
+    compareOptionalString(left.traversalSurfaceId, right.traversalSurfaceId) ||
+    compareOptionalString(left.surfaceEntityId, right.surfaceEntityId) ||
+    compareOptionalString(
+      left.traversalSurfaceProfileRef,
+      right.traversalSurfaceProfileRef,
+    );
+}
+
+function compareOptionalString(
+  left: string | undefined,
+  right: string | undefined,
+): number {
+  if (left === right) return 0;
+  if (isNil(left)) return -1;
+  if (isNil(right)) return 1;
+  return left < right ? -1 : 1;
 }
 
 function canonicalSupportNormal(
@@ -946,11 +1016,20 @@ function canonicalSupportNormal(
 function canonicalContact(
   value: Record<string, unknown>,
 ): BabylonCharacterBodyNativeContactV1 {
+  const surfaceIdentity = isNil(value.colliderSubshapeId)
+    ? undefined
+    : Object.freeze({
+      colliderSubshapeId: value.colliderSubshapeId as string,
+      traversalSurfaceId: value.traversalSurfaceId as string,
+      surfaceEntityId: value.surfaceEntityId as string,
+      traversalSurfaceProfileRef: value.traversalSurfaceProfileRef as string,
+    });
   return Object.freeze({
     pointMetersXYZ: parseVec3(value.pointMetersXYZ),
     normalXYZ: normalized(parseVec3(value.normalXYZ), "contact normal must be nonzero."),
     distanceMeters: value.distanceMeters as number,
     motionType: value.motionType as BabylonCharacterBodyNativeMotionTypeV1,
+    ...surfaceIdentity,
   });
 }
 
@@ -1202,14 +1281,41 @@ function parseNativeContacts(
       invalid("native contacts must contain data values.");
     }
     const value = record(descriptor.value) ?? invalid("native contact is malformed.");
-    if (!exact(value, [
+    const requiredKeys = [
       "pointMetersXYZ",
       "normalXYZ",
       "distanceMeters",
       "motionType",
-    ]) || !finite(value.distanceMeters) ||
+    ];
+    const surfaceIdentityKeys = [
+      "colliderSubshapeId",
+      "traversalSurfaceId",
+      "surfaceEntityId",
+      "traversalSurfaceProfileRef",
+    ];
+    const keys = Reflect.ownKeys(value);
+    const surfaceIdentityKeyCount = surfaceIdentityKeys.filter((key) =>
+      Object.prototype.hasOwnProperty.call(value, key)
+    ).length;
+    if (
+      keys.some((key) =>
+        typeof key !== "string" ||
+        (!requiredKeys.includes(key) && !surfaceIdentityKeys.includes(key))
+      ) ||
+      !requiredKeys.every((key) =>
+        Object.prototype.hasOwnProperty.call(value, key)
+      ) ||
+      (surfaceIdentityKeyCount !== 0 &&
+        surfaceIdentityKeyCount !== surfaceIdentityKeys.length) ||
+      (surfaceIdentityKeyCount > 0 && value.motionType !== "static") ||
+      surfaceIdentityKeys.some((key) =>
+        Object.prototype.hasOwnProperty.call(value, key) &&
+        !nonEmptyString(value[key])
+      ) ||
+      !finite(value.distanceMeters) ||
       (value.motionType !== "static" && value.motionType !== "animated" &&
-        value.motionType !== "dynamic")) invalid("native contact is outside the closed surface.");
+        value.motionType !== "dynamic")
+    ) invalid("native contact is outside the closed surface.");
     contacts.push(canonicalContact(value));
   }
   return Object.freeze(contacts.sort(compareContacts));

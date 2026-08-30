@@ -9,11 +9,11 @@ import { launchChromiumWithSystemFallback } from
 
 const CONTROLLED_ENTITY_ID = "g-bot-primary";
 const EXPECTED_NATIVE_CONTRIBUTION_HASH =
-  "sha256:86364729dc07f841b15bbc02a451c24aef7e6636a1edb841ba2488e2b1c0d395";
+  "sha256:bb339a494526ee6bb51a40ec351777bfcb77dcc0bc08a9fa2886a63c9215d984";
 const EXPECTED_COLLIDER_SUBSHAPE_IDS = Object.freeze([
   "collider-subshape:5af935abea0d5d3da0e32a9e5c1121f3d88f5174c3c0cd32414ea4740b13dc89",
   "collider-subshape:0069b3ff456288eb8ea99f6a7ff396f9886725df6dd89e8626cd14150b71dbcc",
-  "collider-subshape:a4deee1a95a3602e16293405e549435f0cf58f48291fb8b1c4a18c558fc4714e",
+  "collider-subshape:c31d374e9b1f86c1eec231de6db07cf966100a57700ab344f41e64a1c53429bc",
 ]);
 
 interface NativeSubjectProjectionV1 {
@@ -39,6 +39,8 @@ interface NativeSceneProjectionV1 {
 
 interface NativeSceneAuditV1 {
   readonly contributionHash: string;
+  readonly worldSessionId: string;
+  readonly successfulRuntimeCreateCount: number;
   readonly spawnMarkerId: string;
   readonly colliderIds: readonly string[];
   readonly colliderSubshapeIds: readonly string[];
@@ -127,6 +129,7 @@ async function main(): Promise<void> {
       EXPECTED_NATIVE_CONTRIBUTION_HASH,
     );
     assert.equal(initialAudit.spawnMarkerId, "player-spawn");
+    assert.equal(initialAudit.successfulRuntimeCreateCount, 1);
     assert.deepEqual(initialAudit.colliderIds, [
       "foreground-platform",
       "gate-platform",
@@ -145,11 +148,16 @@ async function main(): Promise<void> {
     const initial = await page.evaluate(
       () => window.__WORLDKIT_NATIVE_SPIKE__!.reset(),
     );
+    const firstResetAudit = await page.evaluate(
+      () => window.__WORLDKIT_NATIVE_SPIKE__!.audit(),
+    ) as NativeSceneAuditV1;
+    assert.notEqual(firstResetAudit.worldSessionId, initialAudit.worldSessionId);
+    assert.equal(firstResetAudit.successfulRuntimeCreateCount, 2);
     assert.equal(Object.keys(initial.subjectStatesByEntityId).length, 1);
     assert.equal(initial.resources.bodies, 4);
     assert.deepEqual(controlledSubject(initial).positionMetersXYZ, [
       0,
-      0.05000002932548475,
+      0,
       18,
     ]);
 
@@ -202,6 +210,14 @@ async function main(): Promise<void> {
     const afterReset = await page.evaluate(
       () => window.__WORLDKIT_NATIVE_SPIKE__!.reset(),
     );
+    const cameraResetAudit = await page.evaluate(
+      () => window.__WORLDKIT_NATIVE_SPIKE__!.audit(),
+    ) as NativeSceneAuditV1;
+    assert.notEqual(
+      cameraResetAudit.worldSessionId,
+      firstResetAudit.worldSessionId,
+    );
+    assert.equal(cameraResetAudit.successfulRuntimeCreateCount, 3);
     assert.equal(afterReset.camera.viewYawOffsetRadians, 0);
 
     const pathButton = page.locator("[data-path-check]");
@@ -225,6 +241,8 @@ async function main(): Promise<void> {
       () => window.__WORLDKIT_NATIVE_SPIKE__!.audit(),
     ) as NativeSceneAuditV1;
     assert.equal(finalAudit.contributionHash, initialAudit.contributionHash);
+    assert.notEqual(finalAudit.worldSessionId, cameraResetAudit.worldSessionId);
+    assert.equal(finalAudit.successfulRuntimeCreateCount, 4);
     assert.deepEqual(finalAudit.colliderIds, initialAudit.colliderIds);
     const errorUi = await page.locator("[data-error]").evaluate((element) => ({
       hidden: (element as HTMLElement).hidden,
@@ -256,6 +274,8 @@ async function main(): Promise<void> {
       colliderIds: finalAudit.colliderIds,
       colliderSubshapeIds: finalAudit.colliderSubshapeIds,
       contributionHash: finalAudit.contributionHash,
+      successfulRuntimeCreateCount:
+        finalAudit.successfulRuntimeCreateCount,
       ...(renderedScreenshotPath === undefined
         ? {}
         : { renderedScreenshotPath }),

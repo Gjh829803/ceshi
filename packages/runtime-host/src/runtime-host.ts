@@ -457,10 +457,7 @@ export interface RuntimeWorldAdapterDescriptorV1 {
   readonly worldBuildIdentity: WorldBuildIdentityV1;
   readonly gameplayBootstrap: GameplayBootstrapV1;
   readonly worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
-  readonly sceneSource: Extract<
-    RuntimeSceneSourceV1,
-    { readonly kind: "canonical-execution-plan" }
-  >;
+  readonly sceneSource: RuntimeSceneSourceV1;
 }
 
 export type ConcurrentResidencyPreflightResultV1 =
@@ -490,6 +487,7 @@ export interface RuntimeCandidatePublicationGateInputV1 {
 export interface RuntimeHostCreateOptionsV1 {
   readonly runtimeSessionId: string;
   readonly initialWorld: RuntimeWorldConfigurationV1;
+  readonly initialControlBinding?: RuntimeHostInitialControlBindingV1;
   readonly participantStates: readonly GameplayParticipantStateV1[];
   readonly controllerStates: readonly ControllerEntityStateV1[];
   readonly fixedInputControllerEntityId: string;
@@ -768,7 +766,6 @@ function parsePublishWorldReplacementInput(
   const worldConfiguration = parseRuntimeWorldConfiguration(
     record.worldConfiguration,
   );
-  requireCanonicalRuntimeConfiguration(worldConfiguration);
   return Object.freeze({
     worldConfiguration,
     publication: parseRuntimeWorldPublicationEnvelope(record.publication),
@@ -1179,13 +1176,18 @@ function parseRuntimeHostCreateOptions(
     "adapterFactory",
     "worldSessionIdFactory",
   ] as const;
-  const hasResolver = !isNil(record) && hasExactKeys(record, [
+  const hasResolver = !isNil(record) &&
+    Object.hasOwn(record, "gameplayActionRequestResolver");
+  const hasInitialControlBinding = !isNil(record) &&
+    Object.hasOwn(record, "initialControlBinding");
+  const expectedKeys = [
     ...baseKeys,
-    "gameplayActionRequestResolver",
-  ]);
+    ...(hasResolver ? ["gameplayActionRequestResolver"] : []),
+    ...(hasInitialControlBinding ? ["initialControlBinding"] : []),
+  ];
   if (
     isNil(record) ||
-    (!hasExactKeys(record, baseKeys) && !hasResolver) ||
+    !hasExactKeys(record, expectedKeys) ||
     !isNonEmptyString(record.runtimeSessionId) ||
     !isNonEmptyString(record.fixedInputControllerEntityId) ||
     typeof record.gameplayModeFactory !== "function" ||
@@ -1211,7 +1213,6 @@ function parseRuntimeHostCreateOptions(
     "Value must match the closed RuntimeHostCreateOptionsV1 schema.",
   );
   const initialWorld = parseRuntimeWorldConfiguration(record.initialWorld);
-  requireCanonicalRuntimeConfiguration(initialWorld);
   const gameplayCapacityBudget = parseGameplayCapacityBudgetV1(
     record.gameplayCapacityBudget,
   );
@@ -1255,6 +1256,13 @@ function parseRuntimeHostCreateOptions(
   return Object.freeze({
     runtimeSessionId: record.runtimeSessionId,
     initialWorld,
+    ...(hasInitialControlBinding
+      ? {
+          initialControlBinding: parseInitialControlBinding(
+            record.initialControlBinding,
+          ),
+        }
+      : {}),
     participantStates,
     controllerStates,
     fixedInputControllerEntityId: record.fixedInputControllerEntityId,
@@ -1285,23 +1293,7 @@ function parseReplacementRequest(input: unknown): RuntimeWorldConfigurationV1 {
     );
   }
   const configuration = parseRuntimeWorldConfiguration(record.worldConfiguration);
-  requireCanonicalRuntimeConfiguration(configuration);
   return configuration;
-}
-
-function requireCanonicalRuntimeConfiguration(
-  configuration: RuntimeWorldConfigurationV1,
-): asserts configuration is RuntimeWorldConfigurationV1 & Readonly<{
-  sceneSource: Extract<
-    RuntimeSceneSourceV1,
-    { readonly kind: "canonical-execution-plan" }
-  >;
-}> {
-  if (configuration.sceneSource.kind !== "canonical-execution-plan") {
-    throw new Error(
-      "WORLDKIT_NATIVE_SCENE_PRODUCTION_NOT_ADMITTED: BNA-3 Package identity is admitted; formal Native Runtime activation requires BNA-4.",
-    );
-  }
 }
 
 function parseInitialControlBinding(
@@ -1362,7 +1354,6 @@ function descriptor(
   worldSessionId: string,
   configuration: RuntimeWorldConfigurationV1,
 ): RuntimeWorldAdapterDescriptorV1 {
-  requireCanonicalRuntimeConfiguration(configuration);
   return Object.freeze({
     runtimeSessionId,
     worldSessionId,
@@ -1471,6 +1462,39 @@ export class RuntimeHost {
       throw hostFailure(
         "WORLD_SESSION_FAILED",
         "The initial WorldSession could not be constructed.",
+      );
+    }
+    try {
+      if (!isNil(options.initialControlBinding)) {
+        const bindReceipt = await worldSession.executeGameplayCommand({
+          schemaVersion: 1,
+          id: `command.runtime-host.initial-bind.${worldSessionId}`,
+          type: "control.bind",
+          runtimeSessionId: options.runtimeSessionId,
+          worldSessionId,
+          controllerEntityId: options.initialControlBinding.controllerEntityId,
+          controlledEntityId: options.initialControlBinding.controlledEntityId,
+          expectedPossession: { mode: "unbound" },
+        });
+        if (bindReceipt.status !== "committed") {
+          throw hostFailure(
+            bindReceipt.diagnostic.code,
+            "The initial control binding was not committed.",
+          );
+        }
+      }
+      await options.adapterFactory.awaitCandidatePublicationReady(
+        Object.freeze({
+          runtimeSessionId: options.runtimeSessionId,
+          worldSessionId,
+          publication: worldSession.snapshot(),
+        }),
+      );
+    } catch {
+      await worldSession.dispose().catch(() => undefined);
+      throw hostFailure(
+        "WORLD_SESSION_FAILED",
+        "The initial WorldSession did not reach publication readiness.",
       );
     }
     return new RuntimeHost(options, worldSessionId, worldSession);
@@ -1585,10 +1609,17 @@ export class RuntimeHost {
     return this.startReplacement(configuration);
   }
 
-  publishWorldReplacementV1(input: unknown): Promise<PublishWorldReplacementResultV1> {
+  publishWorldReplacementV1(
+    input: unknown,
+    initialControlBindingInput?: unknown,
+  ): Promise<PublishWorldReplacementResultV1> {
     let parsed: ParsedPublishWorldReplacementV1;
+    let initialControlBinding: RuntimeHostInitialControlBindingV1 | undefined;
     try {
       parsed = parsePublishWorldReplacementInput(input);
+      initialControlBinding = isNil(initialControlBindingInput)
+        ? undefined
+        : parseInitialControlBinding(initialControlBindingInput);
     } catch {
       return Promise.resolve({
         status: "rejected",
@@ -1617,7 +1648,10 @@ export class RuntimeHost {
         message: "A World replacement is already in progress.",
       });
     }
-    const published = this.performPublicationReplacement(parsed);
+    const published = this.performPublicationReplacement(
+      parsed,
+      initialControlBinding,
+    );
     const tracked = published.then((result) => {
       if (result.status === "published") return result.publication;
       throw hostFailure(
@@ -1733,11 +1767,12 @@ export class RuntimeHost {
 
   private async performPublicationReplacement(
     parsed: ParsedPublishWorldReplacementV1,
+    initialControlBinding?: RuntimeHostInitialControlBindingV1,
   ): Promise<PublishWorldReplacementResultV1> {
     try {
       const outcome = await this.performReplacement(
         parsed.worldConfiguration,
-        undefined,
+        initialControlBinding,
         {
           expectation: parsed.publication.runtimeExpectation,
           ...(isNil(parsed.persistDurableCommit)

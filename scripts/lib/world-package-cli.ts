@@ -4,12 +4,14 @@ import path from "node:path";
 
 import {
   BABYLON_WEB_WORLD_PACKAGE_HOST_POLICY_V1,
-  type VerifiedCanonicalWorldPackageDirectoryV1,
   type VerifiedWorldPackageDirectoryV1,
   type WorldPackageDirectoryV1,
   type WorldPackageHostPolicyV1,
 } from "@whitebox-world/world-package";
-import type { RuntimeWorldConfigurationV1 } from "@whitebox-world/runtime-host";
+import {
+  runtimeWorldConfigurationFromVerifiedWorldPackageV1,
+  type RuntimeWorldConfigurationV1,
+} from "@whitebox-world/runtime-host";
 
 import {
   readWorldPackageDirectoryV1,
@@ -102,7 +104,7 @@ export type WorldPackageCommandResultV1 =
 export type LoadRuntimeWorldPackageResultV1 =
   | Readonly<{
       readonly result: WorldPackageCommandSuccessV1;
-      readonly verifiedDirectory: VerifiedCanonicalWorldPackageDirectoryV1;
+      readonly verifiedDirectory: VerifiedWorldPackageDirectoryV1;
       readonly runtimeWorldConfiguration: RuntimeWorldConfigurationV1;
     }>
   | Readonly<{
@@ -359,27 +361,10 @@ export async function loadRuntimeWorldConfigurationFromPackageDirectoryV1(
       result: admitted.failure,
     });
   }
-  if (admitted.verifiedDirectory.kind !== "canonical-execution-plan") {
-    return Object.freeze({
-      result: failure(
-        "load",
-        6,
-        "WORLDKIT_NATIVE_SCENE_PRODUCTION_NOT_ADMITTED",
-        "The Native WorldPackage is valid, but Runtime activation is not admitted until BNA-4.",
-      ),
-    });
-  }
-  const receipt = admitted.verifiedDirectory.receipt;
-  const runtimeWorldConfiguration = Object.freeze({
-    worldBuildIdentity: receipt.worldBuildIdentity,
-    gameplayBootstrap: admitted.verifiedDirectory.gameplayBootstrap,
-    worldRuntimeBootstrap: admitted.verifiedDirectory.worldRuntimeBootstrap,
-    sceneSource: Object.freeze({
-      kind: "canonical-execution-plan" as const,
-      executionPlan: admitted.verifiedDirectory.executionPlan,
-      executionPlanHash: receipt.manifest.sceneSource.executionPlanHash,
-    }),
-  }) satisfies RuntimeWorldConfigurationV1;
+  const runtimeWorldConfiguration =
+    runtimeWorldConfigurationFromVerifiedWorldPackageV1(
+      admitted.verifiedDirectory,
+    );
   return Object.freeze({
     result: summary("load", admitted.directory),
     verifiedDirectory: admitted.verifiedDirectory,

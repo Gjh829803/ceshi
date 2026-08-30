@@ -45,7 +45,10 @@ export interface RuntimeHostUnderTestV1 {
   eventsAfter(afterEventSequence: number, maximumEventCount: number): readonly unknown[];
   runFixedInput(input: unknown): Promise<WorldSessionPublicationV1>;
   replaceWorld(world: unknown): Promise<WorldSessionPublicationV1>;
-  publishWorldReplacementV1(input: unknown): Promise<PublishWorldReplacementResultV1>;
+  publishWorldReplacementV1(
+    input: unknown,
+    initialControlBinding?: unknown,
+  ): Promise<PublishWorldReplacementResultV1>;
   reset(): Promise<WorldSessionPublicationV1>;
   resetWithInitialControlBinding(input: unknown): Promise<WorldSessionPublicationV1>;
   runtimeActivitySnapshot(): runtimeHostModule.RuntimeActivityCoordinatorSnapshotV1;
@@ -337,5 +340,6 @@ export async function createHost(
   const adapter = createAdapterFactoryHarness(ports);
   const options = hostOptions(adapter.factory, ids, overrides);
   const host = await runtimeHostConstructor().create(options);
+  adapter.factory.awaitCandidatePublicationReady.mockClear();
   return { adapter, host, options };
 }

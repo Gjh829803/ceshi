@@ -945,8 +945,7 @@ Replay、Streaming/Dispose 和自动 Diagnostic；普通 Agent 只引用稳定 P
   `WorldRuntimeBootstrapV1`、source-neutral `WorldBuildIdentityV1`、`SceneAuthoringRouteDecisionV1` 与
   `SceneAuthoringAttemptV1`/`SceneAuthoringAttemptResultV1`；完成受影响消费者的版本迁移，移除影子
   ExecutionPlan 和伪造 Plan Hash。Canonical consumer 已 current-only 迁移；实验 Cloud Ridge 不再创建
-  shadow Plan；正式 Native RuntimeHost admission 仍以 `WORLDKIT_NATIVE_SCENE_PRODUCTION_NOT_ADMITTED`
-  在分配前关闭，等待 BNA-3/BNA-4；
+  shadow Plan；其历史 formal rejection 已由 BNA-4 current-only 删除；
 - [x] BNA-2：独立 `@whitebox-world/native-babylon` 与 `defineBabylonNativeScene`；Block Profile 保持为
   BWB-1 的可选独立包，不塞入 core API 形成默认 DSL；
   - [x] BNA-2 Foundation 内部 checkpoint：AI-facing root / Host-only subpath、唯一 Deep ESM Import
@@ -958,17 +957,18 @@ Replay、Streaming/Dispose 和自动 Diagnostic；普通 Agent 只引用稳定 P
     Cloud gate 和独立 Mode B + runtime-deep 审查；专项设计与证据见
     [BNA-2 生产闭环设计](superpowers/specs/2026-08-29-babylon-native-authoring-production-closure-design.md)与
     [最终审查](reviews/2026-08-29-babylon-native-authoring-production-closure-review.md)。
-    BNA-6 AI 生成/修复评测在 BNA-5 后独立执行，不反向成为 BNA-2 依赖；不得用本工程闭合提前关闭
-    BNA-3+ 或 BNA-4 正式 Runtime Gate；
-- [ ] BNA-3：Bundle、依赖/资产锁、Package、Contribution Hash 与 Build Receipt；只消费已发布的
+    BNA-6 AI 生成/修复评测在 BNA-5 后独立执行，不反向成为 BNA-2 依赖；
+- [x] BNA-3：Bundle、依赖/资产锁、Package、Contribution Hash 与 Build Receipt；只消费已发布的
   class-specific Resource Ref，并绑定 Route Decision Hash/completed Attempt Result，不执行资产生产或发布；
-  - [x] 本地实现候选已完成 deterministic Bundle、安装树/资产锁、双 Candidate replay、统一
+  - [x] 最终实现已完成 deterministic Bundle、安装树/资产锁、双 Candidate replay、统一
     Package/Receipt/verifier/Store/File/signing/inspect，以及 Runtime pre-allocation rejection；聚焦证据见
     [BNA-3 实现审查](reviews/2026-08-30-bna3-native-package-receipt-review.md)。
-  - [ ] 等待同一精确 SHA 的 Cursor Cloud 全量门禁与独立 Mode B + runtime-deep GO；GO、PR 合入和
-    `origin/main` 祖先证明完成前不得关闭 BNA-3，也不得声称 Native 已可玩或拥有 Havok admission；
-- [ ] BNA-4：统一 Gameplay Kernel、Profile-based Surface Admission、稳定 Surface/Subshape identity、
-  原子生命周期和对抗测试；
+  - [x] 精确 SHA `9fe9e6e3` 的 Cursor Cloud 全量门禁与独立 Mode B + runtime-deep 均 GO；PR #56
+    已合入 `origin/main@2fd8c1c` 并完成祖先证明；
+- [x] BNA-4：统一 Gameplay Kernel、Profile-based Surface Admission、稳定 Surface/Subshape identity、
+  原子生命周期和对抗测试；最终产品 SHA `dfa6fbc` 的 Cursor Cloud full gates 与独立
+  Mode B/runtime-deep 均 GO，正式 Native Package 已接入同一 RuntimeHost/Gameplay/Havok/Camera Kernel；
+  证据见 [BNA-4 实现审查](reviews/2026-08-30-bna4-runtime-surface-admission-review.md)；
 - [ ] BNA-5：Trusted Local/Hosted Isolated Trust Profile、确定性、预算和安全 Gate；
 - [ ] BNA-6：在 BNA-5 后冻结评测 Profile/预算/阈值、Route Decision、资产身份与同等生产预算，交付 AI
   Checker/Explain、Golden Corpus、真实视觉与人工交互评估；Block 专属 Corpus 由 BWB-5 闭合；
@@ -976,7 +976,7 @@ Replay、Streaming/Dispose 和自动 Diagnostic；普通 Agent 只引用稳定 P
   `goTo`、重规划或移动执行；
 - [ ] BNA-8：按 Trusted Local、Hosted、Route 三种范围分别做最终 Go/No-Go 与文档切换。
 
-在 BNA-3 至 BNA-6 完成并建立独立实施计划前，不提高总进度，不把实验 API 写入 Quickstart，也不修改
+在 BNA-5 至 BNA-6 完成并建立独立实施计划前，不提高总进度，不把 Native API 写入 Quickstart，也不修改
 Catalog/Hosted Builder 生产工作流。P2.6 仍可先使用审核过的 Structure Resource 和产品 GLB；Native
 Lane 不自动扩大 Cave、Overhang、双层 Route 或 NPC Navigation 的当前能力边界。
 

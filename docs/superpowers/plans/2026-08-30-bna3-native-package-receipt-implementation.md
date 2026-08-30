@@ -64,6 +64,13 @@ tree instead of reusing that GO as implementation evidence.
 - do not change Havok, Subject, Camera, Input, fixed Tick or Runtime Candidate
   construction in BNA-3.
 
+**Completion evidence (2026-08-30):** All BNA3-00A through BNA3-60 slices landed in final product
+SHA `9fe9e6e3b78b894fdb9089e6e8e718537f7675f2`. Exact-SHA Cursor Cloud full gates
+(`run-93155bef-681e-423f-a1de-f557c613474f`) and independent Mode B/runtime-deep review
+(`run-9bcb5d9c-11ec-46fb-aafd-10bb03f46325`) both returned GO with no open P0/P1/P2. PR #56
+merged the candidate into `origin/main@2fd8c1c2694a861e213ad2c72e9cb3aefec087ce`, and ancestry was
+verified. BNA3-90 is complete; Runtime/Havok admission remains BNA-4 scope.
+
 ## 1. Frozen decisions carried into implementation
 
 1. There is one `WorldPackageManifestV1`, one Build Receipt parser, one directory

@@ -25,6 +25,7 @@ import {
   type SceneAuthoringRouteDecisionV1,
 } from "@whitebox-world/scene-authoring-contracts";
 import { isNil } from "lodash-es";
+import { resolveTraversalSurfaceProfileV1 } from "@whitebox-world/traversal";
 
 import basicWorldDocument from "../../../examples/authoring/basic-world.json";
 import { BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V1 } from "./babylon-web-host-profile.js";
@@ -137,10 +138,13 @@ export function createBabylonNativeWorldPackageTestInputV1(
     gravityMetersPerSecondSquaredXYZ: [0, -9.81, 0] as const,
     initialCamera: Object.freeze({
       mode: "third-person" as const,
-      pitchRadians: 0.1,
-      distanceMeters: 5,
-      fovDegrees: 55,
-      targetHeightMeters: 1.2,
+      pitchRadians:
+        canonical.worldRuntimeBootstrap.initialCamera.pitchRadians,
+      distanceMeters:
+        canonical.worldRuntimeBootstrap.initialCamera.distanceMeters,
+      fovDegrees: canonical.worldRuntimeBootstrap.initialCamera.fovDegrees,
+      targetHeightMeters:
+        canonical.worldRuntimeBootstrap.initialCamera.targetHeightMeters,
     }),
     seed: 20260830,
     spawnMarkerId: "player-spawn",
@@ -264,7 +268,7 @@ export function createBabylonNativeWorldPackageTestInputV1(
     sceneModuleId: "package-fixture-module",
     spawnMarker: Object.freeze({
       id: nativeSceneBootstrap.spawnMarkerId,
-      positionMetersXYZ: [0, 1, 0] as const,
+      positionMetersXYZ: [0, 0, 0] as const,
       facingRadians: 0,
     }),
     staticColliders: Object.freeze([
@@ -274,12 +278,21 @@ export function createBabylonNativeWorldPackageTestInputV1(
         triangleIndices: [0, 1, 2],
         frictionRatio: 0.8,
         restitutionRatio: 0,
-        traversalBinding: { kind: "not-traversable" },
+        traversalBinding: {
+          kind: "static-surface",
+          surfaceEntityId: "ground-surface",
+          logicalSubshapeId: "top",
+          traversalSurfaceProfileRef:
+            "worldkit://traversal-surface-profile/ground.static@1",
+        },
       }),
     ]),
   });
   const worldRuntimeBootstrapRef =
     "worldkit://world-runtime-bootstrap/package-fixture@1";
+  const traversalSurfaceProfile = resolveTraversalSurfaceProfileV1(
+    "worldkit://traversal-surface-profile/ground.static@1",
+  );
   const registryLock = worldResourceLockEntriesV1([
     ...canonical.worldRuntimeBootstrap.runtimeResourceLockEntries,
     {
@@ -296,6 +309,12 @@ export function createBabylonNativeWorldPackageTestInputV1(
     },
     { resourceKind: "native-scene-api", ...nativeSceneApi },
     { resourceKind: "native-scene-profile", ...nativeSceneProfile },
+    {
+      resourceKind: "traversal-surface-profile",
+      resourceRef: traversalSurfaceProfile.resourceRef,
+      resolvedVersion: traversalSurfaceProfile.resolvedVersion,
+      contentHash: traversalSurfaceProfile.contentHash,
+    },
   ]);
   const base: FrozenBabylonNativeWorldPackageBuildInputV1 = {
     shared: {

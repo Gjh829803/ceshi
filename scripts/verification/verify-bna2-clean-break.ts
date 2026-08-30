@@ -2,11 +2,6 @@ import { readdir, readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
-import {
-  scanBna1CleanBreak,
-  type Bna1CleanBreakScanOptions,
-} from "./verify-bna1-clean-break";
-
 export const BNA2_CLEAN_BREAK_SCAN_ROOTS = Object.freeze([
   "packages",
   "apps",
@@ -21,7 +16,6 @@ const SELF_PATH = "scripts/verification/verify-bna2-clean-break.ts";
 
 export interface Bna2CleanBreakScanOptions {
   readonly scanRoots?: readonly string[];
-  readonly bna1ScanOptions?: Bna1CleanBreakScanOptions;
   readonly workspaceParserOwnerPath?: string;
   readonly importProfileOwnerPath?: string;
 }
@@ -31,8 +25,7 @@ export interface Bna2CleanBreakDiagnostic {
     | "BNA2_OLD_CANDIDATE_API"
     | "BNA2_OLD_CLOUD_RIDGE_API"
     | "BNA2_SECOND_WORKSPACE_PARSER"
-    | "BNA2_SECOND_IMPORT_PROFILE"
-    | "BNA2_FORMAL_NATIVE_PREALLOCATION_GUARD_INVALID";
+    | "BNA2_SECOND_IMPORT_PROFILE";
   readonly path: string;
   readonly line: number;
   readonly value: string;
@@ -212,22 +205,6 @@ export async function scanBna2CleanBreak(
         value: "Babylon Native import profile must have exactly one owner",
       });
     }
-  }
-
-  const bna1Report = await scanBna1CleanBreak(
-    repositoryRoot,
-    options.bna1ScanOptions,
-  );
-  for (const diagnostic of bna1Report.diagnostics) {
-    if (diagnostic.code !== "BNA1_FORMAL_NATIVE_PREALLOCATION_GUARD_INVALID") {
-      continue;
-    }
-    diagnostics.push({
-      code: "BNA2_FORMAL_NATIVE_PREALLOCATION_GUARD_INVALID",
-      path: diagnostic.path,
-      line: diagnostic.line,
-      value: diagnostic.value,
-    });
   }
 
   diagnostics.sort((left, right) =>

@@ -219,6 +219,11 @@ async function defaultAdmitPackage(
       `RUNTIME_SESSION_PACKAGE_ADMISSION_FAILED: ${JSON.stringify(loaded.result.diagnostics)}`,
     );
   }
+  if (loaded.verifiedDirectory.kind !== "canonical-execution-plan") {
+    throw new Error(
+      "RUNTIME_SESSION_ADAPTER_SCENE_SOURCE_UNSUPPORTED: The selected headless Runtime adapter cannot run this Scene Source.",
+    );
+  }
   const { runtimeWorldConfiguration, verifiedDirectory } = loaded;
   return Object.freeze({
     worldPackageRef: runtimeWorldConfiguration.worldBuildIdentity.worldPackageRef,

@@ -21,33 +21,8 @@ function token(parts: readonly string[]): string {
   return parts.join("");
 }
 
-const guardedRuntimeHostSource = [
-  "function parseRuntimeHostCreateOptions(input) {",
-  "  requireCanonicalRuntimeConfiguration(input.initialWorld);",
-  "}",
-  "function parseReplacementRequest(input) {",
-  "  requireCanonicalRuntimeConfiguration(input.worldConfiguration);",
-  "}",
-  "function parsePublishWorldReplacementInput(input) {",
-  "  requireCanonicalRuntimeConfiguration(input.worldConfiguration);",
-  "}",
-  "function requireCanonicalRuntimeConfiguration(configuration) {",
-  "  if (configuration.sceneSource.kind !== 'canonical-execution-plan') {",
-  "    throw new Error('WORLDKIT_NATIVE_SCENE_PRODUCTION_NOT_ADMITTED');",
-  "  }",
-  "}",
-  "function descriptor(configuration) {",
-  "  requireCanonicalRuntimeConfiguration(configuration);",
-  "  return descriptorFor(configuration);",
-  "}",
-  "await options.adapterFactory.create(descriptor(configuration));",
-  "const candidateDescriptor = descriptor(candidateConfiguration);",
-  "await this.options.adapterFactory.create(candidateDescriptor);",
-].join("\n");
-
 async function fixture(options: {
   extraSource?: string;
-  runtimeHostSource?: string;
 } = {}): Promise<{ root: string; scanOptions: Bna2CleanBreakScanOptions }> {
   const root = await mkdtemp(path.join(os.tmpdir(), "worldkit-bna2-clean-break-"));
   cleanupPaths.push(root);
@@ -64,8 +39,7 @@ async function fixture(options: {
       "export type Sha256HashV1 = `sha256:${string}`;\n",
     "packages/runtime-babylon/src/babylon-world-runtime.ts":
       "export const admission = 'audited';\n",
-    "packages/runtime-host/src/runtime-host.ts":
-      options.runtimeHostSource ?? guardedRuntimeHostSource,
+    "packages/runtime-host/src/runtime-host.ts": "export {};\n",
     "scripts/native-scene/authoring-workspace.ts": [
       `export async function ${workspaceParserName}() {`,
       "  return { outcome: 'passed' };",
@@ -82,13 +56,6 @@ async function fixture(options: {
     root,
     scanOptions: {
       scanRoots: ["packages", "apps", "scripts"],
-      bna1ScanOptions: {
-        scanRoots: ["packages", "apps", "scripts"],
-        planSpecificExecutionPlanHashFiles: [],
-        negativeExecutionPlanHashFixtureFiles: [],
-        runtimeHostPath: "packages/runtime-host/src/runtime-host.ts",
-        sha256HashOwnerPath: "packages/protocol/src/hash.ts",
-      },
     },
   };
 }
@@ -128,18 +95,4 @@ describe("BNA-2 clean-break verifier", () => {
     );
   });
 
-  it("reuses the BNA-1 structural check for formal preallocation rejection", async () => {
-    const value = await fixture({
-      runtimeHostSource: [
-        "await adapterFactory.create(descriptorFor(configuration));",
-        "throw new Error('WORLDKIT_NATIVE_SCENE_PRODUCTION_NOT_ADMITTED');",
-      ].join("\n"),
-    });
-    const report = await scanBna2CleanBreak(value.root, value.scanOptions);
-
-    expect(report.diagnostics).toContainEqual(expect.objectContaining({
-      code: "BNA2_FORMAL_NATIVE_PREALLOCATION_GUARD_INVALID",
-      path: "packages/runtime-host/src/runtime-host.ts",
-    }));
-  });
 });

@@ -1,4 +1,13 @@
 export * from "./babylon-world-runtime";
+export {
+  BabylonNativeRuntimePackageErrorV1,
+  prepareBabylonNativeRuntimePackageV1,
+  type BabylonNativeRuntimePackageErrorCodeV1,
+  type BabylonNativeSceneModuleLoaderV1,
+  type BabylonNativeSceneModuleLoadRequestV1,
+  type PreparedBabylonNativeRuntimePackageV1,
+  type PrepareBabylonNativeRuntimePackageInputV1,
+} from "./babylon-native-package-runtime";
 export * from "./runtime-projection";
 export * from "./artifact-capture";
 export {

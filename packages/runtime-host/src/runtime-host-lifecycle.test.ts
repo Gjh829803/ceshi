@@ -3,6 +3,8 @@ import {
   createBabylonNativeWorldPackageV1,
   verifyWorldPackageDirectoryV1,
 } from "@whitebox-world/world-package";
+import { hashBabylonNativeSceneBootstrapV1 } from
+  "@whitebox-world/runtime-contracts";
 
 import { describe, expect, it, vi } from "vitest";
 
@@ -32,7 +34,7 @@ import {
   runtimeHostConstructor,
 } from "./test/runtime-host-lifecycle-harness";
 
-function nativeWorldConfiguration() {
+function verifiedNativeWorldConfiguration() {
   const directory = createBabylonNativeWorldPackageV1(
     createBabylonNativeWorldPackageTestInputV1(),
   );
@@ -51,50 +53,307 @@ function nativeWorldConfiguration() {
   };
 }
 
+function nativeWorldConfiguration(worldPackageRef = INITIAL_WORLD_PACKAGE_REF) {
+  const canonical = mutableWorldConfiguration(worldPackageRef);
+  const sceneModuleBundleHash = `sha256:${"e".repeat(64)}` as const;
+  const bootstrap = Object.freeze({
+    kind: "babylon-native-scene-bootstrap" as const,
+    schemaVersion: 1 as const,
+    id: `native.${canonical.worldBuildIdentity.id}`,
+    sceneModuleRef: "worldkit://native-scene/runtime-host-lifecycle@1",
+    nativeSceneApiRef: "worldkit://native-scene-api/babylon-native@1",
+    nativeSceneProfileRef:
+      "worldkit://native-scene-profile/whitebox.standard@1",
+    gameplayBootstrapRef: canonical.gameplayBootstrap.resourceRef,
+    initialControlledEntityId:
+      canonical.worldRuntimeBootstrap.initialControlledEntityId,
+    gravityMetersPerSecondSquaredXYZ:
+      canonical.worldRuntimeBootstrap.gravityMetersPerSecondSquaredXYZ,
+    initialCamera: Object.freeze({
+      mode: "third-person" as const,
+      pitchRadians:
+        canonical.worldRuntimeBootstrap.initialCamera.pitchRadians,
+      distanceMeters:
+        canonical.worldRuntimeBootstrap.initialCamera.distanceMeters,
+      fovDegrees: canonical.worldRuntimeBootstrap.initialCamera.fovDegrees,
+      targetHeightMeters:
+        canonical.worldRuntimeBootstrap.initialCamera.targetHeightMeters,
+    }),
+    seed: 20260830,
+    spawnMarkerId: "spawn.runtime-host-lifecycle",
+  });
+  return Object.freeze({
+    worldBuildIdentity: Object.freeze({
+      ...canonical.worldBuildIdentity,
+      sceneSourceIdentity: Object.freeze({
+        kind: "babylon-native-scene" as const,
+        nativeSceneBootstrapHash:
+          hashBabylonNativeSceneBootstrapV1(bootstrap),
+        sceneModuleBundleHash,
+        nativeSceneContributionHash: HASH_C,
+      }),
+    }),
+    gameplayBootstrap: canonical.gameplayBootstrap,
+    worldRuntimeBootstrap: canonical.worldRuntimeBootstrap,
+    sceneSource: Object.freeze({
+      kind: "babylon-native-scene" as const,
+      bootstrap,
+      sceneModuleBundleRef:
+        `package://native-scene-module/sha256/${sceneModuleBundleHash.slice("sha256:".length)}` as const,
+    }),
+  });
+}
+
 describe("RuntimeHost lifecycle isolation and admission", () => {
-  it("rejects formal Native admission before adapter or Candidate allocation", async () => {
+  it("commits the initial control binding before the sole initial publication gate", async () => {
     const port = createPortHarness();
     const adapter = createAdapterFactoryHarness([port]);
-    const initialWorld = nativeWorldConfiguration();
+    adapter.factory.awaitCandidatePublicationReady.mockImplementation(
+      async ({ publication }) => {
+        expect(Object.values(
+          publication.gameplayInspection.relationshipStatesById,
+        )).toEqual([
+          expect.objectContaining({
+            controllerEntityId: controllerState.id,
+            controlledEntityId: heroState.id,
+          }),
+        ]);
+      },
+    );
 
-    await expect(runtimeHostConstructor().create(hostOptions(
+    const host = await runtimeHostConstructor().create(hostOptions(
       adapter.factory,
-      ["world-session.native-forbidden"],
-      { initialWorld },
-    ))).rejects.toThrow("WORLDKIT_NATIVE_SCENE_PRODUCTION_NOT_ADMITTED");
-    expect(adapter.factory.create).not.toHaveBeenCalled();
-    expect(port.calls).toEqual([]);
+      ["world-session.bound-initial"],
+      {
+        initialControlBinding: {
+          controllerEntityId: controllerState.id,
+          controlledEntityId: heroState.id,
+        },
+      },
+    ));
+
+    expect(adapter.factory.awaitCandidatePublicationReady).toHaveBeenCalledTimes(1);
+    expect(Object.values(
+      host.snapshot().gameplayInspection.relationshipStatesById,
+    )).toEqual([
+      expect.objectContaining({
+        controllerEntityId: controllerState.id,
+        controlledEntityId: heroState.id,
+      }),
+    ]);
+    await host.dispose();
+    expect(port.disposeCount).toBe(1);
   });
 
-  it("rejects formal Native replacement and publication before preflight or Candidate allocation", async () => {
+  it("rejects a failed initial create binding before readiness and releases its WorldSession", async () => {
+    const port = createPortHarness();
+    const adapter = createAdapterFactoryHarness([port]);
+
+    const error = await runtimeHostConstructor().create(hostOptions(
+      adapter.factory,
+      ["world-session.failed-initial-bind"],
+      {
+        initialControlBinding: {
+          controllerEntityId: controllerState.id,
+          controlledEntityId: "entity.not-controllable",
+        },
+      },
+    )).catch((reason: unknown) => reason);
+
+    expect(error).toMatchObject({
+      diagnostic: { code: "WORLD_SESSION_FAILED" },
+    });
+    expect(adapter.factory.awaitCandidatePublicationReady).not.toHaveBeenCalled();
+    expect(port.disposeCount).toBe(1);
+  });
+
+  it("passes an exact Native Scene Source to the shared initial Adapter path", async () => {
+    const initialWorld = nativeWorldConfiguration();
+    const port = createPortHarness();
+    const adapter = createAdapterFactoryHarness([port]);
+
+    const host = await runtimeHostConstructor().create(hostOptions(
+      adapter.factory,
+      ["world-session.native"],
+      { initialWorld },
+    ));
+
+    expect(adapter.factory.create).toHaveBeenCalledTimes(1);
+    expect(adapter.factory.awaitCandidatePublicationReady).toHaveBeenCalledTimes(1);
+    expect(adapter.factory.awaitCandidatePublicationReady).toHaveBeenCalledWith({
+      runtimeSessionId: RUNTIME_SESSION_ID,
+      worldSessionId: "world-session.native",
+      publication: host.snapshot(),
+    });
+    expect(adapter.factory.create).toHaveBeenCalledWith(expect.objectContaining({
+      runtimeSessionId: RUNTIME_SESSION_ID,
+      worldSessionId: "world-session.native",
+      worldBuildIdentity: initialWorld.worldBuildIdentity,
+      sceneSource: initialWorld.sceneSource,
+    }));
+    expect(host.snapshot().worldState).toMatchObject({
+      worldSessionId: "world-session.native",
+      worldPackageRef: initialWorld.worldBuildIdentity.worldPackageRef,
+    });
+    await host.dispose();
+    expect(port.disposeCount).toBe(1);
+  });
+
+  it("passes a Native Scene Source through shared replacement preflight and publication", async () => {
     const current = createPortHarness();
+    const worldConfiguration = nativeWorldConfiguration();
     const candidate = createPortHarness();
     const { adapter, host } = await createHost(
       [current, candidate],
       ["world-session.initial", "world-session.candidate"],
     );
-    const worldConfiguration = nativeWorldConfiguration();
-
-    expect(() => host.replaceWorld({ worldConfiguration })).toThrow(
-      "WORLDKIT_NATIVE_SCENE_PRODUCTION_NOT_ADMITTED",
-    );
-    await expect(host.publishWorldReplacementV1({
-      worldConfiguration,
-      publication: {},
-    })).resolves.toMatchObject({
-      status: "rejected",
-      failureKind: "prepare-failed",
+    await expect(host.replaceWorld({ worldConfiguration })).resolves.toMatchObject({
+      worldState: {
+        worldSessionId: "world-session.candidate",
+        worldPackageRef: worldConfiguration.worldBuildIdentity.worldPackageRef,
+      },
     });
-    expect(adapter.factory.preflightConcurrentResidency).not.toHaveBeenCalled();
-    expect(adapter.factory.create).toHaveBeenCalledTimes(1);
-    expect(candidate.calls).toEqual([]);
-    expect(host.snapshot().worldState.worldSessionId).toBe(
-      "world-session.initial",
+    expect(adapter.factory.preflightConcurrentResidency).toHaveBeenCalledTimes(1);
+    expect(adapter.factory.preflightConcurrentResidency).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sceneSource: expect.objectContaining({ kind: "canonical-execution-plan" }),
+      }),
+      expect.objectContaining({ sceneSource: worldConfiguration.sceneSource }),
     );
+    expect(adapter.factory.create).toHaveBeenCalledTimes(2);
+    expect(current.disposeCount).toBe(1);
+    expect(candidate.disposeCount).toBe(0);
+    await host.dispose();
+  });
+
+  it.each([
+    {
+      name: "Native to Canonical",
+      initialWorld: nativeWorldConfiguration(),
+      candidateWorld: mutableWorldConfiguration(REPLACEMENT_WORLD_PACKAGE_REF),
+      initialKind: "babylon-native-scene",
+      candidateKind: "canonical-execution-plan",
+    },
+    {
+      name: "Native to Native",
+      initialWorld: nativeWorldConfiguration(),
+      candidateWorld: nativeWorldConfiguration(REPLACEMENT_WORLD_PACKAGE_REF),
+      initialKind: "babylon-native-scene",
+      candidateKind: "babylon-native-scene",
+    },
+  ])("publishes $name through the same replacement transaction", async ({
+    initialWorld,
+    candidateWorld,
+    initialKind,
+    candidateKind,
+  }) => {
+    const current = createPortHarness();
+    const candidate = createPortHarness();
+    const adapter = createAdapterFactoryHarness([current, candidate]);
+    const host = await runtimeHostConstructor().create(hostOptions(
+      adapter.factory,
+      ["world-session.native-current", "world-session.candidate"],
+      { initialWorld },
+    ));
+
+    await expect(host.replaceWorld({ worldConfiguration: candidateWorld }))
+      .resolves.toMatchObject({
+        worldState: {
+          worldSessionId: "world-session.candidate",
+          worldPackageRef: candidateWorld.worldBuildIdentity.worldPackageRef,
+        },
+      });
+    expect(adapter.factory.preflightConcurrentResidency).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sceneSource: expect.objectContaining({ kind: initialKind }),
+      }),
+      expect.objectContaining({
+        sceneSource: expect.objectContaining({ kind: candidateKind }),
+      }),
+    );
+    expect(current.disposeCount).toBe(1);
+    expect(candidate.disposeCount).toBe(0);
+    await host.dispose();
+  });
+
+  it("preserves the exact old publication when a Native replacement fails", async () => {
+    const current = createPortHarness();
+    const candidate = createPortHarness();
+    candidate.failNextOperation(
+      "initialize",
+      "reject",
+      new Error("private Native candidate failure"),
+    );
+    const { host } = await createHost(
+      [current, candidate],
+      ["world-session.current", "world-session.native-candidate"],
+    );
+    const before = host.snapshot();
+
+    await expect(host.replaceWorld({
+      worldConfiguration: nativeWorldConfiguration(
+        REPLACEMENT_WORLD_PACKAGE_REF,
+      ),
+    })).rejects.toMatchObject({
+      diagnostic: { code: "WORLD_SESSION_FAILED" },
+    });
+
+    expect(host.snapshot()).toBe(before);
+    expect(current.disposeCount).toBe(0);
+    expect(candidate.disposeCount).toBe(1);
+    await expect(host.runFixedInput({ actions: [], ticks: 1 })).resolves
+      .toMatchObject({ worldState: { simulationTick: 1 } });
+    await host.dispose();
+  });
+
+  it("disposes an Adapter-created initial port when WorldSession initialization fails", async () => {
+    const port = createPortHarness();
+    port.failNextOperation(
+      "initialize",
+      "reject",
+      new Error("private initial adapter initialization failure"),
+    );
+    const adapter = createAdapterFactoryHarness([port]);
+
+    const error = await runtimeHostConstructor().create(hostOptions(
+      adapter.factory,
+      ["world-session.initial-failure"],
+      { initialWorld: nativeWorldConfiguration() },
+    )).catch((reason: unknown) => reason);
+
+    expect(error).toMatchObject({
+      diagnostic: { code: "WORLD_SESSION_FAILED" },
+    });
+    expect(String(error)).not.toContain(
+      "private initial adapter initialization failure",
+    );
+    expect(adapter.factory.create).toHaveBeenCalledTimes(1);
+    expect(port.disposeCount).toBe(1);
+  });
+
+  it("disposes the initial WorldSession when its publication readiness gate fails", async () => {
+    const port = createPortHarness();
+    const adapter = createAdapterFactoryHarness([port]);
+    adapter.factory.awaitCandidatePublicationReady.mockRejectedValueOnce(
+      new Error("private initial readiness failure"),
+    );
+
+    const error = await runtimeHostConstructor().create(hostOptions(
+      adapter.factory,
+      ["world-session.initial-readiness-failure"],
+      { initialWorld: nativeWorldConfiguration() },
+    )).catch((reason: unknown) => reason);
+
+    expect(error).toMatchObject({
+      diagnostic: { code: "WORLD_SESSION_FAILED" },
+    });
+    expect(String(error)).not.toContain("private initial readiness failure");
+    expect(adapter.factory.awaitCandidatePublicationReady).toHaveBeenCalledTimes(1);
+    expect(port.disposeCount).toBe(1);
   });
 
   it("rejects tampered Native Package identity before adapter allocation", async () => {
-    const baseline = nativeWorldConfiguration();
+    const baseline = verifiedNativeWorldConfiguration();
     const cases = [
       {
         ...baseline,

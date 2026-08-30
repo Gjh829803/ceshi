@@ -25,7 +25,6 @@ async function fixture(options: {
   compilerSource?: string;
   negativeFixtureSource?: string;
   extraSource?: string;
-  runtimeHostSource?: string;
   protocolSource?: string;
 } = {}): Promise<{ root: string; scanOptions: Bna1CleanBreakScanOptions }> {
   const planHashField = token(["execution", "Plan", "Hash"]);
@@ -54,35 +53,7 @@ async function fixture(options: {
     writeFile(path.join(root, files.extra), options.extraSource ?? "export {};\n"),
     writeFile(
       path.join(root, files.runtimeHost),
-      options.runtimeHostSource ?? [
-        "function parseRuntimeHostCreateOptions(input) {",
-        "  const configuration = input.initialWorld;",
-        "  requireCanonicalRuntimeConfiguration(configuration);",
-        "  return configuration;",
-        "}",
-        "function parseReplacementRequest(input) {",
-        "  const configuration = input.worldConfiguration;",
-        "  requireCanonicalRuntimeConfiguration(configuration);",
-        "  return configuration;",
-        "}",
-        "function parsePublishWorldReplacementInput(input) {",
-        "  const configuration = input.worldConfiguration;",
-        "  requireCanonicalRuntimeConfiguration(configuration);",
-        "  return configuration;",
-        "}",
-        "function requireCanonicalRuntimeConfiguration(configuration) {",
-        "  if (configuration.sceneSource.kind !== 'canonical-execution-plan') {",
-        "    throw new Error('WORLDKIT_NATIVE_SCENE_PRODUCTION_NOT_ADMITTED');",
-        "  }",
-        "}",
-        "function descriptor(configuration) {",
-        "  requireCanonicalRuntimeConfiguration(configuration);",
-        "  return descriptorFor(configuration);",
-        "}",
-        "await options.adapterFactory.create(descriptor(configuration));",
-        "const candidateDescriptor = descriptor(candidateConfiguration);",
-        "await this.options.adapterFactory.create(candidateDescriptor);",
-      ].join("\n"),
+      "export {};\n",
     ),
     writeFile(
       path.join(root, files.protocol),
@@ -95,14 +66,13 @@ async function fixture(options: {
       scanRoots: ["packages", "apps"],
       planSpecificExecutionPlanHashFiles: [files.compiler],
       negativeExecutionPlanHashFixtureFiles: [files.negative],
-      runtimeHostPath: files.runtimeHost,
       sha256HashOwnerPath: files.protocol,
     },
   };
 }
 
 describe("BNA-1 clean-break verifier", () => {
-  it("passes one exact Plan allowlist, one negative fixture, and guarded formal Native rejection", async () => {
+  it("passes one exact Plan allowlist and one negative fixture", async () => {
     const value = await fixture();
     const report = await scanBna1CleanBreak(value.root, value.scanOptions);
 
@@ -148,38 +118,6 @@ describe("BNA-1 clean-break verifier", () => {
     expect(report.diagnostics).toContainEqual(expect.objectContaining({
       code: "BNA1_EXECUTION_PLAN_HASH_ALLOWLIST_DRIFT",
       path: "packages/compiler/src/compile.ts",
-    }));
-  });
-
-  it("rejects formal Native allocation when the canonical guard is missing or follows adapter allocation", async () => {
-    const value = await fixture({
-      runtimeHostSource: [
-        "const descriptor = descriptorFor(configuration);",
-        "await adapterFactory.create(descriptor);",
-        "throw new Error('WORLDKIT_NATIVE_SCENE_PRODUCTION_NOT_ADMITTED');",
-      ].join("\n"),
-    });
-    const report = await scanBna1CleanBreak(value.root, value.scanOptions);
-
-    expect(report.diagnostics).toContainEqual(expect.objectContaining({
-      code: "BNA1_FORMAL_NATIVE_PREALLOCATION_GUARD_INVALID",
-    }));
-  });
-
-  it("rejects a new unclassified adapter allocation even when existing guarded allocations remain", async () => {
-    const value = await fixture();
-    const runtimeHostPath = value.scanOptions.runtimeHostPath!;
-    const original = await import("node:fs/promises").then(({ readFile }) =>
-      readFile(path.join(value.root, runtimeHostPath), "utf8")
-    );
-    await writeFile(
-      path.join(value.root, runtimeHostPath),
-      `${original}\nawait options.adapterFactory.create(unclassifiedDescriptor);\n`,
-    );
-
-    const report = await scanBna1CleanBreak(value.root, value.scanOptions);
-    expect(report.diagnostics).toContainEqual(expect.objectContaining({
-      code: "BNA1_FORMAL_NATIVE_PREALLOCATION_GUARD_INVALID",
     }));
   });
 

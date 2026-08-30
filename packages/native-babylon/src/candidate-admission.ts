@@ -493,7 +493,29 @@ function createIsolatedAssetResolver(
   });
 }
 
-export async function admitBabylonNativeSceneCandidateV1(
+// The audit temporarily instruments Babylon's process-global Material event
+// Observable in addition to Candidate-local Scene surfaces. Keep that Build
+// epoch exclusive inside one JavaScript realm; admitted Runtime instances are
+// independent after the probe has restored every descriptor.
+let authorityProbeLeaseTail: Promise<void> = Promise.resolve();
+
+async function withExclusiveBabylonAuthorityProbeV1<T>(
+  operation: () => Promise<T>,
+): Promise<T> {
+  const predecessor = authorityProbeLeaseTail;
+  let releaseLease!: () => void;
+  authorityProbeLeaseTail = new Promise<void>((resolve) => {
+    releaseLease = resolve;
+  });
+  await predecessor;
+  try {
+    return await operation();
+  } finally {
+    releaseLease();
+  }
+}
+
+async function admitBabylonNativeSceneCandidateWithExclusiveProbeV1(
   input: AdmitBabylonNativeSceneCandidateInputV1,
 ): Promise<BabylonNativeSceneCandidateAdmissionResultV1> {
   let bootstrap: BabylonNativeSceneBootstrapV1;
@@ -922,4 +944,12 @@ export async function admitBabylonNativeSceneCandidateV1(
   } finally {
     authorityProbe?.restore();
   }
+}
+
+export function admitBabylonNativeSceneCandidateV1(
+  input: AdmitBabylonNativeSceneCandidateInputV1,
+): Promise<BabylonNativeSceneCandidateAdmissionResultV1> {
+  return withExclusiveBabylonAuthorityProbeV1(() =>
+    admitBabylonNativeSceneCandidateWithExclusiveProbeV1(input)
+  );
 }

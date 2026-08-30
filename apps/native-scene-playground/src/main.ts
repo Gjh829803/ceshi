@@ -2,61 +2,33 @@ import type {
   BabylonRuntimeProjectionV1,
   BabylonWorldRuntimeInitializationStageV1,
 } from "@whitebox-world/runtime-babylon";
-import {
-  BabylonWorldRuntime,
-  createBabylonGameplayWorldPortV1,
-  FIXED_TIME_STEP_SECONDS,
-} from "@whitebox-world/runtime-babylon";
+import { FIXED_TIME_STEP_SECONDS } from "@whitebox-world/runtime-babylon";
 import type {
-  BabylonNativeSceneContributionV1,
+  BabylonNativeSceneBootstrapV1,
   FixedInputV1,
   SemanticInputActionV1,
 } from "@whitebox-world/runtime-contracts";
-import type { BabylonNativeSceneModuleV1 } from
-  "@whitebox-world/native-babylon";
-import { isNil } from "lodash-es";
 
-import cloudRidgeNativeScene from "./cloud-ridge-scene.js";
-import {
-  CLOUD_RIDGE_GAMEPLAY_BOOTSTRAP_V1,
-  CLOUD_RIDGE_NATIVE_ADMISSION_BUDGET_V1,
-  CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1,
-  CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1,
-  cloudRidgeLockedAssetResolver,
-  cloudRidgeSubjectAssetResolver,
-} from "./native-bootstrap.js";
+import cloudRidgeNativeScene, {
+  moduleBundleContentHash as cloudRidgeModuleBundleContentHash,
+} from "virtual:worldkit-cloud-ridge-native-scene";
+import { cloudRidgeSubjectAssetResolver } from
+  "./subject-asset-resolver.js";
+import { NativeRuntimeHostV1 } from "./native-runtime-host.js";
+import { loadVerifiedNativeWorldPackageV1 } from
+  "./world-package-loader.js";
 import "./style.css";
 
-const FIXED_INPUT_CONTROLLER_ENTITY_ID = "native-scene-controller";
 const CLOUD_RIDGE_MAIN_PATH_RUN_TICKS = 1_700;
-const CONTROLLED_ENTITY_ID =
-  CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1.initialControlledEntityId;
-const NATIVE_SCENE_MODULES_BY_REF: Readonly<
-  Record<string, BabylonNativeSceneModuleV1>
-> = Object.freeze({
-  "worldkit://native-scene/cloud-ridge@1":
-    cloudRidgeNativeScene,
-});
-function resolveNativeSceneModule(
-  sceneModuleRef: string,
-): BabylonNativeSceneModuleV1 {
-  const module = NATIVE_SCENE_MODULES_BY_REF[sceneModuleRef];
-  if (isNil(module)) {
-    throw new Error("WORLDKIT_NATIVE_SCENE_MODULE_REF_UNRESOLVED");
-  }
-  return module;
-}
-const nativeSceneModule = resolveNativeSceneModule(
-  CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1.sceneModuleRef,
-);
-
 interface NativeSceneSpikeProbeV1 {
   readonly ready: true;
-  readonly bootstrap: typeof CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1;
+  readonly bootstrap: BabylonNativeSceneBootstrapV1;
   snapshot(): BabylonRuntimeProjectionV1;
   runFixedInput(input: FixedInputV1): Promise<BabylonRuntimeProjectionV1>;
   audit(): Readonly<{
     contributionHash: `sha256:${string}`;
+    worldSessionId: string;
+    successfulRuntimeCreateCount: number;
     spawnMarkerId: string;
     colliderIds: readonly string[];
     colliderSubshapeIds: readonly string[];
@@ -94,39 +66,6 @@ function initializationLabel(
   return labels[stage];
 }
 
-function possessionTransition(
-  controlledEntityId: string,
-  establishedSimulationTick: number,
-) {
-  return Object.freeze({
-    kind: "gameplay-transition-plan" as const,
-    schemaVersion: 1 as const,
-    type: "control.bind" as const,
-    commandId: `command.native-scene.bind.${establishedSimulationTick}`,
-    expectedStateRevision: 0,
-    relationshipChanges: Object.freeze([Object.freeze({
-      operation: "add" as const,
-      after: Object.freeze({
-        id: `possessed-by:native-scene:${establishedSimulationTick}`,
-        type: "possessedBy" as const,
-        schemaVersion: 1 as const,
-        controlledEntityId,
-        controllerEntityId: FIXED_INPUT_CONTROLLER_ENTITY_ID,
-        establishedSimulationTick,
-      }),
-    })]),
-    actionChanges: Object.freeze([]),
-    newlyCommittedActionExecutionIds: Object.freeze([]),
-    capacityDelta: Object.freeze({
-      relationshipStateCountDelta: 1,
-      activeActionStateCountDelta: 0,
-      usedActionExecutionIdCountDelta: 0,
-      immediateEventCount: 1,
-      terminalEventReservationCountDelta: 0,
-    }),
-  });
-}
-
 function semanticActionsForCodes(
   pressedCodes: ReadonlySet<string>,
 ): readonly SemanticInputActionV1[] {
@@ -162,54 +101,28 @@ async function start(): Promise<void> {
   const pauseButton = requiredElement<HTMLButtonElement>("[data-pause]");
   const pathCheckButton = requiredElement<HTMLButtonElement>("[data-path-check]");
 
-  const canvas = document.createElement("canvas");
-  canvas.setAttribute("aria-label", "Cloud Ridge Babylon Native scene");
-  canvas.tabIndex = 0;
-  viewport.prepend(canvas);
-
-  let nativeAdmission: Readonly<{
-    contribution: BabylonNativeSceneContributionV1;
-    contributionHash: `sha256:${string}`;
-  }> | undefined;
-  const runtime = await BabylonWorldRuntime.create({
-    worldRuntimeBootstrap: CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1,
-    gameplayBootstrap: CLOUD_RIDGE_GAMEPLAY_BOOTSTRAP_V1,
-    sceneSource: {
-      kind: "babylon-native-scene",
-      bootstrap: CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1,
-      module: nativeSceneModule,
-      assets: cloudRidgeLockedAssetResolver,
-      budget: CLOUD_RIDGE_NATIVE_ADMISSION_BUDGET_V1,
-    },
+  const verifiedWorldPackage = await loadVerifiedNativeWorldPackageV1(
+    new URL("/world-packages/cloud-ridge/", globalThis.location.origin),
+  );
+  const controlledEntityId =
+    verifiedWorldPackage.worldRuntimeBootstrap.initialControlledEntityId;
+  const coordinator = await NativeRuntimeHostV1.create({
     runtimeSessionId: `native-scene-${crypto.randomUUID()}`,
-    canvas,
-    autoStartRenderLoop: false,
+    canvasHost: viewport,
+    verifiedWorldPackage,
+    loadedSceneModule: cloudRidgeNativeScene,
+    loadedSceneModuleBundleContentHash:
+      cloudRidgeModuleBundleContentHash,
     subjectAssetResolver: cloudRidgeSubjectAssetResolver,
     onInitializationStage(stage) {
       loadingStage.textContent = initializationLabel(stage);
     },
-    onNativeSceneAdmission(admission) {
-      nativeAdmission = admission;
-    },
   });
+  const canvas = () => coordinator.canvas();
+  const activeRuntime = () => coordinator.runtime();
   try {
-  const gameplayPort = createBabylonGameplayWorldPortV1(
-    runtime,
-    FIXED_INPUT_CONTROLLER_ENTITY_ID,
-  );
-  await gameplayPort.initialize();
-
-  const bindPossession = async (): Promise<void> => {
-    const projection = gameplayPort.snapshot();
-    const prepared = await gameplayPort.prepareGameplayTransition(
-      possessionTransition(CONTROLLED_ENTITY_ID, projection.simulationTick),
-    );
-    prepared.commitPrepared();
-  };
-  await bindPossession();
-
   let inputTail: Promise<BabylonRuntimeProjectionV1> =
-    Promise.resolve(runtime.snapshot());
+    Promise.resolve(coordinator.snapshot());
   const runFixedInput = (
     input: FixedInputV1,
   ): Promise<BabylonRuntimeProjectionV1> => {
@@ -222,75 +135,40 @@ async function start(): Promise<void> {
         "Fixed input ticks must be an integer from 0 through 36000.",
       ));
     }
-    inputTail = inputTail.then(async () => {
-      for (let tick = 0; tick < input.ticks; tick += 1) {
-        const nextSimulationTick = gameplayPort.snapshot().simulationTick + 1;
-        await gameplayPort.runFixedInputTick(
-          {
-            actions: input.actions,
-            ...(input.axes === undefined ? {} : { axes: input.axes }),
-            ticks: 1,
-          },
-          Object.freeze({
-            simulationTick: nextSimulationTick,
-            activeActionStatesById: Object.freeze({}),
-          }),
-        );
-      }
-      return runtime.snapshot();
-    });
+    inputTail = inputTail.then(() => coordinator.runFixedInput(input));
     return inputTail;
-  };
-
-  const audit = () => {
-    if (nativeAdmission === undefined) {
-      throw new Error("WORLDKIT_NATIVE_SCENE_ADMISSION_AUDIT_UNAVAILABLE");
-    }
-    return Object.freeze({
-      contributionHash: nativeAdmission.contributionHash,
-      spawnMarkerId: nativeAdmission.contribution.spawnMarker.id,
-      colliderIds: Object.freeze(
-        nativeAdmission.contribution.staticColliders.map(({ id }) => id),
-      ),
-      colliderSubshapeIds: Object.freeze(
-        nativeAdmission.contribution.staticColliders.map(
-          ({ colliderSubshapeId }) => colliderSubshapeId,
-        ),
-      ),
-    });
   };
 
   const reset = async (): Promise<BabylonRuntimeProjectionV1> => {
     await inputTail;
-    runtime.reset();
-    await bindPossession();
-    runtime.adjustCameraView({
+    await coordinator.reset();
+    activeRuntime().adjustCameraView({
       pitchDeltaRadians: -0.15,
       zoomDeltaMeters: 4,
     });
     return runFixedInput({ actions: [], ticks: 50 });
   };
 
-  runtime.adjustCameraView({
+  activeRuntime().adjustCameraView({
     pitchDeltaRadians: -0.15,
     zoomDeltaMeters: 4,
   });
   await runFixedInput({ actions: [], ticks: 50 });
-  runtime.resize();
-  await runtime.renderFrameWhenReady();
+  activeRuntime().resize();
+  await activeRuntime().renderFrameWhenReady();
 
   window.__WORLDKIT_NATIVE_SPIKE__ = Object.freeze({
     ready: true as const,
-    bootstrap: CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1,
-    snapshot: () => runtime.snapshot(),
+    bootstrap: verifiedWorldPackage.bootstrap,
+    snapshot: () => coordinator.snapshot(),
     runFixedInput,
-    audit,
+    audit: () => coordinator.audit(),
     reset,
   });
 
   loading.classList.add("is-complete");
   stateElement.textContent = "IDLE";
-  canvas.focus();
+  canvas().focus();
 
   const pressedCodes = new Set<string>();
   let paused = false;
@@ -309,13 +187,13 @@ async function start(): Promise<void> {
     disposed = true;
     cancelAnimationFrame(frameRequest);
     showFailure(error);
-    void gameplayPort.dispose().catch(() => {
+    void coordinator.dispose().catch(() => {
       // The primary Runtime failure remains the visible diagnostic.
     });
   };
 
   const updateHud = (snapshot: BabylonRuntimeProjectionV1): void => {
-    const subject = snapshot.subjectStatesByEntityId[CONTROLLED_ENTITY_ID];
+    const subject = snapshot.subjectStatesByEntityId[controlledEntityId];
     if (subject === undefined) return;
     stateElement.textContent = paused
       ? "PAUSED"
@@ -343,7 +221,7 @@ async function start(): Promise<void> {
         ticks,
       });
     }
-    runtime.renderFrame();
+    activeRuntime().renderFrame();
     frameCount += 1;
     if (timestamp - fpsTimestamp >= 500) {
       fpsElement.textContent = Math.round(
@@ -351,7 +229,7 @@ async function start(): Promise<void> {
       ).toString();
       frameCount = 0;
       fpsTimestamp = timestamp;
-      updateHud(runtime.snapshot());
+      updateHud(activeRuntime().snapshot());
     }
     frameRequest = requestAnimationFrame((nextTimestamp) => {
       void renderLoop(nextTimestamp).catch(failRuntime);
@@ -379,20 +257,20 @@ async function start(): Promise<void> {
   });
   window.addEventListener("blur", () => pressedCodes.clear());
 
-  canvas.addEventListener("pointerdown", (event) => {
+  viewport.addEventListener("pointerdown", (event) => {
     activePointerId = event.pointerId;
     previousPointerX = event.clientX;
     previousPointerY = event.clientY;
-    canvas.setPointerCapture(event.pointerId);
-    canvas.focus();
+    viewport.setPointerCapture(event.pointerId);
+    canvas().focus();
   });
-  canvas.addEventListener("pointermove", (event) => {
+  viewport.addEventListener("pointermove", (event) => {
     if (event.pointerId !== activePointerId) return;
     const deltaX = event.clientX - previousPointerX;
     const deltaY = event.clientY - previousPointerY;
     previousPointerX = event.clientX;
     previousPointerY = event.clientY;
-    runtime.adjustCameraView({
+    activeRuntime().adjustCameraView({
       yawDeltaRadians: -deltaX * 0.0045,
       pitchDeltaRadians: -deltaY * 0.0035,
     });
@@ -400,16 +278,16 @@ async function start(): Promise<void> {
   const endPointer = (event: PointerEvent): void => {
     if (event.pointerId !== activePointerId) return;
     activePointerId = undefined;
-    if (canvas.hasPointerCapture(event.pointerId)) {
-      canvas.releasePointerCapture(event.pointerId);
+    if (viewport.hasPointerCapture(event.pointerId)) {
+      viewport.releasePointerCapture(event.pointerId);
     }
   };
-  canvas.addEventListener("pointerup", endPointer);
-  canvas.addEventListener("pointercancel", endPointer);
-  canvas.addEventListener("contextmenu", (event) => event.preventDefault());
-  canvas.addEventListener("wheel", (event) => {
+  viewport.addEventListener("pointerup", endPointer);
+  viewport.addEventListener("pointercancel", endPointer);
+  viewport.addEventListener("contextmenu", (event) => event.preventDefault());
+  viewport.addEventListener("wheel", (event) => {
     event.preventDefault();
-    runtime.adjustCameraView({
+    activeRuntime().adjustCameraView({
       zoomDeltaMeters: Math.max(-1.2, Math.min(1.2, event.deltaY * 0.004)),
     });
   }, { passive: false });
@@ -419,7 +297,7 @@ async function start(): Promise<void> {
     pauseButton.textContent = paused ? "▶" : "Ⅱ";
     pauseButton.setAttribute("aria-label", paused ? "继续" : "暂停");
     pressedCodes.clear();
-    updateHud(runtime.snapshot());
+    updateHud(activeRuntime().snapshot());
   });
 
   pathCheckButton.addEventListener("click", () => {
@@ -435,9 +313,9 @@ async function start(): Promise<void> {
       }))
       .then(() => runFixedInput({ actions: [], ticks: 2 }))
       .then((snapshot) => {
-        runtime.renderFrame();
+        activeRuntime().renderFrame();
         updateHud(snapshot);
-        const subject = snapshot.subjectStatesByEntityId[CONTROLLED_ENTITY_ID];
+        const subject = snapshot.subjectStatesByEntityId[controlledEntityId];
         const reached = subject !== undefined &&
           subject.movementMedium === "ground" &&
           subject.positionMetersXYZ[1] > 12 &&
@@ -456,22 +334,22 @@ async function start(): Promise<void> {
       });
   });
 
-  const resizeObserver = new ResizeObserver(() => runtime.resize());
+  const resizeObserver = new ResizeObserver(() => activeRuntime().resize());
   resizeObserver.observe(viewport);
   window.addEventListener("beforeunload", () => {
     disposed = true;
     cancelAnimationFrame(frameRequest);
     resizeObserver.disconnect();
-    void gameplayPort.dispose();
+    void coordinator.dispose();
   }, { once: true });
 
-  updateHud(runtime.snapshot());
+  updateHud(activeRuntime().snapshot());
   frameRequest = requestAnimationFrame((timestamp) => {
     void renderLoop(timestamp).catch(failRuntime);
   });
   } catch (error) {
     try {
-      await runtime.dispose();
+      await coordinator.dispose();
     } catch {
       // Preserve the primary startup failure.
     }
