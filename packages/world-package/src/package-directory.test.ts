@@ -5,6 +5,7 @@ import {
   hashWorldBuildIdentityV1,
   worldPackageRefFromRootHashV1,
 } from "@whitebox-world/world-identity";
+import { isNil } from "lodash-es";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -122,9 +123,14 @@ function withNativeContributionProfileDrift(
   if (directory.receipt.manifest.sceneSource.kind !== "babylon-native-scene") {
     throw new Error("Babylon Native fixture required.");
   }
+  const contributionFile = directory.files.find(
+    ({ path }) => path === "native/contribution.json",
+  );
+  if (isNil(contributionFile)) {
+    throw new Error("Native Contribution fixture missing.");
+  }
   const contribution = JSON.parse(new TextDecoder().decode(
-    directory.files.find(({ path }) => path === "native/contribution.json")!
-      .bytes,
+    contributionFile.bytes,
   )) as Record<string, unknown>;
   const driftedContribution = {
     ...contribution,

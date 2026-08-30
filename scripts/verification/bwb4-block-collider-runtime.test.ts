@@ -22,6 +22,7 @@ import {
 import { createBabylonNativeBlockWorldPackageTestInputV1 } from
   "@whitebox-world/world-package/testing";
 import { describe, expect, it } from "vitest";
+import { isNil } from "lodash-es";
 
 const require = createRequire(import.meta.url);
 const havokWasmBytes = await readFile(
@@ -78,9 +79,12 @@ async function createRuntime(input: Readonly<{
   engineFactory?: () => NullEngine;
   onInitializationStage?: (stage: string) => void;
 }> = {}): Promise<BabylonWorldRuntime> {
-  const packageModule = input.packageModule ??
-    createBabylonNativeBlockColliderRuntimeFixtureModuleV1();
-  const runtimeModule = input.runtimeModule ?? packageModule;
+  const packageModule = isNil(input.packageModule)
+    ? createBabylonNativeBlockColliderRuntimeFixtureModuleV1()
+    : input.packageModule;
+  const runtimeModule = isNil(input.runtimeModule)
+    ? packageModule
+    : input.runtimeModule;
   const contribution = await auditedContribution(packageModule);
   const verified = verifyWorldPackageDirectoryV1(
     createBabylonNativeWorldPackageV1(
@@ -118,14 +122,14 @@ async function createRuntime(input: Readonly<{
     gameplayBootstrap: verified.gameplayBootstrap,
     runtimeSessionId,
     havokWasmBinary,
-    engineFactory: input.engineFactory ?? (() => new NullEngine({
+    engineFactory: isNil(input.engineFactory) ? (() => new NullEngine({
       renderWidth: 64,
       renderHeight: 64,
       textureSize: 64,
       deterministicLockstep: true,
       lockstepMaxSteps: 4,
-    })),
-    ...(input.onInitializationStage === undefined
+    })) : input.engineFactory,
+    ...(isNil(input.onInitializationStage)
       ? {}
       : { onInitializationStage: input.onInitializationStage }),
   });

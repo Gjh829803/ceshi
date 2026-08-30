@@ -2,6 +2,7 @@ import {
   defineBabylonNativeScene,
   type BabylonNativeSceneModuleV1,
 } from "@whitebox-world/native-babylon";
+import { isNil } from "lodash-es";
 
 import { createBabylonNativeBlockProfileSessionV1 } from "./session.js";
 
@@ -18,6 +19,7 @@ export function createBabylonNativeBlockColliderRuntimeFixtureModuleV1(
   input: Readonly<{ paletteRole?: "ground" | "structure" }> = {},
 ):
 BabylonNativeSceneModuleV1 {
+  const paletteRole = isNil(input.paletteRole) ? "ground" : input.paletteRole;
   return defineBabylonNativeScene({
     kind: "babylon-native-scene-module",
     id: "package-fixture-module",
@@ -29,8 +31,8 @@ BabylonNativeSceneModuleV1 {
         session.createBlock({
           id: block.id,
           shape: block.shape,
-          paletteRole: input.paletteRole ?? "ground",
-          ...(input.paletteRole === "structure"
+          paletteRole,
+          ...(paletteRole === "structure"
             ? { visualGroupId: "runtime-fixture-structure" }
             : {}),
         }).position.set(block.center[0], block.center[1], block.center[2]);
