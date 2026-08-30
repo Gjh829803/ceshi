@@ -311,6 +311,7 @@ interface FrozenBabylonNativeWorldPackageBuildInputV1 {
   readonly assetLock: BabylonNativeAssetLockV1;
   readonly sceneAuthoringRouteDecision: SceneAuthoringRouteDecisionV1;
   readonly sceneAuthoringAttempt: SceneAuthoringAttemptV1;
+  readonly sceneAuthoringAttemptResultRef: string;
   readonly sceneAuthoringAttemptResult: SceneAuthoringAttemptResultV1;
   readonly nativeSceneCheckResult: NativeSceneCheckResultV1;
   readonly nativeSceneContribution: BabylonNativeSceneContributionV1;

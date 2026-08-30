@@ -576,6 +576,8 @@ Before any Root exists, reject unless:
 - Attempt ref/hash/route ref/hash/Brief/source input/seed/profile match;
 - completed Result's Attempt hash matches and its `authoredSourceRef` is the selected
   `sceneModuleRef` while `authoredSourceHash` equals Bundle `sourceGraphHash`;
+- the frozen input retains the Host-validated `sceneAuthoringAttemptResultRef`; the
+  pure builder never derives a Registry Ref from Result `id`;
 - Native Check is passed and binds the same module ref;
 - replay Contribution hash matches the frozen Contribution;
 - Bootstrap and World Runtime Bootstrap have exactly equal
