@@ -121,6 +121,11 @@ WRC-1 contains 33 implementation work packages:
 Completed prerequisites are PR #41, BNA-0 through BNA-2, BWB-0 through BWB-2, and the PHO design
 and implementation plan. PC-10B through PC-90 are BNA-2 implementation history and are not reopened.
 
+The first executable work-package design and plan are:
+
+- `docs/superpowers/specs/2026-08-30-wrc1-pr41-split-jump-correction-design.md`;
+- `docs/superpowers/plans/2026-08-30-wrc1-wave-a-jump-authority-implementation.md`.
+
 ## 6. Dependency graph
 
 ```text

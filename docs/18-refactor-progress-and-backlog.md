@@ -1081,6 +1081,11 @@ WRC-1 共包含 33 个工作包：已有 JUMP-0..3、BNA-3..8、BWB-3..6、PHO-0
 开发期只跑聚焦 RED→GREEN 和一次受影响门禁；整仓重型门禁与独立深审只在合入候选/阶段收口时由
 Cursor Cloud 针对精确 SHA 执行，禁止无输入变化时反复重跑。
 
+Wave A 的详细权威设计与施工计划已经固定在：
+
+- [PR #41-Compliant Split Jump Correction Design](superpowers/specs/2026-08-30-wrc1-pr41-split-jump-correction-design.md)
+- [WRC-1 Wave A Jump Authority Implementation Plan](superpowers/plans/2026-08-30-wrc1-wave-a-jump-authority-implementation.md)
+
 ## 5. 推荐实施顺序与依赖
 
 ```text
