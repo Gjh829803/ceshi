@@ -342,6 +342,12 @@ describe("NativeIsolationSupervisorV1", () => {
     expect(prepared.terminate).toHaveBeenCalledOnce();
     expect(prepared.dispose).toHaveBeenCalledOnce();
     expect(prepared.collectReceipt).toHaveBeenCalledOnce();
+    expect(vi.mocked(prepared.terminate).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(prepared.collectReceipt).mock.invocationCallOrder[0]!,
+    );
+    expect(
+      vi.mocked(prepared.collectReceipt).mock.invocationCallOrder[0],
+    ).toBeLessThan(vi.mocked(prepared.dispose).mock.invocationCallOrder[0]!);
     expect(input.attestationVerifier.verify).toHaveBeenCalledOnce();
     await supervisor.dispose();
     await supervisor.dispose();

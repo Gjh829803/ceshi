@@ -42,6 +42,14 @@ import {
   type NativeContainerCommandRunnerV1,
   type NativeContainerInvocationV1,
 } from "../native-scene/hosted/container-provider";
+import {
+  buildNativeContainerControlPlaneUsageV1,
+  buildNativeContainerRuntimeUsageV1,
+  evaluateHostedNativeSecurityEvidenceV1,
+  hostedNativeIsolationExitCodeV1,
+  type NativeContainerProcessUsageSampleV1,
+  type NativeContainerRuntimeUsageObservationV1,
+} from "./hosted-native-isolation-evidence";
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dirname, "../..");
 const PACKAGE_ROOT = path.join(
@@ -252,17 +260,13 @@ class DockerJsonLineProcess implements NativeContainerCommandProcessV1 {
   #inboundBytes = 0;
   #request: NativeIsolatedExecutionRequestV1 | undefined;
   #terminationReason: NativeIsolationTerminationReasonV1 | undefined;
-  #runtimeUsage = {
-    actualSceneNodeCount: 0,
-    actualMaterialCount: 0,
-    actualShaderCount: 0,
-    actualPhysicsBodyCount: 0,
+  #runtimeUsage: NativeContainerRuntimeUsageObservationV1 = {
+    actualSceneNodeCount: undefined,
+    actualMaterialCount: undefined,
+    actualShaderCount: undefined,
+    actualPhysicsBodyCount: undefined,
   };
-  #processUsage = {
-    actualCpuTimeMilliseconds: 0,
-    peakMemoryBytes: 0,
-    peakProcessCount: 1,
-  };
+  #processUsage: NativeContainerProcessUsageSampleV1 | undefined;
   #killPromise: Promise<void> | undefined;
   #disposePromise: Promise<void> | undefined;
   #evidencePromise: ReturnType<DockerJsonLineProcess["buildControlPlaneReceipt"]> |
@@ -484,6 +488,9 @@ class DockerJsonLineProcess implements NativeContainerCommandProcessV1 {
         };
     const contribution = this.verified.nativeSceneContribution;
     const assets = this.verified.assetLock.entries;
+    const textureAssets = assets.filter((asset) =>
+      asset.mediaType.startsWith("image/")
+    );
     const attestationBytes = new TextEncoder().encode(JSON.stringify({
       kind: "worldkit-native-isolation-attestation",
       schemaVersion: 1,
@@ -496,6 +503,16 @@ class DockerJsonLineProcess implements NativeContainerCommandProcessV1 {
         !value.startsWith("worldkit/native") && !value.startsWith("sha256:")
       ),
     }));
+    const controlPlaneUsage = buildNativeContainerControlPlaneUsageV1({
+      elapsedMilliseconds: Date.now() - this.#startedAt,
+      processUsage: this.#processUsage,
+      actualInboundMessageBytes: this.#inboundBytes,
+      actualOutboundMessageBytes: this.#stdoutBytes,
+      actualLogBytes: this.#stderrBytes,
+    });
+    const runtimeUsage = buildNativeContainerRuntimeUsageV1(
+      this.#runtimeUsage,
+    );
     const usageWithoutReceiptBytes: NativeExecutionUsageV1 = {
       scene: {
         actualVertices: contribution.staticColliders.reduce(
@@ -514,62 +531,15 @@ class DockerJsonLineProcess implements NativeContainerCommandProcessV1 {
           (sum, asset) => sum + asset.artifactSizeBytes,
           0,
         ),
-        actualTextureCount: 0,
-        actualTextureBytes: 0,
-      },
-      runtime: {
-        ...this.#runtimeUsage,
-        // Material/shader creation is already fail-closed inside the trusted
-        // runner. The external control plane records the admitted upper bound
-        // because Babylon handles never cross the enclave boundary.
-        actualMaterialCount: request.effectiveBudget.runtime.maximumMaterialCount,
-        actualShaderCount: request.effectiveBudget.runtime.maximumShaderCount,
-      },
-      process: this.#processUsage.peakMemoryBytes === 0
-        ? {
-            actualWallTimeMilliseconds: Math.min(
-              Date.now() - this.#startedAt,
-              request.effectiveBudget.process.maximumWallTimeMilliseconds,
-            ),
-            actualCpuTimeMilliseconds:
-              request.effectiveBudget.process.maximumCpuTimeMilliseconds,
-            peakMemoryBytes: request.effectiveBudget.process.maximumMemoryBytes,
-            peakProcessCount: request.effectiveBudget.process.maximumProcessCount,
-          }
-        : {
-            actualWallTimeMilliseconds: Math.min(
-              Date.now() - this.#startedAt,
-              request.effectiveBudget.process.maximumWallTimeMilliseconds,
-            ),
-            actualCpuTimeMilliseconds: Math.min(
-              this.#processUsage.actualCpuTimeMilliseconds,
-              request.effectiveBudget.process.maximumCpuTimeMilliseconds,
-            ),
-            peakMemoryBytes: Math.min(
-              this.#processUsage.peakMemoryBytes,
-              request.effectiveBudget.process.maximumMemoryBytes,
-            ),
-            peakProcessCount: Math.min(
-              this.#processUsage.peakProcessCount,
-              request.effectiveBudget.process.maximumProcessCount,
-            ),
-          },
-      protocol: {
-        actualInboundMessageBytes: Math.min(
-          this.#inboundBytes,
-          request.effectiveBudget.protocol.maximumInboundMessageBytes,
-        ),
-        actualOutboundMessageBytes: Math.min(
-          this.#stdoutBytes,
-          request.effectiveBudget.protocol.maximumOutboundMessageBytes,
-        ),
-        actualReceiptBytes: 0,
-        actualDiagnosticCount: 0,
-        actualLogBytes: Math.min(
-          this.#stderrBytes,
-          request.effectiveBudget.protocol.maximumLogBytes,
+        actualTextureCount: textureAssets.length,
+        actualTextureBytes: textureAssets.reduce(
+          (sum, asset) => sum + asset.artifactSizeBytes,
+          0,
         ),
       },
+      runtime: runtimeUsage,
+      process: controlPlaneUsage.process,
+      protocol: controlPlaneUsage.protocol,
     };
     const receiptBody = (actualReceiptBytes: number) => ({
       kind: "native-isolated-execution-receipt" as const,
@@ -934,23 +904,19 @@ async function main(): Promise<void> {
     ], { maximumOutputBytes: 65_536, timeoutMilliseconds: 20_000 });
     assert.equal(dockerInfo.exitCode, 0);
     const securityOptions = dockerInfo.stdout.trim();
-    const hasSeccomp = securityOptions.includes("seccomp");
-    const hasRootlessOrUserNamespace =
-      securityOptions.includes("rootless") ||
-      securityOptions.includes("userns");
-    assert.equal(hasSeccomp, true);
+    const securityEvidence = evaluateHostedNativeSecurityEvidenceV1({
+      dockerSecurityOptionsJson: securityOptions,
+      containerInvocationArgs: simultaneousRuns[0]!.invocation.args,
+    });
     const report = Object.freeze({
-      ok: true,
+      ok: securityEvidence.hostedProductionDisposition === "eligible",
       runnerImageDigest: imageDigest,
       sandboxPolicyHash: SANDBOX_POLICY_HASH,
       worldPackageRootHash: verified.receipt.worldPackageRootHash,
       dockerServerVersion: dockerVersion.stdout.trim(),
       imageUser: imageUser.stdout.trim(),
       securityOptions,
-      hasSeccomp,
-      hasRootlessOrUserNamespace,
-      hostedProductionDisposition:
-        hasRootlessOrUserNamespace ? "eligible" : "no-go",
+      ...securityEvidence,
       hostileCases,
       simultaneousTenantCanaries: simultaneousRuns.map(({ summary }) => summary),
       sequentialReuseCanaries: sequentialRuns.map(({ summary }) => summary),
@@ -962,6 +928,7 @@ async function main(): Promise<void> {
       `${JSON.stringify(report, null, 2)}\n`,
     );
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+    process.exitCode = hostedNativeIsolationExitCodeV1(securityEvidence);
   } finally {
     await rm(temporaryRoot, { recursive: true, force: true });
   }

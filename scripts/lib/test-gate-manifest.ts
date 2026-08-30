@@ -341,6 +341,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "scripts/scenes/record-scene-authoring-attempt.test.ts", lane: "contract" },
   { path: "scripts/testing/repository-layout.test.ts", lane: "contract" },
   { path: "scripts/testing/workspace-boundary.test.ts", lane: "contract" },
+  { path: "scripts/verification/hosted-native-isolation-evidence.test.ts", lane: "contract" },
   { path: "scripts/verification/locomotion-capability-state.test.ts", lane: "contract" },
   { path: "scripts/verification/verification-browser-launch.test.ts", lane: "contract" },
   { path: "scripts/verification/verify-3c-migration.test.ts", lane: "contract" },

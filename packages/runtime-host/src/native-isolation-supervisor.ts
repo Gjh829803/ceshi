@@ -336,29 +336,25 @@ export class NativeIsolationSupervisorV1 {
         }
         result = providerResult;
       }
-      if (!this.isProviderDisposed) {
-        this.isProviderDisposed = true;
-        await prepared.dispose();
-      }
     } catch {
       cleanupFailed = true;
     }
 
     let evidence: NativeIsolationReceiptEvidenceV1;
+    let evidenceResult: NativeIsolatedExecutionResultV1;
     try {
       evidence = await prepared.collectReceipt();
       if (
         messageBytes(evidence.receipt) >
           this.request.effectiveBudget.protocol.maximumReceiptBytes
       ) throw new Error("receipt too large");
-      const evidenceResult = parseNativeIsolatedExecutionResultV1(
+      evidenceResult = parseNativeIsolatedExecutionResultV1(
         evidence.result,
       );
       if (
         evidenceResult.status === "ready" ||
         evidenceResult.requestId !== this.request.id ||
-        evidenceResult.runtimeSessionId !== this.request.runtimeSessionId ||
-        (cleanupFailed && evidenceResult.status !== "cleanup-failed")
+        evidenceResult.runtimeSessionId !== this.request.runtimeSessionId
       ) throw new Error("invalid terminal evidence result");
       const receipt = verifyNativeIsolatedExecutionReceiptV1({
         request: this.request,
@@ -380,6 +376,14 @@ export class NativeIsolationSupervisorV1 {
       this.terminalReceipt = receipt;
       result = evidenceResult;
     } catch (error) {
+      if (!this.isProviderDisposed) {
+        this.isProviderDisposed = true;
+        try {
+          await prepared.dispose();
+        } catch {
+          cleanupFailed = true;
+        }
+      }
       if (error instanceof NativeIsolationSupervisorErrorV1) throw error;
       this.phase = "quarantined";
       throw new NativeIsolationSupervisorErrorV1(
@@ -389,6 +393,21 @@ export class NativeIsolationSupervisorV1 {
         cleanupFailed
           ? "Native isolation provider cleanup failed without valid quarantine evidence."
           : "Native isolation terminal receipt is missing or invalid.",
+      );
+    }
+    if (!this.isProviderDisposed) {
+      this.isProviderDisposed = true;
+      try {
+        await prepared.dispose();
+      } catch {
+        cleanupFailed = true;
+      }
+    }
+    if (cleanupFailed && evidenceResult.status !== "cleanup-failed") {
+      this.phase = "quarantined";
+      throw new NativeIsolationSupervisorErrorV1(
+        "NATIVE_ISOLATION_CLEANUP_FAILED",
+        "Native isolation provider cleanup failed without valid quarantine evidence.",
       );
     }
     this.terminalResult = result;
