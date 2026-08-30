@@ -343,6 +343,11 @@ export class NativeRuntimeHostV1 {
         maximumWorldSessionCount: 1_024,
         maximumRuntimeActivityRecordCount: 256,
       },
+      initialControlBinding: {
+        controllerEntityId: CONTROLLER_ENTITY_ID,
+        controlledEntityId:
+          initialWorld.worldRuntimeBootstrap.initialControlledEntityId,
+      },
       adapterFactory,
       worldSessionIdFactory: () =>
         `${options.runtimeSessionId}.world.${worldSessionIndex += 1}`,
@@ -354,19 +359,6 @@ export class NativeRuntimeHostV1 {
       initialWorld.worldRuntimeBootstrap.initialControlledEntityId,
     );
     try {
-      const receipt = await host.executeGameplayCommand({
-        schemaVersion: 1,
-        id: `command.native-scene.initial-bind.${host.currentWorldSessionId}`,
-        type: "control.bind",
-        runtimeSessionId: host.runtimeSessionId,
-        worldSessionId: host.currentWorldSessionId,
-        controllerEntityId: CONTROLLER_ENTITY_ID,
-        controlledEntityId: coordinator.controlledEntityId,
-        expectedPossession: { mode: "unbound" },
-      });
-      if (receipt.status !== "committed") {
-        throw new Error(`${receipt.diagnostic.code}: Initial bind rejected.`);
-      }
       coordinator.activateCurrentCanvas();
       return coordinator;
     } catch (error) {
