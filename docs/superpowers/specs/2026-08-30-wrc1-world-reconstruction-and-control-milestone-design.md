@@ -107,6 +107,27 @@ contains one reviewable authority change or independently useful capability, and
 after merge. Downstream work rebases on the latest merged `main`; it does not accumulate a long-lived
 private replacement of current Runtime contracts.
 
+### 4.5 Evidence-seeking decision rule
+
+Implementation must not stall on uncertain engine behavior or reinvent a solved mechanism. The
+decision order is:
+
+1. inspect the current repository owner, installed lockfile version, and installed Babylon/Havok
+   source;
+2. when the answer remains uncertain or one focused attempt does not resolve the issue, search
+   official documentation, maintained mainstream open-source implementations, and relevant primary
+   papers instead of continuing from memory;
+3. record the external pattern, exact version/commit, license/provenance constraint, and the local
+   contract it informs in the task design or review;
+4. reuse an existing project/platform/engine API or mature dependency before adding custom utility
+   code; and
+5. reject any borrowed design that introduces a second state owner, provider leakage, compatibility
+   debt, nondeterministic evidence, or a new public dialect.
+
+External precedent is evidence, not architecture authority. WRC-1's frozen owner map, current-only
+clean break, SDK/Havok responsibility boundary, deterministic transaction, AI-facing naming, and
+scoped verification rules remain decisive when a popular project uses a different tradeoff.
+
 ## 5. Workstream boundaries
 
 WRC-1 contains 33 implementation work packages:

@@ -19,6 +19,11 @@
 - Every production change begins with one behavior-level RED and ends with focused GREEN.
 - Run affected gates once at the work-package boundary; use Cursor Cloud for exact-SHA deep review and Wave A heavy gates.
 - Preserve the alpha local-actions GLB and provenance bytes from `2c74fffd004243b98ed30895a8844e76754ea05f`; do not cherry-pick its TypeScript authority changes wholesale.
+- When one focused attempt cannot settle engine behavior or an architectural choice, inspect the
+  installed Babylon/Havok source, then use official documentation, maintained open-source code, and
+  primary papers; record exact version/commit and license before applying the pattern.
+- External precedent never overrides the WRC-1 owner map, current-only clean break, deterministic
+  transaction, SDK/Havok boundary, or one AI-facing vocabulary.
 
 ---
 
