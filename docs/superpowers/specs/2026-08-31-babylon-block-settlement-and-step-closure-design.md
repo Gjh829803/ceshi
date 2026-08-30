@@ -286,6 +286,8 @@ rotation、scaling、parent、vertices、indices、scene、dispose、visibility�
 Profile `finalize()` 使用一个 acquisition stack。失败时逆序：detach source materials、dispose Profile
 materials、dispose newly created proxy、dispose source Mesh；throwing disposer 不截断后续清理，最终保留第一
 错误。已登记 proxy 仍由 Candidate Scene/Host lease owner兜底销毁，Profile 不创建第二 Runtime disposer。
+Session `dispose()` 只是 Profile-local 未提交资源清理入口；它不取得 Candidate Scene、Engine、Host lease 或
+Runtime handle 的所有权。Host settlement 只消费冻结快照，成功 Contribution/Package 也不持有 Babylon handle。
 
 Host settlement commit 的错误即使被 Module catch 也必须保留。Candidate admission `finally` 关闭并解绑
 recorder。成功 Contribution/Package 不持有 Babylon handle。
@@ -318,8 +320,10 @@ metric box DSL。
 同一 Layout 沿 `-Z` 建单通道：
 
 1. spawn ground top `0m`；
-2. 至少两级 `step`，每级 relative rise `0.25m`、tread `1m`；
-3. elevated platform top `0.25m`；
+2. 至少两个连续 `step` block：首个相对 ground rise `0.25m`，后续同标高块共同形成不少于 `2m`
+   的 elevated tread；
+3. elevated platform top `0.25m`；本 fixture 只证明一个真实 `0.25m` riser，不把同标高 tread 误记为
+   第二次上升；
 4. 末端 `half` blocker base `0.25m`、top `0.75m`，relative rise `0.5m`；
 5. 侧面保留 ledge departure。
 

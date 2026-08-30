@@ -192,14 +192,17 @@ Babylon 原生类型与语义。
 | shape | `sizeMetersXYZ` | 主要用途 |
 |---|---:|---|
 | `full` | `[1, 1, 1]` | 大体量、承重核心、基础地形质量 |
-| `half` | `[1, 0.5, 1]` | 高度过渡、低台、阶梯与坡面采样 |
+| `half` | `[1, 0.5, 1]` | 半米高度体量、低台和阻断体 |
 | `quarter` | `[0.5, 0.5, 1]` | 窄边、长向细节、轮廓修正 |
 | `small` | `[0.5, 0.5, 0.5]` | 暴露角点、小尺度剪影和局部修补 |
+| `step` | `[1, 0.25, 1]` | 真实四分之一米踏步和连续台阶踏面 |
 
 - 世界单位为米，`+Y` 向上，Subject forward 为 `-Z`；
-- Micro Grid 为 `0.5m`，Block center lattice 为 `0.25m`；
+- Occupancy Grid 为 `[0.5, 0.25, 0.5]m XYZ`，Block center lattice 为
+  `[0.25, 0.125, 0.25]m XYZ`；
 - Profile Block 只允许 Y 轴四分之一圈旋转；
-- `full` 用于表达主体质量，`half` 用于过渡，`quarter/small` 只用于可见轮廓和必要细节；
+- `full` 用于表达主体质量，`step` 用于真实台阶，`half` 用于半米体量，`quarter/small` 只用于
+  可见轮廓和必要细节；
 - 不规则细节可使用普通 Babylon Mesh，但不自动进入 Block Occupancy 或 Collider。
 
 这些是 `whitebox.blocks@1` 的创作规则，不是整个 Native Lane 的全局形状限制。未来其他 Native Profile

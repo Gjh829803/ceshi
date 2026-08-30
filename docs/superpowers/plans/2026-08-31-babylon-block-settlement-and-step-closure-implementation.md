@@ -71,7 +71,7 @@
 - Consumes: accepted `origin/main` containing BNA-5; the five exact BWB commits.
 - Produces: one integration branch with both narrow evidence sets and no lost test-census rows.
 
-- [ ] **Step 1: Update the isolated worktree to accepted main**
+- [x] **Step 1: Update the isolated worktree to accepted main**
 
 Run:
 
@@ -83,7 +83,7 @@ git merge-base --is-ancestor 2f46b3c92c175d49b2bf684052be27b6d044658f HEAD
 
 Expected: all exit 0; the last command proves BNA-5 ancestry.
 
-- [ ] **Step 2: Cherry-pick the BWB inputs in dependency order**
+- [x] **Step 2: Cherry-pick the BWB inputs in dependency order**
 
 Run:
 
@@ -94,7 +94,7 @@ git cherry-pick caa4495 858cd45 6b9350a
 
 If `scripts/lib/test-gate-manifest.ts` conflicts, preserve every BWB-3 and BWB-4 row plus all current main rows, keep the array path-sorted, and continue the same cherry-pick. Do not rewrite either implementation yet.
 
-- [ ] **Step 3: Install and run the imported focused evidence**
+- [x] **Step 3: Install and run the imported focused evidence**
 
 Run:
 
@@ -130,7 +130,7 @@ Expected: all exit 0; this records the narrow baseline without claiming integrat
 - Consumes: `BabylonNativeSceneBootstrapV1.nativeSceneProfileRef`.
 - Produces: exactly `whitebox.standard@1` or `whitebox.blocks@1` as authoring Profiles; zero `native-scene-profile/trusted-local@1` values.
 
-- [ ] **Step 1: Add the clean-break RED**
+- [x] **Step 1: Add the clean-break RED**
 
 Add a production-and-fixture census assertion that scans `packages/`, `apps/`, `scripts/`, and tracked generated examples for the literal:
 
@@ -144,7 +144,7 @@ Expected diagnostic code:
 WORLDKIT_UNRELEASED_LEGACY_NATIVE_SCENE_PROFILE_REF
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run:
 
@@ -154,11 +154,11 @@ pnpm exec vitest run scripts/verification/verify-unreleased-clean-break.test.ts
 
 Expected: FAIL and identify the current legacy fixture paths.
 
-- [ ] **Step 3: Replace the old Profile value atomically**
+- [x] **Step 3: Replace the old Profile value atomically**
 
 Use `worldkit://native-scene-profile/whitebox.standard@1` for ordinary Native tests and fixtures. Use `whitebox.blocks@1` only for modules that actually create a Block Profile Session. Do not change `trustProfileRef` or `nativeExecutionTrustProfileRef`.
 
-- [ ] **Step 4: Run focused GREEN**
+- [x] **Step 4: Run focused GREEN**
 
 Run:
 
@@ -177,7 +177,7 @@ pnpm verify:unreleased-clean-break
 
 Expected: all exit 0 and legacy match count 0.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages apps scripts
@@ -201,7 +201,7 @@ git commit -m "refactor(native): separate scene profiles from trust"
 - Consumes: canonical `profileRef`, count, Profile inventory hash and settled visual hash.
 - Produces: required `BabylonNativeProfileSettlementReceiptV1` inside `BabylonNativeSceneContributionV1.profileSettlement`.
 
-- [ ] **Step 1: Write exact-key and hash RED tests**
+- [x] **Step 1: Write exact-key and hash RED tests**
 
 Add fixtures for both branches:
 
@@ -222,7 +222,7 @@ const blocks = {
 
 Assert missing/extra/accessor/symbol/unknown Profile, negative count, malformed hash and wrong branch/Profile pair reject. Assert changing any receipt field changes Contribution Hash.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run:
 
@@ -232,11 +232,11 @@ pnpm exec vitest run packages/runtime-contracts/src/native-scene-contribution.te
 
 Expected: FAIL because `profileSettlement` is not in the current contract.
 
-- [ ] **Step 3: Implement the closed union and parser**
+- [x] **Step 3: Implement the closed union and parser**
 
 Add `profileSettlement` to the required Contribution field list. Snapshot untrusted inputs before semantic reads, canonicalize signed zero only at the existing publication boundary, freeze every returned branch, and keep `schemaVersion: 1` as the sole current contract.
 
-- [ ] **Step 4: Update Package fixtures and run GREEN**
+- [x] **Step 4: Update Package fixtures and run GREEN**
 
 Run:
 
@@ -250,7 +250,7 @@ pnpm typecheck
 
 Expected: all exit 0.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/runtime-contracts packages/world-package apps/playground/public/world-packages
@@ -274,7 +274,7 @@ git commit -m "feat(native): bind profile settlement to contributions"
 - Consumes: active `BabylonNativeSceneBuildContextV1` and one `BabylonNativeProfileSettlementBatchV1`.
 - Produces: Candidate-private retained target fingerprints and a Host-created persistent receipt after recheck.
 
-- [ ] **Step 1: Write recorder RED tests**
+- [x] **Step 1: Write recorder RED tests**
 
 Cover: no active recorder, malformed batch, wrong Profile, duplicate target, foreign/disposed/parented/instanced/thin/physics Mesh, duplicate commit, late commit, reversed target order determinism, and a commit error caught by caller remaining retained.
 
@@ -286,7 +286,7 @@ expect("commitBabylonNativeProfileSettlementV1" in nativeRoot).toBe(false);
 
 The Host-only import must exist, while Module source import of `/host` remains rejected.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run:
 
@@ -300,15 +300,15 @@ pnpm exec vitest run \
 
 Expected: FAIL because the recorder and Host-only export do not exist.
 
-- [ ] **Step 3: Implement Context-bound recorder and fingerprints**
+- [x] **Step 3: Implement Context-bound recorder and fingerprints**
 
 Use a module-private `WeakMap` keyed by exact Context identity. Snapshot exact plain batch data without invoking accessors. Retain Mesh identity plus canonical world positions, indices, parent/instance/thin/physics/scene/disposed/visible/enabled state. Do not include Material or keep handles in the returned receipt.
 
-- [ ] **Step 4: Run GREEN**
+- [x] **Step 4: Run GREEN**
 
 Run the same command as Step 2 plus `pnpm typecheck`. Expected: all exit 0.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/native-babylon scripts/native-scene/source-admission.test.ts
@@ -327,7 +327,7 @@ git commit -m "feat(native): add host-only profile settlement"
 - Consumes: parsed Bootstrap Profile, retained settlement targets, existing retained Collider proxies.
 - Produces: exact Profile receipt, visual drift rejection and blocks-only Scene membership closure before Contribution publish.
 
-- [ ] **Step 1: Write Candidate behavior REDs**
+- [x] **Step 1: Write Candidate behavior REDs**
 
 Add tests for:
 
@@ -348,7 +348,7 @@ WORLDKIT_NATIVE_SCENE_PROFILE_TARGET_DRIFT
 WORLDKIT_NATIVE_SCENE_PROFILE_INVENTORY_MISMATCH
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run:
 
@@ -358,11 +358,11 @@ pnpm exec vitest run packages/native-babylon/src/candidate-admission.test.ts
 
 Expected: new tests FAIL on missing settlement lifecycle.
 
-- [ ] **Step 3: Compose recorder lifecycle with existing admission**
+- [x] **Step 3: Compose recorder lifecycle with existing admission**
 
 Open the recorder only after Bootstrap/module/precondition admission and before `build(context)`. Close registration and recorder in the same `finally`. After build/authority checks, surface retained registration/asset/settlement failure, recheck all visual targets and existing Collider geometry/binding, run the blocks Scene Mesh identity census, create receipt, parse one Contribution, then restore authority probes. Always unbind recorder in outer `finally`.
 
-- [ ] **Step 4: Run focused GREEN**
+- [x] **Step 4: Run focused GREEN**
 
 Run:
 
@@ -376,7 +376,7 @@ pnpm typecheck
 
 Expected: all exit 0.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/native-babylon
@@ -407,13 +407,13 @@ git commit -m "feat(native): settle profile visuals before publish"
 - Consumes: public Block calls plus closed static Collider selections.
 - Produces: one `BabylonNativeBlockFinalizedEpochV1` and one Host-private complete settlement batch.
 
-- [ ] **Step 1: Write single-finalize RED tests**
+- [x] **Step 1: Write single-finalize RED tests**
 
 Assert `finalize(input)` derives Layout and Check once, passes the same `checkedLayout` object identity to package-private visual/collider adapters, includes every block in the target inventory, registers only independent proxies, applies display gap before Host snapshot, rejects missing/extra/duplicate selections, and returns the same frozen result on an equal repeated finalize call while rejecting a different repeated input.
 
 Add order/hash tests for shape, palette, group, transform, gap and Collider join. Add Nth allocation/registration/commit failure tests proving reverse cleanup and continuing after a throwing disposer.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run:
 
@@ -423,11 +423,11 @@ pnpm exec vitest run packages/native-babylon-block-profile/src
 
 Expected: new tests FAIL because visuals/colliders are separate entry points.
 
-- [ ] **Step 3: Implement Profile-private adapters and sole finalize**
+- [x] **Step 3: Implement Profile-private adapters and sole finalize**
 
 Move visual and Collider materialization behind Session. The Collider adapter accepts the exact `BabylonNativeBlockCheckedLayoutV1`, not separate Layout/Check/records. The settlement assembler hashes every Layout block and Collider join, then calls the Host-only commit. Delete root exports for the separate materializers; keep capture reading the finalized epoch only.
 
-- [ ] **Step 4: Run GREEN and boundary checks**
+- [x] **Step 4: Run GREEN and boundary checks**
 
 Run:
 
@@ -439,7 +439,7 @@ pnpm verify:workspace-boundaries
 
 Expected: all exit 0, no new boundary debt, and root API exposes one finalize path.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/native-babylon-block-profile
@@ -463,11 +463,11 @@ git commit -m "feat(block-profile): finalize visuals and colliders together"
 - Consumes: settled Candidate Contribution and existing Native Package inputs.
 - Produces: byte-bound WorldPackage whose Runtime replay recomputes the same settlement receipt before Havok allocation.
 
-- [ ] **Step 1: Write Package/replay REDs**
+- [x] **Step 1: Write Package/replay REDs**
 
 Cover missing/tampered receipt, Profile mismatch between Bootstrap and receipt, changed inventory/visual hash, and a Runtime replay whose visual Mesh drifts while Collider Contribution stays stable. Assert rejection occurs before Havok/Subject/Camera allocation with existing `WORLDKIT_NATIVE_SCENE_RUNTIME_CONTRIBUTION_MISMATCH` semantics.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run:
 
@@ -481,15 +481,15 @@ pnpm exec vitest run \
 
 Expected: new drift fixture FAILS because Profile receipt is not yet part of replay equality.
 
-- [ ] **Step 3: Update package fixtures and exact-match composition**
+- [x] **Step 3: Update package fixtures and exact-match composition**
 
 Reuse the existing whole-Contribution equality; do not add a Block Runtime branch. Ensure every package builder receives the replayed settled Contribution and that generated fixture bytes are rebuilt through existing generators, never hand-edited.
 
-- [ ] **Step 4: Run GREEN**
+- [x] **Step 4: Run GREEN**
 
 Run the Step 2 command plus `pnpm native:cloud-ridge:package:check` and `pnpm typecheck`. Expected: all exit 0.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/world-package packages/runtime-babylon scripts/native-scene apps/playground/public/world-packages
@@ -516,13 +516,13 @@ git commit -m "feat(block-profile): bind settlement to package replay"
 - Consumes: Block shape and world transform.
 - Produces: one current Profile with occupancy grid `[0.5, 0.25, 0.5]`, center lattice `[0.25, 0.125, 0.25]`, and `step: [1, 0.25, 1]`.
 
-- [ ] **Step 1: Write grid/shape RED tests**
+- [x] **Step 1: Write grid/shape RED tests**
 
 Assert a `step` centered at Y `0.125` is valid, occupies one Y layer, stacks without overlap, and creates `structuralStepTransition` metadata. Assert Y values outside the 0.125 lattice reject, X/Z behavior remains unchanged, `half` stays 0.5m, and `displayGapMeters >= 0.25` rejects a `step` before allocation.
 
 Add a source census that rejects the old scalar constants and `structuralHalfMeterTransition` names.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run:
 
@@ -532,11 +532,11 @@ pnpm exec vitest run packages/native-babylon-block-profile/src
 
 Expected: FAIL because `step` and anisotropic constants do not exist.
 
-- [ ] **Step 3: Implement the sole current grid contract**
+- [x] **Step 3: Implement the sole current grid contract**
 
 Replace scalar division/modulo with axis-indexed Babylon-safe calculations. Add `step` to every exhaustive shape map. Validate display gap against the selected shape's minimum dimension. Delete old exports and fixed 0.5m diagnostics; do not add deprecated aliases or Profile V2.
 
-- [ ] **Step 4: Run GREEN and clean-break census**
+- [x] **Step 4: Run GREEN and clean-break census**
 
 Run:
 
@@ -548,7 +548,7 @@ pnpm typecheck
 
 Expected: all exit 0 and old symbol match count 0.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/native-babylon-block-profile scripts/verification
@@ -569,11 +569,11 @@ git commit -m "feat(block-profile): add true quarter-meter steps"
 - Consumes: real Session/finalize, verified Package, BNA-4 Runtime and installed Havok.
 - Produces: one deterministic evidence result for 0.25m pass, 0.5m block, ledge departure, Reset replay and cleanup.
 
-- [ ] **Step 1: Replace the hand-built fixture with the real Session RED**
+- [x] **Step 1: Replace the hand-built fixture with the real Session RED**
 
 Build one Module using `createBabylonNativeBlockProfileSessionV1`, `step` blocks, a relative 0.5m `half` blocker, explicit selections and one finalize. Remove manual records/Layout/Check calls. Assert every proxy is an 8-vertex/12-triangle axis-aligned Box and inventory exactly equals selections; assert no ramp/wedge/hidden collider exists.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run:
 
@@ -583,7 +583,7 @@ pnpm exec vitest run scripts/verification/bwb4-block-collider-runtime.test.ts
 
 Expected: FAIL until fixture/package/runtime inputs use the integrated settlement chain.
 
-- [ ] **Step 3: Add fixed-Tick traversal assertions**
+- [x] **Step 3: Add fixed-Tick traversal assertions**
 
 Assert:
 
@@ -598,7 +598,7 @@ dispose: every native collider Mesh and Engine disposed
 
 Also run two admissions and two Package builds, requiring equal Contribution/hash and Package root/build identity.
 
-- [ ] **Step 4: Run focused GREEN**
+- [x] **Step 4: Run focused GREEN**
 
 Run:
 
@@ -617,7 +617,7 @@ git diff --check
 
 Expected: all exit 0.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages scripts package.json
@@ -639,7 +639,7 @@ git commit -m "test(block-profile): prove true steps through Havok"
 - Consumes: pushed exact product SHA and all focused evidence.
 - Produces: independent GO/NO-GO, accepted PR/main ancestry, truthful BWB-3/4 and BWB-5 prerequisite status.
 
-- [ ] **Step 1: Freeze and push the product SHA**
+- [x] **Step 1: Freeze and push the product SHA**
 
 Run:
 
