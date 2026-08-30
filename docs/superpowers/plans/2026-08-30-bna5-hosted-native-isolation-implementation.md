@@ -215,7 +215,7 @@ git diff --check
 
 Expected: all exit 0; no new package or undeclared import.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/runtime-contracts
@@ -721,7 +721,7 @@ git commit -m "feat(bna5): isolate hosted native browser sessions"
 - Consumes: final Task 1-6 public names and file ownership.
 - Produces: root command `pnpm verify:bna5-clean-break` with stable JSON `{ ok, scannedFileCount, checks }`.
 
-- [ ] **Step 1: Write census RED tests**
+- [x] **Step 1: Write census RED tests**
 
 The verifier must fail on fixtures containing:
 
@@ -741,12 +741,12 @@ It must also verify no public Authoring/WorldPackage Schema contains Docker, Kub
 iframe, origin or provider fields, and no Hosted bridge defines duplicate Gameplay/Camera command
 names.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `pnpm exec vitest run scripts/verification/verify-bna5-clean-break.test.ts`  
 Expected: FAIL until the verifier exists and injected forbidden fixtures are detected.
 
-- [ ] **Step 3: Implement the verifier and delete actual conflicts**
+- [x] **Step 3: Implement the verifier and delete actual conflicts**
 
 Use a stable explicit file census with allowlisted documentation mentions. Delete, do not deprecate
 or alias, any actual experimental conflicting path. Do not flag the official design discussion or

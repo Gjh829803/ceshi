@@ -25,7 +25,16 @@ async function generatedSource(): Promise<string> {
   const source = standaloneCode(ajv, validate)
     .replace(
       /^const (\w+) = require\("([^"]+)"\)\.default;$/gm,
-      'import $1 from "$2";',
+      (_match, binding: string, moduleSpecifier: string) => {
+        const esmModuleSpecifier = moduleSpecifier.endsWith(".js")
+          ? moduleSpecifier
+          : `${moduleSpecifier}.js`;
+        const moduleBinding = `${binding}Module`;
+        return [
+          `import ${moduleBinding} from "${esmModuleSpecifier}";`,
+          `const ${binding} = typeof ${moduleBinding} === "function" ? ${moduleBinding} : ${moduleBinding}.default;`,
+        ].join("\n");
+      },
     )
     .trimEnd();
   if (/\brequire\s*\(/u.test(source)) {

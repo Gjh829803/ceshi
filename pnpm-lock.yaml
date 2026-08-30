@@ -477,6 +477,9 @@ importers:
       '@whitebox-world/control-capture':
         specifier: workspace:*
         version: link:../control-capture
+      '@whitebox-world/gameplay':
+        specifier: workspace:*
+        version: link:../gameplay
       '@whitebox-world/gameplay-contracts':
         specifier: workspace:*
         version: link:../gameplay-contracts
@@ -529,9 +532,6 @@ importers:
       '@whitebox-world/compiler':
         specifier: workspace:*
         version: link:../compiler
-      '@whitebox-world/gameplay':
-        specifier: workspace:*
-        version: link:../gameplay
 
   packages/runtime-contracts:
     dependencies:

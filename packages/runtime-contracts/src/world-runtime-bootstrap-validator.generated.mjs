@@ -6,7 +6,8 @@ const schema32 = {"type":"string","minLength":1};
 const schema34 = {"type":"string","pattern":"^sha256:[a-f0-9]{64}$"};
 const schema36 = {"type":"array","prefixItems":[{"type":"number"},{"type":"number"},{"type":"number"}],"items":false,"minItems":3,"maxItems":3};
 const func1 = Object.prototype.hasOwnProperty;
-import func2 from "ajv/dist/runtime/ucs2length";
+import func2Module from "ajv/dist/runtime/ucs2length.js";
+const func2 = typeof func2Module === "function" ? func2Module : func2Module.default;
 const pattern4 = new RegExp("^sha256:[a-f0-9]{64}$", "u");
 const schema37 = {"type":"object","additionalProperties":false,"required":["mode","cameraEntityId","targetEntityId","cameraRigProfileRef","pitchRadians","distanceMeters","targetHeightMeters","fovDegrees","manualSwitchAllowed"],"properties":{"mode":{"const":"third-person"},"cameraEntityId":{"$ref":"#/$defs/nonEmptyString"},"targetEntityId":{"$ref":"#/$defs/nonEmptyString"},"cameraRigProfileRef":{"$ref":"#/$defs/nonEmptyString"},"pitchRadians":{"type":"number"},"distanceMeters":{"type":"number","exclusiveMinimum":0},"targetHeightMeters":{"type":"number"},"fovDegrees":{"type":"number","exclusiveMinimum":0,"exclusiveMaximum":180},"manualSwitchAllowed":{"type":"boolean"}}};
 

@@ -1,0 +1,129 @@
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+
+import { afterEach, describe, expect, it } from "vitest";
+
+import { scanBna5CleanBreak } from "./verify-bna5-clean-break";
+
+const cleanupPaths: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(cleanupPaths.splice(0).map((target) =>
+    rm(target, { recursive: true, force: true })
+  ));
+});
+
+async function fixture(
+  extraSources: Readonly<Record<string, string>> = {},
+): Promise<string> {
+  const root = await mkdtemp(path.join(os.tmpdir(), "worldkit-bna5-clean-break-"));
+  cleanupPaths.push(root);
+  const sources: Readonly<Record<string, string>> = {
+    "apps/native-scene-playground/src/hosted-runtime-bridge.ts": [
+      'frame.setAttribute("sandbox", "allow-scripts allow-same-origin");',
+      "if (location.origin === runtimeOrigin) throw new Error('cross-origin');",
+      "if (event.origin !== this.input.runtimeOrigin || event.source !== this.input.frame.contentWindow) throw new Error('identity');",
+      "this.input.frame.contentWindow?.postMessage({ kind: 'port' }, this.input.runtimeOrigin);",
+      "parseRuntimeSessionRequestV1(value);",
+    ].join("\n"),
+    "apps/native-scene-playground/src/hosted-runtime-frame.ts": [
+      "if (event.origin !== input.shellOrigin || event.source !== window.parent) throw new Error('identity');",
+      "window.parent.postMessage({ kind: 'ready' }, input.shellOrigin);",
+      "parseRuntimeSessionEventV1(value);",
+    ].join("\n"),
+    "packages/authoring/src/world.schema.json":
+      '{"type":"object","properties":{"seed":{"type":"number"}}}\n',
+    "packages/world-package/src/world.schema.json":
+      '{"type":"object","properties":{"worldId":{"type":"string"}}}\n',
+    "packages/runtime-contracts/src/native-execution-isolation.ts":
+      "export const nativeExecutionTrustProfileRef = 'locked';\n",
+    ...extraSources,
+  };
+  for (const [relativePath, source] of Object.entries(sources)) {
+    const absolutePath = path.join(root, relativePath);
+    await mkdir(path.dirname(absolutePath), { recursive: true });
+    await writeFile(absolutePath, source);
+  }
+  return root;
+}
+
+describe("BNA-5 clean-break verifier", () => {
+  it("accepts one exact Hosted bridge and infrastructure-free public schemas", async () => {
+    const report = await scanBna5CleanBreak(await fixture());
+
+    expect(report).toMatchObject({
+      kind: "worldkit-bna5-clean-break-report",
+      schemaVersion: 1,
+      ok: true,
+      checks: {
+        legacyHostedAliasesAbsent: true,
+        unsafeExecutionApisAbsent: true,
+        exactOriginMessaging: true,
+        publicSchemasInfrastructureFree: true,
+        hostedCommandDialectAbsent: true,
+      },
+      diagnostics: [],
+    });
+  });
+
+  it.each([
+    "sandboxProfileRef",
+    "trustProfileRef",
+    "isTrusted",
+    "hostedNativeFallback",
+    "allowHostedInProcess",
+  ])("rejects legacy Hosted alias %s", async (token) => {
+    const report = await scanBna5CleanBreak(await fixture({
+      "packages/runtime-contracts/src/native-execution-isolation.ts":
+        `export const value = ${JSON.stringify(token)};\n`,
+    }));
+
+    expect(report.ok).toBe(false);
+    expect(report.diagnostics.some(({ code }) =>
+      code === "BNA5_LEGACY_HOSTED_ALIAS")).toBe(true);
+  });
+
+  it.each(["node:vm", "vm.runInContext"])(
+    "rejects unsafe in-process execution API %s",
+    async (token) => {
+      const report = await scanBna5CleanBreak(await fixture({
+        "scripts/native-scene/hosted/runner.ts":
+          `export const value = ${JSON.stringify(token)};\n`,
+      }));
+      expect(report.diagnostics.some(({ code }) =>
+        code === "BNA5_UNSAFE_EXECUTION_API")).toBe(true);
+    },
+  );
+
+  it("rejects wildcard messaging and a same-origin sandbox", async () => {
+    const report = await scanBna5CleanBreak(await fixture({
+      "apps/native-scene-playground/src/hosted-runtime-bridge.ts": [
+        'frame.src = location.origin + "/runtime";',
+        'frame.setAttribute("sandbox", "allow-scripts allow-same-origin");',
+        'window.postMessage({ kind: "ready" }, "*");',
+      ].join("\n"),
+    }));
+    expect(report.diagnostics.map(({ code }) => code)).toEqual(
+      expect.arrayContaining([
+        "BNA5_WILDCARD_MESSAGE_TARGET",
+        "BNA5_SAME_ORIGIN_SANDBOX",
+      ]),
+    );
+  });
+
+  it("rejects infrastructure fields in public schemas and a Hosted command dialect", async () => {
+    const report = await scanBna5CleanBreak(await fixture({
+      "packages/world-package/src/world.schema.json":
+        '{"type":"object","properties":{"containerProvider":{"type":"string"}}}\n',
+      "apps/native-scene-playground/src/hosted-runtime-frame.ts":
+        'const hostedGameplayCommandTypes = ["gameplay-command.execute", "view.camera-preference.set"];\n',
+    }));
+    expect(report.diagnostics.map(({ code }) => code)).toEqual(
+      expect.arrayContaining([
+        "BNA5_PUBLIC_SCHEMA_INFRASTRUCTURE_FIELD",
+        "BNA5_HOSTED_COMMAND_DIALECT",
+      ]),
+    );
+  });
+});
