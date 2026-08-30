@@ -1,6 +1,7 @@
 import type { Sha256HashV1 } from "@whitebox-world/protocol";
 
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
+import { isNil } from "lodash-es";
 
 export interface BabylonNativeInitialCameraV1 {
   readonly mode: "third-person";
@@ -72,7 +73,7 @@ function invalidBootstrap(): never {
 }
 
 function snapshotCanonicalData(input: unknown): unknown {
-  if (input === null || typeof input === "boolean" || typeof input === "string") {
+  if (isNil(input) || typeof input === "boolean" || typeof input === "string") {
     return input;
   }
   if (typeof input === "number") {
@@ -90,7 +91,7 @@ function snapshotCanonicalData(input: unknown): unknown {
       for (let index = 0; index < input.length; index += 1) {
         const descriptor = Reflect.getOwnPropertyDescriptor(input, String(index));
         if (
-          descriptor === undefined ||
+          isNil(descriptor) ||
           !descriptor.enumerable ||
           !("value" in descriptor)
         ) invalidBootstrap();
@@ -101,7 +102,7 @@ function snapshotCanonicalData(input: unknown): unknown {
       return invalidBootstrap();
     }
   }
-  if (typeof input !== "object" || input === null) return invalidBootstrap();
+  if (typeof input !== "object" || isNil(input)) return invalidBootstrap();
   try {
     if (Reflect.getPrototypeOf(input) !== Object.prototype) invalidBootstrap();
     const snapshot: Record<string, unknown> = {};
@@ -109,7 +110,7 @@ function snapshotCanonicalData(input: unknown): unknown {
       const descriptor = Reflect.getOwnPropertyDescriptor(input, key);
       if (
         typeof key !== "string" ||
-        descriptor === undefined ||
+        isNil(descriptor) ||
         !descriptor.enumerable ||
         !("value" in descriptor)
       ) invalidBootstrap();
@@ -125,7 +126,7 @@ function exactRecord(
   input: unknown,
   fields: readonly string[],
 ): Record<string, unknown> {
-  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+  if (typeof input !== "object" || isNil(input) || Array.isArray(input)) {
     return invalidBootstrap();
   }
   const record = input as Record<string, unknown>;

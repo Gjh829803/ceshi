@@ -3,15 +3,16 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
+import {
+  BABYLON_NATIVE_DEEP_ESM_IMPORT_SPECIFIERS_V1,
+} from "./import-profile.js";
+
 const PACKAGE_ROOT = new URL("../", import.meta.url);
 const SOURCE_ROOT = new URL("./", import.meta.url);
 
-const ALLOWED_BABYLON_IMPORTS = new Set([
-  "@babylonjs/core/Buffers/buffer.js",
-  "@babylonjs/core/Maths/math.vector.js",
-  "@babylonjs/core/Meshes/mesh.js",
-  "@babylonjs/core/scene.js",
-]);
+const ALLOWED_BABYLON_IMPORTS: ReadonlySet<string> = new Set(
+  BABYLON_NATIVE_DEEP_ESM_IMPORT_SPECIFIERS_V1,
+);
 
 async function productionSources(): Promise<readonly Readonly<{
   path: string;
@@ -47,6 +48,7 @@ describe("@whitebox-world/native-babylon package boundary", () => {
       "@babylonjs/core": "9.23.0",
       "@whitebox-world/protocol": "workspace:*",
       "@whitebox-world/runtime-contracts": "workspace:*",
+      "lodash-es": "^4.18.1",
     });
   });
 
@@ -68,6 +70,9 @@ describe("@whitebox-world/native-babylon package boundary", () => {
       }
       expect(source, path).not.toMatch(
         /\b(?:window|document|fetch|WebSocket|setTimeout|setInterval)\b|Date\.now\s*\(|performance\.now\s*\(|Math\.random\s*\(/,
+      );
+      expect(source, path).not.toMatch(
+        /===\s*(?:null|undefined)|!==\s*(?:null|undefined)/,
       );
     }
   });

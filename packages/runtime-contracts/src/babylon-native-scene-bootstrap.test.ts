@@ -151,6 +151,19 @@ describe("BabylonNativeSceneBootstrapV1", () => {
     ]) expectInvalid(input);
   });
 
+  it("does not treat explicit null or undefined as a missing-field default", () => {
+    for (const value of [null, undefined]) {
+      expectInvalid({ ...VALID_BOOTSTRAP, seed: value });
+      expectInvalid({
+        ...VALID_BOOTSTRAP,
+        initialCamera: {
+          ...VALID_BOOTSTRAP.initialCamera,
+          distanceMeters: value,
+        },
+      });
+    }
+  });
+
   it("rejects refs outside each exact WorldKit resource family", () => {
     for (const input of [
       { ...VALID_BOOTSTRAP, sceneModuleRef: "app://native/cloud-ridge" },

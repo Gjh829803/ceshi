@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  canonicalBabylonNativeSceneContributionBytesV1,
   createBabylonNativeStaticColliderContributionV1,
   hashBabylonNativeSceneContributionV1,
   parseBabylonNativeSceneContributionV1,
@@ -57,6 +58,9 @@ describe("BabylonNativeSceneContributionV1", () => {
     );
     expect(hashBabylonNativeSceneContributionV1(input)).toBe(
       hashBabylonNativeSceneContributionV1(contribution),
+    );
+    expect(canonicalBabylonNativeSceneContributionBytesV1(input)).toEqual(
+      canonicalBabylonNativeSceneContributionBytesV1(contribution),
     );
   });
 

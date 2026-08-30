@@ -1,4 +1,9 @@
-import { sha256CanonicalJson } from "@whitebox-world/protocol";
+import {
+  canonicalJsonBytes,
+  sha256Bytes,
+  sha256CanonicalJson,
+} from "@whitebox-world/protocol";
+import { isNil } from "lodash-es";
 
 import type { BabylonNativeTraversalBindingV1 } from "./module.js";
 
@@ -115,7 +120,7 @@ function exactRecord(
   input: unknown,
   fields: readonly string[],
 ): Record<string, unknown> {
-  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+  if (typeof input !== "object" || isNil(input) || Array.isArray(input)) {
     return invalidContribution();
   }
   const record = input as Record<string, unknown>;
@@ -129,7 +134,7 @@ function exactRecord(
 }
 
 function snapshotCanonicalData(input: unknown): unknown {
-  if (input === null || typeof input === "boolean" || typeof input === "string") {
+  if (isNil(input) || typeof input === "boolean" || typeof input === "string") {
     return input;
   }
   if (typeof input === "number") return parsedCanonicalNumber(input);
@@ -144,7 +149,7 @@ function snapshotCanonicalData(input: unknown): unknown {
       for (let index = 0; index < input.length; index += 1) {
         const descriptor = Reflect.getOwnPropertyDescriptor(input, String(index));
         if (
-          descriptor === undefined ||
+          isNil(descriptor) ||
           !descriptor.enumerable ||
           !("value" in descriptor)
         ) invalidContribution();
@@ -155,7 +160,7 @@ function snapshotCanonicalData(input: unknown): unknown {
       return invalidContribution();
     }
   }
-  if (typeof input !== "object" || input === null) return invalidContribution();
+  if (typeof input !== "object" || isNil(input)) return invalidContribution();
   try {
     if (Reflect.getPrototypeOf(input) !== Object.prototype) invalidContribution();
     const output: Record<string, unknown> = {};
@@ -163,7 +168,7 @@ function snapshotCanonicalData(input: unknown): unknown {
       const descriptor = Reflect.getOwnPropertyDescriptor(input, key);
       if (
         typeof key !== "string" ||
-        descriptor === undefined ||
+        isNil(descriptor) ||
         !descriptor.enumerable ||
         !("value" in descriptor)
       ) invalidContribution();
@@ -444,7 +449,13 @@ export function parseBabylonNativeSceneContributionV1(
 export function hashBabylonNativeSceneContributionV1(
   input: unknown,
 ): `sha256:${string}` {
-  return sha256CanonicalJson(
-    parseBabylonNativeSceneContributionV1(input),
+  return sha256Bytes(
+    canonicalBabylonNativeSceneContributionBytesV1(input),
   ) as `sha256:${string}`;
+}
+
+export function canonicalBabylonNativeSceneContributionBytesV1(
+  input: unknown,
+): Uint8Array {
+  return canonicalJsonBytes(parseBabylonNativeSceneContributionV1(input));
 }

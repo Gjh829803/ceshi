@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 
 import { describe, expect, it } from "vitest";
+import { defineBabylonNativeScene } from "@whitebox-world/native-babylon";
 
 import {
   CLOUD_RIDGE_GAMEPLAY_BOOTSTRAP_V1,
@@ -12,6 +13,10 @@ const nativeBootstrapSource = await readFile(
   "utf8",
 );
 const mainSource = await readFile(new URL("./main.ts", import.meta.url), "utf8");
+const cloudRidgeSource = await readFile(
+  new URL("./cloud-ridge-scene.ts", import.meta.url),
+  "utf8",
+);
 
 describe("Cloud Ridge Native Scene Source clean break", () => {
   it("does not load, forge, hash, or pass a Canonical Execution Plan", () => {
@@ -40,5 +45,28 @@ describe("Cloud Ridge Native Scene Source clean break", () => {
     expect(CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1).not.toHaveProperty("terrain");
     expect(CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1).not.toHaveProperty("objects");
     expect(CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1).not.toHaveProperty("traversal");
+  });
+
+  it("keeps one default pure Module and deletes Controller/debug ownership", async () => {
+    const namespace = await import("./cloud-ridge-scene.js");
+    expect(Reflect.ownKeys(namespace)).toEqual([
+      "default",
+      Symbol.toStringTag,
+    ]);
+    expect(defineBabylonNativeScene(namespace.default)).toStrictEqual(
+      namespace.default,
+    );
+    expect(Object.isFrozen(namespace.default)).toBe(true);
+
+    for (const removed of [
+      ["CloudRidge", "NativeSceneControllerV1"].join(""),
+      ["createCloudRidge", "NativeSceneControllerV1"].join(""),
+      ["collisionDebug", "Snapshot"].join(""),
+      ["setCollisionDebug", "Visible"].join(""),
+      ["collision", "Meshes"].join(""),
+    ]) {
+      expect(cloudRidgeSource).not.toContain(removed);
+      expect(mainSource).not.toContain(removed);
+    }
   });
 });

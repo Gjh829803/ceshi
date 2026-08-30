@@ -1317,6 +1317,7 @@ describe("BabylonWorldRuntime", () => {
       createValidAuthoringSpecV4(),
     );
     let buildCount = 0;
+    const randomValues: number[] = [];
     let moduleOwnedPlatform: Mesh | undefined;
     const runtime = await createRuntime(executionPlan, {
       nativeScene: {
@@ -1330,6 +1331,11 @@ describe("BabylonWorldRuntime", () => {
           id: "native-runtime-test",
           build(context) {
             buildCount += 1;
+            randomValues.push(
+              context.random.nextRatio(),
+              context.random.nextRatio(),
+              context.random.nextRatio(),
+            );
             const platform = MeshBuilder.CreateBox(
               "native-foreground-platform",
               { width: 12, height: 1, depth: 16 },
@@ -1383,6 +1389,11 @@ describe("BabylonWorldRuntime", () => {
     try {
       const scene = (runtime as unknown as { scene: Scene }).scene;
       expect(buildCount).toBe(1);
+      expect(randomValues).toEqual([
+        0.2519576223567128,
+        0.9974212802480906,
+        0.8925729258917272,
+      ]);
       expect(scene.getMeshByName(executionPlan.terrain.entityId)).toBeNull();
       for (const object of executionPlan.objects) {
         expect(scene.getMeshByName(object.entityId)).toBeNull();
@@ -1416,6 +1427,48 @@ describe("BabylonWorldRuntime", () => {
     } finally {
       await runtime.dispose();
     }
+  }, 15_000);
+
+  it("fails authority mutation before Havok, camera, or subjects and disposes the Candidate", async () => {
+    const executionPlan = createFlatPackageExecutionPlan();
+    const initializationStages: string[] = [];
+    let candidateEngine: NullEngine | undefined;
+
+    await expect(createRuntime(executionPlan, {
+      engineFactory: () => {
+        candidateEngine = new NullEngine({
+          renderWidth: 640,
+          renderHeight: 360,
+          textureSize: 512,
+          deterministicLockstep: true,
+          lockstepMaxSteps: 4,
+        });
+        return candidateEngine;
+      },
+      onInitializationStage: (stage) => initializationStages.push(stage),
+      nativeScene: {
+        bootstrap: createNativeRuntimeBootstrap(
+          executionPlan,
+          "player-spawn",
+        ),
+        assets: EMPTY_NATIVE_ASSET_RESOLVER,
+        module: {
+          kind: "babylon-native-scene-module",
+          id: "native-authority-mutation-test",
+          build(context) {
+            context.scene.activeCamera = context.scene.activeCamera;
+          },
+        },
+        budget: {
+          maximumStaticColliderCount: 0,
+          maximumStaticColliderVertexCount: 0,
+          maximumStaticColliderTriangleCount: 0,
+        },
+      },
+    })).rejects.toThrow("WORLDKIT_NATIVE_SCENE_AUTHORITY_MUTATION_FORBIDDEN");
+
+    expect(initializationStages).toEqual(["engine", "scene", "native-scene"]);
+    expect(candidateEngine?.isDisposed).toBe(true);
   }, 15_000);
 
   it("rejects a Native spawn marker that does not match the bootstrap binding", async () => {

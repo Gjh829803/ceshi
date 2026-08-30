@@ -1,3 +1,5 @@
+import { isNil } from "lodash-es";
+
 export type NativeSceneDiagnosticMeasurementV1 =
   | Readonly<{ kind: "none" }>
   | Readonly<{
@@ -139,7 +141,7 @@ function snapshotCanonicalData(
   input: unknown,
   invalid: () => never,
 ): unknown {
-  if (input === null || typeof input === "boolean" || typeof input === "string") {
+  if (isNil(input) || typeof input === "boolean" || typeof input === "string") {
     return input;
   }
   if (typeof input === "number") {
@@ -157,7 +159,7 @@ function snapshotCanonicalData(
       for (let index = 0; index < input.length; index += 1) {
         const descriptor = Reflect.getOwnPropertyDescriptor(input, String(index));
         if (
-          descriptor === undefined ||
+          isNil(descriptor) ||
           !descriptor.enumerable ||
           !("value" in descriptor)
         ) invalid();
@@ -168,7 +170,7 @@ function snapshotCanonicalData(
       return invalid();
     }
   }
-  if (typeof input !== "object" || input === null) return invalid();
+  if (typeof input !== "object" || isNil(input)) return invalid();
   try {
     if (Reflect.getPrototypeOf(input) !== Object.prototype) invalid();
     const output: Record<string, unknown> = {};
@@ -176,7 +178,7 @@ function snapshotCanonicalData(
       const descriptor = Reflect.getOwnPropertyDescriptor(input, key);
       if (
         typeof key !== "string" ||
-        descriptor === undefined ||
+        isNil(descriptor) ||
         !descriptor.enumerable ||
         !("value" in descriptor)
       ) invalid();
@@ -193,7 +195,7 @@ function exactRecord(
   fields: readonly string[],
   invalid: () => never,
 ): Record<string, unknown> {
-  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+  if (typeof input !== "object" || isNil(input) || Array.isArray(input)) {
     return invalid();
   }
   const record = input as Record<string, unknown>;

@@ -7,18 +7,19 @@ import { parseBabylonNativeSceneBootstrapV1 } from
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
-  createBabylonNativeHostRandomV1,
   defineBabylonNativeScene,
+  parseNativeSceneDiagnosticV1,
   type BabylonNativeLockedAssetV1,
   type BabylonNativeLockedAssetResolverV1,
   type BabylonNativeSceneBuildContextV1,
   type BabylonNativeSceneModuleV1,
 } from "./index.js";
 import {
-  buildBabylonNativeSceneCandidateV1,
+  admitBabylonNativeSceneCandidateV1,
+  createBabylonNativeLockedAssetResolutionFailureV1,
   hashBabylonNativeSceneContributionV1,
   type BabylonNativeSceneAdmissionBudgetV1,
-  type BuildBabylonNativeSceneCandidateResultV1,
+  type BabylonNativeSceneCandidateAdmissionResultV1,
 } from "./host.js";
 
 const retainedEngines: NullEngine[] = [];
@@ -83,11 +84,10 @@ function buildCandidate(
   module: BabylonNativeSceneModuleV1,
   budget: BabylonNativeSceneAdmissionBudgetV1 = DEFAULT_BUDGET,
 ) {
-  return buildBabylonNativeSceneCandidateV1({
-    scene,
+  return admitBabylonNativeSceneCandidateV1({
+    candidate: { scene, engine: scene.getEngine() },
     bootstrap: BOOTSTRAP,
     module,
-    random: createBabylonNativeHostRandomV1(BOOTSTRAP.seed),
     assets: ASSETS,
     budget,
   });
@@ -102,39 +102,37 @@ function registerSpawn(context: BabylonNativeSceneBuildContextV1): void {
 }
 
 function rejectedCode(
-  result: BuildBabylonNativeSceneCandidateResultV1,
+  result: BabylonNativeSceneCandidateAdmissionResultV1,
 ): string | undefined {
   return result.outcome === "passed"
     ? undefined
-    : result.checkResult.diagnostics.find(({ severity }) => severity === "error")?.code;
+    : result.diagnostics.find(({ severity }) => severity === "error")?.code;
 }
 
 function rejectedStage(
-  result: BuildBabylonNativeSceneCandidateResultV1,
+  result: BabylonNativeSceneCandidateAdmissionResultV1,
 ): string | undefined {
   return result.outcome === "passed"
     ? undefined
-    : result.checkResult.diagnostics.find(({ severity }) => severity === "error")?.stage;
+    : result.diagnostics.find(({ severity }) => severity === "error")?.stage;
 }
 
 afterEach(() => {
   while (retainedEngines.length > 0) retainedEngines.pop()?.dispose();
 });
 
-describe("buildBabylonNativeSceneCandidateV1", () => {
+describe("admitBabylonNativeSceneCandidateV1", () => {
   it("reports an invalid Bootstrap against unresolved-world", async () => {
     const scene = createScene();
-    const result = await buildBabylonNativeSceneCandidateV1({
-      scene,
+    const result = await admitBabylonNativeSceneCandidateV1({
+      candidate: { scene, engine: scene.getEngine() },
       bootstrap: { ...BOOTSTRAP, geometry: [] } as never,
       module: moduleWithBuild(() => undefined),
-      random: createBabylonNativeHostRandomV1(BOOTSTRAP.seed),
       assets: ASSETS,
       budget: DEFAULT_BUDGET,
     });
 
     expect(result.outcome).toBe("rejected");
-    expect(result.checkResult.checkedInput).toEqual({ kind: "unresolved-world" });
     expect(rejectedCode(result)).toBe("WORLDKIT_NATIVE_SCENE_BOOTSTRAP_INVALID");
   });
 
@@ -165,11 +163,11 @@ describe("buildBabylonNativeSceneCandidateV1", () => {
     _case,
     module,
   ) => {
-    const result = await buildBabylonNativeSceneCandidateV1({
-      scene: createScene(),
+    const scene = createScene();
+    const result = await admitBabylonNativeSceneCandidateV1({
+      candidate: { scene, engine: scene.getEngine() },
       bootstrap: BOOTSTRAP,
       module: module as never,
-      random: createBabylonNativeHostRandomV1(BOOTSTRAP.seed),
       assets: ASSETS,
       budget: DEFAULT_BUDGET,
     });
@@ -212,8 +210,9 @@ describe("buildBabylonNativeSceneCandidateV1", () => {
       },
     });
     let secondResolution: Uint8Array | undefined;
-    const result = await buildBabylonNativeSceneCandidateV1({
-      scene: createScene(),
+    const scene = createScene();
+    const result = await admitBabylonNativeSceneCandidateV1({
+      candidate: { scene, engine: scene.getEngine() },
       bootstrap: BOOTSTRAP,
       module: moduleWithBuild(async (context) => {
         const first = await context.assets.resolve({
@@ -226,7 +225,6 @@ describe("buildBabylonNativeSceneCandidateV1", () => {
         secondResolution = second.bytes;
         registerSpawn(context);
       }),
-      random: createBabylonNativeHostRandomV1(BOOTSTRAP.seed),
       assets,
       budget: DEFAULT_BUDGET,
     });
@@ -234,6 +232,141 @@ describe("buildBabylonNativeSceneCandidateV1", () => {
     expect(result.outcome).toBe("passed");
     expect([...sharedBytes]).toEqual([1, 2, 3, 4]);
     expect([...(secondResolution ?? [])]).toEqual([1, 2, 3, 4]);
+  });
+
+  it("derives a fresh deterministic LCG from the Bootstrap seed", async () => {
+    const observations: number[][] = [];
+    for (let run = 0; run < 2; run += 1) {
+      const scene = createScene();
+      const values: number[] = [];
+      const result = await buildCandidate(scene, moduleWithBuild((context) => {
+        values.push(
+          context.random.nextRatio(),
+          context.random.nextRatio(),
+          context.random.nextRatio(),
+        );
+        registerSpawn(context);
+      }));
+      expect(result.outcome).toBe("passed");
+      observations.push(values);
+    }
+
+    expect(observations).toEqual([
+      [0.06558824330568314, 0.5067563650663942, 0.8746301126666367],
+      [0.06558824330568314, 0.5067563650663942, 0.8746301126666367],
+    ]);
+  });
+
+  it("retains a locked-asset failure caught by Module code", async () => {
+    const assets: BabylonNativeLockedAssetResolverV1 = Object.freeze({
+      async resolve() {
+        throw new Error("private resolver detail must not escape");
+      },
+    });
+    const scene = createScene();
+    const result = await admitBabylonNativeSceneCandidateV1({
+      candidate: { scene, engine: scene.getEngine() },
+      bootstrap: BOOTSTRAP,
+      module: moduleWithBuild(async (context) => {
+        try {
+          await context.assets.resolve({
+            assetResourceRef: "worldkit://asset/unavailable@1",
+          });
+        } catch {
+          // A Module cannot erase a trusted Host asset-resolution failure.
+        }
+        registerSpawn(context);
+      }),
+      assets,
+      budget: DEFAULT_BUDGET,
+    });
+
+    expect(rejectedCode(result)).toBe(
+      "WORLDKIT_NATIVE_SCENE_ASSET_LOCK_UNAVAILABLE",
+    );
+    expect(rejectedStage(result)).toBe("capability");
+    if (result.outcome === "rejected") {
+      expect(JSON.stringify(result.diagnostics)).not.toContain(
+        "private resolver detail",
+      );
+    }
+  });
+
+  it("retains a malformed locked-asset request without invoking the resolver", async () => {
+    let resolverCalled = false;
+    const assets: BabylonNativeLockedAssetResolverV1 = Object.freeze({
+      async resolve() {
+        resolverCalled = true;
+        throw new Error("must not run");
+      },
+    });
+    const scene = createScene();
+    const result = await admitBabylonNativeSceneCandidateV1({
+      candidate: { scene, engine: scene.getEngine() },
+      bootstrap: BOOTSTRAP,
+      module: moduleWithBuild(async (context) => {
+        try {
+          await context.assets.resolve({ assetResourceRef: "legacy-path" });
+        } catch {
+          // Malformed requests remain a Host-owned rejection if swallowed.
+        }
+        registerSpawn(context);
+      }),
+      assets,
+      budget: DEFAULT_BUDGET,
+    });
+
+    expect(resolverCalled).toBe(false);
+    expect(rejectedCode(result)).toBe(
+      "WORLDKIT_NATIVE_SCENE_ASSET_LOCK_UNAVAILABLE",
+    );
+  });
+
+  it("preserves a trusted locked-asset diagnostic exactly", async () => {
+    const trustedDiagnostic = parseNativeSceneDiagnosticV1({
+      kind: "native-scene-diagnostic",
+      schemaVersion: 1,
+      id: "cloud-ridge-native.asset-lock-rejected",
+      severity: "error",
+      stage: "capability",
+      code: "WORLDKIT_NATIVE_SCENE_ASSET_LOCK_REJECTED",
+      location: {
+        kind: "asset-resource",
+        assetResourceRef: "worldkit://asset/rejected@1",
+      },
+      measurement: { kind: "none" },
+      message: "The requested asset lock was rejected.",
+      repairHint: "Select an admitted Package asset.",
+    });
+    const assets: BabylonNativeLockedAssetResolverV1 = Object.freeze({
+      async resolve() {
+        throw createBabylonNativeLockedAssetResolutionFailureV1(
+          trustedDiagnostic,
+        );
+      },
+    });
+    const scene = createScene();
+    const result = await admitBabylonNativeSceneCandidateV1({
+      candidate: { scene, engine: scene.getEngine() },
+      bootstrap: BOOTSTRAP,
+      module: moduleWithBuild(async (context) => {
+        try {
+          await context.assets.resolve({
+            assetResourceRef: "worldkit://asset/rejected@1",
+          });
+        } catch {
+          // A trusted resolver diagnostic remains authoritative if swallowed.
+        }
+        registerSpawn(context);
+      }),
+      assets,
+      budget: DEFAULT_BUDGET,
+    });
+
+    expect(result).toEqual({
+      outcome: "rejected",
+      diagnostics: [trustedDiagnostic],
+    });
   });
 
   it("freezes transformed indexed geometry without Babylon handles", async () => {
@@ -274,7 +407,6 @@ describe("buildBabylonNativeSceneCandidateV1", () => {
     expect(result.contributionHash).toBe(
       hashBabylonNativeSceneContributionV1(result.contribution),
     );
-    expect(result.checkResult.outcome).toBe("passed");
   });
 
   it.each([
@@ -321,18 +453,28 @@ describe("buildBabylonNativeSceneCandidateV1", () => {
     const scene = createScene();
     const foreignScene = createScene();
     const cases = [
-      ["foreign", MeshBuilder.CreateBox("foreign", { size: 2 }, foreignScene), "WORLDKIT_NATIVE_SCENE_COLLIDER_SCENE_MISMATCH"],
-      ["disposed", MeshBuilder.CreateBox("disposed", { size: 2 }, scene), "WORLDKIT_NATIVE_SCENE_COLLIDER_DISPOSED"],
-      ["thin", MeshBuilder.CreateBox("thin", { size: 2 }, scene), "WORLDKIT_NATIVE_SCENE_COLLIDER_PROVIDER_STATE_INVALID"],
-      ["physics", MeshBuilder.CreateBox("physics", { size: 2 }, scene), "WORLDKIT_NATIVE_SCENE_COLLIDER_PROVIDER_STATE_INVALID"],
+      ["foreign", () => MeshBuilder.CreateBox("foreign", { size: 2 }, foreignScene), "WORLDKIT_NATIVE_SCENE_COLLIDER_SCENE_MISMATCH"],
+      ["disposed", () => {
+        const mesh = MeshBuilder.CreateBox("disposed", { size: 2 }, scene);
+        mesh.dispose();
+        return mesh;
+      }, "WORLDKIT_NATIVE_SCENE_COLLIDER_DISPOSED"],
+      ["thin", () => {
+        const mesh = MeshBuilder.CreateBox("thin", { size: 2 }, scene);
+        Object.defineProperty(mesh, "hasThinInstances", { configurable: true, value: true });
+        return mesh;
+      }, "WORLDKIT_NATIVE_SCENE_COLLIDER_PROVIDER_STATE_INVALID"],
+      ["physics", () => {
+        const mesh = MeshBuilder.CreateBox("physics", { size: 2 }, scene);
+        Object.defineProperty(mesh, "physicsBody", { configurable: true, value: {} });
+        return mesh;
+      }, "WORLDKIT_NATIVE_SCENE_COLLIDER_PROVIDER_STATE_INVALID"],
     ] as const;
-    cases[1][1].dispose();
-    Object.defineProperty(cases[2][1], "hasThinInstances", { configurable: true, value: true });
-    Object.defineProperty(cases[3][1], "physicsBody", { configurable: true, value: {} });
 
-    for (const [id, mesh, code] of cases) {
+    for (const [id, createMesh, code] of cases) {
       const result = await buildCandidate(scene, moduleWithBuild((context) => {
         registerSpawn(context);
+        const mesh = createMesh();
         context.registration.registerStaticCollider({ id, mesh, traversalBinding: { kind: "not-traversable" } });
       }));
       expect(rejectedCode(result), id).toBe(code);
@@ -406,6 +548,51 @@ describe("buildBabylonNativeSceneCandidateV1", () => {
     })).toThrow("WORLDKIT_NATIVE_SCENE_REGISTRATION_CLOSED");
   });
 
+  const invalidBuildResults: readonly Readonly<[
+    string,
+    () => unknown | Promise<unknown>,
+  ]>[] = [
+    ["sync null", () => null],
+    ["sync object", () => ({ legacyController: true })],
+    ["sync callback", () => () => undefined],
+    ["sync controller", () => ({ update() {} })],
+    ["sync disposer", () => ({ dispose() {} })],
+    ["async object", async () => ({ legacyController: true })],
+    ["async disposer", async () => ({ dispose() {} })],
+  ];
+
+  it.each(invalidBuildResults)("rejects a non-undefined Build result (%s)", async (_label, buildResult) => {
+    const scene = createScene();
+    const result = await buildCandidate(
+      scene,
+      moduleWithBuild(((context: BabylonNativeSceneBuildContextV1) => {
+        registerSpawn(context);
+        return buildResult();
+      }) as never),
+    );
+
+    expect(rejectedCode(result)).toBe(
+      "WORLDKIT_NATIVE_SCENE_BUILD_RETURN_INVALID",
+    );
+    expect(rejectedStage(result)).toBe("build");
+  });
+
+  it("rejects a returned Babylon Mesh handle", async () => {
+    const scene = createScene();
+    const returnedMesh = MeshBuilder.CreateBox("returned", { size: 1 }, scene);
+    const result = await buildCandidate(
+      scene,
+      moduleWithBuild(((context: BabylonNativeSceneBuildContextV1) => {
+        registerSpawn(context);
+        return returnedMesh;
+      }) as never),
+    );
+
+    expect(rejectedCode(result)).toBe(
+      "WORLDKIT_NATIVE_SCENE_BUILD_RETURN_INVALID",
+    );
+  });
+
   it("retains a Host registration failure caught by Module code", async () => {
     const scene = createScene();
     const collider = MeshBuilder.CreateBox("caught", { size: 2 }, scene);
@@ -425,6 +612,60 @@ describe("buildBabylonNativeSceneCandidateV1", () => {
 
     expect(rejectedCode(result)).toBe(
       "WORLDKIT_NATIVE_SCENE_COLLIDER_MATERIAL_INVALID",
+    );
+  });
+
+  it("keeps the first registration failure when Module rethrows another value", async () => {
+    const scene = createScene();
+    const collider = MeshBuilder.CreateBox("first-failure", { size: 2 }, scene);
+    const result = await buildCandidate(scene, moduleWithBuild((context) => {
+      registerSpawn(context);
+      try {
+        context.registration.registerStaticCollider({
+          id: "first-failure",
+          mesh: collider,
+          traversalBinding: { kind: "not-traversable" },
+          restitutionRatio: 4,
+        });
+      } catch {
+        throw new Error("secondary Module failure");
+      }
+    }));
+
+    expect(rejectedCode(result)).toBe(
+      "WORLDKIT_NATIVE_SCENE_COLLIDER_MATERIAL_INVALID",
+    );
+  });
+
+  it("does not treat an explicit null collider ratio as omitted", async () => {
+    const scene = createScene();
+    const collider = MeshBuilder.CreateBox("null-ratio", { size: 2 }, scene);
+    const result = await buildCandidate(scene, moduleWithBuild((context) => {
+      registerSpawn(context);
+      context.registration.registerStaticCollider({
+        id: "null-ratio",
+        mesh: collider,
+        traversalBinding: { kind: "not-traversable" },
+        frictionRatio: null as never,
+      });
+    }));
+
+    expect(rejectedCode(result)).toBe(
+      "WORLDKIT_NATIVE_SCENE_COLLIDER_MATERIAL_INVALID",
+    );
+  });
+
+  it("retains a Module failure even when the thrown value is undefined", async () => {
+    const result = await buildCandidate(
+      createScene(),
+      moduleWithBuild((context) => {
+        registerSpawn(context);
+        throw undefined;
+      }),
+    );
+
+    expect(rejectedCode(result)).toBe(
+      "WORLDKIT_NATIVE_SCENE_MODULE_BUILD_FAILED",
     );
   });
 

@@ -12,7 +12,6 @@ import { Scene } from "@babylonjs/core/scene.js";
 import type {
   BabylonNativeHostRandomV1,
   BabylonNativeSceneBuildContextV1,
-  BabylonNativeSceneModuleV1,
 } from "@whitebox-world/native-babylon";
 import { defineBabylonNativeScene } from "@whitebox-world/native-babylon";
 
@@ -28,7 +27,7 @@ interface SceneMaterials {
   readonly cloudBright: StandardMaterial;
   readonly waterfall: StandardMaterial;
   readonly sun: StandardMaterial;
-  readonly collisionDebug: StandardMaterial;
+  readonly collisionProxy: StandardMaterial;
 }
 
 // Preserved c312871 geometry values. These are not stream draws: both
@@ -118,8 +117,8 @@ function createMaterials(scene: Scene): SceneMaterials {
       new Color3(1, 0.86, 0.56),
       { emissive: new Color3(1, 0.66, 0.23), disableLighting: true },
     ),
-    collisionDebug: standardMaterial(
-      "native.material.collision-debug",
+    collisionProxy: standardMaterial(
+      "native.material.collision-proxy",
       scene,
       new Color3(1, 0.08, 0.55),
       { emissive: new Color3(0.5, 0.02, 0.2), alpha: 0.34, disableLighting: true },
@@ -189,23 +188,25 @@ function createRampPrism(
 function createCollisionProxies(
   context: BabylonNativeSceneBuildContextV1,
   materials: SceneMaterials,
-): readonly Mesh[] {
+): void {
   const foreground = MeshBuilder.CreateBox(
     "collision-foreground-platform",
     { width: 40, height: 3, depth: 29 },
     context.scene,
   );
   foreground.position.set(0, -1.5, 20.5);
-  foreground.material = materials.collisionDebug;
+  foreground.material = materials.collisionProxy;
   foreground.isVisible = false;
+  foreground.visibility = 0;
   foreground.isPickable = false;
 
   const path = createRampPrism(
     "collision-primary-path",
     context.scene,
-    materials.collisionDebug,
+    materials.collisionProxy,
   );
   path.isVisible = false;
+  path.visibility = 0;
   path.isPickable = false;
 
   const gatePlatform = MeshBuilder.CreateBox(
@@ -214,8 +215,9 @@ function createCollisionProxies(
     context.scene,
   );
   gatePlatform.position.set(0, 11.7, -40.5);
-  gatePlatform.material = materials.collisionDebug;
+  gatePlatform.material = materials.collisionProxy;
   gatePlatform.isVisible = false;
+  gatePlatform.visibility = 0;
   gatePlatform.isPickable = false;
 
   context.registration.registerStaticCollider({
@@ -254,7 +256,6 @@ function createCollisionProxies(
     },
     frictionRatio: 0.92,
   });
-  return Object.freeze([foreground, path, gatePlatform]);
 }
 
 function createRockSlabs(
@@ -661,14 +662,6 @@ function createAtmosphere(
   scene.fogColor = new Color3(0.48, 0.58, 0.60);
   scene.fogDensity = 0.0052;
 
-  scene.imageProcessingConfiguration.contrast = 1.18;
-  scene.imageProcessingConfiguration.exposure = 1.12;
-  scene.imageProcessingConfiguration.toneMappingEnabled = true;
-  scene.imageProcessingConfiguration.vignetteEnabled = true;
-  scene.imageProcessingConfiguration.vignetteWeight = 1.4;
-  scene.imageProcessingConfiguration.vignetteStretch = 0.2;
-  scene.imageProcessingConfiguration.vignetteColor = new Color4(0.08, 0.11, 0.12, 1);
-
   const ambient = new HemisphericLight(
     "native-light-sky",
     new Vector3(0.1, 1, 0.15),
@@ -761,63 +754,24 @@ function createAtmosphere(
   );
 }
 
-export interface CloudRidgeNativeSceneControllerV1 {
-  readonly module: BabylonNativeSceneModuleV1;
-  setCollisionDebugVisible(visible: boolean): void;
-  collisionDebugSnapshot(): Readonly<{
-    visible: boolean;
-    visibleMeshCount: number;
-  }>;
-}
+export default defineBabylonNativeScene({
+  kind: "babylon-native-scene-module",
+  id: "cloud-ridge-native-spike",
+  build(context: BabylonNativeSceneBuildContextV1): void {
+    const scene = context.scene;
+    const random = context.random;
+    const materials = createMaterials(scene);
 
-export function createCloudRidgeNativeSceneControllerV1():
-  CloudRidgeNativeSceneControllerV1 {
-  let collisionDebugVisible = false;
-  let collisionMeshes: readonly Mesh[] = Object.freeze([]);
-  const applyCollisionDebugVisibility = (): void => {
-    for (const mesh of collisionMeshes) {
-      if (mesh.isDisposed()) continue;
-      mesh.isVisible = collisionDebugVisible;
-      mesh.visibility = collisionDebugVisible ? 0.48 : 0;
-    }
-  };
+    createAtmosphere(scene, materials, random);
+    createMountainsAndTrees(scene, materials, random);
+    createRockSlabs(scene, materials, random);
+    createGate(scene, materials);
+    createCollisionProxies(context, materials);
 
-  const module: BabylonNativeSceneModuleV1 = defineBabylonNativeScene({
-    kind: "babylon-native-scene-module",
-    id: "cloud-ridge-native-spike",
-    build(context: BabylonNativeSceneBuildContextV1): void {
-      const scene = context.scene;
-      const random = context.random;
-      const materials = createMaterials(scene);
-
-      createAtmosphere(scene, materials, random);
-      createMountainsAndTrees(scene, materials, random);
-      createRockSlabs(scene, materials, random);
-      createGate(scene, materials);
-      collisionMeshes = createCollisionProxies(context, materials);
-      applyCollisionDebugVisibility();
-
-      context.registration.registerSpawnMarker({
-        id: "player-spawn",
-        positionMetersXYZ: [0, 2.2, 18],
-        facingRadians: 0,
-      });
-    },
-  });
-
-  return Object.freeze({
-    module,
-    setCollisionDebugVisible(visible: boolean): void {
-      collisionDebugVisible = visible;
-      applyCollisionDebugVisibility();
-    },
-    collisionDebugSnapshot() {
-      return Object.freeze({
-        visible: collisionDebugVisible,
-        visibleMeshCount: collisionMeshes.filter((mesh) =>
-          !mesh.isDisposed() && mesh.isVisible && mesh.visibility > 0
-        ).length,
-      });
-    },
-  });
-}
+    context.registration.registerSpawnMarker({
+      id: "player-spawn",
+      positionMetersXYZ: [0, 2.2, 18],
+      facingRadians: 0,
+    });
+  },
+});

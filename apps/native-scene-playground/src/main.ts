@@ -13,9 +13,11 @@ import type {
 } from "@whitebox-world/runtime-contracts";
 import type { BabylonNativeSceneContributionV1 } from
   "@whitebox-world/native-babylon/host";
+import type { BabylonNativeSceneModuleV1 } from
+  "@whitebox-world/native-babylon";
+import { isNil } from "lodash-es";
 
-import { createCloudRidgeNativeSceneControllerV1 } from
-  "./cloud-ridge-scene.js";
+import cloudRidgeNativeScene from "./cloud-ridge-scene.js";
 import {
   CLOUD_RIDGE_GAMEPLAY_BOOTSTRAP_V1,
   CLOUD_RIDGE_NATIVE_ADMISSION_BUDGET_V1,
@@ -30,32 +32,35 @@ const FIXED_INPUT_CONTROLLER_ENTITY_ID = "native-scene-controller";
 const CLOUD_RIDGE_MAIN_PATH_RUN_TICKS = 1_700;
 const CONTROLLED_ENTITY_ID =
   CLOUD_RIDGE_WORLD_RUNTIME_BOOTSTRAP_V1.initialControlledEntityId;
-const NATIVE_SCENE_FACTORIES_BY_REF: Readonly<
-  Record<string, typeof createCloudRidgeNativeSceneControllerV1>
+const NATIVE_SCENE_MODULES_BY_REF: Readonly<
+  Record<string, BabylonNativeSceneModuleV1>
 > = Object.freeze({
   "worldkit://native-scene/cloud-ridge@1":
-    createCloudRidgeNativeSceneControllerV1,
+    cloudRidgeNativeScene,
 });
-const nativeSceneFactory =
-  NATIVE_SCENE_FACTORIES_BY_REF[CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1.sceneModuleRef];
-if (nativeSceneFactory === undefined) {
-  throw new Error("WORLDKIT_NATIVE_SCENE_MODULE_REF_UNRESOLVED");
+function resolveNativeSceneModule(
+  sceneModuleRef: string,
+): BabylonNativeSceneModuleV1 {
+  const module = NATIVE_SCENE_MODULES_BY_REF[sceneModuleRef];
+  if (isNil(module)) {
+    throw new Error("WORLDKIT_NATIVE_SCENE_MODULE_REF_UNRESOLVED");
+  }
+  return module;
 }
-const nativeScene = nativeSceneFactory();
+const nativeSceneModule = resolveNativeSceneModule(
+  CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1.sceneModuleRef,
+);
 
 interface NativeSceneSpikeProbeV1 {
   readonly ready: true;
   readonly bootstrap: typeof CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1;
   snapshot(): BabylonRuntimeProjectionV1;
   runFixedInput(input: FixedInputV1): Promise<BabylonRuntimeProjectionV1>;
-  setColliderDebugVisible(visible: boolean): void;
   audit(): Readonly<{
     contributionHash: `sha256:${string}`;
     spawnMarkerId: string;
     colliderIds: readonly string[];
     colliderSubshapeIds: readonly string[];
-    collisionDebugVisible: boolean;
-    visibleCollisionDebugMeshCount: number;
   }>;
   reset(): Promise<BabylonRuntimeProjectionV1>;
 }
@@ -173,7 +178,7 @@ async function start(): Promise<void> {
     sceneSource: {
       kind: "babylon-native-scene",
       bootstrap: CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1,
-      module: nativeScene.module,
+      module: nativeSceneModule,
       assets: cloudRidgeLockedAssetResolver,
       budget: CLOUD_RIDGE_NATIVE_ADMISSION_BUDGET_V1,
     },
@@ -206,7 +211,6 @@ async function start(): Promise<void> {
 
   let inputTail: Promise<BabylonRuntimeProjectionV1> =
     Promise.resolve(runtime.snapshot());
-  let collisionDebugVisible = false;
   const runFixedInput = (
     input: FixedInputV1,
   ): Promise<BabylonRuntimeProjectionV1> => {
@@ -239,16 +243,10 @@ async function start(): Promise<void> {
     return inputTail;
   };
 
-  const setColliderDebugVisible = (visible: boolean): void => {
-    collisionDebugVisible = visible;
-    nativeScene.setCollisionDebugVisible(visible);
-  };
-
   const audit = () => {
     if (nativeAdmission === undefined) {
       throw new Error("WORLDKIT_NATIVE_SCENE_ADMISSION_AUDIT_UNAVAILABLE");
     }
-    const debug = nativeScene.collisionDebugSnapshot();
     return Object.freeze({
       contributionHash: nativeAdmission.contributionHash,
       spawnMarkerId: nativeAdmission.contribution.spawnMarker.id,
@@ -260,8 +258,6 @@ async function start(): Promise<void> {
           ({ colliderSubshapeId }) => colliderSubshapeId,
         ),
       ),
-      collisionDebugVisible: debug.visible,
-      visibleCollisionDebugMeshCount: debug.visibleMeshCount,
     });
   };
 
@@ -289,7 +285,6 @@ async function start(): Promise<void> {
     bootstrap: CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1,
     snapshot: () => runtime.snapshot(),
     runFixedInput,
-    setColliderDebugVisible,
     audit,
     reset,
   });
@@ -378,10 +373,6 @@ async function start(): Promise<void> {
       event.preventDefault();
       pressedCodes.clear();
       void reset().then(updateHud).catch(failRuntime);
-    }
-    if (event.code === "KeyC") {
-      collisionDebugVisible = !collisionDebugVisible;
-      setColliderDebugVisible(collisionDebugVisible);
     }
   });
   window.addEventListener("keyup", (event) => {

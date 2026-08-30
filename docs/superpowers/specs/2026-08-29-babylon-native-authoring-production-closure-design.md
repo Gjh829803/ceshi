@@ -1,6 +1,6 @@
 # Babylon Native Authoring BNA-2 生产闭环设计
 
-- 状态：Ready for independent re-review
+- 状态：BNA-2 Trusted Local engineering closure accepted
 - 日期：2026-08-29
 - 设计基线：`main@9794f0cb05ec2ce54ec3367fa25e1274ea3605a6`
 - 上位架构：
@@ -49,19 +49,20 @@ Runtime 产品入口。
 - 唯一 Babylon `9.23.0` Deep ESM 方言；
 - Cloud Ridge 受信本地实验和 BWB-1/BWB-2 Block Profile Foundation。
 
-### 2.2 尚未关闭的生产缺口
+### 2.2 实施前的基线缺口
 
-当前 `buildBabylonNativeSceneCandidateV1()` 只验证 Module 定义、登记、几何、预算和 Build 期间漂移。它
-没有证明：
+BNA-2 生产闭环实施前，Foundation 的 `buildBabylonNativeSceneCandidateV1()` 只验证 Module 定义、登记、
+几何、预算和 Build 期间漂移。当时尚未证明：
 
 - Source Graph 没有动态依赖、环境 I/O、Timer、全局随机、用户生命周期 callback 或 retained reference；
 - Module 没有接管 active camera、physics、render scheduling、Action Manager 或 Observable；
 - 同一锁定输入在第二个隔离 Scene 中产生相同 Contribution；
 - CLI 对错误阶段、stdout、stderr 和 exit code 有可供 Agent 稳定消费的正式合同。
 
-当前 Cloud Ridge 还通过 `createCloudRidgeNativeSceneControllerV1()` 返回 Controller，并在 Build 闭包外
-长期保留 Collider Mesh。该形态适合实验调试，但与“Build settlement 后关闭 Registration、丢弃
-Module/Context 引用、没有 Module-owned Runtime Controller”的目标合同冲突，必须 current-only 迁移。
+当时 Cloud Ridge 还通过 `createCloudRidgeNativeSceneControllerV1()` 返回 Controller，并在 Build 闭包外
+长期保留 Collider Mesh。该基线形态适合实验调试，但与“Build settlement 后关闭 Registration、丢弃
+Module/Context 引用、没有 Module-owned Runtime Controller”的目标合同冲突，因此本切片要求 current-only
+迁移；本节只记录问题基线，不是当前 API 清单。
 
 ### 2.3 BNA-6 不属于 BNA-2 关闭条件
 
@@ -246,7 +247,41 @@ Source Admission 至少拒绝：
 - `build()` 返回 Controller、Disposer、callback、Handle 或非空值。
 
 允许 module-scope `const` 纯函数、类型、冻结的 primitive/tuple/table，以及唯一默认 Module 定义。
+每个嵌套 tuple/table 容器都必须各自经过 `Object.freeze`，不能用只冻结外层、内部仍可写的对象冒充冻结表。
 checker 需要用 symbol/scope 分析区分局部 Build 变量和 module binding，不能因普通局部 `let` 误拒场景算法。
+
+V1 的静态能力边界还必须满足：
+
+- 显式 `any` 一律拒绝，不能用类型擦除隐藏 Context、Babylon 或标准全局能力；
+- reserved capability member name 在 property/type member、`Record`/`Pick`/mapped type、字符串字面量 computed
+  member、`typeof` 字符串字面量 mapped key 和全部对象解构位置采用同一闭合语义；
+- Module Source 完全禁止使用 `this`；AI 只通过显式 `BuildContext` 取得能力。任何 callable 对象都禁止写入
+  自定义属性。Source Admission 追踪 local/imported module reference、Babylon imported reference 与递归冻结表
+  经对象、数组、Map/Set、comma、属性/元素赋值、声明/赋值解构及其 shorthand 默认值、spread、条件表达式、
+  默认参数、for-of、generator、普通 getter、helper 参数/返回值、标准 identity/container API 和多层
+  helper 的单调来源传播。隐式 `arguments` 不属于 V1 能力面，必须 fail-closed。所有
+  direct/`.call`/`.apply`/`.bind` 调用先归一化为同一 invocation surface，再执行参数、receiver、callee 与
+  container flow 规则；这同时覆盖 const-array `.apply` 参数、`[].concat(...)`/`Array.from(...)`/
+  `reduce(...)` 等容器注入、Promise resolve/reject、迭代器 getter/静态 alias、异常 throw/catch 回流和
+  bind 创建时即传播预绑定参数，并覆盖 bind 后的二次 call/apply/bind/new，避免为每种语法建立可分叉的
+  ad-hoc 旁路。Babylon 构造器的登记控制位必须在静态展开 tuple/spread 后按真实参数位置审计；无法静态
+  展开的 spread 必须 fail-closed。即使中途用
+  `unknown` 或结构类型擦掉引用类型，也不能把 module reference 变成 Context/Handle 袋。递归冻结表允许读取，
+  但直接、局部别名或 helper 返回后的任意层级写入都在静态阶段拒绝。Imported pure callable 的直接调用、
+  普通局部数据/解构，以及 Babylon factory 或 helper 新建并返回的视觉对象仍保持可用；
+  `Object.create`、`Object.assign`、`Object.defineProperty`、
+  `Object.defineProperties`、`Object.setPrototypeOf` 等 reflection 不能成为保留 Context/Module 状态的旁路；
+- Scene 输入/相机所有权方法使用 `/host` 的唯一安装版本 census，同时供 Source Admission 与 Authority
+  instrumentation 消费。Babylon `9.23.0` 的七个 core Scene 方法为 `attachControl`、`detachControl`、
+  `addCamera`、`switchActiveCamera`、`setActiveCameraById`、`setActiveCameraByName`、`setActiveCameraByID`；
+  另有 `createDefaultCamera`、`createDefaultCameraOrLight`、`createDefaultVRExperience`、
+  `createDefaultXRExperienceAsync` 四个 helper augmentation/stub 名。十一项全部拒绝；测试同时对拍安装的
+  `scene.pure.d.ts`、`scene.pure.js` 与 `Helpers/sceneHelpers.types.d.ts`，并验证直接调用和抽方法都拒绝；
+- exact `Scene` helper type、允许的视觉属性以及 `context.random` 保持可用。不能因为拒绝能力名而退化成
+  禁止普通 Babylon 白膜算法。
+
+真正运行期计算出的 property key、`Proxy`、`eval` 或恶意 JavaScript 数据流不由 BNA-2 AST Gate 冒充
+完整证明；Runtime Authority 仍负责捕获可见的 Candidate mutation，而 Hosted 对抗隔离属于 §11 与 BNA-5。
 
 ### 6.4 Typecheck 与临时 Bundle
 
@@ -663,7 +698,8 @@ observable/render-loop/action/camera/physics API、额外 runtime export、Contr
 
 ### 13.2 Authority Audit
 
-至少覆盖：active camera 替换、camera 创建、physics enable/body、ActionManager、五个 Scene callback setter、
+至少覆盖：active camera 替换、camera 创建、上述十一个 Scene 输入/相机所有权方法、physics enable/body、
+ActionManager、五个 Scene callback setter、
 两个唯一 census 中全部 65 个 Scene / 15 个 Engine public Observable、mesh action manager、Scene dispose、
 Engine control、Build 返回 Handle、登记关闭后调用、instrumentation restoration、Audit failure 后完整
 Candidate dispose。

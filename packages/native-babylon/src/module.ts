@@ -1,6 +1,7 @@
 import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import type { Scene } from "@babylonjs/core/scene.js";
 import type { BabylonNativeSceneBootstrapV1 } from "@whitebox-world/runtime-contracts";
+import { isNil } from "lodash-es";
 
 import type { BabylonNativeLockedAssetResolverV1 } from "./assets.js";
 import type { BabylonNativeHostRandomV1 } from "./random.js";
@@ -58,7 +59,7 @@ export function defineBabylonNativeScene(
 ): BabylonNativeSceneModuleV1 {
   if (
     typeof input !== "object" ||
-    input === null ||
+    isNil(input) ||
     Array.isArray(input)
   ) return invalidModule();
 
@@ -75,7 +76,7 @@ export function defineBabylonNativeScene(
     for (const key of ["kind", "id", "build"] as const) {
       const descriptor = descriptors[key];
       if (
-        descriptor === undefined ||
+        isNil(descriptor) ||
         !descriptor.enumerable ||
         !("value" in descriptor)
       ) return invalidModule();

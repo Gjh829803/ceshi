@@ -12,7 +12,10 @@
 
 ## Global Constraints
 
-- Baseline is `main@9794f0cb05ec2ce54ec3367fa25e1274ea3605a6`; implementation starts only after confirming the working branch still contains that ancestry and no newer `origin/main` change invalidates the design.
+- Historical runtime baseline is `main@9794f0cb05ec2ce54ec3367fa25e1274ea3605a6`.
+  The implementation branch starts from the approved design merge
+  `main@7fa3197220ef6b8b1ad86f57fc85f8b3e248e0c3`, which contains that ancestry. Before
+  each integration slice, confirm no newer `origin/main` change invalidates the affected authority.
 - This repository is unreleased. Every touched contract is a current-only clean break: one name, one parser, one entry, one owner. Delete old exports and consumers in the same integration slice; do not add aliases, adapters, `legacy` branches, or V2/V3 siblings.
 - Do not modify Canonical Compiler, Canonical Scene Plan, Catalog/Hosted Builder, WorldChangeSet, Runtime World Configuration diagnostics, old V5 naming, frozen plan locks, or scene artifact locks.
 - Keep `WORLDKIT_NATIVE_SCENE_PRODUCTION_NOT_ADMITTED` before Candidate allocation in formal RuntimeHost. BNA-2 remains a trusted-local correctness gate, not a malicious-code sandbox or production Runtime admission.
@@ -145,7 +148,7 @@ The Source/CLI implementation must use stable codes, not provider/compiler raw m
 | `bundle` | `WORLDKIT_NATIVE_SCENE_BUNDLE_FAILED`, `WORLDKIT_NATIVE_SCENE_MODULE_EXPORT_INVALID` |
 | `capability` | `WORLDKIT_NATIVE_SCENE_PROFILE_UNSUPPORTED`, `WORLDKIT_NATIVE_SCENE_ASSET_LOCK_UNAVAILABLE` plus existing budget codes |
 | `build` | existing Module failure/registration codes plus `WORLDKIT_NATIVE_SCENE_BUILD_RETURN_INVALID` |
-| `authority-audit` | `WORLDKIT_NATIVE_SCENE_CANDIDATE_PRECONDITION_INVALID`, `WORLDKIT_NATIVE_SCENE_AUTHORITY_MUTATION` |
+| `authority-audit` | `WORLDKIT_NATIVE_SCENE_CANDIDATE_PRECONDITION_INVALID`, `WORLDKIT_NATIVE_SCENE_AUTHORITY_MUTATION_FORBIDDEN` |
 | `runtime-replay` | `WORLDKIT_NATIVE_SCENE_RUNTIME_REPLAY_MISMATCH` |
 | `tooling` | `WORLDKIT_NATIVE_SCENE_TOOL_USAGE_INVALID`, `WORLDKIT_NATIVE_SCENE_WORKSPACE_UNAVAILABLE`, `WORLDKIT_NATIVE_SCENE_CANDIDATE_CREATE_FAILED`, `WORLDKIT_NATIVE_SCENE_CANDIDATE_CLEANUP_FAILED`, `WORLDKIT_NATIVE_SCENE_TOOL_INTERNAL_FAILED` |
 
@@ -180,6 +183,10 @@ Tasks are executed sequentially on one integration branch even where file owners
 ---
 
 ## Task 1: BNA2-PC-00 — Freeze the Approved Plan
+
+**Execution status:** completed by merged PR #47 at
+`main@7fa3197220ef6b8b1ad86f57fc85f8b3e248e0c3`. The implementation branch resumes at
+BNA2-PC-05; do not recreate the design commit.
 
 **Files:**
 
@@ -1409,10 +1416,12 @@ git commit -m "docs: close BNA2 production checks"
 git fetch origin
 git log --oneline --left-right --cherry-pick HEAD...origin/main
 git status --short --branch
-git push origin codex/bna2-production-closure-design
+git push origin codex/bna2-production-closure-implementation
 ```
 
-If `origin/main` changed in an affected authority, perform a semantic three-way merge and rerun only invalidated gates before updating the review SHA. Merge PR #47 only after CI and the independent GO apply to the exact pushed head. Delete no remote branch unless explicitly requested.
+If `origin/main` changed in an affected authority, perform a semantic three-way merge and rerun only
+invalidated gates before updating the review SHA. Open and merge a new implementation PR only after CI
+and the independent GO apply to the exact pushed head. Delete no remote branch unless explicitly requested.
 
 ## Final Acceptance Matrix
 

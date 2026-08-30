@@ -60,8 +60,7 @@ import type {
 } from "@whitebox-world/runtime-contracts";
 import type { GameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
 import {
-  buildBabylonNativeSceneCandidateV1,
-  createBabylonNativeHostRandomV1,
+  admitBabylonNativeSceneCandidateV1,
   type BabylonNativeLockedAssetResolverV1,
   type BabylonNativeSceneAdmissionBudgetV1,
   type BabylonNativeSceneContributionV1,
@@ -819,18 +818,15 @@ export class BabylonWorldRuntime {
       let nativeContribution: BabylonNativeSceneContributionV1 | undefined;
       if (!isNil(nativeScene)) {
         options.onInitializationStage?.("native-scene");
-        const nativeResult = await buildBabylonNativeSceneCandidateV1({
-          scene,
+        const nativeResult = await admitBabylonNativeSceneCandidateV1({
+          candidate: { engine, scene },
           bootstrap: nativeScene.bootstrap,
           module: nativeScene.module,
-          random: createBabylonNativeHostRandomV1(
-            nativeScene.bootstrap.seed,
-          ),
           assets: nativeScene.assets,
           budget: nativeScene.budget,
         });
         if (nativeResult.outcome !== "passed") {
-          const problem = nativeResult.checkResult.diagnostics.find(
+          const problem = nativeResult.diagnostics.find(
             ({ severity }) => severity === "error",
           );
           throw new Error(

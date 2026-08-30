@@ -5,12 +5,10 @@ import { Scene } from "@babylonjs/core/scene.pure.js";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
-  buildBabylonNativeSceneCandidateV1,
-  createBabylonNativeHostRandomV1,
+  admitBabylonNativeSceneCandidateV1,
 } from "@whitebox-world/native-babylon/host";
 
-import { createCloudRidgeNativeSceneControllerV1 } from
-  "./cloud-ridge-scene.js";
+import cloudRidgeNativeScene from "./cloud-ridge-scene.js";
 import {
   CLOUD_RIDGE_GAMEPLAY_BOOTSTRAP_V1,
   CLOUD_RIDGE_NATIVE_ADMISSION_BUDGET_V1,
@@ -80,20 +78,17 @@ describe("cloud ridge Babylon Native scene", () => {
     });
     retainedEngines.push(engine);
     const scene = new Scene(engine);
-    const nativeScene = createCloudRidgeNativeSceneControllerV1();
 
-    const result = await buildBabylonNativeSceneCandidateV1({
-      scene,
+    const result = await admitBabylonNativeSceneCandidateV1({
+      candidate: { engine, scene },
       bootstrap: CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1,
-      module: nativeScene.module,
-      random: createBabylonNativeHostRandomV1(
-        CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1.seed,
-      ),
+      module: cloudRidgeNativeScene,
       assets: cloudRidgeLockedAssetResolver,
       budget: CLOUD_RIDGE_NATIVE_ADMISSION_BUDGET_V1,
     });
-    expect(result.outcome).toBe("passed");
-    if (result.outcome !== "passed") return;
+    if (result.outcome !== "passed") {
+      throw new Error(JSON.stringify(result.diagnostics, null, 2));
+    }
     const contribution = result.contribution;
 
     expect(contribution.spawnMarker).toEqual({
@@ -112,17 +107,6 @@ describe("cloud ridge Babylon Native scene", () => {
     expect(scene.getMeshByName("cloud-bank-left")).not.toBeNull();
     expect(scene.getMeshByName("waterfall-right-primary")).not.toBeNull();
     expect(scene.lights.length).toBeGreaterThanOrEqual(2);
-    expect(nativeScene.collisionDebugSnapshot()).toEqual({
-      visible: false,
-      visibleMeshCount: 0,
-    });
-    nativeScene.setCollisionDebugVisible(true);
-    expect(nativeScene.collisionDebugSnapshot()).toEqual({
-      visible: true,
-      visibleMeshCount: 3,
-    });
-    nativeScene.setCollisionDebugVisible(false);
-
     // These baselines are the c312871 LCG output for seed 0x5eed_c10d.
     // They protect visual continuity while the sole random authority moves to Host.
     const firstCloud = scene.getMeshByName("cloud-bank-left")!;
@@ -232,14 +216,6 @@ describe("cloud ridge Babylon Native scene", () => {
 
     const collisionMeshes = [...collisionMeshNames]
       .map((name) => scene.getMeshByName(name)!);
-    expect(collisionMeshes.every(
-      (mesh) => !mesh.isVisible && mesh.visibility === 0,
-    )).toBe(true);
-    nativeScene.setCollisionDebugVisible(true);
-    expect(collisionMeshes.every(
-      (mesh) => mesh.isVisible && mesh.visibility === 0.48,
-    )).toBe(true);
-    nativeScene.setCollisionDebugVisible(false);
     expect(collisionMeshes.every(
       (mesh) => !mesh.isVisible && mesh.visibility === 0,
     )).toBe(true);

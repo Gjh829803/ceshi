@@ -946,17 +946,19 @@ Replay、Streaming/Dispose 和自动 Diagnostic；普通 Agent 只引用稳定 P
   ExecutionPlan 和伪造 Plan Hash。Canonical consumer 已 current-only 迁移；实验 Cloud Ridge 不再创建
   shadow Plan；正式 Native RuntimeHost admission 仍以 `WORLDKIT_NATIVE_SCENE_PRODUCTION_NOT_ADMITTED`
   在分配前关闭，等待 BNA-3/BNA-4；
-- [ ] BNA-2：独立 `@whitebox-world/native-babylon` 与 `defineBabylonNativeScene`；Block Profile 保持为
+- [x] BNA-2：独立 `@whitebox-world/native-babylon` 与 `defineBabylonNativeScene`；Block Profile 保持为
   BWB-1 的可选独立包，不塞入 core API 形成默认 DSL；
   - [x] BNA-2 Foundation 内部 checkpoint：AI-facing root / Host-only subpath、唯一 Deep ESM Import
     Profile、Host uint32 随机源、锁定资产 Resolver 接口、闭合诊断、冻结无 Handle 的 Collider
     Contribution/Hash、预算/登记 Admission 与 `cloud-ridge` current-only 迁移已通过本轮合同、Runtime、
     Build、浏览器和人工保真门禁；这不是兼容承诺或生产支持；
-  - [ ] BNA-2 后续生产闭合仍需 Source Admission、Authority Audit、Runtime Replay、正式 CLI/exit
-    证据；专项设计见
-    [BNA-2 生产闭环设计](superpowers/specs/2026-08-29-babylon-native-authoring-production-closure-design.md)。
-    BNA-6 AI 生成/修复评测在 BNA-5 后独立执行，不反向成为 BNA-2 依赖；不得用本 checkpoint 提前关闭
-    BNA-3+ 或 BNA-4 生产 Gate；
+  - [x] BNA-2 Trusted Local 工程闭合：Source Admission、Authority Audit、双 Candidate Runtime Replay、
+    正式 checker/explain CLI 与 `0/1/2` exit、Cloud Ridge/current consumer clean break 已通过 exact-SHA
+    Cloud gate 和独立 Mode B + runtime-deep 审查；专项设计与证据见
+    [BNA-2 生产闭环设计](superpowers/specs/2026-08-29-babylon-native-authoring-production-closure-design.md)与
+    [最终审查](reviews/2026-08-29-babylon-native-authoring-production-closure-review.md)。
+    BNA-6 AI 生成/修复评测在 BNA-5 后独立执行，不反向成为 BNA-2 依赖；不得用本工程闭合提前关闭
+    BNA-3+ 或 BNA-4 正式 Runtime Gate；
 - [ ] BNA-3：Bundle、依赖/资产锁、Package、Contribution Hash 与 Build Receipt；只消费已发布的
   class-specific Resource Ref，并绑定 Route Decision Hash/completed Attempt Result，不执行资产生产或发布；
 - [ ] BNA-4：统一 Gameplay Kernel、Profile-based Surface Admission、稳定 Surface/Subshape identity、
@@ -968,7 +970,7 @@ Replay、Streaming/Dispose 和自动 Diagnostic；普通 Agent 只引用稳定 P
   `goTo`、重规划或移动执行；
 - [ ] BNA-8：按 Trusted Local、Hosted、Route 三种范围分别做最终 Go/No-Go 与文档切换。
 
-在 BNA-2 至 BNA-6 完成并建立独立实施计划前，不提高总进度，不把实验 API 写入 Quickstart，也不修改
+在 BNA-3 至 BNA-6 完成并建立独立实施计划前，不提高总进度，不把实验 API 写入 Quickstart，也不修改
 Catalog/Hosted Builder 生产工作流。P2.6 仍可先使用审核过的 Structure Resource 和产品 GLB；Native
 Lane 不自动扩大 Cave、Overhang、双层 Route 或 NPC Navigation 的当前能力边界。
 

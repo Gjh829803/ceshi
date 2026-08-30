@@ -42,6 +42,11 @@ import {
 } from "@whitebox-world/authoring-edit";
 import { isNil } from "lodash-es";
 import { Logger } from "@babylonjs/core/Misc/logger.js";
+import {
+  parseNativeSceneCheckResultV1,
+  parseNativeSceneDiagnosticV1,
+  type NativeSceneCheckResultV1,
+} from "@whitebox-world/native-babylon";
 
 import {
   runChangeApplyV1,
@@ -112,19 +117,17 @@ import {
   loadRuntimeWorldConfigurationFromPackageDirectoryV1,
   type WorldPackageCommandResultV1,
 } from "../lib/world-package-cli";
-import { createHeadlessRuntimeSessionV1 } from "../lib/headless-runtime-session";
-import {
-  createRuntimeSessionExecutorV1,
-  resumeRuntimeSessionExecutorV1,
-} from "../lib/runtime-session-executor";
 import { runRuntimeSessionNdjsonV1 } from "../lib/runtime-session-ndjson";
+import { explainNativeSceneCheckResultV1 } from "../native-scene/explain.js";
+import { checkBabylonNativeSceneWorldDirectoryV1 } from
+  "../native-scene/native-scene-check.js";
 
 const execFile = promisify(execFileCallback);
 const REPOSITORY_ROOT = path.resolve(
   fileURLToPath(new URL("../../", import.meta.url)),
 );
 
-const HELP = `worldkit - Canonical JSON whitebox world SDK
+export const HELP = `worldkit - Canonical JSON whitebox world SDK
 
 Usage:
   worldkit validate <file> [--json]
@@ -134,6 +137,8 @@ Usage:
   worldkit run <world.json> [--port <port>] [--refresh-dependencies] [--json]
   worldkit run <package-directory> --interactive --protocol ndjson --headless
     --session-directory <absolute-directory> [--resume]
+  worldkit native check <world-directory> --json
+  worldkit native explain <world-directory> [--json]
   worldkit capture <file> --output <png> [--snapshot <json>] [--triview-output <directory> --implementation-map <json>] [--port <port>] [--json]
   worldkit registry list --kind <resource-kind> [--json]
   worldkit registry describe --resource-ref <ref> [--json]
@@ -178,6 +183,8 @@ export {
 
 export type WorldkitArgs =
   | { command: "help"; json: false }
+  | { command: "native-check"; worldDirectoryPath: string; json: true }
+  | { command: "native-explain"; worldDirectoryPath: string; json: boolean }
   | { command: "validate"; inputPath: string; json: boolean }
   | { command: "build"; inputPath: string; outputPath: string; json: boolean }
   | { command: "inspect"; packageDirectoryPath: string; json: boolean }
@@ -465,6 +472,26 @@ export function parseWorldkitArgs(arguments_: readonly string[]): WorldkitArgs {
 
   const command = tokens.shift();
   const json = takeJsonFlag(tokens);
+
+  if (command === "native") {
+    const operation = takeRequiredPositional(tokens, "native operation");
+    const worldDirectoryPath = takeRequiredPositional(
+      tokens,
+      "Native world directory",
+    );
+    if (operation === "check") {
+      if (!json) {
+        throw new WorldkitUsageError("native check requires --json.");
+      }
+      rejectRemaining(tokens, "native check");
+      return { command: "native-check", worldDirectoryPath, json: true };
+    }
+    if (operation === "explain") {
+      rejectRemaining(tokens, "native explain");
+      return { command: "native-explain", worldDirectoryPath, json };
+    }
+    throw new WorldkitUsageError(`Unknown native operation '${operation}'.`);
+  }
 
   if (command === "subject-preset") {
     const operation = takeRequiredPositional(tokens, "subject-preset operation");
@@ -2014,6 +2041,9 @@ export async function loadPackageHeadless(
   if (!("runtimeWorldConfiguration" in loaded)) return loaded.result;
   try {
     await withBabylonProtocolSilence(async () => {
+      const { createHeadlessRuntimeSessionV1 } = await import(
+        "../lib/headless-runtime-session"
+      );
       const session = await createHeadlessRuntimeSessionV1({
         runtimeSessionId: `runtime-session.load.${randomUUID()}`,
         initialWorldSessionId: `world-session.load.${randomUUID()}`,
@@ -2078,6 +2108,10 @@ async function runRuntimeSession(
 
   try {
     return await withBabylonProtocolSilence(async () => {
+      const {
+        createRuntimeSessionExecutorV1,
+        resumeRuntimeSessionExecutorV1,
+      } = await import("../lib/runtime-session-executor");
       const canonicalPackageDirectoryPath = await realpath(
         path.resolve(packageDirectoryPath),
       );
@@ -2113,6 +2147,55 @@ async function runRuntimeSession(
   }
 }
 
+const NATIVE_EXIT_BY_OUTCOME = Object.freeze({
+  passed: 0,
+  rejected: 1,
+  "tool-error": 2,
+} as const);
+
+function nativeToolUsageResult(): NativeSceneCheckResultV1 {
+  const diagnostic = parseNativeSceneDiagnosticV1({
+    kind: "native-scene-diagnostic",
+    schemaVersion: 1,
+    id: "native-scene-cli.tool-usage-invalid",
+    severity: "error",
+    stage: "tooling",
+    code: "WORLDKIT_NATIVE_SCENE_TOOL_USAGE_INVALID",
+    location: { kind: "none" },
+    measurement: { kind: "none" },
+    message: "The worldkit native command arguments are invalid.",
+    repairHint: "Use native check <world-directory> --json or native explain <world-directory> [--json].",
+  });
+  return parseNativeSceneCheckResultV1({
+    kind: "native-scene-check-result",
+    schemaVersion: 1,
+    id: "native-scene-cli.unresolved-world-check",
+    checkedInput: { kind: "unresolved-world" },
+    outcome: "tool-error",
+    diagnostics: [diagnostic],
+  });
+}
+
+function writeNativeJsonResult(result: NativeSceneCheckResultV1): void {
+  process.stdout.write(`${stringifyCanonicalJson(result)}\n`);
+}
+
+async function runNativeCommand(
+  parsed: Extract<WorldkitArgs, {
+    command: "native-check" | "native-explain";
+  }>,
+): Promise<number> {
+  const result = await withBabylonProtocolSilence(() =>
+    checkBabylonNativeSceneWorldDirectoryV1(parsed.worldDirectoryPath)
+  );
+  if (parsed.command === "native-check" || parsed.json) {
+    writeNativeJsonResult(result);
+  } else {
+    process.stdout.write(explainNativeSceneCheckResultV1(result));
+  }
+  return NATIVE_EXIT_BY_OUTCOME[result.outcome];
+}
+
 export async function main(
   arguments_: readonly string[] = process.argv.slice(2),
 ): Promise<number> {
@@ -2120,6 +2203,10 @@ export async function main(
   try {
     parsed = parseWorldkitArgs(arguments_);
   } catch (error) {
+    if (arguments_[0] === "native") {
+      writeNativeJsonResult(nativeToolUsageResult());
+      return 2;
+    }
     process.stderr.write(
       `${error instanceof Error ? error.message : String(error)}\n\n${HELP}`,
     );
@@ -2128,6 +2215,12 @@ export async function main(
   if (parsed.command === "help") {
     process.stdout.write(HELP);
     return 0;
+  }
+  if (
+    parsed.command === "native-check" ||
+    parsed.command === "native-explain"
+  ) {
+    return runNativeCommand(parsed);
   }
   if (parsed.command === "run-browser") {
     return runUntilSignal(

@@ -976,8 +976,9 @@ Source Admission/Contribution Admission/Authority Audit/Runtime Replay/Capabilit
 `outcome: "rejected"` 和 exit code `1`；工具自身或环境失败对应
 `outcome: "tool-error"` 和 exit code `2`。人类日志只写 stderr。`worldkit native explain` 使用同一
 Diagnostic DTO。
-上述 CLI 名称和语义是目标接口，当前尚未实现。BNA-2 的交付输出必须包含结构化 Diagnostics，不能只
-返回 build callback 或字符串 Error。
+上述 CLI 名称和语义已由 BNA-2 实现。BNA-3 必须消费同一检查结果，不得复用这些名称创建第二套
+Package/Receipt 检查语义；BNA-2 的交付输出始终是结构化 Diagnostics，不只返回 build callback 或
+字符串 Error。
 
 ### 12.3 失败处置与回退
 
@@ -1202,6 +1203,10 @@ RuntimeWorldConfiguration V1 -> Babylon/Havok。
 
 ### BNA-2：独立 Babylon Native Authoring 包
 
+- 状态：**Trusted Local 工程闭合已通过 exact-SHA Cloud gate 与独立 Mode B + runtime-deep 审查**。
+  闭合包括 Source Admission、Candidate Authority Audit、双 Candidate Replay、稳定 checker/explain CLI
+  和 current-only consumer 迁移；不包含 BNA-3 Package/Receipt、BNA-4 正式 RuntimeHost/Havok 或 BNA-5+
+  Hosted/评测/Capture 能力。
 - 后续生产闭环的专项实施权威为
   [`2026-08-29-babylon-native-authoring-production-closure-design.md`](./2026-08-29-babylon-native-authoring-production-closure-design.md)。
 - 目标与独立交付物：创建 `@whitebox-world/native-babylon`、`defineBabylonNativeScene`、BuildContext、

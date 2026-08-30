@@ -42,8 +42,6 @@ interface NativeSceneAuditV1 {
   readonly spawnMarkerId: string;
   readonly colliderIds: readonly string[];
   readonly colliderSubshapeIds: readonly string[];
-  readonly collisionDebugVisible: boolean;
-  readonly visibleCollisionDebugMeshCount: number;
 }
 
 function controlledSubject(
@@ -98,11 +96,28 @@ async function main(): Promise<void> {
     });
     page.on("pageerror", (error) => browserErrors.push(error.message));
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
-    await page.waitForFunction(
-      () => window.__WORLDKIT_NATIVE_SPIKE__?.ready === true,
-      undefined,
-      { timeout: 90_000 },
-    );
+    try {
+      await page.waitForFunction(
+        () => window.__WORLDKIT_NATIVE_SPIKE__?.ready === true,
+        undefined,
+        { timeout: 90_000 },
+      );
+    } catch (error) {
+      const pageState = await page.evaluate(() => ({
+        state: document.querySelector("[data-state]")?.textContent ?? "",
+        loadingStage:
+          document.querySelector("[data-loading-stage]")?.textContent ?? "",
+        errorText: document.querySelector("[data-error]")?.textContent ?? "",
+      }));
+      throw new Error(
+        `Native Playground did not become ready: ${JSON.stringify({
+          browserErrors,
+          browserWarnings,
+          pageState,
+        })}`,
+        { cause: error },
+      );
+    }
 
     const initialAudit = await page.evaluate(
       () => window.__WORLDKIT_NATIVE_SPIKE__!.audit(),
@@ -121,25 +136,11 @@ async function main(): Promise<void> {
       initialAudit.colliderSubshapeIds,
       EXPECTED_COLLIDER_SUBSHAPE_IDS,
     );
-    assert.equal(initialAudit.collisionDebugVisible, false);
-    assert.equal(initialAudit.visibleCollisionDebugMeshCount, 0);
-
-    await page.evaluate(() =>
-      window.__WORLDKIT_NATIVE_SPIKE__!.setColliderDebugVisible(true)
-    );
-    const visibleAudit = await page.evaluate(
-      () => window.__WORLDKIT_NATIVE_SPIKE__!.audit(),
-    ) as NativeSceneAuditV1;
-    assert.equal(visibleAudit.collisionDebugVisible, true);
-    assert.equal(visibleAudit.visibleCollisionDebugMeshCount, 3);
-    const renderedOverlayScreenshotPath =
+    const renderedScreenshotPath =
       process.env.WORLDKIT_NATIVE_VERIFIER_SCREENSHOT;
-    if (renderedOverlayScreenshotPath !== undefined) {
-      await page.screenshot({ path: renderedOverlayScreenshotPath });
+    if (renderedScreenshotPath !== undefined) {
+      await page.screenshot({ path: renderedScreenshotPath });
     }
-    await page.evaluate(() =>
-      window.__WORLDKIT_NATIVE_SPIKE__!.setColliderDebugVisible(false)
-    );
 
     const initial = await page.evaluate(
       () => window.__WORLDKIT_NATIVE_SPIKE__!.reset(),
@@ -255,10 +256,9 @@ async function main(): Promise<void> {
       colliderIds: finalAudit.colliderIds,
       colliderSubshapeIds: finalAudit.colliderSubshapeIds,
       contributionHash: finalAudit.contributionHash,
-      collisionOverlayStateTogglePassed: true,
-      ...(renderedOverlayScreenshotPath === undefined
+      ...(renderedScreenshotPath === undefined
         ? {}
-        : { renderedOverlayScreenshotPath }),
+        : { renderedScreenshotPath }),
       errorUi,
       browserErrors,
       allowedPlatformWarnings,

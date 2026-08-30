@@ -1,3 +1,12 @@
+import {
+  parseNativeSceneDiagnosticV1,
+  type NativeSceneDiagnosticV1,
+} from "./diagnostics.js";
+
+const LOCKED_ASSET_RESOLUTION_FAILURE_V1 = Symbol(
+  "BabylonNativeLockedAssetResolutionFailureV1",
+);
+
 /** Exact resource identity used to request one Package-locked asset. */
 export interface BabylonNativeLockedAssetRequestV1 {
   readonly assetResourceRef: string;
@@ -42,4 +51,42 @@ export interface BabylonNativeLockedAssetResolverV1 {
   resolve(
     request: Readonly<BabylonNativeLockedAssetRequestV1>,
   ): Promise<Readonly<BabylonNativeLockedAssetV1>>;
+}
+
+/** Trusted-Host transport for one stable, already-sanitized asset diagnostic. */
+export interface BabylonNativeLockedAssetResolutionFailureV1 extends Error {
+  readonly diagnostic: NativeSceneDiagnosticV1;
+  readonly [LOCKED_ASSET_RESOLUTION_FAILURE_V1]: true;
+}
+
+export function createBabylonNativeLockedAssetResolutionFailureV1(
+  diagnostic: NativeSceneDiagnosticV1,
+): BabylonNativeLockedAssetResolutionFailureV1 {
+  const parsedDiagnostic = parseNativeSceneDiagnosticV1(diagnostic);
+  const problem = new Error(parsedDiagnostic.code) as
+    BabylonNativeLockedAssetResolutionFailureV1;
+  Object.defineProperties(problem, {
+    diagnostic: {
+      configurable: false,
+      enumerable: true,
+      value: parsedDiagnostic,
+      writable: false,
+    },
+    [LOCKED_ASSET_RESOLUTION_FAILURE_V1]: {
+      configurable: false,
+      enumerable: false,
+      value: true,
+      writable: false,
+    },
+  });
+  return Object.freeze(problem);
+}
+
+export function isBabylonNativeLockedAssetResolutionFailureV1(
+  input: unknown,
+): input is BabylonNativeLockedAssetResolutionFailureV1 {
+  return input instanceof Error &&
+    (input as Partial<BabylonNativeLockedAssetResolutionFailureV1>)[
+      LOCKED_ASSET_RESOLUTION_FAILURE_V1
+    ] === true;
 }

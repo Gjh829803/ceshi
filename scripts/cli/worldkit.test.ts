@@ -37,6 +37,7 @@ import {
 
 import { explainSubjectFile } from "../lib/subject-explain";
 import {
+  HELP,
   buildFile,
   captureVisibleWorldWithRetries,
   createRenderEnvironmentDiagnosticsV1,
@@ -237,6 +238,58 @@ describe("worldkit CLI", () => {
       refreshDependencies: true,
       json: true,
     });
+  });
+
+  it("parses the closed Native check and explain argv contracts", () => {
+    expect(parseWorldkitArgs([
+      "native",
+      "check",
+      "world-directory",
+      "--json",
+    ])).toEqual({
+      command: "native-check",
+      worldDirectoryPath: "world-directory",
+      json: true,
+    });
+    expect(parseWorldkitArgs([
+      "native",
+      "explain",
+      "world-directory",
+    ])).toEqual({
+      command: "native-explain",
+      worldDirectoryPath: "world-directory",
+      json: false,
+    });
+    expect(parseWorldkitArgs([
+      "native",
+      "explain",
+      "world-directory",
+      "--json",
+    ])).toEqual({
+      command: "native-explain",
+      worldDirectoryPath: "world-directory",
+      json: true,
+    });
+    expect(() => parseWorldkitArgs([
+      "native",
+      "check",
+      "world-directory",
+    ])).toThrow("native check requires --json");
+    expect(() => parseWorldkitArgs([
+      "native",
+      "check",
+      "world-directory",
+      "--json",
+      "--json",
+    ])).toThrow("--json may be provided only once");
+    expect(() => parseWorldkitArgs([
+      "native",
+      "explain",
+      "world-directory",
+      "--unknown",
+    ])).toThrow("Unknown native explain option '--unknown'");
+    expect(HELP).toContain("worldkit native check <world-directory> --json");
+    expect(HELP).toContain("worldkit native explain <world-directory> [--json]");
   });
 
   it("retries background-only browser captures and stops at the first visible world", async () => {
