@@ -17,6 +17,9 @@
 - `runtime-babylon` must not own pending/active jump state or rewrite `jumpPressed`/`jumpHeld`.
 - Use `===` / `!==` for equality and lodash `isNil` / `isEmpty` for nil/empty checks when a new check needs them.
 - Every production change begins with one behavior-level RED and ends with focused GREEN.
+- Initialize every implementation worktree with `pnpm install --frozen-lockfile` before development.
+  Reuse of the pnpm store is expected, but manually sharing `node_modules` or skipping installation
+  is not an optimization: each worker must have a complete, reproducible development environment.
 - Run affected gates once at the work-package boundary; use Cursor Cloud for exact-SHA deep review and Wave A heavy gates.
 - Preserve the alpha local-actions GLB and provenance bytes from `2c74fffd004243b98ed30895a8844e76754ea05f`; do not cherry-pick its TypeScript authority changes wholesale.
 - When one focused attempt cannot settle engine behavior or an architectural choice, inspect the
