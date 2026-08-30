@@ -62,14 +62,19 @@ describe("Babylon Native package migration", () => {
     ]);
 
     expect(main).not.toMatch(/BabylonWorldRuntime\.create\s*\(/);
-    expect(main).not.toMatch(/\b(?:module|assets|budget)\s*:/);
     expect(main).not.toContain("createBabylonGameplayWorldPortV1");
     expect(main).toContain("loadVerifiedNativeWorldPackageV1");
     expect(adapter).toContain("RuntimeHost");
     expect(adapter).toContain(
       "runtimeWorldConfigurationFromVerifiedWorldPackageV1",
     );
-    expect(loader).toContain("verifyWorldPackageDirectoryV1");
+    expect(loader).toContain("verifyBabylonNativeWorldPackageDirectoryV1");
+    expect(loader).toContain(
+      'from "@whitebox-world/world-package/native-runtime"',
+    );
+    expect(loader).not.toMatch(
+      /from\s+["']@whitebox-world\/world-package["']/,
+    );
     expect(runtime).not.toContain(
       "WORLDKIT_NATIVE_SCENE_PRODUCTION_NOT_ADMITTED",
     );

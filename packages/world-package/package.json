@@ -5,6 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./native-runtime": "./src/native-runtime-directory.ts",
+    "./runtime-contract": "./src/runtime-contract.ts",
     "./testing": "./src/testing.ts"
   },
   "dependencies": {

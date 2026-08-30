@@ -1,9 +1,9 @@
 import {
-  assembleWorldPackageDirectoryV1,
+  assembleBabylonNativeWorldPackageDirectoryV1,
   assertWorldPackageBuildReceiptV1,
-  verifyWorldPackageDirectoryV1,
+  verifyBabylonNativeWorldPackageDirectoryV1,
   type VerifiedBabylonNativeWorldPackageDirectoryV1,
-} from "@whitebox-world/world-package";
+} from "@whitebox-world/world-package/native-runtime";
 
 async function fetchRequired(url: URL): Promise<Response> {
   const response = await fetch(url, {
@@ -36,11 +36,8 @@ export async function loadVerifiedNativeWorldPackageV1(
       ).arrayBuffer()),
     }),
   ));
-  const verified = verifyWorldPackageDirectoryV1(
-    assembleWorldPackageDirectoryV1({ receipt, files }),
+  const verified = verifyBabylonNativeWorldPackageDirectoryV1(
+    assembleBabylonNativeWorldPackageDirectoryV1({ receipt, files }),
   );
-  if (verified.kind !== "babylon-native-scene") {
-    throw new Error("WORLDKIT_NATIVE_WORLD_PACKAGE_KIND_INVALID");
-  }
   return verified;
 }
