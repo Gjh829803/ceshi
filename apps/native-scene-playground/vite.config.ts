@@ -18,9 +18,47 @@ const cloudRidgeModuleBundleContentHash =
   `sha256:${createHash("sha256").update(cloudRidgeModuleBytes).digest("hex")}`;
 const hostedRuntimeOrigin = process.env.WORLDKIT_HOSTED_RUNTIME_ORIGIN ??
   "http://127.0.0.1:5175";
+const hostedBrowserRunnerSourcePaths = Object.freeze([
+  "src/main.ts",
+  "src/hosted-runtime-bridge.ts",
+  "src/hosted-runtime-frame.ts",
+  "src/native-runtime-host.ts",
+  "src/world-package-loader.ts",
+  "package.json",
+  "vite.config.ts",
+] as const);
+const hostedBrowserRunnerDigest = `sha256:${hostedBrowserRunnerSourcePaths
+  .reduce((hash, relativePath) => {
+    hash.update(relativePath);
+    hash.update("\0");
+    hash.update(readFileSync(new URL(relativePath, import.meta.url)));
+    hash.update("\0");
+    return hash;
+  }, createHash("sha256"))
+  .update(readFileSync(new URL("../../pnpm-lock.yaml", import.meta.url)))
+  .digest("hex")}`;
+const hostedBrowserPolicyHash = `sha256:${createHash("sha256").update(
+  JSON.stringify({
+    schemaVersion: 1,
+    credentialless: true,
+    sandbox: "allow-scripts allow-same-origin",
+    shellOrigin: "cross-origin-exact",
+    runtimeOrigin: hostedRuntimeOrigin,
+    contentSecurityPolicy:
+      "default-src self; script-src self wasm-unsafe-eval; style-src self unsafe-inline; img-src self data; font-src none; media-src none; connect-src self; object-src none; base-uri none; form-action none",
+  }),
+).digest("hex")}`;
 
 export default defineConfig({
   publicDir: "../playground/public",
+  define: {
+    __WORLDKIT_HOSTED_BROWSER_RUNNER_DIGEST__: JSON.stringify(
+      hostedBrowserRunnerDigest,
+    ),
+    __WORLDKIT_HOSTED_BROWSER_POLICY_HASH__: JSON.stringify(
+      hostedBrowserPolicyHash,
+    ),
+  },
   plugins: [{
     name: "worldkit-cloud-ridge-exact-package-module",
     resolveId(id) {

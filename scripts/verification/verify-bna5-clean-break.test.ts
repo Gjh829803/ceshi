@@ -62,6 +62,7 @@ describe("BNA-5 clean-break verifier", () => {
         exactOriginMessaging: true,
         publicSchemasInfrastructureFree: true,
         hostedCommandDialectAbsent: true,
+        directExecutionRequestBypassAbsent: true,
       },
       diagnostics: [],
     });
@@ -125,5 +126,16 @@ describe("BNA-5 clean-break verifier", () => {
         "BNA5_HOSTED_COMMAND_DIALECT",
       ]),
     );
+  });
+
+  it("rejects direct execution request construction outside the Host admission owner", async () => {
+    const report = await scanBna5CleanBreak(await fixture({
+      "apps/native-scene-playground/src/main.ts":
+        "const request = { kind: 'native-isolated-execution-request' };\n",
+    }));
+    expect(report.diagnostics).toContainEqual(expect.objectContaining({
+      code: "BNA5_DIRECT_EXECUTION_REQUEST_BYPASS",
+      path: "apps/native-scene-playground/src/main.ts",
+    }));
   });
 });

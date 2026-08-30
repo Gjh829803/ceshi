@@ -17,6 +17,7 @@ import {
   parseRuntimeSessionReceiptV1,
   parseRuntimeSessionRequestV1,
   type NativeEffectiveExecutionBudgetV1,
+  type NativeExecutionUsageV1,
   type NativeIsolatedExecutionRequestV1,
   type RuntimeSessionDiagnosticV1,
   type RuntimeSessionReceiptV1,
@@ -95,6 +96,7 @@ export interface CreateBabylonNativeIsolatedRuntimeEntryInputV1 {
 export interface BabylonNativeIsolatedRuntimeEntryV1 {
   readonly runtimeSessionId: string;
   initialSnapshot(): WorldRuntimeSnapshotV4;
+  runtimeUsage(): NativeExecutionUsageV1["runtime"];
   renderFrame(): RenderReadyReceiptV1;
   resize(): void;
   submit(payload: RuntimeSessionRequestV1):
@@ -183,11 +185,10 @@ function assertRequestIdentity(
   return request;
 }
 
-function assertRuntimeBudget(
+function observeRuntimeUsage(
   snapshot: ReturnType<BabylonWorldRuntime["snapshot"]>,
   engine: AbstractEngine,
-  budget: NativeEffectiveExecutionBudgetV1,
-): void {
+): NativeExecutionUsageV1["runtime"] {
   const actualMaterialCount = engine.scenes.reduce(
     (total, scene) => total + scene.materials.length,
     0,
@@ -196,16 +197,31 @@ function assertRuntimeBudget(
   // authority. Counting each material as one possible shader variant is a
   // conservative public-API upper bound that cannot under-report shader use.
   const actualShaderCountUpperBound = actualMaterialCount;
+  return Object.freeze({
+    actualSceneNodeCount: snapshot.resources.meshes,
+    actualMaterialCount,
+    actualShaderCount: actualShaderCountUpperBound,
+    actualPhysicsBodyCount: snapshot.resources.bodies,
+  });
+}
+
+function assertRuntimeBudget(
+  snapshot: ReturnType<BabylonWorldRuntime["snapshot"]>,
+  engine: AbstractEngine,
+  budget: NativeEffectiveExecutionBudgetV1,
+): NativeExecutionUsageV1["runtime"] {
+  const usage = observeRuntimeUsage(snapshot, engine);
   if (
-    snapshot.resources.meshes > budget.runtime.maximumSceneNodeCount ||
-    snapshot.resources.bodies > budget.runtime.maximumPhysicsBodyCount ||
-    actualMaterialCount > budget.runtime.maximumMaterialCount ||
-    actualShaderCountUpperBound > budget.runtime.maximumShaderCount
+    usage.actualSceneNodeCount > budget.runtime.maximumSceneNodeCount ||
+    usage.actualPhysicsBodyCount > budget.runtime.maximumPhysicsBodyCount ||
+    usage.actualMaterialCount > budget.runtime.maximumMaterialCount ||
+    usage.actualShaderCount > budget.runtime.maximumShaderCount
   ) {
     throw entryError(
       "WORLDKIT_NATIVE_ISOLATION_EFFECTIVE_BUDGET_EXCEEDED",
     );
   }
+  return usage;
 }
 
 function receiptBase(
@@ -273,6 +289,7 @@ implements BabylonNativeIsolatedRuntimeEntryV1 {
   constructor(
     private readonly host: RuntimeHost,
     private readonly runtime: BabylonWorldRuntime,
+    private readonly engine: AbstractEngine,
   ) {
     this.runtimeSessionId = host.runtimeSessionId;
   }
@@ -286,6 +303,10 @@ implements BabylonNativeIsolatedRuntimeEntryV1 {
       hostPhase: this.host.phase,
       isPaused: false,
     });
+  }
+
+  runtimeUsage(): NativeExecutionUsageV1["runtime"] {
+    return observeRuntimeUsage(this.runtime.snapshot(), this.engine);
   }
 
   renderFrame(): RenderReadyReceiptV1 {
@@ -558,5 +579,13 @@ export async function createBabylonNativeIsolatedRuntimeEntryV1(
     await host.dispose().catch(() => undefined);
     throw new Error("WORLDKIT_NATIVE_ISOLATION_RUNTIME_HANDLE_MISSING");
   }
-  return Object.freeze(new BabylonNativeIsolatedRuntimeEntry(host, runtime));
+  if (isNil(runtimeEngine)) {
+    await host.dispose().catch(() => undefined);
+    throw new Error("WORLDKIT_NATIVE_ISOLATION_ENGINE_HANDLE_MISSING");
+  }
+  return Object.freeze(new BabylonNativeIsolatedRuntimeEntry(
+    host,
+    runtime,
+    runtimeEngine,
+  ));
 }

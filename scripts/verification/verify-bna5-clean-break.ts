@@ -42,7 +42,8 @@ export interface Bna5CleanBreakDiagnostic {
     | "BNA5_SAME_ORIGIN_SANDBOX"
     | "BNA5_EXACT_ORIGIN_BRIDGE_MISSING"
     | "BNA5_PUBLIC_SCHEMA_INFRASTRUCTURE_FIELD"
-    | "BNA5_HOSTED_COMMAND_DIALECT";
+    | "BNA5_HOSTED_COMMAND_DIALECT"
+    | "BNA5_DIRECT_EXECUTION_REQUEST_BYPASS";
   readonly path: string;
   readonly line: number;
   readonly value: string;
@@ -59,6 +60,7 @@ export interface Bna5CleanBreakReport {
     exactOriginMessaging: boolean;
     publicSchemasInfrastructureFree: boolean;
     hostedCommandDialectAbsent: boolean;
+    directExecutionRequestBypassAbsent: boolean;
   }>;
   readonly diagnostics: readonly Bna5CleanBreakDiagnostic[];
 }
@@ -116,6 +118,15 @@ function isPublicSchemaPath(relativePath: string): boolean {
     relativePath.startsWith("packages/authoring/") ||
     relativePath.startsWith("packages/world-package/")
   );
+}
+
+function mayOwnNativeExecutionRequestConstruction(relativePath: string): boolean {
+  return relativePath ===
+      "packages/runtime-host/src/native-execution-admission.ts" ||
+    relativePath ===
+      "packages/runtime-contracts/src/native-execution-isolation.ts" ||
+    relativePath ===
+      "packages/runtime-contracts/src/native-execution-isolation-v1.schema.json";
 }
 
 function addTokenDiagnostics(
@@ -227,6 +238,19 @@ export async function scanBna5CleanBreak(
         value: "Hosted-specific Gameplay/Camera command declaration",
       });
     }
+    const directRequestKind =
+      /\bkind\s*:\s*["']native-isolated-execution-request["']/u.exec(source);
+    if (
+      !mayOwnNativeExecutionRequestConstruction(relativePath) &&
+      directRequestKind !== null
+    ) {
+      diagnostics.push({
+        code: "BNA5_DIRECT_EXECUTION_REQUEST_BYPASS",
+        path: relativePath,
+        line: lineAt(source, directRequestKind.index),
+        value: "Native execution request constructed outside Host admission",
+      });
+    }
   }
 
   if (!hasExactBridgeIdentityChecks(
@@ -256,6 +280,8 @@ export async function scanBna5CleanBreak(
     publicSchemasInfrastructureFree:
       !codes.has("BNA5_PUBLIC_SCHEMA_INFRASTRUCTURE_FIELD"),
     hostedCommandDialectAbsent: !codes.has("BNA5_HOSTED_COMMAND_DIALECT"),
+    directExecutionRequestBypassAbsent:
+      !codes.has("BNA5_DIRECT_EXECUTION_REQUEST_BYPASS"),
   });
   return Object.freeze({
     kind: "worldkit-bna5-clean-break-report" as const,

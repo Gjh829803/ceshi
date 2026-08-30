@@ -13,11 +13,11 @@ import type {
 } from "@whitebox-world/runtime-contracts";
 import {
   deriveRuntimeSessionEventIdV1,
-  hashNativeEffectiveExecutionBudgetV1,
   WORLDKIT_RUNTIME_SESSION_REQUEST_TYPES_V1,
   type NativeEffectiveExecutionBudgetV1,
-  type NativeIsolatedExecutionRequestV1,
 } from "@whitebox-world/runtime-contracts";
+import { admitHostedNativeExecutionRequestV1 } from
+  "@whitebox-world/runtime-host";
 import { Engine } from "@babylonjs/core/Engines/engine.js";
 import { cloudRidgeSubjectAssetResolver } from
   "./subject-asset-resolver.js";
@@ -29,6 +29,8 @@ import { loadVerifiedNativeWorldPackageV1 } from
 import "./style.css";
 
 const CLOUD_RIDGE_MAIN_PATH_RUN_TICKS = 1_700;
+declare const __WORLDKIT_HOSTED_BROWSER_RUNNER_DIGEST__: `sha256:${string}`;
+declare const __WORLDKIT_HOSTED_BROWSER_POLICY_HASH__: `sha256:${string}`;
 interface NativeSceneSpikeProbeV1 {
   readonly ready: true;
   readonly bootstrap: BabylonNativeSceneBootstrapV1;
@@ -437,29 +439,22 @@ async function startHostedFrame(): Promise<void> {
     new URL("/world-packages/cloud-ridge/", location.origin),
   );
   const moduleImport = await import("virtual:worldkit-cloud-ridge-native-scene");
-  const effectiveBudget = browserProtocolBudget(
+  const executionBudgetCap = browserProtocolBudget(
     verified.manifest.resourceBudget,
   );
-  const requestBody = {
-    kind: "native-isolated-execution-request" as const,
-    schemaVersion: 1 as const,
+  const requestBody = admitHostedNativeExecutionRequestV1({
     id: `native-isolated-execution-request.${runtimeSessionId}`,
     runtimeSessionId,
-    worldPackageRef: verified.receipt.worldPackageRef,
-    worldPackageRootHash: verified.receipt.worldPackageRootHash,
-    worldBuildIdentityHash: verified.receipt.worldBuildIdentityHash,
-    sceneModuleBundleHash: verified.sceneModuleBundleHash,
-    nativeSceneContributionHash: verified.manifest.sceneSource.nativeSceneContributionHash,
-    nativeExecutionTrustProfileRef: "worldkit://native-execution-trust-profile/hosted-isolated@1",
-    nativeExecutionTrustProfileHash: `sha256:${"a".repeat(64)}` as const,
+    verifiedWorldPackage: verified,
+    sceneProfileBudget: verified.manifest.resourceBudget,
+    hostHardCap: executionBudgetCap,
+    tenantCap: executionBudgetCap,
     runnerIdentityRef: "worldkit://native-isolation-runner/browser-origin@1",
-    runnerImageDigest: `sha256:${"b".repeat(64)}` as const,
-    sandboxPolicyHash: `sha256:${"c".repeat(64)}` as const,
-    effectiveBudget,
-    effectiveBudgetHash: hashNativeEffectiveExecutionBudgetV1(effectiveBudget),
-    requestedOperation: { mode: "interactive-session" as const },
+    runnerImageDigest: __WORLDKIT_HOSTED_BROWSER_RUNNER_DIGEST__,
+    sandboxPolicyHash: __WORLDKIT_HOSTED_BROWSER_POLICY_HASH__,
+    requestedOperation: { mode: "interactive-session" },
     sessionNonce,
-  } satisfies NativeIsolatedExecutionRequestV1;
+  });
   const entry = await createBabylonNativeIsolatedRuntimeEntryV1({
     request: requestBody,
     verifiedWorldPackage: verified,
@@ -494,7 +489,7 @@ async function startHostedFrame(): Promise<void> {
     shellOrigin,
     runtimeSessionId,
     sessionNonce,
-    protocolBudget: effectiveBudget.protocol,
+    protocolBudget: requestBody.effectiveBudget.protocol,
   });
   const pressedCodes = new Set<string>();
   const contextualCodes = new Set([

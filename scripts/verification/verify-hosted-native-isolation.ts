@@ -10,7 +10,6 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
-  hashNativeEffectiveExecutionBudgetV1,
   hashNativeIsolatedExecutionRequestV1,
   hashNativeIsolatedExecutionResultV1,
   parseNativeIsolatedExecutionReceiptV1,
@@ -31,6 +30,7 @@ import {
   type VerifiedBabylonNativeWorldPackageDirectoryV1,
 } from "@whitebox-world/world-package";
 import {
+  admitHostedNativeExecutionRequestV1,
   NativeIsolationProviderTerminationErrorV1,
   NativeIsolationSupervisorV1,
 } from "@whitebox-world/runtime-host";
@@ -207,25 +207,16 @@ function isolatedRequest(
   suffix: string,
 ): NativeIsolatedExecutionRequestV1 {
   const budget = effectiveBudget(verified);
-  return parseNativeIsolatedExecutionRequestV1({
-    kind: "native-isolated-execution-request",
-    schemaVersion: 1,
+  return admitHostedNativeExecutionRequestV1({
     id: `native-isolated-execution-request.hosted-verifier.${suffix}`,
     runtimeSessionId: `runtime.hosted-verifier.${suffix}`,
-    worldPackageRef: verified.receipt.worldPackageRef,
-    worldPackageRootHash: verified.receipt.worldPackageRootHash,
-    worldBuildIdentityHash: verified.receipt.worldBuildIdentityHash,
-    sceneModuleBundleHash: verified.sceneModuleBundleHash,
-    nativeSceneContributionHash:
-      verified.manifest.sceneSource.nativeSceneContributionHash,
-    nativeExecutionTrustProfileRef:
-      "worldkit://native-execution-trust-profile/hosted-isolated@1",
-    nativeExecutionTrustProfileHash: `sha256:${"a".repeat(64)}`,
+    verifiedWorldPackage: verified,
+    sceneProfileBudget: verified.manifest.resourceBudget,
+    hostHardCap: budget,
+    tenantCap: budget,
     runnerIdentityRef: RUNNER_IDENTITY_REF,
     runnerImageDigest,
     sandboxPolicyHash: SANDBOX_POLICY_HASH,
-    effectiveBudget: budget,
-    effectiveBudgetHash: hashNativeEffectiveExecutionBudgetV1(budget),
     requestedOperation: { mode: "interactive-session" },
     sessionNonce: `nonce.hosted-verifier.${suffix}`,
   });
