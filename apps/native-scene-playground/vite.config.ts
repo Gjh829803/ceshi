@@ -16,6 +16,8 @@ const cloudRidgeModuleBytes = readFileSync(new URL(
 const cloudRidgeModuleSource = cloudRidgeModuleBytes.toString("utf8");
 const cloudRidgeModuleBundleContentHash =
   `sha256:${createHash("sha256").update(cloudRidgeModuleBytes).digest("hex")}`;
+const hostedRuntimeOrigin = process.env.WORLDKIT_HOSTED_RUNTIME_ORIGIN ??
+  "http://127.0.0.1:5175";
 
 export default defineConfig({
   publicDir: "../playground/public",
@@ -46,6 +48,11 @@ export default defineConfig({
   server: {
     host: "127.0.0.1",
     port: 5174,
+    headers: {
+      "Content-Security-Policy": `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'none'; media-src 'none'; connect-src 'self'; frame-src ${hostedRuntimeOrigin}; object-src 'none'; base-uri 'none'; form-action 'none'`,
+      "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=()",
+      "Referrer-Policy": "no-referrer",
+    },
   },
   build: {
     target: "es2022",

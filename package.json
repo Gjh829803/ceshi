@@ -81,6 +81,7 @@
     "verify:outdoor-gameplay": "tsx scripts/verification/verify-outdoor-gameplay-worlds.ts",
     "verify:native-scene-playground": "tsx scripts/verification/verify-native-scene-playground.ts",
     "verify:hosted-native-isolation": "tsx scripts/verification/verify-hosted-native-isolation.ts",
+    "verify:hosted-native-browser": "tsx scripts/verification/verify-hosted-native-browser.ts",
     "verify:unreleased-clean-break": "tsx scripts/verification/verify-unreleased-clean-break.ts",
     "verify:bna1-clean-break": "tsx scripts/verification/verify-bna1-clean-break.ts",
     "verify:bna2-clean-break": "tsx scripts/verification/verify-bna2-clean-break.ts",

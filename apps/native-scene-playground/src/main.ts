@@ -3,17 +3,26 @@ import type {
   BabylonWorldRuntimeInitializationStageV1,
 } from "@whitebox-world/runtime-babylon";
 import { FIXED_TIME_STEP_SECONDS } from "@whitebox-world/runtime-babylon";
+import {
+  createBabylonNativeIsolatedRuntimeEntryV1,
+} from "@whitebox-world/runtime-babylon";
 import type {
   BabylonNativeSceneBootstrapV1,
   FixedInputV1,
   SemanticInputActionV1,
 } from "@whitebox-world/runtime-contracts";
-
-import cloudRidgeNativeScene, {
-  moduleBundleContentHash as cloudRidgeModuleBundleContentHash,
-} from "virtual:worldkit-cloud-ridge-native-scene";
+import {
+  deriveRuntimeSessionEventIdV1,
+  hashNativeEffectiveExecutionBudgetV1,
+  WORLDKIT_RUNTIME_SESSION_REQUEST_TYPES_V1,
+  type NativeEffectiveExecutionBudgetV1,
+  type NativeIsolatedExecutionRequestV1,
+} from "@whitebox-world/runtime-contracts";
+import { Engine } from "@babylonjs/core/Engines/engine.js";
 import { cloudRidgeSubjectAssetResolver } from
   "./subject-asset-resolver.js";
+import { createHostedRuntimeBridgeV1 } from "./hosted-runtime-bridge.js";
+import { startHostedRuntimeFrameV1 } from "./hosted-runtime-frame.js";
 import { NativeRuntimeHostV1 } from "./native-runtime-host.js";
 import { loadVerifiedNativeWorldPackageV1 } from
   "./world-package-loader.js";
@@ -39,6 +48,11 @@ interface NativeSceneSpikeProbeV1 {
 declare global {
   interface Window {
     __WORLDKIT_NATIVE_SPIKE__?: NativeSceneSpikeProbeV1;
+    __WORLDKIT_HOSTED_RUNTIME__?: Readonly<{
+      phase(): string;
+      submit(request: import("@whitebox-world/runtime-contracts").RuntimeSessionRequestV1): Promise<unknown>;
+      frame: HTMLIFrameElement;
+    }>;
   }
 }
 
@@ -100,6 +114,11 @@ async function start(): Promise<void> {
   const positionElement = requiredElement<HTMLElement>("[data-position]");
   const pauseButton = requiredElement<HTMLButtonElement>("[data-pause]");
   const pathCheckButton = requiredElement<HTMLButtonElement>("[data-path-check]");
+
+  const {
+    default: cloudRidgeNativeScene,
+    moduleBundleContentHash: cloudRidgeModuleBundleContentHash,
+  } = await import("virtual:worldkit-cloud-ridge-native-scene");
 
   const verifiedWorldPackage = await loadVerifiedNativeWorldPackageV1(
     new URL("/world-packages/cloud-ridge/", globalThis.location.origin),
@@ -357,4 +376,120 @@ async function start(): Promise<void> {
   }
 }
 
-void start().catch(showFailure);
+function browserProtocolBudget(): NativeEffectiveExecutionBudgetV1 {
+  return {
+    scene: { maximumVertices: 200_000, maximumTriangles: 200_000, maximumColliders: 256 },
+    assets: { maximumAssetCount: 64, maximumAssetBytes: 64_000_000, maximumTextureCount: 32, maximumTextureBytes: 64_000_000 },
+    runtime: { maximumSceneNodeCount: 2_000, maximumMaterialCount: 256, maximumShaderCount: 256, maximumPhysicsBodyCount: 256 },
+    process: { maximumWallTimeMilliseconds: 120_000, maximumCpuTimeMilliseconds: 120_000, maximumMemoryBytes: 1_000_000_000, maximumProcessCount: 1 },
+    protocol: { maximumInboundMessageBytes: 2_000_000, maximumOutboundMessageBytes: 2_000_000, maximumReceiptBytes: 2_000_000, maximumDiagnosticCount: 64, maximumLogBytes: 100_000 },
+  };
+}
+
+async function startHostedShell(): Promise<void> {
+  const query = new URLSearchParams(location.search);
+  const runtimeOrigin = query.get("runtimeOrigin") ?? "http://127.0.0.1:5175";
+  const runtimeSessionId = `runtime.hosted.browser.${crypto.randomUUID()}`;
+  const sessionNonce = `nonce.${crypto.randomUUID()}`;
+  const viewport = requiredElement<HTMLElement>("[data-viewport]");
+  viewport.replaceChildren();
+  const frame = document.createElement("iframe");
+  frame.className = "hosted-runtime-frame";
+  frame.src = `${runtimeOrigin}/?hosted-runtime-frame=1&shellOrigin=${encodeURIComponent(location.origin)}&runtimeSessionId=${encodeURIComponent(runtimeSessionId)}&sessionNonce=${encodeURIComponent(sessionNonce)}`;
+  viewport.append(frame);
+  const bridge = createHostedRuntimeBridgeV1({
+    frame,
+    runtimeOrigin,
+    runtimeSessionId,
+    sessionNonce,
+    protocolBudget: browserProtocolBudget().protocol,
+  });
+  window.__WORLDKIT_HOSTED_RUNTIME__ = Object.freeze({
+    phase: () => bridge.phase(),
+    submit: (request) => bridge.submit(request),
+    frame,
+  });
+  await bridge.waitUntilReady();
+  requiredElement<HTMLElement>("[data-state]").textContent = "READY";
+  window.addEventListener("beforeunload", () => bridge.dispose(), { once: true });
+}
+
+async function startHostedFrame(): Promise<void> {
+  const query = new URLSearchParams(location.search);
+  const shellOrigin = query.get("shellOrigin");
+  const runtimeSessionId = query.get("runtimeSessionId");
+  const sessionNonce = query.get("sessionNonce");
+  if (shellOrigin === null || runtimeSessionId === null || sessionNonce === null) {
+    throw new Error("WORLDKIT_HOSTED_RUNTIME_FRAME_PARAMETERS_MISSING");
+  }
+  const viewport = requiredElement<HTMLElement>("[data-viewport]");
+  const canvas = document.createElement("canvas");
+  canvas.tabIndex = 0;
+  viewport.replaceChildren(canvas);
+  const verified = await loadVerifiedNativeWorldPackageV1(
+    new URL("/world-packages/cloud-ridge/", location.origin),
+  );
+  const moduleImport = await import("virtual:worldkit-cloud-ridge-native-scene");
+  const effectiveBudget = browserProtocolBudget();
+  const requestBody = {
+    kind: "native-isolated-execution-request" as const,
+    schemaVersion: 1 as const,
+    id: `native-isolated-execution-request.${runtimeSessionId}`,
+    runtimeSessionId,
+    worldPackageRef: verified.receipt.worldPackageRef,
+    worldPackageRootHash: verified.receipt.worldPackageRootHash,
+    worldBuildIdentityHash: verified.receipt.worldBuildIdentityHash,
+    sceneModuleBundleHash: verified.sceneModuleBundleHash,
+    nativeSceneContributionHash: verified.manifest.sceneSource.nativeSceneContributionHash,
+    nativeExecutionTrustProfileRef: "worldkit://native-execution-trust-profile/hosted-isolated@1",
+    nativeExecutionTrustProfileHash: `sha256:${"a".repeat(64)}` as const,
+    runnerIdentityRef: "worldkit://native-isolation-runner/browser-origin@1",
+    runnerImageDigest: `sha256:${"b".repeat(64)}` as const,
+    sandboxPolicyHash: `sha256:${"c".repeat(64)}` as const,
+    effectiveBudget,
+    effectiveBudgetHash: hashNativeEffectiveExecutionBudgetV1(effectiveBudget),
+    requestedOperation: { mode: "interactive-session" as const },
+    sessionNonce,
+  } satisfies NativeIsolatedExecutionRequestV1;
+  const entry = await createBabylonNativeIsolatedRuntimeEntryV1({
+    request: requestBody,
+    verifiedWorldPackage: verified,
+    moduleLoader: { load: async () => moduleImport.default },
+    // The browser Runtime owns Babylon's same-origin Havok loader.
+    havokWasmBinary: undefined as unknown as ArrayBuffer,
+    engineFactory: () => new Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true }),
+    subjectAssetResolver: cloudRidgeSubjectAssetResolver,
+  });
+  const snapshot = entry.initialSnapshot();
+  const readyBody = {
+    kind: "worldkit-runtime-session-event" as const,
+    schemaVersion: 1 as const,
+    protocolVersion: 1 as const,
+    sequence: 1,
+    runtimeSessionId,
+    worldSessionId: snapshot.worldSessionId,
+    type: "ready" as const,
+    runtimeSessionUri: `worldkit://runtime-session/${runtimeSessionId}` as const,
+    worldPackageRef: verified.receipt.worldPackageRef,
+    worldPackageRootHash: verified.receipt.worldPackageRootHash,
+    worldBuildIdentityHash: verified.receipt.worldBuildIdentityHash,
+    fixedInputControllerEntityId: "native-isolation-controller",
+    supportedRequestTypes: WORLDKIT_RUNTIME_SESSION_REQUEST_TYPES_V1,
+  };
+  startHostedRuntimeFrameV1({
+    entry,
+    readyEvent: { ...readyBody, id: deriveRuntimeSessionEventIdV1(readyBody) },
+    shellOrigin,
+    runtimeSessionId,
+    sessionNonce,
+    protocolBudget: effectiveBudget.protocol,
+  });
+  canvas.focus();
+}
+
+const mode = new URLSearchParams(location.search);
+void (mode.has("hosted-runtime-frame")
+  ? startHostedFrame()
+  : mode.has("hosted")
+    ? startHostedShell()
+    : start()).catch(showFailure);
