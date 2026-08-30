@@ -11,7 +11,7 @@ import { launchChromiumWithSystemFallback } from
 
 const CONTROLLED_ENTITY_ID = "g-bot-primary";
 const EXPECTED_NATIVE_CONTRIBUTION_HASH =
-  "sha256:bb339a494526ee6bb51a40ec351777bfcb77dcc0bc08a9fa2886a63c9215d984";
+  "sha256:cae0d302c98fc886b7406810a736dc94511b412b7228ad484852cae563ce9b3d";
 const EXPECTED_COLLIDER_SUBSHAPE_IDS = Object.freeze([
   "collider-subshape:5af935abea0d5d3da0e32a9e5c1121f3d88f5174c3c0cd32414ea4740b13dc89",
   "collider-subshape:0069b3ff456288eb8ea99f6a7ff396f9886725df6dd89e8626cd14150b71dbcc",

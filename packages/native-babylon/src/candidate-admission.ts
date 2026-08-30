@@ -1,6 +1,5 @@
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
-import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh.js";
 import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import type { Scene } from "@babylonjs/core/scene.js";
 import {
@@ -984,7 +983,7 @@ async function admitBabylonNativeSceneCandidateWithExclusiveProbeV1(
           "Register every and only the proxies joined by the finalized Block Profile.",
         );
       }
-      const allowedMeshes = new Set<AbstractMesh>([
+      const allowedMeshes = new Set<Scene["meshes"][number]>([
         ...targetMeshes,
         ...retainedColliders.map(({ mesh }) => mesh),
       ]);
