@@ -77,22 +77,19 @@ type PassedCandidateAdmission = Extract<
   { readonly outcome: "passed" }
 >;
 
-function assertExactBoxContribution(
-  collider: PassedCandidateAdmission["contribution"]["staticColliders"][number],
+function assertExactIndexedBoxTopology(
+  worldPositionsMetersXYZ: readonly number[],
+  triangleIndices: readonly number[],
   bounds: Readonly<{
     minimum: readonly [number, number, number];
     maximum: readonly [number, number, number];
   }>,
 ): void {
-  expect(collider).toMatchObject({
-    vertexCount: 8,
-    triangleCount: 12,
-  });
-  expect(collider.worldPositionsMetersXYZ).toHaveLength(8 * 3);
-  expect(collider.triangleIndices).toHaveLength(12 * 3);
+  expect(worldPositionsMetersXYZ).toHaveLength(8 * 3);
+  expect(triangleIndices).toHaveLength(12 * 3);
 
   const corners = Array.from({ length: 8 }, (_, index) =>
-    collider.worldPositionsMetersXYZ.slice(index * 3, index * 3 + 3)
+    worldPositionsMetersXYZ.slice(index * 3, index * 3 + 3)
   );
   const cornerKeys = new Set(corners.map((corner) => corner.join(",")));
   expect(cornerKeys.size).toBe(8);
@@ -108,6 +105,158 @@ function assertExactBoxContribution(
       }
     }
   }
+
+  const boundaryFaces = Object.freeze([
+    Object.freeze({
+      id: "x-min",
+      axis: 0,
+      coordinate: bounds.minimum[0],
+      outward: Object.freeze([-1, 0, 0] as const),
+    }),
+    Object.freeze({
+      id: "x-max",
+      axis: 0,
+      coordinate: bounds.maximum[0],
+      outward: Object.freeze([1, 0, 0] as const),
+    }),
+    Object.freeze({
+      id: "y-min",
+      axis: 1,
+      coordinate: bounds.minimum[1],
+      outward: Object.freeze([0, -1, 0] as const),
+    }),
+    Object.freeze({
+      id: "y-max",
+      axis: 1,
+      coordinate: bounds.maximum[1],
+      outward: Object.freeze([0, 1, 0] as const),
+    }),
+    Object.freeze({
+      id: "z-min",
+      axis: 2,
+      coordinate: bounds.minimum[2],
+      outward: Object.freeze([0, 0, -1] as const),
+    }),
+    Object.freeze({
+      id: "z-max",
+      axis: 2,
+      coordinate: bounds.maximum[2],
+      outward: Object.freeze([0, 0, 1] as const),
+    }),
+  ]);
+  const triangleKeys = new Set<string>();
+  const usedCornerIndices = new Set<number>();
+  const triangleCountByFaceId = new Map(
+    boundaryFaces.map(({ id }) => [id, 0]),
+  );
+  const triangleVertexIndicesByFaceId = new Map(
+    boundaryFaces.map(({ id }) => [
+      id,
+      [] as (readonly [number, number, number])[],
+    ]),
+  );
+  for (let offset = 0; offset < triangleIndices.length; offset += 3) {
+    const vertexIndices = [
+      triangleIndices[offset]!,
+      triangleIndices[offset + 1]!,
+      triangleIndices[offset + 2]!,
+    ] as const;
+    for (const vertexIndex of vertexIndices) {
+      expect(Number.isInteger(vertexIndex)).toBe(true);
+      expect(vertexIndex).toBeGreaterThanOrEqual(0);
+      expect(vertexIndex).toBeLessThan(8);
+      usedCornerIndices.add(vertexIndex);
+    }
+    expect(new Set(vertexIndices).size).toBe(3);
+    triangleKeys.add([...vertexIndices].sort((left, right) => left - right)
+      .join(","));
+
+    const vertices = vertexIndices.map((vertexIndex) =>
+      new Vector3(...corners[vertexIndex]! as [number, number, number])
+    );
+    const edgeA = vertices[1]!.subtract(vertices[0]!);
+    const edgeB = vertices[2]!.subtract(vertices[0]!);
+    // Installed Babylon 9.23 ComputeNormals and the Runtime surface owner use
+    // edgeB x edgeA for this vertex order. A positive dot therefore proves
+    // the exact outward winding consumed by both normals and Havok geometry.
+    const rawNormal = Vector3.Cross(edgeB, edgeA);
+    expect(rawNormal.lengthSquared()).toBeGreaterThan(Number.EPSILON);
+
+    const matchingFaces = boundaryFaces.filter(({ axis, coordinate }) =>
+      vertices.every((vertex) => vertex.asArray()[axis] === coordinate)
+    );
+    expect(matchingFaces).toHaveLength(1);
+    const face = matchingFaces[0];
+    if (isNil(face)) {
+      throw new Error("Indexed Box triangle is not on one boundary face.");
+    }
+    const faceTriangleCount = triangleCountByFaceId.get(face.id);
+    if (isNil(faceTriangleCount)) {
+      throw new Error(`Unknown indexed Box boundary face '${face.id}'.`);
+    }
+    triangleCountByFaceId.set(face.id, faceTriangleCount + 1);
+    const faceTriangles = triangleVertexIndicesByFaceId.get(face.id);
+    if (isNil(faceTriangles)) {
+      throw new Error(`Unknown indexed Box boundary face '${face.id}'.`);
+    }
+    faceTriangles.push(vertexIndices);
+    const outward = new Vector3(...face.outward);
+    expect(Vector3.Dot(rawNormal.normalize(), outward)).toBeGreaterThan(
+      0.999999,
+    );
+  }
+  expect(triangleKeys.size).toBe(12);
+  expect([...usedCornerIndices].sort((left, right) => left - right)).toEqual([
+    0, 1, 2, 3, 4, 5, 6, 7,
+  ]);
+  expect(Object.fromEntries(triangleCountByFaceId)).toEqual({
+    "x-min": 2,
+    "x-max": 2,
+    "y-min": 2,
+    "y-max": 2,
+    "z-min": 2,
+    "z-max": 2,
+  });
+  for (const [faceId, faceTriangles] of triangleVertexIndicesByFaceId) {
+    expect(faceTriangles).toHaveLength(2);
+    const first = faceTriangles[0];
+    const second = faceTriangles[1];
+    if (isNil(first) || isNil(second)) {
+      throw new Error(`Indexed Box face '${faceId}' is incomplete.`);
+    }
+    const faceCornerIndices = new Set([...first, ...second]);
+    expect(faceCornerIndices.size).toBe(4);
+    const sharedDiagonal = first.filter((vertexIndex) =>
+      second.includes(vertexIndex)
+    );
+    expect(sharedDiagonal).toHaveLength(2);
+    const diagonalStart = corners[sharedDiagonal[0]!];
+    const diagonalEnd = corners[sharedDiagonal[1]!];
+    if (isNil(diagonalStart) || isNil(diagonalEnd)) {
+      throw new Error(`Indexed Box face '${faceId}' has an invalid diagonal.`);
+    }
+    expect(diagonalStart.filter((coordinate, axis) =>
+      coordinate !== diagonalEnd[axis]
+    )).toHaveLength(2);
+  }
+}
+
+function assertExactBoxContribution(
+  collider: PassedCandidateAdmission["contribution"]["staticColliders"][number],
+  bounds: Readonly<{
+    minimum: readonly [number, number, number];
+    maximum: readonly [number, number, number];
+  }>,
+): void {
+  expect(collider).toMatchObject({
+    vertexCount: 8,
+    triangleCount: 12,
+  });
+  assertExactIndexedBoxTopology(
+    collider.worldPositionsMetersXYZ,
+    collider.triangleIndices,
+    bounds,
+  );
 }
 
 async function auditedAdmission(
@@ -346,6 +495,18 @@ describe("BWB-4 Block Profile Collider Runtime", () => {
     if (isNil(controlledDescriptor)) {
       throw new Error("Verified WorldRuntimeBootstrap is missing its controlled Subject.");
     }
+    const elevatedContribution =
+      verified.nativeSceneContribution.staticColliders.find(
+        ({ id }) => id === "collider-elevated-tread",
+      );
+    if (
+      isNil(elevatedContribution) ||
+      elevatedContribution.traversalBinding.kind !== "static-surface"
+    ) {
+      throw new Error(
+        "Verified Contribution is missing the elevated static surface.",
+      );
+    }
     const blockerContribution = verified.nativeSceneContribution.staticColliders
       .find(({ id }) => id === "collider-half-meter-blocker");
     if (isNil(blockerContribution)) {
@@ -393,9 +554,26 @@ describe("BWB-4 Block Profile Collider Runtime", () => {
           .sort(),
       );
       for (const mesh of collisionMeshes) {
-        expect(mesh.getVerticesData(VertexBuffer.PositionKind))
-          .toHaveLength(8 * 3);
-        expect(mesh.getIndices()).toHaveLength(12 * 3);
+        const colliderId = mesh.metadata?.worldkitEntityId as unknown;
+        if (typeof colliderId !== "string") {
+          throw new Error("Runtime collider Mesh is missing its verified ID.");
+        }
+        const bounds = EXPECTED_COLLIDER_BOUNDS_METERS[
+          colliderId as keyof typeof EXPECTED_COLLIDER_BOUNDS_METERS
+        ];
+        if (isNil(bounds)) {
+          throw new Error(`Unexpected Runtime collider '${colliderId}'.`);
+        }
+        const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
+        const indices = mesh.getIndices();
+        if (isNil(positions) || isNil(indices)) {
+          throw new Error(`Runtime collider '${colliderId}' lost indexed geometry.`);
+        }
+        assertExactIndexedBoxTopology(
+          [...positions],
+          [...indices],
+          bounds,
+        );
       }
       expect(spawnCollisionMesh?.metadata).toMatchObject({
         worldkitEntityId: "collider-ground-zero",
@@ -423,15 +601,19 @@ describe("BWB-4 Block Profile Collider Runtime", () => {
       expect(elevatedSupport.hasHit).toBe(true);
       expect(elevatedSupport.hitPointWorld.y).toBeCloseTo(0.25, 5);
       expect(elevatedSupport.hitNormalWorld.y).toBeGreaterThan(0.99);
-      expect(elevatedSupport.body?.transformNode.metadata).toMatchObject({
-        worldkitEntityId: "collider-elevated-tread",
-        colliderSubshapeId: expect.stringMatching(/^collider-subshape:[a-f0-9]{64}$/),
-        worldkitNativeTraversalKind: "static-surface",
-        worldkitSurfaceEntityId: "surface-elevated-tread",
-        worldkitLogicalSubshapeId: "top",
-        worldkitTraversalSurfaceId: expect.stringMatching(/^traversal-surface:/),
+      expect(elevatedSupport.body?.transformNode.metadata).toEqual({
+        worldkitEntityId: elevatedContribution.id,
+        colliderSubshapeId: elevatedContribution.colliderSubshapeId,
+        worldkitNativeTraversalKind:
+          elevatedContribution.traversalBinding.kind,
+        worldkitSurfaceEntityId:
+          elevatedContribution.traversalBinding.surfaceEntityId,
+        worldkitLogicalSubshapeId:
+          elevatedContribution.traversalBinding.logicalSubshapeId,
+        worldkitTraversalSurfaceId:
+          elevatedContribution.traversalBinding.traversalSurfaceId,
         worldkitTraversalSurfaceProfileRef:
-          "worldkit://traversal-surface-profile/ground.static@1",
+          elevatedContribution.traversalBinding.traversalSurfaceProfileRef,
       });
 
       const firstTraversal = await runSegmentedTraversal();
