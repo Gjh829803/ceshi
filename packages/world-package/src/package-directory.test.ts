@@ -1,4 +1,6 @@
 import { canonicalJsonBytes, sha256Bytes } from "@whitebox-world/protocol";
+import { hashBabylonNativeSceneContributionV1 } from
+  "@whitebox-world/runtime-contracts";
 import {
   hashWorldBuildIdentityV1,
   worldPackageRefFromRootHashV1,
@@ -114,6 +116,78 @@ function withCanonicalAuthoringSpecHashDrift(
   };
 }
 
+function withNativeContributionProfileDrift(
+  directory: WorldPackageDirectoryV1,
+) {
+  if (directory.receipt.manifest.sceneSource.kind !== "babylon-native-scene") {
+    throw new Error("Babylon Native fixture required.");
+  }
+  const contribution = JSON.parse(new TextDecoder().decode(
+    directory.files.find(({ path }) => path === "native/contribution.json")!
+      .bytes,
+  )) as Record<string, unknown>;
+  const driftedContribution = {
+    ...contribution,
+    profileSettlement: {
+      kind: "host-snapshot",
+      profileRef: "worldkit://native-scene-profile/whitebox.blocks@1",
+      targetCount: 1,
+      profileInventoryHash: `sha256:${"1".repeat(64)}`,
+      settledVisualHash: `sha256:${"2".repeat(64)}`,
+    },
+  };
+  const contributionHash = hashBabylonNativeSceneContributionV1(
+    driftedContribution,
+  );
+  const manifest = {
+    ...directory.receipt.manifest,
+    sceneSource: {
+      ...directory.receipt.manifest.sceneSource,
+      nativeSceneContributionHash: contributionHash,
+    },
+  };
+  const files = rootFiles(directory).map((file) => {
+    if (file.path === "native/contribution.json") {
+      return { ...file, bytes: canonicalJsonBytes(driftedContribution) };
+    }
+    if (file.path === "manifest.json") {
+      return { ...file, bytes: canonicalJsonBytes(manifest) };
+    }
+    return file;
+  });
+  const fileIntegrityEntries =
+    canonicalizeWorldPackageFileIntegrityEntriesV1(files.map((file) => ({
+      path: file.path,
+      mediaType: file.mediaType,
+      sizeBytes: file.bytes.byteLength,
+      contentHash: sha256Bytes(file.bytes) as `sha256:${string}`,
+    })));
+  const worldPackageRootHash = hashWorldPackageRootV1(fileIntegrityEntries);
+  const worldPackageRef = worldPackageRefFromRootHashV1(worldPackageRootHash);
+  const worldBuildIdentity = {
+    ...directory.receipt.worldBuildIdentity,
+    worldPackageRef,
+    worldPackageRootHash,
+    sceneSourceIdentity: {
+      ...directory.receipt.worldBuildIdentity.sceneSourceIdentity,
+      nativeSceneContributionHash: contributionHash,
+    },
+  };
+  return {
+    files,
+    receipt: {
+      ...directory.receipt,
+      manifest,
+      manifestHash: hashWorldPackageManifestV1(manifest),
+      fileIntegrityEntries,
+      worldPackageRootHash,
+      worldPackageRef,
+      worldBuildIdentity,
+      worldBuildIdentityHash: hashWorldBuildIdentityV1(worldBuildIdentity),
+    },
+  };
+}
+
 describe("WorldPackageDirectoryV1", () => {
   it("recomputes and exposes every member of the exact runtime closure", () => {
     const verified = verifyWorldPackageDirectoryV1(fixture());
@@ -181,5 +255,14 @@ describe("WorldPackageDirectoryV1", () => {
 
     expect(() => assembleWorldPackageDirectoryV1(tampered))
       .toThrow("WORLD_PACKAGE_DIRECTORY_INVALID");
+  });
+
+  it("rejects a self-consistent Contribution settlement Profile mismatch", () => {
+    const directory = createBabylonNativeWorldPackageV1(
+      createBabylonNativeWorldPackageTestInputV1(),
+    );
+    expect(() => assembleWorldPackageDirectoryV1(
+      withNativeContributionProfileDrift(directory),
+    )).toThrow("WORLD_PACKAGE_NATIVE_MEMBERSHIP_INVALID");
   });
 });

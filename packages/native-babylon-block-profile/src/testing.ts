@@ -14,7 +14,9 @@ const RUNTIME_FIXTURE_BLOCKS = Object.freeze([
 ]);
 
 /** Test-only exact Module for real BWB-4 Package/Havok evidence. */
-export function createBabylonNativeBlockColliderRuntimeFixtureModuleV1():
+export function createBabylonNativeBlockColliderRuntimeFixtureModuleV1(
+  input: Readonly<{ paletteRole?: "ground" | "structure" }> = {},
+):
 BabylonNativeSceneModuleV1 {
   return defineBabylonNativeScene({
     kind: "babylon-native-scene-module",
@@ -27,7 +29,10 @@ BabylonNativeSceneModuleV1 {
         session.createBlock({
           id: block.id,
           shape: block.shape,
-          paletteRole: "ground",
+          paletteRole: input.paletteRole ?? "ground",
+          ...(input.paletteRole === "structure"
+            ? { visualGroupId: "runtime-fixture-structure" }
+            : {}),
         }).position.set(block.center[0], block.center[1], block.center[2]);
       }
       const traversalSurfaceProfileRef =

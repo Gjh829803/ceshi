@@ -681,6 +681,8 @@ export function assertBabylonNativeWorldPackageMembershipV1(
     check.checkedInput.kind !== "native-scene-module" ||
     check.checkedInput.sceneModuleRef !== bootstrap.sceneModuleRef ||
     contribution.sceneModuleRef !== bootstrap.sceneModuleRef ||
+    contribution.profileSettlement.profileRef !==
+      bootstrap.nativeSceneProfileRef ||
     bundle.sceneModuleRef !== bootstrap.sceneModuleRef ||
     bundle.nativeSceneApi.resourceRef !== bootstrap.nativeSceneApiRef ||
     bundle.nativeSceneProfile.resourceRef !== bootstrap.nativeSceneProfileRef ||

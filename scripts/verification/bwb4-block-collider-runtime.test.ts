@@ -19,7 +19,7 @@ import {
   createBabylonNativeWorldPackageV1,
   verifyWorldPackageDirectoryV1,
 } from "@whitebox-world/world-package";
-import { createBabylonNativeWorldPackageTestInputV1 } from
+import { createBabylonNativeBlockWorldPackageTestInputV1 } from
   "@whitebox-world/world-package/testing";
 import { describe, expect, it } from "vitest";
 
@@ -40,8 +40,8 @@ const RESOURCE_BUDGET = Object.freeze({
 
 async function auditedContribution(
   module: BabylonNativeSceneModuleV1,
-): Promise<ReturnType<typeof createBabylonNativeWorldPackageTestInputV1>["nativeSceneContribution"]> {
-  const packageInput = createBabylonNativeWorldPackageTestInputV1({
+): Promise<ReturnType<typeof createBabylonNativeBlockWorldPackageTestInputV1>["nativeSceneContribution"]> {
+  const packageInput = createBabylonNativeBlockWorldPackageTestInputV1({
     resourceBudget: RESOURCE_BUDGET,
   });
   const engine = new NullEngine();
@@ -72,12 +72,19 @@ async function auditedContribution(
   }
 }
 
-async function createRuntime(): Promise<BabylonWorldRuntime> {
-  const module = createBabylonNativeBlockColliderRuntimeFixtureModuleV1();
-  const contribution = await auditedContribution(module);
+async function createRuntime(input: Readonly<{
+  packageModule?: BabylonNativeSceneModuleV1;
+  runtimeModule?: BabylonNativeSceneModuleV1;
+  engineFactory?: () => NullEngine;
+  onInitializationStage?: (stage: string) => void;
+}> = {}): Promise<BabylonWorldRuntime> {
+  const packageModule = input.packageModule ??
+    createBabylonNativeBlockColliderRuntimeFixtureModuleV1();
+  const runtimeModule = input.runtimeModule ?? packageModule;
+  const contribution = await auditedContribution(packageModule);
   const verified = verifyWorldPackageDirectoryV1(
     createBabylonNativeWorldPackageV1(
-      createBabylonNativeWorldPackageTestInputV1({
+      createBabylonNativeBlockWorldPackageTestInputV1({
         resourceBudget: RESOURCE_BUDGET,
         nativeSceneContribution: contribution,
       }),
@@ -105,19 +112,22 @@ async function createRuntime(): Promise<BabylonWorldRuntime> {
         sceneSource: configuration.sceneSource,
       }),
       verifiedWorldPackage: verified,
-      moduleLoader: Object.freeze({ load: async () => module }),
+      moduleLoader: Object.freeze({ load: async () => runtimeModule }),
     },
     worldRuntimeBootstrap: verified.worldRuntimeBootstrap,
     gameplayBootstrap: verified.gameplayBootstrap,
     runtimeSessionId,
     havokWasmBinary,
-    engineFactory: () => new NullEngine({
+    engineFactory: input.engineFactory ?? (() => new NullEngine({
       renderWidth: 64,
       renderHeight: 64,
       textureSize: 64,
       deterministicLockstep: true,
       lockstepMaxSteps: 4,
-    }),
+    })),
+    ...(input.onInitializationStage === undefined
+      ? {}
+      : { onInitializationStage: input.onInitializationStage }),
   });
   await bindRuntimeTestPossession(
     runtime,
@@ -127,6 +137,34 @@ async function createRuntime(): Promise<BabylonWorldRuntime> {
 }
 
 describe("BWB-4 Block Profile Collider Runtime", () => {
+  it("rejects settled visual drift before Havok, camera, or subjects", async () => {
+    const initializationStages: string[] = [];
+    let candidateEngine: NullEngine | undefined;
+    await expect(createRuntime({
+      packageModule:
+        createBabylonNativeBlockColliderRuntimeFixtureModuleV1(),
+      runtimeModule:
+        createBabylonNativeBlockColliderRuntimeFixtureModuleV1({
+          paletteRole: "structure",
+        }),
+      engineFactory: () => {
+        candidateEngine = new NullEngine({
+          renderWidth: 64,
+          renderHeight: 64,
+          textureSize: 64,
+          deterministicLockstep: true,
+          lockstepMaxSteps: 4,
+        });
+        return candidateEngine;
+      },
+      onInitializationStage: (stage) => initializationStages.push(stage),
+    })).rejects.toThrow(
+      "WORLDKIT_NATIVE_SCENE_RUNTIME_CONTRIBUTION_MISMATCH",
+    );
+    expect(initializationStages).toEqual(["engine", "scene", "native-scene"]);
+    expect(candidateEngine?.isDisposed).toBe(true);
+  });
+
   it("preserves core Surface identity, blocks a 0.5m step, and loses support at the ledge", async () => {
     const runtime = await createRuntime();
     const internals = runtime as unknown as { scene: Scene; engine: NullEngine };
