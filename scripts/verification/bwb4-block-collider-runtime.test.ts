@@ -4,6 +4,8 @@ import { createRequire } from "node:module";
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
+import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
+import { PhysicsEngine } from "@babylonjs/core/Physics/v2/physicsEngine.js";
 import { Scene } from "@babylonjs/core/scene.js";
 import {
   type BabylonNativeSceneModuleV1,
@@ -20,6 +22,7 @@ import { runtimeWorldConfigurationFromVerifiedWorldPackageV1 } from
   "@whitebox-world/runtime-host";
 import {
   createBabylonNativeWorldPackageV1,
+  type VerifiedBabylonNativeWorldPackageDirectoryV1,
   verifyWorldPackageDirectoryV1,
 } from "@whitebox-world/world-package";
 import { createBabylonNativeBlockWorldPackageTestInputV1 } from
@@ -42,16 +45,88 @@ const RESOURCE_BUDGET = Object.freeze({
   maximumColliders: 10,
 });
 
-async function auditedContribution(
+const EXPECTED_COLLIDER_BOUNDS_METERS = Object.freeze({
+  "collider-elevated-tread": Object.freeze({
+    minimum: Object.freeze([-0.5, 0, -3.5] as const),
+    maximum: Object.freeze([0.5, 0.25, -2.5] as const),
+  }),
+  "collider-ground-negative-one": Object.freeze({
+    minimum: Object.freeze([-0.5, -1, -1.5] as const),
+    maximum: Object.freeze([0.5, 0, -0.5] as const),
+  }),
+  "collider-ground-positive-one": Object.freeze({
+    minimum: Object.freeze([-0.5, -1, 0.5] as const),
+    maximum: Object.freeze([0.5, 0, 1.5] as const),
+  }),
+  "collider-ground-zero": Object.freeze({
+    minimum: Object.freeze([-0.5, -1, -0.5] as const),
+    maximum: Object.freeze([0.5, 0, 0.5] as const),
+  }),
+  "collider-half-meter-blocker": Object.freeze({
+    minimum: Object.freeze([-0.5, 0.25, -4.5] as const),
+    maximum: Object.freeze([0.5, 0.75, -3.5] as const),
+  }),
+  "collider-quarter-meter-rise": Object.freeze({
+    minimum: Object.freeze([-0.5, 0, -2.5] as const),
+    maximum: Object.freeze([0.5, 0.25, -1.5] as const),
+  }),
+} as const);
+
+type PassedCandidateAdmission = Extract<
+  Awaited<ReturnType<typeof admitBabylonNativeSceneCandidateV1>>,
+  { readonly outcome: "passed" }
+>;
+
+function assertExactBoxContribution(
+  collider: PassedCandidateAdmission["contribution"]["staticColliders"][number],
+  bounds: Readonly<{
+    minimum: readonly [number, number, number];
+    maximum: readonly [number, number, number];
+  }>,
+): void {
+  expect(collider).toMatchObject({
+    vertexCount: 8,
+    triangleCount: 12,
+  });
+  expect(collider.worldPositionsMetersXYZ).toHaveLength(8 * 3);
+  expect(collider.triangleIndices).toHaveLength(12 * 3);
+
+  const corners = Array.from({ length: 8 }, (_, index) =>
+    collider.worldPositionsMetersXYZ.slice(index * 3, index * 3 + 3)
+  );
+  const cornerKeys = new Set(corners.map((corner) => corner.join(",")));
+  expect(cornerKeys.size).toBe(8);
+  for (let axis = 0; axis < 3; axis += 1) {
+    const coordinates = corners.map((corner) => corner[axis]!);
+    expect(Math.min(...coordinates)).toBe(bounds.minimum[axis]);
+    expect(Math.max(...coordinates)).toBe(bounds.maximum[axis]);
+  }
+  for (const x of [bounds.minimum[0], bounds.maximum[0]]) {
+    for (const y of [bounds.minimum[1], bounds.maximum[1]]) {
+      for (const z of [bounds.minimum[2], bounds.maximum[2]]) {
+        expect(cornerKeys.has(`${x},${y},${z}`)).toBe(true);
+      }
+    }
+  }
+}
+
+async function auditedAdmission(
   module: BabylonNativeSceneModuleV1,
-): Promise<ReturnType<typeof createBabylonNativeBlockWorldPackageTestInputV1>["nativeSceneContribution"]> {
+): Promise<Readonly<{
+  admission: PassedCandidateAdmission;
+  candidateColliderMeshes: readonly Mesh[];
+  candidateScene: Scene;
+  candidateEngine: NullEngine;
+}>> {
   const packageInput = createBabylonNativeBlockWorldPackageTestInputV1({
     resourceBudget: RESOURCE_BUDGET,
   });
   const engine = new NullEngine();
   const scene = new Scene(engine);
+  let admission: PassedCandidateAdmission | undefined;
+  let candidateColliderMeshes: readonly Mesh[] = Object.freeze([]);
   try {
-    const admission = await admitBabylonNativeSceneCandidateV1({
+    const result = await admitBabylonNativeSceneCandidateV1({
       candidate: Object.freeze({ engine, scene }),
       bootstrap: packageInput.nativeSceneBootstrap,
       module,
@@ -66,29 +141,33 @@ async function auditedContribution(
         maximumStaticColliderTriangleCount: RESOURCE_BUDGET.maximumTriangles,
       }),
     });
-    if (admission.outcome !== "passed") {
-      throw new Error(JSON.stringify(admission.diagnostics));
+    if (result.outcome !== "passed") {
+      throw new Error(JSON.stringify(result.diagnostics));
     }
-    return admission.contribution;
+    admission = result;
+    candidateColliderMeshes = Object.freeze(scene.meshes.filter(
+      (mesh): mesh is Mesh =>
+      mesh instanceof Mesh &&
+      mesh.name.startsWith("worldkit-block-collider-"),
+    ));
   } finally {
     scene.dispose();
     engine.dispose();
   }
+  if (isNil(admission)) {
+    throw new Error("BWB-4 fixture admission did not publish a Contribution.");
+  }
+  return Object.freeze({
+    admission,
+    candidateColliderMeshes,
+    candidateScene: scene,
+    candidateEngine: engine,
+  });
 }
 
-async function createRuntime(input: Readonly<{
-  packageModule?: BabylonNativeSceneModuleV1;
-  runtimeModule?: BabylonNativeSceneModuleV1;
-  engineFactory?: () => NullEngine;
-  onInitializationStage?: (stage: string) => void;
-}> = {}): Promise<BabylonWorldRuntime> {
-  const packageModule = isNil(input.packageModule)
-    ? createBabylonNativeBlockColliderRuntimeFixtureModuleV1()
-    : input.packageModule;
-  const runtimeModule = isNil(input.runtimeModule)
-    ? packageModule
-    : input.runtimeModule;
-  const contribution = await auditedContribution(packageModule);
+function verifiedPackage(
+  contribution: PassedCandidateAdmission["contribution"],
+): VerifiedBabylonNativeWorldPackageDirectoryV1 {
   const verified = verifyWorldPackageDirectoryV1(
     createBabylonNativeWorldPackageV1(
       createBabylonNativeBlockWorldPackageTestInputV1({
@@ -100,6 +179,26 @@ async function createRuntime(input: Readonly<{
   if (verified.kind !== "babylon-native-scene") {
     throw new Error("BWB-4 fixture must verify as one Babylon Native Package.");
   }
+  return verified;
+}
+
+async function createRuntime(input: Readonly<{
+  packageModule?: BabylonNativeSceneModuleV1;
+  runtimeModule?: BabylonNativeSceneModuleV1;
+  engineFactory?: () => NullEngine;
+  onInitializationStage?: (stage: string) => void;
+}> = {}): Promise<Readonly<{
+  runtime: BabylonWorldRuntime;
+  verified: VerifiedBabylonNativeWorldPackageDirectoryV1;
+}>> {
+  const packageModule = isNil(input.packageModule)
+    ? createBabylonNativeBlockColliderRuntimeFixtureModuleV1()
+    : input.packageModule;
+  const runtimeModule = isNil(input.runtimeModule)
+    ? packageModule
+    : input.runtimeModule;
+  const packageAdmission = await auditedAdmission(packageModule);
+  const verified = verifiedPackage(packageAdmission.admission.contribution);
   const configuration = runtimeWorldConfigurationFromVerifiedWorldPackageV1(
     verified,
   );
@@ -140,41 +239,67 @@ async function createRuntime(input: Readonly<{
     runtime,
     verified.worldRuntimeBootstrap.initialControlledEntityId,
   );
-  return runtime;
+  return Object.freeze({ runtime, verified });
 }
 
 describe("BWB-4 Block Profile Collider Runtime", () => {
-  it("replays byte-identical Contributions and Package roots from two isolated Candidates", async () => {
-    const first = await auditedContribution(
+  it("replays identical Contributions, hashes, and verified Packages from two disposed Candidates", async () => {
+    const first = await auditedAdmission(
       createBabylonNativeBlockColliderRuntimeFixtureModuleV1(),
     );
-    const second = await auditedContribution(
+    const second = await auditedAdmission(
       createBabylonNativeBlockColliderRuntimeFixtureModuleV1(),
     );
-    expect(second).toEqual(first);
-    expect(first.profileSettlement).toMatchObject({
+    expect(second.admission.contribution).toEqual(
+      first.admission.contribution,
+    );
+    expect(second.admission.contributionHash).toBe(
+      first.admission.contributionHash,
+    );
+    expect(first.admission.contribution.profileSettlement).toMatchObject({
       kind: "host-snapshot",
       profileRef: "worldkit://native-scene-profile/whitebox.blocks@1",
       targetCount: 6,
     });
-    expect(first.staticColliders).toHaveLength(6);
-    for (const collider of first.staticColliders) {
-      expect(collider).toMatchObject({ vertexCount: 8, triangleCount: 12 });
+    const expectedColliderIds = Object.keys(
+      EXPECTED_COLLIDER_BOUNDS_METERS,
+    ).sort();
+    expect(first.admission.contribution.staticColliders.map(({ id }) => id))
+      .toEqual(expectedColliderIds);
+    for (const collider of first.admission.contribution.staticColliders) {
+      const bounds = EXPECTED_COLLIDER_BOUNDS_METERS[
+        collider.id as keyof typeof EXPECTED_COLLIDER_BOUNDS_METERS
+      ];
+      if (isNil(bounds)) {
+        throw new Error(`Unexpected BWB-4 Collider '${collider.id}'.`);
+      }
+      assertExactBoxContribution(collider, bounds);
     }
-    const firstPackage = createBabylonNativeWorldPackageV1(
-      createBabylonNativeBlockWorldPackageTestInputV1({
-        resourceBudget: RESOURCE_BUDGET,
-        nativeSceneContribution: first,
-      }),
-    );
-    const secondPackage = createBabylonNativeWorldPackageV1(
-      createBabylonNativeBlockWorldPackageTestInputV1({
-        resourceBudget: RESOURCE_BUDGET,
-        nativeSceneContribution: second,
-      }),
-    );
+    for (const candidate of [first, second]) {
+      expect(candidate.candidateColliderMeshes).toHaveLength(6);
+      expect(candidate.candidateColliderMeshes.every((mesh) =>
+        mesh.isDisposed()
+      )).toBe(true);
+      expect(candidate.candidateScene.isDisposed).toBe(true);
+      expect(candidate.candidateEngine.isDisposed).toBe(true);
+    }
+
+    const firstPackage = verifiedPackage(first.admission.contribution);
+    const secondPackage = verifiedPackage(second.admission.contribution);
     expect(secondPackage.receipt.worldPackageRootHash).toBe(
       firstPackage.receipt.worldPackageRootHash,
+    );
+    expect(secondPackage.receipt.worldBuildIdentity).toEqual(
+      firstPackage.receipt.worldBuildIdentity,
+    );
+    expect(secondPackage.receipt.worldBuildIdentityHash).toBe(
+      firstPackage.receipt.worldBuildIdentityHash,
+    );
+    expect(firstPackage.nativeSceneContribution).toEqual(
+      first.admission.contribution,
+    );
+    expect(secondPackage.nativeSceneContribution).toEqual(
+      second.admission.contribution,
     );
   });
 
@@ -207,24 +332,66 @@ describe("BWB-4 Block Profile Collider Runtime", () => {
   });
 
   it("passes 0.25m, blocks 0.5m, resets exactly, and loses support at the ledge", async () => {
-    const runtime = await createRuntime();
+    const { runtime, verified } = await createRuntime();
     const internals = runtime as unknown as {
       scene: Scene;
       engine: NullEngine;
-      runtimeSubjects: readonly Readonly<{
-        entityId: string;
-        collider: Readonly<{ maxStepHeightMeters: number }>;
-      }>[];
     };
+    const controlledEntityId =
+      verified.worldRuntimeBootstrap.initialControlledEntityId;
+    const controlledDescriptor =
+      verified.worldRuntimeBootstrap.subjectRuntimeDescriptors.find(
+        ({ entityId }) => entityId === controlledEntityId,
+      );
+    if (isNil(controlledDescriptor)) {
+      throw new Error("Verified WorldRuntimeBootstrap is missing its controlled Subject.");
+    }
+    const blockerContribution = verified.nativeSceneContribution.staticColliders
+      .find(({ id }) => id === "collider-half-meter-blocker");
+    if (isNil(blockerContribution)) {
+      throw new Error("Verified Contribution is missing the half-meter blocker.");
+    }
+    const blockerNearFaceMetersZ = Math.max(
+      ...blockerContribution.worldPositionsMetersXYZ.filter(
+        (_, index) => index % 3 === 2,
+      ),
+    );
+    const blockerCenterLimitMetersZ = blockerNearFaceMetersZ +
+      controlledDescriptor.collider.radiusMeters;
     const spawnCollisionMesh = internals.scene.getMeshByName(
       "worldkit.native-collider.collider-ground-zero",
     );
     const collisionMeshes = internals.scene.meshes.filter(({ name }) =>
       name.startsWith("worldkit.native-collider."));
+    const runSegmentedTraversal = async () => {
+      const supported = await runtime.runFixedInput({ actions: [], ticks: 5 });
+      const crossedRiser = await runtime.runFixedInput({
+        actions: ["move-forward"],
+        ticks: 65,
+      });
+      const elevatedTread = await runtime.runFixedInput({
+        actions: ["move-forward"],
+        ticks: 30,
+      });
+      const blocked = await runtime.runFixedInput({
+        actions: ["move-forward"],
+        ticks: 85,
+      });
+      return Object.freeze({
+        supported,
+        crossedRiser,
+        elevatedTread,
+        blocked,
+      });
+    };
     try {
-      expect(internals.runtimeSubjects.find(({ entityId }) =>
-        entityId === "player")?.collider.maxStepHeightMeters).toBe(0.3);
+      expect(controlledDescriptor.collider.maxStepHeightMeters).toBe(0.3);
       expect(collisionMeshes).toHaveLength(6);
+      expect(collisionMeshes.map(({ name }) => name).sort()).toEqual(
+        Object.keys(EXPECTED_COLLIDER_BOUNDS_METERS)
+          .map((id) => `worldkit.native-collider.${id}`)
+          .sort(),
+      );
       for (const mesh of collisionMeshes) {
         expect(mesh.getVerticesData(VertexBuffer.PositionKind))
           .toHaveLength(8 * 3);
@@ -240,63 +407,104 @@ describe("BWB-4 Block Profile Collider Runtime", () => {
         worldkitTraversalSurfaceProfileRef:
           "worldkit://traversal-surface-profile/ground.static@1",
       });
-      const elevatedSupport = internals.scene.getPhysicsEngine()!.raycast(
+      const physicsEngine = internals.scene.getPhysicsEngine();
+      if (isNil(physicsEngine) || !(physicsEngine instanceof PhysicsEngine)) {
+        throw new Error("BWB-4 Runtime did not initialize installed Havok.");
+      }
+      const elevatedSupportHits = physicsEngine.raycastMulti(
         new Vector3(0, 2, -3),
         new Vector3(0, -1, -3),
       );
+      expect(elevatedSupportHits).toHaveLength(1);
+      const elevatedSupport = elevatedSupportHits[0];
+      if (isNil(elevatedSupport)) {
+        throw new Error("Elevated tread must have exactly one Havok ray hit.");
+      }
       expect(elevatedSupport.hasHit).toBe(true);
       expect(elevatedSupport.hitPointWorld.y).toBeCloseTo(0.25, 5);
       expect(elevatedSupport.hitNormalWorld.y).toBeGreaterThan(0.99);
       expect(elevatedSupport.body?.transformNode.metadata).toMatchObject({
         worldkitEntityId: "collider-elevated-tread",
+        colliderSubshapeId: expect.stringMatching(/^collider-subshape:[a-f0-9]{64}$/),
+        worldkitNativeTraversalKind: "static-surface",
         worldkitSurfaceEntityId: "surface-elevated-tread",
+        worldkitLogicalSubshapeId: "top",
+        worldkitTraversalSurfaceId: expect.stringMatching(/^traversal-surface:/),
+        worldkitTraversalSurfaceProfileRef:
+          "worldkit://traversal-surface-profile/ground.static@1",
       });
-      const supported = await runtime.runFixedInput({ actions: [], ticks: 5 });
-      expect(supported.subjectStatesByEntityId.player).toMatchObject({
+
+      const firstTraversal = await runSegmentedTraversal();
+      expect(firstTraversal.supported.subjectStatesByEntityId[controlledEntityId])
+        .toMatchObject({
         positionMetersXYZ: [0, 0, 0],
         movementMedium: "ground",
       });
-
-      const blocked = await runtime.runFixedInput({
-        actions: ["move-forward"],
-        ticks: 180,
-      });
-      expect(blocked.subjectStatesByEntityId.player!.positionMetersXYZ[2])
-        .toBeLessThan(-2.5);
-      expect(blocked.subjectStatesByEntityId.player!.positionMetersXYZ[2])
-        .toBeGreaterThan(-3.5);
-      expect(blocked.subjectStatesByEntityId.player!.positionMetersXYZ[1])
-        .toBeGreaterThan(0.24);
-      expect(blocked.subjectStatesByEntityId.player!.positionMetersXYZ[1])
-        .toBeLessThan(0.35);
-      expect(blocked.subjectStatesByEntityId.player!.movementMedium).toBe(
-        "ground",
+      const crossedRiser = firstTraversal.crossedRiser
+        .subjectStatesByEntityId[controlledEntityId]!;
+      expect(crossedRiser.positionMetersXYZ[2]).toBeLessThan(-1.5);
+      expect(crossedRiser.positionMetersXYZ[2]).toBeGreaterThan(-2.5);
+      expect(crossedRiser.positionMetersXYZ[1]).toBeGreaterThan(0.24);
+      expect(crossedRiser.positionMetersXYZ[1]).toBeLessThanOrEqual(
+        controlledDescriptor.collider.maxStepHeightMeters + 0.01,
       );
-      const committedHash = sha256CanonicalJson(blocked);
+      expect(crossedRiser.movementMedium).toBe("ground");
+      const elevatedTread = firstTraversal.elevatedTread
+        .subjectStatesByEntityId[controlledEntityId]!;
+      expect(elevatedTread.positionMetersXYZ[2]).toBeLessThan(-2.5);
+      expect(elevatedTread.positionMetersXYZ[2]).toBeGreaterThan(-3.5);
+      expect(elevatedTread.positionMetersXYZ[1]).toBeGreaterThanOrEqual(0.25);
+      expect(elevatedTread.positionMetersXYZ[1]).toBeLessThanOrEqual(0.31);
+      expect(elevatedTread.movementMedium).toBe("ground");
+      const blockedSubject = firstTraversal.blocked
+        .subjectStatesByEntityId[controlledEntityId]!;
+      expect(blockedSubject.positionMetersXYZ[2])
+        .toBeGreaterThanOrEqual(blockerCenterLimitMetersZ - 0.02);
+      expect(blockedSubject.positionMetersXYZ[2])
+        .toBeLessThanOrEqual(blockerCenterLimitMetersZ + 0.08);
+      expect(blockedSubject.positionMetersXYZ[1]).toBeGreaterThanOrEqual(0.25);
+      expect(blockedSubject.positionMetersXYZ[1]).toBeLessThanOrEqual(0.31);
+      expect(blockedSubject.movementMedium).toBe("ground");
+      const committedHash = sha256CanonicalJson(firstTraversal.blocked);
 
       runtime.reset();
-      await bindRuntimeTestPossession(runtime, "player");
-      await runtime.runFixedInput({ actions: [], ticks: 5 });
-      const replayed = await runtime.runFixedInput({
-        actions: ["move-forward"],
-        ticks: 180,
+      await bindRuntimeTestPossession(runtime, controlledEntityId);
+      const replayedTraversal = await runSegmentedTraversal();
+      expect(replayedTraversal).toEqual(firstTraversal);
+      expect(replayedTraversal.blocked).toEqual(firstTraversal.blocked);
+      expect(sha256CanonicalJson(replayedTraversal.blocked)).toBe(
+        committedHash,
+      );
+
+      runtime.reset();
+      await bindRuntimeTestPossession(runtime, controlledEntityId);
+      const reproducedElevated = await runtime.runFixedInput({
+        actions: [],
+        ticks: 5,
       });
-      expect(replayed).toEqual(blocked);
-      expect(sha256CanonicalJson(replayed)).toBe(committedHash);
-
-      runtime.reset();
-      await bindRuntimeTestPossession(runtime, "player");
+      expect(reproducedElevated).toEqual(firstTraversal.supported);
+      const reproducedRiser = await runtime.runFixedInput({
+        actions: ["move-forward"],
+        ticks: 65,
+      });
+      expect(reproducedRiser).toEqual(firstTraversal.crossedRiser);
+      const reproducedTread = await runtime.runFixedInput({
+        actions: ["move-forward"],
+        ticks: 30,
+      });
+      expect(reproducedTread).toEqual(firstTraversal.elevatedTread);
       const departed = await runtime.runFixedInput({
         actions: ["move-right"],
         ticks: 180,
       });
-      expect(departed.subjectStatesByEntityId.player!.positionMetersXYZ[0])
+      expect(departed.subjectStatesByEntityId[controlledEntityId]!
+        .positionMetersXYZ[0])
         .toBeGreaterThan(0.5);
-      expect(departed.subjectStatesByEntityId.player!.positionMetersXYZ[1])
+      expect(departed.subjectStatesByEntityId[controlledEntityId]!
+        .positionMetersXYZ[1])
         .toBeLessThan(-0.25);
-      expect(departed.subjectStatesByEntityId.player!.movementMedium).toBe(
-        "air",
-      );
+      expect(departed.subjectStatesByEntityId[controlledEntityId]!
+        .movementMedium).toBe("air");
     } finally {
       await runtime.dispose();
     }
