@@ -1,14 +1,15 @@
 # WRC-1 Wave A Split-Jump Merge-Candidate Review
 
 - Review date: 2026-08-30
-- Evidence source commit: `8c49e5a1323734508bb4c7abd964e687cdb343e5`
+- Evidence source commit: `4b6a3fbe1c4cb41009a3c39bfc6af64c5923cf97`
 - Branch base: `origin/main` at `38ca91b52af005237420875e27c588c6ebf02b2c`
 - Design authority:
   [`2026-08-30-wrc1-pr41-split-jump-correction-design.md`](../superpowers/specs/2026-08-30-wrc1-pr41-split-jump-correction-design.md)
 - Implementation plan:
   [`2026-08-30-wrc1-wave-a-jump-authority-implementation.md`](../superpowers/plans/2026-08-30-wrc1-wave-a-jump-authority-implementation.md)
-- Local disposition: **implementation and scoped evidence complete; independent exact-SHA Cursor
-  Cloud review and heavy gates still required before merge**
+- Local disposition: **implementation and scoped evidence complete; first-pass Cursor findings
+  repaired; a fresh exact-SHA Cursor Cloud review and affected heavy gates remain required before
+  merge**
 - Release status: `experimental`
 
 This is a Mode B merge-candidate review. It does not mark `JUMP-0..3` or `WRC-GOV-1` complete in
@@ -66,7 +67,7 @@ parent scale, multi-axis diagonal distance, phase discontinuity and over-budget 
 ## 3. Product evidence
 
 The immutable evidence is under
-[`artifacts/examples/alpha-local-actions-world`](../../artifacts/examples/alpha-local-actions-world/verification.json).
+[`examples/evidence/alpha-local-actions-world`](../../examples/evidence/alpha-local-actions-world/verification.json).
 It binds the following identities:
 
 - Normalized IR: `sha256:817d52e713acd72d24e8583e0cda239a38874d70c28cdc0de9b562cac69f43b7`
@@ -81,14 +82,20 @@ valid static correctness evidence but not performance evidence.
 |---|---|
 | two isolated Subjects load | `alpha-primary`, `alpha-secondary` both ready |
 | idle support | Tick 12, position `[-2, 0, 18]`, `movementMedium: ground` |
-| small jump | Tick 60, Y `0.6714166667`, committed variant `small`, medium `air` |
-| large jump | Tick 64, Y `0.8614854167`, committed variant `large`, medium `air` |
+| small jump recipe | `jump`; Tick 60, Y `0.6714166667`, medium `air` |
+| large jump recipe | `jump + run`; Tick 64, Y `0.8614854167`, medium `air` |
 | visual distinction | small/large silhouette difference ratio `0.9103498542` |
+| complete Browser cycle | spawn Tick 0/Y 0; takeoff Tick 51/Y `0.0916666667`; apex Tick 67/Y `0.8171333333`; fall Tick 68/Y `0.81615`; land Tick 92/ground; reset Tick 0/Y 0 |
 | collision | 360 walk-right ticks stop at X `1.28`, before the wall budget X `6.8` |
 | deterministic publication | `verify:alpha-local-actions:update` followed by check mode produced exact matching artifacts |
 
-The reviewer visually inspected [`jump.png`](../../artifacts/examples/alpha-local-actions-world/jump.png)
-and [`jump-large.png`](../../artifacts/examples/alpha-local-actions-world/jump-large.png): the small
+The product receipt deliberately records the two fixed-input recipes and their physical/visual
+outcomes; it does not publish a caller-provided `jumpVariant` as if Browser V5 observed the private
+Movement Episode. Committed `small`/`large` variant selection remains proven by the Movement
+Snapshot/Hash/Golden tests at the authority layer.
+
+The reviewer visually inspected [`jump.png`](../../examples/evidence/alpha-local-actions-world/jump.png)
+and [`jump-large.png`](../../examples/evidence/alpha-local-actions-world/jump-large.png): the small
 pose is compact with arms bent, while the large pose has a materially wider airborne silhouette.
 This is rendered inspection, not a human `FeelReviewReceipt`. Human feel promotion remains owned by
 the later WRC Action/Camera acceptance work and does not upgrade this experimental profile.
@@ -98,18 +105,25 @@ the later WRC Action/Camera acceptance work and does not upgrade this experiment
 | Command or gate | Exact-tree result |
 |---|---|
 | `pnpm check:agent-self-check` | exit 0; Planner and Builder bundles current |
-| `pnpm typecheck` | exit 0 |
+| `pnpm typecheck` after review repairs | exit 0 |
 | planned focused suite | 413 pass; one stale catalog expectation found and repaired |
 | `selectable-control-feel.test.ts` repair replay | 5 / 5 pass |
 | keyboard split-jump latch replay | 1 / 1 pass |
-| `runtime.test.ts` after final admission fix | 139 / 139 pass |
-| `pnpm verify:runtime-authority-boundaries` | exit 0; policy hash `sha256:b4625e82adc3caff782894e0b2733be33b0a272afb0b386290120e457f8b3e85` |
+| `runtime.test.ts` after current-pose foot-anchor repair | 139 / 139 pass |
+| `pnpm verify:runtime-authority-boundaries` | exit 0; 659 files; policy hash `sha256:b4625e82adc3caff782894e0b2733be33b0a272afb0b386290120e457f8b3e85` |
 | `pnpm verify:3c-migration` | exit 0; 11 entries, 61 live references; ceiling not relaxed |
-| `pnpm verify:g-bot-subject` | exit 0; existing product evidence unchanged |
+| `pnpm verify:g-bot-subject` after shared verifier repair | exit 0; existing product evidence matches |
 | `pnpm verify:alpha-local-actions:update` | exit 0; artifacts published |
-| `pnpm verify:alpha-local-actions` after final admission fix | exit 0; deterministic check |
+| `pnpm verify:alpha-local-actions` after full-cycle repair | exit 0; deterministic check |
 | `pnpm build` after final admission fix | exit 0; 2,215 modules; existing chunk advisory only |
 | `git diff --check` | exit 0 before evidence commit |
+
+The first independent Cursor Cloud review at `b3e34a40689ac6ee45c31848fcddf836bef09110`
+returned an authority GO with four P2 findings. The separate heavy-gate agent passed 19 requested
+commands but returned NO-GO because root tests exposed the retired artifact path and a stale
+WorldPackage identity gold, while Python validation left an untracked `__pycache__`. All review and
+gate findings are repaired in the evidence source commit above; the final exact-SHA replay remains a
+separate pre-merge step.
 
 Root `pnpm test` was intentionally not repeated locally. The WRC-1 verification policy assigns full
 repository heavy gates and independent review to separate Cursor Cloud tasks against the exact merge
@@ -151,6 +165,34 @@ The first implementation repeated `activeMotionKernelRef` in a second mapping br
 then consumes it after the fixed sample. Shift-at-press is added only when that existing mapping
 resolved `jump`; the migration ceiling remains unchanged.
 
+### P2: Browser evidence mislabeled requested input as committed variant
+
+The verifier no longer serializes a caller-provided `jumpVariant`. Its split-jump section uses
+`small` and `large` as recipe slots and records only Browser-observed position, medium and rendered
+silhouette. A separate Tick-by-Tick Browser cycle now proves spawn, takeoff, apex, fall, land and
+clean reset without exposing the private Jump Episode through Browser V5.
+
+### P2: governance did not reject private owner imports
+
+The authority verifier now rejects static imports or re-exports below
+`@whitebox-world/character-movement/*` from the Babylon provider while continuing to admit the
+package root contract. A RED-to-GREEN regression proves the exact private-import diagnostic.
+
+### P2: foot anchoring could sample the previous render pose
+
+Installed Babylon `9.23.0` inspection showed that `AnimationGroup.goToFrame()` does not prepare the
+Skeleton. The visual sampler now calls the owned Skeleton's `prepare(true)` before reading foot
+absolute positions. The regression proves a finite, non-zero correction within the existing
+`0.03 m` per-Tick visual-only limit while both committed Subject roots and the sibling instance remain
+unchanged.
+
+### Gate blockers: retired evidence path, stale identity gold and Python cache
+
+Alpha evidence now lives under the repository's single checked-in example authority,
+`examples/evidence/`. The placement-world identity expectation was regenerated from the changed
+Registry lock rather than weakening equality, and nested `__pycache__/` output is ignored so a
+read-only test run leaves the tracked-tree contract clean.
+
 ## 6. Remaining pre-merge work
 
 1. Commit this review document and use the resulting exact SHA for two separate Cursor Cloud tasks:
@@ -159,4 +201,3 @@ resolved `jump`; the migration ceiling remains unchanged.
 3. Push the replacement branch, create the replacement PR, link and close superseded PR #51.
 4. After merge, update the live backlog with the merged `main` SHA and start the next independently
    useful WRC-1 package.
-
