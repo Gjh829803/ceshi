@@ -489,6 +489,9 @@ importers:
       '@whitebox-world/traversal':
         specifier: workspace:*
         version: link:../traversal
+      '@whitebox-world/world-package':
+        specifier: workspace:*
+        version: link:../world-package
       babylonjs-gltf2interface:
         specifier: 9.23.0
         version: 9.23.0
