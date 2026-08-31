@@ -234,7 +234,19 @@ function assertAuthoringClosure(
     bootstrap.gameplayBootstrapRef !== gameplay.resourceRef ||
     runtime.gameplayBootstrapRef !== gameplay.resourceRef ||
     runtime.gameplayBootstrapHash !== gameplay.contentHash ||
-    runtime.initialControlledEntityId !== bootstrap.initialControlledEntityId
+    runtime.initialControlledEntityId !== bootstrap.initialControlledEntityId ||
+    !isEqual(
+      runtime.gravityMetersPerSecondSquaredXYZ,
+      bootstrap.gravityMetersPerSecondSquaredXYZ,
+    ) ||
+    runtime.initialCamera.mode !== bootstrap.initialCamera.mode ||
+    runtime.initialCamera.pitchRadians !==
+      bootstrap.initialCamera.pitchRadians ||
+    runtime.initialCamera.distanceMeters !==
+      bootstrap.initialCamera.distanceMeters ||
+    runtime.initialCamera.fovDegrees !== bootstrap.initialCamera.fovDegrees ||
+    runtime.initialCamera.targetHeightMeters !==
+      bootstrap.initialCamera.targetHeightMeters
   ) return fail();
 }
 

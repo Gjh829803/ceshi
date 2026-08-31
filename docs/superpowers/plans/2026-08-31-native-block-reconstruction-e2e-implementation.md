@@ -20,6 +20,7 @@
 - All model work goes through `scripts/agents/run-codex-task.mjs`; creation submits exactly once and uncertain outcomes reconcile by request ID.
 - Use current-only clean breaks: one public name, parser, entry point, and state owner; delete replaced fields, aliases, fallbacks, duplicate DTOs, and Case-specific production adapters.
 - Checker success precedes Package build; verified Package plus Host admission precede Runtime Candidate allocation.
+- For Native generation, `BabylonNativeSceneBootstrapV1` is only the Host-derived read-only startup projection. `GameplayBootstrapV1`, `WorldRuntimeBootstrapV1`, and validated `WorldPackageWorldBoundsV1` remain the canonical owners whose identities the Request context binds.
 - Static collision comes only from explicit Frozen Contributions; SDK remains sole owner of Havok, Character Capsule, support, Input, Fixed Tick, Action, Camera, Reset, and lifecycle.
 - The current Unified Scene Viewer (`apps/playground`, its curated Catalog/bootstrap, Studio preview route, and `worldkit run`) remains Canonical AuthoringSpec-only. NBR-1 must not add a Native route to that shell or alter its public source-selection contract.
 - Native Package launch and formal Capture use the retained BNA verification Web Harness in `apps/native-scene-playground` and an explicit BNA-scoped CLI route. That Harness is evidence infrastructure, not a second product Viewer or a new Runtime owner.
@@ -508,11 +509,13 @@ git commit -m "feat: add native block reconstruction builder skill"
 - Create: `artifacts/scenes/cloud-temple-t-gate-native-block/evaluation-profile.json`
 - Create: `artifacts/scenes/cloud-temple-t-gate-native-block/inputs/reference-0.png` by copying and hash-binding `/Users/xiateng/Downloads/测试集/1.png`
 - Create: `artifacts/scenes/cloud-temple-t-gate-native-block/inputs/scene-brief.md` from the accepted Cloud Ridge Scene Brief, preserving visible facts and labeling the top T continuation as inferred
-- Create: `artifacts/scenes/cloud-temple-t-gate-native-block/inputs/native-scene.bootstrap.json` as a Host-derived, read-only input frozen before task creation
+- Create: `artifacts/scenes/cloud-temple-t-gate-native-block/inputs/world-bounds.json` as the validated `WorldPackageWorldBoundsV1` input for the later Package manifest
+- Reuse: the admitted G Bot `GameplayBootstrapV1` and `WorldRuntimeBootstrapV1` from the retained verified Cloud Ridge Package as Host owner inputs; do not duplicate their large Registry closure under the Case source directory
+- Materialize: canonical `gameplay-bootstrap.json`, `world-runtime-bootstrap.json`, `world-bounds.json`, and Host-derived `native-scene.bootstrap.json` under `artifacts/scenes/cloud-temple-t-gate-native-block/runs/<run-id>/attempts/0/inputs/` before router submission
 - Modify: `package.json`
 
 **Interfaces:**
-- Consumes: parsed Case/Profile, route decision, Builder Skill context, Host-selected backend and immutable input files.
+- Consumes: parsed Case/Profile, route decision, parsed `GameplayBootstrapV1`, parsed `WorldRuntimeBootstrapV1`, validated `WorldPackageWorldBoundsV1`, Builder Skill context, Host-selected Scene Module/API/Profile refs and backend, and immutable input files.
 - Produces: `prepareNativeBlockGenerationTaskV1(input): PreparedNativeBlockGenerationTaskV1`; `runNativeBlockGenerationV1(input, ports): Promise<NativeBlockGenerationRunV1>` with atomically promoted outputs and parsed `NativeBlockGenerationReceiptV1`.
 
 - [ ] **Step 1: Write RED Request materialization tests**
@@ -535,7 +538,7 @@ expect(prepared.routerArguments).toContain("--submit-attempts");
 expect(prepared.routerArguments).toContain("1");
 ```
 
-Reject a Canonical/capability-gap decision, changed input bytes after hashing, undeclared output, `attemptIndex > 1`, output outside the run directory, and any symbolic-link input.
+Reject a Canonical/capability-gap decision, a caller-forged Native decision, Route/Case Scene Brief mismatch, changed input bytes after hashing, undeclared output, `attemptIndex > 1`, output outside the run directory, symbolic-link files or ancestors, an existing Attempt/task root, and duplicate router identity across run IDs. Require exact resolved-resource descriptors with content hashes. Add cross-owner RED cases for a Gameplay ref/hash mismatch, a World Runtime Bootstrap not admitted by the selected Registry Lock or whose controlled descriptor/Camera closure does not close `initialControlledEntityId`, a Case Spawn mismatch, invalid WorldPackage Bounds, and any change to Gameplay/World Runtime/Bounds canonical bytes after Request identity is frozen.
 
 - [ ] **Step 2: Write RED runner lifecycle tests with an injected process port**
 
@@ -565,12 +568,14 @@ Expected: FAIL because the generation owner does not exist.
 
 `prepareNativeBlockGenerationTaskV1()` must:
 
-1. derive and freeze `native-scene.bootstrap.json` from the Case/Profile before task creation, then re-read and hash the Case, Profile, Scene Brief, reference image, task instruction, Builder Skill, canonical sorted workspace-context manifest and each context input, and Host-selected Native API/Profile/Block Profile content;
-2. call `decideSceneAuthoringRouteV1()` before creating an Attempt;
-3. create `NativeBlockGenerationRequestV1` binding `taskInstructionRef/Hash`, `builderSkillRef/Hash`, `workspaceContextManifestRef/Hash`, sorted `contextInputs`, API/Profile/Block Profile refs and content hashes, and `bootstrapInputRef/Hash`; then create a Native `SceneAuthoringAttemptV1` whose source input binds that Request and frozen Bootstrap;
-4. write instruction/context assets to a sibling staging directory with mode `0700` and reject symlinks;
-5. construct the complete canonical router task payload from the already-hashed Request, compute `routerTaskPayloadHash`, record that hash only in the Generation Receipt, then construct router arguments with one task, one request ID, formal profile, timeout from the Request, three declared outputs, and a unique S3 prefix `<scene-id>/<run-id>/attempt-0` for cloud;
-6. never pass credentials, the mutable checkout, unrelated artifacts, or absolute host paths in serialized contracts.
+1. parse the Case/Profile, `GameplayBootstrapV1`, `WorldRuntimeBootstrapV1` and `WorldPackageWorldBoundsV1`; prove the Gameplay ref/hash link, controlled Subject closure, Camera closure, Case Spawn identity and finite bounds; derive the sole `BabylonNativeSceneBootstrapV1` from the Case-bound Spawn/seed, Gameplay/World Runtime values and Host-selected Scene Module/API/Profile refs;
+2. canonical-materialize `native-scene.bootstrap.json` under the durable Attempt input directory before task creation, freeze its bytes, and then re-read and hash the Case, Profile, Scene Brief, reference image, Gameplay Bootstrap, World Runtime Bootstrap, WorldPackage Bounds, task instruction, Builder Skill, canonical sorted workspace-context manifest and each context input, plus Host-selected Native API/Profile/Block Profile content;
+3. parse the supplied Route, prove its Case Scene Brief closure, recompute it with `decideSceneAuthoringRouteV1()`, require byte-equivalent output, and retain its Case-level identity rather than making it run-scoped;
+4. parse exact Native API/Profile/Block resolved-resource descriptors; bind canonical Registry refs plus resolved content hashes in `NativeBlockGenerationRequestV1`, while binding descriptor paths plus descriptor-byte hashes only in sorted `contextInputs`; use only `worldkit://native-scene-api/babylon@1` for the current Case;
+5. create the Request and Native `SceneAuthoringAttemptV1` with stable run-scoped Request/Attempt/router identities, and create a typed Host-closure descriptor binding the admitted World Runtime Bootstrap ref/resolved version/content hash to the parsed Bootstrap content hash;
+6. atomically publish one fresh durable Attempt containing Route, Request, Attempt, Host closure, canonical Gameplay/World Runtime/Bounds/Bootstrap bytes and exact API/Profile/Block descriptors; reject existing Attempt/task roots and symbolic-link input/output ancestors; cleanup may remove only the isolated `.task`, never these durable inputs;
+7. construct the complete canonical router task payload from the already-hashed Request, compute `routerTaskPayloadHash`, record that hash only in the Generation Receipt, then construct router arguments with one task, one request ID, formal profile, timeout from the Request, three declared outputs, and a unique S3 prefix `<scene-id>/<run-id>/attempt-0` for cloud;
+8. never pass credentials, the mutable checkout, unrelated artifacts, or absolute host paths in serialized contracts.
 
 - [ ] **Step 5: Implement run, reconciliation, receipt, and atomic promotion**
 
@@ -580,7 +585,7 @@ The completed Attempt Result binds `authoredSourceHash` to the admitted source g
 
 - [ ] **Step 6: Create and validate the real Case inputs**
 
-Copy the source image without transformation, calculate its SHA-256, and bind it in `case.json`. Bind the copied Scene Brief hash. The Case must contain non-empty acceptance targets for foreground platform, central ascent, mountain/cliff layers, upper T junction, gate mass, supported Spawn, required blocker colliders, and fixed-input traversal checkpoints. `evaluation-profile.json` fixes one formal model/Profile/Prompt/budget/threshold set, `maximumRepairAttemptCount: 1`, and `builderSelfRepairAttemptCount: 0`.
+Copy the source image without transformation, calculate its SHA-256, and bind it in `case.json`. Bind the copied Scene Brief hash. Reuse the retained verified Cloud Ridge Package's canonical Gameplay and World Runtime Bootstrap owner artifacts for the one real controlled Subject/Camera closure, snapshot their canonical bytes into the durable Attempt input, and bind the validated WorldPackage Bounds; do not hand-author a second Subject/Camera closure in the Native Bootstrap. The Case must contain non-empty acceptance targets for foreground platform, central ascent, mountain/cliff layers, upper T junction, gate mass, supported Spawn, required blocker colliders, and fixed-input traversal checkpoints. `evaluation-profile.json` fixes one formal model/Profile/Prompt/budget/threshold set, `maximumRepairAttemptCount: 1`, and `builderSelfRepairAttemptCount: 0`.
 
 Run:
 
@@ -641,7 +646,7 @@ Open PR B. Review the actual formal Generation Receipt and source outputs withou
 - Modify: `package.json`
 
 **Interfaces:**
-- Consumes: one attempt directory containing Host authoring identity and frozen `inputs/native-scene.bootstrap.json` plus `source/scene.ts`, `source/native-block-authoring.json`, and `source/native-resources.json`, and one parsed `WorldReconstructionCaseV1`.
+- Consumes: one attempt directory containing Host authoring identity, canonical Gameplay/World Runtime/Bounds owner inputs, frozen `inputs/native-scene.bootstrap.json`, `source/scene.ts`, `source/native-block-authoring.json`, and `source/native-resources.json`, plus one parsed `WorldReconstructionCaseV1`.
 - Produces: `packageNativeBlockAttemptV1(input): Promise<PackagedNativeBlockAttemptV1>` containing completed Attempt Result, verified `WorldPackageDirectoryV1`, build identity/receipt hashes, and an atomically published Package directory.
 
 - [ ] **Step 1: Write RED generic package tests**
@@ -687,7 +692,8 @@ Expected: FAIL because the generic command/adapter do not exist.
 `packageNativeBlockAttemptV1()` performs this fixed sequence:
 
 ```text
-re-hash Case/Request/Attempt/Generation Receipt/source files
+re-hash Case/Request/Attempt/Generation Receipt/source files and canonical
+Gameplay/World Runtime/Bounds owner inputs
 -> assemble a sibling check staging directory from a Host-read-only copy of
    inputs/native-scene.bootstrap.json plus the exact three source outputs
 -> checkBabylonNativeSceneWorldDirectoryV1(check-staging)
@@ -702,7 +708,7 @@ re-hash Case/Request/Attempt/Generation Receipt/source files
 
 The generated source directory never owns or contains `native-scene.bootstrap.json`. The Host re-hashes the immutable bootstrap input, copies it into the ephemeral sibling check staging directory, rejects symlinks or additional source outputs, and always cleans the staging directory. It does not add a second checker or trust a model-writable bootstrap.
 
-The generic adapter derives shared Package inputs from admitted Registry/profile owners and the Case. It does not hard-code Cloud Ridge hashes, synthesize an empty acceptance/evidence list, infer a Collider from Mesh/tag/name, or allocate a formal Runtime Candidate.
+The generic adapter derives shared Package inputs from admitted Registry/profile owners and the Case. It verifies that the Package manifest publishes the same validated Bounds input and that Gameplay/World Runtime closure matches the identities bound by the Generation Request; it does not copy Bounds or Subject/Camera resource closure from the Native Bootstrap. It does not hard-code Cloud Ridge hashes, synthesize an empty acceptance/evidence list, infer a Collider from Mesh/tag/name, or allocate a formal Runtime Candidate.
 
 - [ ] **Step 5: Add the stable CLI command**
 
@@ -1285,7 +1291,7 @@ Request exact-identity review, close every P0/P1, merge PR F2, and refresh `orig
 - Modify: `package.json`
 
 **Interfaces:**
-- Consumes: frozen Case/Profile/Bootstrap, Attempt 0 evaluation, stable diagnostics, and the generation/package/capture/evaluation owners from Tasks 4/5/9/11.
+- Consumes: frozen Case/Profile, canonical Gameplay/World Runtime/Bounds owner inputs, derived Bootstrap, Attempt 0 evaluation, stable diagnostics, and the generation/package/capture/evaluation owners from Tasks 4/5/9/11.
 - Produces: `runWorldReconstructionV1(input, ports): Promise<WorldReconstructionRunReceiptV1>` with Attempt 0 and at most Attempt 1; every Attempt owns different Request/Attempt/source/Package/Capture identities.
 
 - [ ] **Step 1: Write RED journal state-machine tests**
@@ -1298,7 +1304,7 @@ initial-evaluated(failed, repairable) -> repair-generating -> repair-packaged
 -> repair-captured -> repair-evaluated -> cleanup-joined -> completed
 ```
 
-Also test initial pass (no repair), initial incomplete (no publication), maximum one repair, non-repairable diagnostic, stale Case/Profile/Bootstrap before submission, same request ID/same hash attach, same ID/different hash reject, create timeout unknown/reconcile, duplicate active job reconcile, no output, empty output, Check failure, Package/Capture/Evaluation failure, Camera rollback failure, and cleanup failure.
+Also test initial pass (no repair), initial incomplete (no publication), maximum one repair, non-repairable diagnostic, stale Case/Profile/Gameplay/World Runtime/Bounds/derived Bootstrap before submission, same request ID/same hash attach, same ID/different hash reject, create timeout unknown/reconcile, duplicate active job reconcile, no output, empty output, Check failure, Package/Capture/Evaluation failure, Camera rollback failure, and cleanup failure.
 
 - [ ] **Step 2: Write RED source-only repair tests**
 
@@ -1310,7 +1316,7 @@ native-block-authoring.json
 native-resources.json
 ```
 
-Assert the repair cannot change Case/Profile/Bootstrap, acceptance thresholds, Runtime, Physics, Camera, evaluator, prior Package, prior Capture, or old task workspace. Attempt 1 must bind the same `bootstrapInputHash` and new Request/source graph/Package Root/Capture hashes.
+Assert the repair cannot change Case/Profile, canonical Gameplay/World Runtime/Bounds inputs, derived Bootstrap, acceptance thresholds, Runtime, Physics, Camera, evaluator, prior Package, prior Capture, or old durable Attempt inputs. Attempt 1 must bind the same `bootstrapInputHash` and the same canonical owner-input hashes, plus new Request/source graph/Package Root/Capture hashes.
 
 - [ ] **Step 3: Run RED repair tests**
 
@@ -1403,7 +1409,7 @@ pnpm worldkit reconstruct run \
   --backend cloud --json
 ```
 
-Expected: the router reports `gpt-5.6-sol`/`xhigh`; Host-frozen Bootstrap hash is identical in every Attempt; AI writes only the three declared authoring outputs; Check precedes Package; Runtime/Capture use one admitted Hosted Session per Attempt; and all terminal resources clean up.
+Expected: the router reports `gpt-5.6-sol`/`xhigh`; Host-frozen Bootstrap and canonical Gameplay/World Runtime/Bounds hashes are identical in every Attempt; AI writes only the three declared authoring outputs; Check precedes Package; Runtime/Capture use one admitted Hosted Session per Attempt; task cleanup retains durable Attempt inputs; and all terminal resources clean up.
 
 If initial evaluation has a repairable failure, the command must execute exactly one diagnostic-driven repair and publish a distinct second Package/Capture identity. The NBR-1 acceptance run must contain a real two-Attempt proof; if this initial result has no repairable failure, keep it immutable and run another independently identified initial Case execution under the same already-frozen Case/Profile until a genuine repairable diagnostic occurs. Do not alter thresholds, inject fake evidence, or corrupt a passed Package to manufacture repair.
 
@@ -1578,11 +1584,12 @@ Show the Capture images and state exact gates/review SHA. Say only “NBR-1 vert
 - [ ] Every shared contract lands before its producer/consumer integration.
 - [ ] Every work item has exactly one execution mode and an exclusive file owner.
 - [ ] The Generation Request binds instruction, Skill, canonical context manifest/input hashes, API/Profile/Block Profile content hashes, and frozen Bootstrap; only the Generation Receipt binds `routerTaskPayloadHash`.
+- [ ] The Host derives the Native Bootstrap from Case Spawn/seed, Gameplay Bootstrap, World Runtime Bootstrap and Host-selected refs; WorldBounds remains Package-owned, Subject/Camera resource closure remains WRT-owned, and task cleanup retains the durable Attempt input.
 - [ ] AI writes `scene.ts`, `native-block-authoring.json`, and `native-resources.json`; it never writes the frozen Bootstrap.
 - [ ] NBR-45P binds complete trusted Block materializer metadata and profile settlement fingerprints into Package Root/Receipt before NBR-45B Capture.
 - [ ] Formal Capture includes semantic identity adapter, opening, world top-down, world side, collider overlay, scripted traversal, and same Hosted Session identity.
 - [ ] Evaluation has seven independent dimensions and no masking aggregate/pixel-only GO.
-- [ ] Repair changes only new Native authoring outputs, keeps Case/Profile/Bootstrap frozen, and creates new immutable identities.
+- [ ] Repair changes only new Native authoring outputs, keeps Case/Profile, canonical Gameplay/World Runtime/Bounds inputs and derived Bootstrap frozen, and creates new immutable identities.
 - [ ] Final Case is real AI output, runnable, playable, collision-checked, captured, scored, repaired, and independently reviewed.
 - [ ] No legacy API, duplicate Host, third Source, shadow Plan, Mesh scan, alias, or fallback remains.
 - [ ] `apps/playground`, its curated Catalog/bootstrap, Studio preview, and `worldkit run` remain Canonical-only; NBR-1 adds no Native Viewer contract.

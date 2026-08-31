@@ -55,6 +55,7 @@ import {
   canonicalizeWorldPackageManifestV1,
   hashWorldPackageManifestV1,
   hashWorldPackageRootV1,
+  parseWorldPackageWorldBoundsV1,
 } from "./package-contract.js";
 import { assembleWorldPackageDirectoryV1, type WorldPackageDirectoryFileV1, type WorldPackageDirectoryV1 } from "./package-directory.js";
 import type {
@@ -383,22 +384,11 @@ function resourceVersion(resourceRef: string, path: string): string {
 function nativeBounds(
   input: WorldPackageWorldBoundsV1,
 ): WorldPackageWorldBoundsV1 {
-  const center = input.centerMetersXZ;
-  const size = input.sizeMetersXZ;
-  const height = input.heightRangeMeters;
-  if (
-    !Array.isArray(center) || center.length !== 2 ||
-    !Array.isArray(size) || size.length !== 2 ||
-    !Array.isArray(height) || height.length !== 2 ||
-    [...center, ...size, ...height].some((value) =>
-      typeof value !== "number" || !Number.isFinite(value) || Object.is(value, -0)) ||
-    size[0] <= 0 || size[1] <= 0 || height[0] >= height[1]
-  ) invalid("worldBounds", "must be finite positive bounds");
-  return Object.freeze({
-    centerMetersXZ: Object.freeze([center[0], center[1]] as const),
-    sizeMetersXZ: Object.freeze([size[0], size[1]] as const),
-    heightRangeMeters: Object.freeze([height[0], height[1]] as const),
-  });
+  try {
+    return parseWorldPackageWorldBoundsV1(input);
+  } catch {
+    return invalid("worldBounds", "must be finite positive bounds");
+  }
 }
 
 function nativeBudget(

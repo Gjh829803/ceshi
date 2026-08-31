@@ -35,6 +35,7 @@ import type {
   WorldPackageHostPolicyV1,
   WorldPackageManifestV1,
   WorldPackageSignatureEnvelopeV1,
+  WorldPackageWorldBoundsV1,
 } from "./package-types.js";
 
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
@@ -90,6 +91,56 @@ const PACKAGE_OWNED_RESOURCE_PATHS = new Set([
 
 function fail(code: string, message: string): never {
   throw new Error(`${code}: ${message}`);
+}
+
+function parseWorldBounds(
+  input: unknown,
+  code: string,
+): WorldPackageWorldBoundsV1 {
+  const value = exactRecord(
+    snapshot(input, code),
+    ["centerMetersXZ", "sizeMetersXZ", "heightRangeMeters"],
+    code,
+  );
+  const tuples = {
+    centerMetersXZ: value.centerMetersXZ,
+    sizeMetersXZ: value.sizeMetersXZ,
+    heightRangeMeters: value.heightRangeMeters,
+  };
+  for (const [label, tuple] of Object.entries(tuples)) {
+    if (!Array.isArray(tuple) || tuple.length !== 2) {
+      fail(code, `${label} must have two numbers`);
+    }
+    tuple.forEach((entry, index) => requireFiniteNumber(
+      entry,
+      `${label}/${index}`,
+      code,
+    ));
+  }
+  const centerMetersXZ = tuples.centerMetersXZ as readonly [number, number];
+  const sizeMetersXZ = tuples.sizeMetersXZ as readonly [number, number];
+  const heightRangeMeters = tuples.heightRangeMeters as readonly [number, number];
+  if (
+    sizeMetersXZ.some((size) => size <= 0) ||
+    heightRangeMeters[0] >= heightRangeMeters[1]
+  ) fail(code, "world bounds invalid");
+  return Object.freeze({
+    centerMetersXZ: Object.freeze([...centerMetersXZ]) as readonly [number, number],
+    sizeMetersXZ: Object.freeze([...sizeMetersXZ]) as readonly [number, number],
+    heightRangeMeters: Object.freeze([...heightRangeMeters]) as readonly [number, number],
+  });
+}
+
+export function parseWorldPackageWorldBoundsV1(
+  input: unknown,
+): WorldPackageWorldBoundsV1 {
+  return parseWorldBounds(input, "WORLD_PACKAGE_WORLD_BOUNDS_INVALID");
+}
+
+export function hashWorldPackageWorldBoundsV1(
+  input: unknown,
+): Sha256HashV1 {
+  return sha256CanonicalJson(parseWorldPackageWorldBoundsV1(input)) as Sha256HashV1;
 }
 
 function snapshot(value: unknown, code: string, seen = new WeakSet<object>()): unknown {
@@ -298,31 +349,7 @@ export function canonicalizeWorldPackageManifestV1(
   if (!Number.isSafeInteger(value.seed) || value.seed < 0 || value.seed > 0xffff_ffff) {
     fail("WORLD_PACKAGE_MANIFEST_INVALID", "seed invalid");
   }
-  const worldBounds = exactRecord(
-    value.worldBounds,
-    ["centerMetersXZ", "sizeMetersXZ", "heightRangeMeters"],
-    "WORLD_PACKAGE_MANIFEST_INVALID",
-  );
-  for (const [label, tuple] of Object.entries({
-    centerMetersXZ: worldBounds.centerMetersXZ,
-    sizeMetersXZ: worldBounds.sizeMetersXZ,
-    heightRangeMeters: worldBounds.heightRangeMeters,
-  })) {
-    if (!Array.isArray(tuple) || tuple.length !== 2) {
-      fail("WORLD_PACKAGE_MANIFEST_INVALID", `${label} must have two numbers`);
-    }
-    tuple.forEach((entry, index) =>
-      requireFiniteNumber(
-        entry,
-        `${label}/${index}`,
-        "WORLD_PACKAGE_MANIFEST_INVALID",
-      ));
-  }
-  if (
-    (worldBounds.sizeMetersXZ as readonly number[]).some((size) => size <= 0) ||
-    (worldBounds.heightRangeMeters as readonly number[])[0]! >
-      (worldBounds.heightRangeMeters as readonly number[])[1]!
-  ) fail("WORLD_PACKAGE_MANIFEST_INVALID", "world bounds invalid");
+  parseWorldBounds(value.worldBounds, "WORLD_PACKAGE_MANIFEST_INVALID");
   const budget = exactRecord(
     value.resourceBudget,
     ["maximumVertices", "maximumTriangles", "maximumColliders"],
