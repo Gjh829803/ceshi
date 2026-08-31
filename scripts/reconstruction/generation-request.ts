@@ -170,6 +170,8 @@ export async function prepareNativeBlockGenerationTaskV1(
   const contextDirectoryPath = path.join(taskWorkspacePath, "context");
   await mkdir(contextDirectoryPath, { recursive: true, mode: 0o700 });
   const contextFiles = [
+    ["case.json", input.case],
+    ["evaluation-profile.json", input.profile],
     ["generation-request.json", generationRequest],
     ["attempt.json", attempt],
     ["workspace-context-manifest.json", workspaceContextManifest],

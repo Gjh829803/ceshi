@@ -34,6 +34,12 @@ interface PreparedInput {
   readonly sourceDirectoryPath: string;
 }
 
+function hasTrustedRouterMarker(stdout: string, backend: "cloud" | "local", requestId: string): boolean {
+  const marker = backend === "cloud" ? "WORLDKIT_LWDP_JOB" : "WORLDKIT_LOCAL_CODEX_JOB";
+  const lines = stdout.split(/\r?\n/).filter((line) => line.startsWith(marker));
+  return lines.length === 1 && lines[0]!.includes(` ${requestId} `) && lines[0]!.includes("profile=formal") && lines[0]!.includes("model=gpt-5.6-sol") && lines[0]!.includes("reasoning=xhigh");
+}
+
 function receipt(input: PreparedInput, outcome: NativeBlockGenerationReceiptV1["outcome"], diagnosticCodes: readonly NativeBlockGenerationReceiptV1["diagnosticCodes"][number][], outputs: NativeBlockGenerationReceiptV1["outputs"], cleanupOutcome: "completed" | "failed"): NativeBlockGenerationReceiptV1 {
   return {
     kind: "native-block-generation-receipt", schemaVersion: 1, id: `${input.generationRequest.id}.receipt`,
@@ -73,6 +79,8 @@ export async function runNativeBlockGenerationV1(input: PreparedInput, ports: Na
     if (result.exitCode !== 0) {
       outcome = "rejected";
       diagnostics = ["task-rejected"];
+    } else if (!hasTrustedRouterMarker(result.stdout, input.backend, input.routerRequestId)) {
+      outcome = "rejected"; diagnostics = ["task-rejected"];
     } else {
       try {
         outputs = await inspectOutputs(input);

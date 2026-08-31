@@ -39,7 +39,7 @@ describe("runNativeBlockGenerationV1", () => {
   it("promotes exactly three non-empty outputs only after successful router and self-check", async () => {
     const prepared = await preparedFixture();
     const calls: unknown[] = [];
-    const port: CodexTaskProcessPortV1 = { run: async (runInput) => { calls.push(runInput); await writeOutputs(prepared.stagingDirectoryPath); return { exitCode: 0, stdout: "ok", stderr: "" }; } };
+    const port: CodexTaskProcessPortV1 = { run: async (runInput) => { calls.push(runInput); await writeOutputs(prepared.stagingDirectoryPath); return { exitCode: 0, stdout: "WORLDKIT_LWDP_JOB native-block-generation native-block-generation-cloud-temple.initial job-1 dispatch=single-task-fast-path profile=formal model=gpt-5.6-sol reasoning=xhigh\n", stderr: "" }; } };
     try {
       const result = await runNativeBlockGenerationV1(prepared, {
         process: port,
@@ -114,5 +114,15 @@ describe("runNativeBlockGenerationV1", () => {
       expect(cleaned).toBe(1);
       expect(result.receipt.outcome).toBe("rejected");
     } finally { await rm(prepared.root, { recursive: true, force: true }); }
+  });
+
+  it("rejects a missing or duplicate router completion marker", async () => {
+    for (const stdout of ["", "WORLDKIT_LWDP_JOB native-block-generation native-block-generation-cloud-temple.initial a profile=formal model=gpt-5.6-sol reasoning=xhigh\nWORLDKIT_LWDP_JOB native-block-generation native-block-generation-cloud-temple.initial b profile=formal model=gpt-5.6-sol reasoning=xhigh"]) {
+      const prepared = await preparedFixture();
+      try {
+        const result = await runNativeBlockGenerationV1(prepared, { process: { run: async () => { await writeOutputs(prepared.stagingDirectoryPath); return { exitCode: 0, stdout, stderr: "" }; } }, selfCheck: async () => ({ ok: true, diagnosticCodes: [] }), reconcile: async () => ({ outcome: "missing" }), cleanup: async () => ({ outcome: "completed" }) });
+        expect(result.receipt.outcome).toBe("rejected");
+      } finally { await rm(prepared.root, { recursive: true, force: true }); }
+    }
   });
 });
