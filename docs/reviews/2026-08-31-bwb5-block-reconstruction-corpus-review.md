@@ -3,9 +3,10 @@
 - 日期：2026-08-31
 - 模式：Mode B 变更审查 + runtime-deep-review-checklist
 - 基线：`origin/main@bcd2beea736ab68199df04c2ed937d63ea389f4a`
-- P1 修复候选：`5d215ade0b5a6aed866dec0b735946f2f749fc28`
+- P1/P2 traversal-evidence 修复候选：`cdcca43702cce025f5782a231d019e96e24312b4`
 - 范围：BWB5-10 至 BWB5-70；关闭山地 / T 字 / 台阶 / 建筑 / 有限室内 / 负向 Corpus
-- 当前裁决：**NO-GO（等待新候选 exact-SHA 独立复核）**。旧候选
+- 当前裁决：**GO（开放 P0/P1 = 0）**。候选 `cdcca43702cce025f5782a231d019e96e24312b4`
+  已通过 exact-SHA 门禁与独立 Mode B + runtime-deep Review。旧候选
   `7b77069f114bb3ae72ae184fb7c60798fe49b301` 的条件 GO 已失效；BNA-6 / BNA-7 /
   WRC-SR-1 / BWB-6 保持开放。
 
@@ -117,21 +118,23 @@ Build-Epoch Session / Checked Layout / `finalize()`。该 Layout 同时产生 Ba
 | BWB5-R1 | P2 | accepted debt | WorldPackage fixture 只有一个 `player` Subject；跨实体 rebind 用跨 Session / 跨 Layout 证明 owner 清理，不扩第二 Subject Definition |
 | BWB5-R2 | P2 | accepted debt | 未跑浏览器 FeelReview 或 Playwright 真像素 PNG；profile-local AuthoringCapture + Havok 是本切片证据。BNA-7 仍开放 |
 | BWB5-R3 | note | closed | `unsupported-spawn` 不进入 air settle；Runtime 在 create 时 fail-closed。这比“先玩后掉下去”更符合权威 |
-| BWB5-P1-1 | P1 | fixed, pending independent verification | T-west、mountain cliff、building/interior back wall 不再使用 spawn 即满足的单边阈值；改为 approach + Contribution near face + capsule radius + grounded tolerance band |
-| BWB5-P1-2 | P1 | fixed, pending independent verification | 删除不存在的 `WORLDKIT_NATIVE_BLOCK_SPAWN_UNSUPPORTED`；inspect/evidence index 不再发布 Profile 失败码，Runtime 继续以 `WORLDKIT_NATIVE_SCENE_RUNTIME_SPAWN_SUPPORT_MISSING` fail-closed |
-| BWB5-P1-3 | P1 | fixed, pending independent verification | mountain `m-overlook` 新增落脚支撑带、Contribution 边缘 + capsule radius、`y < -0.25` 与 `air` 证据 |
-| BWB5-P2-1 | P2 | fixed, pending independent verification | steps 补齐 BWB-4 的 riser/tread z/y 带、blocker 近面 + capsule radius 与 ledge 下落高度 |
+| BWB5-P1-1 | P1 | closed, independently verified | T-west、mountain cliff、building/interior back wall 不再使用 spawn 即满足的单边阈值；改为 approach + Contribution near face + capsule radius + grounded tolerance band |
+| BWB5-P1-2 | P1 | closed, independently verified | 删除不存在的 `WORLDKIT_NATIVE_BLOCK_SPAWN_UNSUPPORTED`；inspect/evidence index 不再发布 Profile 失败码，Runtime 继续以 `WORLDKIT_NATIVE_SCENE_RUNTIME_SPAWN_SUPPORT_MISSING` fail-closed |
+| BWB5-P1-3 | P1 | closed, independently verified | mountain `m-overlook` 新增落脚支撑带、Contribution 边缘 + capsule radius、`y < -0.25` 与 `air` 证据 |
+| BWB5-P2-1 | P2 | closed, independently verified | steps 补齐 BWB-4 的 riser/tread z/y 带、blocker 近面 + capsule radius 与 ledge 下落高度 |
 | BWB5-P2-2 | P2 | accepted debt | `cleanup-throw-partial` 的 Corpus 层证据仅覆盖 overlap finalize rejection 后清理；真正 partial/throwing cleanup 由通用 Session 对抗测试持有，后续应重命名 Case 或引入稳定注入点 |
-| BWB5-P2-3 | P2 | fixed, pending independent verification | sequential rebind 测试标题降为实际证明的 Scene/Engine/Collider Mesh dispose，不再声称 Listener/Camera/Input owner |
-| BWB5-P2-4 | P2 | fixed, pending independent verification | cadence 改为真实 `renderFrame()` 交错，不再把 fixed-input batching 误写成 render cadence |
+| BWB5-P2-3 | P2 | closed, independently verified | sequential rebind 测试标题降为实际证明的 Scene/Engine/Collider Mesh dispose，不再声称 Listener/Camera/Input owner |
+| BWB5-P2-4 | P2 | closed, independently verified | cadence 改为真实 `renderFrame()` 交错，不再把 fixed-input batching 误写成 render cadence |
+| BWB5-P2-5 | P2 | closed, independently verified | 规格工作图删除错误的 `BNA-6 -> BWB-5` 前置，与 §BWB-5 `depends_on` 单一一致 |
 
-修复实现中无已知开放 P0/P1，但在新 exact-SHA 独立审查完成前不恢复 GO。
+独立复核后无开放 P0/P1。BWB5-P2-2、BWB5-R1、BWB5-R2 保持明确的非阻塞接受债务。
 
 ## 5. 合入条件
 
 - focused contract + Havok + typecheck + census + playground build 已通过
 - 不修改 Runtime/Havok/Camera/Input 生产代码
 - 不勾 `docs/18` 的 BWB-5，直到本 PR 合入 main 后再单独勾选，且不抬总进度百分比
-- Cursor Cloud 全量门禁与独立 Review 应绑定本分支精确 SHA；若 Cloud 发现 P0/P1，阻断合入
-- 本文中的旧 GO 不得用作合入证据；必须使用 P1 修复后的新远端 HEAD 重新取得 focused/full gate
-  和独立 Review 结论
+- Cursor Cloud focused 门禁与独立 Review 已绑定产品候选
+  `cdcca43702cce025f5782a231d019e96e24312b4`；后续纯文档闭合不使 Runtime/Havok 证据失效
+- 本文中的旧 GO 不得用作合入证据；合入使用 `cdcca43702cce025f5782a231d019e96e24312b4`
+  的 exact-SHA 门禁和独立 Review 结论

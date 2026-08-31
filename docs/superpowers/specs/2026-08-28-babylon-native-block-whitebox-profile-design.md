@@ -467,7 +467,8 @@ proxy、Scene membership 与 Contribution Hash 全部 settlement 后，才构成
     `unsupported-spawn`、`disconnected-route`、`cleanup-throw-partial`
 - 验证证据：0.25m step 可通过、0.5m blocker 不可通过、ledge departure/support、mountain/T/building/
   limited-interior 预期通路与阻挡、reset、dispose/cleanup、30/60/120-like cadence 下固定 Tick hash
-  一致、跨实体/跨 Session rebind 不残留 Subject/Collider/Listener/Camera/Input owner。有限室内只证
+  一致、同一 Subject 跨 Session rebind 前释放 Scene/Engine/Collider Mesh。跨实体与
+  Subject/Listener/Camera/Input owner 专项残留检查仍是接受债务，不由本切片伪称。有限室内只证
   白模视觉、单层静态支撑和人物通过性。
 - 明确非宣称：完整 Room/Visibility、多层 Navigation、洞穴、桥下双层、NPC Nav、`goTo`、formal
   Capture/Route、BNA-6 成功率、Thin Instance/Chunk/Collider coalescing。
@@ -495,7 +496,7 @@ BWB-0 + BNA-2 -> BWB-1
 BWB-1 -> BWB-2
 BWB-1 + BWB-2 + BNA-3 -> BWB-3
 BWB-2 + BNA-4 -> BWB-4
-BWB-2 + BWB-3 + BWB-4 + BNA-5 + BNA-6 -> BWB-5
+BWB-2 + BWB-3 + BWB-4 + BNA-5 -> BWB-5
 BWB-3 + BWB-4 + BWB-5 -> BWB-6
 ```
 
