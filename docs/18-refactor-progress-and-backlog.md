@@ -13,9 +13,10 @@
 
 > ADR-0007 已接受长期的 Babylon Native Scene Lane 架构方向：Native JSON 管启动/资源/Gameplay，
 > Babylon TypeScript 管视觉，显式登记连接 SDK-owned Havok，且每个世界只选一个 Scene Source。
-> BNA-1 已冻结 Native Schema、Source Union 与 source-neutral identity，但正式 RuntimeHost 仍在任何
-> adapter/Candidate 分配前拒绝 Native。Native Package/Receipt、Surface Admission、Hosted 隔离和正式
-> Route 尚未生产化，因此不改变上一段的当前入口和进度口径。
+> BNA-1～5 已冻结 Native Schema/Source identity，完成 Check、Package/Receipt、Surface Admission、
+> 同一 RuntimeHost/SDK-owned Havok 与 Hosted Isolation 的受限生产链；但 BNA-6/7/8 生成评测、正式
+> Capture/Route 与最终 disposition 仍未完成。默认产品 Viewer/Catalog 继续只接 Canonical
+> AuthoringSpec，因此不改变上一段的当前默认入口和进度口径。
 
 > Source-neutral Asset Production/Admission 已形成 Proposed 设计：只在两条 Scene Source 之前生产原始
 > Candidate，经资产类别 Build Record 与只读 Admission 后发布资源；不增加第三条 Scene Source。APA 尚未
@@ -1122,7 +1123,8 @@ Cursor Cloud 针对精确 SHA 执行，禁止无输入变化时反复重跑。
 - [ ] NBR-10：冻结 Route、真实 Generation Request/Receipt、Case/Profile 和修正后的 Attempt 身份；
 - [ ] NBR-20：通过统一 Codex task router 从真实参考输入生成闭合 Native Block workspace；
 - [ ] NBR-30：通过通用 Native Check/Explain 和 Package/Receipt 链，删除 Cloud Ridge 手写生产装配；
-- [ ] NBR-40：由正式 RuntimeHost 和 SDK-owned Havok/Subject/Input/Action/Camera 启动验证后的 Package；
+- [ ] NBR-40：由保留的 BNA 验证 Harness 调用正式 RuntimeHost 和 SDK-owned
+  Havok/Subject/Input/Action/Camera 启动验证后的 Native Package；不修改 Canonical-only Unified Viewer；
 - [ ] NBR-45：从同一 Package/Runtime 发布身份绑定 Opening/top/side Capture 与 Collider overlay；
 - [ ] NBR-50：输出拓扑、语义轮廓、Opening、Spawn/Support、Collider、固定输入关键通过性和确定性诊断；
 - [ ] NBR-60：最多一次诊断驱动修复，并产生新的 Attempt/Package/Receipt/Capture；
@@ -1133,6 +1135,45 @@ Cursor Cloud 针对精确 SHA 执行，禁止无输入变化时反复重跑。
 以上复选框只按真实代码与证据逐项更新；NBR-1 完成不等于完整 BNA-6/7、WRC-SR 或 WRC-1 完成。
 BWB-6、PHO-7/8、通用 Action/Camera、空间事件、产品 Route/Nav、BNA-8 与 WRC-ACC-1 在本切片期间
 保持延期，不删除也不展开。
+
+#### Unified Scene Viewer 下游开发工具关联（非 WRC 关键路径）
+
+Unified Scene Viewer 的当前设计与实施计划位于独立开发分支：
+
+- [Unified Scene Viewer clean-break design](https://github.com/seedleap/agent-whitebox-world-sdk/blob/codex/default-gbot-dev/docs/superpowers/specs/2026-08-31-unified-scene-viewer-clean-break-design.md)
+- [Unified Scene Viewer implementation plan](https://github.com/seedleap/agent-whitebox-world-sdk/blob/codex/default-gbot-dev/docs/superpowers/plans/2026-08-31-unified-scene-viewer-clean-break-implementation.md)
+
+该 Viewer 是 WRC-1 下游开发工具，不是新的 WRC 工作包、Runtime、Scene Source、WorldPackage、
+Compiler、WorldKit Browser Protocol、Gameplay 或生产准入权威；WRC-1 的工作包数量保持 33。已接受的
+目标合同要求 Catalog/bootstrap 只支持 Canonical AuthoringSpec，Catalog 不保存 Subject Definition Ref；
+Host 必须解析完整 AuthoringSpec，并证明 `startup.controlledEntityId` 最终绑定
+`worldkit://subject-definition/humanoid.g-bot@2`。原子切换完成后，`apps/playground` 才成为唯一产品开发
+Viewer shell，`pnpm dev` 才只提供 `feel-flat`、`traversal-course`、`action-lab` 三个 curated presets；
+这些预设只消费现有 WRC Runtime/Action/Camera 能力，不替代山地/T 字、台阶/建筑/有限室内、动作/相机/
+空间事件验收 Case。
+
+当前 `main@8e0c1bdb9c6b0d037595b8a12605b4e9ad5c5794` 尚未实施 USV-0/USV-1：旧
+`authoring=1`、`catalog-gameplay` route 仍存在，三份 curated preset source 仍未落盘。该状态是待实施
+开发工具工作，不计入 WRC 完成度；旧入口必须保留到一次原子 cutover，不能被 WRC/NBR 提前逐项删除。
+
+Playground、CLI 与 Studio 的公开 source-selection route 必须在同一 current-only 检查点原子切换；前置
+Owner/gate 是 Canonical AuthoringSpec/Subject 解析、RuntimeHost/Browser V5 生命周期、CLI/Studio source
+选择合同、三预设 Browser verifier 与零旧入口 census。`worldkit run` 和 Studio 可通过 Host-selected
+temporary source 打开同一 Viewer，但不得把临时 Case 写入 curated Catalog。Viewer 只消费这些 Owner 的
+已提交状态，不持有 Runtime、Action、Camera、Physics、Capture 或 admission 状态。
+
+Native Viewer 不进入当前合同。NBR-1/BNA Native Package 继续通过 BNA-owned 验证 Harness 启动；未来
+只有在适用 BNA production/admission disposition 后，才能用单独 current-only 原子变更把 Native Source
+加入 Viewer。trusted artifact renderer/正式 Capture 仍是独立证据工具，不是第二个产品 Viewer，其迁移
+由 WRC Capture/BNA-7 Owner 决定。
+
+以下内容明确排除在 Viewer 清理范围之外：`artifacts/scenes` 中的 WRC Capture、Receipt、重建评分和
+验收语料；BWB/BNA Corpus；Runtime/Hosted/Browser Harness；正式 Capture/Route 证据；以及绑定 Package、
+Receipt、Candidate 或 exact-SHA 的 fixtures。Native Web UI、旧 showcase 或历史 Case 只有同时满足
+生产/测试引用为零、identity-bound fixtures 已迁移、相关 focused/Browser/Capture 门禁通过，并获得对应
+WRC Capture/Corpus Owner 与 BNA Runtime/Admission/Capture Owner 明确签字后才能删除。目录整洁不是削弱
+Corpus、Harness、Capture 或 Receipt 的理由。该关联记录不计入 WRC 完成度，也不提前标记任何 WRC/BNA
+能力完成。
 
 Wave A 的详细权威设计与施工计划已经固定在：
 
@@ -1186,11 +1227,15 @@ P1.4 WorldPackage + P1.6 AI Schema / WorldChangeSet + P2.4 Controller/Camera/Dri
 Native Scene 独立候选链：
 
 BNA-0 -> BNA-1 + BNA-2
-BNA-1 + BNA-2 -> BNA-3 -> BNA-4 -> BNA-5 -> BNA-6
+BNA-1 + BNA-2 -> BNA-3 -> BNA-4 -> BNA-5
 BNA-2 -> BWB-1 -> BWB-2
 BWB-1 + BWB-2 + BNA-3 -> BWB-3
 BNA-4 + BWB-2 -> BWB-4
 BNA-5 + BWB-3 + BWB-4 -> BWB-5 -> BWB-6
+BNA-3 + BWB-3 -> WRC-SR-1
+BNA-5 + WRC-SR-1 -> BNA-6
+BNA-4 -> BNA-7
+BNA-6 + BNA-7 + WRC-SR-1 -> WRC-SR-2 -> BNA-8
 
 APA-0..APA-6 只提供 source-neutral 已发布资产；BNA-3 才把已发布 Resource Ref 纳入 Native Package。
 

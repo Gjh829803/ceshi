@@ -116,9 +116,29 @@ The implementation must adapt these owners rather than copy them:
   primitives; NBR-45 adds the missing admitted Block identity, world-side request and hosted transaction;
 - the existing Browser V5 installer and SDK Camera/Input/Action owners.
 
-The Cloud Ridge-specific builder, fixed virtual module loader, and `apps/native-scene-playground` are
-not generic product owners. They may supply fixtures during migration, then must be deleted or reduced
-to testing-only consumers after the generic package run route is green.
+The Cloud Ridge-specific builder and fixed virtual module loader are not generic product owners.
+`apps/native-scene-playground` remains the BNA-owned verification Web Harness until an applicable BNA
+disposition permits a separate current-only Native Viewer cutover. NBR-1 may generalize that Harness to
+load an admitted Package, but it must not route Native through the accepted Canonical-only Unified Scene
+Viewer or treat the Harness as a product Viewer.
+
+### 4.1 `codex/block-world-sdk-v2` is a migration source, not discarded research
+
+The experimental branch `codex/block-world-sdk-v2@3c2e9826f0c91ef39675c27a6bbdc6238e6c0b05`
+already proves valuable AI Block authoring mechanics: the `worldkit-block-builder` Skill and self-check,
+spatial generation orchestration, Block structural checks, deterministic entry/top visual review rules and
+bounded resume/retry behavior. NBR-1 must inspect and migrate those accepted algorithms/tests before writing
+replacements. Its styled visual reconstruction and raw Browser keyboard/playthrough implementation are not
+NBR structural-evaluation authorities; only their useful test intent may be retained.
+
+Migration is a semantic port into current owners, not a branch merge. Skill prompt structure, deterministic
+Block validation rules and selected recovery fixtures may be adapted where their contracts remain valid.
+The old Three.js binding, Block Manifest/Compiler, raw keyboard capture, software PNG renderer,
+shell-specific backend entry and any duplicate Runtime/Physics/Camera state must not return. Babylon Native
+Block Profile, current Codex task router, BNA Check/Package/Receipt/Hosted admission and SDK-owned
+RuntimeHost/Havok remain the destination authorities. Every reused file records its source commit in the
+implementing PR and gains current-contract focused tests; copied compatibility packages or parallel
+Three/Babylon paths are forbidden.
 
 ## 5. Source authoring contracts
 
@@ -270,7 +290,7 @@ worldkit reconstruct run <case.json> --output <run-directory> [--backend cloud|l
 worldkit native check <world-directory> --json
 worldkit native explain <world-directory> [--json]
 worldkit native package <world-directory> --case <case.json> --output <package-directory> --json
-worldkit run <package-directory> [--port <port>] [--refresh-dependencies] --json
+worldkit native run <package-directory> [--port <port>] [--refresh-dependencies] --json
 worldkit capture <package-directory> --output <opening.png>
   --triview-output <directory> --json
 ```
@@ -278,8 +298,10 @@ worldkit capture <package-directory> --output <opening.png>
 `reconstruct run` is source-neutral at the Case/Route layer but `NBR-1` initially implements the admitted
 Native Block route only; a Canonical decision fails with a stable unsupported-route diagnostic rather
 than silently calling the old Builder. `native package` is the sole generic Native package adapter and
-replaces the Cloud Ridge-specific production script. `run <package-directory>` accepts the existing
-verified Scene Source union and uses one Playground/RuntimeHost path for both Sources.
+replaces the Cloud Ridge-specific production script. `native run <package-directory>` is an explicitly
+BNA-owned verification Harness command: it uses the existing RuntimeHost and admitted Native isolation
+path, but does not add Native to the accepted Viewer target Catalog/bootstrap or change the Canonical
+`worldkit run` contract.
 
 ### 6.2 Check-before-Candidate order
 
@@ -301,14 +323,14 @@ Any failed or incomplete stage publishes diagnostics and cleanup evidence but ca
 identity. In particular, checker success is required before Package build, and verified Package plus
 Host admission are required before Candidate allocation.
 
-### 6.3 Generic Runtime route
+### 6.3 BNA verification Runtime route
 
-The main Playground and CLI select an adapter only after `verifyWorldPackageDirectoryV1()` returns its
-closed Canonical/Native union. Native delegates to the existing isolated runtime entry/
-`prepareBabylonNativeRuntimePackageV1()` and the same `RuntimeHost`; it does not copy
-`apps/native-scene-playground` orchestration. Browser ready, Reset, disposal and page exit remain owned by
-the existing Browser/lifecycle modules. After the generic route is accepted, Cloud Ridge becomes a Case
-consumer and the duplicate Native preview Host is deleted or made testing-only.
+The CLI verifies the Native Package before starting the retained BNA verification Web Harness. The Harness
+delegates to the existing isolated runtime entry/`prepareBabylonNativeRuntimePackageV1()` and the same
+`RuntimeHost`; it does not copy Gameplay, Physics, Camera or lifecycle ownership. Browser ready, Reset,
+disposal and page exit remain owned by the existing Runtime/lifecycle modules. Cloud Ridge becomes a Case
+consumer and its fixed loader is removed after the generic Harness route is accepted. The Canonical-only
+`apps/playground` Viewer, its Catalog, Studio source selection and `worldkit run` remain unchanged.
 
 ## 7. Formal Capture core slice
 
@@ -332,8 +354,9 @@ manifest, checked Layout, materialized Mesh identities and frozen inventory agre
 tries to recover Module-local Session records, and Capture never scans names, tags or the Scene to discover
 membership.
 
-The current `worldkit capture` command is extended source-neutrally to accept a verified WorldPackage
-directory. It starts the same formal Playground Runtime, waits for Browser/Runtime ready, and produces:
+The current trusted artifact `worldkit capture` evidence command is extended source-neutrally to accept a
+verified WorldPackage directory. It starts the same admitted BNA Runtime session through the verification
+Harness/isolated port, not the product Viewer shell, waits for Browser/Runtime ready, and produces:
 
 - opening view through the SDK Camera opening state;
 - top-down and side artifact views through bounded Host capture transactions;
@@ -480,8 +503,8 @@ artifacts/scenes/cloud-temple-t-gate-native-block/runs/<run-id>/
   run-receipt.json
 ```
 
-The command returns the exact final Package path. The user launches that path with `worldkit run` and no
-Case-specific dev server.
+The command returns the exact final Package path. The user launches that path with `worldkit native run`;
+this is a BNA verification experience, not current Native Viewer support.
 
 ## 11. Delete ledger
 
@@ -494,11 +517,14 @@ No `NBR-1` checkpoint is accepted while both old and new production paths remain
    recorder;
 4. move BWB-5 reconstruction Corpus factories out of the Block Profile production root into `/testing` or
    evidence-only exports; production orchestration cannot import them;
-5. remove Canonical-only package run/capture rejection once the verified union route is green;
-6. delete or reduce `apps/native-scene-playground` and its fixed Cloud Ridge virtual loader to testing-only
-   after the main Playground can load any verified Native Package;
-7. delete Case-specific root scripts once stable `worldkit reconstruct/native package/run/capture` commands
-   replace them;
+5. keep `worldkit run` Canonical-only; extend only the trusted artifact `capture` evidence command to a
+   verified Package input after BNA admission, and add the explicit `worldkit native run` Harness command;
+6. delete the fixed Cloud Ridge loader after the BNA verification Harness can load a verified Package, but
+   retain `apps/native-scene-playground`, its identity-bound Harness fixtures and Native verification entry
+   until BNA-7 evidence migration plus the applicable BNA-8 disposition and explicit BNA owner sign-off;
+   NBR-1 does not authorize Native Viewer cutover or Native Web UI deletion;
+7. delete Case-specific root scripts once stable `worldkit reconstruct`, `worldkit native package`,
+   `worldkit native run` and `worldkit capture` commands replace them;
 8. never add alias DTOs, migration adapters, shadow Plan, third Source, Mesh scan, or Runtime fallback.
 
 ## 12. Dependency-aware work graph
@@ -509,7 +535,7 @@ No `NBR-1` checkpoint is accepted while both old and new production paths remain
 | NBR-10 | Correct Attempt identity and add Route/Generation/Case/Profile contracts | NBR-00 | NBR-20, NBR-45A, NBR-50A | `scene-authoring-contracts` + `validation` shared contracts | RED/GREEN parse/hash/adversarial tests | main-agent-only |
 | NBR-20 | Add Builder Skill and router-only generation orchestrator | NBR-10 | NBR-30 | Skill + `scripts/reconstruction/generation-*` only | real task, timeout/reconcile/no-output/cleanup | sequential |
 | NBR-30 | Add generic Native check/package command and clean break | NBR-20 | NBR-40 | checker/BNA-3 adapter + CLI integration | checker/package tamper/replay/no early Candidate | main-agent-only |
-| NBR-40 | Add generic verified-Package Runtime/run route | NBR-30 | NBR-45B, NBR-70 | RuntimeHost/Playground/Browser lifecycle only | Havok, ready/reset/dispose/authority negatives | main-agent-only |
+| NBR-40 | Add generic verified-Package BNA verification run route | NBR-30 | NBR-45B, NBR-70 | RuntimeHost/BNA Harness lifecycle only; no Unified Viewer changes | Havok, ready/reset/dispose/authority negatives | main-agent-only |
 | NBR-45A | Add formal Capture and Block capture-identity contracts | NBR-10 | NBR-45P | `runtime-contracts` + Block capture inventory contracts only | parser/hash/join/asymmetric rejection tests | sequential |
 | NBR-45P | Bind the complete capture inventory into Native Bundle/Package/Receipt | NBR-30, NBR-45A | NBR-45B | Block materializer/settlement + world-package/BNA-3 builder/verifier only | metadata drift, Package tamper, replay and Root/Receipt tests | main-agent-only |
 | NBR-45B | Integrate world-side and hosted same-session Capture | NBR-40, NBR-45P | NBR-50B, NBR-70 | runtime-babylon/isolated bridge/Capture CLI only | semantic pass, PNG identity, Camera rollback, cleanup | main-agent-only |
