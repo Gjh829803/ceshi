@@ -23,6 +23,9 @@ const NATIVE_ENVIRONMENT_NAMES = Object.freeze([
   "WORLDKIT_NATIVE_PACKAGE_PATH",
   "WORLDKIT_AUTHORING_SERVER_NONCE",
   "WORLDKIT_NATIVE_SERVER_ROLE",
+  "WORLDKIT_NATIVE_SERVER_INSTANCE_ID",
+  "WORLDKIT_NATIVE_VITE_CACHE_ROOT",
+  "WORLDKIT_NATIVE_VERIFIER_PROBE",
   "WORLDKIT_HOSTED_SHELL_ORIGIN",
   "WORLDKIT_HOSTED_RUNTIME_ORIGIN",
 ] as const);
@@ -129,6 +132,12 @@ async function main(): Promise<void> {
     process.env.WORLDKIT_AUTHORING_SERVER_NONCE =
       `native-playground-verifier-${process.pid}`;
     process.env.WORLDKIT_NATIVE_SERVER_ROLE = "shell";
+    process.env.WORLDKIT_NATIVE_SERVER_INSTANCE_ID =
+      `00000000-0000-4000-8000-${process.pid.toString().padStart(12, "0")}`;
+    process.env.WORLDKIT_NATIVE_VITE_CACHE_ROOT = path.dirname(
+      fixture.packageDirectoryPath,
+    );
+    process.env.WORLDKIT_NATIVE_VERIFIER_PROBE = "enabled";
     server = await createServer({
       root: path.resolve("apps/native-scene-playground"),
       logLevel: "silent",
@@ -152,6 +161,22 @@ async function main(): Promise<void> {
     });
     page.on("pageerror", (error) => browserErrors.push(error.message));
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
+    await page.waitForFunction(
+      () => document.querySelector("[data-error]")?.textContent?.includes(
+        "WORLDKIT_NATIVE_HARNESS_MODE_REQUIRED",
+      ) === true,
+      undefined,
+      { timeout: 5_000 },
+    );
+    assert.equal(
+      await page.evaluate(() => window.__WORLDKIT_NATIVE_SPIKE__),
+      undefined,
+      "An unqualified top-level URL must not create a single-Origin Runtime",
+    );
+    await page.goto(new URL("?verifier-native-spike=1", url).href, {
+      waitUntil: "domcontentloaded",
+      timeout: 30_000,
+    });
     try {
       await page.waitForFunction(
         () => window.__WORLDKIT_NATIVE_SPIKE__?.ready === true,

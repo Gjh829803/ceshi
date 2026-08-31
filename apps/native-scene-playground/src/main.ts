@@ -32,6 +32,7 @@ declare const __WORLDKIT_HOSTED_BROWSER_RUNNER_DIGEST__: `sha256:${string}`;
 declare const __WORLDKIT_HOSTED_BROWSER_POLICY_HASH__: `sha256:${string}`;
 declare const __WORLDKIT_HOSTED_RUNTIME_ORIGIN__: string;
 declare const __WORLDKIT_HOSTED_SHELL_ORIGIN__: string;
+declare const __WORLDKIT_NATIVE_VERIFIER_PROBE_ENABLED__: boolean;
 interface NativeSceneSpikeProbeV1 {
   readonly ready: true;
   readonly bootstrap: BabylonNativeSceneBootstrapV1;
@@ -108,7 +109,7 @@ function showFailure(error: unknown): void {
   requiredElement<HTMLElement>("[data-state]").textContent = "FAILED";
 }
 
-async function start(): Promise<void> {
+async function startVerifierProbe(): Promise<void> {
   const viewport = requiredElement<HTMLElement>("[data-viewport]");
   const loading = requiredElement<HTMLElement>("[data-loading]");
   const loadingStage = requiredElement<HTMLElement>("[data-loading-stage]");
@@ -553,4 +554,10 @@ void (mode.has("hosted-runtime-frame")
   ? startHostedFrame()
   : mode.has("hosted")
     ? startHostedShell()
-    : start()).catch(showFailure);
+    : __WORLDKIT_NATIVE_VERIFIER_PROBE_ENABLED__ &&
+        mode.size === 1 &&
+        mode.get("verifier-native-spike") === "1"
+      ? startVerifierProbe()
+      : Promise.reject(new Error(
+          "WORLDKIT_NATIVE_HARNESS_MODE_REQUIRED",
+        ))).catch(showFailure);

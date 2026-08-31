@@ -7,6 +7,10 @@ import {
   createOwnedNativePackageFixtureV1,
   type OwnedNativePackageFixtureV1,
 } from "./owned-native-package-fixture.js";
+import {
+  createOwnedNativeViteCacheV1,
+  type OwnedNativeViteCacheV1,
+} from "./owned-native-vite-cache.js";
 
 const BUILD_SHELL_ORIGIN = "http://127.0.0.1:5174";
 const BUILD_RUNTIME_ORIGIN = "http://127.0.0.1:5175";
@@ -110,6 +114,7 @@ export async function buildNativeScenePlaygroundV1(
   let interruption: NativeSceneBuildInterruptedErrorV1 | undefined;
   let activeChild: ChildProcess | undefined;
   let ownedFixture: OwnedNativePackageFixtureV1 | undefined;
+  let ownedViteCache: OwnedNativeViteCacheV1 | undefined;
   const stagingAbortController = new AbortController();
   const interrupt = (signal: "SIGINT" | "SIGTERM"): void => {
     interruption ??= new NativeSceneBuildInterruptedErrorV1(signal);
@@ -132,6 +137,7 @@ export async function buildNativeScenePlaygroundV1(
       fixtureDirectoryPath: input.fixtureDirectoryPath,
       signal: stagingAbortController.signal,
     });
+    ownedViteCache = await createOwnedNativeViteCacheV1();
     throwIfInterrupted();
 
     activeChild = spawn(
@@ -152,6 +158,11 @@ export async function buildNativeScenePlaygroundV1(
           WORLDKIT_NATIVE_PACKAGE_PATH: ownedFixture.packageDirectoryPath,
           WORLDKIT_AUTHORING_SERVER_NONCE: randomUUID(),
           WORLDKIT_NATIVE_SERVER_ROLE: "shell",
+          WORLDKIT_NATIVE_SERVER_INSTANCE_ID:
+            ownedViteCache.serverInstanceId,
+          WORLDKIT_NATIVE_VITE_CACHE_ROOT:
+            ownedViteCache.rootDirectoryPath,
+          WORLDKIT_NATIVE_VERIFIER_PROBE: "disabled",
           WORLDKIT_HOSTED_SHELL_ORIGIN: BUILD_SHELL_ORIGIN,
           WORLDKIT_HOSTED_RUNTIME_ORIGIN: BUILD_RUNTIME_ORIGIN,
         },
@@ -183,6 +194,7 @@ export async function buildNativeScenePlaygroundV1(
       activeChild = undefined;
     }
     await ownedFixture?.dispose();
+    await ownedViteCache?.dispose();
     process.off("SIGINT", onSigint);
     process.off("SIGTERM", onSigterm);
   }

@@ -32,7 +32,11 @@ import { createValidAuthoringSpec } from "../../packages/authoring/src/test-fixt
 
 import { launchChromiumWithSystemFallback } from "./playwright-browser-launch";
 import { writeWorldPackageDirectoryV1 } from "./file-world-package";
-import { startWorldkitServer, type WorldkitServerHandle } from "./worldkit-server";
+import {
+  startWorldkitServer,
+  terminateOwnedWorldkitServerChildrenV1,
+  type WorldkitServerHandle,
+} from "./worldkit-server";
 
 const INPUT_PATH = fileURLToPath(
   new URL("../../examples/authoring/rigged-subject-world.json", import.meta.url),
@@ -221,6 +225,46 @@ afterEach(async () => {
 });
 
 describe("startWorldkitServer", () => {
+  it.skipIf(process.platform === "win32")(
+    "bounds cleanup when an owned child ignores SIGTERM",
+    async () => {
+      const child = spawn(
+        process.execPath,
+        [
+          "--eval",
+          "process.on('SIGTERM', () => undefined); process.stdout.write('ready\\n'); setInterval(() => undefined, 1000);",
+        ],
+        { detached: true, stdio: ["ignore", "pipe", "ignore"] },
+      );
+      await new Promise<void>((resolve, reject) => {
+        child.once("error", reject);
+        child.stdout.once("data", () => resolve());
+      });
+      const exitPromise = new Promise<void>((resolve) => {
+        child.once("exit", () => resolve());
+      });
+      const safetyTimer = setTimeout(() => {
+        if (child.pid !== undefined) process.kill(-child.pid, "SIGKILL");
+      }, 1_000);
+      const startedAt = performance.now();
+      try {
+        await terminateOwnedWorldkitServerChildrenV1({
+          children: [child as never],
+          exitPromise,
+          stopTimeoutMilliseconds: 100,
+        });
+      } finally {
+        clearTimeout(safetyTimer);
+        if (child.exitCode === null && child.signalCode === null) {
+          if (child.pid !== undefined) process.kill(-child.pid, "SIGKILL");
+          await exitPromise;
+        }
+      }
+      expect(performance.now() - startedAt).toBeLessThan(750);
+      expect(child.signalCode).toBe("SIGKILL");
+    },
+    5_000,
+  );
   it("rejects a Canonical Package before starting the Native Harness", async () => {
     const directoryPath = await realpath(await mkdtemp(
       path.join(tmpdir(), "worldkit-native-source-kind-"),

@@ -11,6 +11,8 @@ import {
   canonicalWorldkitBrowserRouteEvidencePublicationV2,
   type WorldkitBrowserRouteEvidencePublicationV2,
 } from "@whitebox-world/runtime-contracts";
+import type { OwnedNativeViteCacheV1 } from
+  "../native-scene/owned-native-vite-cache.js";
 
 import { resolveTrustedSourceCommit } from "./worldkit-source-commit";
 import { WORLDKIT_ROUTE_EVIDENCE_MAX_BYTES_V1 } from
@@ -253,6 +255,23 @@ function signalOwnedProcess(
   }
 }
 
+export async function terminateOwnedWorldkitServerChildrenV1(
+  input: Readonly<{
+    children: readonly ChildProcessWithoutNullStreams[];
+    exitPromise: Promise<unknown>;
+    stopTimeoutMilliseconds: number;
+  }>,
+): Promise<void> {
+  for (const child of input.children) signalOwnedProcess(child, "SIGTERM");
+  const exited = await Promise.race([
+    input.exitPromise.then(() => true),
+    delay(input.stopTimeoutMilliseconds).then(() => false),
+  ]);
+  if (exited) return;
+  for (const child of input.children) signalOwnedProcess(child, "SIGKILL");
+  await input.exitPromise;
+}
+
 function createHandle(options: {
   child: ChildProcessWithoutNullStreams;
   children?: readonly ChildProcessWithoutNullStreams[];
@@ -285,15 +304,11 @@ function createHandle(options: {
         await cleanupPromise;
         return;
       }
-      for (const ownedChild of children) signalOwnedProcess(ownedChild, "SIGTERM");
-      const exited = await Promise.race([
-        exitPromise.then(() => true),
-        delay(stopTimeoutMilliseconds).then(() => false),
-      ]);
-      if (!exited) {
-        for (const ownedChild of children) signalOwnedProcess(ownedChild, "SIGKILL");
-        await exitPromise;
-      }
+      await terminateOwnedWorldkitServerChildrenV1({
+        children,
+        exitPromise,
+        stopTimeoutMilliseconds,
+      });
       await cleanupPromise;
     })();
     return stopPromise;
@@ -491,7 +506,18 @@ async function startNativeOne(
       "WORLDKIT_NATIVE_HARNESS_SCENE_SOURCE_KIND_UNSUPPORTED",
     );
   }
-  const runtimePort = await allocateDistinctAvailablePort(shellPort);
+  let runtimePort: number;
+  let ownedViteCache: OwnedNativeViteCacheV1;
+  try {
+    runtimePort = await allocateDistinctAvailablePort(shellPort);
+    const { createOwnedNativeViteCacheV1 } = await import(
+      "../native-scene/owned-native-vite-cache.js"
+    );
+    ownedViteCache = await createOwnedNativeViteCacheV1();
+  } catch (error) {
+    transport.dispose();
+    throw error;
+  }
   const nonce = randomUUID();
   const shellOrigin = `http://127.0.0.1:${shellPort}`;
   const runtimeOrigin = `http://127.0.0.1:${runtimePort}`;
@@ -501,6 +527,9 @@ async function startNativeOne(
       options.source.packageDirectoryPath,
     ),
     WORLDKIT_AUTHORING_SERVER_NONCE: nonce,
+    WORLDKIT_NATIVE_SERVER_INSTANCE_ID: ownedViteCache.serverInstanceId,
+    WORLDKIT_NATIVE_VITE_CACHE_ROOT: ownedViteCache.rootDirectoryPath,
+    WORLDKIT_NATIVE_VERIFIER_PROBE: "disabled",
     WORLDKIT_HOSTED_SHELL_ORIGIN: shellOrigin,
     WORLDKIT_HOSTED_RUNTIME_ORIGIN: runtimeOrigin,
   };
@@ -525,8 +554,14 @@ async function startNativeOne(
       children.push(child);
     }
   } catch (error) {
-    for (const child of children) signalOwnedProcess(child, "SIGTERM");
+    await terminateOwnedWorldkitServerChildrenV1({
+      children,
+      exitPromise: Promise.all(lifecycles.map((entry) => entry.exitPromise)),
+      stopTimeoutMilliseconds:
+        options.stopTimeoutMilliseconds ?? DEFAULT_STOP_TIMEOUT_MILLISECONDS,
+    });
     transport.dispose();
+    await ownedViteCache.dispose();
     throw error;
   }
   const lifecycle: OwnedChildLifecycle = {
@@ -543,7 +578,10 @@ async function startNativeOne(
     port: shellPort,
     stopTimeoutMilliseconds:
       options.stopTimeoutMilliseconds ?? DEFAULT_STOP_TIMEOUT_MILLISECONDS,
-    cleanupOwnedState: async () => transport.dispose(),
+    cleanupOwnedState: async () => {
+      transport.dispose();
+      await ownedViteCache.dispose();
+    },
     sceneSourceKind: "babylon-native-scene",
     worldPackageRootHash: transport.worldPackageRootHash,
     urlSearch: "?hosted=1",

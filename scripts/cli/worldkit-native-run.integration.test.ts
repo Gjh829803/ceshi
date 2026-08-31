@@ -11,6 +11,7 @@ import {
   chmod,
   mkdtemp,
   readFile,
+  readdir,
   realpath,
   rm,
   writeFile,
@@ -30,6 +31,7 @@ const RECEIPT_ENDPOINT =
   "/__worldkit/native-package/world-package-build-receipt.json";
 const READY_TIMEOUT_MILLISECONDS = 90_000;
 const EXIT_TIMEOUT_MILLISECONDS = 10_000;
+const NATIVE_VITE_CACHE_PREFIX = "worldkit-native-vite-cache-";
 
 interface NativeRunReadyV1 {
   readonly ok: true;
@@ -206,6 +208,12 @@ async function makeTemporaryRoot(): Promise<string> {
   return root;
 }
 
+async function ownedNativeViteCacheDirectories(): Promise<readonly string[]> {
+  return (await readdir(tmpdir()))
+    .filter((entry) => entry.startsWith(NATIVE_VITE_CACHE_PREFIX))
+    .sort();
+}
+
 async function createViteSpawnTracker(root: string): Promise<Readonly<{
   environment: NodeJS.ProcessEnv;
   markerPath: string;
@@ -284,8 +292,12 @@ describe("worldkit native run process contract", { timeout: 180_000 }, () => {
         directory: packageDirectory,
       });
       const port = await allocateAvailablePort();
+      const cacheDirectoriesBefore = await ownedNativeViteCacheDirectories();
       const run = spawnNativeRun(packageDirectoryPath, port);
       const ready = await waitForReady(run);
+      expect(await ownedNativeViteCacheDirectories()).toHaveLength(
+        cacheDirectoriesBefore.length + 1,
+      );
 
       expect(ready).toEqual({
         ok: true,
@@ -319,6 +331,9 @@ describe("worldkit native run process contract", { timeout: 180_000 }, () => {
 
       run.child.kill("SIGTERM");
       expect(await waitForExit(run.child)).toEqual({ code: 0, signal: null });
+      expect(await ownedNativeViteCacheDirectories()).toEqual(
+        cacheDirectoriesBefore,
+      );
       expect(run.stderr()).toBe("");
       expect(run.stdout().trim().split("\n")).toHaveLength(1);
       await expect(fetch(ready.url, {
