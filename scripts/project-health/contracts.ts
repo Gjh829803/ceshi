@@ -220,20 +220,50 @@ export interface AcceptedProjectDebtListV1 {
   readonly entries: readonly AcceptedProjectDebtV1[];
 }
 
+export type ProjectHealthAuthoritySelectorV1 = ProjectHealthCapabilitySelectorV1;
+
+export type ProjectHealthAuthoritySymbolMatchV1 = Readonly<{
+  readonly selector: ProjectHealthAuthoritySelectorV1;
+  readonly symbolNames: readonly string[];
+}>;
+
+export type ProjectHealthAuthorityRuleV1 =
+  | Readonly<{
+      readonly id: string;
+      readonly kind: "forbidden-public-symbol";
+      readonly ownerId: string;
+      readonly code: string;
+      readonly selector: ProjectHealthAuthoritySelectorV1;
+      readonly symbolNames: readonly string[];
+    }>
+  | Readonly<{
+      readonly id: string;
+      readonly kind: "unique-public-symbol-owner";
+      readonly ownerId: string;
+      readonly code: string;
+      readonly selector: ProjectHealthAuthoritySelectorV1;
+      readonly symbolNames: readonly string[];
+      readonly ownerPackageId: string;
+    }>
+  | Readonly<{
+      readonly id: string;
+      readonly kind: "forbidden-public-symbol-pair";
+      readonly ownerId: string;
+      readonly code: string;
+      readonly left: ProjectHealthAuthoritySymbolMatchV1;
+      readonly right: ProjectHealthAuthoritySymbolMatchV1;
+    }>;
+
 export interface ProjectHealthAuthorityPolicyV1 {
   readonly kind: "project-health-authority-policy";
   readonly schemaVersion: 1;
   readonly id: "worldkit-supplemental-authority";
-  readonly rules: readonly Readonly<{
-    readonly id: string;
-    readonly kind: "forbidden-owner-pair" | "forbidden-public-symbol";
-    readonly ownerId: string;
-    readonly code: string;
-    readonly subjectRefs: readonly string[];
-  }>[];
+  readonly rules: readonly ProjectHealthAuthorityRuleV1[];
   readonly exceptions: readonly Readonly<{
     readonly ruleId: string;
-    readonly symbolRef: string;
+    readonly packageId: string;
+    readonly sourcePath: string;
+    readonly symbolName: string;
     readonly decisionRef: string;
   }>[];
 }
@@ -277,6 +307,8 @@ const ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const CODE = /^[A-Z0-9_]+$/;
 const SUBJECT_REF = /^(?:package|path|gate|capability):[^\s]+$/;
 const NPM_PACKAGE_NAME = /^(?:@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*|[a-z0-9][a-z0-9._-]*)$/;
+const PUBLIC_SYMBOL_NAME = /^(?:[A-Za-z_$][A-Za-z0-9_$]*|default)$/;
+const SELECTOR_GLOB_OR_REGEX = /[*?[\]()^$|\\]/;
 const SENSOR_IDS = new Set<string>(PROJECT_HEALTH_SENSOR_IDS_V1);
 const EVIDENCE_CLASS_IDS = new Set<ProjectHealthEvidenceClassIdV1>([
   "workspace-edge",
@@ -998,6 +1030,121 @@ export function parseAcceptedProjectDebtListV1(
   return { kind: "accepted-project-debt-list", schemaVersion: 1, entries: sortBy(entries, ["fingerprint"]) };
 }
 
+function parseAuthoritySelector(input: unknown, contract: string): ProjectHealthAuthoritySelectorV1 {
+  const selector = parseSelector(input, true, contract) as ProjectHealthAuthoritySelectorV1;
+  const values = [
+    ...selector.exactPaths,
+    ...selector.pathPrefixes,
+    ...selector.pathSuffixes,
+    ...selector.packageIds,
+  ];
+  if (values.some((value) => SELECTOR_GLOB_OR_REGEX.test(value))) return invalid(contract);
+  if (
+    isEmpty(selector.exactPaths) &&
+    isEmpty(selector.pathPrefixes) &&
+    isEmpty(selector.pathSuffixes) &&
+    isEmpty(selector.packageIds)
+  ) return invalid(contract);
+  return selector;
+}
+
+function parseSymbolNames(input: unknown, contract: string): readonly string[] {
+  const names = sortBy(uniqueStrings(input, (entry) => {
+    const value = nonEmptyString(entry, contract);
+    if (!PUBLIC_SYMBOL_NAME.test(value) || SELECTOR_GLOB_OR_REGEX.test(value)) return invalid(contract);
+    return value;
+  }, contract));
+  if (isEmpty(names)) return invalid(contract);
+  return names;
+}
+
+function parseAuthoritySymbolMatch(input: unknown, contract: string): ProjectHealthAuthoritySymbolMatchV1 {
+  const source = record(input, ["selector", "symbolNames"], contract);
+  return {
+    selector: parseAuthoritySelector(source.selector, contract),
+    symbolNames: parseSymbolNames(source.symbolNames, contract),
+  };
+}
+
+function npmPackageId(input: unknown, contract: string): string {
+  const value = nonEmptyString(input, contract);
+  if (!NPM_PACKAGE_NAME.test(value) || SELECTOR_GLOB_OR_REGEX.test(value)) return invalid(contract);
+  return value;
+}
+
+function parseAuthorityFindingCode(
+  input: unknown,
+  profile: ProjectHealthProfileV1,
+  contract: string,
+): string {
+  const ruleCode = code(input, contract);
+  const policy = profile.findingPoliciesByCode[ruleCode];
+  if (isNil(policy) || policy.sensorId !== "supplemental-authority") return invalid(contract);
+  return ruleCode;
+}
+
+function parseAuthorityRule(
+  input: unknown,
+  profile: ProjectHealthProfileV1,
+  contract: string,
+): ProjectHealthAuthorityRuleV1 {
+  if (
+    typeof input !== "object" ||
+    isNil(input) ||
+    Array.isArray(input) ||
+    Reflect.getPrototypeOf(input) !== Object.prototype
+  ) return invalid(contract);
+  const kind = (input as { readonly kind?: unknown }).kind;
+  if (kind === "forbidden-public-symbol") {
+    const rule = record(input, ["id", "kind", "ownerId", "code", "selector", "symbolNames"], contract);
+    return {
+      id: id(rule.id, contract),
+      kind: "forbidden-public-symbol",
+      ownerId: id(rule.ownerId, contract),
+      code: parseAuthorityFindingCode(rule.code, profile, contract),
+      selector: parseAuthoritySelector(rule.selector, contract),
+      symbolNames: parseSymbolNames(rule.symbolNames, contract),
+    };
+  }
+  if (kind === "unique-public-symbol-owner") {
+    const rule = record(input, [
+      "id",
+      "kind",
+      "ownerId",
+      "code",
+      "selector",
+      "symbolNames",
+      "ownerPackageId",
+    ], contract);
+    const selector = parseAuthoritySelector(rule.selector, contract);
+    const ownerPackageId = npmPackageId(rule.ownerPackageId, contract);
+    if (!isEmpty(selector.packageIds) && !selector.packageIds.includes(ownerPackageId)) {
+      return invalid(contract);
+    }
+    return {
+      id: id(rule.id, contract),
+      kind: "unique-public-symbol-owner",
+      ownerId: id(rule.ownerId, contract),
+      code: parseAuthorityFindingCode(rule.code, profile, contract),
+      selector,
+      symbolNames: parseSymbolNames(rule.symbolNames, contract),
+      ownerPackageId,
+    };
+  }
+  if (kind === "forbidden-public-symbol-pair") {
+    const rule = record(input, ["id", "kind", "ownerId", "code", "left", "right"], contract);
+    return {
+      id: id(rule.id, contract),
+      kind: "forbidden-public-symbol-pair",
+      ownerId: id(rule.ownerId, contract),
+      code: parseAuthorityFindingCode(rule.code, profile, contract),
+      left: parseAuthoritySymbolMatch(rule.left, contract),
+      right: parseAuthoritySymbolMatch(rule.right, contract),
+    };
+  }
+  return invalid(contract);
+}
+
 export function parseProjectHealthAuthorityPolicyV1(
   input: unknown,
   profile: ProjectHealthProfileV1,
@@ -1010,38 +1157,33 @@ export function parseProjectHealthAuthorityPolicyV1(
     source.schemaVersion !== 1 ||
     source.id !== "worldkit-supplemental-authority"
   ) return invalid(contract);
-  const rules = array(source.rules, (entry) => {
-    const rule = record(entry, ["id", "kind", "ownerId", "code", "subjectRefs"], contract);
-    if (rule.kind !== "forbidden-owner-pair" && rule.kind !== "forbidden-public-symbol") return invalid(contract);
-    const ruleCode = code(rule.code, contract);
-    const policy = profile.findingPoliciesByCode[ruleCode];
-    if (isNil(policy) || policy.sensorId !== "supplemental-authority") return invalid(contract);
-    return {
-      id: id(rule.id, contract),
-      kind: rule.kind as "forbidden-owner-pair" | "forbidden-public-symbol",
-      ownerId: id(rule.ownerId, contract),
-      code: ruleCode,
-      subjectRefs: sortBy(uniqueStrings(rule.subjectRefs, (value) => subjectRef(value, contract), contract)),
-    };
-  }, contract);
+  const rules = array(source.rules, (entry) => parseAuthorityRule(entry, profile, contract), contract);
   const ruleIds = rules.map((rule) => rule.id);
   if (uniq(ruleIds).length !== ruleIds.length) return invalid(contract);
   const exceptions = array(source.exceptions, (entry) => {
-    const exception = record(entry, ["ruleId", "symbolRef", "decisionRef"], contract);
+    const exception = record(entry, ["ruleId", "packageId", "sourcePath", "symbolName", "decisionRef"], contract);
     const ruleId = id(exception.ruleId, contract);
     if (!ruleIds.includes(ruleId)) return invalid(contract);
+    const symbolName = nonEmptyString(exception.symbolName, contract);
+    if (!PUBLIC_SYMBOL_NAME.test(symbolName) || SELECTOR_GLOB_OR_REGEX.test(symbolName)) return invalid(contract);
     return {
       ruleId,
-      symbolRef: subjectRef(exception.symbolRef, contract),
+      packageId: npmPackageId(exception.packageId, contract),
+      sourcePath: parseRepositoryRelativePathV1(exception.sourcePath),
+      symbolName,
       decisionRef: parseRepositoryRelativePathV1(exception.decisionRef),
     };
   }, contract);
+  const exceptionKeys = exceptions.map((entry) =>
+    `${entry.ruleId}\0${entry.packageId}\0${entry.sourcePath}\0${entry.symbolName}`,
+  );
+  if (uniq(exceptionKeys).length !== exceptionKeys.length) return invalid(contract);
   return {
     kind: "project-health-authority-policy",
     schemaVersion: 1,
     id: "worldkit-supplemental-authority",
     rules: sortBy(rules, ["id"]),
-    exceptions: sortBy(exceptions, ["ruleId", "symbolRef", "decisionRef"]),
+    exceptions: sortBy(exceptions, ["ruleId", "packageId", "sourcePath", "symbolName"]),
   };
 }
 

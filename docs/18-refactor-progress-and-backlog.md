@@ -1045,14 +1045,16 @@ formal Capture/Route、AI 评测与生产 disposition 仍未完成，因此不�
 [Project Health Observatory Implementation Plan](../docs/superpowers/plans/2026-08-30-project-health-observatory-implementation.md)。
 它是仓库工程健康层，不是新的 World Validation、Scene Source、Runtime authority 或通用“健康总分”。
 现有测试、Build、Browser verifier、视觉 Capture 和人工审查继续产生事实；Observatory 只做精确树绑定、
-受影响门禁规划、跨证据关联、趋势和稳定诊断。当前仅完成设计与任务登记，不提高总进度。
+受影响门禁规划、跨证据关联、趋势和稳定诊断。PHO-0A/0B 已合入 `e40a2c16`；PHO-1 先合入 Evidence
+`publicSymbols` 与 Authority Policy 选择器/符号合同，再合入唯一 scan 与两个 Sensor。不提高总进度。
 
-- [ ] PHO-0A：冻结 current-only Profile、Metric、Observation/Finding、Gate Plan/Receipt、Review Receipt、
+- [x] PHO-0A：冻结 current-only Profile、Metric、Observation/Finding、Gate Plan/Receipt、Review Receipt、
   Report、中立 Workspace Evidence、补充 Authority/Supply Chain Policy、Accepted Debt 和 canonical fingerprint；
-- [ ] PHO-0B：实现唯一 bounded/redacted execution envelope，关闭 `in-place-checkout` / `isolated-temp-worktree`
+- [x] PHO-0B：实现唯一 bounded/redacted execution envelope，关闭 `in-place-checkout` / `isolated-temp-worktree`
   scope，统一 timeout、cooperative owned-process cleanup、临时目录和证据 Hash；
-- [ ] PHO-1：扩展现有 `workspace-boundary.ts` 唯一 scan Owner 以投影稳定 full graph/evidence，
-  由唯一 `health:record` 写 Receipt，再以两个同名 Sensor 分别消费原边界事实与补充重复 Owner、compat alias、Canonical/Native 边界规则；
+- [ ] PHO-1：扩展现有 `workspace-boundary.ts` 唯一 scan Owner，使一次 walk 投影 graph、`publicSymbols`
+  权威事实和 violations；Host 注入 `commitSha`；两个同名 Sensor 只消费该 Evidence 与精确 path/symbol
+  Authority Policy，检测重复 Owner、compat alias、Canonical/Native 边界；禁止第二次 `rg`/glob/AST；
 - [ ] PHO-2：复用现有 Owner 命令实现 Contract/Generated parity，并增加独立 Supply Chain Sensor 观察
   `contract-parity` lock/install/patch Receipt、唯一 `dependency-inventory`、provenance/license 与绑定 provider snapshot
   的漏洞/弃用信号；不重复 workspace undeclared-import 或 lock parser；
