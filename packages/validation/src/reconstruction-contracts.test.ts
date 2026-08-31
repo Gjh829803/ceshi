@@ -174,6 +174,26 @@ const resultValue = () => ({
 });
 
 describe("world reconstruction contracts", () => {
+  it("rejects passed dimensions that declare generic missing or stale evidence", () => {
+    for (const code of [
+      "WORLD_RECONSTRUCTION_EVIDENCE_STALE",
+      "WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING",
+    ] as const) {
+      const result: any = resultValue();
+      result.dimensions[0].diagnosticIds = ["diag.generic-evidence"];
+      result.diagnostics = [{
+        kind: "world-reconstruction-diagnostic", schemaVersion: 1,
+        id: "diag.generic-evidence", code, dimensionId: "collider",
+        acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1",
+        evidenceRefs: [], message: "Evidence cannot support a pass.",
+        repairAction: { kind: "revise-native-source" },
+      }];
+      expect(() => parseWorldReconstructionEvaluationResultV1(result)).toThrowError(
+        "WORLD_RECONSTRUCTION_EVALUATION_RESULT_INVALID",
+      );
+    }
+  });
+
   it("allows generic missing or stale evidence diagnostics in their explicit dimension only", () => {
     const incomplete: any = resultValue();
     incomplete.dimensions[5]!.status = "incomplete";
@@ -559,7 +579,7 @@ describe("world reconstruction contracts", () => {
           sceneAuthoringAttemptHash: H("8"),
           sceneAuthoringAttemptResultRef: "artifact://case/cloud-temple/attempts/0/attempt-result.json",
           sceneAuthoringAttemptResultHash: H("9"),
-          worldPackageRef: "artifact://case/cloud-temple/attempts/0/world-package",
+          worldPackageRef: `package://world-package/sha256/${"a".repeat(64)}`,
           worldPackageRootHash: H("a"),
           worldPackageBuildReceiptRef: "artifact://case/cloud-temple/attempts/0/world-package-build-receipt.json",
           worldPackageBuildReceiptHash: H("b"),
@@ -581,7 +601,7 @@ describe("world reconstruction contracts", () => {
           sceneAuthoringAttemptHash: H("f"),
           sceneAuthoringAttemptResultRef: "artifact://case/cloud-temple/attempts/1/attempt-result.json",
           sceneAuthoringAttemptResultHash: H("1"),
-          worldPackageRef: "artifact://case/cloud-temple/attempts/1/world-package",
+          worldPackageRef: `package://world-package/sha256/${"2".repeat(64)}`,
           worldPackageRootHash: H("2"),
           worldPackageBuildReceiptRef: "artifact://case/cloud-temple/attempts/1/world-package-build-receipt.json",
           worldPackageBuildReceiptHash: H("4"),
@@ -602,6 +622,14 @@ describe("world reconstruction contracts", () => {
     const run = parseWorldReconstructionRunReceiptV1(runValue);
     expect(run.attempts).toHaveLength(2);
     expect(run.finalAttemptIndex).toBe(1);
+
+    expect(() => parseWorldReconstructionRunReceiptV1({
+      ...runValue,
+      attempts: runValue.attempts.map((attempt) => ({
+        ...attempt,
+        worldPackageRef: "artifact://case/cloud-temple/not-a-package-ref",
+      })),
+    })).toThrowError("WORLD_RECONSTRUCTION_RUN_RECEIPT_INVALID");
 
     expect(() => parseWorldReconstructionRunReceiptV1({
       ...runValue,
