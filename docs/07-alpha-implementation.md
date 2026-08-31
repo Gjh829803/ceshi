@@ -16,8 +16,9 @@ OutdoorWorldSpec / AuthoringSpec V4
 ```
 
 Babylon 拥有场景、相机、资产、动画与渲染资源；Havok 拥有碰撞、支撑和 Character
-运动。Catalog gameplay、artifact-only 捕获与 Canonical Authoring 页面使用相同的
-Authoring/Compiler 和 Runtime 边界，不允许场景模块直接创建 Provider 对象或维护备用状态。
+运动。统一 Canonical Viewer 与内部 artifact-only 捕获使用相同的 Authoring/Compiler 和
+Babylon/Havok 边界；旧 catalog-gameplay 已删除，不允许场景模块直接创建 Provider 对象或
+维护备用状态。
 
 `@whitebox-world/camera` 已提供 provider-neutral 的命名 Camera Rig/Modifier/Context Profile、
 View Preference、纯 Selection/Explain 和诊断。它还没有接入 committed Gameplay Context

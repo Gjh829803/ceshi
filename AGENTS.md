@@ -101,7 +101,7 @@ Apply `docs/reviews/runtime-deep-review-checklist.md` whenever changing or revie
 4. The host runs `pnpm plan:freeze -- --scene <catalog-id>` and `pnpm plan:check -- --scene <catalog-id>`.
 5. Builder adds `apps/playground/src/scenes/<catalog-id>.ts`, exports `definePlannedOutdoorScene(...)`, implements stable matching Feature/Entity bindings, and registers it in `apps/playground/src/scenes/index.ts`.
 6. Run `pnpm test:scenes`, `pnpm typecheck`, `pnpm build`, `pnpm plan:scene -- --scene <catalog-id>`, and `pnpm plan:scene:check -- --scene <catalog-id>`.
-7. Open `http://127.0.0.1:5173/?scene=<catalog-id>`. Compare the three planning captures with intent, test playability, then export every Prototype's SDK-derived whitebox tri-view.
+7. Open `http://127.0.0.1:5173/?scene=<catalog-id>&artifact=1` only for planning comparison and SDK-derived whitebox capture. This internal artifact route is not Gameplay and does not expose Browser V5. Test playability only from a Canonical Authoring JSON source through `worldkit run <world.json>` or a promoted curated preset; never restore the deleted catalog-gameplay route.
 8. Visual Bible uses those tri-views and the verified manifest to create styled tri-views and the final rendered opening frame. Finish with `pnpm visual:finalize -- --scene <catalog-id>` and `pnpm visual:check -- --scene <catalog-id>`.
 
 Do not modify Runtime, physics, camera, or rendering internals merely to create a scene.

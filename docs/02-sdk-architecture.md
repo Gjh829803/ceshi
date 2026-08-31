@@ -453,9 +453,10 @@ Protocol V5，也不等于生产编辑器或 Incremental。详细事务、状态
 
 `@whitebox-world/world` 保留 Plan-first 场景 DSL、规划工件和引擎无关几何数据；
 `@whitebox-world/terrain-surface` 拥有 Spawn Safety 等生产空间不变量，
-`@whitebox-world/testkit` 只服务门禁。`apps/playground` 同时承载 Canonical Browser Gate、
-Babylon-backed catalog gameplay 和 artifact-only 捕获，但三者共享同一 Authoring/Compiler
-与 Babylon/Havok Runtime 边界，不存在可混用的第二套运行时协议。
+`@whitebox-world/testkit` 只服务门禁。`apps/playground` 的公开产品面是统一 Canonical Viewer；
+curated Runtime 来源由 `scenes/catalog.json` 选择。旧 Outdoor catalog 模块只保留在内部
+artifact-only 捕获面，不再提供 Gameplay 来源；两者仍复用同一 Authoring/Compiler 与
+Babylon/Havok 边界，不存在可混用的第二套运行时协议。
 
 ## 8. 横向基础能力
 

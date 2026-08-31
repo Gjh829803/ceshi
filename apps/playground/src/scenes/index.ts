@@ -17,8 +17,3 @@ export const sceneCatalog: Readonly<Record<string, OutdoorSceneDefinition>> = {
   "sunlit-flower-bay": sunlitFlowerBayScene,
   "world-08170639-54db": world0817063954dbScene,
 };
-
-export function resolveScene(search: string): OutdoorSceneDefinition {
-  const requested = new URLSearchParams(search).get("scene") ?? "grassland";
-  return sceneCatalog[requested] ?? currentScene;
-}
