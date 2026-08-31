@@ -12,7 +12,6 @@ describe("resolvePlaygroundRuntimeRoute", () => {
   it.each([
     ["", { mode: "viewer" }],
     ["?scene=feel-flat", { mode: "viewer" }],
-    ["?world=studio-world", { mode: "viewer", studioWorldId: "studio-world" }],
     [
       "?scene=sunlit-flower-bay&artifact=1",
       {
@@ -54,11 +53,43 @@ describe("resolvePlaygroundRuntimeRoute", () => {
     });
   });
 
-  it("fails closed when curated and Studio source identities conflict", () => {
+  it("accepts only the Studio world identity injected by the Host document", () => {
     expect(resolvePlaygroundRuntimeRoute(
-      "?scene=feel-flat&world=studio-world",
+      "",
       ARTIFACT_SCENE_CATALOG,
       "curated-host",
+      "studio-world",
+    )).toEqual({ mode: "viewer", studioWorldId: "studio-world" });
+  });
+
+  it.each([
+    ["?world=studio-world", "curated-host"],
+    ["?world=studio-world", "fixed-host"],
+    ["?world=other-world", "fixed-host"],
+  ] as const)("rejects the removed Browser world selector %s for %s", (
+    search,
+    viewerSourceAuthority,
+  ) => {
+    expect(resolvePlaygroundRuntimeRoute(
+      search,
+      ARTIFACT_SCENE_CATALOG,
+      viewerSourceAuthority,
+    )).toEqual({
+      mode: "unknown",
+      diagnostic: {
+        severity: "error",
+        code: "PLAYGROUND_RUNTIME_ROUTE_REMOVED",
+        message: "The Browser world selector was removed; Studio binds the Viewer source in the Host document.",
+      },
+    });
+  });
+
+  it("fails closed when curated and Host-bound Studio identities conflict", () => {
+    expect(resolvePlaygroundRuntimeRoute(
+      "?scene=feel-flat",
+      ARTIFACT_SCENE_CATALOG,
+      "curated-host",
+      "studio-world",
     )).toEqual({
       mode: "unknown",
       diagnostic: {
@@ -72,7 +103,6 @@ describe("resolvePlaygroundRuntimeRoute", () => {
   it.each([
     ["?artifact=1&scene=canyon", "fixed-host"],
     ["?artifact=1&captureArtifacts=1&scene=canyon", "fixed-host"],
-    ["?world=studio-world&artifact=1&scene=canyon", "curated-host"],
   ] as const)(
     "fails closed when %s can replace a %s Viewer source",
     (search, viewerSourceAuthority) => {
@@ -125,7 +155,7 @@ describe("resolvePlaygroundRuntimeRoute", () => {
   );
 
   it("never returns the deleted public route modes", () => {
-    for (const search of ["", "?scene=feel-flat", "?world=studio-world"]) {
+    for (const search of ["", "?scene=feel-flat"]) {
       const route = resolvePlaygroundRuntimeRoute(
         search,
         ARTIFACT_SCENE_CATALOG,
