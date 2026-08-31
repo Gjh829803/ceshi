@@ -1,12 +1,21 @@
 export const BABYLON_NATIVE_BLOCK_FULL_SIZE_METERS_V1 = 1 as const;
-export const BABYLON_NATIVE_BLOCK_MICRO_GRID_METERS_V1 = 0.5 as const;
-export const BABYLON_NATIVE_BLOCK_CENTER_LATTICE_METERS_V1 = 0.25 as const;
+export const BABYLON_NATIVE_BLOCK_OCCUPANCY_GRID_METERS_XYZ_V1 = Object.freeze([
+  0.5,
+  0.25,
+  0.5,
+] as const);
+export const BABYLON_NATIVE_BLOCK_CENTER_LATTICE_METERS_XYZ_V1 = Object.freeze([
+  0.25,
+  0.125,
+  0.25,
+] as const);
 
 export type BabylonNativeBlockShapeKindV1 =
   | "full"
   | "half"
   | "quarter"
-  | "small";
+  | "small"
+  | "step";
 
 export type BabylonNativeBlockPositionMetersXYZV1 = readonly [
   xMeters: number,
@@ -19,6 +28,7 @@ export const BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1 = Object.freeze({
   half: Object.freeze([1, 0.5, 1]) as readonly [1, 0.5, 1],
   quarter: Object.freeze([0.5, 0.5, 1]) as readonly [0.5, 0.5, 1],
   small: Object.freeze([0.5, 0.5, 0.5]) as readonly [0.5, 0.5, 0.5],
+  step: Object.freeze([1, 0.25, 1]) as readonly [1, 0.25, 1],
 } satisfies Readonly<
   Record<BabylonNativeBlockShapeKindV1, readonly [number, number, number]>
 >);
@@ -86,19 +96,27 @@ export function babylonNativeBlockCenterAlignsToGridV1(
   input: BabylonNativeBlockPlacementV1,
 ): boolean {
   if (
-    !input.centerMetersXYZ.every((value) =>
+    !input.centerMetersXYZ.every((value, axis) =>
       Number.isFinite(value) &&
-      aligned(value, BABYLON_NATIVE_BLOCK_CENTER_LATTICE_METERS_V1),
+      aligned(
+        value,
+        BABYLON_NATIVE_BLOCK_CENTER_LATTICE_METERS_XYZ_V1[axis]!,
+      ),
     )
   ) {
     return false;
   }
   const bounds = babylonNativeBlockBoundsFromCenterV1(input);
-  return [
-    ...bounds.minimumMetersXYZ,
-    ...bounds.maximumMetersXYZ,
-  ].every((value) =>
-    aligned(value, BABYLON_NATIVE_BLOCK_MICRO_GRID_METERS_V1),
+  return bounds.minimumMetersXYZ.every((value, axis) =>
+    aligned(
+      value,
+      BABYLON_NATIVE_BLOCK_OCCUPANCY_GRID_METERS_XYZ_V1[axis]!,
+    ),
+  ) && bounds.maximumMetersXYZ.every((value, axis) =>
+    aligned(
+      value,
+      BABYLON_NATIVE_BLOCK_OCCUPANCY_GRID_METERS_XYZ_V1[axis]!,
+    ),
   );
 }
 
@@ -106,11 +124,15 @@ export function babylonNativeBlockOccupiedMicroCellKeysV1(
   input: BabylonNativeBlockPlacementV1,
 ): readonly string[] {
   const bounds = babylonNativeBlockBoundsFromCenterV1(input);
-  const minimum = bounds.minimumMetersXYZ.map((value) =>
-    Math.round(value / BABYLON_NATIVE_BLOCK_MICRO_GRID_METERS_V1),
+  const minimum = bounds.minimumMetersXYZ.map((value, axis) =>
+    Math.round(
+      value / BABYLON_NATIVE_BLOCK_OCCUPANCY_GRID_METERS_XYZ_V1[axis]!,
+    ),
   );
-  const maximum = bounds.maximumMetersXYZ.map((value) =>
-    Math.round(value / BABYLON_NATIVE_BLOCK_MICRO_GRID_METERS_V1),
+  const maximum = bounds.maximumMetersXYZ.map((value, axis) =>
+    Math.round(
+      value / BABYLON_NATIVE_BLOCK_OCCUPANCY_GRID_METERS_XYZ_V1[axis]!,
+    ),
   );
   const keys: string[] = [];
   for (let y = minimum[1]!; y < maximum[1]!; y += 1) {

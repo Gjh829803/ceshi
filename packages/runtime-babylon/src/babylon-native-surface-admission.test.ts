@@ -71,6 +71,10 @@ function contribution(
     schemaVersion: 1,
     sceneModuleRef: "worldkit://native-scene/surface-test@1",
     sceneModuleId: "surface-test",
+    profileSettlement: {
+      kind: "none",
+      profileRef: "worldkit://native-scene-profile/whitebox.standard@1",
+    },
     spawnMarker: {
       id: "player-spawn",
       positionMetersXYZ,

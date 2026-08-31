@@ -1,6 +1,7 @@
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
 import "@babylonjs/core/Meshes/instancedMesh.js";
+import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { Scene } from "@babylonjs/core/scene.js";
 import {
@@ -9,7 +10,15 @@ import {
 } from "@whitebox-world/native-babylon";
 import { describe, expect, it } from "vitest";
 
-type Shape = "full" | "half" | "quarter" | "small";
+import {
+  BABYLON_NATIVE_BLOCK_PROFILE_DIAGNOSTIC_CODES_V1,
+  createBabylonNativeBlockProfileCheckResultV1,
+} from "./check.js";
+import { deriveBabylonNativeBlockLayoutV1 } from "./layout.js";
+import type { BabylonNativeBlockSessionRecordV1 } from "./session.js";
+import { BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1 } from "./shapes.js";
+
+type Shape = "full" | "half" | "quarter" | "small" | "step";
 type PaletteRole =
   | "ground"
   | "route"
@@ -33,6 +42,9 @@ interface BlockProfileModule {
   ): {
     createBlock(input: Readonly<BlockCreateInput>): Mesh;
     finalize(): Readonly<{
+      kind: "babylon-native-block-checked-layout";
+      schemaVersion: 1;
+      checkResult: Readonly<{
       kind: "babylon-native-block-profile-check-result";
       schemaVersion: 1;
       id: string;
@@ -57,7 +69,7 @@ interface BlockProfileModule {
         occupiedMicroCellCount: number;
         exposedTopSurfaceCellCount: number;
         boundarySegmentCount: number;
-        structuralHalfMeterTransitionCount: number;
+        structuralStepTransitionCount: number;
         unsupportedBlockCount: number;
         structuralRouteComponentCount: number;
         visualGroupCount: number;
@@ -69,13 +81,64 @@ interface BlockProfileModule {
         minimumMetersXYZ: readonly [number, number, number];
         maximumMetersXYZ: readonly [number, number, number];
       }>[];
+      }>;
     }>;
   };
 }
 
 async function loadProfile(): Promise<BlockProfileModule> {
-  const modulePath = ["./", "index.js"].join("");
-  return import(modulePath) as Promise<BlockProfileModule>;
+  return {
+    BABYLON_NATIVE_BLOCK_PROFILE_DIAGNOSTIC_CODES_V1,
+    createBabylonNativeBlockProfileSessionV1(context, budget) {
+      const records: BabylonNativeBlockSessionRecordV1[] = [];
+      return {
+        createBlock(input) {
+          if (records.length >= budget.maximumBlockCount) {
+            throw new Error("test check-session budget exceeded");
+          }
+          const [width, height, depth] =
+            BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1[input.shape];
+          const mesh = MeshBuilder.CreateBox(input.id, {
+            width,
+            height,
+            depth,
+            updatable: true,
+          }, context.scene);
+          mesh.id = input.id;
+          const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
+          const indices = mesh.getIndices();
+          if (positions === null || indices === null) {
+            throw new Error("test check-session could not snapshot Mesh geometry");
+          }
+          records.push(Object.freeze({
+            input: Object.freeze({ ...input }),
+            mesh,
+            localGeometrySnapshot: Object.freeze({
+              positions: Object.freeze([...positions]),
+              indices: Object.freeze(Array.from(indices)),
+            }),
+          }));
+          return mesh;
+        },
+        finalize() {
+          const frozenRecords = Object.freeze([...records]);
+          const layout = deriveBabylonNativeBlockLayoutV1(
+            context.scene,
+            frozenRecords,
+          );
+          return Object.freeze({
+            kind: "babylon-native-block-checked-layout" as const,
+            schemaVersion: 1 as const,
+            checkResult: createBabylonNativeBlockProfileCheckResultV1(
+              context.bootstrap.id,
+              frozenRecords,
+              layout,
+            ),
+          });
+        },
+      };
+    },
+  };
 }
 
 function createContext(
@@ -165,7 +228,7 @@ describe("Babylon Native block profile structural check", () => {
       });
       ground.position.set(0, 0.5, 0);
 
-      const result = session.finalize();
+      const result = session.finalize().checkResult;
 
       expect(result).toEqual({
         kind: "babylon-native-block-profile-check-result",
@@ -175,7 +238,13 @@ describe("Babylon Native block profile structural check", () => {
         diagnostics: [],
         metrics: {
           blockCount: 1,
-          blockCountByShape: { full: 1, half: 0, quarter: 0, small: 0 },
+          blockCountByShape: {
+            full: 1,
+            half: 0,
+            quarter: 0,
+            small: 0,
+            step: 0,
+          },
           blockCountByPaletteRole: {
             ground: 1,
             route: 0,
@@ -184,10 +253,10 @@ describe("Babylon Native block profile structural check", () => {
             "water-like-visual": 0,
             "background-mass": 0,
           },
-          occupiedMicroCellCount: 8,
+          occupiedMicroCellCount: 16,
           exposedTopSurfaceCellCount: 4,
           boundarySegmentCount: 8,
-          structuralHalfMeterTransitionCount: 0,
+          structuralStepTransitionCount: 0,
           unsupportedBlockCount: 0,
           structuralRouteComponentCount: 0,
           visualGroupCount: 0,
@@ -226,7 +295,7 @@ describe("Babylon Native block profile structural check", () => {
       });
       lower.position.set(0.25, 0.25, 0.25);
 
-      const result = session.finalize();
+      const result = session.finalize().checkResult;
 
       expect(result.outcome).toBe("passed");
       expect(result.visualGroups).toEqual([{
@@ -270,7 +339,7 @@ describe("Babylon Native block profile structural check", () => {
           });
           mesh.position.set(definition.x, 0.5, 0);
         }
-        return session.finalize();
+        return session.finalize().checkResult;
       } finally {
         scene.dispose();
         engine.dispose();
@@ -284,6 +353,54 @@ describe("Babylon Native block profile structural check", () => {
       outcome: "passed",
     });
     expect(forward).toEqual(reversed);
+  });
+
+  it("connects only route blocks within one quarter-meter structural step", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadProfile();
+
+    const build = (upperY: number) => {
+      const engine = new NullEngine();
+      const scene = new Scene(engine);
+      try {
+        const session = createBabylonNativeBlockProfileSessionV1(
+          createContext(scene, `step-route-${upperY}`),
+          { maximumBlockCount: 2 },
+        );
+        const low = session.createBlock({
+          id: "low-step",
+          shape: "step",
+          paletteRole: "route",
+        });
+        low.position.set(0, 0.125, 0);
+        const high = session.createBlock({
+          id: "high-step",
+          shape: "step",
+          paletteRole: "route",
+        });
+        high.position.set(1, upperY, 0);
+        return session.finalize().checkResult;
+      } finally {
+        scene.dispose();
+        engine.dispose();
+      }
+    };
+
+    const oneStep = build(0.375);
+    const twoSteps = build(0.625);
+
+    expect(oneStep.outcome).toBe("passed");
+    expect(oneStep.metrics.structuralRouteComponentCount).toBe(1);
+    expect(oneStep.metrics.structuralStepTransitionCount).toBe(2);
+    expect(twoSteps.outcome).toBe("rejected");
+    expect(twoSteps.metrics.structuralRouteComponentCount).toBe(2);
+    expect(twoSteps.diagnostics).toContainEqual(expect.objectContaining({
+      code: "WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED",
+      severity: "error",
+    }));
+    expect(twoSteps.diagnostics.find(({ code }) =>
+      code === "WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED")?.repairHint).toBe(
+      "Connect the visual route topology and validate Runtime passability separately through the SDK/Havok gate.",
+    );
   });
 
   it("rejects overlap, missing groups, and disconnected structural routes", async () => {
@@ -325,7 +442,7 @@ describe("Babylon Native block profile structural check", () => {
       });
       eastRoute.position.set(8, 0.5, 0);
 
-      const result = session.finalize();
+      const result = session.finalize().checkResult;
 
       expect(result.outcome).toBe("rejected");
       expect(result.diagnostics.map(({ severity, code, location }) => ({
@@ -375,7 +492,7 @@ describe("Babylon Native block profile structural check", () => {
       });
       floating.position.set(2.25, 2.25, 0.25);
 
-      const result = session.finalize();
+      const result = session.finalize().checkResult;
 
       expect(result.outcome).toBe("passed");
       expect(result.metrics.unsupportedBlockCount).toBe(1);
@@ -404,7 +521,7 @@ describe("Babylon Native block profile structural check", () => {
       });
       mesh.dispose();
 
-      const result = session.finalize();
+      const result = session.finalize().checkResult;
 
       expect(result.outcome).toBe("rejected");
       expect(result.diagnostics).toHaveLength(1);
@@ -436,7 +553,7 @@ describe("Babylon Native block profile structural check", () => {
       positions[0] = positions[0]! + 0.25;
       mesh.setVerticesData(VertexBuffer.PositionKind, positions, true);
 
-      const result = session.finalize();
+      const result = session.finalize().checkResult;
 
       expect(result.outcome).toBe("rejected");
       expect(result.diagnostics).toHaveLength(1);
@@ -471,7 +588,7 @@ describe("Babylon Native block profile structural check", () => {
         value: true,
       });
 
-      const result = session.finalize();
+      const result = session.finalize().checkResult;
 
       expect(result.outcome).toBe("rejected");
       expect(result.diagnostics).toHaveLength(1);
@@ -499,7 +616,7 @@ describe("Babylon Native block profile structural check", () => {
       mesh.position.set(0, 0.5, 0);
       mesh.createInstance("untracked-instance").position.set(2, 0, 0);
 
-      const result = session.finalize();
+      const result = session.finalize().checkResult;
 
       expect(result.outcome).toBe("rejected");
       expect(result.diagnostics).toHaveLength(1);
@@ -532,7 +649,7 @@ describe("Babylon Native block profile structural check", () => {
         },
       });
 
-      const result = session.finalize();
+      const result = session.finalize().checkResult;
 
       expect(result.outcome).toBe("rejected");
       expect(result.diagnostics).toHaveLength(1);

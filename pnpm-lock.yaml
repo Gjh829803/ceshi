@@ -435,6 +435,9 @@ importers:
       '@babylonjs/core':
         specifier: 9.23.0
         version: 9.23.0
+      '@whitebox-world/protocol':
+        specifier: workspace:*
+        version: link:../protocol
       '@whitebox-world/runtime-contracts':
         specifier: workspace:*
         version: link:../runtime-contracts
@@ -450,6 +453,12 @@ importers:
       '@whitebox-world/native-babylon':
         specifier: workspace:*
         version: link:../native-babylon
+      '@whitebox-world/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      lodash-es:
+        specifier: ^4.18.1
+        version: 4.18.1
 
   packages/protocol:
     dependencies:

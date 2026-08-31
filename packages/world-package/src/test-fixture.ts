@@ -108,7 +108,8 @@ export function createWorldPackageTestInputV1(
   return { ...base, ...overrides };
 }
 
-export function createBabylonNativeWorldPackageTestInputV1(
+function createBabylonNativeWorldPackageTestInputForProfileV1(
+  profileKind: "standard" | "blocks",
   overrides: Partial<FrozenBabylonNativeWorldPackageBuildInputV1> = {},
 ): FrozenBabylonNativeWorldPackageBuildInputV1 {
   const canonical = createWorldPackageTestInputV1();
@@ -121,7 +122,9 @@ export function createBabylonNativeWorldPackageTestInputV1(
     contentHash: `sha256:${"a".repeat(64)}` as Sha256HashV1,
   });
   const nativeSceneProfile = Object.freeze({
-    resourceRef: "worldkit://native-scene-profile/trusted-local@1",
+    resourceRef: profileKind === "blocks"
+      ? "worldkit://native-scene-profile/whitebox.blocks@1"
+      : "worldkit://native-scene-profile/whitebox.standard@1",
     resolvedVersion: "1",
     contentHash: `sha256:${"b".repeat(64)}` as Sha256HashV1,
   });
@@ -266,6 +269,20 @@ export function createBabylonNativeWorldPackageTestInputV1(
     schemaVersion: 1 as const,
     sceneModuleRef,
     sceneModuleId: "package-fixture-module",
+    profileSettlement: profileKind === "blocks"
+      ? Object.freeze({
+        kind: "host-snapshot" as const,
+        profileRef:
+          "worldkit://native-scene-profile/whitebox.blocks@1" as const,
+        targetCount: 1,
+        profileInventoryHash: `sha256:${"1".repeat(64)}` as Sha256HashV1,
+        settledVisualHash: `sha256:${"2".repeat(64)}` as Sha256HashV1,
+      })
+      : Object.freeze({
+        kind: "none" as const,
+        profileRef:
+          "worldkit://native-scene-profile/whitebox.standard@1" as const,
+      }),
     spawnMarker: Object.freeze({
       id: nativeSceneBootstrap.spawnMarkerId,
       positionMetersXYZ: [0, 0, 0] as const,
@@ -363,4 +380,22 @@ export function createBabylonNativeWorldPackageTestInputV1(
     resourceArtifacts: [],
   };
   return { ...base, ...overrides };
+}
+
+export function createBabylonNativeWorldPackageTestInputV1(
+  overrides: Partial<FrozenBabylonNativeWorldPackageBuildInputV1> = {},
+): FrozenBabylonNativeWorldPackageBuildInputV1 {
+  return createBabylonNativeWorldPackageTestInputForProfileV1(
+    "standard",
+    overrides,
+  );
+}
+
+export function createBabylonNativeBlockWorldPackageTestInputV1(
+  overrides: Partial<FrozenBabylonNativeWorldPackageBuildInputV1> = {},
+): FrozenBabylonNativeWorldPackageBuildInputV1 {
+  return createBabylonNativeWorldPackageTestInputForProfileV1(
+    "blocks",
+    overrides,
+  );
 }

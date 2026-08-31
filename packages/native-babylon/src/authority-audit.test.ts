@@ -12,6 +12,7 @@ import { Color3, Color4 } from "@babylonjs/core/Maths/math.color.js";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
 import { Geometry } from "@babylonjs/core/Meshes/geometry.js";
+import "@babylonjs/core/Meshes/instancedMesh.js";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
@@ -54,7 +55,7 @@ const BOOTSTRAP = parseBabylonNativeSceneBootstrapV1({
   id: "authority-audit-native",
   sceneModuleRef: "worldkit://native-scene/authority-audit@1",
   nativeSceneApiRef: "worldkit://native-scene-api/babylon@1",
-  nativeSceneProfileRef: "worldkit://native-scene-profile/trusted-local@1",
+  nativeSceneProfileRef: "worldkit://native-scene-profile/whitebox.standard@1",
   gameplayBootstrapRef: "worldkit://gameplay-bootstrap/g-bot@1",
   initialControlledEntityId: "player",
   gravityMetersPerSecondSquaredXYZ: [0, -9.81, 0],
@@ -125,6 +126,72 @@ function registerSpawn(
     facingRadians: 0,
   });
 }
+
+describe("installed Babylon runtime-kind authority audit", () => {
+  it("uses the AbstractMesh callback surface for an InstancedMesh added by Babylon", async () => {
+    const candidate = createCandidate();
+    const result = await admit(candidate, (context) => {
+      const source = MeshBuilder.CreateBox(
+        "instance-source",
+        { size: 1 },
+        candidate.scene,
+      );
+      source.createInstance("installed-instance");
+      registerSpawn(context);
+    });
+
+    expect(result.outcome).toBe("passed");
+  });
+
+  it("retains an InstancedMesh ActionManager set/reset attempt", async () => {
+    const provider = createCandidate();
+    const actionManager = new ActionManager(provider.scene);
+    const candidate = createCandidate();
+    const result = await admit(candidate, (context) => {
+      const source = MeshBuilder.CreateBox(
+        "instance-action-source",
+        { size: 1 },
+        candidate.scene,
+      );
+      const instance = source.createInstance("instance-action-reset");
+      try {
+        instance.actionManager = actionManager;
+        instance.actionManager = null;
+      } catch {
+        // A caught Host probe still rejects the Candidate.
+      }
+      registerSpawn(context);
+    });
+
+    expect(errorCode(result)).toBe(
+      "WORLDKIT_NATIVE_SCENE_AUTHORITY_MUTATION_FORBIDDEN",
+    );
+  });
+
+  it("retains an InstancedMesh PhysicsBody set/reset attempt", async () => {
+    const candidate = createCandidate();
+    const result = await admit(candidate, (context) => {
+      const source = MeshBuilder.CreateBox(
+        "instance-physics-source",
+        { size: 1 },
+        candidate.scene,
+      );
+      const instance = source.createInstance("instance-physics-reset");
+      const instanceRecord = instance as unknown as Record<string, unknown>;
+      try {
+        instanceRecord.physicsBody = {};
+        instanceRecord.physicsBody = undefined;
+      } catch {
+        // A caught Host probe still rejects the Candidate.
+      }
+      registerSpawn(context);
+    });
+
+    expect(errorCode(result)).toBe(
+      "WORLDKIT_NATIVE_SCENE_AUTHORITY_MUTATION_FORBIDDEN",
+    );
+  });
+});
 
 function invokeObservableControl(
   observable: Record<string, unknown>,

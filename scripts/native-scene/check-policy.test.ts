@@ -33,7 +33,7 @@ describe("BNA2 Native check policy", () => {
     const result = resolveBabylonNativeCheckPolicyV1({
       ...VALID_NATIVE_SCENE_BOOTSTRAP_FIXTURE_V1,
       nativeSceneProfileRef:
-        "worldkit://native-scene-profile/trusted-local@1",
+        "worldkit://native-scene-profile/not-registered@1",
     });
 
     expect(result.outcome).toBe("rejected");

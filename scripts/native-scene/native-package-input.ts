@@ -438,6 +438,8 @@ export async function prepareFrozenBabylonNativeWorldPackageBuildInputV1(
       checkResult.checkedInput.kind !== "native-scene-module" ||
       checkResult.checkedInput.sceneModuleRef !== bootstrap.sceneModuleRef ||
       contribution.sceneModuleRef !== bootstrap.sceneModuleRef ||
+      contribution.profileSettlement.profileRef !==
+        bootstrap.nativeSceneProfileRef ||
       replay.contributionHash !==
         hashBabylonNativeSceneContributionV1(contribution)
     ) return fail();

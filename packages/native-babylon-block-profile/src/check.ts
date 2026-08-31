@@ -8,6 +8,10 @@ import type {
   BabylonNativeBlockPositionMetersXYZV1,
   BabylonNativeBlockShapeKindV1,
 } from "./shapes.js";
+import {
+  BABYLON_NATIVE_BLOCK_CENTER_LATTICE_METERS_XYZ_V1,
+  BABYLON_NATIVE_BLOCK_OCCUPANCY_GRID_METERS_XYZ_V1,
+} from "./shapes.js";
 
 export type BabylonNativeBlockProfileDiagnosticLocationV1 =
   | Readonly<{ kind: "none" }>
@@ -59,7 +63,7 @@ export interface BabylonNativeBlockProfileMetricsV1 {
   readonly occupiedMicroCellCount: number;
   readonly exposedTopSurfaceCellCount: number;
   readonly boundarySegmentCount: number;
-  readonly structuralHalfMeterTransitionCount: number;
+  readonly structuralStepTransitionCount: number;
   readonly unsupportedBlockCount: number;
   readonly structuralRouteComponentCount: number;
   readonly visualGroupCount: number;
@@ -138,7 +142,7 @@ function issueMessage(issue: BabylonNativeBlockLayoutIssueV1): Readonly<{
       });
     case "WORLDKIT_NATIVE_BLOCK_GRID_ALIGNMENT_INVALID":
       return Object.freeze({
-        message: `Block '${issue.blockId}' does not align to the 0.25m center and 0.5m boundary grids.`,
+        message: `Block '${issue.blockId}' does not align to the axis-specific center lattice [${BABYLON_NATIVE_BLOCK_CENTER_LATTICE_METERS_XYZ_V1.join(", ")}]m and occupancy grid [${BABYLON_NATIVE_BLOCK_OCCUPANCY_GRID_METERS_XYZ_V1.join(", ")}]m.`,
         repairHint: "Move the final world transform onto the Profile lattice.",
       });
     case "WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP":
@@ -198,7 +202,8 @@ function structurallyAdjacent(
 ): boolean {
   if (
     Math.abs(left.maximumMetersXYZ[1] - right.maximumMetersXYZ[1]) >
-      0.5 + GEOMETRY_EPSILON
+      BABYLON_NATIVE_BLOCK_OCCUPANCY_GRID_METERS_XYZ_V1[1] +
+        GEOMETRY_EPSILON
   ) {
     return false;
   }
@@ -277,6 +282,7 @@ function countInputs(
     half: 0,
     quarter: 0,
     small: 0,
+    step: 0,
   };
   const blockCountByPaletteRole = Object.fromEntries(
     BABYLON_NATIVE_BLOCK_PALETTE_ROLES_V1.map((role) => [role, 0]),
@@ -359,7 +365,7 @@ export function createBabylonNativeBlockProfileCheckResultV1(
       code: "WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED",
       location: Object.freeze({ kind: "none" }),
       message: `Route-colored structural blocks form ${routeComponentCount} disconnected candidates.`,
-      repairHint: "Connect the visual route topology; Runtime passability remains a later BWB-4 gate.",
+      repairHint: "Connect the visual route topology and validate Runtime passability separately through the SDK/Havok gate.",
     }));
   }
   const sortedPending = [...pendingDiagnostics].sort((left, right) =>
@@ -385,8 +391,7 @@ export function createBabylonNativeBlockProfileCheckResultV1(
     ).size,
     exposedTopSurfaceCellCount: layout.exposedTopSurfaceCellKeys.length,
     boundarySegmentCount: layout.boundarySegmentKeys.length,
-    structuralHalfMeterTransitionCount:
-      layout.structuralHalfMeterTransitionKeys.length,
+    structuralStepTransitionCount: layout.structuralStepTransitionKeys.length,
     unsupportedBlockCount: layout.unsupportedBlockIds.length,
     structuralRouteComponentCount: routeComponentCount,
     visualGroupCount: inventory.length,

@@ -54,8 +54,35 @@ describe("Hosted Native runner distribution", () => {
       "@babylonjs/core",
       "@babylonjs/havok",
       "@babylonjs/loaders",
+      "@whitebox-world/native-babylon",
       "earcut",
     ]);
+    expect(report.runnerExternalImportSpecifiersExact).toEqual(
+      expect.arrayContaining([
+        "@whitebox-world/native-babylon",
+        "@whitebox-world/native-babylon/host",
+      ]),
+    );
+    expect(report.runnerSourceModulePaths).not.toEqual(expect.arrayContaining([
+      expect.stringContaining("/packages/native-babylon/src/"),
+    ]));
+    expect(report.blockProfileSourceModulePaths).not.toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("/packages/native-babylon/src/"),
+      ]),
+    );
+    expect(report.nativeRootSourceModulePaths).not.toEqual(
+      expect.arrayContaining([
+        expect.stringContaining(
+          "/packages/native-babylon/src/profile-settlement.ts",
+        ),
+      ]),
+    );
+    expect(report.nativeHostSourceModulePaths.filter((sourcePath) =>
+      sourcePath.endsWith(
+        "/packages/native-babylon/src/profile-settlement.ts",
+      )
+    )).toHaveLength(1);
     expect(await stat(path.join(outputRoot, "runner.mjs"))).toMatchObject({
       size: expect.any(Number),
     });
@@ -81,6 +108,7 @@ describe("Hosted Native runner distribution", () => {
       "node_modules/@babylonjs/core/package.json",
       "node_modules/@babylonjs/havok/package.json",
       "node_modules/@babylonjs/loaders/package.json",
+      "node_modules/@whitebox-world/native-babylon/host.mjs",
       "node_modules/@whitebox-world/native-babylon/index.mjs",
       "node_modules/@whitebox-world/native-babylon/package.json",
       "node_modules/@whitebox-world/native-babylon-block-profile/index.mjs",
@@ -96,5 +124,22 @@ describe("Hosted Native runner distribution", () => {
       file.includes("@whitebox-world/compiler") ||
       file.includes("@whitebox-world/authoring")
     )).toBe(false);
+
+    const nativePackageRoot = path.join(
+      outputRoot,
+      "node_modules/@whitebox-world/native-babylon",
+    );
+    const nativePackageManifest = JSON.parse(await readFile(
+      path.join(nativePackageRoot, "package.json"),
+      "utf8",
+    )) as Readonly<Record<string, unknown>>;
+    expect(nativePackageManifest.exports).toEqual({
+      ".": "./index.mjs",
+      "./host": "./host.mjs",
+    });
+    expect(files.filter((file) =>
+      file === "node_modules/@whitebox-world/native-babylon/host.mjs"
+    )).toHaveLength(1);
+
   }, 30_000);
 });

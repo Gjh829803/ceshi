@@ -11,10 +11,12 @@ const RUNTIME_EXTERNAL_PACKAGE_NAMES = Object.freeze([
   "babylonjs-gltf2interface",
   "earcut",
 ]);
+const NATIVE_BABYLON_PACKAGE_NAME = "@whitebox-world/native-babylon";
 const RUNNER_EXTERNAL_PACKAGE_NAMES = Object.freeze([
   "@babylonjs/core",
   "@babylonjs/havok",
   "@babylonjs/loaders",
+  NATIVE_BABYLON_PACKAGE_NAME,
   "earcut",
 ]);
 const BUILTIN_PREFIX = "node:";
@@ -31,6 +33,10 @@ function isRuntimeExternal(specifier) {
   return RUNTIME_EXTERNAL_PACKAGE_NAMES.includes(
     packageNameFromSpecifier(specifier),
   );
+}
+
+function isNativeBabylonExternal(specifier) {
+  return packageNameFromSpecifier(specifier) === NATIVE_BABYLON_PACKAGE_NAME;
 }
 
 function rollupOutput(result) {
@@ -78,16 +84,20 @@ async function bundleEntry({
   if (chunks.length !== 1 || chunks[0].fileName !== fileName) {
     throw new Error("WORLDKIT_HOSTED_RUNNER_BUILD_OUTPUT_INVALID");
   }
+  const externalImportSpecifiersExact = Object.freeze(
+    [...new Set(chunks.flatMap((chunk) => chunk.imports)
+      .filter((specifier) => !specifier.startsWith(BUILTIN_PREFIX)))]
+      .sort((left, right) => left.localeCompare(right, "en-US")),
+  );
   return Object.freeze({
     sourceModulePaths: Object.freeze(
       Object.keys(chunks[0].modules).sort((left, right) =>
         left.localeCompare(right, "en-US")
       ),
     ),
+    externalImportSpecifiersExact,
     externalImportSpecifiers: Object.freeze(
-      [...new Set(chunks.flatMap((chunk) => chunk.imports)
-        .filter((specifier) => !specifier.startsWith(BUILTIN_PREFIX))
-        .map(packageNameFromSpecifier))]
+      [...new Set(externalImportSpecifiersExact.map(packageNameFromSpecifier))]
         .sort((left, right) => left.localeCompare(right, "en-US")),
     ),
   });
@@ -110,6 +120,7 @@ async function writeGuestPackage(
   outputRoot,
   packageName,
   packageVersion,
+  packageExports,
 ) {
   const packageRoot = path.join(
     outputRoot,
@@ -122,7 +133,7 @@ async function writeGuestPackage(
     version: packageVersion,
     private: true,
     type: "module",
-    exports: "./index.mjs",
+    exports: packageExports,
   })}\n`, "utf8");
   return packageRoot;
 }
@@ -132,6 +143,7 @@ function assertRunnerSourceClosure(sourceModulePaths) {
     "/packages/authoring/",
     "/packages/compiler/",
     "/packages/world-package/src/package-directory.ts",
+    "/packages/native-babylon/",
     "/node_modules/tsx/",
   ];
   if (sourceModulePaths.some((sourcePath) =>
@@ -156,7 +168,8 @@ export async function buildHostedNativeRunnerDistributionV1(input) {
     ),
     outputRoot,
     fileName: RUNNER_FILE_NAME,
-    external: isRuntimeExternal,
+    external: (specifier) =>
+      isRuntimeExternal(specifier) || isNativeBabylonExternal(specifier),
   });
   assertRunnerSourceClosure(runnerBuild.sourceModulePaths);
   if (
@@ -175,13 +188,23 @@ export async function buildHostedNativeRunnerDistributionV1(input) {
   ), "utf8"));
   const nativeBabylonRoot = await writeGuestPackage(
     outputRoot,
-    "@whitebox-world/native-babylon",
+    NATIVE_BABYLON_PACKAGE_NAME,
     nativeBabylonManifest.version,
+    Object.freeze({
+      ".": "./index.mjs",
+      "./host": "./host.mjs",
+    }),
   );
-  await bundleEntry({
+  const nativeRootBuild = await bundleEntry({
     entryPath: path.join(repositoryRoot, "packages/native-babylon/src/index.ts"),
     outputRoot: nativeBabylonRoot,
     fileName: "index.mjs",
+    external: isRuntimeExternal,
+  });
+  const nativeHostBuild = await bundleEntry({
+    entryPath: path.join(repositoryRoot, "packages/native-babylon/src/host.ts"),
+    outputRoot: nativeBabylonRoot,
+    fileName: "host.mjs",
     external: isRuntimeExternal,
   });
 
@@ -193,8 +216,9 @@ export async function buildHostedNativeRunnerDistributionV1(input) {
     outputRoot,
     "@whitebox-world/native-babylon-block-profile",
     blockProfileManifest.version,
+    "./index.mjs",
   );
-  await bundleEntry({
+  const blockProfileBuild = await bundleEntry({
     entryPath: path.join(
       repositoryRoot,
       "packages/native-babylon-block-profile/src/index.ts",
@@ -203,9 +227,13 @@ export async function buildHostedNativeRunnerDistributionV1(input) {
     fileName: "index.mjs",
     external: (specifier) =>
       isRuntimeExternal(specifier) ||
-      packageNameFromSpecifier(specifier) ===
-        "@whitebox-world/native-babylon",
+      isNativeBabylonExternal(specifier),
   });
+  if (blockProfileBuild.sourceModulePaths.some((sourcePath) =>
+    sourcePath.split(path.sep).join("/").includes("/packages/native-babylon/")
+  )) {
+    throw new Error("WORLDKIT_HOSTED_BLOCK_PROFILE_IMPORT_GRAPH_INVALID");
+  }
 
   const packageSources = Object.freeze({
     "@babylonjs/core": path.join(repositoryRoot, "node_modules/@babylonjs/core"),
@@ -247,6 +275,11 @@ export async function buildHostedNativeRunnerDistributionV1(input) {
   return Object.freeze({
     runnerSourceModulePaths: runnerBuild.sourceModulePaths,
     runnerExternalImportSpecifiers: runnerBuild.externalImportSpecifiers,
+    runnerExternalImportSpecifiersExact:
+      runnerBuild.externalImportSpecifiersExact,
+    nativeRootSourceModulePaths: nativeRootBuild.sourceModulePaths,
+    nativeHostSourceModulePaths: nativeHostBuild.sourceModulePaths,
+    blockProfileSourceModulePaths: blockProfileBuild.sourceModulePaths,
   });
 }
 

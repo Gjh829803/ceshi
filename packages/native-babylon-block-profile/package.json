@@ -4,10 +4,13 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./testing": "./src/testing.ts"
   },
   "dependencies": {
     "@babylonjs/core": "9.23.0",
-    "@whitebox-world/native-babylon": "workspace:*"
+    "@whitebox-world/native-babylon": "workspace:*",
+    "@whitebox-world/protocol": "workspace:*",
+    "lodash-es": "^4.18.1"
   }
 }

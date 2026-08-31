@@ -122,7 +122,7 @@ async function makeInput() {
     id: "package-input-bootstrap",
     sceneModuleRef: "worldkit://native-scene/package-input@1",
     nativeSceneApiRef: "worldkit://native-scene-api/babylon-native@1",
-    nativeSceneProfileRef: "worldkit://native-scene-profile/trusted-local@1",
+    nativeSceneProfileRef: "worldkit://native-scene-profile/whitebox.standard@1",
     gameplayBootstrapRef: canonical.gameplayBootstrap.resourceRef,
     initialControlledEntityId:
       canonical.worldRuntimeBootstrap.initialControlledEntityId,
@@ -417,7 +417,7 @@ describe("prepareFrozenBabylonNativeWorldPackageBuildInputV1", () => {
     );
   }, 45_000);
 
-  it("rejects route, result, and controlled-entity closure drift before replay", async () => {
+  it("rejects route, result, Profile, and controlled-entity closure drift before replay", async () => {
     const routeInput = await makeInput();
     await expect(prepareFrozenBabylonNativeWorldPackageBuildInputV1({
       ...routeInput,
@@ -456,9 +456,21 @@ describe("prepareFrozenBabylonNativeWorldPackageBuildInputV1", () => {
         initialControlledEntityId: "other-entity",
       },
     })).rejects.toThrow(/WORLDKIT_NATIVE_PACKAGE_INPUT_INVALID/);
-    expect(routeInput.createCount + resultInput.createCount + entityInput.createCount)
+    const profileInput = await makeInput();
+    await expect(prepareFrozenBabylonNativeWorldPackageBuildInputV1({
+      ...profileInput,
+      nativeSceneProfile: {
+        ...profileInput.nativeSceneProfile,
+        resourceRef:
+          "worldkit://native-scene-profile/whitebox.blocks@1",
+      },
+    })).rejects.toThrow(/WORLDKIT_NATIVE_PACKAGE_INPUT_INVALID/);
+    expect(
+      routeInput.createCount + resultInput.createCount +
+      entityInput.createCount + profileInput.createCount,
+    )
       .toBe(0);
-  });
+  }, 45_000);
 
   it("rejects an extra Registry lock row after successful replay", async () => {
     const input = await makeInput();

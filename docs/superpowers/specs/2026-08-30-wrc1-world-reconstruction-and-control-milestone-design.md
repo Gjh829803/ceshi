@@ -6,6 +6,7 @@
 **Date:** 2026-08-30
 **Source baseline:** `origin/main@b19f9e4be0cb56fc132cff656ade994df4e88a31`
 **Live status authority:** `docs/18-refactor-progress-and-backlog.md`
+**BWB-3/4 settlement authority:** `docs/superpowers/specs/2026-08-31-babylon-block-settlement-and-step-closure-design.md`
 
 ## 1. Decision
 
@@ -29,9 +30,12 @@ specifications remain the detailed technical authorities for their domains. This
 the combined milestone boundary, dependency order, incremental-integration policy, cross-domain
 acceptance cases, and overall completion definition.
 
-Current checkpoint: BNA-5 product SHA `2f46b3c9` has scoped GO from capable-runner isolation evidence,
-exact-SHA Cloud full gates, and independent security/runtime-deep review. This unblocks BNA-6 and the
-BWB-5 dependency edge; it does not complete those tasks or BNA-8 production disposition.
+Current checkpoint: BNA-5 product SHA `2f46b3c9` has scoped GO from capable-runner isolation evidence.
+BWS product SHA `c02afa45` additionally closes BWB-3, BWB-4, and only BWB-5's true-step prerequisite
+through one Block Session/Layout/finalize/Host settlement, one verified Package, and SDK-owned Havok;
+its exact-SHA Cloud full gates and independent review are GO. This unblocks BNA-6, WRC-SR-1,
+WRC-EVT-1's BWB edge, and the remaining BWB-5 corpus. It does not complete those tasks, BNA-7 formal
+Capture/Route, BNA-8 production disposition, or BWB-5 mountain/T-space/building/interior/negative cases.
 
 ## 2. Why this is a major milestone
 

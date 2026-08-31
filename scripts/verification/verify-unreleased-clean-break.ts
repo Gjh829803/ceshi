@@ -135,6 +135,19 @@ function textFamilyDefinitions(): readonly TextFamilyDefinition[] {
     `export\\s+const\\s+${escaped(token(["compile", "World"]))}\\s*=\\s*${escaped(token(["compile", "World", "V5"]))}`,
   ];
 
+  const legacyNativeSceneProfileRef = token([
+    "worldkit://native-scene-profile/",
+    "trusted-local@1",
+  ]);
+  const legacyNativeBlockGridSymbols = [
+    token(["BABYLON_NATIVE_BLOCK_", "MICRO_GRID_METERS_V1"]),
+    token(["BABYLON_NATIVE_BLOCK_", "CENTER_LATTICE_METERS_V1"]),
+  ];
+  const legacyNativeBlockTransitionPrefix = token([
+    "structural",
+    "HalfMeterTransition",
+  ]);
+
   return Object.freeze([
     Object.freeze({
       familyId: "superseded-active-documentation",
@@ -163,6 +176,21 @@ function textFamilyDefinitions(): readonly TextFamilyDefinition[] {
       classification: "superseded-delete" as const,
       blocksCompletion: true,
       pattern: new RegExp(`(?:${supersededMechanisms.join("|")})`, "g"),
+    }),
+    Object.freeze({
+      familyId: "WORLDKIT_UNRELEASED_LEGACY_NATIVE_SCENE_PROFILE_REF",
+      classification: "superseded-delete" as const,
+      blocksCompletion: true,
+      pattern: new RegExp(escaped(legacyNativeSceneProfileRef), "g"),
+    }),
+    Object.freeze({
+      familyId: "WORLDKIT_UNRELEASED_LEGACY_NATIVE_BLOCK_GRID",
+      classification: "superseded-delete" as const,
+      blocksCompletion: true,
+      pattern: new RegExp(
+        `(?:${alternatives(legacyNativeBlockGridSymbols)}|${escaped(legacyNativeBlockTransitionPrefix)}(?:Keys|Count)?)`,
+        "g",
+      ),
     }),
     Object.freeze({
       familyId: "current-top-level-contracts",

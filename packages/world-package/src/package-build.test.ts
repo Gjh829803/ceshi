@@ -6,6 +6,7 @@ import {
   verifyWorldPackageDirectoryV1,
 } from "./index.js";
 import {
+  createBabylonNativeBlockWorldPackageTestInputV1,
   createBabylonNativeWorldPackageTestInputV1,
   createWorldPackageTestInputV1,
 } from "./test-fixture.js";
@@ -66,6 +67,37 @@ describe("createCanonicalWorldPackageV1", () => {
 });
 
 describe("createBabylonNativeWorldPackageV1", () => {
+  it("closes the Bootstrap, Bundle, and Contribution Profile identity", () => {
+    const standard = createBabylonNativeWorldPackageTestInputV1();
+    expect(() => createBabylonNativeWorldPackageV1({
+      ...standard,
+      nativeSceneContribution: {
+        ...standard.nativeSceneContribution,
+        profileSettlement: {
+          kind: "host-snapshot",
+          profileRef:
+            "worldkit://native-scene-profile/whitebox.blocks@1",
+          targetCount: 1,
+          profileInventoryHash: `sha256:${"1".repeat(64)}`,
+          settledVisualHash: `sha256:${"2".repeat(64)}`,
+        },
+      },
+    })).toThrow("WORLD_PACKAGE_BUILD_INVALID");
+
+    const blocks = createBabylonNativeBlockWorldPackageTestInputV1();
+    expect(() => createBabylonNativeWorldPackageV1({
+      ...blocks,
+      nativeSceneContribution: {
+        ...blocks.nativeSceneContribution,
+        profileSettlement: {
+          kind: "none",
+          profileRef:
+            "worldkit://native-scene-profile/whitebox.standard@1",
+        },
+      },
+    })).toThrow("WORLD_PACKAGE_BUILD_INVALID");
+  });
+
   it("builds and verifies one deterministic Native Root without Canonical shadows", () => {
     const input = createBabylonNativeWorldPackageTestInputV1();
     const first = createBabylonNativeWorldPackageV1(input);
