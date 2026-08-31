@@ -492,9 +492,11 @@ allRelationshipConditions: [
 ]
 ```
 
-`rider` is intentional. The resolver considers the controlled Entity and selected Target when matching a
-role. With an ambiguous shared Mount, the projector keeps the typed relationships but fails closed instead of
-guessing a Rider. A `mount` condition would incorrectly activate mounted framing for that ambiguous case.
+`rider` is intentional. The resolver preserves the committed controlled Entity and selected Target, then
+matches this condition only when exactly one `mountedOn` Relationship connects either of them to a unique
+Rider. With an ambiguous shared Mount, the projector keeps the typed relationships but fails closed instead of
+guessing a Rider. It never rewrites `controlledEntityId` to manufacture a match. A `mount` condition would
+incorrectly activate mounted framing for that ambiguous case.
 Relationship contexts are sorted by `type`, then Relationship `id`, using canonical UTF-16 code-unit order;
 locale-sensitive comparison is forbidden.
 

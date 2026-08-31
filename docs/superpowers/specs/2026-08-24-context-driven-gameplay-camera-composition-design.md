@@ -389,7 +389,7 @@ interface CameraContextSampleV1 {
 
 type CameraRelationshipConditionV1 =
   | { type: "possessedBy"; entityRole: "controlled" | "controller" }
-  | { type: "mountedOn"; entityRole: "rider" | "mount" }
+  | { type: "mountedOn"; entityRole: "rider" }
   | { type: "equippedAt"; entityRole: "item" | "wearer" };
 
 interface CameraContextRuleV2 {
@@ -414,8 +414,11 @@ interface CameraContextRuleV2 {
 `relationshipContexts` 必须由当前 WorldSession 同一 committed epoch 的正式 Relationship State
 投影，并按 `type`、Relationship ID 的 Canonical code-unit 顺序稳定生成。每条上下文携带
 已提交 Relationship 的 `id`，供 Explain/Event 关联。Camera Rule 的
-`allRelationshipConditions` 逐条匹配当前
-`controlledEntityId` 或 `targetEntityId` 在角色化端点中的位置，不能使用通用
+`allRelationshipConditions` 逐条匹配 committed `controlledEntityId` 与 `targetEntityId`。对
+`possessedBy` 和 `equippedAt`，匹配它们在角色化端点中的位置；对 `mountedOn` Rider 条件，必须
+恰好存在一条以 controlled/target 为 Rider 或 Mount 端点的相关 Relationship，从而解析出唯一
+Rider。共享 Mount 上存在多条相关 Relationship 时必须 fail closed，且不得为此改写
+`controlledEntityId` 或 `targetEntityId`。任何条件都不能使用通用
 `sourceEntityId/targetEntityId/params`。
 
 首个版本仍只发布 `ground/air`；Water 等 Medium 必须在 P2.5 自己的 Canonical Medium 合同
@@ -448,10 +451,10 @@ ExecutionPlan、CameraDirector、Discovery 和 Fixture；不保留 V1 alias。
 `cameraContextTags = ["air"]` 才生效；规则应优先使用强类型 Medium 条件。
 
 Relationship 条件同样优先使用类型化投影。Context Sample 必须能同时携带当前 Entity 参与的
-多条 Relationship 及其角色化端点；Camera Context Rule 以 `mountedOn` 的 Rider/Mount、
+多条 Relationship 及其角色化端点；Camera Context Rule 以 `mountedOn` 的唯一 Rider 关联、
 `equippedAt` 的 Item/Wearer、`possessedBy` 的 Controlled/Controller 等关闭条件匹配。现有
-单值 `ViewTargetSampleV1.relationshipRole` 只能保留在当前窄切片，不能成为长期合同；升级时
-同步演进 Registry Rule、ExecutionPlan、Runtime DTO 和测试，不保留同义 alias。
+单值 `ViewTargetSampleV1.relationshipRole` 是待删除的过渡 seam，不能进入当前合同；实施时
+同步演进 Registry Rule、ExecutionPlan、Runtime DTO 和测试并删除它，不保留同义 alias。
 
 “优先”不表示可以旁路：只要某个选择条件已有强类型字段或 Ref，Tag 就不得作为该事实的
 充分条件。Ground/Air 使用 `movementMedium`，Motion 使用已提交 Motion Profile/Kernel Ref，
