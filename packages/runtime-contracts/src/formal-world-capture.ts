@@ -272,7 +272,7 @@ const HASH_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const WORLD_PACKAGE_REF_PATTERN =
   /^package:\/\/world-package\/sha256\/([a-f0-9]{64})$/;
 const ZERO_HASH = `sha256:${"0".repeat(64)}`;
-const COLOR_PATTERN = /^#[0-9a-f]{6}$/;
+const COLOR_PATTERN = /^#[0-9A-F]{6}$/;
 const MAXIMUM_CAPTURE_DIMENSION_PIXELS = 16_384;
 const MINIMUM_WORLD_SPAN_XZ_METERS = 8;
 const MINIMUM_WORLD_SPAN_Y_METERS = 4;
@@ -1103,7 +1103,7 @@ function parseBinding(
   }
   const identityColor = text(source.identityColor, contract, `${path}/identityColor`);
   if (!COLOR_PATTERN.test(identityColor)) {
-    fail(contract, `${path}/identityColor`, "expected a lowercase six-digit hex color");
+    fail(contract, `${path}/identityColor`, "expected an uppercase six-digit hex color");
   }
   return Object.freeze({
     acceptanceTargetRef: text(
