@@ -281,7 +281,7 @@ export function deriveNativeBlockGenerationBootstrapV1(input: Readonly<{
       targetHeightMeters: runtime.initialCamera.targetHeightMeters,
     },
     seed: input.seed,
-    spawnMarkerId: reconstructionCase.spawnSupport.spawnMarkerId,
+    spawnMarkerId: reconstructionCase.expected.spawnSupport.spawnMarkerId,
   });
   return Object.freeze({ bootstrap, worldBounds });
 }
