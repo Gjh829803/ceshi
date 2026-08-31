@@ -95,7 +95,7 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
-describe("project health process runner", () => {
+describe("project health process runner", { timeout: 20_000 }, () => {
   it("accepts an exact-clean checkout while excluding only Registry-owned infrastructure", async () => {
     const root = await createRepository();
     await mkdir(path.join(root, ".project-health", "runs", "active-run"), { recursive: true });

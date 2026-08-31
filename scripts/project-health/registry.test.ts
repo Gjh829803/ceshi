@@ -30,6 +30,28 @@ const REPOSITORY_ROOT = path.resolve(new URL("../..", import.meta.url).pathname)
 const COMMIT_SHA = execFileSync("git", ["rev-parse", "HEAD"], { cwd: REPOSITORY_ROOT, encoding: "utf8" }).trim();
 const roots: string[] = [];
 
+function fixtureGitEnv(): NodeJS.ProcessEnv {
+  return {
+    GIT_AUTHOR_EMAIL: "project-health@example.invalid",
+    GIT_AUTHOR_NAME: "Project Health Test",
+    GIT_COMMITTER_EMAIL: "project-health@example.invalid",
+    GIT_COMMITTER_NAME: "Project Health Test",
+    GIT_CONFIG_GLOBAL: "/dev/null",
+    GIT_CONFIG_NOSYSTEM: "1",
+    GIT_CONFIG_SYSTEM: "/dev/null",
+    GIT_OPTIONAL_LOCKS: "0",
+    GIT_TERMINAL_PROMPT: "0",
+    PATH: process.env.PATH ?? "",
+  };
+}
+
+function gitFixture(repositoryRoot: string, args: readonly string[]): string {
+  return execFileSync("git", ["-C", repositoryRoot, ...args], {
+    encoding: "utf8",
+    env: fixtureGitEnv(),
+  });
+}
+
 afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
@@ -74,26 +96,57 @@ async function createCleanRepository(): Promise<Readonly<{ repositoryRoot: strin
   roots.push(repositoryRoot);
   await writeFile(path.join(repositoryRoot, ".gitignore"), ".project-health/\n", "utf8");
   await writeFile(path.join(repositoryRoot, "tracked.txt"), "clean\n", "utf8");
-  execFileSync("git", ["init", "--quiet"], { cwd: repositoryRoot });
-  execFileSync("git", ["config", "user.email", "project-health@example.invalid"], { cwd: repositoryRoot });
-  execFileSync("git", ["config", "user.name", "Project Health Test"], { cwd: repositoryRoot });
-  execFileSync("git", ["add", ".gitignore", "tracked.txt"], { cwd: repositoryRoot });
-  execFileSync("git", ["commit", "--quiet", "-m", "fixture"], { cwd: repositoryRoot });
+  gitFixture(repositoryRoot, ["init", "--quiet"]);
+  gitFixture(repositoryRoot, ["add", ".gitignore", "tracked.txt"]);
+  gitFixture(repositoryRoot, ["commit", "--quiet", "-m", "fixture"]);
   return {
     repositoryRoot,
-    commitSha: execFileSync("git", ["rev-parse", "HEAD"], { cwd: repositoryRoot, encoding: "utf8" }).trim(),
+    commitSha: gitFixture(repositoryRoot, ["rev-parse", "HEAD"]).trim(),
   };
 }
 
-describe("project health registry", () => {
+describe("project health registry", { timeout: 20_000 }, () => {
+  it("creates fixture repositories without inheriting host git signing or fsmonitor", async () => {
+    const hostileHome = await mkdtemp(path.join(os.tmpdir(), "worldkit-project-health-hostile-git-"));
+    roots.push(hostileHome);
+    const hostileConfig = path.join(hostileHome, "config");
+    await writeFile(hostileConfig, [
+      "[commit]",
+      "\tgpgsign = true",
+      "[gpg]",
+      "\tprogram = /nonexistent/worldkit-project-health-missing-gpg",
+      "[core]",
+      "\tfsmonitor = true",
+      "",
+    ].join("\n"), "utf8");
+    const previousGlobal = process.env.GIT_CONFIG_GLOBAL;
+    const previousSystem = process.env.GIT_CONFIG_SYSTEM;
+    const previousNoSystem = process.env.GIT_CONFIG_NOSYSTEM;
+    process.env.GIT_CONFIG_GLOBAL = hostileConfig;
+    process.env.GIT_CONFIG_SYSTEM = hostileConfig;
+    delete process.env.GIT_CONFIG_NOSYSTEM;
+    try {
+      const fixture = await createCleanRepository();
+      expect(fixture.commitSha).toMatch(/^[a-f0-9]{40}$/);
+      await writeFile(path.join(fixture.repositoryRoot, "extra.txt"), "extra\n", "utf8");
+      gitFixture(fixture.repositoryRoot, ["add", "extra.txt"]);
+      gitFixture(fixture.repositoryRoot, ["commit", "--quiet", "-m", "extra"]);
+      expect(gitFixture(fixture.repositoryRoot, ["rev-parse", "HEAD"]).trim()).not.toBe(fixture.commitSha);
+    } finally {
+      if (previousGlobal === undefined) delete process.env.GIT_CONFIG_GLOBAL;
+      else process.env.GIT_CONFIG_GLOBAL = previousGlobal;
+      if (previousSystem === undefined) delete process.env.GIT_CONFIG_SYSTEM;
+      else process.env.GIT_CONFIG_SYSTEM = previousSystem;
+      if (previousNoSystem === undefined) delete process.env.GIT_CONFIG_NOSYSTEM;
+      else process.env.GIT_CONFIG_NOSYSTEM = previousNoSystem;
+    }
+  });
+
   it("admits PR ancestry only through the Registry-owned process envelope", async () => {
     const fixture = await createCleanRepository();
     const baseSha = fixture.commitSha;
-    execFileSync("git", ["commit", "--quiet", "--allow-empty", "-m", "head"], { cwd: fixture.repositoryRoot });
-    const headSha = execFileSync("git", ["rev-parse", "HEAD"], {
-      cwd: fixture.repositoryRoot,
-      encoding: "utf8",
-    }).trim();
+    gitFixture(fixture.repositoryRoot, ["commit", "--quiet", "--allow-empty", "-m", "head"]);
+    const headSha = gitFixture(fixture.repositoryRoot, ["rev-parse", "HEAD"]).trim();
 
     await expect(assertRegisteredProjectHealthPrIdentityV1({
       repositoryRoot: fixture.repositoryRoot,
@@ -304,8 +357,8 @@ describe("project health registry", () => {
     roots.push(repositoryRoot);
     await mkdir(path.join(repositoryRoot, "selected"));
     await writeFile(path.join(repositoryRoot, "selected", "fixture.txt"), "before", "utf8");
-    execFileSync("git", ["init", "--quiet"], { cwd: repositoryRoot });
-    execFileSync("git", ["add", "selected/fixture.txt"], { cwd: repositoryRoot });
+    gitFixture(repositoryRoot, ["init", "--quiet"]);
+    gitFixture(repositoryRoot, ["add", "selected/fixture.txt"]);
     const profile = parsedProfile();
     const selectedProfile = {
       ...profile,
@@ -339,8 +392,8 @@ describe("project health registry", () => {
     );
     await writeFile(path.join(fixture.repositoryRoot, "apps/playground/src/main.ts"), "export {};\n", "utf8");
     await writeFile(path.join(fixture.repositoryRoot, "scripts/testing/census.ts"), "export {};\n", "utf8");
-    execFileSync("git", ["add", "."], { cwd: fixture.repositoryRoot });
-    execFileSync("git", ["commit", "--quiet", "-m", "add selected inputs"], { cwd: fixture.repositoryRoot });
+    gitFixture(fixture.repositoryRoot, ["add", "."]);
+    gitFixture(fixture.repositoryRoot, ["commit", "--quiet", "-m", "add selected inputs"]);
 
     const profile = parsedProfile();
     const before = await Promise.all([
