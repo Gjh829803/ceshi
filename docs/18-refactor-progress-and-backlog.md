@@ -737,11 +737,14 @@ Incremental Hot Apply，以及哪些 Runtime 状态被保留、重置或替换�
 - [x] `mountedOn` 初始 Relationship 编译与动态 Mount/Dismount 事务边界。
 - [x] 首个 stand slot 的 Socket closure、Rider/Slot 基数、冲突、删除和权限校验。
 - [x] 固定 Tick 原子提交；失败时 Gameplay、World State、Event/Receipt 与 Babylon 投影回滚。完整 Camera Context 原子切换仍归 P2.4。
-- [ ] 单一 Semantic Fact Projector 输出 `supportedBy/touching/insideVolume`，不导出 Babylon/Havok Handle 或另建 Ground Support 推断路径。
+- [x] 单一 Semantic Fact Projector 已从 retained Physics `checkSupport()` 输出 `supportedBy`，
+  不导出 Babylon/Havok Handle、不从 `mountedOn` 推断支撑，也不另建 Ground Support 路径。
+- [ ] `touching` / `insideVolume` 仍归 P2.5 Surface Semantics；必须复用同一 projector ownership，
+  不能把它们伪装成已由 `supportedBy` 一并交付。
 - [x] Request ID 幂等、Receipt、关闭 Event Union、Snapshot/Transition Hash，以及
   Control Capture Track 写入/篡改校验。
-- [ ] 第一个人—滑板 Fixture 已完成绑定、移动、解绑、Reset 和 Browser 状态证据；仍需把
-  四阶段真实 RuntimeHost journal 接入正式多帧 Capture verifier 后关闭完整 E2E。
+- [x] 第一个人—滑板 Fixture 已完成绑定、移动、解绑、Reset、Browser 状态与四阶段真实
+  RuntimeHost journal 的正式多帧 Capture verifier；最终 completion 仍由 M8-S1 双审决定。
 
 #### P2.2 Subject S3：骑乘、拖拽与控制上下文
 
@@ -782,8 +785,9 @@ Incremental Hot Apply，以及哪些 Runtime 状态被保留、重置或替换�
   GCC-3B 已在 RuntimeHost 建立 Receipt、Event capacity 预留、View revision 提交和统一
   WorldSession Event 查询；Browser V5 只保留 `executeCameraViewCommand` 与
   `getWorldSessionEvents`，旧同步 set/reset 与 Gameplay-only Event 查询已删除。
-- [ ] GCC-4/GCC-5：CameraDirector 消费纯 Selection Decision；Mount/Equipment/Flight 事务
-  只提交 Camera 输入并与 Gameplay 一起原子回滚。
+- [ ] GCC-4/GCC-5：M8 stand-ground 窄 seam 已让 CameraDirector 消费 committed Selection
+  Decision/typed Relationship Context；广义 Equipment/Flight 仍只提交 Camera 输入。Gameplay
+  失败自行回滚，成功后 Camera 在下一 fixed tick 原子替换完整 publication，不能回滚 Gameplay。
 - [ ] GCC-6/GCC-7：交付两个 Kit、Registry Lock、Browser/CLI/Take 与两个 Golden Fixture，
   分离 automated contract、runtime numeric、rendered visual 和 manual interaction 证据。
 - [ ] GCC-8：全门禁、包边界审计、最终复核和 production/experimental 声明。
@@ -804,7 +808,8 @@ Target 与类型化 `relationshipContexts`。唯一 Rider 命中 7m mounted modi
 Legacy Playground 的 `mounted-skateboard-s1` 已增加场景专用 Mount/Dismount 验收控件；控件只提交
 Browser V5 `action.activate` 并从 Snapshot/Inspection/Camera Telemetry 显示结果，不成为第二状态权威。
 真实浏览器验收确认 Mount 后 `skateboard / skateboard / mounted-framing / 7m`，Dismount 后恢复
-`player / player / none / 5m`，Reset 后可重复单周期验收；正式四阶段 Capture Bundle verifier 仍归 M8-S1。
+`player / player / none / 5m`，Reset 后可重复单周期验收；正式四阶段 Capture Bundle verifier
+已由 M8-S1 接入，最终 completion 仍等待 exact-SHA 双审。
 
 #### P2.5 Surface Semantics 与 Traversal Capability
 

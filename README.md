@@ -563,7 +563,7 @@ Validation 词汇。它不构建 Traversal Graph，不跑 Character Controller�
 | `packages/subject-registry/` | 精确版本的 Subject Definition、Capability Assembly、Profile 与 Asset Inventory | 当前 Registry 资源入口，不回退到旧 Definition | 保存会话状态或未版本化数字 overlay |
 | `packages/subject-composition/` | Primitive Bounds、Collider 推导、角色胶囊和资源成本 | 内部可复用 LEGO 几何合同 | 依赖 Babylon Mesh 或场景层级 |
 | `packages/subject-actions/` | Character State、Ground Humanoid Action 与动作解析 | 引擎无关动作语义 | 直接播放 AnimationGroup 或控制输入设备 |
-| `packages/camera/` | Provider-neutral 命名 Camera Rig/Modifier/Context Profile、View Preference、纯 Selection/Explain | Camera 领域合同；Runtime/Browser 接线尚未完成 | 创建渲染相机、执行碰撞查询、拥有 Gameplay State，或把纯选择误写成已交付 Runtime selector |
+| `packages/camera/` | Provider-neutral 命名 Camera Rig/Modifier/Context Profile、View Preference、纯 Selection/Explain | Camera 领域合同；Runtime/Browser 基础接线与 M8 `mountedOn` 窄 seam 已交付，广义 Equipment/Flight/多 Rig 组合仍开放 | 创建渲染相机、执行碰撞查询、拥有 Gameplay State，或把窄 seam 误写成广义组合已交付 |
 | `packages/terrain-surface/` | Heightfield、Triangle Mesh、Collider Support、Surface Query 与 Spawn Safety | Traversal/Runtime 内部几何合同与生产空间不变量 | 把单一 Heightfield 冒充全部空间拓扑 |
 | `packages/traversal/` | Traversal Surface、Lock、Capability Envelope、Graph/Path/Probe Receipt 与 Route Overlay | Provider-neutral Route 合同 | 暴露 Recast 数据或替代 Runtime 支撑事实 |
 | `packages/traversal-recast/` | Recast/Detour Graph Build、Query 与 Route Evidence Provider Adapter | 不直接面向 AI | 让 Provider 名称或 Handle 进入 Canonical 协议 |
