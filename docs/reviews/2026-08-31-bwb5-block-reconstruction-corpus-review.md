@@ -6,6 +6,8 @@
 - 当前 rebase 基线：`origin/main@960a99d7f2e6f5540fda4348762fc52d93ff7113`
 - P1/P2 traversal-evidence 修复候选：`cdcca43702cce025f5782a231d019e96e24312b4`
 - 范围：BWB5-10 至 BWB5-70；关闭山地 / T 字 / 台阶 / 建筑 / 有限室内 / 负向 Corpus
+- 最终 rebase 候选：`64131baa7cc7ba425fe32200d7b7b7fa4ddf3ab3`；已由 PR #68 合入
+  `main@d1ba9421384036e7c5f2df477931d905cadc2fc9`。
 - 原产品候选裁决：**GO（开放 P0/P1 = 0）**。候选 `cdcca43702cce025f5782a231d019e96e24312b4`
   已通过 exact-SHA 门禁与独立 Mode B + runtime-deep Review。旧候选
   `7b77069f114bb3ae72ae184fb7c60798fe49b301` 的条件 GO 已失效；BNA-6 / BNA-7 /
