@@ -193,25 +193,25 @@ Run: `pnpm exec vitest run scripts/lib/workspace-boundary-contract.test.ts scrip
 
 Commit: `feat: project public-symbol authority facts`
 
-- [ ] **Step 2: Write graph and authority Sensor RED fixtures**
+- [x] **Step 2: Write graph and authority Sensor RED fixtures**
 
 Cover preservation of existing workspace edge/debt identities, wrong-tree Receipt, duplicate parser owner, Canonical/Native Scene Source leakage, public compat alias, and a lawful provider adapter import. Each failure asserts stable code, Owner, subject refs, evidence class, and fingerprint. Sensors consume `publicSymbols` from Evidence; they must not call `rg`, glob, or a second AST.
 
-- [ ] **Step 3: Run RED**
+- [x] **Step 3: Run RED**
 
 Run: `pnpm exec vitest run scripts/lib/workspace-boundary.test.ts scripts/project-health/workspace-boundary-adapter.test.ts scripts/project-health/sensors/workspace-boundary.test.ts scripts/project-health/sensors/supplemental-authority.test.ts`
 
 Expected: FAIL with missing implementation.
 
-- [ ] **Step 4: Adapt the existing normalized repository graph**
+- [x] **Step 4: Adapt the existing normalized repository graph**
 
 Extend `scripts/lib/workspace-boundary.ts` itself so one scan returns canonical `WorkspaceBoundaryEvidenceV1`: violations, a sorted full dependency graph, sorted `publicSymbols`, and reconciled debt fingerprints. Keep all manifest/import/export/cycle/debt decisions in that Owner and update the existing verifier to consume that result. Accept only `WorkspaceBoundaryScanRequestV1`; do not read `HEAD` from Git. `health:record` owns the exact-head Receipt and points `evidenceRef` at those bytes; the adapter and both Sensors only load/validate that evidence and never parse manifests/imports again. The 49 reconciled edge debts remain only count/identity Metrics and evidence, never PHO Findings or accepted debt.
 
-- [ ] **Step 5: Apply authority rules without heuristic blocking**
+- [x] **Step 5: Apply authority rules without heuristic blocking**
 
 Keyword searches for `compat`, `legacy`, or `V2` always begin as `advisory-p3` derived from the same `publicSymbols` collection. Only an exact supplemental forbidden rule may emit `blocking-p1`; the exception set only declares exact lawful symbols. Keep provider-specific Babylon/Havok types behind existing adapter boundaries.
 
-- [ ] **Step 6: Verify and commit**
+- [x] **Step 6: Verify and commit**
 
 Run: `pnpm exec vitest run scripts/lib/workspace-boundary.test.ts scripts/project-health/workspace-boundary-adapter.test.ts scripts/project-health/sensors/workspace-boundary.test.ts scripts/project-health/sensors/supplemental-authority.test.ts && pnpm test:census && pnpm typecheck && git diff --check`
 
