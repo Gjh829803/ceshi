@@ -33,6 +33,10 @@ export type FormalWorldCaptureSdkOwnerIdV1 =
   (typeof FORMAL_WORLD_CAPTURE_SDK_OWNER_IDS_V1)[number];
 
 export const MAXIMUM_FORMAL_SCRIPTED_TRAVERSAL_CHECK_COUNT_V1 = 16 as const;
+export const MAXIMUM_FORMAL_SCRIPTED_TRAVERSAL_TICK_COUNT_PER_CHECK_V1 =
+  1_200 as const;
+export const MAXIMUM_FORMAL_SCRIPTED_TRAVERSAL_TOTAL_TICK_COUNT_V1 =
+  7_200 as const;
 
 export const FORMAL_SEMANTIC_CAPTURE_PROJECTED_BOUNDS_SOURCE_V1 =
   "checked-layout-visual-group" as const;
@@ -146,12 +150,32 @@ export const FORMAL_SEMANTIC_TOPOLOGY_MEASUREMENT_SOURCES_V1 = Object.freeze([
 export type FormalSemanticTopologyMeasurementSourceV1 =
   (typeof FORMAL_SEMANTIC_TOPOLOGY_MEASUREMENT_SOURCES_V1)[number];
 
-export interface FormalSemanticTopologyRelationBindingV1 {
+interface FormalSemanticTopologyRelationBindingBaseV1 {
   readonly fromNodeId: string;
   readonly relation: "connects-to" | "contains" | "above" | "blocks";
   readonly toNodeId: string;
-  readonly measurementSource: FormalSemanticTopologyMeasurementSourceV1;
 }
+
+export type FormalSemanticTopologyRelationBindingV1 =
+  | (FormalSemanticTopologyRelationBindingBaseV1 & Readonly<{
+      measurementSource: "package-bounds";
+      fromVisualGroupId: string;
+      toVisualGroupId: string;
+    }>)
+  | (FormalSemanticTopologyRelationBindingBaseV1 & Readonly<{
+      measurementSource: "sdk-support";
+      subjectEntityId: string;
+      colliderId: string;
+    }>)
+  | (FormalSemanticTopologyRelationBindingBaseV1 & Readonly<{
+      measurementSource: "sdk-collider";
+      colliderId: string;
+      sourceVisualGroupId: string;
+    }>)
+  | (FormalSemanticTopologyRelationBindingBaseV1 & Readonly<{
+      measurementSource: "scripted-traversal";
+      traversalCheckId: string;
+    }>);
 
 export interface FormalObservedTopologyRelationV1 {
   readonly fromNodeId: string;
@@ -323,7 +347,7 @@ export interface FormalColliderOverlayObservationV1
     colliderId: string;
     sourceBlockId: string;
     physicsBodyId: string;
-    logicalSubshapeId: string;
+    colliderSubshapeId: string;
     overlayRecordId: string;
   }>[];
   readonly observedTopologyRelations: readonly FormalObservedTopologyRelationV1[];
@@ -465,6 +489,25 @@ const TOPOLOGY_RELATION_BINDING_FIELDS = [
   "relation",
   "toNodeId",
   "measurementSource",
+] as const;
+const PACKAGE_BOUNDS_TOPOLOGY_RELATION_BINDING_FIELDS = [
+  ...TOPOLOGY_RELATION_BINDING_FIELDS,
+  "fromVisualGroupId",
+  "toVisualGroupId",
+] as const;
+const SDK_SUPPORT_TOPOLOGY_RELATION_BINDING_FIELDS = [
+  ...TOPOLOGY_RELATION_BINDING_FIELDS,
+  "subjectEntityId",
+  "colliderId",
+] as const;
+const SDK_COLLIDER_TOPOLOGY_RELATION_BINDING_FIELDS = [
+  ...TOPOLOGY_RELATION_BINDING_FIELDS,
+  "colliderId",
+  "sourceVisualGroupId",
+] as const;
+const SCRIPTED_TRAVERSAL_TOPOLOGY_RELATION_BINDING_FIELDS = [
+  ...TOPOLOGY_RELATION_BINDING_FIELDS,
+  "traversalCheckId",
 ] as const;
 const OBSERVED_TOPOLOGY_RELATION_FIELDS = [
   "fromNodeId",
@@ -643,7 +686,7 @@ const COLLIDER_OVERLAY_OBSERVATION_FIELDS = [
   ...OBSERVATION_IDENTITY_FIELDS, "colliders", "observedTopologyRelations",
 ] as const;
 const COLLIDER_OBSERVATION_FIELDS = [
-  "colliderId", "sourceBlockId", "physicsBodyId", "logicalSubshapeId",
+  "colliderId", "sourceBlockId", "physicsBodyId", "colliderSubshapeId",
   "overlayRecordId",
 ] as const;
 const SCRIPTED_TRAVERSAL_OBSERVATION_FIELDS = [
@@ -1423,7 +1466,20 @@ function parseTopologyRelationBindings(
   const rows = array(value, contract, path).map((entry, index) => {
     const itemPath = `${path}/${index}`;
     const source = object(entry, contract, itemPath);
-    exactFields(source, TOPOLOGY_RELATION_BINDING_FIELDS, contract, itemPath);
+    const measurementSource = enumValue(
+      source.measurementSource,
+      FORMAL_SEMANTIC_TOPOLOGY_MEASUREMENT_SOURCES_V1,
+      contract,
+      `${itemPath}/measurementSource`,
+    );
+    const fields = measurementSource === "package-bounds"
+      ? PACKAGE_BOUNDS_TOPOLOGY_RELATION_BINDING_FIELDS
+      : measurementSource === "sdk-support"
+        ? SDK_SUPPORT_TOPOLOGY_RELATION_BINDING_FIELDS
+        : measurementSource === "sdk-collider"
+          ? SDK_COLLIDER_TOPOLOGY_RELATION_BINDING_FIELDS
+          : SCRIPTED_TRAVERSAL_TOPOLOGY_RELATION_BINDING_FIELDS;
+    exactFields(source, fields, contract, itemPath);
     const observed = parseObservedTopologyRelation({
       fromNodeId: source.fromNodeId,
       relation: source.relation,
@@ -1435,13 +1491,53 @@ function parseTopologyRelationBindings(
     ) {
       fail(contract, itemPath, "relation endpoints must name bound topology nodes");
     }
+    if (measurementSource === "package-bounds") {
+      return Object.freeze({
+        ...observed,
+        measurementSource,
+        fromVisualGroupId: text(
+          source.fromVisualGroupId,
+          contract,
+          `${itemPath}/fromVisualGroupId`,
+        ),
+        toVisualGroupId: text(
+          source.toVisualGroupId,
+          contract,
+          `${itemPath}/toVisualGroupId`,
+        ),
+      });
+    }
+    if (measurementSource === "sdk-support") {
+      return Object.freeze({
+        ...observed,
+        measurementSource,
+        subjectEntityId: text(
+          source.subjectEntityId,
+          contract,
+          `${itemPath}/subjectEntityId`,
+        ),
+        colliderId: text(source.colliderId, contract, `${itemPath}/colliderId`),
+      });
+    }
+    if (measurementSource === "sdk-collider") {
+      return Object.freeze({
+        ...observed,
+        measurementSource,
+        colliderId: text(source.colliderId, contract, `${itemPath}/colliderId`),
+        sourceVisualGroupId: text(
+          source.sourceVisualGroupId,
+          contract,
+          `${itemPath}/sourceVisualGroupId`,
+        ),
+      });
+    }
     return Object.freeze({
       ...observed,
-      measurementSource: enumValue(
-        source.measurementSource,
-        FORMAL_SEMANTIC_TOPOLOGY_MEASUREMENT_SOURCES_V1,
+      measurementSource,
+      traversalCheckId: text(
+        source.traversalCheckId,
         contract,
-        `${itemPath}/measurementSource`,
+        `${itemPath}/traversalCheckId`,
       ),
     });
   });
@@ -1561,6 +1657,35 @@ export function parseFormalSemanticCaptureMapV1(
       "checkpoint criterion must reference a bound visual group",
     );
   }
+  const traversalCheckIds = new Set(
+    traversalCheckBindings.map(({ traversalCheckId }) => traversalCheckId),
+  );
+  const unknownRelationProof = topologyRelations.find((relation) =>
+    relation.measurementSource === "scripted-traversal" &&
+    !traversalCheckIds.has(relation.traversalCheckId)
+  );
+  if (!isNil(unknownRelationProof)) {
+    fail(
+      contract,
+      "topologyRelations",
+      "scripted traversal relation must reference a bound traversal check",
+    );
+  }
+  const unknownRelationGroup = topologyRelations.find((relation) =>
+    relation.measurementSource === "package-bounds"
+      ? !boundGroupIds.has(relation.fromVisualGroupId) ||
+        !boundGroupIds.has(relation.toVisualGroupId)
+      : relation.measurementSource === "sdk-collider"
+        ? !boundGroupIds.has(relation.sourceVisualGroupId)
+        : false
+  );
+  if (!isNil(unknownRelationGroup)) {
+    fail(
+      contract,
+      "topologyRelations",
+      "relation proof must reference a bound visual group",
+    );
+  }
   return freeze({
     kind: "formal-semantic-capture-map",
     schemaVersion: 1,
@@ -1658,6 +1783,20 @@ function parseScriptedTraversalCheck(
     contract,
     `${path}/fixedInputSequence`,
   );
+  const fixedTickCount = fixedInputSequence.reduce(
+    (total, input) => total + input.ticks,
+    0,
+  );
+  if (
+    fixedTickCount < 1 ||
+    fixedTickCount > MAXIMUM_FORMAL_SCRIPTED_TRAVERSAL_TICK_COUNT_PER_CHECK_V1
+  ) {
+    fail(
+      contract,
+      `${path}/fixedInputSequence`,
+      `must contain 1 through ${MAXIMUM_FORMAL_SCRIPTED_TRAVERSAL_TICK_COUNT_PER_CHECK_V1} total ticks`,
+    );
+  }
   const fixedInputSequenceHash = hash(
     source.fixedInputSequenceHash,
     contract,
@@ -1733,6 +1872,20 @@ export function parseFormalScriptedTraversalRequestV1(
     checks.some((check, index) => index > 0 && checks[index - 1]!.id >= check.id)
   ) {
     fail(contract, "checks", "must be non-empty, unique, and sorted by id");
+  }
+  const totalTickCount = checks.reduce(
+    (total, check) => total + check.fixedInputSequence.reduce(
+      (checkTotal, input) => checkTotal + input.ticks,
+      0,
+    ),
+    0,
+  );
+  if (totalTickCount > MAXIMUM_FORMAL_SCRIPTED_TRAVERSAL_TOTAL_TICK_COUNT_V1) {
+    fail(
+      contract,
+      "checks",
+      `must contain at most ${MAXIMUM_FORMAL_SCRIPTED_TRAVERSAL_TOTAL_TICK_COUNT_V1} total ticks`,
+    );
   }
   return freeze({
     kind: "formal-scripted-traversal-request",
@@ -2475,8 +2628,8 @@ export function parseFormalColliderOverlayObservationV1(
         colliderId: text(row.colliderId, contract, `${path}/colliderId`),
         sourceBlockId: text(row.sourceBlockId, contract, `${path}/sourceBlockId`),
         physicsBodyId: text(row.physicsBodyId, contract, `${path}/physicsBodyId`),
-        logicalSubshapeId: text(
-          row.logicalSubshapeId, contract, `${path}/logicalSubshapeId`,
+        colliderSubshapeId: text(
+          row.colliderSubshapeId, contract, `${path}/colliderSubshapeId`,
         ),
         overlayRecordId: text(
           row.overlayRecordId, contract, `${path}/overlayRecordId`,

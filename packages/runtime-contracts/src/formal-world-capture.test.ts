@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   MAXIMUM_FORMAL_SCRIPTED_TRAVERSAL_CHECK_COUNT_V1,
+  MAXIMUM_FORMAL_SCRIPTED_TRAVERSAL_TICK_COUNT_PER_CHECK_V1,
+  MAXIMUM_FORMAL_SCRIPTED_TRAVERSAL_TOTAL_TICK_COUNT_V1,
   formalArtifactViewRequestCanonicalBytesV1,
   formalSemanticCaptureMapCanonicalBytesV1,
   formalWorldCaptureRequestCanonicalBytesV1,
@@ -314,6 +316,7 @@ function semanticMapValue() {
       relation: "connects-to",
       toNodeId: "upper-t-junction",
       measurementSource: "scripted-traversal",
+      traversalCheckId: "reach-junction",
     }],
     traversalCheckBindings: [
       {
@@ -586,6 +589,31 @@ describe("FormalScriptedTraversalRequestV1", () => {
       minimalScriptedTraversalRequest(17),
     )).toThrowError("FORMAL_SCRIPTED_TRAVERSAL_REQUEST_INVALID");
   });
+
+  it("rejects zero-tick checks and bounds both per-check and transaction ticks", () => {
+    expect(MAXIMUM_FORMAL_SCRIPTED_TRAVERSAL_TICK_COUNT_PER_CHECK_V1).toBe(1_200);
+    expect(MAXIMUM_FORMAL_SCRIPTED_TRAVERSAL_TOTAL_TICK_COUNT_V1).toBe(7_200);
+    const withTicks = (checkCount: number, ticks: number) => {
+      const request = minimalScriptedTraversalRequest(checkCount);
+      return {
+        ...request,
+        checks: request.checks.map((check) => {
+          const fixedInputSequence = [{ actions: ["move-forward"], ticks }];
+          return {
+            ...check,
+            fixedInputSequence,
+            fixedInputSequenceHash: sha256CanonicalJson(fixedInputSequence),
+          };
+        }),
+      };
+    };
+    expect(() => parseFormalScriptedTraversalRequestV1(withTicks(1, 0)))
+      .toThrowError("FORMAL_SCRIPTED_TRAVERSAL_REQUEST_INVALID");
+    expect(() => parseFormalScriptedTraversalRequestV1(withTicks(1, 1_201)))
+      .toThrowError("FORMAL_SCRIPTED_TRAVERSAL_REQUEST_INVALID");
+    expect(() => parseFormalScriptedTraversalRequestV1(withTicks(7, 1_200)))
+      .toThrowError("FORMAL_SCRIPTED_TRAVERSAL_REQUEST_INVALID");
+  });
 });
 
 describe("FormalArtifactViewRequestV1", () => {
@@ -686,6 +714,7 @@ describe("FormalSemanticCaptureMapV1", () => {
       relation: "connects-to",
       toNodeId: "upper-t-junction",
       measurementSource: "scripted-traversal",
+      traversalCheckId: "reach-junction",
     }]);
     expect(hashFormalSemanticCaptureMapV1(parsed)).toBe(
       hashFormalSemanticCaptureMapV1(semanticMapValue()),
@@ -727,6 +756,48 @@ describe("FormalSemanticCaptureMapV1", () => {
       ...semanticMapValue(),
       inferredCompositionTargetBySlug: true,
     })).toThrowError("FORMAL_SEMANTIC_CAPTURE_MAP_INVALID");
+    const missingProof = structuredClone(semanticMapValue());
+    delete (missingProof.topologyRelations[0] as Record<string, unknown>)
+      .traversalCheckId;
+    expect(() => parseFormalSemanticCaptureMapV1(missingProof)).toThrowError(
+      "FORMAL_SEMANTIC_CAPTURE_MAP_INVALID",
+    );
+  });
+
+  it("closes every topology measurement source over an executable proof binding", () => {
+    const relations = [
+      {
+        fromNodeId: "central-ascent",
+        relation: "above",
+        toNodeId: "upper-t-junction",
+        measurementSource: "package-bounds",
+        fromVisualGroupId: "central-ascent-group",
+        toVisualGroupId: "upper-t-junction-group",
+      },
+      {
+        fromNodeId: "central-ascent",
+        relation: "above",
+        toNodeId: "upper-t-junction",
+        measurementSource: "sdk-support",
+        subjectEntityId: "player",
+        colliderId: "spawn-ground",
+      },
+      {
+        fromNodeId: "central-ascent",
+        relation: "blocks",
+        toNodeId: "upper-t-junction",
+        measurementSource: "sdk-collider",
+        colliderId: "t-west-wall",
+        sourceVisualGroupId: "upper-t-junction-group",
+      },
+    ] as const;
+    for (const relation of relations) {
+      const parsed = parseFormalSemanticCaptureMapV1({
+        ...semanticMapValue(),
+        topologyRelations: [relation],
+      });
+      expect(parsed.topologyRelations[0]).toEqual(relation);
+    }
   });
 });
 
@@ -845,7 +916,7 @@ describe("formal measured observation documents", () => {
         colliderId: "spawn-ground",
         sourceBlockId: "central-ascent-block",
         physicsBodyId: "physics-body:spawn-ground",
-        logicalSubshapeId: "primary",
+        colliderSubshapeId: "collider-subshape:spawn-ground",
         overlayRecordId: "overlay:spawn-ground",
       }],
       observedTopologyRelations: [],
@@ -855,6 +926,14 @@ describe("formal measured observation documents", () => {
     expect(hashFormalColliderOverlayObservationV1(parsed)).toMatch(
       /^sha256:[a-f0-9]{64}$/,
     );
+    expect(() => parseFormalColliderOverlayObservationV1({
+      ...value,
+      colliders: [{
+        ...value.colliders[0],
+        colliderSubshapeId: undefined,
+        logicalSubshapeId: "primary",
+      }],
+    })).toThrowError("FORMAL_COLLIDER_OVERLAY_OBSERVATION_INVALID");
   });
 
   it("parses independent-reset traversal ticks and measured checkpoints", () => {
