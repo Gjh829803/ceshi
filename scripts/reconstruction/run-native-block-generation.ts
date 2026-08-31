@@ -10,6 +10,8 @@ import { parseWorldPackageWorldBoundsV1 } from "@whitebox-world/world-package";
 import { prepareNativeBlockGenerationTaskV1 } from "./generation-request.js";
 import { runNativeBlockGenerationV1, type CodexTaskProcessPortV1 } from "./generation-runner.js";
 
+const DEFAULT_LWDP_S3_ROOT = "s3://leap-world-us-east-2/world-model/platform/agent-whitebox-world-sdk";
+
 function option(tokens: readonly string[], name: string): string {
   const index = tokens.indexOf(name);
   const value = index >= 0 ? tokens[index + 1] : undefined;
@@ -63,6 +65,11 @@ async function main(): Promise<void> {
         return reference;
       }) as readonly Readonly<{ inputRef: string; contentHash: Sha256HashV1; mediaType: "image/png" | "image/jpeg"; }>[],
     }, profile, routeDecision, runId, attemptIndex: 0, backend, runDirectoryPath: outputPath, inputDirectoryPath,
+    ...(backend === "cloud" ? {
+      cloudOutputS3Root: String(
+        process.env.WORLDKIT_LWDP_S3_ROOT || DEFAULT_LWDP_S3_ROOT,
+      ).replace(/\/+$/, ""),
+    } : {}),
     taskInstructionPath: path.join(inputDirectoryPath, "task-instruction.md"), builderSkillPath: path.join(inputDirectoryPath, "builder-skill", "SKILL.md"),
     nativeSceneApiPath: path.join(inputDirectoryPath, "native-scene-api.json"), nativeSceneProfilePath: path.join(inputDirectoryPath, "native-scene-profile.json"), blockProfilePath: path.join(inputDirectoryPath, "block-profile.json"),
     hostClosureRootPath,

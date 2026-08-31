@@ -36,7 +36,10 @@ function resolutionDescriptor(
 async function fixture(): Promise<Readonly<{ root: string; inputDirectory: string; routeDecision: SceneAuthoringRouteDecisionV1 }>> {
   const root = await mkdtemp(path.join(os.tmpdir(), "worldkit-generation-request-"));
   const inputDirectory = path.join(root, "inputs");
-  await mkdir(inputDirectory, { recursive: true });
+  await Promise.all([
+    mkdir(path.join(inputDirectory, "builder-skill", "references"), { recursive: true }),
+    mkdir(path.join(inputDirectory, "builder-skill", "scripts"), { recursive: true }),
+  ]);
   await Promise.all([
     writeFile(path.join(inputDirectory, "scene-brief.md"), "# Cloud Temple\n"),
     writeFile(path.join(inputDirectory, "reference-0.png"), "reference"),
@@ -44,7 +47,9 @@ async function fixture(): Promise<Readonly<{ root: string; inputDirectory: strin
     writeFile(path.join(inputDirectory, "native-scene-profile.json"), resolutionDescriptor("native-scene-profile", "worldkit://native-scene-profile/whitebox.blocks@1", SCENE_PROFILE_HASH)),
     writeFile(path.join(inputDirectory, "block-profile.json"), resolutionDescriptor("native-block-profile", "worldkit://native-block-profile/whitebox.blocks@1", BLOCK_PROFILE_HASH)),
     writeFile(path.join(inputDirectory, "instruction.md"), "Build exactly the declared files.\n"),
-    writeFile(path.join(inputDirectory, "builder-skill.md"), "# Builder\n"),
+    writeFile(path.join(inputDirectory, "builder-skill", "SKILL.md"), "# Builder\n"),
+    writeFile(path.join(inputDirectory, "builder-skill", "references", "native-block-output-contract.md"), "# Contract\n"),
+    writeFile(path.join(inputDirectory, "builder-skill", "scripts", "self-check.mjs"), "export {};\n"),
   ]);
   const sceneBriefHash = sha256Bytes(new TextEncoder().encode("# Cloud Temple\n")) as `sha256:${string}`;
   const routeDecision = decideSceneAuthoringRouteV1({
@@ -83,10 +88,11 @@ function input(fixtureValue: Awaited<ReturnType<typeof fixture>>) {
     runId: "initial",
     attemptIndex: 0,
     backend: "cloud" as const,
+    cloudOutputS3Root: "s3://bucket/worldkit",
     runDirectoryPath: path.join(fixtureValue.root, "runs", "initial"),
     inputDirectoryPath: fixtureValue.inputDirectory,
     taskInstructionPath: path.join(fixtureValue.inputDirectory, "instruction.md"),
-    builderSkillPath: path.join(fixtureValue.inputDirectory, "builder-skill.md"),
+    builderSkillPath: path.join(fixtureValue.inputDirectory, "builder-skill", "SKILL.md"),
     nativeSceneApiPath: path.join(fixtureValue.inputDirectory, "native-scene-api.json"),
     nativeSceneProfilePath: path.join(fixtureValue.inputDirectory, "native-scene-profile.json"),
     blockProfilePath: path.join(fixtureValue.inputDirectory, "block-profile.json"),
@@ -114,11 +120,46 @@ function input(fixtureValue: Awaited<ReturnType<typeof fixture>>) {
 }
 
 describe("prepareNativeBlockGenerationTaskV1", () => {
+  it("keeps the committed reconstruction Case and resource descriptors consumable", async () => {
+    const caseRoot = path.resolve(
+      "artifacts/scenes/cloud-temple-t-gate-native-block",
+    );
+    const [caseText, profileText] = await Promise.all([
+      readFile(path.join(caseRoot, "case.json"), "utf8"),
+      readFile(path.join(caseRoot, "evaluation-profile.json"), "utf8"),
+    ]);
+    const profile = parseWorldReconstructionEvaluationProfileV1(
+      JSON.parse(profileText),
+    );
+    const reconstructionCase = parseWorldReconstructionCaseV1(
+      JSON.parse(caseText),
+    );
+    expect(reconstructionCase.evaluationProfileHash).toBe(
+      hashWorldReconstructionEvaluationProfileV1(profile),
+    );
+    for (const fileName of [
+      "native-scene-api.json",
+      "native-scene-profile.json",
+      "block-profile.json",
+    ]) {
+      const descriptorText = await readFile(
+        path.join(caseRoot, "inputs", fileName),
+        "utf8",
+      );
+      expect(descriptorText).toBe(
+        stringifyCanonicalJson(JSON.parse(descriptorText)),
+      );
+    }
+  });
+
   it("freezes one canonical native request with three declared router outputs", async () => {
     const value = await fixture();
     try {
       const prepared = await prepareNativeBlockGenerationTaskV1(input(value));
       expect(prepared.routerArguments.filter((argument) => argument === "--output")).toHaveLength(3);
+      expect(prepared.routerArguments).toContain(
+        "s3://bucket/worldkit/cloud-temple-t-gate-native-block/initial/attempt-0",
+      );
       expect(prepared.routerArguments).toEqual(expect.arrayContaining([
         "--execution-profile", "formal", "--submit-attempts", "1",
       ]));
@@ -321,6 +362,18 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
     const value = await fixture();
     try {
       await expect(prepareNativeBlockGenerationTaskV1(await mutate(value))).rejects.toThrow();
+    } finally {
+      await rm(value.root, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a cloud output root that is not an absolute S3 URI", async () => {
+    const value = await fixture();
+    try {
+      await expect(prepareNativeBlockGenerationTaskV1({
+        ...input(value),
+        cloudOutputS3Root: "cloud-temple/output",
+      })).rejects.toThrowError(/S3/i);
     } finally {
       await rm(value.root, { recursive: true, force: true });
     }

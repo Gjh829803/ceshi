@@ -31,7 +31,7 @@ import {
   parseWorldPackageWorldBoundsV1,
   type WorldPackageWorldBoundsV1,
 } from "@whitebox-world/world-package";
-import { isEqual, isNil } from "lodash-es";
+import { isEqual, isNil, sortBy } from "lodash-es";
 
 const OUTPUTS = ["scene.ts", "native-block-authoring.json", "native-resources.json"] as const;
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
@@ -51,6 +51,7 @@ export interface PrepareNativeBlockGenerationTaskV1Input {
   readonly runId: string;
   readonly attemptIndex: 0 | 1 | number;
   readonly backend: "cloud" | "local";
+  readonly cloudOutputS3Root?: string;
   readonly runDirectoryPath: string;
   readonly inputDirectoryPath: string;
   readonly taskInstructionPath: string;
@@ -383,6 +384,19 @@ function asRef(relativePath: string): string { return `inputs/${relativePath}`; 
 export async function prepareNativeBlockGenerationTaskV1(
   input: PrepareNativeBlockGenerationTaskV1Input,
 ): Promise<PreparedNativeBlockGenerationTaskV1> {
+  const cloudOutputS3Root = input.backend === "cloud"
+    ? input.cloudOutputS3Root
+    : undefined;
+  if (
+    input.backend === "cloud" &&
+    (typeof cloudOutputS3Root !== "string" ||
+      !/^s3:\/\/[a-z0-9][a-z0-9.-]*\/.+[^/]$/.test(cloudOutputS3Root))
+  ) {
+    throw new TypeError("Cloud generation requires a canonical absolute S3 output root.");
+  }
+  if (input.backend === "local" && input.cloudOutputS3Root !== undefined) {
+    throw new TypeError("Local generation must not declare a cloud S3 output root.");
+  }
   const reconstructionCase = parseWorldReconstructionCaseV1(input.case);
   const profile = parseWorldReconstructionEvaluationProfileV1(input.profile);
   if (reconstructionCase.evaluationProfileRef !== "evaluation-profile.json" || reconstructionCase.evaluationProfileHash !== hashWorldReconstructionEvaluationProfileV1(profile)) throw new TypeError("Case/Profile identity closure failed.");
@@ -530,13 +544,13 @@ export async function prepareNativeBlockGenerationTaskV1(
   ]) : [];
   const taskInputFiles = [sceneBrief, taskInstruction, builderSkill, nativeSceneApi, nativeSceneProfile, blockProfile, registryLockSource, bootstrap, gameplay, runtime, worldBounds, hostClosureFile, ...builderBundle, ...references];
   const routeDecisionHash = hashSceneAuthoringRouteDecisionV1(routeDecision);
-  const contextInputs = [nativeSceneApi, nativeSceneProfile, blockProfile, registryLockSource, bootstrap, gameplay, runtime, worldBounds, hostClosureFile, builderSkill, ...builderBundle]
+  const contextInputs = sortBy([nativeSceneApi, nativeSceneProfile, blockProfile, registryLockSource, bootstrap, gameplay, runtime, worldBounds, hostClosureFile, builderSkill, ...builderBundle]
     .map((file) => ({ inputRef: asRef(file.relativePath), contentHash: file.hash }))
     .concat([
       { inputRef: "context/case.json", contentHash: sha256CanonicalJson(reconstructionCase) as Sha256HashV1 },
       { inputRef: "context/evaluation-profile.json", contentHash: hashWorldReconstructionEvaluationProfileV1(profile) },
       { inputRef: "context/scene-authoring-route-decision.json", contentHash: routeDecisionHash },
-    ]).sort((left, right) => left.inputRef.localeCompare(right.inputRef));
+    ]), ({ inputRef }) => inputRef);
   const workspaceContextManifest = { kind: "native-block-generation-context", schemaVersion: 1, inputs: contextInputs };
   const workspaceContextManifestHash = sha256CanonicalJson(workspaceContextManifest) as Sha256HashV1;
   const generationRequest: NativeBlockGenerationRequestV1 = {
@@ -588,7 +602,7 @@ export async function prepareNativeBlockGenerationTaskV1(
     "--output", `scene.ts::attempts/${input.attemptIndex}/.staging/scene.ts::text/typescript`,
     "--output", `native-block-authoring.json::attempts/${input.attemptIndex}/.staging/native-block-authoring.json::application/json`,
     "--output", `native-resources.json::attempts/${input.attemptIndex}/.staging/native-resources.json::application/json`,
-    ...(input.backend === "cloud" ? ["--output-s3-prefix", `${reconstructionCase.id}/${input.runId}/attempt-${input.attemptIndex}`] : []),
+    ...(input.backend === "cloud" ? ["--output-s3-prefix", `${cloudOutputS3Root}/${reconstructionCase.id}/${input.runId}/attempt-${input.attemptIndex}`] : []),
   ];
   const routerTaskPayloadHash = sha256CanonicalJson({ request: generationRequest, routerRequestId, routerArguments }) as Sha256HashV1;
   const runDirectoryPath = await ensureCanonicalDirectoryChain(caseRoot, requestedRunDirectoryPath);
