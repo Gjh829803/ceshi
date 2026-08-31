@@ -59,6 +59,10 @@ import {
 } from "./worldkit-asset-resolver.js";
 import { createPlaygroundCanonicalWorldPackageBuildContextV1 } from "./playground-world-package.js";
 import {
+  createStudioViewerBootstrapV1,
+  type ViewerBootstrapV1,
+} from "./viewer-bootstrap.js";
+import {
   MOUNTED_SKATEBOARD_S1_SCENE_ID,
   augmentMountedSkateboardS1AuthoringSpecV1,
   createMountedSkateboardS1GameplayResourcesV1,
@@ -151,6 +155,7 @@ export async function loadStudioAuthoringPreviewV1(
   options: AuthoringSceneLoadOptionsV1 = {},
 ): Promise<Readonly<{
   loaded: AuthoringSceneLoadResult;
+  viewerBootstrap: ViewerBootstrapV1;
   visualCaptureGroups: readonly VisualCaptureGroupV1[];
   attempt: number;
   attemptStartedAt: string;
@@ -218,15 +223,24 @@ export async function loadStudioAuthoringPreviewV1(
       }`,
     );
   }
+  const viewerBootstrap = createStudioViewerBootstrapV1({
+    worldId,
+    sceneId: payload.sceneId,
+    authoringSpec: payload.authoringSpec,
+  });
   const loaded = await loadAuthoringScene(
-    async () => new Response(stringifyCanonicalJson(payload.authoringSpec), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    }),
+    async () => new Response(
+      stringifyCanonicalJson(viewerBootstrap.authoringSpec),
+      {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      },
+    ),
     options,
   );
   return Object.freeze({
     loaded,
+    viewerBootstrap,
     visualCaptureGroups: Object.freeze(
       implementationMap.visualCaptureGroups.map((target) => Object.freeze({
         ...target,

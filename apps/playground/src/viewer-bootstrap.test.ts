@@ -8,6 +8,7 @@ import { parseSceneCatalogV1 } from "@whitebox-world/scene-catalog";
 import {
   createCuratedViewerBootstrapV1,
   createFixedViewerBootstrapV1,
+  createStudioViewerBootstrapV1,
   loadViewerBootstrapV1,
   parseViewerBootstrapV1,
   viewerSceneSelectionUrlV1,
@@ -68,6 +69,28 @@ describe("Viewer bootstrap V1", () => {
       selectedSceneId: "action-lab",
     });
     expect("entries" in bootstrap.selection).toBe(false);
+  });
+
+  it("projects a Studio transport source into the same fixed Viewer bootstrap", async () => {
+    const authoringSpec = JSON.parse(await readFile(
+      path.resolve("scenes/presets/action-lab/world.json"),
+      "utf8",
+    ));
+    const bootstrap = createStudioViewerBootstrapV1({
+      worldId: "studio-world",
+      sceneId: "action-lab",
+      authoringSpec,
+    });
+
+    expect(bootstrap.selection).toEqual({
+      kind: "fixed-host",
+      selectedSceneId: "action-lab",
+    });
+    expect(() => createStudioViewerBootstrapV1({
+      worldId: "studio-world",
+      sceneId: "another-scene",
+      authoringSpec,
+    })).toThrow("VIEWER_STUDIO_SOURCE_IDENTITY_MISMATCH");
   });
 
   it("rejects malformed app bootstrap payloads through the authoritative V4 parser", () => {

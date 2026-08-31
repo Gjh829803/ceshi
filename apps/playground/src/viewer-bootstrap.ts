@@ -222,6 +222,33 @@ export function createFixedViewerBootstrapV1(
   });
 }
 
+export function createStudioViewerBootstrapV1(input: Readonly<{
+  worldId: string;
+  sceneId: string;
+  authoringSpec: unknown;
+}>): ViewerBootstrapV1 {
+  canonicalString(input.worldId, "VIEWER_STUDIO_SOURCE_IDENTITY_MISMATCH");
+  const sceneId = canonicalString(
+    input.sceneId,
+    "VIEWER_STUDIO_SOURCE_IDENTITY_MISMATCH",
+  );
+  let sourceText: string;
+  try {
+    const serialized = JSON.stringify(input.authoringSpec);
+    if (typeof serialized !== "string") {
+      return fail("VIEWER_BOOTSTRAP_AUTHORING_INVALID");
+    }
+    sourceText = serialized;
+  } catch {
+    return fail("VIEWER_BOOTSTRAP_AUTHORING_INVALID");
+  }
+  const bootstrap = createFixedViewerBootstrapV1(sourceText);
+  if (bootstrap.selection.selectedSceneId !== sceneId) {
+    return fail("VIEWER_STUDIO_SOURCE_IDENTITY_MISMATCH");
+  }
+  return bootstrap;
+}
+
 export function parseViewerBootstrapV1(input: unknown): ViewerBootstrapV1 {
   const record = exactRecord(input, [
     "kind",

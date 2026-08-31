@@ -2437,6 +2437,7 @@ if (runtimeRoute.mode === "unknown") {
         ),
         { worldPackageStore },
       );
+      installViewerSceneSelector(preview.viewerBootstrap);
       loaded = preview.loaded;
       visualCaptureGroups = preview.visualCaptureGroups;
     }
