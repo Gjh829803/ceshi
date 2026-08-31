@@ -18,11 +18,20 @@ async function preparedFixture() {
     stagingDirectoryPath,
     sourceDirectoryPath,
     generationRequest: {
+      kind: "native-block-generation-request", schemaVersion: 1,
       id: "cloud-temple.initial",
+      routeDecisionRef: "worldkit://route/test@1", routeDecisionHash: `sha256:${"d".repeat(64)}`,
+      sceneBriefRef: "scene-brief.md", sceneBriefHash: `sha256:${"e".repeat(64)}`,
+      referenceInputs: [], codexExecutionProfileRef: "worldkit://codex-execution-profile/formal@1", codexExecutionProfileHash: `sha256:${"f".repeat(64)}`,
+      taskInstructionRef: "instruction.md", taskInstructionHash: `sha256:${"1".repeat(64)}`, builderSkillRef: "skill.md", builderSkillHash: `sha256:${"2".repeat(64)}`,
+      workspaceContextManifestRef: "manifest.json", workspaceContextManifestHash: `sha256:${"3".repeat(64)}`, contextInputs: [],
+      nativeSceneApiRef: "api.json", nativeSceneApiHash: `sha256:${"4".repeat(64)}`, nativeSceneProfileRef: "profile.json", nativeSceneProfileHash: `sha256:${"5".repeat(64)}`,
+      blockProfileRef: "block.json", blockProfileHash: `sha256:${"6".repeat(64)}`, bootstrapInputRef: "bootstrap.json", bootstrapInputHash: `sha256:${"7".repeat(64)}`,
+      seed: 1, budgets: { maximumBlockCount: 1, maximumStaticColliderCount: 1, maximumStaticColliderVertexCount: 1, maximumStaticColliderTriangleCount: 1, maximumOutputBytes: 10000, timeoutSeconds: 1 },
       declaredOutputPaths: expectedOutputs,
-    } as never,
+    },
     generationRequestHash: `sha256:${"a".repeat(64)}`,
-    routerRequestId: "native-block-generation-cloud-temple.initial",
+    routerRequestId: "native-block-generation-cloud-temple-initial",
     routerTaskPayloadHash: `sha256:${"b".repeat(64)}`,
     backend: "cloud" as const,
     routerExecutablePath: "/workspace/scripts/agents/run-codex-task.mjs",
@@ -39,7 +48,7 @@ describe("runNativeBlockGenerationV1", () => {
   it("promotes exactly three non-empty outputs only after successful router and self-check", async () => {
     const prepared = await preparedFixture();
     const calls: unknown[] = [];
-    const port: CodexTaskProcessPortV1 = { run: async (runInput) => { calls.push(runInput); await writeOutputs(prepared.stagingDirectoryPath); return { exitCode: 0, stdout: "WORLDKIT_LWDP_JOB native-block-generation native-block-generation-cloud-temple.initial job-1 dispatch=single-task-fast-path profile=formal model=gpt-5.6-sol reasoning=xhigh\n", stderr: "" }; } };
+    const port: CodexTaskProcessPortV1 = { run: async (runInput) => { calls.push(runInput); await writeOutputs(prepared.stagingDirectoryPath); return { exitCode: 0, stdout: "WORLDKIT_LWDP_JOB native-block-generation native-block-generation-cloud-temple-initial job-1 dispatch=single-task-fast-path profile=formal model=gpt-5.6-sol reasoning=xhigh\n", stderr: "" }; } };
     try {
       const result = await runNativeBlockGenerationV1(prepared, {
         process: port,
@@ -117,7 +126,7 @@ describe("runNativeBlockGenerationV1", () => {
   });
 
   it("rejects a missing or duplicate router completion marker", async () => {
-    for (const stdout of ["", "WORLDKIT_LWDP_JOB native-block-generation native-block-generation-cloud-temple.initial a profile=formal model=gpt-5.6-sol reasoning=xhigh\nWORLDKIT_LWDP_JOB native-block-generation native-block-generation-cloud-temple.initial b profile=formal model=gpt-5.6-sol reasoning=xhigh"]) {
+    for (const stdout of ["", "WORLDKIT_LWDP_JOB native-block-generation native-block-generation-cloud-temple-initial a dispatch=single-task-fast-path profile=formal model=gpt-5.6-sol reasoning=xhigh\nWORLDKIT_LWDP_JOB native-block-generation native-block-generation-cloud-temple-initial b dispatch=single-task-fast-path profile=formal model=gpt-5.6-sol reasoning=xhigh"]) {
       const prepared = await preparedFixture();
       try {
         const result = await runNativeBlockGenerationV1(prepared, { process: { run: async () => { await writeOutputs(prepared.stagingDirectoryPath); return { exitCode: 0, stdout, stderr: "" }; } }, selfCheck: async () => ({ ok: true, diagnosticCodes: [] }), reconcile: async () => ({ outcome: "missing" }), cleanup: async () => ({ outcome: "completed" }) });

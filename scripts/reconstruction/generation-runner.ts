@@ -2,7 +2,7 @@ import { lstat, mkdir, readdir, rename, rm } from "node:fs/promises";
 import path from "node:path";
 
 import { sha256Bytes, type Sha256HashV1 } from "@whitebox-world/protocol";
-import type { NativeBlockGenerationReceiptV1, NativeBlockGenerationRequestV1 } from "@whitebox-world/scene-authoring-contracts";
+import { parseNativeBlockGenerationReceiptV1, type NativeBlockGenerationReceiptV1, type NativeBlockGenerationRequestV1 } from "@whitebox-world/scene-authoring-contracts";
 
 const OUTPUTS = ["native-block-authoring.json", "native-resources.json", "scene.ts"] as const;
 type OutputPath = (typeof OUTPUTS)[number];
@@ -36,8 +36,13 @@ interface PreparedInput {
 
 function hasTrustedRouterMarker(stdout: string, backend: "cloud" | "local", requestId: string): boolean {
   const marker = backend === "cloud" ? "WORLDKIT_LWDP_JOB" : "WORLDKIT_LOCAL_CODEX_JOB";
-  const lines = stdout.split(/\r?\n/).filter((line) => line.startsWith(marker));
-  return lines.length === 1 && lines[0]!.includes(` ${requestId} `) && lines[0]!.includes("profile=formal") && lines[0]!.includes("model=gpt-5.6-sol") && lines[0]!.includes("reasoning=xhigh");
+  const lines = stdout.split(/\r?\n/).filter((line) => line.startsWith(`${marker} `));
+  if (lines.length !== 1) return false;
+  const expression = backend === "cloud"
+    ? /^WORLDKIT_LWDP_JOB native-block-generation ([a-z0-9][a-z0-9-]{2,79}) ([a-zA-Z0-9-]+) dispatch=[a-z0-9-]+ profile=formal model=gpt-5\.6-sol reasoning=xhigh$/
+    : /^WORLDKIT_LOCAL_CODEX_JOB native-block-generation ([a-z0-9][a-z0-9-]{2,79}) pid=[1-9][0-9]* profile=formal model=gpt-5\.6-sol reasoning=xhigh$/;
+  const match = expression.exec(lines[0]!);
+  return match !== null && match[1] === requestId;
 }
 
 function receipt(input: PreparedInput, outcome: NativeBlockGenerationReceiptV1["outcome"], diagnosticCodes: readonly NativeBlockGenerationReceiptV1["diagnosticCodes"][number][], outputs: NativeBlockGenerationReceiptV1["outputs"], cleanupOutcome: "completed" | "failed"): NativeBlockGenerationReceiptV1 {
@@ -119,5 +124,5 @@ export async function runNativeBlockGenerationV1(input: PreparedInput, ports: Na
   if (outcome !== "completed") {
     await rm(input.stagingDirectoryPath, { recursive: true, force: true });
   }
-  return Object.freeze({ receipt: receipt(input, outcome, diagnostics, outcome === "completed" ? outputs : [], cleanupOutcome), ...(outcome === "completed" ? { sourceDirectoryPath: input.sourceDirectoryPath } : {}) });
+  return Object.freeze({ receipt: parseNativeBlockGenerationReceiptV1(receipt(input, outcome, diagnostics, outcome === "completed" ? outputs : [], cleanupOutcome)), ...(outcome === "completed" ? { sourceDirectoryPath: input.sourceDirectoryPath } : {}) });
 }
