@@ -1062,7 +1062,7 @@ formal Capture/Route、AI 评测与生产 disposition 仍未完成，因此不�
   实现 Change Impact → mode-specific Required/Advisory Gate Plan 与证据失效判断；PR 不因非 PR Gate 缺 Receipt 而阻断；
 - [x] PHO-4：实现隔离的 Runtime 生命周期、资源 Owner、30/60/120 cadence 和多实例确定性 Sensor；首个 Required
   Profile 只登记已生产 RuntimeHost/Browser/fixed-cadence Owner，BNA 双 Candidate 在生产 GO 前仅为 Advisory；
-- [ ] PHO-5：实现 bundle/性能、视觉、文档真相和独立 Review Receipt Sensor；未冻结的趋势/AI 判断保持 Advisory；
+- [x] PHO-5：实现 bundle/性能、视觉、文档真相和独立 Review Receipt Sensor；未冻结的趋势/AI 判断保持 Advisory；
 - [ ] PHO-6：实现唯一 `health:record` Receipt producer、稳定聚合 Policy、
   `health:pr/nightly/release/explain/update-baseline` 和 0/1/2/3 exit contract；
 - [ ] PHO-7：接入 PR/main-push/Nightly/Release CI；fast mode 只消费前序 exact-head Receipt 且不重复重型
