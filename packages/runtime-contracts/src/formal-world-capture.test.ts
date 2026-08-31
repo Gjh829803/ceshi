@@ -353,6 +353,8 @@ function formalRequestValue() {
     kind: "formal-world-capture-request",
     schemaVersion: 1,
     id: "cloud-temple.attempt-0.formal-capture-request",
+    formalRequestRef:
+      "artifact://case/cloud-temple/attempts/0/formal-world-capture-request.json",
     caseRef: "worldkit://world-reconstruction-case/cloud-temple.case",
     caseHash: H("c"),
     evaluationProfileRef: "artifact://case/cloud-temple/evaluation-profile.json",
@@ -481,6 +483,9 @@ function receiptValue(runtimeSnapshot = snapshotFixture()) {
 describe("FormalWorldCaptureRequestV1", () => {
   it("freezes one Package-bound Capture transaction with one materializer inventory authority", () => {
     const request = parseFormalWorldCaptureRequestV1(formalRequestValue());
+    expect(request.formalRequestRef).toBe(
+      "artifact://case/cloud-temple/attempts/0/formal-world-capture-request.json",
+    );
     expect(request.worldPackageRootHash).toBe(PACKAGE_ROOT);
     expect(request.semanticCaptureMap.caseHash).toBe(request.caseHash);
     expect(request.scriptedTraversal.checks[0]?.checkpointCriteria.map(
@@ -491,6 +496,13 @@ describe("FormalWorldCaptureRequestV1", () => {
     ]);
     expect(formalWorldCaptureRequestCanonicalBytesV1(request)).toEqual(
       formalWorldCaptureRequestCanonicalBytesV1(formalRequestValue()),
+    );
+  });
+
+  it("requires the Request to carry its own stable artifact identity", () => {
+    const { formalRequestRef: _removed, ...request } = formalRequestValue();
+    expect(() => parseFormalWorldCaptureRequestV1(request)).toThrowError(
+      "FORMAL_WORLD_CAPTURE_REQUEST_INVALID",
     );
   });
 
@@ -908,6 +920,10 @@ describe("formal measured observation documents", () => {
       ...value,
       semanticCaptureMapHash: H("9"),
     })).toThrowError("FORMAL_OPENING_OBSERVATION_INVALID");
+    expect(() => parseFormalOpeningObservationV1({
+      ...value,
+      formalRequestRef: "artifact://case/cloud-temple/attempts/0/stale-request.json",
+    })).toThrowError("FORMAL_OPENING_OBSERVATION_INVALID");
   });
 });
 
@@ -988,6 +1004,12 @@ describe("FormalWorldCaptureReceiptV1", () => {
     const staleMaterializer = receiptValue();
     staleMaterializer.nativeBlockMaterializerMetadataHash = H("0");
     expect(() => parseFormalWorldCaptureReceiptV1(staleMaterializer)).toThrowError(
+      "FORMAL_WORLD_CAPTURE_RECEIPT_INVALID",
+    );
+    const staleRequestRef = receiptValue();
+    staleRequestRef.formalRequestRef =
+      "artifact://case/cloud-temple/attempts/0/stale-request.json";
+    expect(() => parseFormalWorldCaptureReceiptV1(staleRequestRef)).toThrowError(
       "FORMAL_WORLD_CAPTURE_RECEIPT_INVALID",
     );
   });

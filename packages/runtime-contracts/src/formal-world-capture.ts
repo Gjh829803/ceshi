@@ -207,6 +207,7 @@ export interface FormalWorldCaptureRequestV1 {
   readonly kind: "formal-world-capture-request";
   readonly schemaVersion: 1;
   readonly id: string;
+  readonly formalRequestRef: string;
   readonly caseRef: string;
   readonly caseHash: Sha256HashV1;
   readonly evaluationProfileRef: string;
@@ -501,6 +502,7 @@ const FORMAL_REQUEST_FIELDS = [
   "kind",
   "schemaVersion",
   "id",
+  "formalRequestRef",
   "caseRef",
   "caseHash",
   "evaluationProfileRef",
@@ -1867,6 +1869,11 @@ export function parseFormalWorldCaptureRequestV1(
     kind: "formal-world-capture-request",
     schemaVersion: 1,
     id: text(source.id, contract, "id"),
+    formalRequestRef: text(
+      source.formalRequestRef,
+      contract,
+      "formalRequestRef",
+    ),
     caseRef,
     caseHash,
     evaluationProfileRef: text(
@@ -2144,13 +2151,25 @@ function parseObservationIdentity(
   ) {
     fail(contract, "formalRequest", "Package, Build, and semantic map identities must join");
   }
+  const formalRequestRef = text(
+    source.formalRequestRef,
+    contract,
+    "formalRequestRef",
+  );
+  if (formalRequestRef !== formalRequest.formalRequestRef) {
+    fail(
+      contract,
+      "formalRequestRef",
+      "must match the embedded formal Request identity",
+    );
+  }
   return freeze({
     id: text(source.id, contract, "id"),
     worldPackageRef,
     worldPackageRootHash,
     worldBuildIdentityRef,
     worldBuildIdentityHash,
-    formalRequestRef: text(source.formalRequestRef, contract, "formalRequestRef"),
+    formalRequestRef,
     formalRequest,
     formalRequestHash,
     semanticCaptureMapHash,
@@ -2742,6 +2761,13 @@ export function parseFormalWorldCaptureReceiptV1(
     fail(contract, "formalRequestHash", "must match the embedded formal Request bytes");
   }
   const formalRequestRef = text(source.formalRequestRef, contract, "formalRequestRef");
+  if (formalRequestRef !== formalRequest.formalRequestRef) {
+    fail(
+      contract,
+      "formalRequestRef",
+      "must match the embedded formal Request identity",
+    );
+  }
   const worldPackageRootHash = hash(
     source.worldPackageRootHash,
     contract,
