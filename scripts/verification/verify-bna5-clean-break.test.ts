@@ -111,6 +111,18 @@ describe("BNA-5 clean-break verifier", () => {
       code === "BNA5_LEGACY_HOSTED_ALIAS")).toEqual([]);
   });
 
+  it("allows the reconstruction route owners to bind authoring trust provenance", async () => {
+    const report = await scanBna5CleanBreak(await fixture({
+      "scripts/reconstruction/generation-request.ts":
+        "decideSceneAuthoringRouteV1({ trustProfileRef: CURRENT_NATIVE_TRUST_PROFILE_REF });\n",
+      "scripts/reconstruction/run-native-block-generation.ts":
+        "decideSceneAuthoringRouteV1({ trustProfileRef: 'worldkit://trust-profile/trusted-local@1' });\n",
+    }));
+
+    expect(report.diagnostics.filter(({ code }) =>
+      code === "BNA5_LEGACY_HOSTED_ALIAS")).toEqual([]);
+  });
+
   it("rejects trustProfileRef outside the exact authoring allowlist", async () => {
     const report = await scanBna5CleanBreak(await fixture({
       "packages/visual-style/src/runtime-options.ts":
