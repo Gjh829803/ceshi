@@ -233,7 +233,7 @@ Commit: `feat: detect architecture authority drift`
 - Produces: separate `contract-parity` and `supply-chain` Observations whose evidence hashes bind exact command,
   exit, stable diagnostic, provider snapshot identity, and tracked-tree cleanliness.
 
-- [ ] **Step 1: Write contract-parity RED tests**
+- [x] **Step 1: Write contract-parity RED tests**
 
 ```ts
 it("reports incomplete when owner evidence records a tracked-tree mutation", async () => {
@@ -245,19 +245,19 @@ it("reports incomplete when owner evidence records a tracked-tree mutation", asy
 
 Also cover a timeout receipt, stale tree/input/command identity, stable exit mapping, generated-byte drift, and a passing read-only verifier. Supply-chain fixtures cover a malformed or stale `dependency-inventory` Receipt, missing provenance, forbidden license, unavailable advisory provider, stale snapshot, and a version-bound advisory. Undeclared workspace imports are tested only in PHO-1. PHO-0B owns the process cleanup/output truncation mechanics.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `pnpm exec vitest run scripts/project-health/process-runner.test.ts scripts/project-health/sensors/contract-parity.test.ts scripts/project-health/sensors/supply-chain.test.ts`
 
-- [ ] **Step 3: Implement mode-specific evidence adaptation**
+- [x] **Step 3: Implement mode-specific evidence adaptation**
 
 In `pr`, only validate exact-head Receipts produced by the preceding `health:record` steps; never invoke an owner. In `nightly`/`release`, missing selected evidence may be produced once from a closed Host descriptor through PHO-0B. Register one immutable `dependency-inventory` argv descriptor backed by `pnpm licenses list --json`; this is the npm/pnpm declared-closure Owner, while `contract-parity` remains the only lock/install/patch byte-identity Owner. Project the pnpm output into the frozen Dependency Inventory DTO, sort/dedupe exact package/version/license entries, and drop raw `paths`, author, description, homepage and order before hashing; RED fixtures use different absolute install roots with byte-identical projected evidence. Supply-chain online evidence additionally binds provider ID, database snapshot date/hash, package name and exact version. Provider unavailability follows the mode-specific Profile rule: Advisory `incomplete` in PR/Nightly, and the explicit Release `not-applicable` reason plus a retained Advisory Finding; it is never a clean bill of health. PHO-6 later registers the same closed set. Neither Sensor may spawn, parse the lockfile independently, implement its own timeout, redact logs, or clean owned processes.
 
-- [ ] **Step 4: Register existing fact owners**
+- [x] **Step 4: Register existing fact owners**
 
 Adapt `check:agent-self-check`, current clean-break verifiers, dependency/patch identity tests, artifact owner check modes, and a closed license/provenance policy. Workspace boundaries belong exclusively to PHO-1 and test census belongs exclusively to PHO-3. Online advisories remain Supply Chain evidence and never modify dependencies or waivers. Do not translate domain errors beyond stable status/code/evidence fields.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run: `pnpm exec vitest run scripts/project-health/process-runner.test.ts scripts/project-health/sensors/contract-parity.test.ts scripts/project-health/sensors/supply-chain.test.ts && pnpm test:census && pnpm typecheck && git diff --check`
 
