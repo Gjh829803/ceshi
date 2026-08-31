@@ -218,9 +218,178 @@ describe("Babylon Native isolated Runtime entry", () => {
     await entry.dispose();
   });
 
+  it("resets through the same RuntimeHost session and atomically replaces the provider handle", async () => {
+    const input = await entryInput("runtime.hosted.capture-reset");
+    const engines: NullEngine[] = [];
+    const entry = await createBabylonNativeIsolatedRuntimeEntryV1({
+      ...input,
+      engineFactory: () => {
+        const engine = new NullEngine({
+          renderWidth: 640,
+          renderHeight: 360,
+          textureSize: 512,
+          deterministicLockstep: true,
+          lockstepMaxSteps: 4,
+        });
+        engines.push(engine);
+        return engine;
+      },
+    });
+    const before = entry.initialSnapshot();
+
+    const after = await entry.resetForFormalCapture();
+
+    expect(after.runtimeSessionId).toBe(before.runtimeSessionId);
+    expect(after.worldSessionId).toBe(
+      `${input.request.runtimeSessionId}.world.2`,
+    );
+    expect(after.worldSessionId).not.toBe(before.worldSessionId);
+    expect(after.world.simulationTick).toBe(0);
+    expect(after.runtime.phase).toBe("ready");
+    expect(Object.values(
+      after.world.gameplayInspection.relationshipStatesById,
+    )).toEqual([
+      expect.objectContaining({
+        controlledEntityId:
+          input.verifiedWorldPackage.worldRuntimeBootstrap
+            .initialControlledEntityId,
+      }),
+    ]);
+    expect(engines).toHaveLength(2);
+    expect(engines[0]?.isDisposed).toBe(true);
+    expect(engines[1]?.isDisposed).toBe(false);
+
+    await entry.dispose();
+    expect(engines[1]?.isDisposed).toBe(true);
+  });
+
+  it("keeps the published world active when the reset Candidate cannot allocate an Engine", async () => {
+    const input = await entryInput("runtime.hosted.capture-reset-failure");
+    const initialEngine = new NullEngine({
+      renderWidth: 640,
+      renderHeight: 360,
+      textureSize: 512,
+      deterministicLockstep: true,
+      lockstepMaxSteps: 4,
+    });
+    let engineRequestCount = 0;
+    const entry = await createBabylonNativeIsolatedRuntimeEntryV1({
+      ...input,
+      engineFactory: () => {
+        engineRequestCount += 1;
+        if (engineRequestCount === 1) return initialEngine;
+        throw new Error("candidate engine unavailable");
+      },
+    });
+    const before = entry.initialSnapshot();
+
+    await expect(entry.resetForFormalCapture()).rejects.toThrow();
+
+    const after = entry.initialSnapshot();
+    expect(after.worldSessionId).toBe(before.worldSessionId);
+    expect(after.runtime.phase).toBe("ready");
+    expect(initialEngine.isDisposed).toBe(false);
+    expect(entry.renderFrame().runtimeSessionId).toBe(before.runtimeSessionId);
+    await entry.dispose();
+    expect(initialEngine.isDisposed).toBe(true);
+  });
+
+  it("releases a retained Candidate after readiness fails and permits a retry", async () => {
+    const input = await entryInput("runtime.hosted.capture-reset-readiness-failure");
+    const engines: NullEngine[] = [];
+    let shouldRejectCandidateReadiness = true;
+    const entry = await createBabylonNativeIsolatedRuntimeEntryV1({
+      ...input,
+      engineFactory: () => {
+        const engine = new NullEngine({
+          renderWidth: 640,
+          renderHeight: 360,
+          textureSize: 512,
+          deterministicLockstep: true,
+          lockstepMaxSteps: 4,
+        });
+        engines.push(engine);
+        return engine;
+      },
+      onInitializationStage(stage) {
+        if (
+          stage === "ready" && engines.length === 2 &&
+          shouldRejectCandidateReadiness
+        ) {
+          shouldRejectCandidateReadiness = false;
+          const candidateScene = engines[1]?.scenes[0];
+          if (candidateScene === undefined) throw new Error("candidate scene missing");
+          vi.spyOn(candidateScene, "whenReadyAsync").mockRejectedValueOnce(
+            new Error("candidate readiness unavailable"),
+          );
+        }
+      },
+    });
+    const before = entry.initialSnapshot();
+
+    await expect(entry.resetForFormalCapture()).rejects.toThrow();
+
+    expect(entry.initialSnapshot().worldSessionId).toBe(before.worldSessionId);
+    expect(engines).toHaveLength(2);
+    expect(engines[0]?.isDisposed).toBe(false);
+    expect(engines[1]?.isDisposed).toBe(true);
+
+    const afterRetry = await entry.resetForFormalCapture();
+    expect(afterRetry.worldSessionId).toBe(
+      `${input.request.runtimeSessionId}.world.3`,
+    );
+    expect(engines).toHaveLength(3);
+    expect(engines[0]?.isDisposed).toBe(true);
+    expect(engines[2]?.isDisposed).toBe(false);
+    await entry.dispose();
+    expect(engines[2]?.isDisposed).toBe(true);
+  });
+
+  it("keeps the newly published world authoritative when old cleanup reports failure", async () => {
+    const input = await entryInput("runtime.hosted.capture-reset-old-cleanup-failure");
+    const engines: NullEngine[] = [];
+    const entry = await createBabylonNativeIsolatedRuntimeEntryV1({
+      ...input,
+      engineFactory: () => {
+        const engine = new NullEngine({
+          renderWidth: 640,
+          renderHeight: 360,
+          textureSize: 512,
+          deterministicLockstep: true,
+          lockstepMaxSteps: 4,
+        });
+        engines.push(engine);
+        return engine;
+      },
+    });
+    const oldEngine = engines[0];
+    if (oldEngine === undefined) throw new Error("old engine missing");
+    const disposeOldEngine = oldEngine.dispose.bind(oldEngine);
+    vi.spyOn(oldEngine, "dispose").mockImplementation(() => {
+      disposeOldEngine();
+      throw new Error("old engine cleanup reported failure");
+    });
+
+    await expect(entry.resetForFormalCapture()).rejects.toThrow();
+
+    const after = entry.initialSnapshot();
+    expect(after.worldSessionId).toBe(
+      `${input.request.runtimeSessionId}.world.2`,
+    );
+    expect(after.runtime.phase).toBe("ready");
+    expect(engines).toHaveLength(2);
+    expect(oldEngine.isDisposed).toBe(true);
+    expect(engines[1]?.isDisposed).toBe(false);
+    expect(entry.renderFrame().runtimeSessionId).toBe(
+      input.request.runtimeSessionId,
+    );
+    await entry.dispose();
+    expect(engines[1]?.isDisposed).toBe(true);
+  });
+
   it("keeps display rendering and resize inside BabylonWorldRuntime authority", async () => {
     const input = await entryInput();
-    const engine = input.engineFactory();
+    const engine = input.engineFactory(`${input.request.runtimeSessionId}.test`);
     const entry = await createBabylonNativeIsolatedRuntimeEntryV1({
       ...input,
       engineFactory: () => engine,
@@ -366,7 +535,7 @@ describe("Babylon Native isolated Runtime entry", () => {
         maximumShaderCount,
       },
     };
-    const engine = input.engineFactory();
+    const engine = input.engineFactory(`${input.request.runtimeSessionId}.test`);
     const dispose = vi.spyOn(engine, "dispose");
     await expect(createBabylonNativeIsolatedRuntimeEntryV1({
       ...input,
@@ -439,7 +608,7 @@ describe("Babylon Native isolated Runtime entry", () => {
 
   it("disposes the real partial Engine when Native admission fails", async () => {
     const input = await entryInput();
-    const engine = input.engineFactory();
+    const engine = input.engineFactory(`${input.request.runtimeSessionId}.test`);
     const dispose = vi.spyOn(engine, "dispose");
     await expect(createBabylonNativeIsolatedRuntimeEntryV1({
       ...input,
@@ -459,7 +628,7 @@ describe("Babylon Native isolated Runtime entry", () => {
 
   it("retains one idempotent cleanup promise when Engine disposal throws", async () => {
     const input = await entryInput();
-    const engine = input.engineFactory();
+    const engine = input.engineFactory(`${input.request.runtimeSessionId}.test`);
     const dispose = vi.spyOn(engine, "dispose").mockImplementation(() => {
       throw new Error("private engine cleanup failure");
     });
