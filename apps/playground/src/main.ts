@@ -19,7 +19,10 @@ import { CAMERA_TUNING_SAFETY_LIMITS_V1 } from "@whitebox-world/runtime-contract
 import { isNil } from "lodash-es";
 
 import { CanvasRecorder } from "./canvas-recorder.js";
-import { installRecordingWorkbench } from "./recording-workbench.js";
+import {
+  installRecordingWorkbench,
+  recordingWorkbenchSceneId,
+} from "./recording-workbench.js";
 import type {
   FeatureInspection,
   OpeningCompositionReport,
@@ -2646,7 +2649,7 @@ function startPlayground(
 requiredElement("#adapter-name").textContent = adapter.name;
 let recorderCanvas = adapter.canvas;
 let canvasRecorder = new CanvasRecorder(recorderCanvas);
-const recordingWorldId = urlParameters.get("world");
+const recordingWorldId = recordingWorkbenchSceneId(runtimeRoute);
 const recordingWorkbench = runtimeRoute.mode === "viewer" && !isNil(recordingWorldId)
   ? installRecordingWorkbench({
       root: requiredElement<HTMLDivElement>("#recording-workbench-root"),

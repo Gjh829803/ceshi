@@ -1120,7 +1120,7 @@ Cursor Cloud 针对精确 SHA 执行，禁止无输入变化时反复重跑。
 #### NBR-1 当前唯一最高优先级纵向切片
 
 - [ ] NBR-00：合入详细设计、实施计划、WRC 优先级和 current-only 删除清单；
-- [ ] NBR-10：冻结 Route、真实 Generation Request/Receipt、Case/Profile 和修正后的 Attempt 身份；
+- [x] NBR-10：冻结 Route、真实 Generation Request/Receipt、Case/Profile 和修正后的 Attempt 身份；
 - [ ] NBR-20：通过统一 Codex task router 从真实参考输入生成闭合 Native Block workspace；
 - [ ] NBR-30：通过通用 Native Check/Explain 和 Package/Receipt 链，删除 Cloud Ridge 手写生产装配；
 - [ ] NBR-40：由保留的 BNA 验证 Harness 调用正式 RuntimeHost 和 SDK-owned

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { formatWorkbenchDuration, recordingStatusLabel } from "./recording-workbench.js";
+import {
+  formatWorkbenchDuration,
+  recordingStatusLabel,
+  recordingWorkbenchSceneId,
+} from "./recording-workbench.js";
 
 describe("recording workbench presentation", () => {
   it("formats recording duration without losing minute boundaries", () => {
@@ -12,5 +16,18 @@ describe("recording workbench presentation", () => {
     expect(recordingStatusLabel("prompt-running")).toBe("正在补全 Prompt");
     expect(recordingStatusLabel("video-running")).toBe("Seedance 生成中");
     expect(recordingStatusLabel("ready")).toBe("视频已完成");
+  });
+
+  it("binds the workbench only to the Studio world identity selected by the Host", () => {
+    expect(recordingWorkbenchSceneId({
+      mode: "viewer",
+      studioWorldId: "studio-world",
+    })).toBe("studio-world");
+    expect(recordingWorkbenchSceneId({ mode: "viewer" })).toBeUndefined();
+    expect(recordingWorkbenchSceneId({
+      mode: "artifact-only",
+      sceneCatalogId: "grassland",
+      captureArtifactsEnabled: false,
+    })).toBeUndefined();
   });
 });
