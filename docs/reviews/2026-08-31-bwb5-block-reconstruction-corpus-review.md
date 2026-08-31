@@ -3,9 +3,11 @@
 - 日期：2026-08-31
 - 模式：Mode B 变更审查 + runtime-deep-review-checklist
 - 基线：`origin/main@bcd2beea736ab68199df04c2ed937d63ea389f4a`
-- 产品候选：`7b77069f114bb3ae72ae184fb7c60798fe49b301`
+- P1 修复候选：`5d215ade0b5a6aed866dec0b735946f2f749fc28`
 - 范围：BWB5-10 至 BWB5-70；关闭山地 / T 字 / 台阶 / 建筑 / 有限室内 / 负向 Corpus
-- 当前裁决：**条件 GO**；开放 P0/P1 = 0。BNA-6 / BNA-7 / WRC-SR-1 / BWB-6 保持开放
+- 当前裁决：**NO-GO（等待新候选 exact-SHA 独立复核）**。旧候选
+  `7b77069f114bb3ae72ae184fb7c60798fe49b301` 的条件 GO 已失效；BNA-6 / BNA-7 /
+  WRC-SR-1 / BWB-6 保持开放。
 
 ## 1. 候选结论与明确非声明
 
@@ -50,7 +52,9 @@ Build-Epoch Session / Checked Layout / `finalize()`。该 Layout 同时产生 Ba
 - 五类正向 Case 均经同一 admit → finalize → capture → collider inventory 合同测试。
 - `ordinary-and-blocked-steps` 复用 BWB-4 六块几何，Havok 再次证明 0.25m 可通过、0.5m 不可通过、
   ledge `air`、reset hash 一致、dispose 释放 Scene/Engine/Collider Mesh。
-- mountain / T / building / limited-interior 有预期通路与阻挡的真实 Havok ticks。
+- mountain / T / building / limited-interior 有预期通路与阻挡的真实 Havok ticks。阻挡证据绑定
+  明确的 `not-traversable` Collider Contribution 近面、controlled Subject capsule radius 和
+  `movementMedium === "ground"`；断言先证明人物离开 spawn/approach，再证明中心停在近面误差带。
 - 负向 Corpus 覆盖 overlap、budget、invalid binding、unsupported spawn、disconnected route、
   partial-construction cleanup。
 - 文档与代码都写明 formal Capture/Route = false。未把 AuthoringCapture 写成 BNA-7 Receipt。
@@ -107,8 +111,10 @@ Build-Epoch Session / Checked Layout / `finalize()`。该 Layout 同时产生 Ba
 | BWB5-R1 | P2 | accepted debt | WorldPackage fixture 只有一个 `player` Subject；跨实体 rebind 用跨 Session / 跨 Layout 证明 owner 清理，不扩第二 Subject Definition |
 | BWB5-R2 | P2 | accepted debt | 未跑浏览器 FeelReview 或 Playwright 真像素 PNG；profile-local AuthoringCapture + Havok 是本切片证据。BNA-7 仍开放 |
 | BWB5-R3 | note | closed | `unsupported-spawn` 不进入 air settle；Runtime 在 create 时 fail-closed。这比“先玩后掉下去”更符合权威 |
+| BWB5-P1-1 | P1 | fixed, pending independent verification | T-west、mountain cliff、building/interior back wall 不再使用 spawn 即满足的单边阈值；改为 approach + Contribution near face + capsule radius + grounded tolerance band |
+| BWB5-P1-2 | P1 | fixed, pending independent verification | 删除不存在的 `WORLDKIT_NATIVE_BLOCK_SPAWN_UNSUPPORTED`；inspect/evidence index 不再发布 Profile 失败码，Runtime 继续以 `WORLDKIT_NATIVE_SCENE_RUNTIME_SPAWN_SUPPORT_MISSING` fail-closed |
 
-开放 P0/P1 = 0。
+修复实现中无已知开放 P0/P1，但在新 exact-SHA 独立审查完成前不恢复 GO。
 
 ## 5. 合入条件
 
@@ -116,3 +122,5 @@ Build-Epoch Session / Checked Layout / `finalize()`。该 Layout 同时产生 Ba
 - 不修改 Runtime/Havok/Camera/Input 生产代码
 - 不勾 `docs/18` 的 BWB-5，直到本 PR 合入 main 后再单独勾选，且不抬总进度百分比
 - Cursor Cloud 全量门禁与独立 Review 应绑定本分支精确 SHA；若 Cloud 发现 P0/P1，阻断合入
+- 本文中的旧 GO 不得用作合入证据；必须使用 P1 修复后的新远端 HEAD 重新取得 focused/full gate
+  和独立 Review 结论
