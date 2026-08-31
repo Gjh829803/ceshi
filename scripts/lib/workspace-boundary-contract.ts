@@ -46,12 +46,27 @@ export interface WorkspaceDependencyGraphV1 {
   readonly edges: readonly WorkspaceDependencyEdgeV1[];
 }
 
+export interface WorkspacePublicSymbolOwnershipV1 {
+  readonly packageId: string;
+  readonly sourcePath: string;
+  readonly exportSubpath: string;
+  readonly symbolName: string;
+  readonly isTypeOnly: boolean;
+  readonly isReexport: boolean;
+}
+
 export interface WorkspaceBoundaryEvidenceV1 {
   readonly kind: "workspace-boundary-evidence";
   readonly schemaVersion: 1;
   readonly graph: WorkspaceDependencyGraphV1;
+  readonly publicSymbols: readonly WorkspacePublicSymbolOwnershipV1[];
   readonly violations: readonly WorkspaceBoundaryViolationV1[];
   readonly reconciledDebtFingerprints: readonly string[];
+}
+
+export interface WorkspaceBoundaryScanRequestV1 {
+  readonly repositoryRoot: string;
+  readonly commitSha: string;
 }
 
 export interface WorkspaceBoundaryDebtIdentityV1 {
@@ -63,6 +78,8 @@ export interface WorkspaceBoundaryDebtIdentityV1 {
 const COMMIT_SHA = /^[a-f0-9]{40}$/;
 const SHA256 = /^sha256:[a-f0-9]{64}$/;
 const PACKAGE_ID = /^(?:@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*|[a-z0-9][a-z0-9._-]*)$/;
+const SYMBOL_NAME = /^(?:[A-Za-z_$][A-Za-z0-9_$]*|default)$/;
+const GLOB_OR_REGEX = /[*?[\]()^$|\\]/;
 const VIOLATION_CODES = new Set<WorkspaceBoundaryViolationCodeV1>([
   "WORKSPACE_DIRECT_DEPENDENCY_MISSING",
   "WORKSPACE_PRODUCTION_DEPENDENCY_IN_DEV",
@@ -72,8 +89,8 @@ const VIOLATION_CODES = new Set<WorkspaceBoundaryViolationCodeV1>([
   "WORKSPACE_DEPENDENCY_CYCLE",
 ]);
 
-function invalid(): never {
-  throw new TypeError("Value must match the closed WorkspaceBoundaryEvidenceV1 schema.");
+function invalid(detail = "Value must match the closed WorkspaceBoundaryEvidenceV1 schema."): never {
+  throw new TypeError(detail);
 }
 
 function invalidPath(): never {
@@ -174,11 +191,17 @@ function parsePackage(input: unknown): WorkspaceDependencyPackageV1 {
   if (!Array.isArray(source.exportedSubpaths)) return invalid();
   const exportedSubpaths = source.exportedSubpaths.map((entry) => {
     const exported = record(entry, ["subpath", "targetPath"]);
+    const subpath = string(exported.subpath);
+    if (GLOB_OR_REGEX.test(subpath)) return invalid();
     return {
-      subpath: string(exported.subpath),
+      subpath,
       targetPath: repositoryPath(exported.targetPath, false),
     };
   });
+  const exportedSubpathKeys = exportedSubpaths.map((entry) => entry.subpath);
+  if (uniq(exportedSubpathKeys).length !== exportedSubpathKeys.length) {
+    return invalid("Workspace evidence requires unique export subpath values.");
+  }
   return {
     id: packageId(source.id),
     rootPath: repositoryPath(source.rootPath, true),
@@ -187,6 +210,40 @@ function parsePackage(input: unknown): WorkspaceDependencyPackageV1 {
     productionDependencyIds: stringArray(source.productionDependencyIds, packageId),
     developmentDependencyIds: stringArray(source.developmentDependencyIds, packageId),
   };
+}
+
+function parsePublicSymbol(input: unknown): WorkspacePublicSymbolOwnershipV1 {
+  const source = record(input, [
+    "packageId",
+    "sourcePath",
+    "exportSubpath",
+    "symbolName",
+    "isTypeOnly",
+    "isReexport",
+  ]);
+  const symbolName = string(source.symbolName);
+  const exportSubpath = string(source.exportSubpath);
+  if (!SYMBOL_NAME.test(symbolName) || GLOB_OR_REGEX.test(exportSubpath)) return invalid();
+  if (typeof source.isTypeOnly !== "boolean" || typeof source.isReexport !== "boolean") return invalid();
+  return {
+    packageId: packageId(source.packageId),
+    sourcePath: repositoryPath(source.sourcePath, false),
+    exportSubpath,
+    symbolName,
+    isTypeOnly: source.isTypeOnly,
+    isReexport: source.isReexport,
+  };
+}
+
+function owningPackage(
+  packages: readonly WorkspaceDependencyPackageV1[],
+  filePath: string,
+): WorkspaceDependencyPackageV1 | undefined {
+  const matches = packages.filter((entry) =>
+    entry.rootPath === "." || filePath === entry.rootPath || filePath.startsWith(`${entry.rootPath}/`),
+  );
+  if (isEmpty(matches)) return undefined;
+  return sortBy(matches, (entry) => -entry.rootPath.length)[0];
 }
 
 function parseEdge(input: unknown): WorkspaceDependencyEdgeV1 {
@@ -223,7 +280,14 @@ function parseViolation(input: unknown): WorkspaceBoundaryViolationV1 {
 }
 
 export function parseWorkspaceBoundaryEvidenceV1(input: unknown): WorkspaceBoundaryEvidenceV1 {
-  const source = record(input, ["kind", "schemaVersion", "graph", "violations", "reconciledDebtFingerprints"]);
+  const source = record(input, [
+    "kind",
+    "schemaVersion",
+    "graph",
+    "publicSymbols",
+    "violations",
+    "reconciledDebtFingerprints",
+  ]);
   if (source.kind !== "workspace-boundary-evidence" || source.schemaVersion !== 1) return invalid();
   const graph = record(source.graph, ["kind", "schemaVersion", "commitSha", "packages", "edges"]);
   if (
@@ -233,12 +297,60 @@ export function parseWorkspaceBoundaryEvidenceV1(input: unknown): WorkspaceBound
     !COMMIT_SHA.test(graph.commitSha) ||
     !Array.isArray(graph.packages) ||
     !Array.isArray(graph.edges) ||
+    !Array.isArray(source.publicSymbols) ||
     !Array.isArray(source.violations)
   ) return invalid();
   const packages = graph.packages.map(parsePackage);
+  const packageIds = packages.map((entry) => entry.id);
+  if (uniq(packageIds).length !== packageIds.length) {
+    return invalid("Workspace evidence requires unique package id values.");
+  }
+  const rootPaths = packages.map((entry) => entry.rootPath);
+  if (uniq(rootPaths).length !== rootPaths.length) {
+    return invalid("Workspace evidence requires unique package rootPath values.");
+  }
+  const manifestPaths = packages.map((entry) => entry.manifestPath);
+  if (uniq(manifestPaths).length !== manifestPaths.length) {
+    return invalid("Workspace evidence requires unique package manifestPath values.");
+  }
   const rootPackages = packages.filter((entry) => entry.rootPath === ".");
   if (rootPackages.length !== 1) return invalid();
-  const evidence: WorkspaceBoundaryEvidenceV1 = {
+  const packageById = new Map(packages.map((entry) => [entry.id, entry]));
+  const edges = graph.edges.map(parseEdge);
+  const edgeKeys = edges.map((entry) =>
+    `${entry.importerPath}\0${entry.specifier}\0${entry.targetPackageId}\0${entry.usage}`,
+  );
+  if (uniq(edgeKeys).length !== edgeKeys.length) {
+    return invalid("Workspace evidence requires unique dependency edges.");
+  }
+  for (const edge of edges) {
+    const importer = packageById.get(edge.importerPackageId);
+    const target = packageById.get(edge.targetPackageId);
+    const owner = owningPackage(packages, edge.importerPath);
+    if (isNil(importer) || isNil(target) || isNil(owner) || owner.id !== edge.importerPackageId) {
+      return invalid("Workspace evidence requires edge referential integrity.");
+    }
+  }
+  const publicSymbols = source.publicSymbols.map(parsePublicSymbol);
+  const publicSymbolKeys = publicSymbols.map((entry) =>
+    `${entry.packageId}\0${entry.exportSubpath}\0${entry.symbolName}\0${entry.isTypeOnly ? "1" : "0"}`,
+  );
+  if (uniq(publicSymbolKeys).length !== publicSymbolKeys.length) {
+    return invalid("Workspace evidence requires unique public symbol ownership.");
+  }
+  for (const symbol of publicSymbols) {
+    const owner = packageById.get(symbol.packageId);
+    const pathOwner = owningPackage(packages, symbol.sourcePath);
+    if (
+      isNil(owner) ||
+      isNil(pathOwner) ||
+      pathOwner.id !== symbol.packageId ||
+      !owner.exportedSubpaths.some((entry) => entry.subpath === symbol.exportSubpath)
+    ) {
+      return invalid("Workspace evidence requires public symbol referential integrity.");
+    }
+  }
+  return {
     kind: "workspace-boundary-evidence",
     schemaVersion: 1,
     graph: {
@@ -246,15 +358,15 @@ export function parseWorkspaceBoundaryEvidenceV1(input: unknown): WorkspaceBound
       schemaVersion: 1,
       commitSha: graph.commitSha,
       packages: sortBy(packages, ["rootPath", "id"]),
-      edges: sortBy(graph.edges.map(parseEdge), ["importerPath", "specifier", "targetPackageId", "usage"]),
+      edges: sortBy(edges, ["importerPath", "specifier", "targetPackageId", "usage"]),
     },
+    publicSymbols: sortBy(publicSymbols, ["packageId", "sourcePath", "exportSubpath", "symbolName", "isTypeOnly"]),
     violations: sortBy(source.violations.map(parseViolation), ["code", "importer", "specifier", "owner"]),
     reconciledDebtFingerprints: stringArray(source.reconciledDebtFingerprints, (value) => {
       if (typeof value !== "string" || !SHA256.test(value)) return invalid();
       return value;
     }),
   };
-  return evidence;
 }
 
 export function workspaceBoundaryDebtFingerprintV1(

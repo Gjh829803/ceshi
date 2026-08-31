@@ -5,24 +5,59 @@
   "rules": [
     {
       "id": "scene-source-single-owner",
-      "kind": "forbidden-owner-pair",
+      "kind": "forbidden-public-symbol-pair",
       "ownerId": "runtime-host",
       "code": "PROJECT_HEALTH_AUTHORITY_DUPLICATE",
-      "subjectRefs": ["capability:canonical-scene-source", "capability:native-scene-source"]
+      "left": {
+        "selector": {
+          "exactPaths": [],
+          "pathPrefixes": ["packages/runtime-host"],
+          "pathSuffixes": [],
+          "packageIds": ["@whitebox-world/runtime-host"]
+        },
+        "symbolNames": ["canonicalSceneSource"]
+      },
+      "right": {
+        "selector": {
+          "exactPaths": [],
+          "pathPrefixes": ["packages/native-babylon"],
+          "pathSuffixes": [],
+          "packageIds": ["@whitebox-world/native-babylon"]
+        },
+        "symbolNames": ["nativeSceneModule"]
+      }
     },
     {
       "id": "public-protocol-single-parser-owner",
-      "kind": "forbidden-owner-pair",
+      "kind": "unique-public-symbol-owner",
       "ownerId": "public-contract",
       "code": "PROJECT_HEALTH_AUTHORITY_DUPLICATE",
-      "subjectRefs": ["capability:canonical-public-protocol-parser", "capability:shadow-public-protocol-parser"]
+      "selector": {
+        "exactPaths": [],
+        "pathPrefixes": ["packages"],
+        "pathSuffixes": [],
+        "packageIds": []
+      },
+      "symbolNames": ["parseCanonicalSceneExecutionPlanV1"],
+      "ownerPackageId": "@whitebox-world/runtime-contracts"
     },
     {
       "id": "public-compat-alias",
       "kind": "forbidden-public-symbol",
       "ownerId": "public-contract",
       "code": "PROJECT_HEALTH_PUBLIC_COMPAT_ALIAS",
-      "subjectRefs": ["capability:current-only-public-contract"]
+      "selector": {
+        "exactPaths": [],
+        "pathPrefixes": ["packages"],
+        "pathSuffixes": [],
+        "packageIds": []
+      },
+      "symbolNames": [
+        "hashValidationReportCompat",
+        "legacyParseWorld",
+        "parseAuthoringSpecV2",
+        "parseAuthoringSpecV3"
+      ]
     }
   ],
   "exceptions": []

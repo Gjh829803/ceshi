@@ -183,26 +183,35 @@ Commit: `feat: add project health execution envelope`
 **Interfaces:**
 - Consumes: the existing scan/reconcile implementation in `scripts/lib/workspace-boundary.ts`, `config/workspace-boundary-debt.json`, and the frozen supplemental Authority Policy.
 - Produces: the same Owner's closed `WorkspaceBoundaryEvidenceV1` plus separate `workspace-boundary` and `supplemental-authority` Observations for PHO-3/6; no third Sensor ID and no second dependency scanner.
+- Scan contract: `scanWorkspaceBoundaries({ repositoryRoot, commitSha }) → WorkspaceBoundaryEvidenceV1`. Delete the violations-only signature. Host/`health:record` injects `commitSha`; the scanner must not spawn Git. One TypeScript walk projects graph edges and `publicSymbols`; Sensors never rescan.
 
-- [ ] **Step 1: Write graph and authority RED fixtures**
+- [x] **Step 1: Current-only Evidence and Authority Policy break**
 
-Cover preservation of existing workspace edge/debt identities, wrong-tree Receipt, duplicate parser owner, Canonical/Native Scene Source leakage, public compat alias, and a lawful provider adapter import. Each failure asserts stable code, Owner, subject refs, evidence class, and fingerprint.
+Require `publicSymbols` on `WorkspaceBoundaryEvidenceV1`, unique graph/public-symbol integrity, and Host-injected 40-hex `commitSha`. Replace Authority Policy `subjectRefs` / `forbidden-owner-pair` with exact path/package selectors and `forbidden-public-symbol` / `unique-public-symbol-owner` / `forbidden-public-symbol-pair`. Reject glob/regex selectors. Do not change `scanWorkspaceBoundaries` in this step.
 
-- [ ] **Step 2: Run RED**
+Run: `pnpm exec vitest run scripts/lib/workspace-boundary-contract.test.ts scripts/project-health/contracts.test.ts && pnpm test:census && pnpm typecheck && git diff --check`
+
+Commit: `feat: project public-symbol authority facts`
+
+- [ ] **Step 2: Write graph and authority Sensor RED fixtures**
+
+Cover preservation of existing workspace edge/debt identities, wrong-tree Receipt, duplicate parser owner, Canonical/Native Scene Source leakage, public compat alias, and a lawful provider adapter import. Each failure asserts stable code, Owner, subject refs, evidence class, and fingerprint. Sensors consume `publicSymbols` from Evidence; they must not call `rg`, glob, or a second AST.
+
+- [ ] **Step 3: Run RED**
 
 Run: `pnpm exec vitest run scripts/lib/workspace-boundary.test.ts scripts/project-health/workspace-boundary-adapter.test.ts scripts/project-health/sensors/workspace-boundary.test.ts scripts/project-health/sensors/supplemental-authority.test.ts`
 
 Expected: FAIL with missing implementation.
 
-- [ ] **Step 3: Adapt the existing normalized repository graph**
+- [ ] **Step 4: Adapt the existing normalized repository graph**
 
-Extend `scripts/lib/workspace-boundary.ts` itself so one scan returns canonical `WorkspaceBoundaryEvidenceV1`: violations, a sorted full dependency graph, and reconciled debt fingerprints. Keep all manifest/import/export/cycle/debt decisions in that Owner and update the existing verifier to consume that result. `health:record` owns the exact-head Receipt and points `evidenceRef` at those bytes; the adapter and both Sensors only load/validate that evidence and never parse manifests/imports again. The 49 reconciled edge debts remain only count/identity Metrics and evidence, never PHO Findings or accepted debt.
+Extend `scripts/lib/workspace-boundary.ts` itself so one scan returns canonical `WorkspaceBoundaryEvidenceV1`: violations, a sorted full dependency graph, sorted `publicSymbols`, and reconciled debt fingerprints. Keep all manifest/import/export/cycle/debt decisions in that Owner and update the existing verifier to consume that result. Accept only `WorkspaceBoundaryScanRequestV1`; do not read `HEAD` from Git. `health:record` owns the exact-head Receipt and points `evidenceRef` at those bytes; the adapter and both Sensors only load/validate that evidence and never parse manifests/imports again. The 49 reconciled edge debts remain only count/identity Metrics and evidence, never PHO Findings or accepted debt.
 
-- [ ] **Step 4: Apply authority rules without heuristic blocking**
+- [ ] **Step 5: Apply authority rules without heuristic blocking**
 
-Keyword searches for `compat`, `legacy`, or `V2` always begin as `advisory-p3`. Only an exact supplemental forbidden rule may emit `blocking-p1`; the exception set only declares exact lawful symbols. Keep provider-specific Babylon/Havok types behind existing adapter boundaries.
+Keyword searches for `compat`, `legacy`, or `V2` always begin as `advisory-p3` derived from the same `publicSymbols` collection. Only an exact supplemental forbidden rule may emit `blocking-p1`; the exception set only declares exact lawful symbols. Keep provider-specific Babylon/Havok types behind existing adapter boundaries.
 
-- [ ] **Step 5: Verify and commit**
+- [ ] **Step 6: Verify and commit**
 
 Run: `pnpm exec vitest run scripts/lib/workspace-boundary.test.ts scripts/project-health/workspace-boundary-adapter.test.ts scripts/project-health/sensors/workspace-boundary.test.ts scripts/project-health/sensors/supplemental-authority.test.ts && pnpm test:census && pnpm typecheck && git diff --check`
 

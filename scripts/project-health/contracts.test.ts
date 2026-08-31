@@ -536,6 +536,19 @@ describe("project health contracts", () => {
       "public-protocol-single-parser-owner",
       "scene-source-single-owner",
     ]);
+    expect(authorityPolicy.rules.map((rule) => rule.kind)).toEqual([
+      "forbidden-public-symbol",
+      "unique-public-symbol-owner",
+      "forbidden-public-symbol-pair",
+    ]);
+    const parserOwner = authorityPolicy.rules.find((rule) => rule.id === "public-protocol-single-parser-owner");
+    expect(parserOwner?.kind).toBe("unique-public-symbol-owner");
+    if (parserOwner?.kind === "unique-public-symbol-owner") {
+      expect(parserOwner.symbolNames).toEqual(["parseCanonicalSceneExecutionPlanV1"]);
+      expect(parserOwner.ownerPackageId).toBe("@whitebox-world/runtime-contracts");
+      expect(parserOwner.selector.pathPrefixes).toEqual(["packages"]);
+      expect(parserOwner.selector.packageIds).toEqual([]);
+    }
     expect(parseProjectHealthSupplyChainPolicyV1(
       readJson("config/project-health/supply-chain-policy.json"),
     ).advisoryProviderIds).toEqual(["osv"]);
@@ -555,6 +568,58 @@ describe("project health contracts", () => {
       ...(readJson("config/project-health/supply-chain-policy.json") as object),
       packageVersionWaivers: [],
     })).toThrow(/closed ProjectHealthSupplyChainPolicyV1/i);
+  });
+
+  it("rejects authority selectors that use glob, regex, or capability subject refs", () => {
+    const profile = parsedProfile();
+    const policy = readJson("config/project-health/authority-policy.json") as {
+      rules: Array<Record<string, unknown>>;
+    };
+    const globRule = {
+      ...policy,
+      rules: [{
+        ...policy.rules[1],
+        selector: {
+          exactPaths: [],
+          pathPrefixes: ["packages/**/src"],
+          pathSuffixes: [],
+          packageIds: ["@whitebox-world/runtime-contracts"],
+        },
+      }],
+    };
+    expect(() => parseProjectHealthAuthorityPolicyV1(globRule, profile)).toThrow(/closed ProjectHealthAuthorityPolicyV1/i);
+    expect(() => parseProjectHealthAuthorityPolicyV1({
+      ...policy,
+      rules: [{
+        id: "public-compat-alias",
+        kind: "forbidden-public-symbol",
+        ownerId: "public-contract",
+        code: "PROJECT_HEALTH_PUBLIC_COMPAT_ALIAS",
+        subjectRefs: ["capability:current-only-public-contract"],
+      }],
+    }, profile)).toThrow(/closed ProjectHealthAuthorityPolicyV1/i);
+  });
+
+  it("rejects a unique-public-symbol-owner whose owner is outside selector packageIds", () => {
+    const profile = parsedProfile();
+    const policy = readJson("config/project-health/authority-policy.json") as {
+      rules: Array<Record<string, unknown>>;
+    };
+    const uniqueOwner = policy.rules.find((rule) => rule.kind === "unique-public-symbol-owner");
+    expect(uniqueOwner).toBeDefined();
+    expect(() => parseProjectHealthAuthorityPolicyV1({
+      ...policy,
+      rules: [{
+        ...uniqueOwner,
+        selector: {
+          exactPaths: [],
+          pathPrefixes: [],
+          pathSuffixes: [],
+          packageIds: ["@whitebox-world/compiler"],
+        },
+        ownerPackageId: "@whitebox-world/runtime-contracts",
+      }],
+    }, profile)).toThrow(/closed ProjectHealthAuthorityPolicyV1/i);
   });
 
   it("never parses Profile-bound contracts without their exact validation authority", () => {

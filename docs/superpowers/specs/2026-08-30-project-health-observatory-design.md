@@ -1,6 +1,6 @@
 # Project Health Observatory 设计
 
-- 状态：**Proposed；仅冻结工程观测边界，不声明已实现**。
+- 状态：**Proposed；PHO-0A/0B 合同与 execution envelope 已入 main，Observatory 整体仍未生产 GO**。
 - 目标：在现有单元测试、整仓门禁和重型 Browser/Runtime 链路之外，持续发现架构漂移、契约双轨、生成物失配、依赖风险、测试盲区、生命周期泄漏、确定性回退、性能退化和视觉退化。
 - 实施计划：[Project Health Observatory Implementation Plan](../plans/2026-08-30-project-health-observatory-implementation.md)。
 - 关联协议：[全维度审查协议](../../reviews/full-dimension-review-protocol.md)、[Runtime 深审清单](../../reviews/runtime-deep-review-checklist.md)、[World Validation Report 与质量门禁](./2026-08-19-world-validation-report-and-quality-gates-design.md)。
@@ -288,12 +288,27 @@ interface WorkspaceDependencyGraphV1 {
   readonly edges: readonly WorkspaceDependencyEdgeV1[];
 }
 
+interface WorkspacePublicSymbolOwnershipV1 {
+  readonly packageId: string;
+  readonly sourcePath: string;
+  readonly exportSubpath: string;
+  readonly symbolName: string;
+  readonly isTypeOnly: boolean;
+  readonly isReexport: boolean;
+}
+
 interface WorkspaceBoundaryEvidenceV1 {
   readonly kind: "workspace-boundary-evidence";
   readonly schemaVersion: 1;
   readonly graph: WorkspaceDependencyGraphV1;
+  readonly publicSymbols: readonly WorkspacePublicSymbolOwnershipV1[];
   readonly violations: readonly WorkspaceBoundaryViolationV1[];
   readonly reconciledDebtFingerprints: readonly string[];
+}
+
+interface WorkspaceBoundaryScanRequestV1 {
+  readonly repositoryRoot: string;
+  readonly commitSha: string;
 }
 
 interface ProjectHealthGateReceiptV1 {
@@ -396,10 +411,16 @@ interface ProjectHealthReportV1 {
 }
 ```
 
-`rootPath`、`manifestPath`、`targetPath` 与 `importerPath` 全部是从仓库根开始的 repo-relative
-POSIX path。根 Workspace Package 的 `rootPath` 唯一编码为 `"."`；其他字段和非根 `rootPath` 不允许
+`rootPath`、`manifestPath`、`targetPath`、`importerPath` 与 public-symbol `sourcePath` 全部是从仓库根开始的
+repo-relative POSIX path。根 Workspace Package 的 `rootPath` 唯一编码为 `"."`；其他字段和非根 `rootPath` 不允许
 `.`。Parser 必须拒绝绝对路径、反斜杠、空段、`..` 段和任何逃逸仓库根的结果；Owner
-不得把 `path.resolve()` 得到的机器路径发布进 Evidence。Workspace 旧债务的稳定 fingerprint 精确为
+不得把 `path.resolve()` 得到的机器路径发布进 Evidence。Graph 要求 package `id` / `rootPath` /
+`manifestPath` 唯一、每个 package 的 export `subpath` 唯一、edge 按
+`importerPath+specifier+targetPackageId+usage` 唯一，且 importer/target package 与最长匹配
+`rootPath` 所有权可解析。`publicSymbols` 按 `packageId+exportSubpath+symbolName+isTypeOnly` 唯一，
+必须引用已有 package、该 package 已声明的 export subpath，以及该 package 拥有的 `sourcePath`。
+空 `publicSymbols` 合法。`graph.commitSha` 只能是 Host/`health:record` 注入的 40 位 lowercase commit SHA，
+禁止 `HEAD` 或 tree object name；scanner 不得自行 spawn Git。Workspace 旧债务的稳定 fingerprint 精确为
 `sha256CanonicalJson({ importer, specifier, owner })`，字段值先按现有 verifier 的 repo-relative/Package ID
 规范化；`reason`、`removalGate`、文案、机器路径和扫描顺序都不参与 identity。PHO-0A 的对抗 fixture
 必须证明这套算法与当前 49 条债务逐项一致，并拒绝把说明字段混入 fingerprint。
@@ -449,23 +470,34 @@ Policy 顺序固定：
 
 ### 5.1 Architecture Authority Sensor
 
-PHO-1 先扩展现有 `scripts/lib/workspace-boundary.ts` 唯一 Owner，使同一次 scan 返回关闭的
-`WorkspaceBoundaryEvidenceV1`（完整 `WorkspaceDependencyGraphV1`、原 violations、已协调 debt fingerprints）；
-现有 verifier 改为消费该结果。Owner 不写 Receipt：`health:record` 只执行该 Owner 一次，把 canonical evidence
-写入 content-addressed store，并让 Gate Receipt 的 `evidenceRef` 指向它。`sensors/workspace-boundary.ts`、
-`sensors/supplemental-authority.ts` 和 `change-impact.ts` 都只能读这份 evidence，不得再次扫描。
-二者分别输出 `sensorId: "workspace-boundary"` 与 `sensorId: "supplemental-authority"`，不得产生第三个
-`architecture-authority` ID，也不得重新扫描或重新判定 undeclared dependency、export、cycle 和现有边债务。
-`authority-policy.json` 只补充原 Owner 未表达的规则：
+PHO-1 先扩展现有 `scripts/lib/workspace-boundary.ts` 唯一 Owner，使同一次 TypeScript walk 返回关闭的
+`WorkspaceBoundaryEvidenceV1`（完整 `WorkspaceDependencyGraphV1`、hashable `publicSymbols` 权威事实、
+原 violations、已协调 debt fingerprints）。公开符号投影来自各 package export target 的导出声明，不是第二次
+`rg`/glob/AST。现有 verifier 改为消费该结果。Owner 不写 Receipt：`health:record` 只执行该 Owner 一次，把
+canonical evidence 写入 content-addressed store，并让 Gate Receipt 的 `evidenceRef` 指向它。扫描入口是
+`scanWorkspaceBoundaries({ repositoryRoot, commitSha })`；`commitSha` 由 Host/`health:record` 注入，scanner
+不得 spawn Git。`sensors/workspace-boundary.ts`、`sensors/supplemental-authority.ts` 和 `change-impact.ts`
+都只能读这份 evidence，不得再次扫描。二者分别输出 `sensorId: "workspace-boundary"` 与
+`sensorId: "supplemental-authority"`，不得产生第三个 `architecture-authority` ID，也不得重新扫描或重新判定
+undeclared dependency、export、cycle 和现有边债务。
 
-- 同一状态/协议/Parser 的重复公开 Owner；
-- Canonical/Native Scene Source 互斥边界、Compiler/Runtime/Provider 泄漏；
-- `V1/V2/V3` 并行实现、compat alias、旧字段或双入口重新出现。
+`authority-policy.json` 只补充原 Owner 未表达的规则，选择器复用 capability selector 形状
+`{ exactPaths, pathPrefixes, pathSuffixes, packageIds }`，禁止 glob/regex，至少一组选择器非空，且**不**要求
+当前树命中（与 Profile capability selector 不同）。关闭规则 kind 只有：
+
+- `forbidden-public-symbol`：selector + `symbolNames`；
+- `unique-public-symbol-owner`：selector + `symbolNames` + `ownerPackageId`；若 `packageIds` 非空，owner 必须属于该列表；
+- `forbidden-public-symbol-pair`：`left`/`right` 各自 `{ selector, symbolNames }`，替换旧 `forbidden-owner-pair`。
+
+Exception 是精确 `{ ruleId, packageId, sourcePath, symbolName, decisionRef }`，不是 capability `subjectRefs`。
+首个 Policy 用这些 kind 表达 Canonical/Native Scene Source 互斥、`parseCanonicalSceneExecutionPlanV1` 的唯一
+parser Owner、以及 `parseAuthoringSpecV2`/`V3`、`hashValidationReportCompat`、`legacyParseWorld` 这类公开
+compat alias。不得把仍在使用的 `hashValidationReportV1`/`V2` 写成 forbidden 名。
 
 现有 `config/workspace-boundary-debt.json` 仍是 workspace edge 的唯一债务账本；49 条存量边不得复制到
-`accepted-debt.json`。Authority Sensors 不靠关键字直接判 P0；关键字 census 只能产生候选，必须由
-关闭 supplemental forbidden rule 的精确符号匹配确认。普通 `compat`/`legacy`/`V2` 关键字只能产生
-`advisory-p3` 候选；Policy 的 exception set 只声明精确合法符号，不反向充当 forbidden list。
+`accepted-debt.json`。Authority Sensors 不靠关键字直接判 P0；`compat`/`legacy`/`V2` 关键字只能由 Sensor 从
+同一份 `publicSymbols` 派生 `advisory-p3` 候选，不得再开第二次 collection。只有精确 supplemental forbidden
+rule 才可发出 `blocking-p1`；Policy 的 exception set 只声明精确合法符号，不反向充当 forbidden list。
 
 ### 5.2 Contract and Generated-Parity Sensor
 
