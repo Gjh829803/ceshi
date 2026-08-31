@@ -2,14 +2,14 @@ import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
-import type { BabylonNativeProfileSettlementReceiptV1 } from
-  "@whitebox-world/runtime-contracts";
+import {
+  BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
+  type BabylonNativeProfileSettlementReceiptV1,
+} from "@whitebox-world/runtime-contracts";
 import { isEqual, isNil } from "lodash-es";
 
 import type { BabylonNativeSceneBuildContextV1 } from "./module.js";
 
-const BLOCK_PROFILE_REF =
-  "worldkit://native-scene-profile/whitebox.blocks@1" as const;
 const SHA256_PATTERN = /^sha256:[0-9a-f]{64}$/;
 
 export type BabylonNativeProfileSettlementCollisionBindingV1 =
@@ -356,7 +356,7 @@ export function commitBabylonNativeProfileSettlementV1(
       record.schemaVersion !== 1
     ) throw invalidBatch();
     if (
-      record.profileRef !== BLOCK_PROFILE_REF ||
+      record.profileRef !== BABYLON_NATIVE_BLOCK_PROFILE_REF_V1 ||
       record.profileRef !== context.bootstrap.nativeSceneProfileRef
     ) {
       throw failure(
@@ -458,7 +458,10 @@ export function finalizeBabylonNativeProfileSettlementV1(
       targets: Object.freeze([]),
     });
   }
-  if (context.bootstrap.nativeSceneProfileRef !== BLOCK_PROFILE_REF) {
+  if (
+    context.bootstrap.nativeSceneProfileRef !==
+      BABYLON_NATIVE_BLOCK_PROFILE_REF_V1
+  ) {
     throw failure(
       "WORLDKIT_NATIVE_SCENE_PROFILE_SETTLEMENT_PROFILE_MISMATCH",
       "Native Scene Profile is outside the closed settlement map.",
@@ -500,7 +503,7 @@ export function finalizeBabylonNativeProfileSettlementV1(
   const settledVisualHash = sha256CanonicalJson({
     kind: "babylon-native-profile-settled-visuals",
     schemaVersion: 1,
-    profileRef: BLOCK_PROFILE_REF,
+    profileRef: BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
     targets: targets.map(({ fingerprint }) => ({
       elementId: fingerprint.elementId,
       collisionBinding: fingerprint.collisionBinding,
@@ -514,7 +517,7 @@ export function finalizeBabylonNativeProfileSettlementV1(
   return Object.freeze({
     receipt: Object.freeze({
       kind: "host-snapshot",
-      profileRef: BLOCK_PROFILE_REF,
+      profileRef: BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
       targetCount: targets.length,
       profileInventoryHash: state.batch.profileInventoryHash,
       settledVisualHash,

@@ -898,6 +898,9 @@ Request Runtime deep review against the exact commit, fix P0/P1 with focused gat
 - Modify: `packages/native-babylon-block-profile/src/profile-settlement.test.ts`
 - Modify: `packages/native-babylon-block-profile/src/babylon-visual-adapter.ts`
 - Modify: `packages/native-babylon-block-profile/src/babylon-visual-adapter.test.ts`
+- Create: `packages/native-babylon-block-profile/src/materializer-metadata.ts`
+- Create: `packages/native-babylon-block-profile/src/live-handle-registry.ts`
+- Modify: `packages/native-babylon-block-profile/src/host-evidence.ts`
 - Modify: `scripts/native-scene/native-package-input.ts`
 - Modify: `scripts/native-scene/native-package-input.test.ts`
 - Modify: `packages/world-package/src/package-build.ts`
@@ -920,7 +923,11 @@ Require complete materializer output rather than the current opaque fingerprint 
 const metadata = parseBabylonNativeBlockMaterializerMetadataV1({
   kind: "babylon-native-block-materializer-metadata",
   schemaVersion: 1,
-  blockProfileRef: BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
+  nativeSceneProfileRef: BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
+  caseHash,
+  authoringManifestHash,
+  checkedLayoutInventoryHash,
+  contributionHash,
   profileInventoryHash,
   settledVisualHash,
   blocks: sortedBlocks,
@@ -947,26 +954,27 @@ Expected: FAIL because the complete trusted inventory is not a Package member.
 
 - [ ] **Step 4: Emit metadata from the trusted materializer and join BNA-3**
 
-The trusted Block visual adapter writes immutable capture metadata while materializing each checked Block:
+The trusted Block visual adapter publishes Host-private live handles while materializing each checked
+Block:
 
 ```ts
-mesh.metadata = Object.freeze({
-  ...mesh.metadata,
-  worldkitEntityId: `native-block:${block.id}`,
-  semanticClassId: `worldkit.native-block.group.${block.visualGroupId ?? "ungrouped"}`,
+liveHandles.register({
+  runtimeEntityId: `native-block:${block.id}`,
+  semanticCaptureClassId: `worldkit.native-block.group.${block.visualGroupId ?? "ungrouped"}`,
+  mesh,
 });
 ```
 
 These values are Host/Profile-defined from checked IDs, not copied from arbitrary Module Mesh metadata.
-The profile settlement fingerprint includes both fields and rejects any mutation before Candidate
-publication/replay. Change the Block profile settlement owner to return both that committed fingerprint
-and immutable metadata:
+The same checked records create immutable serialized metadata; the live registry remains Host-private and
+is never serialized. NBR-45B consumes only this explicit registry and verified Package metadata, never
+`scene.meshes`, Mesh name/tag/metadata, or a raw authoring Layout. Change the Block profile settlement
+owner to expose its committed fingerprint and immutable metadata assembly inputs:
 
 ```ts
 export interface SettledBabylonNativeBlockProfileV1 {
   readonly profileInventoryHash: Sha256HashV1;
-  readonly metadata: BabylonNativeBlockMaterializerMetadataV1;
-  readonly metadataHash: Sha256HashV1;
+  readonly colliderInventory: readonly BabylonNativeBlockColliderCandidateInventoryEntryV1[];
 }
 ```
 
@@ -1000,8 +1008,8 @@ Request BNA-3 identity/tamper review, close every P0/P1, merge PR E1, and refres
 - Modify: `packages/native-babylon-block-profile/src/index.ts`
 
 **Interfaces:**
-- Consumes: the parsed Case, the NBR-30-owned `NativeBlockAuthoringLayoutBindingV1`, and the frozen Contribution identity. NBR-45A must not parse `native-block-authoring.json` again or define a second Layout-inventory hash.
-- Produces: parsed/hashable `FormalSemanticCaptureMapV1`, `FormalArtifactViewRequestV1`, `FormalWorldCaptureReceiptV1`, and `bindBlockVisualGroupsToSemanticCaptureTargetsV1()`; no Browser or Runtime operation.
+- Consumes: the parsed Case, verified Package-owned `BabylonNativeBlockMaterializerMetadataV1`, and the frozen Contribution identity. NBR-45A must not parse `native-block-authoring.json` or checked Layout again, nor define a second identity inventory.
+- Produces: parsed/hashable `FormalSemanticCaptureMapV1`, `FormalArtifactViewRequestV1`, `FormalWorldCaptureReceiptV1`, and `bindBlockMaterializerMetadataToSemanticCaptureTargetsV1()`; no Browser or Runtime operation.
 
 - [ ] **Step 1: Write RED formal Capture contract tests**
 
@@ -1023,14 +1031,19 @@ Reject BWB `scope: "build-epoch-local"`, a mismatched Package/Attempt/Capture ha
 Do not treat Block group IDs as sufficient formal evidence. Define:
 
 ```ts
-export function bindBlockVisualGroupsToSemanticCaptureTargetsV1(input: Readonly<{
+export function bindBlockMaterializerMetadataToSemanticCaptureTargetsV1(input: Readonly<{
   case: WorldReconstructionCaseV1;
-  authoringLayoutBinding: NativeBlockAuthoringLayoutBindingV1;
+  materializerMetadata: BabylonNativeBlockMaterializerMetadataV1;
+  materializerMetadataHash: Sha256HashV1;
   contribution: BabylonNativeSceneContributionV1;
 }>): FormalSemanticCaptureMapV1;
 ```
 
-The NBR-30 binding is the sole parser/hash owner for the uppercase `#RRGGBB` identity-color dialect, authoring Manifest identity, checked Layout inventory identity and Case target-to-group join. Its `caseHash` binds that verified join to the exact parsed Case; NBR-45A compares this field with its parsed Case rather than introducing another authoring or Layout hash. The output carries those already-verified facts into formal Capture and adds projected-bounds source plus required world views. Test stale binding/Contribution, extra target and deterministic sort order. No mapping may be inferred from Mesh/tag/name, and this task must not duplicate the NBR-30 parser or hash only a reduced visual-group array.
+The NBR-45P materializer metadata parser is the sole identity owner for the uppercase `#RRGGBB`
+identity-color dialect, authoring Manifest hash, checked Layout inventory hash, Case target-to-group join,
+runtime entity IDs and Collider joins. NBR-45A compares its `caseHash` and `contributionHash` with the parsed
+Case and Frozen Contribution rather than introducing another inventory. Test stale metadata/Contribution,
+extra target and deterministic sort order. No mapping may be inferred from Mesh/tag/name.
 
 - [ ] **Step 3: Run RED contract tests**
 
@@ -1044,7 +1057,9 @@ Expected: FAIL because the formal contracts and Block semantic identity join do 
 
 `FormalWorldCaptureReceiptV1` binds Case/Profile, Route/Attempt/Result, WorldPackage Ref/Root, WorldBuildIdentity, Build Receipt, Runtime session/ready Snapshot, SDK owner version identities, semantic capture map hash, view Camera inputs, viewport/DPR, renderer/browser identity, PNG hashes, collider overlay hash, scripted traversal hash, Camera rollback, Reset, and cleanup.
 
-`bindBlockVisualGroupsToSemanticCaptureTargetsV1()` reparses the exact Case and the frozen Contribution, then consumes the NBR-30-owned `NativeBlockAuthoringLayoutBindingV1` without redefining its Manifest, uppercase identity-color or Layout-inventory hash rules. Formal evidence uses semantic target refs from this map; raw Block group IDs remain source evidence only.
+`bindBlockMaterializerMetadataToSemanticCaptureTargetsV1()` reparses the exact Case, verified Package
+metadata and Frozen Contribution. Formal evidence uses semantic target refs from this map; raw authoring
+Manifest/Layout inputs and Block group IDs are not a second Capture authority.
 
 - [ ] **Step 5: Run GREEN contract tests and commit PR E0**
 

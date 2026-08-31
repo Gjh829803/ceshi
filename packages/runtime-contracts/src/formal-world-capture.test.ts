@@ -347,9 +347,6 @@ function formalRequestValue() {
       "artifact://case/cloud-temple/attempts/0/semantic-capture-map.json",
     semanticCaptureMap,
     semanticCaptureMapHash: hashFormalSemanticCaptureMapV1(semanticCaptureMap),
-    nativeBlockCaptureIdentityInventoryRef:
-      "world-package://native/block-capture-identity-inventory.json",
-    nativeBlockCaptureIdentityInventoryHash: H("6"),
     nativeBlockMaterializerMetadataRef:
       "world-package://native/block-materializer-metadata.json",
     nativeBlockMaterializerMetadataHash: H("7"),
@@ -391,8 +388,6 @@ function receiptValue(runtimeSnapshot = snapshotFixture()) {
     readySnapshotHash: sha256CanonicalJson(readySnapshot),
     sdkOwnerIdentities: sdkOwnerIdentities(),
     semanticCaptureMapHash: formalRequest.semanticCaptureMapHash,
-    nativeBlockCaptureIdentityInventoryHash:
-      formalRequest.nativeBlockCaptureIdentityInventoryHash,
     nativeBlockMaterializerMetadataHash:
       formalRequest.nativeBlockMaterializerMetadataHash,
     colliderOverlayRequestHash:
@@ -418,7 +413,7 @@ function receiptValue(runtimeSnapshot = snapshotFixture()) {
 }
 
 describe("FormalWorldCaptureRequestV1", () => {
-  it("freezes one Package-bound Capture transaction including semantic, inventory, overlay, and traversal identities", () => {
+  it("freezes one Package-bound Capture transaction with one materializer inventory authority", () => {
     const request = parseFormalWorldCaptureRequestV1(formalRequestValue());
     expect(request.worldPackageRootHash).toBe(PACKAGE_ROOT);
     expect(request.semanticCaptureMap.caseHash).toBe(request.caseHash);
@@ -431,6 +426,15 @@ describe("FormalWorldCaptureRequestV1", () => {
     expect(formalWorldCaptureRequestCanonicalBytesV1(request)).toEqual(
       formalWorldCaptureRequestCanonicalBytesV1(formalRequestValue()),
     );
+  });
+
+  it("rejects the removed shadow capture identity inventory fields", () => {
+    expect(() => parseFormalWorldCaptureRequestV1({
+      ...formalRequestValue(),
+      nativeBlockCaptureIdentityInventoryRef:
+        "world-package://native/block-capture-identity-inventory.json",
+      nativeBlockCaptureIdentityInventoryHash: H("6"),
+    })).toThrowError("FORMAL_WORLD_CAPTURE_REQUEST_INVALID");
   });
 
   it("rejects checkpoint strings without package-derived spatial criteria", () => {
@@ -671,9 +675,9 @@ describe("FormalWorldCaptureReceiptV1", () => {
     expect(() => parseFormalWorldCaptureReceiptV1(staleRequest)).toThrowError(
       "FORMAL_WORLD_CAPTURE_RECEIPT_INVALID",
     );
-    const staleInventory = receiptValue();
-    staleInventory.nativeBlockCaptureIdentityInventoryHash = H("0");
-    expect(() => parseFormalWorldCaptureReceiptV1(staleInventory)).toThrowError(
+    const staleMaterializer = receiptValue();
+    staleMaterializer.nativeBlockMaterializerMetadataHash = H("0");
+    expect(() => parseFormalWorldCaptureReceiptV1(staleMaterializer)).toThrowError(
       "FORMAL_WORLD_CAPTURE_RECEIPT_INVALID",
     );
   });

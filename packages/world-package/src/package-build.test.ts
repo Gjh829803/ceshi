@@ -67,6 +67,61 @@ describe("createCanonicalWorldPackageV1", () => {
 });
 
 describe("createBabylonNativeWorldPackageV1", () => {
+  it("requires and freezes the complete Block materializer metadata in Package identity", () => {
+    const blockInput = createBabylonNativeBlockWorldPackageTestInputV1();
+    const first = createBabylonNativeWorldPackageV1(blockInput);
+    const verified = verifyWorldPackageDirectoryV1(first);
+    expect(verified.kind).toBe("babylon-native-scene");
+    if (verified.kind !== "babylon-native-scene") throw new Error("unreachable");
+    expect(verified.nativeBlockMaterializerMetadata).toEqual(
+      blockInput.nativeBlockMaterializerMetadata,
+    );
+    expect(first.receipt.fileIntegrityEntries.map(({ path }) => path)).toContain(
+      "native/block-materializer-metadata.json",
+    );
+    expect(first.receipt.manifest.sceneSource).toMatchObject({
+      nativeMaterializer: {
+        kind: "babylon-native-block",
+        metadataPath: "native/block-materializer-metadata.json",
+        metadataHash: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+      },
+    });
+
+    const { nativeBlockMaterializerMetadata: _removed, ...withoutMetadata } =
+      blockInput;
+    expect(() => createBabylonNativeWorldPackageV1(withoutMetadata as never))
+      .toThrow("WORLD_PACKAGE_BUILD_INVALID");
+
+    const standard = createBabylonNativeWorldPackageTestInputV1();
+    expect(() => createBabylonNativeWorldPackageV1({
+      ...standard,
+      nativeBlockMaterializerMetadata:
+        blockInput.nativeBlockMaterializerMetadata!,
+    })).toThrow("WORLD_PACKAGE_BUILD_INVALID");
+  });
+
+  it("changes Root and Receipt identity for any accepted materializer metadata change", () => {
+    const input = createBabylonNativeBlockWorldPackageTestInputV1();
+    const first = createBabylonNativeWorldPackageV1(input);
+    const metadata = input.nativeBlockMaterializerMetadata!;
+    const changed = createBabylonNativeWorldPackageV1({
+      ...input,
+      nativeBlockMaterializerMetadata: {
+        ...metadata,
+        visualGroups: metadata.visualGroups.map((group) => ({
+          ...group,
+          identityColorHex: "#AA0011" as const,
+        })),
+      },
+    });
+    expect(changed.receipt.worldPackageRootHash).not.toBe(
+      first.receipt.worldPackageRootHash,
+    );
+    expect(changed.receipt.worldBuildIdentityHash).not.toBe(
+      first.receipt.worldBuildIdentityHash,
+    );
+  });
+
   it("closes the Bootstrap, Bundle, and Contribution Profile identity", () => {
     const standard = createBabylonNativeWorldPackageTestInputV1();
     expect(() => createBabylonNativeWorldPackageV1({

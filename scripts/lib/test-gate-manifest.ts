@@ -163,6 +163,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "packages/runtime-contracts/src/capture-targets.test.ts", lane: "contract" },
   { path: "packages/runtime-contracts/src/control-feel-parameter-contract.test.ts", lane: "contract" },
   { path: "packages/runtime-contracts/src/formal-world-capture.test.ts", lane: "contract" },
+  { path: "packages/runtime-contracts/src/native-block-materializer-metadata.test.ts", lane: "contract" },
   { path: "packages/runtime-contracts/src/native-execution-isolation.test.ts", lane: "contract" },
   { path: "packages/runtime-contracts/src/native-scene-asset-lock.test.ts", lane: "contract" },
   { path: "packages/runtime-contracts/src/native-scene-contribution.test.ts", lane: "contract" },

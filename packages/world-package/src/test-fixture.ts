@@ -11,6 +11,8 @@ import {
   hashBabylonNativeAssetLockV1,
   hashBabylonNativeDependencyLockV1,
   hashBabylonNativeSceneBootstrapV1,
+  hashBabylonNativeSceneContributionV1,
+  parseBabylonNativeBlockMaterializerMetadataV1,
   nativeSceneModuleBundleRefFromHashV1,
   worldResourceLockEntriesV1,
   type BabylonNativeAssetLockV1,
@@ -369,6 +371,51 @@ function createBabylonNativeWorldPackageTestInputForProfileV1(
       }),
     ]),
   });
+  const nativeBlockMaterializerMetadata = profileKind === "blocks"
+    ? parseBabylonNativeBlockMaterializerMetadataV1({
+      kind: "babylon-native-block-materializer-metadata",
+      schemaVersion: 1,
+      nativeSceneProfileRef:
+        "worldkit://native-scene-profile/whitebox.blocks@1",
+      caseHash: `sha256:${"5".repeat(64)}`,
+      authoringManifestHash: `sha256:${"6".repeat(64)}`,
+      checkedLayoutInventoryHash: `sha256:${"7".repeat(64)}`,
+      contributionHash:
+        hashBabylonNativeSceneContributionV1(nativeSceneContribution),
+      profileInventoryHash:
+        nativeSceneContribution.profileSettlement.kind === "host-snapshot"
+          ? nativeSceneContribution.profileSettlement.profileInventoryHash
+          : `sha256:${"8".repeat(64)}`,
+      settledVisualHash:
+        nativeSceneContribution.profileSettlement.kind === "host-snapshot"
+          ? nativeSceneContribution.profileSettlement.settledVisualHash
+          : `sha256:${"9".repeat(64)}`,
+      blocks: [{
+        blockId: "ground-block",
+        runtimeEntityId: "native-block:ground-block",
+        semanticCaptureClassId:
+          "worldkit.native-block.group.ground-group",
+        shape: "full",
+        paletteRole: "ground",
+        visualGroupId: "ground-group",
+        centerMetersXYZ: [0, -0.5, 0],
+        rotationQuarterTurnsY: 0,
+        sizeMetersXYZ: [10, 1, 10],
+      }],
+      visualGroups: [{
+        visualGroupId: "ground-group",
+        acceptanceTargetRef:
+          "worldkit://acceptance-target/package-fixture-opening@1",
+        semanticClassId: "ground.fixture",
+        identityColorHex: "#AA0001",
+        blockIds: ["ground-block"],
+        paletteRoles: ["ground"],
+        minimumMetersXYZ: [-5, -1, -5],
+        maximumMetersXYZ: [5, 0, 5],
+      }],
+      colliderJoins: [{ blockId: "ground-block", colliderId: "ground" }],
+    })
+    : undefined;
   const worldRuntimeBootstrapRef =
     "worldkit://world-runtime-bootstrap/package-fixture@1";
   const traversalSurfaceProfile = resolveTraversalSurfaceProfileV1(
@@ -438,6 +485,9 @@ function createBabylonNativeWorldPackageTestInputForProfileV1(
       diagnostics: [],
     },
     nativeSceneContribution,
+    ...(isNil(nativeBlockMaterializerMetadata)
+      ? {}
+      : { nativeBlockMaterializerMetadata }),
     gameplayBootstrap: canonical.gameplayBootstrap,
     worldRuntimeBootstrap: canonical.worldRuntimeBootstrap,
     registryLock,

@@ -6,6 +6,7 @@ import type {
   BabylonNativeSceneBootstrapV1,
   BabylonNativeSceneContributionV1,
   BabylonNativeSceneModuleBundleManifestV1,
+  BabylonNativeBlockMaterializerMetadataV1,
   NativeSceneCheckResultV1,
   WorldResourceLockEntryV1,
   CanonicalSceneExecutionPlanV1,
@@ -135,6 +136,14 @@ export type WorldPackageSceneSourceV1 =
       readonly sceneAuthoringAttemptHash: Sha256HashV1;
       readonly sceneAuthoringAttemptResultRef: string;
       readonly sceneAuthoringAttemptResultHash: Sha256HashV1;
+      readonly nativeMaterializer:
+        | Readonly<{ readonly kind: "none" }>
+        | Readonly<{
+            readonly kind: "babylon-native-block";
+            readonly metadataPath:
+              "native/block-materializer-metadata.json";
+            readonly metadataHash: Sha256HashV1;
+          }>;
       readonly nativeSceneBootstrapPath: "native/bootstrap.json";
       readonly sceneModuleBundleManifestPath: "native/module-bundle.json";
       readonly sceneModuleBundlePath: "native/scene.mjs";
@@ -249,6 +258,8 @@ export interface BabylonNativeWorldPackageMembershipInputV1 {
   readonly sceneAuthoringAttemptResult: SceneAuthoringAttemptResultV1;
   readonly nativeSceneCheckResult: NativeSceneCheckResultV1;
   readonly nativeSceneContribution: BabylonNativeSceneContributionV1;
+  readonly nativeBlockMaterializerMetadata?:
+    BabylonNativeBlockMaterializerMetadataV1;
   readonly gameplayBootstrap: GameplayBootstrapV1;
   readonly worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
   readonly worldPackageBuildReceipt: WorldPackageBuildReceiptV1;

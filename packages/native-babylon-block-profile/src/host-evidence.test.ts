@@ -60,6 +60,7 @@ function evidence(id: string): BabylonNativeBlockCheckedEpochEvidenceV1 {
       },
     },
     profileInventoryHash: `sha256:${"a".repeat(64)}`,
+    colliderInventory: [],
   };
 }
 

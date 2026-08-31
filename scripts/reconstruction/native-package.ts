@@ -3,12 +3,8 @@ import { Scene } from "@babylonjs/core/scene.pure.js";
 import { parseGameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
 import {
   BABYLON_NATIVE_BLOCK_AUTHORING_PROFILE_REF_V1,
-  bindNativeBlockAuthoringManifestToCheckedLayoutV1,
-  hashBabylonNativeBlockCheckedLayoutInventoryV1,
-  hashNativeBlockAuthoringManifestV1,
   parseNativeBlockAuthoringManifestV1,
   parseNativeBlockVisualResourceListV1,
-  type NativeBlockAuthoringLayoutBindingV1,
 } from "@whitebox-world/native-babylon-block-profile";
 import {
   sha256Bytes,
@@ -17,7 +13,6 @@ import {
   type Sha256HashV1,
 } from "@whitebox-world/protocol";
 import {
-  hashBabylonNativeSceneContributionV1,
   hashBabylonNativeSceneBootstrapV1,
   parseBabylonNativeSceneBootstrapV1,
   parseWorldRuntimeBootstrapV1,
@@ -103,7 +98,6 @@ export interface PackagedNativeBlockAttemptV1 {
     SceneAuthoringAttemptResultV1,
     { readonly outcome: "completed" }
   >;
-  readonly authoringLayoutBinding: NativeBlockAuthoringLayoutBindingV1;
   readonly verifiedWorldPackage: VerifiedBabylonNativeWorldPackageDirectoryV1;
   readonly worldPackageRef:
     VerifiedBabylonNativeWorldPackageDirectoryV1["receipt"]["worldPackageRef"];
@@ -505,27 +499,11 @@ export async function packageNativeBlockAttemptV1(
       worldRuntimeBootstrapRef: hostClosure.worldRuntimeBootstrapRef,
       worldRuntimeBootstrap: runtime,
       registryLock,
-    });
-    const blockEvidence = prepared.blockCheckedEpochEvidence;
-    if (isNil(blockEvidence)) return fail("block-layout-evidence-missing");
-    const contributionHash = hashBabylonNativeSceneContributionV1(
-      prepared.frozenInput.nativeSceneContribution,
-    );
-    const authoringLayoutBinding =
-      bindNativeBlockAuthoringManifestToCheckedLayoutV1({
+      nativeBlockAuthoring: {
         reconstructionCase,
         authoringManifest,
-        authoringManifestHash: hashNativeBlockAuthoringManifestV1(
-          authoringManifest,
-        ),
-        checkedLayout: blockEvidence.checkedLayout,
-        checkedLayoutInventoryHash:
-          hashBabylonNativeBlockCheckedLayoutInventoryV1(
-            blockEvidence.checkedLayout,
-          ),
-        contributionHash,
-        frozenContributionHash: contributionHash,
-      });
+      },
+    });
     const directory = buildTrustedBabylonNativeWorldPackageFromPreparedV1(
       prepared,
     );
@@ -537,22 +515,15 @@ export async function packageNativeBlockAttemptV1(
       outputDirectoryPath,
       directory,
     });
-    await Promise.all([
-      writeCanonicalJsonFresh(
-        path.join(attemptDirectoryPath, "scene-authoring-attempt-result.json"),
-        attemptResult,
-      ),
-      writeCanonicalJsonFresh(
-        path.join(attemptDirectoryPath, "native-block-authoring-layout-binding.json"),
-        authoringLayoutBinding,
-      ),
-    ]);
+    await writeCanonicalJsonFresh(
+      path.join(attemptDirectoryPath, "scene-authoring-attempt-result.json"),
+      attemptResult,
+    );
     const receipt = verified.receipt;
     return Object.freeze({
       outcome: "completed",
       checkResult: verified.nativeSceneCheckResult,
       sceneAuthoringAttemptResult: attemptResult,
-      authoringLayoutBinding,
       verifiedWorldPackage: verified,
       worldPackageRef: receipt.worldPackageRef,
       worldPackageRootHash: receipt.worldPackageRootHash,

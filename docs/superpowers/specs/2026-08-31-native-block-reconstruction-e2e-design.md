@@ -392,18 +392,19 @@ request, and the hosted isolated session exposes no Capture transaction. NBR-45 
 they are not treated as already implemented.
 
 `FormalWorldCaptureRequestV1` and `FormalWorldCaptureReceiptV1` are owned solely by
-`@whitebox-world/runtime-contracts`. The checked `native-block-authoring.json` plus checked Layout create a
-`NativeBlockCaptureIdentityInventoryV1`, whose complete bytes and hash are frozen into the
-Bundle/WorldPackage and verified by its parser, Root and Build Receipt. It explicitly maps accepted block
-IDs to Host-defined Runtime entity IDs and accepted visual groups to semantic class, identity color and
-acceptance target. The trusted Block visual materializer deterministically writes a Host-defined
-`native-block:<blockId>` entity identity and group-derived semantic capture class while creating each Mesh
-from the checked block/group ID; the admitted inventory separately maps that group to the Case's semantic
-class, identity color and acceptance target. The profile settlement fingerprint
-includes the exact identity and rejects post-finalize mutation; checker replay verifies that the authored
-manifest, checked Layout, materialized Mesh identities and frozen inventory agree. No later Runtime Host
-tries to recover Module-local Session records, and Capture never scans names, tags or the Scene to discover
-membership.
+`@whitebox-world/runtime-contracts`. The checked `native-block-authoring.json`, checked Layout, Frozen
+Contribution and profile settlement create one `BabylonNativeBlockMaterializerMetadataV1`. Its complete
+bytes and hash are frozen into the WorldPackage Root and Build Receipt and verified by one parser. There is
+no second Capture identity inventory. The metadata maps every accepted Block to the Host-derived
+`runtimeEntityId` (`native-block:<blockId>`) and semantic capture class, every accepted visual group to its
+Case target/class/identity color/bounds, and every Collider to its source Block. The metadata carries one
+`nativeSceneProfileRef` bound to the selected Native Scene Profile; `blockProfileRef` remains solely the
+authoring Manifest's Native Block Profile ref and is never an alias for the scene profile. The materializer
+creates a Host-private explicit `runtimeEntityId -> Mesh` and `visualGroupId -> Mesh[]` live-handle registry
+from the same checked records. NBR-45B may consume only those handles plus verified Package metadata; it
+never scans Mesh metadata, names, tags or `scene.meshes`. `FormalSemanticCaptureMapV1` remains only the Case
+target/traversal semantic mapping and consumes the verified Package metadata rather than raw Manifest or
+Layout inputs.
 
 The current trusted artifact `worldkit capture` evidence command is extended source-neutrally to accept a
 verified WorldPackage directory. It starts the same admitted BNA Runtime session through the verification

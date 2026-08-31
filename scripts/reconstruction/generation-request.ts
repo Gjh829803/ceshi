@@ -19,6 +19,7 @@ import {
 import { sha256Bytes, sha256CanonicalJson, stringifyCanonicalJson, type Sha256HashV1 } from "@whitebox-world/protocol";
 import { hashWorldReconstructionEvaluationProfileV1, parseWorldReconstructionCaseV1, parseWorldReconstructionEvaluationProfileV1, type WorldReconstructionCaseV1, type WorldReconstructionEvaluationProfileV1 } from "@whitebox-world/validation";
 import {
+  BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
   hashBabylonNativeSceneBootstrapV1,
   parseBabylonNativeSceneBootstrapV1,
   parseWorldRuntimeBootstrapV1,
@@ -39,7 +40,6 @@ export const NATIVE_BLOCK_RECONSTRUCTION_FORMAL_TIMEOUT_SECONDS_V1 = 1_800;
 
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const CURRENT_NATIVE_SCENE_API_REF = "worldkit://native-scene-api/babylon@1";
-const CURRENT_NATIVE_SCENE_PROFILE_REF = "worldkit://native-scene-profile/whitebox.blocks@1";
 const CURRENT_NATIVE_BLOCK_PROFILE_REF = "worldkit://native-block-profile/whitebox.blocks@1";
 const CURRENT_NATIVE_TRUST_PROFILE_REF = "worldkit://trust-profile/trusted-local@1";
 const CURRENT_NATIVE_TRUST_PROFILE_HASH = sha256CanonicalJson({
@@ -488,7 +488,7 @@ export async function prepareNativeBlockGenerationTaskV1(
   const nativeSceneProfileResolution = parseResolvedNativeBlockGenerationResourceV1(
     nativeSceneProfile.bytes,
     "native-scene-profile",
-    CURRENT_NATIVE_SCENE_PROFILE_REF,
+    BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
   );
   const blockProfileResolution = parseResolvedNativeBlockGenerationResourceV1(
     blockProfile.bytes,
