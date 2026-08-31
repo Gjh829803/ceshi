@@ -11,7 +11,7 @@ import {
   type SceneAuthoringAttemptV1,
   type SceneAuthoringRouteDecisionV1,
 } from "@whitebox-world/scene-authoring-contracts";
-import { sha256Bytes, sha256CanonicalJson, type Sha256HashV1 } from "@whitebox-world/protocol";
+import { sha256Bytes, sha256CanonicalJson, stringifyCanonicalJson, type Sha256HashV1 } from "@whitebox-world/protocol";
 
 const OUTPUTS = ["scene.ts", "native-block-authoring.json", "native-resources.json"] as const;
 
@@ -167,6 +167,18 @@ export async function prepareNativeBlockGenerationTaskV1(
     selectedAssetResources: [], seed: input.seed, authoringProfileRef: routeDecision.decision.authoringProfileRef,
     acceptanceTargetRefs: input.case.acceptanceTargetRefs, requiredEvidenceProfileRefs: input.case.requiredEvidenceProfileRefs,
   };
+  const contextDirectoryPath = path.join(taskWorkspacePath, "context");
+  await mkdir(contextDirectoryPath, { recursive: true, mode: 0o700 });
+  const contextFiles = [
+    ["generation-request.json", generationRequest],
+    ["attempt.json", attempt],
+    ["workspace-context-manifest.json", workspaceContextManifest],
+  ] as const;
+  await Promise.all(contextFiles.map(async ([name, value]) => writeFile(path.join(contextDirectoryPath, name), `${stringifyCanonicalJson(value)}\n`, { mode: 0o600 })));
+  for (const [name, value] of contextFiles) {
+    const bytes = await readFile(path.join(contextDirectoryPath, name));
+    if (sha256Bytes(bytes) !== sha256Bytes(new TextEncoder().encode(`${stringifyCanonicalJson(value)}\n`))) throw new TypeError(`Frozen context hash mismatch: ${name}`);
+  }
   const routerRequestId = `native-block-generation-${input.case.id}-attempt-${input.attemptIndex}`;
   const routerArguments = [
     "--backend", input.backend, "--repo-root", ".", "--task-id", routerRequestId,
@@ -174,7 +186,7 @@ export async function prepareNativeBlockGenerationTaskV1(
     "--request-id", routerRequestId, "--execution-profile", "formal", "--submit-attempts", "1",
     "--timeout-seconds", String(generationRequest.budgets.timeoutSeconds),
     "--instruction-file", `attempts/${input.attemptIndex}/.task/inputs/${taskInstruction.relativePath}`,
-    "--context", `attempts/${input.attemptIndex}/.task/inputs`,
+    "--context", `attempts/${input.attemptIndex}/.task/inputs`, "--context", `attempts/${input.attemptIndex}/.task/context`,
     ...references.flatMap((reference, index) => ["--asset", `reference-${index}::attempts/${input.attemptIndex}/.task/inputs/${reference.relativePath}::file::${input.case.referenceInputs[index]!.mediaType}`]),
     "--output", `scene.ts::attempts/${input.attemptIndex}/.staging/scene.ts::text/typescript`,
     "--output", `native-block-authoring.json::attempts/${input.attemptIndex}/.staging/native-block-authoring.json::application/json`,

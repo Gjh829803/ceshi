@@ -2,7 +2,7 @@ import { lstat, mkdir, readdir, rename, rm } from "node:fs/promises";
 import path from "node:path";
 
 import { sha256Bytes, type Sha256HashV1 } from "@whitebox-world/protocol";
-import type { NativeBlockGenerationReceiptV1 } from "@whitebox-world/scene-authoring-contracts";
+import type { NativeBlockGenerationReceiptV1, NativeBlockGenerationRequestV1 } from "@whitebox-world/scene-authoring-contracts";
 
 const OUTPUTS = ["native-block-authoring.json", "native-resources.json", "scene.ts"] as const;
 type OutputPath = (typeof OUTPUTS)[number];
@@ -21,7 +21,7 @@ export interface NativeBlockGenerationRunPortsV1 {
 export interface NativeBlockGenerationRunV1 { readonly receipt: NativeBlockGenerationReceiptV1; readonly sourceDirectoryPath?: string; }
 
 interface PreparedInput {
-  readonly generationRequest: Readonly<{ id: string; declaredOutputPaths: readonly string[]; taskInstructionHash?: Sha256HashV1; builderSkillHash?: Sha256HashV1; workspaceContextManifestHash?: Sha256HashV1; budgets?: Readonly<{ maximumOutputBytes: number }> }>;
+  readonly generationRequest: NativeBlockGenerationRequestV1;
   readonly generationRequestHash: string;
   readonly routerRequestId: string;
   readonly routerTaskPayloadHash: string;
@@ -39,9 +39,9 @@ function receipt(input: PreparedInput, outcome: NativeBlockGenerationReceiptV1["
     kind: "native-block-generation-receipt", schemaVersion: 1, id: `${input.generationRequest.id}.receipt`,
     generationRequestRef: "generation-request.json", generationRequestHash: input.generationRequestHash as Sha256HashV1,
     routerTaskPayloadHash: input.routerTaskPayloadHash as Sha256HashV1,
-    taskInstructionHash: input.generationRequest.taskInstructionHash ?? (`sha256:${"0".repeat(64)}` as Sha256HashV1),
-    builderSkillHash: input.generationRequest.builderSkillHash ?? (`sha256:${"0".repeat(64)}` as Sha256HashV1),
-    workspaceContextManifestHash: input.generationRequest.workspaceContextManifestHash ?? (`sha256:${"0".repeat(64)}` as Sha256HashV1),
+    taskInstructionHash: input.generationRequest.taskInstructionHash,
+    builderSkillHash: input.generationRequest.builderSkillHash,
+    workspaceContextManifestHash: input.generationRequest.workspaceContextManifestHash,
     routerRequestId: input.routerRequestId, backend: input.backend, executionProfile: "formal", resolvedModel: "gpt-5.6-sol", resolvedReasoningEffort: "xhigh",
     outcome, outputs, diagnosticCodes: [...diagnosticCodes].sort() as NativeBlockGenerationReceiptV1["diagnosticCodes"], cleanupOutcome,
   };

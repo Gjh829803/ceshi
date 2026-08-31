@@ -20,7 +20,7 @@ async function preparedFixture() {
     generationRequest: {
       id: "cloud-temple.initial",
       declaredOutputPaths: expectedOutputs,
-    },
+    } as never,
     generationRequestHash: `sha256:${"a".repeat(64)}`,
     routerRequestId: "native-block-generation-cloud-temple.initial",
     routerTaskPayloadHash: `sha256:${"b".repeat(64)}`,
