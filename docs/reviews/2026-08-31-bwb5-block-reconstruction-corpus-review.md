@@ -2,10 +2,11 @@
 
 - 日期：2026-08-31
 - 模式：Mode B 变更审查 + runtime-deep-review-checklist
-- 基线：`origin/main@bcd2beea736ab68199df04c2ed937d63ea389f4a`
+- 原独立审查基线：`origin/main@bcd2beea736ab68199df04c2ed937d63ea389f4a`
+- 当前 rebase 基线：`origin/main@960a99d7f2e6f5540fda4348762fc52d93ff7113`
 - P1/P2 traversal-evidence 修复候选：`cdcca43702cce025f5782a231d019e96e24312b4`
 - 范围：BWB5-10 至 BWB5-70；关闭山地 / T 字 / 台阶 / 建筑 / 有限室内 / 负向 Corpus
-- 当前裁决：**GO（开放 P0/P1 = 0）**。候选 `cdcca43702cce025f5782a231d019e96e24312b4`
+- 原产品候选裁决：**GO（开放 P0/P1 = 0）**。候选 `cdcca43702cce025f5782a231d019e96e24312b4`
   已通过 exact-SHA 门禁与独立 Mode B + runtime-deep Review。旧候选
   `7b77069f114bb3ae72ae184fb7c60798fe49b301` 的条件 GO 已失效；BNA-6 / BNA-7 /
   WRC-SR-1 / BWB-6 保持开放。
@@ -125,7 +126,7 @@ Build-Epoch Session / Checked Layout / `finalize()`。该 Layout 同时产生 Ba
 | BWB5-P2-2 | P2 | accepted debt | `cleanup-throw-partial` 的 Corpus 层证据仅覆盖 overlap finalize rejection 后清理；真正 partial/throwing cleanup 由通用 Session 对抗测试持有，后续应重命名 Case 或引入稳定注入点 |
 | BWB5-P2-3 | P2 | closed, independently verified | sequential rebind 测试标题降为实际证明的 Scene/Engine/Collider Mesh dispose，不再声称 Listener/Camera/Input owner |
 | BWB5-P2-4 | P2 | closed, independently verified | cadence 改为真实 `renderFrame()` 交错，不再把 fixed-input batching 误写成 render cadence |
-| BWB5-P2-5 | P2 | closed, independently verified | 规格工作图删除错误的 `BNA-6 -> BWB-5` 前置，与 §BWB-5 `depends_on` 单一一致 |
+| BWB5-P2-5 | P2 | closed, independently verified | Profile 规格工作图删除错误的 `BNA-6 -> BWB-5` 前置；本次 rebase 又同步修正 WRC-1 总设计与 `docs/18`，统一为 `BNA-5 + BWB-3 + BWB-4 -> BWB-5`，BNA-6/WRC-SR-1 不再阻塞 BWB-5 |
 
 独立复核后无开放 P0/P1。BWB5-P2-2、BWB5-R1、BWB5-R2 保持明确的非阻塞接受债务。
 
@@ -134,7 +135,8 @@ Build-Epoch Session / Checked Layout / `finalize()`。该 Layout 同时产生 Ba
 - focused contract + Havok + typecheck + census + playground build 已通过
 - 不修改 Runtime/Havok/Camera/Input 生产代码
 - 不勾 `docs/18` 的 BWB-5，直到本 PR 合入 main 后再单独勾选，且不抬总进度百分比
-- Cursor Cloud focused 门禁与独立 Review 已绑定产品候选
-  `cdcca43702cce025f5782a231d019e96e24312b4`；后续纯文档闭合不使 Runtime/Havok 证据失效
-- 本文中的旧 GO 不得用作合入证据；合入使用 `cdcca43702cce025f5782a231d019e96e24312b4`
-  的 exact-SHA 门禁和独立 Review 结论
+- Cursor Cloud focused 门禁与独立 Review 只绑定原产品候选
+  `cdcca43702cce025f5782a231d019e96e24312b4`；本次 rebase 把同一产品改动语义移植到 PHO-6 后的
+  `main`，未产生 Runtime/Havok 冲突，`test-gate-manifest.ts` 同时保留 PHO-6 与 BWB-5 登记。
+- 原 exact-SHA GO 是产品改动的历史证据，不直接冒充 rebase 后新 SHA 的 GO。新 SHA 至少完成
+  `git diff --check`、`pnpm test:census` 与 BWB-5 focused 门后，才作为 PR #68 当前候选交给最终合入裁决。
