@@ -408,6 +408,9 @@ export async function prepareNativeBlockGenerationTaskV1(
   if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(input.runId)) {
     throw new TypeError("Generation runId must be one stable lowercase identity part.");
   }
+  if (!/^[a-z0-9][a-z0-9-]{2,79}$/.test(input.bootstrapId)) {
+    throw new TypeError("Native Block bootstrapId must be one stable lowercase identity.");
+  }
   const suppliedRouteDecision = parseSceneAuthoringRouteDecisionV1(input.routeDecision);
   if (
     suppliedRouteDecision.sceneBriefRef !== reconstructionCase.sceneBriefRef ||

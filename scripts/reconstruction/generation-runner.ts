@@ -3,12 +3,13 @@ import path from "node:path";
 
 import { sha256Bytes, type Sha256HashV1 } from "@whitebox-world/protocol";
 import { parseNativeBlockGenerationReceiptV1, type NativeBlockGenerationReceiptV1, type NativeBlockGenerationRequestV1 } from "@whitebox-world/scene-authoring-contracts";
+import type { CodexTaskOutcomeEnvelopeV1 } from "../lib/codex-task-outcome.mjs";
 
 const OUTPUTS = ["native-block-authoring.json", "native-resources.json", "scene.ts"] as const;
 type OutputPath = (typeof OUTPUTS)[number];
 
 export interface CodexTaskProcessPortV1 {
-  run(input: Readonly<{ executablePath: string; arguments: readonly string[]; cwd: string }>): Promise<Readonly<{ exitCode: number; stdout: string; stderr: string }>>;
+  run(input: Readonly<{ executablePath: string; arguments: readonly string[]; cwd: string; requestId: string }>): Promise<Readonly<{ exitCode: number; stdout: string; stderr: string; taskOutcome?: CodexTaskOutcomeEnvelopeV1 }>>;
 }
 
 export interface NativeBlockGenerationRunPortsV1 {
@@ -43,13 +44,6 @@ function hasTrustedRouterMarker(stdout: string, backend: "cloud" | "local", requ
     : /^WORLDKIT_LOCAL_CODEX_JOB native-block-generation ([a-z0-9][a-z0-9-]{2,79}) pid=[1-9][0-9]* profile=formal model=gpt-5\.6-sol reasoning=xhigh$/;
   const match = expression.exec(lines[0]!);
   return match !== null && match[1] === requestId;
-}
-
-function isDefinitiveTaskTimeout(
-  stderr: string,
-  timeoutSeconds: number,
-): boolean {
-  return stderr.includes(`codex timeout after ${timeoutSeconds}s`);
 }
 
 function receipt(input: PreparedInput, outcome: NativeBlockGenerationReceiptV1["outcome"], diagnosticCodes: readonly NativeBlockGenerationReceiptV1["diagnosticCodes"][number][], outputs: NativeBlockGenerationReceiptV1["outputs"], cleanupOutcome: "completed" | "failed"): NativeBlockGenerationReceiptV1 {
@@ -87,14 +81,49 @@ export async function runNativeBlockGenerationV1(input: PreparedInput, ports: Na
   let outputs: NativeBlockGenerationReceiptV1["outputs"] = [];
   let cleanupOutcome: "completed" | "failed" = "completed";
   let cleanupCalled = false;
-  try {
-    const result = await ports.process.run({ executablePath: input.routerExecutablePath, arguments: input.routerArguments, cwd: input.runDirectoryPath ?? path.dirname(path.dirname(path.dirname(input.stagingDirectoryPath))) });
-    if (result.exitCode !== 0) {
+  let reconciliationAttempted = false;
+  const reconcileUnknownCreation = async (): Promise<void> => {
+    if (reconciliationAttempted) {
+      outcome = "unknown";
+      diagnostics = ["creation-outcome-unknown"];
+      return;
+    }
+    reconciliationAttempted = true;
+    let reconciliation: Awaited<ReturnType<
+      NativeBlockGenerationRunPortsV1["reconcile"]
+    >>;
+    try {
+      reconciliation = await ports.reconcile(
+        input.routerRequestId,
+        input.generationRequestHash as Sha256HashV1,
+      );
+    } catch {
+      outcome = "unknown";
+      diagnostics = ["creation-outcome-unknown"];
+      return;
+    }
+    if (reconciliation.outcome !== "missing" &&
+        (reconciliation.requestId !== input.routerRequestId ||
+          reconciliation.requestHash !== input.generationRequestHash)) {
       outcome = "rejected";
-      diagnostics = [isDefinitiveTaskTimeout(
-        result.stderr,
-        input.generationRequest.budgets.timeoutSeconds,
-      ) ? "task-timeout" : "task-rejected"];
+      diagnostics = ["duplicate-request-mismatch"];
+      return;
+    }
+    outcome = "unknown";
+    diagnostics = ["creation-outcome-unknown"];
+  };
+  try {
+    const result = await ports.process.run({ executablePath: input.routerExecutablePath, arguments: input.routerArguments, cwd: input.runDirectoryPath ?? path.dirname(path.dirname(path.dirname(input.stagingDirectoryPath))), requestId: input.routerRequestId });
+    if (result.taskOutcome?.requestId !== undefined &&
+        result.taskOutcome.requestId !== input.routerRequestId) {
+      outcome = "rejected"; diagnostics = ["duplicate-request-mismatch"];
+    } else if (result.taskOutcome?.outcome === "creation-outcome-unknown") {
+      await reconcileUnknownCreation();
+    } else if (result.taskOutcome?.outcome === "task-timeout") {
+      outcome = "rejected"; diagnostics = ["task-timeout"];
+    } else if (result.exitCode !== 0 ||
+        result.taskOutcome?.outcome !== "completed") {
+      outcome = "rejected"; diagnostics = ["task-rejected"];
     } else if (!hasTrustedRouterMarker(result.stdout, input.backend, input.routerRequestId)) {
       outcome = "rejected"; diagnostics = ["task-rejected"];
     } else {
@@ -122,12 +151,7 @@ export async function runNativeBlockGenerationV1(input: PreparedInput, ports: Na
       }
     }
   } catch {
-    const reconciliation = await ports.reconcile(input.routerRequestId, input.generationRequestHash as Sha256HashV1);
-    if (reconciliation.outcome !== "missing" && (reconciliation.requestId !== input.routerRequestId || reconciliation.requestHash !== input.generationRequestHash)) {
-      diagnostics = ["duplicate-request-mismatch"];
-    } else {
-      outcome = "unknown"; diagnostics = ["creation-outcome-unknown"];
-    }
+    await reconcileUnknownCreation();
   }
   if (!cleanupCalled) {
     try { const cleanup = await ports.cleanup(); cleanupOutcome = cleanup.outcome; } catch { cleanupOutcome = "failed"; }

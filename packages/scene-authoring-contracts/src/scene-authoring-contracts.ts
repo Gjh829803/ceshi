@@ -846,12 +846,18 @@ export function parseNativeBlockGenerationReceiptV1(
   }
   const outputs = parseGenerationOutputs(record.outputs);
   const diagnosticCodes = parseGenerationDiagnosticCodes(record.diagnosticCodes);
+  const hasTaskTimeout = diagnosticCodes.includes("task-timeout");
   if (
     (record.outcome === "completed" &&
       (!hasExactOrder(outputs.map(({ path }) => path), SORTED_GENERATION_OUTPUT_PATHS) ||
         diagnosticCodes.length !== 0 ||
         record.cleanupOutcome !== "completed")) ||
-    (record.outcome !== "completed" && diagnosticCodes.length === 0)
+    (record.outcome !== "completed" && diagnosticCodes.length === 0) ||
+    (hasTaskTimeout &&
+      (record.outcome !== "rejected" ||
+        outputs.length !== 0 ||
+        diagnosticCodes.length !== 1 ||
+        record.cleanupOutcome !== "completed"))
   ) {
     return invalidContract("generation-receipt");
   }

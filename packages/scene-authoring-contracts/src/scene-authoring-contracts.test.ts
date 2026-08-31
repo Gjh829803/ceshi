@@ -355,6 +355,22 @@ describe("Native Block generation identity", () => {
     expect(receipt.outputs).toEqual([]);
   });
 
+  it("rejects task-timeout outside its sole rejected and cleaned-up branch", () => {
+    const request = generationRequest();
+    const completed = generationReceipt(request);
+    for (const invalid of [
+      { ...completed, outcome: "unknown", outputs: [], diagnosticCodes: ["task-timeout"] },
+      { ...completed, outcome: "tool-error", outputs: [], diagnosticCodes: ["task-timeout"] },
+      { ...completed, outcome: "rejected", outputs: [], diagnosticCodes: ["task-rejected", "task-timeout"] },
+      { ...completed, outcome: "rejected", diagnosticCodes: ["task-timeout"] },
+      { ...completed, outcome: "rejected", outputs: [], diagnosticCodes: ["task-timeout"], cleanupOutcome: "failed" },
+    ]) {
+      expect(() => parseNativeBlockGenerationReceiptV1(invalid)).toThrow(
+        /NATIVE_BLOCK_GENERATION_RECEIPT_INVALID/,
+      );
+    }
+  });
+
   it("rejects self-reference, reordered inputs, wrong outputs, and non-formal execution", () => {
     const request = generationRequest();
     const receipt = generationReceipt(request);

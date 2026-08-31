@@ -253,7 +253,17 @@ The representative Native Block formal run freezes a 1,800-second task timeout. 
 task timeout is recorded only as the provider-neutral `task-timeout` diagnostic in the durable Generation
 Receipt; provider stderr, payloads, credentials and trace details are never serialized. Submission
 transport uncertainty remains the separate `creation-outcome-unknown` state and never permits a second
-creation submission.
+creation submission. Both Codex adapters project their private state into one request-ID-bound,
+machine-readable `worldkit-codex-task-outcome` envelope. The Host process port consumes only that closed
+envelope; it never classifies stderr. Local timeout is definitive only when the adapter's own frozen timer
+expires. Cloud timeout is definitive only from a structured provider error code. An uncertain create
+outcome reaches the Runner's reconciliation port, which invokes the same router in GET-only recovery mode;
+it never repeats the creation POST. The durable Receipt permits `task-timeout` only as the sole diagnostic
+of a rejected, output-empty attempt whose cleanup completed.
+
+The representative `whitebox.blocks@1` Bootstrap uses the stable hyphen identity
+`cloud-temple-t-gate-native-block-native`. Dotted Bootstrap identities are rejected before task creation
+because that identity becomes the Block build epoch and Collider contribution owner during formal Check.
 
 The Host accepts Native API, Native Scene Profile and Block Profile only through exact resolved-resource
 descriptors containing `resourceKind`, canonical Registry `resourceRef`, `resolvedVersion`, and the resolved

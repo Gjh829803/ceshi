@@ -283,6 +283,18 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
     }
   });
 
+  it("rejects a dotted bootstrap identity before whitebox.blocks finalization", async () => {
+    const value = await fixture();
+    try {
+      await expect(prepareNativeBlockGenerationTaskV1({
+        ...input(value),
+        bootstrapId: "fixture.native",
+      })).rejects.toThrow(/stable lowercase identity/);
+    } finally {
+      await rm(value.root, { recursive: true, force: true });
+    }
+  });
+
   it("requires strict resolved resource descriptors with content hashes", async () => {
     const value = await fixture();
     try {
