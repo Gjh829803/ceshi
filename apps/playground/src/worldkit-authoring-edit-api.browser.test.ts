@@ -177,6 +177,84 @@ describe("WorldKit authoring edit browser installation", () => {
       expect(fixedHostSurfaces.editKeys).toEqual([...AUTHORING_EDIT_KEYS]);
       expect(fixedHostSurfaces.runtimeKeys).toEqual([...BROWSER_V5_KEYS]);
       expect(fixedHostSurfaces.scenePickerHidden).toBe(true);
+      await substitutionPage.close();
+
+      const artifactSubstitutionPage = await browser.newPage();
+      await artifactSubstitutionPage.goto(
+        `http://127.0.0.1:${port}/?artifact=1&scene=canyon`,
+        { waitUntil: "domcontentloaded" },
+      );
+      await artifactSubstitutionPage.waitForFunction(
+        () => document.documentElement.dataset.worldkitStatus === "error",
+        undefined,
+        { timeout: 30_000 },
+      );
+      const artifactSubstitution = await artifactSubstitutionPage.evaluate(() => ({
+        adapterName: document.querySelector("#adapter-name")?.textContent,
+        inspectionText: document.querySelector("#inspection")?.textContent,
+        worldkitApiExposed: Object.hasOwn(window, "__WORLDKIT__"),
+        playgroundApiExposed: Object.hasOwn(window, "__WHITEBOX_PLAYGROUND__"),
+      }));
+      expect(artifactSubstitution.adapterName).toBe("route-error");
+      expect(artifactSubstitution.inspectionText).toContain(
+        "PLAYGROUND_RUNTIME_ROUTE_CONFLICT",
+      );
+      expect(artifactSubstitution.worldkitApiExposed).toBe(false);
+      expect(artifactSubstitution.playgroundApiExposed).toBe(false);
+    } finally {
+      await browser?.close();
+      await stopVite(vite);
+    }
+  }, 180_000);
+
+  it("rejects artifact substitution before a Studio-owned Viewer source loads", async () => {
+    const port = await availableLoopbackPort();
+    const worktreeRoot = resolve(import.meta.dirname, "../../..");
+    const vite = spawn(
+      process.execPath,
+      [
+        resolve(worktreeRoot, "node_modules/vite/bin/vite.js"),
+        "--config",
+        "vite.config.mjs",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        String(port),
+      ],
+      {
+        cwd: resolve(worktreeRoot, "apps/playground"),
+        env: Object.fromEntries(
+          Object.entries(process.env).filter(
+            ([key]) => key !== "WORLDKIT_AUTHORING_SPEC_PATH",
+          ),
+        ),
+        stdio: "pipe",
+      },
+    );
+    let browser: Awaited<ReturnType<typeof launchChromiumWithSystemFallback>> | undefined;
+    try {
+      await waitForHttpOk(`http://127.0.0.1:${port}/`);
+      browser = await launchChromiumWithSystemFallback();
+      const page = await browser.newPage();
+      await page.goto(
+        `http://127.0.0.1:${port}/?world=studio-world&artifact=1&scene=canyon`,
+        { waitUntil: "domcontentloaded" },
+      );
+      await page.waitForFunction(
+        () => document.documentElement.dataset.worldkitStatus === "error",
+        undefined,
+        { timeout: 30_000 },
+      );
+      const result = await page.evaluate(() => ({
+        adapterName: document.querySelector("#adapter-name")?.textContent,
+        inspectionText: document.querySelector("#inspection")?.textContent,
+        worldkitApiExposed: Object.hasOwn(window, "__WORLDKIT__"),
+        playgroundApiExposed: Object.hasOwn(window, "__WHITEBOX_PLAYGROUND__"),
+      }));
+      expect(result.adapterName).toBe("route-error");
+      expect(result.inspectionText).toContain("PLAYGROUND_RUNTIME_ROUTE_CONFLICT");
+      expect(result.worldkitApiExposed).toBe(false);
+      expect(result.playgroundApiExposed).toBe(false);
     } finally {
       await browser?.close();
       await stopVite(vite);

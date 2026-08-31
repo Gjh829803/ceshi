@@ -69,7 +69,7 @@ Feature inspection、固定输入和截图。它是 catalog/制品工作流的�
 pnpm test:scenes
 pnpm typecheck
 pnpm build
-pnpm verify:outdoor-gameplay
+pnpm verify:scene-viewer
 ```
 
 ## 4. Plan-first 场景与制品合同

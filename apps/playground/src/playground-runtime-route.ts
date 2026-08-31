@@ -20,6 +20,7 @@ export type PlaygroundRuntimeRouteV1 =
     };
 
 export type PlaygroundSceneCatalogV1 = Readonly<Record<string, unknown>>;
+export type PlaygroundViewerSourceAuthorityV1 = "curated-host" | "fixed-host";
 
 const DEFAULT_SCENE_CATALOG_ID = "grassland";
 
@@ -37,6 +38,7 @@ function unknownRoute(
 export function resolvePlaygroundRuntimeRoute(
   search: string,
   sceneCatalog: PlaygroundSceneCatalogV1,
+  viewerSourceAuthority: PlaygroundViewerSourceAuthorityV1,
 ): PlaygroundRuntimeRouteV1 {
   const parameters = new URLSearchParams(search);
   const artifactEnabled = parameters.get("artifact") === "1";
@@ -58,6 +60,16 @@ export function resolvePlaygroundRuntimeRoute(
   const requestedSceneCatalogId = parameters.get("scene");
   const trimmedSceneCatalogId = requestedSceneCatalogId?.trim() ?? "";
   const requestedStudioWorldId = parameters.get("world")?.trim() ?? "";
+
+  if (
+    artifactEnabled &&
+    (viewerSourceAuthority === "fixed-host" || requestedStudioWorldId !== "")
+  ) {
+    return unknownRoute(
+      "PLAYGROUND_RUNTIME_ROUTE_CONFLICT",
+      "Artifact mode cannot replace a Host-owned Viewer source.",
+    );
+  }
 
   if (!artifactEnabled) {
     if (trimmedSceneCatalogId !== "" && requestedStudioWorldId !== "") {

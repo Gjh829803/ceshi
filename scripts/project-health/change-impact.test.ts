@@ -230,7 +230,7 @@ describe("change impact planner", () => {
     expect(result.plan.advisoryGateIds).toEqual([
       "canonical",
       "control-capture",
-      "outdoor-gameplay",
+      "scene-viewer",
       "unreleased-clean-break",
       "validation-capture",
     ]);
@@ -246,7 +246,7 @@ describe("change impact planner", () => {
     expect(result.plan.advisoryGateIds).toEqual([
       "canonical",
       "control-capture",
-      "outdoor-gameplay",
+      "scene-viewer",
       "unreleased-clean-break",
       "validation-capture",
     ]);
@@ -263,7 +263,7 @@ describe("change impact planner", () => {
     expect(result.plan.advisoryGateIds).toEqual([
       "canonical",
       "control-capture",
-      "outdoor-gameplay",
+      "scene-viewer",
       "unreleased-clean-break",
       "validation-capture",
     ]);
@@ -306,7 +306,7 @@ describe("change impact planner", () => {
     expect(nightly.plan.requiredGateIds).toEqual([
       "canonical",
       "control-capture",
-      "outdoor-gameplay",
+      "scene-viewer",
       "test-contract",
       "test-resource-heavy",
       "typecheck",

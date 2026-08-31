@@ -24,6 +24,12 @@ const REPOSITORY_ROOT = path.resolve(
   "../..",
 );
 
+export function viewerSourceAuthorityFromEnvironment(environment) {
+  return environment.WORLDKIT_AUTHORING_SPEC_PATH === undefined
+    ? "curated-host"
+    : "fixed-host";
+}
+
 function setServerNonceHeader(response) {
   const nonce = process.env.WORLDKIT_AUTHORING_SERVER_NONCE;
   if (nonce !== undefined && nonce.length > 0) {
@@ -388,6 +394,11 @@ function whiteboxArtifactWriter() {
 }
 
 export default {
+  define: {
+    __WORLDKIT_VIEWER_SOURCE_AUTHORITY__: JSON.stringify(
+      viewerSourceAuthorityFromEnvironment(process.env),
+    ),
+  },
   plugins: [
     worldkitViewerBootstrapSource(),
     worldkitAuthoringSource(),

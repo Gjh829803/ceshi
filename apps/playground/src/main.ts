@@ -50,7 +50,10 @@ import {
   createSubjectPresetWorkbenchDraftV1,
   subjectPresetTuningRequestFromDraftV1,
 } from "./subject-preset-workbench.js";
-import { resolvePlaygroundRuntimeRoute } from "./playground-runtime-route.js";
+import {
+  resolvePlaygroundRuntimeRoute,
+  type PlaygroundViewerSourceAuthorityV1,
+} from "./playground-runtime-route.js";
 import { sceneCatalog } from "./scenes/index.js";
 import { createGameplayPageLifecycle } from "./gameplay-page-lifecycle.js";
 import { createAndStartArtifactRenderer } from "./artifact-renderer-lifecycle.js";
@@ -64,12 +67,16 @@ import {
   type ViewerBootstrapV1,
 } from "./viewer-bootstrap.js";
 
+declare const __WORLDKIT_VIEWER_SOURCE_AUTHORITY__:
+  PlaygroundViewerSourceAuthorityV1;
+
 const app = document.querySelector<HTMLDivElement>("#app");
 if (app === null) throw new Error("Missing #app container");
 const urlParameters = new URLSearchParams(window.location.search);
 const runtimeRoute = resolvePlaygroundRuntimeRoute(
   window.location.search,
   sceneCatalog,
+  __WORLDKIT_VIEWER_SOURCE_AUTHORITY__,
 );
 const viewerMode = runtimeRoute.mode === "viewer";
 let cameraViewCommandSequence = 0;

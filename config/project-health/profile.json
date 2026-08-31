@@ -82,12 +82,12 @@
           "canonical",
           "control-capture",
           "g-bot-subject",
-          "outdoor-gameplay",
           "placement-layout",
           "rigged-subject",
           "route-r0-contract",
           "route-r1-heightfield",
           "route-r1b-static-platform",
+          "scene-viewer",
           "validation-capture"
         ]
       },
@@ -128,12 +128,12 @@
           "canonical",
           "control-capture",
           "g-bot-subject",
-          "outdoor-gameplay",
           "placement-layout",
           "rigged-subject",
           "route-r0-contract",
           "route-r1-heightfield",
           "route-r1b-static-platform",
+          "scene-viewer",
           "validation-capture"
         ],
         "visual-evidence": [],
@@ -381,7 +381,7 @@
       "packageIds": ["@whitebox-world/playground"]
     },
     "canonical-browser-runtime": {
-      "exactPaths": ["scripts/verification/verify-canonical-world.ts", "scripts/verification/verify-control-capture.ts", "scripts/verification/verify-outdoor-gameplay-worlds.ts", "scripts/verification/verify-validation-capture.ts"],
+      "exactPaths": ["scripts/verification/verify-canonical-world.ts", "scripts/verification/verify-control-capture.ts", "scripts/verification/verify-scene-viewer.ts", "scripts/verification/verify-validation-capture.ts"],
       "pathPrefixes": ["apps/playground", "packages/runtime-contracts", "packages/runtime-host"],
       "pathSuffixes": [],
       "packageIds": []
@@ -426,7 +426,7 @@
     "resource-heavy-runtime": ["test-resource-heavy"],
     "test-registration": ["test-census"],
     "playground-build-surface": ["playground-build"],
-    "canonical-browser-runtime": ["canonical", "control-capture", "outdoor-gameplay", "validation-capture"],
+    "canonical-browser-runtime": ["canonical", "control-capture", "scene-viewer", "validation-capture"],
     "placement-and-subject-runtime": ["g-bot-subject", "placement-layout", "rigged-subject"],
     "trusted-route-runtime": ["route-r0-contract", "route-r1-heightfield", "route-r1b-static-platform"],
     "native-scene-experimental": ["bna1-clean-break", "native-scene-playground"],

@@ -83,7 +83,7 @@
     "verify:route-r0-contract": "tsx scripts/verification/verify-route-r0-contract.ts",
     "verify:route-r1-heightfield": "tsx scripts/verification/verify-route-r1-heightfield.ts",
     "verify:route-r1b-static-platform": "tsx scripts/verification/verify-route-r1b-static-platform.ts",
-    "verify:outdoor-gameplay": "tsx scripts/verification/verify-outdoor-gameplay-worlds.ts",
+    "verify:scene-viewer": "tsx scripts/verification/verify-scene-viewer.ts",
     "verify:native-scene-playground": "tsx scripts/verification/verify-native-scene-playground.ts",
     "verify:hosted-native-isolation": "tsx scripts/verification/verify-hosted-native-isolation.ts",
     "verify:hosted-native-browser": "tsx scripts/verification/verify-hosted-native-browser.ts",

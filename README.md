@@ -314,6 +314,18 @@ pnpm dev
 `worldkit run <world.json>` 和 Studio Preview 复用同一 Viewer 壳，但由 Host 固定
 Canonical AuthoringSpec；浏览器查询不能替换固定来源。旧 `?authoring=1` 路由已删除。
 
+以后本地开发和 AI 验证按任务选择唯一入口：
+
+| 任务 | 入口 | 场景来源 | 直接门禁 |
+|---|---|---|---|
+| 调手感、动作、相机、状态和基础通行性 | `pnpm dev` | Viewer 内的 `feel-flat`、`traversal-course`、`action-lab` | `pnpm verify:scene-viewer` |
+| 检查一份已生成的 Canonical 世界 | `pnpm worldkit run <world.json>` | Host 固定的 `world.json` | 对应 WorldKit validate / route / capture 门禁 |
+| 生产或继续 WRC 场景 | `pnpm studio` | Studio Case 和 WRC Planner/Builder 输出 | 该阶段的 self-check、Host replay 与 capture 门禁 |
+| 查看正式场景证据 | 不单独启动应用 | `artifacts/scenes/<scene-id>/` 与 Viewer/Studio 的 Host 来源 | 对应 receipt、manifest、visual check |
+
+`artifacts/scenes` 是正式 WRC 证据目录，不是第二个 Web 应用；调试预设也不是生产
+Scene Case。这样场景生产者可以继续还原世界，控制/动作开发者只使用稳定的三个预设调手感。
+
 结构修改不走 Browser Protocol V5。V5 仍是 exact 38-key Runtime 面，只处理
 Gameplay/Camera/Capture/Route。受信 Authoring 页另外安装
 `window.__WORLDKIT_AUTHORING_EDIT__`（10 个可枚举成员：`version` + 9 个方法）。

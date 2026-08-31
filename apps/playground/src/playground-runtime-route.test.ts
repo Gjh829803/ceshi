@@ -30,7 +30,11 @@ describe("resolvePlaygroundRuntimeRoute", () => {
       },
     ],
   ] as const)("classifies %s without exposing a renderer or RuntimeHost", (search, expected) => {
-    expect(resolvePlaygroundRuntimeRoute(search, ARTIFACT_SCENE_CATALOG)).toEqual(
+    expect(resolvePlaygroundRuntimeRoute(
+      search,
+      ARTIFACT_SCENE_CATALOG,
+      "curated-host",
+    )).toEqual(
       expected,
     );
   });
@@ -39,6 +43,7 @@ describe("resolvePlaygroundRuntimeRoute", () => {
     expect(resolvePlaygroundRuntimeRoute(
       "?authoring=1",
       ARTIFACT_SCENE_CATALOG,
+      "curated-host",
     )).toEqual({
       mode: "unknown",
       diagnostic: {
@@ -53,6 +58,7 @@ describe("resolvePlaygroundRuntimeRoute", () => {
     expect(resolvePlaygroundRuntimeRoute(
       "?scene=feel-flat&world=studio-world",
       ARTIFACT_SCENE_CATALOG,
+      "curated-host",
     )).toEqual({
       mode: "unknown",
       diagnostic: {
@@ -63,10 +69,33 @@ describe("resolvePlaygroundRuntimeRoute", () => {
     });
   });
 
+  it.each([
+    ["?artifact=1&scene=canyon", "fixed-host"],
+    ["?artifact=1&captureArtifacts=1&scene=canyon", "fixed-host"],
+    ["?world=studio-world&artifact=1&scene=canyon", "curated-host"],
+  ] as const)(
+    "fails closed when %s can replace a %s Viewer source",
+    (search, viewerSourceAuthority) => {
+      expect(resolvePlaygroundRuntimeRoute(
+        search,
+        ARTIFACT_SCENE_CATALOG,
+        viewerSourceAuthority,
+      )).toEqual({
+        mode: "unknown",
+        diagnostic: {
+          severity: "error",
+          code: "PLAYGROUND_RUNTIME_ROUTE_CONFLICT",
+          message: "Artifact mode cannot replace a Host-owned Viewer source.",
+        },
+      });
+    },
+  );
+
   it("fails closed when artifact capture is requested outside artifact-only mode", () => {
     expect(resolvePlaygroundRuntimeRoute(
       "?scene=canyon&captureArtifacts=1",
       ARTIFACT_SCENE_CATALOG,
+      "curated-host",
     )).toEqual({
       mode: "unknown",
       diagnostic: {
@@ -83,6 +112,7 @@ describe("resolvePlaygroundRuntimeRoute", () => {
       expect(resolvePlaygroundRuntimeRoute(
         `?scene=${encodeURIComponent(sceneCatalogId)}&artifact=1`,
         ARTIFACT_SCENE_CATALOG,
+        "curated-host",
       )).toEqual({
         mode: "unknown",
         diagnostic: {
@@ -96,7 +126,11 @@ describe("resolvePlaygroundRuntimeRoute", () => {
 
   it("never returns the deleted public route modes", () => {
     for (const search of ["", "?scene=feel-flat", "?world=studio-world"]) {
-      const route = resolvePlaygroundRuntimeRoute(search, ARTIFACT_SCENE_CATALOG);
+      const route = resolvePlaygroundRuntimeRoute(
+        search,
+        ARTIFACT_SCENE_CATALOG,
+        "curated-host",
+      );
       expect(JSON.stringify(route)).not.toContain("authoring");
       expect(JSON.stringify(route)).not.toContain("catalog-gameplay");
     }
