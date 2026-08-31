@@ -119,4 +119,15 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
       await rm(value.root, { recursive: true, force: true });
     }
   });
+
+  it("declares every frozen reference as a router asset", async () => {
+    const value = await fixture();
+    try {
+      await writeFile(path.join(value.inputDirectory, "reference-1.png"), "another");
+      const fixtureInput = input(value);
+      fixtureInput.case.referenceInputs.push({ inputRef: "reference-1.png", contentHash: sha256Bytes(new TextEncoder().encode("another")) as `sha256:${string}`, mediaType: "image/png" });
+      const prepared = await prepareNativeBlockGenerationTaskV1(fixtureInput);
+      expect(prepared.routerArguments.filter((argument) => argument === "--asset")).toHaveLength(2);
+    } finally { await rm(value.root, { recursive: true, force: true }); }
+  });
 });

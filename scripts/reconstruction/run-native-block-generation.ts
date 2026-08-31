@@ -19,7 +19,7 @@ function option(tokens: readonly string[], name: string): string {
 
 const processPort: CodexTaskProcessPortV1 = {
   run: async ({ executablePath, arguments: argumentsValue, cwd }) => new Promise((resolvePromise, reject) => {
-    const child = spawn(executablePath, argumentsValue, { cwd, shell: false, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(process.execPath, [executablePath, ...argumentsValue], { cwd, shell: false, stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (chunk) => { stdout += String(chunk); });
@@ -73,9 +73,16 @@ async function main(): Promise<void> {
       const child = spawn(process.execPath, [checker, "--workspace", workspacePath], { shell: false, stdio: ["ignore", "pipe", "pipe"] });
       let stdout = "";
       child.stdout.on("data", (chunk) => { stdout += String(chunk); });
-      child.once("close", (exitCode) => { const report = JSON.parse(stdout || "{}"); resolvePromise({ ok: exitCode === 0 && report.ok === true, diagnosticCodes: report.diagnosticCodes ?? [] }); });
+      child.once("error", () => resolvePromise({ ok: false, diagnosticCodes: ["self-check-failed"] }));
+      child.once("close", (exitCode) => {
+        try {
+          const report = JSON.parse(stdout || "{}");
+          resolvePromise({ ok: exitCode === 0 && report.ok === true && Array.isArray(report.diagnosticCodes), diagnosticCodes: Array.isArray(report.diagnosticCodes) ? report.diagnosticCodes : ["self-check-failed"] });
+        } catch { resolvePromise({ ok: false, diagnosticCodes: ["self-check-failed"] }); }
+      });
     }),
-    reconcile: async (requestId, requestHash) => ({ outcome: "unknown", requestId, requestHash }),
+    // A create timeout stays durable-unknown here; no second submission is permitted.
+    reconcile: async () => ({ outcome: "missing" }),
     cleanup: async () => { await rm(prepared.taskWorkspacePath, { recursive: true, force: true }); return { outcome: "completed" as const }; },
   });
   await writeFile(path.join(outputPath, "attempts", "0", "generation-receipt.json"), `${stringifyCanonicalJson(result.receipt)}\n`);

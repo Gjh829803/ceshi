@@ -174,7 +174,7 @@ export async function prepareNativeBlockGenerationTaskV1(
     "--request-id", routerRequestId, "--execution-profile", "formal", "--submit-attempts", "1",
     "--instruction-file", `attempts/${input.attemptIndex}/.task/inputs/${taskInstruction.relativePath}`,
     "--context", `attempts/${input.attemptIndex}/.task/inputs`,
-    "--asset", `reference-0::attempts/${input.attemptIndex}/.task/inputs/${references[0]?.relativePath ?? "reference-0.png"}::file::${input.case.referenceInputs[0]?.mediaType ?? "image/png"}`,
+    ...references.flatMap((reference, index) => ["--asset", `reference-${index}::attempts/${input.attemptIndex}/.task/inputs/${reference.relativePath}::file::${input.case.referenceInputs[index]!.mediaType}`]),
     "--output", `scene.ts::attempts/${input.attemptIndex}/.staging/scene.ts::text/typescript`,
     "--output", `native-block-authoring.json::attempts/${input.attemptIndex}/.staging/native-block-authoring.json::application/json`,
     "--output", `native-resources.json::attempts/${input.attemptIndex}/.staging/native-resources.json::application/json`,

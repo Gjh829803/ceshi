@@ -66,6 +66,8 @@ export async function runNativeBlockGenerationV1(input: PreparedInput, ports: Na
   let outcome: NativeBlockGenerationReceiptV1["outcome"] = "tool-error";
   let diagnostics: NativeBlockGenerationReceiptV1["diagnosticCodes"] = ["task-tool-error"];
   let outputs: NativeBlockGenerationReceiptV1["outputs"] = [];
+  let cleanupOutcome: "completed" | "failed" = "completed";
+  let cleanupCalled = false;
   try {
     const result = await ports.process.run({ executablePath: input.routerExecutablePath, arguments: input.routerArguments, cwd: input.runDirectoryPath ?? path.dirname(path.dirname(path.dirname(input.stagingDirectoryPath))) });
     if (result.exitCode !== 0) {
@@ -78,10 +80,11 @@ export async function runNativeBlockGenerationV1(input: PreparedInput, ports: Na
         if (!selfCheck.ok) {
           outcome = "rejected"; diagnostics = ["self-check-failed"];
         } else {
-          const cleanup = await ports.cleanup();
+          const cleanup = await ports.cleanup(); cleanupCalled = true;
           if (cleanup.outcome !== "completed") {
-            outcome = "tool-error"; diagnostics = ["cleanup-failed"];
+            cleanupOutcome = "failed"; outcome = "tool-error"; diagnostics = ["cleanup-failed"];
           } else {
+            await lstat(input.sourceDirectoryPath).then(() => { throw new TypeError("stale-output"); }).catch((error: unknown) => { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; });
             await mkdir(path.dirname(input.sourceDirectoryPath), { recursive: true, mode: 0o700 });
             await rename(input.stagingDirectoryPath, input.sourceDirectoryPath);
             outcome = "completed"; diagnostics = [];
@@ -101,9 +104,12 @@ export async function runNativeBlockGenerationV1(input: PreparedInput, ports: Na
       outcome = "unknown"; diagnostics = ["creation-outcome-unknown"];
     }
   }
+  if (!cleanupCalled) {
+    try { const cleanup = await ports.cleanup(); cleanupOutcome = cleanup.outcome; } catch { cleanupOutcome = "failed"; }
+    if (cleanupOutcome !== "completed") { outcome = "tool-error"; diagnostics = ["cleanup-failed"]; }
+  }
   if (outcome !== "completed") {
     await rm(input.stagingDirectoryPath, { recursive: true, force: true });
   }
-  const cleanup = diagnostics.includes("cleanup-failed") ? "failed" : "completed";
-  return Object.freeze({ receipt: receipt(input, outcome, diagnostics, outcome === "completed" ? outputs : [], cleanup), ...(outcome === "completed" ? { sourceDirectoryPath: input.sourceDirectoryPath } : {}) });
+  return Object.freeze({ receipt: receipt(input, outcome, diagnostics, outcome === "completed" ? outputs : [], cleanupOutcome), ...(outcome === "completed" ? { sourceDirectoryPath: input.sourceDirectoryPath } : {}) });
 }

@@ -100,4 +100,19 @@ describe("runNativeBlockGenerationV1", () => {
       expect(result.receipt.diagnosticCodes).toContain("duplicate-request-mismatch");
     } finally { await rm(prepared.root, { recursive: true, force: true }); }
   });
+
+  it("cleans task state after a rejected process and refuses stale source state", async () => {
+    const prepared = await preparedFixture();
+    let cleaned = 0;
+    await mkdir(prepared.sourceDirectoryPath, { recursive: true });
+    try {
+      const result = await runNativeBlockGenerationV1(prepared, {
+        process: { run: async () => ({ exitCode: 2, stdout: "", stderr: "failed" }) },
+        selfCheck: async () => ({ ok: true, diagnosticCodes: [] }), reconcile: async () => ({ outcome: "missing" }),
+        cleanup: async () => { cleaned += 1; return { outcome: "completed" }; },
+      });
+      expect(cleaned).toBe(1);
+      expect(result.receipt.outcome).toBe("rejected");
+    } finally { await rm(prepared.root, { recursive: true, force: true }); }
+  });
 });
