@@ -320,7 +320,7 @@ expect(() => parseWorldReconstructionEvaluationResultV1({
 })).toThrowError("WORLD_RECONSTRUCTION_EVALUATION_RESULT_INVALID");
 ```
 
-Also reject empty `acceptanceTargetRefs`, empty `requiredEvidenceProfileRefs`, a Case that labels scripted traversal as Route/Nav, advisory-only pixel metrics, stale Attempt/Package/Capture hashes, and a passed dimension with missing required evidence.
+Also reject empty `acceptanceTargetRefs`, empty `requiredEvidenceProfileRefs`, a Case that labels scripted traversal as Route/Nav, advisory-only pixel metrics, stale Attempt/Package/Capture hashes, and a passed dimension with missing required evidence. Every Case scripted traversal check must carry a non-empty, execution-ordered `fixedInputSequence` of `@whitebox-world/runtime-contracts` `FixedInputV1` values. Parse each step only with `parseFixedInputV1`, deep-freeze the sequence, preserve its order, and include it in Case canonical bytes/hash; retain `checkpointIds` solely as result-sampling identities. Do not add Route/Nav/`goTo` fields or a duplicate action/axes parser.
 
 - [ ] **Step 3: Run RED contract tests**
 

@@ -63,7 +63,12 @@ const caseValue = () => ({
       id: "reach-junction",
       evidenceKind: "scripted-fixed-input",
       expectation: "pass",
-      checkpointIds: ["spawn", "junction"],
+      checkpointIds: ["junction", "spawn"],
+      fixedInputSequence: [
+        { actions: ["move-forward"], axes: { moveYRatio: 1 }, ticks: 12 },
+        { actions: ["jump"], ticks: 1 },
+        { actions: ["move-forward"], ticks: 8 },
+      ],
     },
   ],
 });
@@ -152,10 +157,20 @@ describe("world reconstruction contracts", () => {
     const parsed = parseWorldReconstructionCaseV1(caseValue());
     expect(Object.isFrozen(parsed)).toBe(true);
     expect(Object.isFrozen(parsed.topology.relations)).toBe(true);
+    expect(Object.isFrozen(parsed.scriptedTraversalChecks[0]!.fixedInputSequence)).toBe(true);
+    expect(parsed.scriptedTraversalChecks[0]!.fixedInputSequence.every((step) =>
+      Object.isFrozen(step) && Object.isFrozen(step.actions)
+    )).toBe(true);
+    expect(Object.isFrozen(parsed.scriptedTraversalChecks[0]!.fixedInputSequence[0]!.axes)).toBe(true);
     expect(worldReconstructionCaseCanonicalBytesV1(parsed)).toEqual(
       worldReconstructionCaseCanonicalBytesV1(caseValue()),
     );
     expect(hashWorldReconstructionCaseV1(parsed)).toMatch(/^sha256:[a-f0-9]{64}$/);
+    const differentScript = caseValue();
+    differentScript.scriptedTraversalChecks[0]!.fixedInputSequence[0]!.ticks = 13;
+    expect(hashWorldReconstructionCaseV1(differentScript)).not.toEqual(
+      hashWorldReconstructionCaseV1(caseValue()),
+    );
     expect(() => parseWorldReconstructionCaseV1({ ...caseValue(), legacyAlias: true })).toThrowError(
       "WORLD_RECONSTRUCTION_CASE_INVALID",
     );
@@ -171,6 +186,43 @@ describe("world reconstruction contracts", () => {
     const routeClaim = caseValue();
     routeClaim.scriptedTraversalChecks[0]!.evidenceKind = "formal-route" as "scripted-fixed-input";
     expect(() => parseWorldReconstructionCaseV1(routeClaim)).toThrowError(
+      "WORLD_RECONSTRUCTION_CASE_INVALID",
+    );
+  });
+
+  it("requires a complete, non-empty, valid fixed-input script and preserves its execution order", () => {
+    const missingScript = caseValue();
+    delete (missingScript.scriptedTraversalChecks[0] as { fixedInputSequence?: unknown }).fixedInputSequence;
+    expect(() => parseWorldReconstructionCaseV1(missingScript)).toThrowError(
+      "WORLD_RECONSTRUCTION_CASE_INVALID",
+    );
+
+    const emptyScript = caseValue();
+    emptyScript.scriptedTraversalChecks[0]!.fixedInputSequence = [];
+    expect(() => parseWorldReconstructionCaseV1(emptyScript)).toThrowError(
+      "WORLD_RECONSTRUCTION_CASE_INVALID",
+    );
+
+    const invalidScript = caseValue();
+    invalidScript.scriptedTraversalChecks[0]!.fixedInputSequence = [
+      { actions: ["go-to"], ticks: 1 },
+    ];
+    expect(() => parseWorldReconstructionCaseV1(invalidScript)).toThrowError(
+      "WORLD_RECONSTRUCTION_CASE_INVALID",
+    );
+
+    const orderSensitiveScript = caseValue();
+    orderSensitiveScript.scriptedTraversalChecks[0]!.fixedInputSequence = [
+      { actions: ["move-forward"], ticks: 12 },
+      { actions: ["jump"], ticks: 1 },
+      { actions: ["move-backward"], ticks: 4 },
+    ];
+    expect(parseWorldReconstructionCaseV1(orderSensitiveScript)
+      .scriptedTraversalChecks[0]!.fixedInputSequence.map(({ ticks }) => ticks)).toEqual([12, 1, 4]);
+
+    const unorderedCheckpoints = caseValue();
+    unorderedCheckpoints.scriptedTraversalChecks[0]!.checkpointIds = ["spawn", "junction"];
+    expect(() => parseWorldReconstructionCaseV1(unorderedCheckpoints)).toThrowError(
       "WORLD_RECONSTRUCTION_CASE_INVALID",
     );
   });
@@ -245,6 +297,21 @@ describe("world reconstruction contracts", () => {
     expect(() => parseWorldReconstructionEvaluationResultV1(stale)).toThrowError(
       "WORLD_RECONSTRUCTION_EVALUATION_RESULT_INVALID",
     );
+  });
+
+  it("rejects a passed dimension with failure-polarity evidence", () => {
+    for (const metric of [
+      { kind: "boolean-presence", isPresent: false },
+      { kind: "identity-match", isMatch: false },
+      { kind: "receipt-outcome", outcome: "failed" },
+      { kind: "receipt-outcome", outcome: "incomplete" },
+    ] as const) {
+      const result = resultValue();
+      result.dimensions[0]!.metrics = [metric] as never;
+      expect(() => parseWorldReconstructionEvaluationResultV1(result)).toThrowError(
+        "WORLD_RECONSTRUCTION_EVALUATION_RESULT_INVALID",
+      );
+    }
   });
 
   it("rejects non-standard object and array prototypes", () => {
