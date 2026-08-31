@@ -86,7 +86,7 @@ const caseValue = () => ({
       acceptanceTargetRef: WEST_GATE_BLOCKER_TARGET_REF,
       id: "reach-junction",
       evidenceKind: "scripted-fixed-input" as const,
-      expectation: "pass" as const,
+      expectation: "pass" as "pass" | "block",
       checkpointIds: ["junction", "spawn"],
       fixedInputSequence: [
         { actions: ["move-forward"], axes: { moveYRatio: 1 }, ticks: 12 },
@@ -167,7 +167,7 @@ const evidenceValue = () => ({
       dimensionId: "collider" as const,
       evidenceRefs: ["artifact://case/cloud-temple/evidence/collider.json"],
       observed: {
-        kind: "collider-observed" as const,
+        kind: "collider-observed" as "collider-observed" | "evidence-missing",
         contributions: [
           { contributionId: "spawn-ground-contribution", colliderId: "spawn-ground", role: "ground" as const, hasOverlay: true },
           { contributionId: "west-wall-contribution", colliderId: "west-wall", role: "blocker" as const, hasOverlay: true },
@@ -179,7 +179,7 @@ const evidenceValue = () => ({
       evidenceRefs: ["artifact://case/cloud-temple/evidence/critical-traversal.json"],
       observed: {
         kind: "critical-traversal-observed" as const,
-        checks: [{ id: "reach-junction", outcome: "reached" as const, checkpointIds: ["junction", "spawn"] }],
+        checks: [{ id: "reach-junction", outcome: "reached" as "reached" | "blocked" | "incomplete", checkpointIds: ["junction", "spawn"] }],
       },
     },
     {
@@ -187,7 +187,7 @@ const evidenceValue = () => ({
       evidenceRefs: ["artifact://case/cloud-temple/evidence/deterministic-build.json"],
       observed: {
         kind: "deterministic-build-observed" as const,
-        candidateReplayOutcome: "completed" as const,
+        candidateReplayOutcome: "completed" as "completed" | "failed" | "incomplete",
         worldPackageIdentityMatches: true,
         buildIdentityMatches: true,
         captureIdentityMatches: true,
@@ -201,7 +201,7 @@ const evidenceValue = () => ({
         regions: [{ targetRef: OPENING_TARGET_REF, normalizedBounds: { minXBasisPoints: 100, minYBasisPoints: 200, maxXBasisPoints: 500, maxYBasisPoints: 800 } }],
         anchors: [{ targetRef: OPENING_TARGET_REF, normalizedCenter: { xBasisPoints: 300, yBasisPoints: 500 } }],
         orderedTargetRefs: [OPENING_TARGET_REF],
-        distances: [],
+        distances: [] as Array<{ fromTargetRef: string; toTargetRef: string; distanceBasisPoints: number }>,
       },
     },
     {
@@ -626,7 +626,10 @@ describe("evaluateWorldReconstructionV1", () => {
   it("marks a missing required evidence member incomplete without converting it to zero", () => {
     const result = evaluateBound({
       evidence: (draft) => {
-        const collider = observedRow(draft, "collider");
+        const collider = observedRow(draft, "collider") as {
+          evidenceRefs: string[];
+          observed: { kind: "evidence-missing" };
+        };
         collider.evidenceRefs = [];
         collider.observed = { kind: "evidence-missing" };
       },

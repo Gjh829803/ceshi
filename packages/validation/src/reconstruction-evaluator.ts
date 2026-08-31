@@ -20,6 +20,7 @@ import {
   type WorldReconstructionNormalizedBoundsV1,
   type WorldReconstructionNormalizedCenterV1,
   type WorldReconstructionObservedDimensionRowV1,
+  type WorldReconstructionObservedDimensionV1,
   type WorldReconstructionOutcomeV1,
   type WorldReconstructionPositionXYZMetersV1,
   type WorldReconstructionTopologyRelationV1,
@@ -157,6 +158,14 @@ function observedRow(
   return evidence.observedDimensions.find((row) => row.dimensionId === dimensionId);
 }
 
+function observedOfKind<K extends WorldReconstructionObservedDimensionV1["kind"]>(
+  row: WorldReconstructionObservedDimensionRowV1,
+  kind: K,
+): Extract<WorldReconstructionObservedDimensionV1, { kind: K }> | undefined {
+  if (row.observed.kind !== kind) return undefined;
+  return row.observed as Extract<WorldReconstructionObservedDimensionV1, { kind: K }>;
+}
+
 function missingEvidenceDraft(
   dimensionId: WorldReconstructionDimensionIdV1,
   acceptanceTargetRef: string,
@@ -265,12 +274,13 @@ function evaluateTopology(
   row: WorldReconstructionObservedDimensionRowV1,
 ): DimensionDraftV1 {
   const expected = reconstructionCase.expected.topology;
-  if (row.observed.kind === "evidence-missing") {
+  const observed = observedOfKind(row, "topology-observed");
+  if (isNil(observed)) {
     return missingEvidenceDraft("topology", expected.acceptanceTargetRef, row.evidenceRefs);
   }
-  const missingNodes = expected.nodeIds.filter((nodeId) => !row.observed.nodeIds.includes(nodeId));
-  const missingLayers = expected.layerIds.filter((layerId) => !row.observed.layerIds.includes(layerId));
-  const observedRelationKeys = new Set(row.observed.relations.map(relationKey));
+  const missingNodes = expected.nodeIds.filter((nodeId) => !observed.nodeIds.includes(nodeId));
+  const missingLayers = expected.layerIds.filter((layerId) => !observed.layerIds.includes(layerId));
+  const observedRelationKeys = new Set(observed.relations.map(relationKey));
   const missingRelations = expected.relations.filter((relation) =>
     !observedRelationKeys.has(relationKey(relation))
   );
@@ -307,7 +317,8 @@ function evaluateSemanticSilhouette(
   row: WorldReconstructionObservedDimensionRowV1,
 ): DimensionDraftV1 {
   const expectedTargets = reconstructionCase.expected.semanticSilhouetteTargets;
-  if (row.observed.kind === "evidence-missing") {
+  const observed = observedOfKind(row, "semantic-silhouette-observed");
+  if (isNil(observed)) {
     return missingEvidenceDraft(
       "semantic-silhouette",
       expectedTargets[0]!.acceptanceTargetRef,
@@ -326,13 +337,13 @@ function evaluateSemanticSilhouette(
     if (isNil(threshold)) {
       return staleDraft("semantic-silhouette", expected.acceptanceTargetRef, row.evidenceRefs);
     }
-    const observed = row.observed.targets.find(
+    const observedTarget = observed.targets.find(
       (entry) => entry.acceptanceTargetRef === expected.acceptanceTargetRef,
     );
     if (
-      isNil(observed)
-      || observed.isSemanticTargetPresent !== true
-      || observed.visualGroupId !== expected.visualGroupId
+      isNil(observedTarget)
+      || observedTarget.isSemanticTargetPresent !== true
+      || observedTarget.visualGroupId !== expected.visualGroupId
     ) {
       hasIdentityMismatch = true;
       diagnostics.push({
@@ -343,10 +354,10 @@ function evaluateSemanticSilhouette(
       });
       continue;
     }
-    const nextBoundsDrift = boundsDrift(expected.normalizedBounds, observed.normalizedBounds);
-    const nextCenterDrift = centerDrift(expected.normalizedCenter, observed.normalizedCenter);
+    const nextBoundsDrift = boundsDrift(expected.normalizedBounds, observedTarget.normalizedBounds);
+    const nextCenterDrift = centerDrift(expected.normalizedCenter, observedTarget.normalizedCenter);
     const nextCoverageDrift = Math.abs(
-      expected.coverageBasisPoints - observed.coverageBasisPoints,
+      expected.coverageBasisPoints - observedTarget.coverageBasisPoints,
     );
     maximumBoundsDrift = Math.max(maximumBoundsDrift, nextBoundsDrift);
     maximumCenterDrift = Math.max(maximumCenterDrift, nextCenterDrift);
@@ -390,7 +401,8 @@ function evaluateOpeningComposition(
   row: WorldReconstructionObservedDimensionRowV1,
 ): DimensionDraftV1 {
   const expected = reconstructionCase.expected.openingComposition;
-  if (row.observed.kind === "evidence-missing") {
+  const observed = observedOfKind(row, "opening-composition-observed");
+  if (isNil(observed)) {
     return missingEvidenceDraft("opening-composition", expected.acceptanceTargetRef, row.evidenceRefs);
   }
   const diagnostics: DraftDiagnosticV1[] = [];
@@ -403,8 +415,8 @@ function evaluateOpeningComposition(
     if (isNil(threshold)) {
       return staleDraft("opening-composition", expected.acceptanceTargetRef, row.evidenceRefs);
     }
-    const observed = row.observed.regions.find((entry) => entry.targetRef === region.targetRef);
-    if (isNil(observed)) {
+    const observedRegion = observed.regions.find((entry) => entry.targetRef === region.targetRef);
+    if (isNil(observedRegion)) {
       diagnostics.push({
         code: "WORLD_RECONSTRUCTION_OPENING_COMPOSITION_DRIFT",
         acceptanceTargetRef: expected.acceptanceTargetRef,
@@ -413,7 +425,7 @@ function evaluateOpeningComposition(
       });
       continue;
     }
-    const drift = boundsDrift(region.normalizedBounds, observed.normalizedBounds);
+    const drift = boundsDrift(region.normalizedBounds, observedRegion.normalizedBounds);
     maximumRegionDrift = Math.max(maximumRegionDrift, drift);
     if (drift > threshold.maximumDriftBasisPoints) {
       diagnostics.push({
@@ -431,8 +443,8 @@ function evaluateOpeningComposition(
     if (isNil(threshold)) {
       return staleDraft("opening-composition", expected.acceptanceTargetRef, row.evidenceRefs);
     }
-    const observed = row.observed.anchors.find((entry) => entry.targetRef === anchor.targetRef);
-    if (isNil(observed)) {
+    const observedAnchor = observed.anchors.find((entry) => entry.targetRef === anchor.targetRef);
+    if (isNil(observedAnchor)) {
       diagnostics.push({
         code: "WORLD_RECONSTRUCTION_OPENING_COMPOSITION_DRIFT",
         acceptanceTargetRef: expected.acceptanceTargetRef,
@@ -441,7 +453,7 @@ function evaluateOpeningComposition(
       });
       continue;
     }
-    const drift = centerDrift(anchor.normalizedCenter, observed.normalizedCenter);
+    const drift = centerDrift(anchor.normalizedCenter, observedAnchor.normalizedCenter);
     maximumAnchorDrift = Math.max(maximumAnchorDrift, drift);
     if (drift > threshold.maximumDriftBasisPoints) {
       diagnostics.push({
@@ -452,9 +464,9 @@ function evaluateOpeningComposition(
       });
     }
   }
-  const orderMatches = expected.orderedTargetRefs.length === row.observed.orderedTargetRefs.length
+  const orderMatches = expected.orderedTargetRefs.length === observed.orderedTargetRefs.length
     && expected.orderedTargetRefs.every((targetRef, index) =>
-      targetRef === row.observed.orderedTargetRefs[index]
+      targetRef === observed.orderedTargetRefs[index]
     );
   if (!orderMatches) {
     diagnostics.push({
@@ -469,7 +481,7 @@ function evaluateOpeningComposition(
       const right = expected.orderedTargetRefs[index + 1]!;
       const fromTargetRef = left < right ? left : right;
       const toTargetRef = left < right ? right : left;
-      const observedDistance = row.observed.distances.find((entry) =>
+      const observedDistance = observed.distances.find((entry) =>
         entry.fromTargetRef === fromTargetRef && entry.toTargetRef === toTargetRef
       );
       if (
@@ -526,17 +538,18 @@ function evaluateSpawnSupport(
   row: WorldReconstructionObservedDimensionRowV1,
 ): DimensionDraftV1 {
   const expected = reconstructionCase.expected.spawnSupport;
-  if (row.observed.kind === "evidence-missing") {
+  const observed = observedOfKind(row, "spawn-support-observed");
+  if (isNil(observed)) {
     return missingEvidenceDraft("spawn-support", expected.acceptanceTargetRef, row.evidenceRefs);
   }
-  const identityMatches = row.observed.spawnMarkerId === expected.spawnMarkerId
-    && row.observed.supportColliderId === expected.supportColliderId
-    && row.observed.medium === expected.expectedMedium;
+  const identityMatches = observed.spawnMarkerId === expected.spawnMarkerId
+    && observed.supportColliderId === expected.supportColliderId
+    && observed.medium === expected.expectedMedium;
   const nextPositionDrift = positionDriftMillimeters(
     expected.expectedPositionXYZMeters,
-    row.observed.positionXYZMeters,
+    observed.positionXYZMeters,
   );
-  const nextGap = row.observed.supportGapMillimeters;
+  const nextGap = observed.supportGapMillimeters;
   const withinTolerance = nextPositionDrift
       <= profile.thresholds.spawnSupport.maximumPositionDriftMillimeters
     && nextGap <= profile.thresholds.spawnSupport.maximumSupportGapMillimeters;
@@ -570,7 +583,8 @@ function evaluateCollider(
   reconstructionCase: WorldReconstructionCaseV1,
   row: WorldReconstructionObservedDimensionRowV1,
 ): DimensionDraftV1 {
-  if (row.observed.kind === "evidence-missing") {
+  const observed = observedOfKind(row, "collider-observed");
+  if (isNil(observed)) {
     return missingEvidenceDraft(
       "collider",
       reconstructionCase.expected.colliders[0]!.acceptanceTargetRef,
@@ -581,10 +595,10 @@ function evaluateCollider(
   let hasMissing = false;
   let hasRoleMismatch = false;
   for (const expected of reconstructionCase.expected.colliders) {
-    const observed = row.observed.contributions.find(
+    const observedContribution = observed.contributions.find(
       (entry) => entry.contributionId === expected.contributionId,
     );
-    if (isNil(observed) || (expected.requiresOverlay && observed.hasOverlay !== true)) {
+    if (isNil(observedContribution) || (expected.requiresOverlay && observedContribution.hasOverlay !== true)) {
       hasMissing = true;
       diagnostics.push({
         code: "WORLD_RECONSTRUCTION_COLLIDER_MISSING",
@@ -594,13 +608,13 @@ function evaluateCollider(
       });
       continue;
     }
-    if (observed.colliderId !== expected.colliderId || observed.role !== expected.role) {
+    if (observedContribution.colliderId !== expected.colliderId || observedContribution.role !== expected.role) {
       hasRoleMismatch = true;
       diagnostics.push({
         code: "WORLD_RECONSTRUCTION_COLLIDER_ROLE_MISMATCH",
         acceptanceTargetRef: expected.acceptanceTargetRef,
         evidenceRefs: row.evidenceRefs,
-        message: `Required collider ${expected.colliderId} has role ${observed.role} instead of ${expected.role}.`,
+        message: `Required collider ${expected.colliderId} has role ${observedContribution.role} instead of ${expected.role}.`,
       });
     }
   }
@@ -623,7 +637,8 @@ function evaluateCriticalTraversal(
   reconstructionCase: WorldReconstructionCaseV1,
   row: WorldReconstructionObservedDimensionRowV1,
 ): DimensionDraftV1 {
-  if (row.observed.kind === "evidence-missing") {
+  const observed = observedOfKind(row, "critical-traversal-observed");
+  if (isNil(observed)) {
     return missingEvidenceDraft(
       "critical-traversal",
       reconstructionCase.expected.criticalTraversalChecks[0]!.acceptanceTargetRef,
@@ -633,10 +648,10 @@ function evaluateCriticalTraversal(
   const missingDiagnostics: DraftDiagnosticV1[] = [];
   const failureDiagnostics: DraftDiagnosticV1[] = [];
   for (const expected of reconstructionCase.expected.criticalTraversalChecks) {
-    const observed = row.observed.checks.find((entry) => entry.id === expected.id);
-    const checkpointsPresent = !isNil(observed)
-      && expected.checkpointIds.every((checkpointId) => observed.checkpointIds.includes(checkpointId));
-    if (isNil(observed) || !checkpointsPresent || observed.outcome === "incomplete") {
+    const observedCheck = observed.checks.find((entry) => entry.id === expected.id);
+    const checkpointsPresent = !isNil(observedCheck)
+      && expected.checkpointIds.every((checkpointId) => observedCheck.checkpointIds.includes(checkpointId));
+    if (isNil(observedCheck) || !checkpointsPresent || observedCheck.outcome === "incomplete") {
       missingDiagnostics.push({
         code: "WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING",
         acceptanceTargetRef: expected.acceptanceTargetRef,
@@ -645,7 +660,7 @@ function evaluateCriticalTraversal(
       });
       continue;
     }
-    if (expected.expectation === "pass" && observed.outcome === "blocked") {
+    if (expected.expectation === "pass" && observedCheck.outcome === "blocked") {
       failureDiagnostics.push({
         code: "WORLD_RECONSTRUCTION_REQUIRED_TRAVERSAL_BLOCKED",
         acceptanceTargetRef: expected.acceptanceTargetRef,
@@ -653,7 +668,7 @@ function evaluateCriticalTraversal(
         message: `Required traversal ${expected.id} was blocked.`,
       });
     }
-    if (expected.expectation === "block" && observed.outcome === "reached") {
+    if (expected.expectation === "block" && observedCheck.outcome === "reached") {
       failureDiagnostics.push({
         code: "WORLD_RECONSTRUCTION_REQUIRED_BLOCKER_PASSABLE",
         acceptanceTargetRef: expected.acceptanceTargetRef,
@@ -687,16 +702,17 @@ function evaluateDeterministicBuild(
   row: WorldReconstructionObservedDimensionRowV1,
 ): DimensionDraftV1 {
   const expected = reconstructionCase.expected.deterministicBuild;
-  if (row.observed.kind === "evidence-missing") {
+  const observed = observedOfKind(row, "deterministic-build-observed");
+  if (isNil(observed)) {
     return missingEvidenceDraft("deterministic-build", expected.acceptanceTargetRef, row.evidenceRefs);
   }
-  if (row.observed.candidateReplayOutcome === "incomplete") {
+  if (observed.candidateReplayOutcome === "incomplete") {
     return missingEvidenceDraft("deterministic-build", expected.acceptanceTargetRef, row.evidenceRefs);
   }
-  const identitiesMatch = row.observed.worldPackageIdentityMatches
-    && row.observed.buildIdentityMatches
-    && row.observed.captureIdentityMatches;
-  if (row.observed.candidateReplayOutcome === "completed" && identitiesMatch) {
+  const identitiesMatch = observed.worldPackageIdentityMatches
+    && observed.buildIdentityMatches
+    && observed.captureIdentityMatches;
+  if (observed.candidateReplayOutcome === "completed" && identitiesMatch) {
     return passedDraft("deterministic-build", row.evidenceRefs, [
       successPresence(),
       successMatch(),
