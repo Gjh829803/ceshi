@@ -12,7 +12,10 @@ import {
 } from "@whitebox-world/validation";
 import { describe, expect, it } from "vitest";
 
-import { bindBlockVisualGroupsToSemanticCaptureTargetsV1 } from "./formal-capture-identity.js";
+import {
+  bindBlockVisualGroupsToSemanticCaptureTargetsV1,
+  type BindBlockVisualGroupsToSemanticCaptureTargetsInputV1,
+} from "./formal-capture-identity.js";
 import type { BabylonNativeBlockVisualGroupInventoryV1 } from "./check.js";
 
 const H = (character: string) => `sha256:${character.repeat(64)}` as const;
@@ -133,14 +136,14 @@ function visualGroups(): readonly BabylonNativeBlockVisualGroupInventoryV1[] {
     Object.freeze({
       id: "central-ascent-group",
       blockIds: Object.freeze(["ascent-lower", "ascent-upper"]),
-      paletteRoles: Object.freeze(["route", "structure"]),
+      paletteRoles: Object.freeze(["route", "structure"] as const),
       minimumMetersXYZ: Object.freeze([0, 0, 0]) as [number, number, number],
       maximumMetersXYZ: Object.freeze([4, 6, 4]) as [number, number, number],
     }),
     Object.freeze({
       id: "upper-t-junction-group",
       blockIds: Object.freeze(["t-deck"]),
-      paletteRoles: Object.freeze(["structure"]),
+      paletteRoles: Object.freeze(["structure"] as const),
       minimumMetersXYZ: Object.freeze([-2, 6, -6]) as [number, number, number],
       maximumMetersXYZ: Object.freeze([6, 8, 6]) as [number, number, number],
     }),
@@ -181,7 +184,7 @@ function contribution() {
       profileRef: "worldkit://native-scene-profile/whitebox.blocks@1" as const,
       targetCount: 2,
       profileInventoryHash: H("e"),
-      settledVisualHash: H("s"),
+      settledVisualHash: H("f"),
     },
     spawnMarker: {
       id: "player-spawn",
@@ -254,14 +257,6 @@ describe("bindBlockVisualGroupsToSemanticCaptureTargetsV1", () => {
     });
     const reversed = bindBlockVisualGroupsToSemanticCaptureTargetsV1(bindInput({
       blockVisualGroups: [...visualGroups()].reverse(),
-      authoringManifest: {
-        ...authoringManifest(),
-        visualGroups: [...authoringManifest().visualGroups].reverse(),
-      },
-      authoringManifestHash: sha256CanonicalJson({
-        ...authoringManifest(),
-        visualGroups: [...authoringManifest().visualGroups].reverse(),
-      }),
     }));
     expect(hashFormalSemanticCaptureMapV1(map)).toBe(
       hashFormalSemanticCaptureMapV1(reversed),
@@ -330,28 +325,41 @@ describe("bindBlockVisualGroupsToSemanticCaptureTargetsV1", () => {
   });
 
   it("rejects an extra target that is not a Case acceptance target", () => {
-    const manifest = authoringManifest();
-    manifest.visualGroups.push({
-      visualGroupId: "central-ascent-group",
-      acceptanceTargetRef: "worldkit://acceptance-target/cloud-layer@1",
-      semanticClassId: "worldkit.native-block.group.cloud-layer",
-      identityColorHex: "#4e91b5",
+    const extraGroup = Object.freeze({
+      id: "cloud-layer-group",
+      blockIds: Object.freeze(["cloud-mass"]),
+      paletteRoles: Object.freeze(["background-mass"] as const),
+      minimumMetersXYZ: Object.freeze([10, 10, 10]) as [number, number, number],
+      maximumMetersXYZ: Object.freeze([14, 16, 14]) as [number, number, number],
     });
+    const groups = Object.freeze([
+      visualGroups()[0]!,
+      extraGroup,
+      visualGroups()[1]!,
+    ]);
+    const manifest = authoringManifest();
+    manifest.visualGroups = [
+      manifest.visualGroups[0]!,
+      {
+        visualGroupId: "cloud-layer-group",
+        acceptanceTargetRef: "worldkit://acceptance-target/cloud-layer@1",
+        semanticClassId: "worldkit.native-block.group.cloud-layer",
+        identityColorHex: "#4e91b5",
+      },
+      manifest.visualGroups[1]!,
+    ];
     expect(() => bindBlockVisualGroupsToSemanticCaptureTargetsV1(bindInput({
+      blockVisualGroups: groups,
       authoringManifest: manifest,
       authoringManifestHash: sha256CanonicalJson(manifest),
+      layoutInventoryHash: sha256CanonicalJson(groups),
     }))).toThrowError("FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID");
   });
 
   it("sorts bindings deterministically and does not infer Mesh, tag, or name membership", () => {
     const reversedGroups = [...visualGroups()].reverse();
-    const reversedManifest = authoringManifest();
-    reversedManifest.visualGroups = [...reversedManifest.visualGroups].reverse();
     const map = bindBlockVisualGroupsToSemanticCaptureTargetsV1(bindInput({
       blockVisualGroups: reversedGroups,
-      authoringManifest: reversedManifest,
-      authoringManifestHash: sha256CanonicalJson(reversedManifest),
-      layoutInventoryHash: sha256CanonicalJson(visualGroups()),
     }));
     expect(map.bindings.map(({ blockVisualGroupId }) => blockVisualGroupId))
       .toEqual(["central-ascent-group", "upper-t-junction-group"]);
@@ -372,12 +380,14 @@ describe("bindBlockVisualGroupsToSemanticCaptureTargetsV1", () => {
       authoringManifestHash: sha256CanonicalJson({
         ...authoringManifest(),
         visualGroups: [],
-      }),
+      }) as Sha256HashV1,
       meshNameByGroupId: {
         "central-ascent-group": "AscentMesh",
         "upper-t-junction-group": "TDeck",
       },
-    })).toThrowError("FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID");
+    } as BindBlockVisualGroupsToSemanticCaptureTargetsInputV1)).toThrowError(
+      "FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID",
+    );
   });
 
   it("does not treat a Case as already bound from visualGroupId alone", () => {

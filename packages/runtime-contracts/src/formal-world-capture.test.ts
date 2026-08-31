@@ -1,4 +1,4 @@
-import { sha256CanonicalJson } from "@whitebox-world/protocol";
+import { sha256CanonicalJson, type Sha256HashV1 } from "@whitebox-world/protocol";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -19,7 +19,9 @@ const H = (character: string) => `sha256:${character.repeat(64)}` as const;
 const PACKAGE_ROOT = H("1");
 const WORLD_PACKAGE_REF = `package://world-package/sha256/${"1".repeat(64)}`;
 
-function snapshotFixture(): WorldRuntimeSnapshotV4 {
+function snapshotFixture(
+  phase: WorldRuntimeSnapshotV4["runtime"]["phase"] = "ready",
+): WorldRuntimeSnapshotV4 {
   return {
     kind: "worldkit-runtime-snapshot",
     schemaVersion: 4,
@@ -91,7 +93,7 @@ function snapshotFixture(): WorldRuntimeSnapshotV4 {
       camera: { mode: "unbound" },
     },
     runtime: {
-      phase: "ready",
+      phase,
       isPaused: false,
       fixedTimeStepSeconds: 1 / 60,
     },
@@ -151,17 +153,21 @@ function worldTopDownRequest() {
   } as const;
 }
 
+function Hx(byte: string): Sha256HashV1 {
+  return `sha256:${byte.repeat(32)}`;
+}
+
 function viewRecord(
   request: ReturnType<typeof openingRequest> |
     ReturnType<typeof worldSideRequest> |
     ReturnType<typeof worldTopDownRequest>,
-  pngCharacter: string,
+  pngByte: string,
 ) {
   return {
     viewId: request.viewId,
     request,
     requestHash: hashFormalArtifactViewRequestV1(request),
-    pngContentHash: H(pngCharacter),
+    pngContentHash: Hx(pngByte),
   };
 }
 
@@ -269,12 +275,12 @@ function receiptValue(runtimeSnapshot = snapshotFixture()) {
     rendererIdentity: "babylon-webgpu",
     browserIdentity: "playwright-chromium",
     views: [
-      viewRecord(openingRequest(), "p"),
-      viewRecord(worldSideRequest(), "q"),
-      viewRecord(worldTopDownRequest(), "r"),
+      viewRecord(openingRequest(), "a1"),
+      viewRecord(worldSideRequest(), "b2"),
+      viewRecord(worldTopDownRequest(), "c3"),
     ],
-    colliderOverlayHash: H("s"),
-    scriptedTraversalHash: H("t"),
+    colliderOverlayHash: Hx("d4"),
+    scriptedTraversalHash: Hx("e5"),
     cameraRollbackOutcome: "completed",
     resetOutcome: "completed",
     cleanupOutcome: "completed",
@@ -458,9 +464,7 @@ describe("FormalWorldCaptureReceiptV1", () => {
   });
 
   it("rejects a stale Runtime Snapshot", () => {
-    const stale = snapshotFixture();
-    stale.runtime = { ...stale.runtime, phase: "disposed" };
-    expect(() => parseFormalWorldCaptureReceiptV1(receiptValue(stale)))
+    expect(() => parseFormalWorldCaptureReceiptV1(receiptValue(snapshotFixture("disposed"))))
       .toThrowError("FORMAL_WORLD_CAPTURE_RECEIPT_INVALID");
     const mismatchedSession = receiptValue();
     mismatchedSession.runtimeSessionId = "runtime-session-other";
