@@ -635,9 +635,13 @@ function parseGenerationContextInputs(
   });
   const refs = values.map(({ inputRef }) => inputRef);
   if (
-    values.length === 0 ||
     !hasExactOrder(refs, sortBy(refs)) ||
-    new Set(refs).size !== refs.length
+    new Set(refs).size !== refs.length ||
+    refs.some((ref) =>
+      ref.startsWith("/") ||
+      ref.includes("\\") ||
+      ref.split("/").some((segment) => segment === ".." || segment === ".")
+    )
   ) {
     return invalidContract("generation-request");
   }
@@ -685,7 +689,9 @@ export function parseNativeBlockGenerationRequestV1(
   );
   if (
     record.kind !== "native-block-generation-request" ||
-    record.schemaVersion !== 1
+    record.schemaVersion !== 1 ||
+    record.codexExecutionProfileRef !==
+      "worldkit://codex-execution-profile/formal@1"
   ) {
     return invalidContract("generation-request");
   }
@@ -913,6 +919,33 @@ export function assertNativeBlockGenerationReceiptMatchesRequestV1(
   } catch {
     throw new TypeError(
       "NATIVE_BLOCK_GENERATION_RECEIPT_MISMATCH: receipt does not close the generation request identity",
+    );
+  }
+}
+
+export function assertNativeBlockGenerationRequestMatchesAttemptV1(
+  requestInput: unknown,
+  attemptInput: unknown,
+): void {
+  try {
+    const request = parseNativeBlockGenerationRequestV1(requestInput);
+    const attempt = parseSceneAuthoringAttemptV1(attemptInput);
+    if (
+      attempt.sourceInput.kind !== "babylon-native" ||
+      attempt.sceneAuthoringRouteDecisionHash !== request.routeDecisionHash ||
+      attempt.sceneBriefRef !== request.sceneBriefRef ||
+      attempt.sceneBriefHash !== request.sceneBriefHash ||
+      attempt.sourceInput.bootstrapInputRef !== request.bootstrapInputRef ||
+      attempt.sourceInput.bootstrapInputHash !== request.bootstrapInputHash ||
+      attempt.sourceInput.generationRequestHash !==
+        hashNativeBlockGenerationRequestV1(request) ||
+      attempt.seed !== request.seed
+    ) {
+      throw new Error("mismatch");
+    }
+  } catch {
+    throw new TypeError(
+      "NATIVE_BLOCK_GENERATION_REQUEST_ATTEMPT_MISMATCH: Request does not close the Native Scene Authoring Attempt identity",
     );
   }
 }
@@ -1187,6 +1220,21 @@ export function parseSceneAuthoringAttemptV1(
   ) {
     return invalidContract("attempt");
   }
+  const sourceInput = parseAttemptSource(record.sourceInput);
+  const acceptanceTargetRefs = canonicalStringSet(
+    record.acceptanceTargetRefs,
+    "attempt",
+  );
+  const requiredEvidenceProfileRefs = canonicalStringSet(
+    record.requiredEvidenceProfileRefs,
+    "attempt",
+  );
+  if (
+    sourceInput.kind === "babylon-native" &&
+    (acceptanceTargetRefs.length === 0 || requiredEvidenceProfileRefs.length === 0)
+  ) {
+    return invalidContract("attempt");
+  }
   return Object.freeze({
     kind: "scene-authoring-attempt",
     schemaVersion: 1,
@@ -1201,21 +1249,15 @@ export function parseSceneAuthoringAttemptV1(
     ),
     sceneBriefRef: canonicalString(record.sceneBriefRef, "attempt"),
     sceneBriefHash: sha256Hash(record.sceneBriefHash, "attempt"),
-    sourceInput: parseAttemptSource(record.sourceInput),
+    sourceInput,
     selectedAssetResources: parseSelectedAssets(record.selectedAssetResources),
     seed: uint32Seed(record.seed),
     authoringProfileRef: canonicalString(
       record.authoringProfileRef,
       "attempt",
     ),
-    acceptanceTargetRefs: canonicalStringSet(
-      record.acceptanceTargetRefs,
-      "attempt",
-    ),
-    requiredEvidenceProfileRefs: canonicalStringSet(
-      record.requiredEvidenceProfileRefs,
-      "attempt",
-    ),
+    acceptanceTargetRefs,
+    requiredEvidenceProfileRefs,
   });
 }
 

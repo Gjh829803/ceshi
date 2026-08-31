@@ -225,6 +225,16 @@ describe("world reconstruction contracts", () => {
     expect(() => parseWorldReconstructionEvaluationResultV1(openMetric)).toThrowError(
       "WORLD_RECONSTRUCTION_EVALUATION_RESULT_INVALID",
     );
+    const advisoryOnly = resultValue();
+    for (const dimension of advisoryOnly.dimensions) {
+      dimension.metrics = [{
+        kind: "ratio-basis-points",
+        valueBasisPoints: 7_500,
+      }] as never;
+    }
+    expect(() => parseWorldReconstructionEvaluationResultV1(advisoryOnly)).toThrowError(
+      "WORLD_RECONSTRUCTION_EVALUATION_RESULT_INVALID",
+    );
     const missingEvidence = resultValue();
     missingEvidence.dimensions[0]!.evidenceRefs = [];
     expect(() => parseWorldReconstructionEvaluationResultV1(missingEvidence)).toThrowError(
@@ -235,6 +245,18 @@ describe("world reconstruction contracts", () => {
     expect(() => parseWorldReconstructionEvaluationResultV1(stale)).toThrowError(
       "WORLD_RECONSTRUCTION_EVALUATION_RESULT_INVALID",
     );
+  });
+
+  it("rejects non-standard object and array prototypes", () => {
+    const nullPrototype = Object.assign(Object.create(null), profileValue());
+    expect(() => parseWorldReconstructionEvaluationProfileV1(nullPrototype)).toThrowError(
+      "WORLD_RECONSTRUCTION_EVALUATION_PROFILE_INVALID",
+    );
+    class DimensionArray extends Array<string> {}
+    expect(() => parseWorldReconstructionEvaluationProfileV1({
+      ...profileValue(),
+      dimensionIds: new DimensionArray(...DIMENSIONS),
+    })).toThrowError("WORLD_RECONSTRUCTION_EVALUATION_PROFILE_INVALID");
   });
 
   it("parses closed diagnostics and run receipt attempt identities", () => {

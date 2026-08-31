@@ -284,7 +284,12 @@ function assertAccessorFree(value: unknown, contract: string, path = "", seen = 
 }
 
 function object(value: unknown, contract: string, path: string): Readonly<Record<string, unknown>> {
-  if (!isPlainObject(value)) fail(contract, path, "expected a plain object");
+  if (
+    !isPlainObject(value) ||
+    Reflect.getPrototypeOf(value as object) !== Object.prototype
+  ) {
+    fail(contract, path, "expected an ordinary plain object");
+  }
   return value as Readonly<Record<string, unknown>>;
 }
 
@@ -327,7 +332,9 @@ function integer(value: unknown, minimum: number, maximum: number, contract: str
 }
 
 function array(value: unknown, contract: string, path: string): readonly unknown[] {
-  if (!Array.isArray(value)) fail(contract, path, "expected an array");
+  if (!Array.isArray(value) || Reflect.getPrototypeOf(value) !== Array.prototype) {
+    fail(contract, path, "expected an ordinary array");
+  }
   return value;
 }
 
@@ -576,7 +583,17 @@ export function parseWorldReconstructionEvaluationResultV1(value: unknown): Worl
     const status = enumValue(row.status, ["passed", "failed", "incomplete"] as const, contract, `${path}/status`);
     const metrics = array(row.metrics, contract, `${path}/metrics`).map((metric, metricIndex) => parseMetric(metric, contract, `${path}/metrics/${metricIndex}`));
     const evidenceRefs = sortedStrings(row.evidenceRefs, contract, `${path}/evidenceRefs`, status !== "passed");
-    if (status === "passed" && metrics.length === 0) fail(contract, `${path}/metrics`, "a passed dimension requires a non-advisory metric");
+    if (
+      status === "passed" &&
+      !metrics.some(({ kind }) =>
+        kind === "boolean-presence" ||
+        kind === "identity-match" ||
+        kind === "distance-millimeters" ||
+        kind === "receipt-outcome"
+      )
+    ) {
+      fail(contract, `${path}/metrics`, "a passed dimension requires a non-advisory metric");
+    }
     const identity = object(row.identity, contract, `${path}/identity`);
     exactFields(identity, ["attemptHash", "worldPackageRootHash", "captureReceiptHash"], contract, `${path}/identity`);
     if (hash(identity.attemptHash, contract, `${path}/identity/attemptHash`) !== attemptHash || hash(identity.worldPackageRootHash, contract, `${path}/identity/worldPackageRootHash`) !== worldPackageRootHash || hash(identity.captureReceiptHash, contract, `${path}/identity/captureReceiptHash`) !== captureReceiptHash) {

@@ -188,8 +188,12 @@ async function makeInput() {
     }],
     seed: nativeSceneBootstrap.seed,
     authoringProfileRef: nativeAuthoringProfileRef,
-    acceptanceTargetRefs: [],
-    requiredEvidenceProfileRefs: [],
+    acceptanceTargetRefs: [
+      "worldkit://acceptance-target/native-block-package-input@1",
+    ],
+    requiredEvidenceProfileRefs: [
+      "worldkit://evidence-profile/native-block-package-input@1",
+    ],
   };
   const attemptResult: SceneAuthoringAttemptResultV1 = {
     kind: "scene-authoring-attempt-result",

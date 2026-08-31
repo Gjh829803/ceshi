@@ -58,6 +58,9 @@ After Task 2 freezes contracts, Task 10/NBR-50A may run in parallel with sequent
 - `packages/scene-authoring-contracts/src/scene-authoring-contracts.ts`: Route, Attempt, Attempt Result, generation Request/Receipt parsers and hashes.
 - `packages/validation/src/reconstruction-contracts.ts`: source-neutral Case/Profile/Evidence/Result/Diagnostic/Run Receipt contracts and canonical hashes.
 - `packages/validation/src/reconstruction-evaluator.ts`: pure evaluator only; no file/model/runtime access.
+- `packages/world-package/src/package-build.ts`: NBR-10 clean-break generation-request/source-closure join; NBR-45P modifies the same Package identity seam sequentially only after PR A is merged.
+- `packages/world-package/src/package-contract.ts`: NBR-10 verified Package membership closure; NBR-45P extends the same verifier sequentially only after PR A is merged.
+- `packages/world-package/src/test-fixture.ts`: NBR-10 current generation-request Package fixture; NBR-45P extends the fixture sequentially only after PR A is merged.
 - `.codex/skills/worldkit-native-block-builder/`: AI-facing Builder instructions and standalone preflight self-check; never a trusted admission owner.
 - `scripts/reconstruction/generation-request.ts`: trusted Request/Attempt materialization and declared output inventory.
 - `scripts/reconstruction/generation-runner.ts`: the only reconstruction caller of `run-codex-task.mjs` and atomic output promotion.

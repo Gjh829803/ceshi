@@ -442,11 +442,14 @@ Route/ChangeSet/确定性能力 -> 开放或封闭空间与可交互拓扑 -> �
 ### 6.5 Scene Authoring Attempt 与 Runtime Candidate Scene
 
 `SceneAuthoringAttemptV1` 是一次完整场景创作运行的不可变身份，绑定
-`SceneAuthoringRouteDecisionV1` Hash、参考/Brief、Bootstrap 或 Authoring 输入、Module 生成输入、被选择的
+`SceneAuthoringRouteDecisionV1` Hash、参考/Brief、Bootstrap 或 Authoring 输入、Generation Request、被选择的
 **已发布 Asset Resource Ref/Publication Receipt Ref**、Seed/Profile、验收目标和证据要求。它不引用 raw
 Candidate 或未完成的 Production Result；Asset Production/Admission 失败属于独立的上游结果，不通过伪造
 场景 Attempt 记录。它不是单个 Provider invocation，不是 `RuntimeSceneSource`，也没有已发布的
 `WorldBuildIdentity`。
+当前唯一的 Native Attempt 合同使用 `generationRequestRef`/
+`generationRequestHash`；`moduleGenerationInputRef`/`moduleGenerationInputHash` 不是别名或回退路径。
+该 clean-break 属于 NBR-10 施工范围，不表示 NBR 或后续 BNA 生产 Gate 已完成。
 
 ```ts
 interface SceneAuthoringAttemptV1 {
@@ -467,8 +470,8 @@ interface SceneAuthoringAttemptV1 {
         kind: "babylon-native";
         bootstrapInputRef: string;
         bootstrapInputHash: string;
-        moduleGenerationInputRef: string;
-        moduleGenerationInputHash: string;
+        generationRequestRef: string;
+        generationRequestHash: string;
       }>;
   readonly selectedAssetResources: readonly Readonly<{
     assetResourceRef: string;

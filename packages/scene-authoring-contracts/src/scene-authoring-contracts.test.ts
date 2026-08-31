@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   assertNativeBlockGenerationReceiptMatchesRequestV1,
+  assertNativeBlockGenerationRequestMatchesAttemptV1,
   decideSceneAuthoringRouteV1,
   hashNativeBlockGenerationReceiptV1,
   hashNativeBlockGenerationRequestV1,
@@ -350,6 +351,9 @@ describe("Native Block generation identity", () => {
       { ...request, contextInputs: [request.contextInputs[0], request.contextInputs[0]] },
       { ...request, referenceInputs: [request.referenceInputs[0], request.referenceInputs[0]] },
       { ...request, declaredOutputPaths: [...request.declaredOutputPaths].reverse() },
+      { ...request, codexExecutionProfileRef: "worldkit://codex-execution-profile/smoke@1" },
+      { ...request, contextInputs: [{ inputRef: "/tmp/context/api.md", contentHash: HASH_A }] },
+      { ...request, contextInputs: [{ inputRef: "context/../api.md", contentHash: HASH_A }] },
       { ...request, absoluteWorkspacePath: "/tmp/world" },
     ]) {
       expect(() => parseNativeBlockGenerationRequestV1(invalid)).toThrow(
@@ -376,6 +380,36 @@ describe("Native Block generation identity", () => {
         diagnosticCodes: ["output-missing"],
       },
     )).toThrow(/NATIVE_BLOCK_GENERATION_RECEIPT_MISMATCH/);
+    expect(parseNativeBlockGenerationRequestV1({
+      ...request,
+      contextInputs: [],
+    }).contextInputs).toEqual([]);
+  });
+
+  it("closes one parsed Generation Request against its Native Attempt", () => {
+    const request = generationRequest();
+    const attempt = nativeAttempt();
+    const closedAttempt = {
+      ...attempt,
+      sceneAuthoringRouteDecisionHash: request.routeDecisionHash,
+      sceneBriefRef: request.sceneBriefRef,
+      sceneBriefHash: request.sceneBriefHash,
+      sourceInput: {
+        ...attempt.sourceInput,
+        bootstrapInputRef: request.bootstrapInputRef,
+        bootstrapInputHash: request.bootstrapInputHash,
+        generationRequestHash: hashNativeBlockGenerationRequestV1(request),
+      },
+      seed: request.seed,
+    };
+    expect(() => assertNativeBlockGenerationRequestMatchesAttemptV1(
+      request,
+      closedAttempt,
+    )).not.toThrow();
+    expect(() => assertNativeBlockGenerationRequestMatchesAttemptV1(
+      request,
+      { ...closedAttempt, seed: request.seed + 1 },
+    )).toThrow(/NATIVE_BLOCK_GENERATION_REQUEST_ATTEMPT_MISMATCH/);
   });
 });
 
@@ -685,6 +719,16 @@ describe("SceneAuthoringAttemptV1", () => {
     ]) {
       expectAttemptInvalid(value);
     }
+  });
+
+  it("requires Native reconstruction attempts to bind acceptance and evidence profiles", () => {
+    expectAttemptInvalid({ ...nativeAttempt(), acceptanceTargetRefs: [] });
+    expectAttemptInvalid({ ...nativeAttempt(), requiredEvidenceProfileRefs: [] });
+    expect(() => parseSceneAuthoringAttemptV1({
+      ...canonicalAttempt(),
+      acceptanceTargetRefs: [],
+      requiredEvidenceProfileRefs: [],
+    })).not.toThrow();
   });
 
   it("rejects missing, unknown, cross-source, and malformed fields", () => {

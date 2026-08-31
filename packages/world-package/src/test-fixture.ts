@@ -18,11 +18,14 @@ import {
   type BabylonNativeSceneModuleBundleManifestV1,
 } from "@whitebox-world/runtime-contracts";
 import {
+  assertNativeBlockGenerationRequestMatchesAttemptV1,
+  hashNativeBlockGenerationRequestV1,
   hashSceneAuthoringAttemptV1,
   hashSceneAuthoringRouteDecisionV1,
   type SceneAuthoringAttemptResultV1,
   type SceneAuthoringAttemptV1,
   type SceneAuthoringRouteDecisionV1,
+  type NativeBlockGenerationRequestV1,
 } from "@whitebox-world/scene-authoring-contracts";
 import { isNil } from "lodash-es";
 import { resolveTraversalSurfaceProfileV1 } from "@whitebox-world/traversal";
@@ -227,34 +230,91 @@ function createBabylonNativeWorldPackageTestInputForProfileV1(
       reasonCodes: Object.freeze(["user-selected-supported-lane" as const]),
     }),
   });
+  const routeDecisionHash = hashSceneAuthoringRouteDecisionV1(route);
+  const bootstrapInputRef =
+    "worldkit://native-bootstrap-input/package-fixture@1";
+  const bootstrapInputHash =
+    hashBabylonNativeSceneBootstrapV1(nativeSceneBootstrap);
+  const generationRequest: NativeBlockGenerationRequestV1 = Object.freeze({
+    kind: "native-block-generation-request",
+    schemaVersion: 1,
+    id: "package-fixture.initial",
+    routeDecisionRef:
+      "worldkit://scene-authoring-route-decision/package-fixture@1",
+    routeDecisionHash,
+    sceneBriefRef: route.sceneBriefRef,
+    sceneBriefHash: route.sceneBriefHash,
+    referenceInputs: Object.freeze([]),
+    codexExecutionProfileRef:
+      "worldkit://codex-execution-profile/formal@1",
+    codexExecutionProfileHash: `sha256:${"5".repeat(64)}`,
+    taskInstructionRef:
+      "worldkit://task-instruction/native-block-reconstruction@1",
+    taskInstructionHash: `sha256:${"6".repeat(64)}`,
+    builderSkillRef: "worldkit://skill/worldkit-native-block-builder@1",
+    builderSkillHash: `sha256:${"7".repeat(64)}`,
+    workspaceContextManifestRef:
+      "worldkit://workspace-context/native-block-builder@1",
+    workspaceContextManifestHash: `sha256:${"8".repeat(64)}`,
+    contextInputs: Object.freeze([Object.freeze({
+      inputRef: "context/native-scene-api.json",
+      contentHash: nativeSceneApi.contentHash,
+    })]),
+    nativeSceneApiRef: nativeSceneApi.resourceRef,
+    nativeSceneApiHash: nativeSceneApi.contentHash,
+    nativeSceneProfileRef: nativeSceneProfile.resourceRef,
+    nativeSceneProfileHash: nativeSceneProfile.contentHash,
+    blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
+    blockProfileHash: `sha256:${"9".repeat(64)}`,
+    bootstrapInputRef,
+    bootstrapInputHash,
+    seed: nativeSceneBootstrap.seed,
+    budgets: Object.freeze({
+      maximumBlockCount: 2_000,
+      maximumStaticColliderCount: 500,
+      maximumStaticColliderVertexCount: 200_000,
+      maximumStaticColliderTriangleCount: 100_000,
+      maximumOutputBytes: 4_000_000,
+      timeoutSeconds: 900,
+    }),
+    declaredOutputPaths: Object.freeze([
+      "scene.ts",
+      "native-block-authoring.json",
+      "native-resources.json",
+    ] as const),
+  });
   const attempt: SceneAuthoringAttemptV1 = Object.freeze({
     kind: "scene-authoring-attempt",
     schemaVersion: 1,
     id: "package-fixture-attempt",
     sceneAuthoringRouteDecisionRef:
       "worldkit://scene-authoring-route-decision/package-fixture@1",
-    sceneAuthoringRouteDecisionHash: hashSceneAuthoringRouteDecisionV1(route),
+    sceneAuthoringRouteDecisionHash: routeDecisionHash,
     sceneBriefRef: route.sceneBriefRef,
     sceneBriefHash: route.sceneBriefHash,
     sourceInput: Object.freeze({
       kind: "babylon-native" as const,
-      bootstrapInputRef:
-        "worldkit://native-bootstrap-input/package-fixture@1",
-      bootstrapInputHash:
-        hashBabylonNativeSceneBootstrapV1(nativeSceneBootstrap),
+      bootstrapInputRef,
+      bootstrapInputHash,
       generationRequestRef:
         "worldkit://native-generation-request/package-fixture.initial@1",
-      generationRequestHash: sha256CanonicalJson({
-        kind: "native-block-generation-request-fixture",
-        id: "package-fixture.initial",
-      }) as Sha256HashV1,
+      generationRequestHash:
+        hashNativeBlockGenerationRequestV1(generationRequest),
     }),
     selectedAssetResources: Object.freeze([]),
     seed: nativeSceneBootstrap.seed,
     authoringProfileRef,
-    acceptanceTargetRefs: Object.freeze([]),
-    requiredEvidenceProfileRefs: Object.freeze([]),
+    acceptanceTargetRefs: Object.freeze([
+      "worldkit://acceptance-target/package-fixture-opening@1",
+    ]),
+    requiredEvidenceProfileRefs: Object.freeze([
+      "worldkit://evidence-profile/native-block-runtime@1",
+    ]),
   });
+  assertNativeBlockGenerationRequestMatchesAttemptV1(
+    generationRequest,
+    attempt,
+  );
   const attemptResult: SceneAuthoringAttemptResultV1 = Object.freeze({
     kind: "scene-authoring-attempt-result",
     schemaVersion: 1,
