@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "kind": "scene-catalog",
+  "id": "worldkit.dev-scenes",
+  "defaultSceneId": "feel-flat",
+  "entries": [
+    {
+      "id": "feel-flat",
+      "title": "空旷手感测试",
+      "purpose": "feel",
+      "source": {
+        "kind": "canonical-authoring",
+        "authoringSpecPath": "presets/feel-flat/world.json"
+      }
+    },
+    {
+      "id": "traversal-course",
+      "title": "台阶与通行测试",
+      "purpose": "traversal",
+      "source": {
+        "kind": "canonical-authoring",
+        "authoringSpecPath": "presets/traversal-course/world.json"
+      }
+    },
+    {
+      "id": "action-lab",
+      "title": "动作测试场",
+      "purpose": "action",
+      "source": {
+        "kind": "canonical-authoring",
+        "authoringSpecPath": "presets/action-lab/world.json"
+      }
+    }
+  ]
+}

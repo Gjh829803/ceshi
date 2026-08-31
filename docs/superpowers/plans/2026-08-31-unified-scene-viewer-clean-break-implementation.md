@@ -37,7 +37,7 @@
 
 **Files:** create `scenes/catalog.json`, three `scenes/presets/*/world.json`, `scripts/scenes/promote-scene-preset.ts` and focused test; modify root package scripts and test manifest.
 
-**Interfaces:** `promoteScenePresetV1({ sceneId, sourcePath, catalogPath })`; it delegates to `parseAuthoringSpecV4`, verifies matching ID and controlled G Bot Subject, rejects symlink/overwrite, durably renames preset bytes, then publishes catalog metadata.
+**Interfaces:** `promoteScenePresetV1({ sceneId, title, purpose, sourcePath, catalogPath })`; it delegates to `parseAuthoringSpecV4`, verifies matching ID and controlled G Bot Subject, rejects symlink/overwrite, durably renames preset bytes, then publishes catalog metadata.
 
 - [ ] Add RED tests for invalid V4, ID mismatch, non-G-Bot controlled Subject, symlink, overwrite and catalog-before-preset failure.
 - [ ] Run the focused test and confirm the publisher is absent.

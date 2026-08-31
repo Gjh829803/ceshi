@@ -117,6 +117,7 @@
     "@whitebox-world/runtime-contracts": "workspace:*",
     "@whitebox-world/runtime-host": "workspace:*",
     "@whitebox-world/scene-authoring-contracts": "workspace:*",
+    "@whitebox-world/scene-catalog": "workspace:*",
     "@whitebox-world/subject-contracts": "workspace:*",
     "@whitebox-world/subject-registry": "workspace:*",
     "@whitebox-world/terrain-compiler": "workspace:*",
