@@ -440,6 +440,14 @@ non-empty, execution-ordered `fixedInputSequence` of runtime `FixedInputV1` step
 hash; the Case never relies on an implicit Route, NavMesh, planner, or `goTo` route. Attempt `acceptanceTargetRefs` and
 `requiredEvidenceProfileRefs` must reference the Case/Profile; empty placeholder arrays are rejected.
 
+The Case is the sole owner of expected source-neutral facts; the Profile is the sole owner of
+BasisPoints/Millimeters tolerances. Evidence stores one closed observed discriminator and evidence-ref
+list per dimension (an empty list expresses missing evidence), bound through Attempt, formal Package
+root, World Build Identity and Capture identities. It retains only evaluator inputs, never a raw Runtime
+Snapshot: semantic graph/layers; visual-group target presence and normalized projections; opening
+anchors/order/distances; spawn support/medium/XYZ/gap; collider contributions/roles/overlay;
+reached/blocked/incomplete traversal checkpoints; and replay/Package/Build/Capture agreement.
+
 ### 8.2 Independent dimensions
 
 The Result has no masking aggregate score. Each required dimension independently returns

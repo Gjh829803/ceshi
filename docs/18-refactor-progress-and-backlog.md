@@ -220,9 +220,11 @@ Capture V1 是独立的新纵向切片，不改变该 90% 口径。
   locomotion Capability require 的节点；Definition 锁 Ref/hash，Compiler/Runtime 不猜 `ground`。
   最终 full regression、两项 Capture gate 与 completion review 已收口；该切片 Final GO，已由
   `eef75c6` / `5ffd031` 合入 `main`。
-- [x] G19-7 已把六个 Outdoor/catalog 场景接入同一 Gameplay Runtime，并保持 artifact-only
-  renderer 不暴露 `__WORLDKIT__` 或 Gameplay 方法；真实 Browser Gate 通过 6/6 Gameplay、
-  6/6 artifact-only 与 unknown-scene fail-closed。G19-8 已继续关闭 clean break 与最终全量验收。
+- [x] G19-7 的历史切片曾把六个 Outdoor/catalog 场景接入同一 Gameplay Runtime，并保持
+  artifact-only renderer 不暴露 `__WORLDKIT__` 或 Gameplay 方法；当时的 Browser Gate 通过
+  6/6 Gameplay、6/6 artifact-only 与 unknown-scene fail-closed。后续 Unified Scene Viewer
+  clean break 已删除 catalog-gameplay；当前门禁只覆盖三个 Canonical 调试预设与六个内部
+  artifact-only 场景，不能把这条历史证据当作现行入口。
 - [x] 真实 Chromium 下验证 Package Definition 的两个实例可以分别控制。
 
 2026-08-20 的新鲜验证证据：
@@ -652,16 +654,16 @@ P16-CLI1 证据：`worldkit schema project` / `registry search` / `change *` 复
 Request ID；connection profile 拒凭证，JSON 输出会 redact token。live submit 端口已定义，
 本切片没有随 CLI 启动的默认 live Host。验证：`authoring-edit-cli` 测试。
 
-P16-B1 证据：Playground 仅在 `runtimeRoute.mode === "authoring"` 且 loader 给出
-`authoringSpec`、adapter 有 `publishWorldReplacementV1` 时安装
-`window.__WORLDKIT_AUTHORING_EDIT__`。V5 保持 39 keys。catalog `?scene=` 不安装 Edit。
+P16-B1 证据：统一 Viewer 仅在 Host/Loader 提供有效 `authoringSpec` 发布上下文且 adapter
+有 `publishWorldReplacementV1` 时安装 `window.__WORLDKIT_AUTHORING_EDIT__`。Browser V5
+保持 exact 38 keys；已删除的 `?authoring=1` 与 Browser `?world=` 都不能选择或替换来源。
 包 DAG：`authoring-host` ↛ `runtime-host`。验证：Host/bridge 单测与 Chromium 安装测试。
 
 P16-F1 证据：`examples/authoring/p16-add-house` 与 `p16-terrain-replace`；journal 对抗覆盖
 Commit 后过期、quarantine、pin vs 并发 Apply、未 pin GC、prepare 失败、terrain Dry Run。
 Host↔RuntimeHost 集成覆盖 stale expectation 后成功 Full Reload（新 WorldSession、tick 0）。
 Chromium 安装测试证明 Edit 面隔离。页面级
-`worldkit-authoring-edit-add-house.browser.test.ts` 已在 `?authoring=1` 上
+`worldkit-authoring-edit-add-house.browser.test.ts` 已通过受信 Host 固定的 Viewer URL
 `publish-runtime` add-house：合法 PNG before ≠ after，`inspectFeatures()` 含
 `house-north`。该 G1 证据本身不证明 P1.4、Incremental 或人工操作验收；P1.4 由其独立
 completion record 与 fresh-process Gate 关闭。
@@ -1120,7 +1122,7 @@ Cursor Cloud 针对精确 SHA 执行，禁止无输入变化时反复重跑。
 #### NBR-1 当前唯一最高优先级纵向切片
 
 - [ ] NBR-00：合入详细设计、实施计划、WRC 优先级和 current-only 删除清单；
-- [ ] NBR-10：冻结 Route、真实 Generation Request/Receipt、Case/Profile 和修正后的 Attempt 身份；
+- [x] NBR-10：冻结 Route、真实 Generation Request/Receipt、Case/Profile 和修正后的 Attempt 身份；
 - [ ] NBR-20：通过统一 Codex task router 从真实参考输入生成闭合 Native Block workspace；
 - [ ] NBR-30：通过通用 Native Check/Explain 和 Package/Receipt 链，删除 Cloud Ridge 手写生产装配；
 - [ ] NBR-40：由保留的 BNA 验证 Harness 调用正式 RuntimeHost 和 SDK-owned
@@ -1276,9 +1278,9 @@ Placement S1、Simulation Take / Control Capture V1 与 Validation Capture/Integ
 | G19-4E | **已完成** | 全量门禁、真实回归 disposition、生成物治理 | G19-4D | `pnpm typecheck`、165 files / 2,079 tests、`pnpm build` 与 9 项 verify Gate 全通过；Take 根哈希由 `generate:example-takes` 生成；Route 重型套件在全量并发下通过 |
 | G19-5 | **已完成，作为 G19-6 前置底座** | Babylon Gameplay Port；`possessedBy` 唯一控制权；输入目标与 Camera Target projection 事务 | G19-4 | optional Possession、fixed-input Controller 隔离、staged transaction、provider-neutral projection 与 fail-closed Action 已完成 |
 | G19-6 | **已完成并在 `main`** | Browser Protocol V5 Gameplay 唯一入口、Snapshot V4、Reset/Rebind、Runtime Activity、Authoring/CLI/Capture/Take consumer cutover；当前 surface 为 exact 38 keys；Execution Subject locomotion Capability lock 与 Canonical capability state | G19-5 | `eef75c6` 实现、`5ffd031` completion review；typecheck、build、168 files / 2,134 tests、Canonical/Placement/Rigged/G Bot/R0/R1/R1b 与两项 Capture verifier 全通过；无 open confirmed P0/P1/P2 |
-| G19-7 | **已完成** | Outdoor/catalog route、page/artifact lifecycle 与六场景接线，不增加第二套 Gameplay 真相 | G19-6 | `da90f16` + completion record `1594823`；6/6 Gameplay、6/6 artifact-only、unknown-scene fail-closed Browser Gate 通过 |
+| G19-7 | **历史完成；现行入口已由 USV clean break 替换** | 当时的 Outdoor/catalog route、page/artifact lifecycle 与六场景接线；当前只保留六场景 artifact-only 证据面，不再提供 catalog Gameplay | G19-6 | 历史证据为 `da90f16` + completion record `1594823`；当前证据是三个 Canonical preset、六个 artifact-only 场景与 unknown-scene fail-closed |
 | G19-8 | **已完成并合入 `main`，Final GO** | 未发布协议 clean break、历史命名/兼容路径专项清理、零消费者 census、G19 整体全量验证、主 Agent深审与最终 disposition | G19-7 | 候选 `99fb822`；178 files / 2,172 tests、全部专项 Gate、632/0/489 census；与 `main@134592e` Camera 边界文档语义融合；无 open confirmed P0/P1/适用 P2 |
-| HNC-F1 | Alpha 前强制执行 | 对当时全部公共命名、exports、parser、Browser/CLI、生成资产和隐式 fallback 再做一次全面兼容性清理；同时关闭 `SCENE-ORIGIN-1` | Scene spawn-origin 与 collider-derived placement 合同 | 最新 clean-break machine gate + 人工语义分类；Scene 固定 0.9m bridge 删除；场景/Outdoor/Plan gates 全绿 |
+| HNC-F1 | Alpha 前强制执行 | 对当时全部公共命名、exports、parser、Browser/CLI、生成资产和隐式 fallback 再做一次全面兼容性清理；同时关闭 `SCENE-ORIGIN-1` | Scene spawn-origin 与 collider-derived placement 合同 | 最新 clean-break machine gate + 人工语义分类；Scene 固定 0.9m bridge 删除；`test:scenes`、`verify:scene-viewer`、artifact-only 与 Plan gates 全绿 |
 | WS-07B | **待开始；结构治理后续 1** | 按 public contract family 扩展唯一 source/generated parity；每次只迁一个领域 | `ARC-INT` 已完成 / 阻塞相关 Schema release | 正负 parity、unknown-key、round-trip、tracked bytes；禁止用私有 deep import 换取小 bundle |
 | WS-05B/C | **待开始；结构治理后续 2** | 按 owner 批次消减当前 52 条 exact workspace boundary debt；补必要 `/testing` exports、direct deps 与 per-package tsconfig | `ARC-INT` 已完成 / 阻塞 `WS-08` 的相关 package extraction | debt count 单调下降、zero stale/new、zero cycles、无 wildcard |
 | WS-08 | **待开始；结构治理后续 3** | 稳定 Host primitives 后拆分 Host/Studio/CLI composition package，不改变 Runtime/Camera/Capture authority | public contracts 稳定且相关 `WS-05B/C` debt 已清 / 无 | CLI snapshots、readiness/shutdown lifecycle、build graph、Studio E2E |
@@ -1322,7 +1324,8 @@ UCCB-65 的任务账本见
 census 当成永久证明。当前仍有语义职责、但未来应由显式合同替代的
 `SCENE_HUMANOID_SPAWN_CENTER_OFFSET_METERS` 已登记为 `SCENE-ORIGIN-1`：它不是兼容 alias，
 删除门禁是 Scene 明确 spawn origin 或从锁定 Collider 推导 placement，迁移全部 catalog scene，
-并通过 `test:scenes`、Outdoor Gameplay、Plan/Scene Plan gates。
+并通过 `test:scenes`、三个 Canonical 调试预设的 `verify:scene-viewer`、Plan/Scene Plan gates；
+旧 Outdoor catalog 只保留 artifact-only 证据，不再拥有 Gameplay 门禁。
 
 G19-4E 已关闭此前的两项验证债务：Simulation Take 不再手改 `worldPackageRootHash`，而由
 `generate:example-takes` 从 canonical WorldPackage identity 原子生成；两个 Route 重型套件保留

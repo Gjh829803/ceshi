@@ -43,7 +43,7 @@ Native Scene Lane；其 [长期设计](superpowers/specs/2026-08-28-ai-friendly-
 | 内容 | 权威来源 | 对接规则 |
 |---|---|---|
 | Command、Receipt、Event、World State | `@whitebox-world/gameplay-contracts` | 直接导入 exact 类型 |
-| Browser V5、Snapshot V4、Capture、Activity | `@whitebox-world/runtime-contracts` | 只通过 `window.__WORLDKIT__` 使用；结构修改走 `__WORLDKIT_AUTHORING_EDIT__`，不要给 V5 加第 40 个 key |
+| Browser V5、Snapshot V4、Capture、Activity | `@whitebox-world/runtime-contracts` | 只通过 `window.__WORLDKIT__` 使用；结构修改走 `__WORLDKIT_AUTHORING_EDIT__`，不要增减 V5 当前 exact 38-key surface |
 | RuntimeHost command/journal/session | `@whitebox-world/runtime-host` | SDK 内部所有；下游不 import |
 | Camera Profile/Context/Preference/Selection | `@whitebox-world/camera` | 当前提供 provider-neutral 领域合同和纯选择；不得误写成已接入 Browser/Runtime Pose |
 | Babylon Gameplay World Port | `@whitebox-world/runtime-babylon` | Adapter 内部所有；下游不依赖 internal Symbol |
