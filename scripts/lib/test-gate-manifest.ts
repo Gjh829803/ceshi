@@ -349,6 +349,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "scripts/project-health/contracts.test.ts", lane: "contract" },
   { path: "scripts/project-health/dependency-inventory.test.ts", lane: "contract" },
   { path: "scripts/project-health/evidence-store.test.ts", lane: "contract" },
+  { path: "scripts/project-health/mode-observer.test.ts", lane: "contract" },
   { path: "scripts/project-health/process-runner.test.ts", lane: "contract" },
   { path: "scripts/project-health/registry.test.ts", lane: "contract" },
   { path: "scripts/project-health/report.test.ts", lane: "contract" },

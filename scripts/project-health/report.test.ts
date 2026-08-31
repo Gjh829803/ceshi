@@ -395,6 +395,59 @@ describe("project health report aggregation", () => {
     expect(report.debtStatesByFingerprint[advisory.fingerprint]).toBe("open-advisory");
   });
 
+  it("keeps missing Release review advisory while failing on a Host-confirmed review P1", () => {
+    const profile = parsedProfile();
+    const missingReview = observation({
+      profile,
+      sensorId: "independent-review",
+      metricsById: {
+        "independent-review-dispositions-complete": {
+          id: "independent-review-dispositions-complete",
+          kind: "boolean",
+          status: "not-evaluated",
+          reasonCode: "OWNER_COMMAND_NOT_RUN",
+        },
+      },
+    });
+    const withoutReview = aggregate({
+      profile,
+      mode: "release",
+      observations: selectedObservations(profile, "release", { "independent-review": missingReview }),
+    });
+    expect(withoutReview.status).toBe("passed");
+    expect(withoutReview.metricsBySensorId["independent-review"]?.["independent-review-dispositions-complete"])
+      .toMatchObject({ status: "not-evaluated" });
+
+    const blocking = finding({
+      profile,
+      sensorId: "independent-review",
+      code: "PROJECT_HEALTH_INDEPENDENT_REVIEW_HOST_CONFIRMED",
+      subjectRefs: ["path:docs/reviews/full-dimension-review-protocol.md"],
+      evidenceClassIds: ["independent-review"],
+      metricIds: ["independent-review-dispositions-complete"],
+      suggestedGateId: null,
+    });
+    const withConfirmedP1 = aggregate({
+      profile,
+      mode: "release",
+      observations: selectedObservations(profile, "release", {
+        "independent-review": observation({
+          profile,
+          sensorId: "independent-review",
+          findings: [blocking],
+          metricsById: {
+            "independent-review-dispositions-complete": {
+              id: "independent-review-dispositions-complete",
+              kind: "boolean",
+              value: false,
+            },
+          },
+        }),
+      }),
+    });
+    expect(withConfirmedP1.status).toBe("failed");
+  });
+
   it("accepts exact advisory debt on the same day and expires the next day", () => {
     const profile = parsedProfile();
     const advisory = finding({

@@ -345,6 +345,26 @@ describe("project health process runner", () => {
     expect(result.evidence.stdout).toContain("[REDACTED_PATH]");
   });
 
+  it("preserves canonical JSON containing repository-relative POSIX paths", async () => {
+    const root = await createRepository();
+    const canonicalEvidence = JSON.stringify({
+      rootTestFiles: ["scripts/project-health/cli.test.ts"],
+      package: { id: "@whitebox-world/protocol", rootPath: "packages/protocol" },
+    });
+    const encodedEvidence = Buffer.from(canonicalEvidence).toString("base64");
+    const result = await runProjectHealthProcessV1({
+      repositoryRoot: root,
+      descriptor: descriptor([
+        "node",
+        "-e",
+        `process.stdout.write(Buffer.from('${encodedEvidence}', 'base64').toString())`,
+      ]),
+    });
+
+    expect(result.evidence.stdout).toBe(canonicalEvidence);
+    expect(JSON.parse(result.evidence.stdout)).toEqual(JSON.parse(canonicalEvidence));
+  });
+
   it("reports a signal exit without converting it to success", async () => {
     const root = await createRepository();
     const result = await runProjectHealthProcessV1({

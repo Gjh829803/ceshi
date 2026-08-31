@@ -397,6 +397,17 @@ describe("project health contracts", () => {
     expect(() => parseProjectHealthProfileV1(invalid, profileContext())).toThrow(/mode Sensor closure/i);
   });
 
+  it("keeps exact-SHA independent review outside the deterministic Release Required closure", () => {
+    const profile = parseProjectHealthProfileV1(
+      readJson("config/project-health/profile.json"),
+      profileContext(),
+    );
+
+    expect(profile.modesById.release.requiredSensorIds).not.toContain("independent-review");
+    expect(profile.modesById.release.advisorySensorIds).toContain("independent-review");
+    expect(profile.modesById.release.requiredGateIdsBySensorId).not.toHaveProperty("independent-review");
+  });
+
   it("rejects non-canonical capability suffixes", () => {
     const profile = readJson("config/project-health/profile.json") as {
       capabilitySelectorsById: Record<string, { pathSuffixes: string[] }>;

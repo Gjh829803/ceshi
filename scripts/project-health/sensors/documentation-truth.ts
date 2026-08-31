@@ -61,14 +61,34 @@ function finding(pathRef: string, expected: string, impact: string, evidenceRef:
 export function observeDocumentationTruthV1(input: {
   readonly profile: ProjectHealthProfileV1;
   readonly sensorImplementationHash: string;
-  readonly documents: readonly DocumentationDocumentV1[];
-  readonly repositoryPaths: readonly string[];
-  readonly declaredStatusesByTaskId: Readonly<Record<string, "Proposed" | "Implemented" | "Experimental">>;
+  readonly documents: readonly DocumentationDocumentV1[] | null;
+  readonly repositoryPaths: readonly string[] | null;
+  readonly declaredStatusesByTaskId: Readonly<Record<string, "Proposed" | "Implemented" | "Experimental">> | null;
 }): ProjectHealthObservationV1 {
   const inputFingerprint = sha256CanonicalJson({
     documents: input.documents,
     declaredStatusesByTaskId: input.declaredStatusesByTaskId,
   });
+  if (isNil(input.documents) || isNil(input.repositoryPaths) || isNil(input.declaredStatusesByTaskId)) {
+    return parseProjectHealthObservationV1({
+      kind: "project-health-observation",
+      schemaVersion: 1,
+      sensorId: "documentation-truth",
+      sensorImplementationHash: input.sensorImplementationHash,
+      inputFingerprint,
+      status: "incomplete",
+      metricsById: {
+        "documentation-claims-current": {
+          id: "documentation-claims-current",
+          kind: "boolean",
+          status: "not-evaluated",
+          reasonCode: "OWNER_COMMAND_NOT_RUN",
+        },
+      },
+      findings: [],
+      evidenceRefs: [],
+    }, input.profile);
+  }
   const repositoryPaths = new Set(input.repositoryPaths);
   const findings: ProjectHealthFindingV1[] = [];
   const evidenceRefs: string[] = [];

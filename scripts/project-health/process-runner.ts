@@ -411,7 +411,7 @@ function redactOutput(
     if (!isEmpty(root)) value = value.replace(new RegExp(escapeRegExp(root), "g"), "[REDACTED_PATH]");
   }
   return value.replace(
-    /(?:file:\/\/[^\s]+|[A-Za-z]:\\[^\s]+|\/(?:[^\s/=]+\/)*[^\s=]*)/g,
+    /(?:file:\/\/[^\s"']+|[A-Za-z]:\\[^\s"']+|(?<![A-Za-z0-9_.@/\\-])\/(?!\/)(?:(?:[^\s"'\\,\]}]+\/)*[^\s"'\\,\]}]+|(?=$|[\s"'\\,\]}])))/g,
     "[REDACTED_PATH]",
   );
 }

@@ -49,7 +49,7 @@ Observatory 的价值不是“再跑一次全部测试”，而是把这些跨�
 | Gate 执行与 Sensor 实现 | `scripts/project-health/registry.ts` | Host 只 admission 当前 Registry 的关闭 Gate/Sensor 实现；外部 Receipt、Observation 或同名函数不能进入聚合链 |
 | 工程健康结论 | `ProjectHealthReportV1` | Observatory 唯一聚合权威 |
 | Observatory Advisory 债务 | 当前源码/ADR + `config/project-health/accepted-debt.json` | 只接受精确 fingerprint + metric cap；不复制 workspace-boundary debt，不修改 Finding 原始证据 |
-| 工程健康趋势基线 | `config/project-health/baseline.json` | 只由 `health:update-baseline` 从 exact-tree accepted Report 生成；普通 check 只读 |
+| 工程健康趋势基线 | `config/project-health/baseline.json` | 只由 `health:update-baseline` 从 exact-tree、Required evidence complete 的 passed Report 生成；Advisory gaps 原样保留，普通 check 只读 |
 
 `ProjectHealthReportV1` 不是新的 SDK 公共协议，不进入 Registry、WorldPackage、Runtime 或 Browser。它是仓库开发工具合同，位于 `scripts/project-health/`，避免把 CI/审查概念塞入产品 package。
 
@@ -592,6 +592,11 @@ Nightly/Release Required `runtime-health` 变为 `incomplete`/`failed`；首个 
 ### 5.9 Independent Review Sensor
 
 Cursor Cloud/Codex 独立审查只产生 `IndependentReviewReceiptV1` 和候选 Finding。AI 的 `GO` 不能让 Report 通过；AI 的 P0/P1 也必须由 Host 在 exact tree 上复现或通过当前源码证据裁决后，才能成为 Blocking Finding。超时、无输出、错误 SHA，或任一 candidate 仍为 `pending-host-review`，都使 Review Observation 为 `incomplete`；`status: "completed"` 要求每个 candidate 均已逐条 `host-confirmed` 或 `host-rejected`。
+首个 Profile 中它在 Nightly/Release 都是 Advisory，不进入确定性 Release Required 闭包。PHO-8 将
+exact-SHA Review 与同一 SHA 的 Release Report 作为两份并列 adoption evidence，由 Host 逐条 disposition；
+Review Receipt 不作为 `health:release` 的外部 admission 回灌，也不通过 tracked 文件改变被审查 SHA。
+一旦 Host 在该结构化合同上确认 P0/P1，Blocking Finding 仍使最终 Report 或 PHO-8 disposition 失败，
+不因 Sensor 是 Advisory 而被忽略。
 
 ## 6. 三种运行模式
 
@@ -599,7 +604,7 @@ Cursor Cloud/Codex 独立审查只产生 `IndependentReviewReceiptV1` 和候选 
 |---|---|---|---|
 | `pr` | Pull Request exact head SHA；或现有 CI 的 `main` push exact after SHA | Required：同进程 Registry 执行 workspace-boundary、contract/generated parity、test census/change-impact Gate，再由真实 Sensor 产生 workspace/supplemental/test-topology Observation；Advisory：documentation truth、supply chain | deterministic Blocking、Required incomplete 阻断；每个 Owner Gate 在该 check 中只执行一次 |
 | `nightly` | `main` 定时/手动 exact SHA | §6.1 Nightly Required Gate；重型 Runtime、重复确定性和生命周期；未冻结 performance/visual/supply-chain/review 保持 Advisory | 合同/已冻结泄漏/确定性阻断；未冻结趋势 Advisory |
-| `release` | 明确 Release Candidate SHA | §6.1 Release Required Gate；冻结视觉/人工 Receipt、本地 Supply Chain 清单和独立深审 disposition | 任一 Required 缺失或 Blocking Finding 阻断；在线信号只按冻结 Policy 裁决 |
+| `release` | 明确 Release Candidate SHA | §6.1 Release Required Gate；冻结视觉/人工 Receipt、本地 Supply Chain 清单；独立深审由 PHO-8 作为并列 adoption evidence | 任一 Required 缺失或 Blocking Finding 阻断；在线信号与独立深审只按冻结 Policy 裁决 |
 
 首个 Profile 的 PR `requiredGateIdsBySensorId` 精确为：
 
@@ -626,7 +631,7 @@ Sensor 集合精确为：
 |---|---|---|
 | `pr` | `workspace-boundary`、`supplemental-authority`、`contract-parity`、`test-topology` | `supply-chain`、`documentation-truth` |
 | `nightly` | `workspace-boundary`、`supplemental-authority`、`contract-parity`、`test-topology`、`runtime-health` | `supply-chain`、`performance-size`、`visual-evidence`、`documentation-truth`、`independent-review` |
-| `release` | `workspace-boundary`、`supplemental-authority`、`contract-parity`、`supply-chain`、`test-topology`、`runtime-health`、`visual-evidence`、`documentation-truth`、`independent-review` | `performance-size` |
+| `release` | `workspace-boundary`、`supplemental-authority`、`contract-parity`、`supply-chain`、`test-topology`、`runtime-health`、`visual-evidence`、`documentation-truth` | `performance-size`、`independent-review` |
 
 Nightly/Release 的 `requiredGateIdsBySensorId` 精确为：
 
@@ -640,7 +645,7 @@ Nightly/Release 的 `requiredGateIdsBySensorId` 精确为：
 | `runtime-health` | `canonical`、`placement-layout`、`rigged-subject`、`g-bot-subject`、`control-capture`、`validation-capture`、`route-r0-contract`、`route-r1-heightfield`、`route-r1b-static-platform`、`outdoor-gameplay` | 同 Nightly | 对应现有 `pnpm verify:*` command |
 | `visual-evidence` | 不适用（Advisory） | 空 | Sensor 校验冻结 Release evidence manifest 中的 Golden/人工 Receipt，不调用 update command |
 | `documentation-truth` | 不适用（Advisory） | 空 | Sensor 自身的 repo-relative link/status/command observation |
-| `independent-review` | 不适用（Advisory） | 空 | exact-tree `IndependentReviewReceiptV1` + 全部 Host disposition |
+| `independent-review` | 不适用（Advisory） | 不适用（Advisory） | PHO-8 exact-tree `IndependentReviewReceiptV1` + 全部 Host disposition；不回灌 Release Host |
 
 `performance-size` 保持 Advisory，直到 runner profile、稳定窗口、阈值和负向 fixture 另行冻结；它不因出现在
 Release 就获得阻断权。`supply-chain` 在 Release 是 Required，但只对 deterministic local
@@ -713,6 +718,14 @@ Profile 固定 Gate，在同一进程中各执行一次，立即验证 execution
 `health:record` 复用相同 Registry/runner 链写出单 Gate 审计 Receipt，但该文件不被 check 重新 admission。
 聚合 `pnpm test` 在 PHO-7 中仍按其现有四个组成命令分别登记，保持相同测试语义和 per-gate identity。
 
+Host 在执行任何 Gate 前，必须从当前 mode 的 Profile Required Sensor 集合与内部 adapter readiness
+闭包派生 Required-input readiness。该闭包只表达当前 Host 是否拥有构造真实 Sensor 输入的生产 adapter，
+不得按 mode 硬编码降级 Profile，也不得接受外部 Receipt、Observation 或测试注入。若任一 Required
+Sensor 尚无生产输入 adapter，Host 不执行重型 Gate，而以空 validated Gate map 调用同一 Registry Sensor
+集合并聚合 canonical `incomplete` Report；退出码为 `3`。这条 pre-Gate 路径仍要求 output、exact HEAD、
+exact-clean、原子写和发布前二次身份校验。Advisory adapter 缺失不拦截 Gate；对应 Sensor 必须在 Report
+中保留 `not-evaluated` Metric、Observation Hash 与适用的 Advisory Finding，不能伪装为 passed。
+
 ## 7. Explain 与开发者体验
 
 稳定入口：
@@ -731,6 +744,10 @@ Exit Code：`0 = passed`、`2 = failed`、`3 = incomplete`、`1 = usage/infrastr
 进程内聚合，不作为可回灌输入发布。任何 tracked
 baseline 更新必须使用独立 `health:update-baseline` 命令，验证 exact tree/report/profile 后产生 diff 并经过
 Review；`health:pr/nightly/release` 不接受 `--update-baseline` flag，普通 check 永不写 tracked 文件。
+Baseline publication 只要求当前 mode 的 Required Sensor evidence 完整；Advisory `not-evaluated` Metric、
+Observation Hash 与 Finding 必须原样保留，不能因 baseline 写入被删除或伪装为已评估。首个单一 baseline
+采用 PR mode，并只与同 mode Report 比较；Nightly/Release 不复用它做跨 mode 趋势，也不为此增加 V2 或
+第二套 writer。
 
 ## 8. 债务、趋势与告警
 

@@ -12,6 +12,7 @@ import { parseProjectHealthProfileV1 } from "./contracts";
 import { DEPENDENCY_INVENTORY_EXECUTION_DESCRIPTOR_V1 } from "./dependency-inventory";
 import {
   admitRegisteredProjectHealthGateV1,
+  assertRegisteredProjectHealthPrIdentityV1,
   executeRegisteredProjectHealthGateV1,
   isRegisteredProjectHealthGateIdV1,
   PROJECT_HEALTH_GATE_REGISTRY_V1,
@@ -85,6 +86,38 @@ async function createCleanRepository(): Promise<Readonly<{ repositoryRoot: strin
 }
 
 describe("project health registry", () => {
+  it("admits PR ancestry only through the Registry-owned process envelope", async () => {
+    const fixture = await createCleanRepository();
+    const baseSha = fixture.commitSha;
+    execFileSync("git", ["commit", "--quiet", "--allow-empty", "-m", "head"], { cwd: fixture.repositoryRoot });
+    const headSha = execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: fixture.repositoryRoot,
+      encoding: "utf8",
+    }).trim();
+
+    await expect(assertRegisteredProjectHealthPrIdentityV1({
+      repositoryRoot: fixture.repositoryRoot,
+      baseSha,
+      headSha,
+    })).resolves.toEqual({ checkoutSha: headSha, requestedHeadSha: headSha, isMergeCommit: false });
+    await expect(assertRegisteredProjectHealthPrIdentityV1({
+      repositoryRoot: fixture.repositoryRoot,
+      baseSha: headSha,
+      headSha,
+    })).rejects.toThrow(/base must precede/i);
+    await expect(assertRegisteredProjectHealthPrIdentityV1({
+      repositoryRoot: fixture.repositoryRoot,
+      baseSha: headSha,
+      headSha: baseSha,
+    })).rejects.toThrow(/checkout HEAD|ancestor/i);
+    await expect(assertRegisteredProjectHealthPrIdentityV1({
+      repositoryRoot: fixture.repositoryRoot,
+      baseSha: "f".repeat(40),
+      headSha,
+    })).rejects.toThrow(/infrastructure/i);
+    expect(isRegisteredProjectHealthGateIdV1("pr-base-ancestry")).toBe(false);
+  });
+
   it("binds every Profile Sensor to one executable source-derived implementation", () => {
     const profile = parsedProfile();
     expect(Object.keys(PROJECT_HEALTH_SENSOR_REGISTRY_V1)).toEqual([...profile.sensorIds]);
@@ -126,6 +159,27 @@ describe("project health registry", () => {
     expect(after).not.toBe(before);
   });
 
+  it("invalidates implementation identity when only pnpm-lock.yaml bytes change", async () => {
+    const repositoryRoot = await mkdtemp(path.join(os.tmpdir(), "worldkit-project-health-sensor-lock-"));
+    roots.push(repositoryRoot);
+    await cp(path.join(REPOSITORY_ROOT, "scripts"), path.join(repositoryRoot, "scripts"), { recursive: true });
+    await cp(path.join(REPOSITORY_ROOT, "packages", "protocol"), path.join(repositoryRoot, "packages", "protocol"), {
+      recursive: true,
+    });
+    const lockfilePath = path.join(repositoryRoot, "pnpm-lock.yaml");
+    await cp(path.join(REPOSITORY_ROOT, "pnpm-lock.yaml"), lockfilePath);
+    const before = projectHealthSensorImplementationHashV1({
+      repositoryRoot,
+      sensorId: "workspace-boundary",
+    });
+    await writeFile(lockfilePath, `${await readFile(lockfilePath, "utf8")}\n# lockfile identity mutation\n`, "utf8");
+    const after = projectHealthSensorImplementationHashV1({
+      repositoryRoot,
+      sensorId: "workspace-boundary",
+    });
+    expect(after).not.toBe(before);
+  });
+
   it("registers every Profile and capability Gate plus frozen owner descriptors", () => {
     const profile = parsedProfile();
     const gateIds = new Set<string>(["change-impact-diff"]);
@@ -153,7 +207,15 @@ describe("project health registry", () => {
     expect(registeredProjectHealthGateArgvV1("typecheck")).toEqual(["pnpm", "typecheck"]);
     expect(registeredProjectHealthGateArgvV1("workspace-boundaries")).toEqual([
       "pnpm",
-      "verify:workspace-boundaries",
+      "exec",
+      "tsx",
+      "scripts/testing/verify-workspace-boundaries.ts",
+    ]);
+    expect(registeredProjectHealthGateArgvV1("test-census")).toEqual([
+      "pnpm",
+      "exec",
+      "tsx",
+      "scripts/testing/verify-test-gate-census.ts",
     ]);
   });
 

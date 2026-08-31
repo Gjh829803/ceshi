@@ -84,9 +84,29 @@ function authorityFinding(input: {
 export function observeSupplementalAuthorityV1(input: {
   readonly profile: ProjectHealthProfileV1;
   readonly sensorImplementationHash: string;
-  readonly evidence: WorkspaceBoundaryEvidenceV1;
-  readonly authorityPolicy: ProjectHealthAuthorityPolicyV1;
+  readonly evidence: WorkspaceBoundaryEvidenceV1 | null;
+  readonly authorityPolicy: ProjectHealthAuthorityPolicyV1 | null;
 }): ProjectHealthObservationV1 {
+  if (isNil(input.evidence) || isNil(input.authorityPolicy)) {
+    return parseProjectHealthObservationV1({
+      kind: "project-health-observation",
+      schemaVersion: 1,
+      sensorId: "supplemental-authority",
+      sensorImplementationHash: input.sensorImplementationHash,
+      inputFingerprint: sha256CanonicalJson({ evidence: input.evidence, authorityPolicy: input.authorityPolicy }),
+      status: "incomplete",
+      metricsById: {
+        "supplemental-authority-valid": {
+          id: "supplemental-authority-valid",
+          kind: "boolean",
+          status: "not-evaluated",
+          reasonCode: "OWNER_COMMAND_NOT_RUN",
+        },
+      },
+      findings: [],
+      evidenceRefs: [],
+    }, input.profile);
+  }
   const evidenceRef = workspaceBoundaryEvidenceRefV1(input.evidence);
   const findings: ProjectHealthFindingV1[] = [];
   const blockedKeys = new Set<string>();

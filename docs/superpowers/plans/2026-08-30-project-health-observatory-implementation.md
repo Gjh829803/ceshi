@@ -439,6 +439,22 @@ Add:
 
 `health:pr/nightly/release` are Host same-process chains: assert exact HEAD/exact-clean, select required Gate descriptors from the Registry, execute each Owner once through PHO-0B, parse and cross-check the closed execution evidence, store its content-addressed audit bytes, invoke the Registry's actual Sensor, then aggregate the internal Observation. They do not accept `--receipts`, Observation paths, or injected Sensor functions. The formal CLI may inspect only the canonical checkout that owns its loaded Registry/Sensor implementation. PR mode requires an explicit exact base and proves `base` is an ancestor of the requested exact head; PHO-7 supplies trusted `pull_request.head.sha` as `--commit`, so checkout equality rejects GitHub's synthetic merge checkout without rejecting a developer-authored two-parent head. `health:record --gate <registered-id> --commit <sha> --output <receipt>` uses the same chain but atomically writes an audit Receipt; check modes never read that file back as admission. No production entry may call the runner without Registry admission. `health:update-baseline` is the sole tracked-baseline writer and rejects a Report whose commit/profile/evidence identity differs. Reject a moving Release branch without `--commit`; require explicit output; make every check mode read-only and reject an `--update-baseline` flag. Recheck HEAD and exact-clean before publishing any result.
 
+`health:update-baseline` accepts only an exact-tree passed Report whose Required Sensor evidence is complete, then
+rebuilds the same Report in-process and requires canonical byte identity. Advisory `not-evaluated` Metrics and their
+Observation hashes remain in the baseline as honest trend starting points; requiring every Advisory to be evaluated
+would silently promote it to Required and deadlock publication. The first single baseline is PR-mode only and is not
+passed to Nightly/Release comparisons.
+
+Before any Gate execution, derive Required-input readiness from the mode's Profile Required Sensor IDs and the
+Host's current internal adapter-availability closure. Do not hard-code a downgraded mode Profile and do not admit
+external Receipt/Observation inputs. If a Required adapter is unavailable, execute zero heavy Gates, invoke the
+actual selected Registry Sensors with an empty validated-Gate map, atomically publish their canonical `incomplete`
+Report, and return exit `3`; output, exact HEAD/exact-clean, and pre-publication rechecks still apply. Missing
+Advisory adapters do not short-circuit Gate execution, but their not-evaluated Metrics and Observation hashes must
+remain visible in the Report. Add focused PR/Nightly/Release tests proving the selected Sensor key closure, zero
+Gate execution for unavailable Required inputs, PR Advisory behavior, and a future internal adapter-ready transition
+into the normal Gate chain without adding a production injection seam.
+
 - [ ] **Step 5: Verify and commit**
 
 Run the Registry plus three focused test files, `pnpm test:census`, `pnpm typecheck`, fixture
@@ -479,6 +495,12 @@ Replace the current duplicated fact-owner steps with one exact-head `health:pr` 
 
 Nightly uses concurrency cancellation, fixed runner profile, explicit timeout, artifact upload, and clean process/tree checks. Release is `workflow_dispatch` with a required immutable SHA and no automatic publication. PR checkout uses `ref: ${{ github.event.pull_request.head.sha }}` plus explicit fetch of the base ref followed by merge-base verification; main push uses exact event `after`/`before` and verifies ancestry. Measure the exact-head dry-run overhead and encode it in the Profile while keeping the PR job within the existing 20-minute timeout; if it does not fit, reduce PR Sensor scope instead of silently raising the timeout.
 
+Independent review is Advisory in the Nightly and Release Reports. PHO-7 must not add a Receipt/Observation
+admission path or make Release wait on PHO-8. PHO-8 consumes the exact-SHA Release Report and independent
+Codex/Cursor review as parallel adoption evidence, dispositions every candidate on that same SHA, and issues the
+final scoped GO/NO-GO. A Host-confirmed blocking review finding still fails adoption; moving the Sensor out of the
+deterministic Required closure does not waive review.
+
 - [ ] **Step 5: Verify and commit**
 
 Run workflow structure tests, test census, `pnpm typecheck`, `git diff --check`, then execute one fresh PR-mode, one
@@ -514,12 +536,17 @@ clean-tree assertion. Add Browser/visual gates only when implementation changes 
 - [ ] **Step 3: Request independent exact-SHA review**
 
 Cursor Cloud and Codex must review the current tree against the spec and D1–D6, including false-positive pressure, timeout/cleanup, evidence freshness, credential redaction, and the boundary with `ValidationReportV1`. Every finding is reproduced/dispositioned; AI output alone is not gate evidence.
+Treat these reviews as adoption evidence parallel to the exact-SHA Release Report. Do not write a Review Receipt
+back into the reviewed tree or pass it into `health:release`; any source change after review requires a fresh review
+on the new exact SHA.
 
 - [ ] **Step 4: Update truth documents**
 
 After the exact-tree GO, create `baseline.json` only through `health:update-baseline`, inspect its diff, then mark only
 implemented PHO tasks complete, link the review/report evidence, and retain explicit limitations. Do not raise unrelated
 BNA/BWB/Runtime completion percentages.
+Use the exact-SHA PR-mode Report for the first baseline; preserve Advisory gaps and do not compare that baseline against
+Nightly/Release Reports with a different mode.
 
 - [ ] **Step 5: Commit, PR, and merge**
 

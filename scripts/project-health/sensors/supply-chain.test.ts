@@ -134,8 +134,10 @@ describe("supply-chain sensor", () => {
   });
 
   it("reports incomplete for a missing or malformed inventory", () => {
-    const missing = observe("pr", { inventory: null });
+    const missing = observe("pr", { inventory: null, lockReceipt: null });
     expect(missing.status).toBe("incomplete");
+    expect(missing.findings.some((finding) =>
+      finding.code === "PROJECT_HEALTH_DEPENDENCY_PROVENANCE_MISSING")).toBe(false);
     expect(missing.metricsById["dependency-inventory-complete"]).toMatchObject({
       status: "not-evaluated",
       reasonCode: "OWNER_COMMAND_NOT_RUN",

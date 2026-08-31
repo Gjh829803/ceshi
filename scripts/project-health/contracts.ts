@@ -394,9 +394,8 @@ const FROZEN_MODE_SENSOR_AND_GATE_CLOSURE_V1 = Object.freeze({
       "runtime-health",
       "visual-evidence",
       "documentation-truth",
-      "independent-review",
     ],
-    advisorySensorIds: ["performance-size"],
+    advisorySensorIds: ["performance-size", "independent-review"],
     requiredGateIdsBySensorId: {
       "workspace-boundary": ["workspace-boundaries"],
       "supplemental-authority": [],
@@ -417,7 +416,6 @@ const FROZEN_MODE_SENSOR_AND_GATE_CLOSURE_V1 = Object.freeze({
       ],
       "visual-evidence": [],
       "documentation-truth": [],
-      "independent-review": [],
     },
   },
 } as const);

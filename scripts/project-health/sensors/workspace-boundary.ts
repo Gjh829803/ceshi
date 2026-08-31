@@ -1,4 +1,5 @@
-import { isEmpty } from "lodash-es";
+import { isEmpty, isNil } from "lodash-es";
+import { sha256CanonicalJson } from "@whitebox-world/protocol";
 
 import {
   workspaceBoundaryDebtFingerprintV1,
@@ -15,13 +16,33 @@ import { workspaceBoundaryEvidenceRefV1 } from "../workspace-boundary-adapter";
 
 export function observeWorkspaceBoundaryV1(input: {
   readonly profile: ProjectHealthProfileV1;
-  readonly evidence: WorkspaceBoundaryEvidenceV1;
+  readonly evidence: WorkspaceBoundaryEvidenceV1 | null;
   readonly sensorImplementationHash: string;
   readonly ownerGate: Readonly<{
     executionStatus: "passed" | "failed";
     evidenceRef: string;
-  }>;
+  }> | null;
 }): ProjectHealthObservationV1 {
+  if (isNil(input.evidence) || isNil(input.ownerGate)) {
+    return parseProjectHealthObservationV1({
+      kind: "project-health-observation",
+      schemaVersion: 1,
+      sensorId: "workspace-boundary",
+      sensorImplementationHash: input.sensorImplementationHash,
+      inputFingerprint: sha256CanonicalJson({ evidence: input.evidence, ownerGate: input.ownerGate }),
+      status: "incomplete",
+      metricsById: {
+        "workspace-boundary-debt-count": {
+          id: "workspace-boundary-debt-count",
+          kind: "count",
+          status: "not-evaluated",
+          reasonCode: "OWNER_COMMAND_NOT_RUN",
+        },
+      },
+      findings: [],
+      evidenceRefs: [],
+    }, input.profile);
+  }
   const evidenceRef = workspaceBoundaryEvidenceRefV1(input.evidence);
   const reconciled = new Set(input.evidence.reconciledDebtFingerprints);
   const findings: ProjectHealthFindingV1[] = [];

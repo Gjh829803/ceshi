@@ -233,12 +233,22 @@ function descriptor(id: string, argv: readonly [string, ...string[]]): ProjectHe
 }
 
 export const PROJECT_HEALTH_GATE_REGISTRY_V1 = Object.freeze({
-  "workspace-boundaries": descriptor("workspace-boundaries", ["pnpm", "verify:workspace-boundaries"]),
+  "workspace-boundaries": descriptor("workspace-boundaries", [
+    "pnpm",
+    "exec",
+    "tsx",
+    "scripts/testing/verify-workspace-boundaries.ts",
+  ]),
   "agent-self-check": descriptor("agent-self-check", ["pnpm", "check:agent-self-check"]),
   "playground-build": descriptor("playground-build", ["pnpm", "build"]),
   "tracked-tree-clean": descriptor("tracked-tree-clean", ["git", "diff", "--exit-code"]),
   "typecheck": descriptor("typecheck", ["pnpm", "typecheck"]),
-  "test-census": descriptor("test-census", ["pnpm", "test:census"]),
+  "test-census": descriptor("test-census", [
+    "pnpm",
+    "exec",
+    "tsx",
+    "scripts/testing/verify-test-gate-census.ts",
+  ]),
   "test-contract": descriptor("test-contract", ["pnpm", "test:contract"]),
   "test-independent": descriptor("test-independent", ["pnpm", "test:independent"]),
   "test-resource-heavy": descriptor("test-resource-heavy", ["pnpm", "test:resource-heavy"]),
@@ -466,6 +476,60 @@ export async function readProjectHealthCheckoutHeadV1(repositoryRoot: string): P
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
   }
   throw new TypeError("Unable to resolve the exact checkout commit.");
+}
+
+export async function assertRegisteredProjectHealthPrIdentityV1(input: Readonly<{
+  repositoryRoot: string;
+  baseSha: string;
+  headSha: string;
+}>): Promise<Readonly<{
+  checkoutSha: string;
+  requestedHeadSha: string;
+  isMergeCommit: false;
+}>> {
+  if (!/^[a-f0-9]{40}$/.test(input.baseSha) || !/^[a-f0-9]{40}$/.test(input.headSha)) {
+    throw new TypeError("PR identity requires exact lowercase 40-character SHAs.");
+  }
+  if (input.baseSha === input.headSha) {
+    throw new TypeError("PR base must precede the requested head commit.");
+  }
+  const checkoutSha = await readProjectHealthCheckoutHeadV1(input.repositoryRoot);
+  if (checkoutSha !== input.headSha) {
+    throw new TypeError("PR requested head must equal the exact checkout HEAD.");
+  }
+  await assertProjectHealthExactCleanCheckoutV1(input.repositoryRoot);
+  const argv = ["git", "merge-base", "--is-ancestor", input.baseSha, input.headSha] as const;
+  const descriptor = parseProjectHealthExecutionDescriptorV1({
+    kind: "project-health-execution-descriptor",
+    schemaVersion: 1,
+    id: "pr-base-ancestry",
+    executionScope: "in-place-checkout",
+    descendantOwnershipMode: "inherit-owner-token",
+    argv,
+    allowedEnvironmentVariableNames: ["HOME", "PATH", "TMPDIR"],
+    implementationHash: sha256CanonicalJson({
+      id: "pr-base-ancestry",
+      argvPrefix: ["git", "merge-base", "--is-ancestor"],
+    }),
+    workingDirectory: ".",
+    timeoutMilliseconds: 30_000,
+    maximumOutputBytes: 65_536,
+  });
+  const execution = await runProjectHealthProcessV1({
+    repositoryRoot: input.repositoryRoot,
+    descriptor,
+  });
+  if (execution.evidence.status === "failed" && execution.evidence.exitCode === 1) {
+    throw new TypeError("PR base must be an ancestor of the exact requested head commit.");
+  }
+  if (execution.evidence.status !== "passed") {
+    throw new TypeError("PR ancestry identity verification infrastructure failed.");
+  }
+  if (await readProjectHealthCheckoutHeadV1(input.repositoryRoot) !== input.headSha) {
+    throw new TypeError("Checkout HEAD changed during PR ancestry verification.");
+  }
+  await assertProjectHealthExactCleanCheckoutV1(input.repositoryRoot);
+  return { checkoutSha, requestedHeadSha: input.headSha, isMergeCommit: false };
 }
 
 export function isRegisteredProjectHealthGateIdV1(gateId: string): boolean {

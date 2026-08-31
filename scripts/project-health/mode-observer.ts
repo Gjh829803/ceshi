@@ -12,11 +12,14 @@ import {
 import { planChangeImpactV1 } from "./change-impact";
 import {
   parseProjectHealthAuthorityPolicyV1,
+  parseProjectHealthSupplyChainPolicyV1,
   type ProjectHealthGateReceiptV1,
   type ProjectHealthModeV1,
   type ProjectHealthObservationV1,
   type ProjectHealthProfileV1,
+  type ProjectHealthSensorIdV1,
 } from "./contracts";
+import { projectPnpmLicenseInventoryV1 } from "./dependency-inventory";
 import type { ProjectHealthExecutionEvidenceV1 } from "./process-runner";
 import {
   observeRegisteredProjectHealthSensorV1,
@@ -27,6 +30,29 @@ import type { ContractParityOwnerEvidenceV1 } from "./sensors/contract-parity";
 export interface ProjectHealthValidatedGateV1 {
   readonly receipt: ProjectHealthGateReceiptV1;
   readonly evidence: ProjectHealthExecutionEvidenceV1;
+}
+
+const PROJECT_HEALTH_READY_SENSOR_ADAPTER_IDS_V1 = new Set<ProjectHealthSensorIdV1>([
+  "workspace-boundary",
+  "supplemental-authority",
+  "contract-parity",
+  "test-topology",
+]);
+
+export function projectHealthRequiredInputReadinessV1(input: Readonly<{
+  profile: ProjectHealthProfileV1;
+  mode: ProjectHealthModeV1;
+}>): Readonly<{
+  isReady: boolean;
+  missingRequiredSensorIds: readonly ProjectHealthSensorIdV1[];
+}> {
+  const missingRequiredSensorIds = sortBy(input.profile.modesById[input.mode].requiredSensorIds.filter(
+    (sensorId) => !PROJECT_HEALTH_READY_SENSOR_ADAPTER_IDS_V1.has(sensorId),
+  ));
+  return {
+    isReady: isEmpty(missingRequiredSensorIds),
+    missingRequiredSensorIds,
+  };
 }
 
 function workspaceEvidenceFromGate(
@@ -87,12 +113,40 @@ function changedPathsFromGate(
   )));
 }
 
+function fixedRequiredGateIds(
+  profile: ProjectHealthProfileV1,
+  mode: ProjectHealthModeV1,
+): readonly string[] {
+  return sortBy(uniq(Object.values(profile.modesById[mode].requiredGateIdsBySensorId).flatMap((ids) => ids ?? [])));
+}
+
+function supplyChainInventoryFromGate(input: Readonly<{
+  repositoryRoot: string;
+  commitSha: string;
+  validatedGatesById: ReadonlyMap<string, ProjectHealthValidatedGateV1>;
+}>) {
+  const gate = input.validatedGatesById.get("dependency-inventory");
+  if (isNil(gate) || gate.receipt.status !== "passed" || gate.evidence.status !== "passed") return null;
+  try {
+    return projectPnpmLicenseInventoryV1({
+      installRoot: input.repositoryRoot,
+      commitSha: input.commitSha,
+      commandHash: gate.receipt.commandHash,
+      inputFingerprint: gate.receipt.inputFingerprint,
+      pnpmLicensesJson: JSON.parse(gate.evidence.stdout),
+    });
+  } catch {
+    return null;
+  }
+}
+
 export async function observeProjectHealthModeV1(input: Readonly<{
   repositoryRoot: string;
   profile: ProjectHealthProfileV1;
   mode: ProjectHealthModeV1;
   commitSha: string;
   baseSha: string | null;
+  evaluatedOn: string;
   requestedHeadSha: string;
   checkoutSha: string;
   isMergeCommit: boolean;
@@ -106,29 +160,30 @@ export async function observeProjectHealthModeV1(input: Readonly<{
   const workspaceEvidence = workspaceEvidenceFromGate(input.validatedGatesById);
   const testCensus = testCensusFromGate(input.validatedGatesById);
   const workspaceGate = input.validatedGatesById.get("workspace-boundaries");
-  if (
-    selectedSensorIds.has("workspace-boundary")
-    && !isNil(workspaceEvidence)
-    && !isNil(workspaceGate)
-    && (workspaceGate.evidence.status === "passed" || workspaceGate.evidence.status === "failed")
-  ) {
+  if (selectedSensorIds.has("workspace-boundary")) {
     observations.push(observeRegisteredProjectHealthSensorV1({
       sensorId: "workspace-boundary",
       sensorInput: {
         profile: input.profile,
         evidence: workspaceEvidence,
-        ownerGate: {
-          executionStatus: workspaceGate.evidence.status,
-          evidenceRef: workspaceGate.receipt.evidenceRef,
-        },
+        ownerGate: !isNil(workspaceGate)
+            && (workspaceGate.evidence.status === "passed" || workspaceGate.evidence.status === "failed")
+          ? {
+              executionStatus: workspaceGate.evidence.status,
+              evidenceRef: workspaceGate.receipt.evidenceRef,
+            }
+          : null,
       },
     }));
   }
-  if (selectedSensorIds.has("supplemental-authority") && !isNil(workspaceEvidence)) {
-    const authorityPolicy = parseProjectHealthAuthorityPolicyV1(JSON.parse(await readFile(
-      path.join(input.repositoryRoot, "config/project-health/authority-policy.json"),
-      "utf8",
-    )), input.profile);
+  if (selectedSensorIds.has("supplemental-authority")) {
+    let authorityPolicy = null;
+    try {
+      authorityPolicy = parseProjectHealthAuthorityPolicyV1(JSON.parse(await readFile(
+        path.join(input.repositoryRoot, "config/project-health/authority-policy.json"),
+        "utf8",
+      )), input.profile);
+    } catch {}
     observations.push(observeRegisteredProjectHealthSensorV1({
       sensorId: "supplemental-authority",
       sensorInput: { profile: input.profile, evidence: workspaceEvidence, authorityPolicy },
@@ -157,18 +212,21 @@ export async function observeProjectHealthModeV1(input: Readonly<{
       },
     }));
   }
-  if (selectedSensorIds.has("test-topology") && !isNil(workspaceEvidence)) {
-    const changedPaths = changedPathsFromGate(input.validatedGatesById);
-    if (!isNil(changedPaths)) {
+  if (selectedSensorIds.has("test-topology")) {
+    const changedPaths = input.mode === "pr" ? changedPathsFromGate(input.validatedGatesById) : [];
+    let impact = null;
+    if (!isNil(workspaceEvidence) && !isNil(changedPaths)) {
       const gateIds = Object.keys(input.profile.capabilityGateIdsById).flatMap((capabilityId) =>
         input.profile.capabilityGateIdsById[capabilityId] ?? [],
       );
-      const inputFingerprintsByGateId = await projectHealthGateInputFingerprintsV1({
-        repositoryRoot: input.repositoryRoot,
-        profile: input.profile,
-        gateIds: sortBy(uniq(gateIds)),
-      });
-      const impact = planChangeImpactV1({
+      const inputFingerprintsByGateId = isEmpty(changedPaths)
+        ? {}
+        : await projectHealthGateInputFingerprintsV1({
+            repositoryRoot: input.repositoryRoot,
+            profile: input.profile,
+            gateIds: sortBy(uniq(gateIds)),
+          });
+      impact = planChangeImpactV1({
         profile: input.profile,
         mode: input.mode,
         commitSha: input.commitSha,
@@ -177,23 +235,87 @@ export async function observeProjectHealthModeV1(input: Readonly<{
         evidence: workspaceEvidence,
         inputFingerprintsByGateId,
       });
-      const receipts = [...input.validatedGatesById.values()].map((entry) => entry.receipt);
-      observations.push(observeRegisteredProjectHealthSensorV1({
-        sensorId: "test-topology",
-        sensorInput: {
-          profile: input.profile,
-          mode: input.mode,
-          impact,
-          census: testCensus,
-          requiredGateIds: input.profile.modesById[input.mode].requiredGateIdsBySensorId["test-topology"] ?? [],
-          receipts,
-          expectedCommitSha: input.commitSha,
-          requestedHeadSha: input.requestedHeadSha,
-          checkoutSha: input.checkoutSha,
-          isMergeCommit: input.isMergeCommit,
-        },
-      }));
     }
+    observations.push(observeRegisteredProjectHealthSensorV1({
+      sensorId: "test-topology",
+      sensorInput: {
+        profile: input.profile,
+        mode: input.mode,
+        impact,
+        census: testCensus,
+        requiredGateIds: sortBy(uniq([
+          ...fixedRequiredGateIds(input.profile, input.mode),
+          ...(input.mode === "pr" ? ["change-impact-diff"] : []),
+        ])),
+        receipts: [...input.validatedGatesById.values()].map((entry) => entry.receipt),
+        expectedCommitSha: input.commitSha,
+        requestedHeadSha: input.requestedHeadSha,
+        checkoutSha: input.checkoutSha,
+        isMergeCommit: input.isMergeCommit,
+      },
+    }));
+  }
+  if (selectedSensorIds.has("supply-chain")) {
+    let policy = null;
+    try {
+      policy = parseProjectHealthSupplyChainPolicyV1(JSON.parse(await readFile(
+        path.join(input.repositoryRoot, "config/project-health/supply-chain-policy.json"),
+        "utf8",
+      )));
+    } catch {}
+    observations.push(observeRegisteredProjectHealthSensorV1({
+      sensorId: "supply-chain",
+      sensorInput: {
+        profile: input.profile,
+        mode: input.mode,
+        evaluatedOn: input.evaluatedOn,
+        expectedCommitSha: input.commitSha,
+        policy,
+        inventory: supplyChainInventoryFromGate(input),
+        lockReceipt: null,
+        advisorySnapshot: null,
+      },
+    }));
+  }
+  if (selectedSensorIds.has("runtime-health")) {
+    observations.push(observeRegisteredProjectHealthSensorV1({
+      sensorId: "runtime-health",
+      sensorInput: { profile: input.profile, mode: input.mode, evidences: null },
+    }));
+  }
+  if (selectedSensorIds.has("performance-size")) {
+    observations.push(observeRegisteredProjectHealthSensorV1({
+      sensorId: "performance-size",
+      sensorInput: { profile: input.profile, measurement: null, baseline: null },
+    }));
+  }
+  if (selectedSensorIds.has("visual-evidence")) {
+    observations.push(observeRegisteredProjectHealthSensorV1({
+      sensorId: "visual-evidence",
+      sensorInput: { profile: input.profile, evidence: null },
+    }));
+  }
+  if (selectedSensorIds.has("documentation-truth")) {
+    observations.push(observeRegisteredProjectHealthSensorV1({
+      sensorId: "documentation-truth",
+      sensorInput: {
+        profile: input.profile,
+        documents: null,
+        repositoryPaths: null,
+        declaredStatusesByTaskId: null,
+      },
+    }));
+  }
+  if (selectedSensorIds.has("independent-review")) {
+    observations.push(observeRegisteredProjectHealthSensorV1({
+      sensorId: "independent-review",
+      sensorInput: {
+        profile: input.profile,
+        expectedCommitSha: input.commitSha,
+        receipt: null,
+        timedOut: false,
+      },
+    }));
   }
   return observations;
 }

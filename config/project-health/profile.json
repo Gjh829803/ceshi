@@ -103,10 +103,9 @@
         "test-topology",
         "runtime-health",
         "visual-evidence",
-        "documentation-truth",
-        "independent-review"
+        "documentation-truth"
       ],
-      "advisorySensorIds": ["performance-size"],
+      "advisorySensorIds": ["performance-size", "independent-review"],
       "requiredGateIdsBySensorId": {
         "workspace-boundary": ["workspace-boundaries"],
         "supplemental-authority": [],
@@ -138,8 +137,7 @@
           "validation-capture"
         ],
         "visual-evidence": [],
-        "documentation-truth": [],
-        "independent-review": []
+        "documentation-truth": []
       },
       "runnerProfileId": "github-linux-x64",
       "maximumDurationMilliseconds": 10800000

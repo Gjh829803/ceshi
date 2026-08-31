@@ -56,7 +56,7 @@ export function observeTestTopologyV1(input: {
   readonly profile: ProjectHealthProfileV1;
   readonly sensorImplementationHash: string;
   readonly mode: ProjectHealthModeV1;
-  readonly impact: ChangeImpactResultV1;
+  readonly impact: ChangeImpactResultV1 | null;
   readonly census: Pick<TestGateCensusReportV1, "rootTestFiles"> | null;
   readonly requiredGateIds: readonly string[];
   readonly receipts: readonly ProjectHealthGateReceiptV1[];
@@ -65,6 +65,37 @@ export function observeTestTopologyV1(input: {
   readonly checkoutSha: string;
   readonly isMergeCommit: boolean;
 }): ProjectHealthObservationV1 {
+  if (isNil(input.impact)) {
+    const inputFingerprint = sha256CanonicalJson({
+      mode: input.mode,
+      impact: null,
+      censusRootTestFiles: input.census?.rootTestFiles ?? null,
+      requiredGateIds: input.requiredGateIds,
+      receipts: input.receipts,
+      expectedCommitSha: input.expectedCommitSha,
+      requestedHeadSha: input.requestedHeadSha,
+      checkoutSha: input.checkoutSha,
+      isMergeCommit: input.isMergeCommit,
+    });
+    return parseProjectHealthObservationV1({
+      kind: "project-health-observation",
+      schemaVersion: 1,
+      sensorId: "test-topology",
+      sensorImplementationHash: input.sensorImplementationHash,
+      inputFingerprint,
+      status: "incomplete",
+      metricsById: {
+        "test-census-current": {
+          id: "test-census-current",
+          kind: "boolean",
+          status: "not-evaluated",
+          reasonCode: "OWNER_COMMAND_NOT_RUN",
+        },
+      },
+      findings: [],
+      evidenceRefs: input.receipts.map((receipt) => receipt.evidenceRef),
+    }, input.profile);
+  }
   const evidenceRefs = [
     ...Object.values(input.impact.plan.inputFingerprintsByGateId),
     ...input.receipts.map((receipt) => receipt.evidenceRef),

@@ -1052,7 +1052,13 @@ audit output -> actual Registry Sensor -> internal Observation -> Report`。外�
 admission；workspace graph 与 test census 只取同次 Gate stdout 的语义 evidence。Sensor 身份绑定真实递归源码
 闭包 Hash，所有可信入口要求 own-checkout exact HEAD/exact-clean；PR 还要求显式 ancestor base，并由 trusted
 event head 与 checkout equality 排除合成 merge checkout，再由关闭 execution-evidence parser 校验状态、仓库指纹与
-清理结果。该施工更新不表示 PHO-6 已完成，也不提高本页总进度。
+清理结果。Nightly/Release 的稳定入口保留，但在 Required Sensor 尚缺生产输入 adapter 时，Host 必须在任何
+重型 Gate 前从 Profile Required 集合派生 readiness，以空 Gate map 调用真实 Sensor、发布 canonical
+`incomplete` Report 并退出 `3`；不得降低 Profile、伪造证据或增加外部 admission。PR 仅缺 Advisory adapter，
+因此继续执行固定 Gate 闭包并显式保留 not-evaluated Metric。Release 的 independent review 同样保持
+Advisory，由 PHO-8 作为与 Release Report 并列的 exact-SHA adoption gate，不回灌同一 SHA。首个 baseline
+只接受 Required evidence 完整的 passed PR Report，并原样保留 Advisory gaps。该施工更新不表示 PHO-6
+已完成，也不提高本页总进度。
 
 - [x] PHO-0A：冻结 current-only Profile、Metric、Observation/Finding、Gate Plan/Receipt、Review Receipt、
   Report、中立 Workspace Evidence、补充 Authority/Supply Chain Policy、Accepted Debt 和 canonical fingerprint；

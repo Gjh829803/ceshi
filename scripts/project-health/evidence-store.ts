@@ -19,7 +19,7 @@ function redactStableEvidenceText(input: string): string {
     .replace(/\b(?:crsr|sk)_[A-Za-z0-9]*/gi, "[REDACTED_CREDENTIAL]")
     .replace(/file:\/\/[^\s"']+/gi, "[REDACTED_PATH]")
     .replace(/[A-Za-z]:\\[^\s"']+/g, "[REDACTED_PATH]")
-    .replace(/\/(?:[^\s/"']+\/)+[^\s"']+/g, "[REDACTED_PATH]");
+    .replace(/(?<![A-Za-z0-9_.@/\\-])\/(?!\/)(?:[^\s"'\\,\]}]+\/)*[^\s"'\\,\]}]+/g, "[REDACTED_PATH]");
 }
 
 function redactJsonValue(input: unknown): unknown {

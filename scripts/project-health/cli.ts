@@ -1,10 +1,9 @@
-import { execFileSync } from "node:child_process";
 import { readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { sha256CanonicalJson } from "@whitebox-world/protocol";
+import { sha256CanonicalJson, stringifyCanonicalJson } from "@whitebox-world/protocol";
 import { isEmpty, isEqual, isNil, sortBy, uniq } from "lodash-es";
 
 import {
@@ -13,12 +12,14 @@ import {
   parseProjectHealthReportV1,
   type ProjectHealthModeV1,
   type ProjectHealthProfileV1,
+  type ProjectHealthReportV1,
 } from "./contracts";
 import {
   assertProjectHealthOutputPathV1,
   writeProjectHealthJsonAtomicV1,
 } from "./evidence-store";
 import {
+  assertRegisteredProjectHealthPrIdentityV1,
   executeRegisteredProjectHealthGateV1,
   PROJECT_HEALTH_SENSOR_IMPLEMENTATION_HASHES_V1,
   readProjectHealthCheckoutHeadV1,
@@ -27,6 +28,7 @@ import {
 } from "./registry";
 import {
   observeProjectHealthModeV1,
+  projectHealthRequiredInputReadinessV1,
   type ProjectHealthValidatedGateV1,
 } from "./mode-observer";
 import {
@@ -94,31 +96,6 @@ function requiredOption(argumentsValue: ParsedArgumentsV1, name: string): string
   return value;
 }
 
-export function assertProjectHealthPrIdentityV1(input: Readonly<{
-  repositoryRoot: string;
-  baseSha: string;
-  headSha: string;
-}>): Readonly<{ checkoutSha: string; requestedHeadSha: string; isMergeCommit: boolean }> {
-  if (input.baseSha === input.headSha) throw new TypeError("PR base must precede the requested head commit.");
-  let isAncestor = false;
-  try {
-    execFileSync("git", ["-C", input.repositoryRoot, "merge-base", "--is-ancestor", input.baseSha, input.headSha], {
-      stdio: "ignore",
-      env: {
-        GIT_CONFIG_GLOBAL: "/dev/null",
-        GIT_CONFIG_NOSYSTEM: "1",
-        GIT_CONFIG_SYSTEM: "/dev/null",
-        GIT_OPTIONAL_LOCKS: "0",
-        GIT_TERMINAL_PROMPT: "0",
-        PATH: process.env.PATH,
-      },
-    });
-    isAncestor = true;
-  } catch {}
-  if (!isAncestor) throw new TypeError("PR base must be an ancestor of the exact requested head commit.");
-  return { checkoutSha: input.headSha, requestedHeadSha: input.headSha, isMergeCommit: false };
-}
-
 function repositoryPaths(repositoryRoot: string): readonly string[] {
   const ignored = new Set([".git", ".project-health", "node_modules"]);
   const paths: string[] = [];
@@ -179,6 +156,69 @@ function projectHealthOutputPath(repositoryRoot: string, requestedPath: string):
   return outputPath;
 }
 
+async function buildCurrentProjectHealthReportV1(input: Readonly<{
+  repositoryRoot: string;
+  profile: ProjectHealthProfileV1;
+  mode: ProjectHealthModeV1;
+  commitSha: string;
+  baseSha: string | null;
+  checkoutSha: string;
+  requestedHeadSha: string;
+  isMergeCommit: boolean;
+  clock: ProjectHealthClockV1;
+  baseline: ProjectHealthReportV1 | null;
+}>): Promise<ProjectHealthReportV1> {
+  const evaluatedOn = input.clock.utcDate();
+  const readiness = projectHealthRequiredInputReadinessV1({ profile: input.profile, mode: input.mode });
+  const requiredGateIds = readiness.isReady
+    ? sortBy(uniq([
+        ...Object.values(input.profile.modesById[input.mode].requiredGateIdsBySensorId)
+          .flatMap((ids) => ids ?? []),
+        ...(input.mode === "pr" && !isNil(input.baseSha) ? ["change-impact-diff"] : []),
+      ]))
+    : [];
+  const validatedGatesById = new Map<string, ProjectHealthValidatedGateV1>();
+  for (const gateId of requiredGateIds) {
+    const result = await executeRegisteredProjectHealthGateV1({
+      repositoryRoot: input.repositoryRoot,
+      profile: input.profile,
+      gateId,
+      commitSha: input.commitSha,
+      ...(!isNil(input.baseSha) ? { baseSha: input.baseSha } : {}),
+    });
+    validatedGatesById.set(gateId, result);
+  }
+  const observations = await observeProjectHealthModeV1({
+    repositoryRoot: input.repositoryRoot,
+    profile: input.profile,
+    mode: input.mode,
+    commitSha: input.commitSha,
+    baseSha: input.baseSha,
+    validatedGatesById,
+    checkoutSha: input.checkoutSha,
+    requestedHeadSha: input.requestedHeadSha,
+    isMergeCommit: input.isMergeCommit,
+    evaluatedOn,
+  });
+  const acceptedDebt = parseAcceptedProjectDebtListV1(
+    JSON.parse(await readFile(
+      path.join(input.repositoryRoot, "config/project-health/accepted-debt.json"),
+      "utf8",
+    )),
+    input.profile,
+  );
+  return aggregateProjectHealthReportV1({
+    profile: input.profile,
+    mode: input.mode,
+    commitSha: input.commitSha,
+    baseSha: input.baseSha,
+    clock: { utcDate: () => evaluatedOn },
+    observations,
+    acceptedDebt,
+    baseline: input.baseline,
+  });
+}
+
 async function runCheck(input: Readonly<{
   argv: readonly string[];
   repositoryRoot: string;
@@ -206,7 +246,7 @@ async function runCheck(input: Readonly<{
   if (!isNil(baseSha) && !COMMIT_SHA.test(baseSha)) throw new TypeError("--base must be an exact 40-character SHA.");
   if (mode === "pr" && isNil(baseSha)) throw new TypeError("PR checks require an explicit --base exact SHA.");
   const prIdentity = mode === "pr"
-    ? assertProjectHealthPrIdentityV1({
+    ? await assertRegisteredProjectHealthPrIdentityV1({
         repositoryRoot: input.repositoryRoot,
         baseSha: requiredOption(args, "base"),
         headSha: commitSha,
@@ -218,36 +258,6 @@ async function runCheck(input: Readonly<{
   });
   const profile = loadProfile(input.repositoryRoot);
   const modeValue = mode as ProjectHealthModeV1;
-  const requiredGateIds = sortBy(uniq([
-    ...Object.values(profile.modesById[modeValue].requiredGateIdsBySensorId).flatMap((ids) => ids ?? []),
-    ...(modeValue === "pr" && !isNil(baseSha) ? ["change-impact-diff"] : []),
-  ]));
-  const validatedGatesById = new Map<string, ProjectHealthValidatedGateV1>();
-  for (const gateId of requiredGateIds) {
-    const result = await executeRegisteredProjectHealthGateV1({
-      repositoryRoot: input.repositoryRoot,
-      profile,
-      gateId,
-      commitSha,
-      ...(!isNil(baseSha) ? { baseSha } : {}),
-    });
-    validatedGatesById.set(gateId, result);
-  }
-  const observations = await observeProjectHealthModeV1({
-    repositoryRoot: input.repositoryRoot,
-    profile,
-    mode: modeValue,
-    commitSha,
-    baseSha,
-    validatedGatesById,
-    checkoutSha: prIdentity.checkoutSha,
-    requestedHeadSha: prIdentity.requestedHeadSha,
-    isMergeCommit: prIdentity.isMergeCommit,
-  });
-  const acceptedDebt = parseAcceptedProjectDebtListV1(
-    JSON.parse(await readFile(path.join(input.repositoryRoot, "config/project-health/accepted-debt.json"), "utf8")),
-    profile,
-  );
   const baselinePath = option(args, "baseline");
   const baseline = isNil(baselinePath)
     ? null
@@ -255,14 +265,16 @@ async function runCheck(input: Readonly<{
         JSON.parse(await readFile(path.resolve(input.repositoryRoot, baselinePath), "utf8")),
         profile,
       );
-  const report = aggregateProjectHealthReportV1({
+  const report = await buildCurrentProjectHealthReportV1({
+    repositoryRoot: input.repositoryRoot,
     profile,
     mode: modeValue,
     commitSha,
     baseSha,
+    checkoutSha: prIdentity.checkoutSha,
+    requestedHeadSha: prIdentity.requestedHeadSha,
+    isMergeCommit: prIdentity.isMergeCommit,
     clock: input.clock,
-    observations,
-    acceptedDebt,
     baseline,
   });
   if (await readProjectHealthCheckoutHeadV1(input.repositoryRoot) !== commitSha) {
@@ -330,6 +342,7 @@ async function runExplain(input: Readonly<{
 async function runUpdateBaseline(input: Readonly<{
   argv: readonly string[];
   repositoryRoot: string;
+  clock: ProjectHealthClockV1;
 }>): Promise<number> {
   const args = parseArguments(input.argv, ["--commit", "--report", "--output"], []);
   if (!isEmpty(args.positionals)) throw new TypeError("update-baseline does not accept positional arguments.");
@@ -338,6 +351,9 @@ async function runUpdateBaseline(input: Readonly<{
     JSON.parse(await readFile(path.resolve(input.repositoryRoot, requiredOption(args, "report")), "utf8")),
     profile,
   );
+  if (report.mode !== "pr") {
+    throw new TypeError("The single baseline accepts only PR-mode Reports.");
+  }
   const commitSha = requiredOption(args, "commit");
   if (!COMMIT_SHA.test(commitSha)) throw new TypeError("--commit must be an exact 40-character SHA.");
   const actualHead = await readProjectHealthCheckoutHeadV1(input.repositoryRoot);
@@ -359,14 +375,44 @@ async function runUpdateBaseline(input: Readonly<{
   ) {
     throw new TypeError("Report is not an exact-tree accepted baseline identity.");
   }
-  if (Object.values(report.metricsBySensorId).some((metrics) =>
-    Object.values(metrics).some((metric) => "status" in metric && metric.status === "not-evaluated"))) {
-    throw new TypeError("Report is not evidence-complete for baseline publication.");
+  if (profile.modesById[report.mode].requiredSensorIds.some((sensorId) =>
+    Object.values(report.metricsBySensorId[sensorId] ?? {}).some((metric) =>
+      "status" in metric && metric.status === "not-evaluated"))) {
+    throw new TypeError("Report Required evidence is not complete for baseline publication.");
   }
   const requiredBaselinePath = path.join(input.repositoryRoot, "config/project-health/baseline.json");
   const requestedBaselinePath = path.resolve(input.repositoryRoot, requiredOption(args, "output"));
   if (requestedBaselinePath !== requiredBaselinePath) {
     throw new TypeError("Baseline output must be exactly config/project-health/baseline.json.");
+  }
+  if (!isNil(report.baseSha) && !COMMIT_SHA.test(report.baseSha)) {
+    throw new TypeError("Report baseSha must be an exact 40-character SHA.");
+  }
+  let reportIdentity = { checkoutSha: actualHead, requestedHeadSha: commitSha, isMergeCommit: false };
+  if (report.mode === "pr") {
+    if (isNil(report.baseSha)) {
+      throw new TypeError("PR baseline publication requires an explicit Report baseSha.");
+    }
+    reportIdentity = await assertRegisteredProjectHealthPrIdentityV1({
+      repositoryRoot: input.repositoryRoot,
+      baseSha: report.baseSha,
+      headSha: commitSha,
+    });
+  }
+  const freshReport = await buildCurrentProjectHealthReportV1({
+    repositoryRoot: input.repositoryRoot,
+    profile,
+    mode: report.mode,
+    commitSha,
+    baseSha: report.baseSha,
+    checkoutSha: reportIdentity.checkoutSha,
+    requestedHeadSha: reportIdentity.requestedHeadSha,
+    isMergeCommit: reportIdentity.isMergeCommit,
+    clock: input.clock,
+    baseline: null,
+  });
+  if (stringifyCanonicalJson(report) !== stringifyCanonicalJson(freshReport)) {
+    throw new TypeError("Disk Report does not match the fresh same-process Host Report.");
   }
   if (await readProjectHealthCheckoutHeadV1(input.repositoryRoot) !== commitSha) {
     throw new TypeError("Checkout HEAD changed before baseline publication.");
@@ -374,7 +420,7 @@ async function runUpdateBaseline(input: Readonly<{
   await assertProjectHealthExactCleanCheckoutV1(input.repositoryRoot);
   await writeProjectHealthJsonAtomicV1({
     outputPath: requiredBaselinePath,
-    value: report,
+    value: freshReport,
     repositoryRoot: input.repositoryRoot,
   });
   return 0;
@@ -397,7 +443,7 @@ export async function runProjectHealthCliV1(input: ProjectHealthCliInputV1): Pro
     });
     if (command === "record") return await runRecord({ argv, repositoryRoot });
     if (command === "explain") return await runExplain({ argv, repositoryRoot, stdout });
-    if (command === "update-baseline") return await runUpdateBaseline({ argv, repositoryRoot });
+    if (command === "update-baseline") return await runUpdateBaseline({ argv, repositoryRoot, clock });
     throw new TypeError("Expected check, record, explain, or update-baseline command.");
   } catch (error) {
     stderr(`${error instanceof Error ? error.message : String(error)}\n`);

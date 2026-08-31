@@ -95,6 +95,28 @@ describe("project health evidence store", () => {
     expect(siblings.filter((entry) => entry.endsWith(".tmp") || entry.includes("report.json."))).toEqual([]);
   });
 
+  it("preserves repository-relative paths while redacting absolute paths in JSON strings", async () => {
+    const repositoryRoot = await createRoot();
+    const stored = await putProjectHealthEvidenceJsonV1({
+      repositoryRoot,
+      value: {
+        rootTestFiles: ["scripts/project-health/cli.test.ts"],
+        packageRoot: "packages/protocol",
+        absolutePath: "/etc/passwd",
+      },
+    });
+
+    const raw = await getProjectHealthEvidenceV1({
+      repositoryRoot,
+      evidenceRef: stored.evidenceRef,
+    });
+    expect(JSON.parse(raw)).toEqual({
+      absolutePath: "[REDACTED_PATH]",
+      packageRoot: "packages/protocol",
+      rootTestFiles: ["scripts/project-health/cli.test.ts"],
+    });
+  });
+
   it("rejects a repository escape and leaves no partial output", async () => {
     const repositoryRoot = await createRoot();
     await expect(putProjectHealthEvidenceTextV1({

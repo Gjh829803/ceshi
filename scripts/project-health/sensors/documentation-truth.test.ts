@@ -51,6 +51,24 @@ describe("documentation-truth sensor", () => {
     expect(source).not.toMatch("ValidationReportV1");
   });
 
+  it("reports incomplete when the Host documentation input is unavailable", () => {
+    const observation = observeDocumentationTruthV1({
+      profile: parsedProfile(),
+      sensorImplementationHash: SENSOR_IMPLEMENTATION_HASH,
+      documents: null,
+      repositoryPaths: null,
+      declaredStatusesByTaskId: null,
+    });
+    expect(observation.status).toBe("incomplete");
+    expect(observation.metricsById["documentation-claims-current"]).toEqual({
+      id: "documentation-claims-current",
+      kind: "boolean",
+      status: "not-evaluated",
+      reasonCode: "OWNER_COMMAND_NOT_RUN",
+    });
+    expect(observation.findings).toEqual([]);
+  });
+
   it("fails a broken repo-relative documentation link", () => {
     const observation = observeDocumentationTruthV1({
       profile: parsedProfile(),
