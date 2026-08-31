@@ -34,8 +34,9 @@ tests / docs truth。
 
 ## 4. 门禁
 
-候选 SHA：`b0c79bd80c1e008eccccfd9cbf7435e12b4a3437`（基于
-`main@bbe4436f4eb4e64a88344bcb1689a1b69a207854`）。未改生产 Runtime / Havok / Camera / Input。
+实现提交：`b0c79bd80c1e008eccccfd9cbf7435e12b4a3437`。证据回填提交：
+`9b314459e5c70aeacd30bfcfae57cfcf83b68005`。基线
+`main@bbe4436f4eb4e64a88344bcb1689a1b69a207854`。未改生产 Runtime / Havok / Camera / Input。
 
 RED（仅本地、未提交的 Layout 变异；证明新断言会失败）：
 
