@@ -31,6 +31,7 @@
     "generate:runtime-contract-validators": "tsx scripts/contracts/build-runtime-contract-validators.ts --write",
     "check:runtime-contract-validators": "tsx scripts/contracts/build-runtime-contract-validators.ts",
     "check:agent-self-check": "tsx scripts/agents/check-agent-self-check.ts",
+    "check:native-block-builder-skill": "vitest run scripts/agents/native-block-builder-skill.test.ts",
     "agent:scene": "LC_ALL=C LANG=C bash scripts/agents/run-scene-agent.sh",
     "agent:plan": "LC_ALL=C LANG=C bash scripts/agents/run-scene-agent.sh --plan-only",
     "agent:build": "LC_ALL=C LANG=C bash scripts/agents/run-scene-agent.sh --build-only",
