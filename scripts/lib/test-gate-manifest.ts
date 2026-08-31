@@ -248,6 +248,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "packages/traversal/src/route-v2-contracts.test.ts", lane: "contract" },
   { path: "packages/traversal/src/runtime-evidence.test.ts", lane: "contract" },
   { path: "packages/traversal/src/runtime-probe-contract.test.ts", lane: "contract" },
+  { path: "packages/validation/src/reconstruction-contracts.test.ts", lane: "contract" },
   { path: "packages/validation/src/route-evaluator.test.ts", lane: "contract" },
   { path: "packages/validation/src/route-evidence-publication.test.ts", lane: "contract" },
   { path: "packages/validation/src/route-runtime-probe.test.ts", lane: "contract" },
