@@ -76,7 +76,7 @@ BWB5-10 -> BWB5-20 -> BWB5-30 -> BWB5-50 -> BWB5-60 -> BWB5-70
 | ID | Seed | Family | Layout intent | Expected Havok |
 |---|---|---|---|---|
 | `ordinary-and-blocked-steps` | `202608313` | steps | Exact BWB-4 six-block corridor: ground tops at `0m`, `0.25m` rise, `0.5m` half blocker | 0.25m pass, 0.5m block, ledge air |
-| `t-shaped-traversal` | `202608312` | t-shaped | Connected route spine + east/west arms; west arm blocked; east arm open | east pass, west block |
+| `t-shaped-traversal` | `202608312` | t-shaped | Connected route spine + east/west arms; west arm blocked; east arm open; north wall closes the spine | east pass, west block, north block |
 | `mountain-cliff` | `202608311` | mountain | Walkable terrace/steps plus stacked cliff mass | terrace pass, cliff face blocks, overlook ledge air |
 | `building-exterior` | `202608314` | building | Approach pad, `0.25m` threshold, U-shaped doorway, back wall | door pass, back wall block |
 | `limited-interior` | `202608315` | limited-interior | Single-layer floor, U walls, door gap, wall-supported ceiling `not-traversable` | interior pass, wall block; no Room/Nav claim |
