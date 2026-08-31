@@ -279,7 +279,6 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "scripts/agents/planner-skill.test.ts", lane: "contract" },
   { path: "scripts/assets/modular-subject-runtime-bundles.test.ts", lane: "contract" },
   { path: "scripts/assets/modular-subject-source-packages.test.ts", lane: "resource-heavy", reasonCodes: ["measured-duration"] },
-  { path: "scripts/cli/default-dev-entry.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"] },
   { path: "scripts/cli/runtime-session.integration.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process", "native-havok-or-recast"] },
   { path: "scripts/cli/worldkit-native.integration.test.ts", lane: "resource-heavy", reasonCodes: ["measured-duration"] },
   { path: "scripts/cli/worldkit-route-run.integration.test.ts", lane: "resource-heavy", reasonCodes: ["native-havok-or-recast"] },

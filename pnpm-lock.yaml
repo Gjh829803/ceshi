@@ -614,6 +614,8 @@ importers:
         specifier: ^4.18.1
         version: 4.18.1
 
+  packages/scene-catalog: {}
+
   packages/subject-actions:
     dependencies:
       '@whitebox-world/character-movement':
