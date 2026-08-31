@@ -90,7 +90,7 @@ BWB5-10 -> BWB5-20 -> BWB5-30 -> BWB5-50 -> BWB5-60 -> BWB5-70
 | `invalid-traversal-binding` | `202608323` | `WORLDKIT_NATIVE_BLOCK_COLLIDER_SELECTION_INVALID` |
 | `unsupported-spawn` | `202608324` | Block Layout finalizes without a Block Profile failure code; Runtime admission rejects the unsupported spawn with `WORLDKIT_NATIVE_SCENE_RUNTIME_SPAWN_SUPPORT_MISSING` before a playable session exists |
 | `disconnected-route` | `202608325` | `WORLDKIT_NATIVE_BLOCK_PROFILE_CHECK_REJECTED` / `WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED` |
-| `cleanup-throw-partial` | `202608326` | check reject after partial create; reverse dispose releases created Meshes |
+| `cleanup-throw-partial` | `202608326` | overlap finalize reject 后释放未 finalized Mesh；通用 Session 测试持有 partial/throwing cleanup 顺序证据 |
 
 ### Same-Layout outputs required for every finalized Case
 
@@ -139,12 +139,12 @@ Public names:
 
 **File:** `scripts/verification/bwb5-block-reconstruction-corpus.test.ts`
 
-- [x] Write failing Havok tests for the five positive cases, `unsupported-spawn`, reset, dispose, 30/60/120-like cadence on `ordinary-and-blocked-steps`, and sequential cross-session rebind with no leftover collider/listener/camera/input owner.
+- [x] Write Havok tests for the five positive cases, `unsupported-spawn`, reset, dispose, 30/60/120-like render cadence on `ordinary-and-blocked-steps`, and sequential cross-session rebind with no leftover Scene/Engine/Collider Mesh.
 - [x] Confirm they fail for missing corpus Module/behavior.
 - [x] Implement the factory and keep fixtures inside current vertex/triangle/collider budgets.
 - [x] Re-run the resource-heavy file until GREEN.
 
-The default WorldPackage fixture still has one `player` Subject. Cross-entity evidence is: reset+rebind of that Subject, plus sequential dispose of case A and create of case B with different collider IDs. Do not add a second product Subject Definition.
+The default WorldPackage fixture still has one `player` Subject. Current evidence is reset+rebind of that Subject, plus sequential dispose of case A and create of case B with different collider IDs. It is not cross-entity or Listener/Camera/Input-owner evidence. Do not add a second product Subject Definition.
 
 ## Task 4: BWB5-60 / BWB5-70
 

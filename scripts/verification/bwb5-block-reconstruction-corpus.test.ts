@@ -199,7 +199,7 @@ function subjectOf(
   return subject;
 }
 
-function blockingCenterLimitMeters(
+function positiveAxisCenterLimitMeters(
   verified: VerifiedBabylonNativeWorldPackageDirectoryV1,
   colliderId: string,
   axisIndex: 0 | 2,
@@ -218,15 +218,29 @@ function blockingCenterLimitMeters(
   if (isNil(contribution)) {
     throw new Error(`BWB-5 verified Package is missing Collider '${colliderId}'.`);
   }
-  if (contribution.traversalBinding.kind !== "not-traversable") {
-    throw new Error(`BWB-5 Collider '${colliderId}' must be not-traversable.`);
-  }
   const nearFaceMeters = Math.max(
     ...contribution.worldPositionsMetersXYZ.filter(
       (_, index) => index % 3 === axisIndex,
     ),
   );
   return nearFaceMeters + controlledDescriptor.collider.radiusMeters;
+}
+
+function blockingCenterLimitMeters(
+  verified: VerifiedBabylonNativeWorldPackageDirectoryV1,
+  colliderId: string,
+  axisIndex: 0 | 2,
+): number {
+  const contribution = verified.nativeSceneContribution.staticColliders.find(
+    ({ id }) => id === colliderId,
+  );
+  if (isNil(contribution)) {
+    throw new Error(`BWB-5 verified Package is missing Collider '${colliderId}'.`);
+  }
+  if (contribution.traversalBinding.kind !== "not-traversable") {
+    throw new Error(`BWB-5 Collider '${colliderId}' must be not-traversable.`);
+  }
+  return positiveAxisCenterLimitMeters(verified, colliderId, axisIndex);
 }
 
 function expectBlockedAtCenterLimit(
@@ -268,21 +282,39 @@ describe("BWB-5 Block Reconstruction Corpus Runtime", () => {
         actions: ["move-forward"],
         ticks: 65,
       });
-      expect(subjectOf(crossed, entityId).positionMetersXYZ[1])
-        .toBeGreaterThan(0.24);
-      expect(subjectOf(crossed, entityId).movementMedium).toBe("ground");
+      const crossedSubject = subjectOf(crossed, entityId);
+      expect(crossedSubject.positionMetersXYZ[2]).toBeLessThan(-1.5);
+      expect(crossedSubject.positionMetersXYZ[2]).toBeGreaterThan(-2.5);
+      expect(crossedSubject.positionMetersXYZ[1]).toBeGreaterThan(0.24);
+      expect(crossedSubject.positionMetersXYZ[1]).toBeLessThanOrEqual(0.31);
+      expect(crossedSubject.movementMedium).toBe("ground");
       const elevated = await runtime.runFixedInput({
         actions: ["move-forward"],
         ticks: 30,
       });
-      expect(subjectOf(elevated, entityId).positionMetersXYZ[2])
-        .toBeLessThan(-2.5);
+      const elevatedSubject = subjectOf(elevated, entityId);
+      expect(elevatedSubject.positionMetersXYZ[2]).toBeLessThan(-2.5);
+      expect(elevatedSubject.positionMetersXYZ[2]).toBeGreaterThan(-3.5);
+      expect(elevatedSubject.positionMetersXYZ[1]).toBeGreaterThanOrEqual(0.25);
+      expect(elevatedSubject.positionMetersXYZ[1]).toBeLessThanOrEqual(0.31);
+      expect(elevatedSubject.movementMedium).toBe("ground");
       const blocked = await runtime.runFixedInput({
         actions: ["move-forward"],
         ticks: 85,
       });
-      expect(subjectOf(blocked, entityId).positionMetersXYZ[2])
-        .toBeGreaterThan(-4.2);
+      const blockedSubject = subjectOf(blocked, entityId);
+      const blockerCenterLimitMetersZ = positiveAxisCenterLimitMeters(
+        verified,
+        "collider-half-meter-blocker",
+        2,
+      );
+      expectBlockedAtCenterLimit(
+        blockedSubject.positionMetersXYZ[2],
+        blockerCenterLimitMetersZ,
+      );
+      expect(blockedSubject.positionMetersXYZ[1]).toBeGreaterThanOrEqual(0.25);
+      expect(blockedSubject.positionMetersXYZ[1]).toBeLessThanOrEqual(0.31);
+      expect(blockedSubject.movementMedium).toBe("ground");
       const hash = sha256CanonicalJson(blocked);
       await resetAndBind(runtime, entityId);
       const replayedSettled = await runtime.runFixedInput({
@@ -315,6 +347,8 @@ describe("BWB-5 Block Reconstruction Corpus Runtime", () => {
       });
       expect(subjectOf(departed, entityId).positionMetersXYZ[0])
         .toBeGreaterThan(0.5);
+      expect(subjectOf(departed, entityId).positionMetersXYZ[1])
+        .toBeLessThan(-0.25);
       expect(subjectOf(departed, entityId).movementMedium).toBe("air");
     } finally {
       await runtime.dispose();
@@ -324,7 +358,7 @@ describe("BWB-5 Block Reconstruction Corpus Runtime", () => {
     expect(internals.engine.isDisposed).toBe(true);
   }, 30_000);
 
-  it("proves expected pass and block corridors for mountain, T, building, and limited interior", async () => {
+  it("proves mountain ledge, pass, and block corridors for all positive structures", async () => {
     const { runtime: tRuntime, verified: tVerified } = await createRuntime(
       "t-shaped-traversal",
     );
@@ -404,6 +438,36 @@ describe("BWB-5 Block Reconstruction Corpus Runtime", () => {
         cliffLimitMetersX,
       );
       expect(cliffSubject.movementMedium).toBe("ground");
+
+      await resetAndBind(mountainRuntime, mountainEntity);
+      await mountainRuntime.runFixedInput({ actions: [], ticks: 5 });
+      const overlook = await mountainRuntime.runFixedInput({
+        actions: ["move-forward"],
+        ticks: 115,
+      });
+      const overlookSubject = subjectOf(overlook, mountainEntity);
+      expect(overlookSubject.positionMetersXYZ[2]).toBeLessThan(-3.5);
+      expect(overlookSubject.positionMetersXYZ[2]).toBeGreaterThan(-4.5);
+      expect(overlookSubject.positionMetersXYZ[1]).toBeGreaterThan(0.24);
+      expect(overlookSubject.movementMedium).toBe("ground");
+      const departedOverlook = await mountainRuntime.runFixedInput({
+        actions: ["move-right"],
+        ticks: 180,
+      });
+      const departedOverlookSubject = subjectOf(
+        departedOverlook,
+        mountainEntity,
+      );
+      const overlookDepartureLimitMetersX = positiveAxisCenterLimitMeters(
+        mountainVerified,
+        "collider-m-overlook",
+        0,
+      );
+      expect(departedOverlookSubject.positionMetersXYZ[0])
+        .toBeGreaterThan(overlookDepartureLimitMetersX);
+      expect(departedOverlookSubject.positionMetersXYZ[1])
+        .toBeLessThan(-0.25);
+      expect(departedOverlookSubject.movementMedium).toBe("air");
     } finally {
       await mountainRuntime.dispose();
     }
@@ -454,7 +518,7 @@ describe("BWB-5 Block Reconstruction Corpus Runtime", () => {
     );
   }, 30_000);
 
-  it("keeps fixed-tick hashes identical under 30/60/120-like submission", async () => {
+  it("keeps fixed-tick hashes identical across 30/60/120-like render cadence", async () => {
     const sessions: BabylonWorldRuntime[] = [];
     const hashes: string[] = [];
     try {
@@ -466,26 +530,18 @@ describe("BWB-5 Block Reconstruction Corpus Runtime", () => {
         sessions.push(runtime);
         const entityId =
           verified.worldRuntimeBootstrap.initialControlledEntityId;
-        if (suffix === "timing-30") {
-          for (let index = 0; index < 30; index += 1) {
-            await runtime.runFixedInput({
-              actions: ["move-forward"],
-              ticks: 2,
-            });
-          }
-        } else if (suffix === "timing-60") {
-          for (let index = 0; index < 60; index += 1) {
-            await runtime.runFixedInput({
-              actions: ["move-forward"],
-              ticks: 1,
-            });
-          }
-        } else {
-          for (let index = 0; index < 120; index += 1) {
-            await runtime.runFixedInput({
-              actions: ["move-forward"],
-              ticks: index % 2 === 0 ? 1 : 0,
-            });
+        for (let tick = 0; tick < 60; tick += 1) {
+          await runtime.runFixedInput({
+            actions: ["move-forward"],
+            ticks: 1,
+          });
+          if (suffix === "timing-30" && (tick + 1) % 2 === 0) {
+            runtime.renderFrame();
+          } else if (suffix === "timing-60") {
+            runtime.renderFrame();
+          } else if (suffix === "timing-120") {
+            runtime.renderFrame();
+            runtime.renderFrame();
           }
         }
         const snapshot = runtime.snapshot();
@@ -501,7 +557,7 @@ describe("BWB-5 Block Reconstruction Corpus Runtime", () => {
     }
   }, 90_000);
 
-  it("clears Subject, Collider, listener, camera, and input owners across sequential rebind", async () => {
+  it("disposes Scene, Engine, and Collider meshes across sequential Runtime rebind", async () => {
     const first = await createRuntime("mountain-cliff");
     const firstInternals = first.runtime as unknown as {
       scene: Scene;
