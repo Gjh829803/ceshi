@@ -32,7 +32,7 @@
 | `config/project-health/accepted-debt.json` | exact-fingerprint, expiring accepted debt only |
 | `scripts/project-health/contracts.ts` | closed DTO types, parsers, canonical ordering, hashes |
 | `scripts/lib/workspace-boundary-contract.ts` | neutral shared workspace graph/evidence/violation DTO and parser owner |
-| `scripts/project-health/process-runner.ts` | 唯一 bounded/redacted external execution envelope 与 process-tree cleanup owner |
+| `scripts/project-health/process-runner.ts` | 唯一 bounded/redacted external execution envelope 与 cooperative owned-process cleanup owner |
 | `scripts/project-health/registry.ts` | Sensor ID → implementation registry; no command strings in JSON |
 | `scripts/project-health/evidence-store.ts` | content-addressed local evidence and path redaction |
 | `scripts/project-health/sensors/workspace-boundary.ts` | adapts the existing workspace graph/violation/debt Owner only |
@@ -154,13 +154,13 @@ Commit: `feat: add project health contracts`
 
 **Interfaces:**
 - Consumes: closed Host-owned argv/probe descriptors later registered without translation by PHO-6, plus explicit timeout/output budgets.
-- Produces: redacted, bounded, content-addressed execution evidence with deterministic status and complete process-tree cleanup.
+- Produces: redacted, bounded, content-addressed execution evidence with deterministic status and cooperative owner-token process cleanup.
 
-- [ ] **Step 1: Write RED fixtures** for timeout, child-process escape, output truncation, credential/path redaction, signal exit, cleanup throw, tracked-tree mutation, invalid execution scope, and isolation cleanup.
-- [ ] **Step 2: Run RED:** `pnpm exec vitest run scripts/project-health/process-runner.test.ts`.
-- [ ] **Step 3: Implement one runner** without a shell. A closed descriptor selects `in-place-checkout` for existing PR Gate commands or `isolated-temp-worktree` for dynamic probes; both use a temporary output root, cap stdout/stderr, terminate the process tree in `finally`, and never retry a failed or timed-out command silently. The first scope hashes the tracked tree before/after; the second proves worktree removal.
-- [ ] **Step 4: Register the test immediately** in `TEST_GATE_MANIFEST_V1`; run its focused test and the existing census.
-- [ ] **Step 5: Verify and commit:** run the focused test, census, `pnpm typecheck`, and `git diff --check`.
+- [x] **Step 1: Write RED fixtures** for timeout, inherited-owner descendant escape, output truncation, credential/path redaction, signal exit, setup/cleanup throw, repository-state mutation including ignored-root residue, concurrent runner infrastructure, fingerprint budget overflow, symlinked/swapped infrastructure parents, invalid execution scope, and isolation cleanup.
+- [x] **Step 2: Run RED:** `pnpm exec vitest run scripts/project-health/process-runner.test.ts`.
+- [x] **Step 3: Implement one runner** without a shell. A closed descriptor selects `in-place-checkout` for registered trusted PR Gate commands or `isolated-temp-worktree` for dynamic probes; both use a temporary output root, cap stdout/stderr, cooperatively terminate token-owning descendants in `finally`, and never retry a failed or timed-out command silently. Every descriptor requires `descendantOwnershipMode: "inherit-owner-token"`; registered Owners must preserve the injected token for all descendants and must not create tokenless sessions. The first scope hashes tracked, untracked, and non-infrastructure ignored-root repository state before/after under a separate 5-second/8-MiB/4096-entry budget; `.project-health/runs` and `.project-health/worktrees` are Registry-owned infrastructure roots so concurrent executions do not contaminate each other. Repository and every infrastructure/temporary directory require canonical non-symlink identity, revalidated by device/inode before cleanup. The second scope proves worktree removal. Setup, fingerprint, execution, and cleanup failures all publish closed Evidence. This envelope is not an OS sandbox for malicious code: any Probe requiring arbitrary-write containment must use the existing Hosted/container isolation boundary. Formal local profiles are Linux/macOS only.
+- [x] **Step 4: Register the test immediately** in `TEST_GATE_MANIFEST_V1`; run its focused test and the existing census.
+- [x] **Step 5: Verify and commit:** run the focused test, census, `pnpm typecheck`, and `git diff --check`.
 
 Commit: `feat: add project health execution envelope`
 
@@ -242,7 +242,7 @@ Run: `pnpm exec vitest run scripts/project-health/process-runner.test.ts scripts
 
 - [ ] **Step 3: Implement mode-specific evidence adaptation**
 
-In `pr`, only validate exact-head Receipts produced by the preceding `health:record` steps; never invoke an owner. In `nightly`/`release`, missing selected evidence may be produced once from a closed Host descriptor through PHO-0B. Register one immutable `dependency-inventory` argv descriptor backed by `pnpm licenses list --json`; this is the npm/pnpm declared-closure Owner, while `contract-parity` remains the only lock/install/patch byte-identity Owner. Project the pnpm output into the frozen Dependency Inventory DTO, sort/dedupe exact package/version/license entries, and drop raw `paths`, author, description, homepage and order before hashing; RED fixtures use different absolute install roots with byte-identical projected evidence. Supply-chain online evidence additionally binds provider ID, database snapshot date/hash, package name and exact version. Provider unavailability follows the mode-specific Profile rule: Advisory `incomplete` in PR/Nightly, and the explicit Release `not-applicable` reason plus a retained Advisory Finding; it is never a clean bill of health. PHO-6 later registers the same closed set. Neither Sensor may spawn, parse the lockfile independently, implement its own timeout, redact logs, or clean process trees.
+In `pr`, only validate exact-head Receipts produced by the preceding `health:record` steps; never invoke an owner. In `nightly`/`release`, missing selected evidence may be produced once from a closed Host descriptor through PHO-0B. Register one immutable `dependency-inventory` argv descriptor backed by `pnpm licenses list --json`; this is the npm/pnpm declared-closure Owner, while `contract-parity` remains the only lock/install/patch byte-identity Owner. Project the pnpm output into the frozen Dependency Inventory DTO, sort/dedupe exact package/version/license entries, and drop raw `paths`, author, description, homepage and order before hashing; RED fixtures use different absolute install roots with byte-identical projected evidence. Supply-chain online evidence additionally binds provider ID, database snapshot date/hash, package name and exact version. Provider unavailability follows the mode-specific Profile rule: Advisory `incomplete` in PR/Nightly, and the explicit Release `not-applicable` reason plus a retained Advisory Finding; it is never a clean bill of health. PHO-6 later registers the same closed set. Neither Sensor may spawn, parse the lockfile independently, implement its own timeout, redact logs, or clean owned processes.
 
 - [ ] **Step 4: Register existing fact owners**
 
@@ -425,7 +425,7 @@ Add:
 }
 ```
 
-`health:record --gate <registered-id> --commit <sha> --output <receipt>` invokes that exact owner command once through PHO-0B and atomically writes a Receipt. `health:update-baseline` is the sole tracked-baseline writer and rejects a Report whose commit/profile/evidence identity differs. Reject a moving Release branch without `--commit`; require explicit output; make every check mode read-only and reject an `--update-baseline` flag.
+`health:record --gate <registered-id> --commit <sha> --output <receipt>` admits only a trusted descriptor with `descendantOwnershipMode: "inherit-owner-token"`, then invokes that exact owner command once through PHO-0B and atomically writes a Receipt. No production entry may call the runner without Registry admission. `health:update-baseline` is the sole tracked-baseline writer and rejects a Report whose commit/profile/evidence identity differs. Reject a moving Release branch without `--commit`; require explicit output; make every check mode read-only and reject an `--update-baseline` flag.
 
 - [ ] **Step 5: Verify and commit**
 
