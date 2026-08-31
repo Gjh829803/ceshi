@@ -4,8 +4,9 @@
 
 - 状态：**Reviewed / Approved（2026-08-24）**；
   **Camera Domain boundary implemented；M8-S1 所需的 `mountedOn` 窄 Runtime seam 已在
-  `08f8f199e2751f80cf5aa25162bc00927425dfcd` 候选中实现（2026-09-01），其最终生产验收仍等待
-  exact-SHA Cloud gates 与独立终审；广义 GCC Runtime/Kit/Fixture 路线仍 pending**。
+  当前候选 `7f9abd8bc78010cd0e04df8542d40f18c24bfae4` 中实现（2026-09-01），其 exact-SHA
+  Cloud install/typecheck/root aggregate 已 GO，最终生产验收仍等待 Claude/Grok 独立终审；
+  广义 GCC Runtime/Kit/Fixture 路线仍 pending**。
 - 适用里程碑：P2.2 骑乘与控制上下文、P2.3 装备/飞行/动作变体、P2.4 多相机模式。
 - 当前实现基线：已合入 `main` 的 G19 Gameplay/Browser V5 底座、
   `RuntimeHost` / `WorldSession`、`CameraDirectorV1`、`camera-rig-profile`、

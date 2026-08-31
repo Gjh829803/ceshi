@@ -1,7 +1,7 @@
 # M8-S1 `mountedOn` Progress Record
 
 > **Historical checkpoint.** This record preserves the 2026-08-26 implementation and review history;
-> it is not current completion evidence. The current candidate, open Cloud gates and final-review status are
+> it is not current completion evidence. The current candidate, Cloud root-gate and final-review status are
 > tracked in [the M8-S1 completion review](./2026-08-26-m8-s1-mounted-on-skateboard-completion.md).
 
 - Date: 2026-08-26

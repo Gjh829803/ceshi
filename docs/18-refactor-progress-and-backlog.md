@@ -1286,7 +1286,7 @@ Placement S1、Simulation Take / Control Capture V1 与 Validation Capture/Integ
 | WS-07B | **待开始；结构治理后续 1** | 按 public contract family 扩展唯一 source/generated parity；每次只迁一个领域 | `ARC-INT` 已完成 / 阻塞相关 Schema release | 正负 parity、unknown-key、round-trip、tracked bytes；禁止用私有 deep import 换取小 bundle |
 | WS-05B/C | **待开始；结构治理后续 2** | 按 owner 批次消减当前 52 条 exact workspace boundary debt；补必要 `/testing` exports、direct deps 与 per-package tsconfig | `ARC-INT` 已完成 / 阻塞 `WS-08` 的相关 package extraction | debt count 单调下降、zero stale/new、zero cycles、无 wildcard |
 | WS-08 | **待开始；结构治理后续 3** | 稳定 Host primitives 后拆分 Host/Studio/CLI composition package，不改变 Runtime/Camera/Capture authority | public contracts 稳定且相关 `WS-05B/C` debt 已清 / 无 | CLI snapshots、readiness/shutdown lifecycle、build graph、Studio E2E |
-| M8-S1 | 产品实现与正式四阶段 Capture 已在首个候选 `08f8f199` 完成；type/boundary 修复与最终双审 pending | `mountedOn` 合同、编译、Action effect、Gameplay/Host 原子事务、Babylon Rider 投影、retained-Physics `supportedBy`、最新 Camera 合同窄 seam、Playground 与严格 Journal/Snapshot Capture；[专项设计](../docs/superpowers/specs/2026-08-26-m8-s1-mounted-on-skateboard-design.md) / [实施计划](../docs/superpowers/plans/2026-08-26-m8-s1-mounted-on-skateboard-implementation-plan.md) / [completion draft](reviews/2026-08-26-m8-s1-mounted-on-skateboard-completion.md) | G19 已完成 | 本地候选证据：Contracts/Compiler/Camera 10 files / 508 tests、Runtime/Havok/Host 15 / 467、Capture/CLI/Validation 5 / 64，`verify:control-capture` 与 retained 3+1 frame mounted verifier 通过；Capture 子审 23/23 与 tamper matrix GO。exact-SHA Cloud 首轮为 NO-GO：`typecheck` 28 errors / 4 files，root test 在 workspace-boundary preflight 阻断；build、Studio 77/77、independent 23/23 + 1/1、clean-break 1518/0 与四项现行 Canonical capability gates 通过。修复后的最终 exact-SHA Cloud closure 与 Claude/Grok review 尚未完成；历史 catalog `verify:outdoor-gameplay` 已随 Gameplay route 删除，不得恢复。`CAM-MOUNT-1` 的窄修复归 M8；广义 P2.4/GCC 仍开放。 |
+| M8-S1 | 当前候选 `7f9abd8b` 的 Cloud 根门禁 GO；最终双审 pending | `mountedOn` 合同、编译、Action effect、Gameplay/Host 原子事务、Babylon Rider 投影、retained-Physics `supportedBy`、最新 Camera 合同窄 seam、Playground 与严格 Journal/Snapshot Capture；[专项设计](../docs/superpowers/specs/2026-08-26-m8-s1-mounted-on-skateboard-design.md) / [实施计划](../docs/superpowers/plans/2026-08-26-m8-s1-mounted-on-skateboard-implementation-plan.md) / [completion draft](reviews/2026-08-26-m8-s1-mounted-on-skateboard-completion.md) | G19 已完成 | `08f8f199` 首轮 Cloud 历史 NO-GO 保留。Runtime-equivalent `4c7551e` 的 fresh-install Cloud 已通过 build、independent 23/23 + 1/1、clean-break 1,519/0、Control Capture 2/2 与正式 mounted verifier；其唯一阻断是新测试未登记 census。exact `7f9abd8b` 的 install/typecheck/root test 随后 GO：workspace 49 debt / 1,760 symbols；census 386 = 347 + 39；contract 347 files / 4,150 pass / 3 platform skip / 0 fail；resource-heavy 39 files / 613 pass / 0 fail。Claude/Grok exact-SHA 终审尚未开始；不得把门禁 GO 写成最终 completion GO。历史 catalog `verify:outdoor-gameplay` 已随 Gameplay route 删除，不得恢复。`CAM-MOUNT-1` 的窄修复归 M8；广义 P2.4/GCC 仍开放。 |
 
 结构治理固定按 `WS-07B → WS-05B/C → WS-08` 推荐；`M8-S1` 仍是产品能力主线，两条 lane 不得
 因表格相邻而被解释为可以共享 owner 或跳过各自依赖。上述 WS 项的范围、延期理由、ownership、
@@ -1373,19 +1373,23 @@ S1b Golden、
    完成 clean break 接线，旧 Profile 请求表面已删除；作者面板
    Feel 范围与 session 数字袋类型已在 Preset 语义合同修复中收口，
    M7 不标记完成；
-8. **M8（产品实现与正式 Capture 已在首个候选完成，修复后 Cloud closure / 最终双审 pending）：Canonical World State + Typed Relationship
+8. **M8（当前候选 Cloud 根门禁 GO，最终双审 pending）：Canonical World State + Typed Relationship
    人—滑板窄可视切片**：G19-2/G19-4 已交付 Canonical Gameplay 合同、provider-neutral
    RuntimeHost staging 和 WorldPackage membership；G19-6 至 G19-8 已完成并通过 Final GO。
    当前已按
    [M8-S1 专项设计](../docs/superpowers/specs/2026-08-26-m8-s1-mounted-on-skateboard-design.md)与
    [实施计划](../docs/superpowers/plans/2026-08-26-m8-s1-mounted-on-skateboard-implementation-plan.md)
    实现 `mountedOn` 权威关系、Mount/Dismount Action、Receipt/Event、Babylon 投影、
-   Safe Dismount、Browser Fixture 与严格 Capture Track validator；候选 `08f8f199` 又完成 retained
+   Safe Dismount、Browser Fixture 与严格 Capture Track validator；候选 `08f8f199` 完成 retained
    Physics `supportedBy`、Golden/non-Golden 共用投影、最新 Camera 合同的窄 mounted seam、完整
    Journal segment 与四阶段 retained Capture。当前本地影响面和 Capture 子审已通过；
    Cloud 首轮 exact-SHA gate 已完成 NO-GO：`typecheck` 有 28 errors / 4 files，root test 在
    workspace-boundary preflight 阻断；其余 build、Studio、independent、clean-break 与四项现行
-   Canonical capability gates 通过。type/boundary 修复后的最终 Cloud closure 与 Claude/Grok 双审仍 pending。
+   Canonical capability gates 通过；这些通过项仍只属于该历史 SHA。修复后的当前候选
+   `7f9abd8bc78010cd0e04df8542d40f18c24bfae4` 已由 Cloud 完成 install/typecheck/root aggregate：
+   workspace 49 debt / 1,760 symbols，census 386 = 347 + 39，contract 347 files / 4,150 pass /
+   3 platform skip / 0 fail，resource-heavy 39 files / 613 pass / 0 fail。根门禁 GO；Claude/Grok
+   exact-SHA 双审仍 pending，因此 M8 不标记最终完成。
    历史 catalog `verify:outdoor-gameplay` 已随 Gameplay route 删除，不能作为待恢复 Gate；正式
    mounted verifier 与现行 Canonical capability gates 才是当前证据。`CAM-MOUNT-1` 的窄修复归
    M8，广义 P2.4/GCC 仍开放；不向 `SubjectRuntimeStateV3` 追加字段，也不先铺开 seat/tether、

@@ -10,13 +10,13 @@
 
 **Spec:** `docs/superpowers/specs/2026-08-26-m8-s1-mounted-on-skateboard-design.md`
 
-**Progress (2026-09-01):** Tasks 1-8 are implemented on product candidate
-`08f8f199e2751f80cf5aa25162bc00927425dfcd`, including the listed Runtime adversarial hardening,
+**Progress (2026-09-01):** Tasks 1-8 are implemented on current candidate
+`7f9abd8bc78010cd0e04df8542d40f18c24bfae4`, including the listed Runtime adversarial hardening,
 retained-support `supportedBy` projection, latest Camera contract clean break and formal four-phase mounted
-Capture verifier. Local affected evidence and the Capture subreview pass. Task 9 remains open: the exact-SHA
-Cloud run completed NO-GO: `pnpm typecheck` found 28 errors in 4 files and root `pnpm test` stopped in its
-workspace-boundary preflight before census; fixes and a replacement final candidate are in progress. The final
-Claude/Grok code reviews have not started. No final M8-S1 production GO is claimed. The latest approved Camera contract remains
+Capture verifier. Historical local affected evidence passes on `08f8f199`; a fresh-install Cloud run on
+Runtime-equivalent `4c7551e` passes build, independent, clean-break and both Capture verifiers, while the
+exact-`7f9abd8` Cloud install, typecheck and root aggregate are GO. Task 9 remains open because final Claude/Grok code reviews have not
+started. No final M8-S1 production GO is claimed. The latest approved Camera contract remains
 authoritative; no legacy relationship alias or Babylon Node-derived Camera Context may remain.
 
 ## Global constraints
@@ -321,9 +321,23 @@ disposed before final implementation review.
   `run-1642dd9b-1a77-413f-80c5-ca03c910dce2`, exact candidate `08f8f199e2751f80cf5aa25162bc00927425dfcd`.
   This first attempt completed NO-GO: `pnpm typecheck` returned exit 2 with 28 errors in 4 files, and root
   `pnpm test` stopped in the workspace-boundary preflight before census. Build, Studio, independent,
-  unreleased-clean-break and the listed current Canonical capability gates passed. Type/boundary fixes and a
-  replacement final candidate are in progress; the final Cloud checkbox remains open until all required gates
-  pass on the accepted exact SHA.
+  unreleased-clean-break and the listed current Canonical capability gates passed. This remains historical
+  first-attempt evidence; the type/boundary/root blockers were later closed by the current run below.
+
+  Current root closure: Cursor Cloud agent `bc-94b2272e-38ea-4525-971c-a817000e9cec`, run
+  `run-512cffea-279d-45fd-ae83-9457ee381c26`, exact candidate
+  `7f9abd8bc78010cd0e04df8542d40f18c24bfae4`. Install and typecheck passed. Root test passed:
+  workspace boundaries 49 debt / 1,760 public symbols; census 386 = 347 contract + 39 resource-heavy;
+  contract 347 files / 4,150 passed / 3 platform skips / 0 failed; resource-heavy 39 files / 613 passed /
+  0 failed. This closes the root checkbox's install/typecheck/test portion, but the matrix checkbox remains
+  open because final dual review and any D6-selected exact-current non-root evidence are not yet recorded.
+
+  D6 non-root lineage: Cursor Cloud agent `bc-74b5577c-59da-4b4e-b2a0-3103f602894f`, run
+  `run-08af7359-9330-42ea-ae84-2b52dc2e182f`, exact `4c7551e3cee123df3767bda21e1cf72665dca457`,
+  passed frozen install, typecheck, build, independent 23/23 + 1/1, unreleased clean break 1,519/0,
+  Control Capture 2/2 and the formal mounted verifier. The only failure was the new semantic-fact projector
+  test missing from the fail-closed census. Later commits classify that test and align test-only expectations;
+  they do not alter the production or verifier inputs covered by those passing non-root gates.
 
 - [x] Run the new mounted-skateboard Browser/Capture verifier. Record command, test count, artifact paths and warnings.
 - [x] Inspect the real rendered surface for Rider/board separation, slot alignment, Mount movement, Dismount placement and Reset. Record that the retained-frame inspection is rendered evidence, not manual input.
