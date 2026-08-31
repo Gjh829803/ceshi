@@ -96,6 +96,9 @@ async function createFakeRepository(
     "    packagePath,",
     "    nonce: process.env.WORLDKIT_AUTHORING_SERVER_NONCE,",
     "    role: process.env.WORLDKIT_NATIVE_SERVER_ROLE,",
+    "    serverInstanceId: process.env.WORLDKIT_NATIVE_SERVER_INSTANCE_ID,",
+    "    cacheRootPath: process.env.WORLDKIT_NATIVE_VITE_CACHE_ROOT,",
+    "    verifierProbe: process.env.WORLDKIT_NATIVE_VERIFIER_PROBE,",
     "    shellOrigin: process.env.WORLDKIT_HOSTED_SHELL_ORIGIN,",
     "    runtimeOrigin: process.env.WORLDKIT_HOSTED_RUNTIME_ORIGIN,",
     "  },",
@@ -166,6 +169,9 @@ describe("Native Scene Playground build wrapper", () => {
         packagePath: string;
         nonce: string;
         role: string;
+        serverInstanceId: string;
+        cacheRootPath: string;
+        verifierProbe: string;
         shellOrigin: string;
         runtimeOrigin: string;
       }>;
@@ -194,8 +200,12 @@ describe("Native Scene Playground build wrapper", () => {
       role: "shell",
       shellOrigin: "http://127.0.0.1:5174",
       runtimeOrigin: "http://127.0.0.1:5175",
+      verifierProbe: "disabled",
     });
     expect(invocation.environment.nonce.length).toBeGreaterThan(0);
+    expect(invocation.environment.serverInstanceId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
     expect(invocation.receipt).toBe("fixture-receipt\n");
     expect(invocation.inventory).toEqual([
       { path: "", mode: 0o700, kind: "directory" },
@@ -208,6 +218,7 @@ describe("Native Scene Playground build wrapper", () => {
       },
     ]);
     expect(await missing(invocation.environment.packagePath)).toBe(true);
+    expect(await missing(invocation.environment.cacheRootPath)).toBe(true);
   });
 
   it("cleans the owned copy after a failed Vite build", async () => {

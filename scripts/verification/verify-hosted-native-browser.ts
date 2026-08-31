@@ -22,6 +22,9 @@ const NATIVE_ENVIRONMENT_NAMES = Object.freeze([
   "WORLDKIT_NATIVE_PACKAGE_PATH",
   "WORLDKIT_AUTHORING_SERVER_NONCE",
   "WORLDKIT_NATIVE_SERVER_ROLE",
+  "WORLDKIT_NATIVE_SERVER_INSTANCE_ID",
+  "WORLDKIT_NATIVE_VITE_CACHE_ROOT",
+  "WORLDKIT_NATIVE_VERIFIER_PROBE",
   "WORLDKIT_HOSTED_SHELL_ORIGIN",
   "WORLDKIT_HOSTED_RUNTIME_ORIGIN",
 ] as const);
@@ -68,6 +71,12 @@ async function main(): Promise<void> {
   process.env.WORLDKIT_NATIVE_PACKAGE_PATH = fixture.packageDirectoryPath;
   process.env.WORLDKIT_AUTHORING_SERVER_NONCE =
     `hosted-native-browser-verifier-${process.pid}`;
+  process.env.WORLDKIT_NATIVE_SERVER_INSTANCE_ID =
+    `00000000-0000-4000-8000-${process.pid.toString().padStart(12, "0")}`;
+  process.env.WORLDKIT_NATIVE_VITE_CACHE_ROOT = path.dirname(
+    fixture.packageDirectoryPath,
+  );
+  process.env.WORLDKIT_NATIVE_VERIFIER_PROBE = "disabled";
   process.env.WORLDKIT_HOSTED_RUNTIME_ORIGIN = runtimeOrigin;
   process.env.WORLDKIT_HOSTED_SHELL_ORIGIN = shellOrigin;
   const root = path.resolve("apps/native-scene-playground");

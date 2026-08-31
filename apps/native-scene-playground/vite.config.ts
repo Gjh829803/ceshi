@@ -156,6 +156,52 @@ function requiredServerRole(
   return value;
 }
 
+function requiredCacheScope(
+  environment: NativeScenePlaygroundEnvironmentV1,
+): Readonly<{
+  rootDirectoryPath: string;
+  serverInstanceId: string;
+}> {
+  const rootDirectoryPath = environment.WORLDKIT_NATIVE_VITE_CACHE_ROOT;
+  if (
+    rootDirectoryPath === undefined ||
+    rootDirectoryPath.length === 0 ||
+    rootDirectoryPath.trim() !== rootDirectoryPath ||
+    !path.isAbsolute(rootDirectoryPath)
+  ) {
+    throw new Error(
+      "WORLDKIT_NATIVE_VITE_CACHE_ROOT_REQUIRED: configure one absolute Host-owned cache root",
+    );
+  }
+  const serverInstanceId = environment.WORLDKIT_NATIVE_SERVER_INSTANCE_ID;
+  if (
+    serverInstanceId === undefined ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
+      serverInstanceId,
+    )
+  ) {
+    throw new Error(
+      "WORLDKIT_NATIVE_SERVER_INSTANCE_ID_REQUIRED: expected one Host-owned UUID",
+    );
+  }
+  return Object.freeze({
+    rootDirectoryPath: path.normalize(rootDirectoryPath),
+    serverInstanceId,
+  });
+}
+
+function verifierProbeEnabled(
+  environment: NativeScenePlaygroundEnvironmentV1,
+): boolean {
+  const value = environment.WORLDKIT_NATIVE_VERIFIER_PROBE ?? "disabled";
+  if (value !== "enabled" && value !== "disabled") {
+    throw new Error(
+      "WORLDKIT_NATIVE_VERIFIER_PROBE_INVALID: expected enabled or disabled",
+    );
+  }
+  return value === "enabled";
+}
+
 function writeResponse(
   response: ServerResponse,
   input: Readonly<{
@@ -345,6 +391,8 @@ export async function createNativeScenePlaygroundViteConfigV1(
   const packageDirectoryPath = requiredPackagePath(environment);
   const nonce = requiredServerNonce(environment);
   const serverRole = requiredServerRole(environment);
+  const cacheScope = requiredCacheScope(environment);
+  const isVerifierProbeEnabled = verifierProbeEnabled(environment);
   const hostedRuntimeOrigin = configuredOrigin(
     environment,
     "WORLDKIT_HOSTED_RUNTIME_ORIGIN",
@@ -506,11 +554,14 @@ export async function createNativeScenePlaygroundViteConfigV1(
     return {
       publicDir: false,
       cacheDir: path.join(
-        nativeSceneAppRootPath,
-        "node_modules",
-        `.vite-worldkit-native-${serverRole}`,
+        cacheScope.rootDirectoryPath,
+        cacheScope.serverInstanceId,
+        serverRole,
       ),
       define: {
+        __WORLDKIT_NATIVE_VERIFIER_PROBE_ENABLED__: JSON.stringify(
+          isVerifierProbeEnabled,
+        ),
         __WORLDKIT_HOSTED_BROWSER_RUNNER_DIGEST__: JSON.stringify(
           hostedBrowserRunnerDigest,
         ),

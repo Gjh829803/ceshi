@@ -24,6 +24,7 @@ import { createNativeScenePlaygroundViteConfigV1 } from "../vite.config.js";
 const SHELL_ORIGIN = "http://127.0.0.1:35174";
 const RUNTIME_ORIGIN = "http://127.0.0.1:35175";
 const NONCE = "native-package-test-nonce";
+const SERVER_INSTANCE_ID = "00000000-0000-4000-8000-000000000001";
 
 let testRootPath: string;
 let packageDirectoryPath: string;
@@ -51,6 +52,8 @@ async function createConfig(): Promise<UserConfig> {
     WORLDKIT_NATIVE_PACKAGE_PATH: packageDirectoryPath,
     WORLDKIT_AUTHORING_SERVER_NONCE: NONCE,
     WORLDKIT_NATIVE_SERVER_ROLE: "shell",
+    WORLDKIT_NATIVE_SERVER_INSTANCE_ID: SERVER_INSTANCE_ID,
+    WORLDKIT_NATIVE_VITE_CACHE_ROOT: testRootPath,
     WORLDKIT_HOSTED_SHELL_ORIGIN: SHELL_ORIGIN,
     WORLDKIT_HOSTED_RUNTIME_ORIGIN: RUNTIME_ORIGIN,
   });
@@ -168,6 +171,8 @@ describe("Native Playground verified Package Vite seam", () => {
       WORLDKIT_AUTHORING_SERVER_NONCE: NONCE,
       WORLDKIT_HOSTED_SHELL_ORIGIN: SHELL_ORIGIN,
       WORLDKIT_HOSTED_RUNTIME_ORIGIN: RUNTIME_ORIGIN,
+      WORLDKIT_NATIVE_SERVER_INSTANCE_ID: SERVER_INSTANCE_ID,
+      WORLDKIT_NATIVE_VITE_CACHE_ROOT: testRootPath,
     };
     await expect(createNativeScenePlaygroundViteConfigV1(environment))
       .rejects.toThrow("WORLDKIT_NATIVE_SERVER_ROLE_REQUIRED");
@@ -180,7 +185,40 @@ describe("Native Playground verified Package Vite seam", () => {
       ...environment,
       WORLDKIT_NATIVE_SERVER_ROLE: "runtime",
     });
-    expect(runtimeConfig.cacheDir).toContain(".vite-worldkit-native-runtime");
+    expect(runtimeConfig.cacheDir).toBe(path.join(
+      testRootPath,
+      SERVER_INSTANCE_ID,
+      "runtime",
+    ));
+
+    const otherInstanceConfig = await createNativeScenePlaygroundViteConfigV1({
+      ...environment,
+      WORLDKIT_NATIVE_SERVER_ROLE: "runtime",
+      WORLDKIT_NATIVE_SERVER_INSTANCE_ID:
+        "00000000-0000-4000-8000-000000000002",
+    });
+    expect(otherInstanceConfig.cacheDir).not.toBe(runtimeConfig.cacheDir);
+  });
+
+  it("keeps the single-Origin probe verifier-only", async () => {
+    const productionConfig = await createConfig();
+    expect(productionConfig.define).toMatchObject({
+      __WORLDKIT_NATIVE_VERIFIER_PROBE_ENABLED__: "false",
+    });
+
+    const verifierConfig = await createNativeScenePlaygroundViteConfigV1({
+      WORLDKIT_NATIVE_PACKAGE_PATH: packageDirectoryPath,
+      WORLDKIT_AUTHORING_SERVER_NONCE: NONCE,
+      WORLDKIT_NATIVE_SERVER_ROLE: "shell",
+      WORLDKIT_NATIVE_SERVER_INSTANCE_ID: SERVER_INSTANCE_ID,
+      WORLDKIT_NATIVE_VITE_CACHE_ROOT: testRootPath,
+      WORLDKIT_NATIVE_VERIFIER_PROBE: "enabled",
+      WORLDKIT_HOSTED_SHELL_ORIGIN: SHELL_ORIGIN,
+      WORLDKIT_HOSTED_RUNTIME_ORIGIN: RUNTIME_ORIGIN,
+    });
+    expect(verifierConfig.define).toMatchObject({
+      __WORLDKIT_NATIVE_VERIFIER_PROBE_ENABLED__: "true",
+    });
   });
 
   it("rejects a verified non-Native Package before creating the Harness", async () => {
@@ -194,6 +232,8 @@ describe("Native Playground verified Package Vite seam", () => {
       WORLDKIT_NATIVE_PACKAGE_PATH: canonicalPackagePath,
       WORLDKIT_AUTHORING_SERVER_NONCE: NONCE,
       WORLDKIT_NATIVE_SERVER_ROLE: "shell",
+      WORLDKIT_NATIVE_SERVER_INSTANCE_ID: SERVER_INSTANCE_ID,
+      WORLDKIT_NATIVE_VITE_CACHE_ROOT: testRootPath,
       WORLDKIT_HOSTED_SHELL_ORIGIN: SHELL_ORIGIN,
       WORLDKIT_HOSTED_RUNTIME_ORIGIN: RUNTIME_ORIGIN,
     })).rejects.toThrow("WORLDKIT_NATIVE_PACKAGE_SOURCE_KIND_REQUIRED");
