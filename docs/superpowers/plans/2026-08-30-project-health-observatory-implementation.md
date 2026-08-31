@@ -365,23 +365,23 @@ Commit: `feat: observe runtime lifecycle and determinism`
 - Consumes: build manifests, runner profile, existing screenshot/overlay/anchor outputs, Markdown links/status anchors, and exact-SHA independent review receipts.
 - Produces: four independent Observations; heuristic AI/visual/online data remains Advisory until an exact Profile metric freezes it.
 
-- [ ] **Step 1: Write RED fixtures**
+- [x] **Step 1: Write RED fixtures**
 
 Cover static bundle over-budget, cross-runner performance mismatch, stale visual tree identity, missing renderer profile, failed frozen pixel metric, broken doc link, Proposed/Implemented status conflict, AI review wrong SHA, AI timeout, and a Host-confirmed AI P1.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `pnpm exec vitest run scripts/project-health/sensors/{performance-size,visual-evidence,documentation-truth,independent-review}.test.ts`
 
-- [ ] **Step 3: Implement stable adapters**
+- [x] **Step 3: Implement stable adapters**
 
 Use content hashes and normalized metric values. Do not store screenshots inside JSON, compare hardware metrics across runner profiles, execute AI output as instructions, or treat an AI GO as pass evidence.
 
-- [ ] **Step 4: Validate the PHO-0A advisory/blocking policy**
+- [x] **Step 4: Validate the PHO-0A advisory/blocking policy**
 
 Static size budgets and machine-confirmed doc/link contradictions may block. Dynamic performance trends, VLM assessments, online vulnerability lookups, and unreproduced AI findings remain Advisory/Incomplete according to the spec.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run all four focused test files, `pnpm test:census`, `pnpm typecheck`, and `git diff --check`.
 
