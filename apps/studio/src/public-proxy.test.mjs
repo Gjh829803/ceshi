@@ -146,7 +146,7 @@ test("forwards only the public Studio pages, assets, and declared API methods", 
   const requests = [
     ["GET", "/"],
     ["HEAD", "/styles.css"],
-    ["GET", "/play?world=demo-world"],
+    ["GET", "/play/demo-world"],
     ["GET", "/@vite/client"],
     ["GET", "/src/main.ts"],
     ["HEAD", "/node_modules/.vite/deps/lodash-es.js"],

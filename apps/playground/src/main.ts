@@ -73,10 +73,14 @@ declare const __WORLDKIT_VIEWER_SOURCE_AUTHORITY__:
 const app = document.querySelector<HTMLDivElement>("#app");
 if (app === null) throw new Error("Missing #app container");
 const urlParameters = new URLSearchParams(window.location.search);
+const hostStudioWorldId = document
+  .querySelector<HTMLMetaElement>('meta[name="worldkit-studio-world-id"]')
+  ?.content;
 const runtimeRoute = resolvePlaygroundRuntimeRoute(
   window.location.search,
   sceneCatalog,
   __WORLDKIT_VIEWER_SOURCE_AUTHORITY__,
+  hostStudioWorldId,
 );
 const viewerMode = runtimeRoute.mode === "viewer";
 let cameraViewCommandSequence = 0;
