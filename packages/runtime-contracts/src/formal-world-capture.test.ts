@@ -4,12 +4,17 @@ import { describe, expect, it } from "vitest";
 import {
   formalArtifactViewRequestCanonicalBytesV1,
   formalSemanticCaptureMapCanonicalBytesV1,
+  formalWorldCaptureRequestCanonicalBytesV1,
   formalWorldCaptureReceiptCanonicalBytesV1,
   hashFormalArtifactViewRequestV1,
+  hashFormalColliderOverlayRequestV1,
   hashFormalSemanticCaptureMapV1,
+  hashFormalScriptedTraversalRequestV1,
+  hashFormalWorldCaptureRequestV1,
   hashFormalWorldCaptureReceiptV1,
   parseFormalArtifactViewRequestV1,
   parseFormalSemanticCaptureMapV1,
+  parseFormalWorldCaptureRequestV1,
   parseFormalWorldCaptureReceiptV1,
 } from "./formal-world-capture.js";
 import { parseWorldRuntimeSnapshotV4 } from "./runtime-session-protocol.js";
@@ -110,6 +115,51 @@ const WORLD_BOUNDS = {
   minimumMetersXYZ: [-40, 0, -40],
   maximumMetersXYZ: [40, 24, 40],
 } as const;
+
+const CENTRAL_ASCENT_BOUNDS = {
+  minimumMetersXYZ: [0, 0, 0],
+  maximumMetersXYZ: [4, 6, 4],
+} as const;
+
+const UPPER_T_JUNCTION_BOUNDS = {
+  minimumMetersXYZ: [-2, 6, -6],
+  maximumMetersXYZ: [6, 8, 6],
+} as const;
+
+const FIXED_INPUT_SEQUENCE = [
+  { actions: ["move-forward"], axes: { moveYRatio: 1 }, ticks: 12 },
+  { actions: ["jump"], ticks: 1 },
+  { actions: ["move-forward"], ticks: 8 },
+] as const;
+
+const FIXED_INPUT_SEQUENCE_HASH = sha256CanonicalJson(FIXED_INPUT_SEQUENCE);
+
+function traversalCheckpointCriteria() {
+  return [
+    {
+      kind: "reach-bounds",
+      checkpointId: "junction",
+      expectation: "reach",
+      sourceVisualGroupId: "upper-t-junction-group",
+      sourceBoundsMeters: UPPER_T_JUNCTION_BOUNDS,
+      capsuleRadiusMeters: 0.35,
+      toleranceMeters: 0.05,
+    },
+    {
+      kind: "pass-plane",
+      checkpointId: "spawn",
+      expectation: "pass",
+      sourceVisualGroupId: "central-ascent-group",
+      sourceBoundsMeters: CENTRAL_ASCENT_BOUNDS,
+      axis: "z",
+      sourceFace: "minimum",
+      planeMeters: 0,
+      expectedCenterSide: "negative",
+      capsuleRadiusMeters: 0.35,
+      toleranceMeters: 0.05,
+    },
+  ] as const;
+}
 
 function openingRequest() {
   return {
@@ -235,17 +285,46 @@ function semanticMapValue() {
         contributionHash: H("f"),
       },
     ],
+    traversalCheckBindings: [
+      {
+        traversalCheckId: "reach-junction",
+        acceptanceTargetRef: "worldkit://acceptance-target/upper-t-junction@1",
+        checkExpectation: "pass",
+        fixedInputSequenceHash: FIXED_INPUT_SEQUENCE_HASH,
+        checkpointCriteria: traversalCheckpointCriteria(),
+      },
+    ],
   };
 }
 
-function receiptValue(runtimeSnapshot = snapshotFixture()) {
-  const readySnapshot = parseWorldRuntimeSnapshotV4(runtimeSnapshot);
-  return {
-    kind: "formal-world-capture-receipt",
+function formalRequestValue() {
+  const semanticCaptureMap = semanticMapValue();
+  const colliderOverlay = {
+    kind: "formal-collider-overlay-request",
     schemaVersion: 1,
-    id: "cloud-temple.attempt-0.formal-capture",
-    caseRef: "artifact://case/cloud-temple/case.json",
-    caseHash: H("8"),
+    isRequired: true,
+    contributionHash: H("f"),
+  } as const;
+  const scriptedTraversal = {
+    kind: "formal-scripted-traversal-request",
+    schemaVersion: 1,
+    checks: [
+      {
+        id: "reach-junction",
+        acceptanceTargetRef: "worldkit://acceptance-target/upper-t-junction@1",
+        checkExpectation: "pass",
+        fixedInputSequence: FIXED_INPUT_SEQUENCE,
+        fixedInputSequenceHash: FIXED_INPUT_SEQUENCE_HASH,
+        checkpointCriteria: traversalCheckpointCriteria(),
+      },
+    ],
+  } as const;
+  return {
+    kind: "formal-world-capture-request",
+    schemaVersion: 1,
+    id: "cloud-temple.attempt-0.formal-capture-request",
+    caseRef: "worldkit://world-reconstruction-case/cloud-temple.case",
+    caseHash: H("c"),
     evaluationProfileRef: "artifact://case/cloud-temple/evaluation-profile.json",
     evaluationProfileHash: H("9"),
     sceneAuthoringRouteDecisionRef:
@@ -264,11 +343,62 @@ function receiptValue(runtimeSnapshot = snapshotFixture()) {
     worldPackageBuildReceiptRef:
       "artifact://case/cloud-temple/attempts/0/world-package-build-receipt.json",
     worldPackageBuildReceiptHash: H("d"),
+    semanticCaptureMapRef:
+      "artifact://case/cloud-temple/attempts/0/semantic-capture-map.json",
+    semanticCaptureMap,
+    semanticCaptureMapHash: hashFormalSemanticCaptureMapV1(semanticCaptureMap),
+    nativeBlockCaptureIdentityInventoryRef:
+      "world-package://native/block-capture-identity-inventory.json",
+    nativeBlockCaptureIdentityInventoryHash: H("6"),
+    nativeBlockMaterializerMetadataRef:
+      "world-package://native/block-materializer-metadata.json",
+    nativeBlockMaterializerMetadataHash: H("7"),
+    views: [openingRequest(), worldSideRequest(), worldTopDownRequest()],
+    colliderOverlay,
+    scriptedTraversal,
+  } as const;
+}
+
+function receiptValue(runtimeSnapshot = snapshotFixture()) {
+  const readySnapshot = parseWorldRuntimeSnapshotV4(runtimeSnapshot);
+  const formalRequest = formalRequestValue();
+  return {
+    kind: "formal-world-capture-receipt",
+    schemaVersion: 1,
+    id: "cloud-temple.attempt-0.formal-capture",
+    formalRequestRef:
+      "artifact://case/cloud-temple/attempts/0/formal-world-capture-request.json",
+    formalRequest,
+    formalRequestHash: hashFormalWorldCaptureRequestV1(formalRequest),
+    caseRef: formalRequest.caseRef,
+    caseHash: formalRequest.caseHash,
+    evaluationProfileRef: formalRequest.evaluationProfileRef,
+    evaluationProfileHash: formalRequest.evaluationProfileHash,
+    sceneAuthoringRouteDecisionRef: formalRequest.sceneAuthoringRouteDecisionRef,
+    sceneAuthoringRouteDecisionHash: formalRequest.sceneAuthoringRouteDecisionHash,
+    sceneAuthoringAttemptRef: formalRequest.sceneAuthoringAttemptRef,
+    sceneAuthoringAttemptHash: formalRequest.sceneAuthoringAttemptHash,
+    sceneAuthoringAttemptResultRef: formalRequest.sceneAuthoringAttemptResultRef,
+    sceneAuthoringAttemptResultHash: formalRequest.sceneAuthoringAttemptResultHash,
+    worldPackageRef: formalRequest.worldPackageRef,
+    worldPackageRootHash: formalRequest.worldPackageRootHash,
+    worldBuildIdentityRef: formalRequest.worldBuildIdentityRef,
+    worldBuildIdentityHash: formalRequest.worldBuildIdentityHash,
+    worldPackageBuildReceiptRef: formalRequest.worldPackageBuildReceiptRef,
+    worldPackageBuildReceiptHash: formalRequest.worldPackageBuildReceiptHash,
     runtimeSessionId: readySnapshot.runtimeSessionId,
     readySnapshot,
     readySnapshotHash: sha256CanonicalJson(readySnapshot),
     sdkOwnerIdentities: sdkOwnerIdentities(),
-    semanticCaptureMapHash: H("e"),
+    semanticCaptureMapHash: formalRequest.semanticCaptureMapHash,
+    nativeBlockCaptureIdentityInventoryHash:
+      formalRequest.nativeBlockCaptureIdentityInventoryHash,
+    nativeBlockMaterializerMetadataHash:
+      formalRequest.nativeBlockMaterializerMetadataHash,
+    colliderOverlayRequestHash:
+      hashFormalColliderOverlayRequestV1(formalRequest.colliderOverlay),
+    scriptedTraversalRequestHash:
+      hashFormalScriptedTraversalRequestV1(formalRequest.scriptedTraversal),
     viewportWidthPixels: 1280,
     viewportHeightPixels: 720,
     devicePixelRatio: 1,
@@ -286,6 +416,80 @@ function receiptValue(runtimeSnapshot = snapshotFixture()) {
     cleanupOutcome: "completed",
   };
 }
+
+describe("FormalWorldCaptureRequestV1", () => {
+  it("freezes one Package-bound Capture transaction including semantic, inventory, overlay, and traversal identities", () => {
+    const request = parseFormalWorldCaptureRequestV1(formalRequestValue());
+    expect(request.worldPackageRootHash).toBe(PACKAGE_ROOT);
+    expect(request.semanticCaptureMap.caseHash).toBe(request.caseHash);
+    expect(request.scriptedTraversal.checks[0]?.checkpointCriteria.map(
+      ({ checkpointId, expectation }) => ({ checkpointId, expectation }),
+    )).toEqual([
+      { checkpointId: "junction", expectation: "reach" },
+      { checkpointId: "spawn", expectation: "pass" },
+    ]);
+    expect(formalWorldCaptureRequestCanonicalBytesV1(request)).toEqual(
+      formalWorldCaptureRequestCanonicalBytesV1(formalRequestValue()),
+    );
+  });
+
+  it("rejects checkpoint strings without package-derived spatial criteria", () => {
+    const request = formalRequestValue();
+    const checks = request.scriptedTraversal.checks as unknown as Array<{
+      checkpointCriteria: unknown[];
+    }>;
+    checks[0]!.checkpointCriteria = [];
+    expect(() => parseFormalWorldCaptureRequestV1(request)).toThrowError(
+      "FORMAL_WORLD_CAPTURE_REQUEST_INVALID",
+    );
+  });
+
+  it("rejects a plane not derived from the frozen source bounds", () => {
+    const request = formalRequestValue();
+    const criteria = request.scriptedTraversal.checks[0]
+      .checkpointCriteria as unknown as Array<Record<string, unknown>>;
+    criteria[1] = {
+      ...request.scriptedTraversal.checks[0].checkpointCriteria[1],
+      planeMeters: 1,
+    };
+    expect(() => parseFormalWorldCaptureRequestV1(request)).toThrowError(
+      "FORMAL_WORLD_CAPTURE_REQUEST_INVALID",
+    );
+  });
+
+  it("includes capsule-aware spatial criteria in both semantic-map and Request hashes", () => {
+    const original = formalRequestValue();
+    const changedCriteria = traversalCheckpointCriteria().map((criterion) =>
+      criterion.checkpointId === "junction"
+        ? { ...criterion, toleranceMeters: 0.04 }
+        : criterion);
+    const changedMap = {
+      ...original.semanticCaptureMap,
+      traversalCheckBindings: [{
+        ...original.semanticCaptureMap.traversalCheckBindings[0]!,
+        checkpointCriteria: changedCriteria,
+      }],
+    };
+    const changedRequest = {
+      ...original,
+      semanticCaptureMap: changedMap,
+      semanticCaptureMapHash: hashFormalSemanticCaptureMapV1(changedMap),
+      scriptedTraversal: {
+        ...original.scriptedTraversal,
+        checks: [{
+          ...original.scriptedTraversal.checks[0]!,
+          checkpointCriteria: changedCriteria,
+        }],
+      },
+    };
+    expect(hashFormalSemanticCaptureMapV1(changedMap)).not.toBe(
+      hashFormalSemanticCaptureMapV1(original.semanticCaptureMap),
+    );
+    expect(hashFormalWorldCaptureRequestV1(changedRequest)).not.toBe(
+      hashFormalWorldCaptureRequestV1(original),
+    );
+  });
+});
 
 describe("FormalArtifactViewRequestV1", () => {
   it("parses opening, world-side, and world-top-down as a closed formal set", () => {
@@ -374,6 +578,7 @@ describe("FormalSemanticCaptureMapV1", () => {
       formalSemanticCaptureMapCanonicalBytesV1(semanticMapValue()),
     );
     expect(Object.isFrozen(parsed.bindings)).toBe(true);
+    expect(parsed.traversalCheckBindings[0]?.checkpointCriteria).toHaveLength(2);
   });
 
   it("rejects unsorted, duplicate, or extra-field maps", () => {
@@ -453,6 +658,45 @@ describe("FormalWorldCaptureReceiptV1", () => {
     expect(() => parseFormalWorldCaptureReceiptV1(mutated)).toThrowError(
       "FORMAL_WORLD_CAPTURE_RECEIPT_INVALID",
     );
+  });
+
+  it("joins every repeated identity to the embedded formal Request", () => {
+    const receipt = receiptValue();
+    receipt.sceneAuthoringAttemptHash = H("0");
+    expect(() => parseFormalWorldCaptureReceiptV1(receipt)).toThrowError(
+      "FORMAL_WORLD_CAPTURE_RECEIPT_INVALID",
+    );
+    const staleRequest = receiptValue();
+    staleRequest.formalRequestHash = H("0");
+    expect(() => parseFormalWorldCaptureReceiptV1(staleRequest)).toThrowError(
+      "FORMAL_WORLD_CAPTURE_RECEIPT_INVALID",
+    );
+    const staleInventory = receiptValue();
+    staleInventory.nativeBlockCaptureIdentityInventoryHash = H("0");
+    expect(() => parseFormalWorldCaptureReceiptV1(staleInventory)).toThrowError(
+      "FORMAL_WORLD_CAPTURE_RECEIPT_INVALID",
+    );
+  });
+
+  it("allows equal content hashes when distinct formal roles legitimately share bytes", () => {
+    const receipt = receiptValue();
+    const views = receipt.views as unknown as Array<ReturnType<typeof viewRecord>>;
+    const topDownView = receipt.views[2]!;
+    views[2] = {
+      ...topDownView,
+      pngContentHash: receipt.views[1]!.pngContentHash,
+    };
+    const owners = receipt.sdkOwnerIdentities as unknown as Array<{
+      ownerId: "action" | "camera" | "input" | "physics" | "subject";
+      implementationRef: string;
+      implementationHash: Sha256HashV1;
+    }>;
+    owners[1] = {
+      ...receipt.sdkOwnerIdentities[1],
+      implementationHash: receipt.sdkOwnerIdentities[0]!.implementationHash,
+    };
+    expect(parseFormalWorldCaptureReceiptV1(receipt).views[2]?.pngContentHash)
+      .toBe(receipt.views[1]!.pngContentHash);
   });
 
   it("rejects a missing world-side view", () => {

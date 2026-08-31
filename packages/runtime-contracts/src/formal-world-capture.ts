@@ -6,7 +6,11 @@ import {
 import { isEmpty, isNil } from "lodash-es";
 
 import { parseWorldRuntimeSnapshotV4 } from "./runtime-session-protocol.js";
-import type { WorldRuntimeSnapshotV4 } from "./runtime-session.js";
+import {
+  parseFixedInputV1,
+  type FixedInputV1,
+  type WorldRuntimeSnapshotV4,
+} from "./runtime-session.js";
 
 export const FORMAL_WORLD_CAPTURE_VIEW_IDS_V1 = Object.freeze([
   "opening",
@@ -37,6 +41,44 @@ export interface FormalWorldBoundsMetersV1 {
   readonly minimumMetersXYZ: readonly [number, number, number];
   readonly maximumMetersXYZ: readonly [number, number, number];
 }
+
+export type FormalTraversalCheckpointSpatialCriterionV1 =
+  | Readonly<{
+      kind: "reach-bounds";
+      checkpointId: string;
+      expectation: "reach";
+      sourceVisualGroupId: string;
+      sourceBoundsMeters: FormalWorldBoundsMetersV1;
+      capsuleRadiusMeters: number;
+      toleranceMeters: number;
+    }>
+  | Readonly<{
+      kind: "pass-plane";
+      checkpointId: string;
+      expectation: "pass";
+      sourceVisualGroupId: string;
+      sourceBoundsMeters: FormalWorldBoundsMetersV1;
+      axis: "x" | "y" | "z";
+      sourceFace: "minimum" | "maximum";
+      planeMeters: number;
+      expectedCenterSide: "negative" | "positive";
+      capsuleRadiusMeters: number;
+      toleranceMeters: number;
+    }>
+  | Readonly<{
+      kind: "block-plane";
+      checkpointId: string;
+      expectation: "block";
+      sourceVisualGroupId: string;
+      sourceBoundsMeters: FormalWorldBoundsMetersV1;
+      colliderId: string;
+      axis: "x" | "y" | "z";
+      sourceFace: "minimum" | "maximum";
+      planeMeters: number;
+      expectedCenterSide: "negative" | "positive";
+      capsuleRadiusMeters: number;
+      toleranceMeters: number;
+    }>;
 
 export type FormalArtifactViewRequestV1 =
   | Readonly<{
@@ -89,6 +131,14 @@ export interface FormalSemanticCaptureTargetBindingV1 {
   readonly contributionHash: Sha256HashV1;
 }
 
+export interface FormalSemanticTraversalCheckBindingV1 {
+  readonly traversalCheckId: string;
+  readonly acceptanceTargetRef: string;
+  readonly checkExpectation: "pass" | "block";
+  readonly fixedInputSequenceHash: Sha256HashV1;
+  readonly checkpointCriteria: readonly FormalTraversalCheckpointSpatialCriterionV1[];
+}
+
 export interface FormalSemanticCaptureMapV1 {
   readonly kind: "formal-semantic-capture-map";
   readonly schemaVersion: 1;
@@ -99,6 +149,65 @@ export interface FormalSemanticCaptureMapV1 {
   readonly layoutInventoryHash: Sha256HashV1;
   readonly contributionHash: Sha256HashV1;
   readonly bindings: readonly FormalSemanticCaptureTargetBindingV1[];
+  readonly traversalCheckBindings: readonly FormalSemanticTraversalCheckBindingV1[];
+}
+
+export interface FormalColliderOverlayRequestV1 {
+  readonly kind: "formal-collider-overlay-request";
+  readonly schemaVersion: 1;
+  readonly isRequired: true;
+  readonly contributionHash: Sha256HashV1;
+}
+
+export interface FormalScriptedTraversalCheckRequestV1 {
+  readonly id: string;
+  readonly acceptanceTargetRef: string;
+  readonly checkExpectation: "pass" | "block";
+  readonly fixedInputSequence: readonly FixedInputV1[];
+  readonly fixedInputSequenceHash: Sha256HashV1;
+  readonly checkpointCriteria: readonly FormalTraversalCheckpointSpatialCriterionV1[];
+}
+
+export interface FormalScriptedTraversalRequestV1 {
+  readonly kind: "formal-scripted-traversal-request";
+  readonly schemaVersion: 1;
+  readonly checks: readonly FormalScriptedTraversalCheckRequestV1[];
+}
+
+export interface FormalWorldCaptureRequestV1 {
+  readonly kind: "formal-world-capture-request";
+  readonly schemaVersion: 1;
+  readonly id: string;
+  readonly caseRef: string;
+  readonly caseHash: Sha256HashV1;
+  readonly evaluationProfileRef: string;
+  readonly evaluationProfileHash: Sha256HashV1;
+  readonly sceneAuthoringRouteDecisionRef: string;
+  readonly sceneAuthoringRouteDecisionHash: Sha256HashV1;
+  readonly sceneAuthoringAttemptRef: string;
+  readonly sceneAuthoringAttemptHash: Sha256HashV1;
+  readonly sceneAuthoringAttemptResultRef: string;
+  readonly sceneAuthoringAttemptResultHash: Sha256HashV1;
+  readonly worldPackageRef: string;
+  readonly worldPackageRootHash: Sha256HashV1;
+  readonly worldBuildIdentityRef: string;
+  readonly worldBuildIdentityHash: Sha256HashV1;
+  readonly worldPackageBuildReceiptRef: string;
+  readonly worldPackageBuildReceiptHash: Sha256HashV1;
+  readonly semanticCaptureMapRef: string;
+  readonly semanticCaptureMap: FormalSemanticCaptureMapV1;
+  readonly semanticCaptureMapHash: Sha256HashV1;
+  readonly nativeBlockCaptureIdentityInventoryRef: string;
+  readonly nativeBlockCaptureIdentityInventoryHash: Sha256HashV1;
+  readonly nativeBlockMaterializerMetadataRef: string;
+  readonly nativeBlockMaterializerMetadataHash: Sha256HashV1;
+  readonly views: readonly [
+    Extract<FormalArtifactViewRequestV1, { viewId: "opening" }>,
+    Extract<FormalArtifactViewRequestV1, { viewId: "world-side" }>,
+    Extract<FormalArtifactViewRequestV1, { viewId: "world-top-down" }>,
+  ];
+  readonly colliderOverlay: FormalColliderOverlayRequestV1;
+  readonly scriptedTraversal: FormalScriptedTraversalRequestV1;
 }
 
 export interface FormalWorldCaptureSdkOwnerIdentityV1 {
@@ -118,6 +227,9 @@ export interface FormalWorldCaptureReceiptV1 {
   readonly kind: "formal-world-capture-receipt";
   readonly schemaVersion: 1;
   readonly id: string;
+  readonly formalRequestRef: string;
+  readonly formalRequest: FormalWorldCaptureRequestV1;
+  readonly formalRequestHash: Sha256HashV1;
   readonly caseRef: string;
   readonly caseHash: Sha256HashV1;
   readonly evaluationProfileRef: string;
@@ -139,6 +251,10 @@ export interface FormalWorldCaptureReceiptV1 {
   readonly readySnapshotHash: Sha256HashV1;
   readonly sdkOwnerIdentities: readonly FormalWorldCaptureSdkOwnerIdentityV1[];
   readonly semanticCaptureMapHash: Sha256HashV1;
+  readonly nativeBlockCaptureIdentityInventoryHash: Sha256HashV1;
+  readonly nativeBlockMaterializerMetadataHash: Sha256HashV1;
+  readonly colliderOverlayRequestHash: Sha256HashV1;
+  readonly scriptedTraversalRequestHash: Sha256HashV1;
   readonly viewportWidthPixels: number;
   readonly viewportHeightPixels: number;
   readonly devicePixelRatio: number;
@@ -187,6 +303,7 @@ const MAP_FIELDS = [
   "layoutInventoryHash",
   "contributionHash",
   "bindings",
+  "traversalCheckBindings",
 ] as const;
 const BINDING_FIELDS = [
   "acceptanceTargetRef",
@@ -199,10 +316,90 @@ const BINDING_FIELDS = [
   "layoutInventoryHash",
   "contributionHash",
 ] as const;
+const TRAVERSAL_BINDING_FIELDS = [
+  "traversalCheckId",
+  "acceptanceTargetRef",
+  "checkExpectation",
+  "fixedInputSequenceHash",
+  "checkpointCriteria",
+] as const;
+const REACH_CRITERION_FIELDS = [
+  "kind",
+  "checkpointId",
+  "expectation",
+  "sourceVisualGroupId",
+  "sourceBoundsMeters",
+  "capsuleRadiusMeters",
+  "toleranceMeters",
+] as const;
+const PASS_PLANE_CRITERION_FIELDS = [
+  ...REACH_CRITERION_FIELDS,
+  "axis",
+  "sourceFace",
+  "planeMeters",
+  "expectedCenterSide",
+] as const;
+const BLOCK_PLANE_CRITERION_FIELDS = [
+  ...PASS_PLANE_CRITERION_FIELDS,
+  "colliderId",
+] as const;
+const FORMAL_REQUEST_FIELDS = [
+  "kind",
+  "schemaVersion",
+  "id",
+  "caseRef",
+  "caseHash",
+  "evaluationProfileRef",
+  "evaluationProfileHash",
+  "sceneAuthoringRouteDecisionRef",
+  "sceneAuthoringRouteDecisionHash",
+  "sceneAuthoringAttemptRef",
+  "sceneAuthoringAttemptHash",
+  "sceneAuthoringAttemptResultRef",
+  "sceneAuthoringAttemptResultHash",
+  "worldPackageRef",
+  "worldPackageRootHash",
+  "worldBuildIdentityRef",
+  "worldBuildIdentityHash",
+  "worldPackageBuildReceiptRef",
+  "worldPackageBuildReceiptHash",
+  "semanticCaptureMapRef",
+  "semanticCaptureMap",
+  "semanticCaptureMapHash",
+  "nativeBlockCaptureIdentityInventoryRef",
+  "nativeBlockCaptureIdentityInventoryHash",
+  "nativeBlockMaterializerMetadataRef",
+  "nativeBlockMaterializerMetadataHash",
+  "views",
+  "colliderOverlay",
+  "scriptedTraversal",
+] as const;
+const COLLIDER_OVERLAY_REQUEST_FIELDS = [
+  "kind",
+  "schemaVersion",
+  "isRequired",
+  "contributionHash",
+] as const;
+const SCRIPTED_TRAVERSAL_REQUEST_FIELDS = [
+  "kind",
+  "schemaVersion",
+  "checks",
+] as const;
+const SCRIPTED_TRAVERSAL_CHECK_FIELDS = [
+  "id",
+  "acceptanceTargetRef",
+  "checkExpectation",
+  "fixedInputSequence",
+  "fixedInputSequenceHash",
+  "checkpointCriteria",
+] as const;
 const RECEIPT_FIELDS = [
   "kind",
   "schemaVersion",
   "id",
+  "formalRequestRef",
+  "formalRequest",
+  "formalRequestHash",
   "caseRef",
   "caseHash",
   "evaluationProfileRef",
@@ -224,6 +421,10 @@ const RECEIPT_FIELDS = [
   "readySnapshotHash",
   "sdkOwnerIdentities",
   "semanticCaptureMapHash",
+  "nativeBlockCaptureIdentityInventoryHash",
+  "nativeBlockMaterializerMetadataHash",
+  "colliderOverlayRequestHash",
+  "scriptedTraversalRequestHash",
   "viewportWidthPixels",
   "viewportHeightPixels",
   "devicePixelRatio",
@@ -444,7 +645,7 @@ function metersXYZ(
   ]);
 }
 
-function parseWorldBounds(
+function parseSpatialBounds(
   value: unknown,
   contract: string,
   path: string,
@@ -467,6 +668,18 @@ function parseWorldBounds(
   if (spanX <= 0 || spanY <= 0 || spanZ <= 0) {
     fail(contract, path, "world bounds must have positive volume");
   }
+  return Object.freeze({ minimumMetersXYZ, maximumMetersXYZ });
+}
+
+function parseWorldBounds(
+  value: unknown,
+  contract: string,
+  path: string,
+): FormalWorldBoundsMetersV1 {
+  const parsed = parseSpatialBounds(value, contract, path);
+  const spanX = parsed.maximumMetersXYZ[0] - parsed.minimumMetersXYZ[0];
+  const spanY = parsed.maximumMetersXYZ[1] - parsed.minimumMetersXYZ[1];
+  const spanZ = parsed.maximumMetersXYZ[2] - parsed.minimumMetersXYZ[2];
   if (
     spanX < MINIMUM_WORLD_SPAN_XZ_METERS ||
     spanZ < MINIMUM_WORLD_SPAN_XZ_METERS ||
@@ -474,7 +687,7 @@ function parseWorldBounds(
   ) {
     fail(contract, path, "world-side and world-top-down require world-scale bounds");
   }
-  return Object.freeze({ minimumMetersXYZ, maximumMetersXYZ });
+  return parsed;
 }
 
 function dominantLookAxis(
@@ -643,6 +856,217 @@ function parseRequiredWorldViewIds(
   return FORMAL_WORLD_CAPTURE_VIEW_IDS_V1;
 }
 
+function parseCapsuleTolerance(
+  source: Readonly<Record<string, unknown>>,
+  contract: string,
+  path: string,
+): Readonly<{ capsuleRadiusMeters: number; toleranceMeters: number }> {
+  const capsuleRadiusMeters = finiteNumber(
+    source.capsuleRadiusMeters,
+    0.001,
+    100,
+    contract,
+    `${path}/capsuleRadiusMeters`,
+  );
+  const toleranceMeters = finiteNumber(
+    source.toleranceMeters,
+    0,
+    capsuleRadiusMeters,
+    contract,
+    `${path}/toleranceMeters`,
+  );
+  return Object.freeze({ capsuleRadiusMeters, toleranceMeters });
+}
+
+function parseTraversalCheckpointSpatialCriterion(
+  value: unknown,
+  contract = "FORMAL_TRAVERSAL_CHECKPOINT_SPATIAL_CRITERION_INVALID",
+  path = "",
+): FormalTraversalCheckpointSpatialCriterionV1 {
+  assertAccessorFree(value, contract, path);
+  const source = object(value, contract, path);
+  const kind = source.kind;
+  if (kind === "reach-bounds") {
+    exactFields(source, REACH_CRITERION_FIELDS, contract, path);
+    if (source.expectation !== "reach") {
+      fail(contract, `${path}/expectation`, "reach-bounds must expect reach");
+    }
+    return freeze({
+      kind,
+      checkpointId: text(source.checkpointId, contract, `${path}/checkpointId`),
+      expectation: "reach" as const,
+      sourceVisualGroupId: text(
+        source.sourceVisualGroupId,
+        contract,
+        `${path}/sourceVisualGroupId`,
+      ),
+      sourceBoundsMeters: parseSpatialBounds(
+        source.sourceBoundsMeters,
+        contract,
+        `${path}/sourceBoundsMeters`,
+      ),
+      ...parseCapsuleTolerance(source, contract, path),
+    });
+  }
+  if (kind !== "pass-plane" && kind !== "block-plane") {
+    fail(contract, `${path}/kind`, "expected reach-bounds, pass-plane, or block-plane");
+  }
+  exactFields(
+    source,
+    kind === "block-plane"
+      ? BLOCK_PLANE_CRITERION_FIELDS
+      : PASS_PLANE_CRITERION_FIELDS,
+    contract,
+    path,
+  );
+  const expectation = kind === "pass-plane" ? "pass" : "block";
+  if (source.expectation !== expectation) {
+    fail(contract, `${path}/expectation`, `${kind} must expect ${expectation}`);
+  }
+  const sourceBoundsMeters = parseSpatialBounds(
+    source.sourceBoundsMeters,
+    contract,
+    `${path}/sourceBoundsMeters`,
+  );
+  const axis = enumValue(
+    source.axis,
+    ["x", "y", "z"] as const,
+    contract,
+    `${path}/axis`,
+  );
+  const sourceFace = enumValue(
+    source.sourceFace,
+    ["minimum", "maximum"] as const,
+    contract,
+    `${path}/sourceFace`,
+  );
+  const planeMeters = finiteNumber(
+    source.planeMeters,
+    -1_000_000,
+    1_000_000,
+    contract,
+    `${path}/planeMeters`,
+  );
+  const axisIndex = axis === "x" ? 0 : axis === "y" ? 1 : 2;
+  const derivedPlaneMeters = sourceFace === "minimum"
+    ? sourceBoundsMeters.minimumMetersXYZ[axisIndex]
+    : sourceBoundsMeters.maximumMetersXYZ[axisIndex];
+  if (planeMeters !== derivedPlaneMeters) {
+    fail(contract, `${path}/planeMeters`, "must equal the selected frozen bounds face");
+  }
+  const shared = {
+    checkpointId: text(source.checkpointId, contract, `${path}/checkpointId`),
+    sourceVisualGroupId: text(
+      source.sourceVisualGroupId,
+      contract,
+      `${path}/sourceVisualGroupId`,
+    ),
+    sourceBoundsMeters,
+    axis,
+    sourceFace,
+    planeMeters,
+    expectedCenterSide: enumValue(
+      source.expectedCenterSide,
+      ["negative", "positive"] as const,
+      contract,
+      `${path}/expectedCenterSide`,
+    ),
+    ...parseCapsuleTolerance(source, contract, path),
+  };
+  return kind === "pass-plane"
+    ? freeze({ kind, expectation: "pass" as const, ...shared })
+    : freeze({
+        kind,
+        expectation: "block" as const,
+        colliderId: text(source.colliderId, contract, `${path}/colliderId`),
+        ...shared,
+      });
+}
+
+function parseCheckpointCriteria(
+  value: unknown,
+  contract: string,
+  path: string,
+): readonly FormalTraversalCheckpointSpatialCriterionV1[] {
+  const criteria = array(value, contract, path).map((entry, index) =>
+    parseTraversalCheckpointSpatialCriterion(
+      entry,
+      contract,
+      `${path}/${index}`,
+    ));
+  if (isEmpty(criteria)) {
+    fail(contract, path, "must contain one frozen spatial criterion per checkpoint");
+  }
+  if (
+    criteria.some((criterion, index) =>
+      index > 0 && criteria[index - 1]!.checkpointId >= criterion.checkpointId)
+  ) {
+    fail(contract, path, "checkpoint criteria must be unique and sorted by checkpointId");
+  }
+  return Object.freeze(criteria);
+}
+
+export function parseFormalTraversalCheckpointSpatialCriteriaV1(
+  value: unknown,
+): readonly FormalTraversalCheckpointSpatialCriterionV1[] {
+  return parseCheckpointCriteria(
+    value,
+    "FORMAL_TRAVERSAL_CHECKPOINT_SPATIAL_CRITERIA_INVALID",
+    "checkpointCriteria",
+  );
+}
+
+function parseSemanticTraversalBinding(
+  value: unknown,
+  contract: string,
+  path: string,
+): FormalSemanticTraversalCheckBindingV1 {
+  const source = object(value, contract, path);
+  exactFields(source, TRAVERSAL_BINDING_FIELDS, contract, path);
+  const checkExpectation = enumValue(
+    source.checkExpectation,
+    ["pass", "block"] as const,
+    contract,
+    `${path}/checkExpectation`,
+  );
+  const checkpointCriteria = parseCheckpointCriteria(
+    source.checkpointCriteria,
+    contract,
+    `${path}/checkpointCriteria`,
+  );
+  if (
+    checkExpectation === "block" &&
+    !checkpointCriteria.some(({ expectation }) => expectation === "block")
+  ) {
+    fail(contract, `${path}/checkpointCriteria`, "a block check requires a block criterion");
+  }
+  if (
+    checkExpectation === "pass" &&
+    checkpointCriteria.some(({ expectation }) => expectation === "block")
+  ) {
+    fail(contract, `${path}/checkpointCriteria`, "a pass check cannot contain a block criterion");
+  }
+  return freeze({
+    traversalCheckId: text(
+      source.traversalCheckId,
+      contract,
+      `${path}/traversalCheckId`,
+    ),
+    acceptanceTargetRef: text(
+      source.acceptanceTargetRef,
+      contract,
+      `${path}/acceptanceTargetRef`,
+    ),
+    checkExpectation,
+    fixedInputSequenceHash: hash(
+      source.fixedInputSequenceHash,
+      contract,
+      `${path}/fixedInputSequenceHash`,
+    ),
+    checkpointCriteria,
+  });
+}
+
 function parseBinding(
   value: unknown,
   contract: string,
@@ -759,6 +1183,49 @@ export function parseFormalSemanticCaptureMapV1(
   if (new Set(colors).size !== colors.length) {
     fail(contract, "bindings", "identity colors must be unique");
   }
+  const traversalCheckBindings = array(
+    source.traversalCheckBindings,
+    contract,
+    "traversalCheckBindings",
+  ).map((entry, index) => parseSemanticTraversalBinding(
+    entry,
+    contract,
+    `traversalCheckBindings/${index}`,
+  ));
+  if (
+    isEmpty(traversalCheckBindings) ||
+    traversalCheckBindings.some((binding, index) =>
+      index > 0 &&
+      traversalCheckBindings[index - 1]!.traversalCheckId >= binding.traversalCheckId)
+  ) {
+    fail(
+      contract,
+      "traversalCheckBindings",
+      "must be non-empty, unique, and sorted by traversalCheckId",
+    );
+  }
+  const boundGroupIds = new Set(groupIds);
+  const boundAcceptanceTargetRefs = new Set(targetRefs);
+  const unknownTraversalTarget = traversalCheckBindings.find(
+    ({ acceptanceTargetRef }) => !boundAcceptanceTargetRefs.has(acceptanceTargetRef),
+  );
+  if (!isNil(unknownTraversalTarget)) {
+    fail(
+      contract,
+      "traversalCheckBindings",
+      "traversal check must reference a bound acceptance target",
+    );
+  }
+  const unknownCriterionGroup = traversalCheckBindings
+    .flatMap(({ checkpointCriteria }) => checkpointCriteria)
+    .find(({ sourceVisualGroupId }) => !boundGroupIds.has(sourceVisualGroupId));
+  if (!isNil(unknownCriterionGroup)) {
+    fail(
+      contract,
+      "traversalCheckBindings",
+      "checkpoint criterion must reference a bound visual group",
+    );
+  }
   return freeze({
     kind: "formal-semantic-capture-map",
     schemaVersion: 1,
@@ -769,6 +1236,7 @@ export function parseFormalSemanticCaptureMapV1(
     layoutInventoryHash,
     contributionHash,
     bindings: Object.freeze(bindings),
+    traversalCheckBindings: Object.freeze(traversalCheckBindings),
   });
 }
 
@@ -794,6 +1262,379 @@ function formalWorldPackageRef(
     fail(contract, path, "must be the formal package ref for worldPackageRootHash");
   }
   return parsed;
+}
+
+export function parseFormalColliderOverlayRequestV1(
+  value: unknown,
+): FormalColliderOverlayRequestV1 {
+  const contract = "FORMAL_COLLIDER_OVERLAY_REQUEST_INVALID";
+  const source = begin(value, contract, COLLIDER_OVERLAY_REQUEST_FIELDS);
+  if (
+    source.kind !== "formal-collider-overlay-request" ||
+    source.schemaVersion !== 1 ||
+    source.isRequired !== true
+  ) {
+    fail(contract, "", "formal collider overlay evidence must be required");
+  }
+  return Object.freeze({
+    kind: "formal-collider-overlay-request",
+    schemaVersion: 1,
+    isRequired: true,
+    contributionHash: hash(source.contributionHash, contract, "contributionHash"),
+  });
+}
+
+export function hashFormalColliderOverlayRequestV1(
+  value: unknown,
+): Sha256HashV1 {
+  return sha256CanonicalJson(
+    parseFormalColliderOverlayRequestV1(value),
+  ) as Sha256HashV1;
+}
+
+function parseFixedInputSequence(
+  value: unknown,
+  contract: string,
+  path: string,
+): readonly FixedInputV1[] {
+  let fixedInputSequence: readonly FixedInputV1[];
+  try {
+    fixedInputSequence = array(value, contract, path).map((entry) =>
+      parseFixedInputV1(entry));
+  } catch {
+    fail(contract, path, "must be a non-empty sequence of valid FixedInputV1 values");
+  }
+  if (isEmpty(fixedInputSequence)) {
+    fail(contract, path, "must be a non-empty sequence of valid FixedInputV1 values");
+  }
+  return Object.freeze(fixedInputSequence);
+}
+
+function parseScriptedTraversalCheck(
+  value: unknown,
+  contract: string,
+  path: string,
+): FormalScriptedTraversalCheckRequestV1 {
+  const source = object(value, contract, path);
+  exactFields(source, SCRIPTED_TRAVERSAL_CHECK_FIELDS, contract, path);
+  const fixedInputSequence = parseFixedInputSequence(
+    source.fixedInputSequence,
+    contract,
+    `${path}/fixedInputSequence`,
+  );
+  const fixedInputSequenceHash = hash(
+    source.fixedInputSequenceHash,
+    contract,
+    `${path}/fixedInputSequenceHash`,
+  );
+  if (sha256CanonicalJson(fixedInputSequence) !== fixedInputSequenceHash) {
+    fail(
+      contract,
+      `${path}/fixedInputSequenceHash`,
+      "must match the parsed fixed input sequence",
+    );
+  }
+  const checkExpectation = enumValue(
+    source.checkExpectation,
+    ["pass", "block"] as const,
+    contract,
+    `${path}/checkExpectation`,
+  );
+  const checkpointCriteria = parseCheckpointCriteria(
+    source.checkpointCriteria,
+    contract,
+    `${path}/checkpointCriteria`,
+  );
+  if (
+    checkExpectation === "block" &&
+    !checkpointCriteria.some(({ expectation }) => expectation === "block")
+  ) {
+    fail(contract, `${path}/checkpointCriteria`, "a block check requires a block criterion");
+  }
+  if (
+    checkExpectation === "pass" &&
+    checkpointCriteria.some(({ expectation }) => expectation === "block")
+  ) {
+    fail(contract, `${path}/checkpointCriteria`, "a pass check cannot contain a block criterion");
+  }
+  return freeze({
+    id: text(source.id, contract, `${path}/id`),
+    acceptanceTargetRef: text(
+      source.acceptanceTargetRef,
+      contract,
+      `${path}/acceptanceTargetRef`,
+    ),
+    checkExpectation,
+    fixedInputSequence,
+    fixedInputSequenceHash,
+    checkpointCriteria,
+  });
+}
+
+export function parseFormalScriptedTraversalRequestV1(
+  value: unknown,
+): FormalScriptedTraversalRequestV1 {
+  const contract = "FORMAL_SCRIPTED_TRAVERSAL_REQUEST_INVALID";
+  const source = begin(value, contract, SCRIPTED_TRAVERSAL_REQUEST_FIELDS);
+  if (
+    source.kind !== "formal-scripted-traversal-request" ||
+    source.schemaVersion !== 1
+  ) {
+    fail(contract, "", "unexpected kind or schemaVersion");
+  }
+  const checks = array(source.checks, contract, "checks").map((entry, index) =>
+    parseScriptedTraversalCheck(entry, contract, `checks/${index}`));
+  if (
+    isEmpty(checks) ||
+    checks.some((check, index) => index > 0 && checks[index - 1]!.id >= check.id)
+  ) {
+    fail(contract, "checks", "must be non-empty, unique, and sorted by id");
+  }
+  return freeze({
+    kind: "formal-scripted-traversal-request",
+    schemaVersion: 1,
+    checks: Object.freeze(checks),
+  });
+}
+
+export function hashFormalScriptedTraversalRequestV1(
+  value: unknown,
+): Sha256HashV1 {
+  return sha256CanonicalJson(
+    parseFormalScriptedTraversalRequestV1(value),
+  ) as Sha256HashV1;
+}
+
+function parseFormalRequestViews(
+  value: unknown,
+  contract: string,
+): FormalWorldCaptureRequestV1["views"] {
+  const views = array(value, contract, "views");
+  if (views.length !== FORMAL_WORLD_CAPTURE_VIEW_IDS_V1.length) {
+    fail(contract, "views", "must contain opening, world-side, and world-top-down");
+  }
+  const parsed = FORMAL_WORLD_CAPTURE_VIEW_IDS_V1.map((viewId, index) => {
+    const request = parseFormalArtifactViewRequestV1(views[index]);
+    if (request.viewId !== viewId) {
+      fail(contract, `views/${index}/viewId`, `expected ${viewId}`);
+    }
+    return request;
+  });
+  return Object.freeze(parsed) as FormalWorldCaptureRequestV1["views"];
+}
+
+function requireSameCanonicalValue(
+  left: unknown,
+  right: unknown,
+  contract: string,
+  path: string,
+): void {
+  if (sha256CanonicalJson(left) !== sha256CanonicalJson(right)) {
+    fail(contract, path, "must match the frozen formal Capture transaction");
+  }
+}
+
+export function parseFormalWorldCaptureRequestV1(
+  value: unknown,
+): FormalWorldCaptureRequestV1 {
+  const contract = "FORMAL_WORLD_CAPTURE_REQUEST_INVALID";
+  const source = begin(value, contract, FORMAL_REQUEST_FIELDS);
+  if (source.kind !== "formal-world-capture-request" || source.schemaVersion !== 1) {
+    fail(contract, "", "unexpected kind or schemaVersion");
+  }
+  const caseRef = text(source.caseRef, contract, "caseRef");
+  const caseHash = hash(source.caseHash, contract, "caseHash");
+  const worldPackageRootHash = hash(
+    source.worldPackageRootHash,
+    contract,
+    "worldPackageRootHash",
+  );
+  let semanticCaptureMap: FormalSemanticCaptureMapV1;
+  try {
+    semanticCaptureMap = parseFormalSemanticCaptureMapV1(source.semanticCaptureMap);
+  } catch {
+    fail(contract, "semanticCaptureMap", "must be a closed FormalSemanticCaptureMapV1");
+  }
+  const semanticCaptureMapHash = hash(
+    source.semanticCaptureMapHash,
+    contract,
+    "semanticCaptureMapHash",
+  );
+  if (hashFormalSemanticCaptureMapV1(semanticCaptureMap) !== semanticCaptureMapHash) {
+    fail(contract, "semanticCaptureMapHash", "must match the semantic Capture map bytes");
+  }
+  if (semanticCaptureMap.caseHash !== caseHash) {
+    fail(contract, "semanticCaptureMap/caseHash", "must match the formal Case hash");
+  }
+  if (semanticCaptureMap.caseRef !== caseRef) {
+    fail(contract, "semanticCaptureMap/caseRef", "must match the formal Case ref");
+  }
+  let colliderOverlay: FormalColliderOverlayRequestV1;
+  try {
+    colliderOverlay = parseFormalColliderOverlayRequestV1(source.colliderOverlay);
+  } catch {
+    fail(contract, "colliderOverlay", "must be a closed FormalColliderOverlayRequestV1");
+  }
+  if (colliderOverlay.contributionHash !== semanticCaptureMap.contributionHash) {
+    fail(
+      contract,
+      "colliderOverlay/contributionHash",
+      "must match the semantic map frozen Contribution",
+    );
+  }
+  let scriptedTraversal: FormalScriptedTraversalRequestV1;
+  try {
+    scriptedTraversal = parseFormalScriptedTraversalRequestV1(source.scriptedTraversal);
+  } catch {
+    fail(contract, "scriptedTraversal", "must be a closed FormalScriptedTraversalRequestV1");
+  }
+  const semanticTraversalById = new Map(
+    semanticCaptureMap.traversalCheckBindings.map((binding) => [
+      binding.traversalCheckId,
+      binding,
+    ]),
+  );
+  if (scriptedTraversal.checks.length !== semanticTraversalById.size) {
+    fail(contract, "scriptedTraversal/checks", "must match every semantic traversal binding");
+  }
+  for (const check of scriptedTraversal.checks) {
+    const binding = semanticTraversalById.get(check.id);
+    if (isNil(binding)) {
+      fail(contract, "scriptedTraversal/checks", "contains an unbound traversal check");
+    }
+    requireSameCanonicalValue(
+      {
+        id: check.id,
+        acceptanceTargetRef: check.acceptanceTargetRef,
+        checkExpectation: check.checkExpectation,
+        fixedInputSequenceHash: check.fixedInputSequenceHash,
+        checkpointCriteria: check.checkpointCriteria,
+      },
+      {
+        id: binding.traversalCheckId,
+        acceptanceTargetRef: binding.acceptanceTargetRef,
+        checkExpectation: binding.checkExpectation,
+        fixedInputSequenceHash: binding.fixedInputSequenceHash,
+        checkpointCriteria: binding.checkpointCriteria,
+      },
+      contract,
+      `scriptedTraversal/checks/${check.id}`,
+    );
+  }
+  return freeze({
+    kind: "formal-world-capture-request",
+    schemaVersion: 1,
+    id: text(source.id, contract, "id"),
+    caseRef,
+    caseHash,
+    evaluationProfileRef: text(
+      source.evaluationProfileRef,
+      contract,
+      "evaluationProfileRef",
+    ),
+    evaluationProfileHash: hash(
+      source.evaluationProfileHash,
+      contract,
+      "evaluationProfileHash",
+    ),
+    sceneAuthoringRouteDecisionRef: text(
+      source.sceneAuthoringRouteDecisionRef,
+      contract,
+      "sceneAuthoringRouteDecisionRef",
+    ),
+    sceneAuthoringRouteDecisionHash: hash(
+      source.sceneAuthoringRouteDecisionHash,
+      contract,
+      "sceneAuthoringRouteDecisionHash",
+    ),
+    sceneAuthoringAttemptRef: text(
+      source.sceneAuthoringAttemptRef,
+      contract,
+      "sceneAuthoringAttemptRef",
+    ),
+    sceneAuthoringAttemptHash: hash(
+      source.sceneAuthoringAttemptHash,
+      contract,
+      "sceneAuthoringAttemptHash",
+    ),
+    sceneAuthoringAttemptResultRef: text(
+      source.sceneAuthoringAttemptResultRef,
+      contract,
+      "sceneAuthoringAttemptResultRef",
+    ),
+    sceneAuthoringAttemptResultHash: hash(
+      source.sceneAuthoringAttemptResultHash,
+      contract,
+      "sceneAuthoringAttemptResultHash",
+    ),
+    worldPackageRef: formalWorldPackageRef(
+      source.worldPackageRef,
+      worldPackageRootHash,
+      contract,
+      "worldPackageRef",
+    ),
+    worldPackageRootHash,
+    worldBuildIdentityRef: text(
+      source.worldBuildIdentityRef,
+      contract,
+      "worldBuildIdentityRef",
+    ),
+    worldBuildIdentityHash: hash(
+      source.worldBuildIdentityHash,
+      contract,
+      "worldBuildIdentityHash",
+    ),
+    worldPackageBuildReceiptRef: text(
+      source.worldPackageBuildReceiptRef,
+      contract,
+      "worldPackageBuildReceiptRef",
+    ),
+    worldPackageBuildReceiptHash: hash(
+      source.worldPackageBuildReceiptHash,
+      contract,
+      "worldPackageBuildReceiptHash",
+    ),
+    semanticCaptureMapRef: text(
+      source.semanticCaptureMapRef,
+      contract,
+      "semanticCaptureMapRef",
+    ),
+    semanticCaptureMap,
+    semanticCaptureMapHash,
+    nativeBlockCaptureIdentityInventoryRef: text(
+      source.nativeBlockCaptureIdentityInventoryRef,
+      contract,
+      "nativeBlockCaptureIdentityInventoryRef",
+    ),
+    nativeBlockCaptureIdentityInventoryHash: hash(
+      source.nativeBlockCaptureIdentityInventoryHash,
+      contract,
+      "nativeBlockCaptureIdentityInventoryHash",
+    ),
+    nativeBlockMaterializerMetadataRef: text(
+      source.nativeBlockMaterializerMetadataRef,
+      contract,
+      "nativeBlockMaterializerMetadataRef",
+    ),
+    nativeBlockMaterializerMetadataHash: hash(
+      source.nativeBlockMaterializerMetadataHash,
+      contract,
+      "nativeBlockMaterializerMetadataHash",
+    ),
+    views: parseFormalRequestViews(source.views, contract),
+    colliderOverlay,
+    scriptedTraversal,
+  });
+}
+
+export function formalWorldCaptureRequestCanonicalBytesV1(
+  value: unknown,
+): Uint8Array {
+  return canonicalJsonBytes(parseFormalWorldCaptureRequestV1(value));
+}
+
+export function hashFormalWorldCaptureRequestV1(value: unknown): Sha256HashV1 {
+  return sha256CanonicalJson(parseFormalWorldCaptureRequestV1(value)) as Sha256HashV1;
 }
 
 function parseReadySnapshot(
@@ -902,15 +1743,6 @@ function parseViewRecord(
   });
 }
 
-function assertUniqueHashes(
-  hashes: readonly Sha256HashV1[],
-  contract: string,
-): void {
-  if (new Set(hashes).size !== hashes.length) {
-    fail(contract, "", "Package, Attempt, Capture, and SDK hashes must be unique");
-  }
-}
-
 export function parseFormalWorldCaptureReceiptV1(
   value: unknown,
 ): FormalWorldCaptureReceiptV1 {
@@ -920,6 +1752,17 @@ export function parseFormalWorldCaptureReceiptV1(
     fail(contract, "kind", "unexpected kind");
   }
   exactInteger(source.schemaVersion, 1, contract, "schemaVersion");
+  let formalRequest: FormalWorldCaptureRequestV1;
+  try {
+    formalRequest = parseFormalWorldCaptureRequestV1(source.formalRequest);
+  } catch {
+    fail(contract, "formalRequest", "must be a closed FormalWorldCaptureRequestV1");
+  }
+  const formalRequestHash = hash(source.formalRequestHash, contract, "formalRequestHash");
+  if (hashFormalWorldCaptureRequestV1(formalRequest) !== formalRequestHash) {
+    fail(contract, "formalRequestHash", "must match the embedded formal Request bytes");
+  }
+  const formalRequestRef = text(source.formalRequestRef, contract, "formalRequestRef");
   const worldPackageRootHash = hash(
     source.worldPackageRootHash,
     contract,
@@ -977,6 +1820,14 @@ export function parseFormalWorldCaptureReceiptV1(
   const parsedViews = FORMAL_WORLD_CAPTURE_VIEW_IDS_V1.map((viewId, index) =>
     parseViewRecord(views[index], contract, `views/${index}`, viewId, viewport),
   );
+  parsedViews.forEach((view, index) => {
+    requireSameCanonicalValue(
+      view.request,
+      formalRequest.views[index],
+      contract,
+      `views/${index}/request`,
+    );
+  });
   const sdkOwnerIdentities = parseSdkOwnerIdentities(
     source.sdkOwnerIdentities,
     contract,
@@ -1046,72 +1897,84 @@ export function parseFormalWorldCaptureReceiptV1(
     contract,
     "scriptedTraversalHash",
   );
-  assertUniqueHashes([
-    caseHash,
-    evaluationProfileHash,
-    sceneAuthoringRouteDecisionHash,
-    sceneAuthoringAttemptHash,
-    sceneAuthoringAttemptResultHash,
-    worldPackageRootHash,
-    worldBuildIdentityHash,
-    worldPackageBuildReceiptHash,
-    readySnapshotHash,
-    semanticCaptureMapHash,
-    colliderOverlayHash,
-    scriptedTraversalHash,
-    ...parsedViews.map((view) => view.requestHash),
-    ...parsedViews.map((view) => view.pngContentHash),
-    ...sdkOwnerIdentities.map((owner) => owner.implementationHash),
-  ], contract);
+  const nativeBlockCaptureIdentityInventoryHash = hash(
+    source.nativeBlockCaptureIdentityInventoryHash,
+    contract,
+    "nativeBlockCaptureIdentityInventoryHash",
+  );
+  const nativeBlockMaterializerMetadataHash = hash(
+    source.nativeBlockMaterializerMetadataHash,
+    contract,
+    "nativeBlockMaterializerMetadataHash",
+  );
+  const colliderOverlayRequestHash = hash(
+    source.colliderOverlayRequestHash,
+    contract,
+    "colliderOverlayRequestHash",
+  );
+  const scriptedTraversalRequestHash = hash(
+    source.scriptedTraversalRequestHash,
+    contract,
+    "scriptedTraversalRequestHash",
+  );
+  const repeatedIdentityJoins = [
+    [text(source.caseRef, contract, "caseRef"), formalRequest.caseRef, "caseRef"],
+    [caseHash, formalRequest.caseHash, "caseHash"],
+    [text(source.evaluationProfileRef, contract, "evaluationProfileRef"), formalRequest.evaluationProfileRef, "evaluationProfileRef"],
+    [evaluationProfileHash, formalRequest.evaluationProfileHash, "evaluationProfileHash"],
+    [text(source.sceneAuthoringRouteDecisionRef, contract, "sceneAuthoringRouteDecisionRef"), formalRequest.sceneAuthoringRouteDecisionRef, "sceneAuthoringRouteDecisionRef"],
+    [sceneAuthoringRouteDecisionHash, formalRequest.sceneAuthoringRouteDecisionHash, "sceneAuthoringRouteDecisionHash"],
+    [text(source.sceneAuthoringAttemptRef, contract, "sceneAuthoringAttemptRef"), formalRequest.sceneAuthoringAttemptRef, "sceneAuthoringAttemptRef"],
+    [sceneAuthoringAttemptHash, formalRequest.sceneAuthoringAttemptHash, "sceneAuthoringAttemptHash"],
+    [text(source.sceneAuthoringAttemptResultRef, contract, "sceneAuthoringAttemptResultRef"), formalRequest.sceneAuthoringAttemptResultRef, "sceneAuthoringAttemptResultRef"],
+    [sceneAuthoringAttemptResultHash, formalRequest.sceneAuthoringAttemptResultHash, "sceneAuthoringAttemptResultHash"],
+    [worldPackageRef, formalRequest.worldPackageRef, "worldPackageRef"],
+    [worldPackageRootHash, formalRequest.worldPackageRootHash, "worldPackageRootHash"],
+    [text(source.worldBuildIdentityRef, contract, "worldBuildIdentityRef"), formalRequest.worldBuildIdentityRef, "worldBuildIdentityRef"],
+    [worldBuildIdentityHash, formalRequest.worldBuildIdentityHash, "worldBuildIdentityHash"],
+    [text(source.worldPackageBuildReceiptRef, contract, "worldPackageBuildReceiptRef"), formalRequest.worldPackageBuildReceiptRef, "worldPackageBuildReceiptRef"],
+    [worldPackageBuildReceiptHash, formalRequest.worldPackageBuildReceiptHash, "worldPackageBuildReceiptHash"],
+    [semanticCaptureMapHash, formalRequest.semanticCaptureMapHash, "semanticCaptureMapHash"],
+    [nativeBlockCaptureIdentityInventoryHash, formalRequest.nativeBlockCaptureIdentityInventoryHash, "nativeBlockCaptureIdentityInventoryHash"],
+    [nativeBlockMaterializerMetadataHash, formalRequest.nativeBlockMaterializerMetadataHash, "nativeBlockMaterializerMetadataHash"],
+    [colliderOverlayRequestHash, hashFormalColliderOverlayRequestV1(formalRequest.colliderOverlay), "colliderOverlayRequestHash"],
+    [scriptedTraversalRequestHash, hashFormalScriptedTraversalRequestV1(formalRequest.scriptedTraversal), "scriptedTraversalRequestHash"],
+  ] as const;
+  for (const [actual, expected, path] of repeatedIdentityJoins) {
+    if (actual !== expected) fail(contract, path, "must match the embedded formal Request");
+  }
   return freeze({
     kind: "formal-world-capture-receipt",
     schemaVersion: 1,
     id: text(source.id, contract, "id"),
-    caseRef: text(source.caseRef, contract, "caseRef"),
+    formalRequestRef,
+    formalRequest,
+    formalRequestHash,
+    caseRef: formalRequest.caseRef,
     caseHash,
-    evaluationProfileRef: text(
-      source.evaluationProfileRef,
-      contract,
-      "evaluationProfileRef",
-    ),
+    evaluationProfileRef: formalRequest.evaluationProfileRef,
     evaluationProfileHash,
-    sceneAuthoringRouteDecisionRef: text(
-      source.sceneAuthoringRouteDecisionRef,
-      contract,
-      "sceneAuthoringRouteDecisionRef",
-    ),
+    sceneAuthoringRouteDecisionRef: formalRequest.sceneAuthoringRouteDecisionRef,
     sceneAuthoringRouteDecisionHash,
-    sceneAuthoringAttemptRef: text(
-      source.sceneAuthoringAttemptRef,
-      contract,
-      "sceneAuthoringAttemptRef",
-    ),
+    sceneAuthoringAttemptRef: formalRequest.sceneAuthoringAttemptRef,
     sceneAuthoringAttemptHash,
-    sceneAuthoringAttemptResultRef: text(
-      source.sceneAuthoringAttemptResultRef,
-      contract,
-      "sceneAuthoringAttemptResultRef",
-    ),
+    sceneAuthoringAttemptResultRef: formalRequest.sceneAuthoringAttemptResultRef,
     sceneAuthoringAttemptResultHash,
     worldPackageRef,
     worldPackageRootHash,
-    worldBuildIdentityRef: text(
-      source.worldBuildIdentityRef,
-      contract,
-      "worldBuildIdentityRef",
-    ),
+    worldBuildIdentityRef: formalRequest.worldBuildIdentityRef,
     worldBuildIdentityHash,
-    worldPackageBuildReceiptRef: text(
-      source.worldPackageBuildReceiptRef,
-      contract,
-      "worldPackageBuildReceiptRef",
-    ),
+    worldPackageBuildReceiptRef: formalRequest.worldPackageBuildReceiptRef,
     worldPackageBuildReceiptHash,
     runtimeSessionId,
     readySnapshot,
     readySnapshotHash,
     sdkOwnerIdentities,
     semanticCaptureMapHash,
+    nativeBlockCaptureIdentityInventoryHash,
+    nativeBlockMaterializerMetadataHash,
+    colliderOverlayRequestHash,
+    scriptedTraversalRequestHash,
     viewportWidthPixels: viewport.widthPixels,
     viewportHeightPixels: viewport.heightPixels,
     devicePixelRatio: viewport.devicePixelRatio,

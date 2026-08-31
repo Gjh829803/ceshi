@@ -2,15 +2,18 @@ import { sha256CanonicalJson, type Sha256HashV1 } from "@whitebox-world/protocol
 import {
   hashBabylonNativeSceneContributionV1,
   parseBabylonNativeSceneContributionV1,
+  parseFormalTraversalCheckpointSpatialCriteriaV1,
   parseFormalSemanticCaptureMapV1,
+  type BabylonNativeSceneContributionV1,
   type FormalSemanticCaptureMapV1,
+  type FormalTraversalCheckpointSpatialCriterionV1,
 } from "@whitebox-world/runtime-contracts";
 import {
   hashWorldReconstructionCaseV1,
   parseWorldReconstructionCaseV1,
   type WorldReconstructionCaseV1,
 } from "@whitebox-world/validation";
-import { isEmpty, isNil } from "lodash-es";
+import { isEmpty, isEqual, isNil } from "lodash-es";
 
 import type { BabylonNativeBlockVisualGroupInventoryV1 } from "./check.js";
 import {
@@ -27,6 +30,7 @@ export interface BindBlockVisualGroupsToSemanticCaptureTargetsInputV1 {
   readonly layoutInventoryHash: Sha256HashV1;
   readonly authoringManifest: unknown;
   readonly contribution: unknown;
+  readonly checkpointSpatialCriteria: readonly FormalTraversalCheckpointSpatialCriterionV1[];
 }
 
 const CONTRACT = "FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID";
@@ -38,6 +42,7 @@ const INPUT_FIELDS = [
   "layoutInventoryHash",
   "authoringManifest",
   "contribution",
+  "checkpointSpatialCriteria",
 ] as const;
 const AUTHORING_FIELDS = [
   "kind",
@@ -278,13 +283,24 @@ function parseCase(value: unknown): WorldReconstructionCaseV1 {
   }
 }
 
-function parseContributionHash(value: unknown): Sha256HashV1 {
+function parseContribution(value: unknown): BabylonNativeSceneContributionV1 {
   try {
-    return hashBabylonNativeSceneContributionV1(
-      parseBabylonNativeSceneContributionV1(value),
-    );
+    return parseBabylonNativeSceneContributionV1(value);
   } catch {
     fail("contribution", "must be a closed BabylonNativeSceneContributionV1");
+  }
+}
+
+function parseCheckpointSpatialCriteria(
+  value: unknown,
+): readonly FormalTraversalCheckpointSpatialCriterionV1[] {
+  try {
+    return parseFormalTraversalCheckpointSpatialCriteriaV1(value);
+  } catch {
+    fail(
+      "checkpointSpatialCriteria",
+      "must be closed package-derived spatial criteria",
+    );
   }
 }
 
@@ -322,7 +338,8 @@ export function bindBlockVisualGroupsToSemanticCaptureTargetsV1(
   if (layoutInventoryHash !== claimedLayoutInventoryHash) {
     fail("layoutInventoryHash", "does not match the checked Layout inventory");
   }
-  const contributionHash = parseContributionHash(source.contribution);
+  const contribution = parseContribution(source.contribution);
+  const contributionHash = hashBabylonNativeSceneContributionV1(contribution);
   if (contributionHash !== claimedContributionHash) {
     fail("contributionHash", "does not match the frozen Contribution");
   }
@@ -357,6 +374,15 @@ export function bindBlockVisualGroupsToSemanticCaptureTargetsV1(
   if (!isNil(undeclaredGroup)) {
     fail("authoringManifest/visualGroups", "references an undeclared Layout visual group");
   }
+  const unboundInventoryGroup = sortedInventory.find(
+    ({ id }) => !authoringGroups.includes(id),
+  );
+  if (!isNil(unboundInventoryGroup)) {
+    fail(
+      "blockVisualGroups",
+      "contains a checked Layout visual group without an authoring binding",
+    );
+  }
   for (const silhouette of reconstructionCase.expected.semanticSilhouetteTargets) {
     const row = authoringManifest.visualGroups.find((candidate) =>
       candidate.acceptanceTargetRef === silhouette.acceptanceTargetRef);
@@ -383,6 +409,66 @@ export function bindBlockVisualGroupsToSemanticCaptureTargetsV1(
       layoutInventoryHash,
       contributionHash,
     })));
+  const checkpointSpatialCriteria = parseCheckpointSpatialCriteria(
+    source.checkpointSpatialCriteria,
+  );
+  const criteriaByCheckpointId = new Map(
+    checkpointSpatialCriteria.map((criterion) => [criterion.checkpointId, criterion]),
+  );
+  for (const criterion of checkpointSpatialCriteria) {
+    const inventoryGroup = inventoryById.get(criterion.sourceVisualGroupId);
+    if (isNil(inventoryGroup)) {
+      fail(
+        "checkpointSpatialCriteria",
+        "criterion references a visual group outside the checked Layout inventory",
+      );
+    }
+    if (!isEqual(criterion.sourceBoundsMeters, {
+      minimumMetersXYZ: inventoryGroup.minimumMetersXYZ,
+      maximumMetersXYZ: inventoryGroup.maximumMetersXYZ,
+    })) {
+      fail(
+        "checkpointSpatialCriteria",
+        "criterion bounds must equal the checked Layout visual group bounds",
+      );
+    }
+    if (
+      criterion.kind === "block-plane" &&
+      !contribution.staticColliders.some(({ id }) => id === criterion.colliderId)
+    ) {
+      fail(
+        "checkpointSpatialCriteria",
+        "block criterion colliderId must exist in the frozen Contribution",
+      );
+    }
+  }
+  const expectedCheckpointIds = reconstructionCase.expected.criticalTraversalChecks
+    .flatMap(({ checkpointIds }) => checkpointIds)
+    .sort();
+  const criterionCheckpointIds = checkpointSpatialCriteria
+    .map(({ checkpointId }) => checkpointId)
+    .sort();
+  if (!isEqual(criterionCheckpointIds, expectedCheckpointIds)) {
+    fail(
+      "checkpointSpatialCriteria",
+      "must bind every Case checkpoint exactly once without extras",
+    );
+  }
+  const traversalCheckBindings = Object.freeze(
+    [...reconstructionCase.expected.criticalTraversalChecks]
+      .sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0)
+      .map((check) => Object.freeze({
+        traversalCheckId: check.id,
+        acceptanceTargetRef: check.acceptanceTargetRef,
+        checkExpectation: check.expectation,
+        fixedInputSequenceHash: sha256CanonicalJson(
+          check.fixedInputSequence,
+        ) as Sha256HashV1,
+        checkpointCriteria: Object.freeze(check.checkpointIds.map(
+          (checkpointId) => criteriaByCheckpointId.get(checkpointId)!,
+        )),
+      })),
+  );
   return parseFormalSemanticCaptureMapV1({
     kind: "formal-semantic-capture-map",
     schemaVersion: 1,
@@ -393,5 +479,6 @@ export function bindBlockVisualGroupsToSemanticCaptureTargetsV1(
     layoutInventoryHash,
     contributionHash,
     bindings,
+    traversalCheckBindings,
   });
 }

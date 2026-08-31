@@ -150,6 +150,39 @@ function visualGroups(): readonly BabylonNativeBlockVisualGroupInventoryV1[] {
   ]);
 }
 
+function checkpointSpatialCriteria() {
+  return [
+    {
+      kind: "reach-bounds",
+      checkpointId: "junction",
+      expectation: "reach",
+      sourceVisualGroupId: "upper-t-junction-group",
+      sourceBoundsMeters: {
+        minimumMetersXYZ: [-2, 6, -6],
+        maximumMetersXYZ: [6, 8, 6],
+      },
+      capsuleRadiusMeters: 0.35,
+      toleranceMeters: 0.05,
+    },
+    {
+      kind: "pass-plane",
+      checkpointId: "spawn",
+      expectation: "pass",
+      sourceVisualGroupId: "central-ascent-group",
+      sourceBoundsMeters: {
+        minimumMetersXYZ: [0, 0, 0],
+        maximumMetersXYZ: [4, 6, 4],
+      },
+      axis: "z",
+      sourceFace: "minimum",
+      planeMeters: 0,
+      expectedCenterSide: "negative",
+      capsuleRadiusMeters: 0.35,
+      toleranceMeters: 0.05,
+    },
+  ] as const;
+}
+
 function authoringManifest() {
   return {
     kind: "native-block-authoring",
@@ -223,6 +256,7 @@ function bindInput(overrides: Record<string, unknown> = {}) {
     layoutInventoryHash: sha256CanonicalJson(blockVisualGroups) as Sha256HashV1,
     authoringManifest: manifest,
     contribution: frozenContribution,
+    checkpointSpatialCriteria: checkpointSpatialCriteria(),
     ...overrides,
   };
 }
@@ -254,6 +288,11 @@ describe("bindBlockVisualGroupsToSemanticCaptureTargetsV1", () => {
       authoringManifestHash: input.authoringManifestHash,
       layoutInventoryHash: input.layoutInventoryHash,
       contributionHash: input.contributionHash,
+    });
+    expect(map.traversalCheckBindings[0]).toMatchObject({
+      traversalCheckId: "reach-junction",
+      acceptanceTargetRef: "worldkit://acceptance-target/upper-t-junction@1",
+      checkpointCriteria: checkpointSpatialCriteria(),
     });
     const reversed = bindBlockVisualGroupsToSemanticCaptureTargetsV1(bindInput({
       blockVisualGroups: [...visualGroups()].reverse(),
@@ -309,6 +348,61 @@ describe("bindBlockVisualGroupsToSemanticCaptureTargetsV1", () => {
     expect(() => bindBlockVisualGroupsToSemanticCaptureTargetsV1(bindInput({
       authoringManifest: manifest,
       authoringManifestHash: sha256CanonicalJson(manifest),
+    }))).toThrowError("FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID");
+  });
+
+  it("rejects a checked Layout visual group omitted from the authoring bindings", () => {
+    const extraGroup = Object.freeze({
+      id: "unbound-layout-group",
+      blockIds: Object.freeze(["unbound-block"]),
+      paletteRoles: Object.freeze(["structure"] as const),
+      minimumMetersXYZ: Object.freeze([8, 0, 8]) as [number, number, number],
+      maximumMetersXYZ: Object.freeze([10, 2, 10]) as [number, number, number],
+    });
+    const groups = Object.freeze([...visualGroups(), extraGroup]);
+    expect(() => bindBlockVisualGroupsToSemanticCaptureTargetsV1(bindInput({
+      blockVisualGroups: groups,
+      layoutInventoryHash: sha256CanonicalJson(groups),
+    }))).toThrowError("FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID");
+  });
+
+  it("rejects checkpoint criteria that are stale against Layout bounds or Contribution colliders", () => {
+    const staleBounds = checkpointSpatialCriteria().map((criterion) =>
+      criterion.checkpointId === "junction"
+        ? {
+            ...criterion,
+            sourceBoundsMeters: {
+              minimumMetersXYZ: [-1, 6, -6],
+              maximumMetersXYZ: [6, 8, 6],
+            },
+          }
+        : criterion);
+    expect(() => bindBlockVisualGroupsToSemanticCaptureTargetsV1(bindInput({
+      checkpointSpatialCriteria: staleBounds,
+    }))).toThrowError("FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID");
+
+    const blockCriterion = {
+      kind: "block-plane",
+      checkpointId: "junction",
+      expectation: "block",
+      sourceVisualGroupId: "upper-t-junction-group",
+      sourceBoundsMeters: {
+        minimumMetersXYZ: [-2, 6, -6],
+        maximumMetersXYZ: [6, 8, 6],
+      },
+      colliderId: "missing-wall",
+      axis: "x",
+      sourceFace: "minimum",
+      planeMeters: -2,
+      expectedCenterSide: "negative",
+      capsuleRadiusMeters: 0.35,
+      toleranceMeters: 0.05,
+    } as const;
+    expect(() => bindBlockVisualGroupsToSemanticCaptureTargetsV1(bindInput({
+      checkpointSpatialCriteria: [
+        blockCriterion,
+        checkpointSpatialCriteria()[1],
+      ],
     }))).toThrowError("FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID");
   });
 
