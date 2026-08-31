@@ -34,30 +34,30 @@ pnpm worldkit validate examples/authoring/package-subject-world.json --json
 pnpm worldkit run examples/authoring/package-subject-world.json
 ```
 
-`worldkit run` 负责注入 `?authoring=1` 所需的 AuthoringSpec，并发布
-`window.__WORLDKIT__` Browser Protocol V5。不要把普通 `pnpm dev` 与 `?authoring=1`
-组合。
+`worldkit run` 负责把一个 AuthoringSpec 固定到统一 Viewer，并发布
+`window.__WORLDKIT__` Browser Protocol V5。旧 `?authoring=1` 路由已删除。
 
 查看 G Bot：
-
-```bash
-pnpm dev:g-bot
-```
-
-依赖切换后若浏览器报告 `504 Outdated Optimize Dep`，停止旧服务并只运行一次：
-
-```bash
-pnpm dev:g-bot:refresh
-```
-
-## 3. Babylon catalog Playground
 
 ```bash
 pnpm dev
 ```
 
-打开 `http://127.0.0.1:5173/?scene=<catalog-id>`。该入口用于现有 catalog gameplay、场景
-检查、Opening Composition 和规划/三视图制品，不是 Canonical JSON 的注入入口。
+依赖切换后若浏览器报告 `504 Outdated Optimize Dep`，停止旧服务并只运行一次：
+
+```bash
+pnpm dev:refresh
+```
+
+## 3. Babylon/Havok Viewer
+
+```bash
+pnpm dev
+```
+
+打开 `http://127.0.0.1:5173/`。默认是 G Bot `feel-flat`；页面选择器可切换
+allowlisted Canonical 调试预设。`worldkit run` 与 Studio Preview 复用同一页面壳并固定
+自己的 Canonical 来源。规划/三视图的 trusted artifact capture 仍是独立内部证据能力。
 
 场景页面可通过 `window.__WHITEBOX_PLAYGROUND__` 暴露有界的自动化能力，例如 Snapshot、
 Feature inspection、固定输入和截图。它是 catalog/制品工作流的测试面，不替代

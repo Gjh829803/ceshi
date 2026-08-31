@@ -254,3 +254,38 @@ export function parseViewerBootstrapV1(input: unknown): ViewerBootstrapV1 {
     authoringSpec,
   });
 }
+
+export async function loadViewerBootstrapV1(
+  fetchSource: () => Promise<Response> = () =>
+    fetch("/__worldkit/viewer-bootstrap", { cache: "no-store" }),
+): Promise<ViewerBootstrapV1> {
+  let response: Response;
+  try {
+    response = await fetchSource();
+  } catch {
+    return fail("VIEWER_BOOTSTRAP_FETCH_FAILED");
+  }
+  if (!response.ok) fail(`VIEWER_BOOTSTRAP_HTTP_${response.status}`);
+  let input: unknown;
+  try {
+    input = await response.json();
+  } catch {
+    return fail("VIEWER_BOOTSTRAP_JSON_INVALID");
+  }
+  return parseViewerBootstrapV1(input);
+}
+
+export function viewerSceneSelectionUrlV1(
+  currentHref: string,
+  sceneId: string,
+  entries: readonly ViewerSceneEntryV1[],
+): string {
+  if (!entries.some((entry) => entry.id === sceneId)) {
+    return fail("VIEWER_PRESET_NOT_FOUND");
+  }
+  const url = new URL(currentHref);
+  url.search = "";
+  url.hash = "";
+  url.searchParams.set("scene", sceneId);
+  return url.toString();
+}

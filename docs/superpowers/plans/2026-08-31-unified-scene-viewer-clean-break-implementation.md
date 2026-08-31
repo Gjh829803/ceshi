@@ -62,11 +62,11 @@
 
 **Interfaces:** `pnpm dev` selects curated scenes with `scene`; `worldkit run` and Studio supply fixed Host context; all initialize the existing Authoring/RuntimeHost path. Remove `authoring=1` and `catalog-gameplay` source-selection authority in the same candidate.
 
-- [ ] Add RED route, selector, process, CLI and Studio tests for the one-shell behavior.
-- [ ] Run the focused owner tests and confirm current routes fail the new expectations.
-- [ ] Implement selector and all consumer migrations without changing Runtime ownership.
-- [ ] Delete replaced route parsing and update current docs/AGENTS in the same clean break; retain separately owned trusted artifact capture.
-- [ ] Run Playground, CLI, Studio, typecheck, build and Browser switch/reset/tuning gates; commit.
+- [x] Add RED route, selector, process, CLI and Studio tests for the one-shell behavior.
+- [x] Run the focused owner tests and confirm current routes fail the new expectations.
+- [x] Implement selector and all consumer migrations without changing Runtime ownership.
+- [x] Delete replaced route parsing and update current docs/AGENTS in the same clean break; retain separately owned trusted artifact capture.
+- [x] Run Playground, CLI, Studio, typecheck, build and Browser switch/reset/tuning gates; commit.
 
 ### Task 5: Exact-tree verification and integration
 

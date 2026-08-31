@@ -119,6 +119,31 @@ h1 span {
   gap: 9px;
 }
 
+.scene-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 9px 0 11px;
+  border: 1px solid #343c38;
+  border-radius: 8px;
+  color: #87918c;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  background: #171c1a;
+}
+
+.scene-picker[hidden] { display: none; }
+
+.scene-picker select {
+  max-width: 160px;
+  border: 0;
+  outline: 0;
+  color: #dce7e1;
+  background: transparent;
+  font: inherit;
+}
+
 .status {
   gap: 8px;
   margin-right: 8px;
@@ -1371,6 +1396,9 @@ kbd,
   .viewport { border-radius: 10px; }
   .inspector { border-top: 1px solid #252b28; border-left: 0; }
   .status { display: none; }
+  .scene-picker span { display: none; }
+  .scene-picker { padding: 0 7px; }
+  .scene-picker select { max-width: 112px; }
   .button-subtle { display: none; }
   .button-record { padding: 0 10px; }
   .recording-toast { max-width: calc(100% - 210px); }

@@ -100,7 +100,7 @@ async function stopVite(vite: ReturnType<typeof spawn>): Promise<void> {
 }
 
 describe("WorldKit authoring edit browser installation", () => {
-  it("installs Edit API only on the trusted authoring page and keeps V5 at 39 keys", async () => {
+  it("keeps one fixed Host Viewer authoritative and keeps Edit separate from V5", async () => {
     const port = await availableLoopbackPort();
     const worktreeRoot = resolve(import.meta.dirname, "../../..");
     const vite = spawn(
@@ -128,11 +128,11 @@ describe("WorldKit authoring edit browser installation", () => {
     );
     let browser: Awaited<ReturnType<typeof launchChromiumWithSystemFallback>> | undefined;
     try {
-      await waitForHttpOk(`http://127.0.0.1:${port}/?authoring=1`);
+      await waitForHttpOk(`http://127.0.0.1:${port}/`);
       browser = await launchChromiumWithSystemFallback();
 
       const authoringPage = await browser.newPage();
-      await authoringPage.goto(`http://127.0.0.1:${port}/?authoring=1`, {
+      await authoringPage.goto(`http://127.0.0.1:${port}/`, {
         waitUntil: "domcontentloaded",
       });
       await authoringPage.waitForFunction(
@@ -154,24 +154,29 @@ describe("WorldKit authoring edit browser installation", () => {
       expect(authoringSurfaces.runtimeHasEdit).toBe(false);
       await authoringPage.close();
 
-      const catalogPage = await browser.newPage();
-      await catalogPage.goto(
-        `http://127.0.0.1:${port}/?scene=mounted-skateboard-s1`,
+      const substitutionPage = await browser.newPage();
+      await substitutionPage.goto(
+        `http://127.0.0.1:${port}/?scene=action-lab`,
         {
           waitUntil: "domcontentloaded",
         },
       );
-      await catalogPage.waitForFunction(
-        () => window.__WORLDKIT__?.version === 5,
+      await substitutionPage.waitForFunction(
+        () => window.__WORLDKIT_AUTHORING_EDIT__?.version === 1 &&
+          window.__WORLDKIT__?.version === 5,
         undefined,
         { timeout: 90_000 },
       );
-      const catalogSurfaces = await catalogPage.evaluate(() => ({
-        edit: window.__WORLDKIT_AUTHORING_EDIT__,
+      const fixedHostSurfaces = await substitutionPage.evaluate(() => ({
+        adapterName: document.querySelector("#adapter-name")?.textContent,
+        editKeys: Object.keys(window.__WORLDKIT_AUTHORING_EDIT__ ?? {}).sort(),
         runtimeKeys: Object.keys(window.__WORLDKIT__ ?? {}).sort(),
+        scenePickerHidden: document.querySelector("#scene-picker")?.hasAttribute("hidden"),
       }));
-      expect(catalogSurfaces.edit).toBeUndefined();
-      expect(catalogSurfaces.runtimeKeys).toEqual([...BROWSER_V5_KEYS]);
+      expect(fixedHostSurfaces.adapterName).toBe("babylon-havok/basic-world");
+      expect(fixedHostSurfaces.editKeys).toEqual([...AUTHORING_EDIT_KEYS]);
+      expect(fixedHostSurfaces.runtimeKeys).toEqual([...BROWSER_V5_KEYS]);
+      expect(fixedHostSurfaces.scenePickerHidden).toBe(true);
     } finally {
       await browser?.close();
       await stopVite(vite);

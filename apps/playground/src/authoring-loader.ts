@@ -706,7 +706,7 @@ export async function loadAuthoringScene(
     const sourceDiagnosticCode = await sourceResponseDiagnosticCode(response);
     return sourceDiagnostic(
       sourceDiagnosticCode === "AUTHORING_SOURCE_NOT_CONFIGURED"
-        ? "AuthoringSpec is not configured. Start Authoring mode with `pnpm worldkit run <world.json>`; do not combine `pnpm dev` with `?authoring=1`."
+        ? "AuthoringSpec is not configured. Use the Viewer bootstrap or start a fixed source with `pnpm worldkit run <world.json>`."
         : `AuthoringSpec source returned HTTP ${response.status}.`,
       {
         status: response.status,

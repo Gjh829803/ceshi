@@ -8,7 +8,9 @@ import { parseSceneCatalogV1 } from "@whitebox-world/scene-catalog";
 import {
   createCuratedViewerBootstrapV1,
   createFixedViewerBootstrapV1,
+  loadViewerBootstrapV1,
   parseViewerBootstrapV1,
+  viewerSceneSelectionUrlV1,
 } from "./viewer-bootstrap.js";
 
 async function catalogAndSources() {
@@ -79,5 +81,43 @@ describe("Viewer bootstrap V1", () => {
         id: "broken",
       },
     })).toThrow("VIEWER_BOOTSTRAP_AUTHORING_INVALID");
+  });
+
+  it("loads and validates the Host bootstrap before exposing it to the Viewer", async () => {
+    const sourceText = await readFile(
+      path.resolve("scenes/presets/feel-flat/world.json"),
+      "utf8",
+    );
+    const source = createFixedViewerBootstrapV1(sourceText);
+    const loaded = await loadViewerBootstrapV1(async () => new Response(
+      JSON.stringify(source),
+      { status: 200, headers: { "content-type": "application/json" } },
+    ));
+
+    expect(loaded.selection.selectedSceneId).toBe("feel-flat");
+    expect(Object.isFrozen(loaded)).toBe(true);
+    await expect(loadViewerBootstrapV1(async () => new Response("missing", {
+      status: 404,
+    }))).rejects.toThrow("VIEWER_BOOTSTRAP_HTTP_404");
+  });
+
+  it("builds selector navigation only for an advertised curated scene", async () => {
+    const bootstrap = await createCuratedViewerBootstrapV1(
+      await catalogAndSources(),
+    );
+    if (bootstrap.selection.kind !== "curated-preset") {
+      throw new Error("expected curated selection");
+    }
+    const entries = bootstrap.selection.entries;
+    expect(viewerSceneSelectionUrlV1(
+      "http://127.0.0.1:5173/?scene=feel-flat&subjectDefinitionRef=legacy",
+      "action-lab",
+      entries,
+    )).toBe("http://127.0.0.1:5173/?scene=action-lab");
+    expect(() => viewerSceneSelectionUrlV1(
+      "http://127.0.0.1:5173/",
+      "missing",
+      entries,
+    )).toThrow("VIEWER_PRESET_NOT_FOUND");
   });
 });
