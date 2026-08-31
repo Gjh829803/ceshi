@@ -55,7 +55,11 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
       "@whitebox-world/validation",
       "lodash-es",
     ]);
-    expect(Object.keys(manifest.exports as object)).toEqual([".", "./testing"]);
+    expect(Object.keys(manifest.exports as object)).toEqual([
+      ".",
+      "./host",
+      "./testing",
+    ]);
   });
 
   it("uses the frozen Babylon dialect and contains no second world protocol", async () => {
@@ -139,6 +143,13 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
     ]);
     expect(Object.keys(profile).some((name) =>
       /host|runtime|collider|traversal|compiler/i.test(name))).toBe(false);
+  });
+
+  it("keeps checked-epoch transport behind the exact Host-only export", async () => {
+    const host = await import("./host.js") as Record<string, unknown>;
+    expect(Object.keys(host)).toEqual([
+      "takeBabylonNativeBlockCheckedEpochEvidenceV1",
+    ]);
   });
 
   it("keeps the real-runtime fixture behind one exact testing-only export", async () => {
