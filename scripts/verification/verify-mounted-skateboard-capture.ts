@@ -14,15 +14,16 @@ import type { Browser, BrowserContext, Page } from "playwright";
 
 import {
   normalizeAuthoringSpecV4,
+  parseAuthoringSpecV4,
   stringifyCanonicalJson,
   type AuthoringSpecV4,
 } from "@whitebox-world/authoring";
-import { createValidAuthoringSpecV4 } from "@whitebox-world/authoring/testing";
 import {
   compileSimulationTakeV1,
   type SimulationTakeV1,
 } from "@whitebox-world/control-capture";
 import {
+  parseGameplayCommandV1,
   parseGameplayEventV1,
   type GameplayEventV1,
   type GameplayCommandReceiptV1,
@@ -55,7 +56,7 @@ import {
   MOUNTED_SKATEBOARD_S1_RELATIONSHIP_ID,
   MOUNTED_SKATEBOARD_S1_SCENE_ID,
   augmentMountedSkateboardS1AuthoringSpecV1,
-} from "../../apps/playground/src/scenes/mounted-skateboard-s1.js";
+} from "@whitebox-world/playground/mounted-skateboard-s1";
 import {
   collectControlCaptureBundleByteEvidenceV1,
   createControlCaptureBundleWriterV1,
@@ -152,12 +153,17 @@ function supportedByEpisodeIdentity(
 function requireControlledEntityId(
   snapshot: WorldRuntimeSnapshotV4,
 ): string | undefined {
-  return Object.values(
+  for (const relationship of Object.values(
     snapshot.world.gameplayInspection.relationshipStatesById,
-  ).find((relationship) =>
-    relationship.type === "possessedBy" &&
-    relationship.controllerEntityId === CONTROLLER_ENTITY_ID
-  )?.controlledEntityId;
+  )) {
+    if (
+      relationship.type === "possessedBy" &&
+      relationship.controllerEntityId === CONTROLLER_ENTITY_ID
+    ) {
+      return relationship.controlledEntityId;
+    }
+  }
+  return undefined;
 }
 
 function requireSubjectPosition(
@@ -196,7 +202,9 @@ function observePhase(
     cameraTargetEntityId: camera.mode === "tracking"
       ? camera.targetEntityId
       : undefined,
-    activeCameraModifierRefs: [...camera.activeCameraModifierRefs],
+    activeCameraModifierRefs: camera.mode === "tracking"
+      ? [...camera.activeCameraModifierRefs]
+      : [],
     supportedByFacts: Object.values(worldState.semanticFactsById)
       .filter((fact) => fact.type === "supportedBy")
       .map((fact) => ({
@@ -478,8 +486,14 @@ export function assertMountedSkateboardCaptureTimelineV1(
   );
 }
 
-function fixedMountedAuthoringSource(): AuthoringSpecV4 {
-  const source = createValidAuthoringSpecV4();
+async function fixedMountedAuthoringSource(): Promise<AuthoringSpecV4> {
+  const parsed = parseAuthoringSpecV4(await readFile(new URL(
+    "../../examples/traversal/r1-heightfield/success.json",
+    import.meta.url,
+  ), "utf8"));
+  assert.equal(parsed.ok, true, JSON.stringify(parsed.diagnostics));
+  assert.ok(parsed.value !== undefined);
+  const source = parsed.value;
   return {
     ...source,
     id: MOUNTED_SKATEBOARD_S1_SCENE_ID,
@@ -734,7 +748,7 @@ async function run(): Promise<void> {
   let primaryError: unknown;
   try {
     await mkdir(rootDirectory, { recursive: true });
-    const fixedSource = fixedMountedAuthoringSource();
+    const fixedSource = await fixedMountedAuthoringSource();
     const normalized = normalizeAuthoringSpecV4(
       augmentMountedSkateboardS1AuthoringSpecV1(fixedSource),
     );
@@ -774,7 +788,6 @@ async function run(): Promise<void> {
         };
       }
     });
-    assert.equal(initialResult.ok, true, JSON.stringify(initialResult));
     if (!initialResult.ok) {
       throw new Error(`Mounted runtime failed to start: ${initialResult.message}`);
     }
@@ -812,7 +825,7 @@ async function run(): Promise<void> {
     });
     await preResetWriter.appendFrame(beforeMountFrame.writerFrame);
 
-    const mountCommand = {
+    const mountCommand = parseGameplayCommandV1({
       schemaVersion: 1,
       id: MOUNTED_SKATEBOARD_S1_MOUNT_COMMAND_ID,
       type: "action.activate",
@@ -829,7 +842,7 @@ async function run(): Promise<void> {
       actionRequestRef: MOUNTED_SKATEBOARD_S1_MOUNT_REQUEST_REF,
       actionRequestHash:
         sha256CanonicalJson(MOUNTED_SKATEBOARD_S1_MOUNT_REQUEST),
-    } as const satisfies GameplayCommandV1;
+    });
     const mountTransition = await executeCommittedGameplayCommand(
       page,
       mountCommand,
@@ -860,7 +873,7 @@ async function run(): Promise<void> {
     });
     await preResetWriter.appendFrame(afterMountFrame.writerFrame);
 
-    const dismountCommand = {
+    const dismountCommand = parseGameplayCommandV1({
       schemaVersion: 1,
       id: MOUNTED_SKATEBOARD_S1_DISMOUNT_COMMAND_ID,
       type: "action.activate",
@@ -877,7 +890,7 @@ async function run(): Promise<void> {
       actionRequestRef: MOUNTED_SKATEBOARD_S1_DISMOUNT_REQUEST_REF,
       actionRequestHash:
         sha256CanonicalJson(MOUNTED_SKATEBOARD_S1_DISMOUNT_REQUEST),
-    } as const satisfies GameplayCommandV1;
+    });
     const dismountTransition = await executeCommittedGameplayCommand(
       page,
       dismountCommand,

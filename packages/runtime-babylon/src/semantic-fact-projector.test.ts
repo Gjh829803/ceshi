@@ -1,9 +1,9 @@
 import {
   RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
 } from "@whitebox-world/gameplay-contracts";
+import { createValidAuthoringSpecV4 } from "@whitebox-world/authoring/testing";
 import { describe, expect, it } from "vitest";
 
-import { createValidAuthoringSpecV4 } from "../../authoring/src/test-fixture";
 import type {
   MotionKernelLiveLockStateV1,
   RetainedCharacterSupportSampleV1,
@@ -11,7 +11,7 @@ import type {
 import { compileRuntimeTestScenePlanV1 } from "./runtime-test-plan";
 import { projectSemanticFactsV1 } from "./semantic-fact-projector";
 
-const LIVE_LOCK = Object.freeze({
+const LIVE_LOCK = Object.freeze<MotionKernelLiveLockStateV1>({
   capsuleRadiusMeters: 0.35,
   capsuleHeightMeters: 1.8,
   footOffsetMeters: 0.9,
@@ -32,7 +32,7 @@ const LIVE_LOCK = Object.freeze({
   controlProfileRef: "control",
   controlProfileHash: `sha256:${"c".repeat(64)}`,
   mediumProfileRef: "medium",
-}) satisfies MotionKernelLiveLockStateV1;
+});
 
 function flatPlan() {
   const source = createValidAuthoringSpecV4();
@@ -90,7 +90,7 @@ function supportSample(
   }> = {},
 ): RetainedCharacterSupportSampleV1 {
   const normalXYZ = options.normalXYZ ?? [0, 1, 0];
-  return Object.freeze({
+  const sample: RetainedCharacterSupportSampleV1 = {
     supportState,
     supportNormalWorldXYZ: options.aggregateSupportNormalXYZ ?? normalXYZ,
     sampledControllerCenterMetersXYZ: [0, 0.9, 0],
@@ -109,7 +109,8 @@ function supportSample(
               }),
         }), ...(options.additionalContacts ?? [])],
     isSupportSurfaceDynamic: false,
-  });
+  };
+  return Object.freeze(sample);
 }
 
 describe("Semantic Fact Projector", () => {

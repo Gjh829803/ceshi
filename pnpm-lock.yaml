@@ -49,6 +49,9 @@ importers:
       '@whitebox-world/native-babylon-block-profile':
         specifier: workspace:*
         version: link:packages/native-babylon-block-profile
+      '@whitebox-world/playground':
+        specifier: workspace:*
+        version: link:apps/playground
       '@whitebox-world/protocol':
         specifier: workspace:*
         version: link:packages/protocol

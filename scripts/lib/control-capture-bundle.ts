@@ -195,6 +195,11 @@ interface VerifiedRuntimeHostGameplayTransitionInputV1 {
   readonly gameplayInspectionAfter: GameplayInspectionSnapshotV1;
 }
 
+type GameplaySemanticFactEventV1 = Extract<
+  GameplayEventV1,
+  { readonly type: "semantic-fact.started" | "semantic-fact.ended" }
+>;
+
 export interface ControlCaptureRuntimeHostJournalTransitionInputV1
   extends Omit<VerifiedRuntimeHostGameplayTransitionInputV1, "events"> {
   readonly worldSessionEvents: readonly WorldSessionEventV1[];
@@ -686,7 +691,7 @@ export async function createControlCaptureBundleWriterV1(
         }
         capturedEvents.push(event);
       }
-      const lastFactEventById = new Map<string, GameplayEventV1>();
+      const lastFactEventById = new Map<string, GameplaySemanticFactEventV1>();
       for (const event of capturedEvents) {
         if (
           event.type === "semantic-fact.started" ||
@@ -1252,6 +1257,12 @@ export async function validateControlCaptureBundleV1(
     addValidationDiagnostic(diagnostics, "CAPTURE_MANIFEST_HASH_MISMATCH", "bundle.json", "Bundle manifest hash is invalid.");
   }
   const frames = Array.isArray(manifest.frames) ? manifest.frames : [];
+  const manifestFrameCount =
+    typeof manifest.frameCount === "number" &&
+      Number.isSafeInteger(manifest.frameCount) &&
+      manifest.frameCount >= 0
+      ? manifest.frameCount
+      : undefined;
   if (
     compiledTake !== undefined &&
     frames.length !== compiledTake.captureSchedulePlan.entries.length
@@ -1357,10 +1368,13 @@ export async function validateControlCaptureBundleV1(
       }
     }
   }
-  if (manifest.frameCount !== frames.length) {
+  if (manifestFrameCount === undefined || manifestFrameCount !== frames.length) {
     addValidationDiagnostic(diagnostics, "CAPTURE_FRAME_INDEX_INVALID", "bundle.json/frameCount", "Frame count does not match frame manifests.");
   }
-  if (snapshotTrackRows.length !== manifest.frameCount) {
+  if (
+    manifestFrameCount === undefined ||
+    snapshotTrackRows.length !== manifestFrameCount
+  ) {
     addValidationDiagnostic(
       diagnostics,
       "CAPTURE_GAMEPLAY_REFERENCE_MISMATCH",
@@ -1542,7 +1556,7 @@ export async function validateControlCaptureBundleV1(
   }
   for (const [frameIndex, events] of fixedTickEventsByFrameIndex) {
     const worldState = worldStateByFrameIndex.get(frameIndex);
-    const lastFactEventById = new Map<string, GameplayEventV1>();
+    const lastFactEventById = new Map<string, GameplaySemanticFactEventV1>();
     for (const event of events) {
       if (
         event.type === "semantic-fact.started" ||
@@ -1567,7 +1581,11 @@ export async function validateControlCaptureBundleV1(
       }
     }
   }
-  for (let frameIndex = 0; frameIndex < manifest.frameCount; frameIndex += 1) {
+  for (
+    let frameIndex = 0;
+    frameIndex < (manifestFrameCount ?? 0);
+    frameIndex += 1
+  ) {
     const events = [...(worldSessionEventsByFrameIndex.get(frameIndex) ?? [])];
     const worldState = worldStateByFrameIndex.get(frameIndex);
     if (frameIndex === 0) {

@@ -1132,7 +1132,6 @@ describe("Control Capture Bundle V1", () => {
       input: Partial<MountedCapturePhaseObservationV1> &
         Pick<MountedCapturePhaseObservationV1, "phase">,
     ): MountedCapturePhaseObservationV1 => ({
-      phase: input.phase,
       runtimeSessionId: "runtime-test",
       worldSessionId: "world-session-before-reset",
       simulationTick: 1,
