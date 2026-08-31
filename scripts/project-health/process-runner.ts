@@ -1,7 +1,7 @@
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { access, lstat, mkdir, mkdtemp, readdir, readlink, realpath, rm } from "node:fs/promises";
+import { access, lstat, mkdir, mkdtemp, readdir, readFile, readlink, realpath, rm } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 
@@ -234,6 +234,16 @@ function truncateUtf8(input: string, maximumBytes: number): string {
 async function git(repositoryRoot: string, argv: readonly string[]): Promise<string> {
   const result = await execFileAsync("git", ["-C", repositoryRoot, ...argv], {
     encoding: "utf8",
+    env: {
+      GIT_CONFIG_GLOBAL: "/dev/null",
+      GIT_CONFIG_NOSYSTEM: "1",
+      GIT_CONFIG_SYSTEM: "/dev/null",
+      GIT_DISCOVERY_ACROSS_FILESYSTEM: "0",
+      GIT_OPTIONAL_LOCKS: "0",
+      GIT_TERMINAL_PROMPT: "0",
+      HOME: process.env.HOME ?? "",
+      PATH: process.env.PATH ?? "",
+    },
     maxBuffer: 64 * 1024 * 1024,
     timeout: INTERNAL_GIT_TIMEOUT_MILLISECONDS,
   });
@@ -366,8 +376,66 @@ async function repositoryStateHash(
   return sha256CanonicalJson({ projectHealthState, repositoryStatus, trackedDiff });
 }
 
-async function descendantProcessIds(parentPid: number): Promise<readonly number[]> {
-  if (process.platform === "win32") return [];
+const PROC_FILE_READ_TIMEOUT_MILLISECONDS = 100;
+
+async function readProcPidFile(
+  pid: number,
+  leaf: string,
+  encoding?: BufferEncoding,
+): Promise<Buffer | string> {
+  return await readFile(path.join("/proc", String(pid), leaf), {
+    encoding,
+    signal: AbortSignal.timeout(PROC_FILE_READ_TIMEOUT_MILLISECONDS),
+  });
+}
+
+async function linuxProcessIds(): Promise<readonly number[]> {
+  const names = await readdir("/proc");
+  return names.flatMap((name) => {
+    if (!/^\d+$/.test(name)) return [];
+    const pid = Number(name);
+    return Number.isSafeInteger(pid) ? [pid] : [];
+  });
+}
+
+function collectDescendantIds(
+  parentPid: number,
+  childrenByParent: ReadonlyMap<number, readonly number[]>,
+): readonly number[] {
+  const descendants: number[] = [];
+  const seen = new Set<number>([parentPid]);
+  const pending = [...(childrenByParent.get(parentPid) ?? [])];
+  while (pending.length > 0) {
+    const pid = pending.shift()!;
+    if (seen.has(pid)) continue;
+    seen.add(pid);
+    descendants.push(pid);
+    pending.push(...(childrenByParent.get(pid) ?? []));
+  }
+  return descendants.reverse();
+}
+
+async function descendantProcessIdsFromLinuxProc(parentPid: number): Promise<readonly number[]> {
+  const childrenByParent = new Map<number, number[]>();
+  for (const pid of await linuxProcessIds()) {
+    try {
+      const status = await readProcPidFile(pid, "status", "utf8");
+      if (typeof status !== "string") continue;
+      const match = /^PPid:\s+(\d+)/m.exec(status);
+      if (isNil(match)) continue;
+      const observedParentPid = Number(match[1]);
+      if (!Number.isSafeInteger(observedParentPid)) continue;
+      const children = childrenByParent.get(observedParentPid) ?? [];
+      children.push(pid);
+      childrenByParent.set(observedParentPid, children);
+    } catch {
+      continue;
+    }
+  }
+  return collectDescendantIds(parentPid, childrenByParent);
+}
+
+async function descendantProcessIdsFromPs(parentPid: number): Promise<readonly number[]> {
   const { stdout } = await execFileAsync("ps", ["-axo", "pid=,ppid="], {
     encoding: "utf8",
     timeout: INTERNAL_PROCESS_INSPECTION_TIMEOUT_MILLISECONDS,
@@ -382,29 +450,55 @@ async function descendantProcessIds(parentPid: number): Promise<readonly number[
     children.push(pid);
     childrenByParent.set(observedParentPid, children);
   }
-  const descendants: number[] = [];
-  const pending = [...(childrenByParent.get(parentPid) ?? [])];
-  while (pending.length > 0) {
-    const pid = pending.shift()!;
-    descendants.push(pid);
-    pending.push(...(childrenByParent.get(pid) ?? []));
-  }
-  return descendants.reverse();
+  return collectDescendantIds(parentPid, childrenByParent);
 }
 
-async function ownedProcessIds(processOwnerToken: string, excludedPid: number | undefined): Promise<readonly number[]> {
+async function descendantProcessIds(parentPid: number): Promise<readonly number[]> {
   if (process.platform === "win32") return [];
+  return process.platform === "linux"
+    ? descendantProcessIdsFromLinuxProc(parentPid)
+    : descendantProcessIdsFromPs(parentPid);
+}
+
+async function ownedProcessIdsFromLinuxProc(
+  marker: string,
+  excludedPid: number | undefined,
+): Promise<readonly number[]> {
+  const owned: number[] = [];
+  for (const pid of await linuxProcessIds()) {
+    if (pid === excludedPid) continue;
+    try {
+      const environ = await readProcPidFile(pid, "environ");
+      if (environ.includes(marker)) owned.push(pid);
+    } catch {
+      continue;
+    }
+  }
+  return owned;
+}
+
+async function ownedProcessIdsFromPs(
+  marker: string,
+  excludedPid: number | undefined,
+): Promise<readonly number[]> {
   const { stdout } = await execFileAsync("ps", ["eww", "-axo", "pid=,command="], {
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
     timeout: INTERNAL_PROCESS_INSPECTION_TIMEOUT_MILLISECONDS,
   });
-  const marker = `PROJECT_HEALTH_PROCESS_OWNER_TOKEN=${processOwnerToken}`;
   return stdout.split("\n").flatMap((line) => {
     if (!line.includes(marker)) return [];
     const pid = Number(line.trim().split(/\s+/, 1)[0]);
     return Number.isSafeInteger(pid) && pid !== excludedPid ? [pid] : [];
   });
+}
+
+async function ownedProcessIds(processOwnerToken: string, excludedPid: number | undefined): Promise<readonly number[]> {
+  if (process.platform === "win32") return [];
+  const marker = `PROJECT_HEALTH_PROCESS_OWNER_TOKEN=${processOwnerToken}`;
+  return process.platform === "linux"
+    ? ownedProcessIdsFromLinuxProc(marker, excludedPid)
+    : ownedProcessIdsFromPs(marker, excludedPid);
 }
 
 async function terminateOwnedProcesses(
@@ -436,6 +530,11 @@ async function terminateOwnedProcesses(
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ESRCH") cleanupFailed = true;
     }
+  }
+  try {
+    process.kill(child.pid, signal);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ESRCH") cleanupFailed = true;
   }
   try {
     process.kill(-child.pid, signal);

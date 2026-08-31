@@ -16,15 +16,29 @@ const HASH_A = `sha256:${"a".repeat(64)}`;
 const execFileAsync = promisify(execFile);
 const roots: string[] = [];
 
+function fixtureGitEnv(): NodeJS.ProcessEnv {
+  return {
+    GIT_AUTHOR_EMAIL: "project-health@example.invalid",
+    GIT_AUTHOR_NAME: "Project Health Test",
+    GIT_COMMITTER_EMAIL: "project-health@example.invalid",
+    GIT_COMMITTER_NAME: "Project Health Test",
+    GIT_CONFIG_GLOBAL: "/dev/null",
+    GIT_CONFIG_NOSYSTEM: "1",
+    GIT_CONFIG_SYSTEM: "/dev/null",
+    GIT_OPTIONAL_LOCKS: "0",
+    GIT_TERMINAL_PROMPT: "0",
+    PATH: process.env.PATH ?? "",
+  };
+}
+
 async function createRepository(): Promise<string> {
   const root = await mkdtemp(path.join(os.tmpdir(), "worldkit-project-health-runner-"));
   roots.push(root);
-  await execFileAsync("git", ["init", "--quiet", root]);
-  await execFileAsync("git", ["-C", root, "config", "user.email", "project-health@example.invalid"]);
-  await execFileAsync("git", ["-C", root, "config", "user.name", "Project Health Test"]);
+  const env = fixtureGitEnv();
+  await execFileAsync("git", ["init", "--quiet", root], { env });
   await writeFile(path.join(root, "tracked.txt"), "clean\n", "utf8");
-  await execFileAsync("git", ["-C", root, "add", "tracked.txt"]);
-  await execFileAsync("git", ["-C", root, "commit", "--quiet", "-m", "fixture"]);
+  await execFileAsync("git", ["-C", root, "add", "tracked.txt"], { env });
+  await execFileAsync("git", ["-C", root, "commit", "--quiet", "-m", "fixture"], { env });
   return realpath(root);
 }
 
@@ -81,6 +95,7 @@ describe("project health process runner", () => {
     });
 
     expect(result.evidence.status).toBe("passed");
+    expect(result.evidence.failureCodes).toEqual([]);
     expect(result.evidence.stdout).toBe("ok");
     expect(result.evidence.exitCode).toBe(0);
     expect(result.evidenceRef).toMatch(/^sha256:[a-f0-9]{64}$/);
@@ -380,7 +395,9 @@ describe("project health process runner", () => {
     expect(result.evidence.status).toBe("passed");
     expect(result.evidence.stdout).toBe("clean\n");
     expect(result.evidence.temporaryWorktreeRemoved).toBe(true);
-    const { stdout } = await execFileAsync("git", ["-C", root, "worktree", "list", "--porcelain"]);
+    const { stdout } = await execFileAsync("git", ["-C", root, "worktree", "list", "--porcelain"], {
+      env: fixtureGitEnv(),
+    });
     expect(stdout.match(/^worktree /gm)).toHaveLength(1);
   });
 
