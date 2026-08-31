@@ -1121,11 +1121,11 @@ Cursor Cloud 针对精确 SHA 执行，禁止无输入变化时反复重跑。
 
 #### NBR-1 当前唯一最高优先级纵向切片
 
-- [ ] NBR-00：合入详细设计、实施计划、WRC 优先级和 current-only 删除清单；
+- [x] NBR-00：合入详细设计、实施计划、WRC 优先级和 current-only 删除清单；
 - [x] NBR-10：冻结 Route、真实 Generation Request/Receipt、Case/Profile 和修正后的 Attempt 身份；
 - [ ] NBR-20：通过统一 Codex task router 从真实参考输入生成闭合 Native Block workspace；
-- [ ] NBR-30：通过通用 Native Check/Explain 和 Package/Receipt 链，删除 Cloud Ridge 手写生产装配；
-- [ ] NBR-40：由保留的 BNA 验证 Harness 调用正式 RuntimeHost 和 SDK-owned
+- [x] NBR-30：通过通用 Native Check/Explain 和 Package/Receipt 链，删除 Cloud Ridge 手写生产装配；
+- [x] NBR-40：由保留的 BNA 验证 Harness 调用正式 RuntimeHost 和 SDK-owned
   Havok/Subject/Input/Action/Camera 启动验证后的 Native Package；不修改 Canonical-only Unified Viewer；
 - [ ] NBR-45：从同一 Package/Runtime 发布身份绑定 Opening/top/side Capture 与 Collider overlay；
 - [ ] NBR-50：输出拓扑、语义轮廓、Opening、Spawn/Support、Collider、固定输入关键通过性和确定性诊断；
@@ -1135,6 +1135,9 @@ Cursor Cloud 针对精确 SHA 执行，禁止无输入变化时反复重跑。
 
 详细权威为 [NBR-1 纵向闭环设计](superpowers/specs/2026-08-31-native-block-reconstruction-e2e-design.md)。
 以上复选框只按真实代码与证据逐项更新；NBR-1 完成不等于完整 BNA-6/7、WRC-SR 或 WRC-1 完成。
+NBR-30 已由 PR #89/#90 合入通用 Check/Package 与相对路径修复；NBR-40 已由 PR #92 合入
+verified-Package BNA Harness，并在精确候选 SHA 上通过 99 项 focused test、Native build 及两项
+Browser verifier。该证据不提前完成 NBR-45、BNA-7 或产品 Native Viewer。
 BWB-6、PHO-7/8、通用 Action/Camera、空间事件、产品 Route/Nav、BNA-8 与 WRC-ACC-1 在本切片期间
 保持延期，不删除也不展开。
 
