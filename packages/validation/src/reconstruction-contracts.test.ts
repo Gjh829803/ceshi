@@ -178,6 +178,7 @@ describe("world reconstruction contracts", () => {
     for (const code of [
       "WORLD_RECONSTRUCTION_EVIDENCE_STALE",
       "WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING",
+      "WORLD_RECONSTRUCTION_COLLIDER_MISSING",
     ] as const) {
       const result: any = resultValue();
       result.dimensions[0].diagnosticIds = ["diag.generic-evidence"];

@@ -1029,7 +1029,7 @@ export function parseWorldReconstructionEvaluationResultV1(value: unknown): Worl
     const dimensionDiagnostics = dimension.diagnosticIds.map((id) => diagnosticsById.get(id)!);
     const failurePolarity = dimension.metrics.some((metric) => (metric.kind === "boolean-presence" && !metric.isPresent) || (metric.kind === "identity-match" && !metric.isMatch) || (metric.kind === "receipt-outcome" && metric.outcome !== "completed"));
     const successOnly = dimension.metrics.length > 0 && !failurePolarity;
-    if (dimension.status === "passed" && dimensionDiagnostics.some((diagnostic) => diagnostic.code === "WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING" || diagnostic.code === "WORLD_RECONSTRUCTION_EVIDENCE_STALE")) fail(contract, "dimensions", "passed dimensions must not declare missing or stale evidence");
+    if (dimension.status === "passed" && dimensionDiagnostics.length !== 0) fail(contract, "dimensions", "passed dimensions must not declare failure diagnostics");
     if (dimension.status === "failed" && (!failurePolarity || dimensionDiagnostics.length === 0)) fail(contract, "dimensions", "failed dimensions require failure-polarity evidence and a diagnostic");
     if (dimension.status === "incomplete" && (successOnly || !dimensionDiagnostics.some((diagnostic) => diagnostic.code === "WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING" || diagnostic.code === "WORLD_RECONSTRUCTION_EVIDENCE_STALE"))) fail(contract, "dimensions", "incomplete dimensions require missing or stale evidence diagnostics");
   }
