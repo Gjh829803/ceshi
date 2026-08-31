@@ -37,6 +37,7 @@ import {
 import {
   BABYLON_CHARACTER_BODY_PROVIDER_VERSIONS_V1,
   createBabylonCharacterBodyPortV1,
+  type BabylonCharacterBodyCommittedSupportEvidenceV1,
   type BabylonCharacterBodyRuntimePortV1,
 } from "./babylon-character-body-port";
 import {
@@ -168,6 +169,39 @@ export class CharacterMovementComponentV1 extends EntityComponentV1 {
 
   clearRetainedCharacterSupportSample(): void {
     this.motionKernel.clearRetainedCharacterSupportSample();
+  }
+
+  /** @internal Formal evidence from the legacy kernel's committed support state. */
+  readCommittedSupportEvidence(
+    tick: number,
+  ): BabylonCharacterBodyCommittedSupportEvidenceV1 | undefined {
+    const sample = this.motionKernel.retainedCharacterSupportSample();
+    if (sample === undefined) return undefined;
+    const contacts = sample.supportContacts;
+    const pointMetersXYZ = contacts.length === 0
+      ? sample.sampledFootPositionMetersXYZ
+      : Object.freeze([0, 1, 2].map((axis) =>
+          contacts.reduce(
+            (sum, contact) => sum + contact.pointMetersXYZ[axis]!,
+            0,
+          ) / contacts.length
+        )) as RuntimeVec3V1;
+    return Object.freeze({
+      schemaVersion: 1,
+      tick,
+      sampledControllerCenterMetersXYZ:
+        sample.sampledControllerCenterMetersXYZ,
+      sampledFootPointMetersXYZ: sample.sampledFootPositionMetersXYZ,
+      support: sample.supportState === "unsupported"
+        ? Object.freeze({ mode: "unsupported" })
+        : Object.freeze({
+            mode: sample.supportState,
+            pointMetersXYZ,
+            normalXYZ: sample.supportNormalWorldXYZ,
+            isDynamic: sample.isSupportSurfaceDynamic,
+          }),
+      contacts,
+    });
   }
 
   probeGroundPlacementAt(
@@ -746,6 +780,13 @@ export class GoldenHumanoidSubjectControllerV1 extends EntityComponentV1 {
       );
     }
     return this.#bodyPort;
+  }
+
+  /** @internal Formal evidence from the BodyPort's last committed Tick. */
+  readCommittedSupportEvidence():
+    | BabylonCharacterBodyCommittedSupportEvidenceV1
+    | undefined {
+    return this.#requireBodyPort().readCommittedSupportEvidence();
   }
 }
 
