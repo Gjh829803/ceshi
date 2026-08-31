@@ -653,17 +653,17 @@ git rev-parse @{upstream}
 
 Expected: clean status and equal full SHAs.
 
-- [ ] **Step 2: Dispatch two exact-SHA Cursor Cloud agents**
+- [x] **Step 2: Dispatch two exact-SHA Cursor Cloud agents**
 
 Agent A runs install, self-check, typecheck, studio, independent, root test, production builds, census, Native/BNA clean breaks, unreleased clean break, workspace boundaries, BWB-3 capture and real BWB-4/Havok verifier. Agent B performs independent Mode B + runtime-deep review of settlement authority, Mesh drift/census, Package replay, Profile identity and step traversal. Docker/BNA-5 container evidence is not rerun unless BNA-5 inputs changed.
 
 Expected: both inspect the exact pushed SHA; neither edits code.
 
-- [ ] **Step 3: Adjudicate findings**
+- [x] **Step 3: Adjudicate findings**
 
 For each P0/P1/P2, reproduce with a behavior RED before editing. Fix only confirmed defects, run the focused affected gate, commit/push, and dispatch fresh exact-SHA agents. No GO with an open P2.
 
-- [ ] **Step 4: Write the final review and update truth**
+- [x] **Step 4: Write the final review and update truth**
 
 Record exact base/product/docs/main SHAs, contribution/profile identities, settlement authority map, Mesh inventory/drift evidence, step geometry, Havok movement results, cleanup, Cloud Agent/Run IDs, D1-D6 and explicit non-claims. Mark BWB-3 and BWB-4 complete only if the integrated chain is GO. Mark only the stair prerequisite of BWB-5 complete; mountain/T-space/building/limited-interior Corpus remains open.
 

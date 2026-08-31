@@ -1013,8 +1013,9 @@ BWB-3/4 的集成施工与真实台阶前置由
 及其[实施计划](../docs/superpowers/plans/2026-08-31-babylon-block-settlement-and-step-closure-implementation.md)独占。
 该 Profile 采用 `JSON Control Plane + Babylon Native Block Whitebox + Frozen Contributions + SDK/Havok`
 组合；它不是第三条 Scene Source，也不恢复旧分支的 Three/Manifest/Compiler。BWB-1/BWB-2 的可选
-Package、Build-Epoch Session 和结构 Checker 已完成合同级 checkpoint；视觉、多视角、Collider/Havok、
-人物通过性和参考场景 Corpus 仍未完成，因此不提高 Native 生产完成度。
+Package、Build-Epoch Session、结构 Checker、直接 Babylon 视觉、多视角 authoring screenshots、同一
+Layout/Finalize/Host settlement 的 Collider/Havok 链和真实 0.25m 台阶前置已经闭合。参考场景 Corpus、
+formal Capture/Route、AI 评测与生产 disposition 仍未完成，因此不把该 narrow fixture 扩写为生产完成度。
 
 - [x] BWB-0：冻结 Profile、旧分支 `618d96b` 处置、外部证据、能力边界、依赖工作图和
   [Mode A 审查](reviews/2026-08-28-babylon-native-block-whitebox-profile-design-review.md)；
@@ -1022,15 +1023,16 @@ Package、Build-Epoch Session 和结构 Checker 已完成合同级 checkpoint；
   palette、Build-epoch-local Layout 与 diagnostics；
 - [x] BWB-2：重写 Occupancy、重叠、坡面输入、边界、Visual Group 和预算 Checker，不复制旧 DTO/
   Preset/Compiler；
-- [ ] BWB-3：接入直接 Babylon Mesh、稳定视觉组和 Opening/top-down/侧视的 Build-Epoch-local authoring
-  screenshots；独立分支已有 narrow evidence，但必须与 BWB-4 通过同一 Layout/Finalize/Host settlement
-  集成后才完成；它们不是 BNA-7 formal WorldPackage/Browser Capture；
-- [ ] BWB-4：在 BNA-4 后从同一内存 Layout 产生 core Static Collider Contribution 及其关闭
-  `traversalBinding`，由 SDK 冻结并创建 Havok；不新增独立 Traversal/Visual Group Contribution，
-  Runtime 不查询 Layout 或第二 Height Sampler；独立 Havok fixture 只是 narrow evidence，不能与 BWB-3
-  证据直接相加冒充同一 Package 链；
+- [x] BWB-3：同一 Profile Session 已接入直接 Babylon Mesh、稳定视觉组和 Opening/top-down/侧视的
+  Build-Epoch-local authoring screenshots；它们已与 BWB-4 经过同一 Layout/Finalize/Host settlement，
+  但仍不是 BNA-7 formal WorldPackage/Browser Capture；
+- [x] BWB-4：同一内存 Layout 已产生 core Static Collider Contribution 及关闭 `traversalBinding`，由 SDK
+  冻结、verified Package replay 后创建 Havok；没有独立 Traversal/Visual Group Contribution，Runtime
+  不查询 Layout 或第二 Height Sampler；真实 0.25m step、0.5m blocker、support、ledge、reset 和 cleanup
+  已在同一 Package 链通过；
 - [ ] BWB-5：冻结山地、T 字空间、台阶、建筑、有限室内视觉及负向 Corpus，闭合结构、profile-local
-  screenshots、BNA-4 Collider overlay、Spawn Support、真实人物通过性和人工交互证据；
+  screenshots、BNA-4 Collider overlay、Spawn Support、真实人物通过性和人工交互证据。台阶 narrow
+  prerequisite 已完成；30/60/120 cadence、跨实体 rebind、山地/T 字/建筑/有限室内与负向 corpus 仍开放；
 - [ ] BWB-6：BWB-5 正确性成立后评估 Thin Instance、Chunk、Collider coalescing，交付 Profile-side
   eligibility/grouping、等价 fixture、资源 benchmark 和 BNA-4 优化提案；不直接修改 Runtime/Havok，
   不改变 AI-facing Schema 或 Contribution 语义。

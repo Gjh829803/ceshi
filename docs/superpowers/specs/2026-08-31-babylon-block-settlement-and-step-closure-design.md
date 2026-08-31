@@ -286,8 +286,11 @@ rotation、scaling、parent、vertices、indices、scene、dispose、visibility�
 Profile `finalize()` 使用一个 acquisition stack。失败时逆序：detach source materials、dispose Profile
 materials、dispose newly created proxy、dispose source Mesh；throwing disposer 不截断后续清理，最终保留第一
 错误。已登记 proxy 仍由 Candidate Scene/Host lease owner兜底销毁，Profile 不创建第二 Runtime disposer。
-Session `dispose()` 只是 Profile-local 未提交资源清理入口；它不取得 Candidate Scene、Engine、Host lease 或
-Runtime handle 的所有权。Host settlement 只消费冻结快照，成功 Contribution/Package 也不持有 Babylon handle。
+Session `dispose()` 只是 Profile-local authoring/build cleanup 能力；成功 `finalize()` 不会把 Babylon handle
+转移给 settlement/Contribution，也不会使 Session 成为 Runtime disposer。若 Module 在 Host recheck 前主动
+dispose 已结算 Mesh，Candidate 必须以 target drift/inventory mismatch fail closed；正式生产路径最终仍由
+Candidate Scene/Host lease 聚合释放。Host settlement 只消费冻结快照，成功 Contribution/Package 不持有
+Babylon handle。
 
 Host settlement commit 的错误即使被 Module catch 也必须保留。Candidate admission `finally` 关闭并解绑
 recorder。成功 Contribution/Package 不持有 Babylon handle。
