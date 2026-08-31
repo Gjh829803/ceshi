@@ -3,7 +3,7 @@
 - 日期：2026-08-31
 - 模式：Mode B 变更审查 + runtime-deep-review-checklist
 - 基线：`origin/main@bcd2beea736ab68199df04c2ed937d63ea389f4a`
-- 产品候选：本分支 `cursor/bwb-5-reconstruction-corpus-04db` 的最新 pushed SHA
+- 产品候选：`7b77069f114bb3ae72ae184fb7c60798fe49b301`
 - 范围：BWB5-10 至 BWB5-70；关闭山地 / T 字 / 台阶 / 建筑 / 有限室内 / 负向 Corpus
 - 当前裁决：**条件 GO**；开放 P0/P1 = 0。BNA-6 / BNA-7 / WRC-SR-1 / BWB-6 保持开放
 
