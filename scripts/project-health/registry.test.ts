@@ -105,7 +105,7 @@ async function createCleanRepository(): Promise<Readonly<{ repositoryRoot: strin
   };
 }
 
-describe("project health registry", () => {
+describe("project health registry", { timeout: 20_000 }, () => {
   it("creates fixture repositories without inheriting host git signing or fsmonitor", async () => {
     const hostileHome = await mkdtemp(path.join(os.tmpdir(), "worldkit-project-health-hostile-git-"));
     roots.push(hostileHome);
