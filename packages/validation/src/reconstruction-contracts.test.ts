@@ -128,7 +128,7 @@ const evidenceValue = () => ({
     { dimensionId: "collider", evidenceRefs: ["artifact://case/cloud-temple/evidence/collider.json"], observed: { kind: "collider-observed", contributions: [{ contributionId: "spawn-ground-contribution", colliderId: "spawn-ground", role: "ground", hasOverlay: true }, { contributionId: "west-wall-contribution", colliderId: "west-wall", role: "blocker", hasOverlay: true }] } },
     { dimensionId: "critical-traversal", evidenceRefs: ["artifact://case/cloud-temple/evidence/critical-traversal.json"], observed: { kind: "critical-traversal-observed", checks: [{ id: "reach-junction", outcome: "reached", checkpointIds: ["junction", "spawn"] }] } },
     { dimensionId: "deterministic-build", evidenceRefs: ["artifact://case/cloud-temple/evidence/deterministic-build.json"], observed: { kind: "deterministic-build-observed", candidateReplayOutcome: "completed", worldPackageIdentityMatches: true, buildIdentityMatches: true, captureIdentityMatches: true } },
-    { dimensionId: "opening-composition", evidenceRefs: ["artifact://case/cloud-temple/evidence/opening-composition.json"], observed: { kind: "opening-composition-observed", regions: [{ targetRef: "worldkit://composition-target/opening@1", normalizedBounds: { minXBasisPoints: 100, minYBasisPoints: 200, maxXBasisPoints: 500, maxYBasisPoints: 800 } }], anchors: [{ targetRef: "worldkit://composition-target/opening@1", normalizedCenter: { xBasisPoints: 300, yBasisPoints: 500 } }], orderedTargetRefs: ["worldkit://composition-target/opening@1"], distancesBasisPoints: [100] } },
+    { dimensionId: "opening-composition", evidenceRefs: ["artifact://case/cloud-temple/evidence/opening-composition.json"], observed: { kind: "opening-composition-observed", regions: [{ targetRef: "worldkit://composition-target/opening@1", normalizedBounds: { minXBasisPoints: 100, minYBasisPoints: 200, maxXBasisPoints: 500, maxYBasisPoints: 800 } }], anchors: [{ targetRef: "worldkit://composition-target/opening@1", normalizedCenter: { xBasisPoints: 300, yBasisPoints: 500 } }], orderedTargetRefs: ["worldkit://composition-target/opening@1"], distances: [] } },
     { dimensionId: "semantic-silhouette", evidenceRefs: ["artifact://case/cloud-temple/evidence/semantic-silhouette.json"], observed: { kind: "semantic-silhouette-observed", targets: [{ acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1", visualGroupId: "central-ascent-group", isSemanticTargetPresent: true, normalizedBounds: { minXBasisPoints: 100, minYBasisPoints: 200, maxXBasisPoints: 500, maxYBasisPoints: 800 }, normalizedCenter: { xBasisPoints: 300, yBasisPoints: 500 }, coverageBasisPoints: 2_400 }] } },
     { dimensionId: "spawn-support", evidenceRefs: ["artifact://case/cloud-temple/evidence/spawn-support.json"], observed: { kind: "spawn-support-observed", spawnMarkerId: "player-spawn", supportColliderId: "spawn-ground", medium: "ground", positionXYZMeters: { xMeters: 0, yMeters: 1, zMeters: 0 }, supportGapMillimeters: 0 } },
     { dimensionId: "topology", evidenceRefs: ["artifact://case/cloud-temple/evidence/topology.json"], observed: { kind: "topology-observed", nodeIds: ["central-ascent", "upper-t-junction"], relations: [{ fromNodeId: "central-ascent", relation: "connects-to", toNodeId: "upper-t-junction" }], layerIds: ["ground", "upper"] } },
@@ -167,12 +167,22 @@ const resultValue = () => ({
     identity: {
       attemptHash: H("f"),
       worldPackageRootHash: H("1"),
+      worldBuildIdentityHash: H("8"),
       captureReceiptHash: H("2"),
     },
   })),
 });
 
 describe("world reconstruction contracts", () => {
+  it("admits an evidence-missing dimension only with an empty evidence list", () => {
+    const evidence = evidenceValue();
+    evidence.observedDimensions[0]!.evidenceRefs = [];
+    (evidence.observedDimensions[0] as { observed: unknown }).observed = { kind: "evidence-missing" };
+    expect(parseWorldReconstructionEvidenceSetV1(evidence).observedDimensions[0]).toMatchObject({
+      observed: { kind: "evidence-missing" }, evidenceRefs: [],
+    });
+  });
+
   it("admits Profile-owned thresholds and observed rows with build identity and evidence refs", () => {
     const profile = profileValue();
     Object.assign(profile, {
@@ -518,6 +528,8 @@ describe("world reconstruction contracts", () => {
           worldPackageRootHash: H("a"),
           worldPackageBuildReceiptRef: "artifact://case/cloud-temple/attempts/0/world-package-build-receipt.json",
           worldPackageBuildReceiptHash: H("b"),
+          worldBuildIdentityRef: "artifact://case/cloud-temple/attempts/0/world-build-identity.json",
+          worldBuildIdentityHash: H("c"),
           captureReceiptRef: "artifact://case/cloud-temple/attempts/0/capture-receipt.json",
           captureReceiptHash: H("c"),
           evaluationResultRef: "artifact://case/cloud-temple/attempts/0/evaluation.json",
@@ -538,6 +550,8 @@ describe("world reconstruction contracts", () => {
           worldPackageRootHash: H("2"),
           worldPackageBuildReceiptRef: "artifact://case/cloud-temple/attempts/1/world-package-build-receipt.json",
           worldPackageBuildReceiptHash: H("4"),
+          worldBuildIdentityRef: "artifact://case/cloud-temple/attempts/1/world-build-identity.json",
+          worldBuildIdentityHash: H("5"),
           captureReceiptRef: "artifact://case/cloud-temple/attempts/1/capture-receipt.json",
           captureReceiptHash: H("5"),
           evaluationResultRef: "artifact://case/cloud-temple/attempts/1/evaluation.json",
