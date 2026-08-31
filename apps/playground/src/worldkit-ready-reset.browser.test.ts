@@ -25,7 +25,7 @@ const ORIGIN_DRIFT_TOLERANCE_METERS = 1e-9;
 describe("WorldKit Browser readiness", () => {
   it("keeps page setup alive when reset starts immediately after ready", async () => {
     const server = await startWorldkitServer({
-      inputPath: PLACEMENT_WORLD_PATH,
+      source: { kind: "canonical-file", inputPath: PLACEMENT_WORLD_PATH },
       startupTimeoutMilliseconds: 90_000,
     });
     const browser = await launchChromiumWithSystemFallback();
@@ -74,7 +74,10 @@ describe("WorldKit Browser readiness", () => {
 
   it("restores package-subject Origins to the ready snapshot after reset", async () => {
     const server = await startWorldkitServer({
-      inputPath: PACKAGE_SUBJECT_WORLD_PATH,
+      source: {
+        kind: "canonical-file",
+        inputPath: PACKAGE_SUBJECT_WORLD_PATH,
+      },
       startupTimeoutMilliseconds: 90_000,
     });
     const browser = await launchChromiumWithSystemFallback();

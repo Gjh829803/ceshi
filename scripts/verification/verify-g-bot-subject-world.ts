@@ -752,7 +752,9 @@ async function verifyBrowser(
   let result: BrowserEvidence | undefined;
   let primaryError: unknown;
   try {
-    server = await startWorldkitServer({ inputPath: INPUT_PATH });
+    server = await startWorldkitServer({
+      source: { kind: "canonical-file", inputPath: INPUT_PATH },
+    });
     try {
       browser = await launchChromiumWithSystemFallback();
     } catch {

@@ -129,7 +129,7 @@ describe("WorldKit authoring edit add-house Full Reload", () => {
       STALE_AUTHORING_SPEC_HASH,
     );
     const server = await startWorldkitServer({
-      inputPath: BASIC_WORLD_PATH,
+      source: { kind: "canonical-file", inputPath: BASIC_WORLD_PATH },
       startupTimeoutMilliseconds: 90_000,
     });
     const browser = await launchChromiumWithSystemFallback();

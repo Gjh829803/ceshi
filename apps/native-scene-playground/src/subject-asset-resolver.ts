@@ -6,7 +6,7 @@ const SUBJECT_ASSET_URI_BY_REF: Readonly<Record<string, string>> = Object.freeze
     "/subject-assets/humanoid/g-bot/v2/g-bot.glb",
 });
 
-export const cloudRidgeSubjectAssetResolver: SubjectAssetResolverV1 =
+export const nativeSceneSubjectAssetResolver: SubjectAssetResolverV1 =
   Object.freeze({
     async resolveSubjectAsset(
       request: Parameters<SubjectAssetResolverV1["resolveSubjectAsset"]>[0],

@@ -8,6 +8,8 @@ import { createServer, type ViteDevServer } from "vite";
 
 import { launchChromiumWithSystemFallback } from
   "../lib/playwright-browser-launch";
+import { createOwnedNativePackageFixtureV1 } from
+  "../native-scene/owned-native-package-fixture";
 
 const CONTROLLED_ENTITY_ID = "g-bot-primary";
 const EXPECTED_NATIVE_CONTRIBUTION_HASH =
@@ -17,6 +19,24 @@ const EXPECTED_COLLIDER_SUBSHAPE_IDS = Object.freeze([
   "collider-subshape:0069b3ff456288eb8ea99f6a7ff396f9886725df6dd89e8626cd14150b71dbcc",
   "collider-subshape:c31d374e9b1f86c1eec231de6db07cf966100a57700ab344f41e64a1c53429bc",
 ]);
+const NATIVE_ENVIRONMENT_NAMES = Object.freeze([
+  "WORLDKIT_NATIVE_PACKAGE_PATH",
+  "WORLDKIT_AUTHORING_SERVER_NONCE",
+  "WORLDKIT_NATIVE_SERVER_ROLE",
+  "WORLDKIT_HOSTED_SHELL_ORIGIN",
+  "WORLDKIT_HOSTED_RUNTIME_ORIGIN",
+] as const);
+
+function preserveNativeEnvironment(): () => void {
+  const original = new Map(NATIVE_ENVIRONMENT_NAMES.map((name) =>
+    [name, process.env[name]] as const));
+  return () => {
+    for (const [name, value] of original) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  };
+}
 
 interface NativeSubjectProjectionV1 {
   readonly positionMetersXYZ: readonly [number, number, number];
@@ -89,6 +109,12 @@ async function findFreeLoopbackPort(): Promise<number> {
 }
 
 async function main(): Promise<void> {
+  const fixture = await createOwnedNativePackageFixtureV1({
+    fixtureDirectoryPath: path.resolve(
+      "apps/playground/public/world-packages/cloud-ridge",
+    ),
+  });
+  const restoreEnvironment = preserveNativeEnvironment();
   let server: ViteDevServer | undefined;
   let browser: Browser | undefined;
   let page: Page | undefined;
@@ -99,6 +125,10 @@ async function main(): Promise<void> {
       `http://127.0.0.1:${shellPort}`;
     process.env.WORLDKIT_HOSTED_RUNTIME_ORIGIN =
       `http://127.0.0.1:${runtimePort}`;
+    process.env.WORLDKIT_NATIVE_PACKAGE_PATH = fixture.packageDirectoryPath;
+    process.env.WORLDKIT_AUTHORING_SERVER_NONCE =
+      `native-playground-verifier-${process.pid}`;
+    process.env.WORLDKIT_NATIVE_SERVER_ROLE = "shell";
     server = await createServer({
       root: path.resolve("apps/native-scene-playground"),
       logLevel: "silent",
@@ -244,19 +274,14 @@ async function main(): Promise<void> {
     assert.equal(cameraResetAudit.successfulRuntimeCreateCount, 3);
     assert.equal(afterReset.camera.viewYawOffsetRadians, 0);
 
-    const pathButton = page.locator("[data-path-check]");
-    await pathButton.click();
-    await assert.doesNotReject(
-      pathButton.waitFor({ state: "visible", timeout: 30_000 }),
-    );
-    await page.waitForFunction(
-      () => document.querySelector("[data-path-check]")?.textContent !==
-        "正在沿主路径前进…",
-      undefined,
-      { timeout: 30_000 },
-    );
-    assert.equal(await pathButton.textContent(), "主路径通过 ✓");
-    const reached = await readProjection(page);
+    const reached = await page.evaluate(async () => {
+      const probe = window.__WORLDKIT_NATIVE_SPIKE__!;
+      await probe.reset();
+      return probe.runFixedInput({
+        actions: ["move-forward", "run"],
+        ticks: 1_700,
+      });
+    });
     const reachedSubject = controlledSubject(reached);
     assert.equal(reachedSubject.movementMedium, "ground");
     assert.ok(reachedSubject.positionMetersXYZ[1] > 12);
@@ -310,6 +335,11 @@ async function main(): Promise<void> {
     }, null, 2)}\n`);
   } finally {
     await closeBestEffort(page, browser, server);
+    try {
+      await fixture.dispose();
+    } finally {
+      restoreEnvironment();
+    }
   }
 }
 

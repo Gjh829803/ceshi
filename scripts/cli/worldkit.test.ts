@@ -318,6 +318,31 @@ describe("worldkit CLI", () => {
     );
   });
 
+  it("parses the sole BNA verification Harness run command", () => {
+    expect(parseWorldkitArgs([
+      "native",
+      "run",
+      "artifacts/scenes/case-a/packages/run-a-attempt-0",
+      "--port",
+      "5174",
+      "--json",
+    ])).toEqual({
+      command: "native-run",
+      packageDirectoryPath:
+        "artifacts/scenes/case-a/packages/run-a-attempt-0",
+      port: 5174,
+      json: true,
+    });
+    expect(HELP).toContain(
+      "worldkit native run <package-directory> [--port <port>] [--json]",
+    );
+    expect(() => parseWorldkitArgs([
+      "native",
+      "run-cloud-ridge",
+      "packages/cloud-ridge",
+    ])).toThrow("Unknown native operation 'run-cloud-ridge'.");
+  });
+
   it("rejects incomplete, mutable-output, and legacy Native package argv", () => {
     expect(() => parseWorldkitArgs([
       "native",
