@@ -1,7 +1,7 @@
 # Babylon Alpha 实现与运行指南
 
-> 本文记录当前唯一的 Babylon/Havok 白膜 Runtime 与 catalog 场景工作流。Canonical
-> Authoring 输入和 Browser 协议以
+> 本文记录当前唯一的 Babylon/Havok 白膜 Runtime、统一 Canonical Viewer 与内部
+> artifact-only 场景制品工作流。Canonical Authoring 输入和 Browser 协议以
 > [Canonical Authoring V4 快速接入](17-canonical-json-quickstart.md)为准；本文不定义第二套
 > Schema 或 Gameplay 真相。
 

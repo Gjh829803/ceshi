@@ -37,6 +37,12 @@ describe("runtime probe registry", () => {
       requiredness: "advisory",
       gateId: "bna1-clean-break",
     });
+    expect(registry.find((entry) => entry.id === "fixed-cadence")).toMatchObject({
+      kind: "cadence",
+      requiredness: "required",
+      gateId: "route-r1-heightfield",
+      ownerCommandId: "verify-route-r1-heightfield",
+    });
     expect(registry.filter((entry) => entry.requiredness === "required")).toHaveLength(3);
   });
 
