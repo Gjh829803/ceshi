@@ -13,11 +13,6 @@ import {
 } from "../contracts";
 import { workspaceBoundaryEvidenceRefV1 } from "../workspace-boundary-adapter";
 
-export const SUPPLEMENTAL_AUTHORITY_SENSOR_IMPLEMENTATION_HASH_V1 = sha256CanonicalJson({
-  sensorId: "supplemental-authority",
-  implementationId: "public-symbol-authority-v1",
-});
-
 function selectorMatches(
   selector: ProjectHealthAuthoritySelectorV1,
   symbol: WorkspacePublicSymbolOwnershipV1,
@@ -88,9 +83,30 @@ function authorityFinding(input: {
 
 export function observeSupplementalAuthorityV1(input: {
   readonly profile: ProjectHealthProfileV1;
-  readonly evidence: WorkspaceBoundaryEvidenceV1;
-  readonly authorityPolicy: ProjectHealthAuthorityPolicyV1;
+  readonly sensorImplementationHash: string;
+  readonly evidence: WorkspaceBoundaryEvidenceV1 | null;
+  readonly authorityPolicy: ProjectHealthAuthorityPolicyV1 | null;
 }): ProjectHealthObservationV1 {
+  if (isNil(input.evidence) || isNil(input.authorityPolicy)) {
+    return parseProjectHealthObservationV1({
+      kind: "project-health-observation",
+      schemaVersion: 1,
+      sensorId: "supplemental-authority",
+      sensorImplementationHash: input.sensorImplementationHash,
+      inputFingerprint: sha256CanonicalJson({ evidence: input.evidence, authorityPolicy: input.authorityPolicy }),
+      status: "incomplete",
+      metricsById: {
+        "supplemental-authority-valid": {
+          id: "supplemental-authority-valid",
+          kind: "boolean",
+          status: "not-evaluated",
+          reasonCode: "OWNER_COMMAND_NOT_RUN",
+        },
+      },
+      findings: [],
+      evidenceRefs: [],
+    }, input.profile);
+  }
   const evidenceRef = workspaceBoundaryEvidenceRefV1(input.evidence);
   const findings: ProjectHealthFindingV1[] = [];
   const blockedKeys = new Set<string>();
@@ -182,7 +198,7 @@ export function observeSupplementalAuthorityV1(input: {
     kind: "project-health-observation",
     schemaVersion: 1,
     sensorId: "supplemental-authority",
-    sensorImplementationHash: SUPPLEMENTAL_AUTHORITY_SENSOR_IMPLEMENTATION_HASH_V1,
+    sensorImplementationHash: input.sensorImplementationHash,
     inputFingerprint: evidenceRef,
     status: blocking ? "failed" : "passed",
     metricsById: {

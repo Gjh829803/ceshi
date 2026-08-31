@@ -13,6 +13,7 @@ import {
 
 const REPOSITORY_ROOT = path.resolve(new URL("../../..", import.meta.url).pathname);
 const BUDGET = 12_582_912;
+const SENSOR_IMPLEMENTATION_HASH = `sha256:${"b".repeat(64)}`;
 
 function readJson(relativePath: string): unknown {
   return JSON.parse(readFileSync(path.join(REPOSITORY_ROOT, relativePath), "utf8"));
@@ -65,6 +66,7 @@ describe("performance-size sensor", () => {
     expect(source).not.toMatch("peakOwnerCount");
     const observation = observePerformanceSizeV1({
       profile: parsedProfile(),
+      sensorImplementationHash: SENSOR_IMPLEMENTATION_HASH,
       measurement: measurement(),
       baseline: measurement({
         runnerProfileId: "macos-arm64",
@@ -78,6 +80,7 @@ describe("performance-size sensor", () => {
   it("fails a static bundle that exceeds the frozen budget", () => {
     const observation = observePerformanceSizeV1({
       profile: parsedProfile(),
+      sensorImplementationHash: SENSOR_IMPLEMENTATION_HASH,
       measurement: measurement({ bundleBytes: BUDGET + 1 }),
       baseline: null,
     });
@@ -94,6 +97,7 @@ describe("performance-size sensor", () => {
   it("passes a bundle at or below the frozen budget", () => {
     const observation = observePerformanceSizeV1({
       profile: parsedProfile(),
+      sensorImplementationHash: SENSOR_IMPLEMENTATION_HASH,
       measurement: measurement({ bundleBytes: BUDGET }),
       baseline: null,
     });

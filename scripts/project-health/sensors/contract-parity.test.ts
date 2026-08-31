@@ -13,6 +13,7 @@ import {
 
 const REPOSITORY_ROOT = path.resolve(new URL("../../..", import.meta.url).pathname);
 const COMMIT_SHA = "a".repeat(40);
+const SENSOR_IMPLEMENTATION_HASH = `sha256:${"b".repeat(64)}`;
 const STALE_SHA = "b".repeat(40);
 const EVIDENCE_BY_GATE: Readonly<Record<string, string>> = {
   "agent-self-check": `sha256:${"1".repeat(64)}`,
@@ -86,6 +87,7 @@ function runContractParitySensorV1(
 ) {
   return observeContractParityV1({
     profile: parsedProfile(),
+    sensorImplementationHash: SENSOR_IMPLEMENTATION_HASH,
     mode: "pr",
     expectedCommitSha: COMMIT_SHA,
     owners,

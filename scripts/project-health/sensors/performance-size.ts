@@ -9,11 +9,6 @@ import {
   type ProjectHealthProfileV1,
 } from "../contracts";
 
-export const PERFORMANCE_SIZE_SENSOR_IMPLEMENTATION_HASH_V1 = sha256CanonicalJson({
-  sensorId: "performance-size",
-  implementationId: "bundle-bytes-v1",
-});
-
 export interface PerformanceSizeMeasurementV1 {
   readonly runnerProfileId: string;
   readonly bundleBytes: number;
@@ -21,6 +16,7 @@ export interface PerformanceSizeMeasurementV1 {
 
 export function observePerformanceSizeV1(input: {
   readonly profile: ProjectHealthProfileV1;
+  readonly sensorImplementationHash: string;
   readonly measurement: PerformanceSizeMeasurementV1 | null;
   readonly baseline: PerformanceSizeMeasurementV1 | null;
 }): ProjectHealthObservationV1 {
@@ -33,7 +29,7 @@ export function observePerformanceSizeV1(input: {
       kind: "project-health-observation",
       schemaVersion: 1,
       sensorId: "performance-size",
-      sensorImplementationHash: PERFORMANCE_SIZE_SENSOR_IMPLEMENTATION_HASH_V1,
+      sensorImplementationHash: input.sensorImplementationHash,
       inputFingerprint,
       status: "incomplete",
       metricsById: {
@@ -84,7 +80,7 @@ export function observePerformanceSizeV1(input: {
     kind: "project-health-observation",
     schemaVersion: 1,
     sensorId: "performance-size",
-    sensorImplementationHash: PERFORMANCE_SIZE_SENSOR_IMPLEMENTATION_HASH_V1,
+    sensorImplementationHash: input.sensorImplementationHash,
     inputFingerprint,
     status: overBudget ? "failed" : "passed",
     metricsById: {

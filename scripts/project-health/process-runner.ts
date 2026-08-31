@@ -82,9 +82,39 @@ const INTERNAL_PROCESS_INSPECTION_TIMEOUT_MILLISECONDS = 2_000;
 const REPOSITORY_STATE_FINGERPRINT_TIMEOUT_MILLISECONDS = 5_000;
 const REPOSITORY_STATE_FINGERPRINT_MAXIMUM_BYTES = 8 * 1024 * 1024;
 const REPOSITORY_STATE_FINGERPRINT_MAXIMUM_ENTRIES = 4_096;
+const EXECUTION_STATUSES = new Set<ProjectHealthExecutionEvidenceV1["status"]>([
+  "passed",
+  "failed",
+  "timed-out",
+  "repository-state-mutated",
+  "cleanup-failed",
+  "infrastructure-failed",
+]);
+const EXECUTION_FAILURE_CODES = new Set<ProjectHealthExecutionFailureCodeV1>([
+  "EXECUTION_ENVELOPE_FAILED",
+  "OWNED_PROCESS_REMOVE_FAILED",
+  "WORKTREE_REMOVE_FAILED",
+  "OUTPUT_REMOVE_FAILED",
+]);
+const CLEANUP_FAILURE_CODES = new Set<ProjectHealthExecutionFailureCodeV1>([
+  "OWNED_PROCESS_REMOVE_FAILED",
+  "WORKTREE_REMOVE_FAILED",
+  "OUTPUT_REMOVE_FAILED",
+]);
+const PROCESS_SIGNALS = new Set<NodeJS.Signals>([
+  "SIGABRT", "SIGALRM", "SIGBREAK", "SIGBUS", "SIGCHLD", "SIGCONT", "SIGFPE", "SIGHUP",
+  "SIGILL", "SIGINFO", "SIGINT", "SIGIO", "SIGIOT", "SIGKILL", "SIGLOST", "SIGPIPE",
+  "SIGPOLL", "SIGPROF", "SIGPWR", "SIGQUIT", "SIGSEGV", "SIGSTKFLT", "SIGSTOP", "SIGSYS",
+  "SIGTERM", "SIGTRAP", "SIGTSTP", "SIGTTIN", "SIGTTOU", "SIGURG", "SIGUSR1", "SIGUSR2",
+  "SIGVTALRM", "SIGWINCH", "SIGXCPU", "SIGXFSZ",
+]);
 
 function invalid(): never {
   throw new TypeError("Value must match the closed ProjectHealthExecutionDescriptorV1 schema.");
+}
+
+function invalidEvidence(): never {
+  throw new TypeError("Value must match the closed ProjectHealthExecutionEvidenceV1 schema.");
 }
 
 function exactRecord(input: unknown, fields: readonly string[]): Record<string, unknown> {
@@ -182,6 +212,168 @@ export function parseProjectHealthExecutionDescriptorV1(
   };
 }
 
+function evidenceHash(input: unknown): string {
+  if (typeof input !== "string" || !SHA256.test(input)) return invalidEvidence();
+  return input;
+}
+
+function nullableEvidenceHash(input: unknown): string | null {
+  return isNil(input) ? null : evidenceHash(input);
+}
+
+function nullableBoolean(input: unknown): boolean | null {
+  if (isNil(input)) return null;
+  if (typeof input !== "boolean") return invalidEvidence();
+  return input;
+}
+
+function nullableExitCode(input: unknown): number | null {
+  if (isNil(input)) return null;
+  if (
+    typeof input !== "number" ||
+    !Number.isSafeInteger(input) ||
+    Object.is(input, -0) ||
+    input < 0
+  ) return invalidEvidence();
+  return input;
+}
+
+function nullableSignal(input: unknown): NodeJS.Signals | null {
+  if (isNil(input)) return null;
+  if (typeof input !== "string" || !PROCESS_SIGNALS.has(input as NodeJS.Signals)) return invalidEvidence();
+  return input as NodeJS.Signals;
+}
+
+export function parseProjectHealthExecutionEvidenceV1(
+  input: unknown,
+): ProjectHealthExecutionEvidenceV1 {
+  let source: Record<string, unknown>;
+  try {
+    source = exactRecord(input, [
+      "kind",
+      "schemaVersion",
+      "descriptorId",
+      "executionScope",
+      "commandHash",
+      "environmentHash",
+      "status",
+      "exitCode",
+      "signal",
+      "stdout",
+      "stderr",
+      "stdoutTruncated",
+      "stderrTruncated",
+      "repositoryStateBeforeHash",
+      "repositoryStateAfterHash",
+      "temporaryWorktreeRemoved",
+      "temporaryOutputRemoved",
+      "failureCodes",
+    ]);
+  } catch {
+    return invalidEvidence();
+  }
+  if (
+    source.kind !== "project-health-execution-evidence" ||
+    source.schemaVersion !== 1 ||
+    typeof source.descriptorId !== "string" ||
+    !DESCRIPTOR_ID.test(source.descriptorId) ||
+    (source.executionScope !== "in-place-checkout" && source.executionScope !== "isolated-temp-worktree") ||
+    typeof source.status !== "string" ||
+    !EXECUTION_STATUSES.has(source.status as ProjectHealthExecutionEvidenceV1["status"]) ||
+    typeof source.stdout !== "string" ||
+    typeof source.stderr !== "string" ||
+    typeof source.stdoutTruncated !== "boolean" ||
+    typeof source.stderrTruncated !== "boolean" ||
+    !Array.isArray(source.failureCodes)
+  ) return invalidEvidence();
+
+  const status = source.status as ProjectHealthExecutionEvidenceV1["status"];
+  const exitCode = nullableExitCode(source.exitCode);
+  const signal = nullableSignal(source.signal);
+  const repositoryStateBeforeHash = nullableEvidenceHash(source.repositoryStateBeforeHash);
+  const repositoryStateAfterHash = nullableEvidenceHash(source.repositoryStateAfterHash);
+  const temporaryWorktreeRemoved = nullableBoolean(source.temporaryWorktreeRemoved);
+  const temporaryOutputRemoved = nullableBoolean(source.temporaryOutputRemoved);
+  const failureCodes = source.failureCodes.map((code) => {
+    if (typeof code !== "string" || !EXECUTION_FAILURE_CODES.has(code as ProjectHealthExecutionFailureCodeV1)) {
+      return invalidEvidence();
+    }
+    return code as ProjectHealthExecutionFailureCodeV1;
+  });
+  if (uniq(failureCodes).length !== failureCodes.length || (!isNil(exitCode) && !isNil(signal))) {
+    return invalidEvidence();
+  }
+
+  const failureCodeSet = new Set(failureCodes);
+  const hasCleanupFailure = failureCodes.some((code) => CLEANUP_FAILURE_CODES.has(code));
+  const hasEnvelopeFailure = failureCodeSet.has("EXECUTION_ENVELOPE_FAILED");
+  if (
+    (status === "cleanup-failed" && !hasCleanupFailure) ||
+    (status !== "cleanup-failed" && hasCleanupFailure) ||
+    (status === "infrastructure-failed" && (!hasEnvelopeFailure || hasCleanupFailure)) ||
+    (status !== "cleanup-failed" && status !== "infrastructure-failed" && failureCodes.length > 0) ||
+    (status === "passed" && (exitCode !== 0 || !isNil(signal))) ||
+    (status === "failed" && ((isNil(exitCode) && isNil(signal)) || exitCode === 0)) ||
+    (failureCodeSet.has("OUTPUT_REMOVE_FAILED") !== (temporaryOutputRemoved === false))
+  ) return invalidEvidence();
+
+  if (source.executionScope === "in-place-checkout") {
+    if (
+      !isNil(temporaryWorktreeRemoved) ||
+      failureCodeSet.has("WORKTREE_REMOVE_FAILED") ||
+      (!isNil(repositoryStateAfterHash) && isNil(repositoryStateBeforeHash))
+    ) return invalidEvidence();
+    if (status === "passed" || status === "failed" || status === "timed-out") {
+      if (
+        isNil(repositoryStateBeforeHash) ||
+        repositoryStateBeforeHash !== repositoryStateAfterHash ||
+        temporaryOutputRemoved !== true
+      ) return invalidEvidence();
+    }
+    if (
+      status === "repository-state-mutated" &&
+      (isNil(repositoryStateBeforeHash) || isNil(repositoryStateAfterHash) ||
+        repositoryStateBeforeHash === repositoryStateAfterHash || temporaryOutputRemoved !== true)
+    ) return invalidEvidence();
+  } else {
+    if (!isNil(repositoryStateBeforeHash) || !isNil(repositoryStateAfterHash) || status === "repository-state-mutated") {
+      return invalidEvidence();
+    }
+    if (failureCodeSet.has("WORKTREE_REMOVE_FAILED") !== (temporaryWorktreeRemoved === false)) {
+      return invalidEvidence();
+    }
+    if (status === "passed" || status === "failed" || status === "timed-out") {
+      if (temporaryWorktreeRemoved !== true || temporaryOutputRemoved !== true) return invalidEvidence();
+    }
+  }
+
+  if (
+    (status === "cleanup-failed" && temporaryOutputRemoved === null) ||
+    (status !== "cleanup-failed" && status !== "infrastructure-failed" && temporaryOutputRemoved !== true)
+  ) return invalidEvidence();
+
+  return {
+    kind: "project-health-execution-evidence",
+    schemaVersion: 1,
+    descriptorId: source.descriptorId,
+    executionScope: source.executionScope,
+    commandHash: evidenceHash(source.commandHash),
+    environmentHash: evidenceHash(source.environmentHash),
+    status,
+    exitCode,
+    signal,
+    stdout: source.stdout,
+    stderr: source.stderr,
+    stdoutTruncated: source.stdoutTruncated,
+    stderrTruncated: source.stderrTruncated,
+    repositoryStateBeforeHash,
+    repositoryStateAfterHash,
+    temporaryWorktreeRemoved,
+    temporaryOutputRemoved,
+    failureCodes: sortBy(failureCodes),
+  };
+}
+
 function sanitizedEnvironment(
   allowedEnvironmentVariableNames: readonly string[],
   outputRoot: string,
@@ -202,6 +394,13 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function absoluteMachineRootPattern(root: string): RegExp {
+  return new RegExp(
+    `(?<![A-Za-z0-9_.@/\\\\-])${escapeRegExp(root)}(?![A-Za-z0-9_.@-])`,
+    "g",
+  );
+}
+
 function redactOutput(
   input: string,
   machineRoots: readonly string[],
@@ -216,10 +415,10 @@ function redactOutput(
     }
   }
   for (const root of machineRoots) {
-    if (!isEmpty(root)) value = value.replace(new RegExp(escapeRegExp(root), "g"), "[REDACTED_PATH]");
+    if (!isEmpty(root)) value = value.replace(absoluteMachineRootPattern(root), "[REDACTED_PATH]");
   }
   return value.replace(
-    /(?:file:\/\/[^\s]+|[A-Za-z]:\\[^\s]+|\/(?:[^\s/=]+\/)*[^\s=]*)/g,
+    /(?:file:\/\/[^\s"']+|[A-Za-z]:\\[^\s"']+|(?<![A-Za-z0-9_.@/\\-])\/(?!\/)(?:(?:[^\s"'\\,\]}]+\/)*[^\s"'\\,\]}]+|(?=$|[\s"'\\,\]}])))/g,
     "[REDACTED_PATH]",
   );
 }
@@ -327,30 +526,67 @@ async function ignoredProjectHealthState(
   return entries;
 }
 
-async function repositoryStateHash(
-  repositoryRoot: string,
-): Promise<string> {
+interface ProjectHealthRepositoryStateV1 {
+  readonly hash: string;
+  readonly isExactClean: boolean;
+}
+
+async function assertCanonicalRepositoryStateInfrastructure(repositoryRoot: string): Promise<void> {
+  const repositoryIdentity = await canonicalDirectoryIdentity(repositoryRoot);
+  const healthRoot = path.join(repositoryRoot, ".project-health");
+  if (!await pathExists(healthRoot)) return;
+  const healthRootIdentity = await canonicalDirectoryIdentity(healthRoot);
+  await assertDirectoryIdentity(repositoryIdentity);
+  if (path.dirname(healthRootIdentity.absolutePath) !== repositoryIdentity.absolutePath) {
+    throw new Error("Project Health infrastructure escaped its canonical repository root.");
+  }
+  for (const leaf of ["runs", "worktrees"] as const) {
+    const ownedPath = path.join(healthRoot, leaf);
+    if (!await pathExists(ownedPath)) continue;
+    const ownedIdentity = await canonicalDirectoryIdentity(ownedPath);
+    await assertDirectoryIdentity(healthRootIdentity);
+    if (path.dirname(ownedIdentity.absolutePath) !== healthRootIdentity.absolutePath) {
+      throw new Error("Project Health owned infrastructure escaped its canonical parent.");
+    }
+  }
+  await assertDirectoryIdentity(healthRootIdentity);
+}
+
+async function collectProjectHealthRepositoryStateV1(
+  repositoryRootInput: string,
+): Promise<ProjectHealthRepositoryStateV1> {
+  const repositoryRoot = path.resolve(repositoryRootInput);
+  await assertCanonicalRepositoryStateInfrastructure(repositoryRoot);
   const healthRoot = path.join(repositoryRoot, ".project-health");
   const excludedOwnedPaths = [
     path.join(healthRoot, "runs"),
     path.join(healthRoot, "worktrees"),
   ];
-  const excludedPathspecs = excludedOwnedPaths.flatMap((ownedPath) => {
-    const relative = path.relative(repositoryRoot, ownedPath).split(path.sep).join("/");
-    if (relative.startsWith("../") || relative === ".." || path.isAbsolute(relative)) {
-      throw new TypeError("Owned execution path must remain inside the repository root.");
-    }
-    return [`:(exclude)${relative}`, `:(exclude)${relative}/**`];
-  });
+  const healthRootRelative = path.relative(repositoryRoot, healthRoot).split(path.sep).join("/");
+  if (healthRootRelative.startsWith("../") || healthRootRelative === ".." || path.isAbsolute(healthRootRelative)) {
+    throw new TypeError("Project Health infrastructure must remain inside the repository root.");
+  }
+  const excludedHealthPathspecs = [
+    `:(exclude)${healthRootRelative}`,
+    `:(exclude)${healthRootRelative}/**`,
+  ];
   const [trackedDiff, repositoryStatus] = await Promise.all([
-    git(repositoryRoot, ["diff", "--binary", "--no-ext-diff", "HEAD", "--"]),
+    git(repositoryRoot, [
+      "diff",
+      "--binary",
+      "--no-ext-diff",
+      "HEAD",
+      "--",
+      ".",
+      ...excludedHealthPathspecs,
+    ]),
     git(repositoryRoot, [
       "status",
       "--porcelain=v1",
       "--untracked-files=all",
       "--",
       ".",
-      ...excludedPathspecs,
+      ...excludedHealthPathspecs,
     ]),
   ]);
   const controller = new AbortController();
@@ -373,7 +609,20 @@ async function repositoryStateHash(
   } finally {
     if (!isNil(timeout)) clearTimeout(timeout);
   }
-  return sha256CanonicalJson({ projectHealthState, repositoryStatus, trackedDiff });
+  return {
+    hash: sha256CanonicalJson({ projectHealthState, repositoryStatus, trackedDiff }),
+    isExactClean: isEmpty(trackedDiff) && isEmpty(repositoryStatus),
+  };
+}
+
+export async function assertProjectHealthExactCleanCheckoutV1(
+  repositoryRoot: string,
+): Promise<string> {
+  const state = await collectProjectHealthRepositoryStateV1(repositoryRoot);
+  if (!state.isExactClean) {
+    throw new Error("Project Health requires an exact-clean checkout with no tracked or untracked source changes.");
+  }
+  return state.hash;
 }
 
 const PROC_FILE_READ_TIMEOUT_MILLISECONDS = 100;
@@ -618,6 +867,7 @@ interface CapturedProcessV1 {
   readonly stdoutTruncated: boolean;
   readonly stderrTruncated: boolean;
   readonly timedOut: boolean;
+  readonly executionEnvelopeFailed: boolean;
   readonly ownedProcessCleanupFailed: boolean;
   readonly environmentHash: string;
 }
@@ -686,9 +936,21 @@ async function captureProcess(
   }, descriptor.timeoutMilliseconds);
   timeout.unref();
 
-  const closed = await new Promise<{ exitCode: number | null; signal: NodeJS.Signals | null }>((resolve) => {
-    child.once("error", () => resolve({ exitCode: null, signal: null }));
-    child.once("close", (exitCode, signal) => resolve({ exitCode, signal }));
+  const closed = await new Promise<{
+    exitCode: number | null;
+    signal: NodeJS.Signals | null;
+    executionEnvelopeFailed: boolean;
+  }>((resolve) => {
+    child.once("error", () => resolve({
+      exitCode: null,
+      signal: null,
+      executionEnvelopeFailed: true,
+    }));
+    child.once("close", (exitCode, signal) => resolve({
+      exitCode,
+      signal,
+      executionEnvelopeFailed: false,
+    }));
   });
   clearTimeout(timeout);
   if (!isNil(terminationPromise)) await terminationPromise;
@@ -757,6 +1019,7 @@ export async function runProjectHealthProcessV1(input: Readonly<{
     stdoutTruncated: false,
     stderrTruncated: false,
     timedOut: false,
+    executionEnvelopeFailed: false,
     ownedProcessCleanupFailed: false,
     environmentHash: sha256CanonicalJson({}),
   };
@@ -780,7 +1043,7 @@ export async function runProjectHealthProcessV1(input: Readonly<{
       worktreeRootIdentity = await ownedTemporaryDirectoryIdentity(worktreeParentIdentity, worktreeRoot);
       executionRoot = worktreeRoot;
     } else {
-      repositoryStateBeforeHash = await repositoryStateHash(repositoryRoot);
+      repositoryStateBeforeHash = (await collectProjectHealthRepositoryStateV1(repositoryRoot)).hash;
     }
     const cwd = descriptor.workingDirectory === "."
       ? executionRoot
@@ -792,8 +1055,9 @@ export async function runProjectHealthProcessV1(input: Readonly<{
       process.env.HOME ?? "",
     ]);
     if (descriptor.executionScope === "in-place-checkout") {
-      repositoryStateAfterHash = await repositoryStateHash(repositoryRoot);
+      repositoryStateAfterHash = (await collectProjectHealthRepositoryStateV1(repositoryRoot)).hash;
     }
+    if (captured.executionEnvelopeFailed) failureCodes.add("EXECUTION_ENVELOPE_FAILED");
     if (captured.ownedProcessCleanupFailed) failureCodes.add("OWNED_PROCESS_REMOVE_FAILED");
   } catch {
     failureCodes.add("EXECUTION_ENVELOPE_FAILED");
@@ -851,7 +1115,7 @@ export async function runProjectHealthProcessV1(input: Readonly<{
         : captured.exitCode === 0
           ? "passed"
           : "failed";
-  const evidence: ProjectHealthExecutionEvidenceV1 = {
+  const evidence = parseProjectHealthExecutionEvidenceV1({
     kind: "project-health-execution-evidence",
     schemaVersion: 1,
     descriptorId: descriptor.id,
@@ -870,6 +1134,6 @@ export async function runProjectHealthProcessV1(input: Readonly<{
     temporaryWorktreeRemoved,
     temporaryOutputRemoved,
     failureCodes: sortBy([...failureCodes]),
-  };
+  });
   return { evidence, evidenceRef: sha256CanonicalJson(evidence) };
 }

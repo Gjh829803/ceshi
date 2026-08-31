@@ -11,6 +11,7 @@ import { observeVisualEvidenceV1, type VisualEvidenceRecordV1 } from "./visual-e
 const REPOSITORY_ROOT = path.resolve(new URL("../../..", import.meta.url).pathname);
 const COMMIT_SHA = "a".repeat(40);
 const STALE_SHA = "b".repeat(40);
+const SENSOR_IMPLEMENTATION_HASH = `sha256:${"b".repeat(64)}`;
 const IDENTITY = `sha256:${"c".repeat(64)}`;
 
 function readJson(relativePath: string): unknown {
@@ -69,6 +70,7 @@ describe("visual-evidence sensor", () => {
   it("reports incomplete for a stale visual tree identity", () => {
     const observation = observeVisualEvidenceV1({
       profile: parsedProfile(),
+      sensorImplementationHash: SENSOR_IMPLEMENTATION_HASH,
       evidence: evidence({ evidenceCommitSha: STALE_SHA }),
     });
     expect(observation.status).toBe("incomplete");
@@ -81,6 +83,7 @@ describe("visual-evidence sensor", () => {
   it("reports incomplete when a selected Golden is missing a renderer profile", () => {
     const observation = observeVisualEvidenceV1({
       profile: parsedProfile(),
+      sensorImplementationHash: SENSOR_IMPLEMENTATION_HASH,
       evidence: evidence({ rendererProfileId: null }),
     });
     expect(observation.status).toBe("incomplete");
@@ -89,6 +92,7 @@ describe("visual-evidence sensor", () => {
   it("marks an unselected Golden as not-applicable", () => {
     const observation = observeVisualEvidenceV1({
       profile: parsedProfile(),
+      sensorImplementationHash: SENSOR_IMPLEMENTATION_HASH,
       evidence: evidence({ goldenSelected: false, diffRatio: null }),
     });
     expect(observation.status).toBe("not-applicable");
@@ -103,6 +107,7 @@ describe("visual-evidence sensor", () => {
   it("fails a frozen pixel metric above the Profile ratio", () => {
     const observation = observeVisualEvidenceV1({
       profile: parsedProfile(),
+      sensorImplementationHash: SENSOR_IMPLEMENTATION_HASH,
       evidence: evidence({ diffRatio: 0.03 }),
     });
     expect(observation.status).toBe("failed");
@@ -118,6 +123,7 @@ describe("visual-evidence sensor", () => {
   it("passes a frozen Golden at or below the threshold", () => {
     const observation = observeVisualEvidenceV1({
       profile: parsedProfile(),
+      sensorImplementationHash: SENSOR_IMPLEMENTATION_HASH,
       evidence: evidence({ diffRatio: 0.02 }),
     });
     expect(observation.status).toBe("passed");

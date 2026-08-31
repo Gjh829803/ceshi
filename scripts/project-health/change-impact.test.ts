@@ -3,6 +3,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { readFile as readFileAsync } from "node:fs/promises";
 import path from "node:path";
 
+import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -15,6 +16,10 @@ import { parseProjectHealthProfileV1, type ProjectHealthModeV1 } from "./contrac
 const REPOSITORY_ROOT = path.resolve(new URL("../..", import.meta.url).pathname);
 const COMMIT_SHA = "a".repeat(40);
 const BASE_SHA = "b".repeat(40);
+
+function hostInputFingerprint(gateId: string): string {
+  return sha256CanonicalJson({ authority: "host", gateId });
+}
 
 function readJson(relativePath: string): unknown {
   return JSON.parse(readFileSync(path.join(REPOSITORY_ROOT, relativePath), "utf8"));
@@ -136,14 +141,26 @@ function fixtureEvidence(): WorkspaceBoundaryEvidenceV1 {
   });
 }
 
-function planFor(changedPaths: readonly string[], mode: ProjectHealthModeV1 = "pr") {
+function hostInputFingerprints(profile: ReturnType<typeof parsedProfile>) {
+  return Object.fromEntries([
+    ...new Set(Object.values(profile.capabilityGateIdsById).flat()),
+  ].map((gateId) => [gateId, hostInputFingerprint(gateId)]));
+}
+
+function planFor(
+  changedPaths: readonly string[],
+  mode: ProjectHealthModeV1 = "pr",
+  inputFingerprintsByGateId?: Readonly<Record<string, string>>,
+) {
+  const profile = parsedProfile();
   return planChangeImpactV1({
-    profile: parsedProfile(),
+    profile,
     mode,
     commitSha: COMMIT_SHA,
     baseSha: BASE_SHA,
     changedPaths,
     evidence: fixtureEvidence(),
+    inputFingerprintsByGateId: inputFingerprintsByGateId ?? hostInputFingerprints(profile),
   });
 }
 
@@ -176,6 +193,19 @@ describe("change impact planner", () => {
     expect(result.plan.advisoryGateIds).toEqual(["unreleased-clean-break"]);
     expect(result.plan.requiredGateIds).not.toContain("playground-build");
     expect(result.plan.requiredGateIds).not.toContain("canonical");
+    expect(result.plan.inputFingerprintsByGateId).toEqual({
+      "test-contract": hostInputFingerprint("test-contract"),
+      typecheck: hostInputFingerprint("typecheck"),
+      "unreleased-clean-break": hostInputFingerprint("unreleased-clean-break"),
+    });
+  });
+
+  it("fail-closes when the Host omits an affected Gate input fingerprint", () => {
+    expect(() => planFor(
+      ["packages/world-identity/src/local-helper.ts"],
+      "pr",
+      { typecheck: hostInputFingerprint("typecheck") },
+    )).toThrow("Gate test-contract has no Host input fingerprint");
   });
 
   it("expands a public contract export through reverse workspace dependents", () => {

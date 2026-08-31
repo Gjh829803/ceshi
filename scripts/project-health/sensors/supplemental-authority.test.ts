@@ -15,6 +15,7 @@ import { observeSupplementalAuthorityV1 } from "./supplemental-authority";
 
 const REPOSITORY_ROOT = path.resolve(new URL("../../..", import.meta.url).pathname);
 const COMMIT_SHA = "a".repeat(40);
+const SENSOR_IMPLEMENTATION_HASH = `sha256:${"b".repeat(64)}`;
 
 function readJson(relativePath: string): unknown {
   return JSON.parse(readFileSync(path.join(REPOSITORY_ROOT, relativePath), "utf8"));
@@ -77,6 +78,7 @@ describe("supplemental-authority sensor", { timeout: 30_000 }, () => {
     });
     const observation = observeSupplementalAuthorityV1({
       profile: parsedProfile(),
+      sensorImplementationHash: SENSOR_IMPLEMENTATION_HASH,
       evidence,
       authorityPolicy: parsedPolicy(),
     });
@@ -103,6 +105,7 @@ describe("supplemental-authority sensor", { timeout: 30_000 }, () => {
     });
     const observation = observeSupplementalAuthorityV1({
       profile: parsedProfile(),
+      sensorImplementationHash: SENSOR_IMPLEMENTATION_HASH,
       evidence,
       authorityPolicy: parsedPolicy(),
     });
@@ -130,6 +133,7 @@ describe("supplemental-authority sensor", { timeout: 30_000 }, () => {
     });
     const aliasObservation = observeSupplementalAuthorityV1({
       profile: parsedProfile(),
+      sensorImplementationHash: SENSOR_IMPLEMENTATION_HASH,
       evidence: aliased,
       authorityPolicy: parsedPolicy(),
     });
@@ -153,6 +157,7 @@ describe("supplemental-authority sensor", { timeout: 30_000 }, () => {
     });
     const pairObservation = observeSupplementalAuthorityV1({
       profile: parsedProfile(),
+      sensorImplementationHash: SENSOR_IMPLEMENTATION_HASH,
       evidence: paired,
       authorityPolicy: parsedPolicy(),
     });
@@ -175,6 +180,7 @@ describe("supplemental-authority sensor", { timeout: 30_000 }, () => {
     });
     const observation = observeSupplementalAuthorityV1({
       profile: parsedProfile(),
+      sensorImplementationHash: SENSOR_IMPLEMENTATION_HASH,
       evidence,
       authorityPolicy: parsedPolicy(),
     });

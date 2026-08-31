@@ -13,11 +13,6 @@ import {
   type ProjectHealthSupplyChainPolicyV1,
 } from "../contracts";
 
-export const SUPPLY_CHAIN_SENSOR_IMPLEMENTATION_HASH_V1 = sha256CanonicalJson({
-  sensorId: "supply-chain",
-  implementationId: "supply-chain-inventory-v1",
-});
-
 export interface SupplyChainAdvisoryV1 {
   readonly packageName: string;
   readonly version: string;
@@ -88,10 +83,11 @@ function finding(input: {
 
 export function observeSupplyChainV1(input: {
   readonly profile: ProjectHealthProfileV1;
+  readonly sensorImplementationHash: string;
   readonly mode: ProjectHealthModeV1;
   readonly evaluatedOn: string;
   readonly expectedCommitSha: string;
-  readonly policy: ProjectHealthSupplyChainPolicyV1;
+  readonly policy: ProjectHealthSupplyChainPolicyV1 | null;
   readonly inventory: ProjectHealthDependencyInventoryV1 | null;
   readonly lockReceipt: SupplyChainLockReceiptV1 | null;
   readonly advisorySnapshot: SupplyChainAdvisorySnapshotV1 | null;
@@ -100,12 +96,33 @@ export function observeSupplyChainV1(input: {
     mode: input.mode,
     evaluatedOn: input.evaluatedOn,
     expectedCommitSha: input.expectedCommitSha,
+    policy: input.policy,
     inventory: input.inventory,
     lockReceipt: input.lockReceipt,
     advisorySnapshot: input.advisorySnapshot,
   });
   const findings: ProjectHealthFindingV1[] = [];
   const evidenceRefs: string[] = [];
+  if (isNil(input.policy)) {
+    return parseProjectHealthObservationV1({
+      kind: "project-health-observation",
+      schemaVersion: 1,
+      sensorId: "supply-chain",
+      sensorImplementationHash: input.sensorImplementationHash,
+      inputFingerprint,
+      status: "incomplete",
+      metricsById: {
+        "dependency-inventory-complete": {
+          id: "dependency-inventory-complete",
+          kind: "boolean",
+          status: "not-evaluated",
+          reasonCode: "SUPPLY_CHAIN_POLICY_UNAVAILABLE",
+        },
+      },
+      findings: [],
+      evidenceRefs: [],
+    }, input.profile);
+  }
   let metric: ProjectHealthObservationV1["metricsById"][string] = {
     id: "dependency-inventory-complete",
     kind: "boolean",
@@ -159,7 +176,12 @@ export function observeSupplyChainV1(input: {
     }
   }
 
-  if (isNil(input.lockReceipt) || input.lockReceipt.commitSha !== input.expectedCommitSha || input.lockReceipt.passed !== true) {
+  if (
+    !isNil(inventory)
+    && (isNil(input.lockReceipt)
+      || input.lockReceipt.commitSha !== input.expectedCommitSha
+      || input.lockReceipt.passed !== true)
+  ) {
     if (!isNil(input.lockReceipt)) evidenceRefs.push(input.lockReceipt.evidenceRef);
     findings.push(finding({
       code: "PROJECT_HEALTH_DEPENDENCY_PROVENANCE_MISSING",
@@ -234,7 +256,7 @@ export function observeSupplyChainV1(input: {
     kind: "project-health-observation",
     schemaVersion: 1,
     sensorId: "supply-chain",
-    sensorImplementationHash: SUPPLY_CHAIN_SENSOR_IMPLEMENTATION_HASH_V1,
+    sensorImplementationHash: input.sensorImplementationHash,
     inputFingerprint,
     status,
     metricsById: { "dependency-inventory-complete": metric },

@@ -14,13 +14,8 @@ import {
   type ProjectHealthProfileV1,
 } from "../contracts";
 
-export const TEST_TOPOLOGY_SENSOR_IMPLEMENTATION_HASH_V1 = sha256CanonicalJson({
-  sensorId: "test-topology",
-  implementationId: "test-topology-change-impact-v1",
-});
-
 function finding(input: {
-  readonly code: "PROJECT_HEALTH_TEST_UNREGISTERED" | "PROJECT_HEALTH_GATE_RECEIPT_STALE" | "PROJECT_HEALTH_CAPABILITY_UNREGISTERED";
+  readonly code: "PROJECT_HEALTH_TEST_UNREGISTERED" | "PROJECT_HEALTH_GATE_RECEIPT_STALE" | "PROJECT_HEALTH_GATE_FAILED" | "PROJECT_HEALTH_CAPABILITY_UNREGISTERED";
   readonly ownerId: string;
   readonly subjectRefs: readonly string[];
   readonly evidenceClassIds: readonly ["test-census"] | readonly ["gate-receipt"];
@@ -59,15 +54,48 @@ function isTestPath(filePath: string): boolean {
 
 export function observeTestTopologyV1(input: {
   readonly profile: ProjectHealthProfileV1;
+  readonly sensorImplementationHash: string;
   readonly mode: ProjectHealthModeV1;
-  readonly impact: ChangeImpactResultV1;
-  readonly census: Pick<TestGateCensusReportV1, "rootTestFiles">;
+  readonly impact: ChangeImpactResultV1 | null;
+  readonly census: Pick<TestGateCensusReportV1, "rootTestFiles"> | null;
+  readonly requiredGateIds: readonly string[];
   readonly receipts: readonly ProjectHealthGateReceiptV1[];
   readonly expectedCommitSha: string;
   readonly requestedHeadSha: string;
   readonly checkoutSha: string;
   readonly isMergeCommit: boolean;
 }): ProjectHealthObservationV1 {
+  if (isNil(input.impact)) {
+    const inputFingerprint = sha256CanonicalJson({
+      mode: input.mode,
+      impact: null,
+      censusRootTestFiles: input.census?.rootTestFiles ?? null,
+      requiredGateIds: input.requiredGateIds,
+      receipts: input.receipts,
+      expectedCommitSha: input.expectedCommitSha,
+      requestedHeadSha: input.requestedHeadSha,
+      checkoutSha: input.checkoutSha,
+      isMergeCommit: input.isMergeCommit,
+    });
+    return parseProjectHealthObservationV1({
+      kind: "project-health-observation",
+      schemaVersion: 1,
+      sensorId: "test-topology",
+      sensorImplementationHash: input.sensorImplementationHash,
+      inputFingerprint,
+      status: "incomplete",
+      metricsById: {
+        "test-census-current": {
+          id: "test-census-current",
+          kind: "boolean",
+          status: "not-evaluated",
+          reasonCode: "OWNER_COMMAND_NOT_RUN",
+        },
+      },
+      findings: [],
+      evidenceRefs: input.receipts.map((receipt) => receipt.evidenceRef),
+    }, input.profile);
+  }
   const evidenceRefs = [
     ...Object.values(input.impact.plan.inputFingerprintsByGateId),
     ...input.receipts.map((receipt) => receipt.evidenceRef),
@@ -76,7 +104,8 @@ export function observeTestTopologyV1(input: {
     mode: input.mode,
     plan: input.impact.plan,
     unregisteredPaths: input.impact.unregisteredPaths,
-    censusRootTestFiles: input.census.rootTestFiles,
+    censusRootTestFiles: input.census?.rootTestFiles ?? null,
+    requiredGateIds: input.requiredGateIds,
     receipts: input.receipts,
     expectedCommitSha: input.expectedCommitSha,
     requestedHeadSha: input.requestedHeadSha,
@@ -85,7 +114,7 @@ export function observeTestTopologyV1(input: {
   });
   const findings: ProjectHealthFindingV1[] = [];
   const registeredTests = new Set(TEST_GATE_MANIFEST_V1.map((entry) => entry.path));
-  let censusCurrent = true;
+  let censusCurrent = !isNil(input.census);
 
   for (const filePath of input.impact.unregisteredPaths) {
     findings.push(finding({
@@ -101,7 +130,7 @@ export function observeTestTopologyV1(input: {
   }
 
   const changedTestPaths = Object.keys(input.impact.matchedCapabilityIdsByPath).filter(isTestPath);
-  for (const filePath of uniq([...changedTestPaths, ...input.census.rootTestFiles])) {
+  for (const filePath of uniq([...changedTestPaths, ...(input.census?.rootTestFiles ?? [])])) {
     if (registeredTests.has(filePath)) continue;
     censusCurrent = false;
     findings.push(finding({
@@ -134,15 +163,28 @@ export function observeTestTopologyV1(input: {
   }
 
   const receiptsByGateId = new Map(input.receipts.map((receipt) => [receipt.gateId, receipt]));
-  for (const gateId of input.impact.plan.requiredGateIds) {
+  let hasFailedGate = false;
+  let hasIncompleteGate = false;
+  for (const gateId of uniq([...input.requiredGateIds, ...input.impact.plan.requiredGateIds])) {
     const receipt = receiptsByGateId.get(gateId);
     const expectedFingerprint = input.impact.plan.inputFingerprintsByGateId[gateId];
-    if (
-      isNil(receipt) ||
-      receipt.commitSha !== input.expectedCommitSha ||
-      receipt.inputFingerprint !== expectedFingerprint ||
-      receipt.status !== "passed"
-    ) {
+    if (isNil(receipt) || receipt.status === "incomplete") hasIncompleteGate = true;
+    if (receipt?.status === "failed") hasFailedGate = true;
+    const identityIsStale = isNil(receipt)
+      || receipt.commitSha !== input.expectedCommitSha
+      || (!isNil(expectedFingerprint) && receipt.inputFingerprint !== expectedFingerprint);
+    if (!identityIsStale && receipt.status === "failed") {
+      findings.push(finding({
+        code: "PROJECT_HEALTH_GATE_FAILED",
+        ownerId: "test-topology",
+        subjectRefs: [`gate:${gateId}`],
+        evidenceClassIds: ["gate-receipt"],
+        evidenceRefs: [receipt.evidenceRef],
+        expected: "Every current required test Gate must pass on the exact requested head.",
+        impact: "A current test Gate failure is a product or contract regression, not stale evidence.",
+        suggestedGateId: gateId,
+      }));
+    } else if (isNil(receipt) || identityIsStale || receipt.status !== "passed") {
       findings.push(finding({
         code: "PROJECT_HEALTH_GATE_RECEIPT_STALE",
         ownerId: "test-topology",
@@ -160,7 +202,7 @@ export function observeTestTopologyV1(input: {
     input.checkoutSha !== input.requestedHeadSha ||
     input.checkoutSha !== input.expectedCommitSha ||
     input.isMergeCommit === true;
-  const metric = checkoutMismatched
+  const metric = checkoutMismatched || hasIncompleteGate || (isNil(input.census) && !hasFailedGate)
     ? {
         id: "test-census-current",
         kind: "boolean" as const,
@@ -183,7 +225,7 @@ export function observeTestTopologyV1(input: {
     kind: "project-health-observation",
     schemaVersion: 1,
     sensorId: "test-topology",
-    sensorImplementationHash: TEST_TOPOLOGY_SENSOR_IMPLEMENTATION_HASH_V1,
+    sensorImplementationHash: input.sensorImplementationHash,
     inputFingerprint,
     status,
     metricsById: { "test-census-current": metric },

@@ -15,11 +15,6 @@ import {
   type RuntimeProbeEvidenceV1,
 } from "../runtime-probe-registry";
 
-export const RUNTIME_HEALTH_SENSOR_IMPLEMENTATION_HASH_V1 = sha256CanonicalJson({
-  sensorId: "runtime-health",
-  implementationId: "runtime-probe-evidence-v1",
-});
-
 function finding(input: {
   readonly code: "PROJECT_HEALTH_RUNTIME_OWNER_LEAK" | "PROJECT_HEALTH_RUNTIME_NONDETERMINISTIC";
   readonly evidenceClassIds: readonly ["runtime-owner-count"] | readonly ["runtime-determinism"];
@@ -61,6 +56,7 @@ function hashesMismatch(hashes: readonly string[]): boolean {
 
 export function observeRuntimeHealthV1(input: {
   readonly profile: ProjectHealthProfileV1;
+  readonly sensorImplementationHash: string;
   readonly mode: ProjectHealthModeV1;
   readonly evidences: readonly RuntimeProbeEvidenceV1[] | null;
 }): ProjectHealthObservationV1 {
@@ -81,7 +77,7 @@ export function observeRuntimeHealthV1(input: {
       kind: "project-health-observation",
       schemaVersion: 1,
       sensorId: "runtime-health",
-      sensorImplementationHash: RUNTIME_HEALTH_SENSOR_IMPLEMENTATION_HASH_V1,
+      sensorImplementationHash: input.sensorImplementationHash,
       inputFingerprint,
       status: "incomplete",
       metricsById: {
@@ -148,7 +144,7 @@ export function observeRuntimeHealthV1(input: {
     kind: "project-health-observation",
     schemaVersion: 1,
     sensorId: "runtime-health",
-    sensorImplementationHash: RUNTIME_HEALTH_SENSOR_IMPLEMENTATION_HASH_V1,
+    sensorImplementationHash: input.sensorImplementationHash,
     inputFingerprint,
     status,
     metricsById: {

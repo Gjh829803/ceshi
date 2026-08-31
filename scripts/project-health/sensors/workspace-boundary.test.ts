@@ -12,6 +12,7 @@ import { observeWorkspaceBoundaryV1 } from "./workspace-boundary";
 
 const REPOSITORY_ROOT = path.resolve(new URL("../../..", import.meta.url).pathname);
 const COMMIT_SHA = "a".repeat(40);
+const SENSOR_IMPLEMENTATION_HASH = `sha256:${"b".repeat(64)}`;
 const roots: string[] = [];
 
 afterEach(async () => {
@@ -81,7 +82,13 @@ describe("workspace-boundary sensor", { timeout: 30_000 }, () => {
       repositoryRoot: REPOSITORY_ROOT,
       commitSha: COMMIT_SHA,
     });
-    const observation = observeWorkspaceBoundaryV1({ profile: parsedProfile(), evidence });
+    const observation = observeWorkspaceBoundaryV1({
+      profile: parsedProfile(),
+      evidence,
+      sensorImplementationHash: SENSOR_IMPLEMENTATION_HASH,
+      ownerGate: { executionStatus: "passed", evidenceRef: SENSOR_IMPLEMENTATION_HASH },
+    });
+    expect(observation.sensorImplementationHash).toBe(SENSOR_IMPLEMENTATION_HASH);
     expect(observation.status).toBe("passed");
     expect(observation.findings).toEqual([]);
     expect(observation.metricsById["workspace-boundary-debt-count"]).toEqual({
@@ -94,11 +101,32 @@ describe("workspace-boundary sensor", { timeout: 30_000 }, () => {
   it("emits a blocking Finding for an unregistered workspace edge", async () => {
     const root = await fixture('import "@fixture/b";\n');
     const evidence = await scanWorkspaceBoundaries({ repositoryRoot: root, commitSha: COMMIT_SHA });
-    const observation = observeWorkspaceBoundaryV1({ profile: parsedProfile(), evidence });
+    const observation = observeWorkspaceBoundaryV1({
+      profile: parsedProfile(),
+      evidence,
+      sensorImplementationHash: SENSOR_IMPLEMENTATION_HASH,
+      ownerGate: { executionStatus: "passed", evidenceRef: SENSOR_IMPLEMENTATION_HASH },
+    });
     expect(observation.status).toBe("failed");
     expect(observation.findings[0]?.code).toBe("PROJECT_HEALTH_WORKSPACE_BOUNDARY_VIOLATION");
     expect(observation.findings[0]?.policy).toBe("blocking-p1");
     expect(observation.findings[0]?.evidenceClassIds).toEqual(["workspace-edge"]);
     expect(observation.findings[0]?.ownerId).toBe("workspace-boundary");
+  });
+
+  it("cannot turn a failed Owner Gate into a passed Observation from otherwise clean graph evidence", async () => {
+    const evidence = await scanWorkspaceBoundaries({
+      repositoryRoot: REPOSITORY_ROOT,
+      commitSha: COMMIT_SHA,
+    });
+    const observation = observeWorkspaceBoundaryV1({
+      profile: parsedProfile(),
+      evidence,
+      sensorImplementationHash: SENSOR_IMPLEMENTATION_HASH,
+      ownerGate: { executionStatus: "failed", evidenceRef: SENSOR_IMPLEMENTATION_HASH },
+    });
+    expect(observation.status).toBe("failed");
+    expect(observation.findings.some((finding) =>
+      finding.code === "PROJECT_HEALTH_WORKSPACE_BOUNDARY_GATE_FAILED")).toBe(true);
   });
 });

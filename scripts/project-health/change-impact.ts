@@ -105,26 +105,19 @@ export function planChangeImpactV1(input: {
   readonly baseSha: string | null;
   readonly changedPaths: readonly string[];
   readonly evidence: WorkspaceBoundaryEvidenceV1;
+  readonly inputFingerprintsByGateId: Readonly<Record<string, string>>;
 }): ChangeImpactResultV1 {
   const changedPaths = sortBy(uniq(input.changedPaths.map((entry) => parseRepositoryRelativePathV1(entry, false))));
   const publicSourcePaths = new Set(input.evidence.publicSymbols.map((entry) => entry.sourcePath));
   const matchedCapabilityIdsByPath: Record<string, string[]> = {};
   const unregisteredPaths: string[] = [];
   const reasonsByGateId = new Map<string, string[]>();
-  const pathsByGateId = new Map<string, string[]>();
-  const capabilitiesByGateId = new Map<string, string[]>();
 
   const hitCapability = (
-    capabilityId: string,
     gateId: string,
     reason: string,
-    filePath: string | null,
   ): void => {
     reasonsByGateId.set(gateId, uniq([...(reasonsByGateId.get(gateId) ?? []), reason]));
-    capabilitiesByGateId.set(gateId, uniq([...(capabilitiesByGateId.get(gateId) ?? []), capabilityId]));
-    if (!isNil(filePath)) {
-      pathsByGateId.set(gateId, uniq([...(pathsByGateId.get(gateId) ?? []), filePath]));
-    }
   };
 
   for (const filePath of changedPaths) {
@@ -134,7 +127,7 @@ export function planChangeImpactV1(input: {
       if (!pathMatchesSelector(filePath, selector, packageId)) continue;
       matched.push(capabilityId);
       for (const gateId of input.profile.capabilityGateIdsById[capabilityId] ?? []) {
-        hitCapability(capabilityId, gateId, capabilityReasonCode(capabilityId), filePath);
+        hitCapability(gateId, capabilityReasonCode(capabilityId));
       }
     }
     matchedCapabilityIdsByPath[filePath] = sortBy(matched);
@@ -154,11 +147,16 @@ export function planChangeImpactV1(input: {
     const hit = selector.packageIds.some((packageId) => reversePackageIds.includes(packageId));
     if (!hit) continue;
     for (const gateId of input.profile.capabilityGateIdsById[capabilityId] ?? []) {
-      hitCapability(capabilityId, gateId, "REVERSE_WORKSPACE_DEPENDENCY", null);
+      hitCapability(gateId, "REVERSE_WORKSPACE_DEPENDENCY");
     }
   }
 
   const affectedGateIds = sortBy([...reasonsByGateId.keys()]);
+  for (const gateId of affectedGateIds) {
+    if (isNil(input.inputFingerprintsByGateId[gateId])) {
+      throw new TypeError(`Gate ${gateId} has no Host input fingerprint.`);
+    }
+  }
   const requiredUnion = requiredGateUnion(input.profile, input.mode);
   const requiredGateIds = affectedGateIds.filter((gateId) => requiredUnion.has(gateId));
   const advisoryGateIds = affectedGateIds.filter((gateId) => !requiredUnion.has(gateId));
@@ -175,13 +173,7 @@ export function planChangeImpactV1(input: {
     ])),
     inputFingerprintsByGateId: Object.fromEntries(affectedGateIds.map((gateId) => [
       gateId,
-      sha256CanonicalJson({
-        gateId,
-        commitSha: input.commitSha,
-        baseSha: input.baseSha,
-        changedPaths: sortBy(pathsByGateId.get(gateId) ?? []),
-        capabilityIds: sortBy(capabilitiesByGateId.get(gateId) ?? []),
-      }),
+      input.inputFingerprintsByGateId[gateId],
     ])),
   });
   return {

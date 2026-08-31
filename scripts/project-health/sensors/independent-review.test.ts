@@ -18,6 +18,7 @@ const REPOSITORY_ROOT = path.resolve(new URL("../../..", import.meta.url).pathna
 const COMMIT_SHA = "a".repeat(40);
 const WRONG_SHA = "b".repeat(40);
 const HASH_A = `sha256:${"a".repeat(64)}`;
+const SENSOR_IMPLEMENTATION_HASH = `sha256:${"b".repeat(64)}`;
 
 const CANDIDATE: ProjectHealthFindingV1 = {
   kind: "project-health-finding",
@@ -98,6 +99,7 @@ describe("independent-review sensor", () => {
     expect(source).not.toMatch(/\bGO\b/);
     const observation = observeIndependentReviewV1({
       profile: parsedProfile(),
+      sensorImplementationHash: SENSOR_IMPLEMENTATION_HASH,
       expectedCommitSha: COMMIT_SHA,
       receipt: receipt(),
       timedOut: false,
@@ -113,6 +115,7 @@ describe("independent-review sensor", () => {
   it("reports incomplete for a review bound to the wrong SHA", () => {
     const observation = observeIndependentReviewV1({
       profile: parsedProfile(),
+      sensorImplementationHash: SENSOR_IMPLEMENTATION_HASH,
       expectedCommitSha: COMMIT_SHA,
       receipt: receipt({ commitSha: WRONG_SHA }),
       timedOut: false,
@@ -124,6 +127,7 @@ describe("independent-review sensor", () => {
   it("reports incomplete when the review times out", () => {
     const observation = observeIndependentReviewV1({
       profile: parsedProfile(),
+      sensorImplementationHash: SENSOR_IMPLEMENTATION_HASH,
       expectedCommitSha: COMMIT_SHA,
       receipt: null,
       timedOut: true,
@@ -136,6 +140,7 @@ describe("independent-review sensor", () => {
   it("promotes a Host-confirmed AI P1 to a Blocking Finding", () => {
     const observation = observeIndependentReviewV1({
       profile: parsedProfile(),
+      sensorImplementationHash: SENSOR_IMPLEMENTATION_HASH,
       expectedCommitSha: COMMIT_SHA,
       receipt: receipt({
         candidateFindings: [CANDIDATE],
@@ -156,6 +161,7 @@ describe("independent-review sensor", () => {
   it("stays incomplete while a candidate is pending Host review", () => {
     const observation = observeIndependentReviewV1({
       profile: parsedProfile(),
+      sensorImplementationHash: SENSOR_IMPLEMENTATION_HASH,
       expectedCommitSha: COMMIT_SHA,
       receipt: receipt({
         status: "incomplete",
