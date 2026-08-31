@@ -1,174 +1,131 @@
-# Unified Scene Viewer Clean-Break Design
+# WRC-Aligned Unified Scene Viewer Design
 
-## 1. Decision
+**Status:** supporting developer-tool proposal; not a WRC-1 authority
 
-The repository has one developer-facing scene runtime: `apps/playground`.
-It displays already-built worlds, lets a user switch among a small curated set,
-and supplies the shared G Bot movement, Action, Camera, and traversal-tuning
-surface. It does not author scene geometry and it does not scan generation
-workspaces.
+**WRC authority:** `docs/superpowers/specs/2026-08-30-wrc1-world-reconstruction-and-control-milestone-design.md`
 
-`artifacts/scenes` remains a pipeline-owned output root. It is not an
-application, a scene catalog, or a public asset root. A scene becomes visible
-in the Viewer only through an explicit, validated promotion into the stable
-Scene Catalog.
+**Live status authority:** `docs/18-refactor-progress-and-backlog.md`
 
-The accepted tree contains no legacy/new compatibility layer. The old
-`OutdoorSceneDefinition` catalog, the independent product-facing Native Scene
-Playground, duplicate root developer scripts, and their old routes are deleted
-or migrated in the same change.
+## 1. Decision and authority
+
+`apps/playground` becomes the repository's one developer-facing Scene Viewer. It displays an existing
+world, selects among a small curated set of tuning presets, and exposes the shared G Bot movement,
+Action, Camera and traversal workbench. It does not author geometry or own Gameplay state.
+
+This design is downstream of WRC-1. It introduces no Runtime, Scene Source, WorldPackage format,
+Compiler, Browser protocol, Gameplay owner, production admission path or WRC work package. It consumes
+Canonical AuthoringSpec or an admitted Native WorldPackage through the existing one
+RuntimeHost/Babylon/Havok kernel. If this document conflicts with WRC-1 or a domain authority, this
+Viewer design changes.
 
 ## 2. Product outcome
 
-Running `pnpm dev` opens one page with:
+`pnpm dev` opens the Viewer with G Bot in `feel-flat`. A selector exposes exactly three maintained
+product-tuning presets:
 
-- a scene selector containing only maintained tuning presets;
-- G Bot as the default controlled Subject;
-- the existing Subject, Motion, Control Feel, Action, and Camera workbench;
-- reset, capture, Runtime Snapshot, and traversal diagnostics;
-- one Runtime/Browser contract regardless of the selected Scene Source.
+1. `feel-flat`: acceleration, deceleration, turning, jump and Camera tuning;
+2. `traversal-course`: slopes, steps, narrow passages, ledges and blockers;
+3. `action-lab`: admitted local Action closure and interaction targets.
 
-The initial catalog contains exactly three purposes, not showcase scenes:
+These are not WRC acceptance cases. WRC-1's mountain/T-space, stairs/building/limited-interior and
+interactive reconstruction cases keep their own corpus identities and evidence.
 
-1. `feel-flat`: unobstructed acceleration, deceleration, turning, jump, and
-   Camera tuning;
-2. `traversal-course`: slopes, steps, narrow passages, ledges, and blockers;
-3. `action-lab`: the maintained local Action closure and interaction targets.
+## 3. Source and catalog model
 
-Names are purpose-based so visual reconstruction cases never become permanent
-product presets merely because they were generated once.
-
-## 3. Source model
-
-Each catalog entry selects exactly one existing Runtime Scene Source:
+The catalog is internal development-tool metadata, not a third Scene Source or public Runtime
+protocol. A catalog entry selects exactly one existing source:
 
 ```ts
-export type SceneCatalogEntryV1 =
-  | {
-      readonly id: string;
-      readonly title: string;
-      readonly purpose: "feel" | "traversal" | "action";
-      readonly source: {
-        readonly kind: "canonical-authoring";
-        readonly authoringSpecPath: string;
-      };
-      readonly defaultSubjectDefinitionRef:
-        "worldkit://subject-definition/humanoid.g-bot@2";
-    }
-  | {
-      readonly id: string;
-      readonly title: string;
-      readonly purpose: "feel" | "traversal" | "action";
-      readonly source: {
-        readonly kind: "babylon-native-package";
-        readonly worldPackageRef: string;
-      };
-      readonly defaultSubjectDefinitionRef:
-        "worldkit://subject-definition/humanoid.g-bot@2";
-    };
+type SceneCatalogEntryV1 = Readonly<{
+  id: string;
+  title: string;
+  purpose: "feel" | "traversal" | "action";
+  source:
+    | Readonly<{ kind: "canonical-authoring"; authoringSpecPath: string }>
+    | Readonly<{ kind: "babylon-native-package"; worldPackageRef: string }>;
+  defaultSubjectDefinitionRef:
+    "worldkit://subject-definition/humanoid.g-bot@2";
+}>;
 ```
 
-The catalog never references raw files under `artifacts/scenes`. Canonical
-entries reference immutable promoted AuthoringSpec JSON. Native entries
-reference a verified WorldPackage, never a TypeScript source path or arbitrary
-Browser-loaded code. The Native variant is admitted to the public catalog only
-after the BNA Trusted Local gates required by ADR-0007 pass; until then the
-Native implementation remains a verification harness, not a Viewer entry.
+Canonical presets reference validated stable JSON under `scenes/presets`. Native entries reference a
+verified WorldPackage, never a TypeScript path or Browser-loaded source. Native catalog discovery is
+disabled until the applicable BNA production/admission disposition permits that exact claim.
+
+`worldkit run <world.json>`, Studio and trusted Capture may open a Host-selected temporary source in
+the same Viewer without adding it to the curated catalog.
 
 ## 4. Directory ownership
 
 ```text
-apps/playground/                  one Viewer UI and Browser Runtime
-packages/scene-catalog/           catalog schema, validator, loader, manifest
-scenes/presets/<scene-id>/        promoted stable scene inputs
-artifacts/scenes/<case-id>/       replaceable pipeline outputs and receipts
-scripts/scenes/promote-preset.ts  sole artifacts -> preset promotion owner
+apps/playground/                  one Viewer UI; no Gameplay authority
+packages/scene-catalog/           internal development metadata validation
+scenes/presets/<scene-id>/        stable product-tuning AuthoringSpec inputs
+artifacts/scenes/<case-id>/       WRC pipeline outputs, receipts and active evidence
+scripts/scenes/promote-preset.ts  sole curated-preset publication owner
 ```
 
-For a Canonical preset, `scenes/presets/<id>/world.json` is the sole runtime
-source. Public planning images are optional catalog metadata, not a second
-world definition. Formal workflow receipts stay under `artifacts/scenes` and
-are never shipped to the Viewer.
+`artifacts/scenes` is not another application, but it remains an active WRC evidence root. Capture,
+Receipt, reconstruction scoring and acceptance-corpus material stay with their current owner while
+required. Formal receipts never become Viewer catalog metadata.
 
-Test-only Native and receipt corpora move beside their owning verifier under a
-`fixtures/` directory. No production verification test depends on a historical
-user case under `artifacts/scenes`.
+## 5. Viewer transport and responsibility boundary
 
-## 5. One bootstrap and one route
+The Viewer uses one internal Host bootstrap transport and the page route `/?scene=<preset-id>`. The
+transport projects catalog metadata and one already selected Canonical or admitted Native source. It
+does not expose filesystem paths and does not become a new Browser protocol or Scene Source.
 
-The Viewer uses one startup endpoint and one URL parameter:
+Scene reconstruction owns source bytes, static geometry, Spawn intent, visuals and declared static
+traversal surfaces. Runtime owners keep normalized Input, CharacterMovement, Gameplay state, Action,
+Camera, Havok bodies, fixed Tick, Snapshot, Hash, Reset, Replay and Rollback. The Viewer only composes
+the UI and invokes existing Host/runtime owners.
 
-```text
-GET /__worldkit/viewer-bootstrap?scene=<scene-id>
-```
+## 6. Incremental integration
 
-The response is a closed union containing catalog metadata plus either a
-Canonical AuthoringSpec bootstrap or an already-verified Native WorldPackage
-bootstrap. It never returns filesystem paths.
+This work follows WRC-1's small-checkpoint rule:
 
-The page route is `/?scene=<scene-id>`. The default is `feel-flat`. The old
-`?authoring=1`, `?artifact=1`, catalog-gameplay route, and product-facing
-Native Playground route do not survive as alternate public entry modes.
-Trusted capture and Studio preview call the same bootstrap contract with a
-Host-selected Scene identity; they do not select another frontend.
+- **Checkpoint A — Viewer and presets:** one Viewer, default G Bot, three Canonical tuning presets.
+  It deletes no WRC/BNA corpus, Harness, Studio route, Capture path or verifier fixture.
+- **Checkpoint B — Host consumer migration:** Studio, Capture and `worldkit run` use the same Viewer
+  shell while retaining their existing authority and evidence contracts.
+- **Checkpoint C — proven-obsolete cleanup:** remove old Web entries and cases only after an exact
+  reference census and the relevant WRC/BNA owner confirm every current consumer has migrated.
 
-## 6. Responsibility boundary
+Each checkpoint is independently useful, reviewed and merged to `main` before the next begins. This
+is not a long-lived replacement branch.
 
-Scene reconstruction owns Scene Source bytes, static geometry, Spawn intent,
-visuals, and declared static traversal surfaces. It cannot own Subject Motion,
-Input, Camera, Gameplay state, or physics bodies.
+## 7. Deletion policy
 
-Product tuning owns G Bot Subject Definition selection and the existing
-Control Feel, Motion, Action, and Camera profiles. A tuning draft can replace
-the selected Subject closure for the running session without rewriting the
-scene source. Exported tuning candidates remain profile artifacts, not scene
-geometry changes.
+A path is eligible for Checkpoint C deletion only when all of these are true:
 
-The Viewer consumes both responsibilities and owns neither.
+- production and test reference census is zero;
+- it is not an active WRC acceptance case, Capture, Receipt or reconstruction-score input;
+- any identity-bound verifier fixture has moved through its owning generator and integrity checks;
+- removing it does not weaken BNA admission, isolation or production-disposition evidence;
+- affected owner gates pass on the exact candidate tree.
 
-## 7. Deletion and migration policy
-
-Delete from the accepted tree:
-
-- the old `apps/playground/src/scenes` OutdoorScene catalog and its `?scene=`
-  compiler bridge after the three presets are represented by stable JSON;
-- Azure Bay, Canyon showcase form, Mistbound Rider, Sunlit Flower Bay,
-  `world-08170639-54db`, and their registered/public duplicate assets;
-- tracked historical cases under `artifacts/scenes` after any still-required
-  verifier evidence is moved to owner-local fixtures;
-- root aliases `dev:g-bot`, `dev:g-bot:refresh`, `dev:catalog`,
-  `dev:native-scene`, `dev:alpha-local-actions`, and its refresh alias;
-- the independent Native Playground as a public app after its Host/provider
-  code is migrated to the owning package/test harness;
-- documentation and tests that describe removed routes or directories as
-  current product entry points.
-
-Do not retain redirects, deprecated exports, fallback route parsing, or old
-script aliases.
+Eligible targets may include the old OutdoorScene public catalog, obsolete showcase assets, duplicate
+root Viewer aliases and the independent Native Web UI. Native provider code and verification Harnesses
+must first move to their owning packages. No redirect, alias, fallback parser or dual route survives a
+completed migration.
 
 ## 8. Work graph
 
-| ID | Goal and deliverable | depends_on | blocks | Exclusive ownership | Input / output contract | Verification | Mode |
-|---|---|---|---|---|---|---|---|
-| USV-1 | Freeze `SceneCatalogEntryV1` and Viewer Bootstrap V1 | none | USV-2, USV-3 | `packages/scene-catalog`, bootstrap types | manifest bytes -> validated closed catalog/bootstrap | schema and adversarial parser tests | main-agent-only |
-| USV-2 | Promote three purpose-built Canonical presets | USV-1 | USV-3, USV-4 | `scenes/presets`, promotion command | accepted AuthoringSpec -> immutable preset | validate/build/load each preset | sequential |
-| USV-3 | Make `apps/playground` the sole Viewer with selector and G Bot tuning | USV-1, USV-2 | USV-4, USV-5 | Playground route, startup, UI | Viewer Bootstrap -> one Runtime session | real-browser switch/reset/tuning tests | sequential |
-| USV-4 | Migrate Studio, capture, and trusted `worldkit run` to Viewer Bootstrap | USV-3 | USV-5 | Studio proxy, CLI server, capture launch | Host-selected source -> same bootstrap | CLI, Studio, capture integration tests | sequential |
-| USV-5 | Remove old catalog, public assets, scripts, tracked cases, and Native public app | USV-3, USV-4 | USV-6 | legacy paths and references | no legacy inputs; deleted outputs | repository census and negative searches | main-agent-only |
-| USV-6 | Full integration and main merge | USV-5 | none | final tree and Git integration | exact clean tree -> main | typecheck, root test, Studio test, builds, Browser smoke | main-agent-only |
+| ID | Deliverable | depends_on | Exclusive owner | Verification | Mode |
+|---|---|---|---|---|---|
+| USV-A1 | closed internal preset catalog projection | none | `packages/scene-catalog` | adversarial parser tests | main-agent-only |
+| USV-A2 | three validated Canonical G Bot presets | USV-A1 | `scenes/presets`, promotion command | validate/build/headless load | sequential |
+| USV-A3 | default one-Viewer startup, selector and tuning | USV-A1, USV-A2 | Playground startup/UI | browser switch/reset/tuning | sequential |
+| USV-B1 | Studio/Capture/CLI use the same Viewer | USV-A3 | existing Host owners | owner integration gates | separate checkpoint |
+| USV-C1 | delete only proven-obsolete entries | USV-B1 plus WRC/BNA owner sign-off | legacy paths only | census plus owner gates | separate checkpoint, main-agent-only |
 
-## 9. Acceptance gates
+## 9. Checkpoint A acceptance
 
-- `pnpm dev` prints and serves exactly one Viewer URL.
-- The initial page shows G Bot in `feel-flat`, never the red capsule.
-- Switching among all three entries creates one fresh Runtime session and
-  keeps the tuning workbench available.
-- Unknown, inherited, malformed, or unpromoted scene IDs fail closed.
-- No root `dev:*` product alias remains.
-- No production source imports the deleted OutdoorScene catalog.
-- No current test or verifier consumes a tracked historical user case from
-  `artifacts/scenes`.
-- `apps/native-scene-playground` is absent from the final accepted tree; any
-  retained Native test harness is package-owned and has no root dev command.
-- Repository typecheck, root tests, Studio tests, production builds, and a
-  rendered Browser switch/reset smoke all pass on the exact merged tree.
+- `pnpm dev` serves one Viewer URL and loads `feel-flat`.
+- The controlled Subject is `humanoid.g-bot@2`, never the red capsule.
+- All three presets switch through fresh existing RuntimeHost sessions and retain the tuning workbench.
+- Unknown, inherited, malformed or unpromoted preset IDs fail closed.
+- WRC active corpus, Capture, Receipt and reconstruction evidence remain unchanged and available.
+- No Native production claim is added.
+- Focused tests, typecheck, Playground build and rendered Browser switch/reset smoke pass on the exact
+  Checkpoint A tree.
