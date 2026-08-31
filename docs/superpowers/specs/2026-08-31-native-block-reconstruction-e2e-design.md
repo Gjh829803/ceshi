@@ -402,9 +402,16 @@ Case target/class/identity color/bounds, and every Collider to its source Block.
 authoring Manifest's Native Block Profile ref and is never an alias for the scene profile. The materializer
 creates a Host-private explicit `runtimeEntityId -> Mesh` and `visualGroupId -> Mesh[]` live-handle registry
 from the same checked records. NBR-45B may consume only those handles plus verified Package metadata; it
-never scans Mesh metadata, names, tags or `scene.meshes`. `FormalSemanticCaptureMapV1` remains only the Case
-target/traversal semantic mapping and consumes the verified Package metadata rather than raw Manifest or
-Layout inputs.
+never scans Mesh metadata, names, tags or `scene.meshes`. `FormalSemanticCaptureMapV1` remains the sole
+Case-to-Capture semantic mapping. It consumes verified Package metadata rather than raw Manifest or Layout
+inputs and explicitly binds each accepted visual group to its Case acceptance target, opening-composition
+target, topology node and semantic layer. Those bindings are authored Capture intent and are checked against
+the complete Case target sets and Package metadata; no binding may be inferred from a URI suffix, Block/group
+name, expected screen rectangle, Mesh metadata, tag or Scene scan. The map also freezes the topology relations
+that Capture must verify from measured Package bounds, SDK support/collider state or scripted traversal. A
+relation that the current Capture profile cannot measure is missing evidence rather than a copy of Case
+expectations. This extends the existing semantic map; it is not a second Package identity inventory and does
+not change the AI generation request already in flight.
 
 The current trusted artifact `worldkit capture` evidence command is extended source-neutrally to accept a
 verified WorldPackage directory. It starts the same admitted BNA Runtime session through the verification
@@ -418,21 +425,47 @@ Harness/isolated port, not the product Viewer shell, waits for Browser/Runtime r
 
 The source-neutral artifact request union gains an explicit `world-side` orthographic pose. The hosted
 isolated Runtime session gains one bounded Capture transaction that accepts only a parsed formal request,
-executes opening/top-down/world-side/control/overlay capture against the same verified Package/session,
-and returns content bytes plus identity metadata. It cannot expose a general Camera or Scene handle.
+executes ready, Host reset/rebind, render-ready, opening/top-down/world-side/overlay/support/traversal and
+Camera rollback against the same admitted Package and Runtime session, and returns content bytes plus measured
+identity data. Reset keeps `runtimeSessionId` stable, allocates a fresh `worldSessionId` through the existing
+`RuntimeHost`, atomically publishes the reset Candidate and disposes the previous world only after publication.
+The retained isolated Runtime entry may own at most the current and one reset Candidate handle while the swap
+is in flight; it must not create a second RuntimeHost, Gameplay owner, Camera owner, Physics owner or product
+Browser protocol. The transaction cannot expose a general Camera, Scene, Engine or input handle.
 
 The Host capture transaction may temporarily request artifact-view Camera poses, but the Native Module
 never owns a Camera. Capture rollback restores the SDK Camera state before session disposal.
+
+The transaction publishes four immutable measured evidence documents in addition to the three view PNGs and
+collider-overlay PNG:
+
+- `opening-observation.json`: Package-frozen visual-group bounds projected through the SDK opening Camera,
+  including normalized bounds/centres, coverage and Camera-depth order for every explicit semantic mapping;
+- `spawn-support-observation.json`: the reset Snapshot plus the SDK `checkSupport()` contact identity/point,
+  its unique Frozen Contribution collider join, capsule foot point and measured support gap;
+- `collider-overlay-observation.json`: every Frozen Contribution collider joined to the SDK-owned live Havok
+  body/subshape and overlay record, with no Native registry or Scene scan;
+- `scripted-traversal.json`: ordered fixed-input ticks, committed Snapshot hashes/positions/media and measured
+  checkpoint outcomes after an independent Host reset/bind for each check.
+
+The formal Capture provider computes those observations inside the admitted Runtime. NBR-50B only verifies
+their bytes and identity joins and projects them into the existing evaluator DTO; it must never recompute them
+from PNG pixels, copy Case expectations, guess ref suffixes or scan Babylon objects.
 
 `FormalWorldCaptureReceiptV1` binds:
 
 - Case/Profile, Attempt/Result, WorldPackage Ref/Root, WorldBuildIdentity and Build Receipt hashes;
 - Runtime session identity, ready Snapshot hash and SDK owner version identities;
-- formal request hash and frozen Native Block Capture Identity Inventory hash;
-- view IDs, viewport/DPR, Camera input, renderer/browser identity and PNG content hashes;
-- collider overlay hash when requested;
-- scripted traversal evidence hash;
+- formal request hash, semantic Capture map hash and Package-frozen Native Block materializer metadata hash;
+- view IDs, explicit artifact refs, viewport/DPR, Camera input, renderer/browser identity and PNG hashes;
+- opening/support/overlay/traversal observation artifact refs and content hashes;
+- collider-overlay PNG artifact ref and content hash;
 - Reset/Camera rollback and final cleanup outcomes.
+
+The Receipt is written last after every referenced artifact has been hashed and re-read. The Node orchestrator
+owns final browser/server/session/temporary-resource cleanup and may publish `cleanupOutcome: "completed"` only
+after all resources close. The Browser transaction reports rollback/reset results but cannot claim Host-process
+cleanup.
 
 BWB-3 `scope: "build-epoch-local"` screenshots remain authoring evidence only and cannot satisfy this
 Receipt.
