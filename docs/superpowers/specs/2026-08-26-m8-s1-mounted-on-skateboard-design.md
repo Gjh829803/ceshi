@@ -435,8 +435,8 @@ is the sole current resource and fixes these semantics:
 - accepted support states: `supported` and `sliding`;
 - surface motion: static only;
 - support-point height tolerance: the Character body contact band;
-- minimum contact-to-aggregate support-normal dot ratio:
-  `minimumContactToAggregateSupportNormalDotRatio: 0.95`, evaluated as
+- minimum contact-to-aggregate support-normal cosine:
+  `minimumContactToAggregateSupportNormalCosine: 0.95`, evaluated as
   `dot(normalize(contact.normalXYZ), normalize(retainedSupport.supportNormalWorldXYZ)) >= 0.95` after the
   native Body owner has retained only Babylon supporting contacts with
   `dot(normalize(contact.normalXYZ), worldUp) > 0.08`;
