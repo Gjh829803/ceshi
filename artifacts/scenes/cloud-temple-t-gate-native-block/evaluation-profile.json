@@ -1,0 +1,17 @@
+{
+  "kind": "world-reconstruction-evaluation-profile",
+  "schemaVersion": 1,
+  "id": "cloud-temple-t-gate-native-block-profile",
+  "dimensionIds": ["collider", "critical-traversal", "deterministic-build", "opening-composition", "semantic-silhouette", "spawn-support", "topology"],
+  "maximumRepairAttemptCount": 1,
+  "builderSelfRepairAttemptCount": 0,
+  "requiredEvidenceByDimension": [
+    { "dimensionId": "collider", "evidenceProfileRefs": ["worldkit://evidence-profile/native-block-collider@1"] },
+    { "dimensionId": "critical-traversal", "evidenceProfileRefs": ["worldkit://evidence-profile/native-block-traversal@1"] },
+    { "dimensionId": "deterministic-build", "evidenceProfileRefs": ["worldkit://evidence-profile/native-block-determinism@1"] },
+    { "dimensionId": "opening-composition", "evidenceProfileRefs": ["worldkit://evidence-profile/native-block-opening@1"] },
+    { "dimensionId": "semantic-silhouette", "evidenceProfileRefs": ["worldkit://evidence-profile/native-block-silhouette@1"] },
+    { "dimensionId": "spawn-support", "evidenceProfileRefs": ["worldkit://evidence-profile/native-block-spawn@1"] },
+    { "dimensionId": "topology", "evidenceProfileRefs": ["worldkit://evidence-profile/native-block-topology@1"] }
+  ]
+}

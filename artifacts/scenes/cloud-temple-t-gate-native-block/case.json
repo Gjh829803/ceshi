@@ -1,0 +1,21 @@
+{
+  "kind": "world-reconstruction-case",
+  "schemaVersion": 1,
+  "id": "cloud-temple-t-gate-native-block",
+  "sceneBriefRef": "scene-brief.md",
+  "sceneBriefHash": "sha256:c1299a6f991a8292daf86fd7168213084e020bcb1d797429b049934544d5fce9",
+  "referenceInputs": [{ "inputRef": "reference-0.png", "contentHash": "sha256:3ee88950b9d03733cf0743058a5418d78e7c99f0e222a1038c65cab8977309e0", "mediaType": "image/png" }],
+  "evaluationProfileRef": "evaluation-profile.json",
+  "evaluationProfileHash": "sha256:6a7c24c2e942c10926b6efd746ec6e21ab8a63514645554b67665ba65bd71a26",
+  "acceptanceTargetRefs": ["worldkit://acceptance-target/central-ascent@1", "worldkit://acceptance-target/foreground-platform@1", "worldkit://acceptance-target/gate-mass@1", "worldkit://acceptance-target/mountain-cliff-layers@1", "worldkit://acceptance-target/supported-spawn@1", "worldkit://acceptance-target/upper-t-junction@1"],
+  "requiredEvidenceProfileRefs": ["worldkit://evidence-profile/native-block-collider@1", "worldkit://evidence-profile/native-block-opening@1", "worldkit://evidence-profile/native-block-topology@1", "worldkit://evidence-profile/native-block-traversal@1"],
+  "topology": {
+    "nodeIds": ["central-ascent", "foreground-platform", "gate-mass", "mountain-cliff-layers", "upper-t-junction"],
+    "relations": [{ "fromNodeId": "central-ascent", "relation": "connects-to", "toNodeId": "foreground-platform" }, { "fromNodeId": "central-ascent", "relation": "connects-to", "toNodeId": "upper-t-junction" }, { "fromNodeId": "gate-mass", "relation": "above", "toNodeId": "upper-t-junction" }, { "fromNodeId": "mountain-cliff-layers", "relation": "contains", "toNodeId": "central-ascent" }],
+    "layerIds": ["foreground", "middle", "remote"]
+  },
+  "compositionTargetRefs": ["worldkit://acceptance-target/central-ascent@1", "worldkit://acceptance-target/foreground-platform@1", "worldkit://acceptance-target/gate-mass@1", "worldkit://acceptance-target/mountain-cliff-layers@1", "worldkit://acceptance-target/upper-t-junction@1"],
+  "spawnSupport": { "spawnMarkerId": "spawn-foreground-platform", "supportColliderId": "collider-foreground-ground" },
+  "requiredColliders": [{ "colliderId": "collider-central-steps", "role": "step" }, { "colliderId": "collider-cliff-blockers", "role": "blocker" }, { "colliderId": "collider-foreground-ground", "role": "ground" }, { "colliderId": "collider-gate-walls", "role": "blocker" }],
+  "scriptedTraversalChecks": [{ "id": "central-ascent-pass", "evidenceKind": "scripted-fixed-input", "expectation": "pass", "checkpointIds": ["spawn-foreground-platform", "upper-platform"] }, { "id": "cliff-block", "evidenceKind": "scripted-fixed-input", "expectation": "block", "checkpointIds": ["cliff-edge"] }]
+}

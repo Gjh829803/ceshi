@@ -1,0 +1,8 @@
+{
+  "kind": "native-block-generation-bootstrap",
+  "schemaVersion": 1,
+  "seed": 20260831,
+  "nativeSceneApiRef": "worldkit://native-scene-api/babylon-native@1",
+  "nativeSceneProfileRef": "worldkit://native-scene-profile/whitebox.blocks@1",
+  "blockProfileRef": "worldkit://native-block-profile/whitebox.blocks@1"
+}
