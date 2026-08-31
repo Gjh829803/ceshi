@@ -1033,8 +1033,9 @@ focused 验证并合入 `main@d1ba942`，BWB-5 参考场景 Corpus 已完成；f
   已在同一 Package 链通过；
 - [x] BWB-5：PR #68 已实现并合入山地、T 字空间、台阶、建筑、有限室内视觉及负向 Corpus，闭合结构、
   profile-local screenshots、BNA-4 Collider overlay、Spawn Support、真实人物通过性、30/60/120
-  render cadence 与跨 Session/Layout cleanup/rebind 证据。单 Subject、无 Browser FeelReview 是已
-  登记的非阻塞债务，不伪称跨实体
+  render cadence 与跨 Session/Layout cleanup/rebind 证据。后续证据补强从有效走廊证明 T 字北墙
+  Havok 阻挡，绑定冻结 Contribution 近面、capsule radius 与 ground medium；未扩 Corpus。单
+  Subject、无 Browser FeelReview 是已登记的非阻塞债务，不伪称跨实体
   rebind、formal Capture/Route 或生产 disposition；
 - [ ] BWB-6：BWB-5 正确性成立后评估 Thin Instance、Chunk、Collider coalescing，交付 Profile-side
   eligibility/grouping、等价 fixture、资源 benchmark 和 BNA-4 优化提案；不直接修改 Runtime/Havok，
