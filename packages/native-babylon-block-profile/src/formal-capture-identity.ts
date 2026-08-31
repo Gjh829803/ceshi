@@ -7,6 +7,7 @@ import {
   parseFormalSemanticCaptureMapV1,
   parseFormalTraversalCheckpointSpatialCriteriaV1,
   type FormalSemanticCaptureMapV1,
+  type FormalSemanticTopologyMeasurementSourceV1,
   type FormalTraversalCheckpointSpatialCriterionV1,
 } from "@whitebox-world/runtime-contracts";
 import {
@@ -21,6 +22,19 @@ export interface BindBlockMaterializerMetadataToSemanticCaptureTargetsInputV1 {
   readonly materializerMetadata: unknown;
   readonly materializerMetadataHash: Sha256HashV1;
   readonly contribution: unknown;
+  readonly semanticCaptureTargetBindings: readonly Readonly<{
+    acceptanceTargetRef: string;
+    compositionTargetRef: string;
+    topologyNodeId: string;
+    semanticLayerId: string;
+    blockVisualGroupId: string;
+  }>[];
+  readonly topologyRelations: readonly Readonly<{
+    fromNodeId: string;
+    relation: "connects-to" | "contains" | "above" | "blocks";
+    toNodeId: string;
+    measurementSource: FormalSemanticTopologyMeasurementSourceV1;
+  }>[];
   readonly checkpointSpatialCriteria:
     readonly FormalTraversalCheckpointSpatialCriterionV1[];
 }
@@ -28,7 +42,14 @@ export interface BindBlockMaterializerMetadataToSemanticCaptureTargetsInputV1 {
 const CONTRACT = "FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID";
 const INPUT_FIELDS = [
   "case", "materializerMetadata", "materializerMetadataHash", "contribution",
-  "checkpointSpatialCriteria",
+  "semanticCaptureTargetBindings", "topologyRelations", "checkpointSpatialCriteria",
+] as const;
+const TARGET_BINDING_FIELDS = [
+  "acceptanceTargetRef", "compositionTargetRef", "topologyNodeId",
+  "semanticLayerId", "blockVisualGroupId",
+] as const;
+const TOPOLOGY_RELATION_FIELDS = [
+  "fromNodeId", "relation", "toNodeId", "measurementSource",
 ] as const;
 
 function fail(path: string, message: string): never {
@@ -36,16 +57,59 @@ function fail(path: string, message: string): never {
 }
 
 function assertAccessorFree(value: unknown, path = "", seen = new Set<object>()): void {
-  if (value === null || typeof value !== "object" || seen.has(value)) return;
+  if (value === null || typeof value !== "object") return;
+  if (seen.has(value)) fail(path, "must be acyclic plain data");
   seen.add(value);
+  const prototype = Reflect.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== Array.prototype) {
+    fail(path, "must use ordinary object and array prototypes");
+  }
   for (const key of Reflect.ownKeys(value)) {
     if (typeof key !== "string") fail(path, "symbol keys are forbidden");
     const descriptor = Object.getOwnPropertyDescriptor(value, key);
     if (!isNil(descriptor?.get) || !isNil(descriptor?.set)) {
       fail(`${path}/${key}`, "accessors are forbidden");
     }
+    if (key !== "length" && descriptor?.enumerable !== true) {
+      fail(`${path}/${key}`, "data fields must be enumerable");
+    }
     assertAccessorFree(descriptor?.value, `${path}/${key}`, seen);
   }
+  seen.delete(value);
+}
+
+function plainObject(
+  value: unknown,
+  path: string,
+  fields: readonly string[],
+): Readonly<Record<string, unknown>> {
+  if (
+    isNil(value) || typeof value !== "object" || Array.isArray(value) ||
+    Reflect.getPrototypeOf(value) !== Object.prototype
+  ) fail(path, "expected an ordinary plain object");
+  const source = value as Readonly<Record<string, unknown>>;
+  const allowed = new Set(fields);
+  const unknown = Object.keys(source).find((key) => !allowed.has(key));
+  if (!isNil(unknown)) fail(`${path}/${unknown}`, "unknown field");
+  const missing = fields.find((key) => !Object.hasOwn(source, key));
+  if (!isNil(missing)) fail(`${path}/${missing}`, "required field is missing");
+  return source;
+}
+
+function plainArray(value: unknown, path: string): readonly unknown[] {
+  if (
+    !Array.isArray(value) || Reflect.getPrototypeOf(value) !== Array.prototype ||
+    Object.getOwnPropertyNames(value).length !== value.length + 1
+  ) fail(path, "expected an ordinary dense array");
+  return value;
+}
+
+function stringField(value: unknown, path: string): string {
+  if (
+    typeof value !== "string" || value.length === 0 || value.trim() !== value ||
+    value.normalize("NFC") !== value
+  ) fail(path, "expected a non-empty trimmed NFC string");
+  return value;
 }
 
 function exactInput(value: unknown): Readonly<Record<string, unknown>> {
@@ -77,6 +141,121 @@ export function bindBlockMaterializerMetadataToSemanticCaptureTargetsV1(
     metadata.caseHash !== hashWorldReconstructionCaseV1(reconstructionCase) ||
     metadata.contributionHash !== hashBabylonNativeSceneContributionV1(contribution)
   ) fail("materializerMetadata", "must match the verified Package identity closure");
+  const semanticCaptureTargetBindings = plainArray(
+    source.semanticCaptureTargetBindings,
+    "semanticCaptureTargetBindings",
+  ).map((entry, index) => {
+    const path = `semanticCaptureTargetBindings/${index}`;
+    const row = plainObject(entry, path, TARGET_BINDING_FIELDS);
+    return Object.freeze({
+      acceptanceTargetRef: stringField(
+        row.acceptanceTargetRef,
+        `${path}/acceptanceTargetRef`,
+      ),
+      compositionTargetRef: stringField(
+        row.compositionTargetRef,
+        `${path}/compositionTargetRef`,
+      ),
+      topologyNodeId: stringField(row.topologyNodeId, `${path}/topologyNodeId`),
+      semanticLayerId: stringField(row.semanticLayerId, `${path}/semanticLayerId`),
+      blockVisualGroupId: stringField(
+        row.blockVisualGroupId,
+        `${path}/blockVisualGroupId`,
+      ),
+    });
+  });
+  if (
+    semanticCaptureTargetBindings.length === 0 ||
+    semanticCaptureTargetBindings.some((row, index) => index > 0 &&
+      semanticCaptureTargetBindings[index - 1]!.acceptanceTargetRef >=
+        row.acceptanceTargetRef)
+  ) fail("semanticCaptureTargetBindings", "must be non-empty, unique, and acceptance-target sorted");
+  for (const key of [
+    "compositionTargetRef", "topologyNodeId", "blockVisualGroupId",
+  ] as const) {
+    if (
+      new Set(semanticCaptureTargetBindings.map((row) => row[key])).size !==
+        semanticCaptureTargetBindings.length
+    ) fail("semanticCaptureTargetBindings", `${key} must map one-to-one`);
+  }
+  const packageTargetGroupPairs = metadata.visualGroups
+    .map(({ acceptanceTargetRef, visualGroupId }) => ({
+      acceptanceTargetRef,
+      blockVisualGroupId: visualGroupId,
+    }))
+    .sort((left, right) => left.acceptanceTargetRef.localeCompare(right.acceptanceTargetRef));
+  const caseSilhouettePairs = reconstructionCase.expected.semanticSilhouetteTargets
+    .map(({ acceptanceTargetRef, visualGroupId }) => ({
+      acceptanceTargetRef,
+      blockVisualGroupId: visualGroupId,
+    }))
+    .sort((left, right) => left.acceptanceTargetRef.localeCompare(right.acceptanceTargetRef));
+  const explicitTargetGroupPairs = semanticCaptureTargetBindings.map(
+    ({ acceptanceTargetRef, blockVisualGroupId }) => ({
+      acceptanceTargetRef,
+      blockVisualGroupId,
+    }),
+  );
+  if (
+    !isEqual(explicitTargetGroupPairs, packageTargetGroupPairs) ||
+    !isEqual(explicitTargetGroupPairs, caseSilhouettePairs) ||
+    !isEqual(
+      semanticCaptureTargetBindings.map(({ acceptanceTargetRef }) => acceptanceTargetRef),
+      [...reconstructionCase.acceptanceTargetRefs].sort(),
+    ) ||
+    !isEqual(
+      semanticCaptureTargetBindings.map(({ compositionTargetRef }) => compositionTargetRef)
+        .sort(),
+      [...reconstructionCase.expected.openingComposition.targetRefs].sort(),
+    ) ||
+    !isEqual(
+      semanticCaptureTargetBindings.map(({ topologyNodeId }) => topologyNodeId).sort(),
+      [...reconstructionCase.expected.topology.nodeIds].sort(),
+    ) ||
+    !isEqual(
+      [...new Set(semanticCaptureTargetBindings.map(
+        ({ semanticLayerId }) => semanticLayerId,
+      ))].sort(),
+      [...new Set(reconstructionCase.expected.topology.layerIds)].sort(),
+    )
+  ) {
+    fail(
+      "semanticCaptureTargetBindings",
+      "must explicitly cover every Case target and Package visual group exactly once",
+    );
+  }
+  const topologyRelations = plainArray(source.topologyRelations, "topologyRelations")
+    .map((entry, index) => {
+      const path = `topologyRelations/${index}`;
+      const row = plainObject(entry, path, TOPOLOGY_RELATION_FIELDS);
+      const relation = row.relation;
+      if (![
+        "connects-to", "contains", "above", "blocks",
+      ].includes(relation as string)) fail(`${path}/relation`, "unexpected relation");
+      const measurementSource = row.measurementSource;
+      if (![
+        "package-bounds", "sdk-support", "sdk-collider", "scripted-traversal",
+      ].includes(measurementSource as string)) {
+        fail(`${path}/measurementSource`, "unexpected measurement source");
+      }
+      return Object.freeze({
+        fromNodeId: stringField(row.fromNodeId, `${path}/fromNodeId`),
+        relation: relation as "connects-to" | "contains" | "above" | "blocks",
+        toNodeId: stringField(row.toNodeId, `${path}/toNodeId`),
+        measurementSource:
+          measurementSource as FormalSemanticTopologyMeasurementSourceV1,
+      });
+    });
+  const relationKeys = topologyRelations.map(({ fromNodeId, relation, toNodeId }) =>
+    `${fromNodeId}\0${relation}\0${toNodeId}`);
+  if (
+    topologyRelations.length === 0 ||
+    relationKeys.some((key, index) => index > 0 && relationKeys[index - 1]! >= key) ||
+    !isEqual(
+      topologyRelations.map(({ measurementSource: _measurementSource, ...row }) => row),
+      reconstructionCase.expected.topology.relations,
+    )
+  ) fail("topologyRelations", "must explicitly bind every Case topology relation once");
   const checkpointSpatialCriteria =
     parseFormalTraversalCheckpointSpatialCriteriaV1(
       source.checkpointSpatialCriteria,
@@ -121,17 +300,24 @@ export function bindBlockMaterializerMetadataToSemanticCaptureTargetsV1(
     authoringManifestHash: metadata.authoringManifestHash,
     layoutInventoryHash: metadata.checkedLayoutInventoryHash,
     contributionHash: metadata.contributionHash,
-    bindings: metadata.visualGroups.map((group) => ({
-      acceptanceTargetRef: group.acceptanceTargetRef,
-      blockVisualGroupId: group.visualGroupId,
-      semanticClassId: group.semanticClassId,
-      identityColor: group.identityColorHex,
-      projectedBoundsSource: "checked-layout-visual-group",
-      requiredWorldViewIds: ["opening", "world-side", "world-top-down"],
-      authoringManifestHash: metadata.authoringManifestHash,
-      layoutInventoryHash: metadata.checkedLayoutInventoryHash,
-      contributionHash: metadata.contributionHash,
-    })),
+    bindings: semanticCaptureTargetBindings.map((semanticBinding) => {
+      const group = groupById.get(semanticBinding.blockVisualGroupId)!;
+      return {
+        acceptanceTargetRef: semanticBinding.acceptanceTargetRef,
+        compositionTargetRef: semanticBinding.compositionTargetRef,
+        topologyNodeId: semanticBinding.topologyNodeId,
+        semanticLayerId: semanticBinding.semanticLayerId,
+        blockVisualGroupId: semanticBinding.blockVisualGroupId,
+        semanticClassId: group.semanticClassId,
+        identityColor: group.identityColorHex,
+        projectedBoundsSource: "checked-layout-visual-group",
+        requiredWorldViewIds: ["opening", "world-side", "world-top-down"],
+        authoringManifestHash: metadata.authoringManifestHash,
+        layoutInventoryHash: metadata.checkedLayoutInventoryHash,
+        contributionHash: metadata.contributionHash,
+      };
+    }),
+    topologyRelations,
     traversalCheckBindings: reconstructionCase.expected.criticalTraversalChecks
       .map((check) => ({
         traversalCheckId: check.id,

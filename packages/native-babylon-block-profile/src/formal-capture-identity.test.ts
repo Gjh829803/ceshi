@@ -87,21 +87,38 @@ function caseValue() {
       openingComposition: {
         acceptanceTargetRef:
           "worldkit://acceptance-target/central-ascent@1",
-        targetRefs: ["worldkit://composition-target/opening@1"],
+        targetRefs: [
+          "worldkit://composition-target/central-ascent@1",
+          "worldkit://composition-target/upper-t-junction@1",
+        ],
         regions: [{
-          targetRef: "worldkit://composition-target/opening@1",
+          targetRef: "worldkit://composition-target/central-ascent@1",
           normalizedBounds: {
             minXBasisPoints: 100,
             minYBasisPoints: 200,
             maxXBasisPoints: 500,
             maxYBasisPoints: 800,
           },
+        }, {
+          targetRef: "worldkit://composition-target/upper-t-junction@1",
+          normalizedBounds: {
+            minXBasisPoints: 600,
+            minYBasisPoints: 100,
+            maxXBasisPoints: 900,
+            maxYBasisPoints: 400,
+          },
         }],
         anchors: [{
-          targetRef: "worldkit://composition-target/opening@1",
+          targetRef: "worldkit://composition-target/central-ascent@1",
           normalizedCenter: { xBasisPoints: 300, yBasisPoints: 500 },
+        }, {
+          targetRef: "worldkit://composition-target/upper-t-junction@1",
+          normalizedCenter: { xBasisPoints: 750, yBasisPoints: 250 },
         }],
-        orderedTargetRefs: ["worldkit://composition-target/opening@1"],
+        orderedTargetRefs: [
+          "worldkit://composition-target/central-ascent@1",
+          "worldkit://composition-target/upper-t-junction@1",
+        ],
       },
       spawnSupport: {
         acceptanceTargetRef:
@@ -371,6 +388,29 @@ function bindInput(overrides: Record<string, unknown> = {}) {
     materializerMetadataHash:
       hashBabylonNativeBlockMaterializerMetadataV1(materializerMetadata),
     contribution: frozenContribution,
+    semanticCaptureTargetBindings: [{
+      acceptanceTargetRef:
+        "worldkit://acceptance-target/central-ascent@1",
+      compositionTargetRef:
+        "worldkit://composition-target/central-ascent@1",
+      topologyNodeId: "central-ascent",
+      semanticLayerId: "ground",
+      blockVisualGroupId: "central-ascent-group",
+    }, {
+      acceptanceTargetRef:
+        "worldkit://acceptance-target/upper-t-junction@1",
+      compositionTargetRef:
+        "worldkit://composition-target/upper-t-junction@1",
+      topologyNodeId: "upper-t-junction",
+      semanticLayerId: "upper",
+      blockVisualGroupId: "upper-t-junction-group",
+    }],
+    topologyRelations: [{
+      fromNodeId: "central-ascent",
+      relation: "connects-to",
+      toNodeId: "upper-t-junction",
+      measurementSource: "scripted-traversal",
+    }],
     checkpointSpatialCriteria: checkpointSpatialCriteria(),
     ...overrides,
   };
@@ -405,12 +445,22 @@ describe("bindBlockMaterializerMetadataToSemanticCaptureTargetsV1", () => {
       blockVisualGroupId: "upper-t-junction-group",
     }]);
     expect(map.bindings[0]).toMatchObject({
+      compositionTargetRef:
+        "worldkit://composition-target/central-ascent@1",
+      topologyNodeId: "central-ascent",
+      semanticLayerId: "ground",
       semanticClassId: "worldkit.native-block.group.central-ascent",
       identityColor: "#AEB8C4",
       authoringManifestHash: input.materializerMetadata.authoringManifestHash,
       layoutInventoryHash: input.materializerMetadata.checkedLayoutInventoryHash,
       contributionHash: input.materializerMetadata.contributionHash,
     });
+    expect(map.topologyRelations).toEqual([{
+      fromNodeId: "central-ascent",
+      relation: "connects-to",
+      toNodeId: "upper-t-junction",
+      measurementSource: "scripted-traversal",
+    }]);
     expect(map.traversalCheckBindings[0]).toMatchObject({
       traversalCheckId: "reach-junction",
       checkpointCriteria: checkpointSpatialCriteria(),
@@ -507,5 +557,32 @@ describe("bindBlockMaterializerMetadataToSemanticCaptureTargetsV1", () => {
       meshNameByGroupId: { "central-ascent-group": "AscentMesh" },
     } as unknown as BindBlockMaterializerMetadataToSemanticCaptureTargetsInputV1))
       .toThrowError("FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID");
+  });
+
+  it("requires an explicit complete one-to-one Case and Package semantic mapping", () => {
+    const input = bindInput();
+    const missing = { ...input } as Record<string, unknown>;
+    delete missing.semanticCaptureTargetBindings;
+    expect(() => bindBlockMaterializerMetadataToSemanticCaptureTargetsV1(
+      missing as unknown as BindBlockMaterializerMetadataToSemanticCaptureTargetsInputV1,
+    )).toThrowError("FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID");
+    expect(() => bind({
+      semanticCaptureTargetBindings:
+        input.semanticCaptureTargetBindings.slice(0, 1),
+    })).toThrowError("FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID");
+    expect(() => bind({
+      semanticCaptureTargetBindings: input.semanticCaptureTargetBindings.map(
+        (binding, index) => index === 1
+          ? { ...binding, compositionTargetRef:
+              "worldkit://composition-target/central-ascent@1" }
+          : binding,
+      ),
+    })).toThrowError("FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID");
+    expect(() => bind({
+      topologyRelations: [{
+        ...input.topologyRelations[0],
+        toNodeId: "central-ascent",
+      }],
+    })).toThrowError("FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID");
   });
 });
