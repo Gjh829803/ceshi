@@ -64,7 +64,8 @@ async function inspectOutputs(input: PreparedInput): Promise<NativeBlockGenerati
   const outputRows = await Promise.all(OUTPUTS.map(async (output) => {
     const outputPath = path.join(input.stagingDirectoryPath, output);
     const info = await lstat(outputPath);
-    if (info.isSymbolicLink() || !info.isFile() || info.size === 0) throw new TypeError(info.size === 0 ? "output-empty" : "output-missing");
+    if (info.isSymbolicLink() || !info.isFile()) throw new TypeError("output-unexpected");
+    if (info.size === 0) throw new TypeError("output-missing");
     const bytes = await (await import("node:fs/promises")).readFile(outputPath);
     return { path: output, contentHash: sha256Bytes(bytes) as Sha256HashV1, sizeBytes: info.size, mediaType: output === "scene.ts" ? "text/typescript" as const : "application/json" as const };
   }));

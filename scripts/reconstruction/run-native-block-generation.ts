@@ -1,7 +1,6 @@
 import { spawn } from "node:child_process";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { decideSceneAuthoringRouteV1 } from "@whitebox-world/scene-authoring-contracts";
 import { sha256Bytes, sha256CanonicalJson, stringifyCanonicalJson, type Sha256HashV1 } from "@whitebox-world/protocol";
@@ -58,7 +57,7 @@ async function main(): Promise<void> {
         return reference;
       }) as readonly Readonly<{ inputRef: string; contentHash: Sha256HashV1; mediaType: "image/png" | "image/jpeg"; }>[],
     }, profile, routeDecision, attemptIndex: 0, backend, runDirectoryPath: outputPath, inputDirectoryPath,
-    taskInstructionPath: path.join(inputDirectoryPath, "task-instruction.md"), builderSkillPath: path.join(inputDirectoryPath, "builder-skill.md"),
+    taskInstructionPath: path.join(inputDirectoryPath, "task-instruction.md"), builderSkillPath: path.join(inputDirectoryPath, "builder-skill", "SKILL.md"),
     nativeSceneApiPath: path.join(inputDirectoryPath, "native-scene-api.json"), nativeSceneProfilePath: path.join(inputDirectoryPath, "native-scene-profile.json"), blockProfilePath: path.join(inputDirectoryPath, "block-profile.json"), bootstrapInputPath: path.join(inputDirectoryPath, "native-scene.bootstrap.json"),
     seed: bootstrapValue.seed, budgets: { maximumBlockCount: 2000, maximumStaticColliderCount: 500, maximumStaticColliderVertexCount: 200000, maximumStaticColliderTriangleCount: 100000, maximumOutputBytes: 4000000, timeoutSeconds: 900 },
   });
@@ -67,7 +66,7 @@ async function main(): Promise<void> {
     writeFile(path.join(outputPath, "attempts", "0", "generation-request.json"), `${stringifyCanonicalJson(prepared.generationRequest)}\n`),
     writeFile(path.join(outputPath, "attempts", "0", "attempt.json"), `${stringifyCanonicalJson(prepared.attempt)}\n`),
   ]);
-  const checker = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../.codex/skills/worldkit-native-block-builder/scripts/self-check.mjs");
+  const checker = path.join(prepared.taskWorkspacePath, "inputs", "builder-skill", "scripts", "self-check.mjs");
   const result = await runNativeBlockGenerationV1(prepared, {
     process: processPort,
     selfCheck: async (workspacePath) => new Promise((resolvePromise) => {

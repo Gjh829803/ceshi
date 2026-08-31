@@ -128,13 +128,17 @@ export async function prepareNativeBlockGenerationTaskV1(
   for (let index = 0; index < references.length; index += 1) {
     if (references[index]!.hash !== reconstructionCase.referenceInputs[index]!.contentHash) throw new TypeError("Frozen reference bytes do not match the Case hash.");
   }
-  const files = [sceneBrief, taskInstruction, builderSkill, nativeSceneApi, nativeSceneProfile, blockProfile, bootstrap, ...references];
+  const builderBundle = builderSkill.relativePath.endsWith("builder-skill/SKILL.md") ? await Promise.all([
+    freezeFile(inputRoot, path.join(path.dirname(input.builderSkillPath), "references/native-block-output-contract.md")),
+    freezeFile(inputRoot, path.join(path.dirname(input.builderSkillPath), "scripts/self-check.mjs")),
+  ]) : [];
+  const files = [sceneBrief, taskInstruction, builderSkill, nativeSceneApi, nativeSceneProfile, blockProfile, bootstrap, ...builderBundle, ...references];
   const taskWorkspacePath = path.join(runDirectoryPath, "attempts", String(input.attemptIndex), ".task");
   const stagingDirectoryPath = path.join(runDirectoryPath, "attempts", String(input.attemptIndex), ".staging");
   const sourceDirectoryPath = path.join(runDirectoryPath, "attempts", String(input.attemptIndex), "source");
   await mkdir(taskWorkspacePath, { recursive: true, mode: 0o700 });
   await Promise.all(files.map((file) => copyFrozenFile(taskWorkspacePath, file)));
-  const contextInputs = [nativeSceneApi, nativeSceneProfile, blockProfile, bootstrap]
+  const contextInputs = [nativeSceneApi, nativeSceneProfile, blockProfile, bootstrap, builderSkill, ...builderBundle]
     .map((file) => ({ inputRef: asRef(file.relativePath), contentHash: file.hash }))
     .concat([
       { inputRef: "context/case.json", contentHash: sha256CanonicalJson(reconstructionCase) as Sha256HashV1 },
