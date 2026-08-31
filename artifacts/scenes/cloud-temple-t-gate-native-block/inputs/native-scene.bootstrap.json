@@ -1,8 +1,14 @@
 {
-  "kind": "native-block-generation-bootstrap",
+  "kind": "babylon-native-scene-bootstrap",
   "schemaVersion": 1,
-  "seed": 20260831,
+  "id": "cloud-temple-native-block",
+  "sceneModuleRef": "worldkit://native-scene/cloud-temple-t-gate@1",
   "nativeSceneApiRef": "worldkit://native-scene-api/babylon-native@1",
   "nativeSceneProfileRef": "worldkit://native-scene-profile/whitebox.blocks@1",
-  "blockProfileRef": "worldkit://native-block-profile/whitebox.blocks@1"
+  "gameplayBootstrapRef": "worldkit://gameplay-bootstrap/g-bot@1",
+  "initialControlledEntityId": "player",
+  "gravityMetersPerSecondSquaredXYZ": [0, -9.81, 0],
+  "initialCamera": { "mode": "third-person", "pitchRadians": 0.1, "distanceMeters": 5, "fovDegrees": 55, "targetHeightMeters": 1.2 },
+  "seed": 20260831,
+  "spawnMarkerId": "spawn-foreground-platform"
 }

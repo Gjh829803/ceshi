@@ -19,7 +19,7 @@ async function fixture(): Promise<Readonly<{ root: string; inputDirectory: strin
   await Promise.all([
     writeFile(path.join(inputDirectory, "scene-brief.md"), "# Cloud Temple\n"),
     writeFile(path.join(inputDirectory, "reference-0.png"), "reference"),
-    writeFile(path.join(inputDirectory, "native-scene.bootstrap.json"), "{\"seed\":17}\n"),
+    writeFile(path.join(inputDirectory, "native-scene.bootstrap.json"), JSON.stringify({ kind: "babylon-native-scene-bootstrap", schemaVersion: 1, id: "fixture-native", sceneModuleRef: "worldkit://native-scene/fixture@1", nativeSceneApiRef: "worldkit://native-scene-api/babylon-native@1", nativeSceneProfileRef: "worldkit://native-scene-profile/whitebox.blocks@1", gameplayBootstrapRef: "worldkit://gameplay-bootstrap/g-bot@1", initialControlledEntityId: "player", gravityMetersPerSecondSquaredXYZ: [0, -9.81, 0], initialCamera: { mode: "third-person", pitchRadians: 0.1, distanceMeters: 5, fovDegrees: 55, targetHeightMeters: 1.2 }, seed: 17, spawnMarkerId: "spawn" })),
     writeFile(path.join(inputDirectory, "native-scene-api.json"), "{\"api\":1}\n"),
     writeFile(path.join(inputDirectory, "native-scene-profile.json"), "{\"profile\":1}\n"),
     writeFile(path.join(inputDirectory, "block-profile.json"), "{\"blocks\":1}\n"),

@@ -13,6 +13,7 @@ import {
 } from "@whitebox-world/scene-authoring-contracts";
 import { sha256Bytes, sha256CanonicalJson, stringifyCanonicalJson, type Sha256HashV1 } from "@whitebox-world/protocol";
 import { hashWorldReconstructionEvaluationProfileV1, parseWorldReconstructionCaseV1, parseWorldReconstructionEvaluationProfileV1, type WorldReconstructionCaseV1, type WorldReconstructionEvaluationProfileV1 } from "@whitebox-world/validation";
+import { parseBabylonNativeSceneBootstrapV1 } from "@whitebox-world/runtime-contracts";
 
 const OUTPUTS = ["scene.ts", "native-block-authoring.json", "native-resources.json"] as const;
 
@@ -122,6 +123,8 @@ export async function prepareNativeBlockGenerationTaskV1(
     ...reconstructionCase.referenceInputs.map((reference) => freezeFile(inputRoot, path.resolve(inputRoot, reference.inputRef))),
   ]);
   if (sceneBrief.hash !== reconstructionCase.sceneBriefHash) throw new TypeError("Frozen Scene Brief bytes do not match the Case hash.");
+  const parsedBootstrap = parseBabylonNativeSceneBootstrapV1(JSON.parse(new TextDecoder().decode(bootstrap.bytes)));
+  if (parsedBootstrap.spawnMarkerId !== reconstructionCase.spawnSupport.spawnMarkerId || parsedBootstrap.seed !== input.seed) throw new TypeError("Bootstrap does not close Case spawn or seed.");
   for (let index = 0; index < references.length; index += 1) {
     if (references[index]!.hash !== reconstructionCase.referenceInputs[index]!.contentHash) throw new TypeError("Frozen reference bytes do not match the Case hash.");
   }
@@ -133,7 +136,10 @@ export async function prepareNativeBlockGenerationTaskV1(
   await Promise.all(files.map((file) => copyFrozenFile(taskWorkspacePath, file)));
   const contextInputs = [nativeSceneApi, nativeSceneProfile, blockProfile, bootstrap]
     .map((file) => ({ inputRef: asRef(file.relativePath), contentHash: file.hash }))
-    .sort((left, right) => left.inputRef.localeCompare(right.inputRef));
+    .concat([
+      { inputRef: "context/case.json", contentHash: sha256CanonicalJson(reconstructionCase) as Sha256HashV1 },
+      { inputRef: "context/evaluation-profile.json", contentHash: hashWorldReconstructionEvaluationProfileV1(profile) },
+    ]).sort((left, right) => left.inputRef.localeCompare(right.inputRef));
   const workspaceContextManifest = { kind: "native-block-generation-context", schemaVersion: 1, inputs: contextInputs };
   const workspaceContextManifestHash = sha256CanonicalJson(workspaceContextManifest) as Sha256HashV1;
   const routeDecisionHash = hashSceneAuthoringRouteDecisionV1(input.routeDecision);

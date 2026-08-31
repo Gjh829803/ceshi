@@ -6,7 +6,7 @@
   "sceneBriefHash": "sha256:c1299a6f991a8292daf86fd7168213084e020bcb1d797429b049934544d5fce9",
   "referenceInputs": [{ "inputRef": "reference-0.png", "contentHash": "sha256:3ee88950b9d03733cf0743058a5418d78e7c99f0e222a1038c65cab8977309e0", "mediaType": "image/png" }],
   "evaluationProfileRef": "evaluation-profile.json",
-  "evaluationProfileHash": "sha256:6a7c24c2e942c10926b6efd746ec6e21ab8a63514645554b67665ba65bd71a26",
+  "evaluationProfileHash": "sha256:9e669089111bbf9d16cf30d996975d946ad83ff7b83584de1b19226628db3ed1",
   "acceptanceTargetRefs": ["worldkit://acceptance-target/central-ascent@1", "worldkit://acceptance-target/foreground-platform@1", "worldkit://acceptance-target/gate-mass@1", "worldkit://acceptance-target/mountain-cliff-layers@1", "worldkit://acceptance-target/supported-spawn@1", "worldkit://acceptance-target/upper-t-junction@1"],
   "requiredEvidenceProfileRefs": ["worldkit://evidence-profile/native-block-collider@1", "worldkit://evidence-profile/native-block-opening@1", "worldkit://evidence-profile/native-block-topology@1", "worldkit://evidence-profile/native-block-traversal@1"],
   "topology": {
