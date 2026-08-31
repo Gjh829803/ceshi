@@ -113,6 +113,7 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
       "background-mass",
     ]);
     expect(Object.keys(profile).sort()).toEqual([
+      "BABYLON_NATIVE_BLOCK_AUTHORING_PROFILE_REF_V1",
       "BABYLON_NATIVE_BLOCK_CENTER_LATTICE_METERS_XYZ_V1",
       "BABYLON_NATIVE_BLOCK_FULL_SIZE_METERS_V1",
       "BABYLON_NATIVE_BLOCK_OCCUPANCY_GRID_METERS_XYZ_V1",
@@ -122,14 +123,20 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
       "BABYLON_NATIVE_BLOCK_PROFILE_REF_V1",
       "BABYLON_NATIVE_BLOCK_RECONSTRUCTION_CORPUS_CASE_IDS_V1",
       "BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1",
+      "bindNativeBlockAuthoringManifestToCheckedLayoutV1",
       "createBabylonNativeBlockAuthoringCaptureV1",
       "createBabylonNativeBlockProfileSessionV1",
       "createBabylonNativeBlockReconstructionCorpusEvidenceIndexV1",
+      "hashBabylonNativeBlockCheckedLayoutInventoryV1",
+      "hashNativeBlockAuthoringManifestV1",
+      "hashNativeBlockVisualResourceListV1",
       "inspectBabylonNativeBlockReconstructionCorpusCaseV1",
       "materializeBabylonNativeBlockReconstructionCorpusCaseV1",
+      "parseNativeBlockAuthoringManifestV1",
+      "parseNativeBlockVisualResourceListV1",
     ]);
     expect(Object.keys(profile).some((name) =>
-      /host|runtime|collider|traversal|manifest|compiler/i.test(name))).toBe(false);
+      /host|runtime|collider|traversal|compiler/i.test(name))).toBe(false);
   });
 
   it("keeps the real-runtime fixture behind one exact testing-only export", async () => {
