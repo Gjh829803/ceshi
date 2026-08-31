@@ -384,6 +384,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "scripts/reconstruction/generation-request.test.ts", lane: "contract" },
   { path: "scripts/reconstruction/generation-runner.test.ts", lane: "contract" },
   { path: "scripts/reconstruction/native-package.test.ts", lane: "resource-heavy", reasonCodes: ["measured-duration"] },
+  { path: "scripts/reconstruction/sdk-owner-identities.test.ts", lane: "contract" },
   { path: "scripts/scenes/finalize-scene-terrain.test.ts", lane: "contract" },
   { path: "scripts/scenes/finalize-spatial-build.test.ts", lane: "contract" },
   { path: "scripts/scenes/promote-scene-preset.test.ts", lane: "contract" },
