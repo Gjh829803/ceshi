@@ -375,6 +375,11 @@ export type WorldReconstructionMetricV1 =
 
 The Profile sets `maximumRepairAttemptCount: 1` and `builderSelfRepairAttemptCount: 0`. The Case binds real input hashes and expected topology, normalized composition targets, Spawn/Support, required collider IDs/roles, and scripted fixed-input traversal checkpoints. The Result contains no aggregate score. Missing evidence produces `incomplete`, never a numeric zero or advisory pass.
 
+NBR-10C closes the evaluator seam before NBR-50A: Case freezes facts only, Profile owns every
+BasisPoints/Millimeters threshold, and EvidenceSet contains seven closed observed payloads with per-row
+evidence refs. The shared identity closure includes Attempt, formal Package root, World Build Identity,
+and Capture. Observed traversal uses `reached | blocked | incomplete`; pixels remain advisory.
+
 - [ ] **Step 6: Run GREEN contracts and package boundaries**
 
 ```bash
