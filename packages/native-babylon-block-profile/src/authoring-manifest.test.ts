@@ -431,6 +431,32 @@ describe("Native Block authoring to checked Layout binding", () => {
     })).toThrowError(/WORLDKIT_NATIVE_BLOCK_AUTHORING_LAYOUT_BINDING_INVALID/);
   });
 
+  it("binds only semantic silhouette targets, not unrelated Case acceptance targets", () => {
+    const source = reconstructionCaseValue();
+    const reconstructionCase = parseWorldReconstructionCaseV1({
+      ...source,
+      acceptanceTargetRefs: [
+        source.acceptanceTargetRefs[0],
+        "worldkit://acceptance-target/runtime-support@1",
+        source.acceptanceTargetRefs[1],
+      ],
+      expected: {
+        ...source.expected,
+        spawnSupport: {
+          ...source.expected.spawnSupport,
+          acceptanceTargetRef:
+            "worldkit://acceptance-target/runtime-support@1",
+        },
+      },
+    });
+
+    expect(bindNativeBlockAuthoringManifestToCheckedLayoutV1({
+      ...bindingInput(),
+      reconstructionCase,
+    }).visualGroups.map(({ acceptanceTargetRef }) => acceptanceTargetRef))
+      .toEqual(source.acceptanceTargetRefs);
+  });
+
   it.each([
     ["missing target", () => ({ ...bindingInput(), reconstructionCase: { ...reconstructionCaseValue(), acceptanceTargetRefs: [reconstructionCaseValue().acceptanceTargetRefs[0]] } })],
     ["extra target", () => ({ ...bindingInput(), reconstructionCase: { ...reconstructionCaseValue(), acceptanceTargetRefs: [...reconstructionCaseValue().acceptanceTargetRefs, "worldkit://acceptance-target/unused@1"] } })],

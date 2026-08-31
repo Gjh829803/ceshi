@@ -455,7 +455,8 @@ export function bindNativeBlockAuthoringManifestToCheckedLayoutV1(
   } catch {
     return fail(code, "reconstructionCase must be a closed WorldReconstructionCaseV1");
   }
-  const caseAcceptanceTargetRefs = reconstructionCase.acceptanceTargetRefs;
+  const semanticTargetRefs = reconstructionCase.expected.semanticSilhouetteTargets
+    .map(({ acceptanceTargetRef }) => acceptanceTargetRef);
   const caseHash = hashWorldReconstructionCaseV1(
     reconstructionCase,
   ) as Sha256HashV1;
@@ -494,8 +495,11 @@ export function bindNativeBlockAuthoringManifestToCheckedLayoutV1(
   const manifestTargetRefs = [...authoringManifest.visualGroups]
     .map(({ acceptanceTargetRef }) => acceptanceTargetRef)
     .sort(stableCompare);
-  if (!isEqual(caseAcceptanceTargetRefs, manifestTargetRefs)) {
-    return fail(code, "Manifest must bind every Case acceptance target exactly once");
+  if (!isEqual(semanticTargetRefs, manifestTargetRefs)) {
+    return fail(
+      code,
+      "Manifest must bind every Case semantic silhouette target exactly once",
+    );
   }
   const manifestGroupIds = authoringManifest.visualGroups.map(
     ({ visualGroupId }) => visualGroupId,
