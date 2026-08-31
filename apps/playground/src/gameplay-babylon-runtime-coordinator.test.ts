@@ -145,7 +145,6 @@ function fakeRuntimeFactory(
       ),
     });
     let preparedProjection = worldProjection(configuration);
-    let runtimeTick = preparedProjection.simulationTick;
     let renderFrameIndex = 0;
     const dispose = vi.fn(async () => undefined);
     const renderFrame = vi.fn(() => {
@@ -173,7 +172,9 @@ function fakeRuntimeFactory(
       dispose,
       snapshot: (): BabylonRuntimeProjectionV1 => ({
         runtimeBackend: "babylon-havok",
-        tick: runtimeTick,
+        tick: options.usePreparedFixedInput === true
+          ? preparedProjection.simulationTick
+          : harness.publishedWorldProjection.simulationTick,
         ready: true,
         possessionTarget: {
           mode: "possessed",
@@ -186,7 +187,7 @@ function fakeRuntimeFactory(
           targetEntityId:
             configuration.worldRuntimeBootstrap.initialControlledEntityId,
           positionMetersXYZ: [1, 2, 3],
-          activeCameraProfileRef: "worldkit://camera-profile/third-person@1",
+          activeCameraProfileRef: "worldkit://camera-rig/third-person@1",
           activeCameraRigRef: "worldkit://camera-rig/third-person@1",
           activeCameraModifierRefs: [],
           safeFallbackActive: false,
@@ -195,7 +196,9 @@ function fakeRuntimeFactory(
           viewDistanceOffsetMeters: 0,
           selectionDecision: {
             schemaVersion: 2,
-            committedTick: 0,
+            committedTick: options.usePreparedFixedInput === true
+              ? preparedProjection.simulationTick
+              : harness.publishedWorldProjection.simulationTick,
             targetEntityId:
               configuration.worldRuntimeBootstrap.initialControlledEntityId,
             activeCameraRigProfileRef: "worldkit://camera-rig/third-person@1",
@@ -257,7 +260,6 @@ function fakeRuntimeFactory(
         projectedViewStateAfter: Object.freeze({ viewStateRevision: 0 }),
         commitPrepared: () => {
           preparedProjection = projectedWorldStateAfter;
-          runtimeTick = projectedWorldStateAfter.simulationTick;
         },
         abort: async () => undefined,
       });

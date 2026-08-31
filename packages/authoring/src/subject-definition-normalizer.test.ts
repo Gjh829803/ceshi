@@ -483,11 +483,11 @@ describe("Package Subject Definition normalization", () => {
       normalizedWorldIrHash: result.normalizedWorldIrHash,
     }).toEqual({
       packageDefinitionHash:
-        "sha256:1d3e8a9f64de515cb2be8df7fbc81d5f415940631b613e89650fb8564ea48b60",
+        "sha256:ef62665127677a0a337dd8f0f8eae8a9c91abaa5200852f67a606e020f358709",
       resourceLockHash:
-        "sha256:53c69dc50912b151af71fd1ef3003dcef8cae877d61ddad8393548690727d84e",
+        "sha256:726403f0cfebff46361074db737bcfaea06726f7f223c1c86750d3f870be7ae0",
       normalizedWorldIrHash:
-        "sha256:40d626010ab4313e1262e627468c52b736c9a4d9a1fd22c7bb62afd388c9ef20",
+        "sha256:c6fecfe77d9fa55453ba9d40745ba3b7b40efecf884ff12264bd583ed7fd8b20",
     });
   });
 
