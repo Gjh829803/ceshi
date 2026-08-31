@@ -671,7 +671,6 @@ export function assertBabylonNativeWorldPackageMembershipV1(
     attempt.sourceInput.kind !== "babylon-native" ||
     attempt.sourceInput.bootstrapInputHash !==
       source.nativeSceneBootstrapHash ||
-    attempt.sourceInput.moduleGenerationInputHash !== bundle.sourceGraphHash ||
     attempt.seed !== bootstrap.seed ||
     result.outcome !== "completed" ||
     result.sceneAuthoringAttemptHash !== source.sceneAuthoringAttemptHash ||

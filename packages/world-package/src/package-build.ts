@@ -651,7 +651,6 @@ function createBabylonNativeWorldPackageV1Internal(
     attempt.sourceInput.kind !== "babylon-native" ||
     attempt.sourceInput.bootstrapInputHash !==
       hashBabylonNativeSceneBootstrapV1(bootstrap) ||
-    attempt.sourceInput.moduleGenerationInputHash !== bundle.sourceGraphHash ||
     attempt.seed !== bootstrap.seed ||
     attemptResult.outcome !== "completed" ||
     attemptResult.sceneAuthoringAttemptHash !== hashSceneAuthoringAttemptV1(attempt) ||

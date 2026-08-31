@@ -115,7 +115,7 @@ function createBabylonNativeWorldPackageTestInputForProfileV1(
   const canonical = createWorldPackageTestInputV1();
   const sceneModuleRef = "worldkit://native-scene/package-fixture@1";
   const authoringProfileRef =
-    "worldkit://authoring-profile/native-local@1";
+    "worldkit://native-authoring-profile/whitebox.blocks@1";
   const nativeSceneApi = Object.freeze({
     resourceRef: "worldkit://native-scene-api/babylon-native@1",
     resolvedVersion: "1",
@@ -242,9 +242,12 @@ function createBabylonNativeWorldPackageTestInputForProfileV1(
         "worldkit://native-bootstrap-input/package-fixture@1",
       bootstrapInputHash:
         hashBabylonNativeSceneBootstrapV1(nativeSceneBootstrap),
-      moduleGenerationInputRef:
-        "worldkit://native-module-generation-input/package-fixture@1",
-      moduleGenerationInputHash: sourceGraphHash,
+      generationRequestRef:
+        "worldkit://native-generation-request/package-fixture.initial@1",
+      generationRequestHash: sha256CanonicalJson({
+        kind: "native-block-generation-request-fixture",
+        id: "package-fixture.initial",
+      }) as Sha256HashV1,
     }),
     selectedAssetResources: Object.freeze([]),
     seed: nativeSceneBootstrap.seed,

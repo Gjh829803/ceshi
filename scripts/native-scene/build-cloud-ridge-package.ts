@@ -13,11 +13,11 @@ import {
 import { parseGameplayBootstrapV1 } from
   "@whitebox-world/gameplay-contracts";
 import {
+  decideSceneAuthoringRouteV1,
   hashSceneAuthoringAttemptV1,
   hashSceneAuthoringRouteDecisionV1,
   type SceneAuthoringAttemptResultV1,
   type SceneAuthoringAttemptV1,
-  type SceneAuthoringRouteDecisionV1,
 } from "@whitebox-world/scene-authoring-contracts";
 import {
   BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V1,
@@ -61,7 +61,7 @@ const TRUST_PROFILE_HASH = sha256CanonicalJson({
   version: 1,
 }) as Sha256HashV1;
 const AUTHORING_PROFILE_REF =
-  "worldkit://authoring-profile/native-local@1";
+  "worldkit://native-authoring-profile/whitebox.blocks@1";
 
 async function readRuntimeBootstrapInput() {
   const [gameplayInput, runtimeInput] = await Promise.all([
@@ -113,26 +113,25 @@ async function buildCloudRidgePackage(): Promise<WorldPackageDirectoryV1> {
   ]);
   const { authoredSourceHash, nativeSceneBootstrap } = sourceGraphInput;
   const { gameplayBootstrap, worldRuntimeBootstrap } = runtimeBootstrapInput;
-  const routeDecision: SceneAuthoringRouteDecisionV1 = {
-    kind: "scene-authoring-route-decision",
-    schemaVersion: 1,
+  const routeDecision = decideSceneAuthoringRouteV1({
     id: "cloud-ridge-route",
     sceneBriefRef: "worldkit://scene-brief/cloud-ridge@1",
     sceneBriefHash: SCENE_BRIEF_HASH,
     trustProfileRef: "worldkit://trust-profile/trusted-local@1",
     trustProfileHash: TRUST_PROFILE_HASH,
     requiredCapabilityRefs: [],
-    decision: {
-      kind: "babylon-native",
-      authoringProfileRef: AUTHORING_PROFILE_REF,
-      compositionStrategy: "ground-first-with-locked-assets",
-      reasonCodes: ["user-selected-supported-lane"],
-    },
-  };
+    requestedSourceKind: "babylon-native",
+    nativeTrustAdmitted: true,
+    referenceDrivenDistinctiveSilhouette: true,
+  });
   const nativeSceneBootstrapInputRef =
     "worldkit://native-bootstrap-input/cloud-ridge@1";
-  const moduleGenerationInputRef =
-    "worldkit://native-module-generation-input/cloud-ridge@1";
+  const generationRequestRef =
+    "worldkit://native-generation-request/cloud-ridge.initial@1";
+  const generationRequestHash = sha256CanonicalJson({
+    kind: "native-block-generation-request-fixture",
+    id: "cloud-ridge.initial",
+  }) as Sha256HashV1;
   const sceneAuthoringAttemptRef =
     "worldkit://scene-authoring-attempt/cloud-ridge@1";
   const attempt: SceneAuthoringAttemptV1 = {
@@ -150,8 +149,8 @@ async function buildCloudRidgePackage(): Promise<WorldPackageDirectoryV1> {
       bootstrapInputRef: nativeSceneBootstrapInputRef,
       bootstrapInputHash:
         hashBabylonNativeSceneBootstrapV1(nativeSceneBootstrap),
-      moduleGenerationInputRef,
-      moduleGenerationInputHash: authoredSourceHash,
+      generationRequestRef,
+      generationRequestHash,
     },
     selectedAssetResources: [],
     seed: nativeSceneBootstrap.seed,
@@ -274,7 +273,8 @@ async function buildCloudRidgePackage(): Promise<WorldPackageDirectoryV1> {
     },
     nativeSceneBootstrap,
     nativeSceneBootstrapInputRef,
-    moduleGenerationInputRef,
+    generationRequestRef,
+    generationRequestHash,
     nativeSceneApi,
     nativeSceneProfile,
     publishedAssets: [],

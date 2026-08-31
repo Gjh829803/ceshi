@@ -6,6 +6,14 @@ import {
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  assertNativeBlockGenerationReceiptMatchesRequestV1,
+  decideSceneAuthoringRouteV1,
+  hashNativeBlockGenerationReceiptV1,
+  hashNativeBlockGenerationRequestV1,
+  nativeBlockGenerationReceiptCanonicalBytesV1,
+  nativeBlockGenerationRequestCanonicalBytesV1,
+  parseNativeBlockGenerationReceiptV1,
+  parseNativeBlockGenerationRequestV1,
   firstInvalidatedSceneAuthoringGateV1,
   hashSceneAuthoringAttemptResultV1,
   hashSceneAuthoringAttemptV1,
@@ -18,8 +26,11 @@ import {
   sceneAuthoringRouteDecisionCanonicalBytesV1,
   type SceneAuthoringAttemptResultV1,
   type SceneAuthoringAttemptV1,
+  type DecideSceneAuthoringRouteV1Input,
   type SceneAuthoringInvalidatedGateV1,
   type SceneAuthoringRouteDecisionV1,
+  type NativeBlockGenerationReceiptV1,
+  type NativeBlockGenerationRequestV1,
 } from "./scene-authoring-contracts.js";
 
 const HASH_A = `sha256:${"1".repeat(64)}` as Sha256HashV1;
@@ -131,9 +142,9 @@ function nativeAttempt(): SceneAuthoringAttemptV1 {
       kind: "babylon-native",
       bootstrapInputRef: "worldkit://native-bootstrap-input/ridge@1",
       bootstrapInputHash: HASH_C,
-      moduleGenerationInputRef:
-        "worldkit://native-module-generation-input/ridge@1",
-      moduleGenerationInputHash: HASH_D,
+      generationRequestRef:
+        "worldkit://native-generation-request/ridge.initial@1",
+      generationRequestHash: HASH_D,
     },
     authoringProfileRef: "worldkit://authoring-profile/native-local@1",
   };
@@ -199,7 +210,277 @@ function expectResultInvalid(input: unknown): void {
   );
 }
 
+function generationRequest(): NativeBlockGenerationRequestV1 {
+  return {
+    kind: "native-block-generation-request",
+    schemaVersion: 1,
+    id: "cloud-temple.initial",
+    routeDecisionRef:
+      "worldkit://scene-authoring-route-decision/cloud-temple@1",
+    routeDecisionHash: HASH_A,
+    sceneBriefRef: "worldkit://scene-brief/cloud-temple@1",
+    sceneBriefHash: HASH_B,
+    referenceInputs: [{
+      inputRef: "worldkit://reconstruction-input/cloud-temple-reference@1",
+      contentHash: HASH_C,
+      mediaType: "image/png",
+    }],
+    codexExecutionProfileRef:
+      "worldkit://codex-execution-profile/formal@1",
+    codexExecutionProfileHash: HASH_D,
+    taskInstructionRef:
+      "worldkit://task-instruction/native-block-reconstruction@1",
+    taskInstructionHash: HASH_E,
+    builderSkillRef:
+      "worldkit://skill/worldkit-native-block-builder@1",
+    builderSkillHash: HASH_A,
+    workspaceContextManifestRef:
+      "worldkit://workspace-context/native-block-builder@1",
+    workspaceContextManifestHash: HASH_B,
+    contextInputs: [
+      { inputRef: "context/api.md", contentHash: HASH_C },
+      { inputRef: "context/profile.json", contentHash: HASH_D },
+    ],
+    nativeSceneApiRef: "worldkit://native-scene-api/babylon-native@1",
+    nativeSceneApiHash: HASH_A,
+    nativeSceneProfileRef:
+      "worldkit://native-scene-profile/whitebox.blocks@1",
+    nativeSceneProfileHash: HASH_B,
+    blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
+    blockProfileHash: HASH_C,
+    bootstrapInputRef: "worldkit://native-bootstrap/cloud-temple@1",
+    bootstrapInputHash: HASH_D,
+    seed: 202608311,
+    budgets: {
+      maximumBlockCount: 2_000,
+      maximumStaticColliderCount: 500,
+      maximumStaticColliderVertexCount: 200_000,
+      maximumStaticColliderTriangleCount: 100_000,
+      maximumOutputBytes: 4_000_000,
+      timeoutSeconds: 900,
+    },
+    declaredOutputPaths: [
+      "scene.ts",
+      "native-block-authoring.json",
+      "native-resources.json",
+    ],
+  };
+}
+
+function generationReceipt(
+  request: NativeBlockGenerationRequestV1 = generationRequest(),
+): NativeBlockGenerationReceiptV1 {
+  return {
+    kind: "native-block-generation-receipt",
+    schemaVersion: 1,
+    id: "cloud-temple.initial.receipt",
+    generationRequestRef:
+      "worldkit://native-generation-request/cloud-temple.initial@1",
+    generationRequestHash: hashNativeBlockGenerationRequestV1(request),
+    routerTaskPayloadHash: HASH_E,
+    taskInstructionHash: request.taskInstructionHash,
+    builderSkillHash: request.builderSkillHash,
+    workspaceContextManifestHash: request.workspaceContextManifestHash,
+    routerRequestId: "cloud-temple.initial",
+    backend: "cloud",
+    executionProfile: "formal",
+    resolvedModel: "gpt-5.6-sol",
+    resolvedReasoningEffort: "xhigh",
+    outcome: "completed",
+    outputs: [
+      {
+        path: "native-block-authoring.json",
+        contentHash: HASH_A,
+        sizeBytes: 200,
+        mediaType: "application/json",
+      },
+      {
+        path: "native-resources.json",
+        contentHash: HASH_B,
+        sizeBytes: 2,
+        mediaType: "application/json",
+      },
+      {
+        path: "scene.ts",
+        contentHash: HASH_C,
+        sizeBytes: 2_000,
+        mediaType: "text/typescript",
+      },
+    ],
+    diagnosticCodes: [],
+    cleanupOutcome: "completed",
+  };
+}
+
+describe("Native Block generation identity", () => {
+  it("parses, freezes, canonicalizes, and hashes the closed Request and Receipt", () => {
+    const request = parseNativeBlockGenerationRequestV1(generationRequest());
+    const receipt = parseNativeBlockGenerationReceiptV1(generationReceipt(request));
+    expect(request.declaredOutputPaths).toEqual([
+      "scene.ts",
+      "native-block-authoring.json",
+      "native-resources.json",
+    ]);
+    expect(Object.isFrozen(request)).toBe(true);
+    expect(Object.isFrozen(request.referenceInputs[0])).toBe(true);
+    expect(Object.isFrozen(receipt.outputs[0])).toBe(true);
+    expect(nativeBlockGenerationRequestCanonicalBytesV1(request)).toEqual(
+      canonicalJsonBytes(request),
+    );
+    expect(nativeBlockGenerationReceiptCanonicalBytesV1(receipt)).toEqual(
+      canonicalJsonBytes(receipt),
+    );
+    expect(hashNativeBlockGenerationRequestV1(request)).toBe(
+      sha256CanonicalJson(request),
+    );
+    expect(hashNativeBlockGenerationReceiptV1(receipt)).toBe(
+      sha256CanonicalJson(receipt),
+    );
+    expect(() =>
+      assertNativeBlockGenerationReceiptMatchesRequestV1(request, receipt)
+    ).not.toThrow();
+  });
+
+  it("rejects self-reference, reordered inputs, wrong outputs, and non-formal execution", () => {
+    const request = generationRequest();
+    const receipt = generationReceipt(request);
+    for (const invalid of [
+      { ...request, routerTaskPayloadHash: HASH_A },
+      { ...request, contextInputs: [...request.contextInputs].reverse() },
+      { ...request, contextInputs: [request.contextInputs[0], request.contextInputs[0]] },
+      { ...request, referenceInputs: [request.referenceInputs[0], request.referenceInputs[0]] },
+      { ...request, declaredOutputPaths: [...request.declaredOutputPaths].reverse() },
+      { ...request, absoluteWorkspacePath: "/tmp/world" },
+    ]) {
+      expect(() => parseNativeBlockGenerationRequestV1(invalid)).toThrow(
+        /NATIVE_BLOCK_GENERATION_REQUEST_INVALID/,
+      );
+    }
+    for (const invalid of [
+      { ...receipt, resolvedModel: "gpt-5.4" },
+      { ...receipt, resolvedReasoningEffort: "high" },
+      { ...receipt, executionProfile: "smoke" },
+      { ...receipt, providerPayload: {} },
+      { ...receipt, outputs: [...receipt.outputs].reverse() },
+    ]) {
+      expect(() => parseNativeBlockGenerationReceiptV1(invalid)).toThrow(
+        /NATIVE_BLOCK_GENERATION_RECEIPT_INVALID/,
+      );
+    }
+    expect(() => assertNativeBlockGenerationReceiptMatchesRequestV1(
+      request,
+      {
+        ...receipt,
+        outputs: receipt.outputs.filter(({ path }) => path !== "scene.ts"),
+        outcome: "tool-error",
+        diagnosticCodes: ["output-missing"],
+      },
+    )).toThrow(/NATIVE_BLOCK_GENERATION_RECEIPT_MISMATCH/);
+  });
+});
+
 describe("SceneAuthoringRouteDecisionV1", () => {
+  const routeInput = (): DecideSceneAuthoringRouteV1Input => ({
+    id: "route-native-ridge",
+    sceneBriefRef: "worldkit://scene-brief/cloud-ridge@1",
+    sceneBriefHash: HASH_A,
+    trustProfileRef: "worldkit://trust-profile/trusted-local@1",
+    trustProfileHash: HASH_B,
+    requiredCapabilityRefs: ["worldkit://capability/static-collider@1"],
+    requestedSourceKind: "babylon-native",
+    nativeTrustAdmitted: true,
+    referenceDrivenDistinctiveSilhouette: true,
+  });
+
+  it("owns the deterministic admitted Native route decision", () => {
+    const input = routeInput();
+    const decision = decideSceneAuthoringRouteV1({
+      ...input,
+      requiredCapabilityRefs: [
+        "worldkit://capability/static-collider@1",
+        "worldkit://capability/block-visual-groups@1",
+        "worldkit://capability/static-collider@1",
+      ].reverse(),
+    });
+
+    expect(decision).toEqual({
+      kind: "scene-authoring-route-decision",
+      schemaVersion: 1,
+      id: input.id,
+      sceneBriefRef: input.sceneBriefRef,
+      sceneBriefHash: input.sceneBriefHash,
+      trustProfileRef: input.trustProfileRef,
+      trustProfileHash: input.trustProfileHash,
+      requiredCapabilityRefs: [
+        "worldkit://capability/block-visual-groups@1",
+        "worldkit://capability/static-collider@1",
+      ],
+      decision: {
+        kind: "babylon-native",
+        authoringProfileRef:
+          "worldkit://native-authoring-profile/whitebox.blocks@1",
+        compositionStrategy: "ground-first",
+        reasonCodes: [
+          "reference-driven-distinctive-silhouette",
+          "user-selected-supported-lane",
+        ],
+      },
+    });
+    expect(Object.isFrozen(decision)).toBe(true);
+    expect(Object.isFrozen(decision.decision)).toBe(true);
+  });
+
+  it("fails closed for unsupported Native capabilities and unadmitted trust", () => {
+    const unsupported = [
+      ["worldkit://capability/world-change-set@1", "requires-world-change-set"],
+      ["worldkit://capability/route.nav@1", "requires-canonical-route"],
+      [
+        "worldkit://capability/dynamic-multilayer-surface@1",
+        "unsupported-dynamic-multilayer-surface",
+      ],
+    ] as const;
+    for (const [capabilityRef, reasonCode] of unsupported) {
+      const decision = decideSceneAuthoringRouteV1({
+        ...routeInput(),
+        requiredCapabilityRefs: [capabilityRef],
+      });
+      expect(decision.decision).toEqual({
+        kind: "capability-gap",
+        unsupportedCapabilityRefs: [capabilityRef],
+        reasonCodes: [reasonCode],
+      });
+    }
+
+    const unadmitted = decideSceneAuthoringRouteV1({
+      ...routeInput(),
+      nativeTrustAdmitted: false,
+    });
+    expect(unadmitted.decision).toEqual({
+      kind: "capability-gap",
+      unsupportedCapabilityRefs: [
+        "worldkit://capability/hosted-native-admission@1",
+      ],
+      reasonCodes: ["hosted-native-not-admitted"],
+    });
+  });
+
+  it("keeps explicit Canonical selection canonical and rejects extra input keys", () => {
+    expect(decideSceneAuthoringRouteV1({
+      ...routeInput(),
+      requestedSourceKind: "canonical",
+    }).decision).toEqual({
+      kind: "canonical",
+      authoringProfileRef: "worldkit://authoring-profile/canonical-outdoor@1",
+      reasonCodes: ["canonical-default"],
+    });
+    expect(() => decideSceneAuthoringRouteV1({
+      ...routeInput(),
+      modelAuthoredDesiredRoute: "babylon-native",
+    } as DecideSceneAuthoringRouteV1Input)).toThrow(
+      /SCENE_AUTHORING_ROUTE_DECISION_INVALID/,
+    );
+  });
+
   it("parses all closed decision members and deeply freezes detached data", () => {
     for (const fixture of [canonicalRoute(), nativeRoute(), capabilityGapRoute()]) {
       const mutable = structuredClone(fixture);
@@ -430,6 +711,17 @@ describe("SceneAuthoringAttemptV1", () => {
         },
       },
       {
+        ...nativeAttempt(),
+        sourceInput: {
+          kind: "babylon-native",
+          bootstrapInputRef: "worldkit://native-bootstrap-input/ridge@1",
+          bootstrapInputHash: HASH_C,
+          [["module", "GenerationInput", "Ref"].join("")]:
+            "worldkit://native-module-generation-input/ridge@1",
+          [["module", "GenerationInput", "Hash"].join("")]: HASH_D,
+        },
+      },
+      {
         ...canonicalAttempt(),
         selectedAssetResources: [
           { ...canonicalAttempt().selectedAssetResources[0], unknown: true },
@@ -596,7 +888,7 @@ describe("firstInvalidatedSceneAuthoringGateV1", () => {
         ...nativeBase,
         sourceInput: {
           ...nativeBase.sourceInput,
-          moduleGenerationInputHash: HASH_E,
+          generationRequestHash: HASH_E,
         },
       },
       { ...base, selectedAssetResources: base.selectedAssetResources.slice(0, 1) },
