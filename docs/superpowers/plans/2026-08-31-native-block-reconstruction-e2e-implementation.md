@@ -21,6 +21,10 @@
 - Use current-only clean breaks: one public name, parser, entry point, and state owner; delete replaced fields, aliases, fallbacks, duplicate DTOs, and Case-specific production adapters.
 - Checker success precedes Package build; verified Package plus Host admission precede Runtime Candidate allocation.
 - Static collision comes only from explicit Frozen Contributions; SDK remains sole owner of Havok, Character Capsule, support, Input, Fixed Tick, Action, Camera, Reset, and lifecycle.
+- The current Unified Scene Viewer (`apps/playground`, its curated Catalog/bootstrap, Studio preview route, and `worldkit run`) remains Canonical AuthoringSpec-only. NBR-1 must not add a Native route to that shell or alter its public source-selection contract.
+- Native Package launch and formal Capture use the retained BNA verification Web Harness in `apps/native-scene-playground` and an explicit BNA-scoped CLI route. That Harness is evidence infrastructure, not a second product Viewer or a new Runtime owner.
+- Deleting the Native Harness, its identity-bound fixtures, or its verification command is outside NBR-1 unless BNA-7 evidence has migrated, the applicable BNA-8 disposition exists, production/test references are zero, and the BNA Runtime/Capture owners explicitly sign off.
+- Treat `codex/block-world-sdk-v2@3c2e9826f0c91ef39675c27a6bbdc6238e6c0b05` as the implementation migration source for Builder Skill/self-check, deterministic Block validation, playthrough Capture, visual reconstruction review and bounded retry. Port accepted logic/tests into current owners before writing replacements; do not merge its Three.js/old Compiler/duplicate Runtime packages or create compatibility paths.
 - Each implementation worktree runs `pnpm install --frozen-lockfile`; development runs focused RED/GREEN plus necessary typecheck, not repeated whole-repository gates.
 - Every independently reviewable checkpoint is committed, pushed, reviewed, and merged to `main` before the next main-agent integration checkpoint; exact-SHA Cloud evidence may replace waiting on queued GitHub CI.
 - Use `===` / `!==` for equality and lodash `isNil` / `isEmpty` for null-or-empty semantics.
@@ -36,7 +40,7 @@
 | 3 | NBR-20A | Native Block Builder Skill and Host replay rules | 2 | 4 | sequential; Skill files only | PR B |
 | 4 | NBR-20B | Router-only immutable AI generation workspace and receipt | 2, 3 | 5, 11 | sequential; `scripts/reconstruction/generation-*` | PR B |
 | 5 | NBR-30 | Generic Native package command and Cloud Ridge clean break | 4 | 6, 7 | main-agent-only; package CLI adapter | PR C |
-| 6 | NBR-40 | Generic verified-Package Browser Runtime through main Playground | 5 | 9, 13 | main-agent-only; Vite/Browser lifecycle | PR D |
+| 6 | NBR-40 | Generic verified-Package Runtime through retained BNA verification Harness | 5 | 9, 13 | main-agent-only; BNA Harness/Browser lifecycle | PR D |
 | 7 | NBR-45P | Persist trusted Block materializer metadata and complete inventory in Package Root/Receipt | 5, 8 | 9 | main-agent-only; BNA-3 Package identity | PR E1 |
 | 8 | NBR-45A | Formal Capture and Block semantic identity contracts | 2 | 7 | sequential; contracts only | PR E0 |
 | 9 | NBR-45B | Hosted same-session opening/top/world-side/overlay/traversal Capture | 6, 7, 8 | 11, 13 | main-agent-only; Runtime/Capture bridge | PR E2 |
@@ -63,12 +67,32 @@ After Task 2 freezes contracts, Task 10/NBR-50A may run in parallel with sequent
 - `scripts/reconstruction/run-journal.ts`: immutable initial/repair Attempt state machine and cleanup join.
 - `scripts/reconstruction/run.ts`: `worldkit reconstruct run` facade over the above owners.
 - `packages/runtime-contracts/src/formal-world-capture.ts`: source-neutral formal Capture/Traversal Receipt contracts.
-- `scripts/lib/world-package-browser-transport.ts`: exact receipt-listed Package files exposed to the Browser process.
-- `apps/playground/src/browser-world-package-loader.ts`: fetch, assemble, and verify active Package; no Source-specific fallback.
-- `apps/playground/src/native-runtime-host.ts`: relocated generic consumer of existing RuntimeHost/Runtime Babylon owners.
-- `apps/playground/src/package-runtime-startup.ts`: closed verified Package union switch and Browser API publication.
+- `scripts/lib/world-package-browser-transport.ts`: exact receipt-listed Package files exposed only to the BNA verification Browser process.
+- `apps/native-scene-playground/src/world-package-loader.ts`: generalize the existing fixed Package loader to a verified Package input; no Source-specific fallback or repository scan.
+- `apps/native-scene-playground/src/native-runtime-host.ts`: retained generic consumer of existing RuntimeHost/Runtime Babylon owners; it does not become a product Viewer owner.
+- `apps/native-scene-playground/src/native-bootstrap.ts`: start the verified Native Package through the retained Harness and publish only the existing verification bridge.
 - `scripts/cli/worldkit.ts`: stable command parsing/dispatch only; domain logic remains in responsibility directories.
 - `artifacts/scenes/cloud-temple-t-gate-native-block/`: immutable Case input/profile/run evidence and final Package/Capture.
+
+## Experimental branch reuse audit
+
+Before Task 3 changes production code, write the PR description's three-way migration table against
+`codex/block-world-sdk-v2@3c2e9826f0c91ef39675c27a6bbdc6238e6c0b05`:
+
+| Source asset | Disposition | Current destination owner |
+|---|---|---|
+| `.codex/skills/worldkit-block-builder/**` and `scripts/agent-block-builder-self-check.ts` | adapt prompt/self-check and preserve useful adversarial fixtures | `.codex/skills/worldkit-native-block-builder/**` plus Host replay |
+| `packages/block-world/**` check/shape tests | census first; most geometry/Layout semantics already exist, port only a proved missing engine-neutral rule | `@whitebox-world/native-babylon-block-profile` |
+| `scripts/run-spatial-world-agent.sh` | retain task/recovery requirements but reject shell/backend coupling | `scripts/agents/run-codex-task.mjs` through `scripts/reconstruction/generation-*` |
+| `scripts/run-playthrough-capture.ts` | retain fixed-input/cleanup test intent only; reject raw Browser keyboard injection | `scripts/reconstruction/hosted-session-capture.ts` plus SDK control-capture owners |
+| `scripts/lib/block-world-visual-review.ts` | adapt deterministic entry/top composition rules, reject its software renderer | formal Babylon Capture plus WRC-SR evaluator |
+| styled visual reconstructor files | reject from NBR structural scoring; preserve only as separately owned post-Capture work | no NBR destination |
+| LWDP pending/failure classification/late-output recovery fixtures | direct-port or semantic-adapt only after RED tests distinguish unknown submission from repairable scene failure | current router plus immutable run journal |
+| `scripts/verify-block-builder-host-resume.ts` | adapt identity/replay intent; reject old self-check version compatibility table | Native Check, Package Root/Receipt and Runtime replay |
+| `packages/block-world-three/**`, old Compiler/Viewer/Runtime paths | reject | no destination; current Babylon/BNA/SDK owners remain authoritative |
+
+The audit must identify direct ports, semantic adaptations and rejected legacy code. It is not permission to
+restore the old packages wholesale or preserve two public authoring dialects.
 
 ## Checkpoint discipline
 
@@ -720,29 +744,27 @@ git push -u origin HEAD
 
 Request exact-commit Package/identity review. Merge only after P0/P1 closure, then refresh `origin/main`.
 
-### Task 6: NBR-40 Run any verified Package through the main Playground and existing Runtime owners
+### Task 6: NBR-40 Run an admitted Native Package through the retained BNA verification Harness
 
 **Files:**
 - Create: `scripts/lib/world-package-browser-transport.ts`
 - Create: `scripts/lib/world-package-browser-transport.test.ts`
 - Modify: `scripts/lib/worldkit-server.ts`
 - Modify: `scripts/lib/worldkit-server.test.ts`
-- Modify: `apps/playground/vite.config.mjs`
-- Modify: `apps/playground/vite.config.test.mjs`
-- Create: `apps/playground/src/browser-world-package-loader.ts`
-- Create: `apps/playground/src/browser-world-package-loader.test.ts`
-- Create: `apps/playground/src/package-runtime-startup.ts`
-- Create: `apps/playground/src/package-runtime-startup.test.ts`
-- Create: `apps/playground/src/native-runtime-host.ts` by relocating/generalizing the accepted code from `apps/native-scene-playground/src/native-runtime-host.ts`
-- Modify: `apps/playground/src/playground-runtime-route.ts`
-- Modify: `apps/playground/src/playground-runtime-route.test.ts`
-- Modify: `apps/playground/src/main.ts`
+- Modify: `apps/native-scene-playground/vite.config.ts`
+- Modify: `apps/native-scene-playground/src/world-package-loader.ts`
+- Modify: `apps/native-scene-playground/src/native-runtime-host-module-loader.test.ts`
+- Modify: `apps/native-scene-playground/src/native-runtime-host.ts`
+- Modify: `apps/native-scene-playground/src/native-bootstrap.ts`
+- Modify: `apps/native-scene-playground/src/native-package-migration.test.ts`
+- Modify: `apps/native-scene-playground/src/hosted-runtime-bridge.ts`
+- Modify: `apps/native-scene-playground/src/hosted-runtime-bridge.test.ts`
 - Modify: `scripts/cli/worldkit.ts`
 - Modify: `scripts/cli/worldkit.test.ts`
 
 **Interfaces:**
 - Consumes: a filesystem WorldPackage directory that passes `verifyWorldPackageDirectoryV1()`.
-- Produces: `worldkit run <package-directory>` serving a package-gameplay route in the main Playground, installing the existing Browser V5 API, and creating the existing RuntimeHost/BabylonWorldRuntime with SDK-owned systems.
+- Produces: `worldkit native run <package-directory>` serving the admitted Native Package through the retained BNA verification Harness and creating the existing RuntimeHost/BabylonWorldRuntime with SDK-owned systems. It does not change `worldkit run`, Studio, the Canonical Viewer Catalog/bootstrap, or the product Viewer source-selection contract.
 
 - [ ] **Step 1: Write RED exact Package transport tests**
 
@@ -761,19 +783,19 @@ await expect(transport.read("../package.json")).rejects.toThrow(
 
 Test symlink root/file, unlisted file, wrong content hash/size/media type, path traversal, mutated byte after verification, and cleanup. No route may serve the repository root or arbitrary filesystem path.
 
-- [ ] **Step 2: Write RED closed verified-union startup tests**
+- [ ] **Step 2: Write RED Native-only admitted startup tests**
 
-Test `startVerifiedPackageRuntimeV1()` with both `canonical-execution-plan` and `babylon-native-scene`. Native must pass its verified Package and exact loaded Module hash into the existing runtime admission path. Unknown kind must be impossible after the Package parser; do not add `default -> canonical` fallback.
+Test the retained BNA Harness with `babylon-native-scene`: it must pass its verified Package and exact loaded Module hash into the existing runtime admission path. Explicitly prove that a `canonical-execution-plan` Package and any unknown kind are rejected before Harness startup. The source-neutral verified Package union remains tested by its existing WorldPackage/Runtime owner; this Harness must not become a mixed Source route or add a `default -> canonical` fallback.
 
 Use spies to assert the Module cannot create Engine/Physics/Camera/Input/loop and that SDK Runtime creates Havok/Subject/Camera after admission. Add unsupported Spawn, ledge departure, Reset/rebind, two Candidate, and throwing disposal cases from the runtime deep-review checklist.
 
 - [ ] **Step 3: Run RED Runtime route tests**
 
 ```bash
-pnpm exec vitest run scripts/lib/world-package-browser-transport.test.ts scripts/lib/worldkit-server.test.ts apps/playground/src/browser-world-package-loader.test.ts apps/playground/src/package-runtime-startup.test.ts apps/playground/src/playground-runtime-route.test.ts
+pnpm exec vitest run scripts/lib/world-package-browser-transport.test.ts scripts/lib/worldkit-server.test.ts apps/native-scene-playground/src/native-runtime-host-module-loader.test.ts apps/native-scene-playground/src/native-package-migration.test.ts apps/native-scene-playground/src/hosted-runtime-bridge.test.ts
 ```
 
-Expected: FAIL because the main Playground rejects Package directories and has no package-gameplay route.
+Expected: FAIL because the BNA verification Harness still embeds the fixed Cloud Ridge Package and cannot accept an arbitrary admitted Native Package directory.
 
 - [ ] **Step 4: Add verified Package Browser transport and virtual Native module**
 
@@ -785,52 +807,46 @@ type WorldkitServerSourceV1 =
   | Readonly<{ kind: "world-package"; packageDirectoryPath: string }>;
 ```
 
-For Package source, verify before Vite spawn, expose receipt and receipt-listed files through nonce-protected same-origin middleware, and inject the Package Root. `apps/playground/vite.config.mjs` provides one `virtual:worldkit-active-native-scene` module only when the verified Package kind is Native; it loads exactly the admitted `native/scene.mjs` bytes and exports the verified bundle content hash. It must not embed a Cloud Ridge path or scan workspace packages beyond the already admitted runtime dependency graph.
+For Package source, verify before Vite spawn, expose receipt and receipt-listed files through nonce-protected same-origin middleware, and inject the Package Root. `apps/native-scene-playground/vite.config.ts` provides one active Native Module only from the verified Package; it loads exactly the admitted `native/scene.mjs` bytes and exports the verified bundle content hash. It must not embed a Cloud Ridge path or scan workspace packages beyond the already admitted runtime dependency graph.
 
-- [ ] **Step 5: Add package-gameplay route and source-neutral startup**
+- [ ] **Step 5: Generalize the BNA verification startup without touching the Unified Viewer**
 
-Extend `PlaygroundRuntimeRouteV1` with:
-
-```ts
-Readonly<{ mode: "package-gameplay"; worldPackageRootHash: Sha256HashV1 }>
-```
-
-`browser-world-package-loader.ts` fetches the receipt-listed rows, assembles them, and calls `verifyWorldPackageDirectoryV1()` before returning the closed union. `package-runtime-startup.ts` selects the existing Canonical adapter or the relocated Native RuntimeHost consumer after verification. Both install the same `WorldkitBrowserApiV5`; Native does not publish `__WORLDKIT_NATIVE_SPIKE__` as a product API.
+`world-package-loader.ts` fetches receipt-listed rows, assembles them, and verifies the Native Package before returning the admitted input. `native-bootstrap.ts` then delegates to the existing Native RuntimeHost consumer and Hosted bridge. Do not add a Native branch to `PlaygroundRuntimeRouteV1`, `apps/playground`, Studio preview, or the current `worldkit run` parser. The Harness may keep a verification-only bridge, but it must not publish that bridge as a product Browser protocol.
 
 - [ ] **Step 6: Preserve SDK owners and lifecycle semantics**
 
-The relocated Native adapter must delegate to `RuntimeHost`, `runtimeWorldConfigurationFromVerifiedWorldPackageV1()`, `prepareBabylonNativeRuntimePackageV1()`, `BabylonWorldRuntime.create()`, and the SDK Browser API adapter. It must not duplicate motion state, infer support, create Physics shapes itself, or retain a private Camera/Input state machine. Test pause-until-ready, Reset origin, active Candidate swap, exact module hash, page exit, partial create, and idempotent throwing cleanup.
+The retained Native adapter must delegate to `RuntimeHost`, `runtimeWorldConfigurationFromVerifiedWorldPackageV1()`, `prepareBabylonNativeRuntimePackageV1()`, `BabylonWorldRuntime.create()`, and the SDK Browser API adapter. It must not duplicate motion state, infer support, create Physics shapes itself, or retain a private Camera/Input state machine. Test pause-until-ready, Reset origin, active Candidate swap, exact module hash, page exit, partial create, and idempotent throwing cleanup.
 
-- [ ] **Step 7: Change `worldkit run` Package behavior in one clean break**
+- [ ] **Step 7: Add one explicit BNA-scoped launch command**
 
-Remove `CLI_RUN_INPUT_KIND_MISMATCH` for verified Package directories. `runUntilSignal()` resolves the input kind first: Canonical JSON keeps the existing authoring server; Package directory starts package-gameplay. The output JSON remains `{ ok, url, port }` plus WorldPackage Root and Source kind. Interactive NDJSON remains a distinct explicit form and gains no Browser fallback.
+Add `worldkit native run <package-directory>` as the single verification command for an admitted Native Package. It reports `{ ok, url, port, worldPackageRootHash, sceneSourceKind }` and starts only the retained BNA Harness. Keep `worldkit run` Canonical-only and reject Native Package directories there; do not add an alias or input-kind fallback.
 
 - [ ] **Step 8: Run GREEN Runtime gates**
 
 ```bash
-pnpm exec vitest run scripts/lib/world-package-browser-transport.test.ts scripts/lib/worldkit-server.test.ts apps/playground/src/browser-world-package-loader.test.ts apps/playground/src/package-runtime-startup.test.ts apps/playground/src/playground-runtime-route.test.ts apps/playground/src/worldkit-browser-api.test.ts packages/runtime-babylon/src/babylon-native-package-runtime.test.ts packages/runtime-host/src/native-execution-admission.test.ts
+pnpm exec vitest run scripts/lib/world-package-browser-transport.test.ts scripts/lib/worldkit-server.test.ts apps/native-scene-playground/src/native-runtime-host-module-loader.test.ts apps/native-scene-playground/src/native-package-migration.test.ts apps/native-scene-playground/src/hosted-runtime-bridge.test.ts scripts/cli/worldkit.test.ts packages/runtime-babylon/src/babylon-native-package-runtime.test.ts packages/runtime-host/src/native-execution-admission.test.ts
 pnpm typecheck
-pnpm --filter @whitebox-world/playground build
+pnpm build:native-scene
 git diff --check
 ```
 
-Expected: focused tests, typecheck, and main Playground build pass.
+Expected: focused tests, typecheck, and retained BNA verification Harness build pass; no `apps/playground`, Studio, or Canonical route file changes.
 
 - [ ] **Step 9: Manually launch the initial Package before merge**
 
 ```bash
-pnpm worldkit run \
+pnpm worldkit native run \
   artifacts/scenes/cloud-temple-t-gate-native-block/runs/initial/attempts/0/world-package \
   --port 5174 --json
 ```
 
-Expected: returned URL opens the main Playground, Browser V5 reaches ready, the Subject settles on SDK support, WASD/Jump/Reset/Camera work, and explicit blocker colliders stop the Capsule. Record this as manual evidence only; do not call it formal Capture or final Case success.
+Expected: returned URL opens the BNA verification Harness, the admitted Runtime reaches ready, the Subject settles on SDK support, WASD/Jump/Reset/Camera work, and explicit blocker colliders stop the Capsule. Record this as manual evidence only; do not call it formal Capture, a Native Viewer contract, or final Case success.
 
 - [ ] **Step 10: Commit and merge playable Runtime checkpoint PR D**
 
 ```bash
-git add scripts/lib scripts/cli apps/playground
-git commit -m "feat: run verified world packages in the main playground"
+git add scripts/lib scripts/cli apps/native-scene-playground
+git commit -m "feat: run admitted native packages in the verification harness"
 git push -u origin HEAD
 ```
 
@@ -1014,9 +1030,9 @@ Request contract review, close every P0/P1, merge PR E0, and refresh `origin/mai
 - Create: `scripts/reconstruction/formal-capture.test.ts`
 - Create: `scripts/reconstruction/hosted-session-capture.ts`
 - Create: `scripts/reconstruction/hosted-session-capture.test.ts`
-- Modify: `apps/playground/src/package-runtime-startup.ts`
-- Modify: `apps/playground/src/worldkit-browser-api.ts`
-- Modify: `apps/playground/src/worldkit-browser-api.test.ts`
+- Modify: `apps/native-scene-playground/src/hosted-runtime-bridge.ts`
+- Modify: `apps/native-scene-playground/src/hosted-runtime-bridge.test.ts`
+- Modify: `apps/native-scene-playground/src/hosted-runtime-frame.ts`
 - Modify: `scripts/cli/worldkit.ts`
 - Modify: `scripts/cli/worldkit.test.ts`
 
@@ -1052,7 +1068,7 @@ Expected: FAIL because the Hosted same-session capture command does not exist.
 
 - [ ] **Step 3: Implement Hosted Session capture orchestration including world side view**
 
-`captureHostedWorldPackageV1()` starts the existing admitted package-gameplay Browser/Hosted Session, waits for `__WORLDKIT__.ready()`, resets, waits for render readiness, and captures:
+`captureHostedWorldPackageV1()` starts the admitted Native Package through the retained BNA verification Harness/Hosted Session, waits for the existing verification bridge to report ready, resets, waits for render readiness, and captures:
 
 1. `opening`: SDK opening Camera state;
 2. `world-top-down`: bounded orthographic/Host artifact pose covering Case world bounds;
@@ -1061,6 +1077,8 @@ Expected: FAIL because the Hosted same-session capture command does not exist.
 
 Artifact Camera transactions save the committed SDK Camera state and restore it before session cleanup. Fixed-input traversal checkpoints execute in the same session and record committed Snapshot hashes, positions, movement medium, pass/block outcomes, and exact input ticks. They do not publish Route Graph, NavMesh, path planning, or `goTo` evidence.
 
+This trusted artifact renderer/Capture path is an evidence tool, not a product Viewer. It must not register the Package in the Unified Viewer Catalog, add a Native branch to `apps/playground`, or change Studio/`worldkit run` source selection.
+
 - [ ] **Step 4: Extend `worldkit capture` for verified Package directories**
 
 The existing `capture` parser accepts the Package directory and requires `--triview-output`; for Package input, that directory contains `world-top-down.png`, `world-side.png`, `collider-overlay.png`, `scripted-traversal.json`, and `formal-world-capture-receipt.json`. `--output` remains the opening PNG. Canonical file Capture remains its existing source form; there is one command and one input-kind switch after verification, not `native capture`.
@@ -1068,9 +1086,9 @@ The existing `capture` parser accepts the Package directory and requires `--triv
 - [ ] **Step 5: Run GREEN Capture/runtime tests**
 
 ```bash
-pnpm exec vitest run scripts/reconstruction/hosted-session-capture.test.ts scripts/reconstruction/formal-capture.test.ts apps/playground/src/worldkit-browser-api.test.ts scripts/cli/worldkit.test.ts
+pnpm exec vitest run scripts/reconstruction/hosted-session-capture.test.ts scripts/reconstruction/formal-capture.test.ts apps/native-scene-playground/src/hosted-runtime-bridge.test.ts scripts/cli/worldkit.test.ts
 pnpm typecheck
-pnpm --filter @whitebox-world/playground build
+pnpm build:native-scene
 git diff --check
 ```
 
@@ -1091,7 +1109,7 @@ Expected: opening, world top-down, world side, collider overlay, scripted traver
 - [ ] **Step 7: Commit and merge formal Capture checkpoint PR E2**
 
 ```bash
-git add packages/runtime-contracts scripts/reconstruction scripts/cli apps/playground artifacts/scenes/cloud-temple-t-gate-native-block
+git add packages/runtime-contracts scripts/reconstruction scripts/cli apps/native-scene-playground artifacts/scenes/cloud-temple-t-gate-native-block
 git commit -m "feat: capture admitted reconstruction packages"
 git push -u origin HEAD
 ```
@@ -1351,7 +1369,7 @@ seven-dimension evaluation
 run receipt + cleanup outcomes
 ```
 
-It launches the final Package through `worldkit run`, waits for Browser V5 ready, resets, verifies ground medium/support, applies fixed W/A/S/D and Jump sequences, proves gate/side blocker limits, proves the central route reaches the upper platform and at least one T arm, resets again, and disposes. It labels this scripted traversal, never Route/Nav/`goTo`.
+It launches the final Package through `worldkit native run`, waits for the admitted BNA Runtime session to become ready, resets, verifies ground medium/support, applies fixed W/A/S/D and Jump sequences, proves gate/side blocker limits, proves the central route reaches the upper platform and at least one T arm, resets again, and disposes. It labels this scripted traversal, never Route/Nav/`goTo` or a Native Viewer contract.
 
 - [ ] **Step 2: Run RED verifier test**
 
@@ -1390,7 +1408,7 @@ Copy the verified terminal Package/Capture/Evaluation into a sibling `.final-sta
 - [ ] **Step 6: Manually launch and inspect the final world**
 
 ```bash
-pnpm worldkit run \
+pnpm worldkit native run \
   artifacts/scenes/cloud-temple-t-gate-native-block/final/world-package \
   --port 5174 --json
 ```
@@ -1412,34 +1430,34 @@ Do not yet claim full BNA-6, BNA-7, WRC-SR, BNA-8, or WRC-1 completion.
 - Modify: `packages/native-babylon-block-profile/src/index.ts`
 - Modify: `packages/native-babylon-block-profile/src/testing.ts`
 - Modify: `packages/native-babylon-block-profile/src/package-boundary.test.ts`
-- Delete or reduce to testing-only: `apps/native-scene-playground/`
-- Delete when replaced: `scripts/verification/verify-native-scene-playground.ts`
+- Modify: `apps/native-scene-playground/` only to remove the fixed Cloud Ridge loader and duplicate Case-specific startup after the generic admitted-Package Harness is green
+- Retain: `scripts/verification/verify-native-scene-playground.ts` and identity-bound Harness fixtures until the separate BNA owner disposition permits deletion
 - Modify: root `package.json`
-- Modify: `pnpm-lock.yaml` only if workspace package removal changes it
 - Modify: all residual callers discovered by the censuses below
 
 **Interfaces:**
 - Consumes: green generic generation/package/run/capture/evaluate/repair commands and final Case.
-- Produces: one production route with no legacy API, duplicate Host, Case-specific script, production Corpus factory, or compatibility fallback.
+- Produces: one generic BNA verification route with no legacy API, duplicate Host, Case-specific loader, production Corpus factory, or compatibility fallback. It does not delete evidence infrastructure or alter the Canonical Unified Viewer.
 
 - [ ] **Step 1: Move BWB Corpus factories to testing-only exports**
 
 Remove reconstruction Corpus values/types from `packages/native-babylon-block-profile/src/index.ts`; export them only from `./testing`. Update BWB4/5 verifiers/tests to import `@whitebox-world/native-babylon-block-profile/testing`. Add a package-boundary test proving production root keys exclude every `ReconstructionCorpus` symbol.
 
-- [ ] **Step 2: Remove the duplicate Native preview Host**
+- [ ] **Step 2: Remove only the fixed Native Case loader and duplicate startup**
 
-Once the final Package runs in the main Playground, delete `apps/native-scene-playground` and its fixed Cloud Ridge virtual loader/`__WORLDKIT_NATIVE_SPIKE__` verifier, or retain only isolated test fixtures with no build/dev command and no product Host. Remove `build:native-scene` and `verify:native-scene-playground` root scripts if the app is deleted. Do not retain an alias URL or fallback loader.
+Once the final Package runs through the generic BNA verification Harness, delete the fixed Cloud Ridge virtual loader and any Case-specific duplicate startup. Keep `apps/native-scene-playground`, `build:native-scene`, `verify:native-scene-playground`, and identity-bound fixtures as BNA Runtime/Capture evidence infrastructure. Full Native Web UI/Harness deletion requires zero production/test references, migrated BNA-7 evidence, an applicable BNA-8 disposition, and explicit BNA Runtime/Capture owner sign-off in a separate current-only change. Do not retain an alias URL or fallback loader.
 
 - [ ] **Step 3: Delete temporary/Case-specific command surfaces**
 
-Remove `reconstruct:native-block:generate` and any Case-specific package/capture root scripts after `worldkit reconstruct run`, `native package`, `run`, and `capture` are green. Keep the stable generic commands only.
+Remove `reconstruct:native-block:generate` and any Case-specific package/capture root scripts after `worldkit reconstruct run`, `worldkit native package`, `worldkit native run`, and `worldkit capture` are green. Keep the stable generic commands only.
 
 - [ ] **Step 4: Run the clean-break censuses**
 
 ```bash
 if rg -n 'moduleGenerationInput(Ref|Hash)|buildCloudRidgePackage|__WORLDKIT_NATIVE_SPIKE__|virtual:worldkit-cloud-ridge-native-scene' packages scripts apps package.json; then exit 1; fi
 if rg -n 'createBabylonNativeBlockReconstructionCorpus|inspectBabylonNativeBlockReconstructionCorpus|materializeBabylonNativeBlockReconstructionCorpus' packages/native-babylon-block-profile/src/index.ts; then exit 1; fi
-if rg -n 'overlay.*canonical|canonical.*overlay|shadow.?plan|three\.js|mesh.*scan|tag.*collider|name.*collider' scripts/reconstruction apps/playground/src/package-runtime-startup.ts; then exit 1; fi
+if rg -n 'overlay.*canonical|canonical.*overlay|shadow.?plan|three\.js|mesh.*scan|tag.*collider|name.*collider' scripts/reconstruction apps/native-scene-playground/src; then exit 1; fi
+if git diff origin/main -- apps/playground | grep -q .; then echo 'NBR-1 must not change the Canonical Unified Viewer'; exit 1; fi
 ```
 
 Expected: all three negated censuses pass. Inspect any match manually before deletion when it appears only in an explicit negative test.
@@ -1447,9 +1465,9 @@ Expected: all three negated censuses pass. Inspect any match manually before del
 - [ ] **Step 5: Run focused post-deletion gates and commit PR H**
 
 ```bash
-pnpm exec vitest run packages/native-babylon-block-profile scripts/reconstruction scripts/verification/native-block-reconstruction-e2e.test.ts apps/playground/src/package-runtime-startup.test.ts
+pnpm exec vitest run packages/native-babylon-block-profile scripts/reconstruction scripts/verification/native-block-reconstruction-e2e.test.ts apps/native-scene-playground/src/native-package-migration.test.ts apps/native-scene-playground/src/hosted-runtime-bridge.test.ts
 pnpm typecheck
-pnpm --filter @whitebox-world/playground build
+pnpm build:native-scene
 git diff --check
 git add -A
 git commit -m "refactor: remove replaced native reconstruction paths"
@@ -1502,6 +1520,17 @@ For each finding, reproduce on the reviewed SHA, add a failing focused test, imp
 
 Mark `NBR-1` complete only when the spec completion definition is satisfied. In WRC/backlog, record only the delivered minimum slices of BNA-6, BNA-7, WRC-SR-1, and WRC-SR-2; leave complete Golden Corpus, product Route/Nav/`goTo`, BNA-8, WRC-ACC-1, BWB-6, PHO-7/8, generalized Action/Camera, and events unchecked/deferred. Ensure design, plan, commands, package paths, receipts, and code status agree.
 
+- [ ] **Step 5A: Re-audit `codex/block-world-sdk-v2` capability migration**
+
+Against exact source `codex/block-world-sdk-v2@3c2e9826f0c91ef39675c27a6bbdc6238e6c0b05`, close the
+reuse table for Builder/Self-check, real AI generation, deterministic Block validation, playthrough Capture,
+visual reconstruction diagnostics and resume/bounded-repair behavior. Each accepted capability must name its
+current Babylon/BNA owner, focused test and real-Case evidence; every non-migrated capability must have an
+explicit rejection reason. Verify the final representative Case preserves the source branch's useful visual
+and playability outcome through current Capture plus manual inspection. Architectural cleanliness alone cannot
+justify a functional regression, and line-for-line copying is not required when current owners provide stronger
+equivalent evidence.
+
 - [ ] **Step 6: Commit documentation truth and merge final docs PR**
 
 ```bash
@@ -1519,7 +1548,7 @@ Provide:
 ```text
 Case ID: cloud-temple-t-gate-native-block
 Final Package: artifacts/scenes/cloud-temple-t-gate-native-block/final/world-package
-Launch: pnpm worldkit run artifacts/scenes/cloud-temple-t-gate-native-block/final/world-package --port 5174 --json
+Launch: pnpm worldkit native run artifacts/scenes/cloud-temple-t-gate-native-block/final/world-package --port 5174 --json
 Opening: artifacts/scenes/cloud-temple-t-gate-native-block/final/capture/opening.png
 Top-down: artifacts/scenes/cloud-temple-t-gate-native-block/final/capture/world-top-down.png
 World side: artifacts/scenes/cloud-temple-t-gate-native-block/final/capture/world-side.png
@@ -1541,3 +1570,6 @@ Show the Capture images and state exact gates/review SHA. Say only “NBR-1 vert
 - [ ] Repair changes only new Native authoring outputs, keeps Case/Profile/Bootstrap frozen, and creates new immutable identities.
 - [ ] Final Case is real AI output, runnable, playable, collision-checked, captured, scored, repaired, and independently reviewed.
 - [ ] No legacy API, duplicate Host, third Source, shadow Plan, Mesh scan, alias, or fallback remains.
+- [ ] `apps/playground`, its curated Catalog/bootstrap, Studio preview, and `worldkit run` remain Canonical-only; NBR-1 adds no Native Viewer contract.
+- [ ] `apps/native-scene-playground` remains an explicitly BNA-owned verification Harness until the separate BNA-7/BNA-8 migration and owner sign-off permit deletion.
+- [ ] Every useful `codex/block-world-sdk-v2@3c2e9826` generation, validation, deterministic visual-review and recovery capability is either migrated with current evidence or explicitly rejected with a documented reason; styled reconstruction/raw keyboard capture remain outside NBR, and final visual/playability behavior has not regressed.
