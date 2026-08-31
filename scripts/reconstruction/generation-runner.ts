@@ -105,7 +105,8 @@ export async function runNativeBlockGenerationV1(input: PreparedInput, ports: Na
         }
       } catch (error) {
         outcome = "rejected";
-        diagnostics = [String(error).includes("unexpected") ? "output-unexpected" : String(error).includes("empty") ? "output-missing" : "output-missing"];
+        const message = String(error);
+        diagnostics = [message.includes("stale-output") ? "stale-output" : message.includes("unexpected") ? "output-unexpected" : message.includes("hash-mismatch") ? "output-hash-mismatch" : message.includes("empty") || message.includes("missing") ? "output-missing" : "task-tool-error"];
         outputs = [];
       }
     }
