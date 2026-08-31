@@ -1,0 +1,18 @@
+{
+  "kind": "project-health-supply-chain-policy",
+  "schemaVersion": 1,
+  "id": "worldkit-supply-chain",
+  "acceptedSourceIds": ["npm-registry", "patched-npm", "workspace"],
+  "acceptedLicenseSpdxExpressions": [
+    "0BSD",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "MIT",
+    "MPL-2.0",
+    "Unlicense"
+  ],
+  "advisoryProviderIds": ["osv"],
+  "maximumAdvisorySnapshotAgeDays": 7
+}

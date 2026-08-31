@@ -474,7 +474,7 @@ PHO-1 先扩展现有 `scripts/lib/workspace-boundary.ts` 唯一 Owner，使同�
 - Schema、类型、示例、CLI、Browser 和生成物字段一致；
 - 生成文件与源码输入 byte/hash parity；
 - lockfile、patch、安装版本和声明版本一致；
-- fixture/receipt 的 Owner 命令可以只读重放且 tracked tree 保持干净。
+- fixture/receipt 的 Owner 命令可以只读重放且 repository state 保持干净。
 
 不得实现第二个 Schema parser 或第二套 Hash 算法。
 
@@ -648,7 +648,7 @@ prefix、文件 suffix 和 Workspace Package ID，不接受 glob、regex 或 she
 | `canonical-browser-runtime` | `apps/playground/`、`packages/runtime-contracts/`、`packages/runtime-host/`、Canonical/Capture/Outdoor verifier inputs |
 | `placement-and-subject-runtime` | `packages/layout-solver/`、`packages/authoring/`、`packages/subject-*` 与对应 verifier inputs |
 | `trusted-route-runtime` | `packages/traversal/`、`packages/traversal-recast/`、`packages/validation/` 与 Route verifier inputs |
-| `native-scene-experimental` | `packages/native-babylon/`、`packages/native-babylon-block-profile/`、`apps/native-scene-playground/` |
+| `native-scene-experimental` | `packages/native-babylon/`、`packages/native-babylon-block-profile/`、`apps/native-scene-playground/`、当前真实 Owner `scripts/native-scene/` |
 | `three-c-migration-experimental` | `packages/camera/`、`packages/character-movement/`、`packages/subject-actions/` 与 Runtime Babylon 的 3C adapter inputs |
 | `documentation-only` | `docs/`、`AGENTS.md`；只有 change set 全部命中该 selector 且未命中非文档 capability 时才是 docs-only |
 
@@ -706,12 +706,28 @@ GitHub Issue 或发送外部消息；自动通知需后续独立授权。
 ## 9. 安全、性能与失败语义
 
 - Sensor 只使用 Registry 冻结的 execution scope：PR 的既有 Gate 在 exact checkout 中以
-  `in-place-checkout` 执行并比较执行前后 tracked tree；Nightly/Release 的动态 Probe 可使用
-  `isolated-temp-worktree`。两者的输出都只能写 scene-owned/`.project-health/` 临时根。需要启动 Server/Browser
+  `in-place-checkout` 执行并比较执行前后 tracked、untracked 与 Registry-owned `.project-health/runs`、
+  `.project-health/worktrees` 基础设施根之外的 repository state；Nightly/Release 的动态 Probe 可使用
+  `isolated-temp-worktree`。两者的声明输出都只能写 scene-owned/`.project-health/` 临时根。需要启动 Server/Browser
   的 Sensor 必须登记并在 `finally` 清理。
-- 所有外部命令和动态 Probe 只能经过 PHO-0B 冻结的单一 execution envelope/process runner；各 Sensor 不得自行 spawn、实现 timeout、重定向日志或清理进程树。
+- `in-place-checkout` 只接纳仓库内已登记、已有 Owner 的 trusted Gate，不是任意代码的文件系统沙箱。Runner
+  通过关闭 argv/环境、repo-relative cwd、tracked + untracked repository-state 前后 Hash（仅排除上述
+  Registry-owned 基础设施根）和临时根清理来证明
+  仓库内无残留；需要对恶意代码或任意仓库外写入建立 OS 级边界的 Probe 必须进入现有 Hosted/容器隔离入口，
+  不能把跨平台本地进程包装器误称为安全沙箱。
+- ignored-root 额外状态指纹有独立的 5 秒、8 MiB 和 4096 entry 上限；超限、初始化失败或读取竞态都发布
+  `infrastructure-failed` Evidence，而不是抛出未归属异常或继续运行 Owner。
+- Repository、`.project-health`、`runs`、`worktrees` 和每个临时 Owner 根在创建、使用与清理前都必须通过
+  `lstat + realpath + device/inode` 的 canonical non-symlink identity 校验；身份漂移只允许 fail-closed，
+  禁止跟随替换后的路径执行递归清理。
+- 所有外部命令和动态 Probe 只能经过 PHO-0B 冻结的单一 execution envelope/process runner；各 Sensor 不得自行 spawn、实现 timeout、重定向日志或清理进程。
+- 每个可信本地 Registry descriptor 必须声明 `descendantOwnershipMode: "inherit-owner-token"`；Owner
+  启动的全部后代必须继承 Host 注入的 owner token，且不得创建 tokenless session。PHO-6 Registry
+  admission 拒绝其他值，生产 runner 只能由该 Registry 调用。无法满足该协作式归属合同，或需要抵御
+  恶意代码、任意路径写入的 Probe，必须进入 Hosted/容器 OS 隔离；正式本地 runner 只支持 Profile
+  已冻结的 Linux/macOS 环境。
 - 不把仓库凭证、Cursor/Gemini/LWDP token、用户 home、绝对路径或环境快照写入证据。
-- 子进程有明确 timeout、输出上限和 process-tree cleanup；超时是稳定 `incomplete`，不是自动重跑。
+- 子进程有明确 timeout、输出上限和 cooperative owned-process cleanup；超时是稳定 `incomplete`，不是自动重跑。
 - PR 的总 `maximumDurationMilliseconds` 初值不得超过现有 CI `timeout-minutes: 20`；PHO-7
   只能依据 exact-head dry-run 收据量得新增开销并在这个上限内分配，不能凭估计抬高 timeout。
   重型重复测试留在 Nightly。
@@ -723,7 +739,7 @@ GitHub Issue 或发送外部消息；自动通知需后续独立授权。
 | ID | Goal / 独立交付物 | depends_on | blocks | 独占 Owner | 输入 → 输出 | 验证证据 | 模式 |
 |---|---|---|---|---|---|---|---|
 | PHO-0A | 冻结全部 current-only DTO、Profile、Workspace evidence contract、补充 Authority/Supply Chain Policy 与 debt fixtures | 无 | PHO-0B、PHO-1..8 | `contracts.ts`、`workspace-boundary-contract.ts`、`profile.json`、`authority-policy.json`、`supply-chain-policy.json`、`accepted-debt.json` | 设计 → parsable contracts/config | parser adversarial tests、canonical hash | sequential, main-agent-only |
-| PHO-0B | 冻结唯一 execution envelope/process runner | PHO-0A | PHO-2、PHO-3、PHO-4、PHO-5 | `process-runner.ts` | closed Host argv/probe descriptor → bounded redacted execution evidence | timeout/process-tree/dirty-tree fixtures | sequential, main-agent-only |
+| PHO-0B | 冻结唯一 execution envelope/process runner | PHO-0A | PHO-2、PHO-3、PHO-4、PHO-5 | `process-runner.ts` | closed trusted Host argv/probe descriptor → bounded redacted execution evidence | timeout/owner-token/repository-state/cleanup fixtures | sequential, main-agent-only |
 | PHO-1 | 扩展现有 workspace graph Owner；实现两个 Authority Sensor | PHO-0A | PHO-3、PHO-6 | `workspace-boundary.ts`、两个同名 sensor + adapter | one scan + supplemental policy → two Observations/full graph | graph/receipt/original-debt identity、dual-owner/compat fixtures | sequential, main-agent-only |
 | PHO-2 | Contract/Generated 与 Supply Chain Sensors | PHO-0B | PHO-6 | `contract-parity.ts`、`supply-chain.ts` | owner receipts/locks/license policy/advisory snapshot → two Observations | drift/provenance/license/stale-provider + clean-tree fixtures | sequential |
 | PHO-3 | Test Topology 与 Change Impact Planner | PHO-0B、PHO-1 | PHO-6、PHO-7 | `change-impact.ts` | Registry-owned Git diff + existing dependency graph/test census → Gate Plan | exact-head/public-contract/browser/build fixtures | sequential |

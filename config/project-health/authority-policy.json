@@ -1,0 +1,29 @@
+{
+  "kind": "project-health-authority-policy",
+  "schemaVersion": 1,
+  "id": "worldkit-supplemental-authority",
+  "rules": [
+    {
+      "id": "scene-source-single-owner",
+      "kind": "forbidden-owner-pair",
+      "ownerId": "runtime-host",
+      "code": "PROJECT_HEALTH_AUTHORITY_DUPLICATE",
+      "subjectRefs": ["capability:canonical-scene-source", "capability:native-scene-source"]
+    },
+    {
+      "id": "public-protocol-single-parser-owner",
+      "kind": "forbidden-owner-pair",
+      "ownerId": "public-contract",
+      "code": "PROJECT_HEALTH_AUTHORITY_DUPLICATE",
+      "subjectRefs": ["capability:canonical-public-protocol-parser", "capability:shadow-public-protocol-parser"]
+    },
+    {
+      "id": "public-compat-alias",
+      "kind": "forbidden-public-symbol",
+      "ownerId": "public-contract",
+      "code": "PROJECT_HEALTH_PUBLIC_COMPAT_ALIAS",
+      "subjectRefs": ["capability:current-only-public-contract"]
+    }
+  ],
+  "exceptions": []
+}

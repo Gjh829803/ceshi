@@ -32,7 +32,7 @@
 | `config/project-health/accepted-debt.json` | exact-fingerprint, expiring accepted debt only |
 | `scripts/project-health/contracts.ts` | closed DTO types, parsers, canonical ordering, hashes |
 | `scripts/lib/workspace-boundary-contract.ts` | neutral shared workspace graph/evidence/violation DTO and parser owner |
-| `scripts/project-health/process-runner.ts` | 唯一 bounded/redacted external execution envelope 与 process-tree cleanup owner |
+| `scripts/project-health/process-runner.ts` | 唯一 bounded/redacted external execution envelope 与 cooperative owned-process cleanup owner |
 | `scripts/project-health/registry.ts` | Sensor ID → implementation registry; no command strings in JSON |
 | `scripts/project-health/evidence-store.ts` | content-addressed local evidence and path redaction |
 | `scripts/project-health/sensors/workspace-boundary.ts` | adapts the existing workspace graph/violation/debt Owner only |
@@ -88,7 +88,7 @@
 - Consumes: canonical JSON/hash helpers already owned by `@whitebox-world/protocol` when public; otherwise the existing repository-local canonical helper used by verifier scripts.
 - Produces: `parseProjectHealthProfileV1`, `parseProjectHealthObservationV1`, `parseProjectHealthReportV1`, `projectHealthFindingFingerprintV1`, and current JSON fixtures consumed by every later task.
 
-- [ ] **Step 1: Write parser and fingerprint RED tests**
+- [x] **Step 1: Write parser and fingerprint RED tests**
 
 ```ts
 it("rejects an observation containing an absolute path", () => {
@@ -123,21 +123,21 @@ all 49 current workspace debts preserve the exact
 `sha256CanonicalJson({ importer, specifier, owner })` fingerprint and that adding `reason` or `removalGate` changes no
 identity because those fields are excluded before hashing.
 
-- [ ] **Step 2: Run the focused RED test**
+- [x] **Step 2: Run the focused RED test**
 
 Run: `pnpm exec vitest run scripts/project-health/contracts.test.ts scripts/lib/workspace-boundary-contract.test.ts`
 
 Expected: FAIL because the module does not exist.
 
-- [ ] **Step 3: Implement the closed current-only DTOs**
+- [x] **Step 3: Implement the closed current-only DTOs**
 
-Implement discriminated parsers for Profile, Metric, Finding, Observation, Gate Plan, Gate Receipt, Dependency Inventory, Independent Review Receipt, Accepted Debt, and Report. Implement the neutral `WorkspaceBoundaryViolationV1`, `WorkspaceDependencyGraphV1`, and `WorkspaceBoundaryEvidenceV1` parser in `scripts/lib/workspace-boundary-contract.ts`; Project Health imports it instead of copying it. Every workspace path is repo-relative POSIX; only the root Package `rootPath` may be `"."`, and the parser rejects machine paths or traversal elsewhere. Fingerprint Findings exactly as `sensorId + code + sorted unique subjectRefs + sorted unique evidenceClassIds` with `sha256CanonicalJson`; fingerprint workspace debt exactly as `{ importer, specifier, owner }`; exclude evidence bytes, metric values, mode, policy, text, time, explanatory debt fields, and machine paths. Reject unknown keys, non-content-addressed evidence, invalid SHA-256/modes, blocking debt, invalid `YYYY-MM-DD`, empty cap maps, cap-kind mismatch, non-finite/negative/unsafe-integer caps, ratio over 1, or caps over the Profile maximum. Require `capabilitySelectorsById` and `capabilityGateIdsById` to share the exact closed capability key set. Reject a capability without selector entries, or any individual selector entry that does not match at least one path or Workspace Package in the exact implementation tree, with `PROJECT_HEALTH_CAPABILITY_SELECTOR_EMPTY`; add RED fixtures for the dead `packages/studio/` and `scripts/native-scene/` paths so an invalid predeclared selector cannot silently survive beside valid entries. Require `metricsBySensorId` to equal the selected Observation Metric closure, every Finding metric ID to resolve in its Sensor map, and `debtStatesByFingerprint` to have the exact current Finding key set. Expiry is evaluated against Report `evaluatedOn` with the expiry date itself still valid. Do not export aliases.
+Implement discriminated parsers for Profile, Metric, Finding, Observation, Gate Plan, Gate Receipt, Dependency Inventory, Independent Review Receipt, Accepted Debt, and Report. Implement the neutral `WorkspaceBoundaryViolationV1`, `WorkspaceDependencyGraphV1`, and `WorkspaceBoundaryEvidenceV1` parser in `scripts/lib/workspace-boundary-contract.ts`; Project Health imports it instead of copying it. Every workspace path is repo-relative POSIX; only the root Package `rootPath` may be `"."`, and the parser rejects machine paths or traversal elsewhere. Fingerprint Findings exactly as `sensorId + code + sorted unique subjectRefs + sorted unique evidenceClassIds` with `sha256CanonicalJson`; fingerprint workspace debt exactly as `{ importer, specifier, owner }`; exclude evidence bytes, metric values, mode, policy, text, time, explanatory debt fields, and machine paths. Reject unknown keys, non-content-addressed evidence, invalid SHA-256/modes, blocking debt, invalid `YYYY-MM-DD`, empty cap maps, cap-kind mismatch, non-finite/negative/unsafe-integer caps, ratio over 1, or caps over the Profile maximum. Require `capabilitySelectorsById` and `capabilityGateIdsById` to share the exact closed capability key set. Reject a capability without selector entries, or any individual selector entry that does not match at least one path or Workspace Package in the exact implementation tree, with `PROJECT_HEALTH_CAPABILITY_SELECTOR_EMPTY`; add RED fixtures for dead `packages/studio/` and another genuinely absent path so an invalid predeclared selector cannot silently survive beside valid entries. The current BNA tree owns real files under `scripts/native-scene/`, so include that directory in `native-scene-experimental`. Require `metricsBySensorId` to equal the selected Observation Metric closure, every Finding metric ID to resolve in its Sensor map, and `debtStatesByFingerprint` to have the exact current Finding key set. Expiry is evaluated against Report `evaluatedOn` with the expiry date itself still valid. Do not export aliases.
 
-- [ ] **Step 4: Add the single current configuration**
+- [x] **Step 4: Add the single current configuration**
 
-`profile.json` must freeze the complete initial Sensor set; PR/Nightly/Release Required/Advisory Sensor and per-Sensor Gate IDs; Metric thresholds/not-applicable rules; `sensorId + finding code → policy`; canonical Sensor input selectors; the exact path/Package→capability selectors and capability→Gate edges from the design; runner profiles; accepted-debt cap ceilings; budgets; and artifact retention. Capability selector and Gate maps must have the same exact key set; selector entries use only closed repo-relative paths/prefixes/suffixes and Package IDs, and every selector must match the exact implementation tree at freeze time. Use `apps/studio/` plus `@whitebox-world/studio` for Studio; do not retain the nonexistent `packages/studio/` or `scripts/native-scene/` paths. The parser requires exact key closure and every referenced runner/Sensor to exist in the Profile; PHO-6 Registry integration later validates every Gate ID and Profile-derived Finding policy. `authority-policy.json` contains only supplemental Scene Source/dual-owner/compat rules and an empty sorted exception set; it must not copy workspace boundary edges or their 49-item debt ledger. `supply-chain-policy.json` freezes accepted source/license/provider IDs without package-version waivers or update commands. `accepted-debt.json` starts as a valid empty list. Add `.project-health/` to `.gitignore`.
+`profile.json` must freeze the complete initial Sensor set; PR/Nightly/Release Required/Advisory Sensor and per-Sensor Gate IDs; Metric thresholds/not-applicable rules; `sensorId + finding code → policy`; canonical Sensor input selectors; the exact path/Package→capability selectors and capability→Gate edges from the design; runner profiles; accepted-debt cap ceilings; budgets; and artifact retention. Capability selector and Gate maps must have the same exact key set; selector entries use only closed repo-relative paths/prefixes/suffixes and Package IDs, and every selector must match the exact implementation tree at freeze time. Use `apps/studio/` plus `@whitebox-world/studio` for Studio; do not retain the nonexistent `packages/studio/` path. Include the real BNA Owner `scripts/native-scene/` in the Native selector. The parser requires exact key closure and every referenced runner/Sensor to exist in the Profile; PHO-6 Registry integration later validates every Gate ID and Profile-derived Finding policy. `authority-policy.json` contains only supplemental Scene Source/dual-owner/compat rules and an empty sorted exception set; it must not copy workspace boundary edges or their 49-item debt ledger. `supply-chain-policy.json` freezes accepted source/license/provider IDs without package-version waivers or update commands. `accepted-debt.json` starts as a valid empty list. Add `.project-health/` to `.gitignore`.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run: `pnpm exec vitest run scripts/project-health/contracts.test.ts scripts/lib/workspace-boundary-contract.test.ts && pnpm test:census && pnpm typecheck && git diff --check`
 
@@ -154,13 +154,13 @@ Commit: `feat: add project health contracts`
 
 **Interfaces:**
 - Consumes: closed Host-owned argv/probe descriptors later registered without translation by PHO-6, plus explicit timeout/output budgets.
-- Produces: redacted, bounded, content-addressed execution evidence with deterministic status and complete process-tree cleanup.
+- Produces: redacted, bounded, content-addressed execution evidence with deterministic status and cooperative owner-token process cleanup.
 
-- [ ] **Step 1: Write RED fixtures** for timeout, child-process escape, output truncation, credential/path redaction, signal exit, cleanup throw, tracked-tree mutation, invalid execution scope, and isolation cleanup.
-- [ ] **Step 2: Run RED:** `pnpm exec vitest run scripts/project-health/process-runner.test.ts`.
-- [ ] **Step 3: Implement one runner** without a shell. A closed descriptor selects `in-place-checkout` for existing PR Gate commands or `isolated-temp-worktree` for dynamic probes; both use a temporary output root, cap stdout/stderr, terminate the process tree in `finally`, and never retry a failed or timed-out command silently. The first scope hashes the tracked tree before/after; the second proves worktree removal.
-- [ ] **Step 4: Register the test immediately** in `TEST_GATE_MANIFEST_V1`; run its focused test and the existing census.
-- [ ] **Step 5: Verify and commit:** run the focused test, census, `pnpm typecheck`, and `git diff --check`.
+- [x] **Step 1: Write RED fixtures** for timeout, inherited-owner descendant escape, output truncation, credential/path redaction, signal exit, setup/cleanup throw, repository-state mutation including ignored-root residue, concurrent runner infrastructure, fingerprint budget overflow, symlinked/swapped infrastructure parents, invalid execution scope, and isolation cleanup.
+- [x] **Step 2: Run RED:** `pnpm exec vitest run scripts/project-health/process-runner.test.ts`.
+- [x] **Step 3: Implement one runner** without a shell. A closed descriptor selects `in-place-checkout` for registered trusted PR Gate commands or `isolated-temp-worktree` for dynamic probes; both use a temporary output root, cap stdout/stderr, cooperatively terminate token-owning descendants in `finally`, and never retry a failed or timed-out command silently. Every descriptor requires `descendantOwnershipMode: "inherit-owner-token"`; registered Owners must preserve the injected token for all descendants and must not create tokenless sessions. The first scope hashes tracked, untracked, and non-infrastructure ignored-root repository state before/after under a separate 5-second/8-MiB/4096-entry budget; `.project-health/runs` and `.project-health/worktrees` are Registry-owned infrastructure roots so concurrent executions do not contaminate each other. Repository and every infrastructure/temporary directory require canonical non-symlink identity, revalidated by device/inode before cleanup. The second scope proves worktree removal. Setup, fingerprint, execution, and cleanup failures all publish closed Evidence. This envelope is not an OS sandbox for malicious code: any Probe requiring arbitrary-write containment must use the existing Hosted/container isolation boundary. Formal local profiles are Linux/macOS only.
+- [x] **Step 4: Register the test immediately** in `TEST_GATE_MANIFEST_V1`; run its focused test and the existing census.
+- [x] **Step 5: Verify and commit:** run the focused test, census, `pnpm typecheck`, and `git diff --check`.
 
 Commit: `feat: add project health execution envelope`
 
@@ -242,7 +242,7 @@ Run: `pnpm exec vitest run scripts/project-health/process-runner.test.ts scripts
 
 - [ ] **Step 3: Implement mode-specific evidence adaptation**
 
-In `pr`, only validate exact-head Receipts produced by the preceding `health:record` steps; never invoke an owner. In `nightly`/`release`, missing selected evidence may be produced once from a closed Host descriptor through PHO-0B. Register one immutable `dependency-inventory` argv descriptor backed by `pnpm licenses list --json`; this is the npm/pnpm declared-closure Owner, while `contract-parity` remains the only lock/install/patch byte-identity Owner. Project the pnpm output into the frozen Dependency Inventory DTO, sort/dedupe exact package/version/license entries, and drop raw `paths`, author, description, homepage and order before hashing; RED fixtures use different absolute install roots with byte-identical projected evidence. Supply-chain online evidence additionally binds provider ID, database snapshot date/hash, package name and exact version. Provider unavailability follows the mode-specific Profile rule: Advisory `incomplete` in PR/Nightly, and the explicit Release `not-applicable` reason plus a retained Advisory Finding; it is never a clean bill of health. PHO-6 later registers the same closed set. Neither Sensor may spawn, parse the lockfile independently, implement its own timeout, redact logs, or clean process trees.
+In `pr`, only validate exact-head Receipts produced by the preceding `health:record` steps; never invoke an owner. In `nightly`/`release`, missing selected evidence may be produced once from a closed Host descriptor through PHO-0B. Register one immutable `dependency-inventory` argv descriptor backed by `pnpm licenses list --json`; this is the npm/pnpm declared-closure Owner, while `contract-parity` remains the only lock/install/patch byte-identity Owner. Project the pnpm output into the frozen Dependency Inventory DTO, sort/dedupe exact package/version/license entries, and drop raw `paths`, author, description, homepage and order before hashing; RED fixtures use different absolute install roots with byte-identical projected evidence. Supply-chain online evidence additionally binds provider ID, database snapshot date/hash, package name and exact version. Provider unavailability follows the mode-specific Profile rule: Advisory `incomplete` in PR/Nightly, and the explicit Release `not-applicable` reason plus a retained Advisory Finding; it is never a clean bill of health. PHO-6 later registers the same closed set. Neither Sensor may spawn, parse the lockfile independently, implement its own timeout, redact logs, or clean owned processes.
 
 - [ ] **Step 4: Register existing fact owners**
 
@@ -425,7 +425,7 @@ Add:
 }
 ```
 
-`health:record --gate <registered-id> --commit <sha> --output <receipt>` invokes that exact owner command once through PHO-0B and atomically writes a Receipt. `health:update-baseline` is the sole tracked-baseline writer and rejects a Report whose commit/profile/evidence identity differs. Reject a moving Release branch without `--commit`; require explicit output; make every check mode read-only and reject an `--update-baseline` flag.
+`health:record --gate <registered-id> --commit <sha> --output <receipt>` admits only a trusted descriptor with `descendantOwnershipMode: "inherit-owner-token"`, then invokes that exact owner command once through PHO-0B and atomically writes a Receipt. No production entry may call the runner without Registry admission. `health:update-baseline` is the sole tracked-baseline writer and rejects a Report whose commit/profile/evidence identity differs. Reject a moving Release branch without `--commit`; require explicit output; make every check mode read-only and reject an `--update-baseline` flag.
 
 - [ ] **Step 5: Verify and commit**
 

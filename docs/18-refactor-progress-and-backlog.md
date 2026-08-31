@@ -1050,7 +1050,7 @@ formal Capture/Route、AI 评测与生产 disposition 仍未完成，因此不�
 - [ ] PHO-0A：冻结 current-only Profile、Metric、Observation/Finding、Gate Plan/Receipt、Review Receipt、
   Report、中立 Workspace Evidence、补充 Authority/Supply Chain Policy、Accepted Debt 和 canonical fingerprint；
 - [ ] PHO-0B：实现唯一 bounded/redacted execution envelope，关闭 `in-place-checkout` / `isolated-temp-worktree`
-  scope，统一 timeout、process-tree cleanup、临时目录和证据 Hash；
+  scope，统一 timeout、cooperative owned-process cleanup、临时目录和证据 Hash；
 - [ ] PHO-1：扩展现有 `workspace-boundary.ts` 唯一 scan Owner 以投影稳定 full graph/evidence，
   由唯一 `health:record` 写 Receipt，再以两个同名 Sensor 分别消费原边界事实与补充重复 Owner、compat alias、Canonical/Native 边界规则；
 - [ ] PHO-2：复用现有 Owner 命令实现 Contract/Generated parity，并增加独立 Supply Chain Sensor 观察
