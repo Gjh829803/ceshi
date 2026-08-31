@@ -34,5 +34,32 @@ tests / docs truth。
 
 ## 4. 门禁
 
-本文件在提交时记录意图。exact SHA、RED/GREEN 命令输出由后续 focused 门禁回填。要求的命令仅是
-BWB-5 focused tests、`pnpm test:census` 与 `git diff --check`，不跑全仓库套件。
+候选 SHA：`b0c79bd80c1e008eccccfd9cbf7435e12b4a3437`（基于
+`main@bbe4436f4eb4e64a88344bcb1689a1b69a207854`）。未改生产 Runtime / Havok / Camera / Input。
+
+RED（仅本地、未提交的 Layout 变异；证明新断言会失败）：
+
+1. 删除 `t-north-wall` / `t-north-foundation` 后，
+   `pnpm exec vitest run --config vitest.resource-heavy.config.ts scripts/verification/bwb5-block-reconstruction-corpus.test.ts -t "blocks the t-shaped north wall"`
+   以 `BWB-5 verified Package is missing Collider 'collider-t-north-wall'` 失败。
+2. 把同一 Collider 挪到走廊外（`[2, 0.5, -3]`）后，同一命令以
+   `expected -5.239844357803556 to be greater than or equal to -2.2` 失败：人物穿过意图近面
+   （`centerLimit = -2.2` = 近面 `-2.5` + capsule `0.3`）。
+
+GREEN（恢复冻结 Layout 后）：
+
+| 命令 | 结果 |
+|---|---|
+| 同上 isolated north-wall Havok | 1 passed / 5 skipped |
+| `pnpm exec vitest run --config vitest.contract.config.ts packages/native-babylon-block-profile/src/reconstruction-corpus.test.ts` | 4 passed |
+| `pnpm exec vitest run --config vitest.resource-heavy.config.ts scripts/verification/bwb5-block-reconstruction-corpus.test.ts` | 6 passed |
+| `pnpm test:census` | 379 tests, 340 contract, 39 resource-heavy |
+| `git diff --check` 对 `bbe4436f..HEAD` | clean |
+
+未跑全仓库套件。Census 文件数未因本切片增加。
+
+## 5. 接受债务
+
+无新增债务。既有非阻塞债务保持：`BWB5-R1`（单 `player` Subject）、`BWB5-R2`（无 Browser
+FeelReview）、`BWB5-P2-2`（`cleanup-throw-partial` 的真正 partial/throwing cleanup 由 Session
+测试持有）。
