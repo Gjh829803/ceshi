@@ -704,4 +704,59 @@ describe("project health report aggregation", () => {
       [...report.findings.map((entry) => entry.fingerprint)].sort(),
     );
   });
+
+  it("drops Findings published by an invalid Observation", () => {
+    const profile = parsedProfile();
+    const blocking = finding({
+      profile,
+      sensorId: "contract-parity",
+      code: "PROJECT_HEALTH_GENERATED_DRIFT",
+      subjectRefs: ["package:builder"],
+      evidenceClassIds: ["generated-byte-parity"],
+      metricIds: ["generated-bytes-current"],
+      suggestedGateId: "agent-self-check",
+    });
+    const report = aggregate({
+      profile,
+      observations: selectedObservations(profile, "pr", {
+        "contract-parity": observation({
+          profile,
+          sensorId: "contract-parity",
+          findings: [blocking],
+          sensorImplementationHash: `sha256:${"e".repeat(64)}`,
+        }),
+      }),
+    });
+    expect(report.status).toBe("incomplete");
+    expect(report.findings).toEqual([]);
+    expect(report.metricsBySensorId["contract-parity"]?.["generated-bytes-current"]).toMatchObject({
+      status: "not-evaluated",
+    });
+  });
+
+  it("attributes duplicate Advisory input to that Sensor and rejects unattributable input", () => {
+    const profile = parsedProfile();
+    const advisoryObservation = observation({ profile, sensorId: "supply-chain" });
+    const duplicateAdvisory = aggregate({
+      profile,
+      rawObservations: [
+        ...selectedObservations(profile, "pr").filter((entry) => entry.sensorId !== "supply-chain"),
+        advisoryObservation,
+        advisoryObservation,
+      ],
+    });
+    expect(duplicateAdvisory.status).toBe("passed");
+    expect(duplicateAdvisory.metricsBySensorId["supply-chain"]?.["dependency-inventory-complete"]).toMatchObject({
+      status: "not-evaluated",
+    });
+    expect(duplicateAdvisory.metricsBySensorId["workspace-boundary"]?.["workspace-boundary-debt-count"]).toEqual({
+      id: "workspace-boundary-debt-count",
+      kind: "count",
+      valueCount: 49,
+    });
+    expect(() => aggregate({
+      profile,
+      rawObservations: [...selectedObservations(profile, "pr"), { kind: "unknown-input" }],
+    })).toThrow(/attribute|sensor/i);
+  });
 });

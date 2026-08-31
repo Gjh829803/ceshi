@@ -241,14 +241,15 @@ export function aggregateProjectHealthReportV1(
   ]));
   const observationsBySensorId = new Map<ProjectHealthSensorIdV1, ProjectHealthObservationV1>();
   const invalidSensorIds = new Set<ProjectHealthSensorIdV1>();
-  let unknownObservationSeen = false;
 
   for (const raw of input.observations) {
     try {
       const observation = parseProjectHealthObservationV1(raw, input.profile);
-      if (!selectedSensorIds.includes(observation.sensorId) || observationsBySensorId.has(observation.sensorId)) {
+      if (!selectedSensorIds.includes(observation.sensorId)) {
+        throw new TypeError(`Observation Sensor ${observation.sensorId} is outside the selected mode closure.`);
+      }
+      if (observationsBySensorId.has(observation.sensorId)) {
         invalidSensorIds.add(observation.sensorId);
-        unknownObservationSeen = true;
         continue;
       }
       observationsBySensorId.set(observation.sensorId, observation);
@@ -266,7 +267,7 @@ export function aggregateProjectHealthReportV1(
         ? (raw as { sensorId: ProjectHealthSensorIdV1 }).sensorId
         : null;
       if (!isNil(sensorId) && selectedSensorIds.includes(sensorId)) invalidSensorIds.add(sensorId);
-      else unknownObservationSeen = true;
+      else throw new TypeError("Project Health input cannot be attributed to a selected Sensor.");
     }
   }
 
@@ -286,17 +287,7 @@ export function aggregateProjectHealthReportV1(
         ? "PROJECT_HEALTH_OBSERVATION_MISSING"
         : "PROJECT_HEALTH_OBSERVATION_INVALID")
       : observation.metricsById;
-    if (!isNil(observation)) allFindings.push(...observation.findings);
-  }
-  if (unknownObservationSeen) {
-    const firstRequired = input.profile.modesById[input.mode].requiredSensorIds[0];
-    if (!isNil(firstRequired)) {
-      metricsBySensorId[firstRequired] = incompleteMetrics(
-        input.profile,
-        firstRequired,
-        "PROJECT_HEALTH_OBSERVATION_INVALID",
-      );
-    }
+    if (!isNil(observation) && !invalidSensorIds.has(sensorId)) allFindings.push(...observation.findings);
   }
 
   const findings = mergeFindings(input.profile, allFindings);

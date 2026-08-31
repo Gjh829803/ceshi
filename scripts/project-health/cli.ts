@@ -15,10 +15,17 @@ import {
   type ProjectHealthModeV1,
   type ProjectHealthProfileV1,
 } from "./contracts";
-import { writeProjectHealthJsonAtomicV1 } from "./evidence-store";
+import {
+  assertProjectHealthOutputPathV1,
+  getProjectHealthEvidenceV1,
+  writeProjectHealthJsonAtomicV1,
+} from "./evidence-store";
 import {
   admitRegisteredProjectHealthGateV1,
   PROJECT_HEALTH_SENSOR_IMPLEMENTATION_HASHES_V1,
+  projectHealthGateInputFingerprintsV1,
+  projectHealthGateSensorIdV1,
+  readProjectHealthCheckoutHeadV1,
   recordRegisteredProjectHealthGateV1,
   registeredProjectHealthGateArgvV1,
 } from "./registry";
@@ -128,70 +135,48 @@ function loadProfile(repositoryRoot: string): ProjectHealthProfileV1 {
   });
 }
 
-function readCurrentCommitSha(repositoryRoot: string): string {
-  const dotGitPath = path.join(repositoryRoot, ".git");
-  const dotGitStat = statSync(dotGitPath);
-  const gitDirectory = dotGitStat.isDirectory()
-    ? dotGitPath
-    : (() => {
-        const dotGit = readFileSync(dotGitPath, "utf8").trim();
-        if (!dotGit.startsWith("gitdir:")) throw new TypeError("Unable to resolve the Git directory.");
-        return path.resolve(repositoryRoot, dotGit.slice("gitdir:".length).trim());
-      })();
-  const head = readFileSync(path.join(gitDirectory, "HEAD"), "utf8").trim();
-  if (COMMIT_SHA.test(head)) return head;
-  if (!head.startsWith("ref: ")) throw new TypeError("Unable to resolve the exact checkout commit.");
-  const ref = head.slice("ref: ".length);
-  const directRef = path.join(gitDirectory, ref);
-  try {
-    const value = readFileSync(directRef, "utf8").trim();
-    if (COMMIT_SHA.test(value)) return value;
-  } catch {
-    // Worktrees normally keep branch refs in the common Git directory.
-  }
-  const commonDirectory = dotGitStat.isDirectory()
-    ? gitDirectory
-    : path.resolve(gitDirectory, readFileSync(path.join(gitDirectory, "commondir"), "utf8").trim());
-  try {
-    const value = readFileSync(path.join(commonDirectory, ref), "utf8").trim();
-    if (COMMIT_SHA.test(value)) return value;
-  } catch {
-    const packedRefs = readFileSync(path.join(commonDirectory, "packed-refs"), "utf8");
-    const match = packedRefs.split("\n").find((line) => line.endsWith(` ${ref}`));
-    const value = match?.slice(0, 40) ?? "";
-    if (COMMIT_SHA.test(value)) return value;
-  }
-  throw new TypeError("Unable to resolve the exact checkout commit.");
-}
-
 async function readReceiptDirectory(input: Readonly<{
+  repositoryRoot: string;
   directoryPath: string | undefined;
   commitSha: string;
   baseSha: string | null;
   profile: ProjectHealthProfileV1;
+  mode: ProjectHealthModeV1;
 }>): Promise<Readonly<{
   observations: readonly unknown[];
-  hasInvalidExactHeadEvidence: boolean;
+  invalidSensorIds: readonly string[];
+  failedSensorIds: readonly string[];
 }>> {
-  if (isNil(input.directoryPath)) return { observations: [], hasInvalidExactHeadEvidence: false };
+  const requiredGateIdsBySensorId = input.profile.modesById[input.mode].requiredGateIdsBySensorId;
+  const requiredGateIds = sortBy(uniq(Object.values(requiredGateIdsBySensorId).flatMap((ids) => ids ?? [])));
+  const receiptsByGateId = new Map<string, unknown[]>();
+  const invalidSensorIds = new Set<string>();
+  const failedSensorIds = new Set<string>();
+  if (isNil(input.directoryPath)) {
+    for (const [sensorId, gateIds] of Object.entries(requiredGateIdsBySensorId)) {
+      if (!isNil(gateIds) && !isEmpty(gateIds)) invalidSensorIds.add(sensorId);
+    }
+    return { observations: [], invalidSensorIds: [...invalidSensorIds], failedSensorIds: [] };
+  }
   let names: readonly string[];
   try {
     names = sortBy((await readdir(input.directoryPath)).filter((entry) => entry.endsWith(".json")));
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return { observations: [], hasInvalidExactHeadEvidence: false };
+      for (const [sensorId, gateIds] of Object.entries(requiredGateIdsBySensorId)) {
+        if (!isNil(gateIds) && !isEmpty(gateIds)) invalidSensorIds.add(sensorId);
+      }
+      return { observations: [], invalidSensorIds: [...invalidSensorIds], failedSensorIds: [] };
     }
     throw error;
   }
   const observations: unknown[] = [];
-  let hasInvalidExactHeadEvidence = false;
   for (const name of names) {
     let value: unknown;
     try {
       value = JSON.parse(await readFile(path.join(input.directoryPath, name), "utf8"));
     } catch {
-      hasInvalidExactHeadEvidence = true;
-      continue;
+      throw new TypeError(`Receipt input ${name} is not valid JSON.`);
     }
     const kind = typeof value === "object" && !isNil(value) && !Array.isArray(value)
       ? (value as { kind?: unknown }).kind
@@ -201,20 +186,14 @@ async function readReceiptDirectory(input: Readonly<{
       continue;
     }
     if (kind === "project-health-gate-receipt") {
-      try {
-        const receipt = parseProjectHealthGateReceiptV1(value);
-        const descriptor = admitRegisteredProjectHealthGateV1({
-          gateId: receipt.gateId,
-          ...(receipt.gateId === "change-impact-diff" && !isNil(input.baseSha)
-            ? { baseSha: input.baseSha, headSha: input.commitSha }
-            : {}),
-        });
-        if (receipt.commitSha !== input.commitSha || receipt.commandHash !== sha256CanonicalJson(descriptor)) {
-          hasInvalidExactHeadEvidence = true;
-        }
-      } catch {
-        hasInvalidExactHeadEvidence = true;
-      }
+      const rawGateId = typeof value === "object" && !isNil(value) && !Array.isArray(value) &&
+          typeof (value as { gateId?: unknown }).gateId === "string"
+        ? (value as { gateId: string }).gateId
+        : null;
+      if (isNil(rawGateId)) throw new TypeError(`Gate Receipt ${name} has no attributable Gate authority.`);
+      const entries = receiptsByGateId.get(rawGateId) ?? [];
+      entries.push(value);
+      receiptsByGateId.set(rawGateId, entries);
       continue;
     }
     if (kind === "independent-review-receipt") {
@@ -229,14 +208,128 @@ async function readReceiptDirectory(input: Readonly<{
       }
       continue;
     }
+    throw new TypeError(`Receipt input ${name} has an unregistered kind.`);
   }
-  return { observations, hasInvalidExactHeadEvidence };
+
+  for (const gateId of receiptsByGateId.keys()) {
+    if (!requiredGateIds.includes(gateId)) {
+      const sensorId = projectHealthGateSensorIdV1(gateId);
+      if (![...input.profile.modesById[input.mode].requiredSensorIds,
+        ...input.profile.modesById[input.mode].advisorySensorIds].includes(sensorId)) {
+        throw new TypeError(`Gate ${gateId} is outside the selected mode authority.`);
+      }
+      invalidSensorIds.add(sensorId);
+    }
+  }
+  const inputFingerprintsByGateId = new Map(Object.entries(await projectHealthGateInputFingerprintsV1({
+    repositoryRoot: input.repositoryRoot,
+    profile: input.profile,
+    gateIds: requiredGateIds,
+  })));
+  for (const gateId of requiredGateIds) {
+    const sensorId = projectHealthGateSensorIdV1(gateId);
+    const rawReceipts = receiptsByGateId.get(gateId) ?? [];
+    if (rawReceipts.length !== 1) {
+      invalidSensorIds.add(sensorId);
+      continue;
+    }
+    try {
+      const receipt = parseProjectHealthGateReceiptV1(rawReceipts[0]);
+      const descriptor = admitRegisteredProjectHealthGateV1({
+        gateId,
+        ...(gateId === "change-impact-diff" && !isNil(input.baseSha)
+          ? { baseSha: input.baseSha, headSha: input.commitSha }
+          : {}),
+      });
+      const inputFingerprint = inputFingerprintsByGateId.get(gateId);
+      const evidenceText = await getProjectHealthEvidenceV1({
+        repositoryRoot: input.repositoryRoot,
+        evidenceRef: receipt.evidenceRef,
+      });
+      const evidence = JSON.parse(evidenceText) as Record<string, unknown>;
+      const evidenceStatus = evidence.status === "passed"
+        ? "passed"
+        : evidence.status === "failed"
+          ? "failed"
+          : [
+              "timed-out",
+              "repository-state-mutated",
+              "cleanup-failed",
+              "infrastructure-failed",
+            ].includes(String(evidence.status))
+            ? "incomplete"
+            : null;
+      if (
+        receipt.commitSha !== input.commitSha
+        || receipt.commandHash !== sha256CanonicalJson(descriptor)
+        || receipt.inputFingerprint !== inputFingerprint
+        || evidence.kind !== "project-health-execution-evidence"
+        || evidence.schemaVersion !== 1
+        || evidence.descriptorId !== descriptor.id
+        || evidence.executionScope !== descriptor.executionScope
+        || evidence.commandHash !== receipt.commandHash
+        || isNil(evidenceStatus)
+        || evidenceStatus !== receipt.status
+      ) {
+        invalidSensorIds.add(sensorId);
+      } else if (receipt.status === "failed") {
+        failedSensorIds.add(sensorId);
+      } else if (receipt.status === "incomplete") {
+        invalidSensorIds.add(sensorId);
+      }
+    } catch {
+      invalidSensorIds.add(sensorId);
+    }
+  }
+  return {
+    observations,
+    invalidSensorIds: sortBy([...invalidSensorIds]),
+    failedSensorIds: sortBy([...failedSensorIds]),
+  };
 }
 
 function statusExitCode(status: "passed" | "failed" | "incomplete"): 0 | 2 | 3 {
   if (status === "passed") return 0;
   if (status === "failed") return 2;
   return 3;
+}
+
+function projectHealthOutputPath(repositoryRoot: string, requestedPath: string): string {
+  const outputPath = path.resolve(repositoryRoot, requestedPath);
+  const relativePath = path.relative(path.resolve(repositoryRoot), outputPath);
+  if (relativePath === ".project-health" || !relativePath.startsWith(`.project-health${path.sep}`)) {
+    throw new TypeError("Project Health output must stay under .project-health/.");
+  }
+  return outputPath;
+}
+
+function failedGateObservation(
+  raw: unknown,
+  sensorId: string,
+  profile: ProjectHealthProfileV1,
+): unknown {
+  if (
+    typeof raw !== "object"
+    || isNil(raw)
+    || Array.isArray(raw)
+    || (raw as { sensorId?: unknown }).sensorId !== sensorId
+  ) return raw;
+  const source = raw as Record<string, unknown>;
+  const metrics = { ...(source.metricsById as Record<string, unknown>) };
+  const entry = Object.entries(profile.metricPoliciesById).find(([, policy]) => policy.sensorId === sensorId);
+  if (isNil(entry)) return raw;
+  const [metricId, policy] = entry;
+  const threshold = policy.threshold;
+  metrics[metricId] = threshold.kind === "boolean"
+    ? { id: metricId, kind: "boolean", value: !threshold.expectedValue }
+    : threshold.kind === "count"
+      ? { id: metricId, kind: "count", valueCount: threshold.maximumCount + 1 }
+      : threshold.kind === "bytes"
+        ? { id: metricId, kind: "bytes", valueBytes: threshold.maximumBytes + 1 }
+        : threshold.kind === "duration"
+          ? { id: metricId, kind: "duration", valueMilliseconds: threshold.maximumMilliseconds + 1 }
+          : { id: metricId, kind: "ratio", valueRatio: threshold.maximumRatio + 1 };
+  return { ...source, status: "failed", metricsById: metrics };
 }
 
 async function runCheck(input: Readonly<{
@@ -257,23 +350,33 @@ async function runCheck(input: Readonly<{
   if (mode === "release" && isNil(option(args, "commit"))) {
     throw new TypeError("Release checks require an explicit --commit exact SHA.");
   }
-  const commitSha = option(args, "commit") ?? readCurrentCommitSha(input.repositoryRoot);
+  const actualHead = await readProjectHealthCheckoutHeadV1(input.repositoryRoot);
+  const commitSha = option(args, "commit") ?? actualHead;
   if (!COMMIT_SHA.test(commitSha)) throw new TypeError("--commit must be an exact 40-character SHA.");
+  if (commitSha !== actualHead) throw new TypeError("--commit must equal the exact checkout HEAD.");
   const baseSha = option(args, "base") ?? null;
   if (!isNil(baseSha) && !COMMIT_SHA.test(baseSha)) throw new TypeError("--base must be an exact 40-character SHA.");
-  const outputPath = path.resolve(input.repositoryRoot, requiredOption(args, "output"));
+  const outputPath = await assertProjectHealthOutputPathV1({
+    repositoryRoot: input.repositoryRoot,
+    outputPath: projectHealthOutputPath(input.repositoryRoot, requiredOption(args, "output")),
+  });
   const profile = loadProfile(input.repositoryRoot);
   const loaded = await readReceiptDirectory({
+    repositoryRoot: input.repositoryRoot,
     directoryPath: isNil(option(args, "receipts"))
       ? undefined
       : path.resolve(input.repositoryRoot, option(args, "receipts")!),
     commitSha,
     baseSha,
     profile,
+    mode: mode as ProjectHealthModeV1,
   });
-  const observations = [...loaded.observations];
-  if (loaded.hasInvalidExactHeadEvidence) {
-    observations.push({ kind: "project-health-observation", sensorId: "test-topology" });
+  const observations = loaded.observations.map((raw) => loaded.failedSensorIds.reduce(
+    (value, sensorId) => failedGateObservation(value, sensorId, profile),
+    raw,
+  ));
+  for (const sensorId of loaded.invalidSensorIds) {
+    observations.push({ kind: "project-health-observation", sensorId });
   }
   const acceptedDebt = parseAcceptedProjectDebtListV1(
     JSON.parse(await readFile(path.join(input.repositoryRoot, "config/project-health/accepted-debt.json"), "utf8")),
@@ -296,7 +399,10 @@ async function runCheck(input: Readonly<{
     acceptedDebt,
     baseline,
   });
-  await writeProjectHealthJsonAtomicV1({ outputPath, value: report });
+  if (await readProjectHealthCheckoutHeadV1(input.repositoryRoot) !== commitSha) {
+    throw new TypeError("Checkout HEAD changed during Project Health check.");
+  }
+  await writeProjectHealthJsonAtomicV1({ outputPath, value: report, repositoryRoot: input.repositoryRoot });
   return statusExitCode(report.status);
 }
 
@@ -308,11 +414,15 @@ async function runRecord(input: Readonly<{
   if (!isEmpty(args.positionals)) throw new TypeError("record does not accept positional arguments.");
   const commitSha = requiredOption(args, "commit");
   if (!COMMIT_SHA.test(commitSha)) throw new TypeError("--commit must be an exact 40-character SHA.");
+  const actualHead = await readProjectHealthCheckoutHeadV1(input.repositoryRoot);
+  if (commitSha !== actualHead) throw new TypeError("--commit must equal the exact checkout HEAD.");
+  const profile = loadProfile(input.repositoryRoot);
   const receipt = await recordRegisteredProjectHealthGateV1({
     repositoryRoot: input.repositoryRoot,
+    profile,
     gateId: requiredOption(args, "gate"),
     commitSha,
-    outputPath: path.resolve(input.repositoryRoot, requiredOption(args, "output")),
+    outputPath: projectHealthOutputPath(input.repositoryRoot, requiredOption(args, "output")),
     ...(!isNil(option(args, "base")) ? { baseSha: option(args, "base")! } : {}),
   });
   return statusExitCode(receipt.status);
@@ -362,6 +472,8 @@ async function runUpdateBaseline(input: Readonly<{
   );
   const commitSha = requiredOption(args, "commit");
   if (!COMMIT_SHA.test(commitSha)) throw new TypeError("--commit must be an exact 40-character SHA.");
+  const actualHead = await readProjectHealthCheckoutHeadV1(input.repositoryRoot);
+  if (commitSha !== actualHead) throw new TypeError("--commit must equal the exact checkout HEAD.");
   const selectedSensorIds = sortBy([
     ...profile.modesById[report.mode].requiredSensorIds,
     ...profile.modesById[report.mode].advisorySensorIds,
@@ -371,15 +483,29 @@ async function runUpdateBaseline(input: Readonly<{
     PROJECT_HEALTH_SENSOR_IMPLEMENTATION_HASHES_V1[sensorId],
   ]));
   if (
+    report.status !== "passed" ||
     report.commitSha !== commitSha ||
     report.profileHash !== sha256CanonicalJson(profile) ||
     !isEqual(report.sensorImplementationHashesBySensorId, expectedImplementationHashes)
   ) {
-    throw new TypeError("Report identity does not match the requested baseline identity.");
+    throw new TypeError("Report is not an exact-tree accepted baseline identity.");
+  }
+  if (Object.values(report.metricsBySensorId).some((metrics) =>
+    Object.values(metrics).some((metric) => "status" in metric && metric.status === "not-evaluated"))) {
+    throw new TypeError("Report is not evidence-complete for baseline publication.");
+  }
+  const requiredBaselinePath = path.join(input.repositoryRoot, "config/project-health/baseline.json");
+  const requestedBaselinePath = path.resolve(input.repositoryRoot, requiredOption(args, "output"));
+  if (requestedBaselinePath !== requiredBaselinePath) {
+    throw new TypeError("Baseline output must be exactly config/project-health/baseline.json.");
+  }
+  if (await readProjectHealthCheckoutHeadV1(input.repositoryRoot) !== commitSha) {
+    throw new TypeError("Checkout HEAD changed before baseline publication.");
   }
   await writeProjectHealthJsonAtomicV1({
-    outputPath: path.resolve(input.repositoryRoot, requiredOption(args, "output")),
+    outputPath: requiredBaselinePath,
     value: report,
+    repositoryRoot: input.repositoryRoot,
   });
   return 0;
 }

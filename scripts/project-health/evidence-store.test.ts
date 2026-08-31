@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -71,6 +71,17 @@ describe("project health evidence store", () => {
     expect(parsed.command).toBe("pnpm typecheck");
     expect(stored.evidenceRef).toBe(sha256CanonicalJson(JSON.parse(raw)));
 
+    const reordered = await putProjectHealthEvidenceJsonV1({
+      repositoryRoot,
+      value: { command: "pnpm typecheck", note: "Read /etc/passwd and file:///tmp/secret.log", kind: "fixture-evidence" },
+    });
+    expect(reordered.evidenceRef).toBe(stored.evidenceRef);
+    expect(await getProjectHealthEvidenceV1({
+      repositoryRoot,
+      evidenceRef: reordered.evidenceRef,
+    })).toBe(raw);
+    expect(raw).toBe('{"command":"pnpm typecheck","kind":"fixture-evidence","note":"Read [REDACTED_PATH] and [REDACTED_PATH]"}');
+
     const outputPath = path.join(repositoryRoot, ".project-health/report.json");
     await writeProjectHealthJsonAtomicV1({
       outputPath,
@@ -99,5 +110,26 @@ describe("project health evidence store", () => {
     await expect(readFile(path.join(repositoryRoot, "..", "escaped.json"), "utf8")).rejects.toMatchObject({
       code: "ENOENT",
     });
+  });
+
+  it("rejects symlinked evidence parents and never overwrites an existing object", async () => {
+    const repositoryRoot = await createRoot();
+    const outsideRoot = await createRoot();
+    await symlink(outsideRoot, path.join(repositoryRoot, ".project-health"), "dir");
+    await expect(putProjectHealthEvidenceTextV1({
+      repositoryRoot,
+      text: "must-not-escape",
+    })).rejects.toThrow(/canonical|identity|symbolic/i);
+    expect(await readdir(outsideRoot)).toEqual([]);
+
+    await rm(path.join(repositoryRoot, ".project-health"));
+    const value = { kind: "race-fixture", value: true };
+    const evidenceRef = sha256CanonicalJson(value);
+    const evidenceDirectory = path.join(repositoryRoot, ".project-health/evidence/sha256");
+    await mkdir(evidenceDirectory, { recursive: true });
+    const evidencePath = path.join(evidenceDirectory, evidenceRef.slice("sha256:".length));
+    await writeFile(evidencePath, "tampered", "utf8");
+    await expect(putProjectHealthEvidenceJsonV1({ repositoryRoot, value })).rejects.toThrow(/collision|canonical/i);
+    expect(await readFile(evidencePath, "utf8")).toBe("tampered");
   });
 });

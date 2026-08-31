@@ -1,16 +1,18 @@
 import { execFile, execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import os from "node:os";
+import { mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
+import { isNil } from "lodash-es";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { runProjectHealthCliV1 } from "./cli";
 import {
   parseProjectHealthFindingV1,
+  parseProjectHealthGateReceiptV1,
   parseProjectHealthObservationV1,
   parseProjectHealthProfileV1,
   parseProjectHealthReportV1,
@@ -21,6 +23,11 @@ import {
   type ProjectHealthProfileV1,
   type ProjectHealthSensorIdV1,
 } from "./contracts";
+import { putProjectHealthEvidenceJsonV1 } from "./evidence-store";
+import {
+  admitRegisteredProjectHealthGateV1,
+  projectHealthGateInputFingerprintsV1,
+} from "./registry";
 import { CONTRACT_PARITY_SENSOR_IMPLEMENTATION_HASH_V1 } from "./sensors/contract-parity";
 import { DOCUMENTATION_TRUTH_SENSOR_IMPLEMENTATION_HASH_V1 } from "./sensors/documentation-truth";
 import { SUPPLEMENTAL_AUTHORITY_SENSOR_IMPLEMENTATION_HASH_V1 } from "./sensors/supplemental-authority";
@@ -30,7 +37,7 @@ import { WORKSPACE_BOUNDARY_SENSOR_IMPLEMENTATION_HASH_V1 } from "./sensors/work
 
 const execFileAsync = promisify(execFile);
 const REPOSITORY_ROOT = path.resolve(new URL("../..", import.meta.url).pathname);
-const COMMIT_SHA = "c".repeat(40);
+const COMMIT_SHA = execFileSync("git", ["rev-parse", "HEAD"], { cwd: REPOSITORY_ROOT, encoding: "utf8" }).trim();
 const EVIDENCE_A = `sha256:${"a".repeat(64)}`;
 const IMPLEMENTATION_HASHES = {
   "workspace-boundary": WORKSPACE_BOUNDARY_SENSOR_IMPLEMENTATION_HASH_V1,
@@ -41,6 +48,7 @@ const IMPLEMENTATION_HASHES = {
   "documentation-truth": DOCUMENTATION_TRUTH_SENSOR_IMPLEMENTATION_HASH_V1,
 } as const;
 const roots: string[] = [];
+let fingerprintsPromise: Promise<Readonly<Record<string, string>>> | null = null;
 
 afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
@@ -149,6 +157,79 @@ async function writeObservations(
   )));
 }
 
+function outputRoot(): string {
+  const root = path.join(REPOSITORY_ROOT, ".project-health", `cli-test-${randomUUID()}`);
+  roots.push(root);
+  return root;
+}
+
+async function writeRequiredGateReceipts(
+  directory: string,
+  profile: ProjectHealthProfileV1,
+  statusByGateId: Readonly<Record<string, "passed" | "failed" | "incomplete">> = {},
+): Promise<void> {
+  await mkdir(directory, { recursive: true });
+  const requiredGateIds = Object.values(profile.modesById.pr.requiredGateIdsBySensorId).flatMap((ids) => ids ?? []);
+  if (isNil(fingerprintsPromise)) {
+    fingerprintsPromise = projectHealthGateInputFingerprintsV1({
+      repositoryRoot: REPOSITORY_ROOT,
+      profile,
+      gateIds: requiredGateIds,
+    });
+  }
+  const fingerprints = await fingerprintsPromise;
+  await Promise.all(requiredGateIds.map(async (gateId) => {
+    const descriptor = admitRegisteredProjectHealthGateV1({ gateId });
+    const status = statusByGateId[gateId] ?? "passed";
+    const commandHash = sha256CanonicalJson(descriptor);
+    const evidenceStatus = status === "passed" ? "passed" : status === "failed" ? "failed" : "infrastructure-failed";
+    const evidence = {
+      kind: "project-health-execution-evidence",
+      schemaVersion: 1,
+      descriptorId: descriptor.id,
+      executionScope: descriptor.executionScope,
+      commandHash,
+      environmentHash: EVIDENCE_A,
+      status: evidenceStatus,
+      exitCode: status === "passed" ? 0 : status === "failed" ? 1 : null,
+      signal: null,
+      stdout: "",
+      stderr: "",
+      stdoutTruncated: false,
+      stderrTruncated: false,
+      repositoryStateBeforeHash: null,
+      repositoryStateAfterHash: null,
+      temporaryWorktreeRemoved: null,
+      temporaryOutputRemoved: null,
+      failureCodes: status === "incomplete" ? ["EXECUTION_ENVELOPE_FAILED"] : [],
+    };
+    const stored = await putProjectHealthEvidenceJsonV1({ repositoryRoot: REPOSITORY_ROOT, value: evidence });
+    const receipt = parseProjectHealthGateReceiptV1({
+      kind: "project-health-gate-receipt",
+      schemaVersion: 1,
+      gateId,
+      commitSha: COMMIT_SHA,
+      inputFingerprint: fingerprints[gateId],
+      commandHash,
+      status,
+      evidenceRef: stored.evidenceRef,
+    });
+    await writeFile(path.join(directory, `gate-${gateId}.json`), `${JSON.stringify(receipt, null, 2)}\n`, "utf8");
+  }));
+}
+
+async function writePassingInputs(directory: string, profile: ProjectHealthProfileV1): Promise<void> {
+  await writeObservations(directory, [
+    observation(profile, "workspace-boundary"),
+    observation(profile, "supplemental-authority"),
+    observation(profile, "contract-parity"),
+    observation(profile, "test-topology"),
+    observation(profile, "supply-chain"),
+    observation(profile, "documentation-truth"),
+  ]);
+  await writeRequiredGateReceipts(directory, profile);
+}
+
 async function runCli(argv: readonly string[], clockDate = "2026-08-31"): Promise<{
   readonly exitCode: number;
   readonly stdout: string;
@@ -199,9 +280,8 @@ describe("project health cli", () => {
 
   it("maps passed, failed, incomplete, and usage exits", async () => {
     const profile = parsedProfile();
-    const receipts = await mkdtemp(path.join(os.tmpdir(), "worldkit-project-health-receipts-"));
-    const outputRoot = await mkdtemp(path.join(os.tmpdir(), "worldkit-project-health-output-"));
-    roots.push(receipts, outputRoot);
+    const root = outputRoot();
+    const receipts = path.join(root, "receipts");
     const passing = [
       observation(profile, "workspace-boundary"),
       observation(profile, "supplemental-authority"),
@@ -211,6 +291,7 @@ describe("project health cli", () => {
       observation(profile, "documentation-truth"),
     ];
     await writeObservations(receipts, passing);
+    await writeRequiredGateReceipts(receipts, profile);
     const passed = await runCli([
       "check",
       "--mode",
@@ -220,11 +301,11 @@ describe("project health cli", () => {
       "--receipts",
       receipts,
       "--output",
-      path.join(outputRoot, "passed.json"),
+      path.join(root, "passed.json"),
     ]);
     expect(passed.exitCode).toBe(0);
     const passedReport = parseProjectHealthReportV1(
-      JSON.parse(await readFile(path.join(outputRoot, "passed.json"), "utf8")),
+      JSON.parse(await readFile(path.join(root, "passed.json"), "utf8")),
       profile,
     );
     expect(passedReport.status).toBe("passed");
@@ -242,7 +323,7 @@ describe("project health cli", () => {
       "--receipts",
       receipts,
       "--output",
-      path.join(outputRoot, "failed.json"),
+      path.join(root, "failed.json"),
     ]);
     expect(failed.exitCode).toBe(2);
 
@@ -253,62 +334,100 @@ describe("project health cli", () => {
       "--commit",
       COMMIT_SHA,
       "--output",
-      path.join(outputRoot, "incomplete.json"),
+      path.join(root, "incomplete.json"),
     ]);
     expect(incomplete.exitCode).toBe(3);
 
-    const usage = await runCli(["check", "--mode", "release", "--output", path.join(outputRoot, "release.json")]);
+    const usage = await runCli(["check", "--mode", "release", "--output", path.join(root, "release.json")]);
     expect(usage.exitCode).toBe(1);
     expect(usage.stderr).toMatch(/--commit/i);
   });
 
-  it("rejects a stale exact-head Receipt and pending-review incomplete input", async () => {
+  it("requires exactly one current canonical evidence-backed Receipt per Required Gate", async () => {
     const profile = parsedProfile();
-    const receipts = await mkdtemp(path.join(os.tmpdir(), "worldkit-project-health-stale-"));
-    const outputRoot = await mkdtemp(path.join(os.tmpdir(), "worldkit-project-health-output-"));
-    roots.push(receipts, outputRoot);
-    await writeObservations(receipts, [
-      observation(profile, "workspace-boundary"),
-      observation(profile, "supplemental-authority"),
-      observation(profile, "contract-parity"),
-      observation(profile, "test-topology"),
-      observation(profile, "supply-chain"),
-      observation(profile, "documentation-truth"),
-    ]);
-    await writeFile(path.join(receipts, "typecheck.json"), `${JSON.stringify({
-      kind: "project-health-gate-receipt",
-      schemaVersion: 1,
-      gateId: "typecheck",
-      commitSha: "e".repeat(40),
-      inputFingerprint: EVIDENCE_A,
-      commandHash: EVIDENCE_A,
-      status: "passed",
-      evidenceRef: EVIDENCE_A,
-    }, null, 2)}\n`, "utf8");
-    const stale = await runCli([
-      "check",
-      "--mode",
-      "pr",
-      "--commit",
-      COMMIT_SHA,
-      "--receipts",
-      receipts,
-      "--output",
-      path.join(outputRoot, "stale.json"),
-    ]);
-    expect(stale.exitCode).toBe(3);
-    const report = parseProjectHealthReportV1(
-      JSON.parse(await readFile(path.join(outputRoot, "stale.json"), "utf8")),
-      profile,
-    );
-    expect(report.status).toBe("incomplete");
-  });
+    const runFixture = async (
+      name: string,
+      mutate: (directory: string) => Promise<void>,
+      expectedExitCode: number,
+    ): Promise<void> => {
+      const root = outputRoot();
+      const receipts = path.join(root, "receipts");
+      await writePassingInputs(receipts, profile);
+      await mutate(receipts);
+      const result = await runCli([
+        "check", "--mode", "pr", "--commit", COMMIT_SHA,
+        "--receipts", receipts, "--output", path.join(root, `${name}.json`),
+      ]);
+      expect(result.exitCode).toBe(expectedExitCode);
+      if (expectedExitCode === 2 || expectedExitCode === 3) {
+        const report = parseProjectHealthReportV1(
+          JSON.parse(await readFile(path.join(root, `${name}.json`), "utf8")),
+          profile,
+        );
+        expect(report.status).toBe(expectedExitCode === 2 ? "failed" : "incomplete");
+      }
+    };
+
+    await runFixture("missing", async (directory) => {
+      await rm(path.join(directory, "gate-typecheck.json"));
+    }, 3);
+    await runFixture("duplicate", async (directory) => {
+      const receipt = await readFile(path.join(directory, "gate-typecheck.json"), "utf8");
+      await writeFile(path.join(directory, "gate-typecheck-copy.json"), receipt, "utf8");
+    }, 3);
+    await runFixture("failed", async (directory) => {
+      await writeRequiredGateReceipts(directory, profile, { typecheck: "failed" });
+    }, 2);
+    await runFixture("stale", async (directory) => {
+      const receiptPath = path.join(directory, "gate-typecheck.json");
+      const receipt = JSON.parse(await readFile(receiptPath, "utf8")) as Record<string, unknown>;
+      await writeFile(receiptPath, `${JSON.stringify({ ...receipt, commitSha: "e".repeat(40) })}\n`, "utf8");
+    }, 3);
+    await runFixture("wrong-input", async (directory) => {
+      const receiptPath = path.join(directory, "gate-typecheck.json");
+      const receipt = JSON.parse(await readFile(receiptPath, "utf8")) as Record<string, unknown>;
+      await writeFile(receiptPath, `${JSON.stringify({ ...receipt, inputFingerprint: EVIDENCE_A })}\n`, "utf8");
+    }, 3);
+    await runFixture("wrong-command", async (directory) => {
+      const receiptPath = path.join(directory, "gate-typecheck.json");
+      const receipt = JSON.parse(await readFile(receiptPath, "utf8")) as Record<string, unknown>;
+      await writeFile(receiptPath, `${JSON.stringify({ ...receipt, commandHash: EVIDENCE_A })}\n`, "utf8");
+    }, 3);
+    await runFixture("missing-evidence", async (directory) => {
+      const receiptPath = path.join(directory, "gate-typecheck.json");
+      const receipt = JSON.parse(await readFile(receiptPath, "utf8")) as Record<string, unknown>;
+      await writeFile(receiptPath, `${JSON.stringify({ ...receipt, evidenceRef: `sha256:${"f".repeat(64)}` })}\n`, "utf8");
+    }, 3);
+    await runFixture("mismatched-evidence", async (directory) => {
+      const receiptPath = path.join(directory, "gate-typecheck.json");
+      const otherReceipt = JSON.parse(await readFile(
+        path.join(directory, "gate-agent-self-check.json"),
+        "utf8",
+      )) as { readonly evidenceRef: string };
+      const receipt = JSON.parse(await readFile(receiptPath, "utf8")) as Record<string, unknown>;
+      await writeFile(receiptPath, `${JSON.stringify({ ...receipt, evidenceRef: otherReceipt.evidenceRef })}\n`, "utf8");
+    }, 3);
+    await runFixture("incomplete", async (directory) => {
+      await writeRequiredGateReceipts(directory, profile, { typecheck: "incomplete" });
+    }, 3);
+    await runFixture("unregistered", async (directory) => {
+      await writeFile(path.join(directory, "illegal.json"), `${JSON.stringify({
+        kind: "project-health-gate-receipt",
+        schemaVersion: 1,
+        gateId: "unregistered-gate",
+        commitSha: COMMIT_SHA,
+        inputFingerprint: EVIDENCE_A,
+        commandHash: EVIDENCE_A,
+        status: "passed",
+        evidenceRef: EVIDENCE_A,
+      })}\n`, "utf8");
+    }, 1);
+  }, 15_000);
 
   it("explains a Finding from the Registry command and rejects a stale baseline identity", async () => {
     const profile = parsedProfile();
-    const outputRoot = await mkdtemp(path.join(os.tmpdir(), "worldkit-project-health-explain-"));
-    roots.push(outputRoot);
-    const receipts = path.join(outputRoot, "receipts");
+    const root = outputRoot();
+    const receipts = path.join(root, "receipts");
     await writeObservations(receipts, [
       observation(profile, "workspace-boundary"),
       observation(profile, "supplemental-authority"),
@@ -317,7 +436,8 @@ describe("project health cli", () => {
       observation(profile, "supply-chain"),
       observation(profile, "documentation-truth"),
     ]);
-    const reportPath = path.join(outputRoot, "report.json");
+    await writeRequiredGateReceipts(receipts, profile);
+    const reportPath = path.join(root, "report.json");
     const failed = await runCli([
       "check",
       "--mode",
@@ -356,15 +476,54 @@ describe("project health cli", () => {
       "--report",
       reportPath,
       "--output",
-      path.join(outputRoot, "baseline.json"),
+      path.join(root, "baseline.json"),
     ]);
     expect(staleBaseline.exitCode).toBe(1);
-    expect(staleBaseline.stderr).toMatch(/identity/i);
+    expect(staleBaseline.stderr).toMatch(/HEAD|identity/i);
+  });
+
+  it("updates only the canonical baseline from an exact-tree evidence-complete accepted Report", async () => {
+    const profile = parsedProfile();
+    const root = outputRoot();
+    const receipts = path.join(root, "receipts");
+    await writePassingInputs(receipts, profile);
+    const reportPath = path.join(root, "passed.json");
+    expect((await runCli([
+      "check", "--mode", "pr", "--commit", COMMIT_SHA,
+      "--receipts", receipts, "--output", reportPath,
+    ])).exitCode).toBe(0);
+
+    const wrongOutput = await runCli([
+      "update-baseline", "--commit", COMMIT_SHA, "--report", reportPath,
+      "--output", path.join(root, "baseline.json"),
+    ]);
+    expect(wrongOutput.exitCode).toBe(1);
+    expect(wrongOutput.stderr).toMatch(/exactly/i);
+
+    const baselinePath = path.join(REPOSITORY_ROOT, "config/project-health/baseline.json");
+    roots.push(baselinePath);
+    const updated = await runCli([
+      "update-baseline", "--commit", COMMIT_SHA, "--report", reportPath,
+      "--output", baselinePath,
+    ]);
+    expect(updated.exitCode).toBe(0);
+    expect(JSON.parse(await readFile(baselinePath, "utf8"))).toEqual(JSON.parse(await readFile(reportPath, "utf8")));
+
+    const incompletePath = path.join(root, "incomplete.json");
+    expect((await runCli([
+      "check", "--mode", "pr", "--commit", COMMIT_SHA, "--output", incompletePath,
+    ])).exitCode).toBe(3);
+    const rejected = await runCli([
+      "update-baseline", "--commit", COMMIT_SHA, "--report", incompletePath,
+      "--output", baselinePath,
+    ]);
+    expect(rejected.exitCode).toBe(1);
+    expect(rejected.stderr).toMatch(/accepted|evidence-complete/i);
   });
 
   it("records through the Registry and keeps check mode off the tracked tree", async () => {
-    const outputRoot = await mkdtemp(path.join(os.tmpdir(), "worldkit-project-health-cli-record-"));
-    roots.push(outputRoot);
+    const root = outputRoot();
+    await mkdir(root, { recursive: true });
     const recorded = await runCli([
       "record",
       "--gate",
@@ -372,10 +531,10 @@ describe("project health cli", () => {
       "--commit",
       COMMIT_SHA,
       "--output",
-      path.join(outputRoot, "receipt.json"),
+      path.join(root, "receipt.json"),
     ]);
     expect([0, 2, 3]).toContain(recorded.exitCode);
-    const receipt = JSON.parse(await readFile(path.join(outputRoot, "receipt.json"), "utf8")) as {
+    const receipt = JSON.parse(await readFile(path.join(root, "receipt.json"), "utf8")) as {
       readonly kind: string;
       readonly gateId: string;
     };
@@ -389,9 +548,36 @@ describe("project health cli", () => {
       "--commit",
       COMMIT_SHA,
       "--output",
-      path.join(outputRoot, "missing.json"),
+      path.join(root, "missing.json"),
     ]);
     expect(unknown.exitCode).toBe(1);
+
+    const stale = await runCli([
+      "record", "--gate", "tracked-tree-clean", "--commit", "c".repeat(40),
+      "--output", path.join(root, "stale.json"),
+    ]);
+    expect(stale.exitCode).toBe(1);
+    expect(stale.stderr).toMatch(/HEAD/i);
+
+    const outside = await runCli([
+      "check", "--mode", "pr", "--commit", COMMIT_SHA,
+      "--output", path.join(REPOSITORY_ROOT, "outside-report.json"),
+    ]);
+    expect(outside.exitCode).toBe(1);
+    expect(outside.stderr).toMatch(/\.project-health/i);
+
+    const symlinkTarget = outputRoot();
+    const symlinkParent = outputRoot();
+    await mkdir(symlinkTarget, { recursive: true });
+    await mkdir(symlinkParent, { recursive: true });
+    await symlink(symlinkTarget, path.join(symlinkParent, "linked"), "dir");
+    const symlinked = await runCli([
+      "check", "--mode", "pr", "--commit", COMMIT_SHA,
+      "--output", path.join(symlinkParent, "linked", "report.json"),
+    ]);
+    expect(symlinked.exitCode).toBe(1);
+    expect(symlinked.stderr).toMatch(/canonical|symbolic/i);
+    await expect(readFile(path.join(symlinkTarget, "report.json"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
 
     const before = execFileSync("git", ["status", "--porcelain"], {
       cwd: REPOSITORY_ROOT,
@@ -404,7 +590,7 @@ describe("project health cli", () => {
       "--commit",
       COMMIT_SHA,
       "--output",
-      path.join(REPOSITORY_ROOT, ".project-health/report.json"),
+      path.join(root, "incomplete.json"),
     ]);
     expect(check.exitCode).toBe(3);
     const after = execFileSync("git", ["status", "--porcelain"], {
@@ -415,9 +601,8 @@ describe("project health cli", () => {
   });
 
   it("can be invoked through the frozen package scripts", async () => {
-    const outputRoot = await mkdtemp(path.join(os.tmpdir(), "worldkit-project-health-script-"));
-    roots.push(outputRoot);
-    const reportPath = path.join(outputRoot, "report.json");
+    const root = outputRoot();
+    const reportPath = path.join(root, "report.json");
     const result = await execFileAsync(
       "pnpm",
       ["health:pr", "--", "--commit", COMMIT_SHA, "--output", reportPath],

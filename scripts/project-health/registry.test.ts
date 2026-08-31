@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -14,6 +15,8 @@ import {
   isRegisteredProjectHealthGateIdV1,
   PROJECT_HEALTH_GATE_REGISTRY_V1,
   PROJECT_HEALTH_SENSOR_IMPLEMENTATION_HASHES_V1,
+  projectHealthGateInputFingerprintV1,
+  readProjectHealthCheckoutHeadV1,
   recordRegisteredProjectHealthGateV1,
   registeredProjectHealthGateArgvV1,
 } from "./registry";
@@ -29,7 +32,7 @@ import { VISUAL_EVIDENCE_SENSOR_IMPLEMENTATION_HASH_V1 } from "./sensors/visual-
 import { WORKSPACE_BOUNDARY_SENSOR_IMPLEMENTATION_HASH_V1 } from "./sensors/workspace-boundary";
 
 const REPOSITORY_ROOT = path.resolve(new URL("../..", import.meta.url).pathname);
-const COMMIT_SHA = "c".repeat(40);
+const COMMIT_SHA = execFileSync("git", ["rev-parse", "HEAD"], { cwd: REPOSITORY_ROOT, encoding: "utf8" }).trim();
 const roots: string[] = [];
 
 afterEach(async () => {
@@ -133,11 +136,13 @@ describe("project health registry", () => {
     expect(source).toMatch("admitRegisteredProjectHealthGateV1");
     expect(source).toMatch("runProjectHealthProcessV1");
     expect(source).not.toMatch("spawn(");
-    const outputRoot = await mkdtemp(path.join(os.tmpdir(), "worldkit-project-health-record-"));
+    const outputRoot = path.join(REPOSITORY_ROOT, ".project-health", `registry-test-${randomUUID()}`);
+    await mkdir(outputRoot, { recursive: true });
     roots.push(outputRoot);
     const outputPath = path.join(outputRoot, "tracked-tree-clean.json");
     const receipt = await recordRegisteredProjectHealthGateV1({
       repositoryRoot: REPOSITORY_ROOT,
+      profile: parsedProfile(),
       gateId: "tracked-tree-clean",
       commitSha: COMMIT_SHA,
       outputPath,
@@ -147,5 +152,46 @@ describe("project health registry", () => {
     expect(receipt.commitSha).toBe(COMMIT_SHA);
     expect(["passed", "failed", "incomplete"]).toContain(receipt.status);
     expect(JSON.parse(await readFile(outputPath, "utf8"))).toEqual(receipt);
+  });
+
+  it("rejects a non-HEAD commit before publication and fingerprints canonical selected bytes", async () => {
+    expect(await readProjectHealthCheckoutHeadV1(REPOSITORY_ROOT)).toBe(COMMIT_SHA);
+    const outputRoot = path.join(REPOSITORY_ROOT, ".project-health", `registry-test-${randomUUID()}`);
+    await mkdir(outputRoot, { recursive: true });
+    roots.push(outputRoot);
+    const outputPath = path.join(outputRoot, "stale.json");
+    await expect(recordRegisteredProjectHealthGateV1({
+      repositoryRoot: REPOSITORY_ROOT,
+      profile: parsedProfile(),
+      gateId: "tracked-tree-clean",
+      commitSha: "c".repeat(40),
+      outputPath,
+    })).rejects.toThrow(/HEAD/i);
+    await expect(readFile(outputPath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+
+    const repositoryRoot = await mkdtemp(path.join(os.tmpdir(), "worldkit-project-health-inputs-"));
+    roots.push(repositoryRoot);
+    await mkdir(path.join(repositoryRoot, "selected"));
+    await writeFile(path.join(repositoryRoot, "selected", "fixture.txt"), "before", "utf8");
+    const profile = parsedProfile();
+    const selectedProfile = {
+      ...profile,
+      inputSelectorsBySensorId: {
+        ...profile.inputSelectorsBySensorId,
+        "contract-parity": { exactPaths: [], pathPrefixes: ["selected"], configPaths: [] },
+      },
+    };
+    const before = await projectHealthGateInputFingerprintV1({
+      repositoryRoot,
+      profile: selectedProfile,
+      gateId: "typecheck",
+    });
+    await writeFile(path.join(repositoryRoot, "selected", "fixture.txt"), "after", "utf8");
+    const after = await projectHealthGateInputFingerprintV1({
+      repositoryRoot,
+      profile: selectedProfile,
+      gateId: "typecheck",
+    });
+    expect(after).not.toBe(before);
   });
 });
