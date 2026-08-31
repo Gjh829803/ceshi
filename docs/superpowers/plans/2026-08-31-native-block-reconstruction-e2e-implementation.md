@@ -550,11 +550,26 @@ export interface CodexTaskProcessPortV1 {
     executablePath: string;
     arguments: readonly string[];
     cwd: string;
-  }>): Promise<Readonly<{ exitCode: number; stdout: string; stderr: string }>>;
+    requestId: string;
+  }>): Promise<Readonly<{
+    exitCode: number;
+    stdout: string;
+    stderr: string;
+    taskOutcome?: CodexTaskOutcomeEnvelopeV1;
+  }>>;
 }
 ```
 
 Test completed outputs, no output, empty output, task error, timeout/unknown outcome, same request ID + same hash reconciliation, same ID + different hash rejection, interrupted atomic promotion, and cleanup failure. Assert the executable basename is exactly `run-codex-task.mjs`; no test or production branch may call `run-lwdp-codex-task.mjs`, `run-local-codex-task.mjs`, LWDP HTTP, or `codex exec` directly.
+
+The representative formal run uses the frozen 1,800-second timeout. Distinguish a definitive provider
+task timeout as `task-timeout` from an uncertain creation outcome as `creation-outcome-unknown`; retain
+only the stable provider-neutral diagnostic code in the Generation Receipt, never provider stderr or
+payload details. Require both Local and Cloud adapters to emit one closed, request-ID-bound outcome
+envelope. The production process port parses that envelope rather than stderr; unknown creation outcomes
+must enter the Runner reconciliation port and call the router's GET-only recovery mode. Add focused tests
+for the real Local timeout adapter, structured Cloud timeout codes, single-POST recovery, envelope identity,
+Receipt diagnostic combinations, and the stable hyphen Bootstrap ID required by `whitebox.blocks@1`.
 
 - [ ] **Step 3: Run RED generation tests**
 

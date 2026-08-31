@@ -3,6 +3,8 @@ import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { mkdir, readFile, rename, rm, stat } from "node:fs/promises";
 
+import { CodexTaskOutcomeError } from "./codex-task-outcome.mjs";
+
 const terminalStatuses = new Set([
   "succeeded", "completed", "failed", "submit_failed", "cancelled", "stopped",
 ]);
@@ -160,7 +162,8 @@ export async function submitCodexGenerationJob(payload, {
     const recoveryDetail = lastLookupError instanceof Error
       ? ` Exact request lookup also failed: ${lastLookupError.message}`
       : "";
-    throw new Error(
+    throw new CodexTaskOutcomeError(
+      "creation-outcome-unknown",
       `LWDP Codex submission outcome is unknown and no existing job was recovered.${recoveryDetail}`,
       { cause: submissionError },
     );
@@ -210,7 +213,10 @@ export async function pollGenerationJob(jobId, {
     }
     if (terminalStatuses.has(String(job?.status))) return job;
     if (Date.now() - startedAt >= timeoutMs) {
-      throw new Error(`LWDP job ${jobId} timed out after ${timeoutMs}ms.`);
+      throw new CodexTaskOutcomeError(
+        "creation-outcome-unknown",
+        `LWDP job ${jobId} polling outcome is unknown after ${timeoutMs}ms.`,
+      );
     }
     await new Promise((resolvePromise) => setTimeout(resolvePromise, Math.max(100, intervalMs)));
   }
@@ -226,7 +232,13 @@ export async function fetchGenerationItems(jobId, options = {}) {
 export function assertSuccessfulJob(job, itemsPayload, expectedItemIds = []) {
   const jobStatus = String(job?.status ?? "");
   if (["failed", "submit_failed", "cancelled", "stopped"].includes(jobStatus)) {
-    throw new Error(`LWDP job did not succeed: ${job?.error || jobStatus}`);
+    const outcomeCode = ["task_timeout", "codex_timeout"].includes(
+      String(job?.error_code ?? "").toLowerCase(),
+    ) ? "task-timeout" : "task-rejected";
+    throw new CodexTaskOutcomeError(
+      outcomeCode,
+      `LWDP job did not succeed: ${job?.error || jobStatus}`,
+    );
   }
   const items = itemsPayload?.items ?? itemsPayload?.data ?? [];
   const failed = Array.isArray(items)
@@ -234,8 +246,15 @@ export function assertSuccessfulJob(job, itemsPayload, expectedItemIds = []) {
       ["failed", "rejected", "cancelled", "stopped"].includes(String(item?.status)))
     : [];
   if (failed.length > 0) {
-    throw new Error(`LWDP task failures: ${failed.map((item) =>
-      `${item.item_id || item.id}: ${item.error || item.status}`).join("; ")}`);
+    const outcomeCode = failed.every((item) =>
+      ["task_timeout", "codex_timeout"].includes(
+        String(item?.error_code ?? "").toLowerCase(),
+      )) ? "task-timeout" : "task-rejected";
+    throw new CodexTaskOutcomeError(
+      outcomeCode,
+      `LWDP task failures: ${failed.map((item) =>
+        `${item.item_id || item.id}: ${item.error || item.status}`).join("; ")}`,
+    );
   }
   const succeeded = new Set(
     Array.isArray(items)
