@@ -449,6 +449,11 @@ async function git(repositoryRoot: string, argv: readonly string[]): Promise<str
   return result.stdout;
 }
 
+export async function listProjectHealthTrackedPathsV1(repositoryRoot: string): Promise<readonly string[]> {
+  const output = await git(repositoryRoot, ["ls-files", "--cached", "-z", "--", "."]);
+  return sortBy(uniq(output.split("\0").filter((entry) => !isEmpty(entry))));
+}
+
 interface RepositoryStateFingerprintBudget {
   remainingBytes: number;
   remainingEntries: number;

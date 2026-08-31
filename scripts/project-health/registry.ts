@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { lstatSync, readFileSync, readdirSync, realpathSync } from "node:fs";
-import { lstat, readFile, readdir, realpath } from "node:fs/promises";
+import { lstat, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -24,6 +24,7 @@ import {
 } from "./evidence-store";
 import {
   assertProjectHealthExactCleanCheckoutV1,
+  listProjectHealthTrackedPathsV1,
   parseProjectHealthExecutionDescriptorV1,
   runProjectHealthProcessV1,
   type ProjectHealthExecutionDescriptorV1,
@@ -332,29 +333,11 @@ async function selectedInputPaths(
   selectors: readonly ProjectHealthInputSelectorV1[],
 ): Promise<readonly string[]> {
   const selected = new Set(selectors.flatMap((selector) => [...selector.exactPaths, ...selector.configPaths]));
-  const visit = async (relativeDirectory: string): Promise<void> => {
-    const absoluteDirectory = path.join(repositoryRoot, relativeDirectory);
-    let entries;
-    try {
-      entries = await readdir(absoluteDirectory, { withFileTypes: true });
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
-      throw error;
+  for (const relativePath of await listProjectHealthTrackedPathsV1(repositoryRoot)) {
+    if (selectors.some((selector) => selectorMatchesPath(selector, relativePath))) {
+      selected.add(relativePath);
     }
-    for (const entry of entries) {
-      if (entry.name === "node_modules" || entry.name === ".git" || entry.name === ".project-health") continue;
-      const relativePath = path.posix.join(relativeDirectory.split(path.sep).join("/"), entry.name);
-      const couldMatch = selectors.some((selector) => selector.pathPrefixes.some((prefix) =>
-        relativePath === prefix || relativePath.startsWith(`${prefix}/`) || prefix.startsWith(`${relativePath}/`)));
-      if (!couldMatch) continue;
-      if (entry.isSymbolicLink()) throw new TypeError(`Selected input must not be a symbolic link: ${relativePath}`);
-      if (entry.isDirectory()) await visit(relativePath);
-      else if (entry.isFile() && selectors.some((selector) => selectorMatchesPath(selector, relativePath))) {
-        selected.add(relativePath);
-      }
-    }
-  };
-  await visit(".");
+  }
   return sortBy(uniq([...selected]));
 }
 
