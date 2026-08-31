@@ -172,6 +172,25 @@ test("treats cancelled and stopped LWDP jobs and items as unsuccessful terminal 
   }
 });
 
+test("maps only a structured provider task timeout code to the neutral timeout outcome", () => {
+  assert.throws(
+    () => assertSuccessfulJob(
+      { status: "completed" },
+      { items: [{ item_id: "builder", status: "failed", error_code: "task_timeout", error: "private detail" }] },
+      ["builder"],
+    ),
+    (error) => error?.outcomeCode === "task-timeout",
+  );
+  assert.throws(
+    () => assertSuccessfulJob(
+      { status: "completed" },
+      { items: [{ item_id: "builder", status: "failed", error: "codex timeout after 1800s" }] },
+      ["builder"],
+    ),
+    (error) => error?.outcomeCode === "task-rejected",
+  );
+});
+
 test("cancels an LWDP job through the idempotent generation endpoint", async () => {
   const observed = [];
   const payload = await cancelGenerationJob("gen_cancel", {
@@ -235,6 +254,7 @@ test("assembles cloud Codex and T2I tasks without local credentials in smoke mod
       "scripts/agents/run-lwdp-codex-task.mjs",
       "--repo-root", repoRoot,
       "--task-id", "codex-smoke",
+      "--request-id", "codex-smoke-request",
       "--stage", "planner",
       "--output-s3-prefix", "s3://bucket/worldkit/smoke",
       "--instruction-file", instruction,
@@ -245,6 +265,10 @@ test("assembles cloud Codex and T2I tasks without local credentials in smoke mod
     assert.match(
       codex.stdout,
       /WORLDKIT_LWDP_CODEX_SMOKE codex-smoke dispatch=single-task-fast-path tasks=1 profile=formal model=gpt-5\.6-sol reasoning=xhigh submitAttempts=1 assets=1 outputs=1/,
+    );
+    assert.match(
+      codex.stdout,
+      /WORLDKIT_CODEX_TASK_OUTCOME \{"kind":"worldkit-codex-task-outcome","schemaVersion":1,"requestId":"codex-smoke-request","outcome":"completed"\}/,
     );
     const cloudRunner = await readFile(path.join(repoRoot, "scripts/agents/run-lwdp-codex-task.mjs"), "utf8");
     assert.doesNotMatch(cloudRunner, /distributed|max_pods|pod_concurrency|account_concurrency/);

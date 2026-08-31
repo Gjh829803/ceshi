@@ -5,8 +5,18 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { runNativeBlockGenerationV1, type CodexTaskProcessPortV1 } from "./generation-runner.js";
+import {
+  createCodexTaskProcessPortV1,
+  reconcileCodexTaskCreationV1,
+} from "./codex-task-process-port.js";
 
 const expectedOutputs = ["scene.ts", "native-block-authoring.json", "native-resources.json"] as const;
+const completedTaskOutcome = {
+  kind: "worldkit-codex-task-outcome",
+  schemaVersion: 1,
+  requestId: "native-block-generation-cloud-temple-initial",
+  outcome: "completed",
+} as const;
 
 async function preparedFixture() {
   const root = await mkdtemp(path.join(os.tmpdir(), "worldkit-generation-runner-"));
@@ -27,7 +37,7 @@ async function preparedFixture() {
       workspaceContextManifestRef: "manifest.json", workspaceContextManifestHash: `sha256:${"3".repeat(64)}`, contextInputs: [],
       nativeSceneApiRef: "api.json", nativeSceneApiHash: `sha256:${"4".repeat(64)}`, nativeSceneProfileRef: "profile.json", nativeSceneProfileHash: `sha256:${"5".repeat(64)}`,
       blockProfileRef: "block.json", blockProfileHash: `sha256:${"6".repeat(64)}`, bootstrapInputRef: "bootstrap.json", bootstrapInputHash: `sha256:${"7".repeat(64)}`,
-      seed: 1, budgets: { maximumBlockCount: 1, maximumStaticColliderCount: 1, maximumStaticColliderVertexCount: 1, maximumStaticColliderTriangleCount: 1, maximumOutputBytes: 10000, timeoutSeconds: 1 },
+      seed: 1, budgets: { maximumBlockCount: 1, maximumStaticColliderCount: 1, maximumStaticColliderVertexCount: 1, maximumStaticColliderTriangleCount: 1, maximumOutputBytes: 10000, timeoutSeconds: 1_800 },
       declaredOutputPaths: expectedOutputs,
     } as const,
     generationRequestHash: `sha256:${"a".repeat(64)}`,
@@ -45,10 +55,56 @@ async function writeOutputs(directory: string) {
 }
 
 describe("runNativeBlockGenerationV1", () => {
+  it("parses the router envelope and reaches cloud GET-only reconciliation through the production process port", async () => {
+    const prepared = await preparedFixture();
+    const fakeRouter = path.join(prepared.root, "fake-router.mjs");
+    const observedArguments = path.join(prepared.root, "reconcile-arguments.json");
+    await writeFile(fakeRouter, `
+import { writeFileSync } from "node:fs";
+const args = process.argv.slice(2);
+const valueAfter = (name) => args[args.indexOf(name) + 1];
+const requestId = valueAfter("--request-id");
+if (args.includes("--reconcile-only")) {
+  writeFileSync(${JSON.stringify(observedArguments)}, JSON.stringify(args));
+  console.log("WORLDKIT_CODEX_TASK_OUTCOME " + JSON.stringify({ kind: "worldkit-codex-task-outcome", schemaVersion: 1, requestId, outcome: "request-found" }));
+  process.exit(0);
+}
+console.log("WORLDKIT_CODEX_TASK_OUTCOME " + JSON.stringify({ kind: "worldkit-codex-task-outcome", schemaVersion: 1, requestId, outcome: "creation-outcome-unknown" }));
+process.exit(1);
+`);
+    try {
+      const port = createCodexTaskProcessPortV1();
+      const processResult = await port.run({
+        executablePath: fakeRouter,
+        arguments: ["--request-id", prepared.routerRequestId],
+        cwd: prepared.root,
+        requestId: prepared.routerRequestId,
+      });
+      expect(processResult.taskOutcome?.outcome).toBe("creation-outcome-unknown");
+      const reconciliation = await reconcileCodexTaskCreationV1({
+        executablePath: fakeRouter,
+        backend: "cloud",
+        requestId: prepared.routerRequestId,
+        cwd: prepared.root,
+      });
+      expect(reconciliation).toEqual({ outcome: "unknown" });
+      const argumentsValue = JSON.parse(await readFile(observedArguments, "utf8"));
+      expect(argumentsValue).toEqual([
+        "--backend", "cloud",
+        "--reconcile-only",
+        "--task-id", prepared.routerRequestId,
+        "--request-id", prepared.routerRequestId,
+      ]);
+      expect(argumentsValue).not.toContain("--submit-attempts");
+    } finally {
+      await rm(prepared.root, { recursive: true, force: true });
+    }
+  });
+
   it("promotes exactly three non-empty outputs only after successful router and self-check", async () => {
     const prepared = await preparedFixture();
     const calls: unknown[] = [];
-    const port: CodexTaskProcessPortV1 = { run: async (runInput) => { calls.push(runInput); await writeOutputs(prepared.stagingDirectoryPath); return { exitCode: 0, stdout: "WORLDKIT_LWDP_JOB native-block-generation native-block-generation-cloud-temple-initial job-1 dispatch=single-task-fast-path profile=formal model=gpt-5.6-sol reasoning=xhigh\n", stderr: "" }; } };
+    const port: CodexTaskProcessPortV1 = { run: async (runInput) => { calls.push(runInput); await writeOutputs(prepared.stagingDirectoryPath); return { exitCode: 0, stdout: "WORLDKIT_LWDP_JOB native-block-generation native-block-generation-cloud-temple-initial job-1 dispatch=single-task-fast-path profile=formal model=gpt-5.6-sol reasoning=xhigh\n", stderr: "", taskOutcome: completedTaskOutcome }; } };
     try {
       const result = await runNativeBlockGenerationV1(prepared, {
         process: port,
@@ -97,6 +153,105 @@ describe("runNativeBlockGenerationV1", () => {
     } finally { await rm(prepared.root, { recursive: true, force: true }); }
   });
 
+  it("records one request-bound adapter task timeout without inspecting provider stderr", async () => {
+    const prepared = await preparedFixture();
+    const privateProviderDetail = "secret-provider-trace-42";
+    try {
+      const result = await runNativeBlockGenerationV1(prepared, {
+        process: {
+          run: async () => ({
+            exitCode: 1,
+            stdout: "WORLDKIT_LWDP_JOB native-block-generation native-block-generation-cloud-temple-initial job-1 dispatch=single-task-fast-path profile=formal model=gpt-5.6-sol reasoning=xhigh\n",
+            stderr: privateProviderDetail,
+            taskOutcome: {
+              kind: "worldkit-codex-task-outcome",
+              schemaVersion: 1,
+              requestId: prepared.routerRequestId,
+              outcome: "task-timeout",
+            },
+          }),
+        },
+        selfCheck: async () => ({ ok: true, diagnosticCodes: [] }),
+        reconcile: async () => ({ outcome: "missing" }),
+        cleanup: async () => ({ outcome: "completed" }),
+      });
+
+      expect(result.receipt.outcome).toBe("rejected");
+      expect(result.receipt.diagnosticCodes).toEqual(["task-timeout"]);
+      expect(JSON.stringify(result.receipt)).not.toContain(privateProviderDetail);
+      expect(JSON.stringify(result.receipt)).not.toContain("codex timeout after");
+    } finally {
+      await rm(prepared.root, { recursive: true, force: true });
+    }
+  });
+
+  it("routes an adapter creation uncertainty through GET-only reconciliation", async () => {
+    const prepared = await preparedFixture();
+    let reconciliations = 0;
+    try {
+      const result = await runNativeBlockGenerationV1(prepared, {
+        process: {
+          run: async () => ({
+            exitCode: 1,
+            stdout: "",
+            stderr: "private transport detail",
+            taskOutcome: {
+              kind: "worldkit-codex-task-outcome",
+              schemaVersion: 1,
+              requestId: prepared.routerRequestId,
+              outcome: "creation-outcome-unknown",
+            },
+          }),
+        },
+        selfCheck: async () => ({ ok: true, diagnosticCodes: [] }),
+        reconcile: async (requestId, requestHash) => {
+          reconciliations += 1;
+          return { outcome: "unknown", requestId, requestHash };
+        },
+        cleanup: async () => ({ outcome: "completed" }),
+      });
+
+      expect(reconciliations).toBe(1);
+      expect(result.receipt.outcome).toBe("unknown");
+      expect(result.receipt.diagnosticCodes).toEqual(["creation-outcome-unknown"]);
+    } finally {
+      await rm(prepared.root, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps a failed read-only reconciliation durable-unknown without retrying it", async () => {
+    const prepared = await preparedFixture();
+    let reconciliations = 0;
+    try {
+      const result = await runNativeBlockGenerationV1(prepared, {
+        process: {
+          run: async () => ({
+            exitCode: 1,
+            stdout: "",
+            stderr: "",
+            taskOutcome: {
+              kind: "worldkit-codex-task-outcome",
+              schemaVersion: 1,
+              requestId: prepared.routerRequestId,
+              outcome: "creation-outcome-unknown",
+            },
+          }),
+        },
+        selfCheck: async () => ({ ok: true, diagnosticCodes: [] }),
+        reconcile: async () => {
+          reconciliations += 1;
+          throw new Error("GET unavailable");
+        },
+        cleanup: async () => ({ outcome: "completed" }),
+      });
+      expect(reconciliations).toBe(1);
+      expect(result.receipt.outcome).toBe("unknown");
+      expect(result.receipt.diagnosticCodes).toEqual(["creation-outcome-unknown"]);
+    } finally {
+      await rm(prepared.root, { recursive: true, force: true });
+    }
+  });
+
   it("rejects a reconciled request identity whose hash differs", async () => {
     const prepared = await preparedFixture();
     try {
@@ -129,7 +284,7 @@ describe("runNativeBlockGenerationV1", () => {
     for (const stdout of ["", "WORLDKIT_LWDP_JOB native-block-generation native-block-generation-cloud-temple-initial a dispatch=single-task-fast-path profile=formal model=gpt-5.6-sol reasoning=xhigh\nWORLDKIT_LWDP_JOB native-block-generation native-block-generation-cloud-temple-initial b dispatch=single-task-fast-path profile=formal model=gpt-5.6-sol reasoning=xhigh"]) {
       const prepared = await preparedFixture();
       try {
-        const result = await runNativeBlockGenerationV1(prepared, { process: { run: async () => { await writeOutputs(prepared.stagingDirectoryPath); return { exitCode: 0, stdout, stderr: "" }; } }, selfCheck: async () => ({ ok: true, diagnosticCodes: [] }), reconcile: async () => ({ outcome: "missing" }), cleanup: async () => ({ outcome: "completed" }) });
+        const result = await runNativeBlockGenerationV1(prepared, { process: { run: async () => { await writeOutputs(prepared.stagingDirectoryPath); return { exitCode: 0, stdout, stderr: "", taskOutcome: completedTaskOutcome }; } }, selfCheck: async () => ({ ok: true, diagnosticCodes: [] }), reconcile: async () => ({ outcome: "missing" }), cleanup: async () => ({ outcome: "completed" }) });
         expect(result.receipt.outcome).toBe("rejected");
       } finally { await rm(prepared.root, { recursive: true, force: true }); }
     }

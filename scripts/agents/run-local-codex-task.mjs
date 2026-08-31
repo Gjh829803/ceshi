@@ -13,6 +13,10 @@ import {
 } from "node:fs/promises";
 import { basename, dirname, extname, isAbsolute, relative, resolve } from "node:path";
 
+import {
+  CodexTaskOutcomeError,
+  serializeCodexTaskOutcomeEnvelopeV1,
+} from "../lib/codex-task-outcome.mjs";
 import { resolveCodexExecutionProfile } from "../lib/lwdp-codex-profile.mjs";
 
 function parseArguments(argv) {
@@ -132,6 +136,7 @@ async function promoteFileAtomic(source, destination) {
 const args = parseArguments(process.argv.slice(2));
 const repoRoot = resolve(args.repoRoot || process.cwd());
 const taskId = safeTaskId(args.taskId);
+const requestId = safeTaskId(args.requestId || taskId);
 const executionProfile = resolveCodexExecutionProfile({
   executionProfile: args.executionProfile || "formal",
   model: args.model,
@@ -148,6 +153,18 @@ await mkdir(stagingRoot, { recursive: true });
 
 let child = null;
 let timeout = null;
+let didTimeout = false;
+let outcomeEmitted = false;
+const emitOutcome = (outcome) => {
+  if (outcomeEmitted) throw new Error("Codex task outcome was emitted more than once.");
+  outcomeEmitted = true;
+  process.stdout.write(serializeCodexTaskOutcomeEnvelopeV1({
+    kind: "worldkit-codex-task-outcome",
+    schemaVersion: 1,
+    requestId,
+    outcome,
+  }));
+};
 const stopChild = (signal) => {
   if (child !== null && !child.killed) child.kill(signal);
 };
@@ -155,6 +172,7 @@ process.once("SIGINT", () => stopChild("SIGINT"));
 process.once("SIGTERM", () => stopChild("SIGTERM"));
 
 try {
+  try {
   for (const context of args.contexts) {
     const source = safeRelativePath(repoRoot, context, "context");
     await copyIsolatedTree(source.absolute, resolve(stagingRoot, source.relative));
@@ -205,6 +223,7 @@ try {
     process.stdout.write(
       `${smokeMode ? "WORLDKIT_LOCAL_CODEX_SMOKE" : "WORLDKIT_LOCAL_CODEX_DRY_RUN"} ${taskId} profile=${executionProfile.name} model=${executionProfile.model} reasoning=${executionProfile.reasoningEffort} contexts=${args.contexts.length} assets=${assetRows.length} outputs=${outputSpecs.length}\n`,
     );
+    emitOutcome("completed");
     await rm(stagingRoot, { recursive: true, force: true });
     process.exit(0);
   }
@@ -265,7 +284,10 @@ try {
     stderrTail = `${stderrTail}${chunk}`.slice(-64 * 1024);
   });
   child.stdin.end(prompt);
-  timeout = setTimeout(() => stopChild("SIGTERM"), timeoutSeconds * 1_000);
+  timeout = setTimeout(() => {
+    didTimeout = true;
+    stopChild("SIGTERM");
+  }, timeoutSeconds * 1_000);
   timeout.unref();
   const result = await new Promise((resolvePromise) => {
     child.once("error", (error) => resolvePromise({ code: 1, error }));
@@ -275,7 +297,8 @@ try {
   timeout = null;
   if (result.error) throw result.error;
   if (result.code !== 0) {
-    throw new Error(
+    throw new CodexTaskOutcomeError(
+      didTimeout ? "task-timeout" : "task-rejected",
       `Local Codex task ${taskId} failed with code ${result.code}${result.signal ? ` (${result.signal})` : ""}: ${stderrTail.trim()}`,
     );
   }
@@ -289,8 +312,15 @@ try {
     await promoteFileAtomic(output.stagedPath, output.localPath);
   }
   process.stdout.write(`WORLDKIT_LOCAL_CODEX_TASK_READY ${taskId}\n`);
-} finally {
-  if (timeout !== null) clearTimeout(timeout);
-  stopChild("SIGTERM");
-  await rm(stagingRoot, { recursive: true, force: true });
+  } finally {
+    if (timeout !== null) clearTimeout(timeout);
+    stopChild("SIGTERM");
+    await rm(stagingRoot, { recursive: true, force: true });
+  }
+  emitOutcome("completed");
+} catch (error) {
+  emitOutcome(error instanceof CodexTaskOutcomeError
+    ? error.outcomeCode
+    : "task-rejected");
+  throw error;
 }

@@ -34,6 +34,9 @@ import {
 import { isEqual, isNil, sortBy } from "lodash-es";
 
 const OUTPUTS = ["scene.ts", "native-block-authoring.json", "native-resources.json"] as const;
+
+export const NATIVE_BLOCK_RECONSTRUCTION_FORMAL_TIMEOUT_SECONDS_V1 = 1_800;
+
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const CURRENT_NATIVE_SCENE_API_REF = "worldkit://native-scene-api/babylon@1";
 const CURRENT_NATIVE_SCENE_PROFILE_REF = "worldkit://native-scene-profile/whitebox.blocks@1";
@@ -404,6 +407,9 @@ export async function prepareNativeBlockGenerationTaskV1(
   if (input.attemptIndex !== 0 && input.attemptIndex !== 1) throw new TypeError("Native generation supports only initial attempt 0 or repair attempt 1.");
   if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(input.runId)) {
     throw new TypeError("Generation runId must be one stable lowercase identity part.");
+  }
+  if (!/^[a-z0-9][a-z0-9-]{2,79}$/.test(input.bootstrapId)) {
+    throw new TypeError("Native Block bootstrapId must be one stable lowercase identity.");
   }
   const suppliedRouteDecision = parseSceneAuthoringRouteDecisionV1(input.routeDecision);
   if (

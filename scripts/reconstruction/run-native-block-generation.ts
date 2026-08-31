@@ -7,8 +7,15 @@ import { sha256CanonicalJson, stringifyCanonicalJson, type Sha256HashV1 } from "
 import { hashWorldReconstructionCaseV1, hashWorldReconstructionEvaluationProfileV1, parseWorldReconstructionCaseV1, parseWorldReconstructionEvaluationProfileV1 } from "@whitebox-world/validation";
 import { parseWorldPackageWorldBoundsV1 } from "@whitebox-world/world-package";
 
-import { prepareNativeBlockGenerationTaskV1 } from "./generation-request.js";
-import { runNativeBlockGenerationV1, type CodexTaskProcessPortV1 } from "./generation-runner.js";
+import {
+  NATIVE_BLOCK_RECONSTRUCTION_FORMAL_TIMEOUT_SECONDS_V1,
+  prepareNativeBlockGenerationTaskV1,
+} from "./generation-request.js";
+import { runNativeBlockGenerationV1 } from "./generation-runner.js";
+import {
+  createCodexTaskProcessPortV1,
+  reconcileCodexTaskCreationV1,
+} from "./codex-task-process-port.js";
 
 const DEFAULT_LWDP_S3_ROOT = "s3://leap-world-us-east-2/world-model/platform/agent-whitebox-world-sdk";
 
@@ -19,17 +26,7 @@ function option(tokens: readonly string[], name: string): string {
   return value;
 }
 
-const processPort: CodexTaskProcessPortV1 = {
-  run: async ({ executablePath, arguments: argumentsValue, cwd }) => new Promise((resolvePromise, reject) => {
-    const child = spawn(process.execPath, [executablePath, ...argumentsValue], { cwd, shell: false, stdio: ["ignore", "pipe", "pipe"] });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (chunk) => { stdout += String(chunk); });
-    child.stderr.on("data", (chunk) => { stderr += String(chunk); });
-    child.once("error", reject);
-    child.once("close", (exitCode) => resolvePromise({ exitCode: exitCode ?? 1, stdout, stderr }));
-  }),
-};
+const processPort = createCodexTaskProcessPortV1();
 
 async function main(): Promise<void> {
   const tokens = process.argv.slice(2);
@@ -77,9 +74,9 @@ async function main(): Promise<void> {
     worldRuntimeBootstrapPath: path.join(hostClosureRootPath, "runtime", "world-runtime-bootstrap.json"),
     worldRuntimeBootstrapRef: "worldkit://world-runtime-bootstrap/cloud-ridge@1",
     worldBounds,
-    bootstrapId: `${reconstructionCase.id}.native`,
+    bootstrapId: `${reconstructionCase.id}-native`,
     sceneModuleRef: `worldkit://native-scene/${reconstructionCase.id}@1`,
-    seed, budgets: { maximumBlockCount: 2000, maximumStaticColliderCount: 500, maximumStaticColliderVertexCount: 200000, maximumStaticColliderTriangleCount: 100000, maximumOutputBytes: 4000000, timeoutSeconds: 900 },
+    seed, budgets: { maximumBlockCount: 2000, maximumStaticColliderCount: 500, maximumStaticColliderVertexCount: 200000, maximumStaticColliderTriangleCount: 100000, maximumOutputBytes: 4000000, timeoutSeconds: NATIVE_BLOCK_RECONSTRUCTION_FORMAL_TIMEOUT_SECONDS_V1 },
   });
   const checker = path.join(prepared.taskWorkspacePath, "inputs", "builder-skill", "scripts", "self-check.mjs");
   const result = await runNativeBlockGenerationV1(prepared, {
@@ -96,8 +93,17 @@ async function main(): Promise<void> {
         } catch { resolvePromise({ ok: false, diagnosticCodes: ["self-check-failed"] }); }
       });
     }),
-    // A create timeout stays durable-unknown here; no second submission is permitted.
-    reconcile: async () => ({ outcome: "missing" }),
+    reconcile: async (requestId, requestHash) => {
+      const reconciliation = await reconcileCodexTaskCreationV1({
+        executablePath: prepared.routerExecutablePath,
+        backend: prepared.backend,
+        requestId,
+        cwd: prepared.runDirectoryPath,
+      });
+      return reconciliation.outcome === "missing"
+        ? reconciliation
+        : { outcome: "unknown" as const, requestId, requestHash };
+    },
     cleanup: async () => { await rm(prepared.taskWorkspacePath, { recursive: true, force: true }); return { outcome: "completed" as const }; },
   });
   await writeFile(path.join(outputPath, "attempts", "0", "generation-receipt.json"), `${stringifyCanonicalJson(result.receipt)}\n`);

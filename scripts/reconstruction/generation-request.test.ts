@@ -10,7 +10,11 @@ import { createWorldRuntimeBootstrapV1, parseWorldRuntimeBootstrapV1 } from "@wh
 import { decideSceneAuthoringRouteV1, parseSceneAuthoringRouteDecisionV1, type SceneAuthoringRouteDecisionV1 } from "@whitebox-world/scene-authoring-contracts";
 import { hashWorldReconstructionEvaluationProfileV1, parseWorldReconstructionCaseV1, parseWorldReconstructionEvaluationProfileV1 } from "@whitebox-world/validation";
 
-import { deriveNativeBlockGenerationBootstrapV1, prepareNativeBlockGenerationTaskV1 } from "./generation-request.js";
+import {
+  deriveNativeBlockGenerationBootstrapV1,
+  NATIVE_BLOCK_RECONSTRUCTION_FORMAL_TIMEOUT_SECONDS_V1,
+  prepareNativeBlockGenerationTaskV1,
+} from "./generation-request.js";
 
 const hash = (character: string) => `sha256:${character.repeat(64)}` as `sha256:${string}`;
 const API_HASH = hash("a");
@@ -114,7 +118,7 @@ function input(fixtureValue: Awaited<ReturnType<typeof fixture>>) {
       maximumStaticColliderVertexCount: 200000,
       maximumStaticColliderTriangleCount: 100000,
       maximumOutputBytes: 4000000,
-      timeoutSeconds: 900,
+      timeoutSeconds: NATIVE_BLOCK_RECONSTRUCTION_FORMAL_TIMEOUT_SECONDS_V1,
     },
   };
 }
@@ -162,7 +166,9 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
       );
       expect(prepared.routerArguments).toEqual(expect.arrayContaining([
         "--execution-profile", "formal", "--submit-attempts", "1",
+        "--timeout-seconds", "1800",
       ]));
+      expect(NATIVE_BLOCK_RECONSTRUCTION_FORMAL_TIMEOUT_SECONDS_V1).toBe(1_800);
       expect(prepared.generationRequest.declaredOutputPaths).toEqual([
         "scene.ts", "native-block-authoring.json", "native-resources.json",
       ]);
@@ -272,6 +278,18 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
         runId: "brief-mismatch",
         runDirectoryPath: path.join(value.root, "runs", "brief-mismatch"),
       })).rejects.toThrow(/scene brief/i);
+    } finally {
+      await rm(value.root, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a dotted bootstrap identity before whitebox.blocks finalization", async () => {
+    const value = await fixture();
+    try {
+      await expect(prepareNativeBlockGenerationTaskV1({
+        ...input(value),
+        bootstrapId: "fixture.native",
+      })).rejects.toThrow(/stable lowercase identity/);
     } finally {
       await rm(value.root, { recursive: true, force: true });
     }

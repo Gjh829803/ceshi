@@ -258,7 +258,7 @@ function generationRequest(): NativeBlockGenerationRequestV1 {
       maximumStaticColliderVertexCount: 200_000,
       maximumStaticColliderTriangleCount: 100_000,
       maximumOutputBytes: 4_000_000,
-      timeoutSeconds: 900,
+      timeoutSeconds: 1_800,
     },
     declaredOutputPaths: [
       "scene.ts",
@@ -340,6 +340,35 @@ describe("Native Block generation identity", () => {
     expect(() =>
       assertNativeBlockGenerationReceiptMatchesRequestV1(request, receipt)
     ).not.toThrow();
+  });
+
+  it("accepts one provider-neutral definitive task-timeout diagnostic", () => {
+    const request = generationRequest();
+    const receipt = parseNativeBlockGenerationReceiptV1({
+      ...generationReceipt(request),
+      outcome: "rejected",
+      outputs: [],
+      diagnosticCodes: ["task-timeout"],
+    });
+
+    expect(receipt.diagnosticCodes).toEqual(["task-timeout"]);
+    expect(receipt.outputs).toEqual([]);
+  });
+
+  it("rejects task-timeout outside its sole rejected and cleaned-up branch", () => {
+    const request = generationRequest();
+    const completed = generationReceipt(request);
+    for (const invalid of [
+      { ...completed, outcome: "unknown", outputs: [], diagnosticCodes: ["task-timeout"] },
+      { ...completed, outcome: "tool-error", outputs: [], diagnosticCodes: ["task-timeout"] },
+      { ...completed, outcome: "rejected", outputs: [], diagnosticCodes: ["task-rejected", "task-timeout"] },
+      { ...completed, outcome: "rejected", diagnosticCodes: ["task-timeout"] },
+      { ...completed, outcome: "rejected", outputs: [], diagnosticCodes: ["task-timeout"], cleanupOutcome: "failed" },
+    ]) {
+      expect(() => parseNativeBlockGenerationReceiptV1(invalid)).toThrow(
+        /NATIVE_BLOCK_GENERATION_RECEIPT_INVALID/,
+      );
+    }
   });
 
   it("rejects self-reference, reordered inputs, wrong outputs, and non-formal execution", () => {
