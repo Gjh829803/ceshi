@@ -1,89 +1,82 @@
-# WRC-Aligned Unified Scene Viewer Checkpoint A Implementation Plan
+# WRC-Aligned Unified Scene Viewer Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Deliver one default G Bot Scene Viewer and three curated tuning presets without changing or deleting WRC-1/BNA evidence, corpus, Harnesses or Runtime authorities.
+**Goal:** Deliver one default G Bot Viewer and three curated Canonical tuning presets without adding Runtime authority or deleting WRC/BNA evidence.
 
-**Architecture:** `packages/scene-catalog` validates internal development preset metadata and its Host projection. `apps/playground` consumes that projection while continuing to create the existing RuntimeHost/Babylon/Havok session. WRC cases remain Host-selected inputs and all WRC/BNA evidence stays untouched in Checkpoint A.
+**Architecture:** A Canonical-only internal Catalog publishes validated preset inputs. A later atomic cutover makes Playground, CLI and Studio use one app-owned Host bootstrap while preserving the existing RuntimeHost/Babylon/Havok session. Native Viewer support and obsolete-path deletion are outside the current contract.
 
-**Tech Stack:** TypeScript, Vitest, Vite middleware, Babylon.js 9.23.0, Havok, Playwright.
+**Tech Stack:** TypeScript, Vitest, Vite, Babylon.js 9.23.0, Havok, Node test, Playwright.
 
 **Spec:** `docs/superpowers/specs/2026-08-31-unified-scene-viewer-clean-break-design.md`
 
 ## Global Constraints
 
-- The Scene Catalog is development-tool metadata, not a Runtime protocol, Scene Source, WorldPackage format or WRC work package.
-- Checkpoint A does not delete `artifacts/scenes`, WRC acceptance cases, Native Harnesses, Studio routes, Capture routes or verifier fixtures.
-- RuntimeHost, CharacterMovement, Gameplay, Camera and Havok remain the sole state owners defined by WRC-1.
-- Native entries remain undiscoverable until the applicable BNA production/admission disposition permits them.
-- `worldkit run <world.json>` remains a Host-selected temporary input and never mutates the curated catalog.
-- Checkpoints B and C require separate plans after Checkpoint A is merged to `main`.
+- Catalog and bootstrap are internal app metadata, not WorldKit Browser Protocol or a Scene Source.
+- AuthoringSpec is the sole controlled-Subject authority; Catalog has no Subject field.
+- Current contracts are Canonical-only; do not add a Native union member.
+- `artifacts/scenes`, WRC cases, Native Harnesses and trusted artifact evidence remain untouched.
+- Accepted source-route cutover updates Playground, CLI and Studio consumers atomically.
+- Every production behavior follows RED -> GREEN; update `pnpm-lock.yaml` with workspace packages.
 
 ---
 
-### Task 1: Internal preset catalog contract
+### Task 1: Repair the Canonical-only Catalog contract
 
-**Files:** `packages/scene-catalog/package.json`, `packages/scene-catalog/src/index.ts`, `packages/scene-catalog/src/scene-catalog.ts`, `packages/scene-catalog/src/scene-catalog.test.ts`, `scripts/lib/test-gate-manifest.ts`.
+**Files:** modify `packages/scene-catalog/src/scene-catalog.ts`, its index/test and package metadata; modify `pnpm-lock.yaml` and `scripts/lib/test-gate-manifest.ts`.
 
-**Interfaces:** Produce `parseSceneCatalogV1(value)` and `parseViewerBootstrapV1(value)` as defensive internal Host projections with closed Canonical/Native source members.
+**Interfaces:** `parseSceneCatalogV1(value): SceneCatalogV1`; no `defaultSubjectDefinitionRef`, Native source or Viewer bootstrap in this task.
 
-- [ ] Write RED tests for exact keys, duplicate/inherited IDs, path traversal, raw Native module paths, source mismatch and mutable output.
-- [ ] Run `pnpm exec vitest run packages/scene-catalog/src/scene-catalog.test.ts` and confirm the missing implementation fails.
-- [ ] Implement closed parsing, canonical IDs, relative preset paths and deep freezing without adding a Browser/runtime protocol.
-- [ ] Register the test and run the focused test plus `pnpm test:census`.
-- [ ] Commit `feat(scene-catalog): define internal viewer metadata`.
+- [ ] Add RED tests rejecting Subject metadata, Native source members, inherited/extra keys and unsafe paths.
+- [ ] Run the focused test and confirm failures against the current union.
+- [ ] Implement the Canonical-only projection and remove the premature bootstrap/Native exports.
+- [ ] Remove stale test-manifest entries, update lockfile with `pnpm install --lockfile-only`, then run focused test, census, frozen install and typecheck.
+- [ ] Commit `fix(scene-catalog): keep preset metadata canonical-only`.
 
-### Task 2: Curated G Bot presets and publication boundary
+### Task 2: Publish complete G Bot tuning presets
 
-**Files:** `scenes/catalog.json`, `scenes/presets/feel-flat/world.json`, `scenes/presets/traversal-course/world.json`, `scenes/presets/action-lab/world.json`, `scripts/scenes/promote-scene-preset.ts`, its focused test, root `package.json`.
+**Files:** create `scenes/catalog.json`, three `scenes/presets/*/world.json`, `scripts/scenes/promote-scene-preset.ts` and focused test; modify root package scripts and test manifest.
 
-**Interfaces:** Produce `promoteScenePresetV1({ sceneId, sourcePath, catalogPath })`; accept only authoritative AuthoringSpec V4, matching IDs, regular non-symlink input and a new destination.
+**Interfaces:** `promoteScenePresetV1({ sceneId, sourcePath, catalogPath })`; it delegates to `parseAuthoringSpecV4`, verifies matching ID and controlled G Bot Subject, rejects symlink/overwrite, durably renames preset bytes, then publishes catalog metadata.
 
-- [ ] Write RED tests for valid publication, invalid Canonical JSON, ID mismatch, symlink input and overwrite rejection.
-- [ ] Implement staging, file sync and atomic rename; publish catalog metadata only after preset bytes are durable.
-- [ ] Create the three purpose-specific V4 presets with `worldkit://subject-definition/humanoid.g-bot@2`.
-- [ ] Run focused tests and `pnpm worldkit validate`, `pnpm worldkit build`, and headless load for each preset.
-- [ ] Commit `feat(scene-catalog): publish G Bot tuning presets`.
+- [ ] Add RED tests for invalid V4, ID mismatch, non-G-Bot controlled Subject, symlink, overwrite and catalog-before-preset failure.
+- [ ] Run the focused test and confirm the publisher is absent.
+- [ ] Implement minimal atomic publication.
+- [ ] Complete slope/step/corridor/ledge/blocker stations and limit Action Lab to currently admitted transitions.
+- [ ] Run focused tests plus validate/build/headless load for each preset and commit.
 
-### Task 3: One development Host bootstrap
+### Task 3: Define the app-owned Canonical bootstrap projection
 
-**Files:** `apps/playground/vite.config.mjs`, its tests, a focused `scripts/dev/run-scene-viewer.ts` and test, root `package.json`.
+**Files:** create focused Host/client bootstrap modules and tests under `apps/playground`; modify package dependencies and Vite plugin composition.
 
-**Interfaces:** Produce internal `GET /__worldkit/viewer-bootstrap?scene=<id>` and make `pnpm dev` the catalog startup. Preserve fixed Host-selected source support without exposing local paths.
+**Interfaces:** `resolveViewerBootstrapV1(context)` consumes an already validated Catalog, fixed CLI source or Studio source and returns one Canonical bootstrap. It uses authoritative V4 parsing, proves selected ID and controlled G Bot for curated presets, and never returns paths.
 
-- [ ] Write RED middleware/process tests for default selection, explicit selection, unknown ID, HEAD, method rejection, G Bot metadata and path non-disclosure.
-- [ ] Implement a focused middleware module rather than adding more responsibility to the existing large Vite config.
-- [ ] Implement the owned Viewer process runner and set root `pnpm dev` to it; do not delete Studio/Capture/Native scripts in Checkpoint A.
-- [ ] Run focused tests, `pnpm test:census` and `pnpm typecheck`.
-- [ ] Commit `feat(playground): serve internal viewer bootstrap`.
+- [ ] Add RED tests for default/explicit preset, fixed-source substitution, Studio identity, malformed V4, non-G-Bot preset, HEAD/method behavior and path leakage.
+- [ ] Run RED, implement the focused projection/middleware, then run GREEN.
+- [ ] Keep the module independent of renderer, RuntimeHost, Camera, Input and Havok.
+- [ ] Run focused tests, census and typecheck; commit.
 
-### Task 4: Viewer selector and source-neutral tuning
+### Task 4: Atomically cut over Playground, CLI and Studio
 
-**Files:** focused new route/selector modules and tests, `apps/playground/src/main.ts`, `apps/playground/src/authoring-loader.ts`, `apps/playground/src/style.css`.
+**Files:** modify Playground route/main/loader/style and tests; modify `scripts/lib/worldkit-server.ts`, CLI tests, Studio preview/proxy/server modules and tests; delete replaced public route owner/tests only after all consumers compile.
 
-**Interfaces:** Consume the internal Viewer bootstrap, navigate only with `scene`, load its Canonical source through the existing authoring loader, and install the existing tuning workbench for every curated preset.
+**Interfaces:** `pnpm dev` selects curated scenes with `scene`; `worldkit run` and Studio supply fixed Host context; all initialize the existing Authoring/RuntimeHost path. Remove `authoring=1` and `catalog-gameplay` source-selection authority in the same candidate.
 
-- [ ] Write RED route/selector/loader tests covering stable order, selected value, same-origin navigation, old mode flags having no preset-selection authority and malformed bootstrap rejection.
-- [ ] Implement route and selector modules without renderer or Runtime ownership.
-- [ ] Replace default catalog startup with bootstrap selection while preserving the existing RuntimeHost creation path.
-- [ ] Keep legacy Studio/Capture/Native owner routes operational for Checkpoint B; do not add aliases.
-- [ ] Run focused tests, `pnpm typecheck` and `pnpm build`.
-- [ ] Commit `feat(playground): default to G Bot tuning viewer`.
+- [ ] Add RED route, selector, process, CLI and Studio tests for the one-shell behavior.
+- [ ] Run the focused owner tests and confirm current routes fail the new expectations.
+- [ ] Implement selector and all consumer migrations without changing Runtime ownership.
+- [ ] Delete replaced route parsing and update current docs/AGENTS in the same clean break; retain separately owned trusted artifact capture.
+- [ ] Run Playground, CLI, Studio, typecheck, build and Browser switch/reset/tuning gates; commit.
 
-### Task 5: Checkpoint A exact-tree verification and merge
+### Task 5: Exact-tree verification and integration
 
-**Files:** only defects exposed by gates, each with a RED reproducer first.
+- [ ] Verify all three presets visually and manually: G Bot identity, movement, current jump/land, reset, selector, tuning and each traversal station.
+- [ ] Run frozen install, census, affected tests, typecheck, Studio, independent gate, build, Browser evidence and `git diff --check`.
+- [ ] Prove no active WRC/BNA evidence or Harness was deleted and no Native Viewer claim exists.
+- [ ] Fetch latest `origin/main`, perform semantic reconciliation, and rerun invalidated gates.
+- [ ] Merge and push only the exact verified candidate.
 
-**Interfaces:** Produce one independently useful merge candidate; no Checkpoint B/C cleanup is included.
+## Deferred cleanup
 
-- [ ] Browser-run all three presets and verify G Bot, movement, jump, reset, selector and tuning workbench.
-- [ ] Run affected focused tests, `pnpm typecheck`, `pnpm build`, the relevant Browser smoke and repository boundary/census gates.
-- [ ] Verify `git diff --check` and prove no WRC/BNA evidence or Harness path is deleted.
-- [ ] Fetch latest `origin/main`, reconcile semantically, and rerun only invalidated gates.
-- [ ] Merge and push the exact verified Checkpoint A tree.
-
-## Deferred checkpoints
-
-Checkpoint B migrates Studio, Capture and CLI Host consumers to the same Viewer shell. Checkpoint C
-performs reference-proven cleanup with WRC/BNA owner sign-off. Each requires a fresh implementation
-plan against the then-current `main`; neither is executed from this plan.
+Removal of independent Native Web UI, legacy showcases and historical cases requires a new USV-2 plan
+against then-current `main`, with exact WRC/BNA owner sign-off. It is not authorized by this plan.
