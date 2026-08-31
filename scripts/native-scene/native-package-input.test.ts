@@ -7,8 +7,10 @@ import {
   worldResourceLockEntriesV1,
 } from "@whitebox-world/runtime-contracts";
 import {
+  hashNativeBlockGenerationRequestV1,
   hashSceneAuthoringAttemptV1,
   hashSceneAuthoringRouteDecisionV1,
+  parseNativeBlockGenerationRequestV1,
   type SceneAuthoringAttemptResultV1,
   type SceneAuthoringAttemptV1,
   type SceneAuthoringRouteDecisionV1,
@@ -148,18 +150,61 @@ async function makeInput() {
     requiredCapabilityRefs: [],
     decision: {
       kind: "babylon-native",
-      authoringProfileRef: "worldkit://authoring-profile/native-local@1",
+      authoringProfileRef:
+        "worldkit://native-authoring-profile/whitebox.blocks@1",
       compositionStrategy: "ground-first-with-locked-assets",
       reasonCodes: ["user-selected-supported-lane"],
     },
   };
   const routeHash = hashSceneAuthoringRouteDecisionV1(routeDecision);
   const nativeAuthoringProfileRef =
-    "worldkit://authoring-profile/native-local@1";
+    "worldkit://native-authoring-profile/whitebox.blocks@1";
   const nativeSceneBootstrapInputRef =
     "worldkit://native-bootstrap-input/package-input@1";
-  const moduleGenerationInputRef =
-    "worldkit://native-module-generation-input/package-input@1";
+  const generationRequestRef =
+    "worldkit://native-generation-request/package-input.initial@1";
+  const generationRequest = parseNativeBlockGenerationRequestV1({
+    kind: "native-block-generation-request",
+    schemaVersion: 1,
+    id: "package-input.initial",
+    routeDecisionRef: "worldkit://scene-authoring-route-decision/package-input@1",
+    routeDecisionHash: routeHash,
+    sceneBriefRef: routeDecision.sceneBriefRef,
+    sceneBriefHash: routeDecision.sceneBriefHash,
+    referenceInputs: [{
+      inputRef: "worldkit://reconstruction-input/package-input@1",
+      contentHash: HASH_A,
+      mediaType: "image/png",
+    }],
+    codexExecutionProfileRef: "worldkit://codex-execution-profile/formal@1",
+    codexExecutionProfileHash: HASH_B,
+    taskInstructionRef: "worldkit://task-instruction/native-block-reconstruction@1",
+    taskInstructionHash: HASH_A,
+    builderSkillRef: "worldkit://skill/worldkit-native-block-builder@1",
+    builderSkillHash: HASH_B,
+    workspaceContextManifestRef: "worldkit://workspace-context/native-block-builder@1",
+    workspaceContextManifestHash: HASH_A,
+    contextInputs: [{ inputRef: "context/native-scene-api.json", contentHash: HASH_B }],
+    nativeSceneApiRef: nativeSceneBootstrap.nativeSceneApiRef,
+    nativeSceneApiHash: HASH_A,
+    nativeSceneProfileRef: nativeSceneBootstrap.nativeSceneProfileRef,
+    nativeSceneProfileHash: HASH_B,
+    blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
+    blockProfileHash: HASH_A,
+    bootstrapInputRef: nativeSceneBootstrapInputRef,
+    bootstrapInputHash: hashBabylonNativeSceneBootstrapV1(nativeSceneBootstrap),
+    seed: nativeSceneBootstrap.seed,
+    budgets: {
+      maximumBlockCount: 2_000,
+      maximumStaticColliderCount: 500,
+      maximumStaticColliderVertexCount: 200_000,
+      maximumStaticColliderTriangleCount: 100_000,
+      maximumOutputBytes: 4_000_000,
+      timeoutSeconds: 900,
+    },
+    declaredOutputPaths: ["scene.ts", "native-block-authoring.json", "native-resources.json"],
+  });
+  const generationRequestHash = hashNativeBlockGenerationRequestV1(generationRequest);
   const attempt: SceneAuthoringAttemptV1 = {
     kind: "scene-authoring-attempt",
     schemaVersion: 1,
@@ -173,8 +218,8 @@ async function makeInput() {
       kind: "babylon-native",
       bootstrapInputRef: nativeSceneBootstrapInputRef,
       bootstrapInputHash: hashBabylonNativeSceneBootstrapV1(nativeSceneBootstrap),
-      moduleGenerationInputRef,
-      moduleGenerationInputHash: sourceGraphHash,
+      generationRequestRef,
+      generationRequestHash,
     },
     selectedAssetResources: [{
       assetResourceRef: asset.assetResourceRef,
@@ -183,8 +228,12 @@ async function makeInput() {
     }],
     seed: nativeSceneBootstrap.seed,
     authoringProfileRef: nativeAuthoringProfileRef,
-    acceptanceTargetRefs: [],
-    requiredEvidenceProfileRefs: [],
+    acceptanceTargetRefs: [
+      "worldkit://acceptance-target/native-block-package-input@1",
+    ],
+    requiredEvidenceProfileRefs: [
+      "worldkit://evidence-profile/native-block-package-input@1",
+    ],
   };
   const attemptResult: SceneAuthoringAttemptResultV1 = {
     kind: "scene-authoring-attempt-result",
@@ -301,7 +350,8 @@ async function makeInput() {
     },
     nativeSceneBootstrap,
     nativeSceneBootstrapInputRef,
-    moduleGenerationInputRef,
+    generationRequestRef,
+    generationRequestHash,
     nativeSceneApi,
     nativeSceneProfile,
     publishedAssets: [asset],
@@ -339,6 +389,9 @@ describe("prepareFrozenBabylonNativeWorldPackageBuildInputV1", () => {
     expect(prepared.frozenInput.resourceArtifacts).toHaveLength(1);
     expect(prepared.frozenInput.registryLock).toEqual(input.registryLock);
     expect(Object.isFrozen(prepared.frozenInput)).toBe(true);
+    expect(input.generationRequestHash).not.toBe(
+      prepared.frozenInput.sceneModuleBundleManifest.sourceGraphHash,
+    );
 
     const first = createBabylonNativeWorldPackageV1(prepared.frozenInput);
     const repeated = createBabylonNativeWorldPackageV1(prepared.frozenInput);
@@ -465,9 +518,41 @@ describe("prepareFrozenBabylonNativeWorldPackageBuildInputV1", () => {
           "worldkit://native-scene-profile/whitebox.blocks@1",
       },
     })).rejects.toThrow(/WORLDKIT_NATIVE_PACKAGE_INPUT_INVALID/);
+    const requestRefInput = await makeInput();
+    if (requestRefInput.sceneAuthoringAttempt.sourceInput.kind !==
+      "babylon-native") {
+      throw new Error("Native fixture must use the Native source member");
+    }
+    await expect(prepareFrozenBabylonNativeWorldPackageBuildInputV1({
+      ...requestRefInput,
+      sceneAuthoringAttempt: {
+        ...requestRefInput.sceneAuthoringAttempt,
+        sourceInput: {
+          ...requestRefInput.sceneAuthoringAttempt.sourceInput,
+          generationRequestRef:
+            "worldkit://native-generation-request/other@1",
+        },
+      },
+    })).rejects.toThrow(/WORLDKIT_NATIVE_PACKAGE_INPUT_INVALID/);
+    const requestHashInput = await makeInput();
+    if (requestHashInput.sceneAuthoringAttempt.sourceInput.kind !==
+      "babylon-native") {
+      throw new Error("Native fixture must use the Native source member");
+    }
+    await expect(prepareFrozenBabylonNativeWorldPackageBuildInputV1({
+      ...requestHashInput,
+      sceneAuthoringAttempt: {
+        ...requestHashInput.sceneAuthoringAttempt,
+        sourceInput: {
+          ...requestHashInput.sceneAuthoringAttempt.sourceInput,
+          generationRequestHash: HASH_A,
+        },
+      },
+    })).rejects.toThrow(/WORLDKIT_NATIVE_PACKAGE_INPUT_INVALID/);
     expect(
       routeInput.createCount + resultInput.createCount +
-      entityInput.createCount + profileInput.createCount,
+      entityInput.createCount + profileInput.createCount +
+      requestRefInput.createCount + requestHashInput.createCount,
     )
       .toBe(0);
   }, 45_000);

@@ -58,6 +58,9 @@ After Task 2 freezes contracts, Task 10/NBR-50A may run in parallel with sequent
 - `packages/scene-authoring-contracts/src/scene-authoring-contracts.ts`: Route, Attempt, Attempt Result, generation Request/Receipt parsers and hashes.
 - `packages/validation/src/reconstruction-contracts.ts`: source-neutral Case/Profile/Evidence/Result/Diagnostic/Run Receipt contracts and canonical hashes.
 - `packages/validation/src/reconstruction-evaluator.ts`: pure evaluator only; no file/model/runtime access.
+- `packages/world-package/src/package-build.ts`: NBR-10 clean-break generation-request/source-closure join; NBR-45P modifies the same Package identity seam sequentially only after PR A is merged.
+- `packages/world-package/src/package-contract.ts`: NBR-10 verified Package membership closure; NBR-45P extends the same verifier sequentially only after PR A is merged.
+- `packages/world-package/src/test-fixture.ts`: NBR-10 current generation-request Package fixture; NBR-45P extends the fixture sequentially only after PR A is merged.
 - `.codex/skills/worldkit-native-block-builder/`: AI-facing Builder instructions and standalone preflight self-check; never a trusted admission owner.
 - `scripts/reconstruction/generation-request.ts`: trusted Request/Attempt materialization and declared output inventory.
 - `scripts/reconstruction/generation-runner.ts`: the only reconstruction caller of `run-codex-task.mjs` and atomic output promotion.
@@ -116,6 +119,9 @@ Do not wait for queued GitHub CI before starting an independent next checkpoint 
 - Modify: `scripts/native-scene/native-package-input.ts`
 - Modify: `scripts/native-scene/native-package-input.test.ts`
 - Modify: `scripts/native-scene/build-cloud-ridge-package.ts`
+- Modify: `packages/world-package/src/package-build.ts`
+- Modify: `packages/world-package/src/package-contract.ts`
+- Modify: `packages/world-package/src/test-fixture.ts`
 - Modify: every tracked fixture containing `moduleGenerationInputRef` or `moduleGenerationInputHash`, found by the exact census command below
 
 **Interfaces:**
@@ -130,7 +136,7 @@ Run:
 rg -n 'moduleGenerationInput(Ref|Hash)' packages scripts apps artifacts
 ```
 
-Expected: matches only the current Native Attempt parser/tests, Native package input, Cloud Ridge builder, and generated Package fixtures. Save the exact path list in the PR description; no match may remain at Task completion.
+Expected on baseline `33dfb49`: exactly the Attempt parser/tests, Native package input/tests, Cloud Ridge builder, two WorldPackage source-closure checks, the shared Native WorldPackage fixture, and generated Cloud Ridge Attempt. Save the exact path list in the PR description; no match may remain at Task completion.
 
 - [ ] **Step 2: Write RED contract tests for the clean break and route owner**
 
@@ -219,7 +225,7 @@ Update Cloud Ridge and serialized fixtures to the one new dialect. Do not read e
 Run:
 
 ```bash
-pnpm exec vitest run packages/scene-authoring-contracts scripts/native-scene/native-package-input.test.ts
+pnpm exec vitest run packages/scene-authoring-contracts scripts/native-scene/native-package-input.test.ts packages/world-package/src/package-build.test.ts packages/world-package/src/package-directory.test.ts
 pnpm typecheck
 if rg -n 'moduleGenerationInput(Ref|Hash)' packages scripts apps artifacts; then exit 1; fi
 ```
@@ -314,7 +320,7 @@ expect(() => parseWorldReconstructionEvaluationResultV1({
 })).toThrowError("WORLD_RECONSTRUCTION_EVALUATION_RESULT_INVALID");
 ```
 
-Also reject empty `acceptanceTargetRefs`, empty `requiredEvidenceProfileRefs`, a Case that labels scripted traversal as Route/Nav, advisory-only pixel metrics, stale Attempt/Package/Capture hashes, and a passed dimension with missing required evidence.
+Also reject empty `acceptanceTargetRefs`, empty `requiredEvidenceProfileRefs`, a Case that labels scripted traversal as Route/Nav, advisory-only pixel metrics, stale Attempt/Package/Capture hashes, and a passed dimension with missing required evidence. Every Case scripted traversal check must carry a non-empty, execution-ordered `fixedInputSequence` of `@whitebox-world/runtime-contracts` `FixedInputV1` values. Parse each step only with `parseFixedInputV1`, deep-freeze the sequence, preserve its order, and include it in Case canonical bytes/hash; retain `checkpointIds` solely as result-sampling identities. Do not add Route/Nav/`goTo` fields or a duplicate action/axes parser.
 
 - [ ] **Step 3: Run RED contract tests**
 
@@ -651,7 +657,7 @@ expect(packaged.sceneAuthoringAttemptResult.authoredSourceHash)
   .toBe(packaged.verifiedWorldPackage.sceneModuleBundleManifest.sourceGraphHash);
 ```
 
-Use an injected Candidate allocation observer. Test authority violation, TypeScript error, unsupported import, missing output, resource mismatch, tampered Generation Receipt, failed dual replay, missing Spawn support, collider budget overrun, and throwing cleanup. Parse `native-block-authoring.json` as a closed accessor-free contract and join every declared semantic target/group/color to the checked Layout visual-group inventory; reject missing, duplicate, unbound, undeclared, or stale group rows. For every failed check assert `runtimeCandidateAllocationCount === 0`, no Package directory exists, and the failure diagnostic/cleanup receipt is retained.
+Use an injected formal Runtime Candidate allocation observer. Test a source-only directory without the Host bootstrap, authority violation, TypeScript error, unsupported import, missing output, resource mismatch, tampered Generation Receipt, failed dual replay, missing Spawn support, collider budget overrun, and throwing cleanup. Parse `native-block-authoring.json` as a closed accessor-free contract and join every declared semantic target/group/color to the checked Layout visual-group inventory; reject missing, duplicate, unbound, undeclared, or stale group rows. For every failed check assert `formalRuntimeCandidateAllocationCount === 0`, no Package directory exists, and the failure diagnostic/cleanup receipt is retained. The BNA-2 checker is still allowed to allocate and dispose its two isolated Build Epoch Candidate Scenes for deterministic replay; those are not formal Runtime Candidates.
 
 - [ ] **Step 2: Write RED CLI grammar/integration tests**
 
@@ -677,7 +683,9 @@ Expected: FAIL because the generic command/adapter do not exist.
 
 ```text
 re-hash Case/Request/Attempt/Generation Receipt/source files
--> checkBabylonNativeSceneWorldDirectoryV1(attempt/source)
+-> assemble a sibling check staging directory from a Host-read-only copy of
+   inputs/native-scene.bootstrap.json plus the exact three source outputs
+-> checkBabylonNativeSceneWorldDirectoryV1(check-staging)
 -> require outcome === passed
 -> resolve the closed native-resources list
 -> finalize completed SceneAuthoringAttemptResultV1
@@ -686,6 +694,8 @@ re-hash Case/Request/Attempt/Generation Receipt/source files
 -> verifyWorldPackageDirectoryV1
 -> writeWorldPackageDirectoryV1 atomically
 ```
+
+The generated source directory never owns or contains `native-scene.bootstrap.json`. The Host re-hashes the immutable bootstrap input, copies it into the ephemeral sibling check staging directory, rejects symlinks or additional source outputs, and always cleans the staging directory. It does not add a second checker or trust a model-writable bootstrap.
 
 The generic adapter derives shared Package inputs from admitted Registry/profile owners and the Case. It does not hard-code Cloud Ridge hashes, synthesize an empty acceptance/evidence list, infer a Collider from Mesh/tag/name, or allocate a formal Runtime Candidate.
 

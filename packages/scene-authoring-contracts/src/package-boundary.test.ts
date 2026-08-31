@@ -53,5 +53,11 @@ describe("Scene Authoring Contracts package boundary", () => {
     ]) {
       expect(productionSource).not.toContain(forbidden);
     }
+    for (const legacyField of [
+      ["module", "GenerationInput", "Ref"].join(""),
+      ["module", "GenerationInput", "Hash"].join(""),
+    ]) {
+      expect(productionSource).not.toContain(legacyField);
+    }
   });
 });
