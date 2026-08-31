@@ -174,6 +174,41 @@ const resultValue = () => ({
 });
 
 describe("world reconstruction contracts", () => {
+  it("allows generic missing or stale evidence diagnostics in their explicit dimension only", () => {
+    const incomplete: any = resultValue();
+    incomplete.dimensions[5]!.status = "incomplete";
+    incomplete.dimensions[5]!.metrics = [];
+    incomplete.dimensions[5]!.evidenceRefs = [];
+    incomplete.dimensions[5]!.diagnosticIds = ["diag.spawn-missing"];
+    incomplete.diagnostics = [{
+      kind: "world-reconstruction-diagnostic", schemaVersion: 1, id: "diag.spawn-missing",
+      code: "WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING", dimensionId: "spawn-support",
+      acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1", evidenceRefs: [],
+      message: "Spawn support evidence is absent.", repairAction: { kind: "revise-native-source" },
+    }];
+    incomplete.outcome = "incomplete";
+    expect(parseWorldReconstructionEvaluationResultV1(incomplete).dimensions[5]!.status).toBe("incomplete");
+
+    const stale = structuredClone(incomplete);
+    stale.dimensions[0]!.status = "incomplete";
+    stale.dimensions[0]!.metrics = [];
+    stale.dimensions[0]!.evidenceRefs = [];
+    stale.dimensions[0]!.diagnosticIds = ["diag.collider-stale"];
+    stale.diagnostics = [{ ...stale.diagnostics[0]!, id: "diag.collider-stale", code: "WORLD_RECONSTRUCTION_EVIDENCE_STALE", dimensionId: "collider" }];
+    stale.dimensions[5]!.status = "passed";
+    stale.dimensions[5]!.metrics = [{ kind: "boolean-presence", isPresent: true }];
+    stale.dimensions[5]!.evidenceRefs = ["artifact://case/cloud-temple/evidence/spawn-support.json"];
+    stale.dimensions[5]!.diagnosticIds = [];
+    expect(parseWorldReconstructionEvaluationResultV1(stale).dimensions[0]!.status).toBe("incomplete");
+
+    const wrongSpecificDimension = structuredClone(incomplete);
+    wrongSpecificDimension.diagnostics[0]!.code = "WORLD_RECONSTRUCTION_SPAWN_SUPPORT_MISSING";
+    wrongSpecificDimension.diagnostics[0]!.dimensionId = "collider";
+    expect(() => parseWorldReconstructionEvaluationResultV1(wrongSpecificDimension)).toThrowError(
+      "WORLD_RECONSTRUCTION_EVALUATION_RESULT_INVALID",
+    );
+  });
+
   it("admits an evidence-missing dimension only with an empty evidence list", () => {
     const evidence = evidenceValue();
     evidence.observedDimensions[0]!.evidenceRefs = [];

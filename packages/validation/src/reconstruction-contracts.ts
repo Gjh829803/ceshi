@@ -1009,14 +1009,16 @@ export function parseWorldReconstructionEvaluationResultV1(value: unknown): Worl
   });
   if (dimensions.length !== 7) fail(contract, "dimensions", "must cover all seven dimensions");
   const diagnostics = array(source.diagnostics, contract, "diagnostics").map((entry) => parseWorldReconstructionDiagnosticV1(entry));
-  const diagnosticDimensions: Readonly<Record<WorldReconstructionDiagnosticCodeV1, WorldReconstructionDimensionIdV1>> = {
-    WORLD_RECONSTRUCTION_TOPOLOGY_NODE_MISSING: "topology", WORLD_RECONSTRUCTION_TOPOLOGY_RELATION_MISSING: "topology",
-    WORLD_RECONSTRUCTION_SEMANTIC_SILHOUETTE_DRIFT: "semantic-silhouette", WORLD_RECONSTRUCTION_OPENING_COMPOSITION_DRIFT: "opening-composition",
-    WORLD_RECONSTRUCTION_SPAWN_SUPPORT_MISSING: "spawn-support", WORLD_RECONSTRUCTION_COLLIDER_MISSING: "collider", WORLD_RECONSTRUCTION_COLLIDER_ROLE_MISMATCH: "collider",
-    WORLD_RECONSTRUCTION_REQUIRED_TRAVERSAL_BLOCKED: "critical-traversal", WORLD_RECONSTRUCTION_REQUIRED_BLOCKER_PASSABLE: "critical-traversal",
-    WORLD_RECONSTRUCTION_BUILD_NONDETERMINISTIC: "deterministic-build", WORLD_RECONSTRUCTION_EVIDENCE_STALE: "deterministic-build", WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING: "topology",
+  const diagnosticAllowedDimensions: Readonly<Record<WorldReconstructionDiagnosticCodeV1, readonly WorldReconstructionDimensionIdV1[]>> = {
+    WORLD_RECONSTRUCTION_TOPOLOGY_NODE_MISSING: ["topology"], WORLD_RECONSTRUCTION_TOPOLOGY_RELATION_MISSING: ["topology"],
+    WORLD_RECONSTRUCTION_SEMANTIC_SILHOUETTE_DRIFT: ["semantic-silhouette"], WORLD_RECONSTRUCTION_OPENING_COMPOSITION_DRIFT: ["opening-composition"],
+    WORLD_RECONSTRUCTION_SPAWN_SUPPORT_MISSING: ["spawn-support"], WORLD_RECONSTRUCTION_COLLIDER_MISSING: ["collider"], WORLD_RECONSTRUCTION_COLLIDER_ROLE_MISMATCH: ["collider"],
+    WORLD_RECONSTRUCTION_REQUIRED_TRAVERSAL_BLOCKED: ["critical-traversal"], WORLD_RECONSTRUCTION_REQUIRED_BLOCKER_PASSABLE: ["critical-traversal"],
+    WORLD_RECONSTRUCTION_BUILD_NONDETERMINISTIC: ["deterministic-build"],
+    WORLD_RECONSTRUCTION_EVIDENCE_STALE: WORLD_RECONSTRUCTION_DIMENSION_IDS_V1,
+    WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING: WORLD_RECONSTRUCTION_DIMENSION_IDS_V1,
   };
-  if (diagnostics.some((diagnostic) => diagnosticDimensions[diagnostic.code] !== diagnostic.dimensionId)) fail(contract, "diagnostics", "diagnostic code must belong to its fixed dimension");
+  if (diagnostics.some((diagnostic) => !diagnosticAllowedDimensions[diagnostic.code].includes(diagnostic.dimensionId))) fail(contract, "diagnostics", "diagnostic code is not allowed for its dimension");
   const diagnosticKeys = diagnostics.map(({ dimensionId, code, acceptanceTargetRef }) => `${dimensionId}\0${code}\0${acceptanceTargetRef}`);
   if (diagnosticKeys.some((key, index) => index > 0 && diagnosticKeys[index - 1]! >= key)) fail(contract, "diagnostics", "must be unique and sorted by dimension, code, and target");
   const declaredDiagnosticIds = new Set(dimensions.flatMap(({ diagnosticIds }) => diagnosticIds));
