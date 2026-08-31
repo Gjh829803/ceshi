@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { spawn, type ChildProcess } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
+import { createServer } from "node:net";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -10,18 +12,21 @@ import {
   type Page,
 } from "playwright";
 
-import {
-  startWorldkitServer,
-  type WorldkitServerHandle,
-} from "../lib/worldkit-server";
 import type { WorldRuntimeSnapshotV4 } from "@whitebox-world/runtime-contracts";
 
-const SERVER_INPUT_PATH = "examples/authoring/package-subject-world.json";
 const CONTROLLER_ENTITY_ID = "controller-primary";
 const FIXED_INPUT_TICKS = 90;
 const MAXIMUM_STATIC_SUBJECT_DRIFT_METERS = 1e-9;
+const G_BOT_SUBJECT_DEFINITION_REF =
+  "worldkit://subject-definition/humanoid.g-bot@2";
 
-export const OUTDOOR_GAMEPLAY_SCENE_CATALOG_IDS = [
+export const SCENE_VIEWER_PRESET_IDS = [
+  "feel-flat",
+  "traversal-course",
+  "action-lab",
+] as const;
+
+export const ARTIFACT_SCENE_CATALOG_IDS = [
   "grassland",
   "azure-bay",
   "canyon",
@@ -29,6 +34,97 @@ export const OUTDOOR_GAMEPLAY_SCENE_CATALOG_IDS = [
   "sunlit-flower-bay",
   "world-08170639-54db",
 ] as const;
+
+interface CuratedViewerServerHandleV1 {
+  readonly url: string;
+  stop(): Promise<void>;
+}
+
+async function availableLoopbackPort(): Promise<number> {
+  const server = createServer();
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  if (address === null || typeof address === "string") {
+    server.close();
+    throw new Error("Unable to allocate a loopback port.");
+  }
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  return address.port;
+}
+
+async function stopChild(child: ChildProcess): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  child.kill("SIGTERM");
+  await Promise.race([
+    new Promise<void>((resolve) => child.once("exit", () => resolve())),
+    new Promise<void>((resolve) => setTimeout(resolve, 5_000)),
+  ]);
+  if (child.exitCode === null && child.signalCode === null) {
+    child.kill("SIGKILL");
+  }
+}
+
+async function startCuratedViewerServer(): Promise<CuratedViewerServerHandleV1> {
+  const repositoryRoot = path.resolve(".");
+  const playgroundRoot = path.join(repositoryRoot, "apps/playground");
+  const port = await availableLoopbackPort();
+  const environment = Object.fromEntries(
+    Object.entries(process.env).filter(
+      ([key]) => key !== "WORLDKIT_AUTHORING_SPEC_PATH",
+    ),
+  );
+  const child = spawn(
+    process.execPath,
+    [
+      path.join(repositoryRoot, "node_modules/vite/bin/vite.js"),
+      "--config",
+      "vite.config.mjs",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      String(port),
+      "--strictPort",
+    ],
+    {
+      cwd: playgroundRoot,
+      env: environment,
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+  let output = "";
+  child.stdout?.on("data", (chunk) => {
+    output += String(chunk);
+    process.stdout.write(chunk);
+  });
+  child.stderr?.on("data", (chunk) => {
+    output += String(chunk);
+    process.stderr.write(chunk);
+  });
+  const url = `http://127.0.0.1:${port}/`;
+  const deadline = Date.now() + 60_000;
+  while (Date.now() < deadline) {
+    if (child.exitCode !== null || child.signalCode !== null) {
+      throw new Error(`Curated Viewer server exited before readiness.\n${output}`);
+    }
+    try {
+      const response = await fetch(url);
+      if (response.ok) {
+        return Object.freeze({
+          url,
+          stop: () => stopChild(child),
+        });
+      }
+    } catch {
+      // The bounded readiness loop owns retries.
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, 100));
+  }
+  await stopChild(child);
+  throw new Error(`Curated Viewer server did not become ready.\n${output}`);
+}
 
 interface BrowserFailureV1 {
   readonly name: string;
@@ -51,19 +147,32 @@ interface RouteQueryEvidenceV1 {
 
 export interface SceneBrowserEvidenceV1 {
   readonly catalogId: string;
+  readonly adapterName: string;
+  readonly selectorSceneIds: readonly string[];
   readonly browserProtocolVersion: 5;
   readonly runtimeSnapshotSchemaVersion: 4;
   readonly runtimeSessionId: string;
   readonly initialWorldSessionId: string;
   readonly resetWorldSessionId: string;
   readonly controlledEntityId: string;
+  readonly controlledSubjectDefinitionRef: typeof G_BOT_SUBJECT_DEFINITION_REF;
   readonly initialPositionMetersXYZ: readonly [number, number, number];
   readonly movedPositionMetersXYZ: readonly [number, number, number];
   readonly movedMeters: number;
+  readonly jumpedMeters: number;
+  readonly tuningDraftUpdated: true;
   readonly unchangedSubjectEntityIds: readonly string[];
   readonly routeQuery: RouteQueryEvidenceV1;
   readonly resetDeterministic: true;
   readonly screenshotPath: string;
+}
+
+export interface SceneSwitchEvidenceV1 {
+  readonly fromSceneId: "feel-flat";
+  readonly toSceneId: "action-lab";
+  readonly fromRuntimeSessionId: string;
+  readonly toRuntimeSessionId: string;
+  readonly controlledSubjectDefinitionRef: typeof G_BOT_SUBJECT_DEFINITION_REF;
 }
 
 export interface ArtifactBrowserEvidenceV1 {
@@ -76,9 +185,11 @@ export interface ArtifactBrowserEvidenceV1 {
 
 export interface InvalidSceneEvidenceV1 {
   readonly sceneCatalogId: string;
-  readonly diagnosticCode: "PLAYGROUND_SCENE_NOT_FOUND";
-  readonly worldkitApiExposed: false;
-  readonly playgroundApiExposed: false;
+  readonly diagnosticCode: "WORLDKIT_RUNTIME_INITIALIZATION_FAILED";
+  readonly sourceErrorCode: "VIEWER_BOOTSTRAP_HTTP_404";
+  readonly runtimeReadyRejected: true;
+  readonly featureCount: 0;
+  readonly expectedConsoleErrorCount: 1;
 }
 
 export type VerificationResultV1<T> =
@@ -89,16 +200,17 @@ export type VerificationResultV1<T> =
       failure: BrowserFailureV1;
     }>;
 
-export interface OutdoorGameplayVerificationReportV1 {
-  readonly kind: "outdoor-gameplay-browser-verification";
+export interface SceneViewerVerificationReportV1 {
+  readonly kind: "scene-viewer-browser-verification";
   readonly schemaVersion: 1;
   readonly generatedAt: string;
   readonly scenes: readonly VerificationResultV1<SceneBrowserEvidenceV1>[];
+  readonly sceneSwitch: VerificationResultV1<SceneSwitchEvidenceV1>;
   readonly invalidSceneRoute: VerificationResultV1<InvalidSceneEvidenceV1>;
   readonly artifacts: readonly VerificationResultV1<ArtifactBrowserEvidenceV1>[];
 }
 
-export function outdoorGameplaySceneUrl(
+export function sceneViewerUrl(
   origin: string,
   catalogId: string,
   artifact = false,
@@ -226,7 +338,7 @@ async function verifyScene(
     if (message.type() === "error") consoleErrors.push(message.text());
   });
   page.on("pageerror", (error) => consoleErrors.push(error.message));
-  await page.goto(outdoorGameplaySceneUrl(origin, catalogId), {
+  await page.goto(sceneViewerUrl(origin, catalogId), {
     waitUntil: "domcontentloaded",
     timeout: 30_000,
   });
@@ -243,6 +355,25 @@ async function verifyScene(
   assert.ok(
     initialControlled !== undefined,
     `Possessed Subject '${controlledEntityId}' is missing from Snapshot V4.`,
+  );
+  assert.equal(
+    initialControlled.entityState.entityDefinitionRef,
+    G_BOT_SUBJECT_DEFINITION_REF,
+    `${catalogId}: controlled Subject is not G Bot.`,
+  );
+  const viewerIdentity = await page.evaluate(() => ({
+    adapterName: document.querySelector("#adapter-name")?.textContent ?? "",
+    selectedSceneId:
+      document.querySelector<HTMLSelectElement>("#scene-select")?.value ?? "",
+    selectorSceneIds: [
+      ...(document.querySelector<HTMLSelectElement>("#scene-select")?.options ?? []),
+    ].map((option) => option.value),
+  }));
+  assert.equal(viewerIdentity.adapterName, `babylon-havok/${catalogId}`);
+  assert.equal(viewerIdentity.selectedSceneId, catalogId);
+  assert.deepEqual(
+    viewerIdentity.selectorSceneIds,
+    [...SCENE_VIEWER_PRESET_IDS],
   );
 
   const routeQuery = await page.evaluate(
@@ -351,6 +482,23 @@ async function verifyScene(
     );
   }
 
+  const jumped = await page.evaluate(async () => {
+    const api = window.__WORLDKIT__!;
+    const before = api.getSnapshot();
+    const after = await api.runFixedInput([
+      { actions: ["jump"], ticks: 1 },
+      { actions: [], ticks: 5 },
+    ]);
+    return { before, after };
+  });
+  const jumpedControlled =
+    jumped.after.world.subjectStatesByEntityId[controlledEntityId];
+  const jumpedFrom = jumped.before.world.subjectStatesByEntityId[controlledEntityId];
+  assert.ok(jumpedControlled !== undefined && jumpedFrom !== undefined);
+  const jumpedMeters = jumpedControlled.entityState.positionMetersXYZ[1] -
+    jumpedFrom.entityState.positionMetersXYZ[1];
+  assert.ok(jumpedMeters > 0.01, `${catalogId}: jump input did not lift G Bot.`);
+
   const resets = await page.evaluate(async () => {
     const api = window.__WORLDKIT__!;
     const first = await api.reset();
@@ -371,6 +519,21 @@ async function verifyScene(
     `${catalogId}: consecutive resets did not restore the same canonical Gameplay state.`,
   );
 
+  const tuningDraftUpdated = await page.evaluate(() => {
+    const slider = document.querySelector<HTMLInputElement>(
+      "#tuning-motion-sliders input[type=range]",
+    );
+    if (slider === null) return false;
+    const minimum = Number(slider.min);
+    const maximum = Number(slider.max);
+    const current = Number(slider.value);
+    slider.value = String(current === maximum ? minimum : maximum);
+    slider.dispatchEvent(new Event("input", { bubbles: true }));
+    return document.querySelector("#tuning-save-status")?.textContent
+      ?.includes("只保存为草稿") === true;
+  });
+  assert.equal(tuningDraftUpdated, true, `${catalogId}: tuning draft did not update.`);
+
   const canvas = await page.locator("canvas.world-canvas").boundingBox();
   assert.ok(canvas !== null && canvas.width > 0 && canvas.height > 0);
   await page.screenshot({ path: screenshotPath, fullPage: true });
@@ -382,15 +545,20 @@ async function verifyScene(
 
   return {
     catalogId,
+    adapterName: viewerIdentity.adapterName,
+    selectorSceneIds: viewerIdentity.selectorSceneIds,
     browserProtocolVersion: 5,
     runtimeSnapshotSchemaVersion: 4,
     runtimeSessionId: initial.runtimeSessionId,
     initialWorldSessionId: initial.worldSessionId,
     resetWorldSessionId: resets.second.worldSessionId,
     controlledEntityId,
+    controlledSubjectDefinitionRef: G_BOT_SUBJECT_DEFINITION_REF,
     initialPositionMetersXYZ: initialControlled.entityState.positionMetersXYZ,
     movedPositionMetersXYZ: afterPosition,
     movedMeters,
+    jumpedMeters,
+    tuningDraftUpdated: true,
     unchangedSubjectEntityIds,
     routeQuery: {
       selector: routeQuery.selector,
@@ -421,7 +589,7 @@ async function verifyArtifactRoute(
     if (message.type() === "error") consoleErrors.push(message.text());
   });
   page.on("pageerror", (error) => consoleErrors.push(error.message));
-  await page.goto(outdoorGameplaySceneUrl(origin, catalogId, true), {
+  await page.goto(sceneViewerUrl(origin, catalogId, true), {
     waitUntil: "domcontentloaded",
     timeout: 30_000,
   });
@@ -476,6 +644,46 @@ async function verifyArtifactRoute(
   };
 }
 
+async function verifySceneSwitch(
+  page: Page,
+  origin: string,
+): Promise<SceneSwitchEvidenceV1> {
+  await page.goto(sceneViewerUrl(origin, "feel-flat"), {
+    waitUntil: "domcontentloaded",
+    timeout: 30_000,
+  });
+  await waitForGameplayReady(page);
+  const before = await page.evaluate(async () => window.__WORLDKIT__!.ready());
+  await Promise.all([
+    page.waitForURL(/\?scene=action-lab$/, { timeout: 30_000 }),
+    page.selectOption("#scene-select", "action-lab"),
+  ]);
+  await waitForGameplayReady(page);
+  const after = await page.evaluate(async () => window.__WORLDKIT__!.ready());
+  assert.notEqual(
+    after.runtimeSessionId,
+    before.runtimeSessionId,
+    "Scene selection did not create a fresh RuntimeHost session.",
+  );
+  const controlledEntityId = requireControlledEntityId(after);
+  const controlled = after.world.subjectStatesByEntityId[controlledEntityId];
+  assert.equal(
+    controlled?.entityState.entityDefinitionRef,
+    G_BOT_SUBJECT_DEFINITION_REF,
+  );
+  assert.equal(
+    await page.locator("#adapter-name").textContent(),
+    "babylon-havok/action-lab",
+  );
+  return {
+    fromSceneId: "feel-flat",
+    toSceneId: "action-lab",
+    fromRuntimeSessionId: before.runtimeSessionId,
+    toRuntimeSessionId: after.runtimeSessionId,
+    controlledSubjectDefinitionRef: G_BOT_SUBJECT_DEFINITION_REF,
+  };
+}
+
 async function verifyInvalidSceneRoute(
   page: Page,
   origin: string,
@@ -486,7 +694,7 @@ async function verifyInvalidSceneRoute(
     if (message.type() === "error") consoleErrors.push(message.text());
   });
   page.on("pageerror", (error) => consoleErrors.push(error.message));
-  await page.goto(outdoorGameplaySceneUrl(origin, sceneCatalogId), {
+  await page.goto(sceneViewerUrl(origin, sceneCatalogId), {
     waitUntil: "domcontentloaded",
     timeout: 30_000,
   });
@@ -495,28 +703,26 @@ async function verifyInvalidSceneRoute(
     undefined,
     { timeout: 30_000 },
   );
-  const result = await page.evaluate(() => ({
-    adapterName: document.querySelector("#adapter-name")?.textContent ?? "",
-    worldkitApiExposed: Object.prototype.hasOwnProperty.call(
-      window,
-      "__WORLDKIT__",
-    ),
-    playgroundApiExposed: Object.prototype.hasOwnProperty.call(
-      window,
-      "__WHITEBOX_PLAYGROUND__",
-    ),
+  const result = await page.evaluate(async () => ({
+    runtimeReadyRejected: window.__WORLDKIT__ === undefined
+      ? true
+      : await window.__WORLDKIT__.ready().then(() => false, () => true),
+    featureCount: document.querySelectorAll("#feature-list > *").length,
     inspectionText: document.querySelector("#inspection")?.textContent ?? "",
   }));
-  assert.equal(result.adapterName, "route-error");
-  assert.equal(result.worldkitApiExposed, false);
-  assert.equal(result.playgroundApiExposed, false);
-  assert.match(result.inspectionText, /PLAYGROUND_SCENE_NOT_FOUND/);
-  assert.deepEqual(consoleErrors, []);
+  assert.equal(result.runtimeReadyRejected, true);
+  assert.equal(result.featureCount, 0);
+  assert.match(result.inspectionText, /WORLDKIT_RUNTIME_INITIALIZATION_FAILED/);
+  assert.match(result.inspectionText, /VIEWER_BOOTSTRAP_HTTP_404/);
+  assert.equal(consoleErrors.length, 1);
+  assert.match(consoleErrors[0] ?? "", /404 \(Not Found\)/);
   return {
     sceneCatalogId,
-    diagnosticCode: "PLAYGROUND_SCENE_NOT_FOUND",
-    worldkitApiExposed: false,
-    playgroundApiExposed: false,
+    diagnosticCode: "WORLDKIT_RUNTIME_INITIALIZATION_FAILED",
+    sourceErrorCode: "VIEWER_BOOTSTRAP_HTTP_404",
+    runtimeReadyRejected: true,
+    featureCount: 0,
+    expectedConsoleErrorCount: 1,
   };
 }
 
@@ -559,7 +765,7 @@ async function runWithFailureEvidence<T>(
 async function closeBestEffort(
   context: BrowserContext | undefined,
   browser: Browser | undefined,
-  server: WorldkitServerHandle | undefined,
+  server: CuratedViewerServerHandleV1 | undefined,
 ): Promise<void> {
   const pending: Promise<unknown>[] = [];
   if (context !== undefined) pending.push(context.close());
@@ -570,20 +776,16 @@ async function closeBestEffort(
 
 async function main(): Promise<void> {
   const outputDirectory = path.resolve(
-    process.env.OUTDOOR_GAMEPLAY_VERIFICATION_OUTPUT ??
-      `.codex/tmp/outdoor-gameplay-${Date.now()}`,
+    process.env.SCENE_VIEWER_VERIFICATION_OUTPUT ??
+      `.codex/tmp/scene-viewer-${Date.now()}`,
   );
   await mkdir(outputDirectory, { recursive: true });
-  let server: WorldkitServerHandle | undefined;
+  let server: CuratedViewerServerHandleV1 | undefined;
   let browser: Browser | undefined;
   let context: BrowserContext | undefined;
-  let report: OutdoorGameplayVerificationReportV1 | undefined;
+  let report: SceneViewerVerificationReportV1 | undefined;
   try {
-    server = await startWorldkitServer({
-      inputPath: SERVER_INPUT_PATH,
-      forwardOutput: true,
-      startupTimeoutMilliseconds: 60_000,
-    });
+    server = await startCuratedViewerServer();
     try {
       browser = await chromium.launch({ headless: true });
     } catch {
@@ -597,7 +799,7 @@ async function main(): Promise<void> {
     const origin = new URL(server.url).origin;
 
     const scenes: VerificationResultV1<SceneBrowserEvidenceV1>[] = [];
-    for (const catalogId of OUTDOOR_GAMEPLAY_SCENE_CATALOG_IDS) {
+    for (const catalogId of SCENE_VIEWER_PRESET_IDS) {
       const result = await runWithFailureEvidence({
         context,
         screenshotPath: path.join(
@@ -618,6 +820,15 @@ async function main(): Promise<void> {
       );
     }
 
+    const sceneSwitch = await runWithFailureEvidence({
+      context,
+      screenshotPath: path.join(outputDirectory, "scene-switch-failed.png"),
+      run: async (page) => verifySceneSwitch(page, origin),
+    });
+    process.stdout.write(
+      `${sceneSwitch.status === "passed" ? "PASS" : "FAIL"}: Viewer scene switch creates a fresh RuntimeHost session.\n`,
+    );
+
     const invalidSceneRoute = await runWithFailureEvidence({
       context,
       screenshotPath: path.join(outputDirectory, "unknown-scene-failed.png"),
@@ -628,7 +839,7 @@ async function main(): Promise<void> {
     );
 
     const artifacts: VerificationResultV1<ArtifactBrowserEvidenceV1>[] = [];
-    for (const catalogId of OUTDOOR_GAMEPLAY_SCENE_CATALOG_IDS) {
+    for (const catalogId of ARTIFACT_SCENE_CATALOG_IDS) {
       const result = await runWithFailureEvidence({
         context,
         screenshotPath: path.join(
@@ -650,10 +861,11 @@ async function main(): Promise<void> {
     }
 
     report = {
-      kind: "outdoor-gameplay-browser-verification",
+      kind: "scene-viewer-browser-verification",
       schemaVersion: 1,
       generatedAt: new Date().toISOString(),
       scenes,
+      sceneSwitch,
       invalidSceneRoute,
       artifacts,
     };
@@ -665,19 +877,20 @@ async function main(): Promise<void> {
   }
 
   assert.ok(report !== undefined);
-  const failureCount = outdoorGameplayFailureCount(report);
+  const failureCount = sceneViewerFailureCount(report);
   assert.equal(
     failureCount,
     0,
-    `${failureCount} outdoor Gameplay verification case(s) failed; inspect the structured evidence.`,
+    `${failureCount} scene Viewer verification case(s) failed; inspect the structured evidence.`,
   );
 }
 
-export function outdoorGameplayFailureCount(
-  report: OutdoorGameplayVerificationReportV1,
+export function sceneViewerFailureCount(
+  report: SceneViewerVerificationReportV1,
 ): number {
   return [
     ...report.scenes,
+    report.sceneSwitch,
     report.invalidSceneRoute,
     ...report.artifacts,
   ].filter((result) => result.status === "failed").length;

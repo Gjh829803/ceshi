@@ -642,7 +642,7 @@ Nightly/Release 的 `requiredGateIdsBySensorId` 精确为：
 | `contract-parity` | `agent-self-check`、`typecheck`、`playground-build`、`unreleased-clean-break`、`tracked-tree-clean` | 同 Nightly | `pnpm check:agent-self-check`、`pnpm typecheck`、`pnpm build`、`pnpm verify:unreleased-clean-break`、最终 tracked diff |
 | `supply-chain` | 不适用（Advisory） | `dependency-inventory` | PHO-0B 冻结 argv：`pnpm licenses list --json`；同时引用 exact lock/install/patch Receipt |
 | `test-topology` | `test-census`、`test-studio`、`test-independent`、`test-contract`、`test-resource-heavy` | 同 Nightly | 现有五个测试 lane；每个只执行一次 |
-| `runtime-health` | `canonical`、`placement-layout`、`rigged-subject`、`g-bot-subject`、`control-capture`、`validation-capture`、`route-r0-contract`、`route-r1-heightfield`、`route-r1b-static-platform`、`outdoor-gameplay` | 同 Nightly | 对应现有 `pnpm verify:*` command |
+| `runtime-health` | `canonical`、`placement-layout`、`rigged-subject`、`g-bot-subject`、`control-capture`、`validation-capture`、`route-r0-contract`、`route-r1-heightfield`、`route-r1b-static-platform`、`scene-viewer` | 同 Nightly | 对应现有 `pnpm verify:*` command |
 | `visual-evidence` | 不适用（Advisory） | 空 | Sensor 校验冻结 Release evidence manifest 中的 Golden/人工 Receipt，不调用 update command |
 | `documentation-truth` | 不适用（Advisory） | 空 | Sensor 自身的 repo-relative link/status/command observation |
 | `independent-review` | 不适用（Advisory） | 不适用（Advisory） | PHO-8 exact-tree `IndependentReviewReceiptV1` + 全部 Host disposition；不回灌 Release Host |
@@ -667,7 +667,7 @@ current-only Profile 修改升级；不得把实验失败伪装成全仓 Nightly
 | `resource-heavy-runtime` | `test-resource-heavy` |
 | `test-registration` | `test-census` |
 | `playground-build-surface` | `playground-build` |
-| `canonical-browser-runtime` | `canonical`、`control-capture`、`validation-capture`、`outdoor-gameplay` |
+| `canonical-browser-runtime` | `canonical`、`control-capture`、`validation-capture`、`scene-viewer` |
 | `placement-and-subject-runtime` | `placement-layout`、`rigged-subject`、`g-bot-subject` |
 | `trusted-route-runtime` | `route-r0-contract`、`route-r1-heightfield`、`route-r1b-static-platform` |
 | `native-scene-experimental` | `native-scene-playground`、`bna1-clean-break` |

@@ -1420,7 +1420,7 @@ test("does not recover an explicitly failed visual run from leftover output file
     assert.equal(detail.world.status, "failed");
     assert.equal(detail.world.outcome, "failed");
     assert.equal(detail.world.error, "Legacy image alignment failed.");
-    assert.equal(detail.world.previewUrl, `/play?authoring=1&world=${created.id}`);
+    assert.equal(detail.world.previewUrl, `/play?world=${created.id}`);
     await assert.rejects(
       readFile(path.join(artifactRoot, "evaluation-report.json"), "utf8"),
       { code: "ENOENT" },
@@ -1727,7 +1727,7 @@ test("serves Scene Brief deliverables and runtime tri-views", async () => {
     }));
 
     const detail = await (await fetch(`${origin}/api/worlds/${created.id}`)).json();
-    assert.equal(detail.world.previewUrl, `/play?authoring=1&world=${created.id}`);
+    assert.equal(detail.world.previewUrl, `/play?world=${created.id}`);
     assert.equal(detail.media.prototypes[0].id, "player-subject");
     assert.equal(detail.media.prototypes[0].memberCount, 2);
     assert.equal(detail.media.prototypes[0].role, "primary-subject");
