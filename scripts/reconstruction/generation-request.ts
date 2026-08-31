@@ -172,6 +172,7 @@ export async function prepareNativeBlockGenerationTaskV1(
     "--backend", input.backend, "--repo-root", ".", "--task-id", routerRequestId,
     "--stage", "native-block-generation", "--job-name", `Native Block Generation ${input.case.id}`,
     "--request-id", routerRequestId, "--execution-profile", "formal", "--submit-attempts", "1",
+    "--timeout-seconds", String(generationRequest.budgets.timeoutSeconds),
     "--instruction-file", `attempts/${input.attemptIndex}/.task/inputs/${taskInstruction.relativePath}`,
     "--context", `attempts/${input.attemptIndex}/.task/inputs`,
     ...references.flatMap((reference, index) => ["--asset", `reference-${index}::attempts/${input.attemptIndex}/.task/inputs/${reference.relativePath}::file::${input.case.referenceInputs[index]!.mediaType}`]),

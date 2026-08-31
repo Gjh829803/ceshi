@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { decideSceneAuthoringRouteV1 } from "@whitebox-world/scene-authoring-contracts";
-import { sha256CanonicalJson, stringifyCanonicalJson, type Sha256HashV1 } from "@whitebox-world/protocol";
+import { sha256Bytes, sha256CanonicalJson, stringifyCanonicalJson, type Sha256HashV1 } from "@whitebox-world/protocol";
 import { parseWorldReconstructionCaseV1, parseWorldReconstructionEvaluationProfileV1 } from "@whitebox-world/validation";
 
 import { prepareNativeBlockGenerationTaskV1 } from "./generation-request.js";
@@ -37,13 +37,14 @@ async function main(): Promise<void> {
   if (backend !== "cloud" && backend !== "local") throw new TypeError("--backend must be cloud or local.");
   const caseDirectoryPath = path.dirname(casePath);
   const inputDirectoryPath = path.join(caseDirectoryPath, "inputs");
-  const [caseValue, profileValue, bootstrapValue] = await Promise.all([
-    readFile(casePath, "utf8").then(JSON.parse),
-    readFile(path.join(caseDirectoryPath, "evaluation-profile.json"), "utf8").then(JSON.parse),
+  const [caseBytes, profileBytes, bootstrapValue] = await Promise.all([
+    readFile(casePath),
+    readFile(path.join(caseDirectoryPath, "evaluation-profile.json")),
     readFile(path.join(inputDirectoryPath, "native-scene.bootstrap.json"), "utf8").then(JSON.parse),
   ]);
-  const reconstructionCase = parseWorldReconstructionCaseV1(caseValue);
-  const profile = parseWorldReconstructionEvaluationProfileV1(profileValue);
+  const reconstructionCase = parseWorldReconstructionCaseV1(JSON.parse(new TextDecoder().decode(caseBytes)));
+  const profile = parseWorldReconstructionEvaluationProfileV1(JSON.parse(new TextDecoder().decode(profileBytes)));
+  if (reconstructionCase.evaluationProfileRef !== "evaluation-profile.json" || reconstructionCase.evaluationProfileHash !== sha256Bytes(profileBytes)) throw new TypeError("Case/Profile identity closure failed.");
   const routeDecision = decideSceneAuthoringRouteV1({
     id: `${reconstructionCase.id}-route`, sceneBriefRef: reconstructionCase.sceneBriefRef, sceneBriefHash: reconstructionCase.sceneBriefHash,
     trustProfileRef: "worldkit://trust-profile/trusted-local@1", trustProfileHash: sha256CanonicalJson({ id: "trusted-local", version: 1 }) as Sha256HashV1,
