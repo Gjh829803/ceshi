@@ -38,7 +38,7 @@ async function readRepositoryStatus(repositoryRoot: string): Promise<string> {
     repositoryRoot,
     "status",
     "--porcelain=v1",
-    "--untracked-files=all",
+    "--untracked-files=no",
   ]);
   return stdout;
 }
@@ -58,7 +58,7 @@ export async function resolveFormalWorldCaptureSdkOwnerIdentitiesV1(
   }
   if (!isEmpty(repositoryStatus.trim())) {
     throw new Error(
-      "WORLDKIT_SDK_OWNER_IDENTITY_SOURCE_DIRTY: repository contents differ from the trusted commit.",
+      "WORLDKIT_SDK_OWNER_IDENTITY_SOURCE_DIRTY: tracked repository contents differ from the trusted commit.",
     );
   }
 

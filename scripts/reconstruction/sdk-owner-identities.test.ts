@@ -1,9 +1,31 @@
+import { execFile as execFileCallback } from "node:child_process";
+import { mkdtemp, mkdir, rm, unlink, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { promisify } from "node:util";
+
 import { describe, expect, it } from "vitest";
 
 import { resolveFormalWorldCaptureSdkOwnerIdentitiesV1 } from "./sdk-owner-identities";
 
 const SOURCE_COMMIT_A = "0123456789abcdef0123456789abcdef01234567";
 const SOURCE_COMMIT_B = "89abcdef0123456789abcdef0123456789abcdef";
+const execFile = promisify(execFileCallback);
+
+async function createCommittedRepository(): Promise<Readonly<{
+  root: string;
+  trackedPath: string;
+}>> {
+  const root = await mkdtemp(path.join(os.tmpdir(), "worldkit-sdk-owner-identities-"));
+  const trackedPath = path.join(root, "runtime-source.ts");
+  await execFile("git", ["init", "--quiet", root]);
+  await execFile("git", ["-C", root, "config", "user.email", "worldkit@example.invalid"]);
+  await execFile("git", ["-C", root, "config", "user.name", "WorldKit Test"]);
+  await writeFile(trackedPath, "export const runtimeSource = true;\n", "utf8");
+  await execFile("git", ["-C", root, "add", "runtime-source.ts"]);
+  await execFile("git", ["-C", root, "commit", "--quiet", "-m", "fixture"]);
+  return Object.freeze({ root, trackedPath });
+}
 
 describe("trusted formal Capture SDK owner identities", () => {
   it("publishes the five SDK owners in contract order from the root SDK version and exact source commit", async () => {
@@ -64,6 +86,32 @@ describe("trusted formal Capture SDK owner identities", () => {
 
     expect(second.map(({ implementationHash }) => implementationHash))
       .not.toEqual(first.map(({ implementationHash }) => implementationHash));
+  });
+
+  it("allows untracked formal artifacts while tracked modified or deleted source fails closed", async () => {
+    const repository = await createCommittedRepository();
+    try {
+      const artifactDirectory = path.join(repository.root, "artifacts", "scenes", "case-1");
+      await mkdir(artifactDirectory, { recursive: true });
+      await writeFile(path.join(artifactDirectory, "opening.png"), "capture", "utf8");
+
+      await expect(resolveFormalWorldCaptureSdkOwnerIdentitiesV1({
+        repositoryRoot: repository.root,
+      })).resolves.toHaveLength(5);
+
+      await writeFile(repository.trackedPath, "export const runtimeSource = false;\n", "utf8");
+      await expect(resolveFormalWorldCaptureSdkOwnerIdentitiesV1({
+        repositoryRoot: repository.root,
+      })).rejects.toThrow("WORLDKIT_SDK_OWNER_IDENTITY_SOURCE_DIRTY");
+
+      await writeFile(repository.trackedPath, "export const runtimeSource = true;\n", "utf8");
+      await unlink(repository.trackedPath);
+      await expect(resolveFormalWorldCaptureSdkOwnerIdentitiesV1({
+        repositoryRoot: repository.root,
+      })).rejects.toThrow("WORLDKIT_SDK_OWNER_IDENTITY_SOURCE_DIRTY");
+    } finally {
+      await rm(repository.root, { recursive: true, force: true });
+    }
   });
 
   it("fails closed for dirty or unavailable repository state", async () => {
