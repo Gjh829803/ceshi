@@ -279,15 +279,15 @@ Commit: `feat: observe contract and supply-chain parity`
   base/head diff descriptor, and Profile `capabilityGateIdsById`.
 - Produces: `ProjectHealthGatePlanV1` plus a Test Topology Observation used by PHO-6/7.
 
-- [ ] **Step 1: Write RED impact fixtures**
+- [x] **Step 1: Write RED impact fixtures**
 
 Cover a package-local source edit, public contract edit, runtime authority edit, Browser protocol edit, Vite/build edit, visual verifier edit, docs-only edit, new unregistered test, evidence recorded against an older tree, and PR checkout at a merge SHA instead of `pull_request.head.sha`.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `pnpm exec vitest run scripts/project-health/change-impact.test.ts scripts/project-health/sensors/test-topology.test.ts`
 
-- [ ] **Step 3: Implement deterministic impact closure**
+- [x] **Step 3: Implement deterministic impact closure**
 
 Resolve/fetch Git identities and diff only through PHO-0B's registered argv descriptor, then expand changed paths through reverse workspace dependencies and explicit capability edges. Return stable Gate IDs, reasons, input fingerprints, and evidence classes. Never spawn Git locally inside the Sensor or infer visual/manual completion from a unit test.
 
@@ -296,11 +296,11 @@ other registered affected Gate in `advisoryGateIds`. The sets are sorted, disjoi
 change in PR therefore recommends its Nightly/Release gate without requiring a Receipt the PR workflow cannot produce.
 Use only the closed capability keys from the design; unknown capability edges fail closed instead of inventing a category.
 
-- [ ] **Step 4: Enforce test census and evidence freshness**
+- [x] **Step 4: Enforce test census and evidence freshness**
 
 Reuse the existing census result rather than scanning with a second classifier. Reject a required Gate receipt whose tree or input fingerprint differs from the planned inputs; classify docs-only edits without scheduling Runtime replay.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run: `pnpm exec vitest run scripts/project-health/change-impact.test.ts scripts/project-health/sensors/test-topology.test.ts && pnpm test:census && pnpm typecheck && git diff --check`
 

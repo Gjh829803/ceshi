@@ -1058,7 +1058,7 @@ formal Capture/Route、AI 评测与生产 disposition 仍未完成，因此不�
 - [x] PHO-2：复用现有 Owner 命令实现 Contract/Generated parity，并增加独立 Supply Chain Sensor 观察
   `contract-parity` lock/install/patch Receipt、唯一 `dependency-inventory`、provenance/license 与绑定 provider snapshot
   的漏洞/弃用信号；不重复 workspace undeclared-import 或 lock parser；
-- [ ] PHO-3：以现有 test census 和 PHO-1 graph evidence 为唯一归属/依赖输入，通过 PHO-0B 执行 Git diff，
+- [x] PHO-3：以现有 test census 和 PHO-1 graph evidence 为唯一归属/依赖输入，通过 PHO-0B 执行 Git diff，
   实现 Change Impact → mode-specific Required/Advisory Gate Plan 与证据失效判断；PR 不因非 PR Gate 缺 Receipt 而阻断；
 - [ ] PHO-4：实现隔离的 Runtime 生命周期、资源 Owner、30/60/120 cadence 和多实例确定性 Sensor；首个 Required
   Profile 只登记已生产 RuntimeHost/Browser/fixed-cadence Owner，BNA 双 Candidate 在生产 GO 前仅为 Advisory；
