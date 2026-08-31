@@ -1055,7 +1055,7 @@ formal Capture/Route、AI 评测与生产 disposition 仍未完成，因此不�
 - [x] PHO-1：扩展现有 `workspace-boundary.ts` 唯一 scan Owner，使一次 walk 投影 graph、`publicSymbols`
   权威事实和 violations；Host 注入 `commitSha`；两个同名 Sensor 只消费该 Evidence 与精确 path/symbol
   Authority Policy，检测重复 Owner、compat alias、Canonical/Native 边界；禁止第二次 `rg`/glob/AST；
-- [ ] PHO-2：复用现有 Owner 命令实现 Contract/Generated parity，并增加独立 Supply Chain Sensor 观察
+- [x] PHO-2：复用现有 Owner 命令实现 Contract/Generated parity，并增加独立 Supply Chain Sensor 观察
   `contract-parity` lock/install/patch Receipt、唯一 `dependency-inventory`、provenance/license 与绑定 provider snapshot
   的漏洞/弃用信号；不重复 workspace undeclared-import 或 lock parser；
 - [ ] PHO-3：以现有 test census 和 PHO-1 graph evidence 为唯一归属/依赖输入，通过 PHO-0B 执行 Git diff，
