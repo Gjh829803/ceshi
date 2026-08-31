@@ -85,6 +85,16 @@ Apply `docs/reviews/runtime-deep-review-checklist.md` whenever changing or revie
 - Treat verification evidence as scoped to the exact tree state and affected domain. After each edit, rerun the focused regression first; before integration, run each relevant full gate once. Do not rerun a command already covered by a broader passing command on the same tree: root `pnpm test` includes `pnpm test:scenes`, while `pnpm test:studio`, production builds, Browser verifiers, rendered inspection, and manual interaction remain separate evidence layers.
 - A later change invalidates only evidence whose inputs or claimed behavior it can affect. Runtime/source changes invalidate the focused tests plus the relevant typecheck, test, build, or capability verifier; build/dependency changes invalidate affected builds; documentation-only truth updates require diff/link checks, not runtime replay. When an independent review finds a narrow defect after full gates passed, rerun the new reproducer and only the gates touched by that fix unless the fix changes a cross-cutting contract or shared runtime authority.
 
+### Verification scope and stopping rules
+
+- Before starting substantial verification, state which inputs changed, which prior evidence they invalidate, the smallest required rerun set, and whether this is the single final full-gate checkpoint.
+- During implementation, run only the focused RED→GREEN reproducer and directly affected contract, typecheck, build, Browser, or capability gate. Do not run broad directory globs when a narrower owner test exists.
+- Run repository-wide heavy gates and one independent exact-SHA review only after the final merge candidate is frozen and no known blocking changes remain. Do not restart them after every narrow follow-up.
+- P0/P1 findings block completion and may require a new exact-SHA review after their fix. Batch or defer non-blocking P2/P3 findings; never create an edit → full test → review → edit loop for advisory cleanup.
+- If unrelated commits land on `main` concurrently, determine whether they affect the claimed domain before invalidating evidence. Do not rerun Viewer or Runtime gates merely because an unrelated WRC, documentation, or contract-only commit changed the branch SHA.
+- Never repeat a command already covered by a broader passing command on the same relevant tree state. Documentation-only corrections receive diff/link/truth checks only and never trigger Runtime, Browser, build, or full-suite replay.
+- If the user asks to stop testing, cancel active verification immediately, run no further test or review commands, and report exactly which evidence exists and which final evidence is absent.
+
 ## Agent roles and frozen boundary
 
 - **World Planner Agent** may create only `apps/playground/src/scenes/plans/<catalog-id>.ts` and its `world-plan.png` / `opening-shot.png`. It must define the complete WorldPrompt and Entity Catalog before geometry.
