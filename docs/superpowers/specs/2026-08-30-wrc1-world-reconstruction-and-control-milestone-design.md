@@ -32,11 +32,12 @@ the combined milestone boundary, dependency order, incremental-integration polic
 acceptance cases, and overall completion definition.
 
 Current checkpoint: BNA-5 product SHA `2f46b3c9` has scoped GO from capable-runner isolation evidence.
-BWS product SHA `c02afa45` additionally closes BWB-3, BWB-4, and only BWB-5's true-step prerequisite
-through one Block Session/Layout/finalize/Host settlement, one verified Package, and SDK-owned Havok;
-its exact-SHA Cloud full gates and independent review are GO. This unblocks BNA-6, WRC-SR-1,
-WRC-EVT-1's BWB edge, and the remaining BWB-5 corpus. It does not complete those tasks, BNA-7 formal
-Capture/Route, BNA-8 production disposition, or BWB-5 mountain/T-space/building/interior/negative cases.
+BWB-3/4 and the BWB-5 mountain/T-space/steps/building/limited-interior/negative corpus are now integrated
+through `main@d1ba942`; the same Block Session/Layout/finalize/Host settlement produces Babylon visuals,
+frozen Contributions, SDK-owned Havok support and focused traversal evidence. PHO-6 is integrated through
+PR #71, with generated-output fingerprint stability closed by PR #73. This unblocks BNA-6, BNA-7,
+WRC-SR-1, BWB-6 and PHO-7, but does not complete formal Capture/Route, AI reconstruction scoring/repair,
+PHO CI adapters, BNA-8 production disposition, Action/Camera closure or spatial events.
 
 ## 2. Why this is a major milestone
 

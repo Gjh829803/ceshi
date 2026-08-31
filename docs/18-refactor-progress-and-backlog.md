@@ -1050,7 +1050,7 @@ focused 验证并合入 `main@d1ba942`，BWB-5 参考场景 Corpus 已完成；f
 现有测试、Build、Browser verifier、视觉 Capture 和人工审查继续产生事实；Observatory 只做精确树绑定、
 受影响门禁规划、跨证据关联、趋势和稳定诊断。PHO-0A/0B 已合入 `e40a2c16`；PHO-1 先合入 Evidence
 `publicSymbols` 与 Authority Policy 选择器/符号合同，再合入唯一 scan 与两个 Sensor。不提高总进度。
-PHO-6 当前施工合同是单一 Host 同进程链：`Registry Gate -> validated execution evidence/content-addressed
+PHO-6 已通过 PR #71 合入单一 Host 同进程链：`Registry Gate -> validated execution evidence/content-addressed
 audit output -> actual Registry Sensor -> internal Observation -> Report`。外部 Receipt/Observation 不作为
 admission；workspace graph 与 test census 只取同次 Gate stdout 的语义 evidence。Sensor 身份绑定真实递归源码
 闭包 Hash，所有可信入口要求 own-checkout exact HEAD/exact-clean；PR 还要求显式 ancestor base，并由 trusted
@@ -1060,8 +1060,9 @@ event head 与 checkout equality 排除合成 merge checkout，再由关闭 exec
 `incomplete` Report 并退出 `3`；不得降低 Profile、伪造证据或增加外部 admission。PR 仅缺 Advisory adapter，
 因此继续执行固定 Gate 闭包并显式保留 not-evaluated Metric。Release 的 independent review 同样保持
 Advisory，由 PHO-8 作为与 Release Report 并列的 exact-SHA adoption gate，不回灌同一 SHA。首个 baseline
-只接受 Required evidence 完整的 passed PR Report，并原样保留 Advisory gaps。该施工更新不表示 PHO-6
-已完成，也不提高本页总进度。
+只接受 Required evidence 完整的 passed PR Report，并原样保留 Advisory gaps。PR #73 又把 Gate 输入 selector
+收紧为 Git tracked source/config，Host 自产 `dist`/`__pycache__` 不再造成伪 stale Receipt；tracked source
+变化仍会使证据失效。PHO-6 至此完成，PHO-7 继续负责生产 Adapter、总 Deadline 与 CI 接线。
 
 - [x] PHO-0A：冻结 current-only Profile、Metric、Observation/Finding、Gate Plan/Receipt、Review Receipt、
   Report、中立 Workspace Evidence、补充 Authority/Supply Chain Policy、Accepted Debt 和 canonical fingerprint；
@@ -1078,7 +1079,7 @@ Advisory，由 PHO-8 作为与 Release Report 并列的 exact-SHA adoption gate�
 - [x] PHO-4：实现隔离的 Runtime 生命周期、资源 Owner、30/60/120 cadence 和多实例确定性 Sensor；首个 Required
   Profile 只登记已生产 RuntimeHost/Browser/fixed-cadence Owner，BNA 双 Candidate 在生产 GO 前仅为 Advisory；
 - [x] PHO-5：实现 bundle/性能、视觉、文档真相和独立 Review Receipt Sensor；未冻结的趋势/AI 判断保持 Advisory；
-- [ ] PHO-6：实现唯一 Gate/Sensor Registry 与同进程 Host 链、仅作审计输出的 `health:record`、稳定聚合
+- [x] PHO-6：实现唯一 Gate/Sensor Registry 与同进程 Host 链、仅作审计输出的 `health:record`、稳定聚合
   Policy、真实源码闭包 identity、exact-clean/evidence parser、
   `health:pr/nightly/release/explain/update-baseline` 和 0/1/2/3 exit contract；禁止外部 Receipt/Observation admission；
 - [ ] PHO-7：接入 PR/main-push/Nightly/Release CI；每个 mode 由单一 Host check 在同进程执行 Registry Gate 与
