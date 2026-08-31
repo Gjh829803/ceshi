@@ -164,13 +164,12 @@ PR #41
                                       \-> WRC-ACT-1 -> WRC-ACT-2
                                                         \-> WRC-CAM-1 -> WRC-CAM-2
 
-BNA-1 + BNA-2
-  -> BNA-3 -> BNA-4 -> BNA-5 -> BNA-6 -> BNA-8
-       |        |                   |        ^
-       |        +-> BWB-4          +-> WRC-SR-2
-       +-> BWB-3 -> WRC-SR-1 -----------^   |
-                    |                       |
-                    +-> BWB-5 -> BWB-6 -----+
+BNA-1 + BNA-2 -> BNA-3 -> BNA-4 -> BNA-5 -> BNA-6 -> BNA-8
+BNA-3 -> BWB-3
+BNA-4 -> BWB-4
+BNA-5 + BWB-3 + BWB-4 -> BWB-5 -> BWB-6
+BNA-3 + BWB-3 -> WRC-SR-1
+BNA-6 + WRC-SR-1 -> WRC-SR-2 -> BNA-8
 
 BNA-4 + WRC-ACT-1 + WRC-CAM-1 + BWB-4
   -> WRC-EVT-1
@@ -204,18 +203,18 @@ interface ownership before code begins.
 | BNA-3 | Build Native Bundle, dependency/asset locks, Contribution Hash, one WorldPackage, and Build Receipt | BNA-1, BNA-2 | BNA-4, BWB-3, BNA-5..8 | existing `world-package` + provider-neutral runtime contracts; audited Native source/resources -> verified package/receipt | implementation-plan tasks, package tamper/adversarial tests, exact-SHA review | sequential |
 | BNA-4 | Admit verified Native packages to the single RuntimeHost/Gameplay/Havok Kernel | BNA-3 | BWB-4, BNA-5..8, WRC-EVT-1 | RuntimeHost/runtime-babylon; verified package + frozen contributions -> atomic playable session | real Havok, spawn/support/collider/lifecycle/rollback tests | sequential, main-agent-only |
 | BNA-5 | Close Trusted Local and Hosted Isolated trust profiles, budgets, tenant caps, and threat gates | BNA-4 | BNA-6, BWB-5, BNA-8 | Host admission/isolation only; BNA-2 audit + package identity -> bounded isolated execution receipt | adversarial security/cap/cleanup tests and threat-model review | sequential |
-| BNA-6 | Measure AI generation and repair success under frozen budgets and identities | BNA-5, BNA-3, BNA-4 | WRC-SR-2, BWB-5, BNA-8 | evaluation harness/corpus; task + reference + profile -> scored exact-package result | Golden corpus, independent attempts, visual/manual evidence | sequential |
+| BNA-6 | Measure AI generation and repair success under frozen budgets and identities | BNA-5, BNA-3, BNA-4 | WRC-SR-2, BNA-8 | evaluation harness/corpus; task + reference + profile -> scored exact-package result | Golden corpus, independent attempts, visual/manual evidence | sequential |
 | BNA-7 | Produce formal Capture and optional Route/Nav Evidence from the same frozen Surface | BNA-4, BNA-3 | BNA-8 | capture/route owners only; verified session/surfaces -> identity-bound evidence | capture integrity, route provenance, negative fixtures | sequential |
 | BNA-8 | Issue scoped Native GO/NO-GO for Trusted Local, Hosted, and Route claims | BNA-5, BNA-6, BNA-7, WRC-SR-2, BWB-5, PHO-7 | WRC-ACC-1 | review/docs/status only; exact evidence set -> scoped disposition | full-dimension review, no open blocking finding, docs truth | main-agent-only |
 | BWB-3 | Render direct Babylon block Meshes with stable visual groups and local opening/top/side captures | BNA-3, BWB-2 | WRC-SR-1, BWB-5 | block-profile authoring only; valid Layout -> Mesh groups + local screenshots | structural snapshot and rendered image checks | sequential |
 | BWB-4 | Freeze core static Collider Contributions and traversal bindings from the same in-memory Layout | BNA-4, BWB-2 | WRC-EVT-1, BWB-5 | block profile contribution adapter; Layout -> Host-frozen collider contribution | overlay, support, overlap, disposal, Havok traversal tests | sequential |
-| BWB-5 | Close mountain, T-space, stairs, building, limited-interior, and negative reconstruction corpus | BNA-5, BNA-6, BWB-3, BWB-4, WRC-SR-1 | BWB-6, BNA-8 | corpus/evidence only; frozen cases -> structural, visual, collision and manual receipts | screenshots, collider overlay, spawn, player traversal, negative rejection | sequential |
+| BWB-5 | Close mountain, T-space, stairs, building, limited-interior, and negative reconstruction corpus | BNA-5, BWB-3, BWB-4 | BWB-6, BNA-8 | corpus/evidence only; frozen cases -> structural, visual, collision and manual receipts | screenshots, collider overlay, spawn, player traversal, negative rejection | sequential |
 | BWB-6 | Evaluate profile-side Thin Instance, Chunk, and Collider coalescing without changing semantics | BWB-5 | WRC-ACC-1 | block-profile optimization proposal only; equivalent Layout -> measured grouping eligibility | equivalence fixtures, resource benchmark, no Runtime/Havok edits | sequential |
 | WRC-ACT-1 | Freeze general ActionDefinition/Request/Receipt Context, Channel Lock, ActionVariantSet and PoseSetProfile | JUMP-3, WRC-GOV-1 | WRC-ACT-2, WRC-CAM-1, WRC-EVT-1 | gameplay/subject-actions/registry contracts; committed context -> exact variant/presentation binding | closed-schema/hash/ambiguity/missing-binding tests | sequential, main-agent-only |
 | WRC-ACT-2 | Complete fixed-Tick Action/Posture reducer, fall/land, cancel/interrupt, fallback, and safe capsule posture changes | WRC-ACT-1 | WRC-CAM-2, WRC-ACC-1 | Gameplay + CharacterMovement + approved BodyPort query; commands/support -> committed Action/Posture/receipts | replay/reset/blocked-clearance/two-instance/browser tests | sequential |
 | WRC-CAM-1 | Complete committed Context -> Camera Domain -> CameraDirector for Actions, jump/land, narrow/interior, and event focus | WRC-ACT-1, current Camera Domain | WRC-CAM-2, WRC-EVT-1 | camera/runtime-host/runtime-babylon boundaries; committed facts -> selection decision -> final pose | atomic rollback, safe-view, pause/reset/cadence/isolation tests | sequential |
 | WRC-CAM-2 | Close first/third-person and semantic transition fixtures plus two human FeelReviewReceipts | WRC-CAM-1, WRC-ACT-2 | WRC-ACC-1 | camera fixtures/evidence only; locked profiles + cases -> automated/numeric/rendered/manual receipts | real Chromium/Havok, two human rounds bound to SHA/profile/take | main-agent-only |
-| WRC-SR-1 | Freeze reconstruction scorecard and reference corpus semantics | BNA-3, BWB-3 | WRC-SR-2, BWB-5 | evaluation DTO/corpus; reference/Scene Brief/capture -> topology/composition/route/collision scores | asymmetric and negative score fixtures, no pixel-only GO | sequential, main-agent-only |
+| WRC-SR-1 | Freeze reconstruction scorecard and reference corpus semantics | BNA-3, BWB-3 | WRC-SR-2 | evaluation DTO/corpus; reference/Scene Brief/capture -> topology/composition/route/collision scores | asymmetric and negative score fixtures, no pixel-only GO | sequential, main-agent-only |
 | WRC-SR-2 | Implement bounded structured repair from stable diagnostics to a new audited Candidate/package | BNA-6, WRC-SR-1 | BNA-8, WRC-ACC-1 | authoring/evaluation orchestration; failed scored result -> bounded source/resource revision -> new result | max-cycle, no-output, stale-identity, non-idempotent submission tests | sequential |
 | WRC-EVT-1 | Prove location-triggered committed event, world change, Subject/object response, and Camera Context | BNA-4, BWB-4, WRC-ACT-1, WRC-CAM-1 | WRC-ACC-1 | Gameplay spatial sensor/command path; frozen region + committed pose -> event/receipt/state/camera result | enter/exit hysteresis, replay/reset/cadence/two-session/browser evidence | sequential |
 | PHO-0A | Freeze current-only health DTOs, Profile, policies, debt, and fingerprints | PHO design | PHO-0B, PHO-1..8 | `scripts/project-health` contracts/config only | parser/canonical/adversarial tests | sequential, main-agent-only |

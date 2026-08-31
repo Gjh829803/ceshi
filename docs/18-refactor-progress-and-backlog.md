@@ -1014,8 +1014,9 @@ BWB-3/4 的集成施工与真实台阶前置由
 该 Profile 采用 `JSON Control Plane + Babylon Native Block Whitebox + Frozen Contributions + SDK/Havok`
 组合；它不是第三条 Scene Source，也不恢复旧分支的 Three/Manifest/Compiler。BWB-1/BWB-2 的可选
 Package、Build-Epoch Session、结构 Checker、直接 Babylon 视觉、多视角 authoring screenshots、同一
-Layout/Finalize/Host settlement 的 Collider/Havok 链和真实 0.25m 台阶前置已经闭合。参考场景 Corpus、
-formal Capture/Route、AI 评测与生产 disposition 仍未完成，因此不把该 narrow fixture 扩写为生产完成度。
+Layout/Finalize/Host settlement 的 Collider/Havok 链和真实 0.25m 台阶前置已经闭合。PR #68 的
+BWB-5 候选已实现参考场景 Corpus 并完成 focused 验证，但在合入前不记为 `main` 已完成；formal
+Capture/Route、AI 评测与生产 disposition 仍未完成，且不由该 Corpus 代替。
 
 - [x] BWB-0：冻结 Profile、旧分支 `618d96b` 处置、外部证据、能力边界、依赖工作图和
   [Mode A 审查](reviews/2026-08-28-babylon-native-block-whitebox-profile-design-review.md)；
@@ -1030,9 +1031,11 @@ formal Capture/Route、AI 评测与生产 disposition 仍未完成，因此不�
   冻结、verified Package replay 后创建 Havok；没有独立 Traversal/Visual Group Contribution，Runtime
   不查询 Layout 或第二 Height Sampler；真实 0.25m step、0.5m blocker、support、ledge、reset 和 cleanup
   已在同一 Package 链通过；
-- [ ] BWB-5：冻结山地、T 字空间、台阶、建筑、有限室内视觉及负向 Corpus，闭合结构、profile-local
-  screenshots、BNA-4 Collider overlay、Spawn Support、真实人物通过性和人工交互证据。台阶 narrow
-  prerequisite 已完成；30/60/120 cadence、跨实体 rebind、山地/T 字/建筑/有限室内与负向 corpus 仍开放；
+- [ ] BWB-5：PR #68 候选已实现山地、T 字空间、台阶、建筑、有限室内视觉及负向 Corpus，闭合结构、
+  profile-local screenshots、BNA-4 Collider overlay、Spawn Support、真实人物通过性、30/60/120
+  render cadence 与跨 Session/Layout cleanup/rebind 证据；当前状态是“已实现、待合入”，因此本项在
+  `main` 合入前保持未勾选。单 Subject、无 Browser FeelReview 是已登记的非阻塞债务，不伪称跨实体
+  rebind、formal Capture/Route 或生产 disposition；
 - [ ] BWB-6：BWB-5 正确性成立后评估 Thin Instance、Chunk、Collider coalescing，交付 Profile-side
   eligibility/grouping、等价 fixture、资源 benchmark 和 BNA-4 优化提案；不直接修改 Runtime/Havok，
   不改变 AI-facing Schema 或 Contribution 语义。
@@ -1167,7 +1170,7 @@ BNA-1 + BNA-2 -> BNA-3 -> BNA-4 -> BNA-5 -> BNA-6
 BNA-2 -> BWB-1 -> BWB-2
 BWB-1 + BWB-2 + BNA-3 -> BWB-3
 BNA-4 + BWB-2 -> BWB-4
-BNA-5 + BNA-6 + BWB-3 + BWB-4 -> BWB-5 -> BWB-6
+BNA-5 + BWB-3 + BWB-4 -> BWB-5 -> BWB-6
 
 APA-0..APA-6 只提供 source-neutral 已发布资产；BNA-3 才把已发布 Resource Ref 纳入 Native Package。
 
