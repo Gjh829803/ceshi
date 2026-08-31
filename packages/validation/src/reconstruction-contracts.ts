@@ -4,6 +4,10 @@ import {
   canonicalJsonBytes,
   sha256CanonicalJson,
 } from "@whitebox-world/protocol";
+import {
+  parseFixedInputV1,
+  type FixedInputV1,
+} from "@whitebox-world/runtime-contracts";
 import { isPlainObject } from "lodash-es";
 
 export const WORLD_RECONSTRUCTION_DIMENSION_IDS_V1 = Object.freeze([
@@ -72,6 +76,7 @@ export interface WorldReconstructionCaseV1 {
     evidenceKind: "scripted-fixed-input";
     expectation: "pass" | "block";
     checkpointIds: readonly string[];
+    fixedInputSequence: readonly FixedInputV1[];
   }>[];
 }
 
@@ -458,13 +463,24 @@ export function parseWorldReconstructionCaseV1(value: unknown): WorldReconstruct
   const scriptedTraversalChecks = array(source.scriptedTraversalChecks, contract, "scriptedTraversalChecks").map((entry, index) => {
     const path = `scriptedTraversalChecks/${index}`;
     const row = object(entry, contract, path);
-    exactFields(row, ["id", "evidenceKind", "expectation", "checkpointIds"], contract, path);
+    exactFields(row, ["id", "evidenceKind", "expectation", "checkpointIds", "fixedInputSequence"], contract, path);
     if (row.evidenceKind !== "scripted-fixed-input") fail(contract, `${path}/evidenceKind`, "Route/Nav claims are forbidden; expected scripted-fixed-input");
+    let fixedInputSequence: readonly FixedInputV1[];
+    try {
+      fixedInputSequence = array(row.fixedInputSequence, contract, `${path}/fixedInputSequence`)
+        .map((step) => parseFixedInputV1(step));
+    } catch {
+      fail(contract, `${path}/fixedInputSequence`, "must be a non-empty sequence of valid FixedInputV1 steps");
+    }
+    if (fixedInputSequence.length === 0) {
+      fail(contract, `${path}/fixedInputSequence`, "must be a non-empty sequence of valid FixedInputV1 steps");
+    }
     return Object.freeze({
       id: text(row.id, contract, `${path}/id`),
       evidenceKind: "scripted-fixed-input" as const,
       expectation: enumValue(row.expectation, ["pass", "block"] as const, contract, `${path}/expectation`),
-      checkpointIds: uniqueStrings(row.checkpointIds, contract, `${path}/checkpointIds`),
+      checkpointIds: sortedStrings(row.checkpointIds, contract, `${path}/checkpointIds`),
+      fixedInputSequence: Object.freeze(fixedInputSequence),
     });
   });
   if (scriptedTraversalChecks.length === 0 || scriptedTraversalChecks.some((row, index) => index > 0 && scriptedTraversalChecks[index - 1]!.id >= row.id)) fail(contract, "scriptedTraversalChecks", "must be non-empty, unique, and sorted by id");
@@ -583,16 +599,18 @@ export function parseWorldReconstructionEvaluationResultV1(value: unknown): Worl
     const status = enumValue(row.status, ["passed", "failed", "incomplete"] as const, contract, `${path}/status`);
     const metrics = array(row.metrics, contract, `${path}/metrics`).map((metric, metricIndex) => parseMetric(metric, contract, `${path}/metrics/${metricIndex}`));
     const evidenceRefs = sortedStrings(row.evidenceRefs, contract, `${path}/evidenceRefs`, status !== "passed");
-    if (
-      status === "passed" &&
-      !metrics.some(({ kind }) =>
-        kind === "boolean-presence" ||
-        kind === "identity-match" ||
-        kind === "distance-millimeters" ||
-        kind === "receipt-outcome"
-      )
-    ) {
-      fail(contract, `${path}/metrics`, "a passed dimension requires a non-advisory metric");
+    const hasFailurePolarity = metrics.some((metric) =>
+      (metric.kind === "boolean-presence" && !metric.isPresent) ||
+      (metric.kind === "identity-match" && !metric.isMatch) ||
+      (metric.kind === "receipt-outcome" && metric.outcome !== "completed")
+    );
+    const hasSuccessPolarity = metrics.some((metric) =>
+      (metric.kind === "boolean-presence" && metric.isPresent) ||
+      (metric.kind === "identity-match" && metric.isMatch) ||
+      (metric.kind === "receipt-outcome" && metric.outcome === "completed")
+    );
+    if (status === "passed" && (hasFailurePolarity || !hasSuccessPolarity)) {
+      fail(contract, `${path}/metrics`, "a passed dimension requires only success-polarity evidence");
     }
     const identity = object(row.identity, contract, `${path}/identity`);
     exactFields(identity, ["attemptHash", "worldPackageRootHash", "captureReceiptHash"], contract, `${path}/identity`);

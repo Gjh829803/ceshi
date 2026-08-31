@@ -212,6 +212,7 @@ async function buildCloudRidgePackage(): Promise<WorldPackageDirectoryV1> {
     ],
   };
   assertNativeBlockGenerationRequestMatchesAttemptV1(
+    generationRequestRef,
     generationRequest,
     attempt,
   );

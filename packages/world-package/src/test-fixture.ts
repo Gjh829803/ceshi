@@ -312,6 +312,7 @@ function createBabylonNativeWorldPackageTestInputForProfileV1(
     ]),
   });
   assertNativeBlockGenerationRequestMatchesAttemptV1(
+    "worldkit://native-generation-request/package-fixture.initial@1",
     generationRequest,
     attempt,
   );

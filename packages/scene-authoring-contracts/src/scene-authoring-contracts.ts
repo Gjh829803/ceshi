@@ -640,7 +640,9 @@ function parseGenerationContextInputs(
     refs.some((ref) =>
       ref.startsWith("/") ||
       ref.includes("\\") ||
-      ref.split("/").some((segment) => segment === ".." || segment === ".")
+      /^[A-Za-z][A-Za-z0-9+.-]*:/.test(ref) ||
+      /^[A-Za-z]:/.test(ref) ||
+      ref.split("/").some((segment) => segment === "" || segment === ".." || segment === ".")
     )
   ) {
     return invalidContract("generation-request");
@@ -923,15 +925,26 @@ export function assertNativeBlockGenerationReceiptMatchesRequestV1(
   }
 }
 
+/**
+ * Closes a parsed Request against an Attempt. The immutable request ref is an
+ * explicit input because canonical Request bytes deliberately do not contain
+ * their artifact location.
+ */
 export function assertNativeBlockGenerationRequestMatchesAttemptV1(
+  generationRequestRefInput: unknown,
   requestInput: unknown,
   attemptInput: unknown,
 ): void {
   try {
+    const generationRequestRef = canonicalString(
+      generationRequestRefInput,
+      "generation-request",
+    );
     const request = parseNativeBlockGenerationRequestV1(requestInput);
     const attempt = parseSceneAuthoringAttemptV1(attemptInput);
     if (
       attempt.sourceInput.kind !== "babylon-native" ||
+      attempt.sceneAuthoringRouteDecisionRef !== request.routeDecisionRef ||
       attempt.sceneAuthoringRouteDecisionHash !== request.routeDecisionHash ||
       attempt.sceneBriefRef !== request.sceneBriefRef ||
       attempt.sceneBriefHash !== request.sceneBriefHash ||
@@ -939,6 +952,7 @@ export function assertNativeBlockGenerationRequestMatchesAttemptV1(
       attempt.sourceInput.bootstrapInputHash !== request.bootstrapInputHash ||
       attempt.sourceInput.generationRequestHash !==
         hashNativeBlockGenerationRequestV1(request) ||
+      attempt.sourceInput.generationRequestRef !== generationRequestRef ||
       attempt.seed !== request.seed
     ) {
       throw new Error("mismatch");

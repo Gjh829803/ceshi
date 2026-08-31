@@ -401,7 +401,9 @@ sole evaluator:
 
 The Case binds real Scene Brief/reference/opening-target hashes, acceptance target refs, expected topology,
 visual groups, normalized composition regions/anchors, Spawn/Support requirements, collider requirements,
-scripted traversal checks, and Evaluation Profile identity. Attempt `acceptanceTargetRefs` and
+and scripted traversal checks. Each scripted traversal check binds checkpoint sampling identities plus a
+non-empty, execution-ordered `fixedInputSequence` of runtime `FixedInputV1` steps into the Case canonical
+hash; the Case never relies on an implicit Route, NavMesh, planner, or `goTo` route. Attempt `acceptanceTargetRefs` and
 `requiredEvidenceProfileRefs` must reference the Case/Profile; empty placeholder arrays are rejected.
 
 ### 8.2 Independent dimensions

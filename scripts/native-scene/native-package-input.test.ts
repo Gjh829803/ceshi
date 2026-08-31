@@ -7,8 +7,10 @@ import {
   worldResourceLockEntriesV1,
 } from "@whitebox-world/runtime-contracts";
 import {
+  hashNativeBlockGenerationRequestV1,
   hashSceneAuthoringAttemptV1,
   hashSceneAuthoringRouteDecisionV1,
+  parseNativeBlockGenerationRequestV1,
   type SceneAuthoringAttemptResultV1,
   type SceneAuthoringAttemptV1,
   type SceneAuthoringRouteDecisionV1,
@@ -161,10 +163,48 @@ async function makeInput() {
     "worldkit://native-bootstrap-input/package-input@1";
   const generationRequestRef =
     "worldkit://native-generation-request/package-input.initial@1";
-  const generationRequestHash = sha256CanonicalJson({
-    kind: "native-block-generation-request-fixture",
+  const generationRequest = parseNativeBlockGenerationRequestV1({
+    kind: "native-block-generation-request",
+    schemaVersion: 1,
     id: "package-input.initial",
-  }) as Sha256HashV1;
+    routeDecisionRef: "worldkit://scene-authoring-route-decision/package-input@1",
+    routeDecisionHash: routeHash,
+    sceneBriefRef: routeDecision.sceneBriefRef,
+    sceneBriefHash: routeDecision.sceneBriefHash,
+    referenceInputs: [{
+      inputRef: "worldkit://reconstruction-input/package-input@1",
+      contentHash: HASH_A,
+      mediaType: "image/png",
+    }],
+    codexExecutionProfileRef: "worldkit://codex-execution-profile/formal@1",
+    codexExecutionProfileHash: HASH_B,
+    taskInstructionRef: "worldkit://task-instruction/native-block-reconstruction@1",
+    taskInstructionHash: HASH_A,
+    builderSkillRef: "worldkit://skill/worldkit-native-block-builder@1",
+    builderSkillHash: HASH_B,
+    workspaceContextManifestRef: "worldkit://workspace-context/native-block-builder@1",
+    workspaceContextManifestHash: HASH_A,
+    contextInputs: [{ inputRef: "context/native-scene-api.json", contentHash: HASH_B }],
+    nativeSceneApiRef: nativeSceneBootstrap.nativeSceneApiRef,
+    nativeSceneApiHash: HASH_A,
+    nativeSceneProfileRef: nativeSceneBootstrap.nativeSceneProfileRef,
+    nativeSceneProfileHash: HASH_B,
+    blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
+    blockProfileHash: HASH_A,
+    bootstrapInputRef: nativeSceneBootstrapInputRef,
+    bootstrapInputHash: hashBabylonNativeSceneBootstrapV1(nativeSceneBootstrap),
+    seed: nativeSceneBootstrap.seed,
+    budgets: {
+      maximumBlockCount: 2_000,
+      maximumStaticColliderCount: 500,
+      maximumStaticColliderVertexCount: 200_000,
+      maximumStaticColliderTriangleCount: 100_000,
+      maximumOutputBytes: 4_000_000,
+      timeoutSeconds: 900,
+    },
+    declaredOutputPaths: ["scene.ts", "native-block-authoring.json", "native-resources.json"],
+  });
+  const generationRequestHash = hashNativeBlockGenerationRequestV1(generationRequest);
   const attempt: SceneAuthoringAttemptV1 = {
     kind: "scene-authoring-attempt",
     schemaVersion: 1,

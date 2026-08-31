@@ -354,6 +354,9 @@ describe("Native Block generation identity", () => {
       { ...request, codexExecutionProfileRef: "worldkit://codex-execution-profile/smoke@1" },
       { ...request, contextInputs: [{ inputRef: "/tmp/context/api.md", contentHash: HASH_A }] },
       { ...request, contextInputs: [{ inputRef: "context/../api.md", contentHash: HASH_A }] },
+      { ...request, contextInputs: [{ inputRef: "https://example.test/context.json", contentHash: HASH_A }] },
+      { ...request, contextInputs: [{ inputRef: "C:/context/api.md", contentHash: HASH_A }] },
+      { ...request, contextInputs: [{ inputRef: "context//api.md", contentHash: HASH_A }] },
       { ...request, absoluteWorkspacePath: "/tmp/world" },
     ]) {
       expect(() => parseNativeBlockGenerationRequestV1(invalid)).toThrow(
@@ -391,6 +394,8 @@ describe("Native Block generation identity", () => {
     const attempt = nativeAttempt();
     const closedAttempt = {
       ...attempt,
+      sceneAuthoringRouteDecisionRef:
+        "worldkit://scene-authoring-route-decision/cloud-temple@1",
       sceneAuthoringRouteDecisionHash: request.routeDecisionHash,
       sceneBriefRef: request.sceneBriefRef,
       sceneBriefHash: request.sceneBriefHash,
@@ -398,17 +403,31 @@ describe("Native Block generation identity", () => {
         ...attempt.sourceInput,
         bootstrapInputRef: request.bootstrapInputRef,
         bootstrapInputHash: request.bootstrapInputHash,
+        generationRequestRef:
+          "worldkit://native-generation-request/cloud-temple.initial@1",
         generationRequestHash: hashNativeBlockGenerationRequestV1(request),
       },
       seed: request.seed,
     };
     expect(() => assertNativeBlockGenerationRequestMatchesAttemptV1(
+      "worldkit://native-generation-request/cloud-temple.initial@1",
       request,
       closedAttempt,
     )).not.toThrow();
     expect(() => assertNativeBlockGenerationRequestMatchesAttemptV1(
+      "worldkit://native-generation-request/cloud-temple.initial@1",
       request,
       { ...closedAttempt, seed: request.seed + 1 },
+    )).toThrow(/NATIVE_BLOCK_GENERATION_REQUEST_ATTEMPT_MISMATCH/);
+    expect(() => assertNativeBlockGenerationRequestMatchesAttemptV1(
+      "worldkit://native-generation-request/cloud-temple.other@1",
+      request,
+      closedAttempt,
+    )).toThrow(/NATIVE_BLOCK_GENERATION_REQUEST_ATTEMPT_MISMATCH/);
+    expect(() => assertNativeBlockGenerationRequestMatchesAttemptV1(
+      "worldkit://native-generation-request/cloud-temple.initial@1",
+      request,
+      { ...closedAttempt, sceneAuthoringRouteDecisionRef: "worldkit://route/other@1" },
     )).toThrow(/NATIVE_BLOCK_GENERATION_REQUEST_ATTEMPT_MISMATCH/);
   });
 });
