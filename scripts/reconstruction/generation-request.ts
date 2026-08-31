@@ -12,21 +12,13 @@ import {
   type SceneAuthoringRouteDecisionV1,
 } from "@whitebox-world/scene-authoring-contracts";
 import { sha256Bytes, sha256CanonicalJson, stringifyCanonicalJson, type Sha256HashV1 } from "@whitebox-world/protocol";
+import { hashWorldReconstructionEvaluationProfileV1, parseWorldReconstructionCaseV1, parseWorldReconstructionEvaluationProfileV1, type WorldReconstructionCaseV1, type WorldReconstructionEvaluationProfileV1 } from "@whitebox-world/validation";
 
 const OUTPUTS = ["scene.ts", "native-block-authoring.json", "native-resources.json"] as const;
 
 export interface PrepareNativeBlockGenerationTaskV1Input {
-  readonly case: Readonly<{
-    id: string;
-    sceneBriefRef: string;
-    sceneBriefHash: Sha256HashV1;
-    referenceInputs: readonly Readonly<{ inputRef: string; contentHash: Sha256HashV1; mediaType: "image/png" | "image/jpeg"; }>[];
-    evaluationProfileRef: string;
-    evaluationProfileHash: Sha256HashV1;
-    acceptanceTargetRefs: readonly string[];
-    requiredEvidenceProfileRefs: readonly string[];
-  }>;
-  readonly profile: Readonly<{ id: string; maximumRepairAttemptCount: 1; builderSelfRepairAttemptCount: 0 }>;
+  readonly case: WorldReconstructionCaseV1;
+  readonly profile: WorldReconstructionEvaluationProfileV1;
   readonly routeDecision: SceneAuthoringRouteDecisionV1;
   readonly attemptIndex: 0 | 1 | number;
   readonly backend: "cloud" | "local";
@@ -93,6 +85,10 @@ function asRef(relativePath: string): string { return `inputs/${relativePath}`; 
 export async function prepareNativeBlockGenerationTaskV1(
   input: PrepareNativeBlockGenerationTaskV1Input,
 ): Promise<PreparedNativeBlockGenerationTaskV1> {
+  const reconstructionCase = parseWorldReconstructionCaseV1(input.case);
+  const profile = parseWorldReconstructionEvaluationProfileV1(input.profile);
+  if (reconstructionCase.evaluationProfileRef !== "evaluation-profile.json" || reconstructionCase.evaluationProfileHash !== hashWorldReconstructionEvaluationProfileV1(profile)) throw new TypeError("Case/Profile identity closure failed.");
+  if (reconstructionCase.referenceInputs.some((reference) => reference.mediaType === "application/json")) throw new TypeError("Native generation references must be images.");
   if (input.attemptIndex !== 0 && input.attemptIndex !== 1) throw new TypeError("Native generation supports only initial attempt 0 or repair attempt 1.");
   const routeDecision = decideSceneAuthoringRouteV1({
     id: input.routeDecision.id,
@@ -116,18 +112,18 @@ export async function prepareNativeBlockGenerationTaskV1(
     throw new TypeError("Generation run directory must remain inside the Case root.");
   }
   const [sceneBrief, taskInstruction, builderSkill, nativeSceneApi, nativeSceneProfile, blockProfile, bootstrap, ...references] = await Promise.all([
-    freezeFile(inputRoot, path.resolve(inputRoot, input.case.sceneBriefRef)),
+    freezeFile(inputRoot, path.resolve(inputRoot, reconstructionCase.sceneBriefRef)),
     freezeFile(inputRoot, input.taskInstructionPath),
     freezeFile(inputRoot, input.builderSkillPath),
     freezeFile(inputRoot, input.nativeSceneApiPath),
     freezeFile(inputRoot, input.nativeSceneProfilePath),
     freezeFile(inputRoot, input.blockProfilePath),
     freezeFile(inputRoot, input.bootstrapInputPath),
-    ...input.case.referenceInputs.map((reference) => freezeFile(inputRoot, path.resolve(inputRoot, reference.inputRef))),
+    ...reconstructionCase.referenceInputs.map((reference) => freezeFile(inputRoot, path.resolve(inputRoot, reference.inputRef))),
   ]);
-  if (sceneBrief.hash !== input.case.sceneBriefHash) throw new TypeError("Frozen Scene Brief bytes do not match the Case hash.");
+  if (sceneBrief.hash !== reconstructionCase.sceneBriefHash) throw new TypeError("Frozen Scene Brief bytes do not match the Case hash.");
   for (let index = 0; index < references.length; index += 1) {
-    if (references[index]!.hash !== input.case.referenceInputs[index]!.contentHash) throw new TypeError("Frozen reference bytes do not match the Case hash.");
+    if (references[index]!.hash !== reconstructionCase.referenceInputs[index]!.contentHash) throw new TypeError("Frozen reference bytes do not match the Case hash.");
   }
   const files = [sceneBrief, taskInstruction, builderSkill, nativeSceneApi, nativeSceneProfile, blockProfile, bootstrap, ...references];
   const taskWorkspacePath = path.join(runDirectoryPath, "attempts", String(input.attemptIndex), ".task");
@@ -143,10 +139,10 @@ export async function prepareNativeBlockGenerationTaskV1(
   const routeDecisionHash = hashSceneAuthoringRouteDecisionV1(input.routeDecision);
   const generationRequest: NativeBlockGenerationRequestV1 = {
     kind: "native-block-generation-request", schemaVersion: 1,
-    id: `${input.case.id}.attempt-${input.attemptIndex}`,
+    id: `${reconstructionCase.id}.attempt-${input.attemptIndex}`,
     routeDecisionRef: `worldkit://scene-authoring-route-decision/${input.routeDecision.id}@1`, routeDecisionHash,
-    sceneBriefRef: input.case.sceneBriefRef, sceneBriefHash: input.case.sceneBriefHash,
-    referenceInputs: input.case.referenceInputs.map((reference) => ({ ...reference })),
+    sceneBriefRef: reconstructionCase.sceneBriefRef, sceneBriefHash: reconstructionCase.sceneBriefHash,
+    referenceInputs: reconstructionCase.referenceInputs.map((reference) => ({ ...reference })) as NativeBlockGenerationRequestV1["referenceInputs"],
     codexExecutionProfileRef: "worldkit://codex-execution-profile/formal@1",
     codexExecutionProfileHash: sha256CanonicalJson({ resourceRef: "worldkit://codex-execution-profile/formal@1", model: "gpt-5.6-sol", reasoningEffort: "xhigh" }) as Sha256HashV1,
     taskInstructionRef: asRef(taskInstruction.relativePath), taskInstructionHash: taskInstruction.hash,
@@ -160,18 +156,18 @@ export async function prepareNativeBlockGenerationTaskV1(
   };
   const generationRequestHash = hashNativeBlockGenerationRequestV1(generationRequest);
   const attempt: SceneAuthoringAttemptV1 = {
-    kind: "scene-authoring-attempt", schemaVersion: 1, id: `${input.case.id}-attempt-${input.attemptIndex}`,
+    kind: "scene-authoring-attempt", schemaVersion: 1, id: `${reconstructionCase.id}-attempt-${input.attemptIndex}`,
     sceneAuthoringRouteDecisionRef: generationRequest.routeDecisionRef, sceneAuthoringRouteDecisionHash: routeDecisionHash,
     sceneBriefRef: generationRequest.sceneBriefRef, sceneBriefHash: generationRequest.sceneBriefHash,
     sourceInput: { kind: "babylon-native", bootstrapInputRef: generationRequest.bootstrapInputRef, bootstrapInputHash: generationRequest.bootstrapInputHash, generationRequestRef: `generation-request.json`, generationRequestHash },
     selectedAssetResources: [], seed: input.seed, authoringProfileRef: routeDecision.decision.authoringProfileRef,
-    acceptanceTargetRefs: input.case.acceptanceTargetRefs, requiredEvidenceProfileRefs: input.case.requiredEvidenceProfileRefs,
+    acceptanceTargetRefs: reconstructionCase.acceptanceTargetRefs, requiredEvidenceProfileRefs: reconstructionCase.requiredEvidenceProfileRefs,
   };
   const contextDirectoryPath = path.join(taskWorkspacePath, "context");
   await mkdir(contextDirectoryPath, { recursive: true, mode: 0o700 });
   const contextFiles = [
-    ["case.json", input.case],
-    ["evaluation-profile.json", input.profile],
+    ["case.json", reconstructionCase],
+    ["evaluation-profile.json", profile],
     ["generation-request.json", generationRequest],
     ["attempt.json", attempt],
     ["workspace-context-manifest.json", workspaceContextManifest],
@@ -181,19 +177,19 @@ export async function prepareNativeBlockGenerationTaskV1(
     const bytes = await readFile(path.join(contextDirectoryPath, name));
     if (sha256Bytes(bytes) !== sha256Bytes(new TextEncoder().encode(`${stringifyCanonicalJson(value)}\n`))) throw new TypeError(`Frozen context hash mismatch: ${name}`);
   }
-  const routerRequestId = `native-block-generation-${input.case.id}-attempt-${input.attemptIndex}`;
+  const routerRequestId = `native-block-generation-${reconstructionCase.id}-attempt-${input.attemptIndex}`;
   const routerArguments = [
     "--backend", input.backend, "--repo-root", ".", "--task-id", routerRequestId,
-    "--stage", "native-block-generation", "--job-name", `Native Block Generation ${input.case.id}`,
+    "--stage", "native-block-generation", "--job-name", `Native Block Generation ${reconstructionCase.id}`,
     "--request-id", routerRequestId, "--execution-profile", "formal", "--submit-attempts", "1",
     "--timeout-seconds", String(generationRequest.budgets.timeoutSeconds),
     "--instruction-file", `attempts/${input.attemptIndex}/.task/inputs/${taskInstruction.relativePath}`,
     "--context", `attempts/${input.attemptIndex}/.task/inputs`, "--context", `attempts/${input.attemptIndex}/.task/context`,
-    ...references.flatMap((reference, index) => ["--asset", `reference-${index}::attempts/${input.attemptIndex}/.task/inputs/${reference.relativePath}::file::${input.case.referenceInputs[index]!.mediaType}`]),
+    ...references.flatMap((reference, index) => ["--asset", `reference-${index}::attempts/${input.attemptIndex}/.task/inputs/${reference.relativePath}::file::${reconstructionCase.referenceInputs[index]!.mediaType}`]),
     "--output", `scene.ts::attempts/${input.attemptIndex}/.staging/scene.ts::text/typescript`,
     "--output", `native-block-authoring.json::attempts/${input.attemptIndex}/.staging/native-block-authoring.json::application/json`,
     "--output", `native-resources.json::attempts/${input.attemptIndex}/.staging/native-resources.json::application/json`,
-    ...(input.backend === "cloud" ? ["--output-s3-prefix", `${input.case.id}/${path.basename(runDirectoryPath)}/attempt-${input.attemptIndex}`] : []),
+    ...(input.backend === "cloud" ? ["--output-s3-prefix", `${reconstructionCase.id}/${path.basename(runDirectoryPath)}/attempt-${input.attemptIndex}`] : []),
   ];
   const routerTaskPayloadHash = sha256CanonicalJson({ request: generationRequest, routerRequestId, routerArguments }) as Sha256HashV1;
   return Object.freeze({ generationRequest, generationRequestHash, attempt, attemptHash: hashSceneAuthoringAttemptV1(attempt), routerRequestId, routerTaskPayloadHash, backend: input.backend, routerExecutablePath: path.resolve("scripts/agents/run-codex-task.mjs"), routerArguments: Object.freeze(routerArguments), runDirectoryPath, taskWorkspacePath, stagingDirectoryPath, sourceDirectoryPath });

@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import { sha256Bytes } from "@whitebox-world/protocol";
 import { decideSceneAuthoringRouteV1, type SceneAuthoringRouteDecisionV1 } from "@whitebox-world/scene-authoring-contracts";
+import { hashWorldReconstructionEvaluationProfileV1, parseWorldReconstructionCaseV1, parseWorldReconstructionEvaluationProfileV1 } from "@whitebox-world/validation";
 
 import { prepareNativeBlockGenerationTaskV1 } from "./generation-request.js";
 
@@ -41,18 +42,15 @@ async function fixture(): Promise<Readonly<{ root: string; inputDirectory: strin
 }
 
 function input(fixtureValue: Awaited<ReturnType<typeof fixture>>) {
+  const profile = parseWorldReconstructionEvaluationProfileV1({ kind: "world-reconstruction-evaluation-profile", schemaVersion: 1, id: "cloud-temple-profile", dimensionIds: ["collider", "critical-traversal", "deterministic-build", "opening-composition", "semantic-silhouette", "spawn-support", "topology"], maximumRepairAttemptCount: 1, builderSelfRepairAttemptCount: 0, requiredEvidenceByDimension: ["collider", "critical-traversal", "deterministic-build", "opening-composition", "semantic-silhouette", "spawn-support", "topology"].map((dimensionId) => ({ dimensionId, evidenceProfileRefs: [`worldkit://evidence/${dimensionId}@1`] })) });
+  const reconstructionCase = parseWorldReconstructionCaseV1({
+    kind: "world-reconstruction-case", schemaVersion: 1, id: "cloud-temple-t-gate-native-block", sceneBriefRef: "scene-brief.md", sceneBriefHash: fixtureValue.routeDecision.sceneBriefHash,
+    referenceInputs: [{ inputRef: "reference-0.png", contentHash: sha256Bytes(new TextEncoder().encode("reference")), mediaType: "image/png" }], evaluationProfileRef: "evaluation-profile.json", evaluationProfileHash: hashWorldReconstructionEvaluationProfileV1(profile), acceptanceTargetRefs: ["worldkit://acceptance-target/gate@1"], requiredEvidenceProfileRefs: ["worldkit://evidence-profile/native-block@1"],
+    topology: { nodeIds: ["gate", "spawn"], relations: [{ fromNodeId: "gate", relation: "connects-to", toNodeId: "spawn" }], layerIds: ["main"] }, compositionTargetRefs: ["worldkit://acceptance-target/gate@1"], spawnSupport: { spawnMarkerId: "spawn", supportColliderId: "ground" }, requiredColliders: [{ colliderId: "ground", role: "ground" }], scriptedTraversalChecks: [{ id: "walk", evidenceKind: "scripted-fixed-input", expectation: "pass", checkpointIds: ["spawn"], fixedInputSequence: [{ actions: ["move-forward"], axes: { moveYRatio: 1 }, ticks: 1 }] }],
+  });
   return {
-    case: {
-      id: "cloud-temple-t-gate-native-block",
-      sceneBriefRef: "scene-brief.md",
-      sceneBriefHash: fixtureValue.routeDecision.sceneBriefHash,
-      referenceInputs: [{ inputRef: "reference-0.png", contentHash: sha256Bytes(new TextEncoder().encode("reference")) as `sha256:${string}`, mediaType: "image/png" as const }],
-      evaluationProfileRef: "evaluation-profile.json",
-      evaluationProfileHash: hash("d"),
-      acceptanceTargetRefs: ["worldkit://acceptance-target/gate@1"],
-      requiredEvidenceProfileRefs: ["worldkit://evidence-profile/native-block@1"],
-    },
-    profile: { id: "cloud-temple-profile", maximumRepairAttemptCount: 1 as const, builderSelfRepairAttemptCount: 0 as const },
+    case: reconstructionCase,
+    profile,
     routeDecision: fixtureValue.routeDecision,
     attemptIndex: 0,
     backend: "cloud" as const,
@@ -125,7 +123,7 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
     try {
       await writeFile(path.join(value.inputDirectory, "reference-1.png"), "another");
       const fixtureInput = input(value);
-      fixtureInput.case.referenceInputs.push({ inputRef: "reference-1.png", contentHash: sha256Bytes(new TextEncoder().encode("another")) as `sha256:${string}`, mediaType: "image/png" });
+      fixtureInput.case = parseWorldReconstructionCaseV1({ ...fixtureInput.case, referenceInputs: [...fixtureInput.case.referenceInputs, { inputRef: "reference-1.png", contentHash: sha256Bytes(new TextEncoder().encode("another")), mediaType: "image/png" }] });
       const prepared = await prepareNativeBlockGenerationTaskV1(fixtureInput);
       expect(prepared.routerArguments.filter((argument) => argument === "--asset")).toHaveLength(2);
     } finally { await rm(value.root, { recursive: true, force: true }); }

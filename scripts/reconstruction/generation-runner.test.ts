@@ -29,7 +29,7 @@ async function preparedFixture() {
       blockProfileRef: "block.json", blockProfileHash: `sha256:${"6".repeat(64)}`, bootstrapInputRef: "bootstrap.json", bootstrapInputHash: `sha256:${"7".repeat(64)}`,
       seed: 1, budgets: { maximumBlockCount: 1, maximumStaticColliderCount: 1, maximumStaticColliderVertexCount: 1, maximumStaticColliderTriangleCount: 1, maximumOutputBytes: 10000, timeoutSeconds: 1 },
       declaredOutputPaths: expectedOutputs,
-    },
+    } as const,
     generationRequestHash: `sha256:${"a".repeat(64)}`,
     routerRequestId: "native-block-generation-cloud-temple-initial",
     routerTaskPayloadHash: `sha256:${"b".repeat(64)}`,
