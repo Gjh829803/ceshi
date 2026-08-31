@@ -1,7 +1,7 @@
 {
   "kind": "execution-plan-v5-projection-receipt",
   "schemaVersion": 1,
-  "sourceCommit": "8410cb30797cb635ba8768dde720183f88ff01a7",
+  "sourceCommit": "12c0e0df56eb231618495481046ed8d9ac8c3f56",
   "fixtureIds": {
     "executionPlanId": "basic-world",
     "gameplayBootstrapId": "bna1-v5-projection.gameplay",
