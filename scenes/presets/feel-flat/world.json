@@ -1,0 +1,162 @@
+{
+  "kind": "worldkit-authoring-spec",
+  "schemaVersion": 4,
+  "id": "feel-flat",
+  "seed": 83101,
+  "provenance": {
+    "userPrompt": "Stable open test ground for tuning G Bot acceleration, braking, turning, jump, and third-person camera feel."
+  },
+  "layout": {
+    "solverProfileRef": "worldkit://layout-solver-profile/outdoor.s1@1"
+  },
+  "spatial": {
+    "traversalAreas": [],
+    "regions": [],
+    "routes": [],
+    "screenRegions": []
+  },
+  "world": {
+    "coordinateSystem": "right-handed-y-up-minus-z-forward",
+    "bounds": {
+      "centerMetersXZ": [0, 0],
+      "sizeMetersXZ": [96, 96],
+      "heightRangeMeters": [-4, 12]
+    },
+    "gravityMetersPerSecondSquaredXYZ": [0, -9.81, 0],
+    "environment": {
+      "preset": "clear-day"
+    },
+    "resourceBudget": {
+      "maxVertices": 100000,
+      "maxTriangles": 180000,
+      "maxColliders": 16
+    }
+  },
+  "resources": {
+    "prototypes": [
+      {
+        "id": "distance-marker",
+        "version": 1,
+        "kind": "primitive",
+        "primitive": "box",
+        "sizeMetersXYZ": [0.5, 2, 0.5],
+        "collisionEnabled": true,
+        "semantic": {
+          "classId": "marker.distance"
+        }
+      }
+    ],
+    "subjectDefinitions": []
+  },
+  "nodes": [
+    {
+      "id": "terrain-main",
+      "kind": "terrain",
+      "components": {
+        "terrain": {
+          "source": {
+            "kind": "procedural",
+            "relief": "flat",
+            "baseHeightMeters": 0,
+            "amplitudeMeters": 0
+          },
+          "grid": {
+            "centerMetersXZ": [0, 0],
+            "sizeMetersXZ": [96, 96],
+            "resolutionCellsXZ": [65, 65]
+          },
+          "semantic": {
+            "classId": "terrain.feel-flat"
+          }
+        }
+      }
+    },
+    {
+      "id": "marker-10m",
+      "kind": "object",
+      "prototypeRef": "package://prototype/distance-marker@1",
+      "placement": {
+        "kind": "fixed",
+        "transform": {
+          "positionMetersXYZ": [-6, 1, 8]
+        }
+      }
+    },
+    {
+      "id": "marker-20m",
+      "kind": "object",
+      "prototypeRef": "package://prototype/distance-marker@1",
+      "placement": {
+        "kind": "fixed",
+        "transform": {
+          "positionMetersXYZ": [-6, 1, -2]
+        }
+      }
+    },
+    {
+      "id": "marker-30m",
+      "kind": "object",
+      "prototypeRef": "package://prototype/distance-marker@1",
+      "placement": {
+        "kind": "fixed",
+        "transform": {
+          "positionMetersXYZ": [-6, 1, -12]
+        }
+      }
+    },
+    {
+      "id": "spawn-main",
+      "kind": "anchor",
+      "semantic": {
+        "classId": "spawn.player"
+      },
+      "placement": {
+        "kind": "fixed",
+        "transform": {
+          "positionMetersXYZ": [0, 0, 18]
+        }
+      }
+    },
+    {
+      "id": "player",
+      "kind": "subject",
+      "subjectDefinitionRef": "worldkit://subject-definition/humanoid.g-bot@2",
+      "spawnAnchorEntityId": "spawn-main"
+    },
+    {
+      "id": "camera-main",
+      "kind": "camera",
+      "components": {
+        "cameraRig": {
+          "defaultRigRef": "worldkit://camera/third-person.standard@1",
+          "allowedRigRefs": [
+            "worldkit://camera/third-person.standard@1"
+          ],
+          "target": {
+            "targetEntityId": "player",
+            "targetHeightMeters": 1.2
+          },
+          "thirdPerson": {
+            "pitchRadians": 0.18,
+            "distanceMeters": 5,
+            "targetHeightMeters": 1.2,
+            "fovDegrees": 56,
+            "aspectRatio": 1.7777777777777777
+          },
+          "manualSwitchAllowed": false
+        }
+      }
+    }
+  ],
+  "relationships": [],
+  "rules": [],
+  "startup": {
+    "spawnAnchorEntityId": "spawn-main",
+    "controlledEntityId": "player",
+    "cameraEntityId": "camera-main"
+  },
+  "constraints": {
+    "connectivity": [],
+    "placements": []
+  }
+}

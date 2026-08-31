@@ -1,4 +1,5 @@
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
+import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import type { Scene } from "@babylonjs/core/scene.js";
 import {
   parseNativeSceneDiagnosticV1,
@@ -427,7 +428,7 @@ const MAXIMUM_PROVIDER_ENGINE_OBSERVER_COUNT_BY_KEY_V1: Readonly<
   onDisposeObservable: 1,
 });
 
-const MESH_RUNTIME_AUTHORITY_KEYS_V1 = Object.freeze([
+const ABSTRACT_MESH_RUNTIME_AUTHORITY_KEYS_V1 = Object.freeze([
   "actionManager",
   "physicsBody",
 ] as const);
@@ -1091,7 +1092,9 @@ function createdObjectKind(
   insertionKey: string,
   object: Record<string, unknown>,
 ): CreatedObjectSurfaceV1["kind"] {
-  if (insertionKey === "addMesh") return "mesh";
+  if (insertionKey === "addMesh") {
+    return object instanceof Mesh ? "mesh" : "abstract-mesh";
+  }
   if (insertionKey === "addTransformNode") return "transform-node";
   if (insertionKey === "addMaterial") {
     return object instanceof StandardMaterial ? "standard-material" : "material";
@@ -1343,8 +1346,8 @@ export function beginBabylonNativeSceneAuthorityProbeV1(
         ),
       );
     }
-    if (kind === "mesh") {
-      for (const key of MESH_RUNTIME_AUTHORITY_KEYS_V1) {
+    if (kind === "abstract-mesh" || kind === "mesh") {
+      for (const key of ABSTRACT_MESH_RUNTIME_AUTHORITY_KEYS_V1) {
         record.directValuesByKey.set(
           key,
           installCreatedDirectValueGuard(

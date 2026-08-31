@@ -331,6 +331,60 @@ describe("verify:unreleased-clean-break", () => {
     expect(report.ok).toBe(false);
   });
 
+  it("blocks the legacy trust-labelled Native Scene Profile identity", async () => {
+    const fixtureRoot = await createFixtureRoot("clean-break-native-profile-");
+    const fixturePath = path.join(fixtureRoot, "packages", "native-profile.ts");
+    const legacyProfileRef = token([
+      "worldkit://native-scene-profile/",
+      "trusted-local@1",
+    ]);
+    await writeFile(
+      fixturePath,
+      `export const profileRef = "${legacyProfileRef}";\n`,
+      "utf8",
+    );
+
+    const report = await scanUnreleasedCleanBreak(fixtureRoot);
+
+    expect(family(
+      report,
+      "WORLDKIT_UNRELEASED_LEGACY_NATIVE_SCENE_PROFILE_REF",
+    ).matchesByPath).toEqual([{
+      path: "packages/native-profile.ts",
+      matches: [{ line: 1, value: legacyProfileRef }],
+    }]);
+    expect(report.ok).toBe(false);
+  });
+
+  it("blocks scalar block-grid symbols and half-meter transition names", async () => {
+    const fixtureRoot = await createFixtureRoot("clean-break-block-grid-");
+    const fixturePath = path.join(fixtureRoot, "packages", "block-grid.ts");
+    const legacySymbols = [
+      token(["BABYLON_NATIVE_BLOCK_", "MICRO_GRID_METERS_V1"]),
+      token(["BABYLON_NATIVE_BLOCK_", "CENTER_LATTICE_METERS_V1"]),
+      token(["structural", "HalfMeterTransitionKeys"]),
+    ];
+    await writeFile(
+      fixturePath,
+      legacySymbols.map((symbol) => `export const ${symbol} = true;`).join("\n"),
+      "utf8",
+    );
+
+    const report = await scanUnreleasedCleanBreak(fixtureRoot);
+
+    expect(family(
+      report,
+      "WORLDKIT_UNRELEASED_LEGACY_NATIVE_BLOCK_GRID",
+    ).matchesByPath).toEqual([{
+      path: "packages/block-grid.ts",
+      matches: legacySymbols.map((value, index) => ({
+        line: index + 1,
+        value,
+      })),
+    }]);
+    expect(report.ok).toBe(false);
+  });
+
   it("discovers nested superseded serialized contracts under generated artifacts", async () => {
     const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "clean-break-artifacts-"));
     cleanupPaths.push(fixtureRoot);

@@ -14,7 +14,7 @@ interface LayoutModule {
   ): Readonly<{
     blocks: readonly Readonly<{
       id: string;
-      shape: "full" | "half" | "quarter" | "small";
+      shape: "full" | "half" | "quarter" | "small" | "step";
       paletteRole: string;
       visualGroupId?: string;
       centerMetersXYZ: readonly [number, number, number];
@@ -32,7 +32,7 @@ interface LayoutModule {
     }>[];
     exposedTopSurfaceCellKeys: readonly string[];
     boundarySegmentKeys: readonly string[];
-    structuralHalfMeterTransitionKeys: readonly string[];
+    structuralStepTransitionKeys: readonly string[];
     unsupportedBlockIds: readonly string[];
   }>;
 }
@@ -46,7 +46,7 @@ function record(
   scene: Scene,
   input: Readonly<{
     id: string;
-    shape?: "full" | "half" | "quarter" | "small";
+    shape?: "full" | "half" | "quarter" | "small" | "step";
     paletteRole?: "ground" | "route" | "structure";
     visualGroupId?: string;
   }>,
@@ -57,6 +57,7 @@ function record(
     half: [1, 0.5, 1],
     quarter: [0.5, 0.5, 1],
     small: [0.5, 0.5, 0.5],
+    step: [1, 0.25, 1],
   } satisfies Record<typeof shape, readonly [number, number, number]>)[shape];
   const mesh = MeshBuilder.CreateBox(input.id, {
     width: size[0],
@@ -123,7 +124,9 @@ describe("Babylon Native block profile layout", () => {
         sizeMetersXYZ: [1, 0.5, 0.5],
         minimumMetersXYZ: [1, 0, -0.5],
         maximumMetersXYZ: [2, 0.5, 0],
-        occupiedMicroCellKeys: ["2,0,-1", "3,0,-1"],
+        occupiedMicroCellKeys: [
+          "2,0,-1", "3,0,-1", "2,1,-1", "3,1,-1",
+        ],
       }]);
     });
   });
@@ -225,7 +228,9 @@ describe("Babylon Native block profile layout", () => {
         relatedBlockId: "overlap-block",
         microCellKeys: [
           "-1,0,-1", "-1,0,0", "-1,1,-1", "-1,1,0",
+          "-1,2,-1", "-1,2,0", "-1,3,-1", "-1,3,0",
           "0,0,-1", "0,0,0", "0,1,-1", "0,1,0",
+          "0,2,-1", "0,2,0", "0,3,-1", "0,3,0",
         ],
       });
     });
@@ -265,26 +270,26 @@ describe("Babylon Native block profile layout", () => {
 
       expect(layout.exposedTopSurfaceCellKeys).toHaveLength(16);
       expect(layout.boundarySegmentKeys).toHaveLength(16);
-      expect(layout.structuralHalfMeterTransitionKeys).toEqual([]);
+      expect(layout.structuralStepTransitionKeys).toEqual([]);
     });
   });
 
-  it("emits only half-meter structural transitions, never a passability claim", async () => {
+  it("emits only one-step structural transitions, never a passability claim", async () => {
     const { deriveBabylonNativeBlockLayoutV1 } = await loadLayout();
 
     withScene((scene) => {
-      const lowHalf = record(scene, {
-        id: "low-half",
-        shape: "half",
+      const lowStep = record(scene, {
+        id: "low-step",
+        shape: "step",
         paletteRole: "route",
       });
-      lowHalf.mesh.position.set(0, 0.25, 0);
-      const highHalf = record(scene, {
-        id: "high-half",
-        shape: "half",
+      lowStep.mesh.position.set(0, 0.125, 0);
+      const highStep = record(scene, {
+        id: "high-step",
+        shape: "step",
         paletteRole: "route",
       });
-      highHalf.mesh.position.set(1, 0.75, 0);
+      highStep.mesh.position.set(1, 0.375, 0);
       const oneMeterHigh = record(scene, {
         id: "one-meter-high",
         shape: "full",
@@ -298,19 +303,40 @@ describe("Babylon Native block profile layout", () => {
       });
       oneMeterLow.mesh.position.set(2, 0.5, 0);
 
-      const halfMeterLayout = deriveBabylonNativeBlockLayoutV1(
+      const stepLayout = deriveBabylonNativeBlockLayoutV1(
         scene,
-        [lowHalf, highHalf],
+        [lowStep, highStep],
       );
       const oneMeterLayout = deriveBabylonNativeBlockLayoutV1(
         scene,
         [oneMeterLow, oneMeterHigh],
       );
 
-      expect(halfMeterLayout.structuralHalfMeterTransitionKeys).toHaveLength(2);
-      expect(oneMeterLayout.structuralHalfMeterTransitionKeys).toEqual([]);
-      expect(Object.keys(halfMeterLayout)).not.toContain("isPassable");
-      expect(Object.keys(halfMeterLayout)).not.toContain("routeEvidence");
+      expect(stepLayout.structuralStepTransitionKeys).toEqual([
+        "0,1,-1->1,2,-1",
+        "0,1,0->1,2,0",
+      ]);
+      expect(oneMeterLayout.structuralStepTransitionKeys).toEqual([]);
+      expect(Object.keys(stepLayout)).not.toContain("isPassable");
+      expect(Object.keys(stepLayout)).not.toContain("routeEvidence");
+    });
+  });
+
+  it("supports quarter-meter step stacking without overlap", async () => {
+    const { deriveBabylonNativeBlockLayoutV1 } = await loadLayout();
+
+    withScene((scene) => {
+      const base = record(scene, { id: "base-step", shape: "step" });
+      base.mesh.position.set(0, 0.125, 0);
+      const top = record(scene, { id: "top-step", shape: "step" });
+      top.mesh.position.set(0, 0.375, 0);
+
+      const layout = deriveBabylonNativeBlockLayoutV1(scene, [top, base]);
+
+      expect(layout.issues).toEqual([]);
+      expect(layout.unsupportedBlockIds).toEqual([]);
+      expect(layout.blocks.map(({ centerMetersXYZ }) => centerMetersXYZ))
+        .toEqual([[0, 0.125, 0], [0, 0.375, 0]]);
     });
   });
 });

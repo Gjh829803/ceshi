@@ -4,8 +4,9 @@
 **Chinese name:** 世界还原与可玩控制闭环一号里程碑
 **Status:** approved scope; detailed work-package plans required before code
 **Date:** 2026-08-30
-**Source baseline:** `origin/main@b19f9e4be0cb56fc132cff656ade994df4e88a31`
+**Source baseline:** `origin/main@8e0c1bdb9c6b0d037595b8a12605b4e9ad5c5794`
 **Live status authority:** `docs/18-refactor-progress-and-backlog.md`
+**BWB-3/4 settlement authority:** `docs/superpowers/specs/2026-08-31-babylon-block-settlement-and-step-closure-design.md`
 
 ## 1. Decision
 
@@ -23,11 +24,84 @@ reference evidence / user intent
   -> exact-tree Project Health evidence and production disposition
 ```
 
-WRC-1 is an umbrella program, not a new runtime, Scene Source, package format, compiler, state
+This file is the overall WRC-1 milestone design and dependency authority, not the detailed design for
+each package. WRC-1 is an umbrella program, not a new runtime, Scene Source, package format, compiler, state
 authority, test runner, or compatibility layer. Existing BNA, BWB, PHO, Gameplay, Camera, and 3C
 specifications remain the detailed technical authorities for their domains. This document owns only
 the combined milestone boundary, dependency order, incremental-integration policy, cross-domain
 acceptance cases, and overall completion definition.
+
+Current checkpoint: BNA-5 product SHA `2f46b3c9` has scoped GO from capable-runner isolation evidence.
+BWB-3/4 and the BWB-5 mountain/T-space/steps/building/limited-interior/negative corpus are now integrated
+through `main@d1ba942`; the same Block Session/Layout/finalize/Host settlement produces Babylon visuals,
+frozen Contributions, SDK-owned Havok support and focused traversal evidence. PHO-6 is integrated through
+PR #71, with generated-output fingerprint stability closed by PR #73. This unblocks BNA-6, BNA-7,
+WRC-SR-1, BWB-6 and PHO-7, but does not complete formal Capture/Route, AI reconstruction scoring/repair,
+PHO CI adapters, BNA-8 production disposition, Action/Camera closure or spatial events. PR #75 has since
+closed the BWB-5 north-wall collision evidence, and PR #76 has closed the PHO detached-child test-fixture
+stability follow-up on this document's source baseline.
+
+### 1.1 Current execution priority: NBR-1 vertical slice
+
+Until one real reference-driven Babylon Native Block Case completes the formal generation, Check,
+Package, Runtime, Capture, evaluation and one-repair chain, the sole highest-priority WRC-1 slice is
+[NBR-1 Babylon Native Block Reconstruction End-to-End](./2026-08-31-native-block-reconstruction-e2e-design.md).
+NBR-1 consumes only the minimum BNA-6, BNA-7, WRC-SR-1 and WRC-SR-2 slices needed by that runnable Case;
+it does not mark any whole parent work package complete.
+
+BWB-6, full PHO-7/8, generalized Action/Camera, spatial events, the complete BNA-6 Golden Corpus,
+product Route/Nav/`goTo`, BNA-8 and WRC-ACC-1 are explicitly deferred. They remain in this dependency
+authority but must not block NBR-1 or be expanded opportunistically during it.
+
+### 1.2 Unified Scene Viewer is a downstream developer tool
+
+The [Unified Scene Viewer design](./2026-08-31-unified-scene-viewer-clean-break-design.md)
+and [implementation plan](../plans/2026-08-31-unified-scene-viewer-clean-break-implementation.md)
+are downstream developer-tool inputs, not WRC-1 architecture authorities and not additional WRC work
+packages. WRC-1 retains its 33-package count, product capability graph, evidence ownership and completion
+definition. The Viewer may consume accepted WRC outputs but cannot mark a WRC package complete or redefine
+its protocol.
+
+The implemented Viewer contract is Canonical-only: after its atomic cutover, `apps/playground` is the
+sole developer Viewer shell and `pnpm dev` exposes only the curated `feel-flat`, `traversal-course` and
+`action-lab` presets. The target Catalog contains no controlled-Subject field: the Host parses the complete
+AuthoringSpec and proves that `startup.controlledEntityId` resolves to
+`worldkit://subject-definition/humanoid.g-bot@2`. `worldkit run` and Studio may then provide a Host-selected
+temporary Canonical source to that shell without publishing it to the curated Catalog.
+
+The current tree implements USV-0/USV-1 atomically: legacy `authoring=1` and `catalog-gameplay` source
+selection are removed, the three curated presets are published, and Playground, `worldkit run` and Studio
+share the same Viewer shell. This downstream tool status does not increase WRC completion, admit Native
+Viewer support or authorize deletion of WRC/NBR evidence and Harnesses.
+
+Native Package playability remains owned by BNA/NBR Runtime and verification Harnesses. It must not add a
+Native member to the accepted Canonical-only Viewer target Catalog/bootstrap, route a Native Package through
+the Viewer-target `worldkit run` source-selection contract, or use Viewer work as a BNA production/admission gate.
+Native Viewer support requires the applicable BNA production/admission disposition and a later separate
+current-only change that atomically updates the Viewer Host and every consumer.
+
+| Viewer relationship | WRC/BNA owner retained | Viewer may consume | Viewer must not own |
+|---|---|---|---|
+| controlled Subject and actions | Authoring/Registry plus Gameplay/Action | parsed Canonical AuthoringSpec and committed state | duplicate Subject ref, Action reducer or animation truth |
+| Runtime, Physics and Camera | RuntimeHost, CharacterMovement, Havok adapter and Camera Domain/Director | Browser-facing observation and existing commands | Runtime, Physics, Camera state or admission |
+| formal Capture and reconstruction evidence | P0.2/P0.3, BNA-7 and WRC-SR | identity-bound artifacts for display | Capture protocol, score, Receipt or evidence mutation |
+| WRC/BNA Corpus and Harnesses | BWB/BNA/WRC package named by the artifact | links and read-only inspection | cleanup eligibility or completion status |
+| source selection | Canonical Authoring Host; future Native decision remains BNA-owned | one already validated Host bootstrap | Scene Source, WorldPackage, Compiler or Browser Protocol |
+
+The Playground/CLI/Studio source-selection cutover is one atomic Viewer checkpoint. It depends on the
+current Canonical Authoring parser, G Bot Subject admission, existing RuntimeHost/Browser V5 owners and
+the affected Playground, CLI and Studio gates. It does not depend on incomplete Native Viewer work and
+must not modify Browser V5, RuntimeHost or WorldPackage contracts. The trusted artifact renderer/Capture
+remains a separate evidence tool; only its WRC owner may plan a migration, and it is never counted as a
+second product Viewer.
+
+Viewer cleanup is fail-closed. `artifacts/scenes`, BWB/BNA reconstruction Corpus, Native admission and
+Runtime Harnesses, formal Capture/Receipt fixtures and identity-bound acceptance artifacts are outside
+USV cleanup unless their owning WRC/BNA work package explicitly migrates them. Native Web UI or its
+verification entry may be deleted only after BNA-7 evidence migration and the applicable BNA-8
+disposition; historical cases require the corresponding BWB/BNA/WRC-SR owner sign-off. Every deletion
+also requires zero production/test references, migrated identity-bound fixtures and the affected owner
+gates. Directory tidiness is not evidence of obsolescence.
 
 ## 2. Why this is a major milestone
 
@@ -155,18 +229,24 @@ PR #41
                                       \-> WRC-ACT-1 -> WRC-ACT-2
                                                         \-> WRC-CAM-1 -> WRC-CAM-2
 
-BNA-1 + BNA-2
-  -> BNA-3 -> BNA-4 -> BNA-5 -> BNA-6 -> BNA-8
-       |        |                   |        ^
-       |        +-> BWB-4          +-> WRC-SR-2
-       +-> BWB-3 -> WRC-SR-1 -----------^   |
-                    |                       |
-                    +-> BWB-5 -> BWB-6 -----+
+BNA-1 + BNA-2 -> BNA-3 -> BNA-4 -> BNA-5
+BNA-3 -> BWB-3
+BNA-4 -> BWB-4
+BNA-5 + BWB-3 + BWB-4 -> BWB-5 -> BWB-6
+BNA-3 + BWB-3 -> WRC-SR-1
+BNA-5 + WRC-SR-1 -> BNA-6
+BNA-6 + BNA-7 + WRC-SR-1 -> WRC-SR-2 -> BNA-8
 
 BNA-4 + WRC-ACT-1 + WRC-CAM-1 + BWB-4
   -> WRC-EVT-1
 
 BNA-4 -> BNA-7 -> BNA-8
+
+BNA-5 + BWB-5
+  -> NBR-1(NBR-00 -> NBR-10 -> NBR-20 -> NBR-30 -> NBR-40 -> NBR-45
+             -> NBR-50 -> NBR-60 -> NBR-70 -> NBR-90)
+NBR-1 is an execution-slice alias, not a 34th WRC package; it consumes minimum
+BNA-6 + BNA-7 + WRC-SR-1 + WRC-SR-2 slices only
 
 PHO-0A -> PHO-0B + PHO-1
 PHO-0B -> PHO-2 + PHO-4 + PHO-5
@@ -195,29 +275,30 @@ interface ownership before code begins.
 | BNA-3 | Build Native Bundle, dependency/asset locks, Contribution Hash, one WorldPackage, and Build Receipt | BNA-1, BNA-2 | BNA-4, BWB-3, BNA-5..8 | existing `world-package` + provider-neutral runtime contracts; audited Native source/resources -> verified package/receipt | implementation-plan tasks, package tamper/adversarial tests, exact-SHA review | sequential |
 | BNA-4 | Admit verified Native packages to the single RuntimeHost/Gameplay/Havok Kernel | BNA-3 | BWB-4, BNA-5..8, WRC-EVT-1 | RuntimeHost/runtime-babylon; verified package + frozen contributions -> atomic playable session | real Havok, spawn/support/collider/lifecycle/rollback tests | sequential, main-agent-only |
 | BNA-5 | Close Trusted Local and Hosted Isolated trust profiles, budgets, tenant caps, and threat gates | BNA-4 | BNA-6, BWB-5, BNA-8 | Host admission/isolation only; BNA-2 audit + package identity -> bounded isolated execution receipt | adversarial security/cap/cleanup tests and threat-model review | sequential |
-| BNA-6 | Measure AI generation and repair success under frozen budgets and identities | BNA-5, BNA-3, BNA-4 | WRC-SR-2, BWB-5, BNA-8 | evaluation harness/corpus; task + reference + profile -> scored exact-package result | Golden corpus, independent attempts, visual/manual evidence | sequential |
-| BNA-7 | Produce formal Capture and optional Route/Nav Evidence from the same frozen Surface | BNA-4, BNA-3 | BNA-8 | capture/route owners only; verified session/surfaces -> identity-bound evidence | capture integrity, route provenance, negative fixtures | sequential |
+| BNA-6 | Measure AI generation and repair success under frozen budgets and identities | BNA-5, BNA-3, BNA-4, WRC-SR-1 | WRC-SR-2, BNA-8 | measurement producers, source adapters and Corpus execution only; frozen task/reference/profile + WRC-SR protocol -> exact-package evidence/result | Golden corpus, independent attempts, visual/manual evidence | sequential |
+| BNA-7 | Produce formal Capture and optional Route/Nav Evidence from the same frozen Surface | BNA-4, BNA-3 | WRC-SR-2, BNA-8 | capture/route owners only; verified session/surfaces -> identity-bound evidence | capture integrity, route provenance, negative fixtures | sequential |
 | BNA-8 | Issue scoped Native GO/NO-GO for Trusted Local, Hosted, and Route claims | BNA-5, BNA-6, BNA-7, WRC-SR-2, BWB-5, PHO-7 | WRC-ACC-1 | review/docs/status only; exact evidence set -> scoped disposition | full-dimension review, no open blocking finding, docs truth | main-agent-only |
 | BWB-3 | Render direct Babylon block Meshes with stable visual groups and local opening/top/side captures | BNA-3, BWB-2 | WRC-SR-1, BWB-5 | block-profile authoring only; valid Layout -> Mesh groups + local screenshots | structural snapshot and rendered image checks | sequential |
 | BWB-4 | Freeze core static Collider Contributions and traversal bindings from the same in-memory Layout | BNA-4, BWB-2 | WRC-EVT-1, BWB-5 | block profile contribution adapter; Layout -> Host-frozen collider contribution | overlay, support, overlap, disposal, Havok traversal tests | sequential |
-| BWB-5 | Close mountain, T-space, stairs, building, limited-interior, and negative reconstruction corpus | BNA-5, BNA-6, BWB-3, BWB-4, WRC-SR-1 | BWB-6, BNA-8 | corpus/evidence only; frozen cases -> structural, visual, collision and manual receipts | screenshots, collider overlay, spawn, player traversal, negative rejection | sequential |
+| BWB-5 | Close mountain, T-space, stairs, building, limited-interior, and negative reconstruction corpus | BNA-5, BWB-3, BWB-4 | BWB-6, BNA-8 | corpus/evidence only; frozen cases -> structural, visual, collision and manual receipts | screenshots, collider overlay, spawn, player traversal, negative rejection | sequential |
 | BWB-6 | Evaluate profile-side Thin Instance, Chunk, and Collider coalescing without changing semantics | BWB-5 | WRC-ACC-1 | block-profile optimization proposal only; equivalent Layout -> measured grouping eligibility | equivalence fixtures, resource benchmark, no Runtime/Havok edits | sequential |
 | WRC-ACT-1 | Freeze general ActionDefinition/Request/Receipt Context, Channel Lock, ActionVariantSet and PoseSetProfile | JUMP-3, WRC-GOV-1 | WRC-ACT-2, WRC-CAM-1, WRC-EVT-1 | gameplay/subject-actions/registry contracts; committed context -> exact variant/presentation binding | closed-schema/hash/ambiguity/missing-binding tests | sequential, main-agent-only |
 | WRC-ACT-2 | Complete fixed-Tick Action/Posture reducer, fall/land, cancel/interrupt, fallback, and safe capsule posture changes | WRC-ACT-1 | WRC-CAM-2, WRC-ACC-1 | Gameplay + CharacterMovement + approved BodyPort query; commands/support -> committed Action/Posture/receipts | replay/reset/blocked-clearance/two-instance/browser tests | sequential |
 | WRC-CAM-1 | Complete committed Context -> Camera Domain -> CameraDirector for Actions, jump/land, narrow/interior, and event focus | WRC-ACT-1, current Camera Domain | WRC-CAM-2, WRC-EVT-1 | camera/runtime-host/runtime-babylon boundaries; committed facts -> selection decision -> final pose | atomic rollback, safe-view, pause/reset/cadence/isolation tests | sequential |
 | WRC-CAM-2 | Close first/third-person and semantic transition fixtures plus two human FeelReviewReceipts | WRC-CAM-1, WRC-ACT-2 | WRC-ACC-1 | camera fixtures/evidence only; locked profiles + cases -> automated/numeric/rendered/manual receipts | real Chromium/Havok, two human rounds bound to SHA/profile/take | main-agent-only |
-| WRC-SR-1 | Freeze reconstruction scorecard and reference corpus semantics | BNA-3, BWB-3 | WRC-SR-2, BWB-5 | evaluation DTO/corpus; reference/Scene Brief/capture -> topology/composition/route/collision scores | asymmetric and negative score fixtures, no pixel-only GO | sequential, main-agent-only |
-| WRC-SR-2 | Implement bounded structured repair from stable diagnostics to a new audited Candidate/package | BNA-6, WRC-SR-1 | BNA-8, WRC-ACC-1 | authoring/evaluation orchestration; failed scored result -> bounded source/resource revision -> new result | max-cycle, no-output, stale-identity, non-idempotent submission tests | sequential |
+| WRC-SR-1 | Freeze reconstruction scorecard and reference corpus semantics | BNA-3, BWB-3 | WRC-SR-2 | evaluation DTO/corpus; reference/Scene Brief/capture -> topology/composition/route/collision scores | asymmetric and negative score fixtures, no pixel-only GO | sequential, main-agent-only |
+| WRC-SR-2 | Implement bounded structured repair from stable diagnostics to a new audited Candidate/package | BNA-6, BNA-7, WRC-SR-1 | BNA-8, WRC-ACC-1 | authoring/evaluation orchestration; failed scored result -> bounded source/resource revision -> new result | max-cycle, no-output, stale-identity, non-idempotent submission tests | sequential |
+| NBR-1 | Deliver one real reference-driven Native Block world through AI generation, formal Check/Package/Runtime/Capture, dimensioned evaluation and at most one immutable repair | BNA-5, BWB-5 | the resumed horizontal WRC backlog | orchestration and integration only; reference/Brief -> final runnable verified WorldPackage and receipts; the Canonical-only Viewer target is not a dependency | real AI task, focused gates, playable Havok traversal, identity-bound captures, exact-SHA Cloud gates/review | main-agent-only |
 | WRC-EVT-1 | Prove location-triggered committed event, world change, Subject/object response, and Camera Context | BNA-4, BWB-4, WRC-ACT-1, WRC-CAM-1 | WRC-ACC-1 | Gameplay spatial sensor/command path; frozen region + committed pose -> event/receipt/state/camera result | enter/exit hysteresis, replay/reset/cadence/two-session/browser evidence | sequential |
 | PHO-0A | Freeze current-only health DTOs, Profile, policies, debt, and fingerprints | PHO design | PHO-0B, PHO-1..8 | `scripts/project-health` contracts/config only | parser/canonical/adversarial tests | sequential, main-agent-only |
-| PHO-0B | Add the sole bounded/redacted execution envelope | PHO-0A | PHO-2..5 | process runner only; closed descriptor -> bounded execution evidence | timeout/process-tree/temp/dirty-tree tests | sequential, main-agent-only |
+| PHO-0B | Add the sole bounded/redacted execution envelope | PHO-0A | PHO-2..5 | process runner only; trusted owner-token descriptor -> bounded execution evidence | timeout/owned-process/temp/repository-state tests | sequential, main-agent-only |
 | PHO-1 | Extend the existing workspace graph owner and add boundary/supplemental-authority Sensors | PHO-0A, WRC-GOV-1 | PHO-3, PHO-6 | existing workspace scanner + supplemental policy -> two observations | duplicate-owner/compat/debt-identity fixtures | sequential, main-agent-only |
 | PHO-2 | Adapt contract/generated parity and supply-chain evidence | PHO-0B | PHO-6 | existing owner receipts + inventory/provenance policy -> observations | drift/license/provider-snapshot fixtures | sequential |
 | PHO-3 | Plan exact-head affected gates from Git diff, graph, and test census | PHO-0B, PHO-1 | PHO-6, PHO-7 | change-impact planner; exact base/head -> stable Gate Plan | public-contract/runtime/browser/build path fixtures | sequential |
 | PHO-4 | Add Runtime lifecycle, authority, cadence, and determinism probes | PHO-0B, WRC-GOV-1 | PHO-6, PHO-7 | registered probes only; exact runtime input -> observation | repeat/reset/throw/30-60-120/two-instance fixtures | sequential |
 | PHO-5 | Add performance, visual, documentation-truth, and independent-review Sensors | PHO-0B | PHO-6, PHO-7 | evidence adapters only; owner artifacts -> observations | budget/stale/link/status/review fixtures | sequential |
-| PHO-6 | Produce exact receipts, aggregate policy/report, and expose health CLI | PHO-1..5 | PHO-7, PHO-8 | one Registry/producer/aggregator/CLI; observations/debt -> report/explain | ordering/fingerprint/cap/exit tests | sequential, main-agent-only |
-| PHO-7 | Integrate PR, main-push, Nightly, and Release without repeating owner gates | PHO-3, PHO-4, PHO-5, PHO-6 | PHO-8, BNA-8 | workflows only; exact-head receipts + mode -> retained report | workflow layout, bounded CI runs, cleanup | sequential, main-agent-only |
+| PHO-6 | Produce exact audit output, aggregate policy/report, and expose health CLI | PHO-1..5 | PHO-7, PHO-8 | one Host/Registry/aggregator/CLI; own-checkout exact-clean tree + registered Gate -> validated in-memory evidence -> actual Sensor -> internal Observation -> report/explain；PR binds explicit ancestor base to trusted event exact head and rejects a synthetic merge checkout by SHA equality；external Receipt/Observation is never admission | source-closure identity, evidence parser, forged-input rejection, PR identity, ordering/fingerprint/cap/exit tests | sequential, main-agent-only |
+| PHO-7 | Integrate PR, main-push, Nightly, and Release without repeating owner gates | PHO-3, PHO-4, PHO-5, PHO-6 | PHO-8, BNA-8 | workflows only; exact-head same-process Gate/Sensor results + mode -> retained report | workflow layout, bounded CI runs, cleanup | sequential, main-agent-only |
 | PHO-8 | Complete adversarial adoption, independent Cloud review, baseline, and docs switch | PHO-7 | WRC-ACC-1 | review/baseline/docs only; exact reports -> disposition/adopted baseline | D1-D6, Cursor Cloud, clean tree, no open blocking finding | main-agent-only |
 | WRC-ACC-1 | Accept or reject the complete WRC-1 milestone with flagship playable cases | BNA-8, BWB-6, WRC-ACT-2, WRC-CAM-2, WRC-SR-2, WRC-EVT-1, PHO-8 | none | acceptance/review/docs only; all scoped receipts -> final WRC-1 disposition | three flagship cases, exact-SHA full review, docs/Quickstart truth | main-agent-only |
 
@@ -297,10 +378,10 @@ review points; ordinary inner-loop edits are not.
 | B | BNA-3 | locked Native packages and receipts available to downstream work |
 | C | BNA-4, BWB-3, BWB-4 | formally playable Native/block worlds with SDK Havok |
 | D | WRC-ACT-1/2, WRC-CAM-1/2 | reusable Action variants, posture, and semantic Camera transitions |
-| E | BNA-5/6, WRC-SR-1/2, BWB-5 | hosted trust plus measurable reconstruction and repair |
-| F | WRC-EVT-1, BNA-7/8, BWB-6 | interaction, formal Capture/Route evidence, Native disposition, optimization evidence |
+| E | BNA-5, WRC-SR-1, BWB-5, BNA-6 | hosted trust plus frozen evaluation protocol and measurable reconstruction inputs |
+| F | BNA-7, WRC-SR-2, WRC-EVT-1, BWB-6 | formal Capture/Route evidence, bounded repair, interaction and optimization evidence |
 | G | PHO-0A..8 integrated incrementally as dependencies mature | exact-head health planning and non-duplicated CI evidence |
-| H | WRC-ACC-1 | complete milestone disposition and accurate public documentation |
+| H | BNA-8, WRC-ACC-1 | scoped Native disposition, complete milestone disposition and accurate public documentation |
 
 Each row represents multiple small PRs, not one batch PR. A task may be merged as soon as its own
 deliverable is independently useful, its dependencies are present on `main`, and its exact accepted

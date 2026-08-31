@@ -64,6 +64,9 @@ importers:
       '@whitebox-world/scene-authoring-contracts':
         specifier: workspace:*
         version: link:packages/scene-authoring-contracts
+      '@whitebox-world/scene-catalog':
+        specifier: workspace:*
+        version: link:packages/scene-catalog
       '@whitebox-world/subject-contracts':
         specifier: workspace:*
         version: link:packages/subject-contracts
@@ -116,6 +119,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: ^3.2.4
         version: 3.2.7(vitest@3.2.7(@types/node@24.13.3)(tsx@4.23.12)(yaml@2.9.0))
+      ajv:
+        specifier: ^8.17.1
+        version: 8.20.0
       gltf-validator:
         specifier: 2.0.0-dev.3.10
         version: 2.0.0-dev.3.10
@@ -219,6 +225,9 @@ importers:
       '@whitebox-world/runtime-host':
         specifier: workspace:*
         version: link:../../packages/runtime-host
+      '@whitebox-world/scene-catalog':
+        specifier: workspace:*
+        version: link:../../packages/scene-catalog
       '@whitebox-world/subject-contracts':
         specifier: workspace:*
         version: link:../../packages/subject-contracts
@@ -432,6 +441,9 @@ importers:
       '@babylonjs/core':
         specifier: 9.23.0
         version: 9.23.0
+      '@whitebox-world/protocol':
+        specifier: workspace:*
+        version: link:../protocol
       '@whitebox-world/runtime-contracts':
         specifier: workspace:*
         version: link:../runtime-contracts
@@ -447,6 +459,15 @@ importers:
       '@whitebox-world/native-babylon':
         specifier: workspace:*
         version: link:../native-babylon
+      '@whitebox-world/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      '@whitebox-world/validation':
+        specifier: workspace:*
+        version: link:../validation
+      lodash-es:
+        specifier: ^4.18.1
+        version: 4.18.1
 
   packages/protocol:
     dependencies:
@@ -474,6 +495,9 @@ importers:
       '@whitebox-world/control-capture':
         specifier: workspace:*
         version: link:../control-capture
+      '@whitebox-world/gameplay':
+        specifier: workspace:*
+        version: link:../gameplay
       '@whitebox-world/gameplay-contracts':
         specifier: workspace:*
         version: link:../gameplay-contracts
@@ -526,9 +550,6 @@ importers:
       '@whitebox-world/compiler':
         specifier: workspace:*
         version: link:../compiler
-      '@whitebox-world/gameplay':
-        specifier: workspace:*
-        version: link:../gameplay
 
   packages/runtime-contracts:
     dependencies:
@@ -601,6 +622,8 @@ importers:
       lodash-es:
         specifier: ^4.18.1
         version: 4.18.1
+
+  packages/scene-catalog: {}
 
   packages/subject-actions:
     dependencies:

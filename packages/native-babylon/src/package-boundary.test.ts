@@ -71,6 +71,7 @@ describe("@whitebox-world/native-babylon package boundary", () => {
     });
     expect(manifest.dependencies).toEqual({
       "@babylonjs/core": "9.23.0",
+      "@whitebox-world/protocol": "workspace:*",
       "@whitebox-world/runtime-contracts": "workspace:*",
       "lodash-es": "^4.18.1",
     });

@@ -8,6 +8,8 @@
 - 借鉴基线：[`codex/block-world-sdk-v2@618d96b`](https://github.com/seedleap/agent-whitebox-world-sdk/tree/618d96b4e297d90d13ee6d1bf9be1e0b83423dbe)
 - 当前实施真相：[SDK 重构总进度与 Backlog](../../18-refactor-progress-and-backlog.md)
 - Mode A 审查：[Block Whitebox Profile 设计审查](../../reviews/2026-08-28-babylon-native-block-whitebox-profile-design-review.md)
+- BWB-3/4 集成施工：
+  [Block Settlement 与真实台阶闭环](./2026-08-31-babylon-block-settlement-and-step-closure-design.md)
 
 > 本文定义 Babylon Native Lane 的首个参考图白膜创作 Profile。它继承 Block World 实验中有效的
 > 场景构造方法、度量体系和验收思想，但明确替换其 Three.js、持久 Block Manifest、Compiler 和旧
@@ -190,14 +192,17 @@ Babylon 原生类型与语义。
 | shape | `sizeMetersXYZ` | 主要用途 |
 |---|---:|---|
 | `full` | `[1, 1, 1]` | 大体量、承重核心、基础地形质量 |
-| `half` | `[1, 0.5, 1]` | 高度过渡、低台、阶梯与坡面采样 |
+| `half` | `[1, 0.5, 1]` | 半米高度体量、低台和阻断体 |
 | `quarter` | `[0.5, 0.5, 1]` | 窄边、长向细节、轮廓修正 |
 | `small` | `[0.5, 0.5, 0.5]` | 暴露角点、小尺度剪影和局部修补 |
+| `step` | `[1, 0.25, 1]` | 真实四分之一米踏步和连续台阶踏面 |
 
 - 世界单位为米，`+Y` 向上，Subject forward 为 `-Z`；
-- Micro Grid 为 `0.5m`，Block center lattice 为 `0.25m`；
+- Occupancy Grid 为 `[0.5, 0.25, 0.5]m XYZ`，Block center lattice 为
+  `[0.25, 0.125, 0.25]m XYZ`；
 - Profile Block 只允许 Y 轴四分之一圈旋转；
-- `full` 用于表达主体质量，`half` 用于过渡，`quarter/small` 只用于可见轮廓和必要细节；
+- `full` 用于表达主体质量，`step` 用于真实台阶，`half` 用于半米体量，`quarter/small` 只用于
+  可见轮廓和必要细节；
 - 不规则细节可使用普通 Babylon Mesh，但不自动进入 Block Occupancy 或 Collider。
 
 这些是 `whitebox.blocks@1` 的创作规则，不是整个 Native Lane 的全局形状限制。未来其他 Native Profile
@@ -412,6 +417,10 @@ Navigation 和室内 Gameplay Gate 完成前，不得宣称正式室内支持。
 - 验证证据：Transform/材质/组 identity、双实例、dispose、Opening/top-down/侧视 golden、参考语义区域。
 - 执行模式：`sequential`。
 
+BWB-3 的独立 authoring screenshot 证据不能与 BWB-4 独立 Collider 证据直接相加。二者必须按
+[Block Settlement 与真实台阶闭环](./2026-08-31-babylon-block-settlement-and-step-closure-design.md)
+通过一个 Checked Layout、一个 Finalize、一个 Host settlement 和一个 Contribution/Package 后才可标记完成。
+
 ### BWB-4：Collider 与关闭 Traversal Binding 同源派生、SDK Admission
 
 - 目标与独立交付物：从同一内存 Layout 构造显式 Collider proxy；只在 BNA-4 Profile-based Registration
@@ -429,21 +438,41 @@ Navigation 和室内 Gameplay Gate 完成前，不得宣称正式室内支持。
   Reset、双实例、throwing cleanup。
 - 执行模式：`main-agent-only`。
 
+BWB-4 的真实 Havok narrow fixture 只有迁移到同一 Block Session/Finalize，且 source visual、独立 no-gap
+proxy、Scene membership 与 Contribution Hash 全部 settlement 后，才构成正式 Profile passability 证据。
+
 ### BWB-5：参考图 Corpus 与分层验收
 
-- 目标与独立交付物：冻结山地/T 字空间/台阶/建筑/有限室内视觉五类正向 Corpus 及断路、假立面、隐藏
-  foundation、视觉/碰撞漂移等负向 Corpus；产出结构、渲染、Collider 和人工通过性证据。
-- `depends_on`：BWB-2、BWB-3、BWB-4、BNA-5、BNA-6。
-- `blocks`：Block Profile Trusted Local Alpha 与 BWB-6 优化基准。
-- 独占所有权：Block Profile Corpus、阈值、evaluation receipt、修复上限和 Build-Epoch-local authoring
-  screenshots；不拥有 BNA-7 formal Capture identity。
-- 输入/输出合同：reference + frozen Scene Brief/Bootstrap/profile/budget -> checked Native Package + layered
-  evidence。
-- 集成点：Native CLI/Studio/Playground/Capture。
-- 验证证据：首轮/修复成功率、profile-local Opening/top-down/侧视 screenshots、BNA-4 Runtime Collider
-  overlay、关键探针、manual movement/jump/camera/reset；不把局部室内实验升级为 Capability，也不把
-  screenshots 写成 formal Capture Receipt。
-- 执行模式：`sequential`。
+- 目标与独立交付物：冻结关闭的 Block Reconstruction Corpus。每个 Case 使用稳定 ID、确定性 seed 和
+  同一 finalized Layout，同时产生 Babylon Native block visual、Opening/top-down/side
+  `BabylonNativeBlockAuthoringCaptureV1`（`scope = build-epoch-local`）、Static Collider
+  Contribution、关闭 `traversalBinding`、BNA-4 Collider overlay、Spawn Support 与真实人物 Havok
+  通过性。负向 Case fail-closed。可执行工作图见
+  [BWB-5 implementation plan](../plans/2026-08-31-bwb5-block-reconstruction-corpus-implementation.md)。
+- `depends_on`：BWB-2、BWB-3、BWB-4、BNA-5。BNA-6 AI 生成/修复评测、WRC-SR-1 scorecard 和 BNA-7
+  formal Capture/Route 仍独立；本任务不得实现或伪称它们。
+- `blocks`：BWB-6 优化基准。不阻塞 WRC-1 其他泳道。
+- 独占所有权：`packages/native-babylon-block-profile/src/reconstruction-corpus.ts`、testing Module
+  factory、`scripts/verification/bwb5-block-reconstruction-corpus.test.ts` 和 corpus evidence index。
+  不拥有 BNA-7 Capture/Route identity、Runtime/Havok/Camera/Input/Tick、Surface Identity 或新
+  Validation DTO。
+- 输入/输出合同：closed case ID + seed + Host Candidate context -> one Session/Layout/Finalize
+  chain -> existing check/capture/contribution types + corpus evidence index。
+- 集成点：现有 Block Session、BWB-3 authoring capture、BNA-4 admission/overlay、BWB-4 Package/Havok
+  fixture。不创建第三条 Scene Source。
+- 关闭 Case ID（current-only，禁止别名）：
+  - 正向：`mountain-cliff`、`t-shaped-traversal`、`ordinary-and-blocked-steps`、
+    `building-exterior`、`limited-interior`
+  - 负向：`overlap-occupancy`、`out-of-budget`、`invalid-traversal-binding`、
+    `unsupported-spawn`、`disconnected-route`、`cleanup-throw-partial`
+- 验证证据：0.25m step 可通过、0.5m blocker 不可通过、ledge departure/support、mountain/T（含从有效
+  走廊接近的西墙与北墙阻挡）/building/limited-interior 预期通路与阻挡、reset、dispose/cleanup、
+  30/60/120-like cadence 下固定 Tick hash 一致、同一 Subject 跨 Session rebind 前释放
+  Scene/Engine/Collider Mesh。跨实体与 Subject/Listener/Camera/Input owner 专项残留检查仍是接受
+  债务，不由本切片伪称。有限室内只证白模视觉、单层静态支撑和人物通过性。
+- 明确非宣称：完整 Room/Visibility、多层 Navigation、洞穴、桥下双层、NPC Nav、`goTo`、formal
+  Capture/Route、BNA-6 成功率、Thin Instance/Chunk/Collider coalescing。
+- 执行模式：Corpus 合同 `sequential`；Havok/cadence/rebind/review `main-agent-only`。
 
 ### BWB-6：Chunk、实例化与 Collider 优化提案
 
@@ -467,7 +496,7 @@ BWB-0 + BNA-2 -> BWB-1
 BWB-1 -> BWB-2
 BWB-1 + BWB-2 + BNA-3 -> BWB-3
 BWB-2 + BNA-4 -> BWB-4
-BWB-2 + BWB-3 + BWB-4 + BNA-5 + BNA-6 -> BWB-5
+BWB-2 + BWB-3 + BWB-4 + BNA-5 -> BWB-5
 BWB-3 + BWB-4 + BWB-5 -> BWB-6
 ```
 

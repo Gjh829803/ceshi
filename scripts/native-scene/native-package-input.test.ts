@@ -7,8 +7,10 @@ import {
   worldResourceLockEntriesV1,
 } from "@whitebox-world/runtime-contracts";
 import {
+  hashNativeBlockGenerationRequestV1,
   hashSceneAuthoringAttemptV1,
   hashSceneAuthoringRouteDecisionV1,
+  parseNativeBlockGenerationRequestV1,
   type SceneAuthoringAttemptResultV1,
   type SceneAuthoringAttemptV1,
   type SceneAuthoringRouteDecisionV1,
@@ -122,17 +124,21 @@ async function makeInput() {
     id: "package-input-bootstrap",
     sceneModuleRef: "worldkit://native-scene/package-input@1",
     nativeSceneApiRef: "worldkit://native-scene-api/babylon-native@1",
-    nativeSceneProfileRef: "worldkit://native-scene-profile/trusted-local@1",
+    nativeSceneProfileRef: "worldkit://native-scene-profile/whitebox.standard@1",
     gameplayBootstrapRef: canonical.gameplayBootstrap.resourceRef,
     initialControlledEntityId:
       canonical.worldRuntimeBootstrap.initialControlledEntityId,
-    gravityMetersPerSecondSquaredXYZ: [0, -9.81, 0],
+    gravityMetersPerSecondSquaredXYZ:
+      canonical.worldRuntimeBootstrap.gravityMetersPerSecondSquaredXYZ,
     initialCamera: {
-      mode: "third-person",
-      pitchRadians: 0.1,
-      distanceMeters: 5,
-      fovDegrees: 55,
-      targetHeightMeters: 1.2,
+      mode: canonical.worldRuntimeBootstrap.initialCamera.mode,
+      pitchRadians:
+        canonical.worldRuntimeBootstrap.initialCamera.pitchRadians,
+      distanceMeters:
+        canonical.worldRuntimeBootstrap.initialCamera.distanceMeters,
+      fovDegrees: canonical.worldRuntimeBootstrap.initialCamera.fovDegrees,
+      targetHeightMeters:
+        canonical.worldRuntimeBootstrap.initialCamera.targetHeightMeters,
     },
     seed: 20260830,
     spawnMarkerId: "player-spawn",
@@ -148,18 +154,61 @@ async function makeInput() {
     requiredCapabilityRefs: [],
     decision: {
       kind: "babylon-native",
-      authoringProfileRef: "worldkit://authoring-profile/native-local@1",
+      authoringProfileRef:
+        "worldkit://native-authoring-profile/whitebox.blocks@1",
       compositionStrategy: "ground-first-with-locked-assets",
       reasonCodes: ["user-selected-supported-lane"],
     },
   };
   const routeHash = hashSceneAuthoringRouteDecisionV1(routeDecision);
   const nativeAuthoringProfileRef =
-    "worldkit://authoring-profile/native-local@1";
+    "worldkit://native-authoring-profile/whitebox.blocks@1";
   const nativeSceneBootstrapInputRef =
     "worldkit://native-bootstrap-input/package-input@1";
-  const moduleGenerationInputRef =
-    "worldkit://native-module-generation-input/package-input@1";
+  const generationRequestRef =
+    "worldkit://native-generation-request/package-input.initial@1";
+  const generationRequest = parseNativeBlockGenerationRequestV1({
+    kind: "native-block-generation-request",
+    schemaVersion: 1,
+    id: "package-input.initial",
+    routeDecisionRef: "worldkit://scene-authoring-route-decision/package-input@1",
+    routeDecisionHash: routeHash,
+    sceneBriefRef: routeDecision.sceneBriefRef,
+    sceneBriefHash: routeDecision.sceneBriefHash,
+    referenceInputs: [{
+      inputRef: "worldkit://reconstruction-input/package-input@1",
+      contentHash: HASH_A,
+      mediaType: "image/png",
+    }],
+    codexExecutionProfileRef: "worldkit://codex-execution-profile/formal@1",
+    codexExecutionProfileHash: HASH_B,
+    taskInstructionRef: "worldkit://task-instruction/native-block-reconstruction@1",
+    taskInstructionHash: HASH_A,
+    builderSkillRef: "worldkit://skill/worldkit-native-block-builder@1",
+    builderSkillHash: HASH_B,
+    workspaceContextManifestRef: "worldkit://workspace-context/native-block-builder@1",
+    workspaceContextManifestHash: HASH_A,
+    contextInputs: [{ inputRef: "context/native-scene-api.json", contentHash: HASH_B }],
+    nativeSceneApiRef: nativeSceneBootstrap.nativeSceneApiRef,
+    nativeSceneApiHash: HASH_A,
+    nativeSceneProfileRef: nativeSceneBootstrap.nativeSceneProfileRef,
+    nativeSceneProfileHash: HASH_B,
+    blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
+    blockProfileHash: HASH_A,
+    bootstrapInputRef: nativeSceneBootstrapInputRef,
+    bootstrapInputHash: hashBabylonNativeSceneBootstrapV1(nativeSceneBootstrap),
+    seed: nativeSceneBootstrap.seed,
+    budgets: {
+      maximumBlockCount: 2_000,
+      maximumStaticColliderCount: 500,
+      maximumStaticColliderVertexCount: 200_000,
+      maximumStaticColliderTriangleCount: 100_000,
+      maximumOutputBytes: 4_000_000,
+      timeoutSeconds: 900,
+    },
+    declaredOutputPaths: ["scene.ts", "native-block-authoring.json", "native-resources.json"],
+  });
+  const generationRequestHash = hashNativeBlockGenerationRequestV1(generationRequest);
   const attempt: SceneAuthoringAttemptV1 = {
     kind: "scene-authoring-attempt",
     schemaVersion: 1,
@@ -173,8 +222,8 @@ async function makeInput() {
       kind: "babylon-native",
       bootstrapInputRef: nativeSceneBootstrapInputRef,
       bootstrapInputHash: hashBabylonNativeSceneBootstrapV1(nativeSceneBootstrap),
-      moduleGenerationInputRef,
-      moduleGenerationInputHash: sourceGraphHash,
+      generationRequestRef,
+      generationRequestHash,
     },
     selectedAssetResources: [{
       assetResourceRef: asset.assetResourceRef,
@@ -183,8 +232,12 @@ async function makeInput() {
     }],
     seed: nativeSceneBootstrap.seed,
     authoringProfileRef: nativeAuthoringProfileRef,
-    acceptanceTargetRefs: [],
-    requiredEvidenceProfileRefs: [],
+    acceptanceTargetRefs: [
+      "worldkit://acceptance-target/native-block-package-input@1",
+    ],
+    requiredEvidenceProfileRefs: [
+      "worldkit://evidence-profile/native-block-package-input@1",
+    ],
   };
   const attemptResult: SceneAuthoringAttemptResultV1 = {
     kind: "scene-authoring-attempt-result",
@@ -301,7 +354,8 @@ async function makeInput() {
     },
     nativeSceneBootstrap,
     nativeSceneBootstrapInputRef,
-    moduleGenerationInputRef,
+    generationRequestRef,
+    generationRequestHash,
     nativeSceneApi,
     nativeSceneProfile,
     publishedAssets: [asset],
@@ -319,6 +373,36 @@ async function makeInput() {
     get createCount() { return createCount; },
     get disposeCount() { return disposeCount; },
   } as const;
+}
+
+function withSynchronizedNativeBootstrap(
+  input: Awaited<ReturnType<typeof makeInput>>,
+  nativeSceneBootstrap: Parameters<
+    typeof hashBabylonNativeSceneBootstrapV1
+  >[0],
+) {
+  if (input.sceneAuthoringAttempt.sourceInput.kind !== "babylon-native") {
+    throw new Error("Native fixture must use the Native source member");
+  }
+  const sceneAuthoringAttempt: SceneAuthoringAttemptV1 = {
+    ...input.sceneAuthoringAttempt,
+    sourceInput: {
+      ...input.sceneAuthoringAttempt.sourceInput,
+      bootstrapInputHash:
+        hashBabylonNativeSceneBootstrapV1(nativeSceneBootstrap),
+    },
+  };
+  const sceneAuthoringAttemptResult: SceneAuthoringAttemptResultV1 = {
+    ...input.sceneAuthoringAttemptResult,
+    sceneAuthoringAttemptHash:
+      hashSceneAuthoringAttemptV1(sceneAuthoringAttempt),
+  };
+  return {
+    ...input,
+    nativeSceneBootstrap,
+    sceneAuthoringAttempt,
+    sceneAuthoringAttemptResult,
+  };
 }
 
 afterEach(async () => {
@@ -339,6 +423,9 @@ describe("prepareFrozenBabylonNativeWorldPackageBuildInputV1", () => {
     expect(prepared.frozenInput.resourceArtifacts).toHaveLength(1);
     expect(prepared.frozenInput.registryLock).toEqual(input.registryLock);
     expect(Object.isFrozen(prepared.frozenInput)).toBe(true);
+    expect(input.generationRequestHash).not.toBe(
+      prepared.frozenInput.sceneModuleBundleManifest.sourceGraphHash,
+    );
 
     const first = createBabylonNativeWorldPackageV1(prepared.frozenInput);
     const repeated = createBabylonNativeWorldPackageV1(prepared.frozenInput);
@@ -417,7 +504,7 @@ describe("prepareFrozenBabylonNativeWorldPackageBuildInputV1", () => {
     );
   }, 45_000);
 
-  it("rejects route, result, and controlled-entity closure drift before replay", async () => {
+  it("rejects route, result, Profile, and controlled-entity closure drift before replay", async () => {
     const routeInput = await makeInput();
     await expect(prepareFrozenBabylonNativeWorldPackageBuildInputV1({
       ...routeInput,
@@ -456,9 +543,106 @@ describe("prepareFrozenBabylonNativeWorldPackageBuildInputV1", () => {
         initialControlledEntityId: "other-entity",
       },
     })).rejects.toThrow(/WORLDKIT_NATIVE_PACKAGE_INPUT_INVALID/);
-    expect(routeInput.createCount + resultInput.createCount + entityInput.createCount)
+    const profileInput = await makeInput();
+    await expect(prepareFrozenBabylonNativeWorldPackageBuildInputV1({
+      ...profileInput,
+      nativeSceneProfile: {
+        ...profileInput.nativeSceneProfile,
+        resourceRef:
+          "worldkit://native-scene-profile/whitebox.blocks@1",
+      },
+    })).rejects.toThrow(/WORLDKIT_NATIVE_PACKAGE_INPUT_INVALID/);
+    const requestRefInput = await makeInput();
+    if (requestRefInput.sceneAuthoringAttempt.sourceInput.kind !==
+      "babylon-native") {
+      throw new Error("Native fixture must use the Native source member");
+    }
+    await expect(prepareFrozenBabylonNativeWorldPackageBuildInputV1({
+      ...requestRefInput,
+      sceneAuthoringAttempt: {
+        ...requestRefInput.sceneAuthoringAttempt,
+        sourceInput: {
+          ...requestRefInput.sceneAuthoringAttempt.sourceInput,
+          generationRequestRef:
+            "worldkit://native-generation-request/other@1",
+        },
+      },
+    })).rejects.toThrow(/WORLDKIT_NATIVE_PACKAGE_INPUT_INVALID/);
+    const requestHashInput = await makeInput();
+    if (requestHashInput.sceneAuthoringAttempt.sourceInput.kind !==
+      "babylon-native") {
+      throw new Error("Native fixture must use the Native source member");
+    }
+    await expect(prepareFrozenBabylonNativeWorldPackageBuildInputV1({
+      ...requestHashInput,
+      sceneAuthoringAttempt: {
+        ...requestHashInput.sceneAuthoringAttempt,
+        sourceInput: {
+          ...requestHashInput.sceneAuthoringAttempt.sourceInput,
+          generationRequestHash: HASH_A,
+        },
+      },
+    })).rejects.toThrow(/WORLDKIT_NATIVE_PACKAGE_INPUT_INVALID/);
+    expect(
+      routeInput.createCount + resultInput.createCount +
+      entityInput.createCount + profileInput.createCount +
+      requestRefInput.createCount + requestHashInput.createCount,
+    )
       .toBe(0);
-  });
+  }, 45_000);
+
+  it.each([
+    ["gravity", (input: Awaited<ReturnType<typeof makeInput>>) => ({
+      ...input.nativeSceneBootstrap,
+      gravityMetersPerSecondSquaredXYZ: [
+        input.nativeSceneBootstrap.gravityMetersPerSecondSquaredXYZ[0],
+        input.nativeSceneBootstrap.gravityMetersPerSecondSquaredXYZ[1] + 1,
+        input.nativeSceneBootstrap.gravityMetersPerSecondSquaredXYZ[2],
+      ] as const,
+    })],
+    ["camera pitch", (input: Awaited<ReturnType<typeof makeInput>>) => ({
+      ...input.nativeSceneBootstrap,
+      initialCamera: {
+        ...input.nativeSceneBootstrap.initialCamera,
+        pitchRadians:
+          input.nativeSceneBootstrap.initialCamera.pitchRadians + 0.1,
+      },
+    })],
+    ["camera distance", (input: Awaited<ReturnType<typeof makeInput>>) => ({
+      ...input.nativeSceneBootstrap,
+      initialCamera: {
+        ...input.nativeSceneBootstrap.initialCamera,
+        distanceMeters:
+          input.nativeSceneBootstrap.initialCamera.distanceMeters + 1,
+      },
+    })],
+    ["camera field of view", (input: Awaited<ReturnType<typeof makeInput>>) => ({
+      ...input.nativeSceneBootstrap,
+      initialCamera: {
+        ...input.nativeSceneBootstrap.initialCamera,
+        fovDegrees: input.nativeSceneBootstrap.initialCamera.fovDegrees + 1,
+      },
+    })],
+    ["camera target height", (input: Awaited<ReturnType<typeof makeInput>>) => ({
+      ...input.nativeSceneBootstrap,
+      initialCamera: {
+        ...input.nativeSceneBootstrap.initialCamera,
+        targetHeightMeters:
+          input.nativeSceneBootstrap.initialCamera.targetHeightMeters + 0.1,
+      },
+    })],
+  ] as const)(
+    "rejects synchronized %s projection drift before Candidate replay",
+    async (_label, mutateBootstrap) => {
+      const input = await makeInput();
+      await expect(prepareFrozenBabylonNativeWorldPackageBuildInputV1(
+        withSynchronizedNativeBootstrap(input, mutateBootstrap(input)),
+      )).rejects.toThrow(/WORLDKIT_NATIVE_PACKAGE_INPUT_INVALID/);
+      expect(input.createCount).toBe(0);
+      expect(input.disposeCount).toBe(0);
+    },
+    45_000,
+  );
 
   it("rejects an extra Registry lock row after successful replay", async () => {
     const input = await makeInput();

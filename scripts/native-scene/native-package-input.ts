@@ -63,7 +63,8 @@ export interface PrepareFrozenBabylonNativeWorldPackageBuildInputV1 {
   readonly resourceBudget: WorldPackageResourceBudgetV1;
   readonly nativeSceneBootstrap: unknown;
   readonly nativeSceneBootstrapInputRef: string;
-  readonly moduleGenerationInputRef: string;
+  readonly generationRequestRef: string;
+  readonly generationRequestHash: Sha256HashV1;
   readonly nativeSceneApi: BabylonNativeSceneResolvedProfileV1;
   readonly nativeSceneProfile: BabylonNativeSceneResolvedProfileV1;
   readonly publishedAssets:
@@ -223,8 +224,9 @@ function assertAuthoringClosure(
       identity(input.nativeSceneBootstrapInputRef) ||
     attempt.sourceInput.bootstrapInputHash !==
       hashBabylonNativeSceneBootstrapV1(bootstrap) ||
-    attempt.sourceInput.moduleGenerationInputRef !==
-      identity(input.moduleGenerationInputRef) ||
+    attempt.sourceInput.generationRequestRef !==
+      identity(input.generationRequestRef) ||
+    attempt.sourceInput.generationRequestHash !== input.generationRequestHash ||
     attempt.seed !== bootstrap.seed ||
     result.outcome !== "completed" ||
     result.sceneAuthoringAttemptRef !== identity(input.sceneAuthoringAttemptRef) ||
@@ -232,20 +234,29 @@ function assertAuthoringClosure(
     bootstrap.gameplayBootstrapRef !== gameplay.resourceRef ||
     runtime.gameplayBootstrapRef !== gameplay.resourceRef ||
     runtime.gameplayBootstrapHash !== gameplay.contentHash ||
-    runtime.initialControlledEntityId !== bootstrap.initialControlledEntityId
+    runtime.initialControlledEntityId !== bootstrap.initialControlledEntityId ||
+    !isEqual(
+      runtime.gravityMetersPerSecondSquaredXYZ,
+      bootstrap.gravityMetersPerSecondSquaredXYZ,
+    ) ||
+    runtime.initialCamera.mode !== bootstrap.initialCamera.mode ||
+    runtime.initialCamera.pitchRadians !==
+      bootstrap.initialCamera.pitchRadians ||
+    runtime.initialCamera.distanceMeters !==
+      bootstrap.initialCamera.distanceMeters ||
+    runtime.initialCamera.fovDegrees !== bootstrap.initialCamera.fovDegrees ||
+    runtime.initialCamera.targetHeightMeters !==
+      bootstrap.initialCamera.targetHeightMeters
   ) return fail();
 }
 
 function assertSourceClosure(
   bootstrap: ReturnType<typeof parseBabylonNativeSceneBootstrapV1>,
-  attempt: ReturnType<typeof parseSceneAuthoringAttemptV1>,
   result: ReturnType<typeof parseSceneAuthoringAttemptResultV1>,
   sourceGraphHash: Sha256HashV1,
 ): void {
   if (
-    attempt.sourceInput.kind !== "babylon-native" ||
     result.outcome !== "completed" ||
-    attempt.sourceInput.moduleGenerationInputHash !== sourceGraphHash ||
     result.authoredSourceRef !== bootstrap.sceneModuleRef ||
     result.authoredSourceHash !== sourceGraphHash
   ) return fail();
@@ -372,7 +383,6 @@ export async function prepareFrozenBabylonNativeWorldPackageBuildInputV1(
     if (bundled.outcome !== "passed") return fail();
     assertSourceClosure(
       bootstrap,
-      attempt,
       attemptResult,
       bundled.bundleArtifact.sourceGraphHash,
     );
@@ -438,6 +448,8 @@ export async function prepareFrozenBabylonNativeWorldPackageBuildInputV1(
       checkResult.checkedInput.kind !== "native-scene-module" ||
       checkResult.checkedInput.sceneModuleRef !== bootstrap.sceneModuleRef ||
       contribution.sceneModuleRef !== bootstrap.sceneModuleRef ||
+      contribution.profileSettlement.profileRef !==
+        bootstrap.nativeSceneProfileRef ||
       replay.contributionHash !==
         hashBabylonNativeSceneContributionV1(contribution)
     ) return fail();

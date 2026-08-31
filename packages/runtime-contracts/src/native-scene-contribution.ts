@@ -45,11 +45,25 @@ export interface BabylonNativeStaticColliderContributionV1 {
   readonly traversalBinding: BabylonNativeContributionTraversalBindingV1;
 }
 
+export type BabylonNativeProfileSettlementReceiptV1 =
+  | Readonly<{
+      kind: "none";
+      profileRef: "worldkit://native-scene-profile/whitebox.standard@1";
+    }>
+  | Readonly<{
+      kind: "host-snapshot";
+      profileRef: "worldkit://native-scene-profile/whitebox.blocks@1";
+      targetCount: number;
+      profileInventoryHash: `sha256:${string}`;
+      settledVisualHash: `sha256:${string}`;
+    }>;
+
 export interface BabylonNativeSceneContributionV1 {
   readonly kind: "babylon-native-scene-contribution";
   readonly schemaVersion: 1;
   readonly sceneModuleRef: string;
   readonly sceneModuleId: string;
+  readonly profileSettlement: BabylonNativeProfileSettlementReceiptV1;
   readonly spawnMarker: BabylonNativeSpawnMarkerContributionV1;
   readonly staticColliders: readonly BabylonNativeStaticColliderContributionV1[];
 }
@@ -68,6 +82,7 @@ const CONTRIBUTION_FIELDS = Object.freeze([
   "schemaVersion",
   "sceneModuleRef",
   "sceneModuleId",
+  "profileSettlement",
   "spawnMarker",
   "staticColliders",
 ] as const);
@@ -95,6 +110,11 @@ const NATIVE_SCENE_REF_PATTERN =
   /^worldkit:\/\/native-scene\/[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?@[1-9][0-9]*$/;
 const TRAVERSAL_PROFILE_REF_PATTERN =
   /^worldkit:\/\/traversal-surface-profile\/[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?@[1-9][0-9]*$/;
+const SHA256_PATTERN = /^sha256:[0-9a-f]{64}$/;
+const STANDARD_NATIVE_SCENE_PROFILE_REF =
+  "worldkit://native-scene-profile/whitebox.standard@1";
+const BLOCK_NATIVE_SCENE_PROFILE_REF =
+  "worldkit://native-scene-profile/whitebox.blocks@1";
 
 function invalidContribution(): never {
   throw new TypeError(
@@ -424,6 +444,50 @@ function parsedCollider(
   return recreated;
 }
 
+export function parseBabylonNativeProfileSettlementReceiptV1(
+  input: unknown,
+): BabylonNativeProfileSettlementReceiptV1 {
+  const snapshot = snapshotCanonicalData(input);
+  const source = snapshot as Record<string, unknown>;
+  if (source?.kind === "none") {
+    const record = exactRecord(snapshot, ["kind", "profileRef"]);
+    if (record.profileRef !== STANDARD_NATIVE_SCENE_PROFILE_REF) {
+      return invalidContribution();
+    }
+    return Object.freeze({
+      kind: "none",
+      profileRef: STANDARD_NATIVE_SCENE_PROFILE_REF,
+    });
+  }
+  if (source?.kind === "host-snapshot") {
+    const record = exactRecord(snapshot, [
+      "kind",
+      "profileRef",
+      "targetCount",
+      "profileInventoryHash",
+      "settledVisualHash",
+    ]);
+    if (
+      record.profileRef !== BLOCK_NATIVE_SCENE_PROFILE_REF ||
+      typeof record.targetCount !== "number" ||
+      !Number.isSafeInteger(record.targetCount) ||
+      record.targetCount < 0 ||
+      typeof record.profileInventoryHash !== "string" ||
+      !SHA256_PATTERN.test(record.profileInventoryHash) ||
+      typeof record.settledVisualHash !== "string" ||
+      !SHA256_PATTERN.test(record.settledVisualHash)
+    ) return invalidContribution();
+    return Object.freeze({
+      kind: "host-snapshot",
+      profileRef: BLOCK_NATIVE_SCENE_PROFILE_REF,
+      targetCount: record.targetCount,
+      profileInventoryHash: record.profileInventoryHash as `sha256:${string}`,
+      settledVisualHash: record.settledVisualHash as `sha256:${string}`,
+    });
+  }
+  return invalidContribution();
+}
+
 export function parseBabylonNativeSceneContributionV1(
   input: unknown,
 ): BabylonNativeSceneContributionV1 {
@@ -450,6 +514,9 @@ export function parseBabylonNativeSceneContributionV1(
     schemaVersion: 1,
     sceneModuleRef,
     sceneModuleId: identity(record.sceneModuleId),
+    profileSettlement: parseBabylonNativeProfileSettlementReceiptV1(
+      record.profileSettlement,
+    ),
     spawnMarker,
     staticColliders,
   });

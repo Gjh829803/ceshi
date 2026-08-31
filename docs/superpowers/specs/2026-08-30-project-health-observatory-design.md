@@ -1,6 +1,6 @@
 # Project Health Observatory 设计
 
-- 状态：**Proposed；仅冻结工程观测边界，不声明已实现**。
+- 状态：**Proposed；PHO-0A/0B 与 PHO-1..5 的分层实现已登记，PHO-6 同进程信任链仍在施工，Observatory 整体仍未生产 GO**。
 - 目标：在现有单元测试、整仓门禁和重型 Browser/Runtime 链路之外，持续发现架构漂移、契约双轨、生成物失配、依赖风险、测试盲区、生命周期泄漏、确定性回退、性能退化和视觉退化。
 - 实施计划：[Project Health Observatory Implementation Plan](../plans/2026-08-30-project-health-observatory-implementation.md)。
 - 关联协议：[全维度审查协议](../../reviews/full-dimension-review-protocol.md)、[Runtime 深审清单](../../reviews/runtime-deep-review-checklist.md)、[World Validation Report 与质量门禁](./2026-08-19-world-validation-report-and-quality-gates-design.md)。
@@ -11,8 +11,8 @@
 项目需要新增一个**仓库工程健康观测层**，但它不替代现有测试，也不创造第二套产品验证协议。
 
 1. `ValidationReportV1` 继续判断一个 World/Package/Capture 是否可交付；`ProjectHealthReportV1` 只判断一个 Git Tree 的工程健康，两者不能互相转换或覆盖。
-2. 现有测试、Build、Verifier、Browser、视觉和人工证据仍由原 Owner 产生。Observatory 只规划、调用、索引和归一化结果，不复制其算法。
-3. 所有 Sensor 先输出关闭的 `ProjectHealthObservationV1`，聚合器再产生稳定的 `ProjectHealthFindingV1` 和 `ProjectHealthReportV1`。日志文本不是协议。
+2. 现有测试、Build、Verifier、Browser、视觉和人工证据仍由原 Owner 产生。Host 在同一进程内只通过 Registry admission 调用这些 Gate，并把验证后的内存结果及其内容寻址审计输出交给真实 Sensor；Observatory 不复制 Owner 算法，也不接纳外部伪造的 Receipt。
+3. Registry 中登记的真实 Sensor 把验证后的 Gate 事实转为内部 `ProjectHealthObservationV1`，聚合器再产生稳定的 `ProjectHealthFindingV1` 和 `ProjectHealthReportV1`。Observation 是进程内中间合同，不是 CLI 输入或可从目录导入的权威；日志文本也不是协议。
 4. 运行模式固定为 `pr`、`nightly`、`release`。PR 运行确定且受影响的快速 Sensor；Nightly 运行全仓重型、重复和趋势 Sensor；Release 需要全部 Blocking Sensor 与明确的视觉/人工 Receipt。
 5. 只有确定、可复现、当前树可归因的 `blocking-p0` / `blocking-p1` Finding 或 Required Sensor Incomplete 才能阻断。性能、视觉、在线漏洞库和 AI Review 在阈值与环境未冻结前保持 `advisory-p2` / `advisory-p3`，不得把不稳定信号伪装成生产事实。
 6. 债务只能匹配精确 Fingerprint、Advisory Policy 和明确 Metric Cap。Blocking Finding 永不抑制；原 P1 只有先由已接受 ADR 降级为当前 `advisory-p2`，才可登记 `AcceptedProjectDebtV1`。不得使用目录/错误码通配符、无限 cap 或永久忽略。
@@ -46,9 +46,10 @@ Observatory 的价值不是“再跑一次全部测试”，而是把这些跨�
 | Workspace scan 未覆盖的补充架构规则 | `config/project-health/authority-policy.json` | 只声明 Scene Source 互斥、双协议 Owner、公开 compat alias 等补充规则；禁止重复 workspace edge |
 | Supply Chain 许可证/来源/Provider 约束 | `config/project-health/supply-chain-policy.json` | 只读匹配 exact package/version/source/license/provider snapshot；不修改 manifest、lock 或 waiver |
 | Sensor 选择与阈值 | `config/project-health/profile.json` | 唯一当前 Profile；无隐式默认或 override |
+| Gate 执行与 Sensor 实现 | `scripts/project-health/registry.ts` | Host 只 admission 当前 Registry 的关闭 Gate/Sensor 实现；外部 Receipt、Observation 或同名函数不能进入聚合链 |
 | 工程健康结论 | `ProjectHealthReportV1` | Observatory 唯一聚合权威 |
 | Observatory Advisory 债务 | 当前源码/ADR + `config/project-health/accepted-debt.json` | 只接受精确 fingerprint + metric cap；不复制 workspace-boundary debt，不修改 Finding 原始证据 |
-| 工程健康趋势基线 | `config/project-health/baseline.json` | 只由 `health:update-baseline` 从 exact-tree accepted Report 生成；普通 check 只读 |
+| 工程健康趋势基线 | `config/project-health/baseline.json` | 只由 `health:update-baseline` 从 exact-tree、Required evidence complete 的 passed Report 生成；Advisory gaps 原样保留，普通 check 只读 |
 
 `ProjectHealthReportV1` 不是新的 SDK 公共协议，不进入 Registry、WorldPackage、Runtime 或 Browser。它是仓库开发工具合同，位于 `scripts/project-health/`，避免把 CI/审查概念塞入产品 package。
 
@@ -66,7 +67,7 @@ Observatory 的价值不是“再跑一次全部测试”，而是把这些跨�
 - Accepted Debt 的 per-kind cap ceiling；
 - CI Artifact 保留策略。
 
-Profile 不包含 shell 命令字符串。每个 Sensor ID 在源码 Registry 中绑定一个实现，避免配置注入和“同名不同命令”。未注册 Sensor、缺失 Required Sensor 或执行异常一律产生 `incomplete`，不能被当作通过。
+Profile 不包含 shell 命令字符串。每个 Sensor ID 在源码 Registry 中绑定一个可调用实现，避免配置注入和“同名不同命令”。`sensorImplementationHash` 对该入口递归可达的仓库源码字节、Workspace package 入口与 `pnpm-lock.yaml` 组成的排序闭包计算；固定标签、人工版本号和只 Hash 入口文件都不能代表实现身份。未注册 Sensor、缺失 Required Sensor 或执行异常一律产生 `incomplete`，不能被当作通过。
 每个 mode 的 Required/Advisory Sensor 集必须有序、无重复且互斥；Required Gate map 的 key 只能来自
 Required Sensor，并与 §6 冻结集合一致。
 
@@ -208,7 +209,7 @@ Observation status 都是 Profile 派生结果，parser/aggregator 必须重算�
 
 ### 4.3 ProjectHealthObservationV1
 
-每个 Sensor 输出一个关闭对象：
+每个 Registry Sensor 在 Host 进程内输出一个关闭对象：
 
 ```ts
 interface ProjectHealthObservationV1 {
@@ -224,7 +225,7 @@ interface ProjectHealthObservationV1 {
 }
 ```
 
-Sensor 不得把绝对路径、机器名、随机临时目录、访问凭证或未经归一化的 provider 文本放入稳定对象。进程 stdout/stderr 保存在非 Canonical execution envelope 中；Observation 只保存稳定摘要和内容 Hash。`evidenceRefs` 只接受 `sha256:<64 lowercase hex>` 内容地址。
+Sensor 不得把绝对路径、机器名、随机临时目录、访问凭证或未经归一化的 provider 文本放入稳定对象。进程 stdout/stderr 保存在非 Canonical execution envelope 中；Observation 只保存稳定摘要和内容 Hash。`evidenceRefs` 只接受 `sha256:<64 lowercase hex>` 内容地址。CLI 不接受 Observation 文件、Observation 目录或调用方注入的 Sensor 函数；只有源码 Registry 实际调用返回的 Observation 才能进入 Report。
 
 ### 4.4 ProjectHealthFindingV1
 
@@ -288,12 +289,27 @@ interface WorkspaceDependencyGraphV1 {
   readonly edges: readonly WorkspaceDependencyEdgeV1[];
 }
 
+interface WorkspacePublicSymbolOwnershipV1 {
+  readonly packageId: string;
+  readonly sourcePath: string;
+  readonly exportSubpath: string;
+  readonly symbolName: string;
+  readonly isTypeOnly: boolean;
+  readonly isReexport: boolean;
+}
+
 interface WorkspaceBoundaryEvidenceV1 {
   readonly kind: "workspace-boundary-evidence";
   readonly schemaVersion: 1;
   readonly graph: WorkspaceDependencyGraphV1;
+  readonly publicSymbols: readonly WorkspacePublicSymbolOwnershipV1[];
   readonly violations: readonly WorkspaceBoundaryViolationV1[];
   readonly reconciledDebtFingerprints: readonly string[];
+}
+
+interface WorkspaceBoundaryScanRequestV1 {
+  readonly repositoryRoot: string;
+  readonly commitSha: string;
 }
 
 interface ProjectHealthGateReceiptV1 {
@@ -374,6 +390,13 @@ Gate Receipt 的 `commitSha` 永远是被检查 HEAD commit；diff 的 `baseSha`
 AI Receipt 的 GO 不是 Report 通过条件；`dispositionsByFingerprint` 必须与 candidate fingerprint 集合精确
 一致，且只有逐条 `host-confirmed` 的 candidate finding 能进入 Blocking 聚合。
 
+`ProjectHealthGateReceiptV1` 是 `health:record` 可写出的内容寻址审计投影，不是 `health:pr/nightly/release`
+的 admission 输入。正式 check 在一个 Host 进程中执行 `Registry Gate -> parsed execution evidence -> actual
+Registry Sensor -> internal Observation -> Report`；Receipt 文件和 Observation 文件即使字段、Hash 与 SHA
+看似有效，也不能替代这条调用链。Gate execution evidence 必须通过
+`parseProjectHealthExecutionEvidenceV1` 的关闭字段、状态、退出码、repository-state 和 cleanup 交叉约束后才能
+到达 Sensor。
+
 ### 4.6 ProjectHealthReportV1
 
 ```ts
@@ -396,10 +419,16 @@ interface ProjectHealthReportV1 {
 }
 ```
 
-`rootPath`、`manifestPath`、`targetPath` 与 `importerPath` 全部是从仓库根开始的 repo-relative
-POSIX path。根 Workspace Package 的 `rootPath` 唯一编码为 `"."`；其他字段和非根 `rootPath` 不允许
+`rootPath`、`manifestPath`、`targetPath`、`importerPath` 与 public-symbol `sourcePath` 全部是从仓库根开始的
+repo-relative POSIX path。根 Workspace Package 的 `rootPath` 唯一编码为 `"."`；其他字段和非根 `rootPath` 不允许
 `.`。Parser 必须拒绝绝对路径、反斜杠、空段、`..` 段和任何逃逸仓库根的结果；Owner
-不得把 `path.resolve()` 得到的机器路径发布进 Evidence。Workspace 旧债务的稳定 fingerprint 精确为
+不得把 `path.resolve()` 得到的机器路径发布进 Evidence。Graph 要求 package `id` / `rootPath` /
+`manifestPath` 唯一、每个 package 的 export `subpath` 唯一、edge 按
+`importerPath+specifier+targetPackageId+usage` 唯一，且 importer/target package 与最长匹配
+`rootPath` 所有权可解析。`publicSymbols` 按 `packageId+exportSubpath+symbolName+isTypeOnly` 唯一，
+必须引用已有 package、该 package 已声明的 export subpath，以及该 package 拥有的 `sourcePath`。
+空 `publicSymbols` 合法。`graph.commitSha` 只能是当前 Host Gate execution 注入的 40 位 lowercase commit SHA，
+禁止 `HEAD` 或 tree object name；scanner 不得自行 spawn Git。Workspace 旧债务的稳定 fingerprint 精确为
 `sha256CanonicalJson({ importer, specifier, owner })`，字段值先按现有 verifier 的 repo-relative/Package ID
 规范化；`reason`、`removalGate`、文案、机器路径和扫描顺序都不参与 identity。PHO-0A 的对抗 fixture
 必须证明这套算法与当前 49 条债务逐项一致，并拒绝把说明字段混入 fingerprint。
@@ -449,23 +478,35 @@ Policy 顺序固定：
 
 ### 5.1 Architecture Authority Sensor
 
-PHO-1 先扩展现有 `scripts/lib/workspace-boundary.ts` 唯一 Owner，使同一次 scan 返回关闭的
-`WorkspaceBoundaryEvidenceV1`（完整 `WorkspaceDependencyGraphV1`、原 violations、已协调 debt fingerprints）；
-现有 verifier 改为消费该结果。Owner 不写 Receipt：`health:record` 只执行该 Owner 一次，把 canonical evidence
-写入 content-addressed store，并让 Gate Receipt 的 `evidenceRef` 指向它。`sensors/workspace-boundary.ts`、
-`sensors/supplemental-authority.ts` 和 `change-impact.ts` 都只能读这份 evidence，不得再次扫描。
-二者分别输出 `sensorId: "workspace-boundary"` 与 `sensorId: "supplemental-authority"`，不得产生第三个
-`architecture-authority` ID，也不得重新扫描或重新判定 undeclared dependency、export、cycle 和现有边债务。
-`authority-policy.json` 只补充原 Owner 未表达的规则：
+PHO-1 先扩展现有 `scripts/lib/workspace-boundary.ts` 唯一 Owner，使同一次 TypeScript walk 返回关闭的
+`WorkspaceBoundaryEvidenceV1`（完整 `WorkspaceDependencyGraphV1`、hashable `publicSymbols` 权威事实、
+原 violations、已协调 debt fingerprints）。公开符号投影来自各 package export target 的导出声明，不是第二次
+`rg`/glob/AST。现有 verifier 的同次 Gate stdout 是唯一语义 evidence；Host 先通过 execution-evidence parser
+验证 Gate 结果，再把 stdout 解析为 `WorkspaceBoundaryEvidenceV1`，并把完整执行证据写入
+content-addressed store。可选 `health:record` 只额外写审计 Receipt，不形成另一条读取链。扫描入口是
+`scanWorkspaceBoundaries({ repositoryRoot, commitSha })`；`commitSha` 由 Host Gate execution 注入，scanner
+不得 spawn Git。`sensors/workspace-boundary.ts`、`sensors/supplemental-authority.ts` 和 `change-impact.ts`
+都只能读这份 evidence，不得再次扫描。二者分别输出 `sensorId: "workspace-boundary"` 与
+`sensorId: "supplemental-authority"`，不得产生第三个 `architecture-authority` ID，也不得重新扫描或重新判定
+undeclared dependency、export、cycle 和现有边债务。
 
-- 同一状态/协议/Parser 的重复公开 Owner；
-- Canonical/Native Scene Source 互斥边界、Compiler/Runtime/Provider 泄漏；
-- `V1/V2/V3` 并行实现、compat alias、旧字段或双入口重新出现。
+`authority-policy.json` 只补充原 Owner 未表达的规则，选择器复用 capability selector 形状
+`{ exactPaths, pathPrefixes, pathSuffixes, packageIds }`，禁止 glob/regex，至少一组选择器非空，且**不**要求
+当前树命中（与 Profile capability selector 不同）。关闭规则 kind 只有：
+
+- `forbidden-public-symbol`：selector + `symbolNames`；
+- `unique-public-symbol-owner`：selector + `symbolNames` + `ownerPackageId`；若 `packageIds` 非空，owner 必须属于该列表；
+- `forbidden-public-symbol-pair`：`left`/`right` 各自 `{ selector, symbolNames }`，替换旧 `forbidden-owner-pair`。
+
+Exception 是精确 `{ ruleId, packageId, sourcePath, symbolName, decisionRef }`，不是 capability `subjectRefs`。
+首个 Policy 用这些 kind 表达 Canonical/Native Scene Source 互斥、`parseCanonicalSceneExecutionPlanV1` 的唯一
+parser Owner、以及 `parseAuthoringSpecV2`/`V3`、`hashValidationReportCompat`、`legacyParseWorld` 这类公开
+compat alias。不得把仍在使用的 `hashValidationReportV1`/`V2` 写成 forbidden 名。
 
 现有 `config/workspace-boundary-debt.json` 仍是 workspace edge 的唯一债务账本；49 条存量边不得复制到
-`accepted-debt.json`。Authority Sensors 不靠关键字直接判 P0；关键字 census 只能产生候选，必须由
-关闭 supplemental forbidden rule 的精确符号匹配确认。普通 `compat`/`legacy`/`V2` 关键字只能产生
-`advisory-p3` 候选；Policy 的 exception set 只声明精确合法符号，不反向充当 forbidden list。
+`accepted-debt.json`。Authority Sensors 不靠关键字直接判 P0；`compat`/`legacy`/`V2` 关键字只能由 Sensor 从
+同一份 `publicSymbols` 派生 `advisory-p3` 候选，不得再开第二次 collection。只有精确 supplemental forbidden
+rule 才可发出 `blocking-p1`；Policy 的 exception set 只声明精确合法符号，不反向充当 forbidden list。
 
 ### 5.2 Contract and Generated-Parity Sensor
 
@@ -474,7 +515,7 @@ PHO-1 先扩展现有 `scripts/lib/workspace-boundary.ts` 唯一 Owner，使同�
 - Schema、类型、示例、CLI、Browser 和生成物字段一致；
 - 生成文件与源码输入 byte/hash parity；
 - lockfile、patch、安装版本和声明版本一致；
-- fixture/receipt 的 Owner 命令可以只读重放且 tracked tree 保持干净。
+- fixture/receipt 的 Owner 命令可以只读重放且 repository state 保持干净。
 
 不得实现第二个 Schema parser 或第二套 Hash 算法。
 
@@ -498,7 +539,7 @@ PHO-1 先扩展现有 `scripts/lib/workspace-boundary.ts` 唯一 Owner，使同�
 
 ### 5.4 Test Topology and Change Impact Sensor
 
-以现有 test census 为唯一测试归属输入，再结合 Git diff、dependency graph 和显式 capability mapping 计算 Required Gates：
+以同一 Host 进程内 `test-census` Gate stdout 解析出的 census 为唯一测试归属输入，再结合 Git diff、dependency graph 和显式 capability mapping 计算 Required Gates。Sensor 不重新扫描测试文件，也不读取调用方提供的 census/Receipt 目录：
 
 - 新测试是否进入恰当 lane；
 - 被修改的公共合同是否存在行为级 RED→GREEN regression；
@@ -551,14 +592,19 @@ Nightly/Release Required `runtime-health` 变为 `incomplete`/`failed`；首个 
 ### 5.9 Independent Review Sensor
 
 Cursor Cloud/Codex 独立审查只产生 `IndependentReviewReceiptV1` 和候选 Finding。AI 的 `GO` 不能让 Report 通过；AI 的 P0/P1 也必须由 Host 在 exact tree 上复现或通过当前源码证据裁决后，才能成为 Blocking Finding。超时、无输出、错误 SHA，或任一 candidate 仍为 `pending-host-review`，都使 Review Observation 为 `incomplete`；`status: "completed"` 要求每个 candidate 均已逐条 `host-confirmed` 或 `host-rejected`。
+首个 Profile 中它在 Nightly/Release 都是 Advisory，不进入确定性 Release Required 闭包。PHO-8 将
+exact-SHA Review 与同一 SHA 的 Release Report 作为两份并列 adoption evidence，由 Host 逐条 disposition；
+Review Receipt 不作为 `health:release` 的外部 admission 回灌，也不通过 tracked 文件改变被审查 SHA。
+一旦 Host 在该结构化合同上确认 P0/P1，Blocking Finding 仍使最终 Report 或 PHO-8 disposition 失败，
+不因 Sensor 是 Advisory 而被忽略。
 
 ## 6. 三种运行模式
 
 | 模式 | 触发 | 必需内容 | 默认阻断策略 |
 |---|---|---|---|
-| `pr` | Pull Request exact head SHA；或现有 CI 的 `main` push exact after SHA | Required：workspace-boundary 原 Receipt、supplemental authority、contract/generated parity、test topology/change-impact；Advisory：documentation truth、supply chain；受影响 Gate 只消费同一 CI 前序 step 的 exact-head Receipt | deterministic Blocking、Required incomplete 阻断；不重复运行 owner command |
+| `pr` | Pull Request exact head SHA；或现有 CI 的 `main` push exact after SHA | Required：同进程 Registry 执行 workspace-boundary、contract/generated parity、test census/change-impact Gate，再由真实 Sensor 产生 workspace/supplemental/test-topology Observation；Advisory：documentation truth、supply chain | deterministic Blocking、Required incomplete 阻断；每个 Owner Gate 在该 check 中只执行一次 |
 | `nightly` | `main` 定时/手动 exact SHA | §6.1 Nightly Required Gate；重型 Runtime、重复确定性和生命周期；未冻结 performance/visual/supply-chain/review 保持 Advisory | 合同/已冻结泄漏/确定性阻断；未冻结趋势 Advisory |
-| `release` | 明确 Release Candidate SHA | §6.1 Release Required Gate；冻结视觉/人工 Receipt、本地 Supply Chain 清单和独立深审 disposition | 任一 Required 缺失或 Blocking Finding 阻断；在线信号只按冻结 Policy 裁决 |
+| `release` | 明确 Release Candidate SHA | §6.1 Release Required Gate；冻结视觉/人工 Receipt、本地 Supply Chain 清单；独立深审由 PHO-8 作为并列 adoption evidence | 任一 Required 缺失或 Blocking Finding 阻断；在线信号与独立深审只按冻结 Policy 裁决 |
 
 首个 Profile 的 PR `requiredGateIdsBySensorId` 精确为：
 
@@ -570,10 +616,10 @@ Cursor Cloud/Codex 独立审查只产生 `IndependentReviewReceiptV1` 和候选 
 | `test-topology` | `test-census`、`test-studio`、`test-independent`、`test-contract`、`test-resource-heavy` | 当前 CI 的两个独立 lane，加上 `pnpm test` 现有四组成项中除 workspace-boundaries 外三项 |
 
 PR 不要求当前 CI 未执行的 BNA/Route/Canonical/Artifact 专项 clean-break；这些只能进入 Nightly/Release
-对应的明确 Gate ID 集。任一 Required Gate ID 不在 Registry、Receipt 缺失，或 Profile 集合不是当前 CI
-一次执行集合的子集，Report 必须 `incomplete`，不得悄悄缩小检查面。
-Receipt 完整性的唯一权威是当前 mode 的 Profile `requiredGateIdsBySensorId` 全量闭包：即使 docs-only
-GatePlan 的 `requiredGateIds` 为空，CI 仍须一次执行并校验该 mode 的全部固定 Required Receipt。
+对应的明确 Gate ID 集。任一 Required Gate ID 不在 Registry、同进程 execution evidence 缺失/非法，或 Profile
+集合不是当前 CI 一次执行集合的子集，Report 必须 `incomplete`，不得悄悄缩小检查面。
+Gate 完整性的唯一权威是当前 mode 的 Profile `requiredGateIdsBySensorId` 全量闭包：即使 docs-only
+GatePlan 的 `requiredGateIds` 为空，Host 仍须一次执行并校验该 mode 的全部固定 Required Gate。
 GatePlan 只说明哪些已登记 Gate 被本次 diff 直接影响、哪些额外 Gate 应在后续模式补跑；它不能缩小
 Profile 的固定 CI 闭包，也不能把 Advisory Gate 升格为当前 mode Required。
 
@@ -585,7 +631,7 @@ Sensor 集合精确为：
 |---|---|---|
 | `pr` | `workspace-boundary`、`supplemental-authority`、`contract-parity`、`test-topology` | `supply-chain`、`documentation-truth` |
 | `nightly` | `workspace-boundary`、`supplemental-authority`、`contract-parity`、`test-topology`、`runtime-health` | `supply-chain`、`performance-size`、`visual-evidence`、`documentation-truth`、`independent-review` |
-| `release` | `workspace-boundary`、`supplemental-authority`、`contract-parity`、`supply-chain`、`test-topology`、`runtime-health`、`visual-evidence`、`documentation-truth`、`independent-review` | `performance-size` |
+| `release` | `workspace-boundary`、`supplemental-authority`、`contract-parity`、`supply-chain`、`test-topology`、`runtime-health`、`visual-evidence`、`documentation-truth` | `performance-size`、`independent-review` |
 
 Nightly/Release 的 `requiredGateIdsBySensorId` 精确为：
 
@@ -596,10 +642,10 @@ Nightly/Release 的 `requiredGateIdsBySensorId` 精确为：
 | `contract-parity` | `agent-self-check`、`typecheck`、`playground-build`、`unreleased-clean-break`、`tracked-tree-clean` | 同 Nightly | `pnpm check:agent-self-check`、`pnpm typecheck`、`pnpm build`、`pnpm verify:unreleased-clean-break`、最终 tracked diff |
 | `supply-chain` | 不适用（Advisory） | `dependency-inventory` | PHO-0B 冻结 argv：`pnpm licenses list --json`；同时引用 exact lock/install/patch Receipt |
 | `test-topology` | `test-census`、`test-studio`、`test-independent`、`test-contract`、`test-resource-heavy` | 同 Nightly | 现有五个测试 lane；每个只执行一次 |
-| `runtime-health` | `canonical`、`placement-layout`、`rigged-subject`、`g-bot-subject`、`control-capture`、`validation-capture`、`route-r0-contract`、`route-r1-heightfield`、`route-r1b-static-platform`、`outdoor-gameplay` | 同 Nightly | 对应现有 `pnpm verify:*` command |
+| `runtime-health` | `canonical`、`placement-layout`、`rigged-subject`、`g-bot-subject`、`control-capture`、`validation-capture`、`route-r0-contract`、`route-r1-heightfield`、`route-r1b-static-platform`、`scene-viewer` | 同 Nightly | 对应现有 `pnpm verify:*` command |
 | `visual-evidence` | 不适用（Advisory） | 空 | Sensor 校验冻结 Release evidence manifest 中的 Golden/人工 Receipt，不调用 update command |
 | `documentation-truth` | 不适用（Advisory） | 空 | Sensor 自身的 repo-relative link/status/command observation |
-| `independent-review` | 不适用（Advisory） | 空 | exact-tree `IndependentReviewReceiptV1` + 全部 Host disposition |
+| `independent-review` | 不适用（Advisory） | 不适用（Advisory） | PHO-8 exact-tree `IndependentReviewReceiptV1` + 全部 Host disposition；不回灌 Release Host |
 
 `performance-size` 保持 Advisory，直到 runner profile、稳定窗口、阈值和负向 fixture 另行冻结；它不因出现在
 Release 就获得阻断权。`supply-chain` 在 Release 是 Required，但只对 deterministic local
@@ -621,7 +667,7 @@ current-only Profile 修改升级；不得把实验失败伪装成全仓 Nightly
 | `resource-heavy-runtime` | `test-resource-heavy` |
 | `test-registration` | `test-census` |
 | `playground-build-surface` | `playground-build` |
-| `canonical-browser-runtime` | `canonical`、`control-capture`、`validation-capture`、`outdoor-gameplay` |
+| `canonical-browser-runtime` | `canonical`、`control-capture`、`validation-capture`、`scene-viewer` |
 | `placement-and-subject-runtime` | `placement-layout`、`rigged-subject`、`g-bot-subject` |
 | `trusted-route-runtime` | `route-r0-contract`、`route-r1-heightfield`、`route-r1b-static-platform` |
 | `native-scene-experimental` | `native-scene-playground`、`bna1-clean-break` |
@@ -648,7 +694,7 @@ prefix、文件 suffix 和 Workspace Package ID，不接受 glob、regex 或 she
 | `canonical-browser-runtime` | `apps/playground/`、`packages/runtime-contracts/`、`packages/runtime-host/`、Canonical/Capture/Outdoor verifier inputs |
 | `placement-and-subject-runtime` | `packages/layout-solver/`、`packages/authoring/`、`packages/subject-*` 与对应 verifier inputs |
 | `trusted-route-runtime` | `packages/traversal/`、`packages/traversal-recast/`、`packages/validation/` 与 Route verifier inputs |
-| `native-scene-experimental` | `packages/native-babylon/`、`packages/native-babylon-block-profile/`、`apps/native-scene-playground/` |
+| `native-scene-experimental` | `packages/native-babylon/`、`packages/native-babylon-block-profile/`、`apps/native-scene-playground/`、当前真实 Owner `scripts/native-scene/` |
 | `three-c-migration-experimental` | `packages/camera/`、`packages/character-movement/`、`packages/subject-actions/` 与 Runtime Babylon 的 3C adapter inputs |
 | `documentation-only` | `docs/`、`AGENTS.md`；只有 change set 全部命中该 selector 且未命中非文档 capability 时才是 docs-only |
 
@@ -660,21 +706,32 @@ Workspace Package 或 verifier input 若没有同步登记，PHO-3 必须 fail-c
 `PROJECT_HEALTH_CAPABILITY_SELECTOR_EMPTY` fail-closed。不能预登记尚不存在的目录，
 也不能用 Profile 固定全量 Receipt 掩盖无效的 change-impact 归因。
 
-Pull Request checkout 必须显式使用 `pull_request.head.sha` 并取得 base 的 merge-base 所需历史；`main` push
-使用 event `after` 作为 `commitSha`、`before` 作为 change-impact base，并验证两者 ancestry。merge/base SHA 只用于 change-impact，不能进入
+Pull Request checkout 必须显式使用 `pull_request.head.sha` 并取得 base 的 merge-base 所需历史；正式 CLI
+只允许检查加载它自身实现的同一个 canonical checkout，要求显式 base、`base` 是 trusted event exact head 的
+ancestor，并通过 checkout HEAD 与 `pull_request.head.sha` 相等来拒绝 GitHub 合成 merge checkout；开发者在
+PR head 中提交的合法双亲 commit 不因 parent count 被拒绝。`main` push 使用 event `after` 作为 `commitSha`、`before` 作为
+change-impact base，并验证两者 ancestry。merge/base SHA 只用于 change-impact，不能进入
 `report.commitSha`。网络漏洞库、Cloud AI 和硬件性能不稳定时，运行本身必须标注 `incomplete` 或 Advisory；
-它们不属于 PR Required，不能拖垮 deterministic PR Gate。PR `health:pr` 禁止重跑现有 typecheck/test/build，
-只校验前序 step 写出的 `ProjectHealthGateReceiptV1` 的 tree/input/command identity。PHO-6 提供唯一
-`health:record`：它通过 PHO-0B 执行 Registry-owned gate 一次并原子写 Receipt；PHO-7 用它替换当前 CI 中
-对应的直接命令，而不是在原命令后追加第二次执行。聚合 `pnpm test` 在 CI 中按其现有四个组成命令各执行
-一次并分别收据化，保留相同测试语义和 per-gate identity。
+它们不属于 PR Required，不能拖垮 deterministic PR Gate。PR `health:pr` 自身是 Host：它从 Registry 选择
+Profile 固定 Gate，在同一进程中各执行一次，立即验证 execution evidence，调用 Registry 中的实际 Sensor，
+再聚合内部 Observation。CI 不在此前重复运行同一 typecheck/test/build，也不把外部 Receipt 目录传回 check。
+`health:record` 复用相同 Registry/runner 链写出单 Gate 审计 Receipt，但该文件不被 check 重新 admission。
+聚合 `pnpm test` 在 PHO-7 中仍按其现有四个组成命令分别登记，保持相同测试语义和 per-gate identity。
+
+Host 在执行任何 Gate 前，必须从当前 mode 的 Profile Required Sensor 集合与内部 adapter readiness
+闭包派生 Required-input readiness。该闭包只表达当前 Host 是否拥有构造真实 Sensor 输入的生产 adapter，
+不得按 mode 硬编码降级 Profile，也不得接受外部 Receipt、Observation 或测试注入。若任一 Required
+Sensor 尚无生产输入 adapter，Host 不执行重型 Gate，而以空 validated Gate map 调用同一 Registry Sensor
+集合并聚合 canonical `incomplete` Report；退出码为 `3`。这条 pre-Gate 路径仍要求 output、exact HEAD、
+exact-clean、原子写和发布前二次身份校验。Advisory adapter 缺失不拦截 Gate；对应 Sensor 必须在 Report
+中保留 `not-evaluated` Metric、Observation Hash 与适用的 Advisory Finding，不能伪装为 passed。
 
 ## 7. Explain 与开发者体验
 
 稳定入口：
 
 ```text
-pnpm health:pr -- --commit <head-sha> --base <git-ref> --receipts <directory> --output .project-health/report.json
+pnpm health:pr -- --commit <head-sha> --base <base-sha> --output .project-health/report.json
 pnpm health:nightly -- --output .project-health/report.json
 pnpm health:release -- --commit <sha> --output .project-health/report.json
 pnpm health:explain -- <report.json> [--fingerprint <sha256:...>] [--json]
@@ -683,9 +740,14 @@ pnpm health:update-baseline -- --commit <sha> --report <report.json> --output co
 
 Exit Code：`0 = passed`、`2 = failed`、`3 = incomplete`、`1 = usage/infrastructure error`。`explain` 输出 Finding 的 Owner、证据、失效输入、建议的原始 Gate 命令和债务状态，不自动修复。
 
-本地产物写入被忽略的 `.project-health/`；CI 上传 Report、Observation 和稳定 Evidence Bundle。任何 tracked
+本地产物写入被忽略的 `.project-health/`；CI 上传 Report 和稳定 Evidence Bundle，Observation 只在 Host
+进程内聚合，不作为可回灌输入发布。任何 tracked
 baseline 更新必须使用独立 `health:update-baseline` 命令，验证 exact tree/report/profile 后产生 diff 并经过
 Review；`health:pr/nightly/release` 不接受 `--update-baseline` flag，普通 check 永不写 tracked 文件。
+Baseline publication 只要求当前 mode 的 Required Sensor evidence 完整；Advisory `not-evaluated` Metric、
+Observation Hash 与 Finding 必须原样保留，不能因 baseline 写入被删除或伪装为已评估。首个单一 baseline
+采用 PR mode，并只与同 mode Report 比较；Nightly/Release 不复用它做跨 mode 趋势，也不为此增加 V2 或
+第二套 writer。
 
 ## 8. 债务、趋势与告警
 
@@ -705,13 +767,39 @@ GitHub Issue 或发送外部消息；自动通知需后续独立授权。
 
 ## 9. 安全、性能与失败语义
 
+- `health:record/pr/nightly/release/update-baseline` 在发布任何可信结果前要求 exact HEAD 且 source checkout
+  exact-clean：除 Registry-owned `.project-health/` 外不得有 tracked 或 untracked source change；执行结束后再次
+  检查 HEAD 与 exact-clean。`.project-health`、`runs`、`worktrees` 本身仍须通过 canonical non-symlink identity
+  和各自的状态/清理约束，不能借忽略目录绕过证据完整性。
+- 正式 CLI 拒绝用 checkout A 加载的 Registry/Sensor 实现去检查 checkout B；PR 模式还拒绝缺失 base、base/head
+  无 ancestry和 base 等于 head。PHO-7 必须把 trusted event 的 `pull_request.head.sha` 作为 `--commit`，由 exact
+  checkout equality 拒绝 GitHub 合成 merge tree，而不是误用 parent count 拒绝合法的开发者 merge commit。
+- `ProjectHealthExecutionEvidenceV1` 必须先经过唯一关闭 parser，交叉校验字段集合、Hash、scope、status、
+  exit/signal、failure code、repository-state before/after、worktree/output cleanup；松散 type cast、部分字段验证或
+  调用方手造 evidence 不得进入 Receipt 或 Sensor。
 - Sensor 只使用 Registry 冻结的 execution scope：PR 的既有 Gate 在 exact checkout 中以
-  `in-place-checkout` 执行并比较执行前后 tracked tree；Nightly/Release 的动态 Probe 可使用
-  `isolated-temp-worktree`。两者的输出都只能写 scene-owned/`.project-health/` 临时根。需要启动 Server/Browser
+  `in-place-checkout` 执行并比较执行前后 tracked、untracked 与 Registry-owned `.project-health/runs`、
+  `.project-health/worktrees` 基础设施根之外的 repository state；Nightly/Release 的动态 Probe 可使用
+  `isolated-temp-worktree`。两者的声明输出都只能写 scene-owned/`.project-health/` 临时根。需要启动 Server/Browser
   的 Sensor 必须登记并在 `finally` 清理。
-- 所有外部命令和动态 Probe 只能经过 PHO-0B 冻结的单一 execution envelope/process runner；各 Sensor 不得自行 spawn、实现 timeout、重定向日志或清理进程树。
+- `in-place-checkout` 只接纳仓库内已登记、已有 Owner 的 trusted Gate，不是任意代码的文件系统沙箱。Runner
+  通过关闭 argv/环境、repo-relative cwd、tracked + untracked repository-state 前后 Hash（仅排除上述
+  Registry-owned 基础设施根）和临时根清理来证明
+  仓库内无残留；需要对恶意代码或任意仓库外写入建立 OS 级边界的 Probe 必须进入现有 Hosted/容器隔离入口，
+  不能把跨平台本地进程包装器误称为安全沙箱。
+- ignored-root 额外状态指纹有独立的 5 秒、8 MiB 和 4096 entry 上限；超限、初始化失败或读取竞态都发布
+  `infrastructure-failed` Evidence，而不是抛出未归属异常或继续运行 Owner。
+- Repository、`.project-health`、`runs`、`worktrees` 和每个临时 Owner 根在创建、使用与清理前都必须通过
+  `lstat + realpath + device/inode` 的 canonical non-symlink identity 校验；身份漂移只允许 fail-closed，
+  禁止跟随替换后的路径执行递归清理。
+- 所有外部命令和动态 Probe 只能经过 PHO-0B 冻结的单一 execution envelope/process runner；各 Sensor 不得自行 spawn、实现 timeout、重定向日志或清理进程。
+- 每个可信本地 Registry descriptor 必须声明 `descendantOwnershipMode: "inherit-owner-token"`；Owner
+  启动的全部后代必须继承 Host 注入的 owner token，且不得创建 tokenless session。PHO-6 Registry
+  admission 拒绝其他值，生产 runner 只能由该 Registry 调用。无法满足该协作式归属合同，或需要抵御
+  恶意代码、任意路径写入的 Probe，必须进入 Hosted/容器 OS 隔离；正式本地 runner 只支持 Profile
+  已冻结的 Linux/macOS 环境。
 - 不把仓库凭证、Cursor/Gemini/LWDP token、用户 home、绝对路径或环境快照写入证据。
-- 子进程有明确 timeout、输出上限和 process-tree cleanup；超时是稳定 `incomplete`，不是自动重跑。
+- 子进程有明确 timeout、输出上限和 cooperative owned-process cleanup；超时是稳定 `incomplete`，不是自动重跑。
 - PR 的总 `maximumDurationMilliseconds` 初值不得超过现有 CI `timeout-minutes: 20`；PHO-7
   只能依据 exact-head dry-run 收据量得新增开销并在这个上限内分配，不能凭估计抬高 timeout。
   重型重复测试留在 Nightly。
@@ -723,14 +811,14 @@ GitHub Issue 或发送外部消息；自动通知需后续独立授权。
 | ID | Goal / 独立交付物 | depends_on | blocks | 独占 Owner | 输入 → 输出 | 验证证据 | 模式 |
 |---|---|---|---|---|---|---|---|
 | PHO-0A | 冻结全部 current-only DTO、Profile、Workspace evidence contract、补充 Authority/Supply Chain Policy 与 debt fixtures | 无 | PHO-0B、PHO-1..8 | `contracts.ts`、`workspace-boundary-contract.ts`、`profile.json`、`authority-policy.json`、`supply-chain-policy.json`、`accepted-debt.json` | 设计 → parsable contracts/config | parser adversarial tests、canonical hash | sequential, main-agent-only |
-| PHO-0B | 冻结唯一 execution envelope/process runner | PHO-0A | PHO-2、PHO-3、PHO-4、PHO-5 | `process-runner.ts` | closed Host argv/probe descriptor → bounded redacted execution evidence | timeout/process-tree/dirty-tree fixtures | sequential, main-agent-only |
+| PHO-0B | 冻结唯一 execution envelope/process runner | PHO-0A | PHO-2、PHO-3、PHO-4、PHO-5 | `process-runner.ts` | closed trusted Host argv/probe descriptor → bounded redacted execution evidence | timeout/owner-token/repository-state/cleanup fixtures | sequential, main-agent-only |
 | PHO-1 | 扩展现有 workspace graph Owner；实现两个 Authority Sensor | PHO-0A | PHO-3、PHO-6 | `workspace-boundary.ts`、两个同名 sensor + adapter | one scan + supplemental policy → two Observations/full graph | graph/receipt/original-debt identity、dual-owner/compat fixtures | sequential, main-agent-only |
 | PHO-2 | Contract/Generated 与 Supply Chain Sensors | PHO-0B | PHO-6 | `contract-parity.ts`、`supply-chain.ts` | owner receipts/locks/license policy/advisory snapshot → two Observations | drift/provenance/license/stale-provider + clean-tree fixtures | sequential |
 | PHO-3 | Test Topology 与 Change Impact Planner | PHO-0B、PHO-1 | PHO-6、PHO-7 | `change-impact.ts` | Registry-owned Git diff + existing dependency graph/test census → Gate Plan | exact-head/public-contract/browser/build fixtures | sequential |
 | PHO-4 | Runtime Lifecycle/Determinism Sensor | PHO-0B | PHO-6、PHO-7 | runtime sensor + probe registry | registered probes → Observation | repeat/reset/throw/30-60-120 evidence | sequential |
 | PHO-5 | Performance/Visual/Docs/Review Sensors | PHO-0B | PHO-6、PHO-7 | `performance-size.ts`、`visual-evidence.ts`、`documentation-truth.ts`、`independent-review.ts` | owner artifacts/profile → Observations | budget/renderer/link/status/review fixtures | sequential |
-| PHO-6 | 创建 Registry；聚合 Report、Policy、Evidence Store 与 CLI | PHO-1..5 | PHO-7、PHO-8 | Registry、report、CLI、root `package.json` | Observations/debt → Report/explain | ordering/fingerprint/cap/incomplete/exit tests | sequential, main-agent-only |
-| PHO-7 | PR/Nightly/Release CI 接线和 Artifact 保留 | PHO-3、PHO-4、PHO-5、PHO-6 | PHO-8 | workflows、`workflow-layout.test.ts`、manifest integration seam | exact-head receipts/mode → CI Report | fresh CI runs、timeout/cleanup | sequential, main-agent-only |
+| PHO-6 | 创建 Registry；聚合 Report、Policy、Evidence Store 与 CLI | PHO-1..5 | PHO-7、PHO-8 | Registry、mode observer、report、CLI、root `package.json` | exact-clean checkout + registered Gate execution + Profile/debt → validated in-memory results → actual Sensors → internal Observations → Report/explain；Receipt 仅审计输出 | source-closure hash、forged Receipt/Observation rejection、evidence parser、ordering/fingerprint/cap/incomplete/exit tests | sequential, main-agent-only |
+| PHO-7 | PR/Nightly/Release CI 接线和 Artifact 保留 | PHO-3、PHO-4、PHO-5、PHO-6 | PHO-8 | workflows、`workflow-layout.test.ts`、manifest integration seam | exact-head same-process Gate/Sensor results + mode → CI Report | fresh CI runs、timeout/cleanup | sequential, main-agent-only |
 | PHO-8 | 独立 Review Receipt、全维度审查和最终 adoption | PHO-7 | 无 | review/doc/backlog、`baseline.json` | exact SHA reports → disposition/accepted baseline | Codex + Cursor review、D1-D6、clean tree | sequential, main-agent-only |
 
 架构、跨 Sensor 合同、Profile、Policy、Registry、root scripts、test census 和 CI 集成始终由主 Agent

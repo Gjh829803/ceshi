@@ -1,0 +1,66 @@
+{
+  "kind": "babylon-native-block-rendered-capture-evidence",
+  "schemaVersion": 1,
+  "views": [
+    {
+      "viewId": "opening",
+      "contentHash": "sha256:da08eaf681437efd0b972599eb417eaf1e6a10cb40d2a9bc8036cd4a45a53470",
+      "widthPixels": 800,
+      "heightPixels": 600,
+      "distinctColorCount": 159,
+      "dominantColorRatio": 0.9026166666666666
+    },
+    {
+      "viewId": "top-down",
+      "contentHash": "sha256:c0edd1b37c17450f826d42298956245da0b51a30aee69d5da0a0d596e734ebfc",
+      "widthPixels": 800,
+      "heightPixels": 600,
+      "distinctColorCount": 61,
+      "dominantColorRatio": 0.77185
+    },
+    {
+      "viewId": "side",
+      "contentHash": "sha256:5ed622af02b2f60a1cee613c750d2a738b859028bd776e7896b868430c986335",
+      "widthPixels": 800,
+      "heightPixels": 600,
+      "distinctColorCount": 20,
+      "dominantColorRatio": 0.8479
+    }
+  ],
+  "structure": {
+    "checkOutcome": "passed",
+    "kind": "babylon-native-block-authoring-capture",
+    "scope": "build-epoch-local",
+    "viewIds": [
+      "opening",
+      "top-down",
+      "side"
+    ],
+    "visualGroupIdsByView": [
+      {
+        "viewId": "opening",
+        "visualGroupIds": [
+          "cliff-mass",
+          "ridge-gate",
+          "route-spine"
+        ]
+      },
+      {
+        "viewId": "top-down",
+        "visualGroupIds": [
+          "cliff-mass",
+          "ridge-gate",
+          "route-spine"
+        ]
+      },
+      {
+        "viewId": "side",
+        "visualGroupIds": [
+          "cliff-mass",
+          "ridge-gate",
+          "route-spine"
+        ]
+      }
+    ]
+  }
+}

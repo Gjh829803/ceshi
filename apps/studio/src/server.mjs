@@ -598,6 +598,18 @@ export function isAllowedSceneAsset(relativePath) {
   return /^prototypes\/[a-z0-9][a-z0-9-]*\/(?:whitebox|styled)-triview\.png$/.test(relativePath);
 }
 
+export function injectStudioViewerBindingV1(html, worldId) {
+  if (typeof html !== "string" || !idPattern.test(worldId)) {
+    throw new TypeError("Studio Viewer world id is invalid.");
+  }
+  const headCloseIndex = html.indexOf("</head>");
+  if (headCloseIndex < 0) {
+    throw new TypeError("Studio Viewer HTML is missing </head>.");
+  }
+  const binding = `<meta name="worldkit-studio-world-id" content="${worldId}">`;
+  return `${html.slice(0, headCloseIndex)}${binding}${html.slice(headCloseIndex)}`;
+}
+
 export function createStudio(options = {}) {
   const repoRoot = path.resolve(options.repoRoot ?? defaultRepoRoot);
   const dataRoot = path.resolve(options.dataRoot ?? defaultDataRoot);
@@ -1459,7 +1471,7 @@ export function createStudio(options = {}) {
         ? `/scene-assets/${record.sceneId}/whitebox-opening-frame.png`
         : null,
       previewUrl: canonicalAuthoringAvailable && (record.captureStatus === "passed" || record.status === "ready")
-        ? `/play?authoring=1&world=${encodeURIComponent(record.id)}`
+        ? `/play/${encodeURIComponent(record.id)}`
         : null,
       queuePosition: record.status === "queued"
         ? queue.findIndex((item) => item.endsWith(`:${record.id}`)) + 1
@@ -3062,16 +3074,17 @@ export function createStudio(options = {}) {
       pathname.startsWith("/__whitebox/");
   }
 
-  function proxyToPlayground(request, response, url) {
+  function proxyToPlayground(request, response, url, studioWorldId = null) {
     return new Promise((resolve) => {
       const target = new URL(playgroundInternalOrigin);
-      const pathname = url.pathname === "/play"
+      const pathname = studioWorldId !== null || url.pathname === "/play"
         ? "/"
         : url.pathname.startsWith("/play/")
           ? url.pathname.slice("/play".length)
           : url.pathname;
       const headers = { ...request.headers, host: target.host };
       delete headers.authorization;
+      if (studioWorldId !== null) delete headers["accept-encoding"];
       const proxyRequest = createHttpRequest({
         protocol: target.protocol,
         hostname: target.hostname,
@@ -3080,6 +3093,31 @@ export function createStudio(options = {}) {
         path: `${pathname}${url.search}`,
         headers,
       }, (proxyResponse) => {
+        const contentType = String(proxyResponse.headers["content-type"] ?? "");
+        if (
+          studioWorldId !== null &&
+          request.method === "GET" &&
+          (proxyResponse.statusCode ?? 500) >= 200 &&
+          (proxyResponse.statusCode ?? 500) < 300 &&
+          contentType.includes("text/html")
+        ) {
+          const chunks = [];
+          proxyResponse.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+          proxyResponse.once("end", () => {
+            const body = injectStudioViewerBindingV1(
+              Buffer.concat(chunks).toString("utf8"),
+              studioWorldId,
+            );
+            const responseHeaders = { ...proxyResponse.headers };
+            delete responseHeaders["content-length"];
+            delete responseHeaders["content-encoding"];
+            responseHeaders["cache-control"] = "private, no-store";
+            response.writeHead(proxyResponse.statusCode ?? 200, responseHeaders);
+            response.end(body);
+            resolve();
+          });
+          return;
+        }
         response.writeHead(proxyResponse.statusCode ?? 502, proxyResponse.headers);
         proxyResponse.pipe(response);
         proxyResponse.once("end", resolve);
@@ -3122,6 +3160,19 @@ export function createStudio(options = {}) {
       }
 
       if (shouldProxyToPlayground(url.pathname)) {
+        const studioPreviewMatch = /^\/play\/([a-z0-9][a-z0-9-]{2,79})\/?$/.exec(
+          url.pathname,
+        );
+        if (studioPreviewMatch) {
+          const studioWorldId = studioPreviewMatch[1];
+          if (await readRecord(studioWorldId) === null) {
+            response.writeHead(404, { "cache-control": "no-store" });
+            response.end("Studio Viewer world not found.");
+            return;
+          }
+          await proxyToPlayground(request, response, url, studioWorldId);
+          return;
+        }
         await proxyToPlayground(request, response, url);
         return;
       }

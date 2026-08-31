@@ -34,15 +34,16 @@ Native Scene Lane；其 [长期设计](superpowers/specs/2026-08-28-ai-friendly-
 3. `window.__WORLDKIT__.version === 5`；
 4. 请求和返回值直接使用 SDK 导出的 exact 类型。
 
-`pnpm dev` 启动 Babylon-backed catalog Playground；不得与 `?authoring=1` 组合，也不是
-本合同的 Canonical Authoring Runtime 入口。
+`pnpm dev` 启动统一 Babylon/Havok Viewer，默认加载 G Bot Canonical 调试预设；
+`worldkit run <world.json>` 与 Studio Preview 使用同一壳并由 Host 固定来源。旧
+`?authoring=1` 路由已删除。
 
 ## 1. 权威包与所有权
 
 | 内容 | 权威来源 | 对接规则 |
 |---|---|---|
 | Command、Receipt、Event、World State | `@whitebox-world/gameplay-contracts` | 直接导入 exact 类型 |
-| Browser V5、Snapshot V4、Capture、Activity | `@whitebox-world/runtime-contracts` | 只通过 `window.__WORLDKIT__` 使用；结构修改走 `__WORLDKIT_AUTHORING_EDIT__`，不要给 V5 加第 40 个 key |
+| Browser V5、Snapshot V4、Capture、Activity | `@whitebox-world/runtime-contracts` | 只通过 `window.__WORLDKIT__` 使用；结构修改走 `__WORLDKIT_AUTHORING_EDIT__`，不要增减 V5 当前 exact 38-key surface |
 | RuntimeHost command/journal/session | `@whitebox-world/runtime-host` | SDK 内部所有；下游不 import |
 | Camera Profile/Context/Preference/Selection | `@whitebox-world/camera` | 当前提供 provider-neutral 领域合同和纯选择；不得误写成已接入 Browser/Runtime Pose |
 | Babylon Gameplay World Port | `@whitebox-world/runtime-babylon` | Adapter 内部所有；下游不依赖 internal Symbol |

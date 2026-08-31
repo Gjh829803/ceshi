@@ -13,9 +13,10 @@
 
 > ADR-0007 已接受长期的 Babylon Native Scene Lane 架构方向：Native JSON 管启动/资源/Gameplay，
 > Babylon TypeScript 管视觉，显式登记连接 SDK-owned Havok，且每个世界只选一个 Scene Source。
-> BNA-1 已冻结 Native Schema、Source Union 与 source-neutral identity，但正式 RuntimeHost 仍在任何
-> adapter/Candidate 分配前拒绝 Native。Native Package/Receipt、Surface Admission、Hosted 隔离和正式
-> Route 尚未生产化，因此不改变上一段的当前入口和进度口径。
+> BNA-1～5 已冻结 Native Schema/Source identity，完成 Check、Package/Receipt、Surface Admission、
+> 同一 RuntimeHost/SDK-owned Havok 与 Hosted Isolation 的受限生产链；但 BNA-6/7/8 生成评测、正式
+> Capture/Route 与最终 disposition 仍未完成。默认产品 Viewer/Catalog 继续只接 Canonical
+> AuthoringSpec，因此不改变上一段的当前默认入口和进度口径。
 
 > Source-neutral Asset Production/Admission 已形成 Proposed 设计：只在两条 Scene Source 之前生产原始
 > Candidate，经资产类别 Build Record 与只读 Admission 后发布资源；不增加第三条 Scene Source。APA 尚未
@@ -219,9 +220,11 @@ Capture V1 是独立的新纵向切片，不改变该 90% 口径。
   locomotion Capability require 的节点；Definition 锁 Ref/hash，Compiler/Runtime 不猜 `ground`。
   最终 full regression、两项 Capture gate 与 completion review 已收口；该切片 Final GO，已由
   `eef75c6` / `5ffd031` 合入 `main`。
-- [x] G19-7 已把六个 Outdoor/catalog 场景接入同一 Gameplay Runtime，并保持 artifact-only
-  renderer 不暴露 `__WORLDKIT__` 或 Gameplay 方法；真实 Browser Gate 通过 6/6 Gameplay、
-  6/6 artifact-only 与 unknown-scene fail-closed。G19-8 已继续关闭 clean break 与最终全量验收。
+- [x] G19-7 的历史切片曾把六个 Outdoor/catalog 场景接入同一 Gameplay Runtime，并保持
+  artifact-only renderer 不暴露 `__WORLDKIT__` 或 Gameplay 方法；当时的 Browser Gate 通过
+  6/6 Gameplay、6/6 artifact-only 与 unknown-scene fail-closed。后续 Unified Scene Viewer
+  clean break 已删除 catalog-gameplay；当前门禁只覆盖三个 Canonical 调试预设与六个内部
+  artifact-only 场景，不能把这条历史证据当作现行入口。
 - [x] 真实 Chromium 下验证 Package Definition 的两个实例可以分别控制。
 
 2026-08-20 的新鲜验证证据：
@@ -651,16 +654,16 @@ P16-CLI1 证据：`worldkit schema project` / `registry search` / `change *` 复
 Request ID；connection profile 拒凭证，JSON 输出会 redact token。live submit 端口已定义，
 本切片没有随 CLI 启动的默认 live Host。验证：`authoring-edit-cli` 测试。
 
-P16-B1 证据：Playground 仅在 `runtimeRoute.mode === "authoring"` 且 loader 给出
-`authoringSpec`、adapter 有 `publishWorldReplacementV1` 时安装
-`window.__WORLDKIT_AUTHORING_EDIT__`。V5 保持 39 keys。catalog `?scene=` 不安装 Edit。
+P16-B1 证据：统一 Viewer 仅在 Host/Loader 提供有效 `authoringSpec` 发布上下文且 adapter
+有 `publishWorldReplacementV1` 时安装 `window.__WORLDKIT_AUTHORING_EDIT__`。Browser V5
+保持 exact 38 keys；已删除的 `?authoring=1` 与 Browser `?world=` 都不能选择或替换来源。
 包 DAG：`authoring-host` ↛ `runtime-host`。验证：Host/bridge 单测与 Chromium 安装测试。
 
 P16-F1 证据：`examples/authoring/p16-add-house` 与 `p16-terrain-replace`；journal 对抗覆盖
 Commit 后过期、quarantine、pin vs 并发 Apply、未 pin GC、prepare 失败、terrain Dry Run。
 Host↔RuntimeHost 集成覆盖 stale expectation 后成功 Full Reload（新 WorldSession、tick 0）。
 Chromium 安装测试证明 Edit 面隔离。页面级
-`worldkit-authoring-edit-add-house.browser.test.ts` 已在 `?authoring=1` 上
+`worldkit-authoring-edit-add-house.browser.test.ts` 已通过受信 Host 固定的 Viewer URL
 `publish-runtime` add-house：合法 PNG before ≠ after，`inspectFeatures()` 含
 `house-north`。该 G1 证据本身不证明 P1.4、Incremental 或人工操作验收；P1.4 由其独立
 completion record 与 fresh-process Gate 关闭。
@@ -969,14 +972,17 @@ Replay、Streaming/Dispose 和自动 Diagnostic；普通 Agent 只引用稳定 P
   原子生命周期和对抗测试；最终产品 SHA `dfa6fbc` 的 Cursor Cloud full gates 与独立
   Mode B/runtime-deep 均 GO，正式 Native Package 已接入同一 RuntimeHost/Gameplay/Havok/Camera Kernel；
   证据见 [BNA-4 实现审查](reviews/2026-08-30-bna4-runtime-surface-admission-review.md)；
-- [ ] BNA-5：Trusted Local/Hosted Isolated Trust Profile、确定性、预算和安全 Gate；
-- [ ] BNA-6：在 BNA-5 后冻结评测 Profile/预算/阈值、Route Decision、资产身份与同等生产预算，交付 AI
-  Checker/Explain、Golden Corpus、真实视觉与人工交互评估；Block 专属 Corpus 由 BWB-5 闭合；
-- [ ] BNA-7：正式 Capture；仅在需要时从同一冻结 Surface 派生 Route/Nav Evidence，不包含产品级
-  `goTo`、重规划或移动执行；
+- [x] BNA-5：Trusted Local/Hosted Isolated Trust Profile、effective-minimum budget、Host-minted admission、
+  provider-neutral Supervisor、Linux disposable isolation、Dedicated Origin/CSP/asset allowlist 与安全 Gate；
+  产品 SHA `2f46b3c9` 的 capable-runner 11-case hostile/matching-deadline evidence、exact-SHA Cloud full gates
+  与独立 security/runtime-deep 均 GO，开放 P0/P1/P2 = 0；
+- [ ] BNA-6：当前只实施 NBR-1 所需的单模型/Profile、单代表 Case、真实 AI 首次生成与诊断切片；完整
+  Golden Corpus、批量成功率和最终人工统计延期，不能因最小切片通过而勾选本项；
+- [ ] BNA-7：当前只实施 NBR-1 所需的同一冻结 Package 身份绑定 Opening/top/side Capture；关键通过性
+  使用明确标注的固定输入 Havok 脚本证据，正式 Route/Nav/`goTo` 仍延期且不能伪称完成；
 - [ ] BNA-8：按 Trusted Local、Hosted、Route 三种范围分别做最终 Go/No-Go 与文档切换。
 
-在 BNA-5 至 BNA-6 完成并建立独立实施计划前，不提高总进度，不把 Native API 写入 Quickstart，也不修改
+在 BNA-6 完成并建立独立实施计划前，不提高总进度，不把 Native API 写入 Quickstart，也不修改
 Catalog/Hosted Builder 生产工作流。P2.6 仍可先使用审核过的 Structure Resource 和产品 GLB；Native
 Lane 不自动扩大 Cave、Overhang、双层 Route 或 NPC Navigation 的当前能力边界。
 
@@ -1005,10 +1011,15 @@ Lane 不自动扩大 Cave、Overhang、双层 Route 或 NPC Navigation 的当前
 
 详细权威为
 [Babylon Native Block Whitebox 创作 Profile 长期设计](../docs/superpowers/specs/2026-08-28-babylon-native-block-whitebox-profile-design.md)。
+BWB-3/4 的集成施工与真实台阶前置由
+[Block Settlement 与真实台阶闭环设计](../docs/superpowers/specs/2026-08-31-babylon-block-settlement-and-step-closure-design.md)
+及其[实施计划](../docs/superpowers/plans/2026-08-31-babylon-block-settlement-and-step-closure-implementation.md)独占。
 该 Profile 采用 `JSON Control Plane + Babylon Native Block Whitebox + Frozen Contributions + SDK/Havok`
 组合；它不是第三条 Scene Source，也不恢复旧分支的 Three/Manifest/Compiler。BWB-1/BWB-2 的可选
-Package、Build-Epoch Session 和结构 Checker 已完成合同级 checkpoint；视觉、多视角、Collider/Havok、
-人物通过性和参考场景 Corpus 仍未完成，因此不提高 Native 生产完成度。
+Package、Build-Epoch Session、结构 Checker、直接 Babylon 视觉、多视角 authoring screenshots、同一
+Layout/Finalize/Host settlement 的 Collider/Havok 链和真实 0.25m 台阶前置已经闭合。PR #68 已通过
+focused 验证并合入 `main@d1ba942`，BWB-5 参考场景 Corpus 已完成；formal Capture/Route、AI 评测与
+生产 disposition 仍未完成，且不由该 Corpus 代替。
 
 - [x] BWB-0：冻结 Profile、旧分支 `618d96b` 处置、外部证据、能力边界、依赖工作图和
   [Mode A 审查](reviews/2026-08-28-babylon-native-block-whitebox-profile-design-review.md)；
@@ -1016,13 +1027,19 @@ Package、Build-Epoch Session 和结构 Checker 已完成合同级 checkpoint；
   palette、Build-epoch-local Layout 与 diagnostics；
 - [x] BWB-2：重写 Occupancy、重叠、坡面输入、边界、Visual Group 和预算 Checker，不复制旧 DTO/
   Preset/Compiler；
-- [ ] BWB-3：接入直接 Babylon Mesh、稳定视觉组和 Opening/top-down/侧视的 Build-Epoch-local authoring
-  screenshots；它们不是 BNA-7 formal WorldPackage/Browser Capture；
-- [ ] BWB-4：在 BNA-4 后从同一内存 Layout 产生 core Static Collider Contribution 及其关闭
-  `traversalBinding`，由 SDK 冻结并创建 Havok；不新增独立 Traversal/Visual Group Contribution，
-  Runtime 不查询 Layout 或第二 Height Sampler；
-- [ ] BWB-5：冻结山地、T 字空间、台阶、建筑、有限室内视觉及负向 Corpus，闭合结构、profile-local
-  screenshots、BNA-4 Collider overlay、Spawn Support、真实人物通过性和人工交互证据；
+- [x] BWB-3：同一 Profile Session 已接入直接 Babylon Mesh、稳定视觉组和 Opening/top-down/侧视的
+  Build-Epoch-local authoring screenshots；它们已与 BWB-4 经过同一 Layout/Finalize/Host settlement，
+  但仍不是 BNA-7 formal WorldPackage/Browser Capture；
+- [x] BWB-4：同一内存 Layout 已产生 core Static Collider Contribution 及关闭 `traversalBinding`，由 SDK
+  冻结、verified Package replay 后创建 Havok；没有独立 Traversal/Visual Group Contribution，Runtime
+  不查询 Layout 或第二 Height Sampler；真实 0.25m step、0.5m blocker、support、ledge、reset 和 cleanup
+  已在同一 Package 链通过；
+- [x] BWB-5：PR #68 已实现并合入山地、T 字空间、台阶、建筑、有限室内视觉及负向 Corpus，闭合结构、
+  profile-local screenshots、BNA-4 Collider overlay、Spawn Support、真实人物通过性、30/60/120
+  render cadence 与跨 Session/Layout cleanup/rebind 证据。后续证据补强从有效走廊证明 T 字北墙
+  Havok 阻挡，绑定冻结 Contribution 近面、capsule radius 与 ground medium；未扩 Corpus。单
+  Subject、无 Browser FeelReview 是已登记的非阻塞债务，不伪称跨实体
+  rebind、formal Capture/Route 或生产 disposition；
 - [ ] BWB-6：BWB-5 正确性成立后评估 Thin Instance、Chunk、Collider coalescing，交付 Profile-side
   eligibility/grouping、等价 fixture、资源 benchmark 和 BNA-4 优化提案；不直接修改 Runtime/Havok，
   不改变 AI-facing Schema 或 Contribution 语义。
@@ -1035,26 +1052,42 @@ Package、Build-Epoch Session 和结构 Checker 已完成合同级 checkpoint；
 [Project Health Observatory Implementation Plan](../docs/superpowers/plans/2026-08-30-project-health-observatory-implementation.md)。
 它是仓库工程健康层，不是新的 World Validation、Scene Source、Runtime authority 或通用“健康总分”。
 现有测试、Build、Browser verifier、视觉 Capture 和人工审查继续产生事实；Observatory 只做精确树绑定、
-受影响门禁规划、跨证据关联、趋势和稳定诊断。当前仅完成设计与任务登记，不提高总进度。
+受影响门禁规划、跨证据关联、趋势和稳定诊断。PHO-0A/0B 已合入 `e40a2c16`；PHO-1 先合入 Evidence
+`publicSymbols` 与 Authority Policy 选择器/符号合同，再合入唯一 scan 与两个 Sensor。不提高总进度。
+PHO-6 已通过 PR #71 合入单一 Host 同进程链：`Registry Gate -> validated execution evidence/content-addressed
+audit output -> actual Registry Sensor -> internal Observation -> Report`。外部 Receipt/Observation 不作为
+admission；workspace graph 与 test census 只取同次 Gate stdout 的语义 evidence。Sensor 身份绑定真实递归源码
+闭包 Hash，所有可信入口要求 own-checkout exact HEAD/exact-clean；PR 还要求显式 ancestor base，并由 trusted
+event head 与 checkout equality 排除合成 merge checkout，再由关闭 execution-evidence parser 校验状态、仓库指纹与
+清理结果。Nightly/Release 的稳定入口保留，但在 Required Sensor 尚缺生产输入 adapter 时，Host 必须在任何
+重型 Gate 前从 Profile Required 集合派生 readiness，以空 Gate map 调用真实 Sensor、发布 canonical
+`incomplete` Report 并退出 `3`；不得降低 Profile、伪造证据或增加外部 admission。PR 仅缺 Advisory adapter，
+因此继续执行固定 Gate 闭包并显式保留 not-evaluated Metric。Release 的 independent review 同样保持
+Advisory，由 PHO-8 作为与 Release Report 并列的 exact-SHA adoption gate，不回灌同一 SHA。首个 baseline
+只接受 Required evidence 完整的 passed PR Report，并原样保留 Advisory gaps。PR #73 又把 Gate 输入 selector
+收紧为 Git tracked source/config，Host 自产 `dist`/`__pycache__` 不再造成伪 stale Receipt；tracked source
+变化仍会使证据失效。PHO-6 至此完成，PHO-7 继续负责生产 Adapter、总 Deadline 与 CI 接线。
 
-- [ ] PHO-0A：冻结 current-only Profile、Metric、Observation/Finding、Gate Plan/Receipt、Review Receipt、
+- [x] PHO-0A：冻结 current-only Profile、Metric、Observation/Finding、Gate Plan/Receipt、Review Receipt、
   Report、中立 Workspace Evidence、补充 Authority/Supply Chain Policy、Accepted Debt 和 canonical fingerprint；
-- [ ] PHO-0B：实现唯一 bounded/redacted execution envelope，关闭 `in-place-checkout` / `isolated-temp-worktree`
-  scope，统一 timeout、process-tree cleanup、临时目录和证据 Hash；
-- [ ] PHO-1：扩展现有 `workspace-boundary.ts` 唯一 scan Owner 以投影稳定 full graph/evidence，
-  由唯一 `health:record` 写 Receipt，再以两个同名 Sensor 分别消费原边界事实与补充重复 Owner、compat alias、Canonical/Native 边界规则；
-- [ ] PHO-2：复用现有 Owner 命令实现 Contract/Generated parity，并增加独立 Supply Chain Sensor 观察
+- [x] PHO-0B：实现唯一 bounded/redacted execution envelope，关闭 `in-place-checkout` / `isolated-temp-worktree`
+  scope，统一 timeout、cooperative owned-process cleanup、临时目录和证据 Hash；
+- [x] PHO-1：扩展现有 `workspace-boundary.ts` 唯一 scan Owner，使一次 walk 投影 graph、`publicSymbols`
+  权威事实和 violations；Host 注入 `commitSha`；两个同名 Sensor 只消费该 Evidence 与精确 path/symbol
+  Authority Policy，检测重复 Owner、compat alias、Canonical/Native 边界；禁止第二次 `rg`/glob/AST；
+- [x] PHO-2：复用现有 Owner 命令实现 Contract/Generated parity，并增加独立 Supply Chain Sensor 观察
   `contract-parity` lock/install/patch Receipt、唯一 `dependency-inventory`、provenance/license 与绑定 provider snapshot
   的漏洞/弃用信号；不重复 workspace undeclared-import 或 lock parser；
-- [ ] PHO-3：以现有 test census 和 PHO-1 graph evidence 为唯一归属/依赖输入，通过 PHO-0B 执行 Git diff，
+- [x] PHO-3：以现有 test census 和 PHO-1 graph evidence 为唯一归属/依赖输入，通过 PHO-0B 执行 Git diff，
   实现 Change Impact → mode-specific Required/Advisory Gate Plan 与证据失效判断；PR 不因非 PR Gate 缺 Receipt 而阻断；
-- [ ] PHO-4：实现隔离的 Runtime 生命周期、资源 Owner、30/60/120 cadence 和多实例确定性 Sensor；首个 Required
+- [x] PHO-4：实现隔离的 Runtime 生命周期、资源 Owner、30/60/120 cadence 和多实例确定性 Sensor；首个 Required
   Profile 只登记已生产 RuntimeHost/Browser/fixed-cadence Owner，BNA 双 Candidate 在生产 GO 前仅为 Advisory；
-- [ ] PHO-5：实现 bundle/性能、视觉、文档真相和独立 Review Receipt Sensor；未冻结的趋势/AI 判断保持 Advisory；
-- [ ] PHO-6：实现唯一 `health:record` Receipt producer、稳定聚合 Policy、
-  `health:pr/nightly/release/explain/update-baseline` 和 0/1/2/3 exit contract；
-- [ ] PHO-7：接入 PR/main-push/Nightly/Release CI；fast mode 只消费前序 exact-head Receipt 且不重复重型
-  Owner Gate，普通 check 不更新 tracked baseline；
+- [x] PHO-5：实现 bundle/性能、视觉、文档真相和独立 Review Receipt Sensor；未冻结的趋势/AI 判断保持 Advisory；
+- [x] PHO-6：实现唯一 Gate/Sensor Registry 与同进程 Host 链、仅作审计输出的 `health:record`、稳定聚合
+  Policy、真实源码闭包 identity、exact-clean/evidence parser、
+  `health:pr/nightly/release/explain/update-baseline` 和 0/1/2/3 exit contract；禁止外部 Receipt/Observation admission；
+- [ ] PHO-7：接入 PR/main-push/Nightly/Release CI；每个 mode 由单一 Host check 在同进程执行 Registry Gate 与
+  Sensor，不消费外部 Receipt/Observation，也不在前序步骤重复重型 Owner Gate；普通 check 不更新 tracked baseline；
 - [ ] PHO-8：完成对抗 Corpus、全维度审查、Cursor Cloud 独立复核、文档切换和最终 GO/NO-GO。
 
 #### P3.8 WRC-1 世界还原与可玩控制闭环
@@ -1085,6 +1118,64 @@ WRC-1 共包含 33 个工作包：已有 JUMP-0..3、BNA-3..8、BWB-3..6、PHO-0
 每个工作包独立成可审核的小 PR，依赖满足且门禁闭合后立即合入 `main`，不等待 WRC-1 全部完成。
 开发期只跑聚焦 RED→GREEN 和一次受影响门禁；整仓重型门禁与独立深审只在合入候选/阶段收口时由
 Cursor Cloud 针对精确 SHA 执行，禁止无输入变化时反复重跑。
+
+#### NBR-1 当前唯一最高优先级纵向切片
+
+- [ ] NBR-00：合入详细设计、实施计划、WRC 优先级和 current-only 删除清单；
+- [x] NBR-10：冻结 Route、真实 Generation Request/Receipt、Case/Profile 和修正后的 Attempt 身份；
+- [ ] NBR-20：通过统一 Codex task router 从真实参考输入生成闭合 Native Block workspace；
+- [ ] NBR-30：通过通用 Native Check/Explain 和 Package/Receipt 链，删除 Cloud Ridge 手写生产装配；
+- [ ] NBR-40：由保留的 BNA 验证 Harness 调用正式 RuntimeHost 和 SDK-owned
+  Havok/Subject/Input/Action/Camera 启动验证后的 Native Package；不修改 Canonical-only Unified Viewer；
+- [ ] NBR-45：从同一 Package/Runtime 发布身份绑定 Opening/top/side Capture 与 Collider overlay；
+- [ ] NBR-50：输出拓扑、语义轮廓、Opening、Spawn/Support、Collider、固定输入关键通过性和确定性诊断；
+- [ ] NBR-60：最多一次诊断驱动修复，并产生新的 Attempt/Package/Receipt/Capture；
+- [ ] NBR-70：真实 `cloud-temple-t-gate-native-block` Case 可本地启动、接地、移动、挡墙和通过；
+- [ ] NBR-90：focused gates、最终 exact-SHA Cursor Cloud gates 和独立深审无开放 P0/P1。
+
+详细权威为 [NBR-1 纵向闭环设计](superpowers/specs/2026-08-31-native-block-reconstruction-e2e-design.md)。
+以上复选框只按真实代码与证据逐项更新；NBR-1 完成不等于完整 BNA-6/7、WRC-SR 或 WRC-1 完成。
+BWB-6、PHO-7/8、通用 Action/Camera、空间事件、产品 Route/Nav、BNA-8 与 WRC-ACC-1 在本切片期间
+保持延期，不删除也不展开。
+
+#### Unified Scene Viewer 下游开发工具关联（非 WRC 关键路径）
+
+Unified Scene Viewer 的当前设计与实施计划已进入当前树：
+
+- [Unified Scene Viewer clean-break design](superpowers/specs/2026-08-31-unified-scene-viewer-clean-break-design.md)
+- [Unified Scene Viewer implementation plan](superpowers/plans/2026-08-31-unified-scene-viewer-clean-break-implementation.md)
+
+该 Viewer 是 WRC-1 下游开发工具，不是新的 WRC 工作包、Runtime、Scene Source、WorldPackage、
+Compiler、WorldKit Browser Protocol、Gameplay 或生产准入权威；WRC-1 的工作包数量保持 33。已接受的
+目标合同要求 Catalog/bootstrap 只支持 Canonical AuthoringSpec，Catalog 不保存 Subject Definition Ref；
+Host 必须解析完整 AuthoringSpec，并证明 `startup.controlledEntityId` 最终绑定
+`worldkit://subject-definition/humanoid.g-bot@2`。当前原子切换已完成，`apps/playground` 是唯一产品开发
+Viewer shell，`pnpm dev` 只提供 `feel-flat`、`traversal-course`、`action-lab` 三个 curated presets；
+这些预设只消费现有 WRC Runtime/Action/Camera 能力，不替代山地/T 字、台阶/建筑/有限室内、动作/相机/
+空间事件验收 Case。
+
+当前树已实施 USV-0/USV-1：旧 `authoring=1`、`catalog-gameplay` source-selection route 已删除，
+三份 curated preset source 已发布，Playground、CLI 与 Studio 已同步切换。该开发工具完成状态仍不计入
+WRC 完成度，也不授权 WRC/NBR 删除独立证据、Corpus 或 Harness。
+
+Playground、CLI 与 Studio 的公开 source-selection route 必须在同一 current-only 检查点原子切换；前置
+Owner/gate 是 Canonical AuthoringSpec/Subject 解析、RuntimeHost/Browser V5 生命周期、CLI/Studio source
+选择合同、三预设 Browser verifier 与零旧入口 census。`worldkit run` 和 Studio 可通过 Host-selected
+temporary source 打开同一 Viewer，但不得把临时 Case 写入 curated Catalog。Viewer 只消费这些 Owner 的
+已提交状态，不持有 Runtime、Action、Camera、Physics、Capture 或 admission 状态。
+
+Native Viewer 不进入当前合同。NBR-1/BNA Native Package 继续通过 BNA-owned 验证 Harness 启动；未来
+只有在适用 BNA production/admission disposition 后，才能用单独 current-only 原子变更把 Native Source
+加入 Viewer。trusted artifact renderer/正式 Capture 仍是独立证据工具，不是第二个产品 Viewer，其迁移
+由 WRC Capture/BNA-7 Owner 决定。
+
+以下内容明确排除在 Viewer 清理范围之外：`artifacts/scenes` 中的 WRC Capture、Receipt、重建评分和
+验收语料；BWB/BNA Corpus；Runtime/Hosted/Browser Harness；正式 Capture/Route 证据；以及绑定 Package、
+Receipt、Candidate 或 exact-SHA 的 fixtures。Native Web UI、旧 showcase 或历史 Case 只有同时满足
+生产/测试引用为零、identity-bound fixtures 已迁移、相关 focused/Browser/Capture 门禁通过，并获得对应
+WRC Capture/Corpus Owner 与 BNA Runtime/Admission/Capture Owner 明确签字后才能删除。目录整洁不是削弱
+Corpus、Harness、Capture 或 Receipt 的理由。该关联记录不计入 WRC 完成度，也不提前标记任何 WRC/BNA
+能力完成。
 
 Wave A 的详细权威设计与施工计划已经固定在：
 
@@ -1138,11 +1229,15 @@ P1.4 WorldPackage + P1.6 AI Schema / WorldChangeSet + P2.4 Controller/Camera/Dri
 Native Scene 独立候选链：
 
 BNA-0 -> BNA-1 + BNA-2
-BNA-1 + BNA-2 -> BNA-3 -> BNA-4 -> BNA-5 -> BNA-6
+BNA-1 + BNA-2 -> BNA-3 -> BNA-4 -> BNA-5
 BNA-2 -> BWB-1 -> BWB-2
 BWB-1 + BWB-2 + BNA-3 -> BWB-3
 BNA-4 + BWB-2 -> BWB-4
-BNA-5 + BNA-6 + BWB-3 + BWB-4 -> BWB-5 -> BWB-6
+BNA-5 + BWB-3 + BWB-4 -> BWB-5 -> BWB-6
+BNA-3 + BWB-3 -> WRC-SR-1
+BNA-5 + WRC-SR-1 -> BNA-6
+BNA-4 -> BNA-7
+BNA-6 + BNA-7 + WRC-SR-1 -> WRC-SR-2 -> BNA-8
 
 APA-0..APA-6 只提供 source-neutral 已发布资产；BNA-3 才把已发布 Resource Ref 纳入 Native Package。
 
@@ -1183,9 +1278,9 @@ Placement S1、Simulation Take / Control Capture V1 与 Validation Capture/Integ
 | G19-4E | **已完成** | 全量门禁、真实回归 disposition、生成物治理 | G19-4D | `pnpm typecheck`、165 files / 2,079 tests、`pnpm build` 与 9 项 verify Gate 全通过；Take 根哈希由 `generate:example-takes` 生成；Route 重型套件在全量并发下通过 |
 | G19-5 | **已完成，作为 G19-6 前置底座** | Babylon Gameplay Port；`possessedBy` 唯一控制权；输入目标与 Camera Target projection 事务 | G19-4 | optional Possession、fixed-input Controller 隔离、staged transaction、provider-neutral projection 与 fail-closed Action 已完成 |
 | G19-6 | **已完成并在 `main`** | Browser Protocol V5 Gameplay 唯一入口、Snapshot V4、Reset/Rebind、Runtime Activity、Authoring/CLI/Capture/Take consumer cutover；当前 surface 为 exact 38 keys；Execution Subject locomotion Capability lock 与 Canonical capability state | G19-5 | `eef75c6` 实现、`5ffd031` completion review；typecheck、build、168 files / 2,134 tests、Canonical/Placement/Rigged/G Bot/R0/R1/R1b 与两项 Capture verifier 全通过；无 open confirmed P0/P1/P2 |
-| G19-7 | **已完成** | Outdoor/catalog route、page/artifact lifecycle 与六场景接线，不增加第二套 Gameplay 真相 | G19-6 | `da90f16` + completion record `1594823`；6/6 Gameplay、6/6 artifact-only、unknown-scene fail-closed Browser Gate 通过 |
+| G19-7 | **历史完成；现行入口已由 USV clean break 替换** | 当时的 Outdoor/catalog route、page/artifact lifecycle 与六场景接线；当前只保留六场景 artifact-only 证据面，不再提供 catalog Gameplay | G19-6 | 历史证据为 `da90f16` + completion record `1594823`；当前证据是三个 Canonical preset、六个 artifact-only 场景与 unknown-scene fail-closed |
 | G19-8 | **已完成并合入 `main`，Final GO** | 未发布协议 clean break、历史命名/兼容路径专项清理、零消费者 census、G19 整体全量验证、主 Agent深审与最终 disposition | G19-7 | 候选 `99fb822`；178 files / 2,172 tests、全部专项 Gate、632/0/489 census；与 `main@134592e` Camera 边界文档语义融合；无 open confirmed P0/P1/适用 P2 |
-| HNC-F1 | Alpha 前强制执行 | 对当时全部公共命名、exports、parser、Browser/CLI、生成资产和隐式 fallback 再做一次全面兼容性清理；同时关闭 `SCENE-ORIGIN-1` | Scene spawn-origin 与 collider-derived placement 合同 | 最新 clean-break machine gate + 人工语义分类；Scene 固定 0.9m bridge 删除；场景/Outdoor/Plan gates 全绿 |
+| HNC-F1 | Alpha 前强制执行 | 对当时全部公共命名、exports、parser、Browser/CLI、生成资产和隐式 fallback 再做一次全面兼容性清理；同时关闭 `SCENE-ORIGIN-1` | Scene spawn-origin 与 collider-derived placement 合同 | 最新 clean-break machine gate + 人工语义分类；Scene 固定 0.9m bridge 删除；`test:scenes`、`verify:scene-viewer`、artifact-only 与 Plan gates 全绿 |
 | WS-07B | **待开始；结构治理后续 1** | 按 public contract family 扩展唯一 source/generated parity；每次只迁一个领域 | `ARC-INT` 已完成 / 阻塞相关 Schema release | 正负 parity、unknown-key、round-trip、tracked bytes；禁止用私有 deep import 换取小 bundle |
 | WS-05B/C | **待开始；结构治理后续 2** | 按 owner 批次消减当前 52 条 exact workspace boundary debt；补必要 `/testing` exports、direct deps 与 per-package tsconfig | `ARC-INT` 已完成 / 阻塞 `WS-08` 的相关 package extraction | debt count 单调下降、zero stale/new、zero cycles、无 wildcard |
 | WS-08 | **待开始；结构治理后续 3** | 稳定 Host primitives 后拆分 Host/Studio/CLI composition package，不改变 Runtime/Camera/Capture authority | public contracts 稳定且相关 `WS-05B/C` debt 已清 / 无 | CLI snapshots、readiness/shutdown lifecycle、build graph、Studio E2E |
@@ -1229,7 +1324,8 @@ UCCB-65 的任务账本见
 census 当成永久证明。当前仍有语义职责、但未来应由显式合同替代的
 `SCENE_HUMANOID_SPAWN_CENTER_OFFSET_METERS` 已登记为 `SCENE-ORIGIN-1`：它不是兼容 alias，
 删除门禁是 Scene 明确 spawn origin 或从锁定 Collider 推导 placement，迁移全部 catalog scene，
-并通过 `test:scenes`、Outdoor Gameplay、Plan/Scene Plan gates。
+并通过 `test:scenes`、三个 Canonical 调试预设的 `verify:scene-viewer`、Plan/Scene Plan gates；
+旧 Outdoor catalog 只保留 artifact-only 证据，不再拥有 Gameplay 门禁。
 
 G19-4E 已关闭此前的两项验证债务：Simulation Take 不再手改 `worldPackageRootHash`，而由
 `generate:example-takes` 从 canonical WorldPackage identity 原子生成；两个 Route 重型套件保留

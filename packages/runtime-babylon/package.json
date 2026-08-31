@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./testing": "./src/testing.ts"
   },
   "dependencies": {
     "@babylonjs/core": "9.23.0",
@@ -13,6 +14,7 @@
     "@whitebox-world/camera": "workspace:*",
     "@whitebox-world/character-movement": "workspace:*",
     "@whitebox-world/control-capture": "workspace:*",
+    "@whitebox-world/gameplay": "workspace:*",
     "@whitebox-world/gameplay-contracts": "workspace:*",
     "@whitebox-world/native-babylon": "workspace:*",
     "@whitebox-world/protocol": "workspace:*",
@@ -31,7 +33,6 @@
   "devDependencies": {
     "@types/earcut": "3.0.0",
     "@whitebox-world/authoring": "workspace:*",
-    "@whitebox-world/compiler": "workspace:*",
-    "@whitebox-world/gameplay": "workspace:*"
+    "@whitebox-world/compiler": "workspace:*"
   }
 }

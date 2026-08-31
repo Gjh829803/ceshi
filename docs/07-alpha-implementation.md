@@ -1,7 +1,7 @@
 # Babylon Alpha 实现与运行指南
 
-> 本文记录当前唯一的 Babylon/Havok 白膜 Runtime 与 catalog 场景工作流。Canonical
-> Authoring 输入和 Browser 协议以
+> 本文记录当前唯一的 Babylon/Havok 白膜 Runtime、统一 Canonical Viewer 与内部
+> artifact-only 场景制品工作流。Canonical Authoring 输入和 Browser 协议以
 > [Canonical Authoring V4 快速接入](17-canonical-json-quickstart.md)为准；本文不定义第二套
 > Schema 或 Gameplay 真相。
 
@@ -16,8 +16,9 @@ OutdoorWorldSpec / AuthoringSpec V4
 ```
 
 Babylon 拥有场景、相机、资产、动画与渲染资源；Havok 拥有碰撞、支撑和 Character
-运动。Catalog gameplay、artifact-only 捕获与 Canonical Authoring 页面使用相同的
-Authoring/Compiler 和 Runtime 边界，不允许场景模块直接创建 Provider 对象或维护备用状态。
+运动。统一 Canonical Viewer 与内部 artifact-only 捕获使用相同的 Authoring/Compiler 和
+Babylon/Havok 边界；旧 catalog-gameplay 已删除，不允许场景模块直接创建 Provider 对象或
+维护备用状态。
 
 `@whitebox-world/camera` 已提供 provider-neutral 的命名 Camera Rig/Modifier/Context Profile、
 View Preference、纯 Selection/Explain 和诊断。它还没有接入 committed Gameplay Context
@@ -34,30 +35,30 @@ pnpm worldkit validate examples/authoring/package-subject-world.json --json
 pnpm worldkit run examples/authoring/package-subject-world.json
 ```
 
-`worldkit run` 负责注入 `?authoring=1` 所需的 AuthoringSpec，并发布
-`window.__WORLDKIT__` Browser Protocol V5。不要把普通 `pnpm dev` 与 `?authoring=1`
-组合。
+`worldkit run` 负责把一个 AuthoringSpec 固定到统一 Viewer，并发布
+`window.__WORLDKIT__` Browser Protocol V5。旧 `?authoring=1` 路由已删除。
 
 查看 G Bot：
-
-```bash
-pnpm dev:g-bot
-```
-
-依赖切换后若浏览器报告 `504 Outdated Optimize Dep`，停止旧服务并只运行一次：
-
-```bash
-pnpm dev:g-bot:refresh
-```
-
-## 3. Babylon catalog Playground
 
 ```bash
 pnpm dev
 ```
 
-打开 `http://127.0.0.1:5173/?scene=<catalog-id>`。该入口用于现有 catalog gameplay、场景
-检查、Opening Composition 和规划/三视图制品，不是 Canonical JSON 的注入入口。
+依赖切换后若浏览器报告 `504 Outdated Optimize Dep`，停止旧服务并只运行一次：
+
+```bash
+pnpm dev:refresh
+```
+
+## 3. Babylon/Havok Viewer
+
+```bash
+pnpm dev
+```
+
+打开 `http://127.0.0.1:5173/`。默认是 G Bot `feel-flat`；页面选择器可切换
+allowlisted Canonical 调试预设。`worldkit run` 与 Studio Preview 复用同一页面壳并固定
+自己的 Canonical 来源。规划/三视图的 trusted artifact capture 仍是独立内部证据能力。
 
 场景页面可通过 `window.__WHITEBOX_PLAYGROUND__` 暴露有界的自动化能力，例如 Snapshot、
 Feature inspection、固定输入和截图。它是 catalog/制品工作流的测试面，不替代
@@ -69,7 +70,7 @@ Feature inspection、固定输入和截图。它是 catalog/制品工作流的�
 pnpm test:scenes
 pnpm typecheck
 pnpm build
-pnpm verify:outdoor-gameplay
+pnpm verify:scene-viewer
 ```
 
 ## 4. Plan-first 场景与制品合同

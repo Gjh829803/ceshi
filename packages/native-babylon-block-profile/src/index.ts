@@ -3,7 +3,34 @@ export {
   BABYLON_NATIVE_BLOCK_PALETTE_ROLES_V1,
   BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
 } from "./profile.js";
+export {
+  BABYLON_NATIVE_BLOCK_RECONSTRUCTION_CORPUS_CASE_IDS_V1,
+  createBabylonNativeBlockReconstructionCorpusEvidenceIndexV1,
+  inspectBabylonNativeBlockReconstructionCorpusCaseV1,
+  materializeBabylonNativeBlockReconstructionCorpusCaseV1,
+} from "./reconstruction-corpus.js";
+export type {
+  BabylonNativeBlockReconstructionCorpusCaseIdV1,
+  BabylonNativeBlockReconstructionCorpusCaseV1,
+  BabylonNativeBlockReconstructionCorpusEvidenceIndexV1,
+  BabylonNativeBlockReconstructionCorpusMaterializationV1,
+} from "./reconstruction-corpus.js";
 export type { BabylonNativeBlockPaletteRoleV1 } from "./profile.js";
+export {
+  BABYLON_NATIVE_BLOCK_AUTHORING_PROFILE_REF_V1,
+  bindNativeBlockAuthoringManifestToCheckedLayoutV1,
+  hashBabylonNativeBlockCheckedLayoutInventoryV1,
+  hashNativeBlockAuthoringManifestV1,
+  hashNativeBlockVisualResourceListV1,
+  parseNativeBlockAuthoringManifestV1,
+  parseNativeBlockVisualResourceListV1,
+} from "./authoring-manifest.js";
+export type {
+  NativeBlockAuthoringLayoutBindingV1,
+  NativeBlockAuthoringManifestV1,
+  NativeBlockAuthoringVisualGroupV1,
+  NativeBlockVisualResourceListV1,
+} from "./authoring-manifest.js";
 export type {
   BabylonNativeBlockProfileCheckResultV1,
   BabylonNativeBlockProfileDiagnosticLocationV1,
@@ -15,14 +42,29 @@ export { BABYLON_NATIVE_BLOCK_PROFILE_DIAGNOSTIC_CODES_V1 } from "./check.js";
 export type { BabylonNativeBlockProfileDiagnosticCodeV1 } from "./check.js";
 export { createBabylonNativeBlockProfileSessionV1 } from "./session.js";
 export type {
+  BabylonNativeBlockCheckedLayoutV1,
   BabylonNativeBlockCreateInputV1,
+  BabylonNativeBlockFinalizedEpochV1,
   BabylonNativeBlockProfileBudgetV1,
+  BabylonNativeBlockProfileFinalizeInputV1,
   BabylonNativeBlockProfileSessionV1,
 } from "./session.js";
+export type {
+  BabylonNativeBlockColliderCandidateInventoryEntryV1,
+  BabylonNativeBlockStaticColliderSelectionV1,
+} from "./collider-contribution.js";
+export { createBabylonNativeBlockAuthoringCaptureV1 } from "./authoring-capture.js";
+export type {
+  BabylonNativeBlockAuthoringCaptureV1,
+  BabylonNativeBlockAuthoringViewIdV1,
+  BabylonNativeBlockAuthoringViewV1,
+  BabylonNativeBlockAuthoringVisualGroupRegionV1,
+  CreateBabylonNativeBlockAuthoringCaptureInputV1,
+} from "./authoring-capture.js";
 export {
-  BABYLON_NATIVE_BLOCK_CENTER_LATTICE_METERS_V1,
+  BABYLON_NATIVE_BLOCK_CENTER_LATTICE_METERS_XYZ_V1,
   BABYLON_NATIVE_BLOCK_FULL_SIZE_METERS_V1,
-  BABYLON_NATIVE_BLOCK_MICRO_GRID_METERS_V1,
+  BABYLON_NATIVE_BLOCK_OCCUPANCY_GRID_METERS_XYZ_V1,
   BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1,
 } from "./shapes.js";
 export type {

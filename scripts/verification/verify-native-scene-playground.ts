@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { createServer as createHttpServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import path from "node:path";
 
 import type { Browser, Page } from "playwright";
@@ -9,7 +11,7 @@ import { launchChromiumWithSystemFallback } from
 
 const CONTROLLED_ENTITY_ID = "g-bot-primary";
 const EXPECTED_NATIVE_CONTRIBUTION_HASH =
-  "sha256:bb339a494526ee6bb51a40ec351777bfcb77dcc0bc08a9fa2886a63c9215d984";
+  "sha256:cae0d302c98fc886b7406810a736dc94511b412b7228ad484852cae563ce9b3d";
 const EXPECTED_COLLIDER_SUBSHAPE_IDS = Object.freeze([
   "collider-subshape:5af935abea0d5d3da0e32a9e5c1121f3d88f5174c3c0cd32414ea4740b13dc89",
   "collider-subshape:0069b3ff456288eb8ea99f6a7ff396f9886725df6dd89e8626cd14150b71dbcc",
@@ -70,18 +72,40 @@ async function closeBestEffort(
   ]);
 }
 
+async function findFreeLoopbackPort(): Promise<number> {
+  const server = createHttpServer();
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address() as AddressInfo;
+  await new Promise<void>((resolve, reject) => {
+    server.close((error) => {
+      if (error === undefined) resolve();
+      else reject(error);
+    });
+  });
+  return address.port;
+}
+
 async function main(): Promise<void> {
   let server: ViteDevServer | undefined;
   let browser: Browser | undefined;
   let page: Page | undefined;
   try {
+    const shellPort = await findFreeLoopbackPort();
+    const runtimePort = shellPort === 65_535 ? shellPort - 1 : shellPort + 1;
+    process.env.WORLDKIT_HOSTED_SHELL_ORIGIN =
+      `http://127.0.0.1:${shellPort}`;
+    process.env.WORLDKIT_HOSTED_RUNTIME_ORIGIN =
+      `http://127.0.0.1:${runtimePort}`;
     server = await createServer({
       root: path.resolve("apps/native-scene-playground"),
       logLevel: "silent",
       server: {
         host: "127.0.0.1",
-        port: 0,
-        strictPort: false,
+        port: shellPort,
+        strictPort: true,
       },
     });
     await server.listen();

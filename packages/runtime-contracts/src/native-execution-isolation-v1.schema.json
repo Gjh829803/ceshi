@@ -1,0 +1,463 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://whitebox.world/schemas/native-execution-isolation-v1.schema.json",
+  "title": "Native Execution Isolation V1 persistent contracts",
+  "oneOf": [
+    { "$ref": "#/$defs/NativeExecutionTrustProfileV1" },
+    { "$ref": "#/$defs/NativeEffectiveExecutionBudgetV1" },
+    { "$ref": "#/$defs/NativeIsolatedExecutionRequestV1" },
+    { "$ref": "#/$defs/NativeIsolatedExecutionReadyResultV1" },
+    { "$ref": "#/$defs/NativeIsolatedExecutionCompletedResultV1" },
+    { "$ref": "#/$defs/NativeIsolatedExecutionRejectedResultV1" },
+    { "$ref": "#/$defs/NativeIsolatedExecutionTerminatedResultV1" },
+    { "$ref": "#/$defs/NativeIsolatedExecutionCleanupFailedResultV1" },
+    { "$ref": "#/$defs/NativeIsolatedExecutionReceiptV1" }
+  ],
+  "$defs": {
+    "Identity": {
+      "type": "string",
+      "minLength": 1
+    },
+    "Sha256Hash": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "not": { "const": "sha256:0000000000000000000000000000000000000000000000000000000000000000" }
+    },
+    "ResourceRef": {
+      "type": "string",
+      "pattern": "^worldkit://[a-z0-9][a-z0-9.-]*/[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?@[1-9][0-9]*$"
+    },
+    "WorldPackageRef": {
+      "type": "string",
+      "pattern": "^package://world-package/sha256/[a-f0-9]{64}$"
+    },
+    "PositiveInteger": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "NonNegativeInteger": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "NativeExecutionTrustProfileV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "schemaVersion",
+        "id",
+        "resourceRef",
+        "trustMode",
+        "requiredIsolationCapabilityIds",
+        "contentHash"
+      ],
+      "properties": {
+        "kind": { "const": "native-execution-trust-profile" },
+        "schemaVersion": { "const": 1 },
+        "id": { "$ref": "#/$defs/Identity" },
+        "resourceRef": {
+          "type": "string",
+          "pattern": "^worldkit://native-execution-trust-profile/[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?@[1-9][0-9]*$"
+        },
+        "trustMode": { "enum": ["trusted-local", "hosted-isolated"] },
+        "requiredIsolationCapabilityIds": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9.-]*$"
+          }
+        },
+        "contentHash": { "$ref": "#/$defs/Sha256Hash" }
+      }
+    },
+    "SceneBudget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maximumVertices", "maximumTriangles", "maximumColliders"],
+      "properties": {
+        "maximumVertices": { "$ref": "#/$defs/PositiveInteger" },
+        "maximumTriangles": { "$ref": "#/$defs/PositiveInteger" },
+        "maximumColliders": { "$ref": "#/$defs/PositiveInteger" }
+      }
+    },
+    "AssetBudget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "maximumAssetCount",
+        "maximumAssetBytes",
+        "maximumTextureCount",
+        "maximumTextureBytes"
+      ],
+      "properties": {
+        "maximumAssetCount": { "$ref": "#/$defs/PositiveInteger" },
+        "maximumAssetBytes": { "$ref": "#/$defs/PositiveInteger" },
+        "maximumTextureCount": { "$ref": "#/$defs/PositiveInteger" },
+        "maximumTextureBytes": { "$ref": "#/$defs/PositiveInteger" }
+      }
+    },
+    "RuntimeBudget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "maximumSceneNodeCount",
+        "maximumMaterialCount",
+        "maximumShaderCount",
+        "maximumPhysicsBodyCount"
+      ],
+      "properties": {
+        "maximumSceneNodeCount": { "$ref": "#/$defs/PositiveInteger" },
+        "maximumMaterialCount": { "$ref": "#/$defs/PositiveInteger" },
+        "maximumShaderCount": { "$ref": "#/$defs/PositiveInteger" },
+        "maximumPhysicsBodyCount": { "$ref": "#/$defs/PositiveInteger" }
+      }
+    },
+    "ProcessBudget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "maximumWallTimeMilliseconds",
+        "maximumCpuTimeMilliseconds",
+        "maximumMemoryBytes",
+        "maximumProcessCount"
+      ],
+      "properties": {
+        "maximumWallTimeMilliseconds": { "$ref": "#/$defs/PositiveInteger" },
+        "maximumCpuTimeMilliseconds": { "$ref": "#/$defs/PositiveInteger" },
+        "maximumMemoryBytes": { "$ref": "#/$defs/PositiveInteger" },
+        "maximumProcessCount": { "$ref": "#/$defs/PositiveInteger" }
+      }
+    },
+    "ProtocolBudget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "maximumInboundMessageBytes",
+        "maximumOutboundMessageBytes",
+        "maximumReceiptBytes",
+        "maximumDiagnosticCount",
+        "maximumLogBytes"
+      ],
+      "properties": {
+        "maximumInboundMessageBytes": { "$ref": "#/$defs/PositiveInteger" },
+        "maximumOutboundMessageBytes": { "$ref": "#/$defs/PositiveInteger" },
+        "maximumReceiptBytes": { "$ref": "#/$defs/PositiveInteger" },
+        "maximumDiagnosticCount": { "$ref": "#/$defs/PositiveInteger" },
+        "maximumLogBytes": { "$ref": "#/$defs/PositiveInteger" }
+      }
+    },
+    "NativeEffectiveExecutionBudgetV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scene", "assets", "runtime", "process", "protocol"],
+      "properties": {
+        "scene": { "$ref": "#/$defs/SceneBudget" },
+        "assets": { "$ref": "#/$defs/AssetBudget" },
+        "runtime": { "$ref": "#/$defs/RuntimeBudget" },
+        "process": { "$ref": "#/$defs/ProcessBudget" },
+        "protocol": { "$ref": "#/$defs/ProtocolBudget" }
+      }
+    },
+    "NativeIsolatedExecutionOperationV1": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode"],
+          "properties": { "mode": { "const": "check" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "captureRequestHash"],
+          "properties": {
+            "mode": { "const": "capture" },
+            "captureRequestHash": { "$ref": "#/$defs/Sha256Hash" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode"],
+          "properties": { "mode": { "const": "interactive-session" } }
+        }
+      ]
+    },
+    "NativeIsolatedExecutionRequestV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "schemaVersion",
+        "id",
+        "runtimeSessionId",
+        "worldPackageRef",
+        "worldPackageRootHash",
+        "worldBuildIdentityHash",
+        "sceneModuleBundleHash",
+        "nativeSceneContributionHash",
+        "nativeExecutionTrustProfileRef",
+        "nativeExecutionTrustProfileHash",
+        "runnerIdentityRef",
+        "runnerImageDigest",
+        "sandboxPolicyHash",
+        "effectiveBudget",
+        "effectiveBudgetHash",
+        "requestedOperation",
+        "sessionNonce"
+      ],
+      "properties": {
+        "kind": { "const": "native-isolated-execution-request" },
+        "schemaVersion": { "const": 1 },
+        "id": { "$ref": "#/$defs/Identity" },
+        "runtimeSessionId": { "$ref": "#/$defs/Identity" },
+        "worldPackageRef": { "$ref": "#/$defs/WorldPackageRef" },
+        "worldPackageRootHash": { "$ref": "#/$defs/Sha256Hash" },
+        "worldBuildIdentityHash": { "$ref": "#/$defs/Sha256Hash" },
+        "sceneModuleBundleHash": { "$ref": "#/$defs/Sha256Hash" },
+        "nativeSceneContributionHash": { "$ref": "#/$defs/Sha256Hash" },
+        "nativeExecutionTrustProfileRef": {
+          "type": "string",
+          "pattern": "^worldkit://native-execution-trust-profile/[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?@[1-9][0-9]*$"
+        },
+        "nativeExecutionTrustProfileHash": { "$ref": "#/$defs/Sha256Hash" },
+        "runnerIdentityRef": {
+          "type": "string",
+          "pattern": "^worldkit://native-isolation-runner/[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?@[1-9][0-9]*$"
+        },
+        "runnerImageDigest": { "$ref": "#/$defs/Sha256Hash" },
+        "sandboxPolicyHash": { "$ref": "#/$defs/Sha256Hash" },
+        "effectiveBudget": { "$ref": "#/$defs/NativeEffectiveExecutionBudgetV1" },
+        "effectiveBudgetHash": { "$ref": "#/$defs/Sha256Hash" },
+        "requestedOperation": { "$ref": "#/$defs/NativeIsolatedExecutionOperationV1" },
+        "sessionNonce": { "$ref": "#/$defs/Identity" }
+      }
+    },
+    "ResultBase": {
+      "type": "object",
+      "required": ["kind", "schemaVersion", "id", "requestId", "runtimeSessionId"],
+      "properties": {
+        "kind": { "const": "native-isolated-execution-result" },
+        "schemaVersion": { "const": 1 },
+        "id": { "$ref": "#/$defs/Identity" },
+        "requestId": { "$ref": "#/$defs/Identity" },
+        "runtimeSessionId": { "$ref": "#/$defs/Identity" }
+      }
+    },
+    "NativeIsolatedExecutionReadyResultV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "schemaVersion", "id", "requestId", "runtimeSessionId", "status", "runtimeSessionUri", "initialSnapshotHash"],
+      "properties": {
+        "kind": { "const": "native-isolated-execution-result" },
+        "schemaVersion": { "const": 1 },
+        "id": { "$ref": "#/$defs/Identity" },
+        "requestId": { "$ref": "#/$defs/Identity" },
+        "runtimeSessionId": { "$ref": "#/$defs/Identity" },
+        "status": { "const": "ready" },
+        "runtimeSessionUri": { "type": "string", "pattern": "^worldkit://runtime-session/[A-Za-z0-9][A-Za-z0-9._-]*$" },
+        "initialSnapshotHash": { "$ref": "#/$defs/Sha256Hash" }
+      }
+    },
+    "NativeIsolatedExecutionCompletedResultV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "schemaVersion", "id", "requestId", "runtimeSessionId", "status", "outputHashes", "finalSnapshotHash"],
+      "properties": {
+        "kind": { "const": "native-isolated-execution-result" },
+        "schemaVersion": { "const": 1 },
+        "id": { "$ref": "#/$defs/Identity" },
+        "requestId": { "$ref": "#/$defs/Identity" },
+        "runtimeSessionId": { "$ref": "#/$defs/Identity" },
+        "status": { "const": "completed" },
+        "outputHashes": { "type": "array", "maxItems": 256, "uniqueItems": true, "items": { "$ref": "#/$defs/Sha256Hash" } },
+        "finalSnapshotHash": { "$ref": "#/$defs/Sha256Hash" }
+      }
+    },
+    "IsolationDiagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" },
+        "message": { "$ref": "#/$defs/Identity" }
+      }
+    },
+    "NativeIsolatedExecutionRejectedResultV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "schemaVersion", "id", "requestId", "runtimeSessionId", "status", "stage", "diagnostics"],
+      "properties": {
+        "kind": { "const": "native-isolated-execution-result" },
+        "schemaVersion": { "const": 1 },
+        "id": { "$ref": "#/$defs/Identity" },
+        "requestId": { "$ref": "#/$defs/Identity" },
+        "runtimeSessionId": { "$ref": "#/$defs/Identity" },
+        "status": { "const": "rejected" },
+        "stage": { "enum": ["policy", "provisioning", "package-verification", "source-admission", "authority-audit", "runtime-replay", "surface-admission", "runtime", "protocol", "cleanup"] },
+        "diagnostics": { "type": "array", "minItems": 1, "maxItems": 64, "items": { "$ref": "#/$defs/IsolationDiagnostic" } }
+      }
+    },
+    "NativeIsolatedExecutionTerminatedResultV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "schemaVersion", "id", "requestId", "runtimeSessionId", "status", "reason"],
+      "properties": {
+        "kind": { "const": "native-isolated-execution-result" },
+        "schemaVersion": { "const": 1 },
+        "id": { "$ref": "#/$defs/Identity" },
+        "requestId": { "$ref": "#/$defs/Identity" },
+        "runtimeSessionId": { "$ref": "#/$defs/Identity" },
+        "status": { "const": "terminated" },
+            "reason": { "enum": ["host-cancelled", "timeout", "cpu-limit", "memory-limit", "process-limit", "output-limit", "protocol-violation", "provider-lost"] }
+      }
+    },
+    "NativeIsolatedExecutionCleanupFailedResultV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "schemaVersion", "id", "requestId", "runtimeSessionId", "status", "quarantineId"],
+      "properties": {
+        "kind": { "const": "native-isolated-execution-result" },
+        "schemaVersion": { "const": 1 },
+        "id": { "$ref": "#/$defs/Identity" },
+        "requestId": { "$ref": "#/$defs/Identity" },
+        "runtimeSessionId": { "$ref": "#/$defs/Identity" },
+        "status": { "const": "cleanup-failed" },
+        "quarantineId": { "$ref": "#/$defs/Identity" }
+      }
+    },
+    "UsageScene": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actualVertices", "actualTriangles", "actualColliders"],
+      "properties": {
+        "actualVertices": { "$ref": "#/$defs/NonNegativeInteger" },
+        "actualTriangles": { "$ref": "#/$defs/NonNegativeInteger" },
+        "actualColliders": { "$ref": "#/$defs/NonNegativeInteger" }
+      }
+    },
+    "UsageAssets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actualAssetCount", "actualAssetBytes", "actualTextureCount", "actualTextureBytes"],
+      "properties": {
+        "actualAssetCount": { "$ref": "#/$defs/NonNegativeInteger" },
+        "actualAssetBytes": { "$ref": "#/$defs/NonNegativeInteger" },
+        "actualTextureCount": { "$ref": "#/$defs/NonNegativeInteger" },
+        "actualTextureBytes": { "$ref": "#/$defs/NonNegativeInteger" }
+      }
+    },
+    "UsageRuntime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actualSceneNodeCount", "actualMaterialCount", "actualShaderCount", "actualPhysicsBodyCount"],
+      "properties": {
+        "actualSceneNodeCount": { "$ref": "#/$defs/NonNegativeInteger" },
+        "actualMaterialCount": { "$ref": "#/$defs/NonNegativeInteger" },
+        "actualShaderCount": { "$ref": "#/$defs/NonNegativeInteger" },
+        "actualPhysicsBodyCount": { "$ref": "#/$defs/NonNegativeInteger" }
+      }
+    },
+    "UsageProcess": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actualWallTimeMilliseconds", "actualCpuTimeMilliseconds", "peakMemoryBytes", "peakProcessCount"],
+      "properties": {
+        "actualWallTimeMilliseconds": { "$ref": "#/$defs/NonNegativeInteger" },
+        "actualCpuTimeMilliseconds": { "$ref": "#/$defs/NonNegativeInteger" },
+        "peakMemoryBytes": { "$ref": "#/$defs/NonNegativeInteger" },
+        "peakProcessCount": { "$ref": "#/$defs/NonNegativeInteger" }
+      }
+    },
+    "UsageProtocol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actualInboundMessageBytes", "actualOutboundMessageBytes", "actualReceiptBytes", "actualDiagnosticCount", "actualLogBytes"],
+      "properties": {
+        "actualInboundMessageBytes": { "$ref": "#/$defs/NonNegativeInteger" },
+        "actualOutboundMessageBytes": { "$ref": "#/$defs/NonNegativeInteger" },
+        "actualReceiptBytes": { "$ref": "#/$defs/NonNegativeInteger" },
+        "actualDiagnosticCount": { "$ref": "#/$defs/NonNegativeInteger" },
+        "actualLogBytes": { "$ref": "#/$defs/NonNegativeInteger" }
+      }
+    },
+    "NativeExecutionUsageV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scene", "assets", "runtime", "process", "protocol"],
+      "properties": {
+        "scene": { "$ref": "#/$defs/UsageScene" },
+        "assets": { "$ref": "#/$defs/UsageAssets" },
+        "runtime": { "$ref": "#/$defs/UsageRuntime" },
+        "process": { "$ref": "#/$defs/UsageProcess" },
+        "protocol": { "$ref": "#/$defs/UsageProtocol" }
+      }
+    },
+    "NativeIsolationCleanupV1": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": { "status": { "const": "complete" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "quarantineId"],
+          "properties": {
+            "status": { "const": "quarantined" },
+            "quarantineId": { "$ref": "#/$defs/Identity" }
+          }
+        }
+      ]
+    },
+    "NativeIsolatedExecutionReceiptV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind", "schemaVersion", "id", "requestId", "requestHash", "runtimeSessionId",
+        "worldPackageRootHash", "nativeExecutionTrustProfileRef", "nativeExecutionTrustProfileHash",
+        "runnerIdentityRef", "runnerImageDigest", "sandboxPolicyHash", "effectiveBudgetHash", "usage",
+        "requestedOperation", "outcome", "resultHash", "durationMilliseconds", "cleanup",
+        "isolationAttestationRef", "isolationAttestationHash"
+      ],
+      "properties": {
+        "kind": { "const": "native-isolated-execution-receipt" },
+        "schemaVersion": { "const": 1 },
+        "id": { "$ref": "#/$defs/Identity" },
+        "requestId": { "$ref": "#/$defs/Identity" },
+        "requestHash": { "$ref": "#/$defs/Sha256Hash" },
+        "runtimeSessionId": { "$ref": "#/$defs/Identity" },
+        "worldPackageRootHash": { "$ref": "#/$defs/Sha256Hash" },
+        "nativeExecutionTrustProfileRef": {
+          "type": "string",
+          "pattern": "^worldkit://native-execution-trust-profile/[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?@[1-9][0-9]*$"
+        },
+        "nativeExecutionTrustProfileHash": { "$ref": "#/$defs/Sha256Hash" },
+        "runnerIdentityRef": {
+          "type": "string",
+          "pattern": "^worldkit://native-isolation-runner/[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?@[1-9][0-9]*$"
+        },
+        "runnerImageDigest": { "$ref": "#/$defs/Sha256Hash" },
+        "sandboxPolicyHash": { "$ref": "#/$defs/Sha256Hash" },
+        "effectiveBudgetHash": { "$ref": "#/$defs/Sha256Hash" },
+        "usage": { "$ref": "#/$defs/NativeExecutionUsageV1" },
+        "requestedOperation": { "$ref": "#/$defs/NativeIsolatedExecutionOperationV1" },
+        "outcome": { "enum": ["completed", "rejected", "terminated", "cleanup-failed"] },
+        "resultHash": { "$ref": "#/$defs/Sha256Hash" },
+        "durationMilliseconds": { "$ref": "#/$defs/NonNegativeInteger" },
+        "cleanup": { "$ref": "#/$defs/NativeIsolationCleanupV1" },
+        "isolationAttestationRef": {
+          "type": "string",
+          "pattern": "^worldkit://native-isolation-attestation/[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?@[1-9][0-9]*$"
+        },
+        "isolationAttestationHash": { "$ref": "#/$defs/Sha256Hash" }
+      }
+    }
+  }
+}

@@ -11,5 +11,6 @@ agent-tmp/
 .agent-tmp/
 .codex-tmp/
 .playwright-cli/
+.project-health/
 /output/playwright/
 .worktrees/

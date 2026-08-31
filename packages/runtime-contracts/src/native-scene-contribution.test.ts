@@ -4,6 +4,7 @@ import {
   canonicalBabylonNativeSceneContributionBytesV1,
   createBabylonNativeStaticColliderContributionV1,
   hashBabylonNativeSceneContributionV1,
+  parseBabylonNativeProfileSettlementReceiptV1,
   parseBabylonNativeSceneContributionV1,
 } from "./native-scene-contribution.js";
 
@@ -18,6 +19,10 @@ function validContribution() {
     schemaVersion: 1,
     sceneModuleRef: "worldkit://native-scene/cloud-ridge@1",
     sceneModuleId: "cloud-ridge-native",
+    profileSettlement: {
+      kind: "none",
+      profileRef: "worldkit://native-scene-profile/whitebox.standard@1",
+    },
     spawnMarker: {
       id: "player-spawn",
       positionMetersXYZ: [0, 1.1, 18],
@@ -42,6 +47,120 @@ function validContribution() {
 }
 
 describe("BabylonNativeSceneContributionV1", () => {
+  it("parses the exact standard and Host-snapshot settlement branches", () => {
+    const standard = parseBabylonNativeProfileSettlementReceiptV1({
+      kind: "none",
+      profileRef: "worldkit://native-scene-profile/whitebox.standard@1",
+    });
+    const blocks = parseBabylonNativeProfileSettlementReceiptV1({
+      kind: "host-snapshot",
+      profileRef: "worldkit://native-scene-profile/whitebox.blocks@1",
+      targetCount: 7,
+      profileInventoryHash: `sha256:${"1".repeat(64)}`,
+      settledVisualHash: `sha256:${"2".repeat(64)}`,
+    });
+
+    expect(standard).toEqual({
+      kind: "none",
+      profileRef: "worldkit://native-scene-profile/whitebox.standard@1",
+    });
+    expect(blocks).toEqual({
+      kind: "host-snapshot",
+      profileRef: "worldkit://native-scene-profile/whitebox.blocks@1",
+      targetCount: 7,
+      profileInventoryHash: `sha256:${"1".repeat(64)}`,
+      settledVisualHash: `sha256:${"2".repeat(64)}`,
+    });
+    expect(Object.isFrozen(standard)).toBe(true);
+    expect(Object.isFrozen(blocks)).toBe(true);
+  });
+
+  it.each([
+    ["missing", undefined],
+    ["extra", {
+      kind: "none",
+      profileRef: "worldkit://native-scene-profile/whitebox.standard@1",
+      extra: true,
+    }],
+    ["wrong standard pair", {
+      kind: "none",
+      profileRef: "worldkit://native-scene-profile/whitebox.blocks@1",
+    }],
+    ["wrong blocks pair", {
+      kind: "host-snapshot",
+      profileRef: "worldkit://native-scene-profile/whitebox.standard@1",
+      targetCount: 1,
+      profileInventoryHash: `sha256:${"1".repeat(64)}`,
+      settledVisualHash: `sha256:${"2".repeat(64)}`,
+    }],
+    ["negative count", {
+      kind: "host-snapshot",
+      profileRef: "worldkit://native-scene-profile/whitebox.blocks@1",
+      targetCount: -1,
+      profileInventoryHash: `sha256:${"1".repeat(64)}`,
+      settledVisualHash: `sha256:${"2".repeat(64)}`,
+    }],
+    ["malformed hash", {
+      kind: "host-snapshot",
+      profileRef: "worldkit://native-scene-profile/whitebox.blocks@1",
+      targetCount: 1,
+      profileInventoryHash: "sha256:not-a-hash",
+      settledVisualHash: `sha256:${"2".repeat(64)}`,
+    }],
+  ])("rejects %s settlement", (_label, profileSettlement) => {
+    expect(() => parseBabylonNativeSceneContributionV1({
+      ...validContribution(),
+      profileSettlement,
+    })).toThrow(/BabylonNativeSceneContributionV1/);
+  });
+
+  it("rejects accessor and symbol-bearing settlement records", () => {
+    const accessor = Object.defineProperty({}, "kind", {
+      enumerable: true,
+      get: () => "none",
+    });
+    Object.defineProperty(accessor, "profileRef", {
+      enumerable: true,
+      value: "worldkit://native-scene-profile/whitebox.standard@1",
+    });
+    const symbolBearing = {
+      kind: "none",
+      profileRef: "worldkit://native-scene-profile/whitebox.standard@1",
+      [Symbol("hidden")]: true,
+    };
+
+    expect(() => parseBabylonNativeSceneContributionV1({
+      ...validContribution(),
+      profileSettlement: accessor,
+    })).toThrow(/BabylonNativeSceneContributionV1/);
+    expect(() => parseBabylonNativeSceneContributionV1({
+      ...validContribution(),
+      profileSettlement: symbolBearing,
+    })).toThrow(/BabylonNativeSceneContributionV1/);
+  });
+
+  it("binds every settlement field into the Contribution hash", () => {
+    const base = validContribution();
+    const first = {
+      ...base,
+      profileSettlement: {
+        kind: "host-snapshot",
+        profileRef: "worldkit://native-scene-profile/whitebox.blocks@1",
+        targetCount: 7,
+        profileInventoryHash: `sha256:${"1".repeat(64)}`,
+        settledVisualHash: `sha256:${"2".repeat(64)}`,
+      },
+    } as const;
+    const hashes = [
+      first,
+      { ...first, profileSettlement: { ...first.profileSettlement, targetCount: 8 } },
+      { ...first, profileSettlement: { ...first.profileSettlement, profileInventoryHash: `sha256:${"3".repeat(64)}` } },
+      { ...first, profileSettlement: { ...first.profileSettlement, settledVisualHash: `sha256:${"4".repeat(64)}` } },
+    ].map(hashBabylonNativeSceneContributionV1);
+
+    expect(new Set(hashes).size).toBe(hashes.length);
+  });
+
   it("parses a deeply frozen handle-free contribution and hashes canonical data", () => {
     const input = validContribution();
     const contribution = parseBabylonNativeSceneContributionV1(input);

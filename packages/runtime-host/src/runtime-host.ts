@@ -40,7 +40,7 @@ import {
 import {
   assertWorldPackageAccessorFreeDataGraphV1,
   type VerifiedWorldPackageDirectoryV1,
-} from "@whitebox-world/world-package";
+} from "@whitebox-world/world-package/runtime-contract";
 import { isNil } from "lodash-es";
 
 import type { GameplayWorldPortV1 } from "./gameplay-world-port";

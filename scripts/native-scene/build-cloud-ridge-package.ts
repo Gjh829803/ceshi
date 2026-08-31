@@ -13,11 +13,14 @@ import {
 import { parseGameplayBootstrapV1 } from
   "@whitebox-world/gameplay-contracts";
 import {
+  assertNativeBlockGenerationRequestMatchesAttemptV1,
+  decideSceneAuthoringRouteV1,
+  hashNativeBlockGenerationRequestV1,
   hashSceneAuthoringAttemptV1,
   hashSceneAuthoringRouteDecisionV1,
+  type NativeBlockGenerationRequestV1,
   type SceneAuthoringAttemptResultV1,
   type SceneAuthoringAttemptV1,
-  type SceneAuthoringRouteDecisionV1,
 } from "@whitebox-world/scene-authoring-contracts";
 import {
   BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V1,
@@ -61,7 +64,7 @@ const TRUST_PROFILE_HASH = sha256CanonicalJson({
   version: 1,
 }) as Sha256HashV1;
 const AUTHORING_PROFILE_REF =
-  "worldkit://authoring-profile/native-local@1";
+  "worldkit://native-authoring-profile/whitebox.blocks@1";
 
 async function readRuntimeBootstrapInput() {
   const [gameplayInput, runtimeInput] = await Promise.all([
@@ -113,26 +116,73 @@ async function buildCloudRidgePackage(): Promise<WorldPackageDirectoryV1> {
   ]);
   const { authoredSourceHash, nativeSceneBootstrap } = sourceGraphInput;
   const { gameplayBootstrap, worldRuntimeBootstrap } = runtimeBootstrapInput;
-  const routeDecision: SceneAuthoringRouteDecisionV1 = {
-    kind: "scene-authoring-route-decision",
-    schemaVersion: 1,
+  const routeDecision = decideSceneAuthoringRouteV1({
     id: "cloud-ridge-route",
     sceneBriefRef: "worldkit://scene-brief/cloud-ridge@1",
     sceneBriefHash: SCENE_BRIEF_HASH,
     trustProfileRef: "worldkit://trust-profile/trusted-local@1",
     trustProfileHash: TRUST_PROFILE_HASH,
     requiredCapabilityRefs: [],
-    decision: {
-      kind: "babylon-native",
-      authoringProfileRef: AUTHORING_PROFILE_REF,
-      compositionStrategy: "ground-first-with-locked-assets",
-      reasonCodes: ["user-selected-supported-lane"],
-    },
-  };
+    requestedSourceKind: "babylon-native",
+    nativeTrustAdmitted: true,
+    referenceDrivenDistinctiveSilhouette: true,
+  });
   const nativeSceneBootstrapInputRef =
     "worldkit://native-bootstrap-input/cloud-ridge@1";
-  const moduleGenerationInputRef =
-    "worldkit://native-module-generation-input/cloud-ridge@1";
+  const generationRequestRef =
+    "worldkit://native-generation-request/cloud-ridge.initial@1";
+  const routeDecisionHash = hashSceneAuthoringRouteDecisionV1(routeDecision);
+  const nativeSceneBootstrapHash =
+    hashBabylonNativeSceneBootstrapV1(nativeSceneBootstrap);
+  const generationRequest: NativeBlockGenerationRequestV1 = {
+    kind: "native-block-generation-request",
+    schemaVersion: 1,
+    id: "cloud-ridge.initial",
+    routeDecisionRef:
+      "worldkit://scene-authoring-route-decision/cloud-ridge@1",
+    routeDecisionHash,
+    sceneBriefRef: routeDecision.sceneBriefRef,
+    sceneBriefHash: routeDecision.sceneBriefHash,
+    referenceInputs: [],
+    codexExecutionProfileRef:
+      "worldkit://codex-execution-profile/formal@1",
+    codexExecutionProfileHash: sha256CanonicalJson({
+      resourceRef: "worldkit://codex-execution-profile/formal@1",
+    }) as Sha256HashV1,
+    taskInstructionRef:
+      "worldkit://task-instruction/native-block-reconstruction@1",
+    taskInstructionHash: sha256CanonicalJson({ id: "cloud-ridge.task-instruction" }) as Sha256HashV1,
+    builderSkillRef: "worldkit://skill/worldkit-native-block-builder@1",
+    builderSkillHash: sha256CanonicalJson({ id: "worldkit-native-block-builder", version: 1 }) as Sha256HashV1,
+    workspaceContextManifestRef:
+      "worldkit://workspace-context/native-block-builder@1",
+    workspaceContextManifestHash: sha256CanonicalJson({ id: "cloud-ridge.workspace-context" }) as Sha256HashV1,
+    contextInputs: [{ inputRef: "context/native-scene-api.json", contentHash: HASH_A }],
+    nativeSceneApiRef: nativeSceneBootstrap.nativeSceneApiRef,
+    nativeSceneApiHash: HASH_A,
+    nativeSceneProfileRef: nativeSceneBootstrap.nativeSceneProfileRef,
+    nativeSceneProfileHash: HASH_B,
+    blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
+    blockProfileHash: sha256CanonicalJson({ id: "whitebox.blocks", version: 1 }) as Sha256HashV1,
+    bootstrapInputRef: nativeSceneBootstrapInputRef,
+    bootstrapInputHash: nativeSceneBootstrapHash,
+    seed: nativeSceneBootstrap.seed,
+    budgets: {
+      maximumBlockCount: 2_000,
+      maximumStaticColliderCount: 500,
+      maximumStaticColliderVertexCount: 200_000,
+      maximumStaticColliderTriangleCount: 100_000,
+      maximumOutputBytes: 4_000_000,
+      timeoutSeconds: 900,
+    },
+    declaredOutputPaths: [
+      "scene.ts",
+      "native-block-authoring.json",
+      "native-resources.json",
+    ],
+  };
+  const generationRequestHash =
+    hashNativeBlockGenerationRequestV1(generationRequest);
   const sceneAuthoringAttemptRef =
     "worldkit://scene-authoring-attempt/cloud-ridge@1";
   const attempt: SceneAuthoringAttemptV1 = {
@@ -141,24 +191,31 @@ async function buildCloudRidgePackage(): Promise<WorldPackageDirectoryV1> {
     id: "cloud-ridge-attempt",
     sceneAuthoringRouteDecisionRef:
       "worldkit://scene-authoring-route-decision/cloud-ridge@1",
-    sceneAuthoringRouteDecisionHash:
-      hashSceneAuthoringRouteDecisionV1(routeDecision),
+    sceneAuthoringRouteDecisionHash: routeDecisionHash,
     sceneBriefRef: routeDecision.sceneBriefRef,
     sceneBriefHash: routeDecision.sceneBriefHash,
     sourceInput: {
       kind: "babylon-native",
       bootstrapInputRef: nativeSceneBootstrapInputRef,
-      bootstrapInputHash:
-        hashBabylonNativeSceneBootstrapV1(nativeSceneBootstrap),
-      moduleGenerationInputRef,
-      moduleGenerationInputHash: authoredSourceHash,
+      bootstrapInputHash: nativeSceneBootstrapHash,
+      generationRequestRef,
+      generationRequestHash,
     },
     selectedAssetResources: [],
     seed: nativeSceneBootstrap.seed,
     authoringProfileRef: AUTHORING_PROFILE_REF,
-    acceptanceTargetRefs: [],
-    requiredEvidenceProfileRefs: [],
+    acceptanceTargetRefs: [
+      "worldkit://acceptance-target/cloud-ridge-opening@1",
+    ],
+    requiredEvidenceProfileRefs: [
+      "worldkit://evidence-profile/native-block-runtime@1",
+    ],
   };
+  assertNativeBlockGenerationRequestMatchesAttemptV1(
+    generationRequestRef,
+    generationRequest,
+    attempt,
+  );
   const attemptResult: SceneAuthoringAttemptResultV1 = {
     kind: "scene-authoring-attempt-result",
     schemaVersion: 1,
@@ -274,7 +331,8 @@ async function buildCloudRidgePackage(): Promise<WorldPackageDirectoryV1> {
     },
     nativeSceneBootstrap,
     nativeSceneBootstrapInputRef,
-    moduleGenerationInputRef,
+    generationRequestRef,
+    generationRequestHash,
     nativeSceneApi,
     nativeSceneProfile,
     publishedAssets: [],

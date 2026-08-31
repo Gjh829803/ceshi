@@ -43,6 +43,14 @@ import {
   type BabylonNativeTraversalBindingV1,
 } from "./module.js";
 import { createBabylonNativeHostRandomV1 } from "./random.js";
+import {
+  BabylonNativeProfileSettlementFailureV1,
+  beginBabylonNativeProfileSettlementRecorderV1,
+  closeBabylonNativeProfileSettlementRecorderV1,
+  finalizeBabylonNativeProfileSettlementV1,
+  type FinalizedBabylonNativeProfileSettlementV1,
+  unbindBabylonNativeProfileSettlementRecorderV1,
+} from "./profile-settlement.js";
 
 export type {
   BabylonNativeLockedAssetResolverV1,
@@ -526,6 +534,7 @@ async function admitBabylonNativeSceneCandidateWithExclusiveProbeV1(
   }
 
   let authorityProbe: BabylonNativeSceneAuthorityProbeV1 | undefined;
+  let settlementContext: BabylonNativeSceneBuildContextV1 | undefined;
   try {
     validateBudget(input.budget);
     let module: BabylonNativeSceneModuleV1;
@@ -793,6 +802,8 @@ async function admitBabylonNativeSceneCandidateWithExclusiveProbeV1(
       assets: isolatedAssets.resolver,
       registration,
     });
+    settlementContext = context;
+    beginBabylonNativeProfileSettlementRecorderV1(context);
     let buildResult: unknown;
     try {
       buildResult = await module.build(context);
@@ -800,6 +811,7 @@ async function admitBabylonNativeSceneCandidateWithExclusiveProbeV1(
       moduleDidFail = true;
     } finally {
       acceptingRegistrations = false;
+      closeBabylonNativeProfileSettlementRecorderV1(context);
     }
     if (typeof firstRegistrationFailure !== "undefined") {
       throw firstRegistrationFailure;
@@ -807,6 +819,19 @@ async function admitBabylonNativeSceneCandidateWithExclusiveProbeV1(
     const assetFailure = isolatedAssets.firstFailure();
     if (typeof assetFailure !== "undefined") {
       throw failureFromDiagnostic(assetFailure.diagnostic);
+    }
+    let finalizedSettlement: FinalizedBabylonNativeProfileSettlementV1;
+    try {
+      finalizedSettlement = finalizeBabylonNativeProfileSettlementV1(context);
+    } catch (error) {
+      if (error instanceof BabylonNativeProfileSettlementFailureV1) {
+        throw failure(
+          error.code,
+          error.message,
+          error.repairHint,
+        );
+      }
+      throw error;
     }
     const buildAuthorityDiagnostics = authorityProbe.audit();
     if (moduleDidFail && !isEmpty(buildAuthorityDiagnostics)) {
@@ -909,11 +934,80 @@ async function admitBabylonNativeSceneCandidateWithExclusiveProbeV1(
       }
     }
 
+    if (finalizedSettlement.receipt.kind === "host-snapshot") {
+      const targetMeshes = new Set(
+        finalizedSettlement.targets.map(({ mesh }) => mesh),
+      );
+      const colliderById = new Map(
+        retainedColliders.map((retained) => [retained.frozen.id, retained]),
+      );
+      const joinedColliderIds = new Set<string>();
+      for (const target of finalizedSettlement.targets) {
+        if (colliderById.get(target.elementId)?.mesh === target.mesh) {
+          throw failure(
+            "WORLDKIT_NATIVE_SCENE_PROFILE_INVENTORY_MISMATCH",
+            `Profile target '${target.elementId}' cannot also be its Collider proxy.`,
+            "Create one independent invisible Collider proxy for every static collision join.",
+          );
+        }
+        if (target.collisionBinding.kind === "static-collider") {
+          const retained = colliderById.get(target.collisionBinding.colliderId);
+          if (
+            isNil(retained) ||
+            retained.mesh === target.mesh ||
+            joinedColliderIds.has(target.collisionBinding.colliderId)
+          ) {
+            throw failure(
+              "WORLDKIT_NATIVE_SCENE_PROFILE_INVENTORY_MISMATCH",
+              `Profile target '${target.elementId}' has an invalid Collider join.`,
+              "Join each static target to one unique registered independent Collider proxy.",
+            );
+          }
+          joinedColliderIds.add(target.collisionBinding.colliderId);
+        }
+      }
+      if (
+        joinedColliderIds.size !== retainedColliders.length ||
+        retainedColliders.some(({ frozen, mesh }) =>
+          !joinedColliderIds.has(frozen.id) ||
+          targetMeshes.has(mesh) ||
+          Reflect.getPrototypeOf(mesh) !== Mesh.prototype ||
+          mesh.isDisposed() ||
+          mesh.getScene() !== input.candidate.scene ||
+          mesh.isVisible !== false
+        )
+      ) {
+        throw failure(
+          "WORLDKIT_NATIVE_SCENE_PROFILE_INVENTORY_MISMATCH",
+          "Block Profile Collider inventory is not an exact independent proxy set.",
+          "Register every and only the proxies joined by the finalized Block Profile.",
+        );
+      }
+      const allowedMeshes = new Set<Scene["meshes"][number]>([
+        ...targetMeshes,
+        ...retainedColliders.map(({ mesh }) => mesh),
+      ]);
+      const liveMeshes = input.candidate.scene.meshes.filter((mesh) =>
+        !mesh.isDisposed()
+      );
+      if (
+        liveMeshes.length !== allowedMeshes.size ||
+        liveMeshes.some((mesh) => !allowedMeshes.has(mesh))
+      ) {
+        throw failure(
+          "WORLDKIT_NATIVE_SCENE_PROFILE_INVENTORY_MISMATCH",
+          "Candidate Scene Mesh inventory does not match the settled Profile targets and Collider proxies.",
+          "Remove direct extra Meshes and finalize every Block Profile target exactly once.",
+        );
+      }
+    }
+
     const contribution = parseBabylonNativeSceneContributionV1({
       kind: "babylon-native-scene-contribution",
       schemaVersion: 1,
       sceneModuleRef: bootstrap.sceneModuleRef,
       sceneModuleId: module.id,
+      profileSettlement: finalizedSettlement.receipt,
       spawnMarker,
       staticColliders: [...retainedColliders]
         .map(({ frozen }) => frozen)
@@ -942,6 +1036,9 @@ async function admitBabylonNativeSceneCandidateWithExclusiveProbeV1(
           ),
     );
   } finally {
+    if (!isNil(settlementContext)) {
+      unbindBabylonNativeProfileSettlementRecorderV1(settlementContext);
+    }
     authorityProbe?.restore();
   }
 }

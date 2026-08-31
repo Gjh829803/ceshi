@@ -26,7 +26,7 @@ function importSpecifiers(source: string): readonly string[] {
 }
 
 describe("@whitebox-world/native-babylon-block-profile package boundary", () => {
-  it("has one optional root with only its two direct dependencies", async () => {
+  it("has one optional root with only its declared direct dependencies", async () => {
     const manifest = JSON.parse(
       await readFile(new URL("package.json", PACKAGE_ROOT), "utf8"),
     ) as Record<string, unknown>;
@@ -36,17 +36,26 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
       version: "0.0.0",
       private: true,
       type: "module",
-      exports: { ".": "./src/index.ts" },
+      exports: {
+        ".": "./src/index.ts",
+        "./testing": "./src/testing.ts",
+      },
       dependencies: {
         "@babylonjs/core": "9.23.0",
         "@whitebox-world/native-babylon": "workspace:*",
+        "@whitebox-world/protocol": "workspace:*",
+        "@whitebox-world/validation": "workspace:*",
+        "lodash-es": "^4.18.1",
       },
     });
     expect(Object.keys(manifest.dependencies as object).sort()).toEqual([
       "@babylonjs/core",
       "@whitebox-world/native-babylon",
+      "@whitebox-world/protocol",
+      "@whitebox-world/validation",
+      "lodash-es",
     ]);
-    expect(Object.keys(manifest.exports as object)).toEqual(["."]);
+    expect(Object.keys(manifest.exports as object)).toEqual([".", "./testing"]);
   });
 
   it("uses the frozen Babylon dialect and contains no second world protocol", async () => {
@@ -64,16 +73,26 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
 
     for (const { path, source } of sources) {
       const specifiers = importSpecifiers(source);
+      const isSettlementBoundary = path.endsWith("/profile-settlement.ts");
       expect(specifiers, path).not.toContain("@babylonjs/core");
       expect(source, path).not.toMatch(/import\s+\*\s+as/);
       expect(source, path).not.toMatch(
         /BlockWorldManifest|BabylonNativeBlockDefinitionV1|WORLDKIT_NATIVE_BLOCK_DEFINITION|\bCompiler\b|\bPreset\b|\bserialize\b|createMountain|createBuilding|createLevel/,
       );
       for (const specifier of specifiers) {
-        expect(specifier, path).not.toMatch(
-          /native-babylon\/host|runtime-babylon|@babylonjs\/havok|three|@whitebox-world\/(?:authoring|compiler|runtime-host|world)(?:\/|$)|^babylonjs$|^node:|^(?:fs|path|http|https|net|tls|dgram|dns)$/,
-        );
+        if (specifier === "@whitebox-world/native-babylon/host") {
+          expect(isSettlementBoundary, path).toBe(true);
+        } else {
+          expect(specifier, path).not.toMatch(
+            /native-babylon\/host|runtime-babylon|@babylonjs\/havok|three|@whitebox-world\/(?:authoring|compiler|runtime-host|world)(?:\/|$)|^babylonjs$|^node:|^(?:fs|path|http|https|net|tls|dgram|dns)$/,
+          );
+        }
       }
+      expect(
+        specifiers.filter((specifier) =>
+          specifier === "@whitebox-world/native-babylon/host").length,
+        path,
+      ).toBe(isSettlementBoundary ? 1 : 0);
       expect(source, path).not.toMatch(
         /\b(?:window|document|fetch|WebSocket|setTimeout|setInterval)\b|Date\.now\s*\(|performance\.now\s*\(|Math\.random\s*\(/,
       );
@@ -96,17 +115,39 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
       "background-mass",
     ]);
     expect(Object.keys(profile).sort()).toEqual([
-      "BABYLON_NATIVE_BLOCK_CENTER_LATTICE_METERS_V1",
+      "BABYLON_NATIVE_BLOCK_AUTHORING_PROFILE_REF_V1",
+      "BABYLON_NATIVE_BLOCK_CENTER_LATTICE_METERS_XYZ_V1",
       "BABYLON_NATIVE_BLOCK_FULL_SIZE_METERS_V1",
-      "BABYLON_NATIVE_BLOCK_MICRO_GRID_METERS_V1",
+      "BABYLON_NATIVE_BLOCK_OCCUPANCY_GRID_METERS_XYZ_V1",
       "BABYLON_NATIVE_BLOCK_PALETTE_COLOR_HEX_BY_ROLE_V1",
       "BABYLON_NATIVE_BLOCK_PALETTE_ROLES_V1",
       "BABYLON_NATIVE_BLOCK_PROFILE_DIAGNOSTIC_CODES_V1",
       "BABYLON_NATIVE_BLOCK_PROFILE_REF_V1",
+      "BABYLON_NATIVE_BLOCK_RECONSTRUCTION_CORPUS_CASE_IDS_V1",
       "BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1",
+      "bindNativeBlockAuthoringManifestToCheckedLayoutV1",
+      "createBabylonNativeBlockAuthoringCaptureV1",
       "createBabylonNativeBlockProfileSessionV1",
+      "createBabylonNativeBlockReconstructionCorpusEvidenceIndexV1",
+      "hashBabylonNativeBlockCheckedLayoutInventoryV1",
+      "hashNativeBlockAuthoringManifestV1",
+      "hashNativeBlockVisualResourceListV1",
+      "inspectBabylonNativeBlockReconstructionCorpusCaseV1",
+      "materializeBabylonNativeBlockReconstructionCorpusCaseV1",
+      "parseNativeBlockAuthoringManifestV1",
+      "parseNativeBlockVisualResourceListV1",
     ]);
     expect(Object.keys(profile).some((name) =>
-      /host|runtime|collider|traversal|manifest|compiler/i.test(name))).toBe(false);
+      /host|runtime|collider|traversal|compiler/i.test(name))).toBe(false);
+  });
+
+  it("keeps the real-runtime fixture behind one exact testing-only export", async () => {
+    const modulePath = ["./", "testing.js"].join("");
+    const testing = await import(modulePath) as Record<string, unknown>;
+
+    expect(Object.keys(testing)).toEqual([
+      "createBabylonNativeBlockColliderRuntimeFixtureModuleV1",
+      "createBabylonNativeBlockReconstructionCorpusModuleV1",
+    ]);
   });
 });

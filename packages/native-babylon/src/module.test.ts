@@ -13,6 +13,8 @@ import {
   createBabylonNativeHostRandomV1,
   defineBabylonNativeScene,
 } from "./index.js";
+import * as nativeRoot from "./index.js";
+import * as nativeHost from "./host.js";
 
 const VALID_DIAGNOSTIC = {
   kind: "native-scene-diagnostic",
@@ -47,6 +49,11 @@ const TOOLING_ERROR = {
 } as const;
 
 describe("defineBabylonNativeScene", () => {
+  it("keeps Profile settlement Host-only", () => {
+    expect("commitBabylonNativeProfileSettlementV1" in nativeRoot).toBe(false);
+    expect("commitBabylonNativeProfileSettlementV1" in nativeHost).toBe(true);
+  });
+
   it("returns an immutable detached definition with one build epoch", async () => {
     const build = vi.fn((_context: BabylonNativeSceneBuildContextV1) => undefined);
     const input = {

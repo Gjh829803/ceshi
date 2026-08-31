@@ -85,6 +85,16 @@ Apply `docs/reviews/runtime-deep-review-checklist.md` whenever changing or revie
 - Treat verification evidence as scoped to the exact tree state and affected domain. After each edit, rerun the focused regression first; before integration, run each relevant full gate once. Do not rerun a command already covered by a broader passing command on the same tree: root `pnpm test` includes `pnpm test:scenes`, while `pnpm test:studio`, production builds, Browser verifiers, rendered inspection, and manual interaction remain separate evidence layers.
 - A later change invalidates only evidence whose inputs or claimed behavior it can affect. Runtime/source changes invalidate the focused tests plus the relevant typecheck, test, build, or capability verifier; build/dependency changes invalidate affected builds; documentation-only truth updates require diff/link checks, not runtime replay. When an independent review finds a narrow defect after full gates passed, rerun the new reproducer and only the gates touched by that fix unless the fix changes a cross-cutting contract or shared runtime authority.
 
+### Verification scope and stopping rules
+
+- Before starting substantial verification, state which inputs changed, which prior evidence they invalidate, the smallest required rerun set, and whether this is the single final full-gate checkpoint.
+- During implementation, run only the focused RED→GREEN reproducer and directly affected contract, typecheck, build, Browser, or capability gate. Do not run broad directory globs when a narrower owner test exists.
+- Run repository-wide heavy gates and one independent exact-SHA review only after the final merge candidate is frozen and no known blocking changes remain. Do not restart them after every narrow follow-up.
+- P0/P1 findings block completion and may require a new exact-SHA review after their fix. Batch or defer non-blocking P2/P3 findings; never create an edit → full test → review → edit loop for advisory cleanup.
+- If unrelated commits land on `main` concurrently, determine whether they affect the claimed domain before invalidating evidence. Do not rerun Viewer or Runtime gates merely because an unrelated WRC, documentation, or contract-only commit changed the branch SHA.
+- Never repeat a command already covered by a broader passing command on the same relevant tree state. Documentation-only corrections receive diff/link/truth checks only and never trigger Runtime, Browser, build, or full-suite replay.
+- If the user asks to stop testing, cancel active verification immediately, run no further test or review commands, and report exactly which evidence exists and which final evidence is absent.
+
 ## Agent roles and frozen boundary
 
 - **World Planner Agent** may create only `apps/playground/src/scenes/plans/<catalog-id>.ts` and its `world-plan.png` / `opening-shot.png`. It must define the complete WorldPrompt and Entity Catalog before geometry.
@@ -101,7 +111,7 @@ Apply `docs/reviews/runtime-deep-review-checklist.md` whenever changing or revie
 4. The host runs `pnpm plan:freeze -- --scene <catalog-id>` and `pnpm plan:check -- --scene <catalog-id>`.
 5. Builder adds `apps/playground/src/scenes/<catalog-id>.ts`, exports `definePlannedOutdoorScene(...)`, implements stable matching Feature/Entity bindings, and registers it in `apps/playground/src/scenes/index.ts`.
 6. Run `pnpm test:scenes`, `pnpm typecheck`, `pnpm build`, `pnpm plan:scene -- --scene <catalog-id>`, and `pnpm plan:scene:check -- --scene <catalog-id>`.
-7. Open `http://127.0.0.1:5173/?scene=<catalog-id>`. Compare the three planning captures with intent, test playability, then export every Prototype's SDK-derived whitebox tri-view.
+7. Open `http://127.0.0.1:5173/?scene=<catalog-id>&artifact=1` only for planning comparison and SDK-derived whitebox capture. This internal artifact route is not Gameplay and does not expose Browser V5. Test playability only from a Canonical Authoring JSON source through `worldkit run <world.json>` or a promoted curated preset; never restore the deleted catalog-gameplay route.
 8. Visual Bible uses those tri-views and the verified manifest to create styled tri-views and the final rendered opening frame. Finish with `pnpm visual:finalize -- --scene <catalog-id>` and `pnpm visual:check -- --scene <catalog-id>`.
 
 Do not modify Runtime, physics, camera, or rendering internals merely to create a scene.
@@ -119,11 +129,10 @@ The Playground Recording Workbench is a separate manual post-workflow tool. A us
 
 ## Local Runtime startup
 
-- When a user asks to view the product G Bot locally, run `pnpm dev:g-bot` and open the URL printed by the command.
-- `?authoring=1` requires an AuthoringSpec injected by `worldkit run <world.json>`. Never combine plain `pnpm dev` with `?authoring=1` or present that combination to a user.
-- If the browser reports `504 Outdated Optimize Dep` after a branch or dependency change, stop the old server and run `pnpm dev:g-bot:refresh` once. Do not change Babylon, physics, camera, or runtime code to repair a stale Vite dependency cache.
-- Use `pnpm dev` for the Babylon-backed catalog Playground. It is a scene workflow and artifact
-  surface, not the Canonical Authoring Runtime entry supplied by `worldkit run`.
+- When a user asks to view the product G Bot locally, run `pnpm dev` and open the URL printed by the command. It opens the unified Viewer with the `feel-flat` G Bot preset; `?scene=<preset-id>` may select another allowlisted tuning preset.
+- `worldkit run <world.json>` opens the same Viewer with one Host-fixed Canonical source. Browser query parameters must not replace that fixed source. The removed `?authoring=1` route must not be restored.
+- If the browser reports `504 Outdated Optimize Dep` after a branch or dependency change, stop the old server and run `pnpm dev:refresh` once. For a fixed `worldkit run` source, use its `--refresh-dependencies` option. Do not change Babylon, physics, camera, or runtime code to repair a stale Vite dependency cache.
+- `pnpm dev`, `worldkit run`, and Studio Preview share the same Babylon/Havok Viewer shell and existing RuntimeHost path. `artifacts/scenes` remains WRC evidence, not a second application.
 
 ## Preferred APIs
 

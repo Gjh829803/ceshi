@@ -20,6 +20,14 @@ export type { BabylonNativeSceneModuleV1 } from "./module.js";
 export type { BabylonNativeHostRandomV1 } from "./random.js";
 export { createBabylonNativeHostRandomV1 } from "./random.js";
 export type {
+  BabylonNativeProfileSettlementBatchV1,
+  BabylonNativeProfileSettlementCollisionBindingV1,
+  BabylonNativeProfileSettlementTargetV1,
+} from "./profile-settlement.js";
+export {
+  commitBabylonNativeProfileSettlementV1,
+} from "./profile-settlement.js";
+export type {
   BabylonNativeSceneCandidateFactoryV1,
   BabylonNativeSceneCandidateLeaseV1,
   ReplayBabylonNativeSceneModuleInputV1,

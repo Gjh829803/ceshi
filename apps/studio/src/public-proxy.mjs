@@ -153,6 +153,7 @@ export function isAllowedStudioPublicRequest(method, rawUrl) {
   }
   if (["GET", "HEAD"].includes(method)) {
     if (publicStaticPaths.has(pathname)) return true;
+    if (/^\/play\/[a-z0-9][a-z0-9-]{2,79}\/?$/.test(pathname)) return true;
     if (publicAssetPrefixes.some((prefix) => pathname.startsWith(prefix))) return true;
     if (isAllowedViteFsSource(pathname)) return true;
   }

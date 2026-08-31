@@ -154,7 +154,7 @@ describe("checkBabylonNativeSceneWorldDirectoryV1", () => {
       { bootstrap: {
         ...VALID_NATIVE_SCENE_BOOTSTRAP_FIXTURE_V1,
         nativeSceneProfileRef:
-          "worldkit://native-scene-profile/trusted-local@1",
+          "worldkit://native-scene-profile/not-registered@1",
       } },
       "WORLDKIT_NATIVE_SCENE_PROFILE_UNSUPPORTED",
       "native-scene-module",

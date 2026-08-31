@@ -1,0 +1,64 @@
+{
+  "kind": "project-health-authority-policy",
+  "schemaVersion": 1,
+  "id": "worldkit-supplemental-authority",
+  "rules": [
+    {
+      "id": "scene-source-single-owner",
+      "kind": "forbidden-public-symbol-pair",
+      "ownerId": "runtime-host",
+      "code": "PROJECT_HEALTH_AUTHORITY_DUPLICATE",
+      "left": {
+        "selector": {
+          "exactPaths": [],
+          "pathPrefixes": ["packages/runtime-host"],
+          "pathSuffixes": [],
+          "packageIds": ["@whitebox-world/runtime-host"]
+        },
+        "symbolNames": ["canonicalSceneSource"]
+      },
+      "right": {
+        "selector": {
+          "exactPaths": [],
+          "pathPrefixes": ["packages/native-babylon"],
+          "pathSuffixes": [],
+          "packageIds": ["@whitebox-world/native-babylon"]
+        },
+        "symbolNames": ["nativeSceneModule"]
+      }
+    },
+    {
+      "id": "public-protocol-single-parser-owner",
+      "kind": "unique-public-symbol-owner",
+      "ownerId": "public-contract",
+      "code": "PROJECT_HEALTH_AUTHORITY_DUPLICATE",
+      "selector": {
+        "exactPaths": [],
+        "pathPrefixes": ["packages"],
+        "pathSuffixes": [],
+        "packageIds": []
+      },
+      "symbolNames": ["parseCanonicalSceneExecutionPlanV1"],
+      "ownerPackageId": "@whitebox-world/runtime-contracts"
+    },
+    {
+      "id": "public-compat-alias",
+      "kind": "forbidden-public-symbol",
+      "ownerId": "public-contract",
+      "code": "PROJECT_HEALTH_PUBLIC_COMPAT_ALIAS",
+      "selector": {
+        "exactPaths": [],
+        "pathPrefixes": ["packages"],
+        "pathSuffixes": [],
+        "packageIds": []
+      },
+      "symbolNames": [
+        "hashValidationReportCompat",
+        "legacyParseWorld",
+        "parseAuthoringSpecV2",
+        "parseAuthoringSpecV3"
+      ]
+    }
+  ],
+  "exceptions": []
+}

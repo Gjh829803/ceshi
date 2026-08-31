@@ -18,6 +18,8 @@ export * from "./route-validation-set";
 export * from "./route-runtime-probe";
 export * from "./world-package-validation-subject";
 export * from "./route-evidence-publication";
+export * from "./reconstruction-contracts";
+export * from "./reconstruction-evaluator";
 
 export function hashValidationReportV1(
   report: ValidationReportV1,

@@ -304,21 +304,32 @@ pnpm worldkit verify route examples/traversal/r1-heightfield/success.json \
 pnpm verify:route-r1-heightfield
 ```
 
-本地体验产品 G Bot 时使用固定入口；它会同时注入 AuthoringSpec 并打开
-`?authoring=1` 对应的 Canonical Runtime：
+本地体验产品 G Bot 时使用统一 Viewer；默认打开 `feel-flat`，页面可切换手感、通行与
+动作三个 Canonical 调试预设：
 
 ```bash
-pnpm dev:g-bot
+pnpm dev
 ```
 
-不要用普通 `pnpm dev` 配合 `?authoring=1`。普通 Vite Playground 没有配置
-`WORLDKIT_AUTHORING_SPEC_PATH`，该组合会被明确拒绝。Canonical Authoring 页由
-`worldkit run <world.json>` 或 `pnpm dev:g-bot` 注入 AuthoringSpec。
+`worldkit run <world.json>` 和 Studio Preview 复用同一 Viewer 壳，但由 Host 固定
+Canonical AuthoringSpec；浏览器查询不能替换固定来源。旧 `?authoring=1` 路由已删除。
+
+以后本地开发和 AI 验证按任务选择唯一入口：
+
+| 任务 | 入口 | 场景来源 | 直接门禁 |
+|---|---|---|---|
+| 调手感、动作、相机、状态和基础通行性 | `pnpm dev` | Viewer 内的 `feel-flat`、`traversal-course`、`action-lab` | `pnpm verify:scene-viewer` |
+| 检查一份已生成的 Canonical 世界 | `pnpm worldkit run <world.json>` | Host 固定的 `world.json` | 对应 WorldKit validate / route / capture 门禁 |
+| 生产或继续 WRC 场景 | `pnpm studio` | Studio Case 和 WRC Planner/Builder 输出 | 该阶段的 self-check、Host replay 与 capture 门禁 |
+| 查看正式场景证据 | 不单独启动应用 | `artifacts/scenes/<scene-id>/` 与 Viewer/Studio 的 Host 来源 | 对应 receipt、manifest、visual check |
+
+`artifacts/scenes` 是正式 WRC 证据目录，不是第二个 Web 应用；调试预设也不是生产
+Scene Case。这样场景生产者可以继续还原世界，控制/动作开发者只使用稳定的三个预设调手感。
 
 结构修改不走 Browser Protocol V5。V5 仍是 exact 38-key Runtime 面，只处理
 Gameplay/Camera/Capture/Route。受信 Authoring 页另外安装
 `window.__WORLDKIT_AUTHORING_EDIT__`（10 个可枚举成员：`version` + 9 个方法）。
-Catalog `?scene=` 和普通 playable **不会**安装这个对象。不要把
+Viewer 在来源具备发布上下文时安装这个对象。不要把
 `validateWorldChange` / `applyWorldChange` 写进 `window.__WORLDKIT__`。
 
 ```bash
@@ -349,7 +360,7 @@ Runtime Session 工作流关闭。
 出现 `504 Outdated Optimize Dep`，停止旧服务后只执行一次：
 
 ```bash
-pnpm dev:g-bot:refresh
+pnpm dev:refresh
 ```
 
 刷新命令只重建 Vite 的本地依赖缓存，不修改 SDK 源码、AuthoringSpec 或资产；正常
@@ -684,9 +695,9 @@ pnpm dev
 pnpm studio
 ```
 
-`pnpm dev` 用于 Babylon-backed catalog Playground，不能为 `?authoring=1` 注入
-AuthoringSpec。Canonical G Bot 体验使用 `pnpm dev:g-bot`；新外部程序使用 `worldkit`、
-Canonical Authoring V4 和 Browser Protocol V5。Camera 的命名 Profile/Context、Preference、
+`pnpm dev` 用于统一 Babylon/Havok Viewer，默认加载 G Bot 并可通过页面选择器切换
+allowlisted Canonical 调试预设。固定外部程序使用 `worldkit run`、Canonical Authoring V4
+和 Browser Protocol V5。Camera 的命名 Profile/Context、Preference、
 纯 Selection/Explain 已在 `@whitebox-world/camera` 实现；committed Gameplay Context
 Projection、Browser 命令、Registry Lock 和 Babylon CameraDirector 消费 Selection Decision
 仍未交付，详见[重构总进度与 Backlog](docs/18-refactor-progress-and-backlog.md#p24-多-controller相机模式与受控操作)。

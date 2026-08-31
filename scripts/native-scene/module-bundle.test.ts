@@ -101,7 +101,7 @@ describe("Babylon Native deterministic Module bundle", () => {
         contentHash: HASH_A,
       },
       nativeSceneProfile: {
-        resourceRef: "worldkit://native-scene-profile/trusted-local@1",
+        resourceRef: "worldkit://native-scene-profile/whitebox.standard@1",
         resolvedVersion: "1",
         contentHash: HASH_B,
       },
@@ -231,7 +231,7 @@ describe("Babylon Native deterministic Module bundle", () => {
         contentHash: HASH_A,
       },
       nativeSceneProfile: {
-        resourceRef: "worldkit://native-scene-profile/trusted-local@1",
+        resourceRef: "worldkit://native-scene-profile/whitebox.standard@1",
         resolvedVersion: "1",
         contentHash: HASH_B,
       },

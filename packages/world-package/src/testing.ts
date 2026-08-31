@@ -22,6 +22,7 @@ import type { WorldPackageDistributionPolicyV1 } from "./package-types.js";
 import { BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V1 } from "./babylon-web-host-profile.js";
 
 export {
+  createBabylonNativeBlockWorldPackageTestInputV1,
   createBabylonNativeWorldPackageTestInputV1,
   createWorldPackageTestInputV1,
 } from "./test-fixture.js";

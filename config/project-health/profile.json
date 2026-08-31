@@ -1,0 +1,454 @@
+{
+  "kind": "project-health-profile",
+  "schemaVersion": 1,
+  "id": "worldkit-project-health",
+  "sensorIds": [
+    "workspace-boundary",
+    "supplemental-authority",
+    "contract-parity",
+    "supply-chain",
+    "test-topology",
+    "runtime-health",
+    "performance-size",
+    "visual-evidence",
+    "documentation-truth",
+    "independent-review"
+  ],
+  "modesById": {
+    "pr": {
+      "requiredSensorIds": [
+        "workspace-boundary",
+        "supplemental-authority",
+        "contract-parity",
+        "test-topology"
+      ],
+      "advisorySensorIds": [
+        "supply-chain",
+        "documentation-truth"
+      ],
+      "requiredGateIdsBySensorId": {
+        "workspace-boundary": ["workspace-boundaries"],
+        "supplemental-authority": [],
+        "contract-parity": [
+          "agent-self-check",
+          "playground-build",
+          "tracked-tree-clean",
+          "typecheck"
+        ],
+        "test-topology": [
+          "test-census",
+          "test-contract",
+          "test-independent",
+          "test-resource-heavy",
+          "test-studio"
+        ]
+      },
+      "runnerProfileId": "github-linux-x64",
+      "maximumDurationMilliseconds": 1200000
+    },
+    "nightly": {
+      "requiredSensorIds": [
+        "workspace-boundary",
+        "supplemental-authority",
+        "contract-parity",
+        "test-topology",
+        "runtime-health"
+      ],
+      "advisorySensorIds": [
+        "supply-chain",
+        "performance-size",
+        "visual-evidence",
+        "documentation-truth",
+        "independent-review"
+      ],
+      "requiredGateIdsBySensorId": {
+        "workspace-boundary": ["workspace-boundaries"],
+        "supplemental-authority": [],
+        "contract-parity": [
+          "agent-self-check",
+          "playground-build",
+          "tracked-tree-clean",
+          "typecheck",
+          "unreleased-clean-break"
+        ],
+        "test-topology": [
+          "test-census",
+          "test-contract",
+          "test-independent",
+          "test-resource-heavy",
+          "test-studio"
+        ],
+        "runtime-health": [
+          "canonical",
+          "control-capture",
+          "g-bot-subject",
+          "placement-layout",
+          "rigged-subject",
+          "route-r0-contract",
+          "route-r1-heightfield",
+          "route-r1b-static-platform",
+          "scene-viewer",
+          "validation-capture"
+        ]
+      },
+      "runnerProfileId": "github-linux-x64",
+      "maximumDurationMilliseconds": 7200000
+    },
+    "release": {
+      "requiredSensorIds": [
+        "workspace-boundary",
+        "supplemental-authority",
+        "contract-parity",
+        "supply-chain",
+        "test-topology",
+        "runtime-health",
+        "visual-evidence",
+        "documentation-truth"
+      ],
+      "advisorySensorIds": ["performance-size", "independent-review"],
+      "requiredGateIdsBySensorId": {
+        "workspace-boundary": ["workspace-boundaries"],
+        "supplemental-authority": [],
+        "contract-parity": [
+          "agent-self-check",
+          "playground-build",
+          "tracked-tree-clean",
+          "typecheck",
+          "unreleased-clean-break"
+        ],
+        "supply-chain": ["dependency-inventory"],
+        "test-topology": [
+          "test-census",
+          "test-contract",
+          "test-independent",
+          "test-resource-heavy",
+          "test-studio"
+        ],
+        "runtime-health": [
+          "canonical",
+          "control-capture",
+          "g-bot-subject",
+          "placement-layout",
+          "rigged-subject",
+          "route-r0-contract",
+          "route-r1-heightfield",
+          "route-r1b-static-platform",
+          "scene-viewer",
+          "validation-capture"
+        ],
+        "visual-evidence": [],
+        "documentation-truth": []
+      },
+      "runnerProfileId": "github-linux-x64",
+      "maximumDurationMilliseconds": 10800000
+    }
+  },
+  "metricPoliciesById": {
+    "workspace-boundary-debt-count": {
+      "sensorId": "workspace-boundary",
+      "kind": "count",
+      "threshold": { "kind": "count", "maximumCount": 49 },
+      "notApplicableReasonCodes": []
+    },
+    "supplemental-authority-valid": {
+      "sensorId": "supplemental-authority",
+      "kind": "boolean",
+      "threshold": { "kind": "boolean", "expectedValue": true },
+      "notApplicableReasonCodes": []
+    },
+    "generated-bytes-current": {
+      "sensorId": "contract-parity",
+      "kind": "boolean",
+      "threshold": { "kind": "boolean", "expectedValue": true },
+      "notApplicableReasonCodes": []
+    },
+    "dependency-inventory-complete": {
+      "sensorId": "supply-chain",
+      "kind": "boolean",
+      "threshold": { "kind": "boolean", "expectedValue": true },
+      "notApplicableReasonCodes": ["SUPPLY_CHAIN_ONLINE_PROVIDER_UNAVAILABLE"]
+    },
+    "test-census-current": {
+      "sensorId": "test-topology",
+      "kind": "boolean",
+      "threshold": { "kind": "boolean", "expectedValue": true },
+      "notApplicableReasonCodes": []
+    },
+    "runtime-owner-leak-count": {
+      "sensorId": "runtime-health",
+      "kind": "count",
+      "threshold": { "kind": "count", "maximumCount": 0 },
+      "notApplicableReasonCodes": []
+    },
+    "runtime-determinism-mismatch-count": {
+      "sensorId": "runtime-health",
+      "kind": "count",
+      "threshold": { "kind": "count", "maximumCount": 0 },
+      "notApplicableReasonCodes": []
+    },
+    "bundle-bytes": {
+      "sensorId": "performance-size",
+      "kind": "bytes",
+      "threshold": { "kind": "bytes", "maximumBytes": 12582912 },
+      "notApplicableReasonCodes": []
+    },
+    "visual-golden-diff-ratio": {
+      "sensorId": "visual-evidence",
+      "kind": "ratio",
+      "threshold": { "kind": "ratio", "maximumRatio": 0.02 },
+      "notApplicableReasonCodes": ["VISUAL_GOLDEN_NOT_SELECTED"]
+    },
+    "documentation-claims-current": {
+      "sensorId": "documentation-truth",
+      "kind": "boolean",
+      "threshold": { "kind": "boolean", "expectedValue": true },
+      "notApplicableReasonCodes": []
+    },
+    "independent-review-dispositions-complete": {
+      "sensorId": "independent-review",
+      "kind": "boolean",
+      "threshold": { "kind": "boolean", "expectedValue": true },
+      "notApplicableReasonCodes": []
+    }
+  },
+  "findingPoliciesByCode": {
+    "PROJECT_HEALTH_WORKSPACE_BOUNDARY_VIOLATION": { "sensorId": "workspace-boundary", "policy": "blocking-p1" },
+    "PROJECT_HEALTH_WORKSPACE_BOUNDARY_GATE_FAILED": { "sensorId": "workspace-boundary", "policy": "blocking-p1" },
+    "PROJECT_HEALTH_AUTHORITY_DUPLICATE": { "sensorId": "supplemental-authority", "policy": "blocking-p1" },
+    "PROJECT_HEALTH_PUBLIC_COMPAT_ALIAS": { "sensorId": "supplemental-authority", "policy": "blocking-p1" },
+    "PROJECT_HEALTH_AUTHORITY_KEYWORD_CANDIDATE": { "sensorId": "supplemental-authority", "policy": "advisory-p3" },
+    "PROJECT_HEALTH_OWNER_COMMAND_DIRTY_TREE": { "sensorId": "contract-parity", "policy": "blocking-p1" },
+    "PROJECT_HEALTH_OWNER_COMMAND_TIMEOUT": { "sensorId": "contract-parity", "policy": "blocking-p1" },
+    "PROJECT_HEALTH_GENERATED_DRIFT": { "sensorId": "contract-parity", "policy": "blocking-p1" },
+    "PROJECT_HEALTH_DEPENDENCY_LOCK_DRIFT": { "sensorId": "contract-parity", "policy": "blocking-p1" },
+    "PROJECT_HEALTH_DEPENDENCY_PROVENANCE_MISSING": { "sensorId": "supply-chain", "policy": "blocking-p1" },
+    "PROJECT_HEALTH_LICENSE_FORBIDDEN": { "sensorId": "supply-chain", "policy": "blocking-p1" },
+    "PROJECT_HEALTH_VULNERABILITY_ADVISORY": { "sensorId": "supply-chain", "policy": "advisory-p2" },
+    "PROJECT_HEALTH_SUPPLY_CHAIN_PROVIDER_UNAVAILABLE": { "sensorId": "supply-chain", "policy": "advisory-p3" },
+    "PROJECT_HEALTH_TEST_UNREGISTERED": { "sensorId": "test-topology", "policy": "blocking-p1" },
+    "PROJECT_HEALTH_GATE_RECEIPT_STALE": { "sensorId": "test-topology", "policy": "blocking-p1" },
+    "PROJECT_HEALTH_GATE_FAILED": { "sensorId": "test-topology", "policy": "blocking-p1" },
+    "PROJECT_HEALTH_CAPABILITY_UNREGISTERED": { "sensorId": "test-topology", "policy": "blocking-p1" },
+    "PROJECT_HEALTH_RUNTIME_OWNER_LEAK": { "sensorId": "runtime-health", "policy": "blocking-p1" },
+    "PROJECT_HEALTH_RUNTIME_NONDETERMINISTIC": { "sensorId": "runtime-health", "policy": "blocking-p1" },
+    "PROJECT_HEALTH_PERFORMANCE_SIZE_BUDGET_EXCEEDED": { "sensorId": "performance-size", "policy": "advisory-p2" },
+    "PROJECT_HEALTH_VISUAL_GOLDEN_DRIFT": { "sensorId": "visual-evidence", "policy": "advisory-p2" },
+    "PROJECT_HEALTH_DOCUMENTATION_TRUTH_CONFLICT": { "sensorId": "documentation-truth", "policy": "blocking-p1" },
+    "PROJECT_HEALTH_INDEPENDENT_REVIEW_INCOMPLETE": { "sensorId": "independent-review", "policy": "advisory-p2" },
+    "PROJECT_HEALTH_INDEPENDENT_REVIEW_HOST_CONFIRMED": { "sensorId": "independent-review", "policy": "blocking-p1" }
+  },
+  "inputSelectorsBySensorId": {
+    "workspace-boundary": {
+      "exactPaths": ["config/workspace-boundary-debt.json", "scripts/lib/workspace-boundary.ts", "scripts/testing/verify-workspace-boundaries.ts"],
+      "pathPrefixes": ["apps", "packages"],
+      "configPaths": ["package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml"]
+    },
+    "supplemental-authority": {
+      "exactPaths": ["config/project-health/authority-policy.json"],
+      "pathPrefixes": ["apps", "packages", "scripts"],
+      "configPaths": ["config/project-health/profile.json"]
+    },
+    "contract-parity": {
+      "exactPaths": ["package.json", "pnpm-lock.yaml", "scripts/agents/check-agent-self-check.ts", "scripts/verification/verify-unreleased-clean-break.ts"],
+      "pathPrefixes": ["apps", "packages", "scripts"],
+      "configPaths": ["tsconfig.json", "vitest.config.ts"]
+    },
+    "supply-chain": {
+      "exactPaths": ["config/project-health/supply-chain-policy.json", "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml"],
+      "pathPrefixes": ["apps", "packages"],
+      "configPaths": ["config/project-health/profile.json"]
+    },
+    "test-topology": {
+      "exactPaths": ["scripts/lib/test-gate-manifest.ts", "scripts/testing/verify-test-gate-census.ts"],
+      "pathPrefixes": ["apps", "packages", "scripts"],
+      "configPaths": ["vitest.config.ts", "vitest.contract.config.ts", "vitest.resource-heavy.config.ts"]
+    },
+    "runtime-health": {
+      "exactPaths": ["scripts/verification/verify-canonical-world.ts", "scripts/verification/verify-control-capture.ts"],
+      "pathPrefixes": ["packages/runtime-babylon", "packages/runtime-host", "scripts/verification"],
+      "configPaths": ["config/project-health/profile.json"]
+    },
+    "performance-size": {
+      "exactPaths": ["apps/native-scene-playground/vite.config.ts", "apps/playground/vite.config.mjs"],
+      "pathPrefixes": ["apps/native-scene-playground", "apps/playground"],
+      "configPaths": ["config/project-health/profile.json"]
+    },
+    "visual-evidence": {
+      "exactPaths": ["scripts/visual/entry-third-person.ts"],
+      "pathPrefixes": ["scripts/visual", "artifacts/scenes"],
+      "configPaths": ["config/project-health/profile.json"]
+    },
+    "documentation-truth": {
+      "exactPaths": ["AGENTS.md", "README.md"],
+      "pathPrefixes": ["docs"],
+      "configPaths": ["package.json"]
+    },
+    "independent-review": {
+      "exactPaths": ["docs/reviews/full-dimension-review-protocol.md", "docs/reviews/runtime-deep-review-checklist.md"],
+      "pathPrefixes": ["docs/reviews"],
+      "configPaths": ["config/project-health/profile.json"]
+    }
+  },
+  "capabilitySelectorsById": {
+    "workspace-graph": {
+      "exactPaths": [
+        "package.json",
+        "pnpm-lock.yaml",
+        "pnpm-workspace.yaml",
+        "config/workspace-boundary-debt.json",
+        "scripts/lib/workspace-boundary.ts",
+        "scripts/testing/verify-workspace-boundaries.ts",
+        "apps/native-scene-playground/package.json",
+        "apps/playground/package.json",
+        "apps/studio/package.json",
+        "packages/authoring-edit/package.json",
+        "packages/authoring-host/package.json",
+        "packages/authoring/package.json",
+        "packages/camera/package.json",
+        "packages/character-movement/package.json",
+        "packages/compiler/package.json",
+        "packages/contracts/package.json",
+        "packages/control-capture/package.json",
+        "packages/gameplay-contracts/package.json",
+        "packages/gameplay/package.json",
+        "packages/layout-solver/package.json",
+        "packages/native-babylon-block-profile/package.json",
+        "packages/native-babylon/package.json",
+        "packages/protocol/package.json",
+        "packages/runtime-babylon/package.json",
+        "packages/runtime-contracts/package.json",
+        "packages/runtime-framework/package.json",
+        "packages/runtime-host/package.json",
+        "packages/scene-authoring-contracts/package.json",
+        "packages/subject-actions/package.json",
+        "packages/subject-composition/package.json",
+        "packages/subject-contracts/package.json",
+        "packages/subject-registry/package.json",
+        "packages/terrain-compiler/package.json",
+        "packages/terrain-surface/package.json",
+        "packages/testkit/package.json",
+        "packages/traversal-recast/package.json",
+        "packages/traversal/package.json",
+        "packages/validation/package.json",
+        "packages/world-identity/package.json",
+        "packages/world-package/package.json",
+        "packages/world/package.json"
+      ],
+      "pathPrefixes": [],
+      "pathSuffixes": [],
+      "packageIds": []
+    },
+    "agent-self-check-bundles": {
+      "exactPaths": [],
+      "pathPrefixes": [".agents/skills", ".codex/skills", "scripts/agents"],
+      "pathSuffixes": [],
+      "packageIds": []
+    },
+    "typescript-public-contract": {
+      "exactPaths": ["tsconfig.json", "vitest.config.ts", "vitest.contract.config.ts", "vitest.resource-heavy.config.ts", "vitest.shared.ts"],
+      "pathPrefixes": ["apps", "packages", "scripts"],
+      "pathSuffixes": [".js", ".json", ".mjs", ".ts", ".tsx"],
+      "packageIds": []
+    },
+    "studio-surface": {
+      "exactPaths": [],
+      "pathPrefixes": ["apps/studio"],
+      "pathSuffixes": [],
+      "packageIds": ["@whitebox-world/studio"]
+    },
+    "independent-test-surface": {
+      "exactPaths": ["scripts/lib/independent-test-gate.ts", "scripts/testing/run-independent-test-gate.ts"],
+      "pathPrefixes": ["sites/world-sdk-blueprint"],
+      "pathSuffixes": [],
+      "packageIds": []
+    },
+    "resource-heavy-runtime": {
+      "exactPaths": ["scripts/lib/test-gate-manifest.ts", "vitest.resource-heavy.config.ts"],
+      "pathPrefixes": ["packages/runtime-babylon", "packages/runtime-host", "packages/traversal-recast"],
+      "pathSuffixes": [".browser.test.ts", ".integration.test.ts"],
+      "packageIds": []
+    },
+    "test-registration": {
+      "exactPaths": ["scripts/lib/test-gate-manifest.ts"],
+      "pathPrefixes": [],
+      "pathSuffixes": [".browser.test.ts", ".test.ts"],
+      "packageIds": []
+    },
+    "playground-build-surface": {
+      "exactPaths": ["apps/playground/vite.config.mjs", "package.json", "pnpm-lock.yaml", "tsconfig.json"],
+      "pathPrefixes": ["apps/playground"],
+      "pathSuffixes": [],
+      "packageIds": ["@whitebox-world/playground"]
+    },
+    "canonical-browser-runtime": {
+      "exactPaths": ["scripts/verification/verify-canonical-world.ts", "scripts/verification/verify-control-capture.ts", "scripts/verification/verify-scene-viewer.ts", "scripts/verification/verify-validation-capture.ts"],
+      "pathPrefixes": ["apps/playground", "packages/runtime-contracts", "packages/runtime-host"],
+      "pathSuffixes": [],
+      "packageIds": []
+    },
+    "placement-and-subject-runtime": {
+      "exactPaths": ["scripts/verification/verify-g-bot-subject-world.ts", "scripts/verification/verify-placement-layout.ts", "scripts/verification/verify-rigged-subject-world.ts"],
+      "pathPrefixes": ["packages/authoring", "packages/layout-solver", "packages/subject-actions", "packages/subject-composition", "packages/subject-contracts", "packages/subject-registry"],
+      "pathSuffixes": [],
+      "packageIds": []
+    },
+    "trusted-route-runtime": {
+      "exactPaths": ["scripts/verification/verify-route-r0-contract.ts", "scripts/verification/verify-route-r1-heightfield.ts", "scripts/verification/verify-route-r1b-static-platform.ts"],
+      "pathPrefixes": ["packages/traversal", "packages/traversal-recast", "packages/validation"],
+      "pathSuffixes": [],
+      "packageIds": []
+    },
+    "native-scene-experimental": {
+      "exactPaths": [],
+      "pathPrefixes": ["apps/native-scene-playground", "packages/native-babylon", "packages/native-babylon-block-profile", "scripts/native-scene"],
+      "pathSuffixes": [],
+      "packageIds": []
+    },
+    "three-c-migration-experimental": {
+      "exactPaths": ["config/3c-migration-ledger.json", "packages/runtime-babylon/src/camera-director.ts", "packages/runtime-babylon/src/character-movement-component.ts", "packages/runtime-babylon/src/motion-kernel-runtime.ts"],
+      "pathPrefixes": ["packages/camera", "packages/character-movement", "packages/subject-actions"],
+      "pathSuffixes": [],
+      "packageIds": []
+    },
+    "documentation-only": {
+      "exactPaths": ["AGENTS.md"],
+      "pathPrefixes": ["docs"],
+      "pathSuffixes": [],
+      "packageIds": []
+    }
+  },
+  "capabilityGateIdsById": {
+    "workspace-graph": ["workspace-boundaries"],
+    "agent-self-check-bundles": ["agent-self-check"],
+    "typescript-public-contract": ["test-contract", "typecheck", "unreleased-clean-break"],
+    "studio-surface": ["test-studio"],
+    "independent-test-surface": ["test-independent"],
+    "resource-heavy-runtime": ["test-resource-heavy"],
+    "test-registration": ["test-census"],
+    "playground-build-surface": ["playground-build"],
+    "canonical-browser-runtime": ["canonical", "control-capture", "scene-viewer", "validation-capture"],
+    "placement-and-subject-runtime": ["g-bot-subject", "placement-layout", "rigged-subject"],
+    "trusted-route-runtime": ["route-r0-contract", "route-r1-heightfield", "route-r1b-static-platform"],
+    "native-scene-experimental": ["bna1-clean-break", "native-scene-playground"],
+    "three-c-migration-experimental": ["3c-migration"],
+    "documentation-only": []
+  },
+  "runnerProfilesById": {
+    "github-linux-x64": {
+      "id": "github-linux-x64",
+      "operatingSystem": "linux",
+      "architecture": "x64",
+      "nodeVersion": "24",
+      "pnpmVersion": "10.14.0",
+      "browserProfileId": "playwright-chromium-swiftshader",
+      "hardwareProfileId": null
+    }
+  },
+  "maximumAcceptedDebtCapsByKind": {
+    "count": 1000,
+    "bytes": 52428800,
+    "durationMilliseconds": 3600000,
+    "ratio": 1
+  },
+  "artifactRetentionDays": 14
+}
