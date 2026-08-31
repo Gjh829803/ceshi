@@ -50,25 +50,39 @@ import {
   createSubjectPresetWorkbenchDraftV1,
   subjectPresetTuningRequestFromDraftV1,
 } from "./subject-preset-workbench.js";
-import { resolvePlaygroundRuntimeRoute } from "./playground-runtime-route.js";
+import {
+  resolvePlaygroundRuntimeRoute,
+  type PlaygroundViewerSourceAuthorityV1,
+} from "./playground-runtime-route.js";
 import { sceneCatalog } from "./scenes/index.js";
 import { createGameplayPageLifecycle } from "./gameplay-page-lifecycle.js";
 import { createAndStartArtifactRenderer } from "./artifact-renderer-lifecycle.js";
 import { installPageExitDisposal } from "./page-exit-lifecycle.js";
 import { installWorldkitAuthoringCaptureApi } from "./worldkit-authoring-capture-api.js";
 import { initializePlaygroundAdapterV1 } from "./playground-adapter-startup.js";
-import { installMountedSkateboardControlsV1 } from "./mounted-skateboard-controls.js";
-import { MOUNTED_SKATEBOARD_S1_SCENE_ID } from "./scenes/mounted-skateboard-s1.js";
 import { createIndexedDbWorldPackageStoreV1 } from "./indexeddb-world-package-store.js";
+import {
+  loadViewerBootstrapV1,
+  viewerSceneSelectionUrlV1,
+  type ViewerBootstrapV1,
+} from "./viewer-bootstrap.js";
+
+declare const __WORLDKIT_VIEWER_SOURCE_AUTHORITY__:
+  PlaygroundViewerSourceAuthorityV1;
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (app === null) throw new Error("Missing #app container");
 const urlParameters = new URLSearchParams(window.location.search);
+const hostStudioWorldId = document
+  .querySelector<HTMLMetaElement>('meta[name="worldkit-studio-world-id"]')
+  ?.content;
 const runtimeRoute = resolvePlaygroundRuntimeRoute(
   window.location.search,
   sceneCatalog,
+  __WORLDKIT_VIEWER_SOURCE_AUTHORITY__,
+  hostStudioWorldId,
 );
-const authoringMode = runtimeRoute.mode === "authoring";
+const viewerMode = runtimeRoute.mode === "viewer";
 let cameraViewCommandSequence = 0;
 
 async function executeCameraPreference(
@@ -133,12 +147,15 @@ app.innerHTML = `
         <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
         <div>
           <p class="eyebrow">AGENT WHITEBOX WORLD</p>
-          <h1>Runtime Playground <span>α</span></h1>
+          <h1>World Viewer <span>α</span></h1>
         </div>
       </div>
       <div class="topbar-actions">
+        <label class="scene-picker" id="scene-picker" hidden>
+          <span>场景</span><select id="scene-select" aria-label="选择调试场景"></select>
+        </label>
         <span class="status"><i></i><span id="adapter-name">adapter</span></span>
-        ${authoringMode ? '<button class="button button-tuning" id="open-tuning-button" type="button" hidden>打开调控台</button>' : ''}
+        ${viewerMode ? '<button class="button button-tuning" id="open-tuning-button" type="button" hidden>打开调控台</button>' : ''}
         <button class="button button-subtle" id="reset-button" type="button">重置世界</button>
         <button class="button button-record" id="record-button" type="button" aria-pressed="false" title="仅录制 3D 渲染画面，不包含界面">
           <i class="record-dot" aria-hidden="true"></i><span id="record-label">录制画面</span>
@@ -162,7 +179,7 @@ app.innerHTML = `
             <p>移动控制</p>
             <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>移动</span></div>
             <div><kbd>⇧</kbd><span>奔跑</span><kbd>空格</kbd><span>跳跃</span></div>
-            ${authoringMode
+            ${viewerMode
               ? '<div><span>右侧 Camera Preference</span><span>切换镜头</span></div>'
               : '<div><kbd>↑</kbd><kbd>↓</kbd><span>上下移动视角</span></div><div><span class="mouse-icon">↖</span><span>拖拽镜头</span></div><div><span class="wheel-icon">↕</span><span>滚轮缩放</span></div>'}
           </div>
@@ -219,7 +236,7 @@ app.innerHTML = `
       </aside>
     </section>
   </main>
-  ${authoringMode ? `
+  ${viewerMode ? `
     <div class="tuning-layer" id="tuning-layer" hidden>
       <aside class="tuning-workbench" aria-labelledby="tuning-title">
         <header class="tuning-header">
@@ -241,8 +258,8 @@ app.innerHTML = `
         </nav>
         <div class="tuning-content">
           <section class="tuning-section" id="tuning-subject">
-            <div class="tuning-section-heading"><span>01</span><div><h3>先选择要调的主体</h3><p>切换主体会重新载入对应的白膜、运动规律和默认镜头。</p></div></div>
-            <label class="friendly-field">主体预制<select id="tuning-subject-select"></select></label>
+            <div class="tuning-section-heading"><span>01</span><div><h3>当前场景主体</h3><p>主体由 AuthoringSpec 固定；这里调整它的运动、输入与镜头手感。</p></div></div>
+            <label class="friendly-field">主体预制<select id="tuning-subject-select" disabled></select></label>
             <div class="friendly-summary" id="tuning-subject-summary"></div>
           </section>
           <section class="tuning-section" id="tuning-input">
@@ -357,13 +374,31 @@ const viewport = requiredElement<HTMLDivElement>("#viewport");
 const featureList = requiredElement<HTMLDivElement>("#feature-list");
 const inspection = requiredElement<HTMLDivElement>("#inspection");
 
-function navigateToSubjectPackage(subjectDefinitionRef: string): void {
-  writeLocalDraft("worldkit.subject-package", subjectDefinitionRef);
-  const next = new URL(window.location.href);
-  next.searchParams.set("authoring", "1");
-  next.searchParams.set("subjectDefinitionRef", subjectDefinitionRef);
-  next.searchParams.set("uiRecovery", String(Date.now()));
-  window.location.assign(next);
+function installViewerSceneSelector(bootstrap: ViewerBootstrapV1): void {
+  const picker = requiredElement<HTMLLabelElement>("#scene-picker");
+  const select = requiredElement<HTMLSelectElement>("#scene-select");
+  if (bootstrap.selection.kind !== "curated-preset") {
+    picker.hidden = true;
+    select.replaceChildren();
+    return;
+  }
+  select.replaceChildren(...bootstrap.selection.entries.map((entry) => {
+    const option = document.createElement("option");
+    option.value = entry.id;
+    option.textContent = entry.title;
+    option.selected = entry.id === bootstrap.selection.selectedSceneId;
+    return option;
+  }));
+  select.addEventListener("change", () => {
+    window.location.assign(viewerSceneSelectionUrlV1(
+      window.location.href,
+      select.value,
+      bootstrap.selection.kind === "curated-preset"
+        ? bootstrap.selection.entries
+        : [],
+    ));
+  }, { once: true });
+  picker.hidden = false;
 }
 
 const FRIENDLY_MOTION_PARAMETERS: Readonly<Record<string, readonly [string, string]>> = {
@@ -625,7 +660,7 @@ function installTuningWorkbench(
       definition.resourceRef === workbenchContext.definition.resourceRef,
     )
   ));
-  subjectSelect.addEventListener("change", () => navigateToSubjectPackage(subjectSelect.value));
+  subjectSelect.disabled = true;
   const summary = requiredElement<HTMLDivElement>("#tuning-subject-summary");
   const currentSubject = workbenchContext.initialSubject;
   const currentLocomotionState = locomotionStateFromSubjectV4(currentSubject);
@@ -1860,41 +1895,28 @@ function installAuthoringRecoveryPanel(api: WorldkitBrowserApiV5): void {
   const context = requiredElement<HTMLDivElement>("#capability-context");
   const drafts = requiredElement<HTMLDivElement>("#parameter-drafts");
   const harnessOutput = requiredElement<HTMLPreElement>("#harness-output");
-  const requestedDefinitionRef = urlParameters.get("subjectDefinitionRef");
   panel.hidden = false;
-  packageSelect.replaceChildren(...definitions.map((definition) => {
-    const option = document.createElement("option");
-    option.value = definition.resourceRef;
-    option.textContent = `${definition.displayName} · ${definition.authoringAvailability}`;
-    option.selected = definition.resourceRef === requestedDefinitionRef;
-    return option;
-  }));
-  packageSelect.addEventListener("change", () => {
-    navigateToSubjectPackage(packageSelect.value);
-  });
+  packageSelect.replaceChildren(new Option("由 AuthoringSpec 固定", "fixed"));
+  packageSelect.disabled = true;
   cameraSelect.replaceChildren(new Option("Runtime 启动后可用", "unavailable"));
   cameraSelect.disabled = true;
   context.innerHTML = `
     <div><span>Status</span><code>RECOVERY MODE</code></div>
-    <div><span>Package</span><code>${escapeHtml(requestedDefinitionRef ?? "unknown")}</code></div>
+    <div><span>Package</span><code>AuthoringSpec source</code></div>
   `;
   drafts.innerHTML = `
-    <p>当前主体未能启动。你仍然可以在上方切换 Subject Package，或先进入安全白膜恢复编辑器。</p>
+    <p>当前主体未能启动。请修复或重新发布 AuthoringSpec，再重试统一 Viewer。</p>
   `;
   harnessOutput.textContent = JSON.stringify(authoringStartupEvidence(api), null, 2);
   const controls = requiredElement<HTMLDivElement>("#controls-card");
   controls.innerHTML = `
     <p>恢复模式</p>
-    <div><span>Subject Package</span><span>切换到其他主体</span></div>
-    <div><span>安全白膜</span><span>恢复完整编辑界面</span></div>
+    <div><span>Subject Package</span><span>由 AuthoringSpec 固定</span></div>
+    <div><span>重试</span><span>重新加载当前来源</span></div>
   `;
   const safePackageButton = requiredElement<HTMLButtonElement>("#fallback-button");
-  safePackageButton.textContent = "恢复为四足白膜";
-  safePackageButton.addEventListener("click", () => {
-    navigateToSubjectPackage(
-      "worldkit://subject-definition/animal.quadruped.forward-steer@1",
-    );
-  });
+  safePackageButton.textContent = "来源不可替换";
+  safePackageButton.disabled = true;
   const retryButton = requiredElement<HTMLButtonElement>("#harness-button");
   retryButton.textContent = "重试当前主体";
   retryButton.addEventListener("click", () => window.location.reload());
@@ -1919,9 +1941,7 @@ async function installCapabilityAuthoringPanel(
   const snapshot = initialSnapshot;
   const controlledEntityId = controlledEntityIdFromSnapshotV4(snapshot);
   const activeSubject = snapshot.world.subjectStatesByEntityId[controlledEntityId];
-  const requestedDefinitionRef = urlParameters.get("subjectDefinitionRef");
-  const activeDefinitionRef = requestedDefinitionRef ??
-    activeSubject?.entityState.entityDefinitionRef ??
+  const activeDefinitionRef = activeSubject?.entityState.entityDefinitionRef ??
     definitions[0]!.resourceRef;
   const activeRegistryDefinition = builtInSubjectResourceRegistry.resolveSubjectDefinition(
     activeDefinitionRef,
@@ -1940,11 +1960,11 @@ async function installCapabilityAuthoringPanel(
           cameraContextProfileRef: activeRegistryDefinition.profiles.cameraContextProfileRef,
         }
       : undefined;
-  const authoringDefinitions = definitions.some(
-      (definition) => definition.resourceRef === activeDefinitionRef,
-    ) || activeDefinitionSummary === undefined
-    ? definitions
-    : [activeDefinitionSummary, ...definitions];
+  const activeDefinition = definitions.find(
+    (definition) => definition.resourceRef === activeDefinitionRef,
+  ) ?? activeDefinitionSummary;
+  if (activeDefinition === undefined) return;
+  const authoringDefinitions = [activeDefinition];
   packageSelect.replaceChildren(...authoringDefinitions.map((definition) => {
     const option = document.createElement("option");
     option.value = definition.resourceRef;
@@ -1956,6 +1976,7 @@ async function installCapabilityAuthoringPanel(
   const definition = authoringDefinitions.find((row) => row.resourceRef === activeDefinitionRef) ??
     authoringDefinitions[0]!;
   packageSelect.value = definition.resourceRef;
+  packageSelect.disabled = true;
   const activeMotionProfile = builtInSubjectResourceRegistry.resolveMotionProfile(
     definition.defaultMotionProfileRef,
   );
@@ -2132,9 +2153,6 @@ async function installCapabilityAuthoringPanel(
     ...(hostOverlay === undefined ? {} : { hostOverlay }),
   });
 
-  packageSelect.addEventListener("change", () => {
-    navigateToSubjectPackage(packageSelect.value);
-  });
   cameraSelect.addEventListener("change", async () => {
     try {
       if (cameraSelect.value === "auto") {
@@ -2374,9 +2392,6 @@ if (runtimeRoute.mode === "unknown") {
   const worldPackageStore = createIndexedDbWorldPackageStoreV1();
   let createdAdapter: BabylonWorldAdapter | null = null;
   let createdHostOverlay: CapabilityDemoHostOverlayV1 | undefined;
-  let createdPlaygroundMetadata:
-    | import("./playground-world.js").PlaygroundWorldMetadataV1
-    | undefined;
   let startupStage = "host-resolver";
   let preparationError: unknown;
   let prepared: Readonly<{
@@ -2387,49 +2402,55 @@ if (runtimeRoute.mode === "unknown") {
   try {
     startupStage = "module-import";
     const { BabylonWorldAdapter } = await import("./babylon-world-adapter.js");
-    const subjectDefinitionRef = urlParameters.get("subjectDefinitionRef");
+    const { loadAuthoringScene, loadStudioAuthoringPreviewV1 } = await import(
+      "./authoring-loader.js"
+    );
     let loaded: Awaited<ReturnType<typeof import("./authoring-loader.js")["loadAuthoringScene"]>>;
     let visualCaptureGroups: readonly VisualCaptureGroupV1[] = [];
-    if (runtimeRoute.mode === "authoring") {
-      const { loadAuthoringScene, loadStudioAuthoringPreviewV1 } = await import("./authoring-loader.js");
-      startupStage = "authoring-load";
-      const worldId = urlParameters.get("world");
-      const authoringOptions = {
-        worldPackageStore,
-        ...(isNil(subjectDefinitionRef) ? {} : { subjectDefinitionRef }),
-      };
-      if (isNil(worldId)) {
-        loaded = await loadAuthoringScene(undefined, authoringOptions);
-      } else {
-        const preview = await loadStudioAuthoringPreviewV1(
-          worldId,
-          () => fetch(
-            `/api/worlds/${encodeURIComponent(worldId)}/preview-bootstrap`,
-            { cache: "no-store" },
-          ),
-          authoringOptions,
-        );
-        loaded = preview.loaded;
-        visualCaptureGroups = preview.visualCaptureGroups;
-      }
-    } else {
-      const { loadOutdoorGameplaySceneV1 } = await import(
-        "./outdoor-scene-gameplay-loader.js"
+    startupStage = "viewer-source-load";
+    if (runtimeRoute.studioWorldId === undefined) {
+      const bootstrapUrl = new URL(
+        "/__worldkit/viewer-bootstrap",
+        window.location.origin,
       );
-      startupStage = "outdoor-scene-load";
-      const outdoorLoaded = await loadOutdoorGameplaySceneV1(
-        sceneCatalog[runtimeRoute.sceneCatalogId]!,
+      const selectedSceneId = urlParameters.get("scene");
+      if (!isNil(selectedSceneId)) {
+        bootstrapUrl.searchParams.set("scene", selectedSceneId);
+      }
+      const bootstrap = await loadViewerBootstrapV1(() => fetch(
+        bootstrapUrl,
+        { cache: "no-store" },
+      ));
+      installViewerSceneSelector(bootstrap);
+      loaded = await loadAuthoringScene(
+        async () => new Response(JSON.stringify(bootstrap.authoringSpec), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
         {
-          sceneCatalogId: runtimeRoute.sceneCatalogId,
-          aspectRatio: viewport.clientWidth > 0 && viewport.clientHeight > 0
-            ? viewport.clientWidth / viewport.clientHeight
-            : 16 / 9,
           worldPackageStore,
-          ...(isNil(subjectDefinitionRef) ? {} : { subjectDefinitionRef }),
+          ...(bootstrap.selection.kind === "fixed-host"
+            ? {
+                fetchRouteEvidence: () => fetch(
+                  "/__worldkit/route-evidence",
+                  { cache: "no-store" },
+                ),
+              }
+            : {}),
         },
       );
-      createdPlaygroundMetadata = outdoorLoaded.playgroundMetadata;
-      loaded = outdoorLoaded;
+    } else {
+      const preview = await loadStudioAuthoringPreviewV1(
+        runtimeRoute.studioWorldId,
+        () => fetch(
+          `/api/worlds/${encodeURIComponent(runtimeRoute.studioWorldId!)}/preview-bootstrap`,
+          { cache: "no-store" },
+        ),
+        { worldPackageStore },
+      );
+      installViewerSceneSelector(preview.viewerBootstrap);
+      loaded = preview.loaded;
+      visualCaptureGroups = preview.visualCaptureGroups;
     }
     prepared = { loaded, visualCaptureGroups, BabylonWorldAdapter };
   } catch (error) {
@@ -2483,9 +2504,6 @@ if (runtimeRoute.mode === "unknown") {
                   gameplayActionRequestResolver:
                     loaded.gameplayActionRequestResolver,
                 }),
-            ...(isNil(createdPlaygroundMetadata)
-              ? {}
-              : { playgroundMetadata: createdPlaygroundMetadata }),
             onInitializationStage(stage) {
               startupStage = `runtime:${stage}`;
             },
@@ -2515,63 +2533,47 @@ if (runtimeRoute.mode === "unknown") {
     | { dispose(): void }
     | undefined;
   let disposeAuthoringWorkbenchAdapterBinding: (() => void) | undefined;
-  let mountedSkateboardControls:
-    | ReturnType<typeof installMountedSkateboardControlsV1>
-    | undefined;
   const pageLifecycle = createGameplayPageLifecycle({
     initialization: browserInstallation.initialization,
     getAdapter: () => createdAdapter,
     async setup(adapter) {
-      if (runtimeRoute.mode === "authoring") {
-        authoringCaptureInstallation = installWorldkitAuthoringCaptureApi(
+      authoringCaptureInstallation = installWorldkitAuthoringCaptureApi(
+        window,
+        adapter,
+      );
+      if (
+        prepared?.loaded.ok === true &&
+        !isNil(prepared.loaded.authoringSpec) &&
+        !isNil(prepared.loaded.worldPackageBuildContext) &&
+        !isNil(prepared.loaded.worldPackageResourceArtifacts) &&
+        "publishWorldReplacementV1" in adapter
+      ) {
+        const [{ installWorldkitAuthoringEditApi }, { createPlaygroundAuthoringEditHostV1 }] =
+          await Promise.all([
+            import("./worldkit-authoring-edit-api.js"),
+            import("./worldkit-authoring-edit-host.js"),
+          ]);
+        authoringEditInstallation = installWorldkitAuthoringEditApi(
           window,
-          adapter,
+          createPlaygroundAuthoringEditHostV1({
+            authoringSpec: prepared.loaded.authoringSpec,
+            worldPackageStore,
+            worldPackageBuildContext:
+              prepared.loaded.worldPackageBuildContext,
+            resourceArtifacts:
+              prepared.loaded.worldPackageResourceArtifacts,
+            publishWorldReplacement: (input) => adapter.publishWorldReplacementV1(input),
+          }),
         );
-        if (
-          prepared?.loaded.ok === true &&
-          !isNil(prepared.loaded.authoringSpec) &&
-          !isNil(prepared.loaded.worldPackageBuildContext) &&
-          !isNil(prepared.loaded.worldPackageResourceArtifacts) &&
-          "publishWorldReplacementV1" in adapter
-        ) {
-          const [{ installWorldkitAuthoringEditApi }, { createPlaygroundAuthoringEditHostV1 }] =
-            await Promise.all([
-              import("./worldkit-authoring-edit-api.js"),
-              import("./worldkit-authoring-edit-host.js"),
-            ]);
-          authoringEditInstallation = installWorldkitAuthoringEditApi(
-            window,
-            createPlaygroundAuthoringEditHostV1({
-              authoringSpec: prepared.loaded.authoringSpec,
-              worldPackageStore,
-              worldPackageBuildContext:
-                prepared.loaded.worldPackageBuildContext,
-              resourceArtifacts:
-                prepared.loaded.worldPackageResourceArtifacts,
-              publishWorldReplacement: (input) => adapter.publishWorldReplacementV1(input),
-            }),
-          );
-        }
       }
-      const workbench = runtimeRoute.mode === "authoring"
-        ? await installCapabilityAuthoringPanel(
-            createAuthoringPanelRuntimeApi(browserInstallation.api, adapter),
-            adapter.runtimeSnapshot(),
-            createdHostOverlay,
-          )
-        : undefined;
+      const workbench = await installCapabilityAuthoringPanel(
+        createAuthoringPanelRuntimeApi(browserInstallation.api, adapter),
+        adapter.runtimeSnapshot(),
+        createdHostOverlay,
+      );
       if (workbench !== undefined && createdAdapter !== null) {
         disposeAuthoringWorkbenchAdapterBinding?.();
         disposeAuthoringWorkbenchAdapterBinding = workbench.bindAdapterDiagnostics(createdAdapter);
-      }
-      if (
-        runtimeRoute.mode === "catalog-gameplay" &&
-        runtimeRoute.sceneCatalogId === MOUNTED_SKATEBOARD_S1_SCENE_ID
-      ) {
-        mountedSkateboardControls = installMountedSkateboardControlsV1(
-          requiredElement<HTMLDivElement>("#mounted-controls"),
-          browserInstallation.api,
-        );
       }
       startPlayground(adapter, () => pageLifecycle.dispose(), {
         resetSimulation: async () => {
@@ -2586,8 +2588,6 @@ if (runtimeRoute.mode === "unknown") {
       delete (window as { __WHITEBOX_PLAYGROUND__?: unknown }).__WHITEBOX_PLAYGROUND__;
     },
     disposeRuntimeHost: async () => {
-      mountedSkateboardControls?.dispose();
-      mountedSkateboardControls = undefined;
       disposeAuthoringWorkbenchAdapterBinding?.();
       disposeAuthoringWorkbenchAdapterBinding = undefined;
       authoringCaptureInstallation?.dispose();
@@ -2607,9 +2607,7 @@ if (runtimeRoute.mode === "unknown") {
   }
   if (!pageSetupSucceeded) {
     inspection.innerHTML = `<pre>${escapeHtml(JSON.stringify(authoringStartupEvidence(browserInstallation.api), null, 2))}</pre>`;
-    if (runtimeRoute.mode === "authoring") {
-      installAuthoringRecoveryPanel(browserInstallation.api);
-    }
+    installAuthoringRecoveryPanel(browserInstallation.api);
   }
 } else {
   delete window.__WORLDKIT__;
@@ -2649,7 +2647,7 @@ requiredElement("#adapter-name").textContent = adapter.name;
 let recorderCanvas = adapter.canvas;
 let canvasRecorder = new CanvasRecorder(recorderCanvas);
 const recordingWorldId = urlParameters.get("world");
-const recordingWorkbench = runtimeRoute.mode === "authoring" && !isNil(recordingWorldId)
+const recordingWorkbench = runtimeRoute.mode === "viewer" && !isNil(recordingWorldId)
   ? installRecordingWorkbench({
       root: requiredElement<HTMLDivElement>("#recording-workbench-root"),
       sceneId: recordingWorldId,

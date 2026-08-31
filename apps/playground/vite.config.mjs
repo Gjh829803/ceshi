@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 import {
@@ -17,6 +18,17 @@ import { WORLDKIT_ROUTE_EVIDENCE_MAX_BYTES_V1 } from
 
 const MAX_AUTHORING_BYTES = 8 * 1024 * 1024;
 const SERVER_NONCE_HEADER = "x-worldkit-server-nonce";
+const VIEWER_BOOTSTRAP_ENDPOINT = "/__worldkit/viewer-bootstrap";
+const REPOSITORY_ROOT = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../..",
+);
+
+export function viewerSourceAuthorityFromEnvironment(environment) {
+  return environment.WORLDKIT_AUTHORING_SPEC_PATH === undefined
+    ? "curated-host"
+    : "fixed-host";
+}
 
 function setServerNonceHeader(response) {
   const nonce = process.env.WORLDKIT_AUTHORING_SERVER_NONCE;
@@ -31,6 +43,45 @@ function writeJsonResponse(response, statusCode, body) {
   response.setHeader("content-type", "application/json; charset=utf-8");
   response.setHeader("cache-control", "no-store");
   response.end(JSON.stringify(body));
+}
+
+/** @returns {import("vite").Plugin} */
+export function worldkitViewerBootstrapSource() {
+  return {
+    name: "worldkit-viewer-bootstrap-source",
+    apply: "serve",
+    configureServer(server) {
+      let middlewarePromise;
+      server.middlewares.use((request, response, next) => {
+        const requestUrl = new URL(request.url ?? "/", "http://viewer.local");
+        if (requestUrl.pathname !== VIEWER_BOOTSTRAP_ENDPOINT) {
+          next();
+          return;
+        }
+        middlewarePromise ??= server
+          .ssrLoadModule("/src/viewer-bootstrap-host.ts")
+          .then(({ createViewerBootstrapMiddlewareV1 }) =>
+            createViewerBootstrapMiddlewareV1({
+              repositoryRoot: REPOSITORY_ROOT,
+              ...(process.env.WORLDKIT_AUTHORING_SPEC_PATH === undefined
+                ? {}
+                : {
+                    fixedAuthoringSpecPath:
+                      process.env.WORLDKIT_AUTHORING_SPEC_PATH,
+                  }),
+            }));
+        void middlewarePromise
+          .then((middleware) => middleware(request, response, next))
+          .catch(() => {
+            writeJsonResponse(response, 500, {
+              kind: "scene-viewer-bootstrap-error",
+              schemaVersion: 1,
+              code: "VIEWER_BOOTSTRAP_MODULE_UNAVAILABLE",
+            });
+          });
+      });
+    },
+  };
 }
 
 /** @returns {import("vite").Plugin} */
@@ -343,5 +394,14 @@ function whiteboxArtifactWriter() {
 }
 
 export default {
-  plugins: [worldkitAuthoringSource(), whiteboxArtifactWriter()],
+  define: {
+    __WORLDKIT_VIEWER_SOURCE_AUTHORITY__: JSON.stringify(
+      viewerSourceAuthorityFromEnvironment(process.env),
+    ),
+  },
+  plugins: [
+    worldkitViewerBootstrapSource(),
+    worldkitAuthoringSource(),
+    whiteboxArtifactWriter(),
+  ],
 };

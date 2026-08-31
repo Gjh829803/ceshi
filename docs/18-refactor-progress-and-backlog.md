@@ -1138,23 +1138,23 @@ BWB-6、PHO-7/8、通用 Action/Camera、空间事件、产品 Route/Nav、BNA-8
 
 #### Unified Scene Viewer 下游开发工具关联（非 WRC 关键路径）
 
-Unified Scene Viewer 的当前设计与实施计划位于独立开发分支：
+Unified Scene Viewer 的当前设计与实施计划已进入当前树：
 
-- [Unified Scene Viewer clean-break design](https://github.com/seedleap/agent-whitebox-world-sdk/blob/codex/default-gbot-dev/docs/superpowers/specs/2026-08-31-unified-scene-viewer-clean-break-design.md)
-- [Unified Scene Viewer implementation plan](https://github.com/seedleap/agent-whitebox-world-sdk/blob/codex/default-gbot-dev/docs/superpowers/plans/2026-08-31-unified-scene-viewer-clean-break-implementation.md)
+- [Unified Scene Viewer clean-break design](superpowers/specs/2026-08-31-unified-scene-viewer-clean-break-design.md)
+- [Unified Scene Viewer implementation plan](superpowers/plans/2026-08-31-unified-scene-viewer-clean-break-implementation.md)
 
 该 Viewer 是 WRC-1 下游开发工具，不是新的 WRC 工作包、Runtime、Scene Source、WorldPackage、
 Compiler、WorldKit Browser Protocol、Gameplay 或生产准入权威；WRC-1 的工作包数量保持 33。已接受的
 目标合同要求 Catalog/bootstrap 只支持 Canonical AuthoringSpec，Catalog 不保存 Subject Definition Ref；
 Host 必须解析完整 AuthoringSpec，并证明 `startup.controlledEntityId` 最终绑定
-`worldkit://subject-definition/humanoid.g-bot@2`。原子切换完成后，`apps/playground` 才成为唯一产品开发
-Viewer shell，`pnpm dev` 才只提供 `feel-flat`、`traversal-course`、`action-lab` 三个 curated presets；
+`worldkit://subject-definition/humanoid.g-bot@2`。当前原子切换已完成，`apps/playground` 是唯一产品开发
+Viewer shell，`pnpm dev` 只提供 `feel-flat`、`traversal-course`、`action-lab` 三个 curated presets；
 这些预设只消费现有 WRC Runtime/Action/Camera 能力，不替代山地/T 字、台阶/建筑/有限室内、动作/相机/
 空间事件验收 Case。
 
-当前 `main@8e0c1bdb9c6b0d037595b8a12605b4e9ad5c5794` 尚未实施 USV-0/USV-1：旧
-`authoring=1`、`catalog-gameplay` route 仍存在，三份 curated preset source 仍未落盘。该状态是待实施
-开发工具工作，不计入 WRC 完成度；旧入口必须保留到一次原子 cutover，不能被 WRC/NBR 提前逐项删除。
+当前树已实施 USV-0/USV-1：旧 `authoring=1`、`catalog-gameplay` source-selection route 已删除，
+三份 curated preset source 已发布，Playground、CLI 与 Studio 已同步切换。该开发工具完成状态仍不计入
+WRC 完成度，也不授权 WRC/NBR 删除独立证据、Corpus 或 Harness。
 
 Playground、CLI 与 Studio 的公开 source-selection route 必须在同一 current-only 检查点原子切换；前置
 Owner/gate 是 Canonical AuthoringSpec/Subject 解析、RuntimeHost/Browser V5 生命周期、CLI/Studio source

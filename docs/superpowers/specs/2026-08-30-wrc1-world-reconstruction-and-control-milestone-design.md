@@ -55,24 +55,24 @@ authority but must not block NBR-1 or be expanded opportunistically during it.
 
 ### 1.2 Unified Scene Viewer is a downstream developer tool
 
-The proposed [Unified Scene Viewer design](https://github.com/seedleap/agent-whitebox-world-sdk/blob/codex/default-gbot-dev/docs/superpowers/specs/2026-08-31-unified-scene-viewer-clean-break-design.md)
-and [implementation plan](https://github.com/seedleap/agent-whitebox-world-sdk/blob/codex/default-gbot-dev/docs/superpowers/plans/2026-08-31-unified-scene-viewer-clean-break-implementation.md)
+The [Unified Scene Viewer design](./2026-08-31-unified-scene-viewer-clean-break-design.md)
+and [implementation plan](../plans/2026-08-31-unified-scene-viewer-clean-break-implementation.md)
 are downstream developer-tool inputs, not WRC-1 architecture authorities and not additional WRC work
 packages. WRC-1 retains its 33-package count, product capability graph, evidence ownership and completion
 definition. The Viewer may consume accepted WRC outputs but cannot mark a WRC package complete or redefine
 its protocol.
 
-The accepted Viewer target contract is Canonical-only: after its atomic cutover, `apps/playground` is the
+The implemented Viewer contract is Canonical-only: after its atomic cutover, `apps/playground` is the
 sole developer Viewer shell and `pnpm dev` exposes only the curated `feel-flat`, `traversal-course` and
 `action-lab` presets. The target Catalog contains no controlled-Subject field: the Host parses the complete
 AuthoringSpec and proves that `startup.controlledEntityId` resolves to
 `worldkit://subject-definition/humanoid.g-bot@2`. `worldkit run` and Studio may then provide a Host-selected
 temporary Canonical source to that shell without publishing it to the curated Catalog.
 
-This is not current-main implementation status. At baseline `8e0c1bdb9c6b0d037595b8a12605b4e9ad5c5794`,
-the Viewer branch plan remains unimplemented on `main`: legacy `authoring=1` and `catalog-gameplay` routes
-still exist and the three curated preset files are absent. They remain until the one atomic Viewer cutover;
-WRC/NBR work must neither depend on the target route early nor delete the old routes piecemeal.
+The current tree implements USV-0/USV-1 atomically: legacy `authoring=1` and `catalog-gameplay` source
+selection are removed, the three curated presets are published, and Playground, `worldkit run` and Studio
+share the same Viewer shell. This downstream tool status does not increase WRC completion, admit Native
+Viewer support or authorize deletion of WRC/NBR evidence and Harnesses.
 
 Native Package playability remains owned by BNA/NBR Runtime and verification Harnesses. It must not add a
 Native member to the accepted Canonical-only Viewer target Catalog/bootstrap, route a Native Package through

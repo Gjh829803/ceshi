@@ -450,9 +450,9 @@ window.__WORLDKIT__                  # Browser Protocol V5，exact 38 keys，Run
 window.__WORLDKIT_AUTHORING_EDIT__   # 仅 Canonical Authoring 页；10 个可枚举成员
 ```
 
-安装条件：`worldkit run <world.json>`（或等价的注入 AuthoringSpec）打开
-`?authoring=1`，并且 adapter 暴露 `publishWorldReplacementV1`。`pnpm dev` +
-`?authoring=1` 会被拒绝。`?scene=` catalog 页只有 V5，没有 Edit API。
+安装条件：统一 Viewer 的 Host 提供有效 AuthoringSpec 发布上下文，并且 adapter 暴露
+`publishWorldReplacementV1`。`pnpm dev`、`worldkit run <world.json>` 与 Studio Preview
+复用同一页面壳；旧 `?authoring=1` 路由不再存在。
 
 CLI 对应命令是 `worldkit schema project`、`worldkit registry search` 和
 `worldkit change *`。文件模式 `change apply` 只写新的 Authoring JSON
