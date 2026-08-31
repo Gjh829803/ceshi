@@ -26,7 +26,7 @@ function importSpecifiers(source: string): readonly string[] {
 }
 
 describe("@whitebox-world/native-babylon-block-profile package boundary", () => {
-  it("has one optional root with only its two direct dependencies", async () => {
+  it("has one optional root with only its declared direct dependencies", async () => {
     const manifest = JSON.parse(
       await readFile(new URL("package.json", PACKAGE_ROOT), "utf8"),
     ) as Record<string, unknown>;
@@ -44,6 +44,7 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
         "@babylonjs/core": "9.23.0",
         "@whitebox-world/native-babylon": "workspace:*",
         "@whitebox-world/protocol": "workspace:*",
+        "@whitebox-world/validation": "workspace:*",
         "lodash-es": "^4.18.1",
       },
     });
@@ -51,6 +52,7 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
       "@babylonjs/core",
       "@whitebox-world/native-babylon",
       "@whitebox-world/protocol",
+      "@whitebox-world/validation",
       "lodash-es",
     ]);
     expect(Object.keys(manifest.exports as object)).toEqual([".", "./testing"]);

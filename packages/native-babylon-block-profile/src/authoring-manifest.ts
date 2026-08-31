@@ -1,6 +1,11 @@
 import type { Sha256HashV1 } from "@whitebox-world/protocol";
 
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
+import {
+  hashWorldReconstructionCaseV1,
+  parseWorldReconstructionCaseV1,
+  type WorldReconstructionCaseV1,
+} from "@whitebox-world/validation";
 import { isEqual, isNil } from "lodash-es";
 
 import type {
@@ -41,6 +46,7 @@ export interface NativeBlockVisualResourceListV1 {
 export interface NativeBlockAuthoringLayoutBindingV1 {
   readonly kind: "native-block-authoring-layout-binding";
   readonly schemaVersion: 1;
+  readonly caseHash: Sha256HashV1;
   readonly authoringManifestHash: Sha256HashV1;
   readonly checkedLayoutInventoryHash: Sha256HashV1;
   readonly contributionHash: Sha256HashV1;
@@ -58,6 +64,8 @@ export interface NativeBlockAuthoringLayoutBindingV1 {
 
 const STABLE_ID = /^[a-z0-9][a-z0-9-]{2,79}$/;
 const STABLE_REF = /^[a-z][a-z0-9+.-]*:\/\/[^\s]+$/;
+const NATIVE_VISUAL_RESOURCE_REF =
+  /^worldkit:\/\/static-geometry-asset\/[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?@[1-9][0-9]*$/;
 const SEMANTIC_CLASS_ID = /^[a-z][a-z0-9.-]{2,127}$/;
 const IDENTITY_COLOR_HEX = /^#[0-9A-F]{6}$/;
 const SHA256_HASH = /^sha256:[0-9a-f]{64}$/;
@@ -278,11 +286,6 @@ export function parseNativeBlockAuthoringManifestV1(
     "visualGroups/acceptanceTargetRef",
   );
   requireUnique(
-    visualGroups.map(({ semanticClassId }) => semanticClassId),
-    code,
-    "visualGroups/semanticClassId",
-  );
-  requireUnique(
     visualGroups.map(({ identityColorHex }) => identityColorHex),
     code,
     "visualGroups/identityColorHex",
@@ -323,8 +326,16 @@ export function parseNativeBlockVisualResourceListV1(
     source.schemaVersion !== 1 ||
     !Array.isArray(source.resourceRefs)
   ) return fail(code, "visual resource list identity is invalid");
-  const resourceRefs = source.resourceRefs.map((entry, index) =>
-    stableRef(entry, code, `resourceRefs/${index}`));
+  const resourceRefs = source.resourceRefs.map((entry, index) => {
+    const resourceRef = stableRef(entry, code, `resourceRefs/${index}`);
+    if (!NATIVE_VISUAL_RESOURCE_REF.test(resourceRef)) {
+      return fail(
+        code,
+        `resourceRefs/${index} must be a static-geometry-asset Registry ref`,
+      );
+    }
+    return resourceRef;
+  });
   requireStrictlySortedUnique(resourceRefs, code, "resourceRefs");
   return Object.freeze({
     kind: "native-visual-resource-list",
@@ -420,7 +431,7 @@ export function hashBabylonNativeBlockCheckedLayoutInventoryV1(
 
 export function bindNativeBlockAuthoringManifestToCheckedLayoutV1(
   input: Readonly<{
-    caseAcceptanceTargetRefs: readonly string[];
+    reconstructionCase: WorldReconstructionCaseV1;
     authoringManifest: NativeBlockAuthoringManifestV1;
     authoringManifestHash: Sha256HashV1;
     checkedLayout: Pick<
@@ -436,17 +447,18 @@ export function bindNativeBlockAuthoringManifestToCheckedLayoutV1(
   const authoringManifest = parseNativeBlockAuthoringManifestV1(
     input.authoringManifest,
   );
-  const caseAcceptanceTargetRefs = input.caseAcceptanceTargetRefs.map(
-    (entry, index) => stableRef(entry, code, `caseAcceptanceTargetRefs/${index}`),
-  );
-  requireStrictlySortedUnique(
-    caseAcceptanceTargetRefs,
-    code,
-    "caseAcceptanceTargetRefs",
-  );
-  if (caseAcceptanceTargetRefs.length === 0) {
-    return fail(code, "Case acceptance targets must not be empty");
+  let reconstructionCase: WorldReconstructionCaseV1;
+  try {
+    reconstructionCase = parseWorldReconstructionCaseV1(
+      input.reconstructionCase,
+    );
+  } catch {
+    return fail(code, "reconstructionCase must be a closed WorldReconstructionCaseV1");
   }
+  const caseAcceptanceTargetRefs = reconstructionCase.acceptanceTargetRefs;
+  const caseHash = hashWorldReconstructionCaseV1(
+    reconstructionCase,
+  ) as Sha256HashV1;
   const authoringManifestHash = hash(
     input.authoringManifestHash,
     code,
@@ -494,6 +506,19 @@ export function bindNativeBlockAuthoringManifestToCheckedLayoutV1(
   if (!isEqual(manifestGroupIds, checkedGroupIds)) {
     return fail(code, "Manifest and checked Layout visual groups must be a bijection");
   }
+  const manifestGroupIdByTargetRef = new Map(
+    authoringManifest.visualGroups.map(({ acceptanceTargetRef, visualGroupId }) =>
+      [acceptanceTargetRef, visualGroupId] as const),
+  );
+  if (reconstructionCase.expected.semanticSilhouetteTargets.some(
+    ({ acceptanceTargetRef, visualGroupId }) =>
+      manifestGroupIdByTargetRef.get(acceptanceTargetRef) !== visualGroupId,
+  )) {
+    return fail(
+      code,
+      "Manifest target-to-group mapping must match the Case semantic silhouette mapping",
+    );
+  }
   const checkedGroupById = new Map(
     input.checkedLayout.checkResult.visualGroups.map((group) =>
       [group.id, group] as const),
@@ -524,6 +549,7 @@ export function bindNativeBlockAuthoringManifestToCheckedLayoutV1(
   return Object.freeze({
     kind: "native-block-authoring-layout-binding",
     schemaVersion: 1,
+    caseHash,
     authoringManifestHash,
     checkedLayoutInventoryHash,
     contributionHash,

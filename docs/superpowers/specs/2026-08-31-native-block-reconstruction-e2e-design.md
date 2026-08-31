@@ -266,7 +266,9 @@ The task writes only:
 - `scene.ts`: a closed Native Module using Native API + Block Profile;
 - `native-block-authoring.json`: entry module, Block Profile ref, visual target/group mappings and their
   semantic class/identity color; it contains no Gameplay, Camera, Physics, Subject or Spawn state;
-- `native-resources.json`: a closed sorted list of optional Native visual Registry resource refs.
+- `native-resources.json`: a closed sorted list of optional Native visual Registry refs using the
+  existing `worldkit://static-geometry-asset/<name>@<version>` Asset Lock dialect. Subject, Camera,
+  Gameplay and Runtime refs are Host-owned and invalid in this list.
 
 The checker must join every declared visual group to the checked Layout inventory and reject missing,
 duplicate, unbound or undeclared groups. The first Case is asset-free, so `native-resources.json` is an

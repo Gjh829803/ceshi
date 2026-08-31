@@ -979,7 +979,7 @@ Request BNA-3 identity/tamper review, close every P0/P1, merge PR E1, and refres
 - Modify: `packages/native-babylon-block-profile/src/index.ts`
 
 **Interfaces:**
-- Consumes: Case semantic target refs, checked `native-block-authoring.json` mappings, admitted Block visual-group inventory, and frozen Contribution identity.
+- Consumes: the parsed Case, the NBR-30-owned `NativeBlockAuthoringLayoutBindingV1`, and the frozen Contribution identity. NBR-45A must not parse `native-block-authoring.json` again or define a second Layout-inventory hash.
 - Produces: parsed/hashable `FormalSemanticCaptureMapV1`, `FormalArtifactViewRequestV1`, `FormalWorldCaptureReceiptV1`, and `bindBlockVisualGroupsToSemanticCaptureTargetsV1()`; no Browser or Runtime operation.
 
 - [ ] **Step 1: Write RED formal Capture contract tests**
@@ -1004,12 +1004,12 @@ Do not treat Block group IDs as sufficient formal evidence. Define:
 ```ts
 export function bindBlockVisualGroupsToSemanticCaptureTargetsV1(input: Readonly<{
   case: WorldReconstructionCaseV1;
-  blockVisualGroups: readonly BabylonNativeBlockVisualGroupV1[];
-  contributionHash: Sha256HashV1;
+  authoringLayoutBinding: NativeBlockAuthoringLayoutBindingV1;
+  contribution: BabylonNativeSceneContributionV1;
 }>): FormalSemanticCaptureMapV1;
 ```
 
-The output binds every required Case acceptance target ref to exactly one checked Block visual group ID, semantic class, identity color, projected-bounds source, required world views, authoring-manifest hash, Layout inventory hash, and Contribution hash. Test missing/duplicate target binding, one group bound to contradictory semantic targets, undeclared group, stale Manifest/Layout/Contribution, extra target, and deterministic sort order. No mapping may be inferred from Mesh/tag/name.
+The NBR-30 binding is the sole parser/hash owner for the uppercase `#RRGGBB` identity-color dialect, authoring Manifest identity, checked Layout inventory identity and Case target-to-group join. Its `caseHash` binds that verified join to the exact parsed Case; NBR-45A compares this field with its parsed Case rather than introducing another authoring or Layout hash. The output carries those already-verified facts into formal Capture and adds projected-bounds source plus required world views. Test stale binding/Contribution, extra target and deterministic sort order. No mapping may be inferred from Mesh/tag/name, and this task must not duplicate the NBR-30 parser or hash only a reduced visual-group array.
 
 - [ ] **Step 3: Run RED contract tests**
 
@@ -1023,7 +1023,7 @@ Expected: FAIL because the formal contracts and Block semantic identity join do 
 
 `FormalWorldCaptureReceiptV1` binds Case/Profile, Route/Attempt/Result, WorldPackage Ref/Root, WorldBuildIdentity, Build Receipt, Runtime session/ready Snapshot, SDK owner version identities, semantic capture map hash, view Camera inputs, viewport/DPR, renderer/browser identity, PNG hashes, collider overlay hash, scripted traversal hash, Camera rollback, Reset, and cleanup.
 
-`bindBlockVisualGroupsToSemanticCaptureTargetsV1()` validates exact Case target refs, checked authoring manifest, Layout visual-group inventory, identity colors, and frozen Contribution before Browser launch. Formal evidence uses semantic target refs from this map; raw Block group IDs remain source evidence only.
+`bindBlockVisualGroupsToSemanticCaptureTargetsV1()` reparses the exact Case and the frozen Contribution, then consumes the NBR-30-owned `NativeBlockAuthoringLayoutBindingV1` without redefining its Manifest, uppercase identity-color or Layout-inventory hash rules. Formal evidence uses semantic target refs from this map; raw Block group IDs remain source evidence only.
 
 - [ ] **Step 5: Run GREEN contract tests and commit PR E0**
 

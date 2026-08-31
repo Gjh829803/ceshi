@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  hashWorldReconstructionCaseV1,
+  parseWorldReconstructionCaseV1,
+} from "@whitebox-world/validation";
+
+import {
   bindNativeBlockAuthoringManifestToCheckedLayoutV1,
   hashBabylonNativeBlockCheckedLayoutInventoryV1,
   hashNativeBlockAuthoringManifestV1,
@@ -29,6 +34,125 @@ function manifestValue() {
       identityColorHex: "#C9A96B",
     }],
   };
+}
+
+function reconstructionCaseValue() {
+  return {
+    kind: "world-reconstruction-case",
+    schemaVersion: 1,
+    id: "cloud-temple.case",
+    sceneBriefRef: "artifact://case/cloud-temple/scene-brief.json",
+    sceneBriefHash: H("a"),
+    referenceInputs: [{
+      inputRef: "artifact://case/cloud-temple/reference.png",
+      contentHash: H("b"),
+      mediaType: "image/png",
+    }],
+    evaluationProfileRef:
+      "worldkit://reconstruction-evaluation-profile/cloud-temple@1",
+    evaluationProfileHash: H("c"),
+    acceptanceTargetRefs: [
+      "worldkit://acceptance-target/central-ascent@1",
+      "worldkit://acceptance-target/upper-t-junction@1",
+    ],
+    requiredEvidenceProfileRefs: [
+      "worldkit://evidence-profile/native-block-formal-capture@1",
+    ],
+    expected: {
+      topology: {
+        acceptanceTargetRef:
+          "worldkit://acceptance-target/upper-t-junction@1",
+        nodeIds: ["central-ascent", "upper-t-junction"],
+        relations: [{
+          fromNodeId: "central-ascent",
+          relation: "connects-to",
+          toNodeId: "upper-t-junction",
+        }],
+        layerIds: ["ground", "upper"],
+      },
+      semanticSilhouetteTargets: [{
+        acceptanceTargetRef:
+          "worldkit://acceptance-target/central-ascent@1",
+        visualGroupId: "central-ascent-group",
+        normalizedBounds: {
+          minXBasisPoints: 100,
+          minYBasisPoints: 200,
+          maxXBasisPoints: 500,
+          maxYBasisPoints: 800,
+        },
+        normalizedCenter: { xBasisPoints: 300, yBasisPoints: 500 },
+        coverageBasisPoints: 2_400,
+      }, {
+        acceptanceTargetRef:
+          "worldkit://acceptance-target/upper-t-junction@1",
+        visualGroupId: "upper-t-junction-group",
+        normalizedBounds: {
+          minXBasisPoints: 600,
+          minYBasisPoints: 100,
+          maxXBasisPoints: 900,
+          maxYBasisPoints: 400,
+        },
+        normalizedCenter: { xBasisPoints: 750, yBasisPoints: 250 },
+        coverageBasisPoints: 900,
+      }],
+      openingComposition: {
+        acceptanceTargetRef:
+          "worldkit://acceptance-target/central-ascent@1",
+        targetRefs: ["worldkit://composition-target/opening@1"],
+        regions: [{
+          targetRef: "worldkit://composition-target/opening@1",
+          normalizedBounds: {
+            minXBasisPoints: 100,
+            minYBasisPoints: 200,
+            maxXBasisPoints: 500,
+            maxYBasisPoints: 800,
+          },
+        }],
+        anchors: [{
+          targetRef: "worldkit://composition-target/opening@1",
+          normalizedCenter: { xBasisPoints: 300, yBasisPoints: 500 },
+        }],
+        orderedTargetRefs: ["worldkit://composition-target/opening@1"],
+      },
+      spawnSupport: {
+        acceptanceTargetRef:
+          "worldkit://acceptance-target/central-ascent@1",
+        spawnMarkerId: "player-spawn",
+        supportColliderId: "spawn-ground",
+        expectedMedium: "ground",
+        expectedPositionXYZMeters: { xMeters: 0, yMeters: 1, zMeters: 0 },
+      },
+      colliders: [{
+        acceptanceTargetRef:
+          "worldkit://acceptance-target/central-ascent@1",
+        contributionId: "spawn-ground-contribution",
+        colliderId: "spawn-ground",
+        role: "ground",
+        requiresOverlay: true,
+      }],
+      criticalTraversalChecks: [{
+        acceptanceTargetRef:
+          "worldkit://acceptance-target/upper-t-junction@1",
+        id: "reach-junction",
+        evidenceKind: "scripted-fixed-input",
+        expectation: "pass",
+        checkpointIds: ["junction", "spawn"],
+        fixedInputSequence: [{
+          actions: ["move-forward"],
+          axes: { moveYRatio: 1 },
+          ticks: 12,
+        }],
+      }],
+      deterministicBuild: {
+        acceptanceTargetRef:
+          "worldkit://acceptance-target/central-ascent@1",
+        requiresCandidateReplay: true,
+        requiresWorldPackageIdentityAgreement: true,
+        requiresBuildIdentityAgreement: true,
+        requiresCaptureIdentityAgreement: true,
+      },
+    },
+  } as const;
 }
 
 function checkedLayoutValue() {
@@ -114,10 +238,9 @@ function bindingInput() {
   const authoringManifest = parseNativeBlockAuthoringManifestV1(manifestValue());
   const checkedLayout = checkedLayoutValue();
   return {
-    caseAcceptanceTargetRefs: [
-      "worldkit://acceptance-target/central-ascent@1",
-      "worldkit://acceptance-target/upper-t-junction@1",
-    ],
+    reconstructionCase: parseWorldReconstructionCaseV1(
+      reconstructionCaseValue(),
+    ),
     authoringManifest,
     authoringManifestHash: hashNativeBlockAuthoringManifestV1(authoringManifest),
     checkedLayout,
@@ -158,8 +281,8 @@ describe("Native Block authoring manifest", () => {
       kind: "native-visual-resource-list",
       schemaVersion: 1,
       resourceRefs: [
-        "worldkit://native-visual-resource/ancient-stone@1",
-        "worldkit://native-visual-resource/mist-card@1",
+        "worldkit://static-geometry-asset/ancient-stone@1",
+        "worldkit://static-geometry-asset/mist-card@1",
       ],
     });
 
@@ -168,6 +291,26 @@ describe("Native Block authoring manifest", () => {
     expect(hashNativeBlockVisualResourceListV1(parsed)).toMatch(
       /^sha256:[0-9a-f]{64}$/,
     );
+  });
+
+  it("allows separate visual groups to share one semantic class", () => {
+    const value = manifestValue();
+    const parsed = parseNativeBlockAuthoringManifestV1({
+      ...value,
+      visualGroups: [
+        value.visualGroups[0],
+        {
+          ...value.visualGroups[1],
+          semanticClassId: value.visualGroups[0]!.semanticClassId,
+        },
+      ],
+    });
+
+    expect(parsed.visualGroups.map(({ semanticClassId }) => semanticClassId))
+      .toEqual([
+        "worldkit.native-block.group.central-ascent",
+        "worldkit.native-block.group.central-ascent",
+      ]);
   });
 
   it.each([
@@ -183,7 +326,6 @@ describe("Native Block authoring manifest", () => {
     ["duplicate visual-group ID", { ...manifestValue(), visualGroups: [manifestValue().visualGroups[0], { ...manifestValue().visualGroups[1], visualGroupId: "central-ascent-group" }] }],
     ["duplicate acceptance target ref", { ...manifestValue(), visualGroups: [manifestValue().visualGroups[0], { ...manifestValue().visualGroups[1], acceptanceTargetRef: manifestValue().visualGroups[0]!.acceptanceTargetRef }] }],
     ["duplicate identity color", { ...manifestValue(), visualGroups: [manifestValue().visualGroups[0], { ...manifestValue().visualGroups[1], identityColorHex: manifestValue().visualGroups[0]!.identityColorHex }] }],
-    ["duplicate semantic class ID", { ...manifestValue(), visualGroups: [manifestValue().visualGroups[0], { ...manifestValue().visualGroups[1], semanticClassId: manifestValue().visualGroups[0]!.semanticClassId }] }],
     ["lowercase identity color", { ...manifestValue(), visualGroups: [{ ...manifestValue().visualGroups[0], identityColorHex: "#aeb8c4" }, manifestValue().visualGroups[1]] }],
     ["nested Physics authority", { ...manifestValue(), visualGroups: [{ ...manifestValue().visualGroups[0], physicsBodyId: "forbidden" }, manifestValue().visualGroups[1]] }],
     ["nested Subject authority", { ...manifestValue(), visualGroups: [{ ...manifestValue().visualGroups[0], subjectDefinitionRef: "worldkit://subject/forbidden@1" }, manifestValue().visualGroups[1]] }],
@@ -196,8 +338,11 @@ describe("Native Block authoring manifest", () => {
   it.each([
     ["extra field", { kind: "native-visual-resource-list", schemaVersion: 1, resourceRefs: [], runtimeRef: "forbidden" }],
     ["missing resource refs", { kind: "native-visual-resource-list", schemaVersion: 1 }],
-    ["unsorted refs", { kind: "native-visual-resource-list", schemaVersion: 1, resourceRefs: ["worldkit://visual/z@1", "worldkit://visual/a@1"] }],
-    ["duplicate refs", { kind: "native-visual-resource-list", schemaVersion: 1, resourceRefs: ["worldkit://visual/a@1", "worldkit://visual/a@1"] }],
+    ["unsorted refs", { kind: "native-visual-resource-list", schemaVersion: 1, resourceRefs: ["worldkit://static-geometry-asset/z@1", "worldkit://static-geometry-asset/a@1"] }],
+    ["duplicate refs", { kind: "native-visual-resource-list", schemaVersion: 1, resourceRefs: ["worldkit://static-geometry-asset/a@1", "worldkit://static-geometry-asset/a@1"] }],
+    ["Subject authority ref", { kind: "native-visual-resource-list", schemaVersion: 1, resourceRefs: ["worldkit://subject-definition/humanoid.g-bot@2"] }],
+    ["Camera authority ref", { kind: "native-visual-resource-list", schemaVersion: 1, resourceRefs: ["worldkit://camera-rig-profile/stable-follow@1"] }],
+    ["Gameplay authority ref", { kind: "native-visual-resource-list", schemaVersion: 1, resourceRefs: ["worldkit://gameplay-bootstrap/cloud-temple@1"] }],
   ])("rejects visual resources with %s", (_label, value) => {
     expect(() => parseNativeBlockVisualResourceListV1(value)).toThrowError(
       /WORLDKIT_NATIVE_BLOCK_VISUAL_RESOURCES_INVALID/,
@@ -237,12 +382,15 @@ describe("Native Block authoring to checked Layout binding", () => {
     expect(result).toMatchObject({
       kind: "native-block-authoring-layout-binding",
       schemaVersion: 1,
+      caseHash: hashWorldReconstructionCaseV1(
+        bindingInput().reconstructionCase,
+      ),
       authoringManifestHash: bindingInput().authoringManifestHash,
       checkedLayoutInventoryHash: bindingInput().checkedLayoutInventoryHash,
       contributionHash: H("a"),
     });
     expect(result.visualGroups.map((row) => row.acceptanceTargetRef)).toEqual(
-      bindingInput().caseAcceptanceTargetRefs,
+      bindingInput().reconstructionCase.acceptanceTargetRefs,
     );
     expect(result.visualGroups.map((row) => row.visualGroupId)).toEqual([
       "central-ascent-group",
@@ -259,9 +407,33 @@ describe("Native Block authoring to checked Layout binding", () => {
     expect(Object.isFrozen(result.visualGroups)).toBe(true);
   });
 
+  it("rejects a Manifest that swaps Case-owned target-to-group mappings", () => {
+    const input = bindingInput();
+    const source = manifestValue();
+    const authoringManifest = parseNativeBlockAuthoringManifestV1({
+      ...source,
+      visualGroups: [{
+        ...source.visualGroups[0],
+        acceptanceTargetRef:
+          "worldkit://acceptance-target/upper-t-junction@1",
+      }, {
+        ...source.visualGroups[1],
+        acceptanceTargetRef:
+          "worldkit://acceptance-target/central-ascent@1",
+      }],
+    });
+
+    expect(() => bindNativeBlockAuthoringManifestToCheckedLayoutV1({
+      ...input,
+      authoringManifest,
+      authoringManifestHash:
+        hashNativeBlockAuthoringManifestV1(authoringManifest),
+    })).toThrowError(/WORLDKIT_NATIVE_BLOCK_AUTHORING_LAYOUT_BINDING_INVALID/);
+  });
+
   it.each([
-    ["missing target", () => ({ ...bindingInput(), caseAcceptanceTargetRefs: [bindingInput().caseAcceptanceTargetRefs[0]] })],
-    ["extra target", () => ({ ...bindingInput(), caseAcceptanceTargetRefs: [...bindingInput().caseAcceptanceTargetRefs, "worldkit://acceptance-target/unused@1"] })],
+    ["missing target", () => ({ ...bindingInput(), reconstructionCase: { ...reconstructionCaseValue(), acceptanceTargetRefs: [reconstructionCaseValue().acceptanceTargetRefs[0]] } })],
+    ["extra target", () => ({ ...bindingInput(), reconstructionCase: { ...reconstructionCaseValue(), acceptanceTargetRefs: [...reconstructionCaseValue().acceptanceTargetRefs, "worldkit://acceptance-target/unused@1"] } })],
     ["undeclared Layout group", () => {
       const input = bindingInput();
       const checkedLayout = ordinaryCopy(input.checkedLayout) as unknown as
@@ -272,7 +444,7 @@ describe("Native Block authoring to checked Layout binding", () => {
         typeof input.checkedLayout;
       return { ...input, checkedLayout: typedCheckedLayout, checkedLayoutInventoryHash: hashBabylonNativeBlockCheckedLayoutInventoryV1(typedCheckedLayout) };
     }],
-    ["duplicate Case target", () => ({ ...bindingInput(), caseAcceptanceTargetRefs: [bindingInput().caseAcceptanceTargetRefs[0], bindingInput().caseAcceptanceTargetRefs[0]] })],
+    ["duplicate Case target", () => ({ ...bindingInput(), reconstructionCase: { ...reconstructionCaseValue(), acceptanceTargetRefs: [reconstructionCaseValue().acceptanceTargetRefs[0], reconstructionCaseValue().acceptanceTargetRefs[0]] } })],
     ["stale authoring hash", () => ({ ...bindingInput(), authoringManifestHash: H("b") })],
     ["stale Layout hash", () => ({ ...bindingInput(), checkedLayoutInventoryHash: H("b") })],
     ["stale Contribution hash", () => ({ ...bindingInput(), frozenContributionHash: H("b") })],
