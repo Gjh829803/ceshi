@@ -9,6 +9,7 @@ import { parseProjectHealthProfileV1 } from "../contracts";
 import { observeDocumentationTruthV1 } from "./documentation-truth";
 
 const REPOSITORY_ROOT = path.resolve(new URL("../../..", import.meta.url).pathname);
+const SENSOR_IMPLEMENTATION_HASH = `sha256:${"b".repeat(64)}`;
 
 function readJson(relativePath: string): unknown {
   return JSON.parse(readFileSync(path.join(REPOSITORY_ROOT, relativePath), "utf8"));
@@ -53,6 +54,7 @@ describe("documentation-truth sensor", () => {
   it("fails a broken repo-relative documentation link", () => {
     const observation = observeDocumentationTruthV1({
       profile: parsedProfile(),
+      sensorImplementationHash: SENSOR_IMPLEMENTATION_HASH,
       documents: [{
         path: "docs/guide.md",
         markdown: "See the [missing contract](./no-such-spec.md).",
@@ -73,6 +75,7 @@ describe("documentation-truth sensor", () => {
   it("fails a Proposed/Implemented status conflict", () => {
     const observation = observeDocumentationTruthV1({
       profile: parsedProfile(),
+      sensorImplementationHash: SENSOR_IMPLEMENTATION_HASH,
       documents: [{
         path: "docs/18-refactor-progress-and-backlog.md",
         markdown: "PHO-5 is Implemented and ready for production use.",
@@ -87,6 +90,7 @@ describe("documentation-truth sensor", () => {
   it("passes resolved links and matching status claims", () => {
     const observation = observeDocumentationTruthV1({
       profile: parsedProfile(),
+      sensorImplementationHash: SENSOR_IMPLEMENTATION_HASH,
       documents: [{
         path: "docs/guide.md",
         markdown: "PHO-5 is Proposed. See the [spec](./spec.md) and https://example.invalid/out.",

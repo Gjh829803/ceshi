@@ -205,7 +205,7 @@ Expected: FAIL with missing implementation.
 
 - [x] **Step 4: Adapt the existing normalized repository graph**
 
-Extend `scripts/lib/workspace-boundary.ts` itself so one scan returns canonical `WorkspaceBoundaryEvidenceV1`: violations, a sorted full dependency graph, sorted `publicSymbols`, and reconciled debt fingerprints. Keep all manifest/import/export/cycle/debt decisions in that Owner and update the existing verifier to consume that result. Accept only `WorkspaceBoundaryScanRequestV1`; do not read `HEAD` from Git. `health:record` owns the exact-head Receipt and points `evidenceRef` at those bytes; the adapter and both Sensors only load/validate that evidence and never parse manifests/imports again. The 49 reconciled edge debts remain only count/identity Metrics and evidence, never PHO Findings or accepted debt.
+Extend `scripts/lib/workspace-boundary.ts` itself so one scan returns canonical `WorkspaceBoundaryEvidenceV1`: violations, a sorted full dependency graph, sorted `publicSymbols`, and reconciled debt fingerprints. Keep all manifest/import/export/cycle/debt decisions in that Owner and update the existing verifier to consume that result. Accept only `WorkspaceBoundaryScanRequestV1`; do not read `HEAD` from Git. The Host validates the same Gate execution evidence and parses that execution's stdout into the canonical workspace evidence; the adapter and both Sensors consume only this in-memory fact and never parse manifests/imports again. `health:record` may persist its content-addressed audit Receipt, but no Sensor loads that Receipt as admission. The 49 reconciled edge debts remain only count/identity Metrics and evidence, never PHO Findings or accepted debt.
 
 - [x] **Step 5: Apply authority rules without heuristic blocking**
 
@@ -251,7 +251,7 @@ Run: `pnpm exec vitest run scripts/project-health/process-runner.test.ts scripts
 
 - [x] **Step 3: Implement mode-specific evidence adaptation**
 
-In `pr`, only validate exact-head Receipts produced by the preceding `health:record` steps; never invoke an owner. In `nightly`/`release`, missing selected evidence may be produced once from a closed Host descriptor through PHO-0B. Register one immutable `dependency-inventory` argv descriptor backed by `pnpm licenses list --json`; this is the npm/pnpm declared-closure Owner, while `contract-parity` remains the only lock/install/patch byte-identity Owner. Project the pnpm output into the frozen Dependency Inventory DTO, sort/dedupe exact package/version/license entries, and drop raw `paths`, author, description, homepage and order before hashing; RED fixtures use different absolute install roots with byte-identical projected evidence. Supply-chain online evidence additionally binds provider ID, database snapshot date/hash, package name and exact version. Provider unavailability follows the mode-specific Profile rule: Advisory `incomplete` in PR/Nightly, and the explicit Release `not-applicable` reason plus a retained Advisory Finding; it is never a clean bill of health. PHO-6 later registers the same closed set. Neither Sensor may spawn, parse the lockfile independently, implement its own timeout, redact logs, or clean owned processes.
+In every mode, the Host invokes each selected Owner once from a closed Registry descriptor through PHO-0B, validates its in-memory execution evidence, and immediately calls the registered Sensor; no mode admits a preceding `health:record` Receipt. Register one immutable `dependency-inventory` argv descriptor backed by `pnpm licenses list --json`; this is the npm/pnpm declared-closure Owner, while `contract-parity` remains the only lock/install/patch byte-identity Owner. Project the pnpm output into the frozen Dependency Inventory DTO, sort/dedupe exact package/version/license entries, and drop raw `paths`, author, description, homepage and order before hashing; RED fixtures use different absolute install roots with byte-identical projected evidence. Supply-chain online evidence additionally binds provider ID, database snapshot date/hash, package name and exact version. Provider unavailability follows the mode-specific Profile rule: Advisory `incomplete` in PR/Nightly, and the explicit Release `not-applicable` reason plus a retained Advisory Finding; it is never a clean bill of health. PHO-6 later registers the same closed set. Neither Sensor may spawn, parse the lockfile independently, implement its own timeout, redact logs, or clean owned processes.
 
 - [x] **Step 4: Register existing fact owners**
 
@@ -298,7 +298,7 @@ Use only the closed capability keys from the design; unknown capability edges fa
 
 - [x] **Step 4: Enforce test census and evidence freshness**
 
-Reuse the existing census result rather than scanning with a second classifier. Reject a required Gate receipt whose tree or input fingerprint differs from the planned inputs; classify docs-only edits without scheduling Runtime replay.
+Reuse the same-process `test-census` Gate stdout rather than scanning with a second classifier. Reject a required in-memory Gate result whose tree or Registry-owned input fingerprint differs from the planned inputs; classify docs-only edits without scheduling Runtime replay.
 
 - [x] **Step 5: Verify and commit**
 
@@ -389,7 +389,7 @@ Commit: `feat: add project health evidence sensors`
 
 ---
 
-### Task 8: PHO-6 — Create Registry, receipt producer, report aggregation, and check/explain CLI
+### Task 8: PHO-6 — Create Registry, audit output, report aggregation, and check/explain CLI
 
 **Files:**
 - Create: `scripts/project-health/report.ts`
@@ -400,16 +400,19 @@ Commit: `feat: add project health evidence sensors`
 - Create: `scripts/project-health/cli.test.ts`
 - Create: `scripts/project-health/registry.ts`
 - Create: `scripts/project-health/registry.test.ts`
+- Create: `scripts/project-health/mode-observer.ts`
+- Modify: `scripts/project-health/process-runner.ts`
+- Modify: `scripts/project-health/process-runner.test.ts`
 - Modify: `scripts/lib/test-gate-manifest.ts` (main-agent integration step only)
 - Modify: `package.json`
 
 **Interfaces:**
-- Consumes: all registered Observations, Profile, accepted debt, exact tree SHA, and optional baseline Report.
-- Produces: canonical `ProjectHealthReportV1`, content-addressed evidence bundle, `health:record/pr/nightly/release/explain`, and fixed exit codes.
+- Consumes: exact-clean checkout, exact tree SHA, Profile, accepted debt, optional baseline Report, and Host-selected Registry Gate IDs. It does not admit external Receipt or Observation files.
+- Produces: validated in-memory Gate results, content-addressed execution audit output, Registry-generated internal Observations, canonical `ProjectHealthReportV1`, `health:record/pr/nightly/release/explain`, and fixed exit codes.
 
 - [ ] **Step 1: Write RED policy and CLI tests**
 
-Assert Fingerprint dedupe, evidence union, Required incomplete precedence, Required failed propagation, Blocking failure, Advisory non-blocking behavior, exact Finding-to-Metric closure, standalone baseline regression/improvement/Profile-mismatch comparison, exact debt policy/typed-metric-cap/same-day/next-day expiry matching, persisted current-Finding debt state, trusted-clock evaluation, Profile-derived Finding policy, registered suggested Gate IDs, no Blocking suppression, stable ordering, redaction, exit 0/1/2/3, exact-head Receipt rejection, pending-review incomplete, explain selection by fingerprint, and sole-writer baseline update rejection on stale identity.
+Assert Fingerprint dedupe, evidence union, Required incomplete precedence, Required failed propagation, Blocking failure, Advisory non-blocking behavior, exact Finding-to-Metric closure, standalone baseline regression/improvement/Profile-mismatch comparison, exact debt policy/typed-metric-cap/same-day/next-day expiry matching, persisted current-Finding debt state, trusted-clock evaluation, Profile-derived Finding policy, registered suggested Gate IDs, no Blocking suppression, stable ordering, redaction, exit 0/1/2/3, forged external Receipt/Observation rejection, pending-review incomplete, explain selection by fingerprint, exact-clean tracked/untracked rejection, and sole-writer baseline update rejection on stale identity.
 
 - [ ] **Step 2: Run RED**
 
@@ -417,7 +420,7 @@ Run: `pnpm exec vitest run scripts/project-health/report.test.ts scripts/project
 
 - [ ] **Step 3: Implement aggregation and storage**
 
-Hash validated Observations before aggregation, dedupe only by canonical Fingerprint, retain every evidence ref, persist the complete selected Sensor Metric maps plus exact current Finding debt states, and compute new/resolved/unchanged/improved/regressed from a standalone baseline Report with the same Profile and Sensor implementation identity. Requested baseline identity mismatch makes the Report incomplete and leaves the change map null. Bind `evaluatedOn` from the trusted Host clock (injectable only through test internals), and write output atomically under `.project-health/`.
+Bind every Sensor ID to its actual callable implementation in one Registry. Compute `sensorImplementationHash` from the sorted recursive source-byte closure, resolved Workspace package entries, and `pnpm-lock.yaml`; reject fixed labels or caller-provided hashes. The mode observer consumes only parsed in-memory Gate results: workspace graph and test census come from the same Gate stdout that the execution evidence binds, while change impact consumes the Host/Registry Gate input fingerprints. Hash Registry-produced Observations before aggregation, dedupe only by canonical Fingerprint, retain every evidence ref, persist the complete selected Sensor Metric maps plus exact current Finding debt states, and compute new/resolved/unchanged/improved/regressed from a standalone baseline Report with the same Profile and Sensor implementation identity. Requested baseline identity mismatch makes the Report incomplete and leaves the change map null. Bind `evaluatedOn` from the trusted Host clock (injectable only through test internals), and write output atomically under `.project-health/`.
 
 - [ ] **Step 4: Implement commands**
 
@@ -434,12 +437,13 @@ Add:
 }
 ```
 
-`health:record --gate <registered-id> --commit <sha> --output <receipt>` admits only a trusted descriptor with `descendantOwnershipMode: "inherit-owner-token"`, then invokes that exact owner command once through PHO-0B and atomically writes a Receipt. No production entry may call the runner without Registry admission. `health:update-baseline` is the sole tracked-baseline writer and rejects a Report whose commit/profile/evidence identity differs. Reject a moving Release branch without `--commit`; require explicit output; make every check mode read-only and reject an `--update-baseline` flag.
+`health:pr/nightly/release` are Host same-process chains: assert exact HEAD/exact-clean, select required Gate descriptors from the Registry, execute each Owner once through PHO-0B, parse and cross-check the closed execution evidence, store its content-addressed audit bytes, invoke the Registry's actual Sensor, then aggregate the internal Observation. They do not accept `--receipts`, Observation paths, or injected Sensor functions. The formal CLI may inspect only the canonical checkout that owns its loaded Registry/Sensor implementation. PR mode requires an explicit exact base and proves `base` is an ancestor of the requested exact head; PHO-7 supplies trusted `pull_request.head.sha` as `--commit`, so checkout equality rejects GitHub's synthetic merge checkout without rejecting a developer-authored two-parent head. `health:record --gate <registered-id> --commit <sha> --output <receipt>` uses the same chain but atomically writes an audit Receipt; check modes never read that file back as admission. No production entry may call the runner without Registry admission. `health:update-baseline` is the sole tracked-baseline writer and rejects a Report whose commit/profile/evidence identity differs. Reject a moving Release branch without `--commit`; require explicit output; make every check mode read-only and reject an `--update-baseline` flag. Recheck HEAD and exact-clean before publishing any result.
 
 - [ ] **Step 5: Verify and commit**
 
 Run the Registry plus three focused test files, `pnpm test:census`, `pnpm typecheck`, fixture
-`health:record/health:pr/health:explain/health:update-baseline` commands, a check-mode clean-tree assertion, and
+`health:record/health:pr/health:explain/health:update-baseline` commands, forged Receipt/Observation rejection,
+execution-evidence parser adversarial fixtures, tracked and untracked exact-clean assertions, and
 `git diff --check`.
 
 Commit: `feat: add project health report cli`
@@ -469,7 +473,7 @@ Run the focused repository-layout/census tests; expect missing workflow/manifest
 
 - [ ] **Step 3: Wire PR without duplicating existing fact owners**
 
-Replace each current direct fact-owner step with one `health:record` wrapper around the same Registry-owned command. Split the current aggregate `pnpm test` CI step into its existing four component commands so each executes once and gets a separate Receipt. Then run `health:pr` over those exact-head Receipts plus the four deterministic static Sensor families. It must not rerun any owner command or call network/AI/dynamic Runtime work. Keep every owner step explicit in CI.
+Replace the current duplicated fact-owner steps with one exact-head `health:pr` Host process. That process selects the Profile-required Registry Gate descriptors, executes each Owner once, validates the in-memory execution evidence, stores content-addressed audit output, and immediately calls the actual Registry Sensor; CI must not pass a Receipt/Observation directory back into the check. Split the current aggregate `pnpm test` semantics into its existing four component Registry Gate descriptors so each still executes once with a distinct identity. `health:record` remains an optional single-Gate audit command, not a second execution or admission lane. PR mode must not call network/AI/dynamic Runtime work.
 
 - [ ] **Step 4: Add bounded Nightly and manual Release workflows**
 

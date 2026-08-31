@@ -1,9 +1,12 @@
 import { createHash } from "node:crypto";
+import { lstatSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { lstat, readFile, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { isEmpty, isNil, sortBy, uniq } from "lodash-es";
+import { preProcessFile } from "typescript";
 
 import { createChangeImpactDiffDescriptorV1 } from "./change-impact";
 import {
@@ -20,33 +23,198 @@ import {
   writeProjectHealthJsonAtomicV1,
 } from "./evidence-store";
 import {
+  assertProjectHealthExactCleanCheckoutV1,
   parseProjectHealthExecutionDescriptorV1,
   runProjectHealthProcessV1,
   type ProjectHealthExecutionDescriptorV1,
+  type ProjectHealthExecutionEvidenceV1,
 } from "./process-runner";
-import { CONTRACT_PARITY_SENSOR_IMPLEMENTATION_HASH_V1 } from "./sensors/contract-parity";
-import { DOCUMENTATION_TRUTH_SENSOR_IMPLEMENTATION_HASH_V1 } from "./sensors/documentation-truth";
-import { INDEPENDENT_REVIEW_SENSOR_IMPLEMENTATION_HASH_V1 } from "./sensors/independent-review";
-import { PERFORMANCE_SIZE_SENSOR_IMPLEMENTATION_HASH_V1 } from "./sensors/performance-size";
-import { RUNTIME_HEALTH_SENSOR_IMPLEMENTATION_HASH_V1 } from "./sensors/runtime-health";
-import { SUPPLEMENTAL_AUTHORITY_SENSOR_IMPLEMENTATION_HASH_V1 } from "./sensors/supplemental-authority";
-import { SUPPLY_CHAIN_SENSOR_IMPLEMENTATION_HASH_V1 } from "./sensors/supply-chain";
-import { TEST_TOPOLOGY_SENSOR_IMPLEMENTATION_HASH_V1 } from "./sensors/test-topology";
-import { VISUAL_EVIDENCE_SENSOR_IMPLEMENTATION_HASH_V1 } from "./sensors/visual-evidence";
-import { WORKSPACE_BOUNDARY_SENSOR_IMPLEMENTATION_HASH_V1 } from "./sensors/workspace-boundary";
+import { observeContractParityV1 } from "./sensors/contract-parity";
+import { observeDocumentationTruthV1 } from "./sensors/documentation-truth";
+import { observeIndependentReviewV1 } from "./sensors/independent-review";
+import { observePerformanceSizeV1 } from "./sensors/performance-size";
+import { observeRuntimeHealthV1 } from "./sensors/runtime-health";
+import { observeSupplementalAuthorityV1 } from "./sensors/supplemental-authority";
+import { observeSupplyChainV1 } from "./sensors/supply-chain";
+import { observeTestTopologyV1 } from "./sensors/test-topology";
+import { observeVisualEvidenceV1 } from "./sensors/visual-evidence";
+import { observeWorkspaceBoundaryV1 } from "./sensors/workspace-boundary";
 
-export const PROJECT_HEALTH_SENSOR_IMPLEMENTATION_HASHES_V1 = Object.freeze({
-  "workspace-boundary": WORKSPACE_BOUNDARY_SENSOR_IMPLEMENTATION_HASH_V1,
-  "supplemental-authority": SUPPLEMENTAL_AUTHORITY_SENSOR_IMPLEMENTATION_HASH_V1,
-  "contract-parity": CONTRACT_PARITY_SENSOR_IMPLEMENTATION_HASH_V1,
-  "supply-chain": SUPPLY_CHAIN_SENSOR_IMPLEMENTATION_HASH_V1,
-  "test-topology": TEST_TOPOLOGY_SENSOR_IMPLEMENTATION_HASH_V1,
-  "runtime-health": RUNTIME_HEALTH_SENSOR_IMPLEMENTATION_HASH_V1,
-  "performance-size": PERFORMANCE_SIZE_SENSOR_IMPLEMENTATION_HASH_V1,
-  "visual-evidence": VISUAL_EVIDENCE_SENSOR_IMPLEMENTATION_HASH_V1,
-  "documentation-truth": DOCUMENTATION_TRUTH_SENSOR_IMPLEMENTATION_HASH_V1,
-  "independent-review": INDEPENDENT_REVIEW_SENSOR_IMPLEMENTATION_HASH_V1,
-});
+type SensorInputWithoutImplementationHash<T extends (input: never) => unknown> =
+  Omit<Parameters<T>[0], "sensorImplementationHash">;
+
+export interface ProjectHealthSensorInputByIdV1 {
+  readonly "workspace-boundary": SensorInputWithoutImplementationHash<typeof observeWorkspaceBoundaryV1>;
+  readonly "supplemental-authority": SensorInputWithoutImplementationHash<typeof observeSupplementalAuthorityV1>;
+  readonly "contract-parity": SensorInputWithoutImplementationHash<typeof observeContractParityV1>;
+  readonly "supply-chain": SensorInputWithoutImplementationHash<typeof observeSupplyChainV1>;
+  readonly "test-topology": SensorInputWithoutImplementationHash<typeof observeTestTopologyV1>;
+  readonly "runtime-health": SensorInputWithoutImplementationHash<typeof observeRuntimeHealthV1>;
+  readonly "performance-size": SensorInputWithoutImplementationHash<typeof observePerformanceSizeV1>;
+  readonly "visual-evidence": SensorInputWithoutImplementationHash<typeof observeVisualEvidenceV1>;
+  readonly "documentation-truth": SensorInputWithoutImplementationHash<typeof observeDocumentationTruthV1>;
+  readonly "independent-review": SensorInputWithoutImplementationHash<typeof observeIndependentReviewV1>;
+}
+
+type RegisteredSensorImplementationV1 = Readonly<{
+  id: ProjectHealthSensorIdV1;
+  implementationEntryPath: string;
+  observe: (input: never) => ReturnType<typeof observeWorkspaceBoundaryV1>;
+}>;
+
+export const PROJECT_HEALTH_SENSOR_REGISTRY_V1 = Object.freeze({
+  "workspace-boundary": { id: "workspace-boundary", implementationEntryPath: "scripts/project-health/sensors/workspace-boundary.ts", observe: observeWorkspaceBoundaryV1 },
+  "supplemental-authority": { id: "supplemental-authority", implementationEntryPath: "scripts/project-health/sensors/supplemental-authority.ts", observe: observeSupplementalAuthorityV1 },
+  "contract-parity": { id: "contract-parity", implementationEntryPath: "scripts/project-health/sensors/contract-parity.ts", observe: observeContractParityV1 },
+  "supply-chain": { id: "supply-chain", implementationEntryPath: "scripts/project-health/sensors/supply-chain.ts", observe: observeSupplyChainV1 },
+  "test-topology": { id: "test-topology", implementationEntryPath: "scripts/project-health/sensors/test-topology.ts", observe: observeTestTopologyV1 },
+  "runtime-health": { id: "runtime-health", implementationEntryPath: "scripts/project-health/sensors/runtime-health.ts", observe: observeRuntimeHealthV1 },
+  "performance-size": { id: "performance-size", implementationEntryPath: "scripts/project-health/sensors/performance-size.ts", observe: observePerformanceSizeV1 },
+  "visual-evidence": { id: "visual-evidence", implementationEntryPath: "scripts/project-health/sensors/visual-evidence.ts", observe: observeVisualEvidenceV1 },
+  "documentation-truth": { id: "documentation-truth", implementationEntryPath: "scripts/project-health/sensors/documentation-truth.ts", observe: observeDocumentationTruthV1 },
+  "independent-review": { id: "independent-review", implementationEntryPath: "scripts/project-health/sensors/independent-review.ts", observe: observeIndependentReviewV1 },
+} satisfies Readonly<Record<ProjectHealthSensorIdV1, RegisteredSensorImplementationV1>>);
+
+const CURRENT_REPOSITORY_ROOT = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
+
+function canonicalSourceBytes(repositoryRoot: string, relativePath: string): Buffer {
+  const absolutePath = path.resolve(repositoryRoot, relativePath);
+  if (absolutePath === repositoryRoot || !absolutePath.startsWith(`${repositoryRoot}${path.sep}`)) {
+    throw new TypeError(`Sensor implementation source escaped the repository: ${relativePath}`);
+  }
+  const stat = lstatSync(absolutePath);
+  if (!stat.isFile() || stat.isSymbolicLink() || realpathSync(absolutePath) !== absolutePath) {
+    throw new TypeError(`Sensor implementation source is not a canonical regular file: ${relativePath}`);
+  }
+  return readFileSync(absolutePath);
+}
+
+function workspaceEntryPathByPackageId(repositoryRoot: string): ReadonlyMap<string, string> {
+  const entries: Array<readonly [string, string]> = [];
+  for (const parent of ["apps", "packages"] as const) {
+    const parentPath = path.join(repositoryRoot, parent);
+    let children;
+    try {
+      children = readdirSync(parentPath, { withFileTypes: true });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
+      throw error;
+    }
+    for (const child of children) {
+      if (!child.isDirectory() || child.isSymbolicLink()) continue;
+      const manifestPath = path.join(parentPath, child.name, "package.json");
+      let manifest: { readonly name?: unknown; readonly exports?: unknown };
+      try {
+        manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as typeof manifest;
+      } catch {
+        continue;
+      }
+      if (typeof manifest.name !== "string") continue;
+      const rootExport = typeof manifest.exports === "string"
+        ? manifest.exports
+        : typeof manifest.exports === "object" && !isNil(manifest.exports) && !Array.isArray(manifest.exports)
+          ? (manifest.exports as Readonly<Record<string, unknown>>)["."]
+          : null;
+      if (typeof rootExport !== "string") continue;
+      entries.push([manifest.name, path.posix.join(parent, child.name, rootExport.replace(/^\.\//, ""))]);
+    }
+  }
+  return new Map(entries);
+}
+
+function resolveSourceImport(
+  repositoryRoot: string,
+  importerPath: string,
+  specifier: string,
+  workspaceEntries: ReadonlyMap<string, string>,
+): string | null {
+  let unresolved: string | null = null;
+  if (specifier.startsWith(".")) {
+    unresolved = path.posix.normalize(path.posix.join(path.posix.dirname(importerPath), specifier));
+  } else {
+    const workspaceEntry = workspaceEntries.get(specifier);
+    if (!isNil(workspaceEntry)) unresolved = workspaceEntry;
+  }
+  if (isNil(unresolved)) return null;
+  for (const candidate of [unresolved, `${unresolved}.ts`, `${unresolved}.tsx`, path.posix.join(unresolved, "index.ts")]) {
+    try {
+      const stat = lstatSync(path.resolve(repositoryRoot, candidate));
+      if (stat.isFile() && !stat.isSymbolicLink()) return candidate;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+  }
+  throw new TypeError(`Sensor implementation import cannot be resolved: ${importerPath} -> ${specifier}`);
+}
+
+function sensorImplementationSourceInventoryV1(input: Readonly<{
+  repositoryRoot: string;
+  entryPath: string;
+}>): readonly Readonly<{ path: string; sizeBytes: number; contentHash: string }>[] {
+  const repositoryRoot = realpathSync(path.resolve(input.repositoryRoot));
+  const workspaceEntries = workspaceEntryPathByPackageId(repositoryRoot);
+  const pending = [input.entryPath];
+  const visited = new Set<string>();
+  const entries: Array<Readonly<{ path: string; sizeBytes: number; contentHash: string }>> = [];
+  while (!isEmpty(pending)) {
+    const relativePath = pending.pop();
+    if (isNil(relativePath) || visited.has(relativePath)) continue;
+    visited.add(relativePath);
+    const bytes = canonicalSourceBytes(repositoryRoot, relativePath);
+    entries.push({
+      path: relativePath,
+      sizeBytes: bytes.byteLength,
+      contentHash: `sha256:${createHash("sha256").update(bytes).digest("hex")}`,
+    });
+    const sourceText = bytes.toString("utf8");
+    for (const imported of preProcessFile(sourceText, true, true).importedFiles) {
+      const resolved = resolveSourceImport(repositoryRoot, relativePath, imported.fileName, workspaceEntries);
+      if (!isNil(resolved) && !visited.has(resolved)) pending.push(resolved);
+    }
+  }
+  const lockBytes = canonicalSourceBytes(repositoryRoot, "pnpm-lock.yaml");
+  entries.push({
+    path: "pnpm-lock.yaml",
+    sizeBytes: lockBytes.byteLength,
+    contentHash: `sha256:${createHash("sha256").update(lockBytes).digest("hex")}`,
+  });
+  return sortBy(entries, ["path"]);
+}
+
+export function projectHealthSensorImplementationHashV1(input: Readonly<{
+  repositoryRoot: string;
+  sensorId: ProjectHealthSensorIdV1;
+}>): string {
+  const registered = PROJECT_HEALTH_SENSOR_REGISTRY_V1[input.sensorId];
+  return sha256CanonicalJson({
+    sensorId: input.sensorId,
+    sourceInventory: sensorImplementationSourceInventoryV1({
+      repositoryRoot: input.repositoryRoot,
+      entryPath: registered.implementationEntryPath,
+    }),
+  });
+}
+
+export const PROJECT_HEALTH_SENSOR_IMPLEMENTATION_HASHES_V1 = Object.freeze(Object.fromEntries(
+  Object.keys(PROJECT_HEALTH_SENSOR_REGISTRY_V1).map((sensorId) => [
+    sensorId,
+    projectHealthSensorImplementationHashV1({
+      repositoryRoot: CURRENT_REPOSITORY_ROOT,
+      sensorId: sensorId as ProjectHealthSensorIdV1,
+    }),
+  ]),
+) as Readonly<Record<ProjectHealthSensorIdV1, string>>);
+
+export function observeRegisteredProjectHealthSensorV1<SensorId extends ProjectHealthSensorIdV1>(input: Readonly<{
+  sensorId: SensorId;
+  sensorInput: ProjectHealthSensorInputByIdV1[SensorId];
+}>): ReturnType<typeof observeWorkspaceBoundaryV1> {
+  const registered = PROJECT_HEALTH_SENSOR_REGISTRY_V1[input.sensorId];
+  return registered.observe({
+    ...input.sensorInput,
+    sensorImplementationHash: PROJECT_HEALTH_SENSOR_IMPLEMENTATION_HASHES_V1[input.sensorId],
+  } as never);
+}
 
 function descriptor(id: string, argv: readonly [string, ...string[]]): ProjectHealthExecutionDescriptorV1 {
   return parseProjectHealthExecutionDescriptorV1({
@@ -327,25 +495,24 @@ export function registeredProjectHealthGateArgvV1(gateId: string): readonly stri
   return [...admitRegisteredProjectHealthGateV1({ gateId }).argv];
 }
 
-export async function recordRegisteredProjectHealthGateV1(input: Readonly<{
+export async function executeRegisteredProjectHealthGateV1(input: Readonly<{
   repositoryRoot: string;
   profile: ProjectHealthProfileV1;
   gateId: string;
   commitSha: string;
-  outputPath: string;
   baseSha?: string;
-}>): Promise<ProjectHealthGateReceiptV1> {
+}>): Promise<Readonly<{
+  receipt: ProjectHealthGateReceiptV1;
+  evidence: ProjectHealthExecutionEvidenceV1;
+}>> {
   if (!/^[a-f0-9]{40}$/.test(input.commitSha)) {
-    throw new TypeError("Gate recording requires an exact 40-character commit SHA.");
+    throw new TypeError("Gate execution requires an exact 40-character commit SHA.");
   }
   const actualHead = await readProjectHealthCheckoutHeadV1(input.repositoryRoot);
   if (actualHead !== input.commitSha) {
-    throw new TypeError("Gate recording commit must equal the exact checkout HEAD.");
+    throw new TypeError("Gate execution commit must equal the exact checkout HEAD.");
   }
-  const outputPath = await assertProjectHealthOutputPathV1({
-    repositoryRoot: input.repositoryRoot,
-    outputPath: input.outputPath,
-  });
+  await assertProjectHealthExactCleanCheckoutV1(input.repositoryRoot);
   const admitted = admitRegisteredProjectHealthGateV1({
     gateId: input.gateId,
     ...(!isNil(input.baseSha) ? { baseSha: input.baseSha } : {}),
@@ -361,8 +528,9 @@ export async function recordRegisteredProjectHealthGateV1(input: Readonly<{
     descriptor: admitted,
   });
   if (await readProjectHealthCheckoutHeadV1(input.repositoryRoot) !== input.commitSha) {
-    throw new TypeError("Gate recording checkout HEAD changed during owner execution.");
+    throw new TypeError("Gate execution checkout HEAD changed during owner execution.");
   }
+  await assertProjectHealthExactCleanCheckoutV1(input.repositoryRoot);
   const storedEvidence = await putProjectHealthEvidenceJsonV1({
     repositoryRoot: input.repositoryRoot,
     value: execution.evidence,
@@ -380,6 +548,28 @@ export async function recordRegisteredProjectHealthGateV1(input: Readonly<{
         ? "failed"
         : "incomplete",
     evidenceRef: storedEvidence.evidenceRef,
+  });
+  return { receipt, evidence: execution.evidence };
+}
+
+export async function recordRegisteredProjectHealthGateV1(input: Readonly<{
+  repositoryRoot: string;
+  profile: ProjectHealthProfileV1;
+  gateId: string;
+  commitSha: string;
+  outputPath: string;
+  baseSha?: string;
+}>): Promise<ProjectHealthGateReceiptV1> {
+  const outputPath = await assertProjectHealthOutputPathV1({
+    repositoryRoot: input.repositoryRoot,
+    outputPath: input.outputPath,
+  });
+  const { receipt } = await executeRegisteredProjectHealthGateV1({
+    repositoryRoot: input.repositoryRoot,
+    profile: input.profile,
+    gateId: input.gateId,
+    commitSha: input.commitSha,
+    ...(!isNil(input.baseSha) ? { baseSha: input.baseSha } : {}),
   });
   await writeProjectHealthJsonAtomicV1({
     outputPath,

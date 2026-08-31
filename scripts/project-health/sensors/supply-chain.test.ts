@@ -24,6 +24,7 @@ const STALE_SHA = "b".repeat(40);
 const HASH_A = `sha256:${"a".repeat(64)}`;
 const HASH_B = `sha256:${"b".repeat(64)}`;
 const HASH_C = `sha256:${"c".repeat(64)}`;
+const SENSOR_IMPLEMENTATION_HASH = `sha256:${"d".repeat(64)}`;
 
 function readJson(relativePath: string): unknown {
   return JSON.parse(readFileSync(path.join(REPOSITORY_ROOT, relativePath), "utf8"));
@@ -111,6 +112,7 @@ function observe(
 ) {
   return observeSupplyChainV1({
     profile: parsedProfile(),
+    sensorImplementationHash: SENSOR_IMPLEMENTATION_HASH,
     mode,
     evaluatedOn: "2026-08-31",
     expectedCommitSha: COMMIT_SHA,

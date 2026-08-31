@@ -7,9 +7,12 @@ import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  assertProjectHealthExactCleanCheckoutV1,
   parseProjectHealthExecutionDescriptorV1,
+  parseProjectHealthExecutionEvidenceV1,
   runProjectHealthProcessV1,
   type ProjectHealthExecutionDescriptorV1,
+  type ProjectHealthExecutionEvidenceV1,
 } from "./process-runner";
 
 const HASH_A = `sha256:${"a".repeat(64)}`;
@@ -62,11 +65,83 @@ function descriptor(
   };
 }
 
+function executionEvidence(
+  overrides: Partial<ProjectHealthExecutionEvidenceV1> = {},
+): ProjectHealthExecutionEvidenceV1 {
+  return {
+    kind: "project-health-execution-evidence",
+    schemaVersion: 1,
+    descriptorId: "fixture-command",
+    executionScope: "in-place-checkout",
+    commandHash: HASH_A,
+    environmentHash: HASH_A,
+    status: "passed",
+    exitCode: 0,
+    signal: null,
+    stdout: "ok",
+    stderr: "",
+    stdoutTruncated: false,
+    stderrTruncated: false,
+    repositoryStateBeforeHash: HASH_A,
+    repositoryStateAfterHash: HASH_A,
+    temporaryWorktreeRemoved: null,
+    temporaryOutputRemoved: true,
+    failureCodes: [],
+    ...overrides,
+  };
+}
+
 afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
 describe("project health process runner", () => {
+  it("accepts an exact-clean checkout while excluding only Registry-owned infrastructure", async () => {
+    const root = await createRepository();
+    await mkdir(path.join(root, ".project-health", "runs", "active-run"), { recursive: true });
+    await mkdir(path.join(root, ".project-health", "worktrees", "active-worktree"), { recursive: true });
+    await writeFile(path.join(root, ".project-health", "runs", "active-run", "evidence.json"), "{}\n", "utf8");
+    await writeFile(path.join(root, ".project-health", "worktrees", "active-worktree", "state.json"), "{}\n", "utf8");
+
+    await expect(assertProjectHealthExactCleanCheckoutV1(root)).resolves.toMatch(/^sha256:[a-f0-9]{64}$/);
+  });
+
+  it("accepts an exact-clean checkout with existing Project Health evidence and receipts", async () => {
+    const root = await createRepository();
+    const evidencePath = path.join(root, ".project-health", "evidence", "sha256", "fixture.json");
+    const receiptPath = path.join(root, ".project-health", "receipts", "fixture.json");
+    await mkdir(path.dirname(evidencePath), { recursive: true });
+    await mkdir(path.dirname(receiptPath), { recursive: true });
+    await writeFile(evidencePath, "{}\n", "utf8");
+    await writeFile(receiptPath, "{}\n", "utf8");
+
+    await expect(assertProjectHealthExactCleanCheckoutV1(root)).resolves.toMatch(/^sha256:[a-f0-9]{64}$/);
+  });
+
+  it("rejects a checkout with a dirty tracked source file", async () => {
+    const root = await createRepository();
+    await writeFile(path.join(root, "tracked.txt"), "dirty\n", "utf8");
+
+    await expect(assertProjectHealthExactCleanCheckoutV1(root)).rejects.toThrow(/exact-clean checkout/i);
+  });
+
+  it("rejects a checkout with an untracked source file", async () => {
+    const root = await createRepository();
+    await writeFile(path.join(root, "untracked-source.ts"), "export {};\n", "utf8");
+
+    await expect(assertProjectHealthExactCleanCheckoutV1(root)).rejects.toThrow(/exact-clean checkout/i);
+  });
+
+  it.runIf(process.platform !== "win32")("rejects a symlink masquerading as Registry-owned infrastructure", async () => {
+    const root = await createRepository();
+    const externalRoot = await realpath(await mkdtemp(path.join(os.tmpdir(), "worldkit-project-health-exact-clean-external-")));
+    roots.push(externalRoot);
+    await mkdir(path.join(root, ".project-health"), { recursive: true });
+    await symlink(externalRoot, path.join(root, ".project-health", "runs"), "dir");
+
+    await expect(assertProjectHealthExactCleanCheckoutV1(root)).rejects.toThrow(/canonical non-symlink directory/i);
+  });
+
   it("rejects an unknown execution scope before spawning", () => {
     expect(() => parseProjectHealthExecutionDescriptorV1({
       ...descriptor(["node", "-e", "process.exit(0)"]),
@@ -87,6 +162,93 @@ describe("project health process runner", () => {
     )).toThrow(/closed ProjectHealthExecutionDescriptorV1/i);
   });
 
+  it("parses a closed execution evidence record and rejects unknown keys", () => {
+    const valid = executionEvidence();
+    expect(parseProjectHealthExecutionEvidenceV1(valid)).toEqual(valid);
+    expect(() => parseProjectHealthExecutionEvidenceV1({
+      ...valid,
+      hostPid: 42,
+    })).toThrow(/closed ProjectHealthExecutionEvidenceV1/i);
+  });
+
+  it("rejects a passed execution with a nonzero exit or a signal", () => {
+    expect(() => parseProjectHealthExecutionEvidenceV1(executionEvidence({ exitCode: 1 })))
+      .toThrow(/closed ProjectHealthExecutionEvidenceV1/i);
+    expect(() => parseProjectHealthExecutionEvidenceV1(executionEvidence({ exitCode: null, signal: "SIGTERM" })))
+      .toThrow(/closed ProjectHealthExecutionEvidenceV1/i);
+  });
+
+  it("rejects a failed execution without a nonzero exit or terminating signal", () => {
+    expect(() => parseProjectHealthExecutionEvidenceV1(executionEvidence({
+      status: "failed",
+      exitCode: null,
+      signal: null,
+    }))).toThrow(/closed ProjectHealthExecutionEvidenceV1/i);
+  });
+
+  it.each([
+    executionEvidence({ status: "failed", exitCode: 1, failureCodes: ["OUTPUT_REMOVE_FAILED"] }),
+    executionEvidence({ status: "cleanup-failed", failureCodes: [] }),
+    executionEvidence({ status: "infrastructure-failed", failureCodes: [] }),
+    executionEvidence({ status: "infrastructure-failed", failureCodes: ["OUTPUT_REMOVE_FAILED"] }),
+    executionEvidence({
+      status: "cleanup-failed",
+      failureCodes: ["OUTPUT_REMOVE_FAILED", "OUTPUT_REMOVE_FAILED"],
+      temporaryOutputRemoved: false,
+    }),
+  ])("rejects failure codes that contradict execution status", (invalidEvidence) => {
+    expect(() => parseProjectHealthExecutionEvidenceV1(invalidEvidence))
+      .toThrow(/closed ProjectHealthExecutionEvidenceV1/i);
+  });
+
+  it.each([
+    executionEvidence({ repositoryStateBeforeHash: null }),
+    executionEvidence({ repositoryStateAfterHash: null }),
+    executionEvidence({ temporaryWorktreeRemoved: true }),
+    executionEvidence({ temporaryOutputRemoved: false }),
+    executionEvidence({ status: "repository-state-mutated" }),
+    executionEvidence({
+      status: "passed",
+      repositoryStateAfterHash: `sha256:${"b".repeat(64)}`,
+    }),
+  ])("rejects contradictory in-place repository and cleanup evidence", (invalidEvidence) => {
+    expect(() => parseProjectHealthExecutionEvidenceV1(invalidEvidence))
+      .toThrow(/closed ProjectHealthExecutionEvidenceV1/i);
+  });
+
+  it.each([
+    executionEvidence({
+      executionScope: "isolated-temp-worktree",
+      repositoryStateBeforeHash: HASH_A,
+      repositoryStateAfterHash: null,
+      temporaryWorktreeRemoved: true,
+    }),
+    executionEvidence({
+      executionScope: "isolated-temp-worktree",
+      repositoryStateBeforeHash: null,
+      repositoryStateAfterHash: null,
+      temporaryWorktreeRemoved: false,
+    }),
+    executionEvidence({
+      executionScope: "isolated-temp-worktree",
+      repositoryStateBeforeHash: null,
+      repositoryStateAfterHash: null,
+      temporaryWorktreeRemoved: true,
+      temporaryOutputRemoved: false,
+    }),
+    executionEvidence({
+      executionScope: "isolated-temp-worktree",
+      repositoryStateBeforeHash: null,
+      repositoryStateAfterHash: null,
+      temporaryWorktreeRemoved: true,
+      status: "cleanup-failed",
+      failureCodes: ["WORKTREE_REMOVE_FAILED"],
+    }),
+  ])("rejects contradictory isolated cleanup evidence", (invalidEvidence) => {
+    expect(() => parseProjectHealthExecutionEvidenceV1(invalidEvidence))
+      .toThrow(/closed ProjectHealthExecutionEvidenceV1/i);
+  });
+
   it("runs argv directly without a shell and publishes content-addressed evidence", async () => {
     const root = await createRepository();
     const result = await runProjectHealthProcessV1({
@@ -100,6 +262,7 @@ describe("project health process runner", () => {
     expect(result.evidence.exitCode).toBe(0);
     expect(result.evidenceRef).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(result.evidence.temporaryOutputRemoved).toBe(true);
+    expect(parseProjectHealthExecutionEvidenceV1(result.evidence)).toEqual(result.evidence);
   });
 
   it("inherits only the closed Host environment allowlist", async () => {
@@ -192,6 +355,20 @@ describe("project health process runner", () => {
     expect(result.evidence.status).toBe("failed");
     expect(result.evidence.exitCode).toBeNull();
     expect(result.evidence.signal).toBe("SIGTERM");
+  });
+
+  it("classifies a child process spawn error as an execution-envelope infrastructure failure", async () => {
+    const root = await createRepository();
+    const result = await runProjectHealthProcessV1({
+      repositoryRoot: root,
+      descriptor: descriptor(["worldkit-project-health-missing-executable"]),
+    });
+
+    expect(result.evidence.status).toBe("infrastructure-failed");
+    expect(result.evidence.exitCode).toBeNull();
+    expect(result.evidence.signal).toBeNull();
+    expect(result.evidence.failureCodes).toEqual(["EXECUTION_ENVELOPE_FAILED"]);
+    expect(parseProjectHealthExecutionEvidenceV1(result.evidence)).toEqual(result.evidence);
   });
 
   it("times out once and terminates descendant processes", async () => {

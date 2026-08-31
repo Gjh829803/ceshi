@@ -10,11 +10,6 @@ import {
   type ProjectHealthProfileV1,
 } from "../contracts";
 
-export const CONTRACT_PARITY_SENSOR_IMPLEMENTATION_HASH_V1 = sha256CanonicalJson({
-  sensorId: "contract-parity",
-  implementationId: "contract-parity-evidence-v1",
-});
-
 export type ContractParityOwnerKindV1 = "generated-bytes" | "dependency-lock" | "read-only-verifier";
 
 export interface ContractParityOwnerEvidenceV1 {
@@ -66,6 +61,7 @@ function finding(input: {
 
 export function observeContractParityV1(input: {
   readonly profile: ProjectHealthProfileV1;
+  readonly sensorImplementationHash: string;
   readonly mode: ProjectHealthModeV1;
   readonly expectedCommitSha: string;
   readonly owners: readonly ContractParityOwnerEvidenceV1[] | null;
@@ -203,7 +199,7 @@ export function observeContractParityV1(input: {
     kind: "project-health-observation",
     schemaVersion: 1,
     sensorId: "contract-parity",
-    sensorImplementationHash: CONTRACT_PARITY_SENSOR_IMPLEMENTATION_HASH_V1,
+    sensorImplementationHash: input.sensorImplementationHash,
     inputFingerprint,
     status,
     metricsById: { "generated-bytes-current": metric },

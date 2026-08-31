@@ -24,7 +24,8 @@ reference evidence / user intent
   -> exact-tree Project Health evidence and production disposition
 ```
 
-WRC-1 is an umbrella program, not a new runtime, Scene Source, package format, compiler, state
+This file is the overall WRC-1 milestone design and dependency authority, not the detailed design for
+each package. WRC-1 is an umbrella program, not a new runtime, Scene Source, package format, compiler, state
 authority, test runner, or compatibility layer. Existing BNA, BWB, PHO, Gameplay, Camera, and 3C
 specifications remain the detailed technical authorities for their domains. This document owns only
 the combined milestone boundary, dependency order, incremental-integration policy, cross-domain
@@ -224,8 +225,8 @@ interface ownership before code begins.
 | PHO-3 | Plan exact-head affected gates from Git diff, graph, and test census | PHO-0B, PHO-1 | PHO-6, PHO-7 | change-impact planner; exact base/head -> stable Gate Plan | public-contract/runtime/browser/build path fixtures | sequential |
 | PHO-4 | Add Runtime lifecycle, authority, cadence, and determinism probes | PHO-0B, WRC-GOV-1 | PHO-6, PHO-7 | registered probes only; exact runtime input -> observation | repeat/reset/throw/30-60-120/two-instance fixtures | sequential |
 | PHO-5 | Add performance, visual, documentation-truth, and independent-review Sensors | PHO-0B | PHO-6, PHO-7 | evidence adapters only; owner artifacts -> observations | budget/stale/link/status/review fixtures | sequential |
-| PHO-6 | Produce exact receipts, aggregate policy/report, and expose health CLI | PHO-1..5 | PHO-7, PHO-8 | one Registry/producer/aggregator/CLI; observations/debt -> report/explain | ordering/fingerprint/cap/exit tests | sequential, main-agent-only |
-| PHO-7 | Integrate PR, main-push, Nightly, and Release without repeating owner gates | PHO-3, PHO-4, PHO-5, PHO-6 | PHO-8, BNA-8 | workflows only; exact-head receipts + mode -> retained report | workflow layout, bounded CI runs, cleanup | sequential, main-agent-only |
+| PHO-6 | Produce exact audit output, aggregate policy/report, and expose health CLI | PHO-1..5 | PHO-7, PHO-8 | one Host/Registry/aggregator/CLI; own-checkout exact-clean tree + registered Gate -> validated in-memory evidence -> actual Sensor -> internal Observation -> report/explain；PR binds explicit ancestor base to trusted event exact head and rejects a synthetic merge checkout by SHA equality；external Receipt/Observation is never admission | source-closure identity, evidence parser, forged-input rejection, PR identity, ordering/fingerprint/cap/exit tests | sequential, main-agent-only |
+| PHO-7 | Integrate PR, main-push, Nightly, and Release without repeating owner gates | PHO-3, PHO-4, PHO-5, PHO-6 | PHO-8, BNA-8 | workflows only; exact-head same-process Gate/Sensor results + mode -> retained report | workflow layout, bounded CI runs, cleanup | sequential, main-agent-only |
 | PHO-8 | Complete adversarial adoption, independent Cloud review, baseline, and docs switch | PHO-7 | WRC-ACC-1 | review/baseline/docs only; exact reports -> disposition/adopted baseline | D1-D6, Cursor Cloud, clean tree, no open blocking finding | main-agent-only |
 | WRC-ACC-1 | Accept or reject the complete WRC-1 milestone with flagship playable cases | BNA-8, BWB-6, WRC-ACT-2, WRC-CAM-2, WRC-SR-2, WRC-EVT-1, PHO-8 | none | acceptance/review/docs only; all scoped receipts -> final WRC-1 disposition | three flagship cases, exact-SHA full review, docs/Quickstart truth | main-agent-only |
 

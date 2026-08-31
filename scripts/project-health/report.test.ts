@@ -21,54 +21,14 @@ import {
   type ProjectHealthSensorIdV1,
 } from "./contracts";
 import { aggregateProjectHealthReportV1 } from "./report";
-import {
-  CONTRACT_PARITY_SENSOR_IMPLEMENTATION_HASH_V1,
-} from "./sensors/contract-parity";
-import {
-  DOCUMENTATION_TRUTH_SENSOR_IMPLEMENTATION_HASH_V1,
-} from "./sensors/documentation-truth";
-import {
-  INDEPENDENT_REVIEW_SENSOR_IMPLEMENTATION_HASH_V1,
-} from "./sensors/independent-review";
-import {
-  PERFORMANCE_SIZE_SENSOR_IMPLEMENTATION_HASH_V1,
-} from "./sensors/performance-size";
-import {
-  RUNTIME_HEALTH_SENSOR_IMPLEMENTATION_HASH_V1,
-} from "./sensors/runtime-health";
-import {
-  SUPPLEMENTAL_AUTHORITY_SENSOR_IMPLEMENTATION_HASH_V1,
-} from "./sensors/supplemental-authority";
-import {
-  SUPPLY_CHAIN_SENSOR_IMPLEMENTATION_HASH_V1,
-} from "./sensors/supply-chain";
-import {
-  TEST_TOPOLOGY_SENSOR_IMPLEMENTATION_HASH_V1,
-} from "./sensors/test-topology";
-import {
-  VISUAL_EVIDENCE_SENSOR_IMPLEMENTATION_HASH_V1,
-} from "./sensors/visual-evidence";
-import {
-  WORKSPACE_BOUNDARY_SENSOR_IMPLEMENTATION_HASH_V1,
-} from "./sensors/workspace-boundary";
+import { PROJECT_HEALTH_SENSOR_IMPLEMENTATION_HASHES_V1 } from "./registry";
 
 const REPOSITORY_ROOT = path.resolve(new URL("../..", import.meta.url).pathname);
 const COMMIT_SHA = "c".repeat(40);
 const BASE_SHA = "d".repeat(40);
 const EVIDENCE_A = `sha256:${"a".repeat(64)}`;
 const EVIDENCE_B = `sha256:${"b".repeat(64)}`;
-const IMPLEMENTATION_HASHES = {
-  "workspace-boundary": WORKSPACE_BOUNDARY_SENSOR_IMPLEMENTATION_HASH_V1,
-  "supplemental-authority": SUPPLEMENTAL_AUTHORITY_SENSOR_IMPLEMENTATION_HASH_V1,
-  "contract-parity": CONTRACT_PARITY_SENSOR_IMPLEMENTATION_HASH_V1,
-  "supply-chain": SUPPLY_CHAIN_SENSOR_IMPLEMENTATION_HASH_V1,
-  "test-topology": TEST_TOPOLOGY_SENSOR_IMPLEMENTATION_HASH_V1,
-  "runtime-health": RUNTIME_HEALTH_SENSOR_IMPLEMENTATION_HASH_V1,
-  "performance-size": PERFORMANCE_SIZE_SENSOR_IMPLEMENTATION_HASH_V1,
-  "visual-evidence": VISUAL_EVIDENCE_SENSOR_IMPLEMENTATION_HASH_V1,
-  "documentation-truth": DOCUMENTATION_TRUTH_SENSOR_IMPLEMENTATION_HASH_V1,
-  "independent-review": INDEPENDENT_REVIEW_SENSOR_IMPLEMENTATION_HASH_V1,
-} as const;
+const IMPLEMENTATION_HASHES = PROJECT_HEALTH_SENSOR_IMPLEMENTATION_HASHES_V1;
 
 function readJson(relativePath: string): unknown {
   return JSON.parse(readFileSync(path.join(REPOSITORY_ROOT, relativePath), "utf8"));

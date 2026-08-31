@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -12,24 +12,18 @@ import { parseProjectHealthProfileV1 } from "./contracts";
 import { DEPENDENCY_INVENTORY_EXECUTION_DESCRIPTOR_V1 } from "./dependency-inventory";
 import {
   admitRegisteredProjectHealthGateV1,
+  executeRegisteredProjectHealthGateV1,
   isRegisteredProjectHealthGateIdV1,
   PROJECT_HEALTH_GATE_REGISTRY_V1,
+  PROJECT_HEALTH_SENSOR_REGISTRY_V1,
   PROJECT_HEALTH_SENSOR_IMPLEMENTATION_HASHES_V1,
+  observeRegisteredProjectHealthSensorV1,
   projectHealthGateInputFingerprintV1,
+  projectHealthSensorImplementationHashV1,
   readProjectHealthCheckoutHeadV1,
   recordRegisteredProjectHealthGateV1,
   registeredProjectHealthGateArgvV1,
 } from "./registry";
-import { CONTRACT_PARITY_SENSOR_IMPLEMENTATION_HASH_V1 } from "./sensors/contract-parity";
-import { DOCUMENTATION_TRUTH_SENSOR_IMPLEMENTATION_HASH_V1 } from "./sensors/documentation-truth";
-import { INDEPENDENT_REVIEW_SENSOR_IMPLEMENTATION_HASH_V1 } from "./sensors/independent-review";
-import { PERFORMANCE_SIZE_SENSOR_IMPLEMENTATION_HASH_V1 } from "./sensors/performance-size";
-import { RUNTIME_HEALTH_SENSOR_IMPLEMENTATION_HASH_V1 } from "./sensors/runtime-health";
-import { SUPPLEMENTAL_AUTHORITY_SENSOR_IMPLEMENTATION_HASH_V1 } from "./sensors/supplemental-authority";
-import { SUPPLY_CHAIN_SENSOR_IMPLEMENTATION_HASH_V1 } from "./sensors/supply-chain";
-import { TEST_TOPOLOGY_SENSOR_IMPLEMENTATION_HASH_V1 } from "./sensors/test-topology";
-import { VISUAL_EVIDENCE_SENSOR_IMPLEMENTATION_HASH_V1 } from "./sensors/visual-evidence";
-import { WORKSPACE_BOUNDARY_SENSOR_IMPLEMENTATION_HASH_V1 } from "./sensors/workspace-boundary";
 
 const REPOSITORY_ROOT = path.resolve(new URL("../..", import.meta.url).pathname);
 const COMMIT_SHA = execFileSync("git", ["rev-parse", "HEAD"], { cwd: REPOSITORY_ROOT, encoding: "utf8" }).trim();
@@ -72,22 +66,64 @@ function parsedProfile() {
   });
 }
 
+async function createCleanRepository(): Promise<Readonly<{ repositoryRoot: string; commitSha: string }>> {
+  const repositoryRoot = await realpath(await mkdtemp(
+    path.join(os.tmpdir(), "worldkit-project-health-registry-repo-"),
+  ));
+  roots.push(repositoryRoot);
+  await writeFile(path.join(repositoryRoot, ".gitignore"), ".project-health/\n", "utf8");
+  await writeFile(path.join(repositoryRoot, "tracked.txt"), "clean\n", "utf8");
+  execFileSync("git", ["init", "--quiet"], { cwd: repositoryRoot });
+  execFileSync("git", ["config", "user.email", "project-health@example.invalid"], { cwd: repositoryRoot });
+  execFileSync("git", ["config", "user.name", "Project Health Test"], { cwd: repositoryRoot });
+  execFileSync("git", ["add", ".gitignore", "tracked.txt"], { cwd: repositoryRoot });
+  execFileSync("git", ["commit", "--quiet", "-m", "fixture"], { cwd: repositoryRoot });
+  return {
+    repositoryRoot,
+    commitSha: execFileSync("git", ["rev-parse", "HEAD"], { cwd: repositoryRoot, encoding: "utf8" }).trim(),
+  };
+}
+
 describe("project health registry", () => {
-  it("binds every Profile Sensor to its exact implementation hash", () => {
+  it("binds every Profile Sensor to one executable source-derived implementation", () => {
     const profile = parsedProfile();
-    expect(PROJECT_HEALTH_SENSOR_IMPLEMENTATION_HASHES_V1).toEqual({
-      "workspace-boundary": WORKSPACE_BOUNDARY_SENSOR_IMPLEMENTATION_HASH_V1,
-      "supplemental-authority": SUPPLEMENTAL_AUTHORITY_SENSOR_IMPLEMENTATION_HASH_V1,
-      "contract-parity": CONTRACT_PARITY_SENSOR_IMPLEMENTATION_HASH_V1,
-      "supply-chain": SUPPLY_CHAIN_SENSOR_IMPLEMENTATION_HASH_V1,
-      "test-topology": TEST_TOPOLOGY_SENSOR_IMPLEMENTATION_HASH_V1,
-      "runtime-health": RUNTIME_HEALTH_SENSOR_IMPLEMENTATION_HASH_V1,
-      "performance-size": PERFORMANCE_SIZE_SENSOR_IMPLEMENTATION_HASH_V1,
-      "visual-evidence": VISUAL_EVIDENCE_SENSOR_IMPLEMENTATION_HASH_V1,
-      "documentation-truth": DOCUMENTATION_TRUTH_SENSOR_IMPLEMENTATION_HASH_V1,
-      "independent-review": INDEPENDENT_REVIEW_SENSOR_IMPLEMENTATION_HASH_V1,
-    });
+    expect(Object.keys(PROJECT_HEALTH_SENSOR_REGISTRY_V1)).toEqual([...profile.sensorIds]);
     expect(Object.keys(PROJECT_HEALTH_SENSOR_IMPLEMENTATION_HASHES_V1)).toEqual([...profile.sensorIds]);
+    for (const sensorId of profile.sensorIds) {
+      expect(PROJECT_HEALTH_SENSOR_REGISTRY_V1[sensorId].id).toBe(sensorId);
+      expect(typeof PROJECT_HEALTH_SENSOR_REGISTRY_V1[sensorId].observe).toBe("function");
+      expect(PROJECT_HEALTH_SENSOR_IMPLEMENTATION_HASHES_V1[sensorId]).toMatch(/^sha256:[a-f0-9]{64}$/);
+    }
+
+    const observation = observeRegisteredProjectHealthSensorV1({
+      sensorId: "performance-size",
+      sensorInput: { profile, measurement: null, baseline: null },
+    });
+    expect(observation.sensorId).toBe("performance-size");
+    expect(observation.sensorImplementationHash).toBe(
+      PROJECT_HEALTH_SENSOR_IMPLEMENTATION_HASHES_V1["performance-size"],
+    );
+  });
+
+  it("invalidates implementation identity when one registered Sensor source byte changes", async () => {
+    const repositoryRoot = await mkdtemp(path.join(os.tmpdir(), "worldkit-project-health-sensor-source-"));
+    roots.push(repositoryRoot);
+    await cp(path.join(REPOSITORY_ROOT, "scripts"), path.join(repositoryRoot, "scripts"), { recursive: true });
+    await cp(path.join(REPOSITORY_ROOT, "packages", "protocol"), path.join(repositoryRoot, "packages", "protocol"), {
+      recursive: true,
+    });
+    await cp(path.join(REPOSITORY_ROOT, "pnpm-lock.yaml"), path.join(repositoryRoot, "pnpm-lock.yaml"));
+    const before = projectHealthSensorImplementationHashV1({
+      repositoryRoot,
+      sensorId: "workspace-boundary",
+    });
+    const sourcePath = path.join(repositoryRoot, "scripts/project-health/sensors/workspace-boundary.ts");
+    await writeFile(sourcePath, `${await readFile(sourcePath, "utf8")}\n// identity mutation\n`, "utf8");
+    const after = projectHealthSensorImplementationHashV1({
+      repositoryRoot,
+      sensorId: "workspace-boundary",
+    });
+    expect(after).not.toBe(before);
   });
 
   it("registers every Profile and capability Gate plus frozen owner descriptors", () => {
@@ -136,22 +172,55 @@ describe("project health registry", () => {
     expect(source).toMatch("admitRegisteredProjectHealthGateV1");
     expect(source).toMatch("runProjectHealthProcessV1");
     expect(source).not.toMatch("spawn(");
-    const outputRoot = path.join(REPOSITORY_ROOT, ".project-health", `registry-test-${randomUUID()}`);
+    const fixture = await createCleanRepository();
+    const outputRoot = path.join(fixture.repositoryRoot, ".project-health", `registry-test-${randomUUID()}`);
     await mkdir(outputRoot, { recursive: true });
-    roots.push(outputRoot);
     const outputPath = path.join(outputRoot, "tracked-tree-clean.json");
     const receipt = await recordRegisteredProjectHealthGateV1({
-      repositoryRoot: REPOSITORY_ROOT,
+      repositoryRoot: fixture.repositoryRoot,
       profile: parsedProfile(),
       gateId: "tracked-tree-clean",
-      commitSha: COMMIT_SHA,
+      commitSha: fixture.commitSha,
       outputPath,
     });
     expect(receipt.kind).toBe("project-health-gate-receipt");
     expect(receipt.gateId).toBe("tracked-tree-clean");
-    expect(receipt.commitSha).toBe(COMMIT_SHA);
+    expect(receipt.commitSha).toBe(fixture.commitSha);
     expect(["passed", "failed", "incomplete"]).toContain(receipt.status);
     expect(JSON.parse(await readFile(outputPath, "utf8"))).toEqual(receipt);
+  });
+
+  it("executes a registered Gate in memory before any Receipt output is selected", async () => {
+    const fixture = await createCleanRepository();
+    const result = await executeRegisteredProjectHealthGateV1({
+      repositoryRoot: fixture.repositoryRoot,
+      profile: parsedProfile(),
+      gateId: "tracked-tree-clean",
+      commitSha: fixture.commitSha,
+    });
+    expect(result.receipt).toMatchObject({
+      kind: "project-health-gate-receipt",
+      gateId: "tracked-tree-clean",
+      commitSha: fixture.commitSha,
+      status: "passed",
+    });
+    expect(result.evidence).toMatchObject({
+      kind: "project-health-execution-evidence",
+      descriptorId: "tracked-tree-clean",
+      status: "passed",
+      commandHash: result.receipt.commandHash,
+    });
+    expect(result.receipt.evidenceRef).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(await readFile(
+      path.join(
+        fixture.repositoryRoot,
+        ".project-health",
+        "evidence",
+        "sha256",
+        result.receipt.evidenceRef.slice("sha256:".length),
+      ),
+      "utf8",
+    )).toContain('"kind":"project-health-execution-evidence"');
   });
 
   it("rejects a non-HEAD commit before publication and fingerprints canonical selected bytes", async () => {

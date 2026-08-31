@@ -215,6 +215,7 @@
   },
   "findingPoliciesByCode": {
     "PROJECT_HEALTH_WORKSPACE_BOUNDARY_VIOLATION": { "sensorId": "workspace-boundary", "policy": "blocking-p1" },
+    "PROJECT_HEALTH_WORKSPACE_BOUNDARY_GATE_FAILED": { "sensorId": "workspace-boundary", "policy": "blocking-p1" },
     "PROJECT_HEALTH_AUTHORITY_DUPLICATE": { "sensorId": "supplemental-authority", "policy": "blocking-p1" },
     "PROJECT_HEALTH_PUBLIC_COMPAT_ALIAS": { "sensorId": "supplemental-authority", "policy": "blocking-p1" },
     "PROJECT_HEALTH_AUTHORITY_KEYWORD_CANDIDATE": { "sensorId": "supplemental-authority", "policy": "advisory-p3" },
@@ -228,6 +229,7 @@
     "PROJECT_HEALTH_SUPPLY_CHAIN_PROVIDER_UNAVAILABLE": { "sensorId": "supply-chain", "policy": "advisory-p3" },
     "PROJECT_HEALTH_TEST_UNREGISTERED": { "sensorId": "test-topology", "policy": "blocking-p1" },
     "PROJECT_HEALTH_GATE_RECEIPT_STALE": { "sensorId": "test-topology", "policy": "blocking-p1" },
+    "PROJECT_HEALTH_GATE_FAILED": { "sensorId": "test-topology", "policy": "blocking-p1" },
     "PROJECT_HEALTH_CAPABILITY_UNREGISTERED": { "sensorId": "test-topology", "policy": "blocking-p1" },
     "PROJECT_HEALTH_RUNTIME_OWNER_LEAK": { "sensorId": "runtime-health", "policy": "blocking-p1" },
     "PROJECT_HEALTH_RUNTIME_NONDETERMINISTIC": { "sensorId": "runtime-health", "policy": "blocking-p1" },

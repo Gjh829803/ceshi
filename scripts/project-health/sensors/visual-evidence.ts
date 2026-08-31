@@ -9,11 +9,6 @@ import {
   type ProjectHealthProfileV1,
 } from "../contracts";
 
-export const VISUAL_EVIDENCE_SENSOR_IMPLEMENTATION_HASH_V1 = sha256CanonicalJson({
-  sensorId: "visual-evidence",
-  implementationId: "frozen-golden-ratio-v1",
-});
-
 export interface VisualEvidenceRecordV1 {
   readonly expectedCommitSha: string;
   readonly evidenceCommitSha: string | null;
@@ -25,6 +20,7 @@ export interface VisualEvidenceRecordV1 {
 
 export function observeVisualEvidenceV1(input: {
   readonly profile: ProjectHealthProfileV1;
+  readonly sensorImplementationHash: string;
   readonly evidence: VisualEvidenceRecordV1 | null;
 }): ProjectHealthObservationV1 {
   const inputFingerprint = sha256CanonicalJson({ evidence: input.evidence });
@@ -33,7 +29,7 @@ export function observeVisualEvidenceV1(input: {
       kind: "project-health-observation",
       schemaVersion: 1,
       sensorId: "visual-evidence",
-      sensorImplementationHash: VISUAL_EVIDENCE_SENSOR_IMPLEMENTATION_HASH_V1,
+      sensorImplementationHash: input.sensorImplementationHash,
       inputFingerprint,
       status: "incomplete",
       metricsById: {
@@ -59,7 +55,7 @@ export function observeVisualEvidenceV1(input: {
       kind: "project-health-observation",
       schemaVersion: 1,
       sensorId: "visual-evidence",
-      sensorImplementationHash: VISUAL_EVIDENCE_SENSOR_IMPLEMENTATION_HASH_V1,
+      sensorImplementationHash: input.sensorImplementationHash,
       inputFingerprint,
       status: "not-applicable",
       metricsById: {
@@ -109,7 +105,7 @@ export function observeVisualEvidenceV1(input: {
     kind: "project-health-observation",
     schemaVersion: 1,
     sensorId: "visual-evidence",
-    sensorImplementationHash: VISUAL_EVIDENCE_SENSOR_IMPLEMENTATION_HASH_V1,
+    sensorImplementationHash: input.sensorImplementationHash,
     inputFingerprint,
     status: drifted ? "failed" : "passed",
     metricsById: {

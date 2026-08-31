@@ -11,11 +11,6 @@ import {
   type ProjectHealthProfileV1,
 } from "../contracts";
 
-export const INDEPENDENT_REVIEW_SENSOR_IMPLEMENTATION_HASH_V1 = sha256CanonicalJson({
-  sensorId: "independent-review",
-  implementationId: "host-disposition-v1",
-});
-
 function finding(input: {
   readonly code: "PROJECT_HEALTH_INDEPENDENT_REVIEW_INCOMPLETE" | "PROJECT_HEALTH_INDEPENDENT_REVIEW_HOST_CONFIRMED";
   readonly policy: "advisory-p2" | "blocking-p1";
@@ -49,6 +44,7 @@ function finding(input: {
 
 function incompleteObservation(
   profile: ProjectHealthProfileV1,
+  sensorImplementationHash: string,
   inputFingerprint: string,
   evidenceRefs: readonly string[],
   extraFindings: readonly ProjectHealthFindingV1[] = [],
@@ -57,7 +53,7 @@ function incompleteObservation(
     kind: "project-health-observation",
     schemaVersion: 1,
     sensorId: "independent-review",
-    sensorImplementationHash: INDEPENDENT_REVIEW_SENSOR_IMPLEMENTATION_HASH_V1,
+    sensorImplementationHash,
     inputFingerprint,
     status: "incomplete",
     metricsById: {
@@ -75,6 +71,7 @@ function incompleteObservation(
 
 export function observeIndependentReviewV1(input: {
   readonly profile: ProjectHealthProfileV1;
+  readonly sensorImplementationHash: string;
   readonly expectedCommitSha: string;
   readonly receipt: IndependentReviewReceiptV1 | null;
   readonly timedOut: boolean;
@@ -87,6 +84,7 @@ export function observeIndependentReviewV1(input: {
   if (input.timedOut === true || isNil(input.receipt)) {
     return incompleteObservation(
       input.profile,
+      input.sensorImplementationHash,
       inputFingerprint,
       isNil(input.receipt) ? [] : [input.receipt.evidenceRef],
       [finding({
@@ -102,7 +100,7 @@ export function observeIndependentReviewV1(input: {
   const receipt = parseIndependentReviewReceiptV1(input.receipt, input.profile);
   const evidenceRefs = [receipt.evidenceRef];
   if (receipt.commitSha !== input.expectedCommitSha || receipt.status !== "completed") {
-    return incompleteObservation(input.profile, inputFingerprint, evidenceRefs, [finding({
+    return incompleteObservation(input.profile, input.sensorImplementationHash, inputFingerprint, evidenceRefs, [finding({
       code: "PROJECT_HEALTH_INDEPENDENT_REVIEW_INCOMPLETE",
       policy: "advisory-p2",
       evidenceRefs,
@@ -112,7 +110,7 @@ export function observeIndependentReviewV1(input: {
   }
 
   if (Object.values(receipt.dispositionsByFingerprint).includes("pending-host-review")) {
-    return incompleteObservation(input.profile, inputFingerprint, evidenceRefs, [finding({
+    return incompleteObservation(input.profile, input.sensorImplementationHash, inputFingerprint, evidenceRefs, [finding({
       code: "PROJECT_HEALTH_INDEPENDENT_REVIEW_INCOMPLETE",
       policy: "advisory-p2",
       evidenceRefs,
@@ -139,7 +137,7 @@ export function observeIndependentReviewV1(input: {
     kind: "project-health-observation",
     schemaVersion: 1,
     sensorId: "independent-review",
-    sensorImplementationHash: INDEPENDENT_REVIEW_SENSOR_IMPLEMENTATION_HASH_V1,
+    sensorImplementationHash: input.sensorImplementationHash,
     inputFingerprint,
     status: isEmpty(findings) ? "passed" : "failed",
     metricsById: {

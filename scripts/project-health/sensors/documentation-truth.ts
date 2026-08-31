@@ -11,11 +11,6 @@ import {
   type ProjectHealthProfileV1,
 } from "../contracts";
 
-export const DOCUMENTATION_TRUTH_SENSOR_IMPLEMENTATION_HASH_V1 = sha256CanonicalJson({
-  sensorId: "documentation-truth",
-  implementationId: "link-and-status-v1",
-});
-
 export interface DocumentationDocumentV1 {
   readonly path: string;
   readonly markdown: string;
@@ -65,6 +60,7 @@ function finding(pathRef: string, expected: string, impact: string, evidenceRef:
 
 export function observeDocumentationTruthV1(input: {
   readonly profile: ProjectHealthProfileV1;
+  readonly sensorImplementationHash: string;
   readonly documents: readonly DocumentationDocumentV1[];
   readonly repositoryPaths: readonly string[];
   readonly declaredStatusesByTaskId: Readonly<Record<string, "Proposed" | "Implemented" | "Experimental">>;
@@ -117,7 +113,7 @@ export function observeDocumentationTruthV1(input: {
     kind: "project-health-observation",
     schemaVersion: 1,
     sensorId: "documentation-truth",
-    sensorImplementationHash: DOCUMENTATION_TRUTH_SENSOR_IMPLEMENTATION_HASH_V1,
+    sensorImplementationHash: input.sensorImplementationHash,
     inputFingerprint,
     status: current ? "passed" : "failed",
     metricsById: {

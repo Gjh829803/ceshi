@@ -13,11 +13,6 @@ import {
   type ProjectHealthSupplyChainPolicyV1,
 } from "../contracts";
 
-export const SUPPLY_CHAIN_SENSOR_IMPLEMENTATION_HASH_V1 = sha256CanonicalJson({
-  sensorId: "supply-chain",
-  implementationId: "supply-chain-inventory-v1",
-});
-
 export interface SupplyChainAdvisoryV1 {
   readonly packageName: string;
   readonly version: string;
@@ -88,6 +83,7 @@ function finding(input: {
 
 export function observeSupplyChainV1(input: {
   readonly profile: ProjectHealthProfileV1;
+  readonly sensorImplementationHash: string;
   readonly mode: ProjectHealthModeV1;
   readonly evaluatedOn: string;
   readonly expectedCommitSha: string;
@@ -234,7 +230,7 @@ export function observeSupplyChainV1(input: {
     kind: "project-health-observation",
     schemaVersion: 1,
     sensorId: "supply-chain",
-    sensorImplementationHash: SUPPLY_CHAIN_SENSOR_IMPLEMENTATION_HASH_V1,
+    sensorImplementationHash: input.sensorImplementationHash,
     inputFingerprint,
     status,
     metricsById: { "dependency-inventory-complete": metric },

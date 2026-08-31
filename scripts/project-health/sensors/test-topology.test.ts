@@ -3,6 +3,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { readFile as readFileAsync } from "node:fs/promises";
 import path from "node:path";
 
+import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -22,6 +23,7 @@ const COMMIT_SHA = "a".repeat(40);
 const BASE_SHA = "b".repeat(40);
 const MERGE_SHA = "c".repeat(40);
 const HASH_A = `sha256:${"a".repeat(64)}`;
+const SENSOR_IMPLEMENTATION_HASH = `sha256:${"b".repeat(64)}`;
 
 function readJson(relativePath: string): unknown {
   return JSON.parse(readFileSync(path.join(REPOSITORY_ROOT, relativePath), "utf8"));
@@ -91,23 +93,33 @@ function fixtureEvidence(): WorkspaceBoundaryEvidenceV1 {
 }
 
 function impactFor(changedPaths: readonly string[]) {
+  const profile = parsedProfile();
+  const inputFingerprintsByGateId = Object.fromEntries([
+    ...new Set(Object.values(profile.capabilityGateIdsById).flat()),
+  ].map((gateId) => [gateId, sha256CanonicalJson({ authority: "host", gateId })]));
   return planChangeImpactV1({
-    profile: parsedProfile(),
+    profile,
     mode: "pr",
     commitSha: COMMIT_SHA,
     baseSha: BASE_SHA,
     changedPaths,
     evidence: fixtureEvidence(),
+    inputFingerprintsByGateId,
   });
 }
 
 function receiptsFor(impact: ReturnType<typeof impactFor>): ProjectHealthGateReceiptV1[] {
-  return impact.plan.requiredGateIds.map((gateId, index) => parseProjectHealthGateReceiptV1({
+  const profile = parsedProfile();
+  const requiredGateIds = [...new Set([
+    ...(profile.modesById.pr.requiredGateIdsBySensorId["test-topology"] ?? []),
+    ...impact.plan.requiredGateIds,
+  ])];
+  return requiredGateIds.map((gateId, index) => parseProjectHealthGateReceiptV1({
     kind: "project-health-gate-receipt",
     schemaVersion: 1,
     gateId,
     commitSha: COMMIT_SHA,
-    inputFingerprint: impact.plan.inputFingerprintsByGateId[gateId],
+    inputFingerprint: impact.plan.inputFingerprintsByGateId[gateId] ?? sha256CanonicalJson({ gateId }),
     commandHash: HASH_A,
     status: "passed",
     evidenceRef: `sha256:${String(index + 1).repeat(64)}`,
@@ -118,6 +130,7 @@ function observe(input: {
   readonly changedPaths: readonly string[];
   readonly receipts?: readonly ProjectHealthGateReceiptV1[];
   readonly censusRootTestFiles?: readonly string[];
+  readonly censusAvailable?: boolean;
   readonly checkoutSha?: string;
   readonly requestedHeadSha?: string;
   readonly isMergeCommit?: boolean;
@@ -125,9 +138,11 @@ function observe(input: {
   const impact = impactFor(input.changedPaths);
   return observeTestTopologyV1({
     profile: parsedProfile(),
+    sensorImplementationHash: SENSOR_IMPLEMENTATION_HASH,
     mode: "pr",
     impact,
-    census: { rootTestFiles: input.censusRootTestFiles ?? [] },
+    census: input.censusAvailable === false ? null : { rootTestFiles: input.censusRootTestFiles ?? [] },
+    requiredGateIds: parsedProfile().modesById.pr.requiredGateIdsBySensorId["test-topology"] ?? [],
     receipts: input.receipts ?? receiptsFor(impact),
     expectedCommitSha: COMMIT_SHA,
     requestedHeadSha: input.requestedHeadSha ?? COMMIT_SHA,
@@ -145,7 +160,7 @@ describe("test-topology sensor", () => {
   });
 
   it("passes a docs-only plan without scheduling Runtime receipts", () => {
-    const observation = observe({ changedPaths: ["docs/reviews/note.md"], receipts: [] });
+    const observation = observe({ changedPaths: ["docs/reviews/note.md"] });
     expect(observation.status).toBe("passed");
     expect(observation.findings).toEqual([]);
     expect(observation.metricsById["test-census-current"]).toEqual({
@@ -171,7 +186,7 @@ describe("test-topology sensor", () => {
   });
 
   it("reports an unclassified capability path", () => {
-    const observation = observe({ changedPaths: ["README.md"], receipts: [] });
+    const observation = observe({ changedPaths: ["README.md"] });
     expect(observation.status).toBe("failed");
     expect(observation.findings.some((finding) =>
       finding.code === "PROJECT_HEALTH_CAPABILITY_UNREGISTERED")).toBe(true);
@@ -185,9 +200,11 @@ describe("test-topology sensor", () => {
     }));
     const observation = observeTestTopologyV1({
       profile: parsedProfile(),
+      sensorImplementationHash: SENSOR_IMPLEMENTATION_HASH,
       mode: "pr",
       impact,
       census: { rootTestFiles: [] },
+      requiredGateIds: parsedProfile().modesById.pr.requiredGateIdsBySensorId["test-topology"] ?? [],
       receipts: stale,
       expectedCommitSha: COMMIT_SHA,
       requestedHeadSha: COMMIT_SHA,
@@ -223,5 +240,34 @@ describe("test-topology sensor", () => {
     });
     expect(observation.status).toBe("passed");
     expect(observation.findings).toEqual([]);
+  });
+
+  it("fails when a fixed mode Gate fails even if change impact does not schedule it", () => {
+    const impact = impactFor(["docs/reviews/note.md"]);
+    const receipts = receiptsFor(impact).map((receipt) => receipt.gateId === "test-contract"
+      ? { ...receipt, status: "failed" as const }
+      : receipt);
+    const observation = observe({ changedPaths: ["docs/reviews/note.md"], receipts });
+    expect(observation.status).toBe("failed");
+    expect(observation.findings.some((finding) =>
+      finding.code === "PROJECT_HEALTH_GATE_FAILED"
+      && finding.subjectRefs.includes("gate:test-contract"))).toBe(true);
+  });
+
+  it("keeps an infrastructure-incomplete fixed Gate distinct from a failed Gate", () => {
+    const impact = impactFor(["docs/reviews/note.md"]);
+    const receipts = receiptsFor(impact).map((receipt) => receipt.gateId === "test-census"
+      ? { ...receipt, status: "incomplete" as const }
+      : receipt);
+    const observation = observe({
+      changedPaths: ["docs/reviews/note.md"],
+      receipts,
+      censusAvailable: false,
+    });
+    expect(observation.status).toBe("incomplete");
+    expect(observation.metricsById["test-census-current"]).toMatchObject({
+      status: "not-evaluated",
+      reasonCode: "GATE_RECEIPT_STALE",
+    });
   });
 });

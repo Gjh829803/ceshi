@@ -35,11 +35,14 @@ const errors = reconcileWorkspaceBoundaryDebt(
   evidence.violations,
   debt.entries as readonly WorkspaceBoundaryDebtV1[],
 );
-if (errors.length > 0) {
-  process.stderr.write(`${errors.join("\n")}\n`);
-  process.exitCode = 2;
-} else {
+if (typeof process.env.PROJECT_HEALTH_OUTPUT_ROOT === "string") {
+  process.stdout.write(`${JSON.stringify(evidence)}\n`);
+} else if (errors.length === 0) {
   process.stdout.write(
     `Workspace boundary floor passed (${evidence.violations.length} registered debt entries; ${evidence.publicSymbols.length} public symbols).\n`,
   );
+}
+if (errors.length > 0) {
+  process.stderr.write(`${errors.join("\n")}\n`);
+  process.exitCode = 2;
 }

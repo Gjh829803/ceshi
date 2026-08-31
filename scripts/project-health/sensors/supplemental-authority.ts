@@ -13,11 +13,6 @@ import {
 } from "../contracts";
 import { workspaceBoundaryEvidenceRefV1 } from "../workspace-boundary-adapter";
 
-export const SUPPLEMENTAL_AUTHORITY_SENSOR_IMPLEMENTATION_HASH_V1 = sha256CanonicalJson({
-  sensorId: "supplemental-authority",
-  implementationId: "public-symbol-authority-v1",
-});
-
 function selectorMatches(
   selector: ProjectHealthAuthoritySelectorV1,
   symbol: WorkspacePublicSymbolOwnershipV1,
@@ -88,6 +83,7 @@ function authorityFinding(input: {
 
 export function observeSupplementalAuthorityV1(input: {
   readonly profile: ProjectHealthProfileV1;
+  readonly sensorImplementationHash: string;
   readonly evidence: WorkspaceBoundaryEvidenceV1;
   readonly authorityPolicy: ProjectHealthAuthorityPolicyV1;
 }): ProjectHealthObservationV1 {
@@ -182,7 +178,7 @@ export function observeSupplementalAuthorityV1(input: {
     kind: "project-health-observation",
     schemaVersion: 1,
     sensorId: "supplemental-authority",
-    sensorImplementationHash: SUPPLEMENTAL_AUTHORITY_SENSOR_IMPLEMENTATION_HASH_V1,
+    sensorImplementationHash: input.sensorImplementationHash,
     inputFingerprint: evidenceRef,
     status: blocking ? "failed" : "passed",
     metricsById: {
