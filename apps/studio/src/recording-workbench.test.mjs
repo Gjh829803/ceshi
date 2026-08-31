@@ -113,8 +113,9 @@ async function fakeRecordingTranscode({ sourcePath, destinationPath, durationSec
   };
 }
 
-async function waitForRecording(origin, sceneId, predicate) {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
+async function waitForRecording(origin, sceneId, predicate, timeoutMs = 10_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
     const payload = await fetch(
       `${origin}/api/recording-worlds/${sceneId}/recordings`,
     ).then((response) => response.json());
@@ -330,7 +331,11 @@ test("freezes a local Codex backend at enqueue and stores only its local task ma
 
 test("rewrites an existing Seedance prompt when the selected Codex backend changes", async () => {
   const fixture = await makeFixture();
-  const fake = createGenerationSpawn();
+  let releaseFirstCodex;
+  const firstCodexCompletion = new Promise((resolve) => {
+    releaseFirstCodex = resolve;
+  });
+  const fake = createGenerationSpawn({ holdCodex: firstCodexCompletion });
   let selectedBackend = "cloud";
   const service = createRecordingWorkbenchService({
     repoRoot: fixture.repoRoot,
@@ -348,6 +353,7 @@ test("rewrites an existing Seedance prompt when the selected Codex backend chang
       { method: "POST" },
     );
     assert.equal(firstResponse.status, 202, await firstResponse.text());
+    setTimeout(releaseFirstCodex, 2_500);
     const cloudReady = await waitForRecording(
       http.origin,
       fixture.sceneId,
