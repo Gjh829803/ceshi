@@ -82,12 +82,38 @@ export type GameplayActionDefinitionBodyV1 = Omit<
   "contentHash"
 >;
 
+export interface SemanticFactProjectorProfileResourceV1 {
+  readonly kind: "semantic-fact-projector-profile";
+  readonly schemaVersion: 1;
+  readonly id: string;
+  readonly version: 1;
+  readonly resourceRef: string;
+  readonly contentHash: Sha256HashV1;
+  readonly supportedByProjection: Readonly<{
+    readonly supportSampleSource: "retained-character-support";
+    readonly acceptedSupportStates: readonly ["sliding", "supported"];
+    readonly supportSurfaceMotionMode: "static";
+    readonly supportPointHeightToleranceMode:
+      "character-body-contact-band";
+    readonly minimumContactToAggregateSupportNormalCosine: number;
+    readonly ambiguousSurfaceMode: "omit";
+    readonly endDelayTicks: 0;
+  }>;
+}
+
+export type SemanticFactProjectorProfileResourceBodyV1 = Omit<
+  SemanticFactProjectorProfileResourceV1,
+  "contentHash"
+>;
+
 export interface GameplayBootstrapV1 {
   readonly kind: "gameplay-bootstrap";
   readonly id: string;
   readonly version: number;
   readonly resourceRef: string;
   readonly contentHash: Sha256HashV1;
+  readonly semanticFactProjectorProfileResource:
+    SemanticFactProjectorProfileResourceV1;
   readonly entityDescriptors: readonly GameplayEntityDescriptorV1[];
   readonly featureResourceLocks: readonly GameplayFeatureResourceLockV1[];
   readonly semanticActionDefinitions: readonly GameplayActionDefinitionV1[];
@@ -633,6 +659,165 @@ function canonicalObjectCollection<T>(
   return Object.freeze(canonical);
 }
 
+function parseSemanticFactProjectorProfileResourceBody(
+  input: unknown,
+): SemanticFactProjectorProfileResourceBodyV1 {
+  const schemaName = "SemanticFactProjectorProfileResourceBodyV1";
+  const record = snapshotDataRecord(input);
+  if (isNil(record) || !hasExactKeys(record, [
+    "kind",
+    "schemaVersion",
+    "id",
+    "version",
+    "resourceRef",
+    "supportedByProjection",
+  ]) ||
+    record.kind !== "semantic-fact-projector-profile" ||
+    record.schemaVersion !== 1 ||
+    !isNonEmptyString(record.id) ||
+    record.version !== 1 ||
+    !isNonEmptyString(record.resourceRef)
+  ) invalid(schemaName);
+  const supportedByProjection = snapshotDataRecord(
+    record.supportedByProjection,
+  );
+  if (isNil(supportedByProjection) || !hasExactKeys(
+    supportedByProjection,
+    [
+      "supportSampleSource",
+      "acceptedSupportStates",
+      "supportSurfaceMotionMode",
+      "supportPointHeightToleranceMode",
+      "minimumContactToAggregateSupportNormalCosine",
+      "ambiguousSurfaceMode",
+      "endDelayTicks",
+    ],
+  )) invalid(schemaName);
+  const acceptedSupportStates = snapshotDataArray(
+    supportedByProjection.acceptedSupportStates,
+  );
+  if (
+    supportedByProjection.supportSampleSource !==
+      "retained-character-support" ||
+    isNil(acceptedSupportStates) ||
+    acceptedSupportStates.length !== 2 ||
+    acceptedSupportStates[0] !== "sliding" ||
+    acceptedSupportStates[1] !== "supported" ||
+    supportedByProjection.supportSurfaceMotionMode !== "static" ||
+    supportedByProjection.supportPointHeightToleranceMode !==
+      "character-body-contact-band" ||
+    typeof supportedByProjection
+        .minimumContactToAggregateSupportNormalCosine !== "number" ||
+    !Number.isFinite(
+      supportedByProjection.minimumContactToAggregateSupportNormalCosine,
+    ) ||
+    supportedByProjection.minimumContactToAggregateSupportNormalCosine < 0 ||
+    supportedByProjection.minimumContactToAggregateSupportNormalCosine > 1 ||
+    Object.is(
+      supportedByProjection.minimumContactToAggregateSupportNormalCosine,
+      -0,
+    ) ||
+    supportedByProjection.ambiguousSurfaceMode !== "omit" ||
+    supportedByProjection.endDelayTicks !== 0
+  ) invalid(schemaName);
+  return deepFreeze({
+    kind: "semantic-fact-projector-profile",
+    schemaVersion: 1,
+    id: record.id,
+    version: 1,
+    resourceRef: record.resourceRef,
+    supportedByProjection: {
+      supportSampleSource: "retained-character-support",
+      acceptedSupportStates: ["sliding", "supported"],
+      supportSurfaceMotionMode: "static",
+      supportPointHeightToleranceMode: "character-body-contact-band",
+      minimumContactToAggregateSupportNormalCosine:
+        supportedByProjection.minimumContactToAggregateSupportNormalCosine,
+      ambiguousSurfaceMode: "omit",
+      endDelayTicks: 0,
+    },
+  });
+}
+
+export function deriveSemanticFactProjectorProfileResourceContentHashV1(
+  input: unknown,
+): Sha256HashV1 {
+  return sha256CanonicalJson(
+    parseSemanticFactProjectorProfileResourceBody(input),
+  ) as Sha256HashV1;
+}
+
+export function createSemanticFactProjectorProfileResourceV1(
+  input: SemanticFactProjectorProfileResourceBodyV1,
+): SemanticFactProjectorProfileResourceV1 {
+  const body = parseSemanticFactProjectorProfileResourceBody(input);
+  return deepFreeze({
+    ...body,
+    contentHash: sha256CanonicalJson(body) as Sha256HashV1,
+  });
+}
+
+export function parseSemanticFactProjectorProfileResourceV1(
+  input: unknown,
+): SemanticFactProjectorProfileResourceV1 {
+  const schemaName = "SemanticFactProjectorProfileResourceV1";
+  const record = snapshotDataRecord(input);
+  if (isNil(record) || !hasExactKeys(record, [
+    "kind",
+    "schemaVersion",
+    "id",
+    "version",
+    "resourceRef",
+    "contentHash",
+    "supportedByProjection",
+  ]) || !isSha256(record.contentHash)) invalid(schemaName);
+  const { contentHash, ...bodyInput } = record;
+  let body: SemanticFactProjectorProfileResourceBodyV1;
+  try {
+    body = parseSemanticFactProjectorProfileResourceBody(bodyInput);
+  } catch {
+    return invalid(schemaName);
+  }
+  const expectedHash = sha256CanonicalJson(body) as Sha256HashV1;
+  if (contentHash !== expectedHash) invalid(schemaName);
+  return deepFreeze({ ...body, contentHash: expectedHash });
+}
+
+export function canonicalizeSemanticFactProjectorProfileResourceV1(
+  input: unknown,
+): string {
+  return stringifyCanonicalJson(
+    parseSemanticFactProjectorProfileResourceV1(input),
+  );
+}
+
+export function semanticFactProjectorProfileResourceCanonicalBytesV1(
+  input: unknown,
+): Uint8Array {
+  return canonicalJsonBytes(
+    parseSemanticFactProjectorProfileResourceV1(input),
+  );
+}
+
+export const RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1 =
+  createSemanticFactProjectorProfileResourceV1({
+    kind: "semantic-fact-projector-profile",
+    schemaVersion: 1,
+    id: "physics-retained-support",
+    version: 1,
+    resourceRef:
+      "worldkit://semantic-fact-projector-profile/physics.retained-support@1",
+    supportedByProjection: {
+      supportSampleSource: "retained-character-support",
+      acceptedSupportStates: ["sliding", "supported"],
+      supportSurfaceMotionMode: "static",
+      supportPointHeightToleranceMode: "character-body-contact-band",
+      minimumContactToAggregateSupportNormalCosine: 0.95,
+      ambiguousSurfaceMode: "omit",
+      endDelayTicks: 0,
+    },
+  });
+
 function parseGameplayBootstrapBody(
   input: unknown,
   mode: ParseMode,
@@ -645,6 +830,7 @@ function parseGameplayBootstrapBody(
     "id",
     "version",
     "resourceRef",
+    "semanticFactProjectorProfileResource",
     "entityDescriptors",
     "featureResourceLocks",
     "semanticActionDefinitions",
@@ -668,6 +854,10 @@ function parseGameplayBootstrapBody(
     id: record.id,
     version: record.version,
     resourceRef: record.resourceRef,
+    semanticFactProjectorProfileResource:
+      parseSemanticFactProjectorProfileResourceV1(
+        record.semanticFactProjectorProfileResource,
+      ),
     entityDescriptors: canonicalObjectCollection(
       record.entityDescriptors,
       schemaName,
@@ -736,6 +926,7 @@ export function parseGameplayBootstrapV1(input: unknown): GameplayBootstrapV1 {
     "version",
     "resourceRef",
     "contentHash",
+    "semanticFactProjectorProfileResource",
     "entityDescriptors",
     "featureResourceLocks",
     "semanticActionDefinitions",

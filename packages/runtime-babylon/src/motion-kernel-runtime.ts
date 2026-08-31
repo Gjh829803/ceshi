@@ -54,7 +54,15 @@ export interface RetainedCharacterSupportSampleV1 {
 export interface RetainedCharacterSupportContactV1 {
   readonly pointMetersXYZ: RuntimeVec3V1;
   readonly normalXYZ: RuntimeVec3V1;
+  readonly colliderSubshapeId?: string;
+  readonly traversalSurfaceId?: string;
+  readonly surfaceEntityId?: string;
 }
+
+// Babylon 9.23.0 checkSupportToRef admits supporting constraints only when
+// contact.normal.dot(gravityDirection) < -0.08. With canonical -Y gravity,
+// this is the exact equivalent upward-normal threshold.
+const BABYLON_SUPPORTING_CONTACT_MINIMUM_UPWARD_NORMAL_Y = 0.08;
 
 export interface MotionKernelLiveLockStateV1 {
   readonly capsuleRadiusMeters: number;
@@ -380,6 +388,15 @@ export class MotionKernelRuntimeV1 {
             ...contact.pointMetersXYZ,
           ]) as RuntimeVec3V1,
           normalXYZ: Object.freeze([...contact.normalXYZ]) as RuntimeVec3V1,
+          ...(isNil(contact.colliderSubshapeId)
+            ? {}
+            : { colliderSubshapeId: contact.colliderSubshapeId }),
+          ...(isNil(contact.traversalSurfaceId)
+            ? {}
+            : { traversalSurfaceId: contact.traversalSurfaceId }),
+          ...(isNil(contact.surfaceEntityId)
+            ? {}
+            : { surfaceEntityId: contact.surfaceEntityId }),
         })
       )),
     });
@@ -557,6 +574,7 @@ export class MotionKernelRuntimeV1 {
   resetAt(subjectOrigin: Vector3, facingYawRadians: number): void {
     this.physicsController.setPosition(subjectOrigin.add(this.colliderCenterOffset));
     this.physicsController.setVelocity(Vector3.Zero());
+    this.physicsController.synchronizeAfterTeleport();
     this.motionModeResolver.reset();
     this.motionModeResolver.request(this.lastRequestedMotionProfileRef);
     this.motionModeResolver.commitTickBoundary();
@@ -593,6 +611,7 @@ export class MotionKernelRuntimeV1 {
   projectSuspendedAt(subjectOrigin: Vector3, facingYawRadians: number): void {
     this.stop();
     this.physicsController.setPosition(subjectOrigin.add(this.colliderCenterOffset));
+    this.physicsController.synchronizeAfterTeleport();
     this.yawRadians = facingYawRadians;
     this.retainedSupportSample = undefined;
     this.syncVisual(subjectOrigin);
@@ -686,14 +705,23 @@ export class MotionKernelRuntimeV1 {
             new Vector3(...contact.pointMetersXYZ).subtract(sampledFoot),
             this.up,
           )) <= supportContactBandMeters &&
-          Vector3.Dot(new Vector3(...contact.normalXYZ), this.up) >=
-            this.physicsController.maxSlopeCosine
+          Vector3.Dot(new Vector3(...contact.normalXYZ), this.up) >
+            BABYLON_SUPPORTING_CONTACT_MINIMUM_UPWARD_NORMAL_Y
         )
         .map((contact) => Object.freeze({
           pointMetersXYZ: Object.freeze([
             ...contact.pointMetersXYZ,
           ]) as RuntimeVec3V1,
           normalXYZ: Object.freeze([...contact.normalXYZ]) as RuntimeVec3V1,
+          ...(isNil(contact.colliderSubshapeId)
+            ? {}
+            : { colliderSubshapeId: contact.colliderSubshapeId }),
+          ...(isNil(contact.traversalSurfaceId)
+            ? {}
+            : { traversalSurfaceId: contact.traversalSurfaceId }),
+          ...(isNil(contact.surfaceEntityId)
+            ? {}
+            : { surfaceEntityId: contact.surfaceEntityId }),
         }));
     this.retainedSupportSample = Object.freeze({
       supportState,

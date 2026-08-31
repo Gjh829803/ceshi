@@ -30,6 +30,7 @@ import {
   parseJumpVariantPolicyV1,
   type LockedRootMotionSourceV1,
 } from "@whitebox-world/character-movement";
+import type { CameraRelationshipConditionV1 } from "@whitebox-world/camera";
 import { isNil } from "lodash-es";
 
 import {
@@ -249,7 +250,7 @@ export interface RuntimeCameraContextRuleV1 {
   readonly id: string;
   readonly priority: number;
   readonly when: Readonly<{
-    relationshipRoles?: readonly ("none" | "rider" | "driver" | "passenger" | "tethered")[];
+    allRelationshipConditions?: readonly CameraRelationshipConditionV1[];
     locomotionStatuses?: readonly ("active" | "suspended")[];
     mobilityModes?: readonly MobilityModeV2[];
     gaits?: readonly GaitV2[];

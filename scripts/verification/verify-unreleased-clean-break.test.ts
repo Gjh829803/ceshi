@@ -203,6 +203,118 @@ describe("verify:unreleased-clean-break", () => {
     expect(report.ok).toBe(false);
   });
 
+  it("blocks retired M8-S1 public contract dialects in packages, Registry assets, and Agent bundles", async () => {
+    const fixtureRoot = await createFixtureRoot("clean-break-m8-s1-");
+    const packagePath = path.join(
+      fixtureRoot,
+      "packages",
+      "runtime",
+      "legacy-camera.ts",
+    );
+    const registryPath = path.join(
+      fixtureRoot,
+      "assets",
+      "registry",
+      "camera-profiles",
+      "catalog.json",
+    );
+    const bundlePath = path.join(
+      fixtureRoot,
+      ".codex",
+      "skills",
+      "worldkit-canonical-builder",
+      "scripts",
+      "self-check.mjs",
+    );
+    await Promise.all([
+      mkdir(path.dirname(packagePath), { recursive: true }),
+      mkdir(path.dirname(registryPath), { recursive: true }),
+      mkdir(path.dirname(bundlePath), { recursive: true }),
+    ]);
+    await writeFile(
+      packagePath,
+      [
+        `export type LegacyRole = ${token(["Camera", "Relationship", "Role", "V1"])};`,
+        `const sample = { semanticAuthorityStatus: "${token(["un", "available"])}" };`,
+      ].join("\n"),
+      "utf8",
+    );
+    await writeFile(
+      registryPath,
+      JSON.stringify({
+        when: {
+          [token(["relationship", "Roles"])]: ["rider"],
+        },
+      }, null, 2),
+      "utf8",
+    );
+    await writeFile(
+      bundlePath,
+      [
+        `const role = input.${token(["relationship", "Role"])};`,
+        `const threshold = input.${token(["minimumContactToAggregateSupportNormal", "DotRatio"])};`,
+        `const fallback = input.${token(["minimumSupportNormal", "DotRatio"])};`,
+        `export const ${token(["CORE_", "SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1"])} = {};`,
+      ].join("\n"),
+      "utf8",
+    );
+
+    const report = await scanUnreleasedCleanBreak(fixtureRoot);
+    const legacyM8 = family(
+      report,
+      "WORLDKIT_UNRELEASED_LEGACY_M8_S1_PUBLIC_CONTRACT",
+    );
+
+    expect(legacyM8.matchCount).toBe(7);
+    expect(legacyM8.matchesByPath.map((entry) => entry.path)).toEqual([
+      ".codex/skills/worldkit-canonical-builder/scripts/self-check.mjs",
+      "assets/registry/camera-profiles/catalog.json",
+      "packages/runtime/legacy-camera.ts",
+    ]);
+    expect(report.ok).toBe(false);
+  });
+
+  it("allows negative alias-rejection tests and historical Superpowers records", async () => {
+    const fixtureRoot = await createFixtureRoot("clean-break-m8-s1-history-");
+    const negativeTestPath = path.join(
+      fixtureRoot,
+      "packages",
+      "camera",
+      "camera-domain.test.ts",
+    );
+    const historicalSpecPath = path.join(
+      fixtureRoot,
+      "docs",
+      "superpowers",
+      "specs",
+      "historical-camera.md",
+    );
+    await Promise.all([
+      mkdir(path.dirname(negativeTestPath), { recursive: true }),
+      mkdir(path.dirname(historicalSpecPath), { recursive: true }),
+    ]);
+    const historicalTerms = [
+      token(["relationship", "Roles"]),
+      token(["relationship", "Role"]),
+      token(["minimumContactToAggregateSupportNormal", "DotRatio"]),
+      token(["minimumSupportNormal", "DotRatio"]),
+      token(["CORE_", "SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1"]),
+      `semanticAuthorityStatus: "${token(["un", "available"])}"`,
+    ].join("\n");
+    await Promise.all([
+      writeFile(negativeTestPath, historicalTerms, "utf8"),
+      writeFile(historicalSpecPath, historicalTerms, "utf8"),
+    ]);
+
+    const report = await scanUnreleasedCleanBreak(fixtureRoot);
+
+    expect(family(
+      report,
+      "WORLDKIT_UNRELEASED_LEGACY_M8_S1_PUBLIC_CONTRACT",
+    ).matchCount).toBe(0);
+    expect(report.ok).toBe(true);
+  });
+
   it("blocks superseded v3 node contracts after authoring v4 became authoritative", async () => {
     const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "clean-break-node-v3-"));
     cleanupPaths.push(fixtureRoot);

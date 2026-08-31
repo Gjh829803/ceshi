@@ -20,6 +20,7 @@ import {
 } from "@whitebox-world/gameplay";
 import {
   createGameplayBootstrapV1,
+  RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
 } from "@whitebox-world/gameplay-contracts";
 import type { BabylonRuntimeProjectionV1 } from "@whitebox-world/runtime-babylon";
 import { isNil, uniq } from "lodash-es";
@@ -102,6 +103,8 @@ function runtimeGameplayBootstrap(
     version: 1,
     resourceRef:
       `worldkit://gameplay-bootstrap/${normalizedWorldIr.id}.${normalizedWorldIr.seed}@1`,
+    semanticFactProjectorProfileResource:
+      RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
     entityDescriptors,
     featureResourceLocks: [{
       resourceRef: coreControlManifest.resourceRef,
@@ -480,7 +483,6 @@ describe("loadAuthoringScene", () => {
           activeMotionProfileRef: "worldkit://motion-profile/test@1",
           activeMotionKernelRef: "worldkit://motion-kernel/free-ground@1",
           motionTags: ["ground"],
-          relationshipRole: "none",
           safeFallbackActive: false,
         },
       },

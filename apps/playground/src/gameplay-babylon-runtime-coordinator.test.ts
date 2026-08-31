@@ -446,13 +446,15 @@ describe("Gameplay Babylon Runtime coordinator", () => {
         ),
       });
     };
+    let worldSessionIndex = 0;
     const coordinator = await createGameplayBabylonRuntimeCoordinatorV1({
       runtimeSessionId: "runtime.mounted-havok",
       initialWorldConfiguration: loaded.runtimeWorldConfiguration,
       gameplayActionRequestResolver: loaded.gameplayActionRequestResolver,
       document: fakeDocument(),
       runtimeBundleFactory,
-      worldSessionIdFactory: () => "world-session.mounted-havok",
+      worldSessionIdFactory: () =>
+        `world-session.mounted-havok.${worldSessionIndex += 1}`,
     });
     const initial = coordinator.snapshot();
     if (initial.view.camera.mode !== "tracking") {
@@ -511,8 +513,36 @@ describe("Gameplay Babylon Runtime coordinator", () => {
       riderEntityId: "player",
       mountEntityId: "skateboard",
     });
+    const cameraImmediatelyAfterMount = coordinator.snapshot().view.camera;
+    expect.soft(cameraImmediatelyAfterMount).toMatchObject({
+      mode: "tracking",
+      targetEntityId: "player",
+      activeCameraModifierRefs: [],
+      selectionDecision: { targetEntityId: "player" },
+    });
+    expect(cameraImmediatelyAfterMount.mode).toBe("tracking");
+    if (cameraImmediatelyAfterMount.mode === "tracking") {
+      expect(cameraImmediatelyAfterMount.requestedArmLengthMeters)
+        .toBeCloseTo(5, 6);
+    }
 
-    const beforeBoardMove = coordinator.snapshot().world
+    const mountedFirstFixedTick = await coordinator.runFixedInput({
+      actions: [],
+      ticks: 1,
+    });
+    expect(mountedFirstFixedTick.view.camera).toMatchObject({
+      mode: "tracking",
+      targetEntityId: "skateboard",
+      activeCameraModifierRefs: [
+        "worldkit://camera-modifier/mounted-framing@1",
+      ],
+    });
+    if (mountedFirstFixedTick.view.camera.mode === "tracking") {
+      expect(mountedFirstFixedTick.view.camera.requestedArmLengthMeters)
+        .toBeCloseTo(7, 6);
+    }
+
+    const beforeBoardMove = mountedFirstFixedTick.world
       .subjectStatesByEntityId.skateboard!.entityState.positionMetersXYZ;
     const afterBoardMove = await coordinator.runFixedInput({
       actions: ["move-forward"],
@@ -590,7 +620,36 @@ describe("Gameplay Babylon Runtime coordinator", () => {
       coordinator.getGameplayInspectionSnapshot()
         .relationshipStatesById[MOUNTED_SKATEBOARD_S1_RELATIONSHIP_ID],
     ).toBeUndefined();
-    const riderBeforeIndependentMove = coordinator.snapshot().world
+    const cameraImmediatelyAfterDismount = coordinator.snapshot().view.camera;
+    expect.soft(cameraImmediatelyAfterDismount).toMatchObject({
+      mode: "tracking",
+      targetEntityId: "skateboard",
+      activeCameraModifierRefs: [
+        "worldkit://camera-modifier/mounted-framing@1",
+      ],
+      selectionDecision: { targetEntityId: "skateboard" },
+    });
+    expect(cameraImmediatelyAfterDismount.mode).toBe("tracking");
+    if (cameraImmediatelyAfterDismount.mode === "tracking") {
+      expect(cameraImmediatelyAfterDismount.requestedArmLengthMeters)
+        .toBeCloseTo(7, 6);
+    }
+
+    const dismountedFirstFixedTick = await coordinator.runFixedInput({
+      actions: [],
+      ticks: 1,
+    });
+    expect(dismountedFirstFixedTick.view.camera).toMatchObject({
+      mode: "tracking",
+      targetEntityId: "player",
+      activeCameraModifierRefs: [],
+    });
+    if (dismountedFirstFixedTick.view.camera.mode === "tracking") {
+      expect(dismountedFirstFixedTick.view.camera.requestedArmLengthMeters)
+        .toBeCloseTo(5, 6);
+    }
+
+    const riderBeforeIndependentMove = dismountedFirstFixedTick.world
       .subjectStatesByEntityId.player!.entityState.positionMetersXYZ;
     const independentlyMoved = await coordinator.runFixedInput({
       actions: ["move-forward"],
@@ -605,6 +664,55 @@ describe("Gameplay Babylon Runtime coordinator", () => {
       targetEntityId: "player",
       activeCameraModifierRefs: [],
     });
+
+    const resetProbeMount = await coordinator.executeGameplayCommand({
+      schemaVersion: 1,
+      id: `${MOUNTED_SKATEBOARD_S1_MOUNT_COMMAND_ID}.reset-probe`,
+      type: "action.activate",
+      runtimeSessionId: initial.runtimeSessionId,
+      worldSessionId: independentlyMoved.worldSessionId,
+      controllerEntityId: PLAYGROUND_CONTROLLER_ENTITY_ID_V1,
+      expectedPossession: { mode: "possessed", controlledEntityId: "player" },
+      actionExecutionId: "action-execution.mounted-havok.reset-probe",
+      semanticActionRef: MOUNTED_SKATEBOARD_S1_MOUNT_ACTION_REF,
+      actorEntityId: "player",
+      actionRequestRef: MOUNTED_SKATEBOARD_S1_MOUNT_REQUEST_REF,
+      actionRequestHash:
+        sha256CanonicalJson(mountRequest) as `sha256:${string}`,
+    });
+    if (resetProbeMount.status !== "committed") {
+      throw new Error(JSON.stringify(resetProbeMount.diagnostic));
+    }
+    const mountedBeforeReset = await coordinator.runFixedInput({
+      actions: [],
+      ticks: 1,
+    });
+    expect(mountedBeforeReset.view.camera).toMatchObject({
+      mode: "tracking",
+      targetEntityId: "skateboard",
+      activeCameraModifierRefs: [
+        "worldkit://camera-modifier/mounted-framing@1",
+      ],
+    });
+    if (mountedBeforeReset.view.camera.mode === "tracking") {
+      expect(mountedBeforeReset.view.camera.requestedArmLengthMeters)
+        .toBeCloseTo(7, 6);
+    }
+
+    const reset = await coordinator.resetWithInitialControlBinding();
+    expect(reset.worldSessionId).not.toBe(mountedBeforeReset.worldSessionId);
+    expect(reset.world.simulationTick).toBe(0);
+    expect(Object.values(
+      reset.world.gameplayInspection.relationshipStatesById,
+    ).some((relationship) => relationship.type === "mountedOn")).toBe(false);
+    expect(reset.view.camera).toMatchObject({
+      mode: "tracking",
+      targetEntityId: "player",
+      activeCameraModifierRefs: [],
+    });
+    if (reset.view.camera.mode === "tracking") {
+      expect(reset.view.camera.requestedArmLengthMeters).toBeCloseTo(5, 6);
+    }
 
     await coordinator.dispose();
   }, 30_000);

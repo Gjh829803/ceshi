@@ -41,6 +41,7 @@ import {
 } from "./babylon-character-body-port";
 import {
   GoldenHumanoid3CVNextTransactionV1,
+  type GoldenHumanoidCameraContextAuthorityV1,
   type GoldenHumanoidProjectionPortV1,
   type GoldenHumanoidTickResultV1,
 } from "./golden-humanoid-3c-vnext";
@@ -351,6 +352,7 @@ export class GoldenHumanoidSubjectControllerV1 extends EntityComponentV1 {
     },
     axes: Readonly<ControlInputAxesV2> = {},
     activeActionState?: GameplayActionStateV1,
+    cameraContextAuthority?: GoldenHumanoidCameraContextAuthorityV1,
   ): GoldenHumanoidTickResultV1 {
     this.#assertLive();
     const before = this.movementSnapshot();
@@ -409,7 +411,11 @@ export class GoldenHumanoidSubjectControllerV1 extends EntityComponentV1 {
       viewYawRadians: 0,
       layeredMoves: [],
     };
-    const result = this.runCommand(command, activeActionState);
+    const result = this.runCommand(
+      command,
+      activeActionState,
+      cameraContextAuthority,
+    );
     this.#jumpWasHeld = jumpHeld;
     return result;
   }
@@ -417,11 +423,15 @@ export class GoldenHumanoidSubjectControllerV1 extends EntityComponentV1 {
   runCommand(
     command: CharacterMovementCommandV1,
     activeActionState?: GameplayActionStateV1,
+    cameraContextAuthority?: GoldenHumanoidCameraContextAuthorityV1,
   ): GoldenHumanoidTickResultV1 {
     this.#assertLive();
     const result = this.#transaction.runTick({
       command,
       ...(activeActionState === undefined ? {} : { activeActionState }),
+      ...(cameraContextAuthority === undefined
+        ? {}
+        : { cameraContextAuthority }),
     });
     this.#latestTickResult = result;
     return result;
@@ -439,6 +449,34 @@ export class GoldenHumanoidSubjectControllerV1 extends EntityComponentV1 {
   latestTickResult(): GoldenHumanoidTickResultV1 | undefined {
     this.#assertLive();
     return this.#latestTickResult;
+  }
+
+  retainedCharacterSupportSample(): RetainedCharacterSupportSampleV1 | undefined {
+    return this.#requireBodyPort().retainedCharacterSupportSample();
+  }
+
+  liveLockState(): MotionKernelLiveLockStateV1 {
+    const body = this.#requireBodyPort().readSupportProjectionLock();
+    const assembly = this.#subject.capabilityAssembly;
+    const motion = assembly.defaultMotionProfile;
+    return Object.freeze({
+      ...body,
+      colliderCenterOffsetMetersXYZ: Object.freeze([
+        ...this.#subject.collider.centerOffsetFromSubjectOriginMetersXYZ,
+      ]) as RuntimeVec3V1,
+      activeControlFeelProfileRef: this.#subject.controlFeel.resourceRef,
+      activeControlFeelProfileHash: this.#subject.controlFeel.contentHash,
+      requestedControlFeelProfileRef: this.#subject.controlFeel.resourceRef,
+      activeMotionProfileRef: motion.resourceRef,
+      activeMotionProfileHash: motion.contentHash,
+      requestedMotionProfileRef: motion.resourceRef,
+      activeMotionKernelRef: motion.motionKernelRef,
+      physicsBodyProfileRef: this.#subject.physicsBodyProfileRef,
+      locomotionProfileRef: this.#subject.locomotionProfileRef,
+      controlProfileRef: assembly.controlProfile.resourceRef,
+      controlProfileHash: assembly.controlProfile.contentHash,
+      mediumProfileRef: assembly.mediumProfile.resourceRef,
+    });
   }
 
   synchronizeVisual(): void {

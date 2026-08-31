@@ -284,7 +284,6 @@ function runtimeSnapshot(
         activeMotionProfileRef: "worldkit://motion-profile/test@1",
         activeMotionKernelRef: "worldkit://motion-kernel/test@1",
         motionTags: ["ground"],
-        relationshipRole: "none",
         safeFallbackActive: false,
       },
     },

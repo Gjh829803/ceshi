@@ -13,6 +13,7 @@ import {
 import type {
   GameplayCommandReceiptV1,
   GameplayCommandV1,
+  WorldStateSnapshotV1,
 } from "@whitebox-world/gameplay-contracts";
 import { sha256Bytes } from "@whitebox-world/protocol";
 import type {
@@ -25,6 +26,10 @@ import type {
   RuntimeActivityRequestV1,
   RuntimeControlCaptureFrameV1,
   WorldRuntimeSnapshotV4,
+  WorldSessionEventV1,
+} from "@whitebox-world/runtime-contracts";
+import {
+  WORLDKIT_WORLD_SESSION_EVENT_PAGE_MAXIMUM_COUNT,
 } from "@whitebox-world/runtime-contracts";
 import {
   verifyWorldPackageDirectoryV1,
@@ -261,7 +266,10 @@ class PlaywrightSimulationTakeDriverV1 implements SimulationTakeBrowserDriverV1 
   }
 }
 
-function decodeRuntimeFrame(frame: RuntimeControlCaptureFrameV1): ControlCaptureFrameInputV1 {
+function decodeRuntimeFrame(
+  frame: RuntimeControlCaptureFrameV1,
+  worldState: WorldStateSnapshotV1,
+): ControlCaptureFrameInputV1 {
   const passes = Object.fromEntries(Object.entries(frame.passesById).map(([passId, payload]) => {
     const bytes = new Uint8Array(Buffer.from(payload.bytesBase64, "base64"));
     if (
@@ -284,6 +292,7 @@ function decodeRuntimeFrame(frame: RuntimeControlCaptureFrameV1): ControlCapture
     heightPixels: frame.heightPixels,
     camera: frame.camera,
     snapshot: frame.snapshot,
+    worldState,
     passesById: passes,
   };
 }
@@ -335,6 +344,7 @@ export async function runSimulationTakeFileV1(
   let server: WorldkitServerHandle | undefined;
   let browser: Browser | undefined;
   let writer: ControlCaptureBundleWriterV1 | undefined;
+  let previousCapturedEventSequence: number | undefined;
   try {
     server = await startWorldkitServer({
       inputPath: pipeline.absoluteInputPath,
@@ -372,7 +382,43 @@ export async function runSimulationTakeFileV1(
             instances: frame.instances,
           });
         }
-        await writer.appendFrame(decodeRuntimeFrame(frame));
+        const worldState = await page.evaluate((worldStateRef) => {
+          if (window.__WORLDKIT__ === undefined) {
+            throw new Error("WORLDKIT_BROWSER_PROTOCOL_MISSING");
+          }
+          return window.__WORLDKIT__.getWorldStateSnapshot({ worldStateRef });
+        }, frame.snapshot.world.worldStateRef);
+        if (previousCapturedEventSequence !== undefined) {
+          const worldSessionEvents = await page.evaluate(({ afterEventSequence, maximumEventCount }) => {
+            if (window.__WORLDKIT__ === undefined) {
+              throw new Error("WORLDKIT_BROWSER_PROTOCOL_MISSING");
+            }
+            const events: WorldSessionEventV1[] = [];
+            let cursor = afterEventSequence;
+            while (true) {
+              const page = window.__WORLDKIT__.getWorldSessionEvents({
+                afterEventSequence: cursor,
+                maximumEventCount,
+              });
+              events.push(...page.events);
+              if (!page.hasMore) return events;
+              cursor = page.nextAfterEventSequence;
+            }
+          }, {
+            afterEventSequence: previousCapturedEventSequence,
+            maximumEventCount:
+              WORLDKIT_WORLD_SESSION_EVENT_PAGE_MAXIMUM_COUNT,
+          });
+          writer.appendRuntimeHostFixedTickJournal({
+            captureFrameIndexAfter: frame.captureFrameIndex,
+            afterEventSequenceExclusive: previousCapturedEventSequence,
+            worldSessionEvents,
+            worldStateAfter: worldState,
+            gameplayInspectionAfter: frame.snapshot.world.gameplayInspection,
+          });
+        }
+        await writer.appendFrame(decodeRuntimeFrame(frame, worldState));
+        previousCapturedEventSequence = worldState.lastEventSequence;
       },
     });
     if (writer === undefined) throw new Error("SIMULATION_TAKE_CAPTURE_SCHEDULE_EMPTY");

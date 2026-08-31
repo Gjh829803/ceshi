@@ -545,6 +545,37 @@
         "recenterModeOverride": { "enum": ["off", "forward-motion", "always"] }
       }
     },
+    "cameraRelationshipCondition": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "entityRole"],
+          "properties": {
+            "type": { "const": "possessedBy" },
+            "entityRole": { "enum": ["controlled", "controller"] }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "entityRole"],
+          "properties": {
+            "type": { "const": "mountedOn" },
+            "entityRole": { "const": "rider" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "entityRole"],
+          "properties": {
+            "type": { "const": "equippedAt" },
+            "entityRole": { "enum": ["item", "wearer"] }
+          }
+        }
+      ]
+    },
     "cameraContextRule": {
       "type": "object",
       "additionalProperties": false,
@@ -556,7 +587,14 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "relationshipRoles": { "$ref": "#/$defs/stringArray" }, "locomotionStatuses": { "$ref": "#/$defs/stringArray" },
+            "allRelationshipConditions": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 64,
+              "uniqueItems": true,
+              "items": { "$ref": "#/$defs/cameraRelationshipCondition" }
+            },
+            "locomotionStatuses": { "$ref": "#/$defs/stringArray" },
             "mobilityModes": { "$ref": "#/$defs/stringArray" }, "gaits": { "$ref": "#/$defs/stringArray" },
             "verticalPhases": { "$ref": "#/$defs/stringArray" }, "requiredActiveActionRefs": { "$ref": "#/$defs/stringArray" },
             "actionInterruptibility": { "enum": ["interruptible", "non-interruptible"] }, "motionKernelRefs": { "$ref": "#/$defs/stringArray" },

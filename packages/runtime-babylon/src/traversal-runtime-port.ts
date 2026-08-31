@@ -2,7 +2,6 @@ import {
   worldResourceLockEntriesV1,
   type CanonicalSceneExecutionPlanV1,
   type WorldResourceKindV1,
-  type RuntimeVec3V1,
   type WorldRuntimeBootstrapV1,
 } from "@whitebox-world/runtime-contracts";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
@@ -17,13 +16,7 @@ import {
   type TraversalRuntimePortV1,
   type TraversalRuntimeTickEvidenceV1,
 } from "@whitebox-world/traversal";
-import {
-  emitTriangleHeightfieldSurfaceV1,
-  emitTransformedStaticColliderTriangleMeshV1,
-  queryCanonicalTraversalSurfaceHitsV1,
-  type CanonicalTraversalSurfaceTriangleSourceV1,
-} from "@whitebox-world/terrain-surface";
-import { isEmpty, isEqual, isNil } from "lodash-es";
+import { isEqual, isNil } from "lodash-es";
 
 import type { BabylonWorldRuntime } from "./babylon-world-runtime";
 import type { BabylonRuntimeSubjectV1 } from "./runtime-subject";
@@ -33,6 +26,7 @@ import type {
   RetainedCharacterSupportSampleV1,
 } from "./motion-kernel-runtime";
 import { BABYLON_TRAVERSAL_RUNTIME_IMPLEMENTATION_IDENTITY_V1 } from "./traversal-implementation-identity";
+import { resolveRetainedSupportSurfaceV1 } from "./retained-support-surface-resolver";
 import {
   BABYLON_TRAVERSAL_RUNTIME_INTERNAL,
   type BabylonTraversalRuntimeInternalV1,
@@ -241,151 +235,6 @@ function liveLockMatches(
     live.controlProfileRef === lock.controlProfileRef &&
     live.controlProfileHash === lock.controlProfileHash &&
     live.mediumProfileRef === lock.mediumProfileRef;
-}
-
-function collectCanonicalTraversalSurfaceSources(
-  plan: CanonicalSceneExecutionPlanV1,
-):
-  | {
-    status: "ok";
-    sources: CanonicalTraversalSurfaceTriangleSourceV1[];
-  }
-  | {
-    status: "missing-bound-collider";
-  } {
-  const colliderBySubshapeId = new Map(
-    plan.staticColliders.map((collider) => [
-      collider.colliderSubshapeId,
-      collider,
-    ]),
-  );
-  const sources: CanonicalTraversalSurfaceTriangleSourceV1[] = [];
-  for (const surface of plan.traversal.surfaces) {
-    if (surface.kind === "heightfield") {
-      if (surface.surfaceEntityId !== plan.terrain.entityId) {
-        continue;
-      }
-      const mesh = emitTriangleHeightfieldSurfaceV1({
-        centerMetersXZ: plan.terrain.centerMetersXZ,
-        sizeMetersXZ: plan.terrain.sizeMetersXZ,
-        resolutionVerticesXZ: plan.terrain.resolutionCellsXZ,
-        heightSamplesMeters: plan.terrain.heightSamplesMeters,
-      });
-      const worldPositionsMetersXYZ: number[] = [];
-      for (
-        let index = 0;
-        index < mesh.localPositionsMetersXYZ.length;
-        index += 1
-      ) {
-        worldPositionsMetersXYZ.push(
-          mesh.localPositionsMetersXYZ[index]! +
-            mesh.originMetersXYZ[index % 3]!,
-        );
-      }
-      sources.push({
-        traversalSurfaceId: surface.traversalSurfaceId,
-        worldPositionsMetersXYZ,
-        triangleIndices: mesh.triangleIndices,
-      });
-      continue;
-    }
-    if (surface.kind === "static-collider") {
-      const collider = colliderBySubshapeId.get(surface.colliderSubshapeId);
-      if (isNil(collider)) {
-        return { status: "missing-bound-collider" };
-      }
-      const mesh = emitTransformedStaticColliderTriangleMeshV1(
-        collider.shape,
-        collider.transform,
-      );
-      sources.push({
-        traversalSurfaceId: surface.traversalSurfaceId,
-        worldPositionsMetersXYZ: mesh.worldPositionsMetersXYZ,
-        triangleIndices: mesh.triangleIndices,
-      });
-    }
-  }
-  return { status: "ok", sources };
-}
-
-function classifySurface(
-  plan: CanonicalSceneExecutionPlanV1,
-  sample: RetainedCharacterSupportSampleV1,
-  live: MotionKernelLiveLockStateV1,
-): CharacterSupportSurfaceResolutionV1 {
-  if (sample.supportState === "unsupported") {
-    return { mode: "unsupported" };
-  }
-  if (sample.isSupportSurfaceDynamic) {
-    return { mode: "unmatched" };
-  }
-  const collected = collectCanonicalTraversalSurfaceSources(plan);
-  if (collected.status === "missing-bound-collider") {
-    return { mode: "unmatched" };
-  }
-  const { sources } = collected;
-  if (isEmpty(sources)) {
-    return { mode: "unmatched" };
-  }
-  const queryAtPoint = (
-    pointMetersXYZ: RuntimeVec3V1,
-    referenceNormalXYZ: RuntimeVec3V1,
-  ) =>
-    queryCanonicalTraversalSurfaceHitsV1({
-      sources,
-      pointMetersXZ: [pointMetersXYZ[0], pointMetersXYZ[2]],
-      referenceHeightMeters: pointMetersXYZ[1],
-      maximumReferenceHeightDifferenceMeters:
-        live.keepDistanceMeters + live.keepContactToleranceMeters,
-      normalAdmission: {
-        mode: "retained-support",
-        minimumUpwardNormalYRatio: live.maxSlopeCosine,
-        referenceNormalXYZ,
-        minimumReferenceNormalDotRatio: live.maxSlopeCosine,
-      },
-    });
-  if (sample.supportContacts.length === 0) {
-    return { mode: "unmatched" };
-  }
-  const queries = sample.supportContacts.map((contact) => queryAtPoint(
-    contact.pointMetersXYZ,
-    contact.normalXYZ,
-  ));
-  if (queries.some((query) => query.mode !== "resolved")) {
-    if (queries.some((query) => query.mode === "ambiguous")) {
-      return { mode: "ambiguous" };
-    }
-    return { mode: "unmatched" };
-  }
-  const resolvedHits = queries.flatMap((query) =>
-    query.mode === "resolved" ? [query.hit] : []
-  );
-  if (resolvedHits.length === 0) {
-    return { mode: "unmatched" };
-  }
-  const traversalSurfaceIds = new Set(
-    resolvedHits.map((hit) => hit.traversalSurfaceId),
-  );
-  if (traversalSurfaceIds.size !== 1) {
-    return { mode: "ambiguous" };
-  }
-  const hit = resolvedHits[0]!;
-  const surface = plan.traversal.surfaces.find(
-    (candidate) =>
-      candidate.traversalSurfaceId === hit.traversalSurfaceId,
-  );
-  if (isNil(surface)) {
-    return { mode: "unmatched" };
-  }
-  return {
-    mode: "resolved",
-    traversalSurfaceId: surface.traversalSurfaceId,
-    surfaceEntityId: surface.surfaceEntityId,
-    colliderSubshapeId: surface.colliderSubshapeId,
-    resourceRef: surface.resourceRef,
-    resolvedVersion: surface.resolvedVersion,
-    resourceHash: surface.resourceHash,
-  };
 }
 
 class BabylonTraversalRuntimePortV1 implements TraversalRuntimePortV1 {
@@ -634,11 +483,12 @@ class BabylonTraversalRuntimePortV1 implements TraversalRuntimePortV1 {
       supportNormalWorldXYZ: sample.supportNormalWorldXYZ,
       sampledFootPositionMetersXYZ: sample.sampledFootPositionMetersXYZ,
       isSupportSurfaceDynamic: sample.isSupportSurfaceDynamic,
-      surfaceResolution: classifySurface(
-        this.#plan,
+      surfaceResolution: resolveRetainedSupportSurfaceV1({
+        plan: this.#plan,
         sample,
         live,
-      ),
+        policy: { mode: "route-walkable" },
+      }),
     };
     const origin = controller.subjectOrigin;
     const velocity = controller.velocity;

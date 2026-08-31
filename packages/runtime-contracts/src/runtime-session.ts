@@ -16,7 +16,6 @@ import type {
 import type { SubjectPresetBaselineV1 } from "@whitebox-world/subject-contracts";
 import type {
   CameraRelationshipContextV1,
-  CameraRelationshipRoleV1,
   CameraRigParametersV1,
   CameraSelectionDecisionV2,
   CameraViewPreferenceV1,
@@ -260,7 +259,6 @@ export interface ViewTargetSampleV1 {
   motionTags: readonly string[];
   movementMedium: PublishedMovementMediumV1;
   relationshipContexts: readonly CameraRelationshipContextV1[];
-  relationshipRole: CameraRelationshipRoleV1;
   cameraContextTags: readonly string[];
 }
 

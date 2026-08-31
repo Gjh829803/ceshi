@@ -27,6 +27,7 @@ import {
   type BabylonCharacterBodyNativeIntegrateRequestV1,
   type BabylonCharacterBodyNativeSupportV1,
   type BabylonCharacterBodyPortOptionsV1,
+  type BabylonCharacterBodyRuntimePortV1,
   type BabylonCharacterBodyTransactionPortV1,
 } from "./babylon-character-body-port.js";
 import {
@@ -221,6 +222,13 @@ function createPort(
     return driver;
   }) as BabylonCharacterBodyTransactionPortV1;
   return { driver, port, options };
+}
+
+function retainedSupport(
+  port: BabylonCharacterBodyTransactionPortV1,
+) {
+  return (port as BabylonCharacterBodyRuntimePortV1)
+    .retainedCharacterSupportSample();
 }
 
 function proposal(
@@ -471,6 +479,76 @@ describe("BabylonCharacterBodyPortV1 options and ownership", () => {
 });
 
 describe("BabylonCharacterBodyPortV1 transaction", () => {
+  it("retains reset contacts only inside the character-body vertical band", () => {
+    const { driver, port } = createPort();
+    const exactIdentity = {
+      colliderSubshapeId: "collider:ground:primary",
+      traversalSurfaceId: "traversal-surface:ground",
+      surfaceEntityId: "ground",
+    } as const;
+    driver.contacts = [{
+      ...groundContact(),
+      pointMetersXYZ: [0, 0.15, 0],
+      ...exactIdentity,
+    }, {
+      ...groundContact(),
+      pointMetersXYZ: [0, 0.151, 0],
+      ...exactIdentity,
+    }, {
+      ...groundContact([1, 0, 0]),
+      pointMetersXYZ: [0, 0.15, 0],
+      ...exactIdentity,
+    }];
+
+    port.resetToState({
+      positionMetersXYZ: [0, 0.9, 0],
+      linearVelocityMetersPerSecondXYZ: [0, 0, 0],
+    });
+
+    expect(driver.checkSupportCalls).toBe(1);
+    expect(retainedSupport(port)?.supportContacts).toEqual([{
+      pointMetersXYZ: [0, 0.15, 0],
+      normalXYZ: [0, 1, 0],
+      ...exactIdentity,
+    }]);
+    port.dispose();
+  });
+
+  it("restores the committed retained contact band after abort", () => {
+    const { driver, port } = createPort();
+    const exactIdentity = {
+      colliderSubshapeId: "collider:ground:primary",
+      traversalSurfaceId: "traversal-surface:ground",
+      surfaceEntityId: "ground",
+    } as const;
+    driver.contacts = [{
+      ...groundContact(),
+      pointMetersXYZ: [0, 0.15, 0],
+      ...exactIdentity,
+    }];
+    port.resetToState({
+      positionMetersXYZ: [0, 0.9, 0],
+      linearVelocityMetersPerSecondXYZ: [0, 0, 0],
+    });
+    const committed = retainedSupport(port);
+    const token = createMovementTickTokenV1();
+    port.beginTick({ token, tick: 1 });
+    driver.onIntegrate = () => {
+      driver.contacts = [{
+        ...groundContact(),
+        pointMetersXYZ: [0, 0.151, 0],
+        ...exactIdentity,
+      }];
+    };
+    port.resolve({ token, proposal: proposal(token, 1, [0, 0, 0], [0, 0, 0]) });
+
+    expect(retainedSupport(port)).toEqual(committed);
+    port.abortTick(token);
+    expect(retainedSupport(port)).toEqual(committed);
+    expect(driver.checkSupportCalls).toBe(2);
+    port.dispose();
+  });
+
   it("captures immutable pre-proposal position, velocity, and support with one support query", () => {
     const { driver, port } = createPort();
     driver.position = [2, 3, 4];

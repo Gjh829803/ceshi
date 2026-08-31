@@ -104,7 +104,6 @@ function profile(
 
 interface CameraSampleOverridesV2 {
   readonly committedTick?: number;
-  readonly relationshipRole?: CameraContextSampleV2["environment"]["relationshipRole"];
   readonly relationshipContexts?: CameraContextSampleV2["environment"]["relationshipContexts"];
   readonly movementMedium?: "ground" | "air";
   readonly mobilityMode?: "grounded" | "airborne";
@@ -168,7 +167,6 @@ function sample(overrides: CameraSampleOverridesV2 = {}): CameraContextSampleV2 
           mountSlotId: "stand-slot",
         },
       ],
-      relationshipRole: overrides.relationshipRole ?? "rider",
       socketPositionsMetersXYZById: overrides.socketPositionsMetersXYZById ?? {
         "camera.flight": [0, 2, -1],
       },
@@ -181,7 +179,7 @@ const FLIGHT_RULE: CameraContextRuleV2 = {
   id: "flight",
   priority: 100,
   when: {
-    allRelationshipConditions: [{ type: "mountedOn", entityRole: "mount" }],
+    allRelationshipConditions: [{ type: "mountedOn", entityRole: "rider" }],
     mobilityModes: ["airborne"],
     verticalPhases: ["falling"],
     movementMediums: ["air"],
@@ -233,6 +231,10 @@ describe("Camera Context admission", () => {
     ["negative maximum speed", { maximumSpeedMetersPerSecond: -1 }],
     ["incoherent speed bounds", { minimumSpeedMetersPerSecond: 4, maximumSpeedMetersPerSecond: 3 }],
     ["malformed relationship", { allRelationshipConditions: [{ type: "mountedOn", entityRole: "driver" }] }],
+    ["removed mount-side relationship condition", {
+      allRelationshipConditions: [{ type: "mountedOn", entityRole: "mount" }],
+    }],
+    ["removed relationship role alias", { relationshipRoles: ["rider"] }],
   ])("rejects a strict closed V2 Rule with %s", (_label, when) => {
     const invalid = profile([{
       id: "hostile",
@@ -703,7 +705,6 @@ describe("deterministic Camera selection", () => {
       id: "mounted-suspended",
       priority: 200,
       when: {
-        relationshipRoles: ["rider"],
         allRelationshipConditions: [{ type: "mountedOn", entityRole: "rider" }],
         locomotionStatuses: ["suspended"],
       },
@@ -734,114 +735,6 @@ describe("deterministic Camera selection", () => {
     });
   });
 
-  it("bypasses every auto Rule while transitional semantic authority is unavailable", () => {
-    const rules: readonly CameraContextRuleV2[] = [
-      {
-        id: "tag-only",
-        priority: 130,
-        when: { requiredCameraContextTags: ["sprint"] },
-        cameraRigProfileRef: FLIGHT_RIG_REF,
-      },
-      {
-        id: "role-only",
-        priority: 120,
-        when: { relationshipRoles: ["rider"] },
-        cameraRigProfileRef: FLIGHT_RIG_REF,
-      },
-      {
-        id: "suspended-only",
-        priority: 110,
-        when: { locomotionStatuses: ["suspended"] },
-        cameraRigProfileRef: FLIGHT_RIG_REF,
-      },
-    ];
-    const active = sample();
-    const seam: CameraContextSampleV2 = {
-      ...active,
-      semanticAuthorityStatus: "unavailable",
-      locomotion: {
-        schemaVersion: 2,
-        status: "suspended",
-        suspendedByRelationshipId: "3c-task6-authority-unavailable",
-        committedTick: active.committedTick,
-        transitionSequence: 0,
-      },
-      actionSummary: { status: "unavailable" },
-      environment: {
-        relationshipRole: "none",
-        relationshipContexts: [],
-        socketPositionsMetersXYZById: {},
-        cameraContextTags: [],
-      },
-    };
-    const result = selectCameraViewV2({
-      cameraContextProfile: profile(rules),
-      cameraContextSample: seam,
-      cameraViewPreference: { mode: "auto" },
-    });
-
-    expect(result).toMatchObject({
-      ok: true,
-      decision: {
-        activeCameraRigProfileRef: DEFAULT_RIG_REF,
-        activeCameraModifierRefs: [],
-        matchedCameraContextRuleIds: [],
-        fallbackActive: true,
-        diagnostics: [{ code: "CAMERA_SEMANTIC_AUTHORITY_UNAVAILABLE" }],
-        explain: {
-          cameraContextRules: [
-            { cameraContextRuleId: "tag-only", unmatchedReasons: ["semantic-authority-unavailable"] },
-            { cameraContextRuleId: "role-only", unmatchedReasons: ["semantic-authority-unavailable"] },
-            { cameraContextRuleId: "suspended-only", unmatchedReasons: ["semantic-authority-unavailable"] },
-          ],
-        },
-      },
-    });
-  });
-
-  it("honors an explicitly admitted locked Rig while unavailable auto semantics stay bypassed", () => {
-    const active = sample();
-    const seam: CameraContextSampleV2 = {
-      ...active,
-      semanticAuthorityStatus: "unavailable",
-      locomotion: {
-        schemaVersion: 2,
-        status: "suspended",
-        suspendedByRelationshipId: "3c-task6-authority-unavailable",
-        committedTick: active.committedTick,
-        transitionSequence: 0,
-      },
-      actionSummary: { status: "unavailable" },
-      environment: {
-        relationshipRole: "none",
-        relationshipContexts: [],
-        socketPositionsMetersXYZById: {},
-        cameraContextTags: [],
-      },
-    };
-
-    expect(selectCameraViewV2({
-      cameraContextProfile: profile([{
-        id: "suspended-only",
-        priority: 100,
-        when: { locomotionStatuses: ["suspended"] },
-        cameraRigProfileRef: FLIGHT_RIG_REF,
-      }]),
-      cameraContextSample: seam,
-      cameraViewPreference: {
-        mode: "camera-rig-profile",
-        cameraRigProfileRef: FLIGHT_RIG_REF,
-      },
-    })).toMatchObject({
-      ok: true,
-      decision: {
-        activeCameraRigProfileRef: FLIGHT_RIG_REF,
-        matchedCameraContextRuleIds: [],
-        diagnostics: [{ code: "CAMERA_SEMANTIC_AUTHORITY_UNAVAILABLE" }],
-      },
-    });
-  });
-
   it("returns one recursively cloned and frozen V2 authority result", () => {
     const input = profile([FLIGHT_RULE, AIM_RULE]);
     const result = selectCameraViewV2({
@@ -865,21 +758,54 @@ describe("deterministic Camera selection", () => {
     expect(result.decision.activeCameraRigProfileRef).toBe(FLIGHT_RIG_REF);
   });
 
-  it("matches relationship roles only for the matching Camera Context sample", () => {
+  it("matches a unique mounted Rider associated with the committed Mount target and fails closed for a shared Mount", () => {
     const mountedRule: CameraContextRuleV2 = {
       id: "mounted-framing",
       priority: 100,
-      when: { relationshipRoles: ["rider"] },
+      when: {
+        allRelationshipConditions: [{ type: "mountedOn", entityRole: "rider" }],
+      },
       cameraModifierRefs: ["worldkit://camera-modifier/mounted@1"],
     };
     const noRelationshipMatch = selectCameraViewV2({
       cameraContextProfile: profile([mountedRule]),
-      cameraContextSample: sample({ relationshipRole: "none" }),
+      cameraContextSample: sample({ relationshipContexts: [] }),
       cameraViewPreference: { mode: "camera-rig-profile", cameraRigProfileRef: DEFAULT_RIG_REF },
     });
     const riderMatch = selectCameraViewV2({
       cameraContextProfile: profile([mountedRule]),
-      cameraContextSample: sample({ relationshipRole: "rider" }),
+      cameraContextSample: sample(),
+      cameraViewPreference: { mode: "camera-rig-profile", cameraRigProfileRef: DEFAULT_RIG_REF },
+    });
+    const mountTargetMatch = selectCameraViewV2({
+      cameraContextProfile: profile([mountedRule]),
+      cameraContextSample: {
+        ...sample(),
+        controlledEntityId: "flying-sword",
+        targetEntityId: "flying-sword",
+      },
+      cameraViewPreference: { mode: "camera-rig-profile", cameraRigProfileRef: DEFAULT_RIG_REF },
+    });
+    const sharedMount = selectCameraViewV2({
+      cameraContextProfile: profile([mountedRule]),
+      cameraContextSample: {
+        ...sample(),
+        controlledEntityId: "flying-sword",
+        targetEntityId: "flying-sword",
+        environment: {
+          ...sample().environment,
+          relationshipContexts: [
+            ...sample().environment.relationshipContexts,
+            {
+              id: "mount-second-rider-sword",
+              type: "mountedOn",
+              riderEntityId: "second-rider",
+              mountEntityId: "flying-sword",
+              mountSlotId: "second-slot",
+            },
+          ],
+        },
+      },
       cameraViewPreference: { mode: "camera-rig-profile", cameraRigProfileRef: DEFAULT_RIG_REF },
     });
 
@@ -898,6 +824,16 @@ describe("deterministic Camera selection", () => {
         activeCameraRigProfileRef: DEFAULT_RIG_REF,
         activeCameraModifierRefs: ["worldkit://camera-modifier/mounted@1"],
       },
+    });
+    expect(mountTargetMatch).toMatchObject({
+      ok: true,
+      decision: {
+        activeCameraModifierRefs: ["worldkit://camera-modifier/mounted@1"],
+      },
+    });
+    expect(sharedMount).toMatchObject({
+      ok: true,
+      decision: { activeCameraModifierRefs: [] },
     });
   });
 

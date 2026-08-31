@@ -23,7 +23,6 @@ import { BabylonWorldRuntime } from "./babylon-world-runtime";
 import {
   CameraDirectorV1,
   committedCameraContextFromMotionKernelV1,
-  legacyViewTargetToCommittedCameraContextV2ForTask6,
 } from "./camera-director";
 import { SpringArmComponentV1 } from "./spring-arm-component";
 import { bindRuntimeTestPossession } from "./runtime-test-possession";
@@ -853,7 +852,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     }
   }, 15_000);
 
-  it("does not apply mounted framing when the Runtime publishes relationshipRole none", async () => {
+  it("does not apply mounted framing without a committed mountedOn Rider context", async () => {
     const runtime = await createCameraPreviewChannelRuntime();
     try {
       await runtime.runFixedInput({ actions: [], ticks: 4 });
@@ -1349,11 +1348,15 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       motionTags: [],
       movementMedium: "ground",
       relationshipContexts: [],
-      relationshipRole: "none",
       cameraContextTags: [],
     };
     try {
-      const context = legacyViewTargetToCommittedCameraContextV2ForTask6(sample, 7);
+      const context = committedCameraContextFromMotionKernelV1(
+        sample,
+        7,
+        "idle",
+        0,
+      );
       director.update(
         subject.capabilityAssembly.cameraContext,
         sample,
@@ -1365,7 +1368,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       director.adjustView({ yawDeltaRadians: 0.5 });
       director.update(
         subject.capabilityAssembly.cameraContext,
-        // This legacy placeholder is not a solver authority input.
+        // This provider shell is not a solver authority input.
         { ...sample, approximateRadiusMeters: 99 },
         1 / 60,
         structuredClone(context),
@@ -1392,7 +1395,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
         subject.capabilityAssembly.cameraContext,
         sample,
         1 / 60,
-        legacyViewTargetToCommittedCameraContextV2ForTask6(sample, 6),
+        committedCameraContextFromMotionKernelV1(sample, 6, "idle", 0),
         springArm,
       )).toThrow("3C_CAMERA_CONTEXT_UNCOMMITTED");
       expect(queryCount).toBe(1);
@@ -1400,69 +1403,6 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       director.dispose();
       engine.dispose();
     }
-  });
-
-  it("publishes the legacy seam as explicitly unavailable with neutral semantic environment", () => {
-    const executionPlan = compileRuntimeTestScenePlanV1(
-      createFlatTerrainCapabilitySpec(),
-      { subjectResourceRegistry: builtInSubjectResourceRegistry },
-    );
-    const subject = runtimeSubject(executionPlan);
-    const sample: ViewTargetSampleV1 = {
-      controlledEntityId: subject.entityId,
-      entityId: subject.entityId,
-      targetPositionMetersXYZ: [0, 1, 0],
-      forwardXYZ: [0, 0, -1],
-      upXYZ: [0, 1, 0],
-      velocityMetersPerSecondXYZ: [4, 10, 0],
-      approximateRadiusMeters: 0.5,
-      socketPositionsMetersXYZById: { head: [0, 2, 0] },
-      activeMotionKernelRef: "worldkit://motion-kernel/legacy@1",
-      motionTags: ["sprint"],
-      movementMedium: "air",
-      relationshipContexts: [],
-      relationshipRole: "rider",
-      cameraContextTags: ["legacy-context", "sprint"],
-    };
-
-    const context = legacyViewTargetToCommittedCameraContextV2ForTask6(sample, 17);
-    const movingGroundContext = legacyViewTargetToCommittedCameraContextV2ForTask6({
-      ...sample,
-      velocityMetersPerSecondXYZ: [8, 0, 0],
-      movementMedium: "ground",
-      motionTags: ["run", "sprint"],
-    }, 18);
-
-    expect(context.locomotion).toEqual({
-      schemaVersion: 2,
-      status: "suspended",
-      suspendedByRelationshipId: "3c-task6-authority-unavailable",
-      committedTick: 17,
-      transitionSequence: 0,
-    });
-    expect(context.semanticAuthorityStatus).toBe("unavailable");
-    expect(context.actionSummary).toEqual({ status: "unavailable" });
-    expect(context.environment).toEqual({
-      relationshipRole: "none",
-      relationshipContexts: [],
-      socketPositionsMetersXYZById: {},
-      cameraContextTags: [],
-    });
-    expect(movingGroundContext.locomotion).toEqual({
-      schemaVersion: 2,
-      status: "suspended",
-      suspendedByRelationshipId: "3c-task6-authority-unavailable",
-      committedTick: 18,
-      transitionSequence: 0,
-    });
-    expect(movingGroundContext.semanticAuthorityStatus).toBe("unavailable");
-    expect(movingGroundContext.actionSummary).toEqual({ status: "unavailable" });
-    expect(movingGroundContext.environment).toEqual({
-      relationshipRole: "none",
-      relationshipContexts: [],
-      socketPositionsMetersXYZById: {},
-      cameraContextTags: [],
-    });
   });
 
   it("maps leftover free-ground motion tags to grounded mobility so auto view selects orbit.medium", () => {
@@ -1483,7 +1423,6 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       motionTags: ["free-ground"],
       movementMedium: "ground",
       relationshipContexts: [],
-      relationshipRole: "none",
       cameraContextTags: [],
     };
     const groundedContext = parseCameraContextSampleV2({
@@ -1517,7 +1456,6 @@ describe("camera preview channel stays out of Gameplay truth", () => {
         isInterruptible: true,
       },
       environment: {
-        relationshipRole: "none",
         relationshipContexts: [],
         socketPositionsMetersXYZById: {},
         cameraContextTags: [],
@@ -1560,7 +1498,6 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       motionTags: ["free-ground", "ground", "jump"],
       movementMedium: "ground",
       relationshipContexts: [],
-      relationshipRole: "none",
       cameraContextTags: ["forward-intent"],
     };
 
@@ -1636,7 +1573,6 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       socketPositionsMetersXYZById: {},
       motionTags: ["free-ground"],
       movementMedium: "ground",
-      relationshipRole: "rider",
       relationshipContexts: [{
         id: relationshipId,
         type: "mountedOn",
@@ -1657,7 +1593,6 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     expect(context.controlledEntityId).toBe("player");
     expect(context.targetEntityId).toBe("skateboard");
     expect(context.environment).toMatchObject({
-      relationshipRole: "rider",
       relationshipContexts: [{
         id: relationshipId,
         type: "mountedOn",
@@ -1704,7 +1639,6 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       motionTags: [],
       movementMedium: "ground",
       relationshipContexts: [],
-      relationshipRole: "none",
       cameraContextTags: [],
     };
     const poseBytes = () => JSON.stringify({
@@ -1719,7 +1653,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     });
     try {
       director.update(cameraContext, sample, 1 / 60,
-        legacyViewTargetToCommittedCameraContextV2ForTask6(sample, 1), springArm);
+        committedCameraContextFromMotionKernelV1(sample, 1, "idle", 0), springArm);
       expect(director.setViewPreference(cameraContext, {
         mode: "camera-rig-profile",
         cameraRigProfileRef: alternateProfileRef,
@@ -1728,17 +1662,17 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       const beforePose = poseBytes();
       failQuery = true;
       expect(() => director.update(cameraContext, sample, 1 / 60,
-        legacyViewTargetToCommittedCameraContextV2ForTask6(sample, 2), springArm))
+        committedCameraContextFromMotionKernelV1(sample, 2, "idle", 0), springArm))
         .toThrow("3C_CAMERA_QUERY_UNAVAILABLE");
       expect(JSON.stringify(director.snapshot())).toBe(beforeSnapshot);
       expect(poseBytes()).toBe(beforePose);
       expect(() => director.update(cameraContext, sample, 1 / 60,
-        legacyViewTargetToCommittedCameraContextV2ForTask6(sample, 2), springArm))
+        committedCameraContextFromMotionKernelV1(sample, 2, "idle", 0), springArm))
         .toThrow("3C_CAMERA_QUERY_UNAVAILABLE");
 
       failQuery = false;
       director.update(cameraContext, sample, 1 / 60,
-        legacyViewTargetToCommittedCameraContextV2ForTask6(sample, 3), springArm);
+        committedCameraContextFromMotionKernelV1(sample, 3, "idle", 0), springArm);
       expect(director.snapshot()).toMatchObject({
         activeCameraProfileRef: alternateProfileRef,
         profileTransitionProgressRatio: 0,

@@ -12,7 +12,10 @@ import {
   compileResolvedTraversalLockV1,
   compileCanonicalWorldV1,
 } from "@whitebox-world/compiler";
-import { createGameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
+import {
+  createGameplayBootstrapV1,
+  RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
+} from "@whitebox-world/gameplay-contracts";
 import type { CanonicalSceneExecutionPlanV1 } from "@whitebox-world/runtime-contracts";
 import type {
   ResolvedTraversalLockReceiptV1,
@@ -51,6 +54,8 @@ const GAMEPLAY_BOOTSTRAP = createGameplayBootstrapV1({
     version: 1,
     resourceRef:
       "worldkit://gameplay-bootstrap/traversal-runtime-support-conformance-test@1",
+    semanticFactProjectorProfileResource:
+      RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
     entityDescriptors: [],
     featureResourceLocks: [],
     semanticActionDefinitions: [],

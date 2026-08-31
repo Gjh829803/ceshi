@@ -7,6 +7,7 @@ import { compileCanonicalWorldV1 } from "@whitebox-world/compiler";
 import {
   createGameplayBootstrapResourceLockEntryV1,
   createGameplayBootstrapV1,
+  RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
 } from "@whitebox-world/gameplay-contracts";
 import {
   createCanonicalWorldPackageV1,
@@ -44,6 +45,8 @@ function buildClosure() {
     id: `${authoringSpec.id}.gameplay`,
     version: 1,
     resourceRef: `worldkit://gameplay-bootstrap/${authoringSpec.id}@1`,
+    semanticFactProjectorProfileResource:
+      RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
     entityDescriptors: normalized.value.nodes
       .filter((node) => node.kind === "subject")
       .map((node) => {

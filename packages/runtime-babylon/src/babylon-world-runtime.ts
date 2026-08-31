@@ -2,7 +2,7 @@ import { FreeCamera } from "@babylonjs/core/Cameras/freeCamera.js";
 import type { AbstractEngine } from "@babylonjs/core/Engines/abstractEngine.js";
 import { Engine } from "@babylonjs/core/Engines/engine.js";
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color.js";
-import { Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
+import { Matrix, Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import { DirectionalLight } from "@babylonjs/core/Lights/directionalLight.js";
 import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight.js";
 import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
@@ -28,6 +28,7 @@ import {
 import type {
   GameplayActionStateV1,
   GameplayCapabilityStateV1,
+  GameplaySemanticFactV1,
   LocomotionCapabilityStateV2,
   MountedOnRelationshipStateV1,
   SpatialEntityStateV1,
@@ -66,6 +67,7 @@ import type {
 import { hashBabylonNativeSceneContributionV1 } from
   "@whitebox-world/runtime-contracts";
 import type { GameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
+import { parseGameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
 import {
   admitBabylonNativeSceneCandidateV1,
 } from "@whitebox-world/native-babylon/host";
@@ -103,7 +105,10 @@ import {
   GoldenHumanoidSubjectControllerV1,
   createGoldenHumanoidSubjectControllerV1,
 } from "./character-movement-component";
-import { committedCameraContextFromMotionKernelV1 } from "./camera-director";
+import {
+  committedCameraContextFromMotionKernelV1,
+  type CameraDirectorSnapshotV1,
+} from "./camera-director";
 import { hasForwardControlIntentV1 } from "./control-profile-runtime";
 import {
   isSubjectAssetRuntimeErrorV1,
@@ -112,6 +117,7 @@ import {
   type SubjectAssetResolverV1,
 } from "./subject-asset-cache";
 import { createSubjectVisual, type SubjectVisual } from "./subject-visual";
+import { projectSemanticFactsV1 } from "./semantic-fact-projector";
 import {
   createTerrainMesh,
   sampleExecutionTerrainHeight,
@@ -175,6 +181,58 @@ function committedPresentationFromLocomotionMode(
   });
 }
 
+function compareCodeUnits(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function projectLockedLocalCameraSocketsV1(
+  subject: BabylonRuntimeSubjectV1,
+  subjectOriginMetersXYZ: RuntimeVec3V1,
+  facingYawRadians: number,
+): Readonly<Record<string, RuntimeVec3V1>> {
+  const subjectOrigin = new Vector3(...subjectOriginMetersXYZ);
+  const subjectRotation = Matrix.RotationY(facingYawRadians);
+  const socketPositionsMetersXYZById: Record<string, RuntimeVec3V1> = {};
+  for (const socket of subject.sockets) {
+    if (socket.kind !== "local") continue;
+    const worldPosition = Vector3.TransformCoordinates(
+      new Vector3(...socket.localTransform.positionMetersXYZ),
+      subjectRotation,
+    ).addInPlace(subjectOrigin);
+    socketPositionsMetersXYZById[socket.id] = Object.freeze([
+      canonicalizeSignedZero(worldPosition.x),
+      canonicalizeSignedZero(worldPosition.y),
+      canonicalizeSignedZero(worldPosition.z),
+    ]) as RuntimeVec3V1;
+  }
+  return Object.freeze(socketPositionsMetersXYZById);
+}
+
+function lockedLocalSocketV1(
+  subject: BabylonRuntimeSubjectV1,
+  socketId: string,
+) {
+  const socket = subject.sockets.find((candidate) => candidate.id === socketId);
+  return socket?.kind === "local" ? socket : undefined;
+}
+
+function cameraContextWithLockedLocalSocketsV1(
+  subject: BabylonRuntimeSubjectV1,
+  context: CameraContextSampleV2,
+): CameraContextSampleV2 {
+  return parseCameraContextSampleV2({
+    ...context,
+    environment: {
+      ...context.environment,
+      socketPositionsMetersXYZById: projectLockedLocalCameraSocketsV1(
+        subject,
+        context.subjectPose.positionMetersXYZ,
+        context.subjectPose.facingYawRadians,
+      ),
+    },
+  });
+}
+
 export type BabylonWorldRuntimeInitializationStageV1 =
   | "engine"
   | "scene"
@@ -232,6 +290,9 @@ interface BabylonGameplayPublishedStateV1 {
   readonly possessionTarget: BabylonGameplayPossessionTargetV1;
   readonly mountedRelationshipsByRiderEntityId: Readonly<
     Record<string, BabylonMountedRelationshipProjectionV1>
+  >;
+  readonly semanticFactsById: Readonly<
+    Record<string, GameplaySemanticFactV1>
   >;
   readonly viewProjection: ReturnType<
     BabylonGameplayRuntimeInternalV1["readViewProjection"]
@@ -496,6 +557,12 @@ function revalidateRuntimeLayoutAssertions(
 
 function createStaticCollisionMesh(
   collider: CanonicalSceneStaticColliderV1,
+  traversalSurface:
+    | Extract<
+        CanonicalSceneExecutionPlanV1["traversal"]["surfaces"][number],
+        { kind: "static-collider" }
+      >
+    | undefined,
   scene: Scene,
 ): Mesh {
   const topology = emitStaticColliderTriangleMeshV1(collider.shape);
@@ -517,10 +584,85 @@ function createStaticCollisionMesh(
   mesh.metadata = {
     worldkitEntityId: collider.entityId,
     colliderSubshapeId: collider.colliderSubshapeId,
+    ...(traversalSurface === undefined
+      ? {}
+      : {
+          worldkitTraversalSurfaceId:
+            traversalSurface.traversalSurfaceId,
+          worldkitSurfaceEntityId: traversalSurface.surfaceEntityId,
+          worldkitTraversalSurfaceProfileRef:
+            traversalSurface.traversalSurfaceProfileRef,
+        }),
   };
   mesh.isVisible = false;
   mesh.computeWorldMatrix(true);
   return mesh;
+}
+
+function canonicalHeightfieldTraversalSurface(
+  executionPlan: CanonicalSceneExecutionPlanV1,
+): Extract<
+  CanonicalSceneExecutionPlanV1["traversal"]["surfaces"][number],
+  { kind: "heightfield" }
+> {
+  const matches = executionPlan.traversal.surfaces.filter(
+    (surface): surface is Extract<
+      CanonicalSceneExecutionPlanV1["traversal"]["surfaces"][number],
+      { kind: "heightfield" }
+    > => surface.kind === "heightfield" &&
+      surface.surfaceEntityId === executionPlan.terrain.entityId,
+  );
+  if (matches.length !== 1) {
+    throw new Error(
+      "WORLDKIT_RUNTIME_HEIGHTFIELD_TRAVERSAL_IDENTITY_INVALID",
+    );
+  }
+  return matches[0]!;
+}
+
+function canonicalStaticColliderTraversalSurface(
+  executionPlan: CanonicalSceneExecutionPlanV1,
+  collider: CanonicalSceneStaticColliderV1,
+): Extract<
+  CanonicalSceneExecutionPlanV1["traversal"]["surfaces"][number],
+  { kind: "static-collider" }
+> | undefined {
+  const matches = executionPlan.traversal.surfaces.filter(
+    (surface): surface is Extract<
+      CanonicalSceneExecutionPlanV1["traversal"]["surfaces"][number],
+      { kind: "static-collider" }
+    > => surface.kind === "static-collider" &&
+      surface.surfaceEntityId === collider.entityId &&
+      surface.colliderSubshapeId === collider.colliderSubshapeId,
+  );
+  if (matches.length > 1) {
+    throw new Error(
+      "WORLDKIT_RUNTIME_STATIC_TRAVERSAL_IDENTITY_AMBIGUOUS",
+    );
+  }
+  return matches[0];
+}
+
+function attachCanonicalTraversalSurfaceIdentity(
+  mesh: Mesh,
+  surface: CanonicalSceneExecutionPlanV1["traversal"]["surfaces"][number],
+): void {
+  const retained = typeof mesh.metadata === "object" && !isNil(mesh.metadata)
+    ? mesh.metadata as Readonly<Record<string, unknown>>
+    : {};
+  mesh.metadata = {
+    ...retained,
+    worldkitEntityId: surface.surfaceEntityId,
+    colliderSubshapeId: surface.colliderSubshapeId,
+    worldkitTraversalSurfaceId: surface.traversalSurfaceId,
+    worldkitSurfaceEntityId: surface.surfaceEntityId,
+    ...(surface.kind === "static-collider"
+      ? {
+          worldkitTraversalSurfaceProfileRef:
+            surface.traversalSurfaceProfileRef,
+        }
+      : {}),
+  };
 }
 
 function containsPoint(boundary: CanonicalSceneWaterBoundaryV1, x: number, z: number): boolean {
@@ -660,6 +802,10 @@ export class BabylonWorldRuntime {
   private appliedCameraViewStateRevision = 0;
   private pendingCameraHeadingLockBeforeNextTick = false;
   private pendingPublishedCameraViewSyncBeforeNextTick = false;
+  private publishedCameraProjection: Readonly<{
+    director: CameraDirectorSnapshotV1;
+    positionMetersXYZ: RuntimeVec3V1;
+  }> | undefined;
   private traversalConfigurationEpoch = 0;
   private readonly aggregates: PhysicsAggregate[] = [];
   private readonly ownedTerrainShape: PhysicsShape | undefined;
@@ -703,6 +849,7 @@ export class BabylonWorldRuntime {
     beforeCameraFovRadians: number;
     beforePendingCameraHeadingLockBeforeNextTick: boolean;
     beforePendingPublishedCameraViewSyncBeforeNextTick: boolean;
+    beforePublishedCameraProjection: BabylonWorldRuntime["publishedCameraProjection"];
   }> | undefined;
   readonly #creationExecutionPlanHash: `sha256:${string}` | undefined;
 
@@ -737,6 +884,7 @@ export class BabylonWorldRuntime {
     this.gameplayPublishedState = Object.freeze({
       possessionTarget: Object.freeze({ mode: "unbound" }),
       mountedRelationshipsByRiderEntityId: Object.freeze({}),
+      semanticFactsById: Object.freeze({}),
       viewProjection: Object.freeze({ viewStateRevision: 0 }),
     });
     this.entityRegistry = entityRegistry;
@@ -763,11 +911,16 @@ export class BabylonWorldRuntime {
     this.#creationExecutionPlanHash = creationExecutionPlanHash;
     this.terrainSampleCount = terrainSampleCount;
     this.initializeInitialMountedRelationships();
+    this.reconcileSemanticFacts();
     this.updateCamera();
+    this.publishCameraProjection();
     if (autoStartRenderLoop) this.engine.runRenderLoop(this.renderLoop);
   }
 
   static async create(options: BabylonWorldRuntimeOptions): Promise<BabylonWorldRuntime> {
+    const gameplayBootstrap = parseGameplayBootstrapV1(
+      options.gameplayBootstrap,
+    );
     const canonicalScenePlan = options.sceneSource.kind ===
         "canonical-execution-plan"
       ? options.sceneSource.executionPlan
@@ -794,9 +947,9 @@ export class BabylonWorldRuntime {
     }
     if (
       options.worldRuntimeBootstrap.gameplayBootstrapRef !==
-        options.gameplayBootstrap.resourceRef ||
+        gameplayBootstrap.resourceRef ||
       options.worldRuntimeBootstrap.gameplayBootstrapHash !==
-        options.gameplayBootstrap.contentHash
+        gameplayBootstrap.contentHash
     ) {
       throw new Error("WORLDKIT_RUNTIME_GAMEPLAY_BOOTSTRAP_MISMATCH");
     }
@@ -952,6 +1105,10 @@ export class BabylonWorldRuntime {
           materials.terrain,
           scene,
         );
+        attachCanonicalTraversalSurfaceIdentity(
+          terrainMesh,
+          canonicalHeightfieldTraversalSurface(executionPlan),
+        );
         const terrain = executionPlan.terrain;
         const firstTerrainHeight = terrain.heightSamplesMeters[0]!;
         const isFlatTerrain = terrain.heightSamplesMeters.every((height) =>
@@ -991,7 +1148,15 @@ export class BabylonWorldRuntime {
           createBabylonObjectMeshV1(object, materials, scene);
         }
         for (const collider of executionPlan.staticColliders) {
-          const mesh = createStaticCollisionMesh(collider, scene);
+          const traversalSurface = canonicalStaticColliderTraversalSurface(
+            executionPlan,
+            collider,
+          );
+          const mesh = createStaticCollisionMesh(
+            collider,
+            traversalSurface,
+            scene,
+          );
           const shape = new PhysicsShapeMesh(mesh, scene);
           ownedDisposers.push(() => shape.dispose());
           const aggregate = new PhysicsAggregate(
@@ -1068,7 +1233,7 @@ export class BabylonWorldRuntime {
       const characterEntitiesByEntityId = new Map<string, BabylonCharacterEntityV1>();
       const subjectVisuals: SubjectVisual[] = [];
       const sortedSubjects = [...effectiveRuntimeSubjects].sort((left, right) =>
-        left.entityId.localeCompare(right.entityId),
+        compareCodeUnits(left.entityId, right.entityId),
       );
       for (const subject of sortedSubjects) {
         const visual = await createSubjectVisual({
@@ -1160,18 +1325,23 @@ export class BabylonWorldRuntime {
                   commit: (): void => {
                     if (state !== "prepared") return;
                     try {
+                      const cameraContext = cameraContextWithLockedLocalSocketsV1(
+                        subject,
+                        request.cameraContext,
+                      );
                       if (runtime?.controlledEntityId() === subject.entityId) {
-                        const locomotion = request.cameraContext.locomotion;
+                        const locomotion = cameraContext.locomotion;
                         const velocity = locomotion.status === "active"
                           ? locomotion.linearVelocity
                           : { x: 0, y: 0, z: 0 };
                         const facingYawRadians =
-                          request.cameraContext.subjectPose.facingYawRadians;
+                          cameraContext.subjectPose.facingYawRadians;
                         const sample: ViewTargetSampleV1 = {
-                          controlledEntityId: subject.entityId,
-                          entityId: subject.entityId,
+                          controlledEntityId:
+                            cameraContext.controlledEntityId,
+                          entityId: cameraContext.targetEntityId,
                           targetPositionMetersXYZ:
-                            request.cameraContext.subjectPose.positionMetersXYZ,
+                            cameraContext.subjectPose.positionMetersXYZ,
                           forwardXYZ: [
                             canonicalizeSignedZero(-Math.sin(facingYawRadians)),
                             0,
@@ -1185,30 +1355,28 @@ export class BabylonWorldRuntime {
                           ],
                           approximateRadiusMeters: subject.collider.radiusMeters,
                           socketPositionsMetersXYZById:
-                            request.cameraContext.environment
+                            cameraContext.environment
                               .socketPositionsMetersXYZById,
                           motionTags: [],
                           movementMedium: locomotion.status === "active"
                             ? locomotion.movementMedium
                             : "ground",
-                          relationshipRole:
-                            request.cameraContext.environment.relationshipRole,
                           relationshipContexts:
-                            request.cameraContext.environment.relationshipContexts,
+                            cameraContext.environment.relationshipContexts,
                           cameraContextTags:
-                            request.cameraContext.environment.cameraContextTags,
+                            cameraContext.environment.cameraContextTags,
                         };
                         cameraComponent.update(
                           subject.capabilityAssembly.cameraContext,
                           sample,
                           FIXED_TIME_STEP_SECONDS,
-                          request.cameraContext,
+                          cameraContext,
                           runtime.characterFor(subject.entityId).springArm,
                         );
                       }
                       latestGoldenCameraContextsByEntityId.set(
                         subject.entityId,
-                        request.cameraContext,
+                        cameraContext,
                       );
                       state = "committed";
                     } catch (error) {
@@ -1279,7 +1447,7 @@ export class BabylonWorldRuntime {
       runtime = new BabylonWorldRuntime(
         executionPlan,
         options.worldRuntimeBootstrap,
-        options.gameplayBootstrap,
+        gameplayBootstrap,
         effectiveRuntimeSubjects,
         options.runtimeSessionId ?? "runtime-session-local",
         engine,
@@ -1341,6 +1509,11 @@ export class BabylonWorldRuntime {
             controlled ? input.actions : [],
             viewControlFrame,
             controlled ? input.axes : undefined,
+            undefined,
+            this.goldenCameraContextAuthorityForSubject(
+              subject.entityId,
+              controlledEntityId,
+            ),
           );
         } else if (controlled || controller.movementMedium !== "ground") {
           controller.step(
@@ -1396,6 +1569,30 @@ export class BabylonWorldRuntime {
       hasEntity: (entityId) => this.characterEntitiesByEntityId.has(entityId),
       isEntityControllable: (entityId) =>
         this.characterEntitiesByEntityId.has(entityId),
+      estimateSemanticFactProjectionCapacity: () => {
+        const mountedRiderEntityIds = new Set(Object.keys(
+          this.gameplayPublishedState.mountedRelationshipsByRiderEntityId,
+        ));
+        const maximumSupportedByFactCount = this.runtimeSubjects.filter(
+          (subject) => {
+            if (mountedRiderEntityIds.has(subject.entityId)) return false;
+            const controller = this.controllerFor(subject.entityId);
+            return !isGoldenHumanoidControllerV1(controller) ||
+              controller.locomotionStateV2().status !== "suspended";
+          },
+        ).length;
+        const currentFacts = Object.values(
+          this.gameplayPublishedState.semanticFactsById,
+        );
+        return Object.freeze({
+          maximumSemanticFactCountAfterInput:
+            currentFacts.filter((fact) => fact.type !== "supportedBy").length +
+            maximumSupportedByFactCount,
+          maximumSemanticFactTransitionEventCount:
+            currentFacts.filter((fact) => fact.type === "supportedBy").length +
+            maximumSupportedByFactCount,
+        });
+      },
       hasLockedActionPresentation: (actorEntityId, semanticActionRef) => {
         const controller = this.characterEntitiesByEntityId.get(
           actorEntityId,
@@ -1535,7 +1732,38 @@ export class BabylonWorldRuntime {
       simulationTick: this.tick,
       spatialEntityStatesById: Object.freeze(spatialEntityStatesById),
       capabilityStatesById: Object.freeze(capabilityStatesById),
-      semanticFactsById: Object.freeze({}),
+      semanticFactsById: this.gameplayPublishedState.semanticFactsById,
+    });
+  }
+
+  private reconcileSemanticFacts(): void {
+    const mountedRiderEntityIds = new Set(Object.keys(
+      this.gameplayPublishedState.mountedRelationshipsByRiderEntityId,
+    ));
+    const subjects = this.runtimeSubjects.flatMap((subject) => {
+      if (mountedRiderEntityIds.has(subject.entityId)) return [];
+      const controller = this.controllerFor(subject.entityId);
+      if (
+        isGoldenHumanoidControllerV1(controller) &&
+        controller.locomotionStateV2().status === "suspended"
+      ) return [];
+      return [{
+        entityId: subject.entityId,
+        sample: controller.retainedCharacterSupportSample(),
+        live: controller.liveLockState(),
+      }];
+    });
+    this.gameplayPublishedState = Object.freeze({
+      ...this.gameplayPublishedState,
+      semanticFactsById: projectSemanticFactsV1({
+        previousSemanticFactsById:
+          this.gameplayPublishedState.semanticFactsById,
+        simulationTick: this.tick,
+        profileResource:
+          this.gameplayBootstrap.semanticFactProjectorProfileResource,
+        executionPlan: this.executionPlan,
+        subjects,
+      }),
     });
   }
 
@@ -1574,6 +1802,7 @@ export class BabylonWorldRuntime {
       possessionTarget: target,
       mountedRelationshipsByRiderEntityId:
         this.gameplayPublishedState.mountedRelationshipsByRiderEntityId,
+      semanticFactsById: this.gameplayPublishedState.semanticFactsById,
       viewProjection: projectedViewStateAfter,
     });
     const previousControlledEntityId = this.controlledEntityId();
@@ -1607,6 +1836,9 @@ export class BabylonWorldRuntime {
         }
         lifecycle = "committed";
         this.gameplayPublishedState = stagedState;
+        if (target.mode === "unbound") {
+          this.publishedCameraProjection = undefined;
+        }
         this.traversalConfigurationEpoch = traversalConfigurationEpochAfter;
         this.activeInputActions = EMPTY_INPUT_ACTIONS;
         this.activeInputAxes = EMPTY_INPUT_AXES;
@@ -1639,24 +1871,33 @@ export class BabylonWorldRuntime {
     const mountController = this.characterEntitiesByEntityId.get(
       relationship.mountEntityId,
     )?.movement;
-    const mountVisual = this.subjectVisualsByEntityId.get(
-      relationship.mountEntityId,
-    );
-    const socket = isNil(slot)
+    const mountSocket = isNil(slot) || isNil(mountSubject)
       ? undefined
-      : mountVisual?.socketNodesById.get(slot.mountSocketId);
+      : lockedLocalSocketV1(mountSubject, slot.mountSocketId);
     if (
       isNil(mountSubject) ||
       isNil(slot) ||
       isNil(mountController) ||
-      isNil(socket)
+      isNil(mountSocket)
     ) {
       throw new Error("WORLDKIT_MOUNTED_SLOT_UNAVAILABLE");
     }
-    socket.computeWorldMatrix(true);
-    const subjectOrigin = Vector3.TransformCoordinates(
+    const socketLocalTransform = Matrix.Compose(
+      Vector3.One(),
+      Quaternion.FromEulerAngles(
+        ...mountSocket.localTransform.rotationEulerRadiansXYZ,
+      ),
+      new Vector3(...mountSocket.localTransform.positionMetersXYZ),
+    );
+    const subjectOriginInMountSpace = Vector3.TransformCoordinates(
       new Vector3(...slot.riderSubjectOriginOffsetMetersXYZ),
-      socket.getWorldMatrix(),
+      socketLocalTransform,
+    );
+    const subjectOrigin = Vector3.TransformCoordinates(
+      subjectOriginInMountSpace,
+      Matrix.RotationY(mountController.facingYawRadians),
+    ).addInPlace(
+      mountController.subjectOrigin,
     );
     if (![subjectOrigin.x, subjectOrigin.y, subjectOrigin.z].every(Number.isFinite)) {
       throw new Error("WORLDKIT_MOUNTED_POSE_NON_FINITE");
@@ -1749,9 +1990,6 @@ export class BabylonWorldRuntime {
     const riderSubject = this.runtimeSubjects.find(
       (subject) => subject.entityId === relationship.riderEntityId,
     );
-    const riderVisual = this.subjectVisualsByEntityId.get(
-      relationship.riderEntityId,
-    );
     const mount = this.runtimeSubjects.find(
       (subject) => subject.entityId === relationship.mountEntityId,
     );
@@ -1764,17 +2002,14 @@ export class BabylonWorldRuntime {
     if (
       isNil(rider) ||
       isNil(riderSubject) ||
-      isNil(riderVisual) ||
       isNil(mount) ||
       isNil(profile) ||
       profile.relationshipType !== "mountedOn" ||
       profile.requiredRiderSocketIds.some(
-        (socketId) => !riderVisual.socketNodesById.has(socketId),
+        (socketId) => isNil(lockedLocalSocketV1(riderSubject, socketId)),
       ) ||
       profile.requiredMountSocketIds.some(
-        (socketId) => !this.subjectVisualsByEntityId.get(
-          relationship.mountEntityId,
-        )?.socketNodesById.has(socketId),
+        (socketId) => isNil(lockedLocalSocketV1(mount, socketId)),
       ) ||
       !isNil(this.gameplayPublishedState
         .mountedRelationshipsByRiderEntityId[relationship.riderEntityId])
@@ -1873,6 +2108,7 @@ export class BabylonWorldRuntime {
         ...this.gameplayPublishedState.mountedRelationshipsByRiderEntityId,
         [relationship.riderEntityId]: stagedRelationship,
       }),
+      semanticFactsById: this.gameplayPublishedState.semanticFactsById,
       viewProjection: projectedViewStateAfter,
     });
     if (this.traversalConfigurationEpoch === Number.MAX_SAFE_INTEGER) {
@@ -2125,6 +2361,7 @@ export class BabylonWorldRuntime {
       mountedRelationshipsByRiderEntityId: Object.freeze(
         mountedRelationshipsByRiderEntityId,
       ),
+      semanticFactsById: this.gameplayPublishedState.semanticFactsById,
       viewProjection: projectedViewStateAfter,
     });
     if (this.traversalConfigurationEpoch === Number.MAX_SAFE_INTEGER) {
@@ -2236,6 +2473,7 @@ export class BabylonWorldRuntime {
       this.pendingCameraHeadingLockBeforeNextTick;
     const beforePendingPublishedCameraViewSyncBeforeNextTick =
       this.pendingPublishedCameraViewSyncBeforeNextTick;
+    const beforePublishedCameraProjection = this.publishedCameraProjection;
     this.preparedGoldenFixedInput = Object.freeze({
       beforeRuntimeProjection,
       beforeWorldProjection,
@@ -2243,6 +2481,7 @@ export class BabylonWorldRuntime {
       beforeCameraFovRadians,
       beforePendingCameraHeadingLockBeforeNextTick,
       beforePendingPublishedCameraViewSyncBeforeNextTick,
+      beforePublishedCameraProjection,
     });
     let projectedWorldStateAfter: ReturnType<
       BabylonGameplayRuntimeInternalV1["readWorldProjection"]
@@ -2340,6 +2579,8 @@ export class BabylonWorldRuntime {
         prepared.beforePendingCameraHeadingLockBeforeNextTick;
       this.pendingPublishedCameraViewSyncBeforeNextTick =
         prepared.beforePendingPublishedCameraViewSyncBeforeNextTick;
+      this.publishedCameraProjection =
+        prepared.beforePublishedCameraProjection;
       this.preparedGoldenFixedInput = undefined;
       const restoredProjection = this.snapshot();
       if (
@@ -2396,6 +2637,10 @@ export class BabylonWorldRuntime {
           viewControlFrame,
           isTarget ? input.axes : undefined,
           activeActionState,
+          this.goldenCameraContextAuthorityForSubject(
+            subject.entityId,
+            targetEntityId,
+          ),
         );
       } else if (isTarget || controller.movementMedium !== "ground") {
         controller.step(
@@ -2484,7 +2729,8 @@ export class BabylonWorldRuntime {
     for (const mounted of Object.values(
       this.gameplayPublishedState.mountedRelationshipsByRiderEntityId,
     ).sort((left, right) =>
-      left.relationship.riderEntityId.localeCompare(
+      compareCodeUnits(
+        left.relationship.riderEntityId,
         right.relationship.riderEntityId,
       ))) {
       const pose = this.mountedPose(mounted.relationship);
@@ -2496,7 +2742,9 @@ export class BabylonWorldRuntime {
           "suspended",
         ));
     }
+    this.reconcileSemanticFacts();
     if (!isNil(targetEntityId)) this.updateCameraForEntity(targetEntityId);
+    this.publishCameraProjection();
   }
 
   private commitFixedTick(): void {
@@ -2523,7 +2771,8 @@ export class BabylonWorldRuntime {
     for (const mounted of Object.values(
       this.gameplayPublishedState.mountedRelationshipsByRiderEntityId,
     ).sort((left, right) =>
-      left.relationship.riderEntityId.localeCompare(
+      compareCodeUnits(
+        left.relationship.riderEntityId,
         right.relationship.riderEntityId,
       ))) {
       const pose = this.mountedPose(mounted.relationship);
@@ -2535,6 +2784,7 @@ export class BabylonWorldRuntime {
           "suspended",
         ));
     }
+    this.reconcileSemanticFacts();
     if (controlledEntityId !== undefined) {
       const controlled = this.controllerFor(controlledEntityId);
       if (!isGoldenHumanoidControllerV1(controlled)) {
@@ -2547,6 +2797,7 @@ export class BabylonWorldRuntime {
           this.gameplayPublishedState.viewProjection.viewStateRevision;
       }
     }
+    this.publishCameraProjection();
   }
 
   private resetToTraversalAnchor(input: Readonly<{
@@ -2578,7 +2829,13 @@ export class BabylonWorldRuntime {
     this.cameraComponent.reset();
     this.latestLegacyCameraContextsByEntityId.clear();
     this.latestRenderReadyReceipt = undefined;
+    this.gameplayPublishedState = Object.freeze({
+      ...this.gameplayPublishedState,
+      semanticFactsById: Object.freeze({}),
+    });
+    this.reconcileSemanticFacts();
     this.updateCamera();
+    this.publishCameraProjection();
   }
 
   private runTraversalFixedTick(input: Readonly<{
@@ -2674,7 +2931,6 @@ export class BabylonWorldRuntime {
               ]
             : ["mobility:suspended"],
           locomotion,
-          relationshipRole: "none",
           safeFallbackActive: false,
         };
       } else {
@@ -2696,7 +2952,6 @@ export class BabylonWorldRuntime {
           activeMotionProfileRef: motion.activeMotionProfileRef,
           activeMotionKernelRef: motion.activeMotionKernelRef,
           motionTags: motion.motionTags,
-          relationshipRole: "none",
           safeFallbackActive: motion.fallbackActive,
           ...(motion.lastFailureCode === undefined
             ? {}
@@ -2704,7 +2959,9 @@ export class BabylonWorldRuntime {
         };
       }
     }
-    const cameraDirectorSnapshot = this.cameraComponent.snapshot();
+    const publishedCameraProjection = this.publishedCameraProjection ??
+      this.captureCurrentCameraProjection();
+    const cameraDirectorSnapshot = publishedCameraProjection.director;
     return {
       runtimeBackend: "babylon-havok",
       tick: this.tick,
@@ -2714,13 +2971,15 @@ export class BabylonWorldRuntime {
       physics: { backend: "havok", ready: true, fixedTimeStepSeconds: FIXED_TIME_STEP_SECONDS },
       camera: {
         entityId: this.worldRuntimeBootstrap.initialCamera.cameraEntityId,
-        ...(controlledEntityId === undefined
+        ...(controlledEntityId === undefined ||
+            cameraDirectorSnapshot.selectionDecision === undefined
           ? {}
-          : { targetEntityId: controlledEntityId }),
+          : {
+              targetEntityId:
+                cameraDirectorSnapshot.selectionDecision.targetEntityId,
+            }),
         positionMetersXYZ: canonicalizeVec3([
-          this.camera.position.x,
-          this.camera.position.y,
-          this.camera.position.z,
+          ...publishedCameraProjection.positionMetersXYZ,
         ]),
         activeCameraProfileRef: cameraDirectorSnapshot.activeCameraProfileRef,
         activeCameraRigRef: cameraDirectorSnapshot.activeCameraRigRef,
@@ -2894,9 +3153,11 @@ export class BabylonWorldRuntime {
     this.gameplayPublishedState = Object.freeze({
       possessionTarget: Object.freeze({ mode: "unbound" }),
       mountedRelationshipsByRiderEntityId: Object.freeze({}),
+      semanticFactsById: Object.freeze({}),
       viewProjection: Object.freeze({ viewStateRevision: 0 }),
     });
     this.initializeInitialMountedRelationships();
+    this.reconcileSemanticFacts();
     this.appliedCameraViewStateRevision = 0;
     this.pendingCameraHeadingLockBeforeNextTick = false;
     this.pendingPublishedCameraViewSyncBeforeNextTick = false;
@@ -2907,6 +3168,7 @@ export class BabylonWorldRuntime {
     this.cameraComponent.reset();
     this.latestRenderReadyReceipt = undefined;
     this.updateCamera();
+    this.publishCameraProjection();
     return this.snapshot();
   }
 
@@ -3025,6 +3287,12 @@ export class BabylonWorldRuntime {
       );
     }
     this.synchronizePublishedCameraView(0);
+    if (
+      this.publishedCameraProjection?.director.selectionDecision === undefined &&
+      this.controlledEntityId() !== undefined
+    ) {
+      this.publishCameraProjection();
+    }
     for (const subject of this.runtimeSubjects) {
       this.controllerFor(subject.entityId).renderVisual(interpolationAlphaRatio);
     }
@@ -3104,6 +3372,38 @@ export class BabylonWorldRuntime {
     }
   }
 
+  private goldenCameraContextAuthorityForSubject(
+    subjectEntityId: string,
+    committedControlledEntityId: string | undefined,
+  ) {
+    if (committedControlledEntityId === undefined) return undefined;
+    return resolveCameraViewTargetContextV1({
+      controlledEntityId: committedControlledEntityId,
+      targetEntityId: subjectEntityId,
+      mountedRelationships: Object.values(
+        this.gameplayPublishedState.mountedRelationshipsByRiderEntityId,
+      ).map((projection) => projection.relationship),
+    });
+  }
+
+  private captureCurrentCameraProjection(): Readonly<{
+    director: CameraDirectorSnapshotV1;
+    positionMetersXYZ: RuntimeVec3V1;
+  }> {
+    return Object.freeze({
+      director: this.cameraComponent.snapshot(),
+      positionMetersXYZ: canonicalizeVec3([
+        this.camera.position.x,
+        this.camera.position.y,
+        this.camera.position.z,
+      ]),
+    });
+  }
+
+  private publishCameraProjection(): void {
+    this.publishedCameraProjection = this.captureCurrentCameraProjection();
+  }
+
   private lockPublishedCameraHeadingBeforeTick(): void {
     if (
       !this.pendingCameraHeadingLockBeforeNextTick &&
@@ -3175,17 +3475,34 @@ export class BabylonWorldRuntime {
     this.pendingPublishedCameraViewSyncBeforeNextTick = false;
     const controller = this.controllerFor(subject.entityId);
     if (isGoldenHumanoidControllerV1(controller)) {
+      const committedControlledEntityId = this.controlledEntityId();
+      if (committedControlledEntityId === undefined) {
+        throw new Error(
+          "WORLDKIT_RUNTIME_CAMERA_STATE_INVALID: Golden Camera projection requires committed control authority.",
+        );
+      }
       let context = this.latestGoldenCameraContextsByEntityId.get(
         subject.entityId,
       );
-      if (context === undefined) {
+      if (
+        context === undefined ||
+        context.controlledEntityId !== committedControlledEntityId ||
+        context.targetEntityId !== subject.entityId
+      ) {
         const committed = controller.movementSnapshot();
+        const cameraViewTargetContext = resolveCameraViewTargetContextV1({
+          controlledEntityId: committedControlledEntityId,
+          targetEntityId: subject.entityId,
+          mountedRelationships: Object.values(
+            this.gameplayPublishedState.mountedRelationshipsByRiderEntityId,
+          ).map((projection) => projection.relationship),
+        });
         context = parseCameraContextSampleV2({
           schemaVersion: 2,
           semanticAuthorityStatus: "available",
           committedTick: committed.tick,
-          controlledEntityId: subject.entityId,
-          targetEntityId: subject.entityId,
+          controlledEntityId: cameraViewTargetContext.controlledEntityId,
+          targetEntityId: cameraViewTargetContext.targetEntityId,
           subjectPose: {
             positionMetersXYZ: committed.positionMetersXYZ,
             facingYawRadians: committed.facingYawRadians,
@@ -3197,9 +3514,13 @@ export class BabylonWorldRuntime {
             isInterruptible: true,
           },
           environment: {
-            relationshipRole: "none",
-            relationshipContexts: [],
-            socketPositionsMetersXYZById: {},
+            relationshipContexts:
+              cameraViewTargetContext.relationshipContexts,
+            socketPositionsMetersXYZById: projectLockedLocalCameraSocketsV1(
+              subject,
+              committed.positionMetersXYZ,
+              committed.facingYawRadians,
+            ),
             cameraContextTags: [],
           },
         });
@@ -3232,7 +3553,6 @@ export class BabylonWorldRuntime {
         movementMedium: locomotion.status === "active"
           ? locomotion.movementMedium
           : "ground",
-        relationshipRole: context.environment.relationshipRole,
         relationshipContexts: context.environment.relationshipContexts,
         cameraContextTags: context.environment.cameraContextTags,
       };
@@ -3245,23 +3565,21 @@ export class BabylonWorldRuntime {
       );
       return;
     }
-    const visual = this.visualFor(subject.entityId);
     const origin = controller.subjectOrigin;
     const velocity = controller.velocity;
     const motion = controller.motionSnapshot();
-    const socketPositionsMetersXYZById: Record<string, RuntimeVec3V1> = {};
-    visual.root.computeWorldMatrix(true);
-    for (const [socketId, socketNode] of visual.socketNodesById) {
-      socketNode.computeWorldMatrix(true);
-      const position = socketNode.getAbsolutePosition();
-      socketPositionsMetersXYZById[socketId] = [position.x, position.y, position.z];
-    }
-    const cameraViewTargetContext = resolveCameraViewTargetContextV1(
-      subject.entityId,
-      Object.values(
+    const socketPositionsMetersXYZById = projectLockedLocalCameraSocketsV1(
+      subject,
+      canonicalizeVec3([origin.x, origin.y, origin.z]),
+      controller.facingYawRadians,
+    );
+    const cameraViewTargetContext = resolveCameraViewTargetContextV1({
+      controlledEntityId: this.controlledEntityId() ?? subject.entityId,
+      targetEntityId: subject.entityId,
+      mountedRelationships: Object.values(
         this.gameplayPublishedState.mountedRelationshipsByRiderEntityId,
       ).map((projection) => projection.relationship),
-    );
+    });
     const sample: ViewTargetSampleV1 = {
       controlledEntityId: cameraViewTargetContext.controlledEntityId,
       entityId: subject.entityId,
@@ -3275,7 +3593,6 @@ export class BabylonWorldRuntime {
       motionTags: motion.motionTags,
       movementMedium: this.detectMovementMedium(controller),
       relationshipContexts: cameraViewTargetContext.relationshipContexts,
-      relationshipRole: cameraViewTargetContext.relationshipRole,
       cameraContextTags: [
         ...(hasForwardControlIntentV1(
           subject.capabilityAssembly.controlProfile,
@@ -3341,6 +3658,7 @@ export class BabylonWorldRuntime {
     }
     this.latestRenderReadyReceipt = undefined;
     this.updateCamera();
+    this.publishCameraProjection();
     return this.snapshot();
   }
 
@@ -3350,6 +3668,7 @@ export class BabylonWorldRuntime {
     this.cameraComponent.resetViewPreference();
     this.latestRenderReadyReceipt = undefined;
     this.updateCamera();
+    this.publishCameraProjection();
     return this.snapshot();
   }
 
@@ -3375,11 +3694,13 @@ export class BabylonWorldRuntime {
       camera: this.cameraComponent.captureTransactionState(),
       latestRenderReadyReceipt: this.latestRenderReadyReceipt,
       appliedCameraViewStateRevision: this.appliedCameraViewStateRevision,
+      publishedCameraProjection: this.publishedCameraProjection,
     });
     const restore = (): void => {
       this.cameraComponent.restoreTransactionState(checkpoint.camera);
       this.latestRenderReadyReceipt = checkpoint.latestRenderReadyReceipt;
       this.appliedCameraViewStateRevision = checkpoint.appliedCameraViewStateRevision;
+      this.publishedCameraProjection = checkpoint.publishedCameraProjection;
     };
     const previous = this.snapshot();
     let next: BabylonRuntimeProjectionV1;
@@ -3426,6 +3747,7 @@ export class BabylonWorldRuntime {
     }
     this.latestRenderReadyReceipt = undefined;
     this.updateCamera();
+    this.publishCameraProjection();
     return this.snapshot();
   }
 
@@ -3435,6 +3757,7 @@ export class BabylonWorldRuntime {
     this.cameraComponent.resetView();
     this.latestRenderReadyReceipt = undefined;
     this.updateCamera();
+    this.publishCameraProjection();
     return this.snapshot();
   }
 
@@ -3470,6 +3793,7 @@ export class BabylonWorldRuntime {
     }
     this.latestRenderReadyReceipt = undefined;
     this.updateCamera();
+    this.publishCameraProjection();
     return this.cameraComponent.previewState();
   }
 
@@ -3596,6 +3920,7 @@ export class BabylonWorldRuntime {
     this.traversalConfigurationEpoch += 1;
     this.latestRenderReadyReceipt = undefined;
     this.updateCamera();
+    this.publishCameraProjection();
     return { status: "committed", snapshot: this.snapshot() };
   }
 

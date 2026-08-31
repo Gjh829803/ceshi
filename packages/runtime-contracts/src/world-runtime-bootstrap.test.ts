@@ -140,7 +140,10 @@ function capabilityAssemblyFixture(): RuntimeSubjectCapabilityAssemblyV1 {
         id: "running",
         priority: 10,
         when: {
-          relationshipRoles: ["none"],
+          allRelationshipConditions: [{
+            type: "mountedOn",
+            entityRole: "rider",
+          }],
           locomotionStatuses: ["active"],
           mobilityModes: ["grounded"],
           gaits: ["run"],
@@ -558,6 +561,31 @@ describe("WorldRuntimeBootstrapV1", () => {
       ...bodyFixture(),
       gameplayBootstrapRef: "worldkit://gameplay-bootstrap/other@1",
     })).toThrow(/WorldRuntimeBootstrapV1/);
+  });
+
+  it("rejects the removed Camera relationship role condition alias", () => {
+    const body = bodyFixture();
+    const rules = body.subjectRuntimeDescriptors[0]!.capabilityAssembly.cameraContext.rules;
+    const candidate = {
+      ...body,
+      subjectRuntimeDescriptors: [{
+        ...body.subjectRuntimeDescriptors[0]!,
+        capabilityAssembly: {
+          ...body.subjectRuntimeDescriptors[0]!.capabilityAssembly,
+          cameraContext: {
+            ...body.subjectRuntimeDescriptors[0]!.capabilityAssembly.cameraContext,
+            rules: [{
+              ...rules[0]!,
+              when: { relationshipRoles: ["rider"] },
+            }],
+          },
+        },
+      }],
+    };
+
+    expect(() => createWorldRuntimeBootstrapV1(
+      candidate as unknown as WorldRuntimeBootstrapBodyV1,
+    )).toThrow(/WorldRuntimeBootstrapV1/);
   });
 
   it("rejects stale hashes, noncanonical serialized order, nested unknown fields, and accessors", () => {

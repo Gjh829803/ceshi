@@ -150,7 +150,6 @@ function projectionInput(
       isInterruptible: true,
     },
     environment: {
-      relationshipRole: "none",
       relationshipContexts: [],
       socketPositionsMetersXYZById: { head: [0, 1.7, 0] },
       cameraContextTags: ["indoors"],
@@ -365,7 +364,7 @@ describe("GoldenHumanoidPresentationContextProjectionV1", () => {
     })).toBe(authorityBefore);
   });
 
-  it("rejects mixed Tick, forged Action authority and non-available Camera semantics before staging", () => {
+  it("rejects mixed Tick and forged Action authority before staging", () => {
     const cases: readonly GoldenHumanoidProjectionInputV1[] = [
       (() => {
         const input = projectionInput(21);
@@ -379,32 +378,6 @@ describe("GoldenHumanoidPresentationContextProjectionV1", () => {
         const input = projectionInput(21);
         const forged = action(21, { semanticActionHash: `sha256:${"9".repeat(64)}` });
         return Object.freeze({ ...input, committedActionState: forged });
-      })(),
-      (() => {
-        const input = projectionInput(21);
-        const unavailable = parseCameraContextSampleV2({
-          schemaVersion: 2,
-          semanticAuthorityStatus: "unavailable",
-          committedTick: 21,
-          controlledEntityId: "player",
-          targetEntityId: "player",
-          subjectPose: input.cameraContext.subjectPose,
-          locomotion: {
-            schemaVersion: 2,
-            status: "suspended",
-            suspendedByRelationshipId: "migration.seam",
-            committedTick: 21,
-            transitionSequence: 0,
-          },
-          actionSummary: { status: "unavailable" },
-          environment: {
-            relationshipRole: "none",
-            relationshipContexts: [],
-            socketPositionsMetersXYZById: {},
-            cameraContextTags: [],
-          },
-        });
-        return Object.freeze({ ...input, cameraContext: unavailable });
       })(),
     ];
 

@@ -166,13 +166,6 @@ export interface CameraModifierProfileInputV1
   recenterModeOverride?: CameraRigProfileInputV1["recenterMode"];
 }
 
-export type RelationshipRoleV1 =
-  | "none"
-  | "rider"
-  | "driver"
-  | "passenger"
-  | "tethered";
-
 export interface CameraContextRuleV1 {
   id: string;
   priority: number;
@@ -257,7 +250,6 @@ export interface RenderBindingProfileInputV1
     | "movementMedium"
     | "activeMotionKernelRef"
     | "activeActionId"
-    | "relationshipRole"
   )[];
 }
 

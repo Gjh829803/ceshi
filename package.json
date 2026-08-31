@@ -80,6 +80,7 @@
     "verify:alpha-local-actions": "tsx scripts/verification/verify-g-bot-subject-world.ts --fixture examples/product-asset-intakes/humanoid.alpha-local-actions@1.json",
     "verify:alpha-local-actions:update": "tsx scripts/verification/verify-g-bot-subject-world.ts --fixture examples/product-asset-intakes/humanoid.alpha-local-actions@1.json --update",
     "verify:control-capture": "tsx scripts/verification/verify-control-capture.ts",
+    "verify:mounted-skateboard-capture": "tsx scripts/verification/verify-mounted-skateboard-capture.ts",
     "verify:validation-capture": "tsx scripts/verification/verify-validation-capture.ts",
     "verify:route-r0-contract": "tsx scripts/verification/verify-route-r0-contract.ts",
     "verify:route-r1-heightfield": "tsx scripts/verification/verify-route-r1-heightfield.ts",

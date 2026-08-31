@@ -2174,6 +2174,104 @@ function canonicalObjectCollection(input, schemaName, mode, parse, identity2) {
   if (mode === "strict" && !sameOrder(identities, canonical.map(identity2))) invalid$4(schemaName);
   return Object.freeze(canonical);
 }
+function parseSemanticFactProjectorProfileResourceBody(input) {
+  const schemaName = "SemanticFactProjectorProfileResourceBodyV1";
+  const record2 = snapshotDataRecord(input);
+  if (isNil(record2) || !hasExactKeys(record2, [
+    "kind",
+    "schemaVersion",
+    "id",
+    "version",
+    "resourceRef",
+    "supportedByProjection"
+  ]) || record2.kind !== "semantic-fact-projector-profile" || record2.schemaVersion !== 1 || !isNonEmptyString(record2.id) || record2.version !== 1 || !isNonEmptyString(record2.resourceRef)) invalid$4(schemaName);
+  const supportedByProjection = snapshotDataRecord(
+    record2.supportedByProjection
+  );
+  if (isNil(supportedByProjection) || !hasExactKeys(
+    supportedByProjection,
+    [
+      "supportSampleSource",
+      "acceptedSupportStates",
+      "supportSurfaceMotionMode",
+      "supportPointHeightToleranceMode",
+      "minimumContactToAggregateSupportNormalCosine",
+      "ambiguousSurfaceMode",
+      "endDelayTicks"
+    ]
+  )) invalid$4(schemaName);
+  const acceptedSupportStates = snapshotDataArray(
+    supportedByProjection.acceptedSupportStates
+  );
+  if (supportedByProjection.supportSampleSource !== "retained-character-support" || isNil(acceptedSupportStates) || acceptedSupportStates.length !== 2 || acceptedSupportStates[0] !== "sliding" || acceptedSupportStates[1] !== "supported" || supportedByProjection.supportSurfaceMotionMode !== "static" || supportedByProjection.supportPointHeightToleranceMode !== "character-body-contact-band" || typeof supportedByProjection.minimumContactToAggregateSupportNormalCosine !== "number" || !Number.isFinite(
+    supportedByProjection.minimumContactToAggregateSupportNormalCosine
+  ) || supportedByProjection.minimumContactToAggregateSupportNormalCosine < 0 || supportedByProjection.minimumContactToAggregateSupportNormalCosine > 1 || Object.is(
+    supportedByProjection.minimumContactToAggregateSupportNormalCosine,
+    -0
+  ) || supportedByProjection.ambiguousSurfaceMode !== "omit" || supportedByProjection.endDelayTicks !== 0) invalid$4(schemaName);
+  return deepFreeze$5({
+    kind: "semantic-fact-projector-profile",
+    schemaVersion: 1,
+    id: record2.id,
+    version: 1,
+    resourceRef: record2.resourceRef,
+    supportedByProjection: {
+      supportSampleSource: "retained-character-support",
+      acceptedSupportStates: ["sliding", "supported"],
+      supportSurfaceMotionMode: "static",
+      supportPointHeightToleranceMode: "character-body-contact-band",
+      minimumContactToAggregateSupportNormalCosine: supportedByProjection.minimumContactToAggregateSupportNormalCosine,
+      ambiguousSurfaceMode: "omit",
+      endDelayTicks: 0
+    }
+  });
+}
+function createSemanticFactProjectorProfileResourceV1(input) {
+  const body = parseSemanticFactProjectorProfileResourceBody(input);
+  return deepFreeze$5({
+    ...body,
+    contentHash: sha256CanonicalJson(body)
+  });
+}
+function parseSemanticFactProjectorProfileResourceV1(input) {
+  const schemaName = "SemanticFactProjectorProfileResourceV1";
+  const record2 = snapshotDataRecord(input);
+  if (isNil(record2) || !hasExactKeys(record2, [
+    "kind",
+    "schemaVersion",
+    "id",
+    "version",
+    "resourceRef",
+    "contentHash",
+    "supportedByProjection"
+  ]) || !isSha256(record2.contentHash)) invalid$4(schemaName);
+  const { contentHash: contentHash2, ...bodyInput } = record2;
+  let body;
+  try {
+    body = parseSemanticFactProjectorProfileResourceBody(bodyInput);
+  } catch {
+    return invalid$4(schemaName);
+  }
+  const expectedHash = sha256CanonicalJson(body);
+  if (contentHash2 !== expectedHash) invalid$4(schemaName);
+  return deepFreeze$5({ ...body, contentHash: expectedHash });
+}
+const RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1 = createSemanticFactProjectorProfileResourceV1({
+  kind: "semantic-fact-projector-profile",
+  schemaVersion: 1,
+  id: "physics-retained-support",
+  version: 1,
+  resourceRef: "worldkit://semantic-fact-projector-profile/physics.retained-support@1",
+  supportedByProjection: {
+    supportSampleSource: "retained-character-support",
+    acceptedSupportStates: ["sliding", "supported"],
+    supportSurfaceMotionMode: "static",
+    supportPointHeightToleranceMode: "character-body-contact-band",
+    minimumContactToAggregateSupportNormalCosine: 0.95,
+    ambiguousSurfaceMode: "omit",
+    endDelayTicks: 0
+  }
+});
 function parseGameplayBootstrapBody(input, mode) {
   const schemaName = "GameplayBootstrapBodyV1";
   const record2 = snapshotDataRecord(input);
@@ -2183,6 +2281,7 @@ function parseGameplayBootstrapBody(input, mode) {
     "id",
     "version",
     "resourceRef",
+    "semanticFactProjectorProfileResource",
     "entityDescriptors",
     "featureResourceLocks",
     "semanticActionDefinitions",
@@ -2197,6 +2296,9 @@ function parseGameplayBootstrapBody(input, mode) {
     id: record2.id,
     version: record2.version,
     resourceRef: record2.resourceRef,
+    semanticFactProjectorProfileResource: parseSemanticFactProjectorProfileResourceV1(
+      record2.semanticFactProjectorProfileResource
+    ),
     entityDescriptors: canonicalObjectCollection(
       record2.entityDescriptors,
       schemaName,
@@ -2253,6 +2355,7 @@ function parseGameplayBootstrapV1(input) {
     "version",
     "resourceRef",
     "contentHash",
+    "semanticFactProjectorProfileResource",
     "entityDescriptors",
     "featureResourceLocks",
     "semanticActionDefinitions",
@@ -5411,6 +5514,54 @@ function requireUcs2length() {
 }
 var ucs2lengthExports = /* @__PURE__ */ requireUcs2length();
 const func2Module = /* @__PURE__ */ getDefaultExportFromCjs(ucs2lengthExports);
+var equal = {};
+var fastDeepEqual;
+var hasRequiredFastDeepEqual;
+function requireFastDeepEqual() {
+  if (hasRequiredFastDeepEqual) return fastDeepEqual;
+  hasRequiredFastDeepEqual = 1;
+  fastDeepEqual = function equal2(a, b) {
+    if (a === b) return true;
+    if (a && b && typeof a == "object" && typeof b == "object") {
+      if (a.constructor !== b.constructor) return false;
+      var length, i, keys2;
+      if (Array.isArray(a)) {
+        length = a.length;
+        if (length != b.length) return false;
+        for (i = length; i-- !== 0; )
+          if (!equal2(a[i], b[i])) return false;
+        return true;
+      }
+      if (a.constructor === RegExp) return a.source === b.source && a.flags === b.flags;
+      if (a.valueOf !== Object.prototype.valueOf) return a.valueOf() === b.valueOf();
+      if (a.toString !== Object.prototype.toString) return a.toString() === b.toString();
+      keys2 = Object.keys(a);
+      length = keys2.length;
+      if (length !== Object.keys(b).length) return false;
+      for (i = length; i-- !== 0; )
+        if (!Object.prototype.hasOwnProperty.call(b, keys2[i])) return false;
+      for (i = length; i-- !== 0; ) {
+        var key = keys2[i];
+        if (!equal2(a[key], b[key])) return false;
+      }
+      return true;
+    }
+    return a !== a && b !== b;
+  };
+  return fastDeepEqual;
+}
+var hasRequiredEqual;
+function requireEqual() {
+  if (hasRequiredEqual) return equal;
+  hasRequiredEqual = 1;
+  Object.defineProperty(equal, "__esModule", { value: true });
+  const equal$1 = requireFastDeepEqual();
+  equal$1.code = 'require("ajv/dist/runtime/equal").default';
+  equal.default = equal$1;
+  return equal;
+}
+var equalExports = /* @__PURE__ */ requireEqual();
+const func0Module = /* @__PURE__ */ getDefaultExportFromCjs(equalExports);
 const schema31 = { "properties": { "kind": { "const": "world-runtime-bootstrap" }, "schemaVersion": { "const": 1 }, "id": { "$ref": "#/$defs/nonEmptyString" }, "gameplayBootstrapRef": { "$ref": "#/$defs/nonEmptyString" }, "gameplayBootstrapHash": { "$ref": "#/$defs/hash" }, "initialControlledEntityId": { "$ref": "#/$defs/nonEmptyString" }, "gravityMetersPerSecondSquaredXYZ": { "$ref": "#/$defs/vec3" }, "initialCamera": { "$ref": "#/$defs/initialCamera" }, "subjectAssets": { "type": "array", "items": { "$ref": "#/$defs/subjectAsset" } }, "rigProfiles": { "type": "array", "items": { "$ref": "#/$defs/rigProfile" } }, "animationSets": { "type": "array", "items": { "$ref": "#/$defs/animationSet" } }, "colliderProfiles": { "type": "array", "items": { "$ref": "#/$defs/colliderProfile" } }, "actionPresentationRegistry": { "$ref": "#/$defs/actionPresentationRegistry" }, "subjectRuntimeDescriptors": { "type": "array", "items": { "$ref": "#/$defs/subjectDescriptor" } }, "runtimeResourceLockEntries": { "type": "array", "items": { "$ref": "#/$defs/resourceLockEntry" } }, "contentHash": { "$ref": "#/$defs/hash" } } };
 const func1 = Object.prototype.hasOwnProperty;
 const func2 = typeof func2Module === "function" ? func2Module : func2Module.default;
@@ -11361,7 +11512,9 @@ function validate79(data, { instancePath = "", parentData, parentDataProperty, r
   return errors2 === 0;
 }
 validate79.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-const schema133 = { "properties": { "when": { "properties": { "relationshipRoles": { "$ref": "#/$defs/stringArray" }, "locomotionStatuses": { "$ref": "#/$defs/stringArray" }, "mobilityModes": { "$ref": "#/$defs/stringArray" }, "gaits": { "$ref": "#/$defs/stringArray" }, "verticalPhases": { "$ref": "#/$defs/stringArray" }, "requiredActiveActionRefs": { "$ref": "#/$defs/stringArray" }, "actionInterruptibility": { "enum": ["interruptible", "non-interruptible"] }, "motionKernelRefs": { "$ref": "#/$defs/stringArray" }, "requiredMotionTags": { "$ref": "#/$defs/stringArray" }, "movementMediums": { "$ref": "#/$defs/stringArray" }, "minimumSpeedMetersPerSecond": { "type": "number" }, "maximumSpeedMetersPerSecond": { "type": "number" }, "requiredSocketIds": { "$ref": "#/$defs/stringArray" }, "requiredCameraContextTags": { "$ref": "#/$defs/stringArray" } } } } };
+const schema133 = { "properties": { "when": { "properties": { "allRelationshipConditions": { "type": "array", "minItems": 1, "maxItems": 64, "uniqueItems": true, "items": { "$ref": "#/$defs/cameraRelationshipCondition" } }, "locomotionStatuses": { "$ref": "#/$defs/stringArray" }, "mobilityModes": { "$ref": "#/$defs/stringArray" }, "gaits": { "$ref": "#/$defs/stringArray" }, "verticalPhases": { "$ref": "#/$defs/stringArray" }, "requiredActiveActionRefs": { "$ref": "#/$defs/stringArray" }, "actionInterruptibility": { "enum": ["interruptible", "non-interruptible"] }, "motionKernelRefs": { "$ref": "#/$defs/stringArray" }, "requiredMotionTags": { "$ref": "#/$defs/stringArray" }, "movementMediums": { "$ref": "#/$defs/stringArray" }, "minimumSpeedMetersPerSecond": { "type": "number" }, "maximumSpeedMetersPerSecond": { "type": "number" }, "requiredSocketIds": { "$ref": "#/$defs/stringArray" }, "requiredCameraContextTags": { "$ref": "#/$defs/stringArray" } } } } };
+const schema135 = { "oneOf": [{ "type": "object", "additionalProperties": false, "required": ["type", "entityRole"], "properties": { "type": { "const": "possessedBy" }, "entityRole": { "enum": ["controlled", "controller"] } } }, { "type": "object", "additionalProperties": false, "required": ["type", "entityRole"], "properties": { "type": { "const": "mountedOn" }, "entityRole": { "const": "rider" } } }, { "type": "object", "additionalProperties": false, "required": ["type", "entityRole"], "properties": { "type": { "const": "equippedAt" }, "entityRole": { "enum": ["item", "wearer"] } } }] };
+const func0 = typeof func0Module === "function" ? func0Module : func0Module.default;
 function validate81(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors2 = 0;
@@ -11459,10 +11612,292 @@ function validate81(data, { instancePath = "", parentData, parentDataProperty, r
             errors2++;
           }
         }
-        if (data2.relationshipRoles !== void 0) {
-          if (!validate25(data2.relationshipRoles, { instancePath: instancePath + "/when/relationshipRoles", parentData: data2, parentDataProperty: "relationshipRoles", rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate25.errors : vErrors.concat(validate25.errors);
-            errors2 = vErrors.length;
+        if (data2.allRelationshipConditions !== void 0) {
+          let data3 = data2.allRelationshipConditions;
+          if (Array.isArray(data3)) {
+            if (data3.length > 64) {
+              const err8 = { instancePath: instancePath + "/when/allRelationshipConditions", schemaPath: "#/properties/when/properties/allRelationshipConditions/maxItems", keyword: "maxItems", params: { limit: 64 }, message: "must NOT have more than 64 items" };
+              if (vErrors === null) {
+                vErrors = [err8];
+              } else {
+                vErrors.push(err8);
+              }
+              errors2++;
+            }
+            if (data3.length < 1) {
+              const err9 = { instancePath: instancePath + "/when/allRelationshipConditions", schemaPath: "#/properties/when/properties/allRelationshipConditions/minItems", keyword: "minItems", params: { limit: 1 }, message: "must NOT have fewer than 1 items" };
+              if (vErrors === null) {
+                vErrors = [err9];
+              } else {
+                vErrors.push(err9);
+              }
+              errors2++;
+            }
+            const len0 = data3.length;
+            for (let i0 = 0; i0 < len0; i0++) {
+              let data4 = data3[i0];
+              const _errs14 = errors2;
+              let valid6 = false;
+              let passing0 = null;
+              const _errs15 = errors2;
+              if (data4 && typeof data4 == "object" && !Array.isArray(data4)) {
+                if (data4.type === void 0) {
+                  const err10 = { instancePath: instancePath + "/when/allRelationshipConditions/" + i0, schemaPath: "#/$defs/cameraRelationshipCondition/oneOf/0/required", keyword: "required", params: { missingProperty: "type" }, message: "must have required property 'type'" };
+                  if (vErrors === null) {
+                    vErrors = [err10];
+                  } else {
+                    vErrors.push(err10);
+                  }
+                  errors2++;
+                }
+                if (data4.entityRole === void 0) {
+                  const err11 = { instancePath: instancePath + "/when/allRelationshipConditions/" + i0, schemaPath: "#/$defs/cameraRelationshipCondition/oneOf/0/required", keyword: "required", params: { missingProperty: "entityRole" }, message: "must have required property 'entityRole'" };
+                  if (vErrors === null) {
+                    vErrors = [err11];
+                  } else {
+                    vErrors.push(err11);
+                  }
+                  errors2++;
+                }
+                for (const key2 in data4) {
+                  if (!(key2 === "type" || key2 === "entityRole")) {
+                    const err12 = { instancePath: instancePath + "/when/allRelationshipConditions/" + i0, schemaPath: "#/$defs/cameraRelationshipCondition/oneOf/0/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key2 }, message: "must NOT have additional properties" };
+                    if (vErrors === null) {
+                      vErrors = [err12];
+                    } else {
+                      vErrors.push(err12);
+                    }
+                    errors2++;
+                  }
+                }
+                if (data4.type !== void 0) {
+                  if ("possessedBy" !== data4.type) {
+                    const err13 = { instancePath: instancePath + "/when/allRelationshipConditions/" + i0 + "/type", schemaPath: "#/$defs/cameraRelationshipCondition/oneOf/0/properties/type/const", keyword: "const", params: { allowedValue: "possessedBy" }, message: "must be equal to constant" };
+                    if (vErrors === null) {
+                      vErrors = [err13];
+                    } else {
+                      vErrors.push(err13);
+                    }
+                    errors2++;
+                  }
+                }
+                if (data4.entityRole !== void 0) {
+                  let data6 = data4.entityRole;
+                  if (!(data6 === "controlled" || data6 === "controller")) {
+                    const err14 = { instancePath: instancePath + "/when/allRelationshipConditions/" + i0 + "/entityRole", schemaPath: "#/$defs/cameraRelationshipCondition/oneOf/0/properties/entityRole/enum", keyword: "enum", params: { allowedValues: schema135.oneOf[0].properties.entityRole.enum }, message: "must be equal to one of the allowed values" };
+                    if (vErrors === null) {
+                      vErrors = [err14];
+                    } else {
+                      vErrors.push(err14);
+                    }
+                    errors2++;
+                  }
+                }
+              } else {
+                const err15 = { instancePath: instancePath + "/when/allRelationshipConditions/" + i0, schemaPath: "#/$defs/cameraRelationshipCondition/oneOf/0/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+                if (vErrors === null) {
+                  vErrors = [err15];
+                } else {
+                  vErrors.push(err15);
+                }
+                errors2++;
+              }
+              var _valid0 = _errs15 === errors2;
+              if (_valid0) {
+                valid6 = true;
+                passing0 = 0;
+              }
+              const _errs20 = errors2;
+              if (data4 && typeof data4 == "object" && !Array.isArray(data4)) {
+                if (data4.type === void 0) {
+                  const err16 = { instancePath: instancePath + "/when/allRelationshipConditions/" + i0, schemaPath: "#/$defs/cameraRelationshipCondition/oneOf/1/required", keyword: "required", params: { missingProperty: "type" }, message: "must have required property 'type'" };
+                  if (vErrors === null) {
+                    vErrors = [err16];
+                  } else {
+                    vErrors.push(err16);
+                  }
+                  errors2++;
+                }
+                if (data4.entityRole === void 0) {
+                  const err17 = { instancePath: instancePath + "/when/allRelationshipConditions/" + i0, schemaPath: "#/$defs/cameraRelationshipCondition/oneOf/1/required", keyword: "required", params: { missingProperty: "entityRole" }, message: "must have required property 'entityRole'" };
+                  if (vErrors === null) {
+                    vErrors = [err17];
+                  } else {
+                    vErrors.push(err17);
+                  }
+                  errors2++;
+                }
+                for (const key3 in data4) {
+                  if (!(key3 === "type" || key3 === "entityRole")) {
+                    const err18 = { instancePath: instancePath + "/when/allRelationshipConditions/" + i0, schemaPath: "#/$defs/cameraRelationshipCondition/oneOf/1/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key3 }, message: "must NOT have additional properties" };
+                    if (vErrors === null) {
+                      vErrors = [err18];
+                    } else {
+                      vErrors.push(err18);
+                    }
+                    errors2++;
+                  }
+                }
+                if (data4.type !== void 0) {
+                  if ("mountedOn" !== data4.type) {
+                    const err19 = { instancePath: instancePath + "/when/allRelationshipConditions/" + i0 + "/type", schemaPath: "#/$defs/cameraRelationshipCondition/oneOf/1/properties/type/const", keyword: "const", params: { allowedValue: "mountedOn" }, message: "must be equal to constant" };
+                    if (vErrors === null) {
+                      vErrors = [err19];
+                    } else {
+                      vErrors.push(err19);
+                    }
+                    errors2++;
+                  }
+                }
+                if (data4.entityRole !== void 0) {
+                  if ("rider" !== data4.entityRole) {
+                    const err20 = { instancePath: instancePath + "/when/allRelationshipConditions/" + i0 + "/entityRole", schemaPath: "#/$defs/cameraRelationshipCondition/oneOf/1/properties/entityRole/const", keyword: "const", params: { allowedValue: "rider" }, message: "must be equal to constant" };
+                    if (vErrors === null) {
+                      vErrors = [err20];
+                    } else {
+                      vErrors.push(err20);
+                    }
+                    errors2++;
+                  }
+                }
+              } else {
+                const err21 = { instancePath: instancePath + "/when/allRelationshipConditions/" + i0, schemaPath: "#/$defs/cameraRelationshipCondition/oneOf/1/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+                if (vErrors === null) {
+                  vErrors = [err21];
+                } else {
+                  vErrors.push(err21);
+                }
+                errors2++;
+              }
+              var _valid0 = _errs20 === errors2;
+              if (_valid0 && valid6) {
+                valid6 = false;
+                passing0 = [passing0, 1];
+              } else {
+                if (_valid0) {
+                  valid6 = true;
+                  passing0 = 1;
+                }
+                const _errs25 = errors2;
+                if (data4 && typeof data4 == "object" && !Array.isArray(data4)) {
+                  if (data4.type === void 0) {
+                    const err22 = { instancePath: instancePath + "/when/allRelationshipConditions/" + i0, schemaPath: "#/$defs/cameraRelationshipCondition/oneOf/2/required", keyword: "required", params: { missingProperty: "type" }, message: "must have required property 'type'" };
+                    if (vErrors === null) {
+                      vErrors = [err22];
+                    } else {
+                      vErrors.push(err22);
+                    }
+                    errors2++;
+                  }
+                  if (data4.entityRole === void 0) {
+                    const err23 = { instancePath: instancePath + "/when/allRelationshipConditions/" + i0, schemaPath: "#/$defs/cameraRelationshipCondition/oneOf/2/required", keyword: "required", params: { missingProperty: "entityRole" }, message: "must have required property 'entityRole'" };
+                    if (vErrors === null) {
+                      vErrors = [err23];
+                    } else {
+                      vErrors.push(err23);
+                    }
+                    errors2++;
+                  }
+                  for (const key4 in data4) {
+                    if (!(key4 === "type" || key4 === "entityRole")) {
+                      const err24 = { instancePath: instancePath + "/when/allRelationshipConditions/" + i0, schemaPath: "#/$defs/cameraRelationshipCondition/oneOf/2/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key4 }, message: "must NOT have additional properties" };
+                      if (vErrors === null) {
+                        vErrors = [err24];
+                      } else {
+                        vErrors.push(err24);
+                      }
+                      errors2++;
+                    }
+                  }
+                  if (data4.type !== void 0) {
+                    if ("equippedAt" !== data4.type) {
+                      const err25 = { instancePath: instancePath + "/when/allRelationshipConditions/" + i0 + "/type", schemaPath: "#/$defs/cameraRelationshipCondition/oneOf/2/properties/type/const", keyword: "const", params: { allowedValue: "equippedAt" }, message: "must be equal to constant" };
+                      if (vErrors === null) {
+                        vErrors = [err25];
+                      } else {
+                        vErrors.push(err25);
+                      }
+                      errors2++;
+                    }
+                  }
+                  if (data4.entityRole !== void 0) {
+                    let data10 = data4.entityRole;
+                    if (!(data10 === "item" || data10 === "wearer")) {
+                      const err26 = { instancePath: instancePath + "/when/allRelationshipConditions/" + i0 + "/entityRole", schemaPath: "#/$defs/cameraRelationshipCondition/oneOf/2/properties/entityRole/enum", keyword: "enum", params: { allowedValues: schema135.oneOf[2].properties.entityRole.enum }, message: "must be equal to one of the allowed values" };
+                      if (vErrors === null) {
+                        vErrors = [err26];
+                      } else {
+                        vErrors.push(err26);
+                      }
+                      errors2++;
+                    }
+                  }
+                } else {
+                  const err27 = { instancePath: instancePath + "/when/allRelationshipConditions/" + i0, schemaPath: "#/$defs/cameraRelationshipCondition/oneOf/2/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+                  if (vErrors === null) {
+                    vErrors = [err27];
+                  } else {
+                    vErrors.push(err27);
+                  }
+                  errors2++;
+                }
+                var _valid0 = _errs25 === errors2;
+                if (_valid0 && valid6) {
+                  valid6 = false;
+                  passing0 = [passing0, 2];
+                } else {
+                  if (_valid0) {
+                    valid6 = true;
+                    passing0 = 2;
+                  }
+                }
+              }
+              if (!valid6) {
+                const err28 = { instancePath: instancePath + "/when/allRelationshipConditions/" + i0, schemaPath: "#/$defs/cameraRelationshipCondition/oneOf", keyword: "oneOf", params: { passingSchemas: passing0 }, message: "must match exactly one schema in oneOf" };
+                if (vErrors === null) {
+                  vErrors = [err28];
+                } else {
+                  vErrors.push(err28);
+                }
+                errors2++;
+              } else {
+                errors2 = _errs14;
+                if (vErrors !== null) {
+                  if (_errs14) {
+                    vErrors.length = _errs14;
+                  } else {
+                    vErrors = null;
+                  }
+                }
+              }
+            }
+            let i1 = data3.length;
+            let j0;
+            if (i1 > 1) {
+              outer0:
+                for (; i1--; ) {
+                  for (j0 = i1; j0--; ) {
+                    if (func0(data3[i1], data3[j0])) {
+                      const err29 = { instancePath: instancePath + "/when/allRelationshipConditions", schemaPath: "#/properties/when/properties/allRelationshipConditions/uniqueItems", keyword: "uniqueItems", params: { i: i1, j: j0 }, message: "must NOT have duplicate items (items ## " + j0 + " and " + i1 + " are identical)" };
+                      if (vErrors === null) {
+                        vErrors = [err29];
+                      } else {
+                        vErrors.push(err29);
+                      }
+                      errors2++;
+                      break outer0;
+                    }
+                  }
+                }
+            }
+          } else {
+            const err30 = { instancePath: instancePath + "/when/allRelationshipConditions", schemaPath: "#/properties/when/properties/allRelationshipConditions/type", keyword: "type", params: { type: "array" }, message: "must be array" };
+            if (vErrors === null) {
+              vErrors = [err30];
+            } else {
+              vErrors.push(err30);
+            }
+            errors2++;
           }
         }
         if (data2.locomotionStatuses !== void 0) {
@@ -11496,13 +11931,13 @@ function validate81(data, { instancePath = "", parentData, parentDataProperty, r
           }
         }
         if (data2.actionInterruptibility !== void 0) {
-          let data9 = data2.actionInterruptibility;
-          if (!(data9 === "interruptible" || data9 === "non-interruptible")) {
-            const err8 = { instancePath: instancePath + "/when/actionInterruptibility", schemaPath: "#/properties/when/properties/actionInterruptibility/enum", keyword: "enum", params: { allowedValues: schema133.properties.when.properties.actionInterruptibility.enum }, message: "must be equal to one of the allowed values" };
+          let data16 = data2.actionInterruptibility;
+          if (!(data16 === "interruptible" || data16 === "non-interruptible")) {
+            const err31 = { instancePath: instancePath + "/when/actionInterruptibility", schemaPath: "#/properties/when/properties/actionInterruptibility/enum", keyword: "enum", params: { allowedValues: schema133.properties.when.properties.actionInterruptibility.enum }, message: "must be equal to one of the allowed values" };
             if (vErrors === null) {
-              vErrors = [err8];
+              vErrors = [err31];
             } else {
-              vErrors.push(err8);
+              vErrors.push(err31);
             }
             errors2++;
           }
@@ -11526,25 +11961,25 @@ function validate81(data, { instancePath = "", parentData, parentDataProperty, r
           }
         }
         if (data2.minimumSpeedMetersPerSecond !== void 0) {
-          let data13 = data2.minimumSpeedMetersPerSecond;
-          if (!(typeof data13 == "number" && isFinite(data13))) {
-            const err9 = { instancePath: instancePath + "/when/minimumSpeedMetersPerSecond", schemaPath: "#/properties/when/properties/minimumSpeedMetersPerSecond/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+          let data20 = data2.minimumSpeedMetersPerSecond;
+          if (!(typeof data20 == "number" && isFinite(data20))) {
+            const err32 = { instancePath: instancePath + "/when/minimumSpeedMetersPerSecond", schemaPath: "#/properties/when/properties/minimumSpeedMetersPerSecond/type", keyword: "type", params: { type: "number" }, message: "must be number" };
             if (vErrors === null) {
-              vErrors = [err9];
+              vErrors = [err32];
             } else {
-              vErrors.push(err9);
+              vErrors.push(err32);
             }
             errors2++;
           }
         }
         if (data2.maximumSpeedMetersPerSecond !== void 0) {
-          let data14 = data2.maximumSpeedMetersPerSecond;
-          if (!(typeof data14 == "number" && isFinite(data14))) {
-            const err10 = { instancePath: instancePath + "/when/maximumSpeedMetersPerSecond", schemaPath: "#/properties/when/properties/maximumSpeedMetersPerSecond/type", keyword: "type", params: { type: "number" }, message: "must be number" };
+          let data21 = data2.maximumSpeedMetersPerSecond;
+          if (!(typeof data21 == "number" && isFinite(data21))) {
+            const err33 = { instancePath: instancePath + "/when/maximumSpeedMetersPerSecond", schemaPath: "#/properties/when/properties/maximumSpeedMetersPerSecond/type", keyword: "type", params: { type: "number" }, message: "must be number" };
             if (vErrors === null) {
-              vErrors = [err10];
+              vErrors = [err33];
             } else {
-              vErrors.push(err10);
+              vErrors.push(err33);
             }
             errors2++;
           }
@@ -11562,33 +11997,33 @@ function validate81(data, { instancePath = "", parentData, parentDataProperty, r
           }
         }
       } else {
-        const err11 = { instancePath: instancePath + "/when", schemaPath: "#/properties/when/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+        const err34 = { instancePath: instancePath + "/when", schemaPath: "#/properties/when/type", keyword: "type", params: { type: "object" }, message: "must be object" };
         if (vErrors === null) {
-          vErrors = [err11];
+          vErrors = [err34];
         } else {
-          vErrors.push(err11);
+          vErrors.push(err34);
         }
         errors2++;
       }
     }
     if (data.cameraRigProfileRef !== void 0) {
-      let data17 = data.cameraRigProfileRef;
-      if (typeof data17 === "string") {
-        if (func2(data17) < 1) {
-          const err12 = { instancePath: instancePath + "/cameraRigProfileRef", schemaPath: "#/$defs/nonEmptyString/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" };
+      let data24 = data.cameraRigProfileRef;
+      if (typeof data24 === "string") {
+        if (func2(data24) < 1) {
+          const err35 = { instancePath: instancePath + "/cameraRigProfileRef", schemaPath: "#/$defs/nonEmptyString/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" };
           if (vErrors === null) {
-            vErrors = [err12];
+            vErrors = [err35];
           } else {
-            vErrors.push(err12);
+            vErrors.push(err35);
           }
           errors2++;
         }
       } else {
-        const err13 = { instancePath: instancePath + "/cameraRigProfileRef", schemaPath: "#/$defs/nonEmptyString/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+        const err36 = { instancePath: instancePath + "/cameraRigProfileRef", schemaPath: "#/$defs/nonEmptyString/type", keyword: "type", params: { type: "string" }, message: "must be string" };
         if (vErrors === null) {
-          vErrors = [err13];
+          vErrors = [err36];
         } else {
-          vErrors.push(err13);
+          vErrors.push(err36);
         }
         errors2++;
       }
@@ -11600,11 +12035,11 @@ function validate81(data, { instancePath = "", parentData, parentDataProperty, r
       }
     }
   } else {
-    const err14 = { instancePath, schemaPath: "#/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+    const err37 = { instancePath, schemaPath: "#/type", keyword: "type", params: { type: "object" }, message: "must be object" };
     if (vErrors === null) {
-      vErrors = [err14];
+      vErrors = [err37];
     } else {
-      vErrors.push(err14);
+      vErrors.push(err37);
     }
     errors2++;
   }
@@ -11612,12 +12047,12 @@ function validate81(data, { instancePath = "", parentData, parentDataProperty, r
   return errors2 === 0;
 }
 validate81.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-const schema136 = { "properties": { "resourceRef": { "$ref": "#/$defs/nonEmptyString" }, "contentHash": { "$ref": "#/$defs/hash" }, "baseMode": { "enum": ["first-person", "free-orbit", "stable-follow", "speed-chase", "flight-horizon"] }, "algorithmRef": { "$ref": "#/$defs/nonEmptyString" }, "headingSource": { "enum": ["view", "target-forward", "target-velocity"] }, "reverseHeadingPolicy": { "enum": ["follow-velocity", "preserve-target-forward"] }, "recenterMode": { "enum": ["off", "forward-motion", "always"] }, "preferredSocketIds": { "$ref": "#/$defs/stringArray" }, "parameters": { "$ref": "#/$defs/cameraParameters" }, "authoringRanges": { "type": "object", "propertyNames": { "enum": ["distanceMeters", "minimumDistanceMeters", "maximumDistanceMeters", "targetHeightMeters", "shoulderOffsetMeters", "pitchRadians", "minimumPitchRadians", "maximumPitchRadians", "positionDampingPerSecond", "horizontalPositionDampingPerSecond", "verticalPositionDampingPerSecond", "maximumPositionLagMeters", "rotationDampingPerSecond", "yawDampingPerSecond", "pitchDampingPerSecond", "collisionRadiusMeters", "collisionRetractionMetersPerSecond", "collisionRecoveryMetersPerSecond", "baseFovDegrees", "speedFovDegreesPerMeterPerSecond", "maximumSpeedFovDegrees", "lookAheadSeconds", "accelerationLookAheadSecondsSquared", "transitionSeconds", "minimumHeadingSpeedMetersPerSecond", "velocityHeadingDampingPerSecond", "fovDampingPerSecond", "horizontalDeadZoneRatio", "verticalDeadZoneRatio", "recenterDelaySeconds", "recenterDurationSeconds", "recenterMinimumSpeedMetersPerSecond", "teleportSnapDistanceMeters", "lookSensitivityXRatio", "lookSensitivityYRatio"] }, "additionalProperties": { "type": "object", "additionalProperties": false, "required": ["minimum", "maximum", "step"], "properties": { "minimum": { "type": "number" }, "maximum": { "type": "number" }, "step": { "type": "number" } } } } } };
-const schema140 = { "properties": { "distanceMeters": { "type": "number" }, "minimumDistanceMeters": { "type": "number" }, "maximumDistanceMeters": { "type": "number" }, "targetHeightMeters": { "type": "number" }, "shoulderOffsetMeters": { "type": "number" }, "pitchRadians": { "type": "number" }, "minimumPitchRadians": { "type": "number" }, "maximumPitchRadians": { "type": "number" }, "positionDampingPerSecond": { "type": "number" }, "horizontalPositionDampingPerSecond": { "type": "number" }, "verticalPositionDampingPerSecond": { "type": "number" }, "maximumPositionLagMeters": { "type": "number" }, "rotationDampingPerSecond": { "type": "number" }, "yawDampingPerSecond": { "type": "number" }, "pitchDampingPerSecond": { "type": "number" }, "collisionRadiusMeters": { "type": "number" }, "collisionRetractionMetersPerSecond": { "type": "number" }, "collisionRecoveryMetersPerSecond": { "type": "number" }, "baseFovDegrees": { "type": "number" }, "speedFovDegreesPerMeterPerSecond": { "type": "number" }, "maximumSpeedFovDegrees": { "type": "number" }, "lookAheadSeconds": { "type": "number" }, "accelerationLookAheadSecondsSquared": { "type": "number" }, "transitionSeconds": { "type": "number" }, "minimumHeadingSpeedMetersPerSecond": { "type": "number" }, "velocityHeadingDampingPerSecond": { "type": "number" }, "fovDampingPerSecond": { "type": "number" }, "horizontalDeadZoneRatio": { "type": "number" }, "verticalDeadZoneRatio": { "type": "number" }, "recenterDelaySeconds": { "type": "number" }, "recenterDurationSeconds": { "type": "number" }, "recenterMinimumSpeedMetersPerSecond": { "type": "number" }, "teleportSnapDistanceMeters": { "type": "number" }, "lookSensitivityXRatio": { "type": "number" }, "lookSensitivityYRatio": { "type": "number" } } };
-function validate95(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+const schema137 = { "properties": { "resourceRef": { "$ref": "#/$defs/nonEmptyString" }, "contentHash": { "$ref": "#/$defs/hash" }, "baseMode": { "enum": ["first-person", "free-orbit", "stable-follow", "speed-chase", "flight-horizon"] }, "algorithmRef": { "$ref": "#/$defs/nonEmptyString" }, "headingSource": { "enum": ["view", "target-forward", "target-velocity"] }, "reverseHeadingPolicy": { "enum": ["follow-velocity", "preserve-target-forward"] }, "recenterMode": { "enum": ["off", "forward-motion", "always"] }, "preferredSocketIds": { "$ref": "#/$defs/stringArray" }, "parameters": { "$ref": "#/$defs/cameraParameters" }, "authoringRanges": { "type": "object", "propertyNames": { "enum": ["distanceMeters", "minimumDistanceMeters", "maximumDistanceMeters", "targetHeightMeters", "shoulderOffsetMeters", "pitchRadians", "minimumPitchRadians", "maximumPitchRadians", "positionDampingPerSecond", "horizontalPositionDampingPerSecond", "verticalPositionDampingPerSecond", "maximumPositionLagMeters", "rotationDampingPerSecond", "yawDampingPerSecond", "pitchDampingPerSecond", "collisionRadiusMeters", "collisionRetractionMetersPerSecond", "collisionRecoveryMetersPerSecond", "baseFovDegrees", "speedFovDegreesPerMeterPerSecond", "maximumSpeedFovDegrees", "lookAheadSeconds", "accelerationLookAheadSecondsSquared", "transitionSeconds", "minimumHeadingSpeedMetersPerSecond", "velocityHeadingDampingPerSecond", "fovDampingPerSecond", "horizontalDeadZoneRatio", "verticalDeadZoneRatio", "recenterDelaySeconds", "recenterDurationSeconds", "recenterMinimumSpeedMetersPerSecond", "teleportSnapDistanceMeters", "lookSensitivityXRatio", "lookSensitivityYRatio"] }, "additionalProperties": { "type": "object", "additionalProperties": false, "required": ["minimum", "maximum", "step"], "properties": { "minimum": { "type": "number" }, "maximum": { "type": "number" }, "step": { "type": "number" } } } } } };
+const schema141 = { "properties": { "distanceMeters": { "type": "number" }, "minimumDistanceMeters": { "type": "number" }, "maximumDistanceMeters": { "type": "number" }, "targetHeightMeters": { "type": "number" }, "shoulderOffsetMeters": { "type": "number" }, "pitchRadians": { "type": "number" }, "minimumPitchRadians": { "type": "number" }, "maximumPitchRadians": { "type": "number" }, "positionDampingPerSecond": { "type": "number" }, "horizontalPositionDampingPerSecond": { "type": "number" }, "verticalPositionDampingPerSecond": { "type": "number" }, "maximumPositionLagMeters": { "type": "number" }, "rotationDampingPerSecond": { "type": "number" }, "yawDampingPerSecond": { "type": "number" }, "pitchDampingPerSecond": { "type": "number" }, "collisionRadiusMeters": { "type": "number" }, "collisionRetractionMetersPerSecond": { "type": "number" }, "collisionRecoveryMetersPerSecond": { "type": "number" }, "baseFovDegrees": { "type": "number" }, "speedFovDegreesPerMeterPerSecond": { "type": "number" }, "maximumSpeedFovDegrees": { "type": "number" }, "lookAheadSeconds": { "type": "number" }, "accelerationLookAheadSecondsSquared": { "type": "number" }, "transitionSeconds": { "type": "number" }, "minimumHeadingSpeedMetersPerSecond": { "type": "number" }, "velocityHeadingDampingPerSecond": { "type": "number" }, "fovDampingPerSecond": { "type": "number" }, "horizontalDeadZoneRatio": { "type": "number" }, "verticalDeadZoneRatio": { "type": "number" }, "recenterDelaySeconds": { "type": "number" }, "recenterDurationSeconds": { "type": "number" }, "recenterMinimumSpeedMetersPerSecond": { "type": "number" }, "teleportSnapDistanceMeters": { "type": "number" }, "lookSensitivityXRatio": { "type": "number" }, "lookSensitivityYRatio": { "type": "number" } } };
+function validate94(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors2 = 0;
-  const evaluated0 = validate95.evaluated;
+  const evaluated0 = validate94.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -11707,7 +12142,7 @@ function validate95(data, { instancePath = "", parentData, parentDataProperty, r
       errors2++;
     }
     for (const key0 in data) {
-      if (!func1.call(schema136.properties, key0)) {
+      if (!func1.call(schema137.properties, key0)) {
         const err9 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
         if (vErrors === null) {
           vErrors = [err9];
@@ -11764,7 +12199,7 @@ function validate95(data, { instancePath = "", parentData, parentDataProperty, r
     if (data.baseMode !== void 0) {
       let data2 = data.baseMode;
       if (!(data2 === "first-person" || data2 === "free-orbit" || data2 === "stable-follow" || data2 === "speed-chase" || data2 === "flight-horizon")) {
-        const err14 = { instancePath: instancePath + "/baseMode", schemaPath: "#/properties/baseMode/enum", keyword: "enum", params: { allowedValues: schema136.properties.baseMode.enum }, message: "must be equal to one of the allowed values" };
+        const err14 = { instancePath: instancePath + "/baseMode", schemaPath: "#/properties/baseMode/enum", keyword: "enum", params: { allowedValues: schema137.properties.baseMode.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err14];
         } else {
@@ -11798,7 +12233,7 @@ function validate95(data, { instancePath = "", parentData, parentDataProperty, r
     if (data.headingSource !== void 0) {
       let data4 = data.headingSource;
       if (!(data4 === "view" || data4 === "target-forward" || data4 === "target-velocity")) {
-        const err17 = { instancePath: instancePath + "/headingSource", schemaPath: "#/properties/headingSource/enum", keyword: "enum", params: { allowedValues: schema136.properties.headingSource.enum }, message: "must be equal to one of the allowed values" };
+        const err17 = { instancePath: instancePath + "/headingSource", schemaPath: "#/properties/headingSource/enum", keyword: "enum", params: { allowedValues: schema137.properties.headingSource.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err17];
         } else {
@@ -11810,7 +12245,7 @@ function validate95(data, { instancePath = "", parentData, parentDataProperty, r
     if (data.reverseHeadingPolicy !== void 0) {
       let data5 = data.reverseHeadingPolicy;
       if (!(data5 === "follow-velocity" || data5 === "preserve-target-forward")) {
-        const err18 = { instancePath: instancePath + "/reverseHeadingPolicy", schemaPath: "#/properties/reverseHeadingPolicy/enum", keyword: "enum", params: { allowedValues: schema136.properties.reverseHeadingPolicy.enum }, message: "must be equal to one of the allowed values" };
+        const err18 = { instancePath: instancePath + "/reverseHeadingPolicy", schemaPath: "#/properties/reverseHeadingPolicy/enum", keyword: "enum", params: { allowedValues: schema137.properties.reverseHeadingPolicy.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err18];
         } else {
@@ -11822,7 +12257,7 @@ function validate95(data, { instancePath = "", parentData, parentDataProperty, r
     if (data.recenterMode !== void 0) {
       let data6 = data.recenterMode;
       if (!(data6 === "off" || data6 === "forward-motion" || data6 === "always")) {
-        const err19 = { instancePath: instancePath + "/recenterMode", schemaPath: "#/properties/recenterMode/enum", keyword: "enum", params: { allowedValues: schema136.properties.recenterMode.enum }, message: "must be equal to one of the allowed values" };
+        const err19 = { instancePath: instancePath + "/recenterMode", schemaPath: "#/properties/recenterMode/enum", keyword: "enum", params: { allowedValues: schema137.properties.recenterMode.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err19];
         } else {
@@ -12156,7 +12591,7 @@ function validate95(data, { instancePath = "", parentData, parentDataProperty, r
           errors2++;
         }
         for (const key1 in data8) {
-          if (!func1.call(schema140.properties, key1)) {
+          if (!func1.call(schema141.properties, key1)) {
             const err55 = { instancePath: instancePath + "/parameters", schemaPath: "#/$defs/cameraParameters/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key1 }, message: "must NOT have additional properties" };
             if (vErrors === null) {
               vErrors = [err55];
@@ -12602,7 +13037,7 @@ function validate95(data, { instancePath = "", parentData, parentDataProperty, r
         for (const key2 in data44) {
           const _errs92 = errors2;
           if (!(key2 === "distanceMeters" || key2 === "minimumDistanceMeters" || key2 === "maximumDistanceMeters" || key2 === "targetHeightMeters" || key2 === "shoulderOffsetMeters" || key2 === "pitchRadians" || key2 === "minimumPitchRadians" || key2 === "maximumPitchRadians" || key2 === "positionDampingPerSecond" || key2 === "horizontalPositionDampingPerSecond" || key2 === "verticalPositionDampingPerSecond" || key2 === "maximumPositionLagMeters" || key2 === "rotationDampingPerSecond" || key2 === "yawDampingPerSecond" || key2 === "pitchDampingPerSecond" || key2 === "collisionRadiusMeters" || key2 === "collisionRetractionMetersPerSecond" || key2 === "collisionRecoveryMetersPerSecond" || key2 === "baseFovDegrees" || key2 === "speedFovDegreesPerMeterPerSecond" || key2 === "maximumSpeedFovDegrees" || key2 === "lookAheadSeconds" || key2 === "accelerationLookAheadSecondsSquared" || key2 === "transitionSeconds" || key2 === "minimumHeadingSpeedMetersPerSecond" || key2 === "velocityHeadingDampingPerSecond" || key2 === "fovDampingPerSecond" || key2 === "horizontalDeadZoneRatio" || key2 === "verticalDeadZoneRatio" || key2 === "recenterDelaySeconds" || key2 === "recenterDurationSeconds" || key2 === "recenterMinimumSpeedMetersPerSecond" || key2 === "teleportSnapDistanceMeters" || key2 === "lookSensitivityXRatio" || key2 === "lookSensitivityYRatio")) {
-            const err92 = { instancePath: instancePath + "/authoringRanges", schemaPath: "#/properties/authoringRanges/propertyNames/enum", keyword: "enum", params: { allowedValues: schema136.properties.authoringRanges.propertyNames.enum }, message: "must be equal to one of the allowed values", propertyName: key2 };
+            const err92 = { instancePath: instancePath + "/authoringRanges", schemaPath: "#/properties/authoringRanges/propertyNames/enum", keyword: "enum", params: { allowedValues: schema137.properties.authoringRanges.propertyNames.enum }, message: "must be equal to one of the allowed values", propertyName: key2 };
             if (vErrors === null) {
               vErrors = [err92];
             } else {
@@ -12727,15 +13162,15 @@ function validate95(data, { instancePath = "", parentData, parentDataProperty, r
     }
     errors2++;
   }
-  validate95.errors = vErrors;
+  validate94.errors = vErrors;
   return errors2 === 0;
 }
-validate95.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-const schema141 = { "properties": { "headingSourceOverride": { "enum": ["view", "target-forward", "target-velocity"] }, "reverseHeadingPolicyOverride": { "enum": ["follow-velocity", "preserve-target-forward"] }, "recenterModeOverride": { "enum": ["off", "forward-motion", "always"] } } };
-function validate98(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate94.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+const schema142 = { "properties": { "headingSourceOverride": { "enum": ["view", "target-forward", "target-velocity"] }, "reverseHeadingPolicyOverride": { "enum": ["follow-velocity", "preserve-target-forward"] }, "recenterModeOverride": { "enum": ["off", "forward-motion", "always"] } } };
+function validate97(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors2 = 0;
-  const evaluated0 = validate98.evaluated;
+  const evaluated0 = validate97.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -12854,7 +13289,7 @@ function validate98(data, { instancePath = "", parentData, parentDataProperty, r
     if (data.headingSourceOverride !== void 0) {
       let data3 = data.headingSourceOverride;
       if (!(data3 === "view" || data3 === "target-forward" || data3 === "target-velocity")) {
-        const err10 = { instancePath: instancePath + "/headingSourceOverride", schemaPath: "#/properties/headingSourceOverride/enum", keyword: "enum", params: { allowedValues: schema141.properties.headingSourceOverride.enum }, message: "must be equal to one of the allowed values" };
+        const err10 = { instancePath: instancePath + "/headingSourceOverride", schemaPath: "#/properties/headingSourceOverride/enum", keyword: "enum", params: { allowedValues: schema142.properties.headingSourceOverride.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err10];
         } else {
@@ -12866,7 +13301,7 @@ function validate98(data, { instancePath = "", parentData, parentDataProperty, r
     if (data.reverseHeadingPolicyOverride !== void 0) {
       let data4 = data.reverseHeadingPolicyOverride;
       if (!(data4 === "follow-velocity" || data4 === "preserve-target-forward")) {
-        const err11 = { instancePath: instancePath + "/reverseHeadingPolicyOverride", schemaPath: "#/properties/reverseHeadingPolicyOverride/enum", keyword: "enum", params: { allowedValues: schema141.properties.reverseHeadingPolicyOverride.enum }, message: "must be equal to one of the allowed values" };
+        const err11 = { instancePath: instancePath + "/reverseHeadingPolicyOverride", schemaPath: "#/properties/reverseHeadingPolicyOverride/enum", keyword: "enum", params: { allowedValues: schema142.properties.reverseHeadingPolicyOverride.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err11];
         } else {
@@ -12878,7 +13313,7 @@ function validate98(data, { instancePath = "", parentData, parentDataProperty, r
     if (data.recenterModeOverride !== void 0) {
       let data5 = data.recenterModeOverride;
       if (!(data5 === "off" || data5 === "forward-motion" || data5 === "always")) {
-        const err12 = { instancePath: instancePath + "/recenterModeOverride", schemaPath: "#/properties/recenterModeOverride/enum", keyword: "enum", params: { allowedValues: schema141.properties.recenterModeOverride.enum }, message: "must be equal to one of the allowed values" };
+        const err12 = { instancePath: instancePath + "/recenterModeOverride", schemaPath: "#/properties/recenterModeOverride/enum", keyword: "enum", params: { allowedValues: schema142.properties.recenterModeOverride.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err12];
         } else {
@@ -12896,15 +13331,15 @@ function validate98(data, { instancePath = "", parentData, parentDataProperty, r
     }
     errors2++;
   }
-  validate98.errors = vErrors;
+  validate97.errors = vErrors;
   return errors2 === 0;
 }
-validate98.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-const schema145 = { "oneOf": [{ "type": "object", "additionalProperties": false, "required": ["resourceRef", "relationshipType", "requiredRiderSocketIds", "requiredMountSocketIds", "controlTransferMode", "cameraTargetRole"], "properties": { "resourceRef": { "$ref": "#/$defs/nonEmptyString" }, "relationshipType": { "const": "mountedOn" }, "requiredRiderSocketIds": { "$ref": "#/$defs/stringArray" }, "requiredMountSocketIds": { "$ref": "#/$defs/stringArray" }, "controlTransferMode": { "enum": ["keep-rider", "to-mount", "none"] }, "cameraTargetRole": { "enum": ["controlled-entity", "rider", "mount"] }, "maximumMountDistanceMeters": { "type": "number" } } }, { "type": "object", "additionalProperties": false, "required": ["resourceRef", "relationshipType", "requiredOccupantSocketIds", "requiredSeatSocketIds"], "properties": { "resourceRef": { "$ref": "#/$defs/nonEmptyString" }, "relationshipType": { "const": "seat" }, "requiredOccupantSocketIds": { "$ref": "#/$defs/stringArray" }, "requiredSeatSocketIds": { "$ref": "#/$defs/stringArray" } } }, { "type": "object", "additionalProperties": false, "required": ["resourceRef", "relationshipType", "requiredTetheredSocketIds", "requiredTetherAnchorSocketIds"], "properties": { "resourceRef": { "$ref": "#/$defs/nonEmptyString" }, "relationshipType": { "const": "tether" }, "requiredTetheredSocketIds": { "$ref": "#/$defs/stringArray" }, "requiredTetherAnchorSocketIds": { "$ref": "#/$defs/stringArray" } } }] };
-function validate100(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+validate97.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+const schema146 = { "oneOf": [{ "type": "object", "additionalProperties": false, "required": ["resourceRef", "relationshipType", "requiredRiderSocketIds", "requiredMountSocketIds", "controlTransferMode", "cameraTargetRole"], "properties": { "resourceRef": { "$ref": "#/$defs/nonEmptyString" }, "relationshipType": { "const": "mountedOn" }, "requiredRiderSocketIds": { "$ref": "#/$defs/stringArray" }, "requiredMountSocketIds": { "$ref": "#/$defs/stringArray" }, "controlTransferMode": { "enum": ["keep-rider", "to-mount", "none"] }, "cameraTargetRole": { "enum": ["controlled-entity", "rider", "mount"] }, "maximumMountDistanceMeters": { "type": "number" } } }, { "type": "object", "additionalProperties": false, "required": ["resourceRef", "relationshipType", "requiredOccupantSocketIds", "requiredSeatSocketIds"], "properties": { "resourceRef": { "$ref": "#/$defs/nonEmptyString" }, "relationshipType": { "const": "seat" }, "requiredOccupantSocketIds": { "$ref": "#/$defs/stringArray" }, "requiredSeatSocketIds": { "$ref": "#/$defs/stringArray" } } }, { "type": "object", "additionalProperties": false, "required": ["resourceRef", "relationshipType", "requiredTetheredSocketIds", "requiredTetherAnchorSocketIds"], "properties": { "resourceRef": { "$ref": "#/$defs/nonEmptyString" }, "relationshipType": { "const": "tether" }, "requiredTetheredSocketIds": { "$ref": "#/$defs/stringArray" }, "requiredTetherAnchorSocketIds": { "$ref": "#/$defs/stringArray" } } }] };
+function validate99(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors2 = 0;
-  const evaluated0 = validate100.evaluated;
+  const evaluated0 = validate99.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -13029,7 +13464,7 @@ function validate100(data, { instancePath = "", parentData, parentDataProperty, 
     if (data.controlTransferMode !== void 0) {
       let data4 = data.controlTransferMode;
       if (!(data4 === "keep-rider" || data4 === "to-mount" || data4 === "none")) {
-        const err10 = { instancePath: instancePath + "/controlTransferMode", schemaPath: "#/oneOf/0/properties/controlTransferMode/enum", keyword: "enum", params: { allowedValues: schema145.oneOf[0].properties.controlTransferMode.enum }, message: "must be equal to one of the allowed values" };
+        const err10 = { instancePath: instancePath + "/controlTransferMode", schemaPath: "#/oneOf/0/properties/controlTransferMode/enum", keyword: "enum", params: { allowedValues: schema146.oneOf[0].properties.controlTransferMode.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err10];
         } else {
@@ -13041,7 +13476,7 @@ function validate100(data, { instancePath = "", parentData, parentDataProperty, 
     if (data.cameraTargetRole !== void 0) {
       let data5 = data.cameraTargetRole;
       if (!(data5 === "controlled-entity" || data5 === "rider" || data5 === "mount")) {
-        const err11 = { instancePath: instancePath + "/cameraTargetRole", schemaPath: "#/oneOf/0/properties/cameraTargetRole/enum", keyword: "enum", params: { allowedValues: schema145.oneOf[0].properties.cameraTargetRole.enum }, message: "must be equal to one of the allowed values" };
+        const err11 = { instancePath: instancePath + "/cameraTargetRole", schemaPath: "#/oneOf/0/properties/cameraTargetRole/enum", keyword: "enum", params: { allowedValues: schema146.oneOf[0].properties.cameraTargetRole.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err11];
         } else {
@@ -13327,11 +13762,11 @@ function validate100(data, { instancePath = "", parentData, parentDataProperty, 
       }
     }
   }
-  validate100.errors = vErrors;
+  validate99.errors = vErrors;
   evaluated0.props = props0;
   return errors2 === 0;
 }
-validate100.evaluated = { "dynamicProps": true, "dynamicItems": false };
+validate99.evaluated = { "dynamicProps": true, "dynamicItems": false };
 function validate71(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors2 = 0;
@@ -13753,8 +14188,8 @@ function validate71(data, { instancePath = "", parentData, parentDataProperty, r
           if (Array.isArray(data16)) {
             const len3 = data16.length;
             for (let i3 = 0; i3 < len3; i3++) {
-              if (!validate95(data16[i3], { instancePath: instancePath + "/cameraContext/cameraRigProfiles/" + i3, parentData: data16, parentDataProperty: i3, rootData, dynamicAnchors })) {
-                vErrors = vErrors === null ? validate95.errors : vErrors.concat(validate95.errors);
+              if (!validate94(data16[i3], { instancePath: instancePath + "/cameraContext/cameraRigProfiles/" + i3, parentData: data16, parentDataProperty: i3, rootData, dynamicAnchors })) {
+                vErrors = vErrors === null ? validate94.errors : vErrors.concat(validate94.errors);
                 errors2 = vErrors.length;
               }
             }
@@ -13773,8 +14208,8 @@ function validate71(data, { instancePath = "", parentData, parentDataProperty, r
           if (Array.isArray(data18)) {
             const len4 = data18.length;
             for (let i4 = 0; i4 < len4; i4++) {
-              if (!validate98(data18[i4], { instancePath: instancePath + "/cameraContext/cameraModifierProfiles/" + i4, parentData: data18, parentDataProperty: i4, rootData, dynamicAnchors })) {
-                vErrors = vErrors === null ? validate98.errors : vErrors.concat(validate98.errors);
+              if (!validate97(data18[i4], { instancePath: instancePath + "/cameraContext/cameraModifierProfiles/" + i4, parentData: data18, parentDataProperty: i4, rootData, dynamicAnchors })) {
+                vErrors = vErrors === null ? validate97.errors : vErrors.concat(validate97.errors);
                 errors2 = vErrors.length;
               }
             }
@@ -13933,8 +14368,8 @@ function validate71(data, { instancePath = "", parentData, parentDataProperty, r
       if (Array.isArray(data25)) {
         const len5 = data25.length;
         for (let i5 = 0; i5 < len5; i5++) {
-          if (!validate100(data25[i5], { instancePath: instancePath + "/relationshipProfiles/" + i5, parentData: data25, parentDataProperty: i5, rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate100.errors : vErrors.concat(validate100.errors);
+          if (!validate99(data25[i5], { instancePath: instancePath + "/relationshipProfiles/" + i5, parentData: data25, parentDataProperty: i5, rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate99.errors : vErrors.concat(validate99.errors);
             errors2 = vErrors.length;
           }
         }
@@ -14805,11 +15240,11 @@ function validate49(data, { instancePath = "", parentData, parentDataProperty, r
   return errors2 === 0;
 }
 validate49.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-const schema152 = { "properties": { "resourceKind": { "enum": ["subject-definition", "subject-asset", "rig-profile", "animation-set", "collider-profile", "capability", "physics-body-profile", "locomotion-profile", "control-feel-profile", "collider-derivation-profile", "motion-kernel", "motion-profile", "control-profile", "camera-rig-algorithm", "camera-rig-profile", "camera-modifier-profile", "camera-context-profile", "medium-profile", "relationship-profile", "harness-profile", "pose-set-profile", "render-binding-profile", "ai-schema-projection-profile", "gameplay-bootstrap"] } } };
-function validate111(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
+const schema153 = { "properties": { "resourceKind": { "enum": ["subject-definition", "subject-asset", "rig-profile", "animation-set", "collider-profile", "capability", "physics-body-profile", "locomotion-profile", "control-feel-profile", "collider-derivation-profile", "motion-kernel", "motion-profile", "control-profile", "camera-rig-algorithm", "camera-rig-profile", "camera-modifier-profile", "camera-context-profile", "medium-profile", "relationship-profile", "harness-profile", "pose-set-profile", "render-binding-profile", "ai-schema-projection-profile", "gameplay-bootstrap"] } } };
+function validate110(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors2 = 0;
-  const evaluated0 = validate111.evaluated;
+  const evaluated0 = validate110.evaluated;
   if (evaluated0.dynamicProps) {
     evaluated0.props = void 0;
   }
@@ -14889,7 +15324,7 @@ function validate111(data, { instancePath = "", parentData, parentDataProperty, 
     if (data.resourceKind !== void 0) {
       let data1 = data.resourceKind;
       if (!(data1 === "subject-definition" || data1 === "subject-asset" || data1 === "rig-profile" || data1 === "animation-set" || data1 === "collider-profile" || data1 === "capability" || data1 === "physics-body-profile" || data1 === "locomotion-profile" || data1 === "control-feel-profile" || data1 === "collider-derivation-profile" || data1 === "motion-kernel" || data1 === "motion-profile" || data1 === "control-profile" || data1 === "camera-rig-algorithm" || data1 === "camera-rig-profile" || data1 === "camera-modifier-profile" || data1 === "camera-context-profile" || data1 === "medium-profile" || data1 === "relationship-profile" || data1 === "harness-profile" || data1 === "pose-set-profile" || data1 === "render-binding-profile" || data1 === "ai-schema-projection-profile" || data1 === "gameplay-bootstrap")) {
-        const err7 = { instancePath: instancePath + "/resourceKind", schemaPath: "#/properties/resourceKind/enum", keyword: "enum", params: { allowedValues: schema152.properties.resourceKind.enum }, message: "must be equal to one of the allowed values" };
+        const err7 = { instancePath: instancePath + "/resourceKind", schemaPath: "#/properties/resourceKind/enum", keyword: "enum", params: { allowedValues: schema153.properties.resourceKind.enum }, message: "must be equal to one of the allowed values" };
         if (vErrors === null) {
           vErrors = [err7];
         } else {
@@ -14951,10 +15386,10 @@ function validate111(data, { instancePath = "", parentData, parentDataProperty, 
     }
     errors2++;
   }
-  validate111.errors = vErrors;
+  validate110.errors = vErrors;
   return errors2 === 0;
 }
-validate111.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
+validate110.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
 function validate20(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors2 = 0;
@@ -15426,8 +15861,8 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
       if (Array.isArray(data22)) {
         const len7 = data22.length;
         for (let i5 = 0; i5 < len7; i5++) {
-          if (!validate111(data22[i5], { instancePath: instancePath + "/runtimeResourceLockEntries/" + i5, parentData: data22, parentDataProperty: i5, rootData, dynamicAnchors })) {
-            vErrors = vErrors === null ? validate111.errors : vErrors.concat(validate111.errors);
+          if (!validate110(data22[i5], { instancePath: instancePath + "/runtimeResourceLockEntries/" + i5, parentData: data22, parentDataProperty: i5, rootData, dynamicAnchors })) {
+            vErrors = vErrors === null ? validate110.errors : vErrors.concat(validate110.errors);
             errors2 = vErrors.length;
           }
         }
@@ -19354,8 +19789,8 @@ const BUILT_IN_SUBJECT_DEFINITIONS = [
 ];
 const algorithms = [{ "kind": "camera-rig-algorithm", "id": "socket-first-person", "version": 1, "resourceRef": "worldkit://camera-rig/socket-first-person@1", "authoringAvailability": "recommended", "implementationId": "socket-first-person", "runtimeStatus": "implemented", "aiMetadata": { "displayName": "Socket First Person", "description": "Positions the view at a declared first-person socket.", "semanticTags": ["first-person", "socket"] } }, { "kind": "camera-rig-algorithm", "id": "orbit-follow", "version": 1, "resourceRef": "worldkit://camera-rig/orbit-follow@1", "authoringAvailability": "recommended", "implementationId": "orbit-follow", "runtimeStatus": "implemented", "aiMetadata": { "displayName": "Orbit Follow", "description": "Orbits and follows a stable target frame with collision shortening.", "semanticTags": ["follow", "orbit"] } }, { "kind": "camera-rig-algorithm", "id": "velocity-chase", "version": 1, "resourceRef": "worldkit://camera-rig/velocity-chase@1", "authoringAvailability": "advanced", "implementationId": "velocity-chase", "runtimeStatus": "implemented", "aiMetadata": { "displayName": "Velocity Chase", "description": "Chases a moving target with velocity look-ahead and speed FOV.", "semanticTags": ["chase", "speed", "velocity"] } }, { "kind": "camera-rig-algorithm", "id": "flight-horizon", "version": 1, "resourceRef": "worldkit://camera-rig/flight-horizon@1", "authoringAvailability": "experimental", "implementationId": "flight-horizon", "runtimeStatus": "implemented", "aiMetadata": { "displayName": "Flight Horizon", "description": "Follows flight direction while retaining horizon and landing context.", "semanticTags": ["flight", "horizon"] } }];
 const profiles = /* @__PURE__ */ JSON.parse('[{"kind":"camera-rig-profile","id":"first-person.standard","version":1,"resourceRef":"worldkit://camera-profile/first-person.standard@1","authoringAvailability":"recommended","baseMode":"first-person","algorithmRef":"worldkit://camera-rig/socket-first-person@1","headingSource":"target-forward","reverseHeadingPolicy":"preserve-target-forward","recenterMode":"off","preferredSocketIds":["FirstPersonView"],"parameters":{"distanceMeters":0,"minimumDistanceMeters":0,"maximumDistanceMeters":0,"targetHeightMeters":1.64,"shoulderOffsetMeters":0,"pitchRadians":0,"minimumPitchRadians":-1.2,"maximumPitchRadians":1.2,"positionDampingPerSecond":30,"horizontalPositionDampingPerSecond":30,"verticalPositionDampingPerSecond":30,"maximumPositionLagMeters":0.1,"rotationDampingPerSecond":24,"yawDampingPerSecond":24,"pitchDampingPerSecond":20,"collisionRadiusMeters":0.05,"collisionRetractionMetersPerSecond":40,"collisionRecoveryMetersPerSecond":12,"baseFovDegrees":70,"speedFovDegreesPerMeterPerSecond":0,"maximumSpeedFovDegrees":0,"lookAheadSeconds":0,"accelerationLookAheadSecondsSquared":0,"transitionSeconds":0.25,"minimumHeadingSpeedMetersPerSecond":0,"velocityHeadingDampingPerSecond":24,"fovDampingPerSecond":12,"horizontalDeadZoneRatio":0,"verticalDeadZoneRatio":0,"recenterDelaySeconds":0,"recenterDurationSeconds":0,"recenterMinimumSpeedMetersPerSecond":0,"teleportSnapDistanceMeters":8,"lookSensitivityXRatio":0.8,"lookSensitivityYRatio":0.7},"authoringRanges":{"targetHeightMeters":{"minimum":0,"maximum":3,"step":0.02},"pitchRadians":{"minimum":-1.2,"maximum":1.2,"step":0.01},"positionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"maximumPositionLagMeters":{"minimum":0,"maximum":5,"step":0.1},"rotationDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"baseFovDegrees":{"minimum":35,"maximum":100,"step":1},"transitionSeconds":{"minimum":0,"maximum":3,"step":0.05},"horizontalPositionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"verticalPositionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"yawDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"pitchDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"velocityHeadingDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"fovDampingPerSecond":{"minimum":0,"maximum":30,"step":0.25},"teleportSnapDistanceMeters":{"minimum":1,"maximum":100,"step":1},"lookSensitivityXRatio":{"minimum":0.1,"maximum":3,"step":0.05},"lookSensitivityYRatio":{"minimum":0.1,"maximum":3,"step":0.05}},"aiMetadata":{"displayName":"Standard First Person","description":"Stable socket first-person view for subjects that expose FirstPersonView.","semanticTags":["first-person","standard"]}},{"kind":"camera-rig-profile","id":"orbit.medium","version":1,"resourceRef":"worldkit://camera-profile/orbit.medium@1","authoringAvailability":"recommended","baseMode":"free-orbit","algorithmRef":"worldkit://camera-rig/orbit-follow@1","headingSource":"view","reverseHeadingPolicy":"preserve-target-forward","recenterMode":"off","preferredSocketIds":["ThirdPersonTarget","CameraTarget3D"],"parameters":{"distanceMeters":5,"minimumDistanceMeters":0.5,"maximumDistanceMeters":20,"targetHeightMeters":1.25,"shoulderOffsetMeters":0,"pitchRadians":0.22,"minimumPitchRadians":-1.2,"maximumPitchRadians":1.2,"positionDampingPerSecond":18,"horizontalPositionDampingPerSecond":18,"verticalPositionDampingPerSecond":20,"maximumPositionLagMeters":2.5,"rotationDampingPerSecond":20,"yawDampingPerSecond":16,"pitchDampingPerSecond":14,"collisionRadiusMeters":0.12,"collisionRetractionMetersPerSecond":30,"collisionRecoveryMetersPerSecond":6,"baseFovDegrees":58,"speedFovDegreesPerMeterPerSecond":0.4,"maximumSpeedFovDegrees":4,"lookAheadSeconds":0,"accelerationLookAheadSecondsSquared":0,"transitionSeconds":0.35,"minimumHeadingSpeedMetersPerSecond":0,"velocityHeadingDampingPerSecond":16,"fovDampingPerSecond":8,"horizontalDeadZoneRatio":0.08,"verticalDeadZoneRatio":0.05,"recenterDelaySeconds":1,"recenterDurationSeconds":1.2,"recenterMinimumSpeedMetersPerSecond":1.2,"teleportSnapDistanceMeters":12,"lookSensitivityXRatio":1,"lookSensitivityYRatio":0.8},"authoringRanges":{"distanceMeters":{"minimum":0.5,"maximum":20,"step":0.1},"targetHeightMeters":{"minimum":0,"maximum":5,"step":0.05},"shoulderOffsetMeters":{"minimum":-3,"maximum":3,"step":0.05},"pitchRadians":{"minimum":-1.2,"maximum":1.2,"step":0.01},"positionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"maximumPositionLagMeters":{"minimum":0,"maximum":20,"step":0.1},"rotationDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"collisionRadiusMeters":{"minimum":0,"maximum":2,"step":0.01},"baseFovDegrees":{"minimum":35,"maximum":100,"step":1},"lookAheadSeconds":{"minimum":0,"maximum":2,"step":0.01},"transitionSeconds":{"minimum":0,"maximum":3,"step":0.05},"horizontalPositionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"verticalPositionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"yawDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"pitchDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"collisionRetractionMetersPerSecond":{"minimum":0,"maximum":60,"step":0.5},"collisionRecoveryMetersPerSecond":{"minimum":0,"maximum":30,"step":0.25},"accelerationLookAheadSecondsSquared":{"minimum":0,"maximum":1,"step":0.01},"minimumHeadingSpeedMetersPerSecond":{"minimum":0,"maximum":20,"step":0.1},"velocityHeadingDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"fovDampingPerSecond":{"minimum":0,"maximum":30,"step":0.25},"horizontalDeadZoneRatio":{"minimum":0,"maximum":0.4,"step":0.01},"verticalDeadZoneRatio":{"minimum":0,"maximum":0.4,"step":0.01},"recenterDelaySeconds":{"minimum":0,"maximum":5,"step":0.05},"recenterDurationSeconds":{"minimum":0,"maximum":5,"step":0.05},"recenterMinimumSpeedMetersPerSecond":{"minimum":0,"maximum":10,"step":0.1},"teleportSnapDistanceMeters":{"minimum":1,"maximum":100,"step":1},"lookSensitivityXRatio":{"minimum":0.1,"maximum":3,"step":0.05},"lookSensitivityYRatio":{"minimum":0.1,"maximum":3,"step":0.05}},"aiMetadata":{"displayName":"Medium Orbit","description":"General orbit view for medium controllable subjects.","semanticTags":["medium","orbit"]}},{"kind":"camera-rig-profile","id":"follow.medium","version":1,"resourceRef":"worldkit://camera-profile/follow.medium@1","authoringAvailability":"advanced","baseMode":"stable-follow","algorithmRef":"worldkit://camera-rig/orbit-follow@1","headingSource":"target-forward","reverseHeadingPolicy":"preserve-target-forward","recenterMode":"always","preferredSocketIds":["CameraTarget3D","ThirdPersonTarget"],"parameters":{"distanceMeters":6,"minimumDistanceMeters":0.5,"maximumDistanceMeters":20,"targetHeightMeters":1.1,"shoulderOffsetMeters":0,"pitchRadians":0.26,"minimumPitchRadians":-1.2,"maximumPitchRadians":1.2,"positionDampingPerSecond":14,"horizontalPositionDampingPerSecond":14,"verticalPositionDampingPerSecond":16,"maximumPositionLagMeters":2,"rotationDampingPerSecond":16,"yawDampingPerSecond":9,"pitchDampingPerSecond":12,"collisionRadiusMeters":0.12,"collisionRetractionMetersPerSecond":30,"collisionRecoveryMetersPerSecond":6,"baseFovDegrees":60,"speedFovDegreesPerMeterPerSecond":0.6,"maximumSpeedFovDegrees":5,"lookAheadSeconds":0.15,"accelerationLookAheadSecondsSquared":0,"transitionSeconds":0.4,"minimumHeadingSpeedMetersPerSecond":0,"velocityHeadingDampingPerSecond":10,"fovDampingPerSecond":8,"horizontalDeadZoneRatio":0.05,"verticalDeadZoneRatio":0.04,"recenterDelaySeconds":0.7,"recenterDurationSeconds":1,"recenterMinimumSpeedMetersPerSecond":0,"teleportSnapDistanceMeters":12,"lookSensitivityXRatio":0.9,"lookSensitivityYRatio":0.75},"authoringRanges":{"distanceMeters":{"minimum":0.5,"maximum":20,"step":0.1},"targetHeightMeters":{"minimum":0,"maximum":5,"step":0.05},"shoulderOffsetMeters":{"minimum":-3,"maximum":3,"step":0.05},"pitchRadians":{"minimum":-1.2,"maximum":1.2,"step":0.01},"positionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"maximumPositionLagMeters":{"minimum":0,"maximum":20,"step":0.1},"rotationDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"collisionRadiusMeters":{"minimum":0,"maximum":2,"step":0.01},"baseFovDegrees":{"minimum":35,"maximum":100,"step":1},"lookAheadSeconds":{"minimum":0,"maximum":2,"step":0.02},"transitionSeconds":{"minimum":0,"maximum":3,"step":0.05},"horizontalPositionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"verticalPositionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"yawDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"pitchDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"collisionRetractionMetersPerSecond":{"minimum":0,"maximum":60,"step":0.5},"collisionRecoveryMetersPerSecond":{"minimum":0,"maximum":30,"step":0.25},"accelerationLookAheadSecondsSquared":{"minimum":0,"maximum":1,"step":0.01},"minimumHeadingSpeedMetersPerSecond":{"minimum":0,"maximum":20,"step":0.1},"velocityHeadingDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"fovDampingPerSecond":{"minimum":0,"maximum":30,"step":0.25},"horizontalDeadZoneRatio":{"minimum":0,"maximum":0.4,"step":0.01},"verticalDeadZoneRatio":{"minimum":0,"maximum":0.4,"step":0.01},"recenterDelaySeconds":{"minimum":0,"maximum":5,"step":0.05},"recenterDurationSeconds":{"minimum":0,"maximum":5,"step":0.05},"recenterMinimumSpeedMetersPerSecond":{"minimum":0,"maximum":10,"step":0.1},"teleportSnapDistanceMeters":{"minimum":1,"maximum":100,"step":1},"lookSensitivityXRatio":{"minimum":0.1,"maximum":3,"step":0.05},"lookSensitivityYRatio":{"minimum":0.1,"maximum":3,"step":0.05}},"aiMetadata":{"displayName":"Medium Follow","description":"Stable follow view for forward-steering subjects.","semanticTags":["follow","medium"]}},{"kind":"camera-rig-profile","id":"chase.surface-fast","version":1,"resourceRef":"worldkit://camera-profile/chase.surface-fast@1","authoringAvailability":"advanced","baseMode":"speed-chase","algorithmRef":"worldkit://camera-rig/velocity-chase@1","headingSource":"target-velocity","reverseHeadingPolicy":"preserve-target-forward","recenterMode":"forward-motion","preferredSocketIds":["CameraTarget3D","LookAhead"],"parameters":{"distanceMeters":8,"minimumDistanceMeters":0.5,"maximumDistanceMeters":30,"targetHeightMeters":1.2,"shoulderOffsetMeters":0,"pitchRadians":0.18,"minimumPitchRadians":-1.2,"maximumPitchRadians":1.2,"positionDampingPerSecond":11,"horizontalPositionDampingPerSecond":11,"verticalPositionDampingPerSecond":14,"maximumPositionLagMeters":3,"rotationDampingPerSecond":12,"yawDampingPerSecond":8,"pitchDampingPerSecond":10,"collisionRadiusMeters":0.3,"collisionRetractionMetersPerSecond":36,"collisionRecoveryMetersPerSecond":5,"baseFovDegrees":62,"speedFovDegreesPerMeterPerSecond":0.9,"maximumSpeedFovDegrees":12,"lookAheadSeconds":0.45,"accelerationLookAheadSecondsSquared":0.08,"transitionSeconds":0.45,"minimumHeadingSpeedMetersPerSecond":1,"velocityHeadingDampingPerSecond":8,"fovDampingPerSecond":6,"horizontalDeadZoneRatio":0.04,"verticalDeadZoneRatio":0.04,"recenterDelaySeconds":0.5,"recenterDurationSeconds":0.8,"recenterMinimumSpeedMetersPerSecond":2,"teleportSnapDistanceMeters":20,"lookSensitivityXRatio":0.85,"lookSensitivityYRatio":0.7},"authoringRanges":{"distanceMeters":{"minimum":0.5,"maximum":30,"step":0.1},"targetHeightMeters":{"minimum":0,"maximum":5,"step":0.05},"shoulderOffsetMeters":{"minimum":-3,"maximum":3,"step":0.05},"pitchRadians":{"minimum":-1.2,"maximum":1.2,"step":0.01},"positionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"maximumPositionLagMeters":{"minimum":0,"maximum":30,"step":0.1},"rotationDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"collisionRadiusMeters":{"minimum":0,"maximum":2,"step":0.01},"baseFovDegrees":{"minimum":35,"maximum":100,"step":1},"speedFovDegreesPerMeterPerSecond":{"minimum":0,"maximum":5,"step":0.05},"maximumSpeedFovDegrees":{"minimum":0,"maximum":30,"step":0.5},"lookAheadSeconds":{"minimum":0,"maximum":2,"step":0.02},"transitionSeconds":{"minimum":0,"maximum":3,"step":0.05},"horizontalPositionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"verticalPositionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"yawDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"pitchDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"collisionRetractionMetersPerSecond":{"minimum":0,"maximum":60,"step":0.5},"collisionRecoveryMetersPerSecond":{"minimum":0,"maximum":30,"step":0.25},"accelerationLookAheadSecondsSquared":{"minimum":0,"maximum":1,"step":0.01},"minimumHeadingSpeedMetersPerSecond":{"minimum":0,"maximum":20,"step":0.1},"velocityHeadingDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"fovDampingPerSecond":{"minimum":0,"maximum":30,"step":0.25},"horizontalDeadZoneRatio":{"minimum":0,"maximum":0.4,"step":0.01},"verticalDeadZoneRatio":{"minimum":0,"maximum":0.4,"step":0.01},"recenterDelaySeconds":{"minimum":0,"maximum":5,"step":0.05},"recenterDurationSeconds":{"minimum":0,"maximum":5,"step":0.05},"recenterMinimumSpeedMetersPerSecond":{"minimum":0,"maximum":10,"step":0.1},"teleportSnapDistanceMeters":{"minimum":1,"maximum":100,"step":1},"lookSensitivityXRatio":{"minimum":0.1,"maximum":3,"step":0.05},"lookSensitivityYRatio":{"minimum":0.1,"maximum":3,"step":0.05}},"aiMetadata":{"displayName":"Fast Surface Chase","description":"Velocity chase view for fast movement along a support surface.","semanticTags":["chase","fast","surface"]}},{"kind":"camera-rig-profile","id":"follow.water-surface","version":1,"resourceRef":"worldkit://camera-profile/follow.water-surface@1","authoringAvailability":"experimental","baseMode":"stable-follow","algorithmRef":"worldkit://camera-rig/orbit-follow@1","headingSource":"target-forward","reverseHeadingPolicy":"preserve-target-forward","recenterMode":"forward-motion","preferredSocketIds":["CameraTarget3D","LookAhead"],"parameters":{"distanceMeters":7,"minimumDistanceMeters":0.5,"maximumDistanceMeters":25,"targetHeightMeters":1.3,"shoulderOffsetMeters":0,"pitchRadians":0.3,"minimumPitchRadians":-1.2,"maximumPitchRadians":1.2,"positionDampingPerSecond":10,"horizontalPositionDampingPerSecond":10,"verticalPositionDampingPerSecond":14,"maximumPositionLagMeters":2,"rotationDampingPerSecond":10,"yawDampingPerSecond":7,"pitchDampingPerSecond":10,"collisionRadiusMeters":0.3,"collisionRetractionMetersPerSecond":28,"collisionRecoveryMetersPerSecond":5,"baseFovDegrees":60,"speedFovDegreesPerMeterPerSecond":0.5,"maximumSpeedFovDegrees":5,"lookAheadSeconds":0.2,"accelerationLookAheadSecondsSquared":0,"transitionSeconds":0.45,"minimumHeadingSpeedMetersPerSecond":0.3,"velocityHeadingDampingPerSecond":7,"fovDampingPerSecond":7,"horizontalDeadZoneRatio":0.05,"verticalDeadZoneRatio":0.06,"recenterDelaySeconds":0.8,"recenterDurationSeconds":1.2,"recenterMinimumSpeedMetersPerSecond":0.5,"teleportSnapDistanceMeters":15,"lookSensitivityXRatio":0.8,"lookSensitivityYRatio":0.65},"authoringRanges":{"distanceMeters":{"minimum":0.5,"maximum":25,"step":0.1},"targetHeightMeters":{"minimum":0,"maximum":5,"step":0.05},"shoulderOffsetMeters":{"minimum":-3,"maximum":3,"step":0.05},"pitchRadians":{"minimum":-1.2,"maximum":1.2,"step":0.01},"positionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"maximumPositionLagMeters":{"minimum":0,"maximum":25,"step":0.1},"rotationDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"collisionRadiusMeters":{"minimum":0,"maximum":2,"step":0.01},"baseFovDegrees":{"minimum":35,"maximum":100,"step":1},"speedFovDegreesPerMeterPerSecond":{"minimum":0,"maximum":5,"step":0.05},"maximumSpeedFovDegrees":{"minimum":0,"maximum":30,"step":0.5},"lookAheadSeconds":{"minimum":0,"maximum":2,"step":0.02},"transitionSeconds":{"minimum":0,"maximum":3,"step":0.05},"horizontalPositionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"verticalPositionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"yawDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"pitchDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"collisionRetractionMetersPerSecond":{"minimum":0,"maximum":60,"step":0.5},"collisionRecoveryMetersPerSecond":{"minimum":0,"maximum":30,"step":0.25},"accelerationLookAheadSecondsSquared":{"minimum":0,"maximum":1,"step":0.01},"minimumHeadingSpeedMetersPerSecond":{"minimum":0,"maximum":20,"step":0.1},"velocityHeadingDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"fovDampingPerSecond":{"minimum":0,"maximum":30,"step":0.25},"horizontalDeadZoneRatio":{"minimum":0,"maximum":0.4,"step":0.01},"verticalDeadZoneRatio":{"minimum":0,"maximum":0.4,"step":0.01},"recenterDelaySeconds":{"minimum":0,"maximum":5,"step":0.05},"recenterDurationSeconds":{"minimum":0,"maximum":5,"step":0.05},"recenterMinimumSpeedMetersPerSecond":{"minimum":0,"maximum":10,"step":0.1},"teleportSnapDistanceMeters":{"minimum":1,"maximum":100,"step":1},"lookSensitivityXRatio":{"minimum":0.1,"maximum":3,"step":0.05},"lookSensitivityYRatio":{"minimum":0.1,"maximum":3,"step":0.05}},"aiMetadata":{"displayName":"Water Surface Follow","description":"Low-response follow view that preserves water horizon context.","semanticTags":["follow","surface","water"]}},{"kind":"camera-rig-profile","id":"flight.glide","version":1,"resourceRef":"worldkit://camera-profile/flight.glide@1","authoringAvailability":"experimental","baseMode":"flight-horizon","algorithmRef":"worldkit://camera-rig/flight-horizon@1","headingSource":"target-velocity","reverseHeadingPolicy":"follow-velocity","recenterMode":"forward-motion","preferredSocketIds":["CameraTarget3D","LookAhead"],"parameters":{"distanceMeters":9,"minimumDistanceMeters":1,"maximumDistanceMeters":30,"targetHeightMeters":1.4,"shoulderOffsetMeters":0,"pitchRadians":0.12,"minimumPitchRadians":-1,"maximumPitchRadians":1,"positionDampingPerSecond":8,"horizontalPositionDampingPerSecond":8,"verticalPositionDampingPerSecond":10,"maximumPositionLagMeters":5,"rotationDampingPerSecond":9,"yawDampingPerSecond":6,"pitchDampingPerSecond":8,"collisionRadiusMeters":0.25,"collisionRetractionMetersPerSecond":30,"collisionRecoveryMetersPerSecond":4,"baseFovDegrees":64,"speedFovDegreesPerMeterPerSecond":0.8,"maximumSpeedFovDegrees":10,"lookAheadSeconds":0.6,"accelerationLookAheadSecondsSquared":0.1,"transitionSeconds":0.55,"minimumHeadingSpeedMetersPerSecond":2,"velocityHeadingDampingPerSecond":6,"fovDampingPerSecond":6,"horizontalDeadZoneRatio":0.05,"verticalDeadZoneRatio":0.05,"recenterDelaySeconds":0.6,"recenterDurationSeconds":1,"recenterMinimumSpeedMetersPerSecond":2,"teleportSnapDistanceMeters":25,"lookSensitivityXRatio":0.75,"lookSensitivityYRatio":0.65},"authoringRanges":{"distanceMeters":{"minimum":1,"maximum":30,"step":0.1},"targetHeightMeters":{"minimum":0,"maximum":6,"step":0.05},"shoulderOffsetMeters":{"minimum":-3,"maximum":3,"step":0.05},"pitchRadians":{"minimum":-1,"maximum":1,"step":0.01},"positionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"maximumPositionLagMeters":{"minimum":0,"maximum":24,"step":0.1},"rotationDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"collisionRadiusMeters":{"minimum":0,"maximum":2,"step":0.01},"baseFovDegrees":{"minimum":35,"maximum":100,"step":1},"speedFovDegreesPerMeterPerSecond":{"minimum":0,"maximum":5,"step":0.05},"maximumSpeedFovDegrees":{"minimum":0,"maximum":30,"step":0.5},"lookAheadSeconds":{"minimum":0,"maximum":2,"step":0.02},"transitionSeconds":{"minimum":0,"maximum":3,"step":0.05},"horizontalPositionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"verticalPositionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"yawDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"pitchDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"collisionRetractionMetersPerSecond":{"minimum":0,"maximum":60,"step":0.5},"collisionRecoveryMetersPerSecond":{"minimum":0,"maximum":30,"step":0.25},"accelerationLookAheadSecondsSquared":{"minimum":0,"maximum":1,"step":0.01},"minimumHeadingSpeedMetersPerSecond":{"minimum":0,"maximum":20,"step":0.1},"velocityHeadingDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"fovDampingPerSecond":{"minimum":0,"maximum":30,"step":0.25},"horizontalDeadZoneRatio":{"minimum":0,"maximum":0.4,"step":0.01},"verticalDeadZoneRatio":{"minimum":0,"maximum":0.4,"step":0.01},"recenterDelaySeconds":{"minimum":0,"maximum":5,"step":0.05},"recenterDurationSeconds":{"minimum":0,"maximum":5,"step":0.05},"recenterMinimumSpeedMetersPerSecond":{"minimum":0,"maximum":10,"step":0.1},"teleportSnapDistanceMeters":{"minimum":1,"maximum":100,"step":1},"lookSensitivityXRatio":{"minimum":0.1,"maximum":3,"step":0.05},"lookSensitivityYRatio":{"minimum":0.1,"maximum":3,"step":0.05}},"aiMetadata":{"displayName":"Glide Flight","description":"Flight direction view with horizon and landing context.","semanticTags":["flight","glide","horizon"]}},{"kind":"camera-rig-profile","id":"follow.mounted","version":1,"resourceRef":"worldkit://camera-profile/follow.mounted@1","authoringAvailability":"experimental","baseMode":"stable-follow","algorithmRef":"worldkit://camera-rig/orbit-follow@1","headingSource":"target-forward","reverseHeadingPolicy":"preserve-target-forward","recenterMode":"always","preferredSocketIds":["CameraTarget3D","ThirdPersonTarget"],"parameters":{"distanceMeters":7,"minimumDistanceMeters":0.5,"maximumDistanceMeters":25,"targetHeightMeters":1.5,"shoulderOffsetMeters":0,"pitchRadians":0.24,"minimumPitchRadians":-1.2,"maximumPitchRadians":1.2,"positionDampingPerSecond":12,"horizontalPositionDampingPerSecond":12,"verticalPositionDampingPerSecond":14,"maximumPositionLagMeters":3,"rotationDampingPerSecond":12,"yawDampingPerSecond":8,"pitchDampingPerSecond":10,"collisionRadiusMeters":0.28,"collisionRetractionMetersPerSecond":30,"collisionRecoveryMetersPerSecond":5,"baseFovDegrees":61,"speedFovDegreesPerMeterPerSecond":0.6,"maximumSpeedFovDegrees":7,"lookAheadSeconds":0.25,"accelerationLookAheadSecondsSquared":0,"transitionSeconds":0.5,"minimumHeadingSpeedMetersPerSecond":0,"velocityHeadingDampingPerSecond":8,"fovDampingPerSecond":7,"horizontalDeadZoneRatio":0.05,"verticalDeadZoneRatio":0.05,"recenterDelaySeconds":0.6,"recenterDurationSeconds":0.9,"recenterMinimumSpeedMetersPerSecond":0,"teleportSnapDistanceMeters":15,"lookSensitivityXRatio":0.82,"lookSensitivityYRatio":0.68},"authoringRanges":{"distanceMeters":{"minimum":0.5,"maximum":25,"step":0.1},"targetHeightMeters":{"minimum":0,"maximum":5,"step":0.05},"shoulderOffsetMeters":{"minimum":-3,"maximum":3,"step":0.05},"pitchRadians":{"minimum":-1.2,"maximum":1.2,"step":0.01},"positionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"maximumPositionLagMeters":{"minimum":0,"maximum":16,"step":0.1},"rotationDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"collisionRadiusMeters":{"minimum":0,"maximum":2,"step":0.01},"baseFovDegrees":{"minimum":35,"maximum":100,"step":1},"speedFovDegreesPerMeterPerSecond":{"minimum":0,"maximum":5,"step":0.05},"maximumSpeedFovDegrees":{"minimum":0,"maximum":30,"step":0.5},"lookAheadSeconds":{"minimum":0,"maximum":2,"step":0.02},"transitionSeconds":{"minimum":0,"maximum":3,"step":0.05},"horizontalPositionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"verticalPositionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"yawDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"pitchDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"collisionRetractionMetersPerSecond":{"minimum":0,"maximum":60,"step":0.5},"collisionRecoveryMetersPerSecond":{"minimum":0,"maximum":30,"step":0.25},"accelerationLookAheadSecondsSquared":{"minimum":0,"maximum":1,"step":0.01},"minimumHeadingSpeedMetersPerSecond":{"minimum":0,"maximum":20,"step":0.1},"velocityHeadingDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"fovDampingPerSecond":{"minimum":0,"maximum":30,"step":0.25},"horizontalDeadZoneRatio":{"minimum":0,"maximum":0.4,"step":0.01},"verticalDeadZoneRatio":{"minimum":0,"maximum":0.4,"step":0.01},"recenterDelaySeconds":{"minimum":0,"maximum":5,"step":0.05},"recenterDurationSeconds":{"minimum":0,"maximum":5,"step":0.05},"recenterMinimumSpeedMetersPerSecond":{"minimum":0,"maximum":10,"step":0.1},"teleportSnapDistanceMeters":{"minimum":1,"maximum":100,"step":1},"lookSensitivityXRatio":{"minimum":0.1,"maximum":3,"step":0.05},"lookSensitivityYRatio":{"minimum":0.1,"maximum":3,"step":0.05}},"aiMetadata":{"displayName":"Mounted Follow","description":"Follow view for committed seat or mount relationships.","semanticTags":["follow","mounted"]}},{"kind":"camera-rig-profile","id":"orbit.quadruped-official","version":1,"resourceRef":"worldkit://camera-profile/orbit.quadruped-official@1","authoringAvailability":"advanced","baseMode":"free-orbit","algorithmRef":"worldkit://camera-rig/orbit-follow@1","headingSource":"view","reverseHeadingPolicy":"preserve-target-forward","recenterMode":"forward-motion","preferredSocketIds":["ThirdPersonTarget","CameraTarget3D"],"parameters":{"distanceMeters":5,"minimumDistanceMeters":0.5,"maximumDistanceMeters":20,"targetHeightMeters":1.35,"shoulderOffsetMeters":0,"pitchRadians":0.22,"minimumPitchRadians":-1.2,"maximumPitchRadians":1.2,"positionDampingPerSecond":18,"horizontalPositionDampingPerSecond":18,"verticalPositionDampingPerSecond":20,"maximumPositionLagMeters":2.5,"rotationDampingPerSecond":20,"yawDampingPerSecond":16,"pitchDampingPerSecond":14,"collisionRadiusMeters":0.2,"collisionRetractionMetersPerSecond":4.5,"collisionRecoveryMetersPerSecond":3.25,"baseFovDegrees":58,"speedFovDegreesPerMeterPerSecond":0.4,"maximumSpeedFovDegrees":4,"lookAheadSeconds":0,"accelerationLookAheadSecondsSquared":0,"transitionSeconds":0.35,"minimumHeadingSpeedMetersPerSecond":0,"velocityHeadingDampingPerSecond":16,"fovDampingPerSecond":8,"horizontalDeadZoneRatio":0.08,"verticalDeadZoneRatio":0.05,"recenterDelaySeconds":1,"recenterDurationSeconds":1.2,"recenterMinimumSpeedMetersPerSecond":1.2,"teleportSnapDistanceMeters":12,"lookSensitivityXRatio":1,"lookSensitivityYRatio":0.8},"authoringRanges":{"distanceMeters":{"minimum":0.5,"maximum":20,"step":0.1},"targetHeightMeters":{"minimum":0,"maximum":5,"step":0.05},"shoulderOffsetMeters":{"minimum":-3,"maximum":3,"step":0.05},"pitchRadians":{"minimum":-1.2,"maximum":1.2,"step":0.01},"positionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"maximumPositionLagMeters":{"minimum":0,"maximum":20,"step":0.1},"rotationDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"collisionRadiusMeters":{"minimum":0,"maximum":2,"step":0.01},"baseFovDegrees":{"minimum":35,"maximum":100,"step":1},"lookAheadSeconds":{"minimum":0,"maximum":2,"step":0.01},"transitionSeconds":{"minimum":0,"maximum":3,"step":0.05},"horizontalPositionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"verticalPositionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"yawDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"pitchDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"collisionRetractionMetersPerSecond":{"minimum":0,"maximum":60,"step":0.5},"collisionRecoveryMetersPerSecond":{"minimum":0,"maximum":30,"step":0.25},"accelerationLookAheadSecondsSquared":{"minimum":0,"maximum":1,"step":0.01},"minimumHeadingSpeedMetersPerSecond":{"minimum":0,"maximum":20,"step":0.1},"velocityHeadingDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"fovDampingPerSecond":{"minimum":0,"maximum":30,"step":0.25},"horizontalDeadZoneRatio":{"minimum":0,"maximum":0.4,"step":0.01},"verticalDeadZoneRatio":{"minimum":0,"maximum":0.4,"step":0.01},"recenterDelaySeconds":{"minimum":0,"maximum":5,"step":0.05},"recenterDurationSeconds":{"minimum":0,"maximum":5,"step":0.05},"recenterMinimumSpeedMetersPerSecond":{"minimum":0,"maximum":10,"step":0.1},"teleportSnapDistanceMeters":{"minimum":1,"maximum":100,"step":1},"lookSensitivityXRatio":{"minimum":0.1,"maximum":3,"step":0.05},"lookSensitivityYRatio":{"minimum":0.1,"maximum":3,"step":0.05}},"aiMetadata":{"displayName":"Quadruped Official Orbit","description":"Reviewed quadruped orbit default derived from the local tuning workspace.","semanticTags":["official","orbit","quadruped"]}}]');
-const modifiers = [{ "kind": "camera-modifier-profile", "id": "water-stability", "version": 1, "resourceRef": "worldkit://camera-modifier/water-stability@1", "authoringAvailability": "advanced", "parameterOverrides": { "distanceMeters": 7, "targetHeightMeters": 1.3, "horizontalPositionDampingPerSecond": 10, "verticalPositionDampingPerSecond": 14, "maximumPositionLagMeters": 2, "yawDampingPerSecond": 7, "pitchDampingPerSecond": 10, "lookAheadSeconds": 0.2, "accelerationLookAheadSecondsSquared": 0, "horizontalDeadZoneRatio": 0.05, "verticalDeadZoneRatio": 0.06 }, "recenterModeOverride": "forward-motion", "aiMetadata": { "displayName": "Water Stability Modifier", "description": "Adds slower vertical response and calmer framing without creating a separate camera mode.", "semanticTags": ["modifier", "stability", "water"] } }, { "kind": "camera-modifier-profile", "id": "mounted-framing", "version": 1, "resourceRef": "worldkit://camera-modifier/mounted-framing@1", "authoringAvailability": "advanced", "parameterOverrides": { "distanceMeters": 7, "targetHeightMeters": 1.5, "maximumPositionLagMeters": 3, "transitionSeconds": 0.45 }, "aiMetadata": { "displayName": "Mounted Framing Modifier", "description": "Widens framing for a committed rider, driver or passenger relationship.", "semanticTags": ["modifier", "mounted", "relationship"] } }, { "kind": "camera-modifier-profile", "id": "reverse-stability", "version": 1, "resourceRef": "worldkit://camera-modifier/reverse-stability@1", "authoringAvailability": "advanced", "parameterOverrides": { "lookAheadSeconds": 0.08, "accelerationLookAheadSecondsSquared": 0, "yawDampingPerSecond": 10 }, "reverseHeadingPolicyOverride": "preserve-target-forward", "aiMetadata": { "displayName": "Reverse Stability Modifier", "description": "Prevents a chase camera from flipping behind reverse velocity.", "semanticTags": ["modifier", "reverse", "stability"] } }, { "kind": "camera-modifier-profile", "id": "sprint-emphasis", "version": 1, "resourceRef": "worldkit://camera-modifier/sprint-emphasis@1", "authoringAvailability": "advanced", "parameterOverrides": { "speedFovDegreesPerMeterPerSecond": 0.8, "maximumSpeedFovDegrees": 10, "fovDampingPerSecond": 6 }, "aiMetadata": { "displayName": "Sprint Emphasis Modifier", "description": "Adds restrained speed framing while sprint or boost intent is committed.", "semanticTags": ["modifier", "speed", "sprint"] } }, { "kind": "camera-modifier-profile", "id": "aim-framing", "version": 1, "resourceRef": "worldkit://camera-modifier/aim-framing@1", "authoringAvailability": "advanced", "parameterOverrides": { "distanceMeters": 3.5, "targetHeightMeters": 1.45, "shoulderOffsetMeters": 0.55, "maximumPositionLagMeters": 1, "baseFovDegrees": 52, "lookAheadSeconds": 0, "transitionSeconds": 0.2 }, "recenterModeOverride": "off", "aiMetadata": { "displayName": "Aim Framing Modifier", "description": "Moves to a tighter shoulder composition while preserving the active base rig.", "semanticTags": ["aim", "modifier", "shoulder"] } }];
-const contexts = [{ "kind": "camera-context-profile", "id": "capability-driven.default", "version": 1, "resourceRef": "worldkit://camera-context/capability-driven.default@1", "authoringAvailability": "recommended", "defaultCameraRigProfileRef": "worldkit://camera-profile/follow.medium@1", "firstPersonCameraRigProfileRef": "worldkit://camera-profile/first-person.standard@1", "rules": [{ "id": "aim", "priority": 110, "when": { "requiredCameraContextTags": ["aim"] }, "cameraModifierRefs": ["worldkit://camera-modifier/aim-framing@1"] }, { "id": "mounted", "priority": 100, "when": { "relationshipRoles": ["driver", "passenger", "rider"] }, "cameraModifierRefs": ["worldkit://camera-modifier/mounted-framing@1"] }, { "id": "reverse", "priority": 95, "when": { "requiredCameraContextTags": ["reverse"] }, "cameraModifierRefs": ["worldkit://camera-modifier/reverse-stability@1"] }, { "id": "glide", "priority": 90, "when": { "requiredMotionTags": ["glide"], "movementMediums": ["air"] }, "cameraRigProfileRef": "worldkit://camera-profile/flight.glide@1" }, { "id": "water-surface", "priority": 80, "when": { "requiredMotionTags": ["water"], "movementMediums": ["water"] }, "cameraRigProfileRef": "worldkit://camera-profile/follow.medium@1", "cameraModifierRefs": ["worldkit://camera-modifier/water-stability@1"] }, { "id": "sprint", "priority": 65, "when": { "requiredCameraContextTags": ["sprint"] }, "cameraModifierRefs": ["worldkit://camera-modifier/sprint-emphasis@1"] }, { "id": "surface-fast", "priority": 70, "when": { "requiredMotionTags": ["surface-fast"] }, "cameraRigProfileRef": "worldkit://camera-profile/chase.surface-fast@1" }, { "id": "free-ground", "priority": 60, "when": { "requiredMotionTags": ["free-ground"] }, "cameraRigProfileRef": "worldkit://camera-profile/orbit.medium@1" }], "aiMetadata": { "displayName": "Capability-driven Camera Context", "description": "Selects camera behavior from committed relationship, motion and medium state.", "semanticTags": ["capability-driven", "context", "default"] } }, { "kind": "camera-context-profile", "id": "capability-driven.quadruped-official", "version": 1, "resourceRef": "worldkit://camera-context/capability-driven.quadruped-official@1", "authoringAvailability": "advanced", "defaultCameraRigProfileRef": "worldkit://camera-profile/orbit.quadruped-official@1", "firstPersonCameraRigProfileRef": "worldkit://camera-profile/first-person.standard@1", "rules": [{ "id": "aim", "priority": 110, "when": { "requiredCameraContextTags": ["aim"] }, "cameraModifierRefs": ["worldkit://camera-modifier/aim-framing@1"] }, { "id": "mounted", "priority": 100, "when": { "relationshipRoles": ["driver", "passenger", "rider"] }, "cameraModifierRefs": ["worldkit://camera-modifier/mounted-framing@1"] }, { "id": "reverse", "priority": 95, "when": { "requiredCameraContextTags": ["reverse"] }, "cameraModifierRefs": ["worldkit://camera-modifier/reverse-stability@1"] }, { "id": "glide", "priority": 90, "when": { "requiredMotionTags": ["glide"], "movementMediums": ["air"] }, "cameraRigProfileRef": "worldkit://camera-profile/flight.glide@1" }, { "id": "water-surface", "priority": 80, "when": { "requiredMotionTags": ["water"], "movementMediums": ["water"] }, "cameraRigProfileRef": "worldkit://camera-profile/follow.medium@1", "cameraModifierRefs": ["worldkit://camera-modifier/water-stability@1"] }, { "id": "sprint", "priority": 65, "when": { "requiredCameraContextTags": ["sprint"] }, "cameraModifierRefs": ["worldkit://camera-modifier/sprint-emphasis@1"] }, { "id": "surface-fast", "priority": 70, "when": { "requiredMotionTags": ["surface-fast"] }, "cameraRigProfileRef": "worldkit://camera-profile/chase.surface-fast@1" }, { "id": "free-ground", "priority": 60, "when": { "requiredMotionTags": ["free-ground"] }, "cameraRigProfileRef": "worldkit://camera-profile/orbit.medium@1" }], "aiMetadata": { "displayName": "Quadruped Official Camera Context", "description": "Quadruped public default with the reviewed orbit profile as its base view.", "semanticTags": ["capability-driven", "official", "quadruped"] } }];
+const modifiers = [{ "kind": "camera-modifier-profile", "id": "water-stability", "version": 1, "resourceRef": "worldkit://camera-modifier/water-stability@1", "authoringAvailability": "advanced", "parameterOverrides": { "distanceMeters": 7, "targetHeightMeters": 1.3, "horizontalPositionDampingPerSecond": 10, "verticalPositionDampingPerSecond": 14, "maximumPositionLagMeters": 2, "yawDampingPerSecond": 7, "pitchDampingPerSecond": 10, "lookAheadSeconds": 0.2, "accelerationLookAheadSecondsSquared": 0, "horizontalDeadZoneRatio": 0.05, "verticalDeadZoneRatio": 0.06 }, "recenterModeOverride": "forward-motion", "aiMetadata": { "displayName": "Water Stability Modifier", "description": "Adds slower vertical response and calmer framing without creating a separate camera mode.", "semanticTags": ["modifier", "stability", "water"] } }, { "kind": "camera-modifier-profile", "id": "mounted-framing", "version": 1, "resourceRef": "worldkit://camera-modifier/mounted-framing@1", "authoringAvailability": "advanced", "parameterOverrides": { "distanceMeters": 7, "targetHeightMeters": 1.5, "maximumPositionLagMeters": 3, "transitionSeconds": 0.45 }, "aiMetadata": { "displayName": "Mounted Framing Modifier", "description": "Widens framing when a committed mountedOn relationship resolves one unique Rider.", "semanticTags": ["modifier", "mounted", "relationship"] } }, { "kind": "camera-modifier-profile", "id": "reverse-stability", "version": 1, "resourceRef": "worldkit://camera-modifier/reverse-stability@1", "authoringAvailability": "advanced", "parameterOverrides": { "lookAheadSeconds": 0.08, "accelerationLookAheadSecondsSquared": 0, "yawDampingPerSecond": 10 }, "reverseHeadingPolicyOverride": "preserve-target-forward", "aiMetadata": { "displayName": "Reverse Stability Modifier", "description": "Prevents a chase camera from flipping behind reverse velocity.", "semanticTags": ["modifier", "reverse", "stability"] } }, { "kind": "camera-modifier-profile", "id": "sprint-emphasis", "version": 1, "resourceRef": "worldkit://camera-modifier/sprint-emphasis@1", "authoringAvailability": "advanced", "parameterOverrides": { "speedFovDegreesPerMeterPerSecond": 0.8, "maximumSpeedFovDegrees": 10, "fovDampingPerSecond": 6 }, "aiMetadata": { "displayName": "Sprint Emphasis Modifier", "description": "Adds restrained speed framing while sprint or boost intent is committed.", "semanticTags": ["modifier", "speed", "sprint"] } }, { "kind": "camera-modifier-profile", "id": "aim-framing", "version": 1, "resourceRef": "worldkit://camera-modifier/aim-framing@1", "authoringAvailability": "advanced", "parameterOverrides": { "distanceMeters": 3.5, "targetHeightMeters": 1.45, "shoulderOffsetMeters": 0.55, "maximumPositionLagMeters": 1, "baseFovDegrees": 52, "lookAheadSeconds": 0, "transitionSeconds": 0.2 }, "recenterModeOverride": "off", "aiMetadata": { "displayName": "Aim Framing Modifier", "description": "Moves to a tighter shoulder composition while preserving the active base rig.", "semanticTags": ["aim", "modifier", "shoulder"] } }];
+const contexts = [{ "kind": "camera-context-profile", "id": "capability-driven.default", "version": 1, "resourceRef": "worldkit://camera-context/capability-driven.default@1", "authoringAvailability": "recommended", "defaultCameraRigProfileRef": "worldkit://camera-profile/follow.medium@1", "firstPersonCameraRigProfileRef": "worldkit://camera-profile/first-person.standard@1", "rules": [{ "id": "aim", "priority": 110, "when": { "requiredCameraContextTags": ["aim"] }, "cameraModifierRefs": ["worldkit://camera-modifier/aim-framing@1"] }, { "id": "mounted", "priority": 100, "when": { "allRelationshipConditions": [{ "type": "mountedOn", "entityRole": "rider" }] }, "cameraModifierRefs": ["worldkit://camera-modifier/mounted-framing@1"] }, { "id": "reverse", "priority": 95, "when": { "requiredCameraContextTags": ["reverse"] }, "cameraModifierRefs": ["worldkit://camera-modifier/reverse-stability@1"] }, { "id": "glide", "priority": 90, "when": { "requiredMotionTags": ["glide"], "movementMediums": ["air"] }, "cameraRigProfileRef": "worldkit://camera-profile/flight.glide@1" }, { "id": "water-surface", "priority": 80, "when": { "requiredMotionTags": ["water"], "movementMediums": ["water"] }, "cameraRigProfileRef": "worldkit://camera-profile/follow.medium@1", "cameraModifierRefs": ["worldkit://camera-modifier/water-stability@1"] }, { "id": "sprint", "priority": 65, "when": { "requiredCameraContextTags": ["sprint"] }, "cameraModifierRefs": ["worldkit://camera-modifier/sprint-emphasis@1"] }, { "id": "surface-fast", "priority": 70, "when": { "requiredMotionTags": ["surface-fast"] }, "cameraRigProfileRef": "worldkit://camera-profile/chase.surface-fast@1" }, { "id": "free-ground", "priority": 60, "when": { "requiredMotionTags": ["free-ground"] }, "cameraRigProfileRef": "worldkit://camera-profile/orbit.medium@1" }], "aiMetadata": { "displayName": "Capability-driven Camera Context", "description": "Selects camera behavior from committed relationship, motion and medium state.", "semanticTags": ["capability-driven", "context", "default"] } }, { "kind": "camera-context-profile", "id": "capability-driven.quadruped-official", "version": 1, "resourceRef": "worldkit://camera-context/capability-driven.quadruped-official@1", "authoringAvailability": "advanced", "defaultCameraRigProfileRef": "worldkit://camera-profile/orbit.quadruped-official@1", "firstPersonCameraRigProfileRef": "worldkit://camera-profile/first-person.standard@1", "rules": [{ "id": "aim", "priority": 110, "when": { "requiredCameraContextTags": ["aim"] }, "cameraModifierRefs": ["worldkit://camera-modifier/aim-framing@1"] }, { "id": "mounted", "priority": 100, "when": { "allRelationshipConditions": [{ "type": "mountedOn", "entityRole": "rider" }] }, "cameraModifierRefs": ["worldkit://camera-modifier/mounted-framing@1"] }, { "id": "reverse", "priority": 95, "when": { "requiredCameraContextTags": ["reverse"] }, "cameraModifierRefs": ["worldkit://camera-modifier/reverse-stability@1"] }, { "id": "glide", "priority": 90, "when": { "requiredMotionTags": ["glide"], "movementMediums": ["air"] }, "cameraRigProfileRef": "worldkit://camera-profile/flight.glide@1" }, { "id": "water-surface", "priority": 80, "when": { "requiredMotionTags": ["water"], "movementMediums": ["water"] }, "cameraRigProfileRef": "worldkit://camera-profile/follow.medium@1", "cameraModifierRefs": ["worldkit://camera-modifier/water-stability@1"] }, { "id": "sprint", "priority": 65, "when": { "requiredCameraContextTags": ["sprint"] }, "cameraModifierRefs": ["worldkit://camera-modifier/sprint-emphasis@1"] }, { "id": "surface-fast", "priority": 70, "when": { "requiredMotionTags": ["surface-fast"] }, "cameraRigProfileRef": "worldkit://camera-profile/chase.surface-fast@1" }, { "id": "free-ground", "priority": 60, "when": { "requiredMotionTags": ["free-ground"] }, "cameraRigProfileRef": "worldkit://camera-profile/orbit.medium@1" }], "aiMetadata": { "displayName": "Quadruped Official Camera Context", "description": "Quadruped public default with the reviewed orbit profile as its base view.", "semanticTags": ["capability-driven", "official", "quadruped"] } }];
 const cameraCatalog = {
   algorithms,
   profiles,
@@ -20104,7 +20539,7 @@ const motionProfiles = [
   }
 ];
 const poseSets = [{ "kind": "pose-set-profile", "id": "static.whitebox", "version": 1, "resourceRef": "worldkit://pose-set/static.whitebox@1", "authoringAvailability": "recommended", "poseIds": ["idle", "move", "fall"], "defaultPoseId": "idle", "aiMetadata": { "displayName": "Static Whitebox Pose Set", "description": "Semantic fallback poses for primitive whitebox subjects.", "semanticTags": ["pose", "static", "whitebox"] } }];
-const renderBindings = [{ "kind": "render-binding-profile", "id": "subject.standard", "version": 1, "resourceRef": "worldkit://render-binding/subject.standard@1", "authoringAvailability": "recommended", "publishedStateFields": ["semanticClassId", "bodyTopology", "forwardXYZ", "speedMetersPerSecond", "movementMedium", "activeMotionKernelRef", "activeActionId", "relationshipRole"], "aiMetadata": { "displayName": "Standard Subject Render Binding", "description": "Publishes stable movement and relationship facts to whitebox and world-model renderers.", "semanticTags": ["render-binding", "subject"] } }];
+const renderBindings = [{ "kind": "render-binding-profile", "id": "subject.standard", "version": 1, "resourceRef": "worldkit://render-binding/subject.standard@1", "authoringAvailability": "recommended", "publishedStateFields": ["semanticClassId", "bodyTopology", "forwardXYZ", "speedMetersPerSecond", "movementMedium", "activeMotionKernelRef", "activeActionId"], "aiMetadata": { "displayName": "Standard Subject Render Binding", "description": "Publishes stable committed movement and action facts to whitebox and world-model renderers.", "semanticTags": ["render-binding", "subject"] } }];
 const poseAndRenderCatalog = {
   poseSets,
   renderBindings
@@ -24480,41 +24915,6 @@ function requireSubschema() {
   return subschema;
 }
 var resolve = {};
-var fastDeepEqual;
-var hasRequiredFastDeepEqual;
-function requireFastDeepEqual() {
-  if (hasRequiredFastDeepEqual) return fastDeepEqual;
-  hasRequiredFastDeepEqual = 1;
-  fastDeepEqual = function equal2(a, b) {
-    if (a === b) return true;
-    if (a && b && typeof a == "object" && typeof b == "object") {
-      if (a.constructor !== b.constructor) return false;
-      var length, i, keys2;
-      if (Array.isArray(a)) {
-        length = a.length;
-        if (length != b.length) return false;
-        for (i = length; i-- !== 0; )
-          if (!equal2(a[i], b[i])) return false;
-        return true;
-      }
-      if (a.constructor === RegExp) return a.source === b.source && a.flags === b.flags;
-      if (a.valueOf !== Object.prototype.valueOf) return a.valueOf() === b.valueOf();
-      if (a.toString !== Object.prototype.toString) return a.toString() === b.toString();
-      keys2 = Object.keys(a);
-      length = keys2.length;
-      if (length !== Object.keys(b).length) return false;
-      for (i = length; i-- !== 0; )
-        if (!Object.prototype.hasOwnProperty.call(b, keys2[i])) return false;
-      for (i = length; i-- !== 0; ) {
-        var key = keys2[i];
-        if (!equal2(a[key], b[key])) return false;
-      }
-      return true;
-    }
-    return a !== a && b !== b;
-  };
-  return fastDeepEqual;
-}
 var jsonSchemaTraverse = { exports: {} };
 var hasRequiredJsonSchemaTraverse;
 function requireJsonSchemaTraverse() {
@@ -27423,17 +27823,6 @@ function requireLimitItems() {
   return limitItems;
 }
 var uniqueItems = {};
-var equal = {};
-var hasRequiredEqual;
-function requireEqual() {
-  if (hasRequiredEqual) return equal;
-  hasRequiredEqual = 1;
-  Object.defineProperty(equal, "__esModule", { value: true });
-  const equal$1 = requireFastDeepEqual();
-  equal$1.code = 'require("ajv/dist/runtime/equal").default';
-  equal.default = equal$1;
-  return equal;
-}
 var hasRequiredUniqueItems;
 function requireUniqueItems() {
   if (hasRequiredUniqueItems) return uniqueItems;
@@ -34318,6 +34707,7 @@ function createCoreGameplayBootstrapV1(input) {
     id: `${input.worldId}.gameplay`,
     version: 1,
     resourceRef: `worldkit://gameplay-bootstrap/${input.worldId}.${input.worldSeed}@1`,
+    semanticFactProjectorProfileResource: RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
     entityDescriptors: input.entityDescriptors,
     featureResourceLocks: [{
       resourceRef: coreControlManifest.resourceRef,

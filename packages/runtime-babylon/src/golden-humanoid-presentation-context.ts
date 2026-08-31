@@ -123,12 +123,6 @@ function cameraContextFromCommittedFacts(
   action: GameplayActionStateV1 | undefined,
   registry: ActionPresentationRegistryV1,
 ): CameraContextSampleV2 {
-  if (admittedContext.semanticAuthorityStatus !== "available") {
-    throw failure(
-      "3C_CAMERA_CONTEXT_UNCOMMITTED",
-      "Golden projection requires available committed semantic authority.",
-    );
-  }
   const binding = action === undefined
     ? undefined
     : registry.resolveAction(action.semanticActionRef, action.semanticActionHash);

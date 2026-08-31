@@ -905,10 +905,10 @@ function baseUniq(array, iteratee, comparator) {
 function uniq(array) {
   return array && array.length ? baseUniq(array) : [];
 }
-function invalid$1(schemaName) {
+function invalid$2(schemaName) {
   throw new RangeError(`Value must match the closed ${schemaName} schema.`);
 }
-function snapshotDataRecord(value) {
+function snapshotDataRecord$1(value) {
   if (typeof value !== "object" || isNil(value)) return void 0;
   try {
     const prototype = Reflect.getPrototypeOf(value);
@@ -924,21 +924,21 @@ function snapshotDataRecord(value) {
     return void 0;
   }
 }
-function hasExactKeys(value, keys) {
+function hasExactKeys$1(value, keys) {
   const ownKeys = Reflect.ownKeys(value);
   return ownKeys.length === keys.length && ownKeys.every((key) => typeof key === "string" && keys.includes(key));
 }
 function isSafeNonNegativeInteger(value) {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && !Object.is(value, -0);
 }
-function deepFreeze$1(value) {
+function deepFreeze$2(value) {
   if (typeof value !== "object" || isNil(value) || Object.isFrozen(value)) {
     return value;
   }
   for (const key of Reflect.ownKeys(value)) {
     const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
     if (!isNil(descriptor) && "value" in descriptor) {
-      deepFreeze$1(descriptor.value);
+      deepFreeze$2(descriptor.value);
     }
   }
   return Object.freeze(value);
@@ -960,11 +960,11 @@ const GAMEPLAY_CAPACITY_BUDGET_KEYS = [
 ];
 function parseGameplayCapacityBudgetV1(input) {
   const schemaName = "GameplayCapacityBudgetV1";
-  const record2 = snapshotDataRecord(input) ?? invalid$1(schemaName);
-  if (!hasExactKeys(record2, GAMEPLAY_CAPACITY_BUDGET_KEYS) || !GAMEPLAY_CAPACITY_BUDGET_KEYS.every(
+  const record2 = snapshotDataRecord$1(input) ?? invalid$2(schemaName);
+  if (!hasExactKeys$1(record2, GAMEPLAY_CAPACITY_BUDGET_KEYS) || !GAMEPLAY_CAPACITY_BUDGET_KEYS.every(
     (key) => isSafeNonNegativeInteger(record2[key])
-  )) invalid$1(schemaName);
-  return deepFreeze$1(Object.fromEntries(
+  )) invalid$2(schemaName);
+  return deepFreeze$2(Object.fromEntries(
     GAMEPLAY_CAPACITY_BUDGET_KEYS.map((key) => [key, record2[key]])
   ));
 }
@@ -982,6 +982,150 @@ parseGameplayCapacityBudgetV1({
   maximumRetainedReceiptCount: 4096,
   maximumRetainedEventCount: 8192,
   maximumRetainedWorldStateSnapshotCount: 4096
+});
+function invalid$1(schemaName) {
+  throw new RangeError(`Value must match the closed ${schemaName} schema.`);
+}
+function snapshotDataRecord(value) {
+  if (typeof value !== "object" || isNil(value)) return void 0;
+  try {
+    if (Reflect.getPrototypeOf(value) !== Object.prototype) return void 0;
+    const snapshot = {};
+    for (const key of Reflect.ownKeys(value)) {
+      const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
+      if (typeof key !== "string" || isNil(descriptor) || !descriptor.enumerable || !("value" in descriptor)) return void 0;
+      Object.defineProperty(snapshot, key, {
+        configurable: true,
+        enumerable: true,
+        value: descriptor.value,
+        writable: true
+      });
+    }
+    return snapshot;
+  } catch {
+    return void 0;
+  }
+}
+function snapshotDataArray(value) {
+  if (!Array.isArray(value)) return void 0;
+  try {
+    if (Reflect.getPrototypeOf(value) !== Array.prototype) return void 0;
+    if (Reflect.ownKeys(value).some((key) => typeof key === "symbol")) {
+      return void 0;
+    }
+    if (Object.getOwnPropertyNames(value).length !== value.length + 1) {
+      return void 0;
+    }
+    const snapshot = [];
+    for (let index = 0; index < value.length; index += 1) {
+      const descriptor = Reflect.getOwnPropertyDescriptor(value, String(index));
+      if (isNil(descriptor) || !descriptor.enumerable || !("value" in descriptor)) return void 0;
+      snapshot.push(descriptor.value);
+    }
+    const lengthDescriptor = Reflect.getOwnPropertyDescriptor(value, "length");
+    if (isNil(lengthDescriptor) || lengthDescriptor.enumerable !== false) {
+      return void 0;
+    }
+    return snapshot;
+  } catch {
+    return void 0;
+  }
+}
+function hasExactKeys(record2, keys) {
+  const ownKeys = Reflect.ownKeys(record2);
+  return ownKeys.length === keys.length && ownKeys.every(
+    (key) => typeof key === "string" && keys.includes(key)
+  );
+}
+function isNonEmptyString(value) {
+  return typeof value === "string" && value.length > 0;
+}
+function deepFreeze$1(value) {
+  if (typeof value !== "object" || isNil(value) || Object.isFrozen(value)) {
+    return value;
+  }
+  for (const key of Reflect.ownKeys(value)) {
+    const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
+    if (!isNil(descriptor) && "value" in descriptor) {
+      deepFreeze$1(descriptor.value);
+    }
+  }
+  return Object.freeze(value);
+}
+function parseSemanticFactProjectorProfileResourceBody(input) {
+  const schemaName = "SemanticFactProjectorProfileResourceBodyV1";
+  const record2 = snapshotDataRecord(input);
+  if (isNil(record2) || !hasExactKeys(record2, [
+    "kind",
+    "schemaVersion",
+    "id",
+    "version",
+    "resourceRef",
+    "supportedByProjection"
+  ]) || record2.kind !== "semantic-fact-projector-profile" || record2.schemaVersion !== 1 || !isNonEmptyString(record2.id) || record2.version !== 1 || !isNonEmptyString(record2.resourceRef)) invalid$1(schemaName);
+  const supportedByProjection = snapshotDataRecord(
+    record2.supportedByProjection
+  );
+  if (isNil(supportedByProjection) || !hasExactKeys(
+    supportedByProjection,
+    [
+      "supportSampleSource",
+      "acceptedSupportStates",
+      "supportSurfaceMotionMode",
+      "supportPointHeightToleranceMode",
+      "minimumContactToAggregateSupportNormalCosine",
+      "ambiguousSurfaceMode",
+      "endDelayTicks"
+    ]
+  )) invalid$1(schemaName);
+  const acceptedSupportStates = snapshotDataArray(
+    supportedByProjection.acceptedSupportStates
+  );
+  if (supportedByProjection.supportSampleSource !== "retained-character-support" || isNil(acceptedSupportStates) || acceptedSupportStates.length !== 2 || acceptedSupportStates[0] !== "sliding" || acceptedSupportStates[1] !== "supported" || supportedByProjection.supportSurfaceMotionMode !== "static" || supportedByProjection.supportPointHeightToleranceMode !== "character-body-contact-band" || typeof supportedByProjection.minimumContactToAggregateSupportNormalCosine !== "number" || !Number.isFinite(
+    supportedByProjection.minimumContactToAggregateSupportNormalCosine
+  ) || supportedByProjection.minimumContactToAggregateSupportNormalCosine < 0 || supportedByProjection.minimumContactToAggregateSupportNormalCosine > 1 || Object.is(
+    supportedByProjection.minimumContactToAggregateSupportNormalCosine,
+    -0
+  ) || supportedByProjection.ambiguousSurfaceMode !== "omit" || supportedByProjection.endDelayTicks !== 0) invalid$1(schemaName);
+  return deepFreeze$1({
+    kind: "semantic-fact-projector-profile",
+    schemaVersion: 1,
+    id: record2.id,
+    version: 1,
+    resourceRef: record2.resourceRef,
+    supportedByProjection: {
+      supportSampleSource: "retained-character-support",
+      acceptedSupportStates: ["sliding", "supported"],
+      supportSurfaceMotionMode: "static",
+      supportPointHeightToleranceMode: "character-body-contact-band",
+      minimumContactToAggregateSupportNormalCosine: supportedByProjection.minimumContactToAggregateSupportNormalCosine,
+      ambiguousSurfaceMode: "omit",
+      endDelayTicks: 0
+    }
+  });
+}
+function createSemanticFactProjectorProfileResourceV1(input) {
+  const body = parseSemanticFactProjectorProfileResourceBody(input);
+  return deepFreeze$1({
+    ...body,
+    contentHash: sha256CanonicalJson(body)
+  });
+}
+createSemanticFactProjectorProfileResourceV1({
+  kind: "semantic-fact-projector-profile",
+  schemaVersion: 1,
+  id: "physics-retained-support",
+  version: 1,
+  resourceRef: "worldkit://semantic-fact-projector-profile/physics.retained-support@1",
+  supportedByProjection: {
+    supportSampleSource: "retained-character-support",
+    acceptedSupportStates: ["sliding", "supported"],
+    supportSurfaceMotionMode: "static",
+    supportPointHeightToleranceMode: "character-body-contact-band",
+    minimumContactToAggregateSupportNormalCosine: 0.95,
+    ambiguousSurfaceMode: "omit",
+    endDelayTicks: 0
+  }
 });
 const CAMERA_RIG_PARAMETER_NAMES_V1 = [
   "distanceMeters",
@@ -1332,7 +1476,56 @@ function requireUcs2length() {
 }
 var ucs2lengthExports = /* @__PURE__ */ requireUcs2length();
 const func2Module = /* @__PURE__ */ getDefaultExportFromCjs(ucs2lengthExports);
+var equal = {};
+var fastDeepEqual;
+var hasRequiredFastDeepEqual;
+function requireFastDeepEqual() {
+  if (hasRequiredFastDeepEqual) return fastDeepEqual;
+  hasRequiredFastDeepEqual = 1;
+  fastDeepEqual = function equal2(a, b) {
+    if (a === b) return true;
+    if (a && b && typeof a == "object" && typeof b == "object") {
+      if (a.constructor !== b.constructor) return false;
+      var length, i, keys;
+      if (Array.isArray(a)) {
+        length = a.length;
+        if (length != b.length) return false;
+        for (i = length; i-- !== 0; )
+          if (!equal2(a[i], b[i])) return false;
+        return true;
+      }
+      if (a.constructor === RegExp) return a.source === b.source && a.flags === b.flags;
+      if (a.valueOf !== Object.prototype.valueOf) return a.valueOf() === b.valueOf();
+      if (a.toString !== Object.prototype.toString) return a.toString() === b.toString();
+      keys = Object.keys(a);
+      length = keys.length;
+      if (length !== Object.keys(b).length) return false;
+      for (i = length; i-- !== 0; )
+        if (!Object.prototype.hasOwnProperty.call(b, keys[i])) return false;
+      for (i = length; i-- !== 0; ) {
+        var key = keys[i];
+        if (!equal2(a[key], b[key])) return false;
+      }
+      return true;
+    }
+    return a !== a && b !== b;
+  };
+  return fastDeepEqual;
+}
+var hasRequiredEqual;
+function requireEqual() {
+  if (hasRequiredEqual) return equal;
+  hasRequiredEqual = 1;
+  Object.defineProperty(equal, "__esModule", { value: true });
+  const equal$1 = requireFastDeepEqual();
+  equal$1.code = 'require("ajv/dist/runtime/equal").default';
+  equal.default = equal$1;
+  return equal;
+}
+var equalExports = /* @__PURE__ */ requireEqual();
+const func0Module = /* @__PURE__ */ getDefaultExportFromCjs(equalExports);
 typeof func2Module === "function" ? func2Module : func2Module.default;
+typeof func0Module === "function" ? func0Module : func0Module.default;
 Object.freeze([
   ...SUBJECT_RESOURCE_KINDS_V1,
   "gameplay-bootstrap"
@@ -3638,8 +3831,8 @@ const BUILT_IN_SUBJECT_DEFINITIONS = [
 ];
 const algorithms = [{ "kind": "camera-rig-algorithm", "id": "socket-first-person", "version": 1, "resourceRef": "worldkit://camera-rig/socket-first-person@1", "authoringAvailability": "recommended", "implementationId": "socket-first-person", "runtimeStatus": "implemented", "aiMetadata": { "displayName": "Socket First Person", "description": "Positions the view at a declared first-person socket.", "semanticTags": ["first-person", "socket"] } }, { "kind": "camera-rig-algorithm", "id": "orbit-follow", "version": 1, "resourceRef": "worldkit://camera-rig/orbit-follow@1", "authoringAvailability": "recommended", "implementationId": "orbit-follow", "runtimeStatus": "implemented", "aiMetadata": { "displayName": "Orbit Follow", "description": "Orbits and follows a stable target frame with collision shortening.", "semanticTags": ["follow", "orbit"] } }, { "kind": "camera-rig-algorithm", "id": "velocity-chase", "version": 1, "resourceRef": "worldkit://camera-rig/velocity-chase@1", "authoringAvailability": "advanced", "implementationId": "velocity-chase", "runtimeStatus": "implemented", "aiMetadata": { "displayName": "Velocity Chase", "description": "Chases a moving target with velocity look-ahead and speed FOV.", "semanticTags": ["chase", "speed", "velocity"] } }, { "kind": "camera-rig-algorithm", "id": "flight-horizon", "version": 1, "resourceRef": "worldkit://camera-rig/flight-horizon@1", "authoringAvailability": "experimental", "implementationId": "flight-horizon", "runtimeStatus": "implemented", "aiMetadata": { "displayName": "Flight Horizon", "description": "Follows flight direction while retaining horizon and landing context.", "semanticTags": ["flight", "horizon"] } }];
 const profiles = /* @__PURE__ */ JSON.parse('[{"kind":"camera-rig-profile","id":"first-person.standard","version":1,"resourceRef":"worldkit://camera-profile/first-person.standard@1","authoringAvailability":"recommended","baseMode":"first-person","algorithmRef":"worldkit://camera-rig/socket-first-person@1","headingSource":"target-forward","reverseHeadingPolicy":"preserve-target-forward","recenterMode":"off","preferredSocketIds":["FirstPersonView"],"parameters":{"distanceMeters":0,"minimumDistanceMeters":0,"maximumDistanceMeters":0,"targetHeightMeters":1.64,"shoulderOffsetMeters":0,"pitchRadians":0,"minimumPitchRadians":-1.2,"maximumPitchRadians":1.2,"positionDampingPerSecond":30,"horizontalPositionDampingPerSecond":30,"verticalPositionDampingPerSecond":30,"maximumPositionLagMeters":0.1,"rotationDampingPerSecond":24,"yawDampingPerSecond":24,"pitchDampingPerSecond":20,"collisionRadiusMeters":0.05,"collisionRetractionMetersPerSecond":40,"collisionRecoveryMetersPerSecond":12,"baseFovDegrees":70,"speedFovDegreesPerMeterPerSecond":0,"maximumSpeedFovDegrees":0,"lookAheadSeconds":0,"accelerationLookAheadSecondsSquared":0,"transitionSeconds":0.25,"minimumHeadingSpeedMetersPerSecond":0,"velocityHeadingDampingPerSecond":24,"fovDampingPerSecond":12,"horizontalDeadZoneRatio":0,"verticalDeadZoneRatio":0,"recenterDelaySeconds":0,"recenterDurationSeconds":0,"recenterMinimumSpeedMetersPerSecond":0,"teleportSnapDistanceMeters":8,"lookSensitivityXRatio":0.8,"lookSensitivityYRatio":0.7},"authoringRanges":{"targetHeightMeters":{"minimum":0,"maximum":3,"step":0.02},"pitchRadians":{"minimum":-1.2,"maximum":1.2,"step":0.01},"positionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"maximumPositionLagMeters":{"minimum":0,"maximum":5,"step":0.1},"rotationDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"baseFovDegrees":{"minimum":35,"maximum":100,"step":1},"transitionSeconds":{"minimum":0,"maximum":3,"step":0.05},"horizontalPositionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"verticalPositionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"yawDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"pitchDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"velocityHeadingDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"fovDampingPerSecond":{"minimum":0,"maximum":30,"step":0.25},"teleportSnapDistanceMeters":{"minimum":1,"maximum":100,"step":1},"lookSensitivityXRatio":{"minimum":0.1,"maximum":3,"step":0.05},"lookSensitivityYRatio":{"minimum":0.1,"maximum":3,"step":0.05}},"aiMetadata":{"displayName":"Standard First Person","description":"Stable socket first-person view for subjects that expose FirstPersonView.","semanticTags":["first-person","standard"]}},{"kind":"camera-rig-profile","id":"orbit.medium","version":1,"resourceRef":"worldkit://camera-profile/orbit.medium@1","authoringAvailability":"recommended","baseMode":"free-orbit","algorithmRef":"worldkit://camera-rig/orbit-follow@1","headingSource":"view","reverseHeadingPolicy":"preserve-target-forward","recenterMode":"off","preferredSocketIds":["ThirdPersonTarget","CameraTarget3D"],"parameters":{"distanceMeters":5,"minimumDistanceMeters":0.5,"maximumDistanceMeters":20,"targetHeightMeters":1.25,"shoulderOffsetMeters":0,"pitchRadians":0.22,"minimumPitchRadians":-1.2,"maximumPitchRadians":1.2,"positionDampingPerSecond":18,"horizontalPositionDampingPerSecond":18,"verticalPositionDampingPerSecond":20,"maximumPositionLagMeters":2.5,"rotationDampingPerSecond":20,"yawDampingPerSecond":16,"pitchDampingPerSecond":14,"collisionRadiusMeters":0.12,"collisionRetractionMetersPerSecond":30,"collisionRecoveryMetersPerSecond":6,"baseFovDegrees":58,"speedFovDegreesPerMeterPerSecond":0.4,"maximumSpeedFovDegrees":4,"lookAheadSeconds":0,"accelerationLookAheadSecondsSquared":0,"transitionSeconds":0.35,"minimumHeadingSpeedMetersPerSecond":0,"velocityHeadingDampingPerSecond":16,"fovDampingPerSecond":8,"horizontalDeadZoneRatio":0.08,"verticalDeadZoneRatio":0.05,"recenterDelaySeconds":1,"recenterDurationSeconds":1.2,"recenterMinimumSpeedMetersPerSecond":1.2,"teleportSnapDistanceMeters":12,"lookSensitivityXRatio":1,"lookSensitivityYRatio":0.8},"authoringRanges":{"distanceMeters":{"minimum":0.5,"maximum":20,"step":0.1},"targetHeightMeters":{"minimum":0,"maximum":5,"step":0.05},"shoulderOffsetMeters":{"minimum":-3,"maximum":3,"step":0.05},"pitchRadians":{"minimum":-1.2,"maximum":1.2,"step":0.01},"positionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"maximumPositionLagMeters":{"minimum":0,"maximum":20,"step":0.1},"rotationDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"collisionRadiusMeters":{"minimum":0,"maximum":2,"step":0.01},"baseFovDegrees":{"minimum":35,"maximum":100,"step":1},"lookAheadSeconds":{"minimum":0,"maximum":2,"step":0.01},"transitionSeconds":{"minimum":0,"maximum":3,"step":0.05},"horizontalPositionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"verticalPositionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"yawDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"pitchDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"collisionRetractionMetersPerSecond":{"minimum":0,"maximum":60,"step":0.5},"collisionRecoveryMetersPerSecond":{"minimum":0,"maximum":30,"step":0.25},"accelerationLookAheadSecondsSquared":{"minimum":0,"maximum":1,"step":0.01},"minimumHeadingSpeedMetersPerSecond":{"minimum":0,"maximum":20,"step":0.1},"velocityHeadingDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"fovDampingPerSecond":{"minimum":0,"maximum":30,"step":0.25},"horizontalDeadZoneRatio":{"minimum":0,"maximum":0.4,"step":0.01},"verticalDeadZoneRatio":{"minimum":0,"maximum":0.4,"step":0.01},"recenterDelaySeconds":{"minimum":0,"maximum":5,"step":0.05},"recenterDurationSeconds":{"minimum":0,"maximum":5,"step":0.05},"recenterMinimumSpeedMetersPerSecond":{"minimum":0,"maximum":10,"step":0.1},"teleportSnapDistanceMeters":{"minimum":1,"maximum":100,"step":1},"lookSensitivityXRatio":{"minimum":0.1,"maximum":3,"step":0.05},"lookSensitivityYRatio":{"minimum":0.1,"maximum":3,"step":0.05}},"aiMetadata":{"displayName":"Medium Orbit","description":"General orbit view for medium controllable subjects.","semanticTags":["medium","orbit"]}},{"kind":"camera-rig-profile","id":"follow.medium","version":1,"resourceRef":"worldkit://camera-profile/follow.medium@1","authoringAvailability":"advanced","baseMode":"stable-follow","algorithmRef":"worldkit://camera-rig/orbit-follow@1","headingSource":"target-forward","reverseHeadingPolicy":"preserve-target-forward","recenterMode":"always","preferredSocketIds":["CameraTarget3D","ThirdPersonTarget"],"parameters":{"distanceMeters":6,"minimumDistanceMeters":0.5,"maximumDistanceMeters":20,"targetHeightMeters":1.1,"shoulderOffsetMeters":0,"pitchRadians":0.26,"minimumPitchRadians":-1.2,"maximumPitchRadians":1.2,"positionDampingPerSecond":14,"horizontalPositionDampingPerSecond":14,"verticalPositionDampingPerSecond":16,"maximumPositionLagMeters":2,"rotationDampingPerSecond":16,"yawDampingPerSecond":9,"pitchDampingPerSecond":12,"collisionRadiusMeters":0.12,"collisionRetractionMetersPerSecond":30,"collisionRecoveryMetersPerSecond":6,"baseFovDegrees":60,"speedFovDegreesPerMeterPerSecond":0.6,"maximumSpeedFovDegrees":5,"lookAheadSeconds":0.15,"accelerationLookAheadSecondsSquared":0,"transitionSeconds":0.4,"minimumHeadingSpeedMetersPerSecond":0,"velocityHeadingDampingPerSecond":10,"fovDampingPerSecond":8,"horizontalDeadZoneRatio":0.05,"verticalDeadZoneRatio":0.04,"recenterDelaySeconds":0.7,"recenterDurationSeconds":1,"recenterMinimumSpeedMetersPerSecond":0,"teleportSnapDistanceMeters":12,"lookSensitivityXRatio":0.9,"lookSensitivityYRatio":0.75},"authoringRanges":{"distanceMeters":{"minimum":0.5,"maximum":20,"step":0.1},"targetHeightMeters":{"minimum":0,"maximum":5,"step":0.05},"shoulderOffsetMeters":{"minimum":-3,"maximum":3,"step":0.05},"pitchRadians":{"minimum":-1.2,"maximum":1.2,"step":0.01},"positionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"maximumPositionLagMeters":{"minimum":0,"maximum":20,"step":0.1},"rotationDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"collisionRadiusMeters":{"minimum":0,"maximum":2,"step":0.01},"baseFovDegrees":{"minimum":35,"maximum":100,"step":1},"lookAheadSeconds":{"minimum":0,"maximum":2,"step":0.02},"transitionSeconds":{"minimum":0,"maximum":3,"step":0.05},"horizontalPositionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"verticalPositionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"yawDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"pitchDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"collisionRetractionMetersPerSecond":{"minimum":0,"maximum":60,"step":0.5},"collisionRecoveryMetersPerSecond":{"minimum":0,"maximum":30,"step":0.25},"accelerationLookAheadSecondsSquared":{"minimum":0,"maximum":1,"step":0.01},"minimumHeadingSpeedMetersPerSecond":{"minimum":0,"maximum":20,"step":0.1},"velocityHeadingDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"fovDampingPerSecond":{"minimum":0,"maximum":30,"step":0.25},"horizontalDeadZoneRatio":{"minimum":0,"maximum":0.4,"step":0.01},"verticalDeadZoneRatio":{"minimum":0,"maximum":0.4,"step":0.01},"recenterDelaySeconds":{"minimum":0,"maximum":5,"step":0.05},"recenterDurationSeconds":{"minimum":0,"maximum":5,"step":0.05},"recenterMinimumSpeedMetersPerSecond":{"minimum":0,"maximum":10,"step":0.1},"teleportSnapDistanceMeters":{"minimum":1,"maximum":100,"step":1},"lookSensitivityXRatio":{"minimum":0.1,"maximum":3,"step":0.05},"lookSensitivityYRatio":{"minimum":0.1,"maximum":3,"step":0.05}},"aiMetadata":{"displayName":"Medium Follow","description":"Stable follow view for forward-steering subjects.","semanticTags":["follow","medium"]}},{"kind":"camera-rig-profile","id":"chase.surface-fast","version":1,"resourceRef":"worldkit://camera-profile/chase.surface-fast@1","authoringAvailability":"advanced","baseMode":"speed-chase","algorithmRef":"worldkit://camera-rig/velocity-chase@1","headingSource":"target-velocity","reverseHeadingPolicy":"preserve-target-forward","recenterMode":"forward-motion","preferredSocketIds":["CameraTarget3D","LookAhead"],"parameters":{"distanceMeters":8,"minimumDistanceMeters":0.5,"maximumDistanceMeters":30,"targetHeightMeters":1.2,"shoulderOffsetMeters":0,"pitchRadians":0.18,"minimumPitchRadians":-1.2,"maximumPitchRadians":1.2,"positionDampingPerSecond":11,"horizontalPositionDampingPerSecond":11,"verticalPositionDampingPerSecond":14,"maximumPositionLagMeters":3,"rotationDampingPerSecond":12,"yawDampingPerSecond":8,"pitchDampingPerSecond":10,"collisionRadiusMeters":0.3,"collisionRetractionMetersPerSecond":36,"collisionRecoveryMetersPerSecond":5,"baseFovDegrees":62,"speedFovDegreesPerMeterPerSecond":0.9,"maximumSpeedFovDegrees":12,"lookAheadSeconds":0.45,"accelerationLookAheadSecondsSquared":0.08,"transitionSeconds":0.45,"minimumHeadingSpeedMetersPerSecond":1,"velocityHeadingDampingPerSecond":8,"fovDampingPerSecond":6,"horizontalDeadZoneRatio":0.04,"verticalDeadZoneRatio":0.04,"recenterDelaySeconds":0.5,"recenterDurationSeconds":0.8,"recenterMinimumSpeedMetersPerSecond":2,"teleportSnapDistanceMeters":20,"lookSensitivityXRatio":0.85,"lookSensitivityYRatio":0.7},"authoringRanges":{"distanceMeters":{"minimum":0.5,"maximum":30,"step":0.1},"targetHeightMeters":{"minimum":0,"maximum":5,"step":0.05},"shoulderOffsetMeters":{"minimum":-3,"maximum":3,"step":0.05},"pitchRadians":{"minimum":-1.2,"maximum":1.2,"step":0.01},"positionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"maximumPositionLagMeters":{"minimum":0,"maximum":30,"step":0.1},"rotationDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"collisionRadiusMeters":{"minimum":0,"maximum":2,"step":0.01},"baseFovDegrees":{"minimum":35,"maximum":100,"step":1},"speedFovDegreesPerMeterPerSecond":{"minimum":0,"maximum":5,"step":0.05},"maximumSpeedFovDegrees":{"minimum":0,"maximum":30,"step":0.5},"lookAheadSeconds":{"minimum":0,"maximum":2,"step":0.02},"transitionSeconds":{"minimum":0,"maximum":3,"step":0.05},"horizontalPositionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"verticalPositionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"yawDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"pitchDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"collisionRetractionMetersPerSecond":{"minimum":0,"maximum":60,"step":0.5},"collisionRecoveryMetersPerSecond":{"minimum":0,"maximum":30,"step":0.25},"accelerationLookAheadSecondsSquared":{"minimum":0,"maximum":1,"step":0.01},"minimumHeadingSpeedMetersPerSecond":{"minimum":0,"maximum":20,"step":0.1},"velocityHeadingDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"fovDampingPerSecond":{"minimum":0,"maximum":30,"step":0.25},"horizontalDeadZoneRatio":{"minimum":0,"maximum":0.4,"step":0.01},"verticalDeadZoneRatio":{"minimum":0,"maximum":0.4,"step":0.01},"recenterDelaySeconds":{"minimum":0,"maximum":5,"step":0.05},"recenterDurationSeconds":{"minimum":0,"maximum":5,"step":0.05},"recenterMinimumSpeedMetersPerSecond":{"minimum":0,"maximum":10,"step":0.1},"teleportSnapDistanceMeters":{"minimum":1,"maximum":100,"step":1},"lookSensitivityXRatio":{"minimum":0.1,"maximum":3,"step":0.05},"lookSensitivityYRatio":{"minimum":0.1,"maximum":3,"step":0.05}},"aiMetadata":{"displayName":"Fast Surface Chase","description":"Velocity chase view for fast movement along a support surface.","semanticTags":["chase","fast","surface"]}},{"kind":"camera-rig-profile","id":"follow.water-surface","version":1,"resourceRef":"worldkit://camera-profile/follow.water-surface@1","authoringAvailability":"experimental","baseMode":"stable-follow","algorithmRef":"worldkit://camera-rig/orbit-follow@1","headingSource":"target-forward","reverseHeadingPolicy":"preserve-target-forward","recenterMode":"forward-motion","preferredSocketIds":["CameraTarget3D","LookAhead"],"parameters":{"distanceMeters":7,"minimumDistanceMeters":0.5,"maximumDistanceMeters":25,"targetHeightMeters":1.3,"shoulderOffsetMeters":0,"pitchRadians":0.3,"minimumPitchRadians":-1.2,"maximumPitchRadians":1.2,"positionDampingPerSecond":10,"horizontalPositionDampingPerSecond":10,"verticalPositionDampingPerSecond":14,"maximumPositionLagMeters":2,"rotationDampingPerSecond":10,"yawDampingPerSecond":7,"pitchDampingPerSecond":10,"collisionRadiusMeters":0.3,"collisionRetractionMetersPerSecond":28,"collisionRecoveryMetersPerSecond":5,"baseFovDegrees":60,"speedFovDegreesPerMeterPerSecond":0.5,"maximumSpeedFovDegrees":5,"lookAheadSeconds":0.2,"accelerationLookAheadSecondsSquared":0,"transitionSeconds":0.45,"minimumHeadingSpeedMetersPerSecond":0.3,"velocityHeadingDampingPerSecond":7,"fovDampingPerSecond":7,"horizontalDeadZoneRatio":0.05,"verticalDeadZoneRatio":0.06,"recenterDelaySeconds":0.8,"recenterDurationSeconds":1.2,"recenterMinimumSpeedMetersPerSecond":0.5,"teleportSnapDistanceMeters":15,"lookSensitivityXRatio":0.8,"lookSensitivityYRatio":0.65},"authoringRanges":{"distanceMeters":{"minimum":0.5,"maximum":25,"step":0.1},"targetHeightMeters":{"minimum":0,"maximum":5,"step":0.05},"shoulderOffsetMeters":{"minimum":-3,"maximum":3,"step":0.05},"pitchRadians":{"minimum":-1.2,"maximum":1.2,"step":0.01},"positionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"maximumPositionLagMeters":{"minimum":0,"maximum":25,"step":0.1},"rotationDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"collisionRadiusMeters":{"minimum":0,"maximum":2,"step":0.01},"baseFovDegrees":{"minimum":35,"maximum":100,"step":1},"speedFovDegreesPerMeterPerSecond":{"minimum":0,"maximum":5,"step":0.05},"maximumSpeedFovDegrees":{"minimum":0,"maximum":30,"step":0.5},"lookAheadSeconds":{"minimum":0,"maximum":2,"step":0.02},"transitionSeconds":{"minimum":0,"maximum":3,"step":0.05},"horizontalPositionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"verticalPositionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"yawDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"pitchDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"collisionRetractionMetersPerSecond":{"minimum":0,"maximum":60,"step":0.5},"collisionRecoveryMetersPerSecond":{"minimum":0,"maximum":30,"step":0.25},"accelerationLookAheadSecondsSquared":{"minimum":0,"maximum":1,"step":0.01},"minimumHeadingSpeedMetersPerSecond":{"minimum":0,"maximum":20,"step":0.1},"velocityHeadingDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"fovDampingPerSecond":{"minimum":0,"maximum":30,"step":0.25},"horizontalDeadZoneRatio":{"minimum":0,"maximum":0.4,"step":0.01},"verticalDeadZoneRatio":{"minimum":0,"maximum":0.4,"step":0.01},"recenterDelaySeconds":{"minimum":0,"maximum":5,"step":0.05},"recenterDurationSeconds":{"minimum":0,"maximum":5,"step":0.05},"recenterMinimumSpeedMetersPerSecond":{"minimum":0,"maximum":10,"step":0.1},"teleportSnapDistanceMeters":{"minimum":1,"maximum":100,"step":1},"lookSensitivityXRatio":{"minimum":0.1,"maximum":3,"step":0.05},"lookSensitivityYRatio":{"minimum":0.1,"maximum":3,"step":0.05}},"aiMetadata":{"displayName":"Water Surface Follow","description":"Low-response follow view that preserves water horizon context.","semanticTags":["follow","surface","water"]}},{"kind":"camera-rig-profile","id":"flight.glide","version":1,"resourceRef":"worldkit://camera-profile/flight.glide@1","authoringAvailability":"experimental","baseMode":"flight-horizon","algorithmRef":"worldkit://camera-rig/flight-horizon@1","headingSource":"target-velocity","reverseHeadingPolicy":"follow-velocity","recenterMode":"forward-motion","preferredSocketIds":["CameraTarget3D","LookAhead"],"parameters":{"distanceMeters":9,"minimumDistanceMeters":1,"maximumDistanceMeters":30,"targetHeightMeters":1.4,"shoulderOffsetMeters":0,"pitchRadians":0.12,"minimumPitchRadians":-1,"maximumPitchRadians":1,"positionDampingPerSecond":8,"horizontalPositionDampingPerSecond":8,"verticalPositionDampingPerSecond":10,"maximumPositionLagMeters":5,"rotationDampingPerSecond":9,"yawDampingPerSecond":6,"pitchDampingPerSecond":8,"collisionRadiusMeters":0.25,"collisionRetractionMetersPerSecond":30,"collisionRecoveryMetersPerSecond":4,"baseFovDegrees":64,"speedFovDegreesPerMeterPerSecond":0.8,"maximumSpeedFovDegrees":10,"lookAheadSeconds":0.6,"accelerationLookAheadSecondsSquared":0.1,"transitionSeconds":0.55,"minimumHeadingSpeedMetersPerSecond":2,"velocityHeadingDampingPerSecond":6,"fovDampingPerSecond":6,"horizontalDeadZoneRatio":0.05,"verticalDeadZoneRatio":0.05,"recenterDelaySeconds":0.6,"recenterDurationSeconds":1,"recenterMinimumSpeedMetersPerSecond":2,"teleportSnapDistanceMeters":25,"lookSensitivityXRatio":0.75,"lookSensitivityYRatio":0.65},"authoringRanges":{"distanceMeters":{"minimum":1,"maximum":30,"step":0.1},"targetHeightMeters":{"minimum":0,"maximum":6,"step":0.05},"shoulderOffsetMeters":{"minimum":-3,"maximum":3,"step":0.05},"pitchRadians":{"minimum":-1,"maximum":1,"step":0.01},"positionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"maximumPositionLagMeters":{"minimum":0,"maximum":24,"step":0.1},"rotationDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"collisionRadiusMeters":{"minimum":0,"maximum":2,"step":0.01},"baseFovDegrees":{"minimum":35,"maximum":100,"step":1},"speedFovDegreesPerMeterPerSecond":{"minimum":0,"maximum":5,"step":0.05},"maximumSpeedFovDegrees":{"minimum":0,"maximum":30,"step":0.5},"lookAheadSeconds":{"minimum":0,"maximum":2,"step":0.02},"transitionSeconds":{"minimum":0,"maximum":3,"step":0.05},"horizontalPositionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"verticalPositionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"yawDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"pitchDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"collisionRetractionMetersPerSecond":{"minimum":0,"maximum":60,"step":0.5},"collisionRecoveryMetersPerSecond":{"minimum":0,"maximum":30,"step":0.25},"accelerationLookAheadSecondsSquared":{"minimum":0,"maximum":1,"step":0.01},"minimumHeadingSpeedMetersPerSecond":{"minimum":0,"maximum":20,"step":0.1},"velocityHeadingDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"fovDampingPerSecond":{"minimum":0,"maximum":30,"step":0.25},"horizontalDeadZoneRatio":{"minimum":0,"maximum":0.4,"step":0.01},"verticalDeadZoneRatio":{"minimum":0,"maximum":0.4,"step":0.01},"recenterDelaySeconds":{"minimum":0,"maximum":5,"step":0.05},"recenterDurationSeconds":{"minimum":0,"maximum":5,"step":0.05},"recenterMinimumSpeedMetersPerSecond":{"minimum":0,"maximum":10,"step":0.1},"teleportSnapDistanceMeters":{"minimum":1,"maximum":100,"step":1},"lookSensitivityXRatio":{"minimum":0.1,"maximum":3,"step":0.05},"lookSensitivityYRatio":{"minimum":0.1,"maximum":3,"step":0.05}},"aiMetadata":{"displayName":"Glide Flight","description":"Flight direction view with horizon and landing context.","semanticTags":["flight","glide","horizon"]}},{"kind":"camera-rig-profile","id":"follow.mounted","version":1,"resourceRef":"worldkit://camera-profile/follow.mounted@1","authoringAvailability":"experimental","baseMode":"stable-follow","algorithmRef":"worldkit://camera-rig/orbit-follow@1","headingSource":"target-forward","reverseHeadingPolicy":"preserve-target-forward","recenterMode":"always","preferredSocketIds":["CameraTarget3D","ThirdPersonTarget"],"parameters":{"distanceMeters":7,"minimumDistanceMeters":0.5,"maximumDistanceMeters":25,"targetHeightMeters":1.5,"shoulderOffsetMeters":0,"pitchRadians":0.24,"minimumPitchRadians":-1.2,"maximumPitchRadians":1.2,"positionDampingPerSecond":12,"horizontalPositionDampingPerSecond":12,"verticalPositionDampingPerSecond":14,"maximumPositionLagMeters":3,"rotationDampingPerSecond":12,"yawDampingPerSecond":8,"pitchDampingPerSecond":10,"collisionRadiusMeters":0.28,"collisionRetractionMetersPerSecond":30,"collisionRecoveryMetersPerSecond":5,"baseFovDegrees":61,"speedFovDegreesPerMeterPerSecond":0.6,"maximumSpeedFovDegrees":7,"lookAheadSeconds":0.25,"accelerationLookAheadSecondsSquared":0,"transitionSeconds":0.5,"minimumHeadingSpeedMetersPerSecond":0,"velocityHeadingDampingPerSecond":8,"fovDampingPerSecond":7,"horizontalDeadZoneRatio":0.05,"verticalDeadZoneRatio":0.05,"recenterDelaySeconds":0.6,"recenterDurationSeconds":0.9,"recenterMinimumSpeedMetersPerSecond":0,"teleportSnapDistanceMeters":15,"lookSensitivityXRatio":0.82,"lookSensitivityYRatio":0.68},"authoringRanges":{"distanceMeters":{"minimum":0.5,"maximum":25,"step":0.1},"targetHeightMeters":{"minimum":0,"maximum":5,"step":0.05},"shoulderOffsetMeters":{"minimum":-3,"maximum":3,"step":0.05},"pitchRadians":{"minimum":-1.2,"maximum":1.2,"step":0.01},"positionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"maximumPositionLagMeters":{"minimum":0,"maximum":16,"step":0.1},"rotationDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"collisionRadiusMeters":{"minimum":0,"maximum":2,"step":0.01},"baseFovDegrees":{"minimum":35,"maximum":100,"step":1},"speedFovDegreesPerMeterPerSecond":{"minimum":0,"maximum":5,"step":0.05},"maximumSpeedFovDegrees":{"minimum":0,"maximum":30,"step":0.5},"lookAheadSeconds":{"minimum":0,"maximum":2,"step":0.02},"transitionSeconds":{"minimum":0,"maximum":3,"step":0.05},"horizontalPositionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"verticalPositionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"yawDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"pitchDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"collisionRetractionMetersPerSecond":{"minimum":0,"maximum":60,"step":0.5},"collisionRecoveryMetersPerSecond":{"minimum":0,"maximum":30,"step":0.25},"accelerationLookAheadSecondsSquared":{"minimum":0,"maximum":1,"step":0.01},"minimumHeadingSpeedMetersPerSecond":{"minimum":0,"maximum":20,"step":0.1},"velocityHeadingDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"fovDampingPerSecond":{"minimum":0,"maximum":30,"step":0.25},"horizontalDeadZoneRatio":{"minimum":0,"maximum":0.4,"step":0.01},"verticalDeadZoneRatio":{"minimum":0,"maximum":0.4,"step":0.01},"recenterDelaySeconds":{"minimum":0,"maximum":5,"step":0.05},"recenterDurationSeconds":{"minimum":0,"maximum":5,"step":0.05},"recenterMinimumSpeedMetersPerSecond":{"minimum":0,"maximum":10,"step":0.1},"teleportSnapDistanceMeters":{"minimum":1,"maximum":100,"step":1},"lookSensitivityXRatio":{"minimum":0.1,"maximum":3,"step":0.05},"lookSensitivityYRatio":{"minimum":0.1,"maximum":3,"step":0.05}},"aiMetadata":{"displayName":"Mounted Follow","description":"Follow view for committed seat or mount relationships.","semanticTags":["follow","mounted"]}},{"kind":"camera-rig-profile","id":"orbit.quadruped-official","version":1,"resourceRef":"worldkit://camera-profile/orbit.quadruped-official@1","authoringAvailability":"advanced","baseMode":"free-orbit","algorithmRef":"worldkit://camera-rig/orbit-follow@1","headingSource":"view","reverseHeadingPolicy":"preserve-target-forward","recenterMode":"forward-motion","preferredSocketIds":["ThirdPersonTarget","CameraTarget3D"],"parameters":{"distanceMeters":5,"minimumDistanceMeters":0.5,"maximumDistanceMeters":20,"targetHeightMeters":1.35,"shoulderOffsetMeters":0,"pitchRadians":0.22,"minimumPitchRadians":-1.2,"maximumPitchRadians":1.2,"positionDampingPerSecond":18,"horizontalPositionDampingPerSecond":18,"verticalPositionDampingPerSecond":20,"maximumPositionLagMeters":2.5,"rotationDampingPerSecond":20,"yawDampingPerSecond":16,"pitchDampingPerSecond":14,"collisionRadiusMeters":0.2,"collisionRetractionMetersPerSecond":4.5,"collisionRecoveryMetersPerSecond":3.25,"baseFovDegrees":58,"speedFovDegreesPerMeterPerSecond":0.4,"maximumSpeedFovDegrees":4,"lookAheadSeconds":0,"accelerationLookAheadSecondsSquared":0,"transitionSeconds":0.35,"minimumHeadingSpeedMetersPerSecond":0,"velocityHeadingDampingPerSecond":16,"fovDampingPerSecond":8,"horizontalDeadZoneRatio":0.08,"verticalDeadZoneRatio":0.05,"recenterDelaySeconds":1,"recenterDurationSeconds":1.2,"recenterMinimumSpeedMetersPerSecond":1.2,"teleportSnapDistanceMeters":12,"lookSensitivityXRatio":1,"lookSensitivityYRatio":0.8},"authoringRanges":{"distanceMeters":{"minimum":0.5,"maximum":20,"step":0.1},"targetHeightMeters":{"minimum":0,"maximum":5,"step":0.05},"shoulderOffsetMeters":{"minimum":-3,"maximum":3,"step":0.05},"pitchRadians":{"minimum":-1.2,"maximum":1.2,"step":0.01},"positionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"maximumPositionLagMeters":{"minimum":0,"maximum":20,"step":0.1},"rotationDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"collisionRadiusMeters":{"minimum":0,"maximum":2,"step":0.01},"baseFovDegrees":{"minimum":35,"maximum":100,"step":1},"lookAheadSeconds":{"minimum":0,"maximum":2,"step":0.01},"transitionSeconds":{"minimum":0,"maximum":3,"step":0.05},"horizontalPositionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"verticalPositionDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"yawDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"pitchDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"collisionRetractionMetersPerSecond":{"minimum":0,"maximum":60,"step":0.5},"collisionRecoveryMetersPerSecond":{"minimum":0,"maximum":30,"step":0.25},"accelerationLookAheadSecondsSquared":{"minimum":0,"maximum":1,"step":0.01},"minimumHeadingSpeedMetersPerSecond":{"minimum":0,"maximum":20,"step":0.1},"velocityHeadingDampingPerSecond":{"minimum":0,"maximum":40,"step":0.25},"fovDampingPerSecond":{"minimum":0,"maximum":30,"step":0.25},"horizontalDeadZoneRatio":{"minimum":0,"maximum":0.4,"step":0.01},"verticalDeadZoneRatio":{"minimum":0,"maximum":0.4,"step":0.01},"recenterDelaySeconds":{"minimum":0,"maximum":5,"step":0.05},"recenterDurationSeconds":{"minimum":0,"maximum":5,"step":0.05},"recenterMinimumSpeedMetersPerSecond":{"minimum":0,"maximum":10,"step":0.1},"teleportSnapDistanceMeters":{"minimum":1,"maximum":100,"step":1},"lookSensitivityXRatio":{"minimum":0.1,"maximum":3,"step":0.05},"lookSensitivityYRatio":{"minimum":0.1,"maximum":3,"step":0.05}},"aiMetadata":{"displayName":"Quadruped Official Orbit","description":"Reviewed quadruped orbit default derived from the local tuning workspace.","semanticTags":["official","orbit","quadruped"]}}]');
-const modifiers = [{ "kind": "camera-modifier-profile", "id": "water-stability", "version": 1, "resourceRef": "worldkit://camera-modifier/water-stability@1", "authoringAvailability": "advanced", "parameterOverrides": { "distanceMeters": 7, "targetHeightMeters": 1.3, "horizontalPositionDampingPerSecond": 10, "verticalPositionDampingPerSecond": 14, "maximumPositionLagMeters": 2, "yawDampingPerSecond": 7, "pitchDampingPerSecond": 10, "lookAheadSeconds": 0.2, "accelerationLookAheadSecondsSquared": 0, "horizontalDeadZoneRatio": 0.05, "verticalDeadZoneRatio": 0.06 }, "recenterModeOverride": "forward-motion", "aiMetadata": { "displayName": "Water Stability Modifier", "description": "Adds slower vertical response and calmer framing without creating a separate camera mode.", "semanticTags": ["modifier", "stability", "water"] } }, { "kind": "camera-modifier-profile", "id": "mounted-framing", "version": 1, "resourceRef": "worldkit://camera-modifier/mounted-framing@1", "authoringAvailability": "advanced", "parameterOverrides": { "distanceMeters": 7, "targetHeightMeters": 1.5, "maximumPositionLagMeters": 3, "transitionSeconds": 0.45 }, "aiMetadata": { "displayName": "Mounted Framing Modifier", "description": "Widens framing for a committed rider, driver or passenger relationship.", "semanticTags": ["modifier", "mounted", "relationship"] } }, { "kind": "camera-modifier-profile", "id": "reverse-stability", "version": 1, "resourceRef": "worldkit://camera-modifier/reverse-stability@1", "authoringAvailability": "advanced", "parameterOverrides": { "lookAheadSeconds": 0.08, "accelerationLookAheadSecondsSquared": 0, "yawDampingPerSecond": 10 }, "reverseHeadingPolicyOverride": "preserve-target-forward", "aiMetadata": { "displayName": "Reverse Stability Modifier", "description": "Prevents a chase camera from flipping behind reverse velocity.", "semanticTags": ["modifier", "reverse", "stability"] } }, { "kind": "camera-modifier-profile", "id": "sprint-emphasis", "version": 1, "resourceRef": "worldkit://camera-modifier/sprint-emphasis@1", "authoringAvailability": "advanced", "parameterOverrides": { "speedFovDegreesPerMeterPerSecond": 0.8, "maximumSpeedFovDegrees": 10, "fovDampingPerSecond": 6 }, "aiMetadata": { "displayName": "Sprint Emphasis Modifier", "description": "Adds restrained speed framing while sprint or boost intent is committed.", "semanticTags": ["modifier", "speed", "sprint"] } }, { "kind": "camera-modifier-profile", "id": "aim-framing", "version": 1, "resourceRef": "worldkit://camera-modifier/aim-framing@1", "authoringAvailability": "advanced", "parameterOverrides": { "distanceMeters": 3.5, "targetHeightMeters": 1.45, "shoulderOffsetMeters": 0.55, "maximumPositionLagMeters": 1, "baseFovDegrees": 52, "lookAheadSeconds": 0, "transitionSeconds": 0.2 }, "recenterModeOverride": "off", "aiMetadata": { "displayName": "Aim Framing Modifier", "description": "Moves to a tighter shoulder composition while preserving the active base rig.", "semanticTags": ["aim", "modifier", "shoulder"] } }];
-const contexts = [{ "kind": "camera-context-profile", "id": "capability-driven.default", "version": 1, "resourceRef": "worldkit://camera-context/capability-driven.default@1", "authoringAvailability": "recommended", "defaultCameraRigProfileRef": "worldkit://camera-profile/follow.medium@1", "firstPersonCameraRigProfileRef": "worldkit://camera-profile/first-person.standard@1", "rules": [{ "id": "aim", "priority": 110, "when": { "requiredCameraContextTags": ["aim"] }, "cameraModifierRefs": ["worldkit://camera-modifier/aim-framing@1"] }, { "id": "mounted", "priority": 100, "when": { "relationshipRoles": ["driver", "passenger", "rider"] }, "cameraModifierRefs": ["worldkit://camera-modifier/mounted-framing@1"] }, { "id": "reverse", "priority": 95, "when": { "requiredCameraContextTags": ["reverse"] }, "cameraModifierRefs": ["worldkit://camera-modifier/reverse-stability@1"] }, { "id": "glide", "priority": 90, "when": { "requiredMotionTags": ["glide"], "movementMediums": ["air"] }, "cameraRigProfileRef": "worldkit://camera-profile/flight.glide@1" }, { "id": "water-surface", "priority": 80, "when": { "requiredMotionTags": ["water"], "movementMediums": ["water"] }, "cameraRigProfileRef": "worldkit://camera-profile/follow.medium@1", "cameraModifierRefs": ["worldkit://camera-modifier/water-stability@1"] }, { "id": "sprint", "priority": 65, "when": { "requiredCameraContextTags": ["sprint"] }, "cameraModifierRefs": ["worldkit://camera-modifier/sprint-emphasis@1"] }, { "id": "surface-fast", "priority": 70, "when": { "requiredMotionTags": ["surface-fast"] }, "cameraRigProfileRef": "worldkit://camera-profile/chase.surface-fast@1" }, { "id": "free-ground", "priority": 60, "when": { "requiredMotionTags": ["free-ground"] }, "cameraRigProfileRef": "worldkit://camera-profile/orbit.medium@1" }], "aiMetadata": { "displayName": "Capability-driven Camera Context", "description": "Selects camera behavior from committed relationship, motion and medium state.", "semanticTags": ["capability-driven", "context", "default"] } }, { "kind": "camera-context-profile", "id": "capability-driven.quadruped-official", "version": 1, "resourceRef": "worldkit://camera-context/capability-driven.quadruped-official@1", "authoringAvailability": "advanced", "defaultCameraRigProfileRef": "worldkit://camera-profile/orbit.quadruped-official@1", "firstPersonCameraRigProfileRef": "worldkit://camera-profile/first-person.standard@1", "rules": [{ "id": "aim", "priority": 110, "when": { "requiredCameraContextTags": ["aim"] }, "cameraModifierRefs": ["worldkit://camera-modifier/aim-framing@1"] }, { "id": "mounted", "priority": 100, "when": { "relationshipRoles": ["driver", "passenger", "rider"] }, "cameraModifierRefs": ["worldkit://camera-modifier/mounted-framing@1"] }, { "id": "reverse", "priority": 95, "when": { "requiredCameraContextTags": ["reverse"] }, "cameraModifierRefs": ["worldkit://camera-modifier/reverse-stability@1"] }, { "id": "glide", "priority": 90, "when": { "requiredMotionTags": ["glide"], "movementMediums": ["air"] }, "cameraRigProfileRef": "worldkit://camera-profile/flight.glide@1" }, { "id": "water-surface", "priority": 80, "when": { "requiredMotionTags": ["water"], "movementMediums": ["water"] }, "cameraRigProfileRef": "worldkit://camera-profile/follow.medium@1", "cameraModifierRefs": ["worldkit://camera-modifier/water-stability@1"] }, { "id": "sprint", "priority": 65, "when": { "requiredCameraContextTags": ["sprint"] }, "cameraModifierRefs": ["worldkit://camera-modifier/sprint-emphasis@1"] }, { "id": "surface-fast", "priority": 70, "when": { "requiredMotionTags": ["surface-fast"] }, "cameraRigProfileRef": "worldkit://camera-profile/chase.surface-fast@1" }, { "id": "free-ground", "priority": 60, "when": { "requiredMotionTags": ["free-ground"] }, "cameraRigProfileRef": "worldkit://camera-profile/orbit.medium@1" }], "aiMetadata": { "displayName": "Quadruped Official Camera Context", "description": "Quadruped public default with the reviewed orbit profile as its base view.", "semanticTags": ["capability-driven", "official", "quadruped"] } }];
+const modifiers = [{ "kind": "camera-modifier-profile", "id": "water-stability", "version": 1, "resourceRef": "worldkit://camera-modifier/water-stability@1", "authoringAvailability": "advanced", "parameterOverrides": { "distanceMeters": 7, "targetHeightMeters": 1.3, "horizontalPositionDampingPerSecond": 10, "verticalPositionDampingPerSecond": 14, "maximumPositionLagMeters": 2, "yawDampingPerSecond": 7, "pitchDampingPerSecond": 10, "lookAheadSeconds": 0.2, "accelerationLookAheadSecondsSquared": 0, "horizontalDeadZoneRatio": 0.05, "verticalDeadZoneRatio": 0.06 }, "recenterModeOverride": "forward-motion", "aiMetadata": { "displayName": "Water Stability Modifier", "description": "Adds slower vertical response and calmer framing without creating a separate camera mode.", "semanticTags": ["modifier", "stability", "water"] } }, { "kind": "camera-modifier-profile", "id": "mounted-framing", "version": 1, "resourceRef": "worldkit://camera-modifier/mounted-framing@1", "authoringAvailability": "advanced", "parameterOverrides": { "distanceMeters": 7, "targetHeightMeters": 1.5, "maximumPositionLagMeters": 3, "transitionSeconds": 0.45 }, "aiMetadata": { "displayName": "Mounted Framing Modifier", "description": "Widens framing when a committed mountedOn relationship resolves one unique Rider.", "semanticTags": ["modifier", "mounted", "relationship"] } }, { "kind": "camera-modifier-profile", "id": "reverse-stability", "version": 1, "resourceRef": "worldkit://camera-modifier/reverse-stability@1", "authoringAvailability": "advanced", "parameterOverrides": { "lookAheadSeconds": 0.08, "accelerationLookAheadSecondsSquared": 0, "yawDampingPerSecond": 10 }, "reverseHeadingPolicyOverride": "preserve-target-forward", "aiMetadata": { "displayName": "Reverse Stability Modifier", "description": "Prevents a chase camera from flipping behind reverse velocity.", "semanticTags": ["modifier", "reverse", "stability"] } }, { "kind": "camera-modifier-profile", "id": "sprint-emphasis", "version": 1, "resourceRef": "worldkit://camera-modifier/sprint-emphasis@1", "authoringAvailability": "advanced", "parameterOverrides": { "speedFovDegreesPerMeterPerSecond": 0.8, "maximumSpeedFovDegrees": 10, "fovDampingPerSecond": 6 }, "aiMetadata": { "displayName": "Sprint Emphasis Modifier", "description": "Adds restrained speed framing while sprint or boost intent is committed.", "semanticTags": ["modifier", "speed", "sprint"] } }, { "kind": "camera-modifier-profile", "id": "aim-framing", "version": 1, "resourceRef": "worldkit://camera-modifier/aim-framing@1", "authoringAvailability": "advanced", "parameterOverrides": { "distanceMeters": 3.5, "targetHeightMeters": 1.45, "shoulderOffsetMeters": 0.55, "maximumPositionLagMeters": 1, "baseFovDegrees": 52, "lookAheadSeconds": 0, "transitionSeconds": 0.2 }, "recenterModeOverride": "off", "aiMetadata": { "displayName": "Aim Framing Modifier", "description": "Moves to a tighter shoulder composition while preserving the active base rig.", "semanticTags": ["aim", "modifier", "shoulder"] } }];
+const contexts = [{ "kind": "camera-context-profile", "id": "capability-driven.default", "version": 1, "resourceRef": "worldkit://camera-context/capability-driven.default@1", "authoringAvailability": "recommended", "defaultCameraRigProfileRef": "worldkit://camera-profile/follow.medium@1", "firstPersonCameraRigProfileRef": "worldkit://camera-profile/first-person.standard@1", "rules": [{ "id": "aim", "priority": 110, "when": { "requiredCameraContextTags": ["aim"] }, "cameraModifierRefs": ["worldkit://camera-modifier/aim-framing@1"] }, { "id": "mounted", "priority": 100, "when": { "allRelationshipConditions": [{ "type": "mountedOn", "entityRole": "rider" }] }, "cameraModifierRefs": ["worldkit://camera-modifier/mounted-framing@1"] }, { "id": "reverse", "priority": 95, "when": { "requiredCameraContextTags": ["reverse"] }, "cameraModifierRefs": ["worldkit://camera-modifier/reverse-stability@1"] }, { "id": "glide", "priority": 90, "when": { "requiredMotionTags": ["glide"], "movementMediums": ["air"] }, "cameraRigProfileRef": "worldkit://camera-profile/flight.glide@1" }, { "id": "water-surface", "priority": 80, "when": { "requiredMotionTags": ["water"], "movementMediums": ["water"] }, "cameraRigProfileRef": "worldkit://camera-profile/follow.medium@1", "cameraModifierRefs": ["worldkit://camera-modifier/water-stability@1"] }, { "id": "sprint", "priority": 65, "when": { "requiredCameraContextTags": ["sprint"] }, "cameraModifierRefs": ["worldkit://camera-modifier/sprint-emphasis@1"] }, { "id": "surface-fast", "priority": 70, "when": { "requiredMotionTags": ["surface-fast"] }, "cameraRigProfileRef": "worldkit://camera-profile/chase.surface-fast@1" }, { "id": "free-ground", "priority": 60, "when": { "requiredMotionTags": ["free-ground"] }, "cameraRigProfileRef": "worldkit://camera-profile/orbit.medium@1" }], "aiMetadata": { "displayName": "Capability-driven Camera Context", "description": "Selects camera behavior from committed relationship, motion and medium state.", "semanticTags": ["capability-driven", "context", "default"] } }, { "kind": "camera-context-profile", "id": "capability-driven.quadruped-official", "version": 1, "resourceRef": "worldkit://camera-context/capability-driven.quadruped-official@1", "authoringAvailability": "advanced", "defaultCameraRigProfileRef": "worldkit://camera-profile/orbit.quadruped-official@1", "firstPersonCameraRigProfileRef": "worldkit://camera-profile/first-person.standard@1", "rules": [{ "id": "aim", "priority": 110, "when": { "requiredCameraContextTags": ["aim"] }, "cameraModifierRefs": ["worldkit://camera-modifier/aim-framing@1"] }, { "id": "mounted", "priority": 100, "when": { "allRelationshipConditions": [{ "type": "mountedOn", "entityRole": "rider" }] }, "cameraModifierRefs": ["worldkit://camera-modifier/mounted-framing@1"] }, { "id": "reverse", "priority": 95, "when": { "requiredCameraContextTags": ["reverse"] }, "cameraModifierRefs": ["worldkit://camera-modifier/reverse-stability@1"] }, { "id": "glide", "priority": 90, "when": { "requiredMotionTags": ["glide"], "movementMediums": ["air"] }, "cameraRigProfileRef": "worldkit://camera-profile/flight.glide@1" }, { "id": "water-surface", "priority": 80, "when": { "requiredMotionTags": ["water"], "movementMediums": ["water"] }, "cameraRigProfileRef": "worldkit://camera-profile/follow.medium@1", "cameraModifierRefs": ["worldkit://camera-modifier/water-stability@1"] }, { "id": "sprint", "priority": 65, "when": { "requiredCameraContextTags": ["sprint"] }, "cameraModifierRefs": ["worldkit://camera-modifier/sprint-emphasis@1"] }, { "id": "surface-fast", "priority": 70, "when": { "requiredMotionTags": ["surface-fast"] }, "cameraRigProfileRef": "worldkit://camera-profile/chase.surface-fast@1" }, { "id": "free-ground", "priority": 60, "when": { "requiredMotionTags": ["free-ground"] }, "cameraRigProfileRef": "worldkit://camera-profile/orbit.medium@1" }], "aiMetadata": { "displayName": "Quadruped Official Camera Context", "description": "Quadruped public default with the reviewed orbit profile as its base view.", "semanticTags": ["capability-driven", "official", "quadruped"] } }];
 const cameraCatalog = {
   algorithms,
   profiles,
@@ -4388,7 +4581,7 @@ const motionProfiles = [
   }
 ];
 const poseSets = [{ "kind": "pose-set-profile", "id": "static.whitebox", "version": 1, "resourceRef": "worldkit://pose-set/static.whitebox@1", "authoringAvailability": "recommended", "poseIds": ["idle", "move", "fall"], "defaultPoseId": "idle", "aiMetadata": { "displayName": "Static Whitebox Pose Set", "description": "Semantic fallback poses for primitive whitebox subjects.", "semanticTags": ["pose", "static", "whitebox"] } }];
-const renderBindings = [{ "kind": "render-binding-profile", "id": "subject.standard", "version": 1, "resourceRef": "worldkit://render-binding/subject.standard@1", "authoringAvailability": "recommended", "publishedStateFields": ["semanticClassId", "bodyTopology", "forwardXYZ", "speedMetersPerSecond", "movementMedium", "activeMotionKernelRef", "activeActionId", "relationshipRole"], "aiMetadata": { "displayName": "Standard Subject Render Binding", "description": "Publishes stable movement and relationship facts to whitebox and world-model renderers.", "semanticTags": ["render-binding", "subject"] } }];
+const renderBindings = [{ "kind": "render-binding-profile", "id": "subject.standard", "version": 1, "resourceRef": "worldkit://render-binding/subject.standard@1", "authoringAvailability": "recommended", "publishedStateFields": ["semanticClassId", "bodyTopology", "forwardXYZ", "speedMetersPerSecond", "movementMedium", "activeMotionKernelRef", "activeActionId"], "aiMetadata": { "displayName": "Standard Subject Render Binding", "description": "Publishes stable committed movement and action facts to whitebox and world-model renderers.", "semanticTags": ["render-binding", "subject"] } }];
 const poseAndRenderCatalog = {
   poseSets,
   renderBindings
@@ -7328,41 +7521,6 @@ function requireSubschema() {
   return subschema;
 }
 var resolve = {};
-var fastDeepEqual;
-var hasRequiredFastDeepEqual;
-function requireFastDeepEqual() {
-  if (hasRequiredFastDeepEqual) return fastDeepEqual;
-  hasRequiredFastDeepEqual = 1;
-  fastDeepEqual = function equal2(a, b) {
-    if (a === b) return true;
-    if (a && b && typeof a == "object" && typeof b == "object") {
-      if (a.constructor !== b.constructor) return false;
-      var length, i, keys;
-      if (Array.isArray(a)) {
-        length = a.length;
-        if (length != b.length) return false;
-        for (i = length; i-- !== 0; )
-          if (!equal2(a[i], b[i])) return false;
-        return true;
-      }
-      if (a.constructor === RegExp) return a.source === b.source && a.flags === b.flags;
-      if (a.valueOf !== Object.prototype.valueOf) return a.valueOf() === b.valueOf();
-      if (a.toString !== Object.prototype.toString) return a.toString() === b.toString();
-      keys = Object.keys(a);
-      length = keys.length;
-      if (length !== Object.keys(b).length) return false;
-      for (i = length; i-- !== 0; )
-        if (!Object.prototype.hasOwnProperty.call(b, keys[i])) return false;
-      for (i = length; i-- !== 0; ) {
-        var key = keys[i];
-        if (!equal2(a[key], b[key])) return false;
-      }
-      return true;
-    }
-    return a !== a && b !== b;
-  };
-  return fastDeepEqual;
-}
 var jsonSchemaTraverse = { exports: {} };
 var hasRequiredJsonSchemaTraverse;
 function requireJsonSchemaTraverse() {
@@ -10271,17 +10429,6 @@ function requireLimitItems() {
   return limitItems;
 }
 var uniqueItems = {};
-var equal = {};
-var hasRequiredEqual;
-function requireEqual() {
-  if (hasRequiredEqual) return equal;
-  hasRequiredEqual = 1;
-  Object.defineProperty(equal, "__esModule", { value: true });
-  const equal$1 = requireFastDeepEqual();
-  equal$1.code = 'require("ajv/dist/runtime/equal").default';
-  equal.default = equal$1;
-  return equal;
-}
 var hasRequiredUniqueItems;
 function requireUniqueItems() {
   if (hasRequiredUniqueItems) return uniqueItems;

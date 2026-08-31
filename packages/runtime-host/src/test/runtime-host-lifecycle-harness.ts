@@ -7,6 +7,7 @@ import {
   createGameplayBootstrapResourceLockEntryV1,
   createGameplayBootstrapV1,
   DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
+  RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
   type ControllerEntityStateV1,
   type GameplayParticipantStateV1,
   type SpatialEntityStateV1,
@@ -98,6 +99,8 @@ export const gameplayBootstrap = createGameplayBootstrapV1({
   id: "gameplay.lifecycle",
   version: 1,
   resourceRef: "worldkit://gameplay-bootstrap/lifecycle@1",
+  semanticFactProjectorProfileResource:
+    RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
   entityDescriptors: [{
     id: heroState.id,
     entityDefinitionRef: heroState.entityDefinitionRef,

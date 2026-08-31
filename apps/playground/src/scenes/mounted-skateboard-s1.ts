@@ -25,6 +25,7 @@ import {
 import {
   createGameplayActionDefinitionV1,
   createGameplayBootstrapV1,
+  RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
   type GameplayBootstrapV1,
 } from "@whitebox-world/gameplay-contracts";
 import { defineOutdoorScene } from "@whitebox-world/world";
@@ -404,6 +405,8 @@ export function createMountedSkateboardS1GameplayResourcesV1(
       version: 1,
       resourceRef:
         `worldkit://gameplay-bootstrap/${normalizedWorldIr.id}.${normalizedWorldIr.seed}@1`,
+      semanticFactProjectorProfileResource:
+        RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
       entityDescriptors,
       featureResourceLocks: factories.map(({ manifest }) => ({
         resourceRef: manifest.resourceRef,

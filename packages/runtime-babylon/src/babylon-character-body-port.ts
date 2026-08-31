@@ -9,6 +9,7 @@ import {
 } from "@babylonjs/core/Physics/v2/characterController.js";
 import type { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 import type { PhysicsBody } from "@babylonjs/core/Physics/v2/physicsBody.js";
+import type { HavokPlugin } from "@babylonjs/core/Physics/v2/Plugins/havokPlugin.js";
 import type { PhysicsShape } from "@babylonjs/core/Physics/v2/physicsShape.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
 import { isNil } from "lodash-es";
@@ -27,6 +28,8 @@ import {
   type MovementTickTokenV1,
   type MovementVec3V1,
 } from "@whitebox-world/character-movement";
+
+import type { RetainedCharacterSupportSampleV1 } from "./motion-kernel-runtime";
 
 export const BABYLON_CHARACTER_BODY_PROVIDER_VERSIONS_V1 = Object.freeze({
   babylonJs: "9.23.0",
@@ -77,6 +80,16 @@ export interface BabylonCharacterBodyNativeAllocationV1 {
   readonly scene: Scene;
   readonly capsule: BabylonCharacterBodyPortOptionsV1["capsule"];
   readonly initialPositionMetersXYZ: MovementVec3V1;
+}
+
+export interface BabylonCharacterBodySupportProjectionLockV1 {
+  readonly capsuleRadiusMeters: number;
+  readonly capsuleHeightMeters: number;
+  readonly footOffsetMeters: number;
+  readonly keepDistanceMeters: number;
+  readonly keepContactToleranceMeters: number;
+  readonly maxSlopeCosine: number;
+  readonly maxStepHeightMeters: number;
 }
 
 export interface BabylonCharacterBodyNativeConfigurationV1 {
@@ -214,13 +227,13 @@ const SNAP_DOWN_SURFACE_NORMAL_ALIGNMENT_EPSILON = 1e-3;
 // the stricter shared SDK tolerance.
 const BABYLON_CHARACTER_CONTROLLER_COLLISION_TOLERANCE_METERS_V1 = 1e-4;
 
-type BabylonCharacterBodyNativeSurfaceIdentityV1 = Readonly<Required<Pick<
+type BabylonCharacterBodyNativeSurfaceIdentityV1 = Readonly<Pick<
   BabylonCharacterBodyNativeContactV1,
   | "colliderSubshapeId"
   | "traversalSurfaceId"
   | "surfaceEntityId"
   | "traversalSurfaceProfileRef"
->>>;
+>>;
 
 function nonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.length > 0;
@@ -230,31 +243,27 @@ function nativeSurfaceIdentity(
   transformNode: TransformNode,
 ): BabylonCharacterBodyNativeSurfaceIdentityV1 | undefined {
   const metadata = record(transformNode.metadata);
-  if (
-    isNil(metadata) ||
-    metadata.worldkitNativeTraversalKind !== "static-surface"
-  ) {
-    return undefined;
-  }
+  if (isNil(metadata)) return undefined;
   const colliderSubshapeId = metadata.colliderSubshapeId;
   const traversalSurfaceId = metadata.worldkitTraversalSurfaceId;
-  const surfaceEntityId = metadata.worldkitSurfaceEntityId;
+  const declaredSurfaceEntityId = metadata.worldkitSurfaceEntityId;
   const traversalSurfaceProfileRef =
     metadata.worldkitTraversalSurfaceProfileRef;
   if (
-    !nonEmptyString(colliderSubshapeId) ||
-    !nonEmptyString(traversalSurfaceId) ||
-    !nonEmptyString(surfaceEntityId) ||
-    !nonEmptyString(traversalSurfaceProfileRef)
+    nonEmptyString(colliderSubshapeId) &&
+    nonEmptyString(traversalSurfaceId) &&
+    nonEmptyString(declaredSurfaceEntityId)
   ) {
-    return undefined;
+    return Object.freeze({
+      colliderSubshapeId,
+      traversalSurfaceId,
+      surfaceEntityId: declaredSurfaceEntityId,
+      ...(nonEmptyString(traversalSurfaceProfileRef)
+        ? { traversalSurfaceProfileRef }
+        : {}),
+    });
   }
-  return Object.freeze({
-    colliderSubshapeId,
-    traversalSurfaceId,
-    surfaceEntityId,
-    traversalSurfaceProfileRef,
-  });
+  return undefined;
 }
 
 function cloneManifoldContact(
@@ -290,6 +299,23 @@ export class GroundAwarePhysicsCharacterController extends PhysicsCharacterContr
 
   private privateHost(): PhysicsCharacterControllerPrivateHostV1 {
     return this as unknown as PhysicsCharacterControllerPrivateHostV1;
+  }
+
+  private synchronizeNativeBodyTransform(): void {
+    const host = this.privateHost();
+    const physicsPlugin = host._scene.getPhysicsEngine()?.getPhysicsPlugin() as
+      HavokPlugin | undefined;
+    if (physicsPlugin === undefined) {
+      throw new Error(
+        "WORLDKIT_CHARACTER_PHYSICS_ENGINE_UNAVAILABLE: Character Body teleport has no Havok owner.",
+      );
+    }
+    physicsPlugin.setPhysicsBodyTransformation(host._body, host._transformNode);
+  }
+
+  synchronizeAfterTeleport(): void {
+    this.synchronizeNativeBodyTransform();
+    this._refreshManifoldAtPosition(this.getPosition());
   }
 
   refreshCurrentManifold(): void {
@@ -354,6 +380,7 @@ export class GroundAwarePhysicsCharacterController extends PhysicsCharacterContr
     )) {
       host._bodyPositionTracking.set(bodyId, tracking);
     }
+    this.synchronizeNativeBodyTransform();
   }
 
   override dispose(): void {
@@ -1016,20 +1043,26 @@ function canonicalSupportNormal(
 function canonicalContact(
   value: Record<string, unknown>,
 ): BabylonCharacterBodyNativeContactV1 {
-  const surfaceIdentity = isNil(value.colliderSubshapeId)
-    ? undefined
-    : Object.freeze({
-      colliderSubshapeId: value.colliderSubshapeId as string,
-      traversalSurfaceId: value.traversalSurfaceId as string,
-      surfaceEntityId: value.surfaceEntityId as string,
-      traversalSurfaceProfileRef: value.traversalSurfaceProfileRef as string,
-    });
   return Object.freeze({
     pointMetersXYZ: parseVec3(value.pointMetersXYZ),
     normalXYZ: normalized(parseVec3(value.normalXYZ), "contact normal must be nonzero."),
     distanceMeters: value.distanceMeters as number,
     motionType: value.motionType as BabylonCharacterBodyNativeMotionTypeV1,
-    ...surfaceIdentity,
+    ...(isNil(value.colliderSubshapeId)
+      ? {}
+      : { colliderSubshapeId: value.colliderSubshapeId as string }),
+    ...(isNil(value.traversalSurfaceId)
+      ? {}
+      : { traversalSurfaceId: value.traversalSurfaceId as string }),
+    ...(isNil(value.surfaceEntityId)
+      ? {}
+      : { surfaceEntityId: value.surfaceEntityId as string }),
+    ...(isNil(value.traversalSurfaceProfileRef)
+      ? {}
+      : {
+          traversalSurfaceProfileRef:
+            value.traversalSurfaceProfileRef as string,
+        }),
   });
 }
 
@@ -1305,8 +1338,6 @@ function parseNativeContacts(
       !requiredKeys.every((key) =>
         Object.prototype.hasOwnProperty.call(value, key)
       ) ||
-      (surfaceIdentityKeyCount !== 0 &&
-        surfaceIdentityKeyCount !== surfaceIdentityKeys.length) ||
       (surfaceIdentityKeyCount > 0 && value.motionType !== "static") ||
       surfaceIdentityKeys.some((key) =>
         Object.prototype.hasOwnProperty.call(value, key) &&
@@ -1468,7 +1499,7 @@ class BabylonPhysicsCharacterControllerDriverV1
   }
 
   synchronizeAfterTeleport(): void {
-    this.controller.refreshCurrentManifold();
+    this.controller.synchronizeAfterTeleport();
   }
 
   dispose(): void {
@@ -1878,6 +1909,9 @@ class BabylonCharacterBodyPortV1
   private serial = 0;
   private beginAttemptEpoch = 0;
   private transaction: BodyTransactionV1 | undefined;
+  private retainedSupportSample: RetainedCharacterSupportSampleV1 | undefined;
+  private stagedRetainedSupportSample:
+    RetainedCharacterSupportSampleV1 | undefined;
   private upwardSupportDepartureActive = false;
   private disposed = false;
 
@@ -1929,6 +1963,8 @@ class BabylonCharacterBodyPortV1
       if (activeRecord?.generation === this.generation &&
         activeRecord.status === "resolved") {
         activeRecord.status = "committed";
+        this.retainedSupportSample = this.stagedRetainedSupportSample;
+        this.stagedRetainedSupportSample = undefined;
         this.transaction = undefined;
       }
     }
@@ -1943,10 +1979,7 @@ class BabylonCharacterBodyPortV1
       const velocity = parseVec3(
         this.driver.getLinearVelocityMetersPerSecondXYZ(),
       );
-      const nativeSupport = parseNativeSupport(this.driver.checkSupport(
-        this.configuration.fixedDeltaSeconds,
-        this.configuration.gravityDirectionXYZ,
-      ));
+      const nativeSupport = this.querySupport();
       const contacts = parseNativeContacts(this.driver.readCurrentContacts());
       const support = this.projectBeginSupport(
         position,
@@ -2095,6 +2128,11 @@ class BabylonCharacterBodyPortV1
         isTranslationLimited:
           translationDifference > BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1,
       });
+      this.stagedRetainedSupportSample = this.projectRetainedSupportSample(
+        resolution.support,
+        resolution.positionMetersXYZ,
+        contacts,
+      );
       for (let axis = 0; axis < 3; axis += 1) {
         const coherent = transaction.sample.positionMetersXYZ[axis]! +
           resolution.appliedTranslationMetersXYZ[axis]!;
@@ -2114,6 +2152,7 @@ class BabylonCharacterBodyPortV1
       );
       return resolution;
     } catch (error) {
+      this.stagedRetainedSupportSample = undefined;
       this.upwardSupportDepartureActive = transaction.upwardSupportDepartureActive;
       this.restorePreservingPrimary(checkpoint);
       if (!integrateRollbackExternallySafe && !this.disposed) {
@@ -2144,6 +2183,8 @@ class BabylonCharacterBodyPortV1
       stale("Body Tick has no resolved native state to commit.");
     }
     known.status = "committed";
+    this.retainedSupportSample = this.stagedRetainedSupportSample;
+    this.stagedRetainedSupportSample = undefined;
     this.transaction = undefined;
   }
 
@@ -2176,6 +2217,7 @@ class BabylonCharacterBodyPortV1
     }
     this.generation += 1;
     this.serial += 1;
+    this.stagedRetainedSupportSample = undefined;
     this.transaction = undefined;
   }
 
@@ -2191,6 +2233,7 @@ class BabylonCharacterBodyPortV1
     const positionInput = parseVec3(input.positionMetersXYZ);
     const velocityInput = parseVec3(input.linearVelocityMetersPerSecondXYZ);
     const checkpoint = this.driver.captureState();
+    let nextRetainedSupportSample: RetainedCharacterSupportSampleV1;
     try {
       this.driver.setPositionMetersXYZ(positionInput);
       this.driver.setLinearVelocityMetersPerSecondXYZ(velocityInput);
@@ -2206,6 +2249,19 @@ class BabylonCharacterBodyPortV1
         Math.abs(component - velocityInput[axis]!) >
           BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1
       )) invalid("native reset did not restore the requested physical snapshot.");
+      const nativeSupport = this.querySupport();
+      const contacts = parseNativeContacts(this.driver.readCurrentContacts());
+      const support = this.projectBeginSupport(
+        position,
+        velocity,
+        nativeSupport,
+        contacts,
+      );
+      nextRetainedSupportSample = this.projectRetainedSupportSample(
+        support,
+        position,
+        contacts,
+      );
     } catch (error) {
       this.restorePreservingPrimary(checkpoint);
       throw error;
@@ -2213,7 +2269,29 @@ class BabylonCharacterBodyPortV1
     this.generation += 1;
     this.serial += 1;
     this.transaction = undefined;
+    this.retainedSupportSample = nextRetainedSupportSample;
+    this.stagedRetainedSupportSample = undefined;
     this.upwardSupportDepartureActive = false;
+  }
+
+  retainedCharacterSupportSample():
+    RetainedCharacterSupportSampleV1 | undefined {
+    this.assertLive();
+    return this.retainedSupportSample;
+  }
+
+  readSupportProjectionLock(): BabylonCharacterBodySupportProjectionLockV1 {
+    this.assertLive();
+    return Object.freeze({
+      capsuleRadiusMeters: this.options.capsule.radiusMeters,
+      capsuleHeightMeters: this.options.capsule.heightMeters,
+      footOffsetMeters: this.options.capsule.heightMeters / 2,
+      keepDistanceMeters: this.options.controller.keepDistanceMeters,
+      keepContactToleranceMeters:
+        this.options.controller.keepContactToleranceMeters,
+      maxSlopeCosine: this.configuration.maxSlopeCosine,
+      maxStepHeightMeters: this.options.controller.maxStepHeightMeters,
+    });
   }
 
   collisionFilterMasks(): Readonly<{
@@ -2301,7 +2379,74 @@ class BabylonCharacterBodyPortV1
     this.generation += 1;
     this.serial += 1;
     this.transaction = undefined;
+    this.retainedSupportSample = undefined;
+    this.stagedRetainedSupportSample = undefined;
     this.driver.dispose();
+  }
+
+  private projectRetainedSupportSample(
+    support: BodySampleV1["support"],
+    controllerCenterMetersXYZ: MovementVec3V1,
+    contacts: readonly BabylonCharacterBodyNativeContactV1[],
+  ): RetainedCharacterSupportSampleV1 {
+    const up = freezeVec3(
+      this.configuration.gravityDirectionXYZ.map((value) =>
+        value === 0 ? 0 : -value
+      ),
+    );
+    const supportContactBandMeters =
+      this.options.controller.keepDistanceMeters +
+      this.options.controller.keepContactToleranceMeters;
+    const sampledFootPositionMetersXYZ = addScaled(
+      controllerCenterMetersXYZ,
+      up,
+      -this.options.capsule.heightMeters / 2,
+    );
+    const supportContacts = support.mode === "unsupported"
+      ? []
+      : contacts.filter((contact) =>
+          contact.motionType === "static" &&
+          contact.distanceMeters <= supportContactBandMeters &&
+          Math.abs(
+            (contact.pointMetersXYZ[0] - sampledFootPositionMetersXYZ[0]) *
+                up[0] +
+              (contact.pointMetersXYZ[1] - sampledFootPositionMetersXYZ[1]) *
+                up[1] +
+              (contact.pointMetersXYZ[2] - sampledFootPositionMetersXYZ[2]) *
+                up[2],
+          ) <= supportContactBandMeters &&
+          dot(contact.normalXYZ, up) > 0.08
+        ).map((contact) => Object.freeze({
+          pointMetersXYZ: contact.pointMetersXYZ,
+          normalXYZ: contact.normalXYZ,
+          ...(contact.colliderSubshapeId === undefined
+            ? {}
+            : { colliderSubshapeId: contact.colliderSubshapeId }),
+          ...(contact.traversalSurfaceId === undefined
+            ? {}
+            : { traversalSurfaceId: contact.traversalSurfaceId }),
+          ...(contact.surfaceEntityId === undefined
+            ? {}
+            : { surfaceEntityId: contact.surfaceEntityId }),
+        }));
+    return Object.freeze({
+      supportState: support.mode,
+      supportNormalWorldXYZ: support.mode === "unsupported"
+        ? up
+        : support.normalXYZ,
+      sampledControllerCenterMetersXYZ: controllerCenterMetersXYZ,
+      sampledFootPositionMetersXYZ,
+      supportContacts: Object.freeze(supportContacts),
+      isSupportSurfaceDynamic:
+        support.mode === "unsupported" ? false : support.isDynamic,
+    });
+  }
+
+  private querySupport(): BabylonCharacterBodyNativeSupportV1 {
+    return parseNativeSupport(this.driver.checkSupport(
+      this.configuration.fixedDeltaSeconds,
+      this.configuration.gravityDirectionXYZ,
+    ));
   }
 
   private projectBeginSupport(
@@ -2510,6 +2655,9 @@ function createBabylonCharacterBodyPortWithNativeDriverV1(
 export interface BabylonCharacterBodyRuntimePortV1
   extends BabylonCharacterBodyTransactionPortV1 {
   readonly physicsBody: PhysicsBody;
+  retainedCharacterSupportSample():
+    RetainedCharacterSupportSampleV1 | undefined;
+  readSupportProjectionLock(): BabylonCharacterBodySupportProjectionLockV1;
   collisionFilterMasks(): Readonly<{
     membershipMask: number;
     collideMask: number;

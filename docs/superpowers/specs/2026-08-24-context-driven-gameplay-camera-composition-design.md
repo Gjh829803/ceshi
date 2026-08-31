@@ -389,6 +389,8 @@ interface CameraContextSampleV1 {
 
 type CameraRelationshipConditionV1 =
   | { type: "possessedBy"; entityRole: "controlled" | "controller" }
+  // `rider` names the resolved subject role. The controlled/target Entity may be
+  // either endpoint of the one relevant mountedOn Relationship.
   | { type: "mountedOn"; entityRole: "rider" }
   | { type: "equippedAt"; entityRole: "item" | "wearer" };
 
@@ -471,8 +473,8 @@ Glide Motion Ref。测试必须先证明“没有 Equipment Relationship 就不�
 Target 按以下顺序解析：
 
 1. `possessedBy` 决定受控 Entity；
-2. 已提交 Relationship Profile 可以把 Camera Target 映射为受控 Entity、Rider、Source
-   或 Target Entity；
+2. 已提交 Relationship Profile 可以把 Camera Target 映射为受控 Entity，或映射为该
+   Relationship 类型声明的角色化端点，例如 `mountedOn` 的 Rider 或 Mount；
 3. Camera Rig 从目标主体的已锁 Socket 列表选择首个兼容 Socket；
 4. Admission 时缺少必需 Socket 则稳定失败；已提交 Rebind 后目标缺少 Socket 时进入当前
    Context 的 Safe View 或显式 unbound View，不能继续跟随旧 Entity；

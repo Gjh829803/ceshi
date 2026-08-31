@@ -239,9 +239,12 @@ function cameraContextProfileFromExecution(
         id: rule.id,
         priority: rule.priority,
         when: {
-        ...(rule.when.relationshipRoles === undefined
+        ...(rule.when.allRelationshipConditions === undefined
           ? {}
-          : { relationshipRoles: rule.when.relationshipRoles }),
+          : {
+              allRelationshipConditions:
+                rule.when.allRelationshipConditions,
+            }),
         ...(rule.when.locomotionStatuses === undefined
           ? {}
           : { locomotionStatuses: rule.when.locomotionStatuses }),
@@ -324,54 +327,8 @@ type CameraDirectorTelemetryV1 = Omit<
 >;
 
 /**
- * Task 5 isolation seam for the live V1 WorldRuntime. Task 6 replaces this
- * projection with the committed CharacterMovement transaction output.
- * It never infers gait/phase from velocity, Motion Kernel or animation.
- */
-export function legacyViewTargetToCommittedCameraContextV2ForTask6(
-  sample: ViewTargetSampleV1,
-  committedTick: number,
-): CameraContextSampleV2 {
-  const facingYawRadians = canonicalCameraNumber(Math.atan2(
-    -sample.forwardXYZ[0],
-    -sample.forwardXYZ[2],
-  ));
-  return {
-    schemaVersion: 2,
-    semanticAuthorityStatus: "unavailable",
-    committedTick,
-    controlledEntityId: sample.controlledEntityId,
-    targetEntityId: sample.entityId,
-    subjectPose: {
-      positionMetersXYZ: [
-        canonicalCameraNumber(sample.targetPositionMetersXYZ[0]),
-        canonicalCameraNumber(sample.targetPositionMetersXYZ[1]),
-        canonicalCameraNumber(sample.targetPositionMetersXYZ[2]),
-      ],
-      facingYawRadians,
-    },
-    locomotion: {
-      schemaVersion: 2,
-      status: "suspended",
-      suspendedByRelationshipId: "3c-task6-authority-unavailable",
-      committedTick,
-      transitionSequence: 0,
-    },
-    actionSummary: { status: "unavailable" },
-    environment: {
-      relationshipContexts: [],
-      relationshipRole: "none",
-      socketPositionsMetersXYZById: {},
-      cameraContextTags: [],
-    },
-  };
-}
-
-/**
  * Live Motion Kernel subjects still own support and locomotion. Publish those
  * committed facts as Camera Context V2 so automatic Rules can select a view.
- * Do not reuse the Task-6 unavailable seam: that seam must not invent gait or
- * phase, and it bypasses every auto Rule including free-ground → orbit.
  */
 export function committedCameraContextFromMotionKernelV1(
   sample: ViewTargetSampleV1,
@@ -444,7 +401,6 @@ export function committedCameraContextFromMotionKernelV1(
       isInterruptible: true,
     },
     environment: {
-      relationshipRole: sample.relationshipRole,
       relationshipContexts: sample.relationshipContexts,
       socketPositionsMetersXYZById: sample.socketPositionsMetersXYZById,
       cameraContextTags: [...sample.cameraContextTags],
@@ -453,7 +409,7 @@ export function committedCameraContextFromMotionKernelV1(
 }
 
 function viewTargetFromCommittedCameraContextV2(
-  legacySample: ViewTargetSampleV1,
+  viewTargetSample: ViewTargetSampleV1,
   context: CameraContextSampleV2,
 ): ViewTargetSampleV1 {
   const locomotion = context.locomotion;
@@ -475,16 +431,14 @@ function viewTargetFromCommittedCameraContextV2(
           locomotion.linearVelocity.z,
         ]
       : [0, 0, 0],
-    approximateRadiusMeters: legacySample.approximateRadiusMeters,
+    approximateRadiusMeters: viewTargetSample.approximateRadiusMeters,
     socketPositionsMetersXYZById: context.environment.socketPositionsMetersXYZById,
-    // Legacy-only motion identity is intentionally not projected. Camera
-    // Domain consumes the committed Context V2 facts above.
+    // Motion identity is already represented by committed Camera Context facts.
     motionTags: [],
     movementMedium: locomotion.status === "active"
       ? locomotion.movementMedium
       : "ground",
     relationshipContexts: context.environment.relationshipContexts,
-    relationshipRole: context.environment.relationshipRole,
     cameraContextTags: context.environment.cameraContextTags,
   };
 }
@@ -875,7 +829,7 @@ export class CameraDirectorV1 {
 
   update(
     cameraContext: CameraContextV1,
-    legacySample: ViewTargetSampleV1,
+    viewTargetSample: ViewTargetSampleV1,
     deltaSeconds: number,
     cameraContextSample: CameraContextSampleV2,
     springArm: SpringArmComponentV1,
@@ -915,7 +869,7 @@ export class CameraDirectorV1 {
     const beforeSpringArmTransaction = springArm.captureTransactionState();
     try {
     const sample = viewTargetFromCommittedCameraContextV2(
-      legacySample,
+      viewTargetSample,
       committedContext,
     );
     const selected = this.selectProfile(cameraContext, committedContext);

@@ -29,12 +29,11 @@
         "speedMetersPerSecond",
         "movementMedium",
         "activeMotionKernelRef",
-        "activeActionId",
-        "relationshipRole"
+        "activeActionId"
       ],
       "aiMetadata": {
         "displayName": "Standard Subject Render Binding",
-        "description": "Publishes stable movement and relationship facts to whitebox and world-model renderers.",
+        "description": "Publishes stable committed movement and action facts to whitebox and world-model renderers.",
         "semanticTags": ["render-binding", "subject"]
       }
     }

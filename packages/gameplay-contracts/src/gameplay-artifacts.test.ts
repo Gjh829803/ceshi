@@ -14,9 +14,11 @@ import {
   createGameplayBootstrapV1,
   createGameplayEntityDescriptorV1,
   createGameplayFeatureManifestV1,
+  createSemanticFactProjectorProfileResourceV1,
   deriveGameplayActionDefinitionContentHashV1,
   deriveGameplayBootstrapContentHashV1,
   deriveGameplayFeatureManifestContentHashV1,
+  deriveSemanticFactProjectorProfileResourceContentHashV1,
   gameplayActionDefinitionCanonicalBytesV1,
   gameplayBootstrapCanonicalBytesV1,
   gameplayFeatureManifestCanonicalBytesV1,
@@ -25,9 +27,11 @@ import {
   parseGameplayEntityDescriptorV1,
   parseGameplayFeatureManifestV1,
   parseGameplayFeatureResourceLockV1,
+  parseSemanticFactProjectorProfileResourceV1,
   type GameplayActionDefinitionBodyV1,
   type GameplayBootstrapBodyV1,
   type GameplayFeatureManifestBodyV1,
+  type SemanticFactProjectorProfileResourceBodyV1,
 } from "./gameplay-artifacts";
 
 const HASH_A = `sha256:${"a".repeat(64)}` as const;
@@ -67,6 +71,29 @@ function actionBody(
   };
 }
 
+function semanticFactProjectorProfileBody(
+  overrides: Partial<SemanticFactProjectorProfileResourceBodyV1> = {},
+): SemanticFactProjectorProfileResourceBodyV1 {
+  return {
+    kind: "semantic-fact-projector-profile",
+    schemaVersion: 1,
+    id: "physics-retained-support",
+    version: 1,
+    resourceRef:
+      "worldkit://semantic-fact-projector-profile/physics.retained-support@1",
+    supportedByProjection: {
+      supportSampleSource: "retained-character-support",
+      acceptedSupportStates: ["sliding", "supported"],
+      supportSurfaceMotionMode: "static",
+      supportPointHeightToleranceMode: "character-body-contact-band",
+      minimumContactToAggregateSupportNormalCosine: 0.95,
+      ambiguousSurfaceMode: "omit",
+      endDelayTicks: 0,
+    },
+    ...overrides,
+  };
+}
+
 function bootstrapBody(
   overrides: Partial<GameplayBootstrapBodyV1> = {},
 ): GameplayBootstrapBodyV1 {
@@ -85,6 +112,10 @@ function bootstrapBody(
     id: "world-a-gameplay",
     version: 1,
     resourceRef: "worldkit://gameplay-bootstrap/world-a@1",
+    semanticFactProjectorProfileResource:
+      createSemanticFactProjectorProfileResourceV1(
+        semanticFactProjectorProfileBody(),
+      ),
     entityDescriptors: [
       {
         id: "subject-z",
@@ -303,6 +334,48 @@ describe("GameplayActionDefinitionV1", () => {
         gameplayActionEffectHash: "sha256:bad" as typeof HASH_A,
       },
     }))).toThrow(/GameplayActionDefinitionBodyV1/);
+  });
+});
+
+describe("SemanticFactProjectorProfileResourceV1", () => {
+  it("creates one closed hash-bound retained-support resource", () => {
+    const body = semanticFactProjectorProfileBody();
+    const resource = createSemanticFactProjectorProfileResourceV1(body);
+
+    expect(resource.contentHash).toBe(
+      deriveSemanticFactProjectorProfileResourceContentHashV1(body),
+    );
+    expect(parseSemanticFactProjectorProfileResourceV1(resource)).toEqual(
+      resource,
+    );
+    expect(Object.isFrozen(resource.supportedByProjection)).toBe(true);
+    expect(resource.supportedByProjection.acceptedSupportStates).toEqual([
+      "sliding",
+      "supported",
+    ]);
+  });
+
+  it("rejects stale hashes, unknown fields, and unsupported projector policy", () => {
+    const resource = createSemanticFactProjectorProfileResourceV1(
+      semanticFactProjectorProfileBody(),
+    );
+    expect(() => parseSemanticFactProjectorProfileResourceV1({
+      ...resource,
+      contentHash: HASH_A,
+    })).toThrow(/SemanticFactProjectorProfileResourceV1/);
+    expect(() => parseSemanticFactProjectorProfileResourceV1({
+      ...resource,
+      unknownField: true,
+    })).toThrow(/SemanticFactProjectorProfileResourceV1/);
+    expect(() => createSemanticFactProjectorProfileResourceV1({
+      ...semanticFactProjectorProfileBody(),
+      supportedByProjection: {
+        ...semanticFactProjectorProfileBody().supportedByProjection,
+        acceptedSupportStates: ["supported"],
+      },
+    } as unknown as SemanticFactProjectorProfileResourceBodyV1)).toThrow(
+      /SemanticFactProjectorProfileResourceBodyV1/,
+    );
   });
 });
 
@@ -529,6 +602,61 @@ describe("GameplayBootstrapV1", () => {
     expect(createGameplayBootstrapV1({
       ...body,
       initialRelationshipStates: [],
+    }).contentHash).not.toBe(canonical.contentHash);
+  });
+
+  it("requires the full projector resource and binds its policy into the Bootstrap hash", () => {
+    const body = bootstrapBody();
+    const { semanticFactProjectorProfileResource: _missing, ...missing } = body;
+    expect(() => createGameplayBootstrapV1(
+      missing as GameplayBootstrapBodyV1,
+    )).toThrow(/GameplayBootstrapBodyV1/);
+
+    const canonical = createGameplayBootstrapV1(body);
+    const canonicalProjection =
+      body.semanticFactProjectorProfileResource.supportedByProjection;
+    const {
+      minimumContactToAggregateSupportNormalCosine: _removedCanonicalField,
+      ...projectionWithoutCanonicalField
+    } = canonicalProjection;
+    expect(() => createSemanticFactProjectorProfileResourceV1({
+      ...semanticFactProjectorProfileBody(),
+      supportedByProjection: {
+        ...projectionWithoutCanonicalField,
+        minimumContactToAggregateSupportNormalDotRatio: 0.95,
+      },
+    } as unknown as SemanticFactProjectorProfileResourceBodyV1)).toThrow(
+      /SemanticFactProjectorProfileResourceBodyV1/,
+    );
+    expect(() => createSemanticFactProjectorProfileResourceV1({
+      ...semanticFactProjectorProfileBody(),
+      supportedByProjection: {
+        ...projectionWithoutCanonicalField,
+        minimumSupportNormalDotRatio: 0.95,
+      },
+    } as unknown as SemanticFactProjectorProfileResourceBodyV1)).toThrow(
+      /SemanticFactProjectorProfileResourceBodyV1/,
+    );
+    expect(() => parseGameplayBootstrapV1({
+      ...canonical,
+      semanticFactProjectorProfileResource: {
+        resourceRef:
+          body.semanticFactProjectorProfileResource.resourceRef,
+        contentHash:
+          body.semanticFactProjectorProfileResource.contentHash,
+      },
+    })).toThrow(/GameplayBootstrapV1/);
+
+    const changedResource = createSemanticFactProjectorProfileResourceV1({
+      ...semanticFactProjectorProfileBody(),
+      supportedByProjection: {
+        ...semanticFactProjectorProfileBody().supportedByProjection,
+        minimumContactToAggregateSupportNormalCosine: 0.9,
+      },
+    });
+    expect(createGameplayBootstrapV1({
+      ...body,
+      semanticFactProjectorProfileResource: changedResource,
     }).contentHash).not.toBe(canonical.contentHash);
   });
 

@@ -18,10 +18,12 @@ import {
   stringifyCanonicalJson,
 } from "@whitebox-world/protocol";
 import type { WorldRuntimeSnapshotV4 } from "@whitebox-world/runtime-contracts";
+import { deriveCameraViewEventIdV1 } from "@whitebox-world/runtime-contracts";
 import {
   buildWorldStateSnapshotV1,
   deriveGameplayCommandReceiptIdV1,
   deriveGameplayEventIdV1,
+  deriveGameplaySemanticFactIdV1,
   deriveWorldStateSnapshotRefV1,
   type GameplayCommandReceiptV1,
   type GameplayCommandV1,
@@ -33,16 +35,71 @@ import {
   createControlCaptureBundleWriterV1,
   inspectControlCaptureBundleV1,
   type ControlCaptureFrameInputV1,
-  type ControlCaptureGameplayTransitionInputV1,
+  type ControlCaptureRuntimeHostJournalTransitionInputV1,
   validateControlCaptureBundleV1,
 } from "./control-capture-bundle";
+import {
+  assertMountedSkateboardCaptureTimelineV1,
+  type MountedCapturePhaseObservationV1,
+} from "../verification/verify-mounted-skateboard-capture";
 
 const temporaryDirectories: string[] = [];
 const WORLD_HASH = `sha256:${"a".repeat(64)}` as Sha256HashV1;
 
+function runtimeWorldState(simulationTick: number) {
+  return buildWorldStateSnapshotV1({
+    kind: "worldkit-world-state-snapshot",
+    schemaVersion: 1,
+    runtimeSessionId: "session-test",
+    worldSessionId: "world-session-test",
+    simulationTick,
+    worldPackageRef: `package://bundle-test@${WORLD_HASH}`,
+    worldPackageRootHash: WORLD_HASH,
+    worldBuildIdentityHash: `sha256:${"c".repeat(64)}`,
+    entityStatesById: {
+      player: {
+        id: "player",
+        kind: "spatial-entity-state",
+        entityDefinitionRef: "worldkit://subject-definition/player@1",
+        entityDefinitionHash: WORLD_HASH,
+        semanticClassId: "character.humanoid",
+        lifecycleMode: "active",
+        positionMetersXYZ: [0, 0, 0],
+        rotationQuaternionXYZW: [0, 0, 0, 1],
+        scaleRatioXYZ: [1, 1, 1],
+        linearVelocityMetersPerSecondXYZ: [0, 0, 0],
+      },
+      "controller-primary": {
+        id: "controller-primary",
+        kind: "controller-entity-state",
+        controllerDefinitionRef: "worldkit://controller/local-player@1",
+        controllerDefinitionHash: WORLD_HASH,
+        participantId: "participant-primary",
+        lifecycleMode: "active",
+        inputMode: "human",
+      },
+    },
+    capabilityStatesById: {},
+    relationshipStatesById: {
+      "possession-rider-test": {
+        id: "possession-rider-test",
+        type: "possessedBy",
+        schemaVersion: 1,
+        controlledEntityId: "player",
+        controllerEntityId: "controller-primary",
+        establishedSimulationTick: 0,
+      },
+    },
+    semanticFactsById: {},
+    activeActionStatesById: {},
+    lastEventSequence: 0,
+  });
+}
+
 function runtimeSnapshot(simulationTick: number): WorldRuntimeSnapshotV4 {
   const runtimeSessionId = "session-test";
   const worldSessionId = "world-session-test";
+  const worldState = runtimeWorldState(simulationTick);
   return {
     kind: "worldkit-runtime-snapshot",
     schemaVersion: 4,
@@ -51,8 +108,12 @@ function runtimeSnapshot(simulationTick: number): WorldRuntimeSnapshotV4 {
     world: {
       publicationEpoch: 1,
       simulationTick,
-      worldStateRef: `worldkit://world-state/world-state:${"d".repeat(64)}`,
-      worldStateHash: WORLD_HASH,
+      worldStateRef: deriveWorldStateSnapshotRefV1({
+        runtimeSessionId,
+        worldSessionId,
+        worldStateHash: worldState.worldStateHash,
+      }),
+      worldStateHash: worldState.worldStateHash,
       subjectStatesByEntityId: {},
       gameplayInspection: {
         kind: "worldkit-gameplay-inspection-snapshot",
@@ -74,13 +135,13 @@ function runtimeSnapshot(simulationTick: number): WorldRuntimeSnapshotV4 {
           },
         },
         relationshipStatesById: {
-          "possessed-by-primary": {
-            id: "possessed-by-primary",
+          "possession-rider-test": {
+            id: "possession-rider-test",
             type: "possessedBy",
             schemaVersion: 1,
             controlledEntityId: "player",
             controllerEntityId: "controller-primary",
-            establishedSimulationTick: simulationTick,
+            establishedSimulationTick: 0,
           },
         },
         activeActionStatesById: {},
@@ -206,6 +267,7 @@ function frameInput(
   captureFrameIndex: number,
   simulationTick: number,
   snapshot: WorldRuntimeSnapshotV4 = runtimeSnapshot(simulationTick),
+  worldState = runtimeWorldState(simulationTick),
 ): ControlCaptureFrameInputV1 {
   return {
     kind: "worldkit-control-capture-frame" as const,
@@ -230,6 +292,7 @@ function frameInput(
       projectionMatrixColumnMajor: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1] as const,
     },
     snapshot,
+    worldState,
     passesById: Object.fromEntries(CONTROL_CAPTURE_PASS_IDS_V1.map((passId) => [
       passId,
       {
@@ -241,7 +304,7 @@ function frameInput(
 }
 
 function mountedGameplayEvidence(): Readonly<{
-  transition: ControlCaptureGameplayTransitionInputV1;
+  transition: ControlCaptureRuntimeHostJournalTransitionInputV1;
   snapshot: WorldRuntimeSnapshotV4;
 }> {
   const relationship = {
@@ -259,7 +322,7 @@ function mountedGameplayEvidence(): Readonly<{
     schemaVersion: 1 as const,
     controlledEntityId: "player",
     controllerEntityId: "controller-primary",
-    establishedSimulationTick: 1,
+    establishedSimulationTick: 0,
   };
   const mountPossession = {
     id: "possession-mount-test",
@@ -443,10 +506,76 @@ function mountedGameplayEvidence(): Readonly<{
       captureFrameIndexAfter: 1,
       command,
       receipt,
-      events,
+      worldSessionEvents: events,
       worldStateAfter,
       gameplayInspectionAfter,
     },
+    snapshot,
+  };
+}
+
+function fixedTickSupportedByEvidence() {
+  const factBody = {
+    type: "supportedBy" as const,
+    schemaVersion: 1 as const,
+    supportedEntityId: "player",
+    supportSurfaceEntityId: "terrain-main",
+    supportColliderSubshapeId: "terrain-main:heightfield",
+    supportTraversalSurfaceId: "terrain-main:ground",
+    supportPointMetersXYZ: [0, 0, 0] as const,
+    supportNormalXYZ: [0, 1, 0] as const,
+    startedSimulationTick: 5,
+    semanticFactProjectorProfileRef:
+      "worldkit://semantic-fact-projector-profile/contact.support@1",
+    semanticFactProjectorProfileHash: WORLD_HASH,
+  };
+  const semanticFact = {
+    id: deriveGameplaySemanticFactIdV1(factBody),
+    ...factBody,
+  };
+  const event = {
+    kind: "worldkit-gameplay-event" as const,
+    schemaVersion: 1 as const,
+    id: deriveGameplayEventIdV1("world-session-test", 1),
+    type: "semantic-fact.started" as const,
+    runtimeSessionId: "session-test",
+    worldSessionId: "world-session-test",
+    simulationTick: 5,
+    sequence: 1,
+    semanticFact,
+  } satisfies GameplayEventV1;
+  const {
+    id: _oldWorldStateId,
+    worldStateHash: _oldWorldStateHash,
+    ...worldStateBody
+  } = runtimeWorldState(5);
+  const worldStateAfter = buildWorldStateSnapshotV1({
+    ...worldStateBody,
+    semanticFactsById: { [semanticFact.id]: semanticFact },
+    lastEventSequence: 1,
+  });
+  const gameplayInspectionAfter = {
+    ...runtimeSnapshot(5).world.gameplayInspection,
+    lastEventSequence: 1,
+  };
+  const snapshot: WorldRuntimeSnapshotV4 = {
+    ...runtimeSnapshot(5),
+    world: {
+      ...runtimeSnapshot(5).world,
+      worldStateRef: deriveWorldStateSnapshotRefV1({
+        runtimeSessionId: worldStateAfter.runtimeSessionId,
+        worldSessionId: worldStateAfter.worldSessionId,
+        worldStateHash: worldStateAfter.worldStateHash,
+      }),
+      worldStateHash: worldStateAfter.worldStateHash,
+      gameplayInspection: gameplayInspectionAfter,
+    },
+  };
+  return {
+    event,
+    worldSessionEvents: [event],
+    worldStateAfter,
+    gameplayInspectionAfter,
     snapshot,
   };
 }
@@ -477,14 +606,24 @@ describe("Control Capture Bundle V1", () => {
     const evidence = mountedGameplayEvidence();
 
     await writer.appendFrame(frameInput(0, 0));
-    writer.appendGameplayTransition(evidence.transition);
-    await writer.appendFrame(frameInput(1, 5, evidence.snapshot));
+    writer.appendRuntimeHostJournalTransition(evidence.transition);
+    await writer.appendFrame(frameInput(
+      1,
+      5,
+      evidence.snapshot,
+      evidence.transition.worldStateAfter,
+    ));
     await writer.finalize();
 
     const readRows = async (fileName: string) =>
       (await readFile(path.join(outputDirectory, "tracks", fileName), "utf8"))
         .trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
-    expect(await readRows("actions.ndjson")).toHaveLength(1);
+    const actionRows = await readRows("actions.ndjson");
+    expect(actionRows).toHaveLength(1);
+    expect(actionRows[0]).toMatchObject({
+      worldStateAfter: evidence.transition.worldStateAfter,
+      gameplayInspectionAfter: evidence.transition.gameplayInspectionAfter,
+    });
     expect(await readRows("events.ndjson")).toHaveLength(5);
     expect(await readRows("relationships.ndjson")).toHaveLength(3);
     expect(await readRows("relationships.ndjson")).toContainEqual(
@@ -498,14 +637,725 @@ describe("Control Capture Bundle V1", () => {
       .toMatchObject({ ok: true });
   });
 
+  it("selects one committed RuntimeHost journal transition by Receipt Event IDs", async () => {
+    const parent = await createTemporaryDirectory();
+    const outputDirectory = path.join(parent, "capture-bundle");
+    const writer = await createWriter(outputDirectory);
+    const evidence = mountedGameplayEvidence();
+
+    await writer.appendFrame(frameInput(0, 0));
+    writer.appendRuntimeHostJournalTransition({
+      captureFrameIndexAfter: 1,
+      command: evidence.transition.command,
+      receipt: evidence.transition.receipt,
+      worldSessionEvents: [
+        ...evidence.transition.worldSessionEvents,
+        {
+          schemaVersion: 1,
+          id: deriveCameraViewEventIdV1("world-session-test", 6),
+          type: "camera.selection.changed",
+          runtimeSessionId: "session-test",
+          worldSessionId: "world-session-test",
+          simulationTick: 5,
+          sequence: 6,
+          reason: "context-changed",
+          cameraEntityId: "camera-main",
+          previousCameraRigProfileRef:
+            "worldkit://camera-profile/orbit.medium@1",
+          activeCameraRigProfileRef:
+            "worldkit://camera-profile/orbit.medium@1",
+          activeCameraModifierRefs: [
+            "worldkit://camera-modifier/mounted-framing@1",
+          ],
+          targetEntityId: "skateboard",
+          matchedCameraContextRuleIds: ["mounted", "free-ground"],
+          fallbackActive: false,
+        },
+      ],
+      worldStateAfter: evidence.transition.worldStateAfter,
+      gameplayInspectionAfter: evidence.transition.gameplayInspectionAfter,
+    });
+    await writer.appendFrame(frameInput(
+      1,
+      5,
+      evidence.snapshot,
+      evidence.transition.worldStateAfter,
+    ));
+    await writer.finalize();
+
+    const eventRows = (await readFile(
+      path.join(outputDirectory, "tracks/events.ndjson"),
+      "utf8",
+    )).trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
+    expect(eventRows.map((row) => row.event.id)).toEqual(
+      evidence.transition.receipt.eventIds,
+    );
+    await expect(validateControlCaptureBundleV1(outputDirectory)).resolves
+      .toMatchObject({ ok: true });
+  });
+
+  it("records fixed-Tick Gameplay journal Events from one exact sequence range", async () => {
+    const parent = await createTemporaryDirectory();
+    const outputDirectory = path.join(parent, "capture-bundle");
+    const writer = await createWriter(outputDirectory);
+    const evidence = fixedTickSupportedByEvidence();
+
+    await writer.appendFrame(frameInput(0, 0));
+    (writer as unknown as {
+      appendRuntimeHostFixedTickJournal(input: {
+        readonly captureFrameIndexAfter: number;
+        readonly afterEventSequenceExclusive: number;
+        readonly worldSessionEvents: readonly GameplayEventV1[];
+        readonly worldStateAfter: ReturnType<typeof buildWorldStateSnapshotV1>;
+        readonly gameplayInspectionAfter: typeof evidence.gameplayInspectionAfter;
+      }): void;
+    }).appendRuntimeHostFixedTickJournal({
+      captureFrameIndexAfter: 1,
+      afterEventSequenceExclusive: 0,
+      worldSessionEvents: evidence.worldSessionEvents,
+      worldStateAfter: evidence.worldStateAfter,
+      gameplayInspectionAfter: evidence.gameplayInspectionAfter,
+    });
+    await writer.appendFrame(frameInput(
+      1,
+      5,
+      evidence.snapshot,
+      evidence.worldStateAfter,
+    ));
+    await writer.finalize();
+
+    const eventRows = (await readFile(
+      path.join(outputDirectory, "tracks/events.ndjson"),
+      "utf8",
+    )).trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
+    expect(eventRows).toEqual([{
+      captureFrameIndexAfter: 1,
+      source: { kind: "fixed-tick" },
+      event: evidence.event,
+    }]);
+    await expect(validateControlCaptureBundleV1(outputDirectory)).resolves
+      .toMatchObject({ ok: true });
+  });
+
+  it("accepts a fixed-Tick Fact episode that starts and ends before the captured frame", async () => {
+    const parent = await createTemporaryDirectory();
+    const outputDirectory = path.join(parent, "capture-bundle");
+    const writer = await createWriter(outputDirectory);
+    const evidence = fixedTickSupportedByEvidence();
+    const endedEvent = {
+      ...evidence.event,
+      id: deriveGameplayEventIdV1("world-session-test", 2),
+      type: "semantic-fact.ended" as const,
+      sequence: 2,
+    } satisfies GameplayEventV1;
+    const {
+      id: _worldStateId,
+      worldStateHash: _worldStateHash,
+      ...worldStateBody
+    } = evidence.worldStateAfter;
+    const worldStateAfter = buildWorldStateSnapshotV1({
+      ...worldStateBody,
+      semanticFactsById: {},
+      lastEventSequence: 2,
+    });
+    const gameplayInspectionAfter = {
+      ...evidence.gameplayInspectionAfter,
+      lastEventSequence: 2,
+    };
+    const snapshot: WorldRuntimeSnapshotV4 = {
+      ...evidence.snapshot,
+      world: {
+        ...evidence.snapshot.world,
+        worldStateRef: deriveWorldStateSnapshotRefV1({
+          runtimeSessionId: worldStateAfter.runtimeSessionId,
+          worldSessionId: worldStateAfter.worldSessionId,
+          worldStateHash: worldStateAfter.worldStateHash,
+        }),
+        worldStateHash: worldStateAfter.worldStateHash,
+        gameplayInspection: gameplayInspectionAfter,
+      },
+    };
+
+    await writer.appendFrame(frameInput(0, 0));
+    writer.appendRuntimeHostFixedTickJournal({
+      captureFrameIndexAfter: 1,
+      afterEventSequenceExclusive: 0,
+      worldSessionEvents: [
+        ...evidence.worldSessionEvents,
+        endedEvent,
+      ],
+      worldStateAfter,
+      gameplayInspectionAfter,
+    });
+    await writer.appendFrame(frameInput(1, 5, snapshot, worldStateAfter));
+    await writer.finalize();
+
+    const eventRows = (await readFile(
+      path.join(outputDirectory, "tracks/events.ndjson"),
+      "utf8",
+    )).trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
+    expect(eventRows.map((row) => row.event.type)).toEqual([
+      "semantic-fact.started",
+      "semantic-fact.ended",
+    ]);
+    await expect(validateControlCaptureBundleV1(outputDirectory)).resolves
+      .toMatchObject({ ok: true });
+  });
+
+  it("rejects re-hashed WorldSession Event rows outside canonical sequence order", async () => {
+    const parent = await createTemporaryDirectory();
+    const outputDirectory = path.join(parent, "capture-bundle");
+    const writer = await createWriter(outputDirectory);
+    const evidence = fixedTickSupportedByEvidence();
+    const cameraEvent = {
+      schemaVersion: 1 as const,
+      id: deriveCameraViewEventIdV1("world-session-test", 2),
+      type: "camera.selection.changed" as const,
+      runtimeSessionId: "session-test",
+      worldSessionId: "world-session-test",
+      simulationTick: 5,
+      sequence: 2,
+      reason: "context-changed" as const,
+      cameraEntityId: "camera-main",
+      previousCameraRigProfileRef: "worldkit://camera-profile/test@1",
+      activeCameraRigProfileRef: "worldkit://camera-profile/test@1",
+      activeCameraModifierRefs: [],
+      targetEntityId: "player",
+      matchedCameraContextRuleIds: [],
+      fallbackActive: false,
+    };
+    const {
+      id: _worldStateId,
+      worldStateHash: _worldStateHash,
+      ...worldStateBody
+    } = evidence.worldStateAfter;
+    const worldStateAfter = buildWorldStateSnapshotV1({
+      ...worldStateBody,
+      semanticFactsById: evidence.worldStateAfter.semanticFactsById,
+      lastEventSequence: 2,
+    });
+    const gameplayInspectionAfter = {
+      ...evidence.gameplayInspectionAfter,
+      lastEventSequence: 2,
+    };
+    const snapshot: WorldRuntimeSnapshotV4 = {
+      ...evidence.snapshot,
+      world: {
+        ...evidence.snapshot.world,
+        worldStateRef: deriveWorldStateSnapshotRefV1({
+          runtimeSessionId: worldStateAfter.runtimeSessionId,
+          worldSessionId: worldStateAfter.worldSessionId,
+          worldStateHash: worldStateAfter.worldStateHash,
+        }),
+        worldStateHash: worldStateAfter.worldStateHash,
+        gameplayInspection: gameplayInspectionAfter,
+      },
+    };
+    await writer.appendFrame(frameInput(0, 0));
+    writer.appendRuntimeHostFixedTickJournal({
+      captureFrameIndexAfter: 1,
+      afterEventSequenceExclusive: 0,
+      worldSessionEvents: [evidence.event, cameraEvent],
+      worldStateAfter,
+      gameplayInspectionAfter,
+    });
+    await writer.appendFrame(frameInput(1, 5, snapshot, worldStateAfter));
+    await writer.finalize();
+
+    const eventPath = path.join(outputDirectory, "tracks/events.ndjson");
+    const rows = (await readFile(eventPath, "utf8")).trim().split("\n");
+    await writeFile(eventPath, `${rows.reverse().join("\n")}\n`, "utf8");
+    await rewriteIntegrity(outputDirectory);
+
+    const validation = await validateControlCaptureBundleV1(outputDirectory);
+    expect(validation.ok).toBe(false);
+    expect(validation.diagnostics).toContainEqual(expect.objectContaining({
+      code: "CAPTURE_GAMEPLAY_REFERENCE_MISMATCH",
+      path: "tracks/events.ndjson/journal-segment-frame-1",
+    }));
+  });
+
+  it("accepts updated support samples within one stable fixed-Tick Fact episode", async () => {
+    const parent = await createTemporaryDirectory();
+    const outputDirectory = path.join(parent, "capture-bundle");
+    const writer = await createWriter(outputDirectory);
+    const evidence = fixedTickSupportedByEvidence();
+    const updatedFact = {
+      ...evidence.event.semanticFact,
+      supportPointMetersXYZ: [0.25, 0, 0] as const,
+      supportNormalXYZ: [0.01, 0.99995, 0] as const,
+    };
+    const {
+      id: _worldStateId,
+      worldStateHash: _worldStateHash,
+      ...worldStateBody
+    } = evidence.worldStateAfter;
+    const worldStateAfter = buildWorldStateSnapshotV1({
+      ...worldStateBody,
+      semanticFactsById: { [updatedFact.id]: updatedFact },
+    });
+    const snapshot: WorldRuntimeSnapshotV4 = {
+      ...evidence.snapshot,
+      world: {
+        ...evidence.snapshot.world,
+        worldStateRef: deriveWorldStateSnapshotRefV1({
+          runtimeSessionId: worldStateAfter.runtimeSessionId,
+          worldSessionId: worldStateAfter.worldSessionId,
+          worldStateHash: worldStateAfter.worldStateHash,
+        }),
+        worldStateHash: worldStateAfter.worldStateHash,
+      },
+    };
+
+    await writer.appendFrame(frameInput(0, 0));
+    writer.appendRuntimeHostFixedTickJournal({
+      captureFrameIndexAfter: 1,
+      afterEventSequenceExclusive: 0,
+      worldSessionEvents: evidence.worldSessionEvents,
+      worldStateAfter,
+      gameplayInspectionAfter: evidence.gameplayInspectionAfter,
+    });
+    await writer.appendFrame(frameInput(1, 5, snapshot, worldStateAfter));
+    await writer.finalize();
+
+    await expect(validateControlCaptureBundleV1(outputDirectory)).resolves
+      .toMatchObject({ ok: true });
+  });
+
+  it("rejects re-hashed frame Snapshot WorldState identities that disagree with the captured WorldState", async () => {
+    const parent = await createTemporaryDirectory();
+    const outputDirectory = path.join(parent, "capture-bundle");
+    const writer = await createWriter(outputDirectory);
+    const evidence = mountedGameplayEvidence();
+    await writer.appendFrame(frameInput(0, 0));
+    writer.appendRuntimeHostJournalTransition(evidence.transition);
+    await writer.appendFrame(frameInput(
+      1,
+      5,
+      evidence.snapshot,
+      evidence.transition.worldStateAfter,
+    ));
+    await writer.finalize();
+
+    const snapshotPath = path.join(
+      outputDirectory,
+      "tracks/snapshots.ndjson",
+    );
+    const rows = (await readFile(snapshotPath, "utf8")).trim().split("\n")
+      .map((line) => JSON.parse(line));
+    rows[1].snapshot.world.worldStateRef =
+      `worldkit://world-state/world-state:${"e".repeat(64)}`;
+    rows[1].snapshot.world.worldStateHash = `sha256:${"e".repeat(64)}`;
+    await writeFile(
+      snapshotPath,
+      `${rows.map(stringifyCanonicalJson).join("\n")}\n`,
+      "utf8",
+    );
+    await rewriteIntegrity(outputDirectory);
+
+    const validation = await validateControlCaptureBundleV1(outputDirectory);
+    expect(validation.ok).toBe(false);
+    expect(validation.diagnostics).toContainEqual(expect.objectContaining({
+      code: "CAPTURE_GAMEPLAY_REFERENCE_MISMATCH",
+      path: "tracks/snapshots.ndjson/1",
+    }));
+  });
+
+  it("rejects a re-hashed bundle with a missing per-frame Snapshot row", async () => {
+    const parent = await createTemporaryDirectory();
+    const outputDirectory = path.join(parent, "capture-bundle");
+    const writer = await createWriter(outputDirectory);
+    await writer.appendFrame(frameInput(0, 0));
+    await writer.appendFrame(frameInput(1, 5));
+    await writer.finalize();
+
+    await writeFile(
+      path.join(outputDirectory, "tracks/snapshots.ndjson"),
+      "",
+      "utf8",
+    );
+    await rewriteIntegrity(outputDirectory);
+
+    const validation = await validateControlCaptureBundleV1(outputDirectory);
+    expect(validation.ok).toBe(false);
+    expect(validation.diagnostics).toContainEqual(expect.objectContaining({
+      code: "CAPTURE_GAMEPLAY_REFERENCE_MISMATCH",
+      path: "tracks/snapshots.ndjson",
+    }));
+  });
+
+  it("rejects re-hashed missing fixed-Tick Fact episode Events", async () => {
+    const parent = await createTemporaryDirectory();
+    const outputDirectory = path.join(parent, "capture-bundle");
+    const writer = await createWriter(outputDirectory);
+    const evidence = fixedTickSupportedByEvidence();
+
+    await writer.appendFrame(frameInput(0, 0));
+    writer.appendRuntimeHostFixedTickJournal({
+      captureFrameIndexAfter: 1,
+      afterEventSequenceExclusive: 0,
+      worldSessionEvents: evidence.worldSessionEvents,
+      worldStateAfter: evidence.worldStateAfter,
+      gameplayInspectionAfter: evidence.gameplayInspectionAfter,
+    });
+    await writer.appendFrame(frameInput(
+      1,
+      5,
+      evidence.snapshot,
+      evidence.worldStateAfter,
+    ));
+    await writer.finalize();
+
+    await writeFile(
+      path.join(outputDirectory, "tracks/events.ndjson"),
+      "",
+      "utf8",
+    );
+    await rewriteIntegrity(outputDirectory);
+
+    const validation = await validateControlCaptureBundleV1(outputDirectory);
+    expect(validation.ok).toBe(false);
+    expect(validation.diagnostics).toContainEqual(expect.objectContaining({
+      code: "CAPTURE_GAMEPLAY_REFERENCE_MISMATCH",
+      path: "tracks/events.ndjson/fact-transitions-frame-1",
+    }));
+  });
+
+  it("rejects re-hashed Command Events whose Receipt row is missing", async () => {
+    const parent = await createTemporaryDirectory();
+    const outputDirectory = path.join(parent, "capture-bundle");
+    const writer = await createWriter(outputDirectory);
+    const evidence = mountedGameplayEvidence();
+    await writer.appendFrame(frameInput(0, 0));
+    writer.appendRuntimeHostJournalTransition(evidence.transition);
+    await writer.appendFrame(frameInput(
+      1,
+      5,
+      evidence.snapshot,
+      evidence.transition.worldStateAfter,
+    ));
+    await writer.finalize();
+
+    await writeFile(
+      path.join(outputDirectory, "tracks/actions.ndjson"),
+      "",
+      "utf8",
+    );
+    await rewriteIntegrity(outputDirectory);
+
+    const validation = await validateControlCaptureBundleV1(outputDirectory);
+    expect(validation.ok).toBe(false);
+    expect(validation.diagnostics).toContainEqual(expect.objectContaining({
+      code: "CAPTURE_GAMEPLAY_REFERENCE_MISMATCH",
+      path: expect.stringMatching(/^tracks\/events\.ndjson\/receipt-/),
+    }));
+  });
+
+  it("rejects re-hashed missing Command, Event, and Relationship tracks", async () => {
+    const parent = await createTemporaryDirectory();
+    const outputDirectory = path.join(parent, "capture-bundle");
+    const writer = await createWriter(outputDirectory);
+    const evidence = mountedGameplayEvidence();
+    await writer.appendFrame(frameInput(0, 0));
+    writer.appendRuntimeHostJournalTransition(evidence.transition);
+    await writer.appendFrame(frameInput(
+      1,
+      5,
+      evidence.snapshot,
+      evidence.transition.worldStateAfter,
+    ));
+    await writer.finalize();
+
+    for (const track of ["actions", "events", "relationships"]) {
+      await writeFile(
+        path.join(outputDirectory, `tracks/${track}.ndjson`),
+        "",
+        "utf8",
+      );
+    }
+    await rewriteIntegrity(outputDirectory);
+
+    const validation = await validateControlCaptureBundleV1(outputDirectory);
+    expect(validation.ok).toBe(false);
+    expect(validation.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        path: "tracks/events.ndjson/journal-segment-frame-1",
+      }),
+      expect.objectContaining({
+        path: "tracks/events.ndjson/relationship-transitions-frame-1",
+      }),
+    ]));
+  });
+
+  it("rejects an unknown Event source alias after a self-consistent re-hash", async () => {
+    const parent = await createTemporaryDirectory();
+    const outputDirectory = path.join(parent, "capture-bundle");
+    const writer = await createWriter(outputDirectory);
+    const evidence = fixedTickSupportedByEvidence();
+    await writer.appendFrame(frameInput(0, 0));
+    writer.appendRuntimeHostFixedTickJournal({
+      captureFrameIndexAfter: 1,
+      afterEventSequenceExclusive: 0,
+      worldSessionEvents: evidence.worldSessionEvents,
+      worldStateAfter: evidence.worldStateAfter,
+      gameplayInspectionAfter: evidence.gameplayInspectionAfter,
+    });
+    await writer.appendFrame(frameInput(
+      1,
+      5,
+      evidence.snapshot,
+      evidence.worldStateAfter,
+    ));
+    await writer.finalize();
+
+    const eventPath = path.join(outputDirectory, "tracks/events.ndjson");
+    const rows = (await readFile(eventPath, "utf8")).trim().split("\n")
+      .map((line) => JSON.parse(line));
+    rows[0].source.legacyReceiptId = "legacy";
+    await writeFile(
+      eventPath,
+      `${rows.map(stringifyCanonicalJson).join("\n")}\n`,
+      "utf8",
+    );
+    await rewriteIntegrity(outputDirectory);
+
+    const validation = await validateControlCaptureBundleV1(outputDirectory);
+    expect(validation.ok).toBe(false);
+    expect(validation.diagnostics).toContainEqual(expect.objectContaining({
+      code: "CAPTURE_GAMEPLAY_REFERENCE_MISMATCH",
+      path: "tracks/events.ndjson/0",
+    }));
+  });
+
+  it("fails closed when the post-Reset phase reuses a WorldSession or Event", () => {
+    const phase = (
+      input: Partial<MountedCapturePhaseObservationV1> &
+        Pick<MountedCapturePhaseObservationV1, "phase">,
+    ): MountedCapturePhaseObservationV1 => ({
+      phase: input.phase,
+      runtimeSessionId: "runtime-test",
+      worldSessionId: "world-session-before-reset",
+      simulationTick: 1,
+      riderPositionMetersXYZ: [0, 0, 0],
+      boardPositionMetersXYZ: [0, 0, -1],
+      controlledEntityId: "player",
+      mountedOnPresent: false,
+      cameraTargetEntityId: "player",
+      activeCameraModifierRefs: [],
+      supportedByFacts: [
+        {
+          id: "semantic-fact:player-before",
+          supportedEntityId: "player",
+          supportSurfaceEntityId: "terrain",
+          supportTraversalSurfaceId: "surface-terrain",
+          supportColliderSubshapeId: "collider-terrain",
+          startedSimulationTick: 1,
+          semanticFactProjectorProfileRef: "worldkit://semantic-fact-projector-profile/contact.support@1",
+          semanticFactProjectorProfileHash: WORLD_HASH,
+        },
+        {
+          id: "semantic-fact:board-before",
+          supportedEntityId: "skateboard",
+          supportSurfaceEntityId: "terrain",
+          supportTraversalSurfaceId: "surface-terrain",
+          supportColliderSubshapeId: "collider-terrain",
+          startedSimulationTick: 0,
+          semanticFactProjectorProfileRef: "worldkit://semantic-fact-projector-profile/contact.support@1",
+          semanticFactProjectorProfileHash: WORLD_HASH,
+        },
+      ],
+      lastEventSequence: 1,
+      eventIds: ["event-before-reset"],
+      ...input,
+    });
+    const valid = {
+      beforeMount: phase({ phase: "before-mount" }),
+      afterMountMovement: phase({
+        phase: "after-mount-movement",
+        simulationTick: 30,
+        riderPositionMetersXYZ: [0, 0, -2],
+        boardPositionMetersXYZ: [0, 0, -2],
+        controlledEntityId: "skateboard",
+        mountedOnPresent: true,
+        cameraTargetEntityId: "skateboard",
+        activeCameraModifierRefs: [
+          "worldkit://camera-modifier/mounted-framing@1",
+        ],
+        supportedByFacts: [{
+          id: "semantic-fact:board-before",
+          supportedEntityId: "skateboard",
+          supportSurfaceEntityId: "terrain",
+          supportTraversalSurfaceId: "surface-terrain",
+          supportColliderSubshapeId: "collider-terrain",
+          startedSimulationTick: 0,
+          semanticFactProjectorProfileRef: "worldkit://semantic-fact-projector-profile/contact.support@1",
+          semanticFactProjectorProfileHash: WORLD_HASH,
+        }],
+        eventIds: ["event-after-mount"],
+      }),
+      afterDismountMovement: phase({
+        phase: "after-dismount-movement",
+        simulationTick: 60,
+        riderPositionMetersXYZ: [0, 0, -4],
+        boardPositionMetersXYZ: [0, 0, -2],
+        supportedByFacts: [
+          {
+            id: "semantic-fact:player-dismounted",
+            supportedEntityId: "player",
+            supportSurfaceEntityId: "terrain",
+            supportTraversalSurfaceId: "surface-terrain",
+            supportColliderSubshapeId: "collider-terrain",
+            startedSimulationTick: 31,
+            semanticFactProjectorProfileRef: "worldkit://semantic-fact-projector-profile/contact.support@1",
+            semanticFactProjectorProfileHash: WORLD_HASH,
+          },
+          {
+            id: "semantic-fact:board-before",
+            supportedEntityId: "skateboard",
+            supportSurfaceEntityId: "terrain",
+            supportTraversalSurfaceId: "surface-terrain",
+            supportColliderSubshapeId: "collider-terrain",
+            startedSimulationTick: 0,
+            semanticFactProjectorProfileRef: "worldkit://semantic-fact-projector-profile/contact.support@1",
+            semanticFactProjectorProfileHash: WORLD_HASH,
+          },
+        ],
+        eventIds: ["event-after-dismount"],
+      }),
+      afterReset: phase({
+        phase: "after-reset",
+        worldSessionId: "world-session-after-reset",
+        simulationTick: 0,
+        supportedByFacts: [
+          {
+            id: "semantic-fact:player-reset",
+            supportedEntityId: "player",
+            supportSurfaceEntityId: "terrain",
+            supportTraversalSurfaceId: "surface-terrain",
+            supportColliderSubshapeId: "collider-terrain",
+            startedSimulationTick: 0,
+            semanticFactProjectorProfileRef: "worldkit://semantic-fact-projector-profile/contact.support@1",
+            semanticFactProjectorProfileHash: WORLD_HASH,
+          },
+          {
+            id: "semantic-fact:board-before",
+            supportedEntityId: "skateboard",
+            supportSurfaceEntityId: "terrain",
+            supportTraversalSurfaceId: "surface-terrain",
+            supportColliderSubshapeId: "collider-terrain",
+            startedSimulationTick: 0,
+            semanticFactProjectorProfileRef: "worldkit://semantic-fact-projector-profile/contact.support@1",
+            semanticFactProjectorProfileHash: WORLD_HASH,
+          },
+        ],
+        eventIds: ["event-after-reset"],
+      }),
+      riderPositionAfterDismountCommandMetersXYZ: [0, 0, -3] as const,
+    };
+
+    expect(() => assertMountedSkateboardCaptureTimelineV1(valid)).not.toThrow();
+    expect(() => assertMountedSkateboardCaptureTimelineV1({
+      ...valid,
+      afterReset: {
+        ...valid.afterReset,
+        worldSessionId: valid.beforeMount.worldSessionId,
+      },
+    })).toThrow("MOUNTED_CAPTURE_RESET_WORLD_SESSION_REUSED");
+    expect(() => assertMountedSkateboardCaptureTimelineV1({
+      ...valid,
+      afterReset: {
+        ...valid.afterReset,
+        eventIds: ["event-after-mount"],
+      },
+    })).toThrow("MOUNTED_CAPTURE_POST_RESET_EVENT_LEAKAGE");
+    expect(() => assertMountedSkateboardCaptureTimelineV1({
+      ...valid,
+      afterReset: { ...valid.afterReset, supportedByFacts: [] },
+    })).toThrow("MOUNTED_CAPTURE_RESET_FACTS_MISSING");
+    expect(() => assertMountedSkateboardCaptureTimelineV1({
+      ...valid,
+      afterReset: {
+        ...valid.afterReset,
+        supportedByFacts: valid.afterReset.supportedByFacts.filter((fact) =>
+          fact.supportedEntityId !== "skateboard"
+        ),
+      },
+    })).toThrow("MOUNTED_CAPTURE_SUPPORT_FACT_CARDINALITY:after-reset:skateboard");
+    expect(() => assertMountedSkateboardCaptureTimelineV1({
+      ...valid,
+      afterReset: {
+        ...valid.afterReset,
+        supportedByFacts: valid.afterReset.supportedByFacts.map((fact) =>
+          fact.supportedEntityId === "skateboard"
+            ? {
+                ...fact,
+                supportTraversalSurfaceId: "wrong-reset-surface",
+                semanticFactProjectorProfileRef:
+                  "worldkit://semantic-fact-projector-profile/wrong@1",
+                semanticFactProjectorProfileHash: `sha256:${"f".repeat(64)}`,
+              }
+            : fact
+        ) as MountedCapturePhaseObservationV1["supportedByFacts"],
+      },
+    })).toThrow(/MOUNTED_CAPTURE_(SUPPORT_IDENTITY|PROJECTOR_PROFILE)_CHANGED/);
+    expect(() => assertMountedSkateboardCaptureTimelineV1({
+      ...valid,
+      afterMountMovement: {
+        ...valid.afterMountMovement,
+        supportedByFacts: valid.afterMountMovement.supportedByFacts.map(
+          (fact) => ({ ...fact, supportTraversalSurfaceId: "wrong-surface" }),
+        ),
+      },
+    })).toThrow("MOUNTED_CAPTURE_SUPPORT_IDENTITY_CHANGED");
+    expect(() => assertMountedSkateboardCaptureTimelineV1({
+      ...valid,
+      afterMountMovement: {
+        ...valid.afterMountMovement,
+        supportedByFacts: valid.afterMountMovement.supportedByFacts.map(
+          (fact) => ({ ...fact, id: "semantic-fact:wrong-board-episode" }),
+        ),
+      },
+    })).toThrow("MOUNTED_CAPTURE_BOARD_EPISODE_CHANGED");
+    expect(() => assertMountedSkateboardCaptureTimelineV1({
+      ...valid,
+      afterDismountMovement: {
+        ...valid.afterDismountMovement,
+        supportedByFacts: valid.afterDismountMovement.supportedByFacts.map(
+          (fact) => fact.supportedEntityId === "player"
+            ? { ...fact, id: "semantic-fact:player-before" }
+            : fact,
+        ),
+      },
+    })).toThrow("MOUNTED_CAPTURE_RIDER_EPISODE_NOT_RESTARTED");
+    expect(() => assertMountedSkateboardCaptureTimelineV1({
+      ...valid,
+      afterMountMovement: {
+        ...valid.afterMountMovement,
+        supportedByFacts: valid.afterMountMovement.supportedByFacts.map(
+          (fact) => ({
+            ...fact,
+            semanticFactProjectorProfileRef:
+              "worldkit://semantic-fact-projector-profile/wrong@1",
+            semanticFactProjectorProfileHash: `sha256:${"f".repeat(64)}`,
+          }),
+        ) as MountedCapturePhaseObservationV1["supportedByFacts"],
+      },
+    })).toThrow("MOUNTED_CAPTURE_PROJECTOR_PROFILE_CHANGED");
+  });
+
   it("rejects a missing Relationship row even after a self-consistent re-hash", async () => {
     const parent = await createTemporaryDirectory();
     const outputDirectory = path.join(parent, "capture-bundle");
     const writer = await createWriter(outputDirectory);
     const evidence = mountedGameplayEvidence();
     await writer.appendFrame(frameInput(0, 0));
-    writer.appendGameplayTransition(evidence.transition);
-    await writer.appendFrame(frameInput(1, 5, evidence.snapshot));
+    writer.appendRuntimeHostJournalTransition(evidence.transition);
+    await writer.appendFrame(frameInput(
+      1,
+      5,
+      evidence.snapshot,
+      evidence.transition.worldStateAfter,
+    ));
     await writer.finalize();
 
     await writeFile(
@@ -526,14 +1376,14 @@ describe("Control Capture Bundle V1", () => {
     const parent = await createTemporaryDirectory();
     const writer = await createWriter(path.join(parent, "capture-bundle"));
     const evidence = mountedGameplayEvidence();
-    const events = evidence.transition.events.map((event) => ({
+    const events = evidence.transition.worldSessionEvents.map((event) => ({
       ...event,
       simulationTick: event.simulationTick + 1,
     })) as readonly GameplayEventV1[];
 
-    expect(() => writer.appendGameplayTransition({
+    expect(() => writer.appendRuntimeHostJournalTransition({
       ...evidence.transition,
-      events,
+      worldSessionEvents: events,
     })).toThrow("CAPTURE_GAMEPLAY_REFERENCE_MISMATCH");
     await writer.abort();
   });
@@ -544,8 +1394,13 @@ describe("Control Capture Bundle V1", () => {
     const writer = await createWriter(outputDirectory);
     const evidence = mountedGameplayEvidence();
     await writer.appendFrame(frameInput(0, 0));
-    writer.appendGameplayTransition(evidence.transition);
-    await writer.appendFrame(frameInput(1, 5, evidence.snapshot));
+    writer.appendRuntimeHostJournalTransition(evidence.transition);
+    await writer.appendFrame(frameInput(
+      1,
+      5,
+      evidence.snapshot,
+      evidence.transition.worldStateAfter,
+    ));
     await writer.finalize();
 
     const eventPath = path.join(outputDirectory, "tracks/events.ndjson");
@@ -595,8 +1450,13 @@ describe("Control Capture Bundle V1", () => {
     const writer = await createWriter(outputDirectory);
     const evidence = mountedGameplayEvidence();
     await writer.appendFrame(frameInput(0, 0));
-    writer.appendGameplayTransition(evidence.transition);
-    await writer.appendFrame(frameInput(1, 5, evidence.snapshot));
+    writer.appendRuntimeHostJournalTransition(evidence.transition);
+    await writer.appendFrame(frameInput(
+      1,
+      5,
+      evidence.snapshot,
+      evidence.transition.worldStateAfter,
+    ));
     await writer.finalize();
 
     const actionPath = path.join(outputDirectory, "tracks/actions.ndjson");
@@ -629,7 +1489,7 @@ describe("Control Capture Bundle V1", () => {
     actionRows[0].worldStateAfterRef = receipt.worldStateAfterRef;
     actionRows[0].worldStateAfterHash = receipt.worldStateAfterHash;
     for (const row of [...eventRows, ...relationshipRows]) {
-      row.receiptId = actionRows[0].receipt.id;
+      row.source.receiptId = actionRows[0].receipt.id;
     }
     await writeFile(
       actionPath,
