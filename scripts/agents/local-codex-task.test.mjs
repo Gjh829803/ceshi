@@ -143,3 +143,36 @@ process.stdin.on("end", () => {
   assert.equal(await readFile(firstDestination, "utf8"), "previous-result\n");
   await assert.rejects(readFile(secondDestination, "utf8"), /ENOENT/);
 });
+
+test("emits one request-bound machine-readable timeout outcome from the real local adapter", async () => {
+  const root = await createFixture();
+  const outputPath = path.join(root, "delivered", "result.txt");
+  const fakeCodexPath = path.join(root, "fake-hanging-codex.mjs");
+  await writeFile(fakeCodexPath, `#!/usr/bin/env node
+if (process.argv.includes("--version")) process.exit(0);
+process.stdin.resume();
+setInterval(() => undefined, 1000);
+`);
+  await chmod(fakeCodexPath, 0o755);
+  const result = spawnSync(process.execPath, [
+    localRunnerPath,
+    ...baseArguments(root, outputPath),
+    "--request-id", "local-codex-timeout-request",
+    "--timeout-seconds", "1",
+  ], {
+    cwd: repositoryRoot,
+    encoding: "utf8",
+    timeout: 5_000,
+    env: { ...process.env, WORLDKIT_LOCAL_CODEX_BIN: fakeCodexPath },
+  });
+  assert.notEqual(result.status, 0);
+  const prefix = "WORLDKIT_CODEX_TASK_OUTCOME ";
+  const rows = result.stdout.split(/\r?\n/).filter((line) => line.startsWith(prefix));
+  assert.equal(rows.length, 1);
+  assert.deepEqual(JSON.parse(rows[0].slice(prefix.length)), {
+    kind: "worldkit-codex-task-outcome",
+    schemaVersion: 1,
+    requestId: "local-codex-timeout-request",
+    outcome: "task-timeout",
+  });
+});

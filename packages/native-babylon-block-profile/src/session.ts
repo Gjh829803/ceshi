@@ -36,6 +36,9 @@ import {
   BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1,
   type BabylonNativeBlockShapeKindV1,
 } from "./shapes.js";
+import {
+  recordBabylonNativeBlockCheckedEpochEvidenceV1,
+} from "./host-evidence.js";
 
 export interface BabylonNativeBlockProfileBudgetV1 {
   readonly maximumBlockCount: number;
@@ -471,6 +474,17 @@ export function createBabylonNativeBlockProfileSessionV1(
           checkedLayout,
           visualGroups: checkedLayout.checkResult.visualGroups,
           colliderInventory: colliders.inventory,
+          profileInventoryHash,
+        });
+        recordBabylonNativeBlockCheckedEpochEvidenceV1(context.scene, {
+          kind: "babylon-native-block-checked-epoch-evidence",
+          schemaVersion: 1,
+          checkedLayout: {
+            kind: checkedLayout.kind,
+            schemaVersion: checkedLayout.schemaVersion,
+            layout: checkedLayout.layout,
+            checkResult: checkedLayout.checkResult,
+          },
           profileInventoryHash,
         });
         recordsById.clear();

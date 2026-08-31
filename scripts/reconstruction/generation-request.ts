@@ -34,6 +34,9 @@ import {
 import { isEqual, isNil, sortBy } from "lodash-es";
 
 const OUTPUTS = ["scene.ts", "native-block-authoring.json", "native-resources.json"] as const;
+
+export const NATIVE_BLOCK_RECONSTRUCTION_FORMAL_TIMEOUT_SECONDS_V1 = 1_800;
+
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const CURRENT_NATIVE_SCENE_API_REF = "worldkit://native-scene-api/babylon@1";
 const CURRENT_NATIVE_SCENE_PROFILE_REF = "worldkit://native-scene-profile/whitebox.blocks@1";
@@ -105,7 +108,7 @@ export interface NativeBlockGenerationHostClosureV1 {
   readonly initialControlledEntityId: string;
 }
 
-interface ResolvedGenerationResourceV1 {
+export interface ResolvedNativeBlockGenerationResourceV1 {
   readonly kind: "worldkit-resolved-resource";
   readonly schemaVersion: 1;
   readonly resourceKind: "native-scene-api" | "native-scene-profile" | "native-block-profile";
@@ -144,11 +147,11 @@ function exactPlainRecord(
   return record;
 }
 
-function resolvedGenerationResource(
+export function parseResolvedNativeBlockGenerationResourceV1(
   bytes: Uint8Array,
-  resourceKind: ResolvedGenerationResourceV1["resourceKind"],
+  resourceKind: ResolvedNativeBlockGenerationResourceV1["resourceKind"],
   expectedRef: string,
-): ResolvedGenerationResourceV1 {
+): ResolvedNativeBlockGenerationResourceV1 {
   const record = exactPlainRecord(
     JSON.parse(new TextDecoder().decode(bytes)) as unknown,
     ["kind", "schemaVersion", "resourceKind", "resourceRef", "resolvedVersion", "contentHash"],
@@ -405,6 +408,9 @@ export async function prepareNativeBlockGenerationTaskV1(
   if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(input.runId)) {
     throw new TypeError("Generation runId must be one stable lowercase identity part.");
   }
+  if (!/^[a-z0-9][a-z0-9-]{2,79}$/.test(input.bootstrapId)) {
+    throw new TypeError("Native Block bootstrapId must be one stable lowercase identity.");
+  }
   const suppliedRouteDecision = parseSceneAuthoringRouteDecisionV1(input.routeDecision);
   if (
     suppliedRouteDecision.sceneBriefRef !== reconstructionCase.sceneBriefRef ||
@@ -474,17 +480,17 @@ export async function prepareNativeBlockGenerationTaskV1(
   ) {
     throw new TypeError("Generation Host owner resources are not admitted by the selected Registry Lock.");
   }
-  const nativeSceneApiResolution = resolvedGenerationResource(
+  const nativeSceneApiResolution = parseResolvedNativeBlockGenerationResourceV1(
     nativeSceneApi.bytes,
     "native-scene-api",
     CURRENT_NATIVE_SCENE_API_REF,
   );
-  const nativeSceneProfileResolution = resolvedGenerationResource(
+  const nativeSceneProfileResolution = parseResolvedNativeBlockGenerationResourceV1(
     nativeSceneProfile.bytes,
     "native-scene-profile",
     CURRENT_NATIVE_SCENE_PROFILE_REF,
   );
-  const blockProfileResolution = resolvedGenerationResource(
+  const blockProfileResolution = parseResolvedNativeBlockGenerationResourceV1(
     blockProfile.bytes,
     "native-block-profile",
     CURRENT_NATIVE_BLOCK_PROFILE_REF,

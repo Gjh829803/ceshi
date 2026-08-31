@@ -3,6 +3,14 @@ import {
   type BabylonNativeSceneCandidateFactoryV1,
 } from "@whitebox-world/native-babylon/host";
 import {
+  BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
+  hashBabylonNativeBlockCheckedLayoutInventoryV1,
+} from "@whitebox-world/native-babylon-block-profile";
+import {
+  takeBabylonNativeBlockCheckedEpochEvidenceV1,
+  type BabylonNativeBlockCheckedEpochEvidenceV1,
+} from "@whitebox-world/native-babylon-block-profile/host";
+import {
   parseGameplayBootstrapV1,
   type GameplayBootstrapV1,
 } from "@whitebox-world/gameplay-contracts";
@@ -88,6 +96,8 @@ export interface PreparedFrozenBabylonNativeWorldPackageBuildInputV1 {
   readonly sceneModuleBundleManifestHash: Sha256HashV1;
   readonly dependencyLockHash: Sha256HashV1;
   readonly assetLockHash: Sha256HashV1;
+  readonly blockCheckedEpochEvidence?:
+    BabylonNativeBlockCheckedEpochEvidenceV1;
 }
 
 export class BabylonNativePackageInputErrorV1 extends Error {
@@ -416,12 +426,26 @@ export async function prepareFrozenBabylonNativeWorldPackageBuildInputV1(
 
     const ledger = createBabylonNativeReplayAssetLedgerV1(assets.assetResolver);
     let replayIndex = 0;
+    const evidenceByReplay:
+      BabylonNativeBlockCheckedEpochEvidenceV1[][] = [];
     const candidateFactory: BabylonNativeSceneCandidateFactoryV1 = Object.freeze({
       async createCandidate() {
         if (replayIndex > 1) return fail();
         ledger.beginReplay(replayIndex as 0 | 1);
         replayIndex += 1;
-        return input.candidateFactory.createCandidate();
+        const lease = await input.candidateFactory.createCandidate();
+        const evidence: BabylonNativeBlockCheckedEpochEvidenceV1[] = [];
+        evidenceByReplay.push(evidence);
+        return Object.freeze({
+          engine: lease.engine,
+          scene: lease.scene,
+          async dispose() {
+            evidence.push(
+              ...takeBabylonNativeBlockCheckedEpochEvidenceV1(lease.scene),
+            );
+            await lease.dispose();
+          },
+        });
       },
     });
     const replay = await replayBabylonNativeSceneModuleV1({
@@ -435,15 +459,22 @@ export async function prepareFrozenBabylonNativeWorldPackageBuildInputV1(
         maximumStaticColliderTriangleCount: resourceBudget.maximumTriangles,
       },
     });
+    const requiresBlockEvidence = bootstrap.nativeSceneProfileRef ===
+      BABYLON_NATIVE_BLOCK_PROFILE_REF_V1;
     if (
       replay.checkResult.outcome !== "passed" ||
       !("contribution" in replay) ||
-      replayIndex !== 2
+      replayIndex !== 2 ||
+      evidenceByReplay.length !== 2 ||
+      evidenceByReplay[0]!.length !== (requiresBlockEvidence ? 1 : 0) ||
+      evidenceByReplay[1]!.length !== (requiresBlockEvidence ? 1 : 0)
     ) return fail();
     const checkResult = parseNativeSceneCheckResultV1(replay.checkResult);
     const contribution = parseBabylonNativeSceneContributionV1(
       replay.contribution,
     );
+    const firstBlockEvidence = evidenceByReplay[0]![0];
+    const secondBlockEvidence = evidenceByReplay[1]![0];
     if (
       checkResult.checkedInput.kind !== "native-scene-module" ||
       checkResult.checkedInput.sceneModuleRef !== bootstrap.sceneModuleRef ||
@@ -451,7 +482,20 @@ export async function prepareFrozenBabylonNativeWorldPackageBuildInputV1(
       contribution.profileSettlement.profileRef !==
         bootstrap.nativeSceneProfileRef ||
       replay.contributionHash !==
-        hashBabylonNativeSceneContributionV1(contribution)
+        hashBabylonNativeSceneContributionV1(contribution) ||
+      (requiresBlockEvidence && (
+        isNil(firstBlockEvidence) ||
+        isNil(secondBlockEvidence) ||
+        !isEqual(firstBlockEvidence, secondBlockEvidence) ||
+        hashBabylonNativeBlockCheckedLayoutInventoryV1(
+          firstBlockEvidence.checkedLayout,
+        ) !== hashBabylonNativeBlockCheckedLayoutInventoryV1(
+          secondBlockEvidence.checkedLayout,
+        ) ||
+        contribution.profileSettlement.kind !== "host-snapshot" ||
+        firstBlockEvidence.profileInventoryHash !==
+          contribution.profileSettlement.profileInventoryHash
+      ))
     ) return fail();
     const assetReplayLedgers = ledger.snapshot();
     const expectedAssetRefs = assets.assetLock.entries.map((entry) =>
@@ -507,6 +551,9 @@ export async function prepareFrozenBabylonNativeWorldPackageBuildInputV1(
       sceneModuleBundleManifestHash: finalizedBundle.manifestHash,
       dependencyLockHash: dependency.dependencyLockHash,
       assetLockHash: assets.assetLockHash,
+      ...(isNil(firstBlockEvidence)
+        ? {}
+        : { blockCheckedEpochEvidence: firstBlockEvidence }),
     });
   } catch (error) {
     if (error instanceof BabylonNativePackageInputErrorV1) throw error;

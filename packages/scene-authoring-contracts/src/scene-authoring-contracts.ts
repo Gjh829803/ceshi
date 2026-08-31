@@ -135,6 +135,7 @@ export type NativeBlockGenerationDiagnosticCodeV1 =
   | "self-check-failed"
   | "stale-output"
   | "task-rejected"
+  | "task-timeout"
   | "task-tool-error";
 
 export interface NativeBlockGenerationReceiptV1 {
@@ -356,7 +357,8 @@ const SORTED_GENERATION_OUTPUT_PATHS = Object.freeze([
 const GENERATION_DIAGNOSTIC_CODES = Object.freeze([
   "cleanup-failed", "creation-outcome-unknown", "duplicate-request-mismatch",
   "output-hash-mismatch", "output-missing", "output-unexpected",
-  "self-check-failed", "stale-output", "task-rejected", "task-tool-error",
+  "self-check-failed", "stale-output", "task-rejected", "task-timeout",
+  "task-tool-error",
 ] as const satisfies readonly NativeBlockGenerationDiagnosticCodeV1[]);
 const HASH_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const ZERO_HASH = `sha256:${"0".repeat(64)}`;
@@ -844,12 +846,18 @@ export function parseNativeBlockGenerationReceiptV1(
   }
   const outputs = parseGenerationOutputs(record.outputs);
   const diagnosticCodes = parseGenerationDiagnosticCodes(record.diagnosticCodes);
+  const hasTaskTimeout = diagnosticCodes.includes("task-timeout");
   if (
     (record.outcome === "completed" &&
       (!hasExactOrder(outputs.map(({ path }) => path), SORTED_GENERATION_OUTPUT_PATHS) ||
         diagnosticCodes.length !== 0 ||
         record.cleanupOutcome !== "completed")) ||
-    (record.outcome !== "completed" && diagnosticCodes.length === 0)
+    (record.outcome !== "completed" && diagnosticCodes.length === 0) ||
+    (hasTaskTimeout &&
+      (record.outcome !== "rejected" ||
+        outputs.length !== 0 ||
+        diagnosticCodes.length !== 1 ||
+        record.cleanupOutcome !== "completed"))
   ) {
     return invalidContract("generation-receipt");
   }

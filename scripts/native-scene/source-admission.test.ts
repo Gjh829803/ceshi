@@ -117,6 +117,23 @@ describe("Babylon Native Source Admission", () => {
     });
   }, 15_000);
 
+  it("rejects the Host-only Block Profile evidence subpath", async () => {
+    const result = await admittedCode(`
+      import { defineBabylonNativeScene } from "@whitebox-world/native-babylon";
+      import { takeBabylonNativeBlockCheckedEpochEvidenceV1 } from
+        "@whitebox-world/native-babylon-block-profile/host";
+      export default defineBabylonNativeScene({
+        kind: "babylon-native-scene-module",
+        id: "native-source-test",
+        build() { void takeBabylonNativeBlockCheckedEpochEvidenceV1; },
+      });
+    `);
+    expect(result).toEqual({
+      outcome: "rejected",
+      code: "WORLDKIT_NATIVE_SCENE_DEPENDENCY_FORBIDDEN",
+    });
+  }, 15_000);
+
   it("admits local object and assignment destructuring inside build", async () => {
     const result = await admittedCode(`
       import { defineBabylonNativeScene } from "@whitebox-world/native-babylon";

@@ -8,6 +8,7 @@ import {
   assertSuccessfulJob,
   downloadS3FileAtomic,
   fetchGenerationItems,
+  findGenerationJobByRequestId,
   joinS3Uri,
   loadLwdpGenerationConfig,
   pollGenerationJob,
@@ -15,6 +16,10 @@ import {
   submittedJobId,
   uploadS3File,
 } from "../lib/lwdp-generation-client.mjs";
+import {
+  CodexTaskOutcomeError,
+  serializeCodexTaskOutcomeEnvelopeV1,
+} from "../lib/codex-task-outcome.mjs";
 import { resolveCodexExecutionProfile } from "../lib/lwdp-codex-profile.mjs";
 
 function parseArguments(argv) {
@@ -26,8 +31,8 @@ function parseArguments(argv) {
       if (value === undefined) throw new Error(`Missing value after ${key}.`);
       result[key.slice(2) + "s"].push(value);
       index += 1;
-    } else if (key === "--dry-run") {
-      result.dryRun = true;
+    } else if (key === "--dry-run" || key === "--reconcile-only") {
+      result[key === "--dry-run" ? "dryRun" : "reconcileOnly"] = true;
     } else if (key?.startsWith("--")) {
       if (value === undefined) throw new Error(`Missing value after ${key}.`);
       result[key.slice(2).replace(/-([a-z])/g, (_, letter) => letter.toUpperCase())] = value;
@@ -69,21 +74,60 @@ function execFilePromise(command, args, cwd) {
 const args = parseArguments(process.argv.slice(2));
 const repoRoot = resolve(args.repoRoot || process.cwd());
 const taskId = safeTaskId(args.taskId);
+const runToken = `${Date.now().toString(36)}-${randomBytes(4).toString("hex")}`;
+const requestId = safeTaskId(args.requestId || `${taskId}-${runToken}`);
 const executionProfile = resolveCodexExecutionProfile({
   executionProfile: args.executionProfile || "formal",
   model: args.model,
   reasoningEffort: args.reasoningEffort,
 });
+let outcomeEmitted = false;
+const emitOutcome = (outcome) => {
+  if (outcomeEmitted) throw new Error("Codex task outcome was emitted more than once.");
+  outcomeEmitted = true;
+  process.stdout.write(serializeCodexTaskOutcomeEnvelopeV1({
+    kind: "worldkit-codex-task-outcome",
+    schemaVersion: 1,
+    requestId,
+    outcome,
+  }));
+};
+
+if (args.reconcileOnly) {
+  try {
+    const config = await loadLwdpGenerationConfig();
+    const recovered = await findGenerationJobByRequestId(requestId, {
+      config,
+      pipeline: "codex",
+      maxAttempts: 1,
+    });
+    const recoveredRequestId = recovered?.job?.request_id ?? recovered?.request_id;
+    if (recoveredRequestId !== undefined && recoveredRequestId !== requestId) {
+      throw new Error("LWDP reconciliation returned a different request identity.");
+    }
+    emitOutcome("request-found");
+    process.exit(0);
+  } catch (error) {
+    if (error?.status === 404) {
+      emitOutcome("request-missing");
+      process.exit(0);
+    }
+    emitOutcome("creation-outcome-unknown");
+    process.stderr.write("Codex request reconciliation did not produce a definitive result.\n");
+    process.exit(1);
+  }
+}
+
 if (!args.outputS3Prefix) throw new Error("--output-s3-prefix is required.");
 if (!args.instructionFile) throw new Error("--instruction-file is required.");
 if (args.outputs.length === 0) throw new Error("At least one --output is required.");
 
-const runToken = `${Date.now().toString(36)}-${randomBytes(4).toString("hex")}`;
 const stagingRoot = resolve(repoRoot, ".codex-tmp", "lwdp-codex", `${taskId}-${runToken}`);
 const smokeMode = process.env.WORLDKIT_LWDP_CLIENT_SMOKE === "1";
 await mkdir(stagingRoot, { recursive: true });
 
 try {
+  try {
   const taskAssets = [];
   if (args.contexts.length > 0) {
     const contextPaths = args.contexts.map((item) => safeContextPath(repoRoot, item));
@@ -130,7 +174,7 @@ try {
     : "";
   const payload = {
     job_name: args.jobName || `worldkit ${taskId}`,
-    request_id: args.requestId || `${taskId}-${runToken}`,
+    request_id: requestId,
     output_s3_prefix: args.outputS3Prefix,
     defaults: {
       model: executionProfile.model,
@@ -164,6 +208,7 @@ try {
     process.stdout.write(
       `WORLDKIT_LWDP_CODEX_SMOKE ${taskId} dispatch=single-task-fast-path tasks=1 profile=${executionProfile.name} model=${executionProfile.model} reasoning=${executionProfile.reasoningEffort} submitAttempts=${submitAttempts} assets=${taskAssets.length} outputs=${outputSpecs.length}\n`,
     );
+    emitOutcome("completed");
     process.exit(0);
   }
 
@@ -178,6 +223,7 @@ try {
   );
   if (args.dryRun) {
     process.stdout.write(`WORLDKIT_LWDP_DRY_RUN ${taskId} ${jobId}\n`);
+    emitOutcome("completed");
     process.exit(0);
   }
   const job = await pollGenerationJob(jobId, {
@@ -195,6 +241,13 @@ try {
     );
   }
   process.stdout.write(`WORLDKIT_LWDP_TASK_READY ${taskId}\n`);
-} finally {
-  await rm(stagingRoot, { recursive: true, force: true });
+  } finally {
+    await rm(stagingRoot, { recursive: true, force: true });
+  }
+  emitOutcome("completed");
+} catch (error) {
+  emitOutcome(error instanceof CodexTaskOutcomeError
+    ? error.outcomeCode
+    : "task-rejected");
+  throw error;
 }

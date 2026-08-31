@@ -44,6 +44,7 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
         "@babylonjs/core": "9.23.0",
         "@whitebox-world/native-babylon": "workspace:*",
         "@whitebox-world/protocol": "workspace:*",
+        "@whitebox-world/runtime-contracts": "workspace:*",
         "@whitebox-world/validation": "workspace:*",
         "lodash-es": "^4.18.1",
       },
@@ -52,10 +53,15 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
       "@babylonjs/core",
       "@whitebox-world/native-babylon",
       "@whitebox-world/protocol",
+      "@whitebox-world/runtime-contracts",
       "@whitebox-world/validation",
       "lodash-es",
     ]);
-    expect(Object.keys(manifest.exports as object)).toEqual([".", "./testing"]);
+    expect(Object.keys(manifest.exports as object)).toEqual([
+      ".",
+      "./host",
+      "./testing",
+    ]);
   });
 
   it("uses the frozen Babylon dialect and contains no second world protocol", async () => {
@@ -125,6 +131,7 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
       "BABYLON_NATIVE_BLOCK_PROFILE_REF_V1",
       "BABYLON_NATIVE_BLOCK_RECONSTRUCTION_CORPUS_CASE_IDS_V1",
       "BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1",
+      "bindBlockVisualGroupsToSemanticCaptureTargetsV1",
       "bindNativeBlockAuthoringManifestToCheckedLayoutV1",
       "createBabylonNativeBlockAuthoringCaptureV1",
       "createBabylonNativeBlockProfileSessionV1",
@@ -139,6 +146,13 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
     ]);
     expect(Object.keys(profile).some((name) =>
       /host|runtime|collider|traversal|compiler/i.test(name))).toBe(false);
+  });
+
+  it("keeps checked-epoch transport behind the exact Host-only export", async () => {
+    const host = await import("./host.js") as Record<string, unknown>;
+    expect(Object.keys(host)).toEqual([
+      "takeBabylonNativeBlockCheckedEpochEvidenceV1",
+    ]);
   });
 
   it("keeps the real-runtime fixture behind one exact testing-only export", async () => {
