@@ -793,11 +793,13 @@ Incremental Hot Apply，以及哪些 Runtime 状态被保留、重置或替换�
 - [ ] Browser/CLI 支持观察、控制、截图权限分离。
 - [ ] 为上游 Agent 提供 Registry Search、Dry Run、Explain、Diff 和结构化修复工具，不提供底层引擎对象。
 
-已知问题 `CAM-MOUNT-1`（2026-08-26，已修复）：根因是 Possession 切到 skateboard 后，
-Babylon ViewTarget Sample 把 `relationshipRole` 固定发布为 `none` 并丢弃 committed
-`mountedOn` 上下文，导致 `mounted-framing` 从未命中，镜头继续使用 5m 基础臂长。
-CAM-06 现在分离 Camera Domain 的 Rider 控制上下文与实际 Mount ViewTarget：唯一 Rider
-命中 7m mounted modifier，多 Rider 歧义 fail closed，Dismount 后下一 Camera 固定更新撤销 modifier。
+已知问题 `CAM-MOUNT-1`（2026-08-26，M8-S1 窄 seam 已修复）：历史根因是 Possession 切到
+skateboard 后，Babylon ViewTarget Sample 丢弃 committed `mountedOn` 上下文，导致
+`mounted-framing` 从未命中，镜头继续使用 5m 基础臂长。当前 M8 clean break 已删除旧
+`relationshipRole(s)` 方言；Camera Context 同时保留 committed controlled Entity、selected
+Target 与类型化 `relationshipContexts`。唯一 Rider 命中 7m mounted modifier，共享 Mount
+歧义 fail closed，Dismount 后下一 Camera 固定更新撤销 modifier。该窄修复属于 M8-S1，
+不代表上面的广义 GCC-4/5/6/7/8 已完成。
 真实 Havok 集成回归确认 Mount/移动/Dismount 全链路、请求臂长 7m 且有效臂长大于 6m；
 Legacy Playground 的 `mounted-skateboard-s1` 已增加场景专用 Mount/Dismount 验收控件；控件只提交
 Browser V5 `action.activate` 并从 Snapshot/Inspection/Camera Telemetry 显示结果，不成为第二状态权威。
@@ -1284,7 +1286,7 @@ Placement S1、Simulation Take / Control Capture V1 与 Validation Capture/Integ
 | WS-07B | **待开始；结构治理后续 1** | 按 public contract family 扩展唯一 source/generated parity；每次只迁一个领域 | `ARC-INT` 已完成 / 阻塞相关 Schema release | 正负 parity、unknown-key、round-trip、tracked bytes；禁止用私有 deep import 换取小 bundle |
 | WS-05B/C | **待开始；结构治理后续 2** | 按 owner 批次消减当前 52 条 exact workspace boundary debt；补必要 `/testing` exports、direct deps 与 per-package tsconfig | `ARC-INT` 已完成 / 阻塞 `WS-08` 的相关 package extraction | debt count 单调下降、zero stale/new、zero cycles、无 wildcard |
 | WS-08 | **待开始；结构治理后续 3** | 稳定 Host primitives 后拆分 Host/Studio/CLI composition package，不改变 Runtime/Camera/Capture authority | public contracts 稳定且相关 `WS-05B/C` debt 已清 / 无 | CLI snapshots、readiness/shutdown lifecycle、build graph、Studio E2E |
-| M8-S1 | 核心实现与 review hardening 已完成；最终 Capture/Completion 收口中 | `mountedOn` 合同、编译、Action effect、Gameplay/Host 原子事务、Babylon Rider 投影、Physics-authority 安全下车、Playground 与 Track validator；[专项设计](../docs/superpowers/specs/2026-08-26-m8-s1-mounted-on-skateboard-design.md) / [实施计划](../docs/superpowers/plans/2026-08-26-m8-s1-mounted-on-skateboard-implementation-plan.md) / [进展记录](reviews/2026-08-26-m8-s1-mounted-on-skateboard-progress.md) | G19 已完成 | 本轮独立 review 已逐项复现处置，补齐 Physics/边界、控制权不变量、五 Event Capture 与 Builder 禁止项；新树 9/496 affected、190/2,057 contract、typecheck/build、clean-break 与 6+6 Outdoor verifier 通过，resource-heavy 仅有既有固定 5s 负载抖动且失败文件分别复跑通过；剩余 Runtime 对抗 hardening、`supportedBy`、正式四阶段 Capture verifier 及最终新树 review；`CAM-MOUNT-1` 归 P2.4 |
+| M8-S1 | 产品实现与正式四阶段 Capture 已在首个候选 `08f8f199` 完成；type/boundary 修复与最终双审 pending | `mountedOn` 合同、编译、Action effect、Gameplay/Host 原子事务、Babylon Rider 投影、retained-Physics `supportedBy`、最新 Camera 合同窄 seam、Playground 与严格 Journal/Snapshot Capture；[专项设计](../docs/superpowers/specs/2026-08-26-m8-s1-mounted-on-skateboard-design.md) / [实施计划](../docs/superpowers/plans/2026-08-26-m8-s1-mounted-on-skateboard-implementation-plan.md) / [completion draft](reviews/2026-08-26-m8-s1-mounted-on-skateboard-completion.md) | G19 已完成 | 本地候选证据：Contracts/Compiler/Camera 10 files / 508 tests、Runtime/Havok/Host 15 / 467、Capture/CLI/Validation 5 / 64，`verify:control-capture` 与 retained 3+1 frame mounted verifier 通过；Capture 子审 23/23 与 tamper matrix GO。exact-SHA Cloud 首轮为 NO-GO：`typecheck` 28 errors / 4 files，root test 在 workspace-boundary preflight 阻断；build、Studio 77/77、independent 23/23 + 1/1、clean-break 1518/0 与四项现行 Canonical capability gates 通过。修复后的最终 exact-SHA Cloud closure 与 Claude/Grok review 尚未完成；历史 catalog `verify:outdoor-gameplay` 已随 Gameplay route 删除，不得恢复。`CAM-MOUNT-1` 的窄修复归 M8；广义 P2.4/GCC 仍开放。 |
 
 结构治理固定按 `WS-07B → WS-05B/C → WS-08` 推荐；`M8-S1` 仍是产品能力主线，两条 lane 不得
 因表格相邻而被解释为可以共享 owner 或跳过各自依赖。上述 WS 项的范围、延期理由、ownership、
@@ -1371,21 +1373,23 @@ S1b Golden、
    完成 clean break 接线，旧 Profile 请求表面已删除；作者面板
    Feel 范围与 session 数字袋类型已在 Preset 语义合同修复中收口，
    M7 不标记完成；
-8. **M8（核心实现与当前树基础门禁已完成，最终证据收口中）：Canonical World State + Typed Relationship
+8. **M8（产品实现与正式 Capture 已在首个候选完成，修复后 Cloud closure / 最终双审 pending）：Canonical World State + Typed Relationship
    人—滑板窄可视切片**：G19-2/G19-4 已交付 Canonical Gameplay 合同、provider-neutral
    RuntimeHost staging 和 WorldPackage membership；G19-6 至 G19-8 已完成并通过 Final GO。
    当前已按
    [M8-S1 专项设计](../docs/superpowers/specs/2026-08-26-m8-s1-mounted-on-skateboard-design.md)与
    [实施计划](../docs/superpowers/plans/2026-08-26-m8-s1-mounted-on-skateboard-implementation-plan.md)
    实现 `mountedOn` 权威关系、Mount/Dismount Action、Receipt/Event、Babylon 投影、
-   Safe Dismount、Browser Fixture 与 Capture Track validator；独立 review 后又补齐了只依赖静态
-   环境接触与 `checkSupport()` 的隔离下车探针、admitted bounds、骑乘控制权不变量、五 Event
-   Capture 夹具和 Hosted Builder 当前 capability 名禁止项。review 前基线的 typecheck、root test
-   （190/2,050 + 21/401）、build、Studio 73/73、独立三 lane 与六项能力 verifier 已通过；
-   下一步只做 Runtime 对抗 hardening、`supportedBy` retained-support 证据、正式四阶段 Capture
-   verifier及其失效门禁重跑和最终 review，并保持 `supportedBy` 只来自既有 Physics support
-   authority。`CAM-MOUNT-1` 由 P2.4 相机专项修复；不向 `SubjectRuntimeStateV3` 追加字段，
-   也不先铺开 seat/tether、轮子动力学、特技、车辆或 Hosted Builder admission；
+   Safe Dismount、Browser Fixture 与严格 Capture Track validator；候选 `08f8f199` 又完成 retained
+   Physics `supportedBy`、Golden/non-Golden 共用投影、最新 Camera 合同的窄 mounted seam、完整
+   Journal segment 与四阶段 retained Capture。当前本地影响面和 Capture 子审已通过；
+   Cloud 首轮 exact-SHA gate 已完成 NO-GO：`typecheck` 有 28 errors / 4 files，root test 在
+   workspace-boundary preflight 阻断；其余 build、Studio、independent、clean-break 与四项现行
+   Canonical capability gates 通过。type/boundary 修复后的最终 Cloud closure 与 Claude/Grok 双审仍 pending。
+   历史 catalog `verify:outdoor-gameplay` 已随 Gameplay route 删除，不能作为待恢复 Gate；正式
+   mounted verifier 与现行 Canonical capability gates 才是当前证据。`CAM-MOUNT-1` 的窄修复归
+   M8，广义 P2.4/GCC 仍开放；不向 `SubjectRuntimeStateV3` 追加字段，也不先铺开 seat/tether、
+   轮子动力学、特技、车辆或 Hosted Builder admission；
 9. **M9（P1.6 Full Reload 正式 Host 闭环已落地，Incremental 仍开放）**：P1.6 以
    [`WorldChangeSet 专项设计`](../docs/superpowers/specs/2026-08-26-p16-ai-schema-world-change-set-runtime-structural-publication-design.md)
    为唯一实施权威；规格文档状态行仍写 *implementation not started*，那是文档元数据，

@@ -37,9 +37,10 @@ The final accepted tree has one path for each concept:
   or Gameplay-tick reconstruction from the full scene mesh;
 - one typed Camera relationship vocabulary: `relationshipContexts` in samples and
   `allRelationshipConditions` in rules; `relationshipRole` and `relationshipRoles` are deleted;
-- one fixed-tick Camera publication epoch. Relationship/Possession commit may stage the next view revision,
-  but published Target, SelectionDecision, Rig, Modifiers, Spring Arm telemetry and pose remain the previous
-  coherent Camera state until the next fixed-tick Camera phase commits them together;
+- one fixed-tick Camera publication epoch. Relationship/Possession commit may stage the next committed Camera
+  input context but cannot choose a Target or advance the Camera revision; published Target,
+  SelectionDecision, Rig, Modifiers, Spring Arm telemetry and pose remain the previous coherent Camera state
+  until the next fixed-tick Camera phase commits them together;
 - one provider-neutral Socket projection path for Camera Context. It consumes locked Socket definitions and
   committed Subject pose. Camera code never reads Babylon Nodes, render parenting or mesh metadata.
 
@@ -344,7 +345,9 @@ While `mountedOn` exists:
 - Rider Subject Origin is derived each fixed Tick from Mount Subject Origin, Mount yaw, slot Socket and `riderSubjectOriginOffsetMetersXYZ`.
 - Rider facing follows Mount facing for this slice.
 - Visual Root and Snapshot continue to publish Rider Subject Origin, never Babylon parent-local coordinates.
-- Camera target changes only because possession now names the Mount. Camera Director remains the only camera owner.
+- The possession transition changes the committed controlled Entity and Relationship Context input. It does
+  not independently choose or publish a Camera Target; Camera Director consumes those inputs with its selected
+  Target at the next fixed-tick Camera publication and remains the only Camera owner.
 
 The Rider Locomotion Capability projection becomes a closed union. Its active
 branch retains the current Ground/Air fields; its new suspended branch is:
@@ -390,12 +393,12 @@ On commit:
 | Concern | Sole authority | M8 consumer/projection |
 | --- | --- | --- |
 | Relationship truth | GameplayState `relationshipStatesById` | Babylon attachment, inspection, Browser, Capture |
-| Possession | `possessedBy` in GameplayState | input target and Camera target |
+| Possession | `possessedBy` in GameplayState | input controlled Entity and committed Camera control context |
 | Rider mounted pose | committed Mount transform + locked slot | Rider Runtime/visual projection |
 | Ground support | Mount MotionKernel `checkSupport()` result | `supportedBy` fact and Ground mode |
 | Rider support | no independent query while mounted | no fabricated rider-board `supportedBy` fact |
 | Active Action | Core Semantic Action + trusted effect plan | WorldState/Event/Receipt |
-| Camera | Camera Director | follows committed possession target |
+| Camera | Camera Director | consumes one same-epoch committed `controlledEntityId`, selected `targetEntityId` and typed Relationship Context publication |
 | Simulation time | fixed-step RuntimeHost barrier | all state/event/receipt Ticks |
 
 `mountedOn` never implies `supportedBy`. The board may publish a terrain `supportedBy` fact only from its real retained `checkSupport()` evidence. The Rider does not publish a fake board-support fact merely because the Relationship exists.
@@ -419,10 +422,13 @@ Semantic Fact write IDs are empty for this transition. Physics-derived facts may
 change only during the normal fixed-input/support projection phase, never because
 the Relationship effect requested them.
 
-The staged transaction also returns the next View revision produced by the
-possession change. RuntimeHost builds WorldState/inspection/Event/Receipt from
-the validated staged projections before the synchronous commit barrier. An
-invalid or over-broad projection aborts without advancing GameplayState.
+The staged transaction may prepare the next provider-neutral Camera input revision produced by the
+committed control and Relationship changes. It does not independently select or publish a Camera
+Target. RuntimeHost builds WorldState/inspection/Event/Receipt from the validated staged Gameplay
+projections before the synchronous commit barrier; the Camera Director consumes the new committed
+`controlledEntityId`, selected `targetEntityId` and typed Relationship Context together at its next
+fixed-tick publication phase. Until that phase succeeds, every public Camera field remains on the
+previous coherent epoch. An invalid or over-broad projection aborts without advancing GameplayState.
 
 ### 8.2 Retained-support Semantic Fact projection
 

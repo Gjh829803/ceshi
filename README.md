@@ -236,15 +236,15 @@ Socket 和类型化关系表达。
 | 地形 | 室外 Heightfield、基础 Relief、静态障碍、水域和物理查询 | Canonical Raster/Mask/Region Pipeline；已设计但未实现的 Hybrid Terrain、洞穴、Overhang、多层可行走表面和完整室内 |
 | 主体 | Primitive 人形/四足代理；Golden 与首个产品 G Bot 的 GLB、Rig/Animation/Collider Profile、多实例与独立控制 | 更多产品资产、Compound Collider、LOD、更多拓扑和独立动画资产 |
 | 关系 | `possessedBy`；严格 Authoring/Compiler `mountedOn`；Mount/Dismount 原子事务、站位投影、Rider locomotion 暂停与安全下车 | seat/tether、Joint、装备、拖拽、完整坐骑/车辆动力学与 Hosted Builder admission |
-| 运动与相机 | 地面移动、跳跃、第三人称跟随；WaterBody 可查询/可渲染，主体介质只发布 `ground / air` | 游泳与 `movementMedium: water`、第一人称、飞行、车辆、Camera Director 和多 Rig 切换 |
+| 运动与相机 | 地面移动、跳跃、第三人称跟随；Camera Director 的 M8 `mountedOn` 窄 seam；WaterBody 可查询/可渲染，主体介质只发布 `ground / air` | 游泳与 `movementMedium: water`、第一人称、飞行、车辆、广义上下文相机组合和多 Rig 切换 |
 | 自动化 | validate/build/inspect/load/run/capture、Registry Discovery、Definition Validate、Subject Explain、`verify route`、Browser Protocol V5、Take Driver、Control Capture Gate，以及 canonical NDJSON 持久 headless Runtime Session | Capture 恢复续拍、多人同时控制、跨 Host Session 迁移 |
-| Capture | 单帧截图、World Runtime Snapshot V4、Simulation Take V1、五 Pass、原子 Bundle；Action/Event/Relationship Track 写入与交叉校验已实现 | mounted fixture 的正式多阶段 Bundle verifier、Motion Vector、完整 Replay/Resume 与视频 Adapter |
+| Capture | 单帧截图、World Runtime Snapshot V4、Simulation Take V1、五 Pass、原子 Bundle；Action/Event/Relationship Track 写入与交叉校验，以及 mounted fixture 的正式 before-Mount / after-Mount-movement / after-Dismount-movement / after-Reset verifier 已实现 | Motion Vector、完整 Replay/Resume 与视频 Adapter |
 | Validation | Canonical Browser Gate、现有物理/构图检查；Capture/Integrity V1；Route 双 Blocking Gate、R1 Heightfield Golden Fixture；R1b 的 11 个 Fixture、完整验证矩阵、Canonical Evidence/Report 与可信 Host 只读投影 | Placement/Physics/Composition/Replay/Performance 接入统一 Report、Profile 组合、compare 与完整生产 Policy |
 | Gameplay | 基础固定输入、`possessedBy` 权威控制权、Golden/G Bot `idle/walk/run/jump`，以及 `mountedOn` S1 的 Mount/Dismount Action/Event/Receipt；Browser 不提供旁路 `bindControl` | 完整 Action Presentation、姿态、游泳、装备、NPC、导航、任务、战斗、联网 |
 | 最终视觉 | 本地白模渲染 | Render Bridge、实时世界模型和生产 Video Model Adapter |
 
 当前 Route 能力只承诺室外 Heightfield 与普通静态平台地面通行。不要把 H1/H2/H3
-桥下双层/洞口/洞穴、动态平台、NPC 或公开 `goTo`、车辆、坐骑、飞行、室内、联网
+桥下双层/洞口/洞穴、动态平台、NPC 或公开 `goTo`、通用车辆/坐骑动力学、飞行、室内、联网
 或视频模型接入当作已经存在的生产能力。
 
 ## 快速开始

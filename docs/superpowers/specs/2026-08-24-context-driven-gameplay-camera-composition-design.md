@@ -3,7 +3,9 @@
 ## 1. 文档状态
 
 - 状态：**Reviewed / Approved（2026-08-24）**；
-  **Camera Domain boundary implemented，Runtime integration pending（2026-08-25）**。
+  **Camera Domain boundary implemented；M8-S1 所需的 `mountedOn` 窄 Runtime seam 已在
+  `08f8f199e2751f80cf5aa25162bc00927425dfcd` 候选中实现（2026-09-01），其最终生产验收仍等待
+  exact-SHA Cloud gates 与独立终审；广义 GCC Runtime/Kit/Fixture 路线仍 pending**。
 - 适用里程碑：P2.2 骑乘与控制上下文、P2.3 装备/飞行/动作变体、P2.4 多相机模式。
 - 当前实现基线：已合入 `main` 的 G19 Gameplay/Browser V5 底座、
   `RuntimeHost` / `WorldSession`、`CameraDirectorV1`、`camera-rig-profile`、
@@ -19,10 +21,12 @@
 - 实施入口：[SDK 重构进度与 Backlog](../../18-refactor-progress-and-backlog.md) 的 P2.2–P2.4。
 
 本文补齐“人物/坐骑/装备/运动/动作与镜头怎样组合成可复用体验”的端到端合同。
-它不替换上位规格，也不声明飞行、骑乘、装备或第一人称已经生产可用。本文已经完成
+它不替换上位规格，也不声明飞行、通用骑乘、装备或第一人称已经生产可用。本文已经完成
 人工设计评审。Canonical Camera 包边界、Profile/Context/Preference/Decision/Explain
-领域合同和纯选择函数已经实现；committed Gameplay Context Projection、Registry Lock、
-Browser Preference 协议和 Babylon `CameraDirectorV1` 接线仍按 §15 与权威 Backlog 推进。
+领域合同和纯选择函数已经实现；M8-S1 只实现了 stand-ground `mountedOn` 所需的 committed
+Relationship Context、锁定 Socket 投影和同 epoch Camera publication。广义 Registry Lock、
+Equipment/Flight Context、Kit、Browser/CLI/Take Golden Fixture 与 GCC 最终生产验收仍按 §15
+与权威 Backlog 推进。
 
 ## 2. 决策摘要
 
