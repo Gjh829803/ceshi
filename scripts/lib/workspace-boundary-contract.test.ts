@@ -219,11 +219,12 @@ describe("workspace boundary evidence contract", () => {
         owner: entry.owner,
       });
       expect(workspaceBoundaryDebtFingerprintV1(entry)).toBe(expected);
-      expect(workspaceBoundaryDebtFingerprintV1({
+      const mutatedIdentity = {
         ...entry,
         reason: `${entry.reason} changed`,
         removalGate: `${entry.removalGate} changed`,
-      })).toBe(expected);
+      };
+      expect(workspaceBoundaryDebtFingerprintV1(mutatedIdentity)).toBe(expected);
     }
   });
 });

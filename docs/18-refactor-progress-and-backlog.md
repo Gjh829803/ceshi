@@ -1052,7 +1052,7 @@ formal Capture/Route、AI 评测与生产 disposition 仍未完成，因此不�
   Report、中立 Workspace Evidence、补充 Authority/Supply Chain Policy、Accepted Debt 和 canonical fingerprint；
 - [x] PHO-0B：实现唯一 bounded/redacted execution envelope，关闭 `in-place-checkout` / `isolated-temp-worktree`
   scope，统一 timeout、cooperative owned-process cleanup、临时目录和证据 Hash；
-- [ ] PHO-1：扩展现有 `workspace-boundary.ts` 唯一 scan Owner，使一次 walk 投影 graph、`publicSymbols`
+- [x] PHO-1：扩展现有 `workspace-boundary.ts` 唯一 scan Owner，使一次 walk 投影 graph、`publicSymbols`
   权威事实和 violations；Host 注入 `commitSha`；两个同名 Sensor 只消费该 Evidence 与精确 path/symbol
   Authority Policy，检测重复 Owner、compat alias、Canonical/Native 边界；禁止第二次 `rg`/glob/AST；
 - [ ] PHO-2：复用现有 Owner 命令实现 Contract/Generated parity，并增加独立 Supply Chain Sensor 观察

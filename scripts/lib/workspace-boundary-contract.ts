@@ -370,7 +370,7 @@ export function parseWorkspaceBoundaryEvidenceV1(input: unknown): WorkspaceBound
 }
 
 export function workspaceBoundaryDebtFingerprintV1(
-  input: WorkspaceBoundaryDebtIdentityV1 & Readonly<Record<string, unknown>>,
+  input: WorkspaceBoundaryDebtIdentityV1,
 ): string {
   const importer = repositoryPath(input.importer, false);
   const specifier = moduleSpecifier(input.specifier);
