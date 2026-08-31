@@ -9,6 +9,8 @@ import { createServer, type ViteDevServer } from "vite";
 
 import { launchChromiumWithSystemFallback } from
   "../lib/playwright-browser-launch";
+import { createOwnedNativePackageFixtureV1 } from
+  "../native-scene/owned-native-package-fixture";
 
 const shellPort = 5274;
 const runtimePort = 5275;
@@ -16,6 +18,24 @@ const attackerPort = 5276;
 const shellOrigin = `http://127.0.0.1:${shellPort}`;
 const runtimeOrigin = `http://127.0.0.1:${runtimePort}`;
 const attackerOrigin = `http://127.0.0.1:${attackerPort}`;
+const NATIVE_ENVIRONMENT_NAMES = Object.freeze([
+  "WORLDKIT_NATIVE_PACKAGE_PATH",
+  "WORLDKIT_AUTHORING_SERVER_NONCE",
+  "WORLDKIT_NATIVE_SERVER_ROLE",
+  "WORLDKIT_HOSTED_SHELL_ORIGIN",
+  "WORLDKIT_HOSTED_RUNTIME_ORIGIN",
+] as const);
+
+function preserveNativeEnvironment(): () => void {
+  const original = new Map(NATIVE_ENVIRONMENT_NAMES.map((name) =>
+    [name, process.env[name]] as const));
+  return () => {
+    for (const [name, value] of original) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  };
+}
 
 async function closeAll(
   page: Page | undefined,
@@ -39,6 +59,15 @@ async function closeAll(
 }
 
 async function main(): Promise<void> {
+  const fixture = await createOwnedNativePackageFixtureV1({
+    fixtureDirectoryPath: path.resolve(
+      "apps/playground/public/world-packages/cloud-ridge",
+    ),
+  });
+  const restoreEnvironment = preserveNativeEnvironment();
+  process.env.WORLDKIT_NATIVE_PACKAGE_PATH = fixture.packageDirectoryPath;
+  process.env.WORLDKIT_AUTHORING_SERVER_NONCE =
+    `hosted-native-browser-verifier-${process.pid}`;
   process.env.WORLDKIT_HOSTED_RUNTIME_ORIGIN = runtimeOrigin;
   process.env.WORLDKIT_HOSTED_SHELL_ORIGIN = shellOrigin;
   const root = path.resolve("apps/native-scene-playground");
@@ -48,14 +77,13 @@ async function main(): Promise<void> {
   let page: Page | undefined;
   const errors: string[] = [];
   try {
-    for (const port of [shellPort, runtimePort]) {
+    for (const [role, port] of [
+      ["shell", shellPort],
+      ["runtime", runtimePort],
+    ] as const) {
+      process.env.WORLDKIT_NATIVE_SERVER_ROLE = role;
       const server = await createServer({
         root,
-        cacheDir: path.join(
-          root,
-          "node_modules",
-          `.vite-hosted-browser-verifier-${port}`,
-        ),
         optimizeDeps: {
           include: ["@babylonjs/core/Lights/pointLight.js"],
         },
@@ -103,7 +131,10 @@ async function main(): Promise<void> {
     ]) {
       const unexpectedResponse = await fetch(
         new URL(unexpectedPublicPath, runtimeOrigin),
-        { redirect: "manual" },
+        {
+          redirect: "manual",
+          headers: { Accept: "application/octet-stream" },
+        },
       );
       assert.equal(
         unexpectedResponse.status,
@@ -385,6 +416,11 @@ async function main(): Promise<void> {
     }, null, 2));
   } finally {
     await closeAll(page, browser, servers, attackerServer);
+    try {
+      await fixture.dispose();
+    } finally {
+      restoreEnvironment();
+    }
   }
 }
 

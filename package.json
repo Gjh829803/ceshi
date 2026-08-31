@@ -8,7 +8,6 @@
   "scripts": {
     "dev": "pnpm --filter @whitebox-world/playground dev",
     "dev:refresh": "pnpm --filter @whitebox-world/playground exec vite --force",
-    "dev:native-scene": "pnpm --filter @whitebox-world/native-scene-playground dev",
     "generate:golden-humanoid": "tsx scripts/fixtures/generate-golden-humanoid-glb.ts --write",
     "assets:subjects:modularize": "tsx scripts/assets/modular-subject-source-packages.ts --write",
     "assets:subjects:modularize:check": "tsx scripts/assets/modular-subject-source-packages.ts --check",
@@ -24,7 +23,7 @@
     "test:independent:node": "tsx scripts/testing/run-independent-test-gate.ts --lane node",
     "test:independent:site": "tsx scripts/testing/run-independent-test-gate.ts --lane site",
     "build": "pnpm --filter @whitebox-world/playground build",
-    "build:native-scene": "pnpm --filter @whitebox-world/native-scene-playground build",
+    "build:native-scene": "tsx scripts/native-scene/build-native-scene-playground.ts --fixture apps/playground/public/world-packages/cloud-ridge",
     "generate:agent-self-check": "node scripts/agents/build-agent-self-check.mjs",
     "generate:runtime-contract-validators": "tsx scripts/contracts/build-runtime-contract-validators.ts --write",
     "check:runtime-contract-validators": "tsx scripts/contracts/build-runtime-contract-validators.ts",

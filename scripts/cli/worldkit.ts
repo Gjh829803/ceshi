@@ -140,6 +140,7 @@ Usage:
   worldkit native check <world-directory> --json
   worldkit native explain <world-directory> [--json]
   worldkit native package <attempt-directory> --case <case.json> --output <package-directory> --json
+  worldkit native run <package-directory> [--port <port>] [--json]
   worldkit capture <file> --output <png> [--snapshot <json>] [--triview-output <directory> --implementation-map <json>] [--port <port>] [--json]
   worldkit registry list --kind <resource-kind> [--json]
   worldkit registry describe --resource-ref <ref> [--json]
@@ -192,6 +193,12 @@ export type WorldkitArgs =
       casePath: string;
       outputPath: string;
       json: true;
+    }
+  | {
+      command: "native-run";
+      packageDirectoryPath: string;
+      port?: number;
+      json: boolean;
     }
   | { command: "validate"; inputPath: string; json: boolean }
   | { command: "build"; inputPath: string; outputPath: string; json: boolean }
@@ -585,6 +592,21 @@ export function parseWorldkitArgs(arguments_: readonly string[]): WorldkitArgs {
 
   if (command === "native") {
     const operation = takeRequiredPositional(tokens, "native operation");
+    if (operation === "run") {
+      const packageDirectoryPath = takeRequiredPositional(
+        tokens,
+        "Native Package directory",
+      );
+      const portValue = takeOption(tokens, "--port");
+      const port = portValue === undefined ? undefined : parsePort(portValue);
+      rejectRemaining(tokens, "native run");
+      return {
+        command: "native-run",
+        packageDirectoryPath,
+        ...(port === undefined ? {} : { port }),
+        json,
+      };
+    }
     if (operation === "package") {
       const attemptDirectoryPath = takeRequiredPositional(
         tokens,
@@ -1565,7 +1587,7 @@ export async function captureFile(
   try {
     try {
       server = await startWorldkitServer({
-        inputPath,
+        source: { kind: "canonical-file", inputPath },
         ...(options.port === undefined ? {} : { port: options.port }),
       });
     } catch (error) {
@@ -2117,7 +2139,7 @@ async function runUntilSignal(
   let server: WorldkitServerHandle;
   try {
     server = await startWorldkitServer({
-      inputPath,
+      source: { kind: "canonical-file", inputPath },
       ...(port === undefined ? { port: 5173 } : { port }),
       ...(refreshDependencies ? { refreshDependencies: true } : {}),
       forwardOutput: !json,
@@ -2172,6 +2194,53 @@ export async function inspectPackageDirectory(
   return inspectWorldPackageDirectoryV1({
     packageDirectoryPath: canonicalPackageDirectoryPath,
   });
+}
+
+async function runNativeUntilSignal(
+  packageDirectoryPath: string,
+  port: number | undefined,
+  json: boolean,
+): Promise<number> {
+  let server: WorldkitServerHandle;
+  try {
+    server = await startWorldkitServer({
+      source: { kind: "world-package", packageDirectoryPath },
+      ...(port === undefined ? { port: 5174 } : { port }),
+      forwardOutput: !json,
+    });
+  } catch (error) {
+    const result = cliFailure(
+      "CLI_NATIVE_SERVER_START_FAILED",
+      "Unable to start the Native Package verification Harness.",
+      { cause: error instanceof Error ? error.message : String(error) },
+    );
+    printResult(result, json);
+    return result.exitCode;
+  }
+  const result = Object.freeze({
+    ok: true as const,
+    url: server.url,
+    port: server.port,
+    worldPackageRootHash: server.worldPackageRootHash,
+    sceneSourceKind: server.sceneSourceKind,
+  });
+  if (json) {
+    process.stdout.write(`${stringifyCanonicalJson(result)}\n`);
+  } else {
+    process.stdout.write(`Worldkit Native Harness: ${server.url}\n`);
+  }
+  await new Promise<void>((resolve) => {
+    const finish = (): void => {
+      process.off("SIGINT", finish);
+      process.off("SIGTERM", finish);
+      resolve();
+    };
+    process.once("SIGINT", finish);
+    process.once("SIGTERM", finish);
+    void server.waitForExit().then(finish);
+  });
+  await server.stop();
+  return 0;
 }
 
 export async function loadPackageHeadless(
@@ -2414,6 +2483,13 @@ export async function main(
       writeNativePackageJsonResult(failure.result);
       return failure.exitCode;
     }
+  }
+  if (parsed.command === "native-run") {
+    return runNativeUntilSignal(
+      parsed.packageDirectoryPath,
+      parsed.port,
+      parsed.json,
+    );
   }
   if (parsed.command === "run-browser") {
     return runUntilSignal(

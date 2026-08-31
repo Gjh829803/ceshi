@@ -1,4 +1,4 @@
-declare module "virtual:worldkit-cloud-ridge-native-scene" {
+declare module "virtual:worldkit-native-scene" {
   import type { BabylonNativeSceneModuleV1 } from
     "@whitebox-world/native-babylon";
   import type { Sha256HashV1 } from "@whitebox-world/protocol";
