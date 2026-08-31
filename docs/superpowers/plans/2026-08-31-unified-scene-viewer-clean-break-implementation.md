@@ -71,9 +71,9 @@
 ### Task 5: Exact-tree verification and integration
 
 - [ ] Verify all three presets visually and manually: G Bot identity, movement, current jump/land, reset, selector, tuning and each traversal station.
-- [ ] Run frozen install, census, affected tests, typecheck, Studio, independent gate, build, Browser evidence and `git diff --check`.
-- [ ] Prove no active WRC/BNA evidence or Harness was deleted and no Native Viewer claim exists.
-- [ ] Fetch latest `origin/main`, perform semantic reconciliation, and rerun invalidated gates.
+- [x] Run frozen install, census, affected tests, typecheck, Studio, independent gate, build, Browser evidence and `git diff --check`.
+- [x] Prove no active WRC/BNA evidence or Harness was deleted and no Native Viewer claim exists.
+- [x] Fetch latest `origin/main`, perform semantic reconciliation, and rerun invalidated gates.
 - [ ] Merge and push only the exact verified candidate.
 
 ## Deferred cleanup

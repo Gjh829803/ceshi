@@ -61,7 +61,7 @@ apps/playground/                  one Viewer UI; no Runtime authority
 packages/scene-catalog/           internal Canonical preset metadata validation
 scenes/presets/<scene-id>/        stable product-tuning AuthoringSpec inputs
 artifacts/scenes/<case-id>/       WRC pipeline outputs, receipts and active evidence
-scripts/scenes/promote-preset.ts  sole curated-preset publication owner
+scripts/scenes/promote-scene-preset.ts  sole curated-preset publication owner
 ```
 
 `artifacts/scenes` is not another application, but remains an active WRC evidence root. Capture,
