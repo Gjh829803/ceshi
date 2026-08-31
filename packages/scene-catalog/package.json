@@ -1,0 +1,12 @@
+{
+  "name": "@whitebox-world/scene-catalog",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@whitebox-world/world-identity": "workspace:*"
+  }
+}
