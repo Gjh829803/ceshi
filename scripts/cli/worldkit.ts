@@ -438,9 +438,9 @@ async function runNativePackageCommandV1(
     await loadPackageNativeBlockAttemptPortV1();
   const packaged = await packageAttempt({
     repositoryRoot: REPOSITORY_ROOT,
-    attemptDirectoryPath: parsed.attemptDirectoryPath,
-    casePath: parsed.casePath,
-    outputDirectoryPath: parsed.outputPath,
+    attemptDirectoryPath: path.resolve(parsed.attemptDirectoryPath),
+    casePath: path.resolve(parsed.casePath),
+    outputDirectoryPath: path.resolve(parsed.outputPath),
   });
   return Object.freeze({
     outcome: "completed",
