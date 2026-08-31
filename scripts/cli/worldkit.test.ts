@@ -361,7 +361,7 @@ describe("worldkit CLI", () => {
     ])).toThrow("Unknown native operation 'build-cloud-ridge'.");
   });
 
-  it("dispatches Native packaging without owning build policy and emits its stable DTO", async () => {
+  it("resolves relative Native package paths before dispatch without owning build policy", async () => {
     const adapterInputs: unknown[] = [];
     const stdout: string[] = [];
     const write = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
@@ -409,9 +409,9 @@ describe("worldkit CLI", () => {
 
     expect(adapterInputs).toEqual([{
       repositoryRoot: path.resolve(import.meta.dirname, "../.."),
-      attemptDirectoryPath: "attempts/0",
-      casePath: "case.json",
-      outputDirectoryPath: "packages/attempt-0",
+      attemptDirectoryPath: path.resolve("attempts/0"),
+      casePath: path.resolve("case.json"),
+      outputDirectoryPath: path.resolve("packages/attempt-0"),
     }]);
     expect(stdout).toHaveLength(1);
     expect(JSON.parse(stdout[0]!)).toEqual({
