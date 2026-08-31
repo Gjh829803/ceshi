@@ -79,6 +79,7 @@ vi.mock("./mode-observer", async (importOriginal) => {
 });
 
 const REPOSITORY_ROOT = path.resolve(new URL("../..", import.meta.url).pathname);
+const TEST_BASE_SHA = "1".repeat(40);
 const temporaryRoots: string[] = [];
 const baselinePath = path.join(REPOSITORY_ROOT, "config/project-health/baseline.json");
 let baselineRestore: string | null | undefined;
@@ -254,7 +255,7 @@ describe("project health cli", () => {
   it("routes PR checks through the Registry-owned ancestry admission", async () => {
     const profile = await currentProfile();
     const commitSha = git(REPOSITORY_ROOT, ["rev-parse", "HEAD"]);
-    const baseSha = git(REPOSITORY_ROOT, ["rev-parse", "HEAD^"]);
+    const baseSha = TEST_BASE_SHA;
     const outputRoot = path.join(REPOSITORY_ROOT, ".project-health", `cli-test-${randomUUID()}`);
     temporaryRoots.push(outputRoot);
     cliAdmissionState.active = true;
@@ -308,7 +309,7 @@ describe("project health cli", () => {
   it("admits only a disk Report that matches the fresh same-process Host Report", async () => {
     const profile = await currentProfile();
     const commitSha = git(REPOSITORY_ROOT, ["rev-parse", "HEAD"]);
-    const baseSha = git(REPOSITORY_ROOT, ["rev-parse", "HEAD^"]);
+    const baseSha = TEST_BASE_SHA;
     const observations = passingObservations(profile);
     const trustedReport = aggregateProjectHealthReportV1({
       profile,
@@ -390,7 +391,7 @@ describe("project health cli", () => {
   it("publishes a passed baseline with explicit Advisory gaps", async () => {
     const profile = await currentProfile();
     const commitSha = git(REPOSITORY_ROOT, ["rev-parse", "HEAD"]);
-    const baseSha = git(REPOSITORY_ROOT, ["rev-parse", "HEAD^"]);
+    const baseSha = TEST_BASE_SHA;
     const observations = observationsWithAdvisoryGaps(profile);
     const report = aggregateProjectHealthReportV1({
       profile,
