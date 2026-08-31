@@ -60,8 +60,9 @@ Build-Epoch Session / Checked Layout / `finalize()`。该 Layout 同时产生 Ba
 - mountain / T / building / limited-interior 有预期通路与阻挡的真实 Havok ticks。阻挡证据绑定
   明确的 `not-traversable` Collider Contribution 近面、controlled Subject capsule radius 和
   `movementMedium === "ground"`；断言先证明人物离开 spawn/approach，再证明中心停在近面误差带。
-  mountain 还证明人物在 `m-overlook` 支撑面落脚后越过由 Contribution 导出的边缘、下落并进入
-  `movementMedium === "air"`。
+  T 字北墙从有效脊柱走廊接近，绑定 `collider-t-north-wall` 近面 + capsule radius + ground；墙缺失
+  或被穿越则失败。mountain 还证明人物在 `m-overlook` 支撑面落脚后越过由 Contribution 导出的边缘、
+  下落并进入 `movementMedium === "air"`。
 - 负向 Corpus 覆盖 overlap、budget、invalid binding、unsupported spawn、disconnected route、
   overlap finalize rejection 后的未 finalized Mesh cleanup。通用 Session 的 partial-construction /
   throwing-cleanup 对抗由 Session 测试持有，不由本 Corpus 重复声明。
@@ -122,6 +123,7 @@ Build-Epoch Session / Checked Layout / `finalize()`。该 Layout 同时产生 Ba
 | BWB5-R2 | P2 | accepted debt | 未跑浏览器 FeelReview 或 Playwright 真像素 PNG；profile-local AuthoringCapture + Havok 是本切片证据。BNA-7 仍开放 |
 | BWB5-R3 | note | closed | `unsupported-spawn` 不进入 air settle；Runtime 在 create 时 fail-closed。这比“先玩后掉下去”更符合权威 |
 | BWB5-P1-1 | P1 | closed, independently verified | T-west、mountain cliff、building/interior back wall 不再使用 spawn 即满足的单边阈值；改为 approach + Contribution near face + capsule radius + grounded tolerance band |
+| BWB5-P1-4 | P1 | closed by follow-up | T 字 Havok 原先只证明西墙；现从有效走廊接近并绑定 `collider-t-north-wall` 近面 + capsule radius + ground，墙缺失或被穿越则失败 |
 | BWB5-P1-2 | P1 | closed, independently verified | 删除不存在的 `WORLDKIT_NATIVE_BLOCK_SPAWN_UNSUPPORTED`；inspect/evidence index 不再发布 Profile 失败码，Runtime 继续以 `WORLDKIT_NATIVE_SCENE_RUNTIME_SPAWN_SUPPORT_MISSING` fail-closed |
 | BWB5-P1-3 | P1 | closed, independently verified | mountain `m-overlook` 新增落脚支撑带、Contribution 边缘 + capsule radius、`y < -0.25` 与 `air` 证据 |
 | BWB5-P2-1 | P2 | closed, independently verified | steps 补齐 BWB-4 的 riser/tread z/y 带、blocker 近面 + capsule radius 与 ledge 下落高度 |
@@ -130,7 +132,9 @@ Build-Epoch Session / Checked Layout / `finalize()`。该 Layout 同时产生 Ba
 | BWB5-P2-4 | P2 | closed, independently verified | cadence 改为真实 `renderFrame()` 交错，不再把 fixed-input batching 误写成 render cadence |
 | BWB5-P2-5 | P2 | closed, independently verified | Profile 规格工作图删除错误的 `BNA-6 -> BWB-5` 前置；本次 rebase 又同步修正 WRC-1 总设计与 `docs/18`，统一为 `BNA-5 + BWB-3 + BWB-4 -> BWB-5`，BNA-6/WRC-SR-1 不再阻塞 BWB-5 |
 
-独立复核后无开放 P0/P1。BWB5-P2-2、BWB5-R1、BWB5-R2 保持明确的非阻塞接受债务。
+独立复核后无开放 P0/P1。BWB5-P2-2、BWB5-R1、BWB5-R2 保持明确的非阻塞接受债务。T 字北墙行为级
+Havok 补强见
+[BWB-5 T-north-wall follow-up](./2026-08-31-bwb5-t-north-wall-havok-evidence-follow-up.md)。
 
 ## 5. 合入条件
 

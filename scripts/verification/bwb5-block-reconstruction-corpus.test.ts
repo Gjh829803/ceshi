@@ -358,6 +358,44 @@ describe("BWB-5 Block Reconstruction Corpus Runtime", () => {
     expect(internals.engine.isDisposed).toBe(true);
   }, 30_000);
 
+  it("blocks the t-shaped north wall from the valid corridor at the frozen contribution near face", async () => {
+    const { runtime, verified } = await createRuntime("t-shaped-traversal");
+    const entityId = verified.worldRuntimeBootstrap.initialControlledEntityId;
+    try {
+      await runtime.runFixedInput({ actions: [], ticks: 5 });
+      const corridor = await runtime.runFixedInput({
+        actions: ["move-forward"],
+        ticks: 45,
+      });
+      const corridorSubject = subjectOf(corridor, entityId);
+      const northLimitMetersZ = blockingCenterLimitMeters(
+        verified,
+        "collider-t-north-wall",
+        2,
+      );
+      expect(Math.abs(corridorSubject.positionMetersXYZ[0])).toBeLessThan(0.35);
+      expect(corridorSubject.positionMetersXYZ[2]).toBeLessThan(-0.8);
+      expect(corridorSubject.positionMetersXYZ[2])
+        .toBeGreaterThan(northLimitMetersZ + 0.15);
+      expect(corridorSubject.movementMedium).toBe("ground");
+
+      const north = await runtime.runFixedInput({
+        actions: ["move-forward"],
+        ticks: 90,
+      });
+      const northSubject = subjectOf(north, entityId);
+      expect(northSubject.positionMetersXYZ[2])
+        .toBeLessThan(corridorSubject.positionMetersXYZ[2] - 0.15);
+      expectBlockedAtCenterLimit(
+        northSubject.positionMetersXYZ[2],
+        northLimitMetersZ,
+      );
+      expect(northSubject.movementMedium).toBe("ground");
+    } finally {
+      await runtime.dispose();
+    }
+  }, 30_000);
+
   it("proves mountain ledge, pass, and block corridors for all positive structures", async () => {
     const { runtime: tRuntime, verified: tVerified } = await createRuntime(
       "t-shaped-traversal",
