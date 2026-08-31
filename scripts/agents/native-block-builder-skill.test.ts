@@ -1,0 +1,203 @@
+import { execFile } from "node:child_process";
+import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { promisify } from "node:util";
+
+import { afterEach, describe, expect, it } from "vitest";
+
+const execFileAsync = promisify(execFile);
+const CHECKER = path.resolve(
+  ".codex/skills/worldkit-native-block-builder/scripts/self-check.mjs",
+);
+const temporaryDirectories: string[] = [];
+
+async function createWorkspace(): Promise<string> {
+  const workspace = await mkdtemp(path.join(os.tmpdir(), "worldkit-native-block-builder-"));
+  temporaryDirectories.push(workspace);
+  await Promise.all([
+    writeFile(path.join(workspace, "scene.ts"), `
+import { defineBabylonNativeScene } from "@whitebox-world/native-babylon";
+import { createBabylonNativeBlockProfileSessionV1 } from "@whitebox-world/native-babylon-block-profile";
+
+export default defineBabylonNativeScene({
+  kind: "babylon-native-scene-module",
+  id: "valid-native-block-world",
+  build(context) {
+    const blocks = createBabylonNativeBlockProfileSessionV1(context, {
+      maximumBlockCount: 32,
+    });
+    void blocks;
+  },
+});
+`.trimStart()),
+    writeFile(path.join(workspace, "native-block-authoring.json"), `${JSON.stringify({
+      kind: "native-block-authoring",
+      schemaVersion: 1,
+      entryModulePath: "scene.ts",
+      blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
+      visualGroups: [],
+    }, null, 2)}\n`),
+    writeFile(path.join(workspace, "native-resources.json"), `${JSON.stringify({
+      kind: "native-visual-resource-list",
+      schemaVersion: 1,
+      resourceRefs: [],
+    }, null, 2)}\n`),
+  ]);
+  return workspace;
+}
+
+async function runSelfCheck(workspace: string): Promise<Readonly<{
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+  report: Record<string, unknown>;
+}>> {
+  try {
+    const result = await execFileAsync(process.execPath, [CHECKER, "--workspace", workspace]);
+    return {
+      exitCode: 0,
+      stdout: result.stdout,
+      stderr: result.stderr,
+      report: JSON.parse(result.stdout),
+    };
+  } catch (error) {
+    const failure = error as NodeJS.ErrnoException & {
+      code?: number;
+      stdout?: string;
+      stderr?: string;
+    };
+    return {
+      exitCode: typeof failure.code === "number" ? failure.code : 1,
+      stdout: failure.stdout ?? "",
+      stderr: failure.stderr ?? "",
+      report: JSON.parse(failure.stdout ?? "{}"),
+    };
+  }
+}
+
+afterEach(async () => {
+  await Promise.all(temporaryDirectories.splice(0).map((directory) =>
+    rm(directory, { recursive: true, force: true })));
+});
+
+describe("Native Block Builder Skill", () => {
+  it("states the closed outputs and keeps all product authorities with the Host", async () => {
+    const [skill, outputContract] = await Promise.all([
+      readFile(path.resolve(".codex/skills/worldkit-native-block-builder/SKILL.md"), "utf8"),
+      readFile(path.resolve(
+        ".codex/skills/worldkit-native-block-builder/references/native-block-output-contract.md",
+      ), "utf8"),
+    ]);
+
+    expect(skill).toContain("write exactly these three declared outputs");
+    expect(skill).toContain("`scene.ts`");
+    expect(skill).toContain("`native-block-authoring.json`");
+    expect(skill).toContain("`native-resources.json`");
+    expect(skill).toContain("JSON/Case/Scene Brief owns identity, intent, Subject, Spawn target, budgets, and evidence requirements.");
+    expect(skill).toContain("scene.ts owns Babylon Native Block visual construction and explicit registration calls only.");
+    expect(skill).toContain("The Host owns Check, Package, Receipt, Runtime Candidate, Havok, Character, Input, Action, Camera, Reset, Capture, and evaluation.");
+    expect(skill).toContain("gpt-5.6-sol");
+    expect(skill).toContain("xhigh");
+    expect(skill).toContain("at most three self-repair cycles");
+    expect(skill).toContain("ground-supported Spawn");
+    expect(skill).toContain("T-shaped upper platform");
+    expect(skill).toContain("no Route/Nav claim");
+    expect(outputContract).toContain("@whitebox-world/native-babylon");
+    expect(outputContract).toContain("@whitebox-world/native-babylon-block-profile");
+    expect(outputContract).toContain("deterministic seeded construction");
+    expect(outputContract).toContain("explicit visual groups");
+    expect(outputContract).toContain("explicit Spawn registration");
+    expect(outputContract).toContain("explicit collider contribution");
+    for (const forbidden of [
+      "new Engine(", "new Scene(", "runRenderLoop", "new Havok", "new FreeCamera(",
+      "addEventListener", "setInterval", "setTimeout", "fetch(", "Three.js", "Compiler",
+    ]) {
+      expect(skill).not.toContain(`you may use ${forbidden}`);
+    }
+  });
+
+  it("accepts exactly the three non-empty outputs and emits byte-stable canonical evidence", async () => {
+    const workspace = await createWorkspace();
+    const first = await runSelfCheck(workspace);
+    const second = await runSelfCheck(workspace);
+
+    expect(first).toMatchObject({
+      exitCode: 0,
+      stderr: "",
+      report: {
+        kind: "native-block-builder-self-check",
+        schemaVersion: 1,
+        ok: true,
+        declaredOutputPaths: [
+          "scene.ts",
+          "native-block-authoring.json",
+          "native-resources.json",
+        ],
+        diagnosticCodes: [],
+      },
+    });
+    expect(first.report.outputHashes).toEqual([
+      expect.objectContaining({ path: "native-block-authoring.json" }),
+      expect.objectContaining({ path: "native-resources.json" }),
+      expect.objectContaining({ path: "scene.ts" }),
+    ]);
+    expect(first.stdout).toBe(second.stdout);
+  });
+
+  it.each([
+    ["missing output", async (workspace: string) => rm(path.join(workspace, "scene.ts")), "NATIVE_BLOCK_BUILDER_OUTPUT_MISSING"],
+    ["extra output", async (workspace: string) => writeFile(path.join(workspace, "extra.txt"), "no"), "NATIVE_BLOCK_BUILDER_OUTPUT_EXTRA"],
+    ["empty output", async (workspace: string) => writeFile(path.join(workspace, "scene.ts"), ""), "NATIVE_BLOCK_BUILDER_OUTPUT_EMPTY"],
+    ["nested output", async (workspace: string) => mkdir(path.join(workspace, "nested")), "NATIVE_BLOCK_BUILDER_OUTPUT_EXTRA"],
+  ])("rejects %s", async (_label, mutate, expectedCode) => {
+    const workspace = await createWorkspace();
+    await mutate(workspace);
+    const result = await runSelfCheck(workspace);
+    expect(result.exitCode).toBe(2);
+    expect(result.report).toMatchObject({ ok: false });
+    expect(result.report.diagnosticCodes).toContain(expectedCode);
+  });
+
+  it("rejects a symlink even when it resolves to a valid regular output", async () => {
+    const workspace = await createWorkspace();
+    const target = path.join(os.tmpdir(), `worldkit-scene-${process.pid}.ts`);
+    await writeFile(target, "export const scene = {};\n");
+    await rm(path.join(workspace, "scene.ts"));
+    await symlink(target, path.join(workspace, "scene.ts"));
+    try {
+      const result = await runSelfCheck(workspace);
+      expect(result.exitCode).toBe(2);
+      expect(result.report.diagnosticCodes).toContain("NATIVE_BLOCK_BUILDER_OUTPUT_SYMLINK");
+    } finally {
+      await rm(target, { force: true });
+    }
+  });
+
+  it.each([
+    [["worldkit://visual-resource/z@1", "worldkit://visual-resource/a@1"], "NATIVE_BLOCK_BUILDER_RESOURCE_REFS_UNSORTED"],
+    [["worldkit://visual-resource/a@1", "worldkit://visual-resource/a@1"], "NATIVE_BLOCK_BUILDER_RESOURCE_REFS_DUPLICATE"],
+  ])("rejects unsorted or duplicate resource refs", async (resourceRefs, expectedCode) => {
+    const workspace = await createWorkspace();
+    await writeFile(path.join(workspace, "native-resources.json"), JSON.stringify({
+      kind: "native-visual-resource-list",
+      schemaVersion: 1,
+      resourceRefs,
+    }));
+    const result = await runSelfCheck(workspace);
+    expect(result.exitCode).toBe(2);
+    expect(result.report.diagnosticCodes).toContain(expectedCode);
+  });
+
+  it.each([
+    "new PhysicsAggregate(mesh, 0, {}, context.scene)",
+    "new UniversalCamera('camera', position, context.scene)",
+    "window.addEventListener('keydown', listener)",
+  ])("rejects source that attempts to take a Host authority: %s", async (instruction) => {
+    const workspace = await createWorkspace();
+    await writeFile(path.join(workspace, "scene.ts"), `export const instruction = ${JSON.stringify(instruction)};\n`);
+    const result = await runSelfCheck(workspace);
+    expect(result.exitCode).toBe(2);
+    expect(result.report.diagnosticCodes).toContain("NATIVE_BLOCK_BUILDER_SOURCE_AUTHORITY_FORBIDDEN");
+  });
+});
