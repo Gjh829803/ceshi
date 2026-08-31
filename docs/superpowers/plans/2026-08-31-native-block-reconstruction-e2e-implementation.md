@@ -1,0 +1,1543 @@
+# Native Block Reconstruction End-to-End Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Deliver one real reference-driven Babylon Native Block world through AI generation, formal Check/Package/Runtime/Capture, dimensioned evaluation, one bounded repair, and a directly runnable final WorldPackage.
+
+**Architecture:** Keep exactly the existing Canonical JSON and Babylon Native Scene Sources. Add source-neutral generation identity and reconstruction evaluation to existing contract owners, invoke the existing Codex router for generation/repair, and reuse the admitted Native checker, WorldPackage builder, RuntimeHost, BabylonWorldRuntime, SDK Havok/Subject/Input/Action/Camera, Browser lifecycle, and Capture ports. Every failed evaluation creates a new immutable Attempt/Package/Capture chain; no stage edits a frozen predecessor.
+
+**Tech Stack:** TypeScript, Vitest, pnpm workspaces, Babylon.js, Havok, Vite, Playwright, existing WorldKit CLI/RuntimeHost/WorldPackage contracts, `scripts/agents/run-codex-task.mjs`.
+
+**Spec:** `docs/superpowers/specs/2026-08-31-native-block-reconstruction-e2e-design.md`
+
+## Global Constraints
+
+- `NBR-1` is the only highest-priority WRC-1 slice until the representative Case is runnable end to end; do not expand BWB-6, full PHO-7/8, full Action/Camera/Event, product Route/Nav/`goTo`, full Golden Corpus, BNA-8, or WRC-ACC-1.
+- `RuntimeSceneSourceV1` remains exactly Canonical JSON Source or Babylon Native Source; one World selects exactly one Source.
+- Do not add overlay, a third Scene Source, a shadow Plan, Canonical Compiler re-entry, Mesh/tag/name collider scan, or a Native-specific Runtime/Gameplay/Camera/Physics/Package/Browser owner.
+- The Native Module may create visual objects only in the Host Candidate Scene and may register only explicit Spawn/static Collider/Surface intent; it must not create Engine, Scene, Render Loop, Havok/Physics, SDK Camera, Input, Gameplay entities, timers, workers, network calls, or an independent Tick.
+- The formal model/profile is `gpt-5.6-sol` with reasoning effort `xhigh`; smoke profiles never count as BNA-6 evidence.
+- All model work goes through `scripts/agents/run-codex-task.mjs`; creation submits exactly once and uncertain outcomes reconcile by request ID.
+- Use current-only clean breaks: one public name, parser, entry point, and state owner; delete replaced fields, aliases, fallbacks, duplicate DTOs, and Case-specific production adapters.
+- Checker success precedes Package build; verified Package plus Host admission precede Runtime Candidate allocation.
+- Static collision comes only from explicit Frozen Contributions; SDK remains sole owner of Havok, Character Capsule, support, Input, Fixed Tick, Action, Camera, Reset, and lifecycle.
+- Each implementation worktree runs `pnpm install --frozen-lockfile`; development runs focused RED/GREEN plus necessary typecheck, not repeated whole-repository gates.
+- Every independently reviewable checkpoint is committed, pushed, reviewed, and merged to `main` before the next main-agent integration checkpoint; exact-SHA Cloud evidence may replace waiting on queued GitHub CI.
+- Use `===` / `!==` for equality and lodash `isNil` / `isEmpty` for null-or-empty semantics.
+
+---
+
+## Execution map
+
+| Task | Work ID | Deliverable | depends_on | blocks | Mode / exclusive owner | Merge checkpoint |
+|---|---|---|---|---|---|---|
+| 1 | NBR-10A | Clean-break Attempt identity and route decision owner | NBR-00 | 2, 3, 4 | main-agent-only; `scene-authoring-contracts` shared seam | PR A |
+| 2 | NBR-10B | Closed generation request/receipt plus Case/Profile/Evidence/Result contracts | 1 | 3, 8, 10 | sequential; contracts only | PR A |
+| 3 | NBR-20A | Native Block Builder Skill and Host replay rules | 2 | 4 | sequential; Skill files only | PR B |
+| 4 | NBR-20B | Router-only immutable AI generation workspace and receipt | 2, 3 | 5, 11 | sequential; `scripts/reconstruction/generation-*` | PR B |
+| 5 | NBR-30 | Generic Native package command and Cloud Ridge clean break | 4 | 6, 7 | main-agent-only; package CLI adapter | PR C |
+| 6 | NBR-40 | Generic verified-Package Browser Runtime through main Playground | 5 | 9, 13 | main-agent-only; Vite/Browser lifecycle | PR D |
+| 7 | NBR-45P | Persist trusted Block materializer metadata and complete inventory in Package Root/Receipt | 5, 8 | 9 | main-agent-only; BNA-3 Package identity | PR E1 |
+| 8 | NBR-45A | Formal Capture and Block semantic identity contracts | 2 | 7 | sequential; contracts only | PR E0 |
+| 9 | NBR-45B | Hosted same-session opening/top/world-side/overlay/traversal Capture | 6, 7, 8 | 11, 13 | main-agent-only; Runtime/Capture bridge | PR E2 |
+| 10 | NBR-50A | Pure dimensioned evaluator and stable diagnostics | 2 | 11 | parallel-safe; validation evaluator only | PR F1 |
+| 11 | NBR-50B | Formal Capture/runtime evidence adapter | 9, 10 | 12, 13 | main-agent-only; evaluation adapter only | PR F2 |
+| 12 | NBR-60 | At-most-one immutable repair journal | 4, 5, 11 | 13 | main-agent-only; run journal/orchestrator | PR G |
+| 13 | NBR-70 | Real `cloud-temple-t-gate-native-block` Case, artifacts, and local launch | 6, 9, 11, 12 | 14 | main-agent-only; one Case artifact root | PR H |
+| 14 | NBR-80 | Delete replaced/duplicate experimental production paths | 13 | 15 | main-agent-only; deletion ledger | PR H |
+| 15 | NBR-90 | Exact-SHA gates, independent review, docs truth, final merge | 14 | later WRC | main-agent-only | final PR/merge |
+
+After Task 2 freezes contracts, Task 10/NBR-50A may run in parallel with sequential Task 3/4 or Task 8/NBR-45A because their file ownership does not overlap. In execution order, Task 8/NBR-45A lands before Task 7/NBR-45P, then Task 9/NBR-45B. Shared exports, `scripts/cli/worldkit.ts`, Vite configuration, Runtime ownership, Package identity, run journal, and final artifacts remain with the main agent. Every work item has exactly one execution mode.
+
+## File ownership map
+
+- `packages/scene-authoring-contracts/src/scene-authoring-contracts.ts`: Route, Attempt, Attempt Result, generation Request/Receipt parsers and hashes.
+- `packages/validation/src/reconstruction-contracts.ts`: source-neutral Case/Profile/Evidence/Result/Diagnostic/Run Receipt contracts and canonical hashes.
+- `packages/validation/src/reconstruction-evaluator.ts`: pure evaluator only; no file/model/runtime access.
+- `.codex/skills/worldkit-native-block-builder/`: AI-facing Builder instructions and standalone preflight self-check; never a trusted admission owner.
+- `scripts/reconstruction/generation-request.ts`: trusted Request/Attempt materialization and declared output inventory.
+- `scripts/reconstruction/generation-runner.ts`: the only reconstruction caller of `run-codex-task.mjs` and atomic output promotion.
+- `scripts/reconstruction/native-package.ts`: generic checked-workspace-to-WorldPackage adapter.
+- `scripts/reconstruction/formal-capture.ts`: Package/Runtime/Capture orchestration and Receipt publication.
+- `scripts/reconstruction/evaluate.ts`: filesystem adapter that loads verified evidence and calls the pure validation evaluator.
+- `scripts/reconstruction/run-journal.ts`: immutable initial/repair Attempt state machine and cleanup join.
+- `scripts/reconstruction/run.ts`: `worldkit reconstruct run` facade over the above owners.
+- `packages/runtime-contracts/src/formal-world-capture.ts`: source-neutral formal Capture/Traversal Receipt contracts.
+- `scripts/lib/world-package-browser-transport.ts`: exact receipt-listed Package files exposed to the Browser process.
+- `apps/playground/src/browser-world-package-loader.ts`: fetch, assemble, and verify active Package; no Source-specific fallback.
+- `apps/playground/src/native-runtime-host.ts`: relocated generic consumer of existing RuntimeHost/Runtime Babylon owners.
+- `apps/playground/src/package-runtime-startup.ts`: closed verified Package union switch and Browser API publication.
+- `scripts/cli/worldkit.ts`: stable command parsing/dispatch only; domain logic remains in responsibility directories.
+- `artifacts/scenes/cloud-temple-t-gate-native-block/`: immutable Case input/profile/run evidence and final Package/Capture.
+
+## Checkpoint discipline
+
+For every PR below:
+
+1. branch from the latest `origin/main` in an isolated worktree;
+2. run `pnpm install --frozen-lockfile`;
+3. write the focused failing test before production code;
+4. run only the listed focused tests and necessary `pnpm typecheck`;
+5. run `git diff --check`, commit, push, request exact-commit review, fix open P0/P1, then merge;
+6. refresh `origin/main` before the next shared-owner task.
+
+Do not wait for queued GitHub CI before starting an independent next checkpoint when exact-SHA Cursor Cloud evidence covers the same affected gate.
+
+### Task 1: NBR-10A Clean-break Attempt identity and freeze route selection
+
+**Files:**
+- Modify: `packages/scene-authoring-contracts/src/scene-authoring-contracts.ts`
+- Modify: `packages/scene-authoring-contracts/src/scene-authoring-contracts.test.ts`
+- Modify: `packages/scene-authoring-contracts/src/package-boundary.test.ts`
+- Modify: `scripts/native-scene/native-package-input.ts`
+- Modify: `scripts/native-scene/native-package-input.test.ts`
+- Modify: `scripts/native-scene/build-cloud-ridge-package.ts`
+- Modify: every tracked fixture containing `moduleGenerationInputRef` or `moduleGenerationInputHash`, found by the exact census command below
+
+**Interfaces:**
+- Consumes: parsed Scene Brief identity, reference hashes, required capability refs, trust profile, and explicit supported-lane selection.
+- Produces: `decideSceneAuthoringRouteV1(input: DecideSceneAuthoringRouteV1Input): SceneAuthoringRouteDecisionV1`; Native Attempt `sourceInput.generationRequestRef` and `sourceInput.generationRequestHash`.
+
+- [ ] **Step 1: Freeze the legacy-field census**
+
+Run:
+
+```bash
+rg -n 'moduleGenerationInput(Ref|Hash)' packages scripts apps artifacts
+```
+
+Expected: matches only the current Native Attempt parser/tests, Native package input, Cloud Ridge builder, and generated Package fixtures. Save the exact path list in the PR description; no match may remain at Task completion.
+
+- [ ] **Step 2: Write RED contract tests for the clean break and route owner**
+
+Add tests that require the new fields and explicitly reject the old fields:
+
+```ts
+expect(parseSceneAuthoringAttemptV1({
+  ...nativeAttempt,
+  sourceInput: {
+    kind: "babylon-native",
+    bootstrapInputRef: "worldkit://native-bootstrap/cloud-temple@1",
+    bootstrapInputHash: hashA,
+    generationRequestRef: "worldkit://native-generation-request/cloud-temple.initial@1",
+    generationRequestHash: hashB,
+  },
+}).sourceInput).toMatchObject({ generationRequestHash: hashB });
+
+expect(() => parseSceneAuthoringAttemptV1({
+  ...nativeAttempt,
+  sourceInput: {
+    kind: "babylon-native",
+    bootstrapInputRef: "worldkit://native-bootstrap/cloud-temple@1",
+    bootstrapInputHash: hashA,
+    moduleGenerationInputRef: "legacy",
+    moduleGenerationInputHash: hashB,
+  },
+})).toThrowError("SCENE_AUTHORING_ATTEMPT_INVALID");
+```
+
+Add asymmetric route tests: selected Native + distinctive silhouette returns Native; World Change Set, formal Route/Nav, dynamic multilayer surface, or unadmitted trust returns `capability-gap`; a model-authored desired route is not an input field.
+
+- [ ] **Step 3: Run RED tests**
+
+Run:
+
+```bash
+pnpm exec vitest run packages/scene-authoring-contracts/src/scene-authoring-contracts.test.ts scripts/native-scene/native-package-input.test.ts
+```
+
+Expected: FAIL because `generationRequestRef`, `generationRequestHash`, and `decideSceneAuthoringRouteV1` do not exist.
+
+- [ ] **Step 4: Implement the closed route input and clean-break Native Attempt member**
+
+Add the closed input and decision owner without Runtime/Compiler imports:
+
+```ts
+export interface DecideSceneAuthoringRouteV1Input {
+  readonly id: string;
+  readonly sceneBriefRef: string;
+  readonly sceneBriefHash: Sha256HashV1;
+  readonly trustProfileRef: string;
+  readonly trustProfileHash: Sha256HashV1;
+  readonly requiredCapabilityRefs: readonly string[];
+  readonly requestedSourceKind: "canonical" | "babylon-native";
+  readonly nativeTrustAdmitted: boolean;
+  readonly referenceDrivenDistinctiveSilhouette: boolean;
+}
+
+export function decideSceneAuthoringRouteV1(
+  input: DecideSceneAuthoringRouteV1Input,
+): SceneAuthoringRouteDecisionV1;
+```
+
+Replace the Native source field list atomically:
+
+```ts
+readonly sourceInput: Readonly<{
+  kind: "babylon-native";
+  bootstrapInputRef: string;
+  bootstrapInputHash: Sha256HashV1;
+  generationRequestRef: string;
+  generationRequestHash: Sha256HashV1;
+}>;
+```
+
+`decideSceneAuthoringRouteV1()` must sort/dedupe the required capability refs, return the frozen Native decision only for the admitted first profile, and fail closed to a capability gap for the unsupported capabilities named in the spec. It must not inspect output source or call a model.
+
+- [ ] **Step 5: Update package closure and all fixtures atomically**
+
+Change `PrepareFrozenBabylonNativeWorldPackageBuildInputV1.moduleGenerationInputRef` to `generationRequestRef` and add `generationRequestHash`. `assertAuthoringClosure()` compares Attempt fields to these inputs. `assertSourceClosure()` compares only `SceneAuthoringAttemptResultV1.authoredSourceHash` to the built source graph hash; it must no longer compare a request hash to generated source bytes.
+
+Update Cloud Ridge and serialized fixtures to the one new dialect. Do not read either legacy property in a fallback branch.
+
+- [ ] **Step 6: Run GREEN and clean-break census**
+
+Run:
+
+```bash
+pnpm exec vitest run packages/scene-authoring-contracts scripts/native-scene/native-package-input.test.ts
+pnpm typecheck
+if rg -n 'moduleGenerationInput(Ref|Hash)' packages scripts apps artifacts; then exit 1; fi
+```
+
+Expected: all focused tests pass, typecheck exits 0, and the legacy census exits 0 through the negated branch because there are no matches.
+
+- [ ] **Step 7: Commit Task 1**
+
+```bash
+git add packages/scene-authoring-contracts scripts/native-scene apps artifacts
+git commit -m "refactor: bind native attempts to generation requests"
+```
+
+### Task 2: NBR-10B Add closed generation and reconstruction evidence contracts
+
+**Files:**
+- Modify: `packages/scene-authoring-contracts/src/scene-authoring-contracts.ts`
+- Modify: `packages/scene-authoring-contracts/src/scene-authoring-contracts.test.ts`
+- Modify: `packages/scene-authoring-contracts/src/index.ts`
+- Create: `packages/validation/src/reconstruction-contracts.ts`
+- Create: `packages/validation/src/reconstruction-contracts.test.ts`
+- Modify: `packages/validation/src/index.ts`
+
+**Interfaces:**
+- Consumes: `SceneAuthoringRouteDecisionV1`, SHA-256 identities, Case inputs, closed metric values.
+- Produces: parsers/canonical bytes/hash helpers for `NativeBlockGenerationRequestV1`, `NativeBlockGenerationReceiptV1`, `WorldReconstructionCaseV1`, `WorldReconstructionEvaluationProfileV1`, `WorldReconstructionEvidenceSetV1`, `WorldReconstructionEvaluationResultV1`, `WorldReconstructionDiagnosticV1`, and `WorldReconstructionRunReceiptV1`.
+
+- [ ] **Step 1: Write RED generation Request/Receipt parser tests**
+
+Use the exact declared output tuple and formal profile:
+
+```ts
+const request = parseNativeBlockGenerationRequestV1({
+  kind: "native-block-generation-request",
+  schemaVersion: 1,
+  id: "cloud-temple.initial",
+  routeDecisionRef,
+  routeDecisionHash,
+  sceneBriefRef,
+  sceneBriefHash,
+  referenceInputs: [{ inputRef: referenceRef, contentHash: referenceHash, mediaType: "image/png" }],
+  codexExecutionProfileRef: "worldkit://codex-execution-profile/formal@1",
+  codexExecutionProfileHash: formalProfileHash,
+  taskInstructionRef: "worldkit://task-instruction/native-block-reconstruction@1",
+  taskInstructionHash,
+  builderSkillRef: "worldkit://skill/worldkit-native-block-builder@1",
+  builderSkillHash,
+  workspaceContextManifestRef: "worldkit://workspace-context/native-block-builder@1",
+  workspaceContextManifestHash,
+  contextInputs,
+  nativeSceneApiRef: "worldkit://native-scene-api/babylon@1",
+  nativeSceneApiHash,
+  nativeSceneProfileRef: "worldkit://native-scene-profile/whitebox@1",
+  nativeSceneProfileHash,
+  blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
+  blockProfileHash,
+  bootstrapInputRef: "worldkit://native-bootstrap/cloud-temple@1",
+  bootstrapInputHash,
+  seed: 202608311,
+  budgets,
+  declaredOutputPaths: ["scene.ts", "native-block-authoring.json", "native-resources.json"],
+});
+expect(request.declaredOutputPaths).toEqual([
+  "scene.ts",
+  "native-block-authoring.json",
+  "native-resources.json",
+]);
+```
+
+Reject output reordering, extra keys, duplicate reference/context inputs, unsorted context manifest rows, any absolute path/mtime/gzip identity, API/Profile hash mismatch, Bootstrap identity mismatch, `maximumRepairAttemptCount > 1`, non-formal resolved model/effort, credentials/provider payloads, and output inventory not exactly matching the request. The Request rejects `routerTaskPayloadHash`: the canonical router task payload contains the Request identity, so putting its payload hash back into the Request would be self-referential.
+
+- [ ] **Step 2: Write RED reconstruction contract tests**
+
+Require all seven dimension IDs independently and closed metric kinds:
+
+```ts
+expect(parseWorldReconstructionEvaluationResultV1(result).dimensions.map(
+  ({ dimensionId }) => dimensionId,
+)).toEqual([
+  "collider",
+  "critical-traversal",
+  "deterministic-build",
+  "opening-composition",
+  "semantic-silhouette",
+  "spawn-support",
+  "topology",
+]);
+
+expect(() => parseWorldReconstructionEvaluationResultV1({
+  ...result,
+  dimensions: result.dimensions.filter(({ dimensionId }) => dimensionId !== "collider"),
+})).toThrowError("WORLD_RECONSTRUCTION_EVALUATION_RESULT_INVALID");
+```
+
+Also reject empty `acceptanceTargetRefs`, empty `requiredEvidenceProfileRefs`, a Case that labels scripted traversal as Route/Nav, advisory-only pixel metrics, stale Attempt/Package/Capture hashes, and a passed dimension with missing required evidence.
+
+- [ ] **Step 3: Run RED contract tests**
+
+```bash
+pnpm exec vitest run packages/scene-authoring-contracts/src/scene-authoring-contracts.test.ts packages/validation/src/reconstruction-contracts.test.ts
+```
+
+Expected: FAIL because the new parsers and files are absent.
+
+- [ ] **Step 4: Implement generation contracts in the existing source-authoring owner**
+
+Implement the exact Request shape from the spec and this closed Receipt outcome:
+
+```ts
+export type NativeBlockGenerationReceiptV1 = Readonly<{
+  kind: "native-block-generation-receipt";
+  schemaVersion: 1;
+  id: string;
+  generationRequestRef: string;
+  generationRequestHash: Sha256HashV1;
+  routerTaskPayloadHash: Sha256HashV1;
+  taskInstructionHash: Sha256HashV1;
+  builderSkillHash: Sha256HashV1;
+  workspaceContextManifestHash: Sha256HashV1;
+  routerRequestId: string;
+  backend: "cloud" | "local";
+  executionProfile: "formal";
+  resolvedModel: "gpt-5.6-sol";
+  resolvedReasoningEffort: "xhigh";
+  outcome: "completed" | "rejected" | "tool-error" | "unknown";
+  outputs: readonly NativeBlockGenerationOutputV1[];
+  diagnosticCodes: readonly NativeBlockGenerationDiagnosticCodeV1[];
+  cleanupOutcome: "completed" | "failed";
+}>;
+```
+
+Expose `parse*`, `*CanonicalBytesV1`, and `hash*V1` for Request and Receipt. The Receipt must repeat and verify the canonical router payload, instruction, Skill and context-manifest hashes. Use sorted closed arrays; do not accept aliases, mutable filesystem metadata, archive-byte identity, or provider fields.
+
+- [ ] **Step 5: Implement source-neutral reconstruction contracts in validation**
+
+Define the metric union exactly:
+
+```ts
+export type WorldReconstructionMetricV1 =
+  | Readonly<{ kind: "ratio-basis-points"; valueBasisPoints: number }>
+  | Readonly<{ kind: "normalized-distance-basis-points"; valueBasisPoints: number }>
+  | Readonly<{ kind: "distance-millimeters"; valueMillimeters: number }>
+  | Readonly<{ kind: "boolean-presence"; isPresent: boolean }>
+  | Readonly<{ kind: "identity-match"; isMatch: boolean }>
+  | Readonly<{ kind: "receipt-outcome"; outcome: "completed" | "failed" | "incomplete" }>;
+```
+
+The Profile sets `maximumRepairAttemptCount: 1` and `builderSelfRepairAttemptCount: 0`. The Case binds real input hashes and expected topology, normalized composition targets, Spawn/Support, required collider IDs/roles, and scripted fixed-input traversal checkpoints. The Result contains no aggregate score. Missing evidence produces `incomplete`, never a numeric zero or advisory pass.
+
+- [ ] **Step 6: Run GREEN contracts and package boundaries**
+
+```bash
+pnpm exec vitest run packages/scene-authoring-contracts packages/validation/src/reconstruction-contracts.test.ts
+pnpm typecheck
+git diff --check
+```
+
+Expected: all focused tests and typecheck pass.
+
+- [ ] **Step 7: Commit and merge contract checkpoint PR A**
+
+```bash
+git add packages/scene-authoring-contracts packages/validation scripts/native-scene apps artifacts
+git commit -m "feat: add native reconstruction identity contracts"
+git push -u origin HEAD
+```
+
+Open PR A, request focused contract review, close every P0/P1, merge to `main`, and refresh `origin/main` before Tasks 3/4. PR A must contain no orchestration, model call, Runtime, or Browser change.
+
+### Task 3: NBR-20A Add the Native Block Builder Skill without adding authority
+
+**Files:**
+- Create: `.codex/skills/worldkit-native-block-builder/SKILL.md`
+- Create: `.codex/skills/worldkit-native-block-builder/references/native-block-output-contract.md`
+- Create: `.codex/skills/worldkit-native-block-builder/scripts/self-check.mjs`
+- Create: `scripts/agents/native-block-builder-skill.test.ts`
+- Modify: `package.json`
+
+**Interfaces:**
+- Consumes: attached reference image, Scene Brief, `NativeBlockGenerationRequestV1`, Host-selected API/Profile context.
+- Produces: exactly `scene.ts`, `native-block-authoring.json`, and `native-resources.json`; the Host-frozen `native-scene.bootstrap.json` is read-only input, and the standalone preflight Receipt is advisory and never substitutes for Host `worldkit native check`.
+
+- [ ] **Step 1: Write the RED Skill bundle test**
+
+Test the actual Skill tree, required language, forbidden authority, and a synthetic valid output workspace:
+
+```ts
+expect(skill).toContain("write exactly these three declared outputs");
+for (const forbidden of [
+  "new Engine(", "new Scene(", "runRenderLoop", "new Havok", "new FreeCamera(",
+  "addEventListener", "setInterval", "setTimeout", "fetch(",
+]) expect(skill).not.toContain(`you may use ${forbidden}`);
+
+expect(await runSelfCheck(validWorkspace)).toMatchObject({
+  ok: true,
+  declaredOutputPaths: [
+    "scene.ts",
+    "native-block-authoring.json",
+    "native-resources.json",
+  ],
+});
+```
+
+Also test missing output, extra output, symlink, empty file, unsorted/duplicate resource refs, and instruction text that asks the model to create Physics/Camera/Input.
+
+- [ ] **Step 2: Run RED Skill test**
+
+```bash
+pnpm exec vitest run scripts/agents/native-block-builder-skill.test.ts
+```
+
+Expected: FAIL because the Skill bundle and checker do not exist.
+
+- [ ] **Step 3: Write the closed Skill instructions**
+
+The Skill must state this exact responsibility split:
+
+```text
+JSON/Case/Scene Brief owns identity, intent, Subject, Spawn target, budgets, and evidence requirements.
+scene.ts owns Babylon Native Block visual construction and explicit registration calls only.
+The Host owns Check, Package, Receipt, Runtime Candidate, Havok, Character, Input, Action, Camera, Reset, Capture, and evaluation.
+```
+
+Require use of `@whitebox-world/native-babylon` plus `@whitebox-world/native-babylon-block-profile`, deterministic seeded construction, explicit visual groups, explicit Spawn registration, and explicit collider contribution. Require a ground-supported Spawn, readable central ascent, T-shaped upper platform, gate/building silhouette, blocker walls, and no claimed Route/Nav output for this Case.
+
+- [ ] **Step 4: Implement the standalone output-shape self-check**
+
+The checker accepts one workspace path, rejects symlinks/extra top-level files, verifies the exact three non-empty outputs, parses the two JSON files as accessor-free plain data, and returns stable canonical JSON:
+
+```js
+{
+  kind: "native-block-builder-self-check",
+  schemaVersion: 1,
+  ok: true,
+  declaredOutputPaths: [
+    "scene.ts",
+    "native-block-authoring.json",
+    "native-resources.json",
+  ],
+  outputHashes: [/* path/hash rows sorted by path */],
+  diagnosticCodes: [],
+}
+```
+
+It does not typecheck Babylon source, instantiate a Candidate, infer colliders, or claim admission; those remain BNA-2 Host checks.
+
+- [ ] **Step 5: Run GREEN Skill test and register the focused script**
+
+Add `check:native-block-builder-skill` to root `package.json`, then run:
+
+```bash
+pnpm exec vitest run scripts/agents/native-block-builder-skill.test.ts
+pnpm check:native-block-builder-skill
+git diff --check
+```
+
+Expected: both commands pass and the checker output is byte-stable across two runs.
+
+- [ ] **Step 6: Commit Task 3**
+
+```bash
+git add .codex/skills/worldkit-native-block-builder scripts/agents/native-block-builder-skill.test.ts package.json
+git commit -m "feat: add native block reconstruction builder skill"
+```
+
+### Task 4: NBR-20B Dispatch immutable Native Block generation only through the Codex router
+
+**Files:**
+- Create: `scripts/reconstruction/generation-request.ts`
+- Create: `scripts/reconstruction/generation-request.test.ts`
+- Create: `scripts/reconstruction/generation-runner.ts`
+- Create: `scripts/reconstruction/generation-runner.test.ts`
+- Create: `scripts/reconstruction/run-native-block-generation.ts`
+- Create: `artifacts/scenes/cloud-temple-t-gate-native-block/case.json`
+- Create: `artifacts/scenes/cloud-temple-t-gate-native-block/evaluation-profile.json`
+- Create: `artifacts/scenes/cloud-temple-t-gate-native-block/inputs/reference-0.png` by copying and hash-binding `/Users/xiateng/Downloads/测试集/1.png`
+- Create: `artifacts/scenes/cloud-temple-t-gate-native-block/inputs/scene-brief.md` from the accepted Cloud Ridge Scene Brief, preserving visible facts and labeling the top T continuation as inferred
+- Create: `artifacts/scenes/cloud-temple-t-gate-native-block/inputs/native-scene.bootstrap.json` as a Host-derived, read-only input frozen before task creation
+- Modify: `package.json`
+
+**Interfaces:**
+- Consumes: parsed Case/Profile, route decision, Builder Skill context, Host-selected backend and immutable input files.
+- Produces: `prepareNativeBlockGenerationTaskV1(input): PreparedNativeBlockGenerationTaskV1`; `runNativeBlockGenerationV1(input, ports): Promise<NativeBlockGenerationRunV1>` with atomically promoted outputs and parsed `NativeBlockGenerationReceiptV1`.
+
+- [ ] **Step 1: Write RED Request materialization tests**
+
+Assert canonical request identity, stable router request ID, exact output declarations, and rejection before process creation:
+
+```ts
+const prepared = prepareNativeBlockGenerationTaskV1({
+  case: parsedCase,
+  profile: parsedProfile,
+  routeDecision,
+  attemptIndex: 0,
+  backend: "cloud",
+  runDirectoryPath,
+});
+expect(prepared.routerArguments.filter((value) => value === "--output")).toHaveLength(3);
+expect(prepared.routerArguments).toContain("--execution-profile");
+expect(prepared.routerArguments).toContain("formal");
+expect(prepared.routerArguments).toContain("--submit-attempts");
+expect(prepared.routerArguments).toContain("1");
+```
+
+Reject a Canonical/capability-gap decision, changed input bytes after hashing, undeclared output, `attemptIndex > 1`, output outside the run directory, and any symbolic-link input.
+
+- [ ] **Step 2: Write RED runner lifecycle tests with an injected process port**
+
+Define the port so tests never call a real model:
+
+```ts
+export interface CodexTaskProcessPortV1 {
+  run(input: Readonly<{
+    executablePath: string;
+    arguments: readonly string[];
+    cwd: string;
+  }>): Promise<Readonly<{ exitCode: number; stdout: string; stderr: string }>>;
+}
+```
+
+Test completed outputs, no output, empty output, task error, timeout/unknown outcome, same request ID + same hash reconciliation, same ID + different hash rejection, interrupted atomic promotion, and cleanup failure. Assert the executable basename is exactly `run-codex-task.mjs`; no test or production branch may call `run-lwdp-codex-task.mjs`, `run-local-codex-task.mjs`, LWDP HTTP, or `codex exec` directly.
+
+- [ ] **Step 3: Run RED generation tests**
+
+```bash
+pnpm exec vitest run scripts/reconstruction/generation-request.test.ts scripts/reconstruction/generation-runner.test.ts
+```
+
+Expected: FAIL because the generation owner does not exist.
+
+- [ ] **Step 4: Implement immutable Request preparation**
+
+`prepareNativeBlockGenerationTaskV1()` must:
+
+1. derive and freeze `native-scene.bootstrap.json` from the Case/Profile before task creation, then re-read and hash the Case, Profile, Scene Brief, reference image, task instruction, Builder Skill, canonical sorted workspace-context manifest and each context input, and Host-selected Native API/Profile/Block Profile content;
+2. call `decideSceneAuthoringRouteV1()` before creating an Attempt;
+3. create `NativeBlockGenerationRequestV1` binding `taskInstructionRef/Hash`, `builderSkillRef/Hash`, `workspaceContextManifestRef/Hash`, sorted `contextInputs`, API/Profile/Block Profile refs and content hashes, and `bootstrapInputRef/Hash`; then create a Native `SceneAuthoringAttemptV1` whose source input binds that Request and frozen Bootstrap;
+4. write instruction/context assets to a sibling staging directory with mode `0700` and reject symlinks;
+5. construct the complete canonical router task payload from the already-hashed Request, compute `routerTaskPayloadHash`, record that hash only in the Generation Receipt, then construct router arguments with one task, one request ID, formal profile, timeout from the Request, three declared outputs, and a unique S3 prefix `<scene-id>/<run-id>/attempt-0` for cloud;
+6. never pass credentials, the mutable checkout, unrelated artifacts, or absolute host paths in serialized contracts.
+
+- [ ] **Step 5: Implement run, reconciliation, receipt, and atomic promotion**
+
+`runNativeBlockGenerationV1()` invokes the router once, parses the exact three delivered files, reruns the Skill self-check, computes hashes/bytes, and promotes them from `attempts/0/.staging` to `attempts/0/source` only when complete. An uncertain create outcome writes `outcome: "unknown"` and calls a read-only reconciliation port keyed by the same request ID; it never launches a second creation request.
+
+The completed Attempt Result binds `authoredSourceHash` to the admitted source graph at Task 5, not to the raw request. Until Check completes, preserve the Attempt and Generation Receipt but do not synthesize a completed Attempt Result.
+
+- [ ] **Step 6: Create and validate the real Case inputs**
+
+Copy the source image without transformation, calculate its SHA-256, and bind it in `case.json`. Bind the copied Scene Brief hash. The Case must contain non-empty acceptance targets for foreground platform, central ascent, mountain/cliff layers, upper T junction, gate mass, supported Spawn, required blocker colliders, and fixed-input traversal checkpoints. `evaluation-profile.json` fixes one formal model/Profile/Prompt/budget/threshold set, `maximumRepairAttemptCount: 1`, and `builderSelfRepairAttemptCount: 0`.
+
+Run:
+
+```bash
+pnpm exec vitest run packages/validation/src/reconstruction-contracts.test.ts scripts/reconstruction/generation-request.test.ts
+```
+
+Expected: the real Case/Profile parse and their stored content hashes match.
+
+- [ ] **Step 7: Run the first real formal AI generation through the router**
+
+Add root script `reconstruct:native-block:generate` and run:
+
+```bash
+pnpm reconstruct:native-block:generate -- \
+  --case artifacts/scenes/cloud-temple-t-gate-native-block/case.json \
+  --output artifacts/scenes/cloud-temple-t-gate-native-block/runs/initial \
+  --backend cloud
+```
+
+Expected: one formal router task reports `model=gpt-5.6-sol reasoning=xhigh`, creates the exact three non-empty files plus Request/Attempt/Generation Receipt, and does not create a Package, Runtime Candidate, or Capture. If provider submission is uncertain, stop this step in the recorded unknown state and reconcile the same request ID; do not rerun under a new ID.
+
+- [ ] **Step 8: Run GREEN generation tests and repository policy census**
+
+```bash
+pnpm exec vitest run scripts/reconstruction/generation-request.test.ts scripts/reconstruction/generation-runner.test.ts scripts/agents/native-block-builder-skill.test.ts
+pnpm typecheck
+if rg -n 'run-lwdp-codex-task|run-local-codex-task|submitCodexGenerationJob|codex exec' scripts/reconstruction; then exit 1; fi
+git diff --check
+```
+
+Expected: focused tests/typecheck pass and reconstruction code names only `run-codex-task.mjs`.
+
+- [ ] **Step 9: Commit and merge generation checkpoint PR B**
+
+```bash
+git add .codex/skills/worldkit-native-block-builder scripts/reconstruction scripts/agents artifacts/scenes/cloud-temple-t-gate-native-block package.json
+git commit -m "feat: generate native block worlds through the codex router"
+git push -u origin HEAD
+```
+
+Open PR B. Review the actual formal Generation Receipt and source outputs without claiming checker/package/runtime success. Close every P0/P1, merge to `main`, and refresh before Task 5.
+
+### Task 5: NBR-30 Build a generic checked Native WorldPackage and remove hand-written assembly
+
+**Files:**
+- Create: `scripts/reconstruction/native-package.ts`
+- Create: `scripts/reconstruction/native-package.test.ts`
+- Create: `packages/native-babylon-block-profile/src/authoring-manifest.ts`
+- Create: `packages/native-babylon-block-profile/src/authoring-manifest.test.ts`
+- Modify: `packages/native-babylon-block-profile/src/index.ts`
+- Modify: `scripts/native-scene/native-package-input.ts`
+- Modify: `scripts/native-scene/native-package-input.test.ts`
+- Modify: `scripts/native-scene/build-trusted-world-package.ts`
+- Delete: `scripts/native-scene/build-cloud-ridge-package.ts` after fixture callers use the generic adapter
+- Modify: `scripts/cli/worldkit.ts`
+- Modify: `scripts/cli/worldkit-native.integration.test.ts`
+- Modify: `package.json`
+
+**Interfaces:**
+- Consumes: one attempt directory containing Host authoring identity and frozen `inputs/native-scene.bootstrap.json` plus `source/scene.ts`, `source/native-block-authoring.json`, and `source/native-resources.json`, and one parsed `WorldReconstructionCaseV1`.
+- Produces: `packageNativeBlockAttemptV1(input): Promise<PackagedNativeBlockAttemptV1>` containing completed Attempt Result, verified `WorldPackageDirectoryV1`, build identity/receipt hashes, and an atomically published Package directory.
+
+- [ ] **Step 1: Write RED generic package tests**
+
+Build a test attempt directory with a valid asset-free Block source and assert order/identity:
+
+```ts
+const packaged = await packageNativeBlockAttemptV1({
+  repositoryRoot,
+  attemptDirectoryPath,
+  casePath,
+  outputDirectoryPath,
+  candidateFactory,
+});
+expect(packaged.checkResult.outcome).toBe("passed");
+expect(packaged.verifiedWorldPackage.kind).toBe("babylon-native-scene");
+expect(packaged.sceneAuthoringAttemptResult.authoredSourceHash)
+  .toBe(packaged.verifiedWorldPackage.sceneModuleBundleManifest.sourceGraphHash);
+```
+
+Use an injected Candidate allocation observer. Test authority violation, TypeScript error, unsupported import, missing output, resource mismatch, tampered Generation Receipt, failed dual replay, missing Spawn support, collider budget overrun, and throwing cleanup. Parse `native-block-authoring.json` as a closed accessor-free contract and join every declared semantic target/group/color to the checked Layout visual-group inventory; reject missing, duplicate, unbound, undeclared, or stale group rows. For every failed check assert `runtimeCandidateAllocationCount === 0`, no Package directory exists, and the failure diagnostic/cleanup receipt is retained.
+
+- [ ] **Step 2: Write RED CLI grammar/integration tests**
+
+Require exactly:
+
+```text
+worldkit native package <attempt-directory> --case <case.json> --output <package-directory> --json
+```
+
+Reject missing `--case`, missing `--output`, output inside the immutable attempt source, a raw source directory without Host identity files, and legacy Case-specific build commands.
+
+- [ ] **Step 3: Run RED package tests**
+
+```bash
+pnpm exec vitest run packages/native-babylon-block-profile/src/authoring-manifest.test.ts scripts/reconstruction/native-package.test.ts scripts/cli/worldkit-native.integration.test.ts
+```
+
+Expected: FAIL because the generic command/adapter do not exist.
+
+- [ ] **Step 4: Implement check-before-Package materialization**
+
+`packageNativeBlockAttemptV1()` performs this fixed sequence:
+
+```text
+re-hash Case/Request/Attempt/Generation Receipt/source files
+-> checkBabylonNativeSceneWorldDirectoryV1(attempt/source)
+-> require outcome === passed
+-> resolve the closed native-resources list
+-> finalize completed SceneAuthoringAttemptResultV1
+-> prepareFrozenBabylonNativeWorldPackageBuildInputV1
+-> buildTrustedBabylonNativeWorldPackageV1
+-> verifyWorldPackageDirectoryV1
+-> writeWorldPackageDirectoryV1 atomically
+```
+
+The generic adapter derives shared Package inputs from admitted Registry/profile owners and the Case. It does not hard-code Cloud Ridge hashes, synthesize an empty acceptance/evidence list, infer a Collider from Mesh/tag/name, or allocate a formal Runtime Candidate.
+
+- [ ] **Step 5: Add the stable CLI command**
+
+Add a closed `WorldkitArgs` member:
+
+```ts
+readonly {
+  command: "native-package";
+  attemptDirectoryPath: string;
+  casePath: string;
+  outputPath: string;
+  json: true;
+}
+```
+
+Dispatch into `scripts/reconstruction/native-package.ts`; keep `scripts/cli/worldkit.ts` free of build policy. The JSON result returns exact Attempt Result, WorldPackage Ref/Root, WorldBuildIdentity hash, Build Receipt hash, output path, and diagnostics.
+
+- [ ] **Step 6: Replace Cloud Ridge assembly and delete its production script**
+
+Convert Cloud Ridge fixtures to invoke `packageNativeBlockAttemptV1()` with fixture inputs. Delete `build-cloud-ridge-package.ts`, its root package script, and every import. Preserve the generated fixture only when it is regenerated byte-for-byte through the generic command; otherwise update its exact hashes in the same commit and run its Package verifier.
+
+- [ ] **Step 7: Run GREEN package and tamper gates**
+
+```bash
+pnpm exec vitest run packages/native-babylon-block-profile/src/authoring-manifest.test.ts scripts/reconstruction/native-package.test.ts scripts/native-scene/native-package-input.test.ts scripts/native-scene/native-scene-check.test.ts scripts/cli/worldkit-native.integration.test.ts packages/world-package/src/package-build.test.ts packages/world-package/src/package-directory.test.ts
+pnpm typecheck
+if rg -n 'buildCloudRidgePackage|build-cloud-ridge-package' packages scripts apps package.json; then exit 1; fi
+git diff --check
+```
+
+Expected: all focused checks pass and the Case-specific production builder census is empty.
+
+- [ ] **Step 8: Package the initial AI output**
+
+```bash
+pnpm worldkit native check \
+  artifacts/scenes/cloud-temple-t-gate-native-block/runs/initial/attempts/0/source --json
+pnpm worldkit native package \
+  artifacts/scenes/cloud-temple-t-gate-native-block/runs/initial/attempts/0 \
+  --case artifacts/scenes/cloud-temple-t-gate-native-block/case.json \
+  --output artifacts/scenes/cloud-temple-t-gate-native-block/runs/initial/attempts/0/world-package \
+  --json
+```
+
+Expected: formal check passes before Package publication. Store Check Result, Explain output, Attempt Result, Build Receipt, and Package identity. If Check fails, keep the diagnostics as initial-generation evidence and do not hand-edit source in this task; the explicit repair path is Task 12.
+
+- [ ] **Step 9: Commit and merge package checkpoint PR C**
+
+```bash
+git add scripts/reconstruction scripts/native-scene scripts/cli package.json apps artifacts/scenes/cloud-temple-t-gate-native-block
+git commit -m "feat: package checked native reconstruction attempts"
+git push -u origin HEAD
+```
+
+Request exact-commit Package/identity review. Merge only after P0/P1 closure, then refresh `origin/main`.
+
+### Task 6: NBR-40 Run any verified Package through the main Playground and existing Runtime owners
+
+**Files:**
+- Create: `scripts/lib/world-package-browser-transport.ts`
+- Create: `scripts/lib/world-package-browser-transport.test.ts`
+- Modify: `scripts/lib/worldkit-server.ts`
+- Modify: `scripts/lib/worldkit-server.test.ts`
+- Modify: `apps/playground/vite.config.mjs`
+- Modify: `apps/playground/vite.config.test.mjs`
+- Create: `apps/playground/src/browser-world-package-loader.ts`
+- Create: `apps/playground/src/browser-world-package-loader.test.ts`
+- Create: `apps/playground/src/package-runtime-startup.ts`
+- Create: `apps/playground/src/package-runtime-startup.test.ts`
+- Create: `apps/playground/src/native-runtime-host.ts` by relocating/generalizing the accepted code from `apps/native-scene-playground/src/native-runtime-host.ts`
+- Modify: `apps/playground/src/playground-runtime-route.ts`
+- Modify: `apps/playground/src/playground-runtime-route.test.ts`
+- Modify: `apps/playground/src/main.ts`
+- Modify: `scripts/cli/worldkit.ts`
+- Modify: `scripts/cli/worldkit.test.ts`
+
+**Interfaces:**
+- Consumes: a filesystem WorldPackage directory that passes `verifyWorldPackageDirectoryV1()`.
+- Produces: `worldkit run <package-directory>` serving a package-gameplay route in the main Playground, installing the existing Browser V5 API, and creating the existing RuntimeHost/BabylonWorldRuntime with SDK-owned systems.
+
+- [ ] **Step 1: Write RED exact Package transport tests**
+
+The server transport exposes only receipt-listed immutable bytes:
+
+```ts
+const transport = await createWorldPackageBrowserTransportV1({
+  packageDirectoryPath,
+});
+expect(transport.worldPackageRootHash).toBe(verified.receipt.worldPackageRootHash);
+await expect(transport.read("native/scene.mjs")).resolves.toEqual(sceneBytes);
+await expect(transport.read("../package.json")).rejects.toThrow(
+  "WORLD_PACKAGE_BROWSER_PATH_UNADMITTED",
+);
+```
+
+Test symlink root/file, unlisted file, wrong content hash/size/media type, path traversal, mutated byte after verification, and cleanup. No route may serve the repository root or arbitrary filesystem path.
+
+- [ ] **Step 2: Write RED closed verified-union startup tests**
+
+Test `startVerifiedPackageRuntimeV1()` with both `canonical-execution-plan` and `babylon-native-scene`. Native must pass its verified Package and exact loaded Module hash into the existing runtime admission path. Unknown kind must be impossible after the Package parser; do not add `default -> canonical` fallback.
+
+Use spies to assert the Module cannot create Engine/Physics/Camera/Input/loop and that SDK Runtime creates Havok/Subject/Camera after admission. Add unsupported Spawn, ledge departure, Reset/rebind, two Candidate, and throwing disposal cases from the runtime deep-review checklist.
+
+- [ ] **Step 3: Run RED Runtime route tests**
+
+```bash
+pnpm exec vitest run scripts/lib/world-package-browser-transport.test.ts scripts/lib/worldkit-server.test.ts apps/playground/src/browser-world-package-loader.test.ts apps/playground/src/package-runtime-startup.test.ts apps/playground/src/playground-runtime-route.test.ts
+```
+
+Expected: FAIL because the main Playground rejects Package directories and has no package-gameplay route.
+
+- [ ] **Step 4: Add verified Package Browser transport and virtual Native module**
+
+Extend `startWorldkitServer()` with a discriminated source input rather than ambiguous fields:
+
+```ts
+type WorldkitServerSourceV1 =
+  | Readonly<{ kind: "canonical-file"; inputPath: string }>
+  | Readonly<{ kind: "world-package"; packageDirectoryPath: string }>;
+```
+
+For Package source, verify before Vite spawn, expose receipt and receipt-listed files through nonce-protected same-origin middleware, and inject the Package Root. `apps/playground/vite.config.mjs` provides one `virtual:worldkit-active-native-scene` module only when the verified Package kind is Native; it loads exactly the admitted `native/scene.mjs` bytes and exports the verified bundle content hash. It must not embed a Cloud Ridge path or scan workspace packages beyond the already admitted runtime dependency graph.
+
+- [ ] **Step 5: Add package-gameplay route and source-neutral startup**
+
+Extend `PlaygroundRuntimeRouteV1` with:
+
+```ts
+Readonly<{ mode: "package-gameplay"; worldPackageRootHash: Sha256HashV1 }>
+```
+
+`browser-world-package-loader.ts` fetches the receipt-listed rows, assembles them, and calls `verifyWorldPackageDirectoryV1()` before returning the closed union. `package-runtime-startup.ts` selects the existing Canonical adapter or the relocated Native RuntimeHost consumer after verification. Both install the same `WorldkitBrowserApiV5`; Native does not publish `__WORLDKIT_NATIVE_SPIKE__` as a product API.
+
+- [ ] **Step 6: Preserve SDK owners and lifecycle semantics**
+
+The relocated Native adapter must delegate to `RuntimeHost`, `runtimeWorldConfigurationFromVerifiedWorldPackageV1()`, `prepareBabylonNativeRuntimePackageV1()`, `BabylonWorldRuntime.create()`, and the SDK Browser API adapter. It must not duplicate motion state, infer support, create Physics shapes itself, or retain a private Camera/Input state machine. Test pause-until-ready, Reset origin, active Candidate swap, exact module hash, page exit, partial create, and idempotent throwing cleanup.
+
+- [ ] **Step 7: Change `worldkit run` Package behavior in one clean break**
+
+Remove `CLI_RUN_INPUT_KIND_MISMATCH` for verified Package directories. `runUntilSignal()` resolves the input kind first: Canonical JSON keeps the existing authoring server; Package directory starts package-gameplay. The output JSON remains `{ ok, url, port }` plus WorldPackage Root and Source kind. Interactive NDJSON remains a distinct explicit form and gains no Browser fallback.
+
+- [ ] **Step 8: Run GREEN Runtime gates**
+
+```bash
+pnpm exec vitest run scripts/lib/world-package-browser-transport.test.ts scripts/lib/worldkit-server.test.ts apps/playground/src/browser-world-package-loader.test.ts apps/playground/src/package-runtime-startup.test.ts apps/playground/src/playground-runtime-route.test.ts apps/playground/src/worldkit-browser-api.test.ts packages/runtime-babylon/src/babylon-native-package-runtime.test.ts packages/runtime-host/src/native-execution-admission.test.ts
+pnpm typecheck
+pnpm --filter @whitebox-world/playground build
+git diff --check
+```
+
+Expected: focused tests, typecheck, and main Playground build pass.
+
+- [ ] **Step 9: Manually launch the initial Package before merge**
+
+```bash
+pnpm worldkit run \
+  artifacts/scenes/cloud-temple-t-gate-native-block/runs/initial/attempts/0/world-package \
+  --port 5174 --json
+```
+
+Expected: returned URL opens the main Playground, Browser V5 reaches ready, the Subject settles on SDK support, WASD/Jump/Reset/Camera work, and explicit blocker colliders stop the Capsule. Record this as manual evidence only; do not call it formal Capture or final Case success.
+
+- [ ] **Step 10: Commit and merge playable Runtime checkpoint PR D**
+
+```bash
+git add scripts/lib scripts/cli apps/playground
+git commit -m "feat: run verified world packages in the main playground"
+git push -u origin HEAD
+```
+
+Request Runtime deep review against the exact commit, fix P0/P1 with focused gates, merge, and refresh `origin/main`.
+
+### Task 7: NBR-45P Persist trusted Block materializer metadata in WorldPackage identity
+
+**Files:**
+- Create: `packages/runtime-contracts/src/native-block-materializer-metadata.ts`
+- Create: `packages/runtime-contracts/src/native-block-materializer-metadata.test.ts`
+- Modify: `packages/runtime-contracts/src/index.ts`
+- Modify: `packages/native-babylon-block-profile/src/profile-settlement.ts`
+- Modify: `packages/native-babylon-block-profile/src/profile-settlement.test.ts`
+- Modify: `packages/native-babylon-block-profile/src/babylon-visual-adapter.ts`
+- Modify: `packages/native-babylon-block-profile/src/babylon-visual-adapter.test.ts`
+- Modify: `scripts/native-scene/native-package-input.ts`
+- Modify: `scripts/native-scene/native-package-input.test.ts`
+- Modify: `packages/world-package/src/package-build.ts`
+- Modify: `packages/world-package/src/package-build.test.ts`
+- Modify: `packages/world-package/src/package-types.ts`
+- Modify: `packages/world-package/src/package-directory.ts`
+- Modify: `packages/world-package/src/package-directory.test.ts`
+- Modify: `packages/world-package/src/native-runtime-directory.ts`
+- Modify: `packages/world-package/src/test-fixture.ts`
+
+**Interfaces:**
+- Consumes: the trusted Block materializer's checked Layout records, visual-group inventory, collider joins, and committed profile settlement.
+- Produces: `BabylonNativeBlockMaterializerMetadataV1`, `materializerMetadataHash`, full sorted Block/visual-group/collider inventory, profile-settlement fingerprint, and a required `native/block-materializer-metadata.json` Package member covered by WorldPackage Root, Build Identity, verifier, and Receipt.
+
+- [ ] **Step 1: Write RED metadata parser/fingerprint tests**
+
+Require complete materializer output rather than the current opaque fingerprint alone:
+
+```ts
+const metadata = parseBabylonNativeBlockMaterializerMetadataV1({
+  kind: "babylon-native-block-materializer-metadata",
+  schemaVersion: 1,
+  blockProfileRef: BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
+  profileInventoryHash,
+  settledVisualHash,
+  blocks: sortedBlocks,
+  visualGroups: sortedVisualGroups,
+  colliderJoins: sortedColliderJoins,
+});
+expect(hashBabylonNativeBlockMaterializerMetadataV1(metadata))
+  .toBe(materializerMetadataHash);
+```
+
+Reject missing Block rows, duplicate IDs, unsorted arrays, a visual group that references no Block, a Collider join absent from Frozen Contribution, identity-color collision, profile fingerprint mismatch, and accessor-bearing input.
+
+- [ ] **Step 2: Write RED Package Root/Receipt join tests**
+
+Assert `native/block-materializer-metadata.json` is mandatory for the blocks profile and forbidden for the standard profile. Tamper each Block center, group mapping, identity color, collider join, `profileInventoryHash`, and `settledVisualHash`; every mutation must fail Package verification or change Root/Build Receipt identity. A Package with only the old opaque profile settlement receipt must fail closed for the blocks profile.
+
+- [ ] **Step 3: Run RED materializer/Package tests**
+
+```bash
+pnpm exec vitest run packages/runtime-contracts/src/native-block-materializer-metadata.test.ts packages/native-babylon-block-profile/src/profile-settlement.test.ts packages/world-package/src/package-build.test.ts packages/world-package/src/package-directory.test.ts scripts/native-scene/native-package-input.test.ts
+```
+
+Expected: FAIL because the complete trusted inventory is not a Package member.
+
+- [ ] **Step 4: Emit metadata from the trusted materializer and join BNA-3**
+
+The trusted Block visual adapter writes immutable capture metadata while materializing each checked Block:
+
+```ts
+mesh.metadata = Object.freeze({
+  ...mesh.metadata,
+  worldkitEntityId: `native-block:${block.id}`,
+  semanticClassId: `worldkit.native-block.group.${block.visualGroupId ?? "ungrouped"}`,
+});
+```
+
+These values are Host/Profile-defined from checked IDs, not copied from arbitrary Module Mesh metadata.
+The profile settlement fingerprint includes both fields and rejects any mutation before Candidate
+publication/replay. Change the Block profile settlement owner to return both that committed fingerprint
+and immutable metadata:
+
+```ts
+export interface SettledBabylonNativeBlockProfileV1 {
+  readonly profileInventoryHash: Sha256HashV1;
+  readonly metadata: BabylonNativeBlockMaterializerMetadataV1;
+  readonly metadataHash: Sha256HashV1;
+}
+```
+
+`prepareFrozenBabylonNativeWorldPackageBuildInputV1()` accepts only this trusted result from Candidate replay, joins every metadata Collider ID to the Frozen Contribution, joins every authoring-manifest group to the full inventory, and passes the exact bytes/hash into BNA-3. It never reconstructs inventory by scanning Scene Mesh/tag/name.
+
+- [ ] **Step 5: Extend Package builder/verifier/Root/Receipt in one clean break**
+
+For `worldkit://native-scene-profile/whitebox.blocks@1`, add the exact package path `native/block-materializer-metadata.json` to manifest membership and integrity rows. `createBabylonNativeWorldPackageV1()` writes canonical metadata bytes; `verifyBabylonNativeWorldPackageDirectoryV1()` reparses and recomputes its hash, checks profile settlement fingerprints and target count, checks authoring group/Contribution joins, and exposes the verified metadata. Root and Build Receipt therefore change whenever any trusted inventory fact changes.
+
+- [ ] **Step 6: Run GREEN identity/tamper gates and commit PR E1**
+
+```bash
+pnpm exec vitest run packages/runtime-contracts/src/native-block-materializer-metadata.test.ts packages/native-babylon-block-profile/src/profile-settlement.test.ts packages/world-package/src/package-build.test.ts packages/world-package/src/package-directory.test.ts scripts/native-scene/native-package-input.test.ts scripts/reconstruction/native-package.test.ts
+pnpm typecheck
+git diff --check
+git add packages/runtime-contracts packages/native-babylon-block-profile packages/world-package scripts/native-scene scripts/reconstruction
+git commit -m "feat: bind block materializer inventory to world packages"
+git push -u origin HEAD
+```
+
+Request BNA-3 identity/tamper review, close every P0/P1, merge PR E1, and refresh `origin/main`. Do not start Task 9 from a Package built before this identity change.
+
+### Task 8: NBR-45A Freeze formal Capture and Block semantic identity contracts
+
+**Files:**
+- Create: `packages/runtime-contracts/src/formal-world-capture.ts`
+- Create: `packages/runtime-contracts/src/formal-world-capture.test.ts`
+- Modify: `packages/runtime-contracts/src/index.ts`
+- Create: `packages/native-babylon-block-profile/src/formal-capture-identity.ts`
+- Create: `packages/native-babylon-block-profile/src/formal-capture-identity.test.ts`
+- Modify: `packages/native-babylon-block-profile/src/index.ts`
+
+**Interfaces:**
+- Consumes: Case semantic target refs, checked `native-block-authoring.json` mappings, admitted Block visual-group inventory, and frozen Contribution identity.
+- Produces: parsed/hashable `FormalSemanticCaptureMapV1`, `FormalArtifactViewRequestV1`, `FormalWorldCaptureReceiptV1`, and `bindBlockVisualGroupsToSemanticCaptureTargetsV1()`; no Browser or Runtime operation.
+
+- [ ] **Step 1: Write RED formal Capture contract tests**
+
+Require Package/Build/Attempt/Case/Profile/Runtime/SDK owner identities, exactly three required world views, overlay/traversal hashes, rollback, and cleanup:
+
+```ts
+expect(parseFormalWorldCaptureReceiptV1(receipt).views.map(({ viewId }) => viewId))
+  .toEqual(["opening", "world-side", "world-top-down"]);
+expect(receipt.worldPackageRootHash).toBe(packageRootHash);
+expect(receipt.runtimeSessionId).toBe(runtimeSnapshot.runtimeSessionId);
+expect(receipt.cameraRollbackOutcome).toBe("completed");
+expect(receipt.cleanupOutcome).toBe("completed");
+```
+
+Reject BWB `scope: "build-epoch-local"`, a mismatched Package/Attempt/Capture hash, a missing world-side view, stale Runtime Snapshot, absent collider overlay when required, and failed Camera rollback/cleanup. `world-side` must be a world-bounds lateral elevation request and must reject the existing object-local `right` tri-view identifier.
+
+- [ ] **Step 2: Write RED Block visual-group to formal semantic identity adapter tests**
+
+Do not treat Block group IDs as sufficient formal evidence. Define:
+
+```ts
+export function bindBlockVisualGroupsToSemanticCaptureTargetsV1(input: Readonly<{
+  case: WorldReconstructionCaseV1;
+  blockVisualGroups: readonly BabylonNativeBlockVisualGroupV1[];
+  contributionHash: Sha256HashV1;
+}>): FormalSemanticCaptureMapV1;
+```
+
+The output binds every required Case acceptance target ref to exactly one checked Block visual group ID, semantic class, identity color, projected-bounds source, required world views, authoring-manifest hash, Layout inventory hash, and Contribution hash. Test missing/duplicate target binding, one group bound to contradictory semantic targets, undeclared group, stale Manifest/Layout/Contribution, extra target, and deterministic sort order. No mapping may be inferred from Mesh/tag/name.
+
+- [ ] **Step 3: Run RED contract tests**
+
+```bash
+pnpm exec vitest run packages/runtime-contracts/src/formal-world-capture.test.ts packages/native-babylon-block-profile/src/formal-capture-identity.test.ts
+```
+
+Expected: FAIL because the formal contracts and Block semantic identity join do not exist.
+
+- [ ] **Step 4: Implement formal Capture contracts and Block semantic identity join**
+
+`FormalWorldCaptureReceiptV1` binds Case/Profile, Route/Attempt/Result, WorldPackage Ref/Root, WorldBuildIdentity, Build Receipt, Runtime session/ready Snapshot, SDK owner version identities, semantic capture map hash, view Camera inputs, viewport/DPR, renderer/browser identity, PNG hashes, collider overlay hash, scripted traversal hash, Camera rollback, Reset, and cleanup.
+
+`bindBlockVisualGroupsToSemanticCaptureTargetsV1()` validates exact Case target refs, checked authoring manifest, Layout visual-group inventory, identity colors, and frozen Contribution before Browser launch. Formal evidence uses semantic target refs from this map; raw Block group IDs remain source evidence only.
+
+- [ ] **Step 5: Run GREEN contract tests and commit PR E0**
+
+```bash
+pnpm exec vitest run packages/runtime-contracts/src/formal-world-capture.test.ts packages/native-babylon-block-profile/src/formal-capture-identity.test.ts packages/native-babylon-block-profile/src/package-boundary.test.ts
+pnpm typecheck
+git diff --check
+git add packages/runtime-contracts packages/native-babylon-block-profile
+git commit -m "feat: define formal reconstruction capture identity"
+git push -u origin HEAD
+```
+
+Request contract review, close every P0/P1, merge PR E0, and refresh `origin/main`. This PR has no Browser, Playwright, Runtime, CLI, or generated image change.
+
+### Task 9: NBR-45B Capture world views and traversal through one admitted Hosted Session
+
+**Files:**
+- Create: `scripts/reconstruction/formal-capture.ts`
+- Create: `scripts/reconstruction/formal-capture.test.ts`
+- Create: `scripts/reconstruction/hosted-session-capture.ts`
+- Create: `scripts/reconstruction/hosted-session-capture.test.ts`
+- Modify: `apps/playground/src/package-runtime-startup.ts`
+- Modify: `apps/playground/src/worldkit-browser-api.ts`
+- Modify: `apps/playground/src/worldkit-browser-api.test.ts`
+- Modify: `scripts/cli/worldkit.ts`
+- Modify: `scripts/cli/worldkit.test.ts`
+
+**Interfaces:**
+- Consumes: one verified Package, completed Attempt/Result, `FormalSemanticCaptureMapV1`, frozen Collider Contribution, and one BNA-5 admitted Hosted Runtime Session.
+- Produces: opening PNG, world top-down PNG, world side PNG, collider-overlay PNG, scripted traversal evidence, and `FormalWorldCaptureReceiptV1` bound to one Package/Runtime session.
+
+- [ ] **Step 1: Write RED Hosted Session capture tests**
+
+The command must capture through the BNA-5 admitted Hosted Session transport, not by importing a Native Module directly into the CLI process. Inject this port:
+
+```ts
+export interface HostedWorldCaptureSessionPortV1 {
+  ready(): Promise<WorldRuntimeSnapshotV4>;
+  reset(): Promise<WorldRuntimeSnapshotV4>;
+  runFixedInput(frames: readonly FixedInputV1[]): Promise<WorldRuntimeSnapshotV4>;
+  captureScreenshot(): Promise<string>;
+  captureArtifactView(request: FormalArtifactViewRequestV1): Promise<string>;
+  colliderInventory(): Promise<FrozenColliderCaptureInventoryV1>;
+  dispose(): Promise<void>;
+}
+```
+
+Test session-origin mismatch, ready timeout, stale Snapshot after reset, world-side request accidentally mapped to right-side object tri-view, screenshot before render-ready, Camera rollback failure, Browser exit, Server exit, and disposal failure.
+
+- [ ] **Step 2: Run RED Hosted Capture tests**
+
+```bash
+pnpm exec vitest run scripts/reconstruction/hosted-session-capture.test.ts scripts/reconstruction/formal-capture.test.ts
+```
+
+Expected: FAIL because the Hosted same-session capture command does not exist.
+
+- [ ] **Step 3: Implement Hosted Session capture orchestration including world side view**
+
+`captureHostedWorldPackageV1()` starts the existing admitted package-gameplay Browser/Hosted Session, waits for `__WORLDKIT__.ready()`, resets, waits for render readiness, and captures:
+
+1. `opening`: SDK opening Camera state;
+2. `world-top-down`: bounded orthographic/Host artifact pose covering Case world bounds;
+3. `world-side`: bounded world-scale lateral elevation pose covering full height range and central route, not a front/right/back object tri-view;
+4. collider overlay derived only from frozen Contribution/SDK collider inventory.
+
+Artifact Camera transactions save the committed SDK Camera state and restore it before session cleanup. Fixed-input traversal checkpoints execute in the same session and record committed Snapshot hashes, positions, movement medium, pass/block outcomes, and exact input ticks. They do not publish Route Graph, NavMesh, path planning, or `goTo` evidence.
+
+- [ ] **Step 4: Extend `worldkit capture` for verified Package directories**
+
+The existing `capture` parser accepts the Package directory and requires `--triview-output`; for Package input, that directory contains `world-top-down.png`, `world-side.png`, `collider-overlay.png`, `scripted-traversal.json`, and `formal-world-capture-receipt.json`. `--output` remains the opening PNG. Canonical file Capture remains its existing source form; there is one command and one input-kind switch after verification, not `native capture`.
+
+- [ ] **Step 5: Run GREEN Capture/runtime tests**
+
+```bash
+pnpm exec vitest run scripts/reconstruction/hosted-session-capture.test.ts scripts/reconstruction/formal-capture.test.ts apps/playground/src/worldkit-browser-api.test.ts scripts/cli/worldkit.test.ts
+pnpm typecheck
+pnpm --filter @whitebox-world/playground build
+git diff --check
+```
+
+Expected: Hosted Session, CLI, typecheck, and build pass against the Task 7 Package identity and frozen Task 8 Capture contracts.
+
+- [ ] **Step 6: Capture the initial Package**
+
+```bash
+pnpm worldkit capture \
+  artifacts/scenes/cloud-temple-t-gate-native-block/runs/initial/attempts/0/world-package \
+  --output artifacts/scenes/cloud-temple-t-gate-native-block/runs/initial/attempts/0/capture/opening.png \
+  --triview-output artifacts/scenes/cloud-temple-t-gate-native-block/runs/initial/attempts/0/capture \
+  --json
+```
+
+Expected: opening, world top-down, world side, collider overlay, scripted traversal, and one identity-bound Receipt from the same admitted Package/Runtime session. Inspect the images but do not edit them or claim evaluation success.
+
+- [ ] **Step 7: Commit and merge formal Capture checkpoint PR E2**
+
+```bash
+git add packages/runtime-contracts scripts/reconstruction scripts/cli apps/playground artifacts/scenes/cloud-temple-t-gate-native-block
+git commit -m "feat: capture admitted reconstruction packages"
+git push -u origin HEAD
+```
+
+Request exact-commit Runtime/Capture deep review, close P0/P1, merge PR E2, and refresh `origin/main`.
+
+### Task 10: NBR-50A Implement the pure dimensioned reconstruction evaluator
+
+**Files:**
+- Create: `packages/validation/src/reconstruction-evaluator.ts`
+- Create: `packages/validation/src/reconstruction-evaluator.test.ts`
+- Modify: `packages/validation/src/index.ts`
+
+**Interfaces:**
+- Consumes: already parsed `WorldReconstructionCaseV1`, `WorldReconstructionEvaluationProfileV1`, and identity-consistent `WorldReconstructionEvidenceSetV1`.
+- Produces: `evaluateWorldReconstructionV1(input): WorldReconstructionEvaluationResultV1`; it performs no I/O, Browser, Runtime, model, repair, or file mutation.
+
+- [ ] **Step 1: Write RED independent-dimension tests**
+
+Use an asymmetric fixture where six dimensions pass and one fails:
+
+```ts
+const result = evaluateWorldReconstructionV1({
+  case: reconstructionCase,
+  profile,
+  evidence: { ...evidence, collider: missingWestGateBlocker },
+});
+expect(result.dimensions.find(({ dimensionId }) => dimensionId === "collider")?.status)
+  .toBe("failed");
+expect(result.dimensions.filter(({ dimensionId }) => dimensionId !== "collider")
+  .every(({ status }) => status === "passed")).toBe(true);
+expect(result.outcome).toBe("failed");
+expect("score" in result).toBe(false);
+```
+
+Cover topology node present/relation missing, semantic silhouette bounds center versus coverage, opening anchor ordering/drift, Spawn above/below support, wrong Collider role, required traversal blocked, required blocker passable, Candidate replay mismatch, Package/Capture identity mismatch, and one missing required evidence member. Pixel similarity may appear only as advisory evidence and can never make a failed required metric pass.
+
+- [ ] **Step 2: Write RED stable diagnostic tests**
+
+Require closed codes and one allowed source/resource repair action:
+
+```ts
+expect(result.diagnostics).toContainEqual(expect.objectContaining({
+  code: "WORLD_RECONSTRUCTION_COLLIDER_MISSING",
+  dimensionId: "collider",
+  acceptanceTargetRef: westGateBlockerTargetRef,
+  repairAction: { kind: "revise-native-source" },
+}));
+```
+
+Test codes for missing/disconnected topology, silhouette drift, opening-anchor drift, unsupported Spawn, missing/wrong Collider, blocked required traversal, passable required blocker, nondeterministic build, and stale evidence. Diagnostics are sorted by dimension/code/target and contain exact evidence refs; no free-form repair command or Runtime mutation is accepted.
+
+- [ ] **Step 3: Run RED evaluator tests**
+
+```bash
+pnpm exec vitest run packages/validation/src/reconstruction-evaluator.test.ts
+```
+
+Expected: FAIL because the pure evaluator is absent.
+
+- [ ] **Step 4: Implement one evaluator with no masking aggregate**
+
+Implement exactly seven private dimension evaluators called by one public function:
+
+```ts
+export function evaluateWorldReconstructionV1(input: Readonly<{
+  case: WorldReconstructionCaseV1;
+  profile: WorldReconstructionEvaluationProfileV1;
+  evidence: WorldReconstructionEvidenceSetV1;
+}>): WorldReconstructionEvaluationResultV1;
+```
+
+Each returns `passed | failed | incomplete`, closed metrics, evidence refs, and diagnostic IDs. The overall outcome is `incomplete` when any required dimension is incomplete, otherwise `failed` when any is failed, otherwise `passed`. Do not average, weight, or replace missing evidence with zero.
+
+- [ ] **Step 5: Run GREEN evaluator tests and commit PR F1**
+
+```bash
+pnpm exec vitest run packages/validation/src/reconstruction-contracts.test.ts packages/validation/src/reconstruction-evaluator.test.ts
+pnpm typecheck
+git diff --check
+git add packages/validation
+git commit -m "feat: evaluate reconstruction evidence by dimension"
+git push -u origin HEAD
+```
+
+Request pure-logic review, close every P0/P1, merge PR F1, and refresh `origin/main`. This task is `parallel-safe` only because it owns no Runtime/Capture/CLI files.
+
+### Task 11: NBR-50B Join formal Package/Capture/Runtime evidence into the evaluator
+
+**Files:**
+- Create: `scripts/reconstruction/evaluate.ts`
+- Create: `scripts/reconstruction/evaluate.test.ts`
+- Create: `scripts/reconstruction/evidence-set.ts`
+- Create: `scripts/reconstruction/evidence-set.test.ts`
+
+**Interfaces:**
+- Consumes: Case/Profile, checked authoring manifest, verified WorldPackage including trusted Block materializer metadata, Generation/Attempt/Build/Capture receipts, formal semantic map, Runtime Snapshot, overlay inventory, and scripted traversal evidence.
+- Produces: one parsed `WorldReconstructionEvidenceSetV1`, one `WorldReconstructionEvaluationResultV1`, and canonical evidence/result files in the immutable Attempt directory.
+
+- [ ] **Step 1: Write RED identity-join tests**
+
+Construct valid bytes from two Attempts, then cross-wire exactly one identity per test. Reject stale Case/Profile, Request/Attempt/Result, source graph, materializer metadata, profile settlement fingerprint, Package Root, Build Identity, Capture Receipt, semantic map, Contribution, Runtime session, Snapshot, overlay, and traversal hash.
+
+```ts
+await expect(buildWorldReconstructionEvidenceSetV1({
+  ...attemptA,
+  formalCaptureReceipt: attemptB.formalCaptureReceipt,
+})).rejects.toThrow("WORLD_RECONSTRUCTION_EVIDENCE_STALE");
+```
+
+Also reject BWB local screenshots, formal Route/Nav labels on scripted traversal, image files not listed in the Capture Receipt, and a Block group not present in trusted materializer metadata.
+
+- [ ] **Step 2: Run RED adapter tests**
+
+```bash
+pnpm exec vitest run scripts/reconstruction/evidence-set.test.ts scripts/reconstruction/evaluate.test.ts
+```
+
+Expected: FAIL because no formal evidence adapter exists.
+
+- [ ] **Step 3: Implement read-verify-adapt-evaluate**
+
+`buildWorldReconstructionEvidenceSetV1()` reads each canonical artifact once, parses and hashes it, verifies all identity joins, derives only closed metrics, and returns frozen accessor-free data. `evaluateNativeBlockAttemptV1()` calls the pure evaluator, writes `evidence-set.json` and `evaluation.json` through sibling temporary files plus atomic rename, then re-reads/parses them before returning.
+
+Topology and semantic silhouette come from the checked authoring manifest joined to trusted materializer metadata and formal projected bounds; Spawn/Collider/traversal/determinism come from admitted Runtime/Contribution/receipts. Do not infer facts from raw Meshes, filenames, image pixels alone, or provider prose.
+
+- [ ] **Step 4: Run GREEN join/evaluation gates and evaluate attempt 0**
+
+```bash
+pnpm exec vitest run scripts/reconstruction/evidence-set.test.ts scripts/reconstruction/evaluate.test.ts packages/validation/src/reconstruction-evaluator.test.ts
+pnpm typecheck
+git diff --check
+```
+
+Then evaluate the captured initial Attempt with the internal adapter entry and store its Result. Expected: the result is stable across two evaluations and reports each dimension independently. It may pass, fail, or be incomplete according to real evidence; never rewrite thresholds after seeing it.
+
+- [ ] **Step 5: Commit and merge evaluation adapter PR F2**
+
+```bash
+git add scripts/reconstruction artifacts/scenes/cloud-temple-t-gate-native-block
+git commit -m "feat: join formal evidence for reconstruction evaluation"
+git push -u origin HEAD
+```
+
+Request exact-identity review, close every P0/P1, merge PR F2, and refresh `origin/main`.
+
+### Task 12: NBR-60 Orchestrate at most one immutable diagnostic-driven repair
+
+**Files:**
+- Create: `scripts/reconstruction/repair-request.ts`
+- Create: `scripts/reconstruction/repair-request.test.ts`
+- Create: `scripts/reconstruction/run-journal.ts`
+- Create: `scripts/reconstruction/run-journal.test.ts`
+- Create: `scripts/reconstruction/run.ts`
+- Create: `scripts/reconstruction/run.test.ts`
+- Modify: `scripts/cli/worldkit.ts`
+- Modify: `scripts/cli/worldkit.test.ts`
+- Modify: `package.json`
+
+**Interfaces:**
+- Consumes: frozen Case/Profile/Bootstrap, Attempt 0 evaluation, stable diagnostics, and the generation/package/capture/evaluation owners from Tasks 4/5/9/11.
+- Produces: `runWorldReconstructionV1(input, ports): Promise<WorldReconstructionRunReceiptV1>` with Attempt 0 and at most Attempt 1; every Attempt owns different Request/Attempt/source/Package/Capture identities.
+
+- [ ] **Step 1: Write RED journal state-machine tests**
+
+Test these exact transitions:
+
+```text
+created -> initial-generating -> initial-packaged -> initial-captured -> initial-evaluated
+initial-evaluated(failed, repairable) -> repair-generating -> repair-packaged
+-> repair-captured -> repair-evaluated -> cleanup-joined -> completed
+```
+
+Also test initial pass (no repair), initial incomplete (no publication), maximum one repair, non-repairable diagnostic, stale Case/Profile/Bootstrap before submission, same request ID/same hash attach, same ID/different hash reject, create timeout unknown/reconcile, duplicate active job reconcile, no output, empty output, Check failure, Package/Capture/Evaluation failure, Camera rollback failure, and cleanup failure.
+
+- [ ] **Step 2: Write RED source-only repair tests**
+
+`createNativeBlockRepairInstructionV1()` receives only stable diagnostics plus immutable prior source/evidence refs. Its declared writable outputs remain exactly:
+
+```text
+scene.ts
+native-block-authoring.json
+native-resources.json
+```
+
+Assert the repair cannot change Case/Profile/Bootstrap, acceptance thresholds, Runtime, Physics, Camera, evaluator, prior Package, prior Capture, or old task workspace. Attempt 1 must bind the same `bootstrapInputHash` and new Request/source graph/Package Root/Capture hashes.
+
+- [ ] **Step 3: Run RED repair tests**
+
+```bash
+pnpm exec vitest run scripts/reconstruction/repair-request.test.ts scripts/reconstruction/run-journal.test.ts scripts/reconstruction/run.test.ts scripts/cli/worldkit.test.ts
+```
+
+Expected: FAIL because the bounded orchestrator and command do not exist.
+
+- [ ] **Step 4: Implement the journal and cleanup join**
+
+Persist a canonical append-only journal row before and after every external boundary. Re-read frozen input hashes before task creation and final publication. Never mutate Attempt 0. Attempt 1 uses a new S3 prefix and new Request ID; the same logical retry reuses that exact ID/hash. Terminal Run Receipt publishes only after provider task, Candidate, Hosted Browser Session, Vite Server, temporary directories, and output promotion cleanup all reach recorded terminal outcomes.
+
+- [ ] **Step 5: Add the stable `reconstruct run` command**
+
+Parse exactly:
+
+```text
+worldkit reconstruct run <case.json> --output <run-directory> [--backend cloud|local] --json
+```
+
+The command resolves the Profile ref from the Case, executes the state machine, and returns Case ID, run ID, outcome, Attempt count, final WorldPackage path/ref/root, final Capture Receipt path/hash, final Evaluation path/hash, and Run Receipt path/hash. A Canonical/capability-gap decision returns one stable unsupported-route diagnostic; it never calls the old Builder.
+
+- [ ] **Step 6: Run GREEN repair tests including a full injected two-Attempt proof**
+
+Use fake router/Package/Hosted Capture ports that still emit correctly parsed identities. Attempt 0 must fail `WORLD_RECONSTRUCTION_COLLIDER_MISSING`; Attempt 1 must pass and own a different source graph, Package Root, Capture hash, and evaluation hash.
+
+```bash
+pnpm exec vitest run scripts/reconstruction/repair-request.test.ts scripts/reconstruction/run-journal.test.ts scripts/reconstruction/run.test.ts scripts/cli/worldkit.test.ts
+pnpm typecheck
+git diff --check
+```
+
+Expected: focused tests/typecheck pass; attempts length is exactly 2 and a requested third attempt fails closed.
+
+- [ ] **Step 7: Commit and merge repair checkpoint PR G**
+
+```bash
+git add scripts/reconstruction scripts/cli package.json
+git commit -m "feat: repair native reconstructions with immutable attempts"
+git push -u origin HEAD
+```
+
+Request orchestration/idempotency/cleanup review, close every P0/P1, merge, and refresh `origin/main`.
+
+### Task 13: NBR-70 Run and publish the real Cloud Temple T-Gate Case
+
+**Files:**
+- Create: `scripts/verification/verify-native-block-reconstruction-e2e.ts`
+- Create: `scripts/verification/native-block-reconstruction-e2e.test.ts`
+- Modify: `package.json`
+- Add generated immutable evidence under: `artifacts/scenes/cloud-temple-t-gate-native-block/runs/<run-id>/`
+- Add final promoted artifacts under: `artifacts/scenes/cloud-temple-t-gate-native-block/final/`
+
+**Interfaces:**
+- Consumes: the frozen Case/Profile/reference/Scene Brief/Bootstrap and all merged NBR owners.
+- Produces: one real formal run with AI-generated source, formal Check/Package/Runtime/Capture/Evaluation, one real bounded repair when the initial evaluation has a repairable failure, and a directly runnable final Package.
+
+- [ ] **Step 1: Write the RED artifact verifier against an empty candidate root**
+
+The verifier requires and cross-checks:
+
+```text
+generation request/receipt + route/attempt/result
+native check/explain
+trusted Block materializer metadata
+verified Package + Root + Build Identity + Build Receipt
+opening + world-top-down + world-side + collider-overlay PNGs
+formal Capture Receipt + scripted traversal
+seven-dimension evaluation
+run receipt + cleanup outcomes
+```
+
+It launches the final Package through `worldkit run`, waits for Browser V5 ready, resets, verifies ground medium/support, applies fixed W/A/S/D and Jump sequences, proves gate/side blocker limits, proves the central route reaches the upper platform and at least one T arm, resets again, and disposes. It labels this scripted traversal, never Route/Nav/`goTo`.
+
+- [ ] **Step 2: Run RED verifier test**
+
+```bash
+pnpm exec vitest run scripts/verification/native-block-reconstruction-e2e.test.ts
+```
+
+Expected: FAIL with missing Run Receipt/final Package/Capture.
+
+- [ ] **Step 3: Execute the real formal reconstruction run**
+
+```bash
+pnpm worldkit reconstruct run \
+  artifacts/scenes/cloud-temple-t-gate-native-block/case.json \
+  --output artifacts/scenes/cloud-temple-t-gate-native-block/runs/formal-20260831 \
+  --backend cloud --json
+```
+
+Expected: the router reports `gpt-5.6-sol`/`xhigh`; Host-frozen Bootstrap hash is identical in every Attempt; AI writes only the three declared authoring outputs; Check precedes Package; Runtime/Capture use one admitted Hosted Session per Attempt; and all terminal resources clean up.
+
+If initial evaluation has a repairable failure, the command must execute exactly one diagnostic-driven repair and publish a distinct second Package/Capture identity. The NBR-1 acceptance run must contain a real two-Attempt proof; if this initial result has no repairable failure, keep it immutable and run another independently identified initial Case execution under the same already-frozen Case/Profile until a genuine repairable diagnostic occurs. Do not alter thresholds, inject fake evidence, or corrupt a passed Package to manufacture repair.
+
+- [ ] **Step 4: Run the artifact and playability verifier**
+
+```bash
+pnpm verify:native-block-reconstruction-e2e -- \
+  --run artifacts/scenes/cloud-temple-t-gate-native-block/runs/formal-20260831
+```
+
+Expected: all identity joins pass; final evaluation passes every required dimension; Subject spawns grounded, moves, jumps, resets, cannot cross required wall/gate blockers, and reaches the upper platform/T branch. Opening/top/world-side visibly show foreground, central ascent, mountain layers, T junction, and gate mass.
+
+- [ ] **Step 5: Promote final artifacts atomically**
+
+Copy the verified terminal Package/Capture/Evaluation into a sibling `.final-staging`, verify again, then rename to `artifacts/scenes/cloud-temple-t-gate-native-block/final`. Do not use symlinks or mutate Attempt artifacts. Write a small canonical `launch.json` containing Case ID, Run Receipt hash, final Package relative path/ref/root, Capture Receipt relative path/hash, and the stable launch command.
+
+- [ ] **Step 6: Manually launch and inspect the final world**
+
+```bash
+pnpm worldkit run \
+  artifacts/scenes/cloud-temple-t-gate-native-block/final/world-package \
+  --port 5174 --json
+```
+
+Open the returned URL and manually verify movement, blocker collision, central climb, T arms, Jump, Reset, and Camera. Record manual observations separately from automated Capture/Runtime evidence. Preserve the actual opening/top/world-side images for the final user handoff.
+
+- [ ] **Step 7: Commit real Case evidence**
+
+```bash
+git add scripts/verification package.json artifacts/scenes/cloud-temple-t-gate-native-block
+git commit -m "feat: publish the cloud temple reconstruction case"
+```
+
+Do not yet claim full BNA-6, BNA-7, WRC-SR, BNA-8, or WRC-1 completion.
+
+### Task 14: NBR-80 Complete the current-only deletion ledger
+
+**Files:**
+- Modify: `packages/native-babylon-block-profile/src/index.ts`
+- Modify: `packages/native-babylon-block-profile/src/testing.ts`
+- Modify: `packages/native-babylon-block-profile/src/package-boundary.test.ts`
+- Delete or reduce to testing-only: `apps/native-scene-playground/`
+- Delete when replaced: `scripts/verification/verify-native-scene-playground.ts`
+- Modify: root `package.json`
+- Modify: `pnpm-lock.yaml` only if workspace package removal changes it
+- Modify: all residual callers discovered by the censuses below
+
+**Interfaces:**
+- Consumes: green generic generation/package/run/capture/evaluate/repair commands and final Case.
+- Produces: one production route with no legacy API, duplicate Host, Case-specific script, production Corpus factory, or compatibility fallback.
+
+- [ ] **Step 1: Move BWB Corpus factories to testing-only exports**
+
+Remove reconstruction Corpus values/types from `packages/native-babylon-block-profile/src/index.ts`; export them only from `./testing`. Update BWB4/5 verifiers/tests to import `@whitebox-world/native-babylon-block-profile/testing`. Add a package-boundary test proving production root keys exclude every `ReconstructionCorpus` symbol.
+
+- [ ] **Step 2: Remove the duplicate Native preview Host**
+
+Once the final Package runs in the main Playground, delete `apps/native-scene-playground` and its fixed Cloud Ridge virtual loader/`__WORLDKIT_NATIVE_SPIKE__` verifier, or retain only isolated test fixtures with no build/dev command and no product Host. Remove `build:native-scene` and `verify:native-scene-playground` root scripts if the app is deleted. Do not retain an alias URL or fallback loader.
+
+- [ ] **Step 3: Delete temporary/Case-specific command surfaces**
+
+Remove `reconstruct:native-block:generate` and any Case-specific package/capture root scripts after `worldkit reconstruct run`, `native package`, `run`, and `capture` are green. Keep the stable generic commands only.
+
+- [ ] **Step 4: Run the clean-break censuses**
+
+```bash
+if rg -n 'moduleGenerationInput(Ref|Hash)|buildCloudRidgePackage|__WORLDKIT_NATIVE_SPIKE__|virtual:worldkit-cloud-ridge-native-scene' packages scripts apps package.json; then exit 1; fi
+if rg -n 'createBabylonNativeBlockReconstructionCorpus|inspectBabylonNativeBlockReconstructionCorpus|materializeBabylonNativeBlockReconstructionCorpus' packages/native-babylon-block-profile/src/index.ts; then exit 1; fi
+if rg -n 'overlay.*canonical|canonical.*overlay|shadow.?plan|three\.js|mesh.*scan|tag.*collider|name.*collider' scripts/reconstruction apps/playground/src/package-runtime-startup.ts; then exit 1; fi
+```
+
+Expected: all three negated censuses pass. Inspect any match manually before deletion when it appears only in an explicit negative test.
+
+- [ ] **Step 5: Run focused post-deletion gates and commit PR H**
+
+```bash
+pnpm exec vitest run packages/native-babylon-block-profile scripts/reconstruction scripts/verification/native-block-reconstruction-e2e.test.ts apps/playground/src/package-runtime-startup.test.ts
+pnpm typecheck
+pnpm --filter @whitebox-world/playground build
+git diff --check
+git add -A
+git commit -m "refactor: remove replaced native reconstruction paths"
+git push -u origin HEAD
+```
+
+Open PR H containing Tasks 13/14. Request exact-commit functional plus clean-break review, close every P0/P1, and merge to `main` only after the final Package still launches from that exact commit.
+
+### Task 15: NBR-90 Close exact-SHA gates, reviews, and documentation truth
+
+**Files:**
+- Modify: `docs/superpowers/specs/2026-08-30-wrc1-world-reconstruction-and-control-milestone-design.md`
+- Modify: `docs/superpowers/specs/2026-08-31-native-block-reconstruction-e2e-design.md`
+- Modify: `docs/superpowers/plans/2026-08-31-native-block-reconstruction-e2e-implementation.md`
+- Modify: `docs/18-refactor-progress-and-backlog.md`
+- Add only retained exact-SHA evidence under the established review/evidence locations; delete temporary review files after findings are absorbed
+
+**Interfaces:**
+- Consumes: latest `origin/main` exact SHA after PR H, focused evidence, final Case artifacts, and Cloud results for that exact SHA.
+- Produces: no-open-P0/P1 final disposition for NBR-1 only, truthful backlog/status, runnable command/path, and Capture image handoff.
+
+- [ ] **Step 1: Verify the final local focused closure once**
+
+```bash
+git fetch origin main
+test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+test -z "$(git status --porcelain)"
+pnpm verify:native-block-reconstruction-e2e -- \
+  --run artifacts/scenes/cloud-temple-t-gate-native-block/runs/formal-20260831
+pnpm typecheck
+pnpm --filter @whitebox-world/playground build
+git diff --check
+```
+
+Expected: clean exact `origin/main`; runnable Case verifier, typecheck, build, and diff check pass. Do not repeat broader commands already covered on the same SHA.
+
+- [ ] **Step 2: Dispatch Cursor Cloud exact-SHA affected/full gates**
+
+The prompt must name repository, exact SHA, clean checkout requirement, install command, affected gates, full gate command, final Package launch verifier, and a prohibition on code changes. Accept results only when every receipt/report repeats the exact SHA. If a gate times out without a semantic failure, record timeout separately and rerun that gate once in a fresh Cloud worker; do not wait on queued GitHub CI.
+
+- [ ] **Step 3: Dispatch independent Mode B plus runtime-deep review**
+
+Review the exact same SHA against `AGENTS.md`, `docs/reviews/full-dimension-review-protocol.md`, and `docs/reviews/runtime-deep-review-checklist.md`. Require source verification of: two-source exclusivity, no old aliases/fallbacks, pre-Candidate checker order, Generation Request/Receipt identity, materializer inventory Package binding, Hosted same-session Capture, SDK Havok/Subject/Input/Action/Camera authority, Reset/replay/cleanup, evaluation independence, and repair immutability.
+
+- [ ] **Step 4: Fix only reproduced P0/P1 and invalidate scoped evidence**
+
+For each finding, reproduce on the reviewed SHA, add a failing focused test, implement the owning-boundary fix, rerun only affected focused gates, commit/merge, then dispatch affected Cloud gate/review against the new exact SHA. P2 is either fixed when low-risk or recorded with owner/impact; no open P0/P1 may remain.
+
+- [ ] **Step 5: Update durable status without overclaiming**
+
+Mark `NBR-1` complete only when the spec completion definition is satisfied. In WRC/backlog, record only the delivered minimum slices of BNA-6, BNA-7, WRC-SR-1, and WRC-SR-2; leave complete Golden Corpus, product Route/Nav/`goTo`, BNA-8, WRC-ACC-1, BWB-6, PHO-7/8, generalized Action/Camera, and events unchecked/deferred. Ensure design, plan, commands, package paths, receipts, and code status agree.
+
+- [ ] **Step 6: Commit documentation truth and merge final docs PR**
+
+```bash
+git add docs
+git commit -m "docs: close the native block reconstruction slice"
+git push -u origin HEAD
+```
+
+Review links/status against the final exact SHA, merge the docs-only PR without waiting for unrelated long CI, and verify `origin/main` contains it.
+
+- [ ] **Step 7: Final user handoff**
+
+Provide:
+
+```text
+Case ID: cloud-temple-t-gate-native-block
+Final Package: artifacts/scenes/cloud-temple-t-gate-native-block/final/world-package
+Launch: pnpm worldkit run artifacts/scenes/cloud-temple-t-gate-native-block/final/world-package --port 5174 --json
+Opening: artifacts/scenes/cloud-temple-t-gate-native-block/final/capture/opening.png
+Top-down: artifacts/scenes/cloud-temple-t-gate-native-block/final/capture/world-top-down.png
+World side: artifacts/scenes/cloud-temple-t-gate-native-block/final/capture/world-side.png
+Collider overlay: artifacts/scenes/cloud-temple-t-gate-native-block/final/capture/collider-overlay.png
+```
+
+Show the Capture images and state exact gates/review SHA. Say only “NBR-1 vertical slice complete”; do not claim full BNA-6/7 or WRC-1 completion.
+
+## Final self-review checklist
+
+- [ ] Every spec completion condition maps to Tasks 1–15.
+- [ ] Every shared contract lands before its producer/consumer integration.
+- [ ] Every work item has exactly one execution mode and an exclusive file owner.
+- [ ] The Generation Request binds instruction, Skill, canonical context manifest/input hashes, API/Profile/Block Profile content hashes, and frozen Bootstrap; only the Generation Receipt binds `routerTaskPayloadHash`.
+- [ ] AI writes `scene.ts`, `native-block-authoring.json`, and `native-resources.json`; it never writes the frozen Bootstrap.
+- [ ] NBR-45P binds complete trusted Block materializer metadata and profile settlement fingerprints into Package Root/Receipt before NBR-45B Capture.
+- [ ] Formal Capture includes semantic identity adapter, opening, world top-down, world side, collider overlay, scripted traversal, and same Hosted Session identity.
+- [ ] Evaluation has seven independent dimensions and no masking aggregate/pixel-only GO.
+- [ ] Repair changes only new Native authoring outputs, keeps Case/Profile/Bootstrap frozen, and creates new immutable identities.
+- [ ] Final Case is real AI output, runnable, playable, collision-checked, captured, scored, repaired, and independently reviewed.
+- [ ] No legacy API, duplicate Host, third Source, shadow Plan, Mesh scan, alias, or fallback remains.

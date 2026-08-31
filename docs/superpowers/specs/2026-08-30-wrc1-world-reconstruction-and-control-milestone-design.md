@@ -4,7 +4,7 @@
 **Chinese name:** 世界还原与可玩控制闭环一号里程碑
 **Status:** approved scope; detailed work-package plans required before code
 **Date:** 2026-08-30
-**Source baseline:** `origin/main@b19f9e4be0cb56fc132cff656ade994df4e88a31`
+**Source baseline:** `origin/main@e44a41d906b38e35bd5774f0fb129564540c93c0`
 **Live status authority:** `docs/18-refactor-progress-and-backlog.md`
 **BWB-3/4 settlement authority:** `docs/superpowers/specs/2026-08-31-babylon-block-settlement-and-step-closure-design.md`
 
@@ -37,7 +37,21 @@ through `main@d1ba942`; the same Block Session/Layout/finalize/Host settlement p
 frozen Contributions, SDK-owned Havok support and focused traversal evidence. PHO-6 is integrated through
 PR #71, with generated-output fingerprint stability closed by PR #73. This unblocks BNA-6, BNA-7,
 WRC-SR-1, BWB-6 and PHO-7, but does not complete formal Capture/Route, AI reconstruction scoring/repair,
-PHO CI adapters, BNA-8 production disposition, Action/Camera closure or spatial events.
+PHO CI adapters, BNA-8 production disposition, Action/Camera closure or spatial events. PR #75 has since
+closed the BWB-5 north-wall collision evidence, and PR #76 has closed the PHO detached-child test-fixture
+stability follow-up on this document's source baseline.
+
+### 1.1 Current execution priority: NBR-1 vertical slice
+
+Until one real reference-driven Babylon Native Block Case completes the formal generation, Check,
+Package, Runtime, Capture, evaluation and one-repair chain, the sole highest-priority WRC-1 slice is
+[NBR-1 Babylon Native Block Reconstruction End-to-End](./2026-08-31-native-block-reconstruction-e2e-design.md).
+NBR-1 consumes only the minimum BNA-6, BNA-7, WRC-SR-1 and WRC-SR-2 slices needed by that runnable Case;
+it does not mark any whole parent work package complete.
+
+BWB-6, full PHO-7/8, generalized Action/Camera, spatial events, the complete BNA-6 Golden Corpus,
+product Route/Nav/`goTo`, BNA-8 and WRC-ACC-1 are explicitly deferred. They remain in this dependency
+authority but must not block NBR-1 or be expanded opportunistically during it.
 
 ## 2. Why this is a major milestone
 
@@ -177,6 +191,11 @@ BNA-4 + WRC-ACT-1 + WRC-CAM-1 + BWB-4
 
 BNA-4 -> BNA-7 -> BNA-8
 
+BNA-5 + BWB-5
+  -> NBR-1(NBR-00 -> NBR-10 -> NBR-20 -> NBR-30 -> NBR-40 -> NBR-45
+             -> NBR-50 -> NBR-60 -> NBR-70 -> NBR-90)
+NBR-1 consumes minimum BNA-6 + BNA-7 + WRC-SR-1 + WRC-SR-2 slices only
+
 PHO-0A -> PHO-0B + PHO-1
 PHO-0B -> PHO-2 + PHO-4 + PHO-5
 PHO-0B + PHO-1 -> PHO-3
@@ -217,6 +236,7 @@ interface ownership before code begins.
 | WRC-CAM-2 | Close first/third-person and semantic transition fixtures plus two human FeelReviewReceipts | WRC-CAM-1, WRC-ACT-2 | WRC-ACC-1 | camera fixtures/evidence only; locked profiles + cases -> automated/numeric/rendered/manual receipts | real Chromium/Havok, two human rounds bound to SHA/profile/take | main-agent-only |
 | WRC-SR-1 | Freeze reconstruction scorecard and reference corpus semantics | BNA-3, BWB-3 | WRC-SR-2 | evaluation DTO/corpus; reference/Scene Brief/capture -> topology/composition/route/collision scores | asymmetric and negative score fixtures, no pixel-only GO | sequential, main-agent-only |
 | WRC-SR-2 | Implement bounded structured repair from stable diagnostics to a new audited Candidate/package | BNA-6, WRC-SR-1 | BNA-8, WRC-ACC-1 | authoring/evaluation orchestration; failed scored result -> bounded source/resource revision -> new result | max-cycle, no-output, stale-identity, non-idempotent submission tests | sequential |
+| NBR-1 | Deliver one real reference-driven Native Block world through AI generation, formal Check/Package/Runtime/Capture, dimensioned evaluation and at most one immutable repair | BNA-5, BWB-5 | the resumed horizontal WRC backlog | orchestration and integration only; reference/Brief -> final runnable verified WorldPackage and receipts | real AI task, focused gates, playable Havok traversal, identity-bound captures, exact-SHA Cloud gates/review | main-agent-only integration with contract-frozen parallel workers |
 | WRC-EVT-1 | Prove location-triggered committed event, world change, Subject/object response, and Camera Context | BNA-4, BWB-4, WRC-ACT-1, WRC-CAM-1 | WRC-ACC-1 | Gameplay spatial sensor/command path; frozen region + committed pose -> event/receipt/state/camera result | enter/exit hysteresis, replay/reset/cadence/two-session/browser evidence | sequential |
 | PHO-0A | Freeze current-only health DTOs, Profile, policies, debt, and fingerprints | PHO design | PHO-0B, PHO-1..8 | `scripts/project-health` contracts/config only | parser/canonical/adversarial tests | sequential, main-agent-only |
 | PHO-0B | Add the sole bounded/redacted execution envelope | PHO-0A | PHO-2..5 | process runner only; trusted owner-token descriptor -> bounded execution evidence | timeout/owned-process/temp/repository-state tests | sequential, main-agent-only |

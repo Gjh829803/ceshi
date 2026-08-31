@@ -973,10 +973,10 @@ Replay、Streaming/Dispose 和自动 Diagnostic；普通 Agent 只引用稳定 P
   provider-neutral Supervisor、Linux disposable isolation、Dedicated Origin/CSP/asset allowlist 与安全 Gate；
   产品 SHA `2f46b3c9` 的 capable-runner 11-case hostile/matching-deadline evidence、exact-SHA Cloud full gates
   与独立 security/runtime-deep 均 GO，开放 P0/P1/P2 = 0；
-- [ ] BNA-6：在 BNA-5 后冻结评测 Profile/预算/阈值、Route Decision、资产身份与同等生产预算，交付 AI
-  Checker/Explain、Golden Corpus、真实视觉与人工交互评估；Block 专属 Corpus 由 BWB-5 闭合；
-- [ ] BNA-7：正式 Capture；仅在需要时从同一冻结 Surface 派生 Route/Nav Evidence，不包含产品级
-  `goTo`、重规划或移动执行；
+- [ ] BNA-6：当前只实施 NBR-1 所需的单模型/Profile、单代表 Case、真实 AI 首次生成与诊断切片；完整
+  Golden Corpus、批量成功率和最终人工统计延期，不能因最小切片通过而勾选本项；
+- [ ] BNA-7：当前只实施 NBR-1 所需的同一冻结 Package 身份绑定 Opening/top/side Capture；关键通过性
+  使用明确标注的固定输入 Havok 脚本证据，正式 Route/Nav/`goTo` 仍延期且不能伪称完成；
 - [ ] BNA-8：按 Trusted Local、Hosted、Route 三种范围分别做最终 Go/No-Go 与文档切换。
 
 在 BNA-6 完成并建立独立实施计划前，不提高总进度，不把 Native API 写入 Quickstart，也不修改
@@ -1115,6 +1115,24 @@ WRC-1 共包含 33 个工作包：已有 JUMP-0..3、BNA-3..8、BWB-3..6、PHO-0
 每个工作包独立成可审核的小 PR，依赖满足且门禁闭合后立即合入 `main`，不等待 WRC-1 全部完成。
 开发期只跑聚焦 RED→GREEN 和一次受影响门禁；整仓重型门禁与独立深审只在合入候选/阶段收口时由
 Cursor Cloud 针对精确 SHA 执行，禁止无输入变化时反复重跑。
+
+#### NBR-1 当前唯一最高优先级纵向切片
+
+- [ ] NBR-00：合入详细设计、实施计划、WRC 优先级和 current-only 删除清单；
+- [ ] NBR-10：冻结 Route、真实 Generation Request/Receipt、Case/Profile 和修正后的 Attempt 身份；
+- [ ] NBR-20：通过统一 Codex task router 从真实参考输入生成闭合 Native Block workspace；
+- [ ] NBR-30：通过通用 Native Check/Explain 和 Package/Receipt 链，删除 Cloud Ridge 手写生产装配；
+- [ ] NBR-40：由正式 RuntimeHost 和 SDK-owned Havok/Subject/Input/Action/Camera 启动验证后的 Package；
+- [ ] NBR-45：从同一 Package/Runtime 发布身份绑定 Opening/top/side Capture 与 Collider overlay；
+- [ ] NBR-50：输出拓扑、语义轮廓、Opening、Spawn/Support、Collider、固定输入关键通过性和确定性诊断；
+- [ ] NBR-60：最多一次诊断驱动修复，并产生新的 Attempt/Package/Receipt/Capture；
+- [ ] NBR-70：真实 `cloud-temple-t-gate-native-block` Case 可本地启动、接地、移动、挡墙和通过；
+- [ ] NBR-90：focused gates、最终 exact-SHA Cursor Cloud gates 和独立深审无开放 P0/P1。
+
+详细权威为 [NBR-1 纵向闭环设计](superpowers/specs/2026-08-31-native-block-reconstruction-e2e-design.md)。
+以上复选框只按真实代码与证据逐项更新；NBR-1 完成不等于完整 BNA-6/7、WRC-SR 或 WRC-1 完成。
+BWB-6、PHO-7/8、通用 Action/Camera、空间事件、产品 Route/Nav、BNA-8 与 WRC-ACC-1 在本切片期间
+保持延期，不删除也不展开。
 
 Wave A 的详细权威设计与施工计划已经固定在：
 
