@@ -88,7 +88,7 @@ BWB5-10 -> BWB5-20 -> BWB5-30 -> BWB5-50 -> BWB5-60 -> BWB5-70
 | `overlap-occupancy` | `202608321` | `WORLDKIT_NATIVE_BLOCK_PROFILE_CHECK_REJECTED` / `WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP` |
 | `out-of-budget` | `202608322` | `WORLDKIT_NATIVE_BLOCK_COUNT_EXCEEDED` |
 | `invalid-traversal-binding` | `202608323` | `WORLDKIT_NATIVE_BLOCK_COLLIDER_SELECTION_INVALID` |
-| `unsupported-spawn` | `202608324` | finalize may pass; spawn is off support; Havok settle is `air` / unsupported |
+| `unsupported-spawn` | `202608324` | Block Layout finalizes without a Block Profile failure code; Runtime admission rejects the unsupported spawn with `WORLDKIT_NATIVE_SCENE_RUNTIME_SPAWN_SUPPORT_MISSING` before a playable session exists |
 | `disconnected-route` | `202608325` | `WORLDKIT_NATIVE_BLOCK_PROFILE_CHECK_REJECTED` / `WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED` |
 | `cleanup-throw-partial` | `202608326` | check reject after partial create; reverse dispose releases created Meshes |
 

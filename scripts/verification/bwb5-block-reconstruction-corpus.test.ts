@@ -199,6 +199,44 @@ function subjectOf(
   return subject;
 }
 
+function blockingCenterLimitMeters(
+  verified: VerifiedBabylonNativeWorldPackageDirectoryV1,
+  colliderId: string,
+  axisIndex: 0 | 2,
+): number {
+  const entityId = verified.worldRuntimeBootstrap.initialControlledEntityId;
+  const controlledDescriptor =
+    verified.worldRuntimeBootstrap.subjectRuntimeDescriptors.find(
+      (descriptor) => descriptor.entityId === entityId,
+    );
+  if (isNil(controlledDescriptor)) {
+    throw new Error("BWB-5 verified Package is missing its controlled Subject.");
+  }
+  const contribution = verified.nativeSceneContribution.staticColliders.find(
+    ({ id }) => id === colliderId,
+  );
+  if (isNil(contribution)) {
+    throw new Error(`BWB-5 verified Package is missing Collider '${colliderId}'.`);
+  }
+  if (contribution.traversalBinding.kind !== "not-traversable") {
+    throw new Error(`BWB-5 Collider '${colliderId}' must be not-traversable.`);
+  }
+  const nearFaceMeters = Math.max(
+    ...contribution.worldPositionsMetersXYZ.filter(
+      (_, index) => index % 3 === axisIndex,
+    ),
+  );
+  return nearFaceMeters + controlledDescriptor.collider.radiusMeters;
+}
+
+function expectBlockedAtCenterLimit(
+  positionMeters: number,
+  centerLimitMeters: number,
+): void {
+  expect(positionMeters).toBeGreaterThanOrEqual(centerLimitMeters - 0.02);
+  expect(positionMeters).toBeLessThanOrEqual(centerLimitMeters + 0.08);
+}
+
 describe("BWB-5 Block Reconstruction Corpus Runtime", () => {
   it("keeps 0.25m pass, 0.5m block, reset hash, and ledge air on ordinary-and-blocked-steps", async () => {
     const { runtime, verified } = await createRuntime(
@@ -302,13 +340,30 @@ describe("BWB-5 Block Reconstruction Corpus Runtime", () => {
       expect(subjectOf(east, tEntity).movementMedium).toBe("ground");
       await resetAndBind(tRuntime, tEntity);
       await tRuntime.runFixedInput({ actions: [], ticks: 5 });
-      await tRuntime.runFixedInput({ actions: ["move-forward"], ticks: 70 });
+      const junction = await tRuntime.runFixedInput({
+        actions: ["move-forward"],
+        ticks: 70,
+      });
       const west = await tRuntime.runFixedInput({
         actions: ["move-left"],
         ticks: 90,
       });
-      expect(subjectOf(west, tEntity).positionMetersXYZ[0]).toBeGreaterThan(-2.4);
-      expect(subjectOf(west, tEntity).movementMedium).toBe("ground");
+      const junctionSubject = subjectOf(junction, tEntity);
+      const westSubject = subjectOf(west, tEntity);
+      const westLimitMetersX = blockingCenterLimitMeters(
+        tVerified,
+        "collider-t-west-wall",
+        0,
+      );
+      expect(junctionSubject.positionMetersXYZ[2]).toBeLessThan(-1.5);
+      expect(junctionSubject.movementMedium).toBe("ground");
+      expect(westSubject.positionMetersXYZ[0])
+        .toBeLessThan(junctionSubject.positionMetersXYZ[0] - 0.5);
+      expectBlockedAtCenterLimit(
+        westSubject.positionMetersXYZ[0],
+        westLimitMetersX,
+      );
+      expect(westSubject.movementMedium).toBe("ground");
     } finally {
       await tRuntime.dispose();
     }
@@ -327,14 +382,28 @@ describe("BWB-5 Block Reconstruction Corpus Runtime", () => {
         .toBeLessThan(-1.5);
       expect(subjectOf(along, mountainEntity).movementMedium).toBe("ground");
       await resetAndBind(mountainRuntime, mountainEntity);
-      await mountainRuntime.runFixedInput({ actions: [], ticks: 5 });
+      const mountainSpawn = await mountainRuntime.runFixedInput({
+        actions: [],
+        ticks: 5,
+      });
       const intoCliff = await mountainRuntime.runFixedInput({
         actions: ["move-left"],
         ticks: 90,
       });
-      expect(subjectOf(intoCliff, mountainEntity).positionMetersXYZ[0])
-        .toBeGreaterThan(-1.6);
-      expect(subjectOf(intoCliff, mountainEntity).movementMedium).toBe("ground");
+      const mountainSpawnSubject = subjectOf(mountainSpawn, mountainEntity);
+      const cliffSubject = subjectOf(intoCliff, mountainEntity);
+      const cliffLimitMetersX = blockingCenterLimitMeters(
+        mountainVerified,
+        "collider-m-cliff-mid-s",
+        0,
+      );
+      expect(cliffSubject.positionMetersXYZ[0])
+        .toBeLessThan(mountainSpawnSubject.positionMetersXYZ[0] - 0.1);
+      expectBlockedAtCenterLimit(
+        cliffSubject.positionMetersXYZ[0],
+        cliffLimitMetersX,
+      );
+      expect(cliffSubject.movementMedium).toBe("ground");
     } finally {
       await mountainRuntime.dispose();
     }
@@ -346,18 +415,33 @@ describe("BWB-5 Block Reconstruction Corpus Runtime", () => {
         await runtime.runFixedInput({ actions: [], ticks: 5 });
         const entered = await runtime.runFixedInput({
           actions: ["move-forward"],
-          ticks: 55,
+          ticks: caseId === "building-exterior" ? 75 : 35,
         });
-        expect(subjectOf(entered, entityId).positionMetersXYZ[2])
-          .toBeLessThan(-1);
-        expect(subjectOf(entered, entityId).movementMedium).toBe("ground");
+        const enteredSubject = subjectOf(entered, entityId);
+        const entryBoundaryMetersZ = caseId === "building-exterior" ? -2 : -1;
+        expect(enteredSubject.positionMetersXYZ[2])
+          .toBeLessThan(entryBoundaryMetersZ);
+        expect(enteredSubject.movementMedium).toBe("ground");
         const blocked = await runtime.runFixedInput({
           actions: ["move-forward"],
           ticks: 90,
         });
-        expect(subjectOf(blocked, entityId).positionMetersXYZ[2])
-          .toBeGreaterThan(-3.9);
-        expect(subjectOf(blocked, entityId).movementMedium).toBe("ground");
+        const blockedSubject = subjectOf(blocked, entityId);
+        const backWallId = caseId === "building-exterior"
+          ? "collider-b-wall-back"
+          : "collider-i-wall-back";
+        const backWallLimitMetersZ = blockingCenterLimitMeters(
+          verified,
+          backWallId,
+          2,
+        );
+        expect(enteredSubject.positionMetersXYZ[2])
+          .toBeGreaterThan(backWallLimitMetersZ + 0.1);
+        expectBlockedAtCenterLimit(
+          blockedSubject.positionMetersXYZ[2],
+          backWallLimitMetersZ,
+        );
+        expect(blockedSubject.movementMedium).toBe("ground");
       } finally {
         await runtime.dispose();
       }

@@ -394,7 +394,6 @@ const UNSUPPORTED_SPAWN = record({
   maximumBlockCount: 1,
   colliderMode: "layout",
   notTraversableBlockIds: Object.freeze([]),
-  expectedFailureCode: "WORLDKIT_NATIVE_BLOCK_SPAWN_UNSUPPORTED",
   spawn: Object.freeze({
     positionMetersXYZ: Object.freeze([4, 3, 4] as const),
     facingRadians: 0,

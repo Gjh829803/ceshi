@@ -172,6 +172,9 @@ describe("BWB-5 reconstruction corpus contract", () => {
           ? "positive"
           : "negative",
       );
+      if (caseId === "unsupported-spawn") {
+        expect("expectedFailureCode" in inspected).toBe(false);
+      }
     }
   });
 
@@ -328,9 +331,7 @@ describe("BWB-5 reconstruction corpus contract", () => {
         materialization,
       });
       expect(index.polarity).toBe("negative");
-      expect(index.expectedFailureCode).toBe(
-        "WORLDKIT_NATIVE_BLOCK_SPAWN_UNSUPPORTED",
-      );
+      expect("expectedFailureCode" in index).toBe(false);
     } finally {
       scene.dispose();
       engine.dispose();
