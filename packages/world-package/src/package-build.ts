@@ -4,6 +4,7 @@ import { gameplayBootstrapCanonicalBytesV1, parseGameplayBootstrapV1 } from "@wh
 import type { LayoutSolveResultV1 } from "@whitebox-world/layout-solver";
 import { canonicalJsonBytes, sha256Bytes, sha256CanonicalJson, type Sha256HashV1 } from "@whitebox-world/protocol";
 import {
+  BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
   hashBabylonNativeAssetLockV1,
   hashBabylonNativeDependencyLockV1,
   hashBabylonNativeSceneBootstrapV1,
@@ -635,7 +636,7 @@ function createBabylonNativeWorldPackageV1Internal(
   const bounds = nativeBounds(input.worldBounds);
   const budget = nativeBudget(input.resourceBudget);
   const requiresBlockMetadata = bootstrap.nativeSceneProfileRef ===
-    "worldkit://native-scene-profile/whitebox.blocks@1";
+    BABYLON_NATIVE_BLOCK_PROFILE_REF_V1;
   const contributionHash = hashBabylonNativeSceneContributionV1(contribution);
   if (
     bundle.fileInventory.length !== 1 ||
@@ -676,7 +677,7 @@ function createBabylonNativeWorldPackageV1Internal(
     || (requiresBlockMetadata !== !isNil(blockMetadata))
     || (!isNil(blockMetadata) && (
       contribution.profileSettlement.kind !== "host-snapshot" ||
-      blockMetadata.blockProfileRef !== bootstrap.nativeSceneProfileRef ||
+      blockMetadata.nativeSceneProfileRef !== bootstrap.nativeSceneProfileRef ||
       blockMetadata.profileInventoryHash !==
         contribution.profileSettlement.profileInventoryHash ||
       blockMetadata.settledVisualHash !==

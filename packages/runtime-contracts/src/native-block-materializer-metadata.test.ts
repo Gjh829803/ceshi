@@ -11,7 +11,7 @@ function metadataValue() {
   return {
     kind: "babylon-native-block-materializer-metadata",
     schemaVersion: 1,
-    blockProfileRef:
+    nativeSceneProfileRef:
       "worldkit://native-scene-profile/whitebox.blocks@1",
     caseHash: H("a"),
     authoringManifestHash: H("b"),
@@ -124,5 +124,15 @@ describe("BabylonNativeBlockMaterializerMetadataV1", () => {
     });
     expect(() => parseBabylonNativeBlockMaterializerMetadataV1(accessor))
       .toThrow("BABYLON_NATIVE_BLOCK_MATERIALIZER_METADATA_INVALID");
+  });
+
+  it("rejects the replaced blockProfileRef field", () => {
+    const value = metadataValue();
+    const { nativeSceneProfileRef: _removed, ...withoutCurrentField } = value;
+    expect(() => parseBabylonNativeBlockMaterializerMetadataV1({
+      ...withoutCurrentField,
+      blockProfileRef:
+        "worldkit://native-scene-profile/whitebox.blocks@1",
+    })).toThrow("BABYLON_NATIVE_BLOCK_MATERIALIZER_METADATA_INVALID");
   });
 });

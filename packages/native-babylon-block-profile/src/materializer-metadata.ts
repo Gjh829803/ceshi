@@ -1,4 +1,5 @@
 import {
+  BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
   hashBabylonNativeSceneContributionV1,
   parseBabylonNativeBlockMaterializerMetadataV1,
   parseBabylonNativeSceneContributionV1,
@@ -91,8 +92,7 @@ export function createBabylonNativeBlockMaterializerMetadataV1(
   return parseBabylonNativeBlockMaterializerMetadataV1({
     kind: "babylon-native-block-materializer-metadata",
     schemaVersion: 1,
-    blockProfileRef:
-      "worldkit://native-scene-profile/whitebox.blocks@1",
+    nativeSceneProfileRef: BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
     caseHash: input.authoringLayoutBinding.caseHash,
     authoringManifestHash:
       input.authoringLayoutBinding.authoringManifestHash,

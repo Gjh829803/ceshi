@@ -923,7 +923,7 @@ Require complete materializer output rather than the current opaque fingerprint 
 const metadata = parseBabylonNativeBlockMaterializerMetadataV1({
   kind: "babylon-native-block-materializer-metadata",
   schemaVersion: 1,
-  blockProfileRef: BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
+  nativeSceneProfileRef: BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
   caseHash,
   authoringManifestHash,
   checkedLayoutInventoryHash,

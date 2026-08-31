@@ -340,7 +340,7 @@ function bindInput(overrides: Record<string, unknown> = {}) {
     parseBabylonNativeBlockMaterializerMetadataV1({
       kind: "babylon-native-block-materializer-metadata",
       schemaVersion: 1,
-      blockProfileRef:
+      nativeSceneProfileRef:
         "worldkit://native-scene-profile/whitebox.blocks@1",
       caseHash: binding.caseHash,
       authoringManifestHash,
@@ -449,6 +449,48 @@ describe("bindBlockMaterializerMetadataToSemanticCaptureTargetsV1", () => {
           maximumMetersXYZ: [0.5, 2, -1.5],
         },
         colliderId: "missing-wall",
+        axis: "x",
+        sourceFace: "minimum",
+        planeMeters: -0.5,
+        expectedCenterSide: "negative",
+        capsuleRadiusMeters: 0.35,
+        toleranceMeters: 0.05,
+      }, checkpointSpatialCriteria()[1]],
+    })).toThrowError("FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID");
+  });
+
+  it("rejects a Block plane collider joined to a different visual group", () => {
+    const input = bindInput();
+    const blockedCase = parseWorldReconstructionCaseV1({
+      ...caseValue(),
+      expected: {
+        ...caseValue().expected,
+        criticalTraversalChecks: [{
+          ...caseValue().expected.criticalTraversalChecks[0],
+          expectation: "block",
+        }],
+      },
+    });
+    const materializerMetadata =
+      parseBabylonNativeBlockMaterializerMetadataV1({
+        ...input.materializerMetadata,
+        caseHash: hashWorldReconstructionCaseV1(blockedCase),
+      });
+    expect(() => bind({
+      case: blockedCase,
+      materializerMetadata,
+      materializerMetadataHash:
+        hashBabylonNativeBlockMaterializerMetadataV1(materializerMetadata),
+      checkpointSpatialCriteria: [{
+        kind: "block-plane",
+        checkpointId: "junction",
+        expectation: "block",
+        sourceVisualGroupId: "upper-t-junction-group",
+        sourceBoundsMeters: {
+          minimumMetersXYZ: [-0.5, 1, -2.5],
+          maximumMetersXYZ: [0.5, 2, -1.5],
+        },
+        colliderId: "spawn-ground",
         axis: "x",
         sourceFace: "minimum",
         planeMeters: -0.5,

@@ -4,11 +4,11 @@ import {
 } from "@whitebox-world/protocol";
 import { isEqual, isNil } from "lodash-es";
 
+import { BABYLON_NATIVE_BLOCK_PROFILE_REF_V1 } from
+  "./native-scene-contribution.js";
+
 export const BABYLON_NATIVE_BLOCK_MATERIALIZER_METADATA_PATH_V1 =
   "native/block-materializer-metadata.json" as const;
-
-export const BABYLON_NATIVE_BLOCK_SCENE_PROFILE_REF_V1 =
-  "worldkit://native-scene-profile/whitebox.blocks@1" as const;
 
 export type BabylonNativeBlockMaterializerShapeV1 =
   | "full"
@@ -57,8 +57,8 @@ export interface BabylonNativeBlockMaterializerColliderJoinV1 {
 export interface BabylonNativeBlockMaterializerMetadataV1 {
   readonly kind: "babylon-native-block-materializer-metadata";
   readonly schemaVersion: 1;
-  readonly blockProfileRef:
-    typeof BABYLON_NATIVE_BLOCK_SCENE_PROFILE_REF_V1;
+  readonly nativeSceneProfileRef:
+    typeof BABYLON_NATIVE_BLOCK_PROFILE_REF_V1;
   readonly caseHash: Sha256HashV1;
   readonly authoringManifestHash: Sha256HashV1;
   readonly checkedLayoutInventoryHash: Sha256HashV1;
@@ -327,7 +327,7 @@ export function parseBabylonNativeBlockMaterializerMetadataV1(
 ): BabylonNativeBlockMaterializerMetadataV1 {
   assertAccessorFree(input);
   const source = exactRecord(input, [
-    "kind", "schemaVersion", "blockProfileRef", "caseHash",
+    "kind", "schemaVersion", "nativeSceneProfileRef", "caseHash",
     "authoringManifestHash", "checkedLayoutInventoryHash",
     "contributionHash", "profileInventoryHash", "settledVisualHash",
     "blocks", "visualGroups", "colliderJoins",
@@ -335,8 +335,8 @@ export function parseBabylonNativeBlockMaterializerMetadataV1(
   if (
     source.kind !== "babylon-native-block-materializer-metadata" ||
     source.schemaVersion !== 1 ||
-    source.blockProfileRef !== BABYLON_NATIVE_BLOCK_SCENE_PROFILE_REF_V1
-  ) fail("value", "kind, schemaVersion or blockProfileRef is invalid");
+    source.nativeSceneProfileRef !== BABYLON_NATIVE_BLOCK_PROFILE_REF_V1
+  ) fail("value", "kind, schemaVersion or nativeSceneProfileRef is invalid");
   if (
     typeof source.caseHash !== "string" || !HASH.test(source.caseHash) ||
     typeof source.authoringManifestHash !== "string" ||
@@ -421,7 +421,7 @@ export function parseBabylonNativeBlockMaterializerMetadataV1(
   return Object.freeze({
     kind: "babylon-native-block-materializer-metadata",
     schemaVersion: 1,
-    blockProfileRef: BABYLON_NATIVE_BLOCK_SCENE_PROFILE_REF_V1,
+    nativeSceneProfileRef: BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
     caseHash: source.caseHash as Sha256HashV1,
     authoringManifestHash: source.authoringManifestHash as Sha256HashV1,
     checkedLayoutInventoryHash:

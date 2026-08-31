@@ -397,10 +397,12 @@ Contribution and profile settlement create one `BabylonNativeBlockMaterializerMe
 bytes and hash are frozen into the WorldPackage Root and Build Receipt and verified by one parser. There is
 no second Capture identity inventory. The metadata maps every accepted Block to the Host-derived
 `runtimeEntityId` (`native-block:<blockId>`) and semantic capture class, every accepted visual group to its
-Case target/class/identity color/bounds, and every Collider to its source Block. The materializer creates a
-Host-private explicit `runtimeEntityId -> Mesh` and `visualGroupId -> Mesh[]` live-handle registry from the
-same checked records. NBR-45B may consume only those handles plus verified Package metadata; it never scans
-Mesh metadata, names, tags or `scene.meshes`. `FormalSemanticCaptureMapV1` remains only the Case
+Case target/class/identity color/bounds, and every Collider to its source Block. The metadata carries one
+`nativeSceneProfileRef` bound to the selected Native Scene Profile; `blockProfileRef` remains solely the
+authoring Manifest's Native Block Profile ref and is never an alias for the scene profile. The materializer
+creates a Host-private explicit `runtimeEntityId -> Mesh` and `visualGroupId -> Mesh[]` live-handle registry
+from the same checked records. NBR-45B may consume only those handles plus verified Package metadata; it
+never scans Mesh metadata, names, tags or `scene.meshes`. `FormalSemanticCaptureMapV1` remains only the Case
 target/traversal semantic mapping and consumes the verified Package metadata rather than raw Manifest or
 Layout inputs.
 

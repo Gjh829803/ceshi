@@ -375,7 +375,7 @@ function createBabylonNativeWorldPackageTestInputForProfileV1(
     ? parseBabylonNativeBlockMaterializerMetadataV1({
       kind: "babylon-native-block-materializer-metadata",
       schemaVersion: 1,
-      blockProfileRef:
+      nativeSceneProfileRef:
         "worldkit://native-scene-profile/whitebox.blocks@1",
       caseHash: `sha256:${"5".repeat(64)}`,
       authoringManifestHash: `sha256:${"6".repeat(64)}`,

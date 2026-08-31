@@ -10,7 +10,7 @@ import {
   hashBabylonNativeSceneBootstrapV1,
   hashBabylonNativeSceneContributionV1,
   hashBabylonNativeBlockMaterializerMetadataV1,
-  BABYLON_NATIVE_BLOCK_SCENE_PROFILE_REF_V1,
+  BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
   hashNativeSceneCheckResultV1,
   nativeSceneModuleBundleRefFromHashV1,
   worldResourceLockEntriesV1,
@@ -692,7 +692,7 @@ export function assertBabylonNativeWorldPackageMembershipV1(
   const runtime = input.worldRuntimeBootstrap;
   const materializerMetadata = input.nativeBlockMaterializerMetadata;
   const isBlockProfile = bundle.nativeSceneProfile.resourceRef ===
-    BABYLON_NATIVE_BLOCK_SCENE_PROFILE_REF_V1;
+    BABYLON_NATIVE_BLOCK_PROFILE_REF_V1;
   const hostProfileSettlement = contribution.profileSettlement.kind ===
       "host-snapshot"
     ? contribution.profileSettlement
@@ -770,7 +770,7 @@ export function assertBabylonNativeWorldPackageMembershipV1(
         isNil(materializerMetadata) ||
         hashBabylonNativeBlockMaterializerMetadataV1(materializerMetadata) !==
           source.nativeMaterializer.metadataHash ||
-        materializerMetadata.blockProfileRef !==
+        materializerMetadata.nativeSceneProfileRef !==
           bundle.nativeSceneProfile.resourceRef ||
         isNil(hostProfileSettlement) ||
         materializerMetadata.contributionHash !==

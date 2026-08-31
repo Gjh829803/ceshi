@@ -89,6 +89,11 @@ export function bindBlockMaterializerMetadataToSemanticCaptureTargetsV1(
   ));
   for (const criterion of checkpointSpatialCriteria) {
     const group = groupById.get(criterion.sourceVisualGroupId);
+    const matchingColliderJoins = criterion.kind === "block-plane"
+      ? metadata.colliderJoins.filter(
+        ({ colliderId }) => colliderId === criterion.colliderId,
+      )
+      : [];
     if (
       isNil(group) ||
       !isEqual(criterion.sourceBoundsMeters, {
@@ -96,9 +101,8 @@ export function bindBlockMaterializerMetadataToSemanticCaptureTargetsV1(
         maximumMetersXYZ: group.maximumMetersXYZ,
       }) ||
       (criterion.kind === "block-plane" &&
-        !metadata.colliderJoins.some(
-          ({ colliderId }) => colliderId === criterion.colliderId,
-        ))
+        (matchingColliderJoins.length !== 1 ||
+          !group.blockIds.includes(matchingColliderJoins[0]!.blockId)))
     ) fail("checkpointSpatialCriteria", "must join verified Package metadata");
   }
   const expectedCheckpointIds = reconstructionCase.expected

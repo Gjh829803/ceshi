@@ -352,6 +352,63 @@ describe("Babylon Native block visual adapter", () => {
     }
   });
 
+  it("fails closed when two live registries share one Candidate Scene", async () => {
+    const { createBabylonNativeBlockVisualsV1 } = await loadVisualAdapter();
+
+    withScene((scene) => {
+      const first = createBabylonNativeBlockVisualsV1({
+        scene,
+        buildEpochId: "candidate-epoch-first",
+        checkedLayout: checkedLayoutFixture(scene),
+      });
+      const second = createBabylonNativeBlockVisualsV1({
+        scene,
+        buildEpochId: "candidate-epoch-second",
+        checkedLayout: checkedLayoutFixture(scene),
+      });
+
+      expect(() => peekBabylonNativeBlockLiveHandleRegistryV1(scene))
+        .toThrow("WORLDKIT_NATIVE_BLOCK_LIVE_HANDLE_REGISTRY_AMBIGUOUS");
+      first.dispose();
+      expect(peekBabylonNativeBlockLiveHandleRegistryV1(scene)).toBe(
+        second.liveHandles,
+      );
+      second.dispose();
+      expect(peekBabylonNativeBlockLiveHandleRegistryV1(scene))
+        .toBeUndefined();
+    });
+  });
+
+  it("unregisters live handles before throwing material cleanup", async () => {
+    const { createBabylonNativeBlockVisualsV1 } = await loadVisualAdapter();
+
+    withScene((scene) => {
+      const visuals = createBabylonNativeBlockVisualsV1({
+        scene,
+        buildEpochId: "candidate-epoch-cleanup",
+        checkedLayout: checkedLayoutFixture(scene),
+      });
+      const material = visuals.nodes[0]?.mesh.material;
+      expect(material).toBeInstanceOf(StandardMaterial);
+      if (!(material instanceof StandardMaterial)) {
+        throw new TypeError("expected one Babylon StandardMaterial");
+      }
+      const originalDispose = material.dispose.bind(material);
+      material.dispose = () => {
+        expect(peekBabylonNativeBlockLiveHandleRegistryV1(scene))
+          .toBeUndefined();
+        throw new Error("expected material cleanup failure");
+      };
+
+      expect(() => visuals.dispose())
+        .toThrow("expected material cleanup failure");
+      expect(peekBabylonNativeBlockLiveHandleRegistryV1(scene))
+        .toBeUndefined();
+      material.dispose = originalDispose;
+      originalDispose();
+    });
+  });
+
   it("rejects an unpassed or mismatched check before publishing visual nodes", async () => {
     const { createBabylonNativeBlockVisualsV1 } = await loadVisualAdapter();
 
