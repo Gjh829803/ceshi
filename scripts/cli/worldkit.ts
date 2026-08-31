@@ -139,6 +139,7 @@ Usage:
     --session-directory <absolute-directory> [--resume]
   worldkit native check <world-directory> --json
   worldkit native explain <world-directory> [--json]
+  worldkit native package <attempt-directory> --case <case.json> --output <package-directory> --json
   worldkit capture <file> --output <png> [--snapshot <json>] [--triview-output <directory> --implementation-map <json>] [--port <port>] [--json]
   worldkit registry list --kind <resource-kind> [--json]
   worldkit registry describe --resource-ref <ref> [--json]
@@ -185,6 +186,13 @@ export type WorldkitArgs =
   | { command: "help"; json: false }
   | { command: "native-check"; worldDirectoryPath: string; json: true }
   | { command: "native-explain"; worldDirectoryPath: string; json: boolean }
+  | {
+      command: "native-package";
+      attemptDirectoryPath: string;
+      casePath: string;
+      outputPath: string;
+      json: true;
+    }
   | { command: "validate"; inputPath: string; json: boolean }
   | { command: "build"; inputPath: string; outputPath: string; json: boolean }
   | { command: "inspect"; packageDirectoryPath: string; json: boolean }
@@ -370,6 +378,108 @@ export interface WorldkitCommandResult {
   renderEnvironment?: RenderEnvironmentReceiptV1;
 }
 
+interface PackageNativeBlockAttemptInputV1 {
+  readonly repositoryRoot: string;
+  readonly attemptDirectoryPath: string;
+  readonly casePath: string;
+  readonly outputDirectoryPath: string;
+}
+
+interface PackagedNativeBlockAttemptCliSourceV1 {
+  readonly sceneAuthoringAttemptResult: unknown;
+  readonly verifiedWorldPackage: Readonly<{
+    receipt: Readonly<{
+      worldPackageRef: string;
+      worldPackageRootHash: string;
+      worldBuildIdentityHash: string;
+    }>;
+  }>;
+  readonly buildReceiptHash: string;
+  readonly outputDirectoryPath: string;
+  readonly diagnostics: readonly unknown[];
+}
+
+type PackageNativeBlockAttemptPortV1 = (
+  input: PackageNativeBlockAttemptInputV1,
+) => Promise<PackagedNativeBlockAttemptCliSourceV1>;
+
+export interface WorldkitMainPortsV1 {
+  readonly packageNativeBlockAttemptV1?: PackageNativeBlockAttemptPortV1;
+}
+
+async function loadPackageNativeBlockAttemptPortV1(): Promise<
+  PackageNativeBlockAttemptPortV1
+> {
+  const moduleSpecifier = new URL(
+    "../reconstruction/native-package.js",
+    import.meta.url,
+  ).href;
+  const loaded = await import(moduleSpecifier) as Readonly<{
+    packageNativeBlockAttemptV1?: unknown;
+  }>;
+  if (typeof loaded.packageNativeBlockAttemptV1 !== "function") {
+    throw new TypeError("WORLDKIT_NATIVE_PACKAGE_ADAPTER_UNAVAILABLE");
+  }
+  return loaded.packageNativeBlockAttemptV1 as PackageNativeBlockAttemptPortV1;
+}
+
+async function runNativePackageCommandV1(
+  parsed: Extract<WorldkitArgs, { command: "native-package" }>,
+  packageNativeBlockAttemptV1?: PackageNativeBlockAttemptPortV1,
+): Promise<Readonly<Record<string, unknown>>> {
+  const packageAttempt = packageNativeBlockAttemptV1 ??
+    await loadPackageNativeBlockAttemptPortV1();
+  const packaged = await packageAttempt({
+    repositoryRoot: REPOSITORY_ROOT,
+    attemptDirectoryPath: parsed.attemptDirectoryPath,
+    casePath: parsed.casePath,
+    outputDirectoryPath: parsed.outputPath,
+  });
+  return Object.freeze({
+    outcome: "completed",
+    sceneAuthoringAttemptResult: packaged.sceneAuthoringAttemptResult,
+    worldPackageRef: packaged.verifiedWorldPackage.receipt.worldPackageRef,
+    worldPackageRootHash:
+      packaged.verifiedWorldPackage.receipt.worldPackageRootHash,
+    worldBuildIdentityHash:
+      packaged.verifiedWorldPackage.receipt.worldBuildIdentityHash,
+    buildReceiptHash: packaged.buildReceiptHash,
+    outputDirectoryPath: packaged.outputDirectoryPath,
+    diagnostics: packaged.diagnostics,
+  });
+}
+
+function nativePackageFailureV1(error: unknown): Readonly<{
+  exitCode: 1 | 2;
+  result: Readonly<Record<string, unknown>>;
+}> {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    typeof error.code === "string" &&
+    "diagnostics" in error &&
+    Array.isArray(error.diagnostics)
+  ) {
+    return Object.freeze({
+      exitCode: 1,
+      result: Object.freeze({
+        outcome: "failed",
+        code: error.code,
+        diagnostics: error.diagnostics,
+      }),
+    });
+  }
+  return Object.freeze({
+    exitCode: 2,
+    result: Object.freeze({
+      outcome: "tool-error",
+      code: "WORLDKIT_NATIVE_PACKAGE_TOOL_ERROR",
+      diagnostics: Object.freeze([]),
+    }),
+  });
+}
+
 export class WorldkitUsageError extends Error {
   constructor(message: string) {
     super(message);
@@ -475,6 +585,51 @@ export function parseWorldkitArgs(arguments_: readonly string[]): WorldkitArgs {
 
   if (command === "native") {
     const operation = takeRequiredPositional(tokens, "native operation");
+    if (operation === "package") {
+      const attemptDirectoryPath = takeRequiredPositional(
+        tokens,
+        "Native attempt directory",
+      );
+      const casePath = takeOption(tokens, "--case");
+      const outputPath = takeOption(tokens, "--output");
+      if (casePath === undefined) {
+        throw new WorldkitUsageError(
+          "native package requires --case <case.json>.",
+        );
+      }
+      if (outputPath === undefined) {
+        throw new WorldkitUsageError(
+          "native package requires --output <package-directory>.",
+        );
+      }
+      if (!json) {
+        throw new WorldkitUsageError("native package requires --json.");
+      }
+      const relativeOutputPath = path.relative(
+        path.resolve(attemptDirectoryPath),
+        path.resolve(outputPath),
+      );
+      if (
+        relativeOutputPath === "" ||
+        (
+          relativeOutputPath !== ".." &&
+          !relativeOutputPath.startsWith(`..${path.sep}`) &&
+          !path.isAbsolute(relativeOutputPath)
+        )
+      ) {
+        throw new WorldkitUsageError(
+          "native package output must be outside the immutable attempt directory.",
+        );
+      }
+      rejectRemaining(tokens, "native package");
+      return {
+        command: "native-package",
+        attemptDirectoryPath,
+        casePath,
+        outputPath,
+        json: true,
+      };
+    }
     const worldDirectoryPath = takeRequiredPositional(
       tokens,
       "Native world directory",
@@ -2189,6 +2344,12 @@ function writeNativeJsonResult(result: NativeSceneCheckResultV1): void {
   process.stdout.write(`${stringifyCanonicalJson(result)}\n`);
 }
 
+function writeNativePackageJsonResult(
+  result: Readonly<Record<string, unknown>>,
+): void {
+  process.stdout.write(`${stringifyCanonicalJson(result)}\n`);
+}
+
 async function runNativeCommand(
   parsed: Extract<WorldkitArgs, {
     command: "native-check" | "native-explain";
@@ -2207,11 +2368,20 @@ async function runNativeCommand(
 
 export async function main(
   arguments_: readonly string[] = process.argv.slice(2),
+  ports: WorldkitMainPortsV1 = {},
 ): Promise<number> {
   let parsed: WorldkitArgs;
   try {
     parsed = parseWorldkitArgs(arguments_);
   } catch (error) {
+    if (arguments_[0] === "native" && arguments_[1] === "package") {
+      writeNativePackageJsonResult(Object.freeze({
+        outcome: "tool-error",
+        code: "WORLDKIT_NATIVE_PACKAGE_TOOL_USAGE_INVALID",
+        diagnostics: Object.freeze([]),
+      }));
+      return 2;
+    }
     if (arguments_[0] === "native") {
       writeNativeJsonResult(nativeToolUsageResult());
       return 2;
@@ -2230,6 +2400,20 @@ export async function main(
     parsed.command === "native-explain"
   ) {
     return runNativeCommand(parsed);
+  }
+  if (parsed.command === "native-package") {
+    try {
+      const result = await runNativePackageCommandV1(
+        parsed,
+        ports.packageNativeBlockAttemptV1,
+      );
+      writeNativePackageJsonResult(result);
+      return 0;
+    } catch (error) {
+      const failure = nativePackageFailureV1(error);
+      writeNativePackageJsonResult(failure.result);
+      return failure.exitCode;
+    }
   }
   if (parsed.command === "run-browser") {
     return runUntilSignal(

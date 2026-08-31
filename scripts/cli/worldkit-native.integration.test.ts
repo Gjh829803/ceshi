@@ -83,6 +83,48 @@ afterEach(async () => {
 });
 
 describe("worldkit native CLI process contract", () => {
+  it("rejects incomplete or mutable Native package argv before dispatch", async () => {
+    const invocations = [
+      [
+        "native", "package", "attempts/0",
+        "--output", "packages/attempt-0", "--json",
+      ],
+      [
+        "native", "package", "attempts/0",
+        "--case", "case.json", "--json",
+      ],
+      [
+        "native", "package", "attempts/0",
+        "--case", "case.json",
+        "--output", "attempts/0/world-package", "--json",
+      ],
+    ] as const;
+
+    for (const arguments_ of invocations) {
+      const run = await runCli(arguments_);
+      expect(run.exitCode).toBe(2);
+      expect(run.stderr).toBe("");
+      expect(JSON.parse(run.stdout)).toEqual({
+        outcome: "tool-error",
+        code: "WORLDKIT_NATIVE_PACKAGE_TOOL_USAGE_INVALID",
+        diagnostics: [],
+      });
+    }
+  }, 30_000);
+
+  it("keeps legacy Case-specific Native package operations closed", async () => {
+    for (const operation of ["package-cloud-ridge", "build-cloud-ridge"]) {
+      const run = await runCli([
+        "native",
+        operation,
+        "attempts/0",
+        "--json",
+      ]);
+      expect(run.exitCode).toBe(2);
+      expect(run.stderr).toBe("");
+    }
+  }, 30_000);
+
   it("emits byte-clean passing check/explain JSON and deterministic human text", async () => {
     const root = await fixture(moduleSource(`
       context.registration.registerSpawnMarker({
