@@ -1,0 +1,5 @@
+{
+  "centerMetersXZ": [0, -15],
+  "sizeMetersXZ": [180, 180],
+  "heightRangeMeters": [-40, 100]
+}

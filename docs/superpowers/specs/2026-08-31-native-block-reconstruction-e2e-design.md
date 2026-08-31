@@ -250,16 +250,49 @@ identity is a canonical sorted path/content-hash inventory, never gzip bytes, mt
 an absolute host path. It contains no credentials, provider payload, or mutable output directory.
 Creation submission remains exactly once; an uncertain create outcome is reconciled by request ID.
 
+The Host accepts Native API, Native Scene Profile and Block Profile only through exact resolved-resource
+descriptors containing `resourceKind`, canonical Registry `resourceRef`, `resolvedVersion`, and the resolved
+resource `contentHash`. The Request's `...Ref/...Hash` fields bind that Registry resource identity; the
+descriptor file path and descriptor-byte hash remain separate `contextInputs` and never replace it. The
+current Case uses only `worldkit://native-scene-api/babylon@1`. The Host also reparses and recomputes the
+Case-level Route Decision from the complete Case Scene Brief closure, rejects a caller-supplied shadow
+decision, and durably publishes the exact Route bytes beside the Request and Attempt.
+
 The formal profile uses `gpt-5.6-sol` with `xhigh`, as required by repository policy. Smoke profiles are
 not valid BNA-6 evidence.
 
 ### 5.4 AI output workspace
 
-Before task creation, the Host derives `native-scene.bootstrap.json` from the parsed Case/Profile and
-freezes its bytes as `bootstrapInputRef/Hash`. It is a read-only task input and the sole owner of world
-bounds, seed, Gameplay Bootstrap ref, controlled Subject, Camera resource refs and Spawn Marker identity.
-The model cannot rewrite it. This makes Route, Generation Request and Attempt identities fully knowable
-before submission and prevents the generated source from becoming a hidden Gameplay control plane.
+Before task creation, the Host derives `BabylonNativeSceneBootstrapV1` as a read-only Native startup
+projection from the Case-bound Spawn identity and seed, parsed `GameplayBootstrapV1`, parsed
+`WorldRuntimeBootstrapV1`, and Host-selected Scene Module/API/Profile refs. The projection copies only the
+startup values required by the closed Native Bootstrap contract: Gameplay Bootstrap ref, controlled entity
+ID, gravity, numeric opening-camera values, seed and Spawn Marker ID. It does not become the owner of those
+upstream facts.
+
+`WorldPackageWorldBoundsV1` remains owned by the WorldPackage manifest boundary and is not added to the
+Native Bootstrap. Subject closure, Camera resource refs, runtime resource locks and their canonical identity
+remain owned by `WorldRuntimeBootstrapV1`; the Native Bootstrap contains no second Subject or Camera
+resource closure. The Host must reject cross-wired Gameplay/World Runtime links, a controlled Subject not
+closed by the World Runtime Bootstrap, a Case Spawn mismatch, or non-finite/invalid bounds before task
+creation.
+
+The Host canonicalizes and identity-binds the parsed Gameplay Bootstrap, World Runtime Bootstrap and
+validated WorldPackage Bounds in the Generation Request context, then canonical-materializes
+`native-scene.bootstrap.json` and freezes its bytes as `bootstrapInputRef/Hash`. The Builder receives that
+file read-only and cannot rewrite it. The materialized file is a durable Attempt input: it is promoted out of
+task staging before submission and is retained with the Attempt/Generation Receipt even after the isolated
+task workspace is cleaned. This makes Route, Generation Request and Attempt identities fully knowable before
+submission and prevents generated source from becoming a hidden Gameplay control plane.
+
+The durable Attempt additionally retains the exact API/Profile/Block resolution descriptors and a typed
+Host-closure descriptor. That descriptor binds the admitted World Runtime Bootstrap Registry ref, resolved
+version and `contentHash` to the parsed Bootstrap's own `contentHash`, plus Gameplay Bootstrap, World Bounds
+and initial controlled-entity identities. The complete Attempt directory is published from one sibling
+staging directory by atomic rename; an existing Attempt or task root is rejected rather than overwritten.
+Input and output ancestor chains must resolve without symbolic links. Generation Request, Attempt, router
+request and cloud prefix identities include the stable run ID, while the immutable Case-level Route identity
+does not change between runs.
 
 The task writes only:
 
@@ -270,8 +303,9 @@ The task writes only:
 
 The checker must join every declared visual group to the checked Layout inventory and reject missing,
 duplicate, unbound or undeclared groups. The first Case is asset-free, so `native-resources.json` is an
-empty declared set; Gameplay/Subject/Camera Registry closure comes only from the Host-frozen Bootstrap,
-never an implicit default or this resource list. The model cannot mint Resource publication/admission
+empty declared set; Gameplay/Subject/Camera Registry closure comes only from the Host-bound
+`GameplayBootstrapV1` and `WorldRuntimeBootstrapV1`, never an implicit default, the Native Bootstrap, or
+this resource list. The model cannot mint Resource publication/admission
 receipts or Asset Locks. The Host resolves declared refs, creates selected asset rows and locks, and
 rejects unknown or unadmitted resources.
 

@@ -128,13 +128,17 @@ async function makeInput() {
     gameplayBootstrapRef: canonical.gameplayBootstrap.resourceRef,
     initialControlledEntityId:
       canonical.worldRuntimeBootstrap.initialControlledEntityId,
-    gravityMetersPerSecondSquaredXYZ: [0, -9.81, 0],
+    gravityMetersPerSecondSquaredXYZ:
+      canonical.worldRuntimeBootstrap.gravityMetersPerSecondSquaredXYZ,
     initialCamera: {
-      mode: "third-person",
-      pitchRadians: 0.1,
-      distanceMeters: 5,
-      fovDegrees: 55,
-      targetHeightMeters: 1.2,
+      mode: canonical.worldRuntimeBootstrap.initialCamera.mode,
+      pitchRadians:
+        canonical.worldRuntimeBootstrap.initialCamera.pitchRadians,
+      distanceMeters:
+        canonical.worldRuntimeBootstrap.initialCamera.distanceMeters,
+      fovDegrees: canonical.worldRuntimeBootstrap.initialCamera.fovDegrees,
+      targetHeightMeters:
+        canonical.worldRuntimeBootstrap.initialCamera.targetHeightMeters,
     },
     seed: 20260830,
     spawnMarkerId: "player-spawn",
@@ -371,6 +375,36 @@ async function makeInput() {
   } as const;
 }
 
+function withSynchronizedNativeBootstrap(
+  input: Awaited<ReturnType<typeof makeInput>>,
+  nativeSceneBootstrap: Parameters<
+    typeof hashBabylonNativeSceneBootstrapV1
+  >[0],
+) {
+  if (input.sceneAuthoringAttempt.sourceInput.kind !== "babylon-native") {
+    throw new Error("Native fixture must use the Native source member");
+  }
+  const sceneAuthoringAttempt: SceneAuthoringAttemptV1 = {
+    ...input.sceneAuthoringAttempt,
+    sourceInput: {
+      ...input.sceneAuthoringAttempt.sourceInput,
+      bootstrapInputHash:
+        hashBabylonNativeSceneBootstrapV1(nativeSceneBootstrap),
+    },
+  };
+  const sceneAuthoringAttemptResult: SceneAuthoringAttemptResultV1 = {
+    ...input.sceneAuthoringAttemptResult,
+    sceneAuthoringAttemptHash:
+      hashSceneAuthoringAttemptV1(sceneAuthoringAttempt),
+  };
+  return {
+    ...input,
+    nativeSceneBootstrap,
+    sceneAuthoringAttempt,
+    sceneAuthoringAttemptResult,
+  };
+}
+
 afterEach(async () => {
   await Promise.all(roots.splice(0).map(removeNativeSceneWorkspaceFixtureV1));
 });
@@ -556,6 +590,59 @@ describe("prepareFrozenBabylonNativeWorldPackageBuildInputV1", () => {
     )
       .toBe(0);
   }, 45_000);
+
+  it.each([
+    ["gravity", (input: Awaited<ReturnType<typeof makeInput>>) => ({
+      ...input.nativeSceneBootstrap,
+      gravityMetersPerSecondSquaredXYZ: [
+        input.nativeSceneBootstrap.gravityMetersPerSecondSquaredXYZ[0],
+        input.nativeSceneBootstrap.gravityMetersPerSecondSquaredXYZ[1] + 1,
+        input.nativeSceneBootstrap.gravityMetersPerSecondSquaredXYZ[2],
+      ] as const,
+    })],
+    ["camera pitch", (input: Awaited<ReturnType<typeof makeInput>>) => ({
+      ...input.nativeSceneBootstrap,
+      initialCamera: {
+        ...input.nativeSceneBootstrap.initialCamera,
+        pitchRadians:
+          input.nativeSceneBootstrap.initialCamera.pitchRadians + 0.1,
+      },
+    })],
+    ["camera distance", (input: Awaited<ReturnType<typeof makeInput>>) => ({
+      ...input.nativeSceneBootstrap,
+      initialCamera: {
+        ...input.nativeSceneBootstrap.initialCamera,
+        distanceMeters:
+          input.nativeSceneBootstrap.initialCamera.distanceMeters + 1,
+      },
+    })],
+    ["camera field of view", (input: Awaited<ReturnType<typeof makeInput>>) => ({
+      ...input.nativeSceneBootstrap,
+      initialCamera: {
+        ...input.nativeSceneBootstrap.initialCamera,
+        fovDegrees: input.nativeSceneBootstrap.initialCamera.fovDegrees + 1,
+      },
+    })],
+    ["camera target height", (input: Awaited<ReturnType<typeof makeInput>>) => ({
+      ...input.nativeSceneBootstrap,
+      initialCamera: {
+        ...input.nativeSceneBootstrap.initialCamera,
+        targetHeightMeters:
+          input.nativeSceneBootstrap.initialCamera.targetHeightMeters + 0.1,
+      },
+    })],
+  ] as const)(
+    "rejects synchronized %s projection drift before Candidate replay",
+    async (_label, mutateBootstrap) => {
+      const input = await makeInput();
+      await expect(prepareFrozenBabylonNativeWorldPackageBuildInputV1(
+        withSynchronizedNativeBootstrap(input, mutateBootstrap(input)),
+      )).rejects.toThrow(/WORLDKIT_NATIVE_PACKAGE_INPUT_INVALID/);
+      expect(input.createCount).toBe(0);
+      expect(input.disposeCount).toBe(0);
+    },
+    45_000,
+  );
 
   it("rejects an extra Registry lock row after successful replay", async () => {
     const input = await makeInput();

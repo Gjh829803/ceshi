@@ -134,7 +134,7 @@ Later only:
 | 状态或资源 | 唯一 Owner | BNA-2 消费方式 |
 |---|---|---|
 | workspace path、Source Graph、临时文件 | Node checker | 只在一次 check 期间存在，绝对路径不进入公共诊断 |
-| Bootstrap 结构 | `@whitebox-world/runtime-contracts` exact parser | checker 先解析，后续全部使用冻结值 |
+| Bootstrap wire 结构 | `@whitebox-world/runtime-contracts` exact parser | checker 先解析，后续全部使用冻结值；parser 不因此接管 Gameplay、World Runtime、WorldPackage Bounds 或 Case 事实的上游所有权 |
 | Import Profile 与 Native Module API | `@whitebox-world/native-babylon` | Source Admission 只接受该唯一方言 |
 | Native Scene Profile Registry、local hard cap 与 check-policy | BNA-2 checker | CLI/Admission 的唯一 Profile/诊断语义；BNA-5 只叠加 Host/tenant cap 与隔离 |
 | Candidate Engine/Scene 创建与销毁 | Host-provided Candidate factory | 每次 replay 产生一份独立 lease，始终在 `finally` 销毁 |
@@ -162,6 +162,13 @@ Later only:
 规则：
 
 - `native-scene.bootstrap.json` 必须通过当前唯一 `BabylonNativeSceneBootstrapV1` exact parser；
+- 本 BNA-2 工具只把该文件当作已物化的 checker 输入，不规定上游生成方式。进入
+  NBR/BNA-6 生成链路时，必须由 Host 从已解析的 Case/Attempt seed、
+  `GameplayBootstrapV1`、`WorldRuntimeBootstrapV1` 以及 Host-selected Module/API/Profile refs
+  派生并 canonical materialize；Builder 只读且不得回写；
+- `WorldPackageWorldBoundsV1` 仍由 WorldPackage owner 验证和发布；Subject/Camera resource closure
+  仍由 `WorldRuntimeBootstrapV1` 所有。`BabylonNativeSceneBootstrapV1` 只复制 Native startup
+  所需的闭合数值/引用，不得被解读为这些上游事实的第二权威；
 - `scene.ts` 必须只有一个 Runtime 导出：默认导出的 `BabylonNativeSceneModuleV1`；type-only export 不进入
   Bundle Runtime export census；
 - 本地依赖只允许从 entry 开始可达的普通 `.ts` 文件，使用相对静态 ESM import/export；`.js` specifier

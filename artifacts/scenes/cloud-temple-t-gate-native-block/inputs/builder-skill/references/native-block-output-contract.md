@@ -4,7 +4,7 @@ This reference is an AI-facing authoring guide. The installed package types and 
 
 ## Inputs and outputs
 
-Treat the frozen Generation Request, Scene Brief, reference inputs, API/Profile context, and `native-scene.bootstrap.json` as immutable. The Bootstrap owns the seed, bounds, Gameplay Bootstrap ref, controlled Subject, Camera resources, and Spawn Marker identity. Do not duplicate those fields in generated JSON.
+Treat the frozen Generation Request, Scene Brief, reference inputs, API/Profile context, and `native-scene.bootstrap.json` as immutable. The Host derives the Bootstrap as a read-only Native startup projection: it carries the seed, Gameplay Bootstrap ref, controlled Subject identity, opening-camera numeric values, and Spawn Marker identity. World bounds remain a separate WorldPackage-owned context input, while Subject and Camera resource closure remain owned by `WorldRuntimeBootstrapV1`. Do not duplicate or override those fields in generated JSON.
 
 Write only:
 
