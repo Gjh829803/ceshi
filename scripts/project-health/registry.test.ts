@@ -304,6 +304,8 @@ describe("project health registry", () => {
     roots.push(repositoryRoot);
     await mkdir(path.join(repositoryRoot, "selected"));
     await writeFile(path.join(repositoryRoot, "selected", "fixture.txt"), "before", "utf8");
+    execFileSync("git", ["init", "--quiet"], { cwd: repositoryRoot });
+    execFileSync("git", ["add", "selected/fixture.txt"], { cwd: repositoryRoot });
     const profile = parsedProfile();
     const selectedProfile = {
       ...profile,
@@ -324,5 +326,75 @@ describe("project health registry", () => {
       gateId: "typecheck",
     });
     expect(after).not.toBe(before);
+  });
+
+  it("keeps Gate input fingerprints stable across ignored Host-generated outputs", async () => {
+    const fixture = await createCleanRepository();
+    await mkdir(path.join(fixture.repositoryRoot, "apps/playground/src"), { recursive: true });
+    await mkdir(path.join(fixture.repositoryRoot, "scripts/testing"), { recursive: true });
+    await writeFile(
+      path.join(fixture.repositoryRoot, ".gitignore"),
+      ".project-health/\ndist/\n__pycache__/\n",
+      "utf8",
+    );
+    await writeFile(path.join(fixture.repositoryRoot, "apps/playground/src/main.ts"), "export {};\n", "utf8");
+    await writeFile(path.join(fixture.repositoryRoot, "scripts/testing/census.ts"), "export {};\n", "utf8");
+    execFileSync("git", ["add", "."], { cwd: fixture.repositoryRoot });
+    execFileSync("git", ["commit", "--quiet", "-m", "add selected inputs"], { cwd: fixture.repositoryRoot });
+
+    const profile = parsedProfile();
+    const before = await Promise.all([
+      projectHealthGateInputFingerprintV1({
+        repositoryRoot: fixture.repositoryRoot,
+        profile,
+        gateId: "playground-build",
+      }),
+      projectHealthGateInputFingerprintV1({
+        repositoryRoot: fixture.repositoryRoot,
+        profile,
+        gateId: "test-census",
+      }),
+      projectHealthGateInputFingerprintV1({
+        repositoryRoot: fixture.repositoryRoot,
+        profile,
+        gateId: "test-contract",
+      }),
+    ]);
+
+    await mkdir(path.join(fixture.repositoryRoot, "apps/playground/dist"), { recursive: true });
+    await mkdir(path.join(fixture.repositoryRoot, "scripts/visual/__pycache__"), { recursive: true });
+    await writeFile(path.join(fixture.repositoryRoot, "apps/playground/dist/index.js"), "generated\n", "utf8");
+    await writeFile(
+      path.join(fixture.repositoryRoot, "scripts/visual/__pycache__/probe.cpython-312.pyc"),
+      "generated cache\n",
+      "utf8",
+    );
+
+    const afterGeneratedOutputs = await Promise.all([
+      projectHealthGateInputFingerprintV1({
+        repositoryRoot: fixture.repositoryRoot,
+        profile,
+        gateId: "playground-build",
+      }),
+      projectHealthGateInputFingerprintV1({
+        repositoryRoot: fixture.repositoryRoot,
+        profile,
+        gateId: "test-census",
+      }),
+      projectHealthGateInputFingerprintV1({
+        repositoryRoot: fixture.repositoryRoot,
+        profile,
+        gateId: "test-contract",
+      }),
+    ]);
+    expect(afterGeneratedOutputs).toEqual(before);
+
+    await writeFile(path.join(fixture.repositoryRoot, "apps/playground/src/main.ts"), "export const changed = true;\n", "utf8");
+    const afterTrackedSourceChange = await projectHealthGateInputFingerprintV1({
+      repositoryRoot: fixture.repositoryRoot,
+      profile,
+      gateId: "playground-build",
+    });
+    expect(afterTrackedSourceChange).not.toBe(before[0]);
   });
 });
