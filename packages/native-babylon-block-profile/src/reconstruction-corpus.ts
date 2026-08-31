@@ -203,11 +203,13 @@ const T_SHAPED_TRAVERSAL = record({
   seed: 202608312,
   polarity: "positive",
   family: "t-shaped",
-  maximumBlockCount: 11,
+  maximumBlockCount: 12,
   colliderMode: "layout",
   notTraversableBlockIds: Object.freeze([
     "t-west-foundation",
     "t-west-wall",
+    "t-north-foundation",
+    "t-north-wall",
   ]),
   spawn: SUPPORTED_SPAWN,
   opening: Object.freeze({
@@ -226,6 +228,8 @@ const T_SHAPED_TRAVERSAL = record({
     block("t-arm-east-2", "full", "route", [2, -0.5, -2], "t-route"),
     block("t-west-foundation", "full", "structure", [-3, -0.5, -2], "t-west-wall"),
     block("t-west-wall", "full", "structure", [-3, 0.5, -2], "t-west-wall"),
+    block("t-north-foundation", "full", "structure", [0, -0.5, -3], "t-north-wall"),
+    block("t-north-wall", "full", "structure", [0, 0.5, -3], "t-north-wall"),
   ]),
 });
 
@@ -257,12 +261,12 @@ const MOUNTAIN_CLIFF = record({
     block("m-step-rise", "step", "route", [0, 0.125, -2], "m-route"),
     block("m-step-tread", "step", "route", [0, 0.125, -3], "m-route"),
     block("m-overlook", "step", "route", [0, 0.125, -4], "m-route"),
-    block("m-cliff-base-s", "full", "background-mass", [-2, -0.5, 0], "m-cliff"),
-    block("m-cliff-base-m", "full", "background-mass", [-2, -0.5, -1], "m-cliff"),
-    block("m-cliff-base-n", "full", "background-mass", [-2, -0.5, -2], "m-cliff"),
-    block("m-cliff-mid-s", "full", "background-mass", [-2, 0.5, 0], "m-cliff"),
-    block("m-cliff-mid-m", "full", "background-mass", [-2, 0.5, -1], "m-cliff"),
-    block("m-cliff-mid-n", "full", "background-mass", [-2, 0.5, -2], "m-cliff"),
+    block("m-cliff-base-s", "full", "background-mass", [-1, -0.5, 0], "m-cliff"),
+    block("m-cliff-base-m", "full", "background-mass", [-1, -0.5, -1], "m-cliff"),
+    block("m-cliff-base-n", "full", "background-mass", [-1, -0.5, -2], "m-cliff"),
+    block("m-cliff-mid-s", "full", "background-mass", [-1, 0.5, 0], "m-cliff"),
+    block("m-cliff-mid-m", "full", "background-mass", [-1, 0.5, -1], "m-cliff"),
+    block("m-cliff-mid-n", "full", "background-mass", [-1, 0.5, -2], "m-cliff"),
   ]),
 });
 

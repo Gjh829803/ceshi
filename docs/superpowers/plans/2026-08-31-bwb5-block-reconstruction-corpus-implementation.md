@@ -117,10 +117,10 @@ BWB5-10 -> BWB5-20 -> BWB5-30 -> BWB5-50 -> BWB5-60 -> BWB5-70
 - Create: `packages/native-babylon-block-profile/src/reconstruction-corpus.ts`
 - Modify: `src/index.ts`
 
-- [ ] Write the failing contract test for closed IDs, seeds, polarity, same-Layout outputs, negative codes, and evidence-index non-claims.
-- [ ] Run it and confirm it fails because the corpus module is missing.
-- [ ] Implement the closed table and `materializeBabylonNativeBlockReconstructionCorpusCaseV1`.
-- [ ] Re-run until GREEN. Do not add Thin Instance/Chunk/coalescing.
+- [x] Write the failing contract test for closed IDs, seeds, polarity, same-Layout outputs, negative codes, and evidence-index non-claims.
+- [x] Run it and confirm it fails because the corpus module is missing.
+- [x] Implement the closed table and `materializeBabylonNativeBlockReconstructionCorpusCaseV1`.
+- [x] Re-run until GREEN. Do not add Thin Instance/Chunk/coalescing.
 
 Public names:
 
@@ -131,25 +131,25 @@ Public names:
 
 ## Task 2: BWB5-30 / BWB5-40
 
-- [ ] Add `createBabylonNativeBlockReconstructionCorpusModuleV1` on `./testing`.
-- [ ] Update exact root and testing export key lists.
-- [ ] Keep `createBabylonNativeBlockColliderRuntimeFixtureModuleV1`.
+- [x] Add `createBabylonNativeBlockReconstructionCorpusModuleV1` on `./testing`.
+- [x] Update exact root and testing export key lists.
+- [x] Keep `createBabylonNativeBlockColliderRuntimeFixtureModuleV1`.
 
 ## Task 3: BWB5-50 RED then GREEN
 
 **File:** `scripts/verification/bwb5-block-reconstruction-corpus.test.ts`
 
-- [ ] Write failing Havok tests for the five positive cases, `unsupported-spawn`, reset, dispose, 30/60/120-like cadence on `ordinary-and-blocked-steps`, and sequential cross-session rebind with no leftover collider/listener/camera/input owner.
-- [ ] Confirm they fail for missing corpus Module/behavior.
-- [ ] Implement the factory and keep fixtures inside current vertex/triangle/collider budgets.
-- [ ] Re-run the resource-heavy file until GREEN.
+- [x] Write failing Havok tests for the five positive cases, `unsupported-spawn`, reset, dispose, 30/60/120-like cadence on `ordinary-and-blocked-steps`, and sequential cross-session rebind with no leftover collider/listener/camera/input owner.
+- [x] Confirm they fail for missing corpus Module/behavior.
+- [x] Implement the factory and keep fixtures inside current vertex/triangle/collider budgets.
+- [x] Re-run the resource-heavy file until GREEN.
 
 The default WorldPackage fixture still has one `player` Subject. Cross-entity evidence is: reset+rebind of that Subject, plus sequential dispose of case A and create of case B with different collider IDs. Do not add a second product Subject Definition.
 
 ## Task 4: BWB5-60 / BWB5-70
 
-- [ ] Register the two new tests in `scripts/lib/test-gate-manifest.ts` (contract + resource-heavy `native-havok-or-recast`).
-- [ ] Run focused tests, `pnpm typecheck`, `pnpm test:census`, and a playground/native-playground build.
-- [ ] Independent Mode B + runtime-deep review. Fix P0/P1 before PR.
-- [ ] Commit `feat: add block world reconstruction corpus`, push, open PR. Merge independently of WRC-1.
+- [x] Register the two new tests in `scripts/lib/test-gate-manifest.ts` (contract + resource-heavy `native-havok-or-recast`).
+- [x] Run focused tests, `pnpm typecheck`, `pnpm test:census`, and a playground/native-playground build.
+- [x] Independent Mode B + runtime-deep review. Fix P0/P1 before PR.
+- [x] Commit `feat: add block world reconstruction corpus`, push, open PR. Merge independently of WRC-1.
 - [ ] After merge only, tick BWB-5 in `docs/18-refactor-progress-and-backlog.md`. Do not raise the total progress percentage.

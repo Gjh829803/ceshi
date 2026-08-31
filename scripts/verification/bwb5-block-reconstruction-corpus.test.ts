@@ -14,10 +14,8 @@ import { createBabylonNativeBlockReconstructionCorpusModuleV1 } from
 import { admitBabylonNativeSceneCandidateV1 } from
   "@whitebox-world/native-babylon/host";
 import { BabylonWorldRuntime } from "@whitebox-world/runtime-babylon";
-import {
-  bindRuntimeTestPossession,
-  resetAndBindRuntimeTestPossession,
-} from "@whitebox-world/runtime-babylon/testing";
+import { bindRuntimeTestPossession } from
+  "@whitebox-world/runtime-babylon/testing";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { runtimeWorldConfigurationFromVerifiedWorldPackageV1 } from
   "@whitebox-world/runtime-host";
@@ -182,6 +180,14 @@ async function createRuntime(
   return Object.freeze({ runtime, verified });
 }
 
+async function resetAndBind(
+  runtime: BabylonWorldRuntime,
+  entityId: string,
+): Promise<void> {
+  runtime.reset();
+  await bindRuntimeTestPossession(runtime, entityId);
+}
+
 function subjectOf(
   snapshot: Awaited<ReturnType<BabylonWorldRuntime["runFixedInput"]>>,
   entityId: string,
@@ -240,7 +246,7 @@ describe("BWB-5 Block Reconstruction Corpus Runtime", () => {
       expect(subjectOf(blocked, entityId).positionMetersXYZ[2])
         .toBeGreaterThan(-4.2);
       const hash = sha256CanonicalJson(blocked);
-      await resetAndBindRuntimeTestPossession(runtime, entityId);
+      await resetAndBind(runtime, entityId);
       const replayedSettled = await runtime.runFixedInput({
         actions: [],
         ticks: 5,
@@ -262,7 +268,7 @@ describe("BWB-5 Block Reconstruction Corpus Runtime", () => {
       expect(replayedElevated).toEqual(elevated);
       expect(replayedBlocked).toEqual(blocked);
       expect(sha256CanonicalJson(replayedBlocked)).toBe(hash);
-      await resetAndBindRuntimeTestPossession(runtime, entityId);
+      await resetAndBind(runtime, entityId);
       await runtime.runFixedInput({ actions: [], ticks: 5 });
       await runtime.runFixedInput({ actions: ["move-forward"], ticks: 95 });
       const departed = await runtime.runFixedInput({
@@ -294,7 +300,7 @@ describe("BWB-5 Block Reconstruction Corpus Runtime", () => {
       });
       expect(subjectOf(east, tEntity).positionMetersXYZ[0]).toBeGreaterThan(0.6);
       expect(subjectOf(east, tEntity).movementMedium).toBe("ground");
-      await resetAndBindRuntimeTestPossession(tRuntime, tEntity);
+      await resetAndBind(tRuntime, tEntity);
       await tRuntime.runFixedInput({ actions: [], ticks: 5 });
       await tRuntime.runFixedInput({ actions: ["move-forward"], ticks: 70 });
       const west = await tRuntime.runFixedInput({
@@ -320,7 +326,7 @@ describe("BWB-5 Block Reconstruction Corpus Runtime", () => {
       expect(subjectOf(along, mountainEntity).positionMetersXYZ[2])
         .toBeLessThan(-1.5);
       expect(subjectOf(along, mountainEntity).movementMedium).toBe("ground");
-      await resetAndBindRuntimeTestPossession(mountainRuntime, mountainEntity);
+      await resetAndBind(mountainRuntime, mountainEntity);
       await mountainRuntime.runFixedInput({ actions: [], ticks: 5 });
       const intoCliff = await mountainRuntime.runFixedInput({
         actions: ["move-left"],
@@ -358,15 +364,10 @@ describe("BWB-5 Block Reconstruction Corpus Runtime", () => {
     }
   }, 90_000);
 
-  it("leaves unsupported-spawn in air after settle ticks", async () => {
-    const { runtime, verified } = await createRuntime("unsupported-spawn");
-    const entityId = verified.worldRuntimeBootstrap.initialControlledEntityId;
-    try {
-      const settled = await runtime.runFixedInput({ actions: [], ticks: 20 });
-      expect(subjectOf(settled, entityId).movementMedium).toBe("air");
-    } finally {
-      await runtime.dispose();
-    }
+  it("fail-closes unsupported-spawn before a playable Runtime session exists", async () => {
+    await expect(createRuntime("unsupported-spawn")).rejects.toThrow(
+      /WORLDKIT_NATIVE_SCENE_RUNTIME_SPAWN_SUPPORT_MISSING/,
+    );
   }, 30_000);
 
   it("keeps fixed-tick hashes identical under 30/60/120-like submission", async () => {
@@ -450,7 +451,7 @@ describe("BWB-5 Block Reconstruction Corpus Runtime", () => {
       expect(secondInternals.scene).not.toBe(firstInternals.scene);
       const secondEntityId =
         second.verified.worldRuntimeBootstrap.initialControlledEntityId;
-      await resetAndBindRuntimeTestPossession(second.runtime, secondEntityId);
+      await resetAndBind(second.runtime, secondEntityId);
       const rebound = await second.runtime.runFixedInput({
         actions: [],
         ticks: 5,

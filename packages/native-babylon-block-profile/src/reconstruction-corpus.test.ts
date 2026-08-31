@@ -255,7 +255,6 @@ describe("BWB-5 reconstruction corpus contract", () => {
       if (caseId === "unsupported-spawn") continue;
       const engine = new NullEngine();
       const scene = new Scene(engine);
-      const createdMeshIds: string[] = [];
       try {
         const inspected = inspectBabylonNativeBlockReconstructionCorpusCaseV1(
           caseId,
@@ -283,9 +282,6 @@ describe("BWB-5 reconstruction corpus contract", () => {
         expect(materialization.failureMessage).toContain(
           EXPECTED_NEGATIVE_CODES[caseId],
         );
-        for (const mesh of scene.meshes) {
-          createdMeshIds.push(mesh.id);
-        }
         expect(scene.meshes.every((mesh) => mesh.isDisposed())).toBe(true);
         expect(scene.meshes.length).toBe(beforeCount);
         const index = createBabylonNativeBlockReconstructionCorpusEvidenceIndexV1({
@@ -300,7 +296,6 @@ describe("BWB-5 reconstruction corpus contract", () => {
         scene.dispose();
         engine.dispose();
       }
-      expect(createdMeshIds).toEqual(createdMeshIds);
     }
   });
 
