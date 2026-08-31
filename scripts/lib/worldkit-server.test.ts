@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -21,6 +21,9 @@ import {
   canonicalWorldkitBrowserRouteEvidencePublicationV2,
   type WorldkitBrowserRouteEvidencePublicationV2,
 } from "@whitebox-world/runtime-contracts";
+import { createCanonicalWorldPackageV1 } from "@whitebox-world/world-package";
+import { createWorldPackageTestInputV1 } from
+  "@whitebox-world/world-package/testing";
 import type { Browser } from "playwright";
 import { isNil, uniq } from "lodash-es";
 import { afterEach, describe, expect, it } from "vitest";
@@ -28,7 +31,12 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createValidAuthoringSpec } from "../../packages/authoring/src/test-fixture";
 
 import { launchChromiumWithSystemFallback } from "./playwright-browser-launch";
-import { startWorldkitServer, type WorldkitServerHandle } from "./worldkit-server";
+import { writeWorldPackageDirectoryV1 } from "./file-world-package";
+import {
+  startWorldkitServer,
+  terminateOwnedWorldkitServerChildrenV1,
+  type WorldkitServerHandle,
+} from "./worldkit-server";
 
 const INPUT_PATH = fileURLToPath(
   new URL("../../examples/authoring/rigged-subject-world.json", import.meta.url),
@@ -217,10 +225,75 @@ afterEach(async () => {
 });
 
 describe("startWorldkitServer", () => {
+  it.skipIf(process.platform === "win32")(
+    "bounds cleanup when an owned child ignores SIGTERM",
+    async () => {
+      const child = spawn(
+        process.execPath,
+        [
+          "--eval",
+          "process.on('SIGTERM', () => undefined); process.stdout.write('ready\\n'); setInterval(() => undefined, 1000);",
+        ],
+        { detached: true, stdio: ["ignore", "pipe", "ignore"] },
+      );
+      await new Promise<void>((resolve, reject) => {
+        child.once("error", reject);
+        child.stdout.once("data", () => resolve());
+      });
+      const exitPromise = new Promise<void>((resolve) => {
+        child.once("exit", () => resolve());
+      });
+      const safetyTimer = setTimeout(() => {
+        if (child.pid !== undefined) process.kill(-child.pid, "SIGKILL");
+      }, 1_000);
+      const startedAt = performance.now();
+      try {
+        await terminateOwnedWorldkitServerChildrenV1({
+          children: [child as never],
+          exitPromise,
+          stopTimeoutMilliseconds: 100,
+        });
+      } finally {
+        clearTimeout(safetyTimer);
+        if (child.exitCode === null && child.signalCode === null) {
+          if (child.pid !== undefined) process.kill(-child.pid, "SIGKILL");
+          await exitPromise;
+        }
+      }
+      expect(performance.now() - startedAt).toBeLessThan(750);
+      expect(child.signalCode).toBe("SIGKILL");
+    },
+    5_000,
+  );
+  it("rejects a Canonical Package before starting the Native Harness", async () => {
+    const directoryPath = await realpath(await mkdtemp(
+      path.join(tmpdir(), "worldkit-native-source-kind-"),
+    ));
+    try {
+      await writeWorldPackageDirectoryV1({
+        outputDirectoryPath: path.join(directoryPath, "package"),
+        directory: createCanonicalWorldPackageV1(
+          createWorldPackageTestInputV1(),
+        ),
+      });
+      await expect(startWorldkitServer({
+        source: {
+          kind: "world-package",
+          packageDirectoryPath: path.join(directoryPath, "package"),
+        },
+        startupTimeoutMilliseconds: 1_000,
+      })).rejects.toThrow(
+        "WORLDKIT_NATIVE_HARNESS_SCENE_SOURCE_KIND_UNSUPPORTED",
+      );
+    } finally {
+      await rm(directoryPath, { recursive: true, force: true });
+    }
+  });
+
   it("serves exact canonical Route evidence bytes through read-only GET and HEAD", async () => {
     const routeEvidence = routeEvidenceInput();
     const handle = await startWorldkitServer({
-      inputPath: INPUT_PATH,
+      source: { kind: "canonical-file", inputPath: INPUT_PATH },
       routeEvidence,
     });
     handles.push(handle);
@@ -266,7 +339,7 @@ describe("startWorldkitServer", () => {
     let browser: Browser | undefined;
     try {
       const handle = await startWorldkitServer({
-        inputPath,
+        source: { kind: "canonical-file", inputPath },
         routeEvidence: routeEvidenceInput(publication),
       });
       handles.push(handle);
@@ -334,7 +407,7 @@ describe("startWorldkitServer", () => {
     let browser: Browser | undefined;
     try {
       const handle = await startWorldkitServer({
-        inputPath,
+        source: { kind: "canonical-file", inputPath },
         routeEvidence: routeEvidenceInput(mismatchedPublication),
       });
       handles.push(handle);
@@ -380,7 +453,9 @@ describe("startWorldkitServer", () => {
   }, 30_000);
 
   it("returns stable 404 and 405 Route evidence endpoint responses", async () => {
-    const handle = await startWorldkitServer({ inputPath: INPUT_PATH });
+    const handle = await startWorldkitServer({
+      source: { kind: "canonical-file", inputPath: INPUT_PATH },
+    });
     handles.push(handle);
     const endpoint = new URL("/__worldkit/route-evidence", handle.url);
 
@@ -401,7 +476,9 @@ describe("startWorldkitServer", () => {
     const previousPath = process.env.WORLDKIT_ROUTE_EVIDENCE_PATH;
     process.env.WORLDKIT_ROUTE_EVIDENCE_PATH = INPUT_PATH;
     try {
-      const handle = await startWorldkitServer({ inputPath: INPUT_PATH });
+      const handle = await startWorldkitServer({
+        source: { kind: "canonical-file", inputPath: INPUT_PATH },
+      });
       handles.push(handle);
       const response = await fetch(
         new URL("/__worldkit/route-evidence", handle.url),
@@ -431,7 +508,7 @@ describe("startWorldkitServer", () => {
         ".missing-node-executable",
       );
       await expect(startWorldkitServer({
-        inputPath: INPUT_PATH,
+        source: { kind: "canonical-file", inputPath: INPUT_PATH },
         routeEvidence: routeEvidenceInput(publication),
       })).rejects.toMatchObject({
         code: "WORLDKIT_ROUTE_EVIDENCE_TOO_LARGE",
@@ -445,7 +522,7 @@ describe("startWorldkitServer", () => {
   it("removes its private Route evidence directory after stop", async () => {
     const before = await ownedRouteEvidenceDirectories();
     const handle = await startWorldkitServer({
-      inputPath: INPUT_PATH,
+      source: { kind: "canonical-file", inputPath: INPUT_PATH },
       routeEvidence: routeEvidenceInput(),
     });
     const during = await ownedRouteEvidenceDirectories();
@@ -460,7 +537,7 @@ describe("startWorldkitServer", () => {
         new URL("./worldkit-server.ts", import.meta.url).href,
       )};
       const handle = await startWorldkitServer({
-        inputPath: ${JSON.stringify(INPUT_PATH)},
+        source: { kind: "canonical-file", inputPath: ${JSON.stringify(INPUT_PATH)} },
         refreshDependencies: true,
         forwardOutput: true,
         startupTimeoutMilliseconds: 30000,
@@ -490,7 +567,9 @@ describe("startWorldkitServer", () => {
   }, 30_000);
 
   it("proves readiness belongs to its nonce and reuses stop/exit promises", async () => {
-    const handle = await startWorldkitServer({ inputPath: INPUT_PATH });
+    const handle = await startWorldkitServer({
+      source: { kind: "canonical-file", inputPath: INPUT_PATH },
+    });
     handles.push(handle);
     const response = await fetch(
       new URL("/__worldkit/authoring-spec", handle.url),
@@ -518,7 +597,7 @@ describe("startWorldkitServer", () => {
         throw new Error("Test server did not receive a TCP port.");
       }
       await expect(startWorldkitServer({
-        inputPath: INPUT_PATH,
+        source: { kind: "canonical-file", inputPath: INPUT_PATH },
         port: address.port,
         startupTimeoutMilliseconds: 1_000,
       })).rejects.toMatchObject({ code: "WORLDKIT_SERVER_PORT_UNAVAILABLE" });
@@ -537,7 +616,7 @@ describe("startWorldkitServer", () => {
         new URL("./worldkit-server.ts", import.meta.url).href,
       )};
       const handle = await startWorldkitServer({
-        inputPath: ${JSON.stringify(INPUT_PATH)},
+        source: { kind: "canonical-file", inputPath: ${JSON.stringify(INPUT_PATH)} },
         startupTimeoutMilliseconds: 30000,
       });
       await handle.stop();
@@ -576,7 +655,7 @@ describe("startWorldkitServer", () => {
       );
       const outcome = await Promise.race([
         startWorldkitServer({
-          inputPath: INPUT_PATH,
+          source: { kind: "canonical-file", inputPath: INPUT_PATH },
           routeEvidence: routeEvidenceInput(),
           startupTimeoutMilliseconds: 1_000,
         }).then(

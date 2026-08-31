@@ -355,7 +355,9 @@ async function captureBrowserEvidence(): Promise<BrowserEvidenceV1> {
   let result: BrowserEvidenceV1 | undefined;
   let primaryError: unknown;
   try {
-    server = await startWorldkitServer({ inputPath: INPUT_PATH });
+    server = await startWorldkitServer({
+      source: { kind: "canonical-file", inputPath: INPUT_PATH },
+    });
     browser = await launchChromiumWithSystemFallback();
     context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
     page = await context.newPage();

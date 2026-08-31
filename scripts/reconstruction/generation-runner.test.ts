@@ -104,7 +104,7 @@ process.exit(1);
   it("promotes exactly three non-empty outputs only after successful router and self-check", async () => {
     const prepared = await preparedFixture();
     const calls: unknown[] = [];
-    const port: CodexTaskProcessPortV1 = { run: async (runInput) => { calls.push(runInput); await writeOutputs(prepared.stagingDirectoryPath); return { exitCode: 0, stdout: "WORLDKIT_LWDP_JOB native-block-generation native-block-generation-cloud-temple-initial job-1 dispatch=single-task-fast-path profile=formal model=gpt-5.6-sol reasoning=xhigh\n", stderr: "", taskOutcome: completedTaskOutcome }; } };
+    const port: CodexTaskProcessPortV1 = { run: async (runInput) => { calls.push(runInput); await writeOutputs(prepared.stagingDirectoryPath); return { exitCode: 0, stdout: "WORLDKIT_LWDP_JOB native-block-generation native-block-generation-cloud-temple-initial gen_cd640a435a24fae0 dispatch=single-task-fast-path profile=formal model=gpt-5.6-sol reasoning=xhigh\n", stderr: "", taskOutcome: completedTaskOutcome }; } };
     try {
       const result = await runNativeBlockGenerationV1(prepared, {
         process: port,

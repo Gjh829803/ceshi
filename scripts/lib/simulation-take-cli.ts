@@ -337,7 +337,10 @@ export async function runSimulationTakeFileV1(
   let writer: ControlCaptureBundleWriterV1 | undefined;
   try {
     server = await startWorldkitServer({
-      inputPath: pipeline.absoluteInputPath,
+      source: {
+        kind: "canonical-file",
+        inputPath: pipeline.absoluteInputPath,
+      },
       ...(options.port === undefined ? {} : { port: options.port }),
     });
     browser = await launchChromiumWithSystemFallback();

@@ -167,28 +167,6 @@ kbd.wide {
   font-size: 11px;
 }
 
-.path-check-button {
-  width: 100%;
-  padding: 8px 10px;
-  border: 1px solid rgba(226, 236, 218, 0.18);
-  border-radius: 8px;
-  background: rgba(174, 190, 155, 0.10);
-  color: rgba(238, 236, 218, 0.78);
-  font: 500 10px/1.2 "DM Mono", ui-monospace, monospace;
-  letter-spacing: 0.08em;
-  cursor: pointer;
-}
-
-.path-check-button:hover:not(:disabled) {
-  border-color: rgba(230, 215, 163, 0.38);
-  background: rgba(208, 191, 133, 0.14);
-}
-
-.path-check-button:disabled {
-  cursor: wait;
-  opacity: 0.58;
-}
-
 .pause-button {
   right: clamp(24px, 3.1vw, 52px);
   bottom: clamp(24px, 3.1vw, 52px);

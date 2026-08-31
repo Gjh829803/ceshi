@@ -236,7 +236,7 @@ export class NativeRuntimeHostV1 {
         );
         canvas.setAttribute(
           "aria-label",
-          "Cloud Ridge Babylon Native scene",
+          "Babylon Native Package scene",
         );
         canvas.tabIndex = 0;
         canvas.hidden = handles.size > 0;

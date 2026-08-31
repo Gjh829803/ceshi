@@ -19,7 +19,7 @@ import {
 import { admitHostedNativeExecutionRequestV1 } from
   "@whitebox-world/runtime-host";
 import { Engine } from "@babylonjs/core/Engines/engine.js";
-import { cloudRidgeSubjectAssetResolver } from
+import { nativeSceneSubjectAssetResolver } from
   "./subject-asset-resolver.js";
 import { createHostedRuntimeBridgeV1 } from "./hosted-runtime-bridge.js";
 import { startHostedRuntimeFrameV1 } from "./hosted-runtime-frame.js";
@@ -28,11 +28,11 @@ import { loadVerifiedNativeWorldPackageV1 } from
   "./world-package-loader.js";
 import "./style.css";
 
-const CLOUD_RIDGE_MAIN_PATH_RUN_TICKS = 1_700;
 declare const __WORLDKIT_HOSTED_BROWSER_RUNNER_DIGEST__: `sha256:${string}`;
 declare const __WORLDKIT_HOSTED_BROWSER_POLICY_HASH__: `sha256:${string}`;
 declare const __WORLDKIT_HOSTED_RUNTIME_ORIGIN__: string;
 declare const __WORLDKIT_HOSTED_SHELL_ORIGIN__: string;
+declare const __WORLDKIT_NATIVE_VERIFIER_PROBE_ENABLED__: boolean;
 interface NativeSceneSpikeProbeV1 {
   readonly ready: true;
   readonly bootstrap: BabylonNativeSceneBootstrapV1;
@@ -75,8 +75,8 @@ function initializationLabel(
     engine: "创建 Babylon Engine…",
     scene: "创建 Native Scene…",
     havok: "初始化 SDK Havok…",
-    terrain: "初始化 Canonical Terrain…",
-    "native-scene": "构建山峰、山门与云海…",
+    terrain: "初始化世界表面…",
+    "native-scene": "构建已验证 Native 场景…",
     subjects: "载入 SDK G Bot 与动作…",
     camera: "绑定 SDK 第三人称相机…",
     ready: "完成，正在生成首帧…",
@@ -109,7 +109,7 @@ function showFailure(error: unknown): void {
   requiredElement<HTMLElement>("[data-state]").textContent = "FAILED";
 }
 
-async function start(): Promise<void> {
+async function startVerifierProbe(): Promise<void> {
   const viewport = requiredElement<HTMLElement>("[data-viewport]");
   const loading = requiredElement<HTMLElement>("[data-loading]");
   const loadingStage = requiredElement<HTMLElement>("[data-loading-stage]");
@@ -117,15 +117,13 @@ async function start(): Promise<void> {
   const stateElement = requiredElement<HTMLElement>("[data-state]");
   const positionElement = requiredElement<HTMLElement>("[data-position]");
   const pauseButton = requiredElement<HTMLButtonElement>("[data-pause]");
-  const pathCheckButton = requiredElement<HTMLButtonElement>("[data-path-check]");
-
   const {
-    default: cloudRidgeNativeScene,
-    moduleBundleContentHash: cloudRidgeModuleBundleContentHash,
-  } = await import("virtual:worldkit-cloud-ridge-native-scene");
+    default: nativeSceneModule,
+    moduleBundleContentHash: nativeSceneModuleBundleContentHash,
+  } = await import("virtual:worldkit-native-scene");
 
   const verifiedWorldPackage = await loadVerifiedNativeWorldPackageV1(
-    new URL("/world-packages/cloud-ridge/", globalThis.location.origin),
+    new URL("/__worldkit/native-package/", globalThis.location.origin),
   );
   const controlledEntityId =
     verifiedWorldPackage.worldRuntimeBootstrap.initialControlledEntityId;
@@ -133,10 +131,10 @@ async function start(): Promise<void> {
     runtimeSessionId: `native-scene-${crypto.randomUUID()}`,
     canvasHost: viewport,
     verifiedWorldPackage,
-    loadedSceneModule: cloudRidgeNativeScene,
+    loadedSceneModule: nativeSceneModule,
     loadedSceneModuleBundleContentHash:
-      cloudRidgeModuleBundleContentHash,
-    subjectAssetResolver: cloudRidgeSubjectAssetResolver,
+      nativeSceneModuleBundleContentHash,
+    subjectAssetResolver: nativeSceneSubjectAssetResolver,
     onInitializationStage(stage) {
       loadingStage.textContent = initializationLabel(stage);
     },
@@ -323,40 +321,6 @@ async function start(): Promise<void> {
     updateHud(activeRuntime().snapshot());
   });
 
-  pathCheckButton.addEventListener("click", () => {
-    const wasPaused = paused;
-    paused = true;
-    pressedCodes.clear();
-    pathCheckButton.disabled = true;
-    pathCheckButton.textContent = "正在沿主路径前进…";
-    void reset()
-      .then(() => runFixedInput({
-        actions: ["move-forward", "run"],
-        ticks: CLOUD_RIDGE_MAIN_PATH_RUN_TICKS,
-      }))
-      .then(() => runFixedInput({ actions: [], ticks: 2 }))
-      .then((snapshot) => {
-        activeRuntime().renderFrame();
-        updateHud(snapshot);
-        const subject = snapshot.subjectStatesByEntityId[controlledEntityId];
-        const reached = subject !== undefined &&
-          subject.movementMedium === "ground" &&
-          subject.positionMetersXYZ[1] > 12 &&
-          subject.positionMetersXYZ[2] < -29;
-        pathCheckButton.textContent = reached
-          ? "主路径通过 ✓"
-          : "未到达，请查看位置";
-      })
-      .catch((error) => {
-        pathCheckButton.textContent = "路径测试失败";
-        failRuntime(error);
-      })
-      .finally(() => {
-        paused = wasPaused;
-        pathCheckButton.disabled = false;
-      });
-  });
-
   const resizeObserver = new ResizeObserver(() => activeRuntime().resize());
   resizeObserver.observe(viewport);
   window.addEventListener("beforeunload", () => {
@@ -447,9 +411,9 @@ async function startHostedFrame(): Promise<void> {
   canvas.tabIndex = 0;
   viewport.replaceChildren(canvas);
   const verified = await loadVerifiedNativeWorldPackageV1(
-    new URL("/world-packages/cloud-ridge/", location.origin),
+    new URL("/__worldkit/native-package/", location.origin),
   );
-  const moduleImport = await import("virtual:worldkit-cloud-ridge-native-scene");
+  const moduleImport = await import("virtual:worldkit-native-scene");
   const executionBudgetCap = browserProtocolBudget(
     verified.manifest.resourceBudget,
   );
@@ -476,7 +440,7 @@ async function startHostedFrame(): Promise<void> {
         stencil: true,
       });
     },
-    subjectAssetResolver: cloudRidgeSubjectAssetResolver,
+    subjectAssetResolver: nativeSceneSubjectAssetResolver,
   });
   const snapshot = entry.initialSnapshot();
   const readyBody = {
@@ -590,4 +554,10 @@ void (mode.has("hosted-runtime-frame")
   ? startHostedFrame()
   : mode.has("hosted")
     ? startHostedShell()
-    : start()).catch(showFailure);
+    : __WORLDKIT_NATIVE_VERIFIER_PROBE_ENABLED__ &&
+        mode.size === 1 &&
+        mode.get("verifier-native-spike") === "1"
+      ? startVerifierProbe()
+      : Promise.reject(new Error(
+          "WORLDKIT_NATIVE_HARNESS_MODE_REQUIRED",
+        ))).catch(showFailure);
