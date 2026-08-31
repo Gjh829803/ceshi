@@ -12,6 +12,8 @@ import type {
   BabylonNativeBlockVisualGroupInventoryV1,
 } from "./check.js";
 import type { BabylonNativeBlockLayoutV1 } from "./layout.js";
+import { peekBabylonNativeBlockLiveHandleRegistryV1 } from
+  "./live-handle-registry.js";
 import type {
   BabylonNativeBlockCheckedLayoutV1,
   BabylonNativeBlockSessionRecordV1,
@@ -40,6 +42,17 @@ interface VisualAdapterModule {
       minimumMetersXYZ: readonly [number, number, number];
       maximumMetersXYZ: readonly [number, number, number];
     }>[];
+    liveHandles: Readonly<{
+      blocks: readonly Readonly<{
+        runtimeEntityId: string;
+        semanticCaptureClassId: string;
+        mesh: Mesh;
+      }>[];
+      visualGroups: readonly Readonly<{
+        visualGroupId: string;
+        meshes: readonly Mesh[];
+      }>[];
+    }>;
     dispose(): void;
   }>;
 }
@@ -272,6 +285,24 @@ describe("Babylon Native block visual adapter", () => {
       expect(scene.getPhysicsEngine()).toBe(physicsEngineBefore);
       expect(Object.isFrozen(visuals.nodes)).toBe(true);
       expect(Object.isFrozen(visuals.visualGroups)).toBe(true);
+      expect(visuals.liveHandles.blocks.map((entry) => ({
+        runtimeEntityId: entry.runtimeEntityId,
+        semanticCaptureClassId: entry.semanticCaptureClassId,
+      }))).toEqual([{
+        runtimeEntityId: "native-block:gate-cap",
+        semanticCaptureClassId: "worldkit.native-block.group.ridge-gate",
+      }, {
+        runtimeEntityId: "native-block:gate-quarter",
+        semanticCaptureClassId: "worldkit.native-block.group.ridge-gate",
+      }, {
+        runtimeEntityId: "native-block:route-block",
+        semanticCaptureClassId: "worldkit.native-block.group.ungrouped",
+      }]);
+      expect(visuals.liveHandles.visualGroups[0]?.meshes).toEqual([
+        meshByBlockId.get("gate-cap"),
+        meshByBlockId.get("gate-quarter"),
+      ]);
+      expect(Object.isFrozen(visuals.liveHandles)).toBe(true);
     });
   });
 
@@ -297,10 +328,15 @@ describe("Babylon Native block visual adapter", () => {
       expect(first.nodes[0]?.mesh.material).not.toBe(
         second.nodes[0]?.mesh.material,
       );
+      expect(peekBabylonNativeBlockLiveHandleRegistryV1(firstScene)).toBe(
+        first.liveHandles,
+      );
 
       const firstMaterial = first.nodes[0]?.mesh.material;
       first.dispose();
       first.dispose();
+      expect(peekBabylonNativeBlockLiveHandleRegistryV1(firstScene))
+        .toBeUndefined();
 
       expect(first.nodes.every(({ mesh }) => !mesh.isDisposed())).toBe(true);
       expect(first.nodes.every(({ mesh }) => mesh.material === null)).toBe(true);

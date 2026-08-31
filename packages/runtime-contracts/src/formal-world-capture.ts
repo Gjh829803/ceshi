@@ -197,8 +197,6 @@ export interface FormalWorldCaptureRequestV1 {
   readonly semanticCaptureMapRef: string;
   readonly semanticCaptureMap: FormalSemanticCaptureMapV1;
   readonly semanticCaptureMapHash: Sha256HashV1;
-  readonly nativeBlockCaptureIdentityInventoryRef: string;
-  readonly nativeBlockCaptureIdentityInventoryHash: Sha256HashV1;
   readonly nativeBlockMaterializerMetadataRef: string;
   readonly nativeBlockMaterializerMetadataHash: Sha256HashV1;
   readonly views: readonly [
@@ -251,7 +249,6 @@ export interface FormalWorldCaptureReceiptV1 {
   readonly readySnapshotHash: Sha256HashV1;
   readonly sdkOwnerIdentities: readonly FormalWorldCaptureSdkOwnerIdentityV1[];
   readonly semanticCaptureMapHash: Sha256HashV1;
-  readonly nativeBlockCaptureIdentityInventoryHash: Sha256HashV1;
   readonly nativeBlockMaterializerMetadataHash: Sha256HashV1;
   readonly colliderOverlayRequestHash: Sha256HashV1;
   readonly scriptedTraversalRequestHash: Sha256HashV1;
@@ -366,8 +363,6 @@ const FORMAL_REQUEST_FIELDS = [
   "semanticCaptureMapRef",
   "semanticCaptureMap",
   "semanticCaptureMapHash",
-  "nativeBlockCaptureIdentityInventoryRef",
-  "nativeBlockCaptureIdentityInventoryHash",
   "nativeBlockMaterializerMetadataRef",
   "nativeBlockMaterializerMetadataHash",
   "views",
@@ -421,7 +416,6 @@ const RECEIPT_FIELDS = [
   "readySnapshotHash",
   "sdkOwnerIdentities",
   "semanticCaptureMapHash",
-  "nativeBlockCaptureIdentityInventoryHash",
   "nativeBlockMaterializerMetadataHash",
   "colliderOverlayRequestHash",
   "scriptedTraversalRequestHash",
@@ -1601,16 +1595,6 @@ export function parseFormalWorldCaptureRequestV1(
     ),
     semanticCaptureMap,
     semanticCaptureMapHash,
-    nativeBlockCaptureIdentityInventoryRef: text(
-      source.nativeBlockCaptureIdentityInventoryRef,
-      contract,
-      "nativeBlockCaptureIdentityInventoryRef",
-    ),
-    nativeBlockCaptureIdentityInventoryHash: hash(
-      source.nativeBlockCaptureIdentityInventoryHash,
-      contract,
-      "nativeBlockCaptureIdentityInventoryHash",
-    ),
     nativeBlockMaterializerMetadataRef: text(
       source.nativeBlockMaterializerMetadataRef,
       contract,
@@ -1897,11 +1881,6 @@ export function parseFormalWorldCaptureReceiptV1(
     contract,
     "scriptedTraversalHash",
   );
-  const nativeBlockCaptureIdentityInventoryHash = hash(
-    source.nativeBlockCaptureIdentityInventoryHash,
-    contract,
-    "nativeBlockCaptureIdentityInventoryHash",
-  );
   const nativeBlockMaterializerMetadataHash = hash(
     source.nativeBlockMaterializerMetadataHash,
     contract,
@@ -1935,7 +1914,6 @@ export function parseFormalWorldCaptureReceiptV1(
     [text(source.worldPackageBuildReceiptRef, contract, "worldPackageBuildReceiptRef"), formalRequest.worldPackageBuildReceiptRef, "worldPackageBuildReceiptRef"],
     [worldPackageBuildReceiptHash, formalRequest.worldPackageBuildReceiptHash, "worldPackageBuildReceiptHash"],
     [semanticCaptureMapHash, formalRequest.semanticCaptureMapHash, "semanticCaptureMapHash"],
-    [nativeBlockCaptureIdentityInventoryHash, formalRequest.nativeBlockCaptureIdentityInventoryHash, "nativeBlockCaptureIdentityInventoryHash"],
     [nativeBlockMaterializerMetadataHash, formalRequest.nativeBlockMaterializerMetadataHash, "nativeBlockMaterializerMetadataHash"],
     [colliderOverlayRequestHash, hashFormalColliderOverlayRequestV1(formalRequest.colliderOverlay), "colliderOverlayRequestHash"],
     [scriptedTraversalRequestHash, hashFormalScriptedTraversalRequestV1(formalRequest.scriptedTraversal), "scriptedTraversalRequestHash"],
@@ -1971,7 +1949,6 @@ export function parseFormalWorldCaptureReceiptV1(
     readySnapshotHash,
     sdkOwnerIdentities,
     semanticCaptureMapHash,
-    nativeBlockCaptureIdentityInventoryHash,
     nativeBlockMaterializerMetadataHash,
     colliderOverlayRequestHash,
     scriptedTraversalRequestHash,

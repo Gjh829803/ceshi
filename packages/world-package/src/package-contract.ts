@@ -9,6 +9,8 @@ import {
   hashBabylonNativeDependencyLockV1,
   hashBabylonNativeSceneBootstrapV1,
   hashBabylonNativeSceneContributionV1,
+  hashBabylonNativeBlockMaterializerMetadataV1,
+  BABYLON_NATIVE_BLOCK_SCENE_PROFILE_REF_V1,
   hashNativeSceneCheckResultV1,
   nativeSceneModuleBundleRefFromHashV1,
   worldResourceLockEntriesV1,
@@ -63,7 +65,8 @@ const NATIVE_SCENE_SOURCE_FIELDS = Object.freeze([
   "nativeSceneContributionHash", "dependencyLockHash", "assetLockHash",
   "nativeSceneCheckResultHash", "sceneAuthoringRouteDecisionHash",
   "sceneAuthoringAttemptHash", "sceneAuthoringAttemptResultRef",
-  "sceneAuthoringAttemptResultHash", "nativeSceneBootstrapPath",
+  "sceneAuthoringAttemptResultHash", "nativeMaterializer",
+  "nativeSceneBootstrapPath",
   "sceneModuleBundleManifestPath", "sceneModuleBundlePath", "dependencyLockPath",
   "assetLockPath", "nativeSceneContributionPath", "nativeSceneCheckResultPath",
   "sceneAuthoringRouteDecisionPath", "sceneAuthoringAttemptPath",
@@ -83,6 +86,7 @@ const PACKAGE_OWNED_RESOURCE_PATHS = new Set([
   "native/dependency-lock.json",
   "native/asset-lock.json",
   "native/contribution.json",
+  "native/block-materializer-metadata.json",
   "native/check-result.json",
   "authoring/scene-authoring-route-decision.json",
   "authoring/scene-authoring-attempt.json",
@@ -405,6 +409,26 @@ export function canonicalizeWorldPackageManifestV1(
       NATIVE_SCENE_SOURCE_FIELDS,
       "WORLD_PACKAGE_MANIFEST_INVALID",
     );
+    const nativeMaterializer = exactRecord(
+      value.sceneSource.nativeMaterializer,
+      value.sceneSource.nativeMaterializer?.kind === "none"
+        ? ["kind"]
+        : ["kind", "metadataPath", "metadataHash"],
+      "WORLD_PACKAGE_MANIFEST_INVALID",
+    );
+    if (
+      nativeMaterializer.kind !== "none" &&
+      (nativeMaterializer.kind !== "babylon-native-block" ||
+        nativeMaterializer.metadataPath !==
+          "native/block-materializer-metadata.json")
+    ) fail("WORLD_PACKAGE_MANIFEST_INVALID", "Native materializer invalid");
+    if (nativeMaterializer.kind === "babylon-native-block") {
+      requireHash(
+        nativeMaterializer.metadataHash,
+        "nativeMaterializer.metadataHash",
+        "WORLD_PACKAGE_MANIFEST_INVALID",
+      );
+    }
     if (
       value.sceneSource.nativeSceneBootstrapPath !== "native/bootstrap.json" ||
       value.sceneSource.sceneModuleBundleManifestPath !== "native/module-bundle.json" ||
@@ -666,10 +690,23 @@ export function assertBabylonNativeWorldPackageMembershipV1(
   const contribution = input.nativeSceneContribution;
   const gameplay = input.gameplayBootstrap;
   const runtime = input.worldRuntimeBootstrap;
+  const materializerMetadata = input.nativeBlockMaterializerMetadata;
+  const isBlockProfile = bundle.nativeSceneProfile.resourceRef ===
+    BABYLON_NATIVE_BLOCK_SCENE_PROFILE_REF_V1;
+  const hostProfileSettlement = contribution.profileSettlement.kind ===
+      "host-snapshot"
+    ? contribution.profileSettlement
+    : undefined;
   const selectedAssetRefs = attempt.selectedAssetResources.map((entry) =>
     entry.assetResourceRef).sort();
   const lockedAssetRefs = input.assetLock.entries.map((entry) =>
     entry.assetResourceRef).sort();
+  const contributionColliderIds = contribution.staticColliders
+    .map(({ id }) => id)
+    .sort();
+  const materializerColliderIds = materializerMetadata?.colliderJoins
+    .map(({ colliderId }) => colliderId)
+    .sort();
   if (
     hashBabylonNativeSceneBootstrapV1(bootstrap) !==
       source.nativeSceneBootstrapHash ||
@@ -724,6 +761,29 @@ export function assertBabylonNativeWorldPackageMembershipV1(
     receipt.manifest.seed !== bootstrap.seed ||
     receipt.manifest.gameplayBootstrapHash !== gameplay.contentHash ||
     receipt.manifest.worldRuntimeBootstrapHash !== runtime.contentHash ||
+    isBlockProfile !== !isNil(materializerMetadata) ||
+    isBlockProfile !==
+      (source.nativeMaterializer.kind === "babylon-native-block") ||
+    (
+      source.nativeMaterializer.kind === "babylon-native-block" &&
+      (
+        isNil(materializerMetadata) ||
+        hashBabylonNativeBlockMaterializerMetadataV1(materializerMetadata) !==
+          source.nativeMaterializer.metadataHash ||
+        materializerMetadata.blockProfileRef !==
+          bundle.nativeSceneProfile.resourceRef ||
+        isNil(hostProfileSettlement) ||
+        materializerMetadata.contributionHash !==
+          hashBabylonNativeSceneContributionV1(contribution) ||
+        materializerMetadata.profileInventoryHash !==
+          hostProfileSettlement.profileInventoryHash ||
+        materializerMetadata.settledVisualHash !==
+          hostProfileSettlement.settledVisualHash ||
+        materializerMetadata.blocks.length !==
+          hostProfileSettlement.targetCount ||
+        !isEqual(materializerColliderIds, contributionColliderIds)
+      )
+    ) ||
     !isEqual(selectedAssetRefs, lockedAssetRefs)
   ) fail("WORLD_PACKAGE_NATIVE_MEMBERSHIP_INVALID", "component closure mismatch");
 }

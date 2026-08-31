@@ -146,6 +146,12 @@ async function completedAttempt() {
           exitCode: 0,
           stdout: `WORLDKIT_LOCAL_CODEX_JOB native-block-generation ${prepared.routerRequestId} pid=123 profile=formal model=gpt-5.6-sol reasoning=xhigh\n`,
           stderr: "",
+          taskOutcome: {
+            kind: "worldkit-codex-task-outcome" as const,
+            schemaVersion: 1 as const,
+            requestId: prepared.routerRequestId,
+            outcome: "completed" as const,
+          },
         };
       },
     },
@@ -153,7 +159,10 @@ async function completedAttempt() {
     reconcile: async () => ({ outcome: "missing" }),
     cleanup: async () => ({ outcome: "completed" }),
   });
-  expect(generated.receipt.outcome).toBe("completed");
+  expect(
+    generated.receipt.outcome,
+    JSON.stringify(generated.receipt),
+  ).toBe("completed");
   const attemptDirectoryPath = path.dirname(generated.sourceDirectoryPath!);
   await writeFile(
     path.join(attemptDirectoryPath, "generation-receipt.json"),
@@ -188,14 +197,22 @@ describe("packageNativeBlockAttemptV1", () => {
     expect(packaged.sceneAuthoringAttemptResult.authoredSourceHash).toBe(
       packaged.verifiedWorldPackage.sceneModuleBundleManifest.sourceGraphHash,
     );
-    expect(packaged.authoringLayoutBinding.visualGroups).toHaveLength(5);
+    expect(
+      packaged.verifiedWorldPackage.nativeBlockMaterializerMetadata
+        ?.visualGroups,
+    ).toHaveLength(5);
     expect(packaged.worldPackageRef).toBe(
       packaged.verifiedWorldPackage.receipt.worldPackageRef,
     );
     await expect(lstat(path.join(
+      fixture.outputDirectoryPath,
+      "native",
+      "block-materializer-metadata.json",
+    ))).resolves.toBeDefined();
+    await expect(lstat(path.join(
       fixture.attemptDirectoryPath,
       "native-block-authoring-layout-binding.json",
-    ))).resolves.toBeDefined();
+    ))).rejects.toMatchObject({ code: "ENOENT" });
   }, 60_000);
 
   it("rejects a stale Generation Receipt before creating a check or Package output", async () => {

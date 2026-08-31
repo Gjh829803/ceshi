@@ -53,8 +53,8 @@ export type {
   BabylonNativeBlockColliderCandidateInventoryEntryV1,
   BabylonNativeBlockStaticColliderSelectionV1,
 } from "./collider-contribution.js";
-export { bindBlockVisualGroupsToSemanticCaptureTargetsV1 } from "./formal-capture-identity.js";
-export type { BindBlockVisualGroupsToSemanticCaptureTargetsInputV1 } from "./formal-capture-identity.js";
+export { bindBlockMaterializerMetadataToSemanticCaptureTargetsV1 } from "./formal-capture-identity.js";
+export type { BindBlockMaterializerMetadataToSemanticCaptureTargetsInputV1 } from "./formal-capture-identity.js";
 export { createBabylonNativeBlockAuthoringCaptureV1 } from "./authoring-capture.js";
 export type {
   BabylonNativeBlockAuthoringCaptureV1,

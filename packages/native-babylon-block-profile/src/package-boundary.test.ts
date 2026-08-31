@@ -131,7 +131,7 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
       "BABYLON_NATIVE_BLOCK_PROFILE_REF_V1",
       "BABYLON_NATIVE_BLOCK_RECONSTRUCTION_CORPUS_CASE_IDS_V1",
       "BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1",
-      "bindBlockVisualGroupsToSemanticCaptureTargetsV1",
+      "bindBlockMaterializerMetadataToSemanticCaptureTargetsV1",
       "bindNativeBlockAuthoringManifestToCheckedLayoutV1",
       "createBabylonNativeBlockAuthoringCaptureV1",
       "createBabylonNativeBlockProfileSessionV1",
@@ -152,6 +152,8 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
     const host = await import("./host.js") as Record<string, unknown>;
     expect(Object.keys(host)).toEqual([
       "takeBabylonNativeBlockCheckedEpochEvidenceV1",
+      "createBabylonNativeBlockMaterializerMetadataV1",
+      "peekBabylonNativeBlockLiveHandleRegistryV1",
     ]);
   });
 

@@ -79,6 +79,7 @@ function nativeManifestFixture(): WorldPackageManifestV1 {
       sceneAuthoringAttemptHash: HASH_D,
       sceneAuthoringAttemptResultRef: "worldkit://scene-authoring-attempt-result/fixture@1",
       sceneAuthoringAttemptResultHash: HASH_A,
+      nativeMaterializer: { kind: "none" },
       nativeSceneBootstrapPath: "native/bootstrap.json",
       sceneModuleBundleManifestPath: "native/module-bundle.json",
       sceneModuleBundlePath: "native/scene.mjs",

@@ -77,6 +77,9 @@ export function settleBabylonNativeBlockProfileV1(input: Readonly<{
       : input.displayGapMeters,
     blocks: blocks.map((block) => ({
       id: block.id,
+      runtimeEntityId: `native-block:${block.id}`,
+      semanticCaptureClassId:
+        `worldkit.native-block.group.${block.visualGroupId ?? "ungrouped"}`,
       shape: block.shape,
       paletteRole: block.paletteRole,
       ...(isNil(block.visualGroupId)

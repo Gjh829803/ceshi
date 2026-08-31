@@ -8,11 +8,13 @@ import {
   hashBabylonNativeDependencyLockV1,
   hashBabylonNativeSceneBootstrapV1,
   hashBabylonNativeSceneContributionV1,
+  hashBabylonNativeBlockMaterializerMetadataV1,
   hashNativeSceneCheckResultV1,
   parseBabylonNativeAssetLockV1,
   parseBabylonNativeDependencyLockV1,
   parseBabylonNativeSceneBootstrapV1,
   parseBabylonNativeSceneContributionV1,
+  parseBabylonNativeBlockMaterializerMetadataV1,
   parseBabylonNativeSceneModuleBundleManifestV1,
   parseNativeSceneCheckResultV1,
   worldResourceLockEntriesV1,
@@ -26,6 +28,7 @@ import {
   type BabylonNativeDependencyLockV1,
   type BabylonNativeSceneBootstrapV1,
   type BabylonNativeSceneContributionV1,
+  type BabylonNativeBlockMaterializerMetadataV1,
   type BabylonNativeSceneModuleBundleManifestV1,
   type NativeSceneCheckResultV1,
   type WorldResourceLockEntryV1,
@@ -152,6 +155,8 @@ export interface FrozenBabylonNativeWorldPackageBuildInputV1 {
   readonly sceneAuthoringAttemptResult: SceneAuthoringAttemptResultV1;
   readonly nativeSceneCheckResult: NativeSceneCheckResultV1;
   readonly nativeSceneContribution: BabylonNativeSceneContributionV1;
+  readonly nativeBlockMaterializerMetadata?:
+    BabylonNativeBlockMaterializerMetadataV1;
   readonly gameplayBootstrap: GameplayBootstrapV1;
   readonly worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
   readonly registryLock: readonly import("@whitebox-world/runtime-contracts").WorldResourceLockEntryV1[];
@@ -620,10 +625,18 @@ function createBabylonNativeWorldPackageV1Internal(
   const contribution = parseBabylonNativeSceneContributionV1(
     input.nativeSceneContribution,
   );
+  const blockMetadata = isNil(input.nativeBlockMaterializerMetadata)
+    ? undefined
+    : parseBabylonNativeBlockMaterializerMetadataV1(
+      input.nativeBlockMaterializerMetadata,
+    );
   const gameplay = parseGameplayBootstrapV1(input.gameplayBootstrap);
   const runtime = parseWorldRuntimeBootstrapV1(input.worldRuntimeBootstrap);
   const bounds = nativeBounds(input.worldBounds);
   const budget = nativeBudget(input.resourceBudget);
+  const requiresBlockMetadata = bootstrap.nativeSceneProfileRef ===
+    "worldkit://native-scene-profile/whitebox.blocks@1";
+  const contributionHash = hashBabylonNativeSceneContributionV1(contribution);
   if (
     bundle.fileInventory.length !== 1 ||
     bundle.fileInventory[0]?.path !== bundle.entryPath ||
@@ -660,6 +673,21 @@ function createBabylonNativeWorldPackageV1Internal(
     runtime.gameplayBootstrapRef !== gameplay.resourceRef ||
     runtime.gameplayBootstrapHash !== gameplay.contentHash ||
     runtime.initialControlledEntityId !== bootstrap.initialControlledEntityId
+    || (requiresBlockMetadata !== !isNil(blockMetadata))
+    || (!isNil(blockMetadata) && (
+      contribution.profileSettlement.kind !== "host-snapshot" ||
+      blockMetadata.blockProfileRef !== bootstrap.nativeSceneProfileRef ||
+      blockMetadata.profileInventoryHash !==
+        contribution.profileSettlement.profileInventoryHash ||
+      blockMetadata.settledVisualHash !==
+        contribution.profileSettlement.settledVisualHash ||
+      blockMetadata.contributionHash !== contributionHash ||
+      blockMetadata.blocks.length !== contribution.profileSettlement.targetCount ||
+      !isEqual(
+        blockMetadata.colliderJoins.map(({ colliderId }) => colliderId).sort(),
+        contribution.staticColliders.map(({ id }) => id).sort(),
+      )
+    ))
   ) invalid("closure", "Native artifacts do not form one world");
   assertNativeWorldFacts(contribution, bootstrap, bounds, budget);
   const lockedResources = nativeRegistryLock(
@@ -693,8 +721,7 @@ function createBabylonNativeWorldPackageV1Internal(
     kind: "babylon-native-scene" as const,
     nativeSceneBootstrapHash: hashBabylonNativeSceneBootstrapV1(bootstrap),
     sceneModuleBundleHash: bundle.bundleContentHash,
-    nativeSceneContributionHash:
-      hashBabylonNativeSceneContributionV1(contribution),
+    nativeSceneContributionHash: contributionHash,
     dependencyLockHash: hashBabylonNativeDependencyLockV1(dependencyLock),
     assetLockHash: hashBabylonNativeAssetLockV1(assetLock),
     nativeSceneCheckResultHash: hashNativeSceneCheckResultV1(check),
@@ -707,6 +734,15 @@ function createBabylonNativeWorldPackageV1Internal(
     ),
     sceneAuthoringAttemptResultHash:
       hashSceneAuthoringAttemptResultV1(attemptResult),
+    nativeMaterializer: isNil(blockMetadata)
+      ? Object.freeze({ kind: "none" as const })
+      : Object.freeze({
+        kind: "babylon-native-block" as const,
+        metadataPath:
+          "native/block-materializer-metadata.json" as const,
+        metadataHash:
+          hashBabylonNativeBlockMaterializerMetadataV1(blockMetadata),
+      }),
     nativeSceneBootstrapPath: "native/bootstrap.json" as const,
     sceneModuleBundleManifestPath: "native/module-bundle.json" as const,
     sceneModuleBundlePath: "native/scene.mjs" as const,
@@ -784,6 +820,12 @@ function createBabylonNativeWorldPackageV1Internal(
     jsonFile(sceneSource.dependencyLockPath, dependencyLock),
     jsonFile(sceneSource.assetLockPath, assetLock),
     jsonFile(sceneSource.nativeSceneContributionPath, contribution),
+    ...(isNil(blockMetadata) ? [] : [jsonFile(
+      sceneSource.nativeMaterializer.kind === "babylon-native-block"
+        ? sceneSource.nativeMaterializer.metadataPath
+        : invalid("nativeMaterializer", "Block metadata path is missing"),
+      blockMetadata,
+    )]),
     jsonFile(sceneSource.nativeSceneCheckResultPath, check),
     jsonFile(sceneSource.sceneAuthoringRouteDecisionPath, route),
     jsonFile(sceneSource.sceneAuthoringAttemptPath, attempt),
@@ -811,6 +853,9 @@ function createBabylonNativeWorldPackageV1Internal(
     sceneAuthoringAttemptResult: attemptResult,
     nativeSceneCheckResult: check,
     nativeSceneContribution: contribution,
+    ...(isNil(blockMetadata)
+      ? {}
+      : { nativeBlockMaterializerMetadata: blockMetadata }),
     gameplayBootstrap: gameplay,
     worldRuntimeBootstrap: runtime,
     worldPackageBuildReceipt: directory.receipt,
