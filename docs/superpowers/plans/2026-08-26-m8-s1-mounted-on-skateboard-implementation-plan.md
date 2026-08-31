@@ -6,17 +6,18 @@
 
 **Architecture:** Keep `action.activate` owned by Core Semantic Action. A locked trusted-effect planner returns a closed mount/dismount plan; GameplayState remains the sole state writer and RuntimeHost remains the fixed-tick transaction/journal owner. Babylon projects the committed `mountedOn` state, while Physics support remains owned only by MotionKernel `checkSupport()`.
 
-**Tech stack:** TypeScript 5.9, Vitest 3.2.7, Babylon.js 9.21.2, Havok 1.3.14, pnpm 10.14.
+**Tech stack:** TypeScript 5.9, Vitest 3.2.7, Babylon.js 9.23.0, Havok 1.3.14, pnpm 10.14.
 
 **Spec:** `docs/superpowers/specs/2026-08-26-m8-s1-mounted-on-skateboard-design.md`
 
-**Progress (2026-08-26):** The core paths in Tasks 1–7 are implemented on `main`; Task 8's canonical
+**Progress (2026-08-31):** The core paths in Tasks 1–7 are implemented on `main`; Task 8's canonical
 Track writer/validator and primary tamper checks are implemented. Remaining before final M8-S1
 completion is the listed Runtime adversarial hardening, retained-support `supportedBy` evidence,
 formal four-phase mounted Capture verifier, and Task 9's final independent completion review. The
-current integration checkpoint's full same-tree base gates pass; subsequent hardening/Capture edits
-must rerun the evidence they invalidate. `CAM-MOUNT-1` is recorded in the central Backlog and remains owned by P2.4 Camera work,
-outside this slice.
+completion candidate also includes the narrow Camera clean break and publication barrier defined by the
+spec's 2026-08-31 amendment. The latest approved Camera contract is authoritative; no legacy relationship
+alias or Babylon Node-derived Camera Context may remain. The amended design must pass main-agent self-review
+and an exact-SHA Cursor Cloud Claude Opus deep review before the implementation is accepted.
 
 ## Global constraints
 
@@ -25,8 +26,15 @@ outside this slice.
 - Use one canonical public term: `mountedOn`; delete the unreleased `mount` dialect.
 - Do not infer `supportedBy` from `mountedOn` and do not call `checkSupport()` outside MotionKernel.
 - Do not add wheel physics, tricks, vehicle movement, new camera ownership or dynamic Route claims.
+- Camera remains the sole View owner and consumes only committed fixed-tick truth. Use only
+  `relationshipContexts` / `allRelationshipConditions`; delete `relationshipRole(s)` and the Task-6
+  semantic-authority fallback rather than retaining compatibility.
+- Camera Socket Context comes from locked Socket data plus committed Subject pose, never Babylon Nodes,
+  render parenting or mesh metadata.
 - Existing Action definitions must gain explicit `{ mode: "state-only" }`; no optional fallback.
 - Commit small independently reviewable tasks only after their focused GREEN. Final integration evidence must run on one tree.
+- Local verification is limited to affected tests and targeted capability verifiers. Root typecheck/test/build,
+  Studio/independent lanes and other whole-project gates run in Cursor Cloud against the exact pushed SHA.
 
 ## Task 1: Clean-break Relationship and Action contracts
 
@@ -174,6 +182,65 @@ outside this slice.
   pnpm exec vitest run packages/runtime-babylon/src/runtime.test.ts packages/runtime-babylon/src/p15-conformance.test.ts --no-file-parallelism --maxWorkers=1 --minWorkers=1
   ```
 
+## Task 6A: Retained-support Semantic Fact closure
+
+**Files:**
+
+- Modify: `packages/gameplay-contracts/src/gameplay-artifacts.ts`
+- Modify: `packages/gameplay/src/core-gameplay-bootstrap.ts`
+- Modify: Runtime Body/support ports and `packages/runtime-babylon/src/semantic-fact-projector.ts`
+- Modify: owning generated Bootstrap/World Build/Package artifacts through their generators
+- Test: adjacent contract, Runtime, Host capacity and asset-validation suites
+
+**Produces:** one exact, hash-bound Projector Profile and deterministic `supportedBy` facts from the
+already committed Physics support result.
+
+- [ ] Add the complete required `semanticFactProjectorProfileResource`; reject omission, extra keys, stale
+  content Hash and any alias/default path.
+- [ ] Regenerate every checked-in Gameplay Bootstrap and enclosing World Build/Package identity through its
+  owner. Do not hand-edit derived Hashes or signatures.
+- [ ] Retain exact traversal surface identity on Babylon supporting contacts. Keep `sliding`; remove side-wall
+  contacts with the installed Babylon 9.23.0 positive-support constraint; do not reuse Route max slope.
+- [ ] Delete the per-Subject/per-Tick whole-scene geometry reconstruction/query path. The Projector validates
+  exact admitted identities and omits ambiguous/dynamic contacts.
+- [ ] Adapt Golden and non-Golden committed Body support into the same Projector input. Exclude mounted Riders;
+  allow a dismounted Rider Fact only after a real subsequent Physics Tick.
+- [ ] Clear prior Facts before Tick 0 traversal reset; prove departure/landing episode identity,
+  reset/replay/rollback byte equality and `P` / `C + P` capacity bounds.
+- [ ] Run only the affected contract/Runtime/Host/asset tests locally. Leave root gates to Cursor Cloud.
+
+## Task 6B: Latest Camera contract clean break
+
+**Files:**
+
+- Modify: `packages/camera/src/camera-domain.ts`, `selection.ts` and owning tests
+- Modify: `packages/runtime-contracts/src/world-runtime-bootstrap.ts` plus generated schema/validator
+- Modify: `packages/subject-registry` Camera types/catalog and generated Builder/Planner bundles
+- Modify: `packages/runtime-babylon` Camera Context/Director/publication paths and focused tests
+- Modify: checked-in runtime bootstrap/build/package artifacts through their owning generators
+
+**Produces:** one typed Camera relationship contract and one coherent fixed-tick Camera publication.
+
+- [ ] Replace `relationshipRole(s)` atomically with `relationshipContexts` and
+  `allRelationshipConditions`; the mounted rule is `{ type: "mountedOn", entityRole: "rider" }`.
+- [ ] Delete the Task-6 legacy conversion helper, production-unreachable semantic-authority unavailable
+  branch, unused subject/render relationship role field and duplicate Playground Camera projection helper.
+- [ ] Sort Relationship Context by type then ID using canonical code-unit order. Add unique Rider and shared
+  Mount ambiguity/fail-closed tests.
+- [ ] Project local Socket positions from locked Socket definitions plus committed Subject origin/facing.
+  Omit unsupported bone projections and preserve explicit fallback diagnostics. Prove Babylon Node mutation
+  cannot alter same-Tick Camera Context.
+- [ ] Publish Target, SelectionDecision, Rig, Modifiers, Spring Arm and pose as one Camera epoch. Prove the
+  immediate state after Mount/Dismount is the previous coherent view and the first following fixed Tick is the
+  new coherent view; include reset, rebind, rollback and dual-Runtime isolation.
+- [ ] Keep Browser V5 at exactly 38 keys and Snapshot V4 unchanged in shape.
+- [ ] Regenerate all owning schemas/catalog bundles/artifacts; `verify:unreleased-clean-break` must reject every
+  deleted field/helper/path.
+
+The design amendment and deletion graph are main-agent-owned. Before Task 6B can be considered accepted,
+the main agent self-reviews the document and sends the exact pushed design SHA to Cursor Cloud Claude Opus
+for deep review. Every finding is reproduced against source and disposed before final implementation review.
+
 ## Task 7: Playground fixture and unchanged Browser V5 surface
 
 **Files:**
@@ -189,7 +256,7 @@ outside this slice.
 - [x] Build the Rider from the current G Bot/Golden definition and the board from package-local primitive visual parts with one support-centered capsule approximation, one `MountStand` Socket and one stand slot.
 - [x] Add two request resources and two Semantic Action definitions/effect locks to the fixture Bootstrap.
 - [x] Activate the mounted Relationship feature through the canonical Bootstrap closure.
-- [x] Add Browser tests proving exact V5 key count remains 39 and current submit/receipt/event/state/inspection calls expose the transition.
+- [x] Add Browser tests proving exact V5 key count remains 38 and current submit/receipt/event/state/inspection calls expose the transition.
 - [x] Add a source census proving the retired composite hoverboard asset is not referenced and no wheel/vehicle capability is claimed.
 - [x] Add a contract assertion that `MountedOnRelationshipStateV1`, Mount/Dismount requests and Mount slots contain no Ground Motion Kernel/Profile Ref; the S1 Ground closure belongs only to the skateboard Subject capability assembly so a later dynamics closure can replace it without Relationship migration.
 
@@ -220,7 +287,8 @@ outside this slice.
 - Modify: `README.md` only if the public capability index needs an M8 entry
 
 - [x] Run focused tests after the final implementation edit.
-- [x] Run once on the same current checkpoint tree:
+- [ ] After focused local tests pass, push one exact candidate SHA and run these whole-project gates once in
+  Cursor Cloud rather than on the local machine:
 
   ```bash
   pnpm typecheck
@@ -236,10 +304,8 @@ outside this slice.
   pnpm verify:outdoor-gameplay
   ```
 
-  Evidence: 190 contract files / 2,050 tests, 21 resource-heavy files / 401 tests, Studio 73/73,
-  independent Node 23/23 + Site 1/1, typecheck/build and all listed verifiers pass. The removed
-  project Cursor Python suites are no longer part of the current independent gate.
-  The Site lane required `npm ci` inside `sites/world-sdk-blueprint` from its committed lockfile.
+  Previous checkpoint evidence is historical only and does not prove the amended contract or final SHA.
+  Record the cloud agent identity, exact commit, command exit codes, test counts and artifacts.
 
 - [ ] Run the new mounted-skateboard Browser/Capture verifier. Record command, test count, artifact paths and warnings.
 - [ ] Inspect the real rendered surface for Rider/board separation, slot alignment, Mount movement, Dismount placement and Reset. Record manual input separately from automated evidence.
@@ -249,4 +315,5 @@ outside this slice.
 - [ ] Complete the final-tree host review and reproduce every candidate finding before disposition. Earlier
   optional external checkpoint reports were fully dispositioned, but they predate the fixes and are not
   final-tree evidence.
-- [ ] Update the backlog only after all gates pass. Do not mark seat/tether, wheel physics, tricks, full mounted Camera, dynamic Route or hosted Builder support complete.
+- [ ] Update the backlog only after all gates pass. Do not mark seat/tether, wheel physics, tricks, general
+  vehicle/multi-camera behavior, dynamic Route or hosted Builder support complete.
