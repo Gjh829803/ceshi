@@ -195,8 +195,8 @@ describe("Native Block Builder Skill", () => {
   });
 
   it.each([
-    [["worldkit://visual-resource/z@1", "worldkit://visual-resource/a@1"], "NATIVE_BLOCK_BUILDER_RESOURCE_REFS_UNSORTED"],
-    [["worldkit://visual-resource/a@1", "worldkit://visual-resource/a@1"], "NATIVE_BLOCK_BUILDER_RESOURCE_REFS_DUPLICATE"],
+    [["worldkit://static-geometry-asset/z@1", "worldkit://static-geometry-asset/a@1"], "NATIVE_BLOCK_BUILDER_RESOURCE_REFS_UNSORTED"],
+    [["worldkit://static-geometry-asset/a@1", "worldkit://static-geometry-asset/a@1"], "NATIVE_BLOCK_BUILDER_RESOURCE_REFS_DUPLICATE"],
   ])("rejects unsorted or duplicate resource refs", async (resourceRefs, expectedCode) => {
     const workspace = await createWorkspace();
     await writeFile(path.join(workspace, "native-resources.json"), JSON.stringify({
@@ -207,6 +207,22 @@ describe("Native Block Builder Skill", () => {
     const result = await runSelfCheck(workspace);
     expect(result.exitCode).toBe(2);
     expect(result.report.diagnosticCodes).toContain(expectedCode);
+  });
+
+  it("rejects Host-only Registry refs in the Native visual resource list", async () => {
+    const workspace = await createWorkspace();
+    await writeFile(path.join(workspace, "native-resources.json"), JSON.stringify({
+      kind: "native-visual-resource-list",
+      schemaVersion: 1,
+      resourceRefs: ["worldkit://subject-definition/humanoid.g-bot@2"],
+    }));
+
+    const result = await runSelfCheck(workspace);
+
+    expect(result.exitCode).toBe(2);
+    expect(result.report.diagnosticCodes).toContain(
+      "NATIVE_BLOCK_BUILDER_RESOURCE_REFS_INVALID",
+    );
   });
 
   it.each([

@@ -26,7 +26,7 @@ function importSpecifiers(source: string): readonly string[] {
 }
 
 describe("@whitebox-world/native-babylon-block-profile package boundary", () => {
-  it("has one optional root with only its two direct dependencies", async () => {
+  it("has one optional root with only its declared direct dependencies", async () => {
     const manifest = JSON.parse(
       await readFile(new URL("package.json", PACKAGE_ROOT), "utf8"),
     ) as Record<string, unknown>;
@@ -44,6 +44,7 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
         "@babylonjs/core": "9.23.0",
         "@whitebox-world/native-babylon": "workspace:*",
         "@whitebox-world/protocol": "workspace:*",
+        "@whitebox-world/validation": "workspace:*",
         "lodash-es": "^4.18.1",
       },
     });
@@ -51,6 +52,7 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
       "@babylonjs/core",
       "@whitebox-world/native-babylon",
       "@whitebox-world/protocol",
+      "@whitebox-world/validation",
       "lodash-es",
     ]);
     expect(Object.keys(manifest.exports as object)).toEqual([".", "./testing"]);
@@ -113,6 +115,7 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
       "background-mass",
     ]);
     expect(Object.keys(profile).sort()).toEqual([
+      "BABYLON_NATIVE_BLOCK_AUTHORING_PROFILE_REF_V1",
       "BABYLON_NATIVE_BLOCK_CENTER_LATTICE_METERS_XYZ_V1",
       "BABYLON_NATIVE_BLOCK_FULL_SIZE_METERS_V1",
       "BABYLON_NATIVE_BLOCK_OCCUPANCY_GRID_METERS_XYZ_V1",
@@ -122,14 +125,20 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
       "BABYLON_NATIVE_BLOCK_PROFILE_REF_V1",
       "BABYLON_NATIVE_BLOCK_RECONSTRUCTION_CORPUS_CASE_IDS_V1",
       "BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1",
+      "bindNativeBlockAuthoringManifestToCheckedLayoutV1",
       "createBabylonNativeBlockAuthoringCaptureV1",
       "createBabylonNativeBlockProfileSessionV1",
       "createBabylonNativeBlockReconstructionCorpusEvidenceIndexV1",
+      "hashBabylonNativeBlockCheckedLayoutInventoryV1",
+      "hashNativeBlockAuthoringManifestV1",
+      "hashNativeBlockVisualResourceListV1",
       "inspectBabylonNativeBlockReconstructionCorpusCaseV1",
       "materializeBabylonNativeBlockReconstructionCorpusCaseV1",
+      "parseNativeBlockAuthoringManifestV1",
+      "parseNativeBlockVisualResourceListV1",
     ]);
     expect(Object.keys(profile).some((name) =>
-      /host|runtime|collider|traversal|manifest|compiler/i.test(name))).toBe(false);
+      /host|runtime|collider|traversal|compiler/i.test(name))).toBe(false);
   });
 
   it("keeps the real-runtime fixture behind one exact testing-only export", async () => {
