@@ -17,7 +17,8 @@ formal four-phase mounted Capture verifier, and Task 9's final independent compl
 completion candidate also includes the narrow Camera clean break and publication barrier defined by the
 spec's 2026-08-31 amendment. The latest approved Camera contract is authoritative; no legacy relationship
 alias or Babylon Node-derived Camera Context may remain. The amended design must pass main-agent self-review
-and an exact-SHA Cursor Cloud Claude Opus deep review before the implementation is accepted.
+and an independent exact-SHA deep review, with reviewer identity and target SHA recorded, before the
+implementation is accepted.
 
 ## Global constraints
 
@@ -34,7 +35,8 @@ and an exact-SHA Cursor Cloud Claude Opus deep review before the implementation 
 - Existing Action definitions must gain explicit `{ mode: "state-only" }`; no optional fallback.
 - Commit small independently reviewable tasks only after their focused GREEN. Final integration evidence must run on one tree.
 - Local verification is limited to affected tests and targeted capability verifiers. Root typecheck/test/build,
-  Studio/independent lanes and other whole-project gates run in Cursor Cloud against the exact pushed SHA.
+  Studio/independent lanes and other whole-project gates run in a remote Cloud Agent against the exact
+  pushed SHA.
 
 ## Task 1: Clean-break Relationship and Action contracts
 
@@ -188,7 +190,8 @@ and an exact-SHA Cursor Cloud Claude Opus deep review before the implementation 
 
 - Modify: `packages/gameplay-contracts/src/gameplay-artifacts.ts`
 - Modify: `packages/gameplay/src/core-gameplay-bootstrap.ts`
-- Modify: Runtime Body/support ports and `packages/runtime-babylon/src/semantic-fact-projector.ts`
+- Modify: Runtime Body/support ports
+- Create: `packages/runtime-babylon/src/semantic-fact-projector.ts`
 - Modify: owning generated Bootstrap/World Build/Package artifacts through their generators
 - Test: adjacent contract, Runtime, Host capacity and asset-validation suites
 
@@ -201,13 +204,15 @@ already committed Physics support result.
   owner. Do not hand-edit derived Hashes or signatures.
 - [ ] Retain exact traversal surface identity on Babylon supporting contacts. Keep `sliding`; remove side-wall
   contacts with the installed Babylon 9.23.0 positive-support constraint; do not reuse Route max slope.
-- [ ] Delete the per-Subject/per-Tick whole-scene geometry reconstruction/query path. The Projector validates
-  exact admitted identities and omits ambiguous/dynamic contacts.
+- [ ] Do not introduce any per-Subject/per-Tick whole-scene geometry reconstruction/query path. The current
+  tree has no production `supportedBy` projector; the new Projector validates exact admitted identities and
+  omits ambiguous/dynamic contacts. The already-removed Dismount height probe is not a Fact source.
 - [ ] Adapt Golden and non-Golden committed Body support into the same Projector input. Exclude mounted Riders;
   allow a dismounted Rider Fact only after a real subsequent Physics Tick.
 - [ ] Clear prior Facts before Tick 0 traversal reset; prove departure/landing episode identity,
   reset/replay/rollback byte equality and `P` / `C + P` capacity bounds.
-- [ ] Run only the affected contract/Runtime/Host/asset tests locally. Leave root gates to Cursor Cloud.
+- [ ] Run only the affected contract/Runtime/Host/asset tests locally. Leave root gates to a remote Cloud
+  Agent.
 
 ## Task 6B: Latest Camera contract clean break
 
@@ -238,8 +243,9 @@ already committed Physics support result.
   deleted field/helper/path.
 
 The design amendment and deletion graph are main-agent-owned. Before Task 6B can be considered accepted,
-the main agent self-reviews the document and sends the exact pushed design SHA to Cursor Cloud Claude Opus
-for deep review. Every finding is reproduced against source and disposed before final implementation review.
+the main agent self-reviews the document and sends the exact pushed design SHA to an independent deep-review
+agent. The review records reviewer identity and exact SHA. Every finding is reproduced against source and
+disposed before final implementation review.
 
 ## Task 7: Playground fixture and unchanged Browser V5 surface
 
@@ -288,7 +294,7 @@ for deep review. Every finding is reproduced against source and disposed before 
 
 - [x] Run focused tests after the final implementation edit.
 - [ ] After focused local tests pass, push one exact candidate SHA and run these whole-project gates once in
-  Cursor Cloud rather than on the local machine:
+  a remote Cloud Agent rather than on the local machine:
 
   ```bash
   pnpm typecheck

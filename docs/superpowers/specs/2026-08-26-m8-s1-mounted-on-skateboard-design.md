@@ -435,16 +435,21 @@ is the sole current resource and fixes these semantics:
 - accepted support states: `supported` and `sliding`;
 - surface motion: static only;
 - support-point height tolerance: the Character body contact band;
-- minimum upward support-normal dot ratio: `0.95` after the native Body owner has retained only Babylon
-  supporting contacts with `dot(normal, up) > 0.08`;
+- minimum contact-to-aggregate support-normal dot ratio:
+  `minimumContactToAggregateSupportNormalDotRatio: 0.95`, evaluated as
+  `dot(normalize(contact.normalXYZ), normalize(retainedSupport.supportNormalWorldXYZ)) >= 0.95` after the
+  native Body owner has retained only Babylon supporting contacts with
+  `dot(normalize(contact.normalXYZ), worldUp) > 0.08`;
 - ambiguous surface resolution: omit the Fact;
 - end delay: `0` fixed Ticks.
 
-The two normal thresholds have different owners. The low positive dot test preserves Babylon 9.23.0's
-supporting-contact meaning and removes side-wall contacts without reintroducing the walkable-slope policy.
-The profile threshold decides whether the retained supporting evidence is strong enough for a public Fact.
-Route maximum slope remains Route policy and must not filter Motion's retained support evidence; otherwise a
-real `sliding` episode would be lost.
+The two normal thresholds have different owners and different operands. The Body-owned low positive
+world-up dot test preserves Babylon 9.23.0's supporting-contact meaning and removes side-wall contacts
+without reintroducing the walkable-slope policy. The Projector Profile's `0.95` contact-to-aggregate test is
+a coherence gate: it rejects a contact whose normal disagrees with the Body owner's retained aggregate
+support normal. It is not a world-up or walkable-slope threshold. `supported` versus `sliding` remains the
+Body owner's `maxSlopeCosine` classification. Route maximum slope remains separate Route policy and must not
+filter Motion's retained support evidence; otherwise a real `sliding` episode would be lost.
 
 Every retained supporting contact carries the exact frozen traversal identity already attached to its
 admitted collider: `surfaceEntityId`, `traversalSurfaceId` and `colliderSubshapeId`. The Projector validates
@@ -527,13 +532,13 @@ published from one epoch.
 
 | ID | Goal and independently verifiable deliverable | depends_on | blocks | Exclusive owner / integration point | Verification | Mode |
 | --- | --- | --- | --- | --- | --- | --- |
-| M8-D1 | Freeze this amendment and deletion list | current approved Camera and Runtime-State specs | all rows | main agent; this spec and implementation plan | main self-review, then exact-SHA Cursor Cloud Claude Opus deep design review | main-agent-only |
-| M8-F2 | Required hash-bound Projector Profile and clean generated asset closure | M8-D1 | M8-F3, M8-I2 | gameplay contracts/core bootstrap and owning generators | strict parser/hash negatives plus byte-valid checked-in assets | sequential |
-| M8-F3 | Exact-identity retained support for Golden and non-Golden bodies | M8-F2 | M8-F4 | runtime body/support ports and Projector input seam | steep sliding, ground-plus-wall, Golden landing, no hot-loop geometry scan | sequential |
-| M8-F4 | Deterministic Fact lifecycle, reset/replay/rollback and capacity | M8-F3 | M8-I2 | committed Runtime `semanticFactsById` and WorldSession capacity seam | departure/landing/reset plus prepared abort/replay and bound tests | sequential |
-| M8-C1 | Camera public relationship current-only clean break | M8-D1 | M8-C2 | camera domain, runtime contracts, Registry and generators | strict rejection of old fields; unique/ambiguous Rider cases | sequential |
-| M8-C2 | Locked-socket Camera Context and atomic fixed-tick publication | M8-C1 | M8-I2 | runtime-babylon Camera projector/publication owner | immediate Mount/Dismount, Node-mutation, yaw, reset/rebind, dual Runtime | sequential |
-| M8-I2 | Four-phase Capture, affected tests, rendered inspection and exact-SHA final review | M8-F4, M8-C2 | none | main agent; verifier/docs/final integration | local affected tests only; full gates and independent review in Cursor Cloud | main-agent-only |
+| M8-COMP-D1 | Freeze this amendment and deletion list | current approved Camera and Runtime-State specs | all completion rows | main agent; this spec and implementation plan | main self-review, then independent exact-SHA deep design review | main-agent-only |
+| M8-SF1 | Required hash-bound Projector Profile and clean generated asset closure | M8-COMP-D1 | M8-SF2, M8-COMP-I1 | gameplay contracts/core bootstrap and owning generators | strict parser/hash negatives plus byte-valid checked-in assets | sequential |
+| M8-SF2 | Exact-identity retained support for Golden and non-Golden bodies | M8-SF1 | M8-SF3 | runtime body/support ports and Projector input seam | steep sliding, ground-plus-wall, Golden landing, no hot-loop geometry scan | sequential |
+| M8-SF3 | Deterministic Fact lifecycle, reset/replay/rollback and capacity | M8-SF2 | M8-COMP-I1 | committed Runtime `semanticFactsById` and WorldSession capacity seam | departure/landing/reset plus prepared abort/replay and bound tests | sequential |
+| M8-CAM1 | Camera public relationship current-only clean break | M8-COMP-D1 | M8-CAM2 | camera domain, runtime contracts, Registry and generators | strict rejection of old fields; unique/ambiguous Rider cases | sequential |
+| M8-CAM2 | Locked-socket Camera Context and atomic fixed-tick publication | M8-CAM1 | M8-COMP-I1 | runtime-babylon Camera projector/publication owner | immediate Mount/Dismount, Node-mutation, yaw, reset/rebind, dual Runtime | sequential |
+| M8-COMP-I1 | Four-phase Capture, affected tests, rendered inspection and exact-SHA final review | M8-SF3, M8-CAM2 | none | main agent; verifier/docs/final integration | local affected tests only; full gates and independent exact-SHA review in a remote Cloud Agent | main-agent-only |
 
 Architecture, shared contract decisions, final diff review and integration remain main-agent-owned. Parallel
 workers may implement only rows whose inputs and file ownership are already frozen. A worker report is not
