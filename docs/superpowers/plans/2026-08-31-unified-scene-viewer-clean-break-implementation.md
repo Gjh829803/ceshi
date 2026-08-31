@@ -27,11 +27,11 @@
 
 **Interfaces:** `parseSceneCatalogV1(value): SceneCatalogV1`; no `defaultSubjectDefinitionRef`, Native source or Viewer bootstrap in this task.
 
-- [ ] Add RED tests rejecting Subject metadata, Native source members, inherited/extra keys and unsafe paths.
-- [ ] Run the focused test and confirm failures against the current union.
-- [ ] Implement the Canonical-only projection and remove the premature bootstrap/Native exports.
-- [ ] Remove stale test-manifest entries, update lockfile with `pnpm install --lockfile-only`, then run focused test, census, frozen install and typecheck.
-- [ ] Commit `fix(scene-catalog): keep preset metadata canonical-only`.
+- [x] Add RED tests rejecting Subject metadata, Native source members, inherited/extra keys and unsafe paths.
+- [x] Run the focused test and confirm failures against the current union.
+- [x] Implement the Canonical-only projection and remove the premature bootstrap/Native exports.
+- [x] Remove stale test-manifest entries, update lockfile with `pnpm install --lockfile-only`, then run focused test, census, frozen install and typecheck.
+- [x] Commit `fix(scene-catalog): keep preset metadata canonical-only`.
 
 ### Task 2: Publish complete G Bot tuning presets
 
@@ -39,11 +39,11 @@
 
 **Interfaces:** `promoteScenePresetV1({ sceneId, title, purpose, sourcePath, catalogPath })`; it delegates to `parseAuthoringSpecV4`, verifies matching ID and controlled G Bot Subject, rejects symlink/overwrite, durably renames preset bytes, then publishes catalog metadata.
 
-- [ ] Add RED tests for invalid V4, ID mismatch, non-G-Bot controlled Subject, symlink, overwrite and catalog-before-preset failure.
-- [ ] Run the focused test and confirm the publisher is absent.
-- [ ] Implement minimal atomic publication.
-- [ ] Complete slope/step/corridor/ledge/blocker stations and limit Action Lab to currently admitted transitions.
-- [ ] Run focused tests plus validate/build/headless load for each preset and commit.
+- [x] Add RED tests for invalid V4, ID mismatch, non-G-Bot controlled Subject, symlink, overwrite and catalog-before-preset failure.
+- [x] Run the focused test and confirm the publisher is absent.
+- [x] Implement minimal atomic publication.
+- [x] Complete slope/step/corridor/ledge/blocker stations and limit Action Lab to currently admitted transitions.
+- [x] Run focused tests plus validate/build/headless load for each preset and commit.
 
 ### Task 3: Define the app-owned Canonical bootstrap projection
 
@@ -51,10 +51,10 @@
 
 **Interfaces:** `resolveViewerBootstrapV1(context)` consumes an already validated Catalog, fixed CLI source or Studio source and returns one Canonical bootstrap. It uses authoritative V4 parsing, proves selected ID and controlled G Bot for curated presets, and never returns paths.
 
-- [ ] Add RED tests for default/explicit preset, fixed-source substitution, Studio identity, malformed V4, non-G-Bot preset, HEAD/method behavior and path leakage.
-- [ ] Run RED, implement the focused projection/middleware, then run GREEN.
-- [ ] Keep the module independent of renderer, RuntimeHost, Camera, Input and Havok.
-- [ ] Run focused tests, census and typecheck; commit.
+- [x] Add RED tests for default/explicit preset, fixed-source substitution, Studio identity, malformed V4, non-G-Bot preset, HEAD/method behavior and path leakage.
+- [x] Run RED, implement the focused projection/middleware, then run GREEN.
+- [x] Keep the module independent of renderer, RuntimeHost, Camera, Input and Havok.
+- [x] Run focused tests, census, typecheck, build and a real Vite endpoint probe; commit.
 
 ### Task 4: Atomically cut over Playground, CLI and Studio
 

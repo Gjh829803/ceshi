@@ -225,6 +225,9 @@ importers:
       '@whitebox-world/runtime-host':
         specifier: workspace:*
         version: link:../../packages/runtime-host
+      '@whitebox-world/scene-catalog':
+        specifier: workspace:*
+        version: link:../../packages/scene-catalog
       '@whitebox-world/subject-contracts':
         specifier: workspace:*
         version: link:../../packages/subject-contracts

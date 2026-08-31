@@ -38,6 +38,8 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "apps/playground/src/scenes/scenes.test.ts", lane: "contract" },
   { path: "apps/playground/src/subject-preset-local.test.ts", lane: "contract" },
   { path: "apps/playground/src/subject-preset-workbench.test.ts", lane: "contract" },
+  { path: "apps/playground/src/viewer-bootstrap-host.test.ts", lane: "contract" },
+  { path: "apps/playground/src/viewer-bootstrap.test.ts", lane: "contract" },
   { path: "apps/playground/src/worldkit-asset-resolver.test.ts", lane: "contract" },
   { path: "apps/playground/src/worldkit-authoring-capture-api.test.ts", lane: "contract" },
   { path: "apps/playground/src/worldkit-authoring-edit-add-house.browser.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"] },
