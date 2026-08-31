@@ -1060,7 +1060,7 @@ formal Capture/Route、AI 评测与生产 disposition 仍未完成，因此不�
   的漏洞/弃用信号；不重复 workspace undeclared-import 或 lock parser；
 - [x] PHO-3：以现有 test census 和 PHO-1 graph evidence 为唯一归属/依赖输入，通过 PHO-0B 执行 Git diff，
   实现 Change Impact → mode-specific Required/Advisory Gate Plan 与证据失效判断；PR 不因非 PR Gate 缺 Receipt 而阻断；
-- [ ] PHO-4：实现隔离的 Runtime 生命周期、资源 Owner、30/60/120 cadence 和多实例确定性 Sensor；首个 Required
+- [x] PHO-4：实现隔离的 Runtime 生命周期、资源 Owner、30/60/120 cadence 和多实例确定性 Sensor；首个 Required
   Profile 只登记已生产 RuntimeHost/Browser/fixed-cadence Owner，BNA 双 Candidate 在生产 GO 前仅为 Advisory；
 - [ ] PHO-5：实现 bundle/性能、视觉、文档真相和独立 Review Receipt Sensor；未冻结的趋势/AI 判断保持 Advisory；
 - [ ] PHO-6：实现唯一 `health:record` Receipt producer、稳定聚合 Policy、

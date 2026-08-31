@@ -321,26 +321,26 @@ Commit: `feat: plan project health gates by impact`
 - Consumes: explicitly registered existing Runtime/Browser verifiers and owner-provided count/snapshot probes.
 - Produces: lifecycle/determinism Observations; no direct Babylon/Havok assumptions outside verified probes.
 
-- [ ] **Step 1: Write RED lifecycle fixtures**
+- [x] **Step 1: Write RED lifecycle fixtures**
 
 Create fake probes for clean three-cycle create/reset/dispose, leaked Observable, leaked Timer, partial-construction throw with complete cleanup, cleanup throw with remaining owners, cadence-equivalent snapshots, and mismatched duplicate Candidate hashes.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `pnpm exec vitest run scripts/project-health/runtime-probe-registry.test.ts scripts/project-health/sensors/runtime-health.test.ts`
 
-- [ ] **Step 3: Implement registered probe execution**
+- [x] **Step 3: Implement registered probe execution**
 
 Run every probe in isolation, require before/after owner snapshots, preserve cleanup failure as evidence, and forbid GC heap deltas from independently creating Blocking Findings. Read installed Babylon/Havok source before adding an engine-specific owner counter.
 
-- [ ] **Step 4: Register existing probes incrementally**
+- [x] **Step 4: Register existing probes incrementally**
 
 Start only with already-production RuntimeHost lifecycle, Browser ready/reset, and fixed-cadence verifiers. BNA Candidate
 replay/cleanup remains an Advisory registered probe outside the first Required Profile until the BNA production design
 reaches GO; at that point update the one current Profile and Registry together, without retaining both sets. Each adapter
 binds its current command/test identity; it does not copy runtime logic.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run focused probe tests, the exact registered affected verifier tests, `pnpm test:census`, `pnpm typecheck`, and `git diff --check`.
 
