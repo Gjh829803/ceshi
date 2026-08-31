@@ -15,6 +15,7 @@ import {
   deriveReliabilityMetrics,
   deriveWorkflowMetrics,
   deriveWorkflowTrajectory,
+  injectStudioViewerBindingV1,
   isAllowedSceneAsset,
   isAuthorizedHeader,
   normalizePrompt,
@@ -26,6 +27,22 @@ import {
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const temporaryRoots = [];
+
+test("injects one exact Studio Viewer binding into Host-served Playground HTML", () => {
+  assert.equal(
+    injectStudioViewerBindingV1(
+      "<!doctype html><html><head><title>Viewer</title></head><body></body></html>",
+      "studio-world",
+    ),
+    "<!doctype html><html><head><title>Viewer</title>" +
+      '<meta name="worldkit-studio-world-id" content="studio-world">' +
+      "</head><body></body></html>",
+  );
+  assert.throws(
+    () => injectStudioViewerBindingV1("<html></html>", "../escape"),
+    /Studio Viewer world id is invalid/,
+  );
+});
 
 async function temporaryRoot(prefix) {
   const root = await mkdtemp(path.join(repoRoot, "apps/studio", prefix));
@@ -607,6 +624,57 @@ test("proxies Playground subject assets through the Studio origin", async () => 
   } finally {
     await studio.shutdown();
     await new Promise((resolve, reject) => upstream.close((error) => error ? reject(error) : resolve()));
+  }
+});
+
+test("binds Studio Preview identity in Host-served HTML instead of the Browser query", async () => {
+  const requestedUrls = [];
+  const upstream = createServer((request, response) => {
+    requestedUrls.push(request.url);
+    response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    response.end("<!doctype html><html><head></head><body>Viewer</body></html>");
+  });
+  await new Promise((resolve, reject) => {
+    upstream.once("error", reject);
+    upstream.listen(0, "127.0.0.1", resolve);
+  });
+  const upstreamAddress = upstream.address();
+  assert.ok(upstreamAddress && typeof upstreamAddress === "object");
+  const playgroundInternalOrigin = `http://127.0.0.1:${upstreamAddress.port}`;
+  const dataRoot = await temporaryRoot(".test-data-");
+  const studio = createStudio({
+    repoRoot,
+    dataRoot,
+    autoRunJobs: false,
+    importExistingArtifacts: false,
+    playgroundOrigin: playgroundInternalOrigin,
+    playgroundInternalOrigin,
+  });
+  const origin = await listen(studio);
+  try {
+    const created = (await (await fetch(`${origin}/api/worlds`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        title: "Bound Preview",
+        prompt: "Create one bound preview world.",
+      }),
+    })).json()).world;
+    const response = await fetch(
+      `${origin}/play/${created.id}?world=another-existing-world`,
+    );
+    assert.equal(response.status, 200);
+    assert.match(
+      await response.text(),
+      new RegExp(`<meta name="worldkit-studio-world-id" content="${created.id}">`),
+    );
+    assert.deepEqual(requestedUrls, ["/?world=another-existing-world"]);
+    assert.equal((await fetch(`${origin}/play/not-found`)).status, 404);
+  } finally {
+    await Promise.all([
+      studio.shutdown(),
+      new Promise((resolve) => upstream.close(resolve)),
+    ]);
   }
 });
 
@@ -1420,7 +1488,7 @@ test("does not recover an explicitly failed visual run from leftover output file
     assert.equal(detail.world.status, "failed");
     assert.equal(detail.world.outcome, "failed");
     assert.equal(detail.world.error, "Legacy image alignment failed.");
-    assert.equal(detail.world.previewUrl, `/play?world=${created.id}`);
+    assert.equal(detail.world.previewUrl, `/play/${created.id}`);
     await assert.rejects(
       readFile(path.join(artifactRoot, "evaluation-report.json"), "utf8"),
       { code: "ENOENT" },
@@ -1727,7 +1795,7 @@ test("serves Scene Brief deliverables and runtime tri-views", async () => {
     }));
 
     const detail = await (await fetch(`${origin}/api/worlds/${created.id}`)).json();
-    assert.equal(detail.world.previewUrl, `/play?world=${created.id}`);
+    assert.equal(detail.world.previewUrl, `/play/${created.id}`);
     assert.equal(detail.media.prototypes[0].id, "player-subject");
     assert.equal(detail.media.prototypes[0].memberCount, 2);
     assert.equal(detail.media.prototypes[0].role, "primary-subject");

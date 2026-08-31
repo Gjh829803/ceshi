@@ -39,6 +39,7 @@ export function resolvePlaygroundRuntimeRoute(
   search: string,
   sceneCatalog: PlaygroundSceneCatalogV1,
   viewerSourceAuthority: PlaygroundViewerSourceAuthorityV1,
+  hostStudioWorldId?: string,
 ): PlaygroundRuntimeRouteV1 {
   const parameters = new URLSearchParams(search);
   const artifactEnabled = parameters.get("artifact") === "1";
@@ -59,11 +60,28 @@ export function resolvePlaygroundRuntimeRoute(
   }
   const requestedSceneCatalogId = parameters.get("scene");
   const trimmedSceneCatalogId = requestedSceneCatalogId?.trim() ?? "";
-  const requestedStudioWorldId = parameters.get("world")?.trim() ?? "";
+  const fixedStudioWorldId = hostStudioWorldId?.trim() ?? "";
+
+  if (parameters.has("world")) {
+    return unknownRoute(
+      "PLAYGROUND_RUNTIME_ROUTE_REMOVED",
+      "The Browser world selector was removed; Studio binds the Viewer source in the Host document.",
+    );
+  }
+
+  if (
+    fixedStudioWorldId !== "" &&
+    !/^[a-z0-9][a-z0-9-]{2,79}$/.test(fixedStudioWorldId)
+  ) {
+    return unknownRoute(
+      "PLAYGROUND_RUNTIME_ROUTE_CONFLICT",
+      "Studio Viewer source identity is invalid.",
+    );
+  }
 
   if (
     artifactEnabled &&
-    (viewerSourceAuthority === "fixed-host" || requestedStudioWorldId !== "")
+    (viewerSourceAuthority === "fixed-host" || fixedStudioWorldId !== "")
   ) {
     return unknownRoute(
       "PLAYGROUND_RUNTIME_ROUTE_CONFLICT",
@@ -72,18 +90,18 @@ export function resolvePlaygroundRuntimeRoute(
   }
 
   if (!artifactEnabled) {
-    if (trimmedSceneCatalogId !== "" && requestedStudioWorldId !== "") {
+    if (trimmedSceneCatalogId !== "" && fixedStudioWorldId !== "") {
       return unknownRoute(
         "PLAYGROUND_RUNTIME_ROUTE_CONFLICT",
         "Curated and Studio Viewer sources cannot be selected together.",
       );
     }
-    if (requestedStudioWorldId === "") {
+    if (fixedStudioWorldId === "") {
       return Object.freeze({ mode: "viewer" });
     }
     return Object.freeze({
       mode: "viewer",
-      studioWorldId: requestedStudioWorldId,
+      studioWorldId: fixedStudioWorldId,
     });
   }
 

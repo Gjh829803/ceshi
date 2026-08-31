@@ -13,7 +13,8 @@ pnpm studio
 ```
 
 - Studio: `http://127.0.0.1:4174/`
-- Canonical preview: same-origin `/play?world=<scene-id>`
+- Canonical preview: same-origin `/play/<world-id>`；Studio Host 在返回的 Viewer HTML 中绑定
+  世界身份，浏览器 `?world=` 不再拥有来源选择权
 
 Studio starts or proxies the same unified Viewer used by `pnpm dev`, while its Host fixes the current attempt-bound Canonical source. The removed `?authoring=1` route is not a compatibility path.
 

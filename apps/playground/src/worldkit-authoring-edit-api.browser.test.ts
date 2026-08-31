@@ -201,13 +201,34 @@ describe("WorldKit authoring edit browser installation", () => {
       );
       expect(artifactSubstitution.worldkitApiExposed).toBe(false);
       expect(artifactSubstitution.playgroundApiExposed).toBe(false);
+
+      const worldSubstitutionPage = await browser.newPage();
+      await worldSubstitutionPage.goto(
+        `http://127.0.0.1:${port}/?world=studio-world`,
+        { waitUntil: "domcontentloaded" },
+      );
+      await worldSubstitutionPage.waitForFunction(
+        () => document.documentElement.dataset.worldkitStatus === "error",
+        undefined,
+        { timeout: 30_000 },
+      );
+      const worldSubstitution = await worldSubstitutionPage.evaluate(() => ({
+        adapterName: document.querySelector("#adapter-name")?.textContent,
+        inspectionText: document.querySelector("#inspection")?.textContent,
+        worldkitApiExposed: Object.hasOwn(window, "__WORLDKIT__"),
+      }));
+      expect(worldSubstitution.adapterName).toBe("route-error");
+      expect(worldSubstitution.inspectionText).toContain(
+        "PLAYGROUND_RUNTIME_ROUTE_REMOVED",
+      );
+      expect(worldSubstitution.worldkitApiExposed).toBe(false);
     } finally {
       await browser?.close();
       await stopVite(vite);
     }
   }, 180_000);
 
-  it("rejects artifact substitution before a Studio-owned Viewer source loads", async () => {
+  it("rejects Browser world selection before any Studio-owned Viewer source loads", async () => {
     const port = await availableLoopbackPort();
     const worktreeRoot = resolve(import.meta.dirname, "../../..");
     const vite = spawn(
@@ -252,7 +273,7 @@ describe("WorldKit authoring edit browser installation", () => {
         playgroundApiExposed: Object.hasOwn(window, "__WHITEBOX_PLAYGROUND__"),
       }));
       expect(result.adapterName).toBe("route-error");
-      expect(result.inspectionText).toContain("PLAYGROUND_RUNTIME_ROUTE_CONFLICT");
+      expect(result.inspectionText).toContain("PLAYGROUND_RUNTIME_ROUTE_REMOVED");
       expect(result.worldkitApiExposed).toBe(false);
       expect(result.playgroundApiExposed).toBe(false);
     } finally {
