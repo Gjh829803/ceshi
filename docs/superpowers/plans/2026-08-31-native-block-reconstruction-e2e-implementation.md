@@ -556,6 +556,11 @@ export interface CodexTaskProcessPortV1 {
 
 Test completed outputs, no output, empty output, task error, timeout/unknown outcome, same request ID + same hash reconciliation, same ID + different hash rejection, interrupted atomic promotion, and cleanup failure. Assert the executable basename is exactly `run-codex-task.mjs`; no test or production branch may call `run-lwdp-codex-task.mjs`, `run-local-codex-task.mjs`, LWDP HTTP, or `codex exec` directly.
 
+The representative formal run uses the frozen 1,800-second timeout. Distinguish a definitive provider
+task timeout as `task-timeout` from an uncertain creation outcome as `creation-outcome-unknown`; retain
+only the stable provider-neutral diagnostic code in the Generation Receipt, never provider stderr or
+payload details.
+
 - [ ] **Step 3: Run RED generation tests**
 
 ```bash

@@ -249,6 +249,11 @@ Generation Request; putting it inside that Request would create a circular ident
 identity is a canonical sorted path/content-hash inventory, never gzip bytes, mtime or
 an absolute host path. It contains no credentials, provider payload, or mutable output directory.
 Creation submission remains exactly once; an uncertain create outcome is reconciled by request ID.
+The representative Native Block formal run freezes a 1,800-second task timeout. A provider-confirmed
+task timeout is recorded only as the provider-neutral `task-timeout` diagnostic in the durable Generation
+Receipt; provider stderr, payloads, credentials and trace details are never serialized. Submission
+transport uncertainty remains the separate `creation-outcome-unknown` state and never permits a second
+creation submission.
 
 The Host accepts Native API, Native Scene Profile and Block Profile only through exact resolved-resource
 descriptors containing `resourceKind`, canonical Registry `resourceRef`, `resolvedVersion`, and the resolved

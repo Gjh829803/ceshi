@@ -7,7 +7,10 @@ import { sha256CanonicalJson, stringifyCanonicalJson, type Sha256HashV1 } from "
 import { hashWorldReconstructionCaseV1, hashWorldReconstructionEvaluationProfileV1, parseWorldReconstructionCaseV1, parseWorldReconstructionEvaluationProfileV1 } from "@whitebox-world/validation";
 import { parseWorldPackageWorldBoundsV1 } from "@whitebox-world/world-package";
 
-import { prepareNativeBlockGenerationTaskV1 } from "./generation-request.js";
+import {
+  NATIVE_BLOCK_RECONSTRUCTION_FORMAL_TIMEOUT_SECONDS_V1,
+  prepareNativeBlockGenerationTaskV1,
+} from "./generation-request.js";
 import { runNativeBlockGenerationV1, type CodexTaskProcessPortV1 } from "./generation-runner.js";
 
 const DEFAULT_LWDP_S3_ROOT = "s3://leap-world-us-east-2/world-model/platform/agent-whitebox-world-sdk";
@@ -79,7 +82,7 @@ async function main(): Promise<void> {
     worldBounds,
     bootstrapId: `${reconstructionCase.id}.native`,
     sceneModuleRef: `worldkit://native-scene/${reconstructionCase.id}@1`,
-    seed, budgets: { maximumBlockCount: 2000, maximumStaticColliderCount: 500, maximumStaticColliderVertexCount: 200000, maximumStaticColliderTriangleCount: 100000, maximumOutputBytes: 4000000, timeoutSeconds: 900 },
+    seed, budgets: { maximumBlockCount: 2000, maximumStaticColliderCount: 500, maximumStaticColliderVertexCount: 200000, maximumStaticColliderTriangleCount: 100000, maximumOutputBytes: 4000000, timeoutSeconds: NATIVE_BLOCK_RECONSTRUCTION_FORMAL_TIMEOUT_SECONDS_V1 },
   });
   const checker = path.join(prepared.taskWorkspacePath, "inputs", "builder-skill", "scripts", "self-check.mjs");
   const result = await runNativeBlockGenerationV1(prepared, {

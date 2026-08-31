@@ -34,6 +34,9 @@ import {
 import { isEqual, isNil, sortBy } from "lodash-es";
 
 const OUTPUTS = ["scene.ts", "native-block-authoring.json", "native-resources.json"] as const;
+
+export const NATIVE_BLOCK_RECONSTRUCTION_FORMAL_TIMEOUT_SECONDS_V1 = 1_800;
+
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const CURRENT_NATIVE_SCENE_API_REF = "worldkit://native-scene-api/babylon@1";
 const CURRENT_NATIVE_SCENE_PROFILE_REF = "worldkit://native-scene-profile/whitebox.blocks@1";

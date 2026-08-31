@@ -27,7 +27,7 @@ async function preparedFixture() {
       workspaceContextManifestRef: "manifest.json", workspaceContextManifestHash: `sha256:${"3".repeat(64)}`, contextInputs: [],
       nativeSceneApiRef: "api.json", nativeSceneApiHash: `sha256:${"4".repeat(64)}`, nativeSceneProfileRef: "profile.json", nativeSceneProfileHash: `sha256:${"5".repeat(64)}`,
       blockProfileRef: "block.json", blockProfileHash: `sha256:${"6".repeat(64)}`, bootstrapInputRef: "bootstrap.json", bootstrapInputHash: `sha256:${"7".repeat(64)}`,
-      seed: 1, budgets: { maximumBlockCount: 1, maximumStaticColliderCount: 1, maximumStaticColliderVertexCount: 1, maximumStaticColliderTriangleCount: 1, maximumOutputBytes: 10000, timeoutSeconds: 1 },
+      seed: 1, budgets: { maximumBlockCount: 1, maximumStaticColliderCount: 1, maximumStaticColliderVertexCount: 1, maximumStaticColliderTriangleCount: 1, maximumOutputBytes: 10000, timeoutSeconds: 1_800 },
       declaredOutputPaths: expectedOutputs,
     } as const,
     generationRequestHash: `sha256:${"a".repeat(64)}`,
@@ -95,6 +95,54 @@ describe("runNativeBlockGenerationV1", () => {
       expect(result.receipt.outcome).toBe("unknown");
       expect(result.receipt.diagnosticCodes).toContain("creation-outcome-unknown");
     } finally { await rm(prepared.root, { recursive: true, force: true }); }
+  });
+
+  it("records one definitive provider task timeout without retaining provider stderr", async () => {
+    const prepared = await preparedFixture();
+    const privateProviderDetail = "secret-provider-trace-42";
+    try {
+      const result = await runNativeBlockGenerationV1(prepared, {
+        process: {
+          run: async () => ({
+            exitCode: 1,
+            stdout: "WORLDKIT_LWDP_JOB native-block-generation native-block-generation-cloud-temple-initial job-1 dispatch=single-task-fast-path profile=formal model=gpt-5.6-sol reasoning=xhigh\n",
+            stderr: `codex timeout after 1800s: ${privateProviderDetail}`,
+          }),
+        },
+        selfCheck: async () => ({ ok: true, diagnosticCodes: [] }),
+        reconcile: async () => ({ outcome: "missing" }),
+        cleanup: async () => ({ outcome: "completed" }),
+      });
+
+      expect(result.receipt.outcome).toBe("rejected");
+      expect(result.receipt.diagnosticCodes).toEqual(["task-timeout"]);
+      expect(JSON.stringify(result.receipt)).not.toContain(privateProviderDetail);
+      expect(JSON.stringify(result.receipt)).not.toContain("codex timeout after");
+    } finally {
+      await rm(prepared.root, { recursive: true, force: true });
+    }
+  });
+
+  it("does not classify an unrelated or stale timeout message as the frozen task timeout", async () => {
+    const prepared = await preparedFixture();
+    try {
+      const result = await runNativeBlockGenerationV1(prepared, {
+        process: {
+          run: async () => ({
+            exitCode: 1,
+            stdout: "",
+            stderr: "codex timeout after 900s while opening an unrelated provider channel",
+          }),
+        },
+        selfCheck: async () => ({ ok: true, diagnosticCodes: [] }),
+        reconcile: async () => ({ outcome: "missing" }),
+        cleanup: async () => ({ outcome: "completed" }),
+      });
+
+      expect(result.receipt.diagnosticCodes).toEqual(["task-rejected"]);
+    } finally {
+      await rm(prepared.root, { recursive: true, force: true });
+    }
   });
 
   it("rejects a reconciled request identity whose hash differs", async () => {
