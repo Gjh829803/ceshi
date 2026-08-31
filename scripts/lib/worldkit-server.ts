@@ -255,7 +255,7 @@ function createHandle(options: {
     return stopPromise;
   };
   return {
-    url: `http://127.0.0.1:${port}/?authoring=1`,
+    url: `http://127.0.0.1:${port}/`,
     port,
     process: child,
     stop,

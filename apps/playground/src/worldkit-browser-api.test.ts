@@ -2170,7 +2170,7 @@ describe("Authoring camera console", () => {
     let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
     try {
       browser = await chromium.launch({ headless: true });
-      const url = `http://127.0.0.1:${port}/?authoring=1`;
+      const url = `http://127.0.0.1:${port}/`;
       await waitForAuthoringPage(url);
       const page = await browser.newPage();
       await page.addInitScript(() => {
@@ -2244,7 +2244,7 @@ describe("Authoring camera console", () => {
     let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
     try {
       browser = await chromium.launch({ headless: true });
-      const url = `http://127.0.0.1:${port}/?authoring=1`;
+      const url = `http://127.0.0.1:${port}/`;
       await waitForAuthoringPage(url);
       const page = await browser.newPage();
       await page.addInitScript(() => {

@@ -1459,7 +1459,7 @@ export function createStudio(options = {}) {
         ? `/scene-assets/${record.sceneId}/whitebox-opening-frame.png`
         : null,
       previewUrl: canonicalAuthoringAvailable && (record.captureStatus === "passed" || record.status === "ready")
-        ? `/play?authoring=1&world=${encodeURIComponent(record.id)}`
+        ? `/play?world=${encodeURIComponent(record.id)}`
         : null,
       queuePosition: record.status === "queued"
         ? queue.findIndex((item) => item.endsWith(`:${record.id}`)) + 1

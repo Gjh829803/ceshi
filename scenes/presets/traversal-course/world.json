@@ -1,0 +1,284 @@
+{
+  "kind": "worldkit-authoring-spec",
+  "schemaVersion": 4,
+  "id": "traversal-course",
+  "seed": 83102,
+  "provenance": {
+    "userPrompt": "Stable G Bot traversal course with measurable slope, step-height boundaries, narrow corridor, ledge, and collision blocker stations."
+  },
+  "layout": {
+    "solverProfileRef": "worldkit://layout-solver-profile/outdoor.s1@1"
+  },
+  "spatial": {
+    "traversalAreas": [],
+    "regions": [],
+    "routes": [],
+    "screenRegions": []
+  },
+  "world": {
+    "coordinateSystem": "right-handed-y-up-minus-z-forward",
+    "bounds": {
+      "centerMetersXZ": [0, 0],
+      "sizeMetersXZ": [72, 96],
+      "heightRangeMeters": [-4, 12]
+    },
+    "gravityMetersPerSecondSquaredXYZ": [0, -9.81, 0],
+    "environment": {
+      "preset": "clear-day"
+    },
+    "resourceBudget": {
+      "maxVertices": 120000,
+      "maxTriangles": 220000,
+      "maxColliders": 32
+    }
+  },
+  "resources": {
+    "prototypes": [
+      {
+        "id": "step-low",
+        "version": 1,
+        "kind": "primitive",
+        "primitive": "box",
+        "sizeMetersXYZ": [8, 0.2, 4],
+        "collisionEnabled": true,
+        "semantic": {
+          "classId": "traversal.step.low"
+        }
+      },
+      {
+        "id": "step-medium",
+        "version": 1,
+        "kind": "primitive",
+        "primitive": "box",
+        "sizeMetersXYZ": [8, 0.4, 4],
+        "collisionEnabled": true,
+        "semantic": {
+          "classId": "traversal.step.medium"
+        }
+      },
+      {
+        "id": "step-limit",
+        "version": 1,
+        "kind": "primitive",
+        "primitive": "box",
+        "sizeMetersXYZ": [8, 0.6, 4],
+        "collisionEnabled": true,
+        "semantic": {
+          "classId": "traversal.step.limit"
+        }
+      },
+      {
+        "id": "corridor-wall",
+        "version": 1,
+        "kind": "primitive",
+        "primitive": "box",
+        "sizeMetersXYZ": [1, 3, 18],
+        "collisionEnabled": true,
+        "semantic": {
+          "classId": "traversal.corridor-wall"
+        }
+      },
+      {
+        "id": "slope-ramp",
+        "version": 1,
+        "kind": "primitive",
+        "primitive": "box",
+        "sizeMetersXYZ": [8, 0.4, 12],
+        "collisionEnabled": true,
+        "semantic": {
+          "classId": "traversal.slope-ramp"
+        }
+      },
+      {
+        "id": "ledge-platform",
+        "version": 1,
+        "kind": "primitive",
+        "primitive": "box",
+        "sizeMetersXYZ": [8, 1.2, 8],
+        "collisionEnabled": true,
+        "semantic": {
+          "classId": "traversal.ledge-platform"
+        }
+      },
+      {
+        "id": "blocker",
+        "version": 1,
+        "kind": "primitive",
+        "primitive": "box",
+        "sizeMetersXYZ": [5, 3, 1],
+        "collisionEnabled": true,
+        "semantic": {
+          "classId": "traversal.blocker"
+        }
+      }
+    ],
+    "subjectDefinitions": []
+  },
+  "nodes": [
+    {
+      "id": "terrain-main",
+      "kind": "terrain",
+      "components": {
+        "terrain": {
+          "source": {
+            "kind": "procedural",
+            "relief": "flat",
+            "baseHeightMeters": 0,
+            "amplitudeMeters": 0
+          },
+          "grid": {
+            "centerMetersXZ": [0, 0],
+            "sizeMetersXZ": [72, 96],
+            "resolutionCellsXZ": [49, 65]
+          },
+          "semantic": {
+            "classId": "terrain.traversal-course"
+          }
+        }
+      }
+    },
+    {
+      "id": "step-low",
+      "kind": "object",
+      "prototypeRef": "package://prototype/step-low@1",
+      "placement": {
+        "kind": "fixed",
+        "transform": {
+          "positionMetersXYZ": [0, 0.1, 8]
+        }
+      }
+    },
+    {
+      "id": "step-medium",
+      "kind": "object",
+      "prototypeRef": "package://prototype/step-medium@1",
+      "placement": {
+        "kind": "fixed",
+        "transform": {
+          "positionMetersXYZ": [0, 0.2, 2]
+        }
+      }
+    },
+    {
+      "id": "step-limit",
+      "kind": "object",
+      "prototypeRef": "package://prototype/step-limit@1",
+      "placement": {
+        "kind": "fixed",
+        "transform": {
+          "positionMetersXYZ": [0, 0.3, -4]
+        }
+      }
+    },
+    {
+      "id": "corridor-west",
+      "kind": "object",
+      "prototypeRef": "package://prototype/corridor-wall@1",
+      "placement": {
+        "kind": "fixed",
+        "transform": {
+          "positionMetersXYZ": [-2.1, 1.5, -20]
+        }
+      }
+    },
+    {
+      "id": "corridor-east",
+      "kind": "object",
+      "prototypeRef": "package://prototype/corridor-wall@1",
+      "placement": {
+        "kind": "fixed",
+        "transform": {
+          "positionMetersXYZ": [2.1, 1.5, -20]
+        }
+      }
+    },
+    {
+      "id": "slope-ramp",
+      "kind": "object",
+      "prototypeRef": "package://prototype/slope-ramp@1",
+      "placement": {
+        "kind": "fixed",
+        "transform": {
+          "positionMetersXYZ": [14, 1.75, 8],
+          "rotationEulerRadiansXYZ": [-0.25, 0, 0]
+        }
+      }
+    },
+    {
+      "id": "ledge-platform",
+      "kind": "object",
+      "prototypeRef": "package://prototype/ledge-platform@1",
+      "placement": {
+        "kind": "fixed",
+        "transform": {
+          "positionMetersXYZ": [-14, 0.6, -4]
+        }
+      }
+    },
+    {
+      "id": "blocker",
+      "kind": "object",
+      "prototypeRef": "package://prototype/blocker@1",
+      "placement": {
+        "kind": "fixed",
+        "transform": {
+          "positionMetersXYZ": [14, 1.5, -16]
+        }
+      }
+    },
+    {
+      "id": "spawn-main",
+      "kind": "anchor",
+      "semantic": {
+        "classId": "spawn.player"
+      },
+      "placement": {
+        "kind": "fixed",
+        "transform": {
+          "positionMetersXYZ": [0, 0, 18]
+        }
+      }
+    },
+    {
+      "id": "player",
+      "kind": "subject",
+      "subjectDefinitionRef": "worldkit://subject-definition/humanoid.g-bot@2",
+      "spawnAnchorEntityId": "spawn-main"
+    },
+    {
+      "id": "camera-main",
+      "kind": "camera",
+      "components": {
+        "cameraRig": {
+          "defaultRigRef": "worldkit://camera/third-person.standard@1",
+          "allowedRigRefs": [
+            "worldkit://camera/third-person.standard@1"
+          ],
+          "target": {
+            "targetEntityId": "player",
+            "targetHeightMeters": 1.2
+          },
+          "thirdPerson": {
+            "pitchRadians": 0.26,
+            "distanceMeters": 5.5,
+            "targetHeightMeters": 1.2,
+            "fovDegrees": 58,
+            "aspectRatio": 1.7777777777777777
+          },
+          "manualSwitchAllowed": false
+        }
+      }
+    }
+  ],
+  "relationships": [],
+  "rules": [],
+  "startup": {
+    "spawnAnchorEntityId": "spawn-main",
+    "controlledEntityId": "player",
+    "cameraEntityId": "camera-main"
+  },
+  "constraints": {
+    "connectivity": [],
+    "placements": []
+  }
+}

@@ -282,6 +282,10 @@ describe("loadAuthoringScene", () => {
     expect(fetchBootstrap).toHaveBeenCalledTimes(1);
     expect(preview.loaded.ok).toBe(true);
     expect(preview.attempt).toBe(2);
+    expect(preview.viewerBootstrap.selection).toEqual({
+      kind: "fixed-host",
+      selectedSceneId: authoringSpec.id,
+    });
     expect(preview.visualCaptureGroups).toEqual([{
       visualTargetId: "player-subject",
       runtimeEntityIds: ["player"],

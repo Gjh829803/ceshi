@@ -90,8 +90,8 @@ export const RUNTIME_PROBE_REGISTRY_V1: readonly RuntimeProbeRegistrationV1[] = 
     id: "fixed-cadence",
     kind: "cadence",
     requiredness: "required",
-    gateId: "outdoor-gameplay",
-    ownerCommandId: "verify-outdoor-gameplay-worlds",
+    gateId: "scene-viewer",
+    ownerCommandId: "verify-scene-viewer",
   },
   {
     id: "bna-candidate-determinism",

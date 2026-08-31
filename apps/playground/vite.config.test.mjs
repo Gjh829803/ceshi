@@ -6,7 +6,9 @@ import path from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import viteConfig from "./vite.config.mjs";
+import viteConfig, {
+  viewerSourceAuthorityFromEnvironment,
+} from "./vite.config.mjs";
 
 const sceneId = "reference-scene";
 const pngDataUrl = "data:image/png;base64,iVBORw0KGgo=";
@@ -128,6 +130,18 @@ async function exists(filePath) {
     return false;
   }
 }
+
+describe("Viewer source authority", () => {
+  it("freezes curated and fixed Host ownership into the browser bundle", () => {
+    expect(viewerSourceAuthorityFromEnvironment({})).toBe("curated-host");
+    expect(viewerSourceAuthorityFromEnvironment({
+      WORLDKIT_AUTHORING_SPEC_PATH: "/trusted/world.json",
+    })).toBe("fixed-host");
+    expect(viteConfig.define.__WORLDKIT_VIEWER_SOURCE_AUTHORITY__).toBe(
+      JSON.stringify(viewerSourceAuthorityFromEnvironment(process.env)),
+    );
+  });
+});
 
 describe("whitebox opening-frame host gate", () => {
   let root;

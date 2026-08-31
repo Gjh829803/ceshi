@@ -224,6 +224,7 @@ describe("startWorldkitServer", () => {
       routeEvidence,
     });
     handles.push(handle);
+    expect(new URL(handle.url).search).toBe("");
     const endpoint = new URL("/__worldkit/route-evidence", handle.url);
 
     const getResponse = await fetch(endpoint, { cache: "no-store" });

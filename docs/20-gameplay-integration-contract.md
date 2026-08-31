@@ -34,8 +34,9 @@ Native Scene Lane；其 [长期设计](superpowers/specs/2026-08-28-ai-friendly-
 3. `window.__WORLDKIT__.version === 5`；
 4. 请求和返回值直接使用 SDK 导出的 exact 类型。
 
-`pnpm dev` 启动 Babylon-backed catalog Playground；不得与 `?authoring=1` 组合，也不是
-本合同的 Canonical Authoring Runtime 入口。
+`pnpm dev` 启动统一 Babylon/Havok Viewer，默认加载 G Bot Canonical 调试预设；
+`worldkit run <world.json>` 与 Studio Preview 使用同一壳并由 Host 固定来源。旧
+`?authoring=1` 路由已删除。
 
 ## 1. 权威包与所有权
 

@@ -1,0 +1,184 @@
+{
+  "kind": "worldkit-authoring-spec",
+  "schemaVersion": 4,
+  "id": "action-lab",
+  "seed": 83103,
+  "provenance": {
+    "userPrompt": "Stable G Bot lab for currently admitted idle, walk, run, jump, fall, and landing presentation checks; it does not claim unfinished general interaction Actions."
+  },
+  "layout": {
+    "solverProfileRef": "worldkit://layout-solver-profile/outdoor.s1@1"
+  },
+  "spatial": {
+    "traversalAreas": [],
+    "regions": [],
+    "routes": [],
+    "screenRegions": []
+  },
+  "world": {
+    "coordinateSystem": "right-handed-y-up-minus-z-forward",
+    "bounds": {
+      "centerMetersXZ": [0, 0],
+      "sizeMetersXZ": [72, 72],
+      "heightRangeMeters": [-4, 12]
+    },
+    "gravityMetersPerSecondSquaredXYZ": [0, -9.81, 0],
+    "environment": {
+      "preset": "clear-day"
+    },
+    "resourceBudget": {
+      "maxVertices": 100000,
+      "maxTriangles": 180000,
+      "maxColliders": 24
+    }
+  },
+  "resources": {
+    "prototypes": [
+      {
+        "id": "action-target",
+        "version": 1,
+        "kind": "primitive",
+        "primitive": "box",
+        "sizeMetersXYZ": [2, 2, 2],
+        "collisionEnabled": true,
+        "semantic": {
+          "classId": "action.target"
+        }
+      },
+      {
+        "id": "landing-strip",
+        "version": 1,
+        "kind": "primitive",
+        "primitive": "box",
+        "sizeMetersXYZ": [6, 0.1, 12],
+        "collisionEnabled": false,
+        "semantic": {
+          "classId": "action.landing-reference"
+        }
+      }
+    ],
+    "subjectDefinitions": []
+  },
+  "nodes": [
+    {
+      "id": "terrain-main",
+      "kind": "terrain",
+      "components": {
+        "terrain": {
+          "source": {
+            "kind": "procedural",
+            "relief": "flat",
+            "baseHeightMeters": 0,
+            "amplitudeMeters": 0
+          },
+          "grid": {
+            "centerMetersXZ": [0, 0],
+            "sizeMetersXZ": [72, 72],
+            "resolutionCellsXZ": [49, 49]
+          },
+          "semantic": {
+            "classId": "terrain.action-lab"
+          }
+        }
+      }
+    },
+    {
+      "id": "landing-reference",
+      "kind": "object",
+      "prototypeRef": "package://prototype/landing-strip@1",
+      "placement": {
+        "kind": "fixed",
+        "transform": {
+          "positionMetersXYZ": [0, 0.01, 3]
+        }
+      }
+    },
+    {
+      "id": "target-left",
+      "kind": "object",
+      "prototypeRef": "package://prototype/action-target@1",
+      "placement": {
+        "kind": "fixed",
+        "transform": {
+          "positionMetersXYZ": [-6, 1, -8]
+        }
+      }
+    },
+    {
+      "id": "target-center",
+      "kind": "object",
+      "prototypeRef": "package://prototype/action-target@1",
+      "placement": {
+        "kind": "fixed",
+        "transform": {
+          "positionMetersXYZ": [0, 1, -8]
+        }
+      }
+    },
+    {
+      "id": "target-right",
+      "kind": "object",
+      "prototypeRef": "package://prototype/action-target@1",
+      "placement": {
+        "kind": "fixed",
+        "transform": {
+          "positionMetersXYZ": [6, 1, -8]
+        }
+      }
+    },
+    {
+      "id": "spawn-main",
+      "kind": "anchor",
+      "semantic": {
+        "classId": "spawn.player"
+      },
+      "placement": {
+        "kind": "fixed",
+        "transform": {
+          "positionMetersXYZ": [0, 0, 18]
+        }
+      }
+    },
+    {
+      "id": "player",
+      "kind": "subject",
+      "subjectDefinitionRef": "worldkit://subject-definition/humanoid.g-bot@2",
+      "spawnAnchorEntityId": "spawn-main"
+    },
+    {
+      "id": "camera-main",
+      "kind": "camera",
+      "components": {
+        "cameraRig": {
+          "defaultRigRef": "worldkit://camera/third-person.standard@1",
+          "allowedRigRefs": [
+            "worldkit://camera/third-person.standard@1"
+          ],
+          "target": {
+            "targetEntityId": "player",
+            "targetHeightMeters": 1.2
+          },
+          "thirdPerson": {
+            "pitchRadians": 0.22,
+            "distanceMeters": 5,
+            "targetHeightMeters": 1.2,
+            "fovDegrees": 56,
+            "aspectRatio": 1.7777777777777777
+          },
+          "manualSwitchAllowed": false
+        }
+      }
+    }
+  ],
+  "relationships": [],
+  "rules": [],
+  "startup": {
+    "spawnAnchorEntityId": "spawn-main",
+    "controlledEntityId": "player",
+    "cameraEntityId": "camera-main"
+  },
+  "constraints": {
+    "connectivity": [],
+    "placements": []
+  }
+}

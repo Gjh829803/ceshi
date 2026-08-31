@@ -119,11 +119,10 @@ The Playground Recording Workbench is a separate manual post-workflow tool. A us
 
 ## Local Runtime startup
 
-- When a user asks to view the product G Bot locally, run `pnpm dev:g-bot` and open the URL printed by the command.
-- `?authoring=1` requires an AuthoringSpec injected by `worldkit run <world.json>`. Never combine plain `pnpm dev` with `?authoring=1` or present that combination to a user.
-- If the browser reports `504 Outdated Optimize Dep` after a branch or dependency change, stop the old server and run `pnpm dev:g-bot:refresh` once. Do not change Babylon, physics, camera, or runtime code to repair a stale Vite dependency cache.
-- Use `pnpm dev` for the Babylon-backed catalog Playground. It is a scene workflow and artifact
-  surface, not the Canonical Authoring Runtime entry supplied by `worldkit run`.
+- When a user asks to view the product G Bot locally, run `pnpm dev` and open the URL printed by the command. It opens the unified Viewer with the `feel-flat` G Bot preset; `?scene=<preset-id>` may select another allowlisted tuning preset.
+- `worldkit run <world.json>` opens the same Viewer with one Host-fixed Canonical source. Browser query parameters must not replace that fixed source. The removed `?authoring=1` route must not be restored.
+- If the browser reports `504 Outdated Optimize Dep` after a branch or dependency change, stop the old server and run `pnpm dev:refresh` once. For a fixed `worldkit run` source, use its `--refresh-dependencies` option. Do not change Babylon, physics, camera, or runtime code to repair a stale Vite dependency cache.
+- `pnpm dev`, `worldkit run`, and Studio Preview share the same Babylon/Havok Viewer shell and existing RuntimeHost path. `artifacts/scenes` remains WRC evidence, not a second application.
 
 ## Preferred APIs
 
